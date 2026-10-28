@@ -23,6 +23,7 @@ import { AgentIcon, StatusDot } from "./AgentIcon";
 import { MCPSettings, SkillSettings } from "./ExtSettings";
 import { FileViewer } from "./FileViewer";
 import { ImportHerdr } from "./ImportHerdr";
+import { RemoteSettings } from "./RemoteSettings";
 import { ResourceStats } from "./ResourceStats";
 import { ago, DirPicker } from "./NewSession";
 
@@ -206,7 +207,7 @@ function SettingsDialog({ open }: { open: boolean }) {
         <Tabs defaultValue="general" value={tabOpen} onValueChange={setTabOpen} className="flex h-[75vh] min-w-0 flex-col">
           <DialogHeader className="min-w-0 px-6 pt-5 max-md:px-4">
             <DialogTitle>设置</DialogTitle>
-            {/* 七个分页在手机上一行放不下：横滑，不换行 */}
+            {/* 八个分页在手机上一行放不下：横滑，不换行 */}
             <TabsList className="mt-2 max-w-full justify-start overflow-x-auto [scrollbar-width:none]">
               <TabsTrigger value="general">通用</TabsTrigger>
               <TabsTrigger value="keys">快捷键</TabsTrigger>
@@ -215,6 +216,7 @@ function SettingsDialog({ open }: { open: boolean }) {
               <TabsTrigger value="plugins">插件</TabsTrigger>
               <TabsTrigger value="agents">Agent</TabsTrigger>
               <TabsTrigger value="resources">资源</TabsTrigger>
+              <TabsTrigger value="remote">远程访问</TabsTrigger>
             </TabsList>
           </DialogHeader>
           <div className="min-h-0 min-w-0 flex-1 overflow-auto px-6 pb-6 max-md:px-4">
@@ -345,6 +347,9 @@ function SettingsDialog({ open }: { open: boolean }) {
             </TabsContent>
             <TabsContent value="agents" className="pt-2">
               <AgentSettings />
+            </TabsContent>
+            <TabsContent value="remote" className="pt-2">
+              <RemoteSettings open={open && tabOpen === "remote"} />
             </TabsContent>
           </div>
         </Tabs>

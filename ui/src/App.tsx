@@ -131,6 +131,11 @@ export default function App() {
   });
 
   if (authError) {
+    // 远程那条路上凭据掉了（被踢、过期、要重验 passkey）：整页刷新，服务端会给配对页
+    if (location.protocol === "https:") {
+      location.reload();
+      return null;
+    }
     return (
       <div className="flex h-full items-center justify-center p-6">
         <div className="max-w-md space-y-3 text-center">

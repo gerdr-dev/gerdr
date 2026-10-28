@@ -2,9 +2,14 @@ import type { ContentBlock, ExtSettings, ExtView, Hello, PluginBuild, SessionSum
 
 export class ApiError extends Error {
   status: number;
-  constructor(status: number, message: string) {
+  /** 远程那条路上的细分原因：reason="stepup"（再加 passkey 前先验一次）、need="pair" | "passkey"（见 docs/dev/REMOTE.md） */
+  reason?: string;
+  need?: string;
+  constructor(status: number, message: string, data?: { reason?: string; need?: string }) {
     super(message);
     this.status = status;
+    this.reason = data?.reason;
+    this.need = data?.need;
   }
 }
 
@@ -23,7 +28,7 @@ async function req<T>(method: string, path: string, body?: unknown): Promise<T> 
   } catch {
     data = text;
   }
-  if (!res.ok) throw new ApiError(res.status, (data && data.error) || res.statusText);
+  if (!res.ok) throw new ApiError(res.status, (data && data.error) || res.statusText, typeof data === "object" ? data : undefined);
   return data as T;
 }
 
@@ -109,7 +114,39 @@ export const api = {
   dirs: (path: string) =>
     req<{ path: string; parent: string; dirs: string[]; home: string; git: boolean }>("GET", `/api/fs/dirs?path=${encodeURIComponent(path)}`),
   fileStat: (path: string, cwd?: string) => req<FileStat>("GET", `/api/fs/stat?path=${encodeURIComponent(path)}&cwd=${encodeURIComponent(cwd ?? "")}`),
+
+  // 远程访问（设置 →「远程访问」；passkey 的两段 ceremony 在 lib/passkey.ts）
+  remoteStatus: () => req<{ status: RemoteStatus; remote: boolean }>("GET", "/api/remote/status"),
+  remoteWhoami: () => req<{ remote: boolean; authed: boolean; need?: string; deviceId?: string; passkeys: number; passkeyAvailable: boolean }>("GET", "/api/remote/whoami"),
+  /** 出配对码：只有本机口能调（远程那一侧服务端直接 403） */
+  remotePairCode: () => req<{ code: string; expires: string; url: string; qr?: string }>("POST", "/api/remote/pair-code", {}),
+  remoteDevices: () => req<{ devices: RemoteDevice[]; me: string }>("GET", "/api/remote/devices"),
+  remoteRevoke: (id: string) => req<{ revoked: number; label: string }>("DELETE", `/api/remote/devices/${encodeURIComponent(id)}`),
+  /** 全部踢掉：设备 + passkey 一起（只清设备的话，留着的 passkey 能立刻换回一份新凭据） */
+  remoteRevokeAll: () => req<{ revoked: number; passkeys: number }>("DELETE", "/api/remote/devices"),
+  remotePasskeys: () => req<{ passkeys: PasskeyInfo[]; available: boolean; url: string }>("GET", "/api/remote/passkeys"),
+  remoteDeletePasskey: (id: string) => req("DELETE", `/api/remote/passkeys/${encodeURIComponent(id)}`),
+  remoteUnlock: () => req("POST", "/api/remote/unlock", {}),
+  remoteLogout: () => req("POST", "/api/remote/logout", {}),
+  /** passkey ceremony 的原始两步，只给 lib/passkey.ts 用 */
+  passkeyStep: <T>(action: "register" | "login", step: "begin" | "finish", body?: unknown, ceremony?: string) =>
+    req<T>("POST", `/api/remote/passkey/${action}/${step}${ceremony ? `?c=${encodeURIComponent(ceremony)}` : ""}`, body ?? {}),
 };
+
+export type RemoteStatus = {
+  enabled: boolean;
+  host?: string;
+  url?: string;
+  relayURL?: string;
+  state?: string;
+  err?: string;
+  certExpires?: string;
+  ttlDays: number;
+  reauthHours: number;
+  locked: boolean;
+};
+export type RemoteDevice = { id: string; label: string; created: string; lastSeen: string; lastIp: string; expires: string };
+export type PasskeyInfo = { id: string; label: string; created: string; lastUsed: string };
 
 export type FileStat = { path: string; name: string; dir: boolean; size: number; mtime: number; mime: string };
 

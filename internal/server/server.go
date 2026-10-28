@@ -2,6 +2,7 @@
 //
 // 这个服务能让人（经由 agent）在这台机器上跑任意命令，所以**永远要登录令牌**，哪怕只听
 // 127.0.0.1 —— 本机端口不一定只有本机连得到（隧道、端口转发），从进程里看不出来。
+// 远程（云端中继）进来的请求换一套凭据（设备 cookie + passkey，不认令牌），见 remoteapi.go 和 docs/dev/REMOTE.md。
 package server
 
 import (
@@ -28,10 +29,12 @@ import (
 	"github.com/coder/acp-go-sdk"
 	"github.com/gorilla/websocket"
 
+	"github.com/zbysir/gerdr/internal/auth"
 	"github.com/zbysir/gerdr/internal/config"
 	"github.com/zbysir/gerdr/internal/ext"
 	"github.com/zbysir/gerdr/internal/hub"
 	"github.com/zbysir/gerdr/internal/plugins"
+	"github.com/zbysir/gerdr/internal/remote"
 	"github.com/zbysir/gerdr/internal/uisite"
 	"github.com/zbysir/gerdr/internal/version"
 	"github.com/zbysir/gerdr/internal/webui"
@@ -49,6 +52,8 @@ type Server struct {
 	Log     *slog.Logger
 	// OnConfig：界面上存了 config.json 之后（agents 那一节要热换）
 	OnConfig func()
+	// Remote：远程访问（设备表、passkey、中继）。nil = 这个进程不管远程（测试里）。
+	Remote *remote.Service
 }
 
 // cookieName：按令牌区分。cookie 不分端口 —— 同一个浏览器里开着两个 gerdr（正式的 + 调试的，都在 127.0.0.1），
@@ -182,6 +187,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/importable", s.importable)
 	s.extRoutes(mux)
 	s.importRoutes(mux)
+	if s.Remote != nil {
+		s.remoteRoutes(mux)
+	}
 	mux.HandleFunc("GET /api/system/stats", s.stats)
 	mux.HandleFunc("GET /api/fs/dirs", s.dirs)
 	mux.HandleFunc("GET /api/fs/stat", s.fileStat)
@@ -207,7 +215,7 @@ func (s *Server) Handler() http.Handler {
 	return s.guard(mux)
 }
 
-// guard：令牌 + CSRF + 安全头。
+// guard：令牌 + CSRF + 安全头。远程（中继）进来的请求换一套规则，见 remoteGuard。
 func (s *Server) guard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
@@ -215,6 +223,10 @@ func (s *Server) guard(next http.Handler) http.Handler {
 		h.Set("Referrer-Policy", "no-referrer")
 		h.Set("X-Frame-Options", "DENY")
 		h.Set("Content-Security-Policy", cspWith(""))
+		if auth.FromRemote(r) {
+			s.remoteGuard(w, r, next)
+			return
+		}
 		p := r.URL.Path
 		if p == "/auth" || !(strings.HasPrefix(p, "/api/") || p == "/ws") {
 			next.ServeHTTP(w, r)

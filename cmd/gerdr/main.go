@@ -25,6 +25,7 @@ import (
 	"github.com/zbysir/gerdr/internal/ext"
 	"github.com/zbysir/gerdr/internal/hub"
 	"github.com/zbysir/gerdr/internal/plugins"
+	"github.com/zbysir/gerdr/internal/remote"
 	"github.com/zbysir/gerdr/internal/server"
 	"github.com/zbysir/gerdr/internal/sysenv"
 	"github.com/zbysir/gerdr/internal/uisite"
@@ -77,7 +78,7 @@ func main() {
 		Short: "打印版本",
 		Run:   func(cmd *cobra.Command, args []string) { fmt.Println(version.Version) },
 	})
-	root.AddCommand(sessionCmd(), uiCmd())
+	root.AddCommand(sessionCmd(), uiCmd(), remoteCmd())
 	if err := root.Execute(); err != nil {
 		if len(os.Args) > 1 && (os.Args[1] == "session" || os.Args[1] == "ui") {
 			fail(err) // 给 agent 用的：错误也是 JSON
@@ -218,8 +219,19 @@ func runServe(open, appMode bool, parentPID int) error {
 	stopUI := make(chan struct{})
 	defer close(stopUI)
 	go ui.Watch(stopUI)
+	// 远程访问：设备表 / passkey 总是打开（设置里要能看、能踢）；配了中继才真的连出去。
+	// 起不来（证书签不下来、没 join 过）不拦启动，原因在设置 → 远程访问里看。
+	rcfg, err := config.LoadRemote(env.Dir)
+	if err != nil {
+		return fmt.Errorf("读远程访问配置（%s）失败：%w", config.RemoteDir(env.Dir), err)
+	}
+	rm, err := remote.Open(env.Dir, rcfg, log)
+	if err != nil {
+		return err
+	}
+	defer rm.Close()
 	srv := &server.Server{Hub: h, Token: token, Config: cfg, Layout: layout, Plugins: pm, Ext: em, Log: log, OnConfig: applyAgents,
-		UI: ui, ESM: uisite.NewESM(env.ESMCDN, filepath.Join(env.Dir, "cache", "esm"))}
+		UI: ui, ESM: uisite.NewESM(env.ESMCDN, filepath.Join(env.Dir, "cache", "esm")), Remote: rm}
 	ln, err := server.Listen(env.Host, env.Port)
 	if err != nil && env.Port != 0 {
 		// 默认口被占了（比如上一个实例还没退干净）：换一个空闲的，别起不来。
@@ -234,17 +246,23 @@ func runServe(open, appMode bool, parentPID int) error {
 	_ = os.WriteFile(infoPath(env), si, 0o600)
 	defer os.Remove(infoPath(env))
 
-	hs := &http.Server{Handler: srv.Handler(), ReadHeaderTimeout: 10 * time.Second}
+	handler := srv.Handler()
+	hs := &http.Server{Handler: handler, ReadHeaderTimeout: 10 * time.Second}
 	go func() {
 		if err := hs.Serve(ln); err != nil && err != http.ErrServerClosed {
 			log.Error("serve", "err", err)
 		}
 	}()
+	// 远程那条路和本机口是同一个 handler，只是先盖一个「从远程进来的」章（规则完全不同，见 server.remoteGuard）
+	rm.Start(server.RemoteHandler(handler))
 	u := loginURL(env.Host, port, token)
 	if appMode {
 		fmt.Println("GERDR_READY " + u)
 	} else {
 		fmt.Printf("gerdr %s\n  打开：%s\n  数据：%s\n", version.Version, u, env.Dir)
+		if r := rm.URL(); r != "" {
+			fmt.Printf("  远程：%s（新设备：gerdr remote pair）\n", r)
+		}
 	}
 	if open {
 		openBrowser(u)

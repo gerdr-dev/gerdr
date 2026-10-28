@@ -216,6 +216,10 @@ React（ui/，不打包）  ←WebSocket / HTTP→  hub（internal/hub）  ←AC
   而 agent 写出来 / 抓下来的文件都不可信。PDF 例外（Chrome 的 PDF 查看器在 sandbox 下不渲染）。走 ServeContent 带 Range，视频才能拖。
 - 打不开时先原样问、再剥行号锚点重试（`a.md#L21` / `main.go:42`）—— 不能先剥，`notes#1.md` 是合法文件名。
 
+## 远程访问（internal/auth、relay、acme、remote + server/remoteapi.go）
+
+经云端中继对外，配对码 + passkey；本机令牌在远程不认。设计和坑在 [REMOTE.md](REMOTE.md)，动这块之前先读它。
+
 ## mac App
 
 `mac/Sources/main.swift`：AppKit + WKWebView，`swiftc` 直接编（不需要 Xcode）。起内嵌的

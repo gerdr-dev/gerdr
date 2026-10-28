@@ -114,7 +114,37 @@ export default definePlugin({
 | `GERDR_CLAUDE_BIN` / `GERDR_CODEX_BIN` | 自动找 | agent 可执行文件的位置 |
 
 **安全**：gerdr 等于一个能在你机器上跑命令的入口，所以永远要令牌，哪怕只听 127.0.0.1。
-别把它的端口转发到公网。
+别把它的端口转发到公网 —— 要从外面用，走下面的「远程访问」。
+
+## 远程访问（手机 / 别的电脑）
+
+和 herdr-web 同一套：经云端中继（[herdr-relay](https://github.com/zbysir/herdr-web)）对外，TLS 在这台机器上终止，
+中继只转密文。新设备用**配对码**进来（只有坐在机器前的人能出），之后加一把 **passkey**，换新设备就不用再回机器前。
+本机的令牌在远程**不好使**。设计和理由见 [docs/dev/REMOTE.md](docs/dev/REMOTE.md)。
+
+一次性的准备：
+
+```bash
+# VPS 上（已经有 herdr-relay 的话）：给这台机器出一个邀请码
+herdr-relay invite gerdr.example.com
+
+# 这台机器上：注册，顺带配好证书（DNS-01 自己签，这里以 Cloudflare 为例）
+gerdr remote join https://relay.example.com gerdr.example.com <邀请码> \
+  --dns cloudflare --env CLOUDFLARE_DNS_API_TOKEN=…
+```
+
+它会打出要加的 DNS 记录（A 指到中继、一条 CAA），配置写进 `~/.gerdr/remote/remote.json`，重启 gerdr 生效（mac App 也认）。
+
+然后：
+
+- **配对**：设置 →「远程访问」→ 出一个配对码（或 `gerdr remote pair`），手机扫码就进来了。码 5 分钟、用一次就废。
+- **passkey**：在手机上打开的 gerdr 里，设置 →「远程访问」→ 加一把 passkey。配过对的设备 24 小时没验证要再刷一次。
+- **踢设备**：设置里点「踢掉」，或 `gerdr remote devices` / `gerdr remote revoke <id|all>`（all 连 passkey 一起清）。
+- `gerdr remote status` 看中继连没连上、证书什么时候到期。
+
+也能全用环境变量配（盖过 remote.json）：`GERDR_RELAY_URL`、`GERDR_RELAY_HOST`、`GERDR_ACME_DNS`、`GERDR_<DNS 凭据>`
+（比如 `GERDR_CLOUDFLARE_DNS_API_TOKEN`）、`GERDR_ACME_EMAIL`，或者自己给证书 `GERDR_TLS_CERT` / `GERDR_TLS_KEY`；
+`GERDR_DEVICE_TTL_DAYS`（默认 90，0 = 永不过期）、`GERDR_REAUTH_HOURS`（默认 24，0 = 不要求）。
 
 **多个账号 / 换启动参数**：设置 → Agent →「加一个 Claude」，起个名字（比如「Claude 2」），给它一套环境变量：
 订阅账号用一个单独的 `CLAUDE_CONFIG_DIR=~/.claude-2`（然后在终端里 `CLAUDE_CONFIG_DIR=~/.claude-2 claude` 进去 `/login` 一次），

@@ -1,0 +1,215 @@
+<!doctype html>
+<!--
+  远程那条路上「没配过对 / 太久没验证」时拿到的唯一一页。故意不用 React 界面：没认证的人连界面源码、
+  esm 代理都碰不到（见 remoteapi.go 的包注释），所以这一页自己带样式和脚本，内联脚本靠 nonce 过 CSP。
+
+  两种模式：
+    pair    这台设备从来没配过对：要一个配对码（只有坐在机器前的人能出：gerdr remote pair / 设置 → 远程访问）。
+    reauth  配过对，但太久没过 passkey 了：点一下 passkey 就行，不用回机器前。
+  两种都留着配对码输入框：passkey 丢了、或者这台设备上没有，总得有条回去的路。
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>gerdr · 配对</title>
+<style>
+  /* 和 ui/src/index.css 的 token 同一组值（这一页不加载界面，抄过来） */
+  :root {
+    --bg: oklch(0.99 0 0); --card: oklch(1 0 0); --fg: oklch(0.2 0 0); --muted: oklch(0.52 0 0);
+    --line: oklch(0.91 0 0); --brand: oklch(0.58 0.15 255); --brand-fg: oklch(0.98 0 0);
+    --bad: oklch(0.6 0.21 25); --ctl: oklch(0.955 0 0);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: oklch(0.165 0 0); --card: oklch(0.2 0 0); --fg: oklch(0.93 0 0); --muted: oklch(0.66 0 0);
+      --line: oklch(0.29 0 0); --brand: oklch(0.7 0.13 250); --brand-fg: oklch(0.2 0 0);
+      --bad: oklch(0.68 0.19 25); --ctl: oklch(0.25 0 0);
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg); color: var(--fg);
+    font: 14px/1.6 -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", sans-serif;
+    display: grid; place-items: center; padding: 16px;
+  }
+  .card {
+    width: 100%; max-width: 400px; background: var(--card); border: 1px solid var(--line);
+    border-radius: 14px; padding: 22px;
+  }
+  h1 { font-size: 17px; font-weight: 600; margin: 0 0 6px; }
+  p { margin: 0 0 14px; color: var(--muted); font-size: 13px; }
+  code { font: 12px ui-monospace, Menlo, monospace; background: var(--ctl); border: 1px solid var(--line);
+         border-radius: 4px; padding: 1px 5px; color: var(--fg); }
+  button {
+    font: inherit; cursor: pointer; border-radius: 8px; padding: 9px 14px;
+    border: 1px solid var(--line); background: var(--ctl); color: var(--fg);
+  }
+  button.primary { background: var(--brand); color: var(--brand-fg); border-color: transparent; font-weight: 500; }
+  button:disabled { opacity: .6; cursor: default; }
+  .wide { width: 100%; }
+  .row { display: flex; gap: 8px; }
+  input {
+    /* 16px：小于 16px 时 iOS 聚焦输入框会把整页放大 */
+    flex: 1; min-width: 0; font: 16px ui-monospace, Menlo, monospace; text-align: center;
+    text-transform: uppercase; letter-spacing: .3em; padding: 9px 10px; border-radius: 8px;
+    border: 1px solid var(--line); background: var(--bg); color: var(--fg); outline: none;
+  }
+  input:focus { border-color: var(--brand); }
+  input::placeholder { letter-spacing: normal; }
+  .hint { font-size: 12px; color: var(--muted); margin: 6px 0 16px; }
+  .err { color: var(--bad); font-size: 13px; margin: 12px 0 0; min-height: 1em; }
+  .foot { margin: 18px 0 0; padding-top: 14px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1 id="title">这台设备还没配对</h1>
+  <p id="lead">在跑 gerdr 的那台机器上打开「设置 → 远程访问 → 配对新设备」，或者执行 <code>gerdr remote pair</code>，
+    用这台设备的相机扫那个二维码，或者把 8 位码抄到下面。一台设备配一次，之后直接进。</p>
+
+  <div id="pk" hidden>
+    <button id="pkBtn" class="primary wide">用 passkey 登录</button>
+    <div class="hint" id="pkHint">不用回机器前 —— 这是 passkey 的主要好处。</div>
+  </div>
+
+  <div class="row">
+    <input id="code" maxlength="11" placeholder="配对码" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="配对码">
+    <button id="go">配对</button>
+  </div>
+  <div class="err" id="err"></div>
+
+  <div class="foot">配对码 5 分钟过期、用一次就废，截图和二维码被拍走都没有长期风险。</div>
+</div>
+<script nonce="{{NONCE}}">
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var busy = false;
+  var err = function (m) { $("err").textContent = m || ""; };
+  // 进去用 replace + 同源导航：SameSite=Strict 的 cookie 在「从别的 app 点链接进来」那一下不会带，
+  // 一次同源发起的导航才带得上（reload 在有的浏览器上保留原来那个跨站的发起方）。
+  var enter = function () { location.replace("/"); };
+
+  async function api(method, path, body) {
+    var res = await fetch(path, {
+      method: method, credentials: "same-origin",
+      headers: body !== undefined ? { "Content-Type": "application/json", "X-Gerdr": "1" } : { "X-Gerdr": "1" },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+    var data = null;
+    try { data = await res.json(); } catch (e) {}
+    if (!res.ok) {
+      var e = new Error((data && data.error) || res.statusText);
+      e.status = res.status;
+      throw e;
+    }
+    return data;
+  }
+
+  async function submit() {
+    var c = $("code").value.replace(/[\s-]/g, "").toUpperCase();
+    if (c.length !== 8 || busy) return;
+    busy = true; err("");
+    try {
+      await api("POST", "/api/remote/pair", { code: c });
+      enter();
+    } catch (e) {
+      err(e.message);
+      $("code").value = "";
+    } finally {
+      busy = false;
+    }
+  }
+  $("go").onclick = submit;
+  $("code").oninput = submit; // 抄够 8 位就自动提交，手机上少点一下
+  $("code").onkeydown = function (e) { if (e.key === "Enter") submit(); };
+
+  /* ---------------- passkey（照 herdr-web 的 web/src/lib/passkey.ts） ---------------- */
+
+  // 服务端（go-webauthn）用 base64url 传字节串，浏览器 API 要 ArrayBuffer：两个方向都得转。
+  function fromB64u(s) {
+    var b = atob(s.replace(/-/g, "+").replace(/_/g, "/"));
+    return Uint8Array.from(b, function (c) { return c.charCodeAt(0); });
+  }
+  function toB64u(buf) {
+    var s = "";
+    new Uint8Array(buf).forEach(function (x) { s += String.fromCharCode(x); });
+    return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  }
+
+  // 「人划掉的」和「浏览器不让做的」在错误对象上一模一样（都是 NotAllowedError，规范故意的）。
+  // 唯一分得开的信号是时间：真弹出面板再划掉最少大半秒，被策略挡掉是当场就回。
+  // 快回来的不当取消，照旧报出来 —— 吞成静默的话就是「点了没反应、而且查不出原因」。
+  var CANCEL_MS = 700;
+  async function loginPasskey() {
+    var begin = await api("POST", "/api/remote/passkey/login/begin");
+    var pk = begin.options.publicKey;
+    var req = Object.assign({}, pk, {
+      challenge: fromB64u(pk.challenge),
+      allowCredentials: (pk.allowCredentials || []).map(function (c) { return Object.assign({}, c, { id: fromB64u(c.id) }); }),
+    });
+    var t0 = performance.now(), cred;
+    try {
+      cred = await navigator.credentials.get({ publicKey: req });
+    } catch (e) {
+      if (e && e.name === "NotAllowedError" && performance.now() - t0 < CANCEL_MS) {
+        throw new Error("浏览器没让做这次验证，而且不说原因。最常见的是这台设备上没有这个站点的 passkey。下面的配对码也能进。");
+      }
+      if (e && (e.name === "NotAllowedError" || e.name === "AbortError")) return false; // 人取消了，不是错误
+      throw e;
+    }
+    if (!cred) throw new Error("浏览器没有返回凭据");
+    var r = cred.response;
+    await api("POST", "/api/remote/passkey/login/finish?c=" + encodeURIComponent(begin.ceremony), {
+      id: cred.id, rawId: toB64u(cred.rawId), type: cred.type,
+      clientExtensionResults: cred.getClientExtensionResults(),
+      response: {
+        clientDataJSON: toB64u(r.clientDataJSON),
+        authenticatorData: toB64u(r.authenticatorData),
+        signature: toB64u(r.signature),
+        userHandle: r.userHandle ? toB64u(r.userHandle) : undefined,
+      },
+    });
+    return true;
+  }
+  $("pkBtn").onclick = async function () {
+    if (busy) return;
+    busy = true; err("");
+    $("pkBtn").disabled = true;
+    try {
+      if (await loginPasskey()) enter();
+    } catch (e) {
+      err(e.message);
+    } finally {
+      busy = false;
+      $("pkBtn").disabled = false;
+    }
+  };
+
+  /* ---------------- 进页面先问一次「我是谁」 ---------------- */
+
+  if (new URLSearchParams(location.search).get("e") === "code") err("配对码不对或者已经过期了：回机器上再出一个。");
+  api("GET", "/api/remote/whoami").then(function (who) {
+    if (who.authed) return enter(); // cookie 其实在（Strict 在跨站进来那一下没带），直接进
+    var reauth = who.need === "passkey";
+    if (reauth) {
+      $("title").textContent = "需要再验证一次";
+      $("lead").textContent = "这台设备配过对，只是太久没做过生物验证了。";
+      $("pkBtn").textContent = "用 passkey 验证";
+      $("pkHint").textContent = "一次 Face ID / 指纹就好。";
+      $("go").textContent = "重新配对";
+    }
+    var supported = typeof PublicKeyCredential !== "undefined" && !!navigator.credentials;
+    if (who.passkeys > 0 && who.passkeyAvailable && supported) {
+      $("pk").hidden = false;
+      $("pkBtn").focus();
+    } else {
+      $("code").focus();
+    }
+  }).catch(function (e) { err(e.message); });
+})();
+</script>
+</body>
+</html>

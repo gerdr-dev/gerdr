@@ -79,7 +79,7 @@ func mergePath(a, b string) string {
 //     claude 会话里被起的，带着这几个的话子 claude 会以为自己是嵌套调用；
 //   - HERDR_*：在 herdr 的 pane 里起 gerdr 时会继承到。带着它的子 claude 会通过 herdr 的
 //     hook 把**自己的**会话报成那个 pane 的会话（herdr-web 踩过：chat 里出现别人的对话）；
-//   - GERDR_TOKEN：本服务的登录令牌，agent 跑的命令不该看得见。
+//   - GERDR_*：本服务的登录令牌、远程访问的 DNS 凭据（GERDR_CLOUDFLARE_DNS_API_TOKEN 这种），agent 跑的命令不该看得见。
 func ChildEnv(extra ...string) []string {
 	var env []string
 	for _, kv := range os.Environ() {
