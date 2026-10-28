@@ -14,7 +14,8 @@ import { childTools, MessageView, partVisible, renderPart } from "./MessageView"
 export type Row =
   // prev / next：前后紧挨着也是用户消息（连发几句、中途插话）—— 气泡叠成一摞，相邻的角收小
   | { key: string; kind: "user"; msg: GMessage; first: true; prev?: boolean; next?: boolean }
-  | { key: string; kind: "part"; part: GPart; i: number; msgId: string; kids?: ToolPart[]; first: boolean; streaming: boolean; live: boolean; tight?: boolean }
+  // peek：收着的组底下露出来的最新那一块，值是组的 key（见 buildRows）
+  | { key: string; kind: "part"; part: GPart; i: number; msgId: string; kids?: ToolPart[]; first: boolean; streaming: boolean; live: boolean; tight?: boolean; peek?: string }
   | { key: string; kind: "working"; empty: boolean; first: boolean }
   | { key: string; kind: "group"; first: boolean; open: boolean; summary: string; failed: number; busy: boolean; tight?: boolean }
   | { key: string; kind: "cleared"; n: number; first: true };
@@ -155,7 +156,12 @@ export function buildRows(msgs: GMessage[], running: boolean, showCleared = fals
       rows.push({ key, kind: "group", first, open, busy, ...summarize(run.map((r) => r.part)) });
       first = false;
       if (open) run.forEach(push);
-      else if (busy) push(run[run.length - 1]);
+      // 露出来的这一块展开没展开跟着组记、不跟这条命令记：人展开它是想看「最新在干什么」，换了下一条命令也该展开着；
+      // 也不写进那条命令自己的状态 —— 点开组看详情时各行照旧（用户要的）。key 加 :peek，和详情里同一条分开挂载
+      else if (busy) {
+        const last = run[run.length - 1];
+        push({ ...last, key: `${last.key}:peek`, peek: key });
+      }
       a = b;
     }
     // 在跑的这一轮：最底下一行状态（照 Claude Code：转圈 + 动词 + 用时 + token 数）
@@ -266,6 +272,7 @@ export const RowView = memo(
             children,
             onQuickReply: env.onQuickReply,
             quickEnabled: row.live,
+            keep: row.peek && `${env.sessionId}:peek:${row.peek}`,
           })}
         </div>
       </Frame>
@@ -285,7 +292,7 @@ export const RowView = memo(
     if (x.kind === "group" && y.kind === "group")
       return x.open === y.open && x.summary === y.summary && x.failed === y.failed && x.busy === y.busy && x.tight === y.tight && a.env.onToggleGroup === b.env.onToggleGroup;
     if (x.kind === "cleared" && y.kind === "cleared") return x.n === y.n && a.env.onShowCleared === b.env.onShowCleared;
-    if (x.kind === "part" && y.kind === "part") return x.part === y.part && x.streaming === y.streaming && x.live === y.live && x.tight === y.tight && sameKids(x.kids, y.kids);
+    if (x.kind === "part" && y.kind === "part") return x.part === y.part && x.streaming === y.streaming && x.live === y.live && x.tight === y.tight && x.peek === y.peek && sameKids(x.kids, y.kids);
     return false;
   },
 );

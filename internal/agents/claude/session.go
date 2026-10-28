@@ -384,10 +384,12 @@ func (s *session) prompt(ctx context.Context, blocks []acp.ContentBlock, msgID s
 	return acp.PromptResponse{StopReason: r.stop}, nil
 }
 
-// steer：把消息插进正在跑的那一轮。平时用 priority "now"（截断当前这次生成，马上处理）；
-// 正等人回答审批 / 提问时用 "later" —— "now" 会把那个等待中的回调掐掉，界面上的卡片撤了，
-// 这一轮就卡住了（claude-agent-acp 踩过，IJAI-1191）。
-func (s *session) steer(blocks []acp.ContentBlock, msgID string) (acpx.SteerResponse, error) {
+// steer：把消息插进正在跑的那一轮。默认 priority "next"，和 Claude Code 自己的输入框一样（它运行中回车排队用的就是 next）：
+// 等当前这步（比如正在跑的工具）做完，到下一个空档塞进去，不截断。人点「立即发送」/ Ctrl+Enter 时用 "now"
+// （截断当前这次生成，马上处理）。原来默认就是 now，一插话正在跑的工具调用就被掐成「未完成」（用户报的）。
+// 正等人回答审批 / 提问时一律 "later" —— "now" 会把那个等待中的回调掐掉，界面上的卡片撤了，
+// 这一轮就卡住了（claude-agent-acp 踩过，IJAI-1191）；next 会不会也掐没验证过，不冒这个险。
+func (s *session) steer(blocks []acp.ContentBlock, msgID string, now bool) (acpx.SteerResponse, error) {
 	s.mu.Lock()
 	t, pr, open, auto := s.turn, s.p, s.openInputs, s.auto
 	s.mu.Unlock()
@@ -395,9 +397,11 @@ func (s *session) steer(blocks []acp.ContentBlock, msgID string) (acpx.SteerResp
 	if (t == nil && !auto) || pr == nil {
 		return acpx.SteerResponse{Outcome: acpx.SteerPromptRequired}, nil
 	}
-	prio := "now"
+	prio := "next"
 	if open > 0 {
 		prio = "later"
+	} else if now {
+		prio = "now"
 	}
 	if err := pr.send(userMessage(blocks, msgID, prio)); err != nil {
 		return acpx.SteerResponse{}, err

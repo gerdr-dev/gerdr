@@ -136,7 +136,7 @@ export function ToolBody({ meta, input, keep }: { meta: ToolMeta; input: unknown
   );
 }
 
-export function ToolCall({ part, children, running }: { part: ToolPart; children?: ReactNode; running: boolean }) {
+export function ToolCall({ part, children, running, keep: keepOpen }: { part: ToolPart; children?: ReactNode; running: boolean; keep?: string }) {
   const meta = (part.toolMetadata ?? { kind: "other", status: "pending" }) as ToolMeta;
   const Icon = ICONS[meta.kind] ?? Wrench;
   const busy = (part.state === "input-streaming" || part.state === "input-available") && running;
@@ -148,7 +148,7 @@ export function ToolCall({ part, children, running }: { part: ToolPart; children
   const session = useSession();
   // 展开没展开记在组件外面：对话是虚拟列表，滚出屏幕会卸载，滚回来要还是原样
   const keep = session ? `${session.id}:tool:${part.toolCallId}` : undefined;
-  const [open, setOpen] = useKept<boolean | undefined>(keep, undefined);
+  const [open, setOpen] = useKept<boolean | undefined>(keepOpen ?? keep, undefined);
   const isOpen = open ?? (hasDiff || !!children);
   const title = part.title || part.toolName;
   const inp = part.input && typeof part.input === "object" ? (part.input as Record<string, unknown>) : undefined;

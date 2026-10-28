@@ -633,7 +633,7 @@ func (a *Agent) HandleExtensionMethod(ctx context.Context, method string, params
 		if err != nil {
 			return nil, err
 		}
-		return s.steer(p.Prompt, p.MessageId)
+		return s.steer(p.Prompt, p.MessageId, p.Now)
 	case acpx.MethodRewind:
 		var p acpx.RewindRequest
 		if err := json.Unmarshal(params, &p); err != nil {

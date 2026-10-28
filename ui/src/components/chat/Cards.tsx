@@ -268,14 +268,15 @@ export function AskCard({ sessionId, data }: { sessionId: string; data: GData["a
         if (keyRef.current(e.nativeEvent)) e.preventDefault();
       }}
     >
-      <div className="mb-1 flex items-center gap-1.5 text-[12px] text-muted-foreground">
+      {/* 不写「需要你回答」：卡片本身就说明了。只剩题号（多题时）和题目的小标签 */}
+      <div className="mb-1.5 flex items-center gap-1.5 text-[12px] text-muted-foreground">
         <HelpCircle className="size-3.5 text-brand" />
-        {qs.length > 1 ? `问题 ${i + 1} / ${qs.length}` : "需要你回答"}
-        {q.header && <span>· {q.header}</span>}
+        {qs.length > 1 && <span>问题 {i + 1} / {qs.length}</span>}
+        {q.header && <span>{qs.length > 1 && "· "}{q.header}</span>}
       </div>
-      <div className="mb-2 text-[15px] font-medium leading-snug">{q.question}</div>
+      <div className="mb-3 text-[13px] font-medium leading-relaxed">{q.question}</div>
       {/* -mx-2.5 抵掉行的 px-2.5：选项文字和问题左边对齐，选中 / 悬停的底色往外多出一点 */}
-      <div className="-mx-2.5 flex flex-col gap-0.5">
+      <div className="-mx-2.5 flex flex-col gap-1.5">
         {opts.map((o, n) => {
           const on = picked.includes(o.label);
           return (
@@ -283,9 +284,10 @@ export function AskCard({ sessionId, data }: { sessionId: string; data: GData["a
               key={o.label}
               disabled={busy}
               className={cn(
-                "flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left text-[13px] outline-none transition-colors hover:bg-muted/60",
-                n === c && "bg-muted/60",
+                // 键盘停在哪一行要一眼看得出（原来和悬停一样只是淡灰底，看不清）：品牌色描边 + 浅底
+                "flex w-full items-center gap-3 rounded-lg px-2.5 py-2.5 text-left text-[13px] outline-none ring-1 ring-transparent ring-inset transition-colors hover:bg-muted/60",
                 on && "bg-muted hover:bg-muted",
+                n === c && "bg-brand/10 ring-brand/50 hover:bg-brand/10",
               )}
               onMouseEnter={() => c !== n && setCur({ ...cur, [q.id]: n })}
               onClick={() => {
@@ -302,6 +304,7 @@ export function AskCard({ sessionId, data }: { sessionId: string; data: GData["a
                 <span
                   className={cn(
                     "flex size-5 shrink-0 items-center justify-center rounded-md border text-[11px] text-muted-foreground tabular-nums",
+                    n === c && "border-brand/60 text-brand",
                     on && "border-transparent bg-foreground/10 text-foreground",
                   )}
                 >
@@ -314,7 +317,7 @@ export function AskCard({ sessionId, data }: { sessionId: string; data: GData["a
         {q.allowOther && (
           <input
             ref={otherRef}
-            className="mt-0.5 w-full rounded-lg border border-dashed bg-transparent px-2.5 py-2 text-[13px] outline-none placeholder:text-muted-foreground/70 focus:border-solid focus:border-ring/60"
+            className="w-full rounded-lg border border-dashed bg-transparent px-2.5 py-2 text-[13px] outline-none placeholder:text-muted-foreground/70 focus:border-solid focus:border-ring/60"
             type={q.secret ? "password" : "text"}
             placeholder={q.options?.length ? "其他，自己写…" : "你的回答…"}
             value={other[q.id] ?? ""}

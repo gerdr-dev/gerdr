@@ -1,4 +1,4 @@
-import { ArrowUp, ImagePlus, Square, X, CornerDownRight } from "lucide-react";
+import { ArrowUp, ImagePlus, Square, X, CornerDownRight, Zap } from "lucide-react";
 import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -168,7 +168,8 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
   const [held, setHeld] = useState<Holder[] | null>(null);
   const sendRef = useRef<() => void>(() => {});
 
-  const send = async () => {
+  // now：在跑时立即插话（截断它正在做的这一步）；默认照 Claude Code，排到下一个空档再插进去
+  const send = async (now = false) => {
     let t = text.trim();
     if (!imgs.length && /^\/\S+$/.test(t) && runLocal(t.slice(1))) return;
     const alias = /^\/(\S+)(.*)$/s.exec(t);
@@ -186,7 +187,7 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
     hist.current.idx = -1;
     const tid = `send-${session.id}`;
     try {
-      await api.send(session.id, content, (n) => toast.loading(`网络不好，正在重发（第 ${n} 次）…`, { id: tid }));
+      await api.send(session.id, content, (n) => toast.loading(`网络不好，正在重发（第 ${n} 次）…`, { id: tid }), now);
       toast.dismiss(tid);
       sentAt.current = Date.now();
       if (escPending.current) {
@@ -395,7 +396,8 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
       const wantSend = sendKey === "enter" && !isCoarse() ? !e.shiftKey && !e.altKey : mod;
       if (wantSend) {
         e.preventDefault();
-        if (!busy) send();
+        // 在跑时 Ctrl/⌘+回车 = 立即插话（照 Claude Code CLI）。发送键设成 ⌘+回车时这个组合就是普通发送，立即只能点按钮
+        if (!busy) send(running && sendKey === "enter" && mod);
       }
     }
   };
@@ -502,7 +504,7 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
               addFiles(files);
             }
           }}
-          placeholder={running ? "它在干活，说一句会直接插进去" : "说点什么…  / 看命令"}
+          placeholder={running ? (sendKey === "enter" ? "它在干活：↵ 等这一步做完插进去，Ctrl+↵ 立即插" : "它在干活：说一句会等这一步做完插进去") : "说点什么…  / 看命令"}
           className="block max-h-[40vh] min-h-[44px] w-full resize-none bg-transparent px-4 pt-3 pb-1 text-[1em] max-md:text-[16px] leading-relaxed outline-none placeholder:text-muted-foreground/70"
         />
         <div className="flex items-center gap-1 px-2.5 pb-2.5">
@@ -544,13 +546,23 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
               <TooltipContent>打断（Esc）</TooltipContent>
             </Tooltip>
           )}
+          {running && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button size="icon" variant="ghost" className="size-8 rounded-full" disabled={!hasText || busy} onMouseDown={keepFocus} onClick={() => send(true)}>
+                  <Zap className="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>立即发送：打断它正在做的这一步{sendKey === "enter" ? "（Ctrl+↵）" : ""}</TooltipContent>
+            </Tooltip>
+          )}
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button size="icon" className="size-8 rounded-full" disabled={!hasText || busy} onMouseDown={keepFocus} onClick={send}>
+              <Button size="icon" className="size-8 rounded-full" disabled={!hasText || busy} onMouseDown={keepFocus} onClick={() => send()}>
                 {running ? <CornerDownRight className="size-4" /> : <ArrowUp className="size-4" />}
               </Button>
             </TooltipTrigger>
-            <TooltipContent>{running ? "插进正在跑的这一轮" : "发送"}</TooltipContent>
+            <TooltipContent>{running ? "等它做完这一步再插进去" : "发送"}</TooltipContent>
           </Tooltip>
         </div>
       </div>

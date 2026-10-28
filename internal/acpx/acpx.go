@@ -153,7 +153,10 @@ type SteerRequest struct {
 	SessionId acp.SessionId      `json:"sessionId"`
 	Prompt    []acp.ContentBlock `json:"prompt"`
 	MessageId string             `json:"messageId,omitempty"`
-	Meta      map[string]any     `json:"_meta,omitempty"`
+	// Now：立即插（截断正在生成的这次，马上处理）。默认（false）照 Claude Code 自己的输入框：排到下一个空档
+	// （当前这步工具跑完）再塞进去，不打断。不分优先级的 agent（codex 的 turn/steer）忽略它。
+	Now  bool           `json:"now,omitempty"`
+	Meta map[string]any `json:"_meta,omitempty"`
 }
 
 // SteerResponse.Outcome：

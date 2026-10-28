@@ -466,11 +466,12 @@ type SendResult struct {
 // Send：clientID 是 client 自己生成的消息 id（UUID）。网络不好时 client 会拿同一个 id 重发 ——
 // 第一次其实已经到了、只是响应丢了 —— 这里认出来直接回上次的结果，不会发出两条。
 func (s *Session) Send(ctx context.Context, content []acp.ContentBlock, clientID string) (SendResult, error) {
-	return s.SendFrom(ctx, content, clientID, "")
+	return s.SendFrom(ctx, content, clientID, "", false)
 }
 
 // SendFrom：from 是发送方的会话 id（另一个 agent 经 `gerdr session send` 发来的），记在日志里给界面标出来。
-func (s *Session) SendFrom(ctx context.Context, content []acp.ContentBlock, clientID, from string) (SendResult, error) {
+// urgent：在跑时立即插话（截断当前这次生成），见 acpx.SteerRequest.Now；不在跑时没区别。
+func (s *Session) SendFrom(ctx context.Context, content []acp.ContentBlock, clientID, from string, urgent bool) (SendResult, error) {
 	msgID := uuid.NewString()
 	if _, err := uuid.Parse(clientID); err == nil {
 		msgID = clientID
@@ -553,7 +554,7 @@ func (s *Session) SendFrom(ctx context.Context, content []acp.ContentBlock, clie
 		// promptRequired 有两种可能：这一轮刚好结束了（等 running 落下来，按新一轮发），或者
 		// 这一轮还没在 agent 那边真正开始（比如 claude 进程还在启动）——那就隔一会儿再插一次。
 		for i := 0; i < 100; i++ {
-			res, err := agenthost.Call[acpx.SteerResponse](ctx, c, acpx.MethodSteer, acpx.SteerRequest{SessionId: acp.SessionId(agentSID), Prompt: content, MessageId: msgID})
+			res, err := agenthost.Call[acpx.SteerResponse](ctx, c, acpx.MethodSteer, acpx.SteerRequest{SessionId: acp.SessionId(agentSID), Prompt: content, MessageId: msgID, Now: urgent})
 			if err != nil {
 				return SendResult{}, err
 			}

@@ -264,7 +264,11 @@ function AgentList() {
       }
     }),
   );
-  rows.sort((a, b) => a.rank - b.rank || b.s.updatedAt - a.s.updatedAt);
+  // 同一档里新的在前，但「新」看的是进入这个状态的时刻：在跑的按这一轮开始的时间（跑的过程中不变），
+  // 别的按 updatedAt（不在跑时它不动，刚跑完的就排最前）。原来一律按 updatedAt：在跑的 agent 每出一点字就更新一次，
+  // 几个一起跑时列表一直在跳（用户报的）；只按界面位置排又会让刚跑完的沉到底（也报了）。
+  const since = (s: SessionSummary) => (s.status === "running" && s.turn ? s.turn.startedAt : s.updatedAt);
+  rows.sort((a, b) => a.rank - b.rank || since(b.s) - since(a.s));
   return (
     <div className="flex min-h-0 flex-1 flex-col border-t">
       <div className="flex shrink-0 items-center px-3.5 pt-2 pb-1 text-[11px] font-medium text-muted-foreground">

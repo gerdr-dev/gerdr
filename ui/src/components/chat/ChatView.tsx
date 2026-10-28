@@ -20,6 +20,23 @@ import { askKey } from "@/lib/askkeys";
 // 最后一条和输入框之间留一截（照 ChatGPT 桌面版的留白）：贴太近的话最后那行元信息和输入框挤在一起
 const ListFooter = () => <div className="h-12" />;
 
+/**
+ * 贴着底时，不让 Virtuoso 往上「补偿」。一行的顶已经滚出视野上沿、这时把它收起来（展开的长工具输出），
+ * Virtuoso 当它是「视野上面的行变矮了」，scrollBy 负的那么多，想让下面的内容不动 —— 可浏览器已经把 scrollTop 夹回底部了，
+ * 再往上推就离开了底部：收起之后反而不贴底、冒出「回到底部」（用户报的）。
+ * 只在调用那一刻确实在底部时才吞：人往上翻时位置早已不在底部，那时的补偿照旧（不然翻的时候内容会跳）。
+ */
+function keepBottomOnShrink(el: HTMLElement, bottomRef: { current: boolean }) {
+  if ((el as any).__keepBottom) return;
+  (el as any).__keepBottom = true;
+  const scrollBy = el.scrollBy.bind(el) as (o: ScrollToOptions) => void;
+  el.scrollBy = ((o: ScrollToOptions) => {
+    const atBottom = el.scrollHeight - el.clientHeight - el.scrollTop < 80;
+    if (typeof o === "object" && (o.top ?? 0) < 0 && atBottom && bottomRef.current) return;
+    scrollBy(o);
+  }) as typeof el.scrollBy;
+}
+
 // 顶上钉着的那句用户消息：一行，太长截掉；图片 / 文件写成 [图片] 这种占位
 function PinnedPrompt({ msg, onClick }: { msg: GMessage; onClick: () => void }) {
   const text = msg.parts
@@ -167,6 +184,11 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
   };
   useEffect(() => () => cancelAnimationFrame(pinRaf.current), []);
   const lastH = useRef(0); // 上一次量到的总高（推到底之前用它判断「刚才是不是贴着底」）
+  // 人刚点了展开（工具调用、折叠组、思考）：这一小会儿内容变高不追到底，点的那一行留在原地，展开的东西往下长。
+  // 不然贴着底时一展开就被推到最底下，刚点的那行顶出屏幕（用户报的）。收起变矮不受影响，照样贴底。
+  const holdUntil = useRef(0);
+  const hold = () => (holdUntil.current = performance.now() + 500);
+  const holding = () => performance.now() < holdUntil.current;
   // 贴没贴底直接量 DOM，不信 Virtuoso 的 atBottom：贴着底时把上面一块展开的东西收起来，内容变矮、浏览器把 scrollTop
   // 往回夹，Virtuoso 拿旧的总高一算以为人往上翻了，报 false 之后就不再改回来 —— 明明在底部却冒出「回到底部」，
   // 新输出也不跟了（用户报的）。
@@ -190,6 +212,7 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
       onShowCleared: () => setShowCleared(true),
       onToggleGroup: (key) => {
         const { openGroups: g, setOpenGroups: set } = latest.current;
+        hold();
         set({ ...g, [key]: !g[key] });
       },
     }),
@@ -197,7 +220,7 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
   );
   return (
     <SessionContext.Provider value={session}>
-      <div className="flex h-full min-h-0 flex-col" onMouseUp={clickToType}>
+      <div className="flex h-full min-h-0 flex-col" onMouseUp={clickToType} onClickCapture={(e) => (e.target as HTMLElement).closest("[aria-expanded]") && hold()}>
         <div className="relative min-h-0 flex-1">
           {!loaded && <div className="py-10 text-center text-[13px] text-muted-foreground">加载中…</div>}
           {loaded && msgs.length === 0 && sub && <div className="py-16 text-center text-[13px] text-muted-foreground">子 agent 还没说话</div>}
@@ -215,7 +238,7 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
               computeItemKey={(_, r) => r.key}
               itemContent={(_, r) => <RowView row={r} env={env} />}
               // 在底部就跟着新内容走（直接跳，不要动画）；人往上翻了就不打扰
-              followOutput={(bottom) => (bottom ? "auto" : false)}
+              followOutput={(bottom) => (bottom && !holding() ? "auto" : false)}
               // 重新挂载（切回一个被卸载过的 tab）时回到上次的位置：在底部就回底部，不在就回那个高度
               {...(saved && !saved.bottom ? { initialScrollTop: saved.top } : { initialTopMostItemIndex: { index: "LAST" as const, align: "end" as const } })}
               atBottomThreshold={80}
@@ -223,7 +246,10 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
                 syncBottom();
                 requestAnimationFrame(syncBottom); // 它报的那一刻高度可能还没量完，下一帧再量一次
               }}
-              scrollerRef={(el) => (scrollerEl.current = el as HTMLElement | null)}
+              scrollerRef={(el) => {
+                scrollerEl.current = el as HTMLElement | null;
+                if (el) keepBottomOnShrink(el as HTMLElement, bottomRef);
+              }}
               onScroll={(e) => {
                 if (!activeRef.current) return; // 藏着期间的滚动（WebKit 清零）不算
                 const el = e.currentTarget as HTMLElement;
@@ -240,7 +266,8 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
                 const el = scrollerEl.current;
                 if (!el) return;
                 const wasAtBottom = lastH.current - el.clientHeight - el.scrollTop < 80;
-                if (bottomRef.current && wasAtBottom) el.scrollTop = el.scrollHeight;
+                const grew = el.scrollHeight > lastH.current;
+                if (bottomRef.current && wasAtBottom && !(grew && holding())) el.scrollTop = el.scrollHeight;
                 lastH.current = el.scrollHeight;
                 syncBottom();
               }}

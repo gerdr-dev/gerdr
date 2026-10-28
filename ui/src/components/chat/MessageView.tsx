@@ -164,6 +164,8 @@ export type PartCtx = {
   children: Map<string, ToolPart[]>;
   onQuickReply: (s: string) => void;
   quickEnabled: boolean;
+  /** 展开状态记在这个 key 下（不按块自己记），见 buildRows 的 peek */
+  keep?: string;
 };
 
 /** 思考过程：展开没展开记在组件外面（虚拟列表滚出去会卸载）。 */
@@ -229,13 +231,13 @@ export function renderPart(p: GPart, i: number, ctx: PartCtx): ReactNode {
       );
     case "reasoning":
       if (!p.text.trim()) return null;
-      return <KeptReasoning key={i} keep={`${ctx.sessionId}:r:${ctx.msgId}:${i}`} streaming={ctx.streaming} text={p.text} />;
+      return <KeptReasoning key={i} keep={ctx.keep || `${ctx.sessionId}:r:${ctx.msgId}:${i}`} streaming={ctx.streaming} text={p.text} />;
     case "dynamic-tool": {
       const tp = p as ToolPart;
       if (tp.toolMetadata?.parent && ctx.children.size && [...ctx.children.values()].some((arr) => arr.includes(tp))) return null;
       const kids = ctx.children.get(tp.toolCallId);
       return (
-        <ToolCall key={tp.toolCallId} part={tp} running={ctx.running}>
+        <ToolCall key={tp.toolCallId} part={tp} running={ctx.running} keep={ctx.keep || undefined}>
           {kids?.map((k) => (
             <ToolCall key={k.toolCallId} part={k} running={ctx.running} />
           ))}

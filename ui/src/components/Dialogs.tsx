@@ -147,7 +147,8 @@ function Help({ open }: { open: boolean }) {
           <div>
             <div className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">输入框里</div>
             {[
-              ["发送 / 插话", cfg.sendKey === "enter" ? "↵" : "⌘↵"],
+              ["发送 / 插话（等这一步做完）", cfg.sendKey === "enter" ? "↵" : "⌘↵"],
+              ...(cfg.sendKey === "enter" ? [["立即插话（打断这一步）", "Ctrl+↵"]] : []),
               ["换行", cfg.sendKey === "enter" ? "⇧↵" : "↵"],
               ["打断这一轮", "Esc"],
               ["斜杠命令", "/"],
