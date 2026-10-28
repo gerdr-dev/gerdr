@@ -76,11 +76,19 @@ export function ago(sec: number) {
 }
 
 // 现在报的错拼成一段文字：左边显示、新开对话时带给 agent
+// 运行时错误两份合起来：服务端那份（各个页面报上去的、只算当前这一版）+ 这个页面自己记的（右下角「急救」冒不冒看的就是它）。
+// 只看服务端的话，没报上去 / 被当成旧版丢掉的那几条，按钮冒了、面板里却说没报错。
 export function errorText(st: UIStatus | null) {
   if (!st) return "";
   const parts: string[] = [];
   if (st.build_error) parts.push("编译错误：\n" + st.build_error);
-  for (const e of st.runtime_errors || []) parts.push(`运行时错误（${e.source || ""}）：${e.message}${e.detail ? "\n" + e.detail : ""}`);
+  const local: { source?: string; message: string; detail?: string }[] = (window as any).__GERDR_UI_ERRORS__ || [];
+  const seen = new Set<string>();
+  for (const e of [...(st.runtime_errors || []), ...local.filter((e) => e.source !== "build")]) {
+    if (seen.has(e.message)) continue;
+    seen.add(e.message);
+    parts.push(`运行时错误（${e.source || ""}）：${e.message}${e.detail ? "\n" + e.detail : ""}`);
+  }
   if (st.git?.merging) parts.push("界面目录正合并到一半，有冲突：" + (st.git.conflicts || []).join(", "));
   return parts.join("\n\n").slice(0, 6000);
 }

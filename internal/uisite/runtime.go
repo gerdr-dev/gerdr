@@ -80,7 +80,7 @@ async function apply(u) {
   if (u.type === "hello") return location.reload();
   if (u.type === "reload") return location.reload();
   if (u.type === "error") {
-    build = u.build;
+    build = S.build = u.build;
     broken = true;
     overlay(u.error);
     report("build", { message: u.error.split("\n")[0], stack: u.error });
@@ -90,7 +90,9 @@ async function apply(u) {
   if ((window.__GERDR_ROUTE_ERRORS__ || 0) > 0) return location.reload();
   const prev = mods;
   mods = u.modules;
-  build = u.build;
+  // S.build 也要跟着换：报错脚本（html.go）拿它报给服务端，服务端只收当前这一版的错。
+  // 不换的话热更新过一次之后页面报的错全被当成旧版丢掉，右下角冒了「急救」、面板里却说没报错（踩过）。
+  build = S.build = u.build;
   if (u.css != null) { const el = document.getElementById("__gerdr_css__"); if (el) el.textContent = u.css; }
   if (u.boundaries && R) {
     if (!u.boundaries.length) return;
