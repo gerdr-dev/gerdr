@@ -93,6 +93,18 @@ React（ui/，不打包）  ←WebSocket / HTTP→  hub（internal/hub）  ←AC
 4. 审批按轮覆盖：模式 = `approvalPolicy` + `sandboxPolicy`，每次 `turn/start` 带上。
 5. userMessage item 在实时流里忽略（client 自己已经显示了），只在 LoadSession 重放时发。
 
+## 用量额度（`_gerdr/usage` → hub/usage.go → `/api/usage` → 侧栏的 UsageMeter）
+
+不发 `/usage`（那会进对话记录、输出是给终端看的文字）。两边都有结构化的口：
+
+- claude：stream-json 的 `control_request{subtype:"get_usage", skip_behaviors:true}`，就是 /usage 背后那个（CLI 里标着
+  Experimental）。`rate_limits.limits[]` 是服务端给的整份清单（session / weekly_all / weekly_scoped 带模型名），有它以它为准。
+  `skip_behaviors` 省掉扫 7 天本地记录（/usage 的「花在哪」）。没有活着的会话进程时临时起一个、initialize 后问、问完关：
+  没说过话的进程不写会话记录，1～2 秒；临时那个不带 skill / MCP 参数。
+- codex：app-server 的 `account/rateLimits/read`，`rateLimitsByLimitId` 每个桶 primary / secondary 两个窗口，`resetsAt` 是秒。
+
+hub 每家缓存 2 分钟、并发的只真问一次，所以界面几个窗口一起轮询也不会一直起 claude 进程。
+
 ## 回退只回退对话，不动文件
 
 以前 hub 用影子 git 仓库（`~/.gerdr/snapshots/`）给 cwd 打快照、回退时一起恢复文件，已经删了：

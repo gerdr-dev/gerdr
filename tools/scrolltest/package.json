@@ -1,0 +1,9 @@
+{
+  "name": "gerdr-scrolltest",
+  "private": true,
+  "type": "module",
+  "description": "对话列表滚动 / 闪动的复现脚本（docs/dev/SCROLL.md）",
+  "dependencies": {
+    "playwright-core": "1.64.1"
+  }
+}

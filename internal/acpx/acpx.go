@@ -49,7 +49,25 @@ const (
 	// MethodTranscriptStat：client → agent。这个会话在 agent 自己的记录文件有多大、什么时候改的。gerdr 的对话日志只记它
 	// 自己经手的事；别处（herdr / 终端）接着聊过的话，记录文件会长、gerdr 这边不知道 —— 拿它判断要不要从记录重新载入。
 	MethodTranscriptStat = "_gerdr/transcript_stat"
+	// MethodUsage：client → agent。账号的用量额度（5 小时窗口、每周……用了百分之几、什么时候重置），不挂在哪个会话上。
+	// 两边都有结构化的来源，不用解析 /usage 的文字：claude 是 stream-json 的 control_request get_usage，
+	// codex 是 app-server 的 account/rateLimits/read。不支持的 agent 回 method not found。
+	MethodUsage = "_gerdr/usage"
 )
+
+type UsageResponse struct {
+	Plan   string       `json:"plan,omitempty"` // 订阅档位，agent 原样报的（team / max / plus / prolite……）
+	Limits []UsageLimit `json:"limits"`
+}
+
+// UsageLimit：一条额度。Label 是给人看的（界面直接显示），Kind 是 agent 原样的类别，界面按它挑「最要紧的那条」。
+type UsageLimit struct {
+	Kind       string  `json:"kind"`
+	Label      string  `json:"label"`
+	Percent    float64 `json:"percent"`
+	ResetsAt   int64   `json:"resetsAt,omitempty"`   // unix ms，0 = 不知道
+	WindowMins int     `json:"windowMins,omitempty"` // 窗口多长，0 = 不知道
+}
 
 type TranscriptStatRequest struct {
 	SessionId acp.SessionId `json:"sessionId"`

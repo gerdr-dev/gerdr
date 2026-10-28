@@ -86,6 +86,8 @@ type State = {
   sessions: Record<string, SessionSummary>;
   /** 每个会话的对话（只有订阅着的会话有）；tv 是它的版本号，变了就重画。 */
   tv: Record<string, number>;
+  /** 会话日志前面还有没拉的（打开时服务端只推最近一段）：more = 还有，loading = 正在拉。没有这一项 = 已经到头了。 */
+  older: Record<string, "more" | "loading">;
   layout: Layout;
   config: Config;
   prefixActive: boolean;
@@ -140,6 +142,7 @@ export const useStore = create<State>(() => ({
   remoteConns: [],
   sessions: {},
   tv: {},
+  older: {},
   layout: defaultLayout(),
   config: DEFAULT_CONFIG,
   prefixActive: false,
@@ -230,11 +233,12 @@ export function subTranscript(id: string, sub: string): Transcript {
   return t;
 }
 
-export function applyEvents(id: string, events: HubEvent[], reset: boolean) {
+export function applyEvents(id: string, events: HubEvent[], reset: boolean, older = false) {
   const t = transcript(id);
   if (reset) {
     t.reset(events);
     rawEvents.set(id, [...events]);
+    setOlder(id, older ? "more" : undefined);
   } else {
     const fresh = events.filter((e) => e.seq > t.lastSeq);
     for (const e of fresh) t.apply(e);
@@ -249,6 +253,42 @@ export function applyEvents(id: string, events: HubEvent[], reset: boolean) {
     else for (const e of events) st.apply(e);
   }
   set((s) => ({ tv: { ...s.tv, [id]: (s.tv[id] ?? 0) + 1 } }));
+}
+
+function setOlder(id: string, v: "more" | "loading" | undefined) {
+  set((s) => {
+    if (s.older[id] === v) return {};
+    const older = { ...s.older };
+    if (v) older[id] = v;
+    else delete older[id];
+    return { older };
+  });
+}
+
+/**
+ * 往上翻到顶了：拉更早的一段接在前面，整份重放（Transcript 只会从头往后放；消息 id 按日志序号起，已有的不变）。
+ * 打开会话时服务端只推最近一段（hub/blob.go）—— 远程打开一个几十 MB 的会话，整份推过去传不完。
+ */
+export async function loadOlder(id: string) {
+  const raw = rawEvents.get(id);
+  if (get().older[id] !== "more" || !raw?.length) return;
+  setOlder(id, "loading");
+  let next: "more" | undefined = "more";
+  try {
+    const r = await api.olderEvents(id, raw[0].seq);
+    // 等的这会儿整份重推过（回退、重连接不上）：手里换了一份，这次拉到的接不上，丢掉（older 也由那次重推定了）
+    if (rawEvents.get(id) !== raw) return;
+    next = r.older ? "more" : undefined;
+    const all = [...(r.events ?? []), ...raw];
+    rawEvents.set(id, all);
+    transcript(id).reset(all);
+    for (const [k, st] of subTranscripts) if (k.startsWith(id + "#")) st.reset(all);
+    set((s) => ({ tv: { ...s.tv, [id]: (s.tv[id] ?? 0) + 1 } }));
+  } catch {
+    // 网络不好：留着 more，下次翻到顶再试
+  } finally {
+    if (get().older[id] === "loading") setOlder(id, next);
+  }
 }
 
 export function upsertSession(s: SessionSummary) {

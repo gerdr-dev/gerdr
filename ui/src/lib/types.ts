@@ -65,7 +65,8 @@ export type AgentTask = {
 // ACP ContentBlock（只列我们会用到的）
 export type ContentBlock =
   | { type: "text"; text: string }
-  | { type: "image"; data: string; mimeType: string; uri?: string }
+  // blob：推给界面时图片换成了地址（/api/blobs/<sha256>），data 是空的；接口直接回的（撤回、回退）还是带 data 的原样
+  | { type: "image"; data: string; mimeType: string; uri?: string; blob?: string }
   | { type: "resource_link"; uri: string; name: string }
   | { type: "resource"; resource: { uri: string; text?: string } };
 

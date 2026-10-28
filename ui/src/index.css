@@ -233,6 +233,13 @@
   background: color-mix(in oklch, var(--muted) 45%, transparent);
   overflow: hidden;
 }
+/* streamdown 给代码块写了行内的 content-visibility: auto（占位 200px）：屏幕外的块浏览器不排版、先按 200px 算，
+   滚到跟前才排成真实高度。虚拟列表里这一行刚挂上（还在屏幕外的预渲染区）时被量成占位高度，滚近了又变回真的 ——
+   整段内容被拽一截再弹回来，往上翻一闪一闪（用户报的；逐帧量过：同一行 899 → 753px，DOM 一个字节没变）。
+   行内样式只能 !important 压 */
+.gerdr-md [style*="content-visibility"] {
+  content-visibility: visible !important;
+}
 .gerdr-md [data-streamdown="code-block-header"] {
   height: 1.9em;
   padding-inline: 0.75em;

@@ -1,11 +1,12 @@
 // 和服务端保持同步：开机拉一次 /api/hello，之后靠 WebSocket 推。断了自己重连（重连后
-// 重新拉 hello、重新订阅，服务端会把订阅的会话日志整份再推一遍 —— 不用自己对账）。
+// 重新拉 hello、重新订阅）。订阅时带上手里每个会话日志的最后序号，服务端接得上就只补后面的，
+// 接不上（重启过、日志被改写过）整份重推 —— 对账在服务端（hub.eventsAfter），这边照单全收。
 import { api, ApiError, clientId } from "./api";
 import { toast } from "sonner";
 import { validLayout, withView } from "./layout";
 import { nativeNotify } from "./native";
 import { emitSessionChange } from "./plugins";
-import { applyEvents, applyRemoteLayout, get, loadView, mergeConfig, onLayoutChange, removeSession, set, setLayout, upsertSession, watchedSessions } from "./store";
+import { applyEvents, applyRemoteLayout, get, loadView, mergeConfig, onLayoutChange, removeSession, set, setLayout, transcripts, upsertSession, watchedSessions } from "./store";
 import type { HubEvent, SessionSummary } from "./types";
 
 let ws: WebSocket | null = null;
@@ -83,7 +84,7 @@ function connect() {
     set({ connected: true });
     watched = "";
     syncWatch();
-    // 断开期间错过的会话变化：重新拉一遍（订阅的日志服务端会整份重推）。
+    // 断开期间错过的会话变化：重新拉一遍（订阅的日志服务端会补上）。
     refreshHello();
   };
   sock.onmessage = (ev) => {
@@ -190,7 +191,7 @@ function handle(m: any) {
       removeSession(m.id);
       break;
     case "events":
-      applyEvents(m.id, (m.events ?? []) as HubEvent[], !!m.reset);
+      applyEvents(m.id, (m.events ?? []) as HubEvent[], !!m.reset, !!m.older);
       break;
     case "layout":
       if (m.data?.client !== clientId) applyRemoteLayout(m.data?.data);
@@ -233,7 +234,13 @@ export function syncWatch() {
   const key = ids.join(",");
   if (key === watched || !ws || ws.readyState !== WebSocket.OPEN) return;
   watched = key;
-  ws.send(JSON.stringify({ t: "watch", ids }));
+  // 手里已有的日志报个序号：重连、切回看过的面板时不用整份重推（远程连着时一份几十 MB）
+  const since: Record<string, number> = {};
+  for (const id of ids) {
+    const n = transcripts.get(id)?.lastSeq;
+    if (n) since[id] = n;
+  }
+  ws.send(JSON.stringify({ t: "watch", ids, since }));
 }
 
 onLayoutChange(() => syncWatch());

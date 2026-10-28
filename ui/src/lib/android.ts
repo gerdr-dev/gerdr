@@ -27,12 +27,15 @@ export function postAndroid(m: AndroidMsg) {
   port?.postMessage(JSON.stringify(m));
 }
 
-/** 订阅壳发来的某一类消息，挂上时有最近一条就先回调一次。返回退订函数。 */
-export function onAndroid(t: string, f: (m: AndroidMsg) => void): () => void {
+/**
+ * 订阅壳发来的某一类消息，挂上时有最近一条就先回调一次。返回退订函数。
+ * replay = false 给「事件」类（按键、返回、通知点开）：补发最近一条等于凭空再按一次。
+ */
+export function onAndroid(t: string, f: (m: AndroidMsg) => void, replay = true): () => void {
   let s = subs.get(t);
   if (!s) subs.set(t, (s = new Set()));
   s.add(f);
-  const m = last.get(t);
+  const m = replay ? last.get(t) : undefined;
   if (m) f(m);
   return () => {
     s.delete(f);
@@ -58,15 +61,26 @@ if (port) {
  */
 export function initAndroid() {
   if (!port) return;
+  // 热更新会再调一次（App 的 effect 重跑，或者这个模块整个重新执行）：先把上一次挂的拆掉，不然每更新一次
+  // 就多一份 —— 按一下音量键跳两格、返回键回两次。挂在 globalThis 上，模块重新执行了也找得到上一次的
+  const g = globalThis as unknown as { __gerdrAndroidOff?: () => void };
+  g.__gerdrAndroidOff?.();
   document.documentElement.classList.add("android");
   postAndroid({ t: "hello" });
   syncAndroidTheme();
   sendLan();
   // 局域网 IP 会变（换 Wi-Fi、DHCP）：回到前台时再报一次，壳会拿新候选重探
-  document.addEventListener("visibilitychange", () => document.visibilityState === "visible" && sendLan());
-  onAndroid("back", () => postAndroid({ t: "back", handled: closeTop() }));
-  onAndroid("focus", (m) => typeof m.session === "string" && focusSession(m.session));
-  onAndroid("key", (m) => volumeKey(m.k === "up" ? "ArrowUp" : "ArrowDown"));
+  const onVisible = () => document.visibilityState === "visible" && sendLan();
+  document.addEventListener("visibilitychange", onVisible);
+  const offs = [
+    onAndroid("back", () => postAndroid({ t: "back", handled: closeTop() }), false),
+    onAndroid("focus", (m) => typeof m.session === "string" && focusSession(m.session), false),
+    onAndroid("key", (m) => volumeKey(m.k === "up" ? "ArrowUp" : "ArrowDown"), false),
+  ];
+  g.__gerdrAndroidOff = () => {
+    document.removeEventListener("visibilitychange", onVisible);
+    offs.forEach((off) => off());
+  };
 }
 
 /**

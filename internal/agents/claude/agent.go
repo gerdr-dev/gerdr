@@ -624,6 +624,8 @@ func (a *Agent) Cancel(ctx context.Context, p acp.CancelNotification) error {
 
 func (a *Agent) HandleExtensionMethod(ctx context.Context, method string, params json.RawMessage) (any, error) {
 	switch method {
+	case acpx.MethodUsage:
+		return a.usage(ctx)
 	case acpx.MethodSteer:
 		var p acpx.SteerRequest
 		if err := json.Unmarshal(params, &p); err != nil {

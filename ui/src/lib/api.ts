@@ -1,7 +1,12 @@
-import type { ContentBlock, ExtSettings, ExtView, Hello, PluginBuild, SessionSummary, TermInfo } from "./types";
+import type { ContentBlock, ExtSettings, ExtView, Hello, HubEvent, PluginBuild, SessionSummary, TermInfo } from "./types";
 
 /** 正开着某个会话的别的进程（herdr / 终端里的交互式 claude） */
 export type Holder = { pid: number; name?: string; status?: string; cwd?: string };
+
+/** 一条用量额度（后端 acpx.UsageLimit）：label 直接显示，percent 0–100，resetsAt unix ms（0 = 不知道） */
+export type UsageLimit = { kind: string; label: string; percent: number; resetsAt?: number; windowMins?: number };
+/** 一家 agent 账号的额度（后端 hub.UsageInfo）：出错时 data 还是上一次拿到的，at 是它的时间 */
+export type UsageInfo = { agent: string; name: string; data?: { plan?: string; limits: UsageLimit[] }; error?: string; at?: number };
 
 export class ApiError extends Error {
   status: number;
@@ -98,6 +103,7 @@ export type AwakeStatus = {
 export type CliRequest = { label: string; ip: string; local: boolean; device: string; deviceLabel?: string; expires: string };
 
 export const api = {
+  usage: (force?: boolean) => req<UsageInfo[]>("GET", `/api/usage${force ? "?force=1" : ""}`),
   stats: (webpid?: number) => req<any>("GET", `/api/system/stats${webpid ? `?webpid=${webpid}` : ""}`),
   herdrScan: () => req<{ workspaces: HerdrWorkspace[] }>("GET", "/api/import/herdr"),
   herdrImport: (workspaces: string[]) =>
@@ -133,6 +139,8 @@ export const api = {
   setMode: (id: string, mode: string) => req("POST", `/api/sessions/${id}/mode`, { mode }),
   setConfig: (id: string, cid: string, value: string) => req("POST", `/api/sessions/${id}/config`, { id: cid, value }),
   rename: (id: string, title: string) => req("POST", `/api/sessions/${id}/rename`, { title }),
+  /** 序号 before 之前的再一段日志（打开会话时只推了最近一段，往上翻到顶来拉）；older = 还有更早的。 */
+  olderEvents: (id: string, before: number) => req<{ events: HubEvent[]; older: boolean }>("GET", `/api/sessions/${id}/events/older?before=${before}`),
   rewind: (id: string, messageId: string) => req<{ content: ContentBlock[] }>("POST", `/api/sessions/${id}/rewind`, { messageId }),
   importable: (agent: string, cwd: string) =>
     req<{ sessionId: string; cwd: string; title?: string; updatedAt?: string }[]>(

@@ -119,7 +119,9 @@ export class Transcript {
   private lastChunkKey = "";
   private requests = new Map<string, Loc>();
   private planLoc: Loc | null = null;
-  private nextId = 0;
+  private curSeq = 0;
+  private idBase = "";
+  private idDup = 0;
 
   reset(events: HubEvent[]) {
     this.messages = [];
@@ -132,13 +134,19 @@ export class Transcript {
     this.retryLoc = null;
     this.lastChunkKey = "";
     this.lastSeq = 0;
-    // id 从头编：同一份日志重放出来的消息 id 一样，React 才不会把组件全部重建（展开状态、滚动位置都在组件里）。
-    this.nextId = 0;
+    // 同一份日志重放出来的消息 id 一样（见 uid），React 才不会把组件全部重建（展开状态、滚动位置都在组件里）。
+    this.idBase = "";
+    this.idDup = 0;
     for (const e of events) this.apply(e);
   }
 
+  // 按生成它的那条日志的序号起名：往前补了更早的日志（loadOlder）整份重放，已有消息的 id 不变 ——
+  // React 不重建、虚拟列表的行 key 对得上（从头数的话前面一多，后面全错位）。同一条日志生成两条消息时加后缀。
   private uid() {
-    return `m${this.nextId++}`;
+    const base = `m${this.curSeq}`;
+    this.idDup = base === this.idBase ? this.idDup + 1 : 0;
+    this.idBase = base;
+    return this.idDup ? `${base}_${this.idDup}` : base;
   }
 
   /** 改第 i 条消息：换成一个新对象（React 靠引用判断要不要重画）。 */
@@ -186,6 +194,7 @@ export class Transcript {
 
   apply(e: HubEvent) {
     if (e.seq > this.lastSeq) this.lastSeq = e.seq;
+    this.curSeq = e.seq;
     if (this.sub) {
       if (e.kind === "update") {
         this.messages = [...this.messages];
@@ -205,7 +214,7 @@ export class Transcript {
         const parts: GPart[] = [];
         for (const c of e.content ?? []) {
           if (c.type === "text") parts.push({ type: "text", text: mb?.text ?? c.text });
-          else if (c.type === "image") parts.push({ type: "file", mediaType: c.mimeType, url: `data:${c.mimeType};base64,${c.data}` });
+          else if (c.type === "image") parts.push({ type: "file", mediaType: c.mimeType, url: imageURL(c) });
           else if (c.type === "resource_link") parts.push({ type: "text", text: `@${c.uri.replace(/^file:\/\//, "")}` });
         }
         this.messages = [...this.messages];
@@ -382,8 +391,8 @@ export class Transcript {
             break;
           }
           part = { type: "text", text: mb?.text ?? u.content.text };
-        } else if (u.content?.type === "image" && u.content.data) {
-          part = { type: "file", mediaType: u.content.mimeType, url: `data:${u.content.mimeType};base64,${u.content.data}` };
+        } else if (u.content?.type === "image" && (u.content.data || u.content.blob)) {
+          part = { type: "file", mediaType: u.content.mimeType, url: imageURL(u.content) };
         }
         if (!part) break;
         const last = this.messages.length - 1;
@@ -464,6 +473,11 @@ export class Transcript {
     if (next.state === "output-available") next.output = meta.content ?? null;
     this.setPart(loc, next);
   }
+}
+
+/** 图片：推过来时多半已换成地址（blob，服务端存着），老的 / 接口原样回的还是 base64。 */
+function imageURL(c: { data?: string; mimeType?: string; blob?: string }) {
+  return c.blob ?? `data:${c.mimeType};base64,${c.data}`;
 }
 
 function toolState(status: string): ToolPart["state"] {

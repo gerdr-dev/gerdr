@@ -942,6 +942,8 @@ func (a *Agent) Cancel(ctx context.Context, p acp.CancelNotification) error {
 
 func (a *Agent) HandleExtensionMethod(ctx context.Context, method string, params json.RawMessage) (any, error) {
 	switch method {
+	case acpx.MethodUsage:
+		return a.usage(ctx)
 	case acpx.MethodTranscriptStat:
 		// 别处（终端 / Codex App）接着聊过：rollout 文件会长（hub 的 CatchUp 拿它判断要不要重新载入）
 		var p acpx.TranscriptStatRequest

@@ -8,6 +8,8 @@ Claude Code / Codex 的图形界面：Go 后端（ACP 适配器 + hub + HTTP/WS�
 - 安卓 App（android/：局域网直连、App 里的 passkey、后台通知，`internal/lan`、`remote/lan.go`、`server/appapi.go` `appwatch.go`）：
   docs/dev/ANDROID.md。桥的两半（`Bridge.kt` ↔ `ui/src/lib/android.ts`）要一起改；换正式签名钥匙要改 `config.OfficialAndroidCert`。
 - 后台常驻（launchd，`internal/service`、`cmd/gerdr/attach.go`）和 App 怎么分工、怎么跟着 App 升级：docs/dev/SERVICE.md。
+- 对话列表闪、跳、切回来不在底（虚拟列表 `chat/ChatView.tsx`、会变高矮的 Markdown / 代码块 / 图片）：别猜，
+  按 docs/dev/SCROLL.md 用 `tools/scrolltest/` 的脚本逐帧复现，改完再跑一遍。
 - 改完跑 `make test`（Go 测试）；动了界面跑 `make typecheck`（要先 `cd ui && pnpm install`）。
   动了适配器要跑 `make test-e2e`（真 claude / codex，花钱）。
 - 注释和文档写中文，说清**为什么**。

@@ -1,4 +1,4 @@
-import { Bot, Plus, Search, SquareTerminal, X } from "lucide-react";
+import { Plus, Search, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { addTab, basename, focusPane, selectWorkspace, tabName } from "@/lib/actions";
@@ -8,7 +8,7 @@ import { applyWorkspaceLabel } from "@/lib/plugins";
 import { set, useStore } from "@/lib/store";
 import type { SessionSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { AgentIcon, StatusDot } from "./AgentIcon";
+import { StatusDot } from "./AgentIcon";
 import { compareSessions, sessionRank } from "@/lib/order";
 import { WsDot } from "./Chrome";
 
@@ -170,9 +170,10 @@ export function PaneSwitcher() {
         <div className="flex shrink-0 items-center gap-1.5 border-b p-2">
           <div className="relative min-w-0 flex-1">
             <Search className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+            {/* 13px 和列表一个调子；只有 iOS 留 16px：小于 16px 的输入框一聚焦，iOS 会把整页放大 */}
             {/* 触屏上不自动聚焦：一开面板就顶出键盘，而这儿多半是用手指扫，不是打字 */}
             <input
-              className="h-8 w-full rounded-md border bg-transparent pr-2 pl-7 text-base outline-none placeholder:text-muted-foreground/70 focus-visible:ring-2 focus-visible:ring-ring/40 md:text-[13px]"
+              className="h-8 w-full rounded-md border bg-transparent pr-2 pl-7 text-[13px] outline-none placeholder:text-muted-foreground/70 focus-visible:ring-2 focus-visible:ring-ring/40 supports-[-webkit-touch-callout:none]:text-[16px]"
               placeholder="筛 标题 / tab / 路径"
               value={q}
               autoFocus={!isCoarse()}
@@ -247,7 +248,7 @@ export function PaneSwitcher() {
                 {g.items.map((r) => {
                   const s = r.session;
                   const chip = CHIP[rankOf(r, unread)];
-                  const title = r.pane.sub ? r.pane.sub.title || "子 agent" : s ? s.title || basename(s.cwd) : r.pane.term ? `终端 · ${basename(r.pane.term.cwd ?? "")}` : "新会话";
+                  const title = r.pane.sub ? `子 agent · ${r.pane.sub.title || ""}`.replace(/ · $/, "") : s ? s.title || basename(s.cwd) : r.pane.term ? `终端 · ${basename(r.pane.term.cwd ?? "")}` : "新会话";
                   // 第二行：在哪（工作空间 · tab）+ 路径。手机上按工作空间认项目，路径兜底分开同名的
                   const where = sort === "group" ? r.tab : `${r.ws} · ${r.tab}`;
                   return (
@@ -262,14 +263,10 @@ export function PaneSwitcher() {
                       )}
                       {...tap(r.pane.id)}
                     >
-                      {r.pane.sub ? (
-                        <Bot className="size-4 shrink-0 text-muted-foreground" />
-                      ) : r.pane.term ? (
-                        <SquareTerminal className="size-4 shrink-0 text-muted-foreground" />
-                      ) : s ? <AgentIcon agent={s.agent} className="size-4" /> : <span className="size-4 shrink-0 rounded-[5px] border border-dashed" />}
+                      {/* 不画打头的 agent 图标：几乎全是同一个 C，占一列宽却分不出谁是谁；终端 / 子 agent 标题里已经写着 */}
                       <span className="min-w-0 flex-1">
                         <span className="flex items-center gap-1.5">
-                          <span className="truncate text-[13px]">{title}</span>
+                          <span className="truncate text-[12px]">{title}</span>
                           {chip && <span className={cn("shrink-0 rounded-sm border px-1 py-px text-[10px]", chip.cls)}>{chip.text}</span>}
                           <span className="ml-auto shrink-0 font-mono text-[10px] text-muted-foreground" title={s ? new Date(s.updatedAt).toLocaleString() : ""}>
                             {ago(s?.updatedAt, now)}

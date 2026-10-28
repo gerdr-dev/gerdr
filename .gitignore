@@ -7,3 +7,5 @@
 .DS_Store
 # 仓库根上 go build ./cmd/gerdr 出来的可执行文件（make build 放 bin/）
 /gerdr
+/tools/scrolltest/node_modules/
+/tools/scrolltest/package-lock.json

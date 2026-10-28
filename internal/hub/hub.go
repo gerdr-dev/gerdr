@@ -158,9 +158,15 @@ type Hub struct {
 	early map[string][]earlyUpdate
 	subs  map[*Sub]struct{}
 	seq   int64
+	// 增量补发（Watch 带 since）靠这两个判断前端手里那份还能不能接着用，见 Watch。
+	bootSeq int64            // 载入完旧日志时的序号：重启前拿到的（≤ 它）都不信
+	resetAt map[string]int64 // 会话 id → 最近一次整份重推（撤回 / 回退 / 清空改写了日志）时的序号，≤ 它的都不信
 
 	defsMu sync.RWMutex
 	defs   []AgentDef // config.json 里的 agents（变体 + 外部 agent）
+
+	usageOnce sync.Once
+	usage     *usageCache // 用量额度的缓存（usage.go）
 }
 
 func New(opt Options) (*Hub, error) {
@@ -174,6 +180,7 @@ func New(opt Options) (*Hub, error) {
 		opt: opt, log: opt.Log,
 		hosts: map[string]*agenthost.Host{}, starting: map[string]chan struct{}{},
 		sessions: map[string]*Session{}, byAgent: map[string]*Session{}, early: map[string][]earlyUpdate{}, subs: map[*Sub]struct{}{},
+		resetAt: map[string]int64{},
 	}
 	h.defs = ValidAgentDefs(opt.ExtraAgents)
 	h.cmds = newCmdCache(opt.Dir)
@@ -181,6 +188,7 @@ func New(opt Options) (*Hub, error) {
 	if err := h.load(); err != nil {
 		return nil, err
 	}
+	h.bootSeq = h.seq
 	// 等 hub 整个建好再去核对没收尾的轮次（要起 agent、广播事件）
 	for _, s := range h.sessions {
 		if s.orphanSince > 0 {

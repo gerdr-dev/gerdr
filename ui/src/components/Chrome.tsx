@@ -1,5 +1,5 @@
 import { Keyboard, LayoutList, Menu, PanelLeft, Plus, Settings, SquareTerminal, X } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -12,7 +12,9 @@ import type { SessionSummary } from "@/lib/types";
 import { compareSessions } from "@/lib/order";
 import { cn } from "@/lib/utils";
 import { AgentIcon, StatusDot } from "./AgentIcon";
+import { fmtElapsed } from "./chat/StatusLine";
 import { TabDragLayer, useTabDrag } from "./TabDrag";
+import { UsageMeter } from "./UsageMeter";
 import { isAndroid } from "@/lib/android";
 import { useRoute } from "./AndroidSettings";
 
@@ -223,6 +225,7 @@ export function Sidebar({ className }: { className?: string }) {
         </button>
       </div>
       <AgentList />
+      <UsageMeter />
       <div className="flex shrink-0 items-center gap-1 border-t p-1.5">
         <Button variant="ghost" size="sm" className="h-7 flex-1 justify-start gap-2 text-[12px] text-muted-foreground" onClick={() => set({ dialog: { kind: "settings" } })}>
           <Settings className="size-3.5" /> 设置
@@ -280,7 +283,10 @@ function AgentList() {
             <AgentIcon agent={s.agent} className="mt-0.5 size-3.5 shrink-0" />
             <div className="min-w-0 flex-1">
               <div className="truncate text-[12px] leading-5">{s.title || basename(s.cwd)}</div>
-              <div className="truncate text-[11px] leading-4 text-muted-foreground">{where}</div>
+              <div className="flex text-[11px] leading-4 text-muted-foreground">
+                <span className="min-w-0 truncate">{where}</span>
+                {s.status === "running" && s.turn && <Elapsed since={s.turn.startedAt} />}
+              </div>
             </div>
             <StatusDot status={s.status} unread={!!unread[s.id]} className="mt-1.5" />
           </button>
@@ -288,6 +294,16 @@ function AgentList() {
       </div>
     </div>
   );
+}
+
+// 在跑的这一轮跑了多久（和对话里状态行的用时同一个数）。单独一个组件自己每秒走，整张列表不跟着每秒重画。
+function Elapsed({ since }: { since: number }) {
+  const [, tick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => tick((x) => x + 1), 1000);
+    return () => clearInterval(t);
+  }, []);
+  return <span className="shrink-0 tabular-nums">&nbsp;· {fmtElapsed(Date.now() - since)}</span>;
 }
 
 function WorkspaceItem({ w, index, active, sessions, unread, onDragStart, onDrop }: { w: Workspace; index: number; active: boolean; sessions: Record<string, SessionSummary>; unread: Record<string, true>; onDragStart: () => void; onDrop: () => void }) {

@@ -12,6 +12,7 @@ import { focusSession } from "@/lib/actions";
 import { useStore } from "@/lib/store";
 import { AskCard, PermissionCard, PlanCard, QuickReplies } from "./Cards";
 import { ToolCall } from "./ToolCall";
+import { UsageCard } from "./UsageCard";
 import { openLightbox } from "../Lightbox";
 import { TaskDoneCard } from "./TasksBar";
 import { fmtElapsed, fmtTokens } from "./StatusLine";
@@ -247,10 +248,14 @@ export function childTools(msg: GMessage): Map<string, ToolPart[]> {
   return children;
 }
 
+const USAGE = /^Current [^\n:]+:\s*\d+% used/m;
+
 export function renderPart(p: GPart, i: number, ctx: PartCtx): ReactNode {
   switch (p.type) {
     case "text":
       if (!p.text.trim()) return null;
+      // claude 的 /usage：终端排版的纯文本，当 Markdown 画会挤成一坨（UsageCard.tsx）
+      if (USAGE.test(p.text)) return <UsageCard key={i} text={p.text} />;
       return (
         <div key={i} className="gerdr-md">
           <Markdown>{p.text}</Markdown>

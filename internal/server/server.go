@@ -23,6 +23,7 @@ import (
 	"path"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -115,6 +116,10 @@ func (s *Server) Handler() http.Handler {
 		sort.SliceStable(list, func(i, j int) bool { return list[i].UpdatedAt > list[j].UpdatedAt })
 		writeJSON(w, list)
 	})
+	// 账号的用量额度（claude / codex 各一份）。?force=1：人点了刷新，绕过缓存（hub 里仍有最小间隔）
+	mux.HandleFunc("GET /api/usage", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, s.Hub.Usage(r.Context(), r.URL.Query().Get("force") == "1"))
+	})
 	mux.HandleFunc("GET /api/pending", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, s.Hub.Pending()) })
 	mux.HandleFunc("POST /api/sessions/{id}/answer", s.sessionOp(func(r *http.Request, sess *hub.Session) (any, error) {
 		var b struct {
@@ -160,6 +165,16 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/sessions/{id}/events", s.sessionOp(func(r *http.Request, sess *hub.Session) (any, error) {
 		return sess.Events(), nil
 	}))
+	// 界面往上翻到顶：序号 before 之前的再一段（打开会话时 /ws 只推了最近一段，见 hub/blob.go）
+	mux.HandleFunc("GET /api/sessions/{id}/events/older", s.sessionOp(func(r *http.Request, sess *hub.Session) (any, error) {
+		before, err := strconv.ParseInt(r.URL.Query().Get("before"), 10, 64)
+		if err != nil {
+			return nil, errors.New("before 不对")
+		}
+		evs, more := sess.OlderEvents(before)
+		return map[string]any{"events": evs, "older": more}, nil
+	}))
+	mux.HandleFunc("GET /api/blobs/{hash}", s.blob)
 	mux.HandleFunc("POST /api/sessions/{id}/tasks/{task}/stop", s.sessionOp(func(r *http.Request, sess *hub.Session) (any, error) {
 		return map[string]any{}, sess.StopTask(r.Context(), r.PathValue("task"))
 	}))
@@ -500,6 +515,10 @@ func (s *Server) dirs(w http.ResponseWriter, r *http.Request) {
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  4096,
 	WriteBufferSize: 64 << 10,
+	// permessage-deflate：会话日志是 JSON，压完小好几倍。远程（中继 / 手机流量）打开大会话时，
+	// 整份日志是一帧，不压的话慢网络上 15 秒写不完就被写期限掐断、重连再推，永远打不开。
+	// 中继那段是字节隧道，压缩是浏览器和这里端到端协商的。
+	EnableCompression: true,
 	CheckOrigin: func(r *http.Request) bool {
 		o := r.Header.Get("Origin")
 		if o == "" {
@@ -546,7 +565,31 @@ func (s *Server) setAwake(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.Awake.Status())
 }
 
-// ws：推会话列表 / 日志 / 布局 / 配置的变化。客户端发两种消息：{t:"watch", ids:[…]}、{t:"ping"}（回 {t:"pong"}）。
+// blob：日志里的图片（推给界面时换成了地址，见 hub/blob.go）。按内容的 sha256 起名，内容不会变：让浏览器一直缓存。
+func (s *Server) blob(w http.ResponseWriter, r *http.Request) {
+	p := s.Hub.BlobPath(r.PathValue("hash"))
+	if p == "" {
+		http.NotFound(w, r)
+		return
+	}
+	f, err := os.Open(p)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	defer f.Close()
+	st, err := f.Stat()
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
+	// 内容是用户贴的 / 工具读的，类型靠嗅：万一是个 HTML 也别让它在我们的源下跑脚本
+	w.Header().Set("Content-Security-Policy", "sandbox")
+	http.ServeContent(w, r, "", st.ModTime(), f)
+}
+
+// ws：推会话列表 / 日志 / 布局 / 配置的变化。客户端发两种消息：{t:"watch", ids:[…], since:{id:seq}}、{t:"ping"}（回 {t:"pong"}）。
 func (s *Server) ws(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -582,15 +625,16 @@ func (s *Server) ws(w http.ResponseWriter, r *http.Request) {
 			}
 			_ = conn.SetReadDeadline(time.Now().Add(readWait))
 			var m struct {
-				T   string   `json:"t"`
-				IDs []string `json:"ids"`
+				T     string           `json:"t"`
+				IDs   []string         `json:"ids"`
+				Since map[string]int64 `json:"since"` // 会话 id → 前端已有日志的最后序号，接得上就只补后面的
 			}
 			if json.Unmarshal(b, &m) != nil {
 				continue
 			}
 			switch m.T {
 			case "watch":
-				s.Hub.Watch(sub, m.IDs)
+				s.Hub.Watch(sub, m.IDs, m.Since)
 			case "ping":
 				// 应用层心跳：浏览器读不到协议层的 ping/pong，只能靠这个判断连接是不是「假在线」。
 				select {
@@ -606,9 +650,21 @@ func (s *Server) ws(w http.ResponseWriter, r *http.Request) {
 	var batch []hub.Msg
 	flush := time.NewTimer(time.Hour)
 	flush.Stop()
+	// 写失败（多半是写期限到了还没写完：远程慢、一帧太大）记一笔：连接断了界面只会显示「离线」，原因在这儿查
 	write := func(v any) bool {
-		_ = conn.SetWriteDeadline(time.Now().Add(15 * time.Second))
-		return conn.WriteJSON(v) == nil
+		b, err := json.Marshal(v)
+		if err != nil {
+			return false
+		}
+		start := time.Now()
+		_ = conn.SetWriteDeadline(start.Add(30 * time.Second))
+		if err := conn.WriteMessage(websocket.TextMessage, b); err != nil {
+			if s.Log != nil {
+				s.Log.Info("ws write failed", "remote", auth.FromRemote(r), "bytes", len(b), "took", time.Since(start).Round(time.Millisecond), "err", err)
+			}
+			return false
+		}
+		return true
 	}
 	for {
 		select {

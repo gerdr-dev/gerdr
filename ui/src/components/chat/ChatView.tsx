@@ -1,4 +1,4 @@
-import { useContext, useEffect, useMemo, useRef, useState } from "react";
+import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { TabActive } from "../Panes";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { ArrowDown, CornerDownRight } from "lucide-react";
@@ -7,7 +7,7 @@ import { buildRows, RowView, type Row, type RowEnv } from "./Rows";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { withdrawSteer } from "@/lib/actions";
-import { get, subTranscript, transcript, useStore } from "@/lib/store";
+import { get, loadOlder, subTranscript, transcript, useStore } from "@/lib/store";
 import { useKept } from "@/lib/kept";
 import { Loader2 } from "lucide-react";
 import type { GMessage } from "@/lib/transcript";
@@ -20,6 +20,15 @@ import { isCoarse } from "@/lib/phone";
 /** sub：子 agent 的只读面板（值 = 它在主会话里那张卡片的 toolCallId）。没有输入框、不能回退。 */
 // 最后一条和输入框之间留一截（照 ChatGPT 桌面版的留白）：贴太近的话最后那行元信息和输入框挤在一起
 const ListFooter = () => <div className="h-12" />;
+
+// 顶上一行：前面还有更早的消息（打开会话只拉了最近一段，翻到这儿自动接着拉）。高度固定，拉完了也留着空白 ——
+// 顶上的东西一变高矮，下面整段内容就跟着跳。
+const ListHeader = ({ context }: { context?: { older?: "more" | "loading" } }) => (
+  <div className="flex h-8 items-center justify-center text-[12px] text-muted-foreground">
+    {context?.older === "loading" && <Loader2 className="size-3.5 animate-spin" />}
+    {context?.older === "more" && "往上翻加载更早的消息"}
+  </div>
+);
 
 /**
  * 贴着底时，不让 Virtuoso 往上「补偿」。一行的顶已经滚出视野上沿、这时把它收起来（展开的长工具输出），
@@ -61,6 +70,22 @@ function PinnedPrompt({ msg, onClick }: { msg: GMessage; onClick: () => void }) 
 
 // 每个 pane 的滚动位置（在不在底部、滚到哪）：列表被卸载再挂回来（tab 被挤出保留数、虚拟列表重建）时照它恢复。
 const scrollMem = new Map<string, { top: number; bottom: boolean }>();
+
+/**
+ * 人最近一次在这个对话的滚动区里动手（滚轮、触摸、按键、按下 / 按住拖滚动条）的时刻：分清滚动是人滚的还是布局变了带的（见 syncBottom）。
+ * 只认滚动区里面的：切 tab 本身就是一次点击 / 按键，紧跟着就是重新挂载、边挂边量 —— 全局算的话正好把这段放过去了。
+ * 触控板惯性也是一串 wheel，一直在续。
+ */
+function lastInputOf(el: HTMLElement): number {
+  const s = el as HTMLElement & { __lastInput?: number };
+  if (s.__lastInput === undefined) {
+    s.__lastInput = 0;
+    const mark = () => (s.__lastInput = performance.now());
+    for (const ev of ["wheel", "touchstart", "touchmove", "keydown", "pointerdown"]) el.addEventListener(ev, mark, { passive: true });
+    el.addEventListener("pointermove", (e) => e.buttons && mark(), { passive: true });
+  }
+  return s.__lastInput;
+}
 
 export function ChatView({ session, paneId, focused, sub }: { session: SessionSummary; paneId: string; focused: boolean; sub?: string }) {
   useStore((s) => s.tv[session.id]); // 日志变了就重画
@@ -148,6 +173,84 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
   const [showCleared, setShowCleared] = useKept(`cleared:${session.id}:${sub ?? ""}`, false);
   const [openGroups, setOpenGroups] = useKept<Record<string, boolean>>(`groups:${session.id}:${sub ?? ""}`, {});
   const rows = useMemo(() => buildRows(msgs, running, showCleared, openGroups), [msgs, running, showCleared, openGroups]);
+  // 往前补了更早的消息（loadOlder）：告诉 Virtuoso 前面多了几行（firstItemIndex 往小改），它保住眼前这行不动。
+  // 不改的话它当成整份换了，滚动位置留在原来的像素高度上 —— 眼前的内容被新插进来的顶走。
+  // 顶上是折起来的 /clear 之前的对话：更早的拉来也是折在里面，先不拉（点了「展开」再接着拉）
+  const older = useStore((s) => (rows[0]?.kind === "cleared" ? undefined : s.older[session.id]));
+  // 前面多了几行：拿原来的前几行去新的里找，位置差就是。不只认第一行 —— 接缝那儿的行可能变了（折叠组并进了新来的工具调用）
+  const firstIdx = useRef(1_000_000);
+  const prevRows = useRef<Row[]>([]);
+  const prepended = useRef(0); // 刚往前补过：到这个时刻为止盯着眼前那一行（见下面 settle）
+  if (rows !== prevRows.current) {
+    const prev = prevRows.current;
+    if (prev.length && rows.length > prev.length && prev[0].key !== rows[0].key) {
+      const at = new Map(rows.map((r, i) => [r.key, i]));
+      for (let j = 0; j < Math.min(prev.length, 50); j++) {
+        const i = at.get(prev[j].key);
+        if (i === undefined) continue;
+        if (i > j) {
+          firstIdx.current -= i - j;
+          prepended.current = performance.now() + 1500;
+        }
+        break;
+      }
+    }
+    prevRows.current = rows;
+  }
+  // 光改 firstItemIndex 不够：Virtuoso 只在插进来那一下按估的行高 scrollBy 一次，等新行挂上、量出真实高度（往往差几千像素），
+  // 差的那截它不再补 —— scrollTop 不动、上面变高，眼前的内容被整段顶走（逐帧量过：补一段 scrollBy +5700，170ms 后总高又涨 6482，
+  // scrollTop 没动）。所以补完这一小会儿自己盯着眼前顶上那一行：它在内容里的位置（offset）变了、scrollTop 没跟上的那截替它补上。
+  // 人这时可能还在甩（惯性），不能把它钉死在屏幕上原来的位置 —— 只补「上面变高 / 变矮」的那部分。
+  // 在哪儿补：ResizeObserver 里，而且这个 observer 比 Virtuoso 的晚建 —— 同一阶段按创建顺序跑，轮到它时 Virtuoso 该补的已经补完，
+  // 这时的样子就是这一帧要画的。放在 rAF 里补晚了一帧（rAF 在 ResizeObserver 之前，新行是在那之后量出来的：错位先画出来一帧），
+  // 而且会抢在 Virtuoso 前面，它本来会补的也被补了两遍。
+  // 认行用 data-item-index（= firstItemIndex + 位置）：往前补时同一行的它不变。别用 data-index（在 rows 里的位置）配 rows ——
+  // 换数据的那一两帧 DOM 上还是旧行、rows 已经是新的，一配就认错行（踩过：补反了，一下跳回几千像素之前）
+  const settle = useRef<{ idx: string; o: number; st: number } | null>(null);
+  const settleFix = useRef<(() => void) | null>(null);
+  useLayoutEffect(() => {
+    const el = scrollerEl.current;
+    const lst = el?.querySelector("[data-testid=virtuoso-item-list]");
+    if (!el || !lst || performance.now() > prepended.current) return;
+    const offset = (it: HTMLElement) => it.getBoundingClientRect().top - el.getBoundingClientRect().top + el.scrollTop;
+    const anchorOf = () => {
+      const top = el.getBoundingClientRect().top;
+      for (const it of el.querySelectorAll<HTMLElement>("[data-item-index]"))
+        if (it.getBoundingClientRect().bottom > top + 1) return { idx: it.dataset.itemIndex!, o: offset(it), st: el.scrollTop };
+      return null;
+    };
+    const fix = () => {
+      if (performance.now() > prepended.current) return stop();
+      const a = settle.current;
+      const it = a && el.querySelector<HTMLElement>(`[data-item-index="${a.idx}"]`);
+      if (a && it) {
+        // 上面的行变高 / 变矮了 dO，scrollTop 同时动了 dSt（Virtuoso 自己补的 + 人滚的）：没补够的差 = dO - dSt
+        const dO = offset(it) - a.o;
+        const miss = dO - (el.scrollTop - a.st);
+        if (Math.abs(dO) > 1 && Math.abs(miss) > 1) el.scrollTop += miss;
+      }
+      settle.current = anchorOf();
+    };
+    const ro = new ResizeObserver(fix);
+    const stop = () => {
+      ro.disconnect();
+      settle.current = null;
+      settleFix.current = null;
+    };
+    ro.observe(lst);
+    settleFix.current = fix; // 人滚动（onScroll）时也过一遍：布局没变就只是记下新的位置
+    if (!settle.current) settle.current = anchorOf();
+    const t = setTimeout(stop, prepended.current - performance.now());
+    return () => {
+      clearTimeout(t);
+      ro.disconnect();
+    };
+  }, [rows]);
+  const listCtx = useMemo(() => ({ older }), [older]);
+  // 离顶不到一屏 / 内容还不满一屏：接着拉更早的
+  const nearTop = (el: HTMLElement) => {
+    if (rowsRef.current[0]?.kind !== "cleared" && get().older[session.id] === "more" && el.scrollTop < Math.max(400, el.clientHeight)) loadOlder(session.id);
+  };
   // 要重新量：行的结构变了（中间展开 / 收起一组、回退，后面的行全换了序号，Virtuoso 按序号记的高度就对不上了）。
   // 只在末尾追加 / 换掉最后一两行（流式输出、状态行）不算：那些行就在眼前，挂上就量
   const prevKeys = useRef<string[]>([]);
@@ -246,10 +349,17 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
   // 贴没贴底直接量 DOM，不信 Virtuoso 的 atBottom：贴着底时把上面一块展开的东西收起来，内容变矮、浏览器把 scrollTop
   // 往回夹，Virtuoso 拿旧的总高一算以为人往上翻了，报 false 之后就不再改回来 —— 明明在底部却冒出「回到底部」，
   // 新输出也不跟了（用户报的）。
+  // 离开底部只认人：贴着底、这会儿人没动过（滚轮 / 触摸 / 按键 / 按住拖），scrollTop 却离了底 —— 那是布局变了把它带走的，推回去。
+  // 不然一次性的布局变化就把「在底部」记成 false，之后再长高也不追了、还记进 scrollMem：
+  // tab 不保留时切回来要重新挂、边挂边量高度，量的过程中被推离底部一截就停在半中间，下次切回来照记的位置恢复，还是半中间（用户报的）
   const syncBottom = () => {
     const el = scrollerEl.current;
     if (!el || !activeRef.current) return;
     const b = el.scrollHeight - el.clientHeight - el.scrollTop < 80;
+    if (!b && bottomRef.current && performance.now() - lastInputOf(el) > 600) {
+      el.scrollTop = el.scrollHeight;
+      return;
+    }
     bottomRef.current = b;
     setAtBottom(b);
   };
@@ -299,8 +409,14 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
               ref={list}
               className="h-full"
               data={rows}
+              firstItemIndex={firstIdx.current}
+              context={listCtx}
               computeItemKey={(_, r) => r.key}
               itemContent={(_, r) => <RowView row={r} env={env} />}
+              // 行高照实记、不取整。Virtuoso 默认 Math.round(高度)：41.5 记成 42、39.8 记成 40，行一卸载就拿这些整数垫占位，
+              // 每行差一点、攒起来眼前的内容整段挪一截 —— 打开会话量完缩回那一下抖（逐帧量过：卸掉 32 行，实际 1823px 记成 1833px，
+              // 往下挪 10px），会话越长卸得越多抖得越厉害；滚动时边挂边卸的几像素小抖也是它
+              itemSize={(el) => el.getBoundingClientRect().height}
               // 在底部就跟着新内容走（直接跳，不要动画）；人往上翻了就不打扰
               followOutput={(bottom) => (bottom && !holding() ? "auto" : false)}
               // 重新挂载（切回一个被卸载过的 tab）时回到上次的位置：在底部就回底部，不在就回那个高度
@@ -312,7 +428,10 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
               }}
               scrollerRef={(el) => {
                 scrollerEl.current = el as HTMLElement | null;
-                if (el) keepBottomOnShrink(el as HTMLElement, bottomRef);
+                if (el) {
+                  keepBottomOnShrink(el as HTMLElement, bottomRef);
+                  lastInputOf(el as HTMLElement); // 挂上监听：挂载过程里没人动过
+                }
                 watchWidth(el as HTMLElement | null);
               }}
               onScroll={(e) => {
@@ -322,6 +441,8 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
                 syncBottom();
                 scrollMem.set(scrollKey, { top: el.scrollTop, bottom: bottomRef.current });
                 updatePinned();
+                settleFix.current?.();
+                nearTop(el);
               }}
               // 流式输出时最后一行在长高：followOutput 要等下一拍才跟，会落后一两行、一顿一顿的。
               // 总高度一变、原来在底部，就当场推到底。
@@ -335,6 +456,8 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
                 if (bottomRef.current && wasAtBottom && !(grew && holding())) el.scrollTop = el.scrollHeight;
                 lastH.current = el.scrollHeight;
                 syncBottom();
+                // 内容不满一屏（翻不动，就等不到 onScroll）：接着拉。满了就等人自己往上翻，别一口气连拉
+                if (activeRef.current && el.scrollHeight <= el.clientHeight + 50) nearTop(el);
                 if (!measured) {
                   clearTimeout(measureTimer.current);
                   measureTimer.current = window.setTimeout(() => setMeasured(true), 300);
@@ -343,7 +466,7 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
               // 虚拟滚动是实验室开关（默认关）：关着时渲染范围放到无限大 = 所有行一次挂好、不再卸载，
               // 贴底 / 回到底部 / 顶上钉的那句话这些照旧走 Virtuoso，不用另写一套
               increaseViewportBy={virtualList && measured ? { top: 800, bottom: 800 } : { top: 1e7, bottom: 1e7 }}
-              components={{ Footer: ListFooter }}
+              components={{ Header: ListHeader, Footer: ListFooter }}
             />
           )}
           {!atBottom && pinned !== null && rows[pinned]?.kind === "user" && (
