@@ -133,7 +133,7 @@ func (m *Manager) target() string { return "gui/" + m.uid + "/" + Label }
 func EnvSnapshot() map[string]string {
 	env := map[string]string{}
 	for _, k := range []string{"GERDR_DIR", "GERDR_HOST", "GERDR_PORT", "GERDR_UI", "GERDR_ESM_CDN",
-		"GERDR_CLAUDE_IDLE_MINUTES", "GERDR_NO_SNAPSHOTS", "GERDR_DEBUG", "SHELL", "LANG"} {
+		"GERDR_CLAUDE_IDLE_MINUTES", "GERDR_DEBUG", "SHELL", "LANG"} {
 		if v := os.Getenv(k); v != "" {
 			env[k] = v
 		}

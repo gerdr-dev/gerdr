@@ -28,8 +28,8 @@ type Props = {
   sessionId: string;
   live: boolean; // 这一条是正在流式输出的那条
   running: boolean;
-  onRewind?: (m: GMessage, restore: boolean) => void;
-  onEdit?: (m: GMessage, restore: boolean) => void;
+  onRewind?: (m: GMessage) => void;
+  onEdit?: (m: GMessage) => void;
   onQuickReply: (s: string) => void;
   stackPrev?: boolean; // 用户消息：上 / 下紧挨着也是用户消息（叠成一摞）
   stackNext?: boolean;
@@ -70,8 +70,8 @@ export const MessageView = memo(function MessageView({ msg, sessionId, live, run
           {canRewind && (
             // 气泡开着时按钮一直显示（鼠标挪去点气泡，hover 没了也别消失）
             <div className="absolute right-full bottom-1 mr-1 flex gap-0.5 opacity-0 transition-opacity group-hover/user:opacity-100 has-[[data-state=open]]:opacity-100 [@media(hover:none)]:opacity-100">
-              <RewindButton msg={msg} sessionId={sessionId} edit onConfirm={(r) => onEdit?.(msg, r)} />
-              <RewindButton msg={msg} sessionId={sessionId} edit={false} onConfirm={(r) => onRewind?.(msg, r)} />
+              <RewindButton edit onConfirm={() => onEdit?.(msg)} />
+              <RewindButton edit={false} onConfirm={() => onRewind?.(msg)} />
             </div>
           )}
           <MessageContent

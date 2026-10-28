@@ -23,7 +23,6 @@ import (
 	"github.com/zbysir/gerdr/internal/agents/claude"
 	"github.com/zbysir/gerdr/internal/agents/codex"
 	"github.com/zbysir/gerdr/internal/ext"
-	"github.com/zbysir/gerdr/internal/snapshot"
 	"github.com/zbysir/gerdr/internal/sysenv"
 )
 
@@ -88,7 +87,6 @@ type Options struct {
 	Dir         string // ~/.gerdr
 	ClaudeIdle  time.Duration
 	ExtraAgents []AgentDef
-	NoSnapshots bool
 	Log         *slog.Logger
 	Ext         *ext.Manager // skill / MCP 从哪来；nil = 全用 agent 自己的
 }
@@ -145,11 +143,10 @@ func (h *Hub) Base(agent string) string {
 }
 
 type Hub struct {
-	opt   Options
-	log   *slog.Logger
-	snaps *snapshot.Store
-	cmds  *cmdCache
-	opts  *optCache
+	opt  Options
+	log  *slog.Logger
+	cmds *cmdCache
+	opts *optCache
 
 	mu       sync.Mutex
 	hosts    map[string]*agenthost.Host // agent id → 连接（懒起）
@@ -174,7 +171,7 @@ func New(opt Options) (*Hub, error) {
 		return nil, err
 	}
 	h := &Hub{
-		opt: opt, log: opt.Log, snaps: snapshot.New(filepath.Join(opt.Dir, "snapshots")),
+		opt: opt, log: opt.Log,
 		hosts: map[string]*agenthost.Host{}, starting: map[string]chan struct{}{},
 		sessions: map[string]*Session{}, byAgent: map[string]*Session{}, early: map[string][]earlyUpdate{}, subs: map[*Sub]struct{}{},
 	}

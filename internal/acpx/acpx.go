@@ -19,8 +19,7 @@ const (
 	// MethodSteer：client → agent。把一条消息插进正在跑的那一轮。
 	MethodSteer = "_session/steering"
 	// MethodRewind：client → agent。把对话回退到某条用户消息之前（那条消息和之后的全丢掉）。
-	// 只动对话历史，不动文件 —— 文件由 hub 用影子 git 快照统一恢复（两家 agent 自带的
-	// 文件回退都靠不住：claude 的 checkpoint 不跟踪 Bash 改的文件，codex 压根没有）。
+	// 只动对话历史，不动文件（gerdr 的回退只回退对话）。
 	MethodRewind = "_gerdr/rewind"
 	// MethodAsk：agent → client。向人提一组问题（claude 的 AskUserQuestion、codex 的
 	// requestUserInput 都汇到这一条），client 回答案。

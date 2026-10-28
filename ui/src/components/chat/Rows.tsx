@@ -175,8 +175,8 @@ export function buildRows(msgs: GMessage[], running: boolean, showCleared = fals
 export type RowEnv = {
   sessionId: string;
   running: boolean;
-  onRewind?: (m: GMessage, restore: boolean) => void;
-  onEdit?: (m: GMessage, restore: boolean) => void;
+  onRewind?: (m: GMessage) => void;
+  onEdit?: (m: GMessage) => void;
   onQuickReply: (s: string) => void;
   onShowCleared?: () => void;
   onToggleGroup?: (key: string) => void;

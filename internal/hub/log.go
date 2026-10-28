@@ -19,7 +19,6 @@ type Event struct {
 	Content   []json.RawMessage `json:"content,omitempty"` // ACP ContentBlock
 	Steer     bool              `json:"steer,omitempty"`
 	From      string            `json:"from,omitempty"` // 别的会话（agent）经 gerdr session send 发来的：发送方的会话 id
-	Snapshot  string            `json:"snapshot,omitempty"`
 
 	// update：原样的 ACP SessionUpdate
 	Update json.RawMessage `json:"update,omitempty"`

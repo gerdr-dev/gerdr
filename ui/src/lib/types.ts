@@ -75,7 +75,6 @@ export type HubEvent = {
   messageId?: string;
   content?: ContentBlock[];
   steer?: boolean;
-  snapshot?: string;
   auto?: boolean;
   from?: string;
   durationMs?: number;

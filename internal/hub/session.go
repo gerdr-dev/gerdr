@@ -19,7 +19,6 @@ import (
 
 	"github.com/zbysir/gerdr/internal/acpx"
 	"github.com/zbysir/gerdr/internal/agenthost"
-	"github.com/zbysir/gerdr/internal/snapshot"
 )
 
 // Record 是落盘的那部分（sessions/index.json 里一条）。
@@ -586,28 +585,13 @@ func (s *Session) SendFrom(ctx context.Context, content []acp.ContentBlock, clie
 	s.turnStarted, s.turnTokens = now(), 0
 	s.mu.Unlock()
 
-	snap := s.snapshot(msgID)
-	s.emit(&Event{Kind: EvUser, MessageID: msgID, Content: raw, Snapshot: snap, From: from})
+	s.emit(&Event{Kind: EvUser, MessageID: msgID, Content: raw, From: from})
 	s.emit(&Event{Kind: EvTurnStart, MessageID: msgID})
 	s.touchTitle(content)
 	s.setStatus()
 
 	go s.runTurn(c, agentSID, msgID, content)
 	return SendResult{MessageID: msgID}, nil
-}
-
-func (s *Session) snapshot(msgID string) string {
-	if s.h.opt.NoSnapshots {
-		return ""
-	}
-	commit, err := s.h.snaps.Take(s.rec.Cwd, "before "+msgID)
-	if err != nil {
-		if !errors.Is(err, snapshot.ErrSkipped) {
-			s.h.log.Warn("snapshot", "cwd", s.rec.Cwd, "err", err)
-		}
-		return ""
-	}
-	return commit
 }
 
 // retryWaits：一轮因为网络出错失败时自动重试的间隔（agent 自己的重试已经用完了才会走到这里）。
@@ -1208,7 +1192,7 @@ func (s *Session) Escape(ctx context.Context) (EscapeResult, error) {
 	}
 
 	if untouched {
-		_, err := s.Rewind(ctx, turnMsg, false)
+		_, err := s.Rewind(ctx, turnMsg)
 		// agent 那边找不到这条：打断得太快，它还没把消息记进会话（claude 还没写进记录 / codex 还没建出那一轮）——
 		// 等于它压根没收到，只在 gerdr 这边把这一轮删掉就行（实测：发出去 150ms 就按 Esc 是这种）。
 		if err != nil && strings.Contains(err.Error(), "not found") {
@@ -1336,14 +1320,13 @@ func containsEvent(list []*Event, e *Event) bool {
 
 type RewindResult struct {
 	// Content 是被回退掉的那条消息（前端放回输入框，人改两个字再发）。
-	Content      []json.RawMessage `json:"content"`
-	RestoredFrom string            `json:"restoredFrom,omitempty"`
-	SafetyCommit string            `json:"safetyCommit,omitempty"`
+	Content []json.RawMessage `json:"content"`
 }
 
-// Rewind 回到 messageID 那条消息之前：对话历史交给 agent 截断，文件按那条消息发出之前打的
-// 快照恢复（restoreFiles 时）。
-func (s *Session) Rewind(ctx context.Context, messageID string, restoreFiles bool) (RewindResult, error) {
+// Rewind 回到 messageID 那条消息之前：只回退对话（交给 agent 截断），不动文件。
+// 以前用影子 git 仓库给 cwd 打快照、一起恢复文件，但 cwd 以外改的文件管不到、同目录多个会话的快照
+// 互相覆盖，坑太多，删掉了。
+func (s *Session) Rewind(ctx context.Context, messageID string) (RewindResult, error) {
 	s.mu.Lock()
 	if s.running {
 		s.mu.Unlock()
@@ -1387,14 +1370,6 @@ func (s *Session) Rewind(ctx context.Context, messageID string, restoreFiles boo
 		s.h.rekey(s, string(res.SessionId))
 	}
 	out := RewindResult{Content: target.Content}
-	if restoreFiles && target.Snapshot != "" {
-		safety, err := s.h.snaps.Restore(s.rec.Cwd, target.Snapshot)
-		if err != nil {
-			s.emit(&Event{Kind: EvNotice, Level: "error", Text: "对话已回退，但文件没恢复成功：" + err.Error()})
-		} else {
-			out.RestoredFrom, out.SafetyCommit = target.Snapshot, safety
-		}
-	}
 	s.mu.Lock()
 	s.events = s.events[:idx]
 	s.lastErr = ""
@@ -1404,29 +1379,9 @@ func (s *Session) Rewind(ctx context.Context, messageID string, restoreFiles boo
 		s.h.log.Warn("rewrite log", "err", err)
 	}
 	s.h.broadcastEvents(s.rec.ID, evs, true)
-	if out.SafetyCommit != "" {
-		s.emit(&Event{Kind: EvNotice, Level: "info", Text: "文件已恢复到这条消息发出之前。恢复前的状态存在快照 " + out.SafetyCommit[:12] + "。"})
-	}
 	s.setStatus()
 	s.h.saveIndex()
 	return out, nil
-}
-
-// RewindPreview 告诉人「回退会动到哪些文件」。
-func (s *Session) RewindPreview(messageID string) ([]string, error) {
-	s.mu.Lock()
-	var snap string
-	for _, e := range s.events {
-		if e.Kind == EvUser && e.MessageID == messageID {
-			snap = e.Snapshot
-		}
-	}
-	cwd := s.rec.Cwd
-	s.mu.Unlock()
-	if snap == "" {
-		return nil, nil
-	}
-	return s.h.snaps.Changed(cwd, snap)
 }
 
 func (s *Session) close(ctx context.Context) {

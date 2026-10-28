@@ -129,17 +129,12 @@ func (s *Server) Handler() http.Handler {
 	}))
 	mux.HandleFunc("POST /api/sessions/{id}/rewind", s.sessionOp(func(r *http.Request, sess *hub.Session) (any, error) {
 		var b struct {
-			MessageID    string `json:"messageId"`
-			RestoreFiles bool   `json:"restoreFiles"`
+			MessageID string `json:"messageId"`
 		}
 		if err := decode(r, &b); err != nil {
 			return nil, err
 		}
-		return sess.Rewind(r.Context(), b.MessageID, b.RestoreFiles)
-	}))
-	mux.HandleFunc("GET /api/sessions/{id}/rewind-preview", s.sessionOp(func(r *http.Request, sess *hub.Session) (any, error) {
-		files, err := sess.RewindPreview(r.URL.Query().Get("messageId"))
-		return map[string]any{"files": files}, err
+		return sess.Rewind(r.Context(), b.MessageID)
 	}))
 	mux.HandleFunc("GET /api/sessions/{id}/events", s.sessionOp(func(r *http.Request, sess *hub.Session) (any, error) {
 		return sess.Events(), nil

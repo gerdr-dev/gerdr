@@ -303,9 +303,6 @@ function SettingsDialog({ open }: { open: boolean }) {
                   导入…
                 </Button>
               </Row>
-              <Row label="回退时默认恢复文件">
-                <Switch checked={cfg.rewindFiles} onCheckedChange={(v) => setConfig({ rewindFiles: v })} />
-              </Row>
               <div className="pt-2 text-[12px] text-muted-foreground">gerdr {version}</div>
             </TabsContent>
             <TabsContent value="keys" className="pt-2">

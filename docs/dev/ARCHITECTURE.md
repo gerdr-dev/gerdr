@@ -89,14 +89,12 @@ React（ui/，不打包）  ←WebSocket / HTTP→  hub（internal/hub）  ←AC
 4. 审批按轮覆盖：模式 = `approvalPolicy` + `sandboxPolicy`，每次 `turn/start` 带上。
 5. userMessage item 在实时流里忽略（client 自己已经显示了），只在 LoadSession 重放时发。
 
-## 文件快照（回退的另一半）
+## 回退只回退对话，不动文件
 
-两家自带的文件回退都靠不住（claude 的 checkpoint 不管 Bash 改的文件，codex 没有），所以 hub
-自己做：影子 git 仓库 `~/.gerdr/snapshots/<hash(cwd)>.git`，work tree 指向用户目录，每条新消息
-（不含插话）发出前 `add -A` + `commit`。用户的 `.gitignore` 照常生效。恢复前先打一个安全快照
-（回退本身可以反悔），`read-tree` + `checkout-index` 换回文件，再删掉快照之后才出现的。
-家目录 / 根目录不打（太大）。**同一目录下的多个会话共享快照**：恢复会把别的会话之后的改动也
-退掉 —— 所以回退前对话框里列出会动到的文件。
+以前 hub 用影子 git 仓库（`~/.gerdr/snapshots/`）给 cwd 打快照、回退时一起恢复文件，已经删了：
+cwd 以外改的文件（Bash 写 `~/.zshrc`、隔壁项目）管不到；同一目录的多个会话共享快照，恢复会把别的
+会话的改动一起退掉；大目录打快照拖慢发消息。两家 agent 自带的文件回退也靠不住（claude 的 checkpoint
+不管 Bash 改的文件，codex 没有），所以干脆不做，要回文件让人自己用 git。
 
 ## 界面：没有打包环节（internal/uisite，照 shuttle 的 internal/localsite）
 

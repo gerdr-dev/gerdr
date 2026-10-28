@@ -15,14 +15,13 @@ import (
 )
 
 type Env struct {
-	Dir         string        // GERDR_DIR，默认 ~/.gerdr
-	Host        string        // GERDR_HOST，默认 127.0.0.1
-	Port        int           // GERDR_PORT，默认 7870；0 = 随便挑一个空闲口
-	Token       string        // GERDR_TOKEN，不给就用 ~/.gerdr/token（没有就生成）
-	ClaudeIdle  time.Duration // GERDR_CLAUDE_IDLE_MINUTES，默认 15；0 = 永不回收
-	NoSnapshots bool          // GERDR_NO_SNAPSHOTS=1 关掉文件快照
-	UI          string        // GERDR_UI：界面源码目录。不给就用 <Dir>/ui（第一次启动从内嵌的那份装出来）
-	ESMCDN      string        // GERDR_ESM_CDN：第三方包的来源，默认 https://esm.sh（要和它同一套 URL 写法）
+	Dir        string        // GERDR_DIR，默认 ~/.gerdr
+	Host       string        // GERDR_HOST，默认 127.0.0.1
+	Port       int           // GERDR_PORT，默认 7870；0 = 随便挑一个空闲口
+	Token      string        // GERDR_TOKEN，不给就用 ~/.gerdr/token（没有就生成）
+	ClaudeIdle time.Duration // GERDR_CLAUDE_IDLE_MINUTES，默认 15；0 = 永不回收
+	UI         string        // GERDR_UI：界面源码目录。不给就用 <Dir>/ui（第一次启动从内嵌的那份装出来）
+	ESMCDN     string        // GERDR_ESM_CDN：第三方包的来源，默认 https://esm.sh（要和它同一套 URL 写法）
 }
 
 func FromEnv() Env {
@@ -49,7 +48,6 @@ func FromEnv() Env {
 			}
 		}
 	}
-	e.NoSnapshots = truthy(os.Getenv("GERDR_NO_SNAPSHOTS"))
 	e.UI = os.Getenv("GERDR_UI")
 	if e.UI == "" {
 		e.UI = filepath.Join(e.Dir, "ui")

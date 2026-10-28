@@ -1,12 +1,12 @@
 import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { TabActive } from "../Panes";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
-import { ArrowDown } from "lucide-react";
+import { ArrowDown, CornerDownRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { buildRows, RowView, type RowEnv } from "./Rows";
+import { buildRows, RowView, type Row, type RowEnv } from "./Rows";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
-import { get, setConfig, subTranscript, transcript, useStore } from "@/lib/store";
+import { get, subTranscript, transcript, useStore } from "@/lib/store";
 import { useKept } from "@/lib/kept";
 import { Loader2 } from "lucide-react";
 import type { GMessage } from "@/lib/transcript";
@@ -18,6 +18,27 @@ import { TasksBar } from "./TasksBar";
 /** sub：子 agent 的只读面板（值 = 它在主会话里那张卡片的 toolCallId）。没有输入框、不能回退。 */
 // 最后一条和输入框之间留一截（照 ChatGPT 桌面版的留白）：贴太近的话最后那行元信息和输入框挤在一起
 const ListFooter = () => <div className="h-12" />;
+
+// 顶上钉着的那句用户消息：一行，太长截掉；图片 / 文件写成 [图片] 这种占位
+function PinnedPrompt({ msg, onClick }: { msg: GMessage; onClick: () => void }) {
+  const text = msg.parts
+    .map((p) => (p.type === "text" ? p.text : p.type === "file" ? (p.mediaType?.startsWith("image/") ? "[图片]" : "[文件]") : ""))
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return (
+    <div className="pointer-events-none absolute inset-x-0 top-0 z-10 px-4 pt-2">
+      <button
+        className="pointer-events-auto mx-auto flex w-full max-w-[800px] items-center gap-2 rounded-md border bg-background/95 px-3 py-1.5 text-left text-[13px] text-muted-foreground shadow-sm backdrop-blur hover:text-foreground"
+        onClick={onClick}
+        title="跳到这句"
+      >
+        <CornerDownRight className="size-3.5 shrink-0" />
+        <span className="truncate">{text || "（空消息）"}</span>
+      </button>
+    </div>
+  );
+}
 
 // 每个 pane 的滚动位置（在不在底部、滚到哪）：列表被卸载再挂回来（tab 被挤出保留数、虚拟列表重建）时照它恢复。
 const scrollMem = new Map<string, { top: number; bottom: boolean }>();
@@ -68,13 +89,12 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
   };
 
   // 回退 / 改写：确认在消息旁边的小气泡里做（RewindButton），这里只管真的去回退
-  const doRewind = async (msg: GMessage, edit: boolean, restore: boolean) => {
+  const doRewind = async (msg: GMessage, edit: boolean) => {
     try {
-      const r = await api.rewind(session.id, msg.metadata!.messageId!, restore);
-      if (msg.metadata?.snapshot && restore !== get().config.rewindFiles) setConfig({ rewindFiles: restore }); // 记住这次的选择，下次默认照它
+      const r = await api.rewind(session.id, msg.metadata!.messageId!);
       const text = (r.content ?? []).map((c) => (c.type === "text" ? c.text : "")).join("");
       if (edit || text) composer.current?.setText(text);
-      toast.success(r.restoredFrom ? "已回退（对话和文件）" : "已回退对话");
+      toast.success("已回退对话");
     } catch (e: any) {
       toast.error(e.message ?? String(e));
     }
@@ -111,6 +131,36 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
     };
   }, [tabActive]);
   const scrollerEl = useRef<HTMLElement | null>(null);
+  // 往上翻的时候顶上钉一条「这段回复是回哪句话的」（照 Claude Code）：屏幕最上面那一行往前找最近的用户消息，
+  // 它已经滚出屏幕了就钉出来，点一下跳回去。行是虚拟列表的，只能从 DOM 上的 data-index 认出顶上是第几行。
+  const [pinned, setPinned] = useState<number | null>(null);
+  const pinRaf = useRef(0);
+  const rowsRef = useRef(rows);
+  rowsRef.current = rows;
+  const updatePinned = () => {
+    cancelAnimationFrame(pinRaf.current);
+    pinRaf.current = requestAnimationFrame(() => {
+      const el = scrollerEl.current;
+      if (!el) return;
+      const top = el.getBoundingClientRect().top;
+      let topIdx = -1;
+      for (const it of el.querySelectorAll<HTMLElement>("[data-index]")) {
+        if (it.getBoundingClientRect().bottom > top + 1) {
+          topIdx = Number(it.dataset.index);
+          break;
+        }
+      }
+      const rs = rowsRef.current;
+      let u = -1;
+      for (let i = Math.min(topIdx, rs.length - 1); i >= 0; i--)
+        if (rs[i].kind === "user") {
+          u = i;
+          break;
+        }
+      setPinned(u >= 0 && u < topIdx ? u : null);
+    });
+  };
+  useEffect(() => () => cancelAnimationFrame(pinRaf.current), []);
   const lastH = useRef(0); // 上一次量到的总高（推到底之前用它判断「刚才是不是贴着底」）
   // 行是 memo 的，回调要稳定（不然每次都重渲染），但又要拿到最新的 —— 放在 ref 里转一手
   const latest = useRef({ doRewind, sessionId: session.id, openGroups, setOpenGroups });
@@ -119,8 +169,8 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
     () => ({
       sessionId: session.id,
       running,
-      onRewind: sub ? undefined : (m, restore) => latest.current.doRewind(m, false, restore),
-      onEdit: sub ? undefined : (m, restore) => latest.current.doRewind(m, true, restore),
+      onRewind: sub ? undefined : (m) => latest.current.doRewind(m, false),
+      onEdit: sub ? undefined : (m) => latest.current.doRewind(m, true),
       onQuickReply: (s) => api.send(latest.current.sessionId, [{ type: "text", text: s }]).catch((e) => toast.error(e.message)),
       onShowCleared: () => setShowCleared(true),
       onToggleGroup: (key) => {
@@ -167,6 +217,7 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
                 const bottom = el.scrollHeight - el.clientHeight - el.scrollTop < 80;
                 bottomRef.current = bottom;
                 scrollMem.set(scrollKey, { top: el.scrollTop, bottom });
+                updatePinned();
               }}
               // 流式输出时最后一行在长高：followOutput 要等下一拍才跟，会落后一两行、一顿一顿的。
               // 总高度一变、原来在底部，就当场推到底。
@@ -182,6 +233,9 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
               increaseViewportBy={{ top: 800, bottom: 800 }}
               components={{ Footer: ListFooter }}
             />
+          )}
+          {!atBottom && pinned !== null && rows[pinned]?.kind === "user" && (
+            <PinnedPrompt msg={(rows[pinned] as Extract<Row, { kind: "user" }>).msg} onClick={() => list.current?.scrollToIndex({ index: pinned, align: "start", behavior: "smooth" })} />
           )}
           {!atBottom && msgs.length > 0 && (
             <Button

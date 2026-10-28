@@ -106,10 +106,7 @@ export const api = {
   setMode: (id: string, mode: string) => req("POST", `/api/sessions/${id}/mode`, { mode }),
   setConfig: (id: string, cid: string, value: string) => req("POST", `/api/sessions/${id}/config`, { id: cid, value }),
   rename: (id: string, title: string) => req("POST", `/api/sessions/${id}/rename`, { title }),
-  rewind: (id: string, messageId: string, restoreFiles: boolean) =>
-    req<{ content: ContentBlock[]; restoredFrom?: string; safetyCommit?: string }>("POST", `/api/sessions/${id}/rewind`, { messageId, restoreFiles }),
-  rewindPreview: (id: string, messageId: string) =>
-    req<{ files: string[] | null }>("GET", `/api/sessions/${id}/rewind-preview?messageId=${encodeURIComponent(messageId)}`),
+  rewind: (id: string, messageId: string) => req<{ content: ContentBlock[] }>("POST", `/api/sessions/${id}/rewind`, { messageId }),
   importable: (agent: string, cwd: string) =>
     req<{ sessionId: string; cwd: string; title?: string; updatedAt?: string }[]>(
       "GET",

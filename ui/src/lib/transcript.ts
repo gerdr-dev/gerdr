@@ -12,7 +12,6 @@ export type GMeta = {
   steer?: boolean;
   /** 插话还在 agent 的队列里排着、没被读进这一轮（claude 要等手上这个工具调用结束才读） */
   queued?: boolean;
-  snapshot?: string;
   from?: string; // 别的会话发来的：发送方会话 id
   ts: number;
   content?: ContentBlock[];
@@ -198,7 +197,7 @@ export class Transcript {
           id: e.messageId ?? this.uid(),
           role: "user",
           parts,
-          metadata: { messageId: e.messageId, steer: e.steer, snapshot: e.snapshot, from: e.from, ts: e.ts, content: e.content },
+          metadata: { messageId: e.messageId, steer: e.steer, from: e.from, ts: e.ts, content: e.content },
         });
         this.chunks.clear();
         this.lastChunkKey = "";

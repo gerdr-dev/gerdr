@@ -19,8 +19,6 @@ export type Config = {
   notifications: boolean;
   /** 发送：enter（回车发、Shift+回车换行）或 mod+enter（⌘/Ctrl+回车发）。 */
   sendKey: "enter" | "mod+enter";
-  /** 回退时默认要不要连文件一起恢复。 */
-  rewindFiles: boolean;
   keepTabs: number; // 切走之后还留在页面里的 tab 数（展开状态、滚动位置都保住）；1 = 不留
   agents?: AgentDef[];
 };
@@ -37,7 +35,6 @@ export const DEFAULT_CONFIG: Config = {
   defaultModes: {},
   notifications: true,
   sendKey: "enter",
-  rewindFiles: true,
   keepTabs: 6,
 };
 

@@ -228,7 +228,7 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 		return c.Agents
 	}
 	em := ext.New(env.Dir)
-	h, err := hub.New(hub.Options{Dir: env.Dir, ClaudeIdle: env.ClaudeIdle, ExtraAgents: cfgAgents(), NoSnapshots: env.NoSnapshots, Log: log, Ext: em})
+	h, err := hub.New(hub.Options{Dir: env.Dir, ClaudeIdle: env.ClaudeIdle, ExtraAgents: cfgAgents(), Log: log, Ext: em})
 	if err != nil {
 		return err
 	}
