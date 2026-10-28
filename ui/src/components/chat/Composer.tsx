@@ -1,0 +1,505 @@
+import { ArrowUp, ImagePlus, Square, X, CornerDownRight } from "lucide-react";
+import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { api, isNetworkError } from "@/lib/api";
+import { closeFocusedPane, focusPane } from "@/lib/actions";
+import { get, set, transcript, useStore } from "@/lib/store";
+import type { ConfigOption, ContentBlock, SessionSummary } from "@/lib/types";
+import { isCoarse } from "@/lib/phone";
+import { cn } from "@/lib/utils";
+import { OptionMenu } from "./OptionMenu";
+
+export type ComposerHandle = { focus(): void; setText(t: string): void };
+
+type Img = { data: string; mimeType: string; url: string };
+
+function flatOptions(o: ConfigOption) {
+  const arr: any[] = o.options as any[];
+  return arr.flatMap((x) => (x.options ? x.options : [x])) as { value: string; name: string; description?: string }[];
+}
+
+export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; paneId: string; running: boolean; onSent?: () => void }>(function Composer(
+  { session, paneId, running, onSent },
+  ref,
+) {
+  const text = useStore((s) => s.drafts[paneId] ?? "");
+  const sendKey = useStore((s) => s.config.sendKey);
+  const [imgs, setImgs] = useState<Img[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [cmdIdx, setCmdIdx] = useState(0);
+  const ta = useRef<HTMLTextAreaElement>(null);
+  const setText = (t: string) => set((s) => ({ drafts: { ...s.drafts, [paneId]: t } }));
+
+  useImperativeHandle(ref, () => ({
+    focus: () => ta.current?.focus(),
+    setText: (t: string) => {
+      setText(t);
+      requestAnimationFrame(() => {
+        ta.current?.focus();
+        const n = ta.current?.value.length ?? 0;
+        ta.current?.setSelectionRange(n, n);
+      });
+    },
+  }));
+
+  // 高度跟着内容走，最多到 pane 高度的四成。
+  useEffect(() => {
+    const el = ta.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = Math.min(el.scrollHeight, Math.max(160, window.innerHeight * 0.4)) + "px";
+  }, [text]);
+
+  // 斜杠命令：输入框只有一个 /xxx（还没空格）时弹候选。
+  const slash = /^\/(\S*)$/.exec(text);
+  const cmds = useMemo(() => {
+    if (!slash) return [];
+    const q = slash[1].toLowerCase();
+    // 排序照 Claude Code：名字以输入开头的 → 名字里包含的 → 说明里包含的
+    const rank = (c: { name: string; description?: string }) => {
+      const n = c.name.toLowerCase();
+      if (n.startsWith(q)) return 0;
+      if (n.includes(q)) return 1;
+      if ((c.description ?? "").toLowerCase().includes(q)) return 2;
+      return 9;
+    };
+    return (session.commands ?? [])
+      .map((c) => ({ c, r: rank(c) }))
+      .filter((x) => x.r < 9)
+      .sort((a, b) => a.r - b.r || a.c.name.length - b.c.name.length)
+      .map((x) => x.c)
+      .slice(0, 40);
+  }, [slash?.[1], session.commands]);
+  useEffect(() => setCmdIdx(0), [slash?.[1]]);
+
+  // @ 引用文件（照 Claude Code）：光标前面是「@xxx」（@ 在行首或空格后）就弹会话目录下的文件候选，选中换成 @相对路径。
+  const [caret, setCaret] = useState(0);
+  const [atOff, setAtOff] = useState(-1); // Esc 关掉的那一个 @（同一个位置不再弹）
+  const at = useMemo(() => {
+    const m = /(^|\s)@([^\s@]*)$/.exec(text.slice(0, caret));
+    if (!m) return null;
+    const start = caret - m[2].length - 1;
+    return start === atOff ? null : { q: m[2], start };
+  }, [text, caret, atOff]);
+  const [files, setFiles] = useState<string[]>([]);
+  const [fileIdx, setFileIdx] = useState(0);
+  useEffect(() => {
+    if (!at) {
+      setFiles([]);
+      return;
+    }
+    const t = setTimeout(() => {
+      api
+        .searchFiles(session.id, at.q)
+        .then((r) => {
+          setFiles(r.files);
+          setFileIdx(0);
+        })
+        .catch(() => setFiles([]));
+    }, 80);
+    return () => clearTimeout(t);
+  }, [at?.q, at?.start, session.id]);
+  const pickFile = (f: string) => {
+    if (!at) return;
+    const before = text.slice(0, at.start);
+    const ins = `@${f} `;
+    setText(before + ins + text.slice(caret));
+    // 光标要在下一次重渲染时（同一帧里、下一个按键之前）就挪到插入的内容后面：放进 rAF 的话快手接着打的字会落在路径前面
+    caretTo.current = before.length + ins.length;
+    setCaret(caretTo.current);
+    setFiles([]);
+  };
+  const caretTo = useRef(-1);
+  useLayoutEffect(() => {
+    if (caretTo.current < 0) return;
+    ta.current?.focus();
+    ta.current?.setSelectionRange(caretTo.current, caretTo.current);
+    caretTo.current = -1;
+  }, [text]);
+  // 打了 / 但命令列表还是空的（这个会话的 agent 进程还没起，claude 起来才报命令）：先把进程起起来
+  const warmed = useRef(false);
+  useEffect(() => {
+    if (slash && !(session.commands ?? []).length && !warmed.current) {
+      warmed.current = true;
+      api.warm(session.id).catch(() => {});
+    }
+  }, [!!slash, session.commands?.length]);
+
+  const send = async () => {
+    const t = text.trim();
+    if (!t && !imgs.length) return;
+    const content: ContentBlock[] = [];
+    for (const im of imgs) content.push({ type: "image", data: im.data, mimeType: im.mimeType });
+    if (t) content.push({ type: "text", text: t });
+    setBusy(true);
+    const prev = text;
+    const prevImgs = imgs;
+    setText("");
+    setImgs([]);
+    hist.current.idx = -1;
+    const tid = `send-${session.id}`;
+    try {
+      await api.send(session.id, content, (n) => toast.loading(`网络不好，正在重发（第 ${n} 次）…`, { id: tid }));
+      toast.dismiss(tid);
+      sentAt.current = Date.now();
+      if (escPending.current) {
+        escPending.current = false;
+        escape();
+      }
+      onSent?.();
+    } catch (e: any) {
+      toast.dismiss(tid);
+      // 没发出去：原样放回输入框（字和图都在），人可以再按一次。
+      if (!(get().drafts[paneId] ?? "")) setText(prev);
+      setImgs((cur) => (cur.length ? cur : prevImgs));
+      toast.error(isNetworkError(e) ? "网络断了，消息没发出去（已放回输入框）" : (e.message ?? String(e)));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const hist = useRef<{ idx: number; list: string[] }>({ idx: -1, list: [] });
+  const sentAt = useRef(0);
+  const ctrlC = useRef(0);
+  const escPending = useRef(false);
+  const userTexts = () =>
+    transcript(session.id)
+      .messages.filter((m) => m.role === "user")
+      .map((m) => m.parts.map((p) => (p.type === "text" ? p.text : "")).join(""))
+      .filter((t) => t.trim())
+      .reverse();
+  const recallUp = async () => {
+    if (hist.current.idx < 0 && running) {
+      try {
+        const r = await api.withdrawLast(session.id);
+        const back = (r.content ?? []).filter((c) => c.type === "text").map((c) => (c as { text: string }).text).join("\n\n");
+        if (back) {
+          setText(back);
+          toast("排队中的插话已收回，改完再发");
+          return;
+        }
+      } catch {}
+    }
+    if (hist.current.idx < 0) hist.current.list = userTexts();
+    const next = Math.min(hist.current.idx + 1, hist.current.list.length - 1);
+    if (next < 0) return;
+    hist.current.idx = next;
+    setText(hist.current.list[next]);
+  };
+  const recallDown = () => {
+    if (hist.current.idx < 0) return;
+    hist.current.idx -= 1;
+    setText(hist.current.idx >= 0 ? hist.current.list[hist.current.idx] : "");
+  };
+
+  // Esc：和 Claude Code 一样 —— 打断；还没被 agent 用上的话（刚发、它一个字没回 / 排着队的插话）撤回，放回输入框。
+  const escape = async () => {
+    try {
+      const r = await api.escape(session.id);
+      if (!r.content?.length) return;
+      const texts = r.content.filter((c) => c.type === "text").map((c) => (c as { text: string }).text);
+      const back = texts.join("\n\n");
+      const cur = get().drafts[paneId] ?? "";
+      setText(cur ? `${back}\n\n${cur}` : back);
+      const images = r.content.filter((c) => c.type === "image") as { data: string; mimeType: string }[];
+      if (images.length) setImgs((x) => [...images.map((im) => ({ data: im.data, mimeType: im.mimeType, url: `data:${im.mimeType};base64,${im.data}` })), ...x]);
+      toast(r.rolledBack ? "已打断，刚发的话撤回到输入框" : `已打断，${r.withdrawn} 条还没处理的插话撤回到输入框`);
+      ta.current?.focus();
+    } catch (err: any) {
+      toast.error(err.message);
+    }
+  };
+
+  const addFiles = (files: FileList | File[]) => {
+    for (const f of Array.from(files)) {
+      if (!f.type.startsWith("image/")) continue;
+      if (f.size > 20 << 20) {
+        toast.error(`${f.name} 太大了（超过 20MB）`);
+        continue;
+      }
+      const r = new FileReader();
+      r.onload = () => {
+        const url = String(r.result);
+        setImgs((xs) => [...xs, { url, data: url.slice(url.indexOf(",") + 1), mimeType: f.type }]);
+      };
+      r.readAsDataURL(f);
+    }
+  };
+
+  const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // 输入法组字时的回车是给输入法上屏用的（中文用户按回车选词），一律不当发送。
+    if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+    if (at && files.length) {
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        const d = e.key === "ArrowDown" ? 1 : -1;
+        setFileIdx((i) => (i + d + files.length) % files.length);
+        return;
+      }
+      if ((e.key === "Tab" && !e.shiftKey) || (e.key === "Enter" && !e.shiftKey)) {
+        e.preventDefault();
+        pickFile(files[fileIdx] ?? files[0]);
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        setAtOff(at.start);
+        return;
+      }
+    }
+    if (cmds.length) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setCmdIdx((i) => (i + 1) % cmds.length);
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setCmdIdx((i) => (i - 1 + cmds.length) % cmds.length);
+        return;
+      }
+      if (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey)) {
+        e.preventDefault();
+        const c = cmds[cmdIdx];
+        if (c) setText(`/${c.name} `);
+        return;
+      }
+    }
+    // ↑ / ↓（照 Claude Code）：输入框空着时按 ↑ —— 有排着队还没被用上的插话就收回来改，没有就翻之前发过的话；
+    // 翻历史时 ↓ 往回翻，翻到头清空。输入框里有自己写的字时不管（那是在挪光标）。
+    if ((e.key === "ArrowUp" || e.key === "ArrowDown") && !e.shiftKey && !e.altKey && !e.metaKey && !e.ctrlKey) {
+      const browsing = hist.current.idx >= 0 && text === hist.current.list[hist.current.idx];
+      if (text === "" || browsing) {
+        e.preventDefault();
+        if (e.key === "ArrowUp") recallUp();
+        else recallDown();
+        return;
+      }
+    }
+    // Shift+Tab（照 Claude Code）：轮换权限模式
+    if (e.key === "Tab" && e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      // 「全放开」那几档不进轮换（Claude Code 也是）：一是按快了一下子越过审批太危险；二是 claude 没带
+      // --dangerously-skip-permissions 起的进程根本切不过去，切了只会报错。要用就在下拉框里明确地选。
+      const list = (session.modes?.availableModes ?? []).filter((m) => !/bypass|full-access|dontAsk/i.test(m.id));
+      if (list.length > 1) {
+        e.preventDefault();
+        const i = list.findIndex((m) => m.id === session.modes?.currentModeId);
+        const next = list[(i + 1) % list.length];
+        api.setMode(session.id, next.id).catch((err) => toast.error(err.message));
+        toast(`模式：${next.name}`, { id: "mode", duration: 1500 });
+      }
+      return;
+    }
+    // Ctrl+C（照 Claude Code）：有字先清空；在跑先打断；空着又没在跑 —— 2 秒内连按两次关掉这个 pane（= 关掉会话）。
+    // 只认 ctrl，不认 ⌘：mac 上 ⌘C 是复制。
+    if (e.key === "c" && e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+      e.preventDefault();
+      if (text) {
+        setText("");
+        setImgs([]);
+        return;
+      }
+      if (running) {
+        escape();
+        return;
+      }
+      if (Date.now() - ctrlC.current < 2000) {
+        ctrlC.current = 0;
+        toast.dismiss("ctrlc");
+        focusPane(paneId);
+        closeFocusedPane();
+        return;
+      }
+      ctrlC.current = Date.now();
+      toast("再按一次 Ctrl+C 关闭这个会话", { id: "ctrlc", duration: 2000 });
+      return;
+    }
+    // Esc 按得快的两种：消息还在发（等发完再撤）、刚发完界面还没收到「在跑」（服务端其实已经在跑了）
+    if (e.key === "Escape" && (running || busy || Date.now() - sentAt.current < 5000)) {
+      e.preventDefault();
+      if (busy) escPending.current = true;
+      else escape();
+      return;
+    }
+    if (e.key === "Enter") {
+      const mod = e.metaKey || e.ctrlKey;
+      // 触屏的软键盘上回车就是换行（没有 Shift 可按），发送走右下角那个按钮
+      const wantSend = sendKey === "enter" && !isCoarse() ? !e.shiftKey && !e.altKey : mod;
+      if (wantSend) {
+        e.preventDefault();
+        if (!busy) send();
+      }
+    }
+  };
+
+  const modes = session.modes;
+  const opts = session.configOptions ?? [];
+  const hasText = text.trim().length > 0 || imgs.length > 0;
+
+  return (
+    <div className="relative px-3 pb-3">
+      {slash && !(session.commands ?? []).length && (
+        <div className="absolute bottom-full left-3 right-3 z-20 mb-1 rounded-lg border bg-popover px-3 py-2 text-[12px] text-muted-foreground shadow-lg">
+          正在加载命令…（{(session.base ?? session.agent) === "claude" ? "Claude Code 起来之后才报命令列表" : "这个 agent 没有报命令"}）
+        </div>
+      )}
+      {at && files.length > 0 && (
+        <div className="absolute bottom-full left-3 right-3 z-20 mb-1 max-h-64 overflow-auto rounded-lg border bg-popover p-1 shadow-lg">
+          {files.map((f, i) => {
+            const cut = f.lastIndexOf("/");
+            return (
+              <button
+                key={f}
+                className={cn("flex w-full items-baseline gap-2 rounded px-2 py-1 text-left text-[13px]", i === fileIdx && "bg-accent")}
+                onMouseEnter={() => setFileIdx(i)}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  pickFile(f);
+                }}
+              >
+                <span className="shrink-0 font-mono">{f.slice(cut + 1)}</span>
+                <span className="truncate text-[12px] text-muted-foreground">{cut > 0 ? f.slice(0, cut) : ""}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+      {cmds.length > 0 && (
+        <div className="absolute bottom-full left-3 right-3 z-20 mb-1 max-h-64 overflow-auto rounded-lg border bg-popover p-1 shadow-lg">
+          {cmds.map((c, i) => (
+            <button
+              key={c.name}
+              className={cn("flex w-full items-baseline gap-2 rounded px-2 py-1 text-left text-[13px]", i === cmdIdx && "bg-accent")}
+              onMouseEnter={() => setCmdIdx(i)}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                setText(`/${c.name} `);
+              }}
+            >
+              <span className="shrink-0 font-mono">/{c.name}</span>
+              <span className="truncate text-[12px] text-muted-foreground">{c.description}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      <div
+        className={cn("rounded-xl border bg-card shadow-xs transition-colors focus-within:border-ring/60", running && "border-brand/40")}
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={(e) => {
+          if (e.dataTransfer.files.length) {
+            e.preventDefault();
+            addFiles(e.dataTransfer.files);
+          }
+        }}
+      >
+        {imgs.length > 0 && (
+          <div className="flex flex-wrap gap-2 px-3 pt-3">
+            {imgs.map((im, i) => (
+              <div key={i} className="group/img relative">
+                <img src={im.url} className="size-14 rounded-md border object-cover" />
+                <button
+                  className="absolute -right-1.5 -top-1.5 hidden rounded-full bg-foreground p-0.5 text-background group-hover/img:block [@media(hover:none)]:block"
+                  onClick={() => setImgs(imgs.filter((_, j) => j !== i))}
+                >
+                  <X className="size-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        <textarea
+          ref={ta}
+          data-composer={paneId}
+          rows={1}
+          value={text}
+          onChange={(e) => {
+            setText(e.target.value);
+            setCaret(e.target.selectionStart ?? e.target.value.length);
+          }}
+          onSelect={(e) => setCaret(e.currentTarget.selectionStart ?? 0)}
+          onKeyDown={onKeyDown}
+          onPaste={(e) => {
+            const files = Array.from(e.clipboardData.files);
+            if (files.some((f) => f.type.startsWith("image/"))) {
+              e.preventDefault();
+              addFiles(files);
+            }
+          }}
+          placeholder={running ? "它在干活，说一句会直接插进去（Esc 打断）" : "说点什么…  / 看命令"}
+          className="block max-h-[40vh] min-h-[44px] w-full resize-none bg-transparent px-3.5 pt-3 pb-1 text-[1em] max-md:text-[16px] leading-relaxed outline-none placeholder:text-muted-foreground/70"
+        />
+        <div className="flex items-center gap-1 px-2 pb-2">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <label className="flex size-7 cursor-pointer items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground">
+                <ImagePlus className="size-4" />
+                <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => e.target.files && addFiles(e.target.files)} />
+              </label>
+            </TooltipTrigger>
+            <TooltipContent>附图（也可以直接粘贴 / 拖进来）</TooltipContent>
+          </Tooltip>
+          {modes && modes.availableModes.length > 0 && (
+            <OptionMenu
+              label="模式"
+              value={modes.currentModeId}
+              options={modes.availableModes.map((m) => ({ value: m.id, name: m.name, description: m.description }))}
+              onChange={(v) => api.setMode(session.id, v).catch((e) => toast.error(e.message))}
+            />
+          )}
+          {opts.map((o) => (
+            <OptionMenu
+              key={o.id}
+              label={o.name}
+              value={o.currentValue}
+              options={flatOptions(o)}
+              onChange={(v) => api.setConfig(session.id, o.id, v).catch((e) => toast.error(e.message))}
+            />
+          ))}
+          <div className="flex-1" />
+          {session.context && <ContextMeter c={session.context} />}
+          {running && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button size="icon" variant="ghost" className="size-8 rounded-full" onClick={() => escape()}>
+                  <Square className="size-3.5 fill-current" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>打断（Esc）</TooltipContent>
+            </Tooltip>
+          )}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button size="icon" className="size-8 rounded-full" disabled={!hasText || busy} onClick={send}>
+                {running ? <CornerDownRight className="size-4" /> : <ArrowUp className="size-4" />}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{running ? "插进正在跑的这一轮" : "发送"}</TooltipContent>
+          </Tooltip>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+/** 上下文用了多少（照 Claude Code 的「Context left until auto-compact」）：过半才显眼，快满变色。 */
+function ContextMeter({ c }: { c: { tokens: number; window: number } }) {
+  const pct = Math.min(100, Math.round((c.tokens / c.window) * 100));
+  const tone = pct >= 90 ? "text-bad" : pct >= 75 ? "text-warn" : "text-muted-foreground";
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className={cn("mr-1 font-mono text-[11px] tabular-nums", tone)}>上下文 {pct}%</span>
+      </TooltipTrigger>
+      <TooltipContent>
+        已用 {c.tokens.toLocaleString()} / {c.window.toLocaleString()} tokens。快满时 agent 会自动压缩，也可以 /compact 手动压。
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+export function draftOf(paneId: string) {
+  return get().drafts[paneId] ?? "";
+}

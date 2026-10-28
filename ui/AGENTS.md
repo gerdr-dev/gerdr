@@ -1,0 +1,82 @@
+# gerdr 的界面
+
+这个目录就是 gerdr 的整个界面，**没有打包环节**：gerdr 直接读这里的源码，每个文件用 esbuild 单独编译后发给浏览器，
+保存即生效（React Refresh 热替换，页面状态尽量保住）。不用 `npm install`、不用 build、不用重启 gerdr。
+
+界面目录是 git 仓库：`upstream` 分支是 gerdr 发的版本，`main` 是正在用的；gerdr 升级时把新版提交到 `upstream` 再合进 `main`
+（三方合并，你的改动保留）。只在 `main` 上改、别动 `upstream`。改之前先存个档，改坏了能回去：
+
+```bash
+git -C <界面目录> add -A && git -C <界面目录> commit -qm "改界面之前" || true
+```
+
+改完查一下有没有改坏（编译错误、页面里冒出来的运行时错误都在里面；页面开着才有运行时错误）：
+
+```bash
+gerdr ui status
+```
+
+## 目录
+
+```
+package.json       dependencies：界面用到的第三方包和版本（只有这里写了的包才能 import）
+ui.json            标题、图标
+src/index.css      样式：主题色变量（:root / .dark）、Tailwind 的 @theme
+src/pages/         页面，react-router 按文件路由：index.tsx → /，usage.tsx → /usage，s/[id].tsx → /s/:id
+src/layout.tsx     （可选）所有页面外面那一层，里面放 <Outlet />
+src/App.tsx        首页的工作台：侧栏、tab 栏、分屏
+src/components/    组件
+  ui/              shadcn/ui 组件（Button、Dialog、Select……），新组件照它们的写法
+  ai-elements/     对话流的组件（AI SDK 的 AI Elements）
+  chat/            一个会话的对话面板：ChatView（整体，虚拟列表）、Rows（对话拍平成行）、MessageView（用户消息 / 每一块怎么画）、Composer（输入框）、
+                   ToolCall（工具调用卡片）、Cards（审批 / 提问 / 计划）、TasksBar（后台任务）
+  Chrome.tsx       侧栏、tab 栏、手机上那一行顶栏（PhoneBar）
+  Panes.tsx        分屏和每个 pane 的标题栏（手机上只画焦点那一个 pane）
+  PaneSwitcher.tsx 手机上的「面板一览」：所有 pane 拍平，点一下就过去
+  FileViewer.tsx   对话里点了路径之后的查看器（图片 / 视频 / 音频 / PDF / 文本）
+  Dialogs.tsx      命令面板、设置、会话列表等弹窗
+  ExtSettings.tsx  设置里的 Skill / MCP 两页
+src/lib/
+  api.ts           调 gerdr 后端的 HTTP 接口（所有接口都在这里有一个函数）
+  store.ts         全局状态（zustand）：sessions、layout、config、对话（transcript）
+  sync.ts          WebSocket：服务端推来的会话变化、日志
+  transcript.ts    会话日志 → AI SDK 的 UIMessage
+  types.ts         后端数据的类型（SessionSummary、HubEvent……）
+  actions.ts       分屏、开会话、切 tab 这些动作
+  keys.ts          快捷键
+  phone.ts         手机那一档（usePhone，< 768px）、--vvh（软键盘弹起时的可视高度）
+  paths.ts         认对话里的本地路径（rehype 插件），chat/Markdown.tsx 用它
+  plugins.ts       TS 插件的运行时（~/.gerdr/plugins 下的插件）
+```
+
+## 规矩（编译器就是这么认的）
+
+- `@/x` 指 `src/x`。相对路径也行。
+- 第三方包：从 npm 包名 import（`import { X } from "lucide-react"`），**包必须写在 package.json 的 dependencies 里，写精确版本**
+  （`"recharts": "2.15.4"`，不要 `^`）。加了新包不用安装，浏览器从 esm.sh 拉（gerdr 本机缓存）。
+  能不加新包就不加：图标用 lucide-react，组件优先用 src/components/ui 里现成的。
+- **不能在代码里 import CSS**、不能 `?raw` / `?url`。样式用 Tailwind class 写在组件上；全局的写进 `src/index.css`。
+- 样式是浏览器里的 Tailwind v4（Tailwind browser）：任何 class 都直接生效；`src/index.css` 里不能 `@import` / `@plugin`。
+- 颜色用主题变量对应的 class（`bg-background`、`text-muted-foreground`、`border`、`bg-brand`、`text-ok`、`text-bad`、`text-warn`），
+  不要写死颜色 —— 深浅色两套都要好看。
+- 一个 `.tsx` 文件里只导出组件（大写开头 / default）时，改它能热替换、不丢状态；导出了别的（函数、常量）的文件改了会整个重新渲染。
+
+- 对话是**虚拟列表**（react-virtuoso）：只渲染屏幕附近的行，滚出去的会被卸载。所以对话里的组件**别用 useState 记「展开没」这类状态**
+  （滚回来就没了），用 `@/lib/kept` 的 `useKept(key, 初值)`，key 带上会话 id 和这块东西的 id。
+
+## 常见的改法
+
+- **加一块显示**（比如每周 / 每月额度）：数据从哪来先看 `src/lib/api.ts`（已有接口）和 `src/lib/types.ts`；
+  只有前端能算出来的直接在组件里算。放在哪：侧栏底部 `Chrome.tsx` 的 Sidebar、pane 标题栏 `Panes.tsx`、输入框下面 `chat/Composer.tsx`。
+- **加一个弹窗**：照 `Dialogs.tsx` 的写法（`useStore` 里的 `dialog` 决定开哪个），用 `@/components/ui/dialog`。
+- **加一个页面**：新建 `src/pages/<名字>.tsx`（default export 一个组件），用 `import { Link } from "react-router"` 链过去。
+- **手机上的样子**：判断用 `usePhone()`（JS 里要分岔的）或 `max-md:` class（纯样式）。手机上没有 hover，
+  只在悬停时露出来的按钮要加 `[@media(hover:none)]:opacity-100` 之类让它常显。
+- **改对话里某种东西的样子**：消息 `chat/MessageView.tsx`，工具调用 `chat/ToolCall.tsx`，审批 / 提问卡片 `chat/Cards.tsx`。
+- **加快捷键**：`src/lib/keys.ts` 的 `DEFAULT_KEYS` + `src/lib/actions.ts` 的 `runAction`。
+
+后端没有的数据（比如要查 API 用量）界面拿不到：告诉用户需要后端加接口，别在前端硬凑。
+
+## 类型检查（可选）
+
+运行不需要，想在改完跑一下 TypeScript 检查的话：`pnpm install && npx tsc --noEmit`（第一次要装开发依赖）。

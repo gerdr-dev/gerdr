@@ -1,0 +1,292 @@
+package claude
+
+import (
+	"bufio"
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"io"
+	"os"
+	"path/filepath"
+	"regexp"
+	"sort"
+	"strings"
+	"time"
+
+	"github.com/coder/acp-go-sdk"
+)
+
+// claude 把会话记录写在 ~/.claude/projects/<cwd 变形>/<sessionId>.jsonl，每行一条，
+// 靠 uuid / parentUuid 串成一条链。
+
+var nonAlnum = regexp.MustCompile(`[^a-zA-Z0-9]`)
+
+// 目录名变形规则是 CLI 的内部细节（目前是「非字母数字一律换成 -」），只拿来当快路径；
+// 对不上就按 session id 全局找 —— id 是 UUID，全机唯一。
+// root 是 projects 目录（Agent.projectsDir，每个 claude 实例各有各的）。
+func projectDirFor(root, cwd string) string {
+	return filepath.Join(root, nonAlnum.ReplaceAllString(cwd, "-"))
+}
+
+var idRe = regexp.MustCompile(`^[0-9a-fA-F-]{8,64}$`)
+
+func findTranscript(root, id, cwd string) (string, error) {
+	if !idRe.MatchString(id) {
+		return "", errors.New("invalid session id")
+	}
+	if cwd != "" {
+		p := filepath.Join(projectDirFor(root, cwd), id+".jsonl")
+		if _, err := os.Stat(p); err == nil {
+			return p, nil
+		}
+	}
+	matches, _ := filepath.Glob(filepath.Join(root, "*", id+".jsonl"))
+	if len(matches) > 0 {
+		return matches[0], nil
+	}
+	return "", acp.NewInvalidParams(map[string]any{"sessionId": id, "error": "transcript not found"})
+}
+
+type entry struct {
+	Type        string          `json:"type"`
+	UUID        string          `json:"uuid"`
+	ParentUUID  *string         `json:"parentUuid"`
+	IsSidechain bool            `json:"isSidechain"`
+	IsMeta      bool            `json:"isMeta"`
+	Cwd         string          `json:"cwd"`
+	Timestamp   string          `json:"timestamp"`
+	Summary     string          `json:"summary"`
+	CustomTitle string          `json:"customTitle"` // type=custom-title：/rename 改的名字
+	Message     json.RawMessage `json:"message"`
+	ToolResult  json.RawMessage `json:"toolUseResult"`
+}
+
+func scan(path string, fn func(e *entry, raw []byte) bool) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	sc := bufio.NewScanner(f)
+	sc.Buffer(make([]byte, 0, 1<<20), 256<<20)
+	for sc.Scan() {
+		var e entry
+		if json.Unmarshal(sc.Bytes(), &e) != nil {
+			continue
+		}
+		if !fn(&e, sc.Bytes()) {
+			break
+		}
+	}
+	return sc.Err()
+}
+
+// parentOf 找 uuid 那一条的 parentUuid。found=false 表示记录里没有这条。
+func parentOf(path, id string) (parent string, found bool, err error) {
+	err = scan(path, func(e *entry, _ []byte) bool {
+		if e.UUID == id {
+			found = true
+			if e.ParentUUID != nil {
+				parent = *e.ParentUUID
+			}
+			return false
+		}
+		return true
+	})
+	return
+}
+
+type userMsg struct {
+	Role    string          `json:"role"`
+	Content json.RawMessage `json:"content"`
+}
+
+// userText 取一条用户消息里人说的话；工具结果、命令包装、系统注入的返回 ""。
+func userText(e *entry) string {
+	if e.Type != "user" || e.IsSidechain || e.IsMeta {
+		return ""
+	}
+	var m userMsg
+	if json.Unmarshal(e.Message, &m) != nil {
+		return ""
+	}
+	var text string
+	var str string
+	if json.Unmarshal(m.Content, &str) == nil {
+		text = str
+	} else {
+		var parts []struct {
+			Type string `json:"type"`
+			Text string `json:"text"`
+		}
+		if json.Unmarshal(m.Content, &parts) != nil {
+			return ""
+		}
+		for _, p := range parts {
+			if p.Type == "tool_result" {
+				return ""
+			}
+			if p.Type == "text" {
+				text += p.Text
+			}
+		}
+	}
+	t := strings.TrimSpace(text)
+	if strings.HasPrefix(t, "<local-command") || strings.HasPrefix(t, "<command-") || strings.HasPrefix(t, "<system-reminder>") || strings.HasPrefix(t, "Caveat:") {
+		return ""
+	}
+	return text
+}
+
+func listTranscripts(root, cwd string, limit int) ([]acp.SessionInfo, error) {
+	var files []string
+	if cwd != "" {
+		files, _ = filepath.Glob(filepath.Join(projectDirFor(root, cwd), "*.jsonl"))
+	} else {
+		files, _ = filepath.Glob(filepath.Join(root, "*", "*.jsonl"))
+	}
+	type fi struct {
+		path string
+		mod  time.Time
+	}
+	var all []fi
+	for _, f := range files {
+		if st, err := os.Stat(f); err == nil && st.Size() > 0 {
+			all = append(all, fi{f, st.ModTime()})
+		}
+	}
+	sort.Slice(all, func(i, j int) bool { return all[i].mod.After(all[j].mod) })
+	var out []acp.SessionInfo
+	for _, f := range all {
+		if len(out) >= limit {
+			break
+		}
+		id := strings.TrimSuffix(filepath.Base(f.path), ".jsonl")
+		var title, scwd string
+		n := 0
+		_ = scan(f.path, func(e *entry, _ []byte) bool {
+			n++
+			if e.Cwd != "" && scwd == "" {
+				scwd = e.Cwd
+			}
+			if e.Type == "summary" && e.Summary != "" {
+				title = e.Summary
+			}
+			if title == "" {
+				if t := userText(e); t != "" {
+					title = t
+				}
+			}
+			return n < 400 && (title == "" || scwd == "")
+		})
+		if title == "" {
+			continue // 只有系统消息的空会话
+		}
+		// 在 claude 里 /rename 过：用改过的名字（记录在文件后面，只读文件尾巴）。
+		if t := customTitle(f.path); t != "" {
+			title = t
+		}
+		// 目录名变形是有损的（长路径会被截断），同一个目录下可能混着别的 cwd 的会话：以记录里的 cwd 为准。
+		if cwd != "" && scwd != "" && filepath.Clean(scwd) != filepath.Clean(cwd) {
+			continue
+		}
+		if scwd == "" {
+			scwd = cwd
+		}
+		up := f.mod.UTC().Format(time.RFC3339)
+		t := strings.Join(strings.Fields(title), " ")
+		if r := []rune(t); len(r) > 120 {
+			t = string(r[:120]) + "…"
+		}
+		out = append(out, acp.SessionInfo{SessionId: acp.SessionId(id), Cwd: scwd, Title: &t, UpdatedAt: &up})
+	}
+	return out, nil
+}
+
+// replayTranscript 把一份会话记录重放成 session/update。只走主链（不含子 agent 的旁支）。
+func replayTranscript(path string, emit func(acp.SessionUpdate)) error {
+	tmp := &session{a: &Agent{}, tools: map[string]*toolState{}}
+	tmp.a.conn = nil
+	// 借用 stream.go 里那套「assistant 块 / 工具结果 → update」的翻译，输出改成 emit。
+	rec := &replayer{s: tmp, emit: emit}
+	return scan(path, func(e *entry, raw []byte) bool {
+		if e.IsSidechain {
+			return true
+		}
+		switch e.Type {
+		case "user":
+			if t := userText(e); t != "" {
+				id := e.UUID
+				emit(acp.SessionUpdate{UserMessageChunk: &acp.SessionUpdateUserMessageChunk{Content: acp.TextBlock(t), MessageId: &id}})
+				return true
+			}
+			var m userMsg
+			if json.Unmarshal(e.Message, &m) == nil {
+				var blocks []json.RawMessage
+				if json.Unmarshal(m.Content, &blocks) == nil {
+					for _, b := range blocks {
+						rec.toolResult(b, e.ToolResult)
+					}
+				}
+			}
+		case "assistant":
+			var m struct {
+				ID      string            `json:"id"`
+				Content []json.RawMessage `json:"content"`
+			}
+			if json.Unmarshal(e.Message, &m) == nil {
+				for _, b := range m.Content {
+					rec.assistant(m.ID, b)
+				}
+			}
+		}
+		return true
+	})
+}
+
+type replayer struct {
+	s    *session
+	emit func(acp.SessionUpdate)
+}
+
+func (r *replayer) assistant(apiID string, raw json.RawMessage) {
+	r.s.withEmit(r.emit, func() { r.s.onAssistantBlock(context.Background(), apiID, "", raw) })
+}
+
+func (r *replayer) toolResult(raw, structured json.RawMessage) {
+	r.s.withEmit(r.emit, func() { r.s.onToolResult(context.Background(), raw, structured) })
+}
+
+// customTitle：会话记录里最后一次 /rename 的名字（{"type":"custom-title","customTitle":…}）。
+// 改名是追加在文件末尾的，只读最后 512KB，不为它把几十 MB 的记录整个扫一遍。
+func customTitle(path string) string {
+	f, err := os.Open(path)
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+	st, err := f.Stat()
+	if err != nil {
+		return ""
+	}
+	off := st.Size() - 512<<10
+	if off < 0 {
+		off = 0
+	}
+	buf := make([]byte, st.Size()-off)
+	if _, err := f.ReadAt(buf, off); err != nil && err != io.EOF {
+		return ""
+	}
+	title := ""
+	for _, line := range bytes.Split(buf, []byte("\n")) {
+		if !bytes.Contains(line, []byte(`"custom-title"`)) {
+			continue
+		}
+		var e entry
+		if json.Unmarshal(line, &e) == nil && e.Type == "custom-title" && e.CustomTitle != "" {
+			title = e.CustomTitle
+		}
+	}
+	return title
+}
