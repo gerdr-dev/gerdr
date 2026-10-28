@@ -5,6 +5,25 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { type Ev, type Hello, type Session, req, uuid } from "./api";
 import { Markdown } from "./Markdown";
 
+const AGENT_KEY = "gerdr.rescue.agent";
+const DRAFT_KEY = "gerdr.rescue.draft.";
+
+// localStorage 可能不让用（隐私模式之类），读写失败就当没有
+const local = {
+  get(k: string) {
+    try {
+      return localStorage.getItem(k);
+    } catch {
+      return null;
+    }
+  },
+  set(k: string, v: string | null) {
+    try {
+      v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v);
+    } catch {}
+  },
+};
+
 const STATUS: Record<string, string> = { idle: "空闲", running: "在干活…", waiting: "等你处理", error: "出错了", starting: "启动中…" };
 
 export function Chat({ hello, uiDir, errors, onTurnDone }: { hello: Hello; uiDir: string; errors: string; onTurnDone: () => void }) {
@@ -19,11 +38,16 @@ export function Chat({ hello, uiDir, errors, onTurnDone }: { hello: Hello; uiDir
   // 急救只接着最近的一个对话，不列历史
   const [current, setCurrent] = useState(() => mine[0]?.id || "");
   const [events, setEvents] = useState<Ev[]>([]);
+  // 新对话用哪个 agent：先跟着接着的那个对话（上回用 codex 修的，这回还是 codex），再看上回选的，最后才是全局默认
   const [agent, setAgent] = useState(() => {
-    const d = hello.config?.defaultAgent;
-    return hello.agents.find((a) => a.id === d && a.available)?.id || hello.agents.find((a) => a.available)?.id || "";
+    const ok = (id?: string | null) => hello.agents.find((a) => a.id === id && a.available)?.id;
+    return ok(mine[0]?.agent) || ok(local.get(AGENT_KEY)) || ok(hello.config?.defaultAgent) || hello.agents.find((a) => a.available)?.id || "";
   });
-  const [input, setInput] = useState("");
+  // 没发出去的字按对话记着：新对话预填的那段、打到一半刷新了（回退、agent 改完界面常要刷新），回来还在
+  const [input, setInput] = useState(() => (current && local.get(DRAFT_KEY + current)) || "");
+  useEffect(() => {
+    if (current) local.set(DRAFT_KEY + current, input || null);
+  }, [input, current]);
   const [sending, setSending] = useState(false);
   const [creating, setCreating] = useState(false);
   const [alert, setAlert] = useState("");
@@ -90,7 +114,7 @@ export function Chat({ hello, uiDir, errors, onTurnDone }: { hello: Hello; uiDir
       <div className="bar">
         {/* 不列历史对话：急救就接着最近那一个，要从头来点「新对话」 */}
         <span className="grow bar-hint">{cur ? `${hello.agents.find((a) => a.id === cur.agent)?.name || cur.agent} · 接着上次的对话` : "还没开过急救对话"}</span>
-        <select className="agent" value={agent} onChange={(e) => setAgent(e.target.value)} title="新对话用哪个 agent">
+        <select className="agent" value={agent} onChange={(e) => (setAgent(e.target.value), local.set(AGENT_KEY, e.target.value))} title="新对话用哪个 agent">
           {hello.agents.map((a) => (
             <option key={a.id} value={a.id} disabled={!a.available}>
               {a.name}
