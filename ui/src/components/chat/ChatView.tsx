@@ -15,6 +15,7 @@ import type { SessionSummary } from "@/lib/types";
 import { Composer, type ComposerHandle } from "./Composer";
 import { SessionContext } from "./sessionContext";
 import { askKey } from "@/lib/askkeys";
+import { isCoarse } from "@/lib/phone";
 
 /** sub：子 agent 的只读面板（值 = 它在主会话里那张卡片的 toolCallId）。没有输入框、不能回退。 */
 // 最后一条和输入框之间留一截（照 ChatGPT 桌面版的留白）：贴太近的话最后那行元信息和输入框挤在一起
@@ -71,8 +72,9 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
   const composer = useRef<ComposerHandle>(null);
 
   // 焦点切到这个 pane（或者前缀动作做完）时，把光标放回输入框。
+  // 触屏上不做：聚焦输入框就弹软键盘，切个面板键盘就盖住半屏。手机上只有点了输入框本身才弹（和 Terminal 一样）。
   useEffect(() => {
-    if (!focused || sub) return;
+    if (!focused || sub || isCoarse()) return;
     const f = () => {
       if (!get().dialog && !document.querySelector("[role=dialog]")) composer.current?.focus();
     };
@@ -103,8 +105,9 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
   }, [focused, sub, session.id]);
 
   // 点对话区任何地方（不是在选字、也不是点按钮 / 链接这些）：光标回到输入框，直接打字（用户点名的）
+  // 触屏不做：手指点对话区多半是想滚动 / 看内容，一点就弹键盘很烦。
   const clickToType = (e: React.MouseEvent) => {
-    if (sub || e.button !== 0) return;
+    if (sub || e.button !== 0 || isCoarse()) return;
     const t = e.target as HTMLElement;
     if (
       t.closest(
