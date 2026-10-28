@@ -407,6 +407,17 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
         return;
       }
     }
+    // 光标已经顶到头还往那个方向按（开头按 ← / ↑、末尾按 → / ↓）：吃掉。浏览器这时什么都不做、事件算「没人处理」，
+    // 安卓 WebView 会把它还给系统当方向键导航，焦点被挪出网页，软键盘直接收起（输入法「文字编辑」面板里的方向键就是这么来的）。
+    if (/^Arrow(Left|Right|Up|Down)$/.test(e.key) && !e.altKey && !e.metaKey && !e.ctrlKey) {
+      const el = e.currentTarget;
+      const back = e.key === "ArrowLeft" || e.key === "ArrowUp";
+      const edge = back ? 0 : el.value.length;
+      if (el.selectionStart === edge && el.selectionEnd === edge) {
+        e.preventDefault();
+        return;
+      }
+    }
     // Shift+Tab（照 Claude Code）：轮换权限模式
     if (e.key === "Tab" && e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
       // 「全放开」那几档不进轮换（Claude Code 也是）：一是按快了一下子越过审批太危险；二是 claude 没带
