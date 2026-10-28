@@ -39,7 +39,7 @@ type Event struct {
 	// task
 	Task json.RawMessage `json:"task,omitempty"`
 
-	// notice
+	// notice：Level 是 info / warn / error / clear / retry（界面上 agent 再出字就收起的「N 秒后重试」）
 	Level string `json:"level,omitempty"`
 	Text  string `json:"text,omitempty"`
 }

@@ -183,6 +183,8 @@ func (s *session) onSystem(ctx context.Context, m map[string]json.RawMessage, ra
 		}
 		s.update(ctx, acp.SessionUpdate{SessionInfoUpdate: &acp.SessionSessionInfoUpdate{Meta: acpx.Meta(map[string]any{
 			"notice": fmt.Sprintf("%s，%.0f 秒后重试（第 %d/%d 次）", why, float64(r.DelayMS)/1000, r.Attempt, r.MaxRetries),
+			// retry：界面上重试成功（agent 又出字了）就收起这行，不然它一直挂着
+			"noticeLevel": "retry",
 		})}})
 	case "task_started", "task_progress", "task_updated", "task_notification", "background_tasks_changed":
 		s.taskEvent(ctx, sub, raw)

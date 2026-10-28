@@ -21,7 +21,8 @@ export type GData = {
   plan: { entries: PlanEntry[] };
   permission: { reqId: string; request: PermissionRequest; answer?: string; cancelled?: boolean };
   ask: { reqId: string; request: AskRequest; answers?: Record<string, string[]>; cancelled?: boolean; reason?: "skipped" | "replied" };
-  notice: { level: string; text: string };
+  /** level：info / warn / error / clear / auto / retry（「N 秒后重试」，done = 重试成功后收起了） */
+  notice: { level: string; text: string; done?: boolean };
   task: { task: AgentTask };
   turnStat: { ms: number; tokens: number; ts?: number };
   turnEnd: { stopReason: string; error?: string };
@@ -128,6 +129,7 @@ export class Transcript {
     this.chunks.clear();
     this.requests.clear();
     this.planLoc = null;
+    this.retryLoc = null;
     this.lastChunkKey = "";
     this.lastSeq = 0;
     // id 从头编：同一份日志重放出来的消息 id 一样，React 才不会把组件全部重建（展开状态、滚动位置都在组件里）。
@@ -155,6 +157,20 @@ export class Transcript {
     this.lastChunkKey = "";
     this.planLoc = null;
     return this.messages.length - 1;
+  }
+
+  /**
+   * 「N 秒后重试」那行（level retry）：重试期间原地更新同一行，agent 一有新输出（= 重试成功了）或这一轮结束就收起
+   * （标 done，渲染时不画 —— 不真删，删了会让 tools / requests 里记的位置错位）。不收的话成功之后它一直挂在那儿（用户报的）。
+   */
+  private retryLoc: Loc | null = null;
+
+  private clearRetry() {
+    const loc = this.retryLoc;
+    if (!loc) return;
+    this.retryLoc = null;
+    const p = this.messages[loc.msg]?.parts[loc.part] as any;
+    if (p?.type === "data-notice") this.setPart(loc, { ...p, data: { ...p.data, done: true } });
   }
 
   private setPart(loc: Loc, part: GPart) {
@@ -230,6 +246,8 @@ export class Transcript {
         break;
       }
       case "turn_end": {
+        this.messages = [...this.messages];
+        this.clearRetry();
         // 这一轮完了：还标着「排队中」的插话不再转圈（claude 会把它们带进下一轮，到时候自然被读到；别让圈一直转着）
         if (this.messages.some((m) => m.metadata?.queued)) {
           this.messages = this.messages.map((m) => (m.metadata?.queued ? { ...m, metadata: { ...m.metadata, queued: false } } : m));
@@ -295,8 +313,13 @@ export class Transcript {
       }
       case "notice": {
         this.messages = [...this.messages];
-        const i = this.assistant(e.ts);
-        this.pushPart(i, { type: "data-notice", data: { level: e.level ?? "info", text: e.text ?? "" } });
+        const data = { level: e.level ?? "info", text: e.text ?? "" };
+        if (data.level === "retry" && this.retryLoc) {
+          this.setPart(this.retryLoc, { type: "data-notice", data });
+          break;
+        }
+        const loc = this.pushPart(this.assistant(e.ts), { type: "data-notice", data });
+        if (data.level === "retry") this.retryLoc = loc;
         break;
       }
     }
@@ -325,6 +348,8 @@ export class Transcript {
     } else if (tag) {
       return;
     }
+    // agent 有新输出了：重试成功，收起「N 秒后重试」
+    if (this.retryLoc && ["agent_message_chunk", "agent_thought_chunk", "tool_call", "tool_call_update"].includes(u.sessionUpdate)) this.clearRetry();
     switch (u.sessionUpdate) {
       case "agent_message_chunk":
       case "agent_thought_chunk": {

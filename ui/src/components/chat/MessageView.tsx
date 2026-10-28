@@ -283,6 +283,7 @@ export function renderPart(p: GPart, i: number, ctx: PartCtx): ReactNode {
     case "data-task":
       return <TaskDoneCard key={i} sessionId={ctx.sessionId} t={p.data.task} />;
     case "data-notice":
+      if (p.data.done) return null; // 重试成功后收起的「N 秒后重试」（transcript.clearRetry）
       if (p.data.level === "clear")
         return (
           <div key={i} className="flex items-center gap-3 py-2 text-[12px] text-muted-foreground">
@@ -297,7 +298,7 @@ export function renderPart(p: GPart, i: number, ctx: PartCtx): ReactNode {
           key={i}
           className={cn(
             "flex items-start justify-center gap-1.5 px-6 py-1 text-center text-[12px]",
-            p.data.level === "error" ? "text-bad" : p.data.level === "warn" ? "text-warn" : "text-muted-foreground",
+            p.data.level === "error" ? "text-bad" : p.data.level === "warn" || p.data.level === "retry" ? "text-warn" : "text-muted-foreground",
           )}
         >
           <Info className="mt-0.5 size-3.5 shrink-0" />

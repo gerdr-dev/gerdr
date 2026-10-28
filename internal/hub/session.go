@@ -607,12 +607,29 @@ func (s *Session) SendFrom(ctx context.Context, content []acp.ContentBlock, clie
 }
 
 // retryWaits：一轮因为网络出错失败时自动重试的间隔（agent 自己的重试已经用完了才会走到这里）。
-var retryWaits = []time.Duration{5 * time.Second, 15 * time.Second, 30 * time.Second}
+// 指数回退：5 秒起翻倍，单次最多 1 分钟，所有等待加起来不超过 5 分钟 —— 偶发的 403 / 过载常常要一两分钟才缓过来，
+// 原来固定三次（5/15/30 秒）不到一分钟就放弃了；再往后多半是真坏了，别让人一直等。
+var retryWaits = backoff(5*time.Second, time.Minute, 5*time.Minute)
+
+func backoff(first, max, total time.Duration) []time.Duration {
+	var out []time.Duration
+	for d, sum := first, time.Duration(0); sum < total; d *= 2 {
+		d = min(d, max, total-sum)
+		out = append(out, d)
+		sum += d
+	}
+	return out
+}
 
 // retryable：值得自动重来的错误 —— 网络 / 过载 / agent 进程半路死了。额度用完、参数错这类不重试
 // （重试也一样，还白白烧钱）。
 func retryable(msg string) bool {
 	m := strings.ToLower(msg)
+	// 「API Error: 403 Request not allowed」：API 那边偶发的拒绝（前面还挂着一句 Failed to authenticate），
+	// 不是登录失效，过一会儿就好（用户报的）—— 先于下面的 403 判掉。
+	if strings.Contains(m, "request not allowed") {
+		return true
+	}
 	for _, k := range []string{"rate limit", "usage limit", "quota", "invalid", "unauthorized", "401", "403", "credit"} {
 		if strings.Contains(m, k) {
 			return false
@@ -632,7 +649,7 @@ func (s *Session) runTurn(c *agenthost.Host, agentSID, msgID string, content []a
 	// 网络出错：等一会儿让 agent 从断的地方接着做（发一句「继续」，不进对话记录 —— 界面上是一行提示）。
 	for attempt := 0; err != nil && attempt < len(retryWaits) && retryable(errText(err)); attempt++ {
 		wait := retryWaits[attempt]
-		s.emit(&Event{Kind: EvNotice, Level: "warn", Text: fmt.Sprintf("出错了：%s。%d 秒后自动重试（第 %d/%d 次），按停止可以取消。", oneLine(errText(err), 200), int(wait.Seconds()), attempt+1, len(retryWaits))})
+		s.emit(&Event{Kind: EvNotice, Level: "retry", Text: fmt.Sprintf("出错了：%s。%d 秒后自动重试（第 %d/%d 次），按停止可以取消。", oneLine(errText(err), 200), int(wait.Seconds()), attempt+1, len(retryWaits))})
 		if !s.sleepUnlessCancelled(wait) {
 			break
 		}
@@ -809,7 +826,11 @@ func (s *Session) onUpdate(u acp.SessionUpdate) {
 		}
 		if g, ok := u.SessionInfoUpdate.Meta["gerdr"].(map[string]any); ok {
 			if n, ok := g["notice"].(string); ok && n != "" {
-				s.emit(&Event{Kind: EvNotice, Level: "warn", Text: n})
+				lv, _ := g["noticeLevel"].(string)
+				if lv == "" {
+					lv = "warn"
+				}
+				s.emit(&Event{Kind: EvNotice, Level: lv, Text: n})
 			}
 			// 插话排队 / 被读到：只记用户发过的那几条（command_lifecycle 对每条写进去的消息都报）
 			if st, ok := g["steer"].(map[string]any); ok {

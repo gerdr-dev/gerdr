@@ -23,6 +23,7 @@ import (
 
 	"github.com/zbysir/gerdr/internal/agents/claude"
 	"github.com/zbysir/gerdr/internal/agents/codex"
+	"github.com/zbysir/gerdr/internal/awake"
 	"github.com/zbysir/gerdr/internal/config"
 	"github.com/zbysir/gerdr/internal/ext"
 	"github.com/zbysir/gerdr/internal/hub"
@@ -237,9 +238,23 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 		log.Warn("install builtin plugins", "err", err)
 	}
 	pm.Watch(func() { h.Broadcast("plugins", nil) })
+	// 有远程连着时不让电脑睡：界面配置里的实验室开关（keepAwakeRemote），和 agents 一样存了就生效
+	keeper := awake.New(log, env.Dir)
+	defer keeper.Close()
+	applyAwake := func() {
+		var c struct {
+			KeepAwakeRemote bool `json:"keepAwakeRemote"`
+			KeepAwakeLid    bool `json:"keepAwakeLid"`
+		}
+		_ = json.Unmarshal(cfg.Get(), &c)
+		keeper.SetEnabled(c.KeepAwakeRemote)
+		keeper.SetLid(c.KeepAwakeLid)
+	}
+	applyAwake()
 	applyAgents := func() {
 		h.SetAgents(cfgAgents())
 		h.Broadcast("agents", h.Agents())
+		applyAwake()
 	}
 	cfg.Watch(func() {
 		h.Broadcast("config", map[string]any{"data": cfg.Get()})
@@ -273,7 +288,7 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 	}
 	defer rm.Close()
 	srv := &server.Server{Hub: h, Token: token, Config: cfg, Layout: layout, Plugins: pm, Ext: em, Log: log, OnConfig: applyAgents,
-		UI: ui, ESM: uisite.NewESM(env.ESMCDN, filepath.Join(env.Dir, "cache", "esm")), Remote: rm,
+		UI: ui, ESM: uisite.NewESM(env.ESMCDN, filepath.Join(env.Dir, "cache", "esm")), Remote: rm, Awake: keeper,
 		Service: svc, Terms: term.New(func() []string { return sysenv.ChildEnv() }, log)}
 	defer srv.Terms.Close()
 	// 打开后台常驻时，App 起的这个后端让位：退出（errHandover → 退出码 75），后台服务拿到锁接手，

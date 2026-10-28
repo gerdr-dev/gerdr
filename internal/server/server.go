@@ -30,6 +30,7 @@ import (
 	"github.com/gorilla/websocket"
 
 	"github.com/zbysir/gerdr/internal/auth"
+	"github.com/zbysir/gerdr/internal/awake"
 	"github.com/zbysir/gerdr/internal/config"
 	"github.com/zbysir/gerdr/internal/ext"
 	"github.com/zbysir/gerdr/internal/hub"
@@ -60,6 +61,8 @@ type Server struct {
 	Service *service.Manager
 	// Terms：界面里的终端。nil = 不开（测试里）。
 	Terms *term.Manager
+	// Awake：有远程设备连着时不让电脑睡（设置 → 实验室）。nil = 不管（测试里）。
+	Awake *awake.Keeper
 	// OnServiceInstalled：刚打开后台常驻、本进程是 App 起的后端时让位（见 cmd/gerdr 的 handover）。
 	OnServiceInstalled func()
 }
@@ -79,6 +82,22 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/config", func(w http.ResponseWriter, r *http.Request) { writeRaw(w, s.Config.Get()) })
 	mux.HandleFunc("PUT /api/config", s.putStore(s.Config, "config"))
 	mux.HandleFunc("GET /api/layout", func(w http.ResponseWriter, r *http.Request) { writeRaw(w, s.Layout.Get()) })
+	// awake：不让电脑睡（设置 → 实验室）。远程也能调：手机上要能手动续一段，这个口最坏也就是电脑不睡。
+	mux.HandleFunc("GET /api/awake", s.awakeStatus)
+	mux.HandleFunc("PUT /api/awake", s.setAwake)
+	// 合盖不睡要一次管理员授权（弹 macOS 的密码框）：只在本机口（remoteGuard 挡掉远程）—— 远程点了，框弹在没人的电脑上
+	mux.HandleFunc("POST /api/awake/lid-setup", func(w http.ResponseWriter, r *http.Request) {
+		if s.Awake == nil {
+			httpError(w, 501, "这个进程不管休眠")
+			return
+		}
+		if err := awake.SetupLid(); err != nil {
+			httpError(w, 400, err.Error())
+			return
+		}
+		s.Awake.Retry()
+		writeJSON(w, s.Awake.Status())
+	})
 	mux.HandleFunc("PUT /api/layout", s.putStore(s.Layout, "layout"))
 	mux.HandleFunc("POST /api/sessions", s.createSession)
 	mux.HandleFunc("DELETE /api/sessions/{id}", s.sessionOp(func(r *http.Request, sess *hub.Session) (any, error) {
@@ -487,6 +506,42 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
+func (s *Server) awakeStatus(w http.ResponseWriter, r *http.Request) {
+	if s.Awake == nil {
+		writeJSON(w, awake.Status{})
+		return
+	}
+	writeJSON(w, s.Awake.Status())
+}
+
+// setAwake：手动时段。{minutes: n} 从现在起 n 分钟；{until: unix 毫秒}；{forever: true}；都没有 = 结束。
+func (s *Server) setAwake(w http.ResponseWriter, r *http.Request) {
+	var b struct {
+		Minutes float64 `json:"minutes"`
+		Until   int64   `json:"until"`
+		Forever bool    `json:"forever"`
+	}
+	if err := decode(r, &b); err != nil {
+		httpError(w, 400, err.Error())
+		return
+	}
+	if s.Awake == nil {
+		httpError(w, 501, "这个进程不管休眠")
+		return
+	}
+	var until time.Time
+	switch {
+	case b.Forever:
+		until = awake.Forever
+	case b.Minutes > 0:
+		until = time.Now().Add(time.Duration(b.Minutes * float64(time.Minute)))
+	case b.Until > 0:
+		until = time.UnixMilli(b.Until)
+	}
+	s.Awake.SetManual(until)
+	writeJSON(w, s.Awake.Status())
+}
+
 // ws：推会话列表 / 日志 / 布局 / 配置的变化。客户端发两种消息：{t:"watch", ids:[…]}、{t:"ping"}（回 {t:"pong"}）。
 func (s *Server) ws(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
@@ -494,6 +549,10 @@ func (s *Server) ws(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer conn.Close()
+	// 远程界面开着就一直有这条 /ws（走到这儿已经过了 remoteGuard，是配过对的设备）：按它算「有远程连着」
+	if s.Awake != nil && auth.FromRemote(r) {
+		defer s.Awake.Hold()()
+	}
 	sub := s.Hub.Subscribe()
 	defer s.Hub.Unsubscribe(sub)
 	done := make(chan struct{})

@@ -11,6 +11,7 @@ import { ServiceSetting } from "@/components/ServiceSetting";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AgentSettings } from "./AgentSettings";
+import { AwakeSetting } from "./AwakeSetting";
 import { ResumeDialog } from "./ResumeDialog";
 import { addWorkspace, basename, deleteSession, focusSession, openSessionHere, renameTab, renameWorkspace, selectWorkspace, tabName } from "@/lib/actions";
 import { api } from "@/lib/api";
@@ -370,6 +371,13 @@ function SettingsDialog({ open }: { open: boolean }) {
               <Row label="对话虚拟滚动" hint="只渲染屏幕附近的消息，很长的对话更省内存；往上翻时带图的消息可能会跳动">
                 <Switch checked={!!cfg.virtualList} onCheckedChange={(v) => setConfig({ virtualList: v })} />
               </Row>
+              <Row label="远程连着时不休眠" hint="手机等远程设备连着时电脑不自动睡眠（和 Amphetamine 一样），断开 15 分钟后恢复。仅 macOS">
+                <Switch checked={!!cfg.keepAwakeRemote} onCheckedChange={(v) => setConfig({ keepAwakeRemote: v })} />
+              </Row>
+              <Row label="合上盖子也不睡" hint="不休眠期间（远程连着 / 手动时段）合盖也醒着，要授权一次。用电池且电量 ≤ 20% 时自动放手；塞包里会发热">
+                <Switch checked={!!cfg.keepAwakeLid} onCheckedChange={(v) => setConfig({ keepAwakeLid: v })} />
+              </Row>
+              <AwakeSetting open={open && tabOpen === "labs"} />
             </TabsContent>
             <TabsContent value="remote" className="pt-2">
               <RemoteSettings open={open && tabOpen === "remote"} />

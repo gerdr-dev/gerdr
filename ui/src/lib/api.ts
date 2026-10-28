@@ -75,6 +75,22 @@ async function sendWithRetry(id: string, content: ContentBlock[], onRetry?: (att
 export type HerdrPane = { id: string; agent?: string; sessionId?: string; cwd: string; title?: string; existing?: string; skip?: string };
 export type HerdrWorkspace = { id: string; label: string; tabs: { label: string; panes: HerdrPane[] }[] };
 
+/** 不让电脑睡的状态（internal/awake.Status）。时间是 unix 毫秒，0 = 没有，-1 = 无限期。 */
+export type AwakeStatus = {
+  available: boolean;
+  awake: boolean;
+  auto: boolean;
+  remote: number;
+  graceUntil: number;
+  manualUntil: number;
+  /** 合盖也不睡：开关 / 授权过没有 / 现在开着没 / 开不起来的原因 / 电量低放手了 */
+  lid: boolean;
+  lidReady: boolean;
+  lidOn: boolean;
+  lidErr: string;
+  lowBattery: boolean;
+};
+
 export const api = {
   stats: (webpid?: number) => req<any>("GET", `/api/system/stats${webpid ? `?webpid=${webpid}` : ""}`),
   herdrScan: () => req<{ workspaces: HerdrWorkspace[] }>("GET", "/api/import/herdr"),
@@ -88,6 +104,9 @@ export const api = {
   plugins: () => req<PluginBuild[]>("GET", "/api/plugins"),
   putLayout: (data: unknown, client: string) => req("PUT", "/api/layout", { data, client }),
   putConfig: (data: unknown, client: string) => req("PUT", "/api/config", { data, client }),
+  awake: () => req<AwakeStatus>("GET", "/api/awake"),
+  setAwake: (b: { minutes?: number; until?: number; forever?: boolean }) => req<AwakeStatus>("PUT", "/api/awake", b),
+  setupLid: () => req<AwakeStatus>("POST", "/api/awake/lid-setup", {}),
   createSession: (o: { agent: string; cwd: string; mode?: string; config?: Record<string, string>; import?: string; title?: string }) =>
     req<SessionSummary>("POST", "/api/sessions", o),
   deleteSession: (id: string) => req("DELETE", `/api/sessions/${id}`),

@@ -68,7 +68,7 @@ func (s *Server) remoteGuard(w http.ResponseWriter, r *http.Request, next http.H
 	p := r.URL.Path
 	// 本机专用的口：令牌换 cookie、出配对码、解熔断。远程连 404 都不给区分。
 	// 证书配置里有 DNS 服务商的密钥，也只在本机改。
-	if p == "/auth" || p == "/api/remote/pair-code" || p == "/api/remote/unlock" || p == "/api/remote/cert" || p == "/api/service" ||
+	if p == "/auth" || p == "/api/remote/pair-code" || p == "/api/remote/unlock" || p == "/api/remote/cert" || p == "/api/service" || p == "/api/awake/lid-setup" ||
 		p == "/api/remote/stepup/pending" || strings.HasPrefix(p, "/api/remote/stepup/approve/") {
 		httpError(w, http.StatusForbidden, "这个操作只能在跑 gerdr 的那台机器上做")
 		return
