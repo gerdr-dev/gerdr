@@ -31,6 +31,8 @@ function flatOptions(o: ConfigOption) {
 }
 
 const LOCAL_CMDS = [{ name: "resume", description: "换到这个目录下之前的一段对话" }];
+// 命令别名：agent 报了右边那个命令才有左边的别名，发出去时换回本名（agent 只认本名）
+const ALIASES: Record<string, string> = { new: "clear" };
 
 export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; paneId: string; running: boolean; onSent?: () => void }>(function Composer(
   { session, paneId, running, onSent },
@@ -88,7 +90,11 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
       if ((c.description ?? "").toLowerCase().includes(q)) return 2;
       return 9;
     };
-    return [...LOCAL_CMDS.filter((l) => !(session.commands ?? []).some((c) => c.name === l.name)), ...(session.commands ?? [])]
+    const own = session.commands ?? [];
+    const aliases = Object.entries(ALIASES)
+      .filter(([a, to]) => !own.some((c) => c.name === a) && own.some((c) => c.name === to))
+      .map(([a, to]) => ({ name: a, description: `同 /${to}：${own.find((c) => c.name === to)?.description ?? ""}` }));
+    return [...LOCAL_CMDS.filter((l) => !own.some((c) => c.name === l.name)), ...own, ...aliases]
       .map((c) => ({ c, r: rank(c) }))
       .filter((x) => x.r < 9)
       .sort((a, b) => a.r - b.r || a.c.name.length - b.c.name.length)
@@ -163,8 +169,11 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
   const sendRef = useRef<() => void>(() => {});
 
   const send = async () => {
-    const t = text.trim();
+    let t = text.trim();
     if (!imgs.length && /^\/\S+$/.test(t) && runLocal(t.slice(1))) return;
+    const alias = /^\/(\S+)(.*)$/s.exec(t);
+    const to = alias && ALIASES[alias[1]];
+    if (to && !(session.commands ?? []).some((c) => c.name === alias[1]) && (session.commands ?? []).some((c) => c.name === to)) t = `/${to}${alias[2]}`;
     if (!t && !imgs.length) return;
     const content: ContentBlock[] = [];
     for (const im of imgs) content.push({ type: "image", data: im.data, mimeType: im.mimeType });
