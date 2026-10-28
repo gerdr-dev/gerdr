@@ -8,7 +8,7 @@ import { Shimmer } from "@/components/ai-elements/shimmer";
 import type { GMessage, GPart, ToolPart } from "@/lib/transcript";
 import { cn } from "@/lib/utils";
 import { useKept } from "@/lib/kept";
-import { focusSession, withdrawSteer } from "@/lib/actions";
+import { focusSession } from "@/lib/actions";
 import { useStore } from "@/lib/store";
 import { AskCard, PermissionCard, PlanCard, QuickReplies } from "./Cards";
 import { ToolCall } from "./ToolCall";
@@ -30,6 +30,7 @@ type Props = {
   running: boolean;
   onRewind?: (m: GMessage) => void;
   onEdit?: (m: GMessage) => void;
+  onWithdraw?: (messageId: string, now: boolean) => void;
   onQuickReply: (s: string) => void;
   stackPrev?: boolean; // 用户消息：上 / 下紧挨着也是用户消息（叠成一摞）
   stackNext?: boolean;
@@ -55,7 +56,7 @@ function fmtTime(ts?: number) {
   return d.toDateString() === new Date().toDateString() ? hm : `${d.getMonth() + 1}/${d.getDate()} ${hm}`;
 }
 
-export const MessageView = memo(function MessageView({ msg, sessionId, live, running, onRewind, onEdit, onQuickReply, stackPrev, stackNext }: Props) {
+export const MessageView = memo(function MessageView({ msg, sessionId, live, running, onRewind, onEdit, onWithdraw, onQuickReply, stackPrev, stackNext }: Props) {
   if (msg.role === "user") {
     const text = msg.parts.map((p) => (p.type === "text" ? p.text : "")).join("");
     const files = msg.parts.filter((p) => p.type === "file");
@@ -105,19 +106,19 @@ export const MessageView = memo(function MessageView({ msg, sessionId, live, run
                     <Loader2 className="size-3 animate-spin" />
                     排队中，等它读到…
                   </span>
-                  {meta.messageId && (
+                  {meta.messageId && onWithdraw && (
                     <>
                       <button
                         className="rounded-sm px-1.5 hover:bg-muted hover:text-foreground"
                         title="收回来放进输入框改（↑）"
-                        onClick={() => withdrawSteer(sessionId, meta.messageId!, false)}
+                        onClick={() => onWithdraw(meta.messageId!, false)}
                       >
                         撤回
                       </button>
                       <button
                         className="rounded-sm px-1.5 hover:bg-muted hover:text-foreground"
                         title="不等了，打断它手上这一步马上读（Ctrl+↵ 发的就是这种）"
-                        onClick={() => withdrawSteer(sessionId, meta.messageId!, true)}
+                        onClick={() => onWithdraw(meta.messageId!, true)}
                       >
                         立即发
                       </button>

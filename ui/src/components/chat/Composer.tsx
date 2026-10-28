@@ -14,7 +14,7 @@ import { HeldDialog } from "./HeldDialog";
 import { OptionMenu } from "./OptionMenu";
 import { TasksChip } from "./TasksBar";
 
-export type ComposerHandle = { focus(): void; setText(t: string): void; setContent(blocks: ContentBlock[]): void };
+export type ComposerHandle = { focus(): void; setText(t: string): void; setContent(blocks: ContentBlock[]): void; putBack(blocks: ContentBlock[]): void };
 
 type Img = { data: string; mimeType: string; url: string };
 
@@ -55,6 +55,7 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
       putText(blocks.map((c) => (c.type === "text" ? (c as { text: string }).text : "")).join(""));
       setImgs(toImgs(blocks));
     },
+    putBack: (blocks: ContentBlock[]) => putBack(blocks),
   }));
   // 点发送 / 打断按钮不抢输入框的焦点：抢走了，接着按 Esc 打断、回车再发都没反应（用户报的）
   const keepFocus = (e: React.MouseEvent) => {
@@ -220,14 +221,25 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
       .map((m) => m.parts.map((p) => (p.type === "text" ? p.text : "")).join(""))
       .filter((t) => t.trim())
       .reverse();
+  // 收回来的消息（Esc / ↑ / 「排队中」那行的撤回）放回输入框：字接在已有的前面，图片也放回来 ——
+  // 原来 ↑ 和撤回按钮只放字，截图就丢了（用户报的）
+  const putBack = (blocks: ContentBlock[]) => {
+    const back = blocks
+      .filter((c) => c.type === "text")
+      .map((c) => (c as { text: string }).text)
+      .join("\n\n");
+    const cur = get().drafts[paneId] ?? "";
+    if (back) setText(cur ? `${back}\n\n${cur}` : back);
+    const images = toImgs(blocks);
+    if (images.length) setImgs((x) => [...images, ...x]);
+    ta.current?.focus();
+  };
   const recallUp = async () => {
     if (hist.current.idx < 0 && running) {
       try {
         const r = await api.withdrawLast(session.id);
-        const back = (r.content ?? []).filter((c) => c.type === "text").map((c) => (c as { text: string }).text).join("\n\n");
-        if (back) {
-          setText(back);
-          toast("排队中的插话已收回，改完再发");
+        if (r.content?.length) {
+          putBack(r.content);
           return;
         }
       } catch {}
@@ -252,14 +264,8 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
     try {
       const r = await api.escape(session.id);
       if (!r.content?.length) return;
-      const texts = r.content.filter((c) => c.type === "text").map((c) => (c as { text: string }).text);
-      const back = texts.join("\n\n");
-      const cur = get().drafts[paneId] ?? "";
-      setText(cur ? `${back}\n\n${cur}` : back);
-      const images = toImgs(r.content);
-      if (images.length) setImgs((x) => [...images, ...x]);
       // 不弹提示：字已经回到输入框里了，一看就知道；弹出来的 toast 正好压在输入框右下角挡着操作（用户嫌烦）
-      ta.current?.focus();
+      putBack(r.content);
     } catch (err: any) {
       toast.error(err.message);
     } finally {

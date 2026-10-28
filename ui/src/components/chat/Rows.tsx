@@ -167,6 +167,10 @@ export function buildRows(msgs: GMessage[], running: boolean, showCleared = fals
     // 在跑的这一轮：最底下一行状态（照 Claude Code：转圈 + 动词 + 用时 + token 数）
     if (live && running) rows.push({ key: `${m.id}:working`, kind: "working", empty: first, first });
   });
+  // 最后一条是用户消息（排队中的插话、刚发出去它还没回）但这一轮在跑：状态行照样放在最底下。
+  // 原来状态行只挂在最后那条助手消息上，插话一排队就排到了它后面，转圈和用时那一行就没了（用户报的）
+  const tail = msgs[lastIdx];
+  if (running && tail?.role === "user" && lastIdx >= cut) rows.push({ key: `${tail.id}:working`, kind: "working", empty: true, first: true });
   // 行距（照 Codex）：工具调用 / 思考这类一行小字，连着的几条挨紧（tight）；它和正文之间留开，像分段一样 ——
   // 原来一律挨着，正文和一串命令挤成一团
   const toolish = (r: Row) =>
@@ -183,6 +187,7 @@ export type RowEnv = {
   running: boolean;
   onRewind?: (m: GMessage) => void;
   onEdit?: (m: GMessage) => void;
+  onWithdraw?: (messageId: string, now: boolean) => void;
   onQuickReply: (s: string) => void;
   onShowCleared?: () => void;
   onToggleGroup?: (key: string) => void;
@@ -229,6 +234,7 @@ export const RowView = memo(
             running={env.running}
             onRewind={env.onRewind}
             onEdit={env.onEdit}
+            onWithdraw={env.onWithdraw}
             onQuickReply={env.onQuickReply}
             stackPrev={row.prev}
             stackNext={row.next}

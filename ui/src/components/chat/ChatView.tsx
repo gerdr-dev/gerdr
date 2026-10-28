@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { buildRows, RowView, type Row, type RowEnv } from "./Rows";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import { withdrawSteer } from "@/lib/actions";
 import { get, subTranscript, transcript, useStore } from "@/lib/store";
 import { useKept } from "@/lib/kept";
 import { Loader2 } from "lucide-react";
@@ -105,7 +106,12 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
   const clickToType = (e: React.MouseEvent) => {
     if (sub || e.button !== 0) return;
     const t = e.target as HTMLElement;
-    if (t.closest("button,a,input,textarea,select,summary,label,[role=button],[role=menuitem],[role=checkbox],[role=radio],[contenteditable=true],[data-keep-focus]")) return;
+    if (
+      t.closest(
+        "button,a,input,textarea,select,summary,label,[role=button],[role=menuitem],[role=checkbox],[role=radio],[contenteditable=true],[data-keep-focus]",
+      )
+    )
+      return;
     const sel = window.getSelection();
     if (sel && !sel.isCollapsed) return; // 在选字（拖选、双击选词）—— 抢走焦点会让人复制不了
     composer.current?.focus();
@@ -123,9 +129,54 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
 
   const msgs = t.messages;
   const virtualList = useStore((s) => !!s.config.virtualList);
+  // 虚拟滚动开着时，打开会话先把所有行渲染一次、量出真实高度，再缩回只渲染屏幕附近（Virtuoso 记得量过的高度，行卸载了也不忘）。
+  // 不先量的话，往上翻时新进渲染范围的行只能按估的高度占位，实际一挂上高度对不上，整段内容被推走一截，Virtuoso 下一帧才补回来 ——
+  // 一翻一闪（用户报的；录屏逐帧比过：小步连续滚 300 下，45 处 -223 / +223 来回跳）。在补偿上打补丁试过几种（浏览器原生锚定、
+  // 自己在 ResizeObserver 里抢先补），都会在别处跳得更厉害。代价是打开时一次性全量渲染，量完就释放。
+  const [measured, setMeasured] = useState(false);
+  const measureTimer = useRef(0);
+  // 量完 = 总高度连续 300ms 不再变（totalListHeightChanged 里续），最长等 2 秒
+  useEffect(() => {
+    if (!virtualList || measured) return;
+    const t = setTimeout(() => setMeasured(true), 2000);
+    return () => clearTimeout(t);
+  }, [virtualList, measured]);
+  useEffect(() => () => clearTimeout(measureTimer.current), []);
   const [showCleared, setShowCleared] = useKept(`cleared:${session.id}:${sub ?? ""}`, false);
   const [openGroups, setOpenGroups] = useKept<Record<string, boolean>>(`groups:${session.id}:${sub ?? ""}`, {});
   const rows = useMemo(() => buildRows(msgs, running, showCleared, openGroups), [msgs, running, showCleared, openGroups]);
+  // 要重新量：行的结构变了（中间展开 / 收起一组、回退，后面的行全换了序号，Virtuoso 按序号记的高度就对不上了）。
+  // 只在末尾追加 / 换掉最后一两行（流式输出、状态行）不算：那些行就在眼前，挂上就量
+  const prevKeys = useRef<string[]>([]);
+  useEffect(() => {
+    const prev = prevKeys.current;
+    const cur = rows.map((r) => r.key);
+    prevKeys.current = cur;
+    let k = 0;
+    while (k < prev.length && k < cur.length && prev[k] === cur[k]) k++;
+    if (prev.length && k < Math.min(prev.length, cur.length) - 2) setMeasured(false);
+  }, [rows]);
+  // 宽度变了（拖分屏、改窗口）：每一行的高度都变了，也重新量
+  const widthRO = useRef<{ ro: ResizeObserver; el: HTMLElement; w: number } | null>(null);
+  const watchWidth = (el: HTMLElement | null) => {
+    if (widthRO.current?.el === el) return;
+    widthRO.current?.ro.disconnect();
+    widthRO.current = null;
+    if (!el) return;
+    const cur = {
+      el,
+      w: el.clientWidth,
+      ro: new ResizeObserver(() => {
+        if (Math.abs(el.clientWidth - cur.w) > 1) {
+          cur.w = el.clientWidth;
+          setMeasured(false);
+        }
+      }),
+    };
+    cur.ro.observe(el);
+    widthRO.current = cur;
+  };
+  useEffect(() => () => widthRO.current?.ro.disconnect(), []);
   const list = useRef<VirtuosoHandle>(null);
   const scrollKey = `${paneId}:${session.id}:${sub ?? ""}`;
   const saved = scrollMem.get(scrollKey);
@@ -208,6 +259,12 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
       running,
       onRewind: sub ? undefined : (m) => latest.current.doRewind(m, false),
       onEdit: sub ? undefined : (m) => latest.current.doRewind(m, true),
+      onWithdraw: sub
+        ? undefined
+        : async (id, now) => {
+            const c = await withdrawSteer(session.id, id, now);
+            if (c?.length) composer.current?.putBack(c);
+          },
       onQuickReply: (s) => api.send(latest.current.sessionId, [{ type: "text", text: s }]).catch((e) => toast.error(e.message)),
       onShowCleared: () => setShowCleared(true),
       onToggleGroup: (key) => {
@@ -220,7 +277,11 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
   );
   return (
     <SessionContext.Provider value={session}>
-      <div className="flex h-full min-h-0 flex-col" onMouseUp={clickToType} onClickCapture={(e) => (e.target as HTMLElement).closest("[aria-expanded]") && hold()}>
+      <div
+        className="flex h-full min-h-0 flex-col"
+        onMouseUp={clickToType}
+        onClickCapture={(e) => (e.target as HTMLElement).closest("[aria-expanded]") && hold()}
+      >
         <div className="relative min-h-0 flex-1">
           {!loaded && <div className="py-10 text-center text-[13px] text-muted-foreground">加载中…</div>}
           {loaded && msgs.length === 0 && sub && <div className="py-16 text-center text-[13px] text-muted-foreground">子 agent 还没说话</div>}
@@ -249,6 +310,7 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
               scrollerRef={(el) => {
                 scrollerEl.current = el as HTMLElement | null;
                 if (el) keepBottomOnShrink(el as HTMLElement, bottomRef);
+                watchWidth(el as HTMLElement | null);
               }}
               onScroll={(e) => {
                 if (!activeRef.current) return; // 藏着期间的滚动（WebKit 清零）不算
@@ -270,15 +332,22 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
                 if (bottomRef.current && wasAtBottom && !(grew && holding())) el.scrollTop = el.scrollHeight;
                 lastH.current = el.scrollHeight;
                 syncBottom();
+                if (!measured) {
+                  clearTimeout(measureTimer.current);
+                  measureTimer.current = window.setTimeout(() => setMeasured(true), 300);
+                }
               }}
               // 虚拟滚动是实验室开关（默认关）：关着时渲染范围放到无限大 = 所有行一次挂好、不再卸载，
               // 贴底 / 回到底部 / 顶上钉的那句话这些照旧走 Virtuoso，不用另写一套
-              increaseViewportBy={virtualList ? { top: 800, bottom: 800 } : { top: 1e7, bottom: 1e7 }}
+              increaseViewportBy={virtualList && measured ? { top: 800, bottom: 800 } : { top: 1e7, bottom: 1e7 }}
               components={{ Footer: ListFooter }}
             />
           )}
           {!atBottom && pinned !== null && rows[pinned]?.kind === "user" && (
-            <PinnedPrompt msg={(rows[pinned] as Extract<Row, { kind: "user" }>).msg} onClick={() => list.current?.scrollToIndex({ index: pinned, align: "start", behavior: "smooth" })} />
+            <PinnedPrompt
+              msg={(rows[pinned] as Extract<Row, { kind: "user" }>).msg}
+              onClick={() => list.current?.scrollToIndex({ index: pinned, align: "start", behavior: "smooth" })}
+            />
           )}
           {!atBottom && msgs.length > 0 && (
             <Button
