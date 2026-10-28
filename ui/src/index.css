@@ -191,13 +191,11 @@
   font-size: 1em;
   margin-bottom: 0;
 }
+/* 标题只比正文大一点点（三级起和正文一样大，只靠加粗）：agent 的回复里 ## 很多，原来 1.15em 一段段像大标题，太抢（用户报的） */
 .gerdr-md [data-streamdown="heading-1"] {
-  font-size: 1.3em;
-}
-.gerdr-md [data-streamdown="heading-2"] {
   font-size: 1.15em;
 }
-.gerdr-md [data-streamdown="heading-3"] {
+.gerdr-md [data-streamdown="heading-2"] {
   font-size: 1.05em;
 }
 /* 列表：符号挂在外面（换行时文字对齐，不钻到圆点底下），项之间只留一点缝 */

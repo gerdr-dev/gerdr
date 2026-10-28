@@ -195,13 +195,16 @@ type Summary struct {
 	Modes    *acp.SessionModeState     `json:"modes,omitempty"`
 	Config   []acp.SessionConfigOption `json:"configOptions,omitempty"`
 	Commands []acp.AvailableCommand    `json:"commands,omitempty"`
-	Pending  int                       `json:"pending"`
-	LastSeq  int64                     `json:"lastSeq"`
-	Tasks    []acpx.Task               `json:"tasks,omitempty"`
-	Turn     *TurnInfo                 `json:"turn,omitempty"`    // 在跑的这一轮（没在跑是 nil）
-	Context  *ContextInfo              `json:"context,omitempty"` // 上下文用量（agent 报过才有）
-	Base     string                    `json:"base,omitempty"`    // agent 实际是哪一种（变体的底子；界面上按它认图标和功能）
-	Branch   string                    `json:"branch,omitempty"`  // cwd 所在 git 仓库的当前分支（pane 顶部）
+	// CommandsCached：Commands 是借的缓存（这个会话的 agent 进程还没起，用这个 agent 上次报的）。
+	// 缓存可能是旧版写的（升级 gerdr 后适配器多接了命令、claude 多了 skill），界面打 / 时照样先把进程起起来拿新的。
+	CommandsCached bool         `json:"commandsCached,omitempty"`
+	Pending        int          `json:"pending"`
+	LastSeq        int64        `json:"lastSeq"`
+	Tasks          []acpx.Task  `json:"tasks,omitempty"`
+	Turn           *TurnInfo    `json:"turn,omitempty"`    // 在跑的这一轮（没在跑是 nil）
+	Context        *ContextInfo `json:"context,omitempty"` // 上下文用量（agent 报过才有）
+	Base           string       `json:"base,omitempty"`    // agent 实际是哪一种（变体的底子；界面上按它认图标和功能）
+	Branch         string       `json:"branch,omitempty"`  // cwd 所在 git 仓库的当前分支（pane 顶部）
 	// Waiting：在等人处理什么，一句话（最早的那个请求；acpx.DescribeRequest）。会话列表上一眼看得出「问的是什么」，
 	// 手环这种只轮列表的不用再逐个去读日志
 	Waiting string `json:"waiting,omitempty"`
@@ -238,8 +241,9 @@ func (s *Session) Summary() Summary {
 	if n := len(s.events); n > 0 {
 		last = s.events[n-1].Seq
 	}
-	cmds := s.commands
+	cmds, cached := s.commands, false
 	if len(cmds) == 0 && s.h.cmds != nil {
+		cached = true
 		cmds = s.h.cmds.get(s.rec.Agent) // 这个会话的进程还没起：用这个 agent 上次报的
 		if len(cmds) == 0 {
 			cmds = s.h.cmds.get(s.h.Base(s.rec.Agent)) // 新建的变体还没报过：先借原版的
@@ -249,7 +253,7 @@ func (s *Session) Summary() Summary {
 	if (modes == nil || len(config) == 0) && s.h.opts != nil {
 		modes, config = s.optsFallbackLocked(modes, config)
 	}
-	return Summary{Record: s.rec, Status: s.status, Error: s.lastErr, Modes: modes, Config: config, Commands: cmds, Pending: len(s.pending), LastSeq: last, Tasks: s.tasks, Turn: s.turnInfoLocked(), Context: s.contextLocked(), Base: s.h.Base(s.rec.Agent), Branch: gitBranch(s.rec.Cwd), Waiting: s.waitingLocked()}
+	return Summary{Record: s.rec, Status: s.status, Error: s.lastErr, Modes: modes, Config: config, Commands: cmds, CommandsCached: cached && len(cmds) > 0, Pending: len(s.pending), LastSeq: last, Tasks: s.tasks, Turn: s.turnInfoLocked(), Context: s.contextLocked(), Base: s.h.Base(s.rec.Agent), Branch: gitBranch(s.rec.Cwd), Waiting: s.waitingLocked()}
 }
 
 func (s *Session) ID() string { return s.rec.ID }
@@ -1163,10 +1167,19 @@ func (s *Session) Escape(ctx context.Context) (EscapeResult, error) {
 			lastOut = i
 		}
 	}
-	var tail []*Event // 最后一次 agent 有动静之后的用户消息（插话）
-	for i := lastOut + 1; i < len(evs); i++ {
-		if evs[i].Kind == EvUser {
-			tail = append(tail, evs[i])
+	// 要收回的插话：最后一次 agent 有动静之后的用户消息，加上这一轮里还标着「排队中」（steer_state 没到 started）的插话 ——
+	// 插话默认排到下一个空档（priority next），排着的时候 agent 照样在出字，只看「动静之后」会漏掉它们，
+	// 打断后被带进下一轮（用户报的）
+	state := map[string]string{}
+	for i := start + 1; i < len(evs); i++ {
+		if evs[i].Kind == EvSteerState {
+			state[evs[i].MessageID] = evs[i].Text
+		}
+	}
+	var tail []*Event
+	for i := start + 1; i < len(evs); i++ {
+		if e := evs[i]; e.Kind == EvUser && (i > lastOut || (e.Steer && state[e.MessageID] == "queued")) {
+			tail = append(tail, e)
 		}
 	}
 	untouched := start >= 0 && lastOut == start && !auto && turnMsg != ""
@@ -1236,40 +1249,80 @@ func (s *Session) Warm(ctx context.Context) error {
 	return err
 }
 
-// WithdrawLast：按 ↑ —— 收回最后一条还在排队、agent 还没用上的插话，放回输入框改（和 Claude Code 一样）。
-// 收不回（已经被用上了 / agent 不支持）返回空。
+// WithdrawLast：输入框里按 ↑ —— 收回最后一条还没被 agent 读到的插话，放回输入框改。
 func (s *Session) WithdrawLast(ctx context.Context) (EscapeResult, error) {
+	s.mu.Lock()
+	id := ""
+	if s.running {
+		id = s.lastQueuedLocked()
+	}
+	s.mu.Unlock()
+	if id == "" {
+		return EscapeResult{Content: []json.RawMessage{}}, nil
+	}
+	return s.Withdraw(ctx, id)
+}
+
+// lastQueuedLocked：最后一条插话还在 agent 队列里没被读到，就回它的 id。
+// 看排队状态（steer_state：queued / started）。原来看「它后面 agent 还有没有动静」：插话默认排到下一个空档（priority next）后，
+// 排着的时候 agent 照样在出字，那样判断一条都收不回（用户报的）。不报排队状态的 agent 才退回老办法。
+func (s *Session) lastQueuedLocked() string {
+	state := map[string]string{}
+	busy := false
+	for i := len(s.events) - 1; i >= 0; i-- {
+		e := s.events[i]
+		switch e.Kind {
+		case EvSteerState:
+			if _, ok := state[e.MessageID]; !ok {
+				state[e.MessageID] = e.Text // 倒着走，先碰到的是最新的
+			}
+		case EvUpdate, EvPermission, EvAsk:
+			busy = true
+		case EvUser:
+			if !e.Steer {
+				return ""
+			}
+			if st, ok := state[e.MessageID]; ok {
+				if st == "queued" {
+					return e.MessageID
+				}
+				return "" // 最后一条都读到了，前面的更早，也读到了
+			}
+			if busy {
+				return "" // agent 在它之后有动静：已经用上了
+			}
+			return e.MessageID
+		}
+	}
+	return ""
+}
+
+// Withdraw：收回一条还没被 agent 读到的插话（「排队中」那行的撤回 / 立即发、输入框里按 ↑）。
+// 已经被读到的收不回，agent 回空，这里什么也不动（Withdrawn = 0）。
+func (s *Session) Withdraw(ctx context.Context, msgID string) (EscapeResult, error) {
 	out := EscapeResult{Content: []json.RawMessage{}}
 	s.mu.Lock()
-	running, agentSID := s.running, s.rec.AgentSessionID
-	var last *Event
-	if running {
-		for i := len(s.events) - 1; i >= 0; i-- {
-			e := s.events[i]
-			if e.Kind == EvUser {
-				if e.Steer {
-					last = e
-				}
-				break
-			}
-			if e.Kind == EvUpdate || e.Kind == EvPermission || e.Kind == EvAsk {
-				break // agent 在它之后有动静：已经用上了
-			}
+	agentSID := s.rec.AgentSessionID
+	found := false
+	for _, e := range s.events {
+		if e.Kind == EvUser && e.MessageID == msgID && e.Steer {
+			found = true
+			break
 		}
 	}
 	s.mu.Unlock()
-	if last == nil {
+	if !found {
 		return out, nil
 	}
 	c, err := s.ensureAttached(ctx)
 	if err != nil {
 		return out, err
 	}
-	r, err := agenthost.Call[acpx.WithdrawResponse](ctx, c, acpx.MethodWithdraw, acpx.WithdrawRequest{SessionId: acp.SessionId(agentSID), MessageIds: []string{last.MessageID}})
+	r, err := agenthost.Call[acpx.WithdrawResponse](ctx, c, acpx.MethodWithdraw, acpx.WithdrawRequest{SessionId: acp.SessionId(agentSID), MessageIds: []string{msgID}})
 	if err != nil || len(r.Withdrawn) == 0 {
 		return out, nil
 	}
-	s.dropUserEvents(map[string]bool{last.MessageID: true}, &out)
+	s.dropUserEvents(map[string]bool{msgID: true}, &out)
 	return out, nil
 }
 

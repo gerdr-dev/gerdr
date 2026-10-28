@@ -180,6 +180,16 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/sessions/{id}/withdraw-last", s.sessionOp(func(r *http.Request, sess *hub.Session) (any, error) {
 		return sess.WithdrawLast(r.Context())
 	}))
+	// withdraw：收回指定的一条排队中的插话（对话里「排队中」那行的撤回 / 立即发）
+	mux.HandleFunc("POST /api/sessions/{id}/withdraw", s.sessionOp(func(r *http.Request, sess *hub.Session) (any, error) {
+		var b struct {
+			MessageID string `json:"messageId"`
+		}
+		if err := decode(r, &b); err != nil {
+			return nil, err
+		}
+		return sess.Withdraw(r.Context(), b.MessageID)
+	}))
 	mux.HandleFunc("POST /api/sessions/{id}/open", s.sessionOp(func(r *http.Request, sess *hub.Session) (any, error) {
 		var b struct {
 			Near  string `json:"near"`

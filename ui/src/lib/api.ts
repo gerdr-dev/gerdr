@@ -101,6 +101,7 @@ export const api = {
   takeover: (id: string, action: "fork" | "kill") => req("POST", `/api/sessions/${id}/takeover`, { action }),
   searchFiles: (id: string, q: string) => req<{ files: string[] }>("GET", `/api/sessions/${id}/files?q=${encodeURIComponent(q)}`),
   warm: (id: string) => req("POST", `/api/sessions/${id}/warm`, {}),
+  withdraw: (id: string, messageId: string) => req<{ content: ContentBlock[]; withdrawn?: number }>("POST", `/api/sessions/${id}/withdraw`, { messageId }),
   withdrawLast: (id: string) => req<{ content: ContentBlock[]; withdrawn?: number }>("POST", `/api/sessions/${id}/withdraw-last`, {}),
   escape: (id: string) => req<{ content: ContentBlock[]; rolledBack?: boolean; withdrawn?: number }>("POST", `/api/sessions/${id}/escape`, {}),
   answer: (id: string, reqId: string, response: unknown) => req("POST", `/api/sessions/${id}/answer`, { reqId, response }),

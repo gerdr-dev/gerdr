@@ -13,7 +13,6 @@ import type { GMessage } from "@/lib/transcript";
 import type { SessionSummary } from "@/lib/types";
 import { Composer, type ComposerHandle } from "./Composer";
 import { SessionContext } from "./sessionContext";
-import { TasksBar } from "./TasksBar";
 import { askKey } from "@/lib/askkeys";
 
 /** sub：子 agent 的只读面板（值 = 它在主会话里那张卡片的 toolCallId）。没有输入框、不能回退。 */
@@ -123,6 +122,7 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
   };
 
   const msgs = t.messages;
+  const virtualList = useStore((s) => !!s.config.virtualList);
   const [showCleared, setShowCleared] = useKept(`cleared:${session.id}:${sub ?? ""}`, false);
   const [openGroups, setOpenGroups] = useKept<Record<string, boolean>>(`groups:${session.id}:${sub ?? ""}`, {});
   const rows = useMemo(() => buildRows(msgs, running, showCleared, openGroups), [msgs, running, showCleared, openGroups]);
@@ -271,7 +271,9 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
                 lastH.current = el.scrollHeight;
                 syncBottom();
               }}
-              increaseViewportBy={{ top: 800, bottom: 800 }}
+              // 虚拟滚动是实验室开关（默认关）：关着时渲染范围放到无限大 = 所有行一次挂好、不再卸载，
+              // 贴底 / 回到底部 / 顶上钉的那句话这些照旧走 Virtuoso，不用另写一套
+              increaseViewportBy={virtualList ? { top: 800, bottom: 800 } : { top: 1e7, bottom: 1e7 }}
               components={{ Footer: ListFooter }}
             />
           )}
@@ -297,7 +299,6 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
           </div>
         ) : (
           <div className="mx-auto w-full max-w-[800px]">
-            <TasksBar session={session} />
             <Composer ref={composer} session={session} paneId={paneId} running={t.running} />
           </div>
         )}

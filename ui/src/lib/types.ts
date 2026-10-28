@@ -36,6 +36,8 @@ export type SessionSummary = {
   modes?: { availableModes: SessionMode[]; currentModeId: string };
   configOptions?: ConfigOption[];
   commands?: AvailableCommand[];
+  /** commands 是借的缓存（这个会话的 agent 进程还没起，用这个 agent 上次报的；可能是旧版写的） */
+  commandsCached?: boolean;
   pending: number;
   lastSeq: number;
   tasks?: AgentTask[];

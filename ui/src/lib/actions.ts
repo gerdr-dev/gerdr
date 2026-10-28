@@ -695,3 +695,32 @@ export async function openPath(raw: string, cwd?: string) {
   }
   if (seq === openSeq) toast.error((err as Error)?.message ?? "打不开这个路径");
 }
+
+/**
+ * 对话里「排队中」那条插话的两个按钮：撤回（放回输入框改）、立即发（收回后按 now 重发，打断它手上这一步）。
+ * 已经被 agent 读到的收不回（按下去的那一刻它刚好读到），提示一下。撤回只放回文字（和输入框里按 ↑ 一样）。
+ */
+export async function withdrawSteer(sessionId: string, messageId: string, now: boolean) {
+  try {
+    const r = await api.withdraw(sessionId, messageId);
+    if (!r.withdrawn) {
+      toast("它已经读到这条了");
+      return;
+    }
+    const content = r.content ?? [];
+    if (now) {
+      await api.send(sessionId, content, undefined, true);
+      return;
+    }
+    const text = content
+      .filter((c) => c.type === "text")
+      .map((c) => (c as { text: string }).text)
+      .join("\n\n");
+    const loc = locateSession(get().layout, sessionId);
+    if (!loc || !text) return;
+    const id = loc.pane.id;
+    set((s) => ({ drafts: { ...s.drafts, [id]: s.drafts[id] ? `${s.drafts[id]}\n\n${text}` : text } }));
+  } catch (e: any) {
+    toast.error(e.message ?? String(e));
+  }
+}

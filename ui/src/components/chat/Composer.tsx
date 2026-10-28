@@ -12,6 +12,7 @@ import { askKey } from "@/lib/askkeys";
 import { cn } from "@/lib/utils";
 import { HeldDialog } from "./HeldDialog";
 import { OptionMenu } from "./OptionMenu";
+import { TasksChip } from "./TasksBar";
 
 export type ComposerHandle = { focus(): void; setText(t: string): void; setContent(blocks: ContentBlock[]): void };
 
@@ -147,14 +148,15 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
     ta.current?.setSelectionRange(caretTo.current, caretTo.current);
     caretTo.current = -1;
   }, [text]);
-  // 打了 / 但命令列表还是空的（这个会话的 agent 进程还没起，claude 起来才报命令）：先把进程起起来
+  // 打了 /，但这个会话的 agent 进程还没起（claude 起来才报命令）：先把进程起起来拿它报的命令。
+  // 列表不空也要起 —— 那是借的缓存（commandsCached），可能是升级前的旧版写的，少了新接的命令（codex 的 /clear 就这样没出来过）
   const warmed = useRef(false);
   useEffect(() => {
-    if (slash && !(session.commands ?? []).length && !warmed.current) {
+    if (slash && (!(session.commands ?? []).length || session.commandsCached) && !warmed.current) {
       warmed.current = true;
       api.warm(session.id).catch(() => {});
     }
-  }, [!!slash, session.commands?.length]);
+  }, [!!slash, session.commands?.length, session.commandsCached]);
 
   // gerdr 自己接的斜杠命令（agent 在 stream-json 模式下不认的那几个）：不发给 agent，在这边做
   const runLocal = (name: string) => {
@@ -535,6 +537,7 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
             />
           ))}
           <div className="flex-1" />
+          <TasksChip session={session} />
           {session.context && <ContextMeter c={session.context} />}
           {running && (
             <Tooltip>

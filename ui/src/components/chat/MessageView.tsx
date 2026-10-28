@@ -8,7 +8,7 @@ import { Shimmer } from "@/components/ai-elements/shimmer";
 import type { GMessage, GPart, ToolPart } from "@/lib/transcript";
 import { cn } from "@/lib/utils";
 import { useKept } from "@/lib/kept";
-import { focusSession } from "@/lib/actions";
+import { focusSession, withdrawSteer } from "@/lib/actions";
 import { useStore } from "@/lib/store";
 import { AskCard, PermissionCard, PlanCard, QuickReplies } from "./Cards";
 import { ToolCall } from "./ToolCall";
@@ -100,9 +100,29 @@ export const MessageView = memo(function MessageView({ msg, sessionId, live, run
             {meta?.steer &&
               (meta.queued ? (
                 // 排在 agent 的队列里、还没被读到（claude 要等手上这个工具调用结束）
-                <span className="flex items-center gap-1" title="agent 手上的这一步做完就会读到它；按 ↑ 可以收回来改">
-                  <Loader2 className="size-3 animate-spin" />
-                  排队中，等它读到…
+                <span className="flex items-center gap-1">
+                  <span className="flex items-center gap-1" title="agent 手上的这一步做完就会读到它；输入框里按 ↑ 也能收回来改">
+                    <Loader2 className="size-3 animate-spin" />
+                    排队中，等它读到…
+                  </span>
+                  {meta.messageId && (
+                    <>
+                      <button
+                        className="rounded-sm px-1.5 hover:bg-muted hover:text-foreground"
+                        title="收回来放进输入框改（↑）"
+                        onClick={() => withdrawSteer(sessionId, meta.messageId!, false)}
+                      >
+                        撤回
+                      </button>
+                      <button
+                        className="rounded-sm px-1.5 hover:bg-muted hover:text-foreground"
+                        title="不等了，打断它手上这一步马上读（Ctrl+↵ 发的就是这种）"
+                        onClick={() => withdrawSteer(sessionId, meta.messageId!, true)}
+                      >
+                        立即发
+                      </button>
+                    </>
+                  )}
                 </span>
               ) : (
                 <span className="flex items-center gap-1">

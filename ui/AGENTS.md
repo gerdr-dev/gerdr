@@ -31,7 +31,7 @@ src/components/    组件
   ui/              shadcn/ui 组件（Button、Dialog、Select……），新组件照它们的写法
   ai-elements/     对话流的组件（AI SDK 的 AI Elements）
   chat/            一个会话的对话面板：ChatView（整体，虚拟列表）、Rows（对话拍平成行）、MessageView（用户消息 / 每一块怎么画）、Composer（输入框）、
-                   ToolCall（工具调用卡片）、Cards（审批 / 提问 / 计划）、TasksBar（后台任务）
+                   ToolCall（工具调用卡片）、Cards（审批 / 提问 / 计划）、TasksBar（后台任务：输入框底栏的标签）
   Chrome.tsx       侧栏、tab 栏、手机上那一行顶栏（PhoneBar）
   Panes.tsx        分屏和每个 pane 的标题栏（手机上只画焦点那一个 pane）
   Terminal.tsx     终端 pane 的内容（xterm.js，连服务端的 PTY；xterm 的样式在 index.css 末尾）
@@ -65,7 +65,7 @@ src/lib/
 - 圆角用 `rounded-sm/md/lg/xl` 这几档（哪种东西用哪档见 `src/index.css` 里 `--radius` 上面的注释），别用裸 `rounded` 或写死像素。
 - 一个 `.tsx` 文件里只导出组件（大写开头 / default）时，改它能热替换、不丢状态；导出了别的（函数、常量）的文件改了会整个重新渲染。
 
-- 对话是**虚拟列表**（react-virtuoso）：只渲染屏幕附近的行，滚出去的会被卸载。所以对话里的组件**别用 useState 记「展开没」这类状态**
+- 对话是**虚拟列表**（react-virtuoso）：「设置 → 实验室」里打开虚拟滚动时，只渲染屏幕附近的行，滚出去的会被卸载（默认关着，但组件要按开着写）。所以对话里的组件**别用 useState 记「展开没」这类状态**
   （滚回来就没了），用 `@/lib/kept` 的 `useKept(key, 初值)`，key 带上会话 id 和这块东西的 id。
 - 格式按 `.prettierrc.json`（行宽 160、双引号、分号）：只格式化你改的文件，别全量重排（老代码不全是 prettier 排的，一重排 diff 全是噪音）。
   手工对齐的数据表（像素格子、坐标表）前面加一行 `// prettier-ignore`。`components/ui/`、`ai-elements/` 是拷进来的上游组件，不格式化。

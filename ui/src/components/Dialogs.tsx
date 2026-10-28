@@ -213,7 +213,7 @@ function SettingsDialog({ open }: { open: boolean }) {
   };
   return (
     <Dialog open={open} onOpenChange={(o) => !o && close()}>
-      <DialogContent className="max-h-[85vh] max-w-2xl overflow-hidden p-0">
+      <DialogContent className="max-h-[85vh] overflow-hidden p-0 sm:max-w-3xl">
         <Tabs defaultValue="general" value={tabOpen} onValueChange={setTabOpen} className="flex h-[75vh] min-w-0 flex-col">
           <DialogHeader className="min-w-0 px-6 pt-5 max-md:px-4">
             <DialogTitle>设置</DialogTitle>
@@ -227,6 +227,7 @@ function SettingsDialog({ open }: { open: boolean }) {
               <TabsTrigger value="agents">Agent</TabsTrigger>
               <TabsTrigger value="resources">资源</TabsTrigger>
               <TabsTrigger value="remote">远程访问</TabsTrigger>
+              <TabsTrigger value="labs">实验室</TabsTrigger>
             </TabsList>
           </DialogHeader>
           <div className="min-h-0 min-w-0 flex-1 overflow-auto px-6 pb-6 max-md:px-4">
@@ -363,6 +364,12 @@ function SettingsDialog({ open }: { open: boolean }) {
             </TabsContent>
             <TabsContent value="agents" className="pt-2">
               <AgentSettings />
+            </TabsContent>
+            <TabsContent value="labs" className="space-y-4 pt-2">
+              <div className="text-[13px] text-muted-foreground">还在试的功能，默认关着。</div>
+              <Row label="对话虚拟滚动" hint="只渲染屏幕附近的消息，很长的对话更省内存；往上翻时带图的消息可能会跳动">
+                <Switch checked={!!cfg.virtualList} onCheckedChange={(v) => setConfig({ virtualList: v })} />
+              </Row>
             </TabsContent>
             <TabsContent value="remote" className="pt-2">
               <RemoteSettings open={open && tabOpen === "remote"} />

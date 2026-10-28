@@ -1,13 +1,14 @@
-import { Activity, Bot, ChevronDown, CircleX, MessagesSquare, Square, SquareTerminal, Workflow } from "lucide-react";
+import { Activity, Bot, CircleX, MessagesSquare, Square, SquareTerminal, Workflow } from "lucide-react";
 import { openSubagent } from "@/lib/actions";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { api } from "@/lib/api";
 import type { AgentTask, SessionSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-// 后台任务栏：输入框上面一条。有在跑的就显示「n 个后台任务」，点开是列表（停止 / 看结果）。
+// 后台任务：输入框底栏里一个标签。有在跑的就显示「n 个后台任务」，点开是列表（停止 / 看结果）。
 // 和 Claude Code 自己的任务列表是同一份东西（CLI 报的 task_*）。
 
 export function taskIcon(t: AgentTask) {
@@ -36,24 +37,42 @@ function useTick(on: boolean) {
 }
 
 // 只放正在跑的。跑完的进对话流（hub 记一条 task 事件，MessageView 画成 TaskDoneCard）。
-export function TasksBar({ session }: { session: SessionSummary }) {
+// 放在输入框底栏里的一个小标签（照 Claude Code：后台任务在输入框下面的状态行里），点开是列表。原来是输入框上面一整条，
+// 一出现 / 一消失对话区就矮一截 / 高一截，贴底时整个对话跟着跳；几秒就完的任务还会让它一闪而过（用户报的）。
+// 标签在底栏里，有没有它都不改任何区域的高度。另外：任务跑满 2 秒才露出来（短命令不闪）；全结束了马上收
+// （试过再留 1 秒显示「结束了」，用户不要）。
+const SHOW_AFTER = 2000;
+
+export function TasksChip({ session }: { session: SessionSummary }) {
   const all = session.tasks ?? [];
   const running = all.filter((t) => t.status === "running");
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   useTick(running.length > 0);
-  if (running.length === 0) return null;
+  const now = Date.now();
+  const visible = running.some((t) => now - t.startedAt >= SHOW_AFTER);
+  useEffect(() => {
+    if (!visible) setOpen(false);
+  }, [visible]);
+  if (!visible) return null;
   const top = running.filter((t) => !t.parent || !running.some((x) => x.toolCallId === t.parent));
   return (
-    <div className="mx-3 mb-1.5 rounded-lg border bg-card text-[12px]">
-      <button className="flex w-full items-center gap-2 px-3 py-1.5" onClick={() => setOpen(!open)}>
-        {/* 不转圈：对话里那条工具调用和底下的状态行已经在转了 */}
-        <Activity className="size-3.5 text-muted-foreground" />
-        <span>{running.length} 个后台任务在跑</span>
-        {!open && top[0] && <span className="min-w-0 flex-1 truncate text-left text-muted-foreground">{top[0].progress || top[0].description}</span>}
-        <ChevronDown className={cn("ml-auto size-3.5 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")} />
-      </button>
-      {open && (
-        <div className="max-h-56 divide-y overflow-auto border-t">
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          className={cn(
+            "flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-[12px] text-muted-foreground hover:bg-muted hover:text-foreground",
+            open && "bg-muted text-foreground",
+          )}
+          title="后台任务"
+        >
+          {/* 不转圈：对话里那条工具调用和状态行已经在转了 */}
+          <Activity className="size-3.5" />
+          <span className="tabular-nums">{running.length} 个后台任务</span>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent side="top" align="end" className="w-[min(28rem,90vw)] p-0 text-[12px]">
+        <div className="border-b px-3 py-2 text-muted-foreground">{running.length} 个后台任务在跑</div>
+        <div className="max-h-72 divide-y overflow-auto">
           {/* 子 agent 起的任务挂在它下面（缩进），别看着像主 agent 自己在跑 */}
           {top.map((t) => (
             <div key={t.id}>
@@ -68,8 +87,8 @@ export function TasksBar({ session }: { session: SessionSummary }) {
             </div>
           ))}
         </div>
-      )}
-    </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 

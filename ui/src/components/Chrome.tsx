@@ -42,19 +42,18 @@ export function TabBar() {
   const [drag, setDrag] = useState<number | null>(null);
   const flush = sidebar;
   return (
-    // Chrome 那种标签：当前标签和下面的内容同色、连成一片（上圆角 + 底下两侧外翻的弧），别的标签不画底，只靠细竖线隔开。
-    // 标签贴着栏的底边（items-end），栏的底线由当前标签盖住 —— 所以标签 -mb-px 压在线上。**每个标签都压**，不只是当前那个：
-    // 只压当前的话，选中和没选中的文字差 1px，一切换就上下跳（用户报的）。没选中的没有底色，底线照样露出来。
-    // 侧栏开着时第一个标签顶着左边贴齐（flush）：标签和下面 pane 标题栏都是 px-3 + 16px 图标 + gap-2，图标和标题才上下对得齐
-    // （原来左边空了 14px 给外翻的弧，标签里的图标比标题栏的往右错了一截，用户报的）。贴边的那一侧没东西可翻，就不画弧、不要圆角。
+    // 胶囊式标签：当前的是一块亮一点的圆角底（bg-accent），别的不画底、悬停时浮起一块淡的。
+    // 原来是 Chrome 那种（当前标签和下面内容同色、连成一片），可深色下栏底和内容底色只差一点（0.14 / 0.165），
+    // 看不出哪个是当前的；加粗 + 压暗别的、顶上加品牌色细线都试过，还是不明显 / 不好看（用户报的），所以改成有底色的胶囊。
+    // 对齐：侧栏开着时栏左边留 6px、标签 px-1.5，图标落在 12px —— 和下面 pane 标题栏（px-3 + 16px 图标 + gap-2）上下对齐。
     // 侧栏收起时左边是展开侧栏的按钮，本来就对不齐，照旧留空。
-    <div className={cn("flex h-10 shrink-0 items-end gap-1 border-b bg-sidebar", flush ? "pr-1.5" : "px-1.5")} style={{ WebkitAppRegion: "drag" } as any}>
+    <div className="flex h-10 shrink-0 items-center gap-1 border-b bg-sidebar px-1.5" style={{ WebkitAppRegion: "drag" } as any}>
       {!sidebar && (
-        <Button variant="ghost" size="icon" className="mb-1.5 size-7" onClick={toggleSidebar} style={{ WebkitAppRegion: "no-drag" } as any}>
+        <Button variant="ghost" size="icon" className="size-7" onClick={toggleSidebar} style={{ WebkitAppRegion: "no-drag" } as any}>
           <PanelLeft className="size-4" />
         </Button>
       )}
-      <div className={cn("flex min-w-0 flex-1 items-end overflow-x-auto [scrollbar-width:none]", flush ? "pr-2" : "px-2")} style={{ WebkitAppRegion: "no-drag" } as any}>
+      <div className={cn("flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none]", flush ? "pr-2" : "px-2")} style={{ WebkitAppRegion: "no-drag" } as any}>
         {ws.tabs.map((t, i) => {
           const active = t.id === ws.activeTab;
           const st = tabStatus(t, sessions, unread);
@@ -83,26 +82,15 @@ export function TabBar() {
                     closeTab(t.id);
                   }}
                   className={cn(
-                    "group/tab relative isolate -mb-px flex h-8 w-52 min-w-[88px] shrink cursor-default items-center gap-2 px-3 text-[12px] select-none",
-                    active ? "z-10 rounded-t-[10px] bg-background text-foreground" : "text-muted-foreground",
-                    active && flush && i === 0 && "rounded-tl-none",
+                    "group/tab flex h-7 w-52 min-w-[88px] shrink cursor-default items-center gap-2 rounded-md px-1.5 text-[12px] select-none",
+                    active ? "bg-accent font-medium text-foreground" : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
                   )}
                 >
-                  {active ? (
-                    <>
-                      {/* 底下两侧外翻的弧：一块背景色、挖掉一个圆 */}
-                      {!(flush && i === 0) && <span className="pointer-events-none absolute -left-2.5 bottom-0 size-2.5" style={{ background: "radial-gradient(circle at 0 0, transparent 9.5px, var(--background) 10px)" }} />}
-                      <span className="pointer-events-none absolute -right-2.5 bottom-0 size-2.5" style={{ background: "radial-gradient(circle at 100% 0, transparent 9.5px, var(--background) 10px)" }} />
-                    </>
+                  {agent ? (
+                    <AgentIcon agent={agent} className={cn("size-4", !active && "opacity-60")} />
                   ) : (
-                    <>
-                      {/* 悬停时浮起一块圆角底（不贴底边，和当前标签区分开） */}
-                      <span className="pointer-events-none absolute inset-x-1 top-1 bottom-1 -z-10 rounded-md group-hover/tab:bg-accent/60" />
-                      {/* 和前一个标签之间的竖线：前一个是当前标签时不画（Chrome 也是） */}
-                      {i > 0 && ws.tabs[i - 1].id !== ws.activeTab && <span className="pointer-events-none absolute left-0 top-2.5 bottom-2.5 w-px bg-border" />}
-                    </>
+                    first?.term && <SquareTerminal className="size-4 shrink-0 text-muted-foreground" />
                   )}
-                  {agent ? <AgentIcon agent={agent} className="size-4" /> : first?.term && <SquareTerminal className="size-4 shrink-0 text-muted-foreground" />}
                   <span className="min-w-0 flex-1 truncate">{label}</span>
                   <StatusDot status={st.status} unread={st.unread} />
                   {/* 关闭键一直占着位置（照 Chrome）：当前 tab 一直显示，别的 hover 才显示。原来是 hover 时才插进来，
@@ -132,7 +120,7 @@ export function TabBar() {
         })}
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon" className="mb-1 ml-1 size-7 shrink-0" onClick={() => addTab()}>
+            <Button variant="ghost" size="icon" className="size-7 shrink-0" onClick={() => addTab()}>
               <Plus className="size-4" />
             </Button>
           </TooltipTrigger>
@@ -140,7 +128,7 @@ export function TabBar() {
         </Tooltip>
       </div>
       {prefixActive && (
-        <div className="mb-2 shrink-0 rounded-md bg-brand px-2 py-0.5 font-mono text-[11px] text-white" style={{ WebkitAppRegion: "no-drag" } as any}>
+        <div className="shrink-0 rounded-md bg-brand px-2 py-0.5 font-mono text-[11px] text-white" style={{ WebkitAppRegion: "no-drag" } as any}>
           {formatCombo(prefix).replace(/\s.*/, "")} …
         </div>
       )}
