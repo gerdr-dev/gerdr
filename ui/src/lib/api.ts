@@ -11,13 +11,16 @@ export class ApiError extends Error {
   /** 业务上的细分：code="held_elsewhere"（会话还在别处开着，holders 是占着它的进程） */
   code?: string;
   holders?: Holder[];
-  constructor(status: number, message: string, data?: { reason?: string; need?: string; code?: string; holders?: Holder[] }) {
+  /** fs/stat：短写的相对路径对上了好几个文件，这是它们的绝对路径 */
+  candidates?: string[];
+  constructor(status: number, message: string, data?: { reason?: string; need?: string; code?: string; holders?: Holder[]; candidates?: string[] }) {
     super(message);
     this.status = status;
     this.reason = data?.reason;
     this.need = data?.need;
     this.code = data?.code;
     this.holders = data?.holders;
+    this.candidates = data?.candidates;
   }
 }
 

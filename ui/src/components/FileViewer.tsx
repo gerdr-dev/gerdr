@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { MessageResponse } from "@/components/ai-elements/message";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { openPath } from "@/lib/actions";
 import { fileRawURL, type FileStat } from "@/lib/api";
 import { isNative } from "@/lib/native";
 import { set, useStore } from "@/lib/store";
@@ -27,6 +28,37 @@ export function FileViewer() {
     <Dialog open={!!stat} onOpenChange={(o) => !o && close()}>
       <DialogContent className="flex max-h-[90vh] w-full max-w-4xl flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl max-md:h-full max-md:max-h-none max-md:max-w-full max-md:rounded-none max-md:border-0">
         {stat && <Body stat={stat} />}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * 短写的路径（`chat/Composer.tsx`）在会话目录里对上了好几个文件：列出来挑一个。
+ * 前缀淡、对上的那截正常色 —— 几条长得差不多，要一眼看出差在哪段目录。
+ */
+export function FilePicker() {
+  const d = useStore((s) => s.dialog);
+  const pick = d?.kind === "pickFile" ? d : null;
+  return (
+    <Dialog open={!!pick} onOpenChange={(o) => !o && set({ dialog: null })}>
+      <DialogContent className="max-w-lg gap-3">
+        <DialogTitle className="text-[14px]">哪一个？</DialogTitle>
+        <DialogDescription className="text-[12px]">
+          有 {pick?.candidates.length} 个文件都对得上 <code className="font-mono">{pick?.path}</code>
+        </DialogDescription>
+        <div className="-mx-2 flex max-h-[60vh] flex-col overflow-auto">
+          {pick?.candidates.map((c) => {
+            const s = shortPath(c);
+            const head = s.slice(0, s.length - pick.path.length);
+            return (
+              <button key={c} className="truncate rounded-md px-2 py-1.5 text-left font-mono text-[12px] hover:bg-muted" title={c} onClick={() => openPath(c)}>
+                <span className="text-muted-foreground">{head}</span>
+                {s.slice(head.length)}
+              </button>
+            );
+          })}
+        </div>
       </DialogContent>
     </Dialog>
   );

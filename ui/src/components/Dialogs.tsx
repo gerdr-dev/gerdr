@@ -26,7 +26,7 @@ import { cn } from "@/lib/utils";
 import type { SessionSummary } from "@/lib/types";
 import { AgentIcon, StatusDot } from "./AgentIcon";
 import { MCPSettings, SkillSettings } from "./ExtSettings";
-import { FileViewer } from "./FileViewer";
+import { FilePicker, FileViewer } from "./FileViewer";
 import { ImportHerdr } from "./ImportHerdr";
 import { RemoteSettings } from "./RemoteSettings";
 import { ResourceStats } from "./ResourceStats";
@@ -48,6 +48,7 @@ export function Dialogs() {
       <ImportHerdr open={d?.kind === "importHerdr"} />
       <ResumeDialog />
       <FileViewer />
+      <FilePicker />
     </>
   );
 }

@@ -69,6 +69,7 @@ type Dialog =
   | { kind: "importHerdr" }
   | { kind: "resume"; sessionId: string; paneId: string }
   | { kind: "file"; stat: FileStat }
+  | { kind: "pickFile"; path: string; candidates: string[] }
   | null;
 
 type State = {

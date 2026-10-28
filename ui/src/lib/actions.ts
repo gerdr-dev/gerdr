@@ -1,6 +1,6 @@
 // 所有「动作」：快捷键、命令面板、侧栏菜单、插件都调这里，各处不再自己写一份。
 import { toast } from "sonner";
-import { api } from "./api";
+import { api, ApiError } from "./api";
 import type { KeyAction } from "./keys";
 import { stripLineAnchor } from "./paths";
 import {
@@ -741,6 +741,11 @@ export async function openPath(raw: string, cwd?: string) {
       set({ dialog: { kind: "file", stat } });
       return;
     } catch (e) {
+      // 写短了的路径对上好几个文件（服务端按后缀找的）：让人挑一个
+      if (e instanceof ApiError && e.candidates?.length) {
+        if (seq === openSeq) set({ dialog: { kind: "pickFile", path: p, candidates: e.candidates } });
+        return;
+      }
       err = e;
     }
   }

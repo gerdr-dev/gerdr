@@ -1,10 +1,13 @@
 package server
 
 import (
+	"encoding/json"
 	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
+	"sort"
 	"strings"
 )
 
@@ -34,6 +37,27 @@ func resolvePath(p, cwd string) string {
 		p = filepath.Join(cwd, p)
 	}
 	return filepath.Clean(p)
+}
+
+// suffixMatches：相对路径（不带 `..`）在 cwd 下找「以它结尾」的文件，按路径长短排，最多 20 个，返回绝对路径。
+// cwd 为空（没有会话目录）不找：那会去走整个家目录。
+func suffixMatches(p, cwd string) []string {
+	p = filepath.ToSlash(strings.TrimPrefix(p, "./"))
+	if cwd == "" || p == "" || filepath.IsAbs(p) || strings.HasPrefix(p, "~") || slices.Contains(strings.Split(p, "/"), "..") {
+		return nil
+	}
+	dir := resolvePath(".", cwd)
+	var out []string
+	for _, f := range listFiles(dir) {
+		if f == p || strings.HasSuffix(f, "/"+p) {
+			out = append(out, filepath.Join(dir, filepath.FromSlash(f)))
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool { return len(out[i]) < len(out[j]) })
+	if len(out) > 20 {
+		out = out[:20]
+	}
+	return out
 }
 
 // fileMime：按扩展名猜类型。认不出来的给空串，前端按「试着当文本读」处理。
@@ -70,6 +94,21 @@ func (s *Server) fileStat(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	p := resolvePath(q.Get("path"), q.Get("cwd"))
 	st, err := os.Stat(p)
+	if os.IsNotExist(err) {
+		// agent 常把路径写短（`chat/Composer.tsx`，其实在 ui/src/components/ 下），按后缀在会话目录里找：
+		// 只有一个就当是它，有好几个就把候选给前端让人挑。
+		switch c := suffixMatches(q.Get("path"), q.Get("cwd")); len(c) {
+		case 0:
+		case 1:
+			p = c[0]
+			st, err = os.Stat(p)
+		default:
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			w.WriteHeader(404)
+			_ = json.NewEncoder(w).Encode(map[string]any{"error": "有好几个文件都对得上：" + q.Get("path"), "candidates": c})
+			return
+		}
+	}
 	if err != nil {
 		if os.IsNotExist(err) {
 			httpError(w, 404, "没有这个文件："+p)

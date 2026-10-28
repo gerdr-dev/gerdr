@@ -60,3 +60,31 @@ func TestFileRaw(t *testing.T) {
 		t.Errorf("不存在的文件：%d", w.Code)
 	}
 }
+
+// agent 写短了的相对路径（`chat/a.tsx`）：唯一一个对得上就打开它，好几个就给候选，`..` 和绝对路径不猜。
+func TestFileStatSuffix(t *testing.T) {
+	dir := t.TempDir()
+	for _, f := range []string{"ui/src/chat/a.tsx", "x/b.go", "y/b.go"} {
+		os.MkdirAll(filepath.Dir(filepath.Join(dir, f)), 0o755)
+		os.WriteFile(filepath.Join(dir, f), []byte("x"), 0o644)
+	}
+	s := &Server{}
+	stat := func(p string) (int, string) {
+		r := httptest.NewRequest("GET", "/api/fs/stat?path="+url.QueryEscape(p)+"&cwd="+url.QueryEscape(dir), nil)
+		w := httptest.NewRecorder()
+		s.fileStat(w, r)
+		return w.Code, w.Body.String()
+	}
+	if code, body := stat("chat/a.tsx"); code != 200 || !strings.Contains(body, filepath.Join(dir, "ui/src/chat/a.tsx")) {
+		t.Errorf("唯一匹配：%d %s", code, body)
+	}
+	if code, body := stat("b.go"); code != 404 || !strings.Contains(body, "candidates") || !strings.Contains(body, filepath.Join(dir, "y/b.go")) {
+		t.Errorf("多个匹配：%d %s", code, body)
+	}
+	if code, body := stat("hat/a.tsx"); code != 404 || strings.Contains(body, "candidates") {
+		t.Errorf("只按整段目录名对，不按半截：%d %s", code, body)
+	}
+	if got := suffixMatches("../a.tsx", dir); got != nil {
+		t.Errorf("带 .. 的不猜：%v", got)
+	}
+}
