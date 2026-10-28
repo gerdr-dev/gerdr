@@ -130,7 +130,8 @@ function SubPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; tab
       className={cn("flex h-full min-h-0 flex-col", framed && "overflow-hidden rounded-md border", framed && (focused ? "border-brand" : "border-border"))}
       onMouseDown={() => !focused && focusPane(pane.id)}
     >
-      <div className={cn("flex h-8 shrink-0 items-center gap-2 border-b px-3 text-[12px]", !focused && many && "opacity-70")}>
+      {/* 手机上 px-4：16px 图标的中线落在 24px，和顶栏 ☰（px-1.5 + 36px 按钮）的中线对齐。三种 pane 的标题栏同一个边距 */}
+      <div className={cn("flex h-8 shrink-0 items-center gap-2 border-b px-3 text-[12px] max-md:px-4", !focused && many && "opacity-70")}>
         <Bot className="size-4 text-muted-foreground" />
         <span className="shrink-0 text-muted-foreground">{task?.subagent || "子 agent"}</span>
         <span className="min-w-0 flex-1 truncate font-medium">{title}</span>
@@ -173,7 +174,7 @@ function TermPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; ta
       className={cn("flex h-full min-h-0 flex-col", framed && "overflow-hidden rounded-md border", framed && (focused ? "border-brand" : "border-border"))}
       onMouseDown={() => !focused && focusPane(pane.id)}
     >
-      <div className={cn("flex h-8 shrink-0 items-center gap-2 border-b px-3 text-[12px]", !focused && many && "opacity-70")}>
+      <div className={cn("flex h-8 shrink-0 items-center gap-2 border-b px-3 text-[12px] max-md:px-4", !focused && many && "opacity-70")}>
         <SquareTerminal className="size-4 text-muted-foreground" />
         <span className="min-w-[3em] max-w-[60%] shrink truncate font-medium">{title}</span>
         <PaneCount count={count} />
@@ -259,7 +260,7 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
       className={cn("flex h-full min-h-0 flex-col", framed && "overflow-hidden rounded-md border", framed && (focused ? "border-brand" : "border-border"))}
       onMouseDown={() => !focused && focusPane(pane.id)}
     >
-      <div className={cn("flex h-8 shrink-0 items-center gap-2 border-b px-3 text-[12px]", !focused && many && "opacity-70")}>
+      <div className={cn("flex h-8 shrink-0 items-center gap-2 border-b px-3 text-[12px] max-md:px-4", !focused && many && "opacity-70")}>
         {session ? <AgentIcon agent={session.agent} className="size-4" /> : <PanelTopOpen className="size-3.5 text-muted-foreground" />}
         <span className="min-w-[3em] max-w-[60%] shrink truncate font-medium">{title}</span>
         <StatusDot status={session?.status} unread={unread} />
