@@ -18,8 +18,9 @@ import { askKey } from "@/lib/askkeys";
 import { isCoarse } from "@/lib/phone";
 
 /** sub：子 agent 的只读面板（值 = 它在主会话里那张卡片的 toolCallId）。没有输入框、不能回退。 */
-// 最后一条和输入框之间留一截（照 ChatGPT 桌面版的留白）：贴太近的话最后那行元信息和输入框挤在一起
-const ListFooter = () => <div className="h-12" />;
+// 最后一条和输入框之间留一截（照 ChatGPT 桌面版的留白）：贴太近的话最后那行元信息和输入框挤在一起。
+// 手机上只留一点：屏幕本来就矮，一截空白占掉两三行字（用户报的）
+const ListFooter = () => <div className="h-12 max-md:h-5" />;
 
 // 顶上一行：前面还有更早的消息（打开会话只拉了最近一段，翻到这儿自动接着拉）。高度固定，拉完了也留着空白 ——
 // 顶上的东西一变高矮，下面整段内容就跟着跳。
@@ -155,7 +156,7 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
     }
   };
 
-  const msgs = t.messages;
+  const msgs = t.all;
   const virtualList = useStore((s) => !!s.config.virtualList);
   // 虚拟滚动开着时，打开会话先把所有行渲染一次、量出真实高度，再缩回只渲染屏幕附近（Virtuoso 记得量过的高度，行卸载了也不忘）。
   // 不先量的话，往上翻时新进渲染范围的行只能按估的高度占位，实际一挂上高度对不上，整段内容被推走一截，Virtuoso 下一帧才补回来 ——

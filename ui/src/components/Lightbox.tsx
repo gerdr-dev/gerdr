@@ -38,6 +38,9 @@ export function openLightbox(items: LightboxItem[], index = 0, from?: Element | 
   emit({ items, index: i, origin: from ? { el: from, index: i } : undefined });
 }
 
+/** 灯箱开着没有（安卓返回键要先关它，见 lib/android.ts 的 closeTop） */
+export const lightboxOpen = () => !!state;
+
 export function LightboxHost() {
   const s = useSyncExternalStore(
     (f) => (subs.add(f), () => subs.delete(f)),

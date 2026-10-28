@@ -36,6 +36,12 @@ const LOCAL_CMDS = [{ name: "resume", description: "换到这个目录下之前�
 // 命令别名：agent 报了右边那个命令才有左边的别名，发出去时换回本名（agent 只认本名）
 const ALIASES: Record<string, string> = { new: "clear" };
 
+// 补全列表（/ 命令、@ 文件）里选中的那一行：↑↓ 翻到列表外面时把它滚进来（nearest：本来就看得见就不动）。
+// 引用换到哪一行，React 就对那一行调一次
+const keepInView = (el: HTMLElement | null) => {
+  el?.scrollIntoView({ block: "nearest" });
+};
+
 export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; paneId: string; running: boolean; onSent?: () => void }>(function Composer(
   { session, paneId, running, onSent },
   ref,
@@ -219,7 +225,7 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
   const escaping = useRef(false);
   const userTexts = () =>
     transcript(session.id)
-      .messages.filter((m) => m.role === "user")
+      .all.filter((m) => m.role === "user")
       .map((m) => m.parts.map((p) => (p.type === "text" ? p.text : "")).join(""))
       .filter((t) => t.trim())
       .reverse();
@@ -433,6 +439,7 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
               <button
                 key={f}
                 className={cn("flex w-full items-baseline gap-2 rounded-sm px-2 py-1 text-left text-[13px]", i === fileIdx && "bg-accent")}
+                ref={i === fileIdx ? keepInView : undefined}
                 onMouseEnter={() => setFileIdx(i)}
                 onMouseDown={(e) => {
                   e.preventDefault();
@@ -452,6 +459,7 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
             <button
               key={c.name}
               className={cn("flex w-full items-baseline gap-2 rounded-sm px-2 py-1 text-left text-[13px]", i === cmdIdx && "bg-accent")}
+                ref={i === cmdIdx ? keepInView : undefined}
               onMouseEnter={() => setCmdIdx(i)}
               onMouseDown={(e) => {
                 e.preventDefault();
@@ -525,7 +533,19 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
               <TooltipTrigger asChild>
                 <label className="flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground">
                   <ImagePlus className="size-4" />
-                  <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => e.target.files && addFiles(e.target.files)} />
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => {
+                      if (!e.target.files?.length) return;
+                      addFiles(e.target.files);
+                      // 触屏上选完图直接弹键盘：附了图基本都要配一句话，省得再点一下输入框。
+                      // 要在 change 回调里同步聚焦 —— 选图还算这次点击，晚了（等读完图）浏览器不给弹键盘
+                      if (isCoarse()) ta.current?.focus();
+                    }}
+                  />
                 </label>
               </TooltipTrigger>
               <TooltipContent>附图（也可以直接粘贴 / 拖进来）</TooltipContent>

@@ -8,6 +8,7 @@
 // 壳用 addWebMessageListener 注入 gerdrAndroid，**只对它连的那台服务器的 origin 注入** —— 所以「有这个对象」
 // 就是「我在 App 里，而且是 App 认的那台」。对象在页面脚本跑之前就在了，模块顶层读一次就够。
 
+import { lightboxOpen } from "@/components/Lightbox";
 import { focusSession } from "./actions";
 import { activeTab } from "./layout";
 import { get, set } from "./store";
@@ -115,6 +116,12 @@ export function syncAndroidTheme() {
  * **不往会话里发 Esc** —— 返回键是「离开」的意思，替人打断 agent 正在干的事不对。
  */
 function closeTop(): boolean {
+  // 图片灯箱：自己画的浮层（不是 Radix，下面那个选择器认不出来），压在所有弹窗上面（文件查看器里也能点开图），先关它。
+  // 发 Esc 而不是直接清状态：它在窗口上（捕获阶段）收 Esc，走自己的关闭动画
+  if (lightboxOpen()) {
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true, cancelable: true }));
+    return true;
+  }
   // 弹窗（设置、命令面板、查看器……都是 Radix 的 Dialog）：发一个 Esc 给它，它自己关
   const dlg = document.querySelector<HTMLElement>('[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]');
   if (dlg) {

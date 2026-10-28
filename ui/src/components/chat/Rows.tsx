@@ -85,12 +85,15 @@ function summarize(parts: GPart[]): { summary: string; failed: number } {
 }
 
 /**
- * 把整份对话拍平成行。live：最后一条助手消息（还在跑的那一轮里的东西：流式、「工作中…」、快捷回复可点）。
+ * 把整份对话拍平成行。live：最后一条（不算排在底下的插话）助手消息（还在跑的那一轮里的东西：流式、「工作中…」、快捷回复可点）。
  * openGroups：展开了的工具组（key 是组头那一行的 key）。展开时组里每一块还是单独一行 —— 一组几百个调用也照样虚拟化。
  */
 export function buildRows(msgs: GMessage[], running: boolean, showCleared = false, openGroups: Record<string, boolean> = {}): Row[] {
   const rows: Row[] = [];
   const lastIdx = msgs.length - 1;
+  // 排着队的插话挂在最底下（见 Transcript.queued），还在跑的那条是它们前面那条
+  let liveIdx = lastIdx;
+  while (liveIdx >= 0 && msgs[liveIdx].metadata?.queued) liveIdx--;
   // /clear 之前的对话默认收起（照 Claude Code：清空就是清屏），顶上留一行「展开」—— 记录还在，只是不挡眼
   let cut = -1,
     cutPart = -1;
@@ -115,7 +118,7 @@ export function buildRows(msgs: GMessage[], running: boolean, showCleared = fals
       rows.push({ key: m.id, kind: "user", msg: m, first: true, prev });
       return;
     }
-    const live = mi === lastIdx;
+    const live = mi === liveIdx;
     const children = childTools(m);
     const lastPart = m.parts.length - 1;
     const parts: Extract<Row, { kind: "part" }>[] = [];
@@ -165,12 +168,14 @@ export function buildRows(msgs: GMessage[], running: boolean, showCleared = fals
       a = b;
     }
     // 在跑的这一轮：最底下一行状态（照 Claude Code：转圈 + 动词 + 用时 + token 数）
-    if (live && running) rows.push({ key: `${m.id}:working`, kind: "working", empty: first, first });
+    if (live && running && liveIdx === lastIdx) rows.push({ key: `${m.id}:working`, kind: "working", empty: first, first });
   });
   // 最后一条是用户消息（排队中的插话、刚发出去它还没回）但这一轮在跑：状态行照样放在最底下。
-  // 原来状态行只挂在最后那条助手消息上，插话一排队就排到了它后面，转圈和用时那一行就没了（用户报的）
+  // 原来状态行只挂在最后那条助手消息上，插话一排队就排到了它后面，转圈和用时那一行就没了（用户报的）。
+  // key 跟着还在跑的那条走：插话排进来、落下去时状态行不重新挂载
   const tail = msgs[lastIdx];
-  if (running && tail?.role === "user" && lastIdx >= cut) rows.push({ key: `${tail.id}:working`, kind: "working", empty: true, first: true });
+  const owner = msgs[liveIdx] ?? tail;
+  if (running && (tail?.role === "user" || liveIdx !== lastIdx) && lastIdx >= cut) rows.push({ key: `${owner.id}:working`, kind: "working", empty: true, first: true });
   // 行距（照 Codex）：工具调用 / 思考这类一行小字，连着的几条挨紧（tight）；它和正文之间留开，像分段一样 ——
   // 原来一律挨着，正文和一串命令挤成一团
   const toolish = (r: Row) =>

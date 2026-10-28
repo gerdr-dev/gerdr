@@ -109,6 +109,21 @@ export class Transcript {
   }
 
   messages: GMessage[] = [];
+  /**
+   * 排着队的插话（steer_state queued：claude 要等手上这个工具调用结束才读）。不放进 messages：放进去的话 agent 接着说的话、
+   * 跑的工具全排在它后面，看着像这句话早就插进去了。先挂在最底下，被读到（started）或这一轮结束时才落进 messages ——
+   * 落在它真正插进去的那个位置。重放日志走的是同一套，位置一样。
+   */
+  queued: GMessage[] = [];
+  private allCache: { m: GMessage[]; q: GMessage[]; all: GMessage[] } | null = null;
+  /** 界面要画的全部：正文 + 排着队的插话。messages / queued 没换就返回同一个数组（下游靠引用判断要不要重算）。 */
+  get all(): GMessage[] {
+    const c = this.allCache;
+    if (c && c.m === this.messages && c.q === this.queued) return c.all;
+    const all = this.queued.length ? [...this.messages, ...this.queued] : this.messages;
+    this.allCache = { m: this.messages, q: this.queued, all };
+    return all;
+  }
   running = false;
   /** 正在等人回答的请求（审批 / 提问）。 */
   pending = new Map<string, "permission" | "ask">();
@@ -125,6 +140,7 @@ export class Transcript {
 
   reset(events: HubEvent[]) {
     this.messages = [];
+    this.queued = [];
     this.running = false;
     this.pending.clear();
     this.tools.clear();
@@ -147,6 +163,23 @@ export class Transcript {
     this.idDup = base === this.idBase ? this.idDup + 1 : 0;
     this.idBase = base;
     return this.idDup ? `${base}_${this.idDup}` : base;
+  }
+
+  /** 排着队的插话落进正文末尾（不再标排队中）。之后 agent 的输出另起一条消息接在它后面。 */
+  private landQueued(ms: GMessage[]) {
+    this.messages = [...this.messages, ...ms.map((m) => ({ ...m, metadata: { ...m.metadata!, queued: false } }))];
+    this.chunks.clear();
+    this.lastChunkKey = "";
+    this.planLoc = null;
+  }
+
+  /** 从正文里拿掉第 i 条（转去排队的插话）：后面那些消息里记着的位置都往前挪一格。 */
+  private removeMessage(i: number) {
+    this.messages.splice(i, 1);
+    const fix = (l: Loc | null) => (l && l.msg > i ? { msg: l.msg - 1, part: l.part } : l);
+    for (const m of [this.tools, this.chunks, this.requests]) for (const [k, l] of m) m.set(k, fix(l)!);
+    this.planLoc = fix(this.planLoc);
+    this.retryLoc = fix(this.retryLoc);
   }
 
   /** 改第 i 条消息：换成一个新对象（React 靠引用判断要不要重画）。 */
@@ -246,23 +279,33 @@ export class Transcript {
         break;
       }
       case "steer_state": {
+        const queued = e.text === "queued";
+        const q = this.queued.findIndex((m) => m.metadata?.messageId === e.messageId);
+        if (q >= 0) {
+          // 被读到了：从底下挪进正文，接在 agent 此刻说到的地方后面
+          if (!queued) {
+            const m = this.queued[q];
+            this.queued = this.queued.filter((_, j) => j !== q);
+            this.landQueued([m]);
+          }
+          break;
+        }
         const i = this.messages.findIndex((m) => m.role === "user" && m.metadata?.messageId === e.messageId);
-        if (i >= 0) {
-          const m = this.messages[i];
-          this.messages = [...this.messages];
-          this.messages[i] = { ...m, metadata: { ...m.metadata!, queued: e.text === "queued" } };
+        if (i < 0) break;
+        const m = { ...this.messages[i], metadata: { ...this.messages[i].metadata!, queued } };
+        this.messages = [...this.messages];
+        if (queued) {
+          this.removeMessage(i);
+          this.queued = [...this.queued, m];
+        } else {
+          this.messages[i] = m;
         }
         break;
       }
       case "turn_end": {
         this.messages = [...this.messages];
         this.clearRetry();
-        // 这一轮完了：还标着「排队中」的插话不再转圈（claude 会把它们带进下一轮，到时候自然被读到；别让圈一直转着）
-        if (this.messages.some((m) => m.metadata?.queued)) {
-          this.messages = this.messages.map((m) => (m.metadata?.queued ? { ...m, metadata: { ...m.metadata, queued: false } } : m));
-        }
         this.running = false;
-        this.messages = [...this.messages];
         if (e.error || (e.stopReason && e.stopReason !== "end_turn")) {
           const i = this.assistant(e.ts);
           this.pushPart(i, { type: "data-turnEnd", data: { stopReason: e.stopReason ?? "", error: e.error } });
@@ -277,6 +320,12 @@ export class Transcript {
           if (p && (p.state === "input-available" || p.state === "input-streaming")) {
             this.setPart(loc, { ...p, state: "output-error", errorText: e.stopReason === "cancelled" ? "已中断" : "未完成", input: p.input } as any);
           }
+        }
+        // 这一轮完了还没被读到的插话：claude 会把它们带进下一轮，就落在这一轮的末尾（别让圈一直转着）
+        if (this.queued.length) {
+          const q = this.queued;
+          this.queued = [];
+          this.landQueued(q);
         }
         break;
       }

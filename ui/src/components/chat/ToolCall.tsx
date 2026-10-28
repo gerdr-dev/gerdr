@@ -36,6 +36,22 @@ function useTick(on: boolean) {
   }, [on]);
 }
 
+/**
+ * 从 since（unix ms）起满 ms 毫秒才变 true，on 变回 false 时归零。since 用日志里的时间：重新打开会话时早就跑了很久的那条马上就是 true，
+ * 不用再等一遍。since 来自服务端，和本机钟对不上时最多等 ms；没有 since 从挂载算。
+ */
+function useAfter(on: boolean, since: number | undefined, ms: number) {
+  const [, set] = useState(0);
+  const [mounted] = useState(Date.now); // 没有开始时间：从画出来那一刻算
+  const left = Math.min(ms, ms - (Date.now() - (since ?? mounted)));
+  useEffect(() => {
+    if (!on || left <= 0) return;
+    const t = setTimeout(() => set((x) => x + 1), left);
+    return () => clearTimeout(t);
+  }, [on, since]);
+  return on && left <= 0;
+}
+
 const ICONS: Record<string, typeof Wrench> = {
   execute: SquareTerminal,
   edit: FilePen,
@@ -164,7 +180,9 @@ export function ToolCall({ part, children, running, keep: keepOpen }: { part: To
     note && ![desc, title, task?.description].includes(note) && !/^Background command ".*" (completed|failed|was stopped|killed)/.test(note) ? note : undefined;
   // 「转到后台」= claude 里按 ctrl+b：这条命令 / 这个子 agent 接着在后台跑，这一轮先往下走。
   // 子 agent 的工具调用（meta.parent）不给：那是它自己那一轮里的事，转后台得由它决定。
-  const canBackground = busy && !meta.parent && (session?.base ?? session?.agent) === "claude" && !task?.background && (meta.kind === "execute" || !!task);
+  // 跑满 3 秒才露出来：大部分命令一两秒就完，按钮一闪而过，还会把行尾的耗时挤来挤去
+  const slow = useAfter(busy, meta.startedAt, 3000);
+  const canBackground = slow && busy && !meta.parent && (session?.base ?? session?.agent) === "claude" && !task?.background && (meta.kind === "execute" || !!task);
   // 「允许并重试」：auto 模式的分类器拦下的调用（claude 里是 /permissions 里批准）。规则写进项目的
   // .claude/settings.local.json，再发一句话让它重试。点过的记一下，免得重复发。
   const [allowed, setAllowed] = useKept<boolean>(keep && `${keep}:allowed`, false);
