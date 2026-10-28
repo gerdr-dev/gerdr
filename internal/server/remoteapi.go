@@ -373,6 +373,7 @@ func (s *Server) remoteWhoami(w http.ResponseWriter, r *http.Request) {
 		// 配对页据此决定要不要显示「用 passkey 登录」。**按当前 origin 算**，见 passkeyOK
 		"passkeyAvailable": s.passkeyOK(r),
 		"ttlDays":          int(rm.Cfg.DeviceTTL / (24 * time.Hour)),
+		"pairMinutes":      int(rm.Cfg.PairTTL / time.Minute), // 配对码进来的设备活几分钟（配对页上说清楚）
 	}
 	if !auth.FromRemote(r) {
 		out["authed"] = true // 走到这儿说明令牌那道已经过了

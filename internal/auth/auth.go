@@ -64,6 +64,10 @@ type Device struct {
 	// 注册过 passkey 之后，服务端会要求这个时间足够新，否则要求重新验一次 ——
 	// 这是把「cookie 被偷」的可用窗口从整个 TTL 压到一天的那个机制。
 	VerifiedAt time.Time `json:"verifiedAt"`
+	// Temp：配对码进来的临时设备（Config.PairTTL）。Expires 定死在配对那一刻 + PairTTL，用了也**不续期**；
+	// 在这台设备上过一次 passkey（MarkVerified）就转正，按 TTL 滑动。配对码只是「让新设备进门」，
+	// 要长期留下就得绑一把 passkey —— 码被拍走 / 设备丢了，最多半小时的口子。
+	Temp bool `json:"temp,omitempty"`
 }
 
 func (d Device) Expired(now time.Time) bool {
@@ -74,6 +78,8 @@ type Config struct {
 	Dir string
 	// TTL 是滑动过期（每次用都续期）。0 = 永不过期。
 	TTL time.Duration
+	// PairTTL：配对码换来的设备只活这么久（不续期，见 Device.Temp）。0 = 和别的设备一样按 TTL。
+	PairTTL time.Duration
 }
 
 type Store struct {
@@ -196,6 +202,10 @@ func (s *Store) Redeem(code, ua, ip string) (*Device, string, error) {
 	}
 	delete(s.codes, hit) // 用一次就废
 	d, token := s.newLocked(ua, ip, "")
+	if s.cfg.PairTTL > 0 {
+		d.Temp, d.Expires = true, now.Add(s.cfg.PairTTL)
+		s.flushLocked()
+	}
 	return d, token, nil
 }
 
@@ -299,8 +309,8 @@ func (s *Store) lookup(token, ip string) *Device {
 			if ip != "" {
 				d.LastIP = ip
 			}
-			if s.cfg.TTL > 0 {
-				d.Expires = now.Add(s.cfg.TTL) // 滑动续期：天天用的设备永远不掉
+			if s.cfg.TTL > 0 && !d.Temp {
+				d.Expires = now.Add(s.cfg.TTL) // 滑动续期：天天用的设备永远不掉（配对码进来的临时设备不续，见 Device.Temp）
 			}
 			s.dirty = true
 			if now.Sub(s.flushed) > flushEvery {
@@ -342,6 +352,12 @@ func (s *Store) MarkVerified(id string) {
 			now := s.now()
 			d.VerifiedAt = now
 			d.PasskeyAt = now
+			if d.Temp { // 过了 passkey：配对码进来的临时设备转正
+				d.Temp, d.Expires = false, time.Time{}
+				if s.cfg.TTL > 0 {
+					d.Expires = now.Add(s.cfg.TTL)
+				}
+			}
 			s.flushLocked()
 			return
 		}

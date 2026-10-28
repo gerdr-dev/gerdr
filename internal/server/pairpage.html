@@ -81,7 +81,7 @@
   </div>
   <div class="err" id="err"></div>
 
-  <div class="foot">配对码 5 分钟过期、用一次就废，截图和二维码被拍走都没有长期风险。</div>
+  <div class="foot">配对码 5 分钟过期、用一次就废，截图和二维码被拍走都没有长期风险。<span id="temp"></span></div>
   <div class="foot" id="app" hidden><a href="#" id="setup">换一台服务器</a></div>
 </div>
 <script nonce="{{NONCE}}">
@@ -221,6 +221,8 @@
   if (new URLSearchParams(location.search).get("e") === "code") err("配对码不对或者已经过期了：回机器上再出一个。");
   api("GET", "/api/remote/whoami").then(function (who) {
     if (who.authed) return enter(); // cookie 其实在（Strict 在跨站进来那一下没带），直接进
+    // 配对码进来的设备只是临时的（auth.Device.Temp）：先说清楚，免得半小时后莫名其妙掉线
+    if (who.pairMinutes > 0) $("temp").textContent = "配对码进来的设备只能用 " + who.pairMinutes + " 分钟；要一直用，进去后在「设置 → 远程访问」里加一把 passkey。";
     var reauth = who.need === "passkey";
     if (reauth) {
       $("title").textContent = "需要再验证一次";

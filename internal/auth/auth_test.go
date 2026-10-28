@@ -121,3 +121,39 @@ func TestCookieAlwaysSecure(t *testing.T) {
 		t.Fatalf("远程设备 cookie 要 Secure + HttpOnly + SameSite=Strict，得到 %+v", c)
 	}
 }
+
+// 配对码进来的设备是临时的：到点就掉、用了也不续；过一次 passkey 转正。
+func TestPairTempDevice(t *testing.T) {
+	now := time.Unix(1_000_000, 0)
+	s, err := New(Config{Dir: t.TempDir(), TTL: 90 * 24 * time.Hour, PairTTL: 30 * time.Minute})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.now = func() time.Time { return now }
+	code, _ := s.MintCode()
+	d, tok, err := s.Redeem(code, "Android · Edge", "")
+	if err != nil || !d.Temp || !d.Expires.Equal(now.Add(30*time.Minute)) {
+		t.Fatalf("配对码进来该是 30 分钟的临时设备：%+v %v", d, err)
+	}
+	now = now.Add(20 * time.Minute)
+	if s.lookup(tok, "") == nil {
+		t.Fatal("20 分钟时还该能用")
+	}
+	now = now.Add(11 * time.Minute) // 用过一次也不续：31 分钟时掉
+	if s.lookup(tok, "") != nil {
+		t.Fatal("31 分钟时该掉了（临时设备不续期）")
+	}
+
+	code, _ = s.MintCode()
+	d, tok, _ = s.Redeem(code, "Android · App", "")
+	s.MarkVerified(d.ID) // 过了一次 passkey
+	now = now.Add(2 * time.Hour)
+	got := s.lookup(tok, "")
+	if got == nil || got.Temp {
+		t.Fatalf("过了 passkey 该转正：%+v", got)
+	}
+	// passkey 直接登录的新设备不是临时的
+	if nd, _ := s.NewDevice("iPhone", "", "passkey"); nd.Temp {
+		t.Fatal("passkey 登录的新设备不该是临时的")
+	}
+}

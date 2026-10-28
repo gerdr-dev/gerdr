@@ -193,6 +193,8 @@ export type RemoteStatus = {
   certExpires?: string;
   ttlDays: number;
   reauthHours: number;
+  /** 配对码进来的设备活几分钟（0 = 和别的设备一样） */
+  pairMinutes: number;
   locked: boolean;
   /** 局域网直连口（安卓 App 在家时走它）：在听的端口、起不来的原因、报给 App 的候选地址 */
   lanPort?: number;
@@ -214,7 +216,8 @@ export type RemoteCert = {
   accountURI: string;
 };
 export type RemoteCertInput = { dns: string; email: string; staging: boolean; env: Record<string, string>; tlsCert: string; tlsKey: string };
-export type RemoteDevice = { id: string; label: string; created: string; lastSeen: string; lastIp: string; expires: string };
+/** temp：配对码进来的临时设备，expires 定死、不续期；在那台设备上过一次 passkey 就转正 */
+export type RemoteDevice = { id: string; label: string; created: string; lastSeen: string; lastIp: string; expires: string; temp?: boolean };
 export type PasskeyInfo = { id: string; label: string; created: string; lastUsed: string };
 
 export type FileStat = { path: string; name: string; dir: boolean; size: number; mtime: number; mime: string };

@@ -54,7 +54,7 @@ type Service struct {
 // 命令行的 `gerdr remote devices / revoke` 也走这里。
 func Open(dataDir string, cfg config.Remote, log *slog.Logger) (*Service, error) {
 	dir := config.RemoteDir(dataDir)
-	store, err := auth.New(auth.Config{Dir: dir, TTL: cfg.DeviceTTL})
+	store, err := auth.New(auth.Config{Dir: dir, TTL: cfg.DeviceTTL, PairTTL: cfg.PairTTL})
 	if err != nil {
 		return nil, fmt.Errorf("读设备列表失败: %w", err)
 	}
@@ -267,6 +267,7 @@ type Status struct {
 	CertExpires *time.Time `json:"certExpires,omitempty"`
 	TTLDays     int        `json:"ttlDays"`
 	ReauthHours int        `json:"reauthHours"`
+	PairMinutes int        `json:"pairMinutes"` // 配对码进来的设备活几分钟（0 = 和别的一样）
 	Locked      bool       `json:"locked"` // 全局熔断中：不接受新配对，`gerdr remote unlock` 解
 	// 局域网直连口：在听的端口（0 = 没开 / 没起来）、起不来的原因、现在报给 App 的候选地址
 	LanPort    int      `json:"lanPort,omitempty"`
@@ -276,7 +277,7 @@ type Status struct {
 
 func (s *Service) Status() Status {
 	st := Status{Enabled: s.Cfg.Enabled(), Host: s.Cfg.Host, URL: s.URL(), RelayURL: s.Cfg.RelayURL,
-		TTLDays: int(s.Cfg.DeviceTTL / (24 * time.Hour)), ReauthHours: int(s.Cfg.ReauthAfter / time.Hour), Locked: s.Gate.Locked()}
+		TTLDays: int(s.Cfg.DeviceTTL / (24 * time.Hour)), ReauthHours: int(s.Cfg.ReauthAfter / time.Hour), PairMinutes: int(s.Cfg.PairTTL / time.Minute), Locked: s.Gate.Locked()}
 	s.mu.Lock()
 	st.Err = s.err
 	st.LanErr = s.lanErr

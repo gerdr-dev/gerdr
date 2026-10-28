@@ -61,6 +61,12 @@ npm 包的代理 —— 都不该对没配过对的人开放。
 就能给外面的人出一个码，每次都要过人的眼。agent 拿令牌直接 curl 那个口也一样要审批 —— 这一条挡不住
 `bypassPermissions` 模式下的 agent，能挡住的只有「别让它悄悄地做」。
 
+**配对码进来的设备只是临时的**（`auth.Device.Temp`）：从配对那一刻起 30 分钟到期（`GERDR_PAIR_TTL_MINUTES` /
+remote.json 的 `pairTTLMinutes`，0 = 和别的设备一样），用了也不续期；在那台设备上过一次 passkey（登录或注册一把，
+`MarkVerified`）才转正、按设备 TTL 滑动。配对码只负责「让新设备进门」，长期凭据要绑在 passkey 上 —— 码被拍走、
+临时借来的设备忘了退，口子最多半小时。passkey 登录和「批准 App 登录」签出来的设备不是临时的（那两条当场过了 passkey 或本机批准）。
+改之前配的设备不受影响。
+
 ## 远程起不来不拦启动
 
 herdr-web 配错了宁可拒绝启动（远程就是它的全部）。gerdr 的主界面在本机，mac App 起不来就什么都用不了，所以：证书签不下来、

@@ -219,10 +219,12 @@ function SettingsDialog({ open }: { open: boolean }) {
     <Dialog open={open} onOpenChange={(o) => !o && close()}>
       <DialogContent className="max-h-[85vh] overflow-hidden p-0 sm:max-w-3xl">
         <Tabs defaultValue="general" value={tabOpen} onValueChange={setTabOpen} className="flex h-[75vh] min-w-0 flex-col">
-          <DialogHeader className="min-w-0 px-6 pt-5 max-md:px-4">
-            <DialogTitle>设置</DialogTitle>
+          {/* 手机上整页缩一号（标题 15px、分页 13px、按钮矮一档）：组件默认的 18 / 14px 是照桌面定的，放进不到 400px 宽的弹窗里
+              标题和按钮显得又大又挤（用户在安卓 App 里截图报的）。只在 max-md 下生效，桌面不动 */}
+          <DialogHeader className="min-w-0 px-6 pt-5 max-md:gap-1 max-md:px-4 max-md:pt-3">
+            <DialogTitle className="max-md:text-[15px]">设置</DialogTitle>
             {/* 八个分页在手机上一行放不下：横滑，不换行 */}
-            <TabsList className="mt-2 max-w-full justify-start overflow-x-auto [scrollbar-width:none]">
+            <TabsList className="mt-2 max-w-full justify-start overflow-x-auto [scrollbar-width:none] max-md:mt-1 max-md:h-8 max-md:[&>button]:text-[13px]">
               <TabsTrigger value="general">通用</TabsTrigger>
               <TabsTrigger value="keys">快捷键</TabsTrigger>
               <TabsTrigger value="skills">Skill</TabsTrigger>
@@ -242,7 +244,7 @@ function SettingsDialog({ open }: { open: boolean }) {
               <TabsTrigger value="labs">实验室</TabsTrigger>
             </TabsList>
           </DialogHeader>
-          <div className="min-h-0 min-w-0 flex-1 overflow-auto px-6 pb-6 max-md:px-4">
+          <div className="min-h-0 min-w-0 flex-1 overflow-auto px-6 pb-6 max-md:px-4 max-md:[&_[data-slot=button]:not([data-size^=icon])]:h-7 max-md:[&_[data-slot=button]:not([data-size^=icon])]:px-2.5 max-md:[&_[data-slot=button]]:text-[13px]">
             <TabsContent value="general" className="space-y-5 pt-2">
               <Row label="外观">
                 <Select value={cfg.theme} onValueChange={(v) => setConfig({ theme: v as Theme })}>

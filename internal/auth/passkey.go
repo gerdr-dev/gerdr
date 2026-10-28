@@ -313,7 +313,7 @@ func (p *Passkeys) FinishRegister(ceremony, ua string, r *http.Request) (*Passke
 	}
 	cred, err := p.w.FinishRegistration(p.userLocked(), *session, r)
 	if err != nil {
-		return nil, err
+		return nil, webauthnErr(err)
 	}
 	now := p.now()
 	k := &Passkey{
@@ -362,7 +362,7 @@ func (p *Passkeys) FinishLogin(ceremony string, r *http.Request) (*Passkey, erro
 		func(rawID, userHandle []byte) (webauthn.User, error) { return p.userLocked(), nil },
 		*session, r)
 	if err != nil {
-		return nil, err
+		return nil, webauthnErr(err)
 	}
 	for _, k := range p.keys {
 		if string(k.Cred.ID) == string(cred.ID) {
@@ -458,4 +458,15 @@ func AndroidOrigin(fp string) string {
 		return ""
 	}
 	return "android:apk-key-hash:" + base64.RawURLEncoding.EncodeToString(b)
+}
+
+// webauthnErr：go-webauthn 的错误只在 Details 里写一句「Error validating origin」，真正有用的（期望哪些、收到的是什么）
+// 在 DevInfo 里。带上它：安卓 App 里 origin 对不上时，不看到「收到的是什么」根本没法查（签名证书换了、格式不对……）。
+// 里面只有 origin / RPID 这类公开的东西，给前端看没关系。
+func webauthnErr(err error) error {
+	var pe *protocol.Error
+	if errors.As(err, &pe) && pe.DevInfo != "" {
+		return fmt.Errorf("%s（%s）", pe.Details, pe.DevInfo)
+	}
+	return err
 }

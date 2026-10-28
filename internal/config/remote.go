@@ -33,6 +33,8 @@ type Remote struct {
 	// LanPort：局域网直连口（安卓 App 在家时不绕中继，直接连这儿），GERDR_LAN_PORT，默认 DefaultLanPort，0 = 不开。
 	// 和远程口同一张证书、同一套规则，只服务本地网络里的对端。见 docs/dev/ANDROID.md「局域网直连」。
 	LanPort int
+	// PairTTL：配对码换来的设备只活这么久、不续期（过一次 passkey 就转正），GERDR_PAIR_TTL_MINUTES，默认 30，0 = 和别的设备一样。
+	PairTTL time.Duration
 	// AndroidCerts：认哪些安卓 App 的签名证书（SHA-256 指纹，冒号分隔的十六进制）—— 它们能在 App 的 WebView 里
 	// 用这个域名的 passkey（assetlinks.json + android:apk-key-hash origin）。官方那把（OfficialAndroidCert）总在；
 	// 自己编的 debug 包要用 passkey 时加上 debug 钥匙的指纹：GERDR_ANDROID_CERTS（逗号分隔）或 remote.json 的 androidCerts。
@@ -63,6 +65,7 @@ type RemoteFile struct {
 	DeviceTTLDays *int              `json:"deviceTTLDays,omitempty"`
 	ReauthHours   *int              `json:"reauthHours,omitempty"`
 	LanPort       *int              `json:"lanPort,omitempty"`
+	PairMinutes   *int              `json:"pairTTLMinutes,omitempty"`
 	AndroidCerts  []string          `json:"androidCerts,omitempty"`
 	Env           map[string]string `json:"env,omitempty"`
 }
@@ -139,6 +142,9 @@ func LoadRemote(dir string) (Remote, error) {
 	}
 	if h := num("GERDR_REAUTH_HOURS", f.ReauthHours, 24); h > 0 {
 		r.ReauthAfter = time.Duration(h) * time.Hour
+	}
+	if m := num("GERDR_PAIR_TTL_MINUTES", f.PairMinutes, 30); m > 0 {
+		r.PairTTL = time.Duration(m) * time.Minute
 	}
 	if p := num("GERDR_LAN_PORT", f.LanPort, DefaultLanPort); p > 0 && p < 65536 {
 		r.LanPort = p

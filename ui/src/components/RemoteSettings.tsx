@@ -118,7 +118,10 @@ export function RemoteSettings({ open }: { open: boolean }) {
                 <div className="font-mono text-[20px] tracking-[.3em]">
                   {pair.code.slice(0, 4)} {pair.code.slice(4)}
                 </div>
-                <div className="text-[12px] text-muted-foreground">{new Date(pair.expires).toLocaleTimeString()} 前有效，用一次就废。</div>
+                <div className="text-[12px] text-muted-foreground">
+                  {new Date(pair.expires).toLocaleTimeString()} 前有效，用一次就废。
+                  {st.pairMinutes > 0 && <>配进来的设备只能用 {st.pairMinutes} 分钟，在那台设备上过一次 passkey 才长期有效。</>}
+                </div>
                 <Button size="sm" variant="outline" onClick={() => setPair(null)}>
                   收起
                 </Button>
@@ -163,6 +166,12 @@ export function RemoteSettings({ open }: { open: boolean }) {
                 <div className="truncate">
                   {d.label}
                   {d.id === me && <span className="ml-2 text-[11px] text-brand">这台</span>}
+                  {/* 配对码进来的临时设备：到点就掉，在那台设备上过一次 passkey 才转正（auth.Device.Temp） */}
+                  {d.temp && (
+                    <span className="ml-2 text-[11px] text-warn">
+                      临时 · {new Date(d.expires).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} 到期
+                    </span>
+                  )}
                 </div>
                 <div className="truncate text-[11px] text-muted-foreground">
                   最后 {when(d.lastSeen)} · {d.lastIp} · 配于 {when(d.created)}
