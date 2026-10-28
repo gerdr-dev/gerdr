@@ -52,6 +52,20 @@ export function leaves(n: PaneNode): PaneLeaf[] {
   return n.type === "pane" ? [n] : [...leaves(n.a), ...leaves(n.b)];
 }
 
+/**
+ * 手机上画哪一部分：上下分屏照画，左右分屏只留焦点在的那一边 —— 三四百 px 宽再劈两半，对话和输入框都读不了；
+ * 竖着劈两半还各有一整行宽，开着终端看着 agent 跑正合适。只是换个看法，不改布局（布局存服务端、和桌面共用）。
+ */
+export function phoneRoot(tab: Tab): PaneNode {
+  const has = (n: PaneNode): boolean => (n.type === "pane" ? n.id === tab.focus : has(n.a) || has(n.b));
+  const walk = (n: PaneNode): PaneNode => {
+    if (n.type === "pane") return n;
+    if (n.dir === "col") return { ...n, a: walk(n.a), b: walk(n.b) };
+    return walk(has(n.b) ? n.b : n.a); // 焦点不在这棵里（坏数据）就取左边
+  };
+  return walk(tab.root);
+}
+
 export function findLeaf(n: PaneNode, id: string): PaneLeaf | undefined {
   return leaves(n).find((l) => l.id === id);
 }

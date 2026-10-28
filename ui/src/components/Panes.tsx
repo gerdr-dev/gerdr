@@ -21,7 +21,7 @@ import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { basename, closeFocusedPane, deleteSession, focusPane, focusSession, openTerminal, paneToTab, reopenTerminal, splitFocused, toggleZoom } from "@/lib/actions";
-import { leaves, setRatio, updateTab, type PaneLeaf, type PaneNode, type Tab } from "@/lib/layout";
+import { leaves, phoneRoot, setRatio, updateTab, type PaneLeaf, type PaneNode, type Tab } from "@/lib/layout";
 import { applyPaneTitle } from "@/lib/plugins";
 import { markRead, set, setLayout, useStore } from "@/lib/store";
 import { usePhone } from "@/lib/phone";
@@ -38,11 +38,19 @@ export function TabView({ tab }: { tab: Tab }) {
   const all = leaves(tab.root);
   const many = all.length > 1;
   const phone = usePhone();
-  // 手机上只画焦点那一个 pane：多 pane 平铺在三四百 px 宽里读不了。不改布局里的 zoom ——
-  // 布局是存服务端、桌面那边共用的，手机上看一眼不该把电脑上的分屏变成放大。换 pane 走面板一览。
+  // 手机上：上下分屏照画，左右分屏只画焦点那一边（见 phoneRoot）。不管布局里的 zoom ——
+  // 布局是存服务端、桌面那边共用的，手机上看一眼不该把电脑上的分屏变成放大。看不见的 pane 走面板一览，焦点那个标题栏上标「第几个 / 共几个」。
   if (phone) {
-    const p = all.find((x) => x.id === tab.focus) ?? all[0];
-    return <PaneView pane={p} tab={tab} framed={false} count={many ? { i: all.indexOf(p) + 1, n: all.length } : undefined} />;
+    const root = phoneRoot(tab);
+    const shown = leaves(root);
+    const p = shown.find((x) => x.id === tab.focus) ?? shown[0];
+    const count = shown.length < all.length ? { i: all.indexOf(p) + 1, n: all.length, pane: p.id } : undefined;
+    if (root.type === "pane") return <PaneView pane={root} tab={tab} framed={false} count={count} />;
+    return (
+      <div className="h-full min-h-0 p-1">
+        <NodeView node={root} tab={tab} framed count={count} />
+      </div>
+    );
   }
   if (tab.zoom) {
     const p = leaves(tab.root).find((x) => x.id === tab.zoom);
@@ -56,9 +64,10 @@ export function TabView({ tab }: { tab: Tab }) {
   );
 }
 
-function NodeView({ node, tab, framed }: { node: PaneNode; tab: Tab; framed: boolean }) {
+function NodeView({ node, tab, framed, count }: { node: PaneNode; tab: Tab; framed: boolean; count?: Count & { pane: string } }) {
   const box = useRef<HTMLDivElement>(null);
-  if (node.type === "pane") return <PaneView pane={node} tab={tab} framed={framed} />;
+  const phone = usePhone();
+  if (node.type === "pane") return <PaneView pane={node} tab={tab} framed={framed} count={count?.pane === node.id ? count : undefined} />;
   const row = node.dir === "row";
   const startDrag = (e: React.PointerEvent) => {
     e.preventDefault();
@@ -81,7 +90,7 @@ function NodeView({ node, tab, framed }: { node: PaneNode; tab: Tab; framed: boo
   return (
     <div ref={box} className={cn("flex h-full min-h-0 w-full min-w-0", row ? "flex-row" : "flex-col")}>
       <div style={{ flexBasis: `${node.ratio * 100}%` }} className="min-h-0 min-w-0 shrink grow-0 overflow-hidden">
-        <NodeView node={node.a} tab={tab} framed={framed} />
+        <NodeView node={node.a} tab={tab} framed={framed} count={count} />
       </div>
       <div
         onPointerDown={startDrag}
@@ -89,10 +98,12 @@ function NodeView({ node, tab, framed }: { node: PaneNode; tab: Tab; framed: boo
           // 缝本身透明（两边各有边框），悬停时亮一条提示能拖
           "shrink-0 bg-transparent bg-clip-content transition-colors hover:bg-brand/50",
           row ? "w-1.5 cursor-col-resize px-[2px]" : "h-1.5 cursor-row-resize py-[2px]",
+          // 手机上手指按不准 6px：缝加高，拖的时候别让页面跟着滚
+          phone && "h-3 touch-none py-[5px]",
         )}
       />
       <div style={{ flexBasis: `${(1 - node.ratio) * 100}%` }} className="min-h-0 min-w-0 shrink grow-0 overflow-hidden">
-        <NodeView node={node.b} tab={tab} framed={framed} />
+        <NodeView node={node.b} tab={tab} framed={framed} count={count} />
       </div>
     </div>
   );

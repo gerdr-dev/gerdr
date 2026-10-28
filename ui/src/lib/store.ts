@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { api, clientId, type FileStat } from "./api";
 import { DEFAULT_KEYS, type KeyAction } from "./keys";
-import { activeTab, defaultLayout, leaves, validLayout, viewOf, withView, type Layout, type View } from "./layout";
+import { activeTab, defaultLayout, leaves, phoneRoot, validLayout, viewOf, withView, type Layout, type View } from "./layout";
 import { isPhone } from "./phone";
 import { Transcript } from "./transcript";
 import type { AgentInfo, HubEvent, RemoteConn, SessionSummary } from "./types";
@@ -12,6 +12,7 @@ export type Config = {
   prefix: string;
   keys: Partial<Record<KeyAction, string[]>>;
   theme: Theme;
+  /** 旧版存这儿、所有设备共用；现在字号存各设备本机（State.localFont），这个只当没设过时的初值 */
   fontSize: number;
   defaultAgent: string;
   /** 新会话的默认模式（按 agent）。 */
@@ -93,6 +94,11 @@ type State = {
   prefixActive: boolean;
   dialog: Dialog;
   sidebar: boolean;
+  /**
+   * 字号（px）：每台设备各一份，存本机（localStorage），不进 config —— config 存服务端、所有设备共用，
+   * 手机上调大了字，电脑上不该跟着变大。0 = 这台还没设过，用 config.fontSize（以前存在那儿的，老用户设过的照旧生效）。
+   */
+  localFont: number;
   /** 手机上：侧栏抽屉开着没有（不存盘 —— 每次打开页面都该先看见对话）。 */
   drawer: boolean;
   /** 手机上：面板一览（PaneSwitcher）开着没有。 */
@@ -122,6 +128,24 @@ function loadUnread(): Record<string, true> {
   }
 }
 
+function loadLocalFont(): number {
+  try {
+    return Number(localStorage.getItem("gerdr.fontSize")) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** 这台设备用的字号 */
+export const fontSizeOf = (s: { localFont: number; config: Config }) => s.localFont || s.config.fontSize;
+
+export function setFontSize(n: number) {
+  set({ localFont: n });
+  try {
+    localStorage.setItem("gerdr.fontSize", String(n));
+  } catch {}
+}
+
 function loadSidebar(): boolean {
   try {
     return localStorage.getItem("gerdr.sidebar") !== "0";
@@ -148,6 +172,7 @@ export const useStore = create<State>(() => ({
   prefixActive: false,
   dialog: null,
   sidebar: loadSidebar(),
+  localFont: loadLocalFont(),
   drawer: false,
   switcher: false,
   unread: loadUnread(),
@@ -342,10 +367,10 @@ export function toggleSidebar() {
   } catch {}
 }
 
-/** 屏幕上看得见的会话（当前 tab 里的 pane；放大时只有那一个）。 */
-export function visibleSessions(l: Layout): string[] {
+/** 屏幕上看得见的会话（当前 tab 里的 pane；放大时只有那一个；手机上见 phoneRoot：左右分屏只看得见焦点那边）。 */
+export function visibleSessions(l: Layout, phone = false): string[] {
   const tab = activeTab(l);
-  const ls = leaves(tab.root).filter((p) => !tab.zoom || p.id === tab.zoom);
+  const ls = phone ? leaves(phoneRoot(tab)) : leaves(tab.root).filter((p) => !tab.zoom || p.id === tab.zoom);
   // 子 agent 面板看的也是它所属会话的日志。
   return [...new Set(ls.map((p) => p.sessionId ?? p.sub?.sessionId).filter((x): x is string => !!x))];
 }

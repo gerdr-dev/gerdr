@@ -124,8 +124,9 @@ export function PaneSwitcher() {
       if (g) g.items.push(r);
       else out.push({ ws: r.wsId, items: [r] });
     }
-    return out;
-  }, [rows, sort]);
+    // 当前工作空间那组放最上面（和上面那排标签一个顺序）
+    return out.sort((a, b) => +(b.ws === layout.active) - +(a.ws === layout.active));
+  }, [rows, sort, layout.active]);
 
   const go = (paneId: string) => {
     focusPane(paneId);
@@ -222,20 +223,24 @@ export function PaneSwitcher() {
             <Chip on={!ws} onClick={() => setWs("")}>
               全部
             </Chip>
-            {layout.workspaces.map((w, wi) => (
-              <Chip
-                key={w.id}
-                on={ws === w.id}
-                onClick={() => {
-                  setWs(w.id);
-                  selectWorkspace(w.id);
-                }}
-              >
-                <WsDot w={w} sessions={sessions} unread={unread} />
-                <span className="max-w-28 truncate">{applyWorkspaceLabel(w, wi, w.name)}</span>
-                {w.id === layout.active && <span className="text-[10px] text-brand">当前</span>}
-              </Chip>
-            ))}
+            {/* 当前工作空间排第一个（紧跟「全部」）：一排横滑，按原顺序排的话它常在屏幕外面，最常点的反而要先划过去找 */}
+            {layout.workspaces
+              .map((w, wi) => ({ w, wi }))
+              .sort((a, b) => +(b.w.id === layout.active) - +(a.w.id === layout.active))
+              .map(({ w, wi }) => (
+                <Chip
+                  key={w.id}
+                  on={ws === w.id}
+                  onClick={() => {
+                    setWs(w.id);
+                    selectWorkspace(w.id);
+                  }}
+                >
+                  <WsDot w={w} sessions={sessions} unread={unread} hideIdle />
+                  <span className="max-w-28 truncate">{applyWorkspaceLabel(w, wi, w.name)}</span>
+                  {w.id === layout.active && <span className="text-[10px] text-brand">当前</span>}
+                </Chip>
+              ))}
           </div>
         )}
 
@@ -257,16 +262,18 @@ export function PaneSwitcher() {
                       type="button"
                       className={cn(
                         // 一行至少 44px：手机上手指的下限；整块都是热区
-                        "flex min-h-11 w-full items-center gap-2.5 rounded-lg border border-transparent px-2 py-1.5 text-left leading-tight outline-none",
-                        "hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring/40",
-                        r.pane.id === focusedPane && "border-brand/40 bg-brand/10",
+                        // 选中的和侧栏一样用灰底、不用品牌色描边。但面板底（popover）比侧栏底亮，bg-accent 在这上面差得太少、
+                        // 看不出来（用户报的）：用前景色叠一层，深浅两种主题都拉得开
+                        "flex min-h-11 w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left leading-tight outline-none",
+                        "hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring/40",
+                        r.pane.id === focusedPane && "bg-foreground/12 [&_.title]:font-medium",
                       )}
                       {...tap(r.pane.id)}
                     >
                       {/* 不画打头的 agent 图标：几乎全是同一个 C，占一列宽却分不出谁是谁；终端 / 子 agent 标题里已经写着 */}
                       <span className="min-w-0 flex-1">
                         <span className="flex items-center gap-1.5">
-                          <span className="truncate text-[12px]">{title}</span>
+                          <span className="title truncate text-[12px]">{title}</span>
                           {chip && <span className={cn("shrink-0 rounded-sm border px-1 py-px text-[10px]", chip.cls)}>{chip.text}</span>}
                           <span className="ml-auto shrink-0 font-mono text-[10px] text-muted-foreground" title={s ? new Date(s.updatedAt).toLocaleString() : ""}>
                             {ago(s?.updatedAt, now)}
@@ -295,7 +302,7 @@ function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; chi
     <button
       type="button"
       onClick={onClick}
-      className={cn("flex h-7 shrink-0 items-center gap-1.5 rounded-md border px-2 text-[12px]", on ? "border-brand/50 bg-brand/10 text-foreground" : "text-muted-foreground hover:bg-accent/60")}
+      className={cn("flex h-7 shrink-0 items-center gap-1.5 rounded-md border px-2 text-[12px]", on ? "border-transparent bg-foreground/12 font-medium text-foreground" : "text-muted-foreground hover:bg-foreground/5")}
     >
       {children}
     </button>

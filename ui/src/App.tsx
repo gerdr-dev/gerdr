@@ -19,7 +19,7 @@ import { initAndroid, syncAndroidTheme } from "./lib/android";
 import { CliApprove } from "./components/CliApprove";
 import { systemNotify } from "./lib/notify";
 import { reloadPlugins, setTabNameFn } from "./lib/plugins";
-import { focusedSession, get, markUnread, set, useStore, visibleSessions } from "./lib/store";
+import { fontSizeOf, get, markUnread, set, useStore, visibleSessions } from "./lib/store";
 import { boot } from "./lib/sync";
 import type { SessionSummary } from "./lib/types";
 
@@ -27,7 +27,7 @@ setTabNameFn(tabName);
 
 function useTheme() {
   const theme = useStore((s) => s.config.theme);
-  const font = useStore((s) => s.config.fontSize);
+  const font = useStore(fontSizeOf);
   useEffect(() => {
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
     const apply = () => {
@@ -53,8 +53,8 @@ function useAttention() {
       if (s.sessions === prev) return;
       const before = prev;
       prev = s.sessions;
-      // 手机上一次只画焦点那一个 pane，同 tab 里别的 pane 看不见，不能算「看着呢」
-      const visible = new Set(isPhone() ? [focusedSession(s.layout)].filter(Boolean) : visibleSessions(s.layout));
+      // 手机上左右分屏只画焦点那一边，另一边看不见，不能算「看着呢」
+      const visible = new Set(visibleSessions(s.layout, isPhone()));
       const away = document.visibilityState !== "visible" || !document.hasFocus();
       for (const cur of Object.values(s.sessions)) {
         const old = before[cur.id];

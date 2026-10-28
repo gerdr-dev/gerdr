@@ -523,7 +523,7 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
             }
           }}
           placeholder={running ? (phone ? "它在干活：说的话等这一步做完插进去" : sendKey === "enter" ? "它在干活：↵ 等这一步做完插进去，Ctrl+↵ 立即插" : "它在干活：说一句会等这一步做完插进去") : "说点什么…  / 看命令"}
-          className="block max-h-[40vh] min-h-[44px] w-full resize-none bg-transparent px-4 pt-3 pb-1 text-[1em] max-md:text-[15px] max-md:supports-[-webkit-touch-callout:none]:text-[16px] leading-relaxed outline-none placeholder:text-muted-foreground/70"
+          className="block max-h-[40vh] min-h-[44px] w-full resize-none bg-transparent px-4 pt-3 pb-1 text-[1em] max-md:text-[length:max(1em,15px)] max-md:supports-[-webkit-touch-callout:none]:text-[16px] leading-relaxed outline-none placeholder:text-muted-foreground/70"
         />
         <div className="flex items-center gap-1 px-2.5 pb-2.5">
           {/* 附图和几个下拉放一组：手机上放不下时这一组横着滑，而不是每个都被挤成「A…」「Opus …」（用户报的）；

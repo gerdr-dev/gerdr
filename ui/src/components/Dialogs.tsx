@@ -21,7 +21,7 @@ import { ACTION_TITLES, DEFAULT_KEYS, formatCombo, type KeyAction } from "@/lib/
 import { locateSession } from "@/lib/layout";
 import { isNative, nativeOpenPath } from "@/lib/native";
 import { pluginStatus } from "@/lib/plugins";
-import { keyFor, set, setConfig, useStore, type Theme } from "@/lib/store";
+import { fontSizeOf, keyFor, set, setConfig, setFontSize, useStore, type Theme } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import type { SessionSummary } from "@/lib/types";
 import { AgentIcon, StatusDot } from "./AgentIcon";
@@ -197,6 +197,7 @@ function KeyRecorder({ value, onChange }: { value: string; onChange: (v: string)
 
 function SettingsDialog({ open }: { open: boolean }) {
   const cfg = useStore((s) => s.config);
+  const fontSize = useStore(fontSizeOf);
   const agents = useStore((s) => s.agents);
   const pluginsDir = useStore((s) => s.pluginsDir);
   const version = useStore((s) => s.version);
@@ -258,13 +259,13 @@ function SettingsDialog({ open }: { open: boolean }) {
                   </SelectContent>
                 </Select>
               </Row>
-              <Row label="字号">
-                <Select value={String(cfg.fontSize)} onValueChange={(v) => setConfig({ fontSize: Number(v) })}>
+              <Row label="字号" hint="只管这台设备，各设备各设各的">
+                <Select value={String(fontSize)} onValueChange={(v) => setFontSize(Number(v))}>
                   <SelectTrigger className="w-36">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {[12, 13, 14, 15, 16, 17, 18].map((n) => (
+                    {[12, 13, 14, 15, 16, 17, 18, 19, 20].map((n) => (
                       <SelectItem key={n} value={String(n)}>
                         {n}px
                       </SelectItem>
