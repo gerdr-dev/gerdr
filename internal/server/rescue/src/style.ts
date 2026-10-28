@@ -33,12 +33,16 @@ pre, code { font-family: var(--mono); }
 /* 关着、页面又报错了：右下角一颗 */
 .pill {
   position: fixed; right: 16px; bottom: 16px; z-index: 2147483000;
-  display: flex; align-items: center; gap: 6px; padding: 7px 14px 7px 11px;
+  display: flex; align-items: stretch; overflow: hidden;
   border: 1px solid color-mix(in oklab, var(--bad) 40%, var(--border)); border-radius: 999px;
   background: var(--card); color: var(--bad); font-weight: 600;
   box-shadow: 0 6px 20px -6px rgb(0 0 0 / .25);
 }
-.pill:hover { background: color-mix(in oklab, var(--bad) 8%, var(--card)); }
+.pill button { display: flex; align-items: center; border: 0; background: none; color: inherit; font-weight: inherit; }
+.pill .open { gap: 6px; padding: 7px 10px 7px 11px; }
+/* 点掉用的 ×：手机上手指要点得中，宽一点 */
+.pill .x { padding: 0 11px 0 9px; color: var(--muted-fg); border-left: 1px solid color-mix(in oklab, var(--bad) 25%, var(--border)); }
+.pill button:hover { background: color-mix(in oklab, var(--bad) 8%, var(--card)); }
 
 .panel {
   position: fixed; top: 0; right: 0; bottom: 0; z-index: 2147483000;

@@ -23,8 +23,12 @@ const runtimeJS = `const S = window.__GERDR_UI__;
 const errors = (window.__GERDR_UI_ERRORS__ = window.__GERDR_UI_ERRORS__ || []);
 function report(source, e) {
   if (window.__GERDR_REPORT__) window.__GERDR_REPORT__(source, (e && e.message) || e, (e && e.stack) || "");
-  else errors.push({ level: "error", source, message: String((e && e.message) || e), detail: (e && e.stack) || "" });
+  else errors.push({ level: "error", source, build: S.build, message: String((e && e.message) || e), detail: (e && e.stack) || "" });
 }
+// 每条错记着是哪一版构建报的：换了新版就把旧版的丢掉（agent 改好了，右下角的「急救」和面板里的红框跟着消失）。
+// 页面一开始就带着的那几条（html.go 塞进来的构建问题）还没有版本号，算当前这一版的。
+for (const e of errors) if (!e.build) e.build = S.build;
+function dropStale(b) { for (let i = errors.length - 1; i >= 0; i--) if (errors[i].build !== b) errors.splice(i, 1); }
 function overlay(text) {
   let el = document.getElementById("__gerdr_overlay");
   if (!text) { if (el) el.remove(); return; }
@@ -81,6 +85,7 @@ async function apply(u) {
   if (u.type === "reload") return location.reload();
   if (u.type === "error") {
     build = S.build = u.build;
+    dropStale(build);
     broken = true;
     overlay(u.error);
     report("build", { message: u.error.split("\n")[0], stack: u.error });
@@ -93,6 +98,7 @@ async function apply(u) {
   // S.build 也要跟着换：报错脚本（html.go）拿它报给服务端，服务端只收当前这一版的错。
   // 不换的话热更新过一次之后页面报的错全被当成旧版丢掉，右下角冒了「急救」、面板里却说没报错（踩过）。
   build = S.build = u.build;
+  dropStale(build);
   if (u.css != null) { const el = document.getElementById("__gerdr_css__"); if (el) el.textContent = u.css; }
   if (u.boundaries && R) {
     if (!u.boundaries.length) return;

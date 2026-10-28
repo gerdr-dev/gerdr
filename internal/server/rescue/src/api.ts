@@ -82,13 +82,25 @@ export function errorText(st: UIStatus | null) {
   if (!st) return "";
   const parts: string[] = [];
   if (st.build_error) parts.push("编译错误：\n" + st.build_error);
-  const local: { source?: string; message: string; detail?: string }[] = (window as any).__GERDR_UI_ERRORS__ || [];
   const seen = new Set<string>();
-  for (const e of [...(st.runtime_errors || []), ...local.filter((e) => e.source !== "build")]) {
+  for (const e of [...(st.runtime_errors || []), ...pageErrors().filter((e) => e.source !== "build")]) {
     if (seen.has(e.message)) continue;
     seen.add(e.message);
     parts.push(`运行时错误（${e.source || ""}）：${e.message}${e.detail ? "\n" + e.detail : ""}`);
   }
   if (st.git?.merging) parts.push("界面目录正合并到一半，有冲突：" + (st.git.conflicts || []).join(", "));
   return parts.join("\n\n").slice(0, 6000);
+}
+
+// 这个页面自己记的错（页面外壳的收集器记的，换了新版构建运行时会把旧版的丢掉）。警告（index.css 里用不了的写法这种）不算报错。
+export function pageErrors(): { level?: string; source?: string; message: string; detail?: string }[] {
+  return ((window as any).__GERDR_UI_ERRORS__ || []).filter((e: any) => e.level !== "warn");
+}
+
+// 「忽略」：临时的错、已经知道了的错，人说不管了就清掉 —— 页面这份和服务端那份都清，不然红框和右下角的「急救」一直挂着。
+// 页面这份只删报错、留着警告；要原地改那个数组：页面外壳和运行时手里拿的是同一个引用。
+export async function dismissErrors() {
+  const list: any[] = (window as any).__GERDR_UI_ERRORS__ || [];
+  for (let i = list.length - 1; i >= 0; i--) if (list[i].level !== "warn") list.splice(i, 1);
+  await req("DELETE", "/api/ui/errors").catch(() => {});
 }

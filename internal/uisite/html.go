@@ -15,7 +15,7 @@ const errorsScript = `(function(){
   function send(){ timer = 0; var items = queue; queue = [];
     try { fetch("/api/ui/errors", { method: "POST", headers: { "Content-Type": "application/json", "X-Gerdr": "1" }, body: JSON.stringify({ build: (window.__GERDR_UI__ || {}).build, items: items }) }).catch(function(){}) } catch (_) {} }
   function push(source, message, detail){
-    var item = { level: "error", source: source, message: String(message), detail: String(detail || "").slice(0, 4000) };
+    var item = { level: "error", source: source, build: (window.__GERDR_UI__ || {}).build, message: String(message), detail: String(detail || "").slice(0, 4000) };
     var hold = window.__GERDR_HOLD__;
     if (hold && /hook|Should have a queue/i.test(item.message + " " + item.detail)) return hold.push(item);
     list.push(item);

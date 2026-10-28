@@ -1,7 +1,7 @@
 // 面板本体：顶上是界面现在报的错，下面两页 —— 和 agent 对话（在界面目录里开会话）、回到之前的一版。
 import { AlertTriangle, CheckCircle2, ChevronDown, History, LifeBuoy, MessageSquare, RefreshCw, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { type Commit, type Hello, type UIStatus, ago, errorText, req } from "./api";
+import { type Commit, type Hello, type UIStatus, ago, dismissErrors, errorText, pageErrors, req } from "./api";
 import { Chat } from "./Chat";
 
 export function Panel({
@@ -15,7 +15,7 @@ export function Panel({
   onOpen: (v: boolean) => void;
   onWidth: (w: number, done?: boolean) => void;
 }) {
-  const broken = usePageBroken(!open);
+  const [broken, recheck] = usePageBroken(!open);
   const [dark, setDark] = useState(false);
   const [hello, setHello] = useState<Hello | null>(null);
   const [helloErr, setHelloErr] = useState("");
@@ -58,10 +58,16 @@ export function Panel({
   if (!open)
     return broken ? (
       <div className={"root" + (dark ? " dark" : "")}>
-        <button className="pill" onClick={() => onOpen(true)} title="界面报错了：打开急救面板，叫 agent 来修">
-          <LifeBuoy size={15} />
-          急救
-        </button>
+        <div className="pill">
+          <button className="open" onClick={() => onOpen(true)} title="界面报错了：打开急救面板，叫 agent 来修">
+            <LifeBuoy size={15} />
+            急救
+          </button>
+          {/* 临时的错、不想管的错：点掉，别一直挡着下面的按钮（手机上正好压在发送键上） */}
+          <button className="x" onClick={() => dismissErrors().then(recheck)} title="忽略这些错误">
+            <X size={14} />
+          </button>
+        </div>
       </div>
     ) : null;
 
@@ -86,7 +92,7 @@ export function Panel({
           </button>
         </header>
 
-        <StatusCard status={status} error={statusErr} text={err} />
+        <StatusCard status={status} error={statusErr} text={err} onDismiss={() => dismissErrors().then(loadStatus)} />
 
         <nav className="tabs">
           <button className={tab === "chat" ? "on" : ""} onClick={() => setTab("chat")}>
@@ -119,19 +125,17 @@ export function Panel({
 }
 
 // 页面有没有报错（关着的时候用：报了就在右下角冒一个「急救」）。错误是页面外壳一开始就挂好的收集器记的，主界面崩了也记得到。
+// 编译出错不看 __GERDR_UI__.error（页面加载时的那份，修好之前一直在）：编译错误收集器里也有一条，换了新版就被丢掉。
 function usePageBroken(active: boolean) {
   const [broken, setBroken] = useState(false);
+  const check = useCallback(() => setBroken(pageErrors().length > 0), []);
   useEffect(() => {
     if (!active) return;
-    const check = () => {
-      const w = window as any;
-      setBroken(!!(w.__GERDR_UI__?.error || (w.__GERDR_UI_ERRORS__ || []).length));
-    };
     check();
     const t = setInterval(check, 2000);
     return () => clearInterval(t);
-  }, [active]);
-  return broken;
+  }, [active, check]);
+  return [broken, check] as const;
 }
 
 // 左边缘拖一拖改宽度
@@ -159,7 +163,7 @@ function Resizer({ width, onWidth }: { width: number; onWidth: (w: number, done?
   );
 }
 
-function StatusCard({ status, error, text }: { status: UIStatus | null; error: string; text: string }) {
+function StatusCard({ status, error, text, onDismiss }: { status: UIStatus | null; error: string; text: string; onDismiss: () => void }) {
   const [more, setMore] = useState(false);
   if (error) return <div className="status bad">读不到界面状态：{error}</div>;
   if (!status) return null;
@@ -181,6 +185,12 @@ function StatusCard({ status, error, text }: { status: UIStatus | null; error: s
       <div className="row">
         <AlertTriangle size={15} />
         <span className="grow">界面报错了</span>
+        {/* 编译错误点了也没用（改好之前一直在），只给运行时错误 */}
+        {!status.build_error && (
+          <button className="link" onClick={onDismiss} title="临时的错、已经修好了的错：清掉">
+            忽略
+          </button>
+        )}
         <button className="link" onClick={() => setMore(!more)}>
           {more ? "收起" : "展开"}
           <ChevronDown size={13} style={{ transform: more ? "rotate(180deg)" : undefined }} />

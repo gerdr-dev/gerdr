@@ -69,6 +69,13 @@ func (r *Renderer) ReportClientErrors(build string, items []errorItem) {
 	}
 }
 
+// ClearClientErrors：人在急救面板里点了「忽略」（临时的错、已经知道了的错），清掉，免得一直挂着红框。
+func (r *Renderer) ClearClientErrors() {
+	r.errMu.Lock()
+	r.clientErr = nil
+	r.errMu.Unlock()
+}
+
 // ClientErrors：当前这一版构建下页面报过的错。
 func (r *Renderer) ClientErrors() []ClientError {
 	b := r.ensure()

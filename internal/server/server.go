@@ -292,6 +292,10 @@ func (s *Server) Handler() http.Handler {
 		s.UI.ReportClientErrors(b.Build, b.Items)
 		writeJSON(w, map[string]any{})
 	})
+	mux.HandleFunc("DELETE /api/ui/errors", func(w http.ResponseWriter, r *http.Request) {
+		s.UI.ClearClientErrors()
+		writeJSON(w, map[string]any{})
+	})
 	mux.Handle("/", s.ui())
 	return s.guard(mux)
 }
