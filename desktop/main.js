@@ -253,6 +253,15 @@ ipcMain.on("gerdr", (e, m) => {
 // Windows：不要菜单栏 —— 菜单的加速键会先于网页吃掉 Ctrl+C / Ctrl+W 这些（网页自己有一套快捷键：
 // Ctrl+C 两次关 agent、前缀键……），复制粘贴 Chromium 自己会处理。
 
+// origin 是带令牌的登录链接（/auth?token=…）：直接在后面拼路径会变成错的令牌（踩过：「bad token」）。
+// 走登录再跳过去（/auth 认 next），cookie 过期了也进得去。
+function rescueURL() {
+  const u = new URL(origin);
+  if (u.pathname === "/auth") u.searchParams.set("next", "/rescue");
+  else u.pathname = "/rescue";
+  return u.toString();
+}
+
 function cmd(label, id, accelerator) {
   return { label, accelerator, click: () => runInPage(`window.gerdr && window.gerdr.runCommand(${JSON.stringify(id)})`) };
 }
@@ -315,7 +324,15 @@ function buildMenu() {
         submenu: [cmd("下一个 tab", "nextTab", "Cmd+Shift+]"), cmd("上一个 tab", "prevTab", "Cmd+Shift+["), ...tabs, { type: "separator" }, cmd("跳到在等你的会话", "focusAttention", "Cmd+J")],
       },
       { role: "windowMenu", label: "窗口" },
-      { label: "帮助", submenu: [cmd("快捷键", "help", "Cmd+/")] },
+      {
+        label: "帮助",
+        submenu: [
+          cmd("快捷键", "help", "Cmd+/"),
+          { type: "separator" },
+          // 急救面板编进了后端、不在界面目录里：主界面改坏了也打得开（菜单项不经过页面，页面坏了也点得动）
+          { label: "急救：界面坏了时叫 agent 修", click: () => origin && win?.loadURL(rescueURL()) },
+        ],
+      },
     ]),
   );
 }

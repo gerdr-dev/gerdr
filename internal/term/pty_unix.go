@@ -27,7 +27,7 @@ func (t *Term) start(env []string, cols, rows uint16) error {
 	go t.pump()
 	go func() {
 		err := cmd.Wait()
-		code := 0
+		code := 0 // 被信号杀掉时 ExitCode() 是 -1，界面靠它区分「自己退的」和「被结束的」
 		var ee *exec.ExitError
 		if errors.As(err, &ee) {
 			code = ee.ExitCode()

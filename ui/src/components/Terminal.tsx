@@ -136,8 +136,9 @@ export function TerminalView({
           exited = true;
           setCode(m.code);
           setState("exited");
-          // 和 tmux 一样：敲 exit 正常退出就把 pane 收掉；出错退的（或被杀的）留着，看得到最后的输出
-          if (m.code === 0) {
+          // 和 tmux 一样：shell 自己退的（exit、ctrl+d）就把 pane 收掉 —— 不看退出码：ctrl+d 时 zsh 带的是上一条命令的
+          // 退出码，前面 ctrl+c 过就是 130。只有被信号杀掉的（-1：gerdr 退出、被 kill）留着，给「重开」。
+          if (m.code >= 0) {
             api.termKill(termId).catch(() => {});
             closePaneById(paneId);
           }
@@ -251,9 +252,9 @@ export function TerminalView({
           连接中
         </div>
       )}
-      {(state === "gone" || (state === "exited" && code !== 0)) && (
+      {(state === "gone" || state === "exited") && (
         <div className="absolute inset-x-0 bottom-0 flex items-center gap-3 border-t bg-background/95 px-3 py-2 text-[12px]">
-          <span className="text-muted-foreground">{state === "gone" ? "这个终端已经不在了（gerdr 重启过）" : `shell 已退出（${code}）`}</span>
+          <span className="text-muted-foreground">{state === "gone" ? "这个终端已经不在了（gerdr 重启过）" : code < 0 ? "shell 被结束了" : `shell 已退出（${code}）`}</span>
           <Button size="sm" variant="outline" className="ml-auto h-7" onClick={() => reopenTerminal(paneId, cwd)}>
             <RotateCcw className="size-3.5" />在 {cwd.replace(/\/+$/, "").split("/").pop() || cwd} 重开
           </Button>

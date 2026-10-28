@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<!--
+  急救面板（/rescue）：主界面（~/.gerdr/ui，人和 agent 都能改）改坏了的时候，用这一页叫 agent 来修。
+  这一页编进二进制、谁也改不到，只依赖后端接口：不用 React、不从 esm.sh 拉包、不读界面目录 ——
+  主界面可能就是坏在这几样上。所以它刻意做得很简单，别往里加主界面那些功能。
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>gerdr 急救</title>
+<style>
+  :root { color-scheme: light dark; --bg: #fcfcfc; --fg: #222; --muted: #777; --border: #e2e2e2; --card: #fff; --brand: #3b6fd6; --bad: #d1453b; --ok: #2f9e5b; --warn: #b8860b; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #161616; --fg: #ececec; --muted: #9a9a9a; --border: #333; --card: #1e1e1e; --brand: #7aa2f7; --bad: #ef6b60; --ok: #4cc38a; --warn: #e0b13f; } }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { background: var(--bg); color: var(--fg); font: 14px/1.55 system-ui, -apple-system, "PingFang SC", sans-serif; display: flex; flex-direction: column; }
+  header { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  header b { font-size: 15px; }
+  header .sub { color: var(--muted); font-size: 12px; }
+  header a { margin-left: auto; color: var(--brand); text-decoration: none; font-size: 13px; }
+  main { flex: 1; min-height: 0; display: flex; }
+  aside { width: 340px; flex-shrink: 0; border-right: 1px solid var(--border); overflow: auto; padding: 12px 14px; }
+  section { margin-bottom: 18px; }
+  h3 { font-size: 12px; color: var(--muted); font-weight: 600; margin: 0 0 6px; display: flex; align-items: center; gap: 8px; }
+  h3 button { margin-left: auto; }
+  pre { margin: 0; white-space: pre-wrap; word-break: break-word; font: 12px/1.5 ui-monospace, "SF Mono", Menlo, monospace; }
+  .err { color: var(--bad); background: color-mix(in srgb, var(--bad) 8%, transparent); border-radius: 6px; padding: 8px; margin-bottom: 6px; max-height: 260px; overflow: auto; }
+  .ok { color: var(--ok); }
+  .muted { color: var(--muted); font-size: 12px; }
+  button { font: inherit; font-size: 12px; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--card); color: var(--fg); cursor: pointer; }
+  button:hover:not(:disabled) { border-color: var(--muted); }
+  button:disabled { opacity: .5; cursor: default; }
+  button.primary { background: var(--brand); border-color: var(--brand); color: #fff; }
+  button.danger { color: var(--bad); }
+  select, textarea { font: inherit; color: var(--fg); background: var(--card); border: 1px solid var(--border); border-radius: 6px; }
+  select { padding: 3px 6px; font-size: 12px; }
+  .ver { display: flex; align-items: baseline; gap: 6px; padding: 5px 0; border-bottom: 1px dashed var(--border); font-size: 12px; }
+  .ver .s { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ver .t { color: var(--muted); flex-shrink: 0; }
+  .tag { font-size: 10px; border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; color: var(--muted); flex-shrink: 0; }
+  .chat { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .bar { display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .bar .st { font-size: 12px; color: var(--muted); }
+  #log { flex: 1; min-height: 0; overflow: auto; padding: 14px; }
+  .msg { margin: 0 0 12px; max-width: 860px; }
+  .user { margin-left: auto; background: color-mix(in srgb, var(--brand) 12%, transparent); padding: 8px 12px; border-radius: 10px; width: fit-content; max-width: 80%; white-space: pre-wrap; }
+  .text { white-space: pre-wrap; word-break: break-word; }
+  .tool { font-size: 12px; color: var(--muted); font-family: ui-monospace, "SF Mono", Menlo, monospace; margin: 2px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tool.failed { color: var(--bad); }
+  .notice { font-size: 12px; color: var(--muted); text-align: center; }
+  .notice.error { color: var(--bad); }
+  .card { border: 1px solid var(--warn); border-radius: 8px; padding: 10px; margin: 6px 0 12px; background: var(--card); }
+  .card .q { margin-bottom: 6px; }
+  .card .opts { display: flex; flex-wrap: wrap; gap: 6px; }
+  .card.done { border-color: var(--border); opacity: .7; }
+  .composer { border-top: 1px solid var(--border); padding: 10px 14px; display: flex; gap: 8px; align-items: flex-end; }
+  .composer textarea { flex: 1; min-height: 64px; max-height: 40vh; padding: 8px; resize: vertical; font-size: 13px; }
+  .empty { color: var(--muted); text-align: center; margin-top: 12vh; }
+  @media (max-width: 760px) { main { flex-direction: column; } aside { width: auto; max-height: 38vh; border-right: 0; border-bottom: 1px solid var(--border); } }
+</style>
+</head>
+<body>
+<header>
+  <b>gerdr 急救</b>
+  <span class="sub">主界面坏了的时候在这里叫 agent 修。这一页是内置的，改不坏。</span>
+  <a href="/">回到主界面 →</a>
+</header>
+<main>
+  <aside>
+    <section>
+      <h3>界面现在的状态 <button id="refresh">刷新</button></h3>
+      <div id="status" class="muted">读取中…</div>
+    </section>
+    <section>
+      <h3>回到之前的一版</h3>
+      <div class="muted" style="margin-bottom:6px">先让主界面能用上，再慢慢修。现在的样子会先存一版，改动不会丢。</div>
+      <div id="history" class="muted">读取中…</div>
+    </section>
+  </aside>
+  <div class="chat">
+    <div class="bar">
+      <select id="sessions"></select>
+      <select id="agent"></select>
+      <button id="new">新建急救对话</button>
+      <span class="st" id="st"></span>
+      <button id="cancel" class="danger" style="margin-left:auto" hidden>打断</button>
+    </div>
+    <div id="log"><div class="empty">选一个对话，或者新建一个：agent 在界面目录里干活，错误信息会自动带上。</div></div>
+    <div class="composer">
+      <textarea id="input" placeholder="告诉 agent 哪里坏了（⌘/Ctrl + Enter 发送）"></textarea>
+      <button id="send" class="primary">发送</button>
+    </div>
+  </div>
+</main>
+<script src="/rescue/app.js"></script>
+</body>
+</html>

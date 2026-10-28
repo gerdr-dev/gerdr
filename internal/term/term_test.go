@@ -75,6 +75,10 @@ func TestKillGroup(t *testing.T) {
 	if m.Get(tm.ID()) != nil {
 		t.Error("kill 之后还在列表里")
 	}
+	// 界面靠 -1 区分「被结束的」（留着给重开）和 shell 自己退的（关掉 pane）
+	if tm.ExitCode() != -1 {
+		t.Errorf("被 kill 的退出码 = %d，要 -1", tm.ExitCode())
+	}
 }
 
 func TestTrimRing(t *testing.T) {

@@ -243,6 +243,20 @@ React（ui/，不打包）  ←WebSocket / HTTP→  hub（internal/hub）  ←AC
 
 另一个**静默**的坑：在一个 Claude Code 的终端 pane 里敲 `gerdr`，它会继承那个 claude 给子进程打的标记
 （`CLAUDE_CODE_CHILD_SESSION` 等），带着它的子 claude **不写会话记录**（底部一行「Transcript saving is off」，
+## 急救面板（server/rescueapi.go + server/rescue/ + webui/history.go）
+
+主界面就是界面目录里可以改的源码，对话面板也在里面：改坏了就没地方叫 agent 修（修东西的工具和被修的是同一个）。
+照 shuttle 的做法（它的对话面板在打包进二进制的 web/ 里，助手只改得到项目页面），留一页**改不到**的：
+
+- `/rescue`：一个 HTML + 一个原生 JS，`go:embed` 编进二进制，不走 uisite、不用 React、不从 esm.sh 拉包 ——
+  主界面可能就是坏在这几样上。只做修界面要的：看 `/api/ui/status` 的错误、退回之前的一版、在界面目录里开一个会话对话
+  （发消息、看回复和工具调用、审批 / 提问、打断）。**别往里加主界面的功能**，越简单越不会坏、越不用跟着维护。
+- 入口都不在界面目录里：uisite 生成的两种报错页（编译错误的 overlay、渲染错误的 RouteError）和加载太久的提示上有链接，
+  App 菜单「帮助 → 急救」走 `loadURL`（不经过页面，页面坏了也点得动），也可以直接打地址。
+- 退回（`webui.Restore`）只往前提交：先把现在的样子提交一次存档，再 `read-tree -u --reset <版本>` 按那一版重建
+  （它没有的文件删掉），再提交一次。坏的那版留在历史里，改动找得回来；合并到一半的先 abort。
+- 新建急救对话时第一句预填好（带上现在的错误），人看一眼再发。
+
 stream-json 模式下没人看得见）—— resume、回退、追上全部失效。`sysenv.ChildEnv` 按名字去掉这几个。
 
 ## 终端（internal/term + server/termapi.go + ui/src/components/Terminal.tsx）
@@ -255,7 +269,8 @@ stream-json 模式下没人看得见）—— resume、回退、追上全部失�
   同一个终端可以同时开在几处（电脑 + 手机），输出广播给每个连着的；跟不上的连接直接踢掉，让它重连拿重放。
 - **gerdr 重启 = 终端全没**：PTY 是 gerdr 的子进程。布局里留着 id 和 cwd，pane 上给「在 xx 重开」。
 - **关 pane 就杀 shell**（SIGHUP 给整个进程组，2 秒后 SIGKILL）：不然它在服务端没人看得见地一直跑。
-  shell 自己 `exit 0` 时 pane 自动收掉；非 0 退出留着，看得到最后的输出。
+  shell 自己退出（exit、ctrl+d）时 pane 自动收掉，**不看退出码**：ctrl+d 时 zsh 带的是上一条命令的退出码
+  （前面 ctrl+c 过就是 130，踩过）。只有被信号杀掉的（退出码 -1：gerdr 退出、被 kill）留着给「重开」。
 - **先建后放**：开终端的动作先 `POST /api/terms` 拿到 id 再写进布局。布局是几个客户端共用的，「pane 里有终端但还没建」
   的中间态被别的客户端看见，它们会各自去建一个。
 - **环境**：`sysenv.ChildEnv` 那一份（去掉 claude 的子进程标记），加 TERM / COLORTERM；launchd 起的 gerdr 没有 LANG，

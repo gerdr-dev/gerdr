@@ -40,7 +40,7 @@ export function tabName(tab: Tab): string {
   for (const p of leaves(tab.root)) {
     const s = p.sessionId ? sessions[p.sessionId] : undefined;
     if (s) return basename(s.cwd);
-    if (p.term) return basename(p.term.cwd);
+    if (p.term?.cwd) return basename(p.term.cwd);
     if (p.draft?.cwd) return basename(p.draft.cwd);
   }
   return "new";
@@ -56,7 +56,7 @@ function inheritDraft(l: Layout): PaneLeaf["draft"] {
   const p = focusedLeaf(l);
   const s = p?.sessionId ? get().sessions[p.sessionId] : undefined;
   if (s) return { agent: s.agent, cwd: s.cwd };
-  if (p?.term) return { cwd: p.term.cwd };
+  if (p?.term?.cwd) return { cwd: p.term.cwd };
   if (p?.draft) return { ...p.draft };
   const ws = activeWs(l);
   return ws.cwd ? { cwd: ws.cwd } : undefined;
@@ -406,6 +406,8 @@ export async function openTerminal(where: "right" | "down" | "tab" | { pane: str
   try {
     // 从终端旁边开的：跟着它 shell 现在的目录（cd 过之后分屏，和 tmux 一样）
     info = await api.termCreate({ cwd, from: !here && p?.term ? p.term.id : undefined });
+    // 后端太旧（没有终端接口）时可能回一页 HTML 而不是报错：没 id 就当失败，别把空终端写进布局
+    if (!info?.id) throw new Error("后端没有终端接口，gerdr 要升级或重启");
   } catch (e: any) {
     toast.error(`开终端失败：${e.message ?? e}`);
     return;

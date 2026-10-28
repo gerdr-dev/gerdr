@@ -34,7 +34,13 @@ function overlay(text) {
     el.style.cssText = "position:fixed;inset:0;z-index:2147483647;margin:0;padding:24px;overflow:auto;white-space:pre-wrap;font:12px/1.6 ui-monospace,monospace;color:#e5484d;background:rgba(10,10,10,.94)";
     document.body.appendChild(el);
   }
-  el.textContent = "界面代码编译出错（改好之后自动恢复）：\n\n" + text;
+  el.textContent = "界面代码编译出错（改好之后自动恢复）：\n\n" + text + "\n\n";
+  // 急救面板（/rescue）是编进 gerdr 的，界面目录怎么坏都打得开
+  const a = document.createElement("a");
+  a.href = "/rescue";
+  a.textContent = "打开急救面板，叫 agent 来修 →";
+  a.style.cssText = "font:14px system-ui,sans-serif;color:#7aa2f7";
+  el.appendChild(a);
 }
 
 let R = null;

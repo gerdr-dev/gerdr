@@ -31,7 +31,7 @@ const loadingHTML = `<div id="__gerdr_loading" style="position:fixed;inset:0;dis
 	`<style>@keyframes __gerdr_spin{to{transform:rotate(360deg)}}</style>` +
 	`<div style="width:22px;height:22px;border-radius:50%;border:2px solid color-mix(in srgb,CanvasText 15%,transparent);border-top-color:color-mix(in srgb,CanvasText 60%,transparent);animation:__gerdr_spin .8s linear infinite"></div>` +
 	`<div style="opacity:.6">加载中…</div>` +
-	`<div id="__gerdr_loading_slow" style="opacity:.45;max-width:320px;text-align:center;visibility:hidden">第一次打开要下载界面用到的包，可能要一会儿</div>` +
+	`<div id="__gerdr_loading_slow" style="opacity:.45;max-width:320px;text-align:center;visibility:hidden">第一次打开要下载界面用到的包，可能要一会儿。一直打不开的话：<a href="/rescue" style="color:inherit">急救面板</a></div>` +
 	`</div>`
 
 // ServePage 出页面：importMap + 模块清单（window.__GERDR_UI__）+ 运行时，运行时 import 入口再渲染。

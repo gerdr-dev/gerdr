@@ -19,7 +19,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { basename, closeFocusedPane, deleteSession, focusPane, focusSession, openTerminal, splitFocused, toggleZoom } from "@/lib/actions";
+import { basename, closeFocusedPane, deleteSession, focusPane, focusSession, openTerminal, reopenTerminal, splitFocused, toggleZoom } from "@/lib/actions";
 import { leaves, setRatio, updateTab, type PaneLeaf, type PaneNode, type Tab } from "@/lib/layout";
 import { applyPaneTitle } from "@/lib/plugins";
 import { markRead, set, setLayout, useStore } from "@/lib/store";
@@ -157,11 +157,14 @@ function SubPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; tab
 /** 终端：标题栏 + xterm。标题是 shell 设的窗口标题（OSC 0/2，多数 zsh 主题会设成「用户@机器: 目录」或正在跑的命令），没设就是目录名。 */
 function TermPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; tab: Tab; framed: boolean; zoomed?: boolean; count?: Count }) {
   const term = pane.term!;
+  const home = useStore((s) => s.home);
+  // 坏数据兜底（旧后端配新界面时写进布局的空终端）：没 id 就显示「重开」
+  const cwd = term.cwd || home;
   const focused = useContext(TabActive) && tab.focus === pane.id;
   const many = framed || zoomed;
   const [osc, setOsc] = useState("");
   useStore((s) => s.pluginVersion);
-  const title = applyPaneTitle(pane, tab, osc || basename(term.cwd));
+  const title = applyPaneTitle(pane, tab, osc || basename(cwd));
   return (
     <div
       className={cn("flex h-full min-h-0 flex-col", framed && "overflow-hidden rounded-md border", framed && (focused ? "border-brand" : "border-border"))}
@@ -171,8 +174,8 @@ function TermPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; ta
         <SquareTerminal className="size-4 text-muted-foreground" />
         <span className="min-w-[3em] max-w-[60%] shrink truncate font-medium">{title}</span>
         <PaneCount count={count} />
-        <span className="hidden min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground md:block" title={term.cwd}>
-          {term.cwd}
+        <span className="hidden min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground md:block" title={cwd}>
+          {cwd}
         </span>
         <div className="flex-1 md:hidden" />
         {zoomed && (
@@ -212,7 +215,16 @@ function TermPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; ta
         </DropdownMenu>
       </div>
       <div className="min-h-0 flex-1">
-        <TerminalView key={term.id} paneId={pane.id} termId={term.id} cwd={term.cwd} focused={focused} onTitle={setOsc} />
+        {term.id ? (
+          <TerminalView key={term.id} paneId={pane.id} termId={term.id} cwd={cwd} focused={focused} onTitle={setOsc} />
+        ) : (
+          <div className="flex h-full flex-col items-center justify-center gap-3 text-[13px] text-muted-foreground">
+            这个终端没开起来
+            <Button size="sm" variant="outline" onClick={() => reopenTerminal(pane.id, cwd)}>
+              <SquareTerminal className="size-3.5" />在 {basename(cwd)} 重开
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );

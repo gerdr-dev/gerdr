@@ -10,6 +10,7 @@
 - **从 herdr 导入**：herdr 的工作空间、tab、分屏原样搬过来，每个 agent 接上它的会话（设置 → 从 herdr 导入）。
 - **分屏、tab、工作空间**：和 [herdr](https://github.com/herdrdev/herdr) 一样的结构和快捷键（`ctrl+b v` 左右分屏……）。
 - **终端**：临时敲几条命令不用切出去：`ctrl+b t` 在旁边开一个（跟着当前目录），和会话一起分屏、开 tab。shell 跑在 gerdr 这边，刷新页面、换到手机上接着用。
+- **改坏了有急救**：主界面被改坏打不开时，报错页上点「急救面板」（或 App 菜单 帮助 → 急救、直接开 `/rescue`）：看错误、退回之前的一版、叫 agent 来修。这一页编进 gerdr，改不坏。
 - **界面能让 agent 改**：界面就是 `~/.gerdr/ui` 里的 React 源码，没有打包环节，改完保存立刻生效。
   对 agent 说「侧栏底下加一个会话统计」就行（内置的 gerdr-ui skill 教它怎么改、改完怎么确认没改坏）。
 - **多个 agent 互相协作**：会话里的 agent 能开新会话（Claude Code / Codex）、派活、等结果、读回复（内置的 gerdr skill + `gerdr session` 命令）。

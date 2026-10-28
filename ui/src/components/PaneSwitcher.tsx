@@ -252,7 +252,7 @@ export function PaneSwitcher() {
                 {g.items.map((r) => {
                   const s = r.session;
                   const chip = CHIP[rankOf(r, unread)];
-                  const title = r.pane.sub ? r.pane.sub.title || "子 agent" : s ? s.title || basename(s.cwd) : r.pane.term ? `终端 · ${basename(r.pane.term.cwd)}` : "新会话";
+                  const title = r.pane.sub ? r.pane.sub.title || "子 agent" : s ? s.title || basename(s.cwd) : r.pane.term ? `终端 · ${basename(r.pane.term.cwd ?? "")}` : "新会话";
                   // 第二行：在哪（工作空间 · tab）+ 路径。手机上按工作空间认项目，路径兜底分开同名的
                   const where = sort === "group" ? r.tab : `${r.ws} · ${r.tab}`;
                   return (
@@ -282,7 +282,7 @@ export function PaneSwitcher() {
                         </span>
                         <span className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
                           <span className="shrink-0">{where}</span>
-                          {(s || r.pane.term) && <span className="min-w-0 truncate font-mono">{shortCwd(s?.cwd ?? r.pane.term!.cwd)}</span>}
+                          {(s || r.pane.term) && <span className="min-w-0 truncate font-mono">{shortCwd(s?.cwd ?? r.pane.term?.cwd ?? "")}</span>}
                         </span>
                       </span>
                       <StatusDot status={s?.status} unread={!!(s && unread[s.id])} />

@@ -216,6 +216,9 @@ func (s *Server) Handler() http.Handler {
 		s.remoteRoutes(mux)
 	}
 	if s.Service != nil {
+	if s.UI != nil {
+		s.rescueRoutes(mux)
+	}
 		s.serviceRoutes(mux)
 	}
 	if s.Terms != nil {
@@ -567,6 +570,10 @@ func (s *Server) ui() http.Handler {
 		switch {
 		case strings.HasPrefix(p, "/_ui/m/"):
 			s.UI.ServeModule(w, r)
+		case strings.HasPrefix(p, "/api/"):
+			// 不认识的接口别落到下面「前端路由」出页面：200 + HTML 会被界面当成成功（旧后端配新界面时踩过：
+			// 开终端拿到一页 HTML，布局里记了个空终端，渲染直接崩）。
+			httpError(w, 404, "没有这个接口（gerdr 版本旧了？）")
 		case p == "/_ui/events":
 			s.UI.ServeEvents(w, r)
 		case strings.HasPrefix(p, "/_esm/"):
