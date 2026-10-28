@@ -14,6 +14,7 @@ import type { SessionSummary } from "@/lib/types";
 import { Composer, type ComposerHandle } from "./Composer";
 import { SessionContext } from "./sessionContext";
 import { TasksBar } from "./TasksBar";
+import { askKey } from "@/lib/askkeys";
 
 /** sub：子 agent 的只读面板（值 = 它在主会话里那张卡片的 toolCallId）。没有输入框、不能回退。 */
 // 最后一条和输入框之间留一截（照 ChatGPT 桌面版的留白）：贴太近的话最后那行元信息和输入框挤在一起
@@ -68,15 +69,21 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
   useEffect(() => {
     if (!focused || sub) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.defaultPrevented || e.isComposing || e.metaKey || e.ctrlKey || e.altKey || e.key.length !== 1) return;
+      if (e.defaultPrevented || e.isComposing || e.metaKey || e.ctrlKey || e.altKey) return;
       const a = document.activeElement as HTMLElement | null;
       if (a && (a.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))) return;
       if (get().dialog || document.querySelector("[role=dialog]")) return;
+      // 有问题在等回答：↑↓ / 数字 / 回车先给提问卡（和输入框里一样，见 lib/askkeys）
+      if (askKey(session.id, e)) {
+        e.preventDefault();
+        return;
+      }
+      if (e.key.length !== 1) return;
       composer.current?.focus(); // 在 keydown 里换焦点，这个键的字就落到新焦点上
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [focused, sub]);
+  }, [focused, sub, session.id]);
 
   // 点对话区任何地方（不是在选字、也不是点按钮 / 链接这些）：光标回到输入框，直接打字（用户点名的）
   const clickToType = (e: React.MouseEvent) => {

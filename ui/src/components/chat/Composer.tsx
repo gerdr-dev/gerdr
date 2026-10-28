@@ -8,6 +8,7 @@ import { closeFocusedPane, focusPane } from "@/lib/actions";
 import { get, set, transcript, useStore } from "@/lib/store";
 import type { ConfigOption, ContentBlock, SessionSummary } from "@/lib/types";
 import { isCoarse } from "@/lib/phone";
+import { askKey } from "@/lib/askkeys";
 import { cn } from "@/lib/utils";
 import { HeldDialog } from "./HeldDialog";
 import { OptionMenu } from "./OptionMenu";
@@ -248,6 +249,11 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     // 输入法组字时的回车是给输入法上屏用的（中文用户按回车选词），一律不当发送。
     if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+    // agent 在等你回答问题、输入框又空着：↑↓ / 数字 / 回车这些键拿去答题（照 Claude Code），打字照常是直接回复
+    if (text === "" && !imgs.length && askKey(session.id, e.nativeEvent)) {
+      e.preventDefault();
+      return;
+    }
     if (at && files.length) {
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
         e.preventDefault();
