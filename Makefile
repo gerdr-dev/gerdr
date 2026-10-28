@@ -40,7 +40,7 @@ test-e2e:
 	GERDR_E2E=codex go test ./internal/agenthost/ -run E2E -v -count=1
 	GERDR_E2E=claude go test ./internal/agenthost/ -run E2E -v -count=1
 
-# 桌面 App（desktop/build.sh）：app = 本机架构的 build/gerdr.app；dmg = mac 通用安装包；win = Windows 安装包。
+# 桌面 App（desktop/build.sh）：app = 本机架构的 build/Gerdr.app；dmg = mac 通用安装包；win = Windows 安装包。
 # 外壳为什么是 Electron：docs/dev/WHY-ELECTRON.md
 app:
 	./desktop/build.sh mac-dir $(VERSION)
@@ -51,9 +51,10 @@ dmg:
 win:
 	./desktop/build.sh win $(VERSION)
 
-# 重画图标（desktop/res/icon.png 入库，打包不需要 swift —— Windows 包在任何机器上都能打）
+# 从 ui/public/icon.svg 重新生成 App 图标（desktop/res/icon.png 入库，打包时不需要 rsvg-convert —— Windows 包在任何机器上都能打）。
+# 照 macOS 图标的网格：1024 的画布里图形占中间 824，四周各留 100，不然在 Dock 里比别的图标大一圈。要 brew install librsvg。
 icon:
-	swift desktop/icon.swift desktop/res/icon.png
+	rsvg-convert -w 824 -h 824 --page-width 1024 --page-height 1024 --left 100 --top 100 ui/public/icon.svg -o desktop/res/icon.png
 
 # 开发：界面直接用仓库里的 ui/（改了立刻热更新），数据放在单独的目录里，别和自己日常用的那份混。
 dev:
@@ -66,9 +67,9 @@ clean:
 # 先在同一块盘上复制好、再整个 mv 进去：直接 cp -R 进 /Applications，macOS 的「App 管理」保护可能拦到一半
 # （大量 Operation not permitted），留下一个缺 Info.plist、打不开的半截 App（踩过）；mv 只是改名，不改包里的东西。
 install: app
-	rm -rf build/stage && mkdir -p build/stage && cp -R build/gerdr.app build/stage/
-	rm -rf /Applications/gerdr.app
-	mv build/stage/gerdr.app /Applications/gerdr.app
+	rm -rf build/stage && mkdir -p build/stage && cp -R build/Gerdr.app build/stage/
+	rm -rf /Applications/Gerdr.app
+	mv build/stage/Gerdr.app /Applications/Gerdr.app
 	mkdir -p $(HOME)/.local/bin
-	ln -sf /Applications/gerdr.app/Contents/Resources/gerdr $(HOME)/.local/bin/gerdr
-	@echo "装好了：/Applications/gerdr.app，命令行 ~/.local/bin/gerdr"
+	ln -sf /Applications/Gerdr.app/Contents/Resources/gerdr $(HOME)/.local/bin/gerdr
+	@echo "装好了：/Applications/Gerdr.app，命令行 ~/.local/bin/gerdr"

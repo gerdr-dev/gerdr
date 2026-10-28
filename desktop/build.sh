@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 打桌面 App（Electron 外壳 + 内嵌的 Go 后端）。
-#   ./desktop/build.sh mac-dir <version>   本机架构的 gerdr.app（不出安装包，make app / make install 用）
+#   ./desktop/build.sh mac-dir <version>   本机架构的 Gerdr.app（不出安装包，make app / make install 用）
 #   ./desktop/build.sh mac <version>       通用（arm64 + x64）dmg
 #   ./desktop/build.sh win <version>       Windows x64 安装包（nsis，在 mac 上就能交叉打）
 set -euo pipefail
@@ -20,7 +20,7 @@ case "$TARGET" in
 mac-dir)
   GOOS=darwin go build -ldflags "$LDFLAGS" -o desktop/bin/mac/gerdr ./cmd/gerdr
   ( cd desktop && npx electron-builder --mac dir -c.extraMetadata.version="$VERSION" )
-  APP=$(ls -d desktop/dist/mac*/gerdr.app | head -1)
+  APP=$(ls -d desktop/dist/mac*/Gerdr.app | head -1)
   ;;
 mac)
   # 后端合成一个通用二进制；Electron 那边 --universal 会把 arm64 / x64 两份 App 合起来，
@@ -43,13 +43,13 @@ esac
 if [[ "$TARGET" == mac* ]]; then
   # 没配签名证书时 electron-builder 不签（identity: null），但 Apple 芯片上不签名的程序起不来：补一个 ad-hoc 签名。
   # 这样别人第一次打开要右键「打开」；正式发布配 CSC_LINK / CSC_KEY_PASSWORD 让 electron-builder 正经签名 + 公证。
-  for a in desktop/dist/mac*/gerdr.app; do
+  for a in desktop/dist/mac*/Gerdr.app; do
     [ -d "$a" ] && [ -z "${CSC_LINK:-}" ] && codesign --force --deep --sign - "$a"
   done
 fi
 if [[ "$TARGET" == mac-dir ]]; then
-  rm -rf build/gerdr.app && mkdir -p build && cp -R "$APP" build/gerdr.app
-  echo "built build/gerdr.app ($VERSION)"
+  rm -rf build/Gerdr.app && mkdir -p build && cp -R "$APP" build/Gerdr.app
+  echo "built build/Gerdr.app ($VERSION)"
 else
   ls -1 desktop/dist/*.dmg desktop/dist/*.exe 2>/dev/null || true
 fi

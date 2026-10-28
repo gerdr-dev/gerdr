@@ -183,7 +183,7 @@ type uiConfig struct {
 }
 
 func (r *Renderer) build(files []string, sig string) *build {
-	b := &build{sig: sig, served: map[string]served{}, manifest: map[string]moduleInfo{}, inputs: map[string]bool{}, title: "gerdr"}
+	b := &build{sig: sig, served: map[string]served{}, manifest: map[string]moduleInfo{}, inputs: map[string]bool{}, title: "Gerdr"}
 	var fatal []string
 	var cfg uiConfig
 	if raw, err := os.ReadFile(filepath.Join(r.dir, "ui.json")); err == nil {

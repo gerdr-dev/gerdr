@@ -113,7 +113,7 @@ export default function App() {
     if (!phone) set({ drawer: false, switcher: false });
   }, [phone]);
   useEffect(() => {
-    document.title = `${tabName(tab)} · gerdr`;
+    document.title = `${tabName(tab)} · Gerdr`;
   }, [tab]);
 
   // 切走的 tab 不卸载，藏起来（最近用过的几个，keepTabs 个）：展开状态、滚动位置、没发出去的字都还在。

@@ -19,7 +19,7 @@ export function systemNotify(title: string, body: string, sessionId?: string) {
 }
 
 export function notify(text: string, opts?: { level?: "info" | "error"; system?: boolean; sessionId?: string }) {
-  if (opts?.system) systemNotify("gerdr", text, opts.sessionId);
+  if (opts?.system) systemNotify("Gerdr", text, opts.sessionId);
   else if (opts?.level === "error") toast.error(text);
   else toast(text);
 }

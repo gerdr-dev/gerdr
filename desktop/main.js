@@ -130,7 +130,7 @@ function createWindow() {
     ...st,
     minWidth: 640,
     minHeight: 420,
-    title: "gerdr",
+    title: "Gerdr",
     show: false,
     backgroundColor: nativeTheme.shouldUseDarkColors ? "#0f0f0f" : "#ffffff",
     autoHideMenuBar: true,
@@ -211,7 +211,7 @@ ipcMain.on("gerdr", (e, m) => {
   switch (m.type) {
     case "notify": {
       if (!Notification.isSupported()) return;
-      const n = new Notification({ title: String(m.title ?? "gerdr"), body: String(m.body ?? ""), silent: false });
+      const n = new Notification({ title: String(m.title ?? "Gerdr"), body: String(m.body ?? ""), silent: false });
       n.on("click", () => {
         focusWindow();
         if (m.sessionId) runInPage(`window.gerdr && window.gerdr.focusSession(${JSON.stringify(String(m.sessionId))})`);
@@ -281,16 +281,16 @@ function buildMenu() {
   Menu.setApplicationMenu(
     Menu.buildFromTemplate([
       {
-        label: "gerdr",
+        label: "Gerdr",
         submenu: [
-          { role: "about", label: "关于 gerdr" },
+          { role: "about", label: "关于 Gerdr" },
           { type: "separator" },
           cmd("设置…", "settings", "Cmd+,"),
           { type: "separator" },
-          { role: "hide", label: "隐藏 gerdr" },
+          { role: "hide", label: "隐藏 Gerdr" },
           { role: "hideOthers", label: "隐藏其他" },
           { type: "separator" },
-          { role: "quit", label: "退出 gerdr" },
+          { role: "quit", label: "退出 Gerdr" },
         ],
       },
       {

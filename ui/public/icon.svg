@@ -1,30 +1,21 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" shape-rendering="crispEdges">
-  <!-- gerdr：一条在跑的蓝陨石色边境牧羊犬（像素画，16×11 格、每格 3）。herdr 是牧人、logo 是羊，gerdr 是帮他看住一群 agent 的狗。
-       和 desktop/icon.swift 是同一份像素图，改一处要两处一起改。 -->
-  <rect width="64" height="64" rx="14" fill="#1c1c1e" shape-rendering="geometricPrecision"/>
-  <g fill="#3a82f7">
-    <rect x="38" y="15" width="3" height="3"/><rect x="44" y="15" width="3" height="3"/>
-    <rect x="38" y="18" width="9" height="3"/>
-    <rect x="35" y="21" width="6" height="3"/><rect x="44" y="21" width="3" height="3"/>
-    <rect x="8" y="24" width="3" height="3"/><rect x="35" y="24" width="12" height="3"/>
-    <rect x="8" y="27" width="6" height="3"/><rect x="35" y="27" width="9" height="3"/>
-    <rect x="11" y="30" width="6" height="3"/><rect x="26" y="30" width="6" height="3"/><rect x="35" y="30" width="6" height="3"/>
-    <rect x="14" y="33" width="27" height="3"/>
-    <rect x="14" y="36" width="24" height="3"/>
-    <rect x="14" y="39" width="3" height="3"/><rect x="23" y="39" width="15" height="3"/>
-    <rect x="14" y="42" width="3" height="3"/><rect x="23" y="42" width="3" height="3"/><rect x="38" y="42" width="3" height="3"/><rect x="47" y="42" width="3" height="3"/>
-    <rect x="11" y="45" width="3" height="3"/><rect x="26" y="45" width="3" height="3"/><rect x="35" y="45" width="3" height="3"/><rect x="50" y="45" width="3" height="3"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="75 73 876 876">
+  <!-- gerdr：一只银灰色的边境牧羊犬（扁平色块的狗头）。herdr 是牧人、logo 是羊，gerdr 是帮他看住一群 agent 的狗。
+       原稿是 Codex 生图出的方案，描成了矢量；坐标沿用原稿 1024 画布里的位置，所以 viewBox 是从 (75,73) 开始的那块底板。
+       App 图标（desktop/res/icon.png）由 make icon 从这份生成，改了这里要重跑。 -->
+  <rect x="75" y="73" width="876" height="876" rx="193" fill="#3a3b3e"/>
+  <!-- 头 + 两只耳朵 -->
+  <path fill="#d1d1d6" d="M512,262 Q560,262 606,272 L700,220 Q712,214 724,218 L828,262 Q846,270 844,290 L832,366 Q828,384 812,376 L782,372 L744,436 L812,570 Q818,592 810,612 L730,740 Q640,800 512,808 Q384,800 294,740 L214,612 Q206,592 212,570 L280,436 L242,372 L212,376 Q196,384 192,366 L180,290 Q178,270 196,262 L300,218 Q312,214 324,220 L418,272 Q464,262 512,262 Z"/>
+  <!-- 耳朵折下来露出的内侧 -->
+  <g fill="#232326">
+    <path d="M328,238 Q336,248 332,262 L302,336 Q296,348 284,352 L242,372 L216,380 Q208,380 212,372 L316,242 Q322,234 328,238 Z"/>
+    <path transform="translate(1024,0) scale(-1,1)" d="M328,238 Q336,248 332,262 L302,336 Q296,348 284,352 L242,372 L216,380 Q208,380 212,372 L316,242 Q322,234 328,238 Z"/>
   </g>
-  <g fill="#e6e6e6">
-    <rect x="47" y="21" width="3" height="3"/>
-    <rect x="47" y="24" width="6" height="3"/>
-    <rect x="44" y="27" width="9" height="3"/>
-    <rect x="41" y="30" width="6" height="3"/>
-    <rect x="41" y="33" width="6" height="3"/>
-    <rect x="38" y="36" width="9" height="3"/>
-    <rect x="17" y="39" width="6" height="3"/><rect x="38" y="39" width="6" height="3"/>
+  <!-- 额头一道白纹，往下连成白嘴筒 -->
+  <path fill="#ffffff" d="M480,262 L544,262 L574,470 Q592,540 640,600 L704,682 Q724,714 712,742 Q640,802 512,808 Q384,802 312,742 Q300,714 320,682 L384,600 Q432,540 450,470 Z"/>
+  <g fill="#1c1c1e">
+    <circle cx="390" cy="482" r="27"/>
+    <circle cx="634" cy="482" r="27"/>
+    <path d="M456,606 Q450,588 472,588 L552,588 Q574,588 568,606 L526,654 Q512,668 498,654 Z"/>
   </g>
-  <rect x="41" y="21" width="3" height="3" fill="#1c1c1e"/>
-  <rect x="53" y="24" width="3" height="3" fill="#1c1c1e"/>
-  <rect x="32" y="27" width="3" height="6" fill="#d9774a"/>
+  <path fill="none" stroke="#1c1c1e" stroke-width="17" stroke-linecap="round" d="M430,684 Q468,730 512,730 Q556,730 594,684"/>
 </svg>

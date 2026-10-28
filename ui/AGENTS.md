@@ -81,8 +81,8 @@ src/lib/
 - **beUI Pro**（https://pro.beui.dev ，左边栏 AGENTS 那一组）：运行中的像素转圈（AI Thinking Loaders 的 Pixel orbit
   → `chat/PixelLoader.tsx`）、提问卡片（Questionnaire → `chat/Cards.tsx` 的 AskCard）。
   **它是付费组件库：只照着看效果自己写，不要拷它的代码。**
-- **logo**：一条在跑的蓝陨石色边境牧羊犬（像素画；herdr 是牧人、logo 是羊，gerdr 是帮他看住一群 agent 的狗）。
-  `public/icon.svg` 和 `desktop/icon.swift`（App 图标）是同一份像素图，改一处两处一起改。
+- **logo**：一只银灰色边境牧羊犬的狗头（扁平色块；herdr 是牧人、logo 是羊，gerdr 是帮他看住一群 agent 的狗）。
+  `public/icon.svg` 是唯一的原稿，App 图标（`desktop/res/icon.png`）用仓库根上的 `make icon` 从它生成，改了要重跑。
   运行中的 loading 不用狗（16px 整条狗看不清、狗脸画不好看，试过），用上面 beUI 的像素转圈。
   备用素材在仓库的 `docs/brand/`：像素狗爪印 `paw.svg`、三个爪印一步步落下的动画 `paw-walk.svg`（都跟 currentColor 走），
   需要一个小尺寸的「狗」时先用它；「终端小怪」`critter.svg` / `critter-run.svg`（logo 落选的方向：长了眼睛和腿的终端窗口，

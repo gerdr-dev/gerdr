@@ -1,6 +1,6 @@
 {
   "name": "gerdr-desktop",
-  "productName": "gerdr",
+  "productName": "Gerdr",
   "version": "0.1.0",
   "description": "gerdr 的桌面外壳（Electron）：起后端、开一个窗口，界面全在网页里",
   "main": "main.js",
@@ -15,8 +15,8 @@
   },
   "build": {
     "appId": "io.github.zbysir.gerdr",
-    "productName": "gerdr",
-    "copyright": "gerdr",
+    "productName": "Gerdr",
+    "copyright": "Gerdr",
     "directories": {
       "output": "dist",
       "buildResources": "res"

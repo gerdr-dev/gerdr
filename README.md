@@ -29,7 +29,7 @@ npm i -g @openai/codex                           # Codex，然后 codex login
 ```
 
 **mac App**：下载 `gerdr-x.y.z.dmg`，拖进「应用程序」。第一次打开如果提示「无法验证开发者」，
-在 Finder 里右键 → 打开（或 `xattr -dr com.apple.quarantine /Applications/gerdr.app`）。
+在 Finder 里右键 → 打开（或 `xattr -dr com.apple.quarantine /Applications/Gerdr.app`）。
 
 **Windows**：下载 `gerdr Setup x.y.z.exe` 装上（没签名，SmartScreen 拦的话点「更多信息 → 仍要运行」）。
 
@@ -37,10 +37,10 @@ npm i -g @openai/codex                           # Codex，然后 codex login
 
 ```bash
 make build        # → bin/gerdr（命令行 + 内嵌一份界面源码）
-make app          # → build/gerdr.app（本机架构）
+make app          # → build/Gerdr.app（本机架构）
 make dmg          # → desktop/dist/gerdr-<版本>-universal.dmg（mac 通用安装包）
 make win          # → desktop/dist/gerdr Setup <版本>.exe（Windows 安装包，在 mac 上就能打）
-make install      # 把 gerdr.app 放进 /Applications，命令行链到 ~/.local/bin/gerdr
+make install      # 把 Gerdr.app 放进 /Applications，命令行链到 ~/.local/bin/gerdr
 ```
 
 ## 用
