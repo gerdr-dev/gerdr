@@ -367,15 +367,35 @@ func (a *Agent) ResumeSession(ctx context.Context, p acp.ResumeSessionRequest) (
 
 // LoadSession：导入一个在别处开过的会话，从磁盘上的会话记录重放历史。
 func (a *Agent) LoadSession(ctx context.Context, p acp.LoadSessionRequest) (acp.LoadSessionResponse, error) {
+	s := a.own(p.SessionId)
+	emit := func(u acp.SessionUpdate) { s.update(context.Background(), u) }
+	// 回退之后还没说过话：新会话的记录要等下一句话才由 claude 写出来，这时去找它的文件只会 transcript not found
+	// （踩过：回退完点「重新载入」报错）。它的内容就是原会话到分叉点为止；回退到第一条的就是空的。
+	if s != nil {
+		s.mu.Lock()
+		fresh, from, at, cwd := s.fresh, s.forkFrom, s.forkAt, s.cwd
+		s.mu.Unlock()
+		if fresh || from != "" {
+			if from != "" {
+				path, err := findTranscript(a.projectsDir(), from, cwd)
+				if err != nil {
+					return acp.LoadSessionResponse{}, err
+				}
+				if err := replayTranscriptUntil(path, at, emit); err != nil {
+					return acp.LoadSessionResponse{}, err
+				}
+			}
+			return acp.LoadSessionResponse{Modes: s.modeState(), ConfigOptions: a.configOptions(s)}, nil
+		}
+	}
 	path, err := findTranscript(a.projectsDir(), string(p.SessionId), p.Cwd)
 	if err != nil {
 		return acp.LoadSessionResponse{}, err
 	}
-	s := a.own(p.SessionId)
 	if s == nil {
 		s = a.newSession(string(p.SessionId), p.Cwd, p.Meta)
 	}
-	if err := replayTranscript(path, func(u acp.SessionUpdate) { s.update(context.Background(), u) }); err != nil {
+	if err := replayTranscript(path, emit); err != nil {
 		return acp.LoadSessionResponse{}, err
 	}
 	if s.mode == "" {
@@ -417,9 +437,9 @@ func (a *Agent) SetSessionMode(ctx context.Context, p acp.SetSessionModeRequest)
 	}
 	s.mu.Lock()
 	s.mode = string(p.ModeId)
-	pr := s.p
+	pr := s.live()
 	s.mu.Unlock()
-	if pr != nil && pr.alive() {
+	if pr != nil {
 		if _, err := pr.control(ctx, map[string]any{"subtype": "set_permission_mode", "mode": string(p.ModeId)}); err != nil {
 			return acp.SetSessionModeResponse{}, err
 		}
@@ -440,9 +460,9 @@ func (a *Agent) SetSessionConfigOption(ctx context.Context, p acp.SetSessionConf
 	case "model":
 		s.mu.Lock()
 		s.model = val
-		pr := s.p
+		pr := s.live()
 		s.mu.Unlock()
-		if pr != nil && pr.alive() {
+		if pr != nil {
 			m := any(val)
 			if val == "default" {
 				m = nil
@@ -714,9 +734,15 @@ func (a *Agent) rewind(ctx context.Context, p acpx.RewindRequest) (acpx.RewindRe
 	if !found {
 		return acpx.RewindResponse{}, acp.NewInvalidParams(map[string]any{"messageId": p.MessageId, "error": "message not found in transcript"})
 	}
-	s.kill()
 	newID := uuid.NewString()
 	s.mu.Lock()
+	// 旧进程不在这里等它退：claude 关了 stdin 也要 1.5 秒左右才退完（实测，闲着的也一样），
+	// Esc 撤回刚发的话走的就是回退，同步等的话人按完 Esc 要干等两三秒（用户报的「很卡」）。
+	// 让它在后台退（exiting）：ensure 起新进程前会先 stop 旧的、等它退完，分叉时读到的记录是写完的。
+	if s.p != nil {
+		s.exiting = s.p
+		go s.p.stop()
+	}
 	if parent == "" {
 		s.fresh, s.forkFrom, s.forkAt = true, "", ""
 	} else {

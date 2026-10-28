@@ -13,9 +13,17 @@ import { cn } from "@/lib/utils";
 import { HeldDialog } from "./HeldDialog";
 import { OptionMenu } from "./OptionMenu";
 
-export type ComposerHandle = { focus(): void; setText(t: string): void };
+export type ComposerHandle = { focus(): void; setText(t: string): void; setContent(blocks: ContentBlock[]): void };
 
 type Img = { data: string; mimeType: string; url: string };
+
+function toImgs(blocks: ContentBlock[]): Img[] {
+  return (blocks.filter((c) => c.type === "image") as { data: string; mimeType: string }[]).map((im) => ({
+    data: im.data,
+    mimeType: im.mimeType,
+    url: `data:${im.mimeType};base64,${im.data}`,
+  }));
+}
 
 function flatOptions(o: ConfigOption) {
   const arr: any[] = o.options as any[];
@@ -38,15 +46,21 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
 
   useImperativeHandle(ref, () => ({
     focus: () => ta.current?.focus(),
-    setText: (t: string) => {
-      setText(t);
-      requestAnimationFrame(() => {
-        ta.current?.focus();
-        const n = ta.current?.value.length ?? 0;
-        ta.current?.setSelectionRange(n, n);
-      });
+    setText: (t: string) => putText(t),
+    // 回退：整条消息放回来，文字和贴的图都要（只放文字的话截图就丢了）
+    setContent: (blocks: ContentBlock[]) => {
+      putText(blocks.map((c) => (c.type === "text" ? (c as { text: string }).text : "")).join(""));
+      setImgs(toImgs(blocks));
     },
   }));
+  const putText = (t: string) => {
+    setText(t);
+    requestAnimationFrame(() => {
+      ta.current?.focus();
+      const n = ta.current?.value.length ?? 0;
+      ta.current?.setSelectionRange(n, n);
+    });
+  };
 
   // 高度跟着内容走，最多到 pane 高度的四成。
   useEffect(() => {
@@ -221,8 +235,8 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
       const back = texts.join("\n\n");
       const cur = get().drafts[paneId] ?? "";
       setText(cur ? `${back}\n\n${cur}` : back);
-      const images = r.content.filter((c) => c.type === "image") as { data: string; mimeType: string }[];
-      if (images.length) setImgs((x) => [...images.map((im) => ({ data: im.data, mimeType: im.mimeType, url: `data:${im.mimeType};base64,${im.data}` })), ...x]);
+      const images = toImgs(r.content);
+      if (images.length) setImgs((x) => [...images, ...x]);
       toast(r.rolledBack ? "已打断，刚发的话撤回到输入框" : `已打断，${r.withdrawn} 条还没处理的插话撤回到输入框`);
       ta.current?.focus();
     } catch (err: any) {

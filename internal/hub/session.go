@@ -1332,10 +1332,23 @@ func (s *Session) Rewind(ctx context.Context, messageID string) (RewindResult, e
 		s.mu.Unlock()
 		return RewindResult{}, errors.New("先停下这一轮再回退")
 	}
+	// 两种用户消息：gerdr 自己发的（EvUser），和导入 / 追上时从 agent 记录重放的（user_message_chunk，
+	// messageId 就是记录里那条的 uuid，一条带图的消息拆成几块、同一个 id）。只认前一种的话，
+	// 重新载入过的会话上面那些消息全都「找不到这条消息」（踩过）。
 	idx := -1
+	var content []json.RawMessage
+	steer := false
 	for i, e := range s.events {
 		if e.Kind == EvUser && e.MessageID == messageID {
-			idx = i
+			idx, content, steer = i, e.Content, e.Steer
+			break
+		}
+		if id, c, ok := userChunk(e); ok && id == messageID {
+			if idx < 0 {
+				idx = i
+			}
+			content = append(content, c)
+		} else if idx >= 0 {
 			break
 		}
 	}
@@ -1343,7 +1356,6 @@ func (s *Session) Rewind(ctx context.Context, messageID string) (RewindResult, e
 		s.mu.Unlock()
 		return RewindResult{}, errors.New("找不到这条消息")
 	}
-	target := s.events[idx]
 	// /clear 之后 claude 换了一个新会话，这条之前的消息都在旧会话里 —— 回不去
 	for _, e := range s.events[idx:] {
 		if e.Kind == EvNotice && e.Level == "clear" {
@@ -1351,7 +1363,7 @@ func (s *Session) Rewind(ctx context.Context, messageID string) (RewindResult, e
 			return RewindResult{}, errors.New("这条消息在 /clear 之前：清空之后只能回退到清空以后发的消息")
 		}
 	}
-	if target.Steer {
+	if steer {
 		s.mu.Unlock()
 		return RewindResult{}, errors.New("插话的消息不能单独回退，回退它所在那一轮开头的那条")
 	}
@@ -1369,7 +1381,7 @@ func (s *Session) Rewind(ctx context.Context, messageID string) (RewindResult, e
 	if res.SessionId != "" && string(res.SessionId) != agentSID {
 		s.h.rekey(s, string(res.SessionId))
 	}
-	out := RewindResult{Content: target.Content}
+	out := RewindResult{Content: content}
 	s.mu.Lock()
 	s.events = s.events[:idx]
 	s.lastErr = ""
@@ -1590,6 +1602,22 @@ func (s *Session) adoptOrphanTurn(lastTS int64) {
 		text = "gerdr 重启后这一轮在后台跑完了，已经从 agent 自己的记录同步到最新"
 	}
 	s.emit(&Event{Kind: EvNotice, Level: "info", Text: text})
+}
+
+// userChunk：从 agent 记录重放的一块用户消息（user_message_chunk），取出它的 messageId 和内容块。
+func userChunk(e *Event) (id string, content json.RawMessage, ok bool) {
+	if e.Kind != EvUpdate {
+		return "", nil, false
+	}
+	var u struct {
+		SessionUpdate string          `json:"sessionUpdate"`
+		MessageID     string          `json:"messageId"`
+		Content       json.RawMessage `json:"content"`
+	}
+	if json.Unmarshal(e.Update, &u) != nil || u.SessionUpdate != "user_message_chunk" || u.MessageID == "" {
+		return "", nil, false
+	}
+	return u.MessageID, u.Content, true
 }
 
 // userTextSet：gerdr 日志里人说过的话（自己发的 + 导入 / 重新载入时从记录重放的），归一化过。

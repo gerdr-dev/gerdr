@@ -34,6 +34,7 @@ type session struct {
 	forkAt   string
 
 	p          *proc
+	exiting    *proc // 回退时放到后台退的旧进程（就是 p，还没退完）：别再往它发东西，下一轮先等它退完再起新的
 	starting   chan struct{}
 	turn       *turnState
 	openInputs int // 正在等人回答的审批 / 提问数（插话的优先级看它）
@@ -86,7 +87,7 @@ func (s *session) ensure(ctx context.Context) error {
 	}
 	for {
 		s.mu.Lock()
-		if s.p != nil && s.p.alive() && !s.respawn && (s.extFP == fp || s.turn != nil) {
+		if s.p != nil && s.p.alive() && s.p != s.exiting && !s.respawn && (s.extFP == fp || s.turn != nil) {
 			s.mu.Unlock()
 			return nil
 		}
@@ -213,8 +214,19 @@ func (s *session) start(ctx context.Context) error {
 	return nil
 }
 
+// live：还能往里发控制命令的进程（在跑、也不是正在退的那个）；没有就是 nil。持锁调。
+func (s *session) live() *proc {
+	if s.p == nil || s.p == s.exiting || !s.p.alive() {
+		return nil
+	}
+	return s.p
+}
+
 func (s *session) onExit(pr *proc) {
 	s.mu.Lock()
+	if s.exiting == pr {
+		s.exiting = nil
+	}
 	if s.p != pr {
 		s.mu.Unlock()
 		return

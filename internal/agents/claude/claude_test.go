@@ -139,3 +139,39 @@ func TestReplayUserImage(t *testing.T) {
 		t.Fatalf("两块的 MessageId 都应该是 u1")
 	}
 }
+
+// claude 被打断时自己补写的那行不是人说的话：算进去的话，重启一下 App 追上就误报「在别处接着聊过」。
+func TestUserTextsFromSkipsInterrupt(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "s.jsonl")
+	lines := `{"type":"user","message":{"role":"user","content":"hi"}}
+{"type":"user","message":{"role":"user","content":[{"type":"text","text":"[Request interrupted by user for tool use]"}]}}
+{"type":"user","message":{"role":"user","content":"[Request interrupted by user]"}}
+`
+	if err := os.WriteFile(p, []byte(lines), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := userTextsFrom(p, 0); !slices.Equal(got, []string{"hi"}) {
+		t.Fatalf("%q", got)
+	}
+}
+
+// 回退之后还没说过话的会话重新载入：只重放原会话到分叉点为止。
+func TestReplayTranscriptUntil(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "s.jsonl")
+	lines := `{"type":"user","uuid":"u1","message":{"role":"user","content":"one"}}
+{"type":"user","uuid":"u2","message":{"role":"user","content":"two"}}
+{"type":"user","uuid":"u3","message":{"role":"user","content":"three"}}
+`
+	if err := os.WriteFile(p, []byte(lines), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	err := replayTranscriptUntil(p, "u2", func(u acp.SessionUpdate) {
+		if u.UserMessageChunk != nil && u.UserMessageChunk.Content.Text != nil {
+			got = append(got, u.UserMessageChunk.Content.Text.Text)
+		}
+	})
+	if err != nil || !slices.Equal(got, []string{"one", "two"}) {
+		t.Fatalf("%v %q", err, got)
+	}
+}

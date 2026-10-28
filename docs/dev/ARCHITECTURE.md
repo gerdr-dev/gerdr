@@ -231,7 +231,9 @@ cwd 以外改的文件（Bash 写 `~/.zshrc`、隔壁项目）管不到；同一
   自己一轮刚完就重启（来不及记大小）、claude 一轮之后补写的收尾、切模式写的那一行，都会让它变长（第一版只比大小，
   用户撞上了误报）。所以判据是「上次对齐之后（`Record.SyncedSize`），记录里有没有 gerdr 没发过的人话」：agent 把那一段
   里人说的话列出来（`_gerdr/transcript_stat` 的 `since`），和自己日志里的比（空白归一、前 200 字）。有生人话才整份重放
-  （`Session.Reload`），否则只把位置挪过去。
+  （`Session.Reload`），否则只把位置挪过去。claude 被打断时自己补写的 `[Request interrupted by user…]` 也是 user 消息，
+  不算人话（不然重启一下 App 就误报「在别处接着聊过」）。重放出来的历史消息是 `user_message_chunk`（messageId = 记录里的 uuid），
+  不是 gerdr 自己记的 user 事件 —— 回退要两种都认，只认后者的话重新载入过的消息全都「找不到这条消息」。
 - **gerdr 被强杀时那一轮没断**：gerdr 被 SIGKILL / 崩溃（App 退出等不及也会：Electron 3 秒就强杀）时来不及杀 claude，
   claude 只看到 stdin 断了，会**把手上这一轮跑完**、写进自己的记录才退（实测又跑了一分钟）。gerdr 日志停在半截、
   重启时补了「中断」，而上面的追上只认生人话，多出来的全是 agent 回复，救不回来。所以重启时日志里有没收尾的一轮，

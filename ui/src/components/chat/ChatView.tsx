@@ -99,8 +99,7 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
   const doRewind = async (msg: GMessage, edit: boolean) => {
     try {
       const r = await api.rewind(session.id, msg.metadata!.messageId!);
-      const text = (r.content ?? []).map((c) => (c.type === "text" ? c.text : "")).join("");
-      if (edit || text) composer.current?.setText(text);
+      if (edit || r.content?.length) composer.current?.setContent(r.content ?? []);
       toast.success("已回退对话");
     } catch (e: any) {
       toast.error(e.message ?? String(e));

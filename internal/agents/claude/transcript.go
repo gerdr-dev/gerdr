@@ -242,6 +242,12 @@ func userImages(e *entry) []acp.ContentBlock {
 }
 
 func replayTranscript(path string, emit func(acp.SessionUpdate)) error {
+	return replayTranscriptUntil(path, "", emit)
+}
+
+// replayTranscriptUntil：重放到 uuid 为 last 的那一条（含）为止；last 为空就是整份。
+// 回退之后还没说过话的会话用它：新会话的记录要等下一句话才写，这时它的内容 = 原会话到分叉点为止。
+func replayTranscriptUntil(path, last string, emit func(acp.SessionUpdate)) error {
 	tmp := &session{a: &Agent{}, tools: map[string]*toolState{}}
 	tmp.a.conn = nil
 	// 借用 stream.go 里那套「assistant 块 / 工具结果 → update」的翻译，输出改成 emit。
@@ -261,7 +267,7 @@ func replayTranscript(path string, emit func(acp.SessionUpdate)) error {
 				for _, b := range imgs {
 					emit(acp.SessionUpdate{UserMessageChunk: &acp.SessionUpdateUserMessageChunk{Content: b, MessageId: &id}})
 				}
-				return true
+				return last == "" || e.UUID != last
 			}
 			var m userMsg
 			if json.Unmarshal(e.Message, &m) == nil {
@@ -283,7 +289,7 @@ func replayTranscript(path string, emit func(acp.SessionUpdate)) error {
 				}
 			}
 		}
-		return true
+		return last == "" || e.UUID != last
 	})
 }
 
@@ -364,7 +370,9 @@ func userTextsFrom(path string, offset int64) []string {
 		if json.Unmarshal(sc.Bytes(), &e) != nil {
 			continue
 		}
-		if t := userText(&e); t != "" {
+		// 「[Request interrupted by user…]」是 claude 被打断时自己补写的（gerdr 重启、Esc 都会），不是人说的话，
+		// 算进来追上就误报「在别处接着聊过」（踩过：只是重启了一下 App）。重放时不滤：界面把它画成「被打断了」。
+		if t := userText(&e); t != "" && !strings.HasPrefix(strings.TrimSpace(t), "[Request interrupted by user") {
 			out = append(out, t)
 		}
 	}
