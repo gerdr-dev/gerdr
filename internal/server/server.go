@@ -189,6 +189,11 @@ func (s *Server) Handler() http.Handler {
 		s.Hub.Broadcast("open", map[string]any{"id": sess.Summary().ID, "near": b.Near, "focus": b.Focus})
 		return nil, nil
 	}))
+	// close：open 的反面（gerdr session close）。布局归界面管，服务端只广播，开着的界面把显示它的 pane 收掉。
+	mux.HandleFunc("POST /api/sessions/{id}/close", s.sessionOp(func(r *http.Request, sess *hub.Session) (any, error) {
+		s.Hub.Broadcast("close", map[string]any{"id": sess.Summary().ID})
+		return nil, nil
+	}))
 	mux.HandleFunc("GET /api/sessions/{id}", s.sessionOp(func(r *http.Request, sess *hub.Session) (any, error) {
 		return sess.Summary(), nil
 	}))

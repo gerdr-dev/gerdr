@@ -658,6 +658,37 @@ func sessionCmd() *cobra.Command {
 	cmd.AddCommand(openCmd)
 
 	cmd.AddCommand(&cobra.Command{
+		Use:   "close <会话>",
+		Short: "关掉一个会话（从界面上收掉它的 pane；正在跑的那一轮会停掉，记录留着，open 能开回来）",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			c := client()
+			s, err := c.resolve(args[0])
+			if err != nil {
+				return err
+			}
+			if s.ID == c.selfID() {
+				return fmt.Errorf("不能关自己")
+			}
+			if s.inUI != nil && !*s.inUI {
+				printJSON(map[string]any{"closed": true, "id": s.ID})
+				return nil
+			}
+			if err := c.do("POST", "/api/sessions/"+s.ID+"/close", map[string]any{}, nil); err != nil {
+				return err
+			}
+			// 布局归界面管：等开着的界面把 pane 收掉、存好布局。一直没收掉 = 没有界面开着（布局里还挂着它，下次打开界面还在）
+			for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(200 * time.Millisecond) {
+				if s, err := c.resolve(s.ID); err == nil && s.inUI != nil && !*s.inUI {
+					printJSON(map[string]any{"closed": true, "id": s.ID})
+					return nil
+				}
+			}
+			return fmt.Errorf("界面没把它关掉（gerdr 的窗口没开着？）")
+		},
+	})
+
+	cmd.AddCommand(&cobra.Command{
 		Use:   "cancel <会话>",
 		Short: "打断一个会话正在跑的那一轮",
 		Args:  cobra.ExactArgs(1),

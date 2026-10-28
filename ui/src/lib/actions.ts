@@ -150,6 +150,26 @@ export function closeFocusedPane() {
   });
 }
 
+/**
+ * 关掉显示某个会话的 pane（`gerdr session close`，别的 agent 关它开的会话）：和人手动关一样，
+ * 正在跑的那一轮停掉，会话记录留着（`gerdr session open` / prefix+g 能找回来）。
+ */
+export function closeSessionPanes(sessionId: string) {
+  if (!sessionId || !locateSession(get().layout, sessionId)) return;
+  const s = get().sessions[sessionId];
+  if (s && (s.status === "running" || s.status === "waiting")) api.cancel(s.id).catch(() => {});
+  setLayout((l) => {
+    for (let loc = locateSession(l, sessionId); loc; loc = locateSession(l, sessionId)) {
+      const tabId = loc.tab.id;
+      const ws = l.workspaces.find((w) => w.tabs.some((t) => t.id === tabId));
+      if (!ws) break;
+      const next = closePane(loc.tab, loc.pane.id);
+      l = next ? updateTab(l, tabId, () => next) : removeTab(l, ws, tabId);
+    }
+    return l;
+  });
+}
+
 /** 关掉 pane 里的终端：和 tmux 一样，关 pane 就是结束里面的 shell（不然它在服务端没人看得见地一直跑着）。 */
 function killTerms(panes: PaneLeaf[]) {
   for (const p of panes) if (p.term) api.termKill(p.term.id).catch(() => {});

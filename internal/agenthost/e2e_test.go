@@ -44,6 +44,7 @@ type rec struct {
 	tasks   []acpx.Task
 	autos   []bool
 	subText map[string]string // subagent 标记 → 它说的话
+	cleared string            // /clear 之后 agent 报的新会话 id（sessionId + cleared）
 }
 
 func (r *rec) OnUpdate(n acp.SessionNotification) {
@@ -63,6 +64,11 @@ func (r *rec) OnUpdate(n acp.SessionNotification) {
 			if v, ok := g[acpx.AutoTurnKey].(bool); ok {
 				r.autos = append(r.autos, v)
 				r.t.Logf("autoTurn %v", v)
+			}
+			if id, _ := g["sessionId"].(string); id != "" {
+				if c, _ := g["cleared"].(bool); c {
+					r.cleared = id
+				}
 			}
 		}
 	case u.AgentMessageChunk != nil && u.AgentMessageChunk.Meta != nil:
@@ -251,6 +257,56 @@ func TestE2E(t *testing.T) {
 	r.mu.Lock()
 	t.Logf("perms=%d asks=%d tools=%v", r.perms, r.asks, r.tools)
 	r.mu.Unlock()
+}
+
+// TestE2EClear：/clear 两边都是真清空（codex 是另开一个 thread），报出新会话 id，换过去之后不记得之前的事。
+func TestE2EClear(t *testing.T) {
+	which := os.Getenv("GERDR_E2E")
+	if which == "" {
+		t.Skip("set GERDR_E2E=codex|claude")
+	}
+	r := &rec{t: t}
+	h := start(t, which, r)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	meta := acpx.Meta(map[string]any{"mode": "read-only"})
+	if which == "claude" {
+		meta = acpx.Meta(map[string]any{"mode": "default", "model": "haiku"})
+	}
+	ns, err := h.Conn.NewSession(ctx, acp.NewSessionRequest{Cwd: t.TempDir(), McpServers: []acp.McpServer{}, Meta: meta})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sid := ns.SessionId
+	ask := func(text string) string {
+		t.Helper()
+		res, err := h.Conn.Prompt(ctx, acp.PromptRequest{SessionId: sid, MessageId: acp.Ptr(uuid.NewString()), Prompt: []acp.ContentBlock{acp.TextBlock(text)}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if res.StopReason != acp.StopReasonEndTurn {
+			t.Fatalf("stop=%s", res.StopReason)
+		}
+		return r.reset()
+	}
+	ask("Remember this code word: ZEBRA42. Reply with just OK.")
+	r.mu.Lock()
+	cmds := r.cmds
+	r.mu.Unlock()
+	if !slices.Contains(cmds, "clear") {
+		t.Errorf("clear not in advertised commands: %v", cmds)
+	}
+	ask("/clear")
+	r.mu.Lock()
+	nid := r.cleared
+	r.mu.Unlock()
+	if nid == "" || nid == string(sid) {
+		t.Fatalf("/clear 没报新会话 id：%q（旧的 %s）", nid, sid)
+	}
+	sid = acp.SessionId(nid) // 和 hub 一样，之后按新 id 发
+	if got := ask("Without using tools: did I ask you to remember a code word? If yes reply with it, otherwise reply NONE."); strings.Contains(got, "ZEBRA42") {
+		t.Errorf("清空之后还记得：%q", got)
+	}
 }
 
 // TestE2ECompactImage：/compact 走 agent 自己的压缩、压完还记得之前的事；图片能发进去；

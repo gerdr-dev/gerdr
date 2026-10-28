@@ -76,6 +76,16 @@ gerdr session read reviewer --last 20         # 读最近 20 条（用户说的 
 
 `wait` 返回时看 `session.status`：`waiting` 就是卡在等人，照实告诉用户；`timed_out: true` 是还没做完。
 
+## 收尾
+
+```bash
+gerdr session close reviewer          # 用完了：从界面上收掉它的 pane
+gerdr session send reviewer "/clear"  # 还要接着派活、但不想带着之前的上下文：清空（claude、codex 都认）
+```
+
+`close` 和人手动关 pane 一样：它正在跑的那一轮会停掉，记录留着，`gerdr session open` 能开回来。
+你开出来的会话活干完了就关掉，别让用户自己一个个去关。
+
 ## 并行
 
 要几个 agent 同时干，就开几个会话、都不带 `--wait`，然后挨个 `wait`。别开超过用户要的数量，
@@ -83,6 +93,6 @@ gerdr session read reviewer --last 20         # 读最近 20 条（用户说的 
 
 ## 规矩
 
-- 不要 `cancel` 不是你开的会话，除非用户要求。
+- 不要 `cancel` / `close` 不是你开的会话，除非用户要求。
 - 把对方的结论转述给用户时说清楚是哪个会话说的。
 - 对方在 `waiting`（等审批 / 回答）时，你没有权限替人点，交给用户。

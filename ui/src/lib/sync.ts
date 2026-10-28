@@ -201,6 +201,9 @@ function handle(m: any) {
     case "open":
       import("./actions").then((a) => a.openSessionNear(m.data?.id, m.data?.near, !!m.data?.focus));
       break;
+    case "close":
+      import("./actions").then((a) => a.closeSessionPanes(m.data?.id));
+      break;
     case "plugins":
       import("./plugins").then((p) => p.reloadPlugins());
       break;

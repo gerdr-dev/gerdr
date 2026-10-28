@@ -44,7 +44,9 @@ var modes = []acp.SessionMode{
 }
 
 // commands：app-server 不报斜杠命令（那是 TUI 的东西），我们接了哪几个就报哪几个。
+// 名字和描述照 claude 的同名命令：两边都有的常用命令在界面上用起来一样（/new 是界面上 /clear 的别名）。
 var commands = []acp.AvailableCommand{
+	{Name: "clear", Description: "清空上下文：另起一段新对话，之前说过的不再带上"},
 	{Name: "compact", Description: "压缩上下文：把之前的对话总结成摘要，腾出上下文空间"},
 }
 
@@ -739,6 +741,42 @@ func (a *Agent) listModels(ctx context.Context) []modelInfo {
 	return res.Data
 }
 
+// clear：/clear（codex TUI 里叫 /new）。app-server 没有「清空 thread」，TUI 也是另开一个 thread：
+// 照原来的目录 / 权限 / 模型 thread/start 一个新的，然后和 claude 的 /clear 走同一条路 —— 用旧 id 发
+// sessionId + cleared 让 hub 把记录换成新 id（之后回退、恢复都按新的来，对话里留一条「上下文已清空」）。
+// 不接的话 "/clear" 会当成一句普通的话发给模型，它回一句「已清空」，上下文其实原样都在（用户踩过）。
+// 旧 id 留作别名（同 claude 的 adoptID），hub 换 id 之前路上的调用照样找得到。
+func (a *Agent) clear(ctx context.Context, rpc *rpcline.Conn, s *session) (acp.PromptResponse, error) {
+	s.mu.Lock()
+	old, cwd, mode, model := s.id, s.cwd, s.mode, s.model
+	s.mu.Unlock()
+	ap, sb := modeParams(mode)
+	params := map[string]any{"cwd": cwd, "approvalPolicy": ap, "sandbox": sandboxMode(sb), "developerInstructions": acpx.MediaHint}
+	cfg, fp := a.extConfig(ctx, rpc, cwd)
+	if cfg != nil {
+		params["config"] = cfg
+	}
+	if model != "" {
+		params["model"] = model
+	}
+	var res threadStartResp
+	if err := rpc.Call(ctx, "thread/start", params, &res); err != nil {
+		return acp.PromptResponse{}, err
+	}
+	a.send(ctx, old, acp.SessionUpdate{SessionInfoUpdate: &acp.SessionSessionInfoUpdate{Meta: acpx.Meta(map[string]any{"sessionId": res.Thread.ID, "cleared": true})}})
+	s.mu.Lock()
+	s.id, s.extFP = res.Thread.ID, fp
+	s.compacts = nil
+	s.items = map[string]*itemState{}
+	s.mu.Unlock()
+	a.mu.Lock()
+	a.sessions[res.Thread.ID] = s
+	a.mu.Unlock()
+	// 旧 thread 不再用：卸载掉，别让 app-server 一直挂着它
+	_ = rpc.Call(ctx, "thread/unsubscribe", map[string]any{"threadId": old}, nil)
+	return acp.PromptResponse{StopReason: acp.StopReasonEndTurn}, nil
+}
+
 // ---- ACP: 一轮 ----
 
 func (a *Agent) Prompt(ctx context.Context, p acp.PromptRequest) (acp.PromptResponse, error) {
@@ -753,6 +791,9 @@ func (a *Agent) Prompt(ctx context.Context, p acp.PromptRequest) (acp.PromptResp
 	s.mu.Lock()
 	busy := s.turnDone != nil
 	s.mu.Unlock()
+	if !busy && slashCommand(p.Prompt) == "clear" {
+		return a.clear(ctx, rpc, s)
+	}
 	if !busy {
 		a.refreshExt(ctx, rpc, s)
 	}
