@@ -10,7 +10,7 @@ export function OptionMenu({ label, value, options, onChange }: { label: string;
   const cur = options.find((o) => o.value === value);
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className="flex h-7 max-w-44 items-center gap-1 rounded-md px-2 text-[12px] text-muted-foreground outline-none hover:bg-muted hover:text-foreground data-[state=open]:bg-muted">
+      <DropdownMenuTrigger className="flex h-7 min-w-0 max-w-44 items-center gap-1 rounded-md px-2 text-[12px] text-muted-foreground outline-none hover:bg-muted hover:text-foreground data-[state=open]:bg-muted">
         <span className="truncate">{cur?.name ?? (value || label)}</span>
         <ChevronDown className="size-3 shrink-0 opacity-60" />
       </DropdownMenuTrigger>

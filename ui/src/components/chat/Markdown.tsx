@@ -3,6 +3,7 @@ import { defaultComponents, defaultRehypePlugins, type Components } from "stream
 import { MessageResponse } from "@/components/ai-elements/message";
 import { openPath } from "@/lib/actions";
 import { localHref, rehypePaths } from "@/lib/paths";
+import { ChatMedia, imageGroup, localPath, MediaGrid, rehypeImageGroups } from "./ChatMedia";
 import { SessionContext } from "./sessionContext";
 
 /**
@@ -12,7 +13,7 @@ import { SessionContext } from "./sessionContext";
  * 整棵子树卸掉重挂（代码块的横向滚动、选中的字全丢）。cwd 走 context，组件身份才能不变。
  * 我们的插件排在默认那几个后面：harden / sanitize 跑完了才加 data-gerdr-path，不会被它们清掉。
  */
-const rehypePlugins = [...Object.values(defaultRehypePlugins), rehypePaths];
+const rehypePlugins = [...Object.values(defaultRehypePlugins), rehypePaths, rehypeImageGroups];
 
 const DefaultA = (defaultComponents as Record<string, any>).a ?? "a";
 
@@ -35,11 +36,25 @@ function A(props: any) {
   );
 }
 
-const components: Components = { a: A };
+// 图片语法引用的图 / 视频 / 音频 / PDF（ChatMedia）；连着几张图排成网格
+function Img(props: any) {
+  return <ChatMedia src={String(props.src ?? "")} alt={props.alt} />;
+}
+
+function P({ node, children, ...rest }: any) {
+  const group = imageGroup(node);
+  if (group) return <MediaGrid items={group} />;
+  return <p {...rest}>{children}</p>;
+}
+
+// react-markdown 默认会把 file:// 这类地址清掉；本机路径原样留给 ChatMedia（它只拿来拼 /api/fs/raw 的参数）
+const urlTransform = (url: string) => (localPath(url) !== null || /^https?:|^mailto:|^#/i.test(url) ? url : "");
+
+const components: Components = { a: A, img: Img, p: P };
 
 export function Markdown({ children }: { children: string }) {
   return (
-    <MessageResponse rehypePlugins={rehypePlugins} components={components}>
+    <MessageResponse rehypePlugins={rehypePlugins} components={components} urlTransform={urlTransform}>
       {children}
     </MessageResponse>
   );

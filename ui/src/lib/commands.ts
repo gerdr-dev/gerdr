@@ -75,8 +75,12 @@ export function handleKeydown(e: KeyboardEvent): boolean {
     e.stopPropagation();
     setPrefix(false);
     if (e.key === "Escape") return true;
-    // 前缀再按一次前缀：把它当普通按键还给输入框（比如真要输 ctrl+b）。
-    if (prefix && matches(prefix, e)) return true;
+    // 前缀再按一次前缀：把它当普通按键还给输入框（比如真要输 ctrl+b）。终端拿这个事件把 ^B 发给 shell
+    // （终端里跑着 tmux 时，按两下前缀就是 tmux 的前缀）。
+    if (prefix && matches(prefix, e)) {
+      window.dispatchEvent(new CustomEvent("gerdr:prefix-literal", { detail: e }));
+      return true;
+    }
     for (const b of bindings()) {
       if (b.combo?.prefix && matches(b.combo, e)) {
         b.run();

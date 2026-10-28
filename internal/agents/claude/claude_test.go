@@ -110,3 +110,32 @@ func TestAddAllowRules(t *testing.T) {
 		t.Fatal("overwrote invalid settings")
 	}
 }
+
+// 重放带截图的用户消息：文字和图都要发出来，而且是同一个 MessageId（界面按它拼回一条）。
+// 原来只发文字，会话在别处接着聊过、整份重放一次之后截图就没了。
+func TestReplayUserImage(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "s.jsonl")
+	line := `{"type":"user","uuid":"u1","message":{"role":"user","content":[` +
+		`{"type":"image","source":{"type":"base64","media_type":"image/png","data":"iVBORw0KGgo="}},` +
+		`{"type":"text","text":"看这张图"}]}}` + "\n"
+	if err := os.WriteFile(path, []byte(line), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var got []acp.SessionUpdate
+	if err := replayTranscript(path, func(u acp.SessionUpdate) { got = append(got, u) }); err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("要 2 块（文字 + 图），拿到 %d", len(got))
+	}
+	txt, img := got[0].UserMessageChunk, got[1].UserMessageChunk
+	if txt == nil || txt.Content.Text == nil || txt.Content.Text.Text != "看这张图" {
+		t.Fatalf("第一块应该是文字：%+v", got[0])
+	}
+	if img == nil || img.Content.Image == nil || img.Content.Image.MimeType != "image/png" || img.Content.Image.Data != "iVBORw0KGgo=" {
+		t.Fatalf("第二块应该是图：%+v", got[1])
+	}
+	if txt.MessageId == nil || img.MessageId == nil || *txt.MessageId != "u1" || *img.MessageId != "u1" {
+		t.Fatalf("两块的 MessageId 都应该是 u1")
+	}
+}

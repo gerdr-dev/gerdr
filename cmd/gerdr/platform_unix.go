@@ -21,6 +21,19 @@ func lockFile(p string) (*os.File, error) {
 	return f, nil
 }
 
+// lockFileWait：同一把锁，拿不到就一直等（后台服务等 App 的后端退出再接手）。
+func lockFileWait(p string) (*os.File, error) {
+	f, err := os.OpenFile(p, os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return nil, err
+	}
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
+		f.Close()
+		return nil, err
+	}
+	return f, nil
+}
+
 // waitParent：父进程（App 外壳）没了就返回。Unix 上父进程死了，孤儿进程会被过继给 init / launchd，ppid 当场变掉。
 func waitParent(pid int) {
 	for {

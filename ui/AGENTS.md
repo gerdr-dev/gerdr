@@ -32,6 +32,7 @@ src/components/    组件
                    ToolCall（工具调用卡片）、Cards（审批 / 提问 / 计划）、TasksBar（后台任务）
   Chrome.tsx       侧栏、tab 栏、手机上那一行顶栏（PhoneBar）
   Panes.tsx        分屏和每个 pane 的标题栏（手机上只画焦点那一个 pane）
+  Terminal.tsx     终端 pane 的内容（xterm.js，连服务端的 PTY；xterm 的样式在 index.css 末尾）
   PaneSwitcher.tsx 手机上的「面板一览」：所有 pane 拍平，点一下就过去
   FileViewer.tsx   对话里点了路径之后的查看器（图片 / 视频 / 音频 / PDF / 文本）
   Dialogs.tsx      命令面板、设置、会话列表等弹窗
@@ -63,6 +64,26 @@ src/lib/
 
 - 对话是**虚拟列表**（react-virtuoso）：只渲染屏幕附近的行，滚出去的会被卸载。所以对话里的组件**别用 useState 记「展开没」这类状态**
   （滚回来就没了），用 `@/lib/kept` 的 `useKept(key, 初值)`，key 带上会话 id 和这块东西的 id。
+- 格式按 `.prettierrc.json`（行宽 160、双引号、分号）：只格式化你改的文件，别全量重排（老代码不全是 prettier 排的，一重排 diff 全是噪音）。
+  手工对齐的数据表（像素格子、坐标表）前面加一行 `// prettier-ignore`。`components/ui/`、`ai-elements/` 是拷进来的上游组件，不格式化。
+
+## 设计参考
+
+对话界面的排版照这两个站做的，改对话里的东西、加新组件前先去看对应那一页，保持一个调子：
+
+- **Astryx 的 Chat 组件**（https://astryx.atmeta.com/components/ChatMessage ，左边栏 Chat 下面每一个都可以参考）：
+  用户气泡和下面那行时间（ChatMessage / ChatMessageMetadata → `chat/MessageView.tsx`）、
+  工具调用行和折叠组（ChatToolCalls → `chat/ToolCall.tsx`、`chat/Rows.tsx`）、
+  居中的系统小字（ChatSystemMessage → MessageView 里的 data-notice）、输入框（ChatComposer → `chat/Composer.tsx`）。
+- **beUI Pro**（https://pro.beui.dev ，左边栏 AGENTS 那一组）：运行中的像素转圈（AI Thinking Loaders 的 Pixel orbit
+  → `chat/PixelLoader.tsx`）、提问卡片（Questionnaire → `chat/Cards.tsx` 的 AskCard）。
+  **它是付费组件库：只照着看效果自己写，不要拷它的代码。**
+- **logo**：一条在跑的蓝陨石色边境牧羊犬（像素画；herdr 是牧人、logo 是羊，gerdr 是帮他看住一群 agent 的狗）。
+  `public/icon.svg` 和 `desktop/icon.swift`（App 图标）是同一份像素图，改一处两处一起改。
+  运行中的 loading 不用狗（16px 整条狗看不清、狗脸画不好看，试过），用上面 beUI 的像素转圈。
+  备用素材在仓库的 `docs/brand/`：像素狗爪印 `paw.svg`、三个爪印一步步落下的动画 `paw-walk.svg`（都跟 currentColor 走），
+  需要一个小尺寸的「狗」时先用它；「终端小怪」`critter.svg` / `critter-run.svg`（logo 落选的方向：长了眼睛和腿的终端窗口，
+  标题栏三个点是蓝白橙，动起来是三个点轮流亮 + 眨眼），可以当吉祥物用在空状态、报错页之类的地方。
 
 ## 常见的改法
 

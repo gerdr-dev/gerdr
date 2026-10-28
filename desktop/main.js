@@ -44,16 +44,19 @@ function startBackend() {
   backend = p;
   let out = "";
   let errTail = "";
+  // GERDR_READY 可能出现第二次：App 连着的是后台服务 / 终端里那个 gerdr，它退了，我们的后端接了班
+  // （cmd/gerdr 的 appAttach）。地址没变就不动，页面的 WebSocket 自己会重连上。
   p.stdout.on("data", (d) => {
     out += d.toString();
-    for (const line of out.split("\n")) {
+    const lines = out.split("\n");
+    out = lines.pop().slice(-2000); // 最后那段还没收完一整行
+    for (const line of lines) {
       const m = /^GERDR_READY (\S+)/.exec(line.trim());
-      if (m && !origin) {
+      if (m && m[1] !== origin) {
         origin = m[1];
         win?.loadURL(origin);
       }
     }
-    if (out.length > 8000) out = out.slice(-2000);
   });
   p.stderr.on("data", (d) => {
     errTail = (errTail + d.toString()).slice(-16000);
@@ -62,6 +65,8 @@ function startBackend() {
   p.on("exit", (code, signal) => {
     backend = null;
     if (quitting) return;
+    // 75 = 刚打开后台常驻，这个后端让位给后台服务（cmd/gerdr 的 exitHandover）：重起一个，它只连后台
+    if (code === 75) return startBackend();
     // 「已经有一个在跑」那种情况它会正常退出（code 0），那不算出错
     if (!origin || code !== 0 || signal) showMessage(`后端退出了（${signal ?? code}）\n\n${errTail.slice(-2000)}`);
   });
@@ -226,6 +231,16 @@ ipcMain.on("gerdr", (e, m) => {
     case "open":
       openExternal(String(m.url ?? ""));
       break;
+    case "openPath": {
+      // 对话里的图片 / 视频下面那两个按钮（ChatMedia）：用系统程序打开、在访达里显示。相对路径按会话目录算
+      let p = String(m.path ?? "");
+      if (p.startsWith("~/")) p = path.join(app.getPath("home"), p.slice(2));
+      if (!path.isAbsolute(p)) p = path.resolve(String(m.cwd || app.getPath("home")), p);
+      if (!fs.existsSync(p)) break;
+      if (m.reveal) shell.showItemInFolder(p);
+      else shell.openPath(p);
+      break;
+    }
     case "webPid":
       // 设置里的「资源」要量界面所在那个渲染进程的内存（它不是后端起的，后端看不见）
       runInPage(`window.__GERDR_WEB_PID__ = ${win.webContents.getOSProcessId()}`);

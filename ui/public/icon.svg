@@ -1,6 +1,30 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="14" fill="#1c1c1e"/>
-  <rect x="9" y="12" width="21" height="40" rx="4" fill="#3a82f7"/>
-  <rect x="34" y="12" width="21" height="18" rx="4" fill="#e6e6e6"/>
-  <rect x="34" y="34" width="21" height="18" rx="4" fill="#d9774a"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" shape-rendering="crispEdges">
+  <!-- gerdr：一条在跑的蓝陨石色边境牧羊犬（像素画，16×11 格、每格 3）。herdr 是牧人、logo 是羊，gerdr 是帮他看住一群 agent 的狗。
+       和 desktop/icon.swift 是同一份像素图，改一处要两处一起改。 -->
+  <rect width="64" height="64" rx="14" fill="#1c1c1e" shape-rendering="geometricPrecision"/>
+  <g fill="#3a82f7">
+    <rect x="38" y="15" width="3" height="3"/><rect x="44" y="15" width="3" height="3"/>
+    <rect x="38" y="18" width="9" height="3"/>
+    <rect x="35" y="21" width="6" height="3"/><rect x="44" y="21" width="3" height="3"/>
+    <rect x="8" y="24" width="3" height="3"/><rect x="35" y="24" width="12" height="3"/>
+    <rect x="8" y="27" width="6" height="3"/><rect x="35" y="27" width="9" height="3"/>
+    <rect x="11" y="30" width="6" height="3"/><rect x="26" y="30" width="6" height="3"/><rect x="35" y="30" width="6" height="3"/>
+    <rect x="14" y="33" width="27" height="3"/>
+    <rect x="14" y="36" width="24" height="3"/>
+    <rect x="14" y="39" width="3" height="3"/><rect x="23" y="39" width="15" height="3"/>
+    <rect x="14" y="42" width="3" height="3"/><rect x="23" y="42" width="3" height="3"/><rect x="38" y="42" width="3" height="3"/><rect x="47" y="42" width="3" height="3"/>
+    <rect x="11" y="45" width="3" height="3"/><rect x="26" y="45" width="3" height="3"/><rect x="35" y="45" width="3" height="3"/><rect x="50" y="45" width="3" height="3"/>
+  </g>
+  <g fill="#e6e6e6">
+    <rect x="47" y="21" width="3" height="3"/>
+    <rect x="47" y="24" width="6" height="3"/>
+    <rect x="44" y="27" width="9" height="3"/>
+    <rect x="41" y="30" width="6" height="3"/>
+    <rect x="41" y="33" width="6" height="3"/>
+    <rect x="38" y="36" width="9" height="3"/>
+    <rect x="17" y="39" width="6" height="3"/><rect x="38" y="39" width="6" height="3"/>
+  </g>
+  <rect x="41" y="21" width="3" height="3" fill="#1c1c1e"/>
+  <rect x="53" y="24" width="3" height="3" fill="#1c1c1e"/>
+  <rect x="32" y="27" width="3" height="6" fill="#d9774a"/>
 </svg>

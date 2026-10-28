@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -50,21 +51,24 @@ type Session struct {
 	h  *Hub
 	lf logFile
 
-	mu         sync.Mutex
-	rec        Record
-	events     []*Event
-	attached   bool // agent 那边接上了（gerdr 重启后要先 ResumeSession）
-	status     string
-	running    bool
-	catchingUp bool
-	lastCatch  time.Time // 正在从 agent 记录重新载入（CatchUp / Reload），别重入
-	lastErr    string
-	modes      *acp.SessionModeState
-	config     []acp.SessionConfigOption
-	commands   []acp.AvailableCommand
-	pending    map[string]*pending
-	turnMsg    string // 正在跑的那一轮是哪条消息开的
-	auto       bool   // 正在跑的这一轮是 agent 自己开的（后台任务跑完了在汇报），没有 runTurn 在等
+	mu          sync.Mutex
+	rec         Record
+	events      []*Event
+	attached    bool // agent 那边接上了（gerdr 重启后要先 ResumeSession）
+	status      string
+	running     bool
+	catchingUp  bool
+	adopting    bool              // 在等 gerdr 重启前没收尾的那一轮（adoptOrphanTurn），CatchUp 别插手
+	orphanSince int64             // 载入时日志里有一轮没收尾：最后一条日志的时间（只在 New 里用一次）
+	steering    map[string]string // 正在插的话（msgID → 早到的队列状态），见 SendFrom
+	lastCatch   time.Time         // 正在从 agent 记录重新载入（CatchUp / Reload），别重入
+	lastErr     string
+	modes       *acp.SessionModeState
+	config      []acp.SessionConfigOption
+	commands    []acp.AvailableCommand
+	pending     map[string]*pending
+	turnMsg     string // 正在跑的那一轮是哪条消息开的
+	auto        bool   // 正在跑的这一轮是 agent 自己开的（后台任务跑完了在汇报），没有 runTurn 在等
 	// autoNext：「agent 自己开了一轮」先于上一轮 session/prompt 的响应到了（两条路，顺序不保证）。
 	// runTurn 收尾时看到它就直接接上一个 auto 的轮次，不然这一轮在界面上是「闲着」。
 	autoNext    bool
@@ -81,10 +85,54 @@ type Session struct {
 type pending struct {
 	kind string // permission | ask
 	ch   chan json.RawMessage
+	req  json.RawMessage // 原样的请求（GET /api/pending 给外面的程序看）
+	at   int64
+}
+
+func (s *Session) waitingLocked() string {
+	var first *pending
+	for _, p := range s.pending {
+		if first == nil || p.at < first.at {
+			first = p
+		}
+	}
+	if first == nil {
+		return ""
+	}
+	w := acpx.DescribeRequest(first.kind, first.req)
+	if n := len(s.pending); n > 1 {
+		w += fmt.Sprintf("（还有 %d 个）", n-1)
+	}
+	return w
+}
+
+// PendingReq：一个在等人处理的审批 / 提问（GET /api/pending）。
+type PendingReq struct {
+	SessionID string          `json:"sessionId"`
+	Title     string          `json:"title,omitempty"`
+	Agent     string          `json:"agent"`
+	Cwd       string          `json:"cwd"`
+	ReqID     string          `json:"reqId"`
+	Kind      string          `json:"kind"` // permission | ask
+	Request   json.RawMessage `json:"request"`
+	Summary   string          `json:"summary"` // 一句话（acpx.DescribeRequest）
+	At        int64           `json:"at"`      // unix ms
+}
+
+// Pending：这个会话里在等人处理的请求，早的在前。
+func (s *Session) Pending() []PendingReq {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := []PendingReq{}
+	for id, p := range s.pending {
+		out = append(out, PendingReq{SessionID: s.rec.ID, Title: s.rec.Title, Agent: s.rec.Agent, Cwd: s.rec.Cwd, ReqID: id, Kind: p.kind, Request: p.req, Summary: acpx.DescribeRequest(p.kind, p.req), At: p.at})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].At < out[j].At })
+	return out
 }
 
 func newSession(h *Hub, r Record) *Session {
-	return &Session{h: h, rec: r, status: StIdle, pending: map[string]*pending{},
+	return &Session{h: h, rec: r, status: StIdle, pending: map[string]*pending{}, steering: map[string]string{},
 		lf: logFile{path: filepath.Join(h.opt.Dir, "sessions", r.ID+".jsonl")}}
 }
 
@@ -94,9 +142,11 @@ func newID() string {
 	return hex.EncodeToString(b)
 }
 
-// recoverAfterRestart：上次 gerdr 退出时还在跑的那一轮，日志里没有结尾 —— 补一个。
-// 那一轮在 agent 那边已经跟着进程一起没了。
-func (s *Session) recoverAfterRestart() {
+// recoverAfterRestart：上次 gerdr 退出时还在跑的那一轮，日志里没有结尾 —— 先补一个「中断」。
+// 但那一轮**不一定**真断了：gerdr 被强杀 / 崩溃时来不及杀 claude，claude 只看到 stdin 断了，会把手上这一轮
+// 跑完再退（实测：gerdr 重启后它又跑了一分钟，回复写进了自己的记录，gerdr 这边只剩半句 + 「中断」）。
+// 所以返回日志里最后一条的时间（没有没收尾的轮次 = 0），由 adoptOrphanTurn 去核对、追回来。
+func (s *Session) recoverAfterRestart() (openSince int64) {
 	open := false
 	for _, e := range s.events {
 		switch e.Kind {
@@ -107,6 +157,7 @@ func (s *Session) recoverAfterRestart() {
 		}
 	}
 	if open {
+		openSince = s.events[len(s.events)-1].TS
 		s.events = append(s.events, &Event{Seq: s.h.nextSeqLocked(), TS: now(), Kind: EvTurnEnd, StopReason: "cancelled", Error: "gerdr 重启，这一轮被中断了"})
 	}
 	// 没回答的审批 / 提问也一样作废。
@@ -125,6 +176,7 @@ func (s *Session) recoverAfterRestart() {
 			s.events = append(s.events, &Event{Seq: s.h.nextSeqLocked(), TS: now(), Kind: kind, ReqID: e.ReqID, Response: json.RawMessage(`{"cancelled":true}`)})
 		}
 	}
+	return openSince
 }
 
 func (h *Hub) nextSeqLocked() int64 {
@@ -147,6 +199,9 @@ type Summary struct {
 	Context  *ContextInfo              `json:"context,omitempty"` // 上下文用量（agent 报过才有）
 	Base     string                    `json:"base,omitempty"`    // agent 实际是哪一种（变体的底子；界面上按它认图标和功能）
 	Branch   string                    `json:"branch,omitempty"`  // cwd 所在 git 仓库的当前分支（pane 顶部）
+	// Waiting：在等人处理什么，一句话（最早的那个请求；acpx.DescribeRequest）。会话列表上一眼看得出「问的是什么」，
+	// 手环这种只轮列表的不用再逐个去读日志
+	Waiting string `json:"waiting,omitempty"`
 }
 
 type ContextInfo struct {
@@ -191,7 +246,7 @@ func (s *Session) Summary() Summary {
 	if (modes == nil || len(config) == 0) && s.h.opts != nil {
 		modes, config = s.optsFallbackLocked(modes, config)
 	}
-	return Summary{Record: s.rec, Status: s.status, Error: s.lastErr, Modes: modes, Config: config, Commands: cmds, Pending: len(s.pending), LastSeq: last, Tasks: s.tasks, Turn: s.turnInfoLocked(), Context: s.contextLocked(), Base: s.h.Base(s.rec.Agent), Branch: gitBranch(s.rec.Cwd)}
+	return Summary{Record: s.rec, Status: s.status, Error: s.lastErr, Modes: modes, Config: config, Commands: cmds, Pending: len(s.pending), LastSeq: last, Tasks: s.tasks, Turn: s.turnInfoLocked(), Context: s.contextLocked(), Base: s.h.Base(s.rec.Agent), Branch: gitBranch(s.rec.Cwd), Waiting: s.waitingLocked()}
 }
 
 func (s *Session) ID() string { return s.rec.ID }
@@ -456,9 +511,39 @@ func (s *Session) SendFrom(ctx context.Context, content []acp.ContentBlock, clie
 	s.mu.Lock()
 	running := s.running
 	agentSID := s.rec.AgentSessionID
+	var asks []string
+	for id, p := range s.pending {
+		if p.kind == "ask" {
+			asks = append(asks, id)
+		}
+	}
 	s.mu.Unlock()
+	// 提问还挂着，人却直接打字说话了：照 Claude Code，这句话就是回答 —— 先把提问收掉（告诉 agent「他直接在对话里回了」），
+	// 再把话插进去。不收的话 agent 一直卡在等提问，插进去的话要等它超时 / 被关掉才轮得到。
+	if len(asks) > 0 {
+		var said []string
+		for _, b := range content {
+			if b.Text != nil {
+				said = append(said, b.Text.Text)
+			}
+		}
+		resp, _ := json.Marshal(map[string]any{"cancelled": true, "reason": "replied", "text": strings.Join(said, "\n")})
+		for _, id := range asks {
+			_ = s.Answer(id, resp)
+		}
+	}
 
 	if running && c.Steering() {
+		// 插话的「排队中」状态（command_lifecycle → steer_state）常常比 MethodSteer 的返回先到 —— 那时这条消息还没记进日志。
+		// 先登记，早到的状态暂存在这儿，记日志之后补发（见下面和 onGerdrInfo）
+		s.mu.Lock()
+		s.steering[msgID] = ""
+		s.mu.Unlock()
+		defer func() {
+			s.mu.Lock()
+			delete(s.steering, msgID)
+			s.mu.Unlock()
+		}()
 		// promptRequired 有两种可能：这一轮刚好结束了（等 running 落下来，按新一轮发），或者
 		// 这一轮还没在 agent 那边真正开始（比如 claude 进程还在启动）——那就隔一会儿再插一次。
 		for i := 0; i < 100; i++ {
@@ -468,6 +553,13 @@ func (s *Session) SendFrom(ctx context.Context, content []acp.ContentBlock, clie
 			}
 			if res.Outcome == acpx.SteerInjected {
 				s.emit(&Event{Kind: EvUser, MessageID: msgID, Content: raw, Steer: true, From: from})
+				s.mu.Lock()
+				early := s.steering[msgID]
+				delete(s.steering, msgID)
+				s.mu.Unlock()
+				if early != "" {
+					s.emit(&Event{Kind: EvSteerState, MessageID: msgID, Text: early})
+				}
 				s.touchTitle(content)
 				return SendResult{MessageID: msgID, Steered: true}, nil
 			}
@@ -723,6 +815,22 @@ func (s *Session) onUpdate(u acp.SessionUpdate) {
 			if n, ok := g["notice"].(string); ok && n != "" {
 				s.emit(&Event{Kind: EvNotice, Level: "warn", Text: n})
 			}
+			// 插话排队 / 被读到：只记用户发过的那几条（command_lifecycle 对每条写进去的消息都报）
+			if st, ok := g["steer"].(map[string]any); ok {
+				id, _ := st["id"].(string)
+				state, _ := st["state"].(string)
+				if id != "" && (state == "queued" || state == "started") {
+					s.mu.Lock()
+					_, early := s.steering[id]
+					if early {
+						s.steering[id] = state // 消息还没记进日志：先存着，记完再补（started 会盖掉 queued）
+					}
+					s.mu.Unlock()
+					if !early && s.isSteer(id) {
+						s.emit(&Event{Kind: EvSteerState, MessageID: id, Text: state})
+					}
+				}
+			}
 			// agent 那边换了会话 id（claude 的 /clear）：之后回退、恢复都按新的来；对话里留一条分隔线
 			if id, ok := g["sessionId"].(string); ok && id != "" {
 				s.h.rekey(s, id)
@@ -873,7 +981,7 @@ func (s *Session) agentSID() string {
 func (s *Session) askPermission(ctx context.Context, req acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error) {
 	reqID := newID()
 	raw, _ := json.Marshal(req)
-	p := &pending{kind: "permission", ch: make(chan json.RawMessage, 1)}
+	p := &pending{kind: "permission", ch: make(chan json.RawMessage, 1), req: raw, at: now()}
 	s.mu.Lock()
 	s.pending[reqID] = p
 	s.mu.Unlock()
@@ -905,7 +1013,7 @@ func (s *Session) askPermission(ctx context.Context, req acp.RequestPermissionRe
 func (s *Session) ask(ctx context.Context, req acpx.AskRequest) (acpx.AskResponse, error) {
 	reqID := newID()
 	raw, _ := json.Marshal(req)
-	p := &pending{kind: "ask", ch: make(chan json.RawMessage, 1)}
+	p := &pending{kind: "ask", ch: make(chan json.RawMessage, 1), req: raw, at: now()}
 	s.mu.Lock()
 	s.pending[reqID] = p
 	s.mu.Unlock()
@@ -1391,7 +1499,7 @@ func (s *Session) Takeover(ctx context.Context, action string) error {
 // 接着聊过，agent 的记录文件长了，gerdr 这边却还停在原地 —— 人看到的是一段过时的对话（用户报的「追不上 herdr」）。
 // 打开会话时（client 读日志那一下）查一次：文件比上次对齐时大、而我们这边没在跑它，就从记录整份重新载入。
 
-func (s *Session) transcriptStat(ctx context.Context) (acpx.TranscriptStatResponse, bool) {
+func (s *Session) transcriptStat(ctx context.Context, since int64) (acpx.TranscriptStatResponse, bool) {
 	c, err := s.h.host(ctx, s.rec.Agent)
 	if err != nil {
 		return acpx.TranscriptStatResponse{}, false
@@ -1399,7 +1507,7 @@ func (s *Session) transcriptStat(ctx context.Context) (acpx.TranscriptStatRespon
 	s.mu.Lock()
 	sid, cwd := s.rec.AgentSessionID, s.rec.Cwd
 	s.mu.Unlock()
-	st, err := agenthost.Call[acpx.TranscriptStatResponse](ctx, c, acpx.MethodTranscriptStat, acpx.TranscriptStatRequest{SessionId: acp.SessionId(sid), Cwd: cwd})
+	st, err := agenthost.Call[acpx.TranscriptStatResponse](ctx, c, acpx.MethodTranscriptStat, acpx.TranscriptStatRequest{SessionId: acp.SessionId(sid), Cwd: cwd, Since: since})
 	return st, err == nil
 }
 
@@ -1407,7 +1515,7 @@ func (s *Session) markSynced(delay time.Duration) {
 	time.Sleep(delay)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if st, ok := s.transcriptStat(ctx); ok {
+	if st, ok := s.transcriptStat(ctx, -1); ok {
 		s.mu.Lock()
 		changed := s.rec.SyncedSize != st.Size
 		s.rec.SyncedSize = st.Size
@@ -1419,51 +1527,161 @@ func (s *Session) markSynced(delay time.Duration) {
 }
 
 // CatchUp：别处接着聊过就重新载入。打开会话时调（异步，不挡读日志）。
+//
+// 判据不是「文件变大了」，而是「文件里多出了 gerdr 没发过的人话」：文件变大还有一堆自己的原因 —— 自己一轮刚完、
+// 还没来得及记大小就重启了（用户报的误报：明明没在别处聊过，却提示「别处接着聊过」）、claude 一轮之后补写的收尾、
+// 切模式写的那一行。所以让 agent 把上次对齐之后记录里人说的话列出来，和自己日志里的比：全是自己发过的，只更新位置。
 func (s *Session) CatchUp(ctx context.Context) {
 	s.mu.Lock()
 	// 同一个会话半分钟内只查一次：切 tab、几台设备同时开着，都会触发
-	busy := s.running || s.catchingUp || time.Since(s.lastCatch) < 30*time.Second
+	busy := s.running || s.catchingUp || s.adopting || time.Since(s.lastCatch) < 30*time.Second
 	if !busy {
 		s.lastCatch = time.Now()
 	}
 	synced := s.rec.SyncedSize
-	var lastTS int64
-	if n := len(s.events); n > 0 {
-		lastTS = s.events[n-1].TS
-	}
 	s.mu.Unlock()
 	if busy {
 		return
 	}
-	st, ok := s.transcriptStat(ctx)
+	st, ok := s.transcriptStat(ctx, synced)
 	if !ok {
-		return // codex / 外部 agent：没这个口，不管
+		return // codex 之外的外部 agent：没这个口，不管
 	}
-	s.h.log.Debug("catch up", "session", s.rec.ID, "size", st.Size, "synced", synced, "mtime", st.ModTime, "last", lastTS)
-	stale, sure := false, synced > 0
-	if sure {
-		stale = st.Size > synced
-	} else {
-		// 老会话（还没记过大小）：文件明显比我们最后一条日志新，才算别处动过（留一分钟余量：claude 一轮之后还会补写几行）
-		stale = st.ModTime > lastTS+60_000
+	if synced > 0 && st.Size == synced {
+		return
 	}
-	if !stale {
-		if synced == 0 {
-			s.mu.Lock()
-			s.rec.SyncedSize = st.Size
-			s.mu.Unlock()
-			s.h.saveIndex()
+	mine := s.userTextSet()
+	foreign := 0
+	for _, t := range st.NewUserTexts {
+		if !mine[normText(t)] {
+			foreign++
 		}
+	}
+	s.h.log.Debug("catch up", "session", s.rec.ID, "size", st.Size, "synced", synced, "new", len(st.NewUserTexts), "foreign", foreign)
+	if foreign == 0 {
+		s.mu.Lock()
+		s.rec.SyncedSize = st.Size
+		s.mu.Unlock()
+		s.h.saveIndex()
 		return
 	}
 	if err := s.Reload(ctx); err != nil {
 		s.h.log.Warn("catch up", "session", s.rec.ID, "err", err)
 		return
 	}
-	// 老会话（没记过大小）是按修改时间猜的：切过模式之类也会动文件，猜错了说「别处聊过」是误导，只悄悄同步
-	if sure {
-		s.emit(&Event{Kind: EvNotice, Level: "info", Text: "这个会话在别处（herdr / 终端）接着聊过，已经从 agent 自己的记录同步到最新"})
+	s.emit(&Event{Kind: EvNotice, Level: "info", Text: fmt.Sprintf("这个会话在别处（herdr / 终端）接着聊过（%d 条消息），已经从 agent 自己的记录同步到最新", foreign)})
+}
+
+// adoptOrphanTurn：gerdr 重启时日志里有一轮没收尾（recoverAfterRestart 补了「中断」），核对它是不是真断了。
+//
+// gerdr 被强杀 / 崩溃 / App 退出时等不及（Electron 3 秒就 SIGKILL，claude 的 stop 也要等 3 秒）时，
+// 它起的 claude 成了孤儿：stdin 断了，但会把这一轮跑完、写进自己的记录才退。这时 gerdr 的日志停在半截。
+// CatchUp 救不了：它只认「多出了 gerdr 没发过的人话」，这里多出来的全是 agent 的回复，它只会把位置挪过去。
+//
+// 做法：孤儿还活着（stream-json 进程也登记 <配置目录>/sessions/<pid>.json，holders 认得出，重启后已不算「自己起的」）
+// 就等它退；之后记录文件在 gerdr 最后一条日志之后还被写过（超出日志落盘的那 2 秒间隔），就从记录整份重放。
+// 没写过 = 真断了，「中断」留着。
+func (s *Session) adoptOrphanTurn(lastTS int64) {
+	s.mu.Lock()
+	s.adopting = true
+	s.mu.Unlock()
+	defer func() {
+		s.mu.Lock()
+		s.adopting = false
+		s.mu.Unlock()
+	}()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Hour)
+	defer cancel()
+	c, err := s.h.host(ctx, s.rec.Agent)
+	if err != nil {
+		return
 	}
+	told := false
+	for {
+		hs := s.heldElsewhere(ctx, c)
+		if len(hs) == 0 {
+			break
+		}
+		if !told {
+			told = true
+			s.emit(&Event{Kind: EvNotice, Level: "info", Text: fmt.Sprintf("gerdr 重启前的这一轮还在后台跑（claude，pid %d），跑完会自动同步过来", hs[0].Pid)})
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(2 * time.Second):
+		}
+	}
+	st, ok := s.transcriptStat(ctx, -1)
+	// 日志每 2 秒落一次盘（flusher），被强杀时最后这一段本来就丢；只差这么点的不算「接着跑过」
+	if !ok || st.ModTime <= lastTS+5000 {
+		return
+	}
+	s.mu.Lock()
+	running := s.running
+	s.mu.Unlock()
+	if running {
+		// 人已经在新的一轮里了（比如在「别处开着」里把孤儿关掉、接着说话）：这时重放会丢掉正在跑的这一轮，不动
+		s.h.log.Warn("adopt orphan turn: session running, skip reload", "session", s.rec.ID)
+		return
+	}
+	if err := s.Reload(ctx); err != nil {
+		s.h.log.Warn("adopt orphan turn", "session", s.rec.ID, "err", err)
+		return
+	}
+	// 没见到孤儿也可能走到这儿：这一轮在 gerdr 死之前已经跑完，只是日志还没落盘（或者 gerdr 停了很久才起来）
+	text := "gerdr 重启前这一轮有一段没记下来，已经从 agent 自己的记录补上"
+	if told {
+		text = "gerdr 重启后这一轮在后台跑完了，已经从 agent 自己的记录同步到最新"
+	}
+	s.emit(&Event{Kind: EvNotice, Level: "info", Text: text})
+}
+
+// userTextSet：gerdr 日志里人说过的话（自己发的 + 导入 / 重新载入时从记录重放的），归一化过。
+func (s *Session) userTextSet() map[string]bool {
+	s.mu.Lock()
+	evs := append([]*Event(nil), s.events...)
+	s.mu.Unlock()
+	out := map[string]bool{}
+	for _, e := range evs {
+		switch e.Kind {
+		case EvUser:
+			var parts []string
+			for _, c := range e.Content {
+				var b struct {
+					Type string `json:"type"`
+					Text string `json:"text"`
+				}
+				if json.Unmarshal(c, &b) == nil && b.Type == "text" {
+					parts = append(parts, b.Text)
+				}
+			}
+			out[normText(strings.Join(parts, "\n"))] = true
+			for _, p := range parts { // 带图的消息，记录里可能只剩文字那块
+				out[normText(p)] = true
+			}
+		case EvUpdate:
+			var u struct {
+				SessionUpdate string `json:"sessionUpdate"`
+				Content       struct {
+					Text string `json:"text"`
+				} `json:"content"`
+			}
+			if json.Unmarshal(e.Update, &u) == nil && u.SessionUpdate == "user_message_chunk" {
+				out[normText(u.Content.Text)] = true
+			}
+		}
+	}
+	return out
+}
+
+// normText：比对用。空白折成一个空格、只看前 200 个字（两边对长消息的存法可能差在末尾的换行 / 截断）。
+func normText(t string) string {
+	t = strings.Join(strings.Fields(t), " ")
+	if r := []rune(t); len(r) > 200 {
+		t = string(r[:200])
+	}
+	return t
 }
 
 // Reload：丢掉 gerdr 这边的对话日志，从 agent 的记录整份重放（LoadSession）。
@@ -1517,4 +1735,16 @@ func (s *Session) Reload(ctx context.Context) error {
 	go s.markSynced(0)
 	s.setStatus()
 	return nil
+}
+
+// isSteer：这条消息是不是一条插话（只有插话才有「排队中」，正常开一轮的那句不显示）。
+func (s *Session) isSteer(msgID string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := len(s.events) - 1; i >= 0; i-- {
+		if e := s.events[i]; e.Kind == EvUser && e.MessageID == msgID {
+			return e.Steer
+		}
+	}
+	return false
 }

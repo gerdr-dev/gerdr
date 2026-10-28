@@ -41,13 +41,16 @@ export function TabBar() {
   const ws = activeWs(layout);
   const [drag, setDrag] = useState<number | null>(null);
   return (
-    <div className="flex h-9 shrink-0 items-center gap-1 border-b bg-sidebar px-1.5" style={{ WebkitAppRegion: "drag" } as any}>
+    // Chrome 那种标签：当前标签和下面的内容同色、连成一片（上圆角 + 底下两侧外翻的弧），别的标签不画底，只靠细竖线隔开。
+    // 标签贴着栏的底边（items-end），栏的底线由当前标签盖住 —— 所以标签 -mb-px 压在线上。**每个标签都压**，不只是当前那个：
+    // 只压当前的话，选中和没选中的文字差 1px，一切换就上下跳（用户报的）。没选中的没有底色，底线照样露出来。
+    <div className="flex h-10 shrink-0 items-end gap-1 border-b bg-sidebar px-1.5" style={{ WebkitAppRegion: "drag" } as any}>
       {!sidebar && (
-        <Button variant="ghost" size="icon" className="size-7" onClick={toggleSidebar} style={{ WebkitAppRegion: "no-drag" } as any}>
+        <Button variant="ghost" size="icon" className="mb-1.5 size-7" onClick={toggleSidebar} style={{ WebkitAppRegion: "no-drag" } as any}>
           <PanelLeft className="size-4" />
         </Button>
       )}
-      <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto" style={{ WebkitAppRegion: "no-drag" } as any}>
+      <div className="flex min-w-0 flex-1 items-end overflow-x-auto px-2 [scrollbar-width:none]" style={{ WebkitAppRegion: "no-drag" } as any}>
         {ws.tabs.map((t, i) => {
           const active = t.id === ws.activeTab;
           const st = tabStatus(t, sessions, unread);
@@ -75,12 +78,26 @@ export function TabBar() {
                     closeTab(t.id);
                   }}
                   className={cn(
-                    "group/tab flex h-7 max-w-52 shrink-0 cursor-default items-center gap-1.5 rounded-md px-2.5 text-[12px] select-none",
-                    active ? "bg-background text-foreground shadow-xs ring-1 ring-border" : "text-muted-foreground hover:bg-accent/60",
+                    "group/tab relative isolate -mb-px flex h-8 w-52 min-w-[88px] shrink cursor-default items-center gap-1.5 px-3 text-[12px] select-none",
+                    active ? "z-10 rounded-t-[10px] bg-background text-foreground" : "text-muted-foreground",
                   )}
                 >
+                  {active ? (
+                    <>
+                      {/* 底下两侧外翻的弧：一块背景色、挖掉一个圆 */}
+                      <span className="pointer-events-none absolute -left-2.5 bottom-0 size-2.5" style={{ background: "radial-gradient(circle at 0 0, transparent 9.5px, var(--background) 10px)" }} />
+                      <span className="pointer-events-none absolute -right-2.5 bottom-0 size-2.5" style={{ background: "radial-gradient(circle at 100% 0, transparent 9.5px, var(--background) 10px)" }} />
+                    </>
+                  ) : (
+                    <>
+                      {/* 悬停时浮起一块圆角底（不贴底边，和当前标签区分开） */}
+                      <span className="pointer-events-none absolute inset-x-1 top-1 bottom-1 -z-10 rounded-md group-hover/tab:bg-accent/60" />
+                      {/* 和前一个标签之间的竖线：前一个是当前标签时不画（Chrome 也是） */}
+                      {i > 0 && ws.tabs[i - 1].id !== ws.activeTab && <span className="pointer-events-none absolute left-0 top-2.5 bottom-2.5 w-px bg-border" />}
+                    </>
+                  )}
                   {agent && <AgentIcon agent={agent} className="size-3.5" />}
-                  <span className="truncate">{label}</span>
+                  <span className="min-w-0 flex-1 truncate">{label}</span>
                   <StatusDot status={st.status} unread={st.unread} />
                   {/* 关闭键一直占着位置（照 Chrome）：当前 tab 一直显示，别的 hover 才显示。原来是 hover 时才插进来，
                       tab 当场变宽、后面的 tab 全跟着挪 —— 鼠标划过 tab 栏就是一路闪动（用户报的） */}
@@ -109,7 +126,7 @@ export function TabBar() {
         })}
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon" className="size-7 shrink-0" onClick={() => addTab()}>
+            <Button variant="ghost" size="icon" className="mb-1 ml-1 size-7 shrink-0" onClick={() => addTab()}>
               <Plus className="size-4" />
             </Button>
           </TooltipTrigger>
@@ -117,7 +134,7 @@ export function TabBar() {
         </Tooltip>
       </div>
       {prefixActive && (
-        <div className="shrink-0 rounded-md bg-brand px-2 py-0.5 font-mono text-[11px] text-white" style={{ WebkitAppRegion: "no-drag" } as any}>
+        <div className="mb-2 shrink-0 rounded-md bg-brand px-2 py-0.5 font-mono text-[11px] text-white" style={{ WebkitAppRegion: "no-drag" } as any}>
           {formatCombo(prefix).replace(/\s.*/, "")} …
         </div>
       )}

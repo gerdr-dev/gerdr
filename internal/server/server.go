@@ -35,6 +35,8 @@ import (
 	"github.com/zbysir/gerdr/internal/hub"
 	"github.com/zbysir/gerdr/internal/plugins"
 	"github.com/zbysir/gerdr/internal/remote"
+	"github.com/zbysir/gerdr/internal/service"
+	"github.com/zbysir/gerdr/internal/term"
 	"github.com/zbysir/gerdr/internal/uisite"
 	"github.com/zbysir/gerdr/internal/version"
 	"github.com/zbysir/gerdr/internal/webui"
@@ -54,6 +56,12 @@ type Server struct {
 	OnConfig func()
 	// Remote：远程访问（设备表、passkey、中继）。nil = 这个进程不管远程（测试里）。
 	Remote *remote.Service
+	// Service：后台常驻（launchd）。nil = 不管（测试里）。
+	Service *service.Manager
+	// Terms：界面里的终端。nil = 不开（测试里）。
+	Terms *term.Manager
+	// OnServiceInstalled：刚打开后台常驻、本进程是 App 起的后端时让位（见 cmd/gerdr 的 handover）。
+	OnServiceInstalled func()
 }
 
 // cookieName：按令牌区分。cookie 不分端口 —— 同一个浏览器里开着两个 gerdr（正式的 + 调试的，都在 127.0.0.1），
@@ -80,6 +88,13 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/sessions/{id}/cancel", s.sessionOp(func(r *http.Request, sess *hub.Session) (any, error) {
 		return nil, sess.Cancel(r.Context())
 	}))
+	// 全部会话，最近有动静的在前（给外面的程序；界面用的是 /api/hello 那一大包）
+	mux.HandleFunc("GET /api/sessions", func(w http.ResponseWriter, r *http.Request) {
+		list := s.Hub.List()
+		sort.SliceStable(list, func(i, j int) bool { return list[i].UpdatedAt > list[j].UpdatedAt })
+		writeJSON(w, list)
+	})
+	mux.HandleFunc("GET /api/pending", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, s.Hub.Pending()) })
 	mux.HandleFunc("POST /api/sessions/{id}/answer", s.sessionOp(func(r *http.Request, sess *hub.Session) (any, error) {
 		var b struct {
 			ReqID    string          `json:"reqId"`
@@ -199,6 +214,12 @@ func (s *Server) Handler() http.Handler {
 	s.importRoutes(mux)
 	if s.Remote != nil {
 		s.remoteRoutes(mux)
+	}
+	if s.Service != nil {
+		s.serviceRoutes(mux)
+	}
+	if s.Terms != nil {
+		s.termRoutes(mux)
 	}
 	mux.HandleFunc("GET /api/system/stats", s.stats)
 	mux.HandleFunc("GET /api/fs/dirs", s.dirs)

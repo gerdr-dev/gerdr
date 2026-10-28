@@ -1,9 +1,9 @@
-import { ChevronUp, Folder, FolderGit2, History, Loader2, Play } from "lucide-react";
+import { ChevronUp, Folder, FolderGit2, History, Loader2, Play, SquareTerminal } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
-import { basename, createInPane } from "@/lib/actions";
+import { basename, createInPane, openTerminal } from "@/lib/actions";
 import { api } from "@/lib/api";
 import { get, set, useStore } from "@/lib/store";
 import type { PaneLeaf } from "@/lib/layout";
@@ -192,10 +192,17 @@ export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean
           ))}
         </div>
         <DirPicker value={cwd} onChange={setCwd} onEnter={() => start()} />
-        <Button ref={startRef} className="w-full" disabled={busy} onClick={() => start()} onKeyDown={(e) => e.key === "Enter" && start()}>
-          {busy ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
-          开始
-        </Button>
+        <div className="flex gap-2">
+          <Button ref={startRef} className="flex-1" disabled={busy} onClick={() => start()} onKeyDown={(e) => e.key === "Enter" && start()}>
+            {busy ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
+            开始
+          </Button>
+          {/* 临时要敲几条命令：这个 pane 直接变成这个目录下的终端 */}
+          <Button variant="outline" disabled={busy} title="在这个目录开终端（prefix+t 在旁边开）" onClick={() => openTerminal({ pane: pane.id, cwd: abs })}>
+            <SquareTerminal className="size-4" />
+            终端
+          </Button>
+        </div>
         <div>
           <div className="mb-1.5 flex items-center gap-1.5 text-[12px] text-muted-foreground">
             <History className="size-3.5" />

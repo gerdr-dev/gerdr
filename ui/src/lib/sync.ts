@@ -1,7 +1,9 @@
 // 和服务端保持同步：开机拉一次 /api/hello，之后靠 WebSocket 推。断了自己重连（重连后
 // 重新拉 hello、重新订阅，服务端会把订阅的会话日志整份再推一遍 —— 不用自己对账）。
 import { api, ApiError, clientId } from "./api";
+import { toast } from "sonner";
 import { validLayout } from "./layout";
+import { nativeNotify } from "./native";
 import { emitSessionChange } from "./plugins";
 import { applyEvents, applyRemoteLayout, get, mergeConfig, onLayoutChange, removeSession, set, setLayout, upsertSession, watchedSessions } from "./store";
 import type { HubEvent, SessionSummary } from "./types";
@@ -201,6 +203,15 @@ function handle(m: any) {
       break;
     case "plugins":
       import("./plugins").then((p) => p.reloadPlugins());
+      break;
+    case "stepup":
+      // 远程设备请求加 passkey，要坐在电脑前的人批准（RemoteSettings）。只在本机这边提醒：远程那头批不了
+      if (!location.protocol.startsWith("https")) {
+        const body = `「${m.data?.label}」请求添加 passkey，核对码 ${m.data?.code}`;
+        const open = () => set({ dialog: { kind: "settings", tab: "remote" } });
+        nativeNotify("gerdr：要你批准", body);
+        toast(body, { duration: 30000, action: { label: "去批准", onClick: open } });
+      }
       break;
   }
 }

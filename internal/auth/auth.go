@@ -331,7 +331,8 @@ func (s *Store) CheckTampered(alert func(string)) {
 // MarkVerified 记一次刚做过的生物验证（passkey 断言成功）。
 //
 // 调用点只有 passkey 的 login/finish 和 register/finish 两处 —— 也就是说 PasskeyAt
-// 这个时刻**只可能由一次真的 passkey 断言写出来**，配对那条路碰不到它。StepUpNeeded 靠的就是这一点。
+// 这个时刻只可能由一次真的 passkey 断言（或者本机亲手批准，GrantStepUp）写出来，配对那条路碰不到它。
+// StepUpNeeded 靠的就是这一点。
 func (s *Store) MarkVerified(id string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -344,6 +345,22 @@ func (s *Store) MarkVerified(id string) {
 			return
 		}
 	}
+}
+
+// GrantStepUp：本机批准了这台设备加 passkey（Approvals）。只写 PasskeyAt —— 它回答的是「能不能再加一把
+// passkey」，本机那个人亲手点的批准和刚过了一把 passkey 同样算数；VerifiedAt 不动，重新验证的要求照旧。
+// 调用点只有本机口上的 /api/remote/stepup/approve，远程那条路碰不到（remoteGuard 拦着）。
+func (s *Store) GrantStepUp(id string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, d := range s.devs {
+		if d.ID == id {
+			d.PasskeyAt = s.now()
+			s.flushLocked()
+			return true
+		}
+	}
+	return false
 }
 
 /* ------------------------------------------------------------------ cookie */

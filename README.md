@@ -9,6 +9,7 @@
 - **接着以前的聊**：在终端里开过的 Claude Code / Codex 会话，选目录就能列出来接着聊。
 - **从 herdr 导入**：herdr 的工作空间、tab、分屏原样搬过来，每个 agent 接上它的会话（设置 → 从 herdr 导入）。
 - **分屏、tab、工作空间**：和 [herdr](https://github.com/herdrdev/herdr) 一样的结构和快捷键（`ctrl+b v` 左右分屏……）。
+- **终端**：临时敲几条命令不用切出去：`ctrl+b t` 在旁边开一个（跟着当前目录），和会话一起分屏、开 tab。shell 跑在 gerdr 这边，刷新页面、换到手机上接着用。
 - **界面能让 agent 改**：界面就是 `~/.gerdr/ui` 里的 React 源码，没有打包环节，改完保存立刻生效。
   对 agent 说「侧栏底下加一个会话统计」就行（内置的 gerdr-ui skill 教它怎么改、改完怎么确认没改坏）。
 - **多个 agent 互相协作**：会话里的 agent 能开新会话（Claude Code / Codex）、派活、等结果、读回复（内置的 gerdr skill + `gerdr session` 命令）。
@@ -115,6 +116,8 @@ export default definePlugin({
 | `GERDR_UI` | `~/.gerdr/ui` | 界面源码目录（比如单独克隆的 gerdr-ui 仓库） |
 | `GERDR_ESM_CDN` | `https://esm.sh` | 界面第三方包的来源（esm.sh 或它的镜像；本机有缓存） |
 | `GERDR_CLAUDE_BIN` / `GERDR_CODEX_BIN` | 自动找 | agent 可执行文件的位置 |
+
+**用程序接**（手环、脚本）：看会话、读回复、发消息、替人点审批，都有 HTTP 接口，见 [docs/API.md](docs/API.md)。
 
 **安全**：gerdr 等于一个能在你机器上跑命令的入口，所以永远要令牌，哪怕只听 127.0.0.1。
 别把它的端口转发到公网 —— 要从外面用，走下面的「远程访问」。

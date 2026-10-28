@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, type PasskeyInfo, type RemoteDevice, type RemoteStatus } from "@/lib/api";
-import { isCancel, passkeySupported, registerPasskey } from "@/lib/passkey";
+import { isCancel, isStepUp, passkeySupported, registerPasskey } from "@/lib/passkey";
 import { Button } from "@/components/ui/button";
+import { RemoteCert } from "@/components/RemoteCert";
+import { PasskeyStepUp, StepUpApprovals } from "@/components/PasskeyStepUp";
 
 // 设置 →「远程访问」：手机 / 别的电脑经云端中继打开这台机器上的 gerdr（设计见 docs/dev/REMOTE.md）。
 // 两个 origin 上看到的不一样：本机（127.0.0.1）能出配对码、不能加 passkey；远程（中继那个域名）反过来 ——
@@ -20,6 +22,7 @@ export function RemoteSettings({ open }: { open: boolean }) {
   const [err, setErr] = useState("");
   const [msg, setMsg] = useState("");
   const [confirmAll, setConfirmAll] = useState(false);
+  const [stepUp, setStepUp] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -63,9 +66,9 @@ export function RemoteSettings({ open }: { open: boolean }) {
         <div className="space-y-2">
           <div>还没开远程访问。gerdr 经云端中继（herdr-relay）对外：TLS 在这台机器上终止，中继只转密文。开法（一次性）：</div>
           <pre className="overflow-x-auto rounded-md bg-muted p-3 font-mono text-[12px]">
-            {"# VPS 上出邀请码\nherdr-relay invite gerdr.example.com\n\n# 这台机器上\ngerdr remote join https://relay.example.com gerdr.example.com <邀请码> \\\n  --dns cloudflare --env CLOUDFLARE_DNS_API_TOKEN=…"}
+            {"# VPS 上出邀请码\nherdr-relay invite gerdr.example.com\n\n# 这台机器上\ngerdr remote join https://relay.example.com gerdr.example.com <邀请码>"}
           </pre>
-          <div className="text-[12px] text-muted-foreground">它会打出要加的 DNS 记录（A + CAA）。之后重启 gerdr。</div>
+          <div className="text-[12px] text-muted-foreground">它会打出要加的 DNS 记录。之后重启 gerdr，再回这里配证书。</div>
         </div>
       ) : (
         <div className="space-y-1.5">
@@ -94,6 +97,10 @@ export function RemoteSettings({ open }: { open: boolean }) {
           </div>
         </div>
       )}
+
+      {st.enabled && !isRemote && <StepUpApprovals open={open} />}
+
+      {st.enabled && !isRemote && <RemoteCert host={st.host ?? ""} onSaved={load} />}
 
       {st.enabled && !isRemote && (
         <div className="space-y-1.5">
@@ -177,12 +184,35 @@ export function RemoteSettings({ open }: { open: boolean }) {
       <div className="space-y-1.5">
         <div className="flex items-center justify-between">
           <div className="text-[13px] font-medium">passkey</div>
-          {pkOK && (
-            <Button size="sm" variant="outline" onClick={() => run(async () => setMsg(`加好了：${await registerPasskey()}`))}>
+          {pkOK && !stepUp && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                run(async () => {
+                  try {
+                    setMsg(`加好了：${await registerPasskey()}`);
+                  } catch (e) {
+                    if (!isStepUp(e)) throw e;
+                    setStepUp(true); // 已经有 passkey 了：先证明是本人（PasskeyStepUp）
+                  }
+                })
+              }
+            >
               加一把 passkey
             </Button>
           )}
         </div>
+        {stepUp && (
+          <PasskeyStepUp
+            onCancel={() => setStepUp(false)}
+            onDone={(label) => {
+              setStepUp(false);
+              setMsg(`加好了：${label}`);
+              load();
+            }}
+          />
+        )}
         <div className="text-[12px] text-muted-foreground">
           有了 passkey，新设备不用回机器前拿配对码，Face ID / 指纹一下就进来；配过对的设备超过 {st.reauthHours || "—"} 小时没验证要再验一次。
           {!pkOK && st.enabled && <> passkey 绑在 {st.host} 上，在那个地址打开 gerdr 才能加。</>}

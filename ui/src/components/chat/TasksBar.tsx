@@ -1,4 +1,4 @@
-import { Bot, ChevronDown, Loader2, MessagesSquare, Square, SquareTerminal, Workflow } from "lucide-react";
+import { Activity, Bot, ChevronDown, CircleX, MessagesSquare, Square, SquareTerminal, Workflow } from "lucide-react";
 import { openSubagent } from "@/lib/actions";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -46,7 +46,8 @@ export function TasksBar({ session }: { session: SessionSummary }) {
   return (
     <div className="mx-3 mb-1.5 rounded-lg border bg-card text-[12px]">
       <button className="flex w-full items-center gap-2 px-3 py-1.5" onClick={() => setOpen(!open)}>
-        <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
+        {/* 不转圈：对话里那条工具调用和底下的状态行已经在转了 */}
+        <Activity className="size-3.5 text-muted-foreground" />
         <span>{running.length} 个后台任务在跑</span>
         {!open && top[0] && <span className="min-w-0 flex-1 truncate text-left text-muted-foreground">{top[0].progress || top[0].description}</span>}
         <ChevronDown className={cn("ml-auto size-3.5 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")} />
@@ -73,30 +74,42 @@ export function TasksBar({ session }: { session: SessionSummary }) {
 }
 
 /** 对话流里的「这个后台任务结束了」。 */
+/** CLI 自动写的那种摘要（`Background command "xxx" completed (exit code 0)`）就是把描述和状态又说了一遍，不显示。 */
+function boilerplate(t: AgentTask) {
+  return !t.summary || t.summary === t.description || /^Background command ".*" (completed|failed|was stopped|killed)/.test(t.summary);
+}
+
+/**
+ * 后台任务跑完了：时间线上标一下它是这时候结束的。画成和工具调用（ToolCall）一样的一行 ——
+ * 状态图标打头、行尾耗时，对齐也一样（-ml-1.5 px-1.5），不再是一张带框的卡片夹在一串工具行中间。
+ */
 export function TaskDoneCard({ sessionId, t }: { sessionId: string; t: AgentTask }) {
   const Icon = taskIcon(t);
   const ok = t.status === "completed";
   const isAgent = t.type === "local_agent" || !!t.subagent;
   return (
-    <div className="flex items-start gap-2 rounded-md border bg-card/50 px-2.5 py-1.5 text-[12px]">
-      <Icon className={cn("mt-0.5 size-3.5 shrink-0", ok ? "text-muted-foreground" : "text-bad")} />
-      <div className="min-w-0 flex-1">
-        <div className="truncate">
-          <span className="text-muted-foreground">{isAgent ? `子 agent${t.subagent ? `（${t.subagent}）` : ""}` : "后台命令"}</span>
-          <span className="mx-1 text-muted-foreground">·</span>
-          {t.description || t.id}
-        </div>
-        <div className="truncate text-[11px] text-muted-foreground">
-          {STATUS[t.status] ?? t.status} · {elapsed(t.startedAt, t.endedAt)}
-          {t.toolUses ? ` · ${t.toolUses} 次工具调用` : ""}
-          {t.summary ? ` · ${t.summary}` : ""}
-        </div>
-      </div>
+    <div className="-ml-1.5 flex min-w-0 items-center gap-2 px-1.5 py-[3px] text-[13px] text-muted-foreground">
+      {/* 和工具调用那一行一样只有一个图标：成功就是任务图标，失败换成红叉 */}
+      {ok ? <Icon className="size-3.5 shrink-0" /> : <CircleX className="size-3.5 shrink-0 text-bad" />}
+      <span className="min-w-0 truncate">
+        {isAgent && t.subagent ? `${t.subagent} · ` : ""}
+        {t.description || t.id}
+      </span>
+      <span className="shrink-0 rounded bg-muted px-1 text-[11px]">{isAgent ? "子 agent" : "后台"}</span>
+      {!ok && <span className="shrink-0 text-[11px] text-bad">{STATUS[t.status] ?? t.status}</span>}
+      {!boilerplate(t) && <span className="min-w-0 shrink truncate text-[11px]">{t.summary}</span>}
+      <span className="shrink-0 text-[11px] tabular-nums opacity-70">
+        {elapsed(t.startedAt, t.endedAt)}
+        {t.toolUses ? ` · ${t.toolUses} 次工具` : ""}
+      </span>
+      <span className="flex-1" />
       {isAgent && t.toolCallId && (
-        <Button size="sm" variant="ghost" className="h-6 shrink-0 px-2 text-[11px]" onClick={() => openSubagent(sessionId, t.toolCallId!, t.description)}>
-          <MessagesSquare className="size-3" />
+        <button
+          className="shrink-0 rounded px-1.5 text-[11px] hover:bg-muted hover:text-foreground"
+          onClick={() => openSubagent(sessionId, t.toolCallId!, t.description)}
+        >
           查看对话
-        </Button>
+        </button>
       )}
     </div>
   );

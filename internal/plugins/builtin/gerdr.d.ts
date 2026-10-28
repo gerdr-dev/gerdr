@@ -91,6 +91,8 @@ declare global {
     id: string;
     sessionId?: string;
     session?: SessionInfo;
+    /** 终端 pane：服务端的终端 id 和开它时的目录。 */
+    terminal?: { id: string; cwd: string };
   }
 
   interface TabInfo {

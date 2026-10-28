@@ -6,7 +6,6 @@ import (
 	"io"
 	"log/slog"
 	"net/url"
-	"os"
 	"strings"
 	"time"
 
@@ -243,8 +242,8 @@ func offlineRemote() (*remote.Service, error) {
 
 // joinCmd：`gerdr remote join` —— 拿中继那边出的邀请码，把这台机器注册上去，配置写进 remote.json。
 //
-// **先核配置、再用邀请码**：远程那条路要求 TLS 在本进程终止（得有证书来源），缺了这项远程起不来。
-// 邀请码一次性、30 分钟过期，用掉了才发现配置不对就得回 VPS 再出一个。
+// **先核配置、再用邀请码**：邀请码一次性、30 分钟过期，用掉了才发现配置不对就得回 VPS 再出一个。
+// 证书来源（--dns / --cert）可以不给：注册完到设置 → 远程访问 → 证书里填，不用重启。
 func joinCmd() *cobra.Command {
 	var dns, email, cert, key string
 	var tokens []string
@@ -253,7 +252,8 @@ func joinCmd() *cobra.Command {
 		Use:   "join <中继地址> <主机名> <邀请码>",
 		Short: "用邀请码把这台机器注册到云端中继（herdr-relay）上（邀请码在 VPS 上用 herdr-relay invite <主机名> 出）",
 		Long: "注册到中继，并把配置写进 <数据目录>/remote/remote.json（0600），重启 gerdr 之后生效。\n" +
-			"证书要一起给：--dns 让 gerdr 走 DNS-01 自己签（推荐），或者 --cert / --key 指两个文件。\n\n" +
+			"证书可以一起给：--dns 让 gerdr 走 DNS-01 自己签（推荐），或者 --cert / --key 指两个文件；\n" +
+			"也可以不给，注册完在 App 的设置 → 远程访问 → 证书里选服务商、填凭据。\n\n" +
 			"DNS 服务商的凭据用 --env 给（可以给多个），名字照 lego 的写法、不带 GERDR_ 前缀：\n\n" +
 			"  gerdr remote join https://relay.example.com gerdr.example.com <邀请码> \\\n" +
 			"    --dns cloudflare --env CLOUDFLARE_DNS_API_TOKEN=…\n\n" +
@@ -293,14 +293,8 @@ func joinCmd() *cobra.Command {
 				}
 				f.Env[strings.TrimPrefix(k, "GERDR_")] = v
 			}
-			// 按「连上中继之后」的样子核一遍配置：缺证书配置在这儿就停，邀请码还没用掉
-			r := config.Remote{RelayURL: f.RelayURL, Host: f.Host, ACMEDNS: f.ACMEDNS, TLSCert: f.TLSCert, TLSKey: f.TLSKey}
-			if os.Getenv("GERDR_ACME_DNS") != "" {
-				r.ACMEDNS = os.Getenv("GERDR_ACME_DNS")
-			}
-			if p := r.TLSProblem(); p != "" {
-				return fmt.Errorf("%s\n\n  还没注册，邀请码没用掉：把 --dns / --cert 补上再敲一次", p)
-			}
+			// 证书来源可以不在这儿给（之后在设置 → 远程访问 → 证书里填）；给了就先核一下名字，邀请码还没用掉
+			r := config.Remote{ACMEDNS: f.ACMEDNS}
 			if r.ACMEDNS != "" && acme.EnvHint(r.ACMEDNS) == "" {
 				return fmt.Errorf("不认识的 DNS 服务商 %q，编译进来的有：%s", r.ACMEDNS, strings.Join(acme.Providers(), " / "))
 			}

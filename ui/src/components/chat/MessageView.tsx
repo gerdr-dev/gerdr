@@ -1,10 +1,10 @@
-import { Bot, Brain, ChevronDown, CircleAlert, Info, Pencil, RotateCcw, CornerDownRight } from "lucide-react";
+import { Bot, Brain, ChevronDown, CircleAlert, Info, Loader2, CornerDownRight } from "lucide-react";
+import { RewindButton } from "./RewindButton";
 import { memo, type ReactNode } from "react";
 import { Message, MessageContent } from "@/components/ai-elements/message";
 import { Markdown } from "./Markdown";
 import { Reasoning, ReasoningContent, ReasoningTrigger } from "@/components/ai-elements/reasoning";
 import { Shimmer } from "@/components/ai-elements/shimmer";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { GMessage, GPart, ToolPart } from "@/lib/transcript";
 import { cn } from "@/lib/utils";
 import { useKept } from "@/lib/kept";
@@ -28,8 +28,8 @@ type Props = {
   sessionId: string;
   live: boolean; // 这一条是正在流式输出的那条
   running: boolean;
-  onRewind?: (m: GMessage) => void;
-  onEdit?: (m: GMessage) => void;
+  onRewind?: (m: GMessage, restore: boolean) => void;
+  onEdit?: (m: GMessage, restore: boolean) => void;
   onQuickReply: (s: string) => void;
   stackPrev?: boolean; // 用户消息：上 / 下紧挨着也是用户消息（叠成一摞）
   stackNext?: boolean;
@@ -68,23 +68,10 @@ export const MessageView = memo(function MessageView({ msg, sessionId, live, run
         {/* 回退 / 改写按钮悬停时浮在气泡左边，不占高度 */}
         <div className="relative ml-auto flex min-w-0 max-w-[max(80%,280px)] justify-end">
           {canRewind && (
-            <div className="absolute right-full bottom-1 mr-1 flex gap-0.5 opacity-0 transition-opacity group-hover/user:opacity-100 [@media(hover:none)]:opacity-100">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground" onClick={() => onEdit?.(msg)}>
-                    <Pencil className="size-3.5" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>改这句重发（回到它之前）</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground" onClick={() => onRewind?.(msg)}>
-                    <RotateCcw className="size-3.5" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>回到这条消息之前</TooltipContent>
-              </Tooltip>
+            // 气泡开着时按钮一直显示（鼠标挪去点气泡，hover 没了也别消失）
+            <div className="absolute right-full bottom-1 mr-1 flex gap-0.5 opacity-0 transition-opacity group-hover/user:opacity-100 has-[[data-state=open]]:opacity-100 [@media(hover:none)]:opacity-100">
+              <RewindButton msg={msg} sessionId={sessionId} edit onConfirm={(r) => onEdit?.(msg, r)} />
+              <RewindButton msg={msg} sessionId={sessionId} edit={false} onConfirm={(r) => onRewind?.(msg, r)} />
             </div>
           )}
           <MessageContent
@@ -97,7 +84,10 @@ export const MessageView = memo(function MessageView({ msg, sessionId, live, run
             {files.length > 0 && (
               <div className="flex flex-wrap gap-1.5">
                 {files.map((f: any, i) => (
-                  <img key={i} src={f.url} className="max-h-40 rounded-xl border" />
+                  // 高度定死在图片自己身上（宽度按比例自动算）：对话是虚拟列表，行高要在图片加载完之前就定下来。
+                  // 只给 max-h 的话行先按 0 高量、解码完再长 160px，滚动跟着修正又把行卸载 / 重挂，来回抽搐。
+                  // 别套一层定高的 div 再给 img max-w-full：外层宽度又取决于 img，循环依赖，图片宽度会被算成 0（踩过，图没了）
+                  <img key={i} src={f.url} className="h-40 w-auto max-w-full rounded-xl border object-contain" />
                 ))}
               </div>
             )}
@@ -107,12 +97,19 @@ export const MessageView = memo(function MessageView({ msg, sessionId, live, run
         {showMeta && (
           <div className="flex items-center justify-end gap-1.5 px-2 text-[12px] text-muted-foreground">
             {meta?.from && <FromLabel id={meta.from} />}
-            {meta?.steer && (
-              <span className="flex items-center gap-1">
-                <CornerDownRight className="size-3" />
-                中途插话
-              </span>
-            )}
+            {meta?.steer &&
+              (meta.queued ? (
+                // 排在 agent 的队列里、还没被读到（claude 要等手上这个工具调用结束）
+                <span className="flex items-center gap-1" title="agent 手上的这一步做完就会读到它；按 ↑ 可以收回来改">
+                  <Loader2 className="size-3 animate-spin" />
+                  排队中，等它读到…
+                </span>
+              ) : (
+                <span className="flex items-center gap-1">
+                  <CornerDownRight className="size-3" />
+                  中途插话
+                </span>
+              ))}
             {(meta?.from || meta?.steer) && !stackNext && meta?.ts ? <span>·</span> : null}
             {!stackNext && <span className="tabular-nums">{fmtTime(meta?.ts)}</span>}
           </div>
@@ -188,11 +185,21 @@ function KeptReasoning({ keep, streaming, text }: { keep: string; streaming: boo
 /** 这一块在不在主列表里单独成一行（子 agent 的工具调用挂在父调用里面画，不单独成行；空文字不画）。 */
 export function partVisible(p: GPart, children: Map<string, ToolPart[]>): boolean {
   if ((p.type === "text" || p.type === "reasoning") && !p.text.trim()) return false;
+  // 批准了的审批不单独成行：工具那一行的 ✓ 已经说明放行了，再多一行「✓ 允许」只会把一串工具调用切碎。
+  // 拒绝 / 作废的留着（那是这一轮为什么拐弯的原因）。
+  if (p.type === "data-permission" && permAllowed(p.data)) return false;
+  return true;
   if (p.type === "dynamic-tool") {
     const tp = p as ToolPart;
     if (tp.toolMetadata?.parent && [...children.values()].some((arr) => arr.includes(tp))) return false;
   }
   return true;
+}
+
+/** 审批已经答了、而且选的是放行的那种。 */
+export function permAllowed(d: { answer?: string; request: { options: { optionId: string; kind: string }[] } }): boolean {
+  if (!d.answer) return false;
+  return !!d.request.options.find((o) => o.optionId === d.answer)?.kind.startsWith("allow");
 }
 
 /** 子 agent 的工具调用挂在它的父调用下面：父 toolCallId → 子调用。 */
@@ -282,7 +289,8 @@ export function renderPart(p: GPart, i: number, ctx: PartCtx): ReactNode {
         </div>
       );
     case "file":
-      return <img key={i} src={(p as any).url} className="max-h-60 rounded-md border" />;
+      // 同用户消息里的图：高度定死在 img 上，行高不随图片加载变（虚拟列表会抽搐）
+      return <img key={i} src={(p as any).url} className="h-60 w-auto max-w-full self-start rounded-md border object-contain" />;
   }
   return null;
 }

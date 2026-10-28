@@ -13,6 +13,7 @@ import (
 	qrcode "github.com/skip2/go-qrcode"
 
 	"github.com/zbysir/gerdr/internal/auth"
+	"github.com/zbysir/gerdr/internal/remote"
 )
 
 // 远程访问那条路（云端中继进来的请求）。设计见 docs/dev/REMOTE.md，要点三条：
@@ -66,7 +67,9 @@ func (s *Server) remoteGuard(w http.ResponseWriter, r *http.Request, next http.H
 	}
 	p := r.URL.Path
 	// 本机专用的口：令牌换 cookie、出配对码、解熔断。远程连 404 都不给区分。
-	if p == "/auth" || p == "/api/remote/pair-code" || p == "/api/remote/unlock" {
+	// 证书配置里有 DNS 服务商的密钥，也只在本机改。
+	if p == "/auth" || p == "/api/remote/pair-code" || p == "/api/remote/unlock" || p == "/api/remote/cert" || p == "/api/service" ||
+		p == "/api/remote/stepup/pending" || strings.HasPrefix(p, "/api/remote/stepup/approve/") {
 		httpError(w, http.StatusForbidden, "这个操作只能在跑 gerdr 的那台机器上做")
 		return
 	}
@@ -132,9 +135,11 @@ func (s *Server) enterPair(w http.ResponseWriter, r *http.Request) {
 	q.Del("pair")
 	// 已经有设备凭据了就什么都不做，只把 URL 洗干净 —— 否则同一个链接每打开一次就多一台设备
 	if rm.Auth.Authenticate(r) == nil {
-		if !s.gateCheck(w, r) {
+		release, ok := s.gateCheck(w, r)
+		if !ok {
 			return
 		}
+		defer release()
 		ip := auth.ClientIP(r)
 		if _, token, err := rm.Auth.Redeem(code, r.UserAgent(), ip); err != nil {
 			rm.Gate.Fail(ip)
@@ -149,23 +154,51 @@ func (s *Server) enterPair(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, (&url.URL{Path: "/", RawQuery: q.Encode()}).String(), http.StatusFound)
 }
 
-// gateCheck 在每次猜凭据之前过一下闸：封锁中直接 429，否则先睡一会儿（拖慢在线猜解）。
-func (s *Server) gateCheck(w http.ResponseWriter, r *http.Request) bool {
+// gateCheck 在每次猜凭据之前过一下闸：熔断 / 封锁中直接 429；同一个 IP 已经有一次在验、或者全局在验的满了，
+// 也 429（并发请求绕过退避的那个洞，见 auth.Gate.Enter）；否则先睡一会儿（拖慢在线猜解）。
+// 放行时返回 release，验完（成功失败都一样）要调。
+func (s *Server) gateCheck(w http.ResponseWriter, r *http.Request) (release func(), ok bool) {
 	g := s.Remote.Gate
-	if g.Locked() {
+	locked := func() bool {
+		if !g.Locked() {
+			return false
+		}
 		writeJSONStatus(w, http.StatusTooManyRequests, map[string]any{"error": "失败次数太多，已暂停接受新设备。在跑 gerdr 的机器上执行 gerdr remote unlock"})
-		return false
+		return true
 	}
-	delay, blocked, retry := g.Check(auth.ClientIP(r))
+	busy := func() {
+		w.Header().Set("Retry-After", "2")
+		writeJSONStatus(w, http.StatusTooManyRequests, map[string]any{"error": "太快了，等一下再试"})
+	}
+	if locked() {
+		return nil, false
+	}
+	ip := auth.ClientIP(r)
+	if !g.Enter(ip) {
+		busy()
+		return nil, false
+	}
+	delay, blocked, retry := g.Check(ip)
 	if blocked {
+		g.Leave(ip)
 		w.Header().Set("Retry-After", itoa(int(retry.Seconds())+1))
 		writeJSONStatus(w, http.StatusTooManyRequests, map[string]any{"error": "试错太多次了，" + retry.Round(time.Minute).String() + " 后再试"})
-		return false
+		return nil, false
 	}
 	if delay > 0 {
 		time.Sleep(delay)
 	}
-	return true
+	// 睡的这一会儿别人可能已经把全局熔断打跳了
+	if locked() {
+		g.Leave(ip)
+		return nil, false
+	}
+	if !g.Slot() {
+		g.Leave(ip)
+		busy()
+		return nil, false
+	}
+	return func() { g.Unslot(); g.Leave(ip) }, true
 }
 
 //go:embed pairpage.html
@@ -202,6 +235,27 @@ func (s *Server) remoteRoutes(mux *http.ServeMux) {
 			out["qr"] = "data:image/png;base64," + base64.StdEncoding.EncodeToString(png)
 		}
 		writeJSON(w, out)
+	})
+	// 证书来源（DNS 服务商 + 凭据，或者两个文件）：读的时候凭据只给名字；改了不用重启，远程那条路当场重来。
+	mux.HandleFunc("GET /api/remote/cert", func(w http.ResponseWriter, r *http.Request) {
+		c, err := s.Remote.CertConfig()
+		if err != nil {
+			httpError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		writeJSON(w, c)
+	})
+	mux.HandleFunc("POST /api/remote/cert", func(w http.ResponseWriter, r *http.Request) {
+		var in remote.CertInput
+		if err := decode(r, &in); err != nil {
+			httpError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		if err := s.Remote.SaveCert(in); err != nil {
+			httpError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		writeJSON(w, map[string]any{"ok": true})
 	})
 	mux.HandleFunc("POST /api/remote/unlock", func(w http.ResponseWriter, r *http.Request) {
 		s.Remote.Gate.Unlock()
@@ -250,6 +304,50 @@ func (s *Server) remoteRoutes(mux *http.ServeMux) {
 		writeJSON(w, map[string]any{"deleted": 1, "label": label})
 	})
 	mux.HandleFunc("POST /api/remote/passkey/{action}/{step}", s.remotePasskey)
+
+	// 到电脑上批准（auth/approve.go）：远程设备发起 / 查状态；本机列出 / 批准（本机专用，remoteGuard 拦着远程）。
+	mux.HandleFunc("POST /api/remote/stepup/request", func(w http.ResponseWriter, r *http.Request) {
+		id := s.Remote.Auth.Authenticate(r)
+		if id == nil || !auth.FromRemote(r) {
+			httpError(w, http.StatusUnauthorized, "这台设备还没配对")
+			return
+		}
+		a := s.Remote.Approvals.Request(id.Device.ID, id.Label)
+		// 推给开着的界面：本机那边弹通知 / toast（sync.ts 的 "stepup"），不然人不知道要回电脑前点
+		if s.Hub != nil {
+			s.Hub.Broadcast("stepup", map[string]any{"label": id.Label, "code": a.Code})
+		}
+		writeJSON(w, map[string]any{"id": a.ID, "code": a.Code, "expires": a.Expires})
+	})
+	mux.HandleFunc("GET /api/remote/stepup/request/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id := s.Remote.Auth.Authenticate(r)
+		if id == nil {
+			httpError(w, http.StatusUnauthorized, "这台设备还没配对")
+			return
+		}
+		writeJSON(w, map[string]any{"state": s.Remote.Approvals.State(r.PathValue("id"), id.Device.ID)})
+	})
+	mux.HandleFunc("GET /api/remote/stepup/pending", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, map[string]any{"requests": s.Remote.Approvals.Pending()})
+	})
+	mux.HandleFunc("POST /api/remote/stepup/approve/{id}", func(w http.ResponseWriter, r *http.Request) {
+		var b struct {
+			OK bool `json:"ok"`
+		}
+		if err := decode(r, &b); err != nil {
+			httpError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		dev, found := s.Remote.Approvals.Decide(r.PathValue("id"), b.OK)
+		if !found {
+			httpError(w, http.StatusNotFound, "这个请求已经过期了")
+			return
+		}
+		if b.OK {
+			s.Remote.Auth.GrantStepUp(dev)
+		}
+		writeJSON(w, map[string]any{"ok": true})
+	})
 }
 
 func (s *Server) myDevice(r *http.Request) string {
@@ -303,9 +401,11 @@ func (s *Server) remotePair(w http.ResponseWriter, r *http.Request) {
 		httpError(w, 400, err.Error())
 		return
 	}
-	if !s.gateCheck(w, r) {
+	release, ok := s.gateCheck(w, r)
+	if !ok {
 		return
 	}
+	defer release()
 	ip := auth.ClientIP(r)
 	dev, token, err := rm.Auth.Redeem(b.Code, r.UserAgent(), ip)
 	if err != nil {
@@ -377,9 +477,11 @@ func (s *Server) remotePasskey(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"ok": true, "id": k.ID, "label": k.Label})
 
 	case "login/begin":
-		if !s.gateCheck(w, r) {
+		release, ok := s.gateCheck(w, r)
+		if !ok {
 			return
 		}
+		release() // begin 只是发个挑战，不验东西：过一下闸（封锁中就别给）就放
 		opts, ceremony, err := rm.Passkeys.BeginLogin()
 		if err != nil {
 			httpError(w, 400, err.Error())
@@ -388,9 +490,11 @@ func (s *Server) remotePasskey(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"options": opts, "ceremony": ceremony})
 
 	case "login/finish":
-		if !s.gateCheck(w, r) {
+		release, ok := s.gateCheck(w, r)
+		if !ok {
 			return
 		}
+		defer release()
 		ip := auth.ClientIP(r)
 		k, err := rm.Passkeys.FinishLogin(r.URL.Query().Get("c"), r)
 		if err != nil {

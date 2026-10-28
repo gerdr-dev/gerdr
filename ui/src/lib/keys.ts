@@ -7,6 +7,9 @@
 export type KeyAction =
   | "splitRight"
   | "splitDown"
+  | "splitTerminal"
+  | "splitTerminalDown"
+  | "terminalTab"
   | "closePane"
   | "zoom"
   | "focusLeft"
@@ -55,6 +58,9 @@ export type KeyAction =
 export const ACTION_TITLES: Record<KeyAction, string> = {
   splitRight: "左右分屏",
   splitDown: "上下分屏",
+  splitTerminal: "右边开终端",
+  splitTerminalDown: "下面开终端",
+  terminalTab: "新 tab 开终端",
   closePane: "关闭 pane",
   zoom: "放大 / 还原 pane",
   focusLeft: "焦点 ←",
@@ -105,6 +111,10 @@ export const ACTION_TITLES: Record<KeyAction, string> = {
 export const DEFAULT_KEYS: Record<KeyAction, string[]> = {
   splitRight: ["prefix+v"],
   splitDown: ["prefix+-"],
+  // prefix+t 在 tmux 里是大钟，没人用；herdr 也没占
+  splitTerminal: ["prefix+t"],
+  splitTerminalDown: ["prefix+shift+-"],
+  terminalTab: ["prefix+shift+c"],
   closePane: ["prefix+x"],
   zoom: ["prefix+z"],
   focusLeft: ["prefix+h", "prefix+left"],

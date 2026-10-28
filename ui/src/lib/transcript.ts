@@ -10,6 +10,8 @@ export type PlanEntry = { content: string; status: "pending" | "in_progress" | "
 export type GMeta = {
   messageId?: string;
   steer?: boolean;
+  /** 插话还在 agent 的队列里排着、没被读进这一轮（claude 要等手上这个工具调用结束才读） */
+  queued?: boolean;
   snapshot?: string;
   from?: string; // 别的会话发来的：发送方会话 id
   ts: number;
@@ -19,7 +21,7 @@ export type GMeta = {
 export type GData = {
   plan: { entries: PlanEntry[] };
   permission: { reqId: string; request: PermissionRequest; answer?: string; cancelled?: boolean };
-  ask: { reqId: string; request: AskRequest; answers?: Record<string, string[]>; cancelled?: boolean };
+  ask: { reqId: string; request: AskRequest; answers?: Record<string, string[]>; cancelled?: boolean; reason?: "skipped" | "replied" };
   notice: { level: string; text: string };
   task: { task: AgentTask };
   turnStat: { ms: number; tokens: number; ts?: number };
@@ -219,7 +221,20 @@ export class Transcript {
         if (e.auto) this.pushPart(i, { type: "data-notice", data: { level: "auto", text: "后台任务有结果了，agent 接着处理" } });
         break;
       }
+      case "steer_state": {
+        const i = this.messages.findIndex((m) => m.role === "user" && m.metadata?.messageId === e.messageId);
+        if (i >= 0) {
+          const m = this.messages[i];
+          this.messages = [...this.messages];
+          this.messages[i] = { ...m, metadata: { ...m.metadata!, queued: e.text === "queued" } };
+        }
+        break;
+      }
       case "turn_end": {
+        // 这一轮完了：还标着「排队中」的插话不再转圈（claude 会把它们带进下一轮，到时候自然被读到；别让圈一直转着）
+        if (this.messages.some((m) => m.metadata?.queued)) {
+          this.messages = this.messages.map((m) => (m.metadata?.queued ? { ...m, metadata: { ...m.metadata, queued: false } } : m));
+        }
         this.running = false;
         this.messages = [...this.messages];
         if (e.error || (e.stopReason && e.stopReason !== "end_turn")) {
@@ -275,7 +290,7 @@ export class Transcript {
         if (p.type === "data-permission") {
           this.setPart(loc, { ...p, data: { ...p.data, answer: r.optionId, cancelled: !!r.cancelled || !r.optionId } });
         } else {
-          this.setPart(loc, { ...p, data: { ...p.data, answers: r.answers, cancelled: !!r.cancelled } });
+          this.setPart(loc, { ...p, data: { ...p.data, answers: r.answers, cancelled: !!r.cancelled, reason: r.reason } });
         }
         break;
       }
@@ -334,16 +349,25 @@ export class Transcript {
         break;
       }
       case "user_message_chunk": {
-        // 只有导入的历史会出现（agent 重放）。
-        let text = u.content?.type === "text" ? u.content.text : "";
-        if (!text) break;
-        const mb = machineBlock(text);
-        if (mb?.notice) {
-          this.pushPart(this.assistant(ts), { type: "data-notice", data: mb.notice });
-          break;
+        // 只有导入的历史会出现（agent 重放）。一条消息可能分几块来（文字 + 贴的图），MessageId 相同，拼回一条
+        let part: GPart | undefined;
+        if (u.content?.type === "text" && u.content.text) {
+          const mb = machineBlock(u.content.text);
+          if (mb?.notice) {
+            this.pushPart(this.assistant(ts), { type: "data-notice", data: mb.notice });
+            break;
+          }
+          part = { type: "text", text: mb?.text ?? u.content.text };
+        } else if (u.content?.type === "image" && u.content.data) {
+          part = { type: "file", mediaType: u.content.mimeType, url: `data:${u.content.mimeType};base64,${u.content.data}` };
         }
-        if (mb?.text) text = mb.text;
-        this.messages.push({ id: u.messageId ?? this.uid(), role: "user", parts: [{ type: "text", text }], metadata: { messageId: u.messageId, ts } });
+        if (!part) break;
+        const last = this.messages.length - 1;
+        if (u.messageId && last >= 0 && this.messages[last].role === "user" && this.messages[last].metadata?.messageId === u.messageId) {
+          this.touch(last).parts.push(part);
+        } else {
+          this.messages.push({ id: u.messageId ?? this.uid(), role: "user", parts: [part], metadata: { messageId: u.messageId, ts } });
+        }
         this.chunks.clear();
         this.lastChunkKey = "";
         break;

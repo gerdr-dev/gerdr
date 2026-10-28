@@ -20,8 +20,10 @@ import (
 // （用户报的：herdr 里导入的会话，两边各说各的）。CLI 自己不拦这件事。
 //
 // 判据：交互式 claude 起来时会写 <配置目录>/sessions/<pid>.json（pid、sessionId、cwd、状态……），
-// 退出时删掉（被强杀的会留下，所以还要核 pid 活着）。gerdr 自己起的 stream-json 进程不写这个文件 ——
-// 所以这里找到的一定是「别处」的。
+// 退出时删掉（被强杀的会留下，所以还要核 pid 活着）。**gerdr 自己起的 stream-json 进程也写**
+// （entrypoint 是 sdk-cli）—— 第一版以为不写，结果把自己当成了「别处开着」：人选「关掉那边」关的是自己，
+// 下一轮进程重起、又登记，又问一遍（用户报的）。所以按 pid 排除自己起的（ownPids），不按 sdk-cli 排除：
+// 别的用 SDK 的程序开着同一个会话，一样会分叉，该拦。
 
 type sessionFile struct {
 	Pid       int    `json:"pid"`
@@ -37,6 +39,7 @@ func (a *Agent) holders(id string) []acpx.Holder {
 	}
 	dir := filepath.Join(filepath.Dir(a.projectsDir()), "sessions")
 	files, _ := filepath.Glob(filepath.Join(dir, "*.json"))
+	own := a.ownPids()
 	var out []acpx.Holder
 	for _, f := range files {
 		b, err := os.ReadFile(f)
@@ -44,7 +47,7 @@ func (a *Agent) holders(id string) []acpx.Holder {
 			continue
 		}
 		var sf sessionFile
-		if json.Unmarshal(b, &sf) != nil || sf.SessionID != id || sf.Pid <= 0 || sf.Pid == os.Getpid() {
+		if json.Unmarshal(b, &sf) != nil || sf.SessionID != id || sf.Pid <= 0 || sf.Pid == os.Getpid() || own[sf.Pid] {
 			continue
 		}
 		if !sysenv.PidAlive(sf.Pid) {
@@ -92,4 +95,23 @@ func (s *session) takeover(action string) (acpx.TakeoverResponse, error) {
 		return acpx.TakeoverResponse{SessionId: acp.SessionId(newID)}, nil
 	}
 	return acpx.TakeoverResponse{}, acp.NewInvalidParams(map[string]any{"action": action})
+}
+
+// ownPids：这个适配器自己起着的 claude 进程。
+func (a *Agent) ownPids() map[int]bool {
+	a.mu.Lock()
+	ss := make([]*session, 0, len(a.sessions))
+	for _, s := range a.sessions {
+		ss = append(ss, s)
+	}
+	a.mu.Unlock()
+	out := map[int]bool{}
+	for _, s := range ss {
+		s.mu.Lock()
+		if s.p != nil && s.p.cmd != nil && s.p.cmd.Process != nil {
+			out[s.p.cmd.Process.Pid] = true
+		}
+		s.mu.Unlock()
+	}
+	return out
 }

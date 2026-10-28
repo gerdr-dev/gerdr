@@ -6,7 +6,9 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -132,5 +134,115 @@ func TestRemotePairFlow(t *testing.T) {
 	lh.ServeHTTP(w, r)
 	if w.Code != 409 {
 		t.Fatalf("本机口上加 passkey 该 409，得到 %d", w.Code)
+	}
+}
+
+// 证书配置：远程碰不到（里面有 DNS 密钥）；本机能改，读回来只给名字不给值，换服务商时别家的凭据一起删掉。
+func TestRemoteCertConfig(t *testing.T) {
+	t.Setenv("GERDR_DO_AUTH_TOKEN", "")
+	t.Setenv("GERDR_CLOUDFLARE_DNS_API_TOKEN", "") // SaveCert 会写进程环境：登记一下，测完还原
+	s, lh, rh := remoteServer(t)
+	if w := do(rh, "GET", "/api/remote/cert", nil); w.Code != 403 {
+		t.Fatalf("远程不该能读证书配置，得到 %d", w.Code)
+	}
+	local := func(method, body string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(method, "http://127.0.0.1:7870/api/remote/cert", strings.NewReader(body))
+		r.Header.Set("Authorization", "Bearer "+s.Token)
+		r.Header.Set("X-Gerdr", "1")
+		w := httptest.NewRecorder()
+		lh.ServeHTTP(w, r)
+		return w
+	}
+	if w := local("POST", `{"dns":"cloudflare","env":{}}`); w.Code != 400 {
+		t.Fatalf("凭据没填该拒，得到 %d %s", w.Code, w.Body)
+	}
+	if w := local("POST", `{"dns":"cloudflare","env":{"CLOUDFLARE_DNS_API_TOKEN":"cf-secret-123"}}`); w.Code != 200 {
+		t.Fatalf("保存：%d %s", w.Code, w.Body)
+	}
+	w := local("GET", "")
+	if w.Code != 200 || strings.Contains(w.Body.String(), "cf-secret-123") || !strings.Contains(w.Body.String(), `"set":["CLOUDFLARE_DNS_API_TOKEN"]`) {
+		t.Fatalf("读回来该只有名字：%d %s", w.Code, w.Body)
+	}
+	if s.Remote.Cfg.ACMEDNS != "cloudflare" {
+		t.Fatalf("配置没生效：%+v", s.Remote.Cfg)
+	}
+	// 留空 = 沿用；换一家服务商，cloudflare 的 token 要从文件里删掉
+	if w := local("POST", `{"dns":"cloudflare","email":"a@b.c","env":{}}`); w.Code != 200 {
+		t.Fatalf("留空沿用：%d %s", w.Code, w.Body)
+	}
+	if w := local("POST", `{"dns":"digitalocean","env":{"DO_AUTH_TOKEN":"do-1"}}`); w.Code != 200 {
+		t.Fatalf("换服务商：%d %s", w.Code, w.Body)
+	}
+	f, _ := config.ReadRemoteFile(filepath.Dir(s.Remote.Dir))
+	if _, ok := f.Env["CLOUDFLARE_DNS_API_TOKEN"]; ok || f.Env["DO_AUTH_TOKEN"] != "do-1" {
+		t.Fatalf("换服务商之后文件里的凭据不对：%v", f.Env)
+	}
+}
+
+// 爆破：进了退避之后同时打一批猜测，只有一个真去验，其余当场 429 —— 不然并发请求能绕过退避和封锁。
+func TestRemotePairConcurrentGuesses(t *testing.T) {
+	_, _, rh := remoteServer(t)
+	guess := func() int { return do(rh, "POST", "/api/remote/pair", body(`{"code":"AAAAAAAA"}`)(), csrf).Code }
+	for i := 0; i < 3; i++ { // 前两次不罚，第三次之后下一次要先睡 1 秒
+		if c := guess(); c != 401 {
+			t.Fatalf("第 %d 次猜错该 401，得到 %d", i+1, c)
+		}
+	}
+	codes := make(chan int, 10)
+	var wg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() { defer wg.Done(); codes <- guess() }()
+	}
+	wg.Wait()
+	close(codes)
+	n := map[int]int{}
+	for c := range codes {
+		n[c]++
+	}
+	if n[401] != 1 || n[429] != 9 {
+		t.Fatalf("并发 10 次该只有 1 次真去验（401）、9 次 429，得到 %v", n)
+	}
+}
+
+// 到电脑上批准：远程设备发起，**只有本机能批**（远程能批的话，偷来的 cookie 自己批自己，step-up 就白设了）。
+func TestRemoteStepUpApproval(t *testing.T) {
+	s, lh, rh := remoteServer(t)
+	code, _ := s.Remote.Auth.MintCode()
+	dev, token, _ := s.Remote.Auth.Redeem(code, "Android · Edge", "")
+	c := cookie(&http.Cookie{Name: "gerdr_dev", Value: token})
+	w := do(rh, "POST", "/api/remote/stepup/request", body("{}")(), c, csrf)
+	var req struct{ ID, Code string }
+	_ = json.Unmarshal(w.Body.Bytes(), &req)
+	if w.Code != 200 || req.ID == "" || len(req.Code) != 4 {
+		t.Fatalf("发起：%d %s", w.Code, w.Body)
+	}
+	if w := do(rh, "GET", "/api/remote/stepup/pending", nil, c); w.Code != 403 {
+		t.Fatalf("远程不该看得到待批列表，得到 %d", w.Code)
+	}
+	if w := do(rh, "POST", "/api/remote/stepup/approve/"+req.ID, body(`{"ok":true}`)(), c, csrf); w.Code != 403 {
+		t.Fatalf("远程不该能自己批准，得到 %d", w.Code)
+	}
+	local := func(method, path, b string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(method, "http://127.0.0.1:7870"+path, strings.NewReader(b))
+		r.Header.Set("Authorization", "Bearer "+s.Token)
+		r.Header.Set("X-Gerdr", "1")
+		w := httptest.NewRecorder()
+		lh.ServeHTTP(w, r)
+		return w
+	}
+	if w := local("GET", "/api/remote/stepup/pending", ""); !strings.Contains(w.Body.String(), req.Code) {
+		t.Fatalf("本机该看到请求：%s", w.Body)
+	}
+	if w := local("POST", "/api/remote/stepup/approve/"+req.ID, `{"ok":true}`); w.Code != 200 {
+		t.Fatalf("本机批准：%d %s", w.Code, w.Body)
+	}
+	if w := do(rh, "GET", "/api/remote/stepup/request/"+req.ID, nil, c); !strings.Contains(w.Body.String(), "approved") {
+		t.Fatalf("设备该看到已批准：%s", w.Body)
+	}
+	for _, d := range s.Remote.Auth.Devices() {
+		if d.ID == dev.ID && time.Since(d.PasskeyAt) > time.Minute {
+			t.Fatal("批准之后该给这台设备一次 step-up（PasskeyAt）")
+		}
 	}
 }

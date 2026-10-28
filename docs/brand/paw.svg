@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" shape-rendering="crispEdges" fill="currentColor">
+  <!-- 狗爪印（像素画，11×9 格）。做 loading 候选时画的，16px 下比狗脸好认，留着备用。颜色跟 currentColor 走。 -->
+  <rect x="4" y="3" width="2" height="1"/><rect x="9" y="3" width="2" height="1"/><rect x="4" y="4" width="2" height="1"/><rect x="9" y="4" width="2" height="1"/><rect x="2" y="5" width="2" height="1"/><rect x="11" y="5" width="2" height="1"/><rect x="2" y="6" width="2" height="1"/><rect x="11" y="6" width="2" height="1"/><rect x="6" y="7" width="3" height="1"/><rect x="5" y="8" width="5" height="1"/><rect x="4" y="9" width="7" height="1"/><rect x="4" y="10" width="7" height="1"/><rect x="5" y="11" width="2" height="1"/><rect x="8" y="11" width="2" height="1"/>
+</svg>

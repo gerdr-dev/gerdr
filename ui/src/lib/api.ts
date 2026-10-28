@@ -1,4 +1,4 @@
-import type { ContentBlock, ExtSettings, ExtView, Hello, PluginBuild, SessionSummary } from "./types";
+import type { ContentBlock, ExtSettings, ExtView, Hello, PluginBuild, SessionSummary, TermInfo } from "./types";
 
 /** 正开着某个会话的别的进程（herdr / 终端里的交互式 claude） */
 export type Holder = { pid: number; name?: string; status?: string; cwd?: string };
@@ -90,6 +90,10 @@ export const api = {
   createSession: (o: { agent: string; cwd: string; mode?: string; config?: Record<string, string>; import?: string; title?: string }) =>
     req<SessionSummary>("POST", "/api/sessions", o),
   deleteSession: (id: string) => req("DELETE", `/api/sessions/${id}`),
+  termCreate: (o: { cwd?: string; from?: string; cols?: number; rows?: number }) => req<TermInfo>("POST", "/api/terms", o),
+  /** liveCwd：顺带问 shell 现在在哪个目录（mac 上要跑一次 lsof，别每次都问） */
+  termInfo: (id: string, liveCwd?: boolean) => req<TermInfo>("GET", `/api/terms/${encodeURIComponent(id)}${liveCwd ? "?cwd=1" : ""}`),
+  termKill: (id: string) => req("DELETE", `/api/terms/${encodeURIComponent(id)}`),
   send: sendWithRetry,
   cancel: (id: string) => req("POST", `/api/sessions/${id}/cancel`, {}),
   reload: (id: string) => req("POST", `/api/sessions/${id}/reload`, {}),
@@ -137,6 +141,14 @@ export const api = {
   remotePasskeys: () => req<{ passkeys: PasskeyInfo[]; available: boolean; url: string }>("GET", "/api/remote/passkeys"),
   remoteDeletePasskey: (id: string) => req("DELETE", `/api/remote/passkeys/${encodeURIComponent(id)}`),
   remoteUnlock: () => req("POST", "/api/remote/unlock", {}),
+  service: () => req<ServiceStatus>("GET", "/api/service"),
+  setService: (on: boolean) => req("POST", "/api/service", { on }),
+  stepUpRequest: () => req<{ id: string; code: string; expires: string }>("POST", "/api/remote/stepup/request", {}),
+  stepUpState: (id: string) => req<{ state: "pending" | "approved" | "expired" }>("GET", `/api/remote/stepup/request/${encodeURIComponent(id)}`),
+  stepUpPending: () => req<{ requests: StepUpRequest[] }>("GET", "/api/remote/stepup/pending"),
+  stepUpDecide: (id: string, ok: boolean) => req("POST", `/api/remote/stepup/approve/${encodeURIComponent(id)}`, { ok }),
+  remoteCert: () => req<RemoteCert>("GET", "/api/remote/cert"),
+  remoteSaveCert: (c: RemoteCertInput) => req("POST", "/api/remote/cert", c),
   remoteLogout: () => req("POST", "/api/remote/logout", {}),
   /** passkey ceremony 的原始两步，只给 lib/passkey.ts 用 */
   passkeyStep: <T>(action: "register" | "login", step: "begin" | "finish", body?: unknown, ceremony?: string) =>
@@ -155,6 +167,21 @@ export type RemoteStatus = {
   reauthHours: number;
   locked: boolean;
 };
+// 后台常驻（launchd）：why 非空 = 这里装不了（不是 mac、调试实例……）；self = 现在答话的就是那个后台服务。
+export type ServiceStatus = { why: string; installed: boolean; pid: number; self: boolean; log: string };
+export type StepUpRequest = { id: string; deviceId: string; label: string; code: string; expires: string };
+export type DNSProvider = { name: string; label: string; help: string; fields: { env: string; label: string; secret: boolean }[] };
+export type RemoteCert = {
+  dns: string;
+  email: string;
+  staging: boolean;
+  tlsCert: string;
+  tlsKey: string;
+  set: string[];
+  providers: DNSProvider[];
+  accountURI: string;
+};
+export type RemoteCertInput = { dns: string; email: string; staging: boolean; env: Record<string, string>; tlsCert: string; tlsKey: string };
 export type RemoteDevice = { id: string; label: string; created: string; lastSeen: string; lastIp: string; expires: string };
 export type PasskeyInfo = { id: string; label: string; created: string; lastUsed: string };
 

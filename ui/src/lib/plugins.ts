@@ -51,7 +51,7 @@ function sessionInfo(s?: SessionSummary) {
 
 function paneInfo(p: PaneLeaf) {
   const s = p.sessionId ? get().sessions[p.sessionId] : undefined;
-  return { id: p.id, sessionId: p.sessionId, session: sessionInfo(s) };
+  return { id: p.id, sessionId: p.sessionId, session: sessionInfo(s), terminal: p.term ? { ...p.term } : undefined };
 }
 
 function tabInfo(t: Tab, name: string) {

@@ -56,29 +56,79 @@ type Config struct {
 	Staging bool
 }
 
-// Providers 是编译进来的 DNS 服务商，以及各自要的环境变量。
+// Provider 是一家编译进来的 DNS 服务商：设置页按 Fields 画表单，错误信息按它提示要哪几个变量。
 //
-// 加一家是三处：这张表加一行、newDNS 里加一个 case、env.go 的 dnsNamespaces 加一行。
+// 加一家是三处：这张表加一项、newDNS 里加一个 case、env.go 的 dnsNamespaces 加一行。
+type Provider struct {
+	Name   string  `json:"name"`  // GERDR_ACME_DNS 填的那个名字
+	Label  string  `json:"label"` // 给人看的
+	Help   string  `json:"help"`  // 凭据去哪儿拿、要什么权限 —— 「token 怎么配」卡住人的地方几乎都在这一步
+	Fields []Field `json:"fields"`
+}
+
+// Field 是一个凭据变量。Env 是 lego 的名字（不带 GERDR_ 前缀，remote.json 的 env 那一节就这么写）。
+type Field struct {
+	Env    string `json:"env"`
+	Label  string `json:"label"`
+	Secret bool   `json:"secret"`
+}
+
+var providers = []Provider{
+	{Name: "cloudflare", Label: "Cloudflare",
+		Help:   "Cloudflare 后台 → 右上角头像 → My Profile → API Tokens → Create Token → 用「Edit zone DNS」模板，Zone Resources 选这个域名所在的 zone。",
+		Fields: []Field{{"CLOUDFLARE_DNS_API_TOKEN", "API Token", true}}},
+	{Name: "alidns", Label: "阿里云",
+		Help:   "阿里云 RAM 控制台建一个子用户，只给 AliyunDNSFullAccess 权限，创建它的 AccessKey。",
+		Fields: []Field{{"ALICLOUD_ACCESS_KEY", "AccessKey ID", false}, {"ALICLOUD_SECRET_KEY", "AccessKey Secret", true}}},
+	{Name: "tencentcloud", Label: "腾讯云 / DNSPod",
+		Help:   "腾讯云访问管理建一个子用户，只给 QcloudDNSPodFullAccess 权限，创建它的 API 密钥。",
+		Fields: []Field{{"TENCENTCLOUD_SECRET_ID", "SecretId", false}, {"TENCENTCLOUD_SECRET_KEY", "SecretKey", true}}},
+	{Name: "route53", Label: "AWS Route 53",
+		Help:   "IAM 建一个用户，给 route53:GetChange / ChangeResourceRecordSets / ListHostedZonesByName 权限，创建 Access Key。",
+		Fields: []Field{{"AWS_ACCESS_KEY_ID", "Access Key ID", false}, {"AWS_SECRET_ACCESS_KEY", "Secret Access Key", true}, {"AWS_REGION", "Region（如 us-east-1）", false}}},
+	{Name: "digitalocean", Label: "DigitalOcean",
+		Help:   "DigitalOcean 后台 → API → Generate New Token，要有写权限。",
+		Fields: []Field{{"DO_AUTH_TOKEN", "API Token", true}}},
+	{Name: "huaweicloud", Label: "华为云",
+		Help:   "华为云 IAM 建一个用户，给 DNS FullAccess 权限，创建访问密钥。",
+		Fields: []Field{{"HUAWEICLOUD_ACCESS_KEY_ID", "Access Key ID", false}, {"HUAWEICLOUD_SECRET_ACCESS_KEY", "Secret Access Key", true}, {"HUAWEICLOUD_REGION", "Region（如 cn-north-4）", false}}},
+}
+
+// AllProviders 是全部服务商（设置页的下拉框）。
+func AllProviders() []Provider { return providers }
+
+// FindProvider 按名字找；不认识返回 nil。
+func FindProvider(name string) *Provider {
+	for i := range providers {
+		if providers[i].Name == name {
+			return &providers[i]
+		}
+	}
+	return nil
+}
+
+// Providers 是编译进来的服务商名字。
 func Providers() []string {
-	out := make([]string, 0, len(envHint))
-	for k := range envHint {
-		out = append(out, k)
+	out := make([]string, 0, len(providers))
+	for _, p := range providers {
+		out = append(out, p.Name)
 	}
 	sort.Strings(out)
 	return out
 }
 
-var envHint = map[string]string{
-	"cloudflare":   "GERDR_CLOUDFLARE_DNS_API_TOKEN（Zone:DNS:Edit 权限）",
-	"alidns":       "GERDR_ALICLOUD_ACCESS_KEY + GERDR_ALICLOUD_SECRET_KEY",
-	"tencentcloud": "GERDR_TENCENTCLOUD_SECRET_ID + GERDR_TENCENTCLOUD_SECRET_KEY",
-	"route53":      "GERDR_AWS_ACCESS_KEY_ID + GERDR_AWS_SECRET_ACCESS_KEY + GERDR_AWS_REGION",
-	"digitalocean": "GERDR_DO_AUTH_TOKEN",
-	"huaweicloud":  "GERDR_HUAWEICLOUD_ACCESS_KEY_ID + GERDR_HUAWEICLOUD_SECRET_ACCESS_KEY + GERDR_HUAWEICLOUD_REGION",
-}
-
 // EnvHint 给错误信息用：告诉用户这家要哪几个环境变量。
-func EnvHint(name string) string { return envHint[name] }
+func EnvHint(name string) string {
+	p := FindProvider(name)
+	if p == nil {
+		return ""
+	}
+	var names []string
+	for _, f := range p.Fields {
+		names = append(names, envPrefix+f.Env)
+	}
+	return strings.Join(names, " + ")
+}
 
 func newDNS(name string) (challenge.Provider, error) {
 	// lego 读的是光秃秃的名字，我们对外统一带 GERDR_ 前缀 —— 见 env.go。

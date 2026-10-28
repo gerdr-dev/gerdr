@@ -126,6 +126,19 @@ func (s *session) onLine(pr *proc, m map[string]json.RawMessage, raw []byte) {
 		}
 		_ = json.Unmarshal(raw, &req)
 		go s.onControlRequest(pr, req.RequestID, req.Request)
+	case "command_lifecycle":
+		// 插话（以及每条写进 stdin 的消息）在 CLI 队列里的进度：queued = 排着；started = 被拿进这一轮了。
+		// 插话要等手上这个工具调用结束才被读到（实测 sleep 8 中途插，排了 5 秒多），这段时间界面上该显示「排队中」
+		var c struct {
+			CommandUUID string `json:"command_uuid"`
+			State       string `json:"state"`
+		}
+		_ = json.Unmarshal(raw, &c)
+		if c.CommandUUID != "" && c.State != "" {
+			s.update(ctx, acp.SessionUpdate{SessionInfoUpdate: &acp.SessionSessionInfoUpdate{Meta: acpx.Meta(map[string]any{
+				"steer": map[string]any{"id": c.CommandUUID, "state": c.State},
+			})}})
+		}
 	case "control_cancel_request":
 		s.cancelControl(str(m["request_id"]))
 	}
@@ -631,7 +644,7 @@ func (s *session) onControlRequest(pr *proc, reqID string, raw json.RawMessage) 
 			err = json.Unmarshal(raw, &res)
 		}
 		if err != nil || res.Cancelled {
-			deny("The user dismissed the question without answering.")
+			deny(acpx.AskDeclined(res.Reason, res.Text))
 			return
 		}
 		answers := map[string]any{}

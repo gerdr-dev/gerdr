@@ -1,13 +1,13 @@
-import { Check, CheckCircle2, Circle, CircleDot, HelpCircle, ShieldAlert, X } from "lucide-react";
+import { Check, CheckCircle2, Circle, CircleDot, CornerDownRight, HelpCircle, ShieldAlert, X } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Markdown } from "./Markdown";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
 import type { GData, PlanEntry } from "@/lib/transcript";
 import { cn } from "@/lib/utils";
+import { useKept } from "@/lib/kept";
 
 export function PlanCard({ entries }: { entries: PlanEntry[] }) {
   if (!entries.length) return null;
@@ -60,8 +60,9 @@ export function PermissionCard({ sessionId, data }: { sessionId: string; data: G
     const opt = request.options.find((o) => o.optionId === answer);
     const ok = opt && opt.kind.startsWith("allow");
     return (
-      <div className="flex items-center gap-1.5 px-1.5 py-0.5 text-[12px] text-muted-foreground">
-        {ok ? <Check className="size-3.5 text-ok" /> : <X className="size-3.5 text-bad" />}
+      // 和工具调用那一行对齐（ToolCall 的 trigger：-ml-1.5 px-1.5、图标 3.5、gap-2）
+      <div className="-ml-1.5 flex items-center gap-2 px-1.5 py-[3px] text-[13px] text-muted-foreground">
+        {ok ? <Check className="size-3.5 shrink-0 text-ok" /> : <X className="size-3.5 shrink-0 text-bad" />}
         {cancelled && !answer ? "审批已作废" : (opt?.name ?? answer)}
       </div>
     );
@@ -106,17 +107,32 @@ export function PermissionCard({ sessionId, data }: { sessionId: string; data: G
   );
 }
 
+/**
+ * agent 问人的问题（AskUserQuestion）。版式照 beUI 的 Questionnaire：一次一题（多题时「问题 1 / 3」翻页）、
+ * 选项是不带框的平铺行（粗体标题 + 灰色说明，右边编号，选中变 ✓）、右下角「跳过 / 继续 ↵」。
+ * 选到一半的状态用 useKept：对话是虚拟列表，滚出屏幕会卸载，滚回来要还在。
+ */
 export function AskCard({ sessionId, data }: { sessionId: string; data: GData["ask"] }) {
   const qs = data.request.questions;
-  const [sel, setSel] = useState<Record<string, string[]>>({});
-  const [other, setOther] = useState<Record<string, string>>({});
+  const k = `${sessionId}:ask:${data.reqId}`;
+  const [sel, setSel] = useKept<Record<string, string[]>>(`${k}:sel`, {});
+  const [other, setOther] = useKept<Record<string, string>>(`${k}:other`, {});
+  const [page, setPage] = useKept(`${k}:page`, 0);
   const [busy, setBusy] = useState(false);
   if (data.answers || data.cancelled) {
     return (
       <div className="my-1 space-y-0.5 px-1.5 text-[12px] text-muted-foreground">
         {data.cancelled && !data.answers ? (
           <div className="flex items-center gap-1.5">
-            <X className="size-3.5" /> 没回答
+            {data.reason === "replied" ? (
+              <>
+                <CornerDownRight className="size-3.5" /> 没选，在对话里直接回了
+              </>
+            ) : (
+              <>
+                <X className="size-3.5" /> {data.reason === "skipped" ? "跳过了（已告诉 agent 不用再问）" : "没回答（这一轮被打断了）"}
+              </>
+            )}
           </div>
         ) : (
           qs.map((q) => (
@@ -150,73 +166,100 @@ export function AskCard({ sessionId, data }: { sessionId: string; data: GData["a
       setBusy(false);
     }
   };
-  const single = qs.length === 1 && !qs[0].multiSelect;
+  const i = Math.min(page, qs.length - 1);
+  const q = qs[i];
+  const last = i === qs.length - 1;
+  const picked = sel[q.id] ?? [];
+  // 单选、又不能自己填：点一下就是答案，直接进下一题（最后一题就提交），不用再点「继续」
+  const instant = !q.multiSelect && !q.allowOther;
+  const next = (s2 = sel) => (last ? submit(s2) : setPage(i + 1));
+  const pick = (label: string) => {
+    if (q.multiSelect) {
+      setSel({ ...sel, [q.id]: picked.includes(label) ? picked.filter((x) => x !== label) : [...picked, label] });
+      return;
+    }
+    const s2 = { ...sel, [q.id]: [label] };
+    setSel(s2);
+    if (instant) next(s2);
+  };
   return (
-    <div className="my-1.5 space-y-3 rounded-lg border border-brand/50 bg-brand/6 p-3" data-attention>
-      {qs.map((q) => (
-        <div key={q.id}>
-          <div className="mb-1.5 flex items-start gap-2 text-[13px]">
-            <HelpCircle className="mt-0.5 size-4 shrink-0 text-brand" />
-            <div>
-              {q.header && <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{q.header}</div>}
-              <div className="font-medium">{q.question}</div>
-            </div>
-          </div>
-          <div className="flex flex-col gap-1 pl-6">
-            {(q.options ?? []).map((o) => {
-              const on = (sel[q.id] ?? []).includes(o.label);
-              return (
-                <button
-                  key={o.label}
-                  disabled={busy}
+    <div className="my-1.5 rounded-xl border bg-card p-4 shadow-sm" data-attention>
+      <div className="mb-1 flex items-center gap-1.5 text-[12px] text-muted-foreground">
+        <HelpCircle className="size-3.5 text-brand" />
+        {qs.length > 1 ? `问题 ${i + 1} / ${qs.length}` : "需要你回答"}
+        {q.header && <span>· {q.header}</span>}
+      </div>
+      <div className="mb-2 text-[15px] font-medium leading-snug">{q.question}</div>
+      {/* -mx-2.5 抵掉行的 px-2.5：选项文字和问题左边对齐，选中 / 悬停的底色往外多出一点 */}
+      <div className="-mx-2.5 flex flex-col gap-0.5">
+        {(q.options ?? []).map((o, n) => {
+          const on = picked.includes(o.label);
+          return (
+            <button
+              key={o.label}
+              disabled={busy}
+              className={cn(
+                "flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left text-[13px] transition-colors hover:bg-muted/60",
+                on && "bg-muted hover:bg-muted",
+              )}
+              onClick={() => pick(o.label)}
+            >
+              {q.multiSelect && <Checkbox checked={on} className="pointer-events-none" />}
+              <span className="min-w-0 flex-1">
+                <span className="font-medium">{o.label}</span>
+                {o.description && <span className="ml-1.5 text-muted-foreground">{o.description}</span>}
+              </span>
+              {!q.multiSelect && (
+                <span
                   className={cn(
-                    "flex items-start gap-2 rounded-md border px-2.5 py-1.5 text-left text-[13px] hover:bg-accent",
-                    on && "border-brand bg-brand/10",
+                    "flex size-5 shrink-0 items-center justify-center rounded-md border text-[11px] text-muted-foreground tabular-nums",
+                    on && "border-transparent bg-foreground/10 text-foreground",
                   )}
-                  onClick={() => {
-                    if (q.multiSelect) {
-                      const cur = sel[q.id] ?? [];
-                      setSel({ ...sel, [q.id]: on ? cur.filter((x) => x !== o.label) : [...cur, o.label] });
-                    } else if (single) {
-                      submit({ [q.id]: [o.label] });
-                    } else {
-                      setSel({ ...sel, [q.id]: [o.label] });
-                    }
-                  }}
                 >
-                  {q.multiSelect && <Checkbox checked={on} className="mt-0.5" />}
-                  <span>
-                    <span className="font-medium">{o.label}</span>
-                    {o.description && <span className="block text-[12px] text-muted-foreground">{o.description}</span>}
-                  </span>
-                </button>
-              );
-            })}
-            {q.allowOther && (
-              <Input
-                className="h-8 text-[13px]"
-                type={q.secret ? "password" : "text"}
-                placeholder={q.options?.length ? "其他（自己写）" : "你的回答"}
-                value={other[q.id] ?? ""}
-                onChange={(e) => setOther({ ...other, [q.id]: e.target.value })}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.nativeEvent.isComposing && e.keyCode !== 229) submit();
-                }}
-              />
-            )}
-          </div>
-        </div>
-      ))}
-      {!(single && !qs[0].allowOther) && (
-        <div className="flex gap-2 pl-6">
-          <Button size="sm" disabled={busy} onClick={() => submit()}>
-            提交
+                  {on ? <Check className="size-3" /> : n + 1}
+                </span>
+              )}
+            </button>
+          );
+        })}
+        {q.allowOther && (
+          <input
+            className="mt-0.5 w-full rounded-lg border border-dashed bg-transparent px-2.5 py-2 text-[13px] outline-none placeholder:text-muted-foreground/70 focus:border-solid focus:border-ring/60"
+            type={q.secret ? "password" : "text"}
+            placeholder={q.options?.length ? "其他，自己写…" : "你的回答…"}
+            value={other[q.id] ?? ""}
+            disabled={busy}
+            onChange={(e) => setOther({ ...other, [q.id]: e.target.value })}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.nativeEvent.isComposing && e.keyCode !== 229) next();
+            }}
+          />
+        )}
+      </div>
+      <div className="mt-3 flex items-center gap-2">
+        {i > 0 && (
+          <Button size="sm" variant="ghost" disabled={busy} onClick={() => setPage(i - 1)}>
+            上一题
           </Button>
-          <Button size="sm" variant="ghost" disabled={busy} onClick={() => api.answer(sessionId, data.reqId, { cancelled: true }).catch(() => {})}>
-            不回答
+        )}
+        <span className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground max-md:hidden">也可以不选，直接在下面输入框里回复</span>
+        <span className="flex-1 md:hidden" />
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={busy}
+          title="告诉 agent 你不想选、别再问这个问题"
+          onClick={() => api.answer(sessionId, data.reqId, { cancelled: true, reason: "skipped" }).catch(() => {})}
+        >
+          跳过
+        </Button>
+        {!instant && (
+          <Button size="sm" className="rounded-full pr-2 pl-4" disabled={busy} onClick={() => next()}>
+            {last ? "提交" : "继续"}
+            <span className="rounded border border-current/30 px-1 text-[10px] opacity-70">↵</span>
           </Button>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

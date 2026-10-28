@@ -56,25 +56,30 @@ export function ResumeDialog() {
       {/* 高度写在 style 上、且不许被压：WebKit 里弹窗（网格 + 限高）会把可滚动的这一块压到只剩一行（用户报的，导入弹窗同一个坑） */}
       <CommandList className="max-h-none shrink-0" style={{ height: "min(70vh, 720px)" }}>
         <CommandEmpty>{native ? "这个目录下没有别的对话" : "读取中…"}</CommandEmpty>
-        {mine.length > 0 && (
-          <CommandGroup heading="gerdr 里的">
-            {mine.map((s) => (
-              <CommandItem
-                key={s.id}
-                value={`${s.id} ${s.title ?? ""}`}
-                className="gap-2.5"
-                onSelect={() => {
-                  close();
-                  resumeInPane(paneId, s.id);
-                }}
-              >
-                <AgentIcon agent={s.agent} className="size-4 shrink-0" />
-                <span className="min-w-0 truncate">{s.title || "（没有标题）"}</span>
-                <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">{ago(s.updatedAt)}</span>
-              </CommandItem>
-            ))}
-          </CommandGroup>
-        )}
+        <CommandGroup heading="gerdr 里的">
+          {/* 当前这个也列出来（置灰、不能选）：一眼看见「我现在在哪个」，和别的对照着挑 */}
+          <CommandItem value={`${cur.id} ${cur.title ?? ""}`} disabled className="gap-2.5 opacity-60">
+            <AgentIcon agent={cur.agent} className="size-4 shrink-0" />
+            <span className="min-w-0 truncate">{cur.title || "（没有标题）"}</span>
+            <span className="shrink-0 rounded bg-muted px-1.5 text-[11px] text-muted-foreground">当前</span>
+            <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">{ago(cur.updatedAt)}</span>
+          </CommandItem>
+          {mine.map((s) => (
+            <CommandItem
+              key={s.id}
+              value={`${s.id} ${s.title ?? ""}`}
+              className="gap-2.5"
+              onSelect={() => {
+                close();
+                resumeInPane(paneId, s.id);
+              }}
+            >
+              <AgentIcon agent={s.agent} className="size-4 shrink-0" />
+              <span className="min-w-0 truncate">{s.title || "（没有标题）"}</span>
+              <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">{ago(s.updatedAt)}</span>
+            </CommandItem>
+          ))}
+        </CommandGroup>
         {native === null && (
           <div className="flex items-center gap-2 px-3 py-2 text-[12px] text-muted-foreground">
             <Loader2 className="size-3.5 animate-spin" /> 读 agent 自己的会话记录…

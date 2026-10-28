@@ -26,10 +26,29 @@
   --ok: oklch(0.62 0.15 150);
   --warn: oklch(0.75 0.15 75);
   --bad: oklch(0.6 0.21 25);
+
+  /* 终端（components/Terminal.tsx）的 16 色：照 VS Code 浅色 / 深色两套，跟着主题换。 */
+  --term-0: #000000;
+  --term-1: #cd3131;
+  --term-2: #00a000;
+  --term-3: #949800;
+  --term-4: #0451a5;
+  --term-5: #bc05bc;
+  --term-6: #0598bc;
+  --term-7: #555555;
+  --term-8: #666666;
+  --term-9: #cd3131;
+  --term-10: #14ce14;
+  --term-11: #b5ba00;
+  --term-12: #0451a5;
+  --term-13: #bc05bc;
+  --term-14: #0598bc;
+  --term-15: #a5a5a5;
 }
 
 .dark {
   --background: oklch(0.165 0 0);
+  /* 正文字色 0.93：试过 0.97，太白；字发虚主要是 antialiased 的锅（见下面 .dark body），不是颜色 */
   --foreground: oklch(0.93 0 0);
   --card: oklch(0.2 0 0);
   --card-foreground: oklch(0.93 0 0);
@@ -52,6 +71,23 @@
   --ok: oklch(0.72 0.15 150);
   --warn: oklch(0.8 0.14 80);
   --bad: oklch(0.68 0.19 25);
+
+  --term-0: #000000;
+  --term-1: #cd3131;
+  --term-2: #0dbc79;
+  --term-3: #e5e510;
+  --term-4: #2472c8;
+  --term-5: #bc3fbc;
+  --term-6: #11a8cd;
+  --term-7: #e5e5e5;
+  --term-8: #666666;
+  --term-9: #f14c4c;
+  --term-10: #23d18b;
+  --term-11: #f5f543;
+  --term-12: #3b8eea;
+  --term-13: #d670d6;
+  --term-14: #29b8db;
+  --term-15: #e5e5e5;
 }
 
 @theme inline {
@@ -104,6 +140,12 @@
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
     overflow: hidden;
   }
+  /* 深色底上不用 antialiased（灰度抗锯齿）：它在 macOS 深色背景上会把字削细、发虚，同样字重看着比 Codex 淡一档。
+     用系统默认渲染，字更实。浅色底上深色字不受影响，照旧 antialiased。 */
+  .dark body {
+    -webkit-font-smoothing: auto;
+    -moz-osx-font-smoothing: auto;
+  }
   ::-webkit-scrollbar {
     width: 8px;
     height: 8px;
@@ -123,20 +165,21 @@
    作用范围只在 .gerdr-md 里面，用 data-streamdown 认元素，不会波及别处。 */
 .gerdr-md {
   font-size: 1em;
-  line-height: 1.6;
+  line-height: 1.7;
 }
-/* 块之间：段落 / 列表 / 代码块统一一个小间距，标题上面多留一点、下面贴着正文 */
+/* 块之间：段落 / 列表 / 代码块统一一个间距，标题上面多留一点、下面贴着正文。
+   （第一版收得太紧，长回复读着累，放松到现在这档：行高 1.7、段间 0.85em；列表项之间照 Codex 几乎不留缝，只靠行高） */
 .gerdr-md > div > * {
   margin-block: 0;
 }
 .gerdr-md > div > * + * {
-  margin-top: 0.6em;
+  margin-top: 0.85em;
 }
 .gerdr-md > div > [data-streamdown^="heading-"]:not(:first-child) {
-  margin-top: 1.1em;
+  margin-top: 1.4em;
 }
 .gerdr-md > div > [data-streamdown^="heading-"] + * {
-  margin-top: 0.3em;
+  margin-top: 0.45em;
 }
 .gerdr-md [data-streamdown^="heading-"] {
   font-weight: 600;
@@ -162,10 +205,10 @@
   padding-block: 0;
 }
 .gerdr-md [data-streamdown="list-item"] + [data-streamdown="list-item"] {
-  margin-top: 0.2em;
+  margin-top: 0.1em;
 }
 .gerdr-md [data-streamdown="list-item"] > :is([data-streamdown="unordered-list"], [data-streamdown="ordered-list"]) {
-  margin-top: 0.2em;
+  margin-top: 0.1em;
   padding-left: 1.2em;
 }
 .gerdr-md [data-streamdown="list-item"]::marker {
@@ -178,23 +221,47 @@
   background: var(--muted);
   overflow-wrap: anywhere;
 }
+/* 代码块：同样是两层框（外层 bg-sidebar 卡片 + 里面再一个带边框的代码区）。只留一层：外框 + 淡底，
+   代码区透明无边框；没写语言时顶上那条标题栏是空的，整条去掉；复制 / 下载按钮悬停才出来。 */
 .gerdr-md [data-streamdown="code-block"] {
   padding: 0;
   gap: 0;
   border-radius: var(--radius);
+  background: color-mix(in oklch, var(--muted) 45%, transparent);
   overflow: hidden;
 }
 .gerdr-md [data-streamdown="code-block-header"] {
   height: 1.9em;
   padding-inline: 0.75em;
+  border-bottom: 1px solid var(--border);
+}
+.gerdr-md [data-streamdown="code-block-header"]:has(> span:empty) {
+  display: none;
 }
 .gerdr-md [data-streamdown="code-block-body"] {
   font-size: 0.86em;
   line-height: 1.5;
   padding: 0.6em 0.8em;
   border: 0;
-  border-top: 1px solid var(--border);
   border-radius: 0;
+  background: transparent;
+}
+.gerdr-md [data-streamdown="code-block-body"] pre {
+  background: transparent;
+}
+.gerdr-md [data-streamdown="code-block"] > div:has(> [data-streamdown="code-block-actions"]) {
+  top: 4px;
+  right: 4px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.gerdr-md [data-streamdown="code-block"]:hover > div:has(> [data-streamdown="code-block-actions"]) {
+  opacity: 1;
+}
+@media (hover: none) {
+  .gerdr-md [data-streamdown="code-block"] > div:has(> [data-streamdown="code-block-actions"]) {
+    opacity: 1;
+  }
 }
 .gerdr-md [data-streamdown="blockquote"] {
   font-style: normal;
@@ -204,7 +271,252 @@
 .gerdr-md [data-streamdown="horizontal-rule"] {
   margin-block: 1em;
 }
+/* 表格：streamdown 在表格外面又套一层带边框、底色、p-2 的卡片，顶上单独一行放按钮 —— 两层框。
+   外层拆掉，只留表格自己那层；复制 / 下载 / 全屏浮在右上角，悬停才出来。
+   （全屏那份是 portal 到 body 的，不在 .gerdr-md 里，不受影响） */
+/* streamdown 给表格 / 代码块的滚动区写了行内 max-height（表格 300px、代码块 400px）：长一点的就被截成
+   一个框里滚，和外面的对话列表两层滚动。对话里不需要，整段铺开（行内样式只能 !important 压） */
+.gerdr-md [data-streamdown="table-wrapper"] > div:last-child,
+.gerdr-md [data-streamdown="code-block-body"] {
+  max-height: none !important;
+}
+.gerdr-md [data-streamdown="table-wrapper"] {
+  position: relative;
+  padding: 0;
+  gap: 0;
+  border: 0;
+  background: transparent;
+}
+.gerdr-md [data-streamdown="table-wrapper"] > div:first-child:not(:last-child) {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 10;
+  padding: 2px;
+  border-radius: 6px;
+  background: var(--background);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.gerdr-md [data-streamdown="table-wrapper"]:hover > div:first-child:not(:last-child) {
+  opacity: 1;
+}
+@media (hover: none) {
+  .gerdr-md [data-streamdown="table-wrapper"] > div:first-child:not(:last-child) {
+    opacity: 1;
+  }
+}
 .gerdr-md :is([data-streamdown="table-cell"], [data-streamdown="table-header-cell"]) {
   font-size: 0.93em;
   padding: 0.35em 0.7em;
+}
+
+/* 运行中的 loading（chat/PixelLoader.tsx）：外圈每格亮一下再渐暗，按位置错开起点 → 一颗带尾巴的光点在转。 */
+@keyframes gerdr-pixel-orbit {
+  0% {
+    opacity: 1;
+  }
+  45%,
+  100% {
+    opacity: 0.18;
+  }
+}
+@keyframes gerdr-pixel-breathe {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+.gerdr-pixel-orbit {
+  animation: gerdr-pixel-orbit 1.2s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .gerdr-pixel-orbit {
+    animation: none;
+    opacity: 0.6;
+  }
+}
+
+/* ---- 终端（components/Terminal.tsx）：@xterm/xterm 5.5.0 的 css/xterm.css 原样搬过来（界面里不能 import CSS），
+   只把两处写死的黑色换成主题变量。升级 xterm 时对一下这一段。 ---- */
+.xterm {
+    cursor: text;
+    position: relative;
+    user-select: none;
+    -ms-user-select: none;
+    -webkit-user-select: none;
+}
+
+.xterm.focus,
+.xterm:focus {
+    outline: none;
+}
+
+.xterm .xterm-helpers {
+    position: absolute;
+    top: 0;
+    /**
+     * The z-index of the helpers must be higher than the canvases in order for
+     * IMEs to appear on top.
+     */
+    z-index: 5;
+}
+
+.xterm .xterm-helper-textarea {
+    padding: 0;
+    border: 0;
+    margin: 0;
+    /* Move textarea out of the screen to the far left, so that the cursor is not visible */
+    position: absolute;
+    opacity: 0;
+    left: -9999em;
+    top: 0;
+    width: 0;
+    height: 0;
+    z-index: -5;
+    /** Prevent wrapping so the IME appears against the textarea at the correct position */
+    white-space: nowrap;
+    overflow: hidden;
+    resize: none;
+}
+
+.xterm .composition-view {
+    background: var(--popover);
+    color: var(--popover-foreground);
+    display: none;
+    position: absolute;
+    white-space: nowrap;
+    z-index: 1;
+}
+
+.xterm .composition-view.active {
+    display: block;
+}
+
+.xterm .xterm-viewport {
+    overflow-y: scroll;
+    cursor: default;
+    position: absolute;
+    right: 0;
+    left: 0;
+    top: 0;
+    bottom: 0;
+}
+
+.xterm .xterm-screen {
+    position: relative;
+}
+
+.xterm .xterm-screen canvas {
+    position: absolute;
+    left: 0;
+    top: 0;
+}
+
+.xterm .xterm-scroll-area {
+    visibility: hidden;
+}
+
+.xterm-char-measure-element {
+    display: inline-block;
+    visibility: hidden;
+    position: absolute;
+    top: 0;
+    left: -9999em;
+    line-height: normal;
+}
+
+.xterm.enable-mouse-events {
+    /* When mouse events are enabled (eg. tmux), revert to the standard pointer cursor */
+    cursor: default;
+}
+
+.xterm.xterm-cursor-pointer,
+.xterm .xterm-cursor-pointer {
+    cursor: pointer;
+}
+
+.xterm.column-select.focus {
+    /* Column selection mode */
+    cursor: crosshair;
+}
+
+.xterm .xterm-accessibility:not(.debug),
+.xterm .xterm-message {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    right: 0;
+    z-index: 10;
+    color: transparent;
+    pointer-events: none;
+}
+
+.xterm .xterm-accessibility-tree:not(.debug) *::selection {
+  color: transparent;
+}
+
+.xterm .xterm-accessibility-tree {
+  user-select: text;
+  white-space: pre;
+}
+
+.xterm .live-region {
+    position: absolute;
+    left: -9999px;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+}
+
+.xterm-dim {
+    /* Dim should not apply to background, so the opacity of the foreground color is applied
+     * explicitly in the generated class and reset to 1 here */
+    opacity: 1 !important;
+}
+
+.xterm-underline-1 { text-decoration: underline; }
+.xterm-underline-2 { text-decoration: double underline; }
+.xterm-underline-3 { text-decoration: wavy underline; }
+.xterm-underline-4 { text-decoration: dotted underline; }
+.xterm-underline-5 { text-decoration: dashed underline; }
+
+.xterm-overline {
+    text-decoration: overline;
+}
+
+.xterm-overline.xterm-underline-1 { text-decoration: overline underline; }
+.xterm-overline.xterm-underline-2 { text-decoration: overline double underline; }
+.xterm-overline.xterm-underline-3 { text-decoration: overline wavy underline; }
+.xterm-overline.xterm-underline-4 { text-decoration: overline dotted underline; }
+.xterm-overline.xterm-underline-5 { text-decoration: overline dashed underline; }
+
+.xterm-strikethrough {
+    text-decoration: line-through;
+}
+
+.xterm-screen .xterm-decoration-container .xterm-decoration {
+	z-index: 6;
+	position: absolute;
+}
+
+.xterm-screen .xterm-decoration-container .xterm-decoration.xterm-decoration-top-layer {
+	z-index: 7;
+}
+
+.xterm-decoration-overview-ruler {
+    z-index: 8;
+    position: absolute;
+    top: 0;
+    right: 0;
+    pointer-events: none;
+}
+
+.xterm-decoration-top {
+    z-index: 2;
+    position: relative;
 }

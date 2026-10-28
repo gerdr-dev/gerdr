@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -13,6 +14,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"sync"
 	"syscall"
 	"time"
 
@@ -28,6 +30,7 @@ import (
 	"github.com/zbysir/gerdr/internal/remote"
 	"github.com/zbysir/gerdr/internal/server"
 	"github.com/zbysir/gerdr/internal/sysenv"
+	"github.com/zbysir/gerdr/internal/term"
 	"github.com/zbysir/gerdr/internal/uisite"
 	"github.com/zbysir/gerdr/internal/version"
 	"github.com/zbysir/gerdr/internal/webui"
@@ -40,16 +43,18 @@ func main() {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	var open, appMode bool
+	var open, appMode, serviceMode bool
 	var parentPID int
 	serve := func(cmd *cobra.Command, args []string) error {
-		return runServe(open, appMode, parentPID)
+		return runServe(open, appMode, serviceMode, parentPID)
 	}
 	root.RunE = serve
 	root.Flags().BoolVar(&open, "open", false, "启动后用浏览器打开")
 	root.Flags().BoolVar(&appMode, "app", false, "给 mac App 用：就绪后打印一行 GERDR_READY <url>")
 	root.Flags().IntVar(&parentPID, "parent-pid", 0, "父进程退出时跟着退出")
+	root.Flags().BoolVar(&serviceMode, "service", false, "后台服务（launchd）用：数据目录被别的 gerdr 占着就等它退出再接手")
 	_ = root.Flags().MarkHidden("app")
+	_ = root.Flags().MarkHidden("service")
 	_ = root.Flags().MarkHidden("parent-pid")
 
 	root.AddCommand(&cobra.Command{
@@ -80,6 +85,9 @@ func main() {
 	})
 	root.AddCommand(sessionCmd(), uiCmd(), remoteCmd())
 	if err := root.Execute(); err != nil {
+		if errors.Is(err, errHandover) {
+			os.Exit(exitHandover)
+		}
 		if len(os.Args) > 1 && (os.Args[1] == "session" || os.Args[1] == "ui") {
 			fail(err) // 给 agent 用的：错误也是 JSON
 		}
@@ -92,6 +100,24 @@ type serverInfo struct {
 	PID  int    `json:"pid"`
 	Port int    `json:"port"`
 	Host string `json:"host"`
+	// Version / Service：App 启动时看在跑的那个是不是后台服务、是不是旧版（appAttach）
+	Version string `json:"version,omitempty"`
+	Service bool   `json:"service,omitempty"`
+	// Build：二进制文件本身（修改时间 + 大小）。本地打包的版本号都是 0.1.0-dev，只比版本号的话 App 更新了也认不出来
+	Build string `json:"build,omitempty"`
+}
+
+// buildID：本进程二进制的修改时间 + 大小。App 更新 = 同一个路径换了文件，这两个就变了。
+func buildID() string {
+	exe, err := os.Executable()
+	if err != nil {
+		return ""
+	}
+	st, err := os.Stat(exe)
+	if err != nil {
+		return ""
+	}
+	return fmt.Sprintf("%d-%d", st.ModTime().UnixNano(), st.Size())
 }
 
 func infoPath(env config.Env) string { return filepath.Join(env.Dir, "server.json") }
@@ -105,16 +131,21 @@ func loginURL(host string, port int, token string) string {
 
 // runningURL：已经有一个 gerdr 在跑（同一个数据目录）就返回它的登录链接。
 func runningURL(env config.Env) (string, bool) {
+	_, u, ok := running(env)
+	return u, ok
+}
+
+func running(env config.Env) (serverInfo, string, bool) {
+	var si serverInfo
 	b, err := os.ReadFile(infoPath(env))
 	if err != nil {
-		return "", false
+		return si, "", false
 	}
-	var si serverInfo
 	if json.Unmarshal(b, &si) != nil || si.Port == 0 {
-		return "", false
+		return si, "", false
 	}
 	if p, err := os.FindProcess(si.PID); err != nil || p.Signal(syscall.Signal(0)) != nil {
-		return "", false
+		return si, "", false
 	}
 	host := si.Host
 	if host == "" || host == "0.0.0.0" {
@@ -123,17 +154,17 @@ func runningURL(env config.Env) (string, bool) {
 	c := http.Client{Timeout: 2 * time.Second}
 	resp, err := c.Get(fmt.Sprintf("http://%s/api/hello", net.JoinHostPort(host, strconv.Itoa(si.Port))))
 	if err != nil {
-		return "", false
+		return si, "", false
 	}
 	resp.Body.Close()
 	tok := env.Token
 	if tok == "" {
 		tok, _ = config.LoadToken(env.Dir)
 	}
-	return loginURL(si.Host, si.Port, tok), true
+	return si, loginURL(si.Host, si.Port, tok), true
 }
 
-func runServe(open, appMode bool, parentPID int) error {
+func runServe(open, appMode, serviceMode bool, parentPID int) error {
 	env := config.FromEnv()
 	level := slog.LevelInfo
 	if os.Getenv("GERDR_DEBUG") != "" {
@@ -148,16 +179,27 @@ func runServe(open, appMode bool, parentPID int) error {
 	sysenv.SetGerdrContext(env.Dir)
 
 	// 一个数据目录只能有一个 gerdr（两份进程同时写 sessions/ 会互相覆盖）。
-	lock, err := lockFile(filepath.Join(env.Dir, "server.lock"))
-	if err != nil {
+	svc := newService(env, serviceMode)
+	var lock *os.File
+	err := errBusy
+	if !appMode || !svc.Installed() || svc.Why() != "" {
+		lock, err = lockFile(lockPath(env))
+	}
+	switch {
+	case err == nil:
+	case appMode:
+		// 开了后台常驻（始终由它跑），或者终端里有一个在跑：连过去（见 appAttach）
+		if lock = appAttach(env, parentPID, svc); lock == nil {
+			return nil
+		}
+	case serviceMode:
+		// 多半是 App 自己起的那个后端还在：等它退出（⌘Q）再接手。不能退出 —— KeepAlive 会每 10 秒拉一次
+		log.Info("another gerdr is using the data dir, waiting to take over", "dir", env.Dir)
+		if lock, err = lockFileWait(lockPath(env)); err != nil {
+			return err
+		}
+	default:
 		if u, ok := runningURL(env); ok {
-			if appMode {
-				fmt.Println("GERDR_READY " + u)
-				if parentPID > 0 {
-					waitParent(parentPID)
-				}
-				return nil
-			}
 			fmt.Println("gerdr 已经在运行：" + u)
 			if open {
 				openBrowser(u)
@@ -231,7 +273,16 @@ func runServe(open, appMode bool, parentPID int) error {
 	}
 	defer rm.Close()
 	srv := &server.Server{Hub: h, Token: token, Config: cfg, Layout: layout, Plugins: pm, Ext: em, Log: log, OnConfig: applyAgents,
-		UI: ui, ESM: uisite.NewESM(env.ESMCDN, filepath.Join(env.Dir, "cache", "esm")), Remote: rm}
+		UI: ui, ESM: uisite.NewESM(env.ESMCDN, filepath.Join(env.Dir, "cache", "esm")), Remote: rm,
+		Service: svc, Terms: term.New(func() []string { return sysenv.ChildEnv() }, log)}
+	defer srv.Terms.Close()
+	// 打开后台常驻时，App 起的这个后端让位：退出（errHandover → 退出码 75），后台服务拿到锁接手，
+	// App 看到 75 就重起一个后端，它只连后台、不自己干活（desktop/main.js）。
+	handover := make(chan struct{})
+	if appMode {
+		var once sync.Once
+		srv.OnServiceInstalled = func() { once.Do(func() { close(handover) }) }
+	}
 	ln, err := server.Listen(env.Host, env.Port)
 	if err != nil && env.Port != 0 {
 		// 默认口被占了（比如上一个实例还没退干净）：换一个空闲的，别起不来。
@@ -242,7 +293,7 @@ func runServe(open, appMode bool, parentPID int) error {
 		return err
 	}
 	port := ln.Addr().(*net.TCPAddr).Port
-	si, _ := json.Marshal(serverInfo{PID: os.Getpid(), Port: port, Host: env.Host})
+	si, _ := json.Marshal(serverInfo{PID: os.Getpid(), Port: port, Host: env.Host, Version: version.Version, Service: serviceMode, Build: buildID()})
 	_ = os.WriteFile(infoPath(env), si, 0o600)
 	defer os.Remove(infoPath(env))
 
@@ -276,15 +327,32 @@ func runServe(open, appMode bool, parentPID int) error {
 	if parentPID > 0 {
 		go func() { waitParent(parentPID); stop() }()
 	}
-	<-ctx.Done()
+	handed := false
+	select {
+	case <-ctx.Done():
+	case <-handover:
+		handed = true
+		log.Info("background service installed, handing over")
+	}
 	log.Info("shutting down")
 	cancelBase()
 	sctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	_ = hs.Shutdown(sctx)
 	h.Close()
+	if handed {
+		return errHandover
+	}
 	return nil
 }
+
+var (
+	errBusy     = errors.New("数据目录被另一个 gerdr 占着")
+	errHandover = errors.New("交给后台服务了")
+)
+
+// exitHandover：App 看到这个退出码就重起一个后端（它会去连后台服务），不当成出错。和 desktop/main.js 一致。
+const exitHandover = 75
 
 func openBrowser(u string) {
 	var cmd *exec.Cmd

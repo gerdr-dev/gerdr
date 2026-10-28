@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ServiceSetting } from "@/components/ServiceSetting";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AgentSettings } from "./AgentSettings";
@@ -196,6 +197,11 @@ function SettingsDialog({ open }: { open: boolean }) {
   const version = useStore((s) => s.version);
   useStore((s) => s.pluginVersion);
   const [tabOpen, setTabOpen] = useState("general");
+  // 从别处直接打开某一页（比如「去批准」→ 远程访问）
+  const wantTab = useStore((s) => (s.dialog?.kind === "settings" ? s.dialog.tab : undefined));
+  useEffect(() => {
+    if (open && wantTab) setTabOpen(wantTab);
+  }, [open, wantTab]);
   const setKeys = (a: KeyAction, v: string) => {
     const keys = { ...cfg.keys };
     const list = v.split(",").map((x) => x.trim()).filter(Boolean);
@@ -277,6 +283,7 @@ function SettingsDialog({ open }: { open: boolean }) {
               <Row label="系统通知" hint="看不见的会话跑完了 / 在等你时">
                 <Switch checked={cfg.notifications} onCheckedChange={(v) => setConfig({ notifications: v })} />
               </Row>
+              <ServiceSetting />
               <Row label="切走的 tab 留在页面里" hint="展开状态、滚动位置都保住；越多越占内存（设置 → 资源 里看）">
                 <Select value={String(cfg.keepTabs ?? 6)} onValueChange={(v) => setConfig({ keepTabs: Number(v) })}>
                   <SelectTrigger className="w-36">

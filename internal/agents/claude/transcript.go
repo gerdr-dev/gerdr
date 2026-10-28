@@ -208,6 +208,39 @@ func listTranscripts(root, cwd string, limit int) ([]acp.SessionInfo, error) {
 }
 
 // replayTranscript 把一份会话记录重放成 session/update。只走主链（不含子 agent 的旁支）。
+// userImages 取一条用户消息里贴的图（base64 那种），和 userText 认的是同一类消息（人说的、不是工具结果）。
+// 重放时和文字一起发：不发的话，会话在别处接着聊过、整份重放一次之后，带截图的消息就只剩文字（踩过：截图没了）。
+func userImages(e *entry) []acp.ContentBlock {
+	if e.Type != "user" || e.IsSidechain || e.IsMeta {
+		return nil
+	}
+	var m userMsg
+	if json.Unmarshal(e.Message, &m) != nil {
+		return nil
+	}
+	var parts []struct {
+		Type   string `json:"type"`
+		Source struct {
+			Type      string `json:"type"`
+			MediaType string `json:"media_type"`
+			Data      string `json:"data"`
+		} `json:"source"`
+	}
+	if json.Unmarshal(m.Content, &parts) != nil {
+		return nil
+	}
+	var out []acp.ContentBlock
+	for _, p := range parts {
+		if p.Type == "tool_result" {
+			return nil
+		}
+		if p.Type == "image" && p.Source.Type == "base64" && p.Source.Data != "" {
+			out = append(out, acp.ImageBlock(p.Source.Data, p.Source.MediaType))
+		}
+	}
+	return out
+}
+
 func replayTranscript(path string, emit func(acp.SessionUpdate)) error {
 	tmp := &session{a: &Agent{}, tools: map[string]*toolState{}}
 	tmp.a.conn = nil
@@ -219,9 +252,15 @@ func replayTranscript(path string, emit func(acp.SessionUpdate)) error {
 		}
 		switch e.Type {
 		case "user":
-			if t := userText(e); t != "" {
+			// 文字和图是同一条消息的几块，用同一个 MessageId 发，界面按它拼回一条
+			if t, imgs := userText(e), userImages(e); t != "" || len(imgs) > 0 {
 				id := e.UUID
-				emit(acp.SessionUpdate{UserMessageChunk: &acp.SessionUpdateUserMessageChunk{Content: acp.TextBlock(t), MessageId: &id}})
+				if t != "" {
+					emit(acp.SessionUpdate{UserMessageChunk: &acp.SessionUpdateUserMessageChunk{Content: acp.TextBlock(t), MessageId: &id}})
+				}
+				for _, b := range imgs {
+					emit(acp.SessionUpdate{UserMessageChunk: &acp.SessionUpdateUserMessageChunk{Content: b, MessageId: &id}})
+				}
 				return true
 			}
 			var m userMsg
@@ -298,4 +337,36 @@ func titles(path string) (custom, ai string) {
 		}
 	}
 	return custom, ai
+}
+
+// userTextsFrom：记录文件 offset 之后人说的话（跳过斜杠命令的包装、系统提醒、工具结果）。
+// offset 比文件还大（文件被换掉 / 截断过）就从头读。
+func userTextsFrom(path string, offset int64) []string {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+	if st, err := f.Stat(); err != nil || offset > st.Size() {
+		offset = 0
+	}
+	if _, err := f.Seek(offset, io.SeekStart); err != nil {
+		return nil
+	}
+	var out []string
+	sc := bufio.NewScanner(f)
+	sc.Buffer(make([]byte, 0, 1<<20), 256<<20)
+	for sc.Scan() {
+		if !bytes.Contains(sc.Bytes(), []byte(`"type":"user"`)) {
+			continue
+		}
+		var e entry
+		if json.Unmarshal(sc.Bytes(), &e) != nil {
+			continue
+		}
+		if t := userText(&e); t != "" {
+			out = append(out, t)
+		}
+	}
+	return out
 }

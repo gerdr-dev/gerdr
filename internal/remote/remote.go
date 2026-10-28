@@ -16,6 +16,8 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -31,15 +33,18 @@ type Service struct {
 	Auth     *auth.Store
 	Passkeys *auth.Passkeys
 	Gate     *auth.Gate
+	// Approvals：新设备上没有 passkey 可做 step-up 时，到电脑上批准（auth/approve.go）
+	Approvals *auth.Approvals
 
-	log    *slog.Logger
-	acme   *acme.Manager
+	log *slog.Logger
+
+	mu     sync.Mutex
+	h      http.Handler
+	cancel context.CancelFunc // 当前这一轮（SetCert 会收掉重来）
 	certs  *certFile
 	tunnel *relay.Tunnel
 	hs     *http.Server
-
-	mu  sync.Mutex
-	err string // 起不来的原因（证书签不下来、没 join 过……）
+	err    string // 起不来的原因（证书签不下来、没 join 过……）
 }
 
 // Open 准备设备表、passkey 和限速。没开远程也照样打开：设置里要能看设备、踢设备，
@@ -60,7 +65,7 @@ func Open(dataDir string, cfg config.Remote, log *slog.Logger) (*Service, error)
 		return nil, err
 	}
 	g := auth.NewGate()
-	s := &Service{Cfg: cfg, Dir: dir, Auth: store, Passkeys: pk, Gate: g, log: log}
+	s := &Service{Cfg: cfg, Dir: dir, Auth: store, Passkeys: pk, Gate: g, Approvals: auth.NewApprovals(), log: log}
 	g.Alert = s.alert
 	return s, nil
 }
@@ -96,29 +101,59 @@ func (s *Service) PairURL(code string) string {
 // （server.RemoteHandler），这里不再包。
 func (s *Service) Start(h http.Handler) {
 	go s.watchTamper()
-	if !s.Cfg.Enabled() {
+	s.mu.Lock()
+	s.h = h
+	s.mu.Unlock()
+	s.run()
+}
+
+// SetCert：设置页改了证书来源。只换证书那几项（中继地址、主机名不动 —— 它们是 join 时定的，
+// passkey 的 RPID 也绑在主机名上），然后把远程那条路整条重来一遍，不用重启 gerdr。
+func (s *Service) SetCert(dns, email string, staging bool, certFile, keyFile string) {
+	s.stop()
+	s.mu.Lock()
+	s.Cfg.ACMEDNS, s.Cfg.ACMEEmail, s.Cfg.ACMEStaging, s.Cfg.TLSCert, s.Cfg.TLSKey = dns, email, staging, certFile, keyFile
+	s.err = ""
+	s.mu.Unlock()
+	s.run()
+}
+
+func (s *Service) run() {
+	s.mu.Lock()
+	cfg, h := s.Cfg, s.h
+	ctx, cancel := context.WithCancel(context.Background())
+	s.cancel = cancel
+	s.mu.Unlock()
+	if !cfg.Enabled() || h == nil {
 		return
 	}
-	if p := s.Cfg.TLSProblem(); p != "" {
+	if p := cfg.TLSProblem(); p != "" {
 		s.setErr(p)
 		return
 	}
 	go func() {
-		certFile, keyFile := s.Cfg.TLSCert, s.Cfg.TLSKey
-		if s.Cfg.ACMEDNS != "" {
-			s.acme = acme.NewManager(acme.Config{
-				Dir: s.Dir, Domains: []string{s.Cfg.Host}, Email: s.Cfg.ACMEEmail,
-				DNS: s.Cfg.ACMEDNS, Staging: s.Cfg.ACMEStaging,
+		certFile, keyFile := cfg.TLSCert, cfg.TLSKey
+		if cfg.ACMEDNS != "" {
+			am := acme.NewManager(acme.Config{
+				Dir: s.Dir, Domains: []string{cfg.Host}, Email: cfg.ACMEEmail,
+				DNS: cfg.ACMEDNS, Staging: cfg.ACMEStaging,
 			})
 			// 第一次签要等 DNS 传播，一两分钟很正常：在后台等，别拖住整个 gerdr 的启动
-			if a := s.acme.Ensure(false); a.Err != "" {
-				s.setErr("签证书失败：" + a.Err)
+			a := am.Ensure(false)
+			if ctx.Err() != nil {
+				return // 等的时候配置又改了：这一轮作废，新的那轮已经起来了
+			}
+			if a.Err != "" {
+				if !strings.HasPrefix(a.Err, "签证书失败") { // 签发那一步的错误自己带着这个开头
+					a.Err = "签证书失败：" + a.Err
+				}
+				s.setErr(a.Err)
 				return
 			} else if a.Renewed {
-				s.log.Info("remote: issued certificate", "host", s.Cfg.Host)
+				s.log.Info("remote: issued certificate", "host", cfg.Host)
 			}
-			certFile, keyFile = s.acme.Config().Files()
-			go s.renewLoop()
+			certFile, keyFile = am.Config().Files()
+			go s.renewLoop(ctx, am)
 		}
 		cf, err := loadCert(certFile, keyFile)
 		if err != nil {
@@ -126,33 +161,63 @@ func (s *Service) Start(h http.Handler) {
 			return
 		}
 		tn, err := relay.Start(relay.HostConfig{
-			URL: s.Cfg.RelayURL, Host: s.Cfg.Host, Dir: s.relayDir(),
+			URL: cfg.RelayURL, Host: cfg.Host, Dir: s.relayDir(),
 			Log: func(f string, a ...any) { s.log.Info("remote: " + fmt.Sprintf(f, a...)) },
 		})
 		if err != nil {
 			s.setErr(err.Error())
 			return
 		}
-		s.mu.Lock()
-		s.tunnel, s.certs = tn, cf
-		s.mu.Unlock()
-		s.setErr("")
 		// TLS 在这里终止：中继手里只有密文（docs/dev/REMOTE.md「中继能拿到什么」）。
 		// 不发 HSTS 之类的头不用操心 —— 安全头由 server.guard 统一加。
-		s.hs = &http.Server{Handler: h, ReadHeaderTimeout: 10 * time.Second}
+		hs := &http.Server{Handler: h, ReadHeaderTimeout: 10 * time.Second}
+		s.mu.Lock()
+		if ctx.Err() != nil {
+			s.mu.Unlock()
+			tn.Close()
+			return
+		}
+		s.tunnel, s.certs, s.hs, s.err = tn, cf, hs, ""
+		s.mu.Unlock()
 		ln := tls.NewListener(tn, &tls.Config{GetCertificate: cf.get, MinVersion: tls.VersionTLS12, NextProtos: []string{"h2", "http/1.1"}})
-		if err := s.hs.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) && !errors.Is(err, net.ErrClosed) {
+		if err := hs.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) && !errors.Is(err, net.ErrClosed) && ctx.Err() == nil {
 			s.setErr("远程那个口挂了：" + err.Error())
 		}
 	}()
 }
 
+// stop 收掉当前这一轮：隧道、https、续期。
+func (s *Service) stop() {
+	s.mu.Lock()
+	tn, hs, cancel := s.tunnel, s.hs, s.cancel
+	s.tunnel, s.hs, s.certs, s.cancel = nil, nil, nil, nil
+	s.mu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+	if tn != nil {
+		tn.Close()
+	}
+	if hs != nil {
+		ctx, c := context.WithTimeout(context.Background(), time.Second)
+		defer c()
+		_ = hs.Shutdown(ctx)
+	}
+}
+
 func (s *Service) relayDir() string { return s.Dir + "/relay" }
 
 // renewLoop 半天看一次要不要续。续完不用重启：certFile 按 mtime 热重载。
-func (s *Service) renewLoop() {
-	for range time.Tick(12 * time.Hour) {
-		if a := s.acme.Ensure(false); a.Err != "" {
+func (s *Service) renewLoop(ctx context.Context, am *acme.Manager) {
+	t := time.NewTicker(12 * time.Hour)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+		if a := am.Ensure(false); a.Err != "" {
 			s.alert("证书续期失败（先看 DNS 凭据还在不在）：" + a.Err)
 		} else if a.Renewed {
 			s.log.Info("remote: certificate renewed")
@@ -171,17 +236,7 @@ func (s *Service) watchTamper() {
 }
 
 func (s *Service) Close() {
-	s.mu.Lock()
-	tn := s.tunnel
-	s.mu.Unlock()
-	if tn != nil {
-		tn.Close()
-	}
-	if s.hs != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		defer cancel()
-		_ = s.hs.Shutdown(ctx)
-	}
+	s.stop()
 	s.Auth.Flush()
 }
 
@@ -288,3 +343,108 @@ func Join(ctx context.Context, dataDir, relayURL, host, invite string) error {
 
 // AccountURI：这台机器的 ACME 账户地址，给 CAA 的 accounturi 用。
 func AccountURI(dataDir string) string { return acme.AccountURI(config.RemoteDir(dataDir)) }
+
+/* ------------------------------------------------------------------ 设置页改证书 */
+
+// CertConfig 是设置页「证书」那一节：读的时候凭据只给名字（Set），不给值。
+type CertConfig struct {
+	DNS       string          `json:"dns"`
+	Email     string          `json:"email"`
+	Staging   bool            `json:"staging"`
+	TLSCert   string          `json:"tlsCert"`
+	TLSKey    string          `json:"tlsKey"`
+	Set       []string        `json:"set"` // 已经配了的凭据变量名（不带 GERDR_）
+	Providers []acme.Provider `json:"providers"`
+	// AccountURI：CAA 那条记录要的 ACME 账户；签下第一张证书之前是空的。
+	AccountURI string `json:"accountURI"`
+}
+
+func (s *Service) dataDir() string { return filepath.Dir(s.Dir) }
+
+func (s *Service) CertConfig() (CertConfig, error) {
+	f, err := config.ReadRemoteFile(s.dataDir())
+	if err != nil {
+		return CertConfig{}, err
+	}
+	s.mu.Lock()
+	c := CertConfig{DNS: s.Cfg.ACMEDNS, Email: s.Cfg.ACMEEmail, Staging: s.Cfg.ACMEStaging, TLSCert: s.Cfg.TLSCert, TLSKey: s.Cfg.TLSKey}
+	s.mu.Unlock()
+	c.Set = []string{}
+	if p := acme.FindProvider(c.DNS); p != nil {
+		for _, fd := range p.Fields {
+			if f.Env[fd.Env] != "" || os.Getenv("GERDR_"+fd.Env) != "" {
+				c.Set = append(c.Set, fd.Env)
+			}
+		}
+	}
+	c.Providers = acme.AllProviders()
+	c.AccountURI = acme.AccountURI(s.Dir)
+	return c, nil
+}
+
+// CertInput 是设置页提交的。Env 里空着的项 = 沿用已经存着的那份（表单不回显密钥）。
+type CertInput struct {
+	DNS     string            `json:"dns"`
+	Email   string            `json:"email"`
+	Staging bool              `json:"staging"`
+	Env     map[string]string `json:"env"`
+	TLSCert string            `json:"tlsCert"`
+	TLSKey  string            `json:"tlsKey"`
+}
+
+// SaveCert 写进 remote.json、补进进程环境，然后把远程那条路重来一遍。
+//
+// 换了服务商时，别家留在文件里的凭据一起删掉：用不上的密钥不该继续躺在盘上。
+func (s *Service) SaveCert(in CertInput) error {
+	if !s.Cfg.Enabled() {
+		return errors.New("还没注册到中继：先 gerdr remote join")
+	}
+	f, err := config.ReadRemoteFile(s.dataDir())
+	if err != nil {
+		return err
+	}
+	if f.Env == nil {
+		f.Env = map[string]string{}
+	}
+	in.DNS = strings.TrimSpace(in.DNS)
+	switch {
+	case in.DNS != "":
+		p := acme.FindProvider(in.DNS)
+		if p == nil {
+			return fmt.Errorf("不认识的 DNS 服务商 %q", in.DNS)
+		}
+		keep := map[string]bool{}
+		for _, fd := range p.Fields {
+			keep[fd.Env] = true
+			if v := strings.TrimSpace(in.Env[fd.Env]); v != "" {
+				f.Env[fd.Env] = v
+			}
+			if f.Env[fd.Env] == "" && os.Getenv("GERDR_"+fd.Env) == "" {
+				return fmt.Errorf("%s 的「%s」没填", p.Label, fd.Label)
+			}
+		}
+		for k := range f.Env {
+			if !keep[k] {
+				delete(f.Env, k)
+			}
+		}
+		f.ACMEDNS, f.TLSCert, f.TLSKey = in.DNS, "", ""
+	case in.TLSCert != "" && in.TLSKey != "":
+		if _, err := loadCert(in.TLSCert, in.TLSKey); err != nil {
+			return fmt.Errorf("证书文件读不了：%w", err)
+		}
+		f.ACMEDNS, f.TLSCert, f.TLSKey, f.Env = "", in.TLSCert, in.TLSKey, nil
+	default:
+		return errors.New("选一家 DNS 服务商，或者给证书和私钥两个文件")
+	}
+	f.ACMEEmail, f.ACMEStaging = strings.TrimSpace(in.Email), in.Staging
+	if err := config.WriteRemoteFile(s.dataDir(), f); err != nil {
+		return err
+	}
+	// 进程环境里那份也要换成新的（LoadRemote 只补「环境里没有的」，这里是显式改，要盖掉）
+	for k, v := range f.Env {
+		_ = os.Setenv("GERDR_"+k, v)
+	}
+	s.SetCert(f.ACMEDNS, f.ACMEEmail, f.ACMEStaging, f.TLSCert, f.TLSKey)
+	return nil
+}

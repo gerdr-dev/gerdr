@@ -7,7 +7,13 @@
 // agent，hub 这一侧不用改。另外两条是 gerdr 自己的，用 `_gerdr/` 前缀以免和别人撞名。
 package acpx
 
-import "github.com/coder/acp-go-sdk"
+import (
+	"encoding/json"
+	"fmt"
+	"strings"
+
+	"github.com/coder/acp-go-sdk"
+)
 
 const (
 	// MethodSteer：client → agent。把一条消息插进正在跑的那一轮。
@@ -49,11 +55,17 @@ const (
 type TranscriptStatRequest struct {
 	SessionId acp.SessionId `json:"sessionId"`
 	Cwd       string        `json:"cwd,omitempty"`
+	// Since：从文件的这个位置往后，把人说的话列出来（NewUserTexts）。-1 = 不列。
+	Since int64 `json:"since"`
 }
 
 type TranscriptStatResponse struct {
 	Size    int64 `json:"size"`
 	ModTime int64 `json:"modTime"` // unix ms
+	// NewUserTexts：Since 之后记录里人说的话。hub 拿去和自己的日志比：全是自己发过的 = 文件是自己写长的
+	// （一轮之后的收尾、切模式……），不算「别处聊过」。只看文件大小的话，gerdr 自己一轮刚完就重启（没来得及记大小）
+	// 也会被当成别处聊过（用户报的误报）。
+	NewUserTexts []string `json:"newUserTexts,omitempty"`
 }
 
 type HoldersRequest struct {
@@ -196,9 +208,33 @@ type AskRequest struct {
 
 // AskResponse：Answers 按问题 id 给，每题一组（单选就一个）。Cancelled 为真表示人不答，
 // agent 那边按「工具被中止」处理。
+// AskDeclined：没回答时给 agent 的话（两家适配器共用）。要说清楚是人的选择、不是界面故障，并告诉它接下来怎么做 ——
+// 只说「被关掉了」的话，agent 会猜成「界面不支持这个工具」、换着法子一遍遍再问（用户报的）。
+func AskDeclined(reason, text string) string {
+	switch reason {
+	case "replied":
+		// 原话直接放进来：光说「下一条消息是回答」的话，agent 收到这句就立刻接着说话（「还没收到你的回答」），
+		// 插话要晚一步才到（实测）
+		if text != "" {
+			return "The user did not pick an option; they answered in the chat instead: \"" + text + "\". Treat that as their answer to this question and continue. (The same text also arrives as their next chat message — no need to acknowledge it twice.) Do not ask this question again."
+		}
+		return "The user did not pick an option; they replied in the chat instead. Their next message is their answer to this question — read it and continue. Do not ask this question again."
+	case "skipped":
+		return "The user deliberately chose not to answer this question (they clicked \"skip\" in the gerdr UI; the question was displayed fine — this is not a UI problem). Do not ask it again with the question tool. Continue with your best judgment, or ask in plain text in your reply if you really need the answer."
+	}
+	return "The question was withdrawn because the turn was interrupted. Do not re-ask it unless the user brings it up."
+}
+
 type AskResponse struct {
 	Answers   map[string][]string `json:"answers,omitempty"`
 	Cancelled bool                `json:"cancelled,omitempty"`
+	// Reason：为什么没回答。光一个 cancelled 的话 agent 分不清「人不想选」和「界面坏了」，会猜成后者、
+	// 还一遍遍再问（用户报的）。适配器按它给 agent 说不同的话。
+	//   skipped：人在卡片上点了「不回答」（主动的）；
+	//   replied：人没选选项，直接在对话里说了话 —— 他接下来那条消息就是答复（照 Claude Code：提问挂着时打字 = 回答）；
+	//   空：这一轮结束了 / 被打断了，问题作废。
+	Reason string `json:"reason,omitempty"`
+	Text   string `json:"text,omitempty"` // reason=replied 时：人在对话里说的那句话
 }
 
 // MetaKey 是 gerdr 往 ACP `_meta` 里塞东西时用的命名空间。
@@ -216,3 +252,53 @@ func GetMeta(meta map[string]any, key string) (any, bool) {
 	v, ok := g[key]
 	return v, ok
 }
+
+// DescribeRequest：把一个在等人处理的请求说成一句话（会话列表的 waiting、`gerdr session read`、手环上显示的就是它）。
+// 只说「在等人回答问题」的话，看的人 / agent 不知道问的是什么、该不该现在去处理（用户报的）。
+//
+//	permission → 「审批：<工具标题>」
+//	ask        → 「回答：<第一道题>（<选项 / 选项>）」，多道题后面带「等 N 道题」
+func DescribeRequest(kind string, raw json.RawMessage) string {
+	switch kind {
+	case "permission":
+		var r struct {
+			ToolCall struct {
+				Title string `json:"title"`
+			} `json:"toolCall"`
+		}
+		_ = json.Unmarshal(raw, &r)
+		if r.ToolCall.Title == "" {
+			return "审批"
+		}
+		return "审批：" + r.ToolCall.Title
+	case "ask":
+		var r AskRequest
+		_ = json.Unmarshal(raw, &r)
+		if len(r.Questions) == 0 {
+			return "回答问题"
+		}
+		q := r.Questions[0]
+		s := "回答：" + q.Question
+		var opts []string
+		for _, o := range q.Options {
+			opts = append(opts, o.Label)
+		}
+		if len(opts) > 0 {
+			s += "（" + strings.Join(opts, " / ") + "）"
+		}
+		if n := len(r.Questions); n > 1 {
+			s += fmt.Sprintf(" 等 %d 道题", n)
+		}
+		return s
+	}
+	return kind
+}
+
+// MediaHint：起 agent 时追加给它的一句说明（claude 的 --append-system-prompt、codex 的 developerInstructions）——
+// gerdr 的对话界面会把 Markdown 图片语法引用的本机文件直接画出来（ui 的 ChatMedia：图片、视频、音频、PDF），
+// 但 agent 不知道的话只会甩一条路径让人自己去开。照 shuttle 的写法。
+const MediaHint = "You are running inside gerdr, a GUI for coding agents. Its chat view renders Markdown image syntax inline: " +
+	"when the user should see or hear a local image, video, audio file or PDF (a screenshot, a generated or downloaded image/video, a QR code, a voice-over…), " +
+	"embed it in your reply with image syntax and an absolute path, e.g. ![login QR code](/Users/me/project/out/qr.png) " +
+	"(wrap the path in <> if it contains spaces: ![demo](</Users/me/my dir/demo.mp4>)). Several images on consecutive lines show as a grid. " +
+	"Use a plain link instead when the file is just being mentioned, not shown."

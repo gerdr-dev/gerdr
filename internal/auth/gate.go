@@ -29,14 +29,18 @@ type Gate struct {
 	// 全局熔断：窗口内所有 IP 的失败总数超过这个数（换源 IP 的分布式尝试）
 	GlobalTrip int
 	MaxDelay   time.Duration
+	// MaxInflight：全局同时在验的猜测数（见 Enter）
+	MaxInflight int
 
 	Alert func(string) // 打到终端上，别让攻击悄无声息
 
-	mu     sync.Mutex
-	fails  map[string]*gateEntry
-	global []time.Time
-	locked bool
-	now    func() time.Time
+	mu       sync.Mutex
+	fails    map[string]*gateEntry
+	global   []time.Time
+	locked   bool
+	busy     map[string]bool // 这个 IP 有一次正在验
+	inflight int
+	now      func() time.Time
 }
 
 type gateEntry struct {
@@ -50,8 +54,8 @@ func NewGate() *Gate {
 	return &Gate{
 		FreeTries: 2, Threshold: 10, Window: 15 * time.Minute,
 		BlockFor: 15 * time.Minute, MaxBlock: 24 * time.Hour,
-		GlobalTrip: 50, MaxDelay: 30 * time.Second,
-		fails: map[string]*gateEntry{}, now: time.Now,
+		GlobalTrip: 50, MaxDelay: 30 * time.Second, MaxInflight: 4,
+		fails: map[string]*gateEntry{}, busy: map[string]bool{}, now: time.Now,
 	}
 }
 
@@ -80,6 +84,45 @@ func (g *Gate) Check(ip string) (delay time.Duration, blocked bool, retryAfter t
 		d = g.MaxDelay
 	}
 	return d, false, 0
+}
+
+// Enter / Leave：同一个 IP 同时只许一次在验。
+//
+// 为什么要有：Check 只在请求进来时看一眼，失败是验完才记的 —— 同一时刻并发打进来的几百个请求会全部
+// 通过 Check、各自猜一次，退避和「错 10 次封」全被绕过，全局熔断也要等它们都失败完才跳。
+// 拿不到就直接拒（不排队）：排队的话并发请求只是晚一点照样都猜。
+func (g *Gate) Enter(ip string) bool {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.busy[ip] {
+		return false
+	}
+	g.busy[ip] = true
+	return true
+}
+
+func (g *Gate) Leave(ip string) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	delete(g.busy, ip)
+}
+
+// Slot / Unslot：全局同时在验的上限（换着源 IP 并发猜也一样）。只在真正验的那几毫秒占着 ——
+// 退避的那段睡眠不占，不然几个被罚的 IP 睡着就把名额全占了，正常配对的人反而进不来。
+func (g *Gate) Slot() bool {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.inflight >= g.MaxInflight {
+		return false
+	}
+	g.inflight++
+	return true
+}
+
+func (g *Gate) Unslot() {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.inflight--
 }
 
 // Fail 记一次失败。

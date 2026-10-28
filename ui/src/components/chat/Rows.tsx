@@ -1,4 +1,4 @@
-import { ChevronDown, Loader2, Wrench } from "lucide-react";
+import { ChevronDown, Wrench } from "lucide-react";
 import { memo, type ReactNode } from "react";
 import { StatusLine } from "./StatusLine";
 import type { GMessage, GPart, ToolPart } from "@/lib/transcript";
@@ -14,9 +14,9 @@ import { childTools, MessageView, partVisible, renderPart } from "./MessageView"
 export type Row =
   // prev / next：前后紧挨着也是用户消息（连发几句、中途插话）—— 气泡叠成一摞，相邻的角收小
   | { key: string; kind: "user"; msg: GMessage; first: true; prev?: boolean; next?: boolean }
-  | { key: string; kind: "part"; part: GPart; i: number; msgId: string; kids?: ToolPart[]; first: boolean; streaming: boolean; live: boolean }
+  | { key: string; kind: "part"; part: GPart; i: number; msgId: string; kids?: ToolPart[]; first: boolean; streaming: boolean; live: boolean; tight?: boolean }
   | { key: string; kind: "working"; empty: boolean; first: boolean }
-  | { key: string; kind: "group"; first: boolean; open: boolean; summary: string; failed: number; busy: boolean }
+  | { key: string; kind: "group"; first: boolean; open: boolean; summary: string; failed: number; busy: boolean; tight?: boolean }
   | { key: string; kind: "cleared"; n: number; first: true };
 
 const isClear = (p: GPart) => p.type === "data-notice" && (p as any).data?.level === "clear";
@@ -25,8 +25,18 @@ const isClear = (p: GPart) => p.type === "data-notice" && (p as any).data?.level
 // 真正要读的那几段话被挤得找不到。改文件的不折（默认展开看 diff 是它的主要用途），带子 agent 的不折（有「查看对话」）。
 function foldable(p: GPart, kids?: ToolPart[]): boolean {
   if (p.type === "reasoning") return true;
+  // 已经答完的审批（拒绝 / 作废；批准的根本不成行）也收进组里；还在等人点的不折，要让人看见
+  if (p.type === "data-permission") return !!(p.data.answer || p.data.cancelled);
+  // 后台任务跑完的那一行：和工具调用一个样子，也收进组里
+  // 子 agent 的那一行有「查看对话」按钮，不折
+  if (p.type === "data-task") return !(p.data.task.type === "local_agent" || p.data.task.subagent);
   if (p.type !== "dynamic-tool" || kids?.length) return false;
-  const c = (p as ToolPart).toolMetadata?.content ?? [];
+  const tp = p as ToolPart;
+  // 有操作按钮的不折，折起来就点不到了：被 auto 分类器拦下的有「允许并重试」，子 agent（Task / Agent，kind=think）有「查看对话」。
+  // （「转到后台」只在正在跑时出现，那时它是组里最底下那一块，收着也露在外面）
+  if (tp.state === "output-error" && tp.toolMetadata?.autoDenied?.length) return false;
+  if (tp.toolMetadata?.kind === "think") return false;
+  const c = tp.toolMetadata?.content ?? [];
   return !c.some((x: any) => x.type === "diff" || x._meta?.gerdr?.unifiedDiff || x.content?._meta?.gerdr?.unifiedDiff);
 }
 
@@ -41,10 +51,20 @@ const KIND_TEXT: Record<string, [string, string]> = {
 function summarize(parts: GPart[]): { summary: string; failed: number } {
   const n: Record<string, number> = {};
   let think = 0,
-    failed = 0;
+    failed = 0,
+    denied = 0,
+    tasks = 0;
   for (const p of parts) {
     if (p.type === "reasoning") {
       think++;
+      continue;
+    }
+    if (p.type === "data-permission") {
+      denied++;
+      continue;
+    }
+    if (p.type === "data-task") {
+      tasks++;
       continue;
     }
     const tp = p as ToolPart;
@@ -58,6 +78,8 @@ function summarize(parts: GPart[]): { summary: string; failed: number } {
   if (n.other) bits.push(`调了 ${n.other} 次工具`);
   let summary = bits.join("、");
   if (think) summary += `${summary ? "，" : ""}思考 ${think} 次`;
+  if (tasks) summary += `${summary ? "，" : ""}${tasks} 个后台任务跑完`;
+  if (denied) summary += `${summary ? "，" : ""}拒了 ${denied} 次`;
   return { summary, failed };
 }
 
@@ -139,14 +161,22 @@ export function buildRows(msgs: GMessage[], running: boolean, showCleared = fals
     // 在跑的这一轮：最底下一行状态（照 Claude Code：转圈 + 动词 + 用时 + token 数）
     if (live && running) rows.push({ key: `${m.id}:working`, kind: "working", empty: first, first });
   });
+  // 行距（照 Codex）：工具调用 / 思考这类一行小字，连着的几条挨紧（tight）；它和正文之间留开，像分段一样 ——
+  // 原来一律挨着，正文和一串命令挤成一团
+  const toolish = (r: Row) =>
+    r.kind === "group" || (r.kind === "part" && ["dynamic-tool", "reasoning", "data-permission", "data-task"].includes(r.part.type));
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    if ((r.kind === "part" || r.kind === "group") && !r.first) rows[i] = { ...r, tight: toolish(r) && toolish(rows[i - 1]) };
+  }
   return rows;
 }
 
 export type RowEnv = {
   sessionId: string;
   running: boolean;
-  onRewind?: (m: GMessage) => void;
-  onEdit?: (m: GMessage) => void;
+  onRewind?: (m: GMessage, restore: boolean) => void;
+  onEdit?: (m: GMessage, restore: boolean) => void;
   onQuickReply: (s: string) => void;
   onShowCleared?: () => void;
   onToggleGroup?: (key: string) => void;
@@ -159,7 +189,8 @@ function GroupHeader({ row, onToggle }: { row: Extract<Row, { kind: "group" }>; 
       className="-ml-1.5 flex w-[calc(100%+0.375rem)] min-w-0 items-center gap-2 rounded-md px-1.5 py-[3px] text-left text-[13px] text-muted-foreground hover:bg-muted/60 hover:text-foreground"
       onClick={() => onToggle?.(row.key)}
     >
-      {row.busy ? <Loader2 className="size-3.5 shrink-0 animate-spin" /> : <Wrench className="size-3.5 shrink-0" />}
+      {/* 在跑时底下露着最新那一块，它自己会转圈；组头再转就是一屏好几个 loading */}
+      <Wrench className="size-3.5 shrink-0" />
       <span className="min-w-0 truncate">{row.summary}</span>
       {row.failed > 0 && <span className="shrink-0 text-[11px] text-bad">{row.failed} 个失败</span>}
       <ChevronDown className={cn("size-3.5 shrink-0 opacity-60 transition-transform", row.open && "rotate-180")} />
@@ -168,9 +199,10 @@ function GroupHeader({ row, onToggle }: { row: Extract<Row, { kind: "group" }>; 
 }
 
 function Frame({ first, tight, stack, children }: { first: boolean; tight?: boolean; stack?: boolean; children: ReactNode }) {
-  // 消息之间的间距在一条消息的第一行上（pt-5），同一条消息里各块之间 pt-2。
-  // 工具调用 / 思考是一行小字、自己带 py-1，连着好几个时再加 pt-2 就稀稀拉拉的，像终端那样挨紧一点（tight）。
-  return <div className={cn("mx-auto w-full max-w-[860px] px-4", stack ? "pt-1" : first ? "pt-5" : tight ? "pt-0.5" : "pt-2")}>{children}</div>;
+  // 消息之间的间距在一条消息的第一行上（first），同一条消息里各块之间 pt-4；
+  // 工具调用 / 思考接着工具调用 / 思考时挨紧（tight，见 buildRows 最后那段）。
+  // 宽 800 去掉两边 px-4 = 正文 768（照 Codex：一行字少一点读着不累）。轮与轮之间（first）留 32、轮里面各块挨着：层次靠间距拉开
+  return <div className={cn("mx-auto w-full max-w-[800px] px-4", stack ? "pt-1" : first ? "pt-8" : tight ? "pt-0.5" : "pt-4")}>{children}</div>;
 }
 
 const sameKids = (a?: ToolPart[], b?: ToolPart[]) => a === b || (!!a && !!b && a.length === b.length && a.every((x, i) => x === b[i]));
@@ -209,7 +241,7 @@ export const RowView = memo(
     }
     if (row.kind === "group") {
       return (
-        <Frame first={row.first} tight>
+        <Frame first={row.first} tight={row.tight}>
           <GroupHeader row={row} onToggle={env.onToggleGroup} />
         </Frame>
       );
@@ -224,7 +256,7 @@ export const RowView = memo(
     const children = new Map<string, ToolPart[]>();
     if (row.kids && row.part.type === "dynamic-tool") children.set((row.part as ToolPart).toolCallId, row.kids);
     return (
-      <Frame first={row.first} tight={row.part.type === "dynamic-tool" || row.part.type === "reasoning"}>
+      <Frame first={row.first} tight={row.tight}>
         <div className="flex w-full min-w-0 max-w-full flex-col text-[1em] text-foreground">
           {renderPart(row.part, row.i, {
             sessionId: env.sessionId,
@@ -251,9 +283,9 @@ export const RowView = memo(
     if (x.kind === "user" && y.kind === "user") return x.msg === y.msg && x.prev === y.prev && x.next === y.next;
     if (x.kind === "working" && y.kind === "working") return x.empty === y.empty;
     if (x.kind === "group" && y.kind === "group")
-      return x.open === y.open && x.summary === y.summary && x.failed === y.failed && x.busy === y.busy && a.env.onToggleGroup === b.env.onToggleGroup;
+      return x.open === y.open && x.summary === y.summary && x.failed === y.failed && x.busy === y.busy && x.tight === y.tight && a.env.onToggleGroup === b.env.onToggleGroup;
     if (x.kind === "cleared" && y.kind === "cleared") return x.n === y.n && a.env.onShowCleared === b.env.onShowCleared;
-    if (x.kind === "part" && y.kind === "part") return x.part === y.part && x.streaming === y.streaming && x.live === y.live && sameKids(x.kids, y.kids);
+    if (x.kind === "part" && y.kind === "part") return x.part === y.part && x.streaming === y.streaming && x.live === y.live && x.tight === y.tight && sameKids(x.kids, y.kids);
     return false;
   },
 );

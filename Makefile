@@ -58,9 +58,12 @@ clean:
 	rm -rf bin build $(UISNAP)
 	mkdir -p $(UISNAP) && touch $(UISNAP)/.gitkeep
 
+# 先在同一块盘上复制好、再整个 mv 进去：直接 cp -R 进 /Applications，macOS 的「App 管理」保护可能拦到一半
+# （大量 Operation not permitted），留下一个缺 Info.plist、打不开的半截 App（踩过）；mv 只是改名，不改包里的东西。
 install: app
+	rm -rf build/stage && mkdir -p build/stage && cp -R build/gerdr.app build/stage/
 	rm -rf /Applications/gerdr.app
-	cp -R build/gerdr.app /Applications/
+	mv build/stage/gerdr.app /Applications/gerdr.app
 	mkdir -p $(HOME)/.local/bin
 	ln -sf /Applications/gerdr.app/Contents/Resources/gerdr $(HOME)/.local/bin/gerdr
 	@echo "装好了：/Applications/gerdr.app，命令行 ~/.local/bin/gerdr"

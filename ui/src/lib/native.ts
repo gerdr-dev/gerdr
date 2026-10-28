@@ -24,6 +24,11 @@ export function nativeBadge(count: number) {
   bridge()?.postMessage({ type: "badge", count });
 }
 
+/** App 里：用系统默认程序打开本机文件（reveal = 在访达 / 资源管理器里显示）。相对路径按 cwd 算。 */
+export function nativeOpenPath(path: string, cwd: string | undefined, reveal: boolean) {
+  bridge()?.postMessage({ type: "openPath", path, cwd, reveal });
+}
+
 export function nativeOpenURL(url: string) {
   const b = bridge();
   if (b) b.postMessage({ type: "open", url });

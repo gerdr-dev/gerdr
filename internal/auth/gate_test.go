@@ -97,3 +97,30 @@ func TestGateBlocksLoopback(t *testing.T) {
 		t.Error("unlock 之后该放开")
 	}
 }
+
+// 并发请求不能一起溜过闸：同一个 IP 同时只有一次在验，全局在验的有上限。
+func TestGateInflight(t *testing.T) {
+	g := NewGate()
+	if !g.Enter("1.2.3.4") || g.Enter("1.2.3.4") {
+		t.Fatal("同一个 IP 第二次 Enter 该拿不到")
+	}
+	if !g.Enter("5.6.7.8") {
+		t.Fatal("别的 IP 不该受影响")
+	}
+	g.Leave("1.2.3.4")
+	if !g.Enter("1.2.3.4") {
+		t.Fatal("Leave 之后该能再进")
+	}
+	for i := 0; i < g.MaxInflight; i++ {
+		if !g.Slot() {
+			t.Fatalf("第 %d 个全局名额该给", i+1)
+		}
+	}
+	if g.Slot() {
+		t.Fatal("全局名额满了还给")
+	}
+	g.Unslot()
+	if !g.Slot() {
+		t.Fatal("还回去一个之后该能拿到")
+	}
+}

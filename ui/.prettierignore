@@ -1,0 +1,4 @@
+# 从 shadcn / AI Elements 拷进来的组件，保持它们原来的样子（以后对着上游合并更新时 diff 才干净）
+src/components/ui/
+src/components/ai-elements/
+node_modules/

@@ -1,8 +1,6 @@
 import {
   ChevronDown,
   CircleAlert,
-  CircleCheck,
-  CircleDashed,
   CircleX,
   FilePen,
   FileSearch,
@@ -153,10 +151,17 @@ export function ToolCall({ part, children, running }: { part: ToolPart; children
   const [open, setOpen] = useKept<boolean | undefined>(keep, undefined);
   const isOpen = open ?? (hasDiff || !!children);
   const title = part.title || part.toolName;
+  const inp = part.input && typeof part.input === "object" ? (part.input as Record<string, unknown>) : undefined;
+  const cmd = meta.kind === "execute" && typeof inp?.command === "string" ? inp.command : undefined;
+  const desc = meta.kind === "execute" && typeof inp?.description === "string" && inp.description.trim() ? inp.description.trim() : undefined;
   const stat = useMemo(() => diffStat(meta.content ?? []), [meta.content]);
   const took = meta.startedAt && meta.endedAt && meta.endedAt - meta.startedAt >= 1000 ? elapsed(meta.startedAt, meta.endedAt) : undefined;
   const task = session?.tasks?.find((t) => t.toolCallId === part.toolCallId);
   useTick(!!task && task.status === "running");
+  // 任务的进度 / 摘要：和行里已经写着的（说明、标题、任务描述）一样就不再写一遍
+  const note = task && (task.status === "running" ? task.progress : task.summary);
+  const taskNote =
+    note && ![desc, title, task?.description].includes(note) && !/^Background command ".*" (completed|failed|was stopped|killed)/.test(note) ? note : undefined;
   // 「转到后台」= claude 里按 ctrl+b：这条命令 / 这个子 agent 接着在后台跑，这一轮先往下走。
   // 子 agent 的工具调用（meta.parent）不给：那是它自己那一轮里的事，转后台得由它决定。
   const canBackground = busy && !meta.parent && (session?.base ?? session?.agent) === "claude" && !task?.background && (meta.kind === "execute" || !!task);
@@ -169,17 +174,22 @@ export function ToolCall({ part, children, running }: { part: ToolPart; children
       {/* 照 Astryx 的 ChatToolCalls：状态图标打头（转圈 / ✓ / ✗），然后是干了什么，尾巴上 diff 行数、耗时、展开箭头。
           -ml-1.5 抵掉 px-1.5：图标和正文左边对齐，hover 底色往外多出一点 */}
       <CollapsibleTrigger className="group/row -ml-1.5 flex w-[calc(100%+0.375rem)] min-w-0 items-center gap-2 rounded-md px-1.5 py-[3px] text-left text-[13px] text-muted-foreground hover:bg-muted/60 hover:text-foreground">
+        {/* 一行一个图标（照 Codex）：平时是工具种类，在跑换成转圈，失败换成红叉。成功不打勾 —— 一列下来全是绿勾，只是噪音 */}
         {busy || task?.status === "running" ? (
           <Loader2 className="size-3.5 shrink-0 animate-spin" />
         ) : failed ? (
           <CircleX className="size-3.5 shrink-0 text-bad" />
-        ) : part.state === "output-available" ? (
-          <CircleCheck className="size-3.5 shrink-0 text-ok/80" />
         ) : (
-          <CircleDashed className="size-3.5 shrink-0" />
+          <Icon className="size-3.5 shrink-0" />
         )}
-        <Icon className="size-3.5 shrink-0 opacity-70" />
-        <span className={cn("min-w-0 truncate", meta.kind === "execute" && "font-mono text-[12px]")}>{title}</span>
+        {desc ? (
+          // 命令带了说明（claude 的 Bash 工具有 description 字段）：只写说明，命令点开看（照 Codex，一整行命令太抢眼）
+          <span className="min-w-0 truncate" title={cmd}>
+            {desc}
+          </span>
+        ) : (
+          <span className={cn("min-w-0 truncate", meta.kind === "execute" && "font-mono text-[12px]")}>{title}</span>
+        )}
         {stat && (stat.add > 0 || stat.del > 0) && (
           <span className="shrink-0 font-mono text-[11px] tabular-nums">
             {stat.add > 0 && <span className="text-ok">+{stat.add}</span>}
@@ -190,14 +200,11 @@ export function ToolCall({ part, children, running }: { part: ToolPart; children
         {!task && took && <span className="shrink-0 text-[11px] tabular-nums opacity-70">{took}</span>}
         {task && (
           <>
-            {/* 进度文字可以截断，耗时不能（截成「3.」看不懂） */}
-            {(task.background || (task.status === "running" ? task.progress : task.summary)) && (
-              <span className="min-w-0 shrink truncate text-[11px] text-muted-foreground">
-                {task.background && "后台 · "}
-                {task.status === "running" ? task.progress || "" : task.summary || ""}
-              </span>
-            )}
-            <span className="shrink-0 text-[11px] text-muted-foreground tabular-nums">
+            {task.background && <span className="shrink-0 rounded bg-muted px-1 text-[11px]">后台</span>}
+            {/* 进度文字可以截断，耗时不能（截成「3.」看不懂）。跑完后 CLI 自动写的「Background command "…" completed」
+                不显示：就是把标题和状态又说一遍 */}
+            {taskNote && <span className="min-w-0 shrink truncate text-[11px] text-muted-foreground">{taskNote}</span>}
+            <span className="shrink-0 text-[11px] tabular-nums opacity-70">
               {elapsed(task.startedAt, task.endedAt)}
               {task.toolUses ? ` · ${task.toolUses} 次工具` : ""}
             </span>

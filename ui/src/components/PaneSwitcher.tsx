@@ -1,4 +1,4 @@
-import { Bot, Plus, Search, X } from "lucide-react";
+import { Bot, Plus, Search, SquareTerminal, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { addTab, basename, focusPane, selectWorkspace, tabName } from "@/lib/actions";
@@ -114,7 +114,7 @@ export function PaneSwitcher() {
     const kw = q.trim().toLowerCase();
     const hit = (r: Row) =>
       (!ws || r.wsId === ws) &&
-      (!kw || `${r.session?.title ?? ""} ${r.session?.agent ?? ""} ${r.session?.cwd ?? ""} ${r.ws} ${r.tab} ${r.pane.sub?.title ?? ""}`.toLowerCase().includes(kw));
+      (!kw || `${r.session?.title ?? ""} ${r.session?.agent ?? ""} ${r.session?.cwd ?? ""} ${r.ws} ${r.tab} ${r.pane.sub?.title ?? ""} ${r.pane.term ? "终端 " + r.pane.term.cwd : ""}`.toLowerCase().includes(kw));
     const list = out.filter(hit);
     if (sort === "group") return list;
     return list.sort((a, b) => rankOf(a, unread) - rankOf(b, unread) || (b.session?.updatedAt ?? 0) - (a.session?.updatedAt ?? 0) || a.i - b.i);
@@ -252,7 +252,7 @@ export function PaneSwitcher() {
                 {g.items.map((r) => {
                   const s = r.session;
                   const chip = CHIP[rankOf(r, unread)];
-                  const title = r.pane.sub ? r.pane.sub.title || "子 agent" : s ? s.title || basename(s.cwd) : "新会话";
+                  const title = r.pane.sub ? r.pane.sub.title || "子 agent" : s ? s.title || basename(s.cwd) : r.pane.term ? `终端 · ${basename(r.pane.term.cwd)}` : "新会话";
                   // 第二行：在哪（工作空间 · tab）+ 路径。手机上按工作空间认项目，路径兜底分开同名的
                   const where = sort === "group" ? r.tab : `${r.ws} · ${r.tab}`;
                   return (
@@ -267,7 +267,11 @@ export function PaneSwitcher() {
                       )}
                       {...tap(r.pane.id)}
                     >
-                      {r.pane.sub ? <Bot className="size-4 shrink-0 text-muted-foreground" /> : s ? <AgentIcon agent={s.agent} className="size-4" /> : <span className="size-4 shrink-0 rounded-[5px] border border-dashed" />}
+                      {r.pane.sub ? (
+                        <Bot className="size-4 shrink-0 text-muted-foreground" />
+                      ) : r.pane.term ? (
+                        <SquareTerminal className="size-4 shrink-0 text-muted-foreground" />
+                      ) : s ? <AgentIcon agent={s.agent} className="size-4" /> : <span className="size-4 shrink-0 rounded-[5px] border border-dashed" />}
                       <span className="min-w-0 flex-1">
                         <span className="flex items-center gap-1.5">
                           <span className="truncate text-[13px]">{title}</span>
@@ -278,7 +282,7 @@ export function PaneSwitcher() {
                         </span>
                         <span className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
                           <span className="shrink-0">{where}</span>
-                          {s && <span className="min-w-0 truncate font-mono">{shortCwd(s.cwd)}</span>}
+                          {(s || r.pane.term) && <span className="min-w-0 truncate font-mono">{shortCwd(s?.cwd ?? r.pane.term!.cwd)}</span>}
                         </span>
                       </span>
                       <StatusDot status={s?.status} unread={!!(s && unread[s.id])} />

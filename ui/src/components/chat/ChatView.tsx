@@ -1,22 +1,10 @@
-import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { TabActive } from "../Panes";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { ArrowDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { buildRows, RowView, type RowEnv } from "./Rows";
 import { toast } from "sonner";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
 import { api } from "@/lib/api";
 import { get, setConfig, subTranscript, transcript, useStore } from "@/lib/store";
 import { useKept } from "@/lib/kept";
@@ -28,7 +16,8 @@ import { SessionContext } from "./sessionContext";
 import { TasksBar } from "./TasksBar";
 
 /** sub：子 agent 的只读面板（值 = 它在主会话里那张卡片的 toolCallId）。没有输入框、不能回退。 */
-const ListFooter = () => <div className="h-4" />;
+// 最后一条和输入框之间留一截（照 ChatGPT 桌面版的留白）：贴太近的话最后那行元信息和输入框挤在一起
+const ListFooter = () => <div className="h-12" />;
 
 // 每个 pane 的滚动位置（在不在底部、滚到哪）：列表被卸载再挂回来（tab 被挤出保留数、虚拟列表重建）时照它恢复。
 const scrollMem = new Map<string, { top: number; bottom: boolean }>();
@@ -41,9 +30,6 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
   const loaded = useStore((s) => s.tv[session.id] !== undefined);
   const agentName = useStore((s) => s.agents.find((a) => a.id === session.agent)?.name) ?? session.agent;
   const composer = useRef<ComposerHandle>(null);
-  const [rewind, setRewind] = useState<{ msg: GMessage; edit: boolean; files?: string[] | null } | null>(null);
-  const restoreDefault = useStore((s) => s.config.rewindFiles);
-  const [restore, setRestore] = useState(restoreDefault);
 
   // 焦点切到这个 pane（或者前缀动作做完）时，把光标放回输入框。
   useEffect(() => {
@@ -56,27 +42,36 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
     return () => window.removeEventListener("gerdr:refocus", f);
   }, [focused]);
 
-  const openRewind = useCallback(
-    async (msg: GMessage, edit: boolean) => {
-      setRestore(get().config.rewindFiles);
-      setRewind({ msg, edit });
-      if (msg.metadata?.snapshot) {
-        try {
-          const r = await api.rewindPreview(session.id, msg.metadata.messageId!);
-          setRewind((cur) => (cur && cur.msg === msg ? { ...cur, files: r.files } : cur));
-        } catch {}
-      }
-    },
-    [session.id],
-  );
+  // 焦点不在任何输入框里（刚点过对话区、按过 Esc……）时直接敲字：字进这个 pane 的输入框，不用先去点它。
+  // 只认能打出字的单个键（没带 ⌘ / Ctrl / Alt）；快捷键、方向键、翻页照旧归页面（滚对话、切 pane）。
+  useEffect(() => {
+    if (!focused || sub) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || e.isComposing || e.metaKey || e.ctrlKey || e.altKey || e.key.length !== 1) return;
+      const a = document.activeElement as HTMLElement | null;
+      if (a && (a.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))) return;
+      if (get().dialog || document.querySelector("[role=dialog]")) return;
+      composer.current?.focus(); // 在 keydown 里换焦点，这个键的字就落到新焦点上
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [focused, sub]);
 
-  const doRewind = async () => {
-    if (!rewind) return;
-    const { msg, edit } = rewind;
-    setRewind(null);
+  // 点对话区任何地方（不是在选字、也不是点按钮 / 链接这些）：光标回到输入框，直接打字（用户点名的）
+  const clickToType = (e: React.MouseEvent) => {
+    if (sub || e.button !== 0) return;
+    const t = e.target as HTMLElement;
+    if (t.closest("button,a,input,textarea,select,summary,label,[role=button],[role=menuitem],[role=checkbox],[role=radio],[contenteditable=true],[data-keep-focus]")) return;
+    const sel = window.getSelection();
+    if (sel && !sel.isCollapsed) return; // 在选字（拖选、双击选词）—— 抢走焦点会让人复制不了
+    composer.current?.focus();
+  };
+
+  // 回退 / 改写：确认在消息旁边的小气泡里做（RewindButton），这里只管真的去回退
+  const doRewind = async (msg: GMessage, edit: boolean, restore: boolean) => {
     try {
-      const r = await api.rewind(session.id, msg.metadata!.messageId!, restore && !!msg.metadata?.snapshot);
-      if (restore !== get().config.rewindFiles) setConfig({ rewindFiles: restore });
+      const r = await api.rewind(session.id, msg.metadata!.messageId!, restore);
+      if (msg.metadata?.snapshot && restore !== get().config.rewindFiles) setConfig({ rewindFiles: restore }); // 记住这次的选择，下次默认照它
       const text = (r.content ?? []).map((c) => (c.type === "text" ? c.text : "")).join("");
       if (edit || text) composer.current?.setText(text);
       toast.success(r.restoredFrom ? "已回退（对话和文件）" : "已回退对话");
@@ -118,14 +113,14 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
   const scrollerEl = useRef<HTMLElement | null>(null);
   const lastH = useRef(0); // 上一次量到的总高（推到底之前用它判断「刚才是不是贴着底」）
   // 行是 memo 的，回调要稳定（不然每次都重渲染），但又要拿到最新的 —— 放在 ref 里转一手
-  const latest = useRef({ openRewind, sessionId: session.id, openGroups, setOpenGroups });
-  latest.current = { openRewind, sessionId: session.id, openGroups, setOpenGroups };
+  const latest = useRef({ doRewind, sessionId: session.id, openGroups, setOpenGroups });
+  latest.current = { doRewind, sessionId: session.id, openGroups, setOpenGroups };
   const env = useMemo<RowEnv>(
     () => ({
       sessionId: session.id,
       running,
-      onRewind: sub ? undefined : (m) => latest.current.openRewind(m, false),
-      onEdit: sub ? undefined : (m) => latest.current.openRewind(m, true),
+      onRewind: sub ? undefined : (m, restore) => latest.current.doRewind(m, false, restore),
+      onEdit: sub ? undefined : (m, restore) => latest.current.doRewind(m, true, restore),
       onQuickReply: (s) => api.send(latest.current.sessionId, [{ type: "text", text: s }]).catch((e) => toast.error(e.message)),
       onShowCleared: () => setShowCleared(true),
       onToggleGroup: (key) => {
@@ -137,7 +132,7 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
   );
   return (
     <SessionContext.Provider value={session}>
-      <div className="flex h-full min-h-0 flex-col">
+      <div className="flex h-full min-h-0 flex-col" onMouseUp={clickToType}>
         <div className="relative min-h-0 flex-1">
           {!loaded && <div className="py-10 text-center text-[13px] text-muted-foreground">加载中…</div>}
           {loaded && msgs.length === 0 && sub && <div className="py-16 text-center text-[13px] text-muted-foreground">子 agent 还没说话</div>}
@@ -206,46 +201,11 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
             {subTask && !running ? ` · ${subTask.status === "completed" ? "已完成" : "已结束"}` : ""}
           </div>
         ) : (
-          <div className="mx-auto w-full max-w-[860px]">
+          <div className="mx-auto w-full max-w-[800px]">
             <TasksBar session={session} />
             <Composer ref={composer} session={session} paneId={paneId} running={t.running} />
           </div>
         )}
-        <AlertDialog open={!!rewind} onOpenChange={(o) => !o && setRewind(null)}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>{rewind?.edit ? "改这句重发" : "回到这条消息之前"}</AlertDialogTitle>
-              <AlertDialogDescription>
-                这条消息和它之后的对话都会被丢掉，agent 也会忘掉它们。{rewind?.edit ? "原话会放回输入框，改完再发。" : ""}
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            {rewind?.msg.metadata?.snapshot ? (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Checkbox id="restore" checked={restore} onCheckedChange={(v) => setRestore(!!v)} />
-                  <Label htmlFor="restore">同时把文件恢复到那时候</Label>
-                </div>
-                {restore && rewind.files && rewind.files.length > 0 && (
-                  <div className="max-h-40 overflow-auto rounded-md border bg-muted/40 p-2 font-mono text-[11px]">
-                    {rewind.files.map((f) => (
-                      <div key={f} className="truncate">
-                        {f}
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {restore && rewind.files && rewind.files.length === 0 && <div className="text-[12px] text-muted-foreground">从那以后文件没有变化。</div>}
-                {restore && <div className="text-[12px] text-muted-foreground">恢复前会先给现在的状态打一个快照，恢复错了还能找回来。</div>}
-              </div>
-            ) : (
-              <div className="text-[12px] text-muted-foreground">这条消息没有文件快照，只回退对话。</div>
-            )}
-            <AlertDialogFooter>
-              <AlertDialogCancel>取消</AlertDialogCancel>
-              <AlertDialogAction onClick={doRewind}>回退</AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
       </div>
     </SessionContext.Provider>
   );

@@ -644,7 +644,11 @@ func (a *Agent) HandleExtensionMethod(ctx context.Context, method string, params
 		if err != nil {
 			return nil, err
 		}
-		return acpx.TranscriptStatResponse{Size: st.Size(), ModTime: st.ModTime().UnixMilli()}, nil
+		res := acpx.TranscriptStatResponse{Size: st.Size(), ModTime: st.ModTime().UnixMilli()}
+		if p.Since >= 0 {
+			res.NewUserTexts = userTextsFrom(path, p.Since)
+		}
+		return res, nil
 	case acpx.MethodHolders:
 		var p acpx.HoldersRequest
 		if err := json.Unmarshal(params, &p); err != nil {

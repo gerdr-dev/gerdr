@@ -74,6 +74,14 @@ herdr-web 配错了宁可拒绝启动（远程就是它的全部）。gerdr 的�
 GERDR_* 本来就不往 agent 的环境里传（`sysenv.ChildEnv`）；acme 把脱了前缀的那份（lego 要读光秃秃的名字）在建完 provider
 之后立刻撤掉，不然它会被之后起的 agent 继承。
 
+证书来源（DNS 服务商 + 凭据，或两个证书文件）在设置 →「远程访问」→「证书」里填（`/api/remote/cert`，**只在本机口**：
+里面有 DNS 密钥），存进 remote.json，`remote.SetCert` 把远程那条路当场重来，不用重启。读回去只给凭据的名字不给值，
+表单留空 = 沿用；换服务商时别家的凭据从文件里删掉。所以 `join` 不再强制要 `--dns` / `--cert`。
+服务商的表单字段和「凭据去哪儿拿」在 `acme.providers` 一张表里（`acme_test.go` 钉着它和 `dnsNamespaces` 对得上）。
+
+**坑：写在 `~/.zshenv` / `.zshrc` 里的 `GERDR_*` App 看不到**（从访达起不读 shell 配置；`sysenv.AdoptLoginPath`
+只捞 PATH）。终端里起的 gerdr 看得到、App 里看不到，表现是「明明配了，App 里还说缺证书」—— 用设置页那一处。
+
 ## 照搬过来时要守住的几条（都在 herdr-web 踩过）
 
 - **中继协议一个字节都不能改**：`relay.signed` 那串（`herdr-relay/1\n…`）、握手三句 JSON、子流头（两字节长度 + `{"src"}`）。
@@ -81,12 +89,20 @@ GERDR_* 本来就不往 agent 的环境里传（`sysenv.ChildEnv`）；acme 把�
 - `relay.srcConn` 把 yamux 的超时错误换成 `os.ErrDeadlineExceeded`：不换的话 crypto/tls 把它当永久错误记住，**隧道上的
   WebSocket 连上就断**，普通请求一切正常。
 - step-up 判 `PasskeyAt` 不判 `VerifiedAt`：配对会把 VerifiedAt 设成当下，按它判的话刚拿码进来的人天然新鲜，可以给自己留一把 passkey。
+- step-up 只能用已有 passkey 做的话，**新手机永远加不上 passkey**：它上面一把都没有，系统只弹「未发现任何通行密钥」
+  （实测 Android Edge）。所以还有一条「到电脑上批准」（`auth/approve.go`）：远程设备发起请求，本机设置页（和一条通知）
+  显示请求 + 四位核对码，点批准 → `Store.GrantStepUp` 给那台设备写 PasskeyAt。批准和待批列表只在本机口 —— 远程能批的话，
+  偷来的 cookie 自己批自己。批准之后手机上还要人再点一下才注册：WebAuthn 的 create 要用户手势，轮询到了直接调会被拒。
 - 「全部踢掉」连 passkey 一起清（`auth.RevokeEverything`）：passkey 登录不要求认证，只清设备的话留着的 passkey 立刻换回一份新凭据。
 - passkey 能不能用按**请求的 Host** 算（`passkeyOK`），本机口上那几个口 409，界面上不画按钮。
 - `NotAllowedError` 不等于取消：700ms 内回来的照旧报出来（`lib/passkey.ts`、配对页里同一段）。
 - 配对页进去用 `location.replace("/")`：SameSite=Strict 的 cookie 在「从别的 app 点链接进来」那一下不带，页面拿到的是配对页，
   whoami（同源 fetch）会带上 cookie 认出来，再发一次同源导航才进得去。
 - 设备 cookie 一律 `Secure`：远程那条路一定是 https。
+- 限速要管住**并发**：`Gate.Check` 只在请求进来时看一眼、失败是验完才记，同一时刻打进来的一批猜测会全部通过、各猜一次
+  （herdr-web 那份照搬过来就有这个洞）。所以 `gateCheck` 先 `Enter`（同一个 IP 同时只一次在验，拿不到直接 429，不排队），
+  验的那几毫秒再占一个全局名额（`MaxInflight`，换着 IP 并发也有上限；退避的睡眠不占，不然被罚的 IP 睡着就把名额占满了）。
+  熔断前最多大约 `GlobalTrip + MaxInflight` 次猜测，对 31⁸ 的码空间可以忽略。`TestRemotePairConcurrentGuesses` 钉着。
 
 ## 没做的
 

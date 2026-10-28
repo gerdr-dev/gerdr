@@ -70,7 +70,7 @@ export type ContentBlock =
 export type HubEvent = {
   seq: number;
   ts: number;
-  kind: "user" | "update" | "turn_start" | "turn_end" | "permission" | "permission_done" | "ask" | "ask_done" | "notice" | "task";
+  kind: "user" | "update" | "turn_start" | "turn_end" | "permission" | "permission_done" | "ask" | "ask_done" | "notice" | "task" | "steer_state";
   task?: AgentTask;
   messageId?: string;
   content?: ContentBlock[];
@@ -157,3 +157,6 @@ export interface ExtView {
     codexMCP: MCPServer[];
   };
 }
+
+/** 服务端的一个终端（/api/terms） */
+export type TermInfo = { id: string; cwd: string; shell: string; pid: number; exited: boolean; code: number; created: number };

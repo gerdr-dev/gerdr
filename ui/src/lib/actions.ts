@@ -40,6 +40,7 @@ export function tabName(tab: Tab): string {
   for (const p of leaves(tab.root)) {
     const s = p.sessionId ? sessions[p.sessionId] : undefined;
     if (s) return basename(s.cwd);
+    if (p.term) return basename(p.term.cwd);
     if (p.draft?.cwd) return basename(p.draft.cwd);
   }
   return "new";
@@ -55,6 +56,7 @@ function inheritDraft(l: Layout): PaneLeaf["draft"] {
   const p = focusedLeaf(l);
   const s = p?.sessionId ? get().sessions[p.sessionId] : undefined;
   if (s) return { agent: s.agent, cwd: s.cwd };
+  if (p?.term) return { cwd: p.term.cwd };
   if (p?.draft) return { ...p.draft };
   const ws = activeWs(l);
   return ws.cwd ? { cwd: ws.cwd } : undefined;
@@ -138,12 +140,31 @@ export function closeFocusedPane() {
     // 关 pane 不删会话（它还在会话列表里，prefix+g 能找回来），但正在跑的那一轮停掉。
     if (s && (s.status === "running" || s.status === "waiting")) api.cancel(s.id).catch(() => {});
   }
+  killTerms(p ? [p] : []);
   setLayout((l) => {
     const ws = activeWs(l);
     const t = activeTab(l);
     const next = closePane(t, t.focus);
     if (next) return updateTab(l, t.id, () => next);
     return removeTab(l, ws, t.id);
+  });
+}
+
+/** 关掉 pane 里的终端：和 tmux 一样，关 pane 就是结束里面的 shell（不然它在服务端没人看得见地一直跑着）。 */
+function killTerms(panes: PaneLeaf[]) {
+  for (const p of panes) if (p.term) api.termKill(p.term.id).catch(() => {});
+}
+
+/** 按 id 关一个 pane（不一定是焦点那个）：终端里的 shell 退出了就这样收掉。 */
+export function closePaneById(paneId: string) {
+  setLayout((l) => {
+    for (const ws of l.workspaces)
+      for (const tab of ws.tabs)
+        if (findLeaf(tab.root, paneId)) {
+          const next = closePane(tab, paneId);
+          return next ? updateTab(l, tab.id, () => next) : removeTab(l, ws, tab.id);
+        }
+    return l;
   });
 }
 
@@ -262,6 +283,7 @@ export function closeTab(tabId?: string) {
     const s = p.sessionId ? get().sessions[p.sessionId] : undefined;
     if (s && (s.status === "running" || s.status === "waiting")) api.cancel(s.id).catch(() => {});
   }
+  killTerms(tab ? leaves(tab.root) : []);
   setLayout((l) => {
     const w = l.workspaces.find((x) => x.id === ws.id);
     return w ? removeTab(l, w, id) : l;
@@ -293,7 +315,8 @@ export async function duplicateTab(tabId: string, where: "after" | "before") {
   const clone = (n: any): any => {
     if (n.type === "pane") {
       const s = n.sessionId ? sessions[n.sessionId] : undefined;
-      return { type: "pane", id: rid("p"), draft: s ? { agent: s.agent, cwd: s.cwd } : n.draft };
+      // 终端复制不了里面的东西：留一个同目录的空 pane，在那儿点「终端」再开
+      return { type: "pane", id: rid("p"), draft: s ? { agent: s.agent, cwd: s.cwd } : n.term ? { cwd: n.term.cwd } : n.draft };
     }
     return { ...n, id: rid("s"), a: clone(n.a), b: clone(n.b) };
   };
@@ -344,6 +367,8 @@ export function renameWorkspace(id: string, name: string) {
 }
 
 export function closeWorkspace(id?: string) {
+  const w0 = get().layout.workspaces.find((w) => w.id === (id ?? get().layout.active));
+  killTerms(w0 ? w0.tabs.flatMap((t) => leaves(t.root)) : []);
   setLayout((l) => {
     const wid = id ?? l.active;
     const workspaces = l.workspaces.filter((w) => w.id !== wid);
@@ -363,6 +388,58 @@ export function moveWorkspace(from: number, to: number) {
     ws.splice(to, 0, w);
     return { ...l, workspaces: ws };
   });
+}
+
+// ---- 终端 ----
+
+/**
+ * 开一个终端。where：在焦点 pane 右边 / 下面分屏、新 tab，或者把某个空 pane（还没开会话的）换成终端。
+ * 先在服务端建好再放进布局：布局是几个客户端共用的，「pane 里有终端但还没建」这种中间态让别的客户端看见，
+ * 它们会各自去建一个。
+ */
+export async function openTerminal(where: "right" | "down" | "tab" | { pane: string; cwd?: string }) {
+  const l = get().layout;
+  const p = focusedLeaf(l);
+  const here = typeof where === "object" ? where : undefined;
+  const cwd = here?.cwd ?? inheritDraft(l)?.cwd ?? get().home;
+  let info;
+  try {
+    // 从终端旁边开的：跟着它 shell 现在的目录（cd 过之后分屏，和 tmux 一样）
+    info = await api.termCreate({ cwd, from: !here && p?.term ? p.term.id : undefined });
+  } catch (e: any) {
+    toast.error(`开终端失败：${e.message ?? e}`);
+    return;
+  }
+  const term = { id: info.id, cwd: info.cwd };
+  if (here) {
+    setLayout((l) => setPane(l, here.pane, { term, draft: undefined, sessionId: undefined }));
+    return;
+  }
+  if (where === "tab") {
+    setLayout((l) => {
+      const ws = activeWs(l);
+      const pane: PaneLeaf = { type: "pane", id: rid("p"), term };
+      const t: Tab = { id: rid("t"), root: pane, focus: pane.id };
+      return selectTabIn(
+        updateWs(l, ws.id, (w) => ({ ...w, tabs: [...w.tabs, t] })),
+        ws.id,
+        t.id,
+      );
+    });
+    return;
+  }
+  setLayout((l) => {
+    const t = activeTab(l);
+    const fresh: PaneLeaf = { type: "pane", id: rid("p"), term };
+    // 建终端那一会儿焦点可能换过 tab：还在的话贴着发起的那个 pane 分，不在了就贴当前焦点
+    const at = p && findLeaf(t.root, p.id) ? p.id : (t.zoom ?? t.focus);
+    return updateTab(l, t.id, (tab) => split(tab, at, where === "right" ? "row" : "col", fresh));
+  });
+}
+
+/** 终端没了（gerdr 重启过 / shell 退了）：在同一个 pane、同一个目录重开一个。 */
+export async function reopenTerminal(paneId: string, cwd: string) {
+  return openTerminal({ pane: paneId, cwd });
 }
 
 // ---- 会话 ----
@@ -464,6 +541,12 @@ export function runAction(a: KeyAction) {
       return splitFocused("right");
     case "splitDown":
       return splitFocused("down");
+    case "splitTerminal":
+      return openTerminal("right");
+    case "splitTerminalDown":
+      return openTerminal("down");
+    case "terminalTab":
+      return openTerminal("tab");
     case "closePane":
       return closeFocusedPane();
     case "zoom":

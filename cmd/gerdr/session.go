@@ -11,11 +11,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/zbysir/gerdr/internal/acpx"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -100,6 +102,7 @@ type sessInfo struct {
 	Title   string `json:"title"`
 	Status  string `json:"status"`
 	Pending int    `json:"pending"`
+	Waiting string `json:"waiting"`
 	Error   string `json:"error,omitempty"`
 	Updated int64  `json:"updatedAt"`
 	Tasks   []struct {
@@ -111,12 +114,15 @@ type sessInfo struct {
 }
 
 func (s sessInfo) view(self string) map[string]any {
-	m := map[string]any{"id": s.ID, "agent": s.Agent, "cwd": s.Cwd, "title": s.Title, "status": s.Status}
+	// updatedAt（unix ms）：这个会话最后一次有动静（发消息、agent 输出、审批……）的时间 —— 相当于 herdr agent.list 的 state_change_seq，
+	// 拿它就能把「最近动过的」排前面（list 已经按它排好了）
+	m := map[string]any{"id": s.ID, "agent": s.Agent, "cwd": s.Cwd, "title": s.Title, "status": s.Status, "updatedAt": s.Updated}
 	if s.inUI != nil && !*s.inUI {
 		m["closed"] = true // 界面上没有 pane 显示它（被关掉了）；--all 才列出来
 	}
 	if s.Pending > 0 {
 		m["waiting_for_human"] = s.Pending
+		m["waiting"] = s.Waiting // 等的是什么，一句话：「回答：下一步做什么？（A / B）」「审批：Write x.txt」
 	}
 	if s.Error != "" {
 		m["error"] = s.Error
@@ -164,7 +170,7 @@ func (c *apiClient) selfID() string {
 
 func (c *apiClient) list() ([]sessInfo, error) {
 	var h struct {
-		Sessions []sessInfo     `json:"sessions"`
+		Sessions []sessInfo      `json:"sessions"`
 		Layout   json.RawMessage `json:"layout"`
 	}
 	if err := c.do("GET", "/api/hello", nil, &h); err != nil {
@@ -265,10 +271,12 @@ type hubEvent struct {
 	Auto       bool              `json:"auto"`
 	Text       string            `json:"text"`
 	Request    json.RawMessage   `json:"request"`
+	ReqID      string            `json:"reqId"`
+	Response   json.RawMessage   `json:"response"`
 }
 
 type entry struct {
-	Role string `json:"role"` // user / agent / tool / notice / waiting
+	Role string `json:"role"` // user / agent / tool / notice / waiting（还在等人）/ answered（等过、已经处理了）
 	Text string `json:"text"`
 	From string `json:"from,omitempty"`
 	seq  int64
@@ -286,6 +294,7 @@ func transcript(evs []hubEvent) []entry {
 		}
 		push(entry{Role: role, Text: text, seq: seq})
 	}
+	waitAt := map[string]int{} // reqId → out 里那一条
 	for _, e := range evs {
 		switch e.Kind {
 		case "user":
@@ -339,7 +348,15 @@ func transcript(evs []hubEvent) []entry {
 		case "notice":
 			push(entry{Role: "notice", Text: e.Text, seq: e.Seq})
 		case "permission", "ask":
-			push(entry{Role: "waiting", Text: "在等人" + map[string]string{"permission": "审批", "ask": "回答问题"}[e.Kind], seq: e.Seq})
+			// 带上问的是什么（DescribeRequest）；答过的后面会改成「答过了」—— 原来一律写「在等人回答问题」，
+			// 早就答过的也这么写，读的 agent 以为对方还卡着
+			waitAt[e.ReqID] = len(out)
+			push(entry{Role: "waiting", Text: "在等人" + acpx.DescribeRequest(e.Kind, e.Request), seq: e.Seq})
+		case "permission_done", "ask_done":
+			if i, ok := waitAt[e.ReqID]; ok && i < len(out) {
+				out[i].Role = "answered"
+				out[i].Text = strings.Replace(out[i].Text, "在等人", "已处理 · ", 1) + answerNote(e.Response)
+			}
 		}
 	}
 	for i := range out {
@@ -434,7 +451,7 @@ func sessionCmd() *cobra.Command {
 	var listAll bool
 	listCmd := &cobra.Command{
 		Use:   "list",
-		Short: "列出开着的会话（界面上看得见的；self: true 是你自己）。--all 连关掉的一起",
+		Short: "列出开着的会话（界面上看得见的；self: true 是你自己），最近有动静的在前（updatedAt）。--all 连关掉的一起",
 		RunE: func(_ *cobra.Command, _ []string) error {
 			c := client()
 			self := c.selfID()
@@ -442,6 +459,7 @@ func sessionCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			sort.SliceStable(list, func(i, j int) bool { return list[i].Updated > list[j].Updated }) // 最近动过的在前
 			out := []map[string]any{}
 			for _, s := range list {
 				if !listAll && s.inUI != nil && !*s.inUI && s.ID != self {
@@ -723,4 +741,32 @@ func uiCmd() *cobra.Command {
 		},
 	})
 	return cmd
+}
+
+// answerNote：人怎么处理的（session read 里「已处理」那条的后半句）。
+func answerNote(resp json.RawMessage) string {
+	var r struct {
+		OptionID  string              `json:"optionId"`
+		Answers   map[string][]string `json:"answers"`
+		Cancelled bool                `json:"cancelled"`
+		Reason    string              `json:"reason"`
+	}
+	_ = json.Unmarshal(resp, &r)
+	switch {
+	case r.OptionID != "":
+		return " → " + r.OptionID
+	case len(r.Answers) > 0:
+		var a []string
+		for _, v := range r.Answers {
+			a = append(a, strings.Join(v, "、"))
+		}
+		return " → " + strings.Join(a, "；")
+	case r.Reason == "replied":
+		return " → 没选，在对话里直接回了"
+	case r.Reason == "skipped":
+		return " → 跳过了"
+	case r.Cancelled:
+		return " → 作废（这一轮结束了）"
+	}
+	return ""
 }

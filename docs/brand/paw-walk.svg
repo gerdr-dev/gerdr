@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" shape-rendering="crispEdges" fill="currentColor">
+  <!-- 走路的爪印：三个小爪印从左下往右上一步步落下，走完一轮清空再来（做 loading 候选时画的，留着备用）。颜色跟 currentColor 走。 -->
+  <style>g{opacity:0;animation:p 1.5s steps(1) infinite}.p1{animation-delay:.3s}.p2{animation-delay:.6s}@keyframes p{0%{opacity:0}8%,70%{opacity:1}80%,100%{opacity:0}}@media (prefers-reduced-motion:reduce){g{animation:none;opacity:1}}</style>
+  <g class="p0"><rect x="1" y="11" width="1" height="1"/><rect x="3" y="11" width="1" height="1"/><rect x="0" y="12" width="1" height="1"/><rect x="4" y="12" width="1" height="1"/><rect x="1" y="13" width="3" height="1"/><rect x="1" y="14" width="3" height="1"/></g>
+  <g class="p1"><rect x="6" y="6" width="1" height="1"/><rect x="8" y="6" width="1" height="1"/><rect x="5" y="7" width="1" height="1"/><rect x="9" y="7" width="1" height="1"/><rect x="6" y="8" width="3" height="1"/><rect x="6" y="9" width="3" height="1"/></g>
+  <g class="p2"><rect x="11" y="1" width="1" height="1"/><rect x="13" y="1" width="1" height="1"/><rect x="10" y="2" width="1" height="1"/><rect x="14" y="2" width="1" height="1"/><rect x="11" y="3" width="3" height="1"/><rect x="11" y="4" width="3" height="1"/></g>
+</svg>

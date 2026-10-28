@@ -1,13 +1,18 @@
 // 布局模型：工作空间 → tab → pane 树（二叉分割）。纯函数，全部返回新对象。
 // 结构和 herdr 一样（workspace / tab / pane），快捷键语义也照着它。
 
-/** sub：子 agent 的只读面板（不占 sessionId —— 那样「定位到会话」「关 pane 停掉这一轮」都会认错）。 */
+/**
+ * sub：子 agent 的只读面板（不占 sessionId —— 那样「定位到会话」「关 pane 停掉这一轮」都会认错）。
+ * term：终端。id 是服务端的终端（shell 跑在 gerdr 那边，关页面不断）；cwd 是开它时的目录，gerdr 重启过、
+ * 终端没了的时候拿它重开一个。
+ */
 export type PaneLeaf = {
   type: "pane";
   id: string;
   sessionId?: string;
   draft?: { agent?: string; cwd?: string };
   sub?: { sessionId: string; toolCallId: string; title?: string };
+  term?: { id: string; cwd: string };
 };
 export type PaneSplit = { type: "split"; id: string; dir: "row" | "col"; ratio: number; a: PaneNode; b: PaneNode };
 export type PaneNode = PaneLeaf | PaneSplit;

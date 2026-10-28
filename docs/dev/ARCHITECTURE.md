@@ -229,13 +229,42 @@ React（ui/，不打包）  ←WebSocket / HTTP→  hub（internal/hub）  ←AC
   终端先开着，gerdr 这边 `thread/resume` 报 `already has an active writer`。不会分叉，但光秃秃一句英文人不知道怎么办，
   所以同样回 409，界面上给「另起一份」（`thread/fork`，不用先接上原来那个）/「已经在那边关掉了，重试」。
   没有登记文件，不知道是哪个进程，所以不提供「关掉那边」。
-- **追上**：gerdr 的对话日志只记它经手的事。别处接着聊过，agent 的记录文件会长 —— `Record.SyncedSize` 记着上次对齐时
-  文件多大（自己一轮结束、切模式 / 模型之后都更新：claude 会把模式变化也写进文件），打开会话时比一下，大了就从记录
-  整份重放（`Session.Reload`）。老会话没记过大小，按修改时间猜，猜的只悄悄同步、不说「别处聊过」。
+- **追上**：gerdr 的对话日志只记它经手的事。别处接着聊过，agent 的记录文件会长 —— 但**文件变长不等于别处聊过**：
+  自己一轮刚完就重启（来不及记大小）、claude 一轮之后补写的收尾、切模式写的那一行，都会让它变长（第一版只比大小，
+  用户撞上了误报）。所以判据是「上次对齐之后（`Record.SyncedSize`），记录里有没有 gerdr 没发过的人话」：agent 把那一段
+  里人说的话列出来（`_gerdr/transcript_stat` 的 `since`），和自己日志里的比（空白归一、前 200 字）。有生人话才整份重放
+  （`Session.Reload`），否则只把位置挪过去。
+- **gerdr 被强杀时那一轮没断**：gerdr 被 SIGKILL / 崩溃（App 退出等不及也会：Electron 3 秒就强杀）时来不及杀 claude，
+  claude 只看到 stdin 断了，会**把手上这一轮跑完**、写进自己的记录才退（实测又跑了一分钟）。gerdr 日志停在半截、
+  重启时补了「中断」，而上面的追上只认生人话，多出来的全是 agent 回复，救不回来。所以重启时日志里有没收尾的一轮，
+  就单独核对（`adoptOrphanTurn`）：孤儿还在（stream-json 进程也登记 `sessions/<pid>.json`，重启后已不算自己起的，
+  holders 认得出）就等它退；之后记录在 gerdr 最后一条日志之后还被写过（超过日志落盘间隔），就整份重放，否则「中断」留着。
+  这条路也顺带补回「一轮其实跑完了、日志没来得及落盘」的那一截。
 
 另一个**静默**的坑：在一个 Claude Code 的终端 pane 里敲 `gerdr`，它会继承那个 claude 给子进程打的标记
 （`CLAUDE_CODE_CHILD_SESSION` 等），带着它的子 claude **不写会话记录**（底部一行「Transcript saving is off」，
 stream-json 模式下没人看得见）—— resume、回退、追上全部失效。`sysenv.ChildEnv` 按名字去掉这几个。
+
+## 终端（internal/term + server/termapi.go + ui/src/components/Terminal.tsx）
+
+终端是一种 pane（布局里 `PaneLeaf.term`），shell 跑在 gerdr 进程的 PTY 里（creack/pty），界面用 xterm.js 经
+`/api/terms/{id}/ws` 连上来：二进制帧是输入 / 输出，文本帧是 resize / 退出码 / 心跳。
+
+- **断开再接**：和 tmux 一样，PTY 不跟着页面走。每个终端留最近 512KB 原始输出，连上时先重放一遍（客户端先 `reset` 再写）。
+  不在服务端维护屏幕状态（要一个完整的终端模拟器）：重放跨过 resize 的那段可能错位，全屏程序 ctrl+l 一下就好。
+  同一个终端可以同时开在几处（电脑 + 手机），输出广播给每个连着的；跟不上的连接直接踢掉，让它重连拿重放。
+- **gerdr 重启 = 终端全没**：PTY 是 gerdr 的子进程。布局里留着 id 和 cwd，pane 上给「在 xx 重开」。
+- **关 pane 就杀 shell**（SIGHUP 给整个进程组，2 秒后 SIGKILL）：不然它在服务端没人看得见地一直跑。
+  shell 自己 `exit 0` 时 pane 自动收掉；非 0 退出留着，看得到最后的输出。
+- **先建后放**：开终端的动作先 `POST /api/terms` 拿到 id 再写进布局。布局是几个客户端共用的，「pane 里有终端但还没建」
+  的中间态被别的客户端看见，它们会各自去建一个。
+- **环境**：`sysenv.ChildEnv` 那一份（去掉 claude 的子进程标记），加 TERM / COLORTERM；launchd 起的 gerdr 没有 LANG，
+  不补的话 zsh 把中文当转义序列。shell 用 `-l`（PATH 在 profile 里）。
+- **分屏跟着 shell 的当前目录**：从终端旁边开新终端时带 `from`，服务端问 shell 的 cwd（mac 上 `lsof -d cwd`，Linux 读 /proc）。
+- **前缀键**：全局的前缀状态机（lib/commands.ts）在 capture 阶段先拿到键，所以 ctrl+b 照样是 gerdr 的；按两下前缀
+  发 `gerdr:prefix-literal`，终端把 ^B 交给 shell（终端里跑着 tmux 时要用）。
+- xterm 的 CSS 不能 import，原样搬进了 index.css 末尾；配色从主题变量取，oklch 画到 canvas 上读回 rgb（xterm 只认 rgb / hex）。
+- Windows 上还没做（要走 ConPTY），建终端直接报错。
 
 ## 远程访问（internal/auth、relay、acme、remote + server/remoteapi.go）
 

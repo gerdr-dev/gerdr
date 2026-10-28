@@ -6,6 +6,8 @@
 package codex
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -210,7 +212,7 @@ func (a *Agent) onExit() {
 }
 
 func (a *Agent) resumeThread(ctx context.Context, rpc *rpcline.Conn, s *session) error {
-	p := map[string]any{"threadId": s.id, "excludeTurns": true}
+	p := map[string]any{"threadId": s.id, "excludeTurns": true, "developerInstructions": acpx.MediaHint}
 	if s.cwd != "" {
 		p["cwd"] = s.cwd
 	}
@@ -440,7 +442,7 @@ func (a *Agent) NewSession(ctx context.Context, p acp.NewSessionRequest) (acp.Ne
 	}
 	mode := modeFromMeta(p.Meta, modeAuto)
 	ap, sb := modeParams(mode)
-	params := map[string]any{"cwd": p.Cwd, "approvalPolicy": ap, "sandbox": sandboxMode(sb)}
+	params := map[string]any{"cwd": p.Cwd, "approvalPolicy": ap, "sandbox": sandboxMode(sb), "developerInstructions": acpx.MediaHint}
 	cfg, fp := a.extConfig(ctx, rpc, p.Cwd)
 	if cfg != nil {
 		params["config"] = cfg
@@ -487,7 +489,7 @@ func (a *Agent) attach(ctx context.Context, id, cwd string, meta map[string]any)
 	}
 	mode := modeFromMeta(meta, modeAuto)
 	ap, sb := modeParams(mode)
-	params := map[string]any{"threadId": id, "excludeTurns": true, "approvalPolicy": ap, "sandbox": sandboxMode(sb)}
+	params := map[string]any{"threadId": id, "excludeTurns": true, "approvalPolicy": ap, "sandbox": sandboxMode(sb), "developerInstructions": acpx.MediaHint}
 	if cwd != "" {
 		params["cwd"] = cwd
 	}
@@ -913,7 +915,11 @@ func (a *Agent) HandleExtensionMethod(ctx context.Context, method string, params
 		if err != nil {
 			return nil, err
 		}
-		return acpx.TranscriptStatResponse{Size: st.Size(), ModTime: st.ModTime().UnixMilli()}, nil
+		res := acpx.TranscriptStatResponse{Size: st.Size(), ModTime: st.ModTime().UnixMilli()}
+		if p.Since >= 0 {
+			res.NewUserTexts = rolloutUserTexts(path, p.Since)
+		}
+		return res, nil
 	case acpx.MethodTakeover:
 		// codex 自己保证一个 thread 同一时间只有一处能写：别处（终端 / Codex App）开着时 thread/resume 直接报
 		// 「already has an active writer」，不会分叉（实测）。所以这里只有 fork：thread/fork 复制出一个新 thread
@@ -1144,6 +1150,13 @@ func (a *Agent) HandleRequest(ctx context.Context, method string, params json.Ra
 			for id, v := range res.Answers {
 				answers[id] = map[string]any{"answers": v}
 			}
+		} else {
+			// codex 的 requestUserInput 没有「拒绝」这一档，只能回答案：每道题都填上「为什么没答」的说明。
+			// 空着回的话 codex 看到的是一份空答卷，不知道发生了什么（和 claude 那边「被关掉了」同一个毛病）
+			why := acpx.AskDeclined(res.Reason, res.Text)
+			for _, q := range req.Questions {
+				answers[q.Id] = map[string]any{"answers": []string{why}}
+			}
 		}
 		return map[string]any{"answers": answers}, nil
 	case "mcpServer/elicitation/request":
@@ -1320,4 +1333,40 @@ func (a *Agent) rolloutPath(id string) string {
 		return ""
 	}
 	return m[0]
+}
+
+// rolloutUserTexts：rollout 文件 offset 之后人说的话（event_msg / user_message）。
+func rolloutUserTexts(path string, offset int64) []string {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+	if st, err := f.Stat(); err != nil || offset > st.Size() {
+		offset = 0
+	}
+	if _, err := f.Seek(offset, io.SeekStart); err != nil {
+		return nil
+	}
+	var out []string
+	sc := bufio.NewScanner(f)
+	sc.Buffer(make([]byte, 0, 1<<20), 256<<20)
+	for sc.Scan() {
+		if !bytes.Contains(sc.Bytes(), []byte(`"user_message"`)) {
+			continue
+		}
+		var l struct {
+			Type    string `json:"type"`
+			Payload struct {
+				Type    string `json:"type"`
+				Message string `json:"message"`
+			} `json:"payload"`
+		}
+		if json.Unmarshal(sc.Bytes(), &l) == nil && l.Type == "event_msg" && l.Payload.Type == "user_message" {
+			if t := strings.TrimSpace(l.Payload.Message); t != "" {
+				out = append(out, t)
+			}
+		}
+	}
+	return out
 }

@@ -278,11 +278,18 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
         setCmdIdx((i) => (i - 1 + cmds.length) % cmds.length);
         return;
       }
+      // 照 Claude Code：回车 = 选中高亮的那个并直接发出去（打 /rena 回车就是 /rename）；Tab = 只补全，留个空格接着写参数
       if (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey)) {
         e.preventDefault();
         const c = cmds[cmdIdx];
-        if (c && runLocal(c.name)) return;
-        if (c) setText(`/${c.name} `);
+        if (!c) return;
+        if (runLocal(c.name)) return;
+        if (e.key === "Tab") {
+          setText(`/${c.name} `);
+          return;
+        }
+        setText(`/${c.name}`);
+        setTimeout(() => sendRef.current(), 0); // 等这次 setText 渲染完，sendRef 里的 send 读到的才是补全后的字
         return;
       }
     }
@@ -453,7 +460,7 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
               addFiles(files);
             }
           }}
-          placeholder={running ? "它在干活，说一句会直接插进去（Esc 打断）" : "说点什么…  / 看命令"}
+          placeholder={running ? "它在干活，说一句会直接插进去" : "说点什么…  / 看命令"}
           className="block max-h-[40vh] min-h-[44px] w-full resize-none bg-transparent px-4 pt-3 pb-1 text-[1em] max-md:text-[16px] leading-relaxed outline-none placeholder:text-muted-foreground/70"
         />
         <div className="flex items-center gap-1 px-2.5 pb-2.5">
@@ -516,7 +523,11 @@ function ContextMeter({ c }: { c: { tokens: number; window: number } }) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span className={cn("mr-1 font-mono text-[11px] tabular-nums", tone)}>上下文 {pct}%</span>
+        <span className={cn("mr-1 shrink-0 whitespace-nowrap font-mono text-[11px] tabular-nums", tone)}>
+          {/* 手机上底栏挤，只留百分比，免得被挤成一字一行 */}
+          <span className="max-sm:hidden">上下文 </span>
+          {pct}%
+        </span>
       </TooltipTrigger>
       <TooltipContent>
         已用 {c.tokens.toLocaleString()} / {c.window.toLocaleString()} tokens。快满时 agent 会自动压缩，也可以 /compact 手动压。

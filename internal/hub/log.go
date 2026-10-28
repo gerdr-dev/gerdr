@@ -55,7 +55,8 @@ const (
 	EvAsk            = "ask"
 	EvAskDone        = "ask_done"
 	EvNotice         = "notice"
-	EvTask           = "task" // 一个后台任务 / 子 agent 结束了：留一条记录在对话里（任务栏只放在跑的）
+	EvSteerState     = "steer_state" // 插话在 agent 队列里的进度（MessageID + Text：queued / started）
+	EvTask           = "task"        // 一个后台任务 / 子 agent 结束了：留一条记录在对话里（任务栏只放在跑的）
 )
 
 func now() int64 { return time.Now().UnixMilli() }

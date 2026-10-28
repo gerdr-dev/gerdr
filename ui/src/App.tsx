@@ -164,7 +164,10 @@ export default function App() {
         <div className="flex min-w-0 flex-1 flex-col">
           {phone ? <PhoneBar /> : <TabBar />}
           <div className="relative min-h-0 flex-1">
-            {kept.map((id) => {
+            {/* 按 id 排个固定顺序再画，不能直接用 kept（最近用的排最前）：那样每切一次 tab 顺序就变，React 会在 DOM 里
+                挪这些节点，而**挪动 DOM 节点会把里面的滚动位置清零** —— 切走的 tab 一藏起来就回到最顶上（踩过）。
+                顺序固定的话切 tab 只改 invisible，节点不动。 */}
+            {[...kept].sort().map((id) => {
               const t = all.get(id)!;
               const active = id === tab.id;
               return (

@@ -184,6 +184,12 @@ func New(opt Options) (*Hub, error) {
 	if err := h.load(); err != nil {
 		return nil, err
 	}
+	// 等 hub 整个建好再去核对没收尾的轮次（要起 agent、广播事件）
+	for _, s := range h.sessions {
+		if s.orphanSince > 0 {
+			go s.adoptOrphanTurn(s.orphanSince)
+		}
+	}
 	go h.flusher()
 	return h, nil
 }
@@ -421,7 +427,7 @@ func (h *Hub) load() error {
 				h.seq = e.Seq
 			}
 		}
-		s.recoverAfterRestart()
+		s.orphanSince = s.recoverAfterRestart()
 		h.sessions[r.ID] = s
 		h.byAgent[r.Agent+":"+r.AgentSessionID] = s
 	}
@@ -678,4 +684,20 @@ func normCwd(p string) (string, error) {
 		return "", fmt.Errorf("不是目录：%s", abs)
 	}
 	return abs, nil
+}
+
+// Pending：所有会话里在等人处理的审批 / 提问（给手环、脚本这类外面的程序：一次看全，挑一个回 /answer）。
+func (h *Hub) Pending() []PendingReq {
+	h.mu.Lock()
+	ss := make([]*Session, 0, len(h.sessions))
+	for _, s := range h.sessions {
+		ss = append(ss, s)
+	}
+	h.mu.Unlock()
+	out := []PendingReq{}
+	for _, s := range ss {
+		out = append(out, s.Pending()...)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].At < out[j].At })
+	return out
 }

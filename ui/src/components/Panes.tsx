@@ -1,10 +1,25 @@
-import { Bot, Columns2, Copy, GitBranch, Maximize2, RefreshCw, Minimize2, MoreHorizontal, PanelTopOpen, Pencil, Rows2, Trash2, X } from "lucide-react";
-import { createContext, useContext, useEffect, useRef } from "react";
+import {
+  Bot,
+  Columns2,
+  Copy,
+  GitBranch,
+  Maximize2,
+  RefreshCw,
+  Minimize2,
+  MoreHorizontal,
+  PanelTopOpen,
+  Pencil,
+  Rows2,
+  SquareTerminal,
+  Trash2,
+  X,
+} from "lucide-react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { basename, closeFocusedPane, deleteSession, focusPane, focusSession, splitFocused, toggleZoom } from "@/lib/actions";
+import { basename, closeFocusedPane, deleteSession, focusPane, focusSession, openTerminal, splitFocused, toggleZoom } from "@/lib/actions";
 import { leaves, setRatio, updateTab, type PaneLeaf, type PaneNode, type Tab } from "@/lib/layout";
 import { applyPaneTitle } from "@/lib/plugins";
 import { markRead, set, setLayout, useStore } from "@/lib/store";
@@ -13,6 +28,7 @@ import { cn } from "@/lib/utils";
 import { AgentIcon, StatusDot } from "./AgentIcon";
 import { ChatView } from "./chat/ChatView";
 import { NewSession } from "./NewSession";
+import { TerminalView } from "./Terminal";
 
 /** 这个 tab 是不是正显示着的那个（藏着的 tab 里的 pane 不算有焦点，不抢光标、不标已读）。 */
 export const TabActive = createContext(true);
@@ -85,6 +101,7 @@ type Count = { i: number; n: number };
 
 function PaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; tab: Tab; framed: boolean; zoomed?: boolean; count?: Count }) {
   if (pane.sub) return <SubPaneView pane={pane} tab={tab} framed={framed} zoomed={zoomed} count={count} />;
+  if (pane.term) return <TermPaneView pane={pane} tab={tab} framed={framed} zoomed={zoomed} count={count} />;
   return <SessionPaneView pane={pane} tab={tab} framed={framed} zoomed={zoomed} count={count} />;
 }
 
@@ -132,6 +149,70 @@ function SubPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; tab
         ) : (
           <div className="py-16 text-center text-[13px] text-muted-foreground">这个会话已经不在了</div>
         )}
+      </div>
+    </div>
+  );
+}
+
+/** 终端：标题栏 + xterm。标题是 shell 设的窗口标题（OSC 0/2，多数 zsh 主题会设成「用户@机器: 目录」或正在跑的命令），没设就是目录名。 */
+function TermPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; tab: Tab; framed: boolean; zoomed?: boolean; count?: Count }) {
+  const term = pane.term!;
+  const focused = useContext(TabActive) && tab.focus === pane.id;
+  const many = framed || zoomed;
+  const [osc, setOsc] = useState("");
+  useStore((s) => s.pluginVersion);
+  const title = applyPaneTitle(pane, tab, osc || basename(term.cwd));
+  return (
+    <div
+      className={cn("flex h-full min-h-0 flex-col", framed && "overflow-hidden rounded-md border", framed && (focused ? "border-brand" : "border-border"))}
+      onMouseDown={() => !focused && focusPane(pane.id)}
+    >
+      <div className={cn("flex h-8 shrink-0 items-center gap-2 border-b px-3 text-[12px]", !focused && many && "opacity-70")}>
+        <SquareTerminal className="size-4 text-muted-foreground" />
+        <span className="min-w-[3em] max-w-[60%] shrink truncate font-medium">{title}</span>
+        <PaneCount count={count} />
+        <span className="hidden min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground md:block" title={term.cwd}>
+          {term.cwd}
+        </span>
+        <div className="flex-1 md:hidden" />
+        {zoomed && (
+          <Button variant="ghost" size="icon" className="size-6" onClick={toggleZoom} title="还原（prefix+z）">
+            <Minimize2 className="size-3.5" />
+          </Button>
+        )}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="size-6">
+              <MoreHorizontal className="size-3.5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" onCloseAutoFocus={(e) => e.preventDefault()}>
+            <DropdownMenuItem onClick={() => (focusPane(pane.id), openTerminal("right"))}>
+              <SquareTerminal /> 右边再开一个终端
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => (focusPane(pane.id), openTerminal("down"))}>
+              <SquareTerminal /> 下面再开一个终端
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => (focusPane(pane.id), splitFocused("right"))}>
+              <Columns2 /> 右边开会话
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => (focusPane(pane.id), splitFocused("down"))}>
+              <Rows2 /> 下面开会话
+            </DropdownMenuItem>
+            {!zoomed && !count && leaves(tab.root).length > 1 && (
+              <DropdownMenuItem onClick={() => (focusPane(pane.id), toggleZoom())}>
+                <Maximize2 /> 放大
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => (focusPane(pane.id), closeFocusedPane())}>
+              <X /> 关闭终端
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+      <div className="min-h-0 flex-1">
+        <TerminalView key={term.id} paneId={pane.id} termId={term.id} cwd={term.cwd} focused={focused} onTitle={setOsc} />
       </div>
     </div>
   );

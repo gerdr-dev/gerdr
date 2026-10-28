@@ -15,6 +15,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/zbysir/gerdr/internal/acpx"
 	"github.com/zbysir/gerdr/internal/sysenv"
 )
 
@@ -67,6 +68,8 @@ func spawn(o spawnOpts, log *slog.Logger, onLine func(map[string]json.RawMessage
 		"--input-format", "stream-json",
 		"--permission-prompt-tool", "stdio",
 		"--include-partial-messages",
+		// 告诉它 gerdr 的界面能直接显示图片 / 视频 / 音频（acpx.MediaHint）
+		"--append-system-prompt", acpx.MediaHint,
 	}
 	if o.model != "" && o.model != "default" {
 		args = append(args, "--model", o.model)

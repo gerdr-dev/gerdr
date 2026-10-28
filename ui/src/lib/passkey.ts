@@ -54,20 +54,19 @@ type CreateJSON = { challenge: string; user: { id: string; name: string; display
 type RequestJSON = { challenge: string; allowCredentials?: { id: string; type: string }[] };
 
 /**
- * 注册一把新 passkey。**已经有 passkey 时服务端会先要一次新鲜的断言**（403 reason=stepup，见
- * internal/auth 的 StepUpNeeded）：拿配对码进来的人不能给自己偷偷再留一把。这里接住那一下，先验一次再重试
- * —— 对人来说就是「点两次 Face ID」。**只重试一次**：第二次还被挡说明验证那步没真成，再转就是死循环。
+ * 注册一把新 passkey。**已经有 passkey 时服务端会先要一次 step-up**（403 reason=stepup，见
+ * internal/auth 的 StepUpNeeded）：拿配对码进来的人不能给自己偷偷再留一把。step-up 有两种做法，让人选
+ * （RemoteSettings）：用已有的 passkey 验一次（`stepUpWithPasskey`），或者到电脑上批准（auth/approve.go）——
+ * 新手机上一把 passkey 都没有，只给前一种的话系统弹「未发现任何通行密钥」，人就卡死了。
  */
-export async function registerPasskey(): Promise<string> {
-  try {
-    return await doRegister();
-  } catch (e) {
-    if (e instanceof ApiError && e.reason === "stepup") {
-      await loginPasskey();
-      return await doRegister();
-    }
-    throw e;
-  }
+export const registerPasskey = () => doRegister();
+
+export const isStepUp = (e: unknown) => e instanceof ApiError && e.reason === "stepup";
+
+/** 用已有的 passkey 做 step-up，再注册。 */
+export async function stepUpWithPasskey(): Promise<string> {
+  await loginPasskey();
+  return await doRegister();
 }
 
 async function doRegister(): Promise<string> {
