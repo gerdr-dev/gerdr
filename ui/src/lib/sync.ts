@@ -25,10 +25,34 @@ import type { HubEvent, SessionSummary } from "./types";
 let ws: WebSocket | null = null;
 let retry = 0;
 let watched = "";
+let stopped = false;
+
+// 热更新改到非组件模块时，运行时按新 URL 把整棵模块树重新 import、重新挂 App（uisite/runtime.go），
+// 于是这个文件会有一份新实例再 boot 一次。旧实例的 WebSocket 没人关、心跳还在 ping，服务端的读超时永远不到，
+// 「正在连接」里一台手机列好几条（踩过：手机在后台攒了几次热更新，回前台一下多出 4 条），每条还都在收全量推送、挡着睡眠。
+// 所以新实例 boot 时先把上一份收掉；句柄挂在 window 上，因为新旧两份模块的变量互相看不见。
+function stop() {
+  stopped = true;
+  if (reconnectTimer) clearTimeout(reconnectTimer);
+  reconnectTimer = null;
+  if (heartbeat) clearInterval(heartbeat);
+  heartbeat = null;
+  document.removeEventListener("visibilitychange", wake);
+  window.removeEventListener("online", wake);
+  window.removeEventListener("focus", wake);
+  const sock = ws;
+  ws = null; // 先置空：onclose 里认出不是当前这条，不会再去重连
+  sock?.close();
+}
 
 export async function boot() {
+  if (stopped) return;
+  const w = window as any;
+  if (w.__gerdrSyncStop !== stop) w.__gerdrSyncStop?.();
+  w.__gerdrSyncStop = stop;
   try {
     const h = await api.hello();
+    if (stopped) return; // 等 hello 的时候被新实例收掉了
     const sessions: Record<string, SessionSummary> = {};
     for (const s of h.sessions) sessions[s.id] = s;
     set({
@@ -84,6 +108,7 @@ let heartbeat: ReturnType<typeof setInterval> | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
 function connect() {
+  if (stopped) return;
   if (reconnectTimer) {
     clearTimeout(reconnectTimer);
     reconnectTimer = null;
@@ -120,7 +145,7 @@ function connect() {
 }
 
 function scheduleReconnect(now = false) {
-  if (reconnectTimer || ws) return;
+  if (stopped || reconnectTimer || ws) return;
   const delay = now ? 0 : Math.min(8000, 300 * 2 ** retry++);
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null;
@@ -159,27 +184,28 @@ function startHeartbeat() {
       dropStale();
     }
   }, 20000);
-  const wake = () => {
-    if (document.visibilityState === "hidden") return;
-    if (!ws) return scheduleReconnect(true);
-    if (ws.readyState !== WebSocket.OPEN) return;
-    // 刚醒来：问一下，8 秒没回音就重连。
-    // 只收问的那一条：focus / visibilitychange / online 常常一起来，3 秒的版本在远程慢网上会把刚连上的新连接也当死的收掉，
-    // 一直重连（服务端「正在连接」里一台手机列好几条）。8 秒是给远程留的：pong 会排在正在写的一大帧日志后面。
-    const sock = ws;
-    const asked = Date.now();
-    try {
-      sock.send(JSON.stringify({ t: "ping" }));
-    } catch {
-      return dropStale();
-    }
-    setTimeout(() => {
-      if (ws === sock && lastHeard < asked) dropStale();
-    }, 8000);
-  };
   document.addEventListener("visibilitychange", wake);
   window.addEventListener("online", wake);
   window.addEventListener("focus", wake);
+}
+
+function wake() {
+  if (document.visibilityState === "hidden") return;
+  if (!ws) return scheduleReconnect(true);
+  if (ws.readyState !== WebSocket.OPEN) return;
+  // 刚醒来：问一下，8 秒没回音就重连。
+  // 只收问的那一条：focus / visibilitychange / online 常常一起来，3 秒的版本在远程慢网上会把刚连上的新连接也当死的收掉，
+  // 一直重连（服务端「正在连接」里一台手机列好几条）。8 秒是给远程留的：pong 会排在正在写的一大帧日志后面。
+  const sock = ws;
+  const asked = Date.now();
+  try {
+    sock.send(JSON.stringify({ t: "ping" }));
+  } catch {
+    return dropStale();
+  }
+  setTimeout(() => {
+    if (ws === sock && lastHeard < asked) dropStale();
+  }, 8000);
 }
 
 async function refreshHello() {
