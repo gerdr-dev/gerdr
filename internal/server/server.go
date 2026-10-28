@@ -151,6 +151,16 @@ func (s *Server) Handler() http.Handler {
 		return sess.Escape(ctx)
 	}))
 	mux.HandleFunc("GET /api/sessions/{id}/files", s.sessionOp(s.searchFiles))
+	mux.HandleFunc("POST /api/sessions/{id}/reload", s.sessionOp(func(r *http.Request, sess *hub.Session) (any, error) {
+		return nil, sess.Reload(r.Context())
+	}))
+	mux.HandleFunc("POST /api/sessions/{id}/takeover", s.sessionOp(func(r *http.Request, sess *hub.Session) (any, error) {
+		var b struct {
+			Action string `json:"action"`
+		}
+		_ = decode(r, &b)
+		return nil, sess.Takeover(r.Context(), b.Action)
+	}))
 	mux.HandleFunc("POST /api/sessions/{id}/warm", s.sessionOp(func(r *http.Request, sess *hub.Session) (any, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
@@ -363,6 +373,13 @@ func (s *Server) sessionOp(fn func(*http.Request, *hub.Session) (any, error)) ht
 			return
 		}
 		res, err := fn(r, sess)
+		var held *hub.HeldError
+		if errors.As(err, &held) {
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			w.WriteHeader(409)
+			_ = json.NewEncoder(w).Encode(map[string]any{"error": err.Error(), "code": "held_elsewhere", "holders": held.Holders})
+			return
+		}
 		if err != nil {
 			httpError(w, 400, err.Error())
 			return

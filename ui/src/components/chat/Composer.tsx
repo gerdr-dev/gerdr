@@ -3,12 +3,13 @@ import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useMemo, u
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { api, isNetworkError } from "@/lib/api";
+import { api, type Holder, isNetworkError } from "@/lib/api";
 import { closeFocusedPane, focusPane } from "@/lib/actions";
 import { get, set, transcript, useStore } from "@/lib/store";
 import type { ConfigOption, ContentBlock, SessionSummary } from "@/lib/types";
 import { isCoarse } from "@/lib/phone";
 import { cn } from "@/lib/utils";
+import { HeldDialog } from "./HeldDialog";
 import { OptionMenu } from "./OptionMenu";
 
 export type ComposerHandle = { focus(): void; setText(t: string): void };
@@ -19,6 +20,8 @@ function flatOptions(o: ConfigOption) {
   const arr: any[] = o.options as any[];
   return arr.flatMap((x) => (x.options ? x.options : [x])) as { value: string; name: string; description?: string }[];
 }
+
+const LOCAL_CMDS = [{ name: "resume", description: "换到这个目录下之前的一段对话" }];
 
 export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; paneId: string; running: boolean; onSent?: () => void }>(function Composer(
   { session, paneId, running, onSent },
@@ -65,7 +68,7 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
       if ((c.description ?? "").toLowerCase().includes(q)) return 2;
       return 9;
     };
-    return (session.commands ?? [])
+    return [...LOCAL_CMDS.filter((l) => !(session.commands ?? []).some((c) => c.name === l.name)), ...(session.commands ?? [])]
       .map((c) => ({ c, r: rank(c) }))
       .filter((x) => x.r < 9)
       .sort((a, b) => a.r - b.r || a.c.name.length - b.c.name.length)
@@ -127,8 +130,21 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
     }
   }, [!!slash, session.commands?.length]);
 
+  // gerdr 自己接的斜杠命令（agent 在 stream-json 模式下不认的那几个）：不发给 agent，在这边做
+  const runLocal = (name: string) => {
+    if (name !== "resume") return false;
+    setText("");
+    set({ dialog: { kind: "resume", sessionId: session.id, paneId } });
+    return true;
+  };
+
+  // 会话还在别处开着（HeldDialog）：挑完之后拿输入框里的原话再发 —— 用 ref 拿最新的 send（那时 text 已经放回去了）
+  const [held, setHeld] = useState<Holder[] | null>(null);
+  const sendRef = useRef<() => void>(() => {});
+
   const send = async () => {
     const t = text.trim();
+    if (!imgs.length && /^\/\S+$/.test(t) && runLocal(t.slice(1))) return;
     if (!t && !imgs.length) return;
     const content: ContentBlock[] = [];
     for (const im of imgs) content.push({ type: "image", data: im.data, mimeType: im.mimeType });
@@ -154,7 +170,8 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
       // 没发出去：原样放回输入框（字和图都在），人可以再按一次。
       if (!(get().drafts[paneId] ?? "")) setText(prev);
       setImgs((cur) => (cur.length ? cur : prevImgs));
-      toast.error(isNetworkError(e) ? "网络断了，消息没发出去（已放回输入框）" : (e.message ?? String(e)));
+      if (e?.code === "held_elsewhere") setHeld(e.holders ?? []);
+      else toast.error(isNetworkError(e) ? "网络断了，消息没发出去（已放回输入框）" : (e.message ?? String(e)));
     } finally {
       setBusy(false);
     }
@@ -264,6 +281,7 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
       if (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey)) {
         e.preventDefault();
         const c = cmds[cmdIdx];
+        if (c && runLocal(c.name)) return;
         if (c) setText(`/${c.name} `);
         return;
       }
@@ -339,8 +357,10 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
   const opts = session.configOptions ?? [];
   const hasText = text.trim().length > 0 || imgs.length > 0;
 
+  sendRef.current = send;
   return (
     <div className="relative px-3 pb-3">
+      <HeldDialog sessionId={session.id} holders={held} onClose={() => setHeld(null)} onDone={() => setTimeout(() => sendRef.current(), 50)} />
       {slash && !(session.commands ?? []).length && (
         <div className="absolute bottom-full left-3 right-3 z-20 mb-1 rounded-lg border bg-popover px-3 py-2 text-[12px] text-muted-foreground shadow-lg">
           正在加载命令…（{(session.base ?? session.agent) === "claude" ? "Claude Code 起来之后才报命令列表" : "这个 agent 没有报命令"}）
@@ -376,6 +396,7 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
               onMouseEnter={() => setCmdIdx(i)}
               onMouseDown={(e) => {
                 e.preventDefault();
+                if (runLocal(c.name)) return;
                 setText(`/${c.name} `);
               }}
             >
@@ -386,7 +407,11 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
         </div>
       )}
       <div
-        className={cn("rounded-xl border bg-card shadow-xs transition-colors focus-within:border-ring/60", running && "border-brand/40")}
+        className={cn(
+          // 照 Astryx ChatComposer：大圆角 + 投影托起来，描边只留一根细线（浅色底上要靠它看出边界）
+          "rounded-[22px] border border-border/60 bg-card shadow-md transition-colors focus-within:border-ring/60",
+          running && "border-brand/40",
+        )}
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => {
           if (e.dataTransfer.files.length) {
@@ -429,9 +454,9 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
             }
           }}
           placeholder={running ? "它在干活，说一句会直接插进去（Esc 打断）" : "说点什么…  / 看命令"}
-          className="block max-h-[40vh] min-h-[44px] w-full resize-none bg-transparent px-3.5 pt-3 pb-1 text-[1em] max-md:text-[16px] leading-relaxed outline-none placeholder:text-muted-foreground/70"
+          className="block max-h-[40vh] min-h-[44px] w-full resize-none bg-transparent px-4 pt-3 pb-1 text-[1em] max-md:text-[16px] leading-relaxed outline-none placeholder:text-muted-foreground/70"
         />
-        <div className="flex items-center gap-1 px-2 pb-2">
+        <div className="flex items-center gap-1 px-2.5 pb-2.5">
           <Tooltip>
             <TooltipTrigger asChild>
               <label className="flex size-7 cursor-pointer items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground">

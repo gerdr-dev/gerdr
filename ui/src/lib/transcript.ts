@@ -22,7 +22,7 @@ export type GData = {
   ask: { reqId: string; request: AskRequest; answers?: Record<string, string[]>; cancelled?: boolean };
   notice: { level: string; text: string };
   task: { task: AgentTask };
-  turnStat: { ms: number; tokens: number };
+  turnStat: { ms: number; tokens: number; ts?: number };
   turnEnd: { stopReason: string; error?: string };
   quickReplies: { questions: { question: string; options: string[] }[] };
 };
@@ -42,6 +42,9 @@ export type ToolMeta = {
   rawOutput?: unknown;
   parent?: string;
   status: string;
+  /** 开始 / 结束的时间（unix ms，日志事件的 ts）：工具行尾巴上的耗时 */
+  startedAt?: number;
+  endedAt?: number;
   /** 被 auto 模式的分类器拦了：加上这些权限规则就能放行（claude 适配器给的，界面画「允许并重试」） */
   autoDenied?: string[];
 };
@@ -49,6 +52,48 @@ export type ToolMeta = {
 export type ToolPart = DynamicToolUIPart & { toolMetadata?: ToolMeta & Record<string, any> };
 
 type Loc = { msg: number; part: number };
+
+/*
+ * agent 注入的那几种「块」：以 user 角色记着，但不是人说的话，原样显示就是一大坨标签占一个气泡
+ * （最常见的是后台任务跑完的 `<task-notification><task-id>…</task-id>…`，人要看的只有「哪个任务跑完了」）。
+ * 规则照 herdr-web 的 internal/transcript/claude.go（machineBlock）：那边扫过全机的转录，这类就这几种。
+ * 判据是标签名白名单，不能写成「以 < 开头就算」—— 人话里真的有 `<https://…>` 这种写法。
+ */
+const NOTE_WRAP = /^\s*<task-notification>([\s\S]*?)<\/task-notification>/;
+const CMD_OUT = /^\s*<local-command-stdout>([\s\S]*?)<\/local-command-stdout>/;
+const BASH_IN = /^\s*<bash-input>([\s\S]*?)<\/bash-input>/;
+const BASH_OUT = /^\s*<bash-(?:stdout|stderr)>/;
+const ANY_TAG = /<\/?[a-zA-Z][\w-]*(?:\s+[^>]*)?>/g;
+// claude 写进去的打断记号（`[Request interrupted by user]` / `…for tool use]`），也不是人打的
+const INTERRUPT = /^\s*\[Request interrupted by user[^\]]*\]\s*$/;
+
+/** 多行压成一行、剥掉 ANSI（这些都只占一行小字，长了也读不了）；太长截断。 */
+function squash(s: string, max = 300) {
+  const t = s.replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, "").split(/\s+/).filter(Boolean).join(" ");
+  return t.length > max ? t.slice(0, max) + "…" : t;
+}
+
+/**
+ * 认出注入的块：notice = 画成一行系统小字（level 决定颜色），text = 还是人的气泡、只换个写法。
+ * 不是这几种就返回 undefined，照常当人话。
+ */
+export function machineBlock(text: string): { notice?: { level: string; text: string }; text?: string } | undefined {
+  let m = NOTE_WRAP.exec(text);
+  if (m) {
+    const body = m[1];
+    // 形状变了也别退回显示标签：没有 summary 就把标签抹掉当散文读
+    const gist = /<summary>([\s\S]*?)<\/summary>/.exec(body)?.[1].trim() || body.replace(ANY_TAG, " ");
+    const status = /<status>([^<]*)<\/status>/.exec(body)?.[1].trim();
+    const ok = !status || status === "completed";
+    return { notice: { level: ok ? "info" : "warn", text: `后台任务${ok ? "跑完了" : status}：${squash(gist)}` } };
+  }
+  if ((m = CMD_OUT.exec(text))) return { notice: { level: "info", text: squash(m[1]) } };
+  // 人在 claude 里敲的 `!命令`：这是人的动作，照旧是气泡，写成 `! 命令`（和 TUI 里一样）
+  if ((m = BASH_IN.exec(text))) return { text: "! " + squash(m[1]) };
+  if (BASH_OUT.test(text)) return { notice: { level: "info", text: squash(text.replace(ANY_TAG, " ")) } };
+  if (INTERRUPT.test(text)) return { notice: { level: "info", text: "被打断了" } };
+  return undefined;
+}
 
 export class Transcript {
   /**
@@ -133,9 +178,16 @@ export class Transcript {
     }
     switch (e.kind) {
       case "user": {
+        const only = e.content?.length === 1 && e.content[0].type === "text" ? e.content[0].text : undefined;
+        const mb = only !== undefined ? machineBlock(only) : undefined;
+        if (mb?.notice) {
+          this.messages = [...this.messages];
+          this.pushPart(this.assistant(e.ts), { type: "data-notice", data: mb.notice });
+          break;
+        }
         const parts: GPart[] = [];
         for (const c of e.content ?? []) {
-          if (c.type === "text") parts.push({ type: "text", text: c.text });
+          if (c.type === "text") parts.push({ type: "text", text: mb?.text ?? c.text });
           else if (c.type === "image") parts.push({ type: "file", mediaType: c.mimeType, url: `data:${c.mimeType};base64,${c.data}` });
           else if (c.type === "resource_link") parts.push({ type: "text", text: `@${c.uri.replace(/^file:\/\//, "")}` });
         }
@@ -176,7 +228,7 @@ export class Transcript {
         } else if (e.durationMs && e.durationMs > 1000) {
           // 照 Claude Code：一轮结束留一行「用时 1m 5s · ↓ 2.2k tokens」
           const i = this.assistant(e.ts);
-          this.pushPart(i, { type: "data-turnStat", data: { ms: e.durationMs, tokens: e.outputTokens ?? 0 } });
+          this.pushPart(i, { type: "data-turnStat", data: { ms: e.durationMs, tokens: e.outputTokens ?? 0, ts: e.ts } });
         }
         // 这一轮里还在「进行中」的工具调用，到这里就不会再有结果了。
         for (const [, loc] of this.tools) {
@@ -283,8 +335,14 @@ export class Transcript {
       }
       case "user_message_chunk": {
         // 只有导入的历史会出现（agent 重放）。
-        const text = u.content?.type === "text" ? u.content.text : "";
+        let text = u.content?.type === "text" ? u.content.text : "";
         if (!text) break;
+        const mb = machineBlock(text);
+        if (mb?.notice) {
+          this.pushPart(this.assistant(ts), { type: "data-notice", data: mb.notice });
+          break;
+        }
+        if (mb?.text) text = mb.text;
         this.messages.push({ id: u.messageId ?? this.uid(), role: "user", parts: [{ type: "text", text }], metadata: { messageId: u.messageId, ts } });
         this.chunks.clear();
         this.lastChunkKey = "";
@@ -318,7 +376,9 @@ export class Transcript {
       status: u.status ?? "pending",
       parent: u._meta?.gerdr?.parentToolCallId,
       rawOutput: u.rawOutput,
+      startedAt: ts,
     };
+    if (meta.status === "completed" || meta.status === "failed") meta.endedAt = ts;
     const part: ToolPart = {
       type: "dynamic-tool",
       toolName: u.kind ?? "tool",
@@ -341,6 +401,7 @@ export class Transcript {
     if (u.locations) meta.locations = u.locations;
     if (u.content) meta.content = u.content;
     if (u.status) meta.status = u.status;
+    if ((meta.status === "completed" || meta.status === "failed") && !meta.endedAt) meta.endedAt = ts;
     if (u.rawOutput !== undefined) meta.rawOutput = u.rawOutput;
     if (u._meta?.gerdr?.autoDenied) meta.autoDenied = u._meta.gerdr.autoDenied;
     const next: any = {

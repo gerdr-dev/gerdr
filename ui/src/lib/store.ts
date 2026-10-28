@@ -61,6 +61,7 @@ type Dialog =
   | { kind: "rename"; target: "tab" | "workspace" | "session"; id: string; value: string }
   | { kind: "newWorkspace" }
   | { kind: "importHerdr" }
+  | { kind: "resume"; sessionId: string; paneId: string }
   | { kind: "file"; stat: FileStat }
   | null;
 

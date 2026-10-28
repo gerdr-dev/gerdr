@@ -216,14 +216,35 @@ React（ui/，不打包）  ←WebSocket / HTTP→  hub（internal/hub）  ←AC
   而 agent 写出来 / 抓下来的文件都不可信。PDF 例外（Chrome 的 PDF 查看器在 sandbox 下不渲染）。走 ServeContent 带 Range，视频才能拖。
 - 打不开时先原样问、再剥行号锚点重试（`a.md#L21` / `main.go:42`）—— 不能先剥，`notes#1.md` 是合法文件名。
 
+## 同一个会话在别处也开着（herdr / 终端 / Codex App）
+
+导入的会话、在终端里 resume 过的会话，常常同时在 gerdr 和别处开着。实测出来的语义：
+
+- **claude 不拦**：两个进程同时 `--resume` 同一个会话，各自往同一个记录文件里追加、各接在自己看到的最后一条后面
+  —— 记录分叉，两边都只看得见自己那一半。判据是交互式 claude 的登记文件 `<配置目录>/sessions/<pid>.json`
+  （退出时删，强杀会残留，所以还要核 pid 活着；gerdr 自己起的 stream-json 进程**不写**这个文件）。
+  发消息前问一次（`_gerdr/holders`），有人占着就回 409，界面上挑：另起一份（`--fork-session` 复制出新会话）/
+  关掉那边（SIGTERM，**等进程退出**而不是等登记文件消失：它先删文件、再把记录写完，中间差一两秒）。
+- **codex 自己拦**：一个 thread 同一时间只有一处能写。gerdr 先开着，终端里的 codex 显示「open in another app」；
+  终端先开着，gerdr 这边 `thread/resume` 报 `already has an active writer`。不会分叉，但光秃秃一句英文人不知道怎么办，
+  所以同样回 409，界面上给「另起一份」（`thread/fork`，不用先接上原来那个）/「已经在那边关掉了，重试」。
+  没有登记文件，不知道是哪个进程，所以不提供「关掉那边」。
+- **追上**：gerdr 的对话日志只记它经手的事。别处接着聊过，agent 的记录文件会长 —— `Record.SyncedSize` 记着上次对齐时
+  文件多大（自己一轮结束、切模式 / 模型之后都更新：claude 会把模式变化也写进文件），打开会话时比一下，大了就从记录
+  整份重放（`Session.Reload`）。老会话没记过大小，按修改时间猜，猜的只悄悄同步、不说「别处聊过」。
+
+另一个**静默**的坑：在一个 Claude Code 的终端 pane 里敲 `gerdr`，它会继承那个 claude 给子进程打的标记
+（`CLAUDE_CODE_CHILD_SESSION` 等），带着它的子 claude **不写会话记录**（底部一行「Transcript saving is off」，
+stream-json 模式下没人看得见）—— resume、回退、追上全部失效。`sysenv.ChildEnv` 按名字去掉这几个。
+
 ## 远程访问（internal/auth、relay、acme、remote + server/remoteapi.go）
 
 经云端中继对外，配对码 + passkey；本机令牌在远程不认。设计和坑在 [REMOTE.md](REMOTE.md)，动这块之前先读它。
 
-## mac App
+## 桌面 App（desktop/，Electron）
 
-`mac/Sources/main.swift`：AppKit + WKWebView，`swiftc` 直接编（不需要 Xcode）。起内嵌的
-`gerdr --app --parent-pid`，读 stdout 里的 `GERDR_READY <url>`。已经有 gerdr 在跑（同一个数据目录
-有锁）就直接连它。从 Finder 起的 App 的 PATH 只有系统目录，所以后端开机会问一次登录 shell 的
-PATH（`sysenv.AdoptLoginPath`），不然找不到 claude / codex。「编辑」菜单是承重的：没有它
-WKWebView 里 ⌘C / ⌘V 不工作。
+`desktop/main.js`：Electron 外壳，自带 Chromium（mac / Windows 同一个内核）。为什么不是系统 WebView / mygo / nsh、
+外壳的几条坑（退出、Windows 上的父进程、菜单、签名、通用包）都在 [WHY-ELECTRON.md](WHY-ELECTRON.md)。
+起内嵌的 `gerdr --app --parent-pid`，读 stdout 里的 `GERDR_READY <url>`；已经有 gerdr 在跑（同一个数据目录有锁）
+就直接连它。从 Finder 起的 App 的 PATH 只有系统目录，所以后端开机会问一次登录 shell 的 PATH
+（`sysenv.AdoptLoginPath`），不然找不到 claude / codex。打包：`make app`（本机）/ `make dmg` / `make win`。

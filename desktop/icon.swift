@@ -1,4 +1,4 @@
-// 画 App 图标（和 web/public/icon.svg 同一个图形）：swift mac/icon.swift out.png
+// 画 App 图标（和 web/public/icon.svg 同一个图形）：swift desktop/icon.swift out.png（make icon）
 import AppKit
 
 let size: CGFloat = 1024

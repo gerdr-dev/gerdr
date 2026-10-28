@@ -1,4 +1,4 @@
-import { Bot, CircleAlert, Info, Pencil, RotateCcw, CornerDownRight } from "lucide-react";
+import { Bot, Brain, ChevronDown, CircleAlert, Info, Pencil, RotateCcw, CornerDownRight } from "lucide-react";
 import { memo, type ReactNode } from "react";
 import { Message, MessageContent } from "@/components/ai-elements/message";
 import { Markdown } from "./Markdown";
@@ -31,6 +31,8 @@ type Props = {
   onRewind?: (m: GMessage) => void;
   onEdit?: (m: GMessage) => void;
   onQuickReply: (s: string) => void;
+  stackPrev?: boolean; // 用户消息：上 / 下紧挨着也是用户消息（叠成一摞）
+  stackNext?: boolean;
 };
 
 /** 这条消息是别的会话里的 agent 发来的（gerdr session send）：标出来源，点一下跳过去。 */
@@ -38,55 +40,81 @@ function FromLabel({ id }: { id: string }) {
   const s = useStore((st) => st.sessions[id]);
   const name = s ? s.title || s.cwd.split("/").pop() || s.agent : id.slice(0, 8);
   return (
-    <button className="ml-auto flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground" onClick={() => focusSession(id)}>
+    <button className="flex items-center gap-1 hover:text-foreground" onClick={() => focusSession(id)}>
       <Bot className="size-3" />
       来自会话「{name}」
     </button>
   );
 }
 
-export const MessageView = memo(function MessageView({ msg, sessionId, live, running, onRewind, onEdit, onQuickReply }: Props) {
+/** 消息时间：今天的只写时分，别的日子带上月日。 */
+function fmtTime(ts?: number) {
+  if (!ts) return "";
+  const d = new Date(ts);
+  const hm = `${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}`;
+  return d.toDateString() === new Date().toDateString() ? hm : `${d.getMonth() + 1}/${d.getDate()} ${hm}`;
+}
+
+export const MessageView = memo(function MessageView({ msg, sessionId, live, running, onRewind, onEdit, onQuickReply, stackPrev, stackNext }: Props) {
   if (msg.role === "user") {
     const text = msg.parts.map((p) => (p.type === "text" ? p.text : "")).join("");
     const files = msg.parts.filter((p) => p.type === "file");
-    const canRewind = !!onRewind && !!msg.metadata?.messageId && !msg.metadata?.steer && !running;
+    const meta = msg.metadata;
+    const canRewind = !!onRewind && !!meta?.messageId && !meta?.steer && !running;
+    // 元信息（时间、来源）在气泡下面一行小灰字（照 Astryx ChatMessageMetadata）；一摞连发的只在最后一条下面写时间
+    const showMeta = !stackNext || !!meta?.from || !!meta?.steer;
     return (
-      <Message from="user" className="group/user">
-        {msg.metadata?.from && <FromLabel id={msg.metadata.from} />}
-        {msg.metadata?.steer && (
-          <div className="ml-auto flex items-center gap-1 text-[11px] text-muted-foreground">
-            <CornerDownRight className="size-3" />
-            中途插话
-          </div>
-        )}
-        <MessageContent className="whitespace-pre-wrap break-words text-[1em]">
-          {files.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {files.map((f: any, i) => (
-                <img key={i} src={f.url} className="max-h-40 rounded-md border" />
-              ))}
+      <Message from="user" className="group/user gap-1">
+        {/* 回退 / 改写按钮悬停时浮在气泡左边，不占高度 */}
+        <div className="relative ml-auto flex min-w-0 max-w-[max(80%,280px)] justify-end">
+          {canRewind && (
+            <div className="absolute right-full bottom-1 mr-1 flex gap-0.5 opacity-0 transition-opacity group-hover/user:opacity-100 [@media(hover:none)]:opacity-100">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground" onClick={() => onEdit?.(msg)}>
+                    <Pencil className="size-3.5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>改这句重发（回到它之前）</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground" onClick={() => onRewind?.(msg)}>
+                    <RotateCcw className="size-3.5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>回到这条消息之前</TooltipContent>
+              </Tooltip>
             </div>
           )}
-          {text}
-        </MessageContent>
-        {canRewind && (
-          <div className="ml-auto flex gap-0.5 opacity-0 transition-opacity group-hover/user:opacity-100 [@media(hover:none)]:opacity-100">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground" onClick={() => onEdit?.(msg)}>
-                  <Pencil className="size-3.5" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent>改这句重发（回到它之前）</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground" onClick={() => onRewind?.(msg)}>
-                  <RotateCcw className="size-3.5" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent>回到这条消息之前</TooltipContent>
-            </Tooltip>
+          <MessageContent
+            className={cn(
+              "whitespace-pre-wrap break-words text-[1em] leading-[1.5]",
+              stackPrev && "group-[.is-user]:rounded-tr-md",
+              stackNext && "group-[.is-user]:rounded-br-md",
+            )}
+          >
+            {files.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {files.map((f: any, i) => (
+                  <img key={i} src={f.url} className="max-h-40 rounded-xl border" />
+                ))}
+              </div>
+            )}
+            {text}
+          </MessageContent>
+        </div>
+        {showMeta && (
+          <div className="flex items-center justify-end gap-1.5 px-2 text-[12px] text-muted-foreground">
+            {meta?.from && <FromLabel id={meta.from} />}
+            {meta?.steer && (
+              <span className="flex items-center gap-1">
+                <CornerDownRight className="size-3" />
+                中途插话
+              </span>
+            )}
+            {(meta?.from || meta?.steer) && !stackNext && meta?.ts ? <span>·</span> : null}
+            {!stackNext && <span className="tabular-nums">{fmtTime(meta?.ts)}</span>}
           </div>
         )}
       </Message>
@@ -144,10 +172,15 @@ export type PartCtx = {
 /** 思考过程：展开没展开记在组件外面（虚拟列表滚出去会卸载）。 */
 function KeptReasoning({ keep, streaming, text }: { keep: string; streaming: boolean; text: string }) {
   const [open, setOpen] = useKept<boolean | undefined>(keep, undefined);
+  // 和工具调用那一行一个样子（ToolCall）：一行小灰字，不抢正文的眼
   return (
     <Reasoning isStreaming={streaming} defaultOpen={false} open={open} onOpenChange={setOpen} className="mb-0">
-      <ReasoningTrigger />
-      <ReasoningContent className="gerdr-md text-[0.92em]">{text}</ReasoningContent>
+      <ReasoningTrigger className="-ml-1.5 w-auto gap-2 rounded-md px-1.5 py-[3px] text-[13px] hover:bg-muted/60">
+        <Brain className="size-3.5 shrink-0" />
+        {streaming ? <Shimmer duration={1}>思考中…</Shimmer> : <span>思考</span>}
+        <ChevronDown className={cn("size-3.5 shrink-0 opacity-60 transition-transform", open && "rotate-180")} />
+      </ReasoningTrigger>
+      <ReasoningContent className="gerdr-md mt-1 mb-1 ml-[7px] border-l pl-4 text-[0.92em]">{text}</ReasoningContent>
     </Reasoning>
   );
 }
@@ -212,31 +245,40 @@ export function renderPart(p: GPart, i: number, ctx: PartCtx): ReactNode {
       return <QuickReplies key={i} data={p.data} onPick={ctx.onQuickReply} enabled={ctx.quickEnabled} />;
     case "data-turnStat":
       return (
-        <div key={i} className="font-mono text-[12px] text-muted-foreground">
-          ✻ 用时 {fmtElapsed(p.data.ms)}
-          {p.data.tokens > 0 ? ` · ↓ ${fmtTokens(p.data.tokens)} tokens` : ""}
+        // 一轮的元信息：结束时间 · 用时 · 输出 token（照 Astryx ChatMessageMetadata 的「9:46 AM · Claude Opus」）
+        <div key={i} className="text-[12px] text-muted-foreground tabular-nums">
+          {[fmtTime(p.data.ts), `用时 ${fmtElapsed(p.data.ms)}`, p.data.tokens > 0 && `${fmtTokens(p.data.tokens)} tokens`].filter(Boolean).join(" · ")}
         </div>
       );
     case "data-task":
       return <TaskDoneCard key={i} sessionId={ctx.sessionId} t={p.data.task} />;
     case "data-notice":
+      if (p.data.level === "clear")
+        return (
+          <div key={i} className="flex items-center gap-3 py-2 text-[12px] text-muted-foreground">
+            <div className="h-px flex-1 bg-border" />
+            {p.data.text}（/clear）
+            <div className="h-px flex-1 bg-border" />
+          </div>
+        );
       return (
+        // 系统提示：居中一行小字，不像谁说的话（照 Astryx ChatSystemMessage）
         <div
           key={i}
           className={cn(
-            "flex items-start gap-1.5 rounded-md px-2 py-1 text-[12px]",
-            p.data.level === "error" ? "bg-bad/10 text-bad" : p.data.level === "warn" ? "bg-warn/10 text-warn" : "bg-muted/60 text-muted-foreground",
+            "flex items-start justify-center gap-1.5 px-6 py-1 text-center text-[12px]",
+            p.data.level === "error" ? "text-bad" : p.data.level === "warn" ? "text-warn" : "text-muted-foreground",
           )}
         >
           <Info className="mt-0.5 size-3.5 shrink-0" />
-          {p.data.text}
+          <span className="min-w-0">{p.data.text}</span>
         </div>
       );
     case "data-turnEnd":
       return (
-        <div key={i} className={cn("flex items-start gap-1.5 rounded-md px-2 py-1 text-[12px]", p.data.error ? "bg-bad/10 text-bad" : "text-muted-foreground")}>
+        <div key={i} className={cn("flex items-start justify-center gap-1.5 px-6 py-1 text-center text-[12px]", p.data.error ? "text-bad" : "text-muted-foreground")}>
           <CircleAlert className="mt-0.5 size-3.5 shrink-0" />
-          <span className="whitespace-pre-wrap break-words">{p.data.error || STOP_TEXT[p.data.stopReason] || p.data.stopReason}</span>
+          <span className="min-w-0 whitespace-pre-wrap break-words">{p.data.error || STOP_TEXT[p.data.stopReason] || p.data.stopReason}</span>
         </div>
       );
     case "file":

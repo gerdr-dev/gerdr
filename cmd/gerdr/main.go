@@ -246,8 +246,11 @@ func runServe(open, appMode bool, parentPID int) error {
 	_ = os.WriteFile(infoPath(env), si, 0o600)
 	defer os.Remove(infoPath(env))
 
+	// 所有请求的 context 都挂在 base 上，关机时先取消它：界面热更新的 SSE（/_ui/events）是条一直开着的普通请求，
+	// Shutdown 会一直等它结束 —— 等满超时才退，mac App 上表现为 ⌘Q 卡 4 秒再被强杀（实测 5.0s → 修完 0.5s）。
+	base, cancelBase := context.WithCancel(context.Background())
 	handler := srv.Handler()
-	hs := &http.Server{Handler: handler, ReadHeaderTimeout: 10 * time.Second}
+	hs := &http.Server{Handler: handler, ReadHeaderTimeout: 10 * time.Second, BaseContext: func(net.Listener) context.Context { return base }}
 	go func() {
 		if err := hs.Serve(ln); err != nil && err != http.ErrServerClosed {
 			log.Error("serve", "err", err)
@@ -275,20 +278,12 @@ func runServe(open, appMode bool, parentPID int) error {
 	}
 	<-ctx.Done()
 	log.Info("shutting down")
-	sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	cancelBase()
+	sctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	_ = hs.Shutdown(sctx)
 	h.Close()
 	return nil
-}
-
-func waitParent(pid int) {
-	for {
-		time.Sleep(time.Second)
-		if os.Getppid() != pid {
-			return
-		}
-	}
 }
 
 func openBrowser(u string) {
@@ -296,22 +291,12 @@ func openBrowser(u string) {
 	switch runtime.GOOS {
 	case "darwin":
 		cmd = exec.Command("open", u)
+	case "windows":
+		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", u)
 	default:
 		cmd = exec.Command("xdg-open", u)
 	}
 	_ = cmd.Start()
-}
-
-func lockFile(p string) (*os.File, error) {
-	f, err := os.OpenFile(p, os.O_CREATE|os.O_RDWR, 0o600)
-	if err != nil {
-		return nil, err
-	}
-	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
-		f.Close()
-		return nil, err
-	}
-	return f, nil
 }
 
 // runACP：stdio ACP agent 模式。日志只能写 stderr（stdout 是协议）。

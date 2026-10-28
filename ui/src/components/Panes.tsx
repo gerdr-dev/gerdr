@@ -1,7 +1,8 @@
-import { Bot, Columns2, Copy, Maximize2, Minimize2, MoreHorizontal, PanelTopOpen, Pencil, Rows2, Trash2, X } from "lucide-react";
+import { Bot, Columns2, Copy, GitBranch, Maximize2, RefreshCw, Minimize2, MoreHorizontal, PanelTopOpen, Pencil, Rows2, Trash2, X } from "lucide-react";
 import { createContext, useContext, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { api } from "@/lib/api";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { basename, closeFocusedPane, deleteSession, focusPane, focusSession, splitFocused, toggleZoom } from "@/lib/actions";
 import { leaves, setRatio, updateTab, type PaneLeaf, type PaneNode, type Tab } from "@/lib/layout";
@@ -162,8 +163,17 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
         {session?.pending ? <span className="shrink-0 whitespace-nowrap rounded bg-bad/15 px-1.5 text-[11px] text-bad">等你</span> : null}
         <PaneCount count={count} />
         {session ? (
-          <span className="hidden min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground md:inline" title={session.cwd}>
-            {session.cwd}
+          <span className="hidden min-w-0 flex-1 items-center gap-2 font-mono text-[11px] text-muted-foreground md:flex">
+            <span className="min-w-0 truncate" title={session.cwd}>
+              {session.cwd}
+            </span>
+            {/* 分支不许被截：窄的时候宁可截路径（路径的末段在标题里多半已经看得出来） */}
+            {session.branch && (
+              <span className="flex shrink-0 items-center gap-1" title={`git 分支：${session.branch}`}>
+                <GitBranch className="size-3" />
+                <span className="max-w-[16em] truncate">{session.branch}</span>
+              </span>
+            )}
           </span>
         ) : (
           <div className="flex-1" />
@@ -205,6 +215,19 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
                 >
                   <Copy /> 复制 agent 会话 id
                 </DropdownMenuItem>
+                {["claude", "codex"].includes(session.base ?? session.agent) && (
+                  // 在别处（herdr / 终端）接着聊过的会话，打开时会自动追上；这里是手动的那一下
+                  <DropdownMenuItem
+                    onClick={() =>
+                      api
+                        .reload(session.id)
+                        .then(() => toast.success("已从 agent 自己的记录重新载入"))
+                        .catch((e) => toast.error(e.message))
+                    }
+                  >
+                    <RefreshCw /> 从 agent 记录重新载入
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem variant="destructive" onClick={() => deleteSession(session.id).catch((e) => toast.error(e.message))}>
                   <Trash2 /> 删除会话
                 </DropdownMenuItem>

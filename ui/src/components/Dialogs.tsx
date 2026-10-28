@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AgentSettings } from "./AgentSettings";
+import { ResumeDialog } from "./ResumeDialog";
 import { addWorkspace, basename, deleteSession, focusSession, openSessionHere, renameTab, renameWorkspace, selectWorkspace, tabName } from "@/lib/actions";
 import { api } from "@/lib/api";
 import { allCommands, runCommand } from "@/lib/commands";
@@ -41,6 +42,7 @@ export function Dialogs() {
       <Rename />
       <NewWorkspace open={d?.kind === "newWorkspace"} />
       <ImportHerdr open={d?.kind === "importHerdr"} />
+      <ResumeDialog />
       <FileViewer />
     </>
   );

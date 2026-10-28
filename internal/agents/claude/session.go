@@ -48,7 +48,9 @@ type session struct {
 	tools    map[string]*toolState
 	msgDelta map[string]bool // 哪些 API 消息已经按 delta 推过正文了
 
-	emitHook func(acp.SessionUpdate) // 重放会话记录时把 update 改道
+	emitHook  func(acp.SessionUpdate) // 重放会话记录时把 update 改道
+	lastTitle string                  // 上次报给 hub 的标题（syncTitle 去重）
+	genTitled bool                    // 已经自己起过标题了（genTitle 只起一次）
 }
 
 func (s *session) withEmit(emit func(acp.SessionUpdate), fn func()) {
@@ -255,6 +257,27 @@ func (s *session) kill() {
 	}
 }
 
+// adoptID：claude 自己换了会话 id —— /clear 就是这样（CLI 先发一条 conversation_reset，接着用一个新 id 再 init 一次，
+// 之后的对话都写进新 id 的记录文件）。不跟过去的话：回退去旧文件里找消息，报「message not found in transcript」；
+// 进程闲置被收掉、下次 --resume 的还是旧 id，清掉的上下文原样回来（两个都是用户报的 / 实测的）。
+// 先用旧 id 通知 hub（它按旧 id 认这个会话）把记录改成新 id，再在这边换；旧 id 留作别名，正在路上的调用照样找得到。
+func (s *session) adoptID(ctx context.Context, id string) {
+	s.mu.Lock()
+	old := s.id
+	s.mu.Unlock()
+	if id == old {
+		return
+	}
+	s.update(ctx, acp.SessionUpdate{SessionInfoUpdate: &acp.SessionSessionInfoUpdate{Meta: acpx.Meta(map[string]any{"sessionId": id, "cleared": true})}})
+	s.mu.Lock()
+	s.id = id
+	s.fresh, s.forkFrom, s.forkAt = false, "", ""
+	s.mu.Unlock()
+	s.a.mu.Lock()
+	s.a.sessions[id] = s
+	s.a.mu.Unlock()
+}
+
 func (s *session) update(ctx context.Context, u acp.SessionUpdate) {
 	if s.emitHook != nil {
 		s.emitHook(u)
@@ -387,6 +410,55 @@ func (s *session) finishTurn(stop acp.StopReason) {
 		return
 	}
 	t.done <- turnResult{stop: stop}
+	go s.syncTitle(3 * time.Second)
+}
+
+// syncTitle：把 Claude Code 自己的标题带到 gerdr（pane 顶部、侧栏）。它起标题是异步的，常常在一轮结束后才写进记录，
+// 所以等一会儿再读。/rename 的算人改的（renamed，以后不被自动标题盖）；ai-title 只在 gerdr 里没人改过名时用上（hub 判断）。
+func (s *session) syncTitle(delay time.Duration) {
+	time.Sleep(delay)
+	s.mu.Lock()
+	id, cwd, last := s.id, s.cwd, s.lastTitle
+	s.mu.Unlock()
+	path, err := findTranscript(s.a.projectsDir(), id, cwd)
+	if err != nil {
+		return
+	}
+	custom, ai := titles(path)
+	t, renamed := ai, false
+	if custom != "" {
+		t, renamed = custom, true
+	}
+	if t == "" {
+		// gerdr 起的会话（stream-json 模式）claude 不写 ai-title —— 那是交互界面里才做的事。照它的做法自己补一个：
+		// 第一轮完了用 haiku 按第一句话起个短标题。每个会话只起一次（genTitled），起不出来就算了（标题照旧是第一句话）。
+		s.mu.Lock()
+		done := s.genTitled
+		s.genTitled = true
+		s.mu.Unlock()
+		if done {
+			return
+		}
+		first := ""
+		_ = scan(path, func(e *entry, _ []byte) bool {
+			first = userText(e)
+			return first == ""
+		})
+		if t = s.a.genTitle(first); t == "" {
+			return
+		}
+	}
+	if t == last {
+		return
+	}
+	s.mu.Lock()
+	s.lastTitle = t
+	s.mu.Unlock()
+	u := &acp.SessionSessionInfoUpdate{Title: &t}
+	if renamed {
+		u.Meta = acpx.Meta(map[string]any{"renamed": true})
+	}
+	s.update(context.Background(), acp.SessionUpdate{SessionInfoUpdate: u})
 }
 
 // userMessage 拼一条写进 stdin 的 user 消息。

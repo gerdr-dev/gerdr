@@ -1,15 +1,23 @@
 import type { ContentBlock, ExtSettings, ExtView, Hello, PluginBuild, SessionSummary } from "./types";
 
+/** 正开着某个会话的别的进程（herdr / 终端里的交互式 claude） */
+export type Holder = { pid: number; name?: string; status?: string; cwd?: string };
+
 export class ApiError extends Error {
   status: number;
   /** 远程那条路上的细分原因：reason="stepup"（再加 passkey 前先验一次）、need="pair" | "passkey"（见 docs/dev/REMOTE.md） */
   reason?: string;
   need?: string;
-  constructor(status: number, message: string, data?: { reason?: string; need?: string }) {
+  /** 业务上的细分：code="held_elsewhere"（会话还在别处开着，holders 是占着它的进程） */
+  code?: string;
+  holders?: Holder[];
+  constructor(status: number, message: string, data?: { reason?: string; need?: string; code?: string; holders?: Holder[] }) {
     super(message);
     this.status = status;
     this.reason = data?.reason;
     this.need = data?.need;
+    this.code = data?.code;
+    this.holders = data?.holders;
   }
 }
 
@@ -84,6 +92,8 @@ export const api = {
   deleteSession: (id: string) => req("DELETE", `/api/sessions/${id}`),
   send: sendWithRetry,
   cancel: (id: string) => req("POST", `/api/sessions/${id}/cancel`, {}),
+  reload: (id: string) => req("POST", `/api/sessions/${id}/reload`, {}),
+  takeover: (id: string, action: "fork" | "kill") => req("POST", `/api/sessions/${id}/takeover`, { action }),
   searchFiles: (id: string, q: string) => req<{ files: string[] }>("GET", `/api/sessions/${id}/files?q=${encodeURIComponent(q)}`),
   warm: (id: string) => req("POST", `/api/sessions/${id}/warm`, {}),
   withdrawLast: (id: string) => req<{ content: ContentBlock[]; withdrawn?: number }>("POST", `/api/sessions/${id}/withdraw-last`, {}),

@@ -19,6 +19,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { api } from "@/lib/api";
 import { get, setConfig, subTranscript, transcript, useStore } from "@/lib/store";
+import { useKept } from "@/lib/kept";
 import { Loader2 } from "lucide-react";
 import type { GMessage } from "@/lib/transcript";
 import type { SessionSummary } from "@/lib/types";
@@ -85,7 +86,9 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
   };
 
   const msgs = t.messages;
-  const rows = useMemo(() => buildRows(msgs, running), [msgs, running]);
+  const [showCleared, setShowCleared] = useKept(`cleared:${session.id}:${sub ?? ""}`, false);
+  const [openGroups, setOpenGroups] = useKept<Record<string, boolean>>(`groups:${session.id}:${sub ?? ""}`, {});
+  const rows = useMemo(() => buildRows(msgs, running, showCleared, openGroups), [msgs, running, showCleared, openGroups]);
   const list = useRef<VirtuosoHandle>(null);
   const scrollKey = `${paneId}:${session.id}:${sub ?? ""}`;
   const saved = scrollMem.get(scrollKey);
@@ -115,8 +118,8 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
   const scrollerEl = useRef<HTMLElement | null>(null);
   const lastH = useRef(0); // 上一次量到的总高（推到底之前用它判断「刚才是不是贴着底」）
   // 行是 memo 的，回调要稳定（不然每次都重渲染），但又要拿到最新的 —— 放在 ref 里转一手
-  const latest = useRef({ openRewind, sessionId: session.id });
-  latest.current = { openRewind, sessionId: session.id };
+  const latest = useRef({ openRewind, sessionId: session.id, openGroups, setOpenGroups });
+  latest.current = { openRewind, sessionId: session.id, openGroups, setOpenGroups };
   const env = useMemo<RowEnv>(
     () => ({
       sessionId: session.id,
@@ -124,6 +127,11 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
       onRewind: sub ? undefined : (m) => latest.current.openRewind(m, false),
       onEdit: sub ? undefined : (m) => latest.current.openRewind(m, true),
       onQuickReply: (s) => api.send(latest.current.sessionId, [{ type: "text", text: s }]).catch((e) => toast.error(e.message)),
+      onShowCleared: () => setShowCleared(true),
+      onToggleGroup: (key) => {
+        const { openGroups: g, setOpenGroups: set } = latest.current;
+        set({ ...g, [key]: !g[key] });
+      },
     }),
     [session.id, running, sub],
   );

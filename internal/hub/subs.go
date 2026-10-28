@@ -1,7 +1,9 @@
 package hub
 
 import (
+	"context"
 	"sync"
+	"time"
 )
 
 // Msg 是推给前端的一帧。
@@ -67,6 +69,12 @@ func (h *Hub) Watch(sub *Sub, ids []string) {
 			continue
 		}
 		sub.send(Msg{T: "events", ID: id, Events: s.Events(), Reset: true})
+		// 打开 / 切到这个会话：顺手看看它是不是在别处（herdr / 终端）接着聊过，是的话追上（CatchUp）
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+			defer cancel()
+			s.CatchUp(ctx)
+		}()
 	}
 }
 

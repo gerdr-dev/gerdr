@@ -1,10 +1,10 @@
-# gerdr：一个 Go 二进制 + 一个 mac App 外壳。界面是 ui/ 下的源码，没有打包环节（internal/uisite）：
+# gerdr：一个 Go 二进制 + 一个桌面 App 外壳（Electron，desktop/）。界面是 ui/ 下的源码，没有打包环节（internal/uisite）：
 # 编二进制时把 ui/ 原样拷进去内嵌，第一次启动装到 ~/.gerdr/ui，之后谁改那份源码界面就跟着变。
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo 0.1.0-dev)
 LDFLAGS := -s -w -X github.com/zbysir/gerdr/internal/version.Version=$(VERSION)
 UISNAP := internal/webui/ui
 
-.PHONY: all ui sync-ui build test typecheck test-e2e app dmg install clean dev
+.PHONY: all ui sync-ui build test typecheck test-e2e app dmg win icon install clean dev
 
 all: build
 
@@ -35,11 +35,20 @@ test-e2e:
 	GERDR_E2E=codex go test ./internal/agenthost/ -run E2E -v -count=1
 	GERDR_E2E=claude go test ./internal/agenthost/ -run E2E -v -count=1
 
-app: build
-	./mac/build.sh $(VERSION)
+# 桌面 App（desktop/build.sh）：app = 本机架构的 build/gerdr.app；dmg = mac 通用安装包；win = Windows 安装包。
+# 外壳为什么是 Electron：docs/dev/WHY-ELECTRON.md
+app:
+	./desktop/build.sh mac-dir $(VERSION)
 
-dmg: app
-	./mac/dmg.sh $(VERSION)
+dmg:
+	./desktop/build.sh mac $(VERSION)
+
+win:
+	./desktop/build.sh win $(VERSION)
+
+# 重画图标（desktop/res/icon.png 入库，打包不需要 swift —— Windows 包在任何机器上都能打）
+icon:
+	swift desktop/icon.swift desktop/res/icon.png
 
 # 开发：界面直接用仓库里的 ui/（改了立刻热更新），数据放在单独的目录里，别和自己日常用的那份混。
 dev:

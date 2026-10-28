@@ -33,6 +33,8 @@ type Record struct {
 	UpdatedAt      int64             `json:"updatedAt"`
 	Mode           string            `json:"mode,omitempty"`
 	Config         map[string]string `json:"config,omitempty"`
+	// SyncedSize：gerdr 最后一次和 agent 的记录文件对齐时，那个文件有多大（catchUp）。比它大 = 别处接着聊过。
+	SyncedSize int64 `json:"syncedSize,omitempty"`
 }
 
 // 会话状态（给侧栏和提示用）。
@@ -48,19 +50,21 @@ type Session struct {
 	h  *Hub
 	lf logFile
 
-	mu       sync.Mutex
-	rec      Record
-	events   []*Event
-	attached bool // agent 那边接上了（gerdr 重启后要先 ResumeSession）
-	status   string
-	running  bool
-	lastErr  string
-	modes    *acp.SessionModeState
-	config   []acp.SessionConfigOption
-	commands []acp.AvailableCommand
-	pending  map[string]*pending
-	turnMsg  string // 正在跑的那一轮是哪条消息开的
-	auto     bool   // 正在跑的这一轮是 agent 自己开的（后台任务跑完了在汇报），没有 runTurn 在等
+	mu         sync.Mutex
+	rec        Record
+	events     []*Event
+	attached   bool // agent 那边接上了（gerdr 重启后要先 ResumeSession）
+	status     string
+	running    bool
+	catchingUp bool
+	lastCatch  time.Time // 正在从 agent 记录重新载入（CatchUp / Reload），别重入
+	lastErr    string
+	modes      *acp.SessionModeState
+	config     []acp.SessionConfigOption
+	commands   []acp.AvailableCommand
+	pending    map[string]*pending
+	turnMsg    string // 正在跑的那一轮是哪条消息开的
+	auto       bool   // 正在跑的这一轮是 agent 自己开的（后台任务跑完了在汇报），没有 runTurn 在等
 	// autoNext：「agent 自己开了一轮」先于上一轮 session/prompt 的响应到了（两条路，顺序不保证）。
 	// runTurn 收尾时看到它就直接接上一个 auto 的轮次，不然这一轮在界面上是「闲着」。
 	autoNext    bool
@@ -142,6 +146,7 @@ type Summary struct {
 	Turn     *TurnInfo                 `json:"turn,omitempty"`    // 在跑的这一轮（没在跑是 nil）
 	Context  *ContextInfo              `json:"context,omitempty"` // 上下文用量（agent 报过才有）
 	Base     string                    `json:"base,omitempty"`    // agent 实际是哪一种（变体的底子；界面上按它认图标和功能）
+	Branch   string                    `json:"branch,omitempty"`  // cwd 所在 git 仓库的当前分支（pane 顶部）
 }
 
 type ContextInfo struct {
@@ -182,7 +187,11 @@ func (s *Session) Summary() Summary {
 			cmds = s.h.cmds.get(s.h.Base(s.rec.Agent)) // 新建的变体还没报过：先借原版的
 		}
 	}
-	return Summary{Record: s.rec, Status: s.status, Error: s.lastErr, Modes: s.modes, Config: s.config, Commands: cmds, Pending: len(s.pending), LastSeq: last, Tasks: s.tasks, Turn: s.turnInfoLocked(), Context: s.contextLocked(), Base: s.h.Base(s.rec.Agent)}
+	modes, config := s.modes, s.config
+	if (modes == nil || len(config) == 0) && s.h.opts != nil {
+		modes, config = s.optsFallbackLocked(modes, config)
+	}
+	return Summary{Record: s.rec, Status: s.status, Error: s.lastErr, Modes: modes, Config: config, Commands: cmds, Pending: len(s.pending), LastSeq: last, Tasks: s.tasks, Turn: s.turnInfoLocked(), Context: s.contextLocked(), Base: s.h.Base(s.rec.Agent), Branch: gitBranch(s.rec.Cwd)}
 }
 
 func (s *Session) ID() string { return s.rec.ID }
@@ -306,6 +315,7 @@ func (s *Session) ensureAttached(ctx context.Context) (*agenthost.Host, error) {
 				s.mu.Lock()
 				s.attached = true
 				s.modes, s.config = nres.Modes, nres.ConfigOptions
+				s.h.opts.set(s.rec.Agent, s.modes, s.config)
 				s.mu.Unlock()
 				s.syncRecFromState()
 				s.h.broadcastSession(s)
@@ -317,6 +327,7 @@ func (s *Session) ensureAttached(ctx context.Context) (*agenthost.Host, error) {
 	s.mu.Lock()
 	s.attached = true
 	s.modes, s.config = res.Modes, res.ConfigOptions
+	s.h.opts.set(s.rec.Agent, s.modes, s.config)
 	s.mu.Unlock()
 	s.syncRecFromState()
 	s.h.broadcastSession(s)
@@ -335,6 +346,35 @@ func (s *Session) hasUserMessages() bool {
 }
 
 // syncRecFromState 把当前模式 / 配置记进 Record（下次接回时原样带上）。
+// optsFallbackLocked：还没接上 agent 的会话，下拉框先按这类 agent 上次报的选项画（optCache），当前值用自己的记录。
+func (s *Session) optsFallbackLocked(modes *acp.SessionModeState, config []acp.SessionConfigOption) (*acp.SessionModeState, []acp.SessionConfigOption) {
+	o, ok := s.h.opts.get(s.rec.Agent)
+	if !ok {
+		o, ok = s.h.opts.get(s.h.Base(s.rec.Agent))
+	}
+	if !ok {
+		return modes, config
+	}
+	if modes == nil && o.Modes != nil {
+		modes = o.Modes
+		if s.rec.Mode != "" {
+			modes.CurrentModeId = acp.SessionModeId(s.rec.Mode)
+		}
+	}
+	if len(config) == 0 {
+		config = o.Config
+		for _, c := range config {
+			if c.Select != nil {
+				// 空值 = 没手选过、用 agent 的默认（旧版存下的「auto」就是空），别拿它盖掉缓存里那个实际值
+				if v, ok := s.rec.Config[string(c.Select.Id)]; ok && v != "" {
+					c.Select.CurrentValue = acp.SessionConfigValueId(v)
+				}
+			}
+		}
+	}
+	return modes, config
+}
+
 func (s *Session) syncRecFromState() {
 	s.mu.Lock()
 	if s.modes != nil {
@@ -397,7 +437,16 @@ func (s *Session) SendFrom(ctx context.Context, content []acp.ContentBlock, clie
 	}
 	c, err := s.ensureAttached(ctx)
 	if err != nil {
+		// codex：别处（终端 / Codex App）开着这个 thread 时接不回来 —— 它自己防住了分叉，但光秃秃一句英文报错人不知道怎么办
+		if strings.Contains(err.Error(), "active writer") {
+			return SendResult{}, &HeldError{Holders: []acpx.Holder{{Name: "另一个 Codex（终端或 Codex App）"}}}
+		}
 		return SendResult{}, err
+	}
+	// 别处（herdr / 终端里的交互式 claude）还开着这个会话：先不发，让人挑（另起一份 / 关掉那边）。
+	// 在记下这条消息之前拦 —— 处理完 client 拿同一个 id 重发，对话里不会多出一条。
+	if hs := s.heldElsewhere(ctx, c); len(hs) > 0 {
+		return SendResult{}, &HeldError{Holders: hs}
 	}
 	raw := make([]json.RawMessage, 0, len(content))
 	for _, b := range content {
@@ -530,6 +579,7 @@ func (s *Session) runTurn(c *agenthost.Host, agentSID, msgID string, content []a
 	}
 	s.running = false
 	s.turnMsg = ""
+	go s.markSynced(10 * time.Second) // 这一轮是我们写的：记下文件现在多大（claude 在一轮之后还会补写标题之类，等一会儿再量）
 	if err != nil {
 		s.lastErr = ev.Error
 	}
@@ -660,6 +710,7 @@ func (s *Session) onUpdate(u acp.SessionUpdate) {
 	case u.ConfigOptionUpdate != nil:
 		s.mu.Lock()
 		s.config = u.ConfigOptionUpdate.ConfigOptions
+		s.h.opts.set(s.rec.Agent, s.modes, s.config)
 		s.mu.Unlock()
 		s.syncRecFromState()
 		s.h.broadcastSession(s)
@@ -671,6 +722,13 @@ func (s *Session) onUpdate(u acp.SessionUpdate) {
 		if g, ok := u.SessionInfoUpdate.Meta["gerdr"].(map[string]any); ok {
 			if n, ok := g["notice"].(string); ok && n != "" {
 				s.emit(&Event{Kind: EvNotice, Level: "warn", Text: n})
+			}
+			// agent 那边换了会话 id（claude 的 /clear）：之后回退、恢复都按新的来；对话里留一条分隔线
+			if id, ok := g["sessionId"].(string); ok && id != "" {
+				s.h.rekey(s, id)
+				if c, _ := g["cleared"].(bool); c {
+					s.emit(&Event{Kind: EvNotice, Level: "clear", Text: "上下文已清空"})
+				}
 			}
 		}
 		if t := u.SessionInfoUpdate.Title; t != nil && *t != "" {
@@ -916,6 +974,8 @@ func (s *Session) SetMode(ctx context.Context, mode string) error {
 	if err != nil {
 		return err
 	}
+	// claude 会把模式 / 模型的变化写进记录文件：是我们改的，别让下次打开时当成「别处聊过」（CatchUp）
+	defer func() { go s.markSynced(2 * time.Second) }()
 	if _, err := c.Conn.SetSessionMode(ctx, acp.SetSessionModeRequest{SessionId: acp.SessionId(s.rec.AgentSessionID), ModeId: acp.SessionModeId(mode)}); err != nil {
 		return err
 	}
@@ -935,6 +995,8 @@ func (s *Session) SetConfig(ctx context.Context, id, value string) error {
 	if err != nil {
 		return err
 	}
+	// claude 会把模式 / 模型的变化写进记录文件：是我们改的，别让下次打开时当成「别处聊过」（CatchUp）
+	defer func() { go s.markSynced(2 * time.Second) }()
 	res, err := c.Conn.SetSessionConfigOption(ctx, acp.SetSessionConfigOptionRequest{ValueId: &acp.SetSessionConfigOptionValueId{
 		SessionId: acp.SessionId(s.rec.AgentSessionID), ConfigId: acp.SessionConfigId(id), Value: acp.SessionConfigValueId(value),
 	}})
@@ -944,6 +1006,7 @@ func (s *Session) SetConfig(ctx context.Context, id, value string) error {
 	s.mu.Lock()
 	if len(res.ConfigOptions) > 0 {
 		s.config = res.ConfigOptions
+		s.h.opts.set(s.rec.Agent, s.modes, s.config)
 	}
 	s.mu.Unlock()
 	s.syncRecFromState()
@@ -1190,6 +1253,13 @@ func (s *Session) Rewind(ctx context.Context, messageID string, restoreFiles boo
 		return RewindResult{}, errors.New("找不到这条消息")
 	}
 	target := s.events[idx]
+	// /clear 之后 claude 换了一个新会话，这条之前的消息都在旧会话里 —— 回不去
+	for _, e := range s.events[idx:] {
+		if e.Kind == EvNotice && e.Level == "clear" {
+			s.mu.Unlock()
+			return RewindResult{}, errors.New("这条消息在 /clear 之前：清空之后只能回退到清空以后发的消息")
+		}
+	}
 	if target.Steer {
 		s.mu.Unlock()
 		return RewindResult{}, errors.New("插话的消息不能单独回退，回退它所在那一轮开头的那条")
@@ -1266,4 +1336,185 @@ func (s *Session) close(ctx context.Context) {
 			_, _ = c.Conn.CloseSession(ctx, acp.CloseSessionRequest{SessionId: acp.SessionId(sid)})
 		}
 	}
+}
+
+// HeldError：这个会话正被别的进程开着（见 acpx.MethodHolders）。server 把它回成 409 + holders，界面弹框让人挑。
+type HeldError struct{ Holders []acpx.Holder }
+
+func (e *HeldError) Error() string {
+	h := e.Holders[0]
+	if h.Pid == 0 {
+		return "这个会话正在" + h.Name + "里开着，这里接不上"
+	}
+	where := "别的终端"
+	if h.Name != "" {
+		where = "「" + h.Name + "」"
+	}
+	return fmt.Sprintf("这个会话还在%s里开着（claude，pid %d）。两边同时写会分叉，谁也看不见对方说的话", where, h.Pid)
+}
+
+func (s *Session) heldElsewhere(ctx context.Context, c *agenthost.Host) []acpx.Holder {
+	s.mu.Lock()
+	sid := s.rec.AgentSessionID
+	s.mu.Unlock()
+	res, err := agenthost.Call[acpx.HoldersResponse](ctx, c, acpx.MethodHolders, acpx.HoldersRequest{SessionId: acp.SessionId(sid)})
+	if err != nil {
+		return nil // 不支持的 agent（codex、外部 agent）= 没法判断，照常发
+	}
+	return res.Holders
+}
+
+// Takeover：处理「别处开着」。fork 之后 agent 那边是一个新会话（rekey）；对话日志在 gerdr 这边照旧连着。
+func (s *Session) Takeover(ctx context.Context, action string) error {
+	// 不先接回会话：codex 那种情况正是接不回来（别处占着），直接拿 agent 会话 id 去 fork
+	c, err := s.h.host(ctx, s.rec.Agent)
+	if err != nil {
+		return err
+	}
+	s.mu.Lock()
+	sid := s.rec.AgentSessionID
+	s.mu.Unlock()
+	res, err := agenthost.Call[acpx.TakeoverResponse](ctx, c, acpx.MethodTakeover, acpx.TakeoverRequest{SessionId: acp.SessionId(sid), Action: action})
+	if err != nil {
+		return fmt.Errorf("处理失败：%s", errText(err))
+	}
+	if res.SessionId != "" && string(res.SessionId) != sid {
+		s.h.rekey(s, string(res.SessionId))
+		s.emit(&Event{Kind: EvNotice, Level: "info", Text: "另起了一份接着聊：从这里往下只在 gerdr 里，别处那个会话不受影响"})
+	}
+	return nil
+}
+
+// ---- 追上别处的进度 ----
+//
+// gerdr 的对话日志只记它自己经手的事（以及导入那一刻从 agent 记录里重放的）。会话在别处（herdr / 终端里的 claude）
+// 接着聊过，agent 的记录文件长了，gerdr 这边却还停在原地 —— 人看到的是一段过时的对话（用户报的「追不上 herdr」）。
+// 打开会话时（client 读日志那一下）查一次：文件比上次对齐时大、而我们这边没在跑它，就从记录整份重新载入。
+
+func (s *Session) transcriptStat(ctx context.Context) (acpx.TranscriptStatResponse, bool) {
+	c, err := s.h.host(ctx, s.rec.Agent)
+	if err != nil {
+		return acpx.TranscriptStatResponse{}, false
+	}
+	s.mu.Lock()
+	sid, cwd := s.rec.AgentSessionID, s.rec.Cwd
+	s.mu.Unlock()
+	st, err := agenthost.Call[acpx.TranscriptStatResponse](ctx, c, acpx.MethodTranscriptStat, acpx.TranscriptStatRequest{SessionId: acp.SessionId(sid), Cwd: cwd})
+	return st, err == nil
+}
+
+func (s *Session) markSynced(delay time.Duration) {
+	time.Sleep(delay)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if st, ok := s.transcriptStat(ctx); ok {
+		s.mu.Lock()
+		changed := s.rec.SyncedSize != st.Size
+		s.rec.SyncedSize = st.Size
+		s.mu.Unlock()
+		if changed {
+			s.h.saveIndex()
+		}
+	}
+}
+
+// CatchUp：别处接着聊过就重新载入。打开会话时调（异步，不挡读日志）。
+func (s *Session) CatchUp(ctx context.Context) {
+	s.mu.Lock()
+	// 同一个会话半分钟内只查一次：切 tab、几台设备同时开着，都会触发
+	busy := s.running || s.catchingUp || time.Since(s.lastCatch) < 30*time.Second
+	if !busy {
+		s.lastCatch = time.Now()
+	}
+	synced := s.rec.SyncedSize
+	var lastTS int64
+	if n := len(s.events); n > 0 {
+		lastTS = s.events[n-1].TS
+	}
+	s.mu.Unlock()
+	if busy {
+		return
+	}
+	st, ok := s.transcriptStat(ctx)
+	if !ok {
+		return // codex / 外部 agent：没这个口，不管
+	}
+	s.h.log.Debug("catch up", "session", s.rec.ID, "size", st.Size, "synced", synced, "mtime", st.ModTime, "last", lastTS)
+	stale, sure := false, synced > 0
+	if sure {
+		stale = st.Size > synced
+	} else {
+		// 老会话（还没记过大小）：文件明显比我们最后一条日志新，才算别处动过（留一分钟余量：claude 一轮之后还会补写几行）
+		stale = st.ModTime > lastTS+60_000
+	}
+	if !stale {
+		if synced == 0 {
+			s.mu.Lock()
+			s.rec.SyncedSize = st.Size
+			s.mu.Unlock()
+			s.h.saveIndex()
+		}
+		return
+	}
+	if err := s.Reload(ctx); err != nil {
+		s.h.log.Warn("catch up", "session", s.rec.ID, "err", err)
+		return
+	}
+	// 老会话（没记过大小）是按修改时间猜的：切过模式之类也会动文件，猜错了说「别处聊过」是误导，只悄悄同步
+	if sure {
+		s.emit(&Event{Kind: EvNotice, Level: "info", Text: "这个会话在别处（herdr / 终端）接着聊过，已经从 agent 自己的记录同步到最新"})
+	}
+}
+
+// Reload：丢掉 gerdr 这边的对话日志，从 agent 的记录整份重放（LoadSession）。
+func (s *Session) Reload(ctx context.Context) error {
+	s.mu.Lock()
+	if s.running {
+		s.mu.Unlock()
+		return errors.New("先停下这一轮再重新载入")
+	}
+	if s.catchingUp {
+		s.mu.Unlock()
+		return nil
+	}
+	s.catchingUp = true
+	s.mu.Unlock()
+	defer func() {
+		s.mu.Lock()
+		s.catchingUp = false
+		s.mu.Unlock()
+	}()
+	c, err := s.h.host(ctx, s.rec.Agent)
+	if err != nil {
+		return err
+	}
+	s.mu.Lock()
+	s.events = nil
+	s.lastErr = ""
+	rec := s.rec
+	s.mu.Unlock()
+	if err := s.lf.rewrite(nil); err != nil {
+		s.h.log.Warn("rewrite log", "err", err)
+	}
+	s.h.broadcastEvents(rec.ID, []*Event{}, true)
+	meta := map[string]any{}
+	if rec.Mode != "" {
+		meta["mode"] = rec.Mode
+	}
+	res, err := c.Conn.LoadSession(ctx, acp.LoadSessionRequest{SessionId: acp.SessionId(rec.AgentSessionID), Cwd: rec.Cwd, McpServers: []acp.McpServer{}, Meta: acpx.Meta(meta)})
+	if err != nil {
+		return err
+	}
+	s.mu.Lock()
+	s.attached = true
+	if res.Modes != nil {
+		s.modes = res.Modes
+	}
+	if len(res.ConfigOptions) > 0 {
+		s.config = res.ConfigOptions
+	}
+	s.mu.Unlock()
+	go s.markSynced(0)
+	s.setStatus()
+	return nil
 }

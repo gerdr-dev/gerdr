@@ -44,14 +44,16 @@ func TestSubReport(t *testing.T) {
 	}
 }
 
-func TestCustomTitle(t *testing.T) {
+func TestTitles(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "s.jsonl")
 	_ = os.WriteFile(p, []byte(`{"type":"user","message":{"role":"user","content":"hi"}}
 {"type":"custom-title","customTitle":"first","sessionId":"x"}
+{"type":"ai-title","aiTitle":"auto 1","sessionId":"x"}
 {"type":"custom-title","customTitle":"second","sessionId":"x"}
+{"type":"ai-title","aiTitle":"auto 2","sessionId":"x"}
 `), 0o644)
-	if got := customTitle(p); got != "second" {
-		t.Fatalf("%q", got)
+	if c, ai := titles(p); c != "second" || ai != "auto 2" {
+		t.Fatalf("%q %q", c, ai)
 	}
 }
 

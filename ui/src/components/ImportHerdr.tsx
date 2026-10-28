@@ -55,8 +55,9 @@ export function ImportHerdr({ open }: { open: boolean }) {
             按 herdr 的工作空间、tab、分屏建出来，每个 agent 接上它的会话（历史全在，接着聊）。普通终端 pane 跳过。
           </DialogDescription>
         </DialogHeader>
-        {/* 别给 min-h-0：弹窗是网格 + 限高，min-h-0 的这一行会被压到只剩一行高（用户报的「导入的 UI 烂了」） */}
-        <div className="min-w-0 space-y-2 overflow-auto" style={{ maxHeight: "50vh" }}>
+        {/* 高度要写死：弹窗是网格 + 限高，这一行可滚动，WebKit（mac App）里它的自动最小高度按 0 算，整个列表被压成一条缝
+            （Chrome 里正常，所以光在浏览器里验看不出来；用户报了两次「导入的 UI 烂了」）。 */}
+        <div className="min-w-0 shrink-0 space-y-2 overflow-auto" style={{ height: "min(50vh, 440px)" }}>
           {err && <div className="text-[13px] text-bad">{err}</div>}
           {!list && !err && (
             <div className="flex items-center gap-2 text-[13px] text-muted-foreground">

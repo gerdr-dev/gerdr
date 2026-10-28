@@ -149,6 +149,7 @@ type Hub struct {
 	log   *slog.Logger
 	snaps *snapshot.Store
 	cmds  *cmdCache
+	opts  *optCache
 
 	mu       sync.Mutex
 	hosts    map[string]*agenthost.Host // agent id → 连接（懒起）
@@ -179,6 +180,7 @@ func New(opt Options) (*Hub, error) {
 	}
 	h.defs = ValidAgentDefs(opt.ExtraAgents)
 	h.cmds = newCmdCache(opt.Dir)
+	h.opts = newOptCache(opt.Dir)
 	if err := h.load(); err != nil {
 		return nil, err
 	}
@@ -521,7 +523,8 @@ func (h *Hub) Create(ctx context.Context, o CreateOptions) (*Session, error) {
 	for k, v := range o.Config {
 		meta[k] = v
 	}
-	rec := Record{ID: newID(), Agent: o.Agent, Cwd: cwd, CreatedAt: now(), UpdatedAt: now(), Title: o.Title, Mode: o.Mode, Config: o.Config}
+	// 新建时给的标题是人起的（`gerdr session new --title`），算手动命名、不被自动标题盖掉；导入时带进来的是原会话的标题，照旧可以被更新
+	rec := Record{ID: newID(), Agent: o.Agent, Cwd: cwd, CreatedAt: now(), UpdatedAt: now(), Title: o.Title, CustomTitle: o.Title != "" && o.Import == "", Mode: o.Mode, Config: o.Config}
 	s := newSession(h, rec)
 
 	if o.Import != "" {
@@ -537,6 +540,7 @@ func (h *Hub) Create(ctx context.Context, o CreateOptions) (*Session, error) {
 		s.mu.Lock()
 		s.attached = true
 		s.modes, s.config = res.Modes, res.ConfigOptions
+		h.opts.set(o.Agent, res.Modes, res.ConfigOptions)
 		s.mu.Unlock()
 	} else {
 		res, err := c.Conn.NewSession(ctx, acp.NewSessionRequest{Cwd: cwd, McpServers: []acp.McpServer{}, Meta: acpx.Meta(meta)})
@@ -546,6 +550,7 @@ func (h *Hub) Create(ctx context.Context, o CreateOptions) (*Session, error) {
 		s.rec.AgentSessionID = string(res.SessionId)
 		s.attached = true
 		s.modes, s.config = res.Modes, res.ConfigOptions
+		h.opts.set(o.Agent, res.Modes, res.ConfigOptions)
 		h.register(s)
 	}
 	s.syncRecFromState()

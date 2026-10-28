@@ -211,8 +211,12 @@ func (s *session) onSystem(ctx context.Context, m map[string]json.RawMessage, ra
 	case "init":
 		var init struct {
 			PermissionMode string `json:"permissionMode"`
+			SessionID      string `json:"session_id"`
 		}
 		_ = json.Unmarshal(raw, &init)
+		if init.SessionID != "" {
+			s.adoptID(ctx, init.SessionID)
+		}
 		s.mu.Lock()
 		changed := init.PermissionMode != "" && init.PermissionMode != s.mode
 		if changed {

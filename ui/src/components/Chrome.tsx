@@ -67,6 +67,13 @@ export function TabBar() {
                   }}
                   onClick={() => setLayout((l) => ({ ...l, workspaces: l.workspaces.map((w) => (w.id === ws.id ? { ...w, activeTab: t.id, lastTab: w.activeTab === t.id ? w.lastTab : w.activeTab } : w)) }))}
                   onDoubleClick={() => set({ dialog: { kind: "rename", target: "tab", id: t.id, value: t.name ?? tabName(t) } })}
+                  // 中键关（照浏览器）。mousedown 里先拦掉，不然 mac 上中键按下会进「自动滚动」
+                  onMouseDown={(e) => e.button === 1 && e.preventDefault()}
+                  onAuxClick={(e) => {
+                    if (e.button !== 1) return;
+                    e.preventDefault();
+                    closeTab(t.id);
+                  }}
                   className={cn(
                     "group/tab flex h-7 max-w-52 shrink-0 cursor-default items-center gap-1.5 rounded-md px-2.5 text-[12px] select-none",
                     active ? "bg-background text-foreground shadow-xs ring-1 ring-border" : "text-muted-foreground hover:bg-accent/60",
@@ -75,8 +82,10 @@ export function TabBar() {
                   {agent && <AgentIcon agent={agent} className="size-3.5" />}
                   <span className="truncate">{label}</span>
                   <StatusDot status={st.status} unread={st.unread} />
+                  {/* 关闭键一直占着位置（照 Chrome）：当前 tab 一直显示，别的 hover 才显示。原来是 hover 时才插进来，
+                      tab 当场变宽、后面的 tab 全跟着挪 —— 鼠标划过 tab 栏就是一路闪动（用户报的） */}
                   <button
-                    className="-mr-1 hidden rounded p-0.5 hover:bg-muted group-hover/tab:block"
+                    className={cn("-mr-1 rounded p-0.5 hover:bg-muted", active ? "visible" : "invisible group-hover/tab:visible")}
                     onClick={(e) => {
                       e.stopPropagation();
                       closeTab(t.id);

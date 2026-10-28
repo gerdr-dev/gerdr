@@ -1,0 +1,62 @@
+{
+  "name": "gerdr-desktop",
+  "productName": "gerdr",
+  "version": "0.1.0",
+  "description": "gerdr 的桌面外壳（Electron）：起后端、开一个窗口，界面全在网页里",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder"
+  },
+  "devDependencies": {
+    "electron": "44.7.1",
+    "electron-builder": "26.17.0"
+  },
+  "build": {
+    "appId": "io.github.zbysir.gerdr",
+    "productName": "gerdr",
+    "copyright": "gerdr",
+    "directories": {
+      "output": "dist",
+      "buildResources": "res"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "bin/${os}",
+        "to": ".",
+        "filter": [
+          "gerdr",
+          "gerdr.exe"
+        ]
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": [
+        "dmg"
+      ],
+      "icon": "res/icon.png",
+      "identity": null,
+      "extendInfo": {
+        "NSUserNotificationAlertStyle": "banner"
+      },
+      "x64ArchFiles": "Contents/Resources/gerdr"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "res/icon.png"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false
+    }
+  }
+}

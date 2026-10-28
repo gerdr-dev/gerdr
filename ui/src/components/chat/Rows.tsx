@@ -1,3 +1,4 @@
+import { ChevronDown, Loader2, Wrench } from "lucide-react";
 import { memo, type ReactNode } from "react";
 import { StatusLine } from "./StatusLine";
 import type { GMessage, GPart, ToolPart } from "@/lib/transcript";
@@ -11,39 +12,130 @@ import { childTools, MessageView, partVisible, renderPart } from "./MessageView"
 // 子 agent 的工具调用挂在父调用里面（父调用那一行负责画它们），不单独成行。
 
 export type Row =
-  | { key: string; kind: "user"; msg: GMessage; first: true }
+  // prev / next：前后紧挨着也是用户消息（连发几句、中途插话）—— 气泡叠成一摞，相邻的角收小
+  | { key: string; kind: "user"; msg: GMessage; first: true; prev?: boolean; next?: boolean }
   | { key: string; kind: "part"; part: GPart; i: number; msgId: string; kids?: ToolPart[]; first: boolean; streaming: boolean; live: boolean }
-  | { key: string; kind: "working"; empty: boolean; first: boolean };
+  | { key: string; kind: "working"; empty: boolean; first: boolean }
+  | { key: string; kind: "group"; first: boolean; open: boolean; summary: string; failed: number; busy: boolean }
+  | { key: string; kind: "cleared"; n: number; first: true };
 
-/** 把整份对话拍平成行。live：最后一条助手消息（还在跑的那一轮里的东西：流式、「工作中…」、快捷回复可点）。 */
-export function buildRows(msgs: GMessage[], running: boolean): Row[] {
+const isClear = (p: GPart) => p.type === "data-notice" && (p as any).data?.level === "clear";
+
+// 连续的工具调用 / 思考折成一组（照 Claude 桌面版）：一轮里常常是几十行 `cd … && grep …`，夹着几行「思考」，
+// 真正要读的那几段话被挤得找不到。改文件的不折（默认展开看 diff 是它的主要用途），带子 agent 的不折（有「查看对话」）。
+function foldable(p: GPart, kids?: ToolPart[]): boolean {
+  if (p.type === "reasoning") return true;
+  if (p.type !== "dynamic-tool" || kids?.length) return false;
+  const c = (p as ToolPart).toolMetadata?.content ?? [];
+  return !c.some((x: any) => x.type === "diff" || x._meta?.gerdr?.unifiedDiff || x.content?._meta?.gerdr?.unifiedDiff);
+}
+
+const KIND_TEXT: Record<string, [string, string]> = {
+  execute: ["跑了", "条命令"],
+  read: ["读了", "个文件"],
+  search: ["搜了", "次"],
+  fetch: ["抓了", "个网页"],
+};
+
+/** 「跑了 5 条命令、读了 2 个文件，思考 3 次」 */
+function summarize(parts: GPart[]): { summary: string; failed: number } {
+  const n: Record<string, number> = {};
+  let think = 0,
+    failed = 0;
+  for (const p of parts) {
+    if (p.type === "reasoning") {
+      think++;
+      continue;
+    }
+    const tp = p as ToolPart;
+    const k = KIND_TEXT[tp.toolMetadata?.kind ?? ""] ? tp.toolMetadata!.kind : "other";
+    n[k] = (n[k] ?? 0) + 1;
+    if (tp.state === "output-error") failed++;
+  }
+  const bits = Object.keys(KIND_TEXT)
+    .filter((k) => n[k])
+    .map((k) => `${KIND_TEXT[k][0]} ${n[k]} ${KIND_TEXT[k][1]}`);
+  if (n.other) bits.push(`调了 ${n.other} 次工具`);
+  let summary = bits.join("、");
+  if (think) summary += `${summary ? "，" : ""}思考 ${think} 次`;
+  return { summary, failed };
+}
+
+/**
+ * 把整份对话拍平成行。live：最后一条助手消息（还在跑的那一轮里的东西：流式、「工作中…」、快捷回复可点）。
+ * openGroups：展开了的工具组（key 是组头那一行的 key）。展开时组里每一块还是单独一行 —— 一组几百个调用也照样虚拟化。
+ */
+export function buildRows(msgs: GMessage[], running: boolean, showCleared = false, openGroups: Record<string, boolean> = {}): Row[] {
   const rows: Row[] = [];
   const lastIdx = msgs.length - 1;
+  // /clear 之前的对话默认收起（照 Claude Code：清空就是清屏），顶上留一行「展开」—— 记录还在，只是不挡眼
+  let cut = -1,
+    cutPart = -1;
+  if (!showCleared) {
+    for (let mi = lastIdx; mi >= 0 && cut < 0; mi--) {
+      const ps = msgs[mi].parts;
+      for (let pi = ps.length - 1; pi >= 0; pi--)
+        if (isClear(ps[pi])) {
+          [cut, cutPart] = [mi, pi];
+          break;
+        }
+    }
+    const n = cut > 0 ? msgs.slice(0, cut).filter((m) => m.role === "user").length : 0; // cut = -1 时 slice(0,-1) 是「除了最后一条」，别算进去
+    if (n > 0) rows.push({ key: "cleared", kind: "cleared", n, first: true });
+  }
   msgs.forEach((m, mi) => {
+    if (mi < cut) return;
     if (m.role === "user") {
-      rows.push({ key: m.id, kind: "user", msg: m, first: true });
+      const last = rows[rows.length - 1];
+      const prev = last?.kind === "user";
+      if (prev) rows[rows.length - 1] = { ...last, next: true };
+      rows.push({ key: m.id, kind: "user", msg: m, first: true, prev });
       return;
     }
     const live = mi === lastIdx;
     const children = childTools(m);
     const lastPart = m.parts.length - 1;
-    let first = true;
+    const parts: Extract<Row, { kind: "part" }>[] = [];
     m.parts.forEach((p, i) => {
+      if (mi === cut && i < cutPart) return;
       if (!partVisible(p, children)) return;
       const tp = p.type === "dynamic-tool" ? (p as ToolPart) : undefined;
-      rows.push({
+      parts.push({
         key: `${m.id}:${tp ? tp.toolCallId : i}`,
         kind: "part",
         part: p,
         i,
         msgId: m.id,
         kids: tp ? children.get(tp.toolCallId) : undefined,
-        first,
+        first: false,
         streaming: live && running && i === lastPart,
         live,
       });
-      first = false;
     });
+    let first = true;
+    const push = (r: Extract<Row, { kind: "part" }>) => {
+      rows.push({ ...r, first });
+      first = false;
+    };
+    for (let a = 0; a < parts.length; ) {
+      let b = a;
+      while (b < parts.length && foldable(parts[b].part, parts[b].kids)) b++;
+      if (b - a < 2) {
+        push(parts[a]);
+        a = Math.max(b, a + 1);
+        continue;
+      }
+      const run = parts.slice(a, b);
+      const key = `${run[0].key}:group`;
+      const open = !!openGroups[key];
+      // 还在跑、而且这组就在最底下：收着也把最新那一块露出来，看得到它正在干什么
+      const busy = live && running && b === parts.length;
+      rows.push({ key, kind: "group", first, open, busy, ...summarize(run.map((r) => r.part)) });
+      first = false;
+      if (open) run.forEach(push);
+      else if (busy) push(run[run.length - 1]);
+      a = b;
+    }
     // 在跑的这一轮：最底下一行状态（照 Claude Code：转圈 + 动词 + 用时 + token 数）
     if (live && running) rows.push({ key: `${m.id}:working`, kind: "working", empty: first, first });
   });
@@ -56,11 +148,29 @@ export type RowEnv = {
   onRewind?: (m: GMessage) => void;
   onEdit?: (m: GMessage) => void;
   onQuickReply: (s: string) => void;
+  onShowCleared?: () => void;
+  onToggleGroup?: (key: string) => void;
 };
 
-function Frame({ first, children }: { first: boolean; children: ReactNode }) {
-  // 消息之间的间距在一条消息的第一行上（pt-5），同一条消息里各块之间 pt-2：和原来一整条消息时的排版一样
-  return <div className={cn("mx-auto w-full max-w-[860px] px-4", first ? "pt-5" : "pt-2")}>{children}</div>;
+/** 一组折起来的工具调用 / 思考：一行汇总，点开逐行列出来（照 Astryx ChatToolCalls 的组头：扳手 + 数量 + 箭头）。 */
+function GroupHeader({ row, onToggle }: { row: Extract<Row, { kind: "group" }>; onToggle?: (key: string) => void }) {
+  return (
+    <button
+      className="-ml-1.5 flex w-[calc(100%+0.375rem)] min-w-0 items-center gap-2 rounded-md px-1.5 py-[3px] text-left text-[13px] text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+      onClick={() => onToggle?.(row.key)}
+    >
+      {row.busy ? <Loader2 className="size-3.5 shrink-0 animate-spin" /> : <Wrench className="size-3.5 shrink-0" />}
+      <span className="min-w-0 truncate">{row.summary}</span>
+      {row.failed > 0 && <span className="shrink-0 text-[11px] text-bad">{row.failed} 个失败</span>}
+      <ChevronDown className={cn("size-3.5 shrink-0 opacity-60 transition-transform", row.open && "rotate-180")} />
+    </button>
+  );
+}
+
+function Frame({ first, tight, stack, children }: { first: boolean; tight?: boolean; stack?: boolean; children: ReactNode }) {
+  // 消息之间的间距在一条消息的第一行上（pt-5），同一条消息里各块之间 pt-2。
+  // 工具调用 / 思考是一行小字、自己带 py-1，连着好几个时再加 pt-2 就稀稀拉拉的，像终端那样挨紧一点（tight）。
+  return <div className={cn("mx-auto w-full max-w-[860px] px-4", stack ? "pt-1" : first ? "pt-5" : tight ? "pt-0.5" : "pt-2")}>{children}</div>;
 }
 
 const sameKids = (a?: ToolPart[], b?: ToolPart[]) => a === b || (!!a && !!b && a.length === b.length && a.every((x, i) => x === b[i]));
@@ -73,8 +183,34 @@ export const RowView = memo(
   function RowView({ row, env }: { row: Row; env: RowEnv }) {
     if (row.kind === "user") {
       return (
+        <Frame first stack={row.prev}>
+          <MessageView
+            msg={row.msg}
+            sessionId={env.sessionId}
+            live={false}
+            running={env.running}
+            onRewind={env.onRewind}
+            onEdit={env.onEdit}
+            onQuickReply={env.onQuickReply}
+            stackPrev={row.prev}
+            stackNext={row.next}
+          />
+        </Frame>
+      );
+    }
+    if (row.kind === "cleared") {
+      return (
         <Frame first>
-          <MessageView msg={row.msg} sessionId={env.sessionId} live={false} running={env.running} onRewind={env.onRewind} onEdit={env.onEdit} onQuickReply={env.onQuickReply} />
+          <button className="w-full rounded-md py-1 text-center text-[12px] text-muted-foreground hover:bg-accent/50 hover:text-foreground" onClick={env.onShowCleared}>
+            展开 /clear 之前的对话（{row.n} 条）
+          </button>
+        </Frame>
+      );
+    }
+    if (row.kind === "group") {
+      return (
+        <Frame first={row.first} tight>
+          <GroupHeader row={row} onToggle={env.onToggleGroup} />
         </Frame>
       );
     }
@@ -88,7 +224,7 @@ export const RowView = memo(
     const children = new Map<string, ToolPart[]>();
     if (row.kids && row.part.type === "dynamic-tool") children.set((row.part as ToolPart).toolCallId, row.kids);
     return (
-      <Frame first={row.first}>
+      <Frame first={row.first} tight={row.part.type === "dynamic-tool" || row.part.type === "reasoning"}>
         <div className="flex w-full min-w-0 max-w-full flex-col text-[1em] text-foreground">
           {renderPart(row.part, row.i, {
             sessionId: env.sessionId,
@@ -112,8 +248,11 @@ export const RowView = memo(
     const x = a.row,
       y = b.row;
     if (x.kind !== y.kind || x.first !== y.first) return false;
-    if (x.kind === "user" && y.kind === "user") return x.msg === y.msg;
+    if (x.kind === "user" && y.kind === "user") return x.msg === y.msg && x.prev === y.prev && x.next === y.next;
     if (x.kind === "working" && y.kind === "working") return x.empty === y.empty;
+    if (x.kind === "group" && y.kind === "group")
+      return x.open === y.open && x.summary === y.summary && x.failed === y.failed && x.busy === y.busy && a.env.onToggleGroup === b.env.onToggleGroup;
+    if (x.kind === "cleared" && y.kind === "cleared") return x.n === y.n && a.env.onShowCleared === b.env.onShowCleared;
     if (x.kind === "part" && y.kind === "part") return x.part === y.part && x.streaming === y.streaming && x.live === y.live && sameKids(x.kids, y.kids);
     return false;
   },

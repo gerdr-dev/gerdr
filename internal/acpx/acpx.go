@@ -34,7 +34,52 @@ const (
 	// .claude/settings.local.json），给 auto 模式下被分类器拦掉的调用用 —— 规则从工具调用的
 	// _meta.gerdr.autoDenied 来。
 	MethodAllowRules = "_gerdr/allow_rules"
+	// MethodHolders：client → agent。这个会话此刻是不是还被别的进程开着（比如 herdr / 终端里的交互式 claude）。
+	// 两边同时 resume 同一个会话，各写各的，记录文件里就分了叉 —— 谁也看不见对方说过的话（用户报的）。
+	// hub 发消息前问一次，有人占着就先不发、让人挑（MethodTakeover）。不支持的 agent 回 method not found = 没人占。
+	MethodHolders = "_gerdr/holders"
+	// MethodTakeover：client → agent。处理「别处开着」：fork = 另起一份（带着全部历史复制出一个新会话，回新的 sessionId）；
+	// kill = 关掉占着它的那些进程（最多等几秒），之后照常接着聊。
+	MethodTakeover = "_gerdr/takeover"
+	// MethodTranscriptStat：client → agent。这个会话在 agent 自己的记录文件有多大、什么时候改的。gerdr 的对话日志只记它
+	// 自己经手的事；别处（herdr / 终端）接着聊过的话，记录文件会长、gerdr 这边不知道 —— 拿它判断要不要从记录重新载入。
+	MethodTranscriptStat = "_gerdr/transcript_stat"
 )
+
+type TranscriptStatRequest struct {
+	SessionId acp.SessionId `json:"sessionId"`
+	Cwd       string        `json:"cwd,omitempty"`
+}
+
+type TranscriptStatResponse struct {
+	Size    int64 `json:"size"`
+	ModTime int64 `json:"modTime"` // unix ms
+}
+
+type HoldersRequest struct {
+	SessionId acp.SessionId `json:"sessionId"`
+}
+
+// Holder：一个正开着这个会话的别的进程。
+type Holder struct {
+	Pid    int    `json:"pid"`
+	Name   string `json:"name,omitempty"`
+	Status string `json:"status,omitempty"` // idle / busy……（agent 自己报的）
+	Cwd    string `json:"cwd,omitempty"`
+}
+
+type HoldersResponse struct {
+	Holders []Holder `json:"holders"`
+}
+
+type TakeoverRequest struct {
+	SessionId acp.SessionId `json:"sessionId"`
+	Action    string        `json:"action"` // fork | kill
+}
+
+type TakeoverResponse struct {
+	SessionId acp.SessionId `json:"sessionId"` // fork 之后是新的
+}
 
 // AutoDeniedKey：工具调用的 _meta.gerdr.autoDenied = []string，这次调用被 auto 模式的分类器拒了，
 // 加上这些规则就能放行它。

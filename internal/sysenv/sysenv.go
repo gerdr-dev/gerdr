@@ -75,17 +75,28 @@ func mergePath(a, b string) string {
 
 // ChildEnv 是给 agent 子进程的环境：本进程的环境去掉会让它们认错身份的那几个。
 //
-//   - CLAUDECODE / CLAUDE_CODE_ENTRYPOINT / CLAUDE_CODE_SSE_PORT：gerdr 常常是在一个
-//     claude 会话里被起的，带着这几个的话子 claude 会以为自己是嵌套调用；
+//   - CLAUDECODE / CLAUDE_CODE_ENTRYPOINT / CLAUDE_CODE_SSE_PORT 和 claudeChildMarkers 那几个：gerdr 常常是在一个
+//     claude 会话里被起的（终端 pane 里敲 gerdr），这些是那个 claude 给**它自己的**子进程打的身份标记。
+//     子 claude 带着 CLAUDE_CODE_CHILD_SESSION 会把自己当成别人的子会话：**不写会话记录**（底部一行
+//     「Transcript saving is off」，stream-json 模式下没人看得见），resume / 回退 / 追上全部静默失效；
+//     带着 CLAUDE_CODE_SESSION_ID，它跑的 `gerdr session current` 会认成外面那个会话；CLAUDE_EFFORT 会把外面
+//     那个的思考强度带进来；MESSAGING_TOKEN 是外面那个的凭据。用户自己配的 CLAUDE_*（CLAUDE_CONFIG_DIR、
+//     CLAUDE_CODE_USE_BEDROCK……）照常传 —— 所以按名字点，不按前缀砍。
 //   - HERDR_*：在 herdr 的 pane 里起 gerdr 时会继承到。带着它的子 claude 会通过 herdr 的
 //     hook 把**自己的**会话报成那个 pane 的会话（herdr-web 踩过：chat 里出现别人的对话）；
 //   - GERDR_*：本服务的登录令牌、远程访问的 DNS 凭据（GERDR_CLOUDFLARE_DNS_API_TOKEN 这种），agent 跑的命令不该看得见。
+var claudeChildMarkers = map[string]bool{
+	"CLAUDE_CODE_CHILD_SESSION": true, "CLAUDE_CODE_SESSION_ID": true, "CLAUDE_CODE_SESSION_ATTENDED": true,
+	"CLAUDE_CODE_MESSAGING_SOCKET": true, "CLAUDE_CODE_MESSAGING_TOKEN": true, "CLAUDE_CODE_EXECPATH": true,
+	"CLAUDE_PID": true, "CLAUDE_EFFORT": true,
+}
+
 func ChildEnv(extra ...string) []string {
 	var env []string
 	for _, kv := range os.Environ() {
 		k, _, _ := strings.Cut(kv, "=")
 		switch {
-		case k == "CLAUDECODE", k == "CLAUDE_CODE_ENTRYPOINT", k == "CLAUDE_CODE_SSE_PORT",
+		case k == "CLAUDECODE", k == "CLAUDE_CODE_ENTRYPOINT", k == "CLAUDE_CODE_SSE_PORT", claudeChildMarkers[k],
 			strings.HasPrefix(k, "HERDR_"), strings.HasPrefix(k, "GERDR_"):
 			continue
 		case k == "PATH" && gerdrBinDir != "":

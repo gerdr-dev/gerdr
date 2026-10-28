@@ -38,3 +38,24 @@ func TestAgentVariants(t *testing.T) {
 		t.Fatal("删掉之后不该再认")
 	}
 }
+
+func TestReadBranch(t *testing.T) {
+	d := t.TempDir()
+	_ = os.MkdirAll(filepath.Join(d, ".git"), 0o755)
+	_ = os.WriteFile(filepath.Join(d, ".git", "HEAD"), []byte("ref: refs/heads/feat/x\n"), 0o644)
+	sub := filepath.Join(d, "a", "b")
+	_ = os.MkdirAll(sub, 0o755)
+	if b := readBranch(sub); b != "feat/x" {
+		t.Fatalf("子目录：%q", b)
+	}
+	// worktree：.git 是个文件
+	wt, gd := t.TempDir(), t.TempDir()
+	_ = os.WriteFile(filepath.Join(gd, "HEAD"), []byte("0123456789abcdef\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(wt, ".git"), []byte("gitdir: "+gd+"\n"), 0o644)
+	if b := readBranch(wt); b != "0123456" {
+		t.Fatalf("worktree / detached：%q", b)
+	}
+	if b := readBranch(t.TempDir()); b != "" {
+		t.Fatalf("不是仓库：%q", b)
+	}
+}

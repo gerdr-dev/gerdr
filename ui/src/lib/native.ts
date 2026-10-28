@@ -1,9 +1,12 @@
-// 和 mac App（WKWebView 外壳）之间的桥。浏览器里跑时这些都退化成网页自己的实现。
+// 和桌面 App 外壳之间的桥。浏览器里跑时这些都退化成网页自己的实现。
+// 外壳现在是 Electron（desktop/preload.js 挂的 gerdrNative）；老的 mac 外壳是 WKWebView（messageHandlers.gerdr），
+// 两边消息形状一样，都认。
 
 type Bridge = { postMessage(m: unknown): void };
 
 function bridge(): Bridge | undefined {
-  return (window as any).webkit?.messageHandlers?.gerdr;
+  const w = window as any;
+  return w.gerdrNative ?? w.webkit?.messageHandlers?.gerdr;
 }
 
 export const isNative = () => !!bridge();
@@ -27,7 +30,7 @@ export function nativeOpenURL(url: string) {
   else window.open(url, "_blank", "noopener");
 }
 
-/** mac App 里界面所在的 WebContent 进程号（量内存用）。浏览器里没有。 */
+/** App 里界面所在的渲染进程号（量内存用）。浏览器里没有。 */
 export async function nativeWebPid(): Promise<number | undefined> {
   const b = bridge();
   if (!b) return undefined;

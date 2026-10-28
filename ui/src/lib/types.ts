@@ -21,6 +21,8 @@ export type SessionSummary = {
   agent: string;
   /** agent 实际是哪一种（变体的底子：claude / codex） */
   base?: string;
+  /** cwd 所在 git 仓库的当前分支 */
+  branch?: string;
   agentSessionId: string;
   cwd: string;
   title?: string;

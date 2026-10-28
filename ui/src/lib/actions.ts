@@ -385,6 +385,14 @@ function setPane0(paneId: string, patch: Partial<PaneLeaf>) {
   setLayout((l) => setPane(l, paneId, patch));
 }
 
+/** /resume：这个 pane 换成另一个会话。那个会话已经在别的 pane 里开着就直接切过去（一个会话不在两处同时显示）。 */
+export function resumeInPane(paneId: string, sessionId: string) {
+  const loc = locateSession(get().layout, sessionId);
+  if (loc) return focusPane(loc.pane.id);
+  setPane0(paneId, { sessionId, draft: undefined });
+  focusPane(paneId);
+}
+
 /** 把一个会话放到眼前：已经在某个 pane 里就切过去，不在就开一个新 tab 放它。 */
 export function focusSession(sessionId: string) {
   const loc = locateSession(get().layout, sessionId);

@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -166,14 +167,15 @@ func (a *Agent) client(ctx context.Context) (*rpcline.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	cmd.Stderr = &logWriter{log: a.log}
+	stderr := &logWriter{log: a.log}
+	cmd.Stderr = stderr
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("start codex app-server: %w", err)
 	}
 	rpc := rpcline.New(stdout, stdin, a, a.log)
 	go func() {
-		_ = cmd.Wait()
-		a.log.Warn("codex app-server exited")
+		err := cmd.Wait()
+		a.log.Warn("codex app-server exited", "err", err, "stderr", stderr.Tail())
 		a.onExit()
 	}()
 	ictx, cancel := context.WithTimeout(ctx, 30*time.Second)
@@ -342,13 +344,31 @@ func (a *Agent) Close() {
 	}
 }
 
-type logWriter struct{ log *slog.Logger }
+// logWriter：app-server 的 stderr 平时只记 Debug（它很吵），但留着最后一段 —— 进程意外退出时跟着那条 Warn 打出来，
+// 不然「codex initialize: connection closed」到底为什么一个字都查不到（踩过：它正好在被 npm 升级替换）。
+type logWriter struct {
+	log  *slog.Logger
+	mu   sync.Mutex
+	tail string
+}
 
 func (w *logWriter) Write(p []byte) (int, error) {
 	if s := strings.TrimSpace(string(p)); s != "" {
 		w.log.Debug("codex stderr", "line", s)
+		w.mu.Lock()
+		w.tail = (w.tail + "\n" + s)
+		if len(w.tail) > 2000 {
+			w.tail = w.tail[len(w.tail)-2000:]
+		}
+		w.mu.Unlock()
 	}
 	return len(p), nil
+}
+
+func (w *logWriter) Tail() string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return strings.TrimSpace(w.tail)
 }
 
 func (a *Agent) session(id acp.SessionId) (*session, error) {
@@ -879,6 +899,45 @@ func (a *Agent) Cancel(ctx context.Context, p acp.CancelNotification) error {
 
 func (a *Agent) HandleExtensionMethod(ctx context.Context, method string, params json.RawMessage) (any, error) {
 	switch method {
+	case acpx.MethodTranscriptStat:
+		// 别处（终端 / Codex App）接着聊过：rollout 文件会长（hub 的 CatchUp 拿它判断要不要重新载入）
+		var p acpx.TranscriptStatRequest
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, acp.NewInvalidParams(err.Error())
+		}
+		path := a.rolloutPath(string(p.SessionId))
+		if path == "" {
+			return nil, fmt.Errorf("找不到 thread %s 的记录", p.SessionId)
+		}
+		st, err := os.Stat(path)
+		if err != nil {
+			return nil, err
+		}
+		return acpx.TranscriptStatResponse{Size: st.Size(), ModTime: st.ModTime().UnixMilli()}, nil
+	case acpx.MethodTakeover:
+		// codex 自己保证一个 thread 同一时间只有一处能写：别处（终端 / Codex App）开着时 thread/resume 直接报
+		// 「already has an active writer」，不会分叉（实测）。所以这里只有 fork：thread/fork 复制出一个新 thread
+		// 接着聊（不用先接上原来那个 —— 它正被别处占着，也接不上）。「关掉那边」做不了：没有登记文件，不知道是哪个进程。
+		var p acpx.TakeoverRequest
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, acp.NewInvalidParams(err.Error())
+		}
+		if p.Action != "fork" {
+			return nil, acp.NewInvalidParams(map[string]any{"action": p.Action, "error": "codex 只能另起一份"})
+		}
+		rpc, err := a.client(ctx)
+		if err != nil {
+			return nil, err
+		}
+		var res struct {
+			Thread struct {
+				ID string `json:"id"`
+			} `json:"thread"`
+		}
+		if err := rpc.Call(ctx, "thread/fork", map[string]any{"threadId": string(p.SessionId)}, &res); err != nil {
+			return nil, err
+		}
+		return acpx.TakeoverResponse{SessionId: acp.SessionId(res.Thread.ID)}, nil
 	case acpx.MethodSteer:
 		var p acpx.SteerRequest
 		if err := json.Unmarshal(params, &p); err != nil {
@@ -1239,3 +1298,26 @@ func nilIfEmpty(s string) *string {
 var _ acp.Agent = (*Agent)(nil)
 var _ acp.AgentLoader = (*Agent)(nil)
 var _ io.Writer = (*logWriter)(nil)
+
+// rolloutPath：thread 的记录文件 <CODEX_HOME>/sessions/YYYY/MM/DD/rollout-<时间>-<thread id>.jsonl。
+// CODEX_HOME 以这个实例配的为准（另一个账号的 codex 变体），再看环境、最后 ~/.codex。
+func (a *Agent) rolloutPath(id string) string {
+	if id == "" || strings.ContainsAny(id, "/*?[") {
+		return ""
+	}
+	home := os.Getenv("CODEX_HOME")
+	for _, kv := range a.opts.Env {
+		if v, ok := strings.CutPrefix(kv, "CODEX_HOME="); ok {
+			home = v
+		}
+	}
+	if home == "" {
+		h, _ := os.UserHomeDir()
+		home = filepath.Join(h, ".codex")
+	}
+	m, _ := filepath.Glob(filepath.Join(home, "sessions", "*", "*", "*", "rollout-*-"+id+".jsonl"))
+	if len(m) == 0 {
+		return ""
+	}
+	return m[0]
+}

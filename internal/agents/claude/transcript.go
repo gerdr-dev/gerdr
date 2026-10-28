@@ -58,6 +58,7 @@ type entry struct {
 	Timestamp   string          `json:"timestamp"`
 	Summary     string          `json:"summary"`
 	CustomTitle string          `json:"customTitle"` // type=custom-title：/rename 改的名字
+	AITitle     string          `json:"aiTitle"`     // type=ai-title：claude 自己起的标题（会随对话更新，后写的算）
 	Message     json.RawMessage `json:"message"`
 	ToolResult  json.RawMessage `json:"toolUseResult"`
 }
@@ -183,9 +184,11 @@ func listTranscripts(root, cwd string, limit int) ([]acp.SessionInfo, error) {
 		if title == "" {
 			continue // 只有系统消息的空会话
 		}
-		// 在 claude 里 /rename 过：用改过的名字（记录在文件后面，只读文件尾巴）。
-		if t := customTitle(f.path); t != "" {
-			title = t
+		// 标题和 Claude Code 自己的 /resume 列表一致：/rename 过的名字 > 它自动起的标题 > 第一句话。
+		if c, ai := titles(f.path); c != "" {
+			title = c
+		} else if ai != "" {
+			title = ai
 		}
 		// 目录名变形是有损的（长路径会被截断），同一个目录下可能混着别的 cwd 的会话：以记录里的 cwd 为准。
 		if cwd != "" && scwd != "" && filepath.Clean(scwd) != filepath.Clean(cwd) {
@@ -258,17 +261,18 @@ func (r *replayer) toolResult(raw, structured json.RawMessage) {
 	r.s.withEmit(r.emit, func() { r.s.onToolResult(context.Background(), raw, structured) })
 }
 
-// customTitle：会话记录里最后一次 /rename 的名字（{"type":"custom-title","customTitle":…}）。
+// titles：会话记录里最后一次 /rename 的名字（{"type":"custom-title","customTitle":…}）和 claude 自己起的标题
+// （{"type":"ai-title","aiTitle":…}，对话往下走它会改，后写的算）。
 // 改名是追加在文件末尾的，只读最后 512KB，不为它把几十 MB 的记录整个扫一遍。
-func customTitle(path string) string {
+func titles(path string) (custom, ai string) {
 	f, err := os.Open(path)
 	if err != nil {
-		return ""
+		return "", ""
 	}
 	defer f.Close()
 	st, err := f.Stat()
 	if err != nil {
-		return ""
+		return "", ""
 	}
 	off := st.Size() - 512<<10
 	if off < 0 {
@@ -276,17 +280,22 @@ func customTitle(path string) string {
 	}
 	buf := make([]byte, st.Size()-off)
 	if _, err := f.ReadAt(buf, off); err != nil && err != io.EOF {
-		return ""
+		return "", ""
 	}
-	title := ""
 	for _, line := range bytes.Split(buf, []byte("\n")) {
-		if !bytes.Contains(line, []byte(`"custom-title"`)) {
+		if !bytes.Contains(line, []byte(`"custom-title"`)) && !bytes.Contains(line, []byte(`"ai-title"`)) {
 			continue
 		}
 		var e entry
-		if json.Unmarshal(line, &e) == nil && e.Type == "custom-title" && e.CustomTitle != "" {
-			title = e.CustomTitle
+		if json.Unmarshal(line, &e) != nil {
+			continue
+		}
+		if e.Type == "custom-title" && e.CustomTitle != "" {
+			custom = e.CustomTitle
+		}
+		if e.Type == "ai-title" && e.AITitle != "" {
+			ai = e.AITitle
 		}
 	}
-	return title
+	return custom, ai
 }

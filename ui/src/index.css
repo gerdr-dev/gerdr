@@ -117,12 +117,94 @@
   }
 }
 
-@layer components {
-  .gerdr-md {
-    font-size: 1em;
-    line-height: 1.65;
-  }
-  .gerdr-md :not(pre) > code {
-    @apply rounded bg-muted px-1 py-0.5 font-mono text-[0.88em];
-  }
+/* 对话里的 Markdown 排版。streamdown 自带的 class（段落 space-y-4、标题 mt-6 text-3xl、列表 list-inside + li py-1、
+   行内代码 text-sm px-1.5）是给聊天气泡配的，放进一长串 agent 输出里又松又大，读起来不如终端。
+   这里故意不放进 layer：streamdown 的 class 在 utilities 层，写在 components 层压不过（以前那条行内代码样式就一直没生效）。
+   作用范围只在 .gerdr-md 里面，用 data-streamdown 认元素，不会波及别处。 */
+.gerdr-md {
+  font-size: 1em;
+  line-height: 1.6;
+}
+/* 块之间：段落 / 列表 / 代码块统一一个小间距，标题上面多留一点、下面贴着正文 */
+.gerdr-md > div > * {
+  margin-block: 0;
+}
+.gerdr-md > div > * + * {
+  margin-top: 0.6em;
+}
+.gerdr-md > div > [data-streamdown^="heading-"]:not(:first-child) {
+  margin-top: 1.1em;
+}
+.gerdr-md > div > [data-streamdown^="heading-"] + * {
+  margin-top: 0.3em;
+}
+.gerdr-md [data-streamdown^="heading-"] {
+  font-weight: 600;
+  line-height: 1.4;
+  font-size: 1em;
+  margin-bottom: 0;
+}
+.gerdr-md [data-streamdown="heading-1"] {
+  font-size: 1.3em;
+}
+.gerdr-md [data-streamdown="heading-2"] {
+  font-size: 1.15em;
+}
+.gerdr-md [data-streamdown="heading-3"] {
+  font-size: 1.05em;
+}
+/* 列表：符号挂在外面（换行时文字对齐，不钻到圆点底下），项之间只留一点缝 */
+.gerdr-md :is([data-streamdown="unordered-list"], [data-streamdown="ordered-list"]) {
+  list-style-position: outside;
+  padding-left: 1.4em;
+}
+.gerdr-md [data-streamdown="list-item"] {
+  padding-block: 0;
+}
+.gerdr-md [data-streamdown="list-item"] + [data-streamdown="list-item"] {
+  margin-top: 0.2em;
+}
+.gerdr-md [data-streamdown="list-item"] > :is([data-streamdown="unordered-list"], [data-streamdown="ordered-list"]) {
+  margin-top: 0.2em;
+  padding-left: 1.2em;
+}
+.gerdr-md [data-streamdown="list-item"]::marker {
+  color: var(--muted-foreground);
+}
+.gerdr-md [data-streamdown="inline-code"] {
+  font-size: 0.86em;
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  background: var(--muted);
+  overflow-wrap: anywhere;
+}
+.gerdr-md [data-streamdown="code-block"] {
+  padding: 0;
+  gap: 0;
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.gerdr-md [data-streamdown="code-block-header"] {
+  height: 1.9em;
+  padding-inline: 0.75em;
+}
+.gerdr-md [data-streamdown="code-block-body"] {
+  font-size: 0.86em;
+  line-height: 1.5;
+  padding: 0.6em 0.8em;
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+}
+.gerdr-md [data-streamdown="blockquote"] {
+  font-style: normal;
+  border-left-width: 3px;
+  padding-left: 0.8em;
+}
+.gerdr-md [data-streamdown="horizontal-rule"] {
+  margin-block: 1em;
+}
+.gerdr-md :is([data-streamdown="table-cell"], [data-streamdown="table-header-cell"]) {
+  font-size: 0.93em;
+  padding: 0.35em 0.7em;
 }

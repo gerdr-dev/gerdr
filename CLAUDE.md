@@ -1,6 +1,6 @@
 # gerdr
 
-Claude Code / Codex 的图形界面：Go 后端（ACP 适配器 + hub + HTTP/WS）+ 界面源码（ui/，**没有打包环节**）+ mac App 外壳。
+Claude Code / Codex 的图形界面：Go 后端（ACP 适配器 + hub + HTTP/WS）+ 界面源码（ui/，**没有打包环节**）+ 桌面 App 外壳（desktop/，Electron —— 为什么是它：docs/dev/WHY-ELECTRON.md）。
 使用说明见 README.md，设计理由和协议的坑见 docs/dev/ARCHITECTURE.md —— **改适配器 / hub / uisite 之前先读它**，
 里面每一条都是实测踩出来、会静默出错的。
 
