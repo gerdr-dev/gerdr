@@ -17,6 +17,7 @@ import { api } from "@/lib/api";
 import { allCommands, runCommand } from "@/lib/commands";
 import { ACTION_TITLES, DEFAULT_KEYS, formatCombo, type KeyAction } from "@/lib/keys";
 import { locateSession } from "@/lib/layout";
+import { isNative, nativeOpenPath } from "@/lib/native";
 import { pluginStatus } from "@/lib/plugins";
 import { keyFor, set, setConfig, useStore, type Theme } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -334,8 +335,16 @@ function SettingsDialog({ open }: { open: boolean }) {
               <ResourceStats open={open && tabOpen === "resources"} />
             </TabsContent>
             <TabsContent value="plugins" className="space-y-3 pt-2">
-              <div className="text-[13px]">
-                插件放在 <code className="rounded-sm bg-muted px-1 font-mono text-[12px]">{pluginsDir}</code>，一个 .ts 文件一个，保存即生效。API 见同目录的 <code className="font-mono text-[12px]">gerdr.d.ts</code>。
+              <div className="flex items-start justify-between gap-4">
+                <div className="text-[13px]">
+                  插件放在 <code className="rounded-sm bg-muted px-1 font-mono text-[12px]">{pluginsDir}</code>，一个 .ts 文件一个，保存即生效。API 见同目录的 <code className="font-mono text-[12px]">gerdr.d.ts</code>。
+                </div>
+                {/* 只有 App 里能开本机目录；浏览器里（可能是远程连进来的）开不了，就不放这个按钮 */}
+                {isNative() && (
+                  <Button size="sm" variant="outline" className="shrink-0" disabled={!pluginsDir} title={pluginsDir} onClick={() => nativeOpenPath(pluginsDir, undefined, false)}>
+                    <FolderOpen className="size-3.5" /> 打开目录
+                  </Button>
+                )}
               </div>
               <div className="divide-y rounded-md border">
                 {pluginStatus.length === 0 && <div className="p-3 text-[13px] text-muted-foreground">没有插件</div>}
@@ -343,7 +352,7 @@ function SettingsDialog({ open }: { open: boolean }) {
                   <div key={p.id} className="p-3">
                     <div className="flex items-center gap-2 text-[13px]">
                       {p.loaded ? <Check className="size-3.5 text-ok" /> : <span className="size-2 rounded-full bg-bad" />}
-                      <span className="font-medium">{p.id}</span>
+                      <span className="shrink-0 font-medium">{p.id}</span>
                       <span className="truncate font-mono text-[11px] text-muted-foreground">{p.path}</span>
                     </div>
                     {p.error && <pre className="mt-1.5 whitespace-pre-wrap rounded-sm bg-bad/10 p-2 font-mono text-[11px] text-bad">{p.error}</pre>}
