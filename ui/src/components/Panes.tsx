@@ -130,8 +130,8 @@ function SubPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; tab
       className={cn("flex h-full min-h-0 flex-col", framed && "overflow-hidden rounded-md border", framed && (focused ? "border-brand" : "border-border"))}
       onMouseDown={() => !focused && focusPane(pane.id)}
     >
-      {/* 手机上 px-4：16px 图标的中线落在 24px，和顶栏 ☰（px-1.5 + 36px 按钮）的中线对齐。三种 pane 的标题栏同一个边距 */}
-      <div className={cn("flex h-8 shrink-0 items-center gap-2 border-b px-3 text-[12px] max-md:px-4", !focused && many && "opacity-70")}>
+      {/* 手机上和顶栏两头对齐：左 16px，16px 图标的中线落在 24px（= ☰：px-1.5 + 36px 按钮）；右边照旧 12px，24px 的 ⋯ 按钮中线也落在 24px（= 右上角 +）。三种 pane 的标题栏同一个边距 */}
+      <div className={cn("flex h-8 shrink-0 items-center gap-2 border-b px-3 text-[12px] max-md:pl-4", !focused && many && "opacity-70")}>
         <Bot className="size-4 text-muted-foreground" />
         <span className="shrink-0 text-muted-foreground">{task?.subagent || "子 agent"}</span>
         <span className="min-w-0 flex-1 truncate font-medium">{title}</span>
@@ -174,7 +174,7 @@ function TermPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; ta
       className={cn("flex h-full min-h-0 flex-col", framed && "overflow-hidden rounded-md border", framed && (focused ? "border-brand" : "border-border"))}
       onMouseDown={() => !focused && focusPane(pane.id)}
     >
-      <div className={cn("flex h-8 shrink-0 items-center gap-2 border-b px-3 text-[12px] max-md:px-4", !focused && many && "opacity-70")}>
+      <div className={cn("flex h-8 shrink-0 items-center gap-2 border-b px-3 text-[12px] max-md:pl-4", !focused && many && "opacity-70")}>
         <SquareTerminal className="size-4 text-muted-foreground" />
         <span className="min-w-[3em] max-w-[60%] shrink truncate font-medium">{title}</span>
         <PaneCount count={count} />
@@ -260,7 +260,7 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
       className={cn("flex h-full min-h-0 flex-col", framed && "overflow-hidden rounded-md border", framed && (focused ? "border-brand" : "border-border"))}
       onMouseDown={() => !focused && focusPane(pane.id)}
     >
-      <div className={cn("flex h-8 shrink-0 items-center gap-2 border-b px-3 text-[12px] max-md:px-4", !focused && many && "opacity-70")}>
+      <div className={cn("flex h-8 shrink-0 items-center gap-2 border-b px-3 text-[12px] max-md:pl-4", !focused && many && "opacity-70")}>
         {session ? <AgentIcon agent={session.agent} className="size-4" /> : <PanelTopOpen className="size-3.5 text-muted-foreground" />}
         <span className="min-w-[3em] max-w-[60%] shrink truncate font-medium">{title}</span>
         <StatusDot status={session?.status} unread={unread} />
@@ -279,9 +279,9 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
               </span>
             )}
           </span>
-        ) : (
-          <div className="flex-1" />
-        )}
+        ) : null}
+        {/* 路径那段手机上藏了，没它撑开的话 ⋯ 会紧跟在标题后面；和终端 pane 一样补一个手机上的占位 */}
+        <div className={cn("flex-1", session && "md:hidden")} />
         {zoomed && (
           <Button variant="ghost" size="icon" className="size-6" onClick={toggleZoom} title="还原（prefix+z）">
             <Minimize2 className="size-3.5" />

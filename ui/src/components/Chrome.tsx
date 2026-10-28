@@ -172,11 +172,10 @@ export function PhoneBar() {
       </Button>
       <button className="flex h-9 min-w-0 flex-1 items-center gap-1.5 rounded-md px-1.5 text-left" onClick={openSwitcher}>
         <span className="min-w-0 truncate text-[13px] font-medium">{applyTabLabel(tab, ti, ws, tabName(tab))}</span>
-        <StatusDot status={st.status} unread={st.unread} />
+        {/* 只有一个 pane 时不画：下面 pane 标题栏那个点就是同一个会话，一行里三个点太乱。好几个 pane 时它是整个 tab 的汇总，留着 */}
+        {leaves(tab.root).length > 1 && <StatusDot status={st.status} unread={st.unread} />}
         <span className="min-w-0 shrink-[2] truncate text-[11px] text-muted-foreground">{applyWorkspaceLabel(ws, wi, ws.name)}</span>
         {!connected && <span className="shrink-0 text-[11px] text-bad">离线</span>}
-        {/* 安卓 App 里：绿 = 局域网直连、蓝 = 经云端中继（详情在设置 → 通用 → 安卓 App） */}
-        {connected && isAndroid() && <RouteDot />}
       </button>
       <Button variant={switcher ? "secondary" : "ghost"} size="icon" className="relative size-9" aria-label="面板一览" onClick={openSwitcher}>
         <LayoutList className="size-[18px]" />
@@ -191,9 +190,14 @@ export function PhoneBar() {
   );
 }
 
-function RouteDot() {
+function RouteLabel() {
   const r = useRoute();
-  return <span title={r.detail} className={cn("size-1.5 shrink-0 rounded-full", r.via === "lan" ? "bg-ok" : "bg-brand")} />;
+  return (
+    <span title={r.detail} className="flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground">
+      <span className={cn("size-1.5 rounded-full", r.via === "lan" ? "bg-ok" : "bg-brand")} />
+      {r.via === "lan" ? "局域网" : "中继"}
+    </span>
+  );
 }
 
 export function Sidebar({ className }: { className?: string }) {
@@ -209,6 +213,8 @@ export function Sidebar({ className }: { className?: string }) {
         <div className="native-traffic-light-gap" />
         <span className="flex-1 text-[12px] font-semibold tracking-wide text-muted-foreground">gerdr</span>
         {!connected && <span className="text-[11px] text-bad">离线</span>}
+        {/* 安卓 App 里走哪条路（详情在设置 → 通用 → 安卓 App）。原来是顶栏上的一个绿 / 蓝点，和状态点挤在一起分不清，挪到侧栏里写成字 */}
+        {connected && isAndroid() && <RouteLabel />}
         <Button variant="ghost" size="icon" className="size-7" onClick={toggleSidebar} style={{ WebkitAppRegion: "no-drag" } as any}>
           <PanelLeft className="size-4" />
         </Button>
