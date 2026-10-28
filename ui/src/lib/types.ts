@@ -12,7 +12,8 @@ export type ConfigOption = {
   currentValue: string;
   options: ConfigSelectOption[] | { group: string; name: string; options: ConfigSelectOption[] }[];
 };
-export type AvailableCommand = { name: string; description: string; input?: { hint?: string } };
+// _meta.skill：claude 适配器标的（agents/claude 的 acpCommands）—— 是 skill，pin 列表里点了只填进输入框不直接发
+export type AvailableCommand = { name: string; description: string; input?: { hint?: string }; _meta?: { skill?: boolean } };
 
 export type SessionStatus = "idle" | "running" | "waiting" | "error" | "starting";
 

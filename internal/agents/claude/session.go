@@ -18,9 +18,10 @@ import (
 type session struct {
 	a *Agent
 
-	mu  sync.Mutex
-	id  string // 当前 claude 会话 id（= ACP sessionId；回退分叉后会变）
-	cwd string
+	mu   sync.Mutex
+	id   string // 当前 claude 会话 id（= ACP sessionId；回退分叉后会变）
+	cwd  string
+	cmds []cliCommand // 这个会话的进程 initialize 报的命令（learnSkills 重推时用）
 
 	mode    string
 	model   string
@@ -204,14 +205,12 @@ func (s *session) start(ctx context.Context) error {
 		s.update(context.Background(), acp.SessionUpdate{ConfigOptionUpdate: &acp.SessionConfigOptionUpdate{ConfigOptions: opts}})
 	}
 	if len(info.Commands) > 0 {
-		var cmds []acp.AvailableCommand
-		for _, c := range info.Commands {
-			ac := acp.AvailableCommand{Name: c.Name, Description: c.Description}
-			if c.ArgumentHint != "" {
-				ac.Input = &acp.AvailableCommandInput{Unstructured: &acp.UnstructuredCommandInput{Hint: c.ArgumentHint}}
-			}
-			cmds = append(cmds, ac)
-		}
+		s.mu.Lock()
+		s.cmds = info.Commands
+		s.mu.Unlock()
+		s.a.mu.Lock()
+		cmds := s.a.acpCommands(info.Commands)
+		s.a.mu.Unlock()
 		s.update(context.Background(), acp.SessionUpdate{AvailableCommandsUpdate: &acp.SessionAvailableCommandsUpdate{AvailableCommands: cmds}})
 	}
 	return nil

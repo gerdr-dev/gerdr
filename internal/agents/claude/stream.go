@@ -225,10 +225,12 @@ func (s *session) onSystem(ctx context.Context, m map[string]json.RawMessage, ra
 		}
 	case "init":
 		var init struct {
-			PermissionMode string `json:"permissionMode"`
-			SessionID      string `json:"session_id"`
+			PermissionMode string   `json:"permissionMode"`
+			SessionID      string   `json:"session_id"`
+			Skills         []string `json:"skills"`
 		}
 		_ = json.Unmarshal(raw, &init)
+		s.learnSkills(ctx, init.Skills)
 		if init.SessionID != "" {
 			s.adoptID(ctx, init.SessionID)
 		}
@@ -760,4 +762,30 @@ func askQuestions(input map[string]any) []acpx.AskQuestion {
 		out = append(out, aq)
 	}
 	return out
+}
+
+// learnSkills：init 里报的 skill 有 initialize 没标出来的（自带的 /code-review 这种）—— 记下来，重推一遍命令列表
+func (s *session) learnSkills(ctx context.Context, names []string) {
+	s.mu.Lock()
+	list := s.cmds
+	s.mu.Unlock()
+	s.a.mu.Lock()
+	changed := false
+	for _, n := range names {
+		if !s.a.skills[n] {
+			if s.a.skills == nil {
+				s.a.skills = map[string]bool{}
+			}
+			s.a.skills[n] = true
+			changed = true
+		}
+	}
+	var cmds []acp.AvailableCommand
+	if changed && len(list) > 0 {
+		cmds = s.a.acpCommands(list)
+	}
+	s.a.mu.Unlock()
+	if cmds != nil {
+		s.update(ctx, acp.SessionUpdate{AvailableCommandsUpdate: &acp.SessionAvailableCommandsUpdate{AvailableCommands: cmds}})
+	}
 }

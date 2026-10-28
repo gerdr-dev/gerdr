@@ -130,10 +130,33 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
       .filter((c) => !!c);
   }, [pinned, session.commands]);
   const togglePin = (name: string) => setConfig({ pinnedCommands: pinned.includes(name) ? pinned.filter((n) => n !== name) : [...pinned, name] });
-  // 点了 pin 列表里的一个：和在 / 列表里点一样 —— 本地命令直接做，其它填进输入框留个空格（可能要接参数），自己按发送
-  const pickPinned = (name: string) => {
-    if (runLocal(name)) return;
-    putText(`/${name} `);
+  // 点了 pin 列表里的一个：本地命令直接做；skill 一般要跟一句话说做什么 —— 填进输入框（已经写了的字接在后面当参数），自己按发送；
+  // 别的命令（/compact、/clear……）直接发。直接发不经过输入框：写了一半的草稿留着不动
+  const pickPinned = (c: { name: string; _meta?: { skill?: boolean } }) => {
+    if (runLocal(c.name)) return;
+    // 后端还是没标 skill 的旧版（或者借的是旧版写的命令缓存）：claude 的列表里一个标都没有时分不出来，按 skill 算 —— 宁可多点一下发送，别把 skill 空着发出去
+    const own0 = session.commands ?? [];
+    const unknown = (session.base ?? session.agent) === "claude" && !own0.some((x) => x._meta);
+    if (c._meta?.skill || unknown) {
+      const cur = text.trim();
+      putText(cur ? `/${c.name} ${cur}` : `/${c.name} `);
+      return;
+    }
+    const own = session.commands ?? [];
+    const to = ALIASES[c.name];
+    const name = to && !own.some((x) => x.name === c.name) && own.some((x) => x.name === to) ? to : c.name;
+    api.send(session.id, [{ type: "text", text: `/${name}` }]).then(
+      () => onSent?.(),
+      (e: any) => {
+        // 会话在别处开着：走和普通发送一样的 HeldDialog（挑完拿输入框里的字重发）—— 输入框空着才借它放命令，草稿不覆盖
+        if (e?.code === "held_elsewhere" && !(get().drafts[paneId] ?? "")) {
+          setText(`/${name}`);
+          setHeld(e.holders ?? []);
+          return;
+        }
+        toast.error(isNetworkError(e) ? `网络断了，/${c.name} 没发出去` : (e.message ?? String(e)));
+      },
+    );
   };
 
   // @ 引用文件（照 Claude Code）：光标前面是「@xxx」（@ 在行首或空格后）就弹会话目录下的文件候选，选中换成 @相对路径。
@@ -631,7 +654,7 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
                 {/* 关掉时不把焦点还给触发器：pickPinned 要把焦点放进输入框（手机上好直接弹键盘接着写参数） */}
                 <DropdownMenuContent side="top" align="start" className="max-h-80 w-72 overflow-auto" onCloseAutoFocus={(e) => e.preventDefault()}>
                   {pinnedCmds.map((c) => (
-                    <DropdownMenuItem key={c.name} onClick={() => pickPinned(c.name)} className="items-baseline gap-2">
+                    <DropdownMenuItem key={c.name} onClick={() => pickPinned(c)} className="items-baseline gap-2">
                       <span className="shrink-0 font-mono text-[13px]">/{c.name}</span>
                       <span className="truncate text-[12px] text-muted-foreground">{c.description}</span>
                     </DropdownMenuItem>

@@ -207,3 +207,29 @@ func TestPendingForkSurvivesRestart(t *testing.T) {
 		t.Fatalf("记录有了还当成待分叉：%v %q", fresh, from)
 	}
 }
+
+// initialize 的命令列表不分 skill：不是 builtin 的算 skill，builtin 里只有 init 的 skills 报了的才算（/code-review 这种）
+func TestACPCommandsSkill(t *testing.T) {
+	var list []cliCommand
+	_ = json.Unmarshal([]byte(`[{"name":"lark-doc","description":"x (user)"},{"name":"code-review","builtin":true},{"name":"compact","argumentHint":"<x>","builtin":true}]`), &list)
+	a := &Agent{}
+	skill := func(cmds []acp.AvailableCommand) (out []string) {
+		for _, c := range cmds {
+			if c.Meta["skill"] == true {
+				out = append(out, c.Name)
+			}
+		}
+		return
+	}
+	if got := skill(a.acpCommands(list)); !slices.Equal(got, []string{"lark-doc"}) {
+		t.Fatalf("没有 init 时：%v", got)
+	}
+	a.skills = map[string]bool{"lark-doc": true, "code-review": true}
+	cmds := a.acpCommands(list)
+	if got := skill(cmds); !slices.Equal(got, []string{"lark-doc", "code-review"}) {
+		t.Fatalf("有 init 之后：%v", got)
+	}
+	if cmds[2].Input == nil || cmds[2].Input.Unstructured.Hint != "<x>" {
+		t.Fatalf("参数提示丢了：%+v", cmds[2])
+	}
+}

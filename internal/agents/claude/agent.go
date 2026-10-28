@@ -184,7 +184,10 @@ type Agent struct {
 	sessions map[string]*session
 	models   []cliModel
 	commands []cliCommand
-	defMode  string
+	// skills：init 消息里报的 skill 名字（initialize 的命令列表不分，见 cliCommand.Builtin）。进程之间共用，
+	// 下一个进程的 initialize 一回来就能标对，不用再等它的 init
+	skills  map[string]bool
+	defMode string
 
 	stopReaper chan struct{}
 }
@@ -202,6 +205,27 @@ type cliCommand struct {
 	Name         string `json:"name"`
 	Description  string `json:"description"`
 	ArgumentHint string `json:"argumentHint"`
+	// Builtin：Claude Code 自带的命令（/compact、/clear……）。不是 builtin 的是用户 / 项目 / 插件的 skill 和自定义命令；
+	// 但自带的里也有几个 skill（/code-review、/run、/simplify），只有 init 消息的 skills 列表认得出来
+	Builtin bool `json:"builtin"`
+}
+
+// acpCommands：把 claude 报的命令转成 ACP 的。是 skill 的在 _meta 里标 skill: true —— 界面上 pin 住的命令点一下就发，
+// skill 一般要跟一句话说做什么，只填进输入框（ui 的 Composer.pickPinned）。
+// list 用这个会话自己进程报的（项目级的 skill 跟着目录走，各会话不一样），不用 a.commands。调用方持有 a.mu
+func (a *Agent) acpCommands(list []cliCommand) []acp.AvailableCommand {
+	var cmds []acp.AvailableCommand
+	for _, c := range list {
+		ac := acp.AvailableCommand{Name: c.Name, Description: c.Description}
+		if c.ArgumentHint != "" {
+			ac.Input = &acp.AvailableCommandInput{Unstructured: &acp.UnstructuredCommandInput{Hint: c.ArgumentHint}}
+		}
+		if !c.Builtin || a.skills[c.Name] {
+			ac.Meta = map[string]any{"skill": true}
+		}
+		cmds = append(cmds, ac)
+	}
+	return cmds
 }
 
 func New(log *slog.Logger, opts Options) *Agent {
