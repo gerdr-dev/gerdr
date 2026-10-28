@@ -183,7 +183,7 @@ function CAA({ host, account }: { host: string; account: string }) {
   return (
     <div className="space-y-1 pt-1 text-[12px] text-muted-foreground">
       <div>建议在 DNS 上加一条 CAA，只许这台机器签 {host} 的证书（已经有一条覆盖它的 CAA 时要再加这一条，不然签不下来）：</div>
-      <pre className="overflow-x-auto rounded bg-muted p-2 font-mono text-[11px] select-all">{rec}</pre>
+      <pre className="overflow-x-auto rounded-sm bg-muted p-2 font-mono text-[11px] select-all">{rec}</pre>
     </div>
   );
 }

@@ -275,7 +275,7 @@ export function PaneSwitcher() {
                       <span className="min-w-0 flex-1">
                         <span className="flex items-center gap-1.5">
                           <span className="truncate text-[13px]">{title}</span>
-                          {chip && <span className={cn("shrink-0 rounded border px-1 py-px text-[10px]", chip.cls)}>{chip.text}</span>}
+                          {chip && <span className={cn("shrink-0 rounded-sm border px-1 py-px text-[10px]", chip.cls)}>{chip.text}</span>}
                           <span className="ml-auto shrink-0 font-mono text-[10px] text-muted-foreground" title={s ? new Date(s.updatedAt).toLocaleString() : ""}>
                             {ago(s?.updatedAt, now)}
                           </span>

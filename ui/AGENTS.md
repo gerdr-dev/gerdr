@@ -62,6 +62,7 @@ src/lib/
 - 样式是浏览器里的 Tailwind v4（Tailwind browser）：任何 class 都直接生效；`src/index.css` 里不能 `@import` / `@plugin`。
 - 颜色用主题变量对应的 class（`bg-background`、`text-muted-foreground`、`border`、`bg-brand`、`text-ok`、`text-bad`、`text-warn`），
   不要写死颜色 —— 深浅色两套都要好看。
+- 圆角用 `rounded-sm/md/lg/xl` 这几档（哪种东西用哪档见 `src/index.css` 里 `--radius` 上面的注释），别用裸 `rounded` 或写死像素。
 - 一个 `.tsx` 文件里只导出组件（大写开头 / default）时，改它能热替换、不丢状态；导出了别的（函数、常量）的文件改了会整个重新渲染。
 
 - 对话是**虚拟列表**（react-virtuoso）：只渲染屏幕附近的行，滚出去的会被卸载。所以对话里的组件**别用 useState 记「展开没」这类状态**

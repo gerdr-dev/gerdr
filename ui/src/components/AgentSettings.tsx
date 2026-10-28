@@ -237,7 +237,7 @@ function LoginHint({ cmd, then }: { cmd: string; then?: string }) {
     <div className="space-y-1">
       <div>在终端里跑这一条{then ? `，${then}` : "。"}</div>
       <div className="flex items-start gap-1.5">
-        <code className="min-w-0 flex-1 rounded bg-card px-2 py-1 font-mono break-all text-foreground">{cmd}</code>
+        <code className="min-w-0 flex-1 rounded-sm bg-card px-2 py-1 font-mono break-all text-foreground">{cmd}</code>
         <Button
           size="icon"
           variant="ghost"

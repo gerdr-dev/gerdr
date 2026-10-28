@@ -232,7 +232,7 @@ export function TerminalView({
           ).map(([label, seq]) => (
             <button
               key={label}
-              className={cn("shrink-0 rounded border px-2.5 py-1 font-mono text-[12px]", label === "Ctrl" && ctrlOn && "border-brand bg-brand/15 text-brand")}
+              className={cn("shrink-0 rounded-sm border px-2.5 py-1 font-mono text-[12px]", label === "Ctrl" && ctrlOn && "border-brand bg-brand/15 text-brand")}
               onClick={() => {
                 if (label === "Ctrl") {
                   ctrl.current = !ctrl.current;
@@ -247,7 +247,7 @@ export function TerminalView({
         </div>
       )}
       {state === "connecting" && (
-        <div className="pointer-events-none absolute right-2 top-2 flex items-center gap-1.5 rounded bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+        <div className="pointer-events-none absolute right-2 top-2 flex items-center gap-1.5 rounded-sm bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
           <Loader2 className="size-3 animate-spin" />
           连接中
         </div>

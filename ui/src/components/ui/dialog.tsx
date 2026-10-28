@@ -60,7 +60,7 @@ function DialogContent({
         data-slot="dialog-content"
         className={cn(
           // 居中不用 translate(-50%,-50%)：宽高是奇数时落在半像素上，WebKit 里整个弹窗的字发糊。
-          "fixed inset-0 z-50 m-auto grid h-fit content-start w-full max-w-[calc(100%-2rem)] gap-4 rounded-lg border bg-background p-6 shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 sm:max-w-lg",
+          "fixed inset-0 z-50 m-auto grid h-fit content-start w-full max-w-[calc(100%-2rem)] gap-4 rounded-xl border bg-background p-6 shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 sm:max-w-lg",
           className
         )}
         {...props}

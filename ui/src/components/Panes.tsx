@@ -109,7 +109,7 @@ function PaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; tab: T
 function PaneCount({ count }: { count?: Count }) {
   if (!count) return null;
   return (
-    <button className="shrink-0 rounded border px-1.5 py-px font-mono text-[10px] text-muted-foreground" title="这个 tab 里的 pane（点开面板一览）" onClick={() => set({ switcher: true, drawer: false })}>
+    <button className="shrink-0 rounded-sm border px-1.5 py-px font-mono text-[10px] text-muted-foreground" title="这个 tab 里的 pane（点开面板一览）" onClick={() => set({ switcher: true, drawer: false })}>
       {count.i}/{count.n}
     </button>
   );
@@ -253,7 +253,7 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
         {session ? <AgentIcon agent={session.agent} className="size-4" /> : <PanelTopOpen className="size-3.5 text-muted-foreground" />}
         <span className="min-w-[3em] max-w-[60%] shrink truncate font-medium">{title}</span>
         <StatusDot status={session?.status} unread={unread} />
-        {session?.pending ? <span className="shrink-0 whitespace-nowrap rounded bg-bad/15 px-1.5 text-[11px] text-bad">等你</span> : null}
+        {session?.pending ? <span className="shrink-0 whitespace-nowrap rounded-sm bg-bad/15 px-1.5 text-[11px] text-bad">等你</span> : null}
         <PaneCount count={count} />
         {session ? (
           <span className="hidden min-w-0 flex-1 items-center gap-2 font-mono text-[11px] text-muted-foreground md:flex">

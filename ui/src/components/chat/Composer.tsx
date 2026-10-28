@@ -411,7 +411,7 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
             return (
               <button
                 key={f}
-                className={cn("flex w-full items-baseline gap-2 rounded px-2 py-1 text-left text-[13px]", i === fileIdx && "bg-accent")}
+                className={cn("flex w-full items-baseline gap-2 rounded-sm px-2 py-1 text-left text-[13px]", i === fileIdx && "bg-accent")}
                 onMouseEnter={() => setFileIdx(i)}
                 onMouseDown={(e) => {
                   e.preventDefault();
@@ -430,7 +430,7 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
           {cmds.map((c, i) => (
             <button
               key={c.name}
-              className={cn("flex w-full items-baseline gap-2 rounded px-2 py-1 text-left text-[13px]", i === cmdIdx && "bg-accent")}
+              className={cn("flex w-full items-baseline gap-2 rounded-sm px-2 py-1 text-left text-[13px]", i === cmdIdx && "bg-accent")}
               onMouseEnter={() => setCmdIdx(i)}
               onMouseDown={(e) => {
                 e.preventDefault();
@@ -447,7 +447,7 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
       <div
         className={cn(
           // 照 Astryx ChatComposer：大圆角 + 投影托起来，描边只留一根细线（浅色底上要靠它看出边界）
-          "rounded-[22px] border border-border/60 bg-card shadow-md transition-colors focus-within:border-ring/60",
+          "rounded-2xl border border-border/60 bg-card shadow-md transition-colors focus-within:border-ring/60",
           running && "border-brand/40",
         )}
         onDragOver={(e) => e.preventDefault()}
@@ -479,7 +479,9 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
           rows={1}
           value={text}
           onChange={(e) => {
-            setText(e.target.value);
+            // 中文输入法下按 / 出来的是「、」（有的是全角「／」）：空输入框打的第一个字是它，就当 / —— 不然想调命令得先切英文
+            const v = text === "" && /^[、／]$/.test(e.target.value) ? "/" : e.target.value;
+            setText(v);
             setCaret(e.target.selectionStart ?? e.target.value.length);
           }}
           onSelect={(e) => setCaret(e.currentTarget.selectionStart ?? 0)}

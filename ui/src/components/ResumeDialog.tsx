@@ -61,7 +61,7 @@ export function ResumeDialog() {
           <CommandItem value={`${cur.id} ${cur.title ?? ""}`} disabled className="gap-2.5 opacity-60">
             <AgentIcon agent={cur.agent} className="size-4 shrink-0" />
             <span className="min-w-0 truncate">{cur.title || "（没有标题）"}</span>
-            <span className="shrink-0 rounded bg-muted px-1.5 text-[11px] text-muted-foreground">当前</span>
+            <span className="shrink-0 rounded-sm bg-muted px-1.5 text-[11px] text-muted-foreground">当前</span>
             <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">{ago(cur.updatedAt)}</span>
           </CommandItem>
           {mine.map((s) => (

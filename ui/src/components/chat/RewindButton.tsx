@@ -28,7 +28,7 @@ export function RewindButton({ edit, onConfirm }: { edit: boolean; onConfirm: ()
           data-state={open ? "open" : "closed"}
           data-rewind={edit ? "edit" : "rewind"}
           title={open ? "再点一次确认" : label}
-          className={cn("rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground", open && "bg-brand/15 text-brand hover:bg-brand/20 hover:text-brand")}
+          className={cn("rounded-sm p-1 text-muted-foreground hover:bg-muted hover:text-foreground", open && "bg-brand/15 text-brand hover:bg-brand/20 hover:text-brand")}
           onClick={() => (open ? confirm() : setOpen(true))}
         >
           <Icon className="size-3.5" />

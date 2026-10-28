@@ -117,7 +117,7 @@ function Help({ open }: { open: boolean }) {
         <DialogHeader>
           <DialogTitle>快捷键</DialogTitle>
           <DialogDescription>
-            先按前缀 <kbd className="rounded border bg-muted px-1 font-mono">{formatCombo(cfg.prefix)}</kbd> 松开，再按后面那个键（和 herdr / tmux 一样）。中文输入法开着也能用。
+            先按前缀 <kbd className="rounded-sm border bg-muted px-1 font-mono">{formatCombo(cfg.prefix)}</kbd> 松开，再按后面那个键（和 herdr / tmux 一样）。中文输入法开着也能用。
           </DialogDescription>
         </DialogHeader>
         <div className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
@@ -335,7 +335,7 @@ function SettingsDialog({ open }: { open: boolean }) {
             </TabsContent>
             <TabsContent value="plugins" className="space-y-3 pt-2">
               <div className="text-[13px]">
-                插件放在 <code className="rounded bg-muted px-1 font-mono text-[12px]">{pluginsDir}</code>，一个 .ts 文件一个，保存即生效。API 见同目录的 <code className="font-mono text-[12px]">gerdr.d.ts</code>。
+                插件放在 <code className="rounded-sm bg-muted px-1 font-mono text-[12px]">{pluginsDir}</code>，一个 .ts 文件一个，保存即生效。API 见同目录的 <code className="font-mono text-[12px]">gerdr.d.ts</code>。
               </div>
               <div className="divide-y rounded-md border">
                 {pluginStatus.length === 0 && <div className="p-3 text-[13px] text-muted-foreground">没有插件</div>}
@@ -346,7 +346,7 @@ function SettingsDialog({ open }: { open: boolean }) {
                       <span className="font-medium">{p.id}</span>
                       <span className="truncate font-mono text-[11px] text-muted-foreground">{p.path}</span>
                     </div>
-                    {p.error && <pre className="mt-1.5 whitespace-pre-wrap rounded bg-bad/10 p-2 font-mono text-[11px] text-bad">{p.error}</pre>}
+                    {p.error && <pre className="mt-1.5 whitespace-pre-wrap rounded-sm bg-bad/10 p-2 font-mono text-[11px] text-bad">{p.error}</pre>}
                   </div>
                 ))}
               </div>
@@ -405,7 +405,7 @@ function Sessions({ open }: { open: boolean }) {
         <span className="w-16 text-right text-[11px] text-muted-foreground">{ago(s.updatedAt)}</span>
         {!shown && (
           <button
-            className="hidden rounded p-0.5 text-muted-foreground hover:text-bad group-data-[selected=true]:block"
+            className="hidden rounded-sm p-0.5 text-muted-foreground hover:text-bad group-data-[selected=true]:block"
             title="删掉这条记录（agent 自己的会话记录不动）"
             onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => {

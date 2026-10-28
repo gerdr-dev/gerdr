@@ -2,7 +2,11 @@
 
 /* 灰阶纯灰（不带色相），强调色只有一个 —— 和终端里那些彩色输出放一起不脏。 */
 :root {
-  --radius: 0.5rem;
+  /* 圆角就这几档（sm 6 / md 8 / lg 10 / xl 14 px），按东西的大小挑，别写死像素：
+     sm = 小件和浮层里的项（菜单项、标签、小按钮）；md = 控件（按钮、输入框、列表行）；
+     lg = 浮层和卡片（菜单、弹出框、工具卡片、代码块）—— 里面的项是 sm、外框 p-1，外 = 内 + 内边距，弧线才是同心的；
+     xl = 弹窗；输入框用 2xl（16px，22px 太圆）；用户气泡单独用 22px。裸 rounded 是 Tailwind 固定的 4px，不跟这里走，别用。 */
+  --radius: 0.625rem;
   --background: oklch(0.99 0 0);
   --foreground: oklch(0.2 0 0);
   --card: oklch(1 0 0);
@@ -306,9 +310,13 @@
     opacity: 1;
   }
 }
+/* 表格：格子留足内边距、行高放开，一格折成好几行时字不挤在一起；顶对齐 —— 居中的话一行字的格子
+   飘在高格子中间，横着扫一行时眼睛对不上。 */
 .gerdr-md :is([data-streamdown="table-cell"], [data-streamdown="table-header-cell"]) {
   font-size: 0.93em;
-  padding: 0.35em 0.7em;
+  line-height: 1.6;
+  padding: 0.6em 1em;
+  vertical-align: top;
 }
 
 /* 运行中的 loading（chat/PixelLoader.tsx）：外圈每格亮一下再渐暗，按位置错开起点 → 一颗带尾巴的光点在转。 */

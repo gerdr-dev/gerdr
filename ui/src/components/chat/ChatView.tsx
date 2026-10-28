@@ -167,6 +167,16 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
   };
   useEffect(() => () => cancelAnimationFrame(pinRaf.current), []);
   const lastH = useRef(0); // 上一次量到的总高（推到底之前用它判断「刚才是不是贴着底」）
+  // 贴没贴底直接量 DOM，不信 Virtuoso 的 atBottom：贴着底时把上面一块展开的东西收起来，内容变矮、浏览器把 scrollTop
+  // 往回夹，Virtuoso 拿旧的总高一算以为人往上翻了，报 false 之后就不再改回来 —— 明明在底部却冒出「回到底部」，
+  // 新输出也不跟了（用户报的）。
+  const syncBottom = () => {
+    const el = scrollerEl.current;
+    if (!el || !activeRef.current) return;
+    const b = el.scrollHeight - el.clientHeight - el.scrollTop < 80;
+    bottomRef.current = b;
+    setAtBottom(b);
+  };
   // 行是 memo 的，回调要稳定（不然每次都重渲染），但又要拿到最新的 —— 放在 ref 里转一手
   const latest = useRef({ doRewind, sessionId: session.id, openGroups, setOpenGroups });
   latest.current = { doRewind, sessionId: session.id, openGroups, setOpenGroups };
@@ -209,19 +219,17 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
               // 重新挂载（切回一个被卸载过的 tab）时回到上次的位置：在底部就回底部，不在就回那个高度
               {...(saved && !saved.bottom ? { initialScrollTop: saved.top } : { initialTopMostItemIndex: { index: "LAST" as const, align: "end" as const } })}
               atBottomThreshold={80}
-              atBottomStateChange={(b) => {
-                if (!activeRef.current) return;
-                bottomRef.current = b;
-                setAtBottom(b);
+              atBottomStateChange={() => {
+                syncBottom();
+                requestAnimationFrame(syncBottom); // 它报的那一刻高度可能还没量完，下一帧再量一次
               }}
               scrollerRef={(el) => (scrollerEl.current = el as HTMLElement | null)}
               onScroll={(e) => {
                 if (!activeRef.current) return; // 藏着期间的滚动（WebKit 清零）不算
                 const el = e.currentTarget as HTMLElement;
                 lastH.current = el.scrollHeight;
-                const bottom = el.scrollHeight - el.clientHeight - el.scrollTop < 80;
-                bottomRef.current = bottom;
-                scrollMem.set(scrollKey, { top: el.scrollTop, bottom });
+                syncBottom();
+                scrollMem.set(scrollKey, { top: el.scrollTop, bottom: bottomRef.current });
                 updatePinned();
               }}
               // 流式输出时最后一行在长高：followOutput 要等下一拍才跟，会落后一两行、一顿一顿的。
@@ -234,6 +242,7 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
                 const wasAtBottom = lastH.current - el.clientHeight - el.scrollTop < 80;
                 if (bottomRef.current && wasAtBottom) el.scrollTop = el.scrollHeight;
                 lastH.current = el.scrollHeight;
+                syncBottom();
               }}
               increaseViewportBy={{ top: 800, bottom: 800 }}
               components={{ Footer: ListFooter }}

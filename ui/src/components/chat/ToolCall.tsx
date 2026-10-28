@@ -200,7 +200,7 @@ export function ToolCall({ part, children, running }: { part: ToolPart; children
         {!task && took && <span className="shrink-0 text-[11px] tabular-nums opacity-70">{took}</span>}
         {task && (
           <>
-            {task.background && <span className="shrink-0 rounded bg-muted px-1 text-[11px]">后台</span>}
+            {task.background && <span className="shrink-0 rounded-sm bg-muted px-1 text-[11px]">后台</span>}
             {/* 进度文字可以截断，耗时不能（截成「3.」看不懂）。跑完后 CLI 自动写的「Background command "…" completed」
                 不显示：就是把标题和状态又说一遍 */}
             {taskNote && <span className="min-w-0 shrink truncate text-[11px] text-muted-foreground">{taskNote}</span>}
@@ -215,7 +215,7 @@ export function ToolCall({ part, children, running }: { part: ToolPart; children
         {task && (task.type === "local_agent" || task.subagent) && (
           <span
             role="button"
-            className="shrink-0 rounded px-1.5 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
+            className="shrink-0 rounded-sm px-1.5 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
             title="在旁边打开这个子 agent 的完整对话（只读）"
             onClick={(e) => {
               e.stopPropagation();
@@ -228,7 +228,7 @@ export function ToolCall({ part, children, running }: { part: ToolPart; children
         {canBackground && (
           <span
             role="button"
-            className="shrink-0 rounded px-1.5 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
+            className="shrink-0 rounded-sm px-1.5 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
             title="让它在后台接着跑，这一轮先往下走（同 Claude Code 里的 ctrl+b）"
             onClick={(e) => {
               e.stopPropagation();
@@ -243,7 +243,7 @@ export function ToolCall({ part, children, running }: { part: ToolPart; children
             role="button"
             aria-disabled={allowed}
             className={cn(
-              "shrink-0 rounded px-1.5 text-[11px]",
+              "shrink-0 rounded-sm px-1.5 text-[11px]",
               allowed ? "text-muted-foreground" : "text-brand hover:bg-muted",
             )}
             title={`分类器拦下了这次调用。加上这些规则（写进项目的 .claude/settings.local.json），然后让它重试：\n${meta.autoDenied!.join("\n")}`}

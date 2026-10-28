@@ -95,7 +95,7 @@ export function TaskDoneCard({ sessionId, t }: { sessionId: string; t: AgentTask
         {isAgent && t.subagent ? `${t.subagent} · ` : ""}
         {t.description || t.id}
       </span>
-      <span className="shrink-0 rounded bg-muted px-1 text-[11px]">{isAgent ? "子 agent" : "后台"}</span>
+      <span className="shrink-0 rounded-sm bg-muted px-1 text-[11px]">{isAgent ? "子 agent" : "后台"}</span>
       {!ok && <span className="shrink-0 text-[11px] text-bad">{STATUS[t.status] ?? t.status}</span>}
       {!boilerplate(t) && <span className="min-w-0 shrink truncate text-[11px]">{t.summary}</span>}
       <span className="shrink-0 text-[11px] tabular-nums opacity-70">
@@ -105,7 +105,7 @@ export function TaskDoneCard({ sessionId, t }: { sessionId: string; t: AgentTask
       <span className="flex-1" />
       {isAgent && t.toolCallId && (
         <button
-          className="shrink-0 rounded px-1.5 text-[11px] hover:bg-muted hover:text-foreground"
+          className="shrink-0 rounded-sm px-1.5 text-[11px] hover:bg-muted hover:text-foreground"
           onClick={() => openSubagent(sessionId, t.toolCallId!, t.description)}
         >
           查看对话

@@ -108,7 +108,7 @@ export function RemoteSettings({ open }: { open: boolean }) {
           {pair ? (
             <div className="flex items-start gap-4 rounded-md border p-3 max-md:flex-col">
               {/* 图本身是白底黑块（服务端画的 PNG）：扫码要对比度，深色模式下也不反色 */}
-              {pair.qr && <img src={pair.qr} alt="配对二维码" className="size-40 shrink-0 rounded" />}
+              {pair.qr && <img src={pair.qr} alt="配对二维码" className="size-40 shrink-0 rounded-sm" />}
               <div className="space-y-1.5">
                 <div>用手机相机扫这个二维码，或者打开 {st.url} 输入：</div>
                 <div className="font-mono text-[20px] tracking-[.3em]">

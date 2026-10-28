@@ -89,7 +89,7 @@ export function PermissionCard({ sessionId, data }: { sessionId: string; data: G
         </div>
       )}
       {d && d !== tc.title && (
-        <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-all rounded bg-muted/60 px-2 py-1 font-mono text-[12px]">{d}</pre>
+        <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-all rounded-sm bg-muted/60 px-2 py-1 font-mono text-[12px]">{d}</pre>
       )}
       <div className="mt-2.5 flex flex-wrap gap-2">
         {request.options.map((o, i) => (
@@ -361,7 +361,7 @@ export function AskCard({ sessionId, data }: { sessionId: string; data: GData["a
         {!instant && (
           <Button size="sm" className="rounded-full pr-2 pl-4" disabled={busy} onClick={() => next()}>
             {last ? "提交" : "继续"}
-            <span className="rounded border border-current/30 px-1 text-[10px] opacity-70">↵</span>
+            <span className="rounded-sm border border-current/30 px-1 text-[10px] opacity-70">↵</span>
           </Button>
         )}
       </div>

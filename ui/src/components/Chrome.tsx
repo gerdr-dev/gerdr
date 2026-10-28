@@ -102,7 +102,7 @@ export function TabBar() {
                   {/* 关闭键一直占着位置（照 Chrome）：当前 tab 一直显示，别的 hover 才显示。原来是 hover 时才插进来，
                       tab 当场变宽、后面的 tab 全跟着挪 —— 鼠标划过 tab 栏就是一路闪动（用户报的） */}
                   <button
-                    className={cn("-mr-1 rounded p-0.5 hover:bg-muted", active ? "visible" : "invisible group-hover/tab:visible")}
+                    className={cn("-mr-1 rounded-sm p-0.5 hover:bg-muted", active ? "visible" : "invisible group-hover/tab:visible")}
                     onClick={(e) => {
                       e.stopPropagation();
                       closeTab(t.id);
@@ -199,7 +199,7 @@ export function Sidebar({ className }: { className?: string }) {
   const [drag, setDrag] = useState<number | null>(null);
   return (
     <div className={cn("flex h-full w-56 shrink-0 flex-col border-r bg-sidebar", className)}>
-      <div className="flex h-9 shrink-0 items-center gap-1 border-b px-2" style={{ WebkitAppRegion: "drag" } as any}>
+      <div className="flex h-10 shrink-0 items-center gap-1 border-b px-2" style={{ WebkitAppRegion: "drag" } as any}>
         <div className="native-traffic-light-gap" />
         <span className="flex-1 text-[12px] font-semibold tracking-wide text-muted-foreground">gerdr</span>
         {!connected && <span className="text-[11px] text-bad">离线</span>}

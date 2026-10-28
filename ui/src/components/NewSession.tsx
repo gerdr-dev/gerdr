@@ -77,7 +77,7 @@ export function DirPicker({ value, onChange, onEnter, autoFocus }: { value: stri
           <div className="mb-1 border-b pb-1">
             <div className="px-2 py-1 text-[11px] text-muted-foreground">最近</div>
             {recent.map((r) => (
-              <button key={r} className="flex w-full items-center gap-2 rounded px-2 py-1 text-left font-mono text-[12px] hover:bg-accent" onClick={() => (onChange(tilde(r, home)), setOpen(false))}>
+              <button key={r} className="flex w-full items-center gap-2 rounded-sm px-2 py-1 text-left font-mono text-[12px] hover:bg-accent" onClick={() => (onChange(tilde(r, home)), setOpen(false))}>
                 <History className="size-3.5 text-muted-foreground" />
                 <span className="truncate">{tilde(r, home)}</span>
               </button>
@@ -87,7 +87,7 @@ export function DirPicker({ value, onChange, onEnter, autoFocus }: { value: stri
         {err && <div className="px-2 py-1 text-[12px] text-bad">{err}</div>}
         {list && (
           <div className="max-h-72 overflow-auto">
-            <button className="flex w-full items-center gap-2 rounded px-2 py-1 text-left font-mono text-[12px] text-muted-foreground hover:bg-accent" onClick={() => (onChange(tilde(list.parent, home) + "/"), browse(list.parent))}>
+            <button className="flex w-full items-center gap-2 rounded-sm px-2 py-1 text-left font-mono text-[12px] text-muted-foreground hover:bg-accent" onClick={() => (onChange(tilde(list.parent, home) + "/"), browse(list.parent))}>
               <ChevronUp className="size-3.5" />
               {tilde(list.path, home)}
               {list.git && <FolderGit2 className="size-3.5 text-brand" />}
@@ -100,7 +100,7 @@ export function DirPicker({ value, onChange, onEnter, autoFocus }: { value: stri
                 return (
                   <button
                     key={d}
-                    className="flex w-full items-center gap-2 rounded px-2 py-1 text-left font-mono text-[12px] hover:bg-accent"
+                    className="flex w-full items-center gap-2 rounded-sm px-2 py-1 text-left font-mono text-[12px] hover:bg-accent"
                     onClick={() => {
                       onChange(tilde(full, home));
                       browse(full);
