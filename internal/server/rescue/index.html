@@ -18,7 +18,8 @@
   header { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
   header b { font-size: 15px; }
   header .sub { color: var(--muted); font-size: 12px; }
-  header a { margin-left: auto; color: var(--brand); text-decoration: none; font-size: 13px; }
+  header .close { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border: 1px solid var(--border); border-radius: 6px; color: var(--fg); text-decoration: none; font-size: 13px; background: var(--card); }
+  header .close:hover { border-color: var(--muted); }
   main { flex: 1; min-height: 0; display: flex; }
   aside { width: 340px; flex-shrink: 0; border-right: 1px solid var(--border); overflow: auto; padding: 12px 14px; }
   section { margin-bottom: 18px; }
@@ -57,6 +58,7 @@
   .composer { border-top: 1px solid var(--border); padding: 10px 14px; display: flex; gap: 8px; align-items: flex-end; }
   .composer textarea { flex: 1; min-height: 64px; max-height: 40vh; padding: 8px; resize: vertical; font-size: 13px; }
   .empty { color: var(--muted); text-align: center; margin-top: 12vh; }
+  @media (max-width: 760px) { header .sub { display: none; } }
   @media (max-width: 760px) { main { flex-direction: column; } aside { width: auto; max-height: 38vh; border-right: 0; border-bottom: 1px solid var(--border); } }
 </style>
 </head>
@@ -64,7 +66,8 @@
 <header>
   <b>gerdr 急救</b>
   <span class="sub">主界面坏了的时候在这里叫 agent 修。这一页是内置的，改不坏。</span>
-  <a href="/">回到主界面 →</a>
+  <!-- 退出急救：回到主界面。用链接不用 JS，脚本没加载出来也点得动 -->
+  <a class="close" href="/" title="关闭急救面板，回到主界面">✕ 关闭急救</a>
 </header>
 <main>
   <aside>
