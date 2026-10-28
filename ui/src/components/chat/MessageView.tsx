@@ -12,6 +12,7 @@ import { focusSession } from "@/lib/actions";
 import { useStore } from "@/lib/store";
 import { AskCard, PermissionCard, PlanCard, QuickReplies } from "./Cards";
 import { ToolCall } from "./ToolCall";
+import { openLightbox } from "../Lightbox";
 import { TaskDoneCard } from "./TasksBar";
 import { fmtElapsed, fmtTokens } from "./StatusLine";
 
@@ -88,7 +89,12 @@ export const MessageView = memo(function MessageView({ msg, sessionId, live, run
                   // 高度定死在图片自己身上（宽度按比例自动算）：对话是虚拟列表，行高要在图片加载完之前就定下来。
                   // 只给 max-h 的话行先按 0 高量、解码完再长 160px，滚动跟着修正又把行卸载 / 重挂，来回抽搐。
                   // 别套一层定高的 div 再给 img max-w-full：外层宽度又取决于 img，循环依赖，图片宽度会被算成 0（踩过，图没了）
-                  <img key={i} src={f.url} className="h-40 w-auto max-w-full rounded-xl border object-contain" />
+                  <img
+                    key={i}
+                    src={f.url}
+                    onClick={(e) => openLightbox(files.map((x: any) => ({ url: x.url })), i, e.currentTarget)}
+                    className="h-40 w-auto max-w-full cursor-zoom-in rounded-xl border object-contain"
+                  />
                 ))}
               </div>
             )}
@@ -314,7 +320,14 @@ export function renderPart(p: GPart, i: number, ctx: PartCtx): ReactNode {
       );
     case "file":
       // 同用户消息里的图：高度定死在 img 上，行高不随图片加载变（虚拟列表会抽搐）
-      return <img key={i} src={(p as any).url} className="h-60 w-auto max-w-full self-start rounded-md border object-contain" />;
+      return (
+        <img
+          key={i}
+          src={(p as any).url}
+          onClick={(e) => openLightbox([{ url: (p as any).url }], 0, e.currentTarget)}
+          className="h-60 w-auto max-w-full cursor-zoom-in self-start rounded-md border object-contain"
+        />
+      );
   }
   return null;
 }

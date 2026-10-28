@@ -5,6 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { PhoneBar, Sidebar, TabBar } from "./components/Chrome";
 import { PaneSwitcher } from "./components/PaneSwitcher";
 import { Dialogs } from "./components/Dialogs";
+import { LightboxHost } from "./components/Lightbox";
 import { TabActive, TabView } from "./components/Panes";
 import { tabName } from "./lib/actions";
 import { handleKeydown } from "./lib/commands";
@@ -189,6 +190,7 @@ export default function App() {
         </div>
       </div>
       <Dialogs />
+      <LightboxHost />
       <CliApprove />
       {/* 手机上底部是输入框和软键盘，toast 放顶上 */}
       <Toaster position={phone ? "top-center" : "bottom-right"} />

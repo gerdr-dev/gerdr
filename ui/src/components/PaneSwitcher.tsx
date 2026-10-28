@@ -9,6 +9,7 @@ import { set, useStore } from "@/lib/store";
 import type { SessionSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { AgentIcon, StatusDot } from "./AgentIcon";
+import { compareSessions, sessionRank } from "@/lib/order";
 import { WsDot } from "./Chrome";
 
 /**
@@ -25,17 +26,11 @@ const LS_SORT = "gerdr.panesSort";
 type Row = { pane: PaneLeaf; session?: SessionSummary; ws: string; wsId: string; tab: string; i: number };
 
 /**
- * 优先级分档：**等你 > 出错 > 跑完没看 > 在跑 > 闲着 > 还没开会话的空 pane**，同一档里最近动过的在前。
- * 和侧栏 agents 那张表一个顺序，只是多了最后一档（手机上新开的空 pane 也得能找回来）。
+ * 优先级分档：和侧栏 agents 那张表同一套（lib/order.ts），只是多了最后一档 5 = 还没开会话的空 pane
+ * （手机上新开的空 pane 也得能找回来）。
  */
 function rankOf(r: Row, unread: Record<string, true>) {
-  const s = r.session;
-  if (!s) return 5;
-  if (s.status === "waiting") return 0;
-  if (s.status === "error") return 1;
-  if (unread[s.id]) return 2;
-  if (s.status === "running") return 3;
-  return 4;
+  return r.session ? sessionRank(r.session, unread) : 5;
 }
 
 /** 只给最该被看见的几个状态加字：其余靠那个点的颜色，别把每行都塞满标签 */
@@ -117,7 +112,7 @@ export function PaneSwitcher() {
       (!kw || `${r.session?.title ?? ""} ${r.session?.agent ?? ""} ${r.session?.cwd ?? ""} ${r.ws} ${r.tab} ${r.pane.sub?.title ?? ""} ${r.pane.term ? "终端 " + r.pane.term.cwd : ""}`.toLowerCase().includes(kw));
     const list = out.filter(hit);
     if (sort === "group") return list;
-    return list.sort((a, b) => rankOf(a, unread) - rankOf(b, unread) || (b.session?.updatedAt ?? 0) - (a.session?.updatedAt ?? 0) || a.i - b.i);
+    return list.sort((a, b) => rankOf(a, unread) - rankOf(b, unread) || (a.session && b.session ? compareSessions(a.session, b.session, unread) : 0) || a.i - b.i);
   }, [layout, sessions, unread, q, ws, sort]);
 
   // 「分组」按工作空间分组（和侧栏里看到的一样）；优先级是全局排序，分组会把它切碎，所以那边是一条平铺的表。

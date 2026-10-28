@@ -7,11 +7,12 @@ import { api, type Holder, isNetworkError } from "@/lib/api";
 import { closeFocusedPane, focusPane } from "@/lib/actions";
 import { get, set, transcript, useStore } from "@/lib/store";
 import type { ConfigOption, ContentBlock, SessionSummary } from "@/lib/types";
-import { isCoarse } from "@/lib/phone";
+import { isCoarse, usePhone } from "@/lib/phone";
 import { askKey } from "@/lib/askkeys";
 import { cn } from "@/lib/utils";
 import { HeldDialog } from "./HeldDialog";
 import { OptionMenu } from "./OptionMenu";
+import { openLightbox } from "../Lightbox";
 import { TasksChip } from "./TasksBar";
 
 export type ComposerHandle = { focus(): void; setText(t: string): void; setContent(blocks: ContentBlock[]): void; putBack(blocks: ContentBlock[]): void };
@@ -41,6 +42,7 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
 ) {
   const text = useStore((s) => s.drafts[paneId] ?? "");
   const sendKey = useStore((s) => s.config.sendKey);
+  const phone = usePhone();
   const [imgs, setImgs] = useState<Img[]>([]);
   const [busy, setBusy] = useState(false);
   const [cmdIdx, setCmdIdx] = useState(0);
@@ -481,7 +483,7 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
           <div className="flex flex-wrap gap-2 px-3 pt-3">
             {imgs.map((im, i) => (
               <div key={i} className="group/img relative">
-                <img src={im.url} className="size-14 rounded-md border object-cover" />
+                <img src={im.url} onClick={(e) => openLightbox(imgs.map((x) => ({ url: x.url })), i, e.currentTarget)} className="size-14 cursor-zoom-in rounded-md border object-cover" />
                 <button
                   className="absolute -right-1.5 -top-1.5 hidden rounded-full bg-foreground p-0.5 text-background group-hover/img:block [@media(hover:none)]:block"
                   onClick={() => setImgs(imgs.filter((_, j) => j !== i))}
@@ -512,50 +514,55 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
               addFiles(files);
             }
           }}
-          placeholder={running ? (sendKey === "enter" ? "它在干活：↵ 等这一步做完插进去，Ctrl+↵ 立即插" : "它在干活：说一句会等这一步做完插进去") : "说点什么…  / 看命令"}
-          className="block max-h-[40vh] min-h-[44px] w-full resize-none bg-transparent px-4 pt-3 pb-1 text-[1em] max-md:text-[16px] leading-relaxed outline-none placeholder:text-muted-foreground/70"
+          placeholder={running ? (phone ? "它在干活：说的话等这一步做完插进去" : sendKey === "enter" ? "它在干活：↵ 等这一步做完插进去，Ctrl+↵ 立即插" : "它在干活：说一句会等这一步做完插进去") : "说点什么…  / 看命令"}
+          className="block max-h-[40vh] min-h-[44px] w-full resize-none bg-transparent px-4 pt-3 pb-1 text-[1em] max-md:text-[15px] max-md:supports-[-webkit-touch-callout:none]:text-[16px] leading-relaxed outline-none placeholder:text-muted-foreground/70"
         />
         <div className="flex items-center gap-1 px-2.5 pb-2.5">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <label className="flex size-7 cursor-pointer items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground">
-                <ImagePlus className="size-4" />
-                <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => e.target.files && addFiles(e.target.files)} />
-              </label>
-            </TooltipTrigger>
-            <TooltipContent>附图（也可以直接粘贴 / 拖进来）</TooltipContent>
-          </Tooltip>
-          {modes && modes.availableModes.length > 0 && (
-            <OptionMenu
-              label="模式"
-              value={modes.currentModeId}
-              options={modes.availableModes.map((m) => ({ value: m.id, name: m.name, description: m.description }))}
-              onChange={(v) => api.setMode(session.id, v).catch((e) => toast.error(e.message))}
-            />
-          )}
-          {opts.map((o) => (
-            <OptionMenu
-              key={o.id}
-              label={o.name}
-              value={o.currentValue}
-              options={flatOptions(o)}
-              onChange={(v) => api.setConfig(session.id, o.id, v).catch((e) => toast.error(e.message))}
-            />
-          ))}
-          <div className="flex-1" />
-          <TasksChip session={session} />
-          {session.context && <ContextMeter c={session.context} />}
-          {running && (
+          {/* 附图和几个下拉放一组：手机上放不下时这一组横着滑，而不是每个都被挤成「A…」「Opus …」（用户报的）；
+              上下文 / 发送这些固定在右边不动 */}
+          <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none]">
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button size="icon" variant="ghost" className="size-8 rounded-full" onMouseDown={keepFocus} onClick={() => escape()}>
+                <label className="flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground">
+                  <ImagePlus className="size-4" />
+                  <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => e.target.files && addFiles(e.target.files)} />
+                </label>
+              </TooltipTrigger>
+              <TooltipContent>附图（也可以直接粘贴 / 拖进来）</TooltipContent>
+            </Tooltip>
+            {modes && modes.availableModes.length > 0 && (
+              <OptionMenu
+                label="模式"
+                value={modes.currentModeId}
+                options={modes.availableModes.map((m) => ({ value: m.id, name: m.name, description: m.description }))}
+                onChange={(v) => api.setMode(session.id, v).catch((e) => toast.error(e.message))}
+              />
+            )}
+            {opts.map((o) => (
+              <OptionMenu
+                key={o.id}
+                label={o.name}
+                value={o.currentValue}
+                options={flatOptions(o)}
+                onChange={(v) => api.setConfig(session.id, o.id, v).catch((e) => toast.error(e.message))}
+              />
+            ))}
+          </div>
+          <TasksChip session={session} />
+          {session.context && <ContextMeter c={session.context} />}
+          {/* 手机上底栏放不下「打断 / 立即发 / 发送」三个圆钮（再挤下拉就又被截了）：照 ChatGPT 共用一个位置 ——
+              在跑、没打字时是打断；打了字是立即发 + 插进去。电脑上地方够，三个都摆着 */}
+          {running && (!phone || !hasText) && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button size="icon" variant={phone ? "default" : "ghost"} className="size-8 rounded-full" onMouseDown={keepFocus} onClick={() => escape()}>
                   <Square className="size-3.5 fill-current" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>打断（Esc）</TooltipContent>
             </Tooltip>
           )}
-          {running && (
+          {running && (!phone || hasText) && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button size="icon" variant="ghost" className="size-8 rounded-full" disabled={!hasText || busy} onMouseDown={keepFocus} onClick={() => send(true)}>
@@ -565,14 +572,16 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
               <TooltipContent>立即发送：打断它正在做的这一步{sendKey === "enter" ? "（Ctrl+↵）" : ""}</TooltipContent>
             </Tooltip>
           )}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button size="icon" className="size-8 rounded-full" disabled={!hasText || busy} onMouseDown={keepFocus} onClick={() => send()}>
-                {running ? <CornerDownRight className="size-4" /> : <ArrowUp className="size-4" />}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{running ? "等它做完这一步再插进去" : "发送"}</TooltipContent>
-          </Tooltip>
+          {(!phone || !running || hasText) && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button size="icon" className="size-8 rounded-full" disabled={!hasText || busy} onMouseDown={keepFocus} onClick={() => send()}>
+                  {running ? <CornerDownRight className="size-4" /> : <ArrowUp className="size-4" />}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{running ? "等它做完这一步再插进去" : "发送"}</TooltipContent>
+            </Tooltip>
+          )}
         </div>
       </div>
     </div>

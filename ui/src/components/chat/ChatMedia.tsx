@@ -2,12 +2,13 @@ import { AlertCircle, ExternalLink, FileText, FolderOpen } from "lucide-react";
 import { useContext, useState } from "react";
 import { openPath } from "@/lib/actions";
 import { isNative, nativeOpenPath } from "@/lib/native";
+import { openLightbox } from "../Lightbox";
 import { SessionContext } from "./sessionContext";
 
 // 对话里的图片、视频、音频、PDF（照 shuttle 的 ChatMedia）：agent 用 Markdown 图片语法引用，
 // `![说明](/绝对路径.png)` 或者相对会话目录的 `![](out/a.mp4)`，界面按扩展名画成图 / 播放器 / 卡片。
 // 本机文件走 /api/fs/raw（同源、带 Range —— 视频能拖进度条；响应一律 CSP sandbox，见 server/fileview.go）；
-// 网上的地址直接用。点图、点 PDF 打开 gerdr 自己的文件查看器（FileViewer）；在 App 里还能用系统程序打开、在访达里显示。
+// 网上的地址直接用。点图开灯箱（Lightbox），点 PDF 打开 gerdr 自己的文件查看器（FileViewer）；在 App 里还能用系统程序打开、在访达里显示。
 // agent 怎么知道要这么写：起 agent 时给它的说明里有一句（acpx.MediaHint）。
 
 const VIDEO = /\.(mp4|m4v|mov|webm)$/i;
@@ -77,7 +78,7 @@ export function ChatMedia({ src, alt }: { src: string; alt?: string }) {
         loading="lazy"
         title="点击放大"
         onError={() => setFailed(true)}
-        onClick={() => (path ? openPath(path, cwd) : window.open(src, "_blank", "noopener"))}
+        onClick={(e) => openLightbox([{ url, alt: name, path: path ?? undefined, cwd }], 0, e.currentTarget)}
         className="max-h-72 max-w-[min(24rem,100%)] cursor-zoom-in rounded-md border border-border/60"
       />
     );
@@ -165,7 +166,7 @@ export function imageGroup(node: Element | undefined): { src: string; alt: strin
   return list;
 }
 
-/** 多张图：固定大小的方形缩略图，按宽度换行；点开大图（FileViewer） */
+/** 多张图：固定大小的方形缩略图，按宽度换行；点开灯箱，能左右翻 */
 export function MediaGrid({ items }: { items: { src: string; alt: string }[] }) {
   const session = useContext(SessionContext);
   return (
@@ -178,7 +179,16 @@ export function MediaGrid({ items }: { items: { src: string; alt: string }[] }) 
             key={i}
             type="button"
             title={it.alt || nameOf(path ?? it.src)}
-            onClick={() => (path ? openPath(path, session?.cwd) : window.open(it.src, "_blank", "noopener"))}
+            onClick={(e) =>
+              openLightbox(
+                items.map((x) => {
+                  const p = localPath(x.src);
+                  return { url: p ? rawURL(p, session?.cwd) : x.src, alt: x.alt || nameOf(p ?? x.src), path: p ?? undefined, cwd: session?.cwd };
+                }),
+                i,
+                e.currentTarget,
+              )
+            }
             className="size-28 cursor-zoom-in overflow-hidden rounded-md border border-border/60"
           >
             <img src={url} alt={it.alt} loading="lazy" className="size-full object-cover" />

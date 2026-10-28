@@ -9,6 +9,7 @@ import { activeWs, leaves, type Tab, type Workspace } from "@/lib/layout";
 import { applyTabLabel, applyWorkspaceLabel } from "@/lib/plugins";
 import { focusedSession, get, keyFor, set, setLayout, toggleSidebar, useStore } from "@/lib/store";
 import type { SessionSummary } from "@/lib/types";
+import { compareSessions } from "@/lib/order";
 import { cn } from "@/lib/utils";
 import { AgentIcon, StatusDot } from "./AgentIcon";
 import { TabDragLayer, useTabDrag } from "./TabDrag";
@@ -241,14 +242,14 @@ export function Sidebar({ className }: { className?: string }) {
 
 /**
  * 侧栏下半截：所有开着的 agent（= 界面上有 pane 显示的会话），跨工作空间，和 herdr 侧栏的 agents 一样。
- * 排序：在等你的 → 出错的 → 跑完没看的 → 在跑的 → 闲着的；同一档里最近动过的在前。
+ * 排序见 lib/order.ts（和手机上的面板一览共用）：在等你的 → 出错的 → 跑完没看的 → 在跑的 → 闲着的。
  */
 function AgentList() {
   const layout = useStore((s) => s.layout);
   const sessions = useStore((s) => s.sessions);
   const unread = useStore((s) => s.unread);
   const focused = focusedSession(layout);
-  const rows: { s: SessionSummary; where: string; rank: number }[] = [];
+  const rows: { s: SessionSummary; where: string }[] = [];
   const seen = new Set<string>();
   layout.workspaces.forEach((w, wi) =>
     w.tabs.forEach((t, ti) => {
@@ -256,16 +257,12 @@ function AgentList() {
         const s = p.sessionId ? sessions[p.sessionId] : undefined;
         if (!s || seen.has(s.id)) continue;
         seen.add(s.id);
-        const rank = s.status === "waiting" ? 0 : s.status === "error" ? 1 : unread[s.id] ? 2 : s.status === "running" ? 3 : 4;
-        rows.push({ s, rank, where: `${applyWorkspaceLabel(w, wi, w.name)} · ${ti + 1}.${tabName(t)}` });
+        rows.push({ s, where: `${applyWorkspaceLabel(w, wi, w.name)} · ${ti + 1}.${tabName(t)}` });
       }
     }),
   );
-  // 同一档里新的在前，但「新」看的是进入这个状态的时刻：在跑的按这一轮开始的时间（跑的过程中不变），
-  // 别的按 updatedAt（不在跑时它不动，刚跑完的就排最前）。原来一律按 updatedAt：在跑的 agent 每出一点字就更新一次，
-  // 几个一起跑时列表一直在跳（用户报的）；只按界面位置排又会让刚跑完的沉到底（也报了）。
-  const since = (s: SessionSummary) => (s.status === "running" && s.turn ? s.turn.startedAt : s.updatedAt);
-  rows.sort((a, b) => a.rank - b.rank || since(b.s) - since(a.s));
+  // 和手机上的面板一览同一套顺序（lib/order.ts）；分不出来时保持界面上的先后（sort 是稳定的）
+  rows.sort((a, b) => compareSessions(a.s, b.s, unread));
   return (
     <div className="flex min-h-0 flex-1 flex-col border-t">
       <div className="flex shrink-0 items-center px-3.5 pt-2 pb-1 text-[11px] font-medium text-muted-foreground">
