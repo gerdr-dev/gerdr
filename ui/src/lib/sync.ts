@@ -149,16 +149,19 @@ function startHeartbeat() {
     if (document.visibilityState === "hidden") return;
     if (!ws) return scheduleReconnect(true);
     if (ws.readyState !== WebSocket.OPEN) return;
-    // 刚醒来：问一下，3 秒没回音就重连。
+    // 刚醒来：问一下，8 秒没回音就重连。
+    // 只收问的那一条：focus / visibilitychange / online 常常一起来，3 秒的版本在远程慢网上会把刚连上的新连接也当死的收掉，
+    // 一直重连（服务端「正在连接」里一台手机列好几条）。8 秒是给远程留的：pong 会排在正在写的一大帧日志后面。
+    const sock = ws;
     const asked = Date.now();
     try {
-      ws.send(JSON.stringify({ t: "ping" }));
+      sock.send(JSON.stringify({ t: "ping" }));
     } catch {
       return dropStale();
     }
     setTimeout(() => {
-      if (ws && lastHeard < asked) dropStale();
-    }, 3000);
+      if (ws === sock && lastHeard < asked) dropStale();
+    }, 8000);
   };
   document.addEventListener("visibilitychange", wake);
   window.addEventListener("online", wake);

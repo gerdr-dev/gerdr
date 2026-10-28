@@ -564,14 +564,23 @@ func (s *Server) ws(w http.ResponseWriter, r *http.Request) {
 	defer s.Hub.Unsubscribe(sub)
 	done := make(chan struct{})
 	pong := make(chan struct{}, 1)
+	// 读期限：客户端 20 秒一次应用层 ping，浏览器对协议层 ping（下面 25 秒一次）也会自动回 pong，收到哪个都续上。
+	// 70 秒什么都没收到就是死连接（手机换网、中继那头断了）：不设的话它一直挂在「正在连接」里、一直挡着睡眠。
+	const readWait = 70 * time.Second
+	_ = conn.SetReadDeadline(time.Now().Add(readWait))
+	conn.SetPongHandler(func(string) error { return conn.SetReadDeadline(time.Now().Add(readWait)) })
 	go func() {
 		defer close(done)
+		// 读这头断了（客户端关了 / 死了）就把整条连接关掉：写的那头可能正卡在一大帧日志上（写期限 30 秒），
+		// 不关的话它要等写完或超时才发现，这期间重连上来的新连接和它叠在一起，「正在连接」里一台手机列好几条（踩过）。
+		defer conn.Close()
 		conn.SetReadLimit(1 << 20)
 		for {
 			_, b, err := conn.ReadMessage()
 			if err != nil {
 				return
 			}
+			_ = conn.SetReadDeadline(time.Now().Add(readWait))
 			var m struct {
 				T   string   `json:"t"`
 				IDs []string `json:"ids"`

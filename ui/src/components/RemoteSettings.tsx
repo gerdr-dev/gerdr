@@ -309,7 +309,7 @@ function RemoteConns({ me }: { me: string }) {
             <div className="min-w-0 flex-1">
               <div className="truncate">
                 {c.label || "未知设备"}
-                {c.client && <span className="ml-2 text-[11px] text-muted-foreground">{c.client}</span>}
+                {c.client && c.client !== c.label && <span className="ml-2 text-[11px] text-muted-foreground">{c.client}</span>}
                 {me && c.device === me && <span className="ml-2 text-[11px] text-brand">这台</span>}
               </div>
               <div className="truncate text-[11px] text-muted-foreground">
