@@ -35,6 +35,10 @@ function mount() {
   const host = document.createElement("div");
   host.id = "__gerdr_rescue";
   document.body.appendChild(host);
+  // 键盘事件别冒泡出去：主界面在 window 上听 keydown，看 document.activeElement 不是输入框就把焦点抢到它的输入框
+  // （「在哪打字都进对话框」）。Shadow DOM 里的 textarea 从外面看 activeElement 只是这个 div，字就全跑到左边去了（踩过）。
+  // 只拦冒泡：主界面在捕获阶段的快捷键（前缀键那些）照常能用。
+  for (const t of ["keydown", "keyup", "keypress"]) host.addEventListener(t, (e) => e.stopPropagation());
   const shadow = host.attachShadow({ mode: "open" });
   const style = document.createElement("style");
   style.textContent = CSS;
