@@ -330,6 +330,10 @@ func (a *Agent) newSession(id, cwd string, meta map[string]any) *session {
 	}
 	s.model = metaStr(meta, "model")
 	s.effort = metaStr(meta, "effort")
+	// 回退出来、还没说过话的会话（hub 替我们记着，见 acpx.RewindResponse.Fork）：pendingLocked 会核对它是不是已经分叉成了
+	if f := acpx.GetPendingFork(meta); f != nil {
+		s.fresh, s.forkFrom, s.forkAt = f.From == "", f.From, f.At
+	}
 	a.mu.Lock()
 	a.sessions[id] = s
 	a.mu.Unlock()
@@ -368,12 +372,16 @@ func (a *Agent) ResumeSession(ctx context.Context, p acp.ResumeSessionRequest) (
 // LoadSession：导入一个在别处开过的会话，从磁盘上的会话记录重放历史。
 func (a *Agent) LoadSession(ctx context.Context, p acp.LoadSessionRequest) (acp.LoadSessionResponse, error) {
 	s := a.own(p.SessionId)
+	if s == nil && acpx.GetPendingFork(p.Meta) != nil {
+		s = a.newSession(string(p.SessionId), p.Cwd, p.Meta)
+	}
 	emit := func(u acp.SessionUpdate) { s.update(context.Background(), u) }
 	// 回退之后还没说过话：新会话的记录要等下一句话才由 claude 写出来，这时去找它的文件只会 transcript not found
 	// （踩过：回退完点「重新载入」报错）。它的内容就是原会话到分叉点为止；回退到第一条的就是空的。
 	if s != nil {
 		s.mu.Lock()
-		fresh, from, at, cwd := s.fresh, s.forkFrom, s.forkAt, s.cwd
+		fresh, from, at := s.pendingLocked()
+		cwd := s.cwd
 		s.mu.Unlock()
 		if fresh || from != "" {
 			if from != "" {
@@ -717,8 +725,8 @@ func (a *Agent) rewind(ctx context.Context, p acpx.RewindRequest) (acpx.RewindRe
 	}
 	// 还没真正分叉过的会话（上次回退之后还没说过话）：要在原会话的记录里找。
 	src := s.id
-	if s.forkFrom != "" {
-		src = s.forkFrom
+	if _, from, _ := s.pendingLocked(); from != "" {
+		src = from
 	}
 	cwd := s.cwd
 	s.mu.Unlock()
@@ -748,6 +756,7 @@ func (a *Agent) rewind(ctx context.Context, p acpx.RewindRequest) (acpx.RewindRe
 	} else {
 		s.fresh, s.forkFrom, s.forkAt = false, src, parent
 	}
+	fork := &acpx.PendingFork{From: s.forkFrom, At: s.forkAt}
 	old := s.id
 	s.id = newID
 	s.mu.Unlock()
@@ -755,7 +764,7 @@ func (a *Agent) rewind(ctx context.Context, p acpx.RewindRequest) (acpx.RewindRe
 	delete(a.sessions, old)
 	a.sessions[newID] = s
 	a.mu.Unlock()
-	return acpx.RewindResponse{SessionId: acp.SessionId(newID)}, nil
+	return acpx.RewindResponse{SessionId: acp.SessionId(newID), Fork: fork}, nil
 }
 
 func nilIfEmpty(s string) *string {

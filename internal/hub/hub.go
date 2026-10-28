@@ -606,6 +606,7 @@ func (h *Hub) rekey(s *Session, newAgentID string) {
 	delete(h.byAgent, s.rec.Agent+":"+s.rec.AgentSessionID)
 	s.mu.Lock()
 	s.rec.AgentSessionID = newAgentID
+	s.rec.Fork = nil // 换了 id，上一个「从哪儿分叉」作废（回退会在 rekey 之后重新填）
 	s.mu.Unlock()
 	key := s.rec.Agent + ":" + newAgentID
 	h.byAgent[key] = s

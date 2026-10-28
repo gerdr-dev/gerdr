@@ -36,6 +36,7 @@ type session struct {
 	p          *proc
 	exiting    *proc // 回退时放到后台退的旧进程（就是 p，还没退完）：别再往它发东西，下一轮先等它退完再起新的
 	starting   chan struct{}
+	abortWait  context.CancelFunc // 有一句话在等进程起来（还没发给 claude）时：打断就调它，这句作废
 	turn       *turnState
 	openInputs int // 正在等人回答的审批 / 提问数（插话的优先级看它）
 	lastUsed   time.Time
@@ -131,10 +132,11 @@ func (s *session) start(ctx context.Context) error {
 		o.extra = e.ClaudeArgs(s.id, s.cwd)
 	}
 	o.extra = append(o.extra, s.a.opts.Args...)
+	fresh, from, at := s.pendingLocked()
 	switch {
-	case s.forkFrom != "":
-		o.resume, o.resumeAt, o.fork, o.sessionID = s.forkFrom, s.forkAt, true, s.id
-	case s.fresh:
+	case from != "":
+		o.resume, o.resumeAt, o.fork, o.sessionID = from, at, true, s.id
+	case fresh:
 		o.sessionID = s.id
 	default:
 		// 建了会话但一句话都没说过：claude 还没写会话记录，--resume 会报 "No conversation found"。
@@ -189,8 +191,9 @@ func (s *session) start(ctx context.Context) error {
 
 	s.mu.Lock()
 	s.p = pr
-	// 进程起来了，「怎么接上」的那几个标记作废：以后再起一律按 id --resume。
-	s.fresh, s.forkFrom, s.forkAt = false, "", ""
+	// 「怎么接上」的那几个标记不在这里清：进程起来了不等于分叉成了 —— claude 要等这句话写进去才有新会话的记录，
+	// 这句被 Esc 撤回、进程又被收掉的话，下次还得照样分叉（以前在这里清，下次起成一个空会话，前面的对话全丢）。
+	// 记录有了才算数，见 pendingLocked。
 	if s.mode == "" {
 		s.mode = info.Mode
 	}
@@ -212,6 +215,19 @@ func (s *session) start(ctx context.Context) error {
 		s.update(context.Background(), acp.SessionUpdate{AvailableCommandsUpdate: &acp.SessionAvailableCommandsUpdate{AvailableCommands: cmds}})
 	}
 	return nil
+}
+
+// pendingLocked：这个会话是不是还是个「打算」（回退出来、claude 还没写出它的记录）：是的话返回怎么起它。
+// 记录文件有了就是分叉成了，标记作废，以后一律按 id --resume。持锁调。
+func (s *session) pendingLocked() (fresh bool, from, at string) {
+	if !s.fresh && s.forkFrom == "" {
+		return false, "", ""
+	}
+	if _, err := findTranscript(s.a.projectsDir(), s.id, s.cwd); err == nil {
+		s.fresh, s.forkFrom, s.forkAt = false, "", ""
+		return false, "", ""
+	}
+	return s.fresh, s.forkFrom, s.forkAt
 }
 
 // live：还能往里发控制命令的进程（在跑、也不是正在退的那个）；没有就是 nil。持锁调。
@@ -307,12 +323,36 @@ func (s *session) update(ctx context.Context, u acp.SessionUpdate) {
 }
 
 func (s *session) prompt(ctx context.Context, blocks []acp.ContentBlock, msgID string) (acp.PromptResponse, error) {
-	if err := s.ensure(ctx); err != nil {
+	// 等进程起来（回退之后的第一句要现起一个、带着分叉参数 resume，零点几秒到一秒多）的这段时间里也要能打断：
+	// 这时还没有 turn，cancel 落空，人按了 Esc 要干等进程起来、话发进去再被打断（用户报的「按 Esc 卡一秒」）。
+	// 所以等的时候能被 cancel 叫停，这句不发了；进程照样在后台起好，下一句直接用。
+	wctx, abort := context.WithCancel(ctx)
+	defer abort()
+	s.mu.Lock()
+	s.abortWait = abort
+	s.mu.Unlock()
+	ready := make(chan error, 1)
+	go func() { ready <- s.ensure(context.WithoutCancel(ctx)) }()
+	var err error
+	select {
+	case err = <-ready:
+	case <-wctx.Done():
+	}
+	if err != nil && wctx.Err() == nil {
+		s.mu.Lock()
+		s.abortWait = nil
+		s.mu.Unlock()
 		return acp.PromptResponse{}, err
 	}
 	t := &turnState{done: make(chan turnResult, 1)}
 	s.tok.Reset()
 	s.mu.Lock()
+	// 清 abortWait 和挂上 turn 在同一把锁里：中间不留空档，这时来的打断要么作废这句、要么打断这一轮
+	s.abortWait = nil
+	if wctx.Err() != nil {
+		s.mu.Unlock()
+		return acp.PromptResponse{StopReason: acp.StopReasonCancelled}, nil
+	}
 	if s.turn != nil {
 		s.mu.Unlock()
 		return acp.PromptResponse{}, acp.NewInvalidRequest("a turn is already running; use _session/steering")
@@ -367,11 +407,15 @@ func (s *session) steer(blocks []acp.ContentBlock, msgID string) (acpx.SteerResp
 
 func (s *session) cancel() {
 	s.mu.Lock()
-	t, pr, auto := s.turn, s.p, s.auto
+	t, pr, auto, abortWait := s.turn, s.p, s.auto, s.abortWait
 	if t != nil {
 		t.cancelled = true
 	}
 	s.mu.Unlock()
+	if t == nil && abortWait != nil {
+		abortWait()
+		return
+	}
 	if pr == nil {
 		return
 	}

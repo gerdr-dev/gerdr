@@ -181,6 +181,33 @@ type RewindResponse struct {
 	// SessionId：回退之后的会话 id。codex 是就地截断（不变）；claude 是从截断点分叉出一个
 	// 新会话（变了），client 要换成新 id 继续用。
 	SessionId acp.SessionId `json:"sessionId"`
+	// Fork：新会话还只是个打算（claude 要等下一句话写进去才有记录）时，它从哪儿来。client 要存下来，
+	// 接回这个会话（ResumeSession / LoadSession）时放在 _meta.gerdr.fork 里带回去：agent 进程重启过的话，
+	// 它自己记的早没了，不带回去就会起一个空会话、前面的对话全丢（踩过：回退后撤回、gerdr 一重启，claude 说「这是第一条消息」）。
+	Fork *PendingFork `json:"fork,omitempty"`
+}
+
+// PendingFork：回退出来、还没说过话的会话从哪儿来。From 为空 = 回退到了第一条，就是个全新会话。
+type PendingFork struct {
+	From string `json:"from,omitempty"`
+	At   string `json:"at,omitempty"`
+}
+
+// GetPendingFork 读 _meta.gerdr.fork（经过一趟 JSON，到这边是 map）。
+func GetPendingFork(meta map[string]any) *PendingFork {
+	v, ok := GetMeta(meta, "fork")
+	if !ok || v == nil {
+		return nil
+	}
+	b, err := json.Marshal(v)
+	if err != nil {
+		return nil
+	}
+	var f PendingFork
+	if json.Unmarshal(b, &f) != nil {
+		return nil
+	}
+	return &f
 }
 
 type AskOption struct {

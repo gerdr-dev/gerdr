@@ -35,6 +35,9 @@ type Record struct {
 	Config         map[string]string `json:"config,omitempty"`
 	// SyncedSize：gerdr 最后一次和 agent 的记录文件对齐时，那个文件有多大（catchUp）。比它大 = 别处接着聊过。
 	SyncedSize int64 `json:"syncedSize,omitempty"`
+	// Fork：回退出来、agent 还没写出记录的会话从哪儿来（acpx.RewindResponse.Fork）。接回会话时带给 agent：
+	// 它重启过的话自己记的就没了，起成一个空会话，前面的对话全丢。换 id 时清掉（rekey）；agent 那边记录有了就不再理它。
+	Fork *acpx.PendingFork `json:"fork,omitempty"`
 }
 
 // 会话状态（给侧栏和提示用）。
@@ -51,6 +54,7 @@ type Session struct {
 	lf logFile
 
 	mu          sync.Mutex
+	escMu       sync.Mutex // Escape 一次只跑一个：连按几下 Esc 的话，并发的几次会各自把同一句话还回去（输入框里叠好几遍，踩过）
 	rec         Record
 	events      []*Event
 	attached    bool // agent 那边接上了（gerdr 重启后要先 ResumeSession）
@@ -357,6 +361,9 @@ func (s *Session) ensureAttached(ctx context.Context) (*agenthost.Host, error) {
 	}
 	for k, v := range rec.Config {
 		meta[k] = v
+	}
+	if rec.Fork != nil {
+		meta["fork"] = rec.Fork
 	}
 	res, err := c.Conn.ResumeSession(ctx, acp.ResumeSessionRequest{SessionId: acp.SessionId(rec.AgentSessionID), Cwd: rec.Cwd, McpServers: []acp.McpServer{}, Meta: acpx.Meta(meta)})
 	if err != nil {
@@ -1132,6 +1139,8 @@ type EscapeResult struct {
 //     codex 收不回插话（turn/steer 一发就进了这一轮），只打断。
 func (s *Session) Escape(ctx context.Context) (EscapeResult, error) {
 	out := EscapeResult{Content: []json.RawMessage{}}
+	s.escMu.Lock()
+	defer s.escMu.Unlock()
 	s.mu.Lock()
 	running, auto, turnMsg, agentSID := s.running, s.auto, s.turnMsg, s.rec.AgentSessionID
 	evs := append([]*Event(nil), s.events...)
@@ -1380,6 +1389,11 @@ func (s *Session) Rewind(ctx context.Context, messageID string) (RewindResult, e
 	}
 	if res.SessionId != "" && string(res.SessionId) != agentSID {
 		s.h.rekey(s, string(res.SessionId))
+	}
+	if res.Fork != nil {
+		s.mu.Lock()
+		s.rec.Fork = res.Fork
+		s.mu.Unlock()
 	}
 	out := RewindResult{Content: content}
 	s.mu.Lock()
@@ -1701,6 +1715,9 @@ func (s *Session) Reload(ctx context.Context) error {
 	meta := map[string]any{}
 	if rec.Mode != "" {
 		meta["mode"] = rec.Mode
+	}
+	if rec.Fork != nil {
+		meta["fork"] = rec.Fork
 	}
 	res, err := c.Conn.LoadSession(ctx, acp.LoadSessionRequest{SessionId: acp.SessionId(rec.AgentSessionID), Cwd: rec.Cwd, McpServers: []acp.McpServer{}, Meta: acpx.Meta(meta)})
 	if err != nil {

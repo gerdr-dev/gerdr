@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/coder/acp-go-sdk"
+	"github.com/zbysir/gerdr/internal/acpx"
 )
 
 func TestDescribeTool(t *testing.T) {
@@ -173,5 +174,36 @@ func TestReplayTranscriptUntil(t *testing.T) {
 	})
 	if err != nil || !slices.Equal(got, []string{"one", "two"}) {
 		t.Fatalf("%v %q", err, got)
+	}
+}
+
+// 回退出来、还没说过话的会话：agent 进程换了（gerdr 重启）也要照样分叉起，不能起成空会话（踩过：claude 说「这是第一条消息」）。
+// 新会话的记录写出来以后才算分叉成了，改按 id --resume。
+func TestPendingForkSurvivesRestart(t *testing.T) {
+	dir := t.TempDir()
+	a := &Agent{opts: Options{Env: []string{"CLAUDE_CONFIG_DIR=" + dir}}, sessions: map[string]*session{}}
+	const id, cwd = "11111111-2222-4333-8444-555555555555", "/p"
+	meta := acpx.Meta(map[string]any{"fork": &acpx.PendingFork{From: "aaaaaaaa-0000-4000-8000-000000000000", At: "u9"}})
+	// 走一趟 JSON，和真的从 hub 传过来一样
+	b, _ := json.Marshal(meta)
+	var m map[string]any
+	_ = json.Unmarshal(b, &m)
+	s := a.newSession(id, cwd, m)
+	s.mu.Lock()
+	fresh, from, at := s.pendingLocked()
+	s.mu.Unlock()
+	if fresh || from != "aaaaaaaa-0000-4000-8000-000000000000" || at != "u9" {
+		t.Fatalf("pending: %v %q %q", fresh, from, at)
+	}
+	p := filepath.Join(projectDirFor(a.projectsDir(), cwd), id+".jsonl")
+	_ = os.MkdirAll(filepath.Dir(p), 0o755)
+	if err := os.WriteFile(p, []byte("{}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s.mu.Lock()
+	fresh, from, _ = s.pendingLocked()
+	s.mu.Unlock()
+	if fresh || from != "" {
+		t.Fatalf("记录有了还当成待分叉：%v %q", fresh, from)
 	}
 }

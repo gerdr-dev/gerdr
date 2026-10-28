@@ -53,6 +53,11 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
       setImgs(toImgs(blocks));
     },
   }));
+  // 点发送 / 打断按钮不抢输入框的焦点：抢走了，接着按 Esc 打断、回车再发都没反应（用户报的）
+  const keepFocus = (e: React.MouseEvent) => {
+    e.preventDefault();
+    ta.current?.focus();
+  };
   const putText = (t: string) => {
     setText(t);
     requestAnimationFrame(() => {
@@ -196,6 +201,7 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
   const sentAt = useRef(0);
   const ctrlC = useRef(0);
   const escPending = useRef(false);
+  const escaping = useRef(false);
   const userTexts = () =>
     transcript(session.id)
       .messages.filter((m) => m.role === "user")
@@ -228,6 +234,9 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
 
   // Esc：和 Claude Code 一样 —— 打断；还没被 agent 用上的话（刚发、它一个字没回 / 排着队的插话）撤回，放回输入框。
   const escape = async () => {
+    // 上一次还没回来时连按 Esc 不再发：几次撤回一起跑，会各自把同一句话还回来，输入框里叠好几遍（踩过）
+    if (escaping.current) return;
+    escaping.current = true;
     try {
       const r = await api.escape(session.id);
       if (!r.content?.length) return;
@@ -237,10 +246,12 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
       setText(cur ? `${back}\n\n${cur}` : back);
       const images = toImgs(r.content);
       if (images.length) setImgs((x) => [...images, ...x]);
-      toast(r.rolledBack ? "已打断，刚发的话撤回到输入框" : `已打断，${r.withdrawn} 条还没处理的插话撤回到输入框`);
+      // 不弹提示：字已经回到输入框里了，一看就知道；弹出来的 toast 正好压在输入框右下角挡着操作（用户嫌烦）
       ta.current?.focus();
     } catch (err: any) {
       toast.error(err.message);
+    } finally {
+      escaping.current = false;
     }
   };
 
@@ -515,7 +526,7 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
           {running && (
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button size="icon" variant="ghost" className="size-8 rounded-full" onClick={() => escape()}>
+                <Button size="icon" variant="ghost" className="size-8 rounded-full" onMouseDown={keepFocus} onClick={() => escape()}>
                   <Square className="size-3.5 fill-current" />
                 </Button>
               </TooltipTrigger>
@@ -524,7 +535,7 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
           )}
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button size="icon" className="size-8 rounded-full" disabled={!hasText || busy} onClick={send}>
+              <Button size="icon" className="size-8 rounded-full" disabled={!hasText || busy} onMouseDown={keepFocus} onClick={send}>
                 {running ? <CornerDownRight className="size-4" /> : <ArrowUp className="size-4" />}
               </Button>
             </TooltipTrigger>

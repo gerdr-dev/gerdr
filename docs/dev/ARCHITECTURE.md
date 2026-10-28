@@ -52,6 +52,10 @@ React（ui/，不打包）  ←WebSocket / HTTP→  hub（internal/hub）  ←AC
    回退时在 `~/.claude/projects/*/<sessionId>.jsonl` 里找到这条的 `parentUuid`，从那儿
    `--resume 旧 --resume-session-at parent --fork-session --session-id 新` 分叉。原会话不动；
    ACP 的 sessionId 因此会变（`RewindResponse.SessionId`），hub 要换 key。
+   **分叉出来的新会话要等下一句话写进去才有记录**：进程起来了不算数（这句被 Esc 撤回、进程被收掉，下次还得照样分叉），
+   适配器以「新会话的记录在不在」判断分叉成了没有。「从哪分叉」agent 只记在内存里，所以 `RewindResponse.Fork`
+   交给 hub 存进 `Record.Fork`，接回会话时放在 `_meta.gerdr.fork` 带回去 —— 不然 gerdr 一重启，
+   第 4 条的兜底会把它起成一个空会话，前面的对话全丢（踩过：claude 说「这是第一条消息」）。
 4. **建了会话没说过话就没有会话记录**，`--resume` 会报 "No conversation found"。适配器起进程前
    先看记录在不在，不在就按新会话（同一个 id）起；hub 那一侧对任意 agent 也兜了一层
    （接不回 + 一条用户消息都没有 → 新建一个顶上）。
