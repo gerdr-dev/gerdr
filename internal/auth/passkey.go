@@ -2,6 +2,7 @@ package auth
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -446,4 +447,15 @@ func ReauthNeeded(id *Ident, after time.Duration, registered int, now time.Time)
 		v = id.Device.Created // 这个功能之前配的对，拿配对时间当基准
 	}
 	return now.Sub(v) > after
+}
+
+// AndroidOrigin：安卓 App 的 WebView 里做 WebAuthn 时，clientDataJSON 里的 origin 不是网页的 https://…，而是
+// `android:apk-key-hash:<签名证书 SHA-256 的 base64url>`（系统的 Credential Manager 填的，App 改不了）。
+// fp 是 keytool 打出来的那种冒号分隔十六进制。认不出来返回空。
+func AndroidOrigin(fp string) string {
+	b, err := hex.DecodeString(strings.ReplaceAll(strings.TrimSpace(fp), ":", ""))
+	if err != nil || len(b) != sha256.Size {
+		return ""
+	}
+	return "android:apk-key-hash:" + base64.RawURLEncoding.EncodeToString(b)
 }

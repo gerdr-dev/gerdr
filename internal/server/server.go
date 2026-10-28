@@ -64,6 +64,7 @@ type Server struct {
 	// Awake：有远程设备连着时不让电脑睡（设置 → 实验室）。nil = 不管（测试里）。
 	Awake       *awake.Keeper
 	remoteConns remoteConns // 正在连着的远程界面（remoteconns.go）
+	appWatch    appWatch    // 安卓 App 后台通知的长轮询（appwatch.go）
 	// OnServiceInstalled：刚打开后台常驻、本进程是 App 起的后端时让位（见 cmd/gerdr 的 handover）。
 	OnServiceInstalled func()
 }
@@ -244,6 +245,7 @@ func (s *Server) Handler() http.Handler {
 	s.importRoutes(mux)
 	if s.Remote != nil {
 		s.remoteRoutes(mux)
+		s.appRoutes(mux)
 	}
 	if s.Service != nil {
 		s.serviceRoutes(mux)

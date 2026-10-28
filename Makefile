@@ -51,6 +51,20 @@ dmg:
 win:
 	./desktop/build.sh win $(VERSION)
 
+# 安卓 App（android/，设计见 docs/dev/ANDROID.md）。要 Android SDK（sdk.dir 写在 android/local.properties）和 JDK 17–21
+# （AGP 不认更新的 JDK）。apk = 正式包，用 ~/.android-release/gerdr.jks 签（它的指纹写死在 config.OfficialAndroidCert：
+# 换钥匙 App 里就刷不了 passkey）；apk-debug = 调试包（debug 钥匙签，和正式包不能互相覆盖安装）。
+ANDROID_JAVA ?= /opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home
+# APK_VERSION 只认 主.次.修（versionCode 按它算、只能往上走，系统拿它判「是不是升级」）；VERSION 是 git describe，不能直接用
+APK_VERSION ?= 0.1.0
+apk:
+	cd android && JAVA_HOME=$(ANDROID_JAVA) ./gradlew assembleRelease -PappVersion=$(APK_VERSION)
+	@ls -l android/app/build/outputs/apk/release/app-release.apk
+
+apk-debug:
+	cd android && JAVA_HOME=$(ANDROID_JAVA) ./gradlew assembleDebug
+	@ls -l android/app/build/outputs/apk/debug/app-debug.apk
+
 # 从 ui/public/icon.svg 重新生成 App 图标（desktop/res/icon.png 入库，打包时不需要 rsvg-convert —— Windows 包在任何机器上都能打）。
 # 照 macOS 图标的网格：1024 的画布里图形占中间 824，四周各留 100，不然在 Dock 里比别的图标大一圈。要 brew install librsvg。
 icon:

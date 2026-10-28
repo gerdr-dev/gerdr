@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 底色和网页暗色主题的 bg 一致：启动到页面画出来之前不闪白 -->
+    <style name="Theme.Gerdr" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/bg</item>
+        <item name="android:colorBackground">@color/bg</item>
+        <item name="android:colorAccent">@color/brand</item>
+    </style>
+    <color name="bg">#1A1A1F</color>
+    <!-- 网页暗色主题的 brand 是 oklch(0.7 0.13 250)，这里取 hex 近似值 -->
+    <color name="brand">#4F8FE8</color>
+    <!-- 图标那块圆角方底的颜色（desktop/res/icon.png 上取的）：图标四个透明角落透出来的就是它，看不出接缝 -->
+    <color name="icon_bg">#3A3B3E</color>
+</resources>

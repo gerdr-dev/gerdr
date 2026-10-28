@@ -14,6 +14,8 @@ import { isPhone, usePhone, useViewportHeight } from "./lib/phone";
 import { cn } from "./lib/utils";
 import { syncWatch } from "./lib/sync";
 import { isNative, nativeBadge } from "./lib/native";
+import { initAndroid, syncAndroidTheme } from "./lib/android";
+import { CliApprove } from "./components/CliApprove";
 import { systemNotify } from "./lib/notify";
 import { reloadPlugins, setTabNameFn } from "./lib/plugins";
 import { focusedSession, get, markUnread, set, useStore, visibleSessions } from "./lib/store";
@@ -31,6 +33,7 @@ function useTheme() {
       const dark = theme === "dark" || (theme === "system" && mq.matches);
       document.documentElement.classList.toggle("dark", dark);
       document.documentElement.style.colorScheme = dark ? "dark" : "light";
+      syncAndroidTheme(); // 安卓 App 的系统栏跟着换底色（要在 .dark 落下之后读）
     };
     apply();
     mq.addEventListener("change", apply);
@@ -84,7 +87,10 @@ export default function App() {
   useAttention();
 
   useEffect(() => {
-    boot().then(() => reloadPlugins());
+    boot().then(() => {
+      reloadPlugins();
+      initAndroid();
+    });
     const onKey = (e: KeyboardEvent) => handleKeydown(e);
     window.addEventListener("keydown", onKey, true);
     if (isNative()) document.documentElement.classList.add("native");
@@ -183,6 +189,7 @@ export default function App() {
         </div>
       </div>
       <Dialogs />
+      <CliApprove />
       {/* 手机上底部是输入框和软键盘，toast 放顶上 */}
       <Toaster position={phone ? "top-center" : "bottom-right"} />
     </TooltipProvider>

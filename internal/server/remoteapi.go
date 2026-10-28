@@ -38,7 +38,9 @@ func RemoteHandler(next http.Handler) http.Handler {
 func remotePublic(r *http.Request) bool {
 	switch r.URL.Path {
 	case "/api/remote/whoami", "/api/remote/pair",
-		"/api/remote/passkey/login/begin", "/api/remote/passkey/login/finish":
+		"/api/remote/passkey/login/begin", "/api/remote/passkey/login/finish",
+		// 安卓 App：系统来取 assetlinks 时不带凭据；device flow 的发起和轮询是在拿凭据之前（appapi.go）
+		"/.well-known/assetlinks.json", "/api/remote/cli/start", "/api/remote/cli/poll":
 		return true
 	}
 	return false

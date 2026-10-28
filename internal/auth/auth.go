@@ -82,6 +82,7 @@ type Store struct {
 	mu      sync.Mutex
 	devs    []*Device
 	codes   map[string]time.Time // 配对码 → 过期时刻
+	cli     []*CLIRequest        // 等批准的 App 登录（cliapprove.go）
 	dirty   bool
 	flushed time.Time
 	guard   tamperGuard
@@ -477,6 +478,8 @@ func LabelFromUA(ua string) string {
 	}
 	br := ""
 	switch {
+	case strings.Contains(ua, "GerdrApp/"): // 安卓 App 的 WebView（android/ 里给 UA 加的那一截），和手机浏览器分开
+		br = "App"
 	case strings.Contains(ua, "Edg"):
 		br = "Edge"
 	case strings.Contains(ua, "CriOS"), strings.Contains(ua, "Chrome"):

@@ -107,4 +107,5 @@ GERDR_* 本来就不往 agent 的环境里传（`sysenv.ChildEnv`）；acme 把�
 ## 没做的
 
 - 端到端（真 herdr-relay + 真证书 + 手机）只能部署之后验：假中继的测试管协议格式，不管 Traefik 路由、CAA、证书链。
-- herdr-web 的命令行客户端那套（device flow 批准）、App 换路直连、CT 日志巡检、审计日志、令牌轮换。
+- CT 日志巡检、审计日志、令牌轮换。
+- 安卓 App（局域网直连、App 里刷 passkey、device flow 退路、后台通知）见 [ANDROID.md](ANDROID.md)。

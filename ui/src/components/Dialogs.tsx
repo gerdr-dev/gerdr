@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ServiceSetting } from "@/components/ServiceSetting";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { AndroidSettings } from "./AndroidSettings";
 import { AgentSettings } from "./AgentSettings";
 import { AwakeSetting } from "./AwakeSetting";
 import { ResumeDialog } from "./ResumeDialog";
@@ -296,6 +297,7 @@ function SettingsDialog({ open }: { open: boolean }) {
               <Row label="系统通知" hint="看不见的会话跑完了 / 在等你时">
                 <Switch checked={cfg.notifications} onCheckedChange={(v) => setConfig({ notifications: v })} />
               </Row>
+              <AndroidSettings />
               <ServiceSetting />
               <Row label="切走的 tab 留在页面里" hint="展开状态、滚动位置都保住；越多越占内存（设置 → 资源 里看）">
                 <Select value={String(cfg.keepTabs ?? 6)} onValueChange={(v) => setConfig({ keepTabs: Number(v) })}>

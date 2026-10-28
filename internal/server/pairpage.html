@@ -82,6 +82,7 @@
   <div class="err" id="err"></div>
 
   <div class="foot">配对码 5 分钟过期、用一次就废，截图和二维码被拍走都没有长期风险。</div>
+  <div class="foot" id="app" hidden><a href="#" id="setup">换一台服务器</a></div>
 </div>
 <script nonce="{{NONCE}}">
 (function () {
@@ -90,7 +91,28 @@
   var err = function (m) { $("err").textContent = m || ""; };
   // 进去用 replace + 同源导航：SameSite=Strict 的 cookie 在「从别的 app 点链接进来」那一下不会带，
   // 一次同源发起的导航才带得上（reload 在有的浏览器上保留原来那个跨站的发起方）。
-  var enter = function () { location.replace("/"); };
+  // `?cli`（安卓 App 让人来批准登录的那一页）要带着进去，不然登录完落在首页、批准页没了
+  var enter = function () { location.replace(new URLSearchParams(location.search).has("cli") ? "/?cli" : "/"); };
+
+  /* ---------------- 安卓 App（android/ 的壳，桥的另一半在 Bridge.kt，格式见 ui/src/lib/android.ts） ---------------- */
+  // 壳只对这台服务器的 origin 注入 gerdrAndroid。App 的 WebView 能自己刷 passkey 时（hello 回信里 webauthn=true），
+  // 下面那套网页的 passkey 照常用；刷不了时（WebView 太旧、手机上没有凭据提供方）点按钮交给壳：它开浏览器批准
+  // （device flow，internal/auth/cliapprove.go），批准完写好 cookie，回 login{state:"done"}，这边进去。
+  var droid = window.gerdrAndroid, nativeLogin = false;
+  if (droid) {
+    droid.onmessage = function (e) {
+      var m; try { m = JSON.parse(e.data); } catch (x) { return; }
+      if (m.t === "hello") nativeLogin = !m.webauthn;
+      if (m.t === "login") {
+        busy = false; $("pkBtn").disabled = false;
+        if (m.state === "done") enter();
+        else if (m.state === "error") err(m.msg || "登录没成");
+      }
+    };
+    droid.postMessage(JSON.stringify({ t: "hello" }));
+    $("app").hidden = false;
+    $("setup").onclick = function (e) { e.preventDefault(); droid.postMessage(JSON.stringify({ t: "setup" })); };
+  }
 
   async function api(method, path, body) {
     var res = await fetch(path, {
@@ -176,6 +198,12 @@
   }
   $("pkBtn").onclick = async function () {
     if (busy) return;
+    if (droid && nativeLogin) {
+      busy = true; err("");
+      $("pkBtn").disabled = true;
+      droid.postMessage(JSON.stringify({ t: "login", reauth: $("pkBtn").dataset.reauth === "1" }));
+      return;
+    }
     busy = true; err("");
     $("pkBtn").disabled = true;
     try {
@@ -198,11 +226,13 @@
       $("title").textContent = "需要再验证一次";
       $("lead").textContent = "这台设备配过对，只是太久没做过生物验证了。";
       $("pkBtn").textContent = "用 passkey 验证";
+      $("pkBtn").dataset.reauth = "1";
       $("pkHint").textContent = "一次 Face ID / 指纹就好。";
       $("go").textContent = "重新配对";
     }
     var supported = typeof PublicKeyCredential !== "undefined" && !!navigator.credentials;
-    if (who.passkeys > 0 && who.passkeyAvailable && supported) {
+    // App 里：WebView 自己刷不了时也给按钮（交给壳走浏览器批准），所以不看 supported
+    if (who.passkeys > 0 && who.passkeyAvailable && (supported || droid)) {
       $("pk").hidden = false;
       $("pkBtn").focus();
     } else {

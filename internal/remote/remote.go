@@ -24,6 +24,7 @@ import (
 	"github.com/zbysir/gerdr/internal/acme"
 	"github.com/zbysir/gerdr/internal/auth"
 	"github.com/zbysir/gerdr/internal/config"
+	"github.com/zbysir/gerdr/internal/lan"
 	"github.com/zbysir/gerdr/internal/relay"
 )
 
@@ -44,7 +45,9 @@ type Service struct {
 	certs  *certFile
 	tunnel *relay.Tunnel
 	hs     *http.Server
-	err    string // 起不来的原因（证书签不下来、没 join 过……）
+	err    string       // 起不来的原因（证书签不下来、没 join 过……）
+	lanHS  *http.Server // 局域网直连口（lan.go）
+	lanErr string       // 直连口起不来的原因（端口被占……）；不影响中继那条路
 }
 
 // Open 准备设备表、passkey 和限速。没开远程也照样打开：设置里要能看设备、踢设备，
@@ -59,6 +62,12 @@ func Open(dataDir string, cfg config.Remote, log *slog.Logger) (*Service, error)
 	pc := auth.PasskeyConfig{Dir: dir, Display: "gerdr"}
 	if cfg.Enabled() {
 		pc.RPID, pc.Origins = cfg.Host, []string{"https://" + cfg.Host}
+		// 安卓 App 的 WebView 里刷 passkey 时，origin 是 App 签名证书的哈希（docs/dev/ANDROID.md「passkey」）
+		for _, fp := range cfg.AndroidCerts {
+			if o := auth.AndroidOrigin(fp); o != "" {
+				pc.Origins = append(pc.Origins, o)
+			}
+		}
 	}
 	pk, err := auth.NewPasskeys(pc)
 	if err != nil {
@@ -160,6 +169,8 @@ func (s *Service) run() {
 			s.setErr("读证书失败：" + err.Error())
 			return
 		}
+		// 直连口在中继之前起：中继连不上（VPS 挂了）时人在家里照样能用
+		s.startLan(ctx, cfg, cf, h)
 		tn, err := relay.Start(relay.HostConfig{
 			URL: cfg.RelayURL, Host: cfg.Host, Dir: s.relayDir(),
 			Log: func(f string, a ...any) { s.log.Info("remote: " + fmt.Sprintf(f, a...)) },
@@ -189,9 +200,12 @@ func (s *Service) run() {
 // stop 收掉当前这一轮：隧道、https、续期。
 func (s *Service) stop() {
 	s.mu.Lock()
-	tn, hs, cancel := s.tunnel, s.hs, s.cancel
-	s.tunnel, s.hs, s.certs, s.cancel = nil, nil, nil, nil
+	tn, hs, lhs, cancel := s.tunnel, s.hs, s.lanHS, s.cancel
+	s.tunnel, s.hs, s.certs, s.cancel, s.lanHS, s.lanErr = nil, nil, nil, nil, nil, ""
 	s.mu.Unlock()
+	if lhs != nil {
+		_ = lhs.Close()
+	}
 	if cancel != nil {
 		cancel()
 	}
@@ -254,6 +268,10 @@ type Status struct {
 	TTLDays     int        `json:"ttlDays"`
 	ReauthHours int        `json:"reauthHours"`
 	Locked      bool       `json:"locked"` // 全局熔断中：不接受新配对，`gerdr remote unlock` 解
+	// 局域网直连口：在听的端口（0 = 没开 / 没起来）、起不来的原因、现在报给 App 的候选地址
+	LanPort    int      `json:"lanPort,omitempty"`
+	LanErr     string   `json:"lanErr,omitempty"`
+	LanOrigins []string `json:"lanOrigins,omitempty"`
 }
 
 func (s *Service) Status() Status {
@@ -261,6 +279,11 @@ func (s *Service) Status() Status {
 		TTLDays: int(s.Cfg.DeviceTTL / (24 * time.Hour)), ReauthHours: int(s.Cfg.ReauthAfter / time.Hour), Locked: s.Gate.Locked()}
 	s.mu.Lock()
 	st.Err = s.err
+	st.LanErr = s.lanErr
+	if s.lanHS != nil {
+		st.LanPort = s.Cfg.LanPort
+		st.LanOrigins = lan.Origins(s.Cfg.LanPort)
+	}
 	if s.tunnel != nil {
 		st.State = s.tunnel.State()
 	} else if st.Enabled && st.Err == "" {

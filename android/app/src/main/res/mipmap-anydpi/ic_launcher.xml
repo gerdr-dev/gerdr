@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  前景是桌面 App 那张图标（desktop/res/icon.png）裁掉四周透明留白、只剩圆角方块的那部分。
+  自适应图标只露出图层中间 72/108，所以往里缩 1/6，让露出来的正好是整块方底 —— 不缩的话
+  狗耳朵会被启动器的遮罩切掉。方块的圆角落在遮罩边上，角落透出来的是同色的 icon_bg。
+-->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/icon_bg" />
+    <foreground>
+        <inset android:drawable="@drawable/ic_launcher_art" android:inset="16.7%" />
+    </foreground>
+</adaptive-icon>

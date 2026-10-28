@@ -91,6 +91,9 @@ export type AwakeStatus = {
   lowBattery: boolean;
 };
 
+/** 等批准的一次 App 登录（auth.CLIRequest） */
+export type CliRequest = { label: string; ip: string; local: boolean; device: string; deviceLabel?: string; expires: string };
+
 export const api = {
   stats: (webpid?: number) => req<any>("GET", `/api/system/stats${webpid ? `?webpid=${webpid}` : ""}`),
   herdrScan: () => req<{ workspaces: HerdrWorkspace[] }>("GET", "/api/import/herdr"),
@@ -168,6 +171,10 @@ export const api = {
   remoteCert: () => req<RemoteCert>("GET", "/api/remote/cert"),
   remoteSaveCert: (c: RemoteCertInput) => req("POST", "/api/remote/cert", c),
   remoteLogout: () => req("POST", "/api/remote/logout", {}),
+  // 批准安卓 App 的登录（passkey 的退路，device flow：App 显示码，这边手输）
+  cliPeek: (code: string) => req<CliRequest>("POST", "/api/remote/cli/peek", { code }),
+  cliApprove: (code: string) => req<CliRequest>("POST", "/api/remote/cli/approve", { code }),
+  cliDeny: (code: string) => req("POST", "/api/remote/cli/deny", { code }),
   /** passkey ceremony 的原始两步，只给 lib/passkey.ts 用 */
   passkeyStep: <T>(action: "register" | "login", step: "begin" | "finish", body?: unknown, ceremony?: string) =>
     req<T>("POST", `/api/remote/passkey/${action}/${step}${ceremony ? `?c=${encodeURIComponent(ceremony)}` : ""}`, body ?? {}),
@@ -184,6 +191,10 @@ export type RemoteStatus = {
   ttlDays: number;
   reauthHours: number;
   locked: boolean;
+  /** 局域网直连口（安卓 App 在家时走它）：在听的端口、起不来的原因、报给 App 的候选地址 */
+  lanPort?: number;
+  lanErr?: string;
+  lanOrigins?: string[];
 };
 // 后台常驻（launchd）：why 非空 = 这里装不了（不是 mac、调试实例……）；self = 现在答话的就是那个后台服务。
 export type ServiceStatus = { why: string; installed: boolean; pid: number; self: boolean; log: string };

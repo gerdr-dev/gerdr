@@ -11,6 +11,8 @@ import { focusedSession, get, keyFor, set, setLayout, toggleSidebar, useStore } 
 import type { SessionSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { AgentIcon, StatusDot } from "./AgentIcon";
+import { isAndroid } from "@/lib/android";
+import { useRoute } from "./AndroidSettings";
 
 /** 一个 tab 的汇总状态：里面任何一个会话在等你 → 等你；在跑 → 在跑；…… */
 export function tabStatus(tab: Tab, sessions: Record<string, SessionSummary>, unread: Record<string, true>) {
@@ -170,6 +172,8 @@ export function PhoneBar() {
         <StatusDot status={st.status} unread={st.unread} />
         <span className="min-w-0 shrink-[2] truncate text-[11px] text-muted-foreground">{applyWorkspaceLabel(ws, wi, ws.name)}</span>
         {!connected && <span className="shrink-0 text-[11px] text-bad">离线</span>}
+        {/* 安卓 App 里：绿 = 局域网直连、蓝 = 经云端中继（详情在设置 → 通用 → 安卓 App） */}
+        {connected && isAndroid() && <RouteDot />}
       </button>
       <Button variant={switcher ? "secondary" : "ghost"} size="icon" className="relative size-9" aria-label="面板一览" onClick={openSwitcher}>
         <LayoutList className="size-[18px]" />
@@ -182,6 +186,11 @@ export function PhoneBar() {
       </Button>
     </div>
   );
+}
+
+function RouteDot() {
+  const r = useRoute();
+  return <span title={r.detail} className={cn("size-1.5 shrink-0 rounded-full", r.via === "lan" ? "bg-ok" : "bg-brand")} />;
 }
 
 export function Sidebar({ className }: { className?: string }) {

@@ -185,6 +185,27 @@ export function RemoteSettings({ open }: { open: boolean }) {
         </div>
       </div>
 
+      {st.enabled && (
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <div className="text-[13px] font-medium">安卓 App</div>
+            <Button size="sm" variant="outline" onClick={() => window.dispatchEvent(new Event("gerdr:cli-approve"))}>
+              批准 App 登录
+            </Button>
+          </div>
+          <div className="text-[12px] text-muted-foreground">
+            App 填 {st.url} 就能用；手机刷不了 passkey 时 App 会显示一个 8 位码，点上面的按钮输进去批准。
+            {st.lanErr ? (
+              <span className="text-bad"> {st.lanErr}</span>
+            ) : st.lanPort ? (
+              <> 在家时 App 直接连局域网口 {st.lanOrigins?.length ? st.lanOrigins.join("、") : `:${st.lanPort}（现在没有局域网地址）`}，不绕中继。</>
+            ) : (
+              <> 局域网直连没开（GERDR_LAN_PORT=0）。</>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="space-y-1.5">
         <div className="flex items-center justify-between">
           <div className="text-[13px] font-medium">passkey</div>
