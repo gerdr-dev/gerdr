@@ -4,7 +4,7 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo 0.1.
 LDFLAGS := -s -w -X github.com/zbysir/gerdr/internal/version.Version=$(VERSION)
 UISNAP := internal/webui/ui
 
-.PHONY: all ui sync-ui build test typecheck test-e2e app dmg win icon install clean dev
+.PHONY: all ui rescue sync-ui build test typecheck test-e2e app dmg win icon install clean dev
 
 all: build
 
@@ -19,6 +19,10 @@ ui:
 sync-ui:
 	go run ./cmd/gerdr ui sync ui
 
+# 急救面板（internal/server/rescue/src，React）打成 app.js 入库：改了那边的源码跑一下（要 ui/node_modules）。
+rescue:
+	go generate ./internal/server
+
 build: ui
 	go build -ldflags '$(LDFLAGS)' -o bin/gerdr ./cmd/gerdr
 
@@ -29,6 +33,7 @@ test:
 # 界面的类型检查（要先在 ui/ 里装一次开发依赖：cd ui && pnpm install）。运行界面不需要它。
 typecheck:
 	cd ui && npx tsc --noEmit
+	ui/node_modules/.bin/tsc -p internal/server/rescue/tsconfig.json
 
 # 对着真的 claude / codex 跑（花钱、要登录）
 test-e2e:

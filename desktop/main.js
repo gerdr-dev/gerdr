@@ -262,6 +262,14 @@ function rescueURL() {
   return u.toString();
 }
 
+// 急救面板挂在页面右边：页面在就直接拉出来（不刷新，主界面现在什么样就什么样）；
+// 页面没加载出来 / 不是 gerdr 的页面，就走 /rescue 重新打开（会跳回主界面并把面板打开）。
+async function openRescue() {
+  if (!origin || !win) return;
+  const ok = await win.webContents.executeJavaScript("!!(window.__gerdrRescue && (window.__gerdrRescue.open(), 1))").catch(() => false);
+  if (!ok) win.loadURL(rescueURL());
+}
+
 function cmd(label, id, accelerator) {
   return { label, accelerator, click: () => runInPage(`window.gerdr && window.gerdr.runCommand(${JSON.stringify(id)})`) };
 }
@@ -330,7 +338,7 @@ function buildMenu() {
           cmd("快捷键", "help", "Cmd+/"),
           { type: "separator" },
           // 急救面板编进了后端、不在界面目录里：主界面改坏了也打得开（菜单项不经过页面，页面坏了也点得动）
-          { label: "急救：界面坏了时叫 agent 修", click: () => origin && win?.loadURL(rescueURL()) },
+          { label: "急救：界面坏了时叫 agent 修", click: openRescue },
         ],
       },
     ]),

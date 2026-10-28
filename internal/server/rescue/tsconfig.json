@@ -1,0 +1,17 @@
+{
+  "//": "只给类型检查用（make typecheck）：包和类型从 ui/node_modules 取，和 build.go 打包时一样",
+  "compilerOptions": {
+    "target": "ES2020",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "baseUrl": ".",
+    "paths": { "*": ["../../../ui/node_modules/@types/*", "../../../ui/node_modules/*"] },
+    "typeRoots": ["../../../ui/node_modules/@types"]
+  },
+  "include": ["src"]
+}

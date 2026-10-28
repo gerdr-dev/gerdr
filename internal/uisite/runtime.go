@@ -35,9 +35,10 @@ function overlay(text) {
     document.body.appendChild(el);
   }
   el.textContent = "界面代码编译出错（改好之后自动恢复）：\n\n" + text + "\n\n";
-  // 急救面板（/rescue）是编进 gerdr 的，界面目录怎么坏都打得开
+  // 急救面板是编进 gerdr 的，界面目录怎么坏都打得开（就在右边拉出来；脚本没加载到就走 /rescue 刷新一下再开）
   const a = document.createElement("a");
   a.href = "/rescue";
+  a.onclick = (ev) => { if (window.__gerdrRescue) { ev.preventDefault(); window.__gerdrRescue.open(); } };
   a.textContent = "打开急救面板，叫 agent 来修 →";
   a.style.cssText = "font:14px system-ui,sans-serif;color:#7aa2f7";
   el.appendChild(a);

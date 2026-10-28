@@ -31,7 +31,7 @@ const loadingHTML = `<div id="__gerdr_loading" style="position:fixed;inset:0;dis
 	`<style>@keyframes __gerdr_spin{to{transform:rotate(360deg)}}</style>` +
 	`<div style="width:22px;height:22px;border-radius:50%;border:2px solid color-mix(in srgb,CanvasText 15%,transparent);border-top-color:color-mix(in srgb,CanvasText 60%,transparent);animation:__gerdr_spin .8s linear infinite"></div>` +
 	`<div style="opacity:.6">加载中…</div>` +
-	`<div id="__gerdr_loading_slow" style="opacity:.45;max-width:320px;text-align:center;visibility:hidden">第一次打开要下载界面用到的包，可能要一会儿。一直打不开的话：<a href="/rescue" style="color:inherit">急救面板</a></div>` +
+	`<div id="__gerdr_loading_slow" style="opacity:.45;max-width:320px;text-align:center;visibility:hidden">第一次打开要下载界面用到的包，可能要一会儿。一直打不开的话：<a href="/rescue" onclick="if(window.__gerdrRescue){__gerdrRescue.open();return false}" style="color:inherit">急救面板</a></div>` +
 	`</div>`
 
 // ServePage 出页面：importMap + 模块清单（window.__GERDR_UI__）+ 运行时，运行时 import 入口再渲染。
@@ -65,6 +65,9 @@ func (r *Renderer) ServePage(w http.ResponseWriter, req *http.Request, nonce str
 		"error":   b.fatal,
 	})) + ";</script>\n")
 	s.WriteString(`<script type="module" src="/_ui/m/@runtime.js?v=` + runtimeVersion + `"></script>` + "\n")
+	// 急救面板（internal/server/rescue）：编进二进制、自带 React，挂在主界面右边、和它不共享任何东西 ——
+	// 界面目录怎么改坏都打得开。放在页面外壳里而不是界面目录里，就是为了谁也改不掉它。
+	s.WriteString(`<script defer src="/rescue/app.js"></script>` + "\n")
 	s.WriteString("</body>\n</html>\n")
 	w.Header().Set("content-type", "text/html; charset=utf-8")
 	w.Header().Set("cache-control", "no-store")

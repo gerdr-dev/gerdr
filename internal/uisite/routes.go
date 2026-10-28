@@ -100,7 +100,7 @@ function RouteError() {
   return h("div", { style: { padding: 24, font: "12px/1.6 ui-monospace, monospace" } },
     h("pre", { style: { margin: 0, whiteSpace: "pre-wrap", color: "#e5484d" } }, text),
     h("p", { style: { marginTop: 16, opacity: 0.6, fontFamily: "system-ui" } }, "界面代码出错了。改好之后会自动刷新。"),
-    h("a", { href: "/rescue", style: { fontFamily: "system-ui", fontSize: 14, color: "#7aa2f7" } }, "打开急救面板，叫 agent 来修 →"));
+    h("a", { href: "/rescue", onClick: function (ev) { if (window.__gerdrRescue) { ev.preventDefault(); window.__gerdrRescue.open(); } }, style: { fontFamily: "system-ui", fontSize: 14, color: "#7aa2f7" } }, "打开急救面板，叫 agent 来修 →"));
 }
 function NotFound() {
   return h("div", { style: { padding: 24, font: "14px system-ui", opacity: 0.6 } }, "404 · " + location.pathname);

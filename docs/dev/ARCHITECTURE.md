@@ -247,21 +247,26 @@ cwd 以外改的文件（Bash 写 `~/.zshrc`、隔壁项目）管不到；同一
 
 另一个**静默**的坑：在一个 Claude Code 的终端 pane 里敲 `gerdr`，它会继承那个 claude 给子进程打的标记
 （`CLAUDE_CODE_CHILD_SESSION` 等），带着它的子 claude **不写会话记录**（底部一行「Transcript saving is off」，
+stream-json 模式下没人看得见）—— resume、回退、追上全部失效。`sysenv.ChildEnv` 按名字去掉这几个。
+
 ## 急救面板（server/rescueapi.go + server/rescue/ + webui/history.go）
 
 主界面就是界面目录里可以改的源码，对话面板也在里面：改坏了就没地方叫 agent 修（修东西的工具和被修的是同一个）。
 照 shuttle 的做法（它的对话面板在打包进二进制的 web/ 里，助手只改得到项目页面），留一页**改不到**的：
 
-- `/rescue`：一个 HTML + 一个原生 JS，`go:embed` 编进二进制，不走 uisite、不用 React、不从 esm.sh 拉包 ——
-  主界面可能就是坏在这几样上。只做修界面要的：看 `/api/ui/status` 的错误、退回之前的一版、在界面目录里开一个会话对话
+- 一个从页面右侧拉出来的面板，和主界面并排：一边看主界面坏成什么样、修好没有，一边和 agent 说话（主界面让出右边那块，不盖住）。
+  源码在 `server/rescue/src`（React），`go generate ./internal/server` 用 esbuild 连 React 一起打成 `rescue/app.js` 入库、
+  `go:embed` 编进二进制（包从 `ui/node_modules` 取，编 gerdr 不需要 node）。由 uisite 的页面外壳直接 `<script>` 引入，
+  不走界面目录的编译、不用 importmap / esm.sh、挂在自己的 Shadow DOM 里 —— 主界面可能就是坏在这几样上，崩了它也照样能用。
+  开没开记在 localStorage，刷新后还在；外壳自己的全屏层（编译错误的红屏、加载中）开着面板时也让开右边。
+- 只做修界面要的：看 `/api/ui/status` 的错误、退回之前的一版、在界面目录里开一个会话对话
   （发消息、看回复和工具调用、审批 / 提问、打断）。**别往里加主界面的功能**，越简单越不会坏、越不用跟着维护。
-- 入口都不在界面目录里：uisite 生成的两种报错页（编译错误的 overlay、渲染错误的 RouteError）和加载太久的提示上有链接，
-  App 菜单「帮助 → 急救」走 `loadURL`（不经过页面，页面坏了也点得动），也可以直接打地址。
+- 入口都不在界面目录里：uisite 生成的两种报错页（编译错误的 overlay、渲染错误的 RouteError）和加载太久的提示上有链接
+  （`window.__gerdrRescue.open()`，脚本没加载到就走 `/rescue`，它跳回 `/?rescue=1` 打开面板）；页面报了错、面板又关着时右下角冒一个「急救」；
+  App 菜单「帮助 → 急救」先在页面里调 open，不行再 `loadURL`（菜单不经过页面，页面坏了也点得动）。
 - 退回（`webui.Restore`）只往前提交：先把现在的样子提交一次存档，再 `read-tree -u --reset <版本>` 按那一版重建
   （它没有的文件删掉），再提交一次。坏的那版留在历史里，改动找得回来；合并到一半的先 abort。
 - 新建急救对话时第一句预填好（带上现在的错误），人看一眼再发。
-
-stream-json 模式下没人看得见）—— resume、回退、追上全部失效。`sysenv.ChildEnv` 按名字去掉这几个。
 
 ## 终端（internal/term + server/termapi.go + ui/src/components/Terminal.tsx）
 
