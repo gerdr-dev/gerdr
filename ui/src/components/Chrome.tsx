@@ -1,9 +1,9 @@
 import { Keyboard, LayoutList, Menu, PanelLeft, Plus, Settings, SquareTerminal, X } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { addTab, basename, closeTab, closeWorkspace, duplicateTab, focusSession, moveTab, moveWorkspace, selectWorkspace, tabName } from "@/lib/actions";
+import { addTab, basename, closeTab, closeWorkspace, duplicateTab, focusSession, moveWorkspace, selectWorkspace, tabName } from "@/lib/actions";
 import { formatCombo } from "@/lib/keys";
 import { activeWs, leaves, type Tab, type Workspace } from "@/lib/layout";
 import { applyTabLabel, applyWorkspaceLabel } from "@/lib/plugins";
@@ -11,6 +11,7 @@ import { focusedSession, get, keyFor, set, setLayout, toggleSidebar, useStore } 
 import type { SessionSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { AgentIcon, StatusDot } from "./AgentIcon";
+import { TabDragLayer, useTabDrag } from "./TabDrag";
 import { isAndroid } from "@/lib/android";
 import { useRoute } from "./AndroidSettings";
 
@@ -41,7 +42,8 @@ export function TabBar() {
   const prefix = useStore((s) => s.config.prefix);
   useStore((s) => s.pluginVersion);
   const ws = activeWs(layout);
-  const [drag, setDrag] = useState<number | null>(null);
+  const barRef = useRef<HTMLDivElement>(null);
+  const { drag, onPointerDown } = useTabDrag(ws, barRef);
   const flush = sidebar;
   return (
     // 胶囊式标签：当前的是一块亮一点的圆角底（bg-accent），别的不画底、悬停时浮起一块淡的。
@@ -55,7 +57,7 @@ export function TabBar() {
           <PanelLeft className="size-4" />
         </Button>
       )}
-      <div className={cn("flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none]", flush ? "pr-2" : "px-2")} style={{ WebkitAppRegion: "no-drag" } as any}>
+      <div ref={barRef} className={cn("flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none]", flush ? "pr-2" : "px-2")} style={{ WebkitAppRegion: "no-drag" } as any}>
         {ws.tabs.map((t, i) => {
           const active = t.id === ws.activeTab;
           const st = tabStatus(t, sessions, unread);
@@ -67,13 +69,9 @@ export function TabBar() {
             <ContextMenu key={t.id}>
               <ContextMenuTrigger asChild>
                 <div
-                  draggable
-                  onDragStart={() => setDrag(i)}
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={() => {
-                    if (drag != null && drag !== i) moveTab(ws.id, drag, i);
-                    setDrag(null);
-                  }}
+                  data-tab-id={t.id}
+                  // 拖动排序 / 合并 / 挪到别的工作空间，见 TabDrag.tsx
+                  onPointerDown={(e) => onPointerDown(e, t.id, i, { label, agent, term: !!first?.term })}
                   onClick={() => setLayout((l) => ({ ...l, workspaces: l.workspaces.map((w) => (w.id === ws.id ? { ...w, activeTab: t.id, lastTab: w.activeTab === t.id ? w.lastTab : w.activeTab } : w)) }))}
                   onDoubleClick={() => set({ dialog: { kind: "rename", target: "tab", id: t.id, value: t.name ?? tabName(t) } })}
                   // 中键关（照浏览器）。mousedown 里先拦掉，不然 mac 上中键按下会进「自动滚动」
@@ -86,6 +84,7 @@ export function TabBar() {
                   className={cn(
                     "group/tab flex h-7 w-52 min-w-[88px] shrink cursor-default items-center gap-2 rounded-md px-1.5 text-[12px] select-none",
                     active ? "bg-accent font-medium text-foreground" : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+                    drag?.tabId === t.id && "opacity-40",
                   )}
                 >
                   {agent ? (
@@ -134,6 +133,7 @@ export function TabBar() {
           {formatCombo(prefix).replace(/\s.*/, "")} …
         </div>
       )}
+      <TabDragLayer drag={drag} />
     </div>
   );
 }
@@ -296,7 +296,7 @@ function AgentList() {
 function WorkspaceItem({ w, index, active, sessions, unread, onDragStart, onDrop }: { w: Workspace; index: number; active: boolean; sessions: Record<string, SessionSummary>; unread: Record<string, true>; onDragStart: () => void; onDrop: () => void }) {
   const label = applyWorkspaceLabel(w, index, w.name);
   return (
-    <div className="mb-1" draggable onDragStart={onDragStart} onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
+    <div className="mb-1" data-ws-id={w.id} draggable onDragStart={onDragStart} onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
       <ContextMenu>
         <ContextMenuTrigger asChild>
           <button

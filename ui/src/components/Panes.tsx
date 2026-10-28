@@ -2,6 +2,7 @@ import {
   Bot,
   Columns2,
   Copy,
+  ExternalLink,
   GitBranch,
   Maximize2,
   RefreshCw,
@@ -19,7 +20,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { basename, closeFocusedPane, deleteSession, focusPane, focusSession, openTerminal, reopenTerminal, splitFocused, toggleZoom } from "@/lib/actions";
+import { basename, closeFocusedPane, deleteSession, focusPane, focusSession, openTerminal, paneToTab, reopenTerminal, splitFocused, toggleZoom } from "@/lib/actions";
 import { leaves, setRatio, updateTab, type PaneLeaf, type PaneNode, type Tab } from "@/lib/layout";
 import { applyPaneTitle } from "@/lib/plugins";
 import { markRead, set, setLayout, useStore } from "@/lib/store";
@@ -125,6 +126,7 @@ function SubPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; tab
   const title = task?.description || sub.title || "子 agent";
   return (
     <div
+      data-pane-id={pane.id}
       className={cn("flex h-full min-h-0 flex-col", framed && "overflow-hidden rounded-md border", framed && (focused ? "border-brand" : "border-border"))}
       onMouseDown={() => !focused && focusPane(pane.id)}
     >
@@ -167,6 +169,7 @@ function TermPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; ta
   const title = applyPaneTitle(pane, tab, osc || basename(cwd));
   return (
     <div
+      data-pane-id={pane.id}
       className={cn("flex h-full min-h-0 flex-col", framed && "overflow-hidden rounded-md border", framed && (focused ? "border-brand" : "border-border"))}
       onMouseDown={() => !focused && focusPane(pane.id)}
     >
@@ -205,6 +208,12 @@ function TermPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; ta
             {!zoomed && !count && leaves(tab.root).length > 1 && (
               <DropdownMenuItem onClick={() => (focusPane(pane.id), toggleZoom())}>
                 <Maximize2 /> 放大
+              </DropdownMenuItem>
+            )}
+            {leaves(tab.root).length > 1 && (
+              // 合并 tab（把 tab 拖进别的 tab）的反操作
+              <DropdownMenuItem onClick={() => paneToTab(pane.id)}>
+                <ExternalLink /> 移到新 tab
               </DropdownMenuItem>
             )}
             <DropdownMenuSeparator />
@@ -246,6 +255,7 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
 
   return (
     <div
+      data-pane-id={pane.id}
       className={cn("flex h-full min-h-0 flex-col", framed && "overflow-hidden rounded-md border", framed && (focused ? "border-brand" : "border-border"))}
       onMouseDown={() => !focused && focusPane(pane.id)}
     >
@@ -292,6 +302,12 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
             {!zoomed && !count && leaves(tab.root).length > 1 && (
               <DropdownMenuItem onClick={() => (focusPane(pane.id), toggleZoom())}>
                 <Maximize2 /> 放大
+              </DropdownMenuItem>
+            )}
+            {leaves(tab.root).length > 1 && (
+              // 合并 tab（把 tab 拖进别的 tab）的反操作
+              <DropdownMenuItem onClick={() => paneToTab(pane.id)}>
+                <ExternalLink /> 移到新 tab
               </DropdownMenuItem>
             )}
             {session && (

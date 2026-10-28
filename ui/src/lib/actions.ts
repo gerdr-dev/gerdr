@@ -7,6 +7,7 @@ import {
   activeTab,
   activeWs,
   allLeaves,
+  attach,
   closePane,
   cycle,
   findLeaf,
@@ -25,6 +26,7 @@ import {
   type Layout,
   type PaneLeaf,
   type PaneNode,
+  type Side,
   type Tab,
   type Workspace,
 } from "./layout";
@@ -323,6 +325,55 @@ export function moveTab(wsId: string, from: number, to: number) {
       return { ...w, tabs };
     }),
   );
+}
+
+/**
+ * 把 fromId 这个 tab 整个并进 toId（拖 tab 到别的 tab 上 / 别的 pane 的某一边）：它的分屏原样搬过去，
+ * 贴在 paneId 那个 pane（不给 = 整个 tab）的 side 那边，焦点跟过去。会话、终端都不动，只是换个地方显示。
+ * 反过来拆开用 paneToTab。
+ */
+export function mergeTab(fromId: string, toId: string, paneId: string | undefined, side: Side) {
+  if (fromId === toId) return;
+  setLayout((l) => {
+    const fw = l.workspaces.find((w) => w.tabs.some((t) => t.id === fromId));
+    const from = fw?.tabs.find((t) => t.id === fromId);
+    const tw = l.workspaces.find((w) => w.tabs.some((t) => t.id === toId));
+    if (!fw || !from || !tw) return l;
+    let out = updateTab(l, toId, (t) => ({ ...attach(t, paneId, side, from.root), focus: from.focus }));
+    out = removeTab(out, out.workspaces.find((w) => w.id === fw.id)!, fromId);
+    // 「上一个 tab」别指向刚被并掉的那个
+    const gone = (id?: string) => !id || id === fromId || id === toId;
+    const last = !gone(tw.activeTab) ? tw.activeTab : !gone(tw.lastTab) ? tw.lastTab : undefined;
+    out = updateWs(out, tw.id, (w) => ({ ...w, activeTab: toId, lastTab: last }));
+    return tw.id === l.active ? out : { ...out, active: tw.id, lastActive: l.active };
+  });
+}
+
+/** 把一个 pane 拆出来单独成一个 tab，放在原 tab 后面：合并 tab 的反操作。tab 里只有它一个时不动。 */
+export function paneToTab(paneId: string) {
+  setLayout((l) => {
+    for (const w of l.workspaces)
+      for (const t of w.tabs) {
+        const p = findLeaf(t.root, paneId);
+        if (!p) continue;
+        const rest = closePane(t, paneId);
+        if (!rest) return l;
+        const nt: Tab = { id: rid("t"), root: p, focus: p.id };
+        return updateWs(l, w.id, (w) => ({ ...w, tabs: w.tabs.flatMap((x) => (x.id === t.id ? [rest, nt] : [x])), activeTab: nt.id, lastTab: t.id }));
+      }
+    return l;
+  });
+}
+
+/** 把 tab 挪到另一个工作空间（拖到侧栏的工作空间上）：放到最后、切过去看着它。 */
+export function moveTabToWorkspace(tabId: string, wsId: string) {
+  setLayout((l) => {
+    const fw = l.workspaces.find((w) => w.tabs.some((t) => t.id === tabId));
+    const tab = fw?.tabs.find((t) => t.id === tabId);
+    if (!fw || !tab || fw.id === wsId || !l.workspaces.some((w) => w.id === wsId)) return l;
+    const out = updateWs(removeTab(l, fw, tabId), wsId, (w) => ({ ...w, tabs: [...w.tabs, tab], activeTab: tab.id, lastTab: w.activeTab }));
+    return { ...out, active: wsId, lastActive: l.active };
+  });
 }
 
 /** 复制一个 tab：同样的分屏结构，每个 pane 用同样的 agent / 目录开新会话（对话本身复制不了）。 */

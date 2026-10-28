@@ -138,6 +138,20 @@ export function setRatio(tab: Tab, splitId: string, ratio: number): Tab {
   return { ...tab, root: mapNode(tab.root, (n) => (n.type === "split" && n.id === splitId ? { ...n, ratio: r } : n)) };
 }
 
+export type Side = "left" | "right" | "up" | "down";
+
+/**
+ * 把一棵子树 node 贴到 paneId 那个 pane 的 side 那边（各占一半）；paneId 不给 = 贴在整个 tab 的那一边。
+ * 拖 tab 合并进别的 tab 用：node 是被拖的 tab 的整棵树，原样搬过来，里面的分屏比例都不变。焦点由调用方定。
+ */
+export function attach(tab: Tab, paneId: string | undefined, side: Side, node: PaneNode): Tab {
+  const dir = side === "left" || side === "right" ? "row" : "col";
+  const first = side === "left" || side === "up";
+  const wrap = (n: PaneNode): PaneNode => ({ type: "split", id: rid("s"), dir, ratio: 0.5, a: first ? node : n, b: first ? n : node });
+  const root = paneId ? mapNode(tab.root, (n) => (n.type === "pane" && n.id === paneId ? wrap(n) : n)) : wrap(tab.root);
+  return { ...tab, root, zoom: undefined };
+}
+
 // ---- 几何（方向键找邻居）----
 
 export type Rect = { x: number; y: number; w: number; h: number };
