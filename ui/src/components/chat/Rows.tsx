@@ -203,7 +203,6 @@ export type RowEnv = {
   sessionId: string;
   running: boolean;
   onRewind?: (m: GMessage) => void;
-  onEdit?: (m: GMessage) => void;
   onWithdraw?: (messageId: string, now: boolean) => void;
   onQuickReply: (s: string) => void;
   onShowCleared?: () => void;
@@ -250,7 +249,6 @@ export const RowView = memo(
             live={false}
             running={env.running}
             onRewind={env.onRewind}
-            onEdit={env.onEdit}
             onWithdraw={env.onWithdraw}
             onQuickReply={env.onQuickReply}
             stackPrev={row.prev}

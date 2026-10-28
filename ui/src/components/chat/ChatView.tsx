@@ -146,11 +146,12 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
     composer.current?.focus();
   };
 
-  // 回退 / 改写：确认在消息旁边的小气泡里做（RewindButton），这里只管真的去回退
-  const doRewind = async (msg: GMessage, edit: boolean) => {
+  // 回退：确认在消息旁边的小气泡里做（RewindButton），这里只管真的去回退。
+  // 原话总是放回输入框：想原样重发直接点发送，想改就改，不要了清掉 —— 所以不再单独留一个「改这句重发」
+  const doRewind = async (msg: GMessage) => {
     try {
       const r = await api.rewind(session.id, msg.metadata!.messageId!);
-      if (edit || r.content?.length) composer.current?.setContent(r.content ?? []);
+      composer.current?.setContent(r.content ?? []);
     } catch (e: any) {
       toast.error(e.message ?? String(e));
     }
@@ -371,8 +372,7 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
     () => ({
       sessionId: session.id,
       running,
-      onRewind: sub ? undefined : (m) => latest.current.doRewind(m, false),
-      onEdit: sub ? undefined : (m) => latest.current.doRewind(m, true),
+      onRewind: sub ? undefined : (m) => latest.current.doRewind(m),
       onWithdraw: sub
         ? undefined
         : async (id, now) => {

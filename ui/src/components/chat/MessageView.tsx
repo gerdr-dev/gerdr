@@ -31,7 +31,6 @@ type Props = {
   live: boolean; // 这一条是正在流式输出的那条
   running: boolean;
   onRewind?: (m: GMessage) => void;
-  onEdit?: (m: GMessage) => void;
   onWithdraw?: (messageId: string, now: boolean) => void;
   onQuickReply: (s: string) => void;
   stackPrev?: boolean; // 用户消息：上 / 下紧挨着也是用户消息（叠成一摞）
@@ -58,18 +57,7 @@ function fmtTime(ts?: number) {
   return d.toDateString() === new Date().toDateString() ? hm : `${d.getMonth() + 1}/${d.getDate()} ${hm}`;
 }
 
-export const MessageView = memo(function MessageView({
-  msg,
-  sessionId,
-  live,
-  running,
-  onRewind,
-  onEdit,
-  onWithdraw,
-  onQuickReply,
-  stackPrev,
-  stackNext,
-}: Props) {
+export const MessageView = memo(function MessageView({ msg, sessionId, live, running, onRewind, onWithdraw, onQuickReply, stackPrev, stackNext }: Props) {
   if (msg.role === "user") {
     const text = msg.parts.map((p) => (p.type === "text" ? p.text : "")).join("");
     const files = msg.parts.filter((p) => p.type === "file");
@@ -79,13 +67,12 @@ export const MessageView = memo(function MessageView({
     const showMeta = !stackNext || !!meta?.from || !!meta?.steer;
     return (
       <Message from="user" className="group/user gap-1">
-        {/* 回退 / 改写按钮悬停时浮在气泡左边，不占高度 */}
+        {/* 回退按钮悬停时浮在气泡左边，不占高度 */}
         <div className="relative ml-auto flex min-w-0 max-w-[max(80%,280px)] justify-end">
           {canRewind && (
             // 气泡开着时按钮一直显示（鼠标挪去点气泡，hover 没了也别消失）
             <div className="absolute right-full bottom-1 mr-1 flex gap-0.5 opacity-0 transition-opacity group-hover/user:opacity-100 has-[[data-state=open]]:opacity-100 [@media(hover:none)]:opacity-100">
-              <RewindButton edit onConfirm={() => onEdit?.(msg)} />
-              <RewindButton edit={false} onConfirm={() => onRewind?.(msg)} />
+              <RewindButton onConfirm={() => onRewind?.(msg)} />
             </div>
           )}
           <MessageContent
