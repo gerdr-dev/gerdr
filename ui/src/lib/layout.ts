@@ -226,3 +226,55 @@ export function cycle(tab: Tab, delta: number): Tab {
   const next = ls[(i + delta + ls.length) % ls.length];
   return { ...tab, focus: next.id, zoom: tab.zoom ? next.id : undefined };
 }
+
+/**
+ * 「看的位置」：在哪个工作空间、每个工作空间看哪个 tab、每个 tab 焦点在哪个 pane / 放大了哪个。
+ * 每个端各看各的（主机上看着 A，手机上切到 B，主机不跟着动 —— 用户要的功能），所以收到别的端存的布局时
+ * 结构照收、这一份留自己的（withView），自己的那份存在本机浏览器里（store.ts 的 gerdr.view）。
+ * 服务端存的布局里也带着这些字段（最后一个存的端的），只给第一次打开、本地什么都没有的端当起点。
+ */
+export type View = {
+  active: string;
+  lastActive?: string;
+  ws: Record<string, { activeTab: string; lastTab?: string }>;
+  tabs: Record<string, { focus: string; zoom?: string }>;
+};
+
+export function viewOf(l: Layout): View {
+  const v: View = { active: l.active, lastActive: l.lastActive, ws: {}, tabs: {} };
+  for (const w of l.workspaces) {
+    v.ws[w.id] = { activeTab: w.activeTab, lastTab: w.lastTab };
+    for (const t of w.tabs) v.tabs[t.id] = { focus: t.focus, zoom: t.zoom };
+  }
+  return v;
+}
+
+/** 把 v 套到 l 上：v 里说的东西在 l 里还在才用，不在了（被别的端关掉了）就用 l 自己的。没变的部分原样返回同一个对象。 */
+export function withView(l: Layout, v: View | null | undefined): Layout {
+  if (!v) return l;
+  const hasWs = (id?: string) => !!id && l.workspaces.some((w) => w.id === id);
+  let changed = false;
+  const workspaces = l.workspaces.map((w) => {
+    const hasTab = (id?: string) => !!id && w.tabs.some((t) => t.id === id);
+    let wsChanged = false;
+    const tabs = w.tabs.map((t) => {
+      const tv = v.tabs?.[t.id];
+      if (!tv) return t;
+      const focus = findLeaf(t.root, tv.focus) ? tv.focus : t.focus;
+      const zoom = tv.zoom && findLeaf(t.root, tv.zoom) ? tv.zoom : undefined;
+      if (focus === t.focus && zoom === t.zoom) return t;
+      wsChanged = true;
+      return { ...t, focus, zoom };
+    });
+    const wv = v.ws?.[w.id];
+    const activeTab = wv && hasTab(wv.activeTab) ? wv.activeTab : w.activeTab;
+    const lastTab = wv ? (hasTab(wv.lastTab) ? wv.lastTab : undefined) : w.lastTab;
+    if (!wsChanged && activeTab === w.activeTab && lastTab === w.lastTab) return w;
+    changed = true;
+    return { ...w, tabs, activeTab, lastTab };
+  });
+  const active = hasWs(v.active) ? v.active : l.active;
+  const lastActive = hasWs(v.lastActive) ? v.lastActive : l.lastActive;
+  if (!changed && active === l.active && lastActive === l.lastActive) return l;
+  return { ...l, workspaces, active, lastActive };
+}

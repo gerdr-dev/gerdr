@@ -200,6 +200,7 @@ function SettingsDialog({ open }: { open: boolean }) {
   const version = useStore((s) => s.version);
   useStore((s) => s.pluginVersion);
   const [tabOpen, setTabOpen] = useState("general");
+  const remoteConns = useStore((s) => s.remoteConns.length);
   // 从别处直接打开某一页（比如「去批准」→ 远程访问）
   const wantTab = useStore((s) => (s.dialog?.kind === "settings" ? s.dialog.tab : undefined));
   useEffect(() => {
@@ -227,7 +228,15 @@ function SettingsDialog({ open }: { open: boolean }) {
               <TabsTrigger value="plugins">插件</TabsTrigger>
               <TabsTrigger value="agents">Agent</TabsTrigger>
               <TabsTrigger value="resources">资源</TabsTrigger>
-              <TabsTrigger value="remote">远程访问</TabsTrigger>
+              <TabsTrigger value="remote">
+                远程访问
+                {/* 有远程界面连着：数字红点（谁连着、连了多久在 tab 里面） */}
+                {remoteConns > 0 && (
+                  <span className="ml-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-bad px-1 text-[10px] leading-none font-medium text-white tabular-nums">
+                    {remoteConns}
+                  </span>
+                )}
+              </TabsTrigger>
               <TabsTrigger value="labs">实验室</TabsTrigger>
             </TabsList>
           </DialogHeader>

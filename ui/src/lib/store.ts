@@ -1,10 +1,10 @@
 import { create } from "zustand";
 import { api, clientId, type FileStat } from "./api";
 import { DEFAULT_KEYS, type KeyAction } from "./keys";
-import { activeTab, defaultLayout, leaves, validLayout, type Layout } from "./layout";
+import { activeTab, defaultLayout, leaves, validLayout, viewOf, withView, type Layout, type View } from "./layout";
 import { isPhone } from "./phone";
 import { Transcript } from "./transcript";
-import type { AgentInfo, HubEvent, SessionSummary } from "./types";
+import type { AgentInfo, HubEvent, RemoteConn, SessionSummary } from "./types";
 
 export type Theme = "system" | "light" | "dark";
 
@@ -80,6 +80,8 @@ type State = {
   home: string;
   pluginsDir: string;
   agents: AgentInfo[];
+  /** 正在连着的远程界面：设置里「远程访问」tab 上的红点和「正在连接」列表。 */
+  remoteConns: RemoteConn[];
   sessions: Record<string, SessionSummary>;
   /** 每个会话的对话（只有订阅着的会话有）；tv 是它的版本号，变了就重画。 */
   tv: Record<string, number>;
@@ -134,6 +136,7 @@ export const useStore = create<State>(() => ({
   home: "",
   pluginsDir: "",
   agents: [],
+  remoteConns: [],
   sessions: {},
   tv: {},
   layout: defaultLayout(),
@@ -155,11 +158,28 @@ export const set = useStore.setState;
 
 let layoutTimer: ReturnType<typeof setTimeout> | undefined;
 
+// 这个端自己的「看的位置」（layout.ts 的 View）：存在本机浏览器里，主机和远程（不同的 origin）天然各一份。
+const VIEW_KEY = "gerdr.view";
+function saveView(l: Layout) {
+  try {
+    localStorage.setItem(VIEW_KEY, JSON.stringify(viewOf(l)));
+  } catch {}
+}
+export function loadView(): View | null {
+  try {
+    const v = JSON.parse(localStorage.getItem(VIEW_KEY) ?? "null");
+    return v && typeof v.active === "string" && v.ws && v.tabs ? v : null;
+  } catch {
+    return null;
+  }
+}
+
 export function setLayout(fn: (l: Layout) => Layout) {
   const prev = get().layout;
   const next = fn(prev);
   if (next === prev) return;
   set({ layout: next });
+  saveView(next);
   clearTimeout(layoutTimer);
   layoutTimer = setTimeout(() => {
     api.putLayout(get().layout, clientId).catch(() => {});
@@ -167,11 +187,13 @@ export function setLayout(fn: (l: Layout) => Layout) {
   afterLayoutChange(prev, next);
 }
 
+/** 别的端存的布局（或重连时服务端那份）：结构照收，「看的位置」留自己的 —— 手机上切 tab，主机不跟着动。 */
 export function applyRemoteLayout(l: unknown) {
   if (validLayout(l)) {
     const prev = get().layout;
-    set({ layout: l });
-    afterLayoutChange(prev, l);
+    const next = withView(l, viewOf(prev));
+    set({ layout: next });
+    afterLayoutChange(prev, next);
   }
 }
 

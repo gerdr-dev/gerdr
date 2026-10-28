@@ -62,7 +62,8 @@ type Server struct {
 	// Terms：界面里的终端。nil = 不开（测试里）。
 	Terms *term.Manager
 	// Awake：有远程设备连着时不让电脑睡（设置 → 实验室）。nil = 不管（测试里）。
-	Awake *awake.Keeper
+	Awake       *awake.Keeper
+	remoteConns remoteConns // 正在连着的远程界面（remoteconns.go）
 	// OnServiceInstalled：刚打开后台常驻、本进程是 App 起的后端时让位（见 cmd/gerdr 的 handover）。
 	OnServiceInstalled func()
 }
@@ -338,13 +339,14 @@ func (s *Server) auth(w http.ResponseWriter, r *http.Request) {
 func (s *Server) hello(w http.ResponseWriter, r *http.Request) {
 	home, _ := os.UserHomeDir()
 	writeJSON(w, map[string]any{
-		"version":    version.Version,
-		"agents":     s.Hub.Agents(),
-		"sessions":   s.Hub.List(),
-		"layout":     s.Layout.Get(),
-		"config":     s.Config.Get(),
-		"home":       home,
-		"pluginsDir": s.Plugins.Dir(),
+		"version":     version.Version,
+		"agents":      s.Hub.Agents(),
+		"sessions":    s.Hub.List(),
+		"layout":      s.Layout.Get(),
+		"config":      s.Config.Get(),
+		"home":        home,
+		"pluginsDir":  s.Plugins.Dir(),
+		"remoteConns": s.remoteConns.list(),
 	})
 }
 
@@ -550,8 +552,11 @@ func (s *Server) ws(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.Close()
 	// 远程界面开着就一直有这条 /ws（走到这儿已经过了 remoteGuard，是配过对的设备）：按它算「有远程连着」
-	if s.Awake != nil && auth.FromRemote(r) {
-		defer s.Awake.Hold()()
+	if auth.FromRemote(r) {
+		defer s.trackRemote(r)()
+		if s.Awake != nil {
+			defer s.Awake.Hold()()
+		}
 	}
 	sub := s.Hub.Subscribe()
 	defer s.Hub.Unsubscribe(sub)

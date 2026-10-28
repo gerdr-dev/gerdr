@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { api, type PasskeyInfo, type RemoteDevice, type RemoteStatus } from "@/lib/api";
 import { isCancel, isStepUp, passkeySupported, registerPasskey } from "@/lib/passkey";
 import { Button } from "@/components/ui/button";
+import { useStore } from "@/lib/store";
+import type { RemoteConn } from "@/lib/types";
 import { RemoteCert } from "@/components/RemoteCert";
 import { PasskeyStepUp, StepUpApprovals } from "@/components/PasskeyStepUp";
 
@@ -97,6 +99,8 @@ export function RemoteSettings({ open }: { open: boolean }) {
           </div>
         </div>
       )}
+
+      {st.enabled && <RemoteConns me={me} />}
 
       {st.enabled && !isRemote && <StepUpApprovals open={open} />}
 
@@ -249,6 +253,51 @@ export function RemoteSettings({ open }: { open: boolean }) {
           退出这台设备
         </Button>
       )}
+    </div>
+  );
+}
+
+// 「多久」：连上到现在。
+function lasted(since: number, now: number) {
+  const s = Math.max(0, Math.floor((now - since) / 1000));
+  if (s < 60) return `${s} 秒`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m} 分钟`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h} 小时 ${m % 60} 分`;
+  return `${Math.floor(h / 24)} 天 ${h % 24} 小时`;
+}
+
+// 正在连接：现在开着远程界面的设备（一个标签页一条）。列表是服务端推的（remote_conns），不用轮询；时长每秒走一下。
+function RemoteConns({ me }: { me: string }) {
+  const conns = useStore((s) => s.remoteConns);
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    if (conns.length === 0) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [conns.length]);
+  return (
+    <div className="space-y-1.5">
+      <div className="text-[13px] font-medium">正在连接{conns.length > 0 && <span className="ml-1 text-muted-foreground">{conns.length}</span>}</div>
+      <div className="divide-y rounded-md border">
+        {conns.length === 0 && <div className="p-3 text-muted-foreground">现在没有远程设备连着。</div>}
+        {conns.map((c: RemoteConn) => (
+          <div key={c.id} className="flex items-center gap-3 px-3 py-2">
+            <span className="size-2 shrink-0 rounded-full bg-ok" />
+            <div className="min-w-0 flex-1">
+              <div className="truncate">
+                {c.label || "未知设备"}
+                {c.client && <span className="ml-2 text-[11px] text-muted-foreground">{c.client}</span>}
+                {me && c.device === me && <span className="ml-2 text-[11px] text-brand">这台</span>}
+              </div>
+              <div className="truncate text-[11px] text-muted-foreground">
+                已连接 {lasted(c.since, now)} · {new Date(c.since).toLocaleTimeString()} 连上 · {c.ip}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

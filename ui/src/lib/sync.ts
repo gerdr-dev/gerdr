@@ -2,10 +2,10 @@
 // 重新拉 hello、重新订阅，服务端会把订阅的会话日志整份再推一遍 —— 不用自己对账）。
 import { api, ApiError, clientId } from "./api";
 import { toast } from "sonner";
-import { validLayout } from "./layout";
+import { validLayout, withView } from "./layout";
 import { nativeNotify } from "./native";
 import { emitSessionChange } from "./plugins";
-import { applyEvents, applyRemoteLayout, get, mergeConfig, onLayoutChange, removeSession, set, setLayout, upsertSession, watchedSessions } from "./store";
+import { applyEvents, applyRemoteLayout, get, loadView, mergeConfig, onLayoutChange, removeSession, set, setLayout, upsertSession, watchedSessions } from "./store";
 import type { HubEvent, SessionSummary } from "./types";
 
 let ws: WebSocket | null = null;
@@ -26,8 +26,10 @@ export async function boot() {
       agents: h.agents,
       sessions,
       config: mergeConfig(h.config),
+      remoteConns: h.remoteConns ?? [],
     });
-    if (validLayout(h.layout)) set({ layout: h.layout });
+    // 打开页面：服务端那份布局 + 这个端上次自己看的位置（不然一刷新就跳到别的端最后看的地方）
+    if (validLayout(h.layout)) set({ layout: withView(h.layout, loadView()) });
     else setLayout((l) => l); // 第一次：把默认布局存下去
     pruneLayout();
     connect();
@@ -168,7 +170,7 @@ async function refreshHello() {
     const h = await api.hello();
     const sessions: Record<string, SessionSummary> = {};
     for (const s of h.sessions) sessions[s.id] = s;
-    set({ sessions, agents: h.agents });
+    set({ sessions, agents: h.agents, remoteConns: h.remoteConns ?? [] });
     if (validLayout(h.layout)) applyRemoteLayout(h.layout);
   } catch {}
 }
@@ -195,6 +197,9 @@ function handle(m: any) {
       break;
     case "agents":
       if (Array.isArray(m.data)) set({ agents: m.data });
+      break;
+    case "remote_conns":
+      if (Array.isArray(m.data)) set({ remoteConns: m.data });
       break;
     case "pong":
       break;

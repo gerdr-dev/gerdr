@@ -269,6 +269,9 @@ func (s *Server) remoteRoutes(mux *http.ServeMux) {
 		}
 		writeJSON(w, map[string]any{"ok": true})
 	})
+	mux.HandleFunc("GET /api/remote/connections", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, s.remoteConns.list())
+	})
 	mux.HandleFunc("GET /api/remote/devices", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"devices": s.Remote.Auth.Devices(), "me": s.myDevice(r)})
 	})
