@@ -4,7 +4,7 @@
 // 插件出错不能把界面拖垮：每个钩子调用都包 try/catch，出错记在插件名下（设置里能看到）。
 import { api } from "./api";
 import { activeTab, activeWs, leaves, type Layout, type PaneLeaf, type Tab, type Workspace } from "./layout";
-import { get, set, visibleSessions } from "./store";
+import { get, set, useStore, visibleSessions } from "./store";
 import type { PluginBuild, SessionSummary } from "./types";
 
 type TabLabelFn = (tab: any, ctx: any) => string | void;
@@ -153,6 +153,19 @@ export function emitSessionChange(prev: SessionSummary | undefined, next: Sessio
     emit("turnEnd", { session: info, visible, stopReason: next.status === "error" ? "error" : "end_turn", error: next.error });
   }
 }
+
+// 焦点 pane 变了（点 pane、切 tab / 工作空间都算）→ focusChanged。layout 每次改动都会过这里，
+// 所以只比较焦点 pane 的 id，没变就不发；没人听时连快照都不拼。
+let lastFocus = "";
+useStore.subscribe((s, prev) => {
+  if (s.layout === prev.layout) return;
+  const id = activeTab(s.layout).focus;
+  if (id === lastFocus) return;
+  lastFocus = id;
+  if (!listeners.some((l) => l.event === "focusChanged")) return;
+  const snap = stateSnapshot(s.layout);
+  emit("focusChanged", { pane: snap.activePane, tab: snap.activeTab, workspace: snap.activeWorkspace });
+});
 
 // ---- 加载 ----
 
