@@ -232,7 +232,10 @@ export function TerminalView({
           ).map(([label, seq]) => (
             <button
               key={label}
-              className={cn("shrink-0 rounded-sm border px-2.5 py-1 font-mono text-[12px]", label === "Ctrl" && ctrlOn && "border-brand bg-brand/15 text-brand")}
+              className={cn(
+                "shrink-0 rounded-sm border px-2.5 py-1 font-mono text-[12px]",
+                label === "Ctrl" && ctrlOn && "border-brand bg-brand/15 text-brand",
+              )}
               onClick={() => {
                 if (label === "Ctrl") {
                   ctrl.current = !ctrl.current;
@@ -254,7 +257,9 @@ export function TerminalView({
       )}
       {(state === "gone" || state === "exited") && (
         <div className="absolute inset-x-0 bottom-0 flex items-center gap-3 border-t bg-background/95 px-3 py-2 text-[12px]">
-          <span className="text-muted-foreground">{state === "gone" ? "这个终端已经不在了（gerdr 重启过）" : code < 0 ? "shell 被结束了" : `shell 已退出（${code}）`}</span>
+          <span className="text-muted-foreground">
+            {state === "gone" ? "这个终端已经不在了（gerdr 重启过）" : code < 0 ? "shell 被结束了" : `shell 已退出（${code}）`}
+          </span>
           <Button size="sm" variant="outline" className="ml-auto h-7" onClick={() => reopenTerminal(paneId, cwd)}>
             <RotateCcw className="size-3.5" />在 {cwd.replace(/\/+$/, "").split("/").pop() || cwd} 重开
           </Button>

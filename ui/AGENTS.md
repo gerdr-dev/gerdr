@@ -67,8 +67,11 @@ src/lib/
 
 - 对话是**虚拟列表**（react-virtuoso）：「设置 → 实验室」里打开虚拟滚动时，只渲染屏幕附近的行，滚出去的会被卸载（默认关着，但组件要按开着写）。所以对话里的组件**别用 useState 记「展开没」这类状态**
   （滚回来就没了），用 `@/lib/kept` 的 `useKept(key, 初值)`，key 带上会话 id 和这块东西的 id。
-- 格式按 `.prettierrc.json`（行宽 160、双引号、分号）：只格式化你改的文件，别全量重排（老代码不全是 prettier 排的，一重排 diff 全是噪音）。
-  手工对齐的数据表（像素格子、坐标表）前面加一行 `// prettier-ignore`。`components/ui/`、`ai-elements/` 是拷进来的上游组件，不格式化。
+- 格式按 `.prettierrc.json`（行宽 160、双引号、分号），`src/` 下的 ts / tsx 已经全部是 prettier 3.9.10 排过的：改完对改了的文件跑
+  `npx prettier@3.9.10 --write <文件>`，**要在界面目录里跑** —— 在别处跑（或者把文件拷到 /tmp 再排）读不到 `.prettierrc.json`，
+  会按默认的行宽 80 把整个文件拆得稀碎。别换别的版本：不同版本排出来不一样，diff 全是噪音。
+  手工对齐的数据表（像素格子、坐标表）前面加一行 `// prettier-ignore`。`.prettierignore` 里的不格式化：`components/ui/`、`ai-elements/`
+  是拷进来的上游组件，`index.css` 末尾有原样搬的 xterm.css。
 
 ## 设计参考
 

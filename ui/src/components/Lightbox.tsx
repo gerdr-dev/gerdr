@@ -254,7 +254,14 @@ function Lightbox({ items, index, origin }: { items: LightboxItem[]; index: numb
     const mx = (a.x + b.x) / 2;
     const my = (a.y + b.y) / 2;
     const v = view.current;
-    g.current = { ...g.current, mode: "pinch", moved: true, v: { ...v }, dist: Math.hypot(a.x - b.x, a.y - b.y), c: { x: (mx - f.left - v.x) / v.s, y: (my - f.top - v.y) / v.s } };
+    g.current = {
+      ...g.current,
+      mode: "pinch",
+      moved: true,
+      v: { ...v },
+      dist: Math.hypot(a.x - b.x, a.y - b.y),
+      c: { x: (mx - f.left - v.x) / v.s, y: (my - f.top - v.y) / v.s },
+    };
   };
 
   const onDown = (e: React.PointerEvent) => {
@@ -331,13 +338,17 @@ function Lightbox({ items, index, origin }: { items: LightboxItem[]; index: numb
     const now = Date.now();
     const dbl = lastTap.current && now - lastTap.current.t < 300 && Math.hypot(e.clientX - lastTap.current.x, e.clientY - lastTap.current.y) < 30;
     lastTap.current = dbl ? null : { t: now, x: e.clientX, y: e.clientY };
-    const toggle = () => (view.current.s > 1.01 ? (apply(clamp({ s: 1, x: 0, y: 0 }), 240), setZoomed(false)) : zoomAt(e.pointerType === "mouse" ? 2 : 2.5, e.clientX, e.clientY, 240));
+    const toggle = () =>
+      view.current.s > 1.01
+        ? (apply(clamp({ s: 1, x: 0, y: 0 }), 240), setZoomed(false))
+        : zoomAt(e.pointerType === "mouse" ? 2 : 2.5, e.clientX, e.clientY, 240);
     if (e.pointerType === "mouse") onImg ? toggle() : close();
     else if (dbl) toggle();
     else if (!onImg && view.current.s <= 1.01) close();
   };
 
-  const btn = "flex size-9 items-center justify-center rounded-full bg-background/70 text-foreground shadow-sm ring-1 ring-border backdrop-blur hover:bg-background";
+  const btn =
+    "flex size-9 items-center justify-center rounded-full bg-background/70 text-foreground shadow-sm ring-1 ring-border backdrop-blur hover:bg-background";
   return (
     <div
       ref={rootRef}
@@ -357,7 +368,10 @@ function Lightbox({ items, index, origin }: { items: LightboxItem[]; index: numb
         alt={it.alt}
         draggable={false}
         onLoad={(e) => !nat && setNat({ w: e.currentTarget.naturalWidth || 800, h: e.currentTarget.naturalHeight || 800 })}
-        className={cn("absolute top-0 left-0 max-w-none rounded-md shadow-2xl will-change-transform", zoomed ? "cursor-grab active:cursor-grabbing" : "cursor-zoom-in")}
+        className={cn(
+          "absolute top-0 left-0 max-w-none rounded-md shadow-2xl will-change-transform",
+          zoomed ? "cursor-grab active:cursor-grabbing" : "cursor-zoom-in",
+        )}
         style={fit ? { left: fit.left, top: fit.top, width: fit.w, height: fit.h, transformOrigin: "0 0" } : { opacity: 0 }}
       />
       <div ref={chromeRef} style={{ opacity: 0 }}>

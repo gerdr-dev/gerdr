@@ -1,17 +1,18 @@
-import { ArrowUp, ImagePlus, Square, X, CornerDownRight, Zap } from "lucide-react";
+import { ArrowUp, ImagePlus, Square, X, CornerDownRight, Zap, Pin, PinOff } from "lucide-react";
 import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { api, type Holder, isNetworkError } from "@/lib/api";
 import { closeFocusedPane, focusPane } from "@/lib/actions";
-import { get, set, transcript, useStore } from "@/lib/store";
+import { get, set, setConfig, transcript, useStore } from "@/lib/store";
 import type { ConfigOption, ContentBlock, SessionSummary } from "@/lib/types";
 import { isCoarse, usePhone } from "@/lib/phone";
 import { askKey } from "@/lib/askkeys";
 import { cn } from "@/lib/utils";
 import { HeldDialog } from "./HeldDialog";
-import { OptionMenu } from "./OptionMenu";
+import { OptionMenu, OptionsMenu, type OptGroup } from "./OptionMenu";
 import { openLightbox } from "../Lightbox";
 import { TasksChip } from "./TasksBar";
 
@@ -35,6 +36,7 @@ function flatOptions(o: ConfigOption) {
 const LOCAL_CMDS = [{ name: "resume", description: "换到这个目录下之前的一段对话" }];
 // 命令别名：agent 报了右边那个命令才有左边的别名，发出去时换回本名（agent 只认本名）
 const ALIASES: Record<string, string> = { new: "clear" };
+const NO_PINS: string[] = []; // 没 pin 过时用同一个空数组，不然每次渲染都是新数组，useMemo 白算
 
 // 补全列表（/ 命令、@ 文件）里选中的那一行：↑↓ 翻到列表外面时把它滚进来（nearest：本来就看得见就不动）。
 // 引用换到哪一行，React 就对那一行调一次
@@ -48,6 +50,7 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
 ) {
   const text = useStore((s) => s.drafts[paneId] ?? "");
   const sendKey = useStore((s) => s.config.sendKey);
+  const pinned = useStore((s) => s.config.pinnedCommands ?? NO_PINS);
   const phone = usePhone();
   const [imgs, setImgs] = useState<Img[]>([]);
   const [busy, setBusy] = useState(false);
@@ -104,14 +107,34 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
     const aliases = Object.entries(ALIASES)
       .filter(([a, to]) => !own.some((c) => c.name === a) && own.some((c) => c.name === to))
       .map(([a, to]) => ({ name: a, description: `同 /${to}：${own.find((c) => c.name === to)?.description ?? ""}` }));
-    return [...LOCAL_CMDS.filter((l) => !own.some((c) => c.name === l.name)), ...own, ...aliases]
-      .map((c) => ({ c, r: rank(c) }))
-      .filter((x) => x.r < 9)
-      .sort((a, b) => a.r - b.r || a.c.name.length - b.c.name.length)
-      .map((x) => x.c)
-      .slice(0, 40);
-  }, [slash?.[1], session.commands]);
+    return (
+      [...LOCAL_CMDS.filter((l) => !own.some((c) => c.name === l.name)), ...own, ...aliases]
+        .map((c) => ({ c, r: rank(c), p: pinned.indexOf(c.name) }))
+        .filter((x) => x.r < 9)
+        // pin 住的排最上面（照 pin 的先后），其余照上面的排序
+        .sort((a, b) => (a.p < 0 ? 1e9 : a.p) - (b.p < 0 ? 1e9 : b.p) || a.r - b.r || a.c.name.length - b.c.name.length)
+        .map((x) => x.c)
+        .slice(0, 40)
+    );
+  }, [slash?.[1], session.commands, pinned]);
   useEffect(() => setCmdIdx(0), [slash?.[1]]);
+  // pin 住的命令：config 里只存名字（所有设备、所有会话共用一份），这里只列这个会话的 agent 真报了的 ——
+  // claude 和 codex 的命令不一样，别的 agent 的 pin 在这儿点了也发不出去
+  const pinnedCmds = useMemo(() => {
+    const own = session.commands ?? [];
+    const all = [...LOCAL_CMDS, ...own];
+    return pinned
+      .map(
+        (n) => all.find((c) => c.name === n) ?? (ALIASES[n] && own.some((c) => c.name === ALIASES[n]) ? { name: n, description: `同 /${ALIASES[n]}` } : null),
+      )
+      .filter((c) => !!c);
+  }, [pinned, session.commands]);
+  const togglePin = (name: string) => setConfig({ pinnedCommands: pinned.includes(name) ? pinned.filter((n) => n !== name) : [...pinned, name] });
+  // 点了 pin 列表里的一个：和在 / 列表里点一样 —— 本地命令直接做，其它填进输入框留个空格（可能要接参数），自己按发送
+  const pickPinned = (name: string) => {
+    if (runLocal(name)) return;
+    putText(`/${name} `);
+  };
 
   // @ 引用文件（照 Claude Code）：光标前面是「@xxx」（@ 在行首或空格后）就弹会话目录下的文件候选，选中换成 @相对路径。
   const [caret, setCaret] = useState(0);
@@ -421,6 +444,22 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
   const modes = session.modes;
   const opts = session.configOptions ?? [];
   const hasText = text.trim().length > 0 || imgs.length > 0;
+  const modeGroup: OptGroup | undefined = modes?.availableModes.length
+    ? {
+        id: "__mode",
+        label: "模式",
+        value: modes.currentModeId,
+        options: modes.availableModes.map((m) => ({ value: m.id, name: m.name, description: m.description })),
+        onChange: (v) => api.setMode(session.id, v).catch((e) => toast.error(e.message)),
+      }
+    : undefined;
+  const optGroups: OptGroup[] = opts.map((o) => ({
+    id: o.id,
+    label: o.name,
+    value: o.currentValue,
+    options: flatOptions(o),
+    onChange: (v) => api.setConfig(session.id, o.id, v).catch((e) => toast.error(e.message)),
+  }));
 
   sendRef.current = send;
   return (
@@ -459,7 +498,7 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
             <button
               key={c.name}
               className={cn("flex w-full items-baseline gap-2 rounded-sm px-2 py-1 text-left text-[13px]", i === cmdIdx && "bg-accent")}
-                ref={i === cmdIdx ? keepInView : undefined}
+              ref={i === cmdIdx ? keepInView : undefined}
               onMouseEnter={() => setCmdIdx(i)}
               onMouseDown={(e) => {
                 e.preventDefault();
@@ -468,7 +507,23 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
               }}
             >
               <span className="shrink-0 font-mono">/{c.name}</span>
-              <span className="truncate text-[12px] text-muted-foreground">{c.description}</span>
+              <span className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground">{c.description}</span>
+              {/* pin 开关：按钮里不能再套按钮，用 span 接 mousedown（和整行一样用 mousedown，免得输入框先失焦、列表跟着关了） */}
+              <span
+                role="button"
+                title={pinned.includes(c.name) ? "取消 pin" : "pin 到输入框（附图旁边的 / 按钮）"}
+                className={cn(
+                  "shrink-0 self-center rounded-sm p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground",
+                  pinned.includes(c.name) ? "text-brand" : i === cmdIdx ? "opacity-100" : "opacity-0 [@media(hover:none)]:opacity-60",
+                )}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  togglePin(c.name);
+                }}
+              >
+                {pinned.includes(c.name) ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
+              </span>
             </button>
           ))}
         </div>
@@ -491,7 +546,17 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
           <div className="flex flex-wrap gap-2 px-3 pt-3">
             {imgs.map((im, i) => (
               <div key={i} className="group/img relative">
-                <img src={im.url} onClick={(e) => openLightbox(imgs.map((x) => ({ url: x.url })), i, e.currentTarget)} className="size-14 cursor-zoom-in rounded-md border object-cover" />
+                <img
+                  src={im.url}
+                  onClick={(e) =>
+                    openLightbox(
+                      imgs.map((x) => ({ url: x.url })),
+                      i,
+                      e.currentTarget,
+                    )
+                  }
+                  className="size-14 cursor-zoom-in rounded-md border object-cover"
+                />
                 <button
                   className="absolute -right-1.5 -top-1.5 hidden rounded-full bg-foreground p-0.5 text-background group-hover/img:block [@media(hover:none)]:block"
                   onClick={() => setImgs(imgs.filter((_, j) => j !== i))}
@@ -522,12 +587,20 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
               addFiles(files);
             }
           }}
-          placeholder={running ? (phone ? "它在干活：说的话等这一步做完插进去" : sendKey === "enter" ? "它在干活：↵ 等这一步做完插进去，Ctrl+↵ 立即插" : "它在干活：说一句会等这一步做完插进去") : "说点什么…  / 看命令"}
+          placeholder={
+            running
+              ? phone
+                ? "它在干活：说的话等这一步做完插进去"
+                : sendKey === "enter"
+                  ? "它在干活：↵ 等这一步做完插进去，Ctrl+↵ 立即插"
+                  : "它在干活：说一句会等这一步做完插进去"
+              : "说点什么…  / 看命令"
+          }
           className="block max-h-[40vh] min-h-[44px] w-full resize-none bg-transparent px-4 pt-3 pb-1 text-[1em] max-md:text-[length:max(1em,15px)] max-md:supports-[-webkit-touch-callout:none]:text-[16px] leading-relaxed outline-none placeholder:text-muted-foreground/70"
         />
         <div className="flex items-center gap-1 px-2.5 pb-2.5">
-          {/* 附图和几个下拉放一组：手机上放不下时这一组横着滑，而不是每个都被挤成「A…」「Opus …」（用户报的）；
-              上下文 / 发送这些固定在右边不动 */}
+          {/* 附图和几个下拉放一组：放不下时这一组横着滑，而不是每个都被挤成「A…」「Opus …」（用户报的）；
+              手机上模式 / 模型 / 思考强度收成一个图标（OptionsMenu），平时几乎不改，不值得常驻。上下文 / 发送这些固定在右边不动 */}
           <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none]">
             <Tooltip>
               <TooltipTrigger asChild>
@@ -550,23 +623,27 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
               </TooltipTrigger>
               <TooltipContent>附图（也可以直接粘贴 / 拖进来）</TooltipContent>
             </Tooltip>
-            {modes && modes.availableModes.length > 0 && (
-              <OptionMenu
-                label="模式"
-                value={modes.currentModeId}
-                options={modes.availableModes.map((m) => ({ value: m.id, name: m.name, description: m.description }))}
-                onChange={(v) => api.setMode(session.id, v).catch((e) => toast.error(e.message))}
-              />
+            {pinnedCmds.length > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger className="flex size-7 shrink-0 items-center justify-center rounded-md font-mono text-[14px] text-muted-foreground outline-none hover:bg-muted hover:text-foreground data-[state=open]:bg-muted">
+                  /
+                </DropdownMenuTrigger>
+                {/* 关掉时不把焦点还给触发器：pickPinned 要把焦点放进输入框（手机上好直接弹键盘接着写参数） */}
+                <DropdownMenuContent side="top" align="start" className="max-h-80 w-72 overflow-auto" onCloseAutoFocus={(e) => e.preventDefault()}>
+                  {pinnedCmds.map((c) => (
+                    <DropdownMenuItem key={c.name} onClick={() => pickPinned(c.name)} className="items-baseline gap-2">
+                      <span className="shrink-0 font-mono text-[13px]">/{c.name}</span>
+                      <span className="truncate text-[12px] text-muted-foreground">{c.description}</span>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
-            {opts.map((o) => (
-              <OptionMenu
-                key={o.id}
-                label={o.name}
-                value={o.currentValue}
-                options={flatOptions(o)}
-                onChange={(v) => api.setConfig(session.id, o.id, v).catch((e) => toast.error(e.message))}
-              />
-            ))}
+            {phone ? (
+              <OptionsMenu mode={modeGroup} groups={optGroups} />
+            ) : (
+              [modeGroup, ...optGroups].map((g) => g && <OptionMenu key={g.id} label={g.label} value={g.value} options={g.options} onChange={g.onChange} />)
+            )}
           </div>
           <TasksChip session={session} />
           {session.context && <ContextMeter c={session.context} />}
@@ -585,7 +662,14 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
           {running && (!phone || hasText) && (
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button size="icon" variant="ghost" className="size-8 rounded-full" disabled={!hasText || busy} onMouseDown={keepFocus} onClick={() => send(true)}>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="size-8 rounded-full"
+                  disabled={!hasText || busy}
+                  onMouseDown={keepFocus}
+                  onClick={() => send(true)}
+                >
                   <Zap className="size-4" />
                 </Button>
               </TooltipTrigger>

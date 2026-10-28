@@ -58,7 +58,18 @@ function fmtTime(ts?: number) {
   return d.toDateString() === new Date().toDateString() ? hm : `${d.getMonth() + 1}/${d.getDate()} ${hm}`;
 }
 
-export const MessageView = memo(function MessageView({ msg, sessionId, live, running, onRewind, onEdit, onWithdraw, onQuickReply, stackPrev, stackNext }: Props) {
+export const MessageView = memo(function MessageView({
+  msg,
+  sessionId,
+  live,
+  running,
+  onRewind,
+  onEdit,
+  onWithdraw,
+  onQuickReply,
+  stackPrev,
+  stackNext,
+}: Props) {
   if (msg.role === "user") {
     const text = msg.parts.map((p) => (p.type === "text" ? p.text : "")).join("");
     const files = msg.parts.filter((p) => p.type === "file");
@@ -93,7 +104,13 @@ export const MessageView = memo(function MessageView({ msg, sessionId, live, run
                   <img
                     key={i}
                     src={f.url}
-                    onClick={(e) => openLightbox(files.map((x: any) => ({ url: x.url })), i, e.currentTarget)}
+                    onClick={(e) =>
+                      openLightbox(
+                        files.map((x: any) => ({ url: x.url })),
+                        i,
+                        e.currentTarget,
+                      )
+                    }
                     className="h-40 w-auto max-w-full cursor-zoom-in rounded-xl border object-contain"
                   />
                 ))}
@@ -318,7 +335,10 @@ export function renderPart(p: GPart, i: number, ctx: PartCtx): ReactNode {
       );
     case "data-turnEnd":
       return (
-        <div key={i} className={cn("flex items-start justify-center gap-1.5 px-6 py-1 text-center text-[12px]", p.data.error ? "text-bad" : "text-muted-foreground")}>
+        <div
+          key={i}
+          className={cn("flex items-start justify-center gap-1.5 px-6 py-1 text-center text-[12px]", p.data.error ? "text-bad" : "text-muted-foreground")}
+        >
           <CircleAlert className="mt-0.5 size-3.5 shrink-0" />
           <span className="min-w-0 whitespace-pre-wrap break-words">{p.data.error || STOP_TEXT[p.data.stopReason] || p.data.stopReason}</span>
         </div>

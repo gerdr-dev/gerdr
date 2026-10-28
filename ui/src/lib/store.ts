@@ -28,6 +28,8 @@ export type Config = {
   /** 实验室：不休眠时合上盖子也不睡（pmset disablesleep，要授权一次）。只在本来就该醒着时生效。 */
   keepAwakeLid?: boolean;
   agents?: AgentDef[];
+  /** 输入框里 pin 住的 / 命令（命令名，不带 /）：附图按钮旁边多一个 / 按钮，点开就是这些。存 config 是让手机和电脑共用一份。 */
+  pinnedCommands?: string[];
 };
 
 /** config.json 里的 agents：claude / codex 的变体（base），或者外部 ACP agent（command）。 */

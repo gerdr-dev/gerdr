@@ -42,7 +42,11 @@ export function AwakeSetting({ open }: { open: boolean }) {
   useEffect(() => {
     if (!open) return;
     let alive = true;
-    const load = () => api.awake().then((r) => alive && setSt(r)).catch(() => {});
+    const load = () =>
+      api
+        .awake()
+        .then((r) => alive && setSt(r))
+        .catch(() => {});
     load();
     const t = setInterval(load, 10_000);
     return () => {
@@ -52,12 +56,22 @@ export function AwakeSetting({ open }: { open: boolean }) {
   }, [open]);
 
   const put = (b: { minutes?: number; until?: number; forever?: boolean }) =>
-    api.setAwake(b).then(setSt).catch((e) => toast.error(e.message ?? String(e)));
+    api
+      .setAwake(b)
+      .then(setSt)
+      .catch((e) => toast.error(e.message ?? String(e)));
   // 开关一变（存进 config、后端读到）就刷一次：授权按钮要跟着出来
   const lidCfg = useStore((s) => !!s.config.keepAwakeLid);
   useEffect(() => {
     if (!open) return;
-    const t = setTimeout(() => api.awake().then(setSt).catch(() => {}), 300);
+    const t = setTimeout(
+      () =>
+        api
+          .awake()
+          .then(setSt)
+          .catch(() => {}),
+      300,
+    );
     return () => clearTimeout(t);
   }, [lidCfg, open]);
   const [authing, setAuthing] = useState(false);

@@ -14,7 +14,17 @@ function tilde(p: string, home: string) {
   return home && p.startsWith(home) ? "~" + p.slice(home.length) : p;
 }
 
-export function DirPicker({ value, onChange, onEnter, autoFocus }: { value: string; onChange: (v: string) => void; onEnter?: () => void; autoFocus?: boolean }) {
+export function DirPicker({
+  value,
+  onChange,
+  onEnter,
+  autoFocus,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  onEnter?: () => void;
+  autoFocus?: boolean;
+}) {
   const home = useStore((s) => s.home);
   const sessions = useStore((s) => s.sessions);
   const [open, setOpen] = useState(false);
@@ -77,7 +87,11 @@ export function DirPicker({ value, onChange, onEnter, autoFocus }: { value: stri
           <div className="mb-1 border-b pb-1">
             <div className="px-2 py-1 text-[11px] text-muted-foreground">最近</div>
             {recent.map((r) => (
-              <button key={r} className="flex w-full items-center gap-2 rounded-sm px-2 py-1 text-left font-mono text-[12px] hover:bg-accent" onClick={() => (onChange(tilde(r, home)), setOpen(false))}>
+              <button
+                key={r}
+                className="flex w-full items-center gap-2 rounded-sm px-2 py-1 text-left font-mono text-[12px] hover:bg-accent"
+                onClick={() => (onChange(tilde(r, home)), setOpen(false))}
+              >
                 <History className="size-3.5 text-muted-foreground" />
                 <span className="truncate">{tilde(r, home)}</span>
               </button>
@@ -87,7 +101,10 @@ export function DirPicker({ value, onChange, onEnter, autoFocus }: { value: stri
         {err && <div className="px-2 py-1 text-[12px] text-bad">{err}</div>}
         {list && (
           <div className="max-h-72 overflow-auto">
-            <button className="flex w-full items-center gap-2 rounded-sm px-2 py-1 text-left font-mono text-[12px] text-muted-foreground hover:bg-accent" onClick={() => (onChange(tilde(list.parent, home) + "/"), browse(list.parent))}>
+            <button
+              className="flex w-full items-center gap-2 rounded-sm px-2 py-1 text-left font-mono text-[12px] text-muted-foreground hover:bg-accent"
+              onClick={() => (onChange(tilde(list.parent, home) + "/"), browse(list.parent))}
+            >
               <ChevronUp className="size-3.5" />
               {tilde(list.path, home)}
               {list.git && <FolderGit2 className="size-3.5 text-brand" />}
@@ -127,7 +144,9 @@ export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean
   const agents = useStore((s) => s.agents);
   const home = useStore((s) => s.home);
   const defAgent = useStore((s) => s.config.defaultAgent);
-  const [agent, setAgent] = useState(pane.draft?.agent ?? (agents.find((a) => a.id === defAgent && a.available)?.id || agents.find((a) => a.available)?.id || "claude"));
+  const [agent, setAgent] = useState(
+    pane.draft?.agent ?? (agents.find((a) => a.id === defAgent && a.available)?.id || agents.find((a) => a.available)?.id || "claude"),
+  );
   const [cwd, setCwd] = useState(tilde(pane.draft?.cwd ?? home, home));
   const [busy, setBusy] = useState(false);
   const [old, setOld] = useState<{ sessionId: string; cwd: string; title?: string; updatedAt?: string }[] | null>(null);
@@ -216,7 +235,12 @@ export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean
           {old && old.length === 0 && <div className="text-[12px] text-muted-foreground">这个目录下没有以前的会话</div>}
           <div className="space-y-0.5">
             {old?.slice(0, 12).map((o) => (
-              <button key={o.sessionId} disabled={busy} className="flex w-full items-baseline gap-2 rounded-md px-2 py-1.5 text-left text-[13px] hover:bg-accent" onClick={() => start(o.sessionId, o.title)}>
+              <button
+                key={o.sessionId}
+                disabled={busy}
+                className="flex w-full items-baseline gap-2 rounded-md px-2 py-1.5 text-left text-[13px] hover:bg-accent"
+                onClick={() => start(o.sessionId, o.title)}
+              >
                 <span className="min-w-0 flex-1 truncate">{o.title || o.sessionId}</span>
                 {o.updatedAt && <span className="shrink-0 text-[11px] text-muted-foreground">{ago(o.updatedAt)}</span>}
               </button>

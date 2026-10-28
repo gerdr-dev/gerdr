@@ -108,7 +108,8 @@ export function addImportedWorkspaces(list: { label: string; tabs: { label: stri
     let next = l;
     for (const w of list) {
       const tabs: Tab[] = w.tabs.map((t) => {
-        const build = (n: ImportNode): PaneNode => ("sessionId" in n ? newPane(undefined, n.sessionId) : { type: "split", id: rid("s"), dir: n.dir, ratio: n.ratio, a: build(n.a), b: build(n.b) });
+        const build = (n: ImportNode): PaneNode =>
+          "sessionId" in n ? newPane(undefined, n.sessionId) : { type: "split", id: rid("s"), dir: n.dir, ratio: n.ratio, a: build(n.a), b: build(n.b) };
         const root = build(t.tree);
         const firstLeaf = (n: ImportNode): ImportNode & { cwd: string } => ("sessionId" in n ? n : firstLeaf(n.a));
         const name = t.label && t.label !== basename(firstLeaf(t.tree).cwd) ? t.label : undefined;
@@ -340,7 +341,11 @@ export function mergeTab(fromId: string, toId: string, paneId: string | undefine
     const tw = l.workspaces.find((w) => w.tabs.some((t) => t.id === toId));
     if (!fw || !from || !tw) return l;
     let out = updateTab(l, toId, (t) => ({ ...attach(t, paneId, side, from.root), focus: from.focus }));
-    out = removeTab(out, out.workspaces.find((w) => w.id === fw.id)!, fromId);
+    out = removeTab(
+      out,
+      out.workspaces.find((w) => w.id === fw.id)!,
+      fromId,
+    );
     // 「上一个 tab」别指向刚被并掉的那个
     const gone = (id?: string) => !id || id === fromId || id === toId;
     const last = !gone(tw.activeTab) ? tw.activeTab : !gone(tw.lastTab) ? tw.lastTab : undefined;

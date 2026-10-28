@@ -88,9 +88,13 @@ export function ResourceStats({ open }: { open: boolean }) {
       </div>
 
       <div className="space-y-1.5">
-        <div className="text-[13px] font-medium">Agent 进程 {s?.agents?.length ? <span className="font-normal text-muted-foreground">· 共 {mb(agentsTotal)}</span> : null}</div>
+        <div className="text-[13px] font-medium">
+          Agent 进程 {s?.agents?.length ? <span className="font-normal text-muted-foreground">· 共 {mb(agentsTotal)}</span> : null}
+        </div>
         <div className="divide-y rounded-md border">
-          {!s?.agents?.length && <Row label="没有在跑的 agent 进程" value="" sub="Claude 会话闲置 15 分钟会收掉进程（GERDR_CLAUDE_IDLE_MINUTES），下次说话自动接回" />}
+          {!s?.agents?.length && (
+            <Row label="没有在跑的 agent 进程" value="" sub="Claude 会话闲置 15 分钟会收掉进程（GERDR_CLAUDE_IDLE_MINUTES），下次说话自动接回" />
+          )}
           {s?.agents?.map((p) => (
             <Row
               key={p.pid}

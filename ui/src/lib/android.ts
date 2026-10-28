@@ -130,12 +130,12 @@ function closeTop(): boolean {
     return true;
   }
   const s = get();
-  if (s.dialog) return set({ dialog: null }), true;
-  if (s.switcher) return set({ switcher: false }), true;
-  if (s.drawer) return set({ drawer: false }), true;
+  if (s.dialog) return (set({ dialog: null }), true);
+  if (s.switcher) return (set({ switcher: false }), true);
+  if (s.drawer) return (set({ drawer: false }), true);
   // 软键盘开着：先收键盘（输入框失焦）
   const a = document.activeElement as HTMLElement | null;
-  if (a && (a.tagName === "TEXTAREA" || a.tagName === "INPUT")) return a.blur(), true;
+  if (a && (a.tagName === "TEXTAREA" || a.tagName === "INPUT")) return (a.blur(), true);
   return false;
 }
 

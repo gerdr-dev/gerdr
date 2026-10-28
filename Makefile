@@ -4,7 +4,7 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo 0.1.
 LDFLAGS := -s -w -X github.com/zbysir/gerdr/internal/version.Version=$(VERSION)
 UISNAP := internal/webui/ui
 
-.PHONY: all ui rescue sync-ui build test typecheck test-e2e app dmg win icon install clean dev
+.PHONY: all ui rescue sync-ui build test typecheck fmt test-e2e app dmg win icon install clean dev
 
 all: build
 
@@ -34,6 +34,11 @@ test:
 typecheck:
 	cd ui && npx tsc --noEmit
 	ui/node_modules/.bin/tsc -p internal/server/rescue/tsconfig.json
+	cd ui && node_modules/.bin/prettier --check 'src/**/*.{ts,tsx}' --log-level warn || { echo '格式不对：跑 make fmt'; exit 1; }
+
+# 界面全量 prettier（用 ui/node_modules 里钉死版本的那个，在 ui/ 里跑才读得到 .prettierrc.json / .prettierignore）
+fmt:
+	cd ui && node_modules/.bin/prettier --write 'src/**/*.{ts,tsx}' --log-level warn
 
 # 对着真的 claude / codex 跑（花钱、要登录）
 test-e2e:

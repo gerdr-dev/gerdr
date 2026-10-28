@@ -28,7 +28,10 @@ export function RewindButton({ edit, onConfirm }: { edit: boolean; onConfirm: ()
           data-state={open ? "open" : "closed"}
           data-rewind={edit ? "edit" : "rewind"}
           title={open ? "再点一次确认" : label}
-          className={cn("rounded-sm p-1 text-muted-foreground hover:bg-muted hover:text-foreground", open && "bg-brand/15 text-brand hover:bg-brand/20 hover:text-brand")}
+          className={cn(
+            "rounded-sm p-1 text-muted-foreground hover:bg-muted hover:text-foreground",
+            open && "bg-brand/15 text-brand hover:bg-brand/20 hover:text-brand",
+          )}
           onClick={() => (open ? confirm() : setOpen(true))}
         >
           <Icon className="size-3.5" />
@@ -46,9 +49,7 @@ export function RewindButton({ edit, onConfirm }: { edit: boolean; onConfirm: ()
         }}
       >
         <div className="text-[13px] font-medium">{label}？</div>
-        <div className="text-muted-foreground">
-          这句和它之后的对话都会丢掉，agent 也会忘掉。文件不会恢复。{edit ? "原话放回输入框，改完再发。" : ""}
-        </div>
+        <div className="text-muted-foreground">这句和它之后的对话都会丢掉，agent 也会忘掉。文件不会恢复。{edit ? "原话放回输入框，改完再发。" : ""}</div>
         <div className="flex items-center justify-between gap-2 pt-1">
           <span className="text-[11px] text-muted-foreground">再点一次按钮也行 · Esc 取消</span>
           <Button size="sm" className="h-7" autoFocus onClick={confirm}>

@@ -34,7 +34,19 @@ type Box = { left: number; top: number; width: number; height: number };
 
 export type TabGhost = { label: string; agent?: string; term?: boolean };
 
-type Drag = { tabId: string; from: number; x: number; y: number; offX: number; offY: number; w: number; h: number; ghost: TabGhost; target: Target | null; spring?: string };
+type Drag = {
+  tabId: string;
+  from: number;
+  x: number;
+  y: number;
+  offX: number;
+  offY: number;
+  w: number;
+  h: number;
+  ghost: TabGhost;
+  target: Target | null;
+  spring?: string;
+};
 
 const SPRING_MS = 600;
 const GAP = 4; // tab 之间的 gap-1
@@ -109,7 +121,14 @@ export function useTabDrag(ws: Workspace, bar: React.RefObject<HTMLDivElement | 
       const pr = paneEl.getBoundingClientRect();
       const fx = (x - pr.left) / pr.width;
       const fy = (y - pr.top) / pr.height;
-      const side = ([["left", fx], ["right", 1 - fx], ["up", fy], ["down", 1 - fy]] as [Side, number][]).sort((a, b) => a[1] - b[1])[0][0];
+      const side = (
+        [
+          ["left", fx],
+          ["right", 1 - fx],
+          ["up", fy],
+          ["down", 1 - fy],
+        ] as [Side, number][]
+      ).sort((a, b) => a[1] - b[1])[0][0];
       const half = { ...box(pr) };
       if (side === "left" || side === "right") half.width /= 2;
       else half.height /= 2;
@@ -203,7 +222,9 @@ export function TabDragLayer({ drag }: { drag: Drag | null }) {
       {t?.kind === "tab" && (
         <div className="fixed overflow-hidden rounded-md bg-brand/10 ring-2 ring-brand" style={fixed(t.rect)}>
           {/* 停住多久会切过去：底下一条走满 */}
-          {drag.spring === t.tabId && <div key={t.tabId} className="absolute bottom-0 left-0 h-0.5 bg-brand" style={{ animation: `gerdr-spring ${SPRING_MS}ms linear forwards` }} />}
+          {drag.spring === t.tabId && (
+            <div key={t.tabId} className="absolute bottom-0 left-0 h-0.5 bg-brand" style={{ animation: `gerdr-spring ${SPRING_MS}ms linear forwards` }} />
+          )}
         </div>
       )}
       {t?.kind === "pane" && (
@@ -222,13 +243,23 @@ export function TabDragLayer({ drag }: { drag: Drag | null }) {
           "fixed flex items-center gap-2 rounded-md bg-popover px-1.5 text-[12px] font-medium text-popover-foreground shadow-lg ring-1 ring-border",
           compact && "max-w-56 shadow-xl",
         )}
-        style={compact ? { left: drag.x + 12, top: drag.y + 14, height: drag.h } : { left: drag.x - drag.offX, top: drag.y - drag.offY, width: drag.w, height: drag.h }}
+        style={
+          compact
+            ? { left: drag.x + 12, top: drag.y + 14, height: drag.h }
+            : { left: drag.x - drag.offX, top: drag.y - drag.offY, width: drag.w, height: drag.h }
+        }
       >
-        {drag.ghost.agent ? <AgentIcon agent={drag.ghost.agent} className="size-4" /> : drag.ghost.term && <SquareTerminal className="size-4 shrink-0 text-muted-foreground" />}
+        {drag.ghost.agent ? (
+          <AgentIcon agent={drag.ghost.agent} className="size-4" />
+        ) : (
+          drag.ghost.term && <SquareTerminal className="size-4 shrink-0 text-muted-foreground" />
+        )}
         <span className="min-w-0 flex-1 truncate">{drag.ghost.label}</span>
       </div>
       {/* 排序的落点竖线画在拖影上面：拖影跟着指针，常常正好压在那条缝上 */}
-      {t?.kind === "reorder" && <div className="fixed w-0.5 shadow-[0_0_0_1px_var(--background)] rounded-full bg-brand" style={{ left: t.x - 1, top: t.top + 2, height: t.h - 4 }} />}
+      {t?.kind === "reorder" && (
+        <div className="fixed w-0.5 shadow-[0_0_0_1px_var(--background)] rounded-full bg-brand" style={{ left: t.x - 1, top: t.top + 2, height: t.h - 4 }} />
+      )}
       <style>{`@keyframes gerdr-spring { from { width: 0 } to { width: 100% } }`}</style>
     </div>,
     document.body,

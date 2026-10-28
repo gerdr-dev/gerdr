@@ -51,9 +51,7 @@ export function ImportHerdr({ open }: { open: boolean }) {
       <DialogContent className="max-w-xl">
         <DialogHeader>
           <DialogTitle>从 herdr 导入</DialogTitle>
-          <DialogDescription>
-            按 herdr 的工作空间、tab、分屏建出来，每个 agent 接上它的会话（历史全在，接着聊）。普通终端 pane 跳过。
-          </DialogDescription>
+          <DialogDescription>按 herdr 的工作空间、tab、分屏建出来，每个 agent 接上它的会话（历史全在，接着聊）。普通终端 pane 跳过。</DialogDescription>
         </DialogHeader>
         {/* 高度要写死：弹窗是网格 + 限高，这一行可滚动，WebKit（mac App）里它的自动最小高度按 0 算，整个列表被压成一条缝
             （Chrome 里正常，所以光在浏览器里验看不出来；用户报了两次「导入的 UI 烂了」）。 */}

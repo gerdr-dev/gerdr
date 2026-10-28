@@ -24,7 +24,10 @@ import { cn } from "@/lib/utils";
 type Step = { at: "code" } | { at: "confirm"; req: CliRequest } | { at: "done"; ok: boolean; reauth: boolean };
 
 const fmt = (v: string) => {
-  const c = v.replace(/[^0-9a-z]/gi, "").toUpperCase().slice(0, 8);
+  const c = v
+    .replace(/[^0-9a-z]/gi, "")
+    .toUpperCase()
+    .slice(0, 8);
   return c.length > 4 ? `${c.slice(0, 4)}-${c.slice(4)}` : c;
 };
 
@@ -182,7 +185,9 @@ export function CliApprove() {
               {step.ok ? <Check className="size-5" /> : <X className="size-5" />}
               {step.ok ? (step.reauth ? "已批准，那台设备续上了" : "已批准") : "已拒绝"}
             </p>
-            <p className="text-[13px] text-muted-foreground">{step.ok ? "App 那边会自己进去，这一页可以关了。" : "App 那边会收到「被拒绝」，这个码也作废了。"}</p>
+            <p className="text-[13px] text-muted-foreground">
+              {step.ok ? "App 那边会自己进去，这一页可以关了。" : "App 那边会收到「被拒绝」，这个码也作废了。"}
+            </p>
             <Button variant="outline" className="w-full" onClick={close}>
               关闭
             </Button>

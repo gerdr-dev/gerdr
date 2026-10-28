@@ -20,7 +20,18 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { basename, closeFocusedPane, deleteSession, focusPane, focusSession, openTerminal, paneToTab, reopenTerminal, splitFocused, toggleZoom } from "@/lib/actions";
+import {
+  basename,
+  closeFocusedPane,
+  deleteSession,
+  focusPane,
+  focusSession,
+  openTerminal,
+  paneToTab,
+  reopenTerminal,
+  splitFocused,
+  toggleZoom,
+} from "@/lib/actions";
 import { leaves, phoneRoot, setRatio, updateTab, type PaneLeaf, type PaneNode, type Tab } from "@/lib/layout";
 import { applyPaneTitle } from "@/lib/plugins";
 import { markRead, set, setLayout, useStore } from "@/lib/store";
@@ -121,7 +132,11 @@ function PaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; tab: T
 function PaneCount({ count }: { count?: Count }) {
   if (!count) return null;
   return (
-    <button className="shrink-0 rounded-sm border px-1.5 py-px font-mono text-[10px] text-muted-foreground" title="这个 tab 里的 pane（点开面板一览）" onClick={() => set({ switcher: true, drawer: false })}>
+    <button
+      className="shrink-0 rounded-sm border px-1.5 py-px font-mono text-[10px] text-muted-foreground"
+      title="这个 tab 里的 pane（点开面板一览）"
+      onClick={() => set({ switcher: true, drawer: false })}
+    >
       {count.i}/{count.n}
     </button>
   );

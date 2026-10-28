@@ -56,7 +56,11 @@ function fromDraft(d: Draft): AgentDef {
 }
 
 function newId(name: string, taken: Set<string>) {
-  const base = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "agent";
+  const base =
+    name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "") || "agent";
   let id = base;
   for (let n = 2; taken.has(id); n++) id = `${base}-${n}`;
   return id;
@@ -183,14 +187,32 @@ function Editor({ d, onChange, onSave, onCancel }: { d: Draft; onChange: (d: Dra
         {d.kind === "command" ? (
           <>
             <span className="text-muted-foreground">启动命令</span>
-            <Input value={d.command} onChange={(e) => set({ command: e.target.value })} onKeyDown={stop} className="h-8 font-mono text-[12px]" placeholder="gemini --experimental-acp" />
+            <Input
+              value={d.command}
+              onChange={(e) => set({ command: e.target.value })}
+              onKeyDown={stop}
+              className="h-8 font-mono text-[12px]"
+              placeholder="gemini --experimental-acp"
+            />
           </>
         ) : (
           <>
             <span className="text-muted-foreground">可执行文件</span>
-            <Input value={d.bin} onChange={(e) => set({ bin: e.target.value })} onKeyDown={stop} className="h-8 font-mono text-[12px]" placeholder={`留空 = 和原版一样找 ${d.kind}`} />
+            <Input
+              value={d.bin}
+              onChange={(e) => set({ bin: e.target.value })}
+              onKeyDown={stop}
+              className="h-8 font-mono text-[12px]"
+              placeholder={`留空 = 和原版一样找 ${d.kind}`}
+            />
             <span className="text-muted-foreground">额外参数</span>
-            <Input value={d.args} onChange={(e) => set({ args: e.target.value })} onKeyDown={stop} className="h-8 font-mono text-[12px]" placeholder={d.kind === "claude" ? "比如 --settings ~/my-settings.json" : "比如 -c model=o3"} />
+            <Input
+              value={d.args}
+              onChange={(e) => set({ args: e.target.value })}
+              onKeyDown={stop}
+              className="h-8 font-mono text-[12px]"
+              placeholder={d.kind === "claude" ? "比如 --settings ~/my-settings.json" : "比如 -c model=o3"}
+            />
           </>
         )}
         <span className="self-start pt-1.5 text-muted-foreground">环境变量</span>
@@ -207,7 +229,8 @@ function Editor({ d, onChange, onSave, onCancel }: { d: Draft; onChange: (d: Dra
         <div className="space-y-1.5 rounded-md bg-muted/60 p-2.5 text-[12px] text-muted-foreground">
           <div>
             换账号两种做法：① 用订阅账号：给一个单独的 <code className="font-mono">CLAUDE_CONFIG_DIR</code>（登录态和会话记录都存在那个目录，和原版互不相干），
-            然后在终端里用这个目录登录一次；② 用 API key：写 <code className="font-mono">ANTHROPIC_API_KEY=sk-…</code>（要走代理再加 <code className="font-mono">ANTHROPIC_BASE_URL</code>）。
+            然后在终端里用这个目录登录一次；② 用 API key：写 <code className="font-mono">ANTHROPIC_API_KEY=sk-…</code>（要走代理再加{" "}
+            <code className="font-mono">ANTHROPIC_BASE_URL</code>）。
           </div>
           {login && <LoginHint cmd={login} then="进去之后输入 /login 登录，完了 /exit 退出（注意：设了这个变量之后哪怕指向 ~/.claude 也要单独登录一次）。" />}
         </div>

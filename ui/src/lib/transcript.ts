@@ -71,7 +71,11 @@ const INTERRUPT = /^\s*\[Request interrupted by user[^\]]*\]\s*$/;
 
 /** 多行压成一行、剥掉 ANSI（这些都只占一行小字，长了也读不了）；太长截断。 */
 function squash(s: string, max = 300) {
-  const t = s.replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, "").split(/\s+/).filter(Boolean).join(" ");
+  const t = s
+    .replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, "")
+    .split(/\s+/)
+    .filter(Boolean)
+    .join(" ");
   return t.length > max ? t.slice(0, max) + "…" : t;
 }
 

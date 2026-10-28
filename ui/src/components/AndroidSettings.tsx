@@ -97,8 +97,7 @@ export function AndroidSettings() {
 export function useRoute(): { via: "lan" | "relay"; detail: string } {
   const [r, setR] = useState<{ lan: number; relay: number; next: string; proxied: boolean } | null>(null);
   useEffect(
-    () =>
-      onAndroid("route", (m) => setR({ lan: Number(m.lan) || 0, relay: Number(m.relay) || 0, next: String(m.next ?? ""), proxied: !!m.proxied })),
+    () => onAndroid("route", (m) => setR({ lan: Number(m.lan) || 0, relay: Number(m.relay) || 0, next: String(m.next ?? ""), proxied: !!m.proxied })),
     [],
   );
   if (!r?.proxied) return { via: "relay", detail: "经云端中继" };

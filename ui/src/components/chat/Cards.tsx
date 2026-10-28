@@ -198,7 +198,10 @@ export function AskCard({ sessionId, data }: { sessionId: string; data: GData["a
   };
   // 高亮在哪一行：0..opts.length-1 是选项，opts.length 是「其他」那一行
   const rows = opts.length + (q.allowOther ? 1 : 0);
-  const initial = Math.max(0, opts.findIndex((o) => picked.includes(o.label)));
+  const initial = Math.max(
+    0,
+    opts.findIndex((o) => picked.includes(o.label)),
+  );
   const c = Math.min(cur[q.id] ?? initial, Math.max(0, rows - 1));
   const moveTo = (n: number) => {
     setCur({ ...cur, [q.id]: n });
@@ -271,8 +274,17 @@ export function AskCard({ sessionId, data }: { sessionId: string; data: GData["a
       {/* 不写「需要你回答」：卡片本身就说明了。只剩题号（多题时）和题目的小标签 */}
       <div className="mb-1.5 flex items-center gap-1.5 text-[12px] text-muted-foreground">
         <HelpCircle className="size-3.5 text-brand" />
-        {qs.length > 1 && <span>问题 {i + 1} / {qs.length}</span>}
-        {q.header && <span>{qs.length > 1 && "· "}{q.header}</span>}
+        {qs.length > 1 && (
+          <span>
+            问题 {i + 1} / {qs.length}
+          </span>
+        )}
+        {q.header && (
+          <span>
+            {qs.length > 1 && "· "}
+            {q.header}
+          </span>
+        )}
       </div>
       <div className="mb-3 text-[13px] font-medium leading-relaxed">{q.question}</div>
       {/* -mx-2.5 抵掉行的 px-2.5：选项文字和问题左边对齐，选中 / 悬停的底色往外多出一点 */}

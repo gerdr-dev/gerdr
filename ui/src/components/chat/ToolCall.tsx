@@ -182,7 +182,8 @@ export function ToolCall({ part, children, running, keep: keepOpen }: { part: To
   // 子 agent 的工具调用（meta.parent）不给：那是它自己那一轮里的事，转后台得由它决定。
   // 跑满 3 秒才露出来：大部分命令一两秒就完，按钮一闪而过，还会把行尾的耗时挤来挤去
   const slow = useAfter(busy, meta.startedAt, 3000);
-  const canBackground = slow && busy && !meta.parent && (session?.base ?? session?.agent) === "claude" && !task?.background && (meta.kind === "execute" || !!task);
+  const canBackground =
+    slow && busy && !meta.parent && (session?.base ?? session?.agent) === "claude" && !task?.background && (meta.kind === "execute" || !!task);
   // 「允许并重试」：auto 模式的分类器拦下的调用（claude 里是 /permissions 里批准）。规则写进项目的
   // .claude/settings.local.json，再发一句话让它重试。点过的记一下，免得重复发。
   const [allowed, setAllowed] = useKept<boolean>(keep && `${keep}:allowed`, false);
@@ -260,10 +261,7 @@ export function ToolCall({ part, children, running, keep: keepOpen }: { part: To
           <span
             role="button"
             aria-disabled={allowed}
-            className={cn(
-              "shrink-0 rounded-sm px-1.5 text-[11px]",
-              allowed ? "text-muted-foreground" : "text-brand hover:bg-muted",
-            )}
+            className={cn("shrink-0 rounded-sm px-1.5 text-[11px]", allowed ? "text-muted-foreground" : "text-brand hover:bg-muted")}
             title={`分类器拦下了这次调用。加上这些规则（写进项目的 .claude/settings.local.json），然后让它重试：\n${meta.autoDenied!.join("\n")}`}
             onClick={async (e) => {
               e.stopPropagation();

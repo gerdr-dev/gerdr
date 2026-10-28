@@ -15,7 +15,19 @@ export type Row =
   // prev / next：前后紧挨着也是用户消息（连发几句、中途插话）—— 气泡叠成一摞，相邻的角收小
   | { key: string; kind: "user"; msg: GMessage; first: true; prev?: boolean; next?: boolean }
   // peek：收着的组底下露出来的最新那一块，值是组的 key（见 buildRows）
-  | { key: string; kind: "part"; part: GPart; i: number; msgId: string; kids?: ToolPart[]; first: boolean; streaming: boolean; live: boolean; tight?: boolean; peek?: string }
+  | {
+      key: string;
+      kind: "part";
+      part: GPart;
+      i: number;
+      msgId: string;
+      kids?: ToolPart[];
+      first: boolean;
+      streaming: boolean;
+      live: boolean;
+      tight?: boolean;
+      peek?: string;
+    }
   | { key: string; kind: "working"; empty: boolean; first: boolean }
   | { key: string; kind: "group"; first: boolean; open: boolean; summary: string; failed: number; busy: boolean; tight?: boolean }
   | { key: string; kind: "cleared"; n: number; first: true };
@@ -143,7 +155,7 @@ export function buildRows(msgs: GMessage[], running: boolean, showCleared = fals
       rows.push({ ...r, first });
       first = false;
     };
-    for (let a = 0; a < parts.length; ) {
+    for (let a = 0; a < parts.length;) {
       let b = a;
       while (b < parts.length && foldable(parts[b].part, parts[b].kids)) b++;
       if (b - a < 2) {
@@ -175,11 +187,11 @@ export function buildRows(msgs: GMessage[], running: boolean, showCleared = fals
   // key 跟着还在跑的那条走：插话排进来、落下去时状态行不重新挂载
   const tail = msgs[lastIdx];
   const owner = msgs[liveIdx] ?? tail;
-  if (running && (tail?.role === "user" || liveIdx !== lastIdx) && lastIdx >= cut) rows.push({ key: `${owner.id}:working`, kind: "working", empty: true, first: true });
+  if (running && (tail?.role === "user" || liveIdx !== lastIdx) && lastIdx >= cut)
+    rows.push({ key: `${owner.id}:working`, kind: "working", empty: true, first: true });
   // 行距（照 Codex）：工具调用 / 思考这类一行小字，连着的几条挨紧（tight）；它和正文之间留开，像分段一样 ——
   // 原来一律挨着，正文和一串命令挤成一团
-  const toolish = (r: Row) =>
-    r.kind === "group" || (r.kind === "part" && ["dynamic-tool", "reasoning", "data-permission", "data-task"].includes(r.part.type));
+  const toolish = (r: Row) => r.kind === "group" || (r.kind === "part" && ["dynamic-tool", "reasoning", "data-permission", "data-task"].includes(r.part.type));
   for (let i = 1; i < rows.length; i++) {
     const r = rows[i];
     if ((r.kind === "part" || r.kind === "group") && !r.first) rows[i] = { ...r, tight: toolish(r) && toolish(rows[i - 1]) };
@@ -250,7 +262,10 @@ export const RowView = memo(
     if (row.kind === "cleared") {
       return (
         <Frame first>
-          <button className="w-full rounded-md py-1 text-center text-[12px] text-muted-foreground hover:bg-accent/50 hover:text-foreground" onClick={env.onShowCleared}>
+          <button
+            className="w-full rounded-md py-1 text-center text-[12px] text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+            onClick={env.onShowCleared}
+          >
             展开 /clear 之前的对话（{row.n} 条）
           </button>
         </Frame>
@@ -301,9 +316,17 @@ export const RowView = memo(
     if (x.kind === "user" && y.kind === "user") return x.msg === y.msg && x.prev === y.prev && x.next === y.next;
     if (x.kind === "working" && y.kind === "working") return x.empty === y.empty;
     if (x.kind === "group" && y.kind === "group")
-      return x.open === y.open && x.summary === y.summary && x.failed === y.failed && x.busy === y.busy && x.tight === y.tight && a.env.onToggleGroup === b.env.onToggleGroup;
+      return (
+        x.open === y.open &&
+        x.summary === y.summary &&
+        x.failed === y.failed &&
+        x.busy === y.busy &&
+        x.tight === y.tight &&
+        a.env.onToggleGroup === b.env.onToggleGroup
+      );
     if (x.kind === "cleared" && y.kind === "cleared") return x.n === y.n && a.env.onShowCleared === b.env.onShowCleared;
-    if (x.kind === "part" && y.kind === "part") return x.part === y.part && x.streaming === y.streaming && x.live === y.live && x.tight === y.tight && x.peek === y.peek && sameKids(x.kids, y.kids);
+    if (x.kind === "part" && y.kind === "part")
+      return x.part === y.part && x.streaming === y.streaming && x.live === y.live && x.tight === y.tight && x.peek === y.peek && sameKids(x.kids, y.kids);
     return false;
   },
 );

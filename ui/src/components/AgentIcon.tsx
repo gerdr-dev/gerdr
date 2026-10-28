@@ -7,13 +7,19 @@ export function AgentIcon({ agent: id, className }: { agent: string; className?:
   const agent = useStore((s) => s.agents.find((a) => a.id === id)?.base) || id;
   if (agent === "claude")
     return (
-      <span className={cn("inline-flex shrink-0 items-center justify-center rounded-[5px] bg-[oklch(0.68_0.13_45)] font-semibold text-white", className)} style={{ fontSize: "0.62em" }}>
+      <span
+        className={cn("inline-flex shrink-0 items-center justify-center rounded-[5px] bg-[oklch(0.68_0.13_45)] font-semibold text-white", className)}
+        style={{ fontSize: "0.62em" }}
+      >
         C
       </span>
     );
   if (agent === "codex")
     return (
-      <span className={cn("inline-flex shrink-0 items-center justify-center rounded-[5px] bg-foreground font-semibold text-background", className)} style={{ fontSize: "0.62em" }}>
+      <span
+        className={cn("inline-flex shrink-0 items-center justify-center rounded-[5px] bg-foreground font-semibold text-background", className)}
+        style={{ fontSize: "0.62em" }}
+      >
         X
       </span>
     );

@@ -75,7 +75,8 @@ function resetText(s: string, now = Date.now()) {
   const when = `${mon + 1}/${m[2]} ${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
   if (left <= 0) return `${when} 重置`;
   const hours = left / 3600e3;
-  const rest = Math.round(left / 60e3) < 60 ? `${Math.max(1, Math.round(left / 60e3))}m` : hours < 48 ? `${Math.round(hours)}h` : `${Math.round(hours / 24)} 天`;
+  const rest =
+    Math.round(left / 60e3) < 60 ? `${Math.max(1, Math.round(left / 60e3))}m` : hours < 48 ? `${Math.round(hours)}h` : `${Math.round(hours / 24)} 天`;
   return `${when} 重置 · 还剩 ${rest}`;
 }
 

@@ -60,7 +60,11 @@ export function TabBar() {
           <PanelLeft className="size-4" />
         </Button>
       )}
-      <div ref={barRef} className={cn("flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none]", flush ? "pr-2" : "px-2")} style={{ WebkitAppRegion: "no-drag" } as any}>
+      <div
+        ref={barRef}
+        className={cn("flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none]", flush ? "pr-2" : "px-2")}
+        style={{ WebkitAppRegion: "no-drag" } as any}
+      >
         {ws.tabs.map((t, i) => {
           const active = t.id === ws.activeTab;
           const st = tabStatus(t, sessions, unread);
@@ -75,7 +79,14 @@ export function TabBar() {
                   data-tab-id={t.id}
                   // 拖动排序 / 合并 / 挪到别的工作空间，见 TabDrag.tsx
                   onPointerDown={(e) => onPointerDown(e, t.id, i, { label, agent, term: !!first?.term })}
-                  onClick={() => setLayout((l) => ({ ...l, workspaces: l.workspaces.map((w) => (w.id === ws.id ? { ...w, activeTab: t.id, lastTab: w.activeTab === t.id ? w.lastTab : w.activeTab } : w)) }))}
+                  onClick={() =>
+                    setLayout((l) => ({
+                      ...l,
+                      workspaces: l.workspaces.map((w) =>
+                        w.id === ws.id ? { ...w, activeTab: t.id, lastTab: w.activeTab === t.id ? w.lastTab : w.activeTab } : w,
+                      ),
+                    }))
+                  }
                   onDoubleClick={() => set({ dialog: { kind: "rename", target: "tab", id: t.id, value: t.name ?? tabName(t) } })}
                   // 中键关（照浏览器）。mousedown 里先拦掉，不然 mac 上中键按下会进「自动滚动」
                   onMouseDown={(e) => e.button === 1 && e.preventDefault()}
@@ -111,7 +122,9 @@ export function TabBar() {
                 </div>
               </ContextMenuTrigger>
               <ContextMenuContent>
-                <ContextMenuItem onClick={() => set({ dialog: { kind: "rename", target: "tab", id: t.id, value: t.name ?? tabName(t) } })}>重命名</ContextMenuItem>
+                <ContextMenuItem onClick={() => set({ dialog: { kind: "rename", target: "tab", id: t.id, value: t.name ?? tabName(t) } })}>
+                  重命名
+                </ContextMenuItem>
                 <ContextMenuItem onClick={() => duplicateTab(t.id, "after")}>复制到后面</ContextMenuItem>
                 <ContextMenuItem onClick={() => duplicateTab(t.id, "before")}>复制到前面</ContextMenuItem>
                 <ContextMenuSeparator />
@@ -180,7 +193,9 @@ export function PhoneBar() {
       <Button variant={switcher ? "secondary" : "ghost"} size="icon" className="relative size-9" aria-label="面板一览" onClick={openSwitcher}>
         <LayoutList className="size-[18px]" />
         {waiting > 0 && (
-          <span className="absolute top-1 right-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-bad px-0.5 text-[9px] leading-none font-semibold text-white tabular-nums">{waiting}</span>
+          <span className="absolute top-1 right-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-bad px-0.5 text-[9px] leading-none font-semibold text-white tabular-nums">
+            {waiting}
+          </span>
         )}
       </Button>
       <Button variant="ghost" size="icon" className="size-9" aria-label="新建 tab" onClick={() => addTab()}>
@@ -221,19 +236,36 @@ export function Sidebar({ className }: { className?: string }) {
       </div>
       <div className="max-h-[45%] shrink-0 overflow-y-auto px-1.5 py-2">
         {layout.workspaces.map((w, wi) => (
-          <WorkspaceItem key={w.id} w={w} index={wi} active={w.id === layout.active} sessions={sessions} unread={unread} onDragStart={() => setDrag(wi)} onDrop={() => {
-            if (drag != null && drag !== wi) moveWorkspace(drag, wi);
-            setDrag(null);
-          }} />
+          <WorkspaceItem
+            key={w.id}
+            w={w}
+            index={wi}
+            active={w.id === layout.active}
+            sessions={sessions}
+            unread={unread}
+            onDragStart={() => setDrag(wi)}
+            onDrop={() => {
+              if (drag != null && drag !== wi) moveWorkspace(drag, wi);
+              setDrag(null);
+            }}
+          />
         ))}
-        <button className="mt-1 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[12px] text-muted-foreground hover:bg-accent" onClick={() => set({ dialog: { kind: "newWorkspace" } })}>
+        <button
+          className="mt-1 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[12px] text-muted-foreground hover:bg-accent"
+          onClick={() => set({ dialog: { kind: "newWorkspace" } })}
+        >
           <Plus className="size-3.5" /> 新工作空间
         </button>
       </div>
       <AgentList />
       <UsageMeter />
       <div className="flex shrink-0 items-center gap-1 border-t p-1.5">
-        <Button variant="ghost" size="sm" className="h-7 flex-1 justify-start gap-2 text-[12px] text-muted-foreground" onClick={() => set({ dialog: { kind: "settings" } })}>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 flex-1 justify-start gap-2 text-[12px] text-muted-foreground"
+          onClick={() => set({ dialog: { kind: "settings" } })}
+        >
           <Settings className="size-3.5" /> 设置
         </Button>
         <Tooltip>
@@ -312,14 +344,33 @@ function Elapsed({ since }: { since: number }) {
   return <span className="shrink-0 tabular-nums">&nbsp;· {fmtElapsed(Date.now() - since)}</span>;
 }
 
-function WorkspaceItem({ w, index, active, sessions, unread, onDragStart, onDrop }: { w: Workspace; index: number; active: boolean; sessions: Record<string, SessionSummary>; unread: Record<string, true>; onDragStart: () => void; onDrop: () => void }) {
+function WorkspaceItem({
+  w,
+  index,
+  active,
+  sessions,
+  unread,
+  onDragStart,
+  onDrop,
+}: {
+  w: Workspace;
+  index: number;
+  active: boolean;
+  sessions: Record<string, SessionSummary>;
+  unread: Record<string, true>;
+  onDragStart: () => void;
+  onDrop: () => void;
+}) {
   const label = applyWorkspaceLabel(w, index, w.name);
   return (
     <div className="mb-1" data-ws-id={w.id} draggable onDragStart={onDragStart} onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
       <ContextMenu>
         <ContextMenuTrigger asChild>
           <button
-            className={cn("flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px]", active ? "bg-accent font-medium" : "hover:bg-accent/60")}
+            className={cn(
+              "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px]",
+              active ? "bg-accent font-medium" : "hover:bg-accent/60",
+            )}
             onClick={() => selectWorkspace(w.id)}
             onDoubleClick={() => set({ dialog: { kind: "rename", target: "workspace", id: w.id, value: w.name } })}
           >
@@ -342,7 +393,17 @@ function WorkspaceItem({ w, index, active, sessions, unread, onDragStart, onDrop
 }
 
 /** idle：没状态时也占着位置（透明的点；侧栏里靠它和别的行对齐）。传 hideIdle 就不画（面板一览的标签里，占位只是一块空白） */
-export function WsDot({ w, sessions, unread, hideIdle }: { w: Workspace; sessions: Record<string, SessionSummary>; unread: Record<string, true>; hideIdle?: boolean }) {
+export function WsDot({
+  w,
+  sessions,
+  unread,
+  hideIdle,
+}: {
+  w: Workspace;
+  sessions: Record<string, SessionSummary>;
+  unread: Record<string, true>;
+  hideIdle?: boolean;
+}) {
   let best: { status?: string; unread: boolean } = { unread: false };
   let rank = 9;
   for (const t of w.tabs) {

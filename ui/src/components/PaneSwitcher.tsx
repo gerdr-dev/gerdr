@@ -104,15 +104,27 @@ export function PaneSwitcher() {
       const sid = pane.sub?.sessionId ?? pane.sessionId;
       const ls = leaves(tab.root);
       const at = ls.length > 1 ? ` · ${ls.indexOf(pane) + 1}/${ls.length}` : "";
-      return { pane, session: sid ? sessions[sid] : undefined, ws: applyWorkspaceLabel(w, wi, w.name), wsId: w.id, tab: `${w.tabs.indexOf(tab) + 1}.${tabName(tab)}${at}`, i };
+      return {
+        pane,
+        session: sid ? sessions[sid] : undefined,
+        ws: applyWorkspaceLabel(w, wi, w.name),
+        wsId: w.id,
+        tab: `${w.tabs.indexOf(tab) + 1}.${tabName(tab)}${at}`,
+        i,
+      };
     });
     const kw = q.trim().toLowerCase();
     const hit = (r: Row) =>
       (!ws || r.wsId === ws) &&
-      (!kw || `${r.session?.title ?? ""} ${r.session?.agent ?? ""} ${r.session?.cwd ?? ""} ${r.ws} ${r.tab} ${r.pane.sub?.title ?? ""} ${r.pane.term ? "终端 " + r.pane.term.cwd : ""}`.toLowerCase().includes(kw));
+      (!kw ||
+        `${r.session?.title ?? ""} ${r.session?.agent ?? ""} ${r.session?.cwd ?? ""} ${r.ws} ${r.tab} ${r.pane.sub?.title ?? ""} ${r.pane.term ? "终端 " + r.pane.term.cwd : ""}`
+          .toLowerCase()
+          .includes(kw));
     const list = out.filter(hit);
     if (sort === "group") return list;
-    return list.sort((a, b) => rankOf(a, unread) - rankOf(b, unread) || (a.session && b.session ? compareSessions(a.session, b.session, unread) : 0) || a.i - b.i);
+    return list.sort(
+      (a, b) => rankOf(a, unread) - rankOf(b, unread) || (a.session && b.session ? compareSessions(a.session, b.session, unread) : 0) || a.i - b.i,
+    );
   }, [layout, sessions, unread, q, ws, sort]);
 
   // 「分组」按工作空间分组（和侧栏里看到的一样）；优先级是全局排序，分组会把它切碎，所以那边是一条平铺的表。
@@ -181,7 +193,13 @@ export function PaneSwitcher() {
               onChange={(e) => setQ(e.target.value)}
             />
           </div>
-          <Button size="sm" variant={sort === "group" ? "secondary" : "ghost"} className="h-8 px-2 text-[12px]" title="按优先级 / 按工作空间分组" onClick={flipSort}>
+          <Button
+            size="sm"
+            variant={sort === "group" ? "secondary" : "ghost"}
+            className="h-8 px-2 text-[12px]"
+            title="按优先级 / 按工作空间分组"
+            onClick={flipSort}
+          >
             {sort === "group" ? "分组" : "优先级"}
           </Button>
           {/* 「新开」挨着关闭键放，不跟工作空间那一行混：那一行是「选」，这个是「建」 */}
@@ -253,7 +271,13 @@ export function PaneSwitcher() {
                 {g.items.map((r) => {
                   const s = r.session;
                   const chip = CHIP[rankOf(r, unread)];
-                  const title = r.pane.sub ? `子 agent · ${r.pane.sub.title || ""}`.replace(/ · $/, "") : s ? s.title || basename(s.cwd) : r.pane.term ? `终端 · ${basename(r.pane.term.cwd ?? "")}` : "新会话";
+                  const title = r.pane.sub
+                    ? `子 agent · ${r.pane.sub.title || ""}`.replace(/ · $/, "")
+                    : s
+                      ? s.title || basename(s.cwd)
+                      : r.pane.term
+                        ? `终端 · ${basename(r.pane.term.cwd ?? "")}`
+                        : "新会话";
                   // 第二行：在哪（工作空间 · tab）+ 路径。手机上按工作空间认项目，路径兜底分开同名的
                   const where = sort === "group" ? r.tab : `${r.ws} · ${r.tab}`;
                   return (
@@ -275,7 +299,10 @@ export function PaneSwitcher() {
                         <span className="flex items-center gap-1.5">
                           <span className="title truncate text-[12px]">{title}</span>
                           {chip && <span className={cn("shrink-0 rounded-sm border px-1 py-px text-[10px]", chip.cls)}>{chip.text}</span>}
-                          <span className="ml-auto shrink-0 font-mono text-[10px] text-muted-foreground" title={s ? new Date(s.updatedAt).toLocaleString() : ""}>
+                          <span
+                            className="ml-auto shrink-0 font-mono text-[10px] text-muted-foreground"
+                            title={s ? new Date(s.updatedAt).toLocaleString() : ""}
+                          >
                             {ago(s?.updatedAt, now)}
                           </span>
                         </span>
@@ -302,7 +329,10 @@ function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; chi
     <button
       type="button"
       onClick={onClick}
-      className={cn("flex h-7 shrink-0 items-center gap-1.5 rounded-md border px-2 text-[12px]", on ? "border-transparent bg-foreground/12 font-medium text-foreground" : "text-muted-foreground hover:bg-foreground/5")}
+      className={cn(
+        "flex h-7 shrink-0 items-center gap-1.5 rounded-md border px-2 text-[12px]",
+        on ? "border-transparent bg-foreground/12 font-medium text-foreground" : "text-muted-foreground hover:bg-foreground/5",
+      )}
     >
       {children}
     </button>

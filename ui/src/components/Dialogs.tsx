@@ -104,7 +104,25 @@ function Palette({ open }: { open: boolean }) {
 }
 
 const GROUPS: [string, KeyAction[]][] = [
-  ["分屏", ["splitRight", "splitDown", "closePane", "zoom", "focusLeft", "focusDown", "focusUp", "focusRight", "swapLeft", "swapDown", "swapUp", "swapRight", "nextPane", "prevPane"]],
+  [
+    "分屏",
+    [
+      "splitRight",
+      "splitDown",
+      "closePane",
+      "zoom",
+      "focusLeft",
+      "focusDown",
+      "focusUp",
+      "focusRight",
+      "swapLeft",
+      "swapDown",
+      "swapUp",
+      "swapRight",
+      "nextPane",
+      "prevPane",
+    ],
+  ],
   ["tab", ["newTab", "nextTab", "prevTab", "lastTab", "tab1", "closeTab", "renameTab"]],
   ["工作空间", ["newWorkspace", "workspaces", "nextWorkspace", "prevWorkspace", "renameWorkspace", "closeWorkspace"]],
   ["会话", ["sessions", "nextAttention", "prevAttention", "focusAttention", "renamePane", "stop"]],
@@ -121,7 +139,8 @@ function Help({ open }: { open: boolean }) {
         <DialogHeader>
           <DialogTitle>快捷键</DialogTitle>
           <DialogDescription>
-            先按前缀 <kbd className="rounded-sm border bg-muted px-1 font-mono">{formatCombo(cfg.prefix)}</kbd> 松开，再按后面那个键（和 herdr / tmux 一样）。中文输入法开着也能用。
+            先按前缀 <kbd className="rounded-sm border bg-muted px-1 font-mono">{formatCombo(cfg.prefix)}</kbd> 松开，再按后面那个键（和 herdr / tmux
+            一样）。中文输入法开着也能用。
           </DialogDescription>
         </DialogHeader>
         <div className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
@@ -131,7 +150,11 @@ function Help({ open }: { open: boolean }) {
               {acts.map((a) => (
                 <div key={a} className="flex items-center justify-between py-0.5 text-[13px]">
                   <span>{a === "tab1" ? "跳到 tab 1–9" : ACTION_TITLES[a]}</span>
-                  <span className="font-mono text-[12px] text-muted-foreground">{(a === "tab1" ? ["prefix+1..9"] : keyFor(cfg, a)).map((k) => (k === "prefix+1..9" ? `${formatCombo(cfg.prefix)} 1…9` : formatCombo(k))).join("  ") || "—"}</span>
+                  <span className="font-mono text-[12px] text-muted-foreground">
+                    {(a === "tab1" ? ["prefix+1..9"] : keyFor(cfg, a))
+                      .map((k) => (k === "prefix+1..9" ? `${formatCombo(cfg.prefix)} 1…9` : formatCombo(k)))
+                      .join("  ") || "—"}
+                  </span>
                 </div>
               ))}
             </div>
@@ -211,7 +234,10 @@ function SettingsDialog({ open }: { open: boolean }) {
   }, [open, wantTab]);
   const setKeys = (a: KeyAction, v: string) => {
     const keys = { ...cfg.keys };
-    const list = v.split(",").map((x) => x.trim()).filter(Boolean);
+    const list = v
+      .split(",")
+      .map((x) => x.trim())
+      .filter(Boolean);
     if (JSON.stringify(list) === JSON.stringify(DEFAULT_KEYS[a])) delete keys[a];
     else keys[a] = list;
     setConfig({ keys });
@@ -355,11 +381,19 @@ function SettingsDialog({ open }: { open: boolean }) {
             <TabsContent value="plugins" className="space-y-3 pt-2">
               <div className="flex items-start justify-between gap-4">
                 <div className="text-[13px]">
-                  插件放在 <code className="rounded-sm bg-muted px-1 font-mono text-[12px]">{pluginsDir}</code>，一个 .ts 文件一个，保存即生效。API 见同目录的 <code className="font-mono text-[12px]">gerdr.d.ts</code>。
+                  插件放在 <code className="rounded-sm bg-muted px-1 font-mono text-[12px]">{pluginsDir}</code>，一个 .ts 文件一个，保存即生效。API 见同目录的{" "}
+                  <code className="font-mono text-[12px]">gerdr.d.ts</code>。
                 </div>
                 {/* 只有 App 里能开本机目录；浏览器里（可能是远程连进来的）开不了，就不放这个按钮 */}
                 {isNative() && (
-                  <Button size="sm" variant="outline" className="shrink-0" disabled={!pluginsDir} title={pluginsDir} onClick={() => nativeOpenPath(pluginsDir, undefined, false)}>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="shrink-0"
+                    disabled={!pluginsDir}
+                    title={pluginsDir}
+                    onClick={() => nativeOpenPath(pluginsDir, undefined, false)}
+                  >
                     <FolderOpen className="size-3.5" /> 打开目录
                   </Button>
                 )}
@@ -566,7 +600,12 @@ function NewWorkspace({ open }: { open: boolean }) {
           </div>
           <div className="space-y-1.5">
             <Label>名字</Label>
-            <Input value={name} placeholder="留空 = 目录名" onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && !e.nativeEvent.isComposing && create()} />
+            <Input
+              value={name}
+              placeholder="留空 = 目录名"
+              onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && !e.nativeEvent.isComposing && create()}
+            />
           </div>
         </div>
         <DialogFooter>
@@ -578,4 +617,3 @@ function NewWorkspace({ open }: { open: boolean }) {
     </Dialog>
   );
 }
-

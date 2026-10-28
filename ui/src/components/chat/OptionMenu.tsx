@@ -1,5 +1,13 @@
-import { Check, ChevronDown } from "lucide-react";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Check, ChevronDown, SlidersHorizontal } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 
 export type Opt = { value: string; name: string; description?: string };
@@ -25,6 +33,53 @@ export function OptionMenu({ label, value, options, onChange }: { label: string;
               {o.description && <div className="text-[11px] leading-snug text-muted-foreground">{o.description}</div>}
             </div>
           </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+export type OptGroup = { id: string; label: string; value: string; options: Opt[]; onChange: (v: string) => void };
+
+// 值得一直看得见的模式：只做计划 / 只读（agent 不动文件，以为它在改其实没改）、全放开（不再问就动手）。
+// 其它模式（默认、自动、接受编辑）平时就那样，收起来不占地方
+const LOUD_MODE = /plan|read-?only|bypass|full-access|dontAsk/i;
+
+// 手机上输入框底栏放不下模式 / 模型 / 思考强度三个下拉（挤得要横着滑）：收成一个按钮，
+// 点开是一张按组排的单列菜单 —— 不用子菜单，触屏上子菜单往右弹会出屏幕。
+// 按钮上写模型和思考强度（「Opus 5.5 · medium」，要一眼看得到在用哪个）；模式平时就那样，只有落在 LOUD_MODE 里才写出来。
+export function OptionsMenu({ groups, mode }: { groups: OptGroup[]; mode?: OptGroup }) {
+  const all = mode ? [mode, ...groups] : groups;
+  const nameOf = (g: OptGroup) => g.options.find((o) => o.value === g.value)?.name ?? g.value;
+  const modeName = mode && LOUD_MODE.test(mode.value) ? nameOf(mode) : undefined;
+  const summary = groups.map(nameOf).filter(Boolean).join(" · ");
+  if (!all.length) return null;
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        className={cn(
+          "flex h-7 min-w-0 items-center gap-1.5 rounded-md px-1.5 text-[12px] text-muted-foreground outline-none hover:bg-muted hover:text-foreground data-[state=open]:bg-muted",
+        )}
+      >
+        {!summary && !modeName && <SlidersHorizontal className="size-4" />}
+        {modeName && <span className="max-w-28 shrink-0 truncate text-warn">{modeName}</span>}
+        {summary && <span className="truncate">{summary}</span>}
+      </DropdownMenuTrigger>
+      <DropdownMenuContent side="top" align="start" className="max-h-[60vh] w-72 overflow-auto" onCloseAutoFocus={(e) => e.preventDefault()}>
+        {all.map((g, i) => (
+          <DropdownMenuGroup key={g.id}>
+            {i > 0 && <DropdownMenuSeparator />}
+            <DropdownMenuLabel className="text-[11px] font-normal text-muted-foreground">{g.label}</DropdownMenuLabel>
+            {g.options.map((o) => (
+              <DropdownMenuItem key={o.value || "__"} onClick={() => g.onChange(o.value)} className="items-start gap-2">
+                <Check className={cn("mt-0.5 size-3.5 shrink-0", o.value === g.value ? "opacity-100" : "opacity-0")} />
+                <div className="min-w-0">
+                  <div className="text-[13px]">{o.name}</div>
+                  {o.description && <div className="text-[11px] leading-snug text-muted-foreground">{o.description}</div>}
+                </div>
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuGroup>
         ))}
       </DropdownMenuContent>
     </DropdownMenu>

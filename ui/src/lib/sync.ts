@@ -6,7 +6,20 @@ import { toast } from "sonner";
 import { validLayout, withView } from "./layout";
 import { nativeNotify } from "./native";
 import { emitSessionChange } from "./plugins";
-import { applyEvents, applyRemoteLayout, get, loadView, mergeConfig, onLayoutChange, removeSession, set, setLayout, transcripts, upsertSession, watchedSessions } from "./store";
+import {
+  applyEvents,
+  applyRemoteLayout,
+  get,
+  loadView,
+  mergeConfig,
+  onLayoutChange,
+  removeSession,
+  set,
+  setLayout,
+  transcripts,
+  upsertSession,
+  watchedSessions,
+} from "./store";
 import type { HubEvent, SessionSummary } from "./types";
 
 let ws: WebSocket | null = null;

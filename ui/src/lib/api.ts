@@ -56,7 +56,7 @@ export function isNetworkError(e: unknown) {
 
 export function uuid(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
-  return "10000000-1000-4000-8000-100000000000".replace(/[018]/g, (c) => (+c ^ (Math.random() * 16) >> (+c / 4)).toString(16));
+  return "10000000-1000-4000-8000-100000000000".replace(/[018]/g, (c) => (+c ^ ((Math.random() * 16) >> (+c / 4))).toString(16));
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -107,11 +107,12 @@ export const api = {
   stats: (webpid?: number) => req<any>("GET", `/api/system/stats${webpid ? `?webpid=${webpid}` : ""}`),
   herdrScan: () => req<{ workspaces: HerdrWorkspace[] }>("GET", "/api/import/herdr"),
   herdrImport: (workspaces: string[]) =>
-    req<{ workspaces: { label: string; tabs: { label: string; tree: import("./actions").ImportNode }[] }[]; imported: number; reused: number; errors?: string[] }>(
-      "POST",
-      "/api/import/herdr",
-      { workspaces },
-    ),
+    req<{
+      workspaces: { label: string; tabs: { label: string; tree: import("./actions").ImportNode }[] }[];
+      imported: number;
+      reused: number;
+      errors?: string[];
+    }>("POST", "/api/import/herdr", { workspaces }),
   hello: () => req<Hello>("GET", "/api/hello"),
   plugins: () => req<PluginBuild[]>("GET", "/api/plugins"),
   putLayout: (data: unknown, client: string) => req("PUT", "/api/layout", { data, client }),
@@ -163,7 +164,8 @@ export const api = {
 
   // 远程访问（设置 →「远程访问」；passkey 的两段 ceremony 在 lib/passkey.ts）
   remoteStatus: () => req<{ status: RemoteStatus; remote: boolean }>("GET", "/api/remote/status"),
-  remoteWhoami: () => req<{ remote: boolean; authed: boolean; need?: string; deviceId?: string; passkeys: number; passkeyAvailable: boolean }>("GET", "/api/remote/whoami"),
+  remoteWhoami: () =>
+    req<{ remote: boolean; authed: boolean; need?: string; deviceId?: string; passkeys: number; passkeyAvailable: boolean }>("GET", "/api/remote/whoami"),
   /** 出配对码：只有本机口能调（远程那一侧服务端直接 403） */
   remotePairCode: () => req<{ code: string; expires: string; url: string; qr?: string }>("POST", "/api/remote/pair-code", {}),
   remoteDevices: () => req<{ devices: RemoteDevice[]; me: string }>("GET", "/api/remote/devices"),

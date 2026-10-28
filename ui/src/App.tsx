@@ -125,7 +125,10 @@ export default function App() {
 
   // 切走的 tab 不卸载，藏起来（最近用过的几个，keepTabs 个）：展开状态、滚动位置、没发出去的字都还在。
   // 藏用 visibility 不用 display:none（后者把滚动位置丢了）。占多少内存在设置 →「资源」里看。
-  const keep = Math.max(1, useStore((s) => s.config.keepTabs ?? 6));
+  const keep = Math.max(
+    1,
+    useStore((s) => s.config.keepTabs ?? 6),
+  );
   const prevKept = useStore((s) => s.keptTabs);
   const all = new Map<string, Tab>();
   for (const w of layout.workspaces) for (const t of w.tabs) all.set(t.id, t);
@@ -149,7 +152,8 @@ export default function App() {
           <KeyRound className="mx-auto size-8 text-muted-foreground" />
           <div className="text-[15px] font-medium">需要登录链接</div>
           <div className="text-[13px] text-muted-foreground">
-            gerdr 启动时会打印一个带令牌的链接（<code className="font-mono">http://127.0.0.1:7870/auth?token=…</code>）。在终端里运行 <code className="font-mono">gerdr url</code> 再拿一次。
+            gerdr 启动时会打印一个带令牌的链接（<code className="font-mono">http://127.0.0.1:7870/auth?token=…</code>）。在终端里运行{" "}
+            <code className="font-mono">gerdr url</code> 再拿一次。
           </div>
         </div>
       </div>
