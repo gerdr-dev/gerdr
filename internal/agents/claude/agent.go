@@ -85,25 +85,43 @@ func (a *Agent) loginHint(msg string) string {
 
 // defaultEffort：claude 不带 --effort 起来时用哪一档 —— settings 里的 effortLevel，后读的盖前面的：
 // 用户级（这个实例的配置目录）→ 项目 .claude/settings.json → .claude/settings.local.json。
-func (a *Agent) defaultEffort(cwd string) string {
+// modelSettings.<模型 id>.effortLevel 是按模型覆盖的，比顶层的优先：只看顶层的话，顶层写 xhigh、
+// Opus 单独写 medium 时会显示成 xhigh，实际跑的却是 medium。model 传解析后的完整 id（claude-opus-5-5）。
+func (a *Agent) defaultEffort(cwd, model string) string {
 	files := []string{filepath.Join(filepath.Dir(a.projectsDir()), "settings.json")}
 	if cwd != "" {
 		files = append(files, filepath.Join(cwd, ".claude", "settings.json"), filepath.Join(cwd, ".claude", "settings.local.json"))
 	}
-	out := ""
+	// 模型 id 可能带 [1m] 这种后缀，modelSettings 的键不带
+	if i := strings.IndexByte(model, '['); i > 0 {
+		model = model[:i]
+	}
+	general, perModel := "", ""
 	for _, f := range files {
 		b, err := os.ReadFile(f)
 		if err != nil {
 			continue
 		}
 		var st struct {
-			EffortLevel string `json:"effortLevel"`
+			EffortLevel   string `json:"effortLevel"`
+			ModelSettings map[string]struct {
+				EffortLevel string `json:"effortLevel"`
+			} `json:"modelSettings"`
 		}
-		if json.Unmarshal(b, &st) == nil && st.EffortLevel != "" {
-			out = st.EffortLevel
+		if json.Unmarshal(b, &st) != nil {
+			continue
+		}
+		if st.EffortLevel != "" {
+			general = st.EffortLevel
+		}
+		if ms, ok := st.ModelSettings[model]; ok && model != "" && ms.EffortLevel != "" {
+			perModel = ms.EffortLevel
 		}
 	}
-	return out
+	if perModel != "" {
+		return perModel
+	}
+	return general
 }
 
 // genTitle：用 haiku 给一段对话起个短标题（Claude Code 交互界面里的 ai-title 也是这么来的）。用这个实例自己的
@@ -556,17 +574,23 @@ func (a *Agent) configOptions(s *session) []acp.SessionConfigOption {
 		CurrentValue: acp.SessionConfigValueId(cur), Options: acp.SessionConfigSelectOptions{Ungrouped: &opts},
 	}}}
 	if curModel != nil && curModel.SupportsEffort && len(curModel.SupportedEffortLevels) > 0 {
-		// 没手选过时不传 --effort，CLI 用 settings 里的 effortLevel —— 直接显示那一档（原来写的「auto」是我们编的，
-		// Claude Code 里没有这一档，用户问「auto 是什么逻辑」）。settings 里也没写才退回一个「默认」。
+		// 和模型下拉一样，第一项永远是「默认」（值为空 = 不传 --effort，CLI 按 settings 的 effortLevel 来），手选过也能退回去。
+		// 名字直接写那一档（原来写的「auto」是我们编的，Claude Code 里没有这一档，用户问「auto 是什么逻辑」）；
+		// 同一档的显式选项不再单列，不然列表里两个 medium。settings 里没写才叫「默认」。
+		def := a.defaultEffort(s.cwd, curModel.ResolvedModel)
+		if !slices.Contains(curModel.SupportedEffortLevels, def) {
+			def = ""
+		}
 		var eo acp.SessionConfigSelectOptionsUngrouped
-		if effort == "" {
-			if d := a.defaultEffort(s.cwd); slices.Contains(curModel.SupportedEffortLevels, d) {
-				effort = d
-			} else {
-				eo = append(eo, acp.SessionConfigSelectOption{Value: "", Name: "默认"})
-			}
+		if def != "" {
+			eo = append(eo, acp.SessionConfigSelectOption{Value: "", Name: def, Description: acp.Ptr("默认 · 跟着 settings 里的 effortLevel")})
+		} else {
+			eo = append(eo, acp.SessionConfigSelectOption{Value: "", Name: "默认", Description: acp.Ptr("不指定，由 Claude Code 决定")})
 		}
 		for _, e := range curModel.SupportedEffortLevels {
+			if e == def && effort != e {
+				continue
+			}
 			eo = append(eo, acp.SessionConfigSelectOption{Value: acp.SessionConfigValueId(e), Name: e})
 		}
 		out = append(out, acp.SessionConfigOption{Select: &acp.SessionConfigOptionSelect{
