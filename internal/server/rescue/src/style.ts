@@ -96,7 +96,8 @@ select { height: 28px; padding: 0 6px; font-size: 12.5px; min-width: 0; }
 
 .chat { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .bar { display: flex; gap: 6px; padding: 10px 12px; border-bottom: 1px solid var(--border); }
-.bar select:first-child { flex: 1; }
+.bar { align-items: center; }
+.bar-hint { font-size: 12px; color: var(--muted-fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bar .agent { max-width: 110px; }
 
 .log { flex: 1; min-height: 0; overflow: auto; padding: 14px 14px 6px; display: flex; flex-direction: column; gap: 8px; }

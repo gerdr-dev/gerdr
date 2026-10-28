@@ -16,6 +16,7 @@ export function Chat({ hello, uiDir, errors, onTurnDone }: { hello: Hello; uiDir
         .sort((a, b) => b.updatedAt - a.updatedAt),
     [sessions, uiDir],
   );
+  // 急救只接着最近的一个对话，不列历史
   const [current, setCurrent] = useState(() => mine[0]?.id || "");
   const [events, setEvents] = useState<Ev[]>([]);
   const [agent, setAgent] = useState(() => {
@@ -87,14 +88,8 @@ export function Chat({ hello, uiDir, errors, onTurnDone }: { hello: Hello; uiDir
   return (
     <div className="chat">
       <div className="bar">
-        <select value={current} onChange={(e) => e.target.value && select(e.target.value)} title="界面目录下的对话">
-          {!mine.length && <option value="">还没有急救对话</option>}
-          {mine.map((s) => (
-            <option key={s.id} value={s.id}>
-              {(s.title || s.agent) + " · " + (STATUS[s.status] || s.status)}
-            </option>
-          ))}
-        </select>
+        {/* 不列历史对话：急救就接着最近那一个，要从头来点「新对话」 */}
+        <span className="grow bar-hint">{cur ? `${hello.agents.find((a) => a.id === cur.agent)?.name || cur.agent} · 接着上次的对话` : "还没开过急救对话"}</span>
         <select className="agent" value={agent} onChange={(e) => setAgent(e.target.value)} title="新对话用哪个 agent">
           {hello.agents.map((a) => (
             <option key={a.id} value={a.id} disabled={!a.available}>
