@@ -16,7 +16,8 @@ import (
 //
 //  1. 人改的：在 gerdr 里改名、claude 的 /rename（CustomTitle）。之后什么都不再动它。
 //  2. 插件起的（界面插件 g.sessionTitle，经 SetAutoTitle）：这一段上下文里默认逻辑让开（PluginTitleFor）。
-//  3. 默认（autoTitle）：一段上下文（/clear 之间）的第 1 轮和第 3 轮结束时，拿这段里用户说过的话让模型起一个。
+//  3. Default (autoTitle): once a context (between /clears) has 1 and then 3 user messages, ask the model for a title
+//     from what the user said in it. Checked when a message is sent (incl. steers) and again when a turn ends.
 //     只看第一句不够：常常第一句只是「看一下 xxx」，真正要做的事在后面；/clear 之后换了件事，标题也得跟着换
 //     （原来只在整个会话第一轮起一次，clear 之后标题和内容对不上 —— 用户报的）。
 //  4. 还没起出来时：第一句话截一段（touchTitle）。
@@ -96,7 +97,8 @@ func (s *Session) SetAutoTitle(title string) {
 	s.h.broadcastSession(s)
 }
 
-// autoTitle：一轮结束后调（runTurn）。到了 autoTitleStages 的某一档、这一档还没起过，就起一个。
+// autoTitle: called when a message is sent and when a turn ends. Names the session once it reaches an autoTitleStages
+// stage that hasn't been named yet (TitleKey).
 func (s *Session) autoTitle() {
 	prompts := s.Prompts()
 	stage := 0

@@ -7,7 +7,7 @@
 // 壳只做网页做不了的事：起 / 收后端进程、系统通知、Dock 角标、菜单（mac 上没有「编辑」菜单 ⌘C / ⌘V 不工作）、
 // 外部链接交给默认浏览器。
 const { app, BrowserWindow, Menu, Notification, ipcMain, shell, nativeTheme, screen } = require("electron");
-const { spawn } = require("node:child_process");
+const { spawn, execFile } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 
@@ -255,6 +255,19 @@ function seenNote(key) {
   return false;
 }
 
+// Live notifications: an Electron Notification that gets garbage collected loses its click handler
+const liveNotes = new Set();
+
+// macOS only delivers UNUserNotificationCenter notifications for properly code-signed apps; the ad-hoc signed build
+// (adhoc-sign.js, no Developer ID) gets "Notifications are not allowed for this application" and nothing shows.
+// Fall back to AppleScript's `display notification`: it shows up attributed to Script Editor and clicking it can't
+// bring up the session, but the user does learn an agent is waiting. Text goes in as argv, never spliced into the script.
+function scriptNotify(title, body) {
+  if (!isMac) return;
+  const script = "on run argv\ndisplay notification (item 2 of argv) with title (item 1 of argv) sound name \"Glass\"\nend run";
+  execFile("osascript", ["-e", script, title, body], () => {});
+}
+
 // ---- 网页 → 壳 ----
 
 ipcMain.on("gerdr", (e, m) => {
@@ -262,10 +275,20 @@ ipcMain.on("gerdr", (e, m) => {
   if (!m || typeof m.type !== "string" || !win || !wins.has(win)) return;
   switch (m.type) {
     case "notify": {
-      if (!Notification.isSupported()) return;
       if (seenNote(`${m.title}\n${m.body}\n${m.sessionId}`)) return;
-      const n = new Notification({ title: String(m.title ?? "Gerdr"), body: String(m.body ?? ""), silent: false });
+      const title = String(m.title ?? "Gerdr");
+      const body = String(m.body ?? "");
+      if (!Notification.isSupported()) return void scriptNotify(title, body);
+      const n = new Notification({ title, body, silent: false });
+      liveNotes.add(n);
+      if (liveNotes.size > 50) liveNotes.delete(liveNotes.values().next().value); // ones left in Notification Center never close
+      n.on("close", () => liveNotes.delete(n));
+      n.on("failed", () => {
+        liveNotes.delete(n);
+        scriptNotify(title, body);
+      });
       n.on("click", () => {
+        liveNotes.delete(n);
         // The window showing the conversation's session if there is one, else the one that notified (its page switches over)
         const target = allWins().find((w) => m.space && wins.get(w)?.space === m.space) ?? (win.isDestroyed() ? activeWin() : win);
         focusWindow(target);

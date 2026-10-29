@@ -600,6 +600,7 @@ func (s *Session) SendFrom(ctx context.Context, content []acp.ContentBlock, clie
 					s.emit(&Event{Kind: EvSteerState, MessageID: msgID, Text: early})
 				}
 				s.touchTitle(content)
+				go s.autoTitle()
 				return SendResult{MessageID: msgID, Steered: true}, nil
 			}
 			time.Sleep(150 * time.Millisecond)
@@ -629,6 +630,9 @@ func (s *Session) SendFrom(ctx context.Context, content []acp.ContentBlock, clie
 	s.emit(&Event{Kind: EvTurnStart, MessageID: msgID})
 	s.touchTitle(content)
 	s.setStatus()
+	// Name it as soon as the prompt is in, not only when the turn ends: a first turn can run for many minutes, and
+	// until then the tab showed the raw first message (users read that as auto-rename not working)
+	go s.autoTitle()
 
 	go s.runTurn(c, agentSID, msgID, content)
 	return SendResult{MessageID: msgID}, nil
