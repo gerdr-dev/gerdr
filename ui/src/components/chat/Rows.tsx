@@ -53,6 +53,16 @@ function foldable(p: GPart, kids?: ToolPart[]): boolean {
   return !c.some((x: any) => x.type === "diff" || x._meta?.gerdr?.unifiedDiff || x.content?._meta?.gerdr?.unifiedDiff);
 }
 
+// 要人看见的几种（照截图里用户报的）：还在跑的（包括转到后台、这一轮已经答完还没跑完的）、答过的审批（批准的不成行，剩下的就是拒了）。
+// 它们照样算进组里（组的 key、汇总不跟着它们变），只是组收着时也露在组头下面，怎么都收不起来；展开时回到原位。
+// 被 auto 分类器拦下的权限错误本来就不折（见 foldable），这里不用管
+function pinned(p: GPart, busy: boolean, liveTasks: Set<string>): boolean {
+  if (p.type === "data-permission") return !p.data.cancelled;
+  if (p.type !== "dynamic-tool") return false;
+  const tp = p as ToolPart;
+  return (busy && (tp.state === "input-streaming" || tp.state === "input-available")) || liveTasks.has(tp.toolCallId);
+}
+
 const KIND_TEXT: Record<string, [string, string]> = {
   execute: ["跑了", "条命令"],
   read: ["读了", "个文件"],
@@ -99,8 +109,15 @@ function summarize(parts: GPart[]): { summary: string; failed: number } {
 /**
  * 把整份对话拍平成行。live：最后一条（不算排在底下的插话）助手消息（还在跑的那一轮里的东西：流式、「工作中…」、快捷回复可点）。
  * openGroups：展开了的工具组（key 是组头那一行的 key）。展开时组里每一块还是单独一行 —— 一组几百个调用也照样虚拟化。
+ * liveTasks：还在跑的后台任务对应的 toolCallId（这一轮答完了它还在跑，工具调用本身早就有结果了，光看 part 看不出来）。
  */
-export function buildRows(msgs: GMessage[], running: boolean, showCleared = false, openGroups: Record<string, boolean> = {}): Row[] {
+export function buildRows(
+  msgs: GMessage[],
+  running: boolean,
+  showCleared = false,
+  openGroups: Record<string, boolean> = {},
+  liveTasks: Set<string> = new Set(),
+): Row[] {
   const rows: Row[] = [];
   const lastIdx = msgs.length - 1;
   // 排着队的插话、发送中的挂在最底下（见 Transcript.queued / sending），还在跑的那条是它们前面那条
@@ -171,12 +188,14 @@ export function buildRows(msgs: GMessage[], running: boolean, showCleared = fals
       rows.push({ key, kind: "group", first, open, busy, ...summarize(run.map((r) => r.part)) });
       first = false;
       if (open) run.forEach(push);
-      // 露出来的这一块展开没展开跟着组记、不跟这条命令记：人展开它是想看「最新在干什么」，换了下一条命令也该展开着；
-      // 也不写进那条命令自己的状态 —— 点开组看详情时各行照旧（用户要的）。key 加 :peek，和详情里同一条分开挂载
-      else if (busy) {
-        const last = run[run.length - 1];
-        push({ ...last, key: `${last.key}:peek`, peek: key });
-      }
+      else
+        run.forEach((r, j) => {
+          // 露出来的最新这一块展开没展开跟着组记、不跟这条命令记：人展开它是想看「最新在干什么」，换了下一条命令也该展开着；
+          // 也不写进那条命令自己的状态 —— 点开组看详情时各行照旧（用户要的）。key 加 :peek，和详情里同一条分开挂载
+          if (busy && j === run.length - 1) push({ ...r, key: `${r.key}:peek`, peek: key });
+          // 收不起来的那几块（见 pinned）：展开状态和原位那一行共用，key 加 :pin 分开挂载
+          else if (pinned(r.part, live && running, liveTasks)) push({ ...r, key: `${r.key}:pin` });
+        });
       a = b;
     }
     // 在跑的这一轮：最底下一行状态（照 Claude Code：转圈 + 动词 + 用时 + token 数）

@@ -183,7 +183,15 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
   useEffect(() => () => clearTimeout(measureTimer.current), []);
   const [showCleared, setShowCleared] = useKept(`cleared:${session.id}:${sub ?? ""}`, false);
   const [openGroups, setOpenGroups] = useKept<Record<string, boolean>>(`groups:${session.id}:${sub ?? ""}`, {});
-  const rows = useMemo(() => buildRows(msgs, running, showCleared, openGroups), [msgs, running, showCleared, openGroups]);
+  // 还在跑的后台任务：拼成串当依赖，任务进度一直在推，不能每推一次就重排整份对话
+  const liveTaskIds = (session.tasks ?? [])
+    .filter((t) => t.status === "running" && t.toolCallId)
+    .map((t) => t.toolCallId)
+    .join(" ");
+  const rows = useMemo(
+    () => buildRows(msgs, running, showCleared, openGroups, new Set(liveTaskIds.split(" ").filter(Boolean))),
+    [msgs, running, showCleared, openGroups, liveTaskIds],
+  );
   // 往前补了更早的消息（loadOlder）：告诉 Virtuoso 前面多了几行（firstItemIndex 往小改），它保住眼前这行不动。
   // 不改的话它当成整份换了，滚动位置留在原来的像素高度上 —— 眼前的内容被新插进来的顶走。
   // 顶上是折起来的 /clear 之前的对话：更早的拉来也是折在里面，先不拉（点了「展开」再接着拉）
