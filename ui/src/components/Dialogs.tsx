@@ -15,7 +15,18 @@ import { AgentSettings } from "./AgentSettings";
 import { MemorySettings } from "./MemorySettings";
 import { AwakeSetting } from "./AwakeSetting";
 import { ResumeDialog } from "./ResumeDialog";
-import { addWorkspace, basename, deleteSession, focusSession, openSessionHere, renameTab, renameWorkspace, selectWorkspace, tabName } from "@/lib/actions";
+import {
+  addWorkspace,
+  basename,
+  deleteSession,
+  focusSession,
+  openSessionHere,
+  refocusAfterDialog,
+  renameTab,
+  renameWorkspace,
+  selectWorkspace,
+  tabName,
+} from "@/lib/actions";
 import { api } from "@/lib/api";
 import { allCommands, runCommand } from "@/lib/commands";
 import { ACTION_TITLES, KEY_GROUPS, formatCombo } from "@/lib/keys";
@@ -37,6 +48,11 @@ const close = () => set({ dialog: null });
 
 export function Dialogs() {
   const d = useStore((s) => s.dialog);
+  const open = !!d;
+  // Closing any dialog (palette, settings, …) puts the cursor back in the focused pane's input
+  useEffect(() => {
+    if (!open) refocusAfterDialog();
+  }, [open]);
   return (
     <>
       <Palette open={d?.kind === "palette"} />

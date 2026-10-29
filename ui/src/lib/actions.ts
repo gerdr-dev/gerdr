@@ -980,6 +980,21 @@ export function runAction(a: KeyAction) {
   }
 }
 
+/**
+ * After an overlay closes (store.dialog, the Lightbox), hand focus back to the focused pane: its composer / terminal
+ * listens for gerdr:refocus. Radix restores focus to the dialog's trigger (often a sidebar button) when it unmounts
+ * after its exit animation, so wait until no dialog is left in the DOM. Gives up if another one opens meanwhile.
+ */
+export function refocusAfterDialog() {
+  const start = performance.now();
+  const tick = () => {
+    if (get().dialog) return;
+    if (document.querySelector("[role=dialog]") && performance.now() - start < 1000) return void requestAnimationFrame(tick);
+    window.dispatchEvent(new Event("gerdr:refocus"));
+  };
+  requestAnimationFrame(tick);
+}
+
 // ---- 文件 ----
 
 let openSeq = 0;

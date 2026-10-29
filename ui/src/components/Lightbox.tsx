@@ -1,6 +1,6 @@
 import { ChevronLeft, ChevronRight, FileSearch, X } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
-import { openPath } from "@/lib/actions";
+import { openPath, refocusAfterDialog } from "@/lib/actions";
 import { cn } from "@/lib/utils";
 
 /*
@@ -149,7 +149,7 @@ function Lightbox({ items, index, origin }: { items: LightboxItem[]; index: numb
       imgRef.current.style.opacity = "0";
     }
     fade(0, 220);
-    setTimeout(() => emit(null), 220);
+    setTimeout(() => (emit(null), refocusAfterDialog()), 220);
   };
 
   const go = (d: number) => {
