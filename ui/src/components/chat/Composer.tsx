@@ -289,14 +289,21 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
     ta.current?.focus();
   };
   const recallUp = async () => {
+    // 撤回还在路上时再按 ↑ 不管：第二下撤不到东西（第一下已经收走了），会落到翻历史、把同一句话填进输入框，
+    // 等第一下回来 putBack 再把它接在前面 —— 输入框里两遍同样的话（用户报的）。和 Esc 的撤回共用一把锁，↑ 和 Esc 也不叠
+    if (escaping.current) return;
     if (hist.current.idx < 0 && running) {
+      escaping.current = true;
       try {
         const r = await api.withdrawLast(session.id);
         if (r.content?.length) {
           putBack(r.content);
           return;
         }
-      } catch {}
+      } catch {
+      } finally {
+        escaping.current = false;
+      }
     }
     if (hist.current.idx < 0) hist.current.list = userTexts();
     const next = Math.min(hist.current.idx + 1, hist.current.list.length - 1);
@@ -312,7 +319,7 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
 
   // Esc：和 Claude Code 一样 —— 打断；还没被 agent 用上的话（刚发、它一个字没回 / 排着队的插话）撤回，放回输入框。
   const escape = async () => {
-    // 上一次还没回来时连按 Esc 不再发：几次撤回一起跑，会各自把同一句话还回来，输入框里叠好几遍（踩过）
+    // 上一次还没回来时连按 Esc（或 ↑ 的撤回还在路上）不再发：几次撤回一起跑，会各自把同一句话还回来，输入框里叠好几遍（踩过）
     if (escaping.current) return;
     escaping.current = true;
     try {
