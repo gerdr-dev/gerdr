@@ -191,6 +191,8 @@ cwd 以外改的文件（Bash 写 `~/.zshrc`、隔壁项目）管不到；同一
 - claude：skill 走 `--add-dir`（目录下的 `.claude/skills` 会被加载，名字不带前缀）。每次起进程建一个壳目录，只链进这次要给的 skill；
   只用 gerdr 的时候 agent 自己的 skill 用 `skillOverrides: off` 关，**插件里的 skill 按名字关不掉**，只能整个插件 `enabledPlugins: false`。
   MCP 走 `--mcp-config <json>`，只用 gerdr 的加 `--strict-mcp-config`。参数只能启动时给，所以设置一变（指纹）下一轮前换进程。
+  claude 自己配的 MCP（~/.claude.json、.mcp.json）也只在启动时读一次，`claude mcp add` 之后进程里的 /clear 不会重读：
+  它的指纹另记，变了只在 /clear 时换进程（`--resume` 再清空）—— 中途换的话工具列表变了，提示缓存全废，长对话下一轮整段重新计费。
 - codex：`thread/start` / `thread/resume` 的 `config` 是**合并**进用户配置的，给 `mcp_servers = {}` 删不掉任何东西，只能逐个
   `mcp_servers.<名>.enabled = false`；skill 用 `skills.config = [{path, enabled:false}]` 按会话关（会整个覆盖用户的那张表，所以用户自己关掉的要照抄）；
   gerdr 的目录用 `skills/extraRoots/set`（整个 app-server 的设置）。**对一个已经加载着的 thread 再 resume，新 config 不生效**，

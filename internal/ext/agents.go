@@ -1,6 +1,8 @@
 package ext
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -188,6 +190,19 @@ func CodexSkills() []Skill {
 	out := scanSkills(filepath.Join(home(), ".codex", "skills"), "codex")
 	out = append(out, scanSkills(filepath.Join(home(), ".agents", "skills"), "codex")...)
 	return out
+}
+
+// ClaudeMCPFingerprint：claude 自己配的 MCP（~/.claude.json、.mcp.json）的指纹。
+// claude 只在进程启动时读一次 MCP 配置，`claude mcp add` 之后进程里的 /clear 也不会重读，得换进程。
+// 只取 mcpServers 那几段：~/.claude.json 里统计、缓存一直在变，整份哈希会动不动就换进程。
+// 只用 gerdr 的（--strict-mcp-config）时 claude 自己的不生效，给空。m 可以是 nil（没开 skill / MCP 设置）。
+func (m *Manager) ClaudeMCPFingerprint(cwd string) string {
+	if m != nil && m.Settings().MCPSource == SourceGerdr {
+		return ""
+	}
+	b, _ := json.Marshal(ClaudeMCP(cwd))
+	h := sha256.Sum256(b)
+	return hex.EncodeToString(h[:8])
 }
 
 // CodexMCP：~/.codex/config.toml 的 [mcp_servers.*]。

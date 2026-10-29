@@ -28,6 +28,9 @@ type session struct {
 	effort  string
 	respawn bool   // 下一轮前换个进程（改了只能在启动参数里给的东西）
 	extFP   string // 起进程时 skill / MCP 设置的指纹；对不上就换进程
+	// 起进程时 claude 自己配的 MCP 的指纹（ext.ClaudeMCPFingerprint）。对不上只在 /clear 时换进程：
+	// 中途换的话工具列表变了，提示缓存全废，长对话下一轮整段重新计费；清空之后上下文是空的，换了不亏。
+	mcpFP string
 
 	// 起进程时怎么接上对话：
 	fresh    bool   // 全新：--session-id id
@@ -127,6 +130,7 @@ func (s *session) start(ctx context.Context) error {
 	}
 	s.mu.Lock()
 	o := spawnOpts{bin: bin, cwd: s.cwd, model: s.model, mode: s.mode, effort: s.effort, env: s.a.opts.Env}
+	s.mcpFP = s.a.opts.Ext.ClaudeMCPFingerprint(s.cwd)
 	if e := s.a.opts.Ext; e != nil {
 		s.extFP = e.Fingerprint()
 		o.extra = e.ClaudeArgs(s.id, s.cwd)
@@ -329,6 +333,14 @@ func (s *session) prompt(ctx context.Context, blocks []acp.ContentBlock, msgID s
 	s.mu.Lock()
 	s.abortWait = abort
 	s.mu.Unlock()
+	if isClear(blocks) {
+		fp := s.a.opts.Ext.ClaudeMCPFingerprint(s.cwd)
+		s.mu.Lock()
+		if s.p != nil && s.turn == nil && s.mcpFP != fp { // 正在跑的那一轮不能被换掉（这句随后也会被拒）
+			s.respawn = true
+		}
+		s.mu.Unlock()
+	}
 	ready := make(chan error, 1)
 	go func() { ready <- s.ensure(context.WithoutCancel(ctx)) }()
 	var err error
@@ -524,6 +536,11 @@ func userMessage(blocks []acp.ContentBlock, msgID, priority string) map[string]a
 		m["priority"] = priority
 	}
 	return m
+}
+
+// isClear：这句是不是 /clear（整句就这一个命令）。
+func isClear(blocks []acp.ContentBlock) bool {
+	return len(blocks) == 1 && blocks[0].Text != nil && strings.TrimSpace(blocks[0].Text.Text) == "/clear"
 }
 
 func toClaudeContent(blocks []acp.ContentBlock) []map[string]any {
