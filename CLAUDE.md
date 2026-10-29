@@ -12,7 +12,7 @@ Claude Code / Codex 的图形界面：Go 后端（ACP 适配器 + hub + HTTP/WS�
   按 docs/dev/SCROLL.md 用 `tools/scrolltest/` 的脚本逐帧复现，改完再跑一遍。
 - 改完跑 `make test`（Go 测试）；动了界面先 `make fmt` 再跑 `make typecheck`（要先 `cd ui && pnpm install`；它也查格式）。
   动了适配器要跑 `make test-e2e`（真 claude / codex，花钱）。
-- 注释和文档写中文，说清**为什么**。
+- English-first：提交信息、代码注释、文档一律用英文写，说清**为什么**。已有的中文注释 / 文档不用专门去翻，改到哪段时顺手换成英文。
 - 起调试实例用独立的目录和端口，别碰默认的 `~/.gerdr` 和 7870：`make dev`（界面直接用仓库里的 ui/，改了立刻热更新）。
 - 改完界面、看过没问题后跑 `make sync-ui`，同步到正在用的 `~/.gerdr/ui`（开着的 gerdr 直接热更新）：
   正在用的 gerdr 读的是那份，不是仓库里的 ui/，不同步用户就看不到改动。别手动 cp 或在那边 git 提交 ——
