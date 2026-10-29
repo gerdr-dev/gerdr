@@ -91,7 +91,7 @@ function summarize(parts: GPart[]): { summary: string; failed: number } {
   if (n.other) bits.push(`调了 ${n.other} 次工具`);
   let summary = bits.join("、");
   if (think) summary += `${summary ? "，" : ""}思考 ${think} 次`;
-  if (tasks) summary += `${summary ? "，" : ""}${tasks} 个后台任务跑完`;
+  if (tasks) summary += `${summary ? "，" : ""}${tasks} 个后台任务`;
   if (denied) summary += `${summary ? "，" : ""}拒了 ${denied} 次`;
   return { summary, failed };
 }
