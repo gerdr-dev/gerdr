@@ -1,4 +1,4 @@
-import { ChevronUp, Folder, FolderGit2, History, Loader2, Play, SquareTerminal } from "lucide-react";
+import { ChevronUp, Folder, FolderGit2, History, Loader2, Play, Settings2, SquareTerminal } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -184,12 +184,13 @@ export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean
     return () => clearTimeout(t);
   }, [agent, abs]);
 
-  const start = async (imp?: string, title?: string) => {
+  // as：双击某个 agent 卡片直接开，这时 setAgent 还没生效，得显式传进来
+  const start = async (imp?: string, title?: string, as = agent) => {
     if (busy) return;
     setBusy(true);
     try {
       // 接以前的会话：标题沿用列表里那个（agent 那边改过名就是改过的名字，没改过是第一句话）
-      await createInPane(pane.id, { agent, cwd: abs, import: imp, title });
+      await createInPane(pane.id, { agent: as, cwd: abs, import: imp, title });
     } catch {
       setBusy(false);
     }
@@ -217,7 +218,17 @@ export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean
   return (
     <div className="flex h-full items-start justify-center overflow-auto p-6">
       <div className="mt-[8vh] w-full max-w-lg space-y-5">
-        <div className="text-[13px] font-medium text-muted-foreground">新会话（Ctrl+D 关掉）</div>
+        <div className="flex items-center text-[13px] font-medium text-muted-foreground">
+          新会话（Ctrl+D 关掉）
+          {/* 角色、各 agent 新会话的默认模式 / 模型都在设置 → Agent 里，从这儿直接过去 */}
+          <button
+            className="ml-auto flex items-center gap-1 text-[11px] font-normal hover:text-foreground"
+            onClick={() => set({ dialog: { kind: "settings", tab: "agents" } })}
+          >
+            <Settings2 className="size-3.5" />
+            Agent 设置
+          </button>
+        </div>
         <div className="grid grid-cols-2 gap-2">
           {agents.map((a) => (
             <button
@@ -225,6 +236,7 @@ export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean
               disabled={!a.available}
               title={a.error}
               onClick={() => setAgent(a.id)}
+              onDoubleClick={() => start(undefined, undefined, a.id)}
               className={cn(
                 "flex items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-colors",
                 agent === a.id ? "border-brand bg-brand/8" : "hover:bg-accent",
