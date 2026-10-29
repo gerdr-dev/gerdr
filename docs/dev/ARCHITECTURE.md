@@ -179,10 +179,11 @@ stream-json / app-server 都没有这个口（Claude Code 的 `!` 是 TUI 输入
   界面、标题、撤回放回输入框都认 `<bash-input>` 开头跳过这几块；重新载入后没有 shell 事件，靠解析这几块画回卡片。
 - agent 不知道有这个功能：Claude Code 只在交互式终端里告诉模型「让用户敲 `! <command>`」，stream-json 下没有。`acpx.ShellHint` 补上，
   并要它写成 `!` 开头的行内代码（或每行都以 `! ` 开头的代码块），界面在旁边画「运行」（chat/Markdown.tsx）。
-  认命令要求 `!` 后面像命令开头（字母、数字、路径…）：正文里说起这个功能写的「`!命令`」「`! <command>`」不能冒按钮（踩过）。
+  认命令要求 `!` 后面有空格、再接像命令开头的字（字母、数字、路径…）：正文里说起这个功能写的「`!命令`」「`! <command>`」、
+  代码里的取反 `!Se()` 都不能冒按钮（都踩过）。
 - 「运行」旁边的箭头还能放进终端跑（actions.runInTerminal）：新开一个（会话右边分屏，建终端时带 `input`，shell 还在读 profile 时写进去也不丢，
   PTY 先攒着；代价是那行命令会在提示符出来之前先回显一次），或者敲进会话旁边已经开着的终端（`POST /api/terms/{id}/input`，那个 shell 没了就新开）。
-  终端能交互（gh auth login 选选项、输密码），但输出不进对话、agent 看不到 —— ShellHint 里让 agent 遇到要交互的命令照样写 `! 命令`，提醒人跑完告诉它结果。
+  终端能交互（gh auth login 选选项、输密码），但输出不进对话、agent 看不到。ShellHint 只有一句（照 Claude Code 原话的写法），这些不写进提示。
 
 ## 回退只回退对话，不动文件
 

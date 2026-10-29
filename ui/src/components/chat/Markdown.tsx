@@ -58,11 +58,13 @@ const DefaultCode = (defaultComponents as Record<string, any>).code ?? "code";
 const hastText = (n: any): string => (n?.type === "text" ? n.value : (n?.children ?? []).map(hastText).join(""));
 
 /**
- * `! 命令` 里的命令（acpx.ShellHint 教 agent 这么写）。命令得以像命令开头的字起头（字母、数字、路径、引号、$）——
- * 正文里说起这个功能时写的「`!命令`」「`! <command>`」不算，不然那儿也冒出一个「运行」（用户报的）。
+ * `! 命令` 里的命令（acpx.ShellHint 教 agent 这么写）。两条都要满足，不然正文里冒出不该有的「运行」（都是用户报的）：
+ * - `!` 后面有空格：Claude Code 原话和我们的提示都是 `! <command>`；代码里的取反 `!Se()`、`!opts.isInteractive()` 从来不带空格。
+ *   代价是 agent 写成 `!ls` 时不出按钮（少见；输入框里敲 `!ls` 不走这里）。
+ * - 命令以像命令开头的字起头（字母、数字、路径、引号、$）：说起这个功能时写的「`! 命令`」「`! <command>`」不算。
  */
 function bangCommand(text: string): string | null {
-  const m = /^!\s*([\w./~$"'(-][\s\S]*)$/.exec(text.trim());
+  const m = /^!\s+([\w./~$"'(-][\s\S]*)$/.exec(text.trim());
   return m ? m[1].trim() : null;
 }
 
