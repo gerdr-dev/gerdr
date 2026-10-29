@@ -217,7 +217,7 @@ export function buildRows(
         // 露哪一块：最新的那块，跳过跑得快的（见 PEEK_DELAY）—— 跳过时接着露上一块，这一行一直在、高度不变，
         // 快命令一条接一条跑时也不换来换去。上一块是收不起来的（比如那条一直在跑的后台命令）就由它当这一块，不画两遍
         let peek = -1;
-        if (busy) for (peek = run.length - 1; peek > 0 && young(run[peek].part);) peek--;
+        if (busy) for (peek = run.length - 1; peek >= 0 && young(run[peek].part);) peek--;
         run.forEach((r, j) => {
           // 露出来的最新这一块展开没展开跟着组记、不跟这条命令记：人展开它是想看「最新在干什么」，换了下一条命令也该展开着；
           // 也不写进那条命令自己的状态 —— 点开组看详情时各行照旧（用户要的）。key 加 :peek，和详情里同一条分开挂载

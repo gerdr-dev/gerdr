@@ -188,10 +188,17 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
     .filter((t) => t.status === "running" && t.toolCallId)
     .map((t) => t.toolCallId)
     .join(" ");
-  const rows = useMemo(
-    () => buildRows(msgs, running, showCleared, openGroups, new Set(liveTaskIds.split(" ").filter(Boolean))),
-    [msgs, running, showCleared, openGroups, liveTaskIds],
-  );
+  // 跑得快的工具调用先不露（Rows 的 PEEK_DELAY）：buildRows 告诉我们什么时候有一条跑满了，到点 tick 一下重排
+  const [tick, setTick] = useState(0);
+  const [rows, wake] = useMemo(() => {
+    const out: { wake?: number } = {};
+    return [buildRows(msgs, running, showCleared, openGroups, new Set(liveTaskIds.split(" ").filter(Boolean)), Date.now(), out), out.wake] as const;
+  }, [msgs, running, showCleared, openGroups, liveTaskIds, tick]);
+  useEffect(() => {
+    if (wake === undefined) return;
+    const t = setTimeout(() => setTick((x) => x + 1), Math.max(0, wake - Date.now()));
+    return () => clearTimeout(t);
+  }, [wake]);
   // 往前补了更早的消息（loadOlder）：告诉 Virtuoso 前面多了几行（firstItemIndex 往小改），它保住眼前这行不动。
   // 不改的话它当成整份换了，滚动位置留在原来的像素高度上 —— 眼前的内容被新插进来的顶走。
   // 顶上是折起来的 /clear 之前的对话：更早的拉来也是折在里面，先不拉（点了「展开」再接着拉）
