@@ -130,12 +130,13 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
   const cmds = useMemo(() => {
     if (!slash) return [];
     const q = slash[1].toLowerCase();
-    // 排序照 Claude Code：名字以输入开头的 → 名字里包含的 → 说明里包含的
+    // 排序照 Claude Code：名字正好是输入的 → 名字以输入开头的 → 名字里包含的 → 说明里包含的
     const rank = (c: { name: string; description?: string }) => {
       const n = c.name.toLowerCase();
-      if (n.startsWith(q)) return 0;
-      if (n.includes(q)) return 1;
-      if ((c.description ?? "").toLowerCase().includes(q)) return 2;
+      if (n === q) return 0;
+      if (n.startsWith(q)) return 1;
+      if (n.includes(q)) return 2;
+      if ((c.description ?? "").toLowerCase().includes(q)) return 3;
       return 9;
     };
     const own = session.commands ?? [];
@@ -147,8 +148,10 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
       [...local, ...own.filter((c) => !local.some((l) => l.name === c.name)), ...aliases]
         .map((c) => ({ c, r: rank(c), p: pinned.indexOf(c.name) }))
         .filter((x) => x.r < 9)
-        // pin 住的排最上面（照 pin 的先后），其余照上面的排序
-        .sort((a, b) => (a.p < 0 ? 1e9 : a.p) - (b.p < 0 ? 1e9 : b.p) || a.r - b.r || a.c.name.length - b.c.name.length)
+        // 先看匹配得多准，同一档里 pin 住的排前面（照 pin 的先后），再短的在前。
+        // 不能 pin 优先：pin 住的命令只是说明里碰巧带了输入（/res 碰上 /clear 说明里的 resumable）也会压在真正匹配的上面；
+        // 只敲一个 / 时全都算「开头匹配」，pin 照样排最上面
+        .sort((a, b) => a.r - b.r || (a.p < 0 ? 1e9 : a.p) - (b.p < 0 ? 1e9 : b.p) || a.c.name.length - b.c.name.length)
         .map((x) => x.c)
         .slice(0, 40)
     );
