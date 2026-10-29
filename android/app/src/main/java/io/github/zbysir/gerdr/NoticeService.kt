@@ -194,11 +194,13 @@ class NoticeService : Service() {
         val status = n.optString("status")
         val agent = n.optString("agent").ifEmpty { "agent" }
         val head = when (status) {
-            "waiting" -> "$agent 在等你"
-            "error" -> "$agent 出错了"
-            else -> "$agent 跑完了"
+            "waiting" -> "在等你"
+            "error" -> "出错了"
+            else -> "完成"
         }
-        val title = n.optString("title").let { if (it.isEmpty()) head else "$head · $it" }
+        // 标题写「完成 · 会话标题」，不带 agent 名：通知一多，前面那串「claude 跑完了」把标题挤得只剩几个字（用户要的）。
+        // 会话还没标题时才用 agent 名顶上，不然光一个「完成」不知道是谁
+        val title = n.optString("title").let { if (it.isEmpty()) "$agent $head" else "$head · $it" }
         val text = n.optString("text").ifEmpty {
             when (status) {
                 "waiting" -> "要你批准或回答问题"

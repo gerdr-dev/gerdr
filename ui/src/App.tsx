@@ -63,11 +63,11 @@ function useAttention() {
         const seen = visible.has(cur.id) && !away;
         const name = cur.title || cur.cwd.split("/").pop() || cur.agent;
         if (old.status !== "waiting" && cur.status === "waiting" && !seen) {
-          systemNotify(`${name} 在等你`, "需要你批准或回答问题", cur.id);
+          systemNotify(`在等你 · ${name}`, "需要你批准或回答问题", cur.id);
         }
         if ((old.status === "running" || old.status === "waiting") && (cur.status === "idle" || cur.status === "error") && !seen) {
           markUnread(cur.id);
-          systemNotify(cur.status === "error" ? `${name} 出错了` : `${name} 跑完了`, cur.error ?? "", cur.id);
+          systemNotify(cur.status === "error" ? `出错了 · ${name}` : `完成 · ${name}`, cur.error ?? "", cur.id);
         }
       }
       nativeBadge(Object.values(s.sessions).filter((x) => x.status === "waiting").length);
