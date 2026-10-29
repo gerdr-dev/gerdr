@@ -245,7 +245,7 @@ func (s *Server) Handler() http.Handler {
 	}))
 	// resolve：agent 跑的 `gerdr session current` 拿自己的 agent 会话 id 换 gerdr 会话。
 	mux.HandleFunc("GET /api/resolve", func(w http.ResponseWriter, r *http.Request) {
-		for _, agent := range []string{"claude", "codex"} {
+		for _, agent := range []string{"claude", "codex", "native"} {
 			if id := r.URL.Query().Get(agent); id != "" {
 				if sess := s.Hub.FindByAgent(agent, id); sess != nil {
 					writeJSON(w, sess.Summary())

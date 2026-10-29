@@ -161,6 +161,23 @@ API key 就写 `ANTHROPIC_API_KEY=…`。还能换可执行文件、追加命令
 存在 `config.json` 的 `agents` 里：
 `{"id": "claude-2", "name": "Claude 2", "base": "claude", "env": {"CLAUDE_CONFIG_DIR": "~/.claude-2"}, "bin": "", "args": []}`。
 
+**Gerdr Agent（直接用 GPT、DeepSeek 等模型的 API）**：gerdr 自带一个 agent，不经过 Claude Code / Codex，直接调 OpenAI 兼容的接口
+（GPT 走 Responses，DeepSeek 等走 Chat Completions）。在 `config.json` 里配了模型，新建会话时就多一个「Gerdr Agent」：
+
+```json
+"llm": {
+  "providers": [{
+    "id": "my", "name": "我的网关", "baseUrl": "https://example.com/v1", "apiKey": "sk-…",
+    "models": [{"id": "gpt-6.1-sol"}, {"id": "deepseek-v4-pro"}]
+  }],
+  "defaultModel": "my/gpt-6.1-sol"
+}
+```
+
+不想把 key 写进文件就用 `"apiKeyEnv": "环境变量名"`。模型只写 id 就行，协议、思考档位、上下文窗口按 id 猜；猜错了在模型上写
+`api`（chat / responses）、`efforts`、`window`、`images`。会话记录在 `~/.gerdr/native/`。插话、回退、审批、子 agent、
+`/compact`、`/clear`、skill 都支持；没有 MCP。
+
 ## 内存
 
 - Codex：所有会话共用一个 `codex app-server` 进程（几十 MB）。

@@ -23,6 +23,7 @@ import (
 
 	"github.com/zbysir/gerdr/internal/agents/claude"
 	"github.com/zbysir/gerdr/internal/agents/codex"
+	"github.com/zbysir/gerdr/internal/agents/native"
 	"github.com/zbysir/gerdr/internal/awake"
 	"github.com/zbysir/gerdr/internal/config"
 	"github.com/zbysir/gerdr/internal/ext"
@@ -72,7 +73,7 @@ func main() {
 		},
 	})
 	root.AddCommand(&cobra.Command{
-		Use:   "acp <claude|codex>",
+		Use:   "acp <claude|codex|native>",
 		Short: "把内置的适配器当成一个 stdio ACP agent 跑（给 Zed 之类的 ACP 客户端用）",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -229,7 +230,15 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 		return c.Agents
 	}
 	em := ext.New(env.Dir)
-	h, err := hub.New(hub.Options{Dir: env.Dir, ClaudeIdle: env.ClaudeIdle, ExtraAgents: cfgAgents(), Log: log, Ext: em})
+	// config.json 的 llm：native agent 的模型（每轮现取，改了下一轮就生效）
+	cfgLLM := func() native.Config {
+		var c struct {
+			LLM native.Config `json:"llm"`
+		}
+		_ = json.Unmarshal(cfg.Get(), &c)
+		return c.LLM
+	}
+	h, err := hub.New(hub.Options{Dir: env.Dir, ClaudeIdle: env.ClaudeIdle, ExtraAgents: cfgAgents(), LLM: cfgLLM, Log: log, Ext: em})
 	if err != nil {
 		return err
 	}
@@ -397,8 +406,23 @@ func runACP(which string) error {
 		a = claude.New(log, claude.Options{})
 	case "codex":
 		a = codex.New(log, nil)
+	case "native":
+		// 独立跑时模型配置从 $GERDR_DIR/config.json（默认 ~/.gerdr）的 llm 读，会话记录放在同一个目录下
+		dir := os.Getenv("GERDR_DIR")
+		if dir == "" {
+			home, _ := os.UserHomeDir()
+			dir = filepath.Join(home, ".gerdr")
+		}
+		a = native.New(log, native.Options{Dir: filepath.Join(dir, "native"), Config: func() native.Config {
+			var c struct {
+				LLM native.Config `json:"llm"`
+			}
+			b, _ := os.ReadFile(filepath.Join(dir, "config.json"))
+			_ = json.Unmarshal(b, &c)
+			return c.LLM
+		}})
 	default:
-		return fmt.Errorf("unknown agent %q (claude|codex)", which)
+		return fmt.Errorf("unknown agent %q (claude|codex|native)", which)
 	}
 	conn := acp.NewAgentSideConnection(a, os.Stdout, os.Stdin)
 	conn.SetLogger(log)

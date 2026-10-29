@@ -12,6 +12,7 @@ herdr-web 那一套是往 TUI 的输入框里模拟按键、再读屏抽话。�
 React（ui/，不打包）  ←WebSocket / HTTP→  hub（internal/hub）  ←ACP（进程内管道）→  适配器  →  agent
                                                                             claude：stream-json（stdio）
                                                                             codex ：app-server JSON-RPC（stdio）
+                                                                            native：直接调模型接口（GPT / DeepSeek…）
                                                         ←ACP（stdio）→  外部 ACP agent（gemini…）
 ```
 
@@ -92,6 +93,34 @@ React（ui/，不打包）  ←WebSocket / HTTP→  hub（internal/hub）  ←AC
    界面画成按钮，点了就是一次插话。`item/tool/requestUserInput` 只在 plan 协作模式里出现，也接了。
 4. 审批按轮覆盖：模式 = `approvalPolicy` + `sandboxPolicy`，每次 `turn/start` 带上。
 5. userMessage item 在实时流里忽略（client 自己已经显示了），只在 LoadSession 重放时发。
+
+## Gerdr Agent（native）—— 自己写的 agent，直接调模型接口
+
+`internal/agents/native`：没有子进程，主循环、工具、会话记录都在 gerdr 里；模型层 `native/llm` 只有两种协议
+（Chat Completions、Responses）。为什么不用 shuttle 的 pi：插话、子 agent、回退这几样 pi 的主循环里没有或形状不对，
+而它整套有六万行；自己的主循环一百多行（`loop.go`），每一步看得见。配置是 config.json 的 `llm`（README 有例子），每轮现取。
+
+会静默出错的几条（实测 / 抄 pi 的）：
+
+1. **一条 assistant 的每个工具调用都要有结果**，少一个下一轮两家都 400。打断（cancel）时没跑完的调用补「被打断」的结果再结束；
+   被打断的半截生成只留正文、不留工具调用和推理（半截的推理还回去会被拒）。
+2. **DeepSeek 开着思考时历史里每条 assistant 都要带 `reasoning_content`**（没有给空串），带工具调用的那条要把原来的思考带回去。
+   Responses 用 `store:false` + `include:["reasoning.encrypted_content"]`，推理 item 原样放回 input；中途换了协议的就丢掉。
+3. 经网关的 GPT 在 Chat Completions 里，工具调用第一片之后每片都带 `"name":""`，拼的时候不能拿空名字覆盖（subhub 实测）。
+   Responses 的 `input` 必须是数组。工具结果里放不了图：图另起一条 user 消息跟在这批结果后面。
+4. **插话不打断工具**：排队，下一次调模型前接到历史末尾；`Now` 只掐当前这次生成。「模型说完了 → 标成空闲」和插话入队在同一把锁里
+   （`endIfIdle`），不然中间进来的插话被回成 injected 却没人处理。
+5. 流断了（没有 finish_reason / response.completed）报 `stream disconnected`，hub 的 `retryable` 认它、发「继续」重来；
+   拿到响应头之前的 429 / 5xx / 网络错误在 llm 层自己重试几次。
+6. 没有沙箱，所以「Accept edits」只放行改工作目录里的文件，命令照样问；只读命令（ls、git status、rg……，`permission.go`）任何模式都不问。
+7. bash 起在单独的进程组里，打断 / 超时整组杀（`sh -c` 起的 go test、npm 不跟着死会一直挂着）。
+8. 会话记录 `<dir>/native/sessions/<id>.jsonl` 存**完整历史**，压缩是追加一条 `compact`，上下文从最后一条往后算 ——
+   回退到压缩之前，截掉那条就回到压缩前的上下文。`/clear` 换新 id（和 claude / codex 的同一条路）。
+9. 指令文件：`~/.claude/CLAUDE.md`、`~/.codex/AGENTS.md`、git 根到 cwd 每层的 AGENTS.md / CLAUDE.md 都拼进系统提示词；
+   skill 列表（内置 + Claude Code 的 + gerdr 的，按设置的来源）只给名字、描述、路径，模型自己去读。
+10. bash 的环境里有 `GERDR_NATIVE_SESSION_ID`，`gerdr session current` 拿它认自己。
+
+测试：`go test ./internal/agents/native/...` 用假接口跑主循环；`NATIVE_LIVE_BASE / NATIVE_LIVE_KEY / NATIVE_LIVE_MODELS` 设了才跑真模型（花钱）。
 
 ## 用量额度（`_gerdr/usage` → hub/usage.go → `/api/usage` → 侧栏的 UsageMeter）
 

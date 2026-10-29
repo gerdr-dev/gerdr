@@ -158,6 +158,9 @@ func (c *apiClient) selfID() string {
 	if v := os.Getenv("CODEX_THREAD_ID"); v != "" {
 		q.Set("codex", v)
 	}
+	if v := os.Getenv("GERDR_NATIVE_SESSION_ID"); v != "" {
+		q.Set("native", v)
+	}
 	if len(q) == 0 {
 		return ""
 	}
@@ -531,7 +534,7 @@ func sessionCmd() *cobra.Command {
 			return waitResult(c, s.ID, 0, nTimeout)
 		},
 	}
-	newCmd.Flags().StringVar(&nAgent, "agent", "claude", "claude、codex，或者设置里加的变体 / 外部 agent 的 id")
+	newCmd.Flags().StringVar(&nAgent, "agent", "claude", "claude、codex、native（Gerdr Agent），或者设置里加的变体 / 外部 agent 的 id")
 	newCmd.Flags().StringVar(&nCwd, "cwd", "", "工作目录（默认当前目录）")
 	newCmd.Flags().StringVar(&nTitle, "title", "", "会话标题（之后可以用它指代这个会话）")
 	newCmd.Flags().StringVar(&nMode, "mode", "", "权限模式（claude: default/acceptEdits/plan/auto/bypassPermissions；codex: ask/auto/read-only/full-access）")

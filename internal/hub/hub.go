@@ -22,11 +22,12 @@ import (
 	"github.com/zbysir/gerdr/internal/agenthost"
 	"github.com/zbysir/gerdr/internal/agents/claude"
 	"github.com/zbysir/gerdr/internal/agents/codex"
+	"github.com/zbysir/gerdr/internal/agents/native"
 	"github.com/zbysir/gerdr/internal/ext"
 	"github.com/zbysir/gerdr/internal/sysenv"
 )
 
-// AgentDef 描述一种 agent。内置 claude / codex；用户可以在 config.json 的 agents 里加两种：
+// AgentDef 描述一种 agent。内置 claude / codex / native（gerdr 自己的，直接调模型接口，config.json 的 llm 配了模型才能用）；用户可以在 config.json 的 agents 里加两种：
 //   - 变体（Base = claude / codex）：同一个适配器、换一套启动参数 —— 典型是「claude 2」：
 //     同一个 Claude Code、另一个账号（Env 里给 ANTHROPIC_API_KEY，或者给一个单独的 CLAUDE_CONFIG_DIR 在里面 /login）。
 //     每个变体是一个**单独的适配器实例**（各自的进程、各自的会话记录目录），会话按变体 id 记，不会串到原版上去。
@@ -63,7 +64,7 @@ func (d AgentDef) envList() []string {
 // ValidAgentDefs 挑出 config.json 里能用的那些（id 不能和内置的撞、得是变体或外部命令之一），补上缺的名字。
 func ValidAgentDefs(in []AgentDef) []AgentDef {
 	var out []AgentDef
-	seen := map[string]bool{"claude": true, "codex": true}
+	seen := map[string]bool{"claude": true, "codex": true, "native": true}
 	for _, a := range in {
 		if a.ID == "" || seen[a.ID] {
 			continue
@@ -83,12 +84,17 @@ func ValidAgentDefs(in []AgentDef) []AgentDef {
 	return out
 }
 
+// builtinAgent：内置的三个（不是变体、不是外部命令）。
+func builtinAgent(id string) bool { return id == "claude" || id == "codex" || id == "native" }
+
 type Options struct {
 	Dir         string // ~/.gerdr
 	ClaudeIdle  time.Duration
 	ExtraAgents []AgentDef
 	Log         *slog.Logger
 	Ext         *ext.Manager // skill / MCP 从哪来；nil = 全用 agent 自己的
+	// LLM：native agent 的模型配置（config.json 的 llm），每次现取。nil = 没配。
+	LLM func() native.Config
 }
 
 // extra：设置里改了会热换，所以不放在 opt 里读；单独一把锁（Summary 持着会话锁时要读它，而 h.mu 的顺序是先 hub 后会话）。
@@ -131,7 +137,7 @@ func (h *Hub) SetAgents(defs []AgentDef) {
 
 // Base：这个 agent 实际是哪一种（claude / codex / 外部 agent 自己的 id）。界面上图标、哪些功能可用都按它判断。
 func (h *Hub) Base(agent string) string {
-	if agent == "claude" || agent == "codex" {
+	if builtinAgent(agent) {
 		return agent
 	}
 	for _, d := range h.extra() {
@@ -208,6 +214,10 @@ func (h *Hub) Agents() []map[string]any {
 		map[string]any{"id": "claude", "name": "Claude Code", "available": cerr == nil, "error": errStr(cerr)},
 		map[string]any{"id": "codex", "name": "Codex", "available": xerr == nil, "error": errStr(xerr)},
 	)
+	if nerr := native.Available(h.llm()); nerr == nil {
+		// 没配模型时不列：大多数人只用 claude / codex，列一个永远不能用的选项是噪音
+		out = append(out, map[string]any{"id": "native", "name": "Gerdr Agent", "available": true})
+	}
 	for _, a := range h.extra() {
 		m := map[string]any{"id": a.ID, "name": a.Name, "available": true, "base": a.Base}
 		switch {
@@ -225,6 +235,13 @@ func (h *Hub) Agents() []map[string]any {
 	return out
 }
 
+func (h *Hub) llm() native.Config {
+	if h.opt.LLM == nil {
+		return native.Config{}
+	}
+	return h.opt.LLM()
+}
+
 func errStr(err error) string {
 	if err == nil {
 		return ""
@@ -238,6 +255,8 @@ func (h *Hub) agentDef(id string) (AgentDef, bool) {
 		return AgentDef{ID: "claude", Name: "Claude Code"}, true
 	case "codex":
 		return AgentDef{ID: "codex", Name: "Codex"}, true
+	case "native":
+		return AgentDef{ID: "native", Name: "Gerdr Agent"}, true
 	}
 	for _, a := range h.extra() {
 		if a.ID == id {
@@ -303,7 +322,7 @@ func (h *Hub) startHost(ctx context.Context, agent string) (*agenthost.Host, err
 	sctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 	base := def.Base
-	if agent == "claude" || agent == "codex" {
+	if builtinAgent(agent) {
 		base = agent
 	}
 	switch base {
@@ -311,6 +330,8 @@ func (h *Hub) startHost(ctx context.Context, agent string) (*agenthost.Host, err
 		return agenthost.StartInProc(sctx, claude.New(log, claude.Options{IdleTimeout: h.opt.ClaudeIdle, Ext: h.opt.Ext, Bin: def.Bin, Args: def.Args, Env: def.envList()}), handler, log)
 	case "codex":
 		return agenthost.StartInProc(sctx, codex.NewWith(log, h.opt.Ext, codex.Options{Bin: def.Bin, Args: def.Args, Env: def.envList()}), handler, log)
+	case "native":
+		return agenthost.StartInProc(sctx, native.New(log, native.Options{Dir: filepath.Join(h.opt.Dir, "native"), Ext: h.opt.Ext, Config: h.llm}), handler, log)
 	}
 	home, _ := os.UserHomeDir()
 	return agenthost.StartProcess(sctx, def.Command, home, handler, log)
