@@ -7,7 +7,7 @@ import { buildRows, RowView, type Row, type RowEnv } from "./Rows";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { withdrawSteer } from "@/lib/actions";
-import { get, loadOlder, sendShown, subTranscript, transcript, useStore } from "@/lib/store";
+import { get, loadOlder, sendShown, set, subTranscript, transcript, useStore } from "@/lib/store";
 import { useKept } from "@/lib/kept";
 import { Loader2 } from "lucide-react";
 import type { GMessage } from "@/lib/transcript";
@@ -405,6 +405,7 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
   const latest = useRef({ doRewind, sessionId: session.id, openGroups, setOpenGroups });
   latest.current = { doRewind, sessionId: session.id, openGroups, setOpenGroups };
   const steerRewind = (session.base ?? session.agent) === "claude";
+  const hasCleared = !!session.cleared?.length;
   const env = useMemo<RowEnv>(
     () => ({
       sessionId: session.id,
@@ -419,13 +420,16 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
           },
       onQuickReply: (s) => sendShown(latest.current.sessionId, [{ type: "text", text: s }]).catch((e) => toast.error(e.message)),
       onShowCleared: () => setShowCleared(true),
+      // Expanding only shows the old messages; the agent's context stays cleared. Going back means resuming the old
+      // agent session, which /resume lists at the top under "before /clear".
+      onResumeCleared: sub || !hasCleared ? undefined : () => set({ dialog: { kind: "resume", sessionId: session.id, paneId } }),
       onToggleGroup: (key) => {
         const { openGroups: g, setOpenGroups: set } = latest.current;
         hold();
         set({ ...g, [key]: !g[key] });
       },
     }),
-    [session.id, running, sub, steerRewind],
+    [session.id, running, sub, steerRewind, hasCleared, paneId],
   );
   return (
     <SessionContext.Provider value={session}>

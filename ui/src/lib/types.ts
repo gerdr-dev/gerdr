@@ -36,6 +36,8 @@ export type SessionSummary = {
   cwd: string;
   title?: string;
   customTitle?: boolean;
+  /** Contexts this conversation dropped with /clear, oldest first: the agent session id they lived under and the title they had. */
+  cleared?: { id: string; title?: string; at: number }[];
   createdAt: number;
   updatedAt: number;
   mode?: string;

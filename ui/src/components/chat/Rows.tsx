@@ -272,6 +272,8 @@ export type RowEnv = {
   onWithdraw?: (messageId: string, now: boolean) => void;
   onQuickReply: (s: string) => void;
   onShowCleared?: () => void;
+  /** Resume the conversation from before /clear (with its context), not just show its messages. Missing when gerdr didn't record the old id. */
+  onResumeCleared?: () => void;
   onToggleGroup?: (key: string) => void;
 };
 
@@ -327,12 +329,19 @@ export const RowView = memo(
     if (row.kind === "cleared") {
       return (
         <Frame first>
-          <button
-            className="w-full rounded-md py-1 text-center text-[12px] text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-            onClick={env.onShowCleared}
-          >
-            展开 /clear 之前的对话（{row.n} 条）
-          </button>
+          <div className="flex items-center justify-center gap-1 text-[12px] text-muted-foreground">
+            <button className="rounded-md px-2 py-1 hover:bg-accent/50 hover:text-foreground" onClick={env.onShowCleared}>
+              展开 /clear 之前的对话（{row.n} 条）
+            </button>
+            {env.onResumeCleared && (
+              <>
+                <span>·</span>
+                <button className="rounded-md px-2 py-1 hover:bg-accent/50 hover:text-foreground" onClick={env.onResumeCleared}>
+                  回到那段对话
+                </button>
+              </>
+            )}
+          </div>
         </Frame>
       );
     }
@@ -389,7 +398,8 @@ export const RowView = memo(
         x.tight === y.tight &&
         a.env.onToggleGroup === b.env.onToggleGroup
       );
-    if (x.kind === "cleared" && y.kind === "cleared") return x.n === y.n && a.env.onShowCleared === b.env.onShowCleared;
+    if (x.kind === "cleared" && y.kind === "cleared")
+      return x.n === y.n && a.env.onShowCleared === b.env.onShowCleared && a.env.onResumeCleared === b.env.onResumeCleared;
     if (x.kind === "part" && y.kind === "part")
       return x.part === y.part && x.streaming === y.streaming && x.live === y.live && x.tight === y.tight && x.peek === y.peek && sameKids(x.kids, y.kids);
     return false;
