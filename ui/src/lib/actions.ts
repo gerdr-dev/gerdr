@@ -188,6 +188,27 @@ export function closeFocusedPane() {
   shutdownGone(p ? [p] : []);
 }
 
+// Closing a pane ends its agent, cancelling a turn in flight, so ⌘W / prefix+x on an agent that is mid-turn (running, or
+// waiting on a permission prompt) needs a second press within 2s, the same as double Ctrl+C. Idle agents, empty panes
+// and terminals close on the first press: nothing is lost there, the session can be reopened with ⌘⇧T.
+let closeArmed: { paneId: string; at: number } | undefined;
+
+function confirmCloseFocusedPane() {
+  const p = focusedLeaf(get().layout);
+  const status = p?.sessionId ? get().sessions[p.sessionId]?.status : undefined;
+  if (p && (status === "running" || status === "waiting")) {
+    const armed = closeArmed?.paneId === p.id && Date.now() - closeArmed.at < 2000;
+    if (!armed) {
+      closeArmed = { paneId: p.id, at: Date.now() };
+      toast("agent 还在跑，再按一次关闭", { id: "closepane", duration: 2000 });
+      return;
+    }
+    toast.dismiss("closepane");
+  }
+  closeArmed = undefined;
+  closeFocusedPane();
+}
+
 /**
  * 关掉显示某个会话的 pane（`gerdr session close`，别的 agent 关它开的会话）：和人手动关一样。
  * agent 那边服务端已经关了，这里只收 pane；会话记录留着（`gerdr session open` / prefix+g 能找回来）。
@@ -1020,7 +1041,7 @@ export function runAction(a: KeyAction) {
     case "terminalTab":
       return openTerminal("tab");
     case "closePane":
-      return closeFocusedPane();
+      return confirmCloseFocusedPane();
     case "zoom":
       return toggleZoom();
     case "focusLeft":
