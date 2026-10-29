@@ -259,11 +259,17 @@ func (s *Server) Handler() http.Handler {
 		s.Hub.Broadcast("open", map[string]any{"id": sess.Summary().ID, "near": b.Near, "focus": b.Focus})
 		return nil, nil
 	}))
-	// close：open 的反面（gerdr session close）。布局归界面管，服务端广播，开着的界面把显示它的 pane 收掉；
-	// agent 那边这里直接关（没开着界面也得关，不然 claude 进程白挂着）。
+	// close：open 的反面（gerdr session close），见 Hub.CloseUI。afterTurn：会话关自己，等它这一轮跑完再关（Hub.CloseAfterTurn）
 	mux.HandleFunc("POST /api/sessions/{id}/close", s.sessionOp(func(r *http.Request, sess *hub.Session) (any, error) {
-		s.Hub.Broadcast("close", map[string]any{"id": sess.Summary().ID})
-		return nil, s.Hub.Shutdown(r.Context(), sess.ID())
+		var b struct {
+			AfterTurn bool `json:"afterTurn"`
+		}
+		_ = decode(r, &b)
+		if b.AfterTurn {
+			now, err := s.Hub.CloseAfterTurn(r.Context(), sess.ID())
+			return map[string]any{"closedNow": now}, err
+		}
+		return nil, s.Hub.CloseUI(r.Context(), sess.ID())
 	}))
 	// shutdown：界面关 pane / tab 时调，只关 agent 那边、不广播（布局已经是它自己改的）。
 	mux.HandleFunc("POST /api/sessions/{id}/shutdown", s.sessionOp(func(r *http.Request, sess *hub.Session) (any, error) {

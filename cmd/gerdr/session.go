@@ -696,7 +696,7 @@ func sessionCmd() *cobra.Command {
 
 	cmd.AddCommand(&cobra.Command{
 		Use:   "close <会话>",
-		Short: "关掉一个会话（从界面上收掉它的 pane；正在跑的那一轮会停掉，记录留着，open 能开回来）",
+		Short: "关掉一个会话（从界面上收掉它的 pane；正在跑的那一轮会停掉，记录留着，open 能开回来；关自己是等这一轮跑完再关）",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			c := client()
@@ -704,8 +704,14 @@ func sessionCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			// 关自己：当场关会掐掉正在跑的这一轮（就是发这条命令的这一轮），收尾的话说不出来、这条命令也等不到返回；
+			// 改成让服务端等这一轮跑完再关，这里不等
 			if s.ID == c.selfID() {
-				return fmt.Errorf("不能关自己")
+				if err := c.do("POST", "/api/sessions/"+s.ID+"/close", map[string]any{"afterTurn": true}, nil); err != nil {
+					return err
+				}
+				printJSON(map[string]any{"closed": false, "afterTurn": true, "id": s.ID})
+				return nil
 			}
 			if s.inUI != nil && !*s.inUI {
 				printJSON(map[string]any{"closed": true, "id": s.ID})

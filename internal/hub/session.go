@@ -79,7 +79,10 @@ type Session struct {
 	auto        bool   // 正在跑的这一轮是 agent 自己开的（后台任务跑完了在汇报），没有 runTurn 在等
 	// autoNext：「agent 自己开了一轮」先于上一轮 session/prompt 的响应到了（两条路，顺序不保证）。
 	// runTurn 收尾时看到它就直接接上一个 auto 的轮次，不然这一轮在界面上是「闲着」。
-	autoNext    bool
+	autoNext bool
+	// closeAfter：会话自己 `gerdr session close` 了自己（用户叫它「做完就关掉 pane」）。当场关会把它正在跑的这一轮
+	// （就是发出这条命令的这一轮）掐掉，收尾的话说不出来；所以记下来，这一轮跑完再关（Hub.CloseAfterTurn）
+	closeAfter  bool
 	tasks       []acpx.Task
 	ctxTokens   int // 上下文现在用了多少 token、窗口多大（输入框下面的「上下文 37%」）
 	ctxWindow   int
@@ -698,6 +701,11 @@ func (s *Session) runTurn(c *agenthost.Host, agentSID, msgID string, content []a
 	}
 	next := s.autoNext && err == nil
 	s.autoNext = false
+	// agent 自己又接着开了一轮（后台任务回来了）就等那一轮也跑完。出错了、人按了停止就不关了：人要看一眼 / 改主意了
+	closeNow := s.closeAfter && !next && err == nil && ev.StopReason != "cancelled"
+	if !next {
+		s.closeAfter = false
+	}
 	if next {
 		s.running, s.auto = true, true
 		s.turnStarted, s.turnTokens = now(), 0
@@ -711,6 +719,9 @@ func (s *Session) runTurn(c *agenthost.Host, agentSID, msgID string, content []a
 	s.flush(true)
 	s.setStatus()
 	s.h.saveIndex()
+	if closeNow {
+		go s.h.CloseUI(context.Background(), s.rec.ID)
+	}
 }
 
 func errText(err error) string {

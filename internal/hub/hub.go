@@ -817,6 +817,32 @@ func (h *Hub) Shutdown(ctx context.Context, id string) error {
 	return nil
 }
 
+// CloseUI 是 `gerdr session close`：广播给开着的界面把显示它的 pane 收掉（布局归界面管），agent 那边这里直接关
+// （没开着界面也得关，不然 claude 进程白挂着）。
+func (h *Hub) CloseUI(ctx context.Context, id string) error {
+	h.Broadcast("close", map[string]any{"id": id})
+	return h.Shutdown(ctx, id)
+}
+
+// CloseAfterTurn 是会话关自己：正在跑就等这一轮跑完（runTurn 收尾时看 closeAfter）再 CloseUI，闲着就当场关。
+// 返回 true = 当场关了。
+func (h *Hub) CloseAfterTurn(ctx context.Context, id string) (bool, error) {
+	s, err := h.Session(id)
+	if err != nil {
+		return false, err
+	}
+	s.mu.Lock()
+	running := s.running
+	if running {
+		s.closeAfter = true
+	}
+	s.mu.Unlock()
+	if running {
+		return false, nil
+	}
+	return true, h.CloseUI(ctx, id)
+}
+
 // Delete 关掉并删除一个会话（gerdr 这边的记录；agent 自己的会话记录不动）。
 func (h *Hub) Delete(ctx context.Context, id string) error {
 	s, err := h.Session(id)
