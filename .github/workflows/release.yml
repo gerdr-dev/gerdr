@@ -27,18 +27,18 @@ jobs:
     needs: version
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
       # 通用 dmg（arm64 + x64）。没配 Apple 开发者证书：build.sh 补 ad-hoc 签名，别人第一次打开要右键「打开」。
       # 以后要正式签名 + 公证：在仓库 Secrets 里配 CSC_LINK / CSC_KEY_PASSWORD（和 APPLE_ID 那几个），在这一步的 env 里传进去
       - run: ./desktop/build.sh mac ${{ needs.version.outputs.version }}
       - run: mv desktop/dist/*.dmg "Gerdr-${{ needs.version.outputs.version }}-mac.dmg"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: mac
           path: Gerdr-*.dmg
@@ -47,9 +47,9 @@ jobs:
     needs: version
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # AGP 不认比 21 新的 JDK。Android SDK runner 上自带（ANDROID_HOME）
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 21
@@ -74,7 +74,7 @@ jobs:
           echo "want $want"; echo "got  $got"
           [ -n "$want" ] && [ "$want" = "$got" ]
       - run: mv android/app/build/outputs/apk/release/app-release.apk "Gerdr-${{ needs.version.outputs.version }}-android.apk"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: android
           path: Gerdr-*.apk
@@ -84,7 +84,7 @@ jobs:
     needs: [mac, android]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           merge-multiple: true
       - env:
