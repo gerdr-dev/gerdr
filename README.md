@@ -20,39 +20,42 @@
 
 ---
 
-**A real GUI for Claude Code and Codex.**
+**One window for all your coding agents.**
 
-gerdr talks to your agents over a structured protocol (ACP, the Agent Client Protocol), not by typing into a TUI
-and scraping the screen. So approvals, questions, interrupting mid-turn and rewinding are real API calls with real
-answers, rendered as real UI.
+Like [herdr](https://github.com/herdrdev/herdr): splits, tabs and workspaces, with one key to zoom a pane; when an
+agent gets stuck waiting on you, you see it at once and one key takes you there; and agents can talk to each other:
+start sessions, hand out work, wait for the replies and read them.
 
-- **talk while it works** — send a message while the agent is busy and it joins the running turn. By default it waits
-  for the current step to finish (like Claude Code does); ⚡ or `ctrl+enter` interjects right away.
-- **approvals and questions are cards** — commands and file edits that need your OK, and multiple-choice questions
-  the agent asks you, show up as cards. One click answers.
-- **rewind** — go back to before any message: it and everything after are dropped and the agent forgets them; your
-  words go back into the input box to edit and resend. Only the conversation rewinds, files are left alone.
-- **pick up old sessions** — Claude Code / Codex sessions you started in a terminal are listed per directory; click
-  one to continue it.
-- **splits, tabs, workspaces** — the same layout model and prefix keys as [herdr](https://github.com/herdrdev/herdr)
-  (`ctrl+b v` to split…). Already on herdr? Settings → Import from herdr brings your workspaces, tabs and splits over
-  and reattaches each agent to its session.
-- **terminals alongside** — `ctrl+b t` opens a shell in the current directory, splittable like any pane. The shell
-  runs inside gerdr, so it survives a page reload and follows you to your phone.
-- **agents that coordinate** — an agent can start new Claude Code / Codex sessions, hand them work, wait, and read
-  the replies (built-in `gerdr` skill + `gerdr session`).
-- **background work in view** — see running background commands and subagents, stop them, move foreground work to
-  the background, open a subagent's full transcript read-only.
-- **a UI your agent can change** — the interface is plain React source in `~/.gerdr/ui`, with no build step: saved
-  edits show up instantly. Ask "add a session counter under the sidebar" and the built-in `gerdr-ui` skill teaches the
-  agent how. If an edit breaks the UI, the **rescue panel** (compiled into gerdr, can't be broken) lets you see the
-  error, roll back, or have an agent fix it while you watch.
-- **TypeScript plugins** — rename tabs, title panes, add commands and keys. Save and it's live.
-- **skills and MCP, your way** — use the agent's own, gerdr's, or both; import from the agent in one click.
-- **more than two agents** — multiple Claude / Codex accounts side by side, any external ACP agent (Gemini CLI…),
-  and a built-in **Gerdr Agent** that calls OpenAI-compatible APIs (GPT, DeepSeek…) directly, with long-term memory.
-- **from anywhere** — desktop app (macOS / Windows) or any browser; remote access through an end-to-end TLS relay with
-  pairing codes and passkeys; an Android app with LAN direct-connect and background notifications.
+Not at home in a terminal? gerdr is an equally good choice, as an app: images, videos and PDFs from the agent show right in the chat, and clicking a path
+opens the file; away from your desk, keep watching and steering from your phone.
+
+**chat**
+
+- **talk while it works** — your message joins the turn that's already running.
+- **approvals and questions are cards** — approve a command or an edit, answer a question, in one click.
+- **rewind** — go back to before any message; your words return to the input box to edit and resend.
+- **pick up old sessions** — Claude Code / Codex sessions started in a terminal, listed per directory.
+
+**agents**
+
+- **beyond Claude and Codex** — several accounts side by side, any ACP agent, and a built-in Gerdr Agent for GPT / DeepSeek APIs.
+- **background work in view** — running commands and subagents: stop them, read their full transcripts.
+
+**workspace**
+
+- **terminals** — `ctrl+b t` opens one alongside; it survives reloads and follows you to your phone.
+- **coming from herdr** — same keys; import your workspaces, tabs and splits, each agent reattached to its session.
+
+**DIY your own gerdr**
+
+- **a UI your agent can change** — the whole interface: add buttons, shortcuts, what gets shown. Just tell the AI;
+  no release, no deploy, live at once. Break it and an unbreakable rescue panel gets you back.
+- **TypeScript plugins** — rename tabs, title panes, add commands and keys.
+- **skills and MCP** — the agent's own, gerdr's, or both.
+
+**anywhere**
+
+- Desktop app (macOS / Windows) or any browser; remote access via relay (pairing codes + passkeys); Android app with LAN direct-connect and notifications.
 
 ## install
 
@@ -142,7 +145,7 @@ the agents themselves.**
 |---|---|---|
 | what it is | terminal multiplexer for agents (Rust TUI) | graphical client for agents (Go server + web UI, Electron shell) |
 | runs in | the terminal you already use, over SSH | desktop app, any browser, Android app |
-| how it sees an agent | the agent's terminal: screen state, hooks | a structured protocol (ACP): messages, tool calls, permissions as data |
+| images and files | not in a terminal; open them elsewhere | images, videos and PDFs inline in the chat; click a path to open the file |
 | supported agents | anything that runs in a terminal (Claude Code, Codex, Cursor, OpenCode…) | Claude Code, Codex, any ACP agent, the built-in Gerdr Agent |
 | approvals / questions | answered in the agent's own TUI | cards in the chat, also answerable from your phone or the [HTTP API](docs/API.md) |
 | talking mid-turn | type into the TUI | interject into the running turn, queued or immediate |
@@ -158,6 +161,18 @@ the agents themselves.**
 **Pick gerdr** if you want approvals and rewinds as UI, want to check on agents from your phone, or want to
 reshape the interface itself. They also mix: import a herdr setup into gerdr, keep using herdr for the rest. A session
 open in both at once will fork its transcript, so quit it in one first.
+
+### why not herdr-web?
+
+[herdr-web](https://github.com/zbysir/herdr-web) brings herdr to the browser and the phone, and gerdr grew out of it.
+What held it back is the terminal itself: on a phone, sending a message or typing a command into a terminal never
+feels natural. The only way to make it work is to send keystrokes into the terminal and scrape the screen for the
+reply, a fragile patch: when an agent's TUI gains a new option or changes an interaction, the keys you used to send
+can stop working altogether.
+
+gerdr takes another route: it skips the terminal and talks to the agent through its structured interface, drawing
+its own UI. Approvals, questions and rewinds are API calls, so an agent update doesn't break things just because
+the screen looks different.
 
 ## plugins
 

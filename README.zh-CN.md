@@ -20,27 +20,40 @@
 
 ---
 
-**Claude Code 和 Codex 的图形界面。** 不再隔着一层 TUI 模拟按键：底下走 ACP（Agent Client Protocol），
-所以审批、提问、中途插话、回退都是真接口，而不是往终端里敲字再读屏。
+**一个窗口，同时管一群 coding agent。**
 
-- **中途插话**：agent 在干活的时候直接说话，消息插进正在跑的那一轮（不用等、不用先打断）。
-  和 Claude Code 一样默认等它做完手上这一步再插进去；急的话点 ⚡ 或 Ctrl+回车立即插（打断这一步）。
-- **审批 / 提问**：要你批准的命令、改文件，agent 问你的选择题，都是界面上的卡片，点一下就回。
-- **回退**：回到任何一条消息之前 —— 这句和它之后的对话都丢掉，agent 也跟着忘掉；原话放回输入框，改一改再发。只退对话，不动文件。
-- **接着以前的聊**：在终端里开过的 Claude Code / Codex 会话，选目录就能列出来接着聊。
-- **从 herdr 导入**：herdr 的工作空间、tab、分屏原样搬过来，每个 agent 接上它的会话（设置 → 从 herdr 导入）。
-- **分屏、tab、工作空间**：和 [herdr](https://github.com/herdrdev/herdr) 一样的结构和快捷键（`ctrl+b v` 左右分屏……）。
-- **终端**：临时敲几条命令不用切出去：`ctrl+b t` 在旁边开一个（跟着当前目录），和会话一起分屏、开 tab。shell 跑在 gerdr 这边，刷新页面、换到手机上接着用。
-- **改坏了有急救**：主界面被改坏打不开时，报错页上点「急救面板」（或右下角冒出来的「急救」、App 菜单 帮助 → 急救）：从右边拉出一个面板，看错误、退回之前的一版、叫 agent 来修，主界面就在旁边看着它修。这个面板编进 gerdr，改不坏。
-- **界面能让 agent 改**：界面就是 `~/.gerdr/ui` 里的 React 源码，没有打包环节，改完保存立刻生效。
-  对 agent 说「侧栏底下加一个会话统计」就行（内置的 gerdr-ui skill 教它怎么改、改完怎么确认没改坏）。
-- **多个 agent 互相协作**：会话里的 agent 能开新会话（Claude Code / Codex）、派活、等结果、读回复（内置的 gerdr skill + `gerdr session` 命令）。
-- **后台任务和子 agent**：看得到在跑的后台命令、子 agent，能停、能把前台的转到后台；子 agent 的完整对话可以开一个只读面板看。
-- **skill / MCP 自己管**：用 agent 自己的、gerdr 的、或两者都用；从 agent 那边一键导入。
-- **TS 插件**：改 tab 名、pane 标题，加命令和快捷键。保存即生效。
-- **不止两个 agent**：多个 Claude / Codex 账号并排用，接外部 ACP agent（Gemini CLI……），还有直接调 GPT、DeepSeek 等接口的内置 Gerdr Agent（带长期记忆）。
-- **桌面 App**（mac / Windows）：独立窗口、系统通知、Dock 角标；也可以只跑后端，用浏览器打开。
-- **在外面也能用**：经中继远程访问（TLS 在本机终止，配对码 + passkey）；安卓 App 在家时局域网直连，还有后台通知。
+和 [herdr](https://github.com/herdrdev/herdr) 一样：分屏、tab、工作空间，一个键把 pane 放大；哪个 agent 卡住在等你，一眼就看到，一个键跳过去；
+agent 之间还能互相对话：开新会话、派活、等回复、读回复。
+
+不习惯终端？gerdr 是另一个同样好的选择，而且是图形界面：agent 给的图片、视频、PDF 直接在对话里看，点一下路径就打开文件；
+出门了用手机远程接着看、接着管。
+
+**对话**
+
+- **中途插话**：agent 干活时直接说，消息插进正在跑的那一轮。
+- **审批 / 提问是卡片**：批命令、批改文件、回答选择题，点一下就行。
+- **回退**：回到任何一条消息之前，原话放回输入框，改了再发。
+- **接着以前的聊**：终端里开过的 Claude Code / Codex 会话，选目录就能接上。
+
+**agent**
+
+- **不止 Claude 和 Codex**：多账号并排，接任意 ACP agent，还有直接调 GPT / DeepSeek 接口的 Gerdr Agent。
+- **看得见后台**：在跑的后台命令和子 agent，能停、能看完整对话。
+
+**工作区**
+
+- **终端**：`ctrl+b t` 在旁边开一个，刷新页面、换到手机上都还在。
+- **从 herdr 搬过来**：快捷键一样；工作空间、tab、分屏原样导入，每个 agent 接上它的会话。
+
+**DIY 自己的 Gerdr**
+
+- **界面让 agent 改**：整个界面都可以让 agent 改，添加按钮、快捷键、显示内容，直接跟 AI 说就行。无需发版、无需部署，即刻生效；改坏了有改不坏的急救面板。
+- **TS 插件**：改 tab 名、pane 标题，加命令和快捷键。
+- **skill / MCP**：用 agent 自己的、gerdr 的，或两者都用。
+
+**在哪用**
+
+- 桌面 App（mac / Windows）、任意浏览器；经中继远程访问（配对码 + passkey）；安卓 App 能局域网直连、收后台通知。
 
 ## 装
 
@@ -119,7 +132,7 @@ gerdr 是天天用 [herdr](https://github.com/herdrdev/herdr) 用出来的：分
 |---|---|---|
 | 是什么 | 给 agent 用的终端复用器（Rust TUI） | agent 的图形界面（Go 服务 + 网页界面，Electron 外壳） |
 | 在哪用 | 你现有的终端里，SSH 上也行 | 桌面 App、任意浏览器、安卓 App |
-| 怎么看 agent | agent 的终端：读屏、hook | 结构化协议（ACP）：消息、工具调用、审批都是数据 |
+| 图片 / 文件 | 在终端里看不了，要另开 | 图片、视频、PDF 在对话里直接看，点路径就打开文件 |
 | 支持哪些 agent | 能在终端里跑的都行（Claude Code、Codex、Cursor、OpenCode……） | Claude Code、Codex、任意 ACP agent、内置 Gerdr Agent |
 | 审批 / 提问 | 在 agent 自己的 TUI 里回 | 对话里的卡片，手机上、[HTTP 接口](docs/API.md)也能回 |
 | 中途说话 | 往 TUI 里打字 | 插进正在跑的那一轮，等这一步做完或立即插 |
@@ -134,6 +147,15 @@ gerdr 是天天用 [herdr](https://github.com/herdrdev/herdr) 用出来的：分
 **用 herdr**：常待在终端里、要走 SSH，或者要用的 agent gerdr 没有适配。
 **用 gerdr**：想在界面上点审批、回退，想在手机上看 agent 跑得怎么样，或者想改界面本身。
 两个也能一起用：把 herdr 的布局导进 gerdr，其余的照样在 herdr 里跑。同一个会话别两边同时开着，两边写同一份记录会分叉，先在一边退出。
+
+### 为什么不是 herdr-web
+
+[herdr-web](https://github.com/zbysir/herdr-web) 把 herdr 搬进浏览器和手机，gerdr 就是从它长出来的。卡住它的是终端本身：
+在手机上操作终端，提交一句话、敲一条命令都不自然。要在手机上好用，只能往终端里发按键、再读屏把话抽出来，这是很脆的补丁 ——
+agent 的 TUI 加个新选项、改个交互，原来发的按键可能就完全不管用了。
+
+gerdr 换了条路：不经过终端，直接用 agent 的结构化接口说话，界面自己画。审批、提问、回退都是接口调用，
+agent 升级了也不会因为屏幕长得不一样就坏。
 
 ## 插件
 
@@ -178,7 +200,7 @@ export default definePlugin({
 
 ## 远程访问（手机 / 别的电脑）
 
-和 herdr-web 同一套：经云端中继（[herdr-relay](https://github.com/zbysir/herdr-web)）对外，TLS 在这台机器上终止，
+和 [herdr-web](https://github.com/zbysir/herdr-web) 同一套：经云端中继（[herdr-relay](https://github.com/zbysir/herdr-web)）对外，TLS 在这台机器上终止，
 中继只转密文。新设备用**配对码**进来（只有坐在机器前的人能出），之后加一把 **passkey**，换新设备就不用再回机器前。
 本机的令牌在远程**不好使**。设计和理由见 [docs/dev/REMOTE.md](docs/dev/REMOTE.md)。
 
