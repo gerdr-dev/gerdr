@@ -312,8 +312,9 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
     };
   }, [tabActive]);
   const scrollerEl = useRef<HTMLElement | null>(null);
-  // 往上翻的时候顶上钉一条「这段回复是回哪句话的」（照 Claude Code）：屏幕最上面那一行往前找最近的用户消息，
-  // 它已经滚出屏幕了就钉出来，点一下跳回去。行是虚拟列表的，只能从 DOM 上的 data-index 认出顶上是第几行。
+  // 顶上钉一条「这段回复是回哪句话的」（照 Claude Code）：屏幕最上面那一行往前找最近的用户消息，
+  // 它已经滚出屏幕了就钉出来，点一下跳回去。贴着底也钉：原来只在往上翻时才出，回复一长、人停在底部看输出时
+  // 那句话早滚没了却不显示，要往上翻一截离开底部才冒出来（用户报的）。行是虚拟列表的，只能从 DOM 上的 data-index 认出顶上是第几行。
   const [pinned, setPinned] = useState<number | null>(null);
   const pinRaf = useRef(0);
   const rowsRef = useRef(rows);
@@ -457,6 +458,7 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
                 if (bottomRef.current && wasAtBottom && !(grew && holding())) el.scrollTop = el.scrollHeight;
                 lastH.current = el.scrollHeight;
                 syncBottom();
+                updatePinned(); // 行变高矮时顶上是哪行也跟着变，不一定有 onScroll
                 // 内容不满一屏（翻不动，就等不到 onScroll）：接着拉。满了就等人自己往上翻，别一口气连拉
                 if (activeRef.current && el.scrollHeight <= el.clientHeight + 50) nearTop(el);
                 if (!measured) {
@@ -470,7 +472,7 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
               components={{ Header: ListHeader, Footer: ListFooter }}
             />
           )}
-          {!atBottom && pinned !== null && rows[pinned]?.kind === "user" && (
+          {pinned !== null && rows[pinned]?.kind === "user" && (
             <PinnedPrompt
               msg={(rows[pinned] as Extract<Row, { kind: "user" }>).msg}
               onClick={() => list.current?.scrollToIndex({ index: pinned, align: "start", behavior: "smooth" })}
