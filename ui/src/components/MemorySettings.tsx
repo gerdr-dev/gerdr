@@ -5,6 +5,7 @@ import { AgentIcon } from "@/components/AgentIcon";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
+import { askConfirm } from "@/lib/confirm";
 import type { MemoryEntry, MemoryStore } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -103,7 +104,13 @@ export function MemorySettings({ open }: { open: boolean }) {
   };
 
   const remove = async (e: MemoryEntry) => {
-    if (!confirm(`删掉这条记忆？\n\n${e.name}\n${e.description ?? ""}\n\n索引里指向它的那行也会一起删。`)) return;
+    const ok = await askConfirm({
+      title: "删掉这条记忆？",
+      description: `${e.name}\n${e.description ?? ""}\n\n索引里指向它的那行也会一起删。`,
+      action: "删除",
+      destructive: true,
+    });
+    if (!ok) return;
     try {
       await api.memoryDelete(e.path);
       toast.success("删了");
@@ -141,7 +148,13 @@ export function MemorySettings({ open }: { open: boolean }) {
     return (
       <div className="space-y-2 text-[13px]">
         <div className="flex items-center gap-2">
-          <Button size="icon" variant="ghost" className="size-7" title="返回" onClick={() => (!dirty || confirm("还没保存，放弃改动？")) && setEdit(null)}>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="size-7"
+            title="返回"
+            onClick={async () => (!dirty || (await askConfirm({ title: "还没保存，放弃改动？", action: "放弃", destructive: true }))) && setEdit(null)}
+          >
             <ArrowLeft className="size-4" />
           </Button>
           <span className="min-w-0 truncate font-medium">{edit.title}</span>

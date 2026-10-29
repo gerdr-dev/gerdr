@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { refocusAfterDialog } from "@/lib/actions";
 import { useStore } from "@/lib/store";
+import { ConfirmDialog } from "./ConfirmDialog";
 import { FilePicker, FileViewer } from "./FileViewer";
 import { ImportHerdr } from "./ImportHerdr";
 import { KeyHelp } from "./KeyHelp";
@@ -31,6 +32,7 @@ export function Dialogs() {
       <ResumeDialog />
       <FileViewer />
       <FilePicker />
+      <ConfirmDialog />
     </>
   );
 }
