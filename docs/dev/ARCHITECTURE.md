@@ -159,6 +159,9 @@ React（ui/，不打包）  ←WebSocket / HTTP→  hub（internal/hub）  ←AC
 
 hub 每家缓存 2 分钟、并发的只真问一次，所以界面几个窗口一起轮询也不会一直起 claude 进程。
 
+输入框里的 `/usage` 也走这一份：Composer 的 `runLocal` 接住、在输入框上面弹一小块 UsagePanel，不发给 agent（claude 的会起一轮，
+codex 的 app-server 没这个命令）。代价是没有 claude 那段「用量花在哪」—— 那段只在 CLI 的 /usage 文字里有。
+
 ## 回退只回退对话，不动文件
 
 以前 hub 用影子 git 仓库（`~/.gerdr/snapshots/`）给 cwd 打快照、回退时一起恢复文件，已经删了：

@@ -117,7 +117,7 @@ export function UsageCard({ text }: { text: string }) {
           <div key={l.label}>
             <div className="mb-1.5 flex items-baseline gap-2">
               <span className="min-w-0 flex-1 truncate">{limitLabel(l.label)}</span>
-              <span className="text-[15px] font-semibold tabular-nums">{l.pct}%</span>
+              <span className="font-medium tabular-nums">{l.pct}%</span>
             </div>
             <Bar pct={l.pct} className="h-2" />
             {l.reset && <div className="mt-1 text-[11px] text-muted-foreground tabular-nums">{resetText(l.reset)}</div>}

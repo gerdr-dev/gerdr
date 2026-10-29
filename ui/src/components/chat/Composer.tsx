@@ -12,6 +12,7 @@ import { MODE, defaultsOf, flatOptions, setDefault, setDefaults } from "@/lib/de
 import { isCoarse, usePhone } from "@/lib/phone";
 import { askKey } from "@/lib/askkeys";
 import { cn } from "@/lib/utils";
+import { UsagePanel } from "@/components/UsageMeter";
 import { HeldDialog } from "./HeldDialog";
 import { OptionMenu, OptionsMenu, type OptGroup } from "./OptionMenu";
 import { openLightbox } from "../Lightbox";
@@ -35,7 +36,13 @@ function toImgs(blocks: ContentBlock[]): Img[] {
   }));
 }
 
-const LOCAL_CMDS = [{ name: "resume", description: "换到这个目录下之前的一段对话" }];
+// gerdr 自己接的命令（runLocal）：和 agent 报的同名时用这边的（claude 也报 /usage，发过去会起一轮、进对话记录）
+const LOCAL_CMDS = [
+  { name: "resume", description: "换到这个目录下之前的一段对话" },
+  { name: "usage", description: "看账号的用量额度（不发给 agent）" },
+];
+// /usage 只有 claude / codex 有额度可看（hub.Usage），别的 agent 不列
+const localCmds = (base: string) => LOCAL_CMDS.filter((c) => c.name !== "usage" || base === "claude" || base === "codex");
 // 命令别名：agent 报了右边那个命令才有左边的别名，发出去时换回本名（agent 只认本名）
 const ALIASES: Record<string, string> = { new: "clear" };
 // 每个 pane 输入框的光标 / 选区 / 滚动位置：tab 不保留（keepTabs = 1）时切走就整个卸载，字在 drafts 里还在，
@@ -117,6 +124,7 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
     };
   }, [paneId]);
 
+  const base = session.base ?? session.agent;
   // 斜杠命令：输入框只有一个 /xxx（还没空格）时弹候选。
   const slash = /^\/(\S*)$/.exec(text);
   const cmds = useMemo(() => {
@@ -131,11 +139,12 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
       return 9;
     };
     const own = session.commands ?? [];
+    const local = localCmds(base);
     const aliases = Object.entries(ALIASES)
       .filter(([a, to]) => !own.some((c) => c.name === a) && own.some((c) => c.name === to))
       .map(([a, to]) => ({ name: a, description: `同 /${to}：${own.find((c) => c.name === to)?.description ?? ""}` }));
     return (
-      [...LOCAL_CMDS.filter((l) => !own.some((c) => c.name === l.name)), ...own, ...aliases]
+      [...local, ...own.filter((c) => !local.some((l) => l.name === c.name)), ...aliases]
         .map((c) => ({ c, r: rank(c), p: pinned.indexOf(c.name) }))
         .filter((x) => x.r < 9)
         // pin 住的排最上面（照 pin 的先后），其余照上面的排序
@@ -143,19 +152,19 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
         .map((x) => x.c)
         .slice(0, 40)
     );
-  }, [slash?.[1], session.commands, pinned]);
+  }, [slash?.[1], session.commands, pinned, base]);
   useEffect(() => setCmdIdx(0), [slash?.[1]]);
   // pin 住的命令：config 里只存名字（所有设备、所有会话共用一份），这里只列这个会话的 agent 真报了的 ——
   // claude 和 codex 的命令不一样，别的 agent 的 pin 在这儿点了也发不出去
   const pinnedCmds = useMemo(() => {
     const own = session.commands ?? [];
-    const all = [...LOCAL_CMDS, ...own];
+    const all = [...localCmds(base), ...own];
     return pinned
       .map(
         (n) => all.find((c) => c.name === n) ?? (ALIASES[n] && own.some((c) => c.name === ALIASES[n]) ? { name: n, description: `同 /${ALIASES[n]}` } : null),
       )
       .filter((c) => !!c);
-  }, [pinned, session.commands]);
+  }, [pinned, session.commands, base]);
   const togglePin = (name: string) => setConfig({ pinnedCommands: pinned.includes(name) ? pinned.filter((n) => n !== name) : [...pinned, name] });
   // 点了 pin 列表里的一个：本地命令直接做；skill 一般要跟一句话说做什么 —— 填进输入框（已经写了的字接在后面当参数），自己按发送；
   // 别的命令（/compact、/clear……）直接发。直接发不经过输入框：写了一半的草稿留着不动
@@ -241,10 +250,12 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
   }, [!!slash, session.commands?.length, session.commandsCached]);
 
   // gerdr 自己接的斜杠命令（agent 在 stream-json 模式下不认的那几个）：不发给 agent，在这边做
+  const [usage, setUsage] = useState(false); // /usage 的浮层
   const runLocal = (name: string) => {
-    if (name !== "resume") return false;
+    if (!localCmds(base).some((c) => c.name === name)) return false;
     setText("");
-    set({ dialog: { kind: "resume", sessionId: session.id, paneId } });
+    if (name === "usage") setUsage(true);
+    else set({ dialog: { kind: "resume", sessionId: session.id, paneId } });
     return true;
   };
 
@@ -591,6 +602,7 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
   sendRef.current = send;
   return (
     <div className="relative px-3 pb-3">
+      {usage && <UsagePanel agent={base} onClose={() => setUsage(false)} />}
       <HeldDialog sessionId={session.id} holders={held} onClose={() => setHeld(null)} onDone={() => setTimeout(() => sendRef.current(), 50)} />
       {slash && !(session.commands ?? []).length && (
         <div className="absolute bottom-full left-3 right-3 z-20 mb-1 rounded-lg border bg-popover px-3 py-2 text-[12px] text-muted-foreground shadow-lg">
