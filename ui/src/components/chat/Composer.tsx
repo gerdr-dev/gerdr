@@ -740,7 +740,7 @@ function ContextMeter({ c }: { c: { tokens: number; window: number } }) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span className={cn("mr-1 shrink-0 whitespace-nowrap font-mono text-[11px] tabular-nums", tone)}>
+        <span className={cn("mr-1 shrink-0 whitespace-nowrap text-[12px] tabular-nums", tone)}>
           {/* 手机上底栏挤，只留百分比，免得被挤成一字一行 */}
           <span className="max-sm:hidden">上下文 </span>
           {pct}%
