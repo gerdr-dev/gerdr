@@ -3,6 +3,7 @@ import { TabActive } from "../Panes";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { ArrowDown, CornerDownRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { buildRows, RowView, type Row, type RowEnv } from "./Rows";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
@@ -325,6 +326,12 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
   const saved = scrollMem.get(scrollKey);
   const [atBottom, setAtBottom] = useState(saved ? saved.bottom : true);
   const bottomRef = useRef(saved ? saved.bottom : true);
+  // Last row seen while at the bottom: once the list has grown past it while scrolled up, the jump-to-bottom button turns
+  // brand-colored so new output isn't missed. Keyed by row (not count) so loading older history on top doesn't light it.
+  const lastKey = rows[rows.length - 1]?.key;
+  const seenKey = useRef(lastKey);
+  if (atBottom) seenKey.current = lastKey;
+  const unread = !atBottom && lastKey !== seenKey.current;
   // tab 藏起来再显示：滚动位置自己恢复。WebKit（mac App 的 WKWebView）里 visibility:hidden 的滚动容器会被清零
   // （Chrome 不会）——实测切走一下再回来就在最顶上。所以只在显示着的时候记位置（藏着期间那次清零不记），显示时照记的恢复。
   const tabActive = useContext(TabActive);
@@ -528,9 +535,12 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
             <Button
               size="icon"
               variant="outline"
-              className="absolute bottom-4 left-1/2 size-8 -translate-x-1/2 rounded-full shadow-md"
+              className={cn(
+                "absolute bottom-4 left-1/2 size-8 -translate-x-1/2 rounded-full shadow-md",
+                unread && "border-brand bg-brand text-background hover:bg-brand/90 hover:text-background",
+              )}
               onClick={() => list.current?.scrollToIndex({ index: "LAST", align: "end", behavior: "smooth" })}
-              title="回到底部"
+              title={unread ? "有新消息，回到底部" : "回到底部"}
             >
               <ArrowDown className="size-4" />
             </Button>
