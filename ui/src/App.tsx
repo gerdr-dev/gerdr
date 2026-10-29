@@ -1,5 +1,5 @@
 import { KeyRound } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useLayoutEffect } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { PhoneBar, Sidebar, TabBar } from "./components/Chrome";
@@ -29,7 +29,9 @@ setTabNameFn(tabName);
 function useTheme() {
   const theme = useStore((s) => s.config.theme);
   const font = useStore(fontSizeOf);
-  useEffect(() => {
+  // Layout effect, not a plain effect: .dark has to be on <html> before the first frame is painted, or that frame
+  // comes out light (a white flash on a dark phone, right as the Android app's loading cover fades out)
+  useLayoutEffect(() => {
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
     const apply = () => {
       const dark = theme === "dark" || (theme === "system" && mq.matches);
