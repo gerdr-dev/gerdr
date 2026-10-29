@@ -88,6 +88,13 @@ function lastInputOf(el: HTMLElement): number {
   return s.__lastInput;
 }
 
+/** A scroll the user asked for from outside the scroller (the pinned prompt): count it as input so syncBottom lets it leave the bottom. */
+function markInput(el: HTMLElement | null) {
+  if (!el) return;
+  lastInputOf(el);
+  (el as HTMLElement & { __lastInput?: number }).__lastInput = performance.now();
+}
+
 export function ChatView({ session, paneId, focused, sub }: { session: SessionSummary; paneId: string; focused: boolean; sub?: string }) {
   useStore((s) => s.tv[session.id]); // 日志变了就重画
   const t = sub ? subTranscript(session.id, sub) : transcript(session.id);
@@ -505,7 +512,12 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
           {pinned !== null && rows[pinned]?.kind === "user" && (
             <PinnedPrompt
               msg={(rows[pinned] as Extract<Row, { kind: "user" }>).msg}
-              onClick={() => list.current?.scrollToIndex({ index: pinned, align: "start", behavior: "smooth" })}
+              onClick={() => {
+                // The button sits outside the scroller, so the click isn't seen as user input (lastInputOf): starting from the bottom,
+                // syncBottom took the smooth scroll for a layout shift and snapped it back. Count the click as input on the scroller.
+                markInput(scrollerEl.current);
+                list.current?.scrollToIndex({ index: pinned, align: "start", behavior: "smooth" });
+              }}
             />
           )}
           {!atBottom && msgs.length > 0 && (
