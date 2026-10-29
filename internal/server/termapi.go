@@ -48,6 +48,26 @@ func (s *Server) termRoutes(mux *http.ServeMux) {
 		}
 		writeJSON(w, map[string]any{"ok": true})
 	})
+	// 往终端里敲字（对话里「在终端里运行」：把命令带回车敲进已经开着的终端）。平时的输入走 WebSocket，这个只给一次性的
+	mux.HandleFunc("POST /api/terms/{id}/input", func(w http.ResponseWriter, r *http.Request) {
+		t := s.Terms.Get(r.PathValue("id"))
+		if t == nil {
+			httpError(w, 404, term.ErrNotFound.Error())
+			return
+		}
+		var b struct {
+			Data string `json:"data"`
+		}
+		if err := decode(r, &b); err != nil {
+			httpError(w, 400, err.Error())
+			return
+		}
+		if err := t.Write([]byte(b.Data)); err != nil {
+			httpError(w, 500, err.Error())
+			return
+		}
+		writeJSON(w, map[string]any{"ok": true})
+	})
 	mux.HandleFunc("GET /api/terms/{id}/ws", s.termWS)
 }
 

@@ -143,9 +143,9 @@ func NewWith(log *slog.Logger, e *ext.Manager, o Options) *Agent {
 // instructions：每个 thread 的 developerInstructions —— 界面能显示媒体的提示，加上角色追加的指令。
 func (a *Agent) instructions() string {
 	if p := strings.TrimSpace(a.opts.Prompt); p != "" {
-		return acpx.MediaHint + "\n\n" + p
+		return acpx.GUIHint + "\n\n" + p
 	}
-	return acpx.MediaHint
+	return acpx.GUIHint
 }
 
 // SetConn 必须在连接建好之后、处理任何请求之前调。

@@ -56,6 +56,9 @@ type CreateOptions struct {
 	From string `json:"from"`
 	Cols uint16 `json:"cols"`
 	Rows uint16 `json:"rows"`
+	// Input：建好就敲进去的字（对话里「在新终端里运行」：命令带回车）。shell 还在读 profile 时写进去也不丢，
+	// PTY 先替它攒着，提示符出来后照常读到（和人手快先打字一样）。
+	Input string `json:"input"`
 }
 
 func (m *Manager) Create(o CreateOptions) (*Term, error) {
@@ -90,6 +93,9 @@ func (m *Manager) Create(o CreateOptions) (*Term, error) {
 	t := &Term{id: uuid.NewString()[:8], cwd: cwd, shell: shell, created: time.Now(), subs: map[*sub]struct{}{}, done: make(chan struct{})}
 	if err := t.start(env, o.Cols, o.Rows); err != nil {
 		return nil, err
+	}
+	if o.Input != "" {
+		_ = t.Write([]byte(o.Input))
 	}
 	m.mu.Lock()
 	m.terms[t.id] = t

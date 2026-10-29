@@ -64,9 +64,9 @@ type spawnOpts struct {
 }
 
 func spawn(o spawnOpts, log *slog.Logger, onLine func(map[string]json.RawMessage, []byte)) (*proc, error) {
-	// 告诉它 gerdr 的界面能直接显示图片 / 视频 / 音频（acpx.MediaHint）；角色的提示接在后面 ——
+	// 告诉它 gerdr 的界面能直接显示图片 / 视频 / 音频、能让人敲 `!命令`（acpx.GUIHint）；角色的提示接在后面 ——
 	// 只给一个 --append-system-prompt：给两个的话后一个把前一个盖掉。
-	hint := acpx.MediaHint
+	hint := acpx.GUIHint
 	if p := strings.TrimSpace(o.prompt); p != "" {
 		hint += "\n\n" + p
 	}

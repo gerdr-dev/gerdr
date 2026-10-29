@@ -23,17 +23,17 @@ import (
 
 // Record 是落盘的那部分（sessions/index.json 里一条）。
 type Record struct {
-	ID             string            `json:"id"`
-	Agent          string            `json:"agent"`
-	AgentSessionID string            `json:"agentSessionId"`
-	Cwd            string            `json:"cwd"`
-	Title          string            `json:"title,omitempty"`
-	CustomTitle    bool              `json:"customTitle,omitempty"`
+	ID             string `json:"id"`
+	Agent          string `json:"agent"`
+	AgentSessionID string `json:"agentSessionId"`
+	Cwd            string `json:"cwd"`
+	Title          string `json:"title,omitempty"`
+	CustomTitle    bool   `json:"customTitle,omitempty"`
 	// 自动标题的状态（title.go）。TitleStale：/clear 过、标题还是上一件事的，下一句话先顶上；
 	// TitleKey：默认逻辑在哪段上下文的哪一档起过名了；PluginTitleFor：插件在哪段上下文里起过名（这段里默认逻辑让开）。
-	TitleStale     bool   `json:"titleStale,omitempty"`
-	TitleKey       string `json:"titleKey,omitempty"`
-	PluginTitleFor string `json:"pluginTitleFor,omitempty"`
+	TitleStale     bool              `json:"titleStale,omitempty"`
+	TitleKey       string            `json:"titleKey,omitempty"`
+	PluginTitleFor string            `json:"pluginTitleFor,omitempty"`
 	CreatedAt      int64             `json:"createdAt"`
 	UpdatedAt      int64             `json:"updatedAt"`
 	Mode           string            `json:"mode,omitempty"`
@@ -86,11 +86,12 @@ type Session struct {
 	tasks       []acpx.Task
 	ctxTokens   int // 上下文现在用了多少 token、窗口多大（输入框下面的「上下文 37%」）
 	ctxWindow   int
-	turnStarted int64           // 这一轮几点开始的（状态行：跑了多久）
-	turnTokens  int             // 这一轮输出了多少 token（状态行）
-	sending     map[string]bool // 正在处理的 client 消息 id（同一条重发时挡住并发的那次）
-	retryCancel chan struct{}   // 自动重试正在等：关掉它 = 人按了停止
-	shut        bool            // Hub.Shutdown 关掉的（关了 pane）：这一轮因为进程被杀报的错不算错、不自动重试；再接上时清掉
+	turnStarted int64                // 这一轮几点开始的（状态行：跑了多久）
+	turnTokens  int                  // 这一轮输出了多少 token（状态行）
+	sending     map[string]bool      // 正在处理的 client 消息 id（同一条重发时挡住并发的那次）
+	retryCancel chan struct{}        // 自动重试正在等：关掉它 = 人按了停止
+	shut        bool                 // Hub.Shutdown 关掉的（关了 pane）：这一轮因为进程被杀报的错不算错、不自动重试；再接上时清掉
+	shells      map[string]*shellRun // 输入框里 `!命令` 还在跑的（shell.go）
 	attachMu    sync.Mutex
 }
 
@@ -171,6 +172,18 @@ func (s *Session) recoverAfterRestart() (openSince int64) {
 	if open {
 		openSince = s.events[len(s.events)-1].TS
 		s.events = append(s.events, &Event{Seq: s.h.nextSeqLocked(), TS: now(), Kind: EvTurnEnd, StopReason: "cancelled", Error: "gerdr 重启，这一轮被中断了"})
+	}
+	// 还在跑的 `!命令`：进程跟着 gerdr 没了（或者成了没人管的孤儿），补一个结束，卡片别一直转
+	shellDone := map[string]bool{}
+	for _, e := range s.events {
+		if e.Kind == EvShellDone {
+			shellDone[e.MessageID] = true
+		}
+	}
+	for _, e := range s.events {
+		if e.Kind == EvShell && !shellDone[e.MessageID] {
+			s.events = append(s.events, &Event{Seq: s.h.nextSeqLocked(), TS: now(), Kind: EvShellDone, MessageID: e.MessageID, Level: "lost"})
+		}
 	}
 	// 没回答的审批 / 提问也一样作废。
 	answered := map[string]bool{}
@@ -523,11 +536,6 @@ func (s *Session) SendFrom(ctx context.Context, content []acp.ContentBlock, clie
 	if hs := s.heldElsewhere(ctx, c); len(hs) > 0 {
 		return SendResult{}, &HeldError{Holders: hs}
 	}
-	raw := make([]json.RawMessage, 0, len(content))
-	for _, b := range content {
-		j, _ := json.Marshal(b)
-		raw = append(raw, j)
-	}
 	s.mu.Lock()
 	running := s.running
 	agentSID := s.rec.AgentSessionID
@@ -551,6 +559,17 @@ func (s *Session) SendFrom(ctx context.Context, content []acp.ContentBlock, clie
 		for _, id := range asks {
 			_ = s.Answer(id, resp)
 		}
+	}
+
+	// 人在这条之前用 `!` 跑过的命令：输出接在最前面一起发过去（shell.go）。日志里记的也是发出去的原样 ——
+	// agent 的记录里就是这样，回头比对（CatchUp）、重新载入才对得上；界面认出这几块，不画成人说的话
+	s.mu.Lock()
+	content = withShell(s.pendingShellLocked(), content)
+	s.mu.Unlock()
+	raw := make([]json.RawMessage, 0, len(content))
+	for _, b := range content {
+		j, _ := json.Marshal(b)
+		raw = append(raw, j)
 	}
 
 	if running && c.Steering() {
@@ -749,7 +768,7 @@ func (s *Session) touchTitle(content []acp.ContentBlock) {
 		return
 	}
 	for _, b := range content {
-		if b.Text != nil && strings.TrimSpace(b.Text.Text) != "" && !strings.HasPrefix(strings.TrimSpace(b.Text.Text), "/") {
+		if b.Text != nil && strings.TrimSpace(b.Text.Text) != "" && !strings.HasPrefix(strings.TrimSpace(b.Text.Text), "/") && !strings.HasPrefix(b.Text.Text, shellPrefix) {
 			t := strings.Join(strings.Fields(b.Text.Text), " ")
 			if utf8.RuneCountInString(t) > 60 {
 				t = string([]rune(t)[:60]) + "…"
@@ -1516,6 +1535,7 @@ func (s *Session) Rewind(ctx context.Context, messageID string) (RewindResult, e
 
 func (s *Session) close(ctx context.Context) {
 	_ = s.Cancel(ctx)
+	s.stopShells()
 	s.mu.Lock()
 	for id, p := range s.pending {
 		close(p.ch)

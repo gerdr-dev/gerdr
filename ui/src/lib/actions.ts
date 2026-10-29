@@ -716,6 +716,58 @@ export async function openTerminal(where: "right" | "down" | "tab" | { pane: str
   });
 }
 
+// ---- 对话里的「运行」放到终端里跑 ----
+// 默认的「运行」在对话里跑（hub/shell.go），输出带给 agent，但没有 stdin；要交互的（gh auth login 选选项、输密码）放进终端跑，
+// 代价是 agent 看不到输出。
+
+/** 这个会话所在的 pane 和它的 tab（同一个会话开在几处时优先当前 tab） */
+function sessionPane(l: Layout, sessionId: string) {
+  const all = allLeaves(l).filter((x) => x.pane.sessionId === sessionId);
+  const cur = activeTab(l).id;
+  return all.find((x) => x.tab.id === cur) ?? all[0];
+}
+
+/** 会话旁边已经开着的终端：同一个 tab 里，焦点那个优先，不然是最后一个。没有返回 undefined */
+export function terminalNear(sessionId: string): PaneLeaf | undefined {
+  const at = sessionPane(get().layout, sessionId);
+  if (!at) return undefined;
+  const terms = leaves(at.tab.root).filter((p) => p.term);
+  return terms.find((p) => p.id === at.tab.focus) ?? terms[terms.length - 1];
+}
+
+/**
+ * 把命令（带回车）敲进终端。near：会话旁边已经开着的那个（terminalNear）；没有、或者它的 shell 已经没了（gerdr 重启过）
+ * 就和 new 一样，在会话右边新开一个（目录 = 会话目录），焦点给终端：要交互的话人接着在里面操作。
+ */
+export async function runInTerminal(sessionId: string, cwd: string, command: string, where: "new" | "near") {
+  const line = command + "\r";
+  const near = where === "near" ? terminalNear(sessionId) : undefined;
+  if (near?.term) {
+    try {
+      await api.termInput(near.term.id, line);
+      focusPane(near.id);
+      return;
+    } catch {
+      // shell 没了：落到下面新开一个
+    }
+  }
+  let info;
+  try {
+    info = await api.termCreate({ cwd, input: line });
+    if (!info?.id) throw new Error("后端没有终端接口，gerdr 要升级或重启");
+  } catch (e: any) {
+    toast.error(`开终端失败：${e.message ?? e}`);
+    return;
+  }
+  const fresh: PaneLeaf = { type: "pane", id: rid("p"), term: { id: info.id, cwd: info.cwd } };
+  setLayout((l) => {
+    const at = sessionPane(l, sessionId);
+    if (at) return updateTab(l, at.tab.id, (tab) => split(tab, at.pane.id, "row", fresh));
+    const t = activeTab(l);
+    return updateTab(l, t.id, (tab) => split(tab, t.zoom ?? t.focus, "row", fresh));
+  });
+}
+
 /** 终端没了（gerdr 重启过 / shell 退了）：在同一个 pane、同一个目录重开一个。 */
 export async function reopenTerminal(paneId: string, cwd: string) {
   return openTerminal({ pane: paneId, cwd });

@@ -57,7 +57,8 @@ func contentText(blocks []json.RawMessage) string {
 			Type string `json:"type"`
 			Text string `json:"text"`
 		}
-		if json.Unmarshal(raw, &b) == nil && b.Type == "text" && b.Text != "" {
+		// `!命令` 带给 agent 的输出（shell.go）不是人说的话，起标题时不算
+		if json.Unmarshal(raw, &b) == nil && b.Type == "text" && b.Text != "" && !strings.HasPrefix(b.Text, shellPrefix) {
 			parts = append(parts, b.Text)
 		}
 	}

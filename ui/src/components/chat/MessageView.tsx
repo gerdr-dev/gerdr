@@ -15,6 +15,7 @@ import { ToolCall } from "./ToolCall";
 import { UsageCard } from "./UsageCard";
 import { openLightbox } from "../Lightbox";
 import { TaskDoneCard } from "./TasksBar";
+import { ShellCard } from "./ShellCard";
 import { fmtElapsed, fmtTokens } from "./StatusLine";
 
 const STOP_TEXT: Record<string, string> = {
@@ -298,6 +299,8 @@ export function renderPart(p: GPart, i: number, ctx: PartCtx): ReactNode {
       );
     case "data-task":
       return <TaskDoneCard key={i} sessionId={ctx.sessionId} t={p.data.task} woke={p.data.woke} />;
+    case "data-shell":
+      return <ShellCard key={p.data.id} sessionId={ctx.sessionId} data={p.data} />;
     case "data-notice":
       if (p.data.done) return null; // 重试成功后收起的「N 秒后重试」（transcript.clearRetry）
       if (p.data.level === "clear")

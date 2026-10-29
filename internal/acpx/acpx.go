@@ -361,3 +361,19 @@ const MediaHint = "You are running inside gerdr, a GUI for coding agents. Its ch
 	"embed it in your reply with image syntax and an absolute path, e.g. ![login QR code](/Users/me/project/out/qr.png) " +
 	"(wrap the path in <> if it contains spaces: ![demo](</Users/me/my dir/demo.mp4>)). Several images on consecutive lines show as a grid. " +
 	"Use a plain link instead when the file is just being mentioned, not shown."
+
+// ShellHint：告诉 agent 可以让人在输入框里敲 `! 命令`（gerdr 在会话目录里直接跑，输出跟着人的下一条消息带给它，见 hub/shell.go）。
+// Claude Code 自己只在交互式终端里给这句，stream-json 下没有，agent 只会说「去终端里跑」。
+// 写成 `!` 开头的行内代码（或每行都以 `! ` 开头的代码块），界面在旁边画「运行」按钮，点一下就跑（chat/Markdown.tsx）；
+// 按钮的菜单还能放进终端跑（能交互，agent 看不到输出），所以要交互的命令也这么写。
+const ShellHint = "If you need the user to run a shell command themselves (e.g. an interactive login like `gcloud auth login`, " +
+	"or anything that needs their browser, credentials or approval), suggest they type `! <command>` in the chat input: " +
+	"the `!` prefix runs the command in this session's working directory without going through you, and its output reaches you with their next message. " +
+	"Write the suggestion as inline code starting with `!`, e.g. `! gcloud auth login` (or, for long or several commands, a code block in which every line starts with `! `) — " +
+	"gerdr shows a one-click run button next to it. Only use this form for a command you actually want the user to run, never when merely talking about the feature. " +
+	"Run that way the command gets no stdin, so it cannot answer interactive prompts (passwords, menus, y/n). " +
+	"Suggest interactive commands the same way anyway, and say they need input: the run button's menu also lets the user run it in a terminal " +
+	"(opened beside the chat, or the one already open there), where they can interact — but then you won't see the output, so ask them to tell you how it went."
+
+// GUIHint：起 agent 时追加的全部说明（MediaHint + ShellHint）。
+const GUIHint = MediaHint + "\n\n" + ShellHint

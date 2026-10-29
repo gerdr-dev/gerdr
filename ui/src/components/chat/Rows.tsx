@@ -56,11 +56,32 @@ function foldable(p: GPart, kids?: ToolPart[]): boolean {
 // 要人看见的几种（照截图里用户报的）：还在跑的（包括转到后台、这一轮已经答完还没跑完的）、答过的审批（批准的不成行，剩下的就是拒了）。
 // 它们照样算进组里（组的 key、汇总不跟着它们变），只是组收着时也露在组头下面，怎么都收不起来；展开时回到原位。
 // 被 auto 分类器拦下的权限错误本来就不折（见 foldable），这里不用管
-function pinned(p: GPart, busy: boolean, liveTasks: Set<string>): boolean {
+function pinned(p: GPart, busy: boolean, liveTasks: Set<string>, young: (p: GPart) => boolean): boolean {
   if (p.type === "data-permission") return !p.data.cancelled;
   if (p.type !== "dynamic-tool") return false;
   const tp = p as ToolPart;
-  return (busy && (tp.state === "input-streaming" || tp.state === "input-available")) || liveTasks.has(tp.toolCallId);
+  return (busy && (tp.state === "input-streaming" || tp.state === "input-available") && !young(p)) || liveTasks.has(tp.toolCallId);
+}
+
+// 收着的组底下露出来的工具调用，跑满这么久才露。一秒内就跑完的命令一露一收，组底下那一行一闪一闪（用户报的：
+// 一条后台命令一直在跑、旁边一条普通命令 1 秒内跑完，那一行就冒出来又没了，下面的内容跟着上下跳）
+const PEEK_DELAY = 1000;
+// 第一次见到这个工具调用的时间（本机时钟）。不用 startedAt：那是服务端日志的时间，手机 / 远程连过来时两边钟对不上
+const seenAt = new Map<string, number>();
+
+/** 跑得快、还不该露的工具调用：跑完了看用了多久，还在跑看见到它多久了。wake 记下最早什么时候有一个要「长大」，到点重排 */
+function youngTest(now: number, out: { wake?: number }) {
+  return (p: GPart): boolean => {
+    if (p.type !== "dynamic-tool") return false;
+    const tp = p as ToolPart;
+    const m = tp.toolMetadata;
+    if (m?.startedAt && m.endedAt) return m.endedAt - m.startedAt < PEEK_DELAY;
+    let t = seenAt.get(tp.toolCallId);
+    if (t === undefined) seenAt.set(tp.toolCallId, (t = now));
+    if (now - t >= PEEK_DELAY) return false;
+    out.wake = Math.min(out.wake ?? Infinity, t + PEEK_DELAY);
+    return true;
+  };
 }
 
 const KIND_TEXT: Record<string, [string, string]> = {
@@ -110,6 +131,7 @@ function summarize(parts: GPart[]): { summary: string; failed: number } {
  * 把整份对话拍平成行。live：最后一条（不算排在底下的插话）助手消息（还在跑的那一轮里的东西：流式、「工作中…」、快捷回复可点）。
  * openGroups：展开了的工具组（key 是组头那一行的 key）。展开时组里每一块还是单独一行 —— 一组几百个调用也照样虚拟化。
  * liveTasks：还在跑的后台任务对应的 toolCallId（这一轮答完了它还在跑，工具调用本身早就有结果了，光看 part 看不出来）。
+ * now / out：跑得快的工具调用先不露（见 PEEK_DELAY）；out.wake 是下次该重排的时间，到点拿新的 now 再排一遍。
  */
 export function buildRows(
   msgs: GMessage[],
@@ -117,8 +139,11 @@ export function buildRows(
   showCleared = false,
   openGroups: Record<string, boolean> = {},
   liveTasks: Set<string> = new Set(),
+  now = Date.now(),
+  out: { wake?: number } = {},
 ): Row[] {
   const rows: Row[] = [];
+  const young = youngTest(now, out);
   const lastIdx = msgs.length - 1;
   // 排着队的插话、发送中的挂在最底下（见 Transcript.queued / sending），还在跑的那条是它们前面那条
   let liveIdx = lastIdx;
@@ -188,14 +213,19 @@ export function buildRows(
       rows.push({ key, kind: "group", first, open, busy, ...summarize(run.map((r) => r.part)) });
       first = false;
       if (open) run.forEach(push);
-      else
+      else {
+        // 露哪一块：最新的那块，跳过跑得快的（见 PEEK_DELAY）—— 跳过时接着露上一块，这一行一直在、高度不变，
+        // 快命令一条接一条跑时也不换来换去。上一块是收不起来的（比如那条一直在跑的后台命令）就由它当这一块，不画两遍
+        let peek = -1;
+        if (busy) for (peek = run.length - 1; peek > 0 && young(run[peek].part);) peek--;
         run.forEach((r, j) => {
           // 露出来的最新这一块展开没展开跟着组记、不跟这条命令记：人展开它是想看「最新在干什么」，换了下一条命令也该展开着；
           // 也不写进那条命令自己的状态 —— 点开组看详情时各行照旧（用户要的）。key 加 :peek，和详情里同一条分开挂载
-          if (busy && j === run.length - 1) push({ ...r, key: `${r.key}:peek`, peek: key });
+          if (j === peek) push({ ...r, key: `${r.key}:peek`, peek: key });
           // 收不起来的那几块（见 pinned）：展开状态和原位那一行共用，key 加 :pin 分开挂载
-          else if (pinned(r.part, live && running, liveTasks)) push({ ...r, key: `${r.key}:pin` });
+          else if (pinned(r.part, live && running, liveTasks, young)) push({ ...r, key: `${r.key}:pin` });
         });
+      }
       a = b;
     }
     // 在跑的这一轮：最底下一行状态（照 Claude Code：转圈 + 动词 + 用时 + token 数）
@@ -210,7 +240,8 @@ export function buildRows(
     rows.push({ key: `${owner.id}:working`, kind: "working", empty: true, first: true });
   // 行距（照 Codex）：工具调用 / 思考这类一行小字，连着的几条挨紧（tight）；它和正文之间留开，像分段一样 ——
   // 原来一律挨着，正文和一串命令挤成一团
-  const toolish = (r: Row) => r.kind === "group" || (r.kind === "part" && ["dynamic-tool", "reasoning", "data-permission", "data-task"].includes(r.part.type));
+  const toolish = (r: Row) =>
+    r.kind === "group" || (r.kind === "part" && ["dynamic-tool", "reasoning", "data-permission", "data-task", "data-shell"].includes(r.part.type));
   for (let i = 1; i < rows.length; i++) {
     const r = rows[i];
     if ((r.kind === "part" || r.kind === "group") && !r.first) rows[i] = { ...r, tight: toolish(r) && toolish(rows[i - 1]) };

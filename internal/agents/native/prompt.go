@@ -72,7 +72,7 @@ func systemPrompt(cwd string, skills []ext.Skill, model resolved, mem *memoryDir
 			}
 		}
 		b.WriteString("\n" + memorySection(*mem))
-		b.WriteString("\n" + acpx.MediaHint + "\n")
+		b.WriteString("\n" + acpx.GUIHint + "\n")
 	}
 	return b.String()
 }

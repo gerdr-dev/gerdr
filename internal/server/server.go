@@ -108,6 +108,21 @@ func (s *Server) Handler() http.Handler {
 		return nil, s.Hub.Delete(r.Context(), sess.ID())
 	}))
 	mux.HandleFunc("POST /api/sessions/{id}/send", s.sessionOp(s.send))
+	// 输入框里的 `!命令`：gerdr 在会话目录里直接跑，不经过 agent（hub/shell.go）
+	mux.HandleFunc("POST /api/sessions/{id}/shell", s.sessionOp(func(r *http.Request, sess *hub.Session) (any, error) {
+		var b struct {
+			Command string `json:"command"`
+			ID      string `json:"id"` // client 生成的 UUID：重发同一条时不跑两遍
+		}
+		if err := decode(r, &b); err != nil {
+			return nil, err
+		}
+		id, err := sess.Shell(b.Command, b.ID)
+		return map[string]any{"id": id}, err
+	}))
+	mux.HandleFunc("POST /api/sessions/{id}/shell/{run}/stop", s.sessionOp(func(r *http.Request, sess *hub.Session) (any, error) {
+		return map[string]any{}, sess.StopShell(r.PathValue("run"))
+	}))
 	mux.HandleFunc("POST /api/sessions/{id}/cancel", s.sessionOp(func(r *http.Request, sess *hub.Session) (any, error) {
 		return nil, sess.Cancel(r.Context())
 	}))

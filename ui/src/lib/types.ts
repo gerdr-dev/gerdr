@@ -82,7 +82,21 @@ export type ContentBlock =
 export type HubEvent = {
   seq: number;
   ts: number;
-  kind: "user" | "update" | "turn_start" | "turn_end" | "permission" | "permission_done" | "ask" | "ask_done" | "notice" | "task" | "steer_state";
+  kind:
+    | "user"
+    | "update"
+    | "turn_start"
+    | "turn_end"
+    | "permission"
+    | "permission_done"
+    | "ask"
+    | "ask_done"
+    | "notice"
+    | "task"
+    | "steer_state"
+    | "shell"
+    | "shell_out"
+    | "shell_done";
   task?: AgentTask;
   messageId?: string;
   content?: ContentBlock[];
@@ -99,6 +113,7 @@ export type HubEvent = {
   response?: any;
   level?: string;
   text?: string;
+  exit?: number; // shell_done：退出码
 };
 
 export type PermissionOption = { optionId: string; name: string; kind: "allow_once" | "allow_always" | "reject_once" | "reject_always" };

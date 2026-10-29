@@ -134,11 +134,17 @@ export const api = {
   createSession: (o: { agent: string; cwd: string; mode?: string; config?: Record<string, string>; import?: string; title?: string }) =>
     req<SessionSummary>("POST", "/api/sessions", o),
   deleteSession: (id: string) => req("DELETE", `/api/sessions/${id}`),
-  termCreate: (o: { cwd?: string; from?: string; cols?: number; rows?: number }) => req<TermInfo>("POST", "/api/terms", o),
+  /** input：建好就敲进去的字（对话里「在新终端里运行」） */
+  termCreate: (o: { cwd?: string; from?: string; cols?: number; rows?: number; input?: string }) => req<TermInfo>("POST", "/api/terms", o),
+  /** 往终端里敲字（对话里「在当前终端里运行」） */
+  termInput: (id: string, data: string) => req("POST", `/api/terms/${encodeURIComponent(id)}/input`, { data }),
   /** liveCwd：顺带问 shell 现在在哪个目录（mac 上要跑一次 lsof，别每次都问） */
   termInfo: (id: string, liveCwd?: boolean) => req<TermInfo>("GET", `/api/terms/${encodeURIComponent(id)}${liveCwd ? "?cwd=1" : ""}`),
   termKill: (id: string) => req("DELETE", `/api/terms/${encodeURIComponent(id)}`),
   send: sendWithRetry,
+  /** 输入框里的 `!命令`：gerdr 在会话目录里直接跑，不经过 agent；输出进对话、跟着下一条消息带给 agent */
+  shell: (id: string, command: string) => req<{ id: string }>("POST", `/api/sessions/${id}/shell`, { command, id: uuid() }),
+  stopShell: (id: string, run: string) => req("POST", `/api/sessions/${id}/shell/${run}/stop`, {}),
   cancel: (id: string) => req("POST", `/api/sessions/${id}/cancel`, {}),
   /** 关掉 agent 那边（claude 进程当场收掉），记录留着；下次发话自动接回来 */
   shutdown: (id: string) => req("POST", `/api/sessions/${id}/shutdown`, {}),

@@ -8,6 +8,7 @@ import { api, type Holder, isNetworkError } from "@/lib/api";
 import { closeAgentInPane } from "@/lib/actions";
 import { get, sendShown, set, setConfig, transcript, useStore } from "@/lib/store";
 import type { ContentBlock, SessionSummary } from "@/lib/types";
+import { dropShellContext } from "@/lib/transcript";
 import { MODE, defaultsOf, flatOptions, setDefault, setDefaults } from "@/lib/defaults";
 import { isCoarse, usePhone } from "@/lib/phone";
 import { askKey } from "@/lib/askkeys";
@@ -79,7 +80,8 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
     focus: () => ta.current?.focus(),
     setText: (t: string) => putText(t),
     // 回退：整条消息放回来，文字和贴的图都要（只放文字的话截图就丢了）
-    setContent: (blocks: ContentBlock[]) => {
+    setContent: (blocks0: ContentBlock[]) => {
+      const blocks = dropShellContext(blocks0); // `!命令` 带过去的输出不放回来：命令卡片还在对话里，下一条照样带上
       putText(blocks.map((c) => (c.type === "text" ? (c as { text: string }).text : "")).join(""));
       setImgs(toImgs(blocks));
     },
@@ -262,6 +264,23 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
     return true;
   };
 
+  // `!命令`（照 Claude Code 的 bash 模式）：gerdr 在会话目录里直接跑，不发给 agent、不起一轮；输出进对话，
+  // 跟着下一条消息带给 agent（hub/shell.go）。带图时不算（图没法给命令），照常当话发
+  const shellMode = !imgs.length && text.startsWith("!");
+  const runShell = async (cmd: string) => {
+    if (!cmd) return;
+    const prev = text;
+    setText("");
+    hist.current.idx = -1;
+    try {
+      await api.shell(session.id, cmd);
+      onSent?.();
+    } catch (e: any) {
+      if (!(get().drafts[paneId] ?? "")) setText(prev);
+      toast.error(isNetworkError(e) ? "网络断了，命令没跑（已放回输入框）" : (e.message ?? String(e)));
+    }
+  };
+
   // 会话还在别处开着（HeldDialog）：挑完之后拿输入框里的原话再发 —— 用 ref 拿最新的 send（那时 text 已经放回去了）
   const [held, setHeld] = useState<Holder[] | null>(null);
   const sendRef = useRef<() => void>(() => {});
@@ -270,6 +289,7 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
   const send = async (now = false) => {
     let t = text.trim();
     if (!imgs.length && /^\/\S+$/.test(t) && runLocal(t.slice(1))) return;
+    if (shellMode) return runShell(t.slice(1).trim());
     const alias = /^\/(\S+)(.*)$/s.exec(t);
     const to = alias && ALIASES[alias[1]];
     if (to && !(session.commands ?? []).some((c) => c.name === alias[1]) && (session.commands ?? []).some((c) => c.name === to)) t = `/${to}${alias[2]}`;
@@ -318,7 +338,8 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
       .reverse();
   // 收回来的消息（Esc / ↑ / 「排队中」那行的撤回）放回输入框：字接在已有的前面，图片也放回来 ——
   // 原来 ↑ 和撤回按钮只放字，截图就丢了（用户报的）
-  const putBack = (blocks: ContentBlock[]) => {
+  const putBack = (blocks0: ContentBlock[]) => {
+    const blocks = dropShellContext(blocks0); // 同 setContent：`!命令` 的输出不放回输入框
     const back = blocks
       .filter((c) => c.type === "text")
       .map((c) => (c as { text: string }).text)
@@ -675,6 +696,7 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
           // 照 Astryx ChatComposer：大圆角 + 投影托起来，描边只留一根细线（浅色底上要靠它看出边界）
           "rounded-2xl border border-border/60 bg-card shadow-md transition-colors focus-within:border-ring/60",
           running && "border-brand/40",
+          shellMode && "border-warn/60 focus-within:border-warn/80",
         )}
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => {
@@ -724,7 +746,8 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
           value={text}
           onChange={(e) => {
             // 中文输入法下按 / 出来的是「、」（有的是全角「／」）：空输入框打的第一个字是它，就当 / —— 不然想调命令得先切英文
-            const v = text === "" && /^[、／]$/.test(e.target.value) ? "/" : e.target.value;
+            // ！ 同理：中文输入法下打出来的是全角的，当 ! 用（`!命令`）
+            const v = text === "" && /^[、／]$/.test(e.target.value) ? "/" : text === "" && e.target.value === "！" ? "!" : e.target.value;
             setText(v);
             setCaret(e.target.selectionStart ?? e.target.value.length);
           }}
@@ -744,10 +767,16 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
                 : sendKey === "enter"
                   ? "它在干活：↵ 等这一步做完插进去，Ctrl+↵ 立即插"
                   : "它在干活：说一句会等这一步做完插进去"
-              : "说点什么…  / 看命令"
+              : "说点什么…  / 看命令  ! 跑命令"
           }
           className="block max-h-[40vh] min-h-[44px] w-full resize-none bg-transparent px-4 pt-3 pb-1 text-[1em] max-md:text-[length:max(1em,15px)] max-md:supports-[-webkit-touch-callout:none]:text-[16px] leading-relaxed outline-none placeholder:text-muted-foreground/70"
         />
+        {shellMode && (
+          // 照 Claude Code 的「! for bash mode」：说清这一句不发给 agent、在哪个目录跑、输出去哪
+          <div className="truncate px-4 pb-1 text-[12px] text-warn" title={session.cwd}>
+            命令模式：在 {session.cwd.replace(/^\/Users\/[^/]+/, "~")} 里直接跑，不经过 agent；输出跟着你的下一条消息带给它
+          </div>
+        )}
         <div className="flex items-center gap-1 px-2.5 pb-2.5">
           {/* 附图和几个下拉放一组：放不下时这一组横着滑，而不是每个都被挤成「A…」「Opus …」（用户报的）；
               手机上模式 / 模型 / 思考强度收成一个图标（OptionsMenu），平时几乎不改，不值得常驻。上下文 / 发送这些固定在右边不动 */}
