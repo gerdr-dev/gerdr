@@ -41,8 +41,8 @@ function foldable(p: GPart, kids?: ToolPart[]): boolean {
   // 已经答完的审批（拒绝 / 作废；批准的根本不成行）也收进组里；还在等人点的不折，要让人看见
   if (p.type === "data-permission") return !!(p.data.answer || p.data.cancelled);
   // 后台任务跑完的那一行：和工具调用一个样子，也收进组里
-  // 子 agent 的那一行有「查看对话」按钮，不折
-  if (p.type === "data-task") return !(p.data.task.type === "local_agent" || p.data.task.subagent);
+  // 子 agent 的那一行有「查看对话」按钮，不折；唤醒了 agent 的那一行说的是下面这段话怎么来的，也不折
+  if (p.type === "data-task") return !(p.data.task.type === "local_agent" || p.data.task.subagent || p.data.woke);
   if (p.type !== "dynamic-tool" || kids?.length) return false;
   const tp = p as ToolPart;
   // 有操作按钮的不折，折起来就点不到了：被 auto 分类器拦下的有「允许并重试」，子 agent（Task / Agent，kind=think）有「查看对话」。

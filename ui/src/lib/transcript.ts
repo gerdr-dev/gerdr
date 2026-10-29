@@ -25,7 +25,8 @@ export type GData = {
   ask: { reqId: string; request: AskRequest; answers?: Record<string, string[]>; cancelled?: boolean; reason?: "skipped" | "replied" };
   /** level：info / warn / error / clear / auto / retry（「N 秒后重试」，done = 重试成功后收起了） */
   notice: { level: string; text: string; done?: boolean };
-  task: { task: AgentTask };
+  /** woke：这个任务一结束 agent 就自己开了一轮（turn_start auto），卡片上标「→ agent 接着处理」 */
+  task: { task: AgentTask; woke?: boolean };
   turnStat: { ms: number; tokens: number; ts?: number };
   turnEnd: { stopReason: string; error?: string };
   quickReplies: { questions: { question: string; options: string[] }[] };
@@ -302,7 +303,14 @@ export class Transcript {
         this.messages = [...this.messages];
         const i = this.assistant(e.ts);
         // agent 自己开的一轮（后台任务跑完了）：前面没有用户消息，标一下这段话是怎么来的。
-        if (e.auto) this.pushPart(i, { type: "data-notice", data: { level: "auto", text: "后台任务有结果了，agent 接着处理" } });
+        // 紧挨着的就是那张「任务结束」卡片时标在卡片上（「哪个任务跑完、agent 因此接着干」一行说清）；
+        // 另起一行居中提示会和卡片重复说一遍，还看着像警告（用户报的）。没有卡片（别的原因唤醒）才单独提示。
+        if (e.auto) {
+          const parts = this.messages[i].parts;
+          const last = parts[parts.length - 1];
+          if (last?.type === "data-task") this.setPart({ msg: i, part: parts.length - 1 }, { ...last, data: { ...last.data, woke: true } });
+          else this.pushPart(i, { type: "data-notice", data: { level: "auto", text: "后台任务跑完了，agent 自己接着干" } });
+        }
         break;
       }
       case "steer_state": {

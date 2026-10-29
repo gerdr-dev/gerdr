@@ -102,7 +102,7 @@ function boilerplate(t: AgentTask) {
  * 后台任务跑完了：时间线上标一下它是这时候结束的。画成和工具调用（ToolCall）一样的一行 ——
  * 状态图标打头、行尾耗时，对齐也一样（-ml-1.5 px-1.5），不再是一张带框的卡片夹在一串工具行中间。
  */
-export function TaskDoneCard({ sessionId, t }: { sessionId: string; t: AgentTask }) {
+export function TaskDoneCard({ sessionId, t, woke }: { sessionId: string; t: AgentTask; woke?: boolean }) {
   const Icon = taskIcon(t);
   const ok = t.status === "completed";
   const isAgent = t.type === "local_agent" || !!t.subagent;
@@ -110,7 +110,8 @@ export function TaskDoneCard({ sessionId, t }: { sessionId: string; t: AgentTask
     <div className="-ml-1.5 flex min-w-0 items-center gap-2 px-1.5 py-[3px] text-[13px] text-muted-foreground">
       {/* 和工具调用那一行一样只有一个图标：成功就是任务图标，失败换成红叉 */}
       {ok ? <Icon className="size-3.5 shrink-0" /> : <CircleX className="size-3.5 shrink-0 text-bad" />}
-      <span className="min-w-0 truncate">
+      {/* 后台命令照 ToolCall 的 execute 用等宽字，和启动它的那行上下对得齐 */}
+      <span className={cn("min-w-0 truncate", t.type === "local_bash" && "font-mono text-[12px]")}>
         {isAgent && t.subagent ? `${t.subagent} · ` : ""}
         {t.description || t.id}
       </span>
@@ -118,9 +119,13 @@ export function TaskDoneCard({ sessionId, t }: { sessionId: string; t: AgentTask
       {!ok && <span className="shrink-0 text-[11px] text-bad">{STATUS[t.status] ?? t.status}</span>}
       {!boilerplate(t) && <span className="min-w-0 shrink truncate text-[11px]">{t.summary}</span>}
       <span className="shrink-0 text-[11px] tabular-nums opacity-70">
+        {/* 成功时写明「跑完」：图标、文字、角标都和启动它的那条工具调用一样，不写看着像重复了一行 */}
+        {ok && "跑完 · "}
         {elapsed(t.startedAt, t.endedAt)}
         {t.toolUses ? ` · ${t.toolUses} 次工具` : ""}
       </span>
+      {/* 它一结束 agent 就自己接着干了：交代下面这段话是怎么来的（transcript 的 turn_start auto） */}
+      {woke && <span className="shrink-0 text-[11px]">→ agent 接着处理</span>}
       <span className="flex-1" />
       {isAgent && t.toolCallId && (
         <button

@@ -297,7 +297,7 @@ export function renderPart(p: GPart, i: number, ctx: PartCtx): ReactNode {
         </div>
       );
     case "data-task":
-      return <TaskDoneCard key={i} sessionId={ctx.sessionId} t={p.data.task} />;
+      return <TaskDoneCard key={i} sessionId={ctx.sessionId} t={p.data.task} woke={p.data.woke} />;
     case "data-notice":
       if (p.data.done) return null; // 重试成功后收起的「N 秒后重试」（transcript.clearRetry）
       if (p.data.level === "clear")
@@ -306,6 +306,13 @@ export function renderPart(p: GPart, i: number, ctx: PartCtx): ReactNode {
             <div className="h-px flex-1 bg-border" />
             {p.data.text}（/clear）
             <div className="h-px flex-1 bg-border" />
+          </div>
+        );
+      if (p.data.level === "auto")
+        // agent 自己开的一轮：只是交代这段话怎么来的，左对齐的淡字，和 turnStat 一个分量，不用居中 + 图标（那是错误 / 警告的样子）
+        return (
+          <div key={i} className="text-[12px] text-muted-foreground">
+            {p.data.text}
           </div>
         );
       return (
