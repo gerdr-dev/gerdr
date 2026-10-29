@@ -1,6 +1,7 @@
-import { AlertCircle, ExternalLink, FileText, FolderOpen } from "lucide-react";
+import { AlertCircle, ExternalLink, FileText, FolderOpen, RotateCw } from "lucide-react";
 import { useContext, useState } from "react";
 import { openPath } from "@/lib/actions";
+import { cn } from "@/lib/utils";
 import { isNative, nativeOpenPath } from "@/lib/native";
 import { openLightbox } from "../Lightbox";
 import { SessionContext } from "./sessionContext";
@@ -14,6 +15,9 @@ import { SessionContext } from "./sessionContext";
 const VIDEO = /\.(mp4|m4v|mov|webm)$/i;
 const AUDIO = /\.(mp3|m4a|wav|ogg|oga|opus|aac|flac)$/i;
 const PDF = /\.pdf$/i;
+
+// Backoff (ms) between automatic reloads of a media file that failed to load.
+const RETRY_DELAYS = [1000, 3000, 8000];
 
 const bare = (s: string) => s.split(/[?#]/)[0];
 
@@ -40,25 +44,42 @@ export function ChatMedia({ src, alt }: { src: string; alt?: string }) {
   const session = useContext(SessionContext);
   const cwd = session?.cwd;
   const path = localPath(src);
-  const url = path ? rawURL(path, cwd) : src;
-  const name = alt || nameOf(path ?? src);
+  // Agents often post the reply while the file is still being written (a render finishing, an encoder rewriting the
+  // mp4), so the first load can hit a missing or half-written file. Retry a few times with backoff, each with a fresh
+  // query param so the browser doesn't hand back the cached failure; after that, offer a manual retry.
+  const [attempt, setAttempt] = useState(0);
   const [failed, setFailed] = useState(false);
+  const base = path ? rawURL(path, cwd) : src;
+  const url = attempt && path ? `${base}&r=${attempt}` : base;
+  const name = alt || nameOf(path ?? src);
+  const onError = () => {
+    if (attempt < RETRY_DELAYS.length) setTimeout(() => setAttempt((a) => a + 1), RETRY_DELAYS[attempt]);
+    else setFailed(true);
+  };
   if (failed) {
     return (
-      <span className="my-1 inline-flex max-w-full items-center gap-1.5 rounded-md border border-border/60 px-2 py-1 align-middle text-xs text-muted-foreground">
+      <button
+        type="button"
+        title={`${path ?? src}\n点击重试`}
+        onClick={() => {
+          setFailed(false);
+          setAttempt((a) => a + 1);
+        }}
+        className="my-1 inline-flex max-w-full items-center gap-1.5 rounded-md border border-border/60 px-2 py-1 align-middle text-xs text-muted-foreground hover:bg-accent"
+      >
         <AlertCircle className="size-3.5 shrink-0 text-bad" />
-        <span className="min-w-0 truncate" title={path ?? src}>
-          打不开：{path ?? src}
-        </span>
-      </span>
+        <span className="min-w-0 truncate">打不开：{path ?? src}</span>
+        <RotateCw className="size-3.5 shrink-0" />
+      </button>
     );
   }
   const k = bare(path ?? src);
+  const isVideo = VIDEO.test(k);
   let body;
-  if (VIDEO.test(k)) {
-    body = <video src={url} controls preload="metadata" onError={() => setFailed(true)} className="max-h-80 max-w-full rounded-md border border-border/60" />;
+  if (isVideo) {
+    body = <ChatVideo key={attempt} url={url} ratioKey={base} onError={onError} />;
   } else if (AUDIO.test(k)) {
-    body = <audio src={url} controls preload="metadata" onError={() => setFailed(true)} className="w-80 max-w-full" />;
+    body = <audio key={attempt} src={url} controls preload="metadata" onError={onError} className="w-80 max-w-full" />;
   } else if (PDF.test(k)) {
     body = (
       <button
@@ -73,11 +94,12 @@ export function ChatMedia({ src, alt }: { src: string; alt?: string }) {
   } else {
     body = (
       <img
+        key={attempt}
         src={url}
         alt={name}
         loading="lazy"
         title="点击放大"
-        onError={() => setFailed(true)}
+        onError={onError}
         onClick={(e) => openLightbox([{ url, alt: name, path: path ?? undefined, cwd }], 0, e.currentTarget)}
         className="max-h-72 max-w-[min(24rem,100%)] cursor-zoom-in rounded-md border border-border/60"
       />
@@ -86,10 +108,42 @@ export function ChatMedia({ src, alt }: { src: string; alt?: string }) {
   return (
     // 独占一行（flex 不是 inline-flex）：agent 常把图和说明写在同一段（「![图](a.png)\n**a.png**：……」），
     // 行内排的话说明挤到图的右边、和图顶端对齐，很难看（截图里看到的）
-    <span className="my-1 flex w-fit max-w-full flex-col items-start gap-0.5">
+    // Videos take the full column: their width is a percentage of this span, and w-fit would size the span from the
+    // video's pre-metadata default width (300px), so the reserved box came out half size until the video loaded.
+    <span className={cn("my-1 flex max-w-full flex-col items-start gap-0.5", isVideo ? "w-full" : "w-fit")}>
       {body}
       {path && <LocalActions path={path} cwd={cwd} name={name} />}
     </span>
+  );
+}
+
+// Aspect ratio of every video seen on this page, by URL. A <video> renders at the browser default 300x150 until its
+// metadata arrives, then grows to its real size; in the virtualized chat that happens on every remount (scroll the
+// row out and back), so the row's height swung by ~170px each time and the list jumped. Reserving the box from a
+// known ratio keeps the height fixed: remounts reuse the measured ratio, unseen videos guess 16:9 (most screen
+// recordings and renders), which is exact for those and changes at most once for the rest.
+const videoRatio = new Map<string, number>();
+
+function ChatVideo({ url, ratioKey, onError }: { url: string; ratioKey: string; onError: () => void }) {
+  const [ratio, setRatio] = useState(() => videoRatio.get(ratioKey) ?? 16 / 9);
+  return (
+    <video
+      src={url}
+      controls
+      preload="metadata"
+      onError={onError}
+      onLoadedMetadata={(e) => {
+        const v = e.currentTarget;
+        if (!v.videoWidth || !v.videoHeight) return;
+        const r = v.videoWidth / v.videoHeight;
+        videoRatio.set(ratioKey, r);
+        if (Math.abs(r - ratio) > 0.01) setRatio(r);
+      }}
+      // Same bounds as before (at most 20rem tall, never wider than the column), expressed as a width so the
+      // height follows from aspect-ratio and is known before any frame loads.
+      style={{ aspectRatio: ratio, width: `min(100%, ${(20 * ratio).toFixed(3)}rem)` }}
+      className="h-auto rounded-md border border-border/60 bg-black/5"
+    />
   );
 }
 
