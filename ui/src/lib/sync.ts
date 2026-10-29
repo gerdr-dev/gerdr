@@ -113,6 +113,7 @@ function connect() {
     clearTimeout(reconnectTimer);
     reconnectTimer = null;
   }
+  set({ conn: { state: "connecting" } });
   const proto = location.protocol === "https:" ? "wss:" : "ws:";
   const sock = new WebSocket(`${proto}//${location.host}/ws`);
   ws = sock;
@@ -147,8 +148,10 @@ function connect() {
 function scheduleReconnect(now = false) {
   if (stopped || reconnectTimer || ws) return;
   const delay = now ? 0 : Math.min(8000, 300 * 2 ** retry++);
+  set({ conn: delay ? { state: "waiting", at: Date.now() + delay } : { state: "connecting" } });
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null;
+    set({ conn: { state: "connecting" } });
     // 重连前确认凭据还在（401 就别再连了）。
     api
       .hello()
@@ -158,6 +161,14 @@ function scheduleReconnect(now = false) {
         else scheduleReconnect();
       });
   }, delay);
+}
+
+/** Reconnect right away instead of waiting out the backoff (the "retry now" button next to the connection status). */
+export function reconnectNow() {
+  if (stopped || ws) return;
+  if (reconnectTimer) clearTimeout(reconnectTimer);
+  reconnectTimer = null;
+  scheduleReconnect(true);
 }
 
 /** 把一条「看着连着、其实早断了」的连接收掉（睡眠唤醒、换网络之后常见），走重连。 */

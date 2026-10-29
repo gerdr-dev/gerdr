@@ -112,6 +112,11 @@ type State = {
   ready: boolean;
   authError: boolean;
   connected: boolean;
+  /**
+   * What the connection is doing while not connected (sync.ts), so the UI can say "reconnecting" instead of a bare "offline":
+   * connecting = an attempt is in flight; waiting = backing off, next attempt at `at` (ms). Meaningless while connected.
+   */
+  conn: { state: "connecting" } | { state: "waiting"; at: number };
   keptTabs: string[]; // 现在挂在页面里的 tab（当前那个排第一），App 维护
   version: string;
   home: string;
@@ -197,6 +202,7 @@ export const useStore = create<State>(() => ({
   ready: false,
   authError: false,
   connected: false,
+  conn: { state: "connecting" },
   keptTabs: [],
   version: "",
   home: "",

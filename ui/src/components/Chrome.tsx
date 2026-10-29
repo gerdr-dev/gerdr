@@ -1,4 +1,4 @@
-import { Check, ChevronsUpDown, Keyboard, LayoutList, Menu, PanelLeft, Plus, Settings, SquareTerminal, X } from "lucide-react";
+import { Check, ChevronsUpDown, Keyboard, Loader2, LayoutList, Menu, PanelLeft, Plus, Settings, SquareTerminal, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -58,6 +58,7 @@ import { TabDragLayer, useTabDrag } from "./TabDrag";
 import { WorkspaceDragLayer, useWorkspaceDrag } from "./WorkspaceDrag";
 import { UsageMeter } from "./UsageMeter";
 import { isAndroid } from "@/lib/android";
+import { reconnectNow } from "@/lib/sync";
 import { useRoute } from "./AndroidSettings";
 
 /** 一个 tab 的汇总状态：里面任何一个会话在等你 → 等你；在跑 → 在跑；…… */
@@ -189,6 +190,7 @@ export function TabBar() {
           <TooltipContent>新建 tab（{formatCombo(keyFor(get().config, "newTab")[0] ?? "")}）</TooltipContent>
         </Tooltip>
       </div>
+      {!sidebar && <ConnStatus />}
       {prefixActive && (
         <div className="shrink-0 rounded-md bg-brand px-2 py-0.5 font-mono text-[11px] text-white" style={{ WebkitAppRegion: "no-drag" } as any}>
           {formatCombo(prefix).replace(/\s.*/, "")} …
@@ -210,7 +212,6 @@ export function PhoneBar() {
   const sessions = useStore((s) => s.sessions);
   const unread = useStore((s) => s.unread);
   const switcher = useStore((s) => s.switcher);
-  const connected = useStore((s) => s.connected);
   useStore((s) => s.pluginVersion);
   const ws = activeWs(layout);
   const wi = spaceWorkspaces(layout).indexOf(ws);
@@ -239,7 +240,7 @@ export function PhoneBar() {
         {/* 只有一个 pane 时不画：下面 pane 标题栏那个点就是同一个会话，一行里三个点太乱。好几个 pane 时它是整个 tab 的汇总，留着 */}
         {leaves(tab.root).length > 1 && <StatusDot status={st.status} unread={st.unread} />}
         <span className="min-w-0 shrink-[2] truncate text-[11px] text-muted-foreground">{applyWorkspaceLabel(ws, wi, ws.name)}</span>
-        {!connected && <span className="shrink-0 text-[11px] text-bad">离线</span>}
+        <ConnStatus />
       </button>
       <Button variant={switcher ? "secondary" : "ghost"} size="icon" className="relative size-9" aria-label="面板一览" onClick={openSwitcher}>
         <LayoutList className="size-[18px]" />
@@ -253,6 +254,50 @@ export function PhoneBar() {
         <Plus className="size-[18px]" />
       </Button>
     </div>
+  );
+}
+
+/**
+ * The connection status while disconnected from the gerdr backend. Used to be a bare red "offline", which read as "broken" while
+ * sync.ts was in fact retrying with backoff (a backend restart takes a few seconds): now it says it's reconnecting, counts down
+ * to the next try, and offers to try now. Blips under a second (sleep / wake, a dropped stale socket) show nothing.
+ */
+function ConnStatus() {
+  const connected = useStore((s) => s.connected);
+  const conn = useStore((s) => s.conn);
+  const [shown, setShown] = useState(false);
+  const [, tick] = useState(0);
+  useEffect(() => {
+    setShown(false);
+    if (connected) return;
+    const t = setTimeout(() => setShown(true), 1000);
+    return () => clearTimeout(t);
+  }, [connected]);
+  useEffect(() => {
+    if (connected || conn.state !== "waiting") return;
+    const t = setInterval(() => tick((x) => x + 1), 250);
+    return () => clearInterval(t);
+  }, [connected, conn]);
+  if (connected || !shown) return null;
+  const left = conn.state === "waiting" ? conn.at - Date.now() : 0;
+  // A wait under a second would flash a "1 s" countdown between attempts: show it as still connecting
+  if (left < 1000)
+    return (
+      <span className="flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground" title="和 gerdr 后台的连接断了，正在重连">
+        <Loader2 className="size-3 animate-spin" />
+        重连中…
+      </span>
+    );
+  return (
+    <span
+      className="flex shrink-0 items-center gap-1 text-[11px] text-warn tabular-nums"
+      title={`和 gerdr 后台的连接断了，${Math.ceil(left / 1000)} 秒后自动重连`}
+    >
+      断开 · {Math.ceil(left / 1000)}s
+      <button className="rounded-sm px-1 text-foreground hover:bg-accent" style={{ WebkitAppRegion: "no-drag" } as any} onClick={reconnectNow}>
+        重连
+      </button>
+    </span>
   );
 }
 
@@ -283,7 +328,7 @@ export function Sidebar({ className }: { className?: string }) {
         <div className="flex min-w-16 flex-1">
           <SpaceSwitcher />
         </div>
-        {!connected && <span className="text-[11px] text-bad">离线</span>}
+        <ConnStatus />
         {/* 安卓 App 里走哪条路（详情在设置 → 通用 → 安卓 App）。原来是顶栏上的一个绿 / 蓝点，和状态点挤在一起分不清，挪到侧栏里写成字 */}
         {connected && isAndroid() && <RouteLabel />}
         <Button variant="ghost" size="icon" className="size-7" onClick={toggleSidebar} style={{ WebkitAppRegion: "no-drag" } as any}>
