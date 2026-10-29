@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 暗色：index.css 的 .dark 那组（说明见 values/colors.xml） -->
+<resources>
+    <color name="bg">#0E0E0E</color>      <!-- oklch(0.165 0 0) -->
+    <color name="card">#161616</color>    <!-- oklch(0.2 0 0) -->
+    <color name="fg">#E8E8E8</color>      <!-- oklch(0.93 0 0) -->
+    <color name="muted">#929292</color>   <!-- oklch(0.66 0 0) -->
+    <color name="line">#2B2B2B</color>    <!-- oklch(0.29 0 0) -->
+    <color name="ctl">#212121</color>     <!-- oklch(0.25 0 0) -->
+    <color name="brand">#5AA3EC</color>   <!-- oklch(0.7 0.13 250) -->
+    <color name="brand_fg">#161616</color>
+    <color name="bad">#F75D59</color>     <!-- oklch(0.68 0.19 25) -->
+</resources>

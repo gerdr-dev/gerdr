@@ -11,6 +11,8 @@
 ```
 android/app/src/main/java/io/github/zbysir/gerdr/
   MainActivity.kt   填地址一屏、WebView、加载层、导航锁、返回键、音量键、passkey 退路的浮层
+  Look.kt           原生那几屏的控件样式（照配对页 pairpage.html 的卡片画）；颜色在 res/values(-night)/colors.xml，
+                    和 index.css 的 token 对齐、跟系统明暗走 —— 改 token 时一起改
   Bridge.kt         页面 ↔ 壳 的那条线（另一半 ui/src/lib/android.ts）
   LanRoute.kt       局域网换路：本机 CONNECT 代理 + 探测
   Login.kt          passkey 的退路：device flow

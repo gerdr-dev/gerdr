@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  原生那几屏的颜色：和 ui/src/index.css 的亮色 token 同一组值（oklch 换算成 hex，算法同 Css.kt），
+  配对页 pairpage.html 用的也是这组。改 index.css 的 token 时这里和 values-night 一起改，
+  不然启动到页面画出来之间、以及填地址那屏会和网页对不上。
+-->
+<resources>
+    <color name="bg">#FCFCFC</color>      <!-- background  oklch(0.99 0 0) -->
+    <color name="card">#FFFFFF</color>    <!-- card        oklch(1 0 0) -->
+    <color name="fg">#161616</color>      <!-- foreground  oklch(0.2 0 0) -->
+    <color name="muted">#696969</color>   <!-- muted-fg    oklch(0.52 0 0) -->
+    <color name="line">#E1E1E1</color>    <!-- border      oklch(0.91 0 0) -->
+    <color name="ctl">#F0F0F0</color>     <!-- secondary   oklch(0.955 0 0)：次按钮、码的底 -->
+    <color name="brand">#337BD0</color>   <!-- brand       oklch(0.58 0.15 255) -->
+    <color name="brand_fg">#F8F8F8</color>
+    <color name="bad">#E23439</color>     <!-- bad         oklch(0.6 0.21 25) -->
+</resources>

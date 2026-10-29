@@ -10,7 +10,6 @@ import android.net.http.SslError
 import android.os.Bundle
 import android.os.Message
 import android.text.InputType
-import android.util.TypedValue
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
@@ -28,11 +27,9 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import android.widget.Button
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.LinearLayout
-import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
@@ -100,11 +97,12 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // 图标深浅先跟系统明暗（原生那几屏也跟系统走，见 values-night）；页面起来后由 applyTheme 接手
         enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
-            navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
+            statusBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT),
         )
-        root = FrameLayout(this).apply { setBackgroundColor(getColor(R.color.bg)) }
+        root = FrameLayout(this).apply { setBackgroundColor(look.bg) }
         setContentView(root)
         // 系统栏 + 输入法 + 刘海一起垫成 padding：键盘一弹 WebView 就变矮，网页那边看到的
         // 是一次普通的视口变化（和 PWA 上 resizes-content 一样），终端按它重排。
@@ -192,33 +190,33 @@ class MainActivity : ComponentActivity() {
     fun showSetup(error: String?) {
         dropWeb()
         root.removeAllViews()
-        val pad = dp(24)
-        val col = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(pad, pad, pad, pad)
-        }
-        col.addView(text("连接到你的 gerdr", 20f, Color.WHITE))
-        col.addView(
-            text("填 gerdr 远程访问的地址（设置 → 远程访问里那个 https://…），或者粘贴配对链接（…/?pair=…）。", 14f, Color.parseColor("#A3A3A3")),
-            LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) },
+        root.setBackgroundColor(look.bg)
+        val col = page()
+        logo(col)
+        val card = cardBox()
+        col.addView(card, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+        card.addView(look.title("连接到你的 gerdr"))
+        card.addView(
+            look.lead("填远程访问的地址，或者直接粘贴配对链接。"),
+            LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) },
         )
-        val input = EditText(this).apply {
-            hint = "https://gerdr.example.com"
+        val input = look.input("https://gerdr.example.com").apply {
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
             imeOptions = EditorInfo.IME_ACTION_GO
             setSingleLine()
-            setTextColor(Color.WHITE)
-            setHintTextColor(Color.parseColor("#666666"))
             Server.load(this@MainActivity)?.let { setText(it.toString()) }
         }
-        col.addView(input, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(20) })
-        val err = text(error ?: "", 14f, Color.parseColor("#F87171")).apply {
+        card.addView(input, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(16) })
+        val err = look.text(error ?: "", 13f, look.bad).apply {
             visibility = if (error == null) View.GONE else View.VISIBLE
         }
-        col.addView(err, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) })
-        val go = Button(this).apply { text = "连接" }
-        col.addView(go, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(16) })
+        card.addView(err, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) })
+        val go = look.button("连接", primary = true)
+        card.addView(go, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(12) })
+        card.addView(
+            foot("地址在跑 gerdr 的那台电脑上：设置 → 远程访问，就是那个 https://…。「配对新设备」给的链接（…/?pair=…）也能直接粘贴。"),
+            LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(18) },
+        )
 
         val submit = {
             val u = Server.parse(input.text.toString())
@@ -244,7 +242,45 @@ class MainActivity : ComponentActivity() {
         input.setOnEditorActionListener { _, id, _ ->
             if (id == EditorInfo.IME_ACTION_GO) { submit(); true } else false
         }
-        root.addView(col, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+        root.addView(scroll(col), FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+    }
+
+    // ---- 原生那几屏共用的骨架（样式在 Look.kt）----
+
+    /** 居中的一列，最宽 400dp（配对页 .card 的 max-width）：平板 / 横屏上不拉成一长条 */
+    private fun page() = object : LinearLayout(this) {
+        override fun onMeasure(w: Int, h: Int) {
+            val cap = minOf(View.MeasureSpec.getSize(w), dp(400) + paddingLeft + paddingRight)
+            super.onMeasure(View.MeasureSpec.makeMeasureSpec(cap, View.MeasureSpec.EXACTLY), h)
+        }
+    }.apply {
+        orientation = LinearLayout.VERTICAL
+        setPadding(dp(16), dp(24), dp(16), dp(24))
+    }
+
+    /** 竖着放不下（键盘弹起、横屏）时能滚；放得下就上下居中 */
+    private fun scroll(col: View) = android.widget.ScrollView(this).apply {
+        isFillViewport = true
+        val center = FrameLayout(this@MainActivity)
+        center.addView(col, FrameLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT, Gravity.CENTER))
+        addView(center, FrameLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+    }
+
+    private fun logo(col: LinearLayout) = col.addView(
+        android.widget.ImageView(this).apply { setImageResource(R.drawable.ic_launcher_art) },
+        LinearLayout.LayoutParams(dp(56), dp(56)).apply { gravity = Gravity.CENTER_HORIZONTAL; bottomMargin = dp(20) },
+    )
+
+    private fun cardBox() = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        background = look.card()
+        setPadding(dp(22), dp(22), dp(22), dp(22))
+    }
+
+    /** 卡片底部那段说明：上面一条分隔线（配对页的 .foot） */
+    private fun foot(s: String) = look.text(s, 12f, look.muted).apply {
+        background = look.topRule()
+        setPadding(0, dp(14), 0, 0)
     }
 
     // ---- WebView ----
@@ -318,29 +354,30 @@ class MainActivity : ComponentActivity() {
         val box = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setBackgroundColor(getColor(R.color.bg))
+            setBackgroundColor(look.bg)
             isClickable = true
         }
         val logo = android.widget.ImageView(this).apply { setImageResource(R.drawable.ic_launcher_art) }
-        box.addView(logo, LinearLayout.LayoutParams(dp(72), dp(72)))
+        box.addView(logo, LinearLayout.LayoutParams(dp(64), dp(64)))
         val spin = android.widget.ProgressBar(this).apply {
             isIndeterminate = true
-            indeterminateTintList = android.content.res.ColorStateList.valueOf(getColor(R.color.brand))
+            indeterminateTintList = android.content.res.ColorStateList.valueOf(look.brand)
         }
-        box.addView(spin, LinearLayout.LayoutParams(dp(36), dp(36)).apply { topMargin = dp(28) })
+        box.addView(spin, LinearLayout.LayoutParams(dp(28), dp(28)).apply { topMargin = dp(28) })
         box.addView(
-            text("正在连接 $host…", 14f, Color.parseColor("#A3A3A3")).apply { gravity = Gravity.CENTER },
+            look.text("正在连接 $host…", 14f, look.muted).apply { gravity = Gravity.CENTER },
             LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { topMargin = dp(16) },
         )
         // 真实进度（WebChromeClient.onProgressChanged），细细一条，让人看见「在动」
         val bar = android.widget.ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
             max = 100
-            progressTintList = android.content.res.ColorStateList.valueOf(getColor(R.color.brand))
+            progressTintList = android.content.res.ColorStateList.valueOf(look.brand)
+            progressBackgroundTintList = android.content.res.ColorStateList.valueOf(look.line)
         }
-        box.addView(bar, LinearLayout.LayoutParams(dp(160), dp(4)).apply { topMargin = dp(14) })
-        val slow = text(
+        box.addView(bar, LinearLayout.LayoutParams(dp(160), dp(3)).apply { topMargin = dp(14) })
+        val slow = look.text(
             "网络比较慢。第一次打开要下载一次界面（之后有缓存，会快很多）。",
-            12f, Color.parseColor("#737373"),
+            12f, look.muted,
         ).apply {
             gravity = Gravity.CENTER
             visibility = View.INVISIBLE
@@ -372,24 +409,48 @@ class MainActivity : ComponentActivity() {
         web = null
     }
 
-    private fun showError(msg: String) {
+    /** 整屏的「连不上」：[title] 一句话说是什么事，[detail] 是原因（系统给的错误码之类，等宽小字） */
+    private fun showError(title: String, detail: String?) {
         hideLoading(fade = false)
-        val o = origin ?: return showSetup(msg)
-        val pad = dp(24)
-        val box = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            setPadding(pad, pad, pad, pad)
-            setBackgroundColor(getColor(R.color.bg))
-            isClickable = true // 挡住底下那个 WebView
+        val o = origin ?: return showSetup(listOfNotNull(title, detail).joinToString("\n"))
+        val col = page()
+        logo(col)
+        val card = cardBox()
+        col.addView(card, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+        card.addView(look.title(title))
+        // 完整地址（带 https:// 和端口）：连不上时人第一件事是核对是不是填错了 / 换了地址
+        card.addView(
+            look.text("当前服务器", 12f, look.muted),
+            LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(14) },
+        )
+        card.addView(
+            look.text(o, 15f, look.fg).apply { setTextIsSelectable(true) },
+            LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(2) },
+        )
+        if (!detail.isNullOrBlank()) {
+            card.addView(
+                look.text(detail, 12f, look.muted).apply {
+                    typeface = Typeface.MONOSPACE
+                    background = look.shape(look.ctl, look.line, 6)
+                    setPadding(dp(10), dp(8), dp(10), dp(8))
+                    setTextIsSelectable(true)
+                },
+                LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(14) },
+            )
         }
-        box.addView(text(msg, 15f, Color.WHITE).apply { gravity = Gravity.CENTER })
-        val retry = Button(this).apply { text = "重试" }
-        val change = Button(this).apply { text = "换服务器" }
-        box.addView(retry, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { topMargin = dp(20) })
-        box.addView(change, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { topMargin = dp(8) })
+        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val retry = look.button("重试", primary = true)
+        val change = look.button("换服务器", primary = false)
+        row.addView(retry, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+        row.addView(change, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { marginStart = dp(8) })
+        card.addView(row, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(18) })
         retry.setOnClickListener { showWeb(Uri.parse(o)) }
         change.setOnClickListener { showSetup(null) }
+        // 实底挡住底下那个 WebView（它可能停在半张页面上）
+        val box = scroll(col).apply {
+            setBackgroundColor(look.bg)
+            isClickable = true
+        }
         root.addView(box, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
     }
 
@@ -415,7 +476,7 @@ class MainActivity : ComponentActivity() {
         }
 
         override fun onReceivedError(view: WebView, req: WebResourceRequest, err: WebResourceError) {
-            if (req.isForMainFrame) showError("连不上 $origin\n${err.description}")
+            if (req.isForMainFrame) showError("连不上这台 gerdr", err.description?.toString())
         }
 
         /**
@@ -427,7 +488,7 @@ class MainActivity : ComponentActivity() {
         override fun onReceivedSslError(view: WebView, handler: SslErrorHandler, error: SslError) {
             handler.cancel()
             val u = Uri.parse(error.url)
-            if (Server.origin(u) == origin) showError("$origin 的证书不被这台手机信任。\nApp 只认正式签发的证书（比如 ACME 签的）。")
+            if (Server.origin(u) == origin) showError("证书不被这台手机信任", "App 只认正式签发的证书（比如 ACME 签的），自签的不行。")
         }
 
         /** 系统内存吃紧时会杀掉渲染进程；不接这个，App 会跟着一起崩 */
@@ -620,33 +681,39 @@ class MainActivity : ComponentActivity() {
         val box = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(pad, pad, pad, pad)
-            setBackgroundColor(getColor(R.color.bg))
+            // 只画底边一条线，和下面半屏的批准页分开
+            background = android.graphics.drawable.LayerDrawable(
+                arrayOf(look.shape(look.line, radius = 0), look.shape(look.card, radius = 0)),
+            ).apply { setLayerInset(1, 0, 0, 0, dp(1).coerceAtLeast(1)) }
             isClickable = true
         }
-        box.addView(text(if (run.reauth) "在浏览器里验证这台设备" else "在浏览器里批准这台设备", 18f, Color.WHITE))
+        box.addView(look.title(if (run.reauth) "在浏览器里验证这台设备" else "在浏览器里批准这台设备"))
         box.addView(
-            text("在下面打开的批准页里输入这个码，看清发起方是「Android · App」，再刷一次 passkey。", 14f, Color.parseColor("#A3A3A3")),
+            look.lead("在下面打开的批准页里输入这个码，看清发起方是「Android · App」，再刷一次 passkey。"),
             LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) },
         )
         val shown = if (st.code.length == 8) st.code.substring(0, 4) + "-" + st.code.substring(4) else st.code
         box.addView(
-            text(shown, 34f, getColor(R.color.brand)).apply {
-                typeface = Typeface.MONOSPACE
-                letterSpacing = 0.08f
+            look.text(shown, 28f, look.brand).apply {
+                typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
+                letterSpacing = 0.12f
+                gravity = Gravity.CENTER
+                background = look.shape(look.ctl, look.line, 8)
+                setPadding(dp(12), dp(10), dp(12), dp(10))
                 setOnClickListener { copyCode(shown, true) }
             },
-            LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { topMargin = dp(14) },
+            LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(14) },
         )
         box.addView(
-            text("点一下码就复制；打开批准页时已经替你复制好了，在那边粘贴就行。", 12f, Color.parseColor("#737373")),
-            LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(4) },
+            look.text("点一下码就复制；打开批准页时已经替你复制好了，在那边粘贴就行。", 12f, look.muted),
+            LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) },
         )
         val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        val reopen = Button(this).apply { text = "打开批准页" }
-        val cancel = Button(this).apply { text = "取消" }
-        row.addView(reopen)
-        row.addView(cancel, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginStart = dp(8) })
-        box.addView(row, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { topMargin = dp(14) })
+        val reopen = look.button("打开批准页", primary = true)
+        val cancel = look.button("取消", primary = false)
+        row.addView(reopen, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+        row.addView(cancel, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { marginStart = dp(8) })
+        box.addView(row, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(14) })
         reopen.setOnClickListener { openApprove(st.url) }
         cancel.setOnClickListener { endLogin(run, "cancel", null) }
         // 只占上面一条，下面留给半屏的批准页
@@ -725,13 +792,9 @@ class MainActivity : ComponentActivity() {
 
     // ---- 小工具 ----
 
-    private fun dp(v: Int) = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v.toFloat(), resources.displayMetrics).toInt()
+    private val look by lazy { Look(this) }
 
-    private fun text(s: String, sp: Float, color: Int) = TextView(this).apply {
-        text = s
-        textSize = sp
-        setTextColor(color)
-    }
+    private fun dp(v: Int) = look.dp(v)
 
     // ---- 后台通知（NoticeService）----
 
