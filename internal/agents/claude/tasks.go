@@ -8,7 +8,7 @@ import (
 
 	"github.com/coder/acp-go-sdk"
 
-	"github.com/zbysir/gerdr/internal/acpx"
+	"github.com/gerdr-dev/gerdr/internal/acpx"
 )
 
 // 后台任务（Bash run_in_background、后台 / 前台子 agent、Monitor……）和「agent 自己开的一轮」。

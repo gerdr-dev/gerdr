@@ -4,7 +4,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/zbysir/gerdr/internal/agents/native/llm"
+	"github.com/gerdr-dev/gerdr/internal/agents/native/llm"
 )
 
 // Config 是 config.json 里的 "llm"：模型服务商和模型。设置一改下一轮就用新的（Agent 每次现取）。

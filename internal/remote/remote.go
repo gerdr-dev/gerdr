@@ -21,11 +21,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/zbysir/gerdr/internal/acme"
-	"github.com/zbysir/gerdr/internal/auth"
-	"github.com/zbysir/gerdr/internal/config"
-	"github.com/zbysir/gerdr/internal/lan"
-	"github.com/zbysir/gerdr/internal/relay"
+	"github.com/gerdr-dev/gerdr/internal/acme"
+	"github.com/gerdr-dev/gerdr/internal/auth"
+	"github.com/gerdr-dev/gerdr/internal/config"
+	"github.com/gerdr-dev/gerdr/internal/lan"
+	"github.com/gerdr-dev/gerdr/internal/relay"
 )
 
 type Service struct {

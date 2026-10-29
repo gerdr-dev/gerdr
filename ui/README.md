@@ -1,6 +1,6 @@
 # gerdr-ui
 
-[gerdr](https://github.com/zbysir/gerdr) 的界面。**没有打包环节**：gerdr 直接读这个目录的源码（每个文件用 esbuild 单独编译、
+[gerdr](https://github.com/gerdr-dev/gerdr) 的界面。**没有打包环节**：gerdr 直接读这个目录的源码（每个文件用 esbuild 单独编译、
 第三方包按 importMap 从 esm.sh 加载、Tailwind 在浏览器里生成），保存即生效，React Refresh 热替换。
 
 ```bash

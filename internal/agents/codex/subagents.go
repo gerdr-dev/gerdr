@@ -8,7 +8,7 @@ import (
 
 	"github.com/coder/acp-go-sdk"
 
-	"github.com/zbysir/gerdr/internal/acpx"
+	"github.com/gerdr-dev/gerdr/internal/acpx"
 )
 
 // 子 agent（codex 的 multi-agent / collab）。实测 0.16x：

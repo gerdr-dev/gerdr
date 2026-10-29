@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/zbysir/gerdr/internal/agents/native/llm"
+	"github.com/gerdr-dev/gerdr/internal/agents/native/llm"
 )
 
 // 设置页用的两个探测：拉服务商的模型列表（顺便验证地址和 key 对不对）、拿一个模型真说一句话（验证协议猜对了没有）。

@@ -18,13 +18,13 @@ import (
 
 	"github.com/coder/acp-go-sdk"
 
-	"github.com/zbysir/gerdr/internal/acpx"
-	"github.com/zbysir/gerdr/internal/agenthost"
-	"github.com/zbysir/gerdr/internal/agents/claude"
-	"github.com/zbysir/gerdr/internal/agents/codex"
-	"github.com/zbysir/gerdr/internal/agents/native"
-	"github.com/zbysir/gerdr/internal/ext"
-	"github.com/zbysir/gerdr/internal/sysenv"
+	"github.com/gerdr-dev/gerdr/internal/acpx"
+	"github.com/gerdr-dev/gerdr/internal/agenthost"
+	"github.com/gerdr-dev/gerdr/internal/agents/claude"
+	"github.com/gerdr-dev/gerdr/internal/agents/codex"
+	"github.com/gerdr-dev/gerdr/internal/agents/native"
+	"github.com/gerdr-dev/gerdr/internal/ext"
+	"github.com/gerdr-dev/gerdr/internal/sysenv"
 )
 
 // AgentDef 描述一种 agent。内置 claude / codex / native（gerdr 自己的，直接调模型接口，config.json 的 llm 配了模型才能用）；用户可以在 config.json 的 agents 里加两种：

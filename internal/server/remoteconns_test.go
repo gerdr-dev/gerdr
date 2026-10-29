@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/zbysir/gerdr/internal/auth"
+	"github.com/gerdr-dev/gerdr/internal/auth"
 )
 
 // 远程 /ws 连上 / 断开：「正在连接」列表跟着变，能认出是哪台配过对的设备。

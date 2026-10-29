@@ -20,8 +20,8 @@ import (
 
 	"github.com/coder/acp-go-sdk"
 
-	"github.com/zbysir/gerdr/internal/agents/native/llm"
-	"github.com/zbysir/gerdr/internal/sysenv"
+	"github.com/gerdr-dev/gerdr/internal/agents/native/llm"
+	"github.com/gerdr-dev/gerdr/internal/sysenv"
 )
 
 // 工具：照 Claude Code / pi 的那一套（读、写、改、命令、搜内容、搜文件名、待办），名字用小写下划线

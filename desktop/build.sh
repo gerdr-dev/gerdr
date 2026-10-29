@@ -10,7 +10,7 @@ VERSION="${2:-0.1.0}"
 VERSION="${VERSION#v}"
 # electron-builder 要求版本号是 semver；git describe 出来的 a5d916f-dirty 这种不是
 [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]] || VERSION="0.1.0-dev"
-LDFLAGS="-s -w -X github.com/zbysir/gerdr/internal/version.Version=$VERSION"
+LDFLAGS="-s -w -X github.com/gerdr-dev/gerdr/internal/version.Version=$VERSION"
 
 make -s ui
 ( cd desktop && [ -d node_modules ] || npm install --no-audit --no-fund )

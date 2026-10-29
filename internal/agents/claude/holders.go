@@ -11,8 +11,8 @@ import (
 	"github.com/coder/acp-go-sdk"
 	"github.com/google/uuid"
 
-	"github.com/zbysir/gerdr/internal/acpx"
-	"github.com/zbysir/gerdr/internal/sysenv"
+	"github.com/gerdr-dev/gerdr/internal/acpx"
+	"github.com/gerdr-dev/gerdr/internal/sysenv"
 )
 
 // 同一个 claude 会话被两处同时开着（gerdr 里接着聊、herdr / 终端里那个交互式 claude 也还开着）：

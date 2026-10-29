@@ -12,8 +12,8 @@ import (
 
 	qrcode "github.com/skip2/go-qrcode"
 
-	"github.com/zbysir/gerdr/internal/auth"
-	"github.com/zbysir/gerdr/internal/remote"
+	"github.com/gerdr-dev/gerdr/internal/auth"
+	"github.com/gerdr-dev/gerdr/internal/remote"
 )
 
 // 远程访问那条路（云端中继进来的请求）。设计见 docs/dev/REMOTE.md，要点三条：

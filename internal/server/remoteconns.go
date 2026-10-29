@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/zbysir/gerdr/internal/auth"
+	"github.com/gerdr-dev/gerdr/internal/auth"
 )
 
 // 正在连着的远程界面（设置 →「远程访问」里列出来，tab 上挂个数字红点）。

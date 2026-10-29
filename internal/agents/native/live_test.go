@@ -13,7 +13,7 @@ import (
 	"github.com/coder/acp-go-sdk"
 	"github.com/google/uuid"
 
-	"github.com/zbysir/gerdr/internal/agenthost"
+	"github.com/gerdr-dev/gerdr/internal/agenthost"
 )
 
 // 真调模型（花钱）：NATIVE_LIVE_BASE / NATIVE_LIVE_KEY 给地址和 key，NATIVE_LIVE_MODELS 给模型 id（逗号分隔）。

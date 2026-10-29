@@ -3,7 +3,7 @@ package server
 import (
 	"net/http"
 
-	"github.com/zbysir/gerdr/internal/ext"
+	"github.com/gerdr-dev/gerdr/internal/ext"
 )
 
 // skill / MCP 管理（设置 → Skill / MCP）。agent 那边的只读：列出来给人看、能导入到 gerdr，

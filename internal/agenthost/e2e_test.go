@@ -25,11 +25,11 @@ import (
 	"github.com/coder/acp-go-sdk"
 	"github.com/google/uuid"
 
-	"github.com/zbysir/gerdr/internal/acpx"
-	"github.com/zbysir/gerdr/internal/agenthost"
-	"github.com/zbysir/gerdr/internal/agents/claude"
-	"github.com/zbysir/gerdr/internal/agents/codex"
-	"github.com/zbysir/gerdr/internal/ext"
+	"github.com/gerdr-dev/gerdr/internal/acpx"
+	"github.com/gerdr-dev/gerdr/internal/agenthost"
+	"github.com/gerdr-dev/gerdr/internal/agents/claude"
+	"github.com/gerdr-dev/gerdr/internal/agents/codex"
+	"github.com/gerdr-dev/gerdr/internal/ext"
 )
 
 type rec struct {

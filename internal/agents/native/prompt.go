@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/zbysir/gerdr/internal/acpx"
-	"github.com/zbysir/gerdr/internal/ext"
+	"github.com/gerdr-dev/gerdr/internal/acpx"
+	"github.com/gerdr-dev/gerdr/internal/ext"
 )
 
 // 系统提示词：每轮现拼，但内容只随文件变（日期按天），前缀缓存照样命中。

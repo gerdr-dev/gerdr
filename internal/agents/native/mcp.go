@@ -23,9 +23,9 @@ import (
 
 	"github.com/coder/acp-go-sdk"
 
-	"github.com/zbysir/gerdr/internal/agents/native/llm"
-	"github.com/zbysir/gerdr/internal/ext"
-	"github.com/zbysir/gerdr/internal/sysenv"
+	"github.com/gerdr-dev/gerdr/internal/agents/native/llm"
+	"github.com/gerdr-dev/gerdr/internal/ext"
+	"github.com/gerdr-dev/gerdr/internal/sysenv"
 )
 
 // MCP 客户端：只做 agent 要用的 —— initialize、tools/list、tools/call。三种传输：

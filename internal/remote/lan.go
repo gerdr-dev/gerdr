@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/zbysir/gerdr/internal/config"
-	"github.com/zbysir/gerdr/internal/lan"
+	"github.com/gerdr-dev/gerdr/internal/config"
+	"github.com/gerdr-dev/gerdr/internal/lan"
 )
 
 // 局域网直连口：人在家时，安卓 App 的连接不绕云端中继，直接走这台机器的局域网口。设计照 herdr-web 的

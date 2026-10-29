@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/zbysir/gerdr/internal/herdrimport"
-	"github.com/zbysir/gerdr/internal/hub"
+	"github.com/gerdr-dev/gerdr/internal/herdrimport"
+	"github.com/gerdr-dev/gerdr/internal/hub"
 )
 
 // 「从 herdr 导入」：herdr 的工作空间 / tab / 分屏原样搬过来，每个 agent pane 接上它的会话（resume，历史全在）。

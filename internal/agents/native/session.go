@@ -14,8 +14,8 @@ import (
 	"github.com/coder/acp-go-sdk"
 	"github.com/google/uuid"
 
-	"github.com/zbysir/gerdr/internal/acpx"
-	"github.com/zbysir/gerdr/internal/agents/native/llm"
+	"github.com/gerdr-dev/gerdr/internal/acpx"
+	"github.com/gerdr-dev/gerdr/internal/agents/native/llm"
 )
 
 type session struct {

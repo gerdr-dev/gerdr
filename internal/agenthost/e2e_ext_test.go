@@ -13,8 +13,8 @@ import (
 	"github.com/coder/acp-go-sdk"
 	"github.com/google/uuid"
 
-	"github.com/zbysir/gerdr/internal/acpx"
-	"github.com/zbysir/gerdr/internal/ext"
+	"github.com/gerdr-dev/gerdr/internal/acpx"
+	"github.com/gerdr-dev/gerdr/internal/ext"
 )
 
 // 测试二进制自己兼一个最小的 stdio MCP 服务（GERDR_TEST_MCP=1 时）：一个工具 secret_word，返回 PAPAYA。

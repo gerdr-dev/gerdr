@@ -5,9 +5,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/zbysir/gerdr/internal/acpx"
-	"github.com/zbysir/gerdr/internal/agenthost"
-	"github.com/zbysir/gerdr/internal/sysenv"
+	"github.com/gerdr-dev/gerdr/internal/acpx"
+	"github.com/gerdr-dev/gerdr/internal/agenthost"
+	"github.com/gerdr-dev/gerdr/internal/sysenv"
 )
 
 // UsageInfo：一个 agent 账号的用量额度（acpx.MethodUsage），界面常驻显示用。

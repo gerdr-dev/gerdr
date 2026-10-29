@@ -23,10 +23,10 @@ import (
 
 	"github.com/coder/acp-go-sdk"
 
-	"github.com/zbysir/gerdr/internal/acpx"
-	"github.com/zbysir/gerdr/internal/ext"
-	"github.com/zbysir/gerdr/internal/rpcline"
-	"github.com/zbysir/gerdr/internal/sysenv"
+	"github.com/gerdr-dev/gerdr/internal/acpx"
+	"github.com/gerdr-dev/gerdr/internal/ext"
+	"github.com/gerdr-dev/gerdr/internal/rpcline"
+	"github.com/gerdr-dev/gerdr/internal/sysenv"
 )
 
 const (

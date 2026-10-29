@@ -4,7 +4,7 @@ import (
 	_ "embed"
 	"net/http"
 
-	"github.com/zbysir/gerdr/internal/webui"
+	"github.com/gerdr-dev/gerdr/internal/webui"
 )
 
 // 急救面板：主界面（界面目录，人和 agent 都能改）改坏了的时候，从页面右侧拉出来，叫 agent 来修、或者先退回之前的一版。

@@ -3,7 +3,7 @@ package server
 import (
 	"net/http"
 
-	"github.com/zbysir/gerdr/internal/agents/native"
+	"github.com/gerdr-dev/gerdr/internal/agents/native"
 )
 
 // Gerdr Agent（native）的模型设置页用的探测接口。配置本身走 config.json（PUT /api/config），这里只是帮着填：

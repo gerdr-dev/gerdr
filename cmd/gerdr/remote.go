@@ -11,12 +11,12 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/zbysir/gerdr/internal/acme"
-	"github.com/zbysir/gerdr/internal/auth"
-	"github.com/zbysir/gerdr/internal/config"
-	"github.com/zbysir/gerdr/internal/qr"
-	"github.com/zbysir/gerdr/internal/relay"
-	"github.com/zbysir/gerdr/internal/remote"
+	"github.com/gerdr-dev/gerdr/internal/acme"
+	"github.com/gerdr-dev/gerdr/internal/auth"
+	"github.com/gerdr-dev/gerdr/internal/config"
+	"github.com/gerdr-dev/gerdr/internal/qr"
+	"github.com/gerdr-dev/gerdr/internal/relay"
+	"github.com/gerdr-dev/gerdr/internal/remote"
 )
 
 // remoteCmd：远程访问（云端中继 + 配对码 + passkey）。设计见 docs/dev/REMOTE.md。

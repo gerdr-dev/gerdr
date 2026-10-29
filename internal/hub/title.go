@@ -8,8 +8,8 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/zbysir/gerdr/internal/acpx"
-	"github.com/zbysir/gerdr/internal/agenthost"
+	"github.com/gerdr-dev/gerdr/internal/acpx"
+	"github.com/gerdr-dev/gerdr/internal/agenthost"
 )
 
 // 会话标题（pane 顶上、侧栏）怎么来，按优先级：

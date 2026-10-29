@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zbysir/gerdr/internal/config"
-	"github.com/zbysir/gerdr/internal/remote"
+	"github.com/gerdr-dev/gerdr/internal/config"
+	"github.com/gerdr-dev/gerdr/internal/remote"
 )
 
 const testHost = "gerdr.example.com"

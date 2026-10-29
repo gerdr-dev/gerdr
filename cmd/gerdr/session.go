@@ -11,7 +11,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/zbysir/gerdr/internal/acpx"
+	"github.com/gerdr-dev/gerdr/internal/acpx"
 	"io"
 	"net/http"
 	"net/url"
@@ -24,8 +24,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 
-	"github.com/zbysir/gerdr/internal/config"
-	"github.com/zbysir/gerdr/internal/webui"
+	"github.com/gerdr-dev/gerdr/internal/config"
+	"github.com/gerdr-dev/gerdr/internal/webui"
 )
 
 type apiClient struct {

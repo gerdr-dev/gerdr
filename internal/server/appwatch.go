@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/zbysir/gerdr/internal/hub"
+	"github.com/gerdr-dev/gerdr/internal/hub"
 )
 
 // 安卓 App 的后台通知（android/ 的 NoticeService）：App 关着 / 锁屏时，一个前台服务挂在这两个口上长轮询。

@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/zbysir/gerdr/internal/config"
-	"github.com/zbysir/gerdr/internal/service"
-	"github.com/zbysir/gerdr/internal/version"
+	"github.com/gerdr-dev/gerdr/internal/config"
+	"github.com/gerdr-dev/gerdr/internal/service"
+	"github.com/gerdr-dev/gerdr/internal/version"
 )
 
 func lockPath(env config.Env) string { return filepath.Join(env.Dir, "server.lock") }

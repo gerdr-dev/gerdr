@@ -1,4 +1,4 @@
-module github.com/zbysir/gerdr
+module github.com/gerdr-dev/gerdr
 
 go 1.26.10
 

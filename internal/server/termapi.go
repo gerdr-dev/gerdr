@@ -7,7 +7,7 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"github.com/zbysir/gerdr/internal/term"
+	"github.com/gerdr-dev/gerdr/internal/term"
 )
 
 // 终端：建 / 列 / 关走 HTTP，输入输出走每个终端一条 WebSocket（/api/terms/{id}/ws）。

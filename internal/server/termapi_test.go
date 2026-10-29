@@ -15,7 +15,7 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"github.com/zbysir/gerdr/internal/term"
+	"github.com/gerdr-dev/gerdr/internal/term"
 )
 
 // 输入 → 输出走通；断开重连时先收到重放（之前的输出还在）；shell 退出时收到退出码。

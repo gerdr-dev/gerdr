@@ -15,8 +15,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/zbysir/gerdr/internal/acpx"
-	"github.com/zbysir/gerdr/internal/sysenv"
+	"github.com/gerdr-dev/gerdr/internal/acpx"
+	"github.com/gerdr-dev/gerdr/internal/sysenv"
 )
 
 // proc 是一个 claude CLI 进程（headless，stream-json 双向）。一个会话一个。

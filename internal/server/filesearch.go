@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/zbysir/gerdr/internal/hub"
+	"github.com/gerdr-dev/gerdr/internal/hub"
 )
 
 // 输入框里的 @ 文件引用（照 Claude Code）：会话目录下的文件模糊搜索。

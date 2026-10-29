@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/zbysir/gerdr/internal/acpx"
+	"github.com/gerdr-dev/gerdr/internal/acpx"
 )
 
 // 只声明读到的字段（完整的见 generate-ts 出来的 v2/GetAccountRateLimitsResponse.ts）。

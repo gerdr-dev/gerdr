@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/zbysir/gerdr/internal/auth"
-	"github.com/zbysir/gerdr/internal/config"
+	"github.com/gerdr-dev/gerdr/internal/auth"
+	"github.com/gerdr-dev/gerdr/internal/config"
 )
 
 // 安卓 App（android/）要的那几个口。设计见 docs/dev/ANDROID.md：

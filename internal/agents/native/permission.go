@@ -7,7 +7,7 @@ import (
 
 	"github.com/coder/acp-go-sdk"
 
-	"github.com/zbysir/gerdr/internal/sysenv"
+	"github.com/gerdr-dev/gerdr/internal/sysenv"
 )
 
 // 权限模式。没有沙箱（codex 那种），所以「自动」只放到改工作区里的文件为止，命令照样要问 ——

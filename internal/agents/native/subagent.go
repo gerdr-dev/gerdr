@@ -10,8 +10,8 @@ import (
 
 	"github.com/coder/acp-go-sdk"
 
-	"github.com/zbysir/gerdr/internal/acpx"
-	"github.com/zbysir/gerdr/internal/agents/native/llm"
+	"github.com/gerdr-dev/gerdr/internal/acpx"
+	"github.com/gerdr-dev/gerdr/internal/agents/native/llm"
 )
 
 // 子 agent：task 工具起一个新的循环（同一个模型、自己的历史），跑完把最后一句话交回给主 agent。

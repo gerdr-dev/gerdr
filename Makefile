@@ -1,7 +1,7 @@
 # gerdr：一个 Go 二进制 + 一个桌面 App 外壳（Electron，desktop/）。界面是 ui/ 下的源码，没有打包环节（internal/uisite）：
 # 编二进制时把 ui/ 原样拷进去内嵌，第一次启动装到 ~/.gerdr/ui，之后谁改那份源码界面就跟着变。
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo 0.1.0-dev)
-LDFLAGS := -s -w -X github.com/zbysir/gerdr/internal/version.Version=$(VERSION)
+LDFLAGS := -s -w -X github.com/gerdr-dev/gerdr/internal/version.Version=$(VERSION)
 UISNAP := internal/webui/ui
 
 .PHONY: all ui rescue sync-ui build test typecheck fmt test-e2e app dmg win icon install clean dev

@@ -10,7 +10,7 @@ import (
 
 	"github.com/coder/acp-go-sdk"
 
-	"github.com/zbysir/gerdr/internal/acpx"
+	"github.com/gerdr-dev/gerdr/internal/acpx"
 )
 
 // HandleNotification 把 app-server 的通知翻译成 ACP 的 session/update。

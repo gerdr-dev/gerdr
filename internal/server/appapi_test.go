@@ -12,10 +12,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zbysir/gerdr/internal/auth"
-	"github.com/zbysir/gerdr/internal/config"
-	"github.com/zbysir/gerdr/internal/hub"
-	"github.com/zbysir/gerdr/internal/remote"
+	"github.com/gerdr-dev/gerdr/internal/auth"
+	"github.com/gerdr-dev/gerdr/internal/config"
+	"github.com/gerdr-dev/gerdr/internal/hub"
+	"github.com/gerdr-dev/gerdr/internal/remote"
 )
 
 // 带一把（假的）passkey 的远程服务端：device flow 在一把都没有时直接拒。

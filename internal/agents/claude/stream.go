@@ -10,8 +10,8 @@ import (
 
 	"github.com/coder/acp-go-sdk"
 
-	"github.com/zbysir/gerdr/internal/acpx"
-	"github.com/zbysir/gerdr/internal/sysenv"
+	"github.com/gerdr-dev/gerdr/internal/acpx"
+	"github.com/gerdr-dev/gerdr/internal/sysenv"
 )
 
 // onLine 处理 claude stdout 的一行（control_response 已经在 proc 里分走了）。

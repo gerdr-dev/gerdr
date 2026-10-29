@@ -11,7 +11,7 @@ import (
 
 	"github.com/coder/acp-go-sdk"
 
-	"github.com/zbysir/gerdr/internal/agents/native/llm"
+	"github.com/gerdr-dev/gerdr/internal/agents/native/llm"
 )
 
 // 会话记录：<dir>/sessions/<id>.jsonl，一行一条 entry，只追加；回退时整份重写（先写临时文件再改名）。
