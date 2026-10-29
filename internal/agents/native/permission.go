@@ -2,6 +2,7 @@ package native
 
 import (
 	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -46,13 +47,17 @@ const (
 )
 
 // decide 按模式和已放行的规则判断一次工具调用。rule 是「以后不再问」时要记下的规则（空 = 不给这个选项）。
-func decide(mode string, t *tool, args map[string]any, cwd string, allowed func(string) bool) (v verdict, rule string) {
+func decide(mode string, t *tool, args map[string]any, cwd string, mem memoryDirs, allowed func(string) bool) (v verdict, rule string) {
 	if t.readOnly {
 		return allow, ""
 	}
 	switch t.name {
 	case "write", "edit":
 		if mode == modeBypass {
+			return allow, ""
+		}
+		// 记忆目录里的 .md 任何模式都直接写（只读模式也行：记忆不是用户的工作成果），见 memory.go
+		if mem.inMemory(absPath(str(args, "path"), cwd)) {
 			return allow, ""
 		}
 		if mode == modeReadOnly {
@@ -72,7 +77,7 @@ func decide(mode string, t *tool, args map[string]any, cwd string, allowed func(
 		return ask, ""
 	case "bash":
 		cmd := str(args, "command")
-		if mode == modeBypass || readOnlyCommand(cmd) || sysenv.SafeGerdrCLI(cmd) {
+		if mode == modeBypass || readOnlyCommand(cmd) || sysenv.SafeGerdrCLI(cmd) || memoryRm(cmd, cwd, mem) {
 			return allow, ""
 		}
 		if mode == modeReadOnly {
@@ -219,4 +224,37 @@ func readOnlyCommand(cmd string) bool {
 		}
 	}
 	return true
+}
+
+func absPath(p, cwd string) string {
+	if p == "~" || strings.HasPrefix(p, "~/") {
+		h, _ := os.UserHomeDir()
+		p = filepath.Join(h, p[1:])
+	}
+	if !filepath.IsAbs(p) {
+		p = filepath.Join(cwd, p)
+	}
+	return filepath.Clean(p)
+}
+
+// memoryRm：只是 `rm [-f] <记忆目录里的 .md>…`（删一条过时的记忆）—— 不审批。不能带通配符、变量、别的命令。
+func memoryRm(cmd, cwd string, mem memoryDirs) bool {
+	if strings.ContainsAny(cmd, "*?$`<>|;&(){}\n") {
+		return false
+	}
+	f := strings.Fields(cmd)
+	if len(f) < 2 || f[0] != "rm" {
+		return false
+	}
+	n := 0
+	for _, a := range f[1:] {
+		if a == "-f" {
+			continue
+		}
+		if strings.HasPrefix(a, "-") || !mem.inMemory(absPath(strings.Trim(a, "'\""), cwd)) {
+			return false
+		}
+		n++
+	}
+	return n > 0
 }

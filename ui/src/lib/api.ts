@@ -1,5 +1,5 @@
 import type { LLMModel, LLMProvider } from "./store";
-import type { ContentBlock, ExtSettings, ExtView, Hello, HubEvent, PluginBuild, SessionSummary, TermInfo } from "./types";
+import type { ContentBlock, ExtSettings, ExtView, Hello, HubEvent, MemoryStore, PluginBuild, SessionSummary, TermInfo } from "./types";
 
 /** 正开着某个会话的别的进程（herdr / 终端里的交互式 claude） */
 export type Holder = { pid: number; name?: string; status?: string; cwd?: string };
@@ -121,6 +121,11 @@ export const api = {
   putConfig: (data: unknown, client: string) => req("PUT", "/api/config", { data, client }),
   // Gerdr Agent 的模型设置：拉服务商的模型列表、拿一个模型试说一句（服务商参数是页面上的草稿，不用先保存）
   llmModels: (p: LLMProvider) => req<{ models: string[] }>("POST", "/api/llm/models", p),
+  // 设置 →「记忆」：三家 agent 的长期记忆，只能读写它们记忆目录里的 .md
+  memory: () => req<{ stores: MemoryStore[] }>("GET", "/api/memory"),
+  memoryRead: (path: string) => req<{ content: string }>("GET", `/api/memory/file?path=${encodeURIComponent(path)}`),
+  memoryWrite: (path: string, content: string) => req("PUT", "/api/memory/file", { path, content }),
+  memoryDelete: (path: string) => req("DELETE", `/api/memory/file?path=${encodeURIComponent(path)}`),
   llmTest: (provider: LLMProvider, model: LLMModel) => req<{ reply: string; api: string }>("POST", "/api/llm/test", { provider, model }),
   awake: () => req<AwakeStatus>("GET", "/api/awake"),
   setAwake: (b: { minutes?: number; until?: number; forever?: boolean }) => req<AwakeStatus>("PUT", "/api/awake", b),

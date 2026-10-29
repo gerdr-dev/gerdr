@@ -412,6 +412,7 @@ func (a *Agent) configOptions(s *session) []acp.SessionConfigOption {
 var builtinCommands = []acp.AvailableCommand{
 	{Name: "clear", Description: "清空上下文：另起一段新对话，之前说过的不再带上"},
 	{Name: "compact", Description: "压缩上下文：把之前的对话总结成摘要，腾出上下文空间（后面可以跟要求）"},
+	{Name: "memory", Description: "看它跨会话记住了什么；后面跟话就是关于记忆的要求（比如「/memory 忘掉 xxx」「/memory 记住 xxx」）"},
 }
 
 func (a *Agent) announceCommands(s *session) {
@@ -478,7 +479,14 @@ func (a *Agent) Prompt(ctx context.Context, p acp.PromptRequest) (acp.PromptResp
 		}
 		return acp.PromptResponse{StopReason: acp.StopReasonEndTurn}, nil
 	}
-	if name != "" {
+	if name == "memory" {
+		// 换成一句给模型的话（记忆就是文件，它自己会读写）；界面上显示的还是人打的 /memory
+		text := "Show me what you remember across conversations: read both memory indexes (global and project) and list the memories grouped by scope, one line each with its file path. Do not change anything."
+		if args != "" {
+			text = "About your long-term memory: " + args + "\n\n(Act on this by reading / writing / deleting files in your memory directories as described in your instructions, then tell me what changed.)"
+		}
+		blocks = append([]acp.ContentBlock{acp.TextBlock(text)}, blocks[1:]...)
+	} else if name != "" {
 		if sk := findSkill(skillsFor(a.ext, s.cwd()), name); sk != nil {
 			text := fmt.Sprintf("The user invoked the skill %q. Read %s with the read tool and follow it.", sk.Name, filepath.Join(sk.Dir, "SKILL.md"))
 			if args != "" {

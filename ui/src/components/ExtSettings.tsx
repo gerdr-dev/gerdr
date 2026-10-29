@@ -129,7 +129,10 @@ export function SkillSettings({ open }: { open: boolean }) {
       <div className="flex items-center justify-between gap-4">
         <div>
           <div className="text-[13px]">用哪些 skill</div>
-          <div className="text-[12px] text-muted-foreground">改完从每个会话的下一轮起生效</div>
+          <div className="text-[12px] text-muted-foreground">
+            改完从每个会话的下一轮起生效。Gerdr Agent 没有自己的 skill 目录，「agent 自己的」对它来说就是 Claude Code 的那些（~/.claude/skills、项目的
+            .claude/skills）
+          </div>
         </div>
         <SourcePicker value={s.skillSource} onChange={(x) => save({ skillSource: x })} />
       </div>
@@ -314,7 +317,10 @@ export function MCPSettings({ open }: { open: boolean }) {
       <div className="flex items-center justify-between gap-4">
         <div>
           <div className="text-[13px]">用哪些 MCP</div>
-          <div className="text-[12px] text-muted-foreground">改完从每个会话的下一轮起生效</div>
+          <div className="text-[12px] text-muted-foreground">
+            改完从每个会话的下一轮起生效。Gerdr Agent 没有自己的 MCP 配置，「agent 自己的」对它来说就是 Claude Code 配的那些（~/.claude.json、项目的
+            .mcp.json）；它不支持要 OAuth 登录的服务器
+          </div>
         </div>
         <SourcePicker value={s.mcpSource} onChange={(x) => save({ mcpSource: x })} />
       </div>

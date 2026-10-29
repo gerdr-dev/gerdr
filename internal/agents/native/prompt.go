@@ -34,7 +34,9 @@ const basePrompt = `You are a coding agent running inside gerdr, working on the 
 
 const subagentPrompt = `You are a sub-agent of a coding agent running inside gerdr. You were given one self-contained task. Work on it with the tools, then reply with a concise report of what you found or did — that final message is the only thing the parent agent sees, so include the concrete facts (paths, line numbers, commands, results) it needs. Do not ask the user questions.`
 
-func systemPrompt(cwd string, skills []ext.Skill, sub bool) string {
+// systemPrompt：mem 为 nil = 子 agent（任务是主 agent 给的，不用指令文件、skill、记忆）。
+func systemPrompt(cwd string, skills []ext.Skill, model resolved, mem *memoryDirs) string {
+	sub := mem == nil
 	var b strings.Builder
 	if sub {
 		b.WriteString(subagentPrompt)
@@ -50,6 +52,14 @@ func systemPrompt(cwd string, skills []ext.Skill, sub bool) string {
 	}
 	fmt.Fprintf(&b, "- Platform: %s/%s, shell: %s\n", runtime.GOOS, runtime.GOARCH, shell())
 	fmt.Fprintf(&b, "- Today's date: %s\n", time.Now().Format("2006-01-02"))
+	// 不写的话问「你是什么模型」它只能猜（用户问过）
+	if model.ID != "" {
+		pn := model.Provider.Name
+		if pn == "" {
+			pn = model.Provider.ID
+		}
+		fmt.Fprintf(&b, "- You are the model %q (shown to the user as %q), called through the %q API provider\n", model.ID, model.Name, pn)
+	}
 
 	if !sub {
 		for _, f := range instructionFiles(cwd) {
@@ -61,6 +71,7 @@ func systemPrompt(cwd string, skills []ext.Skill, sub bool) string {
 				fmt.Fprintf(&b, "- %s: %s (%s)\n", s.Name, oneLine(s.Description, 300), filepath.Join(s.Dir, "SKILL.md"))
 			}
 		}
+		b.WriteString("\n" + memorySection(*mem))
 		b.WriteString("\n" + acpx.MediaHint + "\n")
 	}
 	return b.String()

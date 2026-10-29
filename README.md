@@ -178,6 +178,8 @@ API key 就写 `ANTHROPIC_API_KEY=…`。还能换可执行文件、追加命令
 `api`（chat / responses）、`efforts`、`window`、`images`。也可以在设置 → Agent 最下面配（能从接口拉模型列表、单个试一下）。
 会话记录在 `~/.gerdr/native/`。插话、回退、审批、子 agent（可以放后台）、后台命令、网页抓取、`/compact`、`/clear`、skill、
 MCP（用 Claude Code 配的那些 + gerdr 自己的，不支持要 OAuth 登录的）都支持。
+**长期记忆**：你纠正过它的、你的偏好、项目的约定它会自己记下来，新会话也记得。记在 `~/.gerdr/native/memory/`（`global/` 是全局的，
+`projects/` 下按项目分），一条一个 Markdown 文件，可以直接看、改、删；`/memory` 看它记了什么，`/memory 忘掉 xxx` 让它删。设置 →「记忆」里能看、改、删，Claude Code 和 Codex 的记忆也在那一页。
 
 ## 内存
 

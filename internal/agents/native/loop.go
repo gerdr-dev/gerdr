@@ -303,6 +303,11 @@ func (r *run) start(p *pending) {
 	if p.t != nil && p.t.show != nil {
 		title, kind, locs = p.t.show(p.args, r.s.cwd())
 	}
+	if p.t != nil && (p.t.name == "write" || p.t.name == "edit") {
+		if path := absPath(str(p.args, "path"), r.s.cwd()); r.s.memory().inMemory(path) {
+			title = memoryTitle(r.s.memory(), path)
+		}
+	}
 	p.ui = &toolUI{Title: title, Kind: kind, Input: p.args, Locs: locs}
 	if p.t != nil && p.t.hidden {
 		return
@@ -334,7 +339,7 @@ func (r *run) finish(p *pending) {
 
 // exec 跑一个工具：先过权限，再执行。
 func (r *run) exec(ctx context.Context, p *pending) result {
-	v, rule := decide(r.s.mode(), p.t, p.args, r.s.cwd(), r.s.allowed)
+	v, rule := decide(r.s.mode(), p.t, p.args, r.s.cwd(), r.s.memory(), r.s.allowed)
 	switch v {
 	case deny:
 		return errResult("Not allowed in read-only mode. Describe the change instead, or ask the user to switch modes.")

@@ -102,7 +102,7 @@ func runTask(c *call, args map[string]any) result {
 	}
 	sr := &subRun{toolCall: c.id}
 	r := &run{s: s, sub: sr, model: parent.model, effort: parent.effort,
-		system: systemPrompt(s.cwd(), nil, true),
+		system: systemPrompt(s.cwd(), nil, parent.model, nil),
 		msgs:   []llm.Message{{Role: "user", Content: []llm.Part{llm.TextPart(prompt)}}}}
 	for _, t := range parent.tools {
 		if t.name != "task" && t.name != "ask_user" {

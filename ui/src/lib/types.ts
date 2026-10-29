@@ -167,3 +167,16 @@ export interface ExtView {
 
 /** 服务端的一个终端（/api/terms） */
 export type TermInfo = { id: string; cwd: string; shell: string; pid: number; exited: boolean; code: number; created: number };
+
+/** 设置 →「记忆」：一家 agent 的一个记忆目录（后端 internal/memstore）。 */
+export type MemoryEntry = { file: string; path: string; name?: string; description?: string; type?: string; size: number; modTime: number };
+export type MemoryStore = {
+  id: string;
+  agent: "native" | "claude" | "codex";
+  scope: "global" | "project";
+  label: string;
+  dir: string;
+  index: boolean;
+  entries: MemoryEntry[];
+  modTime: number;
+};

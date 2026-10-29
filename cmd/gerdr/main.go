@@ -296,7 +296,7 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 		return err
 	}
 	defer rm.Close()
-	srv := &server.Server{Hub: h, Token: token, Config: cfg, Layout: layout, Plugins: pm, Ext: em, Log: log, OnConfig: applyAgents,
+	srv := &server.Server{Dir: env.Dir, Hub: h, Token: token, Config: cfg, Layout: layout, Plugins: pm, Ext: em, Log: log, OnConfig: applyAgents,
 		UI: ui, ESM: uisite.NewESM(env.ESMCDN, filepath.Join(env.Dir, "cache", "esm")), Remote: rm, Awake: keeper,
 		Service: svc, Terms: term.New(func() []string { return sysenv.ChildEnv() }, log)}
 	defer srv.Terms.Close()

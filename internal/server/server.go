@@ -45,6 +45,7 @@ import (
 )
 
 type Server struct {
+	Dir     string // 数据目录（~/.gerdr）
 	Hub     *hub.Hub
 	Token   string
 	Config  *config.Store
@@ -281,6 +282,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/importable", s.importable)
 	s.extRoutes(mux)
 	s.llmRoutes(mux)
+	s.memoryRoutes(mux)
 	s.importRoutes(mux)
 	if s.Remote != nil {
 		s.remoteRoutes(mux)

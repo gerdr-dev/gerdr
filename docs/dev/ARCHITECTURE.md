@@ -129,6 +129,18 @@ React（ui/，不打包）  ←WebSocket / HTTP→  hub（internal/hub）  ←AC
     工具名 `mcp__<服务器>__<工具>`，最长 64（两家接口的限制），标了 readOnlyHint 的不审批。**不支持 OAuth**：要登录的服务器（401）给一行提示。
     测试里 HOME 要换成临时目录，不然会读到本机 ~/.claude.json、把真的 MCP 服务器起起来。
 13. web_fetch 按域名审批（`fetch:<host>`）：联网能把数据带出去，不算只读。HTML 自己转成 Markdown 风格的文字（x/net/html），不另调模型总结。
+14. **长期记忆**（`memory.go`）：照 Claude Code 的自动记忆，文件 + 索引，不用向量库。`<dir>/native/memory/global`（人的偏好）和
+    `projects/<git 根的路径变形>`（项目的事，同一仓库的子目录共用），一条一个 .md（frontmatter 带 type），每层一个 MEMORY.md 索引，
+    两层索引原样放进系统提示词，模型按需 read 全文。不加工具：用 write / edit 写、`rm` 删，**这两样在记忆目录里不审批**
+    （`decide` 的 memoryWrite / `memoryRm`：只认 .md、rm 不能带通配符和别的命令）—— 每记一条都要人点，就没人让它记了。
+    和 Claude Code 的记忆分开存（用户定的）。索引变了系统提示词就变，那一轮前缀缓存不命中，可以接受（记东西不频繁）。
+    系统提示词里写明模型名：不写的话问「你是什么模型」它只能猜（用户问过）。
+15. **设置 →「记忆」**（`internal/memstore` + `server/memoryapi.go` + `ui/…/MemorySettings.tsx`）：三家的记忆放一页看、改、删。
+    Gerdr Agent 的在 `native/memory`；Claude Code 的自动记忆在 `~/.claude/projects/<cwd 变形>/memory/`（格式和我们一样）；
+    Codex 的在 `~/.codex/memories/`（它从过去的会话自动总结、原始数据在 memories_*.sqlite —— 那是它的内部格式，不碰）。
+    接口能写文件，所以只认这几个目录里的 .md：原样路径对原样根、解开链接的路径对解开链接的根各判一次（macOS 的 /var、/tmp 本身是链接，
+    混着比会对不上），新建的文件解开最深一层存在的目录；Claude 那边只认 `<项目>/memory/` 下面的（同一层还有会话记录）。
+    Claude 的项目目录名是 cwd 的有损变形，认不回路径：从同目录的会话记录（.jsonl 每行带 cwd）读。删一条时把 MEMORY.md 里指向它的行一起删。
 
 测试：`go test ./internal/agents/native/...` 用假接口跑主循环；`NATIVE_LIVE_BASE / NATIVE_LIVE_KEY / NATIVE_LIVE_MODELS` 设了才跑真模型（花钱）。
 

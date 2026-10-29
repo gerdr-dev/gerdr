@@ -12,6 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AndroidSettings } from "./AndroidSettings";
 import { AgentSettings } from "./AgentSettings";
+import { MemorySettings } from "./MemorySettings";
 import { AwakeSetting } from "./AwakeSetting";
 import { ResumeDialog } from "./ResumeDialog";
 import { addWorkspace, basename, deleteSession, focusSession, openSessionHere, renameTab, renameWorkspace, selectWorkspace, tabName } from "@/lib/actions";
@@ -196,6 +197,7 @@ function SettingsDialog({ open }: { open: boolean }) {
               <TabsTrigger value="mcp">MCP</TabsTrigger>
               <TabsTrigger value="plugins">插件</TabsTrigger>
               <TabsTrigger value="agents">Agent</TabsTrigger>
+              <TabsTrigger value="memory">记忆</TabsTrigger>
               <TabsTrigger value="resources">资源</TabsTrigger>
               <TabsTrigger value="remote">
                 远程访问
@@ -345,6 +347,9 @@ function SettingsDialog({ open }: { open: boolean }) {
             </TabsContent>
             <TabsContent value="agents" className="pt-2">
               <AgentSettings />
+            </TabsContent>
+            <TabsContent value="memory" className="pt-2">
+              <MemorySettings open={open && tabOpen === "memory"} />
             </TabsContent>
             <TabsContent value="labs" className="space-y-4 pt-2">
               <div className="text-[13px] text-muted-foreground">还在试的功能，默认关着。</div>

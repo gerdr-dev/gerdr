@@ -259,6 +259,9 @@ func (s *session) cancel() {
 	}
 }
 
+// memory：这个会话的两层记忆目录（memory.go）。
+func (s *session) memory() memoryDirs { return memoryFor(s.a.st.dir, s.cwd()) }
+
 func (s *session) newRun(ctx context.Context) *run {
 	cfg := s.a.config()
 	s.mu.Lock()
@@ -286,7 +289,8 @@ func (s *session) newRun(ctx context.Context) *run {
 			}
 		}
 	}
-	r.system = systemPrompt(cwd, skillsFor(s.a.ext, cwd), false)
+	mem := s.memory()
+	r.system = systemPrompt(cwd, skillsFor(s.a.ext, cwd), r.model, &mem)
 	return r
 }
 
