@@ -18,7 +18,7 @@ import { set, useStore } from "@/lib/store";
 // The session switched away from isn't deleted; it's still in the sessions list.
 
 type Native = { sessionId: string; cwd: string; title?: string; updatedAt?: string };
-type Entry = { key: string; search: string; title: string; at: number; note?: string; pick: () => void };
+type Entry = { key: string; search: string; title: string; at: number; pick: () => void };
 
 export function ResumeDialog() {
   const d = useStore((s) => s.dialog);
@@ -58,19 +58,15 @@ export function ResumeDialog() {
   const here = Object.values(sessions).filter((s) => s.agent === cur.agent && s.cwd === cur.cwd);
   const byAgentId = new Map(here.map((s) => [s.agentSessionId, s]));
   const entries: Entry[] = [];
-  const notes = new Map<string, string>(); // pre-clear contexts already imported: they're gerdr sessions now, just say where they came from
   for (const s of here)
     for (const c of s.cleared ?? []) {
-      const note = s.id === cur.id ? "这个会话清空前" : `「${s.title || "没有标题"}」清空前`;
-      const to = byAgentId.get(c.id);
-      if (to) notes.set(to.id, note);
-      else
+      // Already imported: it's a gerdr session now and gets listed below
+      if (!byAgentId.has(c.id))
         entries.push({
           key: `cleared:${s.id}:${c.id}`,
           search: `${c.id} ${c.title ?? ""} ${s.title ?? ""}`,
           title: c.title || c.id.slice(0, 8),
           at: c.at,
-          note,
           pick: () => pickNative({ sessionId: c.id, cwd: cur.cwd, title: c.title }),
         });
     }
@@ -82,7 +78,6 @@ export function ResumeDialog() {
         search: `${s.id} ${s.title ?? ""}`,
         title: s.title || "（没有标题）",
         at: s.updatedAt,
-        note: notes.get(s.id),
         pick: () => pickMine(s.id),
       });
   for (const n of native ?? [])
@@ -113,7 +108,6 @@ export function ResumeDialog() {
             <CommandItem key={e.key} value={e.search} className="gap-2.5" disabled={busy} onSelect={e.pick}>
               <AgentIcon agent={cur.agent} className="size-4 shrink-0" />
               <span className="min-w-0 truncate">{e.title}</span>
-              {e.note && <span className="max-w-[40%] shrink-0 truncate rounded-sm bg-muted px-1.5 text-[11px] text-muted-foreground">{e.note}</span>}
               <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">{e.at ? ago(e.at) : ""}</span>
             </CommandItem>
           ))}
