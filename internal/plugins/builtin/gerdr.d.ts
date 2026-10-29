@@ -34,6 +34,14 @@ declare global {
     workspaceLabel(fn: (ws: WorkspaceInfo, ctx: { index: number; label: string }) => string | void): Dispose;
 
     /**
+     * 给会话起标题（侧栏、pane 顶上那个）。每一轮结束时调；返回字符串就用它，返回 undefined 不改。
+     *
+     * 不注册的话 gerdr 自己起：每段上下文（两次 /clear 之间）的第 1 句和第 3 句话那一轮结束时，拿这段里说过的话
+     * 让模型起一个。插件给出过名字后，这段上下文里默认的就不再动它（/clear 之后重新算）；人改过名的会话不会调到这里。
+     */
+    sessionTitle(fn: (session: SessionInfo, ctx: SessionTitleContext) => string | void | Promise<string | void>): Dispose;
+
+    /**
      * 加一条命令：出现在命令面板（prefix+:）里；给了 key 的话还能用快捷键触发。
      * key 的写法和设置里一样："prefix+a"、"prefix+shift+k"、"ctrl+alt+p"。
      */
@@ -67,6 +75,20 @@ declare global {
       get<T = unknown>(key: string): T | undefined;
       set(key: string, value: unknown): void;
     };
+  }
+
+  interface SessionTitleContext {
+    /** 当前标题（多个插件时是前面的插件给出的）。 */
+    title: string;
+    /** 这段上下文（最后一次 /clear 之后）用户说过的话，按顺序；斜杠命令不算。 */
+    prompts: string[];
+    /** prompts.length：这段上下文里用户说到第几句了。 */
+    turn: number;
+    /**
+     * 用这个会话的 agent 的账号跑一次小问答，回模型的原话（claude 用 haiku；codex 用默认模型的低推理档，
+     * 一次十几秒）。别每轮都调：花钱，标题老变也不好找。
+     */
+    summarize(prompt: string): Promise<string>;
   }
 
   interface CommandContext {

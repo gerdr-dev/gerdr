@@ -29,6 +29,11 @@ type Record struct {
 	Cwd            string            `json:"cwd"`
 	Title          string            `json:"title,omitempty"`
 	CustomTitle    bool              `json:"customTitle,omitempty"`
+	// 自动标题的状态（title.go）。TitleStale：/clear 过、标题还是上一件事的，下一句话先顶上；
+	// TitleKey：默认逻辑在哪段上下文的哪一档起过名了；PluginTitleFor：插件在哪段上下文里起过名（这段里默认逻辑让开）。
+	TitleStale     bool   `json:"titleStale,omitempty"`
+	TitleKey       string `json:"titleKey,omitempty"`
+	PluginTitleFor string `json:"pluginTitleFor,omitempty"`
 	CreatedAt      int64             `json:"createdAt"`
 	UpdatedAt      int64             `json:"updatedAt"`
 	Mode           string            `json:"mode,omitempty"`
@@ -696,6 +701,7 @@ func (s *Session) runTurn(c *agenthost.Host, agentSID, msgID string, content []a
 	}
 	s.mu.Unlock()
 	s.emit(ev)
+	go s.autoTitle()
 	if next {
 		s.emit(&Event{Kind: EvTurnStart, Auto: true})
 	}
@@ -724,17 +730,17 @@ func errText(err error) string {
 
 func (s *Session) touchTitle(content []acp.ContentBlock) {
 	s.mu.Lock()
-	if s.rec.Title != "" {
+	if s.rec.Title != "" && !(s.rec.TitleStale && !s.rec.CustomTitle) {
 		s.mu.Unlock()
 		return
 	}
 	for _, b := range content {
-		if b.Text != nil && strings.TrimSpace(b.Text.Text) != "" {
+		if b.Text != nil && strings.TrimSpace(b.Text.Text) != "" && !strings.HasPrefix(strings.TrimSpace(b.Text.Text), "/") {
 			t := strings.Join(strings.Fields(b.Text.Text), " ")
 			if utf8.RuneCountInString(t) > 60 {
 				t = string([]rune(t)[:60]) + "…"
 			}
-			s.rec.Title = t
+			s.rec.Title, s.rec.TitleStale = t, false
 			break
 		}
 	}
@@ -852,6 +858,9 @@ func (s *Session) onUpdate(u acp.SessionUpdate) {
 			if id, ok := g["sessionId"].(string); ok && id != "" {
 				s.h.rekey(s, id)
 				if c, _ := g["cleared"].(bool); c {
+					s.mu.Lock()
+					s.rec.TitleStale = !s.rec.CustomTitle // 标题还是 clear 之前那件事的：下一句话先顶上，这轮完了重起（title.go）
+					s.mu.Unlock()
 					s.emit(&Event{Kind: EvNotice, Level: "clear", Text: "上下文已清空"})
 				}
 			}

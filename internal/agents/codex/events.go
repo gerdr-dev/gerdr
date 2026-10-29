@@ -184,8 +184,9 @@ func (a *Agent) HandleNotification(method string, params json.RawMessage) {
 			Name *string `json:"name"`
 		}
 		_ = json.Unmarshal(params, &p)
+		// codex 自己不起名，thread 的名字只有人改（/rename、Codex App 里改）才会变：算人改的，之后不被自动标题盖掉（hub/title.go）
 		if p.Name != nil && *p.Name != "" {
-			a.out(ctx, s, acp.SessionUpdate{SessionInfoUpdate: &acp.SessionSessionInfoUpdate{Title: p.Name}})
+			a.out(ctx, s, acp.SessionUpdate{SessionInfoUpdate: &acp.SessionSessionInfoUpdate{Title: p.Name, Meta: acpx.Meta(map[string]any{"renamed": true})}})
 		}
 	}
 }

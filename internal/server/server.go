@@ -146,12 +146,35 @@ func (s *Server) Handler() http.Handler {
 		return nil, sess.SetConfig(r.Context(), b.ID, b.Value)
 	}))
 	mux.HandleFunc("POST /api/sessions/{id}/rename", s.sessionOp(func(r *http.Request, sess *hub.Session) (any, error) {
-		var b struct{ Title string }
+		var b struct {
+			Title string
+			Auto  bool // 插件起的：不算人改的名，人改过名时不生效（hub/title.go）
+		}
 		if err := decode(r, &b); err != nil {
 			return nil, err
 		}
-		sess.Rename(b.Title)
+		if b.Auto {
+			sess.SetAutoTitle(b.Title)
+		} else {
+			sess.Rename(b.Title)
+		}
 		return nil, nil
+	}))
+	// 起标题用的材料（插件 g.sessionTitle）：当前标题、这段上下文（最后一次 /clear 之后）用户说过的话
+	mux.HandleFunc("GET /api/sessions/{id}/title", s.sessionOp(func(r *http.Request, sess *hub.Session) (any, error) {
+		return sess.TitleState(), nil
+	}))
+	// 用这个会话的 agent 的账号跑一次小问答（插件的 ctx.summarize）
+	mux.HandleFunc("POST /api/sessions/{id}/complete", s.sessionOp(func(r *http.Request, sess *hub.Session) (any, error) {
+		var b struct{ Prompt string }
+		if err := decode(r, &b); err != nil {
+			return nil, err
+		}
+		if strings.TrimSpace(b.Prompt) == "" {
+			return nil, errors.New("prompt 是空的")
+		}
+		t, err := s.Hub.Complete(r.Context(), sess.Summary().Agent, b.Prompt)
+		return map[string]string{"text": t}, err
 	}))
 	mux.HandleFunc("POST /api/sessions/{id}/rewind", s.sessionOp(func(r *http.Request, sess *hub.Session) (any, error) {
 		var b struct {

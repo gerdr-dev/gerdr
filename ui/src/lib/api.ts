@@ -138,7 +138,12 @@ export const api = {
   answer: (id: string, reqId: string, response: unknown) => req("POST", `/api/sessions/${id}/answer`, { reqId, response }),
   setMode: (id: string, mode: string) => req("POST", `/api/sessions/${id}/mode`, { mode }),
   setConfig: (id: string, cid: string, value: string) => req("POST", `/api/sessions/${id}/config`, { id: cid, value }),
-  rename: (id: string, title: string) => req("POST", `/api/sessions/${id}/rename`, { title }),
+  /** auto：插件起的名（不算人改的，人改过名时不生效）。 */
+  rename: (id: string, title: string, auto?: boolean) => req("POST", `/api/sessions/${id}/rename`, { title, auto }),
+  /** 起标题的材料：当前标题、这段上下文（最后一次 /clear 之后）用户说过的话。 */
+  titleState: (id: string) => req<{ title: string; customTitle: boolean; prompts: string[] }>("GET", `/api/sessions/${id}/title`),
+  /** 用这个会话的 agent 的账号跑一次小问答（claude 用 haiku，codex 用默认模型的低推理档）。 */
+  complete: (id: string, prompt: string) => req<{ text: string }>("POST", `/api/sessions/${id}/complete`, { prompt }),
   /** 序号 before 之前的再一段日志（打开会话时只推了最近一段，往上翻到顶来拉）；older = 还有更早的。 */
   olderEvents: (id: string, before: number) => req<{ events: HubEvent[]; older: boolean }>("GET", `/api/sessions/${id}/events/older?before=${before}`),
   rewind: (id: string, messageId: string) => req<{ content: ContentBlock[] }>("POST", `/api/sessions/${id}/rewind`, { messageId }),

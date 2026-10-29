@@ -938,12 +938,60 @@ func (a *Agent) Cancel(ctx context.Context, p acp.CancelNotification) error {
 	return nil
 }
 
+// complete：用 codex exec 跑一次小问答（hub 起会话标题用，acpx.MethodComplete）。用默认模型、低推理档，
+// --ephemeral 不留 rollout（不然「接着之前的聊」列表里会多出一堆起标题的会话），只读沙箱、在临时目录里跑。
+// 不带 opts.Args：那是给 app-server 的参数，exec 不一定认。一次大约 15 秒、1 万多 token（多半是 codex 自带的
+// 系统提示，走缓存），所以 hub 只在几个节点上调它。
+func (a *Agent) complete(ctx context.Context, prompt string) (string, error) {
+	bin, err := sysenv.FindCodex()
+	if a.opts.Bin != "" {
+		bin, err = sysenv.FindBin(a.opts.Bin)
+	}
+	if err != nil {
+		return "", err
+	}
+	f, err := os.CreateTemp("", "gerdr-complete-*.txt")
+	if err != nil {
+		return "", err
+	}
+	f.Close()
+	defer os.Remove(f.Name())
+	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
+	defer cancel()
+	// 结果从 -o 的文件拿：stdout 上还混着进度和 hook 的输出
+	cmd := exec.CommandContext(ctx, bin, "exec", "--ephemeral", "--skip-git-repo-check", "-s", "read-only",
+		"-c", "model_reasoning_effort=low", "-o", f.Name(), "-")
+	cmd.Stdin = strings.NewReader(prompt)
+	cmd.Dir = os.TempDir()
+	cmd.Env = append(sysenv.ChildEnv(), a.opts.Env...)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return "", fmt.Errorf("codex exec: %w: %s", err, oneLineTail(out))
+	}
+	b, err := os.ReadFile(f.Name())
+	return strings.TrimSpace(string(b)), err
+}
+
+func oneLineTail(b []byte) string {
+	s := strings.Join(strings.Fields(string(b)), " ")
+	if r := []rune(s); len(r) > 200 {
+		s = string(r[len(r)-200:])
+	}
+	return s
+}
+
 // ---- 扩展方法 ----
 
 func (a *Agent) HandleExtensionMethod(ctx context.Context, method string, params json.RawMessage) (any, error) {
 	switch method {
 	case acpx.MethodUsage:
 		return a.usage(ctx)
+	case acpx.MethodComplete:
+		var p acpx.CompleteRequest
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, acp.NewInvalidParams(err.Error())
+		}
+		t, err := a.complete(ctx, p.Prompt)
+		return acpx.CompleteResponse{Text: t}, err
 	case acpx.MethodTranscriptStat:
 		// 别处（终端 / Codex App）接着聊过：rollout 文件会长（hub 的 CatchUp 拿它判断要不要重新载入）
 		var p acpx.TranscriptStatRequest

@@ -53,7 +53,6 @@ type session struct {
 
 	emitHook  func(acp.SessionUpdate) // 重放会话记录时把 update 改道
 	lastTitle string                  // 上次报给 hub 的标题（syncTitle 去重）
-	genTitled bool                    // 已经自己起过标题了（genTitle 只起一次）
 }
 
 func (s *session) withEmit(emit func(acp.SessionUpdate), fn func()) {
@@ -474,6 +473,7 @@ func (s *session) finishTurn(stop acp.StopReason) {
 
 // syncTitle：把 Claude Code 自己的标题带到 gerdr（pane 顶部、侧栏）。它起标题是异步的，常常在一轮结束后才写进记录，
 // 所以等一会儿再读。/rename 的算人改的（renamed，以后不被自动标题盖）；ai-title 只在 gerdr 里没人改过名时用上（hub 判断）。
+// gerdr 起的会话（stream-json 模式）claude 不写 ai-title（那是交互界面里才做的事），这种会话的标题由 hub 起（hub/title.go）。
 func (s *session) syncTitle(delay time.Duration) {
 	time.Sleep(delay)
 	s.mu.Lock()
@@ -489,23 +489,7 @@ func (s *session) syncTitle(delay time.Duration) {
 		t, renamed = custom, true
 	}
 	if t == "" {
-		// gerdr 起的会话（stream-json 模式）claude 不写 ai-title —— 那是交互界面里才做的事。照它的做法自己补一个：
-		// 第一轮完了用 haiku 按第一句话起个短标题。每个会话只起一次（genTitled），起不出来就算了（标题照旧是第一句话）。
-		s.mu.Lock()
-		done := s.genTitled
-		s.genTitled = true
-		s.mu.Unlock()
-		if done {
-			return
-		}
-		first := ""
-		_ = scan(path, func(e *entry, _ []byte) bool {
-			first = userText(e)
-			return first == ""
-		})
-		if t = s.a.genTitle(first); t == "" {
-			return
-		}
+		return
 	}
 	if t == last {
 		return

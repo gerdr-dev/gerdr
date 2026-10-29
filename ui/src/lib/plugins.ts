@@ -10,6 +10,7 @@ import type { PluginBuild, SessionSummary } from "./types";
 type TabLabelFn = (tab: any, ctx: any) => string | void;
 type PaneTitleFn = (pane: any, ctx: any) => string | void;
 type WsLabelFn = (ws: any, ctx: any) => string | void;
+type SessionTitleFn = (session: any, ctx: any) => string | void | Promise<string | void>;
 export type PluginCommand = { id: string; title: string; key?: string; run: (ctx: any) => void | Promise<void>; plugin: string };
 
 type Reg<T> = { plugin: string; fn: T };
@@ -17,6 +18,7 @@ type Reg<T> = { plugin: string; fn: T };
 const tabLabels: Reg<TabLabelFn>[] = [];
 const paneTitles: Reg<PaneTitleFn>[] = [];
 const wsLabels: Reg<WsLabelFn>[] = [];
+const sessionTitles: Reg<SessionTitleFn>[] = [];
 export const pluginCommands: PluginCommand[] = [];
 const listeners: { plugin: string; event: string; fn: (e: any) => void }[] = [];
 
@@ -151,7 +153,36 @@ export function emitSessionChange(prev: SessionSummary | undefined, next: Sessio
   if (prev.status !== "waiting" && next.status === "waiting") emit("needsInput", { session: info, visible, kind: "permission" });
   if ((prev.status === "running" || prev.status === "waiting") && (next.status === "idle" || next.status === "error")) {
     emit("turnEnd", { session: info, visible, stopReason: next.status === "error" ? "error" : "end_turn", error: next.error });
+    if (sessionTitles.length) runSessionTitle(info!);
   }
+}
+
+// 一轮结束 → 问插件要不要改会话标题。多个插件按文件名顺序串起来（ctx.title 是前面给出的）；有插件给出了名字就交给
+// 后端（auto：人改过名时不生效，这段上下文里后端的默认起名让开，见 internal/hub/title.go）。
+// 每个开着的窗口都会跑一遍：后端对同样的 summarize 只真跑一次，起出来的名字一样，不会来回跳。
+async function runSessionTitle(info: ReturnType<typeof sessionInfo> & {}) {
+  let st: { title: string; customTitle: boolean; prompts: string[] };
+  try {
+    st = await api.titleState(info.id);
+  } catch {
+    return;
+  }
+  if (st.customTitle) return;
+  let title = st.title;
+  let changed = false;
+  const summarize = async (prompt: string) => (await api.complete(info.id, prompt)).text;
+  for (const r of [...sessionTitles]) {
+    try {
+      const v = await r.fn(info, { title, prompts: st.prompts, turn: st.prompts.length, summarize });
+      if (typeof v === "string" && v.trim()) {
+        title = v.trim();
+        changed = true;
+      }
+    } catch (e) {
+      fail(r.plugin, e);
+    }
+  }
+  if (changed) api.rename(info.id, title, true).catch(() => {});
 }
 
 // 焦点 pane 变了（点 pane、切 tab / 工作空间都算）→ focusChanged。layout 每次改动都会过这里，
@@ -186,6 +217,7 @@ function makeApi(id: string) {
     tabLabel: (fn: TabLabelFn) => own(tabLabels, fn),
     paneTitle: (fn: PaneTitleFn) => own(paneTitles, fn),
     workspaceLabel: (fn: WsLabelFn) => own(wsLabels, fn),
+    sessionTitle: (fn: SessionTitleFn) => own(sessionTitles, fn),
     command: (c: Omit<PluginCommand, "plugin">) => {
       const cmd = { ...c, plugin: id };
       pluginCommands.push(cmd);
@@ -260,6 +292,7 @@ function unload(id: string) {
   remove(tabLabels, id);
   remove(paneTitles, id);
   remove(wsLabels, id);
+  remove(sessionTitles, id);
   remove(pluginCommands, id);
   remove(listeners, id);
 }
