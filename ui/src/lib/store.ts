@@ -233,6 +233,9 @@ export const get = useStore.getState;
 export const useLinkSafety = () => ({ enabled: useStore((s) => s.config.confirmLinks !== false) });
 export const set = useStore.setState;
 
+/** Close whatever store.dialog overlay is open (the dialogs rendered by components/Dialogs.tsx). */
+export const closeDialog = () => set({ dialog: null });
+
 // ---- 布局：本地先改，300ms 后写回服务端（别的窗口 / 设备跟着变）----
 
 let layoutTimer: ReturnType<typeof setTimeout> | undefined;
