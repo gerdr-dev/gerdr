@@ -353,14 +353,20 @@ func DescribeRequest(kind string, raw json.RawMessage) string {
 	return kind
 }
 
-// MediaHint：起 agent 时追加给它的一句说明（claude 的 --append-system-prompt、codex 的 developerInstructions）——
-// gerdr 的对话界面会把 Markdown 图片语法引用的本机文件直接画出来（ui 的 ChatMedia：图片、视频、音频、PDF），
-// 但 agent 不知道的话只会甩一条路径让人自己去开。照 shuttle 的写法。
+// MediaHint is appended when an agent starts (claude's --append-system-prompt, codex's developerInstructions).
+// gerdr's chat view draws local files referenced with Markdown image syntax inline (ui ChatMedia: image, video,
+// audio, PDF), and turns file paths in replies into links that open in FileViewer (Markdown rendered, code, etc.;
+// ui lib/paths.ts). An agent that doesn't know either just answers about the file without handing it over:
+// asked about README.zh-CN.md it listed the headings with bare `:45` line numbers and no clickable path, so the
+// user had to ask again for the full path to open it. Bare relative names like `README.md` aren't recognized
+// as paths (no slash), hence "absolute".
 const MediaHint = "You are running inside gerdr, a GUI for coding agents. Its chat view renders Markdown image syntax inline: " +
 	"when the user should see or hear a local image, video, audio file or PDF (a screenshot, a generated or downloaded image/video, a QR code, a voice-over…), " +
 	"embed it in your reply with image syntax and an absolute path, e.g. ![login QR code](/Users/me/project/out/qr.png) " +
 	"(wrap the path in <> if it contains spaces: ![demo](</Users/me/my dir/demo.mp4>)). Several images on consecutive lines show as a grid. " +
-	"Use a plain link instead when the file is just being mentioned, not shown."
+	"Use a plain link instead when the file is just being mentioned, not shown. " +
+	"Absolute file paths in your reply are clickable and open the file in a viewer (Markdown rendered, code, text…), " +
+	"so when the user asks about a file or wants to read one (a doc, a plan, a report you wrote), include its absolute path."
 
 // ShellHint：告诉 agent 可以让人在输入框里敲 `! 命令`（gerdr 在会话目录里直接跑，输出跟着人的下一条消息带给它，见 hub/shell.go）。
 // Claude Code 自己只在交互式终端里给这句，stream-json 下没有，agent 只会说「去终端里跑」。
