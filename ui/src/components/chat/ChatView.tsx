@@ -537,7 +537,8 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
               variant="outline"
               className={cn(
                 "absolute bottom-4 left-1/2 size-8 -translate-x-1/2 rounded-full shadow-md",
-                unread && "border-brand bg-brand text-background hover:bg-brand/90 hover:text-background",
+                // dark: variants too, or the outline variant's dark:border-input wins in the dark theme.
+                unread && "border-brand text-brand hover:text-brand dark:border-brand",
               )}
               onClick={() => list.current?.scrollToIndex({ index: "LAST", align: "end", behavior: "smooth" })}
               title={unread ? "有新消息，回到底部" : "回到底部"}
