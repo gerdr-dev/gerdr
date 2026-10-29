@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { closePaneById, reopenTerminal } from "@/lib/actions";
 import { api, ApiError } from "@/lib/api";
+import { copyOnSelectOn, copySelected } from "@/lib/copysel";
 import { eventKey } from "@/lib/keys";
 import { isCoarse } from "@/lib/phone";
 import { get } from "@/lib/store";
@@ -168,8 +169,26 @@ export function TerminalView({
     // 主题跟着 html 上的 dark class 换
     const mo = new MutationObserver(() => (term.options.theme = readTheme()));
     mo.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    // 实验室「选中即复制」：xterm 的选区不进 DOM，lib/copysel 管不到，这里接。拖到 pane 外面松手也算，
+    // 所以 mousedown 在这里记一下、mouseup 听 document；等一拍让 xterm 把选区定下来（双击选词也是 mouseup 后才落）
+    let downHere = false;
+    let upSeq = 0; // 只认最后一次松手，同 lib/copysel
+    const onDown = (e: MouseEvent) => (downHere = e.button === 0);
+    const onUp = (e: MouseEvent) => {
+      if (!downHere) return;
+      downHere = false;
+      if (!copyOnSelectOn()) return;
+      const my = ++upSeq;
+      setTimeout(() => {
+        if (my === upSeq && !disposed && term.hasSelection()) copySelected(term.getSelection(), e.detail >= 2, () => term.clearSelection());
+      });
+    };
+    el.addEventListener("mousedown", onDown, true);
+    document.addEventListener("mouseup", onUp, true);
 
     return () => {
+      el.removeEventListener("mousedown", onDown, true);
+      document.removeEventListener("mouseup", onUp, true);
       disposed = true;
       clearTimeout(timer);
       clearInterval(pingTimer);

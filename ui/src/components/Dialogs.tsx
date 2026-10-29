@@ -356,6 +356,9 @@ function SettingsDialog({ open }: { open: boolean }) {
               <Row label="对话虚拟滚动" hint="只渲染屏幕附近的消息，很长的对话更省内存；往上翻时带图的消息可能会跳动">
                 <Switch checked={!!cfg.virtualList} onCheckedChange={(v) => setConfig({ virtualList: v })} />
               </Row>
+              <Row label="选中即复制" hint="和 herdr 一样：拖着选中文字，松开鼠标就复制到剪贴板；双击选词也会复制。对话和终端里都管用，输入框里不复制">
+                <Switch checked={!!cfg.copyOnSelect} onCheckedChange={(v) => setConfig({ copyOnSelect: v })} />
+              </Row>
               <Row
                 label="远程连着时不休眠"
                 hint="手机等远程设备连着时电脑不睡，合上盖子也醒着（和 Amphetamine 一样），断开 15 分钟后恢复；下面的手动时段也合盖不睡。合盖要授权一次，用电池且电量 ≤ 20% 时自动放手，塞包里会发热。仅 macOS"

@@ -18,6 +18,7 @@ import { isNative, nativeBadge, nativeMenuKeys } from "./lib/native";
 import { initAndroid, syncAndroidTheme } from "./lib/android";
 import { CliApprove } from "./components/CliApprove";
 import { systemNotify } from "./lib/notify";
+import { watchCopyOnSelect } from "./lib/copysel";
 import { reloadPlugins, setTabNameFn } from "./lib/plugins";
 import { fontSizeOf, get, keyFor, markUnread, set, useStore, visibleSessions } from "./lib/store";
 import { boot } from "./lib/sync";
@@ -94,13 +95,17 @@ export default function App() {
     });
     const onKey = (e: KeyboardEvent) => handleKeydown(e);
     window.addEventListener("keydown", onKey, true);
+    const unwatchCopy = watchCopyOnSelect(); // 实验室「选中即复制」，没开时什么都不做
     if (isNative()) document.documentElement.classList.add("native");
     // mac App 的菜单和通知点击走这两个入口。
     (window as any).gerdr = {
       runCommand: (id: string) => import("./lib/plugins").then((p) => p.runCommand(id)),
       focusSession: (id: string) => import("./lib/actions").then((a) => a.focusSession(id)),
     };
-    return () => window.removeEventListener("keydown", onKey, true);
+    return () => {
+      window.removeEventListener("keydown", onKey, true);
+      unwatchCopy();
+    };
   }, []);
 
   useEffect(() => setPrefixLabel(prefix), [prefix]);

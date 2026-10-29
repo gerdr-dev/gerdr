@@ -28,6 +28,8 @@ export type Config = {
   /** 实验室：有远程设备连着时不让电脑睡（后端起 caffeinate），断开 15 分钟后放手；开着时合上盖子也不睡
    *  （pmset disablesleep，要授权一次，手动时段也算）。后端读这个字段（cmd/gerdr 的 applyAwake）。 */
   keepAwakeRemote?: boolean;
+  /** 实验室：选中即复制（和 herdr 的 ui.copy_on_select 一样），lib/copysel.ts。 */
+  copyOnSelect?: boolean;
   agents?: AgentDef[];
   /** 输入框里 pin 住的 / 命令（命令名，不带 /）：附图按钮旁边多一个 / 按钮，点开就是这些。存 config 是让手机和电脑共用一份。 */
   pinnedCommands?: string[];
@@ -56,6 +58,7 @@ export const DEFAULT_CONFIG: Config = {
   expandEdits: true,
   virtualList: false,
   keepAwakeRemote: false,
+  copyOnSelect: false,
 };
 
 export function mergeConfig(raw: any): Config {
