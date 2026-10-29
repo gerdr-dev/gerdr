@@ -73,6 +73,8 @@ func (a *Agent) HandleNotification(method string, params json.RawMessage) {
 		if p.WillRetry {
 			a.out(ctx, s, acp.SessionUpdate{SessionInfoUpdate: &acp.SessionSessionInfoUpdate{Meta: acpx.Meta(map[string]any{
 				"notice": p.Error.Message + "（codex 在重试）",
+				// retry：界面原地更新同一行、codex 又出字就收起，不然每次重试都新起一行
+				"noticeLevel": "retry",
 			})}})
 		}
 	case "item/started":

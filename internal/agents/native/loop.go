@@ -151,7 +151,11 @@ func (r *run) callModel(ctx context.Context) (llm.Result, bool, error) {
 		defer r.s.setStreamCancel(nil)
 	}
 	sctx = llm.WithRetryNotice(sctx, func(err error, attempt int, wait time.Duration) {
-		r.notice(fmt.Sprintf("模型接口出错：%s（%d 秒后第 %d 次重试）", oneLine(err.Error(), 160), int(wait.Seconds()), attempt))
+		// retry 级别：界面原地更新同一行、重试成功（又出字）就收起；不带级别会按 warn 每次重试新起一行
+		r.s.send(acp.SessionUpdate{SessionInfoUpdate: &acp.SessionSessionInfoUpdate{Meta: acpx.Meta(map[string]any{
+			"notice":      fmt.Sprintf("模型接口出错：%s（%d 秒后第 %d 次重试）", oneLine(err.Error(), 160), int(wait.Seconds()), attempt),
+			"noticeLevel": "retry",
+		})}})
 	})
 	msgID := uuid.NewString()
 	key := strconv.Itoa(r.reqN)
