@@ -185,6 +185,7 @@ export const api = {
   dirs: (path: string) =>
     req<{ path: string; parent: string; dirs: string[]; home: string; git: boolean }>("GET", `/api/fs/dirs?path=${encodeURIComponent(path)}`),
   fileStat: (path: string, cwd?: string) => req<FileStat>("GET", `/api/fs/stat?path=${encodeURIComponent(path)}&cwd=${encodeURIComponent(cwd ?? "")}`),
+  fileExists: (paths: string[], cwd?: string) => req<{ exists: Record<string, boolean> }>("POST", "/api/fs/exists", { paths, cwd: cwd ?? "" }),
 
   // 远程访问（设置 →「远程访问」；passkey 的两段 ceremony 在 lib/passkey.ts）
   remoteStatus: () => req<{ status: RemoteStatus; remote: boolean }>("GET", "/api/remote/status"),

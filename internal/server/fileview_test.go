@@ -1,11 +1,14 @@
 package server
 
 import (
+	"bytes"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -86,5 +89,25 @@ func TestFileStatSuffix(t *testing.T) {
 	}
 	if got := suffixMatches("../a.tsx", dir); got != nil {
 		t.Errorf("带 .. 的不猜：%v", got)
+	}
+}
+
+// Bare names from inline code: present (directly or by suffix) count, identifiers that only look like files don't.
+func TestFileExists(t *testing.T) {
+	dir := t.TempDir()
+	for _, f := range []string{"README.md", "ui/src/chat/Composer.tsx", "x/b.go", "y/b.go"} {
+		os.MkdirAll(filepath.Dir(filepath.Join(dir, f)), 0o755)
+		os.WriteFile(filepath.Join(dir, f), []byte("x"), 0o644)
+	}
+	body, _ := json.Marshal(map[string]any{"cwd": dir, "paths": []string{"README.md", "Composer.tsx", "b.go", "acpx.GUIHint", "Node.js"}})
+	w := httptest.NewRecorder()
+	(&Server{}).fileExists(w, httptest.NewRequest("POST", "/api/fs/exists", bytes.NewReader(body)))
+	var got struct{ Exists map[string]bool }
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatal(w.Body.String())
+	}
+	want := map[string]bool{"README.md": true, "Composer.tsx": true, "b.go": true}
+	if !reflect.DeepEqual(got.Exists, want) {
+		t.Errorf("got %v, want %v", got.Exists, want)
 	}
 }

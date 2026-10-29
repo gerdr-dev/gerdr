@@ -1,5 +1,5 @@
 import { ChevronDown, Play, SquareTerminal, Terminal } from "lucide-react";
-import { useContext, useState } from "react";
+import { useContext, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import { defaultComponents, defaultRehypePlugins, type Components } from "streamdown";
 import { MessageResponse } from "@/components/ai-elements/message";
@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import { basename, openPath, runInTerminal, terminalNear } from "@/lib/actions";
 import type { PaneLeaf } from "@/lib/layout";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { localHref, rehypePaths } from "@/lib/paths";
+import { bareFileName, fileExists, localHref, onFileExists, rehypePaths } from "@/lib/paths";
 import { ChatMedia, imageGroup, localPath, MediaGrid, rehypeImageGroups } from "./ChatMedia";
 import { SessionContext } from "./sessionContext";
 
@@ -23,6 +23,8 @@ const rehypePlugins = [...Object.values(defaultRehypePlugins), rehypePaths, rehy
 
 const DefaultA = (defaultComponents as Record<string, any>).a ?? "a";
 
+const pathLink = "cursor-pointer text-brand underline decoration-brand/40 underline-offset-2 hover:decoration-brand";
+
 function A(props: any) {
   const session = useContext(SessionContext);
   const path: string | undefined = props["data-gerdr-path"] ?? localHref(props.href);
@@ -31,7 +33,7 @@ function A(props: any) {
     <a
       href="#"
       title={path}
-      className="cursor-pointer text-brand underline decoration-brand/40 underline-offset-2 hover:decoration-brand"
+      className={pathLink}
       onClick={(e) => {
         e.preventDefault();
         openPath(path, session?.cwd);
@@ -137,9 +139,28 @@ function RunButton({ cmd, className }: { cmd: string; className?: string }) {
 }
 
 // 行内代码：`! 命令` 旁边画「运行」。字从 hast 节点里取：路径插件可能把里面改成了链接
+// A bare file name (`README.md:45`) becomes a link once the server confirms it's in the session directory.
 function InlineCode(props: any) {
-  const cmd = bangCommand(hastText(props.node));
+  const session = useContext(SessionContext);
+  const text = hastText(props.node);
+  const cmd = bangCommand(text);
+  const name = session?.cwd ? bareFileName(text) : undefined;
+  const found = useSyncExternalStore(onFileExists, () => (name && session?.cwd ? fileExists(name, session.cwd) : undefined));
   const code = <DefaultCode {...props} />;
+  if (name && found)
+    return (
+      <a
+        href="#"
+        title={name}
+        className={pathLink}
+        onClick={(e) => {
+          e.preventDefault();
+          openPath(name, session?.cwd);
+        }}
+      >
+        {code}
+      </a>
+    );
   if (!cmd) return code;
   return (
     <>

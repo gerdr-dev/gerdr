@@ -42,13 +42,22 @@ func resolvePath(p, cwd string) string {
 // suffixMatches：相对路径（不带 `..`）在 cwd 下找「以它结尾」的文件，按路径长短排，最多 20 个，返回绝对路径。
 // cwd 为空（没有会话目录）不找：那会去走整个家目录。
 func suffixMatches(p, cwd string) []string {
+	return suffixIn(p, cwd, nil)
+}
+
+// suffixIn is suffixMatches over an already listed file set (nil = list it now), so a batch of names
+// costs one `git ls-files` instead of one each.
+func suffixIn(p, cwd string, files []string) []string {
 	p = filepath.ToSlash(strings.TrimPrefix(p, "./"))
 	if cwd == "" || p == "" || filepath.IsAbs(p) || strings.HasPrefix(p, "~") || slices.Contains(strings.Split(p, "/"), "..") {
 		return nil
 	}
 	dir := resolvePath(".", cwd)
+	if files == nil {
+		files = listFiles(dir)
+	}
 	var out []string
-	for _, f := range listFiles(dir) {
+	for _, f := range files {
 		if f == p || strings.HasSuffix(f, "/"+p) {
 			out = append(out, filepath.Join(dir, filepath.FromSlash(f)))
 		}
@@ -122,6 +131,50 @@ func (s *Server) fileStat(w http.ResponseWriter, r *http.Request) {
 		m = fileMime(p)
 	}
 	writeJSON(w, map[string]any{"path": p, "name": filepath.Base(p), "dir": st.IsDir(), "size": st.Size(), "mtime": st.ModTime().UnixMilli(), "mime": m})
+}
+
+// fileExists answers, for a batch of names, which ones open in the session directory (as is, or by the
+// same suffix search fileStat falls back to). The chat uses it for bare file names in inline code
+// (`README.md`, `Composer.tsx:42`): without a slash they can't be told apart from `acpx.GUIHint` or
+// `Node.js` by looking, so they only become links once the file is known to be there.
+//
+//	POST /api/fs/exists {cwd, paths}  →  {exists: {path: true}}
+func (s *Server) fileExists(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Cwd   string   `json:"cwd"`
+		Paths []string `json:"paths"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		httpError(w, 400, err.Error())
+		return
+	}
+	if len(body.Paths) > 500 {
+		body.Paths = body.Paths[:500]
+	}
+	out := map[string]bool{}
+	var files []string
+	for _, p := range body.Paths {
+		if p == "" {
+			continue
+		}
+		if _, err := os.Stat(resolvePath(p, body.Cwd)); err == nil {
+			out[p] = true
+			continue
+		}
+		if body.Cwd == "" {
+			continue
+		}
+		if files == nil {
+			files = listFiles(resolvePath(".", body.Cwd))
+			if files == nil {
+				files = []string{}
+			}
+		}
+		if len(suffixIn(p, body.Cwd, files)) > 0 {
+			out[p] = true
+		}
+	}
+	writeJSON(w, map[string]any{"exists": out})
 }
 
 func (s *Server) fileRaw(w http.ResponseWriter, r *http.Request) {

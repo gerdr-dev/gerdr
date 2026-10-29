@@ -1,3 +1,5 @@
+import { api } from "@/lib/api";
+
 /**
  * 认出对话里的**本地文件路径**，让它可点（点了原地打开，见 components/FileViewer.tsx）。
  *
@@ -111,4 +113,60 @@ export function localHref(h: string | undefined): string | undefined {
   } catch {
     return raw;
   }
+}
+
+/**
+ * Bare file names in inline code (`README.md`, `Composer.tsx:42`). Agents write these all the time, but with
+ * no slash they look exactly like `acpx.GUIHint` or `Node.js`, so findPaths leaves them alone; the chat only
+ * links one after the server says it opens in the session directory (as is, or by its suffix search).
+ * Returns the name without the line number, or undefined if it doesn't look like a file name at all.
+ */
+const BARE = /^([\w@][\w.@+-]*\.[A-Za-z]\w{0,9})(?::\d+(?::\d+)?)?$/;
+export const bareFileName = (text: string) => BARE.exec(text.trim())?.[1];
+
+// Answers per cwd + name. Misses expire: the agent may create the file a few messages later, and the
+// virtual list re-mounts old messages anyway, so a stale "no" fixes itself on the next look.
+const known = new Map<string, { ok: boolean; at: number }>();
+const MISS_TTL = 30_000;
+const waiting = new Map<string, Set<string>>(); // cwd → names queued for the next batch
+const listeners = new Set<() => void>();
+let timer: ReturnType<typeof setTimeout> | undefined;
+
+const key = (name: string, cwd: string) => cwd + "\n" + name;
+
+/** Whether `name` is known to open under `cwd`; undefined = not checked yet (one is queued). */
+export function fileExists(name: string, cwd: string): boolean | undefined {
+  const k = known.get(key(name, cwd));
+  if (k && (k.ok || Date.now() - k.at < MISS_TTL)) return k.ok;
+  let q = waiting.get(cwd);
+  if (!q) waiting.set(cwd, (q = new Set()));
+  q.add(name);
+  // A rendered conversation asks for dozens at once: gather them into one request per cwd.
+  timer ??= setTimeout(flush, 50);
+  return k?.ok;
+}
+
+export function onFileExists(fn: () => void) {
+  listeners.add(fn);
+  return () => void listeners.delete(fn);
+}
+
+async function flush() {
+  timer = undefined;
+  const batches = [...waiting];
+  waiting.clear();
+  await Promise.all(
+    batches.map(async ([cwd, names]) => {
+      const list = [...names];
+      try {
+        const { exists } = await api.fileExists(list, cwd);
+        for (const n of list) known.set(key(n, cwd), { ok: !!exists[n], at: Date.now() });
+      } catch {
+        // Older server or offline: plain code for now, retried once the misses expire (not on every
+        // render — the listeners below re-render, which would ask again in a tight loop).
+        for (const n of list) known.set(key(n, cwd), { ok: false, at: Date.now() });
+      }
+    }),
+  );
+  for (const fn of listeners) fn();
 }
