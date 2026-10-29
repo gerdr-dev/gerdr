@@ -141,11 +141,6 @@ export function closeFocusedPane() {
   const l = get().layout;
   const p = focusedLeaf(l);
   if (p) rememberPane(activeWs(l), activeTab(l), p);
-  if (p?.sessionId) {
-    const s = get().sessions[p.sessionId];
-    // 关 pane 不删会话（它还在会话列表里，prefix+g 能找回来），但正在跑的那一轮停掉。
-    if (s && (s.status === "running" || s.status === "waiting")) api.cancel(s.id).catch(() => {});
-  }
   killTerms(p ? [p] : []);
   setLayout((l) => {
     const ws = activeWs(l);
@@ -154,16 +149,15 @@ export function closeFocusedPane() {
     if (next) return updateTab(l, t.id, () => next);
     return removeTab(l, ws, t.id);
   });
+  shutdownGone(p ? [p] : []);
 }
 
 /**
- * 关掉显示某个会话的 pane（`gerdr session close`，别的 agent 关它开的会话）：和人手动关一样，
- * 正在跑的那一轮停掉，会话记录留着（`gerdr session open` / prefix+g 能找回来）。
+ * 关掉显示某个会话的 pane（`gerdr session close`，别的 agent 关它开的会话）：和人手动关一样。
+ * agent 那边服务端已经关了，这里只收 pane；会话记录留着（`gerdr session open` / prefix+g 能找回来）。
  */
 export function closeSessionPanes(sessionId: string) {
   if (!sessionId || !locateSession(get().layout, sessionId)) return;
-  const s = get().sessions[sessionId];
-  if (s && (s.status === "running" || s.status === "waiting")) api.cancel(s.id).catch(() => {});
   setLayout((l) => {
     for (let loc = locateSession(l, sessionId); loc; loc = locateSession(l, sessionId)) {
       const tabId = loc.tab.id;
@@ -179,6 +173,16 @@ export function closeSessionPanes(sessionId: string) {
 /** 关掉 pane 里的终端：和 tmux 一样，关 pane 就是结束里面的 shell（不然它在服务端没人看得见地一直跑着）。 */
 function killTerms(panes: PaneLeaf[]) {
   for (const p of panes) if (p.term) api.termKill(p.term.id).catch(() => {});
+}
+
+/**
+ * 关掉的 pane 里的会话：布局里已经哪儿都不显示了，就把 agent 那边也关掉（claude 进程当场收掉，正在跑的那一轮算取消），
+ * 和 herdr 关 pane 就结束里面的 agent 一个意思 —— 不然它没人看得见地挂着，claude 进程要白占几百 MB 到闲置超时。
+ * 记录留着：⌘⇧T 能原样放回来，下次发话再 --resume 接上。要在 setLayout 之后调（看的是关完之后的布局）。
+ */
+function shutdownGone(panes: PaneLeaf[]) {
+  const l = get().layout;
+  for (const p of panes) if (p.sessionId && get().sessions[p.sessionId] && !locateSession(l, p.sessionId)) api.shutdown(p.sessionId).catch(() => {});
 }
 
 /** 按 id 关一个 pane（不一定是焦点那个）：终端里的 shell 退出了就这样收掉。 */
@@ -306,22 +310,19 @@ export function closeTab(tabId?: string) {
   const id = tabId ?? ws.activeTab;
   const tab = ws.tabs.find((t) => t.id === id);
   if (tab && !onlyBlank(ws, tab)) remember({ kind: "tab", wsId: ws.id, index: ws.tabs.indexOf(tab), tab });
-  for (const p of tab ? leaves(tab.root) : []) {
-    const s = p.sessionId ? get().sessions[p.sessionId] : undefined;
-    if (s && (s.status === "running" || s.status === "waiting")) api.cancel(s.id).catch(() => {});
-  }
   killTerms(tab ? leaves(tab.root) : []);
   setLayout((l) => {
     const w = l.workspaces.find((x) => x.id === ws.id);
     return w ? removeTab(l, w, id) : l;
   });
+  shutdownGone(tab ? leaves(tab.root) : []);
 }
 
 // ---- 撤销关闭（⌘⇧T）----
 //
 // 只记人手关的（关 pane、关 tab、两次 Ctrl+C 关掉 agent）；shell 自己退出、别的 agent 用 `gerdr session close` 关的不记。
 // 只记在这个页面的内存里：刷新就没了，和浏览器的「重新打开关闭的标签页」一样够用。
-// 会话关 pane 时只是停掉这一轮、记录还在，所以能原样接回来；终端关的时候 shell 已经结束，回来的是同目录新开的一个。
+// 会话关 pane 时 agent 那边关了、gerdr 的记录还在（shutdownGone），所以能原样接回来（下次发话再 --resume）；终端关的时候 shell 已经结束，回来的是同目录新开的一个。
 
 type Closed =
   | { kind: "tab"; wsId: string; index: number; tab: Tab }
@@ -449,9 +450,9 @@ export function closeAgentInPane(paneId: string) {
   const p = allLeaves(l).find((x) => x.pane.id === paneId)?.pane;
   if (!p?.sessionId) return;
   const s = get().sessions[p.sessionId];
-  if (s && (s.status === "running" || s.status === "waiting")) api.cancel(s.id).catch(() => {});
   remember({ kind: "agent", paneId, sessionId: p.sessionId });
   setLayout((l) => setPane(l, paneId, { sessionId: undefined, draft: s ? { agent: s.agent, cwd: s.cwd } : undefined }));
+  shutdownGone([p]);
   focusPane(paneId);
 }
 
@@ -586,7 +587,8 @@ export function renameWorkspace(id: string, name: string) {
 
 export function closeWorkspace(id?: string) {
   const w0 = get().layout.workspaces.find((w) => w.id === (id ?? get().layout.active));
-  killTerms(w0 ? w0.tabs.flatMap((t) => leaves(t.root)) : []);
+  const panes = w0 ? w0.tabs.flatMap((t) => leaves(t.root)) : [];
+  killTerms(panes);
   setLayout((l) => {
     const wid = id ?? l.active;
     const workspaces = l.workspaces.filter((w) => w.id !== wid);
@@ -597,6 +599,7 @@ export function closeWorkspace(id?: string) {
     const active = l.active === wid ? (l.lastActive && workspaces.some((w) => w.id === l.lastActive) ? l.lastActive : workspaces[0].id) : l.active;
     return { ...l, workspaces, active };
   });
+  shutdownGone(panes);
 }
 
 export function moveWorkspace(from: number, to: number) {
@@ -686,7 +689,9 @@ function setPane0(paneId: string, patch: Partial<PaneLeaf>) {
 export function resumeInPane(paneId: string, sessionId: string) {
   const loc = locateSession(get().layout, sessionId);
   if (loc) return focusPane(loc.pane.id);
+  const was = allLeaves(get().layout).find((x) => x.pane.id === paneId)?.pane;
   setPane0(paneId, { sessionId, draft: undefined });
+  shutdownGone(was ? [was] : []); // 换下来的那个会话也不显示了
   focusPane(paneId);
 }
 

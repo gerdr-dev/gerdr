@@ -87,6 +87,7 @@ type Session struct {
 	turnTokens  int             // 这一轮输出了多少 token（状态行）
 	sending     map[string]bool // 正在处理的 client 消息 id（同一条重发时挡住并发的那次）
 	retryCancel chan struct{}   // 自动重试正在等：关掉它 = 人按了停止
+	shut        bool            // Hub.Shutdown 关掉的（关了 pane）：这一轮因为进程被杀报的错不算错、不自动重试；再接上时清掉
 	attachMu    sync.Mutex
 }
 
@@ -383,7 +384,7 @@ func (s *Session) ensureAttached(ctx context.Context) (*agenthost.Host, error) {
 			if nerr == nil {
 				s.h.rekey(s, string(nres.SessionId))
 				s.mu.Lock()
-				s.attached = true
+				s.attached, s.shut = true, false
 				s.modes, s.config = nres.Modes, nres.ConfigOptions
 				s.h.opts.set(s.rec.Agent, s.modes, s.config)
 				s.mu.Unlock()
@@ -395,7 +396,7 @@ func (s *Session) ensureAttached(ctx context.Context) (*agenthost.Host, error) {
 		return nil, fmt.Errorf("接回会话失败：%s", errText(err))
 	}
 	s.mu.Lock()
-	s.attached = true
+	s.attached, s.shut = true, false
 	s.modes, s.config = res.Modes, res.ConfigOptions
 	s.h.opts.set(s.rec.Agent, s.modes, s.config)
 	s.mu.Unlock()
@@ -652,10 +653,10 @@ func retryable(msg string) bool {
 func (s *Session) runTurn(c *agenthost.Host, agentSID, msgID string, content []acp.ContentBlock) {
 	res, err := c.Conn.Prompt(context.Background(), acp.PromptRequest{SessionId: acp.SessionId(agentSID), MessageId: &msgID, Prompt: content})
 	// 网络出错：等一会儿让 agent 从断的地方接着做（发一句「继续」，不进对话记录 —— 界面上是一行提示）。
-	for attempt := 0; err != nil && attempt < len(retryWaits) && retryable(errText(err)); attempt++ {
+	for attempt := 0; err != nil && attempt < len(retryWaits) && retryable(errText(err)) && !s.isShut(); attempt++ {
 		wait := retryWaits[attempt]
 		s.emit(&Event{Kind: EvNotice, Level: "retry", Text: fmt.Sprintf("出错了：%s。%d 秒后自动重试（第 %d/%d 次），按停止可以取消。", oneLine(errText(err), 200), int(wait.Seconds()), attempt+1, len(retryWaits))})
-		if !s.sleepUnlessCancelled(wait) {
+		if !s.sleepUnlessCancelled(wait) || s.isShut() {
 			break
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
@@ -675,7 +676,9 @@ func (s *Session) runTurn(c *agenthost.Host, agentSID, msgID string, content []a
 	s.mu.Lock()
 	ev.DurationMs, ev.OutputTokens = now()-s.turnStarted, s.turnTokens
 	s.mu.Unlock()
-	if err != nil {
+	if err != nil && s.isShut() {
+		err, ev.StopReason = nil, "cancelled" // 人关了 pane、进程是我们杀的：和按停止一样
+	} else if err != nil {
 		ev.Error = errText(err)
 		ev.StopReason = "error"
 	} else {
@@ -747,6 +750,12 @@ func (s *Session) touchTitle(content []acp.ContentBlock) {
 	s.mu.Unlock()
 	s.h.broadcastSession(s)
 	s.h.saveIndex()
+}
+
+func (s *Session) isShut() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.shut
 }
 
 // sleepUnlessCancelled：自动重试前的等待；人按了停止就提前返回 false。
@@ -1808,7 +1817,7 @@ func (s *Session) Reload(ctx context.Context) error {
 		return err
 	}
 	s.mu.Lock()
-	s.attached = true
+	s.attached, s.shut = true, false
 	if res.Modes != nil {
 		s.modes = res.Modes
 	}

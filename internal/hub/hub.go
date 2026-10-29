@@ -651,6 +651,27 @@ func (h *Hub) rekey(s *Session, newAgentID string) {
 	h.saveIndex()
 }
 
+// Shutdown 关掉 agent 那边的会话（claude 的进程当场收掉），gerdr 的记录留着：界面上关了 pane / tab 就调它，
+// 不然 claude 进程要白挂到闲置超时（15 分钟）。之后再发话 ensureAttached 会 --resume 接回来，⌘⇧T 撤销关闭照样能用。
+func (h *Hub) Shutdown(ctx context.Context, id string) error {
+	s, err := h.Session(id)
+	if err != nil {
+		return err
+	}
+	s.attachMu.Lock() // 和 ensureAttached 错开：别刚接上就被这边标成没接
+	s.mu.Lock()
+	s.shut = true // 先标上再杀：杀掉后 runTurn 拿到「进程意外退出」时要认得出是我们关的
+	s.mu.Unlock()
+	s.close(ctx)
+	s.mu.Lock()
+	s.attached = false
+	s.mu.Unlock()
+	s.attachMu.Unlock()
+	s.setStatus() // close 把等人处理的请求清掉了
+	h.broadcastSession(s)
+	return nil
+}
+
 // Delete 关掉并删除一个会话（gerdr 这边的记录；agent 自己的会话记录不动）。
 func (h *Hub) Delete(ctx context.Context, id string) error {
 	s, err := h.Session(id)

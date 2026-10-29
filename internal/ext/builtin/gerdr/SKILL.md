@@ -83,7 +83,7 @@ gerdr session close reviewer          # 用完了：从界面上收掉它的 pan
 gerdr session send reviewer "/clear"  # 还要接着派活、但不想带着之前的上下文：清空（claude、codex 都认）
 ```
 
-`close` 和人手动关 pane 一样：它正在跑的那一轮会停掉，记录留着，`gerdr session open` 能开回来。
+`close` 和人手动关 pane 一样：agent 那边关掉（正在跑的那一轮停掉，claude 进程收掉），记录留着，`gerdr session open` 能开回来、再发话会接着原来的对话。
 你开出来的会话活干完了就关掉，别让用户自己一个个去关。
 
 ## 并行

@@ -141,6 +141,8 @@ export const api = {
   termKill: (id: string) => req("DELETE", `/api/terms/${encodeURIComponent(id)}`),
   send: sendWithRetry,
   cancel: (id: string) => req("POST", `/api/sessions/${id}/cancel`, {}),
+  /** 关掉 agent 那边（claude 进程当场收掉），记录留着；下次发话自动接回来 */
+  shutdown: (id: string) => req("POST", `/api/sessions/${id}/shutdown`, {}),
   reload: (id: string) => req("POST", `/api/sessions/${id}/reload`, {}),
   takeover: (id: string, action: "fork" | "kill") => req("POST", `/api/sessions/${id}/takeover`, { action }),
   searchFiles: (id: string, q: string) => req<{ files: string[] }>("GET", `/api/sessions/${id}/files?q=${encodeURIComponent(q)}`),

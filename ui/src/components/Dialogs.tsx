@@ -57,6 +57,7 @@ export function Dialogs() {
 function Palette({ open }: { open: boolean }) {
   useStore((s) => s.pluginVersion);
   const sessions = useStore((s) => s.sessions);
+  const layout = useStore((s) => s.layout);
   const cmds = open ? allCommands() : [];
   return (
     <CommandDialog open={open} onOpenChange={(o) => !o && close()} title="命令面板" description="搜索命令或会话">
@@ -80,9 +81,10 @@ function Palette({ open }: { open: boolean }) {
           ))}
         </CommandGroup>
         <CommandGroup heading="会话">
+          {/* 只列开在 pane 里的：关掉的 pane 连 agent 一起关了（shutdownGone），这里再搜出来像没关掉。全部会话在 prefix+g */}
           {Object.values(sessions)
+            .filter((s) => locateSession(layout, s.id))
             .sort((a, b) => b.updatedAt - a.updatedAt)
-            .slice(0, 50)
             .map((s) => (
               <CommandItem
                 key={s.id}
