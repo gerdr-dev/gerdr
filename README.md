@@ -1,95 +1,171 @@
 # gerdr
 
-**Claude Code 和 Codex 的图形界面。** 不再隔着一层 TUI 模拟按键：底下走 ACP（Agent Client Protocol），
-所以审批、提问、中途插话、回退都是真接口，而不是往终端里敲字再读屏。
+<p align="center">
+  <img src="ui/public/icon.svg" alt="gerdr" width="100" />
+</p>
 
-- **中途插话**：agent 在干活的时候直接说话，消息插进正在跑的那一轮（不用等、不用先打断）。
-  和 Claude Code 一样默认等它做完手上这一步再插进去；急的话点 ⚡ 或 Ctrl+回车立即插（打断这一步）。
-- **审批 / 提问**：要你批准的命令、改文件，agent 问你的选择题，都是界面上的卡片，点一下就回。
-- **回退**：回到任何一条消息之前 —— 对话截断，**文件也一起恢复**（含 agent 用 shell 改的文件）。
-- **接着以前的聊**：在终端里开过的 Claude Code / Codex 会话，选目录就能列出来接着聊。
-- **从 herdr 导入**：herdr 的工作空间、tab、分屏原样搬过来，每个 agent 接上它的会话（设置 → 从 herdr 导入）。
-- **分屏、tab、工作空间**：和 [herdr](https://github.com/herdrdev/herdr) 一样的结构和快捷键（`ctrl+b v` 左右分屏……）。
-- **终端**：临时敲几条命令不用切出去：`ctrl+b t` 在旁边开一个（跟着当前目录），和会话一起分屏、开 tab。shell 跑在 gerdr 这边，刷新页面、换到手机上接着用。
-- **改坏了有急救**：主界面被改坏打不开时，报错页上点「急救面板」（或右下角冒出来的「急救」、App 菜单 帮助 → 急救）：从右边拉出一个面板，看错误、退回之前的一版、叫 agent 来修，主界面就在旁边看着它修。这个面板编进 gerdr，改不坏。
-- **界面能让 agent 改**：界面就是 `~/.gerdr/ui` 里的 React 源码，没有打包环节，改完保存立刻生效。
-  对 agent 说「侧栏底下加一个会话统计」就行（内置的 gerdr-ui skill 教它怎么改、改完怎么确认没改坏）。
-- **多个 agent 互相协作**：会话里的 agent 能开新会话（Claude Code / Codex）、派活、等结果、读回复（内置的 gerdr skill + `gerdr session` 命令）。
-- **后台任务和子 agent**：看得到在跑的后台命令、子 agent，能停、能把前台的转到后台；子 agent 的完整对话可以开一个只读面板看。
-- **skill / MCP 自己管**：用 agent 自己的、gerdr 的、或两者都用；从 agent 那边一键导入。
-- **TS 插件**：改 tab 名、pane 标题，加命令和快捷键。保存即生效。
-- **桌面 App**（mac / Windows）：独立窗口、系统通知、Dock 角标；也可以只跑后端，用浏览器打开。
+<p align="center">
+  <a href="#install">install</a> · <a href="#usage">usage</a> · <a href="#gerdr-vs-herdr">gerdr vs herdr</a> · <a href="docs/API.md">http api</a> · <a href="docs/dev/ARCHITECTURE.md">architecture</a>
+</p>
 
-## 装
+<p align="center">
+  English · <a href="README.zh-CN.md">简体中文</a>
+</p>
 
-需要先装好、登录好你要用的 agent：
+<p align="center">
+  <a href="https://github.com/gerdr-dev/gerdr/releases/latest"><img src="https://img.shields.io/github/v/release/gerdr-dev/gerdr?label=release&labelColor=333333&color=666666" alt="latest release" /></a>
+  <a href="https://github.com/gerdr-dev/gerdr/releases"><img src="https://img.shields.io/github/downloads/gerdr-dev/gerdr/total?labelColor=333333&color=666666" alt="total downloads" /></a>
+  <a href="https://github.com/gerdr-dev/gerdr/stargazers"><img src="https://img.shields.io/github/stars/gerdr-dev/gerdr?labelColor=333333&color=666666&logo=github" alt="GitHub stars" /></a>
+</p>
+
+---
+
+**A real GUI for Claude Code and Codex.**
+
+gerdr talks to your agents over a structured protocol (ACP, the Agent Client Protocol), not by typing into a TUI
+and scraping the screen. So approvals, questions, interrupting mid-turn and rewinding are real API calls with real
+answers, rendered as real UI.
+
+- **talk while it works** — send a message while the agent is busy and it joins the running turn. By default it waits
+  for the current step to finish (like Claude Code does); ⚡ or `ctrl+enter` interjects right away.
+- **approvals and questions are cards** — commands and file edits that need your OK, and multiple-choice questions
+  the agent asks you, show up as cards. One click answers.
+- **rewind** — go back to before any message: it and everything after are dropped and the agent forgets them; your
+  words go back into the input box to edit and resend. Only the conversation rewinds, files are left alone.
+- **pick up old sessions** — Claude Code / Codex sessions you started in a terminal are listed per directory; click
+  one to continue it.
+- **splits, tabs, workspaces** — the same layout model and prefix keys as [herdr](https://github.com/herdrdev/herdr)
+  (`ctrl+b v` to split…). Already on herdr? Settings → Import from herdr brings your workspaces, tabs and splits over
+  and reattaches each agent to its session.
+- **terminals alongside** — `ctrl+b t` opens a shell in the current directory, splittable like any pane. The shell
+  runs inside gerdr, so it survives a page reload and follows you to your phone.
+- **agents that coordinate** — an agent can start new Claude Code / Codex sessions, hand them work, wait, and read
+  the replies (built-in `gerdr` skill + `gerdr session`).
+- **background work in view** — see running background commands and subagents, stop them, move foreground work to
+  the background, open a subagent's full transcript read-only.
+- **a UI your agent can change** — the interface is plain React source in `~/.gerdr/ui`, with no build step: saved
+  edits show up instantly. Ask "add a session counter under the sidebar" and the built-in `gerdr-ui` skill teaches the
+  agent how. If an edit breaks the UI, the **rescue panel** (compiled into gerdr, can't be broken) lets you see the
+  error, roll back, or have an agent fix it while you watch.
+- **TypeScript plugins** — rename tabs, title panes, add commands and keys. Save and it's live.
+- **skills and MCP, your way** — use the agent's own, gerdr's, or both; import from the agent in one click.
+- **more than two agents** — multiple Claude / Codex accounts side by side, any external ACP agent (Gemini CLI…),
+  and a built-in **Gerdr Agent** that calls OpenAI-compatible APIs (GPT, DeepSeek…) directly, with long-term memory.
+- **from anywhere** — desktop app (macOS / Windows) or any browser; remote access through an end-to-end TLS relay with
+  pairing codes and passkeys; an Android app with LAN direct-connect and background notifications.
+
+## install
+
+Install and log in to the agents you want to use first:
 
 ```bash
-curl -fsSL https://claude.ai/install.sh | bash   # Claude Code，然后跑一次 claude 登录
-npm i -g @openai/codex                           # Codex，然后 codex login
+curl -fsSL https://claude.ai/install.sh | bash   # Claude Code, then run `claude` once to log in
+npm i -g @openai/codex                           # Codex, then `codex login`
 ```
 
-**mac App**：下载 `Gerdr-x.y.z-mac-arm64.dmg`（Apple 芯片：M1 及以后）或 `Gerdr-x.y.z-mac-x64.dmg`（Intel），拖进「应用程序」。第一次打开如果提示「无法验证开发者」，
-在 Finder 里右键 → 打开（或 `xattr -dr com.apple.quarantine /Applications/Gerdr.app`）。
+Then grab gerdr from [releases](https://github.com/gerdr-dev/gerdr/releases/latest):
 
-**Windows**：下载 `gerdr Setup x.y.z.exe` 装上（没签名，SmartScreen 拦的话点「更多信息 → 仍要运行」）。
+- **macOS** — `Gerdr-x.y.z-mac-arm64.dmg` (Apple silicon) or `Gerdr-x.y.z-mac-x64.dmg` (Intel); drag it into
+  Applications. If macOS says the developer can't be verified, right-click → Open in Finder
+  (or `xattr -dr com.apple.quarantine /Applications/Gerdr.app`).
+- **Android** — `Gerdr-x.y.z-android.apk`. It connects to your own gerdr through [remote access](#remote-access).
+- **Windows** — not in releases yet; build the installer with `make win` (unsigned: on SmartScreen click
+  More info → Run anyway).
 
-**从源码**（Go 1.24+、Node 20+、pnpm；打桌面 App 还要 `cd desktop && npm install`）：
+From source (Go 1.24+, Node 20+, pnpm; the desktop app also needs `cd desktop && npm install`):
 
 ```bash
-make build        # → bin/gerdr（命令行 + 内嵌一份界面源码）
-make app          # → build/Gerdr.app（本机架构）
-make dmg          # → desktop/dist/Gerdr-<版本>-mac-{arm64,x64}.dmg（Apple 芯片 / Intel 各一个）
-make win          # → desktop/dist/gerdr Setup <版本>.exe（Windows 安装包，在 mac 上就能打）
-make install      # 把 Gerdr.app 放进 /Applications，命令行链到 ~/.local/bin/gerdr
+make build        # → bin/gerdr (CLI + an embedded copy of the UI source)
+make app          # → build/Gerdr.app (this machine's arch)
+make dmg          # → desktop/dist/Gerdr-<version>-mac-{arm64,x64}.dmg
+make win          # → desktop/dist/gerdr Setup <version>.exe (builds on a Mac too)
+make apk          # → Android app (needs the Android SDK and JDK 17–21)
+make install      # puts Gerdr.app in /Applications, links the CLI to ~/.local/bin/gerdr
 ```
 
-## 用
+## usage
 
 ```bash
-gerdr             # 起服务，打印一个带令牌的链接，用浏览器打开
-gerdr --open      # 起服务并打开浏览器
-gerdr url         # 再拿一次登录链接
-gerdr acp claude  # 把内置适配器当 stdio ACP agent 跑（给 Zed 等 ACP 客户端用）
+gerdr             # start the server and print a login link with a token
+gerdr --open      # same, and open the browser
+gerdr url         # print the login link again
+gerdr acp claude  # run the built-in adapter as a stdio ACP agent (for Zed and other ACP clients)
 ```
 
-桌面 App 和命令行可以同时用：App 发现已经有一个 gerdr 在跑，就直接连它，看到的是同一份会话。
+> The UI is Chinese-only for now; menu and setting names in this README are translations.
 
-新建会话：选 agent、选目录、开始。下面会列出这个目录下以前的会话，点一下接着聊。
+The desktop app and the CLI can run together: if a gerdr is already running, the app connects to it and you see the
+same sessions. On macOS, Settings → General → *Run in background* installs a LaunchAgent so sessions keep running
+after you quit the app ([details](docs/dev/SERVICE.md)).
 
-输入框：回车发送，Shift+回车换行（设置里可以改成 ⌘+回车）；`/` 出斜杠命令；Esc 打断；
-粘贴 / 拖进来的图片会一起发。agent 在跑的时候发送 = 插话（Ctrl+回车 = 立即插话）。
+New session: pick an agent, pick a directory, go. Earlier sessions in that directory are listed below; click one to
+continue it.
 
-鼠标移到自己说过的话上：✏️ 改这句重发、↺ 回到这条消息之前（可选连文件一起恢复）。
+In the input box: `enter` sends, `shift+enter` is a newline (switchable to `⌘+enter` in Settings), `/` opens slash
+commands, `esc` interrupts, pasted or dropped images are sent along. Sending while the agent runs is an interjection
+(`ctrl+enter` = interject now). A line like `` `! ls` `` from the agent gets a *Run* button.
 
-## 快捷键
+Hover one of your own messages and click ↺, then click again (or press enter) to confirm: the conversation goes back
+to before it, and the message (text and images) returns to the input box — send as is, or edit first. Files are not
+restored.
 
-和 herdr / tmux 一样：先按前缀 `ctrl+b`，松开，再按：
+### keys
 
-| 键 | 作用 | 键 | 作用 |
+Like herdr / tmux: press the prefix `ctrl+b`, release, then:
+
+| key | action | key | action |
 |---|---|---|---|
-| `v` | 左右分屏 | `-` | 上下分屏 |
-| `h j k l` / 方向键 | 切 pane | `shift+h/j/k/l` | 和邻居交换 |
-| `x` | 关 pane | `z` | 放大 / 还原 |
-| `c` | 新 tab | `n` / `p` | 下一个 / 上一个 tab |
-| `1`…`9` | 跳到第几个 tab | `;` | 上次的 tab |
-| `shift+x` | 关 tab | `shift+t` | 重命名 tab |
-| `shift+n` | 新工作空间 | `w` | 切工作空间 |
-| `g` | 会话列表 | `o` | 跳到在等你的会话 |
-| `u` / `d` | 上一个 / 下一个要你处理的会话 | `:` | 命令面板（也可以 ⌘K） |
-| `b` | 侧栏 | `?` | 全部快捷键 |
+| `v` | split left/right | `-` | split top/bottom |
+| `h j k l` / arrows | move between panes | `shift+h/j/k/l` | swap with neighbor |
+| `x` | close pane | `z` | zoom / restore |
+| `c` | new tab | `n` / `p` | next / previous tab |
+| `1`…`9` | go to tab N | `;` | last tab |
+| `shift+x` | close tab | `shift+t` | rename tab |
+| `shift+n` | new workspace | `w` | switch workspace |
+| `g` | session list | `o` | jump to a session waiting on you |
+| `u` / `d` | previous / next session needing you | `:` | command palette (also `⌘K`) |
+| `t` | terminal | `b` | sidebar |
+| `?` | all shortcuts | | |
 
-中文输入法开着也能用（按物理键位认键）。全部可以在「设置 → 快捷键」里改。
-mac App 里另有 ⌘T 新 tab、⌘1…9 切 tab 这些菜单快捷键；⌘D / ⌘⇧D 把焦点那个复制一份放右边 / 下面（会话就是同 agent、同目录、同模式的新会话，直接开起来；终端就是同目录终端），要空面板用 prefix+v / prefix+-。
+Keys are matched by physical position, so they work with a CJK input method on. Rebind everything in
+Settings → Shortcuts. The macOS app adds menu shortcuts: `⌘T` new tab, `⌘1…9` switch tab, `⌘D` / `⌘⇧D` duplicate
+the focused pane to the right / below (a new session with the same agent, directory and mode, or a terminal in the
+same directory).
 
-## 插件
+## gerdr vs herdr
 
-插件目录 `~/.gerdr/plugins/`，一个 `.ts` 文件一个插件，保存即生效（不用装 node，gerdr 自己编译）。
-自带的：
+gerdr grew out of using [herdr](https://github.com/herdrdev/herdr) daily: it keeps herdr's layout model and keys, and
+can import a herdr setup. The difference is the layer they work at. **herdr owns the agents' terminals; gerdr talks to
+the agents themselves.**
 
-- `tab-numbering.ts` —— tab 名前加位置编号 `1.web`、`2.api`，同名的加 `Ⅱ Ⅲ`；
-- `duplicate-tab.ts` —— `prefix+a` / `prefix+i` 复制当前 tab 到后面 / 前面；
-- `_notify-when-done.ts` —— 示例，默认关（文件名以 `_` 开头的不加载）。
+| | herdr | gerdr |
+|---|---|---|
+| what it is | terminal multiplexer for agents (Rust TUI) | graphical client for agents (Go server + web UI, Electron shell) |
+| runs in | the terminal you already use, over SSH | desktop app, any browser, Android app |
+| how it sees an agent | the agent's terminal: screen state, hooks | a structured protocol (ACP): messages, tool calls, permissions as data |
+| supported agents | anything that runs in a terminal (Claude Code, Codex, Cursor, OpenCode…) | Claude Code, Codex, any ACP agent, the built-in Gerdr Agent |
+| approvals / questions | answered in the agent's own TUI | cards in the chat, also answerable from your phone or the [HTTP API](docs/API.md) |
+| talking mid-turn | type into the TUI | interject into the running turn, queued or immediate |
+| undo | whatever the agent offers | rewind to any message (conversation only, files untouched) |
+| layout | panes, tabs, workspaces, prefix keys | same model, same keys, importable from herdr |
+| plain shells | every pane is one | terminal panes next to sessions |
+| agents driving each other | `herdr agent …` CLI + socket API | `gerdr session …` CLI + built-in skill |
+| remote | saved SSH machines in one window | relay with end-to-end TLS, pairing codes, passkeys; LAN direct on Android |
+| customizing | plugins | TS plugins, plus the whole UI is editable source with hot reload |
+| footprint | one binary, no Electron | one Go binary; the desktop app adds Electron |
+
+**Pick herdr** if you live in the terminal, work over SSH, or use agents gerdr has no adapter for.
+**Pick gerdr** if you want approvals and rewinds as UI, want to check on agents from your phone, or want to
+reshape the interface itself. They also mix: import a herdr setup into gerdr, keep using herdr for the rest. A session
+open in both at once will fork its transcript, so quit it in one first.
+
+## plugins
+
+Plugins live in `~/.gerdr/plugins/`, one `.ts` file each, live on save (no Node needed, gerdr compiles them). Bundled:
+
+- `tab-numbering.ts` — prefixes tab names with their position (`1.web`, `2.api`), numbers duplicates `Ⅱ Ⅲ`;
+- `duplicate-tab.ts` — `prefix+a` / `prefix+i` duplicates the current tab after / before itself;
+- `_notify-when-done.ts` — an example, off by default (files starting with `_` aren't loaded).
 
 ```ts
 /// <reference path="./gerdr.d.ts" />
@@ -101,100 +177,118 @@ export default definePlugin({
 });
 ```
 
-完整 API 在插件目录的 `gerdr.d.ts` 里。
+The full API is in `gerdr.d.ts` in the plugin directory.
 
-## 配置
+## configuration
 
-界面上的偏好（快捷键、主题、外部 agent）在「设置」里改，存在 `~/.gerdr/config.json`。服务本身用环境变量：
+UI preferences (shortcuts, theme, agents) live in Settings and are saved to `~/.gerdr/config.json`. The server
+itself reads environment variables:
 
-| 变量 | 默认 | |
+| variable | default | |
 |---|---|---|
-| `GERDR_PORT` | `7870` | 监听端口（被占了会自动换一个） |
-| `GERDR_HOST` | `127.0.0.1` | 监听地址 |
-| `GERDR_DIR` | `~/.gerdr` | 数据目录（会话、布局、插件） |
-| `GERDR_TOKEN` | 自动生成 | 登录令牌，存在 `~/.gerdr/token` |
-| `GERDR_CLAUDE_IDLE_MINUTES` | `15` | Claude 会话闲多久就收掉它的进程（下次说话自动接回）；`0` = 不收 |
-| `GERDR_UI` | `~/.gerdr/ui` | 界面源码目录（比如单独克隆的 gerdr-ui 仓库） |
-| `GERDR_ESM_CDN` | `https://esm.sh` | 界面第三方包的来源（esm.sh 或它的镜像；本机有缓存） |
-| `GERDR_CLAUDE_BIN` / `GERDR_CODEX_BIN` | 自动找 | agent 可执行文件的位置 |
+| `GERDR_PORT` | `7870` | listen port (picks another if taken) |
+| `GERDR_HOST` | `127.0.0.1` | listen address |
+| `GERDR_DIR` | `~/.gerdr` | data directory (sessions, layout, plugins) |
+| `GERDR_TOKEN` | generated | login token, stored in `~/.gerdr/token` |
+| `GERDR_CLAUDE_IDLE_MINUTES` | `15` | stop an idle Claude session's process after this long (resumed on the next message); `0` = never |
+| `GERDR_UI` | `~/.gerdr/ui` | UI source directory (e.g. a separate clone) |
+| `GERDR_ESM_CDN` | `https://esm.sh` | where the UI's third-party packages come from (esm.sh or a mirror; cached locally) |
+| `GERDR_CLAUDE_BIN` / `GERDR_CODEX_BIN` | auto | agent executables |
 
-**用程序接**（手环、脚本）：看会话、读回复、发消息、替人点审批，都有 HTTP 接口，见 [docs/API.md](docs/API.md)。
+**Scripting** — listing sessions, reading replies, sending messages and answering approvals are all HTTP endpoints:
+[docs/API.md](docs/API.md).
 
-**安全**：gerdr 等于一个能在你机器上跑命令的入口，所以永远要令牌，哪怕只听 127.0.0.1。
-别把它的端口转发到公网 —— 要从外面用，走下面的「远程访问」。
+**Security** — gerdr is a way to run commands on your machine, so it always requires a token, even on 127.0.0.1.
+Don't port-forward it to the internet; use [remote access](#remote-access) instead.
 
-## 远程访问（手机 / 别的电脑）
+### more agents and accounts
 
-和 herdr-web 同一套：经云端中继（[herdr-relay](https://github.com/zbysir/herdr-web)）对外，TLS 在这台机器上终止，
-中继只转密文。新设备用**配对码**进来（只有坐在机器前的人能出），之后加一把 **passkey**，换新设备就不用再回机器前。
-本机的令牌在远程**不好使**。设计和理由见 [docs/dev/REMOTE.md](docs/dev/REMOTE.md)。
+Settings → Agents → *Add a Claude*: give it a name (say "Claude 2") and an environment. For a second subscription
+use its own `CLAUDE_CONFIG_DIR=~/.claude-2` (then `CLAUDE_CONFIG_DIR=~/.claude-2 claude` in a terminal and `/login`
+once); for an API key set `ANTHROPIC_API_KEY=…`. You can also swap the executable or append arguments. It shows up
+next to the original when starting a session, with its own process and transcript directory. Codex works the same
+way (`CODEX_HOME` / `OPENAI_API_KEY`). External ACP agents (e.g. `gemini --experimental-acp`) are added on the same
+page. Changes apply immediately. Stored under `agents` in `config.json`:
+`{"id": "claude-2", "name": "Claude 2", "base": "claude", "env": {"CLAUDE_CONFIG_DIR": "~/.claude-2"}, "bin": "", "args": []}`.
 
-一次性的准备：
+### Gerdr Agent (GPT, DeepSeek… straight from the API)
 
-```bash
-# VPS 上（已经有 herdr-relay 的话）：给这台机器出一个邀请码
-herdr-relay invite gerdr.example.com
-
-# 这台机器上：注册，顺带配好证书（DNS-01 自己签，这里以 Cloudflare 为例）
-gerdr remote join https://relay.example.com gerdr.example.com <邀请码> \
-  --dns cloudflare --env CLOUDFLARE_DNS_API_TOKEN=…
-```
-
-它会打出要加的 DNS 记录（A 指到中继、一条 CAA），配置写进 `~/.gerdr/remote/remote.json`，重启 gerdr 生效（mac App 也认）。
-
-然后：
-
-- **配对**：设置 →「远程访问」→ 出一个配对码（或 `gerdr remote pair`），手机扫码就进来了。码 5 分钟、用一次就废。
-- **passkey**：在手机上打开的 gerdr 里，设置 →「远程访问」→ 加一把 passkey。配过对的设备 24 小时没验证要再刷一次。
-- **踢设备**：设置里点「踢掉」，或 `gerdr remote devices` / `gerdr remote revoke <id|all>`（all 连 passkey 一起清）。
-- `gerdr remote status` 看中继连没连上、证书什么时候到期。
-
-也能全用环境变量配（盖过 remote.json）：`GERDR_RELAY_URL`、`GERDR_RELAY_HOST`、`GERDR_ACME_DNS`、`GERDR_<DNS 凭据>`
-（比如 `GERDR_CLOUDFLARE_DNS_API_TOKEN`）、`GERDR_ACME_EMAIL`，或者自己给证书 `GERDR_TLS_CERT` / `GERDR_TLS_KEY`；
-`GERDR_DEVICE_TTL_DAYS`（默认 90，0 = 永不过期）、`GERDR_REAUTH_HOURS`（默认 24，0 = 不要求）。
-
-**多个账号 / 换启动参数**：设置 → Agent →「加一个 Claude」，起个名字（比如「Claude 2」），给它一套环境变量：
-订阅账号用一个单独的 `CLAUDE_CONFIG_DIR=~/.claude-2`（然后在终端里 `CLAUDE_CONFIG_DIR=~/.claude-2 claude` 进去 `/login` 一次），
-API key 就写 `ANTHROPIC_API_KEY=…`。还能换可执行文件、追加命令行参数。新建会话时它和原版并排出现在 agent 里，
-每个是单独的进程和会话记录目录。Codex 同理（`CODEX_HOME` / `OPENAI_API_KEY`）。
-外部 ACP agent（Gemini CLI 等）也在这一页加（`gemini --experimental-acp`）。改了立即生效，不用重启。
-存在 `config.json` 的 `agents` 里：
-`{"id": "claude-2", "name": "Claude 2", "base": "claude", "env": {"CLAUDE_CONFIG_DIR": "~/.claude-2"}, "bin": "", "args": []}`。
-
-**Gerdr Agent（直接用 GPT、DeepSeek 等模型的 API）**：gerdr 自带一个 agent，不经过 Claude Code / Codex，直接调 OpenAI 兼容的接口
-（GPT 走 Responses，DeepSeek 等走 Chat Completions）。在 `config.json` 里配了模型，新建会话时就多一个「Gerdr Agent」：
+gerdr ships its own agent that skips Claude Code / Codex and calls OpenAI-compatible APIs (Responses for GPT, Chat
+Completions for DeepSeek and others). Configure models in `config.json` and *Gerdr Agent* appears when starting a
+session:
 
 ```json
 "llm": {
   "providers": [{
-    "id": "my", "name": "我的网关", "baseUrl": "https://example.com/v1", "apiKey": "sk-…",
+    "id": "my", "name": "My gateway", "baseUrl": "https://example.com/v1", "apiKey": "sk-…",
     "models": [{"id": "gpt-6.1-sol"}, {"id": "deepseek-v4-pro"}]
   }],
   "defaultModel": "my/gpt-6.1-sol"
 }
 ```
 
-不想把 key 写进文件就用 `"apiKeyEnv": "环境变量名"`。模型只写 id 就行，协议、思考档位、上下文窗口按 id 猜；猜错了在模型上写
-`api`（chat / responses）、`efforts`、`window`、`images`。也可以在设置 → Agent 最下面配（能从接口拉模型列表、单个试一下）。
-会话记录在 `~/.gerdr/native/`。插话、回退、审批、子 agent（可以放后台）、后台命令、网页抓取、`/compact`、`/clear`、skill、
-MCP（用 Claude Code 配的那些 + gerdr 自己的，不支持要 OAuth 登录的）都支持。
-**长期记忆**：你纠正过它的、你的偏好、项目的约定它会自己记下来，新会话也记得。记在 `~/.gerdr/native/memory/`（`global/` 是全局的，
-`projects/` 下按项目分），一条一个 Markdown 文件，可以直接看、改、删；`/memory` 看它记了什么，`/memory 忘掉 xxx` 让它删。设置 →「记忆」里能看、改、删，Claude Code 和 Codex 的记忆也在那一页。
+Use `"apiKeyEnv": "VAR_NAME"` to keep the key out of the file. A model id is usually enough; protocol, reasoning
+levels and context window are guessed from it, and you can override with `api` (chat / responses), `efforts`,
+`window`, `images`. The bottom of Settings → Agents can do this too (fetch the model list, test a model).
 
-## 内存
+Transcripts go to `~/.gerdr/native/`. Interjecting, rewind, approvals, subagents (backgroundable), background
+commands, web fetch, `/compact`, `/clear`, skills and MCP (Claude Code's servers plus gerdr's; no OAuth servers) all
+work. **Long-term memory**: corrections, your preferences and project conventions are remembered across sessions, one
+Markdown file each under `~/.gerdr/native/memory/` (`global/`, and `projects/` per project). `/memory` lists them,
+`/memory forget xxx` deletes one; Settings → Memory shows them too, alongside Claude Code's and Codex's.
 
-- Codex：所有会话共用一个 `codex app-server` 进程（几十 MB）。
-- Claude Code：一个会话一个 `claude` 进程（几百 MB，CLI 的结构）。闲置 15 分钟的会话会被收掉进程，
-  下次说话时自动 `--resume`，对话不丢。
-- gerdr 本身：一个 Go 进程，没有 node。
+## remote access
 
-## 开发
+From your phone or another computer, through a cloud relay ([herdr-relay](https://github.com/zbysir/herdr-web)).
+TLS terminates on this machine; the relay only forwards ciphertext. A new device gets in with a **pairing code** (only
+someone at the machine can issue one), then adds a **passkey** so the next device doesn't need you at the machine.
+The local token does **not** work remotely. Design and reasoning: [docs/dev/REMOTE.md](docs/dev/REMOTE.md).
 
-见 [docs/dev/ARCHITECTURE.md](docs/dev/ARCHITECTURE.md)（为什么这么设计、协议里实测出来的坑）。
+One-time setup:
 
 ```bash
-make test         # Go 测试
-make typecheck    # 界面的类型检查（先 cd ui && pnpm install）
-make test-e2e     # 对着真的 claude / codex 跑（花钱、要登录）
-make dev          # 界面用仓库里的 ui/（改了立刻热更新），数据放 ~/.gerdr-dev，端口 7871
+# on the VPS (with herdr-relay already running): issue an invite for this machine
+herdr-relay invite gerdr.example.com
+
+# on this machine: register and set up certificates (DNS-01, Cloudflare as the example)
+gerdr remote join https://relay.example.com gerdr.example.com <invite> \
+  --dns cloudflare --env CLOUDFLARE_DNS_API_TOKEN=…
+```
+
+It prints the DNS records to add (an A record to the relay, a CAA record), writes `~/.gerdr/remote/remote.json`, and
+takes effect after restarting gerdr (the macOS app reads it too). Then:
+
+- **pair** — Settings → Remote access → issue a pairing code (or `gerdr remote pair`), scan it with your phone. Codes
+  last 5 minutes and work once.
+- **passkey** — in gerdr on the phone, Settings → Remote access → add a passkey. Paired devices re-verify after 24
+  hours without one.
+- **revoke** — *Kick* in Settings, or `gerdr remote devices` / `gerdr remote revoke <id|all>` (`all` clears passkeys
+  too).
+- `gerdr remote status` shows the relay connection and certificate expiry.
+
+Everything can also come from the environment (overrides `remote.json`): `GERDR_RELAY_URL`, `GERDR_RELAY_HOST`,
+`GERDR_ACME_DNS`, `GERDR_<DNS credential>` (e.g. `GERDR_CLOUDFLARE_DNS_API_TOKEN`), `GERDR_ACME_EMAIL`, or your own
+certificate via `GERDR_TLS_CERT` / `GERDR_TLS_KEY`; `GERDR_DEVICE_TTL_DAYS` (default 90, 0 = never expire),
+`GERDR_REAUTH_HOURS` (default 24, 0 = never).
+
+The [Android app](docs/dev/ANDROID.md) wraps the same UI and adds what a browser can't: direct LAN connection when
+you're home (same origin, same TLS), passkeys inside the app, and background notifications.
+
+## memory use
+
+- Codex: one shared `codex app-server` process for all sessions (tens of MB).
+- Claude Code: one `claude` process per session (hundreds of MB, that's how the CLI works). Sessions idle for 15
+  minutes have their process stopped and are `--resume`d on the next message; nothing is lost.
+- gerdr itself: one Go process, no Node.
+
+## development
+
+Read [docs/dev/ARCHITECTURE.md](docs/dev/ARCHITECTURE.md) first: why it's built this way, and the protocol pitfalls
+found by testing. AI agents working on this repo: start with [CLAUDE.md](CLAUDE.md).
+
+```bash
+make test         # Go tests
+make typecheck    # UI type check (cd ui && pnpm install first)
+make test-e2e     # against real claude / codex (costs money, needs login)
+make dev          # UI served from the repo's ui/ with hot reload, data in ~/.gerdr-dev, port 7871
 ```
