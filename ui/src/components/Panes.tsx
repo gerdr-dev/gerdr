@@ -86,7 +86,14 @@ export function TabView({ tab }: { tab: Tab }) {
   place(root, FULL, panes, seams);
   const zoom = !phone && tab.zoom && panes.some((p) => p.pane.id === tab.zoom) ? tab.zoom : undefined;
   // 分屏时和 herdr 一样：每个 pane 一圈边框、中间留缝，焦点那个边框高亮。只有一个 pane（或放大着）时不画框（省地方）。
-  const framed = panes.length > 1 && !zoom;
+  const anim = useZoomAnim(zoom, phone);
+  // Frames stay on while a zoom animates (the growing pane looks like a window sliding over its neighbours) and drop at the end.
+  const framed = panes.length > 1 && (!zoom || !!anim);
+  // The animating pane's content is pinned to the full tab size (the size at the zoomed end) for the whole transition, so only
+  // its clipping box moves: the chat list / xterm see one resize at the zoomed end instead of one per frame (re-measuring every
+  // row or refitting the terminal each frame is what made a naive width/height transition stutter).
+  // Minus the 3px frame padding on each side, which stays on while animating, so the right / bottom border isn't clipped.
+  const pin = anim && box.current ? { width: box.current.clientWidth - 6, height: box.current.clientHeight - 6 } : undefined;
   let count: (Count & { pane: string }) | undefined;
   if (phone && panes.length < all.length) {
     const p = panes.find((x) => x.pane.id === tab.focus)?.pane ?? panes[0].pane;
@@ -121,13 +128,31 @@ export function TabView({ tab }: { tab: Tab }) {
         {panes.map(({ pane, box: b }) => {
           const z = zoom === pane.id;
           const at = z ? FULL : b;
+          const moving = anim === pane.id;
           return (
             <div
               key={pane.id}
-              style={{ left: pct(at.x), top: pct(at.y), width: pct(at.w), height: pct(at.h) }}
-              className={cn("absolute min-h-0 min-w-0 overflow-hidden", framed && "p-[3px]", zoom && (z ? "z-10" : "invisible"))}
+              // The transition is an inline style, not a class: browser Tailwind generates a class's CSS only after it first shows up
+              // in the DOM, which is one style change too late — the first zoom of a page load would jump instead of animate.
+              style={{
+                left: pct(at.x),
+                top: pct(at.y),
+                width: pct(at.w),
+                height: pct(at.h),
+                transition: moving ? `left ${ZOOM_MS}ms ${EASE}, top ${ZOOM_MS}ms ${EASE}, width ${ZOOM_MS}ms ${EASE}, height ${ZOOM_MS}ms ${EASE}` : undefined,
+              }}
+              className={cn(
+                "absolute min-h-0 min-w-0 overflow-hidden",
+                framed && "p-[3px]",
+                // Neighbours stay put under the moving pane and are only hidden once it covers them.
+                zoom && !z && !anim && "invisible",
+                moving ? "z-20" : zoom && z && "z-10",
+              )}
             >
-              <PaneView pane={pane} tab={tab} framed={framed} zoomed={z || undefined} count={count?.pane === pane.id ? count : undefined} />
+              {/* Opaque while moving: it slides over its neighbours, which panes don't otherwise need to cover */}
+              <div className={cn("h-full w-full", moving && "rounded-md bg-background")} style={moving ? pin : undefined}>
+                <PaneView pane={pane} tab={tab} framed={framed} zoomed={z || undefined} count={count?.pane === pane.id ? count : undefined} />
+              </div>
             </div>
           );
         })}
@@ -158,6 +183,29 @@ export function TabView({ tab }: { tab: Tab }) {
 }
 
 type Count = { i: number; n: number };
+
+const ZOOM_MS = 220;
+const EASE = "cubic-bezier(0.2, 0.8, 0.2, 1)";
+
+/**
+ * Which pane is growing to / shrinking from full size right now (zoom toggled within the last ZOOM_MS), if any.
+ * Decided during render (not in an effect) so the transition class lands in the same style change as the new box —
+ * a frame later the box has already jumped and there is nothing left to transition.
+ */
+function useZoomAnim(zoom: string | undefined, phone: boolean) {
+  const [seen, setSeen] = useState(zoom);
+  const [anim, setAnim] = useState<string>();
+  if (seen !== zoom) {
+    setSeen(zoom);
+    setAnim(phone || matchMedia("(prefers-reduced-motion: reduce)").matches ? undefined : (zoom ?? seen));
+  }
+  useEffect(() => {
+    if (!anim) return;
+    const t = setTimeout(() => setAnim(undefined), ZOOM_MS + 30);
+    return () => clearTimeout(t);
+  }, [anim, seen]);
+  return anim;
+}
 
 /**
  * 标题栏按住拖：把这个 pane 挪到别处（见 TabDrag.tsx 的 startPaneDrag）。手机上一次只看一个 pane，不给拖。
