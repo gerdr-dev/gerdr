@@ -341,6 +341,8 @@ var bashTool = &tool{
 		"command":     prop("string", "The command to run"),
 		"description": prop("string", "Short description of what this command does (5-10 words)"),
 		"timeout":     prop("integer", "Timeout in seconds (default 120, max 600)"),
+		"run_in_background": prop("boolean", "Run in the background and return immediately (dev servers, watchers, long builds). "+
+			"You are notified with the output when it finishes; check it with task_output, stop it with task_stop."),
 	}, "command"),
 	show: func(args map[string]any, cwd string) (string, acp.ToolKind, []acp.ToolCallLocation) {
 		cmd := str(args, "command")
@@ -356,10 +358,72 @@ func shell() string {
 	return "/bin/sh"
 }
 
+// proc 是一个跑着的命令。
+type proc struct {
+	cmd   *exec.Cmd
+	buf   *lockedBuf
+	done  chan error
+	start time.Time
+}
+
+func startProc(c *call, command string) (*proc, error) {
+	cmd := exec.Command(shell(), "-c", command)
+	cmd.Dir = c.cwd()
+	cmd.Env = sysenv.ChildEnv(sessionEnvKey + "=" + c.r.s.currentID())
+	cmd.Stdin = nil
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	p := &proc{cmd: cmd, buf: &lockedBuf{}, done: make(chan error, 1), start: time.Now()}
+	cmd.Stdout = p.buf
+	cmd.Stderr = p.buf
+	if err := cmd.Start(); err != nil {
+		return nil, err
+	}
+	go func() { p.done <- cmd.Wait() }()
+	return p, nil
+}
+
+// kill：整个进程组一起杀（sh -c 起的子进程 —— npm、go test 起的一串 —— 不跟着死的话会一直挂着），等它退出。
+func (p *proc) kill() error {
+	_ = syscall.Kill(-p.cmd.Process.Pid, syscall.SIGTERM)
+	select {
+	case err := <-p.done:
+		return err
+	case <-time.After(2 * time.Second):
+		_ = syscall.Kill(-p.cmd.Process.Pid, syscall.SIGKILL)
+		return <-p.done
+	}
+}
+
+func exitCode(err error) int {
+	if err == nil {
+		return 0
+	}
+	var ee *exec.ExitError
+	if errors.As(err, &ee) {
+		return ee.ExitCode()
+	}
+	return -1
+}
+
 func runBash(c *call, args map[string]any) result {
 	command := str(args, "command")
 	if strings.TrimSpace(command) == "" {
 		return errResult("empty command")
+	}
+	desc := str(args, "description")
+	if desc == "" {
+		desc = command
+	}
+	p, err := startProc(c, command)
+	if err != nil {
+		return errResult("%v", err)
+	}
+	s := c.r.s
+	if boolean(args, "run_in_background") {
+		s.setBgOut(c.id, p.buf)
+		c.bgBash(p, desc)
+		return result{text: fmt.Sprintf("Started in the background (task id %s). You will be notified when it finishes; use task_output to check on it, task_stop to stop it.", c.id),
+			display: []acp.ToolCallContent{}}
 	}
 	timeout := time.Duration(num(args, "timeout")) * time.Second
 	if timeout <= 0 {
@@ -368,21 +432,8 @@ func runBash(c *call, args map[string]any) result {
 	timeout = min(timeout, 600*time.Second)
 	ctx, cancel := context.WithTimeout(c.ctx, timeout)
 	defer cancel()
-
-	cmd := exec.Command(shell(), "-c", command)
-	cmd.Dir = c.cwd()
-	cmd.Env = sysenv.ChildEnv(sessionEnvKey + "=" + c.r.s.currentID())
-	cmd.Stdin = nil
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	var buf lockedBuf
-	cmd.Stdout = &buf
-	cmd.Stderr = &buf
-	start := time.Now()
-	if err := cmd.Start(); err != nil {
-		return errResult("%v", err)
-	}
-	done := make(chan error, 1)
-	go func() { done <- cmd.Wait() }()
+	detach, undetach := s.detachable(c.id)
+	defer undetach()
 	tick := time.NewTicker(400 * time.Millisecond)
 	defer tick.Stop()
 	var werr error
@@ -390,39 +441,31 @@ func runBash(c *call, args map[string]any) result {
 loop:
 	for {
 		select {
-		case werr = <-done:
+		case werr = <-p.done:
 			break loop
 		case <-tick.C:
-			if s, changed := buf.snapshot(); changed {
-				c.progress(tailStr(s, 16<<10))
+			if out, changed := p.buf.snapshot(); changed {
+				c.progress(tailStr(out, 16<<10))
 			}
+		case <-detach:
+			// 界面上点了「转到后台」：命令接着跑，这一轮往下走
+			s.setBgOut(c.id, p.buf)
+			c.bgBash(p, desc)
+			out, _ := p.buf.snapshot()
+			return result{text: fmt.Sprintf("The user moved this command to the background (task id %s); it is still running. You will be notified when it finishes. Output so far:\n%s", c.id, headTail(out, outMax/2)),
+				display: []acp.ToolCallContent{acp.ToolContent(acp.TextBlock(tailStr(out, 64<<10)))}}
 		case <-ctx.Done():
-			// 整个进程组一起杀：sh -c 起的子进程（npm、go test 起的一串）不跟着死的话会一直挂着
-			_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
-			select {
-			case werr = <-done:
-			case <-time.After(2 * time.Second):
-				_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-				werr = <-done
-			}
+			werr = p.kill()
 			if c.ctx.Err() != nil {
 				killed = "interrupted by the user"
 			} else {
-				killed = fmt.Sprintf("timed out after %s", timeout)
+				killed = fmt.Sprintf("timed out after %s; for long-running commands use run_in_background", timeout)
 			}
 			break loop
 		}
 	}
-	out, _ := buf.snapshot()
-	code := 0
-	if werr != nil {
-		var ee *exec.ExitError
-		if errors.As(werr, &ee) {
-			code = ee.ExitCode()
-		} else {
-			code = -1
-		}
-	}
+	out, _ := p.buf.snapshot()
+	code := exitCode(werr)
 	text := headTail(out, outMax)
 	if text == "" {
 		text = "(no output)"
@@ -433,7 +476,7 @@ loop:
 	case code != 0:
 		text += fmt.Sprintf("\n[exit code %d]", code)
 	}
-	if d := time.Since(start); d > 10*time.Second {
+	if d := time.Since(p.start); d > 10*time.Second {
 		text += fmt.Sprintf("\n[took %s]", d.Round(time.Second))
 	}
 	disp := tailStr(out, 64<<10)

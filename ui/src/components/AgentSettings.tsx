@@ -5,6 +5,7 @@ import { AgentIcon } from "@/components/AgentIcon";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { LLMSettings } from "@/components/LLMSettings";
 import { setConfig, useStore, type AgentDef } from "@/lib/store";
 
 // 设置 →「Agent」。除了内置的 Claude Code / Codex，可以再加几个：
@@ -72,7 +73,7 @@ export function AgentSettings() {
   const [edit, setEdit] = useState<Draft | null>(null);
   const [isNew, setIsNew] = useState(false);
 
-  const taken = new Set(["claude", "codex", ...defs.map((d) => d.id)]);
+  const taken = new Set(["claude", "codex", "native", ...defs.map((d) => d.id)]);
   const add = (kind: Kind) => {
     const n = defs.filter((d) => (d.base ?? "command") === kind).length + 2;
     const name = kind === "claude" ? `Claude ${n}` : kind === "codex" ? `Codex ${n}` : "Gemini";
@@ -159,6 +160,10 @@ export function AgentSettings() {
       )}
 
       {edit && <Editor d={edit} onChange={setEdit} onSave={save} onCancel={() => setEdit(null)} />}
+
+      <div className="border-t pt-4">
+        <LLMSettings />
+      </div>
     </div>
   );
 }

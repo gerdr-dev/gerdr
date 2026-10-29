@@ -119,6 +119,16 @@ React（ui/，不打包）  ←WebSocket / HTTP→  hub（internal/hub）  ←AC
 9. 指令文件：`~/.claude/CLAUDE.md`、`~/.codex/AGENTS.md`、git 根到 cwd 每层的 AGENTS.md / CLAUDE.md 都拼进系统提示词；
    skill 列表（内置 + Claude Code 的 + gerdr 的，按设置的来源）只给名字、描述、路径，模型自己去读。
 10. bash 的环境里有 `GERDR_NATIVE_SESSION_ID`，`gerdr session current` 拿它认自己。
+11. **后台任务**（`bg.go`）：bash / task 的 `run_in_background`，或界面上「转到后台」（`_gerdr/task_background`，前台的命令 / 子 agent
+    在等的 select 里收到就把自己交给后台 goroutine）。跑完时会话在跑 → 通知排进插话队列；闲着 → 自己开一轮，前后发 `autoTurn` true / false
+    （hub 当成 agent 自己跑起来了，和 claude 后台任务跑完一样）。子 agent 的 ctx 不挂在这一轮上，前台时这一轮被打断由 select 转达。
+    后台任务只在内存里，gerdr 重启就没了。
+12. **MCP**（`mcp.go`，自己写的客户端，只有 initialize / tools/list / tools/call）：stdio、streamable HTTP（响应可能是 JSON 也可能是一段 SSE，
+    带 Mcp-Session-Id）、老式 SSE（先等 endpoint 事件）。服务器按设置里 MCP 的来源取：「agent 自己的」= Claude Code 配的（~/.claude.json、
+    项目 .mcp.json）。同一份配置整个 agent 只起一个、各会话共用；起不来的 1 分钟内不重试；每轮最多等 30 秒，没起完的这轮先不带。
+    工具名 `mcp__<服务器>__<工具>`，最长 64（两家接口的限制），标了 readOnlyHint 的不审批。**不支持 OAuth**：要登录的服务器（401）给一行提示。
+    测试里 HOME 要换成临时目录，不然会读到本机 ~/.claude.json、把真的 MCP 服务器起起来。
+13. web_fetch 按域名审批（`fetch:<host>`）：联网能把数据带出去，不算只读。HTML 自己转成 Markdown 风格的文字（x/net/html），不另调模型总结。
 
 测试：`go test ./internal/agents/native/...` 用假接口跑主循环；`NATIVE_LIVE_BASE / NATIVE_LIVE_KEY / NATIVE_LIVE_MODELS` 设了才跑真模型（花钱）。
 

@@ -1,3 +1,4 @@
+import type { LLMModel, LLMProvider } from "./store";
 import type { ContentBlock, ExtSettings, ExtView, Hello, HubEvent, PluginBuild, SessionSummary, TermInfo } from "./types";
 
 /** 正开着某个会话的别的进程（herdr / 终端里的交互式 claude） */
@@ -116,6 +117,9 @@ export const api = {
   plugins: () => req<PluginBuild[]>("GET", "/api/plugins"),
   putLayout: (data: unknown, client: string) => req("PUT", "/api/layout", { data, client }),
   putConfig: (data: unknown, client: string) => req("PUT", "/api/config", { data, client }),
+  // Gerdr Agent 的模型设置：拉服务商的模型列表、拿一个模型试说一句（服务商参数是页面上的草稿，不用先保存）
+  llmModels: (p: LLMProvider) => req<{ models: string[] }>("POST", "/api/llm/models", p),
+  llmTest: (provider: LLMProvider, model: LLMModel) => req<{ reply: string; api: string }>("POST", "/api/llm/test", { provider, model }),
   awake: () => req<AwakeStatus>("GET", "/api/awake"),
   setAwake: (b: { minutes?: number; until?: number; forever?: boolean }) => req<AwakeStatus>("PUT", "/api/awake", b),
   setupLid: () => req<AwakeStatus>("POST", "/api/awake/lid-setup", {}),

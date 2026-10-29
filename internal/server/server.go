@@ -280,6 +280,7 @@ func (s *Server) Handler() http.Handler {
 	})
 	mux.HandleFunc("GET /api/importable", s.importable)
 	s.extRoutes(mux)
+	s.llmRoutes(mux)
 	s.importRoutes(mux)
 	if s.Remote != nil {
 		s.remoteRoutes(mux)

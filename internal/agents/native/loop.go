@@ -366,6 +366,8 @@ func (r *run) askPermission(ctx context.Context, p *pending, rule string) (strin
 			name = "允许，本会话改文件都不再问"
 		case strings.HasPrefix(rule, "bash:"):
 			name = "允许，本会话 `" + strings.TrimPrefix(rule, "bash:") + "` 开头的命令都不再问"
+		case strings.HasPrefix(rule, "fetch:"):
+			name = "允许，本会话访问 " + strings.TrimPrefix(rule, "fetch:") + " 都不再问"
 		}
 		opts = append(opts, acp.PermissionOption{OptionId: "allow_always", Name: name, Kind: acp.PermissionOptionKindAllowAlways})
 	}

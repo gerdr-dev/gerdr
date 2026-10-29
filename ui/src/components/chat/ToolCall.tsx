@@ -185,7 +185,12 @@ export function ToolCall({ part, children, running, keep: keepOpen }: { part: To
   // 跑满 3 秒才露出来：大部分命令一两秒就完，按钮一闪而过，还会把行尾的耗时挤来挤去
   const slow = useAfter(busy, meta.startedAt, 3000);
   const canBackground =
-    slow && busy && !meta.parent && (session?.base ?? session?.agent) === "claude" && !task?.background && (meta.kind === "execute" || !!task);
+    slow &&
+    busy &&
+    !meta.parent &&
+    ["claude", "native"].includes(session?.base ?? session?.agent ?? "") &&
+    !task?.background &&
+    (meta.kind === "execute" || !!task);
   // 「允许并重试」：auto 模式的分类器拦下的调用（claude 里是 /permissions 里批准）。规则写进项目的
   // .claude/settings.local.json，再发一句话让它重试。点过的记一下，免得重复发。
   const [allowed, setAllowed] = useKept<boolean>(keep && `${keep}:allowed`, false);

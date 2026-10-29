@@ -76,78 +76,117 @@ var taskTool = &tool{
 	desc: "Launch a sub-agent to handle a self-contained task autonomously (e.g. searching a large codebase, investigating how something works, " +
 		"doing an independent piece of work). It has the same tools as you except task and ask_user, starts with no context " +
 		"— so the prompt must contain everything it needs — and returns a single final report. " +
-		"Launch several in one response to run them in parallel. Do not use it for simple lookups you can do with one or two tool calls.",
+		"Launch several in one response to run them in parallel. Set run_in_background to keep working while it runs; you are notified with its report when it finishes. " +
+		"Do not use it for simple lookups you can do with one or two tool calls.",
 	params: obj(map[string]any{
-		"description": prop("string", "A short (3-5 word) description of the task"),
-		"prompt":      prop("string", "The full task for the sub-agent, including all context it needs and what to report back"),
+		"description":       prop("string", "A short (3-5 word) description of the task"),
+		"prompt":            prop("string", "The full task for the sub-agent, including all context it needs and what to report back"),
+		"run_in_background": prop("boolean", "Return immediately and let it run in the background (default false)"),
 	}, "description", "prompt"),
 	readOnly: true,
 	show: func(args map[string]any, cwd string) (string, acp.ToolKind, []acp.ToolCallLocation) {
 		return "Sub-agent: " + oneLine(str(args, "description"), 80), acp.ToolKindOther, nil
 	},
-	run: func(c *call, args map[string]any) result {
-		parent := c.r
-		if parent.sub != nil {
-			return errResult("sub-agents cannot start sub-agents")
+	run: runTask,
+}
+
+func runTask(c *call, args map[string]any) result {
+	parent := c.r
+	if parent.sub != nil {
+		return errResult("sub-agents cannot start sub-agents")
+	}
+	s := parent.s
+	desc, prompt := str(args, "description"), str(args, "prompt")
+	if strings.TrimSpace(prompt) == "" {
+		return errResult("prompt is empty")
+	}
+	sr := &subRun{toolCall: c.id}
+	r := &run{s: s, sub: sr, model: parent.model, effort: parent.effort,
+		system: systemPrompt(s.cwd(), nil, true),
+		msgs:   []llm.Message{{Role: "user", Content: []llm.Part{llm.TextPart(prompt)}}}}
+	for _, t := range parent.tools {
+		if t.name != "task" && t.name != "ask_user" {
+			r.tools = append(r.tools, t)
 		}
-		s := parent.s
-		desc, prompt := str(args, "description"), str(args, "prompt")
-		if strings.TrimSpace(prompt) == "" {
-			return errResult("prompt is empty")
-		}
-		sr := &subRun{toolCall: c.id}
-		r := &run{s: s, sub: sr, model: parent.model, effort: parent.effort,
-			system: systemPrompt(s.cwd(), nil, true),
-			msgs:   []llm.Message{{Role: "user", Content: []llm.Part{llm.TextPart(prompt)}}}}
-		for _, t := range parent.tools {
-			if t.name != "task" && t.name != "ask_user" {
-				r.tools = append(r.tools, t)
-			}
-		}
-		ctx, cancel := context.WithCancel(c.ctx)
-		defer cancel()
-		s.mu.Lock()
-		if s.tasks == nil {
-			s.tasks, s.subCancel = map[string]*acpx.Task{}, map[string]context.CancelFunc{}
-		}
-		s.subCancel[c.id] = cancel
-		task := &acpx.Task{ID: c.id, Type: "local_agent", Description: oneLine(desc, 160), ToolCallID: c.id, Status: "running", StartedAt: time.Now().UnixMilli()}
-		s.tasks[c.id] = task
-		s.mu.Unlock()
+	}
+	// 子 agent 的 ctx 不挂在这一轮上：转到后台之后这一轮结束了它也得接着跑。前台时这一轮被打断由下面的 select 转达
+	ctx, cancel := context.WithCancel(context.Background())
+	bg := boolean(args, "run_in_background")
+	s.mu.Lock()
+	if s.tasks == nil {
+		s.tasks = map[string]*acpx.Task{}
+	}
+	s.tasks[c.id] = &acpx.Task{ID: c.id, Type: "local_agent", Description: oneLine(desc, 160), ToolCallID: c.id, Status: "running", StartedAt: time.Now().UnixMilli()}
+	if s.stops == nil {
+		s.stops = map[string]func(){}
+	}
+	s.stops[c.id] = cancel
+	s.mu.Unlock()
+	if bg {
+		s.track(c.id, "local_agent", desc, cancel)
+	} else {
 		s.pushTasks()
-		// 子 agent 收到的任务（只读面板里第一条）
-		s.send(acp.SessionUpdate{UserMessageChunk: &acp.SessionUpdateUserMessageChunk{Content: acp.TextBlock(prompt), Meta: acpx.Meta(map[string]any{"subagent": c.id})}})
+	}
+	// 子 agent 收到的任务（只读面板里第一条）
+	s.send(acp.SessionUpdate{UserMessageChunk: &acp.SessionUpdateUserMessageChunk{Content: acp.TextBlock(prompt), Meta: acpx.Meta(map[string]any{"subagent": c.id})}})
 
-		err := r.loop(ctx)
-
+	done := make(chan error, 1)
+	go func() { done <- r.loop(ctx) }()
+	// finish：子 agent 结束后记任务状态，给出交回主 agent 的结果
+	finish := func(err error) (string, result) {
+		cancel()
 		status := "completed"
 		switch {
-		case err == errStopped || ctx.Err() != nil:
+		case err == errStopped || ctx.Err() != nil && err != nil:
 			status = "killed"
 		case err != nil:
 			status = "failed"
 		}
-		s.mu.Lock()
-		delete(s.subCancel, c.id)
-		task.Status, task.EndedAt, task.Summary = status, time.Now().UnixMilli(), oneLine(r.last, 200)
 		var calls int
 		for _, m := range r.msgs {
 			calls += len(m.ToolCalls)
 		}
-		task.ToolUses = calls
+		s.mu.Lock()
+		if t := s.tasks[c.id]; t != nil {
+			t.ToolUses = calls
+		}
 		s.mu.Unlock()
-		s.pushTasks()
+		s.finishTask(c.id, status, r.last)
 		switch status {
 		case "killed":
-			return errResult("The sub-agent was interrupted.")
+			return status, errResult("The sub-agent was stopped.")
 		case "failed":
-			return errResult("The sub-agent failed: %v", err)
+			return status, errResult("The sub-agent failed: %v", err)
 		}
 		if strings.TrimSpace(r.last) == "" {
-			return errResult("The sub-agent finished without a report.")
+			return status, errResult("The sub-agent finished without a report.")
 		}
-		return result{text: r.last, display: []acp.ToolCallContent{acp.ToolContent(acp.TextBlock(r.last))}}
-	},
+		return status, result{text: r.last, display: []acp.ToolCallContent{acp.ToolContent(acp.TextBlock(r.last))}}
+	}
+	background := func(how string) result {
+		go func() {
+			status, res := finish(<-done)
+			s.notifyDone(fmt.Sprintf("Background sub-agent %q (task id %s) %s. Its report:\n%s", oneLine(desc, 200), c.id, status, res.text))
+		}()
+		return result{text: fmt.Sprintf("%s (task id %s). You will be notified with its report when it finishes; task_stop stops it.", how, c.id), display: []acp.ToolCallContent{}}
+	}
+	if bg {
+		return background("The sub-agent is running in the background")
+	}
+	detach, undetach := s.detachable(c.id)
+	defer undetach()
+	select {
+	case err := <-done:
+		_, res := finish(err)
+		return res
+	case <-c.ctx.Done():
+		cancel()
+		_, res := finish(<-done)
+		return res
+	case <-detach:
+		s.track(c.id, "local_agent", desc, cancel)
+		return background("The user moved this sub-agent to the background; it is still running")
+	}
 }
 
 // ---- ask_user ----

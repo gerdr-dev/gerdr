@@ -31,8 +31,15 @@ export type Config = {
   keepAwakeLid?: boolean;
   agents?: AgentDef[];
   /** 输入框里 pin 住的 / 命令（命令名，不带 /）：附图按钮旁边多一个 / 按钮，点开就是这些。存 config 是让手机和电脑共用一份。 */
+  /** Gerdr Agent（native）用的模型服务商，后端读（cmd/gerdr 的 cfgLLM），设置 → Agent 里编辑。 */
+  llm?: LLMConfig;
   pinnedCommands?: string[];
 };
+/** config.json 的 llm：Gerdr Agent 直接调的模型接口（OpenAI 兼容）。模型只写 id 时协议、思考档位按 id 猜（后端 native/config.go）。 */
+export type LLMModel = { id: string; name?: string; api?: "chat" | "responses"; efforts?: string[]; window?: number };
+export type LLMProvider = { id: string; name?: string; baseUrl: string; apiKey?: string; apiKeyEnv?: string; models: LLMModel[] };
+export type LLMConfig = { providers?: LLMProvider[]; defaultModel?: string };
+
 
 /** config.json 里的 agents：claude / codex 的变体（base），或者外部 ACP agent（command）。 */
 export type AgentDef = { id: string; name: string; base?: "claude" | "codex"; command?: string[]; bin?: string; args?: string[]; env?: Record<string, string> };

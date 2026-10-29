@@ -1,6 +1,7 @@
 package native
 
 import (
+	"net/url"
 	"path/filepath"
 	"strings"
 
@@ -93,6 +94,17 @@ func decide(mode string, t *tool, args map[string]any, cwd string, allowed func(
 			return ask, "bash:" + cmdPrefix(segs[0])
 		}
 		return ask, ""
+	}
+	if t.name == "web_fetch" {
+		// 按域名放行：同一个站的文档翻好几页不用每页都点
+		host := ""
+		if u, err := url.Parse(str(args, "url")); err == nil {
+			host = u.Hostname()
+		}
+		if mode == modeBypass || allowed("fetch:"+host) {
+			return allow, ""
+		}
+		return ask, "fetch:" + host
 	}
 	if mode == modeReadOnly {
 		return deny, ""

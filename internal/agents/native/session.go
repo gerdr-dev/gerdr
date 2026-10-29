@@ -36,14 +36,19 @@ type session struct {
 	queue        []queued
 	lastInput    int // 最近一次请求的输入 token，判断要不要压缩
 
-	tok       acpx.TokenMeter
-	tasks     map[string]*acpx.Task         // 子 agent（后台任务栏）
-	subCancel map[string]context.CancelFunc // 跑着的子 agent，任务栏上的「停止」用
+	tok   acpx.TokenMeter
+	tasks map[string]*acpx.Task    // 任务栏：子 agent、后台命令
+	stops map[string]func()        // 跑着的任务怎么停（任务栏上的「停止」、task_stop）
+	fg    map[string]chan struct{} // 前台跑着、可以「转到后台」的工具调用
+	bgOut map[string]*lockedBuf    // 后台命令的输出（task_output）
+
+	mcpWarned map[string]bool // 连不上的 MCP 服务器已经提示过了
 }
 
 type queued struct {
 	id     string
 	blocks []acp.ContentBlock
+	note   string // 不是人说的话：后台任务的通知（bg.go）
 }
 
 func (s *session) currentID() string {
@@ -83,6 +88,15 @@ func (s *session) allow(rule string) {
 	s.meta.Allow = append(s.meta.Allow, rule)
 	s.mu.Unlock()
 	s.saveMeta()
+}
+
+func (s *session) setBgOut(id string, b *lockedBuf) {
+	s.mu.Lock()
+	if s.bgOut == nil {
+		s.bgOut = map[string]*lockedBuf{}
+	}
+	s.bgOut[id] = b
+	s.mu.Unlock()
 }
 
 func (s *session) markRead(p string) {
@@ -187,6 +201,10 @@ func (s *session) drainQueue() {
 	s.queue = nil
 	s.mu.Unlock()
 	for _, x := range q {
+		if x.note != "" {
+			s.addMsg(llm.Message{Role: "user", Content: []llm.Part{llm.TextPart(x.note)}}, "", nil)
+			continue
+		}
 		s.addMsg(llm.Message{Role: "user", Content: s.a.toParts(x.blocks, s)}, x.id, nil)
 	}
 }
@@ -241,16 +259,42 @@ func (s *session) cancel() {
 	}
 }
 
-func (s *session) newRun() *run {
+func (s *session) newRun(ctx context.Context) *run {
 	cfg := s.a.config()
 	s.mu.Lock()
 	model, effort, cwd := s.meta.Model, s.meta.Effort, s.meta.Cwd
 	s.mu.Unlock()
 	m, _ := cfg.find(model)
 	r := &run{s: s, model: m, effort: effort, tok: &s.tok}
-	r.tools = []*tool{readTool, writeTool, editTool, bashTool, grepTool, globTool, todoTool, askTool, taskTool}
+	r.tools = append([]*tool(nil), builtinTools...)
+	if servers := mcpServers(s.a.ext, cwd); len(servers) > 0 {
+		// 第一次要起服务器（npx 下载之类）可能很慢：最多等 30 秒，没起完的这一轮先不带，起完了下一轮就有
+		clients, errs := s.a.mcp.get(ctx, servers, 30*time.Second)
+		for _, c := range clients {
+			r.tools = append(r.tools, s.a.mcpTools(c)...)
+		}
+		for name, err := range errs {
+			s.mu.Lock()
+			warned := s.mcpWarned[name]
+			if s.mcpWarned == nil {
+				s.mcpWarned = map[string]bool{}
+			}
+			s.mcpWarned[name] = true
+			s.mu.Unlock()
+			if !warned {
+				r.notice("MCP 服务器 " + name + " 没连上：" + oneLine(err.Error(), 200))
+			}
+		}
+	}
 	r.system = systemPrompt(cwd, skillsFor(s.a.ext, cwd), false)
 	return r
+}
+
+// builtinTools：内置工具。在 init 里装：工具的 run 绕一圈会用到 newRun（后台任务跑完自己开一轮），直接写在变量初始化里是初始化循环。
+var builtinTools []*tool
+
+func init() {
+	builtinTools = []*tool{readTool, writeTool, editTool, bashTool, grepTool, globTool, todoTool, askTool, taskTool, bashOutputTool, stopTaskTool, webFetchTool}
 }
 
 // ---- 压缩 ----

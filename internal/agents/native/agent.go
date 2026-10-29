@@ -42,6 +42,7 @@ type Agent struct {
 
 	mu       sync.Mutex
 	sessions map[string]*session // 当前 id 和 /clear 之前的旧 id 都指向它
+	mcp      mcpPool
 }
 
 func New(log *slog.Logger, o Options) *Agent {
@@ -62,7 +63,9 @@ func (a *Agent) Close() {
 	a.mu.Unlock()
 	for _, s := range ss {
 		s.cancel()
+		s.stopAll()
 	}
+	a.mcp.closeAll()
 }
 
 func (a *Agent) config() Config { return a.cfg() }
@@ -459,7 +462,7 @@ func (a *Agent) Prompt(ctx context.Context, p acp.PromptRequest) (acp.PromptResp
 	stop := context.AfterFunc(ctx, s.cancel)
 	defer stop()
 
-	r := s.newRun()
+	r := s.newRun(tctx)
 	if r.model.Key == "" {
 		return acp.PromptResponse{}, Available(a.config())
 	}
@@ -589,14 +592,20 @@ func (a *Agent) HandleExtensionMethod(ctx context.Context, method string, params
 		if err != nil {
 			return nil, err
 		}
-		s.mu.Lock()
-		c := s.subCancel[p.TaskId]
-		s.mu.Unlock()
-		if c == nil {
+		if !s.stopTask(p.TaskId) {
 			return nil, fmt.Errorf("no running task %s", p.TaskId)
 		}
-		c()
 		return map[string]any{}, nil
+	case acpx.MethodTaskBackground:
+		var p acpx.TaskBackgroundRequest
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, acp.NewInvalidParams(err.Error())
+		}
+		s, err := a.session(p.SessionId)
+		if err != nil {
+			return nil, err
+		}
+		return acpx.TaskBackgroundResponse{Backgrounded: s.detach(p.ToolCallId)}, nil
 	}
 	return nil, acp.NewMethodNotFound(method)
 }

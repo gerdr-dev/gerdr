@@ -174,6 +174,8 @@ type env struct {
 
 func setup(t *testing.T, script func(n int, msgs []any) reply) *env {
 	t.Helper()
+	// 别读到真的 ~/.claude.json、~/.claude/skills：会把本机配的 MCP 服务器真起起来
+	t.Setenv("HOME", t.TempDir())
 	f := &fakeLLM{t: t, script: script}
 	srv := httptest.NewServer(f)
 	t.Cleanup(srv.Close)
@@ -486,4 +488,106 @@ func TestReadOnlyCommand(t *testing.T) {
 			t.Errorf("readOnlyCommand(%q) = %v, want %v", cmd, got, want)
 		}
 	}
+}
+
+// autoTurns：会话报过的 autoTurn（true / false）序列。
+func (h *handler) autoTurns() []bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	var out []bool
+	for _, n := range h.updates {
+		if u := n.Update.SessionInfoUpdate; u != nil {
+			if v, ok := acpx.GetMeta(u.Meta, acpx.AutoTurnKey); ok {
+				out = append(out, v.(bool))
+			}
+		}
+	}
+	return out
+}
+
+func waitFor(t *testing.T, what string, cond func() bool) {
+	t.Helper()
+	for i := 0; i < 100; i++ {
+		if cond() {
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for %s", what)
+}
+
+func TestBackgroundBashAutoTurn(t *testing.T) {
+	e := setup(t, func(n int, msgs []any) reply {
+		switch {
+		case n == 0:
+			return reply{calls: [][2]string{{"bash", `{"command":"sleep 0.5; echo bg-finished","run_in_background":true}`}}}
+		case strings.Contains(lastUser(msgs), "background-task-notification"):
+			return reply{text: "the background job is done"}
+		}
+		return reply{text: "started it"}
+	})
+	sid := e.newSession(modeBypass)
+	if _, err := e.prompt(sid, uuid.NewString(), "run it in bg"); err != nil {
+		t.Fatal(err)
+	}
+	if e.llm.count() != 2 {
+		t.Fatalf("turn should end without waiting for the command, calls=%d", e.llm.count())
+	}
+	// 命令跑完：自己开一轮，通知里带着输出
+	waitFor(t, "auto turn", func() bool { return len(e.h.autoTurns()) == 2 })
+	if got := e.h.autoTurns(); !got[0] || got[1] {
+		t.Fatalf("autoTurn sequence %v", got)
+	}
+	if u := lastUser(e.llm.request(-1)["messages"].([]any)); !strings.Contains(u, "bg-finished") {
+		t.Fatalf("notification lacks output: %q", u)
+	}
+}
+
+func TestDetachForegroundBash(t *testing.T) {
+	e := setup(t, func(n int, msgs []any) reply {
+		switch {
+		case n == 0:
+			return reply{calls: [][2]string{{"bash", `{"command":"sleep 1; echo late"}`}}}
+		case strings.Contains(lastUser(msgs), "background-task-notification"):
+			return reply{text: "noted"}
+		}
+		return reply{text: "moved on"}
+	})
+	sid := e.newSession(modeBypass)
+	done := make(chan struct{})
+	go func() { e.prompt(sid, uuid.NewString(), "go"); close(done) }()
+	time.Sleep(300 * time.Millisecond)
+	r, err := agenthost.Call[acpx.TaskBackgroundResponse](context.Background(), e.c, acpx.MethodTaskBackground, acpx.TaskBackgroundRequest{SessionId: sid, ToolCallId: "call_0_0"})
+	if err != nil || !r.Backgrounded {
+		t.Fatalf("background: %v %v", r, err)
+	}
+	select {
+	case <-done:
+	case <-time.After(700 * time.Millisecond):
+		t.Fatal("turn still waiting for the detached command")
+	}
+	waitFor(t, "notification", func() bool { return strings.Contains(lastUser(e.llm.request(-1)["messages"].([]any)), "late") })
+}
+
+func TestBackgroundSubagent(t *testing.T) {
+	e := setup(t, func(n int, msgs []any) reply {
+		sys, _ := msgs[0].(map[string]any)["content"].(string)
+		if strings.Contains(sys, "You are a sub-agent") {
+			return reply{text: "sub report 123", delay: 100 * time.Millisecond}
+		}
+		switch {
+		case n == 0:
+			return reply{calls: [][2]string{{"task", `{"description":"bg job","prompt":"do it","run_in_background":true}`}}}
+		case strings.Contains(lastUser(msgs), "background-task-notification"):
+			return reply{text: "got the report"}
+		}
+		return reply{text: "carrying on"}
+	})
+	sid := e.newSession(modeBypass)
+	if _, err := e.prompt(sid, uuid.NewString(), "go"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "report delivered", func() bool {
+		return strings.Contains(lastUser(e.llm.request(-1)["messages"].([]any)), "sub report 123")
+	})
 }
