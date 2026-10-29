@@ -19,7 +19,7 @@ rm -rf desktop/bin && mkdir -p desktop/bin/mac desktop/bin/win
 case "$TARGET" in
 mac-dir)
   GOOS=darwin go build -ldflags "$LDFLAGS" -o desktop/bin/mac/gerdr ./cmd/gerdr
-  ( cd desktop && npx electron-builder --mac dir -c.extraMetadata.version="$VERSION" )
+  ( cd desktop && npx electron-builder --mac dir --publish never -c.extraMetadata.version="$VERSION" )
   APP=$(ls -d desktop/dist/mac*/Gerdr.app | head -1)
   ;;
 mac)
@@ -28,11 +28,11 @@ mac)
   GOOS=darwin GOARCH=arm64 go build -ldflags "$LDFLAGS" -o build/gerdr-arm64 ./cmd/gerdr
   GOOS=darwin GOARCH=amd64 go build -ldflags "$LDFLAGS" -o build/gerdr-amd64 ./cmd/gerdr
   lipo -create -output desktop/bin/mac/gerdr build/gerdr-arm64 build/gerdr-amd64
-  ( cd desktop && npx electron-builder --mac dmg --universal -c.extraMetadata.version="$VERSION" )
+  ( cd desktop && npx electron-builder --mac dmg --universal --publish never -c.extraMetadata.version="$VERSION" )
   ;;
 win)
   GOOS=windows GOARCH=amd64 go build -ldflags "$LDFLAGS" -o desktop/bin/win/gerdr.exe ./cmd/gerdr
-  ( cd desktop && npx electron-builder --win nsis --x64 -c.extraMetadata.version="$VERSION" )
+  ( cd desktop && npx electron-builder --win nsis --x64 --publish never -c.extraMetadata.version="$VERSION" )
   ;;
 *)
   echo "用法：$0 mac-dir|mac|win <version>" >&2

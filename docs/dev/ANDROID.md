@@ -27,6 +27,9 @@ android/app/src/main/java/io/github/zbysir/gerdr/
 编：`make apk`（正式包，`~/.android-release/gerdr.jks` 签）/ `make apk-debug`。要 Android SDK（`android/local.properties`
 的 `sdk.dir`，这个文件不入库）和 JDK 17–21（AGP 不认更新的 JDK）。**正式包和调试包签名不同，不能互相覆盖安装**，换过去要先卸载。
 
+发版在 GitHub 上打（`.github/workflows/release.yml`，推 `v主.次.修` 的 tag）：钥匙放在仓库 Secrets 的
+`GERDR_APP_KEYSTORE_B64`（`base64 -i gerdr.jks`）和 `GERDR_APP_KEY_PASS`，打完拿签名指纹和 `OfficialAndroidCert` 对一下，对不上就失败。
+
 ## 局域网直连：换路，不换 origin
 
 ```

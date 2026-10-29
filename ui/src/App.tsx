@@ -9,17 +9,17 @@ import { LightboxHost } from "./components/Lightbox";
 import { TabActive, TabView } from "./components/Panes";
 import { tabName } from "./lib/actions";
 import { handleKeydown } from "./lib/commands";
-import { setPrefixLabel } from "./lib/keys";
+import { ACTION_TITLES, setPrefixLabel, toAccelerator, type KeyAction } from "./lib/keys";
 import { activeTab, type Tab } from "./lib/layout";
 import { isPhone, usePhone, useViewportHeight } from "./lib/phone";
 import { cn } from "./lib/utils";
 import { syncWatch } from "./lib/sync";
-import { isNative, nativeBadge } from "./lib/native";
+import { isNative, nativeBadge, nativeMenuKeys } from "./lib/native";
 import { initAndroid, syncAndroidTheme } from "./lib/android";
 import { CliApprove } from "./components/CliApprove";
 import { systemNotify } from "./lib/notify";
 import { reloadPlugins, setTabNameFn } from "./lib/plugins";
-import { fontSizeOf, get, markUnread, set, useStore, visibleSessions } from "./lib/store";
+import { fontSizeOf, get, keyFor, markUnread, set, useStore, visibleSessions } from "./lib/store";
 import { boot } from "./lib/sync";
 import type { SessionSummary } from "./lib/types";
 
@@ -104,6 +104,16 @@ export default function App() {
   }, []);
 
   useEffect(() => setPrefixLabel(prefix), [prefix]);
+
+  // App 菜单上的键跟着设置走：在设置里把 ⌘D 删了 / 改了，菜单不跟着的话按 ⌘D 还是会从菜单那边分屏
+  const keys = useStore((s) => s.config.keys);
+  useEffect(() => {
+    if (!isNative()) return;
+    const cfg = get().config;
+    const out: Record<string, string | null> = {};
+    for (const a of Object.keys(ACTION_TITLES) as KeyAction[]) out[a] = keyFor(cfg, a).map(toAccelerator).find(Boolean) ?? null;
+    nativeMenuKeys(out);
+  }, [keys]);
 
   const tab = activeTab(layout);
   // 抽屉里点了工作空间 / agent（= 换了眼前那个 pane）就收起来：在手机上，去了别处还挡着半个屏没有意义

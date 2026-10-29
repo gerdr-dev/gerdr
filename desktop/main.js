@@ -241,6 +241,13 @@ ipcMain.on("gerdr", (e, m) => {
       else shell.openPath(p);
       break;
     }
+    case "menuKeys":
+      // 菜单上的键跟着界面设置里的快捷键走（ui/src/lib/keys.ts 的 DEFAULT_KEYS + 用户改的）
+      if (m.keys && typeof m.keys === "object") {
+        menuKeys = m.keys;
+        buildMenu();
+      }
+      break;
     case "webPid":
       // 设置里的「资源」要量界面所在那个渲染进程的内存（它不是后端起的，后端看不见）
       runInPage(`window.__GERDR_WEB_PID__ = ${win.webContents.getOSProcessId()}`);
@@ -270,12 +277,28 @@ async function openRescue() {
   if (!ok) win.loadURL(rescueURL());
 }
 
-function cmd(label, id, accelerator) {
+// 界面发来的「动作 → 键」（null = 不挂键）。没发过（界面还没起来、老界面）就用下面写的默认。
+// 按键先到网页、网页自己处理掉，菜单收不到；菜单上的键主要是显示用，外加界面坏了时还能点。
+let menuKeys = {};
+
+function cmd(label, id, fallback) {
+  const accelerator = id in menuKeys ? menuKeys[id] || undefined : fallback;
   return { label, accelerator, click: () => runInPage(`window.gerdr && window.gerdr.runCommand(${JSON.stringify(id)})`) };
 }
 
 function buildMenu() {
   if (!isMac) return Menu.setApplicationMenu(null);
+  try {
+    buildMacMenu();
+  } catch (e) {
+    // 界面发来的键 Electron 不认（写法怪）：退回默认的键，别让菜单整个没了
+    console.error("menu:", e);
+    menuKeys = {};
+    buildMacMenu();
+  }
+}
+
+function buildMacMenu() {
   const tabs = [];
   for (let i = 1; i <= 9; i++) tabs.push(cmd(`tab ${i}`, `tab${i}`, `Cmd+${i}`));
   Menu.setApplicationMenu(

@@ -110,15 +110,18 @@ export const ACTION_TITLES: Record<KeyAction, string> = {
 };
 
 // 默认键位照着 herdr（src/config/model.rs 里那张表），再加上 gerdr 自己的几个。
+// ⌘ 开头的是 mac 上的习惯键（⌘D 分屏、⌘W 关 pane……）：原来只写在桌面 App 的菜单里，设置里看不到也改不了（用户问「怎么没有 ⌘D」）。
+// 现在都在这张表里：网页先收到按键、自己处理掉，菜单上的键由网页同步过去（syncMenuKeys），改了这里菜单跟着变。
+// 浏览器里 ⌘T / ⌘W / ⌘N / ⌘1–9 这些被浏览器自己占着，按了是浏览器的功能，只在 App 里管用。
 export const DEFAULT_KEYS: Record<KeyAction, string[]> = {
-  splitRight: ["prefix+v"],
-  splitDown: ["prefix+-"],
+  splitRight: ["prefix+v", "meta+d"],
+  splitDown: ["prefix+-", "meta+shift+d"],
   // prefix+t 在 tmux 里是大钟，没人用；herdr 也没占
   splitTerminal: ["prefix+t"],
   splitTerminalDown: ["prefix+shift+-"],
   terminalTab: ["prefix+shift+c"],
-  closePane: ["prefix+x"],
-  zoom: ["prefix+z"],
+  closePane: ["prefix+x", "meta+w"],
+  zoom: ["prefix+z", "meta+shift+enter"],
   focusLeft: ["prefix+h", "prefix+left"],
   focusDown: ["prefix+j", "prefix+down"],
   focusUp: ["prefix+k", "prefix+up"],
@@ -129,41 +132,76 @@ export const DEFAULT_KEYS: Record<KeyAction, string[]> = {
   swapRight: ["prefix+shift+l"],
   nextPane: ["prefix+tab"],
   prevPane: ["prefix+shift+tab"],
-  newTab: ["prefix+c"],
-  nextTab: ["prefix+n"],
-  prevTab: ["prefix+p"],
+  newTab: ["prefix+c", "meta+t"],
+  nextTab: ["prefix+n", "meta+shift+]"],
+  prevTab: ["prefix+p", "meta+shift+["],
   lastTab: ["prefix+;"],
   closeTab: ["prefix+shift+x"],
   // 和浏览器一样。浏览器里这个键被浏览器自己占着（重开它的标签页），只在桌面 App 里管用；那边用命令面板
   reopenClosed: ["meta+shift+t"],
   renameTab: ["prefix+shift+t"],
-  tab1: ["prefix+1"],
-  tab2: ["prefix+2"],
-  tab3: ["prefix+3"],
-  tab4: ["prefix+4"],
-  tab5: ["prefix+5"],
-  tab6: ["prefix+6"],
-  tab7: ["prefix+7"],
-  tab8: ["prefix+8"],
-  tab9: ["prefix+9"],
-  newWorkspace: ["prefix+shift+n"],
+  tab1: ["prefix+1", "meta+1"],
+  tab2: ["prefix+2", "meta+2"],
+  tab3: ["prefix+3", "meta+3"],
+  tab4: ["prefix+4", "meta+4"],
+  tab5: ["prefix+5", "meta+5"],
+  tab6: ["prefix+6", "meta+6"],
+  tab7: ["prefix+7", "meta+7"],
+  tab8: ["prefix+8", "meta+8"],
+  tab9: ["prefix+9", "meta+9"],
+  newWorkspace: ["prefix+shift+n", "meta+shift+n"],
   renameWorkspace: ["prefix+shift+w"],
   closeWorkspace: ["prefix+shift+d"],
   workspaces: ["prefix+w"],
   nextWorkspace: ["prefix+)"],
   prevWorkspace: ["prefix+("],
-  sessions: ["prefix+g"],
-  toggleSidebar: ["prefix+b"],
-  help: ["prefix+?"],
-  settings: ["prefix+s"],
+  sessions: ["prefix+g", "meta+o"],
+  toggleSidebar: ["prefix+b", "meta+ctrl+s"],
+  help: ["prefix+?", "meta+/"],
+  settings: ["prefix+s", "meta+,"],
   importHerdr: [],
   palette: ["prefix+:", "meta+k", "ctrl+shift+p"],
   nextAttention: ["prefix+d"],
   prevAttention: ["prefix+u"],
-  focusAttention: ["prefix+o"],
+  focusAttention: ["prefix+o", "meta+j"],
   renamePane: ["prefix+shift+p"],
   stop: [],
 };
+
+/** 设置页和帮助里的分组（tab1 代表 tab1–9）。 */
+export const KEY_GROUPS: [string, KeyAction[]][] = [
+  [
+    "分屏",
+    ["splitRight", "splitDown", "splitTerminal", "splitTerminalDown", "closePane", "zoom", "focusLeft", "focusDown", "focusUp", "focusRight", "swapLeft", "swapDown", "swapUp", "swapRight", "nextPane", "prevPane"],
+  ],
+  ["tab", ["newTab", "terminalTab", "nextTab", "prevTab", "lastTab", "tab1", "closeTab", "reopenClosed", "renameTab"]],
+  ["工作空间", ["newWorkspace", "workspaces", "nextWorkspace", "prevWorkspace", "renameWorkspace", "closeWorkspace"]],
+  ["会话", ["sessions", "nextAttention", "prevAttention", "focusAttention", "renamePane", "stop"]],
+  ["其他", ["palette", "toggleSidebar", "settings", "help", "importHerdr"]],
+];
+
+/** 按键事件 → 设置里存的写法（"meta+shift+d"）。前缀另算，这里不管。 */
+export function comboOf(e: KeyboardEvent): string {
+  const parts: string[] = [];
+  if (e.ctrlKey) parts.push("ctrl");
+  if (e.altKey) parts.push("alt");
+  if (e.shiftKey) parts.push("shift");
+  if (e.metaKey) parts.push("meta");
+  parts.push(eventKey(e).key);
+  return parts.join("+");
+}
+
+/**
+ * 写法 → Electron 菜单的 accelerator（"meta+shift+d" → "Cmd+Shift+D"）。带前缀的、没有 ⌘ 的不上菜单：
+ * 菜单只认一次按下的组合；不带 ⌘ 的（ctrl+shift+p）放上去会在输入框里抢键。
+ */
+export function toAccelerator(s: string): string | undefined {
+  const c = parseCombo(s);
+  if (!c || c.prefix || !c.meta) return;
+  const names: Record<string, string> = { left: "Left", right: "Right", up: "Up", down: "Down", enter: "Enter", tab: "Tab", escape: "Esc", " ": "Space", "+": "Plus", backspace: "Backspace" };
+  const mods = ["Cmd", c.ctrl && "Ctrl", c.alt && "Alt", c.shift && "Shift"].filter(Boolean);
+  return [...mods, names[c.key] ?? c.key.toUpperCase()].join("+");
+}
 
 export type Combo = { prefix: boolean; ctrl: boolean; alt: boolean; shift: boolean; meta: boolean; key: string };
 

@@ -65,8 +65,23 @@ function setPrefix(on: boolean) {
   if (on) prefixTimer = setTimeout(() => setPrefix(false), 8000);
 }
 
+// 设置里录快捷键时，按键整个交给录键的那边：不然按 ⌘D 想录下来，先被当成「分屏」执行了。
+let capture: ((e: KeyboardEvent) => void) | null = null;
+export function captureKeys(f: (e: KeyboardEvent) => void) {
+  capture = f;
+  return () => {
+    if (capture === f) capture = null;
+  };
+}
+
 export function handleKeydown(e: KeyboardEvent): boolean {
   if (isModifierOnly(e)) return false;
+  if (capture && !e.isComposing) {
+    e.preventDefault();
+    e.stopPropagation();
+    capture(e);
+    return true;
+  }
   const st = get();
   const prefix = parseCombo(st.config.prefix);
 

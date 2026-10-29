@@ -17,7 +17,7 @@ import { ResumeDialog } from "./ResumeDialog";
 import { addWorkspace, basename, deleteSession, focusSession, openSessionHere, renameTab, renameWorkspace, selectWorkspace, tabName } from "@/lib/actions";
 import { api } from "@/lib/api";
 import { allCommands, runCommand } from "@/lib/commands";
-import { ACTION_TITLES, DEFAULT_KEYS, formatCombo, type KeyAction } from "@/lib/keys";
+import { ACTION_TITLES, KEY_GROUPS, formatCombo } from "@/lib/keys";
 import { locateSession } from "@/lib/layout";
 import { isNative, nativeOpenPath } from "@/lib/native";
 import { pluginStatus } from "@/lib/plugins";
@@ -103,31 +103,6 @@ function Palette({ open }: { open: boolean }) {
   );
 }
 
-const GROUPS: [string, KeyAction[]][] = [
-  [
-    "分屏",
-    [
-      "splitRight",
-      "splitDown",
-      "closePane",
-      "zoom",
-      "focusLeft",
-      "focusDown",
-      "focusUp",
-      "focusRight",
-      "swapLeft",
-      "swapDown",
-      "swapUp",
-      "swapRight",
-      "nextPane",
-      "prevPane",
-    ],
-  ],
-  ["tab", ["newTab", "nextTab", "prevTab", "lastTab", "tab1", "closeTab", "reopenClosed", "renameTab"]],
-  ["工作空间", ["newWorkspace", "workspaces", "nextWorkspace", "prevWorkspace", "renameWorkspace", "closeWorkspace"]],
-  ["会话", ["sessions", "nextAttention", "prevAttention", "focusAttention", "renamePane", "stop"]],
-  ["其他", ["palette", "toggleSidebar", "settings", "help"]],
-];
 
 function Help({ open }: { open: boolean }) {
   const cfg = useStore((s) => s.config);
@@ -144,15 +119,15 @@ function Help({ open }: { open: boolean }) {
           </DialogDescription>
         </DialogHeader>
         <div className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
-          {GROUPS.map(([g, acts]) => (
+          {KEY_GROUPS.map(([g, acts]) => (
             <div key={g}>
               <div className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{g}</div>
               {acts.map((a) => (
                 <div key={a} className="flex items-center justify-between py-0.5 text-[13px]">
                   <span>{a === "tab1" ? "跳到 tab 1–9" : ACTION_TITLES[a]}</span>
                   <span className="font-mono text-[12px] text-muted-foreground">
-                    {(a === "tab1" ? ["prefix+1..9"] : keyFor(cfg, a))
-                      .map((k) => (k === "prefix+1..9" ? `${formatCombo(cfg.prefix)} 1…9` : formatCombo(k)))
+                    {keyFor(cfg, a)
+                      .map((k) => (a === "tab1" ? formatCombo(k).replace(/1$/, "1…9") : formatCombo(k)))
                       .join("  ") || "—"}
                   </span>
                 </div>

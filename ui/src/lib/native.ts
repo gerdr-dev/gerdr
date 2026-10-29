@@ -46,3 +46,8 @@ export async function nativeWebPid(): Promise<number | undefined> {
   }
   return w.__GERDR_WEB_PID__ || undefined;
 }
+
+/** App 里：菜单上显示 / 认的键跟着设置走（动作 id → accelerator，null = 菜单上不挂键）。 */
+export function nativeMenuKeys(keys: Record<string, string | null>) {
+  bridge()?.postMessage({ type: "menuKeys", keys });
+}
