@@ -75,6 +75,22 @@ export function splitFocused(dir: "right" | "down") {
 }
 
 /**
+ * ⌘D：把焦点那个复制一份放旁边。会话 → 同 agent / 目录 / 模式的新会话直接开起来（只复制配置，不带对话）；
+ * 终端 → 同目录终端；空面板 → 还是空面板（没东西可复制）。
+ */
+export function duplicateFocused(dir: "right" | "down") {
+  const l = get().layout;
+  const p = focusedLeaf(l);
+  if (p?.term) return openTerminal(dir);
+  const s = p?.sessionId ? get().sessions[p.sessionId] : undefined;
+  if (!s) return splitFocused(dir);
+  const fresh: PaneLeaf = { type: "pane", id: rid("p"), draft: { agent: s.agent, cwd: s.cwd } };
+  setLayout((l) => updateTab(l, activeTab(l).id, (tab) => split(tab, tab.zoom ?? tab.focus, dir === "right" ? "row" : "col", fresh)));
+  // 开失败时 createInPane 已经 toast 过，pane 留在空面板，人可以自己再点开始
+  createInPane(fresh.id, { agent: s.agent, cwd: s.cwd, mode: s.modes?.currentModeId ?? s.mode }).catch(() => {});
+}
+
+/**
  * 别的 agent 用 `gerdr session new` 开的会话：放在发起它的那个会话旁边（右边分一屏）。
  * 默认不抢焦点（人可能正在别处打字）；找不到发起方就在当前工作空间后台开个 tab。
  */
@@ -798,6 +814,10 @@ export function runAction(a: KeyAction) {
       return splitFocused("right");
     case "splitDown":
       return splitFocused("down");
+    case "duplicateRight":
+      return duplicateFocused("right");
+    case "duplicateDown":
+      return duplicateFocused("down");
     case "splitTerminal":
       return openTerminal("right");
     case "splitTerminalDown":

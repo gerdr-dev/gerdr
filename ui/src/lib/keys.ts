@@ -7,6 +7,8 @@
 export type KeyAction =
   | "splitRight"
   | "splitDown"
+  | "duplicateRight"
+  | "duplicateDown"
   | "splitTerminal"
   | "splitTerminalDown"
   | "terminalTab"
@@ -57,8 +59,10 @@ export type KeyAction =
   | "stop";
 
 export const ACTION_TITLES: Record<KeyAction, string> = {
-  splitRight: "左右分屏",
-  splitDown: "上下分屏",
+  splitRight: "左右分屏（空面板）",
+  splitDown: "上下分屏（空面板）",
+  duplicateRight: "复制到右边（会话 / 终端）",
+  duplicateDown: "复制到下面（会话 / 终端）",
   splitTerminal: "右边开终端",
   splitTerminalDown: "下面开终端",
   terminalTab: "新 tab 开终端",
@@ -114,8 +118,12 @@ export const ACTION_TITLES: Record<KeyAction, string> = {
 // 现在都在这张表里：网页先收到按键、自己处理掉，菜单上的键由网页同步过去（syncMenuKeys），改了这里菜单跟着变。
 // 浏览器里 ⌘T / ⌘W / ⌘N / ⌘1–9 这些被浏览器自己占着，按了是浏览器的功能，只在 App 里管用。
 export const DEFAULT_KEYS: Record<KeyAction, string[]> = {
-  splitRight: ["prefix+v", "meta+d"],
-  splitDown: ["prefix+-", "meta+shift+d"],
+  // prefix+v / prefix+- 出空面板（挑 agent、目录、开终端、接旧会话）；⌘D 照 iTerm 的习惯直接复制一个能用的：
+  // 焦点是会话就起同 agent / 目录 / 模式的新会话，是终端就开同目录终端，是空面板才出空面板
+  splitRight: ["prefix+v"],
+  splitDown: ["prefix+-"],
+  duplicateRight: ["meta+d"],
+  duplicateDown: ["meta+shift+d"],
   // prefix+t 在 tmux 里是大钟，没人用；herdr 也没占
   splitTerminal: ["prefix+t"],
   splitTerminalDown: ["prefix+shift+-"],

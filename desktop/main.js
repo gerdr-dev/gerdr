@@ -337,8 +337,11 @@ function buildMacMenu() {
         submenu: [
           cmd("命令面板", "palette", "Cmd+K"),
           cmd("显示 / 隐藏侧栏", "toggleSidebar", "Cmd+Ctrl+S"),
-          cmd("左右分屏", "splitRight", "Cmd+D"),
-          cmd("上下分屏", "splitDown", "Cmd+Shift+D"),
+          // ⌘D 复制焦点那个（会话 / 终端）；空面板的分屏走 prefix 键，菜单上不挂 ⌘ 键
+          cmd("复制到右边", "duplicateRight", "Cmd+D"),
+          cmd("复制到下面", "duplicateDown", "Cmd+Shift+D"),
+          cmd("左右分屏（空面板）", "splitRight"),
+          cmd("上下分屏（空面板）", "splitDown"),
           cmd("放大 / 还原 pane", "zoom", "Cmd+Shift+Enter"),
           { type: "separator" },
           { role: "zoomIn", label: "放大", accelerator: "Cmd+=" },
