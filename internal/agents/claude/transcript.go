@@ -370,9 +370,11 @@ func userTextsFrom(path string, offset int64) []string {
 		if json.Unmarshal(sc.Bytes(), &e) != nil {
 			continue
 		}
-		// 「[Request interrupted by user…]」是 claude 被打断时自己补写的（gerdr 重启、Esc 都会），不是人说的话，
-		// 算进来追上就误报「在别处接着聊过」（踩过：只是重启了一下 App）。重放时不滤：界面把它画成「被打断了」。
-		if t := userText(&e); t != "" && !strings.HasPrefix(strings.TrimSpace(t), "[Request interrupted by user") {
+		// 这两种是 claude 自己写进来的、不是人说的话，算进来追上就误报「在别处接着聊过」。重放时不滤，界面各有画法。
+		//   - 「[Request interrupted by user…]」：被打断时补写的（gerdr 重启、Esc 都会；踩过：只是重启了一下 App）
+		//   - 「<task-notification>…」：后台任务跑完 / 被停时 CLI 自己开一轮汇报（踩过：后台 find 超时被停，提示「1 条消息」）
+		t := userText(&e)
+		if tt := strings.TrimSpace(t); tt != "" && !strings.HasPrefix(tt, "[Request interrupted by user") && !strings.HasPrefix(tt, "<task-notification>") {
 			out = append(out, t)
 		}
 	}

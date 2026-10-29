@@ -141,12 +141,13 @@ func TestReplayUserImage(t *testing.T) {
 	}
 }
 
-// claude 被打断时自己补写的那行不是人说的话：算进去的话，重启一下 App 追上就误报「在别处接着聊过」。
+// claude 自己补写的那几行不是人说的话：被打断的记号、后台任务的汇报。算进去的话追上就误报「在别处接着聊过」。
 func TestUserTextsFromSkipsInterrupt(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "s.jsonl")
 	lines := `{"type":"user","message":{"role":"user","content":"hi"}}
 {"type":"user","message":{"role":"user","content":[{"type":"text","text":"[Request interrupted by user for tool use]"}]}}
 {"type":"user","message":{"role":"user","content":"[Request interrupted by user]"}}
+{"type":"user","message":{"role":"user","content":"<task-notification>\n<task-id>b1</task-id>\n<status>killed</status>\n</task-notification>"},"origin":{"kind":"task-notification"}}
 `
 	if err := os.WriteFile(p, []byte(lines), 0o644); err != nil {
 		t.Fatal(err)
