@@ -148,7 +148,9 @@ function InlineCode(props: any) {
 }
 
 /**
- * 代码块：每一行都是 `! 命令` 时，块下面每条命令一个「运行」（命令长、或者一次给好几条时 agent 会写成块）。
+ * 代码块：每一行都是 `! 命令` 时（命令长、或者一次给好几条时 agent 会写成块），整块换成一张命令列表：一条命令一行，
+ * 「运行」在那一行右边，平时淡着、指过去才亮（手机上没有悬停，常亮）。原来是代码块照画、下面再堆一排按钮把命令重抄一遍，
+ * 同一条命令出现两次，看着乱（用户报的）。
  * 普通的 bash 代码块不加：那多半是给人看的、或者 agent 自己要跑的，点一下就跑太冒失。
  */
 function CodeBlock(props: any) {
@@ -157,20 +159,22 @@ function CodeBlock(props: any) {
     .map((l) => l.trim())
     .filter(Boolean);
   const cmds = lines.map(bangCommand);
-  const code = <DefaultCode {...props} />;
-  if (!cmds.length || cmds.some((c) => !c)) return code;
+  if (!cmds.length || cmds.some((c) => !c)) return <DefaultCode {...props} />;
   return (
-    <>
-      {code}
-      <div className="-mt-2 mb-4 flex flex-col gap-1">
+    // 外框、字号、行距都和普通代码块一家：挂上同样的 data-streamdown，index.css 里 .gerdr-md 那几条（字号 0.86em、行距 1.5、
+    // 淡底、单层框）一并套上；原来自己写 text-sm + 24px 行高，比旁边的代码块大一号、行距也松（用户报的）
+    <div data-streamdown="code-block" className="my-4 flex flex-col rounded-xl border border-border">
+      <div data-streamdown="code-block-body" className="font-mono">
         {cmds.map((c, i) => (
-          <div key={i} className="flex min-w-0 items-center gap-2">
-            <RunButton cmd={c!} className="shrink-0" />
-            {cmds.length > 1 && <span className="min-w-0 truncate font-mono text-[12px] text-muted-foreground">{c}</span>}
+          <div key={i} className="group/cmd -mx-1.5 flex min-w-0 items-start gap-2 rounded-md px-1.5 hover:bg-muted/60">
+            <span className="shrink-0 font-semibold text-brand">!</span>
+            {/* 长命令折行显示全：要跑的东西得让人看全了再点，截成一行加省略号的话后半截看不到 */}
+            <span className="min-w-0 flex-1 whitespace-pre-wrap [overflow-wrap:anywhere]">{c}</span>
+            <RunButton cmd={c!} className="shrink-0 font-sans opacity-40 transition-opacity group-hover/cmd:opacity-100 [@media(hover:none)]:opacity-100" />
           </div>
         ))}
       </div>
-    </>
+    </div>
   );
 }
 
