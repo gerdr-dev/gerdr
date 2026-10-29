@@ -65,6 +65,7 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
   const [busy, setBusy] = useState(false);
   const [cmdIdx, setCmdIdx] = useState(0);
   const ta = useRef<HTMLTextAreaElement>(null);
+  const imgRefs = useRef<(HTMLDivElement | null)[]>([]);
   const setText = (t: string) => set((s) => ({ drafts: { ...s.drafts, [paneId]: t } }));
 
   useImperativeHandle(ref, () => ({
@@ -399,6 +400,42 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
     }
   };
 
+  // 选中的那张图上按键：← → 在图之间挑（最后一张再按 → 回输入框），退格 / Delete 删掉它，Esc 回输入框，回车放大看。
+  // 删完焦点落到原位置上的下一张（退格往前一张，像删字），一张不剩就回输入框
+  const onImgKey = (e: React.KeyboardEvent<HTMLDivElement>, i: number) => {
+    if (e.altKey || e.metaKey || e.ctrlKey) return;
+    const toText = () => ta.current?.focus();
+    if (e.key === "Backspace" || e.key === "Delete") {
+      e.preventDefault();
+      const n = imgs.length - 1;
+      setImgs((xs) => xs.filter((_, j) => j !== i));
+      const next = e.key === "Backspace" ? Math.max(i - 1, 0) : Math.min(i, n - 1);
+      if (n === 0 || (e.key === "Delete" && i === n)) toText();
+      else requestAnimationFrame(() => imgRefs.current[next]?.focus());
+    } else if (e.key === "ArrowLeft") {
+      e.preventDefault();
+      imgRefs.current[Math.max(i - 1, 0)]?.focus();
+    } else if (e.key === "ArrowRight") {
+      e.preventDefault();
+      if (i + 1 < imgs.length) imgRefs.current[i + 1]?.focus();
+      else toText();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      toText();
+    } else if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      openLightbox(
+        imgs.map((x) => ({ url: x.url })),
+        i,
+        e.currentTarget,
+      );
+    } else if (e.key.length === 1) {
+      // 选着图直接打字：回输入框接着打，这个字不丢
+      toText();
+    }
+  };
+
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     // 输入法组字时的回车是给输入法上屏用的（中文用户按回车选词），一律不当发送。
     if (e.nativeEvent.isComposing || e.keyCode === 229) return;
@@ -463,6 +500,15 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
         return;
       }
     }
+    // 贴的图排在文字前面：光标在最开头（没选中文字）按退格，删掉紧挨着的最后一张图（照 Claude Code），不用伸手去点那个小叉
+    if (e.key === "Backspace" && imgs.length && !e.altKey && !e.metaKey && !e.ctrlKey) {
+      const el = e.currentTarget;
+      if (el.selectionStart === 0 && el.selectionEnd === 0) {
+        e.preventDefault();
+        setImgs((xs) => xs.slice(0, -1));
+        return;
+      }
+    }
     // 光标已经顶到头还往那个方向按（开头按 ← / ↑、末尾按 → / ↓）：吃掉。浏览器这时什么都不做、事件算「没人处理」，
     // 安卓 WebView 会把它还给系统当方向键导航，焦点被挪出网页，软键盘直接收起（输入法「文字编辑」面板里的方向键就是这么来的）。
     if (/^Arrow(Left|Right|Up|Down)$/.test(e.key) && !e.altKey && !e.metaKey && !e.ctrlKey) {
@@ -471,6 +517,8 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
       const edge = back ? 0 : el.value.length;
       if (el.selectionStart === edge && el.selectionEnd === edge) {
         e.preventDefault();
+        // 开头再按 ←：选中最后一张图，接着 ← → 挑、退格删。触屏不挪：焦点离开输入框软键盘就收了
+        if (e.key === "ArrowLeft" && imgs.length && !e.shiftKey && !isCoarse()) imgRefs.current[imgs.length - 1]?.focus();
         return;
       }
     }
@@ -624,7 +672,15 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
         {imgs.length > 0 && (
           <div className="flex flex-wrap gap-2 px-3 pt-3">
             {imgs.map((im, i) => (
-              <div key={i} className="group/img relative">
+              <div
+                key={i}
+                ref={(el) => {
+                  imgRefs.current[i] = el;
+                }}
+                tabIndex={-1}
+                onKeyDown={(e) => onImgKey(e, i)}
+                className="group/img relative rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-card"
+              >
                 <img
                   src={im.url}
                   onClick={(e) =>
