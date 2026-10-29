@@ -22,12 +22,12 @@ import { locateSession } from "@/lib/layout";
 import { isNative, nativeOpenPath } from "@/lib/native";
 import { pluginStatus } from "@/lib/plugins";
 import { fontSizeOf, keyFor, set, setConfig, setFontSize, useStore, type Theme } from "@/lib/store";
-import { cn } from "@/lib/utils";
 import type { SessionSummary } from "@/lib/types";
 import { AgentIcon, StatusDot } from "./AgentIcon";
 import { MCPSettings, SkillSettings } from "./ExtSettings";
 import { FilePicker, FileViewer } from "./FileViewer";
 import { ImportHerdr } from "./ImportHerdr";
+import { KeySettings } from "./KeySettings";
 import { RemoteSettings } from "./RemoteSettings";
 import { ResourceStats } from "./ResourceStats";
 import { ago, DirPicker } from "./NewSession";
@@ -103,7 +103,6 @@ function Palette({ open }: { open: boolean }) {
   );
 }
 
-
 function Help({ open }: { open: boolean }) {
   const cfg = useStore((s) => s.config);
   useStore((s) => s.pluginVersion);
@@ -166,33 +165,6 @@ function Help({ open }: { open: boolean }) {
   );
 }
 
-function KeyRecorder({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const [rec, setRec] = useState(false);
-  return (
-    <Input
-      readOnly
-      className={cn("h-7 w-44 font-mono text-[12px]", rec && "border-brand")}
-      value={rec ? "按下组合键…" : value}
-      onFocus={() => setRec(true)}
-      onBlur={() => setRec(false)}
-      onKeyDown={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (["Shift", "Control", "Alt", "Meta"].includes(e.key)) return;
-        const parts = [];
-        if (e.ctrlKey) parts.push("ctrl");
-        if (e.altKey) parts.push("alt");
-        if (e.shiftKey) parts.push("shift");
-        if (e.metaKey) parts.push("meta");
-        const k = e.code.startsWith("Key") ? e.code.slice(3).toLowerCase() : e.code.startsWith("Digit") ? e.code.slice(5) : e.key.toLowerCase();
-        parts.push(k);
-        onChange(parts.join("+"));
-        (e.target as HTMLInputElement).blur();
-      }}
-    />
-  );
-}
-
 function SettingsDialog({ open }: { open: boolean }) {
   const cfg = useStore((s) => s.config);
   const fontSize = useStore(fontSizeOf);
@@ -207,16 +179,7 @@ function SettingsDialog({ open }: { open: boolean }) {
   useEffect(() => {
     if (open && wantTab) setTabOpen(wantTab);
   }, [open, wantTab]);
-  const setKeys = (a: KeyAction, v: string) => {
-    const keys = { ...cfg.keys };
-    const list = v
-      .split(",")
-      .map((x) => x.trim())
-      .filter(Boolean);
-    if (JSON.stringify(list) === JSON.stringify(DEFAULT_KEYS[a])) delete keys[a];
-    else keys[a] = list;
-    setConfig({ keys });
-  };
+
   return (
     <Dialog open={open} onOpenChange={(o) => !o && close()}>
       <DialogContent className="max-h-[85vh] overflow-hidden p-0 sm:max-w-3xl">
@@ -335,23 +298,7 @@ function SettingsDialog({ open }: { open: boolean }) {
               <div className="pt-2 text-[12px] text-muted-foreground">gerdr {version}</div>
             </TabsContent>
             <TabsContent value="keys" className="pt-2">
-              <Row label="前缀键" hint="默认 ctrl+b">
-                <KeyRecorder value={cfg.prefix} onChange={(v) => setConfig({ prefix: v })} />
-              </Row>
-              <div className="mt-3 text-[12px] text-muted-foreground">多个键用逗号隔开；「prefix+」表示先按前缀。清空 = 不绑定。</div>
-              <div className="mt-2 divide-y">
-                {(Object.keys(ACTION_TITLES) as KeyAction[]).map((a) => (
-                  <div key={a} className="flex items-center justify-between gap-4 py-1.5 text-[13px]">
-                    <span>{ACTION_TITLES[a]}</span>
-                    <Input
-                      className="h-7 w-56 font-mono text-[12px]"
-                      defaultValue={keyFor(cfg, a).join(", ")}
-                      onBlur={(e) => setKeys(a, e.target.value)}
-                      onKeyDown={(e) => e.stopPropagation()}
-                    />
-                  </div>
-                ))}
-              </div>
+              <KeySettings />
             </TabsContent>
             <TabsContent value="skills" className="pt-2">
               <SkillSettings open={open} />

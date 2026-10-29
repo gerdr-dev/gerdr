@@ -172,7 +172,24 @@ export const DEFAULT_KEYS: Record<KeyAction, string[]> = {
 export const KEY_GROUPS: [string, KeyAction[]][] = [
   [
     "分屏",
-    ["splitRight", "splitDown", "splitTerminal", "splitTerminalDown", "closePane", "zoom", "focusLeft", "focusDown", "focusUp", "focusRight", "swapLeft", "swapDown", "swapUp", "swapRight", "nextPane", "prevPane"],
+    [
+      "splitRight",
+      "splitDown",
+      "splitTerminal",
+      "splitTerminalDown",
+      "closePane",
+      "zoom",
+      "focusLeft",
+      "focusDown",
+      "focusUp",
+      "focusRight",
+      "swapLeft",
+      "swapDown",
+      "swapUp",
+      "swapRight",
+      "nextPane",
+      "prevPane",
+    ],
   ],
   ["tab", ["newTab", "terminalTab", "nextTab", "prevTab", "lastTab", "tab1", "closeTab", "reopenClosed", "renameTab"]],
   ["工作空间", ["newWorkspace", "workspaces", "nextWorkspace", "prevWorkspace", "renameWorkspace", "closeWorkspace"]],
@@ -198,7 +215,18 @@ export function comboOf(e: KeyboardEvent): string {
 export function toAccelerator(s: string): string | undefined {
   const c = parseCombo(s);
   if (!c || c.prefix || !c.meta) return;
-  const names: Record<string, string> = { left: "Left", right: "Right", up: "Up", down: "Down", enter: "Enter", tab: "Tab", escape: "Esc", " ": "Space", "+": "Plus", backspace: "Backspace" };
+  const names: Record<string, string> = {
+    left: "Left",
+    right: "Right",
+    up: "Up",
+    down: "Down",
+    enter: "Enter",
+    tab: "Tab",
+    escape: "Esc",
+    " ": "Space",
+    "+": "Plus",
+    backspace: "Backspace",
+  };
   const mods = ["Cmd", c.ctrl && "Ctrl", c.alt && "Alt", c.shift && "Shift"].filter(Boolean);
   return [...mods, names[c.key] ?? c.key.toUpperCase()].join("+");
 }
