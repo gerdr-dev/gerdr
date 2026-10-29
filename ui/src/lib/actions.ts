@@ -305,7 +305,7 @@ export function closeTab(tabId?: string) {
   const ws = l.workspaces.find((w) => w.tabs.some((t) => t.id === (tabId ?? activeWs(l).activeTab))) ?? activeWs(l);
   const id = tabId ?? ws.activeTab;
   const tab = ws.tabs.find((t) => t.id === id);
-  if (tab && !blankTab(tab)) remember({ kind: "tab", wsId: ws.id, index: ws.tabs.indexOf(tab), tab });
+  if (tab && !onlyBlank(ws, tab)) remember({ kind: "tab", wsId: ws.id, index: ws.tabs.indexOf(tab), tab });
   for (const p of tab ? leaves(tab.root) : []) {
     const s = p.sessionId ? get().sessions[p.sessionId] : undefined;
     if (s && (s.status === "running" || s.status === "waiting")) api.cancel(s.id).catch(() => {});
@@ -335,18 +335,24 @@ function remember(c: Closed) {
   if (closed.length > 30) closed.shift();
 }
 
-/** 里面什么都没有的 pane / tab（还没开会话的空 pane）：关了不用记，撤销回来也没意义。 */
+/** 里面什么都没有的 pane / tab（还没开会话的空 pane）。 */
 const blankLeaf = (p: PaneLeaf) => !p.sessionId && !p.term && !p.sub;
 const blankTab = (t: Tab) => !t.name && t.root.type === "pane" && blankLeaf(t.root);
+/**
+ * 空 tab 也要记：⌘T 开个新 tab 随手 ⌘W 关掉，再按 ⌘⇧T 却说「没有刚关掉的」，和浏览器对不上（用户报的）。
+ * 只有工作区里唯一的那个空 tab 不记：关掉它会立刻补一个一模一样的空 tab，记了只会让 ⌘⇧T 多按一次才回到真正关掉的东西。
+ */
+const onlyBlank = (ws: Workspace, t: Tab) => ws.tabs.length === 1 && blankTab(t);
 
 /** 关 pane 之前记下它在哪：有兄弟就记兄弟（摆回它旁边），tab 里只剩它就当关了整个 tab。 */
 function rememberPane(ws: Workspace, tab: Tab, p: PaneLeaf) {
   if (blankLeaf(p)) {
     // 两次 Ctrl+C 退出 agent、接着 Ctrl+D 关掉这个空 pane：撤销时把会话连 pane 一起放回原位，而不是另开一个 tab
     const last = closed.at(-1);
-    if (last?.kind !== "agent" || last.paneId !== p.id) return;
-    closed.pop();
-    p = { type: "pane", id: p.id, sessionId: last.sessionId };
+    if (last?.kind === "agent" && last.paneId === p.id) {
+      closed.pop();
+      p = { type: "pane", id: p.id, sessionId: last.sessionId };
+    } else if (onlyBlank(ws, tab)) return;
   }
   const par = parentSplit(tab.root, p.id);
   if (!par) return remember({ kind: "tab", wsId: ws.id, index: ws.tabs.indexOf(tab), tab });

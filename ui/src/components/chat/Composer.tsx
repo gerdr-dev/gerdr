@@ -42,6 +42,10 @@ function flatOptions(o: ConfigOption) {
 const LOCAL_CMDS = [{ name: "resume", description: "换到这个目录下之前的一段对话" }];
 // 命令别名：agent 报了右边那个命令才有左边的别名，发出去时换回本名（agent 只认本名）
 const ALIASES: Record<string, string> = { new: "clear" };
+// 每个 pane 输入框的光标 / 选区 / 滚动位置：tab 不保留（keepTabs = 1）时切走就整个卸载，字在 drafts 里还在，
+// 光标却跑到了末尾（用户报的）。卸载时记下来，挂回来照着放回去。只放内存：刷新页面不用保住。
+const carets = new Map<string, { start: number; end: number; dir: "forward" | "backward" | "none"; top: number }>();
+const NO_IMGS: Img[] = [];
 const NO_PINS: string[] = []; // 没 pin 过时用同一个空数组，不然每次渲染都是新数组，useMemo 白算
 
 // 补全列表（/ 命令、@ 文件）里选中的那一行：↑↓ 翻到列表外面时把它滚进来（nearest：本来就看得见就不动）。
@@ -58,7 +62,10 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
   const sendKey = useStore((s) => s.config.sendKey);
   const pinned = useStore((s) => s.config.pinnedCommands ?? NO_PINS);
   const phone = usePhone();
-  const [imgs, setImgs] = useState<Img[]>([]);
+  const imgs = useStore((s) => s.draftImgs[paneId] ?? NO_IMGS);
+  // 读图片的回调可能在切走（卸载）之后才回来，所以每次都从 store 里取最新的再改，别用渲染时的 imgs
+  const setImgs = (v: Img[] | ((cur: Img[]) => Img[])) =>
+    set((s) => ({ draftImgs: { ...s.draftImgs, [paneId]: typeof v === "function" ? v(s.draftImgs[paneId] ?? NO_IMGS) : v } }));
   const [busy, setBusy] = useState(false);
   const [cmdIdx, setCmdIdx] = useState(0);
   const ta = useRef<HTMLTextAreaElement>(null);
@@ -96,6 +103,22 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
     el.style.height = "auto";
     el.style.height = Math.min(el.scrollHeight, Math.max(160, window.innerHeight * 0.4)) + "px";
   }, [text]);
+
+  useLayoutEffect(() => {
+    const el = ta.current;
+    if (!el) return;
+    const c = carets.get(paneId);
+    if (c) {
+      el.setSelectionRange(c.start, c.end, c.dir);
+      setCaret(c.start);
+      // 上面跟内容走的高度是 useEffect，比这里晚（先设成 auto 会把滚动位置冲掉），等它设完再滚
+      requestAnimationFrame(() => (el.scrollTop = c.top));
+    }
+    // 卸载时 ta.current 可能已经清掉了，用挂上时拿到的那个元素：拆下来的 DOM 上选区还读得到
+    return () => {
+      carets.set(paneId, { start: el.selectionStart, end: el.selectionEnd, dir: el.selectionDirection ?? "none", top: el.scrollTop });
+    };
+  }, [paneId]);
 
   // 斜杠命令：输入框只有一个 /xxx（还没空格）时弹候选。
   const slash = /^\/(\S*)$/.exec(text);

@@ -116,6 +116,8 @@ type State = {
   unread: Record<string, true>;
   /** 每个 pane 输入框里还没发的字（切 tab 不丢）。 */
   drafts: Record<string, string>;
+  /** 每个 pane 输入框里贴了还没发的图：和字一样，tab 不保留时切走输入框会卸载，放组件里就丢了（用户报的）。 */
+  draftImgs: Record<string, { data: string; mimeType: string; url: string }[]>;
   pluginVersion: number;
 };
 
@@ -187,6 +189,7 @@ export const useStore = create<State>(() => ({
   switcher: false,
   unread: loadUnread(),
   drafts: {},
+  draftImgs: {},
   pluginVersion: 0,
 }));
 
