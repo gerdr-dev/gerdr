@@ -108,8 +108,13 @@ func (a *Agent) ownPids() map[int]bool {
 	out := map[int]bool{}
 	for _, s := range ss {
 		s.mu.Lock()
-		if s.p != nil && s.p.cmd != nil && s.p.cmd.Process != nil {
-			out[s.p.cmd.Process.Pid] = true
+		// 还在 initialize 的（spawning）也算：新会话的进程在后台起，人马上发话时它已经登记了、还没挂到 p 上，
+		// 不认它就把自己当成「别处开着」弹窗（用户报的：⌘D 完马上发消息）。
+		// 正在退的（exiting）登记文件可能还没删，也排除掉。
+		for _, pr := range []*proc{s.p, s.spawning, s.exiting} {
+			if pr != nil && pr.cmd != nil && pr.cmd.Process != nil {
+				out[pr.cmd.Process.Pid] = true
+			}
 		}
 		s.mu.Unlock()
 	}

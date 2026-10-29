@@ -39,6 +39,7 @@ type session struct {
 
 	p          *proc
 	exiting    *proc // 回退时放到后台退的旧进程（就是 p，还没退完）：别再往它发东西，下一轮先等它退完再起新的
+	spawning   *proc // 起了、还没 initialize 完的进程（还没挂到 p 上）：它已经写了登记文件，ownPids 要认它，见 holders.go
 	starting   chan struct{}
 	abortWait  context.CancelFunc // 有一句话在等进程起来（还没发给 claude）时：打断就调它，这句作废
 	turn       *turnState
@@ -162,6 +163,16 @@ func (s *session) start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	s.mu.Lock()
+	s.spawning = pr
+	s.mu.Unlock()
+	defer func() {
+		s.mu.Lock()
+		if s.spawning == pr {
+			s.spawning = nil
+		}
+		s.mu.Unlock()
+	}()
 	go func() {
 		<-pr.done
 		s.onExit(pr)
