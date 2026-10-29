@@ -537,7 +537,7 @@ func sessionCmd() *cobra.Command {
 	newCmd.Flags().StringVar(&nAgent, "agent", "claude", "claude、codex、native（Gerdr Agent），或者设置里加的变体 / 外部 agent 的 id")
 	newCmd.Flags().StringVar(&nCwd, "cwd", "", "工作目录（默认当前目录）")
 	newCmd.Flags().StringVar(&nTitle, "title", "", "会话标题（之后可以用它指代这个会话）")
-	newCmd.Flags().StringVar(&nMode, "mode", "", "权限模式（claude: default/acceptEdits/plan/auto/bypassPermissions；codex: ask/auto/read-only/full-access）")
+	newCmd.Flags().StringVar(&nMode, "mode", "", "权限模式（claude: default/acceptEdits/plan/auto/bypassPermissions；codex: ask/auto/read-only/full-access；native: default/acceptEdits/plan/bypassPermissions）")
 	newCmd.Flags().StringVar(&nPrompt, "prompt", "", "开好之后马上发的第一句话")
 	newCmd.Flags().BoolVar(&nWait, "wait", false, "和 --prompt 一起用：等它做完，输出它的回复")
 	newCmd.Flags().DurationVar(&nTimeout, "timeout", 30*time.Minute, "--wait 最多等多久")

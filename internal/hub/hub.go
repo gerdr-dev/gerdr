@@ -579,6 +579,12 @@ func (h *Hub) Create(ctx context.Context, o CreateOptions) (*Session, error) {
 		if err != nil {
 			return nil, err
 		}
+		// 各家适配器遇到不认识的模式都是悄悄按默认模式开（比如给 native 填了 codex 的 full-access），
+		// 调用方（`gerdr session new --mode`）以为放开了权限、其实每步都要人批 —— 这里对着 agent 报的可选模式查，不对就报错。
+		if err := checkMode(o.Mode, res.Modes); err != nil {
+			_, _ = c.Conn.CloseSession(ctx, acp.CloseSessionRequest{SessionId: res.SessionId})
+			return nil, err
+		}
 		s.rec.AgentSessionID = string(res.SessionId)
 		s.attached = true
 		s.modes, s.config = res.Modes, res.ConfigOptions
@@ -727,4 +733,19 @@ func (h *Hub) Pending() []PendingReq {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].At < out[j].At })
 	return out
+}
+
+// checkMode：新建会话时指定的模式得在 agent 报的可选模式里。agent 没报模式（有的外部 agent 不支持）就不查。
+func checkMode(mode string, modes *acp.SessionModeState) error {
+	if mode == "" || modes == nil || len(modes.AvailableModes) == 0 {
+		return nil
+	}
+	ids := make([]string, 0, len(modes.AvailableModes))
+	for _, m := range modes.AvailableModes {
+		if string(m.Id) == mode {
+			return nil
+		}
+		ids = append(ids, string(m.Id))
+	}
+	return fmt.Errorf("不支持的模式 %q，可选：%s", mode, strings.Join(ids, "、"))
 }
