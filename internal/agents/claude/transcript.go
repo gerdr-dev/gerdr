@@ -61,6 +61,12 @@ type entry struct {
 	AITitle     string          `json:"aiTitle"`     // type=ai-title：claude 自己起的标题（会随对话更新，后写的算）
 	Message     json.RawMessage `json:"message"`
 	ToolResult  json.RawMessage `json:"toolUseResult"`
+	// type=attachment: a steer that landed mid-turn is stored as a queued_command attachment, not a
+	// user message; SourceUUID is the uuid we sent it with (gerdr's messageId).
+	Attachment *struct {
+		Type       string `json:"type"`
+		SourceUUID string `json:"source_uuid"`
+	} `json:"attachment"`
 }
 
 func scan(path string, fn func(e *entry, raw []byte) bool) error {
@@ -83,10 +89,12 @@ func scan(path string, fn func(e *entry, raw []byte) bool) error {
 	return sc.Err()
 }
 
-// parentOf 找 uuid 那一条的 parentUuid。found=false 表示记录里没有这条。
+// parentOf finds the parentUuid of the user message we sent with uuid id. found=false: not in the transcript.
+// A steer that landed mid-turn is recorded as a queued_command attachment carrying our uuid as source_uuid;
+// forking at its parent is what Claude Code's own /rewind does for it ("No code restore").
 func parentOf(path, id string) (parent string, found bool, err error) {
 	err = scan(path, func(e *entry, _ []byte) bool {
-		if e.UUID == id {
+		if e.UUID == id || (e.Type == "attachment" && e.Attachment != nil && e.Attachment.Type == "queued_command" && e.Attachment.SourceUUID == id) {
 			found = true
 			if e.ParentUUID != nil {
 				parent = *e.ParentUUID

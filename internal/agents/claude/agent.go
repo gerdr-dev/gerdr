@@ -322,7 +322,8 @@ func (a *Agent) Initialize(ctx context.Context, p acp.InitializeRequest) (acp.In
 			},
 		},
 		AuthMethods: []acp.AuthMethod{},
-		Meta:        map[string]any{"steering": map[string]any{"supported": true}},
+		// rewind: a steer can be rewound on its own (parentOf finds its queued_command attachment).
+		Meta: map[string]any{"steering": map[string]any{"supported": true, "rewind": true}},
 	}, nil
 }
 

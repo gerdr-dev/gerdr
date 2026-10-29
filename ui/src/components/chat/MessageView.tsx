@@ -32,6 +32,7 @@ type Props = {
   live: boolean; // 这一条是正在流式输出的那条
   running: boolean;
   onRewind?: (m: GMessage) => void;
+  steerRewind?: boolean;
   onWithdraw?: (messageId: string, now: boolean) => void;
   onQuickReply: (s: string) => void;
   stackPrev?: boolean; // 用户消息：上 / 下紧挨着也是用户消息（叠成一摞）
@@ -58,12 +59,23 @@ function fmtTime(ts?: number) {
   return d.toDateString() === new Date().toDateString() ? hm : `${d.getMonth() + 1}/${d.getDate()} ${hm}`;
 }
 
-export const MessageView = memo(function MessageView({ msg, sessionId, live, running, onRewind, onWithdraw, onQuickReply, stackPrev, stackNext }: Props) {
+export const MessageView = memo(function MessageView({
+  msg,
+  sessionId,
+  live,
+  running,
+  onRewind,
+  steerRewind,
+  onWithdraw,
+  onQuickReply,
+  stackPrev,
+  stackNext,
+}: Props) {
   if (msg.role === "user") {
     const text = msg.parts.map((p) => (p.type === "text" ? p.text : "")).join("");
     const files = msg.parts.filter((p) => p.type === "file");
     const meta = msg.metadata;
-    const canRewind = !!onRewind && !!meta?.messageId && !meta?.steer && !meta?.sending && !running;
+    const canRewind = !!onRewind && !!meta?.messageId && (!meta?.steer || steerRewind) && !meta?.sending && !running;
     // 元信息（时间、来源）在气泡下面一行小灰字（照 Astryx ChatMessageMetadata）；一摞连发的只在最后一条下面写时间
     const showMeta = !stackNext || !!meta?.from || !!meta?.steer;
     return (

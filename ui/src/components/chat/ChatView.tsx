@@ -397,11 +397,13 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
   // 行是 memo 的，回调要稳定（不然每次都重渲染），但又要拿到最新的 —— 放在 ref 里转一手
   const latest = useRef({ doRewind, sessionId: session.id, openGroups, setOpenGroups });
   latest.current = { doRewind, sessionId: session.id, openGroups, setOpenGroups };
+  const steerRewind = (session.base ?? session.agent) === "claude";
   const env = useMemo<RowEnv>(
     () => ({
       sessionId: session.id,
       running,
       onRewind: sub ? undefined : (m) => latest.current.doRewind(m),
+      steerRewind,
       onWithdraw: sub
         ? undefined
         : async (id, now) => {
@@ -416,7 +418,7 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
         set({ ...g, [key]: !g[key] });
       },
     }),
-    [session.id, running, sub],
+    [session.id, running, sub, steerRewind],
   );
   return (
     <SessionContext.Provider value={session}>

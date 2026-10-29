@@ -267,6 +267,8 @@ export type RowEnv = {
   sessionId: string;
   running: boolean;
   onRewind?: (m: GMessage) => void;
+  /** Steers can be rewound on their own (claude: forks before the steer, like its own /rewind). Codex can't: a steer joins the running turn and revert cuts whole turns. */
+  steerRewind?: boolean;
   onWithdraw?: (messageId: string, now: boolean) => void;
   onQuickReply: (s: string) => void;
   onShowCleared?: () => void;
@@ -313,6 +315,7 @@ export const RowView = memo(
             live={false}
             running={env.running}
             onRewind={env.onRewind}
+            steerRewind={env.steerRewind}
             onWithdraw={env.onWithdraw}
             onQuickReply={env.onQuickReply}
             stackPrev={row.prev}

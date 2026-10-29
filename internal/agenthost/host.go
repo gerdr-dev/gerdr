@@ -53,6 +53,13 @@ func (h *Host) Steering() bool {
 	return ok && s["supported"] == true
 }
 
+// SteerRewind reports whether a steer can be rewound on its own. Codex can't: a steer joins the running
+// turn and thread/revert only cuts whole turns.
+func (h *Host) SteerRewind() bool {
+	s, ok := h.Info.Meta["steering"].(map[string]any)
+	return ok && s["rewind"] == true
+}
+
 func StartInProc(ctx context.Context, agent InProcAgent, handler Handler, log *slog.Logger) (*Host, error) {
 	c2aR, c2aW := io.Pipe()
 	a2cR, a2cW := io.Pipe()

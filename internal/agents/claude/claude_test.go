@@ -158,6 +158,27 @@ func TestUserTextsFromSkipsInterrupt(t *testing.T) {
 	}
 }
 
+// A steer that landed mid-turn is a queued_command attachment, found by source_uuid (our messageId);
+// one that the CLI picked up after the turn ended is a plain user message, found by uuid.
+func TestParentOfSteer(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "s.jsonl")
+	lines := `{"type":"user","uuid":"u1","parentUuid":null,"message":{"role":"user","content":"go"}}
+{"type":"assistant","uuid":"a1","parentUuid":"u1","message":{"role":"assistant","content":[{"type":"tool_use","id":"t1"}]}}
+{"type":"user","uuid":"r1","parentUuid":"a1","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1"}]}}
+{"type":"attachment","uuid":"x1","parentUuid":"r1","attachment":{"type":"queued_command","prompt":"stop","source_uuid":"steer-1"}}
+{"type":"system","uuid":"s1","parentUuid":"x1","subtype":"stop_hook_summary"}
+{"type":"user","uuid":"steer-2","parentUuid":"s1","message":{"role":"user","content":"next"}}
+`
+	if err := os.WriteFile(p, []byte(lines), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for id, want := range map[string]string{"steer-1": "r1", "steer-2": "s1"} {
+		if got, found, err := parentOf(p, id); err != nil || !found || got != want {
+			t.Fatalf("%s: %q %v %v", id, got, found, err)
+		}
+	}
+}
+
 // 回退之后还没说过话的会话重新载入：只重放原会话到分叉点为止。
 func TestReplayTranscriptUntil(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "s.jsonl")

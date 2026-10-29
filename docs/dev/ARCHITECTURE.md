@@ -58,6 +58,11 @@ React（ui/，不打包）  ←WebSocket / HTTP→  hub（internal/hub）  ←AC
    回退时在 `~/.claude/projects/*/<sessionId>.jsonl` 里找到这条的 `parentUuid`，从那儿
    `--resume 旧 --resume-session-at parent --fork-session --session-id 新` 分叉。原会话不动；
    ACP 的 sessionId 因此会变（`RewindResponse.SessionId`），hub 要换 key。
+   **Steers can be rewound too** (Claude Code's own `/rewind` lists them, marked "No code restore"). One the CLI
+   picked up after the turn ended is a plain user message with our uuid. One that landed mid-turn is not a user
+   message but an `attachment{type:"queued_command", source_uuid:<our uuid>}`: fork at that entry's parent.
+   The adapter advertises this as `steering.rewind`; codex doesn't (a steer joins the running turn, `thread/revert`
+   only cuts whole turns). The hub closes the cut turn with a `turn_end`, since the real one went with the rest.
    **分叉出来的新会话要等下一句话写进去才有记录**：进程起来了不算数（这句被 Esc 撤回、进程被收掉，下次还得照样分叉），
    适配器以「新会话的记录在不在」判断分叉成了没有。「从哪分叉」agent 只记在内存里，所以 `RewindResponse.Fork`
    交给 hub 存进 `Record.Fork`，接回会话时放在 `_meta.gerdr.fork` 带回去 —— 不然 gerdr 一重启，

@@ -1495,16 +1495,15 @@ func (s *Session) Rewind(ctx context.Context, messageID string) (RewindResult, e
 			return RewindResult{}, errors.New("这条消息在 /clear 之前：清空之后只能回退到清空以后发的消息")
 		}
 	}
-	if steer {
-		s.mu.Unlock()
-		return RewindResult{}, errors.New("插话的消息不能单独回退，回退它所在那一轮开头的那条")
-	}
 	agentSID := s.rec.AgentSessionID
 	s.mu.Unlock()
 
 	c, err := s.ensureAttached(ctx)
 	if err != nil {
 		return RewindResult{}, err
+	}
+	if steer && !c.SteerRewind() {
+		return RewindResult{}, errors.New("插话的消息不能单独回退，回退它所在那一轮开头的那条")
 	}
 	res, err := agenthost.Call[acpx.RewindResponse](ctx, c, acpx.MethodRewind, acpx.RewindRequest{SessionId: acp.SessionId(agentSID), MessageId: messageID})
 	if err != nil {
@@ -1521,6 +1520,10 @@ func (s *Session) Rewind(ctx context.Context, messageID string) (RewindResult, e
 	out := RewindResult{Content: content}
 	s.mu.Lock()
 	s.events = s.events[:idx]
+	if steer {
+		// Cut mid-turn: the turn_end went with the rest. Close the turn so a reload doesn't leave it open.
+		s.events = append(s.events, &Event{Seq: s.h.nextSeqLocked(), TS: now(), Kind: EvTurnEnd, StopReason: string(acp.StopReasonEndTurn)})
+	}
 	s.lastErr = ""
 	evs := append([]*Event(nil), s.events...)
 	s.mu.Unlock()
