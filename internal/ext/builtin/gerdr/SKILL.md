@@ -1,6 +1,6 @@
 ---
 name: gerdr
-description: "Coordinate other coding-agent sessions inside gerdr (Claude Code / Codex sessions in the gerdr GUI): list sessions, start a new agent session next to you, hand it a task, wait for it, read its reply, or message an existing session. Use when the user asks you to delegate to / start / ask / check on another agent or session in gerdr, or to run several agents in parallel. Requires GERDR_ENV=1."
+description: "Coordinate other coding-agent sessions inside gerdr (Claude Code / Codex sessions in the gerdr GUI): list sessions, start a new agent session next to you, hand it a task, wait for it, read its reply, or message an existing session. Use when the user asks you to delegate to / start / ask / check on another agent or session in gerdr, or to run several agents in parallel. Also for arranging gerdr's layout: sorting tabs into workspaces, splitting panes together, renaming or reordering workspaces / tabs. Requires GERDR_ENV=1."
 ---
 
 # gerdr：和其他会话协作
@@ -94,6 +94,48 @@ gerdr session send reviewer "/clear"  # 还要接着派活、但不想带着之�
 你开出来的会话活干完了就关掉，别让用户自己一个个去关。
 用户叫你做完把自己关掉时，`gerdr session close` 你自己的 id（`gerdr session current` 拿）：它不会当场关，
 等你这一轮答完才关，所以把它放在最后、照常把要说的话说完。
+
+## Arranging the layout (workspaces / tabs / panes)
+
+When the user asks you to tidy up gerdr (sort tabs into workspaces, put two conversations side by side, rename things), use
+`gerdr workspace|tab|pane …`. They're shaped like herdr's commands of the same names and output JSON. Only do what was asked:
+the layout is the user's desk.
+
+```bash
+gerdr workspace list                     # workspace_id, label, number (sidebar order), tab_count
+gerdr tab list [--workspace <ws>]        # tab_id, label, pane_count, split: row(a, b) = a left of b, col(a, b) = a above b
+gerdr pane list [--workspace <ws>]       # pane_id, kind (agent / terminal / empty), session {id, title, status, cwd}; self: true is you
+gerdr pane current                       # your own pane
+gerdr pane layout [<pane>] [--tab <tab>] # each pane's rect in its tab
+```
+
+A workspace is named by its id, number or label; a tab by its id or label; a pane by its id or by the conversation it shows
+(session id, prefix, or title). When a label matches several things you get an error: use the id.
+
+```bash
+gerdr workspace create --label lb [--cwd DIR] [--position 1]   # starts with an empty tab, which goes away once you move something in
+gerdr pane move <pane> --workspace lb [--tab-label api]        # make it a tab of that workspace
+gerdr pane move <pane> --new-workspace --label lb              # make it the first tab of a new workspace
+gerdr pane move <pane> --target-pane <pane> --split right      # split it beside another pane (right / down / left / up, --ratio 0.5)
+gerdr pane move <pane> --tab <tab> --split down                # beside the whole tab
+gerdr pane move <pane> --new-tab                               # pull it out of a split into a tab of its own
+gerdr pane swap <pane> --target-pane <pane>
+gerdr tab move <tab> --workspace lb [--position 1]             # a whole tab, splits and all
+gerdr tab move <tab> --tab <other-tab> --split right           # merge it into another tab
+gerdr workspace move <ws> --position 1
+gerdr workspace rename <ws> <label>;  gerdr tab rename <tab> <label>
+gerdr workspace close <ws>;  gerdr tab close <tab>             # only empty ones
+```
+
+- Moving never stops anything: the conversation or terminal just shows up somewhere else. A pane alone in its tab takes the tab
+  (and its label) along. A tab you moved everything out of disappears; a workspace you emptied stays (with one empty tab) until
+  you `workspace close` it.
+- `close` refuses anything that still shows a conversation or a terminal. Ending a conversation is `gerdr session close`, and
+  only when the user asked.
+- Nothing switches the user's view. Each window keeps looking at what it was looking at.
+- Everything stays inside your own session (the space you're in); other sessions' workspaces aren't listed and can't be reached.
+- Plan the whole rearrangement from one `workspace list` + `pane list`, then run the moves. Ids don't change when things move,
+  so you don't need to list again between moves.
 
 ## 并行
 

@@ -231,7 +231,8 @@ func (e *NotFoundError) Error() string { return e.Name + " not found: " + e.Hint
 // 不弹审批（多个会话协作时每一步都要人点一下就没法用了；codex 的沙箱连本机端口都算联网，必然会来问）。
 //
 // 放行的边界：
-//   - 只能是一条 `gerdr session …` / `gerdr ui …`，不能用 ; && | 拼别的命令，不能有重定向、$(…)、反引号；
+//   - 只能是一条 `gerdr session …` / `gerdr ui …` / `gerdr workspace|tab|pane …`（layout moves: they never stop an agent
+//     or a terminal, closing only takes empty ones），不能用 ; && | 拼别的命令，不能有重定向、$(…)、反引号；
 //     单引号里随便写（shell 不展开），双引号里不能有 $ 和反引号；
 //   - 不带 --mode：开新会话时自己指定权限模式等于给自己提权（沙箱里的 agent 开一个 bypassPermissions 的会话
 //     就什么都能干了），这种还是要人点头。
@@ -283,7 +284,9 @@ func SafeGerdrCLI(cmd string) bool {
 	if len(words) < 2 || (words[0] != "gerdr" && !strings.HasSuffix(words[0], "/gerdr")) {
 		return false
 	}
-	if words[1] != "session" && words[1] != "ui" {
+	switch words[1] {
+	case "session", "ui", "workspace", "tab", "pane":
+	default:
 		return false
 	}
 	for _, w := range words[2:] {

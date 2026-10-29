@@ -13,6 +13,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"sync"
 	"syscall"
@@ -85,13 +86,13 @@ func main() {
 		Short: "打印版本",
 		Run:   func(cmd *cobra.Command, args []string) { fmt.Println(version.Version) },
 	})
-	root.AddCommand(sessionCmd(), uiCmd(), remoteCmd())
+	root.AddCommand(sessionCmd(), uiCmd(), remoteCmd(), workspaceCmd(), tabCmd(), paneCmd())
 	if err := root.Execute(); err != nil {
 		if errors.Is(err, errHandover) {
 			os.Exit(exitHandover)
 		}
-		if len(os.Args) > 1 && (os.Args[1] == "session" || os.Args[1] == "ui") {
-			fail(err) // 给 agent 用的：错误也是 JSON
+		if len(os.Args) > 1 && slices.Contains([]string{"session", "ui", "workspace", "tab", "pane"}, os.Args[1]) {
+			fail(err) // for agents: errors are JSON too
 		}
 		fmt.Fprintln(os.Stderr, "gerdr:", err)
 		os.Exit(1)

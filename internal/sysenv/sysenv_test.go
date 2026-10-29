@@ -9,6 +9,8 @@ func TestSafeGerdrCLI(t *testing.T) {
 		`gerdr session send helper 'a; b $(x)'`:                            true,
 		`gerdr ui status`:                                                  true,
 		`/Applications/gerdr.app/Contents/Resources/gerdr session current`: true,
+		`gerdr pane move p1 --new-workspace --label lb`:                    true,
+		`gerdr workspace list`:                                             true,
 		`gerdr session list; rm -rf ~`:                                     false,
 		`gerdr session send x "$(cat ~/.ssh/id_rsa)"`:                      false,
 		"gerdr session send x `id`":                                        false,

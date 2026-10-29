@@ -32,6 +32,11 @@ React（ui/，不打包）  ←WebSocket / HTTP→  hub（internal/hub）  ←AC
   token 级片段落到文件里只剩几条。
 - **布局**（工作空间 / tab / pane 树）存在 `~/.gerdr/layout.json`，服务端不解释，前端说了算，
   多个窗口之间靠广播同步。
+  The one exception is `gerdr workspace|tab|pane …` (internal/server/layoutapi.go, for agents): the server edits layout.json
+  itself, then broadcasts it exactly like a PUT from a window. That way it runs once (not once per open window) and works with no
+  window open. It edits generic JSON so fields it doesn't know survive. Its tree rules mirror ui/src/lib/actions.ts (movePane,
+  mergeTab, removeTab), so change both together. Last writer wins: a window that changed the layout less than 300 ms before (its
+  PUT still pending) takes the server's version when the broadcast arrives and drops its own change, which the user then redoes.
 
 ## Claude（stream-json）—— 没有公开文档，照 Agent SDK 的 sdk.d.ts 和抓包写的
 
@@ -233,7 +238,7 @@ cwd 以外改的文件（Bash 写 `~/.zshrc`、隔壁项目）管不到；同一
   `/api/resolve` 换 gerdr 会话 id。claude 回退之后会话 id 会变，hub 那边跟着 rekey，所以按 agent id 查永远是当前的。
 - 发消息带 `from`，对方界面上标「来自会话 X」；`gerdr session new` 默认让界面在调用者旁边分屏打开、不抢焦点（WS 推 `open`）。
 - **自动放行**：codex 的沙箱连本机端口都算联网，每条 `gerdr session …` 都会来要审批；codex 的「本会话都允许」又只放行一模一样的那条
-  命令 —— 协作时每一步都要人点，没法用。所以两个适配器对「只是一条 gerdr session / ui 命令」直接放行（`sysenv.SafeGerdrCLI`：
+  命令 —— 协作时每一步都要人点，没法用。所以两个适配器对「只是一条 gerdr session / ui / workspace / tab / pane 命令」直接放行（`sysenv.SafeGerdrCLI`：
   不能拼别的命令、不能有 `$()`、重定向；**不能带 `--mode`**，否则沙箱里的 agent 开一个 bypassPermissions 的会话就等于给自己提权）。
 - **Sessions (herdr's `--session`) keep agents apart.** In the layout a session is a `space` on each workspace
   (`ui/src/lib/layout.ts` `Space`; unset = `default`, so old layouts need no migration). Workspaces stay in one flat list, so

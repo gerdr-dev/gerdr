@@ -103,6 +103,7 @@ func (s *Server) Handler() http.Handler {
 		writeJSON(w, s.Awake.Status())
 	})
 	mux.HandleFunc("PUT /api/layout", s.putStore(s.Layout, "layout"))
+	mux.HandleFunc("POST /api/layout/op", s.layoutOp) // gerdr workspace / tab / pane (layoutapi.go)
 	mux.HandleFunc("POST /api/sessions", s.createSession)
 	mux.HandleFunc("DELETE /api/sessions/{id}", s.sessionOp(func(r *http.Request, sess *hub.Session) (any, error) {
 		return nil, s.Hub.Delete(r.Context(), sess.ID())
