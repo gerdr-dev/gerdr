@@ -62,6 +62,7 @@ export function TabBar() {
       )}
       <div
         ref={barRef}
+        data-tab-bar
         className={cn("flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none]", flush ? "pr-2" : "px-2")}
         style={{ WebkitAppRegion: "no-drag" } as any}
       >
@@ -149,7 +150,7 @@ export function TabBar() {
           {formatCombo(prefix).replace(/\s.*/, "")} …
         </div>
       )}
-      <TabDragLayer drag={drag} />
+      <TabDragLayer />
     </div>
   );
 }

@@ -40,6 +40,7 @@ import { cn } from "@/lib/utils";
 import { AgentIcon, StatusDot } from "./AgentIcon";
 import { ChatView } from "./chat/ChatView";
 import { NewSession } from "./NewSession";
+import { startPaneDrag, useDrag, type TabGhost } from "./TabDrag";
 import { TerminalView } from "./Terminal";
 
 /** 这个 tab 是不是正显示着的那个（藏着的 tab 里的 pane 不算有焦点，不抢光标、不标已读）。 */
@@ -157,6 +158,16 @@ export function TabView({ tab }: { tab: Tab }) {
 
 type Count = { i: number; n: number };
 
+/**
+ * 标题栏按住拖：把这个 pane 挪到别处（见 TabDrag.tsx 的 startPaneDrag）。手机上一次只看一个 pane，不给拖。
+ * 被拖着的那个 pane 淡下去，和 tab 栏里被拖的 tab 一样。
+ */
+function usePaneDrag(paneId: string, ghost: TabGhost) {
+  const phone = usePhone();
+  const dragging = useDrag()?.paneId === paneId;
+  return { dragging, onPointerDown: phone ? undefined : (e: React.PointerEvent<HTMLElement>) => startPaneDrag(e, paneId, ghost) };
+}
+
 function PaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; tab: Tab; framed: boolean; zoomed?: boolean; count?: Count }) {
   if (pane.sub) return <SubPaneView pane={pane} tab={tab} framed={framed} zoomed={zoomed} count={count} />;
   if (pane.term) return <TermPaneView pane={pane} tab={tab} framed={framed} zoomed={zoomed} count={count} />;
@@ -185,14 +196,23 @@ function SubPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; tab
   const many = framed || zoomed;
   const task = session?.tasks?.find((t) => t.toolCallId === sub.toolCallId);
   const title = task?.description || sub.title || "子 agent";
+  const drag = usePaneDrag(pane.id, { label: title });
   return (
     <div
       data-pane-id={pane.id}
-      className={cn("flex h-full min-h-0 flex-col", framed && "overflow-hidden rounded-md border", framed && (focused ? "border-brand" : "border-border"))}
+      className={cn(
+        "flex h-full min-h-0 flex-col",
+        framed && "overflow-hidden rounded-md border",
+        framed && (focused ? "border-brand" : "border-border"),
+        drag.dragging && "opacity-40",
+      )}
       onMouseDown={() => !focused && focusPane(pane.id)}
     >
       {/* 手机上和顶栏两头对齐：左 16px，16px 图标的中线落在 24px（= ☰：px-1.5 + 36px 按钮）；右边照旧 12px，24px 的 ⋯ 按钮中线也落在 24px（= 右上角 +）。三种 pane 的标题栏同一个边距 */}
-      <div className={cn("flex h-8 shrink-0 items-center gap-2 border-b px-3 text-[12px] max-md:pl-4", !focused && many && "opacity-70")}>
+      <div
+        onPointerDown={drag.onPointerDown}
+        className={cn("flex h-8 shrink-0 items-center gap-2 border-b px-3 text-[12px] max-md:pl-4", !focused && many && "opacity-70")}
+      >
         <Bot className="size-4 text-muted-foreground" />
         <span className="shrink-0 text-muted-foreground">{task?.subagent || "子 agent"}</span>
         <span className="min-w-0 flex-1 truncate font-medium">{title}</span>
@@ -229,13 +249,22 @@ function TermPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; ta
   const [osc, setOsc] = useState("");
   useStore((s) => s.pluginVersion);
   const title = applyPaneTitle(pane, tab, osc || basename(cwd));
+  const drag = usePaneDrag(pane.id, { label: title, term: true });
   return (
     <div
       data-pane-id={pane.id}
-      className={cn("flex h-full min-h-0 flex-col", framed && "overflow-hidden rounded-md border", framed && (focused ? "border-brand" : "border-border"))}
+      className={cn(
+        "flex h-full min-h-0 flex-col",
+        framed && "overflow-hidden rounded-md border",
+        framed && (focused ? "border-brand" : "border-border"),
+        drag.dragging && "opacity-40",
+      )}
       onMouseDown={() => !focused && focusPane(pane.id)}
     >
-      <div className={cn("flex h-8 shrink-0 items-center gap-2 border-b px-3 text-[12px] max-md:pl-4", !focused && many && "opacity-70")}>
+      <div
+        onPointerDown={drag.onPointerDown}
+        className={cn("flex h-8 shrink-0 items-center gap-2 border-b px-3 text-[12px] max-md:pl-4", !focused && many && "opacity-70")}
+      >
         <SquareTerminal className="size-4 text-muted-foreground" />
         <span className="min-w-[3em] max-w-[60%] shrink truncate font-medium">{title}</span>
         <PaneCount count={count} />
@@ -314,14 +343,23 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
 
   const base = session ? session.title || basename(session.cwd) : "新会话";
   const title = applyPaneTitle(pane, tab, base);
+  const drag = usePaneDrag(pane.id, { label: title, agent: session?.agent });
 
   return (
     <div
       data-pane-id={pane.id}
-      className={cn("flex h-full min-h-0 flex-col", framed && "overflow-hidden rounded-md border", framed && (focused ? "border-brand" : "border-border"))}
+      className={cn(
+        "flex h-full min-h-0 flex-col",
+        framed && "overflow-hidden rounded-md border",
+        framed && (focused ? "border-brand" : "border-border"),
+        drag.dragging && "opacity-40",
+      )}
       onMouseDown={() => !focused && focusPane(pane.id)}
     >
-      <div className={cn("flex h-8 shrink-0 items-center gap-2 border-b px-3 text-[12px] max-md:pl-4", !focused && many && "opacity-70")}>
+      <div
+        onPointerDown={drag.onPointerDown}
+        className={cn("flex h-8 shrink-0 items-center gap-2 border-b px-3 text-[12px] max-md:pl-4", !focused && many && "opacity-70")}
+      >
         {session ? <AgentIcon agent={session.agent} className="size-4" /> : <PanelTopOpen className="size-3.5 text-muted-foreground" />}
         <span className="min-w-[3em] max-w-[60%] shrink truncate font-medium">{title}</span>
         <StatusDot status={session?.status} unread={unread} />

@@ -513,6 +513,38 @@ export function paneToTab(paneId: string) {
   });
 }
 
+/**
+ * 拖 pane 标题栏把一个 pane 挪走：贴到 tabId 那个 tab 里 paneId 那个 pane（不给 = 整个 tab）的 side 那边（同一个 tab 里换位置也走这里），
+ * 或者单独成一个新 tab，插在 wsId 那个工作空间的第 index 个（不给 = 最后）。焦点跟过去。
+ * tab 里只有它一个时不动 —— 那种情况拖的是整个 tab（mergeTab / moveTab / moveTabToWorkspace）。
+ */
+export function movePane(paneId: string, to: { tabId: string; paneId?: string; side: Side } | { wsId: string; index?: number }) {
+  setLayout((l) => {
+    const src = allLeaves(l).find((x) => x.pane.id === paneId);
+    const rest = src && closePane(src.tab, paneId);
+    if (!src || !rest) return l;
+    let out = updateTab(l, src.tab.id, () => rest);
+    let wsId: string;
+    if ("tabId" in to) {
+      const tw = out.workspaces.find((w) => w.tabs.some((t) => t.id === to.tabId));
+      if (!tw || (to.paneId && to.paneId === paneId)) return l;
+      wsId = tw.id;
+      out = updateTab(out, to.tabId, (t) => ({ ...attach(t, to.paneId, to.side, src.pane), focus: paneId }));
+      out = updateWs(out, wsId, (w) => (w.activeTab === to.tabId ? w : { ...w, activeTab: to.tabId, lastTab: w.activeTab }));
+    } else {
+      if (!out.workspaces.some((w) => w.id === to.wsId)) return l;
+      wsId = to.wsId;
+      const nt: Tab = { id: rid("t"), root: src.pane, focus: paneId };
+      out = updateWs(out, wsId, (w) => {
+        const tabs = [...w.tabs];
+        tabs.splice(to.index ?? tabs.length, 0, nt);
+        return { ...w, tabs, activeTab: nt.id, lastTab: w.activeTab };
+      });
+    }
+    return wsId === l.active ? out : { ...out, active: wsId, lastActive: l.active };
+  });
+}
+
 /** 把 tab 挪到另一个工作空间（拖到侧栏的工作空间上）：放到最后、切过去看着它。 */
 export function moveTabToWorkspace(tabId: string, wsId: string) {
   setLayout((l) => {
