@@ -30,6 +30,8 @@ export type GData = {
   turnStat: { ms: number; tokens: number; ts?: number };
   turnEnd: { stopReason: string; error?: string };
   quickReplies: { questions: { question: string; options: string[] }[] };
+  /** 输入框里的 `!命令`（gerdr 自己跑的，hub/shell.go）。end：stopped = 人点了停止，lost = gerdr 重启时还在跑；replayed = 从 agent 记录重放出来的 */
+  shell: { id: string; command: string; output: string; running: boolean; exit?: number; end?: string; error?: string; replayed?: boolean };
 };
 
 export type GMessage = UIMessage<GMeta, GData>;
@@ -69,6 +71,10 @@ const CMD_OUT = /^\s*<local-command-stdout>([\s\S]*?)<\/local-command-stdout>/;
 const BASH_IN = /^\s*<bash-input>([\s\S]*?)<\/bash-input>/;
 const BASH_OUT = /^\s*<bash-(?:stdout|stderr)>/;
 const ANY_TAG = /<\/?[a-zA-Z][\w-]*(?:\s+[^>]*)?>/g;
+// 点「允许并重试」时 gerdr 替人发的那句（allowRetryText）：画成系统小字，不当人话 —— 写死一句中文在气泡里，换个界面语言就不对了
+const ALLOWED = /^\s*<gerdr-allowed>([\s\S]*?)<\/gerdr-allowed>/;
+// 以前发的是这句中文，旧对话里留着的也一样画
+const ALLOWED_OLD = /^\s*我已经允许了刚才被拦下的操作，请重试。\s*$/;
 // claude 写进去的打断记号（`[Request interrupted by user]` / `…for tool use]`），也不是人打的
 const INTERRUPT = /^\s*\[Request interrupted by user[^\]]*\]\s*$/;
 
@@ -101,8 +107,39 @@ export function machineBlock(text: string): { notice?: { level: string; text: st
   if ((m = BASH_IN.exec(text))) return { text: "! " + squash(m[1]) };
   if (BASH_OUT.test(text)) return { notice: { level: "info", text: squash(text.replace(ANY_TAG, " ")) } };
   if (INTERRUPT.test(text)) return { notice: { level: "info", text: "被打断了" } };
+  if (ALLOWED_OLD.test(text)) return { notice: { level: "info", text: "已允许被拦下的操作，让它重试" } };
+  if ((m = ALLOWED.exec(text))) {
+    const rules = m[1].split("\n").flatMap((l) => (l.startsWith("- ") ? [l.slice(2).trim()] : []));
+    return { notice: { level: "info", text: `已允许被拦下的操作，让它重试${rules.length ? "：" + rules.join("、") : ""}` } };
+  }
   return undefined;
 }
+
+/**
+ * 「允许并重试」发给 agent 的话：给 agent 看的用英文（它照样按对话的语言回），包一层标签让界面认出来画成系统提示（machineBlock）。
+ * 规则一行一条「- 」开头，界面从这里取出来显示。
+ */
+export function allowRetryText(rules: string[]) {
+  return [
+    "<gerdr-allowed>",
+    "The user has allowed the operation that was just blocked, by adding these permission rules:",
+    ...rules.map((r) => "- " + r),
+    "Please retry it.",
+    "</gerdr-allowed>",
+  ].join("\n");
+}
+
+/*
+ * `!命令` 跟着下一条消息带给 agent 的那段（hub/shell.go 的 shellContext）：一条命令一块文字，排在人说的话前面。
+ * 日志里有 shell 事件画卡片，这几块不再画成人说的话；从 agent 记录重放时没有 shell 事件，就靠解析它画回卡片。
+ * 和 Claude Code 自己 `!` 留下的记录（输入、输出各一条消息，machineBlock 管）不同：这里输入输出在同一块里。
+ */
+const SHELL_CTX = /^<bash-input>([\s\S]*?)<\/bash-input>\n<bash-stdout>([\s\S]*?)<\/bash-stdout><bash-stderr>([\s\S]*?)<\/bash-stderr>\s*$/;
+
+export const isShellContext = (text: string) => SHELL_CTX.test(text);
+
+/** 消息内容里去掉 `!命令` 带的那几块（撤回、回退放回输入框时用：命令还在对话里，下一条照样会带上） */
+export const dropShellContext = (blocks: ContentBlock[]) => blocks.filter((c) => !(c.type === "text" && isShellContext(c.text)));
 
 export class Transcript {
   /**
@@ -160,6 +197,7 @@ export class Transcript {
   private chunks = new Map<string, Loc>(); // "text:<msgId>" / "reasoning:<msgId>" → part
   private lastChunkKey = "";
   private requests = new Map<string, Loc>();
+  private shells = new Map<string, Loc>(); // `!命令` 的 id → 卡片
   private planLoc: Loc | null = null;
   private curSeq = 0;
   private idBase = "";
@@ -173,6 +211,7 @@ export class Transcript {
     this.tools.clear();
     this.chunks.clear();
     this.requests.clear();
+    this.shells.clear();
     this.planLoc = null;
     this.retryLoc = null;
     this.lastChunkKey = "";
@@ -204,7 +243,7 @@ export class Transcript {
   private removeMessage(i: number) {
     this.messages.splice(i, 1);
     const fix = (l: Loc | null) => (l && l.msg > i ? { msg: l.msg - 1, part: l.part } : l);
-    for (const m of [this.tools, this.chunks, this.requests]) for (const [k, l] of m) m.set(k, fix(l)!);
+    for (const m of [this.tools, this.chunks, this.requests, this.shells]) for (const [k, l] of m) m.set(k, fix(l)!);
     this.planLoc = fix(this.planLoc);
     this.retryLoc = fix(this.retryLoc);
   }
@@ -273,6 +312,7 @@ export class Transcript {
         }
         const parts: GPart[] = [];
         for (const c of e.content ?? []) {
+          if (c.type === "text" && isShellContext(c.text)) continue; // `!命令` 带过去的输出：上面已经有那张命令卡片了
           if (c.type === "text") parts.push({ type: "text", text: mb?.text ?? c.text });
           else if (c.type === "image") parts.push({ type: "file", mediaType: c.mimeType, url: imageURL(c) });
           else if (c.type === "resource_link") parts.push({ type: "text", text: `@${c.uri.replace(/^file:\/\//, "")}` });
@@ -404,6 +444,26 @@ export class Transcript {
         }
         break;
       }
+      case "shell": {
+        this.messages = [...this.messages];
+        const id = e.messageId!;
+        this.shells.set(id, this.pushPart(this.assistant(e.ts), { type: "data-shell", data: { id, command: e.text ?? "", output: "", running: true } }));
+        this.lastChunkKey = "";
+        break;
+      }
+      case "shell_out":
+      case "shell_done": {
+        const loc = this.shells.get(e.messageId!);
+        const p = loc && (this.messages[loc.msg]?.parts[loc.part] as any);
+        if (!p || p.type !== "data-shell") break;
+        this.messages = [...this.messages];
+        const data =
+          e.kind === "shell_out"
+            ? { ...p.data, output: p.data.output + (e.text ?? "") }
+            : { ...p.data, running: false, exit: e.exit, end: e.level, error: e.error };
+        this.setPart(loc!, { ...p, data });
+        break;
+      }
       case "notice": {
         this.messages = [...this.messages];
         const data = { level: e.level ?? "info", text: e.text ?? "" };
@@ -468,6 +528,14 @@ export class Transcript {
       case "user_message_chunk": {
         // 只有导入的历史会出现（agent 重放）。一条消息可能分几块来（文字 + 贴的图），MessageId 相同，拼回一条
         let part: GPart | undefined;
+        const sh = u.content?.type === "text" ? SHELL_CTX.exec(u.content.text ?? "") : null;
+        if (sh) {
+          // `!命令` 带过去的那段（重新载入后日志里没有 shell 事件了）：画回命令卡片
+          const i = this.assistant(ts);
+          const id = `r${this.curSeq}-${this.messages[i].parts.length}`; // 一条消息里可能带了好几条命令
+          this.pushPart(i, { type: "data-shell", data: { id, command: sh[1], output: sh[2], running: false, error: sh[3] || undefined, replayed: true } });
+          break;
+        }
         if (u.content?.type === "text" && u.content.text) {
           const mb = machineBlock(u.content.text);
           if (mb?.notice) {

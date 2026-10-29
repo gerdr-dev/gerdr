@@ -17,7 +17,7 @@ import {
 import { diffLines } from "diff";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import type { ToolContent, ToolMeta, ToolPart } from "@/lib/transcript";
+import { allowRetryText, type ToolContent, type ToolMeta, type ToolPart } from "@/lib/transcript";
 import { cn } from "@/lib/utils";
 import { DiffView } from "./DiffView";
 import { useSession } from "./sessionContext";
@@ -276,7 +276,7 @@ export function ToolCall({ part, children, running, keep: keepOpen }: { part: To
               try {
                 await api.allowRules(session!.id, meta.autoDenied!);
                 setAllowed(true);
-                await api.send(session!.id, [{ type: "text", text: "我已经允许了刚才被拦下的操作，请重试。" }]);
+                await api.send(session!.id, [{ type: "text", text: allowRetryText(meta.autoDenied!) }]);
               } catch (err: any) {
                 toast.error(err.message);
               }
