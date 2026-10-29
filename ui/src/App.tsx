@@ -10,11 +10,11 @@ import { TabActive, TabView } from "./components/Panes";
 import { tabName } from "./lib/actions";
 import { handleKeydown } from "./lib/commands";
 import { ACTION_TITLES, setPrefixLabel, toAccelerator, type KeyAction } from "./lib/keys";
-import { activeTab, type Tab } from "./lib/layout";
+import { activeTab, currentSpace, spaceList, type Tab } from "./lib/layout";
 import { isPhone, usePhone, useViewportHeight } from "./lib/phone";
 import { cn } from "./lib/utils";
 import { syncWatch } from "./lib/sync";
-import { isNative, nativeBadge, nativeMenuKeys } from "./lib/native";
+import { isNative, nativeBadge, nativeMenuKeys, nativeSpace } from "./lib/native";
 import { initAndroid, syncAndroidTheme } from "./lib/android";
 import { CliApprove } from "./components/CliApprove";
 import { systemNotify } from "./lib/notify";
@@ -134,9 +134,24 @@ export default function App() {
   useEffect(() => {
     if (!phone) set({ drawer: false, switcher: false });
   }, [phone]);
+  // Which (herdr-style) session this window shows: in the title when there's more than one (tells the App's windows apart),
+  // in the address (?space=, so a reload or a window opened for a session stays on it), and told to the App shell
+  const spaceId = useStore((s) => currentSpace(s.layout));
+  const spaceName = useStore((s) => spaceList(s.layout).find((x) => x.id === spaceId)?.name ?? spaceId);
+  const many = useStore((s) => spaceList(s.layout).length > 1);
+  const space = { id: spaceId, name: spaceName, many };
   useEffect(() => {
-    document.title = `${tabName(tab)} · Gerdr`;
-  }, [tab]);
+    document.title = space.many ? `${tabName(tab)} · ${space.name} · Gerdr` : `${tabName(tab)} · Gerdr`;
+  }, [tab, space.name, space.many]);
+  useEffect(() => {
+    if (!ready) return; // the layout isn't loaded yet: don't overwrite the ?space= this window was opened with
+    const u = new URL(location.href);
+    if (u.searchParams.get("space") !== space.id) {
+      u.searchParams.set("space", space.id);
+      history.replaceState(history.state, "", u);
+    }
+    nativeSpace(space.id, space.name);
+  }, [ready, space.id, space.name]);
 
   // 切走的 tab 不卸载，藏起来（最近用过的几个，keepTabs 个）：展开状态、滚动位置、没发出去的字都还在。
   // 藏用 visibility 不用 display:none（后者把滚动位置丢了）。占多少内存在设置 →「资源」里看。

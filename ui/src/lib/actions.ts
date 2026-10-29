@@ -645,6 +645,12 @@ export function selectWorkspace(id: string) {
   setLayout((l) => (l.active === id ? l : { ...l, active: id, lastActive: l.active }));
 }
 
+/** The n-th workspace of the current session (0-based), as numbered in the sidebar (⌃⌘1–9, Alt+1–9 off the mac). */
+export function selectWorkspaceN(n: number) {
+  const w = spaceWorkspaces(get().layout)[n];
+  if (w) selectWorkspace(w.id);
+}
+
 /** Next / previous workspace, cycling within the current session only. */
 export function stepWorkspace(delta: number) {
   setLayout((l) => {
@@ -725,7 +731,7 @@ function rememberSpace(l: Layout): Layout {
 
 export function switchSpace(id: string) {
   setLayout((l) => {
-    if (currentSpace(l) === id) return l;
+    if (currentSpace(l) === id || !spaceList(l).some((s) => s.id === id)) return l;
     let next = rememberSpace(l);
     let wid = landIn(next, id);
     if (!wid) {
@@ -1063,6 +1069,16 @@ export function runAction(a: KeyAction) {
     case "tab8":
     case "tab9":
       return selectTab(Number(a.slice(3)) - 1);
+    case "ws1":
+    case "ws2":
+    case "ws3":
+    case "ws4":
+    case "ws5":
+    case "ws6":
+    case "ws7":
+    case "ws8":
+    case "ws9":
+      return selectWorkspaceN(Number(a.slice(2)) - 1);
     case "newWorkspace":
       return set({ dialog: { kind: "newWorkspace" } });
     case "renameWorkspace": {

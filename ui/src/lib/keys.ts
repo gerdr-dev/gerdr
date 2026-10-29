@@ -46,6 +46,15 @@ export type KeyAction =
   | "workspaces"
   | "nextWorkspace"
   | "prevWorkspace"
+  | "ws1"
+  | "ws2"
+  | "ws3"
+  | "ws4"
+  | "ws5"
+  | "ws6"
+  | "ws7"
+  | "ws8"
+  | "ws9"
   | "newSpace"
   | "nextSpace"
   | "prevSpace"
@@ -104,6 +113,15 @@ export const ACTION_TITLES: Record<KeyAction, string> = {
   workspaces: "切换工作空间",
   nextWorkspace: "下一个工作空间",
   prevWorkspace: "上一个工作空间",
+  ws1: "工作空间 1",
+  ws2: "工作空间 2",
+  ws3: "工作空间 3",
+  ws4: "工作空间 4",
+  ws5: "工作空间 5",
+  ws6: "工作空间 6",
+  ws7: "工作空间 7",
+  ws8: "工作空间 8",
+  ws9: "工作空间 9",
   newSpace: "新 session",
   nextSpace: "下一个 session",
   prevSpace: "上一个 session",
@@ -125,7 +143,7 @@ export const ACTION_TITLES: Record<KeyAction, string> = {
 // ⌘ 开头的是 mac 上的习惯键（⌘D 分屏、⌘W 关 pane……）：原来只写在桌面 App 的菜单里，设置里看不到也改不了（用户问「怎么没有 ⌘D」）。
 // 现在都在这张表里：网页先收到按键、自己处理掉，菜单上的键由网页同步过去（syncMenuKeys），改了这里菜单跟着变。
 // 浏览器里 ⌘T / ⌘W / ⌘N / ⌘1–9 这些被浏览器自己占着，按了是浏览器的功能，只在 App 里管用。
-export const DEFAULT_KEYS: Record<KeyAction, string[]> = {
+const MAC_KEYS: Record<KeyAction, string[]> = {
   // prefix+v / prefix+- 出空面板（挑 agent、目录、开终端、接旧会话）；⌘D 照 iTerm 的习惯直接复制一个能用的：
   // 焦点是会话就起同 agent / 目录 / 模式的新会话，是终端就开同目录终端，是空面板才出空面板
   splitRight: ["prefix+v"],
@@ -171,9 +189,22 @@ export const DEFAULT_KEYS: Record<KeyAction, string[]> = {
   workspaces: ["prefix+w"],
   nextWorkspace: ["prefix+)"],
   prevWorkspace: ["prefix+("],
+  // ⌃⌘1–9: the numbers in front of the sidebar's workspaces (within the current session); ⌘1–9 are tabs. Not ⇧⌘1–9 (macOS keeps
+  // ⇧⌘3 / 4 / 5 for screenshots, they never reach the page) nor ⌃1–9 (desktops, when Mission Control shortcuts are on)
+  ws1: ["meta+ctrl+1"],
+  ws2: ["meta+ctrl+2"],
+  ws3: ["meta+ctrl+3"],
+  ws4: ["meta+ctrl+4"],
+  ws5: ["meta+ctrl+5"],
+  ws6: ["meta+ctrl+6"],
+  ws7: ["meta+ctrl+7"],
+  ws8: ["meta+ctrl+8"],
+  ws9: ["meta+ctrl+9"],
   newSpace: [],
-  nextSpace: [],
-  prevSpace: [],
+  // ⌃⌘] / ⌃⌘[ next to tabs' ⇧⌘] / ⇧⌘[. Not ⌘`: macOS uses that to cycle an app's windows, and now that each session can
+  // have a window of its own the two would fight
+  nextSpace: ["meta+ctrl+]", "prefix+]"],
+  prevSpace: ["meta+ctrl+[", "prefix+["],
   renameSpace: [],
   sessions: ["prefix+g", "meta+o"],
   toggleSidebar: ["prefix+b", "meta+ctrl+s"],
@@ -188,7 +219,52 @@ export const DEFAULT_KEYS: Record<KeyAction, string[]> = {
   stop: [],
 };
 
-/** 设置页和帮助里的分组（tab1 代表 tab1–9）。 */
+/*
+ * Windows / Linux. The mac table's ⌘ is "meta", which there is the Windows key: Windows keeps nearly every Win+ combination
+ * (Win+D desktop, Win+1–9 taskbar, Win+T…) and most never reach the page, and the Windows App has no menu bar to fall back on.
+ * So off the mac every ⌘ binding is dropped and these take their place (prefix bindings are shared), after Windows Terminal /
+ * VS Code: Ctrl+Shift+letter, not Ctrl+letter, because Ctrl+W / D / K / T are delete-word / EOF / kill-line / transpose in
+ * terminals and inputs. Not Ctrl+Alt+anything that types: AltGr is Ctrl+Alt on European layouts (German AltGr+7/8/9 = { [ ]).
+ * In a browser (not the App) Chrome keeps Ctrl+Shift+T/W/N and Ctrl+Tab for itself, same as ⌘T / ⌘W on the mac.
+ */
+const PC_EXTRA: Partial<Record<KeyAction, string[]>> = {
+  duplicateRight: ["alt+shift+d"],
+  duplicateDown: ["alt+shift+-"],
+  closePane: ["ctrl+shift+w"],
+  zoom: ["ctrl+shift+enter"],
+  newTab: ["ctrl+shift+t"],
+  nextTab: ["ctrl+tab"],
+  prevTab: ["ctrl+shift+tab"],
+  reopenClosed: ["ctrl+shift+alt+t"],
+  ...Object.fromEntries(
+    [1, 2, 3, 4, 5, 6, 7, 8, 9].flatMap((i) => [
+      [`tab${i}`, [`ctrl+${i}`]],
+      [`ws${i}`, [`alt+${i}`]],
+    ]),
+  ),
+  newWorkspace: ["ctrl+shift+n"],
+  nextSpace: ["ctrl+alt+]"],
+  prevSpace: ["ctrl+alt+["],
+  sessions: ["ctrl+shift+o"],
+  toggleSidebar: ["ctrl+shift+b"],
+  help: ["ctrl+shift+/"],
+  settings: ["ctrl+,"],
+  focusAttention: ["ctrl+shift+j"],
+};
+
+export const IS_MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
+
+/**
+ * The defaults for this platform (custom keys in config.json are still one set shared by every device). Computed at load, so it
+ * can't call parseCombo: that reads ALIASES, declared further down (temporal dead zone).
+ */
+export const DEFAULT_KEYS: Record<KeyAction, string[]> = IS_MAC
+  ? MAC_KEYS
+  : (Object.fromEntries(
+      (Object.keys(MAC_KEYS) as KeyAction[]).map((a) => [a, [...MAC_KEYS[a].filter((k) => !/(^|\+)meta\+/.test(k)), ...(PC_EXTRA[a] ?? [])]]),
+    ) as Record<KeyAction, string[]>);
+
+/** 设置页和帮助里的分组（tab1 代表 tab1–9，ws1 代表 ws1–9）。 */
 export const KEY_GROUPS: [string, KeyAction[]][] = [
   [
     "分屏",
@@ -212,7 +288,7 @@ export const KEY_GROUPS: [string, KeyAction[]][] = [
     ],
   ],
   ["tab", ["newTab", "terminalTab", "nextTab", "prevTab", "lastTab", "tab1", "closeTab", "reopenClosed", "renameTab"]],
-  ["工作空间", ["newWorkspace", "workspaces", "nextWorkspace", "prevWorkspace", "renameWorkspace", "closeWorkspace"]],
+  ["工作空间", ["newWorkspace", "workspaces", "nextWorkspace", "prevWorkspace", "ws1", "renameWorkspace", "closeWorkspace"]],
   ["session", ["newSpace", "nextSpace", "prevSpace", "renameSpace"]],
   ["会话", ["sessions", "nextAttention", "prevAttention", "focusAttention", "renamePane", "stop"]],
   ["其他", ["palette", "toggleSidebar", "settings", "help", "importHerdr"]],

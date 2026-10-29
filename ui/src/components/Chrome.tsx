@@ -1,5 +1,5 @@
 import { Check, ChevronsUpDown, Keyboard, Loader2, LayoutList, Menu, PanelLeft, Plus, Settings, SquareTerminal, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   ContextMenu,
@@ -33,7 +33,7 @@ import {
   switchSpace,
   tabName,
 } from "@/lib/actions";
-import { formatCombo } from "@/lib/keys";
+import { formatCombo, type KeyAction } from "@/lib/keys";
 import {
   activeWs,
   allLeaves,
@@ -59,6 +59,8 @@ import { WorkspaceDragLayer, useWorkspaceDrag } from "./WorkspaceDrag";
 import { UsageMeter } from "./UsageMeter";
 import { isAndroid } from "@/lib/android";
 import { reconnectNow } from "@/lib/sync";
+import { askConfirm } from "@/lib/confirm";
+import { isNative, nativeNewWindow } from "@/lib/native";
 import { useRoute } from "./AndroidSettings";
 
 /** 一个 tab 的汇总状态：里面任何一个会话在等你 → 等你；在跑 → 在跑；…… */
@@ -482,7 +484,12 @@ function WorkspaceItem({
             onClick={() => selectWorkspace(w.id)}
             onDoubleClick={() => set({ dialog: { kind: "rename", target: "workspace", id: w.id, value: w.name } })}
           >
-            <span className="w-4 shrink-0 text-center font-mono text-[11px] text-muted-foreground">{index + 1}</span>
+            <span
+              className="w-4 shrink-0 text-center font-mono text-[11px] text-muted-foreground"
+              title={index < 9 ? `${formatCombo(keyFor(get().config, `ws${index + 1}` as KeyAction)[0] ?? "")} 跳到这里` : undefined}
+            >
+              {index + 1}
+            </span>
             <span className="min-w-0 flex-1 truncate">{label}</span>
             <WsDot w={w} sessions={sessions} unread={unread} />
           </button>
@@ -532,7 +539,112 @@ function spaceStatus(l: Layout, sp: Space, sessions: Record<string, SessionSumma
  * Which herdr-style session the sidebar shows (layout.ts Space). One line above the workspaces: the current one's name, and a dot when
  * another session has something for you — its agents are out of the lists below, so this is the only place that tells you.
  */
+async function askCloseSpace(sp: Space) {
+  const n = spaceWorkspaces(get().layout, sp.id).length;
+  const ok = await askConfirm({
+    title: `关闭 session「${sp.name}」？`,
+    description: `连同它的 ${n} 个工作空间一起关掉，里面的 agent 会停掉（会话记录留着，能再打开）。`,
+    action: "关闭",
+    destructive: true,
+  });
+  if (ok) closeSpace(sp.id);
+}
+
+const newSpaceDialog = () => set({ dialog: { kind: "rename", target: "newSpace", id: "", value: "" } });
+
+/**
+ * The session switcher in the sidebar header. When every session's name fits on one line they sit side by side like tabs
+ * (one click to switch, asked for); when they don't, it folds into a dropdown (SpaceMenu). Fitting is measured on an invisible
+ * copy of the row, re-measured when the header resizes or a name changes.
+ */
 function SpaceSwitcher() {
+  const layout = useStore((s) => s.layout);
+  const sessions = useStore((s) => s.sessions);
+  const unread = useStore((s) => s.unread);
+  const spaces = spaceList(layout);
+  const here = currentSpace(layout);
+  const box = useRef<HTMLDivElement>(null);
+  const ruler = useRef<HTMLDivElement>(null);
+  const [fits, setFits] = useState(true);
+  const names = spaces.map((s) => s.name).join("\0");
+  useLayoutEffect(() => {
+    const el = box.current;
+    const r = ruler.current;
+    if (!el || !r) return;
+    const check = () => setFits(r.scrollWidth <= el.clientWidth);
+    check();
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [names]);
+  const chip = (sp: Space, live: boolean) => {
+    const st = sp.id === here ? undefined : spaceStatus(layout, sp, sessions, unread);
+    return (
+      <button
+        key={sp.id}
+        tabIndex={live ? undefined : -1}
+        className={cn(
+          "flex h-6 max-w-28 shrink-0 items-center gap-1 rounded-md px-1.5 text-[12px] font-semibold whitespace-nowrap",
+          sp.id === here ? "bg-accent text-foreground" : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
+          // Mark which session the context menu belongs to while it's open
+          "data-[state=open]:ring-1 data-[state=open]:ring-brand/60",
+        )}
+        style={{ WebkitAppRegion: "no-drag" } as any}
+        onClick={live ? () => switchSpace(sp.id) : undefined}
+        onDoubleClick={live ? () => set({ dialog: { kind: "rename", target: "space", id: sp.id, value: sp.name } }) : undefined}
+      >
+        <span className="min-w-0 truncate">{sp.name}</span>
+        {st && <StatusDot status={st.status} unread={st.unread} />}
+      </button>
+    );
+  };
+  const plus = (live: boolean) => (
+    <button
+      tabIndex={live ? undefined : -1}
+      title="新 session（不同 session 里的 agent 互相看不见）"
+      className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/60 hover:text-foreground"
+      style={{ WebkitAppRegion: "no-drag" } as any}
+      onClick={live ? newSpaceDialog : undefined}
+    >
+      <Plus className="size-3.5" />
+    </button>
+  );
+  return (
+    <div ref={box} className="relative flex min-w-0 flex-1 items-center">
+      <div ref={ruler} aria-hidden className="pointer-events-none invisible absolute top-0 left-0 flex w-max items-center gap-0.5">
+        {spaces.map((sp) => chip(sp, false))}
+        {plus(false)}
+      </div>
+      {fits ? (
+        <div className="-ml-1 flex min-w-0 items-center gap-0.5">
+          {spaces.map((sp) => (
+            <ContextMenu key={sp.id}>
+              <ContextMenuTrigger asChild>{chip(sp, true)}</ContextMenuTrigger>
+              <ContextMenuContent>
+                {isNative() && <ContextMenuItem onClick={() => nativeNewWindow(sp.id)}>在新窗口打开</ContextMenuItem>}
+                <ContextMenuItem onClick={() => set({ dialog: { kind: "rename", target: "space", id: sp.id, value: sp.name } })}>重命名</ContextMenuItem>
+                {spaces.length > 1 && (
+                  <>
+                    <ContextMenuSeparator />
+                    <ContextMenuItem variant="destructive" onClick={() => askCloseSpace(sp)}>
+                      关闭 session
+                    </ContextMenuItem>
+                  </>
+                )}
+              </ContextMenuContent>
+            </ContextMenu>
+          ))}
+          {plus(true)}
+        </div>
+      ) : (
+        <SpaceMenu />
+      )}
+    </div>
+  );
+}
+
+/** The folded form of the switcher: the current session's name, a dot when another one needs you, everything else in a menu. */
+function SpaceMenu() {
   const layout = useStore((s) => s.layout);
   const sessions = useStore((s) => s.sessions);
   const unread = useStore((s) => s.unread);
@@ -570,20 +682,15 @@ function SpaceSwitcher() {
           );
         })}
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => set({ dialog: { kind: "rename", target: "newSpace", id: "", value: "" } })}>
+        {isNative() && <DropdownMenuItem onClick={() => nativeNewWindow(cur.id)}>在新窗口打开「{cur.name}」</DropdownMenuItem>}
+        <DropdownMenuItem onClick={newSpaceDialog}>
           <Plus className="size-3.5" /> 新 session
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => set({ dialog: { kind: "rename", target: "space", id: cur.id, value: cur.name } })}>
           重命名「{cur.name}」
         </DropdownMenuItem>
         {spaces.length > 1 && (
-          <DropdownMenuItem
-            variant="destructive"
-            onClick={() =>
-              confirm(`关闭 session「${cur.name}」和它的 ${spaceWorkspaces(layout, cur.id).length} 个工作空间？里面的 agent 会停掉（会话记录留着）。`) &&
-              closeSpace(cur.id)
-            }
-          >
+          <DropdownMenuItem variant="destructive" onClick={() => askCloseSpace(cur)}>
             关闭「{cur.name}」
           </DropdownMenuItem>
         )}

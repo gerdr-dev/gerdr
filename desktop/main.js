@@ -1,4 +1,5 @@
-// gerdr 的桌面外壳（Electron）：一个窗口，界面全在网页里（就是浏览器里打开的那一份）。
+// gerdr 的桌面外壳（Electron）：界面全在网页里（就是浏览器里打开的那一份）。Usually one window; each herdr-style session
+// (ui/src/lib/layout.ts Space) can also get a window of its own ("open in new window", ⌘N), each page showing its own one.
 //
 // 为什么是 Electron、不是系统 WebView（原来的 mac 外壳是 WKWebView）/ mygo / nsh：docs/dev/WHY-ELECTRON.md。
 // 一句话：界面在 Chrome 里怎么样，到 App 里就怎么样，mac 和 Windows 一个内核。
@@ -17,7 +18,10 @@ if (!app.requestSingleInstanceLock()) {
   process.exit(0);
 }
 
-let win = null;
+// Every open window → the session its page says it shows ({ space, name }; nativeSpace in ui/src/lib/native.ts).
+// main is the first one: its size and place are what window.json remembers, and on mac closing the last window only hides it.
+const wins = new Map();
+let main = null;
 let origin = null; // 后端的地址（就绪之后才有）
 let backend = null;
 let quitting = false;
@@ -54,7 +58,7 @@ function startBackend() {
       const m = /^GERDR_READY (\S+)/.exec(line.trim());
       if (m && m[1] !== origin) {
         origin = m[1];
-        win?.loadURL(origin);
+        for (const w of allWins()) w.loadURL(pageURL(wins.get(w)?.space));
       }
     }
   });
@@ -117,16 +121,45 @@ function loadState() {
 }
 
 function saveState() {
-  if (!win || win.isDestroyed()) return;
-  const b = win.getNormalBounds();
+  if (!main || main.isDestroyed()) return;
+  const b = main.getNormalBounds();
   try {
-    fs.writeFileSync(statePath(), JSON.stringify({ ...b, maximized: win.isMaximized() }));
+    fs.writeFileSync(statePath(), JSON.stringify({ ...b, maximized: main.isMaximized() }));
   } catch {}
 }
 
-function createWindow() {
-  const st = loadState();
-  win = new BrowserWindow({
+const allWins = () => [...wins.keys()].filter((w) => !w.isDestroyed());
+
+/** The window a menu command is for: the focused one of ours, else the main one. */
+function activeWin() {
+  const f = BrowserWindow.getFocusedWindow();
+  return f && wins.has(f) ? f : main && !main.isDestroyed() ? main : allWins()[0] ?? null;
+}
+
+/**
+ * The page's address, optionally opened on one session (?space=, which the page switches to). origin is the login link
+ * (/auth?token=…), so the page path goes in its `next` (see rescueURL).
+ */
+function pageURL(space) {
+  const u = new URL(origin);
+  const page = space ? `/?space=${encodeURIComponent(space)}` : "/";
+  if (u.pathname === "/auth") u.searchParams.set("next", page);
+  else {
+    u.pathname = "/";
+    u.search = space ? `?space=${encodeURIComponent(space)}` : "";
+  }
+  return u.toString();
+}
+
+function createWindow(space) {
+  const first = !main || main.isDestroyed();
+  let st = first ? loadState() : null;
+  if (!first) {
+    // A further window: same size as the one it was opened from, nudged down-right so it doesn't sit exactly on top
+    const b = (activeWin() ?? main).getNormalBounds();
+    st = { width: b.width, height: b.height, x: b.x + 28, y: b.y + 28 };
+  }
+  const w = new BrowserWindow({
     ...st,
     minWidth: 640,
     minHeight: 420,
@@ -142,18 +175,24 @@ function createWindow() {
       spellcheck: false,
     },
   });
-  if (st.maximized) win.maximize();
-  win.once("ready-to-show", () => win.show());
-  for (const ev of ["resize", "move", "close"]) win.on(ev, saveState);
-  // mac：关窗口 = 藏起来（点 Dock 图标再出来），后端和会话照跑；⌘Q 才是真退出
-  win.on("close", (e) => {
-    if (isMac && !quitting) {
+  wins.set(w, { space });
+  if (first) main = w;
+  if (st.maximized) w.maximize();
+  w.once("ready-to-show", () => w.show());
+  for (const ev of ["resize", "move", "close"]) w.on(ev, () => w === main && saveState());
+  // mac：关掉最后一个窗口 = 藏起来（点 Dock 图标再出来），后端和会话照跑；⌘Q 才是真退出。Extra windows really close.
+  w.on("close", (e) => {
+    if (isMac && !quitting && allWins().length === 1) {
       e.preventDefault();
-      win.hide();
+      w.hide();
     }
   });
+  w.on("closed", () => {
+    wins.delete(w);
+    if (main === w) main = allWins()[0] ?? null;
+  });
 
-  const wc = win.webContents;
+  const wc = w.webContents;
   // 外部链接交给默认浏览器；后端自己的地址留在窗口里
   wc.setWindowOpenHandler(({ url }) => {
     openExternal(url);
@@ -166,11 +205,12 @@ function createWindow() {
   });
   // 页面进程崩了 / 被系统收了：重新载入（会话都在后端，界面重开就接上）
   wc.on("render-process-gone", (_e, d) => {
-    if (d.reason !== "clean-exit" && origin) setTimeout(() => wc.loadURL(origin), 500);
+    if (d.reason !== "clean-exit" && origin) setTimeout(() => !w.isDestroyed() && wc.loadURL(pageURL(wins.get(w)?.space)), 500);
   });
 
-  if (origin) win.loadURL(origin);
-  else showMessage("启动中…");
+  if (origin) w.loadURL(pageURL(space));
+  else showMessage("启动中…", w);
+  return w;
 }
 
 function sameOrigin(url) {
@@ -185,36 +225,51 @@ function openExternal(url) {
   if (/^(https?|mailto):/i.test(url)) shell.openExternal(url);
 }
 
-function showMessage(text) {
-  if (!win) return;
+function showMessage(text, only) {
+  const targets = only ? [only] : allWins();
+  if (!targets.length) return;
   const esc = text.replace(/&/g, "&amp;").replace(/</g, "&lt;");
   const dark = nativeTheme.shouldUseDarkColors;
   const html = `<html><body style="font:13px -apple-system,'Segoe UI',sans-serif;color:#888;display:flex;height:100vh;margin:0;align-items:center;justify-content:center;background:${dark ? "#0f0f0f" : "#fff"}"><pre style="white-space:pre-wrap;max-width:640px;font:inherit">${esc}</pre></body></html>`;
-  win.loadURL("data:text/html;charset=utf-8," + encodeURIComponent(html));
+  for (const w of targets) w.loadURL("data:text/html;charset=utf-8," + encodeURIComponent(html));
 }
 
-function focusWindow() {
-  if (!win) return;
-  if (win.isMinimized()) win.restore();
-  win.show();
-  win.focus();
+function focusWindow(w = activeWin()) {
+  if (!w) return void createWindow();
+  if (w.isMinimized()) w.restore();
+  w.show();
+  w.focus();
 }
 
-function runInPage(js) {
-  if (win && origin) win.webContents.executeJavaScript(js).catch(() => {});
+function runInPage(js, w = activeWin()) {
+  if (w && !w.isDestroyed() && origin) w.webContents.executeJavaScript(js).catch(() => {});
+}
+
+// Every window's page notifies on its own, so two windows would pop the same notification twice: drop repeats for a few seconds
+const recentNotes = new Map();
+function seenNote(key) {
+  const now = Date.now();
+  for (const [k, t] of recentNotes) if (now - t > 5000) recentNotes.delete(k);
+  if (recentNotes.has(key)) return true;
+  recentNotes.set(key, now);
+  return false;
 }
 
 // ---- 网页 → 壳 ----
 
 ipcMain.on("gerdr", (e, m) => {
-  if (!m || typeof m.type !== "string" || e.sender !== win?.webContents) return;
+  const win = BrowserWindow.fromWebContents(e.sender);
+  if (!m || typeof m.type !== "string" || !win || !wins.has(win)) return;
   switch (m.type) {
     case "notify": {
       if (!Notification.isSupported()) return;
+      if (seenNote(`${m.title}\n${m.body}\n${m.sessionId}`)) return;
       const n = new Notification({ title: String(m.title ?? "Gerdr"), body: String(m.body ?? ""), silent: false });
       n.on("click", () => {
-        focusWindow();
-        if (m.sessionId) runInPage(`window.gerdr && window.gerdr.focusSession(${JSON.stringify(String(m.sessionId))})`);
+        // The window showing the conversation's session if there is one, else the one that notified (its page switches over)
+        const target = allWins().find((w) => m.space && wins.get(w)?.space === m.space) ?? (win.isDestroyed() ? activeWin() : win);
+        focusWindow(target);
+        if (m.sessionId) runInPage(`window.gerdr && window.gerdr.focusSession(${JSON.stringify(String(m.sessionId))})`, target);
       });
       n.show();
       break;
@@ -222,12 +277,18 @@ ipcMain.on("gerdr", (e, m) => {
     case "badge": {
       const n = Number(m.count) || 0;
       if (isMac) app.setBadgeCount(n);
-      if (n > 0 && win && !win.isFocused()) {
+      if (n > 0 && !allWins().some((w) => w.isFocused())) {
         if (isMac) app.dock?.bounce("informational");
         else win.flashFrame(true);
       }
       break;
     }
+    case "space":
+      wins.set(win, { space: String(m.id ?? ""), name: String(m.name ?? "") });
+      break;
+    case "newWindow":
+      focusWindow(createWindow(String(m.space ?? "") || undefined));
+      break;
     case "open":
       openExternal(String(m.url ?? ""));
       break;
@@ -250,7 +311,7 @@ ipcMain.on("gerdr", (e, m) => {
       break;
     case "webPid":
       // 设置里的「资源」要量界面所在那个渲染进程的内存（它不是后端起的，后端看不见）
-      runInPage(`window.__GERDR_WEB_PID__ = ${win.webContents.getOSProcessId()}`);
+      runInPage(`window.__GERDR_WEB_PID__ = ${win.webContents.getOSProcessId()}`, win);
       break;
   }
 });
@@ -272,6 +333,7 @@ function rescueURL() {
 // 急救面板挂在页面右边：页面在就直接拉出来（不刷新，主界面现在什么样就什么样）；
 // 页面没加载出来 / 不是 gerdr 的页面，就走 /rescue 重新打开（会跳回主界面并把面板打开）。
 async function openRescue() {
+  const win = activeWin();
   if (!origin || !win) return;
   const ok = await win.webContents.executeJavaScript("!!(window.__gerdrRescue && (window.__gerdrRescue.open(), 1))").catch(() => false);
   if (!ok) win.loadURL(rescueURL());
@@ -283,8 +345,12 @@ let menuKeys = {};
 
 function cmd(label, id, fallback) {
   const accelerator = id in menuKeys ? menuKeys[id] || undefined : fallback;
+  // runInPage goes to the focused window
   return { label, accelerator, click: () => runInPage(`window.gerdr && window.gerdr.runCommand(${JSON.stringify(id)})`) };
 }
+
+// ⌘N: another window on the session the focused one shows (switch it there with the session bar)
+const newWindow = () => focusWindow(createWindow(wins.get(activeWin())?.space || undefined));
 
 function buildMenu() {
   if (!isMac) return Menu.setApplicationMenu(null);
@@ -318,7 +384,7 @@ function buildMacMenu() {
       },
       {
         label: "文件",
-        submenu: [cmd("新建 tab", "newTab", "Cmd+T"), cmd("新工作空间", "newWorkspace", "Cmd+Shift+N"), cmd("会话列表", "sessions", "Cmd+O"), { type: "separator" }, cmd("关闭 pane", "closePane", "Cmd+W"), cmd("重新打开刚关的 tab / pane", "reopenClosed", "Cmd+Shift+T")],
+        submenu: [{ label: "新窗口", accelerator: "Cmd+N", click: newWindow }, { type: "separator" }, cmd("新建 tab", "newTab", "Cmd+T"), cmd("新工作空间", "newWorkspace", "Cmd+Shift+N"), cmd("会话列表", "sessions", "Cmd+O"), { type: "separator" }, cmd("关闭 pane", "closePane", "Cmd+W"), cmd("重新打开刚关的 tab / pane", "reopenClosed", "Cmd+Shift+T")],
       },
       {
         label: "编辑",
@@ -348,14 +414,21 @@ function buildMacMenu() {
           { role: "zoomOut", label: "缩小" },
           { role: "resetZoom", label: "实际大小" },
           { type: "separator" },
-          { label: "重新载入", accelerator: "Cmd+R", click: () => (origin ? win?.loadURL(origin) : win?.reload()) },
-          { label: "开发者工具", accelerator: "Cmd+Alt+I", click: () => win?.webContents.toggleDevTools() },
+          {
+            label: "重新载入",
+            accelerator: "Cmd+R",
+            click: () => {
+              const w = activeWin();
+              if (w) origin ? w.loadURL(pageURL(wins.get(w)?.space)) : w.reload();
+            },
+          },
+          { label: "开发者工具", accelerator: "Cmd+Alt+I", click: () => activeWin()?.webContents.toggleDevTools() },
           { label: "在浏览器里打开", click: () => origin && shell.openExternal(origin) },
         ],
       },
       {
         label: "前往",
-        submenu: [cmd("下一个 tab", "nextTab", "Cmd+Shift+]"), cmd("上一个 tab", "prevTab", "Cmd+Shift+["), ...tabs, { type: "separator" }, cmd("跳到在等你的会话", "focusAttention", "Cmd+J")],
+        submenu: [cmd("下一个 tab", "nextTab", "Cmd+Shift+]"), cmd("上一个 tab", "prevTab", "Cmd+Shift+["), ...tabs, { type: "separator" }, cmd("跳到在等你的会话", "focusAttention", "Cmd+J"), { type: "separator" }, cmd("下一个 session", "nextSpace", "Cmd+Ctrl+]"), cmd("上一个 session", "prevSpace", "Cmd+Ctrl+[")],
       },
       { role: "windowMenu", label: "窗口" },
       {
@@ -373,8 +446,8 @@ function buildMacMenu() {
 
 // ---- 生命周期 ----
 
-app.on("second-instance", focusWindow);
-app.on("activate", () => (win ? focusWindow() : createWindow()));
+app.on("second-instance", () => focusWindow());
+app.on("activate", () => focusWindow());
 app.on("window-all-closed", () => {
   if (!isMac) app.quit();
 });

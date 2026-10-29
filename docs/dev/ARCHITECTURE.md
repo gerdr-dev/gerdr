@@ -256,6 +256,14 @@ cwd 以外改的文件（Bash 写 `~/.zshrc`、隔壁项目）管不到；同一
   cross on the server (`crossSpace`, using `from` / `near`). Closed conversations belong to no session (`--all` lists them);
   reopening one puts it next to the caller, in the caller's session. This is not a security boundary: an agent has the token
   and can call the API itself. herdr's isn't one either: it's a separate socket.
+- **One window per session (App).** "Open in new window" (session bar context menu) and ⌘N open another BrowserWindow on
+  `/?space=<id>` (desktop/main.js `pageURL`, through `/auth?next=`). Every window is a full client with its own view, like a
+  second browser tab. The page keeps `?space=` current (App.tsx) so a reload stays put; it must not touch it before the layout
+  has loaded (the first render uses the default layout and used to overwrite the parameter), and sync.ts reads it at module
+  load for the same reason. Each page reports its session to the shell (`space` message): a notification click goes to the
+  window showing that session. Every page also sends its own notifications, so the shell drops repeats for 5 s. Menu commands
+  go to the focused window. On mac only the last window hides on close; extra windows really close. No ⌘` for switching
+  sessions: macOS cycles an app's windows with it.
 
 ## 内置 skill、skill / MCP 的来源（internal/ext）
 

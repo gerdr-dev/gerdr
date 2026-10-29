@@ -22,6 +22,10 @@ import {
 } from "./store";
 import type { HubEvent, SessionSummary } from "./types";
 
+// The session this window was opened on (?space=, the App's "open in new window"), read before anything renders: App.tsx
+// rewrites the parameter to the session being shown, and it renders the not-yet-loaded default layout first
+const wantSpace = new URLSearchParams(location.search).get("space");
+
 let ws: WebSocket | null = null;
 let retry = 0;
 let watched = "";
@@ -70,6 +74,7 @@ export async function boot() {
     if (validLayout(h.layout)) set({ layout: withView(h.layout, loadView()) });
     else setLayout((l) => l); // 第一次：把默认布局存下去
     pruneLayout();
+    if (wantSpace) import("./actions").then((a) => a.switchSpace(wantSpace));
     connect();
     startHeartbeat();
   } catch (e) {

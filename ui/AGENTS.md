@@ -103,7 +103,7 @@ src/lib/
 - **手机上的样子**：判断用 `usePhone()`（JS 里要分岔的）或 `max-md:` class（纯样式）。手机上没有 hover，
   只在悬停时露出来的按钮要加 `[@media(hover:none)]:opacity-100` 之类让它常显。
 - **改对话里某种东西的样子**：消息 `chat/MessageView.tsx`，工具调用 `chat/ToolCall.tsx`，审批 / 提问卡片 `chat/Cards.tsx`。
-- **加快捷键**：`src/lib/keys.ts` 的 `DEFAULT_KEYS` + `src/lib/actions.ts` 的 `runAction`。
+- **加快捷键**：`src/lib/keys.ts` 的 `MAC_KEYS`（Windows / Linux 上带 ⌘ 的会被去掉，要在 `PC_EXTRA` 里另给一个）+ `src/lib/actions.ts` 的 `runAction`。
 
 后端没有的数据（比如要查 API 用量）界面拿不到：告诉用户需要后端加接口，别在前端硬凑。
 

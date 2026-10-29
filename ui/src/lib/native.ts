@@ -11,10 +11,11 @@ function bridge(): Bridge | undefined {
 
 export const isNative = () => !!bridge();
 
-export function nativeNotify(title: string, body: string, sessionId?: string) {
+/** space: the session (layout.ts Space) the conversation is in, so clicking it brings up the window showing that one. */
+export function nativeNotify(title: string, body: string, sessionId?: string, space?: string) {
   const b = bridge();
   if (b) {
-    b.postMessage({ type: "notify", title, body, sessionId });
+    b.postMessage({ type: "notify", title, body, sessionId, space });
     return true;
   }
   return false;
@@ -45,6 +46,16 @@ export async function nativeWebPid(): Promise<number | undefined> {
     for (let i = 0; i < 10 && !w.__GERDR_WEB_PID__; i++) await new Promise((r) => setTimeout(r, 50));
   }
   return w.__GERDR_WEB_PID__ || undefined;
+}
+
+/** App 里：open a window of its own for a (herdr-style) session. */
+export function nativeNewWindow(space: string) {
+  bridge()?.postMessage({ type: "newWindow", space });
+}
+
+/** App 里：tell the shell which session this window shows (its title, where a notification click goes, what ⌘N copies). */
+export function nativeSpace(id: string, name: string) {
+  bridge()?.postMessage({ type: "space", id, name });
 }
 
 /** App 里：菜单上显示 / 认的键跟着设置走（动作 id → accelerator，null = 菜单上不挂键）。 */

@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { captureKeys } from "@/lib/commands";
 import { ACTION_TITLES, DEFAULT_KEYS, KEY_GROUPS, comboOf, formatCombo, matches, parseCombo, type KeyAction } from "@/lib/keys";
 import { isNative } from "@/lib/native";
+import { askConfirm } from "@/lib/confirm";
 import { keyFor, setConfig, useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
@@ -14,10 +15,10 @@ import { cn } from "@/lib/utils";
 type Target = KeyAction | "prefix";
 type Rec = { target: Target; afterPrefix: boolean };
 
-/** 设置页里 tab1 展开成 tab1–9 各一行（帮助里合成一行）。 */
+/** 设置页里 tab1 / ws1 展开成 1–9 各一行（帮助里合成一行）。 */
 const ROWS: [string, KeyAction[]][] = KEY_GROUPS.map(([g, acts]) => [
   g,
-  acts.flatMap((a) => (a === "tab1" ? ([1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => `tab${i}`) as KeyAction[]) : [a])),
+  acts.flatMap((a) => (a === "tab1" || a === "ws1" ? ([1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => `${a.slice(0, -1)}${i}`) as KeyAction[]) : [a])),
 ]);
 
 const same = (a: string[], b: string[]) => a.length === b.length && a.every((x, i) => x === b[i]);
@@ -110,7 +111,12 @@ export function KeySettings() {
           <Input className="h-8 pl-7 text-[13px]" placeholder="搜动作或按键" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
         {Object.keys(cfg.keys).length > 0 && (
-          <Button variant="outline" size="sm" className="h-8" onClick={() => confirm("所有快捷键恢复成默认？") && setConfig({ keys: {} })}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8"
+            onClick={async () => (await askConfirm({ title: "所有快捷键恢复成默认？", action: "恢复默认" })) && setConfig({ keys: {} })}
+          >
             全部恢复默认
           </Button>
         )}

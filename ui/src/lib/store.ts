@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { api, clientId, uuid, type FileStat } from "./api";
-import { DEFAULT_KEYS, type KeyAction } from "./keys";
+import { DEFAULT_KEYS, IS_MAC, type KeyAction } from "./keys";
 import { activeTab, defaultLayout, leaves, phoneRoot, validLayout, viewOf, withView, type Layout, type View } from "./layout";
 import { isPhone } from "./phone";
 import { Transcript } from "./transcript";
@@ -90,7 +90,13 @@ export function mergeConfig(raw: any): Config {
 }
 
 export function keyFor(c: Config, a: KeyAction): string[] {
-  return c.keys[a] ?? DEFAULT_KEYS[a];
+  const custom = c.keys[a];
+  if (!custom) return DEFAULT_KEYS[a];
+  if (IS_MAC || !custom.length) return custom; // [] = deliberately unbound
+  // Custom keys are one set for every device (config.json): ⌘ ones set on a mac are the Windows key elsewhere and never reach
+  // the page (see PC_EXTRA in keys.ts), so skip them there, and fall back to this platform's defaults if nothing is left
+  const usable = custom.filter((k) => !/(^|\+)meta\+/.test(k));
+  return usable.length ? usable : DEFAULT_KEYS[a];
 }
 
 type Dialog =
