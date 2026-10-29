@@ -1,9 +1,9 @@
 import { ChevronUp, Folder, FolderGit2, History, Loader2, Play, SquareTerminal } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
-import { basename, createInPane, openTerminal } from "@/lib/actions";
+import { basename, closeFocusedPane, createInPane, focusPane, openTerminal } from "@/lib/actions";
 import { api } from "@/lib/api";
 import { get, set, useStore } from "@/lib/store";
 import type { PaneLeaf } from "@/lib/layout";
@@ -185,10 +185,20 @@ export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean
     }
   };
 
+  // Ctrl+D 关掉这个空 pane（像在空 shell 里按 ^D 退出）：两次 Ctrl+C 退出 agent 之后落到这一屏，再按它才关 pane。
+  // 光标在目录输入框里时不管：mac 上那是「删掉后面一个字」。
+  const onKey = (e: KeyboardEvent) => {
+    if (e.key !== "d" || !e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+    if ((e.target as HTMLElement).closest("input, textarea")) return;
+    e.preventDefault();
+    focusPane(pane.id);
+    closeFocusedPane();
+  };
+
   return (
-    <div className="flex h-full items-start justify-center overflow-auto p-6">
+    <div className="flex h-full items-start justify-center overflow-auto p-6" onKeyDown={onKey}>
       <div className="mt-[8vh] w-full max-w-lg space-y-5">
-        <div className="text-[13px] font-medium text-muted-foreground">新会话</div>
+        <div className="text-[13px] font-medium text-muted-foreground">新会话（Ctrl+D 关掉）</div>
         <div className="grid grid-cols-2 gap-2">
           {agents.map((a) => (
             <button

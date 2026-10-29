@@ -123,7 +123,7 @@ const GROUPS: [string, KeyAction[]][] = [
       "prevPane",
     ],
   ],
-  ["tab", ["newTab", "nextTab", "prevTab", "lastTab", "tab1", "closeTab", "renameTab"]],
+  ["tab", ["newTab", "nextTab", "prevTab", "lastTab", "tab1", "closeTab", "reopenClosed", "renameTab"]],
   ["工作空间", ["newWorkspace", "workspaces", "nextWorkspace", "prevWorkspace", "renameWorkspace", "closeWorkspace"]],
   ["会话", ["sessions", "nextAttention", "prevAttention", "focusAttention", "renamePane", "stop"]],
   ["其他", ["palette", "toggleSidebar", "settings", "help"]],

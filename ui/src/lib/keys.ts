@@ -27,6 +27,7 @@ export type KeyAction =
   | "prevTab"
   | "lastTab"
   | "closeTab"
+  | "reopenClosed"
   | "renameTab"
   | "tab1"
   | "tab2"
@@ -78,6 +79,7 @@ export const ACTION_TITLES: Record<KeyAction, string> = {
   prevTab: "上一个 tab",
   lastTab: "上次的 tab",
   closeTab: "关闭 tab",
+  reopenClosed: "重新打开刚关的 tab / pane",
   renameTab: "重命名 tab",
   tab1: "tab 1",
   tab2: "tab 2",
@@ -132,6 +134,8 @@ export const DEFAULT_KEYS: Record<KeyAction, string[]> = {
   prevTab: ["prefix+p"],
   lastTab: ["prefix+;"],
   closeTab: ["prefix+shift+x"],
+  // 和浏览器一样。浏览器里这个键被浏览器自己占着（重开它的标签页），只在桌面 App 里管用；那边用命令面板
+  reopenClosed: ["meta+shift+t"],
   renameTab: ["prefix+shift+t"],
   tab1: ["prefix+1"],
   tab2: ["prefix+2"],

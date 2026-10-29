@@ -147,6 +147,27 @@ export function closePane(tab: Tab, paneId: string): Tab | null {
   return { ...tab, root, focus, zoom: tab.zoom === paneId ? undefined : tab.zoom };
 }
 
+/** paneId 那个 pane 的父分割（它是根时没有）。 */
+export function parentSplit(n: PaneNode, paneId: string): PaneSplit | undefined {
+  if (n.type === "pane") return;
+  if (n.a.id === paneId || n.b.id === paneId) return n;
+  return parentSplit(n.a, paneId) ?? parentSplit(n.b, paneId);
+}
+
+/**
+ * 把 leaf 贴回 nodeId 那个节点（pane 或一整个分割）旁边，方向、在哪边、比例照关之前的：撤销关 pane 用，
+ * 原来的兄弟还在就能原样摆回去。找不到那个节点返回 null。
+ */
+export function insertBeside(tab: Tab, nodeId: string, leaf: PaneLeaf, dir: "row" | "col", first: boolean, ratio: number): Tab | null {
+  let hit = false;
+  const root = mapNode(tab.root, (n) => {
+    if (n.id !== nodeId) return n;
+    hit = true;
+    return { type: "split", id: rid("s"), dir, ratio, a: first ? leaf : n, b: first ? n : leaf };
+  });
+  return hit ? { ...tab, root, zoom: undefined } : null;
+}
+
 export function setRatio(tab: Tab, splitId: string, ratio: number): Tab {
   const r = Math.min(0.9, Math.max(0.1, ratio));
   return { ...tab, root: mapNode(tab.root, (n) => (n.type === "split" && n.id === splitId ? { ...n, ratio: r } : n)) };

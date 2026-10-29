@@ -295,7 +295,7 @@ function buildMenu() {
       },
       {
         label: "文件",
-        submenu: [cmd("新建 tab", "newTab", "Cmd+T"), cmd("新工作空间", "newWorkspace", "Cmd+Shift+N"), cmd("会话列表", "sessions", "Cmd+O"), { type: "separator" }, cmd("关闭 pane", "closePane", "Cmd+W")],
+        submenu: [cmd("新建 tab", "newTab", "Cmd+T"), cmd("新工作空间", "newWorkspace", "Cmd+Shift+N"), cmd("会话列表", "sessions", "Cmd+O"), { type: "separator" }, cmd("关闭 pane", "closePane", "Cmd+W"), cmd("重新打开刚关的 tab / pane", "reopenClosed", "Cmd+Shift+T")],
       },
       {
         label: "编辑",

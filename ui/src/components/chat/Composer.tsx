@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { api, type Holder, isNetworkError } from "@/lib/api";
-import { closeFocusedPane, focusPane } from "@/lib/actions";
+import { closeAgentInPane } from "@/lib/actions";
 import { get, sendShown, set, setConfig, transcript, useStore } from "@/lib/store";
 import type { ConfigOption, ContentBlock, SessionSummary } from "@/lib/types";
 import { isCoarse, usePhone } from "@/lib/phone";
@@ -439,7 +439,8 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
       }
       return;
     }
-    // Ctrl+C（照 Claude Code）：有字先清空；在跑先打断；空着又没在跑 —— 2 秒内连按两次关掉这个 pane（= 关掉会话）。
+    // Ctrl+C（照 Claude Code）：有字先清空；在跑先打断；空着又没在跑 —— 2 秒内连按两次关掉这个 agent，
+    // pane 留着回到「新会话」那一屏（再按 Ctrl+D 才关 pane，和终端里退出 shell 一样分两步）。
     // 只认 ctrl，不认 ⌘：mac 上 ⌘C 是复制。
     if (e.key === "c" && e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
       e.preventDefault();
@@ -455,12 +456,11 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
       if (Date.now() - ctrlC.current < 2000) {
         ctrlC.current = 0;
         toast.dismiss("ctrlc");
-        focusPane(paneId);
-        closeFocusedPane();
+        closeAgentInPane(paneId);
         return;
       }
       ctrlC.current = Date.now();
-      toast("再按一次 Ctrl+C 关闭这个会话", { id: "ctrlc", duration: 2000 });
+      toast("再按一次 Ctrl+C 退出这个 agent", { id: "ctrlc", duration: 2000 });
       return;
     }
     // Esc 按得快的两种：消息还在发（等发完再撤）、刚发完界面还没收到「在跑」（服务端其实已经在跑了）

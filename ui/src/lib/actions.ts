@@ -10,6 +10,8 @@ import {
   attach,
   closePane,
   cycle,
+  insertBeside,
+  parentSplit,
   findLeaf,
   leaves,
   locateSession,
@@ -138,6 +140,7 @@ export function openSubagent(sessionId: string, toolCallId: string, title?: stri
 export function closeFocusedPane() {
   const l = get().layout;
   const p = focusedLeaf(l);
+  if (p) rememberPane(activeWs(l), activeTab(l), p);
   if (p?.sessionId) {
     const s = get().sessions[p.sessionId];
     // 关 pane 不删会话（它还在会话列表里，prefix+g 能找回来），但正在跑的那一轮停掉。
@@ -302,6 +305,7 @@ export function closeTab(tabId?: string) {
   const ws = l.workspaces.find((w) => w.tabs.some((t) => t.id === (tabId ?? activeWs(l).activeTab))) ?? activeWs(l);
   const id = tabId ?? ws.activeTab;
   const tab = ws.tabs.find((t) => t.id === id);
+  if (tab && !blankTab(tab)) remember({ kind: "tab", wsId: ws.id, index: ws.tabs.indexOf(tab), tab });
   for (const p of tab ? leaves(tab.root) : []) {
     const s = p.sessionId ? get().sessions[p.sessionId] : undefined;
     if (s && (s.status === "running" || s.status === "waiting")) api.cancel(s.id).catch(() => {});
@@ -311,6 +315,138 @@ export function closeTab(tabId?: string) {
     const w = l.workspaces.find((x) => x.id === ws.id);
     return w ? removeTab(l, w, id) : l;
   });
+}
+
+// ---- 撤销关闭（⌘⇧T）----
+//
+// 只记人手关的（关 pane、关 tab、两次 Ctrl+C 关掉 agent）；shell 自己退出、别的 agent 用 `gerdr session close` 关的不记。
+// 只记在这个页面的内存里：刷新就没了，和浏览器的「重新打开关闭的标签页」一样够用。
+// 会话关 pane 时只是停掉这一轮、记录还在，所以能原样接回来；终端关的时候 shell 已经结束，回来的是同目录新开的一个。
+
+type Closed =
+  | { kind: "tab"; wsId: string; index: number; tab: Tab }
+  | { kind: "pane"; wsId: string; tabId: string; pane: PaneLeaf; beside: string; dir: "row" | "col"; first: boolean; ratio: number }
+  | { kind: "agent"; paneId: string; sessionId: string };
+
+const closed: Closed[] = [];
+
+function remember(c: Closed) {
+  closed.push(c);
+  if (closed.length > 30) closed.shift();
+}
+
+/** 里面什么都没有的 pane / tab（还没开会话的空 pane）：关了不用记，撤销回来也没意义。 */
+const blankLeaf = (p: PaneLeaf) => !p.sessionId && !p.term && !p.sub;
+const blankTab = (t: Tab) => !t.name && t.root.type === "pane" && blankLeaf(t.root);
+
+/** 关 pane 之前记下它在哪：有兄弟就记兄弟（摆回它旁边），tab 里只剩它就当关了整个 tab。 */
+function rememberPane(ws: Workspace, tab: Tab, p: PaneLeaf) {
+  if (blankLeaf(p)) {
+    // 两次 Ctrl+C 退出 agent、接着 Ctrl+D 关掉这个空 pane：撤销时把会话连 pane 一起放回原位，而不是另开一个 tab
+    const last = closed.at(-1);
+    if (last?.kind !== "agent" || last.paneId !== p.id) return;
+    closed.pop();
+    p = { type: "pane", id: p.id, sessionId: last.sessionId };
+  }
+  const par = parentSplit(tab.root, p.id);
+  if (!par) return remember({ kind: "tab", wsId: ws.id, index: ws.tabs.indexOf(tab), tab });
+  const first = par.a.id === p.id;
+  remember({ kind: "pane", wsId: ws.id, tabId: tab.id, pane: p, beside: (first ? par.b : par.a).id, dir: par.dir, first, ratio: par.ratio });
+}
+
+/** 撤销回来的 pane：会话没了 / 已经在别处开着就留个同 agent 同目录的空 pane；终端换成待重开的。 */
+function revive(p: PaneLeaf, l: Layout): PaneLeaf {
+  if (p.term) return { ...p, term: { id: "", cwd: p.term.cwd } };
+  if (p.sessionId) {
+    const s = get().sessions[p.sessionId];
+    if (!s || locateSession(l, p.sessionId)) return { type: "pane", id: p.id, draft: s ? { agent: s.agent, cwd: s.cwd } : p.draft };
+  }
+  return p;
+}
+
+function reviveTree(n: PaneNode, l: Layout): PaneNode {
+  return n.type === "pane" ? revive(n, l) : { ...n, a: reviveTree(n.a, l), b: reviveTree(n.b, l) };
+}
+
+export function reopenClosed() {
+  const c = closed.pop();
+  if (!c) {
+    toast("没有刚关掉的 tab / pane");
+    return;
+  }
+  const l = get().layout;
+  if (c.kind === "agent") {
+    const loc = locateSession(l, c.sessionId);
+    if (loc) return focusPane(loc.pane.id);
+    const at = allLeaves(l).find((x) => x.pane.id === c.paneId && blankLeaf(x.pane));
+    if (at) {
+      setLayout((l) => setPane(l, c.paneId, { sessionId: c.sessionId, draft: undefined }));
+      return focusPane(c.paneId);
+    }
+    return addTab({ sessionId: c.sessionId });
+  }
+  if (c.kind === "pane") {
+    // 单个会话 pane 已经在别处开着（prefix+g 找回来过）：切过去就行
+    if (c.pane.sessionId && locateSession(l, c.pane.sessionId)) return focusSession(c.pane.sessionId);
+    const pane = revive(c.pane, l);
+    setLayout((l) => {
+      const ws = l.workspaces.find((w) => w.tabs.some((t) => t.id === c.tabId));
+      const tab = ws?.tabs.find((t) => t.id === c.tabId);
+      if (ws && tab) {
+        // 原来的兄弟被关了 / 挪走了：贴在整个 tab 右边
+        const next = insertBeside(tab, c.beside, pane, c.dir, c.first, c.ratio) ?? attach(tab, undefined, "right", pane);
+        return selectTabIn(
+          updateTab(l, tab.id, () => ({ ...next, focus: pane.id })),
+          ws.id,
+          tab.id,
+        );
+      }
+      // tab 也没了：单独开一个
+      const w = l.workspaces.find((x) => x.id === c.wsId) ?? activeWs(l);
+      const t: Tab = { id: rid("t"), root: pane, focus: pane.id };
+      return selectTabIn(
+        updateWs(l, w.id, (w) => ({ ...w, tabs: [...w.tabs, t] })),
+        w.id,
+        t.id,
+      );
+    });
+    reopenTerms([pane]);
+    return;
+  }
+  const root = reviveTree(c.tab.root, l);
+  const tab: Tab = { ...c.tab, root };
+  setLayout((l) => {
+    const w = l.workspaces.find((x) => x.id === c.wsId) ?? activeWs(l);
+    // 关的是最后一个 tab 时补上的那个空 tab：顶掉它
+    let tabs = w.tabs.length === 1 && blankTab(w.tabs[0]) ? [] : [...w.tabs];
+    tabs = tabs.filter((t) => t.id !== tab.id);
+    tabs.splice(Math.min(c.index, tabs.length), 0, tab);
+    return selectTabIn(
+      updateWs(l, w.id, (w) => ({ ...w, tabs })),
+      w.id,
+      tab.id,
+    );
+  });
+  reopenTerms(leaves(root));
+}
+
+function reopenTerms(panes: PaneLeaf[]) {
+  for (const p of panes) if (p.term && !p.term.id) reopenTerminal(p.id, p.term.cwd);
+}
+
+/**
+ * 两次 Ctrl+C（照 Claude Code 退出）：关掉这个 pane 里的 agent，pane 留着、回到「新会话」那一屏（同 agent 同目录），
+ * 要关 pane 再按 Ctrl+D。会话记录还在，⌘⇧T / prefix+g 能接回来。
+ */
+export function closeAgentInPane(paneId: string) {
+  const l = get().layout;
+  const p = allLeaves(l).find((x) => x.pane.id === paneId)?.pane;
+  if (!p?.sessionId) return;
+  const s = get().sessions[p.sessionId];
+  if (s && (s.status === "running" || s.status === "waiting")) api.cancel(s.id).catch(() => {});
+  remember({ kind: "agent", paneId, sessionId: p.sessionId });
+  setLayout((l) => setPane(l, paneId, { sessionId: undefined, draft: s ? { agent: s.agent, cwd: s.cwd } : undefined }));
+  focusPane(paneId);
 }
 
 export function renameTab(tabId: string, name: string) {
@@ -659,6 +795,8 @@ export function runAction(a: KeyAction) {
       return lastTab();
     case "closeTab":
       return closeTab();
+    case "reopenClosed":
+      return reopenClosed();
     case "renameTab": {
       const t = activeTab(l);
       return set({ dialog: { kind: "rename", target: "tab", id: t.id, value: t.name ?? tabName(t) } });
