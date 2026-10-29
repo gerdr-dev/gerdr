@@ -103,9 +103,16 @@ func TestE2EExt(t *testing.T) {
 		return r.reset()
 	}
 	if which == "claude" {
-		r.mu.Lock()
-		cmds := strings.Join(r.cmds, " ")
-		r.mu.Unlock()
+		// 新会话的进程在后台起（NewSession 不等它），斜杠命令要等进程 initialize 完才推过来
+		var cmds string
+		for deadline := time.Now().Add(60 * time.Second); ; time.Sleep(200 * time.Millisecond) {
+			r.mu.Lock()
+			cmds = strings.Join(r.cmds, " ")
+			r.mu.Unlock()
+			if strings.Contains(" "+cmds+" ", " gerdrprobe ") || time.Now().After(deadline) {
+				break
+			}
+		}
 		if !strings.Contains(" "+cmds+" ", " gerdrprobe ") {
 			t.Errorf("gerdr skill missing from commands")
 		}

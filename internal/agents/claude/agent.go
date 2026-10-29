@@ -375,13 +375,24 @@ func (a *Agent) NewSession(ctx context.Context, p acp.NewSessionRequest) (acp.Ne
 	}
 	s := a.newSession(uuid.NewString(), p.Cwd, p.Meta)
 	s.fresh = true
-	// 新会话马上起进程：拿到模型列表 / 斜杠命令 / 当前模式，人通常也马上就要说话了。
-	if err := s.ensure(ctx); err != nil {
+	// 新会话马上在后台起进程（人通常马上就要说话了），但不等它：起进程 + initialize 要一到几秒（MCP 多更久），
+	// 等的话界面那几秒只能干看着「正在开」，开不出对话框（用户嫌）。先拿缓存的模型列表 / 模式回话；
+	// 进程起来后 start 会补推模型列表和斜杠命令（早于 hub 登记到的通知 hub 会先攒着，见 agentHandler.OnUpdate）。
+	// 模型 / 思考强度 / 模式在 meta 里，newSession 已经记下，起进程时带上。起不来只记日志：第一句话时 Prompt 会再 ensure 一遍、把错误报给人。
+	go func() {
+		if err := s.ensure(context.WithoutCancel(ctx)); err != nil {
+			a.log.Warn("start new session", "session", s.id, "err", err)
+			return
+		}
+		// 起的这几秒里会话被关了（⌘D 开完马上关掉）：CloseSession 那时还没有进程可杀，它也已经不在 a.sessions 里、
+		// 闲置回收看不到 —— 不在这里收就一直挂着。
 		a.mu.Lock()
-		delete(a.sessions, s.id)
+		gone := a.sessions[s.id] != s
 		a.mu.Unlock()
-		return acp.NewSessionResponse{}, err
-	}
+		if gone {
+			s.kill()
+		}
+	}()
 	return acp.NewSessionResponse{SessionId: acp.SessionId(s.id), Modes: s.modeState(), ConfigOptions: a.configOptions(s)}, nil
 }
 
