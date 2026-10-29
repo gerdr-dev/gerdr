@@ -76,9 +76,14 @@ export function initAndroid() {
   const offs = [
     onAndroid("back", () => postAndroid({ t: "back", handled: closeTop() }), false),
     onAndroid("focus", (m) => typeof m.session === "string" && focusSession(m.session), false),
-    onAndroid("key", (m) => volumeKey(m.k === "up" ? "ArrowUp" : "ArrowDown"), false),
+    onAndroid("key", (m) => (volumeKey(m.k === "up" ? "ArrowUp" : "ArrowDown"), syncMedia()), false),
   ];
+  // Media events don't bubble, but they do go through the capture phase
+  for (const ev of MEDIA_EVENTS) document.addEventListener(ev, syncMedia, true);
+  playing = false;
+  syncMedia();
   g.__gerdrAndroidOff = () => {
+    for (const ev of MEDIA_EVENTS) document.removeEventListener(ev, syncMedia, true);
     document.removeEventListener("visibilitychange", onVisible);
     offs.forEach((off) => off());
   };
@@ -137,6 +142,22 @@ function closeTop(): boolean {
   const a = document.activeElement as HTMLElement | null;
   if (a && (a.tagName === "TEXTAREA" || a.tagName === "INPUT")) return (a.blur(), true);
   return false;
+}
+
+const MEDIA_EVENTS = ["play", "playing", "pause", "ended", "emptied"];
+let playing = false;
+
+/**
+ * Tell the shell whether a video / audio in the page is playing: while one is, the volume keys stay volume keys
+ * instead of turning into ↑ / ↓ (MainActivity.dispatchKeyEvent). Rescans the DOM rather than trusting the event's
+ * element: a player the virtual chat list unmounts is paused off-document, and that pause never reaches us. The
+ * rescan on every volume key catches up with that case (that one press is lost, the next one is volume again).
+ */
+function syncMedia() {
+  const now = [...document.querySelectorAll<HTMLMediaElement>("video, audio")].some((m) => !m.paused && !m.ended);
+  if (now === playing) return;
+  playing = now;
+  postAndroid({ t: "media", playing: now });
 }
 
 /**

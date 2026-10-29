@@ -323,7 +323,7 @@ class MainActivity : ComponentActivity() {
             setAcceptThirdPartyCookies(w, false)
         }
         w.webViewClient = Client()
-        w.webChromeClient = Chrome()
+        w.webChromeClient = chrome
         w.setDownloadListener { url, _, _, _, _ -> openExternal(url) }
         web = w
         bridge = Bridge(this, w, o)
@@ -399,6 +399,7 @@ class MainActivity : ComponentActivity() {
 
     private fun dropWeb() {
         hideLoading(fade = false)
+        chrome.onHideCustomView() // a fullscreen video belongs to the WebView being dropped
         login?.let { endLogin(it, "cancel", null) }
         bridge?.reset()
         bridge = null
@@ -542,7 +543,35 @@ class MainActivity : ComponentActivity() {
 
         // 相机 / 麦克风暂时不给（语音投稿走的是输入法，不是 getUserMedia）
         override fun onPermissionRequest(request: PermissionRequest) = request.deny()
+
+        /**
+         * A <video>'s fullscreen button. WebView doesn't do element fullscreen on its own: it hands us the
+         * player as a View and the host has to show it. Without this override the button silently does nothing.
+         * Added to the decor view, not `root`: root is padded by the system-bar insets.
+         */
+        override fun onShowCustomView(view: View, callback: CustomViewCallback) {
+            if (video != null) return callback.onCustomViewHidden()
+            video = view
+            videoCb = callback
+            view.setBackgroundColor(Color.BLACK)
+            (window.decorView as FrameLayout).addView(view, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+            applyBars()
+        }
+
+        override fun onHideCustomView() {
+            val v = video ?: return
+            video = null
+            (window.decorView as FrameLayout).removeView(v)
+            videoCb?.onCustomViewHidden()
+            videoCb = null
+            applyBars()
+        }
     }
+
+    private val chrome = Chrome()
+    /** The video currently shown fullscreen (see [Chrome.onShowCustomView]); null = none */
+    private var video: View? = null
+    private var videoCb: WebChromeClient.CustomViewCallback? = null
 
     // ---- passkey 登录（device flow，见 Login.kt）----
 
@@ -736,7 +765,8 @@ class MainActivity : ComponentActivity() {
         val up = e.keyCode == KeyEvent.KEYCODE_VOLUME_UP
         if (up || e.keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
             val b = bridge
-            if (b != null && b.ready && volumeKeys()) {
+            // Playing a video / audio (inline or fullscreen): the keys are volume again
+            if (b != null && b.ready && volumeKeys() && video == null && !b.mediaPlaying) {
                 if (e.action == KeyEvent.ACTION_DOWN) b.key(if (up) "up" else "down", e.repeatCount > 0)
                 return true
             }
@@ -752,6 +782,8 @@ class MainActivity : ComponentActivity() {
 
 
     private fun back() {
+        // A fullscreen video is on top of the page: back leaves it first, like in a browser
+        if (video != null) return chrome.onHideCustomView()
         val b = bridge
         if (b == null || !b.ready) return fallbackBack()
         b.askBack { handled -> if (!handled) fallbackBack() }
@@ -762,8 +794,16 @@ class MainActivity : ComponentActivity() {
         moveTaskToBack(true)
     }
 
+    /** What the page asked for through the bridge; a fullscreen video hides the bars regardless, and leaving it restores this */
+    private var pageFullscreen = false
+
     fun setFullscreen(on: Boolean) {
-        if (on) {
+        pageFullscreen = on
+        applyBars()
+    }
+
+    private fun applyBars() {
+        if (pageFullscreen || video != null) {
             bars.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             bars.hide(WindowInsetsCompat.Type.systemBars())
         } else {

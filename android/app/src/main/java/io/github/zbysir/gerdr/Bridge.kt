@@ -41,8 +41,13 @@ class Bridge(private val act: MainActivity, web: WebView, origin: String) {
         }
     }
 
+    /** Something in the page is playing sound: the volume keys are left alone (MainActivity.dispatchKeyEvent) */
+    var mediaPlaying = false
+        private set
+
     fun reset() {
         page = null
+        mediaPlaying = false
         backCb?.invoke(false)
         backCb = null
     }
@@ -81,6 +86,8 @@ class Bridge(private val act: MainActivity, web: WebView, origin: String) {
                 val a = m.optJSONArray("origins") ?: return
                 LanRoute.setCandidates((0 until a.length()).map { a.optString(it) })
             }
+            // A video / audio in the page started or stopped playing (android.ts syncMedia)
+            "media" -> mediaPlaying = m.optBoolean("playing")
             "volkeys" -> {
                 if (m.optString("op") == "set") act.setVolumeKeys(m.optBoolean("on"))
                 send(JSONObject().put("t", "volkeys").put("on", act.volumeKeys()))
