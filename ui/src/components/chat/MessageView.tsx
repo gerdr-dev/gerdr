@@ -1,6 +1,6 @@
 import { Bot, Brain, ChevronDown, CircleAlert, Info, Loader2, CornerDownRight } from "lucide-react";
 import { RewindButton } from "./RewindButton";
-import { memo, type ReactNode } from "react";
+import { memo, useEffect, useState, type ReactNode } from "react";
 import { Message, MessageContent } from "@/components/ai-elements/message";
 import { Markdown } from "./Markdown";
 import { Reasoning, ReasoningContent, ReasoningTrigger } from "@/components/ai-elements/reasoning";
@@ -347,7 +347,7 @@ export function renderPart(p: GPart, i: number, ctx: PartCtx): ReactNode {
           )}
         >
           <Info className="mt-0.5 size-3.5 shrink-0" />
-          <span className="min-w-0">{p.data.text}</span>
+          <span className="min-w-0">{p.data.level === "retry" && p.data.until ? <RetryText text={p.data.text} until={p.data.until} /> : p.data.text}</span>
         </div>
       );
     case "data-turnEnd":
@@ -372,4 +372,20 @@ export function renderPart(p: GPart, i: number, ctx: PartCtx): ReactNode {
       );
   }
   return null;
+}
+
+/**
+ * The retry notice's "N 秒后自动重试", counted down live: the server writes the wait once, so it used to sit at "10 秒"
+ * while the seconds went by. Past the deadline the retry is under way (the notice is folded away once it succeeds or the turn ends).
+ */
+function RetryText({ text, until }: { text: string; until: number }) {
+  const [now, setNow] = useState(Date.now);
+  const left = Math.ceil((until - now) / 1000);
+  useEffect(() => {
+    if (left <= 0) return;
+    // wake right as the shown second changes (9.3s left shows 10; 300ms later it is 9)
+    const t = setTimeout(() => setNow(Date.now()), ((until - Date.now()) % 1000 || 1000) + 5);
+    return () => clearTimeout(t);
+  }, [now, until, left]);
+  return <>{text.replace(/\d+ 秒后自动重试/, left > 0 ? `${left} 秒后自动重试` : "正在自动重试")}</>;
 }

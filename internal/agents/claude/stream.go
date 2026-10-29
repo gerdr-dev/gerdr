@@ -37,6 +37,18 @@ func (s *session) onLine(pr *proc, m map[string]json.RawMessage, raw []byte) {
 		if msg.Parent != nil {
 			parent = *msg.Parent
 		}
+		// A failed API call comes as a synthetic assistant message (error set, the error text as its content), followed by an
+		// is_error result with the same text. That result already becomes the turn's error (the retry notice / turn-end line),
+		// so showing this one too printed the error once per attempt. Only dropped inside our own turn: there the result is
+		// guaranteed to surface it.
+		if msg.Error != "" && parent == "" {
+			s.mu.Lock()
+			inTurn := s.turn != nil
+			s.mu.Unlock()
+			if inTurn {
+				return
+			}
+		}
 		for _, c := range msg.Message.Content {
 			s.onAssistantBlock(ctx, msg.Message.ID, parent, c)
 		}

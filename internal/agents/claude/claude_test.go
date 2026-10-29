@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/coder/acp-go-sdk"
@@ -290,5 +291,39 @@ func TestTurnEndsWhenQueuedIntoAutoRun(t *testing.T) {
 		}
 	default:
 		t.Fatal("idle 之后这一轮没结束")
+	}
+}
+
+// A failed API call: the CLI sends a synthetic assistant message carrying the error, then an is_error result with the same
+// text. Only the turn's error should carry it; pushing the message too printed the error once per retry attempt.
+func TestAPIErrorMessageNotShownTwice(t *testing.T) {
+	a := &Agent{opts: Options{Env: []string{"CLAUDE_CONFIG_DIR=" + t.TempDir()}}, sessions: map[string]*session{}, log: slog.New(slog.DiscardHandler)}
+	s := a.newSession("11111111-2222-4333-8444-555555555555", "/p", nil)
+	var got []acp.SessionUpdate
+	s.emitHook = func(u acp.SessionUpdate) { got = append(got, u) }
+	line := func(js string) {
+		var m map[string]json.RawMessage
+		if err := json.Unmarshal([]byte(js), &m); err != nil {
+			t.Fatal(err)
+		}
+		s.onLine(nil, m, []byte(js))
+	}
+	turn := &turnState{done: make(chan turnResult, 1)}
+	s.mu.Lock()
+	s.turn = turn
+	s.mu.Unlock()
+	const text = "Failed to authenticate. API Error: 403 Request not allowed"
+	line(`{"type":"assistant","error":"authentication_failed","parent_tool_use_id":null,"message":{"id":"m1","content":[{"type":"text","text":"` + text + `"}]}}`)
+	line(`{"type":"result","subtype":"success","is_error":true,"result":"` + text + `"}`)
+	for _, u := range got {
+		if u.AgentMessageChunk != nil {
+			t.Fatalf("error pushed as a reply: %+v", u.AgentMessageChunk)
+		}
+	}
+	s.mu.Lock()
+	errText := turn.errText
+	s.mu.Unlock()
+	if !strings.Contains(errText, "Request not allowed") {
+		t.Fatalf("turn error lost: %q", errText)
 	}
 }

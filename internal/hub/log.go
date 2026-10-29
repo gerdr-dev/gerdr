@@ -42,6 +42,8 @@ type Event struct {
 	// notice：Level 是 info / warn / error / clear / retry（界面上 agent 再出字就收起的「N 秒后重试」）
 	Level string `json:"level,omitempty"`
 	Text  string `json:"text,omitempty"`
+	// notice retry: when the retry fires (unix ms), so the UI can count the "N 秒后" in Text down instead of leaving it frozen
+	Until int64 `json:"until,omitempty"`
 
 	// shell_done：命令的退出码（0 也要记，所以是指针）
 	Exit *int `json:"exit,omitempty"`

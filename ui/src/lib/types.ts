@@ -113,6 +113,7 @@ export type HubEvent = {
   response?: any;
   level?: string;
   text?: string;
+  until?: number; // notice retry: when the retry fires (unix ms)
   exit?: number; // shell_done：退出码
 };
 

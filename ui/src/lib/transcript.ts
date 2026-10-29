@@ -24,7 +24,7 @@ export type GData = {
   permission: { reqId: string; request: PermissionRequest; answer?: string; cancelled?: boolean };
   ask: { reqId: string; request: AskRequest; answers?: Record<string, string[]>; cancelled?: boolean; reason?: "skipped" | "replied" };
   /** level：info / warn / error / clear / auto / retry（「N 秒后重试」，done = 重试成功后收起了） */
-  notice: { level: string; text: string; done?: boolean };
+  notice: { level: string; text: string; done?: boolean; until?: number };
   /** woke：这个任务一结束 agent 就自己开了一轮（turn_start auto），卡片上标「→ agent 接着处理」 */
   /** command: the command of the tool call that started it, so the card can tell whether its description is that command (monospace) or prose */
   task: { task: AgentTask; woke?: boolean; command?: string };
@@ -494,7 +494,7 @@ export class Transcript {
       }
       case "notice": {
         this.messages = [...this.messages];
-        const data = { level: e.level ?? "info", text: e.text ?? "" };
+        const data = { level: e.level ?? "info", text: e.text ?? "", until: e.until };
         if (data.level === "retry" && this.retryLoc) {
           this.setPart(this.retryLoc, { type: "data-notice", data });
           break;
