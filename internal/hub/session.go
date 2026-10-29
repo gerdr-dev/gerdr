@@ -891,7 +891,13 @@ func (s *Session) onUpdate(u acp.SessionUpdate) {
 				if lv == "" {
 					lv = "warn"
 				}
-				s.emit(&Event{Kind: EvNotice, Level: lv, Text: n})
+				ev := &Event{Kind: EvNotice, Level: lv, Text: n}
+				// The adapter reports how long the wait is; turn it into a deadline here so the UI can count down
+				// (a bare "9 秒后" stays at 9 forever, and a replayed log would restart the count)
+				if d := num(g["noticeDelayMs"]); d > 0 {
+					ev.Until = now() + d
+				}
+				s.emit(ev)
 			}
 			// 插话排队 / 被读到：只记用户发过的那几条（command_lifecycle 对每条写进去的消息都报）
 			if st, ok := g["steer"].(map[string]any); ok {
@@ -1899,4 +1905,17 @@ func (s *Session) isSteer(msgID string) bool {
 		}
 	}
 	return false
+}
+
+// num reads a number out of _meta: float64 once it has been through JSON, the Go type when an adapter runs in-process.
+func num(v any) int64 {
+	switch n := v.(type) {
+	case float64:
+		return int64(n)
+	case int:
+		return int64(n)
+	case int64:
+		return n
+	}
+	return 0
 }
