@@ -124,13 +124,13 @@ React（ui/，不打包）  ←WebSocket / HTTP→  hub（internal/hub）  ←AC
     （hub 当成 agent 自己跑起来了，和 claude 后台任务跑完一样）。子 agent 的 ctx 不挂在这一轮上，前台时这一轮被打断由 select 转达。
     后台任务只在内存里，gerdr 重启就没了。
 12. **MCP**（`mcp.go`，自己写的客户端，只有 initialize / tools/list / tools/call）：stdio、streamable HTTP（响应可能是 JSON 也可能是一段 SSE，
-    带 Mcp-Session-Id）、老式 SSE（先等 endpoint 事件）。服务器按设置里 MCP 的来源取：「agent 自己的」= Claude Code 配的（~/.claude.json、
-    项目 .mcp.json）。同一份配置整个 agent 只起一个、各会话共用；起不来的 1 分钟内不重试；每轮最多等 30 秒，没起完的这轮先不带。
+    带 Mcp-Session-Id）、老式 SSE（先等 endpoint 事件）。**只用 Gerdr 那份**（~/.gerdr/ext.json 里开着的），不看设置里的来源：
+    以前「Agent 自己的」对它来说是借 Claude Code 配的（~/.claude.json、项目 .mcp.json），分出「引擎」之后用户看不懂一个引擎为什么跟着
+    另一个引擎的配置走（用户定的改法）。升级后头一回启动 `ext.MigrateNativeMCP` 把以前借着用的用户级那些拷进 Gerdr 那份一次
+    （`<dir>/native-mcp-migrated` 记着；项目 .mcp.json 里的不拷）。skill 还是借 Claude Code 的（~/.claude/skills），没改。
+    同一份配置整个 agent 只起一个、各会话共用；起不来的 1 分钟内不重试；每轮最多等 30 秒，没起完的这轮先不带。
     工具名 `mcp__<服务器>__<工具>`，最长 64（两家接口的限制），标了 readOnlyHint 的不审批。**不支持 OAuth**：要登录的服务器（401）给一行提示。
-    测试里 HOME 要换成临时目录，不然会读到本机 ~/.claude.json、把真的 MCP 服务器起起来。
-    设置 → MCP 页「Gerdr Agent 在用的」：按来源算出它实际用哪些、各来自哪份配置，加上连接池里的状态（`_gerdr/mcp_status`，hub 的
-    `NativeMCP`；native 没起时只按配置算，不为了看一眼把它起起来；「检查连接」才真连）。只算用户级的：家目录在 ~/.claude.json 里也是一个
-    项目，拿它当 cwd 会混进只对家目录生效的那些，和页面下面「Claude Code 自己的」对不上。
+    设置里不单独列它连了哪些、连没连上（以前有一块「在用的」+「检查连接」，用户觉得没必要，删了）：要连的就是「Gerdr 的 MCP」里开着的。
 13. web_fetch 按域名审批（`fetch:<host>`）：联网能把数据带出去，不算只读。HTML 自己转成 Markdown 风格的文字（x/net/html），不另调模型总结。
 14. **长期记忆**（`memory.go`）：照 Claude Code 的自动记忆，文件 + 索引，不用向量库。`<dir>/native/memory/global`（人的偏好）和
     `projects/<git 根的路径变形>`（项目的事，同一仓库的子目录共用），一条一个 .md（frontmatter 带 type），每层一个 MEMORY.md 索引，
@@ -236,6 +236,8 @@ cwd 以外改的文件（Bash 写 `~/.zshrc`、隔壁项目）管不到；同一
     代价是插件的 MCP 和 claude.ai 的 connector 也没了。提示词和 MediaHint 拼成**一个** `--append-system-prompt`（给两个后一个盖前一个）。
   - codex：没挑的 `mcp_servers.<名>.enabled = false`、`skills.config` 里关；system 范围的 skill 界面列不出来，不动。提示词接在 `developerInstructions` 后面。
   - native：`skillsFor` / `resolveMCP` 里筛；提示词接在系统提示词最后。基于 native 的角色和原版共用会话目录和记忆。
+    还能只用某几家模型服务商（`providers`，`native.Config.Only`）：两个 agent 都用 native 引擎、各走一家。界面上叫「引擎」
+    （Claude Code / Codex / Native，Native 的服务商在 config.json 的 llm）和「agent」（引擎 + 提示词 / skill / MCP / 默认值 / 服务商），用户定的说法。
 - **新会话默认**：config.json `defaultModes[agent]` / `defaultConfig[agent][配置项 id]`（内置的和角色一样按 id；Gerdr Agent 的默认模型就是
   `llm.defaultModel`，不另存）。**在后端套**（`hub.Create`，`Options.Defaults` 每次现取）：界面和 `gerdr session new` 开出来的一样。
   三家在 session/new 里能接的配置项不一样（claude 接 model / effort，codex、native 只接 model），所以新建之后对着 agent 报回来的当前值

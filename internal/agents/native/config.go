@@ -52,6 +52,26 @@ type Model struct {
 	Images    *bool `json:"images,omitempty"` // 能不能看图
 }
 
+// Only：只留这几个服务商（按 id）。一个 agent 用 native 引擎、只走某家的模型（设置 → Agent 里配的 providers）；
+// ids 为空 = 全部。默认模型 / 杂活模型不在留下的里面时，find 自己退回留下的第一个。
+func (c Config) Only(ids []string) Config {
+	if len(ids) == 0 {
+		return c
+	}
+	keep := map[string]bool{}
+	for _, id := range ids {
+		keep[id] = true
+	}
+	out := c
+	out.Providers = nil
+	for _, p := range c.Providers {
+		if keep[p.ID] {
+			out.Providers = append(out.Providers, p)
+		}
+	}
+	return out
+}
+
 // resolved 是一个能直接用的模型：服务商的地址 + 补全了默认值的模型属性。
 type resolved struct {
 	Key      string // provider/model

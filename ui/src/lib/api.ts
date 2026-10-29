@@ -1,5 +1,5 @@
 import type { LLMModel, LLMProvider } from "./store";
-import type { ContentBlock, ExtSettings, ExtView, Hello, HubEvent, MemoryStore, NativeMCPEntry, PluginBuild, SessionSummary, TermInfo } from "./types";
+import type { ContentBlock, ExtSettings, ExtView, Hello, HubEvent, MemoryStore, PluginBuild, SessionSummary, TermInfo } from "./types";
 
 /** 正开着某个会话的别的进程（herdr / 终端里的交互式 claude） */
 export type Holder = { pid: number; name?: string; status?: string; cwd?: string };
@@ -127,7 +127,6 @@ export const api = {
   memoryWrite: (path: string, content: string) => req("PUT", "/api/memory/file", { path, content }),
   memoryDelete: (path: string) => req("DELETE", `/api/memory/file?path=${encodeURIComponent(path)}`),
   // Gerdr Agent 实际在用的 MCP 和连接状态；probe = 现在就连一遍
-  nativeMCP: (probe?: boolean) => req<{ servers: NativeMCPEntry[] }>("GET", `/api/llm/mcp${probe ? "?probe=1" : ""}`),
   llmTest: (provider: LLMProvider, model: LLMModel) => req<{ reply: string; api: string }>("POST", "/api/llm/test", { provider, model }),
   awake: () => req<AwakeStatus>("GET", "/api/awake"),
   setAwake: (b: { minutes?: number; until?: number; forever?: boolean }) => req<AwakeStatus>("PUT", "/api/awake", b),

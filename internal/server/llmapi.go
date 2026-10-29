@@ -22,16 +22,6 @@ func (s *Server) llmRoutes(mux *http.ServeMux) {
 		}
 		writeJSON(w, map[string]any{"models": ids})
 	})
-	// Gerdr Agent 实际在用的 MCP（设置 → MCP 页）。probe=1：现在就连一遍看看（最多等 30 秒）
-	mux.HandleFunc("GET /api/llm/mcp", func(w http.ResponseWriter, r *http.Request) {
-		// cwd 给空：只算用户级的（和页面下面「Claude Code 自己的」那一节对得上；家目录也算一个项目，给家目录会混进只对它生效的那些）
-		list, err := s.Hub.NativeMCP(r.Context(), "", r.URL.Query().Get("probe") == "1")
-		if err != nil {
-			httpError(w, 502, err.Error())
-			return
-		}
-		writeJSON(w, map[string]any{"servers": list})
-	})
 	mux.HandleFunc("POST /api/llm/test", func(w http.ResponseWriter, r *http.Request) {
 		var b struct {
 			Provider native.Provider `json:"provider"`

@@ -240,6 +240,46 @@ func (m *Manager) Fingerprint() string {
 	return hex.EncodeToString(h.Sum(nil))[:16]
 }
 
+// MigrateNativeMCP：以前 Native 引擎在来源不是「只用 Gerdr 的」时借 Claude Code 配的 MCP（~/.claude.json 用户级那些），
+// 现在它只用 Gerdr 那份。升级后头一回启动把它借着用的那几个拷进 Gerdr 那份（名字已有的不动），不然升级完它的 MCP 一下子全没了。
+// 只做一次（<dir>/native-mcp-migrated 记着）；当时来源是「只用 Gerdr 的」就没借过，什么都不拷。
+// 拷进来不影响 Claude Code / Codex：来源是「只用 Agent 自己的」时它们不读 Gerdr 那份；是「两者都用」时同名的本来就有。
+func (m *Manager) MigrateNativeMCP() (added []string, err error) {
+	mark := filepath.Join(m.dir, "native-mcp-migrated")
+	if _, err := os.Stat(mark); err == nil {
+		return nil, nil
+	}
+	s := m.Settings()
+	if s.MCPSource != SourceGerdr {
+		have := map[string]bool{}
+		for _, v := range s.MCP {
+			have[v.Name] = true
+		}
+		for _, v := range ClaudeMCP("") {
+			if have[v.Name] || !ValidName(v.Name) {
+				continue
+			}
+			if v.Remote() && v.Type == "" {
+				v.Type = "http"
+			} else if !v.Remote() {
+				v.Type = "stdio"
+			}
+			v.Enabled = true
+			s.MCP = append(s.MCP, v)
+			added = append(added, v.Name)
+		}
+		if len(added) > 0 {
+			if err := m.Save(s); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if err := os.MkdirAll(m.dir, 0o700); err != nil {
+		return added, err
+	}
+	return added, os.WriteFile(mark, []byte("1\n"), 0o600)
+}
+
 // ---- gerdr 自己的 skill ----
 
 func (m *Manager) Skills() []Skill {

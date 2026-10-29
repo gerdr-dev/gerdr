@@ -1,13 +1,15 @@
-import { Check, Download, Loader2, Pencil, Plus, Trash2, X } from "lucide-react";
+import { Check, Download, Loader2, Pencil, Plus, X } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { AgentIcon } from "@/components/AgentIcon";
+import { ConfirmDelete } from "@/components/ConfirmDelete";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { api } from "@/lib/api";
 import { setConfig, useStore, type LLMConfig, type LLMModel, type LLMProvider } from "@/lib/store";
 
-// 设置 → Agent 里「Gerdr Agent 的模型」：gerdr 自带的 agent 直接调的模型接口（OpenAI 兼容）。
+// 设置 → Agent 里「引擎」那块的 Native 服务商：native 引擎直接调的模型接口（OpenAI 兼容）。用 native 引擎的 agent 可以只挑几家（AgentDef.providers）。
 // 存进 config.json 的 llm（后端 native/config.go 读，每轮现取：改了下一轮就用新的）。配了至少一个模型，新建会话时才出现 Gerdr Agent。
 // 模型只填 id，协议（GPT 走 Responses、别的走 Chat Completions）、思考档位、上下文窗口后端按 id 猜；猜错了在 config.json 里给模型写 api / efforts / window。
 
@@ -54,35 +56,39 @@ export function LLMSettings() {
   const [isNew, setIsNew] = useState(false);
   const save = (next: LLMConfig) => setConfig({ llm: next });
 
-  const all = providers.flatMap((p) =>
-    p.models.map((m) => ({ key: `${p.id}/${m.id}`, label: `${m.name || m.id}${providers.length > 1 ? ` · ${p.name || p.id}` : ""}` })),
-  );
-  const def = llm.defaultModel && all.some((m) => m.key === llm.defaultModel) ? llm.defaultModel : all[0]?.key;
-
   const onSave = () => {
     if (!edit) return;
     try {
       const p = fromDraft(edit);
       const list = isNew ? [...providers, p] : providers.map((x) => (x.id === p.id ? p : x));
       save({ ...llm, providers: list });
-      toast.success(isNew && p.models.length ? "加好了：新建会话时选「Gerdr Agent」" : "已保存（下一轮就用新的）");
+      toast.success(isNew && p.models.length ? "加好了：Gerdr Agent 和用 Native 引擎的 Agent 都能用它" : "已保存（下一轮就用新的）");
       setEdit(null);
     } catch (e: any) {
       toast.error(e.message);
     }
   };
 
+  // 和上面 Claude Code / Codex 两张引擎卡片一个样子：图标 + 名字 + 一句话 + 右边状态；服务商列在卡片里面
   return (
-    <div className="space-y-3 text-[13px]">
-      <div>
-        <div className="font-medium">Gerdr Agent 的模型</div>
-        <div className="text-[12px] text-muted-foreground">
-          gerdr 自带的 agent，不经过 Claude Code / Codex，直接调 OpenAI 兼容的接口（GPT、DeepSeek、各家网关）。配了模型，新建会话时就能选它。
-        </div>
+    <div className="space-y-2.5 rounded-md border px-3 py-2 text-[13px]">
+      <div className="flex items-center gap-2">
+        <AgentIcon agent="native" className="size-4" />
+        <span className="font-medium">Native</span>
+        <span className="min-w-0 truncate text-[12px] text-muted-foreground">Gerdr 自己的引擎，直接调下面这些模型服务商（OpenAI 兼容接口）</span>
+        <span className="flex-1" />
+        {providers.some((p) => p.models.length) ? (
+          <span className="shrink-0 text-[12px] text-ok">配了 {providers.length} 家</span>
+        ) : (
+          <span className="shrink-0 text-[12px] text-bad">还没配服务商</span>
+        )}
+      </div>
+      <div className="text-[12px] text-muted-foreground">
+        Gerdr Agent 用全部服务商；用 Native 引擎新建的 Agent 可以只挑其中几家。默认模型在各个 Agent 的「新会话默认」里设。
       </div>
 
       {providers.map((p) => (
-        <div key={p.id} className="space-y-1.5 rounded-md border px-3 py-2">
+        <div key={p.id} className="space-y-1.5 rounded-md bg-muted/40 px-3 py-2">
           <div className="flex items-center gap-2">
             <span className="font-medium">{p.name || p.id}</span>
             <span className="truncate font-mono text-[12px] text-muted-foreground">{p.baseUrl}</span>
@@ -101,15 +107,10 @@ export function LLMSettings() {
             >
               <Pencil className="size-3.5" />
             </Button>
-            <Button
-              size="icon"
-              variant="ghost"
-              className="size-7"
-              title="删除"
-              onClick={() => save({ ...llm, providers: providers.filter((x) => x.id !== p.id) })}
-            >
-              <Trash2 className="size-3.5" />
-            </Button>
+            <ConfirmDelete
+              title="删除（用它的 Agent 会没有可用的模型）"
+              onConfirm={() => save({ ...llm, providers: providers.filter((x) => x.id !== p.id) })}
+            />
           </div>
           <div className="flex flex-wrap gap-1">
             {p.models.length ? (
@@ -124,24 +125,6 @@ export function LLMSettings() {
           </div>
         </div>
       ))}
-
-      {all.length > 1 && (
-        <div className="flex items-center gap-3">
-          <span className="text-muted-foreground">新会话默认用</span>
-          <Select value={def} onValueChange={(v) => save({ ...llm, defaultModel: v })}>
-            <SelectTrigger size="sm" className="w-72">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {all.map((m) => (
-                <SelectItem key={m.key} value={m.key}>
-                  {m.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      )}
 
       {!edit && (
         <Button
@@ -263,7 +246,7 @@ function Editor({
               onChange={(e) => set({ apiKey: e.target.value })}
               onKeyDown={stop}
               className="h-8 font-mono text-[12px]"
-              placeholder="sk-…（存在跑 gerdr 的电脑的 config.json 里）"
+              placeholder="sk-…（存在跑 Gerdr 的电脑的 config.json 里）"
             />
           ) : (
             <Input
@@ -271,7 +254,7 @@ function Editor({
               onChange={(e) => set({ apiKeyEnv: e.target.value })}
               onKeyDown={stop}
               className="h-8 font-mono text-[12px]"
-              placeholder="环境变量名，比如 DEEPSEEK_API_KEY（gerdr 启动时的环境里要有）"
+              placeholder="环境变量名，比如 DEEPSEEK_API_KEY（Gerdr 启动时的环境里要有）"
             />
           )}
         </div>

@@ -1,7 +1,6 @@
 import { Download, Pencil, Plus, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { NativeMCP } from "@/components/NativeMCP";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -12,9 +11,9 @@ import type { ExtSettings, ExtSkill, ExtSource, ExtView, MCPServer } from "@/lib
 // 设置 →「Skill」「MCP」两页。gerdr 自己那份在这里增删改；agent 自己的只读，能导入。
 
 const SOURCES: { v: ExtSource; label: string }[] = [
-  { v: "agent", label: "只用 agent 自己的" },
-  { v: "both", label: "agent 的 + gerdr 的" },
-  { v: "gerdr", label: "只用 gerdr 的" },
+  { v: "agent", label: "只用 Agent 自己的" },
+  { v: "both", label: "Agent 的 + Gerdr 的" },
+  { v: "gerdr", label: "只用 Gerdr 的" },
 ];
 
 const stop = (e: React.KeyboardEvent) => e.stopPropagation();
@@ -75,12 +74,12 @@ const Empty = ({ children }: { children: React.ReactNode }) => <div className="p
 
 const TEMPLATE = (name: string) => `---
 name: ${name}
-description: 一句话说清楚什么时候该用这个 skill（agent 靠它判断）
+description: 一句话说清楚什么时候该用这个 skill（Agent 靠它判断）
 ---
 
 # ${name}
 
-在这里写给 agent 的说明。
+在这里写给 Agent 的说明。
 `;
 
 export function SkillSettings({ open }: { open: boolean }) {
@@ -131,20 +130,20 @@ export function SkillSettings({ open }: { open: boolean }) {
         <div>
           <div className="text-[13px]">用哪些 skill</div>
           <div className="text-[12px] text-muted-foreground">
-            改完从每个会话的下一轮起生效。Gerdr Agent 没有自己的 skill 目录，「agent 自己的」对它来说就是 Claude Code 的那些（~/.claude/skills、项目的
-            .claude/skills）
+            「Agent 自己的」是 Claude Code / Codex 各自的 skill 目录。Native 引擎没有自己的目录，它的「Agent 自己的」用的是 Claude Code 那些
+            （~/.claude/skills、项目的 .claude/skills）。改完从每个会话的下一轮起生效。
           </div>
         </div>
         <SourcePicker value={s.skillSource} onChange={(x) => save({ skillSource: x })} />
       </div>
       {s.skillSource === "gerdr" && (
         <div className="rounded-md bg-muted/60 p-2.5 text-[12px] text-muted-foreground">
-          Claude 插件里的 skill 没法单独关，所以「只用 gerdr 的」会把 Claude 的插件整个关掉（插件带的 hook、MCP 也一起没了）。想留某个插件里的 skill，把它导入到
-          gerdr。
+          Claude 插件里的 skill 没法单独关，所以「只用 Gerdr 的」会把 Claude 的插件整个关掉（插件带的 hook、MCP 也一起没了）。想留某个插件里的 skill，把它导入到
+          Gerdr。
         </div>
       )}
 
-      <Section title="gerdr 内置" hint="不管上面选什么都会给 agent：gerdr 让它在多个会话之间协作、按你说的改这个界面">
+      <Section title="Gerdr 内置" hint="不管上面选什么都会给 Agent：Gerdr 让它在多个会话之间协作、按你说的改这个界面">
         {v.builtin.map((sk) => (
           <div key={sk.name} className="flex items-center gap-2 px-3 py-1.5">
             <Switch checked={sk.enabled} onCheckedChange={(on) => toggle(sk.name, on)} />
@@ -170,8 +169,8 @@ export function SkillSettings({ open }: { open: boolean }) {
         />
       ) : (
         <Section
-          title="gerdr 的 skill"
-          hint={s.skillSource === "agent" ? "现在没在用（上面选的是只用 agent 自己的）" : "每个 skill 一个目录，在 ~/.gerdr/skills 下"}
+          title="Gerdr 的 skill"
+          hint={s.skillSource === "agent" ? "现在没在用（上面选的是只用 Agent 自己的）" : "每个 skill 一个目录，在 ~/.gerdr/skills 下"}
           action={
             <Button size="sm" variant="outline" className="h-7 text-[12px]" onClick={() => setEdit({ name: "", content: "", isNew: true })}>
               <Plus className="size-3.5" />
@@ -179,7 +178,7 @@ export function SkillSettings({ open }: { open: boolean }) {
             </Button>
           }
         >
-          {v.skills.length === 0 && <Empty>还没有。新建一个，或者从下面 agent 自己的里导入。</Empty>}
+          {v.skills.length === 0 && <Empty>还没有。新建一个，或者从下面 Agent 自己的里导入。</Empty>}
           {v.skills.map((sk) => (
             <div key={sk.name} className="flex items-center gap-2 px-3 py-1.5">
               <Switch checked={sk.enabled} onCheckedChange={(on) => toggle(sk.name, on)} />
@@ -319,18 +318,17 @@ export function MCPSettings({ open }: { open: boolean }) {
         <div>
           <div className="text-[13px]">用哪些 MCP</div>
           <div className="text-[12px] text-muted-foreground">
-            改完从每个会话的下一轮起生效。Gerdr Agent 没有自己的 MCP 配置，「agent 自己的」对它来说就是 Claude Code 配的那些（~/.claude.json、项目的
-            .mcp.json）；它不支持要 OAuth 登录的服务器
+            只管 Claude Code 和 Codex：「Agent 自己的」是它们各自配的那份（~/.claude.json、项目的 .mcp.json / ~/.codex/config.toml）。Native
+            引擎没有自己的配置，一律只用下面「Gerdr 的 MCP」（不支持要 OAuth 登录的服务器）。改完从每个会话的下一轮起生效。
           </div>
         </div>
         <SourcePicker value={s.mcpSource} onChange={(x) => save({ mcpSource: x })} />
       </div>
       {s.mcpSource === "gerdr" && (
         <div className="rounded-md bg-muted/60 p-2.5 text-[12px] text-muted-foreground">
-          只用 gerdr 的：Claude 的 claude.ai 账号连接器、Codex 插件自带的 MCP 不受这里控制。Codex 不支持 SSE，SSE 的只给 Claude。
+          只用 Gerdr 的：Claude 的 claude.ai 账号连接器、Codex 插件自带的 MCP 不受这里控制。Codex 不支持 SSE，SSE 的只给 Claude。
         </div>
       )}
-      <NativeMCP deps={JSON.stringify([s.mcpSource, s.mcp])} />
 
       {edit ? (
         <MCPEditor
@@ -346,8 +344,12 @@ export function MCPSettings({ open }: { open: boolean }) {
         />
       ) : (
         <Section
-          title="gerdr 的 MCP"
-          hint={s.mcpSource === "agent" ? "现在没在用（上面选的是只用 agent 自己的）" : "存在 ~/.gerdr/ext.json"}
+          title="Gerdr 的 MCP"
+          hint={
+            s.mcpSource === "agent"
+              ? "Native 引擎用这些；Claude Code / Codex 现在不用（上面选的是只用 Agent 自己的）。存在 ~/.gerdr/ext.json"
+              : "Native 引擎用这些，Claude Code / Codex 按上面的来源也用。存在 ~/.gerdr/ext.json"
+          }
           action={
             <Button size="sm" variant="outline" className="h-7 text-[12px]" onClick={() => setEdit({ index: -1, server: blankServer() })}>
               <Plus className="size-3.5" />
@@ -355,7 +357,7 @@ export function MCPSettings({ open }: { open: boolean }) {
             </Button>
           }
         >
-          {s.mcp.length === 0 && <Empty>还没有。添加一个，或者从下面 agent 自己的里导入。</Empty>}
+          {s.mcp.length === 0 && <Empty>还没有。添加一个，或者从下面 Agent 自己的里导入。</Empty>}
           {s.mcp.map((m, i) => (
             <div key={m.name} className="flex items-center gap-2 px-3 py-1.5">
               <Switch checked={m.enabled} onCheckedChange={(on) => put(s.mcp.map((x, j) => (j === i ? { ...x, enabled: on } : x)))} />

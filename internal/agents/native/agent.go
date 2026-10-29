@@ -94,7 +94,7 @@ func (a *Agent) session(id acp.SessionId) (*session, error) {
 // Available：配置里有没有能用的模型（hub 的 agent 列表据此显示能不能用）。
 func Available(c Config) error {
 	if len(c.models()) == 0 {
-		return fmt.Errorf("还没配置模型：在 config.json 的 llm.providers 里加一个服务商（baseUrl、apiKey、models）")
+		return fmt.Errorf("没有可用的模型：在设置 → Agent 的「引擎 → Native」里加一个模型服务商")
 	}
 	return nil
 }
@@ -606,13 +606,6 @@ func (a *Agent) HandleExtensionMethod(ctx context.Context, method string, params
 			return nil, fmt.Errorf("no running task %s", p.TaskId)
 		}
 		return map[string]any{}, nil
-	case acpx.MethodMCPStatus:
-		var p struct {
-			Cwd   string `json:"cwd"`
-			Probe bool   `json:"probe"`
-		}
-		_ = json.Unmarshal(params, &p)
-		return map[string]any{"servers": a.mcpStatus(ctx, p.Cwd, p.Probe)}, nil
 	case acpx.MethodTaskBackground:
 		var p acpx.TaskBackgroundRequest
 		if err := json.Unmarshal(params, &p); err != nil {

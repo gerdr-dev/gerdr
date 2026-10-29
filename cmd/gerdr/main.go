@@ -230,6 +230,11 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 		return c.Agents
 	}
 	em := ext.New(env.Dir)
+	if added, err := em.MigrateNativeMCP(); err != nil {
+		log.Warn("migrate native mcp", "err", err)
+	} else if len(added) > 0 {
+		log.Info("Native 引擎借用的 Claude Code MCP 已导入到 Gerdr 的 MCP", "servers", added)
+	}
 	// config.json 的 llm：native agent 的模型（每轮现取，改了下一轮就生效）
 	cfgLLM := func() native.Config {
 		var c struct {

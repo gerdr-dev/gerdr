@@ -95,3 +95,26 @@ func TestClaudeArgsScoped(t *testing.T) {
 		t.Fatalf("没限定不该 strict：%v", args)
 	}
 }
+
+// 以前 Native 借着用的 Claude Code MCP，升级后导入到 Gerdr 那份一次；已有的同名不动，第二次不再导。
+func TestMigrateNativeMCP(t *testing.T) {
+	h := t.TempDir()
+	t.Setenv("HOME", h)
+	_ = os.WriteFile(filepath.Join(h, ".claude.json"), []byte(`{"mcpServers":{"okr":{"type":"http","url":"https://x/mcp"},"mine":{"command":"y"}}}`), 0o600)
+	m := New(t.TempDir())
+	st := m.Settings()
+	st.MCP = []MCPServer{{Name: "mine", Command: "keep", Enabled: false}}
+	_ = m.Save(st)
+	added, err := m.MigrateNativeMCP()
+	if err != nil || !slices.Equal(added, []string{"okr"}) {
+		t.Fatalf("应当只导入 okr：%v %v", added, err)
+	}
+	got := m.Settings().MCP
+	if len(got) != 2 || got[0].Command != "keep" || got[1].Name != "okr" || !got[1].Enabled || got[1].Type != "http" {
+		t.Fatalf("导入结果不对：%+v", got)
+	}
+	_ = os.WriteFile(filepath.Join(h, ".claude.json"), []byte(`{"mcpServers":{"later":{"command":"z"}}}`), 0o600)
+	if added, _ := m.MigrateNativeMCP(); len(added) != 0 {
+		t.Fatalf("只做一次：%v", added)
+	}
+}

@@ -46,7 +46,7 @@ export type LLMModel = { id: string; name?: string; api?: "chat" | "responses"; 
 export type LLMProvider = { id: string; name?: string; baseUrl: string; apiKey?: string; apiKeyEnv?: string; models: LLMModel[] };
 export type LLMConfig = { providers?: LLMProvider[]; defaultModel?: string };
 
-/** config.json 里的 agents：角色 / 变体（base = claude / codex / native），或者外部 ACP agent（command）。
+/** config.json 里的 agents：agent = 一个引擎（base = claude / codex / native，或者外部 ACP agent 的 command）+ 自己的配置。
  *  prompt 是追加的系统提示；skills / mcp 是只给的那几个（按名字），不写 = 照全局设置，空数组 = 一个都不给（后端 hub.AgentDef）。 */
 export type AgentDef = {
   id: string;
@@ -59,6 +59,8 @@ export type AgentDef = {
   prompt?: string;
   skills?: string[];
   mcp?: string[];
+  /** 引擎是 native 时只用这几家模型服务商（llm.providers 的 id）；不写 = 全部 */
+  providers?: string[];
 };
 
 export const DEFAULT_CONFIG: Config = {

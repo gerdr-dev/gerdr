@@ -13,6 +13,8 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+
+	"github.com/gerdr-dev/gerdr/internal/ext"
 )
 
 // 测试二进制自己当 stdio MCP 服务器：FAKE_MCP=1 时 TestMain 直接跑服务器。
@@ -62,10 +64,32 @@ func mcpScript(tool string) func(n int, msgs []any) reply {
 	}
 }
 
-func TestMCPStdio(t *testing.T) {
+// useMCP：Native 引擎只用 Gerdr 那份 MCP（ext.json），给测试的 agent 配一份。
+func useMCP(t *testing.T, e *env, servers ...ext.MCPServer) {
+	t.Helper()
+	m := ext.New(t.TempDir())
+	st := m.Settings()
+	st.MCP = servers
+	if err := m.Save(st); err != nil {
+		t.Fatal(err)
+	}
+	e.ag.ext = m
+}
+
+// 以前「Agent 自己的」对 Native 来说是借 Claude Code 的：现在项目里的 .mcp.json、~/.claude.json 都不该被它用上。
+func TestMCPNotBorrowedFromClaude(t *testing.T) {
 	e := setup(t, mcpScript("mcp__fake__echo"))
 	cfg, _ := json.Marshal(map[string]any{"mcpServers": map[string]any{"fake": map[string]any{"command": os.Args[0], "env": map[string]string{"FAKE_MCP": "1"}}}})
 	os.WriteFile(filepath.Join(e.cwd, ".mcp.json"), cfg, 0o644)
+	e.ag.ext = ext.New(t.TempDir())
+	if got := resolveMCP(e.ag.ext, e.cwd); len(got) != 0 {
+		t.Fatalf("不该借 Claude Code 的 MCP：%v", got)
+	}
+}
+
+func TestMCPStdio(t *testing.T) {
+	e := setup(t, mcpScript("mcp__fake__echo"))
+	useMCP(t, e, ext.MCPServer{Name: "fake", Command: os.Args[0], Env: map[string]string{"FAKE_MCP": "1"}, Enabled: true})
 	sid := e.newSession(modeDefault) // echo 标了只读：默认模式也不该来问
 	if _, err := e.prompt(sid, uuid.NewString(), "use it"); err != nil {
 		t.Fatal(err)
@@ -106,8 +130,7 @@ func TestMCPHTTP(t *testing.T) {
 	}))
 	defer srv.Close()
 	e := setup(t, mcpScript("mcp__web__echo"))
-	cfg, _ := json.Marshal(map[string]any{"mcpServers": map[string]any{"web": map[string]any{"type": "http", "url": srv.URL}}})
-	os.WriteFile(filepath.Join(e.cwd, ".mcp.json"), cfg, 0o644)
+	useMCP(t, e, ext.MCPServer{Name: "web", Type: "http", URL: srv.URL, Enabled: true})
 	sid := e.newSession(modeBypass)
 	if _, err := e.prompt(sid, uuid.NewString(), "use it"); err != nil {
 		t.Fatal(err)

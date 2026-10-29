@@ -46,6 +46,8 @@ type AgentDef struct {
 	Args    []string          `json:"args,omitempty"`    // 变体：追加的命令行参数
 	Env     map[string]string `json:"env,omitempty"`     // 变体：环境变量
 	Prompt  string            `json:"prompt,omitempty"`  // 变体：追加的系统提示
+	// Providers：引擎是 native 时只用这几个模型服务商（config.json llm.providers 的 id）；空 = 全部。
+	Providers []string `json:"providers,omitempty"`
 	// Skills / MCP：只给这几个（按名字）。不写 = 照全局设置；写了空列表 = 一个都不给。
 	Skills []string `json:"skills"`
 	MCP    []string `json:"mcp"`
@@ -251,7 +253,12 @@ func (h *Hub) Agents() []map[string]any {
 		case a.Base == "codex":
 			m["available"], m["error"] = xerr == nil, errStr(xerr)
 		case a.Base == "native":
-			m["available"], m["error"] = nerr == nil, errStr(nerr)
+			err := native.Available(h.llm().Only(a.Providers))
+			if err != nil && len(a.Providers) > 0 && len(h.llm().Only(a.Providers).Providers) == 0 {
+				// 勾的服务商都被删了（比 Available 那句「去加一个」更说得清）
+				err = fmt.Errorf("勾的服务商（%s）已经删了：编辑它重新勾一个", strings.Join(a.Providers, "、"))
+			}
+			m["available"], m["error"] = err == nil, errStr(err)
 		}
 		out = append(out, m)
 	}
@@ -369,7 +376,7 @@ func (h *Hub) startHost(ctx context.Context, agent string) (*agenthost.Host, err
 		return agenthost.StartInProc(sctx, codex.NewWith(log, em, codex.Options{Bin: def.Bin, Args: def.Args, Env: def.envList(), Prompt: def.Prompt}), handler, log)
 	case "native":
 		// 基于 Gerdr Agent 的角色和原版共用会话目录（id 是 uuid，撞不了）和记忆：记忆是人的偏好、项目的约定，不分角色
-		return agenthost.StartInProc(sctx, native.New(log, native.Options{Dir: filepath.Join(h.opt.Dir, "native"), Ext: em, Config: h.llm, Prompt: def.Prompt}), handler, log)
+		return agenthost.StartInProc(sctx, native.New(log, native.Options{Dir: filepath.Join(h.opt.Dir, "native"), Ext: em, Config: func() native.Config { return h.llm().Only(def.Providers) }, Prompt: def.Prompt}), handler, log)
 	}
 	home, _ := os.UserHomeDir()
 	return agenthost.StartProcess(sctx, def.Command, home, handler, log)

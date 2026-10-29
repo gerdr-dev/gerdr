@@ -591,3 +591,24 @@ func TestBackgroundSubagent(t *testing.T) {
 		return strings.Contains(lastUser(e.llm.request(-1)["messages"].([]any)), "sub report 123")
 	})
 }
+
+// 一个 agent 只用某家服务商：模型列表只剩那家的，默认模型不在里面就退回那家的第一个。
+func TestConfigOnly(t *testing.T) {
+	c := Config{Providers: []Provider{
+		{ID: "a", BaseURL: "http://a", Models: []Model{{ID: "m1"}}},
+		{ID: "b", BaseURL: "http://b", Models: []Model{{ID: "m2"}, {ID: "m3"}}},
+	}, DefaultModel: "a/m1"}
+	if n := len(c.Only(nil).models()); n != 3 {
+		t.Fatalf("不限：%d", n)
+	}
+	o := c.Only([]string{"b"})
+	if ms := o.models(); len(ms) != 2 || ms[0].Key != "b/m2" {
+		t.Fatalf("只留 b：%v", ms)
+	}
+	if r, _ := o.find(""); r.Key != "b/m2" {
+		t.Fatalf("默认模型不在 b 里应当退回 b 的第一个：%s", r.Key)
+	}
+	if len(c.Providers) != 2 {
+		t.Fatal("Only 改了原来的配置")
+	}
+}

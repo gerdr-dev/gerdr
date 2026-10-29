@@ -1,29 +1,34 @@
-import { Copy, Pencil, Plus, Trash2 } from "lucide-react";
+import { Copy, Pencil, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { AgentIcon } from "@/components/AgentIcon";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ConfirmDelete } from "@/components/ConfirmDelete";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { LLMSettings } from "@/components/LLMSettings";
 import { api } from "@/lib/api";
 import { MODE, defaultsOf, flatOptions, setDefaults, withoutDefaults } from "@/lib/defaults";
-import { setConfig, useStore, type AgentDef } from "@/lib/store";
+import { get, setConfig, useStore, type AgentDef, type LLMProvider } from "@/lib/store";
 import type { AgentInfo, ExtView } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-// 设置 →「Agent」。除了内置的 Claude Code / Codex / Gerdr Agent，可以再加：
-//   - 角色：基于其中一个，带一段追加的系统提示、只给挑出来的 skill / MCP、自己的新会话默认（模式 / 模型 / 思考强度）——
-//     比如「代码审查」只读、只开 GitHub 的 MCP；新建会话时和内置的并排可选；
-//   - 另一个账号：同一个 claude / codex，换一套环境变量（CLAUDE_CONFIG_DIR / CODEX_HOME）—— 其实也是角色，只是填的是「高级」那几项；
-//   - 外部 ACP agent：自己会说 ACP 的程序（gemini --experimental-acp 这种）。
+// 设置 →「Agent」。两个概念（用户定的）：
+//   - 引擎：真正干活的那个 —— Claude Code、Codex、Native（gerdr 自己直接调模型接口，用下面配的模型服务商，可以有好几家）；
+//   - agent：新建会话时选的那个 = 一个引擎 + 自己的提示词、skill / MCP、新会话默认（模式 / 模型 / 思考强度）。
+//     内置三个（Claude Code / Codex / Gerdr Agent）各用一个引擎、什么都不限；可以再建，比如两个都用 Native、各走一家服务商
+//     （providers），或者「代码审查」只读、只开 GitHub 的 MCP。换账号（CLAUDE_CONFIG_DIR / CODEX_HOME）是「高级」里那几项；
+//     外部 ACP agent（gemini --experimental-acp 这种）在「引擎」里选。
+// 入口只有一个「新建」，新建和编辑都在弹窗里（用户要的：别一排按钮）。
 // 存进 config.json 的 agents（后端 hub.AgentDef，热换：改了的那个正在跑的进程收掉，会话下一轮按新配置接上）；
 // 新会话默认存 defaultModes / defaultConfig（lib/defaults.ts），内置的三个也能设。
 
 const stop = (e: React.KeyboardEvent) => e.stopPropagation();
 const NONE: AgentDef[] = []; // 选择器里别 `?? []`：每次一个新数组，zustand 认成变了，无限重渲染
 const UNSET = "__unset"; // Select 的值不能是空串：「不指定」用它
+const NO_PROVIDERS: LLMProvider[] = [];
 
 type Kind = "claude" | "codex" | "native" | "command";
 type Draft = {
@@ -39,9 +44,10 @@ type Draft = {
   skills: string[] | null; // null = 照全局设置
   mcp: string[] | null;
   defaults: Record<string, string>; // MODE / 配置项 id → 值
+  providers: string[]; // 引擎是 native 时只用这几家服务商；空 = 全部
 };
 
-const KIND_NAME: Record<Kind, string> = { claude: "Claude Code", codex: "Codex", native: "Gerdr Agent", command: "外部 ACP agent" };
+const KIND_NAME: Record<Kind, string> = { claude: "Claude Code", codex: "Codex", native: "Native", command: "外部 ACP" };
 
 const toDraft = (d: AgentDef): Draft => ({
   id: d.id,
@@ -57,6 +63,8 @@ const toDraft = (d: AgentDef): Draft => ({
   skills: d.skills ?? null,
   mcp: d.mcp ?? null,
   defaults: defaultsOf(d.id),
+  // 以前存的「不写 = 全部」：打开编辑时摊成全部勾上（现在至少要勾一个，后端仍把空当全部，兼容老配置）
+  providers: d.providers?.length ? d.providers : d.base === "native" ? allProviders() : [],
 });
 
 function fromDraft(d: Draft): AgentDef {
@@ -71,10 +79,11 @@ function fromDraft(d: Draft): AgentDef {
   const words = (s: string) => s.split(/\s+/).filter(Boolean);
   if (!d.name.trim()) throw new Error("起个名字");
   if (d.kind === "command") {
-    if (!d.command.trim()) throw new Error("外部 agent 要填启动命令");
+    if (!d.command.trim()) throw new Error("外部 Agent 要填启动命令");
     return { id: d.id, name: d.name.trim(), command: words(d.command), env: Object.keys(env).length ? env : undefined };
   }
-  const native = d.kind === "native"; // Gerdr Agent 没有可执行文件，启动参数 / 环境变量用不上
+  const native = d.kind === "native"; // Native 引擎没有可执行文件，启动参数 / 环境变量用不上
+  if (native && !d.providers.length) throw new Error("至少勾一个服务商");
   return {
     id: d.id,
     name: d.name.trim(),
@@ -85,8 +94,11 @@ function fromDraft(d: Draft): AgentDef {
     prompt: d.prompt.trim() || undefined,
     skills: d.skills ?? undefined,
     mcp: d.mcp ?? undefined,
+    providers: native ? d.providers : undefined,
   };
 }
+
+const allProviders = () => (get().config.llm?.providers ?? []).map((p) => p.id);
 
 function newId(name: string, taken: Set<string>) {
   const base =
@@ -117,6 +129,7 @@ function defaultsSummary(agents: AgentInfo[], id: string, base: string, d: Recor
 export function AgentSettings() {
   const agents = useStore((s) => s.agents);
   const defs = useStore((s) => s.config.agents ?? NONE);
+  const providers = useStore((s) => s.config.llm?.providers) ?? NO_PROVIDERS;
   // 订阅默认值：在输入框下拉里「设为新会话的默认」之后，这一页的摘要跟着变
   useStore((s) => s.config.defaultModes);
   useStore((s) => s.config.defaultConfig);
@@ -137,19 +150,16 @@ export function AgentSettings() {
     skills: null,
     mcp: null,
     defaults: {},
+    providers: [],
   });
+  // 打开时的样子：改过了（和它不一样）就不许点弹窗外面关掉，免得误点把填了半天的丢了（用户要的）；关闭按钮、取消、Esc 照常
+  const [orig, setOrig] = useState("");
   const open = (d: Draft, fresh: boolean) => {
     setIsNew(fresh);
     setEdit(d);
+    setOrig(JSON.stringify(d));
   };
-  const addRole = () => open(blank("claude", "新角色"), true);
-  const addAccount = (kind: "claude" | "codex") => {
-    const n = defs.filter((d) => d.base === kind).length + 2;
-    const name = kind === "claude" ? `Claude ${n}` : `Codex ${n}`;
-    const d = blank(kind, name);
-    d.env = kind === "claude" ? `CLAUDE_CONFIG_DIR=~/.${d.id}` : `CODEX_HOME=~/.${d.id}`;
-    open(d, true);
-  };
+  const dirty = !!edit && JSON.stringify(edit) !== orig;
   const save = () => {
     if (!edit) return;
     try {
@@ -173,19 +183,30 @@ export function AgentSettings() {
 
   return (
     <div className="space-y-4 text-[13px]">
+      <div>
+        <div className="font-medium">Agent</div>
+        <div className="text-[12px] text-muted-foreground">
+          新建会话时选的就是它们：一个引擎，加上自己的提示词、Skill / MCP、新会话默认。同一个引擎可以建好几个。
+        </div>
+      </div>
       <div className="space-y-1.5">
         {agents.map((a) => {
           const def = defs.find((d) => d.id === a.id);
           const base = def?.base ?? a.id;
           const summary = defaultsSummary(agents, a.id, base, defaultsOf(a.id));
-          const chips = def && def.base ? roleChips(def) : [];
+          const chips = def && def.base ? roleChips(def, providers) : [];
           return (
             <div key={a.id} className="rounded-md border px-3 py-2">
-              <div className="flex items-center gap-2">
+              {/* 第一行只放短的（名字、引擎、可用没有），都不换行；不可用的原因放到下面一行 —— 原来原因塞在这一行里，
+                  一长就把名字和引擎挤成两三行（用户报的） */}
+              <div className="flex items-center gap-2 whitespace-nowrap">
                 <AgentIcon agent={a.id} className="size-4" />
-                <span className="font-medium">{a.name}</span>
-                <span className="text-[12px] text-muted-foreground">{!def ? "内置" : def.base ? `基于 ${KIND_NAME[def.base]}` : "外部 ACP"}</span>
-                {a.available ? <span className="text-[12px] text-ok">可用</span> : <span className="truncate text-[12px] text-bad">{a.error || "不可用"}</span>}
+                <span className="min-w-0 truncate font-medium">{a.name}</span>
+                <span className="shrink-0 text-[12px] text-muted-foreground">
+                  引擎 {KIND_NAME[(def ? (def.base ?? "command") : a.id) as Kind]}
+                  {!def && " · 内置"}
+                </span>
+                {a.available ? <span className="shrink-0 text-[12px] text-ok">可用</span> : <span className="shrink-0 text-[12px] text-bad">不可用</span>}
                 <span className="flex-1" />
                 <Button
                   size="icon"
@@ -197,17 +218,13 @@ export function AgentSettings() {
                   <Pencil className="size-3.5" />
                 </Button>
                 {def && (
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="size-7"
+                  <ConfirmDelete
                     title="删除（已有的会话留着，只是没法再接着聊）"
-                    onClick={() => setConfig({ agents: defs.filter((x) => x.id !== def.id), ...withoutDefaults(def.id) })}
-                  >
-                    <Trash2 className="size-3.5" />
-                  </Button>
+                    onConfirm={() => setConfig({ agents: defs.filter((x) => x.id !== def.id), ...withoutDefaults(def.id) })}
+                  />
                 )}
               </div>
+              {!a.available && a.error && <div className="mt-1 pl-6 text-[12px] text-bad">{a.error}</div>}
               {(summary || chips.length > 0) && (
                 <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 pl-6 text-[12px] text-muted-foreground">
                   {chips.map((c) => (
@@ -221,45 +238,74 @@ export function AgentSettings() {
         })}
       </div>
 
-      {!edit && (
-        <div className="flex flex-wrap gap-2">
-          <Button size="sm" variant="outline" onClick={addRole}>
-            <Plus className="size-3.5" /> 新建角色
-          </Button>
-          <Button size="sm" variant="ghost" onClick={() => addAccount("claude")}>
-            <Plus className="size-3.5" /> 另一个 Claude 账号
-          </Button>
-          <Button size="sm" variant="ghost" onClick={() => addAccount("codex")}>
-            <Plus className="size-3.5" /> 另一个 Codex 账号
-          </Button>
-          <Button size="sm" variant="ghost" onClick={() => open(blank("command", "Gemini"), true)}>
-            <Plus className="size-3.5" /> 外部 ACP agent
-          </Button>
-        </div>
-      )}
+      {/* 只一个「新建」：换账号、外部 ACP agent 都在弹窗里选「引擎」/ 展开「高级」 */}
+      <Button size="sm" variant="outline" onClick={() => open(blank("claude", "新角色"), true)}>
+        <Plus className="size-3.5" /> 新建
+      </Button>
 
-      {edit && <Editor d={edit} onChange={setEdit} onSave={save} onCancel={() => setEdit(null)} />}
+      {/* 新建和编辑都在弹窗里（叠在设置弹窗上面）：原来展开在列表下面，列表一长就要往下找 */}
+      <Dialog open={!!edit} onOpenChange={(o) => !o && setEdit(null)}>
+        {/* 宽度写成内联样式：界面的 Tailwind 是浏览器里现编的，页面上头一回出现的 class（sm:max-w-2xl）样式要晚一拍才生成，
+            第一次打开时先按没限宽铺满全屏、再缩回来（用户报的），第二次才正常 */}
+        <DialogContent
+          className="max-h-[85vh] overflow-auto text-[13px]"
+          style={{ maxWidth: "min(42rem, calc(100% - 2rem))" }}
+          onInteractOutside={(e) => dirty && e.preventDefault()}
+        >
+          <DialogHeader>
+            <DialogTitle>{!edit ? "" : edit.builtin ? `${edit.name} · 新会话默认` : isNew ? "新建 Agent" : `编辑「${edit.name}」`}</DialogTitle>
+          </DialogHeader>
+          {edit && <Editor d={edit} onChange={setEdit} onSave={save} onCancel={() => setEdit(null)} />}
+        </DialogContent>
+      </Dialog>
 
-      <div className="border-t pt-4">
-        <LLMSettings />
-      </div>
+      <Engines agents={agents} />
     </div>
   );
 }
 
-function roleChips(d: AgentDef) {
+function roleChips(d: AgentDef, providers: LLMProvider[]) {
   const out: string[] = [];
   if (d.prompt) out.push("有提示词");
   if (d.skills) out.push(d.skills.length ? `Skill ${d.skills.length} 个` : "不用 Skill");
   if (d.mcp) out.push(d.mcp.length ? `MCP ${d.mcp.length} 个` : "不用 MCP");
+  if (d.providers?.length) out.push(`服务商 ${d.providers.map((id) => providers.find((p) => p.id === id)?.name || `${id}（已删）`).join("、")}`);
   if (d.env && Object.keys(d.env).length) out.push("自己的环境变量");
   return out;
 }
 
+/** 「引擎」那块：Claude Code / Codex 是本机装的 CLI（账号在它们自己那边登录），Native 用这里配的模型服务商。 */
+function Engines({ agents }: { agents: AgentInfo[] }) {
+  const cli = (id: string, name: string, how: string) => {
+    const a = agents.find((x) => x.id === id);
+    return (
+      <div className="flex items-center gap-2 rounded-md border px-3 py-2">
+        <AgentIcon agent={id} className="size-4" />
+        <span className="font-medium">{name}</span>
+        <span className="text-[12px] text-muted-foreground">{how}</span>
+        <span className="flex-1" />
+        {a?.available ? <span className="text-[12px] text-ok">装了</span> : <span className="truncate text-[12px] text-bad">{a?.error || "没装"}</span>}
+      </div>
+    );
+  };
+  return (
+    <div className="space-y-3 border-t pt-4">
+      <div>
+        <div className="font-medium">引擎</div>
+        <div className="text-[12px] text-muted-foreground">真正干活的那个。Agent 选哪个引擎，会话就跑在哪个上面。</div>
+      </div>
+      <div className="space-y-1.5">
+        {cli("claude", "Claude Code", "本机的 claude 命令，账号在它那边登录")}
+        {cli("codex", "Codex", "本机的 codex 命令，账号在它那边登录")}
+      </div>
+      <LLMSettings />
+    </div>
+  );
+}
+
 function Editor({ d, onChange, onSave, onCancel }: { d: Draft; onChange: (d: Draft) => void; onSave: () => void; onCancel: () => void }) {
   const set = (p: Partial<Draft>) => onChange({ ...d, ...p });
-  const agents = useStore((s) => s.agents);
-  const nativeOK = agents.some((a) => a.id === "native");
+  const providers = useStore((s) => s.config.llm?.providers) ?? NO_PROVIDERS;
   const dir = /^CLAUDE_CONFIG_DIR=(.+)$/m.exec(d.env)?.[1]?.trim();
   const codexHome = /^CODEX_HOME=(.+)$/m.exec(d.env)?.[1]?.trim();
   const login = d.kind === "claude" && dir ? `CLAUDE_CONFIG_DIR=${dir} claude` : d.kind === "codex" && codexHome ? `CODEX_HOME=${codexHome} codex login` : "";
@@ -267,7 +313,7 @@ function Editor({ d, onChange, onSave, onCancel }: { d: Draft; onChange: (d: Dra
   // 「高级」里填过东西（另一个账号）就展开着，不然收起来：大多数角色用不到
   const [adv, setAdv] = useState(!!(d.env || d.bin || d.args) || d.kind === "command");
   return (
-    <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
+    <div className="space-y-3">
       <div className="grid grid-cols-[88px_1fr] items-center gap-x-3 gap-y-2.5">
         <span className="text-muted-foreground">名字</span>
         {d.builtin ? (
@@ -277,18 +323,50 @@ function Editor({ d, onChange, onSave, onCancel }: { d: Draft; onChange: (d: Dra
         )}
         {!d.builtin && (
           <>
-            <span className="text-muted-foreground">基于</span>
-            <Select value={d.kind} onValueChange={(v) => set({ kind: v as Kind })}>
+            <span className="text-muted-foreground">引擎</span>
+            <Select
+              value={d.kind}
+              // 换到 Native 时先把服务商全勾上（至少要勾一个，省得人再去点）
+              onValueChange={(v) => set({ kind: v as Kind, ...(v === "native" && !d.providers.length ? { providers: allProviders() } : {}) })}
+            >
               <SelectTrigger size="sm" className="w-56">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="claude">Claude Code</SelectItem>
                 <SelectItem value="codex">Codex</SelectItem>
-                {(nativeOK || d.kind === "native") && <SelectItem value="native">Gerdr Agent</SelectItem>}
-                <SelectItem value="command">外部 ACP agent</SelectItem>
+                {(providers.length > 0 || d.kind === "native") && <SelectItem value="native">Native</SelectItem>}
+                <SelectItem value="command">外部 ACP Agent</SelectItem>
               </SelectContent>
             </Select>
+          </>
+        )}
+        {d.kind === "native" && !d.builtin && (
+          <>
+            <span className="self-start pt-1 text-muted-foreground">服务商</span>
+            <div className="space-y-1">
+              <div className="flex flex-wrap gap-x-4 gap-y-1">
+                {[
+                  ...providers.map((p) => ({ id: p.id, name: p.name || p.id })),
+                  ...d.providers.filter((id) => !providers.some((p) => p.id === id)).map((id) => ({ id, name: `${id}（已删）` })),
+                ].map((p) => (
+                  <label key={p.id} className="flex cursor-pointer items-center gap-1.5">
+                    <Checkbox
+                      checked={d.providers.includes(p.id)}
+                      onCheckedChange={(on) => {
+                        const next = on ? [...d.providers, p.id] : d.providers.filter((x) => x !== p.id);
+                        // 默认模型不在新的服务商里了就清掉，免得存一个用不上的
+                        const m = d.defaults.model;
+                        const defaults = m && next.length && !next.some((x) => m.startsWith(x + "/")) ? (({ model: _, ...r }) => r)(d.defaults) : d.defaults;
+                        set({ providers: next, defaults });
+                      }}
+                    />
+                    {p.name}
+                  </label>
+                ))}
+              </div>
+              <div className="text-[11px] text-muted-foreground">只用勾上的这几家的模型，至少勾一个。服务商在下面「引擎 → Native」里配。</div>
+            </div>
           </>
         )}
         {role && (
@@ -302,7 +380,7 @@ function Editor({ d, onChange, onSave, onCancel }: { d: Draft; onChange: (d: Dra
                 onKeyDown={stop}
                 placeholder="这个角色是干什么的、要守什么规矩。比如：你是代码审查员，只读代码、不改文件，按严重程度列出问题。"
               />
-              <div className="text-[11px] text-muted-foreground">追加在 agent 自己的系统提示后面（CLAUDE.md / AGENTS.md 照样读）。</div>
+              <div className="text-[11px] text-muted-foreground">追加在 Agent 自己的系统提示后面（CLAUDE.md / AGENTS.md 照样读）。</div>
             </div>
           </>
         )}
@@ -310,7 +388,13 @@ function Editor({ d, onChange, onSave, onCancel }: { d: Draft; onChange: (d: Dra
 
       {role && <ExtPicker kind={d.kind as "claude" | "codex" | "native"} skills={d.skills} mcp={d.mcp} onChange={(p) => set(p)} />}
 
-      <DefaultsEditor id={d.id} base={d.builtin ? d.id : d.kind} value={d.defaults} onChange={(v) => set({ defaults: v })} />
+      <DefaultsEditor
+        id={d.id}
+        base={d.builtin ? d.id : d.kind}
+        providers={d.kind === "native" ? d.providers : undefined}
+        value={d.defaults}
+        onChange={(v) => set({ defaults: v })}
+      />
 
       {!d.builtin && d.kind !== "native" && (
         <div className="space-y-2.5">
@@ -319,7 +403,7 @@ function Editor({ d, onChange, onSave, onCancel }: { d: Draft; onChange: (d: Dra
               {adv ? "▾" : "▸"} 高级：换账号 / 可执行文件 / 启动参数
             </button>
           )}
-          {adv && (
+          {(adv || d.kind === "command") && (
             <div className="grid grid-cols-[88px_1fr] items-center gap-x-3 gap-y-2.5">
               {d.kind === "command" ? (
                 <>
@@ -410,11 +494,13 @@ function candidates(v: ExtView, kind: "claude" | "codex" | "native") {
   const mcp: Cand[] = [];
   const add = (list: Cand[], c: Cand) => !list.some((x) => x.name === c.name) && list.push(c);
   for (const sk of v.builtin) if (sk.enabled) add(skills, { name: sk.name, from: "内置", description: sk.description });
-  if (s.skillSource !== "agent") for (const sk of v.skills) if (sk.enabled) add(skills, { name: sk.name, from: "gerdr", description: sk.description });
+  if (s.skillSource !== "agent") for (const sk of v.skills) if (sk.enabled) add(skills, { name: sk.name, from: "Gerdr", description: sk.description });
   if (s.skillSource !== "gerdr")
     for (const sk of kind === "codex" ? v.agent.codexSkills : v.agent.claudeSkills) add(skills, { name: sk.name, from: own, description: sk.description });
-  if (s.mcpSource !== "agent") for (const m of s.mcp) if (m.enabled) add(mcp, { name: m.name, from: "gerdr" });
-  if (s.mcpSource !== "gerdr") for (const m of kind === "codex" ? v.agent.codexMCP : v.agent.claudeMCP) if (m.enabled) add(mcp, { name: m.name, from: own });
+  // Native 引擎只用 Gerdr 那份 MCP（不看来源、不借 Claude Code 的）；另外两个按来源
+  if (kind === "native" || s.mcpSource !== "agent") for (const m of s.mcp) if (m.enabled) add(mcp, { name: m.name, from: "Gerdr" });
+  if (kind !== "native" && s.mcpSource !== "gerdr")
+    for (const m of kind === "codex" ? v.agent.codexMCP : v.agent.claudeMCP) if (m.enabled) add(mcp, { name: m.name, from: own });
   return { skills, mcp };
 }
 
@@ -459,6 +545,7 @@ function ExtPicker({
         value={mcp}
         onChange={(v) => onChange({ mcp: v })}
         note={kind === "claude" ? "限定之后只给勾上的：插件带的 MCP、claude.ai 账号里连的 connector 都不给。" : undefined}
+        allHint={kind === "native" ? `用「设置 → MCP」里 Gerdr 的 MCP 开着的那些，${c.mcp.length} 个。` : undefined}
       />
     </div>
   );
@@ -471,12 +558,14 @@ function Pick({
   value,
   onChange,
   note,
+  allHint,
 }: {
   label: string;
   items: Cand[];
   value: string[] | null;
   onChange: (v: string[] | null) => void;
   note?: string;
+  allHint?: string; // 「全部」时的说明，不给就是「照设置里的来源」
 }) {
   const limited = value !== null;
   // 存着的名字现在列表里没有了（skill 删了、MCP 改名了）：也列出来，不然勾不掉
@@ -505,9 +594,7 @@ function Pick({
         </div>
       </div>
       {!limited ? (
-        <div className="text-[12px] text-muted-foreground">
-          照「设置 → {label}」里的来源，{items.length} 个。
-        </div>
+        <div className="text-[12px] text-muted-foreground">{allHint ?? `照「设置 → ${label}」里的来源，${items.length} 个。`}</div>
       ) : (
         <div className="max-h-52 space-y-0.5 overflow-auto">
           {items.length + gone.length === 0 && <div className="text-[12px] text-muted-foreground">没有可选的</div>}
@@ -533,20 +620,34 @@ function Pick({
 function DefaultsEditor({
   id,
   base,
+  providers,
   value,
   onChange,
 }: {
   id: string;
   base: string;
+  providers?: string[]; // Native 引擎的 agent：模型只列这几家的（空 = 全部）
   value: Record<string, string>;
   onChange: (v: Record<string, string>) => void;
 }) {
   const agents = useStore((s) => s.agents);
+  const llm = useStore((s) => s.config.llm);
   const o = optionsOf(agents, id, base);
   const rows: { key: string; label: string; options: { value: string; name: string }[] }[] = [];
   if (o?.modes?.availableModes.length) rows.push({ key: MODE, label: "模式", options: o.modes.availableModes.map((m) => ({ value: m.id, name: m.name })) });
   for (const c of o?.config ?? [])
     rows.push({ key: c.id, label: c.id === "model" ? "模型" : c.id === "effort" ? "思考强度" : c.name, options: flatOptions(c) });
+  if (base === "native") {
+    // Native 的模型直接按配置里的服务商列（不靠上次报的那份：那份是全部服务商的，换了勾选也不跟着变）
+    const ps = (llm?.providers ?? []).filter((p) => !providers?.length || providers.includes(p.id));
+    const models = ps.flatMap((p) =>
+      p.models.map((m) => ({ value: `${p.id}/${m.id}`, name: `${m.name || m.id}${ps.length > 1 ? ` · ${p.name || p.id}` : ""}` })),
+    );
+    const row = { key: "model", label: "模型", options: models };
+    const i = rows.findIndex((r) => r.key === "model");
+    if (i >= 0) rows[i] = row;
+    else if (models.length) rows.push(row);
+  }
   const put = (k: string, v: string) => {
     const next = { ...value };
     if (v === UNSET) delete next[k];
@@ -573,7 +674,7 @@ function DefaultsEditor({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={UNSET}>不指定（{id === "native" && r.key === "model" ? "第一个模型" : "跟 agent 自己的默认"}）</SelectItem>
+                    <SelectItem value={UNSET}>不指定（{id === "native" && r.key === "model" ? "第一个模型" : "跟 Agent 自己的默认"}）</SelectItem>
                     {!known && <SelectItem value={v}>{v}（现在没有这个了）</SelectItem>}
                     {r.options.map((x) => (
                       <SelectItem key={x.value} value={x.value}>
@@ -588,7 +689,7 @@ function DefaultsEditor({
         </div>
       )}
       <div className="text-[11px] text-muted-foreground">
-        只管新开的会话；`gerdr session new` 不带 --mode 时也用这里的模式（全放开的那种除外，防 agent
+        只管新开的会话；`gerdr session new` 不带 --mode 时也用这里的模式（全放开的那种除外，防 Agent
         借它提权）。思考强度的选项跟着模型变，选的档位新模型不认就用模型的默认。
       </div>
     </div>

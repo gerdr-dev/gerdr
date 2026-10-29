@@ -141,12 +141,12 @@ export function DirPicker({
 }
 
 const NO_DEFS: AgentDef[] = [];
-const BASE_NAME: Record<string, string> = { claude: "Claude Code", codex: "Codex", native: "Gerdr Agent" };
+const BASE_NAME: Record<string, string> = { claude: "Claude Code", codex: "Codex", native: "Native" };
 
-/** 角色卡片下面那行小字：有提示词就显示提示词开头（一眼看出这个角色干什么的），没有就说基于谁。 */
+/** 自建 agent 卡片下面那行小字：有提示词就显示提示词开头（一眼看出它干什么的），没有就说用哪个引擎。 */
 function roleHint(d?: AgentDef) {
   if (!d?.base) return "";
-  return d.prompt?.trim().split("\n")[0] || `基于 ${BASE_NAME[d.base]}`;
+  return d.prompt?.trim().split("\n")[0] || `引擎 ${BASE_NAME[d.base]}`;
 }
 
 export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean }) {
