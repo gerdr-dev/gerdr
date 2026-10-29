@@ -74,10 +74,13 @@ Windows 上要出 App 的话，系统 WebView 是 WebView2（Chromium），**mac
   要拿父进程句柄等（`cmd/gerdr/platform_windows.go`），照 Unix 那样比 ppid 的话后端永远退不掉。
 - **菜单**：mac 上必须有「编辑」菜单（⌘C / ⌘V / ⌘A / ⌘Z 走它）。**Windows 上不挂菜单**：菜单的加速键会先于网页吃掉
   Ctrl+C / Ctrl+W，而网页自己有一套快捷键（Ctrl+C 两次关 agent、前缀键……）；复制粘贴 Chromium 自己处理。
-- **签名**：没配证书时 electron-builder 不签（`identity: null`），而 Apple 芯片上没签名的程序起不来 —— `desktop/build.sh` 补一个 ad-hoc 签名。
+- **签名**：没配证书时 electron-builder 不签（`identity: null`），而 Apple 芯片上没签名的程序起不来 —— electron-builder 的 afterPack 钩子
+  （`desktop/adhoc-sign.js`）补一个 ad-hoc 签名。**得在打 dmg 之前签**：原来是 build.sh 等打完再签 `dist/` 里那份，
+  装进 dmg 的那份没签全，下载下来打开报「已损坏」（v0.2.0 踩过；发版流水线里现在会挂载 dmg 查一遍）。afterSign 钩子在不签名时会被跳过，所以用 afterPack。
   别人第一次打开要右键「打开」；正式发布配 `CSC_LINK` / `CSC_KEY_PASSWORD` 走正经签名 + 公证。
-- **mac 通用包**：后端先 `lipo` 成一个通用二进制，Electron `--universal` 合并两份 App 时，两边一模一样的 Mach-O 要在
-  `x64ArchFiles` 里点名（`desktop/package.json`），不然合并报错。
+- **mac 按架构分两个包**：Apple 芯片（arm64）、Intel（x64）各一个 dmg。原来打的是通用包（后端 `lipo` 合成通用二进制、
+  Electron `--universal` 合并两份 App），体积翻倍到 250MB 左右，每台机器却只用得上一半。
+  要改回通用包的话：两份 App 里一模一样的 Mach-O 要在 `x64ArchFiles` 里点名（`desktop/package.json`），不然合并报错。
 - **Windows 包在 mac 上就能打**（`make win`，nsis，不需要 wine）。
 
 ## 7. 什么时候该重看

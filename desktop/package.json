@@ -17,6 +17,7 @@
     "appId": "io.github.zbysir.gerdr",
     "productName": "Gerdr",
     "copyright": "Gerdr",
+    "afterPack": "adhoc-sign.js",
     "directories": {
       "output": "dist",
       "buildResources": "res"
@@ -45,8 +46,7 @@
       "identity": null,
       "extendInfo": {
         "NSUserNotificationAlertStyle": "banner"
-      },
-      "x64ArchFiles": "Contents/Resources/gerdr"
+      }
     },
     "win": {
       "target": [
