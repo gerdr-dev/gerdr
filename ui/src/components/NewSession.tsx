@@ -1,5 +1,5 @@
 import { ChevronUp, Folder, FolderGit2, History, Loader2, Play, SquareTerminal } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
@@ -186,17 +186,26 @@ export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean
   };
 
   // Ctrl+D 关掉这个空 pane（像在空 shell 里按 ^D 退出）：两次 Ctrl+C 退出 agent 之后落到这一屏，再按它才关 pane。
-  // 光标在目录输入框里时不管：mac 上那是「删掉后面一个字」。
-  const onKey = (e: KeyboardEvent) => {
-    if (e.key !== "d" || !e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
-    if ((e.target as HTMLElement).closest("input, textarea")) return;
-    e.preventDefault();
-    focusPane(pane.id);
-    closeFocusedPane();
-  };
+  // 挂在 window 上、只看这个 pane 是不是焦点：原来挂在这一屏的 div 上，关了别的 pane、点过别处之后
+  // 光标不在这一屏里面（落到了 body），按了没反应（用户报的）。
+  // 光标在输入框里时不管：mac 上那是「删掉后面一个字」。
+  useEffect(() => {
+    if (!focused) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || e.key !== "d" || !e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+      const a = document.activeElement as HTMLElement | null;
+      if (a && (a.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))) return;
+      if (get().dialog || document.querySelector("[role=dialog]")) return;
+      e.preventDefault();
+      focusPane(pane.id);
+      closeFocusedPane();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [focused, pane.id]);
 
   return (
-    <div className="flex h-full items-start justify-center overflow-auto p-6" onKeyDown={onKey}>
+    <div className="flex h-full items-start justify-center overflow-auto p-6">
       <div className="mt-[8vh] w-full max-w-lg space-y-5">
         <div className="text-[13px] font-medium text-muted-foreground">新会话（Ctrl+D 关掉）</div>
         <div className="grid grid-cols-2 gap-2">

@@ -143,7 +143,14 @@ export function closePane(tab: Tab, paneId: string): Tab | null {
   const root = rm(tab.root);
   if (!root) return null;
   const ls = leaves(root);
-  const focus = ls.some((x) => x.id === tab.focus) ? tab.focus : ls[0].id;
+  // 关的是焦点那个：焦点落到它前一个 pane（排在它左边 / 上面那个，一般就是从它分出来之前的那个），它是第一个才往后。
+  // 原来一律回第一个 pane，开了一排分屏、关掉最右边那个时焦点跳到最左边，得再一路切回来（用户报的）。
+  let focus = tab.focus;
+  if (!ls.some((x) => x.id === focus)) {
+    const old = leaves(tab.root);
+    const i = old.findIndex((x) => x.id === paneId);
+    focus = (old[i - 1] ?? old[i + 1] ?? ls[0]).id;
+  }
   return { ...tab, root, focus, zoom: tab.zoom === paneId ? undefined : tab.zoom };
 }
 

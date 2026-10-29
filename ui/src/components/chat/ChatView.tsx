@@ -114,10 +114,19 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
   useEffect(() => {
     if (!focused || sub) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.defaultPrevented || e.isComposing || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.defaultPrevented || e.isComposing) return;
       const a = document.activeElement as HTMLElement | null;
       if (a && (a.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))) return;
       if (get().dialog || document.querySelector("[role=dialog]")) return;
+      // Ctrl+C 不管焦点在哪都算数（在对话区选着字、点过别处）：和输入框里按一样，清空 / 打断 / 连按两次退出。
+      // mac 上复制是 ⌘C，不冲突；Windows / Linux 上 Ctrl+C 就是复制，选着字时让给复制
+      const copying = !/Mac/.test(navigator.platform) && window.getSelection()?.isCollapsed === false;
+      if (e.key === "c" && e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && !copying) {
+        e.preventDefault();
+        composer.current?.ctrlC();
+        return;
+      }
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
       // 有问题在等回答：↑↓ / 数字 / 回车先给提问卡（和输入框里一样，见 lib/askkeys）
       if (askKey(session.id, e)) {
         e.preventDefault();

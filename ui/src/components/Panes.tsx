@@ -32,7 +32,7 @@ import {
   splitFocused,
   toggleZoom,
 } from "@/lib/actions";
-import { leaves, phoneRoot, setRatio, updateTab, type PaneLeaf, type PaneNode, type Tab } from "@/lib/layout";
+import { leaves, phoneRoot, setRatio, updateTab, type PaneLeaf, type PaneNode, type PaneSplit, type Tab } from "@/lib/layout";
 import { applyPaneTitle } from "@/lib/plugins";
 import { markRead, set, setLayout, useStore } from "@/lib/store";
 import { usePhone } from "@/lib/phone";
@@ -45,49 +45,62 @@ import { TerminalView } from "./Terminal";
 /** 这个 tab 是不是正显示着的那个（藏着的 tab 里的 pane 不算有焦点，不抢光标、不标已读）。 */
 export const TabActive = createContext(true);
 
-export function TabView({ tab }: { tab: Tab }) {
-  const all = leaves(tab.root);
-  const many = all.length > 1;
-  const phone = usePhone();
-  // 手机上：上下分屏照画，左右分屏只画焦点那一边（见 phoneRoot）。不管布局里的 zoom ——
-  // 布局是存服务端、桌面那边共用的，手机上看一眼不该把电脑上的分屏变成放大。看不见的 pane 走面板一览，焦点那个标题栏上标「第几个 / 共几个」。
-  if (phone) {
-    const root = phoneRoot(tab);
-    const shown = leaves(root);
-    const p = shown.find((x) => x.id === tab.focus) ?? shown[0];
-    const count = shown.length < all.length ? { i: all.indexOf(p) + 1, n: all.length, pane: p.id } : undefined;
-    if (root.type === "pane") return <PaneView pane={root} tab={tab} framed={false} count={count} />;
-    return (
-      <div className="h-full min-h-0 p-1">
-        <NodeView node={root} tab={tab} framed count={count} />
-      </div>
-    );
+type Box = { x: number; y: number; w: number; h: number };
+const FULL: Box = { x: 0, y: 0, w: 1, h: 1 };
+const pct = (v: number) => `${v * 100}%`;
+
+/** 把分屏树摊平：每个 pane 占整个 tab 的哪一块（比例），每条缝在哪。 */
+function place(n: PaneNode, b: Box, panes: { pane: PaneLeaf; box: Box }[], seams: { split: PaneSplit; box: Box }[]) {
+  if (n.type === "pane") {
+    panes.push({ pane: n, box: b });
+    return;
   }
-  if (tab.zoom) {
-    const p = leaves(tab.root).find((x) => x.id === tab.zoom);
-    if (p) return <PaneView pane={p} tab={tab} framed={false} zoomed />;
+  seams.push({ split: n, box: b });
+  const r = n.ratio;
+  if (n.dir === "row") {
+    place(n.a, { ...b, w: b.w * r }, panes, seams);
+    place(n.b, { ...b, x: b.x + b.w * r, w: b.w * (1 - r) }, panes, seams);
+  } else {
+    place(n.a, { ...b, h: b.h * r }, panes, seams);
+    place(n.b, { ...b, y: b.y + b.h * r, h: b.h * (1 - r) }, panes, seams);
   }
-  // 分屏时和 herdr 一样：每个 pane 一圈边框、中间留缝，焦点那个边框高亮。只有一个 pane 时不画框（省地方）。
-  return (
-    <div className={cn("h-full min-h-0", many && "p-1")}>
-      <NodeView node={tab.root} tab={tab} framed={many} />
-    </div>
-  );
 }
 
-function NodeView({ node, tab, framed, count }: { node: PaneNode; tab: Tab; framed: boolean; count?: Count & { pane: string } }) {
+/**
+ * 所有 pane 平铺在同一层、按 id 做 key，用绝对定位摆到各自的位置 —— 不按分屏树一层层嵌套着画。
+ * 嵌套着画的话，分屏会把原来的 pane 包进一个新的 split 节点、关 pane 会把兄弟提上一层，React 认为它换了位置，
+ * 整个卸载重挂：对话重新加载、滚动位置丢掉、终端重连（用户报的「新建 pane 之前的 pane 会重新加载」）。
+ * 放大也一样：别的 pane 只是藏起来（invisible，大小不变），还原时不重新加载。
+ */
+export function TabView({ tab }: { tab: Tab }) {
   const box = useRef<HTMLDivElement>(null);
   const phone = usePhone();
-  if (node.type === "pane") return <PaneView pane={node} tab={tab} framed={framed} count={count?.pane === node.id ? count : undefined} />;
-  const row = node.dir === "row";
-  const startDrag = (e: React.PointerEvent) => {
+  const all = leaves(tab.root);
+  // 手机上：上下分屏照画，左右分屏只画焦点那一边（见 phoneRoot）。不管布局里的 zoom ——
+  // 布局是存服务端、桌面那边共用的，手机上看一眼不该把电脑上的分屏变成放大。看不见的 pane 走面板一览，焦点那个标题栏上标「第几个 / 共几个」。
+  const root = phone ? phoneRoot(tab) : tab.root;
+  const panes: { pane: PaneLeaf; box: Box }[] = [];
+  const seams: { split: PaneSplit; box: Box }[] = [];
+  place(root, FULL, panes, seams);
+  const zoom = !phone && tab.zoom && panes.some((p) => p.pane.id === tab.zoom) ? tab.zoom : undefined;
+  // 分屏时和 herdr 一样：每个 pane 一圈边框、中间留缝，焦点那个边框高亮。只有一个 pane（或放大着）时不画框（省地方）。
+  const framed = panes.length > 1 && !zoom;
+  let count: (Count & { pane: string }) | undefined;
+  if (phone && panes.length < all.length) {
+    const p = panes.find((x) => x.pane.id === tab.focus)?.pane ?? panes[0].pane;
+    count = { i: all.indexOf(p) + 1, n: all.length, pane: p.id };
+  }
+
+  const startDrag = (e: React.PointerEvent, split: PaneSplit, b: Box) => {
     e.preventDefault();
     const el = box.current;
     if (!el) return;
-    const r = el.getBoundingClientRect();
+    const c = el.getBoundingClientRect();
+    const row = split.dir === "row";
+    const r = { left: c.left + b.x * c.width, top: c.top + b.y * c.height, width: b.w * c.width, height: b.h * c.height };
     const move = (ev: PointerEvent) => {
       const ratio = row ? (ev.clientX - r.left) / r.width : (ev.clientY - r.top) / r.height;
-      setLayout((l) => updateTab(l, tab.id, (t) => setRatio(t, node.id, ratio)));
+      setLayout((l) => updateTab(l, tab.id, (t) => setRatio(t, split.id, ratio)));
     };
     const up = () => {
       window.removeEventListener("pointermove", move);
@@ -98,23 +111,45 @@ function NodeView({ node, tab, framed, count }: { node: PaneNode; tab: Tab; fram
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
   };
+
+  // 外圈 1px + 每个 pane 自己 3px：贴边 4px、两个 pane 之间 6px，和原来的 p-1 + 6px 缝一样
   return (
-    <div ref={box} className={cn("flex h-full min-h-0 w-full min-w-0", row ? "flex-row" : "flex-col")}>
-      <div style={{ flexBasis: `${node.ratio * 100}%` }} className="min-h-0 min-w-0 shrink grow-0 overflow-hidden">
-        <NodeView node={node.a} tab={tab} framed={framed} count={count} />
-      </div>
-      <div
-        onPointerDown={startDrag}
-        className={cn(
-          // 缝本身透明（两边各有边框），悬停时亮一条提示能拖
-          "shrink-0 bg-transparent bg-clip-content transition-colors hover:bg-brand/50",
-          row ? "w-1.5 cursor-col-resize px-[2px]" : "h-1.5 cursor-row-resize py-[2px]",
-          // 手机上手指按不准 6px：缝加高，拖的时候别让页面跟着滚
-          phone && "h-3 touch-none py-[5px]",
-        )}
-      />
-      <div style={{ flexBasis: `${(1 - node.ratio) * 100}%` }} className="min-h-0 min-w-0 shrink grow-0 overflow-hidden">
-        <NodeView node={node.b} tab={tab} framed={framed} count={count} />
+    <div className={cn("h-full min-h-0", framed && "p-px")}>
+      <div ref={box} className="relative h-full w-full">
+        {panes.map(({ pane, box: b }) => {
+          const z = zoom === pane.id;
+          const at = z ? FULL : b;
+          return (
+            <div
+              key={pane.id}
+              style={{ left: pct(at.x), top: pct(at.y), width: pct(at.w), height: pct(at.h) }}
+              className={cn("absolute min-h-0 min-w-0 overflow-hidden", framed && "p-[3px]", zoom && (z ? "z-10" : "invisible"))}
+            >
+              <PaneView pane={pane} tab={tab} framed={framed} zoomed={z || undefined} count={count?.pane === pane.id ? count : undefined} />
+            </div>
+          );
+        })}
+        {!zoom &&
+          seams.map(({ split, box: b }) => {
+            const row = split.dir === "row";
+            const style = row
+              ? { left: pct(b.x + b.w * split.ratio), top: pct(b.y), height: pct(b.h) }
+              : { top: pct(b.y + b.h * split.ratio), left: pct(b.x), width: pct(b.w) };
+            return (
+              <div
+                key={split.id}
+                onPointerDown={(e) => startDrag(e, split, b)}
+                style={style}
+                className={cn(
+                  // 缝本身透明（两边各有边框），悬停时亮一条提示能拖
+                  "absolute z-10 bg-transparent bg-clip-content transition-colors hover:bg-brand/50",
+                  row ? "w-1.5 -translate-x-1/2 cursor-col-resize px-[2px]" : "h-1.5 -translate-y-1/2 cursor-row-resize py-[2px]",
+                  // 手机上手指按不准 6px：缝加高，拖的时候别让页面跟着滚
+                  phone && "h-3 touch-none py-[5px]",
+                )}
+              />
+            );
+          })}
       </div>
     </div>
   );

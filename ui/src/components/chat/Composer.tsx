@@ -16,7 +16,13 @@ import { OptionMenu, OptionsMenu, type OptGroup } from "./OptionMenu";
 import { openLightbox } from "../Lightbox";
 import { TasksChip } from "./TasksBar";
 
-export type ComposerHandle = { focus(): void; setText(t: string): void; setContent(blocks: ContentBlock[]): void; putBack(blocks: ContentBlock[]): void };
+export type ComposerHandle = {
+  focus(): void;
+  setText(t: string): void;
+  setContent(blocks: ContentBlock[]): void;
+  putBack(blocks: ContentBlock[]): void;
+  ctrlC(): void;
+};
 
 type Img = { data: string; mimeType: string; url: string };
 
@@ -67,6 +73,7 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
       setImgs(toImgs(blocks));
     },
     putBack: (blocks: ContentBlock[]) => putBack(blocks),
+    ctrlC: () => ctrlC(),
   }));
   // 点发送 / 打断按钮不抢输入框的焦点：抢走了，接着按 Esc 打断、回车再发都没反应（用户报的）
   const keepFocus = (e: React.MouseEvent) => {
@@ -266,7 +273,7 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
 
   const hist = useRef<{ idx: number; list: string[] }>({ idx: -1, list: [] });
   const sentAt = useRef(0);
-  const ctrlC = useRef(0);
+  const ctrlCAt = useRef(0);
   const escPending = useRef(false);
   const escaping = useRef(false);
   const userTexts = () =>
@@ -332,6 +339,29 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
     } finally {
       escaping.current = false;
     }
+  };
+
+  // Ctrl+C（照 Claude Code）：有字先清空；在跑先打断；空着又没在跑 —— 2 秒内连按两次关掉这个 agent，
+  // pane 留着回到「新会话」那一屏（再按 Ctrl+D 才关 pane，和终端里退出 shell 一样分两步）。
+  // 输入框里按、焦点在对话区（选着字、点过别处）按都走这里，见 ChatView。
+  const ctrlC = () => {
+    if (text) {
+      setText("");
+      setImgs([]);
+      return;
+    }
+    if (running) {
+      escape();
+      return;
+    }
+    if (Date.now() - ctrlCAt.current < 2000) {
+      ctrlCAt.current = 0;
+      toast.dismiss("ctrlc");
+      closeAgentInPane(paneId);
+      return;
+    }
+    ctrlCAt.current = Date.now();
+    toast("再按一次 Ctrl+C 退出这个 agent", { id: "ctrlc", duration: 2000 });
   };
 
   const addFiles = (files: FileList | File[]) => {
@@ -439,28 +469,10 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
       }
       return;
     }
-    // Ctrl+C（照 Claude Code）：有字先清空；在跑先打断；空着又没在跑 —— 2 秒内连按两次关掉这个 agent，
-    // pane 留着回到「新会话」那一屏（再按 Ctrl+D 才关 pane，和终端里退出 shell 一样分两步）。
     // 只认 ctrl，不认 ⌘：mac 上 ⌘C 是复制。
     if (e.key === "c" && e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
       e.preventDefault();
-      if (text) {
-        setText("");
-        setImgs([]);
-        return;
-      }
-      if (running) {
-        escape();
-        return;
-      }
-      if (Date.now() - ctrlC.current < 2000) {
-        ctrlC.current = 0;
-        toast.dismiss("ctrlc");
-        closeAgentInPane(paneId);
-        return;
-      }
-      ctrlC.current = Date.now();
-      toast("再按一次 Ctrl+C 退出这个 agent", { id: "ctrlc", duration: 2000 });
+      ctrlC();
       return;
     }
     // Esc 按得快的两种：消息还在发（等发完再撤）、刚发完界面还没收到「在跑」（服务端其实已经在跑了）
