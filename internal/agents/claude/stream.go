@@ -134,6 +134,17 @@ func (s *session) onLine(pr *proc, m map[string]json.RawMessage, raw []byte) {
 			State       string `json:"state"`
 		}
 		_ = json.Unmarshal(raw, &c)
+		// 这一轮的那句被拿进去跑了 = 这一轮开始了，后面的 idle 就是它的结束。光看 running 不够：
+		// --resume 一个有没跑完的后台任务的会话，CLI 一起来就先自己跑起来（报那个任务 stopped），running 到的时候
+		// 这一轮还没挂上（被当成它自己开的一轮），我们这句接着在同一段 running 里跑完才 idle —— 中间不再有 running，
+		// 只认 running 的话这一轮永远等不到结束，界面一直转（实测）。
+		if c.State == "started" {
+			s.mu.Lock()
+			if t := s.turn; t != nil && (t.id == "" || t.id == c.CommandUUID) {
+				t.sawRunning = true
+			}
+			s.mu.Unlock()
+		}
 		if c.CommandUUID != "" && c.State != "" {
 			s.update(ctx, acp.SessionUpdate{SessionInfoUpdate: &acp.SessionSessionInfoUpdate{Meta: acpx.Meta(map[string]any{
 				"steer": map[string]any{"id": c.CommandUUID, "state": c.State},

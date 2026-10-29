@@ -66,6 +66,7 @@ func (s *session) withEmit(emit func(acp.SessionUpdate), fn func()) {
 
 type turnState struct {
 	done       chan turnResult
+	id         string // 这一轮那句话的 uuid（msgID 是 UUID 才有）：认 command_lifecycle 里哪条是它
 	sawRunning bool
 	cancelled  bool
 	errText    string
@@ -355,6 +356,9 @@ func (s *session) prompt(ctx context.Context, blocks []acp.ContentBlock, msgID s
 		return acp.PromptResponse{}, err
 	}
 	t := &turnState{done: make(chan turnResult, 1)}
+	if _, err := uuid.Parse(msgID); err == nil {
+		t.id = msgID // 和 userMessage 带的 uuid 一致
+	}
 	s.tok.Reset()
 	s.mu.Lock()
 	// 清 abortWait 和挂上 turn 在同一把锁里：中间不留空档，这时来的打断要么作废这句、要么打断这一轮

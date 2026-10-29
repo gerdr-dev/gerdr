@@ -2,6 +2,7 @@ package claude
 
 import (
 	"encoding/json"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"slices"
@@ -232,5 +233,41 @@ func TestACPCommandsSkill(t *testing.T) {
 	}
 	if cmds[2].Input == nil || cmds[2].Input.Unstructured.Hint != "<x>" {
 		t.Fatalf("参数提示丢了：%+v", cmds[2])
+	}
+}
+
+// --resume 一个有没跑完的后台任务的会话：CLI 一起来就自己跑起来（running 到时这一轮还没挂上），我们这句在同一段 running 里
+// 跑完才 idle。只认 running 的话这一轮永远等不到结束（实测卡死）；认 command_lifecycle started 才对。
+func TestTurnEndsWhenQueuedIntoAutoRun(t *testing.T) {
+	a := &Agent{opts: Options{Env: []string{"CLAUDE_CONFIG_DIR=" + t.TempDir()}}, sessions: map[string]*session{}, log: slog.New(slog.DiscardHandler)}
+	s := a.newSession("11111111-2222-4333-8444-555555555555", "/p", nil)
+	s.emitHook = func(acp.SessionUpdate) {}
+	line := func(js string) {
+		var m map[string]json.RawMessage
+		if err := json.Unmarshal([]byte(js), &m); err != nil {
+			t.Fatal(err)
+		}
+		s.onLine(nil, m, []byte(js))
+	}
+	line(`{"type":"system","subtype":"task_notification","task_id":"b1","status":"stopped","summary":"didn't finish"}`)
+	line(`{"type":"system","subtype":"session_state_changed","state":"running"}`) // 这时 turn 还没挂上
+	const msg = "aaaaaaaa-1111-4222-8333-444444444444"
+	turn := &turnState{done: make(chan turnResult, 1), id: msg}
+	s.mu.Lock()
+	s.turn = turn
+	s.mu.Unlock()
+	line(`{"type":"command_lifecycle","command_uuid":"` + msg + `","state":"queued"}`)
+	line(`{"type":"result","subtype":"success","is_error":false,"stop_reason":null}`) // 它自己那一轮的空 result
+	line(`{"type":"command_lifecycle","command_uuid":"` + msg + `","state":"started"}`)
+	line(`{"type":"result","subtype":"success","is_error":false,"stop_reason":"end_turn","result":"OK"}`)
+	line(`{"type":"command_lifecycle","command_uuid":"` + msg + `","state":"completed"}`)
+	line(`{"type":"system","subtype":"session_state_changed","state":"idle"}`)
+	select {
+	case r := <-turn.done:
+		if r.err != nil || r.stop != acp.StopReasonEndTurn {
+			t.Fatalf("%+v", r)
+		}
+	default:
+		t.Fatal("idle 之后这一轮没结束")
 	}
 }

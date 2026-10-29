@@ -230,6 +230,9 @@ cwd 以外改的文件（Bash 写 `~/.zshrc`、隔壁项目）管不到；同一
   停任务是 control `stop_task`，把前台的命令 / 子 agent 转后台是 `background_tasks {tool_use_id}`（= claude 里的 ctrl+b）。
 - **后台任务跑完后 CLI 会自己开一轮**（running → idle，前面没有 user 消息）。没有 session/prompt 对应，适配器用
   session_info_update 的 `_meta.gerdr.autoTurn` 告诉 hub；它可能比上一轮 Prompt 的响应先到，hub 用 `autoNext` 接上，不然那一轮在界面上是「闲着」。
+- **`--resume` 一个有没跑完的后台任务的会话**（进程被收掉 / 关了 pane / gerdr 重启时任务还在跑）：CLI 一起来先报那个任务
+  stopped、自己跑起来，这时我们那句的 turn 还没挂上；那句常被并进同一段 running 跑完才 idle，中间不再有 running。
+  所以「这一轮开始了」还要认 `command_lifecycle started`（command_uuid = 那句的 uuid），只认 running 的话一直转（实测）。
 - 子 agent：claude 的子 agent 工具调用带 `parent_tool_use_id`；它的话打上 `_meta.gerdr.subagent` 推出来（主对话不显示，只读面板显示）。
   前台子 agent 最后那句话只在 Agent 工具的结果里，而且被 CLI 包了一层「[Subagent hand-back] … The report follows:」+ agentId + usage，要剥掉（`subReport`）。
   codex 的子 agent 是另一个 thread：主 thread 上有 `subAgentActivity` item，子 thread 的通知照样推到同一条连接上，适配器把它挂到主会话下。
