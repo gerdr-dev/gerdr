@@ -163,8 +163,8 @@ func TestRemoteCertConfig(t *testing.T) {
 	if w.Code != 200 || strings.Contains(w.Body.String(), "cf-secret-123") || !strings.Contains(w.Body.String(), `"set":["CLOUDFLARE_DNS_API_TOKEN"]`) {
 		t.Fatalf("读回来该只有名字：%d %s", w.Code, w.Body)
 	}
-	if s.Remote.Cfg.ACMEDNS != "cloudflare" {
-		t.Fatalf("配置没生效：%+v", s.Remote.Cfg)
+	if s.Remote.Config().ACMEDNS != "cloudflare" {
+		t.Fatalf("配置没生效：%+v", s.Remote.Config())
 	}
 	// 留空 = 沿用；换一家服务商，cloudflare 的 token 要从文件里删掉
 	if w := local("POST", `{"dns":"cloudflare","email":"a@b.c","env":{}}`); w.Code != 200 {
@@ -244,5 +244,46 @@ func TestRemoteStepUpApproval(t *testing.T) {
 		if d.ID == dev.ID && time.Since(d.PasskeyAt) > time.Minute {
 			t.Fatal("批准之后该给这台设备一次 step-up（PasskeyAt）")
 		}
+	}
+}
+
+// 设置里的连接 / 移除：远程那一侧碰不到（远程移除 = 把自己锁在门外）；本机移除后当场关掉远程那条路，
+// 设备和 passkey 一起清掉，不用重启。
+func TestRemoteDisconnect(t *testing.T) {
+	t.Setenv("GERDR_RELAY_URL", "")
+	t.Setenv("GERDR_RELAY_HOST", "")
+	s, lh, rh := remoteServer(t)
+	for _, p := range []string{"/api/remote/connect", "/api/remote/disconnect", "/api/remote/reload"} {
+		if w := do(rh, "POST", p, strings.NewReader("{}"), csrf, hdr("Origin", "https://"+testHost)); w.Code != 403 {
+			t.Fatalf("远程不该能调 %s，得到 %d", p, w.Code)
+		}
+	}
+	local := func(path, body string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest("POST", "http://127.0.0.1:7870"+path, strings.NewReader(body))
+		r.Header.Set("Authorization", "Bearer "+s.Token)
+		r.Header.Set("X-Gerdr", "1")
+		w := httptest.NewRecorder()
+		lh.ServeHTTP(w, r)
+		return w
+	}
+	if w := local("/api/remote/connect", `{"relayURL":"https://relay.example.com","host":"other.example.com","invite":"x"}`); w.Code != 400 || !strings.Contains(w.Body.String(), "已经连着") {
+		t.Fatalf("连着的时候再连该拒，得到 %d %s", w.Code, w.Body)
+	}
+	code, _ := s.Remote.Auth.MintCode()
+	if _, _, err := s.Remote.Auth.Redeem(code, "test", "203.0.113.9"); err != nil {
+		t.Fatal(err)
+	}
+	w := local("/api/remote/disconnect", "")
+	if w.Code != 200 || !strings.Contains(w.Body.String(), `"revoked":1`) {
+		t.Fatalf("移除：%d %s", w.Code, w.Body)
+	}
+	if st := s.Remote.Status(); st.Enabled || st.RelayURL != "" && st.Host != "" {
+		t.Fatalf("移除后还开着：%+v", st)
+	}
+	if s.Remote.Passkeys.Available() {
+		t.Fatal("移除后 passkey 还绑着旧域名")
+	}
+	if w := do(rh, "GET", "/", nil); w.Code != 404 {
+		t.Fatalf("移除后远程那条路该关掉，得到 %d", w.Code)
 	}
 }

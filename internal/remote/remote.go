@@ -15,6 +15,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -29,7 +30,8 @@ import (
 )
 
 type Service struct {
-	Cfg      config.Remote
+	// cfg 在设置里连上 / 移除远程访问时会整份换掉（不重启），读要过 Config() 或者持 mu
+	cfg      config.Remote
 	Dir      string // <数据目录>/remote
 	Auth     *auth.Store
 	Passkeys *auth.Passkeys
@@ -58,25 +60,38 @@ func Open(dataDir string, cfg config.Remote, log *slog.Logger) (*Service, error)
 	if err != nil {
 		return nil, fmt.Errorf("读设备列表失败: %w", err)
 	}
-	// RPID 就是中继上的主机名：passkey 只在那个 origin 上能用。没开远程时给空，passkey 那几个口就都是 409。
-	pc := auth.PasskeyConfig{Dir: dir, Display: "gerdr"}
-	if cfg.Enabled() {
-		pc.RPID, pc.Origins = cfg.Host, []string{"https://" + cfg.Host}
-		// 安卓 App 的 WebView 里刷 passkey 时，origin 是 App 签名证书的哈希（docs/dev/ANDROID.md「passkey」）
-		for _, fp := range cfg.AndroidCerts {
-			if o := auth.AndroidOrigin(fp); o != "" {
-				pc.Origins = append(pc.Origins, o)
-			}
-		}
-	}
-	pk, err := auth.NewPasskeys(pc)
+	rpid, origins := relyingParty(cfg)
+	pk, err := auth.NewPasskeys(auth.PasskeyConfig{Dir: dir, Display: "gerdr", RPID: rpid, Origins: origins})
 	if err != nil {
 		return nil, err
 	}
 	g := auth.NewGate()
-	s := &Service{Cfg: cfg, Dir: dir, Auth: store, Passkeys: pk, Gate: g, Approvals: auth.NewApprovals(), log: log}
+	s := &Service{cfg: cfg, Dir: dir, Auth: store, Passkeys: pk, Gate: g, Approvals: auth.NewApprovals(), log: log}
 	g.Alert = s.alert
 	return s, nil
+}
+
+// relyingParty：passkey 绑哪个域名。RPID 就是中继上的主机名：passkey 只在那个 origin 上能用。
+// 没开远程时给空，passkey 那几个口就都是 409。
+func relyingParty(cfg config.Remote) (rpid string, origins []string) {
+	if !cfg.Enabled() {
+		return "", nil
+	}
+	origins = []string{"https://" + cfg.Host}
+	// 安卓 App 的 WebView 里刷 passkey 时，origin 是 App 签名证书的哈希（docs/dev/ANDROID.md「passkey」）
+	for _, fp := range cfg.AndroidCerts {
+		if o := auth.AndroidOrigin(fp); o != "" {
+			origins = append(origins, o)
+		}
+	}
+	return cfg.Host, origins
+}
+
+// Config 是现在这份远程配置的拷贝。
+func (s *Service) Config() config.Remote {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.cfg
 }
 
 func (s *Service) alert(msg string) { s.log.Warn("remote: " + msg) }
@@ -91,11 +106,13 @@ func (s *Service) setErr(e string) {
 }
 
 // URL 是远程打开的地址；没开远程时为空。
-func (s *Service) URL() string {
-	if !s.Cfg.Enabled() {
+func (s *Service) URL() string { return urlOf(s.Config()) }
+
+func urlOf(cfg config.Remote) string {
+	if !cfg.Enabled() {
 		return ""
 	}
-	return "https://" + s.Cfg.Host
+	return "https://" + cfg.Host
 }
 
 // PairURL：扫码进来的链接。码在 query 里，服务端换成 cookie 之后 302 洗掉。
@@ -121,7 +138,7 @@ func (s *Service) Start(h http.Handler) {
 func (s *Service) SetCert(dns, email string, staging bool, certFile, keyFile string) {
 	s.stop()
 	s.mu.Lock()
-	s.Cfg.ACMEDNS, s.Cfg.ACMEEmail, s.Cfg.ACMEStaging, s.Cfg.TLSCert, s.Cfg.TLSKey = dns, email, staging, certFile, keyFile
+	s.cfg.ACMEDNS, s.cfg.ACMEEmail, s.cfg.ACMEStaging, s.cfg.TLSCert, s.cfg.TLSKey = dns, email, staging, certFile, keyFile
 	s.err = ""
 	s.mu.Unlock()
 	s.run()
@@ -129,7 +146,7 @@ func (s *Service) SetCert(dns, email string, staging bool, certFile, keyFile str
 
 func (s *Service) run() {
 	s.mu.Lock()
-	cfg, h := s.Cfg, s.h
+	cfg, h := s.cfg, s.h
 	ctx, cancel := context.WithCancel(context.Background())
 	s.cancel = cancel
 	s.mu.Unlock()
@@ -256,10 +273,12 @@ func (s *Service) Close() {
 
 // Status 是给设置页 / `gerdr remote status` 看的一句话状态。
 type Status struct {
-	Enabled  bool   `json:"enabled"`
-	Host     string `json:"host,omitempty"`
-	URL      string `json:"url,omitempty"`
-	RelayURL string `json:"relayURL,omitempty"`
+	Enabled bool `json:"enabled"`
+	// EnvLocked：中继地址 / 主机名是环境变量给的（盖过 remote.json），设置里连接 / 移除改不动它
+	EnvLocked bool   `json:"envLocked,omitempty"`
+	Host      string `json:"host,omitempty"`
+	URL       string `json:"url,omitempty"`
+	RelayURL  string `json:"relayURL,omitempty"`
 	// State：中继隧道的状态（「已连上」「断开了，正在重连：…」）；Err：起不来的原因。
 	State string `json:"state,omitempty"`
 	Err   string `json:"err,omitempty"`
@@ -268,7 +287,7 @@ type Status struct {
 	TTLDays     int        `json:"ttlDays"`
 	ReauthHours int        `json:"reauthHours"`
 	PairMinutes int        `json:"pairMinutes"` // 配对码进来的设备活几分钟（0 = 和别的一样）
-	Locked      bool       `json:"locked"` // 全局熔断中：不接受新配对，`gerdr remote unlock` 解
+	Locked      bool       `json:"locked"`      // 全局熔断中：不接受新配对，`gerdr remote unlock` 解
 	// 局域网直连口：在听的端口（0 = 没开 / 没起来）、起不来的原因、现在报给 App 的候选地址
 	LanPort    int      `json:"lanPort,omitempty"`
 	LanErr     string   `json:"lanErr,omitempty"`
@@ -276,14 +295,15 @@ type Status struct {
 }
 
 func (s *Service) Status() Status {
-	st := Status{Enabled: s.Cfg.Enabled(), Host: s.Cfg.Host, URL: s.URL(), RelayURL: s.Cfg.RelayURL,
-		TTLDays: int(s.Cfg.DeviceTTL / (24 * time.Hour)), ReauthHours: int(s.Cfg.ReauthAfter / time.Hour), PairMinutes: int(s.Cfg.PairTTL / time.Minute), Locked: s.Gate.Locked()}
 	s.mu.Lock()
+	cfg := s.cfg
+	st := Status{Enabled: cfg.Enabled(), Host: cfg.Host, URL: urlOf(cfg), RelayURL: cfg.RelayURL, EnvLocked: envLocked(),
+		TTLDays: int(cfg.DeviceTTL / (24 * time.Hour)), ReauthHours: int(cfg.ReauthAfter / time.Hour), PairMinutes: int(cfg.PairTTL / time.Minute), Locked: s.Gate.Locked()}
 	st.Err = s.err
 	st.LanErr = s.lanErr
 	if s.lanHS != nil {
-		st.LanPort = s.Cfg.LanPort
-		st.LanOrigins = lan.Origins(s.Cfg.LanPort)
+		st.LanPort = cfg.LanPort
+		st.LanOrigins = lan.Origins(cfg.LanPort)
 	}
 	if s.tunnel != nil {
 		st.State = s.tunnel.State()
@@ -362,7 +382,101 @@ func (c *certFile) leaf() *x509.Certificate {
 
 // Join 拿邀请码把这台机器注册到中继上（`gerdr remote join`）。
 func Join(ctx context.Context, dataDir, relayURL, host, invite string) error {
-	return relay.Join(ctx, relay.HostConfig{URL: relayURL, Host: host, Dir: config.RemoteDir(dataDir) + "/relay"}, invite)
+	// 底下的错误常常只有一个「EOF」「connection refused」，不带上是哪一步、连的谁，人没法判断是地址错了还是码错了
+	if err := relay.Join(ctx, relay.HostConfig{URL: relayURL, Host: host, Dir: config.RemoteDir(dataDir) + "/relay"}, invite); err != nil {
+		return fmt.Errorf("注册到中继 %s 失败（地址对不对、邀请码是不是给 %s 出的、过没过期）：%w", relayURL, host, err)
+	}
+	return nil
+}
+
+// envLocked：中继地址 / 主机名是环境变量给的。LoadRemote 里环境变量盖过 remote.json，
+// 这时候设置里改文件不会生效，干脆不让改，免得「点了连接 / 移除，什么都没变」。
+func envLocked() bool {
+	return os.Getenv("GERDR_RELAY_URL") != "" || os.Getenv("GERDR_RELAY_HOST") != ""
+}
+
+var errEnvLocked = errors.New("中继地址 / 主机名是环境变量 GERDR_RELAY_URL / GERDR_RELAY_HOST 给的，这里改不动：去掉它们、重启 gerdr 再来")
+
+// Connect 是设置里的「连接」，等于 `gerdr remote join` 不带证书参数：拿邀请码注册到中继、写进 remote.json，
+// 然后当场把远程那条路拉起来，不用重启。证书之后在设置的「证书」那一节填（以前配过就沿用）。
+//
+// 先核参数再用邀请码：邀请码一次性、30 分钟过期，用掉了才发现填错就得回 VPS 再出一个。
+func (s *Service) Connect(ctx context.Context, relayURL, host, invite string) error {
+	if envLocked() {
+		return errEnvLocked
+	}
+	if cur := s.Config(); cur.Enabled() {
+		return fmt.Errorf("已经连着 %s 了：先移除再连", cur.Host)
+	}
+	host, err := relay.CleanHost(host)
+	if err != nil {
+		return err
+	}
+	relayURL = strings.TrimRight(strings.TrimSpace(relayURL), "/")
+	if u, err := url.Parse(relayURL); err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
+		return errors.New("中继地址要写成 https://relay.example.com 这样")
+	}
+	if invite = strings.TrimSpace(invite); invite == "" {
+		return errors.New("邀请码没填：在中继那台 VPS 上跑 herdr-relay invite " + host)
+	}
+	f, err := config.ReadRemoteFile(s.dataDir())
+	if err != nil {
+		return err
+	}
+	if err := Join(ctx, s.dataDir(), relayURL, host, invite); err != nil {
+		return err
+	}
+	// passkey 绑在域名上：换了名字，旧的那些一把都用不了，留着只会让「已有 N 把」变成假话
+	if f.Host != host {
+		s.Passkeys.DeleteAll()
+	}
+	f.RelayURL, f.Host = relayURL, host
+	if err := config.WriteRemoteFile(s.dataDir(), f); err != nil {
+		return fmt.Errorf("注册好了，但配置没写进去：%w", err)
+	}
+	return s.Reload()
+}
+
+// Disconnect 是设置里的「移除」：收掉隧道，主机名从 remote.json 里去掉，设备和 passkey 全部清掉。
+// 中继地址和证书来源留着，下次连接不用重填（ACME 的证书按域名分文件，换名字会另签一张）。
+//
+// 为什么连凭据一起清：远程这条路没了还留着它们，下次连上时（可能隔了几个月、换了名字）它们突然又好使，
+// 那时已经没人记得当初给过谁。中继那边的注册记录这边删不掉（协议里没有注销），不过没有本机的
+// 身份私钥签名，别人拿那个名字也连不上来；不想要了在 VPS 上删掉即可。
+func (s *Service) Disconnect() (devs, keys int, err error) {
+	if envLocked() {
+		return 0, 0, errEnvLocked
+	}
+	f, err := config.ReadRemoteFile(s.dataDir())
+	if err != nil {
+		return 0, 0, err
+	}
+	f.Host = ""
+	if err := config.WriteRemoteFile(s.dataDir(), f); err != nil {
+		return 0, 0, err
+	}
+	devs, keys = auth.RevokeEverything(s.Auth, s.Passkeys)
+	return devs, keys, s.Reload()
+}
+
+// Reload 按 remote.json（和环境变量）把远程那条路整条重来：连接 / 移除之后，以及 `gerdr remote join`
+// 写完文件通知正在跑的 gerdr。passkey 的 RPID 跟着主机名换。
+func (s *Service) Reload() error {
+	cfg, err := config.LoadRemote(s.dataDir())
+	if err != nil {
+		return err
+	}
+	s.stop()
+	rpid, origins := relyingParty(cfg)
+	perr := s.Passkeys.SetRP(rpid, origins)
+	s.mu.Lock()
+	s.cfg, s.err = cfg, ""
+	s.mu.Unlock()
+	if perr != nil {
+		s.setErr(perr.Error())
+	}
+	s.run()
+	return nil
 }
 
 // AccountURI：这台机器的 ACME 账户地址，给 CAA 的 accounturi 用。
@@ -391,7 +505,7 @@ func (s *Service) CertConfig() (CertConfig, error) {
 		return CertConfig{}, err
 	}
 	s.mu.Lock()
-	c := CertConfig{DNS: s.Cfg.ACMEDNS, Email: s.Cfg.ACMEEmail, Staging: s.Cfg.ACMEStaging, TLSCert: s.Cfg.TLSCert, TLSKey: s.Cfg.TLSKey}
+	c := CertConfig{DNS: s.cfg.ACMEDNS, Email: s.cfg.ACMEEmail, Staging: s.cfg.ACMEStaging, TLSCert: s.cfg.TLSCert, TLSKey: s.cfg.TLSKey}
 	s.mu.Unlock()
 	c.Set = []string{}
 	if p := acme.FindProvider(c.DNS); p != nil {
@@ -420,8 +534,8 @@ type CertInput struct {
 //
 // 换了服务商时，别家留在文件里的凭据一起删掉：用不上的密钥不该继续躺在盘上。
 func (s *Service) SaveCert(in CertInput) error {
-	if !s.Cfg.Enabled() {
-		return errors.New("还没注册到中继：先 gerdr remote join")
+	if !s.Config().Enabled() {
+		return errors.New("还没连上中继：先在上面「连接」")
 	}
 	f, err := config.ReadRemoteFile(s.dataDir())
 	if err != nil {

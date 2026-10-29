@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	_ "embed"
 	"encoding/base64"
 	"encoding/json"
@@ -49,15 +50,20 @@ func remotePublic(r *http.Request) bool {
 // remoteGuard 代替 guard 里令牌那一段。走到这儿的请求一定来自隧道。
 func (s *Server) remoteGuard(w http.ResponseWriter, r *http.Request, next http.Handler) {
 	rm := s.Remote
-	if rm == nil || !rm.Cfg.Enabled() {
+	if rm == nil {
+		http.NotFound(w, r)
+		return
+	}
+	cfg := rm.Config()
+	if !cfg.Enabled() {
 		http.NotFound(w, r)
 		return
 	}
 	// Host 白名单：DNS rebinding 的防线。隧道那头只该有一个名字（中继按 SNI 转过来的就是它）。
-	if !sameHost(r.Host, rm.Cfg.Host) {
+	if !sameHost(r.Host, cfg.Host) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(http.StatusMisdirectedRequest)
-		_, _ = w.Write([]byte("Host 不对：这里只服务 " + rm.Cfg.Host + "\n"))
+		_, _ = w.Write([]byte("Host 不对：这里只服务 " + cfg.Host + "\n"))
 		return
 	}
 	// 写接口一律要自定义头（跨站页面发不出来：要 CORS 预检，而我们不答），外加 Origin 同源。
@@ -69,8 +75,9 @@ func (s *Server) remoteGuard(w http.ResponseWriter, r *http.Request, next http.H
 	}
 	p := r.URL.Path
 	// 本机专用的口：令牌换 cookie、出配对码、解熔断。远程连 404 都不给区分。
-	// 证书配置里有 DNS 服务商的密钥，也只在本机改。
-	if p == "/auth" || p == "/api/remote/pair-code" || p == "/api/remote/unlock" || p == "/api/remote/cert" || p == "/api/service" || p == "/api/awake/lid-setup" ||
+	// 证书配置里有 DNS 服务商的密钥，也只在本机改；连接 / 移除远程访问同理（远程移除 = 把自己锁在门外）。
+	if p == "/auth" || p == "/api/remote/pair-code" || p == "/api/remote/unlock" || p == "/api/remote/cert" ||
+		p == "/api/remote/connect" || p == "/api/remote/disconnect" || p == "/api/remote/reload" || p == "/api/service" || p == "/api/awake/lid-setup" ||
 		p == "/api/remote/stepup/pending" || strings.HasPrefix(p, "/api/remote/stepup/approve/") {
 		httpError(w, http.StatusForbidden, "这个操作只能在跑 gerdr 的那台机器上做")
 		return
@@ -226,8 +233,8 @@ func (s *Server) remoteRoutes(mux *http.ServeMux) {
 	// 出配对码：本机专用（remoteGuard 在远程那一侧已经拦了）。
 	mux.HandleFunc("POST /api/remote/pair-code", func(w http.ResponseWriter, r *http.Request) {
 		rm := s.Remote
-		if !rm.Cfg.Enabled() {
-			httpError(w, http.StatusConflict, "还没开远程访问：先 gerdr remote join（见设置 → 远程访问）")
+		if !rm.Config().Enabled() {
+			httpError(w, http.StatusConflict, "还没开远程访问：先在设置 → 远程访问里连上中继")
 			return
 		}
 		code, exp := rm.Auth.MintCode()
@@ -255,6 +262,36 @@ func (s *Server) remoteRoutes(mux *http.ServeMux) {
 		}
 		if err := s.Remote.SaveCert(in); err != nil {
 			httpError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		writeJSON(w, map[string]any{"ok": true})
+	})
+	// 连接 / 移除 / 重读配置：都只在本机（remoteGuard 拦了远程那一侧），改完当场生效、不用重启。
+	mux.HandleFunc("POST /api/remote/connect", func(w http.ResponseWriter, r *http.Request) {
+		var in struct{ RelayURL, Host, Invite string }
+		if err := decode(r, &in); err != nil {
+			httpError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+		defer cancel()
+		if err := s.Remote.Connect(ctx, in.RelayURL, in.Host, in.Invite); err != nil {
+			httpError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		writeJSON(w, map[string]any{"ok": true})
+	})
+	mux.HandleFunc("POST /api/remote/disconnect", func(w http.ResponseWriter, r *http.Request) {
+		n, keys, err := s.Remote.Disconnect()
+		if err != nil {
+			httpError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		writeJSON(w, map[string]any{"revoked": n, "passkeys": keys})
+	})
+	mux.HandleFunc("POST /api/remote/reload", func(w http.ResponseWriter, r *http.Request) {
+		if err := s.Remote.Reload(); err != nil {
+			httpError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 		writeJSON(w, map[string]any{"ok": true})
@@ -372,8 +409,8 @@ func (s *Server) remoteWhoami(w http.ResponseWriter, r *http.Request) {
 		"passkeys": rm.Passkeys.Count(),
 		// 配对页据此决定要不要显示「用 passkey 登录」。**按当前 origin 算**，见 passkeyOK
 		"passkeyAvailable": s.passkeyOK(r),
-		"ttlDays":          int(rm.Cfg.DeviceTTL / (24 * time.Hour)),
-		"pairMinutes":      int(rm.Cfg.PairTTL / time.Minute), // 配对码进来的设备活几分钟（配对页上说清楚）
+		"ttlDays":          int(rm.Config().DeviceTTL / (24 * time.Hour)),
+		"pairMinutes":      int(rm.Config().PairTTL / time.Minute), // 配对码进来的设备活几分钟（配对页上说清楚）
 	}
 	if !auth.FromRemote(r) {
 		out["authed"] = true // 走到这儿说明令牌那道已经过了
@@ -429,14 +466,14 @@ func (s *Server) remotePair(w http.ResponseWriter, r *http.Request) {
 // passkeyOK 这个请求所在的 origin 上能不能做 passkey。**按请求算**：本机口（http://127.0.0.1）
 // 和远程口（https://主机名）是两个 origin，WebAuthn 只认 RPID 那一个。见 auth.UsableOn。
 func (s *Server) passkeyOK(r *http.Request) bool {
-	return auth.FromRemote(r) && s.Remote.Passkeys.Available() && auth.UsableOn(s.Remote.Cfg.Host, r.Host)
+	return auth.FromRemote(r) && s.Remote.Passkeys.Available() && auth.UsableOn(s.Remote.Config().Host, r.Host)
 }
 
 // stepUpWindow：再注册一把 passkey 之前，那次生物验证的新鲜度要求。
 const stepUpWindow = 5 * time.Minute
 
 func (s *Server) reauthNeeded(id *auth.Ident) bool {
-	return auth.ReauthNeeded(id, s.Remote.Cfg.ReauthAfter, s.Remote.Passkeys.Count(), time.Now())
+	return auth.ReauthNeeded(id, s.Remote.Config().ReauthAfter, s.Remote.Passkeys.Count(), time.Now())
 }
 
 func (s *Server) remotePasskey(w http.ResponseWriter, r *http.Request) {

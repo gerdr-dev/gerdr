@@ -42,7 +42,7 @@ func remoteCmd() *cobra.Command {
 			}
 			st := out.Status
 			if !st.Enabled {
-				fmt.Println("  没开远程访问。开法：gerdr remote join <中继地址> <主机名> <邀请码>（gerdr remote join -h）")
+				fmt.Println("  没开远程访问。开法：设置 → 远程访问里填中继地址、主机名和邀请码；或者 gerdr remote join <中继地址> <主机名> <邀请码>")
 				return nil
 			}
 			fmt.Printf("  地址：%s\n  中继：%s\n", st.URL, st.RelayURL)
@@ -251,7 +251,8 @@ func joinCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use:   "join <中继地址> <主机名> <邀请码>",
 		Short: "用邀请码把这台机器注册到云端中继（herdr-relay）上（邀请码在 VPS 上用 herdr-relay invite <主机名> 出）",
-		Long: "注册到中继，并把配置写进 <数据目录>/remote/remote.json（0600），重启 gerdr 之后生效。\n" +
+		Long: "注册到中继，并把配置写进 <数据目录>/remote/remote.json（0600）；gerdr 在跑就当场生效，没在跑就下次启动生效。\n" +
+			"也可以不敲命令：设置 → 远程访问里填同样三样。\n" +
 			"证书可以一起给：--dns 让 gerdr 走 DNS-01 自己签（推荐），或者 --cert / --key 指两个文件；\n" +
 			"也可以不给，注册完在 App 的设置 → 远程访问 → 证书里选服务商、填凭据。\n\n" +
 			"DNS 服务商的凭据用 --env 给（可以给多个），名字照 lego 的写法、不带 GERDR_ 前缀：\n\n" +
@@ -306,8 +307,15 @@ func joinCmd() *cobra.Command {
 			if err := config.WriteRemoteFile(env.Dir, f); err != nil {
 				return fmt.Errorf("注册好了，但配置没写进去：%w", err)
 			}
-			fmt.Printf("\n  ✓ 注册好了：%s → %s\n  配置写在 %s/remote.json，重启 gerdr 之后生效（mac App 退出再开）。\n",
-				host, relayURL, config.RemoteDir(env.Dir))
+			// gerdr 在跑就让它当场重读，不用重启
+			applied := "重启 gerdr 之后生效（mac App 退出再开）"
+			if c, err := newAPIClient(); err == nil {
+				if err := c.do("POST", "/api/remote/reload", nil, nil); err == nil {
+					applied = "正在跑的 gerdr 已经换上了"
+				}
+			}
+			fmt.Printf("\n  ✓ 注册好了：%s → %s\n  配置写在 %s/remote.json，%s。\n",
+				host, relayURL, config.RemoteDir(env.Dir), applied)
 			printRelayDNS(env.Dir, host)
 			return nil
 		},

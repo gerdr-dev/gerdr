@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { useStore } from "@/lib/store";
 import type { RemoteConn } from "@/lib/types";
 import { RemoteCert } from "@/components/RemoteCert";
+import { RemoteConnect } from "@/components/RemoteConnect";
+import { ConfirmDelete } from "@/components/ConfirmDelete";
 import { PasskeyStepUp, StepUpApprovals } from "@/components/PasskeyStepUp";
 
 // 设置 →「远程访问」：手机 / 别的电脑经云端中继打开这台机器上的 gerdr（设计见 docs/dev/REMOTE.md）。
@@ -65,16 +67,32 @@ export function RemoteSettings({ open }: { open: boolean }) {
       {msg && <div className="text-ok">{msg}</div>}
 
       {!st.enabled ? (
-        <div className="space-y-2">
-          <div>还没开远程访问。gerdr 经云端中继（herdr-relay）对外：TLS 在这台机器上终止，中继只转密文。开法（一次性）：</div>
-          <pre className="overflow-x-auto rounded-md bg-muted p-3 font-mono text-[12px]">
-            {"# VPS 上出邀请码\nherdr-relay invite gerdr.example.com\n\n# 这台机器上\ngerdr remote join https://relay.example.com gerdr.example.com <邀请码>"}
-          </pre>
-          <div className="text-[12px] text-muted-foreground">它会打出要加的 DNS 记录。之后重启 gerdr，再回这里配证书。</div>
-        </div>
+        st.envLocked ? (
+          <div className="text-[12px] text-muted-foreground">
+            中继地址 / 主机名由环境变量 GERDR_RELAY_URL / GERDR_RELAY_HOST 给，两个都给齐才算开了远程访问。
+          </div>
+        ) : (
+          !isRemote && <RemoteConnect relayURL={st.relayURL} onDone={load} />
+        )
       ) : (
         <div className="space-y-1.5">
-          <div className="text-[13px] font-medium">地址</div>
+          <div className="flex items-center justify-between">
+            <div className="text-[13px] font-medium">地址</div>
+            {/* 远程那一侧不给：移除 = 把自己锁在门外（后端也拦着）。换地址 = 先移除再连 */}
+            {!isRemote && !st.envLocked && (
+              <ConfirmDelete
+                title="移除远程访问（换地址也是先移除、再连新的）：断开中继，配过的设备和 passkey 全部清掉"
+                label="确认移除，设备和 passkey 一起清掉"
+                onConfirm={() =>
+                  run(async () => {
+                    const r = await api.remoteDisconnect();
+                    setPair(null);
+                    setMsg(`已移除远程访问，踢掉了 ${r.revoked} 台设备${r.passkeys ? `、删掉了 ${r.passkeys} 把 passkey` : ""}。`);
+                  })
+                }
+              />
+            )}
+          </div>
           <div className="space-y-1 rounded-md border p-3">
             <div>
               <a className="font-mono text-brand underline-offset-2 hover:underline" href={st.url} target="_blank" rel="noreferrer">

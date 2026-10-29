@@ -35,11 +35,11 @@ func (s *Server) appRoutes(mux *http.ServeMux) {
 //
 // 没认证也给（remotePublic）：系统来取它时不带任何凭据；里面只有公开的证书指纹。
 func (s *Server) assetLinks(w http.ResponseWriter, r *http.Request) {
-	if s.Remote == nil || !s.Remote.Cfg.Enabled() {
+	if s.Remote == nil || !s.Remote.Config().Enabled() {
 		http.NotFound(w, r)
 		return
 	}
-	cfg := s.Remote.Cfg
+	cfg := s.Remote.Config()
 	type target struct {
 		Namespace   string   `json:"namespace"`
 		Site        string   `json:"site,omitempty"`
@@ -70,7 +70,7 @@ func (s *Server) assetLinks(w http.ResponseWriter, r *http.Request) {
 //	deny     批准方：拒绝
 func (s *Server) apiCLI(w http.ResponseWriter, r *http.Request) {
 	rm := s.Remote
-	if rm == nil || !rm.Cfg.Enabled() {
+	if rm == nil || !rm.Config().Enabled() {
 		httpError(w, http.StatusConflict, "还没开远程访问")
 		return
 	}

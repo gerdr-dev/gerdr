@@ -64,7 +64,7 @@ func (s *Service) startLan(ctx context.Context, cfg config.Remote, cf *certFile,
 // 每次现算：局域网 IP 会变（DHCP、换 Wi-Fi），配死一个地址的表现是「某天开始不直连了，而且没有任何报错」。
 func (s *Service) LanOrigins() []string {
 	s.mu.Lock()
-	on, port := s.lanHS != nil, s.Cfg.LanPort
+	on, port := s.lanHS != nil, s.cfg.LanPort
 	s.mu.Unlock()
 	if !on {
 		return nil

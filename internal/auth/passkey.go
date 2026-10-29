@@ -86,21 +86,32 @@ func NewPasskeys(cfg PasskeyConfig) (*Passkeys, error) {
 	if err := p.load(); err != nil {
 		return nil, err
 	}
-	if cfg.RPID == "" {
-		return p, nil // 用不了，但对象还在，Count() 返回 0
+	if err := p.SetRP(cfg.RPID, cfg.Origins); err != nil {
+		return nil, err
 	}
-	display := cfg.Display
-	if display == "" {
-		display = "gerdr"
-	}
-	w, err := webauthn.New(&webauthn.Config{
-		RPID: cfg.RPID, RPDisplayName: display, RPOrigins: cfg.Origins,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("passkey 配置不对（RPID=%q origins=%v）: %w", cfg.RPID, cfg.Origins, err)
-	}
-	p.w = w
 	return p, nil
+}
+
+// SetRP 换绑定的域名（设置里连上 / 移除远程访问时，不重启 gerdr）。空 RPID = 用不了。
+// 已经存着的 passkey 不动：它们绑在旧域名上，换了名字就用不了 —— 要不要清由调用方定。
+func (p *Passkeys) SetRP(rpid string, origins []string) error {
+	var w *webauthn.WebAuthn
+	if rpid != "" {
+		display := p.cfg.Display
+		if display == "" {
+			display = "gerdr"
+		}
+		var err error
+		w, err = webauthn.New(&webauthn.Config{RPID: rpid, RPDisplayName: display, RPOrigins: origins})
+		if err != nil {
+			return fmt.Errorf("passkey 配置不对（RPID=%q origins=%v）: %w", rpid, origins, err)
+		}
+	}
+	p.mu.Lock()
+	p.cfg.RPID, p.cfg.Origins, p.w = rpid, origins, w
+	p.sess = map[string]*pendingCeremony{} // 换了域名，进行到一半的 ceremony 全作废
+	p.mu.Unlock()
+	return nil
 }
 
 // CheckTampered 看一眼 passkey 文件有没有被外部改过。
@@ -109,7 +120,14 @@ func (p *Passkeys) CheckTampered(alert func(string)) {
 }
 
 // Available：这个部署能不能用 passkey。
-func (p *Passkeys) Available() bool { return p != nil && p.w != nil }
+func (p *Passkeys) Available() bool {
+	if p == nil {
+		return false
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.w != nil
+}
 
 // UsableOn 在**这个 Host 上**能不能做 WebAuthn。
 //
@@ -277,11 +295,11 @@ var ErrNoPasskey = errors.New("这个部署用不了 passkey：需要用域名�
 
 // BeginRegister 返回给浏览器的 options 和一个 ceremony id。
 func (p *Passkeys) BeginRegister() (any, string, error) {
-	if !p.Available() {
-		return nil, "", ErrNoPasskey
-	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	if p.w == nil { // 锁里判：SetRP 随时可能把它换成 nil
+		return nil, "", ErrNoPasskey
+	}
 
 	opts, session, err := p.w.BeginRegistration(p.userLocked(),
 		// 要 discoverable（resident key）：这样登录时不用先输用户名，
@@ -301,11 +319,11 @@ func (p *Passkeys) BeginRegister() (any, string, error) {
 }
 
 func (p *Passkeys) FinishRegister(ceremony, ua string, r *http.Request) (*Passkey, error) {
-	if !p.Available() {
-		return nil, ErrNoPasskey
-	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	if p.w == nil { // 锁里判：SetRP 随时可能把它换成 nil
+		return nil, ErrNoPasskey
+	}
 
 	session := p.takeLocked(ceremony)
 	if session == nil {
@@ -329,11 +347,11 @@ func (p *Passkeys) FinishRegister(ceremony, ua string, r *http.Request) (*Passke
 
 // BeginLogin 走 discoverable（passkey）流程：不需要先知道是谁。
 func (p *Passkeys) BeginLogin() (any, string, error) {
-	if !p.Available() {
-		return nil, "", ErrNoPasskey
-	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	if p.w == nil { // 锁里判：SetRP 随时可能把它换成 nil
+		return nil, "", ErrNoPasskey
+	}
 	if len(p.keys) == 0 {
 		return nil, "", errors.New("还没有注册过 passkey")
 	}
@@ -347,11 +365,11 @@ func (p *Passkeys) BeginLogin() (any, string, error) {
 }
 
 func (p *Passkeys) FinishLogin(ceremony string, r *http.Request) (*Passkey, error) {
-	if !p.Available() {
-		return nil, ErrNoPasskey
-	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	if p.w == nil { // 锁里判：SetRP 随时可能把它换成 nil
+		return nil, ErrNoPasskey
+	}
 
 	session := p.takeLocked(ceremony)
 	if session == nil {

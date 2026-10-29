@@ -85,6 +85,18 @@ GERDR_* 本来就不往 agent 的环境里传（`sysenv.ChildEnv`）；acme 把�
 表单留空 = 沿用；换服务商时别家的凭据从文件里删掉。所以 `join` 不再强制要 `--dns` / `--cert`。
 服务商的表单字段和「凭据去哪儿拿」在 `acme.providers` 一张表里（`acme_test.go` 钉着它和 `dnsNamespaces` 对得上）。
 
+连上 / 移除中继也在设置页（`/api/remote/connect` `disconnect`，同样**只在本机口**：远程移除等于把自己锁在门外），
+`remote.Service.Connect` / `Disconnect` 改完 remote.json 走 `Reload` 整条重来，不用重启；`gerdr remote join` 写完文件也调
+`/api/remote/reload` 通知在跑的 gerdr。几条要守住的：
+
+- **`Service.cfg` 运行中会整份换掉**，读一律走 `Config()`（持锁拷一份）。直接读字段就是数据竞争，`go test -race` 才看得出来。
+- **passkey 的 RPID 跟着主机名换**（`Passkeys.SetRP`）。`Available()` 和 ceremony 里判 `p.w` 都在锁里 —— 先判再上锁的话，
+  两步之间被换成 nil 就是空指针。
+- **移除 = 设备 + passkey 全清**（`RevokeEverything`），中继地址和证书来源留着方便下次连。不清的话，几个月后重新连上（可能
+  换了名字）那些凭据突然又好使，已经没人记得给过谁。换地址就是先移除再连；连一个和文件里不同的名字时也清 passkey（绑在旧域名上，一把都用不了）。
+- 中继那边的注册删不掉（协议里没有注销，协议也不能改），没有本机身份私钥签名别人也连不上，要清在 VPS 上清。
+- 地址由环境变量 `GERDR_RELAY_URL` / `GERDR_RELAY_HOST` 给时（它们盖过文件），连接 / 移除直接拒（`envLocked`），不然点了什么都不变。
+
 **坑：写在 `~/.zshenv` / `.zshrc` 里的 `GERDR_*` App 看不到**（从访达起不读 shell 配置；`sysenv.AdoptLoginPath`
 只捞 PATH）。终端里起的 gerdr 看得到、App 里看不到，表现是「明明配了，App 里还说缺证书」—— 用设置页那一处。
 

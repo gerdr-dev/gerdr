@@ -168,7 +168,7 @@ export function RemoteCert({ host, onSaved }: { host: string; onSaved: () => voi
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+export function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="flex items-center gap-3 max-md:flex-col max-md:items-stretch max-md:gap-1">
       <span className="w-32 shrink-0 text-muted-foreground">{label}</span>

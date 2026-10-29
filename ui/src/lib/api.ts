@@ -201,6 +201,9 @@ export const api = {
   stepUpDecide: (id: string, ok: boolean) => req("POST", `/api/remote/stepup/approve/${encodeURIComponent(id)}`, { ok }),
   remoteCert: () => req<RemoteCert>("GET", "/api/remote/cert"),
   remoteSaveCert: (c: RemoteCertInput) => req("POST", "/api/remote/cert", c),
+  /** 连上 / 移除远程访问：本机专用，当场生效不用重启 */
+  remoteConnect: (relayURL: string, host: string, invite: string) => req("POST", "/api/remote/connect", { relayURL, host, invite }),
+  remoteDisconnect: () => req<{ revoked: number; passkeys: number }>("POST", "/api/remote/disconnect", {}),
   remoteLogout: () => req("POST", "/api/remote/logout", {}),
   // 批准安卓 App 的登录（passkey 的退路，device flow：App 显示码，这边手输）
   cliPeek: (code: string) => req<CliRequest>("POST", "/api/remote/cli/peek", { code }),
@@ -213,6 +216,8 @@ export const api = {
 
 export type RemoteStatus = {
   enabled: boolean;
+  /** 中继地址 / 主机名是环境变量给的：设置里连接 / 移除改不动 */
+  envLocked?: boolean;
   host?: string;
   url?: string;
   relayURL?: string;
