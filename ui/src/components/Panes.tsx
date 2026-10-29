@@ -40,6 +40,7 @@ import { cn } from "@/lib/utils";
 import { AgentIcon, StatusDot } from "./AgentIcon";
 import { ChatView } from "./chat/ChatView";
 import { NewSession } from "./NewSession";
+import { PixelLoader } from "./chat/PixelLoader";
 import { startPaneDrag, useDrag, type TabGhost } from "./TabDrag";
 import { TerminalView } from "./Terminal";
 
@@ -333,6 +334,8 @@ function TermPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; ta
 function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; tab: Tab; framed: boolean; zoomed?: boolean; count?: Count }) {
   const session = useStore((s) => (pane.sessionId ? s.sessions[pane.sessionId] : undefined));
   const unread = useStore((s) => (pane.sessionId ? !!s.unread[pane.sessionId] : false));
+  const starting = useStore((s) => !!s.starting[pane.id]);
+  const agents = useStore((s) => s.agents);
   useStore((s) => s.pluginVersion);
   const focused = useContext(TabActive) && tab.focus === pane.id;
   const many = framed || zoomed;
@@ -341,7 +344,7 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
     if (focused && pane.sessionId && unread) markRead(pane.sessionId);
   }, [focused, pane.sessionId, unread]);
 
-  const base = session ? session.title || basename(session.cwd) : "新会话";
+  const base = session ? session.title || basename(session.cwd) : starting && pane.draft?.cwd ? basename(pane.draft.cwd) : "新会话";
   const title = applyPaneTitle(pane, tab, base);
   const drag = usePaneDrag(pane.id, { label: title, agent: session?.agent });
 
@@ -360,7 +363,11 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
         onPointerDown={drag.onPointerDown}
         className={cn("flex h-8 shrink-0 items-center gap-2 border-b px-3 text-[12px] max-md:pl-4", !focused && many && "opacity-70")}
       >
-        {session ? <AgentIcon agent={session.agent} className="size-4" /> : <PanelTopOpen className="size-3.5 text-muted-foreground" />}
+        {session || (starting && pane.draft?.agent) ? (
+          <AgentIcon agent={session?.agent ?? pane.draft!.agent!} className="size-4" />
+        ) : (
+          <PanelTopOpen className="size-3.5 text-muted-foreground" />
+        )}
         <span className="min-w-[3em] max-w-[60%] shrink truncate font-medium">{title}</span>
         <StatusDot status={session?.status} unread={unread} />
         {session?.pending ? <span className="shrink-0 whitespace-nowrap rounded-sm bg-bad/15 px-1.5 text-[11px] text-bad">等你</span> : null}
@@ -452,6 +459,11 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
       <div className="min-h-0 flex-1">
         {session ? (
           <ChatView key={session.id} session={session} paneId={pane.id} focused={focused} />
+        ) : starting ? (
+          <div className="flex h-full items-center justify-center gap-2 text-[12px] text-muted-foreground">
+            <PixelLoader className="size-4" />
+            正在开 {agents.find((a) => a.id === pane.draft?.agent)?.name ?? pane.draft?.agent}…
+          </div>
         ) : (
           <NewSession key={pane.id + (pane.draft?.cwd ?? "")} pane={pane} focused={focused} />
         )}

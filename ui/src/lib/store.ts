@@ -140,6 +140,8 @@ type State = {
   /** 每个 pane 输入框里贴了还没发的图：和字一样，tab 不保留时切走输入框会卸载，放组件里就丢了（用户报的）。 */
   draftImgs: Record<string, { data: string; mimeType: string; url: string }[]>;
   pluginVersion: number;
+  /** 正在直接开会话的 pane（⌘D 复制）：开好之前别画空面板（挑 agent 那一屏闪一下再变成对话，用户不想看见）。不存盘。 */
+  starting: Record<string, true>;
 };
 
 export const transcripts = new Map<string, Transcript>();
@@ -212,6 +214,7 @@ export const useStore = create<State>(() => ({
   drafts: {},
   draftImgs: {},
   pluginVersion: 0,
+  starting: {},
 }));
 
 export const get = useStore.getState;
