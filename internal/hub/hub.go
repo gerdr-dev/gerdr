@@ -852,6 +852,7 @@ func (h *Hub) Delete(ctx context.Context, id string) error {
 	s.close(ctx)
 	h.unregister(s)
 	_ = os.Remove(s.lf.path)
+	_ = os.RemoveAll(s.shellDir()) // `!命令` 的完整输出（shell.go）
 	h.saveIndex()
 	h.broadcast(Msg{T: "session_removed", ID: id})
 	return nil

@@ -167,7 +167,12 @@ codex 的 app-server 没这个命令）。代价是没有 claude 那段「用量
 照 Claude Code 的 bash 模式：不发给 agent、不起一轮，gerdr 在会话目录里用登录 shell 直接跑（没有 stdin，自己一个进程组，停止时整组杀）。
 stream-json / app-server 都没有这个口（Claude Code 的 `!` 是 TUI 输入框自己做的），三家 agent 一个做法。
 
-- 日志记 `shell` / `shell_out`（攒 200ms 一段，最多 256KB）/ `shell_done`（退出码；stopped / lost），界面画成命令卡片（chat/ShellCard）。
+- 日志记 `shell` / `shell_out`（攒 200ms 一段，最多 256KB）/ `shell_done`（退出码；stopped / lost；Text = 完整输出的文件），界面画成命令卡片（chat/ShellCard）。
+  完整输出另写一份文件（`sessions/<id>.shell/<运行 id>.log`，最多 64MB，删会话时一起删）：日志只记开头，结尾（报错）常在后面。
+- 卡片默认收起只露 3 行（照 Claude Code 的「… +N lines」，正好多 1 行就全露）：在跑 / 失败露最后 3 行，成功露开头；收起时不折行。
+  原来整段摊开，跑两条 ls 就占满一屏（用户报的）。日志记满时卡片上给「打开完整输出」（文件查看器开那个文件）。
+- 长输出照 Claude Code 处理 Bash 长输出的办法：超过 30000 字（或日志记满）不内联，给 agent `<persisted-output>`（文件路径 + 开头、结尾各 2KB），
+  要细看它自己去读。原来是掐头去尾、中间直接删掉，agent 再也看不到。
 - 带给 agent：下一条消息（包括插话）前面接上 `<bash-input>…</bash-input>\n<bash-stdout>…</bash-stdout><bash-stderr>…</bash-stderr>\n`
   （Claude Code 自己记 `!` 的格式），一条命令一块。「还没带的」= 最后一条用户消息之后跑完的，从日志推，不另存：撤回 / 回退掉那条消息，命令自动算回没带。
   日志里的用户消息记的是带上之后的原样 —— agent 记录里就是这样，CatchUp 比对、重新载入才对得上；块末尾的换行不能省（claude 记录里几块文字直接拼，hub 按换行拼）。

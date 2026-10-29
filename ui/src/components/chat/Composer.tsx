@@ -330,11 +330,15 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
   const ctrlCAt = useRef(0);
   const escPending = useRef(false);
   const escaping = useRef(false);
+  // ↑ 翻的历史：人说过的话，加上跑过的 `!命令`（照 Claude Code：它们在同一份输入历史里）。命令卡片挂在助手消息里，按出现的先后排进去
   const userTexts = () =>
     transcript(session.id)
-      .all.filter((m) => m.role === "user")
-      .map((m) => m.parts.map((p) => (p.type === "text" ? p.text : "")).join(""))
-      .filter((t) => t.trim())
+      .all.flatMap((m) =>
+        m.role === "user"
+          ? [m.parts.map((p) => (p.type === "text" ? p.text : "")).join("")]
+          : m.parts.flatMap((p) => (p.type === "data-shell" ? ["!" + p.data.command] : [])),
+      )
+      .filter((t, i, a) => t.trim() && t !== a[i - 1]) // 连着一样的只留一条：`!ls` 跑三遍，↑ 不用按三下
       .reverse();
   // 收回来的消息（Esc / ↑ / 「排队中」那行的撤回）放回输入框：字接在已有的前面，图片也放回来 ——
   // 原来 ↑ 和撤回按钮只放字，截图就丢了（用户报的）

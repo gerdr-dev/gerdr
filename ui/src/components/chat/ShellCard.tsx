@@ -2,6 +2,8 @@ import { CircleX, Loader2, RotateCw, Square } from "lucide-react";
 import { useLayoutEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import { openPath } from "@/lib/actions";
+import { useKept } from "@/lib/kept";
 import type { GData } from "@/lib/transcript";
 import { cn } from "@/lib/utils";
 
@@ -14,21 +16,35 @@ const plain = (s: string) =>
     .map((l) => l.slice(l.lastIndexOf("\r", l.length - 2) + 1).replace(/\r$/, ""))
     .join("\n");
 
+// 收起时露几行（照 Claude Code：3 行，正好多 1 行时直接全露，不为一行折起来）
+const FOLD = 3;
+// hub/shell.go 在日志记满时补的那句：看到它说明这里只有开头，完整的得去文件里看
+const CUT_MARK = "完整的在文件里";
+
 /**
  * 输入框里 `!命令` 跑出来的那张卡片（gerdr 自己跑的，不经过 agent，见 hub/shell.go）：
- * 头一行是命令（和 Claude Code 里一样写成 `! 命令`），下面是输出。在跑时输出跟着滚到底、能停；跑完能再跑一次。
+ * 头一行是命令（和 Claude Code 里一样写成 `! 命令`），下面是输出。在跑时能停；跑完能再跑一次。
  * 输出会跟着人的下一条消息带给 agent，卡片上不用再说 —— 输入框里打 ! 时提示过了。
+ *
+ * 输出默认收起，只露 3 行（照 Claude Code 的「… +N lines」）：原来整段摊开（最高 288px），跑两条 ls 就占满一屏（用户报的）。
+ * 露哪 3 行：在跑时看最后（进度在后面）、失败了也看最后（报错在后面），成功了看开头。收起时不折行，一行就是一行。
+ * 展开的状态放 useKept：对话是虚拟列表，滚出去再回来组件是新挂的。
  */
 export function ShellCard({ sessionId, data }: { sessionId: string; data: GData["shell"] }) {
   const out = plain(data.output).replace(/\n+$/, "");
   const pre = useRef<HTMLPreElement>(null);
   const [busy, setBusy] = useState(false);
-  // 在跑时跟着输出滚到底（人往上翻过就不跟了：离底部超过一行算翻过）
+  const [open, setOpen] = useKept(`${sessionId}:shell:${data.id}`, false);
+  const failed = !data.running && (data.end === "stopped" || data.end === "lost" || !!data.error || (data.exit ?? 0) !== 0);
+  const lines = out ? out.split("\n") : [];
+  const folded = !open && lines.length > FOLD + 1;
+  const shown = folded ? (data.running || failed ? lines.slice(-FOLD) : lines.slice(0, FOLD)) : lines;
+  const cut = !!data.path && data.output.includes(CUT_MARK);
+  // 展开着、还在跑：跟着输出滚到底（人往上翻过就不跟了：离底部超过一行算翻过）
   useLayoutEffect(() => {
     const el = pre.current;
-    if (el && data.running && el.scrollHeight - el.scrollTop - el.clientHeight < 40) el.scrollTop = el.scrollHeight;
-  }, [out, data.running]);
-  const failed = !data.running && (data.end === "stopped" || data.end === "lost" || !!data.error || (data.exit ?? 0) !== 0);
+    if (el && open && data.running && el.scrollHeight - el.scrollTop - el.clientHeight < 40) el.scrollTop = el.scrollHeight;
+  }, [out, data.running, open]);
   const status = data.running
     ? null
     : data.end === "stopped"
@@ -89,10 +105,27 @@ export function ShellCard({ sessionId, data }: { sessionId: string; data: GData[
       {out && (
         <pre
           ref={pre}
-          className="ml-5.5 max-h-72 overflow-auto rounded-md bg-muted/60 px-2.5 py-1.5 font-mono text-[12px] leading-relaxed whitespace-pre-wrap break-all text-muted-foreground"
+          className={cn(
+            "ml-5.5 rounded-md bg-muted/60 px-2.5 py-1.5 font-mono text-[12px] leading-relaxed text-muted-foreground",
+            folded ? "overflow-hidden whitespace-pre text-ellipsis" : "max-h-96 overflow-auto whitespace-pre-wrap break-all",
+          )}
         >
-          {out}
+          {shown.join("\n")}
         </pre>
+      )}
+      {(folded || open || cut) && (
+        <div className="ml-5.5 flex items-center gap-3 text-[11px] text-muted-foreground">
+          {(folded || open) && lines.length > FOLD + 1 && (
+            <button className="hover:text-foreground" onClick={() => setOpen(!open)}>
+              {open ? "收起" : `${data.running || failed ? "前面" : "后面"}还有 ${lines.length - FOLD} 行 · 展开`}
+            </button>
+          )}
+          {cut && (
+            <button className="hover:text-foreground" title={data.path} onClick={() => openPath(data.path!)}>
+              这里只记了开头，打开完整输出
+            </button>
+          )}
+        </div>
       )}
     </div>
   );

@@ -2,6 +2,7 @@ package hub
 
 import (
 	"encoding/json"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -107,4 +108,54 @@ func TestShellOutTake(t *testing.T) {
 	if got := o.take(true); got != "中" {
 		t.Fatalf("got %q", got)
 	}
+}
+
+// 输出太长：完整的在文件里，带给 agent 的是路径 + 开头结尾各一小段（照 Claude Code 的 <persisted-output>）。
+func TestShellLongOutput(t *testing.T) {
+	t.Setenv("SHELL", "/bin/sh")
+	h, err := New(Options{Dir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := newSession(h, Record{ID: "s1", Cwd: t.TempDir()})
+	id, err := s.Shell("seq 1 20000", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := waitShellDone(t, s, id)
+	if d.Text == "" {
+		t.Fatal("没记完整输出的文件")
+	}
+	s.mu.Lock()
+	p := s.pendingShellLocked()
+	s.mu.Unlock()
+	txt := p[0].Text.Text
+	// 开头、结尾两段都切在整行上：结尾那段第一行是完整的数，开头那段最后一行也是
+	if !strings.Contains(txt, "Last 2048 bytes:\n1") || strings.Contains(txt, "Last 2048 bytes:\n9\n") {
+		t.Error("结尾那段从半行开始")
+	}
+	for _, want := range []string{"<persisted-output>", d.Text, "\n1\n2\n3\n", "19999\n20000"} {
+		if !strings.Contains(txt, want) {
+			t.Errorf("缺 %q", want)
+		}
+	}
+	if len(txt) > 3*shellPeek+500 {
+		t.Errorf("带给 agent 的太长了：%d", len(txt))
+	}
+	if !isShellContextShape(txt) {
+		t.Error("形状变了，界面认不出来")
+	}
+	// 删会话时一起删
+	h.register(s)
+	if err := h.Delete(t.Context(), "s1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(d.Text); !os.IsNotExist(err) {
+		t.Error("删会话后完整输出还在")
+	}
+}
+
+// 界面（transcript.ts 的 SHELL_CTX）按这个形状认
+func isShellContextShape(t string) bool {
+	return strings.HasPrefix(t, "<bash-input>") && strings.Contains(t, "</bash-input>\n<bash-stdout>") && strings.HasSuffix(t, "</bash-stderr>\n")
 }

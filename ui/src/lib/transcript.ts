@@ -31,7 +31,8 @@ export type GData = {
   turnEnd: { stopReason: string; error?: string };
   quickReplies: { questions: { question: string; options: string[] }[] };
   /** 输入框里的 `!命令`（gerdr 自己跑的，hub/shell.go）。end：stopped = 人点了停止，lost = gerdr 重启时还在跑；replayed = 从 agent 记录重放出来的 */
-  shell: { id: string; command: string; output: string; running: boolean; exit?: number; end?: string; error?: string; replayed?: boolean };
+  /** path：完整输出的文件（日志只记开头 256KB，太长时 agent 拿到的也是它，见 hub/shell.go） */
+  shell: { id: string; command: string; output: string; running: boolean; exit?: number; end?: string; error?: string; replayed?: boolean; path?: string };
 };
 
 export type GMessage = UIMessage<GMeta, GData>;
@@ -460,7 +461,7 @@ export class Transcript {
         const data =
           e.kind === "shell_out"
             ? { ...p.data, output: p.data.output + (e.text ?? "") }
-            : { ...p.data, running: false, exit: e.exit, end: e.level, error: e.error };
+            : { ...p.data, running: false, exit: e.exit, end: e.level, error: e.error, path: e.text || undefined };
         this.setPart(loc!, { ...p, data });
         break;
       }

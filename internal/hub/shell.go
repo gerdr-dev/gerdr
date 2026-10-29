@@ -1,11 +1,13 @@
 package hub
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -34,9 +36,11 @@ const (
 )
 
 const (
-	shellLogMax = 256 << 10 // 日志里最多记这么多输出（给界面看），再多只留一句提示
-	shellCtxMax = 30000     // 带给 agent 的输出最多这么多字（照 Claude Code 的 bash 输出上限），超了留头尾
-	shellTick   = 200 * time.Millisecond
+	shellLogMax  = 256 << 10 // 日志里最多记这么多输出（给界面看），再多只留一句提示 —— 完整的在文件里（shellDir）
+	shellFileMax = 64 << 20  // 完整输出的文件最多这么大（防着 `yes` 这种把盘写满）
+	shellCtxMax  = 30000     // 带给 agent 的输出超过这么多字就不内联了（照 Claude Code 的 bash 输出上限，见 shellContext）
+	shellPeek    = 2048      // 不内联时给 agent 看的开头、结尾各多少字节
+	shellTick    = 200 * time.Millisecond
 )
 
 // shellPrefix：带给 agent 的那段以它开头。界面、标题、撤回放回输入框都靠它认出来跳过。
@@ -50,17 +54,24 @@ func isShellBlock(raw json.RawMessage) bool {
 	return json.Unmarshal(raw, &b) == nil && b.Type == "text" && strings.HasPrefix(b.Text, shellPrefix)
 }
 
-// shellOut：命令的输出先攒在这儿，定时成段写进日志（一个字节一条日志的话流式命令能刷出几万条）。
+// shellOut：命令的输出先攒在这儿，定时成段写进日志（一个字节一条日志的话流式命令能刷出几万条）；
+// 同时原样写进文件（file，可能没有）：日志只记开头 256KB，完整的给 agent 按需去读、给人在查看器里打开。
 type shellOut struct {
 	mu      sync.Mutex
 	pending []byte
 	total   int
 	cut     bool
+	file    *os.File
+	written int
 }
 
 func (o *shellOut) Write(p []byte) (int, error) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
+	if o.file != nil && o.written < shellFileMax {
+		n, _ := o.file.Write(p[:min(len(p), shellFileMax-o.written)])
+		o.written += n
+	}
 	if o.cut {
 		return len(p), nil
 	}
@@ -103,6 +114,11 @@ type shellRun struct {
 	stopped bool
 }
 
+// shellDir：这个会话 `!命令` 的完整输出放在哪（和会话日志挨着，删会话时一起删）。
+func (s *Session) shellDir() string {
+	return filepath.Join(filepath.Dir(s.lf.path), s.rec.ID+".shell")
+}
+
 func userShell() string {
 	if s := os.Getenv("SHELL"); s != "" {
 		return s
@@ -128,6 +144,12 @@ func (s *Session) Shell(command, clientID string) (string, error) {
 	// 自己一个进程组：停止时连它起的一串子进程一起杀（npm、go test 起的那些不跟着死的话会一直挂着）
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	out := &shellOut{}
+	path := filepath.Join(s.shellDir(), id+".log")
+	if os.MkdirAll(filepath.Dir(path), 0o700) == nil {
+		if f, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600); err == nil {
+			out.file = f
+		}
+	}
 	cmd.Stdout, cmd.Stderr = out, out
 	// 命令自己退了、它丢到后台的进程还拿着输出管道时（`dev-server &`），Wait 会一直等那个管道 —— 最多再等 2 秒就不管了
 	cmd.WaitDelay = 2 * time.Second
@@ -146,6 +168,10 @@ func (s *Session) Shell(command, clientID string) (string, error) {
 	cmd.Dir = s.rec.Cwd
 	if err := cmd.Start(); err != nil {
 		s.mu.Unlock()
+		if out.file != nil {
+			out.file.Close()
+			os.Remove(path)
+		}
 		return "", err
 	}
 	if s.shells == nil {
@@ -179,13 +205,17 @@ func (s *Session) Shell(command, clientID string) (string, error) {
 		}
 		t := out.take(true)
 		if out.cut {
-			t += fmt.Sprintf("\n…（输出超过 %d KB，后面的没记下来）\n", shellLogMax>>10)
+			t += fmt.Sprintf("\n…（输出超过 %d KB，这里只显示开头，完整的在文件里）\n", shellLogMax>>10)
 		}
 		if t != "" {
 			s.emit(&Event{Kind: EvShellOut, MessageID: id, Text: t})
 		}
 		code := cmd.ProcessState.ExitCode()
 		ev := &Event{Kind: EvShellDone, MessageID: id, Exit: &code}
+		if out.file != nil {
+			out.file.Close()
+			ev.Text = path // 完整输出的文件：界面「打开完整输出」，太长时 agent 拿它去读（shellContext）
+		}
 		s.mu.Lock()
 		if run.stopped {
 			ev.Level = "stopped"
@@ -271,20 +301,88 @@ func (s *Session) pendingShellLocked() []acp.ContentBlock {
 				buf.WriteString(e.Text)
 			}
 		}
-		out = append(out, acp.TextBlock(shellContext(cmd, buf.String(), d)))
+		out = append(out, acp.TextBlock(shellContext(cmd, shellOutput(buf.String(), d.Text), d)))
 	}
 	return out
+}
+
+// shellOutput：带给 agent 的输出。不长就是日志里记的全文；超过 shellCtxMax 字（或者日志只记了开头）时照 Claude Code
+// 处理 Bash 长输出的办法：不塞进上下文，给文件路径和开头、结尾各一小段，要细看让它自己去读（它认得 <persisted-output>）。
+// 结尾也给：出错信息多半在最后。没有文件（建文件失败）才退回掐头去尾。
+func shellOutput(logged, path string) string {
+	logged = strings.TrimRight(logged, "\n")
+	var size int64 = -1
+	if path != "" {
+		if st, err := os.Stat(path); err == nil {
+			size = st.Size()
+		}
+	}
+	long := utf8.RuneCountInString(logged) > shellCtxMax || size > shellLogMax
+	if !long {
+		return logged
+	}
+	if size < 0 {
+		r := []rune(logged)
+		head, tail := r[:shellCtxMax/3], r[len(r)-shellCtxMax*2/3:]
+		return string(head) + fmt.Sprintf("\n…（中间省略 %d 字）…\n", len(r)-len(head)-len(tail)) + string(tail)
+	}
+	head, tail := peekFile(path, size)
+	var b strings.Builder
+	fmt.Fprintf(&b, "<persisted-output>\nOutput too large (%.1fKB). Full output saved to: %s\n\nPreview (first %d bytes):\n%s\n", float64(size)/1024, path, shellPeek, head)
+	if tail != "" {
+		fmt.Fprintf(&b, "...\n\nLast %d bytes:\n%s\n", shellPeek, tail)
+	}
+	b.WriteString("</persisted-output>")
+	return b.String()
+}
+
+// peekFile：文件开头、结尾各 shellPeek 字节（切口上半个 UTF-8 字符去掉）。文件不比两段长时 tail 为空，head 就是全文。
+func peekFile(path string, size int64) (head, tail string) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", ""
+	}
+	defer f.Close()
+	buf := make([]byte, shellPeek)
+	n, _ := f.ReadAt(buf, 0)
+	if size <= 2*shellPeek {
+		return trimRunes(buf[:n]), ""
+	}
+	// 切口对齐到整行：半行（`19659` 只剩个 `9`）读着像另一个值（用户问「你看得到多少行」时露出来的）。
+	// 一行比整段还长（压缩过的 JSON）就不对齐了，照字节切
+	b := buf[:n]
+	if i := bytes.LastIndexByte(b, '\n'); i > 0 {
+		b = b[:i]
+	}
+	head = trimRunes(b)
+	t := make([]byte, shellPeek)
+	n, _ = f.ReadAt(t, size-shellPeek)
+	t = t[:n]
+	if i := bytes.IndexByte(t, '\n'); i >= 0 && i < len(t)-1 {
+		t = t[i+1:]
+	}
+	return head, trimRunes(t)
+}
+
+func trimRunes(b []byte) string {
+	for len(b) > 0 && !utf8.RuneStart(b[0]) {
+		b = b[1:]
+	}
+	for i := len(b) - 1; i >= 0 && i >= len(b)-utf8.UTFMax; i-- {
+		if utf8.RuneStart(b[i]) {
+			if !utf8.FullRune(b[i:]) {
+				b = b[:i]
+			}
+			break
+		}
+	}
+	return strings.ToValidUTF8(string(b), "�")
 }
 
 // shellContext：一条命令带给 agent 的样子（Claude Code 记 `!` 的格式）。stdout / stderr 跑的时候没分开（要按先后显示），
 // 全在 stdout 里；stderr 只交代命令是怎么结束的。末尾的换行不能省：claude 记录里一条消息的几块文字是直接拼起来的，
 // 和 hub 这边按换行拼的比对（userTextSet）要对得上，不然以为别处接着聊过。
 func shellContext(cmd, output string, done *Event) string {
-	output = strings.TrimRight(output, "\n")
-	if r := []rune(output); len(r) > shellCtxMax {
-		head, tail := r[:shellCtxMax/3], r[len(r)-shellCtxMax*2/3:]
-		output = string(head) + fmt.Sprintf("\n…（中间省略 %d 字）…\n", len(r)-len(head)-len(tail)) + string(tail)
-	}
 	var note string
 	switch {
 	case done.Level == "stopped":
