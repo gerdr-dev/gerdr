@@ -324,11 +324,13 @@ export function renderPart(p: GPart, i: number, ctx: PartCtx): ReactNode {
           </div>
         );
       return (
-        // 系统提示：居中一行小字，不像谁说的话（照 Astryx ChatSystemMessage）
+        // System notice: a small centered line that reads as nobody's words (after Astryx ChatSystemMessage).
+        // Only the block is centered; the text itself stays left-aligned, otherwise a wrapped notice centers
+        // each line and the icon ends up floating beside an indented first line.
         <div
           key={i}
           className={cn(
-            "flex items-start justify-center gap-1.5 px-6 py-1 text-center text-[12px]",
+            "flex items-start justify-center gap-1.5 px-6 py-1 text-[12px]",
             p.data.level === "error" ? "text-bad" : p.data.level === "warn" || p.data.level === "retry" ? "text-warn" : "text-muted-foreground",
           )}
         >
