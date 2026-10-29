@@ -300,7 +300,7 @@ export function PaneSwitcher() {
                           <span className="title truncate text-[12px]">{title}</span>
                           {chip && <span className={cn("shrink-0 rounded-sm border px-1 py-px text-[10px]", chip.cls)}>{chip.text}</span>}
                           <span
-                            className="ml-auto shrink-0 font-mono text-[10px] text-muted-foreground"
+                            className="ml-auto shrink-0 text-[10px] text-muted-foreground tabular-nums"
                             title={s ? new Date(s.updatedAt).toLocaleString() : ""}
                           >
                             {ago(s?.updatedAt, now)}

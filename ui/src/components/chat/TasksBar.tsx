@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { api } from "@/lib/api";
 import type { AgentTask, SessionSummary } from "@/lib/types";
+import { isCommandText } from "@/lib/transcript";
 import { cn } from "@/lib/utils";
 
 // 后台任务：输入框底栏里一个标签。有在跑的就显示「n 个后台任务」，点开是列表（停止 / 看结果）。
@@ -102,7 +103,7 @@ function boilerplate(t: AgentTask) {
  * 后台任务跑完了：时间线上标一下它是这时候结束的。画成和工具调用（ToolCall）一样的一行 ——
  * 状态图标打头、行尾耗时，对齐也一样（-ml-1.5 px-1.5），不再是一张带框的卡片夹在一串工具行中间。
  */
-export function TaskDoneCard({ sessionId, t, woke }: { sessionId: string; t: AgentTask; woke?: boolean }) {
+export function TaskDoneCard({ sessionId, t, woke, command }: { sessionId: string; t: AgentTask; woke?: boolean; command?: string }) {
   const Icon = taskIcon(t);
   const ok = t.status === "completed";
   const isAgent = t.type === "local_agent" || !!t.subagent;
@@ -110,8 +111,10 @@ export function TaskDoneCard({ sessionId, t, woke }: { sessionId: string; t: Age
     <div className="-ml-1.5 flex min-w-0 items-center gap-2 px-1.5 py-[3px] text-[13px] text-muted-foreground">
       {/* 和工具调用那一行一样只有一个图标：成功就是任务图标，失败换成红叉 */}
       {ok ? <Icon className="size-3.5 shrink-0" /> : <CircleX className="size-3.5 shrink-0 text-bad" />}
-      {/* 后台命令照 ToolCall 的 execute 用等宽字，和启动它的那行上下对得齐；行高钉成正文的 19.5px，不然这行矮 1.5px（见 ToolCall） */}
-      <span className={cn("min-w-0 truncate", t.type === "local_bash" && "font-mono text-[12px] leading-[19.5px]")}>
+      {/* Same font rule as the ToolCall row that started it: monospace only when the description is the command itself, not the
+          Bash description the agent wrote (that one is prose; drawing it monospace here made the two rows differ). Line height pinned
+          to the body's 19.5px, see ToolCall */}
+      <span className={cn("min-w-0 truncate", isCommandText(t.description, command) && "font-mono text-[12px] leading-[19.5px]")}>
         {isAgent && t.subagent ? `${t.subagent} · ` : ""}
         {t.description || t.id}
       </span>

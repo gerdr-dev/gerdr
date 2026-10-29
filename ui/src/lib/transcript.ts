@@ -26,7 +26,8 @@ export type GData = {
   /** level：info / warn / error / clear / auto / retry（「N 秒后重试」，done = 重试成功后收起了） */
   notice: { level: string; text: string; done?: boolean };
   /** woke：这个任务一结束 agent 就自己开了一轮（turn_start auto），卡片上标「→ agent 接着处理」 */
-  task: { task: AgentTask; woke?: boolean };
+  /** command: the command of the tool call that started it, so the card can tell whether its description is that command (monospace) or prose */
+  task: { task: AgentTask; woke?: boolean; command?: string };
   turnStat: { ms: number; tokens: number; ts?: number };
   turnEnd: { stopReason: string; error?: string };
   quickReplies: { questions: { question: string; options: string[] }[] };
@@ -141,6 +142,20 @@ export const isShellContext = (text: string) => SHELL_CTX.test(text);
 
 /** 消息内容里去掉 `!命令` 带的那几块（撤回、回退放回输入框时用：命令还在对话里，下一条照样会带上） */
 export const dropShellContext = (blocks: ContentBlock[]) => blocks.filter((c) => !(c.type === "text" && isShellContext(c.text)));
+
+/**
+ * Whether a row's text is the command itself rather than a description of it. Only command text is drawn
+ * monospace: the same label switching fonts between rows (description in the tool row, monospace in the
+ * task-done row; English prose like "Stop background command" in monospace) is what kept looking off.
+ * Titles may be the command squeezed onto one line and cut with "…" (native's oneLine), so compare loosely.
+ */
+export function isCommandText(text: string | undefined, command: string | undefined): boolean {
+  if (!text || !command) return false;
+  const flat = (s: string) => s.split(/\s+/).join(" ").trim();
+  const t = flat(text),
+    c = flat(command);
+  return t === c || (t.endsWith("…") && t.length > 1 && c.startsWith(t.slice(0, -1)));
+}
 
 export class Transcript {
   /**
@@ -286,6 +301,18 @@ export class Transcript {
     m.parts[loc.part] = part;
   }
 
+  /** The `command` input of the tool call with this id (the one that started a background task). */
+  private commandOf(toolCallId?: string): string | undefined {
+    if (!toolCallId) return undefined;
+    for (let mi = this.messages.length - 1; mi >= 0; mi--)
+      for (const p of this.messages[mi].parts)
+        if (p.type === "dynamic-tool" && (p as ToolPart).toolCallId === toolCallId) {
+          const c = ((p as ToolPart).input as any)?.command;
+          return typeof c === "string" ? c : undefined;
+        }
+    return undefined;
+  }
+
   private pushPart(i: number, part: GPart): Loc {
     const m = this.touch(i);
     m.parts.push(part);
@@ -335,7 +362,7 @@ export class Transcript {
         if (!e.task) break;
         this.messages = [...this.messages];
         const i = this.assistant(e.ts);
-        this.pushPart(i, { type: "data-task", data: { task: e.task } });
+        this.pushPart(i, { type: "data-task", data: { task: e.task, command: this.commandOf(e.task.toolCallId) } });
         this.lastChunkKey = "";
         break;
       }

@@ -303,7 +303,7 @@ export function renderPart(p: GPart, i: number, ctx: PartCtx): ReactNode {
         </div>
       );
     case "data-task":
-      return <TaskDoneCard key={i} sessionId={ctx.sessionId} t={p.data.task} woke={p.data.woke} />;
+      return <TaskDoneCard key={i} sessionId={ctx.sessionId} t={p.data.task} woke={p.data.woke} command={p.data.command} />;
     case "data-shell":
       return <ShellCard key={p.data.id} sessionId={ctx.sessionId} data={p.data} />;
     case "data-notice":

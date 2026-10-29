@@ -17,7 +17,7 @@ import {
 import { diffLines } from "diff";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { allowRetryText, type ToolContent, type ToolMeta, type ToolPart } from "@/lib/transcript";
+import { allowRetryText, isCommandText, type ToolContent, type ToolMeta, type ToolPart } from "@/lib/transcript";
 import { cn } from "@/lib/utils";
 import { DiffView } from "./DiffView";
 import { useSession } from "./sessionContext";
@@ -214,9 +214,11 @@ export function ToolCall({ part, children, running, keep: keepOpen }: { part: To
             {desc}
           </span>
         ) : (
-          // 等宽字 12px 的行高按 1.5 算只有 18px，比 13px 正文的 19.5 矮，这一行就矮 1.5px：命令先流出来、说明后到（标题从等宽换成说明），
-          // 或者后台命令跑完多出一行等宽的任务结束（TaskDoneCard），行高一变虚拟列表就跳。行高钉成和正文一样
-          <span className={cn("min-w-0 truncate", meta.kind === "execute" && "font-mono text-[12px] leading-[19.5px]")}>{title}</span>
+          // Monospace only when the title is the command itself (isCommandText); execute rows can also carry prose titles
+          // ("Stop background command", "Run command") that looked out of place in monospace.
+          // 12px monospace at line-height 1.5 is 18px, 1.5px shorter than 13px body text: when the description arrives after the
+          // command has streamed in, the row height changes and the virtual list jumps. Pin it to the body's 19.5px
+          <span className={cn("min-w-0 truncate", isCommandText(title, cmd) && "font-mono text-[12px] leading-[19.5px]")}>{title}</span>
         )}
         {stat && (stat.add > 0 || stat.del > 0) && (
           <span className="shrink-0 font-mono text-[11px] tabular-nums">
@@ -228,7 +230,8 @@ export function ToolCall({ part, children, running, keep: keepOpen }: { part: To
         {!task && took && <span className="shrink-0 text-[11px] tabular-nums opacity-70">{took}</span>}
         {task && (
           <>
-            {task.background && <span className="shrink-0 rounded-sm bg-muted px-1 text-[11px]">后台</span>}
+            {/* Claude only sets is_backgrounded for ctrl+b; a Bash call with run_in_background is a background command too */}
+            {(task.background || inp?.run_in_background === true) && <span className="shrink-0 rounded-sm bg-muted px-1 text-[11px]">后台</span>}
             {/* 进度文字可以截断，耗时不能（截成「3.」看不懂）。跑完后 CLI 自动写的「Background command "…" completed」
                 不显示：就是把标题和状态又说一遍 */}
             {taskNote && <span className="min-w-0 shrink truncate text-[11px] text-muted-foreground">{taskNote}</span>}

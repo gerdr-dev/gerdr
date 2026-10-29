@@ -54,6 +54,17 @@ function foldable(p: GPart, kids: ToolPart[] | undefined, showThinking: boolean)
   return !c.some((x: any) => x.type === "diff" || x._meta?.gerdr?.unifiedDiff || x.content?._meta?.gerdr?.unifiedDiff);
 }
 
+// A background command's "finished" row right under the tool call that started it says nothing new: that row already shows the
+// task's elapsed time (ToolCall looks the task up by toolCallId), and side by side they read as the same line twice (user report).
+// Keep it when something sits in between (it marks when the command finished), when it failed (the tool row doesn't turn red for
+// that), when it woke the agent (it explains the text below), and for subagents (it carries "查看对话").
+function redundantTaskDone(p: GPart, prev: GPart | undefined): boolean {
+  if (p.type !== "data-task" || prev?.type !== "dynamic-tool") return false;
+  const { task: t, woke } = p.data;
+  if (woke || t.status !== "completed" || t.type === "local_agent" || t.subagent) return false;
+  return !!t.toolCallId && (prev as ToolPart).toolCallId === t.toolCallId;
+}
+
 // 要人看见的几种（照截图里用户报的）：还在跑的（包括转到后台、这一轮已经答完还没跑完的）、答过的审批（批准的不成行，剩下的就是拒了）。
 // 它们照样算进组里（组的 key、汇总不跟着它们变），只是组收着时也露在组头下面，怎么都收不起来；展开时回到原位。
 // 被 auto 分类器拦下的权限错误本来就不折（见 foldable），这里不用管
@@ -181,6 +192,7 @@ export function buildRows(
     m.parts.forEach((p, i) => {
       if (mi === cut && i < cutPart) return;
       if (!partVisible(p, children)) return;
+      if (redundantTaskDone(p, parts[parts.length - 1]?.part)) return;
       const tp = p.type === "dynamic-tool" ? (p as ToolPart) : undefined;
       parts.push({
         key: `${m.id}:${tp ? tp.toolCallId : i}`,
