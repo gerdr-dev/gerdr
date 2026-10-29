@@ -25,6 +25,8 @@ export type Config = {
   keepTabs: number; // 切走之后还留在页面里的 tab 数（展开状态、滚动位置都保住）；1 = 不留
   /** 改文件 / 新建文件的工具调用默认展开 diff。关掉后只剩一行（文件名、+/- 行数），点开再看。 */
   expandEdits?: boolean;
+  /** 显示思考：思考过程不收进工具调用那一组，单独成行、默认展开着。关掉就和工具调用折在一起，一行「思考」点开再看。没写 = 开。 */
+  showThinking?: boolean;
   /** 点对话里的外部链接先弹确认框（streamdown 的 linkSafety，它默认开着）。关掉就直接打开。没写 = 开（老行为）。 */
   confirmLinks?: boolean;
   /** 实验室：对话用虚拟滚动（只渲染屏幕附近的行）。默认关 —— 往上翻时行卸载再挂载，带图的行高度先 0 后撑开，界面一跳一跳（用户报的）。 */
@@ -74,6 +76,7 @@ export const DEFAULT_CONFIG: Config = {
   sendKey: "enter",
   keepTabs: 6,
   expandEdits: true,
+  showThinking: true,
   virtualList: false,
   keepAwakeRemote: false,
   copyOnSelect: false,

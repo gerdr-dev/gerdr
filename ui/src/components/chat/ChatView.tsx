@@ -168,6 +168,7 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
 
   const msgs = t.all;
   const virtualList = useStore((s) => !!s.config.virtualList);
+  const showThinking = useStore((s) => s.config.showThinking !== false);
   // 虚拟滚动开着时，打开会话先把所有行渲染一次、量出真实高度，再缩回只渲染屏幕附近（Virtuoso 记得量过的高度，行卸载了也不忘）。
   // 不先量的话，往上翻时新进渲染范围的行只能按估的高度占位，实际一挂上高度对不上，整段内容被推走一截，Virtuoso 下一帧才补回来 ——
   // 一翻一闪（用户报的；录屏逐帧比过：小步连续滚 300 下，45 处 -223 / +223 来回跳）。在补偿上打补丁试过几种（浏览器原生锚定、
@@ -192,8 +193,11 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
   const [tick, setTick] = useState(0);
   const [rows, wake] = useMemo(() => {
     const out: { wake?: number } = {};
-    return [buildRows(msgs, running, showCleared, openGroups, new Set(liveTaskIds.split(" ").filter(Boolean)), Date.now(), out), out.wake] as const;
-  }, [msgs, running, showCleared, openGroups, liveTaskIds, tick]);
+    return [
+      buildRows(msgs, running, showCleared, openGroups, new Set(liveTaskIds.split(" ").filter(Boolean)), Date.now(), out, showThinking),
+      out.wake,
+    ] as const;
+  }, [msgs, running, showCleared, openGroups, liveTaskIds, tick, showThinking]);
   useEffect(() => {
     if (wake === undefined) return;
     const t = setTimeout(() => setTick((x) => x + 1), Math.max(0, wake - Date.now()));

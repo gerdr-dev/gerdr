@@ -204,7 +204,10 @@ export type PartCtx = {
 
 /** 思考过程：展开没展开记在组件外面（虚拟列表滚出去会卸载）。 */
 function KeptReasoning({ keep, streaming, text }: { keep: string; streaming: boolean; text: string }) {
-  const [open, setOpen] = useKept<boolean | undefined>(keep, undefined);
+  const [kept, setOpen] = useKept<boolean | undefined>(keep, undefined);
+  // 开着「显示思考」默认展开。不用 Reasoning 的 defaultOpen：它为 true 时流完 1 秒会自己收起来
+  const show = useStore((s) => s.config.showThinking !== false);
+  const open = kept ?? show;
   // 和工具调用那一行一个样子（ToolCall）：一行小灰字，不抢正文的眼
   return (
     <Reasoning isStreaming={streaming} defaultOpen={false} open={open} onOpenChange={setOpen} className="mb-0">
@@ -213,7 +216,9 @@ function KeptReasoning({ keep, streaming, text }: { keep: string; streaming: boo
         {streaming ? <Shimmer duration={1}>思考中…</Shimmer> : <span>思考</span>}
         <ChevronDown className={cn("size-3.5 shrink-0 opacity-60 transition-transform", open && "rotate-180")} />
       </ReasoningTrigger>
-      <ReasoningContent className="gerdr-md mt-1 mb-1 ml-[7px] border-l pl-4 text-[0.92em]">{text}</ReasoningContent>
+      {/* 开着「显示思考」时字色和正文一样（用户要的）：思考默认摊开给人读，灰字读着费劲，和正文靠左边那条竖线、小一号的字分开。
+          关着时照旧是灰字 */}
+      <ReasoningContent className={cn("gerdr-md mt-1 mb-1 ml-[7px] border-l pl-4 text-[0.92em]", show && "text-foreground")}>{text}</ReasoningContent>
     </Reasoning>
   );
 }

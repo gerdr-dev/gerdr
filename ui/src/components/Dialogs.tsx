@@ -258,6 +258,9 @@ function SettingsDialog({ open }: { open: boolean }) {
                 <Row label="改文件时展开 diff" hint="新建 / 编辑文件的那一行默认展开改动；关掉只留一行（文件名和 +/- 行数），点开再看">
                   <Switch checked={cfg.expandEdits !== false} onCheckedChange={(v) => setConfig({ expandEdits: v })} />
                 </Row>
+                <Row label="显示思考" hint="agent 的思考过程单独成行、直接展开；关掉就和工具调用收在一组里，点开再看">
+                  <Switch checked={cfg.showThinking !== false} onCheckedChange={(v) => setConfig({ showThinking: v })} />
+                </Row>
                 <Row label="打开链接前确认" hint="点对话里的外部链接先弹框，显示完整地址，可以复制或打开；关掉就直接打开">
                   <Switch checked={cfg.confirmLinks !== false} onCheckedChange={(v) => setConfig({ confirmLinks: v })} />
                 </Row>

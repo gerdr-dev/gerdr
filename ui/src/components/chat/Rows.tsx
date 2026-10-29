@@ -36,8 +36,9 @@ const isClear = (p: GPart) => p.type === "data-notice" && (p as any).data?.level
 
 // 连续的工具调用 / 思考折成一组（照 Claude 桌面版）：一轮里常常是几十行 `cd … && grep …`，夹着几行「思考」，
 // 真正要读的那几段话被挤得找不到。改文件的不折（默认展开看 diff 是它的主要用途），带子 agent 的不折（有「查看对话」）。
-function foldable(p: GPart, kids?: ToolPart[]): boolean {
-  if (p.type === "reasoning") return true;
+// 开着「显示思考」时思考不折：它要直接摊开给人看，收进组里就看不到了
+function foldable(p: GPart, kids: ToolPart[] | undefined, showThinking: boolean): boolean {
+  if (p.type === "reasoning") return !showThinking;
   // 已经答完的审批（拒绝 / 作废；批准的根本不成行）也收进组里；还在等人点的不折，要让人看见
   if (p.type === "data-permission") return !!(p.data.answer || p.data.cancelled);
   // 后台任务跑完的那一行：和工具调用一个样子，也收进组里
@@ -141,6 +142,7 @@ export function buildRows(
   liveTasks: Set<string> = new Set(),
   now = Date.now(),
   out: { wake?: number } = {},
+  showThinking = true,
 ): Row[] {
   const rows: Row[] = [];
   const young = youngTest(now, out);
@@ -199,7 +201,7 @@ export function buildRows(
     };
     for (let a = 0; a < parts.length;) {
       let b = a;
-      while (b < parts.length && foldable(parts[b].part, parts[b].kids)) b++;
+      while (b < parts.length && foldable(parts[b].part, parts[b].kids, showThinking)) b++;
       if (b - a < 2) {
         push(parts[a]);
         a = Math.max(b, a + 1);
