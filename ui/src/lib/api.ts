@@ -66,8 +66,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  * 只是响应丢了」，不会变成两条。onRetry 给界面说一声「在重试」。
  */
 // now：agent 在跑时立即插话（截断当前这次生成）；默认排到下一个空档（当前这步做完）再塞进去，和 Claude Code 的输入框一样。
-async function sendWithRetry(id: string, content: ContentBlock[], onRetry?: (attempt: number) => void, now?: boolean) {
-  const msgId = uuid();
+async function sendWithRetry(id: string, content: ContentBlock[], onRetry?: (attempt: number) => void, now?: boolean, msgId = uuid()) {
   const waits = [500, 1000, 2000, 4000, 8000, 15000, 30000];
   for (let i = 0; ; i++) {
     try {

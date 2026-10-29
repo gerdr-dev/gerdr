@@ -12,6 +12,8 @@ export type GMeta = {
   steer?: boolean;
   /** 插话还在 agent 的队列里排着、没被读进这一轮（claude 要等手上这个工具调用结束才读） */
   queued?: boolean;
+  /** 刚点了发送、服务端还没记进日志（见 Transcript.sending）：半透明画着 */
+  sending?: boolean;
   from?: string; // 别的会话发来的：发送方会话 id
   ts: number;
   content?: ContentBlock[];
@@ -119,14 +121,34 @@ export class Transcript {
    * 落在它真正插进去的那个位置。重放日志走的是同一套，位置一样。
    */
   queued: GMessage[] = [];
-  private allCache: { m: GMessage[]; q: GMessage[]; all: GMessage[] } | null = null;
-  /** 界面要画的全部：正文 + 排着队的插话。messages / queued 没换就返回同一个数组（下游靠引用判断要不要重算）。 */
+  /**
+   * 刚点了发送、还没回到日志里的消息：服务端要等 agent 进程连上（冷会话要起进程，几百毫秒到几秒）才记下这条，
+   * 这段时间输入框已经清空、对话里却什么都没有，像是没发出去。先在最底下画一条半透明的，日志里那条（同一个 messageId）到了就换掉；
+   * 发失败就拿掉（字放回输入框）。不是日志重放出来的，reset 不清 —— 重放里有它的那条会顺手把它换掉。
+   */
+  sending: GMessage[] = [];
+  private allCache: { m: GMessage[]; q: GMessage[]; s: GMessage[]; all: GMessage[] } | null = null;
+  /** 界面要画的全部：正文 + 排着队的插话 + 发送中的。都没换就返回同一个数组（下游靠引用判断要不要重算）。 */
   get all(): GMessage[] {
     const c = this.allCache;
-    if (c && c.m === this.messages && c.q === this.queued) return c.all;
-    const all = this.queued.length ? [...this.messages, ...this.queued] : this.messages;
-    this.allCache = { m: this.messages, q: this.queued, all };
+    if (c && c.m === this.messages && c.q === this.queued && c.s === this.sending) return c.all;
+    const all = this.queued.length || this.sending.length ? [...this.messages, ...this.queued, ...this.sending] : this.messages;
+    this.allCache = { m: this.messages, q: this.queued, s: this.sending, all };
     return all;
+  }
+
+  /** 先画一条发送中的（id 用 messageId：日志里那条的 id 也是它，换过去时 React 不重建这一行） */
+  addSending(messageId: string, content: ContentBlock[]) {
+    const parts: GPart[] = [];
+    for (const c of content) {
+      if (c.type === "text") parts.push({ type: "text", text: c.text });
+      else if (c.type === "image") parts.push({ type: "file", mediaType: c.mimeType, url: imageURL(c) });
+    }
+    this.sending = [...this.sending, { id: messageId, role: "user", parts, metadata: { messageId, sending: true, ts: Date.now(), content } }];
+  }
+
+  dropSending(messageId: string) {
+    if (this.sending.some((m) => m.id === messageId)) this.sending = this.sending.filter((m) => m.id !== messageId);
   }
   running = false;
   /** 正在等人回答的请求（审批 / 提问）。 */
@@ -254,6 +276,7 @@ export class Transcript {
           else if (c.type === "image") parts.push({ type: "file", mediaType: c.mimeType, url: imageURL(c) });
           else if (c.type === "resource_link") parts.push({ type: "text", text: `@${c.uri.replace(/^file:\/\//, "")}` });
         }
+        if (e.messageId) this.dropSending(e.messageId);
         this.messages = [...this.messages];
         this.messages.push({
           id: e.messageId ?? this.uid(),

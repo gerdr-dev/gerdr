@@ -7,7 +7,7 @@ import { buildRows, RowView, type Row, type RowEnv } from "./Rows";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { withdrawSteer } from "@/lib/actions";
-import { get, loadOlder, subTranscript, transcript, useStore } from "@/lib/store";
+import { get, loadOlder, sendShown, subTranscript, transcript, useStore } from "@/lib/store";
 import { useKept } from "@/lib/kept";
 import { Loader2 } from "lucide-react";
 import type { GMessage } from "@/lib/transcript";
@@ -379,7 +379,7 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
             const c = await withdrawSteer(session.id, id, now);
             if (c?.length) composer.current?.putBack(c);
           },
-      onQuickReply: (s) => api.send(latest.current.sessionId, [{ type: "text", text: s }]).catch((e) => toast.error(e.message)),
+      onQuickReply: (s) => sendShown(latest.current.sessionId, [{ type: "text", text: s }]).catch((e) => toast.error(e.message)),
       onShowCleared: () => setShowCleared(true),
       onToggleGroup: (key) => {
         const { openGroups: g, setOpenGroups: set } = latest.current;

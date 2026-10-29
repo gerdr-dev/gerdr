@@ -6,7 +6,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { api, type Holder, isNetworkError } from "@/lib/api";
 import { closeFocusedPane, focusPane } from "@/lib/actions";
-import { get, set, setConfig, transcript, useStore } from "@/lib/store";
+import { get, sendShown, set, setConfig, transcript, useStore } from "@/lib/store";
 import type { ConfigOption, ContentBlock, SessionSummary } from "@/lib/types";
 import { isCoarse, usePhone } from "@/lib/phone";
 import { askKey } from "@/lib/askkeys";
@@ -244,7 +244,7 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
     hist.current.idx = -1;
     const tid = `send-${session.id}`;
     try {
-      await api.send(session.id, content, (n) => toast.loading(`网络不好，正在重发（第 ${n} 次）…`, { id: tid }), now);
+      await sendShown(session.id, content, (n) => toast.loading(`网络不好，正在重发（第 ${n} 次）…`, { id: tid }), now);
       toast.dismiss(tid);
       sentAt.current = Date.now();
       if (escPending.current) {

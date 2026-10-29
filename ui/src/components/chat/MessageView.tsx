@@ -62,11 +62,12 @@ export const MessageView = memo(function MessageView({ msg, sessionId, live, run
     const text = msg.parts.map((p) => (p.type === "text" ? p.text : "")).join("");
     const files = msg.parts.filter((p) => p.type === "file");
     const meta = msg.metadata;
-    const canRewind = !!onRewind && !!meta?.messageId && !meta?.steer && !running;
+    const canRewind = !!onRewind && !!meta?.messageId && !meta?.steer && !meta?.sending && !running;
     // 元信息（时间、来源）在气泡下面一行小灰字（照 Astryx ChatMessageMetadata）；一摞连发的只在最后一条下面写时间
     const showMeta = !stackNext || !!meta?.from || !!meta?.steer;
     return (
-      <Message from="user" className="group/user gap-1">
+      // 发送中（服务端还没记下，见 Transcript.sending）：整条半透明，记下了换成正常的那条
+      <Message from="user" className={cn("group/user gap-1 transition-opacity", meta?.sending && "opacity-50")}>
         {/* 回退按钮悬停时浮在气泡左边，不占高度 */}
         <div className="relative ml-auto flex min-w-0 max-w-[max(80%,280px)] justify-end">
           {canRewind && (
@@ -143,7 +144,7 @@ export const MessageView = memo(function MessageView({ msg, sessionId, live, run
                 </span>
               ))}
             {(meta?.from || meta?.steer) && !stackNext && meta?.ts ? <span>·</span> : null}
-            {!stackNext && <span className="tabular-nums">{fmtTime(meta?.ts)}</span>}
+            {!stackNext && (meta?.sending ? <span>发送中…</span> : <span className="tabular-nums">{fmtTime(meta?.ts)}</span>)}
           </div>
         )}
       </Message>

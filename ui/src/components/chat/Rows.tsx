@@ -103,9 +103,9 @@ function summarize(parts: GPart[]): { summary: string; failed: number } {
 export function buildRows(msgs: GMessage[], running: boolean, showCleared = false, openGroups: Record<string, boolean> = {}): Row[] {
   const rows: Row[] = [];
   const lastIdx = msgs.length - 1;
-  // 排着队的插话挂在最底下（见 Transcript.queued），还在跑的那条是它们前面那条
+  // 排着队的插话、发送中的挂在最底下（见 Transcript.queued / sending），还在跑的那条是它们前面那条
   let liveIdx = lastIdx;
-  while (liveIdx >= 0 && msgs[liveIdx].metadata?.queued) liveIdx--;
+  while (liveIdx >= 0 && (msgs[liveIdx].metadata?.queued || msgs[liveIdx].metadata?.sending)) liveIdx--;
   // /clear 之前的对话默认收起（照 Claude Code：清空就是清屏），顶上留一行「展开」—— 记录还在，只是不挡眼
   let cut = -1,
     cutPart = -1;

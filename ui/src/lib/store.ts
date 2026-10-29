@@ -1,10 +1,10 @@
 import { create } from "zustand";
-import { api, clientId, type FileStat } from "./api";
+import { api, clientId, uuid, type FileStat } from "./api";
 import { DEFAULT_KEYS, type KeyAction } from "./keys";
 import { activeTab, defaultLayout, leaves, phoneRoot, validLayout, viewOf, withView, type Layout, type View } from "./layout";
 import { isPhone } from "./phone";
 import { Transcript } from "./transcript";
-import type { AgentInfo, HubEvent, RemoteConn, SessionSummary } from "./types";
+import type { AgentInfo, ContentBlock, HubEvent, RemoteConn, SessionSummary } from "./types";
 
 export type Theme = "system" | "light" | "dark";
 
@@ -280,6 +280,33 @@ export function applyEvents(id: string, events: HubEvent[], reset: boolean, olde
     else for (const e of events) st.apply(e);
   }
   set((s) => ({ tv: { ...s.tv, [id]: (s.tv[id] ?? 0) + 1 } }));
+}
+
+/**
+ * 发一条消息，点下去就先在对话最底下画一条半透明的（见 Transcript.sending），日志里那条到了换掉。
+ * 失败就拿掉、错误照旧抛给调用方（它负责把字放回输入框）。
+ */
+export async function sendShown(id: string, content: ContentBlock[], onRetry?: (attempt: number) => void, now?: boolean) {
+  const msgId = uuid();
+  const t = transcript(id);
+  const bump = () => set((s) => ({ tv: { ...s.tv, [id]: (s.tv[id] ?? 0) + 1 } }));
+  t.addSending(msgId, content);
+  bump();
+  try {
+    const r = await api.send(id, content, onRetry, now, msgId);
+    // 服务端回成功之前已经记下这条、推出来了，正常早就换掉了；推送断了的话重连会整份重推，也会换掉。
+    // 万一两样都没赶上，别让一条半透明的永远挂着
+    setTimeout(() => {
+      if (!t.sending.some((m) => m.id === msgId)) return;
+      t.dropSending(msgId);
+      bump();
+    }, 10_000);
+    return r;
+  } catch (e) {
+    t.dropSending(msgId);
+    bump();
+    throw e;
+  }
 }
 
 function setOlder(id: string, v: "more" | "loading" | undefined) {
