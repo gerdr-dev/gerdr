@@ -224,6 +224,27 @@ cwd 以外改的文件（Bash 写 `~/.zshrc`、隔壁项目）管不到；同一
   要先 `thread/unsubscribe` 让它卸载再 resume（实测）。
 - 内置 skill（`internal/ext/builtin/`：gerdr、gerdr-ui）不管来源选什么都给，设置里能单个关。
 
+## 角色和新会话默认（设置 → Agent）
+
+- **角色** = config.json `agents` 里一条带 base（claude / codex / native）的定义：追加的系统提示（`prompt`）、只给哪些 skill / MCP
+  （`skills` / `mcp`，按名字；**不写 = 照全局，空数组 = 一个不给**，所以 hub.AgentDef 的这两项不能加 omitempty）、换账号用的 bin / args / env。
+  每个角色是一个单独的适配器实例（和「另一个账号」的变体一样），定义一改 SetAgents 就收掉它的连接。
+- 限定靠 `ext.Manager.Scoped`：设置、目录、锁和全局的是同一份（`core`；内置 skill 各装各的会在别的 claude 读着时把目录删了重写），
+  只在三家各自取 skill / MCP 的地方再筛一遍。只能在「全局来源本来会给的」里面挑，不会加东西进来。
+  - claude：skill 壳目录只链挑中的；claude 自己的 skill 没挑的走 `skillOverrides: off`；插件的 skill 关不了单个，**一个都没挑的插件整个关**
+    （它的 MCP / hook 一起没）。MCP 按名字关不掉：把挑中的（gerdr 的 + ~/.claude.json / .mcp.json 里的）全写进 `--mcp-config` 再 `--strict-mcp-config`，
+    代价是插件的 MCP 和 claude.ai 的 connector 也没了。提示词和 MediaHint 拼成**一个** `--append-system-prompt`（给两个后一个盖前一个）。
+  - codex：没挑的 `mcp_servers.<名>.enabled = false`、`skills.config` 里关；system 范围的 skill 界面列不出来，不动。提示词接在 `developerInstructions` 后面。
+  - native：`skillsFor` / `resolveMCP` 里筛；提示词接在系统提示词最后。基于 native 的角色和原版共用会话目录和记忆。
+- **新会话默认**：config.json `defaultModes[agent]` / `defaultConfig[agent][配置项 id]`（内置的和角色一样按 id；Gerdr Agent 的默认模型就是
+  `llm.defaultModel`，不另存）。**在后端套**（`hub.Create`，`Options.Defaults` 每次现取）：界面和 `gerdr session new` 开出来的一样。
+  三家在 session/new 里能接的配置项不一样（claude 接 model / effort，codex、native 只接 model），所以新建之后对着 agent 报回来的当前值
+  补 `SetConfig`：先 model（换模型会重置思考强度）再别的，值不在可选项里的跳过（存的模型可能已经没了）。默认模式 agent 不认不报错
+  （`checkMode` 只查调用方点名的）。`gerdr session new` 开的（FromCLI）不套「全放开」的默认模式：那条命令不审批，不能让沙箱里的 agent
+  借用户的默认值开一个不设防的会话（和不许带 `--mode` 同一个理由）。
+- 编辑默认值的下拉框拿 optCache（上次这种 agent 报的模式 / 配置项，`Agents()` 的 `options`）画；没开过会话的角色用底子的。
+  输入框下面每个下拉底部「设为新会话的默认」直接存当前值（`ui/src/lib/defaults.ts`）。
+
 ## 后台任务、子 agent、agent 自己开的一轮
 
 - claude 在 stream-json 里报 `task_started / task_progress / task_updated / task_notification / background_tasks_changed`；

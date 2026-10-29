@@ -12,12 +12,16 @@ func TestAgentVariants(t *testing.T) {
 		{ID: "claude", Base: "codex"},       // 和内置的撞名：丢掉
 		{ID: "bad", Base: "gemini"},         // 不认识的底子：丢掉
 		{ID: "ext", Command: []string{"x"}}, // 外部 agent
+		{ID: "reviewer", Base: "native", Prompt: "只读代码、挑毛病", Skills: []string{}}, // 基于 Gerdr Agent 的角色
 	}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n := len(h.extra()); n != 2 {
-		t.Fatalf("应当留下 2 个，实际 %d", n)
+	if n := len(h.extra()); n != 3 {
+		t.Fatalf("应当留下 3 个，实际 %d", n)
+	}
+	if h.Base("reviewer") != "native" {
+		t.Fatal("基于 native 的角色 Base 不对")
 	}
 	if h.Base("claude-2") != "claude" || h.Base("ext") != "ext" || h.Base("codex") != "codex" {
 		t.Fatal("Base 不对")

@@ -81,12 +81,86 @@ var nameRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$`)
 func ValidName(n string) bool { return nameRE.MatchString(n) }
 
 type Manager struct {
+	*core
+	// only：角色（设置 → Agent 里配的）只给它挑的那几个；nil = 不限，全照全局设置。见 Scoped。
+	only *Only
+}
+
+// core 是同一个 GERDR_DIR 下所有 Manager（全局的 + 各角色 Scoped 出来的）共用的：同一把锁、内置 skill 只装一次
+// （各装各的会在别的 claude 正读着时把 builtin-skills 删了重写）。
+type core struct {
 	dir         string
 	mu          sync.Mutex
 	builtinOnce sync.Once
 }
 
-func New(dir string) *Manager { return &Manager{dir: dir} }
+func New(dir string) *Manager { return &Manager{core: &core{dir: dir}} }
+
+// Only：一个角色限定的 skill / MCP（按名字）。某一项是 nil = 那一项不限，照全局的来源给；
+// 非 nil（哪怕是空的）= 只给列出来的那些 —— 空列表就是一个都不给。
+// 只在「全局设置下本来就会给的」里面挑：不会把来源里没有的东西加进来。
+type Only struct {
+	Skills []string
+	MCP    []string
+}
+
+// Scoped：给一个角色用的 Manager —— 设置、目录和全局的同一份，只是 skill / MCP 按 o 再筛一遍。
+// o 两项都是 nil 就原样返回。
+func (m *Manager) Scoped(o Only) *Manager {
+	if m == nil || (o.Skills == nil && o.MCP == nil) {
+		return m
+	}
+	return &Manager{core: m.core, only: &o}
+}
+
+// LimitsSkills / LimitsMCP：这个角色有没有限定。m 可以是 nil。
+func (m *Manager) LimitsSkills() bool { return m != nil && m.only != nil && m.only.Skills != nil }
+func (m *Manager) LimitsMCP() bool    { return m != nil && m.only != nil && m.only.MCP != nil }
+
+// AllowSkill / AllowMCP：角色限定里有没有这个名字；没限定的一律 true。
+func (m *Manager) AllowSkill(name string) bool {
+	return !m.LimitsSkills() || contains(m.only.Skills, name)
+}
+
+func (m *Manager) AllowMCP(name string) bool {
+	return !m.LimitsMCP() || contains(m.only.MCP, name)
+}
+
+// FilterSkills / FilterMCP：按角色限定筛（没限定原样返回）。
+func (m *Manager) FilterSkills(in []Skill) []Skill {
+	if !m.LimitsSkills() {
+		return in
+	}
+	var out []Skill
+	for _, s := range in {
+		if m.AllowSkill(s.Name) {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+func (m *Manager) FilterMCP(in []MCPServer) []MCPServer {
+	if !m.LimitsMCP() {
+		return in
+	}
+	var out []MCPServer
+	for _, s := range in {
+		if m.AllowMCP(s.Name) {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+func contains(list []string, s string) bool {
+	for _, x := range list {
+		if x == s {
+			return true
+		}
+	}
+	return false
+}
 
 func (m *Manager) file() string      { return filepath.Join(m.dir, "ext.json") }
 func (m *Manager) SkillsDir() string { return filepath.Join(m.dir, "skills") }
@@ -159,6 +233,9 @@ func (m *Manager) Fingerprint() string {
 		for _, sk := range m.Skills() {
 			fmt.Fprintln(h, sk.Name, sk.Enabled)
 		}
+	}
+	if m.only != nil {
+		_ = json.NewEncoder(h).Encode(m.only)
 	}
 	return hex.EncodeToString(h.Sum(nil))[:16]
 }
@@ -241,6 +318,7 @@ func (m *Manager) ClaudeAddDir(id string, includeGerdr bool) (string, error) {
 	if includeGerdr {
 		list = append(list, m.Skills()...)
 	}
+	list = m.FilterSkills(list)
 	n := 0
 	for _, sk := range list {
 		if !sk.Enabled {

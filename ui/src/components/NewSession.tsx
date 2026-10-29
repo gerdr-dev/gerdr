@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import { basename, closeFocusedPane, createInPane, focusPane, openTerminal } from "@/lib/actions";
 import { api } from "@/lib/api";
-import { get, set, useStore } from "@/lib/store";
+import { get, set, useStore, type AgentDef } from "@/lib/store";
 import type { PaneLeaf } from "@/lib/layout";
 import { cn } from "@/lib/utils";
 import { AgentIcon } from "./AgentIcon";
@@ -140,10 +140,20 @@ export function DirPicker({
   );
 }
 
+const NO_DEFS: AgentDef[] = [];
+const BASE_NAME: Record<string, string> = { claude: "Claude Code", codex: "Codex", native: "Gerdr Agent" };
+
+/** 角色卡片下面那行小字：有提示词就显示提示词开头（一眼看出这个角色干什么的），没有就说基于谁。 */
+function roleHint(d?: AgentDef) {
+  if (!d?.base) return "";
+  return d.prompt?.trim().split("\n")[0] || `基于 ${BASE_NAME[d.base]}`;
+}
+
 export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean }) {
   const agents = useStore((s) => s.agents);
   const home = useStore((s) => s.home);
   const defAgent = useStore((s) => s.config.defaultAgent);
+  const defs = useStore((s) => s.config.agents) ?? NO_DEFS;
   const [agent, setAgent] = useState(
     pane.draft?.agent ?? (agents.find((a) => a.id === defAgent && a.available)?.id || agents.find((a) => a.available)?.id || "claude"),
   );
@@ -224,7 +234,9 @@ export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean
               <AgentIcon agent={a.id} className="size-5" />
               <div className="min-w-0">
                 <div className="text-[13px] font-medium">{a.name}</div>
-                {!a.available && <div className="truncate text-[11px] text-muted-foreground">没装</div>}
+                {(!a.available || roleHint(defs.find((d) => d.id === a.id))) && (
+                  <div className="truncate text-[11px] text-muted-foreground">{a.available ? roleHint(defs.find((d) => d.id === a.id)) : "没装"}</div>
+                )}
               </div>
             </button>
           ))}

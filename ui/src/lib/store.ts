@@ -15,8 +15,10 @@ export type Config = {
   /** 旧版存这儿、所有设备共用；现在字号存各设备本机（State.localFont），这个只当没设过时的初值 */
   fontSize: number;
   defaultAgent: string;
-  /** 新会话的默认模式（按 agent）。 */
+  /** 新会话的默认模式（按 agent id，角色也算）。后端建会话时套（cmd/gerdr 的 cfgDefaults），`gerdr session new` 也吃。 */
   defaultModes: Record<string, string>;
+  /** 新会话的默认配置项（按 agent id → 配置项 id → 值，比如 model / effort）。Gerdr Agent 的默认模型不在这儿，在 llm.defaultModel。 */
+  defaultConfig?: Record<string, Record<string, string>>;
   notifications: boolean;
   /** 发送：enter（回车发、Shift+回车换行）或 mod+enter（⌘/Ctrl+回车发）。 */
   sendKey: "enter" | "mod+enter";
@@ -44,8 +46,20 @@ export type LLMModel = { id: string; name?: string; api?: "chat" | "responses"; 
 export type LLMProvider = { id: string; name?: string; baseUrl: string; apiKey?: string; apiKeyEnv?: string; models: LLMModel[] };
 export type LLMConfig = { providers?: LLMProvider[]; defaultModel?: string };
 
-/** config.json 里的 agents：claude / codex 的变体（base），或者外部 ACP agent（command）。 */
-export type AgentDef = { id: string; name: string; base?: "claude" | "codex"; command?: string[]; bin?: string; args?: string[]; env?: Record<string, string> };
+/** config.json 里的 agents：角色 / 变体（base = claude / codex / native），或者外部 ACP agent（command）。
+ *  prompt 是追加的系统提示；skills / mcp 是只给的那几个（按名字），不写 = 照全局设置，空数组 = 一个都不给（后端 hub.AgentDef）。 */
+export type AgentDef = {
+  id: string;
+  name: string;
+  base?: "claude" | "codex" | "native";
+  command?: string[];
+  bin?: string;
+  args?: string[];
+  env?: Record<string, string>;
+  prompt?: string;
+  skills?: string[];
+  mcp?: string[];
+};
 
 export const DEFAULT_CONFIG: Config = {
   prefix: "ctrl+b",

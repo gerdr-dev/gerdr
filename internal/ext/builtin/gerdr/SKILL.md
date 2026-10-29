@@ -52,11 +52,13 @@ gerdr session new --agent codex --title reviewer \
   --wait --timeout 20m
 ```
 
-- `--agent` 是 `claude`、`codex` 或 `native`（gerdr 自带的 Gerdr Agent，直接用配置里的 GPT / DeepSeek 等模型，配了才有；用户在设置里加过别的，比如另一个账号的 `claude-2`，也可以用它的 id —— `gerdr session list` 里的 `agent` 字段就是），用户指定了哪个就用哪个；
+- `--agent` 是 `claude`、`codex` 或 `native`（gerdr 自带的 Gerdr Agent，直接用配置里的 GPT / DeepSeek 等模型，配了才有）；
+  用户在设置里建的**角色**（比如只读代码的 `reviewer`，带自己的提示词、只开某几个 skill / MCP）和另一个账号（`claude-2`）也用它的 id。
+  `gerdr session agents` 列出全部能用的、角色带着它的提示词；用户说「让审查那个看看」这种就去那里找对应的角色。用户指定了哪个就用哪个；
 - `--title` 起个短名字，之后可以 `gerdr session send reviewer …`；
 - 带 `--wait`：等它这一轮做完，输出里 `reply` 就是它的回复；不带就是派出去不等，之后再 `wait`；
 - 要它能改文件 / 跑命令而不每次问人，按用户的意思给 `--mode`（claude：`acceptEdits` / `auto` / `bypassPermissions`；codex：`auto` / `full-access`；native：`acceptEdits` / `bypassPermissions`，只读用 `plan`）。
-  不确定就别给，默认模式下它要做危险操作会在界面上弹审批给人。
+  不确定就别给：用用户给这种 agent 设的默认模式（没设、或者设的是全放开的那种，就是 agent 自己的默认），要做危险操作会在界面上弹审批给人。
 
 ## 给已有的会话发消息
 

@@ -116,7 +116,7 @@ func resolveMCP(m *ext.Manager, cwd string) []resolvedMCP {
 	seen := map[string]bool{}
 	add := func(ss []ext.MCPServer, from string) {
 		for _, s := range ss {
-			if !seen[s.Name] {
+			if !seen[s.Name] && m.AllowMCP(s.Name) { // 角色限定了 MCP 的话只留挑中的
 				seen[s.Name] = true
 				out = append(out, resolvedMCP{s, from})
 			}

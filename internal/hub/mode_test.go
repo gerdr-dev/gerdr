@@ -23,3 +23,17 @@ func TestCheckMode(t *testing.T) {
 		t.Fatalf("不认识的模式要报错并列出可选值，得到 %v", err)
 	}
 }
+
+// 建会话时补设默认配置：先 model 再别的，不在可选项里的跳过。
+func TestApplyConfigOrder(t *testing.T) {
+	keys := []string{"effort", "zeta", "model"}
+	sortKeys(keys)
+	if keys[0] != "model" || keys[1] != "effort" || keys[2] != "zeta" {
+		t.Fatalf("顺序不对：%v", keys)
+	}
+	opts := acp.SessionConfigSelectOptionsUngrouped{{Value: "opus"}, {Value: "sonnet"}}
+	o := &acp.SessionConfigOptionSelect{Id: "model", Options: acp.SessionConfigSelectOptions{Ungrouped: &opts}}
+	if !hasValue(o, "opus") || hasValue(o, "gone") {
+		t.Fatal("hasValue 不对")
+	}
+}

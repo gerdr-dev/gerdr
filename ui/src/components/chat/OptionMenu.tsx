@@ -1,4 +1,4 @@
-import { Check, ChevronDown, SlidersHorizontal } from "lucide-react";
+import { Check, ChevronDown, Pin, SlidersHorizontal } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,7 +14,22 @@ export type Opt = { value: string; name: string; description?: string };
 
 // 输入框底下那几个小下拉（模式 / 模型 / 思考强度）。不用 Select：Select 的触发器会把选项里的
 // 说明文字也一起显示出来，挤成两行；这里触发器只显示名字，说明只在展开的列表里。
-export function OptionMenu({ label, value, options, onChange }: { label: string; value: string; options: Opt[]; onChange: (v: string) => void }) {
+// 列表底下的「设为新会话的默认」：把这一项现在的值存成这种 agent 新开会话时的默认（lib/defaults.ts）。
+export function OptionMenu({
+  label,
+  value,
+  options,
+  onChange,
+  defaultValue,
+  onSetDefault,
+}: {
+  label: string;
+  value: string;
+  options: Opt[];
+  onChange: (v: string) => void;
+  defaultValue?: string;
+  onSetDefault?: () => void;
+}) {
   const cur = options.find((o) => o.value === value);
   return (
     <DropdownMenu>
@@ -34,12 +49,25 @@ export function OptionMenu({ label, value, options, onChange }: { label: string;
             </div>
           </DropdownMenuItem>
         ))}
+        {onSetDefault && <SetDefaultItem same={value === defaultValue} onClick={onSetDefault} />}
       </DropdownMenuContent>
     </DropdownMenu>
   );
 }
 
-export type OptGroup = { id: string; label: string; value: string; options: Opt[]; onChange: (v: string) => void };
+function SetDefaultItem({ same, onClick, all }: { same: boolean; onClick: () => void; all?: boolean }) {
+  return (
+    <>
+      <DropdownMenuSeparator />
+      <DropdownMenuItem disabled={same} onClick={onClick} className="gap-2 text-[12px] text-muted-foreground">
+        <Pin className="size-3.5" />
+        {same ? "已是新会话的默认" : all ? "把这些设为新会话的默认" : "设为新会话的默认"}
+      </DropdownMenuItem>
+    </>
+  );
+}
+
+export type OptGroup = { id: string; label: string; value: string; options: Opt[]; onChange: (v: string) => void; defaultValue?: string };
 
 // 值得一直看得见的模式：只做计划 / 只读（agent 不动文件，以为它在改其实没改）、全放开（不再问就动手）。
 // 其它模式（默认、自动、接受编辑）平时就那样，收起来不占地方
@@ -48,7 +76,7 @@ const LOUD_MODE = /plan|read-?only|bypass|full-access|dontAsk/i;
 // 手机上输入框底栏放不下模式 / 模型 / 思考强度三个下拉（挤得要横着滑）：收成一个按钮，
 // 点开是一张按组排的单列菜单 —— 不用子菜单，触屏上子菜单往右弹会出屏幕。
 // 按钮上写模型和思考强度（「Opus 5.5 · medium」，要一眼看得到在用哪个）；模式平时就那样，只有落在 LOUD_MODE 里才写出来。
-export function OptionsMenu({ groups, mode }: { groups: OptGroup[]; mode?: OptGroup }) {
+export function OptionsMenu({ groups, mode, onSetDefault }: { groups: OptGroup[]; mode?: OptGroup; onSetDefault?: () => void }) {
   const all = mode ? [mode, ...groups] : groups;
   const nameOf = (g: OptGroup) => g.options.find((o) => o.value === g.value)?.name ?? g.value;
   const modeName = mode && LOUD_MODE.test(mode.value) ? nameOf(mode) : undefined;
@@ -81,6 +109,7 @@ export function OptionsMenu({ groups, mode }: { groups: OptGroup[]; mode?: OptGr
             ))}
           </DropdownMenuGroup>
         ))}
+        {onSetDefault && <SetDefaultItem all same={all.every((g) => g.value === g.defaultValue)} onClick={onSetDefault} />}
       </DropdownMenuContent>
     </DropdownMenu>
   );

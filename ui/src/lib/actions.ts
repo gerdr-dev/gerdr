@@ -670,8 +670,8 @@ export async function reopenTerminal(paneId: string, cwd: string) {
 export async function createInPane(paneId: string, o: { agent: string; cwd: string; mode?: string; import?: string; title?: string }) {
   setPane0(paneId, { draft: { agent: o.agent, cwd: o.cwd } });
   try {
-    const mode = o.mode ?? get().config.defaultModes[o.agent];
-    const s = await api.createSession({ ...o, mode: mode || undefined });
+    // 没给模式时后端按设置里的默认模式 / 模型开（hub.Create），这里不用管
+    const s = await api.createSession(o);
     set((st) => ({ sessions: { ...st.sessions, [s.id]: s } }));
     setLayout((l) => setPane(l, paneId, { sessionId: s.id, draft: undefined }));
     return s;

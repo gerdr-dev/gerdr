@@ -158,7 +158,7 @@ func skillsFor(m *ext.Manager, cwd string) []ext.Skill {
 		seen[s.Name] = true
 		out = append(out, s)
 	}
-	return out
+	return m.FilterSkills(out) // 角色限定了 skill 的话只留挑中的（m 是 nil 也行）
 }
 
 func oneLine(s string, n int) string {

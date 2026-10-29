@@ -238,7 +238,16 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 		_ = json.Unmarshal(cfg.Get(), &c)
 		return c.LLM
 	}
-	h, err := hub.New(hub.Options{Dir: env.Dir, ClaudeIdle: env.ClaudeIdle, ExtraAgents: cfgAgents(), LLM: cfgLLM, Log: log, Ext: em})
+	// config.json 的 defaultModes / defaultConfig：新会话的默认模式 / 模型（按 agent id，设置 → Agent 里改），建会话时现取
+	cfgDefaults := func(agent string) hub.NewDefaults {
+		var c struct {
+			Modes  map[string]string            `json:"defaultModes"`
+			Config map[string]map[string]string `json:"defaultConfig"`
+		}
+		_ = json.Unmarshal(cfg.Get(), &c)
+		return hub.NewDefaults{Mode: c.Modes[agent], Config: c.Config[agent]}
+	}
+	h, err := hub.New(hub.Options{Dir: env.Dir, ClaudeIdle: env.ClaudeIdle, ExtraAgents: cfgAgents(), LLM: cfgLLM, Defaults: cfgDefaults, Log: log, Ext: em})
 	if err != nil {
 		return err
 	}

@@ -59,17 +59,23 @@ type spawnOpts struct {
 	resumeAt  string // --resume-session-at（配 --fork-session）
 	fork      bool
 	extra     []string // skill / MCP 那几个（ext.ClaudeArgs）+ 变体自己配的参数
+	prompt    string   // 角色追加的系统提示（Options.Prompt）
 	env       []string // 变体配的环境变量，盖在继承来的上面
 }
 
 func spawn(o spawnOpts, log *slog.Logger, onLine func(map[string]json.RawMessage, []byte)) (*proc, error) {
+	// 告诉它 gerdr 的界面能直接显示图片 / 视频 / 音频（acpx.MediaHint）；角色的提示接在后面 ——
+	// 只给一个 --append-system-prompt：给两个的话后一个把前一个盖掉。
+	hint := acpx.MediaHint
+	if p := strings.TrimSpace(o.prompt); p != "" {
+		hint += "\n\n" + p
+	}
 	args := []string{
 		"--output-format", "stream-json", "--verbose",
 		"--input-format", "stream-json",
 		"--permission-prompt-tool", "stdio",
 		"--include-partial-messages",
-		// 告诉它 gerdr 的界面能直接显示图片 / 视频 / 音频（acpx.MediaHint）
-		"--append-system-prompt", acpx.MediaHint,
+		"--append-system-prompt", hint,
 	}
 	if o.model != "" && o.model != "default" {
 		args = append(args, "--model", o.model)

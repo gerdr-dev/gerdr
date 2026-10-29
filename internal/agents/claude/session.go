@@ -130,7 +130,7 @@ func (s *session) start(ctx context.Context) error {
 		return err
 	}
 	s.mu.Lock()
-	o := spawnOpts{bin: bin, cwd: s.cwd, model: s.model, mode: s.mode, effort: s.effort, env: s.a.opts.Env}
+	o := spawnOpts{bin: bin, cwd: s.cwd, model: s.model, mode: s.mode, effort: s.effort, env: s.a.opts.Env, prompt: s.a.opts.Prompt}
 	s.mcpFP = s.a.opts.Ext.ClaudeMCPFingerprint(s.cwd)
 	if e := s.a.opts.Ext; e != nil {
 		s.extFP = e.Fingerprint()

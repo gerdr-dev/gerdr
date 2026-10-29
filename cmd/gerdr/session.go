@@ -494,6 +494,40 @@ func sessionCmd() *cobra.Command {
 		},
 	})
 
+	cmd.AddCommand(&cobra.Command{
+		Use:   "agents",
+		Short: "能开哪些 agent（new --agent 填 id）：内置的 + 用户在设置里建的角色，角色带它的提示词（看它是干什么的）",
+		RunE: func(_ *cobra.Command, _ []string) error {
+			var h struct {
+				Agents []map[string]any `json:"agents"`
+				Config struct {
+					Agents []struct {
+						ID     string `json:"id"`
+						Prompt string `json:"prompt"`
+					} `json:"agents"`
+				} `json:"config"`
+			}
+			if err := client().do("GET", "/api/hello", nil, &h); err != nil {
+				return err
+			}
+			out := []map[string]any{}
+			for _, a := range h.Agents {
+				v := map[string]any{"id": a["id"], "name": a["name"], "available": a["available"]}
+				if b, _ := a["base"].(string); b != "" {
+					v["base"] = b
+				}
+				for _, d := range h.Config.Agents {
+					if d.ID == a["id"] && d.Prompt != "" {
+						v["prompt"] = d.Prompt
+					}
+				}
+				out = append(out, v)
+			}
+			printJSON(out)
+			return nil
+		},
+	})
+
 	var nAgent, nCwd, nTitle, nMode, nPrompt string
 	var nWait, nFocus bool
 	var nTimeout time.Duration
@@ -537,7 +571,7 @@ func sessionCmd() *cobra.Command {
 	newCmd.Flags().StringVar(&nAgent, "agent", "claude", "claude、codex、native（Gerdr Agent），或者设置里加的变体 / 外部 agent 的 id")
 	newCmd.Flags().StringVar(&nCwd, "cwd", "", "工作目录（默认当前目录）")
 	newCmd.Flags().StringVar(&nTitle, "title", "", "会话标题（之后可以用它指代这个会话）")
-	newCmd.Flags().StringVar(&nMode, "mode", "", "权限模式（claude: default/acceptEdits/plan/auto/bypassPermissions；codex: ask/auto/read-only/full-access；native: default/acceptEdits/plan/bypassPermissions）")
+	newCmd.Flags().StringVar(&nMode, "mode", "", "权限模式（claude: default/acceptEdits/plan/auto/bypassPermissions；codex: ask/auto/read-only/full-access；native: default/acceptEdits/plan/bypassPermissions）。不给 = 用户在设置里给这种 agent 定的默认模式（全放开的那种不算）")
 	newCmd.Flags().StringVar(&nPrompt, "prompt", "", "开好之后马上发的第一句话")
 	newCmd.Flags().BoolVar(&nWait, "wait", false, "和 --prompt 一起用：等它做完，输出它的回复")
 	newCmd.Flags().DurationVar(&nTimeout, "timeout", 30*time.Minute, "--wait 最多等多久")

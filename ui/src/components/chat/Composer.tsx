@@ -7,7 +7,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { api, type Holder, isNetworkError } from "@/lib/api";
 import { closeAgentInPane } from "@/lib/actions";
 import { get, sendShown, set, setConfig, transcript, useStore } from "@/lib/store";
-import type { ConfigOption, ContentBlock, SessionSummary } from "@/lib/types";
+import type { ContentBlock, SessionSummary } from "@/lib/types";
+import { MODE, defaultsOf, flatOptions, setDefault, setDefaults } from "@/lib/defaults";
 import { isCoarse, usePhone } from "@/lib/phone";
 import { askKey } from "@/lib/askkeys";
 import { cn } from "@/lib/utils";
@@ -32,11 +33,6 @@ function toImgs(blocks: ContentBlock[]): Img[] {
     mimeType: im.mimeType,
     url: `data:${im.mimeType};base64,${im.data}`,
   }));
-}
-
-function flatOptions(o: ConfigOption) {
-  const arr: any[] = o.options as any[];
-  return arr.flatMap((x) => (x.options ? x.options : [x])) as { value: string; name: string; description?: string }[];
 }
 
 const LOCAL_CMDS = [{ name: "resume", description: "换到这个目录下之前的一段对话" }];
@@ -519,12 +515,18 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
 
   const modes = session.modes;
   const opts = session.configOptions ?? [];
+  // 新会话的默认值：订阅这几样，设完下拉里马上显示「已是默认」
+  useStore((s) => s.config.defaultModes);
+  useStore((s) => s.config.defaultConfig);
+  useStore((s) => s.config.llm);
+  const defs = defaultsOf(session.agent);
   const hasText = text.trim().length > 0 || imgs.length > 0;
   const modeGroup: OptGroup | undefined = modes?.availableModes.length
     ? {
-        id: "__mode",
+        id: MODE,
         label: "模式",
         value: modes.currentModeId,
+        defaultValue: defs[MODE],
         options: modes.availableModes.map((m) => ({ value: m.id, name: m.name, description: m.description })),
         onChange: (v) => api.setMode(session.id, v).catch((e) => toast.error(e.message)),
       }
@@ -533,6 +535,7 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
     id: o.id,
     label: o.name,
     value: o.currentValue,
+    defaultValue: defs[o.id],
     options: flatOptions(o),
     onChange: (v) => api.setConfig(session.id, o.id, v).catch((e) => toast.error(e.message)),
   }));
@@ -716,9 +719,32 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
               </DropdownMenu>
             )}
             {phone ? (
-              <OptionsMenu mode={modeGroup} groups={optGroups} />
+              <OptionsMenu
+                mode={modeGroup}
+                groups={optGroups}
+                onSetDefault={() => {
+                  setDefaults(session.agent, Object.fromEntries([modeGroup, ...optGroups].filter((g) => !!g).map((g) => [g!.id, g!.value])));
+                  toast.success("之后新开的会话按这个来");
+                }}
+              />
             ) : (
-              [modeGroup, ...optGroups].map((g) => g && <OptionMenu key={g.id} label={g.label} value={g.value} options={g.options} onChange={g.onChange} />)
+              [modeGroup, ...optGroups].map(
+                (g) =>
+                  g && (
+                    <OptionMenu
+                      key={g.id}
+                      label={g.label}
+                      value={g.value}
+                      options={g.options}
+                      onChange={g.onChange}
+                      defaultValue={g.defaultValue}
+                      onSetDefault={() => {
+                        setDefault(session.agent, g.id, g.value);
+                        toast.success(`之后新开的会话${g.label}默认用这个`);
+                      }}
+                    />
+                  ),
+              )
             )}
           </div>
           <TasksChip session={session} />

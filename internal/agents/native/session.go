@@ -291,6 +291,9 @@ func (s *session) newRun(ctx context.Context) *run {
 	}
 	mem := s.memory()
 	r.system = systemPrompt(cwd, skillsFor(s.a.ext, cwd), r.model, &mem)
+	if s.a.role != "" {
+		r.system += "\n" + s.a.role + "\n"
+	}
 	return r
 }
 

@@ -87,6 +87,8 @@ type Options struct {
 	Bin  string
 	Args []string
 	Env  []string
+	// Prompt：角色（设置 → Agent）追加的指令，跟在 developerInstructions 后面。
+	Prompt string
 }
 
 type session struct {
@@ -136,6 +138,14 @@ func New(log *slog.Logger, e *ext.Manager) *Agent {
 
 func NewWith(log *slog.Logger, e *ext.Manager, o Options) *Agent {
 	return &Agent{log: log.With("agent", "codex"), sessions: map[string]*session{}, ext: e, opts: o}
+}
+
+// instructions：每个 thread 的 developerInstructions —— 界面能显示媒体的提示，加上角色追加的指令。
+func (a *Agent) instructions() string {
+	if p := strings.TrimSpace(a.opts.Prompt); p != "" {
+		return acpx.MediaHint + "\n\n" + p
+	}
+	return acpx.MediaHint
 }
 
 // SetConn 必须在连接建好之后、处理任何请求之前调。
@@ -214,7 +224,7 @@ func (a *Agent) onExit() {
 }
 
 func (a *Agent) resumeThread(ctx context.Context, rpc *rpcline.Conn, s *session) error {
-	p := map[string]any{"threadId": s.id, "excludeTurns": true, "developerInstructions": acpx.MediaHint}
+	p := map[string]any{"threadId": s.id, "excludeTurns": true, "developerInstructions": a.instructions()}
 	if s.cwd != "" {
 		p["cwd"] = s.cwd
 	}
@@ -240,13 +250,16 @@ func (a *Agent) extConfig(ctx context.Context, rpc *rpcline.Conn, cwd string) (m
 	fp := a.ext.Fingerprint()
 	st := a.ext.Settings()
 	cfg := a.ext.CodexMCPOverrides()
-	if st.MCPSource == ext.SourceGerdr {
+	if st.MCPSource == ext.SourceGerdr || a.ext.LimitsMCP() {
 		mine := map[string]bool{}
-		for _, v := range st.MCP {
-			mine[v.Name] = true
+		if st.MCPSource.UsesGerdr() {
+			for _, v := range st.MCP {
+				mine[v.Name] = true
+			}
 		}
+		// 只用 gerdr 的：codex 自己的全关；角色限定了 MCP：codex 自己的里没挑的关（gerdr 那份已经在 CodexMCPOverrides 里筛过）
 		for _, v := range ext.CodexMCP() {
-			if !mine[v.Name] {
+			if !mine[v.Name] && (st.MCPSource == ext.SourceGerdr || !a.ext.AllowMCP(v.Name)) {
 				cfg["mcp_servers."+v.Name+".enabled"] = false
 			}
 		}
@@ -261,7 +274,7 @@ func (a *Agent) extConfig(ctx context.Context, rpc *rpcline.Conn, cwd string) (m
 	if err := rpc.Call(ctx, "skills/extraRoots/set", map[string]any{"extraRoots": roots}, nil); err != nil {
 		a.log.Warn("skills/extraRoots/set failed", "err", err)
 	}
-	if st.SkillSource != ext.SourceAgent || len(st.DisabledSkills) > 0 {
+	if st.SkillSource != ext.SourceAgent || len(st.DisabledSkills) > 0 || a.ext.LimitsSkills() {
 		var res struct {
 			Data []struct {
 				Skills []struct {
@@ -304,6 +317,10 @@ func (a *Agent) extConfig(ctx context.Context, rpc *rpcline.Conn, cwd string) (m
 					disable = dis[sk.Name] || !st.SkillSource.UsesGerdr()
 				default:
 					disable = st.SkillSource == ext.SourceGerdr && sk.Scope != "system"
+				}
+				// 角色限定了 skill：没挑的也关。codex 自带的（system）界面上列不出来、挑不了，不动它们。
+				if !disable && sk.Scope != "system" && !a.ext.AllowSkill(sk.Name) {
+					disable = true
 				}
 				if disable {
 					off = append(off, map[string]any{"path": sk.Path, "enabled": false})
@@ -444,7 +461,7 @@ func (a *Agent) NewSession(ctx context.Context, p acp.NewSessionRequest) (acp.Ne
 	}
 	mode := modeFromMeta(p.Meta, modeAuto)
 	ap, sb := modeParams(mode)
-	params := map[string]any{"cwd": p.Cwd, "approvalPolicy": ap, "sandbox": sandboxMode(sb), "developerInstructions": acpx.MediaHint}
+	params := map[string]any{"cwd": p.Cwd, "approvalPolicy": ap, "sandbox": sandboxMode(sb), "developerInstructions": a.instructions()}
 	cfg, fp := a.extConfig(ctx, rpc, p.Cwd)
 	if cfg != nil {
 		params["config"] = cfg
@@ -491,7 +508,7 @@ func (a *Agent) attach(ctx context.Context, id, cwd string, meta map[string]any)
 	}
 	mode := modeFromMeta(meta, modeAuto)
 	ap, sb := modeParams(mode)
-	params := map[string]any{"threadId": id, "excludeTurns": true, "approvalPolicy": ap, "sandbox": sandboxMode(sb), "developerInstructions": acpx.MediaHint}
+	params := map[string]any{"threadId": id, "excludeTurns": true, "approvalPolicy": ap, "sandbox": sandboxMode(sb), "developerInstructions": a.instructions()}
 	if cwd != "" {
 		params["cwd"] = cwd
 	}
@@ -751,7 +768,7 @@ func (a *Agent) clear(ctx context.Context, rpc *rpcline.Conn, s *session) (acp.P
 	old, cwd, mode, model := s.id, s.cwd, s.mode, s.model
 	s.mu.Unlock()
 	ap, sb := modeParams(mode)
-	params := map[string]any{"cwd": cwd, "approvalPolicy": ap, "sandbox": sandboxMode(sb), "developerInstructions": acpx.MediaHint}
+	params := map[string]any{"cwd": cwd, "approvalPolicy": ap, "sandbox": sandboxMode(sb), "developerInstructions": a.instructions()}
 	cfg, fp := a.extConfig(ctx, rpc, cwd)
 	if cfg != nil {
 		params["config"] = cfg

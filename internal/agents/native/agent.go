@@ -31,6 +31,7 @@ type Options struct {
 	Dir    string        // 会话记录放哪（<GERDR_DIR>/native）
 	Ext    *ext.Manager  // skill 从哪来；nil = 只用 Claude Code 的
 	Config func() Config // 模型配置，每次现取（设置一改下一轮就用新的）
+	Prompt string        // 角色（设置 → Agent）追加的系统提示，接在系统提示词最后
 }
 
 type Agent struct {
@@ -39,6 +40,7 @@ type Agent struct {
 	st   store
 	ext  *ext.Manager
 	cfg  func() Config
+	role string // Options.Prompt
 
 	mu       sync.Mutex
 	sessions map[string]*session // 当前 id 和 /clear 之前的旧 id 都指向它
@@ -49,7 +51,7 @@ func New(log *slog.Logger, o Options) *Agent {
 	if o.Config == nil {
 		o.Config = func() Config { return Config{} }
 	}
-	return &Agent{log: log.With("agent", "native"), st: store{dir: o.Dir}, ext: o.Ext, cfg: o.Config, sessions: map[string]*session{}}
+	return &Agent{log: log.With("agent", "native"), st: store{dir: o.Dir}, ext: o.Ext, cfg: o.Config, role: strings.TrimSpace(o.Prompt), sessions: map[string]*session{}}
 }
 
 func (a *Agent) SetConn(c *acp.AgentSideConnection) { a.conn = c }

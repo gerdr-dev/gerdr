@@ -126,24 +126,34 @@ func ClaudeMCP(cwd string) []MCPServer {
 func (m *Manager) ClaudeArgs(id, cwd string) []string {
 	s := m.Settings()
 	var args []string
+	var own []MCPServer // gerdr 那份里开着的
 	if s.MCPSource.UsesGerdr() {
-		servers := map[string]any{}
 		for _, v := range s.MCP {
-			if !v.Enabled {
-				continue
-			}
-			if v.Remote() {
-				t := v.Type
-				if t == "" {
-					t = "http"
-				}
-				servers[v.Name] = map[string]any{"type": t, "url": v.URL, "headers": v.Headers}
-			} else {
-				servers[v.Name] = map[string]any{"command": v.Command, "args": nonNil(v.Args), "env": v.Env}
+			if v.Enabled {
+				own = append(own, v)
 			}
 		}
-		b, _ := json.Marshal(map[string]any{"mcpServers": servers})
-		args = append(args, "--mcp-config", string(b))
+	}
+	switch {
+	case m.LimitsMCP():
+		// 角色限定了 MCP：claude 自己配的按名字关不掉，干脆把要的那几个（gerdr 的 + claude 自己配的里挑出来的）
+		// 全写进 --mcp-config，再 --strict-mcp-config 让它别的一概不读。代价：插件带的 MCP、claude.ai 账号里连的
+		// connector 也一起没了（它们不在 ~/.claude.json 里，挑不出来）。
+		list := own
+		if s.MCPSource != SourceGerdr {
+			seen := map[string]bool{}
+			for _, v := range own {
+				seen[v.Name] = true
+			}
+			for _, v := range ClaudeMCP(cwd) {
+				if !seen[v.Name] {
+					list = append(list, v)
+				}
+			}
+		}
+		args = append(args, "--mcp-config", claudeMCPConfig(m.FilterMCP(list)), "--strict-mcp-config")
+	case s.MCPSource.UsesGerdr():
+		args = append(args, "--mcp-config", claudeMCPConfig(own))
 		if s.MCPSource == SourceGerdr {
 			args = append(args, "--strict-mcp-config")
 		}
@@ -153,7 +163,10 @@ func (m *Manager) ClaudeArgs(id, cwd string) []string {
 	if dir, err := m.ClaudeAddDir(id, s.SkillSource.UsesGerdr()); err == nil && dir != "" {
 		args = append(args, "--add-dir", dir)
 	}
-	if s.SkillSource == SourceGerdr {
+	// 插件里的 skill 按名字关不掉（实测），只能把插件整个关了 —— 它带的 hook / MCP 也跟着没了。
+	plugins := map[string]bool{}
+	switch {
+	case s.SkillSource == SourceGerdr:
 		gerdr := map[string]bool{}
 		for _, sk := range append(m.Skills(), m.Builtin()...) {
 			gerdr[sk.Name] = true
@@ -163,14 +176,35 @@ func (m *Manager) ClaudeArgs(id, cwd string) []string {
 				overrides[sk.Name] = "off"
 			}
 		}
-		// 插件里的 skill 按名字关不掉（实测），只能把插件整个关了 —— 它带的 hook / MCP 也跟着没了。
-		plugins := map[string]bool{}
 		for _, p := range ClaudePlugins(cwd) {
 			plugins[p.ID] = false
 		}
-		if len(plugins) > 0 {
-			settings["enabledPlugins"] = plugins
+	case m.LimitsSkills():
+		// 角色限定了 skill：claude 自己的里没挑的按名字关；插件里一个都没挑的整个插件关，挑了一个就整个留着（关不了单个）。
+		// gerdr 那份和内置的不用管，ClaudeAddDir 只链了挑中的。
+		keep := map[string]bool{}
+		for _, sk := range ClaudeSkills(cwd) {
+			if pl, ok := strings.CutPrefix(sk.Origin, "claude-plugin:"); ok {
+				if _, seen := keep[pl]; !seen {
+					keep[pl] = false
+				}
+				if m.AllowSkill(sk.Name) {
+					keep[pl] = true
+				}
+				continue
+			}
+			if !m.AllowSkill(sk.Name) {
+				overrides[sk.Name] = "off"
+			}
 		}
+		for pl, k := range keep {
+			if !k {
+				plugins[pl] = false
+			}
+		}
+	}
+	if len(plugins) > 0 {
+		settings["enabledPlugins"] = plugins
 	}
 	if len(overrides) > 0 {
 		settings["skillOverrides"] = overrides
@@ -180,6 +214,24 @@ func (m *Manager) ClaudeArgs(id, cwd string) []string {
 		args = append(args, "--settings", string(b))
 	}
 	return args
+}
+
+// claudeMCPConfig：--mcp-config 要的那份 JSON。
+func claudeMCPConfig(list []MCPServer) string {
+	servers := map[string]any{}
+	for _, v := range list {
+		if v.Remote() {
+			t := v.Type
+			if t == "" {
+				t = "http"
+			}
+			servers[v.Name] = map[string]any{"type": t, "url": v.URL, "headers": v.Headers}
+		} else {
+			servers[v.Name] = map[string]any{"command": v.Command, "args": nonNil(v.Args), "env": v.Env}
+		}
+	}
+	b, _ := json.Marshal(map[string]any{"mcpServers": servers})
+	return string(b)
 }
 
 // ---- codex ----
@@ -245,7 +297,7 @@ func (m *Manager) CodexMCPOverrides() map[string]any {
 		return out
 	}
 	for _, v := range s.MCP {
-		if !v.Enabled || v.Type == "sse" {
+		if !v.Enabled || v.Type == "sse" || !m.AllowMCP(v.Name) {
 			continue
 		}
 		if v.Remote() {

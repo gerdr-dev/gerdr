@@ -1,6 +1,14 @@
 // 服务端对象的形状（和 internal/hub 一一对应）。
 
-export type AgentInfo = { id: string; name: string; available: boolean; error?: string; base?: string };
+/** options：这种 agent 上次报的模式 / 配置项（后端 optCache），编辑「新会话默认」时画下拉框用；没开过会话的没有。 */
+export type AgentInfo = {
+  id: string;
+  name: string;
+  available: boolean;
+  error?: string;
+  base?: string;
+  options?: { modes?: { availableModes: SessionMode[]; currentModeId: string }; config?: ConfigOption[] };
+};
 
 export type SessionMode = { id: string; name: string; description?: string };
 export type ConfigSelectOption = { value: string; name: string; description?: string };

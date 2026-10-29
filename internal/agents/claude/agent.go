@@ -39,6 +39,8 @@ type Options struct {
 	Bin  string
 	Args []string
 	Env  []string
+	// Prompt：角色（设置 → Agent）追加的系统提示，和 MediaHint 一起走 --append-system-prompt。
+	Prompt string
 }
 
 // configDir：这个实例的 claude 把东西写在哪（CLAUDE_CONFIG_DIR，变体里配的优先）。会话记录在它的 projects/ 下 ——

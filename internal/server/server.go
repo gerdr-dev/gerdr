@@ -442,6 +442,8 @@ func (s *Server) createSession(w http.ResponseWriter, r *http.Request) {
 		httpError(w, 400, err.Error())
 		return
 	}
+	// 带 open 的是 `gerdr session new`（agent 跑的），界面自己开会话不带
+	o.CreateOptions.FromCLI = o.Open != nil
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
 	defer cancel()
 	sess, err := s.Hub.Create(ctx, o.CreateOptions)

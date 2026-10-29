@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -32,15 +33,26 @@ import (
 //     同一个 Claude Code、另一个账号（Env 里给 ANTHROPIC_API_KEY，或者给一个单独的 CLAUDE_CONFIG_DIR 在里面 /login）。
 //     每个变体是一个**单独的适配器实例**（各自的进程、各自的会话记录目录），会话按变体 id 记，不会串到原版上去。
 //   - 外部 ACP agent（Command）：自己会说 ACP 的程序。
+//
+// 变体也是「角色」：可以带一段追加的系统提示（Prompt），只给挑出来的 skill / MCP（Skills / MCP，nil = 照全局设置），
+// 新会话的默认模式 / 模型另存在 config.json 的 defaultModes / defaultConfig（按 agent id，内置的三个也一样，见 NewDefaults）。
+// 角色可以基于 native（Gerdr Agent）：它没有可执行文件，Bin / Args / Env 不起作用。
 type AgentDef struct {
 	ID      string            `json:"id"`
 	Name    string            `json:"name"`
 	Command []string          `json:"command,omitempty"` // 外部 agent 的启动命令；内置的为空
-	Base    string            `json:"base,omitempty"`    // claude / codex：变体
+	Base    string            `json:"base,omitempty"`    // claude / codex / native：变体
 	Bin     string            `json:"bin,omitempty"`     // 变体：换一个可执行文件（空 = 和原版一样找）
 	Args    []string          `json:"args,omitempty"`    // 变体：追加的命令行参数
 	Env     map[string]string `json:"env,omitempty"`     // 变体：环境变量
+	Prompt  string            `json:"prompt,omitempty"`  // 变体：追加的系统提示
+	// Skills / MCP：只给这几个（按名字）。不写 = 照全局设置；写了空列表 = 一个都不给。
+	Skills []string `json:"skills"`
+	MCP    []string `json:"mcp"`
 }
+
+// only：这个角色对 skill / MCP 的限定。
+func (d AgentDef) only() ext.Only { return ext.Only{Skills: d.Skills, MCP: d.MCP} }
 
 func (d AgentDef) envList() []string {
 	keys := make([]string, 0, len(d.Env))
@@ -69,7 +81,7 @@ func ValidAgentDefs(in []AgentDef) []AgentDef {
 		if a.ID == "" || seen[a.ID] {
 			continue
 		}
-		if a.Base != "" && a.Base != "claude" && a.Base != "codex" {
+		if a.Base != "" && !builtinAgent(a.Base) {
 			continue
 		}
 		if a.Base == "" && len(a.Command) == 0 {
@@ -95,6 +107,14 @@ type Options struct {
 	Ext         *ext.Manager // skill / MCP 从哪来；nil = 全用 agent 自己的
 	// LLM：native agent 的模型配置（config.json 的 llm），每次现取。nil = 没配。
 	LLM func() native.Config
+	// Defaults：新会话的默认模式 / 模型（config.json 的 defaultModes / defaultConfig），按 agent id，每次现取。
+	Defaults func(agent string) NewDefaults
+}
+
+// NewDefaults：一种 agent（或角色）新开会话时用的模式和配置项（model / effort…，键是 agent 报的配置项 id）。
+type NewDefaults struct {
+	Mode   string
+	Config map[string]string
 }
 
 // extra：设置里改了会热换，所以不放在 opt 里读；单独一把锁（Summary 持着会话锁时要读它，而 h.mu 的顺序是先 hub 后会话）。
@@ -214,14 +234,15 @@ func (h *Hub) Agents() []map[string]any {
 		map[string]any{"id": "claude", "name": "Claude Code", "available": cerr == nil, "error": errStr(cerr)},
 		map[string]any{"id": "codex", "name": "Codex", "available": xerr == nil, "error": errStr(xerr)},
 	)
-	if nerr := native.Available(h.llm()); nerr == nil {
+	nerr := native.Available(h.llm())
+	if nerr == nil {
 		// 没配模型时不列：大多数人只用 claude / codex，列一个永远不能用的选项是噪音
 		out = append(out, map[string]any{"id": "native", "name": "Gerdr Agent", "available": true})
 	}
 	for _, a := range h.extra() {
 		m := map[string]any{"id": a.ID, "name": a.Name, "available": true, "base": a.Base}
 		switch {
-		case a.Base != "" && a.Bin != "":
+		case a.Base != "" && a.Base != "native" && a.Bin != "":
 			if _, err := sysenv.FindBin(a.Bin); err != nil {
 				m["available"], m["error"] = false, err.Error()
 			}
@@ -229,8 +250,22 @@ func (h *Hub) Agents() []map[string]any {
 			m["available"], m["error"] = cerr == nil, errStr(cerr)
 		case a.Base == "codex":
 			m["available"], m["error"] = xerr == nil, errStr(xerr)
+		case a.Base == "native":
+			m["available"], m["error"] = nerr == nil, errStr(nerr)
 		}
 		out = append(out, m)
+	}
+	// options：这种 agent 上次报的模式 / 配置项（optCache），设置里编辑「新会话默认」时拿它画下拉框。
+	// 新加的角色还没开过会话，用它底子的。
+	for _, m := range out {
+		id, _ := m["id"].(string)
+		o, ok := h.opts.get(id)
+		if !ok {
+			o, ok = h.opts.get(h.Base(id))
+		}
+		if ok {
+			m["options"] = o
+		}
 	}
 	return out
 }
@@ -325,13 +360,16 @@ func (h *Hub) startHost(ctx context.Context, agent string) (*agenthost.Host, err
 	if builtinAgent(agent) {
 		base = agent
 	}
+	// 角色限定了 skill / MCP 的，给它一个只看得见挑中那几个的 ext（设置、目录还是同一份）
+	em := h.opt.Ext.Scoped(def.only())
 	switch base {
 	case "claude":
-		return agenthost.StartInProc(sctx, claude.New(log, claude.Options{IdleTimeout: h.opt.ClaudeIdle, Ext: h.opt.Ext, Bin: def.Bin, Args: def.Args, Env: def.envList()}), handler, log)
+		return agenthost.StartInProc(sctx, claude.New(log, claude.Options{IdleTimeout: h.opt.ClaudeIdle, Ext: em, Bin: def.Bin, Args: def.Args, Env: def.envList(), Prompt: def.Prompt}), handler, log)
 	case "codex":
-		return agenthost.StartInProc(sctx, codex.NewWith(log, h.opt.Ext, codex.Options{Bin: def.Bin, Args: def.Args, Env: def.envList()}), handler, log)
+		return agenthost.StartInProc(sctx, codex.NewWith(log, em, codex.Options{Bin: def.Bin, Args: def.Args, Env: def.envList(), Prompt: def.Prompt}), handler, log)
 	case "native":
-		return agenthost.StartInProc(sctx, native.New(log, native.Options{Dir: filepath.Join(h.opt.Dir, "native"), Ext: h.opt.Ext, Config: h.llm}), handler, log)
+		// 基于 Gerdr Agent 的角色和原版共用会话目录（id 是 uuid，撞不了）和记忆：记忆是人的偏好、项目的约定，不分角色
+		return agenthost.StartInProc(sctx, native.New(log, native.Options{Dir: filepath.Join(h.opt.Dir, "native"), Ext: em, Config: h.llm, Prompt: def.Prompt}), handler, log)
 	}
 	home, _ := os.UserHomeDir()
 	return agenthost.StartProcess(sctx, def.Command, home, handler, log)
@@ -534,7 +572,13 @@ type CreateOptions struct {
 	// Import：接上一个在别处开过的会话（agent 自己的 session id），历史从它那儿重放。
 	Import string `json:"import,omitempty"`
 	Title  string `json:"title,omitempty"`
+	// FromCLI：`gerdr session new` 开的（agent 自己跑的命令）。这时默认模式是「全放开」那种的不套：
+	// 那条命令不审批就放行（sysenv.SafeGerdrCLI 不许带 --mode 就是为这个），沙箱里的 agent 不能借用户的默认值开一个不设防的会话。
+	FromCLI bool `json:"-"`
 }
+
+// permissive：不再问人就动手的模式。
+var permissive = regexp.MustCompile(`(?i)bypass|full-access|dontAsk`)
 
 func (h *Hub) Create(ctx context.Context, o CreateOptions) (*Session, error) {
 	if _, ok := h.agentDef(o.Agent); !ok {
@@ -548,9 +592,28 @@ func (h *Hub) Create(ctx context.Context, o CreateOptions) (*Session, error) {
 	if err != nil {
 		return nil, err
 	}
+	// 没指定的模式 / 配置项用设置里的默认值（config.json 的 defaultModes / defaultConfig）。界面和 `gerdr session new`
+	// 都走这里，所以两边开出来的一样。默认值不对（agent 不认这个模式、模型被删了）不报错：适配器不认的模式按自己的默认开，
+	// 配置项在下面对着 agent 报的可选值核过才设。
+	explicitMode := o.Mode != ""
+	var defConfig map[string]string
+	if h.opt.Defaults != nil {
+		d := h.opt.Defaults(o.Agent)
+		if o.Mode == "" && !(o.FromCLI && permissive.MatchString(d.Mode)) {
+			o.Mode = d.Mode
+		}
+		if o.Import == "" { // 导入的会话用它原来的模型，不拿默认的盖
+			defConfig = d.Config
+		}
+	}
 	meta := map[string]any{}
 	if o.Mode != "" {
 		meta["mode"] = o.Mode
+	}
+	for k, v := range defConfig {
+		if _, given := o.Config[k]; !given {
+			meta[k] = v
+		}
 	}
 	for k, v := range o.Config {
 		meta[k] = v
@@ -581,7 +644,8 @@ func (h *Hub) Create(ctx context.Context, o CreateOptions) (*Session, error) {
 		}
 		// 各家适配器遇到不认识的模式都是悄悄按默认模式开（比如给 native 填了 codex 的 full-access），
 		// 调用方（`gerdr session new --mode`）以为放开了权限、其实每步都要人批 —— 这里对着 agent 报的可选模式查，不对就报错。
-		if err := checkMode(o.Mode, res.Modes); err != nil {
+		// 只查调用方点名的；设置里的默认模式 agent 不认就算了（它已经按自己的默认开了，记录跟着 agent 报的走）。
+		if err := checkMode(o.Mode, res.Modes); explicitMode && err != nil {
 			_, _ = c.Conn.CloseSession(ctx, acp.CloseSessionRequest{SessionId: res.SessionId})
 			return nil, err
 		}
@@ -590,11 +654,85 @@ func (h *Hub) Create(ctx context.Context, o CreateOptions) (*Session, error) {
 		s.modes, s.config = res.Modes, res.ConfigOptions
 		h.opts.set(o.Agent, res.Modes, res.ConfigOptions)
 		h.register(s)
+		s.applyConfig(ctx, mergeConfig(defConfig, o.Config))
 	}
 	s.syncRecFromState()
 	h.saveIndex()
 	h.broadcastSession(s)
 	return s, nil
+}
+
+func mergeConfig(def, given map[string]string) map[string]string {
+	out := map[string]string{}
+	for k, v := range def {
+		out[k] = v
+	}
+	for k, v := range given {
+		out[k] = v
+	}
+	return out
+}
+
+// applyConfig：建会话时要的配置项，agent 在 session/new 里没接住的补设一遍。三家能在新建时就接的不一样
+// （claude 接 model / effort，codex 只接 model，native 只接 model），统一在这儿对着它报回来的当前值补：
+// 先 model（换模型会把思考强度重置成这个模型的默认），再别的；值不在可选项里的跳过（默认值里存的模型可能已经没了）。
+func (s *Session) applyConfig(ctx context.Context, want map[string]string) {
+	keys := make([]string, 0, len(want))
+	for k := range want {
+		keys = append(keys, k)
+	}
+	sortKeys(keys)
+	for _, k := range keys {
+		v := want[k]
+		s.mu.Lock()
+		cur, ok := selectOption(s.config, k)
+		s.mu.Unlock()
+		if !ok || v == "" || string(cur.CurrentValue) == v || !hasValue(cur, v) {
+			continue
+		}
+		if err := s.SetConfig(ctx, k, v); err != nil {
+			s.h.log.Warn("apply default config", "session", s.rec.ID, "key", k, "err", err)
+		}
+	}
+}
+
+// sortKeys：model 排最前，其余按名字。
+func sortKeys(keys []string) {
+	sort.Slice(keys, func(i, j int) bool {
+		if (keys[i] == "model") != (keys[j] == "model") {
+			return keys[i] == "model"
+		}
+		return keys[i] < keys[j]
+	})
+}
+
+func selectOption(opts []acp.SessionConfigOption, id string) (*acp.SessionConfigOptionSelect, bool) {
+	for _, o := range opts {
+		if o.Select != nil && string(o.Select.Id) == id {
+			return o.Select, true
+		}
+	}
+	return nil, false
+}
+
+func hasValue(o *acp.SessionConfigOptionSelect, v string) bool {
+	if u := o.Options.Ungrouped; u != nil {
+		for _, x := range *u {
+			if string(x.Value) == v {
+				return true
+			}
+		}
+	}
+	if g := o.Options.Grouped; g != nil {
+		for _, grp := range *g {
+			for _, x := range grp.Options {
+				if string(x.Value) == v {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 // FindByAgent：按 agent 自己的会话 id 找 gerdr 会话（agent 跑的 `gerdr session …` 靠
