@@ -112,7 +112,9 @@ func TestLid(t *testing.T) {
 		lid.Add(1)
 		return func() { lid.Add(-1) }, nil
 	}
-	k.battLow = low.Load
+	k.batt = func() Battery {
+		return Battery{Percent: map[bool]int{true: 10, false: 80}[low.Load()], OnBattery: true}
+	}
 	k.done = make(chan struct{})
 	go k.watchBattery(10 * time.Millisecond)
 	defer k.Close()

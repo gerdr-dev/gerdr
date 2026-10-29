@@ -35,10 +35,10 @@ type Keeper struct {
 	grace time.Duration
 	// start 起一个让系统别睡的进程，返回停掉它的函数；测试里换成假的。nil = 这个平台做不到。
 	start func() (stop func(), err error)
-	// lidOn 打开「合盖也不睡」，返回关掉它的函数；lidReady 是不是已经授权过；battLow 用电池且快没电了。测试里换成假的。
+	// lidOn 打开「合盖也不睡」，返回关掉它的函数；lidReady 是不是已经授权过；batt 读电量和电源。测试里换成假的。
 	lidOn    func() (stop func(), err error)
 	lidReady func() bool
-	battLow  func() bool
+	batt     func() Battery
 	done     chan struct{}
 
 	mu      sync.Mutex
@@ -55,6 +55,16 @@ type Keeper struct {
 	lowBatt bool        // 用电池且电量 ≤ 20%：合盖模式放手
 }
 
+// Battery：电量和电源。Percent -1 = 没电池（台式机）。
+type Battery struct {
+	Percent   int  `json:"percent"`
+	OnBattery bool `json:"onBattery"` // 在用电池（没插电）
+	Charging  bool `json:"charging"`
+}
+
+// low：用电池且电量 ≤ 20%，合盖模式放手的线。
+func (b Battery) low() bool { return b.OnBattery && b.Percent >= 0 && b.Percent <= 20 }
+
 // Forever：手动时段「无限期」。
 var Forever = time.Unix(1<<62, 0)
 
@@ -67,7 +77,7 @@ func New(log *slog.Logger, dir string) *Keeper {
 		}
 		lidCleanup(dir)
 		k.lidOn = func() (func(), error) { return lidOn(dir) }
-		k.lidReady, k.battLow = lidReady, battLow
+		k.lidReady, k.batt = lidReady, battery
 		go k.watchBattery(time.Minute)
 	}
 	return k
@@ -89,7 +99,7 @@ func (k *Keeper) watchBattery(every time.Duration) {
 		if !check {
 			continue
 		}
-		low := k.battLow()
+		low := k.batt().low()
 		k.mu.Lock()
 		if low != k.lowBatt {
 			k.lowBatt = low
@@ -224,14 +234,20 @@ type Status struct {
 	LidOn      bool   `json:"lidOn"`      // 现在合盖也不睡
 	LidErr     string `json:"lidErr"`     // 开不起来的原因
 	LowBattery bool   `json:"lowBattery"` // 电量低，合盖模式放手了
+
+	Battery Battery `json:"battery"` // 现在的电量和电源，设置页上标出来（合盖不睡时心里有数）
 }
 
 func (k *Keeper) Status() Status {
-	ready := k.lidReady != nil && k.lidReady() // 跑一下 sudo -l，别拿着锁
+	ready := k.lidReady != nil && k.lidReady() // 跑一下 sudo -l / pmset，别拿着锁
+	batt := Battery{Percent: -1}
+	if k.batt != nil {
+		batt = k.batt()
+	}
 	k.mu.Lock()
 	defer k.mu.Unlock()
 	st := Status{Available: k.start != nil, Awake: k.stop != nil, Auto: k.enabled, Remote: k.conns,
-		Lid: k.lid, LidReady: ready, LidOn: k.lidStop != nil, LidErr: k.lidErr, LowBattery: k.lowBatt}
+		Lid: k.lid, LidReady: ready, LidOn: k.lidStop != nil, LidErr: k.lidErr, LowBattery: k.lowBatt, Battery: batt}
 	if k.timer != nil {
 		st.GraceUntil = k.idleAt.Add(k.grace).UnixMilli()
 	}

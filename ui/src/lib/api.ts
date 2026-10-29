@@ -97,6 +97,8 @@ export type AwakeStatus = {
   lidOn: boolean;
   lidErr: string;
   lowBattery: boolean;
+  /** 现在的电量和电源；percent -1 = 没电池（台式机） */
+  battery: { percent: number; onBattery: boolean; charging: boolean };
 };
 
 /** 等批准的一次 App 登录（auth.CLIRequest） */

@@ -247,17 +247,17 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 		log.Warn("install builtin plugins", "err", err)
 	}
 	pm.Watch(func() { h.Broadcast("plugins", nil) })
-	// 有远程连着时不让电脑睡：界面配置里的实验室开关（keepAwakeRemote），和 agents 一样存了就生效
+	// 有远程连着时不让电脑睡：界面配置里的实验室开关（keepAwakeRemote），和 agents 一样存了就生效。
+	// 开着就连合盖也不睡（原来是两个开关，合成一个：要远程用电脑，合盖睡着了一样连不上）；手动时段的合盖也跟着它。
 	keeper := awake.New(log, env.Dir)
 	defer keeper.Close()
 	applyAwake := func() {
 		var c struct {
 			KeepAwakeRemote bool `json:"keepAwakeRemote"`
-			KeepAwakeLid    bool `json:"keepAwakeLid"`
 		}
 		_ = json.Unmarshal(cfg.Get(), &c)
 		keeper.SetEnabled(c.KeepAwakeRemote)
-		keeper.SetLid(c.KeepAwakeLid)
+		keeper.SetLid(c.KeepAwakeRemote)
 	}
 	applyAwake()
 	applyAgents := func() {

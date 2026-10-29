@@ -83,20 +83,21 @@ func lidCleanup(dir string) {
 	}
 }
 
-var battRe = regexp.MustCompile(`(\d+)%;`)
+var battRe = regexp.MustCompile(`(\d+)%; ([a-zA-Z ]+);`)
 
-// battLow：用电池、电量 ≤ 20%。台式机没电池 = false。
-func battLow() bool {
+// battery：读 `pmset -g batt`。台式机没电池 = Percent -1。
+func battery() Battery {
 	out, err := exec.Command(pmset, "-g", "batt").Output()
-	if err != nil || !strings.Contains(string(out), "'Battery Power'") {
-		return false
+	if err != nil {
+		return Battery{Percent: -1}
 	}
-	m := battRe.FindSubmatch(out)
-	if m == nil {
-		return false
+	b := Battery{Percent: -1, OnBattery: strings.Contains(string(out), "'Battery Power'")}
+	if m := battRe.FindSubmatch(out); m != nil {
+		b.Percent, _ = strconv.Atoi(string(m[1]))
+		// charging / charged / finishing charge / AC attached（插着但没在充）；discharging 是在用电池
+		b.Charging = string(m[2]) == "charging" || string(m[2]) == "finishing charge"
 	}
-	n, _ := strconv.Atoi(string(m[1]))
-	return n <= 20
+	return b
 }
 
 var userRe = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)

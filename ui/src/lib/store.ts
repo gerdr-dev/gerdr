@@ -25,21 +25,20 @@ export type Config = {
   expandEdits?: boolean;
   /** 实验室：对话用虚拟滚动（只渲染屏幕附近的行）。默认关 —— 往上翻时行卸载再挂载，带图的行高度先 0 后撑开，界面一跳一跳（用户报的）。 */
   virtualList?: boolean;
-  /** 实验室：有远程设备连着时不让电脑睡（后端起 caffeinate），断开 15 分钟后放手。后端读这个字段（cmd/gerdr 的 applyAwake）。 */
+  /** 实验室：有远程设备连着时不让电脑睡（后端起 caffeinate），断开 15 分钟后放手；开着时合上盖子也不睡
+   *  （pmset disablesleep，要授权一次，手动时段也算）。后端读这个字段（cmd/gerdr 的 applyAwake）。 */
   keepAwakeRemote?: boolean;
-  /** 实验室：不休眠时合上盖子也不睡（pmset disablesleep，要授权一次）。只在本来就该醒着时生效。 */
-  keepAwakeLid?: boolean;
   agents?: AgentDef[];
   /** 输入框里 pin 住的 / 命令（命令名，不带 /）：附图按钮旁边多一个 / 按钮，点开就是这些。存 config 是让手机和电脑共用一份。 */
+  pinnedCommands?: string[];
   /** Gerdr Agent（native）用的模型服务商，后端读（cmd/gerdr 的 cfgLLM），设置 → Agent 里编辑。 */
   llm?: LLMConfig;
-  pinnedCommands?: string[];
 };
+
 /** config.json 的 llm：Gerdr Agent 直接调的模型接口（OpenAI 兼容）。模型只写 id 时协议、思考档位按 id 猜（后端 native/config.go）。 */
 export type LLMModel = { id: string; name?: string; api?: "chat" | "responses"; efforts?: string[]; window?: number };
 export type LLMProvider = { id: string; name?: string; baseUrl: string; apiKey?: string; apiKeyEnv?: string; models: LLMModel[] };
 export type LLMConfig = { providers?: LLMProvider[]; defaultModel?: string };
-
 
 /** config.json 里的 agents：claude / codex 的变体（base），或者外部 ACP agent（command）。 */
 export type AgentDef = { id: string; name: string; base?: "claude" | "codex"; command?: string[]; bin?: string; args?: string[]; env?: Record<string, string> };
@@ -57,7 +56,6 @@ export const DEFAULT_CONFIG: Config = {
   expandEdits: true,
   virtualList: false,
   keepAwakeRemote: false,
-  keepAwakeLid: false,
 };
 
 export function mergeConfig(raw: any): Config {

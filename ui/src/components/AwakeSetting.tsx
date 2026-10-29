@@ -22,6 +22,13 @@ function clock(ms: number) {
   return d.toLocaleString(undefined, same ? { hour: "2-digit", minute: "2-digit" } : { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
+// 合盖不睡时心里得有数：现在是插着电还是在耗电池、还剩多少
+function power({ percent, onBattery, charging }: AwakeStatus["battery"]) {
+  if (percent < 0) return "接着电源";
+  if (onBattery) return `用电池，剩 ${percent}%`;
+  return `接着电源，电量 ${percent}%${charging ? "（充电中）" : ""}`;
+}
+
 function describe(st: AwakeStatus) {
   if (!st.awake) return "现在没挡着，电脑会照常睡眠。";
   const why: string[] = [];
@@ -61,7 +68,7 @@ export function AwakeSetting({ open }: { open: boolean }) {
       .then(setSt)
       .catch((e) => toast.error(e.message ?? String(e)));
   // 开关一变（存进 config、后端读到）就刷一次：授权按钮要跟着出来
-  const lidCfg = useStore((s) => !!s.config.keepAwakeLid);
+  const lidCfg = useStore((s) => !!s.config.keepAwakeRemote);
   useEffect(() => {
     if (!open) return;
     const t = setTimeout(
@@ -95,6 +102,15 @@ export function AwakeSetting({ open }: { open: boolean }) {
       <div>
         <div className="text-[13px]">手动不休眠</div>
         <div className={st.awake ? "text-[12px] text-ok" : "text-[12px] text-muted-foreground"}>{describe(st)}</div>
+        {st.battery && (
+          <div
+            className={
+              st.battery.onBattery && st.battery.percent >= 0 && st.battery.percent <= 20 ? "text-[12px] text-warn" : "text-[12px] text-muted-foreground"
+            }
+          >
+            现在{power(st.battery)}
+          </div>
+        )}
       </div>
       {st.lid && !st.lidReady && (
         // 远程点会 403（密码框得弹在电脑上、有人输）：后端只在本机口放行
