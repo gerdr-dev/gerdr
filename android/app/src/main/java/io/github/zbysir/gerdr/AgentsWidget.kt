@@ -59,7 +59,7 @@ class AgentsWidget : AppWidgetProvider() {
             val v = RemoteViews(ctx.packageName, R.layout.widget_agents)
             if (raw == null) {
                 ROWS.forEach { v.setViewVisibility(it[0], View.GONE) }
-                v.setTextViewText(R.id.title, "gerdr")
+                v.setTextViewText(R.id.title, "Gerdr")
                 v.setTextViewText(R.id.foot, "打开一次 App 登录，之后这里显示 agent 状态")
                 v.setViewVisibility(R.id.foot, View.VISIBLE)
             } else {

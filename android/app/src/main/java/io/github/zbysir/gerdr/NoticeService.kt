@@ -226,7 +226,7 @@ class NoticeService : Service() {
         if (!canNotify(this)) return
         val note = NotificationCompat.Builder(this, CH_AGENT)
             .setSmallIcon(R.drawable.ic_notify)
-            .setContentTitle(if (passkey) "gerdr 要你验证一次" else "gerdr 的登录失效了")
+            .setContentTitle(if (passkey) "Gerdr 要你验证一次" else "Gerdr 的登录失效了")
             .setContentText(if (passkey) "打开 App 用 passkey 验证，验完接着收通知" else "打开 App 重新登录，之后才收得到通知")
             .setAutoCancel(true)
             .setContentIntent(openApp(this, null))
@@ -357,7 +357,7 @@ class NoticeService : Service() {
             if (!canNotify(ctx)) return
             val note = NotificationCompat.Builder(ctx, CH_AGENT)
                 .setSmallIcon(R.drawable.ic_notify)
-                .setContentTitle("gerdr 通知试一下")
+                .setContentTitle("Gerdr 通知试一下")
                 .setContentText("看到这条就说明通知是通的")
                 .setAutoCancel(true)
                 .setContentIntent(openApp(ctx, null))

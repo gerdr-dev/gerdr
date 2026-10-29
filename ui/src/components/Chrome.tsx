@@ -226,7 +226,7 @@ export function Sidebar({ className }: { className?: string }) {
     <div className={cn("flex h-full w-56 shrink-0 flex-col border-r bg-sidebar", className)}>
       <div className="flex h-10 shrink-0 items-center gap-1 border-b px-2" style={{ WebkitAppRegion: "drag" } as any}>
         <div className="native-traffic-light-gap" />
-        <span className="flex-1 text-[12px] font-semibold tracking-wide text-muted-foreground">gerdr</span>
+        <span className="flex-1 text-[12px] font-semibold tracking-wide text-muted-foreground">Gerdr</span>
         {!connected && <span className="text-[11px] text-bad">离线</span>}
         {/* 安卓 App 里走哪条路（详情在设置 → 通用 → 安卓 App）。原来是顶栏上的一个绿 / 蓝点，和状态点挤在一起分不清，挪到侧栏里写成字 */}
         {connected && isAndroid() && <RouteLabel />}

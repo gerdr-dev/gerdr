@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">gerdr</string>
+    <string name="app_name">Gerdr</string>
     <string name="widget_desc">agent 状态一览：哪几个在等你、哪几个在跑</string>
 </resources>
