@@ -99,7 +99,8 @@ type Dialog =
   | { kind: "settings"; tab?: string }
   | { kind: "sessions" }
   | { kind: "workspaces" }
-  | { kind: "rename"; target: "tab" | "workspace" | "session"; id: string; value: string }
+  // space = a herdr-style session (layout.ts Space); newSpace reuses the rename dialog to name a new one (id unused)
+  | { kind: "rename"; target: "tab" | "workspace" | "session" | "space" | "newSpace"; id: string; value: string }
   | { kind: "newWorkspace" }
   | { kind: "importHerdr" }
   | { kind: "resume"; sessionId: string; paneId: string }

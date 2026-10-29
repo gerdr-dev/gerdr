@@ -46,6 +46,10 @@ export type KeyAction =
   | "workspaces"
   | "nextWorkspace"
   | "prevWorkspace"
+  | "newSpace"
+  | "nextSpace"
+  | "prevSpace"
+  | "renameSpace"
   | "sessions"
   | "toggleSidebar"
   | "help"
@@ -100,6 +104,10 @@ export const ACTION_TITLES: Record<KeyAction, string> = {
   workspaces: "切换工作空间",
   nextWorkspace: "下一个工作空间",
   prevWorkspace: "上一个工作空间",
+  newSpace: "新 session",
+  nextSpace: "下一个 session",
+  prevSpace: "上一个 session",
+  renameSpace: "重命名 session",
   sessions: "会话列表（接着以前的聊）",
   toggleSidebar: "显示 / 隐藏侧栏",
   help: "快捷键帮助",
@@ -163,6 +171,10 @@ export const DEFAULT_KEYS: Record<KeyAction, string[]> = {
   workspaces: ["prefix+w"],
   nextWorkspace: ["prefix+)"],
   prevWorkspace: ["prefix+("],
+  newSpace: [],
+  nextSpace: [],
+  prevSpace: [],
+  renameSpace: [],
   sessions: ["prefix+g", "meta+o"],
   toggleSidebar: ["prefix+b", "meta+ctrl+s"],
   help: ["prefix+?", "meta+/"],
@@ -201,6 +213,7 @@ export const KEY_GROUPS: [string, KeyAction[]][] = [
   ],
   ["tab", ["newTab", "terminalTab", "nextTab", "prevTab", "lastTab", "tab1", "closeTab", "reopenClosed", "renameTab"]],
   ["工作空间", ["newWorkspace", "workspaces", "nextWorkspace", "prevWorkspace", "renameWorkspace", "closeWorkspace"]],
+  ["session", ["newSpace", "nextSpace", "prevSpace", "renameSpace"]],
   ["会话", ["sessions", "nextAttention", "prevAttention", "focusAttention", "renamePane", "stop"]],
   ["其他", ["palette", "toggleSidebar", "settings", "help", "importHerdr"]],
 ];

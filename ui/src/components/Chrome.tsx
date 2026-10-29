@@ -1,11 +1,52 @@
-import { Keyboard, LayoutList, Menu, PanelLeft, Plus, Settings, SquareTerminal, X } from "lucide-react";
+import { Check, ChevronsUpDown, Keyboard, LayoutList, Menu, PanelLeft, Plus, Settings, SquareTerminal, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { addTab, basename, closeTab, closeWorkspace, duplicateTab, focusSession, moveWorkspace, selectWorkspace, tabName } from "@/lib/actions";
+import {
+  addTab,
+  basename,
+  closeSpace,
+  closeTab,
+  closeWorkspace,
+  duplicateTab,
+  focusSession,
+  moveWorkspaceToSpace,
+  selectWorkspace,
+  switchSpace,
+  tabName,
+} from "@/lib/actions";
 import { formatCombo } from "@/lib/keys";
-import { activeWs, leaves, type Tab, type Workspace } from "@/lib/layout";
+import {
+  activeWs,
+  allLeaves,
+  currentSpace,
+  leaves,
+  spaceList,
+  spaceOf,
+  spaceWorkspaces,
+  type Layout,
+  type Space,
+  type Tab,
+  type Workspace,
+} from "@/lib/layout";
 import { applyTabLabel, applyWorkspaceLabel } from "@/lib/plugins";
 import { focusedSession, get, keyFor, set, setLayout, toggleSidebar, useStore } from "@/lib/store";
 import type { SessionSummary } from "@/lib/types";
@@ -14,6 +55,7 @@ import { cn } from "@/lib/utils";
 import { AgentIcon, StatusDot } from "./AgentIcon";
 import { fmtElapsed } from "./chat/StatusLine";
 import { TabDragLayer, useTabDrag } from "./TabDrag";
+import { WorkspaceDragLayer, useWorkspaceDrag } from "./WorkspaceDrag";
 import { UsageMeter } from "./UsageMeter";
 import { isAndroid } from "@/lib/android";
 import { useRoute } from "./AndroidSettings";
@@ -100,6 +142,8 @@ export function TabBar() {
                     "group/tab flex h-7 w-52 min-w-[88px] shrink cursor-default items-center gap-2 rounded-md px-1.5 text-[12px] select-none",
                     active ? "bg-accent font-medium text-foreground" : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
                     drag?.tabId === t.id && "opacity-40",
+                    // Mark which tab the context menu belongs to while it's open (Radix sets data-state on the trigger)
+                    "data-[state=open]:bg-accent data-[state=open]:text-foreground data-[state=open]:ring-1 data-[state=open]:ring-brand/60",
                   )}
                 >
                   {agent ? (
@@ -169,11 +213,17 @@ export function PhoneBar() {
   const connected = useStore((s) => s.connected);
   useStore((s) => s.pluginVersion);
   const ws = activeWs(layout);
-  const wi = layout.workspaces.indexOf(ws);
+  const wi = spaceWorkspaces(layout).indexOf(ws);
   const ti = ws.tabs.findIndex((t) => t.id === ws.activeTab);
   const tab = ws.tabs[ti] ?? ws.tabs[0];
   const st = tabStatus(tab, sessions, unread);
-  const waiting = Object.values(sessions).filter((s) => s.status === "waiting").length;
+  // Waiting in this session (the switcher it opens only lists this session's panes); other sessions' show on the sidebar's session switcher
+  const space = currentSpace(layout);
+  const waiting = new Set(
+    allLeaves(layout)
+      .filter((x) => spaceOf(x.ws) === space && x.pane.sessionId && sessions[x.pane.sessionId]?.status === "waiting")
+      .map((x) => x.pane.sessionId),
+  ).size;
   const openSwitcher = () => {
     // 先把键盘收掉：键盘占着半个屏时，点面板里第一下只会收键盘
     (document.activeElement as HTMLElement | null)?.blur?.();
@@ -222,12 +272,17 @@ export function Sidebar({ className }: { className?: string }) {
   const unread = useStore((s) => s.unread);
   const connected = useStore((s) => s.connected);
   useStore((s) => s.pluginVersion);
-  const [drag, setDrag] = useState<number | null>(null);
+  const list = spaceWorkspaces(layout); // only the session being shown (herdr-style; switch with SpaceSwitcher)
+  const listRef = useRef<HTMLDivElement>(null);
+  const { drag, onPointerDown } = useWorkspaceDrag(listRef, list.map((w) => w.id).join(","));
   return (
     <div className={cn("flex h-full w-56 shrink-0 flex-col border-r bg-sidebar", className)}>
       <div className="flex h-10 shrink-0 items-center gap-1 border-b px-2" style={{ WebkitAppRegion: "drag" } as any}>
         <div className="native-traffic-light-gap" />
-        <span className="flex-1 text-[12px] font-semibold tracking-wide text-muted-foreground">Gerdr</span>
+        {/* The session switcher takes the title's place (asked for). Only the button is no-drag, so the rest of the bar still moves the window */}
+        <div className="flex min-w-16 flex-1">
+          <SpaceSwitcher />
+        </div>
         {!connected && <span className="text-[11px] text-bad">离线</span>}
         {/* 安卓 App 里走哪条路（详情在设置 → 通用 → 安卓 App）。原来是顶栏上的一个绿 / 蓝点，和状态点挤在一起分不清，挪到侧栏里写成字 */}
         {connected && isAndroid() && <RouteLabel />}
@@ -236,21 +291,21 @@ export function Sidebar({ className }: { className?: string }) {
         </Button>
       </div>
       <div className="max-h-[45%] shrink-0 overflow-y-auto px-1.5 py-2">
-        {layout.workspaces.map((w, wi) => (
-          <WorkspaceItem
-            key={w.id}
-            w={w}
-            index={wi}
-            active={w.id === layout.active}
-            sessions={sessions}
-            unread={unread}
-            onDragStart={() => setDrag(wi)}
-            onDrop={() => {
-              if (drag != null && drag !== wi) moveWorkspace(drag, wi);
-              setDrag(null);
-            }}
-          />
-        ))}
+        <div ref={listRef}>
+          {list.map((w, wi) => (
+            <WorkspaceItem
+              key={w.id}
+              w={w}
+              index={wi}
+              active={w.id === layout.active}
+              dragging={drag?.wsId === w.id}
+              sessions={sessions}
+              unread={unread}
+              onPointerDown={(e) => onPointerDown(e, w.id, wi, applyWorkspaceLabel(w, wi, w.name))}
+            />
+          ))}
+        </div>
+        <WorkspaceDragLayer index={(id) => list.findIndex((w) => w.id === id)} />
         <button
           className="mt-1 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[12px] text-muted-foreground hover:bg-accent"
           onClick={() => set({ dialog: { kind: "newWorkspace" } })}
@@ -293,7 +348,8 @@ function AgentList() {
   const focused = focusedSession(layout);
   const rows: { s: SessionSummary; where: string }[] = [];
   const seen = new Set<string>();
-  layout.workspaces.forEach((w, wi) =>
+  // This session's agents only: another session's are out of sight like in herdr (their state shows on the session switcher)
+  spaceWorkspaces(layout).forEach((w, wi) =>
     w.tabs.forEach((t, ti) => {
       for (const p of leaves(t.root)) {
         const s = p.sessionId ? sessions[p.sessionId] : undefined;
@@ -349,28 +405,34 @@ function WorkspaceItem({
   w,
   index,
   active,
+  dragging,
   sessions,
   unread,
-  onDragStart,
-  onDrop,
+  onPointerDown,
 }: {
   w: Workspace;
   index: number;
   active: boolean;
+  dragging: boolean;
   sessions: Record<string, SessionSummary>;
   unread: Record<string, true>;
-  onDragStart: () => void;
-  onDrop: () => void;
+  onPointerDown: (e: React.PointerEvent<HTMLElement>) => void;
 }) {
   const label = applyWorkspaceLabel(w, index, w.name);
+  const layout = useStore((s) => s.layout);
+  const others = spaceList(layout).filter((sp) => sp.id !== spaceOf(w));
   return (
-    <div className="mb-1" data-ws-id={w.id} draggable onDragStart={onDragStart} onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
+    // No gap between rows (asked for); data-ws-id is also the drop target when dragging a tab onto a workspace (TabDrag.tsx)
+    <div data-ws-id={w.id} onPointerDown={onPointerDown}>
       <ContextMenu>
         <ContextMenuTrigger asChild>
           <button
             className={cn(
               "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px]",
               active ? "bg-accent font-medium" : "hover:bg-accent/60",
+              // Mark which workspace the context menu belongs to while it's open
+              "data-[state=open]:bg-accent data-[state=open]:ring-1 data-[state=open]:ring-brand/60",
+              dragging && "opacity-40",
             )}
             onClick={() => selectWorkspace(w.id)}
             onDoubleClick={() => set({ dialog: { kind: "rename", target: "workspace", id: w.id, value: w.name } })}
@@ -383,6 +445,18 @@ function WorkspaceItem({
         <ContextMenuContent>
           <ContextMenuItem onClick={() => set({ dialog: { kind: "rename", target: "workspace", id: w.id, value: w.name } })}>重命名</ContextMenuItem>
           <ContextMenuItem onClick={() => addTab({ workspaceId: w.id })}>新建 tab</ContextMenuItem>
+          {others.length > 0 && (
+            <ContextMenuSub>
+              <ContextMenuSubTrigger>移到 session</ContextMenuSubTrigger>
+              <ContextMenuSubContent>
+                {others.map((sp) => (
+                  <ContextMenuItem key={sp.id} onClick={() => moveWorkspaceToSpace(w.id, sp.id)}>
+                    {sp.name}
+                  </ContextMenuItem>
+                ))}
+              </ContextMenuSubContent>
+            </ContextMenuSub>
+          )}
           <ContextMenuSeparator />
           <ContextMenuItem variant="destructive" onClick={() => closeWorkspace(w.id)}>
             关闭工作空间
@@ -390,6 +464,86 @@ function WorkspaceItem({
         </ContextMenuContent>
       </ContextMenu>
     </div>
+  );
+}
+
+/** A session's overall state for the switcher: the most urgent of its workspaces' (same ranking as WsDot). */
+function spaceStatus(l: Layout, sp: Space, sessions: Record<string, SessionSummary>, unread: Record<string, true>) {
+  let best: { status?: string; unread: boolean } = { unread: false };
+  let rank = 9;
+  for (const w of spaceWorkspaces(l, sp.id))
+    for (const t of w.tabs) {
+      const st = tabStatus(t, sessions, unread);
+      const r = st.status === "waiting" ? 0 : st.status === "error" ? 1 : st.status === "running" ? 2 : st.unread ? 3 : 9;
+      if (r < rank) {
+        rank = r;
+        best = st;
+      }
+    }
+  return rank === 9 ? undefined : best;
+}
+
+/**
+ * Which herdr-style session the sidebar shows (layout.ts Space). One line above the workspaces: the current one's name, and a dot when
+ * another session has something for you — its agents are out of the lists below, so this is the only place that tells you.
+ */
+function SpaceSwitcher() {
+  const layout = useStore((s) => s.layout);
+  const sessions = useStore((s) => s.sessions);
+  const unread = useStore((s) => s.unread);
+  const spaces = spaceList(layout);
+  const here = currentSpace(layout);
+  const cur = spaces.find((s) => s.id === here)!;
+  const elsewhere = spaces
+    .filter((s) => s.id !== here)
+    .map((s) => spaceStatus(layout, s, sessions, unread))
+    .filter((x) => x)
+    .sort((a, b) => +(b!.status === "waiting") - +(a!.status === "waiting"))[0];
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          className="-ml-1 flex h-7 max-w-full min-w-0 items-center gap-1.5 rounded-md px-1.5 text-left text-[12px] font-semibold text-muted-foreground hover:bg-accent/60 hover:text-foreground data-[state=open]:bg-accent"
+          style={{ WebkitAppRegion: "no-drag" } as any}
+        >
+          <span className="min-w-0 truncate text-foreground">{cur.name}</span>
+          {elsewhere && <StatusDot status={elsewhere.status} unread={elsewhere.unread} />}
+          <ChevronsUpDown className="size-3 shrink-0" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-52">
+        <DropdownMenuLabel className="text-[11px] font-normal text-muted-foreground">不同 session 里的 agent 互相看不见</DropdownMenuLabel>
+        {spaces.map((sp) => {
+          const st = spaceStatus(layout, sp, sessions, unread);
+          return (
+            <DropdownMenuItem key={sp.id} onClick={() => switchSpace(sp.id)}>
+              <Check className={cn("size-3.5", sp.id !== here && "invisible")} />
+              <span className="min-w-0 flex-1 truncate">{sp.name}</span>
+              <span className="text-[11px] text-muted-foreground tabular-nums">{spaceWorkspaces(layout, sp.id).length}</span>
+              <StatusDot status={st?.status} unread={!!st?.unread} />
+            </DropdownMenuItem>
+          );
+        })}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={() => set({ dialog: { kind: "rename", target: "newSpace", id: "", value: "" } })}>
+          <Plus className="size-3.5" /> 新 session
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => set({ dialog: { kind: "rename", target: "space", id: cur.id, value: cur.name } })}>
+          重命名「{cur.name}」
+        </DropdownMenuItem>
+        {spaces.length > 1 && (
+          <DropdownMenuItem
+            variant="destructive"
+            onClick={() =>
+              confirm(`关闭 session「${cur.name}」和它的 ${spaceWorkspaces(layout, cur.id).length} 个工作空间？里面的 agent 会停掉（会话记录留着）。`) &&
+              closeSpace(cur.id)
+            }
+          >
+            关闭「{cur.name}」
+          </DropdownMenuItem>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 

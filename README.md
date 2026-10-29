@@ -22,7 +22,8 @@
 
 **One window for all your coding agents.**
 
-Like [herdr](https://github.com/herdrdev/herdr): splits, tabs and workspaces, with one key to zoom a pane; when an
+Like [herdr](https://github.com/herdrdev/herdr): splits, tabs and workspaces, with one key to zoom a pane, and separate
+sessions to keep groups of workspaces apart; when an
 agent gets stuck waiting on you, you see it at once and one key takes you there; and agents can talk to each other:
 start sessions, hand out work, wait for the replies and read them.
 

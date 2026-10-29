@@ -16,12 +16,14 @@ import { MemorySettings } from "./MemorySettings";
 import { AwakeSetting } from "./AwakeSetting";
 import { ResumeDialog } from "./ResumeDialog";
 import {
+  addSpace,
   addWorkspace,
   basename,
   deleteSession,
   focusSession,
   openSessionHere,
   refocusAfterDialog,
+  renameSpace,
   renameTab,
   renameWorkspace,
   selectWorkspace,
@@ -30,7 +32,7 @@ import {
 import { api } from "@/lib/api";
 import { allCommands, runCommand } from "@/lib/commands";
 import { ACTION_TITLES, KEY_GROUPS, formatCombo } from "@/lib/keys";
-import { locateSession } from "@/lib/layout";
+import { currentSpace, locateSession, spaceList, spaceOf, spaceWorkspaces } from "@/lib/layout";
 import { isNative, nativeOpenPath } from "@/lib/native";
 import { pluginStatus } from "@/lib/plugins";
 import { fontSizeOf, keyFor, set, setConfig, setFontSize, useStore, type Theme } from "@/lib/store";
@@ -433,9 +435,17 @@ function Sessions({ open }: { open: boolean }) {
   const unread = useStore((s) => s.unread);
   const all = Object.values(sessions).sort((a, b) => b.updatedAt - a.updatedAt);
   const isOpen = (id: string) => !!locateSession(layout, id);
-  const opened = all.filter((s) => isOpen(s.id));
+  // Open in another (herdr-style) session: listed apart with that session's name; picking one switches over to it
+  const here = currentSpace(layout);
+  const spaceName = (id: string) => {
+    const loc = locateSession(layout, id);
+    const sp = loc && spaceOf(loc.ws);
+    return sp && sp !== here ? (spaceList(layout).find((x) => x.id === sp)?.name ?? sp) : undefined;
+  };
+  const opened = all.filter((s) => isOpen(s.id) && !spaceName(s.id));
+  const elsewhere = all.filter((s) => isOpen(s.id) && spaceName(s.id));
   const closed = all.filter((s) => !isOpen(s.id));
-  const row = (s: SessionSummary, shown: boolean) => (
+  const row = (s: SessionSummary, shown: boolean, space?: string) => (
     <CommandItem
       key={s.id}
       value={`${s.id} ${s.title ?? ""} ${s.cwd} ${s.agent}`}
@@ -450,6 +460,7 @@ function Sessions({ open }: { open: boolean }) {
       <span className="min-w-0 truncate">{s.title || basename(s.cwd)}</span>
       <span className="min-w-0 shrink truncate font-mono text-[11px] text-muted-foreground">{basename(s.cwd)}</span>
       <span className="ml-auto flex shrink-0 items-center gap-2">
+        {space && <span className="max-w-24 truncate rounded-sm bg-muted px-1 text-[11px] text-muted-foreground">{space}</span>}
         <StatusDot status={s.status} unread={!!unread[s.id]} />
         <span className="w-16 text-right text-[11px] text-muted-foreground">{ago(s.updatedAt)}</span>
         {!shown && (
@@ -474,6 +485,9 @@ function Sessions({ open }: { open: boolean }) {
       <CommandList className="max-h-[60vh]">
         <CommandEmpty>没有</CommandEmpty>
         {opened.length > 0 && <CommandGroup heading={`开着的 · ${opened.length}`}>{opened.map((s) => row(s, true))}</CommandGroup>}
+        {elsewhere.length > 0 && (
+          <CommandGroup heading={`在别的 session 里 · ${elsewhere.length}`}>{elsewhere.map((s) => row(s, true, spaceName(s.id)))}</CommandGroup>
+        )}
         {closed.length > 0 && <CommandGroup heading={`关掉的 · ${closed.length}`}>{closed.map((s) => row(s, false))}</CommandGroup>}
       </CommandList>
     </CommandDialog>
@@ -482,13 +496,14 @@ function Sessions({ open }: { open: boolean }) {
 
 function Workspaces({ open }: { open: boolean }) {
   const layout = useStore((s) => s.layout);
+  const list = spaceWorkspaces(layout); // only the current session's, like the sidebar
   return (
     <CommandDialog open={open} onOpenChange={(o) => !o && close()} title="工作空间" description="切换工作空间">
       <CommandInput placeholder="工作空间…" />
       <CommandList>
         <CommandEmpty>没有</CommandEmpty>
         <CommandGroup>
-          {layout.workspaces.map((w, i) => (
+          {list.map((w, i) => (
             <CommandItem
               key={w.id}
               value={`${i + 1} ${w.name}`}
@@ -508,6 +523,8 @@ function Workspaces({ open }: { open: boolean }) {
   );
 }
 
+const RENAME_TITLE = { tab: "重命名 tab", workspace: "重命名工作空间", session: "重命名会话", space: "重命名 session", newSpace: "新 session" };
+
 function Rename() {
   const d = useStore((s) => s.dialog);
   const r = d?.kind === "rename" ? d : null;
@@ -519,6 +536,8 @@ function Rename() {
     if (!r) return;
     if (r.target === "tab") renameTab(r.id, v);
     else if (r.target === "workspace") renameWorkspace(r.id, v);
+    else if (r.target === "space") renameSpace(r.id, v);
+    else if (r.target === "newSpace") addSpace(v);
     else api.rename(r.id, v).catch((e) => toast.error(e.message));
     close();
   };
@@ -526,7 +545,10 @@ function Rename() {
     <Dialog open={!!r} onOpenChange={(o) => !o && close()}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle>{r?.target === "tab" ? "重命名 tab" : r?.target === "workspace" ? "重命名工作空间" : "重命名会话"}</DialogTitle>
+          <DialogTitle>{r ? RENAME_TITLE[r.target] : ""}</DialogTitle>
+          {r?.target === "newSpace" && (
+            <DialogDescription>一组独立的工作空间，和 herdr 的 session 一样：不同 session 里的 agent 互相看不见、不能互发消息。</DialogDescription>
+          )}
         </DialogHeader>
         <Input
           autoFocus
@@ -535,7 +557,7 @@ function Rename() {
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.nativeEvent.isComposing && e.keyCode !== 229) save();
           }}
-          placeholder={r?.target === "tab" ? "留空 = 用目录名" : ""}
+          placeholder={r?.target === "tab" ? "留空 = 用目录名" : r?.target === "newSpace" ? "名字" : ""}
         />
         <DialogFooter>
           <Button onClick={save}>好</Button>

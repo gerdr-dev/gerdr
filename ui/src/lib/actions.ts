@@ -9,7 +9,9 @@ import {
   allLeaves,
   attach,
   closePane,
+  currentSpace,
   cycle,
+  DEFAULT_SPACE,
   insertBeside,
   parentSplit,
   findLeaf,
@@ -21,6 +23,9 @@ import {
   newWorkspace,
   rid,
   setPane,
+  spaceList,
+  spaceOf,
+  spaceWorkspaces,
   split,
   swap,
   updateTab,
@@ -142,7 +147,14 @@ export function addImportedWorkspaces(list: { label: string; tabs: { label: stri
         const focus = root.type === "pane" ? root.id : leaves(root)[0].id;
         return { id: rid("t"), root, focus, name };
       });
-      const ws: Workspace = { id: rid("w"), name: w.label, cwd: "sessionId" in w.tabs[0].tree ? w.tabs[0].tree.cwd : undefined, tabs, activeTab: tabs[0].id };
+      const ws: Workspace = {
+        id: rid("w"),
+        name: w.label,
+        cwd: "sessionId" in w.tabs[0].tree ? w.tabs[0].tree.cwd : undefined,
+        tabs,
+        activeTab: tabs[0].id,
+        space: inSpace(currentSpace(l)),
+      };
       first ??= ws.id;
       next = { ...next, workspaces: [...next.workspaces, ws] };
     }
@@ -618,9 +630,13 @@ export async function duplicateTab(tabId: string, where: "after" | "before") {
 
 // ---- 工作空间 ----
 
+// The default space is stored as "no space" so layouts written before spaces existed need no migration.
+const inSpace = (space: string) => (space === DEFAULT_SPACE ? undefined : space);
+
 export function addWorkspace(name: string, cwd?: string) {
   setLayout((l) => {
-    const w = newWorkspace(name || `workspace ${l.workspaces.length + 1}`, cwd);
+    const space = currentSpace(l);
+    const w = { ...newWorkspace(name || `workspace ${spaceWorkspaces(l, space).length + 1}`, cwd), space: inSpace(space) };
     return { ...l, workspaces: [...l.workspaces, w], active: w.id, lastActive: l.active };
   });
 }
@@ -629,16 +645,27 @@ export function selectWorkspace(id: string) {
   setLayout((l) => (l.active === id ? l : { ...l, active: id, lastActive: l.active }));
 }
 
+/** Next / previous workspace, cycling within the current session only. */
 export function stepWorkspace(delta: number) {
   setLayout((l) => {
-    const i = l.workspaces.findIndex((w) => w.id === l.active);
-    const w = l.workspaces[(i + delta + l.workspaces.length) % l.workspaces.length];
-    return { ...l, active: w.id, lastActive: l.active };
+    const list = spaceWorkspaces(l);
+    const i = list.findIndex((w) => w.id === l.active);
+    const w = list[(i + delta + list.length) % list.length];
+    return w.id === l.active ? l : { ...l, active: w.id, lastActive: l.active };
   });
 }
 
 export function renameWorkspace(id: string, name: string) {
   setLayout((l) => updateWs(l, id, (w) => ({ ...w, name: name.trim() || w.name })));
+}
+
+/**
+ * Where to go once workspace `gone` disappears from `l`: the last one you were on if it's in the same session, else the first one left
+ * in that session. Returns undefined when the session has none left.
+ */
+function fallbackIn(l: Layout, space: string, gone: string): string | undefined {
+  const left = l.workspaces.filter((w) => w.id !== gone && spaceOf(w) === space);
+  return left.find((w) => w.id === l.lastActive)?.id ?? left[0]?.id;
 }
 
 export function closeWorkspace(id?: string) {
@@ -647,23 +674,125 @@ export function closeWorkspace(id?: string) {
   killTerms(panes);
   setLayout((l) => {
     const wid = id ?? l.active;
+    const gone = l.workspaces.find((w) => w.id === wid);
+    if (!gone) return l;
+    const space = spaceOf(gone);
     const workspaces = l.workspaces.filter((w) => w.id !== wid);
     if (workspaces.length === 0) {
-      const w = newWorkspace("default");
+      const w = { ...newWorkspace("default"), space: gone.space };
       return { ...l, workspaces: [w], active: w.id };
     }
-    const active = l.active === wid ? (l.lastActive && workspaces.some((w) => w.id === l.lastActive) ? l.lastActive : workspaces[0].id) : l.active;
-    return { ...l, workspaces, active };
+    if (l.active !== wid) return { ...l, workspaces };
+    const same = fallbackIn(l, space, wid);
+    if (same) return { ...l, workspaces, active: same };
+    // That was the session's last workspace: the session goes with it (the default one just stays, empty), and we land in another session.
+    const spaces = (l.spaces ?? []).filter((s) => s.id !== space || space === DEFAULT_SPACE);
+    const next = { ...l, workspaces, spaces };
+    return { ...next, active: landIn(next, spaceOf(workspaces[0]))! };
   });
   shutdownGone(panes);
 }
 
-export function moveWorkspace(from: number, to: number) {
+/** Move workspace `id` to position `to` among its session's workspaces (indexes as the sidebar shows them). */
+export function moveWorkspace(id: string, to: number) {
   setLayout((l) => {
-    const ws = [...l.workspaces];
-    const [w] = ws.splice(from, 1);
-    ws.splice(to, 0, w);
-    return { ...l, workspaces: ws };
+    const w = l.workspaces.find((x) => x.id === id);
+    if (!w) return l;
+    const rest = l.workspaces.filter((x) => x.id !== id);
+    const peers = rest.filter((x) => spaceOf(x) === spaceOf(w));
+    // Insert before the peer that ends up after it; past the end = right after the last peer (other sessions' workspaces keep their places)
+    const at = to < peers.length ? rest.indexOf(peers[to]) : peers.length ? rest.indexOf(peers[peers.length - 1]) + 1 : rest.length;
+    if (l.workspaces.indexOf(w) === at) return l;
+    rest.splice(at, 0, w);
+    return { ...l, workspaces: rest };
+  });
+}
+
+// ---- sessions (herdr's: isolated groups of workspaces; Space in layout.ts) ----
+
+/** The workspace to show when entering `space`: the one you left it on, else its first. Undefined if it has none. */
+function landIn(l: Layout, space: string): string | undefined {
+  const list = spaceWorkspaces(l, space);
+  const last = spaceList(l).find((s) => s.id === space)?.active;
+  return list.find((w) => w.id === last)?.id ?? list[0]?.id;
+}
+
+/** Remember which workspace the current session was on, so switching back lands there. */
+function rememberSpace(l: Layout): Layout {
+  const cur = currentSpace(l);
+  return { ...l, spaces: spaceList(l).map((s) => (s.id === cur ? { ...s, active: l.active } : s)) };
+}
+
+export function switchSpace(id: string) {
+  setLayout((l) => {
+    if (currentSpace(l) === id) return l;
+    let next = rememberSpace(l);
+    let wid = landIn(next, id);
+    if (!wid) {
+      // An empty session (the default one after its last workspace closed): give it a fresh workspace
+      const w = { ...newWorkspace("default"), space: inSpace(id) };
+      next = { ...next, workspaces: [...next.workspaces, w] };
+      wid = w.id;
+    }
+    return { ...next, active: wid, lastActive: l.active };
+  });
+}
+
+export function stepSpace(delta: number) {
+  const l = get().layout;
+  const list = spaceList(l);
+  const i = list.findIndex((s) => s.id === currentSpace(l));
+  if (list.length > 1) switchSpace(list[(i + delta + list.length) % list.length].id);
+}
+
+export function addSpace(name: string) {
+  setLayout((l) => {
+    const prev = rememberSpace(l);
+    const sp = { id: rid("s"), name: name.trim() || `session ${prev.spaces!.length + 1}` };
+    const w = { ...newWorkspace("default"), space: sp.id };
+    return { ...prev, spaces: [...prev.spaces!, sp], workspaces: [...l.workspaces, w], active: w.id, lastActive: l.active };
+  });
+}
+
+export function renameSpace(id: string, name: string) {
+  setLayout((l) => ({ ...l, spaces: spaceList(l).map((s) => (s.id === id ? { ...s, name: name.trim() || s.name } : s)) }));
+}
+
+/** Close a whole session: all its workspaces (their agents stop, records stay — same as closing the workspaces one by one). */
+export function closeSpace(id: string) {
+  const l0 = get().layout;
+  const gone = spaceWorkspaces(l0, id);
+  const panes = gone.flatMap((w) => w.tabs.flatMap((t) => leaves(t.root)));
+  killTerms(panes);
+  setLayout((l) => {
+    const workspaces = l.workspaces.filter((w) => spaceOf(w) !== id);
+    const spaces = spaceList(l).filter((s) => s.id !== id || id === DEFAULT_SPACE);
+    if (workspaces.length === 0) {
+      const w = newWorkspace("default");
+      return { ...l, workspaces: [w], spaces: spaces.filter((s) => s.id === DEFAULT_SPACE), active: w.id };
+    }
+    const next = { ...l, workspaces, spaces };
+    if (currentSpace(l) !== id) return next;
+    return { ...next, active: landIn(next, spaceOf(workspaces[0]))!, lastActive: undefined };
+  });
+  shutdownGone(panes);
+}
+
+/**
+ * Move a workspace into another session. Its agents keep running, but from now on they're in the other session:
+ * they can only reach agents there (and the ones they were talking to can't reach them).
+ */
+export function moveWorkspaceToSpace(wsId: string, space: string) {
+  setLayout((l) => {
+    const w = l.workspaces.find((x) => x.id === wsId);
+    if (!w || spaceOf(w) === space) return l;
+    const from = spaceOf(w);
+    const moved = { ...w, space: inSpace(space) };
+    const rest = l.workspaces.filter((x) => x.id !== wsId);
+    let next: Layout = { ...l, workspaces: [...rest, moved] };
+    if (!rest.some((x) => spaceOf(x) === from) && from !== DEFAULT_SPACE) next = { ...next, spaces: spaceList(next).filter((s) => s.id !== from) };
+    // Moving the workspace you're on takes you along (otherwise the view would jump to a session you didn't pick)
+    return next;
   });
 }
 
@@ -948,6 +1077,16 @@ export function runAction(a: KeyAction) {
       return stepWorkspace(1);
     case "prevWorkspace":
       return stepWorkspace(-1);
+    case "newSpace":
+      return set({ dialog: { kind: "rename", target: "newSpace", id: "", value: "" } });
+    case "nextSpace":
+      return stepSpace(1);
+    case "prevSpace":
+      return stepSpace(-1);
+    case "renameSpace": {
+      const sp = spaceList(l).find((x) => x.id === currentSpace(l))!;
+      return set({ dialog: { kind: "rename", target: "space", id: sp.id, value: sp.name } });
+    }
     case "sessions":
       return set({ dialog: { kind: "sessions" } });
     case "toggleSidebar":

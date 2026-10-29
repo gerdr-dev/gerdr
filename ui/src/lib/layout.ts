@@ -18,8 +18,19 @@ export type PaneSplit = { type: "split"; id: string; dir: "row" | "col"; ratio: 
 export type PaneNode = PaneLeaf | PaneSplit;
 
 export type Tab = { id: string; name?: string; root: PaneNode; focus: string; zoom?: string };
-export type Workspace = { id: string; name: string; cwd?: string; tabs: Tab[]; activeTab: string; lastTab?: string };
-export type Layout = { version: 1; workspaces: Workspace[]; active: string; lastActive?: string };
+/** space: which session (see Space below) it belongs to; unset = the default one. */
+export type Workspace = { id: string; name: string; cwd?: string; tabs: Tab[]; activeTab: string; lastTab?: string; space?: string };
+/**
+ * Space = herdr's "session": an isolated set of workspaces. The UI shows one at a time (the one the active workspace is in),
+ * and agents in different spaces can't see or message each other through `gerdr session …` (cmd/gerdr/session.go,
+ * server.SessionSpaces). Called "session" in the UI like herdr; "space" in code because "session" already means a conversation.
+ * Workspaces stay in one flat list (everything that walks the whole layout — shutting agents down when no pane shows them,
+ * locating a session — keeps working); views filter by space. active：switching back lands on the workspace you left.
+ */
+export type Space = { id: string; name: string; active?: string };
+export type Layout = { version: 1; workspaces: Workspace[]; active: string; lastActive?: string; spaces?: Space[] };
+
+export const DEFAULT_SPACE = "default";
 
 export const rid = (p: string) => `${p}${Math.random().toString(36).slice(2, 9)}`;
 
@@ -45,6 +56,24 @@ export function defaultLayout(): Layout {
 export function validLayout(x: any): x is Layout {
   return x && x.version === 1 && Array.isArray(x.workspaces) && x.workspaces.length > 0;
 }
+
+// ---- spaces ----
+
+export const spaceOf = (w: Workspace) => w.space || DEFAULT_SPACE;
+
+/** All spaces, in order: the stored list, plus the default one and any a workspace points at that the list lacks (old / hand-edited layouts). */
+export function spaceList(l: Layout): Space[] {
+  const out = [...(l.spaces ?? [])];
+  const has = (id: string) => out.some((s) => s.id === id);
+  if (!has(DEFAULT_SPACE)) out.unshift({ id: DEFAULT_SPACE, name: "default" });
+  for (const w of l.workspaces) if (!has(spaceOf(w))) out.push({ id: spaceOf(w), name: spaceOf(w) });
+  return out;
+}
+
+/** The space being shown: the one the active workspace is in. */
+export const currentSpace = (l: Layout) => spaceOf(activeWs(l));
+
+export const spaceWorkspaces = (l: Layout, space = currentSpace(l)) => l.workspaces.filter((w) => spaceOf(w) === space);
 
 // ---- 查找 ----
 

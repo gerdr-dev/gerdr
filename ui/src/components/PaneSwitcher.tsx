@@ -2,7 +2,7 @@ import { Plus, Search, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { addTab, basename, focusPane, selectWorkspace, tabName } from "@/lib/actions";
-import { allLeaves, leaves, type PaneLeaf } from "@/lib/layout";
+import { allLeaves, currentSpace, leaves, spaceOf, spaceWorkspaces, type PaneLeaf } from "@/lib/layout";
 import { isCoarse } from "@/lib/phone";
 import { applyWorkspaceLabel } from "@/lib/plugins";
 import { set, useStore } from "@/lib/store";
@@ -99,20 +99,25 @@ export function PaneSwitcher() {
   }, [layout]);
 
   const rows = useMemo(() => {
-    const out: Row[] = allLeaves(layout).map(({ ws: w, tab, pane }, i) => {
-      const wi = layout.workspaces.indexOf(w);
-      const sid = pane.sub?.sessionId ?? pane.sessionId;
-      const ls = leaves(tab.root);
-      const at = ls.length > 1 ? ` · ${ls.indexOf(pane) + 1}/${ls.length}` : "";
-      return {
-        pane,
-        session: sid ? sessions[sid] : undefined,
-        ws: applyWorkspaceLabel(w, wi, w.name),
-        wsId: w.id,
-        tab: `${w.tabs.indexOf(tab) + 1}.${tabName(tab)}${at}`,
-        i,
-      };
-    });
+    // Only the session being shown (herdr-style isolation; switching sessions is in the sidebar)
+    const space = currentSpace(layout);
+    const mine = spaceWorkspaces(layout, space);
+    const out: Row[] = allLeaves(layout)
+      .filter((x) => spaceOf(x.ws) === space)
+      .map(({ ws: w, tab, pane }, i) => {
+        const wi = mine.indexOf(w);
+        const sid = pane.sub?.sessionId ?? pane.sessionId;
+        const ls = leaves(tab.root);
+        const at = ls.length > 1 ? ` · ${ls.indexOf(pane) + 1}/${ls.length}` : "";
+        return {
+          pane,
+          session: sid ? sessions[sid] : undefined,
+          ws: applyWorkspaceLabel(w, wi, w.name),
+          wsId: w.id,
+          tab: `${w.tabs.indexOf(tab) + 1}.${tabName(tab)}${at}`,
+          i,
+        };
+      });
     const kw = q.trim().toLowerCase();
     const hit = (r: Row) =>
       (!ws || r.wsId === ws) &&
@@ -236,13 +241,13 @@ export function PaneSwitcher() {
           工作空间那一行：「我要去另一个项目」在手机上最短的路。点一个 = 切过去 + 只看它的 pane ——
           切过去之后多半还要在它里面挑一个，两件事本来就是一起要的。横滑，不换行（换行会吃掉好几行列表）。
         */}
-        {layout.workspaces.length > 1 && (
+        {spaceWorkspaces(layout).length > 1 && (
           <div className="flex shrink-0 items-center gap-1.5 overflow-x-auto border-b px-2 py-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <Chip on={!ws} onClick={() => setWs("")}>
               全部
             </Chip>
             {/* 当前工作空间排第一个（紧跟「全部」）：一排横滑，按原顺序排的话它常在屏幕外面，最常点的反而要先划过去找 */}
-            {layout.workspaces
+            {spaceWorkspaces(layout)
               .map((w, wi) => ({ w, wi }))
               .sort((a, b) => +(b.w.id === layout.active) - +(a.w.id === layout.active))
               .map(({ w, wi }) => (

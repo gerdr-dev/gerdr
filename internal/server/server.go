@@ -271,15 +271,22 @@ func (s *Server) Handler() http.Handler {
 			Focus bool   `json:"focus"`
 		}
 		_ = decode(r, &b)
+		if err := s.crossSpace(b.Near, sess.ID()); err != nil {
+			return nil, err
+		}
 		s.Hub.Broadcast("open", map[string]any{"id": sess.Summary().ID, "near": b.Near, "focus": b.Focus})
 		return nil, nil
 	}))
 	// close：open 的反面（gerdr session close），见 Hub.CloseUI。afterTurn：会话关自己，等它这一轮跑完再关（Hub.CloseAfterTurn）
 	mux.HandleFunc("POST /api/sessions/{id}/close", s.sessionOp(func(r *http.Request, sess *hub.Session) (any, error) {
 		var b struct {
-			AfterTurn bool `json:"afterTurn"`
+			AfterTurn bool   `json:"afterTurn"`
+			From      string `json:"from"` // the agent session asking (gerdr session close); empty from the UI
 		}
 		_ = decode(r, &b)
+		if err := s.crossSpace(b.From, sess.ID()); err != nil {
+			return nil, err
+		}
 		if b.AfterTurn {
 			now, err := s.Hub.CloseAfterTurn(r.Context(), sess.ID())
 			return map[string]any{"closedNow": now}, err
@@ -491,6 +498,9 @@ func (s *Server) send(r *http.Request, sess *hub.Session) (any, error) {
 	}
 	if len(b.Content) == 0 {
 		return nil, errors.New("empty message")
+	}
+	if err := s.crossSpace(b.From, sess.ID()); err != nil {
+		return nil, err
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()

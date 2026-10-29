@@ -42,6 +42,11 @@ gerdr session list      # 全部；"self": true 是你自己
 关掉的会话记录还在、能接着聊：`gerdr session list --all` 能看到（`closed: true`），
 `gerdr session open <会话>` 把它开回界面上（开在你旁边，不抢焦点）；给它 `send` 也会自动开回来。
 
+The user can split gerdr into several isolated **sessions** (like herdr's `--session`): each is its own set of workspaces.
+You only see, and can only reach, the conversations in your own one: `list` leaves the others out, and naming one of them fails
+with "no such session". That is deliberate. Don't try to get around it, and don't ask the user to move things across for you
+unless they brought it up.
+
 ## 开一个新会话派活
 
 默认就在当前目录、开在你旁边一屏、不抢用户的焦点。没被要求就别换目录、别开一堆：

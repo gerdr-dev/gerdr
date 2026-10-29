@@ -235,6 +235,17 @@ cwd 以外改的文件（Bash 写 `~/.zshrc`、隔壁项目）管不到；同一
 - **自动放行**：codex 的沙箱连本机端口都算联网，每条 `gerdr session …` 都会来要审批；codex 的「本会话都允许」又只放行一模一样的那条
   命令 —— 协作时每一步都要人点，没法用。所以两个适配器对「只是一条 gerdr session / ui 命令」直接放行（`sysenv.SafeGerdrCLI`：
   不能拼别的命令、不能有 `$()`、重定向；**不能带 `--mode`**，否则沙箱里的 agent 开一个 bypassPermissions 的会话就等于给自己提权）。
+- **Sessions (herdr's `--session`) keep agents apart.** In the layout a session is a `space` on each workspace
+  (`ui/src/lib/layout.ts` `Space`; unset = `default`, so old layouts need no migration). Workspaces stay in one flat list, so
+  everything that walks the whole layout (locating a conversation, shutting an agent down once no pane shows it) is unchanged;
+  only the views filter (sidebar workspaces and agents, the phone pane switcher, next / previous workspace). The current session
+  is the active workspace's, and the active workspace is part of each client's own `View`, so each window shows its own session,
+  like attaching to a herdr session. Focusing a conversation that's in another session (a notification) just switches over.
+  Isolation for agents: `server.SessionSpaces` maps every conversation shown in a pane to its session; the CLI's `list` (and so
+  `resolve`, which every command goes through) drops the ones open in another session, and `send` / `open` / `close` refuse to
+  cross on the server (`crossSpace`, using `from` / `near`). Closed conversations belong to no session (`--all` lists them);
+  reopening one puts it next to the caller, in the caller's session. This is not a security boundary: an agent has the token
+  and can call the API itself. herdr's isn't one either: it's a separate socket.
 
 ## 内置 skill、skill / MCP 的来源（internal/ext）
 

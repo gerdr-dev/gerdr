@@ -22,7 +22,7 @@
 
 **一个窗口，同时管一群 coding agent。**
 
-和 [herdr](https://github.com/herdrdev/herdr) 一样：分屏、tab、工作空间，一个键把 pane 放大；哪个 agent 卡住在等你，一眼就看到，一个键跳过去；
+和 [herdr](https://github.com/herdrdev/herdr) 一样：分屏、tab、工作空间，一个键把 pane 放大，还能分成几个互相隔离的 session；哪个 agent 卡住在等你，一眼就看到，一个键跳过去；
 agent 之间还能互相对话：开新会话、派活、等回复、读回复。
 
 不习惯终端？gerdr 是另一个同样好的选择，而且是图形界面：agent 给的图片、视频、PDF 直接在对话里看，点一下路径就打开文件；

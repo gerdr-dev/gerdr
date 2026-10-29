@@ -25,6 +25,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/gerdr-dev/gerdr/internal/config"
+	"github.com/gerdr-dev/gerdr/internal/server"
 	"github.com/gerdr-dev/gerdr/internal/webui"
 )
 
@@ -32,6 +33,7 @@ type apiClient struct {
 	base  string
 	token string
 	http  *http.Client
+	self  *string // selfID, cached: list() needs it on every call
 }
 
 func newAPIClient() (*apiClient, error) {
@@ -113,6 +115,12 @@ type sessInfo struct {
 	inUI *bool
 }
 
+// errNoSession is also what an agent gets for a session open in another herdr-style session (list leaves those out):
+// to an agent, other sessions don't exist, same as in herdr.
+func errNoSession(ref string) error {
+	return fmt.Errorf("没有会话 %q（gerdr session list 看有哪些）", ref)
+}
+
 func (s sessInfo) view(self string) map[string]any {
 	// updatedAt（unix ms）：这个会话最后一次有动静（发消息、agent 输出、审批……）的时间 —— 相当于 herdr agent.list 的 state_change_seq，
 	// 拿它就能把「最近动过的」排前面（list 已经按它排好了）
@@ -151,6 +159,14 @@ func printJSON(v any) {
 
 // selfID：调用这条命令的 agent 所在的 gerdr 会话（不在 gerdr 里就是空）。
 func (c *apiClient) selfID() string {
+	if c.self == nil {
+		id := c.lookupSelf()
+		c.self = &id
+	}
+	return *c.self
+}
+
+func (c *apiClient) lookupSelf() string {
 	q := url.Values{}
 	if v := os.Getenv("CLAUDE_CODE_SESSION_ID"); v != "" {
 		q.Set("claude", v)
@@ -171,6 +187,9 @@ func (c *apiClient) selfID() string {
 	return s.ID
 }
 
+// list: the sessions the caller may see. An agent only sees its own herdr-style session (the "space" of the workspace it's in,
+// server.SessionSpaces): sessions open in another one are left out, like herdr where each session has its own socket.
+// Closed sessions (no pane anywhere) belong to no session and stay visible; opening one puts it next to the caller, in the caller's.
 func (c *apiClient) list() ([]sessInfo, error) {
 	var h struct {
 		Sessions []sessInfo      `json:"sessions"`
@@ -179,55 +198,18 @@ func (c *apiClient) list() ([]sessInfo, error) {
 	if err := c.do("GET", "/api/hello", nil, &h); err != nil {
 		return nil, err
 	}
-	open := layoutSessions(h.Layout)
-	for i := range h.Sessions {
-		v := open[h.Sessions[i].ID]
-		h.Sessions[i].inUI = &v
-	}
-	return h.Sessions, nil
-}
-
-// layoutSessions：布局（layout.json，界面存的）里哪些会话挂在 pane 上。
-func layoutSessions(raw json.RawMessage) map[string]bool {
-	var l struct {
-		Data struct {
-			Workspaces []struct {
-				Tabs []struct {
-					Root json.RawMessage `json:"root"`
-				} `json:"tabs"`
-			} `json:"workspaces"`
-		} `json:"data"`
-		Workspaces []struct {
-			Tabs []struct {
-				Root json.RawMessage `json:"root"`
-			} `json:"tabs"`
-		} `json:"workspaces"`
-	}
-	_ = json.Unmarshal(raw, &l)
-	out := map[string]bool{}
-	var walk func(json.RawMessage)
-	walk = func(n json.RawMessage) {
-		var x struct {
-			Type      string          `json:"type"`
-			SessionID string          `json:"sessionId"`
-			A         json.RawMessage `json:"a"`
-			B         json.RawMessage `json:"b"`
+	spaces := server.SessionSpaces(h.Layout)
+	mine, scoped := spaces[c.selfID()]
+	out := h.Sessions[:0]
+	for _, s := range h.Sessions {
+		sp, open := spaces[s.ID]
+		if scoped && open && sp != mine {
+			continue
 		}
-		_ = json.Unmarshal(n, &x)
-		if x.SessionID != "" {
-			out[x.SessionID] = true
-		}
-		if x.Type == "split" {
-			walk(x.A)
-			walk(x.B)
-		}
+		s.inUI = &open
+		out = append(out, s)
 	}
-	for _, w := range append(l.Data.Workspaces, l.Workspaces...) {
-		for _, t := range w.Tabs {
-			walk(t.Root)
-		}
-	}
-	return out
+	return out, nil
 }
 
 // resolve：会话可以写完整 id、id 前缀（至少 4 位）或者标题（完全一样）。
@@ -249,7 +231,7 @@ func (c *apiClient) resolve(ref string) (sessInfo, error) {
 	case 1:
 		return hits[0], nil
 	case 0:
-		return sessInfo{}, fmt.Errorf("没有会话 %q（gerdr session list 看有哪些）", ref)
+		return sessInfo{}, errNoSession(ref)
 	}
 	return sessInfo{}, fmt.Errorf("%q 对应好几个会话，用完整 id", ref)
 }
@@ -717,7 +699,7 @@ func sessionCmd() *cobra.Command {
 				printJSON(map[string]any{"closed": true, "id": s.ID})
 				return nil
 			}
-			if err := c.do("POST", "/api/sessions/"+s.ID+"/close", map[string]any{}, nil); err != nil {
+			if err := c.do("POST", "/api/sessions/"+s.ID+"/close", map[string]any{"from": c.selfID()}, nil); err != nil {
 				return err
 			}
 			// 布局归界面管：等开着的界面把 pane 收掉、存好布局。一直没收掉 = 没有界面开着（布局里还挂着它，下次打开界面还在）
