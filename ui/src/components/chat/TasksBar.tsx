@@ -110,8 +110,8 @@ export function TaskDoneCard({ sessionId, t, woke }: { sessionId: string; t: Age
     <div className="-ml-1.5 flex min-w-0 items-center gap-2 px-1.5 py-[3px] text-[13px] text-muted-foreground">
       {/* 和工具调用那一行一样只有一个图标：成功就是任务图标，失败换成红叉 */}
       {ok ? <Icon className="size-3.5 shrink-0" /> : <CircleX className="size-3.5 shrink-0 text-bad" />}
-      {/* 后台命令照 ToolCall 的 execute 用等宽字，和启动它的那行上下对得齐 */}
-      <span className={cn("min-w-0 truncate", t.type === "local_bash" && "font-mono text-[12px]")}>
+      {/* 后台命令照 ToolCall 的 execute 用等宽字，和启动它的那行上下对得齐；行高钉成正文的 19.5px，不然这行矮 1.5px（见 ToolCall） */}
+      <span className={cn("min-w-0 truncate", t.type === "local_bash" && "font-mono text-[12px] leading-[19.5px]")}>
         {isAgent && t.subagent ? `${t.subagent} · ` : ""}
         {t.description || t.id}
       </span>

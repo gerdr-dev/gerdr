@@ -214,7 +214,9 @@ export function ToolCall({ part, children, running, keep: keepOpen }: { part: To
             {desc}
           </span>
         ) : (
-          <span className={cn("min-w-0 truncate", meta.kind === "execute" && "font-mono text-[12px]")}>{title}</span>
+          // 等宽字 12px 的行高按 1.5 算只有 18px，比 13px 正文的 19.5 矮，这一行就矮 1.5px：命令先流出来、说明后到（标题从等宽换成说明），
+          // 或者后台命令跑完多出一行等宽的任务结束（TaskDoneCard），行高一变虚拟列表就跳。行高钉成和正文一样
+          <span className={cn("min-w-0 truncate", meta.kind === "execute" && "font-mono text-[12px] leading-[19.5px]")}>{title}</span>
         )}
         {stat && (stat.add > 0 || stat.del > 0) && (
           <span className="shrink-0 font-mono text-[11px] tabular-nums">
