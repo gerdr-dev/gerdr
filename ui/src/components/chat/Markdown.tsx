@@ -144,7 +144,7 @@ function InlineCode(props: any) {
   return (
     <>
       {code}
-      <RunButton cmd={cmd} className="ml-1 translate-y-[2px] align-baseline" />
+      <RunButton cmd={cmd} className="ml-1 align-middle" />
     </>
   );
 }

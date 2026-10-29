@@ -183,7 +183,8 @@ stream-json / app-server 都没有这个口（Claude Code 的 `!` 是 TUI 输入
   代码里的取反 `!Se()` 都不能冒按钮（都踩过）。
 - 「运行」旁边的箭头还能放进终端跑（actions.runInTerminal）：新开一个（会话右边分屏，建终端时带 `input`，shell 还在读 profile 时写进去也不丢，
   PTY 先攒着；代价是那行命令会在提示符出来之前先回显一次），或者敲进会话旁边已经开着的终端（`POST /api/terms/{id}/input`，那个 shell 没了就新开）。
-  终端能交互（gh auth login 选选项、输密码），但输出不进对话、agent 看不到。ShellHint 只有一句（照 Claude Code 原话的写法），这些不写进提示。
+  终端能交互（gh auth login 选选项、输密码），但输出不进对话、agent 看不到。ShellHint 只有一句（照 Claude Code 原话的写法），
+  末尾括号里交代没有 stdin、要输入的让人从菜单改在终端跑 —— 省掉的话 agent 会把 `! gh auth login` 当成点了就能跑的（实测）。
 
 ## 回退只回退对话，不动文件
 

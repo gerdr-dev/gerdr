@@ -365,10 +365,11 @@ const MediaHint = "You are running inside gerdr, a GUI for coding agents. Its ch
 // ShellHint：告诉 agent 可以让人在输入框里敲 `! 命令`（gerdr 在会话目录里直接跑，输出跟着人的下一条消息带给它，见 hub/shell.go）。
 // Claude Code 自己只在交互式终端里给这句，stream-json 下没有，agent 只会说「去终端里跑」。
 // 写成 `!` 开头的行内代码（或每行都以 `! ` 开头的代码块），界面在旁边画「运行」按钮，点一下就跑（chat/Markdown.tsx）；
-// 只给一句，照 Claude Code 那句的写法：试过五句、八句的长版，说清了误触发、没有 stdin、改去终端跑，但用户嫌啰嗦；
-// 按钮菜单里能改在终端跑（能交互），这一点留给界面，不写进提示。
+// 只给一句，照 Claude Code 那句的写法：试过五句、八句的长版，用户嫌啰嗦。括号里那半句不能省：只有一句时 agent 把
+// `! gh auth login` 当成点一下就能跑的给出来，在对话里跑没有 stdin，点了一直卡着（实测）。
 const ShellHint = "If you need the user to run a shell command themselves (e.g., an interactive login like `gcloud auth login`), " +
-	"suggest it as inline code starting with `!` (e.g. `! gcloud auth login`) — gerdr shows a run button next to it that runs the command in this session and brings its output back to you."
+	"suggest it as inline code starting with `!` (e.g. `! gcloud auth login`) — gerdr shows a run button next to it that runs the command in this session and brings its output back to you " +
+	"(it gets no stdin, so for commands that need input, tell the user to use the terminal option in the button's menu instead)."
 
 // GUIHint：起 agent 时追加的全部说明（MediaHint + ShellHint）。
 const GUIHint = MediaHint + "\n\n" + ShellHint
