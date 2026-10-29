@@ -85,6 +85,20 @@ func mcpKey(s ext.MCPServer) string {
 
 // mcpServers：这个会话要用的 MCP 服务器（按设置的来源）。
 func mcpServers(m *ext.Manager, cwd string) []ext.MCPServer {
+	var out []ext.MCPServer
+	for _, r := range resolveMCP(m, cwd) {
+		out = append(out, r.server)
+	}
+	return out
+}
+
+type resolvedMCP struct {
+	server ext.MCPServer
+	from   string // gerdr | claude
+}
+
+// resolveMCP：按设置的来源算出要用的服务器，记着每个来自哪份配置。同名的 gerdr 那份优先。
+func resolveMCP(m *ext.Manager, cwd string) []resolvedMCP {
 	src := ext.SourceAgent
 	var own []ext.MCPServer
 	if m != nil {
@@ -98,21 +112,85 @@ func mcpServers(m *ext.Manager, cwd string) []ext.MCPServer {
 			}
 		}
 	}
-	var out []ext.MCPServer
+	var out []resolvedMCP
 	seen := map[string]bool{}
-	add := func(ss []ext.MCPServer) {
+	add := func(ss []ext.MCPServer, from string) {
 		for _, s := range ss {
 			if !seen[s.Name] {
 				seen[s.Name] = true
-				out = append(out, s)
+				out = append(out, resolvedMCP{s, from})
 			}
 		}
 	}
-	add(own)
+	add(own, "gerdr")
 	if src != ext.SourceGerdr {
-		add(ext.ClaudeMCP(cwd))
+		add(ext.ClaudeMCP(cwd), "claude")
 	}
 	return out
+}
+
+// MCPEntry：设置 → MCP 页「Gerdr Agent 在用的」一行。
+type MCPEntry struct {
+	Name   string `json:"name"`
+	From   string `json:"from"` // gerdr | claude
+	Type   string `json:"type"` // stdio | http | sse
+	Target string `json:"target"`
+	// Status：connected（连着）| failed（上次没连上，1 分钟内不重试）| connecting | idle（还没用到：第一次对话时才连）
+	Status string `json:"status"`
+	Tools  int    `json:"tools,omitempty"`
+	Error  string `json:"error,omitempty"`
+}
+
+// ResolveMCP：不问正在跑的 agent，只按配置算（agent 还没起时设置页用）。
+func ResolveMCP(m *ext.Manager, cwd string) []MCPEntry {
+	var p mcpPool
+	return p.status(resolveMCP(m, cwd))
+}
+
+func (p *mcpPool) status(rs []resolvedMCP) []MCPEntry {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	out := []MCPEntry{}
+	for _, r := range rs {
+		s := r.server
+		e := MCPEntry{Name: s.Name, From: r.from, Type: "stdio", Target: strings.TrimSpace(s.Command + " " + strings.Join(s.Args, " ")), Status: "idle"}
+		if s.Type == "sse" {
+			e.Type, e.Target = "sse", s.URL
+		} else if s.Remote() {
+			e.Type, e.Target = "http", s.URL
+		}
+		key := mcpKey(s)
+		switch {
+		case p.clients[key] != nil:
+			e.Status, e.Tools = "connected", len(p.clients[key].tools)
+		case p.starting[key] != nil:
+			e.Status = "connecting"
+		default:
+			if f, ok := p.failed[key]; ok {
+				e.Status, e.Error = "failed", f.err.Error()
+			}
+		}
+		out = append(out, e)
+	}
+	return out
+}
+
+// mcpStatus：_gerdr/mcp_status。probe = 现在就连一遍（设置页的「检查连接」），不然只报连接池里现成的状态。
+func (a *Agent) mcpStatus(ctx context.Context, cwd string, probe bool) []MCPEntry {
+	rs := resolveMCP(a.ext, cwd)
+	if probe {
+		var servers []ext.MCPServer
+		for _, r := range rs {
+			servers = append(servers, r.server)
+		}
+		a.mcp.mu.Lock()
+		for _, r := range rs { // 「检查」要真的再试一次：清掉 1 分钟内不重试的记号
+			delete(a.mcp.failed, mcpKey(r.server))
+		}
+		a.mcp.mu.Unlock()
+		a.mcp.get(ctx, servers, 30*time.Second)
+	}
+	return a.mcp.status(rs)
 }
 
 // get 把这些服务器都接上（并发，最多等 timeout），返回接上了的和没接上的错误。

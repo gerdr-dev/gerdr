@@ -1,6 +1,7 @@
 import { Download, Pencil, Plus, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { NativeMCP } from "@/components/NativeMCP";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -329,6 +330,7 @@ export function MCPSettings({ open }: { open: boolean }) {
           只用 gerdr 的：Claude 的 claude.ai 账号连接器、Codex 插件自带的 MCP 不受这里控制。Codex 不支持 SSE，SSE 的只给 Claude。
         </div>
       )}
+      <NativeMCP deps={JSON.stringify([s.mcpSource, s.mcp])} />
 
       {edit ? (
         <MCPEditor

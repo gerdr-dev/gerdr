@@ -128,6 +128,9 @@ React（ui/，不打包）  ←WebSocket / HTTP→  hub（internal/hub）  ←AC
     项目 .mcp.json）。同一份配置整个 agent 只起一个、各会话共用；起不来的 1 分钟内不重试；每轮最多等 30 秒，没起完的这轮先不带。
     工具名 `mcp__<服务器>__<工具>`，最长 64（两家接口的限制），标了 readOnlyHint 的不审批。**不支持 OAuth**：要登录的服务器（401）给一行提示。
     测试里 HOME 要换成临时目录，不然会读到本机 ~/.claude.json、把真的 MCP 服务器起起来。
+    设置 → MCP 页「Gerdr Agent 在用的」：按来源算出它实际用哪些、各来自哪份配置，加上连接池里的状态（`_gerdr/mcp_status`，hub 的
+    `NativeMCP`；native 没起时只按配置算，不为了看一眼把它起起来；「检查连接」才真连）。只算用户级的：家目录在 ~/.claude.json 里也是一个
+    项目，拿它当 cwd 会混进只对家目录生效的那些，和页面下面「Claude Code 自己的」对不上。
 13. web_fetch 按域名审批（`fetch:<host>`）：联网能把数据带出去，不算只读。HTML 自己转成 Markdown 风格的文字（x/net/html），不另调模型总结。
 14. **长期记忆**（`memory.go`）：照 Claude Code 的自动记忆，文件 + 索引，不用向量库。`<dir>/native/memory/global`（人的偏好）和
     `projects/<git 根的路径变形>`（项目的事，同一仓库的子目录共用），一条一个 .md（frontmatter 带 type），每层一个 MEMORY.md 索引，

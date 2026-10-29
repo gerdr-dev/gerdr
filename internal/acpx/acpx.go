@@ -53,6 +53,8 @@ const (
 	// 两边都有结构化的来源，不用解析 /usage 的文字：claude 是 stream-json 的 control_request get_usage，
 	// codex 是 app-server 的 account/rateLimits/read。不支持的 agent 回 method not found。
 	MethodUsage = "_gerdr/usage"
+	// MethodMCPStatus：client → agent（只有 native 认）。它实际在用哪些 MCP 服务器、连上没有（设置 → MCP 页）。
+	MethodMCPStatus = "_gerdr/mcp_status"
 	// MethodComplete：client → agent。用这个 agent 自己的账号跑一次不带工具、不留记录的小问答（起会话标题用）。
 	// 走 agent 自己的 CLI，是因为 gerdr 手里没有 API key —— 账号都在 agent 那边（变体的另一个账号也一样）。
 	// claude 用 haiku；codex 用它默认的模型、低推理档。不支持的 agent 回 method not found。

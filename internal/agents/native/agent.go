@@ -604,6 +604,13 @@ func (a *Agent) HandleExtensionMethod(ctx context.Context, method string, params
 			return nil, fmt.Errorf("no running task %s", p.TaskId)
 		}
 		return map[string]any{}, nil
+	case acpx.MethodMCPStatus:
+		var p struct {
+			Cwd   string `json:"cwd"`
+			Probe bool   `json:"probe"`
+		}
+		_ = json.Unmarshal(params, &p)
+		return map[string]any{"servers": a.mcpStatus(ctx, p.Cwd, p.Probe)}, nil
 	case acpx.MethodTaskBackground:
 		var p acpx.TaskBackgroundRequest
 		if err := json.Unmarshal(params, &p); err != nil {

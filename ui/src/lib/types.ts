@@ -180,3 +180,14 @@ export type MemoryStore = {
   entries: MemoryEntry[];
   modTime: number;
 };
+
+/** 设置 → MCP 页「Gerdr Agent 在用的」一行（后端 native.MCPEntry）。 */
+export type NativeMCPEntry = {
+  name: string;
+  from: "gerdr" | "claude";
+  type: "stdio" | "http" | "sse";
+  target: string;
+  status: "connected" | "failed" | "connecting" | "idle";
+  tools?: number;
+  error?: string;
+};
