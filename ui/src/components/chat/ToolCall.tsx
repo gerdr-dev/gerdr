@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils";
 import { DiffView } from "./DiffView";
 import { useSession } from "./sessionContext";
 import { useKept } from "@/lib/kept";
+import { useStore } from "@/lib/store";
 import { elapsed } from "./TasksBar";
 import { api } from "@/lib/api";
 import { openSubagent } from "@/lib/actions";
@@ -160,12 +161,13 @@ export function ToolCall({ part, children, running, keep: keepOpen }: { part: To
   const hasDiff = (meta.content ?? []).some(
     (c) => c.type === "diff" || (c.type === "content" && (c._meta?.gerdr?.unifiedDiff || (c.content as any)?._meta?.gerdr?.unifiedDiff)),
   );
-  // 改文件的默认展开（看 diff 是主要用途），其余默认收起，一行一个。
+  // 改文件的默认展开（看 diff 是主要用途；设置里能关），其余默认收起，一行一个。
+  const expandEdits = useStore((s) => s.config.expandEdits !== false);
   const session = useSession();
   // 展开没展开记在组件外面：对话是虚拟列表，滚出屏幕会卸载，滚回来要还是原样
   const keep = session ? `${session.id}:tool:${part.toolCallId}` : undefined;
   const [open, setOpen] = useKept<boolean | undefined>(keepOpen ?? keep, undefined);
-  const isOpen = open ?? (hasDiff || !!children);
+  const isOpen = open ?? ((hasDiff && expandEdits) || !!children);
   const title = part.title || part.toolName;
   const inp = part.input && typeof part.input === "object" ? (part.input as Record<string, unknown>) : undefined;
   const cmd = meta.kind === "execute" && typeof inp?.command === "string" ? inp.command : undefined;

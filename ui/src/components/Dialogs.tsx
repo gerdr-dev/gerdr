@@ -272,82 +272,91 @@ function SettingsDialog({ open }: { open: boolean }) {
             </TabsList>
           </DialogHeader>
           <div className="min-h-0 min-w-0 flex-1 overflow-auto px-6 pb-6 max-md:px-4 max-md:[&_[data-slot=button]:not([data-size^=icon])]:h-7 max-md:[&_[data-slot=button]:not([data-size^=icon])]:px-2.5 max-md:[&_[data-slot=button]]:text-[13px]">
-            <TabsContent value="general" className="space-y-5 pt-2">
-              <Row label="外观">
-                <Select value={cfg.theme} onValueChange={(v) => setConfig({ theme: v as Theme })}>
-                  <SelectTrigger className="w-36">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="system">跟随系统</SelectItem>
-                    <SelectItem value="light">浅色</SelectItem>
-                    <SelectItem value="dark">深色</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Row>
-              <Row label="字号" hint="只管这台设备，各设备各设各的">
-                <Select value={String(fontSize)} onValueChange={(v) => setFontSize(Number(v))}>
-                  <SelectTrigger className="w-36">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {[12, 13, 14, 15, 16, 17, 18, 19, 20].map((n) => (
-                      <SelectItem key={n} value={String(n)}>
-                        {n}px
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Row>
-              <Row label="发送键" hint="另一种组合换行">
-                <Select value={cfg.sendKey} onValueChange={(v) => setConfig({ sendKey: v as any })}>
-                  <SelectTrigger className="w-36">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="enter">回车</SelectItem>
-                    <SelectItem value="mod+enter">⌘ / Ctrl + 回车</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Row>
-              <Row label="默认 agent">
-                <Select value={cfg.defaultAgent} onValueChange={(v) => setConfig({ defaultAgent: v })}>
-                  <SelectTrigger className="w-36">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {agents.map((a) => (
-                      <SelectItem key={a.id} value={a.id}>
-                        {a.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Row>
-              <Row label="系统通知" hint="看不见的会话跑完了 / 在等你时">
-                <Switch checked={cfg.notifications} onCheckedChange={(v) => setConfig({ notifications: v })} />
-              </Row>
-              <AndroidSettings />
-              <ServiceSetting />
-              <Row label="切走的 tab 留在页面里" hint="展开状态、滚动位置都保住；越多越占内存（设置 → 资源 里看）">
-                <Select value={String(cfg.keepTabs ?? 6)} onValueChange={(v) => setConfig({ keepTabs: Number(v) })}>
-                  <SelectTrigger className="w-36">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {[1, 3, 6, 10, 20].map((n) => (
-                      <SelectItem key={n} value={String(n)}>
-                        {n === 1 ? "不留" : `最近 ${n} 个`}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Row>
-              <Row label="从 herdr 导入" hint="工作空间、tab、分屏和每个 agent 的会话">
-                <Button size="sm" variant="outline" onClick={() => set({ dialog: { kind: "importHerdr" } })}>
-                  导入…
-                </Button>
-              </Row>
+            <TabsContent value="general" className="space-y-6 pt-2">
+              {/* 设置分两种：存 gerdr 服务端、所有设备共用（config.json），和只存这台设备（localStorage / 安卓壳）。
+                  不分组的话在手机上调了一项，电脑上跟着变还是不变，用户猜不出来 */}
+              <Section title="所有设备共用" hint="存在跑 gerdr 的电脑上，电脑、手机、别的浏览器打开都是这一份；其他各页的设置也都是共用的">
+                <Row label="外观">
+                  <Select value={cfg.theme} onValueChange={(v) => setConfig({ theme: v as Theme })}>
+                    <SelectTrigger className="w-36">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="system">跟随系统</SelectItem>
+                      <SelectItem value="light">浅色</SelectItem>
+                      <SelectItem value="dark">深色</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </Row>
+                <Row label="发送键" hint="另一种组合换行">
+                  <Select value={cfg.sendKey} onValueChange={(v) => setConfig({ sendKey: v as any })}>
+                    <SelectTrigger className="w-36">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="enter">回车</SelectItem>
+                      <SelectItem value="mod+enter">⌘ / Ctrl + 回车</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </Row>
+                <Row label="默认 agent">
+                  <Select value={cfg.defaultAgent} onValueChange={(v) => setConfig({ defaultAgent: v })}>
+                    <SelectTrigger className="w-36">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {agents.map((a) => (
+                        <SelectItem key={a.id} value={a.id}>
+                          {a.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Row>
+                <Row label="改文件时展开 diff" hint="新建 / 编辑文件的那一行默认展开改动；关掉只留一行（文件名和 +/- 行数），点开再看">
+                  <Switch checked={cfg.expandEdits !== false} onCheckedChange={(v) => setConfig({ expandEdits: v })} />
+                </Row>
+                <Row label="切走的 tab 留在页面里" hint="展开状态、滚动位置都保住；越多越占内存（设置 → 资源 里看）">
+                  <Select value={String(cfg.keepTabs ?? 6)} onValueChange={(v) => setConfig({ keepTabs: Number(v) })}>
+                    <SelectTrigger className="w-36">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[1, 3, 6, 10, 20].map((n) => (
+                        <SelectItem key={n} value={String(n)}>
+                          {n === 1 ? "不留" : `最近 ${n} 个`}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Row>
+                <Row label="系统通知" hint="看不见的会话跑完了 / 在等你时">
+                  <Switch checked={cfg.notifications} onCheckedChange={(v) => setConfig({ notifications: v })} />
+                </Row>
+                <ServiceSetting />
+                <Row label="从 herdr 导入" hint="工作空间、tab、分屏和每个 agent 的会话">
+                  <Button size="sm" variant="outline" onClick={() => set({ dialog: { kind: "importHerdr" } })}>
+                    导入…
+                  </Button>
+                </Row>
+              </Section>
+              <Section title="只管这台设备" hint="存在这台设备上，别的设备各设各的">
+                <Row label="字号">
+                  <Select value={String(fontSize)} onValueChange={(v) => setFontSize(Number(v))}>
+                    <SelectTrigger className="w-36">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[12, 13, 14, 15, 16, 17, 18, 19, 20].map((n) => (
+                        <SelectItem key={n} value={String(n)}>
+                          {n}px
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Row>
+                <AndroidSettings />
+              </Section>
               <div className="pt-2 text-[12px] text-muted-foreground">gerdr {version}</div>
             </TabsContent>
             <TabsContent value="keys" className="pt-2">
@@ -435,6 +444,18 @@ function SettingsDialog({ open }: { open: boolean }) {
         </Tabs>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function Section({ title, hint, children }: { title: string; hint: string; children: React.ReactNode }) {
+  return (
+    <section className="space-y-4">
+      <div className="border-b pb-1.5">
+        <div className="text-[12px] font-medium text-muted-foreground">{title}</div>
+        <div className="text-[11px] text-muted-foreground/80">{hint}</div>
+      </div>
+      {children}
+    </section>
   );
 }
 

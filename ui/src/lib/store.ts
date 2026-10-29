@@ -21,6 +21,8 @@ export type Config = {
   /** 发送：enter（回车发、Shift+回车换行）或 mod+enter（⌘/Ctrl+回车发）。 */
   sendKey: "enter" | "mod+enter";
   keepTabs: number; // 切走之后还留在页面里的 tab 数（展开状态、滚动位置都保住）；1 = 不留
+  /** 改文件 / 新建文件的工具调用默认展开 diff。关掉后只剩一行（文件名、+/- 行数），点开再看。 */
+  expandEdits?: boolean;
   /** 实验室：对话用虚拟滚动（只渲染屏幕附近的行）。默认关 —— 往上翻时行卸载再挂载，带图的行高度先 0 后撑开，界面一跳一跳（用户报的）。 */
   virtualList?: boolean;
   /** 实验室：有远程设备连着时不让电脑睡（后端起 caffeinate），断开 15 分钟后放手。后端读这个字段（cmd/gerdr 的 applyAwake）。 */
@@ -45,6 +47,7 @@ export const DEFAULT_CONFIG: Config = {
   notifications: true,
   sendKey: "enter",
   keepTabs: 6,
+  expandEdits: true,
   virtualList: false,
   keepAwakeRemote: false,
   keepAwakeLid: false,
