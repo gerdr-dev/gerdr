@@ -155,7 +155,7 @@ function PhoneOverview({ ids, focus, shown, onPick }: { ids: string[]; focus?: s
           ) : (
             <div className="flex h-full flex-col items-center justify-center gap-3 px-8 text-center text-[13px] text-muted-foreground">
               <LayoutGrid className="size-6" />
-              还没有放进来的 agent
+              待办是空的
               <Button size="sm" variant="outline" onClick={() => setList(true)}>
                 <Plus className="size-3.5" /> 挑几个
               </Button>
@@ -492,7 +492,7 @@ function Grid({
         {ids.length === 0 && (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-[13px] text-muted-foreground">
             <LayoutGrid className="size-6" />
-            在左边点 agent 放进来，或者点「放入运行中和未读」
+            待办是空的：在左边点 agent 放进来，或者点「放入运行中和未读」
           </div>
         )}
         {/* Flat and keyed by session, positioned absolutely (like Panes.TabView): re-arranging only moves boxes, the chats don't remount */}
@@ -695,7 +695,7 @@ function Tile({
         <TileButton title={inWork ? "去 Work 模式" : "回到它所在的 tab"} onClick={jump}>
           <ArrowUpRight className="size-3.5" />
         </TileButton>
-        <TileButton title="从总览移出（agent 不受影响）" onClick={() => removeTile(id)}>
+        <TileButton title="完成，移出待办（agent 不受影响）" onClick={() => removeTile(id)}>
           <X className="size-3.5" />
         </TileButton>
       </div>

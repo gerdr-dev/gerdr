@@ -128,7 +128,7 @@ export const ACTION_TITLES: Record<KeyAction, string> = {
   prevSpace: "上一个项目",
   sessions: "会话列表（接着以前的聊）",
   toggleSidebar: "显示 / 隐藏侧栏",
-  overview: "全部 agent 总览（打开 / 退出）",
+  overview: "待办（打开 / 退出）",
   help: "快捷键帮助",
   settings: "设置",
   importHerdr: "从 herdr 导入（工作空间、tab、会话）",

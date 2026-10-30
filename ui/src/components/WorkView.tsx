@@ -100,7 +100,7 @@ export function ModeSwitch() {
   return (
     <div className="flex shrink-0 gap-0.5 rounded-lg bg-muted p-0.5" style={{ WebkitAppRegion: "no-drag" } as any}>
       {item("agents", "Code", Code2)}
-      {item("overview", `全部 agent 总览（${formatCombo(keyFor(get().config, "overview")[0] ?? "")}）`, LayoutGrid)}
+      {item("overview", `待办（${formatCombo(keyFor(get().config, "overview")[0] ?? "")}）`, LayoutGrid)}
       {item("work", "Work", Briefcase)}
     </div>
   );

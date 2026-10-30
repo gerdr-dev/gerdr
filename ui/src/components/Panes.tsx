@@ -4,6 +4,8 @@ import {
   Copy,
   ExternalLink,
   GitBranch,
+  ListPlus,
+  ListX,
   Maximize2,
   RefreshCw,
   Minimize2,
@@ -34,7 +36,8 @@ import {
 } from "@/lib/actions";
 import { leaves, phoneRoot, setRatio, updateTab, type PaneLeaf, type PaneNode, type PaneSplit, type Tab } from "@/lib/layout";
 import { applyPaneTitle } from "@/lib/plugins";
-import { markRead, set, setLayout, useStore } from "@/lib/store";
+import { get, markRead, set, setLayout, useStore } from "@/lib/store";
+import { addTiles, MAX_TILES, overviewIds, removeTile } from "@/lib/overview";
 import { usePhone } from "@/lib/phone";
 import { cn } from "@/lib/utils";
 import { AgentIcon, StatusDot } from "./AgentIcon";
@@ -397,6 +400,7 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
   const session = useStore((s) => (pane.sessionId ? s.sessions[pane.sessionId] : undefined));
   const unread = useStore((s) => (pane.sessionId ? !!s.unread[pane.sessionId] : false));
   const starting = useStore((s) => !!s.starting[pane.id]);
+  const inTodo = useStore((s) => !!pane.sessionId && overviewIds(s.overview, s.layout, s.sessions, s.config).includes(pane.sessionId));
   const agents = useStore((s) => s.agents);
   useStore((s) => s.pluginVersion);
   const focused = useContext(TabActive) && tab.focus === pane.id;
@@ -482,6 +486,20 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
             {session && (
               <>
                 <DropdownMenuSeparator />
+                {inTodo ? (
+                  <DropdownMenuItem onClick={() => removeTile(session.id)}>
+                    <ListX /> 移出待办
+                  </DropdownMenuItem>
+                ) : (
+                  <DropdownMenuItem
+                    onClick={() => {
+                      addTiles([session.id]);
+                      toast(get().overview.ids.includes(session.id) ? "已加入待办" : `待办最多放 ${MAX_TILES} 个，先移出几个`);
+                    }}
+                  >
+                    <ListPlus /> 加入待办
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem onClick={() => set({ dialog: { kind: "rename", target: "session", id: session.id, value: session.title ?? "" } })}>
                   <Pencil /> 重命名会话
                 </DropdownMenuItem>

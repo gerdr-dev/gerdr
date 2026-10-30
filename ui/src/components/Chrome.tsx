@@ -324,7 +324,7 @@ function OverviewButton() {
     held.current = true;
     const id = focusedSessionId();
     if (!id) return toggleOverview(true); // a terminal or an empty pane: nothing to put in
-    if (!showInOverview(id)) toast(`总览最多放 ${MAX_TILES} 个，先移出几个`);
+    if (!showInOverview(id)) toast(`待办最多放 ${MAX_TILES} 个，先移出几个`);
   };
   const cancel = () => clearTimeout(timer.current);
   return (
@@ -333,7 +333,7 @@ function OverviewButton() {
       size="icon"
       // No text selection / iOS callout from the long-press
       className="size-9 select-none [-webkit-touch-callout:none]"
-      aria-label="全部 agent 总览（长按：把当前面板放进去）"
+      aria-label="待办（长按：把当前面板加进去）"
       onPointerDown={() => {
         held.current = false;
         cancel();
