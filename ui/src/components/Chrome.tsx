@@ -82,6 +82,8 @@ function useModHeld() {
       setHeld(false);
     };
     const down = (e: KeyboardEvent) => {
+      // ⌘1–9 switches tabs while ⌘ is still down: keep the numbers up so the next pick is still readable.
+      if (/^[1-9]$/.test(e.key) && (IS_MAC ? e.metaKey : e.ctrlKey)) return;
       if (e.key !== mod) return off();
       if (e.repeat) return;
       if (e.shiftKey || e.altKey || (IS_MAC ? e.ctrlKey : e.metaKey)) return;
@@ -188,14 +190,21 @@ export function TabBar() {
                     "data-[state=open]:bg-accent data-[state=open]:text-foreground data-[state=open]:ring-1 data-[state=open]:ring-brand/60",
                   )}
                 >
-                  {/* Holding ⌘ (Ctrl elsewhere) swaps the icon for the tab's ⌘1–9 number, so the target is readable right when
-                      you're about to press it; the rest of the time the icon stays (and the name stays plain for plugins / renames). */}
-                  {numbers && i < 9 ? (
-                    <span className="w-4 shrink-0 text-center text-[12px] font-medium text-foreground tabular-nums">{i + 1}</span>
-                  ) : agent ? (
-                    <AgentIcon agent={agent} className={cn("size-4", !active && "opacity-60")} />
-                  ) : (
-                    first?.term && <SquareTerminal className="size-4 shrink-0 text-muted-foreground" />
+                  {/* Holding ⌘ (Ctrl elsewhere) lays the tab's ⌘1–9 number over the icon on a translucent veil, so the target is
+                      readable right when you're about to press it without the icon jumping away; the name stays plain for plugins / renames. */}
+                  {(agent || first?.term || (numbers && i < 9)) && (
+                    <span className="relative flex size-4 shrink-0 items-center justify-center">
+                      {agent ? (
+                        <AgentIcon agent={agent} className={cn("size-4", !active && "opacity-60")} />
+                      ) : (
+                        first?.term && <SquareTerminal className="size-4 shrink-0 text-muted-foreground" />
+                      )}
+                      {numbers && i < 9 && (
+                        <span className="absolute -inset-0.5 flex items-center justify-center rounded-sm bg-background/70 text-[12px] font-medium text-foreground/70 tabular-nums">
+                          {i + 1}
+                        </span>
+                      )}
+                    </span>
                   )}
                   <span className="min-w-0 flex-1 truncate">{label}</span>
                   <StatusDot status={st.status} unread={st.unread} />
