@@ -207,7 +207,7 @@ function OverviewList({
         // The same top row as the Code sidebar and Work mode (asked for): project, then the Code / overview / Work switch
         <SidebarHeader />
       )}
-      <div className="shrink-0 space-y-2 border-b p-2">
+      <div className="shrink-0 space-y-2 border-b p-1.5">
         <Button
           variant="outline"
           size="sm"
@@ -417,9 +417,10 @@ function Grid({
     onFocus(id);
   };
 
+  // 3px around + 3px per tile: 6px to the edges and between tiles, the same inset as the sidebar header and split panes
   return (
     <div className="relative min-w-0 flex-1">
-      <div ref={box} className="absolute inset-1">
+      <div ref={box} className="absolute inset-[3px]">
         {ids.length === 0 && (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-[13px] text-muted-foreground">
             <LayoutGrid className="size-6" />
@@ -439,7 +440,7 @@ function Grid({
               key={id}
               data-ov-tile={id}
               className={cn(
-                "absolute overflow-clip p-1",
+                "absolute overflow-clip p-[3px]",
                 hidden && "pointer-events-none invisible",
                 drag?.id === id && "opacity-40",
                 moving ? "z-20" : zoom === id && "z-10",
