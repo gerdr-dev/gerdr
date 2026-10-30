@@ -3,8 +3,8 @@
 //   node media.mjs [--tab=1] [--src=/tmp/gerdr-scrolltest-missing.png] [--watch=14000]
 // Appends two agent messages to the session (client side only, store.applyEvents): one with the broken media between two
 // paragraphs, then a long one after it. Scrolls up so the broken one sits mid-screen (not at the bottom, so any
-// movement counts), watches long enough to cover every automatic retry, then scrolls it out and back in and watches
-// again.
+// movement counts), watches long enough to cover every automatic retry, clicks the retry button on the "can't open"
+// chip, then scrolls it out and back in and watches again.
 import { analyze, args, launch, open, readEvents, report, startFrameLog, stopFrameLog, tab, useStore } from "./lib.mjs";
 
 const a = args({ tab: 1, src: "/tmp/gerdr-scrolltest-missing.png", watch: 14000 });
@@ -45,6 +45,40 @@ console.log(`== failing and retrying (${a.watch}ms)`);
 await startFrameLog(page);
 await page.waitForTimeout(a.watch);
 bad += report(analyze((await stopFrameLog(page)).frames));
+
+// The manual retry on the "can't open" chip.
+const name = a.src.split("/").pop();
+const clicked = await page.evaluate((name) => {
+  const b = [...document.querySelectorAll("button")].find((x) => (x.textContent || "").includes(name) && !x.disabled);
+  if (!b) return false;
+  window.__retryBtn = b;
+  return true;
+}, name);
+if (!clicked) {
+  console.log("no enabled retry chip after the automatic retries");
+  bad++;
+} else {
+  console.log("== clicked retry, watching 3000ms");
+  // Besides jumps, check the chip itself never leaves the screen: swapping it for the broken <img> and back can be too
+  // short to move anything, but it shows as a flash.
+  await page.evaluate((name) => {
+    window.__chipGone = 0;
+    window.__chipFrames = 0;
+    const tick = () => {
+      window.__chipFrames++;
+      if (![...document.querySelectorAll("button")].some((x) => (x.textContent || "").includes(name))) window.__chipGone++;
+      window.__chipRaf = requestAnimationFrame(tick);
+    };
+    tick();
+  }, name);
+  await startFrameLog(page);
+  await page.evaluate(() => window.__retryBtn.click());
+  await page.waitForTimeout(3000);
+  bad += report(analyze((await stopFrameLog(page)).frames));
+  const gone = await page.evaluate(() => (cancelAnimationFrame(window.__chipRaf), [window.__chipGone, window.__chipFrames]));
+  console.log(`chip missing in ${gone[0]} of ${gone[1]} frames`);
+  if (gone[0]) bad++;
+}
 
 // Scroll it out of the rendered range and back: the row remounts.
 const vp = page.viewportSize();

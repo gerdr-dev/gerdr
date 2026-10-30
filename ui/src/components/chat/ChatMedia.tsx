@@ -26,8 +26,9 @@ const RETRY_DELAYS = [1000, 3000, 8000];
 // step (broken image, reloading, failed chip), and the virtual list restarted the cycle whenever the row scrolled back
 // into view, so a single broken image kept the chat jumping (tools/scrolltest/media.mjs).
 // tries: probes used so far. show: a probe passed, render the media again (a load clears the entry, an error sends it
-// back to the chip with tries kept, so a file that exists but won't decode can't loop).
-type Fail = { tries: number; show: boolean };
+// back to the chip with tries kept, so a file that exists but won't decode can't loop). now: probe after a short
+// pause instead of the backoff (the retry button).
+type Fail = { tries: number; show: boolean; now?: boolean };
 const mediaFail = new Map<string, Fail>();
 
 const bare = (s: string) => s.split(/[?#]/)[0];
@@ -79,26 +80,31 @@ export function ChatMedia({ src, alt }: { src: string; alt?: string }) {
   useEffect(() => {
     if (!fail || fail.show || done) return;
     let live = true;
-    const t = setTimeout(() => {
-      const probe = path
-        ? api.fileStat(path, cwd).then((st) => st.size > 0)
-        : VIDEO.test(k) || AUDIO.test(k)
-          ? Promise.resolve(true) // remote stream: nothing cheaper to ask than trying it again
-          : new Promise<boolean>((ok) => {
-              const im = new Image();
-              im.onload = () => ok(true);
-              im.onerror = () => ok(false);
-              im.src = `${src}${src.includes("?") ? "&" : "?"}r=${Date.now()}`;
-            });
-      probe.then(
-        (ok) => {
-          if (!live) return;
-          setFail({ tries: fail.tries + 1, show: ok });
-          if (ok) setAttempt((a) => a + 1);
-        },
-        () => live && setFail({ tries: fail.tries + 1, show: false }),
-      );
-    }, RETRY_DELAYS[fail.tries]);
+    const t = setTimeout(
+      () => {
+        const probe = path
+          ? api.fileStat(path, cwd).then((st) => st.size > 0)
+          : VIDEO.test(k) || AUDIO.test(k)
+            ? Promise.resolve(true) // remote stream: nothing cheaper to ask than trying it again
+            : new Promise<boolean>((ok) => {
+                const im = new Image();
+                im.onload = () => ok(true);
+                im.onerror = () => ok(false);
+                im.src = `${src}${src.includes("?") ? "&" : "?"}r=${Date.now()}`;
+              });
+        probe.then(
+          (ok) => {
+            if (!live) return;
+            setFail({ tries: fail.tries + 1, show: ok });
+            if (ok) setAttempt((a) => a + 1);
+          },
+          () => live && setFail({ tries: fail.tries + 1, show: false }),
+        );
+      },
+      // The retry button still waits a moment: a probe answered in a few ms swapped the icon to a spinner and back
+      // within a frame or two, which read as a flicker rather than "retrying".
+      fail.now ? 400 : RETRY_DELAYS[fail.tries],
+    );
     return () => {
       live = false;
       clearTimeout(t);
@@ -134,9 +140,9 @@ export function ChatMedia({ src, alt }: { src: string; alt?: string }) {
         disabled={!done}
         title={done ? `${path ?? src}\n点击重试` : (path ?? src)}
         onClick={() => {
-          // One more go: back to the media right away; if it fails again it comes straight back here.
-          setFail({ tries: RETRY_DELAYS.length, show: true });
-          setAttempt((a) => a + 1);
+          // One more probe, right away. The chip stays put (spinner while it runs) and the media only comes back if the
+          // file is there: putting the broken <img> back to find out made the row change height twice per click.
+          setFail({ tries: RETRY_DELAYS.length - 1, show: false, now: true });
         }}
         className="my-1 inline-flex max-w-full items-center gap-1.5 rounded-md border border-border/60 px-2 py-1 align-middle text-xs text-muted-foreground enabled:hover:bg-accent"
       >
