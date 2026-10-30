@@ -63,7 +63,7 @@
 
 .dark {
   --background: oklch(0.165 0 0);
-  /* 正文字色 0.93：试过 0.97，太白；字发虚主要是 antialiased 的锅（见下面 .dark body），不是颜色 */
+  /* Body text at 0.93: 0.97 was too white. Thin, blurry text was antialiased's fault (see body), not the color. */
   --foreground: oklch(0.93 0 0);
   --card: oklch(0.2 0 0);
   --card-foreground: oklch(0.93 0 0);
@@ -150,17 +150,13 @@
     height: var(--vvh, 100%);
   }
   body {
-    @apply bg-background text-foreground antialiased;
+    @apply bg-background text-foreground;
     font-size: var(--gerdr-font, 14px);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
     overflow: hidden;
   }
-  /* 深色底上不用 antialiased（灰度抗锯齿）：它在 macOS 深色背景上会把字削细、发虚，同样字重看着比 Codex 淡一档。
-     用系统默认渲染，字更实。浅色底上深色字不受影响，照旧 antialiased。 */
-  .dark body {
-    -webkit-font-smoothing: auto;
-    -moz-osx-font-smoothing: auto;
-  }
+  /* No antialiased (grayscale smoothing) in either theme: on macOS it thins glyphs, so the same weight reads a notch
+     lighter and blurrier. The system default rendering is more solid. */
   /* 细滚动条：8px 在窄的侧栏里像一道竖杠（用户报的），6px 刚好看得见、抓得住 */
   ::-webkit-scrollbar {
     width: 6px;

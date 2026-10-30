@@ -30,7 +30,6 @@ Error generating stack: `+l.message+`
   color-scheme: light;
   font: 13px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   color: var(--fg);
-  -webkit-font-smoothing: antialiased;
 }
 .root.dark {
   --bg: oklch(0.165 0 0); --fg: oklch(0.93 0 0); --card: oklch(0.2 0 0); --side: oklch(0.14 0 0);
