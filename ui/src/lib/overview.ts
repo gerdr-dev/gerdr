@@ -6,15 +6,16 @@
 // closed one alive). So the overview is a view over the layout: a list of session ids, per device (localStorage, like
 // the sidebar / mode), and closing a tile only takes it off this list. Ids whose session no longer has a pane anywhere
 // drop out on their own (overviewIds), so the overview never keeps an agent alive that the layout let go of.
-import { allLeaves, locateSession, type Layout } from "./layout";
-import { MAX_TILES, OVERVIEW_KEY, overviewFocus, overviewIds, type Overview } from "./overviewState";
+// Each project's current Work conversation counts as open too (overviewState.workChats): it has no pane, Work mode shows it.
+import { allLeaves, type Layout } from "./layout";
+import { isOpen, MAX_TILES, OVERVIEW_KEY, overviewFocus, overviewIds, workChats, type Overview, type WorkConf } from "./overviewState";
 import { sessionRank } from "./order";
 import { get, set, useStore } from "./store";
 import { syncWatch } from "./sync";
 import type { KeyAction } from "./keys";
 import type { SessionSummary } from "./types";
 
-export { MAX_TILES, overviewFocus, overviewIds, type Overview };
+export { MAX_TILES, overviewFocus, overviewIds, workChats, type Overview };
 
 export function setOverview(fn: (o: Overview) => Overview) {
   const next = fn(get().overview);
@@ -26,18 +27,20 @@ export function setOverview(fn: (o: Overview) => Overview) {
   syncWatch(); // which transcripts to stream changes with the tiles (store.watchedSessions)
 }
 
-/** Open agents = sessions some pane shows, in any project. */
-export function openSessions(l: Layout, sessions: Record<string, SessionSummary>): SessionSummary[] {
+/** Open agents = sessions some pane shows, in any project, then each project's Work conversation. */
+export function openSessions(l: Layout, sessions: Record<string, SessionSummary>, c: WorkConf): SessionSummary[] {
   const seen = new Set<string>();
   const out: SessionSummary[] = [];
-  for (const { pane } of allLeaves(l)) {
-    const s = pane.sessionId ? sessions[pane.sessionId] : undefined;
+  const add = (id?: string) => {
+    const s = id ? sessions[id] : undefined;
     if (s && !seen.has(s.id)) (seen.add(s.id), out.push(s));
-  }
+  };
+  for (const { pane } of allLeaves(l)) add(pane.sessionId);
+  for (const id of Object.values(workChats(c, l))) add(id);
   return out;
 }
 
-export const useOverviewIds = () => useStore((s) => overviewIds(s.overview, s.layout, s.sessions).join(","));
+export const useOverviewIds = () => useStore((s) => overviewIds(s.overview, s.layout, s.sessions, s.config).join(","));
 
 export function toggleOverview(on = !get().overview.on) {
   setOverview((o) => ({ ...o, on }));
@@ -45,7 +48,7 @@ export function toggleOverview(on = !get().overview.on) {
 
 export function addTiles(ids: string[]) {
   setOverview((o) => {
-    const live = overviewIds(o, get().layout, get().sessions);
+    const live = overviewIds(o, get().layout, get().sessions, get().config);
     const add = ids.filter((id) => !live.includes(id));
     if (!add.length) return o;
     return { ...o, ids: [...live, ...add].slice(0, MAX_TILES) };
@@ -68,7 +71,7 @@ export function focusTile(id: string) {
 /** Zoom the tile to the whole grid, or back (`id` defaults to the focused tile). */
 export function toggleTileZoom(id?: string) {
   setOverview((o) => {
-    const t = id ?? overviewFocus(o, get().layout, get().sessions);
+    const t = id ?? overviewFocus(o, get().layout, get().sessions, get().config);
     if (!t) return o;
     return { ...o, zoom: o.zoom === t ? undefined : t, focus: t };
   });
@@ -80,8 +83,8 @@ export function toggleMain(id: string) {
 
 /** The agents worth a look: running, waiting for you, errored, or finished unseen (sessionRank 0–3). */
 export function attentionIds(): string[] {
-  const { layout, sessions, unread } = get();
-  return openSessions(layout, sessions)
+  const { layout, sessions, unread, config } = get();
+  return openSessions(layout, sessions, config)
     .filter((s) => sessionRank(s, unread) <= 3)
     .sort((a, b) => sessionRank(a, unread) - sessionRank(b, unread))
     .map((s) => s.id);
@@ -99,7 +102,7 @@ export function watchFollow() {
     for (const cur of Object.values(s.sessions)) {
       const old = before[cur.id];
       const busy = (x?: SessionSummary) => x?.status === "running" || x?.status === "waiting";
-      if (busy(cur) && !busy(old) && locateSession(s.layout, cur.id)) add.push(cur.id);
+      if (busy(cur) && !busy(old) && isOpen(s.layout, s.config, cur.id)) add.push(cur.id);
     }
     if (add.length) addTiles(add);
   });
@@ -316,9 +319,9 @@ const NEUTRAL = new Set<KeyAction>([
  */
 export function overviewKey(a: KeyAction): boolean {
   if (NEUTRAL.has(a) || a === "stop" || a === "renamePane" || a === "stash") return false;
-  const { overview: o, layout, sessions } = get();
-  const ids = overviewIds(o, layout, sessions);
-  const cur = overviewFocus(o, layout, sessions);
+  const { overview: o, layout, sessions, config } = get();
+  const ids = overviewIds(o, layout, sessions, config);
+  const cur = overviewFocus(o, layout, sessions, config);
   const dirOf: Partial<Record<KeyAction, Dir>> = {
     focusLeft: "left",
     focusRight: "right",

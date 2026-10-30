@@ -1058,7 +1058,7 @@ export function stashDraft() {
   const el = document.activeElement as HTMLElement | null;
   const leaf = focusedLeaf(get().layout);
   // The composer being typed in (also the Work view's, which isn't a pane), else the focused pane's
-  const ovFocus = overviewShown() ? overviewFocus(get().overview, get().layout, get().sessions) : undefined;
+  const ovFocus = overviewShown() ? overviewFocus(get().overview, get().layout, get().sessions, get().config) : undefined;
   const paneId = el?.dataset.composer ?? (ovFocus ? `ov-${ovFocus}` : leaf?.sessionId ? leaf.id : undefined);
   const box = paneId ? document.querySelector<HTMLTextAreaElement>(`textarea[data-composer="${CSS.escape(paneId)}"]`) : null;
   if (!paneId || !box) return toast("没有可以暂存的输入框");
@@ -1081,7 +1081,7 @@ export function stashDraft() {
 
 export function focusedSessionId(): string | undefined {
   // With the overview up, the focused tile is the one you're on (not the pane hidden under it)
-  if (overviewShown()) return overviewFocus(get().overview, get().layout, get().sessions);
+  if (overviewShown()) return overviewFocus(get().overview, get().layout, get().sessions, get().config);
   return focusedLeaf(get().layout)?.sessionId;
 }
 

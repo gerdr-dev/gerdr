@@ -1,6 +1,6 @@
 // The overview's stored state and the read side of it. Kept apart from overview.ts, which needs the store: the store
 // loads this at creation, and a store <-> overview import cycle would hand it an undefined loadOverview.
-import { locateSession, type Layout } from "./layout";
+import { locateSession, spaceList, type Layout } from "./layout";
 import type { SessionSummary } from "./types";
 
 export type Overview = {
@@ -47,13 +47,34 @@ export function loadOverview(): Overview {
   }
 }
 
+/** The part of the config saying which conversation each project's Work view shows (store Config; not imported, see above). */
+export type WorkConf = { workSessions?: Record<string, string>; workSession?: string };
+
+/**
+ * Each project's current Work agent conversation (project → session id), for the projects that still exist. They sit in
+ * no pane (Work mode shows them on its own right side), but they're open agents all the same (asked for: in the overview too).
+ */
+export function workChats(c: WorkConf, l: Layout): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const sp of spaceList(l)) {
+    const id = c.workSessions?.[sp.id] ?? (sp.id === "default" ? c.workSession : undefined);
+    if (id) out[sp.id] = id;
+  }
+  return out;
+}
+
+/** Open = some pane shows it, or it's a project's current Work conversation. */
+export function isOpen(l: Layout, c: WorkConf, id: string): boolean {
+  return !!locateSession(l, id) || Object.values(workChats(c, l)).includes(id);
+}
+
 /** The tiles that can actually be shown: still open somewhere. */
-export function overviewIds(o: Overview, l: Layout, sessions: Record<string, SessionSummary>): string[] {
-  return o.ids.filter((id) => sessions[id] && locateSession(l, id)).slice(0, MAX_TILES);
+export function overviewIds(o: Overview, l: Layout, sessions: Record<string, SessionSummary>, c: WorkConf): string[] {
+  return o.ids.filter((id) => sessions[id] && isOpen(l, c, id)).slice(0, MAX_TILES);
 }
 
 /** The focused tile: the stored one while it's still a tile, else the first. */
-export function overviewFocus(o: Overview, l: Layout, sessions: Record<string, SessionSummary>): string | undefined {
-  const ids = overviewIds(o, l, sessions);
+export function overviewFocus(o: Overview, l: Layout, sessions: Record<string, SessionSummary>, c: WorkConf): string | undefined {
+  const ids = overviewIds(o, l, sessions, c);
   return o.focus && ids.includes(o.focus) ? o.focus : ids[0];
 }

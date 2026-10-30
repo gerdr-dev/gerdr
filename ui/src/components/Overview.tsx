@@ -24,9 +24,11 @@ import {
   toggleMain,
   toggleOverview,
   useOverviewIds,
+  workChats,
   type Box,
   type Seam,
 } from "@/lib/overview";
+import type { WorkConf } from "@/lib/overviewState";
 import { usePhone } from "@/lib/phone";
 import { markRead, useStore } from "@/lib/store";
 import type { SessionSummary } from "@/lib/types";
@@ -37,11 +39,22 @@ import { ChatView } from "./chat/ChatView";
 import { Elapsed, SidebarEdge, SidebarFooter, SidebarHeader } from "./Chrome";
 import { TabActive } from "./Panes";
 
-/** "project · workspace · tab" of a session's pane (the project only when there's more than one). */
-function whereOf(l: Layout, id: string): string {
+/** The project a session belongs to: its pane's, or the one whose Work view shows it. */
+function projectOf(l: Layout, c: WorkConf, id: string): string | undefined {
   const loc = locateSession(l, id);
-  if (!loc) return "";
+  if (loc) return spaceOf(loc.ws);
+  return Object.entries(workChats(c, l)).find(([, x]) => x === id)?.[0];
+}
+
+/** "project · workspace · tab" of a session's pane, or "project · Work" (the project only when there's more than one). */
+function whereOf(l: Layout, c: WorkConf, id: string): string {
+  const loc = locateSession(l, id);
   const spaces = spaceList(l);
+  if (!loc) {
+    const p = projectOf(l, c, id);
+    if (!p) return "";
+    return spaces.length > 1 ? `${spaces.find((s) => s.id === p)?.name ?? p} · Work` : "Work";
+  }
   const ti = loc.ws.tabs.indexOf(loc.tab);
   const parts = [loc.ws.name, `${ti + 1}.${tabName(loc.tab)}`];
   if (spaces.length > 1) parts.unshift(spaces.find((s) => s.id === spaceOf(loc.ws))?.name ?? spaceOf(loc.ws));
@@ -57,7 +70,7 @@ export function OverviewView({ shown }: { shown: boolean }) {
   const phone = usePhone();
   const ids = useOverviewIds().split(",").filter(Boolean);
   const zoom = useStore((s) => s.overview.zoom);
-  const cur = useStore((s) => overviewFocus(s.overview, s.layout, s.sessions));
+  const cur = useStore((s) => overviewFocus(s.overview, s.layout, s.sessions, s.config));
   // A tile taken out while zoomed: back to the grid
   const zoomed = zoom && ids.includes(zoom) ? zoom : undefined;
   const pick = (id: string) => {
@@ -171,8 +184,9 @@ function OverviewList({
   const unread = useStore((s) => s.unread);
   const o = useStore((s) => s.overview);
   const sidebarW = useStore((s) => s.sidebarW);
-  const tiles = new Set(overviewIds(o, layout, sessions));
-  const all = openSessions(layout, sessions);
+  const config = useStore((s) => s.config);
+  const tiles = new Set(overviewIds(o, layout, sessions, config));
+  const all = openSessions(layout, sessions, config);
   const attention = all.filter((s) => s.status === "running" || s.status === "waiting" || s.status === "error" || unread[s.id]);
   const missing = attention.filter((s) => !tiles.has(s.id)).length;
   const full = tiles.size >= MAX_TILES;
@@ -182,10 +196,7 @@ function OverviewList({
   if (o.sort === "status") groups.push({ rows: [...all].sort((a, b) => compareSessions(a, b, unread)) });
   else
     for (const sp of spaceList(layout)) {
-      const rows = all.filter((s) => {
-        const loc = locateSession(layout, s.id);
-        return loc && spaceOf(loc.ws) === sp.id;
-      });
+      const rows = all.filter((s) => projectOf(layout, config, s.id) === sp.id);
       if (rows.length) groups.push({ name: sp.name, rows });
     }
 
@@ -276,7 +287,7 @@ function OverviewList({
                       {s.title || basename(s.cwd)}
                     </div>
                     <div className="flex text-[11px] leading-4 text-muted-foreground">
-                      <span className="min-w-0 truncate">{whereOf(layout, s.id)}</span>
+                      <span className="min-w-0 truncate">{whereOf(layout, config, s.id)}</span>
                       {s.status === "running" && s.turn && <Elapsed since={s.turn.startedAt} />}
                     </div>
                   </div>
@@ -551,12 +562,14 @@ function Tile({
 }) {
   const session = useStore((s) => s.sessions[id]);
   const unread = useStore((s) => !!s.unread[id]);
-  const where = useStore((s) => whereOf(s.layout, id));
+  const where = useStore((s) => whereOf(s.layout, s.config, id));
+  const inWork = useStore((s) => !locateSession(s.layout, id)); // a Work conversation (no pane)
   useEffect(() => {
     if (focused && unread) markRead(id);
   }, [focused, unread, id]);
   if (!session) return null;
   const title = session.title || basename(session.cwd);
+  // A Work conversation goes to Work mode (actions.openInWork), any other to its pane
   const jump = () => {
     toggleOverview(false);
     focusSession(id);
@@ -603,7 +616,7 @@ function Tile({
             </TileButton>
           </>
         )}
-        <TileButton title="回到它所在的 tab" onClick={jump}>
+        <TileButton title={inWork ? "去 Work 模式" : "回到它所在的 tab"} onClick={jump}>
           <ArrowUpRight className="size-3.5" />
         </TileButton>
         <TileButton title="从总览移出（agent 不受影响）" onClick={() => removeTile(id)}>
