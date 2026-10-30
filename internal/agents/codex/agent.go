@@ -113,6 +113,7 @@ type session struct {
 	req    int
 	sub    *subInfo // 非空 = 这是某个子 agent 的伪会话，update 改挂到主会话下（subagents.go）
 	items  map[string]*itemState
+	roll   *rollTail // code-mode exec / wait cards read from the rollout (codemode.go)
 	cancel bool
 	errMsg string
 }
@@ -475,7 +476,7 @@ func (a *Agent) NewSession(ctx context.Context, p acp.NewSessionRequest) (acp.Ne
 	if err := rpc.Call(ctx, "thread/start", params, &res); err != nil {
 		return acp.NewSessionResponse{}, err
 	}
-	s := &session{id: res.Thread.ID, cwd: p.Cwd, mode: mode, model: res.Model, items: map[string]*itemState{}, extFP: fp}
+	s := &session{id: res.Thread.ID, cwd: p.Cwd, mode: mode, model: res.Model, items: map[string]*itemState{}, extFP: fp, roll: newRollTail(res.Thread.ID, false)}
 	if res.ReasoningEffort != nil {
 		s.effort = *res.ReasoningEffort
 	}
@@ -520,7 +521,7 @@ func (a *Agent) attach(ctx context.Context, id, cwd string, meta map[string]any)
 	if err := rpc.Call(ctx, "thread/resume", params, &res); err != nil {
 		return nil, err
 	}
-	s := &session{id: id, cwd: res.Thread.Cwd, mode: mode, model: res.Model, items: map[string]*itemState{}, extFP: fp}
+	s := &session{id: id, cwd: res.Thread.Cwd, mode: mode, model: res.Model, items: map[string]*itemState{}, extFP: fp, roll: newRollTail(id, true)}
 	if s.cwd == "" {
 		s.cwd = cwd
 	}
@@ -531,6 +532,9 @@ func (a *Agent) attach(ctx context.Context, id, cwd string, meta map[string]any)
 	if old := a.sessions[id]; old != nil {
 		old.mu.Lock()
 		s.turnID, s.turnDone, s.compacts = old.turnID, old.turnDone, old.compacts
+		if old.roll != nil {
+			s.roll = old.roll // keep the read position and the open cards across a re-attach mid-turn
+		}
 		old.mu.Unlock()
 	}
 	a.sessions[id] = s
@@ -569,11 +573,7 @@ func (a *Agent) LoadSession(ctx context.Context, p acp.LoadSessionRequest) (acp.
 		}
 		cursor = *res.NextCursor
 	}
-	for _, t := range turns {
-		for _, raw := range t.Items {
-			a.replayItem(ctx, s, raw)
-		}
-	}
+	a.replayTurns(ctx, s, turns)
 	return acp.LoadSessionResponse{
 		Modes:         &acp.SessionModeState{AvailableModes: modes, CurrentModeId: acp.SessionModeId(s.mode)},
 		ConfigOptions: a.configOptions(ctx, s),

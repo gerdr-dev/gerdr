@@ -43,7 +43,7 @@ func (a *Agent) subAgentActivity(ctx context.Context, s *session, raw json.RawMe
 	a.mu.Lock()
 	cs := a.sessions[it.AgentThreadID]
 	if cs == nil && it.Kind != "completed" && it.Kind != "interrupted" {
-		cs = &session{id: s.id, cwd: s.cwd, items: map[string]*itemState{}, sub: &subInfo{parent: s, toolCall: tc}}
+		cs = &session{id: s.id, cwd: s.cwd, items: map[string]*itemState{}, sub: &subInfo{parent: s, toolCall: tc}, roll: newRollTail(it.AgentThreadID, false)}
 		a.sessions[it.AgentThreadID] = cs
 	}
 	a.mu.Unlock()

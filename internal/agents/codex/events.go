@@ -33,6 +33,17 @@ func (a *Agent) HandleNotification(method string, params json.RawMessage) {
 		return
 	}
 	ctx := context.Background()
+	// Code-mode exec / wait cards come from the rollout, not from notifications: catch up on it first, so a cell's card
+	// lands before the nested tool calls it makes (codemode.go). Deltas are too frequent to be worth a file read each.
+	switch {
+	case method == "turn/started":
+		a.rollPoll(ctx, s)
+		a.rollStartTurn(s)
+	case method == "turn/completed":
+		a.rollEndTurn(ctx, s)
+	case !strings.Contains(method, "elta"):
+		a.rollPoll(ctx, s)
+	}
 	if s.sub != nil {
 		// 子 agent 的 thread：只要它干的活（item），它的轮次 / 标题 / 计划和主会话无关。
 		switch method {
@@ -266,7 +277,7 @@ func (a *Agent) itemStarted(ctx context.Context, s *session, raw json.RawMessage
 			acp.WithStartKind(acp.ToolKindFetch), acp.WithStartStatus(acp.ToolCallStatusInProgress), acp.WithStartRawInput(map[string]any{"query": it.Query})))
 	case "subAgentActivity":
 		a.subAgentActivity(ctx, s, raw)
-	case "imageView", "imageGeneration", "dynamicToolCall", "collabAgentToolCall", "contextCompaction", "enteredReviewMode", "exitedReviewMode":
+	case "imageView", "imageGeneration", "dynamicToolCall", "collabAgentToolCall", "contextCompaction", "enteredReviewMode", "exitedReviewMode", "sleep":
 		var m map[string]any
 		_ = json.Unmarshal(raw, &m)
 		a.out(ctx, s, acp.StartToolCall(acp.ToolCallId(h.ID), genericTitle(h.Type, m),
@@ -398,7 +409,7 @@ func (a *Agent) itemCompleted(ctx context.Context, s *session, raw json.RawMessa
 			content = []acp.ToolCallContent{acp.ToolContent(acp.TextBlock(tail(text, 64<<10)))}
 		}
 		a.out(ctx, s, acp.UpdateToolCall(acp.ToolCallId(it.ID), acp.WithUpdateStatus(status), acp.WithUpdateContent(content)))
-	case "webSearch", "imageView", "imageGeneration", "dynamicToolCall", "collabAgentToolCall", "contextCompaction", "enteredReviewMode", "exitedReviewMode":
+	case "webSearch", "imageView", "imageGeneration", "dynamicToolCall", "collabAgentToolCall", "contextCompaction", "enteredReviewMode", "exitedReviewMode", "sleep":
 		if replay {
 			a.itemStarted(ctx, s, raw)
 		}
@@ -499,6 +510,11 @@ func genericTitle(typ string, m map[string]any) string {
 		}
 	case "contextCompaction":
 		return "Compact context"
+	case "sleep":
+		if ms, ok := m["durationMs"].(float64); ok && ms > 0 {
+			return "Sleep " + (time.Duration(ms) * time.Millisecond).String()
+		}
+		return "Sleep"
 	case "dynamicToolCall":
 		if t, ok := m["tool"].(string); ok {
 			return t

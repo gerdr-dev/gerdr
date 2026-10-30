@@ -103,6 +103,13 @@ React（ui/，不打包）  ←WebSocket / HTTP→  hub（internal/hub）  ←AC
    界面画成按钮，点了就是一次插话。`item/tool/requestUserInput` 只在 plan 协作模式里出现，也接了。
 4. 审批按轮覆盖：模式 = `approvalPolicy` + `sandboxPolicy`，每次 `turn/start` 带上。
 5. userMessage item 在实时流里忽略（client 自己已经显示了），只在 LoadSession 重放时发。
+6. **Code mode leaves no item for `exec` / `wait`** (default on since ~0.166): the model calls one `exec` tool with a JS cell
+   that calls the real tools, and `wait` to poll a cell that yielded. The app-server emits items for the nested tool calls only;
+   `exec` / `wait` themselves appear nowhere in the protocol (not live, not in `thread/read` / `thread/turns/list`), so a pure-JS
+   cell left nothing in the chat (the codex TUI doesn't show them either). `codemode.go` reads them from the rollout file
+   (`custom_tool_call` / `function_call` + `*_output`): live by polling before each non-delta notification plus a ticker during
+   the turn (the call line is written before the nested tools run, so the card lands above them), on replay merged with the
+   turn items by timestamp. `sleep` *is* an item (`type: "sleep"`, id = call id).
 
 ## Gerdr Agent（native）—— 自己写的 agent，直接调模型接口
 
