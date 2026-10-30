@@ -30,8 +30,8 @@ src/App.tsx        首页的工作台：侧栏、tab 栏、分屏
 src/components/    组件
   ui/              shadcn/ui 组件（Button、Dialog、Select……），新组件照它们的写法
   ai-elements/     对话流的组件（AI SDK 的 AI Elements）
-  chat/            一个会话的对话面板：ChatView（整体，虚拟列表）、Rows（对话拍平成行）、MessageView（用户消息 / 每一块怎么画）、Composer（输入框）、
-                   ToolCall（工具调用卡片）、Cards（审批 / 提问 / 计划）、TasksBar（后台任务：输入框底栏的标签）
+  chat/            gerdr-only pieces of the chat: ChatView (wraps the package's, tells it whether the tab shows), RunButton (`! command` in a reply),
+                   HeldDialog (session open elsewhere)
   Chrome.tsx       侧栏、tab 栏、手机上那一行顶栏（PhoneBar）
   Panes.tsx        分屏和每个 pane 的标题栏（手机上只画焦点那一个 pane）
   Terminal.tsx     终端 pane 的内容（xterm.js，连服务端的 PTY；xterm 的样式在 index.css 末尾）
@@ -41,16 +41,23 @@ src/components/    组件
                    Palette（命令面板）、KeyHelp（快捷键表）、SettingsDialog（设置）、Pickers（会话列表 / 切工作空间）、
                    NameDialogs（重命名、新 session、新工作空间）
   ExtSettings.tsx  设置里的 Skill / MCP 两页
+packages/chat/     the conversation UI itself, a package (@gerdr/chat) also published to npm for other apps. Served from source like src/:
+  src/components/  ChatView (the whole panel, virtual list), Rows (the conversation as rows), MessageView (user messages / how each block
+                   draws), Composer (input box), ToolCall (tool call cards), Cards (permission / question / plan), TasksBar (background tasks)
+  src/host.tsx     ChatHost: everything the chat gets from the app (data, actions, slots). gerdr's is src/lib/chatHost.tsx
+  src/messages.ts  every text the chat shows, zh + en: add new texts here, not inline
+  src/style.css    the chat's CSS (Markdown typography…); gerdr adds it after src/index.css
+  Imports inside the package are relative (no @/…), and it can't import gerdr's src/: what it needs from gerdr goes through ChatHost.
 src/lib/
+  chatHost.tsx     gerdr's ChatHost (store, api, actions, and the composer features only gerdr has)
   api.ts           调 gerdr 后端的 HTTP 接口（所有接口都在这里有一个函数）
   store.ts         全局状态（zustand）：sessions、layout、config、对话（transcript）
   sync.ts          WebSocket：服务端推来的会话变化、日志
-  transcript.ts    会话日志 → AI SDK 的 UIMessage
+  transcript.ts    re-exports packages/chat/src/transcript.ts (会话日志 → AI SDK 的 UIMessage)
   types.ts         后端数据的类型（SessionSummary、HubEvent……）
   actions.ts       分屏、开会话、切 tab 这些动作
   keys.ts          快捷键
   phone.ts         手机那一档（usePhone，< 768px）、--vvh（软键盘弹起时的可视高度）
-  paths.ts         认对话里的本地路径（rehype 插件），chat/Markdown.tsx 用它
   plugins.ts       TS 插件的运行时（~/.gerdr/plugins 下的插件）
 ```
 
@@ -68,7 +75,7 @@ src/lib/
 - 一个 `.tsx` 文件里只导出组件（大写开头 / default）时，改它能热替换、不丢状态；导出了别的（函数、常量）的文件改了会整个重新渲染。
 
 - 对话是**虚拟列表**（react-virtuoso）：「设置 → 实验室」里打开虚拟滚动时，只渲染屏幕附近的行，滚出去的会被卸载（默认关着，但组件要按开着写）。所以对话里的组件**别用 useState 记「展开没」这类状态**
-  （滚回来就没了），用 `@/lib/kept` 的 `useKept(key, 初值)`，key 带上会话 id 和这块东西的 id。
+  （滚回来就没了），用 `packages/chat/src/kept.ts` 的 `useKept(key, 初值)`，key 带上会话 id 和这块东西的 id。
 - 格式按 `.prettierrc.json`（行宽 160、双引号、分号），`src/` 下的 ts / tsx 已经全部是 prettier 3.9.10 排过的：改完对改了的文件跑
   `npx prettier@3.9.10 --write <文件>`，**要在界面目录里跑** —— 在别处跑（或者把文件拷到 /tmp 再排）读不到 `.prettierrc.json`，
   会按默认的行宽 80 把整个文件拆得稀碎。别换别的版本：不同版本排出来不一样，diff 全是噪音。
@@ -80,11 +87,11 @@ src/lib/
 对话界面的排版照这两个站做的，改对话里的东西、加新组件前先去看对应那一页，保持一个调子：
 
 - **Astryx 的 Chat 组件**（https://astryx.atmeta.com/components/ChatMessage ，左边栏 Chat 下面每一个都可以参考）：
-  用户气泡和下面那行时间（ChatMessage / ChatMessageMetadata → `chat/MessageView.tsx`）、
-  工具调用行和折叠组（ChatToolCalls → `chat/ToolCall.tsx`、`chat/Rows.tsx`）、
-  居中的系统小字（ChatSystemMessage → MessageView 里的 data-notice）、输入框（ChatComposer → `chat/Composer.tsx`）。
+  用户气泡和下面那行时间（ChatMessage / ChatMessageMetadata → `packages/chat/src/components/MessageView.tsx`）、
+  工具调用行和折叠组（ChatToolCalls → `packages/chat/src/components/ToolCall.tsx`、`packages/chat/src/components/Rows.tsx`）、
+  居中的系统小字（ChatSystemMessage → MessageView 里的 data-notice）、输入框（ChatComposer → `packages/chat/src/components/Composer.tsx`）。
 - **beUI Pro**（https://pro.beui.dev ，左边栏 AGENTS 那一组）：运行中的像素转圈（AI Thinking Loaders 的 Pixel orbit
-  → `chat/PixelLoader.tsx`）、提问卡片（Questionnaire → `chat/Cards.tsx` 的 AskCard）。
+  → `packages/chat/src/components/PixelLoader.tsx`）、提问卡片（Questionnaire → `packages/chat/src/components/Cards.tsx` 的 AskCard）。
   **它是付费组件库：只照着看效果自己写，不要拷它的代码。**
 - **logo**：一只银灰色边境牧羊犬的狗头（扁平色块；herdr 是牧人、logo 是羊，gerdr 是帮他看住一群 agent 的狗）。
   `public/icon.svg` 是唯一的原稿，App 图标（`desktop/res/icon.png`）用仓库根上的 `make icon` 从它生成，改了要重跑。
@@ -96,13 +103,13 @@ src/lib/
 ## 常见的改法
 
 - **加一块显示**（比如每周 / 每月额度）：数据从哪来先看 `src/lib/api.ts`（已有接口）和 `src/lib/types.ts`；
-  只有前端能算出来的直接在组件里算。放在哪：侧栏底部 `Chrome.tsx` 的 Sidebar、pane 标题栏 `Panes.tsx`、输入框下面 `chat/Composer.tsx`。
+  只有前端能算出来的直接在组件里算。放在哪：侧栏底部 `Chrome.tsx` 的 Sidebar、pane 标题栏 `Panes.tsx`、输入框下面（`src/lib/chatHost.tsx` 的 composerBar 插槽）。
 - **加一个弹窗**：新建一个组件文件（照 `NameDialogs.tsx` 的写法，关掉用 `closeDialog()`），在 store 的 `Dialog` 类型里加一种 `kind`，
   再到 `Dialogs.tsx` 里挂上；用 `@/components/ui/dialog`。
 - **加一个页面**：新建 `src/pages/<名字>.tsx`（default export 一个组件），用 `import { Link } from "react-router"` 链过去。
 - **手机上的样子**：判断用 `usePhone()`（JS 里要分岔的）或 `max-md:` class（纯样式）。手机上没有 hover，
   只在悬停时露出来的按钮要加 `[@media(hover:none)]:opacity-100` 之类让它常显。
-- **改对话里某种东西的样子**：消息 `chat/MessageView.tsx`，工具调用 `chat/ToolCall.tsx`，审批 / 提问卡片 `chat/Cards.tsx`。
+- **改对话里某种东西的样子**：消息 `packages/chat/src/components/MessageView.tsx`，工具调用 `…/ToolCall.tsx`，审批 / 提问卡片 `…/Cards.tsx`。
 - **加快捷键**：`src/lib/keys.ts` 的 `MAC_KEYS`（Windows / Linux 上带 ⌘ 的会被去掉，要在 `PC_EXTRA` 里另给一个）+ `src/lib/actions.ts` 的 `runAction`。
 
 后端没有的数据（比如要查 API 用量）界面拿不到：告诉用户需要后端加接口，别在前端硬凑。

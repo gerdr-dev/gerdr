@@ -52,3 +52,14 @@ func keys(m map[string]*compiled) []string {
 	}
 	return out
 }
+
+func TestPackagesCSS(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "packages/chat/src"), 0o755)
+	os.WriteFile(filepath.Join(dir, "package.json"), []byte(`{"dependencies":{"@gerdr/chat":"workspace:*"}}`), 0o644)
+	os.WriteFile(filepath.Join(dir, "packages/chat/package.json"), []byte(`{"name":"@gerdr/chat"}`), 0o644)
+	os.WriteFile(filepath.Join(dir, "packages/chat/src/style.css"), []byte(`.gerdr-md{color:red}`), 0o644)
+	if css := string(packagesCSS(dir)); !strings.Contains(css, ".gerdr-md{color:red}") {
+		t.Fatalf("%q", css)
+	}
+}

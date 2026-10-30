@@ -7,8 +7,9 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { cn } from "@/lib/utils";
+} from "../ui/dropdown-menu";
+import { cn } from "../utils";
+import { t } from "../i18n";
 
 export type Opt = { value: string; name: string; description?: string };
 
@@ -61,7 +62,7 @@ function SetDefaultItem({ same, onClick, all }: { same: boolean; onClick: () => 
       <DropdownMenuSeparator />
       <DropdownMenuItem disabled={same} onClick={onClick} className="gap-2 text-[12px] text-muted-foreground">
         <Pin className="size-3.5" />
-        {same ? "已是新会话的默认" : all ? "把这些设为新会话的默认" : "设为新会话的默认"}
+        {same ? t("options.isDefault") : all ? t("options.setAllDefault") : t("options.setDefault")}
       </DropdownMenuItem>
     </>
   );

@@ -1,14 +1,8 @@
-import { ChevronDown, Play, SquareTerminal, Terminal } from "lucide-react";
-import { useContext, useState, useSyncExternalStore } from "react";
-import { toast } from "sonner";
+import { useContext, useSyncExternalStore } from "react";
 import { defaultComponents, defaultRehypePlugins, defaultRemarkPlugins, type Components, type StreamdownProps } from "streamdown";
-import { MessageResponse } from "@/components/ai-elements/message";
-import { api } from "@/lib/api";
-import { cn } from "@/lib/utils";
-import { basename, openPath, runInTerminal, terminalNear } from "@/lib/actions";
-import type { PaneLeaf } from "@/lib/layout";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { bareFileName, fileExists, localHref, onFileExists, rehypePaths } from "@/lib/paths";
+import { MessageResponse } from "../ai/message";
+import { chatHost, useChatHost } from "../host";
+import { bareFileName, fileExists, localHref, onFileExists, rehypePaths } from "../paths";
 import { ChatMedia, imageGroup, localPath, MediaGrid, rehypeImageGroups } from "./ChatMedia";
 import { SessionContext } from "./sessionContext";
 
@@ -34,8 +28,17 @@ const pathLink = "cursor-pointer text-brand underline decoration-brand/40 underl
 
 function A(props: any) {
   const session = useContext(SessionContext);
+  const host = useChatHost();
   const path: string | undefined = props["data-gerdr-path"] ?? localHref(props.href);
-  if (!path) return <DefaultA {...props} />;
+  if (!path || !host.openPath) {
+    if (!host.onLink || !props.href) return <DefaultA {...props} />;
+    // The host may take a link over (an app page link opens in its own view instead of a new tab)
+    return (
+      <span className="contents" onClickCapture={(e) => host.onLink!(props.href, e.nativeEvent) && (e.preventDefault(), e.stopPropagation())}>
+        <DefaultA {...props} />
+      </span>
+    );
+  }
   return (
     <a
       href="#"
@@ -43,7 +46,7 @@ function A(props: any) {
       className={pathLink}
       onClick={(e) => {
         e.preventDefault();
-        openPath(path, session?.cwd);
+        host.openPath?.(path, session?.cwd);
       }}
     >
       {props.children}
@@ -77,81 +80,13 @@ function bangCommand(text: string): string | null {
   return m ? m[1].trim() : null;
 }
 
-/**
- * 「运行」：主按钮在对话里跑 —— 等于在输入框里敲 `!命令`，gerdr 在会话目录里直接跑，输出进对话、跟着下一条消息带给 agent（hub/shell.go）。
- * 旁边的箭头还能放进终端跑（新开一个 / 会话旁边已经开着的那个）：终端能交互（选选项、输密码），代价是 agent 看不到输出。
- */
-function RunButton({ cmd, className }: { cmd: string; className?: string }) {
-  const session = useContext(SessionContext);
-  const [busy, setBusy] = useState(false);
-  // 旁边开着的终端：菜单打开时才找（布局一变就让对话里每个按钮重画不值得）
-  const [near, setNear] = useState<PaneLeaf | undefined>();
-  if (!session) return null;
-  const inChat = async () => {
-    setBusy(true);
-    try {
-      await api.shell(session.id, cmd);
-    } catch (e: any) {
-      toast.error(e.message ?? String(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-  const box = "inline-flex items-center text-[11px] leading-4 text-brand hover:bg-brand/10 disabled:opacity-50";
-  return (
-    <span className={cn("inline-flex items-stretch rounded-sm border border-brand/40", className)}>
-      <button
-        title={`在对话里运行：${cmd}\n目录：${session.cwd}\n输出会跟着你的下一条消息带给 agent`}
-        disabled={busy}
-        className={cn(box, "gap-0.5 px-1")}
-        onClick={inChat}
-      >
-        <Play className="size-2.5 fill-current" />
-        运行
-      </button>
-      <DropdownMenu onOpenChange={(o) => o && setNear(terminalNear(session.id))}>
-        <DropdownMenuTrigger asChild>
-          <button title="换个地方运行" className={cn(box, "border-l border-brand/40 px-0.5")}>
-            <ChevronDown className="size-3" />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-72">
-          <DropdownMenuItem onSelect={inChat} className="flex-col items-start gap-0">
-            <span className="flex items-center gap-1.5">
-              <Play className="size-3.5" />
-              在对话里运行
-            </span>
-            <span className="pl-5 text-[11px] text-muted-foreground">输出带给 agent；没有输入，要交互的命令会卡住</span>
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => runInTerminal(session.id, session.cwd, cmd, "new")} className="flex-col items-start gap-0">
-            <span className="flex items-center gap-1.5">
-              <SquareTerminal className="size-3.5" />
-              在新终端里运行
-            </span>
-            <span className="pl-5 text-[11px] text-muted-foreground">在右边开一个终端，能交互；agent 看不到输出</span>
-          </DropdownMenuItem>
-          {near?.term && (
-            <DropdownMenuItem onSelect={() => runInTerminal(session.id, session.cwd, cmd, "near")} className="flex-col items-start gap-0">
-              <span className="flex items-center gap-1.5">
-                <Terminal className="size-3.5" />
-                在当前终端里运行
-              </span>
-              <span className="max-w-full truncate pl-5 text-[11px] text-muted-foreground">敲进旁边开着的终端（{basename(near.term.cwd)}）</span>
-            </DropdownMenuItem>
-          )}
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </span>
-  );
-}
-
 // 行内代码：`! 命令` 旁边画「运行」。字从 hast 节点里取：路径插件可能把里面改成了链接
 // A bare file name (`README.md:45`) becomes a link once the server confirms it's in the session directory.
 function InlineCode(props: any) {
   const session = useContext(SessionContext);
   const text = hastText(props.node);
   const cmd = bangCommand(text);
-  const name = session?.cwd ? bareFileName(text) : undefined;
+  const name = session?.cwd && chatHost().openPath ? bareFileName(text) : undefined;
   const found = useSyncExternalStore(onFileExists, () => (name && session?.cwd ? fileExists(name, session.cwd) : undefined));
   const code = <DefaultCode {...props} />;
   if (name && found)
@@ -162,17 +97,18 @@ function InlineCode(props: any) {
         className={pathLink}
         onClick={(e) => {
           e.preventDefault();
-          openPath(name, session?.cwd);
+          chatHost().openPath?.(name, session?.cwd);
         }}
       >
         {code}
       </a>
     );
-  if (!cmd) return code;
+  const actions = cmd && session ? chatHost().codeActions?.(cmd, "bang", session) : undefined;
+  if (!actions) return code;
   return (
     <>
       {code}
-      <RunButton cmd={cmd} className="ml-1 align-middle" />
+      <span className="ml-1 inline-flex align-middle">{actions}</span>
     </>
   );
 }
@@ -184,12 +120,19 @@ function InlineCode(props: any) {
  * 普通的 bash 代码块不加：那多半是给人看的、或者 agent 自己要跑的，点一下就跑太冒失。
  */
 function CodeBlock(props: any) {
-  const lines = hastText(props.node)
+  const session = useContext(SessionContext);
+  const host = useChatHost();
+  const text = hastText(props.node);
+  // A language the host draws itself (```chart)
+  const lang = /language-([\w-]+)/.exec(String(props.className ?? props.node?.properties?.className ?? ""))?.[1];
+  const custom = lang ? host.codeBlocks?.[lang] : undefined;
+  if (custom) return <>{custom(text.replace(/\n$/, ""))}</>;
+  const lines = text
     .split("\n")
     .map((l) => l.trim())
     .filter(Boolean);
   const cmds = lines.map(bangCommand);
-  if (!cmds.length || cmds.some((c) => !c)) return <DefaultCode {...props} />;
+  if (!session || !host.codeActions || !cmds.length || cmds.some((c) => !c)) return <DefaultCode {...props} />;
   return (
     // 外框、字号、行距都和普通代码块一家：挂上同样的 data-streamdown，index.css 里 .gerdr-md 那几条（字号 0.86em、行距 1.5、
     // 淡底、单层框）一并套上；原来自己写 text-sm + 24px 行高，比旁边的代码块大一号、行距也松（用户报的）
@@ -200,7 +143,9 @@ function CodeBlock(props: any) {
             <span className="shrink-0 font-semibold text-brand">!</span>
             {/* 长命令折行显示全：要跑的东西得让人看全了再点，截成一行加省略号的话后半截看不到 */}
             <span className="min-w-0 flex-1 whitespace-pre-wrap [overflow-wrap:anywhere]">{c}</span>
-            <RunButton cmd={c!} className="shrink-0 font-sans opacity-40 transition-opacity group-hover/cmd:opacity-100 [@media(hover:none)]:opacity-100" />
+            <span className="shrink-0 font-sans opacity-40 transition-opacity group-hover/cmd:opacity-100 [@media(hover:none)]:opacity-100">
+              {host.codeActions!(c!, "bang", session)}
+            </span>
           </div>
         ))}
       </div>

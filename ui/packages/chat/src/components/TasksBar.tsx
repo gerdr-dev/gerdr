@@ -1,13 +1,13 @@
 import { Activity, Bot, CircleX, MessagesSquare, Square, SquareTerminal, Workflow } from "lucide-react";
-import { openSubagent } from "@/lib/actions";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { api } from "@/lib/api";
-import type { AgentTask, SessionSummary } from "@/lib/types";
-import { isCommandText } from "@/lib/transcript";
-import { cn } from "@/lib/utils";
+import { Button } from "../ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
+import { chatHost } from "../host";
+import { t as tr } from "../i18n";
+import type { AgentTask, ChatSession } from "../types";
+import { isCommandText } from "../transcript";
+import { cn } from "../utils";
 
 // 后台任务：输入框底栏里一个标签。有在跑的就显示「n 个后台任务」，点开是列表（停止 / 看结果）。
 // 和 Claude Code 自己的任务列表是同一份东西（CLI 报的 task_*）。
@@ -26,7 +26,14 @@ export function elapsed(from: number, to?: number) {
   return `${Math.floor(m / 60)}h${m % 60}m`;
 }
 
-const STATUS: Record<string, string> = { completed: "完成", failed: "失败", killed: "已停止", stopped: "已停止", cancelled: "已停止" };
+const statusText = (s: string) =>
+  s === "completed"
+    ? tr("task.completed")
+    : s === "failed"
+      ? tr("task.failed")
+      : s === "killed" || s === "stopped" || s === "cancelled"
+        ? tr("task.stopped")
+        : s;
 
 function useTick(on: boolean) {
   const [, set] = useState(0);
@@ -45,7 +52,7 @@ function useTick(on: boolean) {
 const SHOW_AFTER = 2000;
 
 /** `short`: the composer row has no room, show just the icon and the count (the list is still a tap away). */
-export function TasksChip({ session, short }: { session: SessionSummary; short?: boolean }) {
+export function TasksChip({ session, short }: { session: ChatSession; short?: boolean }) {
   const all = session.tasks ?? [];
   const running = all.filter((t) => t.status === "running");
   const [open, setOpen] = useState(false);
@@ -65,15 +72,15 @@ export function TasksChip({ session, short }: { session: SessionSummary; short?:
             "flex h-7 shrink-0 items-center gap-1 rounded-md px-1.5 text-[12px] text-muted-foreground hover:bg-muted hover:text-foreground",
             open && "bg-muted text-foreground",
           )}
-          title={`${running.length} 个后台任务`}
+          title={tr("task.count", { n: running.length })}
         >
           {/* 不转圈：对话里那条工具调用和状态行已经在转了 */}
           <Activity className="size-3.5" />
-          <span className="tabular-nums">{short ? running.length : `${running.length} 个后台任务`}</span>
+          <span className="tabular-nums">{short ? running.length : tr("task.count", { n: running.length })}</span>
         </button>
       </PopoverTrigger>
       <PopoverContent side="top" align="end" className="w-[min(28rem,90vw)] p-0 text-[12px]">
-        <div className="border-b px-3 py-2 text-muted-foreground">{running.length} 个后台任务在跑</div>
+        <div className="border-b px-3 py-2 text-muted-foreground">{tr("task.running", { n: running.length })}</div>
         <div className="max-h-72 divide-y overflow-auto">
           {/* 子 agent 起的任务挂在它下面（缩进），别看着像主 agent 自己在跑 */}
           {top.map((t) => (
@@ -119,24 +126,24 @@ export function TaskDoneCard({ sessionId, t, woke, command }: { sessionId: strin
         {isAgent && t.subagent ? `${t.subagent} · ` : ""}
         {t.description || t.id}
       </span>
-      <span className="shrink-0 rounded-sm bg-muted px-1 text-[11px]">{isAgent ? "子 agent" : "后台"}</span>
-      {!ok && <span className="shrink-0 text-[11px] text-bad">{STATUS[t.status] ?? t.status}</span>}
+      <span className="shrink-0 rounded-sm bg-muted px-1 text-[11px]">{isAgent ? tr("task.subagent") : tr("task.background")}</span>
+      {!ok && <span className="shrink-0 text-[11px] text-bad">{statusText(t.status)}</span>}
       {!boilerplate(t) && <span className="min-w-0 shrink truncate text-[11px]">{t.summary}</span>}
       <span className="shrink-0 text-[11px] tabular-nums opacity-70">
         {/* 成功时写明「跑完」：图标、文字、角标都和启动它的那条工具调用一样，不写看着像重复了一行 */}
-        {ok && "跑完 · "}
+        {ok && tr("task.doneDot")}
         {elapsed(t.startedAt, t.endedAt)}
-        {t.toolUses ? ` · ${t.toolUses} 次工具` : ""}
+        {t.toolUses ? tr("task.tools", { n: t.toolUses }) : ""}
       </span>
       {/* 它一结束 agent 就自己接着干了：交代下面这段话是怎么来的（transcript 的 turn_start auto） */}
-      {woke && <span className="shrink-0 text-[11px]">→ agent 接着处理</span>}
+      {woke && <span className="shrink-0 text-[11px]">{tr("task.woke")}</span>}
       <span className="flex-1" />
-      {isAgent && t.toolCallId && (
+      {isAgent && t.toolCallId && chatHost().openSubagent && (
         <button
           className="shrink-0 rounded-sm px-1.5 text-[11px] hover:bg-muted hover:text-foreground"
-          onClick={() => openSubagent(sessionId, t.toolCallId!, t.description)}
+          onClick={() => chatHost().openSubagent?.(sessionId, t.toolCallId!, t.description)}
         >
-          查看对话
+          {tr("task.viewChat")}
         </button>
       )}
     </div>
@@ -156,19 +163,24 @@ function TaskRow({ sessionId, t }: { sessionId: string; t: AgentTask }) {
           {t.description || t.id}
         </div>
         <div className="truncate text-[11px] text-muted-foreground">
-          {live ? (t.progress ? `${t.progress} · ` : "") : `${STATUS[t.status] ?? t.status} · `}
+          {live ? (t.progress ? `${t.progress} · ` : "") : `${statusText(t.status)} · `}
           {elapsed(t.startedAt, t.endedAt)}
-          {t.toolUses ? ` · ${t.toolUses} 次工具调用` : ""}
+          {t.toolUses ? tr("task.toolCalls", { n: t.toolUses }) : ""}
           {!live && t.summary ? ` · ${t.summary}` : ""}
         </div>
       </div>
-      {t.toolCallId && (t.type === "local_agent" || t.subagent) && (
-        <Button size="sm" variant="ghost" className="h-6 shrink-0 px-2 text-[11px]" onClick={() => openSubagent(sessionId, t.toolCallId!, t.description)}>
+      {t.toolCallId && (t.type === "local_agent" || t.subagent) && chatHost().openSubagent && (
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-6 shrink-0 px-2 text-[11px]"
+          onClick={() => chatHost().openSubagent?.(sessionId, t.toolCallId!, t.description)}
+        >
           <MessagesSquare className="size-3" />
-          查看对话
+          {tr("task.viewChat")}
         </Button>
       )}
-      {live && (
+      {live && chatHost().stopTask && (
         <Button
           size="sm"
           variant="ghost"
@@ -177,7 +189,7 @@ function TaskRow({ sessionId, t }: { sessionId: string; t: AgentTask }) {
           onClick={async () => {
             setStopping(true);
             try {
-              await api.stopTask(sessionId, t.id);
+              await chatHost().stopTask?.(sessionId, t.id);
             } catch (e: any) {
               toast.error(e.message);
             } finally {
@@ -186,7 +198,7 @@ function TaskRow({ sessionId, t }: { sessionId: string; t: AgentTask }) {
           }}
         >
           <Square className="size-3" />
-          停止
+          {tr("task.stop")}
         </Button>
       )}
     </div>

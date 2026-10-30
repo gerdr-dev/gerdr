@@ -1,4 +1,5 @@
-import { cn } from "@/lib/utils";
+import { cn } from "../utils";
+import { t } from "../i18n";
 
 /*
  * claude 的 /usage 输出画成卡片。
@@ -52,8 +53,8 @@ function parse(text: string) {
 function limitLabel(s: string) {
   const m = /^Current (session|week)(?:\s*\((.+)\))?$/.exec(s);
   if (!m) return s;
-  const base = m[1] === "session" ? "当前会话" : "本周";
-  const sub = m[2] === "all models" ? "全部模型" : m[2];
+  const base = m[1] === "session" ? t("usage.session") : t("usage.week");
+  const sub = m[2] === "all models" ? t("usage.allModels") : m[2];
   return sub ? `${base} · ${sub}` : base;
 }
 
@@ -64,7 +65,7 @@ function resetText(s: string, now = Date.now()) {
   const plain = s.replace(/\s*\([^)]*\)\s*$/, "");
   const m = /^([A-Z][a-z]{2}) (\d{1,2})(?: at (\d{1,2})(?::(\d{2}))?\s*(am|pm))?$/i.exec(plain);
   const mon = m ? MONTHS.indexOf(m[1].slice(0, 3)) : -1;
-  if (!m || mon < 0) return `${plain} 重置`;
+  if (!m || mon < 0) return t("usage.resets", { when: plain });
   let h = m[3] ? Number(m[3]) % 12 : 0;
   if (m[5]?.toLowerCase() === "pm") h += 12;
   const min = m[4] ? Number(m[4]) : 0;
@@ -73,11 +74,15 @@ function resetText(s: string, now = Date.now()) {
   if (d.getTime() < now - 86400e3 * 30) d.setFullYear(d.getFullYear() + 1);
   const left = d.getTime() - now;
   const when = `${mon + 1}/${m[2]} ${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
-  if (left <= 0) return `${when} 重置`;
+  if (left <= 0) return t("usage.resets", { when });
   const hours = left / 3600e3;
   const rest =
-    Math.round(left / 60e3) < 60 ? `${Math.max(1, Math.round(left / 60e3))}m` : hours < 48 ? `${Math.round(hours)}h` : `${Math.round(hours / 24)} 天`;
-  return `${when} 重置 · 还剩 ${rest}`;
+    Math.round(left / 60e3) < 60
+      ? `${Math.max(1, Math.round(left / 60e3))}m`
+      : hours < 48
+        ? `${Math.round(hours)}h`
+        : t("usage.days", { n: Math.round(hours / 24) });
+  return t("usage.resetsLeft", { when, rest });
 }
 
 function tone(pct: number) {
@@ -96,7 +101,7 @@ function Bar({ pct, plain, className }: { pct: number; plain?: boolean; classNam
 // 「Last 24h」→「近 24 小时」，「Last 7d」→「近 7 天」
 function sectionTitle(s: string) {
   const m = /^Last (\d+)(h|d)$/.exec(s);
-  return m ? `近 ${m[1]} ${m[2] === "h" ? "小时" : "天"}` : s;
+  return m ? t(m[2] === "h" ? "usage.lastHours" : "usage.lastDays", { n: m[1] }) : s;
 }
 
 export function UsageCard({ text }: { text: string }) {
@@ -104,10 +109,10 @@ export function UsageCard({ text }: { text: string }) {
   return (
     <div className="my-1 overflow-hidden rounded-lg border bg-card text-[13px]">
       <div className="flex items-baseline justify-between gap-3 border-b px-3 py-2">
-        <span className="font-medium">用量</span>
+        <span className="font-medium">{t("usage.title")}</span>
         {head.length > 0 && (
           <span className="min-w-0 truncate text-[11px] text-muted-foreground" title={head.join("\n")}>
-            {/subscription/i.test(head[0]) ? "走的是订阅额度" : head.join(" ")}
+            {/subscription/i.test(head[0]) ? t("usage.subscription") : head.join(" ")}
           </span>
         )}
       </div>
@@ -128,10 +133,10 @@ export function UsageCard({ text }: { text: string }) {
       {sections.length > 0 && (
         <div className="border-t px-3 py-3">
           <div className="mb-2 flex items-baseline justify-between gap-3">
-            <span className="shrink-0 text-[12px] font-medium">用量花在哪</span>
+            <span className="shrink-0 text-[12px] font-medium">{t("usage.where")}</span>
             {note && (
               <span className="min-w-0 truncate text-[11px] text-muted-foreground" title={note}>
-                {/^Approximate/.test(note) ? "估算 · 只算这台机器 · 各项有重叠" : note}
+                {/^Approximate/.test(note) ? t("usage.estimate") : note}
               </span>
             )}
           </div>

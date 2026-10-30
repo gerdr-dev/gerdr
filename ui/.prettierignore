@@ -4,3 +4,7 @@ src/components/ai-elements/
 node_modules/
 # 末尾那段 xterm.css 是原样搬的上游（升级 xterm 时要对着 diff），而 CSS 的 prettier-ignore 只管下一条规则，整个文件不格式化
 src/index.css
+# The chat package keeps its own copies of those upstream components
+packages/chat/src/ui/
+packages/chat/src/ai/
+packages/*/dist/

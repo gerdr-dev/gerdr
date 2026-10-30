@@ -1,10 +1,9 @@
 import { AlertCircle, ExternalLink, FileText, FolderOpen, Loader2, RotateCw } from "lucide-react";
 import { useContext, useEffect, useState } from "react";
-import { openPath } from "@/lib/actions";
-import { api } from "@/lib/api";
-import { cn } from "@/lib/utils";
-import { isNative, nativeOpenPath } from "@/lib/native";
-import { openLightbox } from "../Lightbox";
+import { chatHost } from "../host";
+import { t } from "../i18n";
+import { cn } from "../utils";
+import { openLightbox } from "./Lightbox";
 import { SessionContext } from "./sessionContext";
 
 // 对话里的图片、视频、音频、PDF（照 shuttle 的 ChatMedia）：agent 用 Markdown 图片语法引用，
@@ -48,7 +47,9 @@ export function localPath(src: unknown): string | null {
   return s;
 }
 
-const rawURL = (path: string, cwd?: string) => `/api/fs/raw?path=${encodeURIComponent(path)}&cwd=${encodeURIComponent(cwd ?? "")}`;
+const rawURL = (path: string, cwd?: string) => chatHost().fileURL(path, cwd);
+// No fileStat on the host: assume the file is there (a retry just tries loading it again).
+const statOf = (path: string, cwd?: string) => chatHost().fileStat?.(path, cwd) ?? Promise.resolve({ size: 1, mtime: 0 });
 const nameOf = (p: string) => bare(p).split("/").pop() || p;
 
 /** 一张图 / 一段视频或音频 / 一份 PDF */
@@ -83,7 +84,7 @@ export function ChatMedia({ src, alt }: { src: string; alt?: string }) {
     const t = setTimeout(
       () => {
         const probe = path
-          ? api.fileStat(path, cwd).then((st) => st.size > 0)
+          ? statOf(path, cwd).then((st) => st.size > 0)
           : VIDEO.test(k) || AUDIO.test(k)
             ? Promise.resolve(true) // remote stream: nothing cheaper to ask than trying it again
             : new Promise<boolean>((ok) => {
@@ -121,7 +122,7 @@ export function ChatMedia({ src, alt }: { src: string; alt?: string }) {
     if (!streamed) return;
     let live = true;
     setVersion(null);
-    api.fileStat(path!, cwd).then(
+    statOf(path!, cwd).then(
       (st) => live && (st.size > 0 ? setVersion(`${st.mtime}-${st.size}`) : onError()),
       () => live && onError(),
     );
@@ -138,7 +139,7 @@ export function ChatMedia({ src, alt }: { src: string; alt?: string }) {
       <button
         type="button"
         disabled={!done}
-        title={done ? `${path ?? src}\n点击重试` : (path ?? src)}
+        title={done ? `${path ?? src}\n${t("media.clickRetry")}` : (path ?? src)}
         onClick={() => {
           // One more probe, right away. The chip stays put (spinner while it runs) and the media only comes back if the
           // file is there: putting the broken <img> back to find out made the row change height twice per click.
@@ -147,9 +148,7 @@ export function ChatMedia({ src, alt }: { src: string; alt?: string }) {
         className="my-1 inline-flex max-w-full items-center gap-1.5 rounded-md border border-border/60 px-2 py-1 align-middle text-xs text-muted-foreground enabled:hover:bg-accent"
       >
         {done ? <AlertCircle className="size-3.5 shrink-0 text-bad" /> : <Loader2 className="size-3.5 shrink-0 animate-spin" />}
-        <span className="min-w-0 truncate">
-          {done ? "打不开" : "加载中"}：{path ?? src}
-        </span>
+        <span className="min-w-0 truncate">{done ? t("media.cantOpen", { src: path ?? src }) : t("media.loading", { src: path ?? src })}</span>
         {done && <RotateCw className="size-3.5 shrink-0" />}
       </button>
     );
@@ -173,7 +172,7 @@ export function ChatMedia({ src, alt }: { src: string; alt?: string }) {
     body = (
       <button
         type="button"
-        onClick={() => (path ? openPath(path, cwd) : window.open(src, "_blank", "noopener"))}
+        onClick={() => (path && chatHost().openPath ? chatHost().openPath!(path, cwd) : window.open(path ? rawURL(path, cwd) : src, "_blank", "noopener"))}
         className="inline-flex max-w-full items-center gap-2 rounded-md border border-border/60 px-3 py-2 text-[13px] hover:bg-accent"
       >
         <FileText className="size-4 shrink-0 text-bad" />
@@ -187,7 +186,7 @@ export function ChatMedia({ src, alt }: { src: string; alt?: string }) {
         src={url}
         alt={name}
         loading="lazy"
-        title="点击放大"
+        title={t("media.zoom")}
         onError={onError}
         onLoad={onLoad}
         onClick={(e) => openLightbox([{ url, alt: name, path: path ?? undefined, cwd }], 0, e.currentTarget)}
@@ -241,18 +240,19 @@ function ChatVideo({ url, ratioKey, onError, onLoad }: { url?: string; ratioKey:
 /** 本机文件下面那行：文件名 + （App 里）用系统程序打开、在访达里显示 */
 function LocalActions({ path, cwd, name }: { path: string; cwd?: string; name: string }) {
   const btn = "inline-flex h-6 shrink-0 items-center gap-1 rounded-md px-1.5 hover:bg-accent hover:text-foreground";
+  const openNative = chatHost().openNative;
   return (
     <span className="inline-flex max-w-full items-center gap-1 text-xs text-muted-foreground">
       <span className="min-w-0 truncate" title={path}>
         {name}
       </span>
-      {isNative() && (
+      {openNative && (
         <>
-          <button type="button" className={btn} title="用系统默认程序打开" onClick={() => nativeOpenPath(path, cwd, false)}>
-            <ExternalLink className="size-3.5" /> 打开
+          <button type="button" className={btn} title={t("media.openWithApp")} onClick={() => openNative(path, cwd, false)}>
+            <ExternalLink className="size-3.5" /> {t("media.open")}
           </button>
-          <button type="button" className={btn} title={path} onClick={() => nativeOpenPath(path, cwd, true)}>
-            <FolderOpen className="size-3.5" /> {navigator.platform.includes("Mac") ? "在访达中显示" : "在文件夹中显示"}
+          <button type="button" className={btn} title={path} onClick={() => openNative(path, cwd, true)}>
+            <FolderOpen className="size-3.5" /> {navigator.platform.includes("Mac") ? t("media.revealFinder") : t("media.revealFolder")}
           </button>
         </>
       )}

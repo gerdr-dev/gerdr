@@ -2,13 +2,14 @@ import { Check, CheckCircle2, Circle, CircleDot, CornerDownRight, HelpCircle, Sh
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Markdown } from "./Markdown";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { api } from "@/lib/api";
-import type { GData, PlanEntry } from "@/lib/transcript";
-import { cn } from "@/lib/utils";
-import { useKept } from "@/lib/kept";
-import { registerAsk } from "@/lib/askkeys";
+import { Button } from "../ui/button";
+import { Checkbox } from "../ui/checkbox";
+import { chatHost } from "../host";
+import { t } from "../i18n";
+import type { GData, PlanEntry } from "../transcript";
+import { cn } from "../utils";
+import { useKept } from "../kept";
+import { registerAsk } from "../askkeys";
 
 export function PlanCard({ entries }: { entries: PlanEntry[] }) {
   if (!entries.length) return null;
@@ -16,7 +17,7 @@ export function PlanCard({ entries }: { entries: PlanEntry[] }) {
   return (
     <div className="my-1 rounded-lg border bg-card px-3 py-2">
       <div className="mb-1 flex items-center justify-between text-[11px] text-muted-foreground">
-        <span>计划</span>
+        <span>{t("card.plan")}</span>
         <span>
           {done}/{entries.length}
         </span>
@@ -64,14 +65,14 @@ export function PermissionCard({ sessionId, data }: { sessionId: string; data: G
       // 和工具调用那一行对齐（ToolCall 的 trigger：-ml-1.5 px-1.5、图标 3.5、gap-2）
       <div className="-ml-1.5 flex items-center gap-2 px-1.5 py-[3px] text-[13px] text-muted-foreground">
         {ok ? <Check className="size-3.5 shrink-0 text-ok" /> : <X className="size-3.5 shrink-0 text-bad" />}
-        {cancelled && !answer ? "审批已作废" : (opt?.name ?? answer)}
+        {cancelled && !answer ? t("card.permissionVoid") : (opt?.name ?? answer)}
       </div>
     );
   }
   const choose = async (optionId: string) => {
     setBusy(optionId);
     try {
-      await api.answer(sessionId, data.reqId, { optionId });
+      await chatHost().answer(sessionId, data.reqId, { optionId });
     } catch (e: any) {
       toast.error(e.message);
       setBusy(undefined);
@@ -81,7 +82,7 @@ export function PermissionCard({ sessionId, data }: { sessionId: string; data: G
     <div className="my-1.5 rounded-lg border border-warn/60 bg-warn/8 p-3" data-attention>
       <div className="flex items-center gap-2 text-[13px] font-medium">
         <ShieldAlert className="size-4 text-warn" />
-        <span className="min-w-0 truncate">{tc.title ?? "要你批准"}</span>
+        <span className="min-w-0 truncate">{tc.title ?? t("card.needsApproval")}</span>
       </div>
       {plan && (
         <div className="gerdr-md mt-2 max-h-[50vh] overflow-auto rounded-md border bg-card px-3 py-2 text-[13px]">
@@ -137,11 +138,11 @@ export function AskCard({ sessionId, data }: { sessionId: string; data: GData["a
           <div className="flex items-center gap-1.5">
             {data.reason === "replied" ? (
               <>
-                <CornerDownRight className="size-3.5" /> 没选，在对话里直接回了
+                <CornerDownRight className="size-3.5" /> {t("ask.repliedInChat")}
               </>
             ) : (
               <>
-                <X className="size-3.5" /> {data.reason === "skipped" ? "跳过了（已告诉 agent 不用再问）" : "没回答（这一轮被打断了）"}
+                <X className="size-3.5" /> {data.reason === "skipped" ? t("ask.skipped") : t("ask.unanswered")}
               </>
             )}
           </div>
@@ -150,7 +151,7 @@ export function AskCard({ sessionId, data }: { sessionId: string; data: GData["a
             <div key={q.id} className="flex items-start gap-1.5">
               <Check className="mt-0.5 size-3.5 shrink-0 text-ok" />
               <span>
-                {q.question} → <span className="text-foreground">{(data.answers?.[q.id] ?? []).join(", ") || "（空）"}</span>
+                {q.question} → <span className="text-foreground">{(data.answers?.[q.id] ?? []).join(", ") || t("ask.empty")}</span>
               </span>
             </div>
           ))
@@ -171,7 +172,7 @@ export function AskCard({ sessionId, data }: { sessionId: string; data: GData["a
     }
     setBusy(true);
     try {
-      await api.answer(sessionId, data.reqId, { answers });
+      await chatHost().answer(sessionId, data.reqId, { answers });
     } catch (e: any) {
       toast.error(e.message);
       setBusy(false);
@@ -275,11 +276,7 @@ export function AskCard({ sessionId, data }: { sessionId: string; data: GData["a
       {/* 不写「需要你回答」：卡片本身就说明了。只剩题号（多题时）和题目的小标签 */}
       <div className="mb-1.5 flex items-center gap-1.5 text-[12px] text-muted-foreground">
         <HelpCircle className="size-3.5 text-brand" />
-        {qs.length > 1 && (
-          <span>
-            问题 {i + 1} / {qs.length}
-          </span>
-        )}
+        {qs.length > 1 && <span>{t("ask.progress", { i: i + 1, n: qs.length })}</span>}
         {q.header && (
           <span>
             {qs.length > 1 && "· "}
@@ -332,7 +329,7 @@ export function AskCard({ sessionId, data }: { sessionId: string; data: GData["a
             ref={otherRef}
             className="w-full rounded-lg border border-dashed bg-transparent px-2.5 py-2 text-[13px] outline-none placeholder:text-muted-foreground/70 focus:border-solid focus:border-ring/60"
             type={q.secret ? "password" : "text"}
-            placeholder={q.options?.length ? "其他，自己写…" : "你的回答…"}
+            placeholder={q.options?.length ? t("ask.other") : t("ask.yourAnswer")}
             value={other[q.id] ?? ""}
             disabled={busy}
             onChange={(e) => setOther({ ...other, [q.id]: e.target.value })}
@@ -358,25 +355,27 @@ export function AskCard({ sessionId, data }: { sessionId: string; data: GData["a
       <div className="mt-3 flex items-center gap-2">
         {i > 0 && (
           <Button size="sm" variant="ghost" disabled={busy} onClick={() => setPage(i - 1)}>
-            上一题
+            {t("ask.prev")}
           </Button>
         )}
-        <span className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground max-md:hidden">
-          ↑↓ 选 · 数字直选 · ↵ 确定{qs.length > 1 && " · ←→ 翻题"} · 或直接在下面输入框里回复
-        </span>
+        <span className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground max-md:hidden">{qs.length > 1 ? t("ask.keysPaged") : t("ask.keys")}</span>
         <span className="flex-1 md:hidden" />
         <Button
           size="sm"
           variant="ghost"
           disabled={busy}
-          title="告诉 agent 你不想选、别再问这个问题"
-          onClick={() => api.answer(sessionId, data.reqId, { cancelled: true, reason: "skipped" }).catch(() => {})}
+          title={t("ask.skipTitle")}
+          onClick={() =>
+            chatHost()
+              .answer(sessionId, data.reqId, { cancelled: true, reason: "skipped" })
+              .catch(() => {})
+          }
         >
-          跳过
+          {t("ask.skip")}
         </Button>
         {!instant && (
           <Button size="sm" className="rounded-full pr-2 pl-4" disabled={busy} onClick={() => next()}>
-            {last ? "提交" : "继续"}
+            {last ? t("ask.submit") : t("ask.next")}
             <span className="rounded-sm border border-current/30 px-1 text-[10px] opacity-70">↵</span>
           </Button>
         )}

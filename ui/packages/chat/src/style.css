@@ -1,0 +1,216 @@
+/* @gerdr/chat's own CSS: the conversation's Markdown typography (.gerdr-md) and the running loader. It uses the
+   theme tokens (see tokens.css). gerdr serves it from source (uisite adds a workspace package's src/style.css after
+   the app's index.css); the npm build puts it into dist/style.css with the Tailwind utilities the components use. */
+
+/* The few resets the components count on (Tailwind's preflight has them; an app without it still renders right),
+   scoped to the chat and in the base layer so every utility still wins. */
+@layer base {
+  [data-gerdr-chat] :where(*, ::before, ::after) {
+    box-sizing: border-box;
+    border: 0 solid;
+  }
+  [data-gerdr-chat] :where(button, input, textarea, select) {
+    font: inherit;
+    color: inherit;
+    background: transparent;
+    margin: 0;
+    padding: 0;
+  }
+  [data-gerdr-chat] :where(p, h1, h2, h3, h4, ol, ul, pre, figure) {
+    margin: 0;
+  }
+}
+
+/* 对话里的 Markdown 排版。streamdown 自带的 class（段落 space-y-4、标题 mt-6 text-3xl、列表 list-inside + li py-1、
+   行内代码 text-sm px-1.5）是给聊天气泡配的，放进一长串 agent 输出里又松又大，读起来不如终端。
+   这里故意不放进 layer：streamdown 的 class 在 utilities 层，写在 components 层压不过（以前那条行内代码样式就一直没生效）。
+   作用范围只在 .gerdr-md 里面，用 data-streamdown 认元素，不会波及别处。 */
+.gerdr-md {
+  font-size: 1em;
+  line-height: 1.7;
+  /* A long path or URL in prose (`~/.codex/config.toml）。`) has no break opportunity, so on a phone it pushed the
+     whole chat into horizontal scroll. break-word only splits a word when it would overflow, and unlike `anywhere`
+     it leaves min-content alone, so table columns don't collapse. */
+  overflow-wrap: break-word;
+}
+/* 块之间：段落 / 列表 / 代码块统一一个间距，标题上面多留一点、下面贴着正文。
+   （第一版收得太紧，长回复读着累，放松到现在这档：行高 1.7、段间 0.85em；列表项之间照 Codex 几乎不留缝，只靠行高） */
+.gerdr-md > div > * {
+  margin-block: 0;
+}
+.gerdr-md > div > * + * {
+  margin-top: 0.85em;
+}
+.gerdr-md > div > [data-streamdown^="heading-"]:not(:first-child) {
+  margin-top: 1.4em;
+}
+.gerdr-md > div > [data-streamdown^="heading-"] + * {
+  margin-top: 0.45em;
+}
+.gerdr-md [data-streamdown^="heading-"] {
+  font-weight: 600;
+  line-height: 1.4;
+  font-size: 1em;
+  margin-bottom: 0;
+}
+/* 标题只比正文大一点点（三级起和正文一样大，只靠加粗）：agent 的回复里 ## 很多，原来 1.15em 一段段像大标题，太抢（用户报的） */
+.gerdr-md [data-streamdown="heading-1"] {
+  font-size: 1.15em;
+}
+.gerdr-md [data-streamdown="heading-2"] {
+  font-size: 1.05em;
+}
+/* 列表：符号挂在外面（换行时文字对齐，不钻到圆点底下），项之间只留一点缝 */
+.gerdr-md :is([data-streamdown="unordered-list"], [data-streamdown="ordered-list"]) {
+  list-style-position: outside;
+  padding-left: 1.4em;
+}
+.gerdr-md [data-streamdown="list-item"] {
+  padding-block: 0;
+}
+.gerdr-md [data-streamdown="list-item"] + [data-streamdown="list-item"] {
+  margin-top: 0.1em;
+}
+.gerdr-md [data-streamdown="list-item"] > :is([data-streamdown="unordered-list"], [data-streamdown="ordered-list"]) {
+  margin-top: 0.1em;
+  padding-left: 1.2em;
+}
+.gerdr-md [data-streamdown="list-item"]::marker {
+  color: var(--muted-foreground);
+}
+.gerdr-md [data-streamdown="inline-code"] {
+  font-size: 0.86em;
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  background: var(--muted);
+  overflow-wrap: anywhere;
+}
+/* 代码块：同样是两层框（外层 bg-sidebar 卡片 + 里面再一个带边框的代码区）。只留一层：外框 + 淡底，
+   代码区透明无边框；没写语言时顶上那条标题栏是空的，整条去掉；复制 / 下载按钮悬停才出来。 */
+.gerdr-md [data-streamdown="code-block"] {
+  padding: 0;
+  gap: 0;
+  border-radius: var(--radius);
+  background: color-mix(in oklch, var(--muted) 45%, transparent);
+  overflow: hidden;
+}
+/* streamdown 给代码块写了行内的 content-visibility: auto（占位 200px）：屏幕外的块浏览器不排版、先按 200px 算，
+   滚到跟前才排成真实高度。虚拟列表里这一行刚挂上（还在屏幕外的预渲染区）时被量成占位高度，滚近了又变回真的 ——
+   整段内容被拽一截再弹回来，往上翻一闪一闪（用户报的；逐帧量过：同一行 899 → 753px，DOM 一个字节没变）。
+   行内样式只能 !important 压 */
+.gerdr-md [style*="content-visibility"] {
+  content-visibility: visible !important;
+}
+.gerdr-md [data-streamdown="code-block-header"] {
+  height: 1.9em;
+  padding-inline: 0.75em;
+  border-bottom: 1px solid var(--border);
+}
+.gerdr-md [data-streamdown="code-block-header"]:has(> span:empty) {
+  display: none;
+}
+.gerdr-md [data-streamdown="code-block-body"] {
+  font-size: 0.86em;
+  line-height: 1.5;
+  padding: 0.6em 0.8em;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.gerdr-md [data-streamdown="code-block-body"] pre {
+  background: transparent;
+}
+.gerdr-md [data-streamdown="code-block"] > div:has(> [data-streamdown="code-block-actions"]) {
+  top: 4px;
+  right: 4px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.gerdr-md [data-streamdown="code-block"]:hover > div:has(> [data-streamdown="code-block-actions"]) {
+  opacity: 1;
+}
+@media (hover: none) {
+  .gerdr-md [data-streamdown="code-block"] > div:has(> [data-streamdown="code-block-actions"]) {
+    opacity: 1;
+  }
+}
+.gerdr-md [data-streamdown="blockquote"] {
+  font-style: normal;
+  border-left-width: 3px;
+  padding-left: 0.8em;
+}
+.gerdr-md [data-streamdown="horizontal-rule"] {
+  margin-block: 1em;
+}
+/* 表格：streamdown 在表格外面又套一层带边框、底色、p-2 的卡片，顶上单独一行放按钮 —— 两层框。
+   外层拆掉，只留表格自己那层；复制 / 下载 / 全屏浮在右上角，悬停才出来。
+   （全屏那份是 portal 到 body 的，不在 .gerdr-md 里，不受影响） */
+/* streamdown 给表格 / 代码块的滚动区写了行内 max-height（表格 300px、代码块 400px）：长一点的就被截成
+   一个框里滚，和外面的对话列表两层滚动。对话里不需要，整段铺开（行内样式只能 !important 压） */
+.gerdr-md [data-streamdown="table-wrapper"] > div:last-child,
+.gerdr-md [data-streamdown="code-block-body"] {
+  max-height: none !important;
+}
+.gerdr-md [data-streamdown="table-wrapper"] {
+  position: relative;
+  padding: 0;
+  gap: 0;
+  border: 0;
+  background: transparent;
+}
+.gerdr-md [data-streamdown="table-wrapper"] > div:first-child:not(:last-child) {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 10;
+  padding: 2px;
+  border-radius: 6px;
+  background: var(--background);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.gerdr-md [data-streamdown="table-wrapper"]:hover > div:first-child:not(:last-child) {
+  opacity: 1;
+}
+@media (hover: none) {
+  .gerdr-md [data-streamdown="table-wrapper"] > div:first-child:not(:last-child) {
+    opacity: 1;
+  }
+}
+/* 表格：格子留足内边距、行高放开，一格折成好几行时字不挤在一起；顶对齐 —— 居中的话一行字的格子
+   飘在高格子中间，横着扫一行时眼睛对不上。 */
+.gerdr-md :is([data-streamdown="table-cell"], [data-streamdown="table-header-cell"]) {
+  font-size: 0.93em;
+  line-height: 1.6;
+  padding: 0.6em 1em;
+  vertical-align: top;
+}
+
+/* 运行中的 loading（chat/PixelLoader.tsx）：外圈每格亮一下再渐暗，按位置错开起点 → 一颗带尾巴的光点在转。 */
+@keyframes gerdr-pixel-orbit {
+  0% {
+    opacity: 1;
+  }
+  45%,
+  100% {
+    opacity: 0.18;
+  }
+}
+@keyframes gerdr-pixel-breathe {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+.gerdr-pixel-orbit {
+  animation: gerdr-pixel-orbit 1.2s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .gerdr-pixel-orbit {
+    animation: none;
+    opacity: 0.6;
+  }
+}

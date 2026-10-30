@@ -15,6 +15,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -31,10 +32,15 @@ type manifest struct {
 
 // skipFile：不算界面源码的（和 Makefile 里 `make ui` 的 rsync 排除项一致，两边算出的版本号才对得上）。
 func skipFile(rel string) bool {
-	for _, part := range strings.Split(rel, "/") {
+	parts := strings.Split(rel, "/")
+	for _, part := range parts {
 		if part == "node_modules" || part == ".git" {
 			return true
 		}
+	}
+	// A workspace package's build output (npm only; gerdr serves its src/)
+	if parts[0] == "packages" && slices.Contains(parts[1:len(parts)-1], "dist") {
+		return true
 	}
 	// .gitignore 不算：界面目录的那份是 gerdr 自己写的（gitmerge.go）
 	return rel == ".gitkeep" || rel == ".gitignore" || rel == manifestName || strings.HasSuffix(rel, ".tsbuildinfo") || strings.HasSuffix(rel, ".DS_Store")

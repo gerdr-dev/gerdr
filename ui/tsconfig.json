@@ -16,7 +16,11 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "baseUrl": ".",
-    "paths": { "@/*": ["./src/*"] }
+    "paths": {
+      "@/*": ["./src/*"],
+      "@gerdr/chat": ["./packages/chat/src/index.ts"],
+      "@gerdr/chat/*": ["./packages/chat/src/*"]
+    }
   },
-  "include": ["src"]
+  "include": ["src", "packages/chat/src"]
 }

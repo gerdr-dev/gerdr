@@ -90,3 +90,21 @@ func localKey(local map[string]string) string {
 	h := sha256.Sum256([]byte(strings.Join(keys, "\n")))
 	return hex.EncodeToString(h[:8])
 }
+
+// packagesCSS is the src/style.css of every workspace package, in name order, to go after the app's index.css.
+func packagesCSS(dir string) []byte {
+	local := localPackages(dir)
+	names := make([]string, 0, len(local))
+	for n := range local {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	var out []byte
+	for _, n := range names {
+		if b, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(local[n]), "src", "style.css")); err == nil {
+			out = append(out, "\n/* "+n+" */\n"...)
+			out = append(out, b...)
+		}
+	}
+	return out
+}

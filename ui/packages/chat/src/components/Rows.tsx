@@ -1,8 +1,9 @@
 import { ChevronDown, Wrench } from "lucide-react";
 import { memo, type ReactNode } from "react";
 import { StatusLine } from "./StatusLine";
-import type { GMessage, GPart, ToolPart } from "@/lib/transcript";
-import { cn } from "@/lib/utils";
+import type { GMessage, GPart, ToolPart } from "../transcript";
+import { cn } from "../utils";
+import { t, type MessageKey } from "../i18n";
 import { childTools, MessageView, partVisible, renderPart } from "./MessageView";
 
 // 对话是虚拟列表（react-virtuoso），只渲染屏幕附近的行。长对话卡的是两样：DOM 太多、每次更新都要重排一长串 markdown。
@@ -93,11 +94,11 @@ function youngTest(now: number, out: { wake?: number }) {
   };
 }
 
-const KIND_TEXT: Record<string, [string, string]> = {
-  execute: ["跑了", "条命令"],
-  read: ["读了", "个文件"],
-  search: ["搜了", "次"],
-  fetch: ["抓了", "个网页"],
+const KIND_TEXT: Record<string, MessageKey> = {
+  execute: "group.ran",
+  read: "group.read",
+  search: "group.searched",
+  fetch: "group.fetched",
 };
 
 /** 「跑了 5 条命令、读了 2 个文件，思考 3 次」 */
@@ -127,12 +128,13 @@ function summarize(parts: GPart[]): { summary: string; failed: number } {
   }
   const bits = Object.keys(KIND_TEXT)
     .filter((k) => n[k])
-    .map((k) => `${KIND_TEXT[k][0]} ${n[k]} ${KIND_TEXT[k][1]}`);
-  if (n.other) bits.push(`调了 ${n.other} 次工具`);
-  let summary = bits.join("、");
-  if (think) summary += `${summary ? "，" : ""}思考 ${think} 次`;
-  if (tasks) summary += `${summary ? "，" : ""}${tasks} 个后台任务`;
-  if (denied) summary += `${summary ? "，" : ""}拒了 ${denied} 次`;
+    .map((k) => t(KIND_TEXT[k], { n: n[k] }));
+  if (n.other) bits.push(t("group.tools", { n: n.other }));
+  let summary = bits.join(t("list.sep"));
+  const more = (s: string) => (summary += (summary ? t("group.sep") : "") + s);
+  if (think) more(t("group.thought", { n: think }));
+  if (tasks) more(t("task.count", { n: tasks }));
+  if (denied) more(t("group.denied", { n: denied }));
   return { summary, failed };
 }
 
@@ -262,7 +264,7 @@ function GroupHeader({ row, onToggle }: { row: Extract<Row, { kind: "group" }>; 
       {/* 在跑时底下露着最新那一块，它自己会转圈；组头再转就是一屏好几个 loading */}
       <Wrench className="size-3.5 shrink-0" />
       <span className="min-w-0 truncate">{row.summary}</span>
-      {row.failed > 0 && <span className="shrink-0 text-[11px] text-bad">{row.failed} 个失败</span>}
+      {row.failed > 0 && <span className="shrink-0 text-[11px] text-bad">{t("group.failed", { n: row.failed })}</span>}
       <ChevronDown className={cn("size-3.5 shrink-0 opacity-60 transition-transform", row.open && "rotate-180")} />
     </button>
   );

@@ -11,7 +11,7 @@ all: build
 # 内嵌的那份界面：只拷源码和配置，不要 node_modules（类型检查用的）。
 ui:
 	rm -rf $(UISNAP) && mkdir -p $(UISNAP)
-	rsync -a --exclude node_modules --exclude '.git' --exclude '*.tsbuildinfo' --exclude '.gerdr-ui.json' --exclude .DS_Store ui/ $(UISNAP)/
+	rsync -a --exclude node_modules --exclude '.git' --exclude '*.tsbuildinfo' --exclude '.gerdr-ui.json' --exclude .DS_Store --exclude 'packages/**/dist' ui/ $(UISNAP)/
 	touch $(UISNAP)/.gitkeep
 
 # 把仓库的 ui/ 同步到正在用的界面目录（默认 ~/.gerdr/ui）：开着的 gerdr 窗口直接热更新，不用重新打包、重启。
@@ -34,11 +34,11 @@ test:
 typecheck:
 	cd ui && npx tsc --noEmit
 	ui/node_modules/.bin/tsc -p internal/server/rescue/tsconfig.json
-	cd ui && node_modules/.bin/prettier --check 'src/**/*.{ts,tsx}' --log-level warn || { echo '格式不对：跑 make fmt'; exit 1; }
+	cd ui && node_modules/.bin/prettier --check 'src/**/*.{ts,tsx}' 'packages/*/src/**/*.{ts,tsx}' --log-level warn || { echo '格式不对：跑 make fmt'; exit 1; }
 
 # 界面全量 prettier（用 ui/node_modules 里钉死版本的那个，在 ui/ 里跑才读得到 .prettierrc.json / .prettierignore）
 fmt:
-	cd ui && node_modules/.bin/prettier --write 'src/**/*.{ts,tsx}' --log-level warn
+	cd ui && node_modules/.bin/prettier --write 'src/**/*.{ts,tsx}' 'packages/*/src/**/*.{ts,tsx}' --log-level warn
 
 # 对着真的 claude / codex 跑（花钱、要登录）
 test-e2e:

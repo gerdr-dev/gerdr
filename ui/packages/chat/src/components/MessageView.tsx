@@ -1,30 +1,30 @@
 import { Bot, Brain, ChevronDown, CircleAlert, Info, Loader2, CornerDownRight } from "lucide-react";
 import { RewindButton } from "./RewindButton";
 import { memo, useEffect, useState, type ReactNode } from "react";
-import { Message, MessageContent } from "@/components/ai-elements/message";
+import { Message, MessageContent } from "../ai/message";
 import { Markdown } from "./Markdown";
-import { Reasoning, ReasoningContent, ReasoningTrigger } from "@/components/ai-elements/reasoning";
-import { Shimmer } from "@/components/ai-elements/shimmer";
-import type { GMessage, GPart, ToolPart } from "@/lib/transcript";
-import { cn } from "@/lib/utils";
-import { useKept } from "@/lib/kept";
-import { focusSession } from "@/lib/actions";
-import { useStore } from "@/lib/store";
+import { Reasoning, ReasoningContent, ReasoningTrigger } from "../ai/reasoning";
+import { Shimmer } from "../ai/shimmer";
+import type { GMessage, GPart, ToolPart } from "../transcript";
+import { cn } from "../utils";
+import { useKept } from "../kept";
+import { useChatHost, useChatSettings } from "../host";
+import { t, type MessageKey } from "../i18n";
 import { AskCard, PermissionCard, PlanCard, QuickReplies } from "./Cards";
 import { ToolCall } from "./ToolCall";
 import { UsageCard } from "./UsageCard";
-import { openLightbox } from "../Lightbox";
+import { openLightbox } from "./Lightbox";
 import { PlayBadge } from "./PlayBadge";
 import { TaskDoneCard } from "./TasksBar";
 import { ShellCard } from "./ShellCard";
 import { fmtElapsed, fmtTokens } from "./StatusLine";
 
-const STOP_TEXT: Record<string, string> = {
-  cancelled: "已中断",
-  max_tokens: "输出太长被截断了",
-  max_turn_requests: "到了单轮的步数上限",
-  refusal: "模型拒绝了这个请求",
-  error: "出错了",
+const STOP_TEXT: Record<string, MessageKey> = {
+  cancelled: "tool.interrupted",
+  max_tokens: "stop.maxTokens",
+  max_turn_requests: "stop.maxTurnRequests",
+  refusal: "stop.refusal",
+  error: "stop.error",
 };
 
 type Props = {
@@ -42,13 +42,13 @@ type Props = {
 
 /** 这条消息是别的会话里的 agent 发来的（gerdr session send）：标出来源，点一下跳过去。 */
 function FromLabel({ id }: { id: string }) {
-  const s = useStore((st) => st.sessions[id]);
-  const name = s ? s.title || s.cwd.split("/").pop() || s.agent : id.slice(0, 8);
+  const host = useChatHost();
+  const name = host.useSessionTitle?.(id) ?? id.slice(0, 8);
   return (
     // A long session title truncates instead of wrapping the whole metadata row (and squeezing the icon).
-    <button className="flex min-w-0 items-center gap-1 hover:text-foreground" title={name} onClick={() => focusSession(id)}>
+    <button className="flex min-w-0 items-center gap-1 hover:text-foreground" title={name} onClick={() => host.focusSession?.(id)}>
       <Bot className="size-3 shrink-0" />
-      <span className="truncate">来自会话「{name}」</span>
+      <span className="truncate">{t("msg.fromSession", { name })}</span>
     </button>
   );
 }
@@ -134,25 +134,25 @@ export const MessageView = memo(function MessageView({
               (meta.queued ? (
                 // 排在 agent 的队列里、还没被读到（claude 要等手上这个工具调用结束）
                 <span className="flex items-center gap-1">
-                  <span className="flex items-center gap-1" title="agent 手上的这一步做完就会读到它；输入框里按 ↑ 也能收回来改">
+                  <span className="flex items-center gap-1" title={t("msg.queuedTitle")}>
                     <Loader2 className="size-3 shrink-0 animate-spin" />
-                    排队中，等它读到…
+                    {t("msg.queued")}
                   </span>
                   {meta.messageId && onWithdraw && (
                     <>
                       <button
                         className="rounded-sm px-1.5 hover:bg-muted hover:text-foreground"
-                        title="收回来放进输入框改（↑）"
+                        title={t("msg.withdrawTitle")}
                         onClick={() => onWithdraw(meta.messageId!, false)}
                       >
-                        撤回
+                        {t("msg.withdraw")}
                       </button>
                       <button
                         className="rounded-sm px-1.5 hover:bg-muted hover:text-foreground"
-                        title="不等了，打断它手上这一步马上读（Ctrl+↵ 发的就是这种）"
+                        title={t("msg.sendNowTitle")}
                         onClick={() => onWithdraw(meta.messageId!, true)}
                       >
-                        立即发
+                        {t("msg.sendNow")}
                       </button>
                     </>
                   )}
@@ -160,11 +160,11 @@ export const MessageView = memo(function MessageView({
               ) : (
                 <span className="flex items-center gap-1">
                   <CornerDownRight className="size-3 shrink-0" />
-                  中途插话
+                  {t("msg.steered")}
                 </span>
               ))}
             {(meta?.from || meta?.steer) && !stackNext && meta?.ts ? <span>·</span> : null}
-            {!stackNext && (meta?.sending ? <span>发送中…</span> : <span className="tabular-nums">{fmtTime(meta?.ts)}</span>)}
+            {!stackNext && (meta?.sending ? <span>{t("msg.sending")}</span> : <span className="tabular-nums">{fmtTime(meta?.ts)}</span>)}
           </div>
         )}
       </Message>
@@ -202,7 +202,7 @@ export const MessageView = memo(function MessageView({
       <MessageContent className="w-full max-w-full text-[1em]">
         {nodes}
         {live && running && (empty || msg.parts[lastIdx]?.type === "dynamic-tool" || msg.parts[lastIdx]?.type?.startsWith("data-")) && (
-          <Shimmer className="text-[13px]">{empty ? "思考中…" : "工作中…"}</Shimmer>
+          <Shimmer className="text-[13px]">{empty ? t("msg.thinking") : t("msg.working")}</Shimmer>
         )}
       </MessageContent>
     </Message>
@@ -225,14 +225,14 @@ export type PartCtx = {
 function KeptReasoning({ keep, streaming, text }: { keep: string; streaming: boolean; text: string }) {
   const [kept, setOpen] = useKept<boolean | undefined>(keep, undefined);
   // 开着「显示思考」默认展开。不用 Reasoning 的 defaultOpen：它为 true 时流完 1 秒会自己收起来
-  const show = useStore((s) => s.config.showThinking !== false);
+  const show = useChatSettings().showThinking !== false;
   const open = kept ?? show;
   // 和工具调用那一行一个样子（ToolCall）：一行小灰字，不抢正文的眼
   return (
     <Reasoning isStreaming={streaming} defaultOpen={false} open={open} onOpenChange={setOpen} className="mb-0">
       <ReasoningTrigger className="-ml-1.5 w-auto gap-2 rounded-md px-1.5 py-[3px] text-[13px] hover:bg-muted/60">
         <Brain className="size-3.5 shrink-0" />
-        {streaming ? <Shimmer duration={1}>思考中…</Shimmer> : <span>思考</span>}
+        {streaming ? <Shimmer duration={1}>{t("msg.thinking")}</Shimmer> : <span>{t("msg.thought")}</span>}
         <ChevronDown className={cn("size-3.5 shrink-0 opacity-60 transition-transform", open && "rotate-180")} />
       </ReasoningTrigger>
       {/* 开着「显示思考」时字色和正文一样（用户要的）：思考默认摊开给人读，灰字读着费劲，和正文靠左边那条竖线、小一号的字分开。
@@ -313,7 +313,9 @@ export function renderPart(p: GPart, i: number, ctx: PartCtx): ReactNode {
         // 一轮的元信息：结束时间 · 用时 · 输出 token（照 Astryx ChatMessageMetadata 的「9:46 AM · Claude Opus」）
         // h-5 like the running turn's StatusLine it replaces, so the swap doesn't jump
         <div key={i} className="flex h-5 items-center text-[12px] text-muted-foreground tabular-nums">
-          {[fmtTime(p.data.ts), `用时 ${fmtElapsed(p.data.ms)}`, p.data.tokens > 0 && `${fmtTokens(p.data.tokens)} tokens`].filter(Boolean).join(" · ")}
+          {[fmtTime(p.data.ts), t("msg.took", { time: fmtElapsed(p.data.ms) }), p.data.tokens > 0 && `${fmtTokens(p.data.tokens)} tokens`]
+            .filter(Boolean)
+            .join(" · ")}
         </div>
       );
     case "data-task":
@@ -359,7 +361,9 @@ export function renderPart(p: GPart, i: number, ctx: PartCtx): ReactNode {
           className={cn("flex items-start justify-center gap-1.5 px-6 py-1 text-center text-[12px]", p.data.error ? "text-bad" : "text-muted-foreground")}
         >
           <CircleAlert className="mt-0.5 size-3.5 shrink-0" />
-          <span className="min-w-0 whitespace-pre-wrap break-words">{p.data.error || STOP_TEXT[p.data.stopReason] || p.data.stopReason}</span>
+          <span className="min-w-0 whitespace-pre-wrap break-words">
+            {p.data.error || (STOP_TEXT[p.data.stopReason] ? t(STOP_TEXT[p.data.stopReason]) : p.data.stopReason)}
+          </span>
         </div>
       );
     case "file":
@@ -389,5 +393,5 @@ function RetryText({ text, until }: { text: string; until: number }) {
     const t = setTimeout(() => setNow(Date.now()), ((until - Date.now()) % 1000 || 1000) + 5);
     return () => clearTimeout(t);
   }, [now, until, left]);
-  return <>{text.replace(/\d+ 秒后自动重试/, left > 0 ? `${left} 秒后自动重试` : "正在自动重试")}</>;
+  return <>{text.replace(/\d+ 秒后自动重试/, left > 0 ? `${left} 秒后自动重试` : "正在自动重试" /* the server's (Chinese) text, counted down in place */)}</>;
 }

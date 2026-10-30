@@ -17,16 +17,15 @@ import {
 } from "lucide-react";
 import { diffLines } from "diff";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { allowRetryText, isCommandText, type ToolContent, type ToolMeta, type ToolPart } from "@/lib/transcript";
-import { cn } from "@/lib/utils";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../ui/collapsible";
+import { allowRetryText, isCommandText, type ToolContent, type ToolMeta, type ToolPart } from "../transcript";
+import { cn } from "../utils";
 import { DiffView } from "./DiffView";
 import { useSession } from "./sessionContext";
-import { useKept } from "@/lib/kept";
-import { useStore } from "@/lib/store";
+import { useKept } from "../kept";
 import { elapsed } from "./TasksBar";
-import { api } from "@/lib/api";
-import { openSubagent } from "@/lib/actions";
+import { chatHost, useChatHost, useChatSettings } from "../host";
+import { t } from "../i18n";
 import { toast } from "sonner";
 
 function useTick(on: boolean) {
@@ -105,7 +104,7 @@ function OutputText({ text, keep, bare }: { text: string; keep?: string; bare?: 
     <div className={cn("overflow-hidden", bare ? "border-t" : "rounded-lg border bg-muted/30")}>
       {lines.length > max && (
         <button className="w-full border-b py-0.5 text-[11px] text-muted-foreground hover:bg-muted/50" onClick={() => setAll(!all)}>
-          {all ? "收起" : `前面还有 ${lines.length - max} 行`}
+          {all ? t("common.collapse") : t("tool.moreBefore", { n: lines.length - max })}
         </button>
       )}
       <pre className="max-h-[420px] overflow-auto whitespace-pre-wrap break-all px-2.5 py-1.5 font-mono text-[12px] leading-[1.5]">{shown.join("\n")}</pre>
@@ -154,7 +153,15 @@ export function ToolBody({ meta, input, keep }: { meta: ToolMeta; input: unknown
   );
 }
 
-export function ToolCall({ part, agent, running, keep: keepOpen }: { part: ToolPart; agent?: boolean; running: boolean; keep?: string }) {
+/** A tool call row; the host may render some tools its own way (ChatHost.renderTool). */
+export function ToolCall(props: { part: ToolPart; agent?: boolean; running: boolean; keep?: string }) {
+  const host = useChatHost();
+  const session = useSession();
+  const custom = host.renderTool?.(props.part, { sessionId: session?.id ?? "", running: props.running });
+  return custom !== undefined ? <>{custom}</> : <DefaultToolCall {...props} />;
+}
+
+function DefaultToolCall({ part, agent, running, keep: keepOpen }: { part: ToolPart; agent?: boolean; running: boolean; keep?: string }) {
   const meta = (part.toolMetadata ?? { kind: "other", status: "pending" }) as ToolMeta;
   const busy = (part.state === "input-streaming" || part.state === "input-available") && running;
   const failed = part.state === "output-error";
@@ -162,7 +169,7 @@ export function ToolCall({ part, agent, running, keep: keepOpen }: { part: ToolP
     (c) => c.type === "diff" || (c.type === "content" && (c._meta?.gerdr?.unifiedDiff || (c.content as any)?._meta?.gerdr?.unifiedDiff)),
   );
   // 改文件的默认展开（看 diff 是主要用途；设置里能关），其余默认收起，一行一个。
-  const expandEdits = useStore((s) => s.config.expandEdits !== false);
+  const expandEdits = useChatSettings().expandEdits !== false;
   const session = useSession();
   // 展开没展开记在组件外面：对话是虚拟列表，滚出屏幕会卸载，滚回来要还是原样
   const keep = session ? `${session.id}:tool:${part.toolCallId}` : undefined;
@@ -191,6 +198,7 @@ export function ToolCall({ part, agent, running, keep: keepOpen }: { part: ToolP
   const canBackground =
     slow &&
     busy &&
+    !!chatHost().backgroundTool &&
     !meta.parent &&
     ["claude", "native"].includes(session?.base ?? session?.agent ?? "") &&
     !task?.background &&
@@ -198,7 +206,7 @@ export function ToolCall({ part, agent, running, keep: keepOpen }: { part: ToolP
   // 「允许并重试」：auto 模式的分类器拦下的调用（claude 里是 /permissions 里批准）。规则写进项目的
   // .claude/settings.local.json，再发一句话让它重试。点过的记一下，免得重复发。
   const [allowed, setAllowed] = useKept<boolean>(keep && `${keep}:allowed`, false);
-  const canAllow = failed && !!meta.autoDenied?.length && !!session;
+  const canAllow = failed && !!meta.autoDenied?.length && !!session && !!chatHost().allowRules;
   return (
     <Collapsible open={isOpen} onOpenChange={setOpen} className="group/tool">
       {/* 照 Astryx 的 ChatToolCalls：状态图标打头（转圈 / ✓ / ✗），然后是干了什么，尾巴上 diff 行数、耗时、展开箭头。
@@ -235,42 +243,46 @@ export function ToolCall({ part, agent, running, keep: keepOpen }: { part: ToolP
         {task && (
           <>
             {/* Claude only sets is_backgrounded for ctrl+b; a Bash call with run_in_background is a background command too */}
-            {(task.background || inp?.run_in_background === true) && <span className="shrink-0 rounded-sm bg-muted px-1 text-[11px]">后台</span>}
+            {(task.background || inp?.run_in_background === true) && (
+              <span className="shrink-0 rounded-sm bg-muted px-1 text-[11px]">{t("task.background")}</span>
+            )}
             {/* 进度文字可以截断，耗时不能（截成「3.」看不懂）。跑完后 CLI 自动写的「Background command "…" completed」
                 不显示：就是把标题和状态又说一遍 */}
             {taskNote && <span className="min-w-0 shrink truncate text-[11px] text-muted-foreground">{taskNote}</span>}
             <span className="shrink-0 text-[11px] tabular-nums opacity-70">
               {elapsed(task.startedAt, task.endedAt)}
-              {task.toolUses ? ` · ${task.toolUses} 次工具` : ""}
+              {task.toolUses ? t("task.tools", { n: task.toolUses }) : ""}
             </span>
           </>
         )}
         {/* 后面的按钮和展开箭头都靠右 */}
         <span className="flex-1" />
-        {task && isAgent && (
+        {task && isAgent && chatHost().openSubagent && (
           <span
             role="button"
             className="shrink-0 rounded-sm px-1.5 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
-            title="在旁边打开这个子 agent 的完整对话（只读）"
+            title={t("tool.openSubagent")}
             onClick={(e) => {
               e.stopPropagation();
-              openSubagent(session!.id, part.toolCallId, task.description);
+              chatHost().openSubagent?.(session!.id, part.toolCallId, task.description);
             }}
           >
-            查看对话
+            {t("task.viewChat")}
           </span>
         )}
         {canBackground && (
           <span
             role="button"
             className="shrink-0 rounded-sm px-1.5 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
-            title="让它在后台接着跑，这一轮先往下走（同 Claude Code 里的 ctrl+b）"
+            title={t("tool.toBackgroundTitle")}
             onClick={(e) => {
               e.stopPropagation();
-              api.backgroundTool(session!.id, part.toolCallId).catch((err) => toast.error(err.message));
+              chatHost()
+                .backgroundTool?.(session!.id, part.toolCallId)
+                .catch((err) => toast.error(err.message));
             }}
           >
-            转到后台
+            {t("tool.toBackground")}
           </span>
         )}
         {canAllow && (
@@ -278,23 +290,23 @@ export function ToolCall({ part, agent, running, keep: keepOpen }: { part: ToolP
             role="button"
             aria-disabled={allowed}
             className={cn("shrink-0 rounded-sm px-1.5 text-[11px]", allowed ? "text-muted-foreground" : "text-brand hover:bg-muted")}
-            title={`分类器拦下了这次调用。加上这些规则（写进项目的 .claude/settings.local.json），然后让它重试：\n${meta.autoDenied!.join("\n")}`}
+            title={t("tool.allowTitle", { rules: meta.autoDenied!.join("\n") })}
             onClick={async (e) => {
               e.stopPropagation();
               if (allowed) return;
               try {
-                await api.allowRules(session!.id, meta.autoDenied!);
+                await chatHost().allowRules?.(session!.id, meta.autoDenied!);
                 setAllowed(true);
-                await api.send(session!.id, [{ type: "text", text: allowRetryText(meta.autoDenied!) }]);
+                await chatHost().send(session!.id, [{ type: "text", text: allowRetryText(meta.autoDenied!) }]);
               } catch (err: any) {
                 toast.error(err.message);
               }
             }}
           >
-            {allowed ? "已允许" : "允许并重试"}
+            {allowed ? t("tool.allowed") : t("tool.allowRetry")}
           </span>
         )}
-        {failed && part.errorText && part.errorText !== "失败" && (
+        {failed && part.errorText && part.errorText !== t("tool.failed") && (
           <span className="flex min-w-0 shrink items-center gap-1 truncate text-[11px] text-bad">
             <CircleAlert className="size-3 shrink-0" />
             {part.errorText}

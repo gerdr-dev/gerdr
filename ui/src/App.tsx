@@ -5,7 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { PhoneBar, PhoneConnToast, Sidebar, TabBar } from "./components/Chrome";
 import { PaneSwitcher } from "./components/PaneSwitcher";
 import { Dialogs } from "./components/Dialogs";
-import { LightboxHost } from "./components/Lightbox";
+import { GerdrChatProvider } from "./lib/chatHost";
 import { AppContextMenu } from "./components/AppContextMenu";
 import { TabActive, TabView } from "./components/Panes";
 import { WorkView } from "./components/WorkView";
@@ -211,56 +211,57 @@ export default function App() {
   if (!ready) return <div className="flex h-full items-center justify-center text-[13px] text-muted-foreground">连接中…</div>;
 
   return (
-    <TooltipProvider delayDuration={400}>
-      <div className="relative flex h-full">
-        {overviewMounted && (
-          <div className={cn("absolute inset-0 z-30", !overview && "pointer-events-none invisible")} aria-hidden={!overview}>
-            <OverviewView shown={overview} />
-          </div>
-        )}
-        {/* Work mode has its own top bar with the Code / Work switch, and the Work project draws its own menu */}
-        {sidebar && !phone && mode !== "work" && <Sidebar />}
-        {/* 手机上侧栏是盖在上面的抽屉（并排放的话对话只剩一百多 px 宽） */}
-        {phone && drawer && (
-          <div className="fixed inset-0 z-40 flex">
-            <Sidebar className="w-[min(18rem,85vw)] shadow-xl" />
-            <div className="flex-1 bg-background/50" onClick={() => set({ drawer: false })} />
-          </div>
-        )}
-        <div className="relative flex min-w-0 flex-1 flex-col">
-          {/* Work mode covers the agent tabs instead of unmounting them: back in Code mode everything is where it was */}
-          {mode === "work" && (
-            <div className="absolute inset-0 z-30">
-              <WorkView />
+    <GerdrChatProvider>
+      <TooltipProvider delayDuration={400}>
+        <div className="relative flex h-full">
+          {overviewMounted && (
+            <div className={cn("absolute inset-0 z-30", !overview && "pointer-events-none invisible")} aria-hidden={!overview}>
+              <OverviewView shown={overview} />
             </div>
           )}
-          {phone ? <PhoneBar /> : <TabBar />}
-          <div className="relative min-h-0 flex-1">
-            {/* 按 id 排个固定顺序再画，不能直接用 kept（最近用的排最前）：那样每切一次 tab 顺序就变，React 会在 DOM 里
+          {/* Work mode has its own top bar with the Code / Work switch, and the Work project draws its own menu */}
+          {sidebar && !phone && mode !== "work" && <Sidebar />}
+          {/* 手机上侧栏是盖在上面的抽屉（并排放的话对话只剩一百多 px 宽） */}
+          {phone && drawer && (
+            <div className="fixed inset-0 z-40 flex">
+              <Sidebar className="w-[min(18rem,85vw)] shadow-xl" />
+              <div className="flex-1 bg-background/50" onClick={() => set({ drawer: false })} />
+            </div>
+          )}
+          <div className="relative flex min-w-0 flex-1 flex-col">
+            {/* Work mode covers the agent tabs instead of unmounting them: back in Code mode everything is where it was */}
+            {mode === "work" && (
+              <div className="absolute inset-0 z-30">
+                <WorkView />
+              </div>
+            )}
+            {phone ? <PhoneBar /> : <TabBar />}
+            <div className="relative min-h-0 flex-1">
+              {/* 按 id 排个固定顺序再画，不能直接用 kept（最近用的排最前）：那样每切一次 tab 顺序就变，React 会在 DOM 里
                 挪这些节点，而**挪动 DOM 节点会把里面的滚动位置清零** —— 切走的 tab 一藏起来就回到最顶上（踩过）。
                 顺序固定的话切 tab 只改 invisible，节点不动。 */}
-            {[...kept].sort().map((id) => {
-              const t = all.get(id)!;
-              const active = id === tab.id;
-              return (
-                <div key={id} className={cn("absolute inset-0", !active && "pointer-events-none invisible")} aria-hidden={!active}>
-                  <TabActive.Provider value={active && !overview}>
-                    <TabView tab={t} />
-                  </TabActive.Provider>
-                </div>
-              );
-            })}
-            {switcher && phone && <PaneSwitcher />}
+              {[...kept].sort().map((id) => {
+                const t = all.get(id)!;
+                const active = id === tab.id;
+                return (
+                  <div key={id} className={cn("absolute inset-0", !active && "pointer-events-none invisible")} aria-hidden={!active}>
+                    <TabActive.Provider value={active && !overview}>
+                      <TabView tab={t} />
+                    </TabActive.Provider>
+                  </div>
+                );
+              })}
+              {switcher && phone && <PaneSwitcher />}
+            </div>
           </div>
         </div>
-      </div>
-      <Dialogs />
-      <LightboxHost />
-      <AppContextMenu />
-      <CliApprove />
-      {/* 手机上底部是输入框和软键盘，toast 放顶上 */}
-      <Toaster position={phone ? "top-center" : "bottom-right"} />
-      {phone && <PhoneConnToast />}
-    </TooltipProvider>
+        <Dialogs />
+        <AppContextMenu />
+        <CliApprove />
+        {/* 手机上底部是输入框和软键盘，toast 放顶上 */}
+        <Toaster position={phone ? "top-center" : "bottom-right"} />
+        {phone && <PhoneConnToast />}
+      </TooltipProvider>
+    </GerdrChatProvider>
   );
 }

@@ -232,6 +232,8 @@ func (r *Renderer) build(files []string, sig string) *build {
 		deps = map[string]string{}
 	}
 	cssRaw, _ := os.ReadFile(filepath.Join(r.dir, "src", "index.css"))
+	// Workspace packages bring their own CSS (src/style.css): the app's index.css can't @import it (Tailwind browser)
+	cssRaw = append(cssRaw, packagesCSS(r.dir)...)
 	css, dropped := browserCSS(string(cssRaw))
 	b.css = css
 	for _, d := range dropped {

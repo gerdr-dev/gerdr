@@ -1,8 +1,9 @@
 import { RotateCcw } from "lucide-react";
 import { useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
-import { cn } from "@/lib/utils";
+import { Button } from "../ui/button";
+import { Popover, PopoverAnchor, PopoverContent } from "../ui/popover";
+import { cn } from "../utils";
+import { t } from "../i18n";
 
 // 用户消息旁边的「回到这句之前」：点一下在按钮旁边冒一个小气泡（不是全屏弹窗，不挡对话），
 // 再点一次同一个按钮 / 回车 / 点气泡里的按钮 = 确认，Esc 或点别处 = 算了（用户点名要「动静更小」）。
@@ -18,7 +19,7 @@ export function RewindButton({ onConfirm }: { onConfirm: () => void }) {
     setOpen(false);
     onConfirm();
   };
-  const label = "回到这句之前";
+  const label = t("rewind.label");
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -26,7 +27,7 @@ export function RewindButton({ onConfirm }: { onConfirm: () => void }) {
         <button
           ref={btnRef}
           data-state={open ? "open" : "closed"}
-          title={open ? "再点一次确认" : label}
+          title={open ? t("rewind.clickAgain") : label}
           className={cn(
             "rounded-sm p-1 text-muted-foreground hover:bg-muted hover:text-foreground",
             open && "bg-brand/15 text-brand hover:bg-brand/20 hover:text-brand",
@@ -46,12 +47,12 @@ export function RewindButton({ onConfirm }: { onConfirm: () => void }) {
           if (btnRef.current?.contains(e.target as Node)) e.preventDefault();
         }}
       >
-        <div className="text-[13px] font-medium">{label}？</div>
-        <div className="text-muted-foreground">这句和它之后的对话都会丢掉，agent 也会忘掉。文件不会恢复。原话放回输入框，可以改了再发。</div>
+        <div className="text-[13px] font-medium">{t("rewind.question")}</div>
+        <div className="text-muted-foreground">{t("rewind.explain")}</div>
         <div className="flex items-center justify-between gap-2 pt-1">
-          <span className="text-[11px] text-muted-foreground">再点一次按钮也行 · Esc 取消</span>
+          <span className="text-[11px] text-muted-foreground">{t("rewind.hint")}</span>
           <Button size="sm" className="h-7" autoFocus onClick={confirm}>
-            回退
+            {t("rewind.confirm")}
           </Button>
         </div>
       </PopoverContent>

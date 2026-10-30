@@ -1,11 +1,11 @@
 import { CircleX, Loader2, RotateCw, Square } from "lucide-react";
 import { useLayoutEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { api } from "@/lib/api";
-import { openPath } from "@/lib/actions";
-import { useKept } from "@/lib/kept";
-import type { GData } from "@/lib/transcript";
-import { cn } from "@/lib/utils";
+import { chatHost } from "../host";
+import { t } from "../i18n";
+import { useKept } from "../kept";
+import type { GData } from "../transcript";
+import { cn } from "../utils";
 
 // 去掉 ANSI 颜色 / 光标控制（输出是给终端看的，这里只画字）；\r 覆盖的进度条只留最后一版
 const plain = (s: string) =>
@@ -48,13 +48,13 @@ export function ShellCard({ sessionId, data }: { sessionId: string; data: GData[
   const status = data.running
     ? null
     : data.end === "stopped"
-      ? "已停止"
+      ? t("task.stopped")
       : data.end === "lost"
-        ? "gerdr 重启，没跑完"
+        ? t("shell.lost")
         : data.error
           ? data.error
           : (data.exit ?? 0) !== 0
-            ? `退出码 ${data.exit}`
+            ? t("shell.exit", { code: data.exit! })
             : null;
   const act = async (fn: () => Promise<unknown>) => {
     setBusy(true);
@@ -81,24 +81,24 @@ export function ShellCard({ sessionId, data }: { sessionId: string; data: GData[
         </span>
         {status && <span className={cn("shrink-0 text-[11px]", failed ? "text-bad" : "text-muted-foreground")}>{status}</span>}
         <span className="flex-1" />
-        {data.running ? (
+        {!chatHost().shell ? null : data.running ? (
           <button
             className="flex shrink-0 items-center gap-1 rounded-sm px-1.5 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
             disabled={busy}
-            onClick={() => act(() => api.stopShell(sessionId, data.id))}
+            onClick={() => act(() => chatHost().shell!.stop(sessionId, data.id))}
           >
             <Square className="size-3" />
-            停止
+            {t("task.stop")}
           </button>
         ) : (
           <button
-            title="在会话目录里再跑一次"
+            title={t("shell.rerunTitle")}
             className="flex shrink-0 items-center gap-1 rounded-sm px-1.5 text-[11px] text-muted-foreground opacity-0 group-hover/shell:opacity-100 hover:bg-muted hover:text-foreground disabled:opacity-50 [@media(hover:none)]:opacity-100"
             disabled={busy}
-            onClick={() => act(() => api.shell(sessionId, data.command))}
+            onClick={() => act(() => chatHost().shell!.run(sessionId, data.command))}
           >
             <RotateCw className="size-3" />
-            再跑一次
+            {t("shell.rerun")}
           </button>
         )}
       </div>
@@ -114,7 +114,7 @@ export function ShellCard({ sessionId, data }: { sessionId: string; data: GData[
           // The folded preview expands on click too, not just the small link under it. Only while folded: once open, a
           // click is someone selecting or scrolling the output. Dragging out a selection in the preview shouldn't expand it.
           onClick={folded ? () => window.getSelection()?.isCollapsed !== false && setOpen(true) : undefined}
-          title={folded ? "点一下展开" : undefined}
+          title={folded ? t("shell.clickExpand") : undefined}
         >
           {shown.join("\n")}
         </pre>
@@ -123,12 +123,12 @@ export function ShellCard({ sessionId, data }: { sessionId: string; data: GData[
         <div className="ml-5.5 flex items-center gap-3 text-[11px] text-muted-foreground">
           {(folded || open) && lines.length > FOLD + 1 && (
             <button className="hover:text-foreground" onClick={() => setOpen(!open)}>
-              {open ? "收起" : `${data.running || failed ? "前面" : "后面"}还有 ${lines.length - FOLD} 行 · 展开`}
+              {open ? t("common.collapse") : t(data.running || failed ? "shell.moreBefore" : "shell.moreAfter", { n: lines.length - FOLD })}
             </button>
           )}
-          {cut && (
-            <button className="hover:text-foreground" title={data.path} onClick={() => openPath(data.path!)}>
-              这里只记了开头，打开完整输出
+          {cut && chatHost().openPath && (
+            <button className="hover:text-foreground" title={data.path} onClick={() => chatHost().openPath?.(data.path!)}>
+              {t("shell.openFull")}
             </button>
           )}
         </div>

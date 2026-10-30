@@ -1,7 +1,8 @@
 import { diffLines } from "diff";
 import { useContext, useMemo, useState } from "react";
-import { openPath } from "@/lib/actions";
-import { cn } from "@/lib/utils";
+import { useChatHost } from "../host";
+import { t } from "../i18n";
+import { cn } from "../utils";
 import { SessionContext } from "./sessionContext";
 
 type Line = { t: " " | "+" | "-" | "@"; s: string };
@@ -63,6 +64,7 @@ export function DiffView({
   const lines = useMemo(() => (unified != null ? fromUnified(unified) : fromTexts(oldText, newText ?? "")), [oldText, newText, unified]);
   const [all, setAll] = useState(false);
   const session = useContext(SessionContext);
+  const host = useChatHost();
   const shown = all ? lines : lines.slice(0, maxLines);
   const adds = lines.filter((l) => l.t === "+").length;
   const dels = lines.filter((l) => l.t === "-").length;
@@ -71,9 +73,17 @@ export function DiffView({
       {path && (
         <div className="flex items-center justify-between border-b bg-muted/40 px-2 py-1 text-[11px] text-muted-foreground">
           {/* 点文件名看改完之后的整个文件（diff 只给了改动那几段） */}
-          <button className="truncate text-left hover:text-foreground hover:underline" title="打开这个文件" onClick={() => openPath(path, session?.cwd)}>
-            {path}
-          </button>
+          {host.openPath ? (
+            <button
+              className="truncate text-left hover:text-foreground hover:underline"
+              title={t("diff.open")}
+              onClick={() => host.openPath?.(path, session?.cwd)}
+            >
+              {path}
+            </button>
+          ) : (
+            <span className="truncate">{path}</span>
+          )}
           <span className="shrink-0 pl-2">
             <span className="text-ok">+{adds}</span> <span className="text-bad">−{dels}</span>
           </span>
@@ -99,7 +109,7 @@ export function DiffView({
       </div>
       {lines.length > maxLines && (
         <button className="w-full border-t py-1 text-[11px] text-muted-foreground hover:bg-muted/50" onClick={() => setAll(!all)}>
-          {all ? "收起" : `还有 ${lines.length - maxLines} 行`}
+          {all ? t("common.collapse") : t("diff.more", { n: lines.length - maxLines })}
         </button>
       )}
     </div>
