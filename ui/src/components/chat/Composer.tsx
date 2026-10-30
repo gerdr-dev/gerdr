@@ -114,10 +114,11 @@ export const Composer = forwardRef<
   const optsRow = useRef<HTMLDivElement>(null);
   const needW = useRef(0); // the box width the full row needed when it last overflowed
   const compact = phone || narrow;
-  // One step further for a compact row that still overflows (a phone with the context meter and a background task up):
-  // the task chip drops to icon + count and the options menu shows only the model. Measured like `narrow`, so with
-  // nothing else on the row there is still room for the model and its effort
-  const [tight, setTight] = useState(false);
+  // Further steps for a compact row that still overflows (a phone with the context meter and a background task up):
+  // 1 = the task chip drops to icon + count and the options menu loses the effort; 2 = it loses the mode too, naming only
+  // the model. One step at a time, each measured like `narrow`: going straight to 2 hid a loud mode ("Full access")
+  // that had room once the effort was gone
+  const [tight, setTight] = useState(0);
   const tightKey = useRef("");
   const imgs = useStore((s) => s.draftImgs[paneId] ?? NO_IMGS);
   // 读图片的回调可能在切走（卸载）之后才回来，所以每次都从 store 里取最新的再改，别用渲染时的 imgs
@@ -317,7 +318,7 @@ export const Composer = forwardRef<
     const r = root.current;
     if (!o || !r || !r.clientWidth) return;
     if (!compact) {
-      if (tight) setTight(false);
+      if (tight) setTight(0);
       return;
     }
     // Whether the longer row fits can't be measured while the short one is up, so whenever what sits on the row changes
@@ -326,11 +327,11 @@ export const Composer = forwardRef<
     if (key !== tightKey.current) {
       tightKey.current = key;
       if (tight) {
-        setTight(false);
+        setTight(0);
         return;
       }
     }
-    if (!tight && o.scrollWidth - o.clientWidth > 1) setTight(true);
+    if (tight < 2 && o.scrollWidth - o.clientWidth > 1) setTight(tight + 1);
   });
 
   useLayoutEffect(() => {
@@ -1091,7 +1092,10 @@ export const Composer = forwardRef<
         <div className="flex items-center gap-1 px-2.5 pb-2.5">
           {/* 附图和几个下拉放一组：放不下时这一组横着滑，而不是每个都被挤成「A…」「Opus …」（用户报的）；
               手机上模式 / 模型 / 思考强度收成一个图标（OptionsMenu），平时几乎不改，不值得常驻。上下文 / 发送这些固定在右边不动 */}
-          <div ref={optsRow} className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none] [&>*]:shrink-0">
+          <div
+            ref={optsRow}
+            className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>*]:shrink-0"
+          >
             <Tooltip>
               <TooltipTrigger asChild>
                 <label className="flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground">
@@ -1159,7 +1163,7 @@ export const Composer = forwardRef<
               )
             )}
           </div>
-          <TasksChip session={session} short={compact && tight} />
+          <TasksChip session={session} short={compact && tight > 0} />
           {session.context && <ContextMeter c={session.context} short={compact} />}
           {/* 手机上底栏放不下「打断 / 立即发 / 发送」三个圆钮（再挤下拉就又被截了）：照 ChatGPT 共用一个位置 ——
               在跑、没打字时是打断；打了字是立即发 + 插进去。电脑上地方够，三个都摆着 */}

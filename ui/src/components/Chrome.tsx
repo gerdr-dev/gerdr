@@ -150,7 +150,7 @@ export function TabBar() {
       <div
         ref={barRef}
         data-tab-bar
-        className={cn("flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none]", flush ? "pr-2" : "px-2")}
+        className={cn("flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden", flush ? "pr-2" : "px-2")}
         style={{ WebkitAppRegion: "no-drag" } as any}
       >
         {ws.tabs.map((t, i) => {

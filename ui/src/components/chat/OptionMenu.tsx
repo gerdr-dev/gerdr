@@ -85,12 +85,13 @@ export function OptionsMenu({
   groups: OptGroup[];
   mode?: OptGroup;
   onSetDefault?: () => void;
-  /** No room on the row: name only the model (the effort etc. are one tap away in the menu) */
-  short?: boolean;
+  /** No room on the row: 1 = model and a loud mode, 2 = only the model (the rest is one tap away in the menu) */
+  short?: number;
 }) {
   const all = mode ? [mode, ...groups] : groups;
   const nameOf = (g: OptGroup) => g.options.find((o) => o.value === g.value)?.name ?? g.value;
-  const modeName = mode && LOUD_MODE.test(mode.value) ? nameOf(mode) : undefined;
+  // At 2 the mode goes too: "Full access" takes half a phone's row
+  const modeName = (short ?? 0) < 2 && mode && LOUD_MODE.test(mode.value) ? nameOf(mode) : undefined;
   const shown = short ? groups.filter((g) => g.id === "model").slice(0, 1) : groups;
   const summary = (shown.length ? shown : groups.slice(0, 1)).map(nameOf).filter(Boolean).join(" · ");
   if (!all.length) return null;

@@ -139,7 +139,8 @@ function PhoneOverview({ ids, focus, shown, onPick }: { ids: string[]; focus?: s
           <Button variant="ghost" size="icon" className="size-8 shrink-0" aria-label="返回" onClick={() => toggleOverview(false)}>
             <ArrowLeft className="size-[18px]" />
           </Button>
-          <div ref={chips} className="flex min-w-0 flex-1 gap-1 overflow-x-auto [scrollbar-width:none]">
+          {/* Both scrollbar hiders: Android's WebView ignores scrollbar-width and drew a bar under the chips */}
+          <div ref={chips} className="flex min-w-0 flex-1 gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {sorted.map((id) => (
               <TileChip key={id} id={id} current={id === focus} className="h-8 max-w-36" onClick={() => focusTile(id)} />
             ))}
@@ -565,7 +566,10 @@ function Grid({
         )}
       </div>
       {more.length > 0 && (
-        <div className="absolute inset-x-[6px] bottom-[3px] flex items-center gap-1 overflow-x-auto [scrollbar-width:none]" style={{ height: MORE_H }}>
+        <div
+          className="absolute inset-x-[6px] bottom-[3px] flex items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          style={{ height: MORE_H }}
+        >
           <span className="shrink-0 px-1 text-[11px] text-muted-foreground" title="放不下了：点一个换进来，顶替最后一格">
             更多 {more.length}
           </span>
