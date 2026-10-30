@@ -77,6 +77,9 @@ func (h *Hub) Watch(sub *Sub, ids []string, since map[string]int64) {
 			tail, older := s.Tail()
 			sub.send(Msg{T: "events", ID: id, Events: tail, Reset: true, Older: older})
 		}
+		if m := h.draftFor(id); m != nil {
+			sub.send(*m)
+		}
 		// 打开 / 切到这个会话：顺手看看它是不是在别处（herdr / 终端）接着聊过，是的话追上（CatchUp）
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)

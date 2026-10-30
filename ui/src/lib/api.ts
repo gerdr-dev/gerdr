@@ -173,6 +173,8 @@ export const api = {
     if (!res.ok) throw new ApiError(res.status, data?.error || res.statusText, data);
     return data as { path: string };
   },
+  /** Stores a pasted image (base64) on the gerdr machine so other devices' composers can show it; returns /api/blobs/<sha256>. */
+  saveBlob: (data: string) => req<{ url: string }>("POST", "/api/blobs", { data }),
   /** 输入框里的 `!命令`：gerdr 在会话目录里直接跑，不经过 agent；输出进对话、跟着下一条消息带给 agent */
   shell: (id: string, command: string) => req<{ id: string }>("POST", `/api/sessions/${id}/shell`, { command, id: uuid() }),
   stopShell: (id: string, run: string) => req("POST", `/api/sessions/${id}/shell/${run}/stop`, {}),

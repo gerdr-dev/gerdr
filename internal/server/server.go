@@ -224,6 +224,22 @@ func (s *Server) Handler() http.Handler {
 		return map[string]any{"events": evs, "older": more}, nil
 	}))
 	mux.HandleFunc("GET /api/blobs/{hash}", s.blob)
+	// A composer image, stored so the draft can reference it on the other devices instead of carrying the bytes
+	mux.HandleFunc("POST /api/blobs", func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Data string `json:"data"` // base64
+		}
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 40<<20)).Decode(&body); err != nil {
+			httpError(w, 400, err.Error())
+			return
+		}
+		u := s.Hub.SaveBlob(body.Data)
+		if u == "" {
+			httpError(w, 400, "bad image data")
+			return
+		}
+		writeJSON(w, map[string]string{"url": u})
+	})
 	mux.HandleFunc("POST /api/sessions/{id}/tasks/{task}/stop", s.sessionOp(func(r *http.Request, sess *hub.Session) (any, error) {
 		return map[string]any{}, sess.StopTask(r.Context(), r.PathValue("task"))
 	}))
@@ -686,6 +702,7 @@ func (s *Server) blob(w http.ResponseWriter, r *http.Request) {
 }
 
 // ws：推会话列表 / 日志 / 布局 / 配置的变化。客户端发两种消息：{t:"watch", ids:[…], since:{id:seq}}、{t:"ping"}（回 {t:"pong"}）。
+// Plus {t:"draft", id, draft:{text, sel, imgs, from}}: the unsent composer content, mirrored to the other devices (hub/draft.go).
 func (s *Server) ws(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -724,6 +741,8 @@ func (s *Server) ws(w http.ResponseWriter, r *http.Request) {
 				T     string           `json:"t"`
 				IDs   []string         `json:"ids"`
 				Since map[string]int64 `json:"since"` // 会话 id → 前端已有日志的最后序号，接得上就只补后面的
+				ID    string           `json:"id"`    // draft: which session
+				Draft hub.Draft        `json:"draft"` // draft: text, selection, attachment refs, writer's client id
 			}
 			if json.Unmarshal(b, &m) != nil {
 				continue
@@ -731,6 +750,9 @@ func (s *Server) ws(w http.ResponseWriter, r *http.Request) {
 			switch m.T {
 			case "watch":
 				s.Hub.Watch(sub, m.IDs, m.Since)
+			case "draft":
+				// The composer text, mirrored to every device looking at this session (hub/draft.go)
+				s.Hub.SetDraft(m.ID, m.Draft)
 			case "ping":
 				// 应用层心跳：浏览器读不到协议层的 ping/pong，只能靠这个判断连接是不是「假在线」。
 				select {

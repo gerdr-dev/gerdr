@@ -431,6 +431,20 @@ cwd 以外改的文件（Bash 写 `~/.zshrc`、隔壁项目）管不到；同一
   CSP 因此放行 `blob:` 脚本。插件钩子全部 try/catch，出错只记在插件名下。
 - WebSocket 推送攒 30ms 一帧（流式片段很碎）；`Msg.Events` 不能 `omitempty`——空日志的会话也要
   推一帧 reset，前端靠它知道「加载完了」（踩过：空会话永远显示「加载中」）。
+- The composer is shared per session across devices (phone and computer see the same box): the tab sends
+  `{t:"draft", id, draft:{text, sel, imgs, from}}` over /ws (throttled 120ms), the hub keeps it in memory (`hub/draft.go`)
+  and pushes it to every tab watching that session, the writer included, plus once to a tab that starts watching
+  (`init`). Whole-draft last writer wins, no merging. What keeps devices from drifting is the server's order: a tab
+  ignores foreign drafts while one of its own is unsent or not echoed back yet (that one lands after them everywhere),
+  so it never undoes a newer write of its own with an older one from elsewhere (`sync.ts` gotDraft).
+  - `sel`: the caret / selection of whoever typed or moved it last, applied on the other devices (not to an unfocused
+    box on a touch screen: the tap that focuses it places the caret, and moving an unfocused field's selection can pop
+    the iOS keyboard). Putting a remote draft in moves the caret around (React resets it on the value change), so the
+    composer doesn't push selection changes until it's done (`applying`); otherwise two devices echo carets forever.
+  - `imgs`: references only, never bytes (the websocket read limit is 1 MiB). A pasted image is stored with
+    `POST /api/blobs` (same content-addressed store as transcript images) and shared as its `/api/blobs/<sha256>`; an
+    uploaded video as its path. A device that got an image this way has no base64 for it: send fetches the bytes then.
+    Images still uploading stay out of the shared list and are kept at the end when a remote draft is applied.
 
 ## 手机上（< 768px，照 herdr-web）
 

@@ -20,6 +20,7 @@ import {
   upsertSession,
   watchedSessions,
 } from "./store";
+import type { DraftImg, SharedDraft } from "./store";
 import type { HubEvent, SessionSummary } from "./types";
 
 // The project this window was opened on (the address /<project id>; ?space= from older App shells), read before anything
@@ -29,6 +30,9 @@ const wantSpace = decodeURIComponent(location.pathname.split("/")[1] ?? "") || n
 let ws: WebSocket | null = null;
 let retry = 0;
 let watched = "";
+const draftOutbox = new Map<string, SharedDraft>(); // session id → draft waiting for the throttle (or for a connection)
+const draftsInFlight = new Map<string, number>(); // session id → writes sent, echo not back yet
+let draftTimer: ReturnType<typeof setTimeout> | null = null;
 let stopped = false;
 
 // 热更新改到非组件模块时，运行时按新 URL 把整棵模块树重新 import、重新挂 App（uisite/runtime.go），
@@ -140,7 +144,12 @@ function connect() {
     lastHeard = Date.now();
     set({ connected: true });
     watched = "";
+    // Echoes of drafts sent on the old connection never come back: stop waiting for them. Then send what was typed
+    // while offline, after the watch, so the server's (older) draft pushed on watch arrives while ours is in flight
+    // and gets ignored.
+    draftsInFlight.clear();
     syncWatch();
+    flushDrafts();
     // 断开期间错过的会话变化：重新拉一遍（订阅的日志服务端会补上）。
     refreshHello();
   };
@@ -262,6 +271,9 @@ function handle(m: any) {
     case "events":
       applyEvents(m.id, (m.events ?? []) as HubEvent[], !!m.reset, !!m.older);
       break;
+    case "draft":
+      gotDraft(m.id, m.data ?? {});
+      break;
     case "layout":
       if (m.data?.client !== clientId) applyRemoteLayout(m.data?.data);
       break;
@@ -306,6 +318,8 @@ export function syncWatch() {
   const key = ids.join(",");
   if (key === watched || !ws || ws.readyState !== WebSocket.OPEN) return;
   watched = key;
+  // Sessions no longer watched won't echo our drafts back (hub.SetDraft only tells watchers)
+  for (const id of draftsInFlight.keys()) if (!ids.includes(id)) draftsInFlight.delete(id);
   // 手里已有的日志报个序号：重连、切回看过的面板时不用整份重推（远程连着时一份几十 MB）
   const since: Record<string, number> = {};
   for (const id of ids) {
@@ -316,3 +330,49 @@ export function syncWatch() {
 }
 
 onLayoutChange(() => syncWatch());
+
+// Composer text mirrored across devices (hub/draft.go). Last writer wins on the whole text; what keeps devices from
+// drifting apart is the server's order: every write, ours included, comes back in the order the server took them. So
+// while a write of ours is on its way (unsent, or sent and not echoed yet) anything older from elsewhere is dropped:
+// ours lands after it on the server and on every other device. Once nothing of ours is in flight, the next foreign
+// write is the latest and is taken.
+
+/** Two drafts say the same thing (text, selection and the same attachments in the same order). */
+export function sameDraft(a: SharedDraft | undefined, b: SharedDraft | undefined) {
+  if (!a || !b) return a === b;
+  if (a.text !== b.text || a.sel?.[0] !== b.sel?.[0] || a.sel?.[1] !== b.sel?.[1] || a.imgs.length !== b.imgs.length) return false;
+  return a.imgs.every((x, i) => x.blob === b.imgs[i].blob && x.path === b.imgs[i].path);
+}
+
+/** The composer changed here (text, caret, attachments): share it with the other devices (throttled; the latest wins). */
+export function pushDraft(id: string, d: SharedDraft) {
+  if (!sameDraft(get().sharedDrafts[id], d)) set((s) => ({ sharedDrafts: { ...s.sharedDrafts, [id]: d } }));
+  draftOutbox.set(id, d);
+  draftTimer ??= setTimeout(flushDrafts, 120);
+}
+
+function flushDrafts() {
+  if (draftTimer) clearTimeout(draftTimer);
+  draftTimer = null;
+  if (!ws || ws.readyState !== WebSocket.OPEN) return; // kept for the reconnect (onopen)
+  const watching = new Set(watched.split(","));
+  for (const [id, d] of draftOutbox) {
+    ws.send(JSON.stringify({ t: "draft", id, draft: { ...d, from: clientId } }));
+    // The echo only comes back to tabs watching the session; don't wait for one that won't
+    if (watching.has(id)) draftsInFlight.set(id, (draftsInFlight.get(id) ?? 0) + 1);
+  }
+  draftOutbox.clear();
+}
+
+function gotDraft(id: string, d: { text?: string; sel?: [number, number]; imgs?: DraftImg[]; from?: string; init?: boolean }) {
+  const n = draftsInFlight.get(id) ?? 0;
+  // Our own echo. The one pushed on watch (init) is not an echo even if we wrote it: it was sent once, not per write.
+  if (d.from === clientId && !d.init) {
+    if (n > 1) draftsInFlight.set(id, n - 1);
+    else draftsInFlight.delete(id);
+    return;
+  }
+  if (n > 0 || draftOutbox.has(id)) return; // older than what we're sending: ours will win everywhere
+  const next: SharedDraft = { text: d.text ?? "", sel: d.sel, imgs: Array.isArray(d.imgs) ? d.imgs : [] };
+  if (!sameDraft(get().sharedDrafts[id], next)) set((s) => ({ sharedDrafts: { ...s.sharedDrafts, [id]: next } }));
+}

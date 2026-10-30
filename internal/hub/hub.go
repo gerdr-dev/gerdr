@@ -189,6 +189,7 @@ type Hub struct {
 	// 增量补发（Watch 带 since）靠这两个判断前端手里那份还能不能接着用，见 Watch。
 	bootSeq int64            // 载入完旧日志时的序号：重启前拿到的（≤ 它）都不信
 	resetAt map[string]int64 // 会话 id → 最近一次整份重推（撤回 / 回退 / 清空改写了日志）时的序号，≤ 它的都不信
+	drafts  map[string]Draft // session id → unsent composer text, shared by every device (draft.go)
 
 	defsMu sync.RWMutex
 	defs   []AgentDef // config.json 里的 agents（变体 + 外部 agent）
@@ -208,7 +209,7 @@ func New(opt Options) (*Hub, error) {
 		opt: opt, log: opt.Log,
 		hosts: map[string]*agenthost.Host{}, starting: map[string]chan struct{}{},
 		sessions: map[string]*Session{}, byAgent: map[string]*Session{}, early: map[string][]earlyUpdate{}, subs: map[*Sub]struct{}{},
-		resetAt: map[string]int64{},
+		resetAt: map[string]int64{}, drafts: map[string]Draft{},
 	}
 	h.defs = ValidAgentDefs(opt.ExtraAgents)
 	h.cmds = newCmdCache(opt.Dir)
@@ -777,6 +778,7 @@ func (h *Hub) register(s *Session) {
 func (h *Hub) unregister(s *Session) {
 	h.mu.Lock()
 	delete(h.sessions, s.rec.ID)
+	delete(h.drafts, s.rec.ID)
 	delete(h.byAgent, s.rec.Agent+":"+s.rec.AgentSessionID)
 	h.mu.Unlock()
 }

@@ -10,6 +10,14 @@ import type { AgentInfo, ContentBlock, HubEvent, RemoteConn, SessionSummary } fr
 
 export type Theme = "system" | "light" | "dark";
 
+/**
+ * A composer attachment as other devices see it: a reference, never the bytes. `blob` is an image stored on the gerdr
+ * machine (POST /api/blobs → /api/blobs/<sha256>), `path` an uploaded video.
+ */
+export type DraftImg = { mimeType: string; blob?: string; path?: string; name?: string };
+/** The composer content shared across devices (hub/draft.go): text, selection [start, end], attachments. */
+export type SharedDraft = { text: string; sel?: [number, number]; imgs: DraftImg[] };
+
 export type Config = {
   prefix: string;
   keys: Partial<Record<KeyAction, string[]>>;
@@ -178,7 +186,12 @@ type State = {
   /** 每个 pane 输入框里还没发的字（切 tab 不丢）。 */
   drafts: Record<string, string>;
   /** 每个 pane 输入框里贴了还没发的图：和字一样，tab 不保留时切走输入框会卸载，放组件里就丢了（用户报的）。 */
-  draftImgs: Record<string, { data: string; mimeType: string; url: string; path?: string; name?: string }[]>;
+  draftImgs: Record<string, { data: string; mimeType: string; url: string; path?: string; name?: string; blob?: string }[]>;
+  /**
+   * Session id → the composer content every device agrees on (sync.ts pushDraft / the server's "draft" frames). The
+   * composer copies it into its pane's draft when it changes, and pushes its own edits here.
+   */
+  sharedDrafts: Record<string, SharedDraft>;
   /**
    * The one message put aside with ⌘S (actions.stashDraft): text and images, not tied to a pane, so it can be taken back
    * out in any other session or agent. Memory only, like drafts.
@@ -295,6 +308,7 @@ export const useStore = create<State>(() => ({
   unread: loadUnread(),
   drafts: {},
   draftImgs: {},
+  sharedDrafts: {},
   stash: null,
   pluginVersion: 0,
   starting: {},

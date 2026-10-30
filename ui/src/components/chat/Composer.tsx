@@ -6,7 +6,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { api, fileRawURL, type Holder, isNetworkError } from "@/lib/api";
 import { closeAgentInPane } from "@/lib/actions";
-import { get, sendShown, set, setConfig, transcript, useStore } from "@/lib/store";
+import { get, sendShown, set, setConfig, transcript, useStore, type DraftImg, type SharedDraft } from "@/lib/store";
+import { pushDraft, sameDraft } from "@/lib/sync";
 import type { ContentBlock, SessionSummary } from "@/lib/types";
 import { dropShellContext, videoLinkPath } from "@/lib/transcript";
 import { MODE, defaultsOf, flatOptions, setDefault, setDefaults } from "@/lib/defaults";
@@ -30,8 +31,36 @@ export type ComposerHandle = {
 
 // A video can't go to the agent inline: it's uploaded to the gerdr machine (api.upload) and sent as a resource_link
 // to that path. `path` stays unset while the upload is still running; `data` is empty for videos.
-type Img = { data: string; mimeType: string; url: string; path?: string; name?: string };
+// `blob`: the image is also stored on the gerdr machine (api.saveBlob), so other devices' composers can show it. An image
+// that arrived from another device has only `blob` (`data` empty) until it is sent: send fetches the bytes then.
+type Img = { data: string; mimeType: string; url: string; path?: string; name?: string; blob?: string };
 const isVideo = (im: Img) => im.mimeType.startsWith("video/");
+
+// What other devices get of the attachments: references only. Ones still uploading are left out until they're done.
+const shareable = (xs: Img[]): DraftImg[] =>
+  xs.flatMap((im): DraftImg[] =>
+    im.path ? [{ mimeType: im.mimeType, path: im.path, name: im.name }] : im.blob ? [{ mimeType: im.mimeType, blob: im.blob }] : [],
+  );
+const fromShared = (r: DraftImg): Img =>
+  r.path
+    ? { data: "", mimeType: r.mimeType, url: fileRawURL(r.path), path: r.path, name: r.name }
+    : { data: "", mimeType: r.mimeType, url: r.blob!, blob: r.blob };
+const imgsKey = (xs: DraftImg[]) => xs.map((x) => x.blob ?? x.path).join("\n");
+// Images being stored on the gerdr machine (by data URL), so a remount doesn't upload the same one twice
+const savingBlobs = new Set<string>();
+
+async function blobData(url: string) {
+  const b = await (await fetch(url, { credentials: "same-origin" })).blob();
+  return new Promise<string>((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => {
+      const s = String(r.result);
+      res(s.slice(s.indexOf(",") + 1));
+    };
+    r.onerror = () => rej(r.error);
+    r.readAsDataURL(b);
+  });
+}
 
 function toImgs(blocks: ContentBlock[]): Img[] {
   return blocks.flatMap((c): Img[] => {
@@ -94,6 +123,85 @@ export const Composer = forwardRef<
   const root = useRef<HTMLDivElement>(null);
   const imgRefs = useRef<(HTMLDivElement | null)[]>([]);
   const setText = (t: string) => set((s) => ({ drafts: { ...s.drafts, [paneId]: t } }));
+  // Same composer on every device looking at this session (phone and computer): text, caret and attachments. Whatever
+  // ends up in this pane's draft (typing, sending clears it, ⌘S stash…) is pushed out, and changes from elsewhere are
+  // copied in. On mount the shared draft wins over this pane's local copy, which may be stale from before the tab was
+  // switched away. Caret moves alone are pushed from onSelect (pushSel).
+  const shared = useStore((s) => s.sharedDrafts[session.id]);
+  const seen = useRef<{ id: string; d: SharedDraft | undefined } | null>(null);
+  const applying = useRef(false); // putting a remote draft in: the caret jumps around meanwhile, don't echo that back
+  const sharedImgs = shareable(imgs);
+  const localDraft = (): SharedDraft => {
+    const el = ta.current;
+    const sel: [number, number] | undefined = el && document.activeElement === el ? [el.selectionStart, el.selectionEnd] : undefined;
+    return { text: get().drafts[paneId] ?? "", sel, imgs: shareable(get().draftImgs[paneId] ?? NO_IMGS) };
+  };
+  useEffect(() => {
+    const prev = seen.current?.id === session.id ? seen.current.d : undefined;
+    seen.current = { id: session.id, d: shared };
+    const mine = localDraft();
+    if (shared && shared !== prev) {
+      // Something changed elsewhere (or this box just mounted): take it unless we already look exactly like that
+      const el = ta.current;
+      if (!sameDraft({ ...mine, sel: shared.sel && el ? [el.selectionStart, el.selectionEnd] : undefined }, shared)) takeRemote(shared);
+      return;
+    }
+    // Only text / attachments decide here: the caret is pushed by pushSel, and right after takeRemote it is not where
+    // it's going yet (that happens a frame later)
+    if (shared ? shared.text !== mine.text || imgsKey(shared.imgs) !== imgsKey(mine.imgs) : mine.text || mine.imgs.length) pushDraft(session.id, mine);
+  }, [text, imgsKey(sharedImgs), shared, session.id]);
+  const pushSel = () => {
+    if (applying.current) return;
+    const mine = localDraft();
+    if (!mine.sel || (!shared && !mine.text)) return;
+    if (!sameDraft(mine, shared)) pushDraft(session.id, mine);
+  };
+  const takeRemote = (d: SharedDraft) => {
+    const el = ta.current;
+    const cur = el?.value ?? text;
+    const focused = !!el && document.activeElement === el;
+    const old = el ? [el.selectionStart, el.selectionEnd] : null;
+    applying.current = true;
+    setText(d.text);
+    // Keep the local copies (they have the bytes); images still uploading here stay at the end
+    setImgs((xs) => {
+      const have = new Map(xs.filter((x) => x.blob || x.path).map((x) => [x.blob ?? x.path, x]));
+      return [...d.imgs.map((r) => have.get(r.blob ?? r.path) ?? fromShared(r)), ...xs.filter((x) => !x.blob && !x.path)];
+    });
+    let sel: number[] | null = null;
+    // Not on an unfocused touch screen: there the tap that focuses the box puts the caret anyway, and moving the
+    // selection of an unfocused field can pop the keyboard up on iOS
+    if (d.sel && (focused || !isCoarse())) sel = d.sel.map((i) => Math.min(i, d.text.length));
+    else if (focused && old) {
+      // No caret from the other side: keep ours where it was relative to the text around it. The edit sits between
+      // the unchanged head and tail, so a caret in the head stays put and one in the tail moves with it; one inside
+      // the replaced part goes to the end of what replaced it.
+      const next = d.text;
+      let head = 0;
+      while (head < cur.length && head < next.length && cur[head] === next[head]) head++;
+      let tail = 0;
+      while (tail < cur.length - head && tail < next.length - head && cur[cur.length - 1 - tail] === next[next.length - 1 - tail]) tail++;
+      const map = (i: number) => (i <= head ? i : i >= cur.length - tail ? i + next.length - cur.length : next.length - tail);
+      sel = old.map(map);
+    }
+    requestAnimationFrame(() => {
+      if (sel && el) el.setSelectionRange(sel[0], sel[1]);
+      // The select events from the line above fire after this frame
+      setTimeout(() => (applying.current = false), 0);
+    });
+  };
+  // Pasted images go to the gerdr machine too, so the draft can point other devices at them
+  useEffect(() => {
+    for (const im of imgs) {
+      if (im.blob || im.path || !im.data || isVideo(im) || savingBlobs.has(im.url)) continue;
+      savingBlobs.add(im.url);
+      api
+        .saveBlob(im.data)
+        .then(({ url }) => setImgs((xs) => xs.map((x) => (x.url === im.url ? { ...x, blob: url } : x))))
+        .catch(() => {}) // stays on this device only
+        .finally(() => savingBlobs.delete(im.url));
+    }
+  }, [imgs]);
 
   useImperativeHandle(ref, () => ({
     focus: () => ta.current?.focus(),
@@ -378,8 +486,18 @@ export const Composer = forwardRef<
       toast("视频还在上传，传完再发");
       return;
     }
+    // Images that came from another device have only the reference: fetch the bytes now
+    let full = imgs;
+    if (imgs.some((im) => !im.data && im.blob)) {
+      try {
+        full = await Promise.all(imgs.map(async (im) => (!im.data && im.blob ? { ...im, data: await blobData(im.blob) } : im)));
+      } catch {
+        toast.error("图片没取到，再发一次试试");
+        return;
+      }
+    }
     const content: ContentBlock[] = [];
-    for (const im of imgs)
+    for (const im of full)
       content.push(
         im.path
           ? { type: "resource_link", uri: `file://${im.path}`, name: im.name ?? im.path.slice(im.path.lastIndexOf("/") + 1) }
@@ -875,7 +993,10 @@ export const Composer = forwardRef<
             setText(v);
             setCaret(e.target.selectionStart ?? e.target.value.length);
           }}
-          onSelect={(e) => setCaret(e.currentTarget.selectionStart ?? 0)}
+          onSelect={(e) => {
+            setCaret(e.currentTarget.selectionStart ?? 0);
+            pushSel();
+          }}
           onKeyDown={onKeyDown}
           onPaste={(e) => {
             const files = Array.from(e.clipboardData.files);

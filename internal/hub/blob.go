@@ -139,6 +139,9 @@ func imageMime(m map[string]any) bool {
 	return m["type"] == "image"
 }
 
+// SaveBlob stores an image pasted into the composer so the draft can point other devices at it (hub/draft.go).
+func (h *Hub) SaveBlob(b64 string) string { return h.saveBlob(b64) }
+
 // saveBlob：base64 解开存成 blobs/<sha256>（已有就不写），返回地址；解不开返回空（原样留着）。
 func (h *Hub) saveBlob(b64 string) string {
 	b, err := base64.StdEncoding.DecodeString(b64)
