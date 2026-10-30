@@ -734,7 +734,7 @@ func (c *httpConn) post(ctx context.Context, body []byte) (*http.Response, error
 		if res.StatusCode == 401 {
 			if c.unauthorized != nil {
 				c.unauthorized()
-				return nil, fmt.Errorf("HTTP 401: not signed in to this MCP server (or the login expired); authorize it in Settings → MCP")
+				return nil, fmt.Errorf("HTTP 401: not signed in to this MCP server (or the login expired); authorize it in Settings → Agent → MCP")
 			}
 			return nil, fmt.Errorf("HTTP 401: the server needs authorization; put a token in the server's headers")
 		}

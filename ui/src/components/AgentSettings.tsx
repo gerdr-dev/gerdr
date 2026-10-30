@@ -545,7 +545,7 @@ function ExtPicker({
         value={mcp}
         onChange={(v) => onChange({ mcp: v })}
         note={kind === "claude" ? "限定之后只给勾上的：插件带的 MCP、claude.ai 账号里连的 connector 都不给。" : undefined}
-        allHint={kind === "native" ? `用「设置 → MCP」里 Gerdr 的 MCP 开着的那些，${c.mcp.length} 个。` : undefined}
+        allHint={kind === "native" ? `用「设置 → Agent → MCP」里 Gerdr 的 MCP 开着的那些，${c.mcp.length} 个。` : undefined}
       />
     </div>
   );

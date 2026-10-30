@@ -5,9 +5,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { isAndroid } from "@/lib/android";
 import { isNative, nativeOpenPath } from "@/lib/native";
 import { pluginStatus } from "@/lib/plugins";
 import { closeDialog, fontSizeOf, set, setConfig, setFontSize, useStore, type Theme } from "@/lib/store";
+import { cn } from "@/lib/utils";
 import { AgentSettings } from "./AgentSettings";
 import { AndroidSettings } from "./AndroidSettings";
 import { AwakeSetting } from "./AwakeSetting";
@@ -20,6 +22,10 @@ import { ResourceStats } from "./ResourceStats";
 import { ServiceSetting } from "./ServiceSetting";
 import { UpdateSetting } from "./UpdateSetting";
 
+// Pages that became sections of the Agent page (what an agent can use): old links (a Work app's openSettings("mcp"),
+// older code) still land on them.
+const AGENT_SECTIONS = ["roles", "skills", "mcp", "memory"];
+
 // Settings (prefix+s / ⌘,). The general and plugins pages and labs live here; every other page is its own component file.
 export function SettingsDialog({ open }: { open: boolean }) {
   const cfg = useStore((s) => s.config);
@@ -28,13 +34,19 @@ export function SettingsDialog({ open }: { open: boolean }) {
   const pluginsDir = useStore((s) => s.pluginsDir);
   useStore((s) => s.pluginVersion);
   const [tabOpen, setTabOpen] = useState("general");
+  const [agentTab, setAgentTab] = useState("roles");
   const remoteConns = useStore((s) => s.remoteConns.length);
   const doctorBad = useStore((s) => s.doctor?.level === "bad");
   // 从别处直接打开某一页（比如「去批准」→ 远程访问）
   const wantTab = useStore((s) => (s.dialog?.kind === "settings" ? s.dialog.tab : undefined));
   useEffect(() => {
-    if (open && wantTab) setTabOpen(wantTab);
+    if (!open || !wantTab) return;
+    if (AGENT_SECTIONS.includes(wantTab)) {
+      setTabOpen("agents");
+      setAgentTab(wantTab);
+    } else setTabOpen(wantTab);
   }, [open, wantTab]);
+  const agentOpen = open && tabOpen === "agents";
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && closeDialog()}>
@@ -49,12 +61,8 @@ export function SettingsDialog({ open }: { open: boolean }) {
             <TabsList className="mt-2 max-w-full justify-start overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden max-md:mt-1 max-md:h-8 max-md:[&>button]:text-[13px]">
               <TabsTrigger value="general">通用</TabsTrigger>
               <TabsTrigger value="keys">快捷键</TabsTrigger>
-              <TabsTrigger value="skills">Skill</TabsTrigger>
-              <TabsTrigger value="mcp">MCP</TabsTrigger>
-              <TabsTrigger value="plugins">插件</TabsTrigger>
               <TabsTrigger value="agents">Agent</TabsTrigger>
-              <TabsTrigger value="memory">记忆</TabsTrigger>
-              <TabsTrigger value="resources">资源</TabsTrigger>
+              <TabsTrigger value="plugins">插件</TabsTrigger>
               <TabsTrigger value="remote">
                 远程访问
                 {/* 有远程界面连着：数字红点（谁连着、连了多久在 tab 里面） */}
@@ -64,6 +72,7 @@ export function SettingsDialog({ open }: { open: boolean }) {
                   </span>
                 )}
               </TabsTrigger>
+              <TabsTrigger value="resources">资源</TabsTrigger>
               <TabsTrigger value="labs">
                 实验室
                 {/* the diagnosis found something broken */}
@@ -77,10 +86,15 @@ export function SettingsDialog({ open }: { open: boolean }) {
               still size a control themselves; icon buttons keep their size. */}
           <div className="min-h-0 min-w-0 flex-1 overflow-auto px-6 pb-6 text-[13px] max-md:px-4 max-md:[&_[data-slot=button]:not([data-size^=icon])]:h-7 max-md:[&_[data-slot=button]:not([data-size^=icon])]:px-2.5 max-md:[&_[data-slot=button]]:text-[13px] md:[&_[data-slot=button]]:text-[12px] md:[&_[data-slot=button][data-size=default]]:h-8 md:[&_[data-slot=button][data-size=default]]:px-3 md:[&_[data-slot=input]]:h-8 md:[&_[data-slot=input]]:text-[12px] md:[&_[data-slot=textarea]]:text-[12px] md:[&_[data-slot=select-trigger]]:text-[12px] md:[&_[data-slot=select-trigger][data-size=default]]:h-8">
             <TabsContent value="general" className="space-y-6 pt-2">
-              {/* 设置分两种：存 gerdr 服务端、所有设备共用（config.json），和只存这台设备（localStorage / 安卓壳）。
-                  不分组的话在手机上调了一项，电脑上跟着变还是不变，用户猜不出来 */}
-              <Section title="所有设备共用" hint="存在跑 gerdr 的电脑上，电脑、手机、别的浏览器打开都是这一份；其他各页的设置也都是共用的">
-                <Row label="外观">
+              {/* Grouped by what a setting is about. Where it's stored (gerdr's config.json, shared by every device, or this
+                  device only: localStorage / the Android shell) is a tag on the few device-only rows: grouping by storage put
+                  font size a screen away from the theme (and without saying it, people can't guess whether a change on the
+                  phone follows them to the computer). */}
+              <div className="text-[12px] text-muted-foreground">
+                设置存在跑 gerdr 的电脑上，电脑、手机、别的浏览器打开都是这一份；标了 <LocalTag /> 的只管这台设备。
+              </div>
+              <Section title="外观">
+                <Row label="主题">
                   <Select value={cfg.theme} onValueChange={(v) => setConfig({ theme: v as Theme })}>
                     <SelectTrigger className="w-36">
                       <SelectValue />
@@ -92,6 +106,22 @@ export function SettingsDialog({ open }: { open: boolean }) {
                     </SelectContent>
                   </Select>
                 </Row>
+                <Row label="字号" local>
+                  <Select value={String(fontSize)} onValueChange={(v) => setFontSize(Number(v))}>
+                    <SelectTrigger className="w-36">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[12, 13, 14, 15, 16, 17, 18, 19, 20].map((n) => (
+                        <SelectItem key={n} value={String(n)}>
+                          {n}px
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Row>
+              </Section>
+              <Section title="对话">
                 <Row label="发送键" hint="另一种组合换行">
                   <Select value={cfg.sendKey} onValueChange={(v) => setConfig({ sendKey: v as any })}>
                     <SelectTrigger className="w-36">
@@ -103,7 +133,7 @@ export function SettingsDialog({ open }: { open: boolean }) {
                     </SelectContent>
                   </Select>
                 </Row>
-                <Row label="默认 agent">
+                <Row label="默认 agent" hint="新会话先选中它">
                   <Select value={cfg.defaultAgent} onValueChange={(v) => setConfig({ defaultAgent: v })}>
                     <SelectTrigger className="w-36">
                       <SelectValue />
@@ -120,7 +150,7 @@ export function SettingsDialog({ open }: { open: boolean }) {
                 <Row label="改文件时展开 diff" hint="新建 / 编辑文件的那一行默认展开改动；关掉只留一行（文件名和 +/- 行数），点开再看">
                   <Switch checked={cfg.expandEdits !== false} onCheckedChange={(v) => setConfig({ expandEdits: v })} />
                 </Row>
-                <Row label="显示思考" hint="agent 的思考过程单独成行、直接展开；关掉就和工具调用收在一组里，点开再看">
+                <Row label="显示思考" hint="Agent 的思考过程单独成行、直接展开。Claude 模型建议打开。">
                   <Switch checked={cfg.showThinking !== false} onCheckedChange={(v) => setConfig({ showThinking: v })} />
                 </Row>
                 <Row label="打开链接前确认" hint="点对话里的外部链接先弹框，显示完整地址，可以复制或打开；关掉就直接打开">
@@ -140,43 +170,33 @@ export function SettingsDialog({ open }: { open: boolean }) {
                     </SelectContent>
                   </Select>
                 </Row>
+              </Section>
+              <Section title="通知">
                 <Row label="系统通知" hint="看不见的会话跑完了 / 在等你时">
                   <Switch checked={cfg.notifications} onCheckedChange={(v) => setConfig({ notifications: v })} />
                 </Row>
+              </Section>
+              {/* Only in the Android App (its shell keeps these): notifications in the background, volume keys, server */}
+              {isAndroid() && (
+                <Section title="这台手机" local>
+                  <AndroidSettings />
+                </Section>
+              )}
+              {/* The gerdr on the computer running it: which version, updating it (App only), the background service (macOS) */}
+              <Section title="版本与后台">
                 <UpdateSetting />
                 <ServiceSetting />
+              </Section>
+              <Section title="导入">
                 <Row label="从 herdr 导入" hint="工作空间、tab、分屏和每个 agent 的会话">
                   <Button size="sm" variant="outline" onClick={() => set({ dialog: { kind: "importHerdr" } })}>
                     导入…
                   </Button>
                 </Row>
               </Section>
-              <Section title="只管这台设备" hint="存在这台设备上，别的设备各设各的">
-                <Row label="字号">
-                  <Select value={String(fontSize)} onValueChange={(v) => setFontSize(Number(v))}>
-                    <SelectTrigger className="w-36">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {[12, 13, 14, 15, 16, 17, 18, 19, 20].map((n) => (
-                        <SelectItem key={n} value={String(n)}>
-                          {n}px
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </Row>
-                <AndroidSettings />
-              </Section>
             </TabsContent>
             <TabsContent value="keys" className="pt-2">
               <KeySettings />
-            </TabsContent>
-            <TabsContent value="skills" className="pt-2">
-              <SkillSettings open={open} />
-            </TabsContent>
-            <TabsContent value="mcp" className="pt-2">
-              <MCPSettings open={open} />
             </TabsContent>
             <TabsContent value="resources" className="pt-2">
               <ResourceStats open={open && tabOpen === "resources"} />
@@ -215,11 +235,37 @@ export function SettingsDialog({ open }: { open: boolean }) {
                 ))}
               </div>
             </TabsContent>
+            {/* What an agent is and what it can use: roles, Skill, MCP, memory. Were four top-level pages; one page with
+                sections keeps the top row short enough to read (ten tabs didn't fit, and these four belong together) */}
             <TabsContent value="agents" className="pt-2">
-              <AgentSettings />
-            </TabsContent>
-            <TabsContent value="memory" className="pt-2">
-              <MemorySettings open={open && tabOpen === "memory"} />
+              <Tabs value={agentTab} onValueChange={setAgentTab} className="gap-4">
+                <TabsList variant="line" className="h-8 border-b w-full justify-start rounded-none p-0">
+                  <TabsTrigger value="roles" className="flex-none px-3">
+                    角色
+                  </TabsTrigger>
+                  <TabsTrigger value="skills" className="flex-none px-3">
+                    Skill
+                  </TabsTrigger>
+                  <TabsTrigger value="mcp" className="flex-none px-3">
+                    MCP
+                  </TabsTrigger>
+                  <TabsTrigger value="memory" className="flex-none px-3">
+                    记忆
+                  </TabsTrigger>
+                </TabsList>
+                <TabsContent value="roles">
+                  <AgentSettings />
+                </TabsContent>
+                <TabsContent value="skills">
+                  <SkillSettings open={agentOpen && agentTab === "skills"} />
+                </TabsContent>
+                <TabsContent value="mcp">
+                  <MCPSettings open={agentOpen && agentTab === "mcp"} />
+                </TabsContent>
+                <TabsContent value="memory">
+                  <MemorySettings open={agentOpen && agentTab === "memory"} />
+                </TabsContent>
+              </Tabs>
             </TabsContent>
             <TabsContent value="labs" className="space-y-4 pt-2">
               <div className="text-[13px] text-muted-foreground">还在试的功能，默认关着。</div>
@@ -250,23 +296,34 @@ export function SettingsDialog({ open }: { open: boolean }) {
   );
 }
 
-function Section({ title, hint, children }: { title: string; hint: string; children: React.ReactNode }) {
+function Section({ title, hint, local, children }: { title: string; hint?: string; local?: boolean; children: React.ReactNode }) {
   return (
     <section className="space-y-4">
       <div className="border-b pb-1.5">
-        <div className="text-[12px] font-medium text-muted-foreground">{title}</div>
-        <div className="text-[11px] text-muted-foreground/80">{hint}</div>
+        <div className="flex items-center gap-1.5 text-[12px] font-medium text-muted-foreground">
+          {title}
+          {local && <LocalTag />}
+        </div>
+        {hint && <div className="text-[11px] text-muted-foreground/80">{hint}</div>}
       </div>
       {children}
     </section>
   );
 }
 
-function Row({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+/** Marks a setting kept on this device only (localStorage / the Android shell), not in gerdr's shared config. */
+function LocalTag({ className }: { className?: string }) {
+  return <span className={cn("rounded-sm border px-1 py-px text-[10px] font-normal leading-none text-muted-foreground", className)}>仅本设备</span>;
+}
+
+function Row({ label, hint, local, children }: { label: string; hint?: string; local?: boolean; children: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-4">
       <div>
-        <div className="text-[13px]">{label}</div>
+        <div className="flex items-center gap-1.5 text-[13px]">
+          {label}
+          {local && <LocalTag />}
+        </div>
         {hint && <div className="text-[12px] text-muted-foreground">{hint}</div>}
       </div>
       {children}
