@@ -745,6 +745,7 @@ export const Composer = forwardRef<
   };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    newlineKey.current = false;
     // 输入法组字时的回车是给输入法上屏用的（中文用户按回车选词），一律不当发送。
     if (e.nativeEvent.isComposing || e.keyCode === 229) return;
     // agent 在等你回答问题、输入框又空着：↑↓ / 数字 / 回车这些键拿去答题（照 Claude Code），打字照常是直接回复
@@ -859,17 +860,40 @@ export const Composer = forwardRef<
     }
     if (e.key === "Enter") {
       const mod = e.metaKey || e.ctrlKey;
-      // 触屏的软键盘上回车就是换行（没有 Shift 可按），发送走右下角那个按钮
-      const wantSend = sendKey === "enter" && !isCoarse() ? !e.shiftKey && !e.altKey : mod;
+      // The setting holds on touch screens too: with "Enter" a soft keyboard's return key sends (there is no Shift to
+      // reach for a newline there, so whoever wants newlines on the phone picks ⌘+Enter, which a soft keyboard can't press).
+      const wantSend = sendKey === "enter" ? !e.shiftKey && !e.altKey : mod;
       if (wantSend) {
         e.preventDefault();
-        // Nothing to send: Enter jumps the chat to the bottom instead, so you don't have to reach for the ↓ button
-        if (!text.trim() && !imgs.length) return onEmptyEnter?.();
-        // 在跑时 Ctrl/⌘+回车 = 立即插话（照 Claude Code CLI）。发送键设成 ⌘+回车时这个组合就是普通发送，立即只能点按钮
-        if (!busy) send(running && sendKey === "enter" && mod);
-      }
+        enterSend(mod);
+      } else newlineKey.current = true;
     }
   };
+  const enterSend = (mod = false) => {
+    // Nothing to send: Enter jumps the chat to the bottom instead, so you don't have to reach for the ↓ button
+    if (!text.trim() && !imgs.length) return onEmptyEnter?.();
+    // 在跑时 Ctrl/⌘+回车 = 立即插话（照 Claude Code CLI）。发送键设成 ⌘+回车时这个组合就是普通发送，立即只能点按钮
+    if (!busy) send(running && sendKey === "enter" && mod);
+  };
+  const newlineKey = useRef(false); // a keydown just asked for a newline (Shift+Enter on a tablet's keyboard)
+  const enterSendRef = useRef(enterSend);
+  enterSendRef.current = enterSend;
+  // Android keyboards (Gboard…) often report the return key as keyCode 229 while a word is still underlined, which
+  // onKeyDown skips as IME composing, and the newline goes in anyway. What does arrive is a beforeinput of a line break:
+  // catch that on touch screens. A keydown that already sent cancels the default, so this never fires twice.
+  useEffect(() => {
+    const el = ta.current;
+    if (!el || sendKey !== "enter" || !isCoarse()) return;
+    const f = (e: InputEvent) => {
+      const newline = newlineKey.current;
+      newlineKey.current = false;
+      if (newline || (e.inputType !== "insertLineBreak" && e.inputType !== "insertParagraph")) return;
+      e.preventDefault();
+      enterSendRef.current();
+    };
+    el.addEventListener("beforeinput", f);
+    return () => el.removeEventListener("beforeinput", f);
+  }, [sendKey]);
 
   const modes = session.modes;
   const opts = session.configOptions ?? [];
@@ -1022,6 +1046,7 @@ export const Composer = forwardRef<
           ref={ta}
           data-composer={paneId}
           rows={1}
+          enterKeyHint={sendKey === "enter" ? "send" : "enter"}
           value={text}
           onChange={(e) => {
             // 中文输入法下按 / 出来的是「、」（有的是全角「／」）：空输入框打的第一个字是它，就当 / —— 不然想调命令得先切英文

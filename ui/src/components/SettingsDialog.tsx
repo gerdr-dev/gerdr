@@ -123,7 +123,7 @@ export function SettingsDialog({ open }: { open: boolean }) {
                 </Row>
               </Section>
               <Section title="对话">
-                <Row label="发送键" hint="另一种组合换行">
+                <Row label="发送键" hint="另一种组合换行；手机上选「回车」时键盘的回车键直接发送">
                   <Select value={cfg.sendKey} onValueChange={(v) => setConfig({ sendKey: v as any })}>
                     <SelectTrigger className="w-36">
                       <SelectValue />

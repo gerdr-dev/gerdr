@@ -25,7 +25,7 @@ export function usePhone() {
   return phone;
 }
 
-/** 触屏（没有实体指针）。判「要不要自动聚焦 / 回车发不发送」看这个，不看屏幕多宽 —— 平板也是手指。 */
+/** 触屏（没有实体指针）。判「要不要自动聚焦」看这个，不看屏幕多宽 —— 平板也是手指。 */
 export const isCoarse = () => window.matchMedia("(pointer: coarse)").matches;
 
 /**
