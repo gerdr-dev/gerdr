@@ -77,4 +77,7 @@ dependencies {
     // passkey 批准页用 Custom Tabs 打开：真浏览器（passkey 能用、带着浏览器自己的登录态），
     // 而且能只占下半屏，上面还看得见要输的那个码
     implementation("androidx.browser:browser:1.8.0")
+    // Scanning the pairing QR code. ZXing rather than Google's code scanner: that one needs Play services,
+    // which most phones sold in China don't have. Brings its own camera screen and CAMERA permission request.
+    implementation("com.journeyapps:zxing-android-embedded:4.3.0")
 }

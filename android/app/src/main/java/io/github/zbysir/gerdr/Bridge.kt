@@ -62,7 +62,7 @@ class Bridge(private val act: MainActivity, web: WebView, origin: String) {
                 // navigator.credentials；不能才发 login 走 device flow（Login.kt）
                 send(
                     JSONObject().put("t", "hello").put("platform", "android")
-                        .put("version", BuildInfo.version(act)).put("webauthn", act.webAuthn),
+                        .put("version", BuildInfo.version(act)).put("webauthn", act.webAuthn).put("scan", true),
                 )
                 send(LanRoute.snapshot()) // 顶栏那个「直连 / 中继」标签的初值
                 pendingFocus?.let { focus(it) }
@@ -79,6 +79,8 @@ class Bridge(private val act: MainActivity, web: WebView, origin: String) {
             "theme" -> act.applyTheme(m.optString("bg"), m.optBoolean("light"))
             "open" -> act.openExternal(m.optString("url"))
             "setup" -> act.showSetup(null)
+            // Pair page's scan button; the answer comes back as `scan` (scanResult)
+            "scan" -> act.scanPair()
             "login" -> act.startLogin(m.optBoolean("reauth"))
             "loginCancel" -> act.cancelLogin()
             // 局域网直连口的候选（`https://192.168.x.x:7878`），换路由壳做，不换 origin（LanRoute）
@@ -122,6 +124,14 @@ class Bridge(private val act: MainActivity, web: WebView, origin: String) {
     fun loginState(state: String, msg: String? = null) {
         val m = JSONObject().put("t", "login").put("state", state)
         if (msg != null) m.put("msg", msg)
+        send(m)
+    }
+
+    /** Result of a pair-page scan: the pairing code, or an error to show (`code` / `error`) */
+    fun scanResult(code: String?, error: String?) {
+        val m = JSONObject().put("t", "scan")
+        if (code != null) m.put("code", code)
+        if (error != null) m.put("error", error)
         send(m)
     }
 

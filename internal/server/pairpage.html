@@ -78,6 +78,7 @@
   <div class="row">
     <input id="code" maxlength="11" placeholder="配对码" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="配对码">
     <button id="go">配对</button>
+    <button id="scan" hidden>扫码</button>
   </div>
   <div class="err" id="err"></div>
 
@@ -102,15 +103,22 @@
   if (droid) {
     droid.onmessage = function (e) {
       var m; try { m = JSON.parse(e.data); } catch (x) { return; }
-      if (m.t === "hello") nativeLogin = !m.webauthn;
+      if (m.t === "hello") { nativeLogin = !m.webauthn; $("scan").hidden = !m.scan; }
       if (m.t === "login") {
         busy = false; $("pkBtn").disabled = false;
         if (m.state === "done") enter();
         else if (m.state === "error") err(m.msg || "登录没成");
       }
+      // Answer to the scan button: the code from the pairing QR (same server), or why it isn't one
+      if (m.t === "scan") {
+        if (m.error) err(m.error);
+        else if (m.code) { $("code").value = m.code; submit(); }
+      }
     };
     droid.postMessage(JSON.stringify({ t: "hello" }));
     $("app").hidden = false;
+    // Older app builds ignore an unknown message, so the button only shows up once the shell said hello
+    $("scan").onclick = function () { err(""); droid.postMessage(JSON.stringify({ t: "scan" })); };
     $("setup").onclick = function (e) { e.preventDefault(); droid.postMessage(JSON.stringify({ t: "setup" })); };
   }
 

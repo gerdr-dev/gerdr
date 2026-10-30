@@ -47,6 +47,8 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewFeature
+import com.journeyapps.barcodescanner.ScanContract
+import com.journeyapps.barcodescanner.ScanOptions
 
 /**
  * 整个壳就这一个 Activity：没填过服务器 → 填地址那一屏；填过 → 一个 WebView 加载那台
@@ -93,6 +95,43 @@ class MainActivity : ComponentActivity() {
         val uris = if (clip != null) Array(clip.itemCount) { clip.getItemAt(it).uri }
         else data.data?.let { arrayOf(it) }
         cb.onReceiveValue(uris)
+    }
+
+    /** Where the next scan result goes; null = the scan was started by nobody (Activity recreated) */
+    private var scanCb: ((String) -> Unit)? = null
+    private val scanner = registerForActivityResult(ScanContract()) { r ->
+        val cb = scanCb
+        scanCb = null
+        r.contents?.let { cb?.invoke(it) } // null = backed out / camera denied: nothing to say
+    }
+
+    /** Scan a QR code with the camera (ZXing's own screen, which also asks for the CAMERA permission). */
+    private fun scanQR(cb: (String) -> Unit) {
+        scanCb = cb
+        scanner.launch(
+            ScanOptions().setDesiredBarcodeFormats(ScanOptions.QR_CODE).setPrompt("扫电脑上「配对新设备」的二维码")
+                .setBeepEnabled(false).setOrientationLocked(false),
+        )
+    }
+
+    /**
+     * The pair page's scan button (bridge `scan`). The QR is the pairing link `https://host/?pair=CODE`
+     * (remote.PairURL). Same server → hand the code back to the page, which submits it like a typed one.
+     * Another server → the person is switching machines: load that link, as if pasted on the setup screen.
+     * Never load an arbitrary URL from a QR: only https gerdr pairing links, everything else is an error.
+     */
+    fun scanPair() = scanQR { raw ->
+        val u = Server.parse(raw)
+        val code = u?.getQueryParameter("pair")
+        when {
+            u == null || code.isNullOrEmpty() || u.scheme != "https" -> bridge?.scanResult(null, "这不是 gerdr 的配对二维码")
+            Server.origin(u) == origin -> bridge?.scanResult(code, null)
+            else -> {
+                val o = Server.origin(u)
+                Server.save(this, o)
+                showWeb(Uri.parse(o), u)
+            }
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -213,8 +252,10 @@ class MainActivity : ComponentActivity() {
         card.addView(err, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) })
         val go = look.button("连接", primary = true)
         card.addView(go, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(12) })
+        val scan = look.button("扫码配对", primary = false)
+        card.addView(scan, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) })
         card.addView(
-            foot("地址在跑 gerdr 的那台电脑上：设置 → 远程访问，就是那个 https://…。「配对新设备」给的链接（…/?pair=…）也能直接粘贴。"),
+            foot("地址在跑 gerdr 的那台电脑上：设置 → 远程访问，就是那个 https://…。「配对新设备」给的链接（…/?pair=…）可以直接粘贴，或者点「扫码配对」扫它的二维码。"),
             LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(18) },
         )
 
@@ -239,6 +280,19 @@ class MainActivity : ComponentActivity() {
             }
         }
         go.setOnClickListener { submit() }
+        // The QR is the pairing link that can be pasted here. Only take actual pairing links: any other QR
+        // would otherwise become "the server" and load some stranger's page inside the app
+        scan.setOnClickListener {
+            scanQR { raw ->
+                if (Server.parse(raw)?.getQueryParameter("pair").isNullOrEmpty()) {
+                    err.text = "这不是 gerdr 的配对二维码"
+                    err.visibility = View.VISIBLE
+                } else {
+                    input.setText(raw.trim())
+                    submit()
+                }
+            }
+        }
         input.setOnEditorActionListener { _, id, _ ->
             if (id == EditorInfo.IME_ACTION_GO) { submit(); true } else false
         }
