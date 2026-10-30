@@ -28,6 +28,8 @@ type ESM struct {
 
 	mu       sync.Mutex
 	inflight map[string]*fetchCall
+
+	vendors vendorSet
 }
 
 type fetchCall struct {
@@ -63,6 +65,10 @@ func rewriteESM(b []byte) []byte {
 
 func (e *ESM) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	rest := strings.TrimPrefix(r.URL.Path, "/_esm")
+	if strings.HasPrefix(rest, vendorPrefix) {
+		e.serveVendor(w, r, rest)
+		return
+	}
 	key := rest
 	if r.URL.RawQuery != "" {
 		key += "?" + r.URL.RawQuery

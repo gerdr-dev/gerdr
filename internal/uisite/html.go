@@ -52,9 +52,17 @@ func (r *Renderer) ServePage(w http.ResponseWriter, req *http.Request, nonce str
 	if issues == nil {
 		issues = []errorItem{}
 	}
+	if b.waiting {
+		r.servePreparing(w, b, n)
+		return
+	}
 	s.WriteString("<script" + n + ">" + strings.Replace(errorsScript, "%s", string(mustJSON(issues)), 1) + "</script>\n")
 	s.WriteString(`<style type="text/tailwindcss" id="__gerdr_css__">` + escapeStyle(b.css) + "</style>\n")
 	s.WriteString(`<script type="importmap"` + n + `>` + string(mustJSON(map[string]any{"imports": b.importMap})) + "</script>\n")
+	// After the import map: a modulepreload starts module loading, and an import map that comes later is ignored.
+	for _, u := range append([]string{b.entry}, b.preload...) {
+		s.WriteString(`<link rel="modulepreload" href="` + html.EscapeString(u) + `">` + "\n")
+	}
 	s.WriteString(`<script type="module" src="/_esm/` + tailwindBrowser + `"></script>` + "\n")
 	s.WriteString("</head>\n<body>\n<div id=\"root\">" + loadingHTML + "</div>\n<script" + n + ">")
 	s.WriteString("setTimeout(function(){var e=document.getElementById('__gerdr_loading_slow');if(e)e.style.visibility='visible'},5000);\n")
@@ -77,6 +85,23 @@ func (r *Renderer) ServePage(w http.ResponseWriter, req *http.Request, nonce str
 	// 急救面板（internal/server/rescue）：编进二进制、自带 React，挂在主界面右边、和它不共享任何东西 ——
 	// 界面目录怎么改坏都打得开。放在页面外壳里而不是界面目录里，就是为了谁也改不掉它。
 	s.WriteString(`<script defer src="/rescue/app.js"></script>` + "\n")
+	s.WriteString("</body>\n</html>\n")
+	w.Header().Set("content-type", "text/html; charset=utf-8")
+	w.Header().Set("cache-control", "no-store")
+	w.Write([]byte(s.String()))
+}
+
+// servePreparing: the vendor bundle isn't built yet (first start, or a package was just added). Rather than load the
+// packages per file from esm.sh meanwhile (slow, and they'd compete with the build for the same downloads), show the
+// loading screen and reload once a new build is out: the hot reload stream says hello with the current build id.
+func (r *Renderer) servePreparing(w http.ResponseWriter, b *build, n string) {
+	var s strings.Builder
+	s.WriteString("<!DOCTYPE html>\n<html lang=\"zh-CN\" style=\"color-scheme: light dark\">\n<head>\n<meta charset=\"UTF-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />\n")
+	s.WriteString("<title>" + html.EscapeString(b.title) + "</title>\n</head>\n<body>\n")
+	s.WriteString(strings.Replace(loadingHTML, "加载中…", "正在准备界面用到的包（新装或加了包之后只这一次）…", 1))
+	s.WriteString("<script" + n + ">var B=" + string(mustJSON(b.id)) + ";var es=new EventSource(" + string(mustJSON(r.base+"/_ui/events")) +
+		");es.onmessage=function(e){try{if(JSON.parse(e.data).build!==B)location.reload()}catch(_){}};" +
+		"setTimeout(function(){var e=document.getElementById('__gerdr_loading_slow');if(e)e.style.visibility='visible'},20000);</script>\n")
 	s.WriteString("</body>\n</html>\n")
 	w.Header().Set("content-type", "text/html; charset=utf-8")
 	w.Header().Set("cache-control", "no-store")

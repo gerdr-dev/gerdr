@@ -222,6 +222,30 @@ cwd 以外改的文件（Bash 写 `~/.zshrc`、隔壁项目）管不到；同一
   URL 指向本机的 `/_esm/` 代理（转 esm.sh，结果落盘，离线也能开）。全页面只能有一份 React：react / react-dom 用 `?dev`
   （React Refresh 要开发版），**别的包一律 `external=react,react-dom`，react-dom 自己也 `external=react`** ——
   不然 esm.sh 按 peer 范围给 react-dom 挑一个 react，和我们的不是同一个模块，hooks 当场报错。
+- **Vendor bundle** (`vendor.go`): the import map doesn't point at esm.sh's files directly but at a bundle the
+  backend builds from them with esbuild (sources still fetched through `/_esm/` and its disk cache; no npm), one
+  entry chunk per specifier plus shared chunks, under `/_esm/~vendor/<key>/`. esm.sh splits packages very finely
+  (every package also starts with a re-export stub), and the browser discovers those files one import level at a
+  time: measured 414 requests, 67 s cold and 17 s with a warm cache at 150 ms per request (phone via relay);
+  bundled, 34 requests, 9.4 s cold (8.7 s of it the server-side build) and 6.6 s at 150 ms. The key is the
+  specifier → URL map, so editing the UI's own files never touches it and hot reload is unchanged; adding a package
+  changes the import map (already a full reload) and the page shows a "preparing" screen until the new bundle is out
+  (about 1–2 s when the packages are cached). One build = one React, the same rule as before. `import()` inside a
+  package (shiki's languages) stays external and loads per file. A failed bundle falls back to the per-file map.
+  The cold build's time is almost all downloads, not esbuild (0.2 s): 414 files from the esm.sh instance, at
+  least 8 import levels deep (a level is only known once the previous one is parsed), each request 1.3–2 s from
+  here (through a proxy exiting in Frankfurt; even CloudFront cache hits). Measured 8.7 s and 16.6 s on two runs.
+- The page lists everything the first render loads statically as `<link rel="modulepreload">` (after the import map:
+  a preload starts module loading, and a later import map is ignored): the UI's own non-lazy modules plus the vendor
+  entry files they use and the shared chunks those pull in (`manifest.json`'s `static`). The browser then fetches it
+  all in one round instead of one import level at a time. The UI's own files are **not** bundled: hot reload
+  imports a changed file by its new URL, and a bundled copy next to it would be a second instance of the same
+  module (two zustand stores). Over HTTP/2 (the relay and LAN ports negotiate h2) the request count itself is
+  cheap; the levels were the cost. Measured over h2 at 150 ms: 3.6 s → 1.4 s (20 Mbit/s), 5.2 s → 3.8 s (4 Mbit/s,
+  where bandwidth is now the limit). Preloading only fetches and parses, it doesn't run anything, so React Refresh
+  still hooks in before react-dom executes.
+- Responses to non-loopback clients are gzipped (`server/gzip.go`): the first load over the relay is 5.75 MB of text
+  uncompressed, 1.42 MB gzipped; at 4 Mbit/s + 150 ms that's 14.0 s → 7.2 s. Loopback is skipped (the App gains nothing).
 - esm.sh 返回的模块里 import 的是 `/react@…/es2022/…` 这种根路径，经过代理落在我们自己的根上，所以代理要把
   import / export from 里以 `/` 开头的串改写成 `/_esm/…`（`esm.go`）。esm.sh 第一次被请求某个包时现场编译，偶尔 5xx，
   代理重试几次（实测 hast-util-to-parse5 第一次 500、再要就好）。

@@ -387,7 +387,7 @@ func (s *Server) Handler() http.Handler {
 		writeJSON(w, map[string]any{})
 	})
 	mux.Handle("/", s.ui())
-	return s.guard(mux)
+	return s.guard(gzipped(mux))
 }
 
 // guard：令牌 + CSRF + 安全头。远程（中继）进来的请求换一套规则，见 remoteGuard。

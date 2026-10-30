@@ -328,7 +328,9 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 	if _, err := os.Stat(filepath.Join(env.UI, "package.json")); err != nil {
 		return fmt.Errorf("界面目录 %s 不对（没有 package.json）：用 GERDR_UI 指到界面源码目录", env.UI)
 	}
+	esm := uisite.NewESM(env.ESMCDN, filepath.Join(env.Dir, "cache", "esm"))
 	ui := uisite.New(env.UI, filepath.Join(env.Dir, "cache", "ui"), log)
+	ui.UseESM(esm)
 	stopUI := make(chan struct{})
 	defer close(stopUI)
 	go ui.Watch(stopUI)
@@ -385,7 +387,7 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 	layout.OnSet = wr.SaveLayouts
 	wr.SaveLayouts(layout.Get())
 	srv := &server.Server{Dir: env.Dir, Hub: h, Token: token, Config: cfg, Secrets: secrets, Layout: layout, Plugins: pm, Ext: em, Work: wr, Log: log, OnConfig: applyAgents,
-		UI: ui, ESM: uisite.NewESM(env.ESMCDN, filepath.Join(env.Dir, "cache", "esm")), Remote: rm, Awake: keeper,
+		UI: ui, ESM: esm, Remote: rm, Awake: keeper,
 		Service: svc, Terms: term.New(func() []string { return sysenv.ChildEnv() }, log)}
 	defer srv.Terms.Close()
 	// Diagnosis: a light check now and then, so a broken PATH shows up as a red dot by Settings

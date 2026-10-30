@@ -90,6 +90,9 @@ func esmURL(pkg, ver, sub string) string {
 	return "/_esm/" + pkg + "@" + ver + sub + "?" + esmQuery(pkg)
 }
 
+// runtimeBare: what the page runtime (runtime.go) and the generated entry (routes.go) import, whatever the UI's code does.
+var runtimeBare = []string{"react", "react/jsx-runtime", "react/jsx-dev-runtime", "react-dom", "react-dom/client", "react-refresh/runtime", "react-router"}
+
 // buildImportMap：bare 是代码里用到的第三方 specifier。缺版本的（package.json 里没写）报出来。
 func buildImportMap(deps map[string]string, bare []string) (map[string]string, []string) {
 	im := map[string]string{}
@@ -104,7 +107,7 @@ func buildImportMap(deps map[string]string, bare []string) (map[string]string, [
 		im[spec] = esmURL(pkg, ver, sub)
 	}
 	// React 那几个总是要有：运行时用、JSX 编译出来的代码用、第三方包 external 掉的也指望它们。
-	for _, s := range []string{"react", "react/jsx-runtime", "react/jsx-dev-runtime", "react-dom", "react-dom/client", "react-refresh/runtime", "react-router"} {
+	for _, s := range runtimeBare {
 		add(s)
 	}
 	for _, s := range bare {

@@ -32,9 +32,11 @@ type Renderer struct {
 	log     *slog.Logger
 	modules *moduleCache
 	events  hub
+	esm     *ESM // where third-party packages come from; nil = per-file import map only (vendor.go)
 
 	mu        sync.Mutex
 	cur, prev *build // prev 留着：还在用上一版的页面也拿得到它的模块
+	waitingOn *vendorBuild
 
 	errMu     sync.Mutex
 	clientErr []ClientError // 页面报上来的运行时错误（只留当前这一版构建的）
@@ -107,6 +109,12 @@ type build struct {
 	inputs    map[string]bool
 	fatal     string
 	issues    []errorItem
+	// The vendor bundle for this import map is still being built: the page is a "preparing" page that reloads
+	// when it is done (html.go), instead of loading hundreds of files from esm.sh in the meantime.
+	waiting bool
+	// Everything the first render loads statically, for <link rel="modulepreload"> (html.go): the browser fetches it
+	// all at once instead of discovering it one import level at a time.
+	preload []string
 }
 
 type moduleInfo struct {
@@ -134,6 +142,10 @@ func New(dir, cacheDir string, log *slog.Logger) *Renderer {
 }
 
 func (r *Renderer) Dir() string { return r.dir }
+
+// UseESM bundles the third-party packages through this proxy (vendor.go) instead of mapping each to esm.sh's files.
+// Call before Watch.
+func (r *Renderer) UseESM(e *ESM) { r.esm = e }
 
 // NewAt is New for a site mounted under a URL prefix (e.g. "/work"): module, event and public URLs and
 // the router's basename all carry it. Used for the Work view's project, a second, user-owned UI that
@@ -259,13 +271,17 @@ func (r *Renderer) build(files []string, sig string) *build {
 	for _, rt := range roots {
 		walk(rt)
 	}
-	var bare []string
+	var bare, staticBare []string
 	for p, m := range g.mods {
 		b.inputs[p] = true
 		if m.Error != "" {
 			continue
 		}
 		bare = append(bare, m.Bare...)
+		if static[p] {
+			staticBare = append(staticBare, m.Bare...)
+			b.preload = append(b.preload, moduleURL(r.base, p, g.version[p]))
+		}
 		b.served[p] = served{ver: g.version[p], code: g.link(p), sourcemap: m.Map}
 		b.manifest[p] = moduleInfo{URL: moduleURL(r.base, p, g.version[p]), Lazy: !static[p]}
 	}
@@ -273,15 +289,73 @@ func (r *Renderer) build(files []string, sig string) *build {
 	b.importMap = im
 	if len(missing) > 0 {
 		fatal = append(fatal, "代码里用到了这些包，但 package.json 的 dependencies 里没写版本："+strings.Join(missing, ", "))
+	} else if r.esm != nil {
+		r.useVendor(b, deps, append(staticBare, runtimeBare...))
 	}
+	sort.Strings(b.preload)
 	entry := entrySource(b.routes, b.layout, r.base, func(f string) string { return moduleURL(r.base, f, g.version[f]) })
 	ev := shortHash(entry)
 	b.served["@entry.js"] = served{ver: ev, code: entry}
 	b.entry = moduleURL(r.base, "@entry.js", ev)
 	b.fatal = strings.Join(fatal, "\n\n")
 	imj, _ := json.Marshal(b.importMap)
-	b.id = shortHash(ev, b.css, string(imj), b.fatal, b.title, b.favicon)
+	b.id = shortHash(ev, b.css, string(imj), b.fatal, b.title, b.favicon, fmt.Sprint(b.waiting))
 	return b
+}
+
+// useVendor points the import map at the vendor bundle, or marks the build as waiting for it. Prefix entries
+// ("react/") stay on esm.sh: they are only a fallback for subpaths nobody imports directly. Called with r.mu held.
+func (r *Renderer) useVendor(b *build, deps map[string]string, staticBare []string) {
+	entries := map[string]string{}
+	for spec, u := range b.importMap {
+		if !strings.HasSuffix(spec, "/") {
+			entries[spec] = u
+		}
+	}
+	vb := r.esm.vendor(entries, deps)
+	select {
+	case <-vb.done:
+		if vb.err != nil {
+			b.issues = append(b.issues, errorItem{Level: "warn", Source: "vendor", Message: "第三方包没能打成 vendor 包，退回逐个从 esm.sh 加载（首次打开会慢）：" + firstLine(vb.err.Error()), Detail: vb.err.Error()})
+			return
+		}
+		for spec, u := range vb.imports {
+			b.importMap[spec] = u
+		}
+		seen := map[string]bool{}
+		for _, spec := range staticBare {
+			u, ok := vb.imports[spec]
+			if !ok {
+				continue
+			}
+			for _, x := range append([]string{u}, vb.closure[u]...) {
+				if !seen[x] {
+					seen[x] = true
+					b.preload = append(b.preload, x)
+				}
+			}
+		}
+	default:
+		b.waiting = true
+		if r.waitingOn == vb {
+			return
+		}
+		r.waitingOn = vb
+		go func() {
+			<-vb.done
+			// Force a rebuild (the sources didn't change, so ensure would keep the waiting build): its import map
+			// now differs, so diff sends open pages a reload.
+			r.mu.Lock()
+			if r.waitingOn == vb {
+				r.waitingOn = nil
+			}
+			if r.cur != nil {
+				r.cur.sig = ""
+			}
+			r.mu.Unlock()
+			r.ensure()
+		}()
+	}
 }
 
 // update 是推给页面的一次变化（runtime.go 的 apply）

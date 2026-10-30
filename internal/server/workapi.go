@@ -40,6 +40,7 @@ func (s *Server) workUI(project string) (*uisite.Renderer, error) {
 	ui := s.workUIs.m[project]
 	if ui == nil {
 		ui = uisite.NewAt(filepath.Join(dir, "ui"), filepath.Join(s.Dir, "cache", "work-ui", project), "/work/"+project, s.Log)
+		ui.UseESM(s.ESM)
 		go ui.Watch(nil)
 		s.workUIs.m[project] = ui
 	}
