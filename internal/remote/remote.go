@@ -1,5 +1,5 @@
 // Package remote 把远程访问的几块拼起来：设备表 / passkey / 限速（internal/auth）、证书（internal/acme
-// 或自己给的文件）、云端中继的隧道（internal/relay），以及隧道上那个 https 服务。
+// 或自己给的文件）、云端中继的隧道（github.com/zbysir/dialhome/relay），以及隧道上那个 https 服务。
 //
 // 设计见 docs/dev/REMOTE.md。和 herdr-web 不一样的一条：**远程起不来不拦 gerdr 启动**。herdr-web 的
 // 远程就是它的全部，配错了宁可拒绝启动；gerdr 的主界面在本机（mac App 起不来就什么都用不了），所以
@@ -22,11 +22,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/zbysir/dialhome/relay"
+
 	"github.com/gerdr-dev/gerdr/internal/acme"
 	"github.com/gerdr-dev/gerdr/internal/auth"
 	"github.com/gerdr-dev/gerdr/internal/config"
 	"github.com/gerdr-dev/gerdr/internal/lan"
-	"github.com/gerdr-dev/gerdr/internal/relay"
 )
 
 type Service struct {
@@ -190,6 +191,10 @@ func (s *Service) run() {
 			URL: cfg.RelayURL, Host: cfg.Host, Dir: s.relayDir(),
 			Log: func(f string, a ...any) { s.log.Info("remote: " + fmt.Sprintf(f, a...)) },
 		})
+		if errors.Is(err, relay.ErrNotJoined) {
+			s.setErr(err.Error() + "：先跑一次 gerdr remote join")
+			return
+		}
 		if err != nil {
 			s.setErr(err.Error())
 			return
@@ -415,7 +420,7 @@ func (s *Service) Connect(ctx context.Context, relayURL, host, invite string) er
 		return errors.New("中继地址要写成 https://relay.example.com 这样")
 	}
 	if invite = strings.TrimSpace(invite); invite == "" {
-		return errors.New("邀请码没填：在中继那台 VPS 上跑 herdr-relay invite " + host)
+		return errors.New("邀请码没填：在中继后台（或 VPS 上 dialhome invite " + host + "）出一个")
 	}
 	f, err := config.ReadRemoteFile(s.dataDir())
 	if err != nil {

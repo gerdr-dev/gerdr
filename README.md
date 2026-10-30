@@ -255,7 +255,7 @@ Markdown file each under `~/.gerdr/native/memory/` (`global/`, and `projects/` p
 
 ## remote access
 
-From your phone or another computer, through a cloud relay ([herdr-relay](https://github.com/zbysir/herdr-web)).
+From your phone or another computer, through a cloud relay ([dialhome](https://github.com/zbysir/dialhome)).
 TLS terminates on this machine; the relay only forwards ciphertext. A new device gets in with a **pairing code** (only
 someone at the machine can issue one), then adds a **passkey** so the next device doesn't need you at the machine.
 The local token does **not** work remotely. Design and reasoning: [docs/dev/REMOTE.md](docs/dev/REMOTE.md).
@@ -263,8 +263,8 @@ The local token does **not** work remotely. Design and reasoning: [docs/dev/REMO
 One-time setup:
 
 ```bash
-# on the VPS (with herdr-relay already running): issue an invite for this machine
-herdr-relay invite gerdr.example.com
+# in the dialhome web admin (https://relay.example.com/), invite this machine — or on the VPS:
+dialhome invite gerdr.example.com
 
 # on this machine: register and set up certificates (DNS-01, Cloudflare as the example)
 gerdr remote join https://relay.example.com gerdr.example.com <invite> \

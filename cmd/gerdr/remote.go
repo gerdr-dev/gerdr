@@ -11,11 +11,12 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/zbysir/dialhome/relay"
+
 	"github.com/gerdr-dev/gerdr/internal/acme"
 	"github.com/gerdr-dev/gerdr/internal/auth"
 	"github.com/gerdr-dev/gerdr/internal/config"
 	"github.com/gerdr-dev/gerdr/internal/qr"
-	"github.com/gerdr-dev/gerdr/internal/relay"
 	"github.com/gerdr-dev/gerdr/internal/remote"
 )
 
@@ -250,7 +251,7 @@ func joinCmd() *cobra.Command {
 	var staging bool
 	c := &cobra.Command{
 		Use:   "join <中继地址> <主机名> <邀请码>",
-		Short: "用邀请码把这台机器注册到云端中继（herdr-relay）上（邀请码在 VPS 上用 herdr-relay invite <主机名> 出）",
+		Short: "用邀请码把这台机器注册到云端中继（dialhome）上（邀请码在中继的网页后台里出，或者 VPS 上 dialhome invite <主机名>）",
 		Long: "注册到中继，并把配置写进 <数据目录>/remote/remote.json（0600）；gerdr 在跑就当场生效，没在跑就下次启动生效。\n" +
 			"也可以不敲命令：设置 → 远程访问里填同样三样。\n" +
 			"证书可以一起给：--dns 让 gerdr 走 DNS-01 自己签（推荐），或者 --cert / --key 指两个文件；\n" +

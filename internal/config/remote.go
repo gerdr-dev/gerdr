@@ -18,7 +18,7 @@ import (
 // 跑的 agent 读得到 —— 能读你文件的东西早就有你的 shell 了，这里能做的是别再往 agent 的**环境**里
 // 漏（GERDR_* 不往下传，见 sysenv.ChildEnv；acme 签完把脱了前缀的那份撤掉）。
 type Remote struct {
-	RelayURL string // GERDR_RELAY_URL：中继控制面，https://herdr-relay.example.com
+	RelayURL string // GERDR_RELAY_URL：中继控制面，https://relay.example.com
 	Host     string // GERDR_RELAY_HOST：在中继上注册的主机名，也是 passkey 的 RPID
 	// 证书：二选一。ACME 走 DNS-01 自己签（推荐，见 internal/acme）；或者自己给两个文件。
 	ACMEDNS     string // GERDR_ACME_DNS：cloudflare / alidns / …

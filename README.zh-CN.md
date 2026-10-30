@@ -200,15 +200,15 @@ export default definePlugin({
 
 ## 远程访问（手机 / 别的电脑）
 
-和 [herdr-web](https://github.com/zbysir/herdr-web) 同一套：经云端中继（[herdr-relay](https://github.com/zbysir/herdr-web)）对外，TLS 在这台机器上终止，
+和 [herdr-web](https://github.com/zbysir/herdr-web) 同一套：经云端中继（[dialhome](https://github.com/zbysir/dialhome)）对外，TLS 在这台机器上终止，
 中继只转密文。新设备用**配对码**进来（只有坐在机器前的人能出），之后加一把 **passkey**，换新设备就不用再回机器前。
 本机的令牌在远程**不好使**。设计和理由见 [docs/dev/REMOTE.md](docs/dev/REMOTE.md)。
 
 一次性的准备：
 
 ```bash
-# VPS 上（已经有 herdr-relay 的话）：给这台机器出一个邀请码
-herdr-relay invite gerdr.example.com
+# 在 dialhome 的网页后台（https://relay.example.com/）里给这台机器出邀请码，或者在 VPS 上：
+dialhome invite gerdr.example.com
 
 # 这台机器上：注册，顺带配好证书（DNS-01 自己签，这里以 Cloudflare 为例）
 gerdr remote join https://relay.example.com gerdr.example.com <邀请码> \

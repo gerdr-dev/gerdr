@@ -4,12 +4,13 @@
 先读那两份）。这里只写 gerdr 和它**不一样**的地方，以及搬过来时会静默出错的几条。
 
 ```
- 手机浏览器 ──TLS──▶ herdr-relay（VPS）──按 SNI 原样转──▶ gerdr 的隧道（主动连出去的 WebSocket + yamux）
+ 手机浏览器 ──TLS──▶ dialhome（VPS）──按 SNI 原样转──▶ gerdr 的隧道（主动连出去的 WebSocket + yamux）
  https://gerdr.example.com        不解密                      TLS 在这里终止 → server.RemoteHandler → remoteGuard
 ```
 
-代码：`internal/auth`（设备表 / 配对码 / passkey / 限速，照 herdr-web）、`internal/relay`（**只有主机那半边**，中继本身
-在 herdr-web 仓库里）、`internal/acme`（DNS-01 签证书）、`internal/remote`（把上面拼起来）、`internal/server/remoteapi.go`
+代码：`internal/auth`（设备表 / 配对码 / passkey / 限速，照 herdr-web）、`github.com/zbysir/dialhome/relay`（中继的主机那半边，
+import 的；中继本身也在 dialhome 仓库里 —— 原来这里抄了一份主机侧，2026-10-30 中继拆成独立项目后改成 import，
+协议只在一处定义）、`internal/acme`（DNS-01 签证书）、`internal/remote`（把上面拼起来）、`internal/server/remoteapi.go`
 （远程的门 + `/api/remote/*`）、`internal/server/pairpage.html`（配对页）、`cmd/gerdr/remote.go`（`gerdr remote …`）、
 界面 `ui/src/components/RemoteSettings.tsx` + `ui/src/lib/passkey.ts`。
 
@@ -102,8 +103,7 @@ GERDR_* 本来就不往 agent 的环境里传（`sysenv.ChildEnv`）；acme 把�
 
 ## 照搬过来时要守住的几条（都在 herdr-web 踩过）
 
-- **中继协议一个字节都不能改**：`relay.signed` 那串（`herdr-relay/1\n…`）、握手三句 JSON、子流头（两字节长度 + `{"src"}`）。
-  `internal/relay/relay_test.go` 的假中继钉着格式；真的兼容性只有连上真中继才验得到。
+- **中继协议在 dialhome 那边定义、那边测**（`relay/relay_test.go` 是真中继 + 真主机两头对着跑），这里不再有自己的一份。
 - `relay.srcConn` 把 yamux 的超时错误换成 `os.ErrDeadlineExceeded`：不换的话 crypto/tls 把它当永久错误记住，**隧道上的
   WebSocket 连上就断**，普通请求一切正常。
 - step-up 判 `PasskeyAt` 不判 `VerifiedAt`：配对会把 VerifiedAt 设成当下，按它判的话刚拿码进来的人天然新鲜，可以给自己留一把 passkey。
@@ -124,6 +124,6 @@ GERDR_* 本来就不往 agent 的环境里传（`sysenv.ChildEnv`）；acme 把�
 
 ## 没做的
 
-- 端到端（真 herdr-relay + 真证书 + 手机）只能部署之后验：假中继的测试管协议格式，不管 Traefik 路由、CAA、证书链。
+- 端到端（真中继（dialhome）+ 真证书 + 手机）只能部署之后验：假中继的测试管协议格式，不管 Traefik 路由、CAA、证书链。
 - CT 日志巡检、审计日志、令牌轮换。
 - 安卓 App（局域网直连、App 里刷 passkey、device flow 退路、后台通知）见 [ANDROID.md](ANDROID.md)。
