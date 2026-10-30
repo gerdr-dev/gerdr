@@ -229,7 +229,8 @@ page. Changes apply immediately. Stored under `agents` in `config.json`:
 ### Gerdr Agent (GPT, DeepSeek… straight from the API)
 
 gerdr ships its own agent that skips Claude Code / Codex and calls OpenAI-compatible APIs (Responses for GPT, Chat
-Completions for DeepSeek and others). Configure models in `config.json` and *Gerdr Agent* appears when starting a
+Completions for DeepSeek and others) or Anthropic's Messages API (`"api": "anthropic"` on the provider, with a base URL
+like `https://api.anthropic.com`). Configure models in `config.json` and *Gerdr Agent* appears when starting a
 session:
 
 ```json
@@ -247,7 +248,7 @@ and `config.json` keeps `"<hidden>"`, so an agent that reads your settings doesn
 Or use `"apiKeyEnv": "VAR_NAME"` to take it from gerdr's environment; that variable is not passed on to agents or
 terminals. A model id is usually enough; protocol, reasoning
 levels and context window are guessed from it, and you can override with `api` (chat / responses), `efforts`,
-`window`, `images`. The bottom of Settings → Agents can do this too (fetch the model list, test a model).
+`window`, `images`, `maxOutput`. The bottom of Settings → Agents can do this too (fetch the model list, test a model).
 
 Transcripts go to `~/.gerdr/native/`. Interjecting, rewind, approvals, subagents (backgroundable), background
 commands, web fetch, `/compact`, `/clear`, skills and MCP (Claude Code's servers plus gerdr's; no OAuth servers) all

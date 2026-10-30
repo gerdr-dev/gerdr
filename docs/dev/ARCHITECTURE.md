@@ -113,9 +113,12 @@ React（ui/，不打包）  ←WebSocket / HTTP→  hub（internal/hub）  ←AC
 
 ## Gerdr Agent（native）—— 自己写的 agent，直接调模型接口
 
-`internal/agents/native`：没有子进程，主循环、工具、会话记录都在 gerdr 里；模型层 `native/llm` 只有两种协议
-（Chat Completions、Responses）。为什么不用 shuttle 的 pi：插话、子 agent、回退这几样 pi 的主循环里没有或形状不对，
-而它整套有六万行；自己的主循环一百多行（`loop.go`），每一步看得见。配置是 config.json 的 `llm`（README 有例子），每轮现取。
+`internal/agents/native`: no subprocess; the loop, tools and transcripts all live in gerdr. The model layer `native/llm`
+speaks three protocols (Chat Completions, Responses, Anthropic Messages; the protocol is picked per provider,
+`Provider.API`), each hand-written rather than through an SDK so every gateway quirk is visible and fixable in one place.
+Why not shuttle's pi: interjections, subagents and rewind are missing from or the wrong shape in pi's loop, and pi is
+sixty thousand lines; our loop is about a hundred (`loop.go`) and every step is visible. Config is the `llm` key of
+config.json (example in the README), read fresh every turn.
 
 会静默出错的几条（实测 / 抄 pi 的）：
 
@@ -125,6 +128,10 @@ React（ui/，不打包）  ←WebSocket / HTTP→  hub（internal/hub）  ←AC
    Responses 用 `store:false` + `include:["reasoning.encrypted_content"]`，推理 item 原样放回 input；中途换了协议的就丢掉。
 3. 经网关的 GPT 在 Chat Completions 里，工具调用第一片之后每片都带 `"name":""`，拼的时候不能拿空名字覆盖（subhub 实测）。
    Responses 的 `input` 必须是数组。工具结果里放不了图：图另起一条 user 消息跟在这批结果后面。
+   Anthropic: assistant turns are replayed as the exact content blocks the API returned (`Message.Blocks`), not rebuilt
+   from Text / Reasoning / ToolCalls: thinking blocks carry signatures, newer Claude models check that earlier turns
+   weren't edited, and the split fields lose the block order. Anything that edits a message must clear `Blocks`
+   (`keepPartial` does). Thinking needs `display:"summarized"`, or newer models stream empty thinking text.
 4. **插话不打断工具**：排队，下一次调模型前接到历史末尾；`Now` 只掐当前这次生成。「模型说完了 → 标成空闲」和插话入队在同一把锁里
    （`endIfIdle`），不然中间进来的插话被回成 injected 却没人处理。
 5. 流断了（没有 finish_reason / response.completed）报 `stream disconnected`，hub 的 `retryable` 认它、发「继续」重来；

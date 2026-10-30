@@ -1,5 +1,5 @@
-// Package llm 是 native agent 跟模型说话的那一层：和厂商无关的消息格式 + 两种线路协议
-// （OpenAI Chat Completions、OpenAI Responses）。
+// Package llm 是 native agent 跟模型说话的那一层：和厂商无关的消息格式 + 三种线路协议
+// （OpenAI Chat Completions、OpenAI Responses、Anthropic Messages）。
 //
 // 为什么不用 pi（shuttle 用的那套）：pi 是一个完整的 agent 框架（主循环、会话树、几十个厂商），
 // gerdr 要的插话、子 agent、回退都得改它的主循环；而模型这一层我们只需要两种协议（DeepSeek、
@@ -30,6 +30,12 @@ type Message struct {
 	// API：assistant 是哪种协议生成的。不透明的推理（Responses 的 encrypted_content）只能还给同一种协议，
 	// 中途换了模型 / 协议就丢掉，只留文字。
 	API string `json:"api,omitempty"`
+	// Blocks: the assistant's content blocks exactly as the Anthropic API returned them (thinking with its
+	// signature, text, tool_use, in their original order). Sent back verbatim to the same protocol: newer Claude
+	// models reject (or silently drop thinking from) a history whose earlier turns were edited, and Text /
+	// Reasoning / ToolCalls can't keep the order of interleaved blocks. Only set on a complete response; anything
+	// that edits the message (keepPartial) must clear it.
+	Blocks json.RawMessage `json:"blocks,omitempty"`
 }
 
 type Part struct {
@@ -41,7 +47,7 @@ type Part struct {
 
 func TextPart(s string) Part { return Part{Type: "text", Text: s} }
 
-// Thought 是一段思考。Text 给人看；ID / Encrypted 是 Responses 要原样带回的推理 item。
+// Thought 是一段思考。Text 给人看；ID / Encrypted 是 Responses 要原样带回的推理 item（Anthropic 的 signature 也放 Encrypted）。
 type Thought struct {
 	Text      string `json:"text,omitempty"`
 	ID        string `json:"id,omitempty"`
@@ -67,7 +73,8 @@ type Request struct {
 	Tools    []Tool
 	// Effort：思考档位，原样按模型的规矩发（见 Model.Efforts）。空 = 不发，用接口默认。
 	Effort string
-	// Thinking：Chat Completions 上的思考开关格式（"deepseek" = thinking:{type}；"" = reasoning_effort）。
+	// Thinking：思考开关的格式。Chat Completions："deepseek" = thinking:{type}，"" = reasoning_effort；
+	// Anthropic："adaptive" = thinking:{type:adaptive}（Claude 4.6+），"" = 不发 thinking。
 	Thinking string
 	// CacheKey：前缀缓存的路由键（OpenAI 的 prompt_cache_key）。同一个会话用同一个，命中率高很多。
 	CacheKey  string
@@ -110,10 +117,13 @@ type Endpoint struct {
 	Headers map[string]string // 额外的请求头
 }
 
-// New 按协议名拿客户端：chat（Chat Completions）| responses。
+// New 按协议名拿客户端：chat（Chat Completions）| responses | anthropic（Messages）。
 func New(api string, ep Endpoint) Client {
-	if api == "responses" {
+	switch api {
+	case "responses":
 		return &responses{ep: ep}
+	case "anthropic":
+		return &anthropic{ep: ep}
 	}
 	return &chat{ep: ep}
 }

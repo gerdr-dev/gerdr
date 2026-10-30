@@ -48,7 +48,7 @@ var configKeys = map[string]configKey{
 	"pinnedCommands":  {kind: "array", desc: "slash commands (no /) pinned beside the input box"},
 	"agents":          {kind: "array", desc: "agents (roles) from Settings → Agent: {id, name, base: claude|codex|native, prompt, skills, mcp, providers, env…}; address one as agents.<id>"},
 	"agentBins":       {kind: "object", desc: "which claude / codex executable to run: {\"claude\": \"/path/to/claude\"}"},
-	"llm":             {kind: "object", desc: "Gerdr Agent's model providers: {providers: [{id, name, baseUrl, apiKey, apiKeyEnv, models: [{id}]}], defaultModel: \"provider/model\"}; apiKey is stored in secrets.json and reads back as <hidden>"},
+	"llm":             {kind: "object", desc: "Gerdr Agent's model providers: {providers: [{id, name, api (omit = OpenAI-compatible, \"anthropic\" = Anthropic Messages), baseUrl, apiKey, apiKeyEnv, models: [{id}]}], defaultModel: \"provider/model\"}; apiKey is stored in secrets.json and reads back as <hidden>"},
 	"workSessions":    {kind: "object", desc: "managed by the UI: each project's Work conversation"},
 	"workAgents":      {kind: "object", desc: "managed by the UI: each project's Work agent"},
 }

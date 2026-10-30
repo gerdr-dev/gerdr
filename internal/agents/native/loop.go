@@ -139,6 +139,7 @@ func (r *run) keepPartial(res llm.Result) {
 		return
 	}
 	m.Reasoning = nil // 半截的不透明推理还回去会被拒
+	m.Blocks = nil
 	r.add(m, "", nil)
 }
 
@@ -164,7 +165,7 @@ func (r *run) callModel(ctx context.Context) (llm.Result, bool, error) {
 	r.reqN++
 	req := llm.Request{
 		Model: r.model.ID, System: r.system, Messages: r.history(), Tools: toolDefs(r.tools),
-		Effort: r.effortValue(), Thinking: r.model.Thinking, CacheKey: r.s.currentID(),
+		Effort: r.effortValue(), Thinking: r.model.Thinking, CacheKey: r.s.currentID(), MaxTokens: r.model.MaxOutput,
 	}
 	res, err := r.model.client().Stream(sctx, req, func(e llm.Event) {
 		switch e.Kind {

@@ -43,11 +43,20 @@ var httpClient = &http.Client{Transport: &http.Transport{
 
 // post 发请求，拿到 200 的响应体（SSE）。网络错误、429、5xx 在拿到响应之前重试。
 func post(ctx context.Context, ep Endpoint, path string, body any) (io.ReadCloser, error) {
+	h := http.Header{}
+	if ep.APIKey != "" {
+		h.Set("Authorization", "Bearer "+ep.APIKey)
+	}
+	return postURL(ctx, strings.TrimRight(ep.BaseURL, "/")+path, h, ep.Headers, body)
+}
+
+// postURL is post with the auth headers already chosen (the protocols put the key in different headers);
+// extra (the provider's own headers) is applied last so it can override them.
+func postURL(ctx context.Context, url string, auth http.Header, extra map[string]string, body any) (io.ReadCloser, error) {
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
-	url := strings.TrimRight(ep.BaseURL, "/") + path
 	var last error
 	for attempt := 0; ; attempt++ {
 		req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(buf))
@@ -56,10 +65,10 @@ func post(ctx context.Context, ep Endpoint, path string, body any) (io.ReadClose
 		}
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Accept", "text/event-stream")
-		if ep.APIKey != "" {
-			req.Header.Set("Authorization", "Bearer "+ep.APIKey)
+		for k, v := range auth {
+			req.Header[k] = v
 		}
-		for k, v := range ep.Headers {
+		for k, v := range extra {
 			req.Header.Set(k, v)
 		}
 		res, err := httpClient.Do(req)

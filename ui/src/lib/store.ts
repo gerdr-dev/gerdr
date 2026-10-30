@@ -63,9 +63,10 @@ export type Config = {
   llm?: LLMConfig;
 };
 
-/** config.json 的 llm：Gerdr Agent 直接调的模型接口（OpenAI 兼容）。模型只写 id 时协议、思考档位按 id 猜（后端 native/config.go）。 */
+/** config.json 的 llm：Gerdr Agent 直接调的模型接口（OpenAI 兼容或 Anthropic）。模型只写 id 时协议、思考档位按 id 猜（后端 native/config.go）。 */
 export type LLMModel = { id: string; name?: string; api?: "chat" | "responses"; efforts?: string[]; window?: number };
-export type LLMProvider = { id: string; name?: string; baseUrl: string; apiKey?: string; apiKeyEnv?: string; models: LLMModel[] };
+/** api: the provider's protocol. Unset = OpenAI-compatible (each model picks Chat Completions / Responses); "anthropic" = Anthropic Messages. */
+export type LLMProvider = { id: string; name?: string; api?: "anthropic"; baseUrl: string; apiKey?: string; apiKeyEnv?: string; models: LLMModel[] };
 export type LLMConfig = { providers?: LLMProvider[]; defaultModel?: string };
 
 /** config.json 里的 agents：agent = 一个引擎（base = claude / codex / native，或者外部 ACP agent 的 command）+ 自己的配置。

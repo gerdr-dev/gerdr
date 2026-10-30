@@ -9,18 +9,27 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { api } from "@/lib/api";
 import { setConfig, useStore, type LLMConfig, type LLMModel, type LLMProvider } from "@/lib/store";
 
-// 设置 → Agent 里「引擎」那块的 Native 服务商：native 引擎直接调的模型接口（OpenAI 兼容）。用 native 引擎的 agent 可以只挑几家（AgentDef.providers）。
+// 设置 → Agent 里「引擎」那块的 Native 服务商：native 引擎直接调的模型接口。用 native 引擎的 agent 可以只挑几家（AgentDef.providers）。
 // 存进 config.json 的 llm（后端 native/config.go 读，每轮现取：改了下一轮就用新的）。配了至少一个模型，新建会话时才出现 Gerdr Agent。
-// 模型只填 id，协议（GPT 走 Responses、别的走 Chat Completions）、思考档位、上下文窗口后端按 id 猜；猜错了在 config.json 里给模型写 api / efforts / window。
+// The protocol is picked per provider (a gateway can't be recognized by its URL): OpenAI-compatible or Anthropic.
+// On OpenAI-compatible ones the backend guesses per model id (GPT → Responses, others → Chat Completions); thinking
+// levels and context window are guessed too. Wrong guesses are fixed in config.json (api / efforts / window on the model).
 
 const stop = (e: React.KeyboardEvent) => e.stopPropagation();
 const EMPTY: LLMConfig = {}; // 选择器里别 `?? {}`：每次一个新对象，zustand 认成变了，无限重渲染
 
-type Draft = { id: string; name: string; baseUrl: string; keyMode: "key" | "env"; apiKey: string; apiKeyEnv: string; models: LLMModel[] };
+type Protocol = "openai" | "anthropic";
+type Draft = { id: string; name: string; api: Protocol; baseUrl: string; keyMode: "key" | "env"; apiKey: string; apiKeyEnv: string; models: LLMModel[] };
+
+const PROTOCOLS: Record<Protocol, { label: string; baseUrl: string; key: string; model: string }> = {
+  openai: { label: "OpenAI 兼容", baseUrl: "https://api.deepseek.com/v1（到 /v1 为止）", key: "sk-…", model: "deepseek-v4-pro" },
+  anthropic: { label: "Anthropic", baseUrl: "https://api.anthropic.com", key: "sk-ant-…", model: "claude-opus-5-5" },
+};
 
 const toDraft = (p: LLMProvider): Draft => ({
   id: p.id,
   name: p.name ?? "",
+  api: p.api === "anthropic" ? "anthropic" : "openai",
   baseUrl: p.baseUrl,
   keyMode: p.apiKeyEnv && !p.apiKey ? "env" : "key",
   apiKey: p.apiKey ?? "",
@@ -29,10 +38,16 @@ const toDraft = (p: LLMProvider): Draft => ({
 });
 
 function fromDraft(d: Draft): LLMProvider {
-  if (!d.baseUrl.trim()) throw new Error("填接口地址（到 /v1 为止）");
+  if (!d.baseUrl.trim()) throw new Error(d.api === "anthropic" ? "填接口地址" : "填接口地址（到 /v1 为止）");
   if (!/^https?:\/\//.test(d.baseUrl.trim())) throw new Error("接口地址要以 http:// 或 https:// 开头");
   if (!d.id.trim()) throw new Error("起个名字");
-  const p: LLMProvider = { id: d.id, name: d.name.trim() || undefined, baseUrl: d.baseUrl.trim().replace(/\/+$/, ""), models: d.models };
+  const p: LLMProvider = {
+    id: d.id,
+    name: d.name.trim() || undefined,
+    api: d.api === "anthropic" ? "anthropic" : undefined,
+    baseUrl: d.baseUrl.trim().replace(/\/+$/, ""),
+    models: d.models,
+  };
   if (d.keyMode === "key") p.apiKey = d.apiKey.trim() || undefined;
   else p.apiKeyEnv = d.apiKeyEnv.trim() || undefined;
   return p;
@@ -75,7 +90,7 @@ export function LLMSettings() {
       <div className="flex items-center gap-2">
         <AgentIcon agent="native" className="size-4" />
         <span className="font-medium">Native</span>
-        <span className="min-w-0 truncate text-[12px] text-muted-foreground">Gerdr 自己的引擎，直接调下面这些模型服务商（OpenAI 兼容接口）</span>
+        <span className="min-w-0 truncate text-[12px] text-muted-foreground">Gerdr 自己的引擎，直接调下面这些模型服务商（OpenAI 兼容或 Anthropic 接口）</span>
         <span className="flex-1" />
         {providers.some((p) => p.models.length) ? (
           <span className="shrink-0 text-[12px] text-ok">配了 {providers.length} 家</span>
@@ -91,6 +106,7 @@ export function LLMSettings() {
         <div key={p.id} className="space-y-1.5 rounded-md bg-muted/40 px-3 py-2">
           <div className="flex items-center gap-2">
             <span className="font-medium">{p.name || p.id}</span>
+            {p.api === "anthropic" && <span className="shrink-0 rounded-sm bg-muted px-1 text-[11px] text-muted-foreground">Anthropic</span>}
             <span className="truncate font-mono text-[12px] text-muted-foreground">{p.baseUrl}</span>
             {!p.apiKey && !p.apiKeyEnv && <span className="shrink-0 text-[12px] text-warn">没填 key</span>}
             {p.apiKeyEnv && !p.apiKey && <span className="shrink-0 text-[12px] text-muted-foreground">key 取自 ${p.apiKeyEnv}</span>}
@@ -133,7 +149,7 @@ export function LLMSettings() {
           onClick={() => {
             setIsNew(true);
             const taken = new Set(providers.map((p) => p.id));
-            setEdit({ id: slug("provider", taken), name: "", baseUrl: "", keyMode: "key", apiKey: "", apiKeyEnv: "", models: [] });
+            setEdit({ id: slug("provider", taken), name: "", api: "openai", baseUrl: "", keyMode: "key", apiKey: "", apiKeyEnv: "", models: [] });
           }}
         >
           <Plus className="size-3.5" /> 加一个模型服务商
@@ -199,7 +215,8 @@ function Editor({
     setTesting(m.id);
     try {
       const r = await api.llmTest(p, m);
-      toast.success(`${m.id} 能用（${r.api === "responses" ? "Responses" : "Chat Completions"}）：${r.reply.slice(0, 60)}`);
+      const proto = r.api === "anthropic" ? "Anthropic Messages" : r.api === "responses" ? "Responses" : "Chat Completions";
+      toast.success(`${m.id} 能用（${proto}）：${r.reply.slice(0, 60)}`);
     } catch (e: any) {
       toast.error(`${m.id} 不通：${e.message}`);
     } finally {
@@ -219,13 +236,26 @@ function Editor({
           className="h-8"
           placeholder="比如 DeepSeek、公司网关"
         />
+        <span className="text-muted-foreground">协议</span>
+        <Select value={d.api} onValueChange={(v) => set({ api: v as Protocol })}>
+          <SelectTrigger size="sm" className="w-40">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {(Object.keys(PROTOCOLS) as Protocol[]).map((k) => (
+              <SelectItem key={k} value={k}>
+                {PROTOCOLS[k].label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <span className="text-muted-foreground">接口地址</span>
         <Input
           value={d.baseUrl}
           onChange={(e) => set({ baseUrl: e.target.value })}
           onKeyDown={stop}
           className="h-8 font-mono text-[12px]"
-          placeholder="https://api.deepseek.com/v1（到 /v1 为止）"
+          placeholder={PROTOCOLS[d.api].baseUrl}
         />
         <span className="text-muted-foreground">API key</span>
         <div className="flex items-center gap-2">
@@ -246,7 +276,7 @@ function Editor({
               onChange={(e) => set({ apiKey: e.target.value })}
               onKeyDown={stop}
               className="h-8 font-mono text-[12px]"
-              placeholder="sk-…（存在跑 Gerdr 的电脑的 secrets.json 里，不进 config.json）"
+              placeholder={`${PROTOCOLS[d.api].key}（存在跑 Gerdr 的电脑的 secrets.json 里，不进 config.json）`}
             />
           ) : (
             <Input
@@ -294,7 +324,7 @@ function Editor({
                 }
               }}
               className="h-8 font-mono text-[12px]"
-              placeholder="模型 id，回车加上（比如 deepseek-v4-pro）"
+              placeholder={`模型 id，回车加上（比如 ${PROTOCOLS[d.api].model}）`}
             />
             <Button size="sm" variant="outline" className="shrink-0" onClick={fetchModels} disabled={busy}>
               {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />} 从接口拉
@@ -327,8 +357,19 @@ function Editor({
         </div>
       </div>
       <div className="text-[12px] text-muted-foreground">
-        协议、思考档位、上下文窗口按模型 id 猜：gpt / o 系列走 Responses，别的走 Chat Completions；DeepSeek 是纯文本模型、思考档位 关 / 高 / 最高。 猜错了在
-        config.json 的模型上写 <code className="font-mono">api</code>、<code className="font-mono">efforts</code>、<code className="font-mono">window</code>。
+        {d.api === "anthropic" ? (
+          <>
+            每个模型都走 Anthropic Messages（/v1/messages，地址带不带 /v1 都行）。Claude 4.6 及以后自动开 adaptive 思考，档位 low → max；
+            别的模型不发思考参数。猜错了在 config.json 的模型上写 <code className="font-mono">efforts</code>、<code className="font-mono">window</code>、
+            <code className="font-mono">maxOutput</code>。
+          </>
+        ) : (
+          <>
+            协议、思考档位、上下文窗口按模型 id 猜：gpt / o 系列走 Responses，别的走 Chat Completions；DeepSeek 是纯文本模型、思考档位 关 / 高 / 最高。 猜错了在
+            config.json 的模型上写 <code className="font-mono">api</code>、<code className="font-mono">efforts</code>、<code className="font-mono">window</code>
+            。
+          </>
+        )}
       </div>
       <div className="flex justify-end gap-2">
         <Button size="sm" variant="ghost" onClick={onCancel}>
