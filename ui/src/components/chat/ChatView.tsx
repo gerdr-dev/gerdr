@@ -58,9 +58,9 @@ function PinnedPrompt({ msg, onClick }: { msg: GMessage; onClick: () => void }) 
     .replace(/\s+/g, " ")
     .trim();
   return (
-    <div className="pointer-events-none absolute inset-x-0 top-0 z-10 px-4 pt-2">
+    <div className="pointer-events-none absolute inset-x-0 top-0 z-10 px-4">
       <button
-        className="pointer-events-auto mx-auto flex w-full max-w-[800px] items-center gap-2 rounded-md border bg-background/95 px-3 py-1.5 text-left text-[13px] text-muted-foreground shadow-sm backdrop-blur hover:text-foreground"
+        className="pointer-events-auto mx-auto flex w-full max-w-[800px] items-center gap-2 rounded-b-md border border-t-0 bg-background/95 px-3 py-1 text-left text-[13px] text-muted-foreground shadow-sm backdrop-blur hover:text-foreground"
         onClick={onClick}
         title="跳到这句"
       >
