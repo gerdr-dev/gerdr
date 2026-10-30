@@ -49,7 +49,15 @@ function stop() {
   sock?.close();
 }
 
-export async function boot() {
+// App remounts (hot update with changed hooks, or a changed module that this one doesn't import) call boot() again
+// on the *same* instance of this module. Starting over would open a second WebSocket and orphan the first: both stay
+// live, every broadcast is handled twice (the stepup toast showed up once per remount). So boot once per instance.
+let booting: Promise<void> | null = null;
+export function boot() {
+  return (booting ??= start());
+}
+
+async function start() {
   if (stopped) return;
   const w = window as any;
   if (w.__gerdrSyncStop !== stop) w.__gerdrSyncStop?.();
@@ -86,7 +94,7 @@ export async function boot() {
       set({ authError: true, ready: true });
       return;
     }
-    setTimeout(boot, 2000);
+    setTimeout(start, 2000);
   }
 }
 
@@ -284,7 +292,7 @@ function handle(m: any) {
         const body = `「${m.data?.label}」请求添加 passkey，核对码 ${m.data?.code}`;
         const open = () => set({ dialog: { kind: "settings", tab: "remote" } });
         nativeNotify("gerdr：要你批准", body);
-        toast(body, { duration: 30000, action: { label: "去批准", onClick: open } });
+        toast(body, { id: "stepup", duration: 30000, action: { label: "去批准", onClick: open } }); // a newer request replaces the old one
       }
       break;
   }

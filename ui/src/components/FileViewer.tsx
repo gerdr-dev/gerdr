@@ -65,7 +65,8 @@ export function FilePicker() {
 }
 
 function Body({ stat }: { stat: FileStat }) {
-  const url = fileRawURL(stat.path);
+  // Versioned so a file rewritten in place isn't played from Chromium's per-URL media buffer (see ChatMedia).
+  const url = `${fileRawURL(stat.path)}&v=${stat.mtime}-${stat.size}`;
   const kind = stat.mime.split("/")[0];
   return (
     <>
