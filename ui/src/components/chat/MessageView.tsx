@@ -310,7 +310,8 @@ export function renderPart(p: GPart, i: number, ctx: PartCtx): ReactNode {
     case "data-turnStat":
       return (
         // 一轮的元信息：结束时间 · 用时 · 输出 token（照 Astryx ChatMessageMetadata 的「9:46 AM · Claude Opus」）
-        <div key={i} className="text-[12px] text-muted-foreground tabular-nums">
+        // h-5 like the running turn's StatusLine it replaces, so the swap doesn't jump
+        <div key={i} className="flex h-5 items-center text-[12px] text-muted-foreground tabular-nums">
           {[fmtTime(p.data.ts), `用时 ${fmtElapsed(p.data.ms)}`, p.data.tokens > 0 && `${fmtTokens(p.data.tokens)} tokens`].filter(Boolean).join(" · ")}
         </div>
       );

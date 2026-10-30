@@ -65,7 +65,9 @@ export function StatusLine() {
   const waiting = session?.status === "waiting";
   return (
     // 像素转圈打头（PixelLoader，照 beUI 的 Pixel orbit），后面动词 + 用时 / token；等人处理时它停下来呼吸、换成 warn 色
-    <div className="flex items-center gap-2 py-[3px] text-[13px]">
+    // Fixed h-5, same as the turn's metadata line that replaces it when the turn ends (MessageView, data-turnStat): heights
+    // that differed made the chat jump at that swap
+    <div className="flex h-5 items-center gap-2 text-[13px]">
       <PixelLoader paused={waiting} className={waiting ? "text-warn" : "text-brand"} />
       <span className={waiting ? "text-warn" : "text-brand"}>{waiting ? "等你处理" : `${verb}…`}</span>
       <span className="text-[12px] text-muted-foreground tabular-nums">
