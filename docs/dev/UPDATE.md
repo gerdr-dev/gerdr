@@ -48,6 +48,9 @@ A backend restart kills running turns, pending permission requests, background t
   every 10s, unless started with `GERDR_UPGRADE_NOW=1` (the shell sets it when the person chose "now" or it just saw
   idle). If the service runs a different file than ours (a downloaded backend moved it), it rewrites the plist
   (`InstalledExec` ≠ ours → `Install`), since a kickstart would restart the old file.
+  `GERDR_UPGRADE_NOW` covers only the update the attacher was started for: it is dropped after one restart or when
+  its binary changes again. Kept for the process's whole life, every later `make install` restarted the service at
+  once, cutting off running turns.
 
 Local builds follow the same rule: `make install` swaps the bundle under the running App, and `appAttach` re-reads
 its own binary's buildID every round, so it notices and restarts the service once idle. Staleness is decided by
