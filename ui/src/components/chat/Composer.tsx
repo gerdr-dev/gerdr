@@ -76,6 +76,14 @@ export const Composer = forwardRef<
   const sendKey = useStore((s) => s.config.sendKey);
   const pinned = useStore((s) => s.config.pinnedCommands ?? NO_PINS);
   const phone = usePhone();
+  // The phone's compact bottom row (options folded into one menu, one shared stop / send button) whenever the full row
+  // doesn't fit the box, not just on a phone: a split pane or Work mode's chat column squeezed the dropdowns to "A…" "GP…".
+  // Decided by measuring, not a fixed width: how much room the row needs depends on the agent's option names.
+  const [narrow, setNarrow] = useState(false);
+  const [, setRootW] = useState(0);
+  const optsRow = useRef<HTMLDivElement>(null);
+  const needW = useRef(0); // the box width the full row needed when it last overflowed
+  const compact = phone || narrow;
   const imgs = useStore((s) => s.draftImgs[paneId] ?? NO_IMGS);
   // 读图片的回调可能在切走（卸载）之后才回来，所以每次都从 store 里取最新的再改，别用渲染时的 imgs
   const setImgs = (v: Img[] | ((cur: Img[]) => Img[])) =>
@@ -158,6 +166,29 @@ export const Composer = forwardRef<
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+
+  // Re-render on resize so the check below runs again
+  useEffect(() => {
+    const el = root.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setRootW(el.clientWidth));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  // Every render (the row also changes with running / the options): full row overflowing → compact, remembering how wide
+  // the box would have to be; compact → back to full once the box is that wide again
+  useLayoutEffect(() => {
+    const o = optsRow.current;
+    const r = root.current;
+    if (phone || !o || !r || !r.clientWidth) return;
+    if (!narrow) {
+      const over = o.scrollWidth - o.clientWidth;
+      if (over > 1) {
+        needW.current = r.clientWidth + over;
+        setNarrow(true);
+      }
+    } else if (r.clientWidth >= needW.current) setNarrow(false);
+  });
 
   useLayoutEffect(() => {
     const el = ta.current;
@@ -873,7 +904,7 @@ export const Composer = forwardRef<
         <div className="flex items-center gap-1 px-2.5 pb-2.5">
           {/* 附图和几个下拉放一组：放不下时这一组横着滑，而不是每个都被挤成「A…」「Opus …」（用户报的）；
               手机上模式 / 模型 / 思考强度收成一个图标（OptionsMenu），平时几乎不改，不值得常驻。上下文 / 发送这些固定在右边不动 */}
-          <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none]">
+          <div ref={optsRow} className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none] [&>*]:shrink-0">
             <Tooltip>
               <TooltipTrigger asChild>
                 <label className="flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground">
@@ -911,7 +942,7 @@ export const Composer = forwardRef<
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
-            {phone ? (
+            {compact ? (
               <OptionsMenu
                 mode={modeGroup}
                 groups={optGroups}
@@ -941,20 +972,20 @@ export const Composer = forwardRef<
             )}
           </div>
           <TasksChip session={session} />
-          {session.context && <ContextMeter c={session.context} />}
+          {session.context && <ContextMeter c={session.context} short={compact} />}
           {/* 手机上底栏放不下「打断 / 立即发 / 发送」三个圆钮（再挤下拉就又被截了）：照 ChatGPT 共用一个位置 ——
               在跑、没打字时是打断；打了字是立即发 + 插进去。电脑上地方够，三个都摆着 */}
-          {running && (!phone || !hasText) && (
+          {running && (!compact || !hasText) && (
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button size="icon" variant={phone ? "default" : "ghost"} className="size-8 rounded-full" onMouseDown={keepFocus} onClick={() => escape()}>
+                <Button size="icon" variant={compact ? "default" : "ghost"} className="size-8 rounded-full" onMouseDown={keepFocus} onClick={() => escape()}>
                   <Square className="size-3.5 fill-current" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>打断（Esc）</TooltipContent>
             </Tooltip>
           )}
-          {running && (!phone || hasText) && (
+          {running && (!compact || hasText) && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -971,7 +1002,7 @@ export const Composer = forwardRef<
               <TooltipContent>立即发送：打断它正在做的这一步{sendKey === "enter" ? "（Ctrl+↵）" : ""}</TooltipContent>
             </Tooltip>
           )}
-          {(!phone || !running || hasText) && (
+          {(!compact || !running || hasText) && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button size="icon" className="size-8 rounded-full" disabled={!hasText || busy} onMouseDown={keepFocus} onClick={() => send()}>
@@ -988,15 +1019,15 @@ export const Composer = forwardRef<
 });
 
 /** 上下文用了多少（照 Claude Code 的「Context left until auto-compact」）：过半才显眼，快满变色。 */
-function ContextMeter({ c }: { c: { tokens: number; window: number } }) {
+function ContextMeter({ c, short }: { c: { tokens: number; window: number }; short?: boolean }) {
   const pct = Math.min(100, Math.round((c.tokens / c.window) * 100));
   const tone = pct >= 90 ? "text-bad" : pct >= 75 ? "text-warn" : "text-muted-foreground";
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <span className={cn("mr-1 shrink-0 whitespace-nowrap text-[12px] tabular-nums", tone)}>
-          {/* 手机上底栏挤，只留百分比，免得被挤成一字一行 */}
-          <span className="max-sm:hidden">上下文 </span>
+          {/* Compact row (phone, or a narrow box): just the percentage, the label would get squeezed to one character a line */}
+          {!short && "上下文 "}
           {pct}%
         </span>
       </TooltipTrigger>

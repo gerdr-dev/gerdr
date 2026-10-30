@@ -32,6 +32,60 @@ import { askWorkAgent, ensureWorkSession, newWorkChat, openWorkChat, useWorkChat
 
 const WORK_PANE = "work"; // drafts / scroll position key prefix for the right-hand chat (it has no pane in the layout)
 
+// The chat column's width: dragged by its left edge (asked for), kept per browser like the sidebar's
+const CHAT_W = 440;
+const CHAT_MIN = 320;
+const CHAT_MAX = 900;
+const clampChatW = (w: number) => Math.round(Math.min(CHAT_MAX, window.innerWidth * 0.7, Math.max(CHAT_MIN, w)));
+
+function useChatW() {
+  const [w, setW] = useState(() => {
+    try {
+      const v = Number(localStorage.getItem("gerdr.workChatW"));
+      return v ? clampChatW(v) : CHAT_W;
+    } catch {
+      return CHAT_W;
+    }
+  });
+  const save = (v: number) => {
+    v = clampChatW(v);
+    setW(v);
+    try {
+      localStorage.setItem("gerdr.workChatW", String(v));
+    } catch {}
+  };
+  return [w, save] as const;
+}
+
+/** The chat column's left edge: drag to resize, double-click for the default. Same look as the sidebar's (SidebarEdge). */
+function ChatEdge({ width, onWidth }: { width: number; onWidth: (w: number) => void }) {
+  const start = (e: React.PointerEvent) => {
+    e.preventDefault();
+    const el = e.currentTarget as HTMLElement;
+    // Captured, so the Work site's frame next to it can't swallow the moves
+    el.setPointerCapture(e.pointerId);
+    const x0 = e.clientX;
+    const move = (ev: PointerEvent) => onWidth(width - (ev.clientX - x0));
+    const up = () => {
+      el.removeEventListener("pointermove", move);
+      el.removeEventListener("pointerup", up);
+      document.body.style.cursor = "";
+    };
+    document.body.style.cursor = "col-resize";
+    el.addEventListener("pointermove", move);
+    el.addEventListener("pointerup", up);
+  };
+  return (
+    <div
+      className="absolute top-0 -left-1 bottom-0 z-20 w-2 cursor-col-resize bg-clip-content px-[3px] transition-colors hover:bg-brand/50"
+      onPointerDown={start}
+      onDoubleClick={() => onWidth(CHAT_W)}
+      title="拖动调宽窄，双击还原"
+      style={{ WebkitAppRegion: "no-drag" } as any}
+    />
+  );
+}
+
 /**
  * Code / overview / Work: gerdr's own switch, at the right of the left column's top row in all three (Chrome.tsx
  * SidebarHeader). The overview isn't a `mode` (it lays over Code: lib/overview.ts), but to the user it's a third view.
@@ -218,6 +272,7 @@ export function WorkView() {
   const phone = usePhone();
   const sidebarW = useStore((s) => s.sidebarW);
   const project = useWorkProject();
+  const [chatW, setChatW] = useChatW();
   const [side, setSide] = useState<"page" | "chat">("page");
   if (phone) {
     return (
@@ -269,7 +324,9 @@ export function WorkView() {
           </div>
         </div>
       </div>
-      <div className="flex w-[min(440px,40%)] shrink-0 flex-col border-l">
+      {/* max-w: a window made smaller after dragging still leaves the Work site some room */}
+      <div className="relative flex max-w-[70%] shrink-0 flex-col border-l" style={{ width: chatW }}>
+        <ChatEdge width={chatW} onWidth={setChatW} />
         <ChatHeader />
         <div className="min-h-0 flex-1">
           <WorkChat />
