@@ -411,7 +411,7 @@ export function Sidebar({ className }: { className?: string }) {
  */
 export function SidebarHeader({ className, style }: { className?: string; style?: React.CSSProperties }) {
   return (
-    <div className={cn("flex h-10 shrink-0 items-center gap-1 border-b px-2", className)} style={{ WebkitAppRegion: "drag", ...style } as any}>
+    <div className={cn("flex h-10 shrink-0 items-center gap-1 border-b px-1.5", className)} style={{ WebkitAppRegion: "drag", ...style } as any}>
       <div className="native-traffic-light-gap" />
       {/* The session switcher takes the title's place (asked for). Only the button is no-drag, so the rest of the bar still moves the window */}
       <div className="flex min-w-16 flex-1">
