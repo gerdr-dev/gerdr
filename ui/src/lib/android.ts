@@ -56,6 +56,37 @@ if (port) {
   };
 }
 
+/** Does the shell say (in its hello reply) that it can do this? An older App doesn't know newer messages. */
+export const androidCan = (feature: string) => last.get("hello")?.[feature] === true;
+
+/**
+ * Put an image on the phone's clipboard through the shell (MainActivity.copyImage): WebView's navigator.clipboard
+ * can't write images, its promise just never settles. Sends the bytes rather than the URL, since only the page is
+ * signed in to fetch them. Rejects with the shell's error, or after 15s without an answer.
+ */
+export async function androidCopyImage(blob: Blob) {
+  const data = await new Promise<string>((ok, no) => {
+    const r = new FileReader();
+    r.onload = () => ok(String(r.result).replace(/^data:[^,]*,/, ""));
+    r.onerror = () => no(r.error);
+    r.readAsDataURL(blob);
+  });
+  await new Promise<void>((ok, no) => {
+    const t = setTimeout(() => (off(), no(new Error("App 没有回应"))), 15000);
+    const off = onAndroid(
+      "copyImage",
+      (m) => {
+        clearTimeout(t);
+        off();
+        if (m.ok) ok();
+        else no(new Error(String(m.error ?? "复制失败")));
+      },
+      false,
+    );
+    postAndroid({ t: "copyImage", data, mime: blob.type || "image/png" });
+  });
+}
+
 /**
  * 页面起来之后接上壳：hello（壳收到它才有往回发的通道）、局域网候选、返回键、通知点开、音量键。
  * App.tsx 在 boot 之后调一次。

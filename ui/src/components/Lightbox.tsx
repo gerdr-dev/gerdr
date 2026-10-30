@@ -215,6 +215,8 @@ function Lightbox({ items, index, origin }: { items: LightboxItem[]; index: numb
     const key = (e: KeyboardEvent) => {
       const k = e.key;
       if (k !== "Escape" && k !== "ArrowLeft" && k !== "ArrowRight") return;
+      // A right-click menu open over the image takes this Esc for itself (AppContextMenu); the lightbox stays
+      if (document.querySelector("[data-app-context-menu]")) return;
       e.preventDefault();
       e.stopPropagation();
       if (k === "Escape") close();

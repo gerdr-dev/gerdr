@@ -766,6 +766,38 @@ class MainActivity : ComponentActivity() {
         if (toast && android.os.Build.VERSION.SDK_INT < 33) Toast.makeText(this, "已复制", Toast.LENGTH_SHORT).show()
     }
 
+    /**
+     * Put an image from the page on the clipboard (Bridge `copyImage`). WebView's navigator.clipboard.write can't take
+     * images: the promise never settles, so the page's long-press "copy image" did nothing and said nothing. The page
+     * sends the bytes it already fetched (it is signed in; we aren't, so we couldn't fetch the URL ourselves); they go
+     * to a cache file shared through our FileProvider, and the clipboard service grants readers access to that URI.
+     * A fresh name per copy, so an app still holding the last clip isn't handed different bytes under the same URI.
+     * [done] gets null on success or the error to show, on the main thread.
+     */
+    fun copyImage(base64: String, mime: String, done: (String?) -> Unit) {
+        io.execute {
+            val err = try {
+                val bytes = android.util.Base64.decode(base64, android.util.Base64.DEFAULT)
+                val dir = java.io.File(cacheDir, "clip").apply { mkdirs() }
+                dir.listFiles()?.forEach { it.delete() }
+                val ext = android.webkit.MimeTypeMap.getSingleton().getExtensionFromMimeType(mime) ?: "png"
+                val f = java.io.File(dir, "image-${System.currentTimeMillis()}.$ext").apply { writeBytes(bytes) }
+                val uri = androidx.core.content.FileProvider.getUriForFile(this, "$packageName.files", f)
+                main.post {
+                    val cm = getSystemService(android.content.ClipboardManager::class.java)
+                    cm.setPrimaryClip(android.content.ClipData.newUri(contentResolver, "image", uri))
+                    // No toast here: the page says "copied" itself. Android 13+ is meant to show its own preview,
+                    // but HyperOS doesn't, and copying with no sign at all looked like it had failed (user report)
+                    done(null)
+                }
+                null
+            } catch (e: Exception) {
+                e.message ?: e.toString()
+            }
+            if (err != null) main.post { done(err) }
+        }
+    }
+
     private fun showLoginOverlay(run: LoginRun, st: Login.Start) {
         val pad = dp(20)
         val box = LinearLayout(this).apply {

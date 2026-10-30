@@ -62,7 +62,8 @@ class Bridge(private val act: MainActivity, web: WebView, origin: String) {
                 // navigator.credentials；不能才发 login 走 device flow（Login.kt）
                 send(
                     JSONObject().put("t", "hello").put("platform", "android")
-                        .put("version", BuildInfo.version(act)).put("webauthn", act.webAuthn).put("scan", true),
+                        .put("version", BuildInfo.version(act)).put("webauthn", act.webAuthn).put("scan", true)
+                        .put("copyImage", true),
                 )
                 send(LanRoute.snapshot()) // 顶栏那个「直连 / 中继」标签的初值
                 pendingFocus?.let { focus(it) }
@@ -75,6 +76,12 @@ class Bridge(private val act: MainActivity, web: WebView, origin: String) {
             "fullscreen" -> {
                 act.setFullscreen(m.optBoolean("on"))
                 send(JSONObject().put("t", "fullscreen").put("on", m.optBoolean("on")))
+            }
+            // Long-press menu's "copy image" (ui AppContextMenu): base64 `data` + `mime`, answered with `ok` / `error`
+            "copyImage" -> act.copyImage(m.optString("data"), m.optString("mime", "image/png")) { err ->
+                val r = JSONObject().put("t", "copyImage").put("ok", err == null)
+                if (err != null) r.put("error", err)
+                send(r)
             }
             "theme" -> act.applyTheme(m.optString("bg"), m.optBoolean("light"))
             "open" -> act.openExternal(m.optString("url"))

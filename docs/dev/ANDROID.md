@@ -100,5 +100,6 @@ App 关着 / 锁屏时，一个前台服务（`NoticeService`）挂在两个长�
 | `login` | 页 → 壳 → 页 | passkey 退路：`reauth`；回 `state`（done / error / cancel）+ `msg` |
 | `notify` | 页 ↔ 壳 | 后台通知的开关 / 权限 / 电池优化 / 试一下 |
 | `volkeys` / `key` | 页 ↔ 壳 | 音量键当 ↑ / ↓（等于在焦点会话的输入框里按方向键：翻历史、提问时选选项） |
+| `copyImage` | 页 → 壳 → 页 | Long-press "copy image": base64 `data` + `mime` (WebView's clipboard API can't write images); answers `ok` / `error`. The hello reply carries `copyImage: true` so the menu hides it on older Apps |
 | `focus` | 壳 → 页 | 点通知进来：切到那个会话 |
 | `open` / `setup` / `fullscreen` | 页 → 壳 | 外部链接交给系统浏览器 / 回到填地址那屏 / 藏系统栏 |

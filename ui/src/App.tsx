@@ -6,6 +6,7 @@ import { PhoneBar, Sidebar, TabBar } from "./components/Chrome";
 import { PaneSwitcher } from "./components/PaneSwitcher";
 import { Dialogs } from "./components/Dialogs";
 import { LightboxHost } from "./components/Lightbox";
+import { AppContextMenu } from "./components/AppContextMenu";
 import { TabActive, TabView } from "./components/Panes";
 import { WorkView } from "./components/WorkView";
 import { tabName } from "./lib/actions";
@@ -239,6 +240,7 @@ export default function App() {
       </div>
       <Dialogs />
       <LightboxHost />
+      <AppContextMenu />
       <CliApprove />
       {/* 手机上底部是输入框和软键盘，toast 放顶上 */}
       <Toaster position={phone ? "top-center" : "bottom-right"} />

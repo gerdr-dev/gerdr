@@ -43,6 +43,17 @@
             android:name="com.journeyapps.barcodescanner.CaptureActivity"
             android:screenOrientation="fullSensor"
             tools:replace="screenOrientation" />
+        <!-- Images copied from the page's long-press menu (MainActivity.copyImage) are shared from the cache through
+             this; grantUriPermissions lets the clipboard hand read access to whichever app pastes -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
         <receiver
             android:name=".AgentsWidget"
             android:exported="false">
