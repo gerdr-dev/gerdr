@@ -10,7 +10,7 @@ import (
 // chat：OpenAI Chat Completions（/chat/completions）。DeepSeek、各家网关都认这个。
 //
 // 实测 / 抄 pi 来的怪癖：
-//   - 工具调用的流式片段按 index 拼；GPT 经网关时第一片之后每片都带 `"name":""`，不能拿空名字覆盖第一片的（实测 subhub）。
+//   - 工具调用的流式片段按 index 拼；GPT 经网关时第一片之后每片都带 `"name":""`，不能拿空名字覆盖第一片的（经网关实测）。
 //   - DeepSeek 的思考在 delta.reasoning_content（有的实现叫 reasoning / reasoning_text）。开着思考时，
 //     **历史里每条 assistant 都要带 reasoning_content**（没有就给空串），否则 400；带工具调用的那条要把原来的思考带回去，
 //     模型才接得上自己的思路（DeepSeek 的文档：同一轮工具调用之间要回传）。

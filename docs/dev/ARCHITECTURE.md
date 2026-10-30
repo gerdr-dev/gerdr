@@ -126,7 +126,7 @@ config.json (example in the README), read fresh every turn.
    被打断的半截生成只留正文、不留工具调用和推理（半截的推理还回去会被拒）。
 2. **DeepSeek 开着思考时历史里每条 assistant 都要带 `reasoning_content`**（没有给空串），带工具调用的那条要把原来的思考带回去。
    Responses 用 `store:false` + `include:["reasoning.encrypted_content"]`，推理 item 原样放回 input；中途换了协议的就丢掉。
-3. 经网关的 GPT 在 Chat Completions 里，工具调用第一片之后每片都带 `"name":""`，拼的时候不能拿空名字覆盖（subhub 实测）。
+3. 经网关的 GPT 在 Chat Completions 里，工具调用第一片之后每片都带 `"name":""`，拼的时候不能拿空名字覆盖（经网关实测）。
    Responses 的 `input` 必须是数组。工具结果里放不了图：图另起一条 user 消息跟在这批结果后面。
    Anthropic: assistant turns are replayed as the exact content blocks the API returned (`Message.Blocks`), not rebuilt
    from Text / Reasoning / ToolCalls: thinking blocks carry signatures, newer Claude models check that earlier turns

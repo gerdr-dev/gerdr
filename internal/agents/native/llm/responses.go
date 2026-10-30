@@ -12,7 +12,7 @@ import (
 //
 //   - store=false（不在 OpenAI 那边存对话，我们自己管历史），所以推理要带 include:["reasoning.encrypted_content"]，
 //     下一次请求原样放回 input 里（type:reasoning + encrypted_content）。
-//   - input 必须是数组（网关对字符串报 "Input must be a list"，实测 subhub）。
+//   - input 必须是数组（网关对字符串报 "Input must be a list"，经网关实测）。
 //   - 工具调用：output_item.added 给 call_id 和 name，function_call_arguments.delta 是参数片段，
 //     output_item.done 给完整的。结果是 function_call_output{call_id, output}。
 //   - 错误可能是 HTTP 200 之后流里的 response.failed / error 事件。

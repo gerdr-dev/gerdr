@@ -13,13 +13,13 @@ import (
 //
 //	"llm": {
 //	  "providers": [{
-//	    "id": "subhub", "name": "SubHub", "baseUrl": "https://example.com/v1", "apiKey": "sk-…",
+//	    "id": "my", "name": "My gateway", "baseUrl": "https://example.com/v1", "apiKey": "sk-…",
 //	    "models": [{"id": "gpt-6.1-sol"}, {"id": "deepseek-v4-pro"}]
 //	  }, {
 //	    "id": "anthropic", "api": "anthropic", "baseUrl": "https://api.anthropic.com", "apiKey": "sk-ant-…",
 //	    "models": [{"id": "claude-opus-5-5"}]
 //	  }],
-//	  "defaultModel": "subhub/gpt-6.1-sol"
+//	  "defaultModel": "my/gpt-6.1-sol"
 //	}
 //
 // 模型只写 id 就行：协议、思考档位、上下文窗口、能不能看图按 id 猜（defaults）；猜得不对再在模型上写。
