@@ -9,7 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 // 凭据存在 ~/.gerdr/remote/remote.json（0600），读回来只给名字不给值 —— 表单里留空就是沿用存着的那份。
 // 只在本机口上出现：远程改不了（后端也拦着，见 remoteGuard）。
 
-export function RemoteCert({ host, onSaved }: { host: string; onSaved: () => void }) {
+// expires: when the certificate in use runs out (shown here; the address line only shows it on the remote side).
+export function RemoteCert({ host, expires, onSaved }: { host: string; expires?: string; onSaved: () => void }) {
   const [c, setC] = useState<Cert | null>(null);
   const [editing, setEditing] = useState(false);
   const [mode, setMode] = useState<"dns" | "files">("dns");
@@ -86,7 +87,8 @@ export function RemoteCert({ host, onSaved }: { host: string; onSaved: () => voi
               <>gerdr 经 {label} 的 DNS 自己去 Let's Encrypt 签，到期前自动续。</>
             )}
           </div>
-          {c.dns && c.accountURI && <CAA host={host} account={c.accountURI} />}
+          {expires && <div className="text-[12px] text-muted-foreground">现在这张 {new Date(expires).toLocaleDateString()} 到期。</div>}
+          {c.dns && c.accountURI && <CAA host={host} account={c.accountURI} auto={c.caaAuto ? label : ""} />}
         </div>
       ) : (
         <div className="space-y-3 rounded-md border p-3">
@@ -177,13 +179,54 @@ export function Field({ label, children }: { label: string; children: React.Reac
   );
 }
 
-// CAA：只许这台机器的 ACME 账户给这个名字签证书。不配一切照常，只是中继那台 VPS 能自己签一张做中间人（docs/dev/REMOTE.md）。
-function CAA({ host, account }: { host: string; account: string }) {
+// CAA: only this machine's ACME account may issue for this name. Without it everything still works, but the relay VPS
+// could get its own certificate and sit in the middle (docs/dev/REMOTE.md). `auto` names the DNS provider when gerdr can
+// check and write the record itself with the stored credentials: then the hint only shows once the provider confirms
+// the record is missing, so a set-up machine sees nothing. Other providers can't be checked and always show it.
+function CAA({ host, account, auto }: { host: string; account: string; auto: string }) {
   const rec = `${host}. CAA 0 issue "letsencrypt.org; accounturi=${account}; validationmethods=dns-01"`;
+  // checking → missing / present; "added" after the button worked
+  const [state, setState] = useState<"checking" | "missing" | "present" | "added">(auto ? "checking" : "missing");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  useEffect(() => {
+    if (!auto) return;
+    api
+      .remoteCheckCAA()
+      .then((r) => setState(r.missing ? "missing" : "present"))
+      .catch((e) => (setErr(`查不到 ${auto} 上的 CAA：${(e as Error).message}`), setState("missing")));
+  }, [auto, host, account]);
+  const add = async () => {
+    setBusy(true);
+    setErr("");
+    try {
+      await api.remoteAddCAA();
+      setState("added");
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (state === "checking" || state === "present") return null;
+  if (state === "added")
+    return (
+      <div className="pt-1 text-[12px] text-ok">
+        CAA 已经加到 {auto} 上了，只有这台机器能签 {host} 的证书。
+      </div>
+    );
   return (
     <div className="space-y-1 pt-1 text-[12px] text-muted-foreground">
-      <div>建议在 DNS 上加一条 CAA，只许这台机器签 {host} 的证书（已经有一条覆盖它的 CAA 时要再加这一条，不然签不下来）：</div>
+      <div className="flex items-center justify-between gap-3">
+        <div>建议在 DNS 上加一条 CAA，只许这台机器签 {host} 的证书（已经有一条覆盖它的 CAA 时要再加这一条，不然签不下来）：</div>
+        {auto && (
+          <Button size="sm" variant="outline" className="shrink-0" disabled={busy} onClick={add}>
+            {busy ? "添加中…" : "一键加上"}
+          </Button>
+        )}
+      </div>
       <pre className="overflow-x-auto rounded-sm bg-muted p-2 font-mono text-[11px] select-all">{rec}</pre>
+      {err && <div className="text-bad">{err}</div>}
     </div>
   );
 }

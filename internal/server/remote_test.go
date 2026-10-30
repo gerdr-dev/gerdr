@@ -145,6 +145,12 @@ func TestRemoteCertConfig(t *testing.T) {
 	if w := do(rh, "GET", "/api/remote/cert", nil); w.Code != 403 {
 		t.Fatalf("远程不该能读证书配置，得到 %d", w.Code)
 	}
+	if w := do(rh, "POST", "/api/remote/cert/caa", nil, csrf, hdr("Origin", "https://"+testHost)); w.Code != 403 {
+		t.Fatalf("remote must not spend the DNS credentials on CAA, got %d", w.Code)
+	}
+	if w := do(rh, "GET", "/api/remote/cert/caa", nil); w.Code != 403 {
+		t.Fatalf("remote must not check CAA either, got %d", w.Code)
+	}
 	local := func(method, body string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(method, "http://127.0.0.1:7870/api/remote/cert", strings.NewReader(body))
 		r.Header.Set("Authorization", "Bearer "+s.Token)

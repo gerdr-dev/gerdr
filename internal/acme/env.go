@@ -21,7 +21,7 @@ const envPrefix = "GERDR_"
 // `_FILE` 后缀那种从文件读的写法）。列全名一定会漏，而漏掉的表现是「我明明配了这个变量
 // 却没生效」—— 比报错难查得多。
 //
-// 加一家 provider 是三处：这张表 + envHint + newDNS 的 case。少了这张表的表现是
+// Adding a provider takes four places (see the providers table in acme.go). 少了这张表的表现是
 // 「带前缀的凭据被当成没配」。
 var dnsNamespaces = map[string][]string{
 	"cloudflare":   {"CLOUDFLARE_", "CF_"}, // CF_ 是 lego 认的别名

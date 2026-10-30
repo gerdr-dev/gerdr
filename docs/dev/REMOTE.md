@@ -28,6 +28,13 @@ gerdr 有**自己的** ACME 账户（`~/.gerdr/remote/acme/account.json`），�
 CAA 覆盖到这个名字（比如挂在上一级）时，要**再加一条** issue，不然 gerdr 签不下证书。`gerdr remote status` 打出 accounturi。
 CAA 不配一切照常工作，只是中继多了一个后门，没有任何症状。
 
+The settings page has a one-click button that writes this record with the stored DNS credentials
+(`POST /api/remote/cert/caa`, local only, `internal/acme/caa*.go`). lego only manages TXT records, so each provider
+has its own small client there, built on the SDK lego already links. It never touches other CAA values on the name
+(another machine may be issuing for it); Route 53 and Huawei Cloud keep all values of a name in one record set, so
+there it reads the set and writes it back with ours appended. Only Cloudflare and DigitalOcean have a fake-API test;
+the SDK-based ones (AliDNS, DNSPod, Route 53, Huawei) were not exercised against the real APIs.
+
 中继那边的 SNI 路由（Traefik 的 `HostSNI` 规则之类）也要放行 gerdr 的名字 —— 漏了的表现是「注册成功、隧道已连上、
 手机打不开」，gerdr 这边一个字都不报。
 

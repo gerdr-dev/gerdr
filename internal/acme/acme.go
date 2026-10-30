@@ -58,7 +58,8 @@ type Config struct {
 
 // Provider 是一家编译进来的 DNS 服务商：设置页按 Fields 画表单，错误信息按它提示要哪几个变量。
 //
-// 加一家是三处：这张表加一项、newDNS 里加一个 case、env.go 的 dnsNamespaces 加一行。
+// Adding a provider takes four places: this table, a case in newDNS, a line in env.go's dnsNamespaces, and a
+// CAA writer in caa.go (the settings page's one-click CAA button).
 type Provider struct {
 	Name   string  `json:"name"`  // GERDR_ACME_DNS 填的那个名字
 	Label  string  `json:"label"` // 给人看的
@@ -84,7 +85,7 @@ var providers = []Provider{
 		Help:   "腾讯云访问管理建一个子用户，只给 QcloudDNSPodFullAccess 权限，创建它的 API 密钥。",
 		Fields: []Field{{"TENCENTCLOUD_SECRET_ID", "SecretId", false}, {"TENCENTCLOUD_SECRET_KEY", "SecretKey", true}}},
 	{Name: "route53", Label: "AWS Route 53",
-		Help:   "IAM 建一个用户，给 route53:GetChange / ChangeResourceRecordSets / ListHostedZonesByName 权限，创建 Access Key。",
+		Help:   "IAM 建一个用户，给 route53:GetChange / ChangeResourceRecordSets / ListResourceRecordSets / ListHostedZonesByName 权限，创建 Access Key。",
 		Fields: []Field{{"AWS_ACCESS_KEY_ID", "Access Key ID", false}, {"AWS_SECRET_ACCESS_KEY", "Secret Access Key", true}, {"AWS_REGION", "Region（如 us-east-1）", false}}},
 	{Name: "digitalocean", Label: "DigitalOcean",
 		Help:   "DigitalOcean 后台 → API → Generate New Token，要有写权限。",

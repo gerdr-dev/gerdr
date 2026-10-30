@@ -253,6 +253,8 @@ export const api = {
   stepUpDecide: (id: string, ok: boolean) => req("POST", `/api/remote/stepup/approve/${encodeURIComponent(id)}`, { ok }),
   remoteCert: () => req<RemoteCert>("GET", "/api/remote/cert"),
   remoteSaveCert: (c: RemoteCertInput) => req("POST", "/api/remote/cert", c),
+  remoteCheckCAA: () => req<{ missing: boolean }>("GET", "/api/remote/cert/caa"),
+  remoteAddCAA: () => req<{ missing: boolean }>("POST", "/api/remote/cert/caa"),
   /** 连上 / 移除远程访问：本机专用，当场生效不用重启 */
   remoteConnect: (relayURL: string, host: string, invite: string) => req("POST", "/api/remote/connect", { relayURL, host, invite }),
   remoteDisconnect: () => req<{ revoked: number; passkeys: number }>("POST", "/api/remote/disconnect", {}),
@@ -304,6 +306,7 @@ export type RemoteCert = {
   set: string[];
   providers: DNSProvider[];
   accountURI: string;
+  caaAuto: boolean;
 };
 export type RemoteCertInput = { dns: string; email: string; staging: boolean; env: Record<string, string>; tlsCert: string; tlsKey: string };
 /** temp：配对码进来的临时设备，expires 定死、不续期；在那台设备上过一次 passkey 就转正 */

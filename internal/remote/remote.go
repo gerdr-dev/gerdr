@@ -498,6 +498,8 @@ type CertConfig struct {
 	Providers []acme.Provider `json:"providers"`
 	// AccountURI：CAA 那条记录要的 ACME 账户；签下第一张证书之前是空的。
 	AccountURI string `json:"accountURI"`
+	// CAAAuto: the provider can write the CAA record itself (AddCAA), so the page offers a button.
+	CAAAuto bool `json:"caaAuto"`
 }
 
 func (s *Service) dataDir() string { return filepath.Dir(s.Dir) }
@@ -520,7 +522,18 @@ func (s *Service) CertConfig() (CertConfig, error) {
 	}
 	c.Providers = acme.AllProviders()
 	c.AccountURI = acme.AccountURI(s.Dir)
+	c.CAAAuto = acme.CAASupported(c.DNS)
 	return c, nil
+}
+
+// CAA checks for the relay host's CAA record through the configured DNS provider; with apply it also adds it.
+// missing=false means an identical record is already there.
+func (s *Service) CAA(ctx context.Context, apply bool) (missing bool, err error) {
+	cfg := s.Config()
+	if !cfg.Enabled() {
+		return false, errors.New("还没连上中继：先在上面「连接」")
+	}
+	return acme.SetCAA(ctx, cfg.ACMEDNS, cfg.Host, acme.AccountURI(s.Dir), apply)
 }
 
 // CertInput 是设置页提交的。Env 里空着的项 = 沿用已经存着的那份（表单不回显密钥）。

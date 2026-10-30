@@ -76,7 +76,7 @@ func (s *Server) remoteGuard(w http.ResponseWriter, r *http.Request, next http.H
 	p := r.URL.Path
 	// 本机专用的口：令牌换 cookie、出配对码、解熔断。远程连 404 都不给区分。
 	// 证书配置里有 DNS 服务商的密钥，也只在本机改；连接 / 移除远程访问同理（远程移除 = 把自己锁在门外）。
-	if p == "/auth" || p == "/api/remote/pair-code" || p == "/api/remote/unlock" || p == "/api/remote/cert" ||
+	if p == "/auth" || p == "/api/remote/pair-code" || p == "/api/remote/unlock" || p == "/api/remote/cert" || p == "/api/remote/cert/caa" ||
 		p == "/api/remote/connect" || p == "/api/remote/disconnect" || p == "/api/remote/reload" || p == "/api/service" || p == "/api/awake/lid-setup" ||
 		p == "/api/remote/stepup/pending" || strings.HasPrefix(p, "/api/remote/stepup/approve/") {
 		httpError(w, http.StatusForbidden, "这个操作只能在跑 gerdr 的那台机器上做")
@@ -266,6 +266,20 @@ func (s *Server) remoteRoutes(mux *http.ServeMux) {
 		}
 		writeJSON(w, map[string]any{"ok": true})
 	})
+	// CAA through the DNS provider's API: GET checks whether the record is missing (the settings page only nags
+	// then), POST adds it. Local only: both spend the stored DNS credentials.
+	caa := func(apply bool) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			missing, err := s.Remote.CAA(r.Context(), apply)
+			if err != nil {
+				httpError(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			writeJSON(w, map[string]any{"missing": missing})
+		}
+	}
+	mux.HandleFunc("GET /api/remote/cert/caa", caa(false))
+	mux.HandleFunc("POST /api/remote/cert/caa", caa(true))
 	// 连接 / 移除 / 重读配置：都只在本机（remoteGuard 拦了远程那一侧），改完当场生效、不用重启。
 	mux.HandleFunc("POST /api/remote/connect", func(w http.ResponseWriter, r *http.Request) {
 		var in struct{ RelayURL, Host, Invite string }
