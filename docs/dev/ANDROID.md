@@ -60,7 +60,7 @@ WebView ──CONNECT gerdr.example.com:443──▶ App 内的代理（127.0.0.
   一个通用 App 本来绑不了每个用户自己的域名（herdr-web 因此只能开浏览器）；**gerdr 自己就是这个域名的服务器**，自己发这份文件就行
   （`server.assetLinks`，没认证也给）。
 - 这时 clientDataJSON 里的 origin 不是 `https://域名`，而是 `android:apk-key-hash:<签名证书 SHA-256 的 base64url>`，
-  所以服务端的 RPOrigins 里要有它（`remote.Open` 按 `AndroidCerts` 加，`auth.AndroidOrigin` 算）。
+  所以服务端的 RPOrigins 里要有它（`remote.Open` 按 `AndroidCerts` 加，`auth.AndroidOrigins` 算；规范说 base64url，实际小米上收到的是标准 base64，所以几种编码都认）。
 - 认哪些证书：`config.OfficialAndroidCert`（正式包那把，写死在代码里）+ `GERDR_ANDROID_CERTS` / remote.json 的 `androidCerts`
   （自己编的调试包要用 passkey 时加 debug 钥匙的指纹：`keytool -list -v -keystore ~/.android/debug.keystore -storepass android`）。
   **换正式钥匙要同步改 OfficialAndroidCert**，不然新包刷不了 passkey、只能走下面的退路；而且已经装上的人要卸了重装。

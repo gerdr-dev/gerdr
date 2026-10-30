@@ -467,15 +467,21 @@ func ReauthNeeded(id *Ident, after time.Duration, registered int, now time.Time)
 	return now.Sub(v) > after
 }
 
-// AndroidOrigin：安卓 App 的 WebView 里做 WebAuthn 时，clientDataJSON 里的 origin 不是网页的 https://…，而是
-// `android:apk-key-hash:<签名证书 SHA-256 的 base64url>`（系统的 Credential Manager 填的，App 改不了）。
-// fp 是 keytool 打出来的那种冒号分隔十六进制。认不出来返回空。
-func AndroidOrigin(fp string) string {
+// AndroidOrigins: when the Android app's WebView does WebAuthn, the clientDataJSON origin is not the page's
+// https://… but `android:apk-key-hash:<SHA-256 of the signing cert>`, filled in by the system Credential Manager
+// (the app can't change it). The spec says base64url without padding, but real devices send plain base64
+// (`/` and `+`, seen on a Xiaomi phone), and go-webauthn compares origins byte for byte — so accept every
+// encoding of the same hash. fp is keytool's colon-separated hex. Returns nil if fp can't be parsed.
+func AndroidOrigins(fp string) []string {
 	b, err := hex.DecodeString(strings.ReplaceAll(strings.TrimSpace(fp), ":", ""))
 	if err != nil || len(b) != sha256.Size {
-		return ""
+		return nil
 	}
-	return "android:apk-key-hash:" + base64.RawURLEncoding.EncodeToString(b)
+	var out []string
+	for _, enc := range []*base64.Encoding{base64.RawURLEncoding, base64.URLEncoding, base64.StdEncoding, base64.RawStdEncoding} {
+		out = append(out, "android:apk-key-hash:"+enc.EncodeToString(b))
+	}
+	return out
 }
 
 // webauthnErr：go-webauthn 的错误只在 Details 里写一句「Error validating origin」，真正有用的（期望哪些、收到的是什么）

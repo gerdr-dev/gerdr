@@ -78,11 +78,9 @@ func relyingParty(cfg config.Remote) (rpid string, origins []string) {
 		return "", nil
 	}
 	origins = []string{"https://" + cfg.Host}
-	// 安卓 App 的 WebView 里刷 passkey 时，origin 是 App 签名证书的哈希（docs/dev/ANDROID.md「passkey」）
+	// Passkeys inside the Android app's WebView carry the signing cert hash as origin (docs/dev/ANDROID.md "passkey")
 	for _, fp := range cfg.AndroidCerts {
-		if o := auth.AndroidOrigin(fp); o != "" {
-			origins = append(origins, o)
-		}
+		origins = append(origins, auth.AndroidOrigins(fp)...)
 	}
 	return cfg.Host, origins
 }

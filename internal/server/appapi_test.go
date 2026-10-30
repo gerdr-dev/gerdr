@@ -66,12 +66,16 @@ func TestAssetLinks(t *testing.T) {
 }
 
 func TestAndroidOrigin(t *testing.T) {
-	o := auth.AndroidOrigin(config.OfficialAndroidCert)
-	if !strings.HasPrefix(o, "android:apk-key-hash:") || len(o) != len("android:apk-key-hash:")+43 {
-		t.Fatalf("origin 不对：%q", o)
+	got := auth.AndroidOrigins(config.OfficialAndroidCert)
+	const pre = "android:apk-key-hash:"
+	if len(got) != 4 || got[0] != pre+strings.NewReplacer("+", "-", "/", "_").Replace(strings.TrimRight(got[2][len(pre):], "=")) {
+		t.Fatalf("origins wrong: %q", got)
 	}
-	if auth.AndroidOrigin("zz:zz") != "" {
-		t.Fatal("认不出的指纹该给空")
+	if !strings.HasPrefix(got[0], pre) || len(got[0]) != len(pre)+43 {
+		t.Fatalf("base64url origin wrong: %q", got[0])
+	}
+	if auth.AndroidOrigins("zz:zz") != nil {
+		t.Fatal("unparsable fingerprint should give nil")
 	}
 }
 
