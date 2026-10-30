@@ -116,9 +116,14 @@ export function OverviewView({ shown }: { shown: boolean }) {
 function PhoneOverview({ ids, focus, shown, onPick }: { ids: string[]; focus?: string; shown: boolean; onPick: (id: string) => void }) {
   const [list, setList] = useState(false);
   const chips = useRef<HTMLDivElement>(null);
-  // Keep the current chip in view (on opening, switching from the list, a removal). Scrolls the strip itself after layout:
+  const sessions = useStore((s) => s.sessions);
+  const unread = useStore((s) => s.unread);
+  // Chips in the Code sidebar's agent-list order (asked for: what needs you first), not the order they were put in;
+  // ties keep that order (sort is stable).
+  const sorted = ids.filter((id) => sessions[id]).sort((a, b) => compareSessions(sessions[a], sessions[b], unread));
+  // Keep the current chip in view (on opening, switching from the list, a removal, a reorder). Scrolls the strip itself after layout:
   // scrollIntoView also moves ancestors, and run before the chips were laid out it left the current one off screen.
-  const idsKey = ids.join(",");
+  const idsKey = sorted.join(",");
   useLayoutEffect(() => {
     const strip = chips.current;
     const chip = strip?.querySelector<HTMLElement>("[data-current]");
@@ -135,7 +140,7 @@ function PhoneOverview({ ids, focus, shown, onPick }: { ids: string[]; focus?: s
             <ArrowLeft className="size-[18px]" />
           </Button>
           <div ref={chips} className="flex min-w-0 flex-1 gap-1 overflow-x-auto [scrollbar-width:none]">
-            {ids.map((id) => (
+            {sorted.map((id) => (
               <TileChip key={id} id={id} current={id === focus} className="h-8 max-w-36" onClick={() => focusTile(id)} />
             ))}
           </div>
