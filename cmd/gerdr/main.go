@@ -178,7 +178,10 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 	}
 	logOut := os.Stderr
 	log := slog.New(slog.NewTextHandler(logOut, &slog.HandlerOptions{Level: level}))
-	sysenv.AdoptLoginPath()
+	if err := sysenv.AdoptLoginPath(); err != nil {
+		// Agents would start with a bare PATH (codex / node / go not found); it retries on the next spawn.
+		log.Warn("login shell PATH not read, will retry", "err", err)
+	}
 	sysenv.SetGerdrContext(env.Dir)
 
 	// 一个数据目录只能有一个 gerdr（两份进程同时写 sessions/ 会互相覆盖）。

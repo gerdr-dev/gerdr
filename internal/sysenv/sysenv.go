@@ -5,6 +5,8 @@ package sysenv
 import (
 	"bufio"
 	"context"
+	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,49 +17,92 @@ import (
 )
 
 var (
-	pathOnce sync.Once
+	pathMu   sync.Mutex
+	pathDone bool      // got the login shell's PATH; never ask again
+	pathLast time.Time // last attempt, to space out retries after a failure
+	pathBase string    // PATH this process started with, before any merge
 )
 
-// AdoptLoginPath 把登录 shell 的 PATH 并进本进程。
+// AdoptLoginPath merges the login shell's PATH into this process's.
 //
-// 从 Finder / Dock 起的 mac App 拿到的 PATH 只有 /usr/bin:/bin:/usr/sbin:/sbin ——
-// claude 装在 ~/.local/bin、codex 装在 nvm / volta / version-fox 的目录里，全都找不到，
-// 表现是「装着却说没装」。所以开机问一次登录 shell（-l 读 profile、-i 读 rc，
-// 大多数人的 PATH 是在 .zshrc 里改的）。终端里起的进程本来就有完整 PATH，合并一遍无害。
-func AdoptLoginPath() {
-	pathOnce.Do(func() {
-		shell := os.Getenv("SHELL")
-		if shell == "" {
-			shell = "/bin/zsh"
+// A mac App started from Finder / Dock, or the launchd service, gets only /usr/bin:/bin:/usr/sbin:/sbin:
+// claude lives in ~/.local/bin, codex / node in nvm / volta / version-fox dirs, and none of them are found
+// ("installed but says it isn't", or a stale copy in /usr/local/bin wins over the one the user actually uses).
+// So ask a login shell once (-l reads the profile, -i the rc; most people set PATH in .zshrc).
+// A process started from a terminal already has the full PATH; merging again is harmless.
+//
+// Asking can fail: a busy machine right after the service restarts can blow the timeout. A failure used to
+// stick for the life of the process (sync.Once) and leave every agent with the bare PATH, so now the
+// common fallback dirs are still added, and the next call retries after pathRetry.
+func AdoptLoginPath() error {
+	pathMu.Lock()
+	defer pathMu.Unlock()
+	if pathDone || !pathLast.IsZero() && time.Since(pathLast) < pathRetry {
+		return nil
+	}
+	if pathLast.IsZero() {
+		pathBase = os.Getenv("PATH")
+	}
+	pathLast = time.Now()
+	login, err := loginShellPath()
+	if err == nil {
+		pathDone = true
+	}
+	home, _ := os.UserHomeDir()
+	fallback := strings.Join([]string{filepath.Join(home, ".local/bin"), "/opt/homebrew/bin", "/usr/local/bin"}, ":")
+	// The login shell's order wins over the bare system PATH launchd hands us: it is what decides that
+	// ~/.version-fox/shims beats an old /usr/local/bin/codex. A real inherited PATH (started from a
+	// terminal, maybe inside a venv) keeps going first.
+	merged := mergePath(pathBase, login)
+	if isBarePath(pathBase) {
+		merged = mergePath(login, pathBase)
+	}
+	os.Setenv("PATH", mergePath(merged, fallback))
+	return err
+}
+
+const pathRetry = 30 * time.Second
+
+func loginShellPath() (string, error) {
+	shell := os.Getenv("SHELL")
+	if shell == "" {
+		shell = "/bin/zsh"
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	// Wrapped in markers so welcome banners / errors printed by the rc don't get mixed in.
+	cmd := exec.CommandContext(ctx, shell, "-l", "-i", "-c", `printf '\n__GERDR_PATH__%s__GERDR_PATH__\n' "$PATH"`)
+	cmd.Stdin = nil
+	// Something the rc starts in the background can hold stdout open after the shell exits.
+	cmd.WaitDelay = 2 * time.Second
+	out, err := cmd.Output()
+	s := string(out)
+	i := strings.Index(s, "__GERDR_PATH__")
+	if i < 0 {
+		if err == nil {
+			err = errors.New("no PATH in output")
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
-		defer cancel()
-		// 用标记包住，rc 里打印的欢迎语 / 报错不会混进来。
-		cmd := exec.CommandContext(ctx, shell, "-l", "-i", "-c", `printf '\n__GERDR_PATH__%s__GERDR_PATH__\n' "$PATH"`)
-		cmd.Stdin = nil
-		out, err := cmd.Output()
-		if err != nil && len(out) == 0 {
-			return
+		return "", fmt.Errorf("login shell %s: %w", shell, err)
+	}
+	s = s[i+len("__GERDR_PATH__"):]
+	j := strings.Index(s, "__GERDR_PATH__")
+	if j < 0 {
+		return "", fmt.Errorf("login shell %s: truncated output", shell)
+	}
+	// An rc that exits non-zero after PATH is set up still gave us what we need.
+	return s[:j], nil
+}
+
+// isBarePath: only the system dirs, i.e. what launchd gives an App / service.
+func isBarePath(p string) bool {
+	for _, d := range strings.Split(p, ":") {
+		switch d {
+		case "", "/usr/bin", "/bin", "/usr/sbin", "/sbin":
+		default:
+			return false
 		}
-		s := string(out)
-		i := strings.Index(s, "__GERDR_PATH__")
-		if i < 0 {
-			return
-		}
-		s = s[i+len("__GERDR_PATH__"):]
-		j := strings.Index(s, "__GERDR_PATH__")
-		if j < 0 {
-			return
-		}
-		merged := mergePath(os.Getenv("PATH"), s[:j])
-		// 一些常见位置兜底（rc 里出错退出时上面那步拿不到东西）。
-		home, _ := os.UserHomeDir()
-		merged = mergePath(merged, strings.Join([]string{
-			filepath.Join(home, ".local/bin"),
-			"/opt/homebrew/bin", "/usr/local/bin",
-		}, ":"))
-		os.Setenv("PATH", merged)
-	})
+	}
+	return true
 }
 
 func mergePath(a, b string) string {
