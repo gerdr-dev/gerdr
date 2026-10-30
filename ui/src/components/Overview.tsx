@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowUpRight, Eraser, GripVertical, LayoutGrid, Maximize2, Minimize2, PanelLeft, Pin, PinOff, Plus, X } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, Eraser, GripVertical, ClipboardCheck, Maximize2, Minimize2, PanelLeft, Pin, PinOff, Plus, X } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -154,7 +154,7 @@ function PhoneOverview({ ids, focus, shown, onPick }: { ids: string[]; focus?: s
             <Tile key={focus} id={focus} focused={shown} main={false} zoomed={false} target={false} phone onFocus={() => {}} onZoom={() => {}} />
           ) : (
             <div className="flex h-full flex-col items-center justify-center gap-3 px-8 text-center text-[13px] text-muted-foreground">
-              <LayoutGrid className="size-6" />
+              <ClipboardCheck className="size-6" />
               待办是空的
               <Button size="sm" variant="outline" onClick={() => setList(true)}>
                 <Plus className="size-3.5" /> 挑几个
@@ -491,7 +491,7 @@ function Grid({
       <div ref={box} className="absolute inset-[3px]" style={more.length ? { bottom: 3 + MORE_H } : undefined}>
         {ids.length === 0 && (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-[13px] text-muted-foreground">
-            <LayoutGrid className="size-6" />
+            <ClipboardCheck className="size-6" />
             待办是空的：在左边点 agent 放进来，或者点「放入运行中和未读」
           </div>
         )}

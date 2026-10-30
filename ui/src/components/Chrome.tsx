@@ -1,4 +1,4 @@
-import { Check, ChevronsUpDown, Keyboard, LayoutGrid, Loader2, LayoutList, Menu, PanelLeft, Plus, Settings, SquareTerminal, X } from "lucide-react";
+import { Check, ChevronsUpDown, Keyboard, ClipboardCheck, Loader2, LayoutList, Menu, PanelLeft, Plus, Settings, SquareTerminal, X } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -353,7 +353,7 @@ function OverviewButton() {
         toggleOverview(true);
       }}
     >
-      <LayoutGrid className="size-[18px]" />
+      <ClipboardCheck className="size-[18px]" />
     </Button>
   );
 }

@@ -1,4 +1,4 @@
-import { Briefcase, Check, ChevronDown, Code2, History, LayoutGrid, MessageSquarePlus, Settings } from "lucide-react";
+import { Briefcase, Check, ChevronDown, Code2, History, ClipboardCheck, MessageSquarePlus, Settings } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { AgentIcon, StatusDot } from "@/components/AgentIcon";
@@ -100,7 +100,7 @@ export function ModeSwitch() {
   return (
     <div className="flex shrink-0 gap-0.5 rounded-lg bg-muted p-0.5" style={{ WebkitAppRegion: "no-drag" } as any}>
       {item("agents", "Code", Code2)}
-      {item("overview", `待办（${formatCombo(keyFor(get().config, "overview")[0] ?? "")}）`, LayoutGrid)}
+      {item("overview", `待办（${formatCombo(keyFor(get().config, "overview")[0] ?? "")}）`, ClipboardCheck)}
       {item("work", "Work", Briefcase)}
     </div>
   );
