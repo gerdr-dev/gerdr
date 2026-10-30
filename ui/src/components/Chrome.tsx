@@ -527,29 +527,54 @@ export function SidebarFooter({ sidebarToggle }: { sidebarToggle?: boolean }) {
 }
 
 /**
+ * A column resize handle's look. touch-none: without it a touch drag that moves fast is taken over by the browser as a
+ * pan (pointercancel), so on a phone or tablet only a slow drag got anywhere. The callers make it wider for fingers.
+ */
+export const COL_EDGE = "z-20 cursor-col-resize touch-none bg-clip-content transition-colors hover:bg-brand/50";
+
+/**
+ * Drag on a column resize handle: onDx gets the distance from where it started, at most once a frame (each call
+ * re-renders the sidebar or the chat column; per pointer event that's several times a frame on a phone). Captured, so a
+ * frame next to the handle (Work mode's site) can't swallow the moves.
+ */
+export function startColResize(e: React.PointerEvent, onDx: (dx: number) => void) {
+  e.preventDefault();
+  const el = e.currentTarget as HTMLElement;
+  el.setPointerCapture(e.pointerId);
+  const x0 = e.clientX;
+  let x = x0;
+  let raf = 0;
+  const move = (ev: PointerEvent) => {
+    x = ev.clientX;
+    raf ||= requestAnimationFrame(() => {
+      raf = 0;
+      onDx(x - x0);
+    });
+  };
+  const end = () => {
+    if (raf) (cancelAnimationFrame(raf), onDx(x - x0));
+    raf = 0;
+    for (const t of ["pointerup", "pointercancel", "lostpointercapture"]) el.removeEventListener(t, end);
+    el.removeEventListener("pointermove", move);
+    document.body.style.cursor = "";
+  };
+  document.body.style.cursor = "col-resize";
+  el.addEventListener("pointermove", move);
+  for (const t of ["pointerup", "pointercancel", "lostpointercapture"]) el.addEventListener(t, end);
+}
+
+/**
  * The sidebar's right edge: drag to resize it (asked for), double-click for the default width. Also on the overview's
  * list, which shares the width so switching between them doesn't jump.
  */
 export function SidebarEdge() {
   const start = (e: React.PointerEvent) => {
-    e.preventDefault();
-    const el = e.currentTarget as HTMLElement;
-    el.setPointerCapture(e.pointerId);
-    const x0 = e.clientX;
     const w0 = get().sidebarW;
-    const move = (ev: PointerEvent) => setSidebarW(w0 + ev.clientX - x0);
-    const up = () => {
-      el.removeEventListener("pointermove", move);
-      el.removeEventListener("pointerup", up);
-      document.body.style.cursor = "";
-    };
-    document.body.style.cursor = "col-resize";
-    el.addEventListener("pointermove", move);
-    el.addEventListener("pointerup", up);
+    startColResize(e, (dx) => setSidebarW(w0 + dx));
   };
   return (
     <div
-      className="absolute top-0 -right-1 bottom-0 z-20 w-2 cursor-col-resize bg-clip-content px-[3px] transition-colors hover:bg-brand/50"
+      className={cn("absolute top-0 -right-1 bottom-0 w-2 px-[3px] pointer-coarse:-right-3 pointer-coarse:w-6 pointer-coarse:px-[11px]", COL_EDGE)}
       onPointerDown={start}
       onDoubleClick={() => setSidebarW(SIDEBAR_W)}
       title="拖动调宽窄，双击还原"

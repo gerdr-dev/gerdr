@@ -109,18 +109,28 @@ export function TabView({ tab }: { tab: Tab }) {
     const c = el.getBoundingClientRect();
     const row = split.dir === "row";
     const r = { left: c.left + b.x * c.width, top: c.top + b.y * c.height, width: b.w * c.width, height: b.h * c.height };
-    const move = (ev: PointerEvent) => {
-      const ratio = row ? (ev.clientX - r.left) / r.width : (ev.clientY - r.top) / r.height;
+    // At most one layout update a frame: each re-renders every pane of the tab, and a phone sends several moves a frame
+    let ratio = NaN;
+    let raf = 0;
+    const apply = () => {
+      raf = 0;
       setLayout((l) => updateTab(l, tab.id, (t) => setRatio(t, split.id, ratio)));
     };
+    const move = (ev: PointerEvent) => {
+      ratio = row ? (ev.clientX - r.left) / r.width : (ev.clientY - r.top) / r.height;
+      raf ||= requestAnimationFrame(apply);
+    };
     const up = () => {
+      if (raf) (cancelAnimationFrame(raf), apply());
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
       document.body.style.cursor = "";
     };
     document.body.style.cursor = row ? "col-resize" : "row-resize";
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
   };
 
   // Outer 3px + each pane's own 3px: 6px to the edges and 6px between panes, the same inset as the sidebar's rows
@@ -176,8 +186,11 @@ export function TabView({ tab }: { tab: Tab }) {
                   // 缝本身透明（两边各有边框），悬停时亮一条提示能拖
                   "absolute z-10 bg-transparent bg-clip-content transition-colors hover:bg-brand/50",
                   row ? "w-1.5 -translate-x-1/2 cursor-col-resize px-[2px]" : "h-1.5 -translate-y-1/2 cursor-row-resize py-[2px]",
-                  // 手机上手指按不准 6px：缝加高，拖的时候别让页面跟着滚
-                  phone && "h-3 touch-none py-[5px]",
+                  // touch-none: a fast touch drag otherwise turns into a page pan (pointercancel) and the seam stops following.
+                  // Fingers can't hit 6px: wider for touch, and taller on a phone (only top / bottom splits are drawn there)
+                  "touch-none",
+                  row && "pointer-coarse:w-5 pointer-coarse:px-[9px]",
+                  phone && "h-3 py-[5px]",
                 )}
               />
             );
@@ -262,17 +275,18 @@ function SubPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; tab
         onPointerDown={drag.onPointerDown}
         className={cn("flex h-8 shrink-0 items-center gap-2 border-b px-3 text-[12px] max-md:pl-4", !focused && many && "opacity-70")}
       >
-        <Bot className="size-4 text-muted-foreground" />
-        <span className="shrink-0 text-muted-foreground">{task?.subagent || "子 agent"}</span>
+        <Bot className="size-4 shrink-0 text-muted-foreground" />
+        <span className="min-w-0 shrink-[2] truncate text-muted-foreground">{task?.subagent || "子 agent"}</span>
         <span className="min-w-0 flex-1 truncate font-medium">{title}</span>
         {task?.status === "running" && <StatusDot status="running" />}
         <PaneCount count={count} />
+        {/* Shrinks too (truncated), so in a narrow pane the close button still fits */}
         {session && (
-          <button className="shrink-0 truncate text-[11px] text-muted-foreground hover:text-foreground" onClick={() => focusSession(session.id)}>
+          <button className="min-w-0 max-w-[40%] truncate text-[11px] text-muted-foreground hover:text-foreground" onClick={() => focusSession(session.id)}>
             ← {session.title || basename(session.cwd)}
           </button>
         )}
-        <Button variant="ghost" size="icon" className="size-6" title="关闭" onClick={() => (focusPane(pane.id), closeFocusedPane())}>
+        <Button variant="ghost" size="icon" className="size-6 shrink-0" title="关闭" onClick={() => (focusPane(pane.id), closeFocusedPane())}>
           <X className="size-3.5" />
         </Button>
       </div>
@@ -421,7 +435,7 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
         {session?.pending ? <span className="shrink-0 whitespace-nowrap rounded-sm bg-bad/15 px-1.5 text-[11px] text-bad">等你</span> : null}
         <PaneCount count={count} />
         {session ? (
-          <span className="hidden min-w-0 flex-1 items-center gap-2 font-mono text-[11px] text-muted-foreground md:flex">
+          <span className="hidden min-w-0 flex-1 items-center gap-2 overflow-hidden font-mono text-[11px] text-muted-foreground md:flex">
             <span className="min-w-0 truncate" title={session.cwd}>
               {session.cwd}
             </span>

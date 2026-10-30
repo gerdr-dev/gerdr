@@ -9,6 +9,7 @@
 // - The page follows gerdr's light / dark theme by itself (see the listener at the bottom).
 // - The menu's width is --gerdr-sidebar-w, which follows gerdr's sidebar: the user resizes them together by dragging the
 //   menu's right edge (gerdr draws that handle over this page). Keep using the variable for the menu width.
+//   Below md the page is too narrow for a side menu (layout.tsx shows tabs instead); gerdr then lays nothing over it.
 
 /** The project this Work site belongs to: it's served at /work/<project>/. */
 export const project = decodeURIComponent(location.pathname.split("/")[2] || "default");

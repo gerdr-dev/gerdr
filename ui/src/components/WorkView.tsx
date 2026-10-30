@@ -2,7 +2,7 @@ import { Briefcase, Check, ChevronDown, Code2, History, LayoutGrid, MessageSquar
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { AgentIcon, StatusDot } from "@/components/AgentIcon";
-import { SidebarEdge, SidebarFooter, SidebarHeader } from "@/components/Chrome";
+import { COL_EDGE, SidebarEdge, SidebarFooter, SidebarHeader, startColResize } from "@/components/Chrome";
 import { formatCombo } from "@/lib/keys";
 import { toggleOverview } from "@/lib/overview";
 import { ChatView } from "@/components/chat/ChatView";
@@ -16,7 +16,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { usePhone } from "@/lib/phone";
+import { PHONE_MAX, usePhone } from "@/lib/phone";
 import { get, keyFor, set, setMode, useStore } from "@/lib/store";
 import { syncWatch } from "@/lib/sync";
 import { cn } from "@/lib/utils";
@@ -59,25 +59,10 @@ function useChatW() {
 
 /** The chat column's left edge: drag to resize, double-click for the default. Same look as the sidebar's (SidebarEdge). */
 function ChatEdge({ width, onWidth }: { width: number; onWidth: (w: number) => void }) {
-  const start = (e: React.PointerEvent) => {
-    e.preventDefault();
-    const el = e.currentTarget as HTMLElement;
-    // Captured, so the Work site's frame next to it can't swallow the moves
-    el.setPointerCapture(e.pointerId);
-    const x0 = e.clientX;
-    const move = (ev: PointerEvent) => onWidth(width - (ev.clientX - x0));
-    const up = () => {
-      el.removeEventListener("pointermove", move);
-      el.removeEventListener("pointerup", up);
-      document.body.style.cursor = "";
-    };
-    document.body.style.cursor = "col-resize";
-    el.addEventListener("pointermove", move);
-    el.addEventListener("pointerup", up);
-  };
+  const start = (e: React.PointerEvent) => startColResize(e, (dx) => onWidth(width - dx));
   return (
     <div
-      className="absolute top-0 -left-1 bottom-0 z-20 w-2 cursor-col-resize bg-clip-content px-[3px] transition-colors hover:bg-brand/50"
+      className={cn("absolute top-0 -left-1 bottom-0 w-2 px-[3px] pointer-coarse:-left-3 pointer-coarse:w-6 pointer-coarse:px-[11px]", COL_EDGE)}
       onPointerDown={start}
       onDoubleClick={() => onWidth(CHAT_W)}
       title="拖动调宽窄，双击还原"
@@ -256,16 +241,35 @@ function ChatHeader() {
 }
 
 /** Top bar over the Work project: gerdr's own controls (mode switch, settings), apart from the project's menu. */
-function WorkBar() {
+function WorkBar({ narrow }: { narrow: boolean }) {
   // The first sidebarW px are the same header as the sidebar's (Chrome.tsx SidebarHeader), so the switch sits exactly where
   // it does in Code mode; the Work site's own menu below is the same width (gerdr:sidebar). Settings and the connection
   // status are in the bottom row gerdr lays over the site's menu (WorkView), as in the other two modes.
+  // Narrow: the site has no side menu to line up with (useNarrow), so the header takes the whole width.
   const sidebarW = useStore((s) => s.sidebarW);
   return (
     <div className="flex h-10 shrink-0 border-b bg-sidebar" style={{ WebkitAppRegion: "drag" } as any}>
-      <SidebarHeader className="border-r border-b-0" style={{ width: sidebarW }} />
+      <SidebarHeader className={narrow ? "flex-1 border-b-0" : "border-r border-b-0"} style={narrow ? undefined : { width: sidebarW }} />
     </div>
   );
+}
+
+/**
+ * Whether the page column is narrower than the site's phone breakpoint (Tailwind's md, like gerdr's own PHONE_MAX):
+ * a landscape phone or a small window with a wide chat. The site then drops its side menu for its phone layout (the
+ * templates' layout.tsx), so gerdr's header and settings row, drawn sidebarW wide to sit on that menu, would stick out
+ * over the page instead. It's the frame's width that counts, not the window's: the site's breakpoints see the frame.
+ */
+function useNarrow(ref: React.RefObject<HTMLDivElement | null>) {
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const o = new ResizeObserver(() => setNarrow(el.clientWidth < PHONE_MAX));
+    o.observe(el);
+    return () => o.disconnect();
+  }, []);
+  return narrow;
 }
 
 export function WorkView() {
@@ -274,6 +278,8 @@ export function WorkView() {
   const project = useWorkProject();
   const [chatW, setChatW] = useChatW();
   const [side, setSide] = useState<"page" | "chat">("page");
+  const col = useRef<HTMLDivElement>(null);
+  const narrow = useNarrow(col);
   if (phone) {
     return (
       <div className="flex h-full flex-col bg-background">
@@ -308,21 +314,26 @@ export function WorkView() {
   }
   return (
     <div className="flex h-full bg-background">
-      <div className="relative flex min-w-0 flex-1 flex-col">
-        <WorkBar />
+      <div ref={col} className="relative flex min-w-0 flex-1 flex-col">
+        <WorkBar narrow={narrow} />
         <div className="min-h-0 flex-1">
           <WorkFrame key={project} project={project} />
         </div>
-        {/* The sidebar's resize handle, over the top bar and the site's menu edge alike (the site lays its menu out at
-            the same width): it's ours, so it works whatever the site does, and captures the pointer so the frame can't take it */}
-        <div className="pointer-events-none absolute inset-y-0 left-0 [&>*]:pointer-events-auto" style={{ width: sidebarW }}>
-          <SidebarEdge />
-          {/* Settings at the bottom of the left column, like the Code sidebar (asked for). The site keeps that strip free
+        {/* Narrow: no side menu in the site to lay the settings row over or to resize, so the row goes under the page (useNarrow) */}
+        {narrow ? (
+          <SidebarFooter />
+        ) : (
+          // The sidebar's resize handle, over the top bar and the site's menu edge alike (the site lays its menu out at
+          // the same width): it's ours, so it works whatever the site does, and captures the pointer so the frame can't take it
+          <div className="pointer-events-none absolute inset-y-0 left-0 [&>*]:pointer-events-auto" style={{ width: sidebarW }}>
+            <SidebarEdge />
+            {/* Settings at the bottom of the left column, like the Code sidebar (asked for). The site keeps that strip free
               (--gerdr-menu-bottom in its index.css, used by its layout.tsx) */}
-          <div className="absolute inset-x-0 bottom-0 border-r">
-            <SidebarFooter />
+            <div className="absolute inset-x-0 bottom-0 border-r">
+              <SidebarFooter />
+            </div>
           </div>
-        </div>
+        )}
       </div>
       {/* max-w: a window made smaller after dragging still leaves the Work site some room */}
       <div className="relative flex max-w-[70%] shrink-0 flex-col border-l" style={{ width: chatW }}>
