@@ -74,6 +74,38 @@ func TestGitMerge(t *testing.T) {
 	}
 }
 
+// A sync cut off after the snapshot landed on upstream but before the merge: the next sync of the same version has to
+// merge it, not report up_to_date because upstream already carries that version (happened: the live UI kept old code).
+func TestSyncResumesInterruptedMerge(t *testing.T) {
+	if !hasGit() {
+		t.Skip("no git")
+	}
+	src, dst := t.TempDir(), t.TempDir()
+	w(t, src, "package.json", "{}")
+	w(t, src, "src/a.tsx", "old\n")
+	if res, err := SyncFrom(src, dst); err != nil || res.Status != "installed" {
+		t.Fatalf("%+v %v", res, err)
+	}
+	w(t, src, "src/a.tsx", "new\n")
+	files, err := ReadDir(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := commitSnapshot(dst, files, manifestOf(files).Version, "test"); err != nil {
+		t.Fatal(err)
+	}
+	if r(t, dst, "src/a.tsx") != "old\n" {
+		t.Fatal("snapshot alone should not touch the working tree")
+	}
+	res, err := SyncFrom(src, dst)
+	if err != nil || res.Status != "merged" || r(t, dst, "src/a.tsx") != "new\n" {
+		t.Fatalf("%+v %v %q", res, err, r(t, dst, "src/a.tsx"))
+	}
+	if res, _ := SyncFrom(src, dst); res.Status != "up_to_date" {
+		t.Fatalf("%+v", res)
+	}
+}
+
 // 老版本（按哈希管、没改过）换成 git：直接换成新的
 func TestLegacyToGit(t *testing.T) {
 	if !hasGit() {

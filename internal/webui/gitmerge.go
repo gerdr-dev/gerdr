@@ -75,6 +75,15 @@ func upgradeGit(dst string, files map[string][]byte, label string, leave bool) (
 	}
 	if tip, err := git(dst, nil, "log", "-1", "--format=%B", upstream); err == nil {
 		if m := verTrailerRE.FindStringSubmatch(tip); m != nil && m[1] == ver {
+			// Same version already on upstream, but only up to date if it was merged too: a sync cut off between
+			// the snapshot and the merge left it on upstream alone, and every later sync then said up_to_date
+			// while the live UI kept the old code.
+			if _, err := git(dst, nil, "merge-base", "--is-ancestor", upstream, "HEAD"); err != nil {
+				if err := commitAll(dst, "合并新版界面之前的改动"); err != nil {
+					return nil, err
+				}
+				return merge(dst, res, leave)
+			}
 			res.Status = "up_to_date"
 			return res, nil
 		}
