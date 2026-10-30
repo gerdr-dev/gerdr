@@ -604,7 +604,13 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
           </div>
         ) : (
           <div className="mx-auto w-full max-w-[800px]">
-            <Composer ref={composer} session={session} paneId={paneId} running={t.running} />
+            <Composer
+              ref={composer}
+              session={session}
+              paneId={paneId}
+              running={t.running}
+              onEmptyEnter={() => list.current?.scrollToIndex({ index: "LAST", align: "end", behavior: "smooth" })}
+            />
           </div>
         )}
       </div>

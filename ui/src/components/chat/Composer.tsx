@@ -62,10 +62,16 @@ const keepInView = (el: HTMLElement | null) => {
   el?.scrollIntoView({ block: "nearest" });
 };
 
-export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; paneId: string; running: boolean; onSent?: () => void }>(function Composer(
-  { session, paneId, running, onSent },
-  ref,
-) {
+export const Composer = forwardRef<
+  ComposerHandle,
+  {
+    session: SessionSummary;
+    paneId: string;
+    running: boolean;
+    onSent?: () => void;
+    onEmptyEnter?: () => void;
+  }
+>(function Composer({ session, paneId, running, onSent, onEmptyEnter }, ref) {
   const text = useStore((s) => s.drafts[paneId] ?? "");
   const sendKey = useStore((s) => s.config.sendKey);
   const pinned = useStore((s) => s.config.pinnedCommands ?? NO_PINS);
@@ -633,6 +639,8 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
       const wantSend = sendKey === "enter" && !isCoarse() ? !e.shiftKey && !e.altKey : mod;
       if (wantSend) {
         e.preventDefault();
+        // Nothing to send: Enter jumps the chat to the bottom instead, so you don't have to reach for the ↓ button
+        if (!text.trim() && !imgs.length) return onEmptyEnter?.();
         // 在跑时 Ctrl/⌘+回车 = 立即插话（照 Claude Code CLI）。发送键设成 ⌘+回车时这个组合就是普通发送，立即只能点按钮
         if (!busy) send(running && sendKey === "enter" && mod);
       }
