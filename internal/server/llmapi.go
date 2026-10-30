@@ -8,6 +8,7 @@ import (
 
 // Gerdr Agent（native）的模型设置页用的探测接口。配置本身走 config.json（PUT /api/config），这里只是帮着填：
 // 拉服务商的模型列表、拿一个模型试说一句。服务商的参数由页面带上来（还没保存的草稿也能试）。
+// A saved key comes up as config.Hidden; WithKey swaps in the real one.
 func (s *Server) llmRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/llm/models", func(w http.ResponseWriter, r *http.Request) {
 		var p native.Provider
@@ -15,7 +16,7 @@ func (s *Server) llmRoutes(mux *http.ServeMux) {
 			httpError(w, 400, err.Error())
 			return
 		}
-		ids, err := native.ListModels(r.Context(), p)
+		ids, err := native.ListModels(r.Context(), p.WithKey(s.Secrets))
 		if err != nil {
 			httpError(w, 502, err.Error())
 			return
@@ -31,7 +32,7 @@ func (s *Server) llmRoutes(mux *http.ServeMux) {
 			httpError(w, 400, err.Error())
 			return
 		}
-		reply, api, err := native.TestModel(r.Context(), b.Provider, b.Model)
+		reply, api, err := native.TestModel(r.Context(), b.Provider.WithKey(s.Secrets), b.Model)
 		if err != nil {
 			httpError(w, 502, err.Error())
 			return

@@ -89,12 +89,12 @@ func main() {
 		Short: "打印版本",
 		Run:   func(cmd *cobra.Command, args []string) { fmt.Println(version.Version) },
 	})
-	root.AddCommand(addProjectFlag(sessionCmd()), uiCmd(), workCmd(), remoteCmd(), addProjectFlag(workspaceCmd()), addProjectFlag(tabCmd()), addProjectFlag(paneCmd()))
+	root.AddCommand(addProjectFlag(sessionCmd()), uiCmd(), workCmd(), remoteCmd(), configCmd(), addProjectFlag(workspaceCmd()), addProjectFlag(tabCmd()), addProjectFlag(paneCmd()))
 	if err := root.Execute(); err != nil {
 		if errors.Is(err, errHandover) {
 			os.Exit(exitHandover)
 		}
-		if len(os.Args) > 1 && slices.Contains([]string{"session", "ui", "work", "workspace", "tab", "pane"}, os.Args[1]) {
+		if len(os.Args) > 1 && slices.Contains([]string{"session", "ui", "work", "workspace", "tab", "pane", "config"}, os.Args[1]) {
 			fail(err) // for agents: errors are JSON too
 		}
 		fmt.Fprintln(os.Stderr, "gerdr:", err)
@@ -234,6 +234,8 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 		}
 	}
 	cfg := config.NewStore(filepath.Join(env.Dir, "config.json"), `{}`)
+	secrets := config.NewSecrets(filepath.Join(env.Dir, "secrets.json"))
+	cfg.SetFilter(secrets.Split) // API keys live in secrets.json, config.json only says <hidden> (config/secrets.go)
 	layout := config.NewStore(filepath.Join(env.Dir, "layout.json"), `null`)
 
 	// config.json 的 agents：变体（另一个账号的 claude……）和外部 ACP agent。设置里改了 / 手改了文件都热换。
@@ -257,8 +259,9 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 			LLM native.Config `json:"llm"`
 		}
 		_ = json.Unmarshal(cfg.Get(), &c)
-		return c.LLM
+		return c.LLM.WithKeys(secrets)
 	}
+	sysenv.SetSecretEnv(cfgLLM().KeyEnvs()) // before any agent or terminal starts; applyAgents keeps it current
 	// config.json 的 defaultModes / defaultConfig：新会话的默认模式 / 模型（按 agent id，设置 → Agent 里改），建会话时现取
 	cfgDefaults := func(agent string) hub.NewDefaults {
 		var c struct {
@@ -304,6 +307,7 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 	applyBins()
 	applyAgents := func() {
 		applyBins()
+		sysenv.SetSecretEnv(cfgLLM().KeyEnvs())
 		h.SetAgents(cfgAgents())
 		h.Broadcast("agents", h.Agents())
 		applyAwake()
@@ -357,7 +361,7 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 	// layout save, and once now for the projects that are open.
 	layout.OnSet = wr.SaveLayouts
 	wr.SaveLayouts(layout.Get())
-	srv := &server.Server{Dir: env.Dir, Hub: h, Token: token, Config: cfg, Layout: layout, Plugins: pm, Ext: em, Work: wr, Log: log, OnConfig: applyAgents,
+	srv := &server.Server{Dir: env.Dir, Hub: h, Token: token, Config: cfg, Secrets: secrets, Layout: layout, Plugins: pm, Ext: em, Work: wr, Log: log, OnConfig: applyAgents,
 		UI: ui, ESM: uisite.NewESM(env.ESMCDN, filepath.Join(env.Dir, "cache", "esm")), Remote: rm, Awake: keeper,
 		Service: svc, Terms: term.New(func() []string { return sysenv.ChildEnv() }, log)}
 	defer srv.Terms.Close()
@@ -486,7 +490,7 @@ func runACP(which string) error {
 			}
 			b, _ := os.ReadFile(filepath.Join(dir, "config.json"))
 			_ = json.Unmarshal(b, &c)
-			return c.LLM
+			return c.LLM.WithKeys(config.NewSecrets(filepath.Join(dir, "secrets.json")))
 		}})
 	default:
 		return fmt.Errorf("unknown agent %q (claude|codex|native)", which)

@@ -167,6 +167,8 @@ func mergePath(a, b string) string {
 //   - HERDR_*：在 herdr 的 pane 里起 gerdr 时会继承到。带着它的子 claude 会通过 herdr 的
 //     hook 把**自己的**会话报成那个 pane 的会话（herdr-web 踩过：chat 里出现别人的对话）；
 //   - GERDR_*：本服务的登录令牌、远程访问的 DNS 凭据（GERDR_CLOUDFLARE_DNS_API_TOKEN 这种），agent 跑的命令不该看得见。
+//   - the variables native providers take their API keys from (apiKeyEnv, SetSecretEnv): only gerdr itself
+//     calls those APIs, so agents and terminals have no use for them, and an `env` in a transcript would leak them.
 var claudeChildMarkers = map[string]bool{
 	"CLAUDE_CODE_CHILD_SESSION": true, "CLAUDE_CODE_SESSION_ID": true, "CLAUDE_CODE_SESSION_ATTENDED": true,
 	"CLAUDE_CODE_MESSAGING_SOCKET": true, "CLAUDE_CODE_MESSAGING_TOKEN": true, "CLAUDE_CODE_EXECPATH": true,
@@ -179,7 +181,7 @@ func ChildEnv(extra ...string) []string {
 		k, _, _ := strings.Cut(kv, "=")
 		switch {
 		case k == "CLAUDECODE", k == "CLAUDE_CODE_ENTRYPOINT", k == "CLAUDE_CODE_SSE_PORT", claudeChildMarkers[k],
-			strings.HasPrefix(k, "HERDR_"), strings.HasPrefix(k, "GERDR_"):
+			strings.HasPrefix(k, "HERDR_"), strings.HasPrefix(k, "GERDR_"), secretEnv(k):
 			continue
 		case k == "PATH" && gerdrBinDir != "":
 			// agent 跑的命令里能直接敲 gerdr（多个会话之间互相调用，内置的 gerdr skill 靠它）
@@ -189,6 +191,29 @@ func ChildEnv(extra ...string) []string {
 	}
 	env = append(env, gerdrEnv...)
 	return append(env, extra...)
+}
+
+var (
+	secretMu   sync.Mutex
+	secretEnvs = map[string]bool{}
+)
+
+// SetSecretEnv names the environment variables that hold secrets (config.json's llm.providers[].apiKeyEnv);
+// ChildEnv leaves them out. Replaces the previous list.
+func SetSecretEnv(names []string) {
+	m := map[string]bool{}
+	for _, n := range names {
+		m[n] = true
+	}
+	secretMu.Lock()
+	secretEnvs = m
+	secretMu.Unlock()
+}
+
+func secretEnv(k string) bool {
+	secretMu.Lock()
+	defer secretMu.Unlock()
+	return secretEnvs[k]
 }
 
 var (

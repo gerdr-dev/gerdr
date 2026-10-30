@@ -243,7 +243,10 @@ session:
 }
 ```
 
-Use `"apiKeyEnv": "VAR_NAME"` to keep the key out of the file. A model id is usually enough; protocol, reasoning
+A key written into `apiKey` (by Settings, `gerdr config set`, or by hand) is moved to `~/.gerdr/secrets.json` (0600)
+and `config.json` keeps `"<hidden>"`, so an agent that reads your settings doesn't pull the key into its transcript.
+Or use `"apiKeyEnv": "VAR_NAME"` to take it from gerdr's environment; that variable is not passed on to agents or
+terminals. A model id is usually enough; protocol, reasoning
 levels and context window are guessed from it, and you can override with `api` (chat / responses), `efforts`,
 `window`, `images`. The bottom of Settings → Agents can do this too (fetch the model list, test a model).
 

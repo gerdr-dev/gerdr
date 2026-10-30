@@ -246,7 +246,7 @@ function Editor({
               onChange={(e) => set({ apiKey: e.target.value })}
               onKeyDown={stop}
               className="h-8 font-mono text-[12px]"
-              placeholder="sk-…（存在跑 Gerdr 的电脑的 config.json 里）"
+              placeholder="sk-…（存在跑 Gerdr 的电脑的 secrets.json 里，不进 config.json）"
             />
           ) : (
             <Input

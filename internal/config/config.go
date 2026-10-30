@@ -3,6 +3,7 @@
 package config
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -92,12 +93,25 @@ type Store struct {
 	// OnSet, if set, runs after every successful Set with what was written (layout.json uses it to keep
 	// each project's own copy of its workspaces in the project directory, see work.Runner.SaveLayouts).
 	OnSet func(json.RawMessage)
+	// Filter rewrites what gets stored, both on Set and when the file was edited by hand (then the file is
+	// rewritten too). config.json uses it to move API keys out into secrets.json (Secrets.Split).
+	filter func(json.RawMessage) (json.RawMessage, bool)
 }
 
 func NewStore(path, def string) *Store {
 	s := &Store{path: path, data: json.RawMessage(def)}
 	s.reload()
 	return s
+}
+
+// SetFilter installs the filter and runs it over what is already on disk.
+func (s *Store) SetFilter(f func(json.RawMessage) (json.RawMessage, bool)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.filter = f
+	if out, ok := f(s.data); ok {
+		_ = s.write(out)
+	}
 }
 
 func (s *Store) reload() bool {
@@ -113,6 +127,11 @@ func (s *Store) reload() bool {
 		return false
 	}
 	s.data, s.mod = b, st.ModTime()
+	if s.filter != nil {
+		if out, ok := s.filter(b); ok {
+			_ = s.write(out)
+		}
+	}
 	return true
 }
 
@@ -139,9 +158,23 @@ func (s *Store) set(b json.RawMessage) error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.filter != nil {
+		b, _ = s.filter(b)
+	}
+	return s.write(b)
+}
+
+// write saves b pretty-printed and makes it the current data. Caller holds mu.
+func (s *Store) write(b json.RawMessage) error {
 	var pretty any
 	_ = json.Unmarshal(b, &pretty)
-	out, _ := json.MarshalIndent(pretty, "", "  ")
+	// No HTML escaping: config.Hidden is "<hidden>", and "\u003chidden\u003e" is unreadable to whoever opens the file.
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	enc.SetIndent("", "  ")
+	_ = enc.Encode(pretty)
+	out := bytes.TrimRight(buf.Bytes(), "\n")
 	tmp := s.path + ".tmp"
 	if err := os.WriteFile(tmp, out, 0o600); err != nil {
 		return err

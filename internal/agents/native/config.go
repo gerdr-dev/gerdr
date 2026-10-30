@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/gerdr-dev/gerdr/internal/agents/native/llm"
+	"github.com/gerdr-dev/gerdr/internal/config"
 )
 
 // Config 是 config.json 里的 "llm"：模型服务商和模型。设置一改下一轮就用新的（Agent 每次现取）。
@@ -29,8 +30,10 @@ type Provider struct {
 	ID      string `json:"id"`
 	Name    string `json:"name,omitempty"`
 	BaseURL string `json:"baseUrl"`
-	APIKey  string `json:"apiKey,omitempty"` //nolint:gosec
-	// APIKeyEnv：key 从这个环境变量读（不想把 key 写进 config.json 时用）。
+	// APIKey is config.Hidden in config.json: the key itself is in secrets.json (WithKeys fills it in).
+	APIKey string `json:"apiKey,omitempty"` //nolint:gosec
+	// APIKeyEnv: read the key from this environment variable instead. Agents don't see it
+	// (sysenv.SetSecretEnv drops it from their environment).
 	APIKeyEnv string            `json:"apiKeyEnv,omitempty"`
 	Headers   map[string]string `json:"headers,omitempty"`
 	Models    []Model           `json:"models"`
@@ -67,6 +70,34 @@ func (c Config) Only(ids []string) Config {
 	for _, p := range c.Providers {
 		if keep[p.ID] {
 			out.Providers = append(out.Providers, p)
+		}
+	}
+	return out
+}
+
+// WithKeys swaps config.Hidden for the real keys from secrets.json.
+func (c Config) WithKeys(sec *config.Secrets) Config {
+	ps := make([]Provider, len(c.Providers))
+	for i, p := range c.Providers {
+		ps[i] = p.WithKey(sec)
+	}
+	c.Providers = ps
+	return c
+}
+
+func (p Provider) WithKey(sec *config.Secrets) Provider {
+	if p.APIKey == config.Hidden {
+		p.APIKey = sec.Get(config.LLMKeyName(p.ID))
+	}
+	return p
+}
+
+// KeyEnvs lists the environment variables the providers take their keys from.
+func (c Config) KeyEnvs() []string {
+	var out []string
+	for _, p := range c.Providers {
+		if p.APIKeyEnv != "" {
+			out = append(out, p.APIKeyEnv)
 		}
 	}
 	return out

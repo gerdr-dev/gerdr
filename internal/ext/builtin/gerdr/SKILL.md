@@ -1,6 +1,6 @@
 ---
 name: gerdr
-description: "Coordinate other coding-agent sessions inside gerdr (Claude Code / Codex sessions in the gerdr GUI): list sessions, start a new agent session next to you, hand it a task, wait for it, read its reply, or message an existing session. Use when the user asks you to delegate to / start / ask / check on another agent or session in gerdr, or to run several agents in parallel. Also for arranging gerdr's layout: sorting tabs into workspaces, splitting panes together, renaming or reordering workspaces / tabs. Requires GERDR_ENV=1."
+description: "Coordinate other coding-agent sessions inside gerdr (Claude Code / Codex sessions in the gerdr GUI): list sessions, start a new agent session next to you, hand it a task, wait for it, read its reply, or message an existing session. Use when the user asks you to delegate to / start / ask / check on another agent or session in gerdr, or to run several agents in parallel. Also for arranging gerdr's layout: sorting tabs into workspaces, splitting panes together, renaming or reordering workspaces / tabs. Also for changing gerdr's own settings (theme, default agent / mode / model, shortcuts, agents, model providers) with `gerdr config`. Requires GERDR_ENV=1."
 ---
 
 # gerdr：和其他会话协作
@@ -140,6 +140,24 @@ gerdr workspace close <ws>;  gerdr tab close <tab>             # only empty ones
 - Everything stays inside your own session (the space you're in); other sessions' workspaces aren't listed and can't be reached.
 - Plan the whole rearrangement from one `workspace list` + `pane list`, then run the moves. Ids don't change when things move,
   so you don't need to list again between moves.
+
+## Changing gerdr's settings
+
+When the user asks to change a gerdr setting (theme, send key, default agent / mode / model, shortcuts, agents
+in Settings → Agent, Gerdr Agent's model providers…), use `gerdr config`, not an editor on config.json:
+it changes one field, checks the value, and open windows update within seconds.
+
+```bash
+gerdr config keys                         # every setting and what it does
+gerdr config get defaultModes             # read one (no path = all)
+gerdr config set theme dark               # value is JSON if it parses, else a string
+gerdr config set agents.reviewer.prompt "Review only, don't edit"   # array elements by id or index
+gerdr config unset defaultConfig.codex
+```
+
+API keys read back as `<hidden>`; the real ones are in secrets.json. Don't open that file or print the
+environment variables named in `apiKeyEnv`: whatever you read ends up in this transcript. To set a key the
+user gives you, `gerdr config set llm.providers.<id>.apiKey <key>`.
 
 ## 并行
 

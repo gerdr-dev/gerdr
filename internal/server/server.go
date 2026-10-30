@@ -51,6 +51,7 @@ type Server struct {
 	Hub     *hub.Hub
 	Token   string
 	Config  *config.Store
+	Secrets *config.Secrets // API keys moved out of config.json (config/secrets.go)
 	Layout  *config.Store
 	Plugins *plugins.Manager
 	Ext     *ext.Manager
@@ -471,7 +472,11 @@ func (s *Server) putStore(st *config.Store, name string) http.HandlerFunc {
 			httpError(w, 400, err.Error())
 			return
 		}
-		s.Hub.Broadcast(name, map[string]any{"data": b.Data, "client": b.Client})
+		if name == "config" && s.Secrets != nil {
+			s.Secrets.Prune(st.Get())
+		}
+		// What was stored, not what was sent: a key typed into Settings must not go out to every client.
+		s.Hub.Broadcast(name, map[string]any{"data": st.Get(), "client": b.Client})
 		if name == "config" && s.OnConfig != nil {
 			s.OnConfig()
 		}
