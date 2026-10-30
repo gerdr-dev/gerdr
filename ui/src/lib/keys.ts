@@ -68,7 +68,8 @@ export type KeyAction =
   | "prevAttention"
   | "focusAttention"
   | "renamePane"
-  | "stop";
+  | "stop"
+  | "stash";
 
 export const ACTION_TITLES: Record<KeyAction, string> = {
   splitRight: "左右分屏（空面板）",
@@ -135,6 +136,7 @@ export const ACTION_TITLES: Record<KeyAction, string> = {
   focusAttention: "跳到在等你的会话",
   renamePane: "重命名会话",
   stop: "打断当前会话",
+  stash: "暂存输入框里的消息 / 取回来",
 };
 
 // 默认键位照着 herdr（src/config/model.rs 里那张表），再加上 gerdr 自己的几个。
@@ -214,6 +216,7 @@ const MAC_KEYS: Record<KeyAction, string[]> = {
   focusAttention: ["prefix+o", "meta+j"],
   renamePane: ["prefix+shift+p"],
   stop: [],
+  stash: ["meta+s"],
 };
 
 /*
@@ -247,6 +250,8 @@ const PC_EXTRA: Partial<Record<KeyAction, string[]>> = {
   help: ["ctrl+shift+/"],
   settings: ["ctrl+,"],
   focusAttention: ["ctrl+shift+j"],
+  // Not Ctrl+S: in a terminal pane that's XOFF / bash's forward history search
+  stash: ["ctrl+shift+s"],
 };
 
 export const IS_MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
@@ -287,7 +292,7 @@ export const KEY_GROUPS: [string, KeyAction[]][] = [
   ["tab", ["newTab", "terminalTab", "nextTab", "prevTab", "lastTab", "tab1", "closeTab", "reopenClosed", "renameTab"]],
   ["工作空间", ["newWorkspace", "workspaces", "nextWorkspace", "prevWorkspace", "ws1", "renameWorkspace", "closeWorkspace"]],
   ["项目", ["newSpace", "nextSpace", "prevSpace"]],
-  ["会话", ["sessions", "nextAttention", "prevAttention", "focusAttention", "renamePane", "stop"]],
+  ["会话", ["sessions", "nextAttention", "prevAttention", "focusAttention", "renamePane", "stop", "stash"]],
   ["其他", ["palette", "toggleSidebar", "settings", "help", "importHerdr"]],
 ];
 

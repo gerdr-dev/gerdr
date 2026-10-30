@@ -1010,6 +1010,34 @@ export function stopFocused() {
   if (id) api.cancel(id).catch(() => {});
 }
 
+/**
+ * ⌘S: put the composer's message (text and images) aside, press again on an empty composer to take it back — in any pane,
+ * so a half-written prompt can move to another session or agent. One slot: stashing again replaces what was there.
+ */
+export function stashDraft() {
+  const el = document.activeElement as HTMLElement | null;
+  const leaf = focusedLeaf(get().layout);
+  // The composer being typed in (also the Work view's, which isn't a pane), else the focused pane's
+  const paneId = el?.dataset.composer ?? (leaf?.sessionId ? leaf.id : undefined);
+  const box = paneId ? document.querySelector<HTMLTextAreaElement>(`textarea[data-composer="${CSS.escape(paneId)}"]`) : null;
+  if (!paneId || !box) return toast("没有可以暂存的输入框");
+  const { drafts, draftImgs, stash } = get();
+  const text = drafts[paneId] ?? "";
+  const imgs = draftImgs[paneId] ?? [];
+  if (text.trim() !== "" || imgs.length > 0) {
+    // A video still uploading gets its path written back into this pane's draft when it finishes; stashed, it'd stay pathless
+    if (imgs.some((im) => im.mimeType.startsWith("video/") && !im.path)) return toast("视频还在上传，传完再暂存");
+    set((s) => ({ drafts: { ...s.drafts, [paneId]: "" }, draftImgs: { ...s.draftImgs, [paneId]: [] }, stash: { text, imgs } }));
+  } else {
+    if (!stash) return toast("没有暂存的消息");
+    set((s) => ({ drafts: { ...s.drafts, [paneId]: stash.text }, draftImgs: { ...s.draftImgs, [paneId]: stash.imgs }, stash: null }));
+  }
+  requestAnimationFrame(() => {
+    box.focus();
+    box.setSelectionRange(box.value.length, box.value.length);
+  });
+}
+
 export function focusedSessionId(): string | undefined {
   return focusedLeaf(get().layout)?.sessionId;
 }
@@ -1165,6 +1193,8 @@ export function runAction(a: KeyAction) {
     }
     case "stop":
       return stopFocused();
+    case "stash":
+      return stashDraft();
   }
 }
 
