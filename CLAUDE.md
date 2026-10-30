@@ -7,6 +7,7 @@ Claude Code / Codex 的图形界面：Go 后端（ACP 适配器 + hub + HTTP/WS�
 - 远程访问（中继 / 配对码 / passkey，`internal/auth` `relay` `acme` `remote`）的设计和坑在 docs/dev/REMOTE.md，动之前先读。
 - 安卓 App（android/：局域网直连、App 里的 passkey、后台通知，`internal/lan`、`remote/lan.go`、`server/appapi.go` `appwatch.go`）：
   docs/dev/ANDROID.md。桥的两半（`Bridge.kt` ↔ `ui/src/lib/android.ts`）要一起改；换正式签名钥匙要改 `config.OfficialAndroidCert`。
+- Measured-and-postponed work (why, numbers, how to do it): docs/dev/TODO.md. Add to it instead of losing the investigation.
 - Desktop App self-update (backend-only ~10MB vs whole App, applied only when idle; `desktop/updater.js`,
   `desktop/shell-id.sh`): docs/dev/UPDATE.md. Changing shell files forces a full download for everyone.
 - 后台常驻（launchd，`internal/service`、`cmd/gerdr/attach.go`）和 App 怎么分工、怎么跟着 App 升级：docs/dev/SERVICE.md。
