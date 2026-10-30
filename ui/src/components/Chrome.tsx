@@ -265,7 +265,7 @@ export function PhoneBar() {
  * sync.ts was in fact retrying with backoff (a backend restart takes a few seconds): now it says it's reconnecting, counts down
  * to the next try, and offers to try now. Blips under a second (sleep / wake, a dropped stale socket) show nothing.
  */
-function ConnStatus() {
+export function ConnStatus() {
   const connected = useStore((s) => s.connected);
   const conn = useStore((s) => s.conn);
   const [shown, setShown] = useState(false);
@@ -332,10 +332,8 @@ export function Sidebar({ className }: { className?: string }) {
         <div className="flex min-w-16 flex-1">
           <SpaceSwitcher />
         </div>
-        <ConnStatus />
-        {/* 安卓 App 里走哪条路（详情在设置 → 通用 → 安卓 App）。原来是顶栏上的一个绿 / 蓝点，和状态点挤在一起分不清，挪到侧栏里写成字 */}
-        {connected && isAndroid() && <RouteLabel />}
-        {/* Project first, Code / Work at the right: Work mode's top bar repeats this row at the same width (WorkView WorkBar), so switching modes doesn't move it */}
+        {/* Project first, Code / Work at the right: Work mode's top bar repeats this row at the same width (WorkView WorkBar), so switching modes doesn't move it.
+            Only these three: the connection status used to sit here too and squeezed the project name to "def…" and the toggle out (it's in the bottom row now) */}
         <ModeSwitch />
         <Button variant="ghost" size="icon" className="size-7" onClick={toggleSidebar} style={{ WebkitAppRegion: "no-drag" } as any}>
           <PanelLeft className="size-4" />
@@ -370,7 +368,7 @@ export function Sidebar({ className }: { className?: string }) {
         <Button
           variant="ghost"
           size="sm"
-          className="h-7 flex-1 justify-start gap-2 text-[12px] text-muted-foreground"
+          className="h-7 shrink-0 justify-start gap-2 text-[12px] text-muted-foreground"
           onClick={() => set({ dialog: { kind: "settings", tab: doctorBad ? "labs" : undefined } })}
         >
           <Settings className="size-3.5" /> 设置
@@ -381,6 +379,12 @@ export function Sidebar({ className }: { className?: string }) {
             </span>
           )}
         </Button>
+        {/* Status lives down here, where there's room: the connection to the backend when it's lost, and on Android which route
+            the app takes (details in Settings → General → Android app) */}
+        <div className="flex min-w-0 flex-1 items-center justify-end gap-2 overflow-hidden">
+          <ConnStatus />
+          {connected && isAndroid() && <RouteLabel />}
+        </div>
         <Tooltip>
           <TooltipTrigger asChild>
             <Button variant="ghost" size="icon" className="size-7 text-muted-foreground" onClick={() => set({ dialog: { kind: "help" } })}>

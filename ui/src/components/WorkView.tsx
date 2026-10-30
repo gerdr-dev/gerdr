@@ -2,7 +2,7 @@ import { Briefcase, Check, ChevronDown, Code2, History, MessageSquarePlus, Setti
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { AgentIcon, StatusDot } from "@/components/AgentIcon";
-import { SpaceSwitcher } from "@/components/Chrome";
+import { ConnStatus, SpaceSwitcher } from "@/components/Chrome";
 import { ChatView } from "@/components/chat/ChatView";
 import { PixelLoader } from "@/components/chat/PixelLoader";
 import { Button } from "@/components/ui/button";
@@ -206,6 +206,10 @@ function WorkBar() {
         >
           <Settings className="size-4" />
         </Button>
+      </div>
+      {/* No sidebar (and so no bottom row) in Work mode: the connection status goes at the bar's right end */}
+      <div className="flex min-w-0 flex-1 items-center justify-end px-3">
+        <ConnStatus />
       </div>
     </div>
   );
