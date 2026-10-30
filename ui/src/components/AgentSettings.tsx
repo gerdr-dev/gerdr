@@ -323,7 +323,8 @@ function Editor({ d, onChange, onSave, onCancel }: { d: Draft; onChange: (d: Dra
   const [adv, setAdv] = useState(!!(d.env || d.bin || d.args) || d.kind === "command");
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-[88px_minmax(0,1fr)] max-md:grid-cols-[72px_minmax(0,1fr)] items-center gap-x-3 gap-y-2.5">
+      {/* Phones: one column, each label pulled up against the field under it (a label column left the fields too narrow) */}
+      <div className="grid grid-cols-[88px_minmax(0,1fr)] items-center gap-x-3 max-md:grid-cols-1 gap-y-2.5 max-md:[&>span.text-muted-foreground]:-mb-1.5 max-md:[&>span.text-muted-foreground]:pt-0">
         <span className="text-muted-foreground">名字</span>
         {d.builtin ? (
           <span className="font-medium">{d.name}</span>
@@ -338,7 +339,7 @@ function Editor({ d, onChange, onSave, onCancel }: { d: Draft; onChange: (d: Dra
               // 换到 Native 时先把服务商全勾上（至少要勾一个，省得人再去点）
               onValueChange={(v) => set({ kind: v as Kind, ...(v === "native" && !d.providers.length ? { providers: allProviders() } : {}) })}
             >
-              <SelectTrigger size="sm" className="w-56 max-w-full">
+              <SelectTrigger size="sm" className="w-56 max-w-full max-md:w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -413,7 +414,7 @@ function Editor({ d, onChange, onSave, onCancel }: { d: Draft; onChange: (d: Dra
             </button>
           )}
           {(adv || d.kind === "command") && (
-            <div className="grid grid-cols-[88px_minmax(0,1fr)] max-md:grid-cols-[72px_minmax(0,1fr)] items-center gap-x-3 gap-y-2.5">
+            <div className="grid grid-cols-[88px_minmax(0,1fr)] items-center gap-x-3 max-md:grid-cols-1 gap-y-2.5 max-md:[&>span.text-muted-foreground]:-mb-1.5 max-md:[&>span.text-muted-foreground]:pt-0">
               {d.kind === "command" ? (
                 <>
                   <span className="text-muted-foreground">启动命令</span>
@@ -671,7 +672,7 @@ function DefaultsEditor({
           还不知道它有哪些模式和模型：先开一个这种会话，回来就能选；或者在会话输入框下面的下拉里选好，点「设为新会话的默认」。
         </div>
       ) : (
-        <div className="grid grid-cols-[88px_minmax(0,1fr)] max-md:grid-cols-[72px_minmax(0,1fr)] items-center gap-x-3 gap-y-2">
+        <div className="grid grid-cols-[88px_minmax(0,1fr)] items-center gap-x-3 max-md:grid-cols-1 gap-y-2 max-md:gap-y-2.5 max-md:[&>div>span.text-muted-foreground]:-mb-1 max-md:[&>div>span.text-muted-foreground]:pt-0">
           {rows.map((r) => {
             const v = value[r.key];
             const known = !v || r.options.some((x) => x.value === v);
@@ -679,7 +680,7 @@ function DefaultsEditor({
               <div key={r.key} className="contents">
                 <span className="text-muted-foreground">{r.label}</span>
                 <Select value={v ?? UNSET} onValueChange={(x) => put(r.key, x)}>
-                  <SelectTrigger size="sm" className="w-64 max-w-full">
+                  <SelectTrigger size="sm" className="w-64 max-w-full max-md:w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>

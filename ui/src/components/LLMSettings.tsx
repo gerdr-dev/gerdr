@@ -230,7 +230,8 @@ function Editor({
 
   return (
     <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
-      <div className="grid grid-cols-[88px_minmax(0,1fr)] max-md:grid-cols-[72px_minmax(0,1fr)] items-center gap-x-3 gap-y-2.5">
+      {/* Phones: one column, each label pulled up against the field under it (a label column left the fields too narrow) */}
+      <div className="grid grid-cols-[88px_minmax(0,1fr)] items-center gap-x-3 max-md:grid-cols-1 gap-y-2.5 max-md:[&>span.text-muted-foreground]:-mb-1.5 max-md:[&>span.text-muted-foreground]:pt-0">
         <span className="text-muted-foreground">名字</span>
         <Input
           value={d.name}
@@ -241,7 +242,7 @@ function Editor({
         />
         <span className="text-muted-foreground">协议</span>
         <Select value={d.api} onValueChange={(v) => set({ api: v as Protocol })}>
-          <SelectTrigger size="sm" className="w-40 max-w-full">
+          <SelectTrigger size="sm" className="w-40 max-w-full max-md:w-full">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -263,7 +264,7 @@ function Editor({
         <span className="text-muted-foreground">API key</span>
         <div className="flex items-center gap-2">
           <Select value={d.keyMode} onValueChange={(v) => set({ keyMode: v as Draft["keyMode"] })}>
-            <SelectTrigger size="sm" className="w-32 shrink-0 max-md:w-24">
+            <SelectTrigger size="sm" className="w-32 shrink-0">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
