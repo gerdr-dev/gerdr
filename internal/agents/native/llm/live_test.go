@@ -35,6 +35,9 @@ func TestLiveToolRoundTrip(t *testing.T) {
 			}
 			if api == "anthropic" {
 				req.Thinking = "adaptive"
+				if th := os.Getenv("NATIVE_LIVE_THINKING"); th != "" {
+					req.Thinking = th
+				}
 			}
 			if api == "chat" && strings.Contains(model, "deepseek") {
 				req.Thinking = "deepseek"

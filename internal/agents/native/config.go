@@ -54,7 +54,8 @@ type Model struct {
 	// 服务商是 anthropic 协议时不看这个，一律 anthropic。
 	API string `json:"api,omitempty"`
 	// Thinking：思考开关的格式。Chat Completions：deepseek = thinking:{type:enabled|disabled}，空 = reasoning_effort；
-	// Anthropic：adaptive = thinking:{type:adaptive}（Claude 4.6+ 按 id 猜），空 = 不发。
+	// Anthropic: adaptive = thinking:{type:adaptive} with a reasoning summary; updates = the model's short progress
+	// notes instead (Opus/Sonnet 5.5, Fable 5+). Guessed from the id; empty = no thinking param.
 	Thinking string `json:"thinking,omitempty"`
 	// Efforts：思考档位（原样发给接口的值），从低到高；DefaultEffort 是默认档。都空 = 按 id 猜。
 	Efforts       []string `json:"efforts,omitempty"`
@@ -187,6 +188,10 @@ func (p Provider) withDefaults(m Model) Model {
 // budget_tokens is a 400 on 4.7+). Same pattern shuttle uses.
 var adaptiveClaude = regexp.MustCompile(`claude-(opus|sonnet|haiku|fable|mythos)-(4[.-][6-9]|[5-9]|\d{2})`)
 
+// updatesClaude: the ones that take thinking.display "updates" (short progress notes, what Claude Code shows) —
+// Opus / Sonnet 5.5 and Fable / Mythos 5+, and anything later. Haiku isn't on the list.
+var updatesClaude = regexp.MustCompile(`claude-((opus|sonnet)-(5[.-][5-9]|[6-9]|\d{2})|(fable|mythos)-([5-9]|\d{2}))`)
+
 // withDefaults：按模型 id 补协议、思考档位、窗口。数值来自 pi 的 models_catalog（shuttle 在用的那份）。
 func withDefaults(m Model) Model {
 	id := strings.ToLower(m.ID)
@@ -243,13 +248,17 @@ func withDefaults(m Model) Model {
 	return m
 }
 
-// anthropicDefaults: the same guesses for a model on the Anthropic protocol. Claude 4.6+ gets adaptive thinking and
+// anthropicDefaults: the same guesses for a model on the Anthropic protocol. Claude 4.6+ gets adaptive thinking
+// ("updates" display where the model takes it) and
 // its effort levels (xhigh came with 4.7); anything else behind an Anthropic-compatible gateway gets no thinking
 // parameters unless the model says so, because each gateway takes different ones.
 func anthropicDefaults(m Model, id string) Model {
 	if adaptiveClaude.MatchString(id) {
 		if m.Thinking == "" {
 			m.Thinking = "adaptive"
+			if updatesClaude.MatchString(id) {
+				m.Thinking = "updates"
+			}
 		}
 		if len(m.Efforts) == 0 {
 			if strings.Contains(id, "4-6") || strings.Contains(id, "4.6") {

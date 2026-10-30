@@ -74,7 +74,8 @@ type Request struct {
 	// Effort：思考档位，原样按模型的规矩发（见 Model.Efforts）。空 = 不发，用接口默认。
 	Effort string
 	// Thinking：思考开关的格式。Chat Completions："deepseek" = thinking:{type}，"" = reasoning_effort；
-	// Anthropic："adaptive" = thinking:{type:adaptive}（Claude 4.6+），"" = 不发 thinking。
+	// Anthropic: "adaptive" = thinking:{type:adaptive} with a summary of the reasoning (Claude 4.6+); "updates" = the
+	// same with the model's short progress notes instead (beta, Opus/Sonnet 5.5, Fable 5+); "" = no thinking param.
 	Thinking string
 	// CacheKey：前缀缓存的路由键（OpenAI 的 prompt_cache_key）。同一个会话用同一个，命中率高很多。
 	CacheKey  string

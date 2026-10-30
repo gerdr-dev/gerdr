@@ -20,8 +20,11 @@ import (
 //   - All tool results of one assistant turn go into one user message (splitting them is legal but teaches the model
 //     to stop calling tools in parallel). Images go inside tool_result, unlike the OpenAI protocols.
 //   - Claude 4.6+ thinks with thinking:{type:adaptive} + output_config.effort; display defaults to "omitted" on newer
-//     models (thinking blocks with empty text), so ask for "summarized" or the UI shows nothing while it thinks.
-//     budget_tokens is a 400 on Claude 4.7+ and is never sent.
+//     models (thinking blocks with empty text), so we ask for something. "summarized" is a separate model's long
+//     English summary of the reasoning; "updates" (beta, Opus/Sonnet 5.5, Fable 5+) is the model's own one- or
+//     two-line progress notes between tool calls, in the conversation's language — what Claude Code asks for by
+//     default, and much easier to follow. Request.Thinking picks: "updates" where the model takes it, else
+//     "adaptive" (= summarized). budget_tokens is a 400 on Claude 4.7+ and is never sent.
 //   - Prompt caching is opt-in: cache_control on the system prompt, the last tool and the last block of the last
 //     message (3 of the 4 allowed breakpoints). usage.input_tokens excludes cache reads and writes; Usage.Input adds
 //     them back so it means the same thing as on the other protocols.
@@ -42,6 +45,8 @@ func AnthropicURL(base, path string) string {
 	}
 	return base + path
 }
+
+const thinkingUpdatesBeta = "thinking-display-updates-2026-08-18"
 
 // AnthropicAuth is the auth headers for a key.
 func AnthropicAuth(key string) http.Header {
@@ -82,14 +87,20 @@ func (c *anthropic) Stream(ctx context.Context, req Request, on func(Event)) (Re
 		body["tools"] = tools
 	}
 	thinkingOff := req.Effort == "off"
-	if req.Thinking == "adaptive" && !thinkingOff {
-		body["thinking"] = map[string]any{"type": "adaptive", "display": "summarized"}
+	hdr := AnthropicAuth(c.ep.APIKey)
+	if (req.Thinking == "adaptive" || req.Thinking == "updates") && !thinkingOff {
+		display := "summarized"
+		if req.Thinking == "updates" {
+			display = "updates"
+			hdr.Set("anthropic-beta", thinkingUpdatesBeta)
+		}
+		body["thinking"] = map[string]any{"type": "adaptive", "display": display}
 	}
 	if req.Effort != "" && !thinkingOff {
 		body["output_config"] = map[string]any{"effort": req.Effort}
 	}
 
-	rc, err := postURL(ctx, AnthropicURL(c.ep.BaseURL, "/messages"), AnthropicAuth(c.ep.APIKey), c.ep.Headers, body)
+	rc, err := postURL(ctx, AnthropicURL(c.ep.BaseURL, "/messages"), hdr, c.ep.Headers, body)
 	if err != nil {
 		return Result{Stop: "cancelled"}, err
 	}
