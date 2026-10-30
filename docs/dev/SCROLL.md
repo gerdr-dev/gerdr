@@ -31,6 +31,7 @@ node tabs.mjs                                # 然后跑场景，见下表
 | agent 输出时内容在动 / 不跟底 | `stream.mjs --at="用户说的话" [--up=600\|0]` | 截到那句话，后面那一轮流式灌进去；往上翻着看内容动没动 / 贴着底看跟没跟 |
 | Phone: switching panes shows a mid-chat frame, then snaps to the bottom | `panes.mjs [--stream] [--cpu=4] [--ro]` | One tab split in two, phone viewport, focus flipped back and forth (only the focused pane is drawn, so each switch remounts). `--cpu` slows the CPU like a phone, `--stream` feeds output in while switching, `--ro` judges the painted frames |
 | Can't scroll up from the bottom, gets pulled back | `scrollup.mjs [--step=40] [--steps=25]` | Small wheel steps up from the bottom must stick. Run it after touching anything that keeps the chat at the bottom: the first 80px up still count as at the bottom, and the virtual list resizes on every step |
+| Scrolling up while a reply streams in gets pulled back | `streamup.mjs [--step=30] [--steps=5] [--gap=1500]` | Small wheel steps up from the bottom with pauses longer than 600ms while output keeps arriving. Leaving the bottom goes by direction, not distance: any user scroll up leaves it, only scrolling back down (or reaching the very bottom) re-sticks (`syncBottom`) |
 | A broken image / video makes the chat jump | `media.mjs [--src=/tmp/x.png] [--tab=1]` | Appends a message with missing media, parks it mid-screen, watches through every automatic retry, then scrolls it out and back in. Run it after touching `chat/ChatMedia.tsx` |
 | 某一行自己变高矮 | `rows.mjs [--tab=1]` | 行挂上后高度变没变（DOM 没变也会变）、Virtuoso 记的高度和实际对不对 |
 
