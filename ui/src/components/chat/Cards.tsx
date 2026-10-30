@@ -389,7 +389,8 @@ export function QuickReplies({ data, onPick, enabled }: { data: GData["quickRepl
   return (
     <div className="my-1 flex flex-wrap gap-1.5">
       {data.questions.flatMap((q) =>
-        q.options.map((o) => (
+        // Transcripts saved before the backend dropped open-ended questions still carry "options": null.
+        (q.options ?? []).map((o) => (
           <Button key={q.question + o} size="sm" variant="outline" className="h-7 rounded-full text-[12px]" disabled={!enabled} onClick={() => onPick(o)}>
             {o}
           </Button>

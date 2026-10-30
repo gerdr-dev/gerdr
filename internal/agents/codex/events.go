@@ -300,9 +300,14 @@ func (a *Agent) itemCompleted(ctx context.Context, s *session, raw json.RawMessa
 			// 等回复（回复走 turn/steer 进来）。把选项挂在 _meta 上，界面画成「点一下就回」的按钮。
 			var qs []map[string]any
 			for _, q := range it.Questions {
-				qs = append(qs, map[string]any{"question": q.Title, "options": q.Options})
+				// Open-ended questions come with "options": null; they have no button to draw.
+				if len(q.Options) > 0 {
+					qs = append(qs, map[string]any{"question": q.Title, "options": q.Options})
+				}
 			}
-			meta = acpx.Meta(map[string]any{"quickReplies": qs})
+			if len(qs) > 0 {
+				meta = acpx.Meta(map[string]any{"quickReplies": qs})
+			}
 		}
 		if !st.sawDelta || replay {
 			a.out(ctx, s, acp.SessionUpdate{AgentMessageChunk: &acp.SessionUpdateAgentMessageChunk{
