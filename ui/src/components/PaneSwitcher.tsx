@@ -63,7 +63,9 @@ export function PaneSwitcher() {
 
   const [q, setQ] = useState("");
   /** 只看这个工作空间（空 = 全部）。不存盘：它是「我这会儿在找什么」，不是偏好。 */
-  const [ws, setWs] = useState("");
+  // Opens on the current workspace (asked for): mostly you're switching panes within the project you're in, and
+  // "全部" is one tap away. The panel is remounted on every open, so this is read fresh each time.
+  const [ws, setWs] = useState(() => layout.active ?? "");
   const [adding, setAdding] = useState(false);
   const [sort, setSort] = useState<"rank" | "group">(() => {
     try {
