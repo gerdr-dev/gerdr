@@ -123,9 +123,10 @@ export function TabView({ tab }: { tab: Tab }) {
     window.addEventListener("pointerup", up);
   };
 
-  // 外圈 1px + 每个 pane 自己 3px：贴边 4px、两个 pane 之间 6px，和原来的 p-1 + 6px 缝一样
+  // Outer 3px + each pane's own 3px: 6px to the edges and 6px between panes, the same inset as the sidebar's rows
+  // and the tab bar's tabs, so the cards line up with both across the divider
   return (
-    <div className={cn("h-full min-h-0", framed && "p-px")}>
+    <div className={cn("h-full min-h-0", framed && "p-[3px]")}>
       <div ref={box} className="relative h-full w-full">
         {panes.map(({ pane, box: b }) => {
           const z = zoom === pane.id;

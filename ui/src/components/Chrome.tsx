@@ -382,7 +382,7 @@ export function Sidebar({ className }: { className?: string }) {
     <div className={cn("relative flex h-full shrink-0 flex-col border-r bg-sidebar", className)} style={className ? undefined : { width: sidebarW }}>
       {!className && <SidebarEdge />}
       <SidebarHeader />
-      <div className="max-h-[45%] shrink-0 overflow-y-auto px-1.5 pt-1 pb-2">
+      <div className="max-h-[45%] shrink-0 overflow-y-auto px-1.5 pt-1.5 pb-2">
         <div ref={listRef}>
           {list.map((w, wi) => (
             <WorkspaceItem
