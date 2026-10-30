@@ -289,6 +289,16 @@ cwd 以外改的文件（Bash 写 `~/.zshrc`、隔壁项目）管不到；同一
   `mcp_servers.<名>.enabled = false`；skill 用 `skills.config = [{path, enabled:false}]` 按会话关（会整个覆盖用户的那张表，所以用户自己关掉的要照抄）；
   gerdr 的目录用 `skills/extraRoots/set`（整个 app-server 的设置）。**对一个已经加载着的 thread 再 resume，新 config 不生效**，
   要先 `thread/unsubscribe` 让它卸载再 resume（实测）。
+- Scope: Gerdr only manages MCP servers from local config files (its own `ext.json`, `~/.claude.json`, `.mcp.json`,
+  `~/.codex/config.toml` `[mcp_servers.*]`). Account-side connectors (claude.ai connectors, the apps connected to the
+  ChatGPT account, which Codex exposes through its built-in apps channel) and MCP bundled in Codex `[plugins.*]` are
+  neither listed nor toggled: they are managed in the account settings, Codex gives no way to list the account apps, and
+  their state changes with the account. That's why an agent asked "what MCP do you have" names more than Settings → MCP.
+  One asymmetry with "only Gerdr's": for Claude, `--strict-mcp-config` drops the claude.ai connectors too (tested: 22
+  `claude.ai *` servers in the init event without it, none with it); for Codex they stay, since only the
+  `mcp_servers.<name>` entries Gerdr read from config.toml get `enabled = false`. Accepted for now: "only Gerdr's" asks
+  for a clean set anyway. Keeping the connectors would mean dropping strict and denying the local servers by name
+  (`permissions.deny: ["mcp__<name>"]`), which still starts their processes.
 - 内置 skill（`internal/ext/builtin/`：gerdr、gerdr-ui）不管来源选什么都给，设置里能单个关。
 
 ## MCP OAuth (internal/mcpauth + server/mcpauthapi.go)

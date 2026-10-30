@@ -44,8 +44,9 @@ export function SettingsDialog({ open }: { open: boolean }) {
               标题和按钮显得又大又挤（用户在安卓 App 里截图报的）。只在 max-md 下生效，桌面不动 */}
           <DialogHeader className="min-w-0 px-6 pt-5 max-md:gap-1 max-md:px-4 max-md:pt-3">
             <DialogTitle className="max-md:text-[15px]">设置</DialogTitle>
-            {/* 八个分页在手机上一行放不下：横滑，不换行 */}
-            <TabsList className="mt-2 max-w-full justify-start overflow-x-auto [scrollbar-width:none] max-md:mt-1 max-md:h-8 max-md:[&>button]:text-[13px]">
+            {/* The tabs don't fit one row on a phone: swipe sideways, no wrapping. overflow-x-auto makes y auto too, and Android's
+                WebView ignores scrollbar-width, so it drew both scrollbars (a bar under the tabs, a white corner square) */}
+            <TabsList className="mt-2 max-w-full justify-start overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden max-md:mt-1 max-md:h-8 max-md:[&>button]:text-[13px]">
               <TabsTrigger value="general">通用</TabsTrigger>
               <TabsTrigger value="keys">快捷键</TabsTrigger>
               <TabsTrigger value="skills">Skill</TabsTrigger>

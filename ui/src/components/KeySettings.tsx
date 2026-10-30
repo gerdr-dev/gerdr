@@ -137,7 +137,9 @@ export function KeySettings() {
                   const changed = !same(list, DEFAULT_KEYS[a]);
                   return (
                     <div key={a} className="flex items-center gap-3 py-1.5">
-                      <span className="flex-1 text-[13px]">
+                      {/* min-w: the label has flex-basis 0, so on a phone the chips took the whole row and squeezed CJK labels to one
+                          character per line; with a floor the chips wrap instead */}
+                      <span className="min-w-28 flex-1 text-[13px]">
                         {ACTION_TITLES[a]}
                         {changed && <span className="ml-1.5 text-[11px] text-muted-foreground">已改</span>}
                       </span>
@@ -174,7 +176,8 @@ export function KeySettings() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className={cn("size-6 text-muted-foreground", !changed && "invisible")}
+                          // Unchanged rows keep the slot so the + buttons line up on desktop; a phone can't spare the blank column
+                          className={cn("size-6 text-muted-foreground", !changed && "invisible max-md:hidden")}
                           title="恢复默认"
                           onClick={() => setList(a, DEFAULT_KEYS[a])}
                         >

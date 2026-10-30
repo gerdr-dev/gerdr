@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -61,20 +62,25 @@ const Empty = ({ children }: { children: React.ReactNode }) => <div className="p
 
 // The Skill and MCP pages share one look: a header row (title + ⓘ, source, add), then groups of rows, each thing once.
 
+// A popover, not a tooltip: tooltips only open on hover/focus, so on a phone tapping ⓘ showed nothing
 function HelpTip({ lines }: { lines: string[] }) {
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
+    <Popover>
+      <PopoverTrigger asChild>
         <button className="text-muted-foreground hover:text-foreground" aria-label="说明">
           <Info className="size-3.5" />
         </button>
-      </TooltipTrigger>
-      <TooltipContent side="bottom" align="start" className="max-w-sm space-y-1.5 text-[12px] leading-5 font-normal">
+      </PopoverTrigger>
+      <PopoverContent
+        side="bottom"
+        align="start"
+        className="w-auto max-w-[min(24rem,calc(100vw-2rem))] space-y-1.5 px-3 py-2 text-[12px] leading-5 font-normal"
+      >
         {lines.map((t) => (
           <p key={t}>{t}</p>
         ))}
-      </TooltipContent>
-    </Tooltip>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -82,9 +88,9 @@ function Group({ title, count, hint, children }: { title: string; count: number;
   return (
     <div className="space-y-1.5">
       <div className="flex items-baseline gap-2 px-0.5">
-        <span className="text-[12px] font-medium">{title}</span>
-        <span className="text-[11px] text-muted-foreground tabular-nums">{count}</span>
-        {hint && <span className="truncate text-[11px] text-muted-foreground">{hint}</span>}
+        <span className="shrink-0 text-[12px] font-medium whitespace-nowrap">{title}</span>
+        <span className="shrink-0 text-[11px] text-muted-foreground tabular-nums">{count}</span>
+        {hint && <span className="min-w-0 truncate text-[11px] text-muted-foreground">{hint}</span>}
       </div>
       <div className="divide-y rounded-md border">{children}</div>
     </div>
@@ -195,13 +201,17 @@ export function SkillSettings({ open }: { open: boolean }) {
 
   return (
     <div className="min-w-0 space-y-3">
-      <div className="flex items-center gap-2">
+      {/* On a phone the source picker gets its own row (order-last + full width): in one row it pushed the buttons past
+          the dialog's edge and squeezed the label to one character per line */}
+      <div className="flex flex-wrap items-center gap-2">
         <div className="flex flex-1 items-center gap-1.5 text-[13px] font-medium">
           Skill
           <HelpTip lines={SKILL_HELP} />
         </div>
-        <span className="text-[12px] text-muted-foreground">Agent 用：</span>
-        <SourcePicker value={s.skillSource} onChange={(x) => save({ skillSource: x })} />
+        <div className="flex items-center gap-2 max-md:order-last max-md:w-full max-md:justify-between">
+          <span className="text-[12px] whitespace-nowrap text-muted-foreground">Agent 用：</span>
+          <SourcePicker value={s.skillSource} onChange={(x) => save({ skillSource: x })} />
+        </div>
         <Button size="sm" variant="outline" className="text-[12px]" onClick={() => setEdit({ name: "", content: "", isNew: true })}>
           <Plus className="size-3.5" />
           新建
@@ -444,6 +454,9 @@ function rowStatus(r: MCPRow, a: MCPAuth | undefined, rc: Reconnect | undefined,
 
 const MCP_HELP = [
   "来源决定 Claude Code 和 Codex 的会话用哪些，Native 引擎只用 Gerdr 组的。Work 右边的助手按它用的引擎算，和 Code 里一样。改完从每个会话的下一轮起生效。",
+  // Account-side connectors live in claude.ai / ChatGPT settings and Gerdr deliberately leaves them alone, so asking
+  // an agent "what MCP do you have" lists more than this page does
+  "这里只列本机配置文件里的（Gerdr 的、~/.claude.json、.mcp.json、~/.codex/config.toml）。claude.ai / ChatGPT 账号里连接的应用（Notion、Figma、GitHub…）和 Codex 插件自带的不在这里，去各自的账号设置里管。",
 ];
 
 export function MCPSettings({ open }: { open: boolean }) {
@@ -494,13 +507,15 @@ export function MCPSettings({ open }: { open: boolean }) {
 
   return (
     <div className="min-w-0 space-y-3">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <div className="flex flex-1 items-center gap-1.5 text-[13px] font-medium">
           MCP
           <HelpTip lines={MCP_HELP} />
         </div>
-        <span className="text-[12px] text-muted-foreground">Claude Code / Codex 用：</span>
-        <SourcePicker value={s.mcpSource} onChange={(x) => save({ mcpSource: x })} />
+        <div className="flex items-center gap-2 max-md:order-last max-md:w-full max-md:justify-between">
+          <span className="text-[12px] whitespace-nowrap text-muted-foreground">Claude Code / Codex 用：</span>
+          <SourcePicker value={s.mcpSource} onChange={(x) => save({ mcpSource: x })} />
+        </div>
         <Button size="icon" variant="ghost" className="size-8" title="重新检查状态" disabled={auth.busy} onClick={auth.reload}>
           <RefreshCw className={`size-3.5 ${auth.busy ? "animate-spin" : ""}`} />
         </Button>
@@ -540,16 +555,19 @@ export function MCPSettings({ open }: { open: boolean }) {
                     {hostOf(m)}
                   </div>
                 </div>
+                {/* "未登录" next to the 授权 button says the same thing twice; on a phone the name needs that room */}
                 {st.text &&
                   (st.title ? (
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <span className={`shrink-0 cursor-default text-[11px] ${st.cls}`}>{st.text}</span>
+                        <span className={`shrink-0 cursor-default text-[11px] ${st.cls} ${a?.state === "needs_auth" && !off ? "max-md:hidden" : ""}`}>
+                          {st.text}
+                        </span>
                       </TooltipTrigger>
                       <TooltipContent className="max-w-sm text-[12px] leading-5">{st.title}</TooltipContent>
                     </Tooltip>
                   ) : (
-                    <span className={`shrink-0 text-[11px] ${st.cls}`}>{st.text}</span>
+                    <span className={`shrink-0 text-[11px] ${st.cls} ${a?.state === "needs_auth" && !off ? "max-md:hidden" : ""}`}>{st.text}</span>
                   ))}
                 {a?.state === "needs_auth" && !off && (
                   <Button size="sm" variant="outline" className="h-7 shrink-0 text-[12px]" onClick={() => auth.authorize(m)}>
@@ -603,7 +621,7 @@ export function MCPSettings({ open }: { open: boolean }) {
       ))}
       {s.mcpSource === "gerdr" && (
         <div className="text-[12px] text-muted-foreground">
-          只用 Gerdr 的：Claude 的 claude.ai 连接器、Codex 插件自带的 MCP 不受这里控制；Codex 不支持 SSE。
+          只用 Gerdr 的：Claude 的 claude.ai 连接器会被一起关掉（--strict-mcp-config 连它们也去掉）；Codex 账号里的应用和插件自带的照常可用；Codex 不支持 SSE。
         </div>
       )}
     </div>
