@@ -41,14 +41,20 @@ func appAttach(env config.Env, parentPID int, svc *service.Manager) *os.File {
 	if parentPID > 0 {
 		go func() { waitParent(parentPID); close(gone) }()
 	}
-	if svc.Installed() && svc.PID() == 0 {
-		_ = svc.Install() // 装着但没加载：重新 bootstrap 一次
-	}
 	self := buildID()
 	now := os.Getenv("GERDR_UPGRADE_NOW") == "1"
 	var announced string
-	var restarted, checked time.Time
+	var restarted, checked, healed time.Time
 	for {
+		// Installed but not loaded (booted out, or a bootstrap that failed — e.g. right after an update rewrote the
+		// plist): load it again. Not only at start: a failed restart used to leave the App with no backend at all
+		// until something started a new attacher. Rate-limited so a service that keeps dying isn't hammered.
+		if svc.Installed() && time.Since(healed) >= 15*time.Second && svc.PID() == 0 {
+			healed = time.Now()
+			if err := svc.Install(); err != nil {
+				fmt.Fprintln(os.Stderr, "load background service:", err)
+			}
+		}
 		if !svc.Installed() {
 			if l, err := lockFile(lockPath(env)); err == nil {
 				return l
@@ -71,11 +77,14 @@ func appAttach(env config.Env, parentPID int, svc *service.Manager) *os.File {
 			}
 			switch {
 			case idle && moved:
-				_ = svc.Install() // rewrites the plist to our binary; bootout + bootstrap restarts it
-				restarted = time.Now()
+				// Rewrites the plist to our binary; bootout + bootstrap restarts it.
+				if err := svc.Install(); err != nil {
+					fmt.Fprintln(os.Stderr, "restart background service:", err)
+				}
+				restarted, healed = time.Now(), time.Now()
 			case idle:
 				_ = svc.Restart()
-				restarted = time.Now()
+				restarted, healed = time.Now(), time.Now()
 			case u != announced && (!stale || restarted.IsZero() || time.Since(restarted) > 15*time.Second):
 				fmt.Println("GERDR_READY " + u)
 				announced = u

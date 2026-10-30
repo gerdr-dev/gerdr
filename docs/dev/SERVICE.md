@@ -35,6 +35,11 @@ Updates restart it only when idle (docs/dev/UPDATE.md).
 ## 坑
 
 - 改了 plist 只 `kickstart` 不生效（launchd 不重读）：要 bootout + bootstrap，`service.Install` 就是这么做的。
+- `launchctl bootout` returns in milliseconds while the old process is still exiting; a `bootstrap` in that window
+  fails with `5: Input/output error` and nothing is loaded. This took the service down for 4.5 minutes when an
+  update moved its binary (appAttach → Install, error ignored, and appAttach only re-loaded at start). `Install` now
+  waits until `launchctl print` stops finding the label (exit 113) and retries; appAttach re-loads an installed but
+  unloaded service every 15s.
 - 调试实例（数据目录不是 `~/.gerdr`）和 `go run` 出来的临时二进制不让装：Label 只有一个，会把日常那份顶掉。
   调试实例看到日常那份 plist 也不算「装了」（`Installed` 先看 `Why`），不然它的 App 后端会一直等一个不会来的服务。
 - 接口 `/api/service` 只在本机口：远程能关的话，手机上点一下就把自己连着的那个 gerdr 停了。

@@ -19,6 +19,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Label 是 launchd 的 Label，也是 plist 的文件名。
@@ -89,10 +90,29 @@ func (m *Manager) Install() error {
 		return err
 	}
 	_ = run("launchctl", "bootout", m.target())
-	if err := run("launchctl", "bootstrap", "gui/"+m.uid, m.PlistPath()); err != nil {
-		return fmt.Errorf("launchctl bootstrap 失败：%w", err)
+	// bootout returns at once, while the old process is still shutting down (gerdr takes ~1s); a bootstrap in that
+	// window fails with "5: Input/output error" and leaves nothing loaded. That took the service down for minutes
+	// when an update moved its binary (appAttach → Install). Wait until launchd has let go of the label (up to its
+	// exit timeout + margin), and retry a couple of times in case it was still busy.
+	m.waitUnloaded(10 * time.Second)
+	var err error
+	for i := 0; i < 3; i++ {
+		if err = run("launchctl", "bootstrap", "gui/"+m.uid, m.PlistPath()); err == nil {
+			return nil
+		}
+		time.Sleep(time.Second)
+		m.waitUnloaded(5 * time.Second)
 	}
-	return nil
+	return fmt.Errorf("launchctl bootstrap failed: %w", err)
+}
+
+// waitUnloaded waits until launchd no longer knows the service (`launchctl print` fails, exit 113), or d passes.
+func (m *Manager) waitUnloaded(d time.Duration) {
+	for end := time.Now().Add(d); time.Now().Before(end); time.Sleep(200 * time.Millisecond) {
+		if exec.Command("launchctl", "print", m.target()).Run() != nil {
+			return
+		}
+	}
 }
 
 // Uninstall 删 plist 并卸载。Self 的时候 bootout 会把本进程一起停掉，调用方要先把响应发出去。
