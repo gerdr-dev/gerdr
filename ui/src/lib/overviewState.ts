@@ -15,6 +15,8 @@ export type Overview = {
   follow: boolean;
   /** Left list order. */
   sort: "status" | "project";
+  /** The tile shown full size (zoomed), if any. Not restored on reload. */
+  zoom?: string;
   /** The tile you're on (gets the keyboard; the only one counted as seen, see overviewFocus). */
   focus?: string;
   /** Seam positions the user dragged to, per grid shape (overview.ts shapeKey / GridSizes). */

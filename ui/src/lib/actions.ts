@@ -38,8 +38,8 @@ import {
   type Tab,
   type Workspace,
 } from "./layout";
-import { get, markRead, set, setLayout, setMode, toggleSidebar } from "./store";
-import { toggleOverview } from "./overview";
+import { get, markRead, overviewShown, set, setLayout, setMode, toggleSidebar } from "./store";
+import { overviewFocus, overviewKey, toggleOverview } from "./overview";
 import { openWorkChat, workProjectOf } from "./work";
 import type { ContentBlock } from "./types";
 
@@ -1044,7 +1044,8 @@ export function stashDraft() {
   const el = document.activeElement as HTMLElement | null;
   const leaf = focusedLeaf(get().layout);
   // The composer being typed in (also the Work view's, which isn't a pane), else the focused pane's
-  const paneId = el?.dataset.composer ?? (leaf?.sessionId ? leaf.id : undefined);
+  const ovFocus = overviewShown() ? overviewFocus(get().overview, get().layout, get().sessions) : undefined;
+  const paneId = el?.dataset.composer ?? (ovFocus ? `ov-${ovFocus}` : leaf?.sessionId ? leaf.id : undefined);
   const box = paneId ? document.querySelector<HTMLTextAreaElement>(`textarea[data-composer="${CSS.escape(paneId)}"]`) : null;
   if (!paneId || !box) return toast("没有可以暂存的输入框");
   const { drafts, draftImgs, stash } = get();
@@ -1065,6 +1066,8 @@ export function stashDraft() {
 }
 
 export function focusedSessionId(): string | undefined {
+  // With the overview up, the focused tile is the one you're on (not the pane hidden under it)
+  if (overviewShown()) return overviewFocus(get().overview, get().layout, get().sessions);
   return focusedLeaf(get().layout)?.sessionId;
 }
 
@@ -1094,6 +1097,7 @@ export function stepAttention(delta: number) {
 // ---- 快捷键动作 ----
 
 export function runAction(a: KeyAction) {
+  if (overviewShown() && overviewKey(a)) return;
   const l = get().layout;
   switch (a) {
     case "splitRight":

@@ -11,6 +11,7 @@ import {
   attentionIds,
   clearTiles,
   focusTile,
+  toggleTileZoom,
   MAX_TILES,
   openSessions,
   overviewFocus,
@@ -55,7 +56,7 @@ function whereOf(l: Layout, id: string): string {
 export function OverviewView({ shown }: { shown: boolean }) {
   const phone = usePhone();
   const ids = useOverviewIds().split(",").filter(Boolean);
-  const [zoom, setZoom] = useState<string>();
+  const zoom = useStore((s) => s.overview.zoom);
   const cur = useStore((s) => overviewFocus(s.overview, s.layout, s.sessions));
   // A tile taken out while zoomed: back to the grid
   const zoomed = zoom && ids.includes(zoom) ? zoom : undefined;
@@ -68,7 +69,7 @@ export function OverviewView({ shown }: { shown: boolean }) {
     <TabActive.Provider value={shown}>
       <div className="flex h-full bg-background">
         <OverviewList current={cur} onPick={pick} />
-        <Grid ids={ids} focus={cur} zoom={zoomed} shown={shown} onFocus={focusTile} onZoom={(id) => setZoom(zoomed === id ? undefined : id)} />
+        <Grid ids={ids} focus={cur} zoom={zoomed} shown={shown} onFocus={focusTile} onZoom={toggleTileZoom} />
       </div>
     </TabActive.Provider>
   );
@@ -380,12 +381,10 @@ function Grid({
     const rect = box.current!.getBoundingClientRect();
     const { key, sizes, region } = lay;
     track(e, seam.dir === "row" ? "row-resize" : "col-resize", (ev) => {
-      if (seam.dir === "row") setGridSizes(key, { ...sizes, rows: moveSeam(sizes.rows, seam.index, (ev.clientY - rect.top) / rect.height) });
-      else {
-        const at = ((ev.clientX - rect.left) / rect.width - region.x) / region.w;
-        const cols = sizes.cols.map((c, r) => (r === seam.row ? moveSeam(c, seam.index, at) : c));
-        setGridSizes(key, { ...sizes, cols });
-      }
+      // Where the pointer is along the seam's drag axis, as a fraction of the grid region
+      const at = seam.dir === "row" ? (ev.clientY - rect.top) / rect.height : ((ev.clientX - rect.left) / rect.width - region.x) / region.w;
+      if (seam.outer) setGridSizes(key, { ...sizes, rows: moveSeam(sizes.rows, seam.index, at) });
+      else setGridSizes(key, { ...sizes, cols: sizes.cols.map((c, r) => (r === seam.row ? moveSeam(c, seam.index, at) : c)) });
     });
   };
 
@@ -475,14 +474,14 @@ function Grid({
             const row = sm.dir === "row";
             return (
               <div
-                key={`${sm.dir}${sm.row}.${sm.index}`}
+                key={`${sm.outer ? "o" : "i"}${sm.row}.${sm.index}`}
                 className={cn(
                   "group/seam absolute z-10 flex items-center justify-center hover:bg-brand/30",
                   row ? "h-2 -translate-y-1/2 cursor-row-resize" : "w-2 -translate-x-1/2 cursor-col-resize",
                 )}
                 style={
                   row
-                    ? { left: pct(region.x), width: pct(region.w), top: pct(sm.y) }
+                    ? { left: pct(region.x + sm.x * region.w), width: pct(sm.len * region.w), top: pct(sm.y) }
                     : { left: pct(region.x + sm.x * region.w), top: pct(sm.y), height: pct(sm.len) }
                 }
                 onPointerDown={(e) => dragSeam(e, sm)}

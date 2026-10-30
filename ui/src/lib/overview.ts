@@ -11,6 +11,7 @@ import { MAX_TILES, OVERVIEW_KEY, overviewFocus, overviewIds, type Overview } fr
 import { sessionRank } from "./order";
 import { get, set, useStore } from "./store";
 import { syncWatch } from "./sync";
+import type { KeyAction } from "./keys";
 import type { SessionSummary } from "./types";
 
 export { MAX_TILES, overviewFocus, overviewIds, type Overview };
@@ -60,7 +61,17 @@ export function clearTiles() {
 }
 
 export function focusTile(id: string) {
-  setOverview((o) => (o.focus === id ? o : { ...o, focus: id }));
+  // Zoomed in, moving to another tile zooms that one instead (as panes do: actions.focusPane)
+  setOverview((o) => (o.focus === id ? o : { ...o, focus: id, zoom: o.zoom ? id : undefined }));
+}
+
+/** Zoom the tile to the whole grid, or back (`id` defaults to the focused tile). */
+export function toggleTileZoom(id?: string) {
+  setOverview((o) => {
+    const t = id ?? overviewFocus(o, get().layout, get().sessions);
+    if (!t) return o;
+    return { ...o, zoom: o.zoom === t ? undefined : t, focus: t };
+  });
 }
 
 export function toggleMain(id: string) {
@@ -109,6 +120,7 @@ const MIN_TILE_W = 300;
  */
 export function gridRows(n: number, w: number, h: number): number[] {
   if (n <= 0) return [];
+  // (3 in a wide area doesn't get here: gridShape lays it out as columns)
   let best = { cols: 1, score: Infinity };
   for (let cols = 1; cols <= n; cols++) {
     const rows = Math.ceil(n / cols);
@@ -123,22 +135,40 @@ export function gridRows(n: number, w: number, h: number): number[] {
   return Array.from({ length: rows }, (_, r) => (r === rows - 1 ? n - best.cols * (rows - 1) : best.cols));
 }
 
-/** Equal-split tile boxes (fractions of the area), row by row. */
+/**
+ * A grid's shape: how many tiles in each row, or with `cols`, in each column (counts run left to right then).
+ * 3 tiles in a wide area go one full-height on the left and two stacked on the right (asked for: "1 | 1/1"), rather
+ * than two above one; everything else is gridRows.
+ */
+export type Shape = { counts: number[]; cols?: boolean };
+
+export function gridShape(n: number, w: number, h: number): Shape {
+  // Down to a somewhat tall area (asked for: columns where possible); a clearly tall one stacks the three instead
+  if (n === 3 && w >= h * 0.6) return { counts: [1, 2], cols: true };
+  return { counts: gridRows(n, w, h) };
+}
+
+/** Equal-split tile boxes (fractions of the area). */
 export function gridBoxes(n: number, w: number, h: number): Box[] {
-  return layoutTiles(gridRows(n, w, h), undefined).boxes;
+  return layoutTiles(gridShape(n, w, h), undefined).boxes;
 }
 
 /**
  * Sizes the user dragged the seams to, for one shape of grid (see shapeKey). Shares of the area: rows = each row's
- * height, cols[r] = each tile's width in row r. Each sums to 1.
+ * height, cols[r] = each tile's width in row r; for a column shape, rows = each column's width and cols[c] = each
+ * tile's height in column c. Each sums to 1.
  */
 export type GridSizes = { rows: number[]; cols: number[][] };
 
-/** One grid shape = the tiles per row, plus whether a main tile takes the left. Sizes are remembered per shape. */
-export const shapeKey = (counts: number[], hasMain: boolean) => (hasMain ? "m" : "") + counts.join("-");
+/** One grid shape = the tiles per row / column, plus whether a main tile takes the left. Sizes are remembered per shape. */
+export const shapeKey = (shape: Shape, hasMain: boolean) => (hasMain ? "m" : "") + (shape.cols ? "c" : "") + shape.counts.join("-");
 
-/** A seam between two rows (dir "row": drags up/down) or two tiles in a row (dir "col": drags left/right). In area fractions. */
-export type Seam = { dir: "row" | "col"; row: number; index: number; x: number; y: number; len: number };
+/**
+ * A seam, in area fractions. dir "row" = a horizontal line (drags up / down), starting at x for len of the width; "col"
+ * = a vertical one (drags left / right), starting at y for len of the height. outer: between two rows (or columns),
+ * sized by GridSizes.rows; else between two tiles of row (column) `row`, sized by GridSizes.cols[row].
+ */
+export type Seam = { dir: "row" | "col"; outer: boolean; row: number; index: number; x: number; y: number; len: number };
 
 const equal = (n: number) => Array.from({ length: n }, () => 1 / n);
 
@@ -146,24 +176,36 @@ function fit(saved: number[] | undefined, n: number): number[] {
   return saved && saved.length === n && saved.every((v) => v > 0) ? saved : equal(n);
 }
 
-/** Boxes and seams of a grid with `counts` tiles per row, sized by `sizes` (equal where they don't fit the shape). */
-export function layoutTiles(counts: number[], sizes: GridSizes | undefined): { boxes: Box[]; seams: Seam[]; sizes: GridSizes } {
-  const rows = fit(sizes?.rows, counts.length);
-  const cols = counts.map((c, r) => fit(sizes?.cols?.[r], c));
+/**
+ * Boxes and seams of a grid shape, sized by `sizes` (equal where they don't fit the shape). Laid out along the major
+ * axis (down for rows, across for columns), each line split along the other.
+ */
+export function layoutTiles(shape: Shape, sizes: GridSizes | undefined): { boxes: Box[]; seams: Seam[]; sizes: GridSizes } {
+  const { counts, cols: T } = shape;
+  const outer = fit(sizes?.rows, counts.length);
+  const inner = counts.map((c, r) => fit(sizes?.cols?.[r], c));
   const boxes: Box[] = [];
   const seams: Seam[] = [];
-  let y = 0;
+  let major = 0;
   counts.forEach((_, r) => {
-    let x = 0;
-    cols[r].forEach((cw, c) => {
-      boxes.push({ x, y, w: cw, h: rows[r] });
-      x += cw;
-      if (c < cols[r].length - 1) seams.push({ dir: "col", row: r, index: c, x, y, len: rows[r] });
+    let minor = 0;
+    inner[r].forEach((size, c) => {
+      boxes.push(T ? { x: major, y: minor, w: outer[r], h: size } : { x: minor, y: major, w: size, h: outer[r] });
+      minor += size;
+      if (c < inner[r].length - 1)
+        seams.push(
+          T
+            ? { dir: "row", outer: false, row: r, index: c, x: major, y: minor, len: outer[r] }
+            : { dir: "col", outer: false, row: r, index: c, x: minor, y: major, len: outer[r] },
+        );
     });
-    y += rows[r];
-    if (r < counts.length - 1) seams.push({ dir: "row", row: r, index: r, x: 0, y, len: 1 });
+    major += outer[r];
+    if (r < counts.length - 1)
+      seams.push(
+        T ? { dir: "col", outer: true, row: r, index: r, x: major, y: 0, len: 1 } : { dir: "row", outer: true, row: r, index: r, x: 0, y: major, len: 1 },
+      );
   });
-  return { boxes, seams, sizes: { rows, cols } };
+  return { boxes, seams, sizes: { rows: outer, cols: inner } };
 }
 
 /** Move the seam after item `index` of `arr` to `at` (a fraction of the whole), keeping each side at least `min`. */
@@ -187,9 +229,9 @@ export function arrange(ids: string[], main: string | undefined, ratio: number, 
   const hasMain = !!main && ids.includes(main) && ids.length > 1;
   const rest = hasMain ? ids.filter((id) => id !== main) : ids;
   const region: Box = hasMain ? { x: ratio, y: 0, w: 1 - ratio, h: 1 } : { x: 0, y: 0, w: 1, h: 1 };
-  const counts = gridRows(rest.length, w * region.w, h);
-  const key = shapeKey(counts, hasMain);
-  const { boxes, seams, sizes } = layoutTiles(counts, saved[key]);
+  const shape = gridShape(rest.length, w * region.w, h);
+  const key = shapeKey(shape, hasMain);
+  const { boxes, seams, sizes } = layoutTiles(shape, saved[key]);
   const out = new Map<string, Box>();
   if (hasMain) out.set(main!, { x: 0, y: 0, w: ratio, h: 1 });
   rest.forEach((id, i) => {
@@ -220,4 +262,106 @@ export function setGridSizes(key: string, sizes: GridSizes | undefined) {
     else delete all[key];
     return { ...o, sizes: all };
   });
+}
+
+// ---- keys ----
+
+type Dir = "left" | "right" | "up" | "down";
+
+/** The tile next to `from` in a direction, by where the tiles are on screen (zoomed-out positions: hidden tiles keep theirs). */
+function neighbour(from: string, dir: Dir): string | undefined {
+  const rect = (el: Element) => el.getBoundingClientRect();
+  const els = [...document.querySelectorAll<HTMLElement>("[data-ov-tile]")];
+  const cur = els.find((e) => e.dataset.ovTile === from);
+  if (!cur) return;
+  const a = rect(cur);
+  let best: { id: string; d: number } | undefined;
+  for (const el of els) {
+    const id = el.dataset.ovTile!;
+    if (id === from) continue;
+    const b = rect(el);
+    // Strictly on that side, overlapping on the other axis (so "right" from a tall main tile reaches the column beside it)
+    const side =
+      dir === "left" ? b.right <= a.left + 1 : dir === "right" ? b.left >= a.right - 1 : dir === "up" ? b.bottom <= a.top + 1 : b.top >= a.bottom - 1;
+    const overlap = dir === "left" || dir === "right" ? b.top < a.bottom - 1 && b.bottom > a.top + 1 : b.left < a.right - 1 && b.right > a.left + 1;
+    if (!side || !overlap) continue;
+    const d = dir === "left" ? a.left - b.right : dir === "right" ? b.left - a.right : dir === "up" ? a.top - b.bottom : b.top - a.bottom;
+    // Nearest edge first; among equals, the one closest to the current tile's top / left
+    const tie = dir === "left" || dir === "right" ? Math.abs(b.top - a.top) : Math.abs(b.left - a.left);
+    const score = d * 10000 + tie;
+    if (!best || score < best.d) best = { id, d: score };
+  }
+  return best?.id;
+}
+
+/** Keys that only open something or go somewhere by themselves: they work the same with the overview up. */
+const NEUTRAL = new Set<KeyAction>([
+  "overview",
+  "help",
+  "settings",
+  "importHerdr",
+  "palette",
+  "sessions",
+  "nextAttention",
+  "prevAttention",
+  "focusAttention",
+  "toggleSidebar",
+]);
+
+/**
+ * A shortcut pressed while the overview is up (actions.runAction asks first). Pane keys act on the tiles: zoom, close
+ * (takes the tile out, the agent keeps running), focus / swap by direction, next / previous; stop, rename and stash go
+ * to the focused tile's session (actions.focusedSessionId). Anything that would change the tabs underneath (split, new
+ * tab, switch workspace…) leaves the overview first, so it doesn't happen out of sight. Returns true when handled here.
+ */
+export function overviewKey(a: KeyAction): boolean {
+  if (NEUTRAL.has(a) || a === "stop" || a === "renamePane" || a === "stash") return false;
+  const { overview: o, layout, sessions } = get();
+  const ids = overviewIds(o, layout, sessions);
+  const cur = overviewFocus(o, layout, sessions);
+  const dirOf: Partial<Record<KeyAction, Dir>> = {
+    focusLeft: "left",
+    focusRight: "right",
+    focusUp: "up",
+    focusDown: "down",
+    swapLeft: "left",
+    swapRight: "right",
+    swapUp: "up",
+    swapDown: "down",
+  };
+  switch (a) {
+    case "zoom":
+      if (cur) toggleTileZoom(cur);
+      return true;
+    case "closePane":
+      if (cur) {
+        const i = ids.indexOf(cur);
+        const next = ids[i + 1] ?? ids[i - 1];
+        removeTile(cur);
+        if (next) focusTile(next);
+      }
+      return true;
+    case "nextPane":
+    case "prevPane":
+      if (cur && ids.length > 1) focusTile(ids[(ids.indexOf(cur) + (a === "nextPane" ? 1 : -1) + ids.length) % ids.length]);
+      return true;
+    case "focusLeft":
+    case "focusRight":
+    case "focusUp":
+    case "focusDown": {
+      const n = cur && neighbour(cur, dirOf[a]!);
+      if (n) focusTile(n);
+      return true;
+    }
+    case "swapLeft":
+    case "swapRight":
+    case "swapUp":
+    case "swapDown": {
+      const n = cur && !o.zoom ? neighbour(cur, dirOf[a]!) : undefined;
+      if (n) swapTiles(cur!, n);
+      return true;
+    }
+  }
+  toggleOverview(false);
+  return false;
 }
