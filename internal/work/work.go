@@ -1,18 +1,20 @@
 // Package work runs the business logic behind the Work view: local functions in local/*.ts of each
-// project's Work directory (see Runner.Dir), the same shape as Annulo's (../shuttle internal/localfn):
+// project's Work directory (see Runner.Dir), the same shape and runtime as Annulo's (../shuttle internal/localfn):
 //
 //	export async function summary(input, ctx) {
 //	  const me = await ctx.mcp("okr", "get_current_user", {})
-//	  return { me }
+//	  const { stdout } = await ctx.exec("glab", ["mr", "list", "-F", "json"])
+//	  return { me, mrs: JSON.parse(stdout) }
 //	}
 //
 // Called by name ("okr.summary" = export summary of local/okr.ts) from the Work page, without a
 // model in the loop: deterministic logic the page needs every time it opens shouldn't cost an agent
 // turn. esbuild bundles the TS to CommonJS and goja (pure-Go JS) runs it, so no node is needed.
 //
-// A function can only do what ctx offers — call MCP tools (ctx.mcp) and log — no files, no
-// processes. The MCP servers are the ones gerdr knows: its own list, then Claude Code's and Codex's
-// (the user's MCP mostly lives in ~/.claude.json), signed in through internal/mcpauth.
+// What a function can do is what ctx and the globals offer (fn.go): run commands (ctx.exec), fetch, call MCP tools
+// (gerdr's own list, then Claude Code's and Codex's, signed in through internal/mcpauth), read and write the Work
+// directory (ctx.fs), read the user's stored keys (ctx.secrets), report progress and log. Runs outlive the request,
+// stream their progress and can be stopped (runs.go).
 package work
 
 import (
@@ -24,16 +26,13 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
 	"unicode/utf8"
-
-	"github.com/dop251/goja"
-	"github.com/evanw/esbuild/pkg/api"
 )
 
 // builtin/base goes into every project's Work directory (the site skeleton, a starting page, the agent's
@@ -53,11 +52,16 @@ const DefaultProject = "default"
 // own Work directory: the default project's is <GERDR_DIR>/work (where it lived before projects
 // existed), others' are <GERDR_DIR>/projects/<id>/work.
 type Runner struct {
-	Root string // <GERDR_DIR>
-	MCP  CallMCP
+	Root       string // <GERDR_DIR>
+	MCP        CallMCP
+	MCPServers func() []MCPServer       // ctx.mcp.servers()
+	Secret     func(name string) string // ctx.secrets.get; "" = none
+	Log        *slog.Logger
 
 	mu        sync.Mutex
 	installed map[string]bool
+	runs      map[string]*Run
+	pruned    map[string]time.Time // log directories by when they were last pruned
 }
 
 func New(root string, mcp CallMCP) *Runner {
@@ -204,113 +208,33 @@ func hash(b []byte) string {
 	return hex.EncodeToString(h[:])
 }
 
-var fnRE = regexp.MustCompile(`^([A-Za-z0-9_-]+)\.([A-Za-z_$][A-Za-z0-9_$]*)$`)
-
-// Run calls "<file>.<export>" with input and returns its (JSON-able) result.
+// Run calls "<file>.<export>" with input and waits for its (JSON-able) result: a run of its own (Start) with ctx's lifetime
+// only bounding the wait. Pages and the CLI use Start to stream progress.
 func (r *Runner) Run(ctx context.Context, project, name string, input any) (any, error) {
-	m := fnRE.FindStringSubmatch(name)
-	if m == nil {
+	return r.Start(project, name, input).Wait(ctx)
+}
+
+// run compiles and runs one function, logging the run (runs.go).
+func (r *Runner) run(ctx context.Context, project, name string, input any, id string, emit func(Event)) (res any, err error) {
+	emit, finish := r.runLog(project, id, name, emit)
+	defer func() { finish(err) }()
+	file, fn, ok := strings.Cut(name, ".")
+	if !ok || fn == "" || strings.Contains(fn, ".") {
 		return nil, fmt.Errorf("function name %q should look like file.export (okr.summary)", name)
 	}
 	dir, err := r.Ensure(project)
 	if err != nil {
 		return nil, err
 	}
-	path := filepath.Join(dir, "local", m[1]+".ts")
-	if _, err := os.Stat(path); err != nil {
-		return nil, fmt.Errorf("no %s", path)
+	path, err := source(dir, file)
+	if err != nil {
+		return nil, err
 	}
 	code, err := compile(path)
 	if err != nil {
 		return nil, err
 	}
-	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
-	defer cancel()
-	return r.exec(ctx, code, m[2], input)
-}
-
-func compile(path string) (string, error) {
-	res := api.Build(api.BuildOptions{
-		EntryPoints: []string{path},
-		Bundle:      true,
-		Format:      api.FormatCommonJS,
-		Platform:    api.PlatformNeutral,
-		Target:      api.ES2017, // goja runs async/await; esbuild lowers ?. ?? and friends
-		Write:       false,
-		LogLevel:    api.LogLevelSilent,
-	})
-	if len(res.Errors) > 0 {
-		e := res.Errors[0]
-		if e.Location != nil {
-			return "", fmt.Errorf("%s:%d: %s", e.Location.File, e.Location.Line, e.Text)
-		}
-		return "", errors.New(e.Text)
-	}
-	if len(res.OutputFiles) == 0 {
-		return "", errors.New("esbuild produced nothing")
-	}
-	return string(res.OutputFiles[0].Contents), nil
-}
-
-func (r *Runner) exec(ctx context.Context, code, fn string, input any) (any, error) {
-	vm := goja.New()
-	vm.SetFieldNameMapper(goja.TagFieldNameMapper("json", true))
-	stop := context.AfterFunc(ctx, func() { vm.Interrupt("timed out") })
-	defer stop()
-
-	console := vm.NewObject()
-	for _, k := range []string{"log", "info", "warn", "error"} {
-		_ = console.Set(k, func(goja.FunctionCall) goja.Value { return goja.Undefined() })
-	}
-	_ = vm.Set("console", console)
-	module := vm.NewObject()
-	exports := vm.NewObject()
-	_ = module.Set("exports", exports)
-	_ = vm.Set("module", module)
-	_ = vm.Set("exports", exports)
-	if _, err := vm.RunString(code); err != nil {
-		return nil, jsErr(err)
-	}
-	f, ok := goja.AssertFunction(module.Get("exports").ToObject(vm).Get(fn))
-	if !ok {
-		return nil, fmt.Errorf("the file has no exported function %q", fn)
-	}
-
-	c := vm.NewObject()
-	// ctx.mcp(server, tool, args): the call blocks this goroutine and hands back a settled promise —
-	// the JS side just awaits it.
-	_ = c.Set("mcp", func(server, tool string, args goja.Value) *goja.Promise {
-		p, resolve, reject := vm.NewPromise()
-		var a map[string]any
-		if args != nil && !goja.IsUndefined(args) && !goja.IsNull(args) {
-			b, _ := json.Marshal(args.Export())
-			_ = json.Unmarshal(b, &a)
-		}
-		v, err := r.callMCP(ctx, server, tool, a)
-		if err != nil {
-			_ = reject(vm.NewGoError(err))
-		} else {
-			_ = resolve(vm.ToValue(v))
-		}
-		return p
-	})
-	_ = c.Set("log", func(goja.FunctionCall) goja.Value { return goja.Undefined() })
-
-	res, err := f(goja.Undefined(), vm.ToValue(input), c)
-	if err != nil {
-		return nil, jsErr(err)
-	}
-	if p, ok := res.Export().(*goja.Promise); ok {
-		switch p.State() {
-		case goja.PromiseStateFulfilled:
-			return plain(p.Result().Export()), nil
-		case goja.PromiseStateRejected:
-			return nil, jsErr(p.Result())
-		default:
-			return nil, errors.New("the function's promise never settled (only await ctx.* calls)")
-		}
-	}
-	return plain(res.Export()), nil
+	return r.runCode(ctx, project, dir, filepath.Base(path), fn, code, input, emit)
 }
 
 // callMCP unwraps a tools/call result into a plain value: structuredContent if the server sent
@@ -352,25 +276,6 @@ func (r *Runner) callMCP(ctx context.Context, server, tool string, args map[stri
 		return v, nil
 	}
 	return text, nil
-}
-
-func jsErr(v any) error {
-	switch e := v.(type) {
-	case *goja.Exception:
-		return errors.New(e.Value().String())
-	case *goja.InterruptedError:
-		return errors.New("timed out")
-	case goja.Value:
-		if o, ok := e.(*goja.Object); ok {
-			if m := o.Get("message"); m != nil && !goja.IsUndefined(m) {
-				return errors.New(m.String())
-			}
-		}
-		return errors.New(e.String())
-	case error:
-		return e
-	}
-	return fmt.Errorf("%v", v)
 }
 
 // plain round-trips through JSON so goja-exported values (int64 vs float64, nested maps) serialize cleanly.

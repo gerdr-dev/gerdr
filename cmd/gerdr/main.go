@@ -354,6 +354,29 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 		}
 		return nil, fmt.Errorf("no MCP server named %q (add it in Settings → MCP or in Claude Code)", name)
 	})
+	wr.MCPServers = func() []work.MCPServer {
+		// One per name, the one ctx.mcp calls: the first enabled (else the first, reported disabled)
+		out := []work.MCPServer{}
+		at := map[string]int{}
+		for i, list := range [][]ext.MCPServer{em.Settings().MCP, ext.ClaudeMCP(""), ext.CodexMCP()} {
+			for _, m := range list {
+				st := "enabled"
+				if !m.Enabled {
+					st = "disabled"
+				}
+				e := work.MCPServer{Name: m.Name, Status: st, Source: []string{"gerdr", "claude", "codex"}[i]}
+				if j, ok := at[m.Name]; !ok {
+					at[m.Name] = len(out)
+					out = append(out, e)
+				} else if out[j].Status == "disabled" && m.Enabled {
+					out[j] = e
+				}
+			}
+		}
+		return out
+	}
+	wr.Secret = func(name string) string { return secrets.Get("work/" + name) }
+	wr.Log = log
 	if _, err := wr.Ensure(work.DefaultProject); err != nil {
 		log.Warn("install work files", "err", err)
 	}

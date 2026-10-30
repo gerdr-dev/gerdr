@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 )
@@ -53,6 +54,23 @@ func (s *Secrets) Get(name string) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.load()[name]
+}
+
+// Names lists the stored names starting with prefix, prefix cut off (never the values).
+func (s *Secrets) Names(prefix string) []string {
+	out := []string{}
+	if s == nil {
+		return out
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for k := range s.load() {
+		if strings.HasPrefix(k, prefix) {
+			out = append(out, strings.TrimPrefix(k, prefix))
+		}
+	}
+	sort.Strings(out)
+	return out
 }
 
 // Set stores a value; "" deletes it.

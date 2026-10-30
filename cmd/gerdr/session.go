@@ -8,13 +8,16 @@ package main
 // 输出一律是 JSON（agent 读起来不用猜格式）；出错时 stderr 一行 JSON、退出码 1。
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -793,29 +796,161 @@ func workCmd() *cobra.Command {
 		wd, _ := os.Getwd()
 		return work.New(config.FromEnv().Dir, nil).ProjectOf(wd)
 	}
-	cmd.AddCommand(&cobra.Command{
+	var input string
+	run := &cobra.Command{
 		Use:   "run <file.export> [input JSON]",
-		Short: "Run a local function the way a page does, e.g. gerdr work run okr.summary '{\"quarter\":\"2026Q4\"}'",
-		Args:  cobra.RangeArgs(1, 2),
+		Short: "Run a local function the way a page does: progress and logs on stderr, the result (JSON) on stdout",
+		Long: `Run a local function the way a page does, e.g. gerdr work run okr.summary '{"quarter":"2026Q4"}'.
+Progress and console output go to stderr as they happen, the returned value to stdout as JSON; a thrown error
+prints its stack and exits 1. Ctrl-C stops the run. --input-file - reads the input from stdin.`,
+		Args: cobra.RangeArgs(1, 2),
 		RunE: func(_ *cobra.Command, args []string) error {
 			c, err := newAPIClient()
 			if err != nil {
 				return err
 			}
-			var input any
+			raw := ""
 			if len(args) > 1 {
-				if err := json.Unmarshal([]byte(args[1]), &input); err != nil {
+				raw = args[1]
+			}
+			if input != "" {
+				var b []byte
+				if input == "-" {
+					b, err = io.ReadAll(os.Stdin)
+				} else {
+					b, err = os.ReadFile(input)
+				}
+				if err != nil {
+					return err
+				}
+				raw = string(b)
+			}
+			var in any
+			if strings.TrimSpace(raw) != "" {
+				if err := json.Unmarshal([]byte(raw), &in); err != nil {
 					return fmt.Errorf("input isn't JSON: %w", err)
 				}
 			}
-			var out map[string]any
-			if err := c.do("POST", "/api/work/run", map[string]any{"project": which(), "fn": args[0], "input": input}, &out); err != nil {
+			return c.workRun(which(), args[0], in)
+		},
+	}
+	run.Flags().StringVar(&input, "input-file", "", "read the input JSON from this file (- = stdin)")
+	cmd.AddCommand(run)
+	cmd.AddCommand(&cobra.Command{
+		Use:   "functions",
+		Short: "List the project's callable functions (file.export)",
+		Args:  cobra.NoArgs,
+		RunE: func(_ *cobra.Command, _ []string) error {
+			c, err := newAPIClient()
+			if err != nil {
 				return err
 			}
-			printJSON(out["result"])
+			var out map[string]any
+			if err := c.do("GET", "/api/work/functions?project="+url.QueryEscape(which()), nil, &out); err != nil {
+				return err
+			}
+			printJSON(out["list"])
 			return nil
 		},
 	})
+	var logFn, logID string
+	var logN int
+	logs := &cobra.Command{
+		Use:   "logs",
+		Short: "Past runs of the project's functions (newest first), or one run's full log with --id",
+		Args:  cobra.NoArgs,
+		RunE: func(_ *cobra.Command, _ []string) error {
+			c, err := newAPIClient()
+			if err != nil {
+				return err
+			}
+			q := url.Values{"project": {which()}}
+			if logID != "" {
+				q.Set("id", logID)
+			}
+			if logFn != "" {
+				q.Set("fn", logFn)
+			}
+			q.Set("limit", fmt.Sprint(logN))
+			var out map[string]any
+			if err := c.do("GET", "/api/work/logs?"+q.Encode(), nil, &out); err != nil {
+				return err
+			}
+			if logID != "" {
+				printJSON(out["lines"])
+			} else {
+				printJSON(out["list"])
+			}
+			return nil
+		},
+	}
+	logs.Flags().StringVar(&logFn, "fn", "", "only this function (file or file.export)")
+	logs.Flags().StringVar(&logID, "id", "", "one run's log: progress, logs, the error with its stack")
+	logs.Flags().IntVarP(&logN, "limit", "n", 20, "how many runs")
+	cmd.AddCommand(logs)
+	cmd.AddCommand(&cobra.Command{
+		Use:   "abort <run id>",
+		Short: "Stop a running function (the id is in the run's start event, X-Gerdr-Run, or gerdr work logs)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			c, err := newAPIClient()
+			if err != nil {
+				return err
+			}
+			return c.do("POST", "/api/work/runs/"+url.PathEscape(args[0])+"/abort", map[string]any{}, nil)
+		},
+	})
+	secret := &cobra.Command{Use: "secret", Short: "Keys for ctx.secrets.get (stored in gerdr's secrets.json, never shown back)"}
+	secret.AddCommand(&cobra.Command{
+		Use:   "set <name>",
+		Short: "Store a key; the value is read from stdin so it stays out of shell history and transcripts",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			c, err := newAPIClient()
+			if err != nil {
+				return err
+			}
+			b, err := io.ReadAll(os.Stdin)
+			if err != nil {
+				return err
+			}
+			v := strings.TrimRight(string(b), "\r\n")
+			if v == "" {
+				return errors.New("no value on stdin (to delete it: gerdr work secret rm)")
+			}
+			return c.do("POST", "/api/work/secrets", map[string]any{"name": args[0], "value": v}, nil)
+		},
+	})
+	secret.AddCommand(&cobra.Command{
+		Use:   "rm <name>",
+		Short: "Delete a key",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			c, err := newAPIClient()
+			if err != nil {
+				return err
+			}
+			return c.do("POST", "/api/work/secrets", map[string]any{"name": args[0], "value": ""}, nil)
+		},
+	})
+	secret.AddCommand(&cobra.Command{
+		Use:   "list",
+		Short: "The stored keys' names",
+		Args:  cobra.NoArgs,
+		RunE: func(_ *cobra.Command, _ []string) error {
+			c, err := newAPIClient()
+			if err != nil {
+				return err
+			}
+			var out map[string]any
+			if err := c.do("GET", "/api/work/secrets", nil, &out); err != nil {
+				return err
+			}
+			printJSON(out["list"])
+			return nil
+		},
+	})
+	cmd.AddCommand(secret)
 	cmd.AddCommand(&cobra.Command{
 		Use:   "status",
 		Short: "The project's Work site (ui/): build error and runtime errors from the open page",
@@ -833,6 +968,80 @@ func workCmd() *cobra.Command {
 		},
 	})
 	return cmd
+}
+
+// workRun runs a function and follows it: progress and logs to stderr, the result to stdout, an error (with its stack)
+// to stderr and exit 1. Ctrl-C aborts the run (it would otherwise go on: runs don't belong to the request).
+func (c *apiClient) workRun(project, fn string, input any) error {
+	b, _ := json.Marshal(map[string]any{"project": project, "fn": fn, "input": input})
+	req, err := http.NewRequest("POST", c.base+"/api/work/run", bytes.NewReader(b))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	req.Header.Set("X-Gerdr", "1")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "text/event-stream")
+	resp, err := (&http.Client{}).Do(req) // no timeout: a run may take up to an hour
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(resp.Body)
+		var e struct {
+			Error string `json:"error"`
+		}
+		if json.Unmarshal(body, &e) == nil && e.Error != "" {
+			return errors.New(e.Error)
+		}
+		return fmt.Errorf("%s", resp.Status)
+	}
+	id := resp.Header.Get("X-Gerdr-Run")
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, os.Interrupt)
+	defer signal.Stop(sig)
+	go func() {
+		if _, ok := <-sig; ok && id != "" {
+			fmt.Fprintln(os.Stderr, "stopping…")
+			_ = c.do("POST", "/api/work/runs/"+url.PathEscape(id)+"/abort", map[string]any{}, nil)
+		}
+	}()
+	sc := bufio.NewScanner(resp.Body)
+	sc.Buffer(make([]byte, 1<<20), 64<<20)
+	for sc.Scan() {
+		line, ok := strings.CutPrefix(sc.Text(), "data: ")
+		if !ok {
+			continue
+		}
+		var ev struct {
+			Type string          `json:"type"`
+			Data json.RawMessage `json:"data"`
+		}
+		if json.Unmarshal([]byte(line), &ev) != nil {
+			continue
+		}
+		var d map[string]any
+		_ = json.Unmarshal(ev.Data, &d)
+		switch ev.Type {
+		case "progress":
+			fmt.Fprintf(os.Stderr, "[progress] %s\n", ev.Data)
+		case "log":
+			fmt.Fprintf(os.Stderr, "[%v] %v\n", d["level"], d["message"])
+		case "result":
+			printJSON(d["value"])
+			return nil
+		case "error":
+			if st, _ := d["stack"].(string); st != "" {
+				fmt.Fprintln(os.Stderr, st)
+			}
+			return fmt.Errorf("%v", d["message"])
+		}
+	}
+	if err := sc.Err(); err != nil {
+		return err
+	}
+	return errors.New("the connection closed before the run ended (it may still be running: gerdr work logs)")
 }
 
 // gerdr ui …：给改界面的 agent 用（内置的 gerdr-ui skill）。
