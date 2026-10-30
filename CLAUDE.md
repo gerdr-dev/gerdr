@@ -23,6 +23,9 @@ Claude Code / Codex 的图形界面：Go 后端（ACP 适配器 + hub + HTTP/WS�
   once nothing is running — no turn, no pending permission, no background task, no open terminal (`GET /api/busy`,
   `appAttach` in cmd/gerdr/attach.go) — so it happens after your turn ends. The App has to be open for that (it is
   what watches); if the user turned the background service off, tell them to reopen the App when they're idle.
+  Exception: an App opened before edbb169 runs an old watcher that never notices the new file. Tell the user to quit
+  and reopen the App once; with the background service on that is safe even mid-turn (it only replaces the watcher,
+  the service and its agents keep running), and the new watcher then restarts the service once idle.
   Same rule as App updates: docs/dev/UPDATE.md.
 - 改完界面、看过没问题后跑 `make sync-ui`，同步到正在用的 `~/.gerdr/ui`（开着的 gerdr 直接热更新）：
   正在用的 gerdr 读的是那份，不是仓库里的 ui/，不同步用户就看不到改动。别手动 cp 或在那边 git 提交 ——
