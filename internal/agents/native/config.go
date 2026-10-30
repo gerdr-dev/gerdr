@@ -55,8 +55,7 @@ type Model struct {
 	API string `json:"api,omitempty"`
 	// Thinking：思考开关的格式。Chat Completions：deepseek = thinking:{type:enabled|disabled}，空 = reasoning_effort；
 	// Anthropic: adaptive = thinking:{type:adaptive} with a reasoning summary; updates = the model's short progress
-	// notes instead (Opus/Sonnet 5.5, Fable 5+; opt-in, set it on the model). Claude 4.6+ defaults to adaptive;
-	// empty = no thinking param.
+	// notes instead (Opus/Sonnet 5.5, Fable 5+, the default there). Guessed from the id; empty = no thinking param.
 	Thinking string `json:"thinking,omitempty"`
 	// Efforts：思考档位（原样发给接口的值），从低到高；DefaultEffort 是默认档。都空 = 按 id 猜。
 	Efforts       []string `json:"efforts,omitempty"`
@@ -189,6 +188,10 @@ func (p Provider) withDefaults(m Model) Model {
 // budget_tokens is a 400 on 4.7+). Same pattern shuttle uses.
 var adaptiveClaude = regexp.MustCompile(`claude-(opus|sonnet|haiku|fable|mythos)-(4[.-][6-9]|[5-9]|\d{2})`)
 
+// updatesClaude: the ones that take thinking.display "updates" — Opus / Sonnet 5.5 and Fable / Mythos 5+, and
+// anything later. Haiku isn't on the list.
+var updatesClaude = regexp.MustCompile(`claude-((opus|sonnet)-(5[.-][5-9]|[6-9]|\d{2})|(fable|mythos)-([5-9]|\d{2}))`)
+
 // withDefaults：按模型 id 补协议、思考档位、窗口。数值来自 pi 的 models_catalog（shuttle 在用的那份）。
 func withDefaults(m Model) Model {
 	id := strings.ToLower(m.ID)
@@ -251,9 +254,13 @@ func withDefaults(m Model) Model {
 func anthropicDefaults(m Model, id string) Model {
 	if adaptiveClaude.MatchString(id) {
 		if m.Thinking == "" {
-			// Not "updates" by default: through a gateway (2026-10-30) the model often writes no note at all for many
-			// steps in a row — the reasoning is hidden and nothing shows. The summary always has something.
+			// "updates" where the model takes it, as Claude Code does: the reasoning stays hidden and what shows is
+			// the model's own short notes. Those come from the "keep the user posted" line in basePrompt — without
+			// it the model wrote none for many steps and nothing showed (2026-10-30).
 			m.Thinking = "adaptive"
+			if updatesClaude.MatchString(id) {
+				m.Thinking = "updates"
+			}
 		}
 		if len(m.Efforts) == 0 {
 			if strings.Contains(id, "4-6") || strings.Contains(id, "4.6") {
