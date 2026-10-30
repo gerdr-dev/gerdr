@@ -43,6 +43,7 @@ import { NewSession } from "./NewSession";
 import { PixelLoader } from "./chat/PixelLoader";
 import { startPaneDrag, useDrag, type TabGhost } from "./TabDrag";
 import { TerminalView } from "./Terminal";
+import { BOX_TRANSITION, useZoomAnim } from "@/lib/zoomAnim";
 
 /** 这个 tab 是不是正显示着的那个（藏着的 tab 里的 pane 不算有焦点，不抢光标、不标已读）。 */
 export const TabActive = createContext(true);
@@ -89,10 +90,11 @@ export function TabView({ tab }: { tab: Tab }) {
   const anim = useZoomAnim(zoom, phone);
   // Frames stay on while a zoom animates (the growing pane looks like a window sliding over its neighbours) and drop at the end.
   const framed = panes.length > 1 && (!zoom || !!anim);
-  // The animating pane's content is pinned to the full tab size (the size at the zoomed end) for the whole transition, so only
-  // its clipping box moves: the chat list / xterm see one resize at the zoomed end instead of one per frame (re-measuring every
-  // row or refitting the terminal each frame is what made a naive width/height transition stutter).
-  // Minus the 3px frame padding on each side, which stays on while animating, so the right / bottom border isn't clipped.
+  // The animating pane's body (chat / terminal) is pinned to the full tab size (the size at the zoomed end) for the whole
+  // transition, so only its clipping box moves: the chat list / xterm see one resize at the zoomed end instead of one per
+  // frame (re-measuring every row or refitting the terminal each frame is what made a naive width/height transition stutter).
+  // Only the body (PaneBody): the frame and title bar follow the moving box, or the right / bottom border and the title
+  // bar's buttons would sit outside it, clipped, until the end. Minus the 3px frame padding on each side.
   const pin = anim && box.current ? { width: box.current.clientWidth - 6, height: box.current.clientHeight - 6 } : undefined;
   let count: (Count & { pane: string }) | undefined;
   if (phone && panes.length < all.length) {
@@ -139,7 +141,7 @@ export function TabView({ tab }: { tab: Tab }) {
                 top: pct(at.y),
                 width: pct(at.w),
                 height: pct(at.h),
-                transition: moving ? `left ${ZOOM_MS}ms ${EASE}, top ${ZOOM_MS}ms ${EASE}, width ${ZOOM_MS}ms ${EASE}, height ${ZOOM_MS}ms ${EASE}` : undefined,
+                transition: moving ? BOX_TRANSITION : undefined,
               }}
               className={cn(
                 "absolute min-h-0 min-w-0 overflow-hidden",
@@ -150,8 +152,10 @@ export function TabView({ tab }: { tab: Tab }) {
               )}
             >
               {/* Opaque while moving: it slides over its neighbours, which panes don't otherwise need to cover */}
-              <div className={cn("h-full w-full", moving && "rounded-md bg-background")} style={moving ? pin : undefined}>
-                <PaneView pane={pane} tab={tab} framed={framed} zoomed={z || undefined} count={count?.pane === pane.id ? count : undefined} />
+              <div className={cn("h-full w-full", moving && "rounded-md bg-background")}>
+                <PanePin.Provider value={moving ? pin : undefined}>
+                  <PaneView pane={pane} tab={tab} framed={framed} zoomed={z || undefined} count={count?.pane === pane.id ? count : undefined} />
+                </PanePin.Provider>
               </div>
             </div>
           );
@@ -184,29 +188,6 @@ export function TabView({ tab }: { tab: Tab }) {
 
 type Count = { i: number; n: number };
 
-const ZOOM_MS = 220;
-const EASE = "cubic-bezier(0.2, 0.8, 0.2, 1)";
-
-/**
- * Which pane is growing to / shrinking from full size right now (zoom toggled within the last ZOOM_MS), if any.
- * Decided during render (not in an effect) so the transition class lands in the same style change as the new box —
- * a frame later the box has already jumped and there is nothing left to transition.
- */
-function useZoomAnim(zoom: string | undefined, phone: boolean) {
-  const [seen, setSeen] = useState(zoom);
-  const [anim, setAnim] = useState<string>();
-  if (seen !== zoom) {
-    setSeen(zoom);
-    setAnim(phone || matchMedia("(prefers-reduced-motion: reduce)").matches ? undefined : (zoom ?? seen));
-  }
-  useEffect(() => {
-    if (!anim) return;
-    const t = setTimeout(() => setAnim(undefined), ZOOM_MS + 30);
-    return () => clearTimeout(t);
-  }, [anim, seen]);
-  return anim;
-}
-
 /**
  * 标题栏按住拖：把这个 pane 挪到别处（见 TabDrag.tsx 的 startPaneDrag）。手机上一次只看一个 pane，不给拖。
  * 被拖着的那个 pane 淡下去，和 tab 栏里被拖的 tab 一样。
@@ -221,6 +202,24 @@ function PaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; tab: T
   if (pane.sub) return <SubPaneView pane={pane} tab={tab} framed={framed} zoomed={zoomed} count={count} />;
   if (pane.term) return <TermPaneView pane={pane} tab={tab} framed={framed} zoomed={zoomed} count={count} />;
   return <SessionPaneView pane={pane} tab={tab} framed={framed} zoomed={zoomed} count={count} />;
+}
+
+/** Size of the whole pane at the end of a zoom animation in progress (TabView), for PaneBody. */
+const PanePin = createContext<{ width: number; height: number } | undefined>(undefined);
+
+/**
+ * A pane's content under its title bar. While the pane zooms it's laid out at its final size (clipped by the moving box),
+ * so the chat / terminal re-lays out once instead of every frame: minus the 1px frame on each side and the 32px + 1px title bar.
+ */
+function PaneBody({ children }: { children: React.ReactNode }) {
+  const pin = useContext(PanePin);
+  return (
+    <div className="min-h-0 flex-1 overflow-clip">
+      <div className="h-full w-full" style={pin && { width: pin.width - 2, height: pin.height - 35 }}>
+        {children}
+      </div>
+    </div>
+  );
 }
 
 /** 手机上「这个 tab 里有几个 pane、你在第几个」：别的 pane 在屏幕上看不见，得有个地方说它们还在。点开面板一览去挑。 */
@@ -276,13 +275,13 @@ function SubPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; tab
           <X className="size-3.5" />
         </Button>
       </div>
-      <div className="min-h-0 flex-1">
+      <PaneBody>
         {session ? (
           <ChatView key={pane.id} session={session} paneId={pane.id} focused={focused} sub={sub.toolCallId} />
         ) : (
           <div className="py-16 text-center text-[13px] text-muted-foreground">这个会话已经不在了</div>
         )}
-      </div>
+      </PaneBody>
     </div>
   );
 }
@@ -363,7 +362,7 @@ function TermPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; ta
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-      <div className="min-h-0 flex-1">
+      <PaneBody>
         {term.id ? (
           <TerminalView key={term.id} paneId={pane.id} termId={term.id} cwd={cwd} focused={focused} onTitle={setOsc} />
         ) : (
@@ -374,7 +373,7 @@ function TermPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; ta
             </Button>
           </div>
         )}
-      </div>
+      </PaneBody>
     </div>
   );
 }
@@ -504,7 +503,7 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-      <div className="min-h-0 flex-1">
+      <PaneBody>
         {session ? (
           <ChatView key={session.id} session={session} paneId={pane.id} focused={focused} />
         ) : starting ? (
@@ -515,7 +514,7 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
         ) : (
           <NewSession key={pane.id + (pane.draft?.cwd ?? "")} pane={pane} focused={focused} />
         )}
-      </div>
+      </PaneBody>
     </div>
   );
 }

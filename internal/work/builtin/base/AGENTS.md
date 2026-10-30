@@ -10,7 +10,11 @@ you as messages (e.g. "write this week's progress reports").
 - `ui/` — the Work project: a React site with **no build step**, same rules as gerdr's own UI
   (gerdr reads the source, compiles each file with esbuild, hot-reloads on save):
   - `ui/src/layout.tsx` — the menu on the left of the page + `<Outlet />`. The menu is plain code:
-    change it however the user wants (groups, icons, badges, styling).
+    change it however the user wants (groups, icons, badges, styling). Keep its width
+    `w-(--gerdr-sidebar-w)` (and keep it the leftmost thing on the page): it lines up with gerdr's bar above
+    and the user resizes both by dragging the menu's right edge (gerdr draws that handle over the page).
+    gerdr also draws its bottom row (settings, connection status) over the menu's last
+    `--gerdr-menu-bottom` px: keep the menu's bottom padding at least that, as layout.tsx does.
   - `ui/src/pages/*.tsx` — one file per page, routed by file name (`index.tsx` → `/`,
     `weekly.tsx` → `/weekly`, `okr/[id].tsx` → `/okr/:id`); default-export a component.
   - `ui/src/lib/gerdr.ts` — the bridge: `run(fn, input)` calls a local function, `ask(text)` sends

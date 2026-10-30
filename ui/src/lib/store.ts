@@ -3,6 +3,7 @@ import { api, clientId, uuid, type DoctorReport, type FileStat } from "./api";
 import { DEFAULT_KEYS, IS_MAC, type KeyAction } from "./keys";
 import { activeTab, currentSpace, defaultLayout, leaves, phoneRoot, validLayout, viewOf, withView, type Layout, type View } from "./layout";
 import type { AppUpdateStatus } from "./native";
+import { loadOverview, overviewFocus, overviewIds, type Overview } from "./overviewState";
 import { isPhone } from "./phone";
 import { Transcript } from "./transcript";
 import type { AgentInfo, ContentBlock, HubEvent, RemoteConn, SessionSummary } from "./types";
@@ -158,8 +159,12 @@ type State = {
   prefixActive: boolean;
   dialog: Dialog;
   sidebar: boolean;
+  /** Sidebar width in px (drag its right edge; the overview's list follows). Per device, in localStorage. */
+  sidebarW: number;
   /** Which view fills the main area: the agent tabs, or the Work dashboard (WorkView). Per device, in localStorage. */
   mode: "agents" | "work";
+  /** The all-agents overview (lib/overview.ts): covers the sidebar and the tabs while on. Per device, in localStorage. */
+  overview: Overview;
   /**
    * 字号（px）：每台设备各一份，存本机（localStorage），不进 config —— config 存服务端、所有设备共用，
    * 手机上调大了字，电脑上不该跟着变大。0 = 这台还没设过，用 config.fontSize（以前存在那儿的，老用户设过的照旧生效）。
@@ -237,6 +242,28 @@ function loadSidebar(): boolean {
   }
 }
 
+export const SIDEBAR_W = 224;
+export const SIDEBAR_MIN = 180;
+export const SIDEBAR_MAX = 480;
+
+function loadSidebarW(): number {
+  try {
+    const v = Number(localStorage.getItem("gerdr.sidebarW"));
+    return v ? Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, v)) : SIDEBAR_W;
+  } catch {
+    return SIDEBAR_W;
+  }
+}
+
+export function setSidebarW(w: number) {
+  const v = Math.round(Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, w)));
+  if (v === get().sidebarW) return;
+  set({ sidebarW: v });
+  try {
+    localStorage.setItem("gerdr.sidebarW", String(v));
+  } catch {}
+}
+
 export const useStore = create<State>(() => ({
   ready: false,
   authError: false,
@@ -259,7 +286,9 @@ export const useStore = create<State>(() => ({
   prefixActive: false,
   dialog: null,
   sidebar: loadSidebar(),
+  sidebarW: loadSidebarW(),
   mode: loadMode(),
+  overview: loadOverview(),
   localFont: loadLocalFont(),
   drawer: false,
   switcher: false,
@@ -500,11 +529,20 @@ export function toggleSidebar() {
 
 /** 屏幕上看得见的会话（当前 tab 里的 pane；放大时只有那一个；手机上见 phoneRoot：左右分屏只看得见焦点那边）。 */
 export function visibleSessions(l: Layout, phone = false): string[] {
+  // The overview covers the tabs. Only the focused tile counts as looked at, the
+  // others are just in view: one that finishes there still gets the unread dot (asked for). They're all watched, see below.
+  if (overviewShown()) {
+    const f = overviewFocus(get().overview, l, get().sessions);
+    return f ? [f] : [];
+  }
   const tab = activeTab(l);
   const ls = phone ? leaves(phoneRoot(tab)) : leaves(tab.root).filter((p) => !tab.zoom || p.id === tab.zoom);
   // 子 agent 面板看的也是它所属会话的日志。
   return [...new Set(ls.map((p) => p.sessionId ?? p.sub?.sessionId).filter((x): x is string => !!x))];
 }
+
+/** The overview is on screen (it covers everything but the Work view). */
+export const overviewShown = () => get().overview.on && get().mode !== "work";
 
 /** 要订阅日志的会话：看得见的 + 留在页面里没卸载的 tab 里的（它们切回来时不用整份重推、组件不用重建）。 */
 export function watchedSessions(l: Layout, kept: string[]): string[] {
@@ -516,6 +554,9 @@ export function watchedSessions(l: Layout, kept: string[]): string[] {
     const work = c.workSessions?.[space] ?? (space === "default" ? c.workSession : undefined);
     if (work) out.add(work);
   }
+  // The tabs under the overview stay watched (kept), so closing it doesn't reload them
+  // On a phone only the shown tile is mounted (Overview PhoneOverview): don't stream the rest
+  if (overviewShown()) for (const id of isPhone() ? visibleSessions(l) : overviewIds(get().overview, l, get().sessions)) out.add(id);
   const want = new Set(kept);
   for (const ws of l.workspaces)
     for (const t of ws.tabs)

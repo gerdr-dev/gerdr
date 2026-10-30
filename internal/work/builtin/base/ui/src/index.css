@@ -8,6 +8,10 @@
      lg = 浮层和卡片（菜单、弹出框、工具卡片、代码块）—— 里面的项是 sm、外框 p-1，外 = 内 + 内边距，弧线才是同心的；
      xl = 弹窗；输入框用 2xl（16px，22px 太圆）；用户气泡单独用 22px。裸 rounded 是 Tailwind 固定的 4px，不跟这里走，别用。 */
   --radius: 0.625rem;
+  /* The menu's width: gerdr sets it to its sidebar's (lib/gerdr.ts), so the two line up and resize together */
+  --gerdr-sidebar-w: 224px;
+  /* gerdr lays its bottom row (settings, connection status) over the menu's last 40px: keep them free */
+  --gerdr-menu-bottom: 40px;
   --background: oklch(0.99 0 0);
   --foreground: oklch(0.2 0 0);
   --card: oklch(1 0 0);

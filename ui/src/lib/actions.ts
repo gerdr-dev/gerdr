@@ -39,6 +39,7 @@ import {
   type Workspace,
 } from "./layout";
 import { get, markRead, set, setLayout, setMode, toggleSidebar } from "./store";
+import { toggleOverview } from "./overview";
 import { openWorkChat, workProjectOf } from "./work";
 import type { ContentBlock } from "./types";
 
@@ -998,6 +999,8 @@ function openInWork(sessionId: string): boolean {
 }
 
 export function focusSession(sessionId: string) {
+  // Going to a session (notification, next-needs-you, the lists) means its pane: the overview would cover it
+  if (get().overview.on) toggleOverview(false);
   if (openInWork(sessionId)) return;
   const loc = locateSession(get().layout, sessionId);
   if (loc) focusPane(loc.pane.id);
@@ -1191,6 +1194,9 @@ export function runAction(a: KeyAction) {
       return set({ dialog: { kind: "sessions" } });
     case "toggleSidebar":
       return toggleSidebar();
+    case "overview":
+      if (get().mode === "work") setMode("agents");
+      return toggleOverview();
     case "help":
       return set({ dialog: { kind: "help" } });
     case "settings":

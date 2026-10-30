@@ -1,5 +1,5 @@
 import { KeyRound } from "lucide-react";
-import { useEffect, useLayoutEffect } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { PhoneBar, Sidebar, TabBar } from "./components/Chrome";
@@ -9,6 +9,8 @@ import { LightboxHost } from "./components/Lightbox";
 import { AppContextMenu } from "./components/AppContextMenu";
 import { TabActive, TabView } from "./components/Panes";
 import { WorkView } from "./components/WorkView";
+import { OverviewView } from "./components/Overview";
+import { watchFollow } from "./lib/overview";
 import { tabName } from "./lib/actions";
 import { handleKeydown } from "./lib/commands";
 import { ACTION_TITLES, setPrefixLabel, toAccelerator, type KeyAction } from "./lib/keys";
@@ -100,6 +102,7 @@ export default function App() {
     const onKey = (e: KeyboardEvent) => handleKeydown(e);
     window.addEventListener("keydown", onKey, true);
     const unwatchCopy = watchCopyOnSelect(); // 实验室「选中即复制」，没开时什么都不做
+    const unwatchFollow = watchFollow(); // overview: put agents that start running in by themselves (when switched on)
     if (isNative()) document.documentElement.classList.add("native");
     // mac App 的菜单和通知点击走这两个入口。
     (window as any).gerdr = {
@@ -111,6 +114,7 @@ export default function App() {
     return () => {
       window.removeEventListener("keydown", onKey, true);
       unwatchCopy();
+      unwatchFollow();
     };
   }, []);
 
@@ -170,6 +174,11 @@ export default function App() {
   const prevKept = useStore((s) => s.keptTabs);
   const mode = useStore((s) => s.mode);
   useEffect(() => syncWatch(), [mode]);
+  // The overview covers sidebar and tabs (on a phone too, one tile at a time). Once opened it stays mounted, hidden, so reopening keeps each
+  // chat's scroll position, like the kept tabs below.
+  const overview = useStore((s) => s.overview.on) && mode !== "work";
+  const [overviewMounted, setOverviewMounted] = useState(overview);
+  if (overview && !overviewMounted) setOverviewMounted(true);
   const all = new Map<string, Tab>();
   for (const w of layout.workspaces) for (const t of w.tabs) all.set(t.id, t);
   const kept = [tab.id, ...prevKept.filter((id) => id !== tab.id && all.has(id))].slice(0, keep);
@@ -203,7 +212,12 @@ export default function App() {
 
   return (
     <TooltipProvider delayDuration={400}>
-      <div className="flex h-full">
+      <div className="relative flex h-full">
+        {overviewMounted && (
+          <div className={cn("absolute inset-0 z-30", !overview && "pointer-events-none invisible")} aria-hidden={!overview}>
+            <OverviewView shown={overview} />
+          </div>
+        )}
         {/* Work mode has its own top bar with the Code / Work switch, and the Work project draws its own menu */}
         {sidebar && !phone && mode !== "work" && <Sidebar />}
         {/* 手机上侧栏是盖在上面的抽屉（并排放的话对话只剩一百多 px 宽） */}
@@ -230,7 +244,7 @@ export default function App() {
               const active = id === tab.id;
               return (
                 <div key={id} className={cn("absolute inset-0", !active && "pointer-events-none invisible")} aria-hidden={!active}>
-                  <TabActive.Provider value={active}>
+                  <TabActive.Provider value={active && !overview}>
                     <TabView tab={t} />
                   </TabActive.Provider>
                 </div>

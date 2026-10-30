@@ -1,4 +1,4 @@
-import { Check, ChevronsUpDown, Keyboard, Loader2, LayoutList, Menu, PanelLeft, Plus, Settings, SquareTerminal, X } from "lucide-react";
+import { Check, ChevronsUpDown, Keyboard, LayoutGrid, Loader2, LayoutList, Menu, PanelLeft, Plus, Settings, SquareTerminal, X } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -49,9 +49,10 @@ import {
 } from "@/lib/layout";
 import { applyTabLabel, applyWorkspaceLabel } from "@/lib/plugins";
 import { ModeSwitch } from "@/components/WorkView";
-import { focusedSession, get, keyFor, set, setLayout, toggleSidebar, useStore } from "@/lib/store";
+import { focusedSession, get, keyFor, set, setLayout, setSidebarW, SIDEBAR_W, toggleSidebar, useStore } from "@/lib/store";
 import type { SessionSummary } from "@/lib/types";
 import { compareSessions } from "@/lib/order";
+import { toggleOverview } from "@/lib/overview";
 import { cn } from "@/lib/utils";
 import { AgentIcon, StatusDot } from "./AgentIcon";
 import { fmtElapsed } from "./chat/StatusLine";
@@ -253,6 +254,9 @@ export function PhoneBar() {
           </span>
         )}
       </Button>
+      <Button variant="ghost" size="icon" className="size-9" aria-label="全部 agent 总览" onClick={() => toggleOverview(true)}>
+        <LayoutGrid className="size-[18px]" />
+      </Button>
       <Button variant="ghost" size="icon" className="size-9" aria-label="新建 tab" onClick={() => addTab()}>
         <Plus className="size-[18px]" />
       </Button>
@@ -318,27 +322,16 @@ export function Sidebar({ className }: { className?: string }) {
   const layout = useStore((s) => s.layout);
   const sessions = useStore((s) => s.sessions);
   const unread = useStore((s) => s.unread);
-  const connected = useStore((s) => s.connected);
-  const doctorBad = useStore((s) => s.doctor?.level === "bad");
   useStore((s) => s.pluginVersion);
+  const sidebarW = useStore((s) => s.sidebarW);
   const list = spaceWorkspaces(layout); // only the session being shown (herdr-style; switch with SpaceSwitcher)
   const listRef = useRef<HTMLDivElement>(null);
   const { drag, onPointerDown } = useWorkspaceDrag(listRef, list.map((w) => w.id).join(","));
   return (
-    <div className={cn("flex h-full w-56 shrink-0 flex-col border-r bg-sidebar", className)}>
-      <div className="flex h-10 shrink-0 items-center gap-1 border-b px-2" style={{ WebkitAppRegion: "drag" } as any}>
-        <div className="native-traffic-light-gap" />
-        {/* The session switcher takes the title's place (asked for). Only the button is no-drag, so the rest of the bar still moves the window */}
-        <div className="flex min-w-16 flex-1">
-          <SpaceSwitcher />
-        </div>
-        {/* Project first, Code / Work at the right: Work mode's top bar repeats this row at the same width (WorkView WorkBar), so switching modes doesn't move it.
-            Only these three: the connection status used to sit here too and squeezed the project name to "def…" and the toggle out (it's in the bottom row now) */}
-        <ModeSwitch />
-        <Button variant="ghost" size="icon" className="size-7" onClick={toggleSidebar} style={{ WebkitAppRegion: "no-drag" } as any}>
-          <PanelLeft className="size-4" />
-        </Button>
-      </div>
+    // className = the phone drawer, which sets its own width; on the desktop the width is the user's (SidebarEdge)
+    <div className={cn("relative flex h-full shrink-0 flex-col border-r bg-sidebar", className)} style={className ? undefined : { width: sidebarW }}>
+      {!className && <SidebarEdge />}
+      <SidebarHeader />
       <div className="max-h-[45%] shrink-0 overflow-y-auto px-1.5 py-2">
         <div ref={listRef}>
           {list.map((w, wi) => (
@@ -364,37 +357,111 @@ export function Sidebar({ className }: { className?: string }) {
       </div>
       <AgentList />
       <UsageMeter />
-      <div className="flex shrink-0 items-center gap-1 border-t p-1.5">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 shrink-0 justify-start gap-2 text-[12px] text-muted-foreground"
-          onClick={() => set({ dialog: { kind: "settings", tab: doctorBad ? "labs" : undefined } })}
-        >
-          <Settings className="size-3.5" /> 设置
-          {/* Labs → Diagnosis found something broken (agents missing PATH dirs, a blocked codex…) */}
-          {doctorBad && (
-            <span className="ml-auto flex items-center gap-1 text-[11px] text-bad" title="诊断发现了问题：设置 → 实验室 → 诊断">
-              <span className="size-1.5 rounded-full bg-bad" /> 有问题
-            </span>
-          )}
-        </Button>
-        {/* Status lives down here, where there's room: the connection to the backend when it's lost, and on Android which route
-            the app takes (details in Settings → General → Android app) */}
-        <div className="flex min-w-0 flex-1 items-center justify-end gap-2 overflow-hidden">
-          <ConnStatus />
-          {connected && isAndroid() && <RouteLabel />}
-        </div>
+      <SidebarFooter sidebarToggle />
+    </div>
+  );
+}
+
+/**
+ * The top row of the left column, the same in all three modes (asked for): the Code sidebar, the overview's list, and
+ * Work mode's top bar. Project first, the Code / overview / Work switch at the right, so switching modes moves nothing.
+ * Only these two: the connection status used to sit here too and squeezed the project name to "def…" (it's in the
+ * bottom row now, SidebarFooter).
+ */
+export function SidebarHeader({ className, style }: { className?: string; style?: React.CSSProperties }) {
+  return (
+    <div className={cn("flex h-10 shrink-0 items-center gap-1 border-b px-2", className)} style={{ WebkitAppRegion: "drag", ...style } as any}>
+      <div className="native-traffic-light-gap" />
+      {/* The session switcher takes the title's place (asked for). Only the button is no-drag, so the rest of the bar still moves the window */}
+      <div className="flex min-w-16 flex-1">
+        <SpaceSwitcher />
+      </div>
+      <ModeSwitch />
+    </div>
+  );
+}
+
+/**
+ * The bottom row of the left column, the same in all three modes (asked for: settings always at the bottom): the Code
+ * sidebar, the overview's list, and over the bottom of the Work site's menu (WorkView). `sidebarToggle`: only the Code
+ * sidebar can be hidden.
+ */
+export function SidebarFooter({ sidebarToggle }: { sidebarToggle?: boolean }) {
+  const connected = useStore((s) => s.connected);
+  const doctorBad = useStore((s) => s.doctor?.level === "bad");
+  return (
+    <div className="flex h-10 shrink-0 items-center gap-1 border-t bg-sidebar px-1.5">
+      <Button
+        variant="ghost"
+        size="sm"
+        className="h-7 shrink-0 justify-start gap-2 text-[12px] text-muted-foreground"
+        onClick={() => set({ dialog: { kind: "settings", tab: doctorBad ? "labs" : undefined } })}
+      >
+        <Settings className="size-3.5" /> 设置
+        {/* Labs → Diagnosis found something broken (agents missing PATH dirs, a blocked codex…) */}
+        {doctorBad && (
+          <span className="ml-auto flex items-center gap-1 text-[11px] text-bad" title="诊断发现了问题：设置 → 实验室 → 诊断">
+            <span className="size-1.5 rounded-full bg-bad" /> 有问题
+          </span>
+        )}
+      </Button>
+      {/* Status lives down here, where there's room: the connection to the backend when it's lost, and on Android which route
+          the app takes (details in Settings → General → Android app) */}
+      <div className="flex min-w-0 flex-1 items-center justify-end gap-2 overflow-hidden">
+        <ConnStatus />
+        {connected && isAndroid() && <RouteLabel />}
+      </div>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button variant="ghost" size="icon" className="size-7 text-muted-foreground" onClick={() => set({ dialog: { kind: "help" } })}>
+            <Keyboard className="size-3.5" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>快捷键</TooltipContent>
+      </Tooltip>
+      {sidebarToggle && (
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon" className="size-7 text-muted-foreground" onClick={() => set({ dialog: { kind: "help" } })}>
-              <Keyboard className="size-3.5" />
+            <Button variant="ghost" size="icon" className="size-7 text-muted-foreground" onClick={toggleSidebar}>
+              <PanelLeft className="size-3.5" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent>快捷键</TooltipContent>
+          <TooltipContent>隐藏侧栏</TooltipContent>
         </Tooltip>
-      </div>
+      )}
     </div>
+  );
+}
+
+/**
+ * The sidebar's right edge: drag to resize it (asked for), double-click for the default width. Also on the overview's
+ * list, which shares the width so switching between them doesn't jump.
+ */
+export function SidebarEdge() {
+  const start = (e: React.PointerEvent) => {
+    e.preventDefault();
+    const el = e.currentTarget as HTMLElement;
+    el.setPointerCapture(e.pointerId);
+    const x0 = e.clientX;
+    const w0 = get().sidebarW;
+    const move = (ev: PointerEvent) => setSidebarW(w0 + ev.clientX - x0);
+    const up = () => {
+      el.removeEventListener("pointermove", move);
+      el.removeEventListener("pointerup", up);
+      document.body.style.cursor = "";
+    };
+    document.body.style.cursor = "col-resize";
+    el.addEventListener("pointermove", move);
+    el.addEventListener("pointerup", up);
+  };
+  return (
+    <div
+      className="absolute top-0 -right-1 bottom-0 z-20 w-2 cursor-col-resize bg-clip-content px-[3px] transition-colors hover:bg-brand/50"
+      onPointerDown={start}
+      onDoubleClick={() => setSidebarW(SIDEBAR_W)}
+      title="拖动调宽窄，双击还原"
+      style={{ WebkitAppRegion: "no-drag" } as any}
+    />
   );
 }
 
@@ -453,7 +520,7 @@ function AgentList() {
 }
 
 // 在跑的这一轮跑了多久（和对话里状态行的用时同一个数）。单独一个组件自己每秒走，整张列表不跟着每秒重画。
-function Elapsed({ since }: { since: number }) {
+export function Elapsed({ since }: { since: number }) {
   const [, tick] = useState(0);
   useEffect(() => {
     const t = setInterval(() => tick((x) => x + 1), 1000);

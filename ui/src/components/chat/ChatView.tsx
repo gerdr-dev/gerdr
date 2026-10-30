@@ -444,12 +444,19 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
       lastH.current = el.scrollHeight;
     });
     ro.observe(lst);
+    // The scroller itself got shorter / narrower (a seam dragged, an overview tile re-arranged) with the content's height
+    // unchanged, so the observer above doesn't act: at the bottom before, still at the bottom (was left up to 60px short).
+    const box = new ResizeObserver(() => {
+      if (activeRef.current && bottomRef.current && el.scrollHeight - el.clientHeight - el.scrollTop > 1) el.scrollTop = el.scrollHeight;
+    });
+    box.observe(el);
     // Virtuoso un-hides the list (see pinNow) without resizing it, so the observer above doesn't fire then. A
     // MutationObserver callback is a microtask, still ahead of the paint that first shows the rows.
     const mo = new MutationObserver(() => activeRef.current && pinNow());
     mo.observe(lst, { attributes: true, attributeFilter: ["style"] });
     return () => {
       ro.disconnect();
+      box.disconnect();
       mo.disconnect();
     };
   }, [hasList]);

@@ -1,0 +1,637 @@
+import { ArrowLeft, ArrowUpRight, Eraser, GripVertical, LayoutGrid, Maximize2, Minimize2, Pin, PinOff, Plus, X } from "lucide-react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { basename, focusSession, tabName } from "@/lib/actions";
+import { locateSession, spaceList, spaceOf, type Layout } from "@/lib/layout";
+import { compareSessions } from "@/lib/order";
+import {
+  addTiles,
+  arrange,
+  attentionIds,
+  clearTiles,
+  focusTile,
+  MAX_TILES,
+  openSessions,
+  overviewFocus,
+  overviewIds,
+  removeTile,
+  moveSeam,
+  setGridSizes,
+  setOverview,
+  swapTiles,
+  toggleMain,
+  toggleOverview,
+  useOverviewIds,
+  type Box,
+  type Seam,
+} from "@/lib/overview";
+import { usePhone } from "@/lib/phone";
+import { markRead, useStore } from "@/lib/store";
+import type { SessionSummary } from "@/lib/types";
+import { cn } from "@/lib/utils";
+import { BOX_TRANSITION, useLayoutAnim, useZoomAnim } from "@/lib/zoomAnim";
+import { AgentIcon, StatusDot } from "./AgentIcon";
+import { ChatView } from "./chat/ChatView";
+import { Elapsed, SidebarEdge, SidebarFooter, SidebarHeader } from "./Chrome";
+import { TabActive } from "./Panes";
+
+/** "project · workspace · tab" of a session's pane (the project only when there's more than one). */
+function whereOf(l: Layout, id: string): string {
+  const loc = locateSession(l, id);
+  if (!loc) return "";
+  const spaces = spaceList(l);
+  const ti = loc.ws.tabs.indexOf(loc.tab);
+  const parts = [loc.ws.name, `${ti + 1}.${tabName(loc.tab)}`];
+  if (spaces.length > 1) parts.unshift(spaces.find((s) => s.id === spaceOf(loc.ws))?.name ?? spaceOf(loc.ws));
+  return parts.join(" · ");
+}
+
+/**
+ * The all-agents overview (lib/overview.ts): every open agent of every project in the list on the left, the ones put in
+ * auto-arranged on the right. Covers the sidebar and the tabs; they stay mounted underneath (TabActive off) so closing
+ * this lands back exactly where things were. `shown` false = kept mounted but hidden, for the same reason.
+ */
+export function OverviewView({ shown }: { shown: boolean }) {
+  const phone = usePhone();
+  const ids = useOverviewIds().split(",").filter(Boolean);
+  const [zoom, setZoom] = useState<string>();
+  const cur = useStore((s) => overviewFocus(s.overview, s.layout, s.sessions));
+  // A tile taken out while zoomed: back to the grid
+  const zoomed = zoom && ids.includes(zoom) ? zoom : undefined;
+  const pick = (id: string) => {
+    if (!ids.includes(id)) addTiles([id]);
+    focusTile(id);
+  };
+  if (phone) return <PhoneOverview ids={ids} focus={cur} shown={shown} onPick={pick} />;
+  return (
+    <TabActive.Provider value={shown}>
+      <div className="flex h-full bg-background">
+        <OverviewList current={cur} onPick={pick} />
+        <Grid ids={ids} focus={cur} zoom={zoomed} shown={shown} onFocus={focusTile} onZoom={(id) => setZoom(zoomed === id ? undefined : id)} />
+      </div>
+    </TabActive.Provider>
+  );
+}
+
+/**
+ * The overview on a phone: no room for a grid, so one tile at a time. The top bar is the tile switcher, one chip per
+ * tile tinted with its status (waiting / running / unseen readable at a glance, asked for); the list of all agents is a
+ * drawer. Only the shown tile is mounted (a phone can't afford a dozen live chats); its transcript stays cached.
+ */
+function PhoneOverview({ ids, focus, shown, onPick }: { ids: string[]; focus?: string; shown: boolean; onPick: (id: string) => void }) {
+  const sessions = useStore((s) => s.sessions);
+  const unread = useStore((s) => s.unread);
+  const [list, setList] = useState(false);
+  const chips = useRef<HTMLDivElement>(null);
+  // Keep the current chip in view (on opening, switching from the list, a removal). Scrolls the strip itself after layout:
+  // scrollIntoView also moves ancestors, and run before the chips were laid out it left the current one off screen.
+  const idsKey = ids.join(",");
+  useLayoutEffect(() => {
+    const strip = chips.current;
+    const chip = strip?.querySelector<HTMLElement>("[data-current]");
+    if (!strip || !chip) return;
+    const left = chip.offsetLeft - strip.offsetLeft;
+    if (left < strip.scrollLeft) strip.scrollLeft = left;
+    else if (left + chip.offsetWidth > strip.scrollLeft + strip.clientWidth) strip.scrollLeft = left + chip.offsetWidth - strip.clientWidth;
+  }, [focus, idsKey, shown]);
+  return (
+    <TabActive.Provider value={shown}>
+      <div className="flex h-full flex-col bg-background">
+        <div className="flex h-11 shrink-0 items-center gap-1 border-b bg-sidebar px-1.5">
+          <Button variant="ghost" size="icon" className="size-8 shrink-0" aria-label="返回" onClick={() => toggleOverview(false)}>
+            <ArrowLeft className="size-[18px]" />
+          </Button>
+          <div ref={chips} className="flex min-w-0 flex-1 gap-1 overflow-x-auto [scrollbar-width:none]">
+            {ids.map((id) => {
+              const s = sessions[id];
+              if (!s) return null;
+              const cur = id === focus;
+              return (
+                <button
+                  key={id}
+                  data-current={cur || undefined}
+                  className={cn(
+                    "flex h-8 max-w-36 shrink-0 items-center gap-1.5 rounded-md border px-2 text-[12px]",
+                    statusTint(s.status, !!unread[id]),
+                    cur ? "border-brand font-medium" : "border-transparent text-muted-foreground",
+                  )}
+                  onClick={() => focusTile(id)}
+                >
+                  {/* An idle one has no dot: StatusDot is transparent then but would still leave a gap */}
+                  {(s.status !== "idle" || unread[id]) && <StatusDot status={s.status} unread={!!unread[id]} />}
+                  <span className="truncate">{s.title || basename(s.cwd)}</span>
+                </button>
+              );
+            })}
+          </div>
+          <Button variant="ghost" size="icon" className="size-9 shrink-0" aria-label="全部 agent" onClick={() => setList(true)}>
+            <Plus className="size-[18px]" />
+          </Button>
+        </div>
+        <div className="min-h-0 flex-1">
+          {focus ? (
+            <Tile key={focus} id={focus} focused={shown} main={false} zoomed={false} target={false} phone onFocus={() => {}} onZoom={() => {}} />
+          ) : (
+            <div className="flex h-full flex-col items-center justify-center gap-3 px-8 text-center text-[13px] text-muted-foreground">
+              <LayoutGrid className="size-6" />
+              还没有放进来的 agent
+              <Button size="sm" variant="outline" onClick={() => setList(true)}>
+                <Plus className="size-3.5" /> 挑几个
+              </Button>
+            </div>
+          )}
+        </div>
+      </div>
+      {list && (
+        <div className="fixed inset-0 z-40 flex">
+          <OverviewList current={focus} onPick={(id) => (onPick(id), setList(false))} phone onClose={() => setList(false)} />
+          <div className="flex-1 bg-background/50" onClick={() => setList(false)} />
+        </div>
+      )}
+    </TabActive.Provider>
+  );
+}
+
+function OverviewList({
+  current,
+  onPick,
+  phone,
+  onClose,
+}: {
+  current?: string;
+  onPick: (id: string) => void;
+  /** In the phone drawer: wider, and the header closes the drawer instead of the overview. */
+  phone?: boolean;
+  onClose?: () => void;
+}) {
+  const layout = useStore((s) => s.layout);
+  const sessions = useStore((s) => s.sessions);
+  const unread = useStore((s) => s.unread);
+  const o = useStore((s) => s.overview);
+  const sidebarW = useStore((s) => s.sidebarW);
+  const tiles = new Set(overviewIds(o, layout, sessions));
+  const all = openSessions(layout, sessions);
+  const attention = all.filter((s) => s.status === "running" || s.status === "waiting" || s.status === "error" || unread[s.id]);
+  const missing = attention.filter((s) => !tiles.has(s.id)).length;
+  const full = tiles.size >= MAX_TILES;
+
+  // By status: one list in sessionRank order. By project: grouped under each project, layout order inside.
+  const groups: { name?: string; rows: SessionSummary[] }[] = [];
+  if (o.sort === "status") groups.push({ rows: [...all].sort((a, b) => compareSessions(a, b, unread)) });
+  else
+    for (const sp of spaceList(layout)) {
+      const rows = all.filter((s) => {
+        const loc = locateSession(layout, s.id);
+        return loc && spaceOf(loc.ws) === sp.id;
+      });
+      if (rows.length) groups.push({ name: sp.name, rows });
+    }
+
+  return (
+    <div
+      className={cn("relative flex h-full shrink-0 flex-col border-r bg-sidebar", phone && "w-[min(18rem,85vw)] shadow-xl")}
+      style={phone ? undefined : { width: sidebarW }}
+    >
+      {!phone && <SidebarEdge />}
+      {phone ? (
+        // The phone drawer: a way to close it, the overview's own top bar is behind it
+        <div className="flex h-10 shrink-0 items-center gap-1 border-b px-2">
+          <Button variant="ghost" size="icon" className="size-7" onClick={onClose} aria-label="返回">
+            <ArrowLeft className="size-4" />
+          </Button>
+          <span className="flex-1 truncate text-[13px] font-medium">全部 agent</span>
+        </div>
+      ) : (
+        // The same top row as the Code sidebar and Work mode (asked for): project, then the Code / overview / Work switch
+        <SidebarHeader />
+      )}
+      <div className="shrink-0 space-y-2 border-b p-2">
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 w-full justify-start gap-2 text-[12px]"
+          disabled={!missing || full}
+          onClick={() => addTiles(attentionIds())}
+        >
+          <Plus className="size-3.5" />
+          放入运行中和未读
+          <span className="ml-auto tabular-nums text-muted-foreground">{missing || ""}</span>
+        </Button>
+        <label className="flex items-center gap-2 px-1 text-[12px] text-muted-foreground" title="有 agent 开始跑或在等你时，自动放进来">
+          <Switch size="sm" checked={o.follow} onCheckedChange={(v) => setOverview((x) => ({ ...x, follow: v }))} />
+          自动放入开始运行的
+        </label>
+      </div>
+      <div className="flex shrink-0 items-center gap-1 px-3.5 pt-2 pb-1 text-[11px] text-muted-foreground">
+        <button
+          className={cn("hover:text-foreground", o.sort === "status" && "font-medium text-foreground")}
+          onClick={() => setOverview((x) => ({ ...x, sort: "status" }))}
+        >
+          按状态
+        </button>
+        <span>/</span>
+        <button
+          className={cn("hover:text-foreground", o.sort === "project" && "font-medium text-foreground")}
+          onClick={() => setOverview((x) => ({ ...x, sort: "project" }))}
+        >
+          按项目
+        </button>
+        <span className="flex-1" />
+        <span className="tabular-nums">
+          {tiles.size}/{all.length}
+        </span>
+        {tiles.size > 0 && (
+          <button className="ml-1 hover:text-foreground" title="全部移出" onClick={clearTiles}>
+            <Eraser className="size-3" />
+          </button>
+        )}
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto px-1.5 pb-2">
+        {all.length === 0 && <div className="px-2 py-1 text-[12px] text-muted-foreground">没有开着的会话</div>}
+        {groups.map((g, gi) => (
+          <div key={g.name ?? gi}>
+            {g.name && <div className="truncate px-2 pt-2 pb-0.5 text-[11px] font-medium text-muted-foreground">{g.name}</div>}
+            {g.rows.map((s) => {
+              const on = tiles.has(s.id);
+              return (
+                <div
+                  key={s.id}
+                  role="button"
+                  // Three looks that tell apart at a glance (a slightly different grey didn't, in the dark theme): the tile you're on
+                  // = brand tint + bar, in the grid = bar, not in = dimmed title
+                  className={cn(
+                    "group relative flex w-full cursor-default items-start gap-2 rounded-md px-2 py-1 text-left hover:bg-accent/60",
+                    s.id === current && on && "bg-brand/15 hover:bg-brand/20",
+                    !on && full && "opacity-50",
+                  )}
+                  title={on ? "在右边（点一下聚焦）" : full ? `最多放 ${MAX_TILES} 个` : "放到右边"}
+                  onClick={() => (on || !full) && onPick(s.id)}
+                >
+                  {on && <span className="absolute top-1.5 bottom-1.5 left-0 w-[3px] rounded-full bg-brand" />}
+                  <AgentIcon agent={s.agent} className="mt-0.5 size-3.5 shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <div className={cn("truncate text-[12px] leading-5", !on && "text-muted-foreground", s.id === current && on && "font-semibold")}>
+                      {s.title || basename(s.cwd)}
+                    </div>
+                    <div className="flex text-[11px] leading-4 text-muted-foreground">
+                      <span className="min-w-0 truncate">{whereOf(layout, s.id)}</span>
+                      {s.status === "running" && s.turn && <Elapsed since={s.turn.startedAt} />}
+                    </div>
+                  </div>
+                  {on ? (
+                    <button
+                      className="mt-0.5 hidden size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground group-hover:flex hover:text-foreground"
+                      title="从右边移出"
+                      onClick={(e) => (e.stopPropagation(), removeTile(s.id))}
+                    >
+                      <X className="size-3" />
+                    </button>
+                  ) : null}
+                  <StatusDot status={s.status} unread={!!unread[s.id]} className={cn("mt-1.5", on && "group-hover:hidden")} />
+                </div>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+      {!phone && <SidebarFooter />}
+    </div>
+  );
+}
+
+const pct = (v: number) => `${v * 100}%`;
+const NO_SIZES = {};
+
+/**
+ * Follow the pointer until it's released: the shared part of every drag here (seams, tiles). The pointer is captured by
+ * the handle: otherwise moving across other tiles with the button down reaches their chats as "the user is dragging this
+ * scroller" (ChatView lastInputOf), and when the drop then resizes them they take the moved scroll position as the
+ * user's and stop sticking to the bottom (measured: 400-1600px off the bottom after a swap).
+ */
+function track(e: React.PointerEvent, cursor: string, move: (ev: PointerEvent) => void, up?: (ev: PointerEvent) => void) {
+  e.preventDefault();
+  const handle = e.currentTarget as HTMLElement;
+  try {
+    handle.setPointerCapture(e.pointerId);
+  } catch {}
+  const done = (ev: PointerEvent) => {
+    window.removeEventListener("pointermove", move);
+    window.removeEventListener("pointerup", done);
+    document.body.style.cursor = "";
+    up?.(ev);
+  };
+  document.body.style.cursor = cursor;
+  window.addEventListener("pointermove", move);
+  window.addEventListener("pointerup", done);
+}
+
+type TileDrag = { id: string; x: number; y: number; over?: string; label: string };
+
+function Grid({
+  ids,
+  focus,
+  zoom,
+  shown,
+  onFocus,
+  onZoom,
+}: {
+  ids: string[];
+  focus?: string;
+  zoom?: string;
+  shown: boolean;
+  onFocus: (id: string) => void;
+  onZoom: (id: string) => void;
+}) {
+  const box = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState({ w: 0, h: 0 });
+  const main = useStore((s) => s.overview.main);
+  const ratio = useStore((s) => s.overview.ratio);
+  const saved = useStore((s) => s.overview.sizes) ?? NO_SIZES;
+  const [drag, setDrag] = useState<TileDrag>();
+  useLayoutEffect(() => {
+    const el = box.current!;
+    const ro = new ResizeObserver(() => setSize({ w: el.clientWidth, h: el.clientHeight }));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const key = ids.join(",");
+  const lay = useMemo(() => arrange(ids, main, ratio, size.w, size.h, saved), [key, main, ratio, size.w, size.h, saved]);
+  const hasMain = !!main && ids.includes(main) && ids.length > 1 && !zoom;
+  // Same zoom animation as panes in a tab (lib/zoomAnim): the tile slides to full size over the others and back. Only its
+  // chat is pinned to the full size while moving (Tile `pin`), so the chat re-lays out once, not every frame; the frame and
+  // title bar follow the box, keeping the buttons in the corner and all four borders in view.
+  const anim = useZoomAnim(zoom, false);
+  const pin = anim && box.current ? { width: box.current.clientWidth - 8, height: box.current.clientHeight - 8 } : undefined;
+  // Re-arranging (pin, swap, add / remove a tile) slides every tile to its new box the same way; seam drags and window
+  // resizes follow the pointer / window and don't animate. Each chat is laid out at its final size meanwhile (tilePin).
+  const moved = useLayoutAnim(`${key}|${main ?? ""}`);
+  const tilePin = (b: Box) => ({ width: b.w * size.w - 8, height: b.h * size.h - 8 });
+
+  const dragMain = (e: React.PointerEvent) => {
+    const rect = box.current!.getBoundingClientRect();
+    track(e, "col-resize", (ev) => {
+      const r = Math.min(0.8, Math.max(0.2, (ev.clientX - rect.left) / rect.width));
+      setOverview((o) => ({ ...o, ratio: r }));
+    });
+  };
+
+  const dragSeam = (e: React.PointerEvent, seam: Seam) => {
+    const rect = box.current!.getBoundingClientRect();
+    const { key, sizes, region } = lay;
+    track(e, seam.dir === "row" ? "row-resize" : "col-resize", (ev) => {
+      if (seam.dir === "row") setGridSizes(key, { ...sizes, rows: moveSeam(sizes.rows, seam.index, (ev.clientY - rect.top) / rect.height) });
+      else {
+        const at = ((ev.clientX - rect.left) / rect.width - region.x) / region.w;
+        const cols = sizes.cols.map((c, r) => (r === seam.row ? moveSeam(c, seam.index, at) : c));
+        setGridSizes(key, { ...sizes, cols });
+      }
+    });
+  };
+
+  // Drag a tile by its title bar onto another one: the two trade places. Starts after a few px, so a click still focuses.
+  const dragTile = (e: React.PointerEvent, id: string, label: string) => {
+    if (e.button !== 0 || (e.target as HTMLElement).closest("button")) return;
+    const sx = e.clientX;
+    const sy = e.clientY;
+    let on = false;
+    const overAt = (ev: PointerEvent) => {
+      const el = document.elementFromPoint(ev.clientX, ev.clientY)?.closest<HTMLElement>("[data-ov-tile]");
+      const over = el?.dataset.ovTile;
+      return over && over !== id ? over : undefined;
+    };
+    track(
+      e,
+      "grabbing",
+      (ev) => {
+        if (!on && Math.hypot(ev.clientX - sx, ev.clientY - sy) < 5) return;
+        on = true;
+        setDrag({ id, label, x: ev.clientX, y: ev.clientY, over: overAt(ev) });
+      },
+      (ev) => {
+        const over = on ? overAt(ev) : undefined;
+        setDrag(undefined);
+        if (over) swapTiles(id, over);
+      },
+    );
+    onFocus(id);
+  };
+
+  return (
+    <div className="relative min-w-0 flex-1">
+      <div ref={box} className="absolute inset-1">
+        {ids.length === 0 && (
+          <div className="flex h-full flex-col items-center justify-center gap-2 text-[13px] text-muted-foreground">
+            <LayoutGrid className="size-6" />
+            在左边点 agent 放进来，或者点「放入运行中和未读」
+          </div>
+        )}
+        {/* Flat and keyed by session, positioned absolutely (like Panes.TabView): re-arranging only moves boxes, the chats don't remount */}
+        {ids.map((id) => {
+          const b = zoom === id ? { x: 0, y: 0, w: 1, h: 1 } : lay.boxes.get(id);
+          if (!b) return null;
+          // Neighbours stay put under the moving tile and are only hidden once it covers them
+          const hidden = !!zoom && zoom !== id && !anim;
+          const moving = anim === id;
+          const sliding = moved && !anim;
+          return (
+            <div
+              key={id}
+              data-ov-tile={id}
+              className={cn(
+                "absolute overflow-clip p-1",
+                hidden && "pointer-events-none invisible",
+                drag?.id === id && "opacity-40",
+                moving ? "z-20" : zoom === id && "z-10",
+              )}
+              // Inline transition, not a class: see Panes.TabView (browser Tailwind would add the class's CSS a change too late)
+              style={{
+                left: pct(b.x),
+                top: pct(b.y),
+                width: pct(b.w),
+                height: pct(b.h),
+                transition: moving || sliding ? BOX_TRANSITION : undefined,
+              }}
+            >
+              <Tile
+                id={id}
+                focused={shown && focus === id}
+                main={main === id}
+                zoomed={zoom === id}
+                target={drag?.over === id}
+                onFocus={() => onFocus(id)}
+                onZoom={() => onZoom(id)}
+                onDragStart={zoom ? undefined : (e, label) => dragTile(e, id, label)}
+                pin={moving ? pin : sliding ? tilePin(b) : undefined}
+              />
+            </div>
+          );
+        })}
+        {!zoom &&
+          !anim &&
+          !moved &&
+          lay.seams.map((sm) => {
+            const { region } = lay;
+            const row = sm.dir === "row";
+            return (
+              <div
+                key={`${sm.dir}${sm.row}.${sm.index}`}
+                className={cn(
+                  "group/seam absolute z-10 flex items-center justify-center hover:bg-brand/30",
+                  row ? "h-2 -translate-y-1/2 cursor-row-resize" : "w-2 -translate-x-1/2 cursor-col-resize",
+                )}
+                style={
+                  row
+                    ? { left: pct(region.x), width: pct(region.w), top: pct(sm.y) }
+                    : { left: pct(region.x + sm.x * region.w), top: pct(sm.y), height: pct(sm.len) }
+                }
+                onPointerDown={(e) => dragSeam(e, sm)}
+                onDoubleClick={() => setGridSizes(lay.key, undefined)}
+                title="拖动调大小，双击恢复等分"
+              >
+                <SeamGrip row={row} />
+              </div>
+            );
+          })}
+        {hasMain && !anim && !moved && (
+          <div
+            className="group/seam absolute top-0 bottom-0 z-10 flex w-2 -translate-x-1/2 cursor-col-resize items-center justify-center hover:bg-brand/30"
+            style={{ left: pct(ratio) }}
+            onPointerDown={dragMain}
+            onDoubleClick={() => setOverview((o) => ({ ...o, ratio: 0.5 }))}
+            title="拖动调宽窄，双击还原"
+          >
+            <SeamGrip row={false} />
+          </div>
+        )}
+      </div>
+      {drag && (
+        <div
+          className="pointer-events-none fixed z-50 max-w-60 truncate rounded-md border bg-popover px-2 py-1 text-[12px] shadow-md"
+          style={{ left: drag.x + 12, top: drag.y + 12 }}
+        >
+          {drag.label}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Always-visible handle in the middle of a seam: the gap alone doesn't say it can be dragged. */
+function SeamGrip({ row }: { row: boolean }) {
+  return <span className={cn("rounded-full bg-muted-foreground/40 group-hover/seam:bg-brand", row ? "h-1 w-10" : "h-10 w-1")} />;
+}
+
+function Tile({
+  id,
+  focused,
+  main,
+  zoomed,
+  target,
+  onFocus,
+  onZoom,
+  onDragStart,
+  pin,
+  phone,
+}: {
+  id: string;
+  focused: boolean;
+  main: boolean;
+  zoomed: boolean;
+  /** Another tile is being dragged over this one: dropping swaps them. */
+  target: boolean;
+  onFocus: () => void;
+  onZoom: () => void;
+  onDragStart?: (e: React.PointerEvent, label: string) => void;
+  /** Tile size at the end of a zoom animation in progress: the chat is laid out at that size meanwhile (clipped). */
+  pin?: { width: number; height: number };
+  /** Shown alone on a phone: no pinning / zooming there. */
+  phone?: boolean;
+}) {
+  const session = useStore((s) => s.sessions[id]);
+  const unread = useStore((s) => !!s.unread[id]);
+  const where = useStore((s) => whereOf(s.layout, id));
+  useEffect(() => {
+    if (focused && unread) markRead(id);
+  }, [focused, unread, id]);
+  if (!session) return null;
+  const title = session.title || basename(session.cwd);
+  const jump = () => {
+    toggleOverview(false);
+    focusSession(id);
+  };
+  return (
+    <div
+      className={cn(
+        "flex h-full min-h-0 flex-col overflow-clip bg-background",
+        !phone && "rounded-md border",
+        focused ? "border-brand" : "border-border",
+        target && "ring-2 ring-brand",
+      )}
+      onMouseDown={() => !focused && onFocus()}
+    >
+      <div
+        className={cn(
+          "flex h-8 shrink-0 items-center gap-2 border-b px-3 text-[12px]",
+          // The status is the whole title bar's tint instead of a dot (asked for): readable at a glance across a dozen tiles.
+          // Dimming an unfocused tile goes on the contents only, so the tint keeps its strength.
+          statusTint(session.status, unread),
+          !focused && "[&>*]:opacity-70",
+          onDragStart && "cursor-grab",
+        )}
+        onDoubleClick={onZoom}
+        onPointerDown={onDragStart && ((e) => onDragStart(e, title))}
+        // Middle click closes it, like a browser tab (mousedown is cancelled so the browser doesn't start auto-scroll)
+        onMouseDown={(e) => e.button === 1 && e.preventDefault()}
+        onAuxClick={(e) => e.button === 1 && removeTile(id)}
+        title="拖到别的格子上交换位置，双击放大，中键关闭"
+      >
+        {onDragStart && <GripVertical className="-mx-1.5 size-3.5 shrink-0 text-muted-foreground/60" />}
+        <AgentIcon agent={session.agent} className="size-4" />
+        <span className="min-w-[3em] max-w-[50%] shrink truncate font-medium">{title}</span>
+        <StatusDot status={session.status} unread={unread} />
+        {session.pending ? <span className="shrink-0 whitespace-nowrap rounded-sm bg-bad/15 px-1.5 text-[11px] text-bad">等你</span> : null}
+        <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">{where}</span>
+        {!phone && (
+          <>
+            <TileButton title={main ? "取消固定" : "固定在左边"} onClick={() => toggleMain(id)}>
+              {main ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
+            </TileButton>
+            <TileButton title={zoomed ? "还原" : "放大（双击标题栏也行）"} onClick={onZoom}>
+              {zoomed ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
+            </TileButton>
+          </>
+        )}
+        <TileButton title="回到它所在的 tab" onClick={jump}>
+          <ArrowUpRight className="size-3.5" />
+        </TileButton>
+        <TileButton title="从总览移出（agent 不受影响）" onClick={() => removeTile(id)}>
+          <X className="size-3.5" />
+        </TileButton>
+      </div>
+      <div className="min-h-0 flex-1 overflow-clip">
+        {/* Own pane id: the composer's draft here is separate from the one in the session's real pane */}
+        {/* Minus the 1px frame on each side and the 32px + 1px title bar */}
+        <div className="h-full w-full" style={pin && { width: pin.width - 2, height: pin.height - 35 }}>
+          <ChatView key={id} session={session} paneId={`ov-${id}`} focused={focused} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Title bar tint for a tile's status, same colours as StatusDot: waiting / error red, running amber, finished unseen green. */
+function statusTint(status: string, unread: boolean) {
+  if (status === "waiting" || status === "error") return "bg-bad/15";
+  if (status === "running") return "bg-warn/15";
+  if (unread) return "bg-ok/15";
+  return undefined;
+}
+
+function TileButton({ title, onClick, children }: { title: string; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <Button variant="ghost" size="icon" className="size-6 shrink-0" title={title} onClick={onClick} onDoubleClick={(e) => e.stopPropagation()}>
+      {children}
+    </Button>
+  );
+}

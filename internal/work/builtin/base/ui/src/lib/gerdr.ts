@@ -5,6 +5,8 @@
 // - ask(text): hand a task to the Work agent on the right of the page (gerdr sends it as a message;
 //   it queues if the agent is busy).
 // - The page follows gerdr's light / dark theme by itself (see the listener at the bottom).
+// - The menu's width is --gerdr-sidebar-w, which follows gerdr's sidebar: the user resizes them together by dragging the
+//   menu's right edge (gerdr draws that handle over this page). Keep using the variable for the menu width.
 
 /** The project this Work site belongs to: it's served at /work/<project>/. */
 export const project = decodeURIComponent(location.pathname.split("/")[2] || "default");
@@ -31,8 +33,12 @@ export function openSettings(tab?: string) {
 }
 
 window.addEventListener("message", (e) => {
-  if (e.origin !== location.origin || e.data?.type !== "gerdr:theme") return;
-  document.documentElement.classList.toggle("dark", !!e.data.dark);
-  document.documentElement.style.colorScheme = e.data.dark ? "dark" : "light";
+  if (e.origin !== location.origin) return;
+  if (e.data?.type === "gerdr:theme") {
+    document.documentElement.classList.toggle("dark", !!e.data.dark);
+    document.documentElement.style.colorScheme = e.data.dark ? "dark" : "light";
+  } else if (e.data?.type === "gerdr:sidebar" && typeof e.data.width === "number") {
+    document.documentElement.style.setProperty("--gerdr-sidebar-w", `${e.data.width}px`);
+  }
 });
 window.parent.postMessage({ type: "gerdr:ready" }, location.origin);

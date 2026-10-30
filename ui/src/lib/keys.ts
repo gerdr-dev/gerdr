@@ -60,6 +60,7 @@ export type KeyAction =
   | "prevSpace"
   | "sessions"
   | "toggleSidebar"
+  | "overview"
   | "help"
   | "settings"
   | "importHerdr"
@@ -127,6 +128,7 @@ export const ACTION_TITLES: Record<KeyAction, string> = {
   prevSpace: "上一个项目",
   sessions: "会话列表（接着以前的聊）",
   toggleSidebar: "显示 / 隐藏侧栏",
+  overview: "全部 agent 总览（打开 / 退出）",
   help: "快捷键帮助",
   settings: "设置",
   importHerdr: "从 herdr 导入（工作空间、tab、会话）",
@@ -207,6 +209,7 @@ const MAC_KEYS: Record<KeyAction, string[]> = {
   prevSpace: ["meta+ctrl+[", "prefix+["],
   sessions: ["prefix+g", "meta+o"],
   toggleSidebar: ["prefix+b", "meta+ctrl+s"],
+  overview: ["prefix+a"],
   help: ["prefix+?", "meta+/"],
   settings: ["prefix+s", "meta+,"],
   importHerdr: [],
@@ -293,7 +296,7 @@ export const KEY_GROUPS: [string, KeyAction[]][] = [
   ["工作空间", ["newWorkspace", "workspaces", "nextWorkspace", "prevWorkspace", "ws1", "renameWorkspace", "closeWorkspace"]],
   ["项目", ["newSpace", "nextSpace", "prevSpace"]],
   ["会话", ["sessions", "nextAttention", "prevAttention", "focusAttention", "renamePane", "stop", "stash"]],
-  ["其他", ["palette", "toggleSidebar", "settings", "help", "importHerdr"]],
+  ["其他", ["palette", "overview", "toggleSidebar", "settings", "help", "importHerdr"]],
 ];
 
 /** 按键事件 → 设置里存的写法（"meta+shift+d"）。前缀另算，这里不管。 */

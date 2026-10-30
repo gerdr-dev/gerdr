@@ -1,8 +1,10 @@
-import { Briefcase, Check, ChevronDown, Code2, History, MessageSquarePlus, Settings } from "lucide-react";
+import { Briefcase, Check, ChevronDown, Code2, History, LayoutGrid, MessageSquarePlus, Settings } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { AgentIcon, StatusDot } from "@/components/AgentIcon";
-import { ConnStatus, SpaceSwitcher } from "@/components/Chrome";
+import { SidebarEdge, SidebarFooter, SidebarHeader } from "@/components/Chrome";
+import { formatCombo } from "@/lib/keys";
+import { toggleOverview } from "@/lib/overview";
 import { ChatView } from "@/components/chat/ChatView";
 import { PixelLoader } from "@/components/chat/PixelLoader";
 import { Button } from "@/components/ui/button";
@@ -15,7 +17,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { usePhone } from "@/lib/phone";
-import { set, setMode, useStore } from "@/lib/store";
+import { get, keyFor, set, setMode, useStore } from "@/lib/store";
 import { syncWatch } from "@/lib/sync";
 import { cn } from "@/lib/utils";
 import { askWorkAgent, ensureWorkSession, newWorkChat, openWorkChat, useWorkChats, useWorkProject, useWorkSession, workAgent } from "@/lib/work";
@@ -30,19 +32,28 @@ import { askWorkAgent, ensureWorkSession, newWorkChat, openWorkChat, useWorkChat
 
 const WORK_PANE = "work"; // drafts / scroll position key prefix for the right-hand chat (it has no pane in the layout)
 
-/** Code / Work: gerdr's own switch, at the right of the top row's first 224px in both modes (sidebar header / Work top bar). */
+/**
+ * Code / overview / Work: gerdr's own switch, at the right of the left column's top row in all three (Chrome.tsx
+ * SidebarHeader). The overview isn't a `mode` (it lays over Code: lib/overview.ts), but to the user it's a third view.
+ */
 export function ModeSwitch() {
   const mode = useStore((s) => s.mode);
-  // Icons, not words: the project name next to it needs the room (the sidebar is 224px)
-  const item = (m: "agents" | "work", label: string, Icon: typeof Code2) => (
+  const overview = useStore((s) => s.overview.on);
+  const cur = mode === "work" ? "work" : overview ? "overview" : "agents";
+  const go = (m: typeof cur) => {
+    setMode(m === "work" ? "work" : "agents");
+    if (m !== "work") toggleOverview(m === "overview");
+  };
+  // Icons, not words: the project name next to it needs the room (the sidebar is 224px by default)
+  const item = (m: typeof cur, label: string, Icon: typeof Code2) => (
     <button
       title={label}
       aria-label={label}
       className={cn(
         "flex h-6 w-7 items-center justify-center rounded-md",
-        mode === m ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+        cur === m ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
       )}
-      onClick={() => setMode(m)}
+      onClick={() => go(m)}
     >
       <Icon className="size-3.5" />
     </button>
@@ -50,6 +61,7 @@ export function ModeSwitch() {
   return (
     <div className="flex shrink-0 gap-0.5 rounded-lg bg-muted p-0.5" style={{ WebkitAppRegion: "no-drag" } as any}>
       {item("agents", "Code", Code2)}
+      {item("overview", `全部 agent 总览（${formatCombo(keyFor(get().config, "overview")[0] ?? "")}）`, LayoutGrid)}
       {item("work", "Work", Briefcase)}
     </div>
   );
@@ -73,12 +85,17 @@ function WorkFrame({ project }: { project: string }) {
   const dark = useDark();
   const send = (m: unknown) => ref.current?.contentWindow?.postMessage(m, location.origin);
   useEffect(() => send({ type: "gerdr:theme", dark }), [dark]);
+  // The site's menu takes the sidebar's width (--gerdr-sidebar-w, its lib/gerdr.ts); dragged by SidebarEdge in WorkView
+  const sidebarW = useStore((s) => s.sidebarW);
+  useEffect(() => send({ type: "gerdr:sidebar", width: sidebarW }), [sidebarW]);
   useEffect(() => {
     const f = (e: MessageEvent) => {
       if (e.origin !== location.origin || e.source !== ref.current?.contentWindow) return;
       const m = e.data ?? {};
-      if (m.type === "gerdr:ready") send({ type: "gerdr:theme", dark: document.documentElement.classList.contains("dark") });
-      else if (m.type === "gerdr:ask" && typeof m.text === "string")
+      if (m.type === "gerdr:ready") {
+        send({ type: "gerdr:theme", dark: document.documentElement.classList.contains("dark") });
+        send({ type: "gerdr:sidebar", width: get().sidebarW });
+      } else if (m.type === "gerdr:ask" && typeof m.text === "string")
         askWorkAgent(m.text, project).then(
           () => toast.success("交给右边的助手了"),
           (err) => toast.error(err.message ?? String(err)),
@@ -186,37 +203,20 @@ function ChatHeader() {
 
 /** Top bar over the Work project: gerdr's own controls (mode switch, settings), apart from the project's menu. */
 function WorkBar() {
-  // The first 224px repeat the sidebar header (Chrome.tsx Sidebar: project, then Code / Work, then one icon button), so the
-  // switch sits exactly where it does in Code mode; the Work site's own menu below is the same width.
+  // The first sidebarW px are the same header as the sidebar's (Chrome.tsx SidebarHeader), so the switch sits exactly where
+  // it does in Code mode; the Work site's own menu below is the same width (gerdr:sidebar). Settings and the connection
+  // status are in the bottom row gerdr lays over the site's menu (WorkView), as in the other two modes.
+  const sidebarW = useStore((s) => s.sidebarW);
   return (
     <div className="flex h-10 shrink-0 border-b bg-sidebar" style={{ WebkitAppRegion: "drag" } as any}>
-      <div className="flex w-56 shrink-0 items-center gap-1 border-r px-2">
-        <div className="native-traffic-light-gap" />
-        <div className="flex min-w-16 flex-1">
-          <SpaceSwitcher />
-        </div>
-        <ModeSwitch />
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-7 text-muted-foreground"
-          title="设置"
-          style={{ WebkitAppRegion: "no-drag" } as any}
-          onClick={() => set({ dialog: { kind: "settings" } })}
-        >
-          <Settings className="size-4" />
-        </Button>
-      </div>
-      {/* No sidebar (and so no bottom row) in Work mode: the connection status goes at the bar's right end */}
-      <div className="flex min-w-0 flex-1 items-center justify-end px-3">
-        <ConnStatus />
-      </div>
+      <SidebarHeader className="border-r border-b-0" style={{ width: sidebarW }} />
     </div>
   );
 }
 
 export function WorkView() {
   const phone = usePhone();
+  const sidebarW = useStore((s) => s.sidebarW);
   const project = useWorkProject();
   const [side, setSide] = useState<"page" | "chat">("page");
   if (phone) {
@@ -253,10 +253,20 @@ export function WorkView() {
   }
   return (
     <div className="flex h-full bg-background">
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="relative flex min-w-0 flex-1 flex-col">
         <WorkBar />
         <div className="min-h-0 flex-1">
           <WorkFrame key={project} project={project} />
+        </div>
+        {/* The sidebar's resize handle, over the top bar and the site's menu edge alike (the site lays its menu out at
+            the same width): it's ours, so it works whatever the site does, and captures the pointer so the frame can't take it */}
+        <div className="pointer-events-none absolute inset-y-0 left-0 [&>*]:pointer-events-auto" style={{ width: sidebarW }}>
+          <SidebarEdge />
+          {/* Settings at the bottom of the left column, like the Code sidebar (asked for). The site keeps that strip free
+              (--gerdr-menu-bottom in its index.css, used by its layout.tsx) */}
+          <div className="absolute inset-x-0 bottom-0 border-r">
+            <SidebarFooter />
+          </div>
         </div>
       </div>
       <div className="flex w-[min(440px,40%)] shrink-0 flex-col border-l">

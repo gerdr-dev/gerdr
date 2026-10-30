@@ -16,7 +16,7 @@ const MENU = [
 export default function Layout() {
   return (
     <div className="flex h-full">
-      <nav className="flex w-56 shrink-0 flex-col gap-3 border-r bg-sidebar px-2 py-3">
+      <nav className="flex w-(--gerdr-sidebar-w) shrink-0 flex-col gap-3 overflow-y-auto border-r bg-sidebar px-2 pt-3 pb-[calc(var(--gerdr-menu-bottom)+0.75rem)]">
         {MENU.map((g) => (
           <div key={g.title}>
             <div className="px-2 pb-1 text-[11px] font-medium text-muted-foreground">{g.title}</div>
