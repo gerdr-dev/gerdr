@@ -26,7 +26,7 @@ const local = {
 
 const STATUS: Record<string, string> = { idle: "空闲", running: "在干活…", waiting: "等你处理", error: "出错了", starting: "启动中…" };
 
-export function Chat({ hello, uiDir, errors, onTurnDone }: { hello: Hello; uiDir: string; errors: string; onTurnDone: () => void }) {
+export function Chat({ hello, uiDir, errors, upgrade, onTurnDone }: { hello: Hello; uiDir: string; errors: string; upgrade: string; onTurnDone: () => void }) {
   const [sessions, setSessions] = useState<Record<string, Session>>(() => Object.fromEntries(hello.sessions.map((s) => [s.id, s])));
   const mine = useMemo(
     () =>
@@ -67,14 +67,26 @@ export function Chat({ hello, uiDir, errors, onTurnDone }: { hello: Hello; uiDir
     setCreating(true);
     try {
       const mode = hello.config?.defaultModes?.[agent];
-      const s = await req<Session>("POST", "/api/sessions", { agent, cwd: uiDir, mode: mode || undefined, title: "急救：修界面" });
+      const merge = !!upgrade && !errors;
+      const s = await req<Session>("POST", "/api/sessions", {
+        agent,
+        cwd: uiDir,
+        mode: mode || undefined,
+        title: merge ? "急救：合入新版界面" : "急救：修界面",
+      });
       setSessions((m) => ({ ...m, [s.id]: s }));
       select(s.id);
       // 先填好第一句（带上错误），人看一眼再发
+      const mergeHow =
+        "运行 `gerdr ui merge` 把冲突摆出来，逐个解决：新版的改动和本地的改动都要保留（看不懂本地那边为什么这么改，先看 git log）。" +
+        "解决完 `git add -A && git commit`，再跑 `gerdr ui status`，确认没有错误、也没有 pending_upstream 了。";
       setInput(
-        "gerdr 的界面（就是这个目录）被改坏了，帮我修好。先读 AGENTS.md，再跑 `gerdr ui status` 看错误；" +
-          "修完再跑一次确认没有错误了。只改坏掉的地方，别顺手重构。" +
-          (errors ? "\n\n现在报的错：\n" + errors : ""),
+        merge
+          ? "gerdr 出了新版界面，但和这个目录里本地的改动冲突，自动升级时没合进来。先读 AGENTS.md，然后" + mergeHow + "\n\n" + upgrade
+          : "gerdr 的界面（就是这个目录）被改坏了，帮我修好。先读 AGENTS.md，再跑 `gerdr ui status` 看错误；" +
+              "修完再跑一次确认没有错误了。只改坏掉的地方，别顺手重构。" +
+              (errors ? "\n\n现在报的错：\n" + errors : "") +
+              (upgrade ? "\n\n修好之后还有一件：" + upgrade + "。" + mergeHow : ""),
       );
       setTimeout(() => ta.current?.focus());
     } catch (e: any) {
@@ -98,8 +110,7 @@ export function Chat({ hello, uiDir, errors, onTurnDone }: { hello: Hello; uiDir
     }
   };
 
-  const answer = (reqId: string, response: unknown) =>
-    req("POST", `/api/sessions/${current}/answer`, { reqId, response }).catch((e) => setAlert(e.message));
+  const answer = (reqId: string, response: unknown) => req("POST", `/api/sessions/${current}/answer`, { reqId, response }).catch((e) => setAlert(e.message));
 
   // 输入框跟着内容长高
   useLayoutEffect(() => {
@@ -113,7 +124,9 @@ export function Chat({ hello, uiDir, errors, onTurnDone }: { hello: Hello; uiDir
     <div className="chat">
       <div className="bar">
         {/* 不列历史对话：急救就接着最近那一个，要从头来点「新对话」 */}
-        <span className="grow bar-hint">{cur ? `${hello.agents.find((a) => a.id === cur.agent)?.name || cur.agent} · 接着上次的对话` : "还没开过急救对话"}</span>
+        <span className="grow bar-hint">
+          {cur ? `${hello.agents.find((a) => a.id === cur.agent)?.name || cur.agent} · 接着上次的对话` : "还没开过急救对话"}
+        </span>
         <select className="agent" value={agent} onChange={(e) => (setAgent(e.target.value), local.set(AGENT_KEY, e.target.value))} title="新对话用哪个 agent">
           {hello.agents.map((a) => (
             <option key={a.id} value={a.id} disabled={!a.available}>
@@ -181,9 +194,19 @@ function useWS(
   const done = useRef(onTurnDone);
   done.current = onTurnDone;
 
+  // Subscribing only brings the log; the session's status comes by broadcast when it changes. So read it now too:
+  // the panel starts from the /api/hello it fetched when first opened (closing the panel unmounts this, reopening
+  // starts from that copy again), and a reconnect misses whatever changed meanwhile. Without this a turn that ended
+  // while the panel was closed stayed "在干活…" for good.
   const watch = () => {
     const s = sock.current;
-    if (s?.readyState === WebSocket.OPEN) s.send(JSON.stringify({ t: "watch", ids: cur.current ? [cur.current] : [] }));
+    if (s?.readyState !== WebSocket.OPEN) return;
+    const id = cur.current;
+    s.send(JSON.stringify({ t: "watch", ids: id ? [id] : [] }));
+    if (id)
+      req<Session>("GET", `/api/sessions/${id}`)
+        .then((sum) => setSessions((all) => ({ ...all, [id]: sum })))
+        .catch(() => {});
   };
   useEffect(watch, [current]);
 
@@ -212,7 +235,13 @@ function useWS(
             setSessions((all) => {
               const prev = all[m.id];
               // agent 一轮干完（多半刚改过界面）：上面的错误和版本列表跟着刷新
-              if (m.id === cur.current && prev && (prev.status === "running" || prev.status === "waiting") && m.session.status !== prev.status && m.session.status !== "waiting")
+              if (
+                m.id === cur.current &&
+                prev &&
+                (prev.status === "running" || prev.status === "waiting") &&
+                m.session.status !== prev.status &&
+                m.session.status !== "waiting"
+              )
                 setTimeout(() => done.current(), 600);
               return { ...all, [m.id]: m.session };
             });
@@ -294,7 +323,7 @@ function toItems(events: Ev[]): Item[] {
       items.push(it);
     } else if ((e.kind === "permission_done" || e.kind === "ask_done") && e.reqId) {
       const it = reqs.get(e.reqId);
-      if (it) (it.done = true), (it.response = e.response);
+      if (it) ((it.done = true), (it.response = e.response));
     } else if (e.kind === "turn_end") {
       text = null;
       if (e.error) items.push({ k: "notice", level: "error", text: e.error });
@@ -332,7 +361,11 @@ function Log({
   }, [current]);
 
   return (
-    <div className="log" ref={box} onScroll={(e) => (stick.current = e.currentTarget.scrollHeight - e.currentTarget.scrollTop - e.currentTarget.clientHeight < 80)}>
+    <div
+      className="log"
+      ref={box}
+      onScroll={(e) => (stick.current = e.currentTarget.scrollHeight - e.currentTarget.scrollTop - e.currentTarget.clientHeight < 80)}
+    >
       {!current ? (
         <div className="empty big">
           <b>开一个新对话</b>
@@ -448,7 +481,12 @@ function AskCard({ it, answer }: { it: Req; answer: (reqId: string, r: unknown) 
           </div>
           <div className="opts">
             {(q.options || []).map((o: any) => (
-              <button key={o.label} title={o.description || ""} className={"btn sm" + ((chosen[q.id] || []).includes(o.label) ? " primary" : "")} onClick={() => pick(q, o.label)}>
+              <button
+                key={o.label}
+                title={o.description || ""}
+                className={"btn sm" + ((chosen[q.id] || []).includes(o.label) ? " primary" : "")}
+                onClick={() => pick(q, o.label)}
+              >
                 {o.label}
               </button>
             ))}

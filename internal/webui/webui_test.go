@@ -61,7 +61,7 @@ func TestGitMerge(t *testing.T) {
 	if err != nil || res.Status != "conflict" || r(t, dst, "src/b.tsx") != "mine\n" {
 		t.Fatalf("%+v %v %q", res, err, r(t, dst, "src/b.tsx"))
 	}
-	if st := Status(dst); !st.Pending || st.Merging {
+	if st := Status(dst); !st.Pending || st.Merging || len(st.PendingConflicts) != 1 || st.PendingConflicts[0] != "src/b.tsx" {
 		t.Fatalf("%+v", st)
 	}
 	// merge：冲突摆出来

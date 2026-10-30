@@ -237,6 +237,11 @@ type State struct {
 	Merging    bool     `json:"merging,omitempty"`
 	Conflicts  []string `json:"conflicts,omitempty"`
 	Pending    bool     `json:"pending_upstream,omitempty"` // upstream 有新版还没合进 main（上次合并有冲突、被跳过了）
+	// PendingVersion / PendingConflicts: that newer UI's version, and the files it would conflict on with the local
+	// edits (a dry-run merge, nothing touched). Settings and the rescue panel show them: an upgrade skipped over a
+	// conflict otherwise only shows up in the log, and the user just sees an App that "updated" without changing.
+	PendingVersion   string   `json:"pending_version,omitempty"`
+	PendingConflicts []string `json:"pending_conflicts,omitempty"`
 	Uncommited int      `json:"uncommitted_files,omitempty"`
 }
 
@@ -251,6 +256,14 @@ func Status(dst string) State {
 	}
 	if out, err := git(dst, nil, "rev-list", "--count", "HEAD.."+upstream); err == nil && strings.TrimSpace(out) != "0" {
 		st.Pending = true
+		if tip, err := git(dst, nil, "log", "-1", "--format=%B", upstream); err == nil {
+			if m := verTrailerRE.FindStringSubmatch(tip); m != nil {
+				st.PendingVersion = m[1]
+			}
+		}
+		if !st.Merging {
+			st.PendingConflicts = wouldConflict(dst)
+		}
 	}
 	if out, err := git(dst, nil, "status", "--porcelain"); err == nil {
 		for _, l := range strings.Split(out, "\n") {
@@ -260,6 +273,21 @@ func Status(dst string) State {
 		}
 	}
 	return st
+}
+
+// wouldConflict: the files merging upstream into HEAD would conflict on, without touching the work tree
+// (git merge-tree, git 2.38+; older git: nil, the UI then just says there is an update it couldn't merge).
+func wouldConflict(dst string) []string {
+	// Exit status 1 means "conflicts", so the output matters, not the error.
+	out, _ := git(dst, nil, "merge-tree", "--write-tree", "--name-only", "--no-messages", "HEAD", upstream)
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	var files []string
+	for _, l := range lines[1:] { // the first line is the merged tree
+		if l = strings.TrimSpace(l); l != "" {
+			files = append(files, l)
+		}
+	}
+	return files
 }
 
 // Merge：把 upstream 上还没合进来的新版界面合进来，冲突留在文件里（给 agent 解决：改好之后 git add + git commit）。

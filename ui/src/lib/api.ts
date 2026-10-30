@@ -245,6 +245,7 @@ export const api = {
   remoteDeletePasskey: (id: string) => req("DELETE", `/api/remote/passkeys/${encodeURIComponent(id)}`),
   remoteUnlock: () => req("POST", "/api/remote/unlock", {}),
   service: () => req<ServiceStatus>("GET", "/api/service"),
+  uiStatus: () => req<UIStatus>("GET", "/api/ui/status"),
   setService: (on: boolean) => req("POST", "/api/service", { on }),
   stepUpRequest: () => req<{ id: string; code: string; expires: string }>("POST", "/api/remote/stepup/request", {}),
   stepUpState: (id: string) => req<{ state: "pending" | "approved" | "expired" }>("GET", `/api/remote/stepup/request/${encodeURIComponent(id)}`),
@@ -284,6 +285,11 @@ export type RemoteStatus = {
   lanPort?: number;
   lanErr?: string;
   lanOrigins?: string[];
+};
+/** The UI directory's state (webui.Status): a newer gerdr UI the upgrade skipped over a conflict with local edits. */
+export type UIStatus = {
+  dir: string;
+  git?: { merging?: boolean; conflicts?: string[]; pending_upstream?: boolean; pending_version?: string; pending_conflicts?: string[] };
 };
 // 后台常驻（launchd）：why 非空 = 这里装不了（不是 mac、调试实例……）；self = 现在答话的就是那个后台服务。
 export type ServiceStatus = { why: string; installed: boolean; pid: number; self: boolean; log: string };

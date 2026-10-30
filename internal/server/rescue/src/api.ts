@@ -23,7 +23,14 @@ export type UIStatus = {
   dir: string;
   build_error?: string;
   runtime_errors?: { source?: string; message: string; detail?: string }[];
-  git?: { merging?: boolean; conflicts?: string[]; uncommitted_files?: number };
+  git?: {
+    merging?: boolean;
+    conflicts?: string[];
+    uncommitted_files?: number;
+    pending_upstream?: boolean;
+    pending_version?: string;
+    pending_conflicts?: string[];
+  };
 };
 
 export type Commit = { sha: string; time: number; subject: string; upstream?: boolean; current?: boolean };
@@ -90,6 +97,16 @@ export function errorText(st: UIStatus | null) {
   }
   if (st.git?.merging) parts.push("界面目录正合并到一半，有冲突：" + (st.git.conflicts || []).join(", "));
   return parts.join("\n\n").slice(0, 6000);
+}
+
+// A newer gerdr UI that the automatic upgrade skipped because it conflicts with local edits (webui.Status). Not an
+// error: the page works, it's just the old one. "" when there is none or a merge is already under way (that one is in
+// errorText: its conflict markers break the build).
+export function upgradeText(st: UIStatus | null) {
+  const g = st?.git;
+  if (!g?.pending_upstream || g.merging) return "";
+  const files = g.pending_conflicts?.length ? g.pending_conflicts.join(", ") : "";
+  return `gerdr 的新版界面${g.pending_version ? `（${g.pending_version}）` : ""}和本地对界面的改动有冲突，自动升级时没合进来，现在用的还是旧的。${files ? `会冲突的文件：${files}` : ""}`;
 }
 
 // 这个页面自己记的错（页面外壳的收集器记的，换了新版构建运行时会把旧版的丢掉）。警告（index.css 里用不了的写法这种）不算报错。

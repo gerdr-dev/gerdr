@@ -20,6 +20,7 @@ import { MemorySettings } from "./MemorySettings";
 import { RemoteSettings } from "./RemoteSettings";
 import { ResourceStats } from "./ResourceStats";
 import { ServiceSetting } from "./ServiceSetting";
+import { UIUpgradeSetting } from "./UIUpgradeSetting";
 import { UpdateSetting } from "./UpdateSetting";
 
 // Pages that became sections of the Agent page (what an agent can use): old links (a Work app's openSettings("mcp"),
@@ -185,6 +186,7 @@ export function SettingsDialog({ open }: { open: boolean }) {
               {/* The gerdr on the computer running it: which version, updating it (App only), the background service (macOS) */}
               <Section title="版本与后台">
                 <UpdateSetting />
+                <UIUpgradeSetting />
                 <ServiceSetting />
               </Section>
               <Section title="导入">

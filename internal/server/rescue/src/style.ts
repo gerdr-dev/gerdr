@@ -71,6 +71,10 @@ pre, code { font-family: var(--mono); }
 .status.ok svg { margin-top: 2px; flex-shrink: 0; }
 .status.ok small { display: block; color: var(--muted-fg); font-size: 11.5px; }
 .status.bad { color: var(--bad); background: color-mix(in oklab, var(--bad) 9%, transparent); }
+.status.warn { color: var(--fg); background: color-mix(in oklab, var(--warn) 14%, transparent); }
+.status.warn .row { color: color-mix(in oklab, var(--warn) 70%, var(--fg)); }
+.status.warn p { margin: 6px 0 0; font-size: 12px; line-height: 1.5; word-break: break-word; }
+.status.warn small { display: block; margin-top: 4px; color: var(--muted-fg); font-size: 11.5px; }
 .status .row { display: flex; align-items: center; gap: 8px; font-weight: 600; }
 .status pre { margin: 6px 0 0; white-space: pre-wrap; word-break: break-word; font-size: 11.5px; line-height: 1.5; max-height: 40vh; overflow: auto; color: var(--fg); opacity: .85; }
 .status pre.clip { max-height: 4.6em; overflow: hidden; -webkit-mask-image: linear-gradient(#000 55%, transparent); mask-image: linear-gradient(#000 55%, transparent); }

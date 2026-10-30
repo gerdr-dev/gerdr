@@ -1,7 +1,7 @@
-// 面板本体：顶上是界面现在报的错，下面两页 —— 和 agent 对话（在界面目录里开会话）、回到之前的一版。
-import { AlertTriangle, CheckCircle2, ChevronDown, History, LifeBuoy, MessageSquare, RefreshCw, X } from "lucide-react";
+// 面板本体：顶上是界面现在报的错（和没合上的新版界面），下面两页 —— 和 agent 对话（在界面目录里开会话）、回到之前的一版。
+import { AlertTriangle, ArrowUpCircle, CheckCircle2, ChevronDown, History, LifeBuoy, MessageSquare, RefreshCw, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { type Commit, type Hello, type UIStatus, ago, dismissErrors, errorText, pageErrors, req } from "./api";
+import { type Commit, type Hello, type UIStatus, ago, dismissErrors, errorText, pageErrors, req, upgradeText } from "./api";
 import { Chat } from "./Chat";
 
 export function Panel({
@@ -72,6 +72,7 @@ export function Panel({
     ) : null;
 
   const err = errorText(status);
+  const upgrade = upgradeText(status);
   return (
     <div className={"root" + (dark ? " dark" : "")}>
       <aside className="panel" style={{ width }}>
@@ -92,7 +93,18 @@ export function Panel({
           </button>
         </header>
 
-        <StatusCard status={status} error={statusErr} text={err} onDismiss={() => dismissErrors().then(loadStatus)} />
+        {/* A skipped upgrade alone isn't "broken": say that instead of the green "no errors" */}
+        {!(upgrade && !err) && <StatusCard status={status} error={statusErr} text={err} onDismiss={() => dismissErrors().then(loadStatus)} />}
+        {upgrade && (
+          <div className="status warn">
+            <div className="row">
+              <ArrowUpCircle size={15} />
+              <span className="grow">有新版界面没合上</span>
+            </div>
+            <p>{upgrade}</p>
+            <small>开个新对话，让 agent 把新版合进来、两边的改动都留着。</small>
+          </div>
+        )}
 
         <nav className="tabs">
           <button className={tab === "chat" ? "on" : ""} onClick={() => setTab("chat")}>
@@ -112,7 +124,7 @@ export function Panel({
           <>
             {/* 两页都一直挂着（只是藏起来）：切过去再切回来，输入框里没发的字和滚动位置都还在 */}
             <div className="page" hidden={tab !== "chat"}>
-              <Chat hello={hello} uiDir={status.dir} errors={err} onTurnDone={refresh} />
+              <Chat hello={hello} uiDir={status.dir} errors={err} upgrade={upgrade} onTurnDone={refresh} />
             </div>
             <div className="page" hidden={tab !== "history"}>
               <Versions tick={histTick} onRestored={() => setTimeout(loadStatus, 800)} />
@@ -174,9 +186,7 @@ function StatusCard({ status, error, text, onDismiss }: { status: UIStatus | nul
         <CheckCircle2 size={15} />
         <div>
           界面现在没报错
-          <small>
-            运行时错误要主界面开着才报得上来{dirty ? ` · ${dirty} 个文件改了还没提交` : ""}
-          </small>
+          <small>运行时错误要主界面开着才报得上来{dirty ? ` · ${dirty} 个文件改了还没提交` : ""}</small>
         </div>
       </div>
     );
