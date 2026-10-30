@@ -310,7 +310,7 @@ type anthropicUsage struct {
 }
 
 // merge: message_delta's numbers are cumulative (overwrite, don't add) and any field may be missing, so each
-// non-zero field replaces the earlier one on its own (same rule as weave's Anthropic gateway).
+// non-zero field replaces the earlier one on its own.
 func (u *anthropicUsage) merge(o anthropicUsage) {
 	for _, f := range []struct{ dst, src *int }{
 		{&u.InputTokens, &o.InputTokens}, {&u.OutputTokens, &o.OutputTokens},
