@@ -177,8 +177,9 @@ export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean
   // belong to their Work view, and never-used sessions (an empty pane) have nothing to resume.
   const sessions = useStore((s) => s.sessions);
   const layout = useStore((s) => s.layout);
+  // Untitled = nothing said in it yet (a fresh pane, or a tab right after /clear): nothing to pick up, see ResumeDialog
   const old = Object.values(sessions)
-    .filter((s) => s.agent === agent && s.cwd === abs && (s.lastSeq > 0 || !!s.title) && !workProjectOf(s.id))
+    .filter((s) => s.agent === agent && s.cwd === abs && !!s.title && !workProjectOf(s.id))
     // A running session bumps updatedAt with every streamed chunk, so two running ones kept swapping places: order those by
     // when their turn started instead, which holds still for the whole turn.
     .sort((a, b) => (b.turn?.startedAt ?? b.updatedAt) - (a.turn?.startedAt ?? a.updatedAt))

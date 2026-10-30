@@ -56,8 +56,9 @@ export function ResumeDialog() {
   const here = Object.values(sessions).filter((s) => s.agent === cur.agent && s.cwd === cur.cwd);
   const entries: Entry[] = [];
   for (const s of here)
-    // 一句话都没说过的空会话（新建了没用的 pane）没什么可恢复的，不列
-    if (s.id !== cur.id && (s.lastSeq > 0 || !!s.title))
+    // Nothing said in it, nothing to resume: a pane opened and left unused, or what a /clear leaves behind (only the
+    // /clear itself). The first real message titles a session right away (hub touchTitle), so no title means no message.
+    if (s.id !== cur.id && !!s.title)
       entries.push({
         key: s.id,
         search: `${s.id} ${s.title ?? ""}`,
