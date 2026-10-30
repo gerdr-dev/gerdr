@@ -39,7 +39,7 @@ import {
   type Workspace,
 } from "./layout";
 import { get, markRead, overviewShown, set, setLayout, setMode, toggleSidebar, useStore } from "./store";
-import { overviewFocus, overviewKey, toggleOverview } from "./overview";
+import { focusTile, overviewFocus, overviewIds, overviewKey, toggleOverview } from "./overview";
 import { openWorkChat, workProjectOf } from "./work";
 import type { ContentBlock } from "./types";
 
@@ -1013,8 +1013,15 @@ function openInWork(sessionId: string): boolean {
 }
 
 export function focusSession(sessionId: string) {
-  // Going to a session (notification, next-needs-you, the lists) means its pane: the overview would cover it
-  if (get().overview.on) toggleOverview(false);
+  // Already a tile in the overview on screen: go to that tile, closing the overview would only lose the user's place
+  const st = get();
+  if (overviewShown() && overviewIds(st.overview, st.layout, st.sessions, st.config).includes(sessionId)) {
+    focusTile(sessionId);
+    markRead(sessionId);
+    return;
+  }
+  // Otherwise going to a session (notification, next-needs-you, the lists) means its pane: the overview would cover it
+  if (st.overview.on) toggleOverview(false);
   if (openInWork(sessionId)) return;
   const loc = locateSession(get().layout, sessionId);
   if (loc) focusPane(loc.pane.id);
