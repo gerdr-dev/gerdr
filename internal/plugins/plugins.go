@@ -26,21 +26,21 @@ import (
 var builtin embed.FS
 
 type Plugin struct {
-	ID     string `json:"id"`
-	Path   string `json:"path"`
-	Code   string `json:"code,omitempty"`
-	Error  string `json:"error,omitempty"`
-	Hash   string `json:"hash"`
-	Mtime  int64  `json:"mtime"`
+	ID    string `json:"id"`
+	Path  string `json:"path"`
+	Code  string `json:"code,omitempty"`
+	Error string `json:"error,omitempty"`
+	Hash  string `json:"hash"`
+	Mtime int64  `json:"mtime"`
 }
 
 type Manager struct {
 	dir string
 	log *slog.Logger
 
-	mu      sync.Mutex
-	cache   map[string]*Plugin // id → 编好的
-	sig     string
+	mu       sync.Mutex
+	cache    map[string]*Plugin // id → 编好的
+	sig      string
 	onChange func()
 }
 
@@ -167,19 +167,19 @@ func (m *Manager) rebuild() {
 			p.Mtime = st.ModTime().UnixMilli()
 		}
 		res := api.Build(api.BuildOptions{
-			EntryPoints:      []string{path},
-			Bundle:           true,
-			Write:            false,
-			Format:           api.FormatESModule,
-			Platform:         api.PlatformBrowser,
-			Target:           api.ES2022,
-			Sourcemap:        api.SourceMapInline,
-			SourceRoot:       "gerdr-plugin://" + id + "/",
-			JSX:              api.JSXTransform,
-			JSXFactory:       "gerdr.h",
-			LogLevel:         api.LogLevelSilent,
-			AbsWorkingDir:    m.dir,
-			TsconfigRaw:      `{"compilerOptions":{"target":"es2022","useDefineForClassFields":true}}`,
+			EntryPoints:   []string{path},
+			Bundle:        true,
+			Write:         false,
+			Format:        api.FormatESModule,
+			Platform:      api.PlatformBrowser,
+			Target:        api.ES2022,
+			Sourcemap:     api.SourceMapInline,
+			SourceRoot:    "gerdr-plugin://" + id + "/",
+			JSX:           api.JSXTransform,
+			JSXFactory:    "gerdr.h",
+			LogLevel:      api.LogLevelSilent,
+			AbsWorkingDir: m.dir,
+			TsconfigRaw:   `{"compilerOptions":{"target":"es2022","useDefineForClassFields":true}}`,
 		})
 		if len(res.Errors) > 0 {
 			var msgs []string

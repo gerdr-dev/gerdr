@@ -7,10 +7,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gerdr-dev/gerdr/agents/native"
 	"github.com/gerdr-dev/gerdr/internal/agentwire"
 	"github.com/gerdr-dev/gerdr/internal/ext"
 	"github.com/gerdr-dev/gerdr/internal/mcpauth"
-	"github.com/gerdr-dev/gerdr/agents/native"
 )
 
 // MCP OAuth (Settings → MCP): sign-in state of every remote MCP server gerdr knows about — gerdr's

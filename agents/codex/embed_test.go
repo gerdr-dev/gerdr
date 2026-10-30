@@ -16,7 +16,9 @@ func TestThreadConfig(t *testing.T) {
 	t.Setenv("CODEX_HOME", home)
 	os.WriteFile(filepath.Join(home, "config.toml"), []byte("[mcp_servers.mine]\ncommand = \"x\"\n"), 0o644)
 	a := &Agent{log: slog.New(slog.NewTextHandler(io.Discard, nil)), opts: Options{StrictMCP: true, Network: true, NoApprovals: true,
-		SessionEnv: func(sid string, meta map[string]any) []string { return []string{"ANNULO_CHAT_ID=" + meta["chat"].(string)} }}}
+		SessionEnv: func(sid string, meta map[string]any) []string {
+			return []string{"ANNULO_CHAT_ID=" + meta["chat"].(string)}
+		}}}
 	cfg, _ := a.threadConfig(context.Background(), nil, "", "/w", map[string]any{"chat": "c1"},
 		[]acp.McpServer{{Http: &acp.McpServerHttpInline{Name: "annulo", Type: "http", Url: "http://h/mcp", Headers: []acp.HttpHeader{{Name: "Authorization", Value: "Bearer t"}}}}})
 	if cfg["mcp_servers.mine.enabled"] != false {

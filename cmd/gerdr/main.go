@@ -24,6 +24,7 @@ import (
 
 	"github.com/gerdr-dev/gerdr/agents/claude"
 	"github.com/gerdr-dev/gerdr/agents/codex"
+	"github.com/gerdr-dev/gerdr/agents/native"
 	"github.com/gerdr-dev/gerdr/internal/agentwire"
 	"github.com/gerdr-dev/gerdr/internal/awake"
 	"github.com/gerdr-dev/gerdr/internal/config"
@@ -34,13 +35,12 @@ import (
 	"github.com/gerdr-dev/gerdr/internal/plugins"
 	"github.com/gerdr-dev/gerdr/internal/remote"
 	"github.com/gerdr-dev/gerdr/internal/server"
-	"github.com/gerdr-dev/gerdr/sysenv"
 	"github.com/gerdr-dev/gerdr/internal/term"
 	"github.com/gerdr-dev/gerdr/internal/uisite"
 	"github.com/gerdr-dev/gerdr/internal/version"
 	"github.com/gerdr-dev/gerdr/internal/webui"
 	"github.com/gerdr-dev/gerdr/internal/work"
-	"github.com/gerdr-dev/gerdr/agents/native"
+	"github.com/gerdr-dev/gerdr/sysenv"
 )
 
 func main() {

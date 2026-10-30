@@ -26,9 +26,9 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/gerdr-dev/gerdr/acpx"
-	"github.com/gerdr-dev/gerdr/internal/agenthost"
 	"github.com/gerdr-dev/gerdr/agents/claude"
 	"github.com/gerdr-dev/gerdr/agents/codex"
+	"github.com/gerdr-dev/gerdr/internal/agenthost"
 	"github.com/gerdr-dev/gerdr/internal/agentwire"
 	"github.com/gerdr-dev/gerdr/internal/ext"
 )

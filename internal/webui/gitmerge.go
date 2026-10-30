@@ -242,16 +242,16 @@ func writeFiles(dst string, files map[string][]byte) error {
 
 // State：界面目录的 git 状态（gerdr ui status 用）。
 type State struct {
-	Git        bool     `json:"git"`
-	Merging    bool     `json:"merging,omitempty"`
-	Conflicts  []string `json:"conflicts,omitempty"`
-	Pending    bool     `json:"pending_upstream,omitempty"` // upstream 有新版还没合进 main（上次合并有冲突、被跳过了）
+	Git       bool     `json:"git"`
+	Merging   bool     `json:"merging,omitempty"`
+	Conflicts []string `json:"conflicts,omitempty"`
+	Pending   bool     `json:"pending_upstream,omitempty"` // upstream 有新版还没合进 main（上次合并有冲突、被跳过了）
 	// PendingVersion / PendingConflicts: that newer UI's version, and the files it would conflict on with the local
 	// edits (a dry-run merge, nothing touched). Settings and the rescue panel show them: an upgrade skipped over a
 	// conflict otherwise only shows up in the log, and the user just sees an App that "updated" without changing.
 	PendingVersion   string   `json:"pending_version,omitempty"`
 	PendingConflicts []string `json:"pending_conflicts,omitempty"`
-	Uncommited int      `json:"uncommitted_files,omitempty"`
+	Uncommited       int      `json:"uncommitted_files,omitempty"`
 }
 
 func Status(dst string) State {
