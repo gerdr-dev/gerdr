@@ -1,5 +1,6 @@
-import { RefreshCw } from "lucide-react";
+import { CircleHelp, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { api, type UsageInfo, type UsageLimit } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -76,6 +77,47 @@ function pick(limits: UsageLimit[]) {
   return [...limits].sort((a, b) => rank(a) - rank(b)).slice(0, 2);
 }
 
+// Adapter errors arrive as a JSON-RPC error object ({"code","message","data":{"error"}}); the readable part is data.error.
+function readable(error: string) {
+  try {
+    const e = JSON.parse(error);
+    return String(e?.data?.error || e?.message || error);
+  } catch {
+    return error;
+  }
+}
+
+// The "?" next to "拿不到": click for the backend's error in a bubble (a title tooltip never shows on a phone).
+// It sits inside the meter's toggle <button>, so it can't be a <button> itself, and its clicks must not toggle the meter.
+function ErrorHint({ error }: { error: string }) {
+  const [open, setOpen] = useState(false);
+  const stop = (e: React.SyntheticEvent) => e.stopPropagation();
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <span
+          role="button"
+          tabIndex={0}
+          aria-label="为什么"
+          className="inline-flex shrink-0 cursor-pointer items-center rounded-sm text-muted-foreground hover:text-foreground"
+          onClick={stop}
+          onKeyDown={(e) => {
+            if (e.key !== "Enter" && e.key !== " ") return;
+            e.preventDefault();
+            e.stopPropagation();
+            setOpen((v) => !v);
+          }}
+        >
+          <CircleHelp className="size-3" />
+        </span>
+      </PopoverTrigger>
+      <PopoverContent side="top" className="w-auto max-w-72 px-3 py-2 text-[11px] break-words whitespace-pre-wrap select-text" onClick={stop}>
+        {readable(error)}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 export function UsageMeter() {
   const { list, loading, refresh } = useUsage();
   const [open, setOpen] = useState(false);
@@ -101,8 +143,9 @@ export function UsageMeter() {
                     <span className="font-medium">{name}</span>
                     {u.data?.plan && <span className="text-muted-foreground">{u.data.plan}</span>}
                     {u.error && (
-                      <span className="ml-auto truncate text-warn" title={u.error}>
-                        {u.data ? "没刷新上" : "拿不到"}
+                      <span className="ml-auto flex min-w-0 items-center gap-1">
+                        <span className="truncate text-warn">{u.data ? "没刷新上" : "拿不到"}</span>
+                        <ErrorHint error={u.error} />
                       </span>
                     )}
                   </div>
@@ -120,7 +163,12 @@ export function UsageMeter() {
               ) : (
                 <div className="flex items-center gap-2 text-[11px]">
                   <span className="w-11 shrink-0 truncate text-muted-foreground">{name}</span>
-                  {limits.length === 0 && <span className="truncate text-warn">拿不到</span>}
+                  {limits.length === 0 && (
+                    <span className="flex min-w-0 items-center gap-1">
+                      <span className="truncate text-warn">拿不到</span>
+                      {u.error && <ErrorHint error={u.error} />}
+                    </span>
+                  )}
                   {pick(limits).map((l) => (
                     <span key={l.kind + l.label} className="flex min-w-0 flex-1 items-center gap-1" title={`${l.label} ${Math.round(l.percent)}%`}>
                       <span className="shrink-0 text-muted-foreground">{short(l.label)}</span>
