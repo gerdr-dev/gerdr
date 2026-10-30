@@ -242,7 +242,8 @@ async function refreshHello() {
     const h = await api.hello();
     const sessions: Record<string, SessionSummary> = {};
     for (const s of h.sessions) sessions[s.id] = s;
-    set({ sessions, agents: h.agents, remoteConns: h.remoteConns ?? [] });
+    // version / installedAt too: a reconnect is usually the backend restarting onto a newly installed binary
+    set({ sessions, agents: h.agents, remoteConns: h.remoteConns ?? [], version: h.version, installedAt: h.installedAt ?? 0 });
     if (validLayout(h.layout)) applyRemoteLayout(h.layout);
   } catch {}
 }

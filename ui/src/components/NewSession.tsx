@@ -179,7 +179,9 @@ export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean
   const layout = useStore((s) => s.layout);
   const old = Object.values(sessions)
     .filter((s) => s.agent === agent && s.cwd === abs && (s.lastSeq > 0 || !!s.title) && !workProjectOf(s.id))
-    .sort((a, b) => b.updatedAt - a.updatedAt)
+    // A running session bumps updatedAt with every streamed chunk, so two running ones kept swapping places: order those by
+    // when their turn started instead, which holds still for the whole turn.
+    .sort((a, b) => (b.turn?.startedAt ?? b.updatedAt) - (a.turn?.startedAt ?? a.updatedAt))
     .map((s) => ({ s, open: !!locateSession(layout, s.id) }));
   const agentName = agents.find((a) => a.id === agent)?.name ?? agent;
 
