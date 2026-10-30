@@ -137,12 +137,27 @@ export const Composer = forwardRef<
   };
 
   // 高度跟着内容走，最多到 pane 高度的四成。
-  useEffect(() => {
+  const fitHeight = () => {
     const el = ta.current;
     if (!el) return;
     el.style.height = "auto";
     el.style.height = Math.min(el.scrollHeight, Math.max(160, window.innerHeight * 0.4)) + "px";
-  }, [text]);
+  };
+  useEffect(fitHeight, [text]);
+  // And when the width changes: measured while the box was briefly narrow (an overview tile appearing or sliding into
+  // place), even the placeholder wraps to many lines and the empty box stayed that tall until the next keystroke.
+  useEffect(() => {
+    const el = ta.current;
+    if (!el) return;
+    let w = el.clientWidth;
+    const ro = new ResizeObserver(() => {
+      if (el.clientWidth === w) return;
+      w = el.clientWidth;
+      fitHeight();
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   useLayoutEffect(() => {
     const el = ta.current;

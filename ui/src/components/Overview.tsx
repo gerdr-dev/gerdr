@@ -367,7 +367,8 @@ function Grid({
   // Re-arranging (pin, swap, add / remove a tile) slides every tile to its new box the same way; seam drags and window
   // resizes follow the pointer / window and don't animate. Each chat is laid out at its final size meanwhile (tilePin).
   const moved = useLayoutAnim(`${key}|${main ?? ""}`);
-  const tilePin = (b: Box) => ({ width: b.w * size.w - 8, height: b.h * size.h - 8 });
+  // Not before the grid has been measured: a chat laid out in a 0-wide box wraps everything (the composer stayed huge)
+  const tilePin = (b: Box) => (size.w ? { width: b.w * size.w - 8, height: b.h * size.h - 8 } : undefined);
 
   const dragMain = (e: React.PointerEvent) => {
     const rect = box.current!.getBoundingClientRect();
