@@ -35,7 +35,7 @@ func newService(env config.Env, self bool) *service.Manager {
 // a new path: the plist gets rewritten). A version or binary (buildID) mismatch restarts it, but only once it is
 // idle (server busy(): no turn running, nobody asked, no background task, no terminal) — a restart cuts all of those
 // off. Until then we connect to the old one and keep checking. GERDR_UPGRADE_NOW=1 (the person said "update now"
-// in the App) skips the wait. After restarting, wait up to 15s for the new one before connecting to the old again.
+// in the App, or the shell just saw it idle) skips the wait, once: for the update this process was started for. After restarting, wait up to 15s for the new one before connecting to the old again.
 func appAttach(env config.Env, parentPID int, svc *service.Manager) *os.File {
 	gone := make(chan struct{})
 	if parentPID > 0 {
@@ -63,7 +63,10 @@ func appAttach(env config.Env, parentPID int, svc *service.Manager) *os.File {
 		// Re-read every round: `make install` swaps the bundle under a running App, and the service should follow
 		// (once idle) without the App being reopened. A new file is a new chance to restart.
 		if b := buildID(); b != self {
-			self, restarted = b, time.Time{}
+			// GERDR_UPGRADE_NOW was the person's (or the idle shell's) go-ahead for the update this process was
+			// started for, not for every later swap: kept for the whole life of the process, each `make install`
+			// after it restarted the service at once, cutting off running turns (2026-10-30). A new file waits for idle.
+			self, restarted, now = b, time.Time{}, false
 		}
 		if si, u, ok := running(env); ok {
 			moved := si.Service && svc.InstalledExec() != svc.Exec
@@ -81,10 +84,10 @@ func appAttach(env config.Env, parentPID int, svc *service.Manager) *os.File {
 				if err := svc.Install(); err != nil {
 					fmt.Fprintln(os.Stderr, "restart background service:", err)
 				}
-				restarted, healed = time.Now(), time.Now()
+				restarted, healed, now = time.Now(), time.Now(), false
 			case idle:
 				_ = svc.Restart()
-				restarted, healed = time.Now(), time.Now()
+				restarted, healed, now = time.Now(), time.Now(), false
 			case u != announced && (!stale || restarted.IsZero() || time.Since(restarted) > 15*time.Second):
 				fmt.Println("GERDR_READY " + u)
 				announced = u
