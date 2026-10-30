@@ -3,6 +3,7 @@ import { refocusAfterDialog } from "@/lib/actions";
 import { useStore } from "@/lib/store";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { FilePicker, FileViewer } from "./FileViewer";
+import { ImportAgentDialog } from "./ImportAgentDialog";
 import { ImportHerdr } from "./ImportHerdr";
 import { KeyHelp } from "./KeyHelp";
 import { NewWorkspace, Rename } from "./NameDialogs";
@@ -30,6 +31,7 @@ export function Dialogs() {
       <NewWorkspace open={d?.kind === "newWorkspace"} />
       <ImportHerdr open={d?.kind === "importHerdr"} />
       <ResumeDialog />
+      <ImportAgentDialog />
       <FileViewer />
       <FilePicker />
       <ConfirmDialog />

@@ -120,6 +120,7 @@ type Dialog =
   | { kind: "rename"; target: "tab" | "workspace" | "session" | "space" | "newSpace"; id: string; value: string }
   | { kind: "newWorkspace" }
   | { kind: "importHerdr" }
+  | { kind: "importAgent"; agent: string; cwd: string; paneId: string }
   | { kind: "resume"; sessionId: string; paneId: string }
   | { kind: "file"; stat: FileStat }
   | { kind: "pickFile"; path: string; candidates: string[] }

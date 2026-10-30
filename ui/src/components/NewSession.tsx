@@ -3,12 +3,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
-import { basename, closeFocusedPane, createInPane, focusPane, openTerminal } from "@/lib/actions";
+import { closeFocusedPane, createInPane, focusPane, focusSession, openTerminal, resumeInPane } from "@/lib/actions";
 import { api } from "@/lib/api";
 import { get, set, useStore, type AgentDef } from "@/lib/store";
-import type { PaneLeaf } from "@/lib/layout";
+import { locateSession, type PaneLeaf } from "@/lib/layout";
 import { cn } from "@/lib/utils";
-import { AgentIcon } from "./AgentIcon";
+import { workProjectOf } from "@/lib/work";
+import { AgentIcon, StatusDot } from "./AgentIcon";
 
 function tilde(p: string, home: string) {
   return home && p.startsWith(home) ? "~" + p.slice(home.length) : p;
@@ -159,8 +160,6 @@ export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean
   );
   const [cwd, setCwd] = useState(tilde(pane.draft?.cwd ?? home, home));
   const [busy, setBusy] = useState(false);
-  const [old, setOld] = useState<{ sessionId: string; cwd: string; title?: string; updatedAt?: string }[] | null>(null);
-  const [oldErr, setOldErr] = useState("");
   const startRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -172,17 +171,17 @@ export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean
   }, [focused]);
 
   const abs = cwd.startsWith("~") ? home + cwd.slice(1) : cwd;
-  useEffect(() => {
-    setOld(null);
-    setOldErr("");
-    const t = setTimeout(() => {
-      api
-        .importable(agent, abs)
-        .then((r) => setOld(r))
-        .catch((e) => setOldErr(e.message));
-    }, 400);
-    return () => clearTimeout(t);
-  }, [agent, abs]);
+  // Earlier conversations here = gerdr's own sessions for this agent and directory. Ones a pane already shows are listed too,
+  // marked, and clicking one jumps to its pane instead of opening it a second time. Not the agent's native history: that's a
+  // one-off import (ImportAgentDialog), and as conversations move into gerdr it would only empty out. Work agent conversations
+  // belong to their Work view, and never-used sessions (an empty pane) have nothing to resume.
+  const sessions = useStore((s) => s.sessions);
+  const layout = useStore((s) => s.layout);
+  const old = Object.values(sessions)
+    .filter((s) => s.agent === agent && s.cwd === abs && (s.lastSeq > 0 || !!s.title) && !workProjectOf(s.id))
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .map((s) => ({ s, open: !!locateSession(layout, s.id) }));
+  const agentName = agents.find((a) => a.id === agent)?.name ?? agent;
 
   // as：双击某个 agent 卡片直接开，这时 setAgent 还没生效，得显式传进来
   const start = async (imp?: string, title?: string, as = agent) => {
@@ -268,24 +267,32 @@ export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean
         <div>
           <div className="mb-1.5 flex items-center gap-1.5 text-[12px] text-muted-foreground">
             <History className="size-3.5" />
-            接着以前的聊（{basename(abs)}）
-            <button className="ml-auto text-[11px] font-normal hover:text-foreground" onClick={() => set({ dialog: { kind: "importHerdr" } })}>
-              从 herdr 整个导入…
+            接着以前的聊
+            <button
+              className="ml-auto text-[11px] font-normal hover:text-foreground"
+              onClick={() => set({ dialog: { kind: "importAgent", agent, cwd: abs, paneId: pane.id } })}
+            >
+              导入 {agentName} 对话…
             </button>
           </div>
-          {oldErr && <div className="text-[12px] text-bad">{oldErr}</div>}
-          {!old && !oldErr && <div className="text-[12px] text-muted-foreground">…</div>}
-          {old && old.length === 0 && <div className="text-[12px] text-muted-foreground">这个目录下没有以前的会话</div>}
+          {old.length === 0 && <div className="text-[12px] text-muted-foreground">这个目录下还没有以前的会话</div>}
           <div className="space-y-0.5">
-            {old?.slice(0, 12).map((o) => (
+            {old.slice(0, 12).map(({ s: o, open }) => (
               <button
-                key={o.sessionId}
+                key={o.id}
                 disabled={busy}
-                className="flex w-full items-baseline gap-2 rounded-md px-2 py-1.5 text-left text-[13px] hover:bg-accent"
-                onClick={() => start(o.sessionId, o.title)}
+                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] hover:bg-accent"
+                title={open ? "已经开着：点了跳过去" : undefined}
+                onClick={() => (open ? focusSession(o.id) : resumeInPane(pane.id, o.id))}
               >
-                <span className="min-w-0 flex-1 truncate">{o.title || o.sessionId}</span>
-                {o.updatedAt && <span className="shrink-0 text-[11px] text-muted-foreground">{ago(o.updatedAt)}</span>}
+                <span className="min-w-0 flex-1 truncate">{o.title || o.id}</span>
+                {open && (
+                  <span className="flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground">
+                    <StatusDot status={o.status} />
+                    已打开
+                  </span>
+                )}
+                <span className="shrink-0 text-[11px] text-muted-foreground">{ago(o.updatedAt)}</span>
               </button>
             ))}
           </div>
