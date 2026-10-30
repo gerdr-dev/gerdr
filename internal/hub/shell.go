@@ -14,10 +14,10 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/gerdr-dev/gerdr/chatlog"
-
 	"github.com/coder/acp-go-sdk"
 	"github.com/google/uuid"
+
+	"github.com/gerdr-dev/gerdr/chatlog"
 
 	"github.com/gerdr-dev/gerdr/sysenv"
 )
