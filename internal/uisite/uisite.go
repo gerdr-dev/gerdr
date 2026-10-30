@@ -530,37 +530,50 @@ func firstLine(s string) string {
 
 var sourceExts = map[string]bool{".ts": true, ".tsx": true, ".js": true, ".jsx": true, ".mjs": true, ".css": true, ".json": true}
 
-// scan 列出界面目录里的源码（src/ 下 + package.json、ui.json），按路径、大小、修改时间算签名：签名变了就重建。
+// scan 列出界面目录里的源码（src/ 下 + package.json、ui.json，加上 workspace 包 packages/*/ 的 src/ 和 package.json），
+// 按路径、大小、修改时间算签名：签名变了就重建。
 func (r *Renderer) scan(_ map[string]bool) (files []string, sig string) {
 	h := sha256.New()
-	for _, top := range []string{"package.json", "ui.json"} {
-		if info, err := os.Stat(filepath.Join(r.dir, top)); err == nil {
+	tops := []string{"package.json", "ui.json"}
+	roots := []string{"src"}
+	if ents, err := os.ReadDir(filepath.Join(r.dir, "packages")); err == nil {
+		for _, e := range ents {
+			if e.IsDir() && !strings.HasPrefix(e.Name(), ".") {
+				tops = append(tops, "packages/"+e.Name()+"/package.json")
+				roots = append(roots, "packages/"+e.Name()+"/src")
+			}
+		}
+	}
+	for _, top := range tops {
+		if info, err := os.Stat(filepath.Join(r.dir, filepath.FromSlash(top))); err == nil {
 			h.Write([]byte(top + "\x00" + strconv.FormatInt(info.Size(), 10) + "\x00" + strconv.FormatInt(info.ModTime().UnixNano(), 10) + "\n"))
 		}
 	}
-	_ = filepath.WalkDir(filepath.Join(r.dir, "src"), func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return nil
-		}
-		rel, _ := filepath.Rel(r.dir, p)
-		rel = filepath.ToSlash(rel)
-		if d.IsDir() {
-			if strings.HasPrefix(d.Name(), ".") || d.Name() == "node_modules" {
-				return filepath.SkipDir
+	for _, root := range roots {
+		_ = filepath.WalkDir(filepath.Join(r.dir, filepath.FromSlash(root)), func(p string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return nil
 			}
+			rel, _ := filepath.Rel(r.dir, p)
+			rel = filepath.ToSlash(rel)
+			if d.IsDir() {
+				if strings.HasPrefix(d.Name(), ".") || d.Name() == "node_modules" {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			if !sourceExts[path.Ext(rel)] {
+				return nil
+			}
+			info, err := d.Info()
+			if err != nil {
+				return nil
+			}
+			files = append(files, rel)
+			h.Write([]byte(rel + "\x00" + strconv.FormatInt(info.Size(), 10) + "\x00" + strconv.FormatInt(info.ModTime().UnixNano(), 10) + "\n"))
 			return nil
-		}
-		if !sourceExts[path.Ext(rel)] {
-			return nil
-		}
-		info, err := d.Info()
-		if err != nil {
-			return nil
-		}
-		files = append(files, rel)
-		h.Write([]byte(rel + "\x00" + strconv.FormatInt(info.Size(), 10) + "\x00" + strconv.FormatInt(info.ModTime().UnixNano(), 10) + "\n"))
-		return nil
-	})
+		})
+	}
 	sort.Strings(files)
 	return files, hex.EncodeToString(h.Sum(nil))
 }

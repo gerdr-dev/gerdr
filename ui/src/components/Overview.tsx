@@ -351,6 +351,8 @@ const MORE_H = 30;
  * the handle: otherwise moving across other tiles with the button down reaches their chats as "the user is dragging this
  * scroller" (ChatView lastInputOf), and when the drop then resizes them they take the moved scroll position as the
  * user's and stop sticking to the bottom (measured: 400-1600px off the bottom after a swap).
+ * Every handle needs touch-none (DRAG_TOUCH): without it the browser takes a touch drag over as a pan after a few px and
+ * sends pointercancel, so on a phone or tablet nothing here moved more than a nudge. A cancel still ends the drag.
  */
 function track(e: React.PointerEvent, cursor: string, move: (ev: PointerEvent) => void, up?: (ev: PointerEvent) => void) {
   e.preventDefault();
@@ -361,13 +363,20 @@ function track(e: React.PointerEvent, cursor: string, move: (ev: PointerEvent) =
   const done = (ev: PointerEvent) => {
     window.removeEventListener("pointermove", move);
     window.removeEventListener("pointerup", done);
+    window.removeEventListener("pointercancel", done);
     document.body.style.cursor = "";
     up?.(ev);
   };
   document.body.style.cursor = cursor;
   window.addEventListener("pointermove", move);
   window.addEventListener("pointerup", done);
+  window.addEventListener("pointercancel", done);
 }
+
+/** Drag handles here on touch (track): no browser pan; seams wider for a finger (8px is hard to hit). */
+const DRAG_TOUCH = "touch-none";
+const SEAM_COL_COARSE = "pointer-coarse:w-6";
+const SEAM_ROW_COARSE = "pointer-coarse:h-6";
 
 type TileDrag = { id: string; x: number; y: number; over?: string; label: string };
 
@@ -538,7 +547,8 @@ function Grid({
                 key={`${sm.outer ? "o" : "i"}${sm.row}.${sm.index}`}
                 className={cn(
                   "group/seam absolute z-10 flex items-center justify-center hover:bg-brand/30",
-                  row ? "h-2 -translate-y-1/2 cursor-row-resize" : "w-2 -translate-x-1/2 cursor-col-resize",
+                  DRAG_TOUCH,
+                  row ? `h-2 -translate-y-1/2 cursor-row-resize ${SEAM_ROW_COARSE}` : `w-2 -translate-x-1/2 cursor-col-resize ${SEAM_COL_COARSE}`,
                 )}
                 style={
                   row
@@ -555,7 +565,11 @@ function Grid({
           })}
         {hasMain && !anim && !moved && (
           <div
-            className="group/seam absolute top-0 bottom-0 z-10 flex w-2 -translate-x-1/2 cursor-col-resize items-center justify-center hover:bg-brand/30"
+            className={cn(
+              "group/seam absolute top-0 bottom-0 z-10 flex w-2 -translate-x-1/2 cursor-col-resize items-center justify-center hover:bg-brand/30",
+              DRAG_TOUCH,
+              SEAM_COL_COARSE,
+            )}
             style={{ left: pct(ratio) }}
             onPointerDown={dragMain}
             onDoubleClick={() => setOverview((o) => ({ ...o, ratio: 0.5 }))}
@@ -652,7 +666,8 @@ function Tile({
           // Dimming an unfocused tile goes on the contents only, so the tint keeps its strength.
           statusTint(session.status, unread),
           !focused && "[&>*]:opacity-70",
-          onDragStart && "cursor-grab",
+          // touch-none: the bar is a drag handle (track), and it has nothing to scroll
+          onDragStart && `cursor-grab ${DRAG_TOUCH}`,
         )}
         onDoubleClick={onZoom}
         onPointerDown={onDragStart && ((e) => onDragStart(e, title))}

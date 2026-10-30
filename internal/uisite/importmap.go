@@ -42,6 +42,9 @@ func readPackageJSON(dir string) (map[string]string, error) {
 	}
 	out := map[string]string{}
 	for k, v := range p.Dependencies {
+		if isWorkspaceDep(v) {
+			continue // served from source (workspace.go), not esm.sh
+		}
 		out[k] = cleanVersion(v)
 	}
 	for k, v := range builtinPackages {

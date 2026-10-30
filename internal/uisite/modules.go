@@ -52,9 +52,9 @@ type moduleCache struct {
 	mem map[string]*compiled // key：路径 + 内容的哈希
 }
 
-func (c *moduleCache) key(rel string, src []byte) string {
+func (c *moduleCache) key(rel string, src []byte, local map[string]string) string {
 	h := sha256.New()
-	h.Write([]byte(compileCacheVersion + "\x00" + rel + "\x00"))
+	h.Write([]byte(compileCacheVersion + "\x00" + rel + "\x00" + localKey(local) + "\x00"))
 	h.Write(src)
 	return hex.EncodeToString(h.Sum(nil))[:32]
 }
@@ -103,16 +103,16 @@ func (c *moduleCache) put(key string, v *compiled, disk bool) {
 }
 
 // compileFile 编译一个文件（rel 是相对项目根目录的路径，/ 分隔）。缓存命中就不跑 esbuild。
-func (c *moduleCache) compileFile(dir, rel string) (*compiled, error) {
+func (c *moduleCache) compileFile(dir, rel string, local map[string]string) (*compiled, error) {
 	src, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(rel)))
 	if err != nil {
 		return nil, err
 	}
-	key := c.key(rel, src)
+	key := c.key(rel, src, local)
 	if m := c.get(key); m != nil {
 		return m, nil
 	}
-	m := compileSource(dir, rel, src)
+	m := compileSource(dir, rel, src, local)
 	c.put(key, m, true)
 	return m, nil
 }
@@ -133,7 +133,7 @@ func loaderFor(rel string) api.Loader {
 	return api.LoaderJS
 }
 
-func compileSource(dir, rel string, src []byte) *compiled {
+func compileSource(dir, rel string, src []byte, local map[string]string) *compiled {
 	m := &compiled{Resolved: map[string]string{}}
 	var deps, lazy, bare []string
 	var mu sync.Mutex
@@ -167,6 +167,8 @@ func compileSource(dir, rel string, src []byte) *compiled {
 					spec := args.Path
 					if strings.HasPrefix(spec, "@/") {
 						spec = "/src/" + strings.TrimPrefix(spec, "@/")
+					} else if l := localSpec(local, spec); l != "" {
+						spec = l // a workspace package (workspace.go)
 					}
 					local := strings.HasPrefix(spec, "./") || strings.HasPrefix(spec, "../") || spec == "." || spec == ".." || strings.HasPrefix(spec, "/")
 					if !local {
@@ -298,6 +300,7 @@ func moduleURL(base, rel, version string) string { return base + "/_ui/m/" + rel
 // buildGraph 从 roots（页面文件）出发编译整张图，并发编译、结果按文件缓存。
 func (c *moduleCache) buildGraph(dir string, roots []string) *graph {
 	g := &graph{mods: map[string]*compiled{}, importers: map[string][]string{}, version: map[string]string{}}
+	local := localPackages(dir)
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, 8)
@@ -314,7 +317,7 @@ func (c *moduleCache) buildGraph(dir string, roots []string) *graph {
 		go func() {
 			defer wg.Done()
 			sem <- struct{}{}
-			m, err := c.compileFile(dir, rel)
+			m, err := c.compileFile(dir, rel, local)
 			<-sem
 			if err != nil {
 				m = &compiled{Error: fmt.Sprintf("%s: %v", rel, err)}
