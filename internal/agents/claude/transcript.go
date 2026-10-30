@@ -362,6 +362,34 @@ func titles(path string) (custom, ai string) {
 	return custom, ai
 }
 
+// inheritedTitle: the /rename name Claude Code copied over from the context a /clear left. It writes it (with
+// agent-name) as the first lines of the new transcript, before anything else, and keeps re-appending it later, so
+// only the head tells it apart from a /rename made in this context.
+func inheritedTitle(path string) string {
+	f, err := os.Open(path)
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+	buf := make([]byte, 16<<10)
+	n, _ := io.ReadFull(f, buf)
+	title := ""
+	for _, line := range bytes.Split(buf[:n], []byte("\n")) {
+		var e entry
+		if json.Unmarshal(line, &e) != nil {
+			break
+		}
+		switch e.Type {
+		case "custom-title":
+			title = e.CustomTitle
+		case "agent-name":
+		default:
+			return title
+		}
+	}
+	return title
+}
+
 // userTextsFrom：记录文件 offset 之后人说的话（跳过斜杠命令的包装、系统提醒、工具结果）。
 // offset 比文件还大（文件被换掉 / 截断过）就从头读。
 func userTextsFrom(path string, offset int64) []string {

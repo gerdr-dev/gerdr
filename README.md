@@ -208,7 +208,7 @@ itself reads environment variables:
 | `GERDR_TOKEN` | generated | login token, stored in `~/.gerdr/token` |
 | `GERDR_CLAUDE_IDLE_MINUTES` | `15` | stop an idle Claude session's process after this long (resumed on the next message); `0` = never |
 | `GERDR_UI` | `~/.gerdr/ui` | UI source directory (e.g. a separate clone) |
-| `GERDR_ESM_CDN` | `https://esm.sh` | where the UI's third-party packages come from (esm.sh or a mirror; cached locally) |
+| `GERDR_ESM_CDN` | `https://esm.talizen.com` | where the UI's third-party packages come from (any esm.sh instance, e.g. `https://esm.sh`; cached locally) |
 | `GERDR_CLAUDE_BIN` / `GERDR_CODEX_BIN` | auto | agent executables |
 
 **Scripting** — listing sessions, reading replies, sending messages and answering approvals are all HTTP endpoints:

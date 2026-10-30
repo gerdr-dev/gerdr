@@ -929,7 +929,9 @@ func (s *Session) onUpdate(u acp.SessionUpdate) {
 							s.rec.Cleared = s.rec.Cleared[n-20:]
 						}
 					}
-					s.rec.TitleStale = !s.rec.CustomTitle // 标题还是 clear 之前那件事的：下一句话先顶上，这轮完了重起（title.go）
+					// The title belongs to what was cleared away, renamed or not (a /rename names that piece of work, not
+					// the tab): the next message replaces it and auto-naming starts over for the new context (title.go).
+					s.rec.TitleStale, s.rec.CustomTitle = true, false
 					s.mu.Unlock()
 					s.emit(&Event{Kind: EvNotice, Level: "clear", Text: "上下文已清空"})
 				}

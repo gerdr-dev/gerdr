@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-// ESM 是 /_esm/ 的本机代理：转到 esm.sh（GERDR_ESM_CDN 可换镜像），结果落盘缓存。
+// ESM is the local proxy behind /_esm/: forwards to an esm.sh instance (DefaultESMCDN, or GERDR_ESM_CDN) and caches results on disk.
 // 为什么不让浏览器直连 CDN：① 第一次拉过之后离线也能开（agent 本身要联网，但界面不该跟着白屏）；
 // ② 国内直连 esm.sh 时快时慢，缓存之后只慢第一次；③ CSP 只用放行 'self'。
 //
@@ -42,9 +42,13 @@ type cached struct {
 	Body        []byte `json:"-"`
 }
 
+// DefaultESMCDN is our own esm.sh instance. The public esm.sh goes down now and then (e.g. its build disk filling
+// up, 500 on every package not yet cached), which leaves newly added UI packages unloadable; ours is under our control.
+const DefaultESMCDN = "https://esm.talizen.com"
+
 func NewESM(upstream, cacheDir string) *ESM {
 	if upstream == "" {
-		upstream = "https://esm.sh"
+		upstream = DefaultESMCDN
 	}
 	return &ESM{upstream: strings.TrimRight(upstream, "/"), dir: cacheDir, client: &http.Client{Timeout: 60 * time.Second}, inflight: map[string]*fetchCall{}}
 }

@@ -68,6 +68,18 @@ export function TerminalView({
     let pingTimer: ReturnType<typeof setInterval> | undefined;
     let lastPong = 0;
     const enc = new TextEncoder();
+    // WebGL renderer: the default DOM renderer draws box/block characters (Claude Code's logo, TUI borders) with the
+    // font's glyphs, which don't fill a cell taller than the font (lineHeight > 1), leaving gaps and stray background
+    // strips between rows. WebGL draws them as custom glyphs that fill the cell. Loaded lazily so the terminal still
+    // works on the DOM renderer when the package can't be fetched, WebGL is missing, or the context gets lost.
+    import("@xterm/addon-webgl")
+      .then(({ WebglAddon }) => {
+        if (disposed) return;
+        const gl = new WebglAddon();
+        gl.onContextLoss(() => gl.dispose());
+        term.loadAddon(gl);
+      })
+      .catch(() => {});
 
     const sendBytes = (b: Uint8Array) => {
       if (ws?.readyState === WebSocket.OPEN) ws.send(b);

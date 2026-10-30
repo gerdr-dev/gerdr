@@ -519,6 +519,9 @@ func (s *session) syncTitle(delay time.Duration) {
 		return
 	}
 	custom, ai := titles(path)
+	if custom != "" && custom == inheritedTitle(path) {
+		custom = "" // carried over from before a /clear: that context's name, not this one's (hub/title.go)
+	}
 	t, renamed := ai, false
 	if custom != "" {
 		t, renamed = custom, true

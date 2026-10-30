@@ -60,6 +60,26 @@ func TestTitles(t *testing.T) {
 	}
 }
 
+func TestInheritedTitle(t *testing.T) {
+	dir := t.TempDir()
+	cleared := filepath.Join(dir, "cleared.jsonl")
+	_ = os.WriteFile(cleared, []byte(`{"type":"custom-title","customTitle":"old","sessionId":"x"}
+{"type":"agent-name","agentName":"old","sessionId":"x"}
+{"type":"user","message":{"role":"user","content":"hi"}}
+{"type":"custom-title","customTitle":"old","sessionId":"x"}
+`), 0o644)
+	if got := inheritedTitle(cleared); got != "old" {
+		t.Fatalf("cleared: %q", got)
+	}
+	fresh := filepath.Join(dir, "fresh.jsonl")
+	_ = os.WriteFile(fresh, []byte(`{"type":"user","message":{"role":"user","content":"hi"}}
+{"type":"custom-title","customTitle":"mine","sessionId":"x"}
+`), 0o644)
+	if got := inheritedTitle(fresh); got != "" {
+		t.Fatalf("fresh: %q", got)
+	}
+}
+
 func TestAllowRules(t *testing.T) {
 	cases := map[string][]string{
 		`git push --force origin main`:         {"Bash(git push --force origin main)"},

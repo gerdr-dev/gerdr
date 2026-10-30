@@ -14,7 +14,8 @@ import (
 
 // 会话标题（pane 顶上、侧栏）怎么来，按优先级：
 //
-//  1. 人改的：在 gerdr 里改名、claude 的 /rename（CustomTitle）。之后什么都不再动它。
+//  1. Set by a person: renamed in gerdr, or claude's /rename (CustomTitle). Nothing else touches it until the next
+//     /clear, which drops it like any other title: it named the work that was cleared away.
 //  2. 插件起的（界面插件 g.sessionTitle，经 SetAutoTitle）：这一段上下文里默认逻辑让开（PluginTitleFor）。
 //  3. Default (autoTitle): once a context (between /clears) has 1 and then 3 user messages, ask the model for a title
 //     from what the user said in it. Checked when a message is sent (incl. steers) and again when a turn ends.
