@@ -45,9 +45,10 @@ function FromLabel({ id }: { id: string }) {
   const s = useStore((st) => st.sessions[id]);
   const name = s ? s.title || s.cwd.split("/").pop() || s.agent : id.slice(0, 8);
   return (
-    <button className="flex items-center gap-1 hover:text-foreground" onClick={() => focusSession(id)}>
-      <Bot className="size-3" />
-      来自会话「{name}」
+    // A long session title truncates instead of wrapping the whole metadata row (and squeezing the icon).
+    <button className="flex min-w-0 items-center gap-1 hover:text-foreground" title={name} onClick={() => focusSession(id)}>
+      <Bot className="size-3 shrink-0" />
+      <span className="truncate">来自会话「{name}」</span>
     </button>
   );
 }
@@ -127,14 +128,14 @@ export const MessageView = memo(function MessageView({
           </MessageContent>
         </div>
         {showMeta && (
-          <div className="flex items-center justify-end gap-1.5 px-2 text-[12px] text-muted-foreground">
+          <div className="flex min-w-0 items-center justify-end gap-1.5 px-2 text-[12px] whitespace-nowrap text-muted-foreground [&>*:not(button)]:shrink-0">
             {meta?.from && <FromLabel id={meta.from} />}
             {meta?.steer &&
               (meta.queued ? (
                 // 排在 agent 的队列里、还没被读到（claude 要等手上这个工具调用结束）
                 <span className="flex items-center gap-1">
                   <span className="flex items-center gap-1" title="agent 手上的这一步做完就会读到它；输入框里按 ↑ 也能收回来改">
-                    <Loader2 className="size-3 animate-spin" />
+                    <Loader2 className="size-3 shrink-0 animate-spin" />
                     排队中，等它读到…
                   </span>
                   {meta.messageId && onWithdraw && (
@@ -158,7 +159,7 @@ export const MessageView = memo(function MessageView({
                 </span>
               ) : (
                 <span className="flex items-center gap-1">
-                  <CornerDownRight className="size-3" />
+                  <CornerDownRight className="size-3 shrink-0" />
                   中途插话
                 </span>
               ))}

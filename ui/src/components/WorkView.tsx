@@ -1,5 +1,5 @@
 import { Briefcase, Check, ChevronDown, Code2, History, LayoutGrid, MessageSquarePlus, Settings } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { AgentIcon, StatusDot } from "@/components/AgentIcon";
 import { COL_EDGE, SidebarEdge, SidebarFooter, SidebarHeader, startColResize } from "@/components/Chrome";
@@ -119,7 +119,7 @@ function useDark() {
 }
 
 /** One project's Work site. Keyed by project by the caller, so switching projects loads the other site. */
-function WorkFrame({ project }: { project: string }) {
+function WorkFrame({ project, onShowChat }: { project: string; onShowChat?: () => void }) {
   const ref = useRef<HTMLIFrameElement>(null);
   const dark = useDark();
   const send = (m: unknown) => ref.current?.contentWindow?.postMessage(m, location.origin);
@@ -134,16 +134,25 @@ function WorkFrame({ project }: { project: string }) {
       if (m.type === "gerdr:ready") {
         send({ type: "gerdr:theme", dark: document.documentElement.classList.contains("dark") });
         send({ type: "gerdr:sidebar", width: get().sidebarW });
-      } else if (m.type === "gerdr:ask" && typeof m.text === "string")
+      } else if (m.type === "gerdr:ask" && typeof m.text === "string") {
+        // With a request id the page shows its own notice: answer it with the conversation (or the error) instead of a toast
+        const rid = m.id;
         askWorkAgent(m.text, project).then(
-          () => toast.success("交给右边的助手了"),
-          (err) => toast.error(err.message ?? String(err)),
+          (session) => (rid != null ? send({ type: "gerdr:asked", id: rid, session }) : toast.success("交给右边的助手了")),
+          (err) => {
+            const error = err.message ?? String(err);
+            if (rid != null) send({ type: "gerdr:asked", id: rid, error });
+            else toast.error(error);
+          },
         );
-      else if (m.type === "gerdr:settings") set({ dialog: { kind: "settings", tab: typeof m.tab === "string" ? m.tab : undefined } });
+      } else if (m.type === "gerdr:openChat" && typeof m.session === "string") {
+        openWorkChat(m.session);
+        onShowChat?.();
+      } else if (m.type === "gerdr:settings") set({ dialog: { kind: "settings", tab: typeof m.tab === "string" ? m.tab : undefined } });
     };
     window.addEventListener("message", f);
     return () => window.removeEventListener("message", f);
-  }, [project]);
+  }, [project, onShowChat]);
   return <iframe ref={ref} src={`/work/${encodeURIComponent(project)}/`} title="Work" className="size-full border-0 bg-background" />;
 }
 
@@ -278,6 +287,7 @@ export function WorkView() {
   const project = useWorkProject();
   const [chatW, setChatW] = useChatW();
   const [side, setSide] = useState<"page" | "chat">("page");
+  const showChat = useCallback(() => setSide("chat"), []);
   const col = useRef<HTMLDivElement>(null);
   const narrow = useNarrow(col);
   if (phone) {
@@ -304,7 +314,7 @@ export function WorkView() {
         </div>
         {/* both stay mounted: switching tabs keeps the page's state and the chat's scroll */}
         <div className={cn("min-h-0 flex-1", side !== "page" && "hidden")}>
-          <WorkFrame key={project} project={project} />
+          <WorkFrame key={project} project={project} onShowChat={showChat} />
         </div>
         <div className={cn("min-h-0 flex-1", side !== "chat" && "hidden")}>
           <WorkChat />

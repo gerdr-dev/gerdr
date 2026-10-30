@@ -106,8 +106,9 @@ export function openWorkChat(id: string, project = workProject()) {
   setWorkSession(project, id);
 }
 
-/** Hand a task to the project's Work agent (opens one if there isn't any). The agent queues it if it's busy. */
-export async function askWorkAgent(text: string, project = workProject()) {
+/** Hand a task to the project's Work agent (opens one if there isn't any). The agent queues it if it's busy. Returns the conversation it went to. */
+export async function askWorkAgent(text: string, project = workProject()): Promise<string> {
   const id = await ensureWorkSession(project);
   await api.send(id, [{ type: "text", text }]);
+  return id;
 }
