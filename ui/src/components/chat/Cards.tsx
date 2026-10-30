@@ -96,6 +96,7 @@ export function PermissionCard({ sessionId, data }: { sessionId: string; data: G
           <Button
             key={o.optionId}
             size="sm"
+            className="h-7 px-2.5 text-[13px]"
             variant={o.kind.startsWith("allow") ? (i === 0 ? "default" : "secondary") : "outline"}
             disabled={!!busy}
             onClick={() => choose(o.optionId)}
