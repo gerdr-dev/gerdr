@@ -73,3 +73,35 @@ func TestDevInstanceNotInstalled(t *testing.T) {
 		t.Error("调试实例看到日常那份 plist 不该算装了")
 	}
 }
+
+// The App compares this with its own backend to tell whether the service runs a binary that moved (an update the
+// App downloaded lives outside the bundle): a misread means restarting forever or never moving over.
+func TestInstalledExec(t *testing.T) {
+	m := &Manager{Exec: "/Users/x/Library/Application Support/Gerdr/backend/0.3.0/gerdr&co", Dir: "/Users/x/.gerdr", home: t.TempDir()}
+	if m.InstalledExec() != "" {
+		t.Error("nothing installed yet")
+	}
+	_ = os.MkdirAll(filepath.Dir(m.PlistPath()), 0o755)
+	if err := os.WriteFile(m.PlistPath(), []byte(m.plist()), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := m.InstalledExec(); got != m.Exec {
+		t.Errorf("InstalledExec = %q, want %q", got, m.Exec)
+	}
+}
+
+func TestOptedOut(t *testing.T) {
+	m := &Manager{Dir: t.TempDir()}
+	if m.OptedOut() {
+		t.Fatal("on by default")
+	}
+	if err := m.SetOptedOut(true); err != nil || !m.OptedOut() {
+		t.Fatal("turning it off must stick", err)
+	}
+	if err := m.SetOptedOut(false); err != nil || m.OptedOut() {
+		t.Fatal("turning it back on clears the marker", err)
+	}
+	if err := m.SetOptedOut(false); err != nil {
+		t.Fatal("clearing twice is fine", err)
+	}
+}

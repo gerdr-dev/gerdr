@@ -30,8 +30,12 @@ func newService(env config.Env, self bool) *service.Manager {
 //
 // 关掉后台常驻（plist 没了）之后也走「等着接班」那条：服务停了，我们接上。返回 nil = App 没了。
 //
-// App 更新过的话，后台服务跑的还是旧版（plist 指着 App 包里的文件，文件换了、进程没换）：
-// 版本或二进制（buildID）对不上就 kickstart -k 重启它，等新版起来再连（最多 15 秒，过了就先连着旧的）。
+// After an update the service still runs the old version: the plist points at the bundle's file (replaced, but the
+// process wasn't), or at a backend the App downloaded and has since replaced with a newer one (desktop/updater.js,
+// a new path: the plist gets rewritten). A version or binary (buildID) mismatch restarts it, but only once it is
+// idle (server busy(): no turn running, nobody asked, no background task, no terminal) — a restart cuts all of those
+// off. Until then we connect to the old one and keep checking. GERDR_UPGRADE_NOW=1 (the person said "update now"
+// in the App) skips the wait. After restarting, wait up to 15s for the new one before connecting to the old again.
 func appAttach(env config.Env, parentPID int, svc *service.Manager) *os.File {
 	gone := make(chan struct{})
 	if parentPID > 0 {
@@ -41,18 +45,35 @@ func appAttach(env config.Env, parentPID int, svc *service.Manager) *os.File {
 		_ = svc.Install() // 装着但没加载：重新 bootstrap 一次
 	}
 	self := buildID()
+	now := os.Getenv("GERDR_UPGRADE_NOW") == "1"
 	var announced string
-	var restarted time.Time
+	var restarted, checked time.Time
 	for {
 		if !svc.Installed() {
 			if l, err := lockFile(lockPath(env)); err == nil {
 				return l
 			}
 		}
+		// Re-read every round: `make install` swaps the bundle under a running App, and the service should follow
+		// (once idle) without the App being reopened. A new file is a new chance to restart.
+		if b := buildID(); b != self {
+			self, restarted = b, time.Time{}
+		}
 		if si, u, ok := running(env); ok {
-			stale := si.Version != version.Version || si.Build != self
+			moved := si.Service && svc.InstalledExec() != svc.Exec
+			// Build (the file's mtime + size) is what tells: our compiled-in version stays the old one after the
+			// file under us was replaced. Version only for a gerdr too old to report Build.
+			stale := moved || (si.Build != "" && si.Build != self) || (si.Build == "" && si.Version != version.Version)
+			idle := false
+			if stale && si.Service && restarted.IsZero() && (now || time.Since(checked) >= 10*time.Second) {
+				checked = time.Now()
+				idle = now || serviceIdle()
+			}
 			switch {
-			case stale && si.Service && restarted.IsZero():
+			case idle && moved:
+				_ = svc.Install() // rewrites the plist to our binary; bootout + bootstrap restarts it
+				restarted = time.Now()
+			case idle:
 				_ = svc.Restart()
 				restarted = time.Now()
 			case u != announced && (!stale || restarted.IsZero() || time.Since(restarted) > 15*time.Second):
@@ -66,4 +87,39 @@ func appAttach(env config.Env, parentPID int, svc *service.Manager) *os.File {
 		case <-time.After(time.Second):
 		}
 	}
+}
+
+// serviceIdle: nothing a restart of the running gerdr would cut off (server Busy). A gerdr from before /api/busy
+// existed answers 404: fall back to the session list it does have (no terminal count there).
+func serviceIdle() bool {
+	c, err := newAPIClient()
+	if err != nil {
+		return false
+	}
+	c.http.Timeout = 3 * time.Second
+	var b struct{ Turns, Waiting, Tasks, Terms int }
+	if err := c.do("GET", "/api/busy", nil, &b); err == nil {
+		return b.Turns+b.Waiting+b.Tasks+b.Terms == 0
+	}
+	var list []struct {
+		Turn    any `json:"turn"`
+		Pending int `json:"pending"`
+		Tasks   []struct {
+			Status string `json:"status"`
+		} `json:"tasks"`
+	}
+	if c.do("GET", "/api/sessions", nil, &list) != nil {
+		return false
+	}
+	for _, x := range list {
+		if x.Turn != nil || x.Pending > 0 {
+			return false
+		}
+		for _, t := range x.Tasks {
+			if t.Status == "running" {
+				return false
+			}
+		}
+	}
+	return true
 }

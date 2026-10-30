@@ -1,0 +1,76 @@
+import { useEffect, useState } from "react";
+import { api } from "@/lib/api";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { isNative, nativeApplyUpdate, nativeAskUpdate, type AppUpdateStatus } from "@/lib/native";
+import { useStore } from "@/lib/store";
+
+// Settings → 通用 →「版本」: which gerdr is running and where the App's self-update is (desktop/updater.js, pushed
+// by desktop/main.js updateStatus): downloading, waiting for agents to finish, upgrading. A downloaded backend
+// update is applied by the App only when nothing would be cut off (docs/dev/UPDATE.md), so "waiting" says on what.
+// In a browser there's no shell: just the version.
+
+export function UpdateSetting() {
+  const version = useStore((s) => s.version);
+  const u = useStore((s) => s.appUpdate);
+  const [service, setService] = useState(false);
+
+  useEffect(() => {
+    if (!isNative()) return;
+    nativeAskUpdate();
+    api
+      .service()
+      .then((st) => setService(st.installed))
+      .catch(() => {});
+  }, []);
+
+  const running = u?.running || version;
+  const shown = u && u.app !== running ? `gerdr ${running} · App ${u.app}` : `gerdr ${running}`;
+  const { text, tone } = u ? describe(u, service) : { text: "", tone: "" };
+  const p = u?.pending;
+
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <div className="min-w-0">
+        <div className="text-[13px]">版本</div>
+        <div className="text-[12px] text-muted-foreground">{shown}</div>
+        {text && <div className={cn("text-[12px]", tone || "text-muted-foreground")}>{text}</div>}
+      </div>
+      {u?.enabled &&
+        (p ? (
+          <Button size="sm" disabled={u.phase === "applying"} onClick={nativeApplyUpdate}>
+            现在更新
+          </Button>
+        ) : (
+          <Button size="sm" variant="outline" disabled={u.phase !== "idle"} onClick={() => nativeAskUpdate(true)}>
+            检查更新
+          </Button>
+        ))}
+    </div>
+  );
+}
+
+function describe(u: AppUpdateStatus, service: boolean): { text: string; tone: string } {
+  const p = u.pending;
+  if (u.phase === "applying" && p) return { text: `正在升级到 ${p.version}…`, tone: "text-brand" };
+  if (u.phase === "downloading") return { text: `正在下载 ${u.downloading}（${u.progress}%）`, tone: "" };
+  if (u.phase === "checking") return { text: "正在检查更新…", tone: "" };
+  if (p?.kind === "app") return { text: `有升级：${p.version}。这次要换整个 App，更新时会退出再打开`, tone: "text-brand" };
+  if (p) {
+    const b = u.busy;
+    const who = service ? "后台服务" : "gerdr";
+    if (!b) return { text: `有升级：${p.version}`, tone: "text-brand" };
+    const wait: string[] = [];
+    if (b.turns) wait.push(`${b.turns} 个 agent 跑完`);
+    if (b.waiting) wait.push(`${b.waiting} 个请求被批准`);
+    if (b.tasks) wait.push(`${b.tasks} 个后台任务结束`);
+    if (b.terms) wait.push(`${b.terms} 个终端关掉`);
+    if (!wait.length) return { text: `有升级：${p.version}，马上自动升级`, tone: "text-brand" };
+    return { text: `${who}等待升级到 ${p.version}：等 ${wait.join("、")}`, tone: "text-warn" };
+  }
+  if (u.error) return { text: `检查更新失败：${u.error}`, tone: "text-bad" };
+  if (!u.enabled) return { text: "本地构建，不自动更新", tone: "" };
+  if (!u.checkedAt) return { text: "", tone: "" };
+  const at = new Date(u.checkedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return { text: `已是最新（${at} 检查过）`, tone: "" };
+}

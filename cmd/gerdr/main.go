@@ -189,6 +189,14 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 
 	// 一个数据目录只能有一个 gerdr（两份进程同时写 sessions/ 会互相覆盖）。
 	svc := newService(env, serviceMode)
+	// The App runs gerdr as the background service unless the person turned that off (docs/dev/SERVICE.md):
+	// quitting the App (⌘Q) then leaves running agents to finish instead of killing them. Done before taking the
+	// lock, so nothing is running yet that a handover would interrupt.
+	if appMode && svc.Why() == "" && !svc.Installed() && !svc.OptedOut() {
+		if err := svc.Install(); err != nil {
+			log.Warn("install background service", "err", err)
+		}
+	}
 	var lock *os.File
 	err := errBusy
 	if !appMode || !svc.Installed() || svc.Why() != "" {

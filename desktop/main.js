@@ -6,12 +6,17 @@
 //
 // 壳只做网页做不了的事：起 / 收后端进程、系统通知、Dock 角标、菜单（mac 上没有「编辑」菜单 ⌘C / ⌘V 不工作）、
 // 外部链接交给默认浏览器。
-const { app, BrowserWindow, Menu, Notification, ipcMain, shell, nativeTheme, screen } = require("electron");
+const { app, BrowserWindow, Menu, Notification, dialog, ipcMain, net, shell, nativeTheme, screen } = require("electron");
 const { spawn, execFile } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
+const updater = require("./updater");
 
 const isMac = process.platform === "darwin";
+
+// A second, debug App next to the one in use (its own window state, downloaded backends, single-instance lock);
+// pair it with GERDR_DIR / GERDR_PORT for the backend's side.
+if (process.env.GERDR_APP_DATA) app.setPath("userData", process.env.GERDR_APP_DATA);
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -31,17 +36,19 @@ let quitting = false;
 function backendPath() {
   const exe = process.platform === "win32" ? "gerdr.exe" : "gerdr";
   if (process.env.GERDR_BIN) return process.env.GERDR_BIN;
-  if (app.isPackaged) return path.join(process.resourcesPath, exe);
+  if (app.isPackaged) return updater.backend().path; // the bundle's, or a newer one updater.js downloaded
   return path.join(__dirname, "..", "bin", exe); // 开发时：make build 出的那个
 }
 
-function startBackend() {
+// now: the person chose to update now (or we checked it's idle) — tells appAttach to restart an outdated background
+// service without waiting for it to go idle.
+function startBackend(now = false) {
   const bin = backendPath();
   if (!fs.existsSync(bin)) return showMessage(`找不到 gerdr 后端：${bin}`);
   // --app：就绪后打印一行 GERDR_READY <url>；已经有一个 gerdr 在跑（比如终端里起的）就直接连它，两边看到的是同一份会话。
   // --parent-pid：App 退出（哪怕是被强杀）时后端跟着退。
   const p = spawn(bin, ["--app", "--parent-pid", String(process.pid)], {
-    env: { ...process.env, GERDR_FROM_APP: "1" },
+    env: { ...process.env, GERDR_FROM_APP: "1", ...(now ? { GERDR_UPGRADE_NOW: "1" } : {}) },
     stdio: ["ignore", "pipe", "pipe"],
     windowsHide: true,
   });
@@ -67,8 +74,8 @@ function startBackend() {
   });
   p.on("error", (e) => showMessage(`起不来后端：${e.message}`));
   p.on("exit", (code, signal) => {
-    backend = null;
-    if (quitting) return;
+    if (backend === p) backend = null;
+    if (quitting || p.replaced) return;
     // 75 = 刚打开后台常驻，这个后端让位给后台服务（cmd/gerdr 的 exitHandover）：重起一个，它只连后台
     if (code === 75) return startBackend();
     // 「已经有一个在跑」那种情况它会正常退出（code 0），那不算出错
@@ -100,6 +107,146 @@ function stopBackend() {
       resolve();
     } else p.kill("SIGTERM");
   });
+}
+
+// Swap in the backend updater.js picked (a downloaded update). The page keeps its address; if the new one comes up
+// on the same one its WebSocket just reconnects. Windows has no SIGTERM (stopBackend only waits for the parent to
+// go): kill it outright there.
+function restartBackend(now) {
+  const p = backend;
+  if (p) p.replaced = true;
+  if (p && process.platform === "win32") p.kill();
+  stopBackend().then(() => startBackend(now));
+}
+
+// ---- 更新（updater.js） ----
+
+/** What a restart would cut off, from the gerdr the windows show (server busy()); null = couldn't ask. */
+async function fetchBusy() {
+  if (!origin) return null;
+  try {
+    const u = new URL(origin);
+    const tok = u.searchParams.get("token");
+    const r = await net.fetch(`${u.origin}/api/busy`, { headers: tok ? { Authorization: `Bearer ${tok}` } : {}, cache: "no-store" });
+    return r.ok ? await r.json() : null;
+  } catch {
+    return null;
+  }
+}
+
+const isIdle = (b) => !!b && b.turns + b.waiting + b.tasks + b.terms === 0;
+
+function describeBusy(b) {
+  if (!b) return "正在跑的 agent 和终端会被打断。";
+  const parts = [];
+  if (b.turns) parts.push(`${b.turns} 个 agent 正在跑`);
+  if (b.waiting) parts.push(`${b.waiting} 个在等你批准`);
+  if (b.tasks) parts.push(`${b.tasks} 个后台任务`);
+  if (b.terms) parts.push(`${b.terms} 个终端`);
+  return `重启会打断：${parts.join("、")}。空闲的会话不受影响，下次发话自己接上。`;
+}
+
+let applying = false;
+// The update being swapped in, until the running gerdr reports it (Settings shows "upgrading"); also keeps the poll
+// from restarting again and again when a swap didn't take (e.g. the service didn't come back new).
+let upgrading = { version: "", at: 0 };
+const upgradingNow = (p) => !!p && upgrading.version === p.version && Date.now() - upgrading.at < 2 * 60 * 1000;
+
+/** ask: the person clicked "update" — if something would be cut off, say what and let them pick. */
+async function applyUpdate(ask) {
+  const p = updater.pending();
+  if (!p || applying) return;
+  if (ask) {
+    const b = await fetchBusy();
+    if (!isIdle(b)) {
+      const { response } = await dialog.showMessageBox(activeWin() ?? undefined, {
+        type: "question",
+        message: `更新到 ${p.version}`,
+        detail: describeBusy(b) + (p.kind === "app" ? "\n\n这次更新换的是整个 App，会退出再重新打开。" : ""),
+        buttons: ["现在更新", "等空闲时自动更新", "取消"],
+        defaultId: 1,
+        cancelId: 2,
+      });
+      if (response !== 0) return;
+    }
+  }
+  applying = true;
+  upgrading = { version: p.version, at: Date.now() };
+  pushUpdate();
+  try {
+    if (p.kind === "app") {
+      if (await updater.installApp(p.file)) app.quit();
+    } else restartBackend(true);
+  } finally {
+    applying = false;
+  }
+}
+
+let lastBusy = null; // the running gerdr's /api/busy, from the last poll
+
+/** Everything Settings → 版本 shows (ui/src/components/UpdateSetting.tsx reads the same shape). */
+function updateStatus() {
+  const st = updater.state();
+  const p = updater.pending();
+  return {
+    enabled: updater.enabled(),
+    app: app.getVersion(),
+    backend: updater.backend().version,
+    running: lastBusy?.version ?? "",
+    busy: lastBusy,
+    pending: p ? { kind: p.kind, version: p.version } : null,
+    phase: upgradingNow(p) ? "applying" : st.phase,
+    progress: st.progress,
+    downloading: st.downloading,
+    error: st.error,
+    checkedAt: st.checkedAt,
+  };
+}
+
+/** Tell every page (window.gerdr.appUpdate in ui/src/App.tsx); a page without that hook (older UI) gets a notification instead. */
+const notified = new Set();
+async function pushUpdate(only) {
+  const p = updater.pending();
+  buildMenu();
+  const arg = JSON.stringify(updateStatus());
+  const shown = await Promise.all(
+    (only ? [only] : allWins()).map((w) =>
+      origin ? w.webContents.executeJavaScript(`!!(window.gerdr && window.gerdr.appUpdate && (window.gerdr.appUpdate(${arg}), 1))`).catch(() => false) : false,
+    ),
+  );
+  if (only || !p || shown.some(Boolean) || notified.has(p.version) || !Notification.isSupported()) return;
+  notified.add(p.version);
+  const n = new Notification({ title: "Gerdr 有新版本", body: `${p.version} 已下载好，点这里更新` });
+  n.on("click", () => applyUpdate(true));
+  n.show();
+}
+
+// Every 15s: what would a restart cut off, is the running gerdr behind what we have (noteRunning), and if an update
+// is waiting and nothing would be cut off, apply it. A whole-App update quits and reopens the windows, so that one
+// always waits for a click.
+function watchUpdates() {
+  if (!updater.enabled()) return;
+  updater.start(() => pushUpdate());
+  const poll = async () => {
+    const b = await fetchBusy();
+    if (!b) return;
+    const changed = JSON.stringify(b) !== JSON.stringify(lastBusy);
+    lastBusy = b;
+    const before = updater.pending();
+    updater.noteRunning(b.version); // pushes by itself when what's pending changes
+    const p = updater.pending();
+    if (changed && p === before) pushUpdate();
+    if (p?.kind !== "backend" || !isIdle(b) || upgradingNow(p)) return;
+    applyUpdate(false);
+  };
+  setTimeout(poll, 5 * 1000);
+  setInterval(poll, 15 * 1000);
+}
+
+async function checkFromMenu() {
+  if (updater.pending()) return applyUpdate(true);
+  const msg = await updater.check();
+  if (!updater.pending()) dialog.showMessageBox(activeWin() ?? undefined, { message: "检查更新", detail: msg });
 }
 
 // ---- 窗口 ----
@@ -332,6 +479,12 @@ ipcMain.on("gerdr", (e, m) => {
         buildMenu();
       }
       break;
+    case "update":
+      // the page asking for the update status (it just loaded), "check now" / "update now" in Settings or the toast
+      if (m.apply) applyUpdate(true);
+      else if (m.check) updater.check().then(() => pushUpdate(win));
+      else pushUpdate(win);
+      break;
     case "webPid":
       // 设置里的「资源」要量界面所在那个渲染进程的内存（它不是后端起的，后端看不见）
       runInPage(`window.__GERDR_WEB_PID__ = ${win.webContents.getOSProcessId()}`, win);
@@ -396,6 +549,7 @@ function buildMacMenu() {
         label: "Gerdr",
         submenu: [
           { role: "about", label: "关于 Gerdr" },
+          { label: updater.pending() ? `更新到 ${updater.pending().version}…` : "检查更新…", enabled: updater.enabled(), click: checkFromMenu },
           { type: "separator" },
           cmd("设置…", "settings", "Cmd+,"),
           { type: "separator" },
@@ -492,4 +646,5 @@ app.whenReady().then(() => {
   buildMenu();
   createWindow();
   startBackend();
+  watchUpdates();
 });

@@ -25,6 +25,7 @@
     "files": [
       "main.js",
       "preload.js",
+      "updater.js",
       "package.json"
     ],
     "extraResources": [

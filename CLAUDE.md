@@ -7,6 +7,8 @@ Claude Code / Codex 的图形界面：Go 后端（ACP 适配器 + hub + HTTP/WS�
 - 远程访问（中继 / 配对码 / passkey，`internal/auth` `relay` `acme` `remote`）的设计和坑在 docs/dev/REMOTE.md，动之前先读。
 - 安卓 App（android/：局域网直连、App 里的 passkey、后台通知，`internal/lan`、`remote/lan.go`、`server/appapi.go` `appwatch.go`）：
   docs/dev/ANDROID.md。桥的两半（`Bridge.kt` ↔ `ui/src/lib/android.ts`）要一起改；换正式签名钥匙要改 `config.OfficialAndroidCert`。
+- Desktop App self-update (backend-only ~10MB vs whole App, applied only when idle; `desktop/updater.js`,
+  `desktop/shell-id.sh`): docs/dev/UPDATE.md. Changing shell files forces a full download for everyone.
 - 后台常驻（launchd，`internal/service`、`cmd/gerdr/attach.go`）和 App 怎么分工、怎么跟着 App 升级：docs/dev/SERVICE.md。
 - 对话列表闪、跳、切回来不在底（虚拟列表 `chat/ChatView.tsx`、会变高矮的 Markdown / 代码块 / 图片）：别猜，
   按 docs/dev/SCROLL.md 用 `tools/scrolltest/` 的脚本逐帧复现，改完再跑一遍。
@@ -14,6 +16,13 @@ Claude Code / Codex 的图形界面：Go 后端（ACP 适配器 + hub + HTTP/WS�
   动了适配器要跑 `make test-e2e`（真 claude / codex，花钱）。
 - English-first：提交信息、代码注释、文档一律用英文写，说清**为什么**。已有的中文注释 / 文档不用专门去翻，改到哪段时顺手换成英文。
 - 起调试实例用独立的目录和端口，别碰默认的 `~/.gerdr` 和 7870：`make dev`（界面直接用仓库里的 ui/，改了立刻热更新）。
+- Putting a new backend on this machine (`make install`): **never restart gerdr yourself** (no `pkill gerdr`, no
+  `launchctl kickstart`, no reopening the App). You are one of the agents running on it, and so are the user's others:
+  a restart cuts every running turn off. The background service (on by default) picks the new binary up by itself
+  once nothing is running — no turn, no pending permission, no background task, no open terminal (`GET /api/busy`,
+  `appAttach` in cmd/gerdr/attach.go) — so it happens after your turn ends. The App has to be open for that (it is
+  what watches); if the user turned the background service off, tell them to reopen the App when they're idle.
+  Same rule as App updates: docs/dev/UPDATE.md.
 - 改完界面、看过没问题后跑 `make sync-ui`，同步到正在用的 `~/.gerdr/ui`（开着的 gerdr 直接热更新）：
   正在用的 gerdr 读的是那份，不是仓库里的 ui/，不同步用户就看不到改动。别手动 cp 或在那边 git 提交 ——
   `gerdr ui sync` 会一起更新清单（不然下次升级会把它当成被人改过），那边被人改过时也会拒绝覆盖。

@@ -145,6 +145,7 @@ func (s *Server) Handler() http.Handler {
 		writeJSON(w, s.Hub.Usage(r.Context(), r.URL.Query().Get("force") == "1"))
 	})
 	mux.HandleFunc("GET /api/pending", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, s.Hub.Pending()) })
+	mux.HandleFunc("GET /api/busy", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, s.busy()) })
 	mux.HandleFunc("POST /api/sessions/{id}/answer", s.sessionOp(func(r *http.Request, sess *hub.Session) (any, error) {
 		var b struct {
 			ReqID    string          `json:"reqId"`
@@ -862,4 +863,44 @@ func Listen(host string, port int) (net.Listener, error) {
 func itoa(n int) string {
 	b, _ := json.Marshal(n)
 	return string(b)
+}
+
+// Busy is what a restart of this process would cut off. The desktop shell (desktop/updater.js) and the App's
+// attaching backend (cmd/gerdr appAttach) only swap in a new gerdr on their own when everything is zero:
+// idle sessions come back on their own after a restart (the next message resumes them), but a running turn
+// is interrupted, a permission request is lost, background tasks live only in memory, and terminals are
+// gerdr's own child processes (docs/dev/ARCHITECTURE.md, terminals).
+type Busy struct {
+	Version string `json:"version"`
+	Turns   int    `json:"turns"`   // sessions with a turn running
+	Waiting int    `json:"waiting"` // sessions waiting on a person (permission / question)
+	Tasks   int    `json:"tasks"`   // background tasks still running
+	Terms   int    `json:"terms"`   // live terminals
+}
+
+func (b Busy) Idle() bool { return b.Turns+b.Waiting+b.Tasks+b.Terms == 0 }
+
+func (s *Server) busy() Busy {
+	b := Busy{Version: version.Version}
+	for _, x := range s.Hub.List() {
+		if x.Turn != nil {
+			b.Turns++
+		}
+		if x.Pending > 0 {
+			b.Waiting++
+		}
+		for _, t := range x.Tasks {
+			if t.Status == "running" {
+				b.Tasks++
+			}
+		}
+	}
+	if s.Terms != nil {
+		for _, t := range s.Terms.List() {
+			if !t.Exited {
+				b.Terms++
+			}
+		}
+	}
+	return b
 }

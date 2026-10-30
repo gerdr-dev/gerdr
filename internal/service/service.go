@@ -104,6 +104,48 @@ func (m *Manager) Uninstall() error {
 	return nil
 }
 
+// The service is on by default for the App (cmd/gerdr runServe installs it at App start), so ⌘Q leaves agents
+// running. Turning it off in Settings leaves this marker in the data dir, and the App stops putting it back.
+func (m *Manager) optOutPath() string { return filepath.Join(m.Dir, "service-off") }
+
+// OptedOut: the person turned the service off; don't install it on our own.
+func (m *Manager) OptedOut() bool {
+	_, err := os.Stat(m.optOutPath())
+	return err == nil
+}
+
+// SetOptedOut records the person's choice from Settings (off = true).
+func (m *Manager) SetOptedOut(off bool) error {
+	if !off {
+		if err := os.Remove(m.optOutPath()); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		return nil
+	}
+	return os.WriteFile(m.optOutPath(), nil, 0o600)
+}
+
+// InstalledExec is the binary the installed plist runs ("" = not installed / unreadable). The App can run a backend
+// it downloaded itself (desktop/updater.js) instead of the one in its bundle, so the service's binary can move;
+// a moved one needs the plist rewritten (Install), a kickstart alone would restart the old file.
+func (m *Manager) InstalledExec() string {
+	b, err := os.ReadFile(m.PlistPath())
+	if err != nil {
+		return ""
+	}
+	s := string(b)
+	i := strings.Index(s, "<key>ProgramArguments</key>")
+	if i < 0 {
+		return ""
+	}
+	s = s[i:]
+	a, z := strings.Index(s, "<string>"), strings.Index(s, "</string>")
+	if a < 0 || z < a {
+		return ""
+	}
+	return strings.NewReplacer("&lt;", "<", "&gt;", ">", "&quot;", `"`, "&apos;", "'", "&amp;", "&").Replace(s[a+len("<string>") : z])
+}
+
 // Restart：换了二进制之后要它生效（kickstart -k = 杀掉再起，二进制按路径重新读）。
 func (m *Manager) Restart() error { return run("launchctl", "kickstart", "-k", m.target()) }
 

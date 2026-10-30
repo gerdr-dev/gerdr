@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { api, clientId, uuid, type DoctorReport, type FileStat } from "./api";
 import { DEFAULT_KEYS, IS_MAC, type KeyAction } from "./keys";
 import { activeTab, currentSpace, defaultLayout, leaves, phoneRoot, validLayout, viewOf, withView, type Layout, type View } from "./layout";
+import type { AppUpdateStatus } from "./native";
 import { isPhone } from "./phone";
 import { Transcript } from "./transcript";
 import type { AgentInfo, ContentBlock, HubEvent, RemoteConn, SessionSummary } from "./types";
@@ -135,6 +136,8 @@ type State = {
   conn: { state: "connecting" } | { state: "waiting"; at: number };
   keptTabs: string[]; // 现在挂在页面里的 tab（当前那个排第一），App 维护
   version: string;
+  /** The desktop App's update status (desktop/main.js updateStatus); null in a browser / before the shell answered. */
+  appUpdate: AppUpdateStatus | null;
   home: string;
   pluginsDir: string;
   agents: AgentInfo[];
@@ -233,6 +236,7 @@ export const useStore = create<State>(() => ({
   conn: { state: "connecting" },
   keptTabs: [],
   version: "",
+  appUpdate: null,
   home: "",
   pluginsDir: "",
   agents: [],

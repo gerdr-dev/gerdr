@@ -3,6 +3,10 @@
 设置 → 通用 →「后台常驻」打开后，gerdr 装成一个 LaunchAgent（`~/Library/LaunchAgents/io.github.zbysir.gerdr.plist`，
 代码在 `internal/service`）：⌘Q 退出 App 会话照跑、手机远程照样连得上，登录就起、崩了被拉起来。只做了 macOS。
 
+**On by default** for the App: at start (`--app`, before taking the lock) gerdr installs it unless the person turned it
+off in Settings, which leaves `~/.gerdr/service-off` (`service.OptedOut`). So ⌘Q leaves running agents to finish.
+Updates restart it only when idle (docs/dev/UPDATE.md).
+
 ## 和 App 的分工：开了就始终由后台跑，App 只是窗口
 
 一个数据目录只能有一个 gerdr（`server.lock`，两份进程同时写会话日志会互相覆盖）。

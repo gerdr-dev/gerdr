@@ -22,6 +22,10 @@ func (s *Server) serviceRoutes(mux *http.ServeMux) {
 			return
 		}
 		m := s.Service
+		if err := m.SetOptedOut(!b.On); err != nil {
+			httpError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
 		switch {
 		case b.On && m.Installed() && m.PID() > 0:
 		case b.On:

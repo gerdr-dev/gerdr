@@ -18,6 +18,7 @@ import { MemorySettings } from "./MemorySettings";
 import { RemoteSettings } from "./RemoteSettings";
 import { ResourceStats } from "./ResourceStats";
 import { ServiceSetting } from "./ServiceSetting";
+import { UpdateSetting } from "./UpdateSetting";
 
 // Settings (prefix+s / ⌘,). The general and plugins pages and labs live here; every other page is its own component file.
 export function SettingsDialog({ open }: { open: boolean }) {
@@ -25,7 +26,6 @@ export function SettingsDialog({ open }: { open: boolean }) {
   const fontSize = useStore(fontSizeOf);
   const agents = useStore((s) => s.agents);
   const pluginsDir = useStore((s) => s.pluginsDir);
-  const version = useStore((s) => s.version);
   useStore((s) => s.pluginVersion);
   const [tabOpen, setTabOpen] = useState("general");
   const remoteConns = useStore((s) => s.remoteConns.length);
@@ -143,6 +143,7 @@ export function SettingsDialog({ open }: { open: boolean }) {
                 <Row label="系统通知" hint="看不见的会话跑完了 / 在等你时">
                   <Switch checked={cfg.notifications} onCheckedChange={(v) => setConfig({ notifications: v })} />
                 </Row>
+                <UpdateSetting />
                 <ServiceSetting />
                 <Row label="从 herdr 导入" hint="工作空间、tab、分屏和每个 agent 的会话">
                   <Button size="sm" variant="outline" onClick={() => set({ dialog: { kind: "importHerdr" } })}>
@@ -167,7 +168,6 @@ export function SettingsDialog({ open }: { open: boolean }) {
                 </Row>
                 <AndroidSettings />
               </Section>
-              <div className="pt-2 text-[12px] text-muted-foreground">gerdr {version}</div>
             </TabsContent>
             <TabsContent value="keys" className="pt-2">
               <KeySettings />

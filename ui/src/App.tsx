@@ -16,7 +16,7 @@ import { activeTab, currentSpace, spaceList, type Tab } from "./lib/layout";
 import { isPhone, usePhone, useViewportHeight } from "./lib/phone";
 import { cn } from "./lib/utils";
 import { syncWatch } from "./lib/sync";
-import { isNative, nativeBadge, nativeMenuKeys, nativeSpace } from "./lib/native";
+import { isNative, nativeAskUpdate, nativeBadge, nativeMenuKeys, nativeSpace, onAppUpdate } from "./lib/native";
 import { initAndroid, syncAndroidTheme } from "./lib/android";
 import { CliApprove } from "./components/CliApprove";
 import { systemNotify } from "./lib/notify";
@@ -105,7 +105,9 @@ export default function App() {
     (window as any).gerdr = {
       runCommand: (id: string) => import("./lib/plugins").then((p) => p.runCommand(id)),
       focusSession: (id: string) => import("./lib/actions").then((a) => a.focusSession(id)),
+      appUpdate: onAppUpdate, // desktop/main.js pushUpdate
     };
+    nativeAskUpdate();
     return () => {
       window.removeEventListener("keydown", onKey, true);
       unwatchCopy();
