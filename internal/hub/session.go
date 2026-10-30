@@ -29,7 +29,8 @@ type Record struct {
 	Cwd            string `json:"cwd"`
 	Title          string `json:"title,omitempty"`
 	CustomTitle    bool   `json:"customTitle,omitempty"`
-	// 自动标题的状态（title.go）。TitleStale：/clear 过、标题还是上一件事的，下一句话先顶上；
+	// 自动标题的状态（title.go）。TitleStale: legacy — /clear used to keep the old title until the next message
+	// replaced it; it now clears the title outright, but records saved before that may still carry the flag.
 	// TitleKey：默认逻辑在哪段上下文的哪一档起过名了；PluginTitleFor：插件在哪段上下文里起过名（这段里默认逻辑让开）。
 	TitleStale     bool              `json:"titleStale,omitempty"`
 	TitleKey       string            `json:"titleKey,omitempty"`
@@ -46,6 +47,11 @@ type Record struct {
 	// Cleared: legacy. Indexes written before /clear split the old conversation into its own session (clear.go) list
 	// the agent session ids this tab had before each /clear here; migrateCleared turns them into sessions on load.
 	Cleared []ClearedCtx `json:"cleared,omitempty"`
+	// CtxTokens / CtxWindow: how full the context is (the "上下文 37%" under the composer). Saved with the record because
+	// adapters only learn them from a request: kept in memory, a restarted gerdr showed nothing until the next turn,
+	// and claude only reports the window at the end of a turn, so not even during the first one.
+	CtxTokens int `json:"ctxTokens,omitempty"`
+	CtxWindow int `json:"ctxWindow,omitempty"`
 }
 
 // ClearedCtx is one context dropped by /clear: its agent session id and what it was called at the time.
@@ -94,8 +100,6 @@ type Session struct {
 	// （就是发出这条命令的这一轮）掐掉，收尾的话说不出来；所以记下来，这一轮跑完再关（Hub.CloseAfterTurn）
 	closeAfter  bool
 	tasks       []acpx.Task
-	ctxTokens   int // 上下文现在用了多少 token、窗口多大（输入框下面的「上下文 37%」）
-	ctxWindow   int
 	turnStarted int64                // 这一轮几点开始的（状态行：跑了多久）
 	turnTokens  int                  // 这一轮输出了多少 token（状态行）
 	sending     map[string]bool      // 正在处理的 client 消息 id（同一条重发时挡住并发的那次）
@@ -253,10 +257,10 @@ type TurnInfo struct {
 }
 
 func (s *Session) contextLocked() *ContextInfo {
-	if s.ctxTokens == 0 || s.ctxWindow == 0 {
+	if s.rec.CtxTokens == 0 || s.rec.CtxWindow == 0 {
 		return nil
 	}
-	return &ContextInfo{Tokens: s.ctxTokens, Window: s.ctxWindow}
+	return &ContextInfo{Tokens: s.rec.CtxTokens, Window: s.rec.CtxWindow}
 }
 
 func (s *Session) turnInfoLocked() *TurnInfo {
@@ -926,9 +930,14 @@ func (s *Session) onUpdate(u acp.SessionUpdate) {
 					}
 					s.mu.Lock()
 					// The title belongs to what was cleared away, renamed or not (a /rename names that piece of work, not
-					// the tab): the next message replaces it and auto-naming starts over for the new context (title.go).
-					s.rec.TitleStale, s.rec.CustomTitle = true, false
+					// the tab): drop it right away rather than leave the old name on an empty context until the next
+					// message (two entries with the same name in the session list). Auto-naming starts over (title.go).
+					s.rec.Title, s.rec.TitleStale, s.rec.CustomTitle = "", false, false
+					// The usage was the cleared context's: hide it until the next request reports the new one (the
+					// window stays, it is the model's), instead of showing the old percentage over an empty conversation.
+					s.rec.CtxTokens = 0
 					s.mu.Unlock()
+					s.h.broadcastSession(s)
 					s.emit(&Event{Kind: EvNotice, Level: "clear", Text: "上下文已清空"})
 				}
 			}
@@ -968,10 +977,10 @@ func (s *Session) onGerdrInfo(g map[string]any) {
 			s.turnTokens = int(n)
 		}
 		if n, ok := p["contextTokens"].(float64); ok && n > 0 {
-			s.ctxTokens = int(n)
+			s.rec.CtxTokens = int(n)
 		}
 		if n, ok := p["contextWindow"].(float64); ok && n > 0 {
-			s.ctxWindow = int(n)
+			s.rec.CtxWindow = int(n)
 		}
 		s.mu.Unlock()
 		s.h.broadcastSession(s)

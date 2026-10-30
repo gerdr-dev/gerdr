@@ -319,6 +319,7 @@ func (s *session) adoptID(ctx context.Context, id string) {
 	s.mu.Lock()
 	s.id = id
 	s.fresh, s.forkFrom, s.forkAt = false, "", ""
+	s.ctxTokens = 0 // the cleared context's: the /clear's own result must not report it again for the new one
 	if s.mcpFP != fp {
 		s.respawn = true
 	}
