@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowUpRight, Eraser, GripVertical, LayoutGrid, Maximize2, Minimize2, Pin, PinOff, Plus, X } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, Eraser, GripVertical, LayoutGrid, Maximize2, Minimize2, PanelLeft, Pin, PinOff, Plus, X } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -10,6 +10,7 @@ import {
   arrange,
   attentionIds,
   clearTiles,
+  fitTiles,
   focusTile,
   toggleTileZoom,
   MAX_TILES,
@@ -30,7 +31,7 @@ import {
 } from "@/lib/overview";
 import type { WorkConf } from "@/lib/overviewState";
 import { usePhone } from "@/lib/phone";
-import { markRead, useStore } from "@/lib/store";
+import { markRead, toggleSidebar, useStore } from "@/lib/store";
 import type { SessionSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { BOX_TRANSITION, useLayoutAnim, useZoomAnim } from "@/lib/zoomAnim";
@@ -38,6 +39,7 @@ import { AgentIcon, StatusDot } from "./AgentIcon";
 import { ChatView } from "./chat/ChatView";
 import { Elapsed, SidebarEdge, SidebarFooter, SidebarHeader } from "./Chrome";
 import { TabActive } from "./Panes";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 /** The project a session belongs to: its pane's, or the one whose Work view shows it. */
 function projectOf(l: Layout, c: WorkConf, id: string): string | undefined {
@@ -70,6 +72,7 @@ export function OverviewView({ shown }: { shown: boolean }) {
   const phone = usePhone();
   const ids = useOverviewIds().split(",").filter(Boolean);
   const zoom = useStore((s) => s.overview.zoom);
+  const sidebar = useStore((s) => s.sidebar);
   const cur = useStore((s) => overviewFocus(s.overview, s.layout, s.sessions, s.config));
   // A tile taken out while zoomed: back to the grid
   const zoomed = zoom && ids.includes(zoom) ? zoom : undefined;
@@ -81,7 +84,24 @@ export function OverviewView({ shown }: { shown: boolean }) {
   return (
     <TabActive.Provider value={shown}>
       <div className="flex h-full bg-background">
-        <OverviewList current={cur} onPick={pick} />
+        {/* Hidden with the Code sidebar (one setting, asked for: as in Code mode); a thin rail keeps the way back where the
+            hide button was, at the bottom (the top-left corner is the window's traffic lights in the desktop App) */}
+        {sidebar ? (
+          <OverviewList current={cur} onPick={pick} />
+        ) : (
+          <div className="flex w-10 shrink-0 flex-col justify-end border-r bg-sidebar">
+            <div className="flex h-10 shrink-0 items-center justify-center border-t">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon" className="size-7 text-muted-foreground" onClick={toggleSidebar}>
+                    <PanelLeft className="size-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="right">显示侧栏</TooltipContent>
+              </Tooltip>
+            </div>
+          </div>
+        )}
         <Grid ids={ids} focus={cur} zoom={zoomed} shown={shown} onFocus={focusTile} onZoom={toggleTileZoom} />
       </div>
     </TabActive.Provider>
@@ -94,8 +114,6 @@ export function OverviewView({ shown }: { shown: boolean }) {
  * drawer. Only the shown tile is mounted (a phone can't afford a dozen live chats); its transcript stays cached.
  */
 function PhoneOverview({ ids, focus, shown, onPick }: { ids: string[]; focus?: string; shown: boolean; onPick: (id: string) => void }) {
-  const sessions = useStore((s) => s.sessions);
-  const unread = useStore((s) => s.unread);
   const [list, setList] = useState(false);
   const chips = useRef<HTMLDivElement>(null);
   // Keep the current chip in view (on opening, switching from the list, a removal). Scrolls the strip itself after layout:
@@ -117,27 +135,9 @@ function PhoneOverview({ ids, focus, shown, onPick }: { ids: string[]; focus?: s
             <ArrowLeft className="size-[18px]" />
           </Button>
           <div ref={chips} className="flex min-w-0 flex-1 gap-1 overflow-x-auto [scrollbar-width:none]">
-            {ids.map((id) => {
-              const s = sessions[id];
-              if (!s) return null;
-              const cur = id === focus;
-              return (
-                <button
-                  key={id}
-                  data-current={cur || undefined}
-                  className={cn(
-                    "flex h-8 max-w-36 shrink-0 items-center gap-1.5 rounded-md border px-2 text-[12px]",
-                    statusTint(s.status, !!unread[id]),
-                    cur ? "border-brand font-medium" : "border-transparent text-muted-foreground",
-                  )}
-                  onClick={() => focusTile(id)}
-                >
-                  {/* An idle one has no dot: StatusDot is transparent then but would still leave a gap */}
-                  {(s.status !== "idle" || unread[id]) && <StatusDot status={s.status} unread={!!unread[id]} />}
-                  <span className="truncate">{s.title || basename(s.cwd)}</span>
-                </button>
-              );
-            })}
+            {ids.map((id) => (
+              <TileChip key={id} id={id} current={id === focus} className="h-8 max-w-36" onClick={() => focusTile(id)} />
+            ))}
           </div>
           <Button variant="ghost" size="icon" className="size-9 shrink-0" aria-label="全部 agent" onClick={() => setList(true)}>
             <Plus className="size-[18px]" />
@@ -164,6 +164,29 @@ function PhoneOverview({ ids, focus, shown, onPick }: { ids: string[]; focus?: s
         </div>
       )}
     </TabActive.Provider>
+  );
+}
+
+/** A tile as a small chip tinted with its status: the phone's tile switcher, and the tiles that didn't fit in the grid. */
+function TileChip({ id, current, className, onClick }: { id: string; current: boolean; className?: string; onClick: () => void }) {
+  const s = useStore((st) => st.sessions[id]);
+  const unread = useStore((st) => !!st.unread[id]);
+  if (!s) return null;
+  return (
+    <button
+      data-current={current || undefined}
+      className={cn(
+        "flex shrink-0 items-center gap-1.5 rounded-md border px-2 text-[12px]",
+        statusTint(s.status, unread),
+        current ? "border-brand font-medium" : "border-transparent text-muted-foreground",
+        className,
+      )}
+      onClick={onClick}
+    >
+      {/* An idle one has no dot: StatusDot is transparent then but would still leave a gap */}
+      {(s.status !== "idle" || unread) && <StatusDot status={s.status} unread={unread} />}
+      <span className="truncate">{s.title || basename(s.cwd)}</span>
+    </button>
   );
 }
 
@@ -307,13 +330,15 @@ function OverviewList({
           </div>
         ))}
       </div>
-      {!phone && <SidebarFooter />}
+      {!phone && <SidebarFooter sidebarToggle />}
     </div>
   );
 }
 
 const pct = (v: number) => `${v * 100}%`;
 const NO_SIZES = {};
+/** Height of the "more" row under the grid, holding the tiles that didn't fit. */
+const MORE_H = 30;
 
 /**
  * Follow the pointer until it's released: the shared part of every drag here (seams, tiles). The pointer is captured by
@@ -355,21 +380,38 @@ function Grid({
   onFocus: (id: string) => void;
   onZoom: (id: string) => void;
 }) {
+  const wrap = useRef<HTMLDivElement>(null);
   const box = useRef<HTMLDivElement>(null);
-  const [size, setSize] = useState({ w: 0, h: 0 });
+  const [area, setArea] = useState({ w: 0, h: 0 });
   const main = useStore((s) => s.overview.main);
   const ratio = useStore((s) => s.overview.ratio);
   const saved = useStore((s) => s.overview.sizes) ?? NO_SIZES;
   const [drag, setDrag] = useState<TileDrag>();
   useLayoutEffect(() => {
-    const el = box.current!;
-    const ro = new ResizeObserver(() => setSize({ w: el.clientWidth, h: el.clientHeight }));
+    const el = wrap.current!;
+    // Minus the 3px inset on each side (the grid box below)
+    const ro = new ResizeObserver(() => setArea({ w: Math.max(0, el.clientWidth - 6), h: Math.max(0, el.clientHeight - 6) }));
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  const key = ids.join(",");
-  const lay = useMemo(() => arrange(ids, main, ratio, size.w, size.h, saved), [key, main, ratio, size.w, size.h, saved]);
-  const hasMain = !!main && ids.includes(main) && ids.length > 1 && !zoom;
+  const all = ids.join(",");
+  // Only as many tiles as fit at a readable size (lib/overview fitTiles); the rest wait in the "more" row, which itself
+  // takes MORE_H off the grid, so fit again with that height once some don't fit
+  const shownIds = useMemo(() => {
+    const v = fitTiles(ids, main, ratio, area.w, area.h);
+    return v.length < ids.length ? fitTiles(ids, main, ratio, area.w, area.h - MORE_H) : v;
+  }, [all, main, ratio, area.w, area.h]);
+  const more = ids.filter((id) => !shownIds.includes(id));
+  const size = { w: area.w, h: more.length ? area.h - MORE_H : area.h };
+  const key = shownIds.join(",");
+  const lay = useMemo(() => arrange(shownIds, main, ratio, size.w, size.h, saved), [key, main, ratio, size.w, size.h, saved]);
+  // Focusing a tile that's in "more" (from there, the list, the keys) brings it into the grid in place of the last one
+  useEffect(() => {
+    if (!focus || !ids.includes(focus) || shownIds.includes(focus)) return;
+    const out = [...shownIds].reverse().find((id) => id !== main) ?? shownIds[shownIds.length - 1];
+    if (out) swapTiles(focus, out);
+  }, [focus, key, all]);
+  const hasMain = !!main && shownIds.includes(main) && shownIds.length > 1 && !zoom;
   // Same zoom animation as panes in a tab (lib/zoomAnim): the tile slides to full size over the others and back. Only its
   // chat is pinned to the full size while moving (Tile `pin`), so the chat re-lays out once, not every frame; the frame and
   // title bar follow the box, keeping the buttons in the corner and all four borders in view.
@@ -430,8 +472,8 @@ function Grid({
 
   // 3px around + 3px per tile: 6px to the edges and between tiles, the same inset as the sidebar header and split panes
   return (
-    <div className="relative min-w-0 flex-1">
-      <div ref={box} className="absolute inset-[3px]">
+    <div ref={wrap} className="relative min-w-0 flex-1">
+      <div ref={box} className="absolute inset-[3px]" style={more.length ? { bottom: 3 + MORE_H } : undefined}>
         {ids.length === 0 && (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-[13px] text-muted-foreground">
             <LayoutGrid className="size-6" />
@@ -439,7 +481,7 @@ function Grid({
           </div>
         )}
         {/* Flat and keyed by session, positioned absolutely (like Panes.TabView): re-arranging only moves boxes, the chats don't remount */}
-        {ids.map((id) => {
+        {shownIds.map((id) => {
           const b = zoom === id ? { x: 0, y: 0, w: 1, h: 1 } : lay.boxes.get(id);
           if (!b) return null;
           // Neighbours stay put under the moving tile and are only hidden once it covers them
@@ -517,6 +559,16 @@ function Grid({
           </div>
         )}
       </div>
+      {more.length > 0 && (
+        <div className="absolute inset-x-[6px] bottom-[3px] flex items-center gap-1 overflow-x-auto [scrollbar-width:none]" style={{ height: MORE_H }}>
+          <span className="shrink-0 px-1 text-[11px] text-muted-foreground" title="放不下了：点一个换进来，顶替最后一格">
+            更多 {more.length}
+          </span>
+          {more.map((id) => (
+            <TileChip key={id} id={id} current={false} className="h-6 max-w-40" onClick={() => onFocus(id)} />
+          ))}
+        </div>
+      )}
       {drag && (
         <div
           className="pointer-events-none fixed z-50 max-w-60 truncate rounded-md border bg-popover px-2 py-1 text-[12px] shadow-md"

@@ -114,7 +114,10 @@ export type Box = { x: number; y: number; w: number; h: number };
 
 /** Chat tiles read best a bit wider than tall; a narrower tile wraps every line. */
 const TARGET_ASPECT = 1.3;
-const MIN_TILE_W = 300;
+// Narrow enough that two tiles still sit side by side in a landscape phone's ~590px grid (asked for: not stacked as strips)
+const MIN_TILE_W = 280;
+/** Title bar + composer take ~110px; below this a tile shows hardly any of the conversation. */
+const MIN_TILE_H = 200;
 
 /**
  * How many tiles go in each row when n tiles share a w×h area (2 → [2], 4 → [2,2], 6 → [3,3], 9 → [3,3,3]; tall areas
@@ -242,6 +245,23 @@ export function arrange(ids: string[], main: string | undefined, ratio: number, 
     out.set(id, { x: region.x + b.x * region.w, y: b.y, w: b.w * region.w, h: b.h });
   });
   return { boxes: out, seams, key, sizes, region };
+}
+
+/**
+ * The tiles that fit in a w×h grid without any going under MIN_TILE_W × MIN_TILE_H (equal split), in `ids` order; the
+ * rest wait behind "more" (Overview.tsx). On a desktop all 12 fit; a landscape phone takes two (asked for: four
+ * stacked 80px strips were unusable). The main tile is always among them. Unmeasured (0×0): all of them.
+ */
+export function fitTiles(ids: string[], main: string | undefined, ratio: number, w: number, h: number): string[] {
+  if (!w || !h) return ids;
+  const hasMain = !!main && ids.includes(main);
+  for (let k = ids.length; k > 1; k--) {
+    const rest = ids.filter((id) => id !== main).slice(0, hasMain ? k - 1 : k);
+    const vis = ids.filter((id) => id === main || rest.includes(id));
+    const { boxes } = arrange(vis, main, ratio, w, h, {});
+    if ([...boxes.values()].every((b) => b.w * w >= MIN_TILE_W && b.h * h >= MIN_TILE_H)) return vis;
+  }
+  return ids.length ? [hasMain ? main! : ids[0]] : [];
 }
 
 /** Drop tile `from` on tile `to`: they trade places (and the main slot, if either had it). */

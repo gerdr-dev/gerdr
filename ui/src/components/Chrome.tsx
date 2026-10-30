@@ -433,8 +433,8 @@ export function SidebarHeader({ className, style }: { className?: string; style?
 
 /**
  * The bottom row of the left column, the same in all three modes (asked for: settings always at the bottom): the Code
- * sidebar, the overview's list, and over the bottom of the Work site's menu (WorkView). `sidebarToggle`: only the Code
- * sidebar can be hidden.
+ * sidebar, the overview's list, and over the bottom of the Work site's menu (WorkView). `sidebarToggle`: the Code
+ * sidebar and the overview's list (one setting) can be hidden; Work mode's menu can't.
  */
 export function SidebarFooter({ sidebarToggle }: { sidebarToggle?: boolean }) {
   const connected = useStore((s) => s.connected);
