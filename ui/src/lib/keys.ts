@@ -95,7 +95,7 @@ export const ACTION_TITLES: Record<KeyAction, string> = {
   newTab: "新建 tab",
   nextTab: "下一个 tab",
   prevTab: "上一个 tab",
-  lastTab: "上次的 tab",
+  lastTab: "上次的 tab（跨工作空间）",
   closeTab: "关闭 tab",
   reopenClosed: "重新打开刚关的 tab / pane",
   renameTab: "重命名 tab",
@@ -171,7 +171,8 @@ const MAC_KEYS: Record<KeyAction, string[]> = {
   newTab: ["prefix+c", "meta+t"],
   nextTab: ["prefix+n", "meta+shift+]"],
   prevTab: ["prefix+p", "meta+shift+["],
-  lastTab: ["prefix+;"],
+  // Not on Windows / Linux: Ctrl+E is end-of-line in a terminal pane
+  lastTab: ["prefix+;", "meta+e"],
   closeTab: ["prefix+shift+x"],
   // 和浏览器一样。浏览器里这个键被浏览器自己占着（重开它的标签页），只在桌面 App 里管用；那边用命令面板
   reopenClosed: ["meta+shift+t"],

@@ -121,7 +121,7 @@ gerdr acp claude  # 把内置适配器当 stdio ACP agent 跑（给 Zed 等 ACP 
 | `?` | 全部快捷键 | | |
 
 中文输入法开着也能用（按物理键位认键）。全部可以在「设置 → 快捷键」里改。
-mac App 里另有 ⌘T 新 tab、⌘1…9 切 tab 这些菜单快捷键；⌘D / ⌘⇧D 把焦点那个复制一份放右边 / 下面（会话就是同 agent、同目录、同模式的新会话，直接开起来；终端就是同目录终端），要空面板用 prefix+v / prefix+-。
+mac App 里另有 ⌘T 新 tab、⌘1…9 切 tab（按住 ⌘ tab 上会显示编号）、⌘E 回到上一个 tab（跨工作空间）这些菜单快捷键；⌘D / ⌘⇧D 把焦点那个复制一份放右边 / 下面（会话就是同 agent、同目录、同模式的新会话，直接开起来；终端就是同目录终端），要空面板用 prefix+v / prefix+-。
 
 ## 和 herdr 比
 
@@ -162,7 +162,6 @@ agent 升级了也不会因为屏幕长得不一样就坏。
 插件目录 `~/.gerdr/plugins/`，一个 `.ts` 文件一个插件，保存即生效（不用装 node，gerdr 自己编译）。
 自带的：
 
-- `tab-numbering.ts` —— tab 名前加位置编号 `1.web`、`2.api`，同名的加 `Ⅱ Ⅲ`；
 - `duplicate-tab.ts` —— `prefix+a` / `prefix+i` 复制当前 tab 到后面 / 前面；
 - `_notify-when-done.ts` —— 示例，默认关（文件名以 `_` 开头的不加载）。
 

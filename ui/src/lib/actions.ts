@@ -38,7 +38,7 @@ import {
   type Tab,
   type Workspace,
 } from "./layout";
-import { get, markRead, overviewShown, set, setLayout, setMode, toggleSidebar } from "./store";
+import { get, markRead, overviewShown, set, setLayout, setMode, toggleSidebar, useStore } from "./store";
 import { overviewFocus, overviewKey, toggleOverview } from "./overview";
 import { openWorkChat, workProjectOf } from "./work";
 import type { ContentBlock } from "./types";
@@ -366,10 +366,24 @@ export function stepTab(delta: number) {
   });
 }
 
+// The tab focused before the current one, across workspaces (and sessions). Workspace.lastTab only knows its own
+// workspace, so jumping between two tabs in different workspaces had no shortcut. Kept in memory per window: it's
+// "where I just was", not layout. A tab that was closed doesn't become the previous one (it can't be returned to).
+let curTab = activeTab(get().layout).id;
+let prevTab = "";
+useStore.subscribe((s, p) => {
+  if (s.layout === p.layout) return;
+  const id = activeTab(s.layout).id;
+  if (id === curTab) return;
+  if (curTab && s.layout.workspaces.some((w) => w.tabs.some((t) => t.id === curTab))) prevTab = curTab;
+  curTab = id;
+});
+
+/** Back to the previously focused tab, in whatever workspace it is; focus lands on the pane it had when you left. */
 export function lastTab() {
   setLayout((l) => {
-    const ws = activeWs(l);
-    return ws.lastTab && ws.tabs.some((t) => t.id === ws.lastTab) ? selectTabIn(l, ws.id, ws.lastTab) : l;
+    const ws = l.workspaces.find((w) => w.tabs.some((t) => t.id === prevTab));
+    return ws ? selectTabIn(l, ws.id, prevTab) : l;
   });
 }
 

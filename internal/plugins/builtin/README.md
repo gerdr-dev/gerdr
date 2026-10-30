@@ -10,7 +10,6 @@
 
 | 文件 | 干什么 |
 |---|---|
-| `tab-numbering.ts` | tab 名前加位置编号，`1.claude`、`2.web`，同名的加罗马数字后缀 |
 | `duplicate-tab.ts` | `prefix+a` / `prefix+i` 复制当前 tab（插到后面 / 前面） |
 | `_notify-when-done.ts` | 示例：看不见的会话跑完了 / 在等你时弹系统通知（默认关） |
 | `_session-title.ts` | 示例：自己定会话标题怎么起（`g.sessionTitle`，默认关） |

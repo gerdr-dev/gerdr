@@ -33,7 +33,7 @@ import {
   switchSpace,
   tabName,
 } from "@/lib/actions";
-import { formatCombo, type KeyAction } from "@/lib/keys";
+import { formatCombo, IS_MAC, type KeyAction } from "@/lib/keys";
 import {
   activeWs,
   allLeaves,
@@ -66,6 +66,42 @@ import { isNative, nativeNewWindow } from "@/lib/native";
 import { useRoute } from "./AndroidSettings";
 
 /** 一个 tab 的汇总状态：里面任何一个会话在等你 → 等你；在跑 → 在跑；…… */
+/**
+ * True while the tab shortcuts' modifier (⌘ on mac, Ctrl elsewhere) is held on its own. Waits a moment before turning on
+ * so a quick ⌘C / ⌘V doesn't flash numbers across the tab bar. Listens in the capture phase because xterm and the
+ * composer stop some keydowns; drops on blur since the keyup of a ⌘-Tab away never reaches the page.
+ */
+function useModHeld() {
+  const [held, setHeld] = useState(false);
+  useEffect(() => {
+    const mod = IS_MAC ? "Meta" : "Control";
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const off = () => {
+      clearTimeout(timer);
+      timer = undefined;
+      setHeld(false);
+    };
+    const down = (e: KeyboardEvent) => {
+      if (e.key !== mod) return off();
+      if (e.repeat) return;
+      if (e.shiftKey || e.altKey || (IS_MAC ? e.ctrlKey : e.metaKey)) return;
+      clearTimeout(timer);
+      timer = setTimeout(() => setHeld(true), 250);
+    };
+    const up = (e: KeyboardEvent) => e.key === mod && off();
+    window.addEventListener("keydown", down, true);
+    window.addEventListener("keyup", up, true);
+    window.addEventListener("blur", off);
+    return () => {
+      off();
+      window.removeEventListener("keydown", down, true);
+      window.removeEventListener("keyup", up, true);
+      window.removeEventListener("blur", off);
+    };
+  }, []);
+  return held;
+}
+
 export function tabStatus(tab: Tab, sessions: Record<string, SessionSummary>, unread: Record<string, true>) {
   let rank = 9;
   let status: string | undefined;
@@ -95,6 +131,7 @@ export function TabBar() {
   const barRef = useRef<HTMLDivElement>(null);
   const { drag, onPointerDown } = useTabDrag(ws, barRef);
   const flush = sidebar;
+  const numbers = useModHeld();
   return (
     // 胶囊式标签：当前的是一块亮一点的圆角底（bg-accent），别的不画底、悬停时浮起一块淡的。
     // 原来是 Chrome 那种（当前标签和下面内容同色、连成一片），可深色下栏底和内容底色只差一点（0.14 / 0.165），
@@ -151,7 +188,11 @@ export function TabBar() {
                     "data-[state=open]:bg-accent data-[state=open]:text-foreground data-[state=open]:ring-1 data-[state=open]:ring-brand/60",
                   )}
                 >
-                  {agent ? (
+                  {/* Holding ⌘ (Ctrl elsewhere) swaps the icon for the tab's ⌘1–9 number, so the target is readable right when
+                      you're about to press it; the rest of the time the icon stays (and the name stays plain for plugins / renames). */}
+                  {numbers && i < 9 ? (
+                    <span className="w-4 shrink-0 text-center text-[12px] font-medium text-foreground tabular-nums">{i + 1}</span>
+                  ) : agent ? (
                     <AgentIcon agent={agent} className={cn("size-4", !active && "opacity-60")} />
                   ) : (
                     first?.term && <SquareTerminal className="size-4 shrink-0 text-muted-foreground" />
