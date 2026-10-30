@@ -23,10 +23,7 @@ import (
 
 	"github.com/coder/acp-go-sdk"
 
-	"github.com/gerdr-dev/gerdr/internal/agents/native/llm"
-	"github.com/gerdr-dev/gerdr/internal/ext"
-	"github.com/gerdr-dev/gerdr/internal/mcpauth"
-	"github.com/gerdr-dev/gerdr/internal/sysenv"
+	"github.com/gerdr-dev/gerdr/native/llm"
 )
 
 // MCP 客户端：只做 agent 要用的 —— initialize、tools/list、tools/call。三种传输：
@@ -67,6 +64,9 @@ type mcpConn interface {
 }
 
 type mcpPool struct {
+	auth MCPAuth                        // nil = no OAuth
+	env  func(extra ...string) []string // stdio servers' environment; nil = this process's
+
 	mu       sync.Mutex
 	clients  map[string]*mcpClient
 	failed   map[string]mcpFailure
@@ -78,44 +78,36 @@ type mcpFailure struct {
 	at  time.Time
 }
 
-func mcpKey(s ext.MCPServer) string {
+func mcpKey(s MCPServer) string {
 	b, _ := json.Marshal([]any{s.Name, s.Type, s.Command, s.Args, s.Env, s.URL, s.Headers})
 	h := sha256.Sum256(b)
 	return hex.EncodeToString(h[:8])
 }
 
-// mcpServers：这个会话要用的 MCP 服务器（按设置的来源）。
-func mcpServers(m *ext.Manager, cwd string) []ext.MCPServer {
-	var out []ext.MCPServer
-	for _, r := range resolveMCP(m, cwd) {
-		out = append(out, r.server)
+// mcpServers: the servers this session uses — Options.MCP's, then the ones the client passed in session/new
+// (same name: the first wins).
+func (s *session) mcpServers(cwd string) []MCPServer {
+	var all []MCPServer
+	if s.a.opt.MCP != nil {
+		all = append(all, s.a.opt.MCP(cwd)...)
 	}
-	return out
-}
-
-type resolvedMCP struct {
-	server ext.MCPServer
-	from   string // 现在只有 gerdr（以前还有借来的 claude）
-}
-
-// resolveMCP：Native 引擎要用的服务器 = Gerdr 那份里开着的（角色限定了的再筛）。不看设置里的来源 ——
-// 来源只管 Claude Code / Codex。以前「Agent 自己的」对 Native 来说就是借 Claude Code 配的（~/.claude.json），
-// 分出「引擎」之后用户看不懂一个引擎为什么跟着另一个引擎的配置走，改成只用 Gerdr 的（升级时 ext.MigrateNativeMCP 把借着用的导入过来一次）。
-func resolveMCP(m *ext.Manager, cwd string) []resolvedMCP {
-	if m == nil {
-		return nil
-	}
-	var out []resolvedMCP
-	for _, s := range m.Settings().MCP {
-		if s.Enabled && m.AllowMCP(s.Name) {
-			out = append(out, resolvedMCP{s, "gerdr"})
+	s.mu.Lock()
+	all = append(all, s.clientMCP...)
+	s.mu.Unlock()
+	seen := map[string]bool{}
+	var out []MCPServer
+	for _, m := range all {
+		if m.Name == "" || seen[m.Name] {
+			continue
 		}
+		seen[m.Name] = true
+		out = append(out, m)
 	}
 	return out
 }
 
 // get 把这些服务器都接上（并发，最多等 timeout），返回接上了的和没接上的错误。
-func (p *mcpPool) get(ctx context.Context, servers []ext.MCPServer, timeout time.Duration) ([]*mcpClient, map[string]error) {
+func (p *mcpPool) get(ctx context.Context, servers []MCPServer, timeout time.Duration) ([]*mcpClient, map[string]error) {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	var wg sync.WaitGroup
@@ -141,7 +133,7 @@ func (p *mcpPool) get(ctx context.Context, servers []ext.MCPServer, timeout time
 	return out, errs
 }
 
-func (p *mcpPool) client(ctx context.Context, s ext.MCPServer) (*mcpClient, error) {
+func (p *mcpPool) client(ctx context.Context, s MCPServer) (*mcpClient, error) {
 	key := mcpKey(s)
 	for {
 		p.mu.Lock()
@@ -170,7 +162,7 @@ func (p *mcpPool) client(ctx context.Context, s ext.MCPServer) (*mcpClient, erro
 		p.mu.Unlock()
 
 		// 起服务器不跟着这次请求的 ctx 走：等不及先返回，服务器照样起完，下一轮就有了
-		c, err := startMCP(context.Background(), s)
+		c, err := startMCP(context.Background(), s, p.auth, p.env)
 		p.mu.Lock()
 		delete(p.starting, key)
 		if err != nil {
@@ -210,7 +202,7 @@ func (p *mcpPool) closeAll() {
 	}
 }
 
-func startMCP(ctx context.Context, s ext.MCPServer) (*mcpClient, error) {
+func startMCP(ctx context.Context, s MCPServer, auth MCPAuth, env func(...string) []string) (*mcpClient, error) {
 	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 	var conn mcpConn
@@ -218,18 +210,18 @@ func startMCP(ctx context.Context, s ext.MCPServer) (*mcpClient, error) {
 	switch {
 	case s.Type == "sse":
 		conn, err = dialSSE(ctx, expand(s.URL), expandMap(s.Headers))
-	case s.Remote():
+	case s.remote():
 		hc := &httpConn{url: expand(s.URL), headers: expandMap(s.Headers)}
-		// OAuth servers: the token comes from mcpauth (Claude Code's login, else gerdr's own) and is
+		// OAuth servers: the token comes from MCPAuth (in gerdr: Claude Code's login, else gerdr's own) and is
 		// fetched per request, so a refresh or a fresh login takes effect without reconnecting.
-		if st := mcpauth.Default; st != nil && !mcpauth.HasAuthHeader(s.Headers) {
+		if st := auth; st != nil && !hasAuthHeader(s.Headers) {
 			name, u, headers := s.Name, hc.url, hc.headers
 			hc.bearer = func(ctx context.Context) string { return st.Token(ctx, name, u, headers) }
 			hc.unauthorized = func() { st.Invalidate(name, u) }
 		}
 		conn = hc
 	default:
-		conn, err = startStdio(s)
+		conn, err = startStdio(s, env)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("MCP %s: %w", s.Name, err)
@@ -271,6 +263,23 @@ func startMCP(ctx context.Context, s ext.MCPServer) (*mcpClient, error) {
 // sharedPool backs CallTool: connections for callers outside an agent session (work functions).
 var sharedPool mcpPool
 
+// SetSharedMCP sets the OAuth tokens and child environment for CallTool and ReconnectMCP. Call it once at
+// startup, before either is used.
+func SetSharedMCP(auth MCPAuth, env func(extra ...string) []string) {
+	sharedPool.mu.Lock()
+	sharedPool.auth, sharedPool.env = auth, env
+	sharedPool.mu.Unlock()
+}
+
+func hasAuthHeader(h map[string]string) bool {
+	for k := range h {
+		if strings.EqualFold(k, "Authorization") {
+			return true
+		}
+	}
+	return false
+}
+
 // pools: every connection pool in this process (each native agent's and sharedPool), for ReconnectMCP.
 var pools struct {
 	sync.Mutex
@@ -287,7 +296,7 @@ func init() { registerPool(&sharedPool) }
 
 // ReconnectMCP drops every connection to the server named s.Name (in all pools, so native agents reconnect on their next
 // call), forgets a recent failure, then connects once to report how it went: the number of tools it offers, or the error.
-func ReconnectMCP(ctx context.Context, s ext.MCPServer) (tools int, err error) {
+func ReconnectMCP(ctx context.Context, s MCPServer) (tools int, err error) {
 	pools.Lock()
 	all := append([]*mcpPool(nil), pools.all...)
 	pools.Unlock()
@@ -320,7 +329,7 @@ func (p *mcpPool) forget(name string) {
 
 // CallTool calls one MCP tool outside any agent session and returns the raw tools/call result.
 // Same transports, OAuth and connection reuse as the agent's own MCP tools.
-func CallTool(ctx context.Context, s ext.MCPServer, tool string, args map[string]any) (json.RawMessage, error) {
+func CallTool(ctx context.Context, s MCPServer, tool string, args map[string]any) (json.RawMessage, error) {
 	c, err := sharedPool.client(ctx, s)
 	if err != nil {
 		return nil, err
@@ -573,11 +582,10 @@ type stdioConn struct {
 	mux rpcMux
 }
 
-func startStdio(s ext.MCPServer) (*stdioConn, error) {
+func startStdio(s MCPServer, childEnv func(...string) []string) (*stdioConn, error) {
 	if s.Command == "" {
 		return nil, errors.New("no command")
 	}
-	sysenv.AdoptLoginPath()
 	args := make([]string, len(s.Args))
 	for i, a := range s.Args {
 		args[i] = expand(a)
@@ -587,7 +595,11 @@ func startStdio(s ext.MCPServer) (*stdioConn, error) {
 	for k, v := range s.Env {
 		env = append(env, k+"="+expand(v))
 	}
-	cmd.Env = sysenv.ChildEnv(env...)
+	if childEnv != nil {
+		cmd.Env = childEnv(env...)
+	} else {
+		cmd.Env = mergeEnv(os.Environ(), env)
+	}
 	in, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, err

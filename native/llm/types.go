@@ -1,11 +1,10 @@
-// Package llm 是 native agent 跟模型说话的那一层：和厂商无关的消息格式 + 三种线路协议
-// （OpenAI Chat Completions、OpenAI Responses、Anthropic Messages）。
+// Package llm is how the native agent talks to models: a vendor-neutral message format and three wire
+// protocols (OpenAI Chat Completions, OpenAI Responses, Anthropic Messages), hand-written so every gateway quirk
+// is visible in one place (DeepSeek's reasoning_content must be sent back, Responses reasoning goes back with its
+// encrypted_content, Claude's thinking blocks are replayed verbatim…; each noted in its file).
 //
-// 为什么不用 pi（shuttle 用的那套）：pi 是一个完整的 agent 框架（主循环、会话树、几十个厂商），
-// gerdr 要的插话、子 agent、回退都得改它的主循环；而模型这一层我们只需要两种协议（DeepSeek、
-// 国内网关走 Chat Completions，GPT 走 Responses），自己写不到一千行，坑都在这里看得见。
-// 各家的怪癖（DeepSeek 的 reasoning_content 要回传、Responses 的推理要带 encrypted_content 回去……）
-// 都记在对应的文件里。
+// It is usable on its own for one-off calls: New(api, Endpoint{…}).Stream(ctx, Request{…}, onEvent). To pick
+// the protocol, thinking format and effort from a native.Config, use native.Complete.
 package llm
 
 import (

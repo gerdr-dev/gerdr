@@ -10,7 +10,7 @@ import (
 	"github.com/coder/acp-go-sdk"
 	"github.com/google/uuid"
 
-	"github.com/gerdr-dev/gerdr/internal/acpx"
+	"github.com/gerdr-dev/gerdr/acpx"
 )
 
 // TestE2ETasks：子 agent 的话带 subagent 标记推出来（不混进主对话）、任务列表里有它；

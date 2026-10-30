@@ -8,8 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gerdr-dev/gerdr/internal/acpx"
-	"github.com/gerdr-dev/gerdr/internal/ext"
+	"github.com/gerdr-dev/gerdr/acpx"
 )
 
 // 系统提示词：每轮现拼，但内容只随文件变（日期按天），前缀缓存照样命中。
@@ -35,15 +34,47 @@ const basePrompt = `You are a coding agent running inside gerdr, working on the 
 
 const subagentPrompt = `You are a sub-agent of a coding agent running inside gerdr. You were given one self-contained task. Work on it with the tools, then reply with a concise report of what you found or did — that final message is the only thing the parent agent sees, so include the concrete facts (paths, line numbers, commands, results) it needs. Do not ask the user questions.`
 
-// systemPrompt：mem 为 nil = 子 agent（任务是主 agent 给的，不用指令文件、skill、记忆）。
-func systemPrompt(cwd string, skills []ext.Skill, model resolved, mem *memoryDirs) string {
-	sub := mem == nil
-	var b strings.Builder
-	if sub {
-		b.WriteString(subagentPrompt)
-	} else {
-		b.WriteString(basePrompt)
+// systemPrompt is a main session's system prompt: the base prompt (or Options.SystemPrompt), the environment,
+// instruction files, skills, memory, gerdr's GUI hint and the role's prompt, minus what Options turned off.
+func (a *Agent) systemPrompt(s *session, cwd string, model resolved) string {
+	base := basePrompt
+	custom := a.opt.SystemPrompt != nil
+	if custom {
+		base = strings.TrimSpace(a.opt.SystemPrompt(s.currentID(), cwd, s.clientMetaMap()))
 	}
+	var b strings.Builder
+	b.WriteString(base)
+	b.WriteString(envSection(cwd, model))
+	if !a.opt.NoInstructionFiles {
+		for _, f := range instructionFiles(cwd) {
+			fmt.Fprintf(&b, "\n# Instructions from %s\n\n%s\n", f.path, strings.TrimSpace(f.content))
+		}
+	}
+	if skills := a.skills(cwd); len(skills) > 0 {
+		b.WriteString("\n# Skills\nSkills are packaged instructions for specific tasks. When a task matches a skill's description, read its SKILL.md with the read tool first and follow it (paths inside are relative to the skill's directory). The user may also invoke one as /<name>.\n")
+		for _, sk := range skills {
+			fmt.Fprintf(&b, "- %s: %s (%s)\n", sk.Name, oneLine(sk.Description, 300), filepath.Join(sk.Dir, "SKILL.md"))
+		}
+	}
+	if !a.opt.NoMemory {
+		b.WriteString("\n" + memorySection(s.memory()))
+	}
+	if !custom {
+		b.WriteString("\n" + acpx.GUIHint + "\n")
+	}
+	if a.role != "" {
+		b.WriteString("\n" + a.role + "\n")
+	}
+	return b.String()
+}
+
+// subagentSystemPrompt: a sub-agent's task comes from the main agent, so no instruction files, skills or memory.
+func subagentSystemPrompt(cwd string, model resolved) string {
+	return subagentPrompt + envSection(cwd, model)
+}
+
+func envSection(cwd string, model resolved) string {
+	var b strings.Builder
 	b.WriteString("\n\n# Environment\n")
 	fmt.Fprintf(&b, "- Working directory: %s\n", cwd)
 	if root := gitRoot(cwd); root != "" {
@@ -60,20 +91,6 @@ func systemPrompt(cwd string, skills []ext.Skill, model resolved, mem *memoryDir
 			pn = model.Provider.ID
 		}
 		fmt.Fprintf(&b, "- You are the model %q (shown to the user as %q), called through the %q API provider\n", model.ID, model.Name, pn)
-	}
-
-	if !sub {
-		for _, f := range instructionFiles(cwd) {
-			fmt.Fprintf(&b, "\n# Instructions from %s\n\n%s\n", f.path, strings.TrimSpace(f.content))
-		}
-		if len(skills) > 0 {
-			b.WriteString("\n# Skills\nSkills are packaged instructions for specific tasks. When a task matches a skill's description, read its SKILL.md with the read tool first and follow it (paths inside are relative to the skill's directory). The user may also invoke one as /<name>.\n")
-			for _, s := range skills {
-				fmt.Fprintf(&b, "- %s: %s (%s)\n", s.Name, oneLine(s.Description, 300), filepath.Join(s.Dir, "SKILL.md"))
-			}
-		}
-		b.WriteString("\n" + memorySection(*mem))
-		b.WriteString("\n" + acpx.GUIHint + "\n")
 	}
 	return b.String()
 }
@@ -132,34 +149,6 @@ func gitRoot(dir string) string {
 			return ""
 		}
 	}
-}
-
-// skillsFor：给这个 agent 的 skill —— 内置的（gerdr、gerdr-ui）总是给；「agent 自己的」当成 Claude Code 的那份
-// （用户级、项目级：这个 agent 没有自己的 skill 目录，用户的 skill 基本都在 ~/.claude/skills 里）；
-// 设置里的来源（只用 agent 的 / 两者 / 只用 gerdr 的）照常生效。同名的先到先得。
-func skillsFor(m *ext.Manager, cwd string) []ext.Skill {
-	var all []ext.Skill
-	src := ext.SourceAgent
-	if m != nil {
-		all = append(all, m.Builtin()...)
-		src = m.Settings().SkillSource
-		if src.UsesGerdr() {
-			all = append(all, m.Skills()...)
-		}
-	}
-	if src != ext.SourceGerdr {
-		all = append(all, ext.ClaudeSkills(cwd)...)
-	}
-	seen := map[string]bool{}
-	var out []ext.Skill
-	for _, s := range all {
-		if !s.Enabled || seen[s.Name] {
-			continue
-		}
-		seen[s.Name] = true
-		out = append(out, s)
-	}
-	return m.FilterSkills(out) // 角色限定了 skill 的话只留挑中的（m 是 nil 也行）
 }
 
 func oneLine(s string, n int) string {

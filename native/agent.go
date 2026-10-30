@@ -1,11 +1,3 @@
-// Package native 是 gerdr 自己的 agent：直接调模型接口（GPT、DeepSeek……，见 llm/），工具、主循环、会话记录都在这里。
-// 对上和 claude / codex 两个适配器一样是一个完整的 ACP agent（进程内管道接 hub，`gerdr acp native` 是 stdio 版）。
-//
-// 为什么自己写、不用 shuttle 的 pi：插话（_session/steering）、子 agent、回退这几样 gerdr 必需的，pi 的主循环里都没有
-// 或者形状不对，改它不如自己写一个小的 —— 主循环一百多行（loop.go），每一步都看得见、改得动。
-// 模型这层只要两种协议（Chat Completions、Responses），也自己写（llm/）。
-//
-// 进程模型：没有子进程，会话就是内存里的一个 session + 磁盘上一份 jsonl（store.go）。
 package native
 
 import (
@@ -22,23 +14,15 @@ import (
 	"github.com/coder/acp-go-sdk"
 	"github.com/google/uuid"
 
-	"github.com/gerdr-dev/gerdr/internal/acpx"
-	"github.com/gerdr-dev/gerdr/internal/agents/native/llm"
-	"github.com/gerdr-dev/gerdr/internal/ext"
+	"github.com/gerdr-dev/gerdr/acpx"
+	"github.com/gerdr-dev/gerdr/native/llm"
 )
-
-type Options struct {
-	Dir    string        // 会话记录放哪（<GERDR_DIR>/native）
-	Ext    *ext.Manager  // skill 从哪来；nil = 只用 Claude Code 的
-	Config func() Config // 模型配置，每次现取（设置一改下一轮就用新的）
-	Prompt string        // 角色（设置 → Agent）追加的系统提示，接在系统提示词最后
-}
 
 type Agent struct {
 	log  *slog.Logger
 	conn *acp.AgentSideConnection
 	st   store
-	ext  *ext.Manager
+	opt  Options
 	cfg  func() Config
 	role string // Options.Prompt
 
@@ -51,7 +35,8 @@ func New(log *slog.Logger, o Options) *Agent {
 	if o.Config == nil {
 		o.Config = func() Config { return Config{} }
 	}
-	a := &Agent{log: log.With("agent", "native"), st: store{dir: o.Dir}, ext: o.Ext, cfg: o.Config, role: strings.TrimSpace(o.Prompt), sessions: map[string]*session{}}
+	a := &Agent{log: log.With("agent", "native"), st: store{dir: o.Dir}, opt: o, cfg: o.Config, role: strings.TrimSpace(o.Prompt), sessions: map[string]*session{}}
+	a.mcp.auth, a.mcp.env = o.MCPAuth, a.childEnv
 	registerPool(&a.mcp) // so Settings → MCP's reconnect reaches it (ReconnectMCP)
 	return a
 }
@@ -160,6 +145,7 @@ func (a *Agent) NewSession(ctx context.Context, p acp.NewSessionRequest) (acp.Ne
 		m.Model = r.Key
 	}
 	s := a.register(uuid.NewString(), m, nil)
+	s.setClient(p.Meta, p.McpServers)
 	s.saveMeta()
 	a.announceCommands(s)
 	return acp.NewSessionResponse{
@@ -170,7 +156,7 @@ func (a *Agent) NewSession(ctx context.Context, p acp.NewSessionRequest) (acp.Ne
 }
 
 func (a *Agent) register(id string, m sessionMeta, es []entry) *session {
-	s := &session{a: a, id: id, meta: m, entries: es, rules: map[string]bool{}, read: map[string]bool{}}
+	s := &session{a: a, id: id, meta: m, entries: es, rules: map[string]bool{}, read: map[string]string{}}
 	for _, r := range m.Allow {
 		s.rules[r] = true
 	}
@@ -181,7 +167,7 @@ func (a *Agent) register(id string, m sessionMeta, es []entry) *session {
 }
 
 // attach：接回一个会话（Resume / Load）。记录不在（建了没说过话、或者被删了）就按同一个 id 新起一个。
-func (a *Agent) attach(id, cwd string, meta map[string]any) (*session, error) {
+func (a *Agent) attach(id, cwd string, meta map[string]any, servers []acp.McpServer) (*session, error) {
 	a.mu.Lock()
 	if s := a.sessions[id]; s != nil {
 		a.mu.Unlock()
@@ -190,6 +176,7 @@ func (a *Agent) attach(id, cwd string, meta map[string]any) (*session, error) {
 			s.meta.Mode = md
 			s.mu.Unlock()
 		}
+		s.setClient(meta, servers)
 		return s, nil
 	}
 	a.mu.Unlock()
@@ -214,6 +201,7 @@ func (a *Agent) attach(id, cwd string, meta map[string]any) (*session, error) {
 		m.Model = r.Key // 原来的模型从配置里删掉了：换成默认的
 	}
 	s := a.register(id, m, es)
+	s.setClient(meta, servers)
 	if len(es) == 0 {
 		s.saveMeta()
 	}
@@ -221,7 +209,7 @@ func (a *Agent) attach(id, cwd string, meta map[string]any) (*session, error) {
 }
 
 func (a *Agent) ResumeSession(ctx context.Context, p acp.ResumeSessionRequest) (acp.ResumeSessionResponse, error) {
-	s, err := a.attach(string(p.SessionId), p.Cwd, p.Meta)
+	s, err := a.attach(string(p.SessionId), p.Cwd, p.Meta, p.McpServers)
 	if err != nil {
 		return acp.ResumeSessionResponse{}, err
 	}
@@ -234,7 +222,7 @@ func (a *Agent) ResumeSession(ctx context.Context, p acp.ResumeSessionRequest) (
 
 // LoadSession = Resume + 把历史当成 session/update 重放一遍。
 func (a *Agent) LoadSession(ctx context.Context, p acp.LoadSessionRequest) (acp.LoadSessionResponse, error) {
-	s, err := a.attach(string(p.SessionId), p.Cwd, p.Meta)
+	s, err := a.attach(string(p.SessionId), p.Cwd, p.Meta, p.McpServers)
 	if err != nil {
 		return acp.LoadSessionResponse{}, err
 	}
@@ -420,8 +408,13 @@ var builtinCommands = []acp.AvailableCommand{
 }
 
 func (a *Agent) announceCommands(s *session) {
-	cmds := append([]acp.AvailableCommand(nil), builtinCommands...)
-	for _, sk := range skillsFor(a.ext, s.cwd()) {
+	var cmds []acp.AvailableCommand
+	for _, c := range builtinCommands {
+		if c.Name != "memory" || !a.opt.NoMemory {
+			cmds = append(cmds, c)
+		}
+	}
+	for _, sk := range a.skills(s.cwd()) {
 		cmds = append(cmds, acp.AvailableCommand{Name: sk.Name, Description: oneLine(sk.Description, 200), Meta: map[string]any{"skill": true}})
 	}
 	s.send(acp.SessionUpdate{AvailableCommandsUpdate: &acp.SessionAvailableCommandsUpdate{AvailableCommands: cmds}})
@@ -477,13 +470,13 @@ func (a *Agent) Prompt(ctx context.Context, p acp.PromptRequest) (acp.PromptResp
 		s.addMsg(llmUser(a.toParts(blocks, s)), msgID, nil)
 		if err := r.compact(tctx, args); err != nil {
 			if tctx.Err() != nil {
-				return acp.PromptResponse{StopReason: acp.StopReasonCancelled}, nil
+				return acp.PromptResponse{StopReason: acp.StopReasonCancelled, Usage: s.turnUsage()}, nil
 			}
 			return acp.PromptResponse{}, acp.NewInternalError(map[string]any{"message": err.Error()})
 		}
-		return acp.PromptResponse{StopReason: acp.StopReasonEndTurn}, nil
+		return acp.PromptResponse{StopReason: acp.StopReasonEndTurn, Usage: s.turnUsage()}, nil
 	}
-	if name == "memory" {
+	if name == "memory" && !a.opt.NoMemory {
 		// 换成一句给模型的话（记忆就是文件，它自己会读写）；界面上显示的还是人打的 /memory
 		text := "Show me what you remember across conversations: read both memory indexes (global and project) and list the memories grouped by scope, one line each with its file path. Do not change anything."
 		if args != "" {
@@ -491,7 +484,7 @@ func (a *Agent) Prompt(ctx context.Context, p acp.PromptRequest) (acp.PromptResp
 		}
 		blocks = append([]acp.ContentBlock{acp.TextBlock(text)}, blocks[1:]...)
 	} else if name != "" {
-		if sk := findSkill(skillsFor(a.ext, s.cwd()), name); sk != nil {
+		if sk := findSkill(a.skills(s.cwd()), name); sk != nil {
 			text := fmt.Sprintf("The user invoked the skill %q. Read %s with the read tool and follow it.", sk.Name, filepath.Join(sk.Dir, "SKILL.md"))
 			if args != "" {
 				text += "\n\nArguments: " + args
@@ -510,14 +503,14 @@ func (a *Agent) Prompt(ctx context.Context, p acp.PromptRequest) (acp.PromptResp
 	// 不能只看 tctx：endIfIdle 收尾时已经把它取消了
 	switch {
 	case err == errStopped || (err != nil && tctx.Err() != nil):
-		return acp.PromptResponse{StopReason: acp.StopReasonCancelled}, nil
+		return acp.PromptResponse{StopReason: acp.StopReasonCancelled, Usage: s.turnUsage()}, nil
 	case err != nil:
 		return acp.PromptResponse{}, acp.NewInternalError(map[string]any{"message": err.Error()})
 	}
-	return acp.PromptResponse{StopReason: acp.StopReasonEndTurn}, nil
+	return acp.PromptResponse{StopReason: acp.StopReasonEndTurn, Usage: s.turnUsage()}, nil
 }
 
-func findSkill(ss []ext.Skill, name string) *ext.Skill {
+func findSkill(ss []Skill, name string) *Skill {
 	for i := range ss {
 		if ss[i].Name == name {
 			return &ss[i]

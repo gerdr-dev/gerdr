@@ -13,8 +13,8 @@ import (
 	"github.com/coder/acp-go-sdk"
 	"github.com/google/uuid"
 
-	"github.com/gerdr-dev/gerdr/internal/acpx"
-	"github.com/gerdr-dev/gerdr/internal/agents/native/llm"
+	"github.com/gerdr-dev/gerdr/acpx"
+	"github.com/gerdr-dev/gerdr/native/llm"
 )
 
 // 主循环：调模型 → 有工具调用就执行、把结果接上再调 → 没有了就结束。
@@ -181,6 +181,7 @@ func (r *run) callModel(ctx context.Context) (llm.Result, bool, error) {
 			}
 		}
 	})
+	r.s.addUsage(res.Usage)
 	if res.Usage.Output > 0 && r.tok != nil {
 		r.tok.Exact(key, res.Usage.Output)
 		r.s.send(acp.SessionUpdate{SessionInfoUpdate: &acp.SessionSessionInfoUpdate{Meta: acpx.Progress(r.tok.Total())}})
@@ -198,23 +199,38 @@ func (r *run) callModel(ctx context.Context) (llm.Result, bool, error) {
 	return res, false, err
 }
 
-func (r *run) effortValue() string {
-	e := r.effort
+func (r *run) effortValue() string { return effortFor(r.model, r.effort) }
+
+// effortFor is the effort to send: the chosen one if the model takes it, else its default. "off" (thinking off,
+// e.g. an embedder's off / low / medium / high levels) is honoured even when the model doesn't list it: the
+// protocols that can turn thinking off get "off" (llm translates it per model), the rest their lowest level.
+func effortFor(m resolved, e string) string {
 	if e == "" {
-		e = r.model.DefaultEffort
+		e = m.DefaultEffort
 	}
-	if len(r.model.Efforts) > 0 {
-		ok := false
-		for _, x := range r.model.Efforts {
-			if x == e {
-				ok = true
+	if len(m.Efforts) == 0 {
+		return e
+	}
+	for _, x := range m.Efforts {
+		if x == e {
+			return e
+		}
+	}
+	if e == "off" {
+		switch m.Thinking {
+		case "deepseek", "adaptive", "updates":
+			return "off"
+		}
+		for _, x := range []string{"none", "minimal"} {
+			for _, y := range m.Efforts {
+				if x == y {
+					return x
+				}
 			}
 		}
-		if !ok {
-			e = r.model.DefaultEffort
-		}
+		return m.Efforts[0]
 	}
-	return e
+	return m.DefaultEffort
 }
 
 func (r *run) notice(text string) {
@@ -342,7 +358,7 @@ func (r *run) finish(p *pending) {
 
 // exec 跑一个工具：先过权限，再执行。
 func (r *run) exec(ctx context.Context, p *pending) result {
-	v, rule := decide(r.s.mode(), p.t, p.args, r.s.cwd(), r.s.memory(), r.s.allowed)
+	v, rule := decide(r.s.mode(), p.t, p.args, r.s.cwd(), r.s.memory(), r.s.allowed, r.s.a.opt.SafeCommand)
 	switch v {
 	case deny:
 		return errResult("Not allowed in read-only mode. Describe the change instead, or ask the user to switch modes.")
@@ -390,7 +406,7 @@ func (r *run) askPermission(ctx context.Context, p *pending, rule string) (strin
 	}
 	// 改文件的审批卡片上直接给 diff：人要看的就是改成什么样
 	if p.t.name == "edit" || p.t.name == "write" {
-		if d := previewDiff(r.s.cwd(), p.t.name, p.args); d != nil {
+		if d := previewDiff(&call{ctx: ctx, r: r, id: p.tc.ID}, p.t.name, p.args); d != nil {
 			tc.Content = d
 		}
 	}

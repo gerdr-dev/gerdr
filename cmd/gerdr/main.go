@@ -24,7 +24,7 @@ import (
 
 	"github.com/gerdr-dev/gerdr/internal/agents/claude"
 	"github.com/gerdr-dev/gerdr/internal/agents/codex"
-	"github.com/gerdr-dev/gerdr/internal/agents/native"
+	"github.com/gerdr-dev/gerdr/internal/agents/gerdrnative"
 	"github.com/gerdr-dev/gerdr/internal/awake"
 	"github.com/gerdr-dev/gerdr/internal/config"
 	"github.com/gerdr-dev/gerdr/internal/doctor"
@@ -40,6 +40,7 @@ import (
 	"github.com/gerdr-dev/gerdr/internal/version"
 	"github.com/gerdr-dev/gerdr/internal/webui"
 	"github.com/gerdr-dev/gerdr/internal/work"
+	"github.com/gerdr-dev/gerdr/native"
 )
 
 func main() {
@@ -248,6 +249,7 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 	}
 	em := ext.New(env.Dir)
 	mcpauth.Default = mcpauth.New(env.Dir)
+	native.SetSharedMCP(gerdrnative.Auth{}, gerdrnative.ChildEnv) // Work functions' ctx.mcp and Settings → MCP's reconnect
 	if added, err := em.MigrateNativeMCP(); err != nil {
 		log.Warn("migrate native mcp", "err", err)
 	} else if len(added) > 0 {
@@ -259,7 +261,7 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 			LLM native.Config `json:"llm"`
 		}
 		_ = json.Unmarshal(cfg.Get(), &c)
-		return c.LLM.WithKeys(secrets)
+		return gerdrnative.WithKeys(c.LLM, secrets)
 	}
 	sysenv.SetSecretEnv(cfgLLM().KeyEnvs()) // before any agent or terminal starts; applyAgents keeps it current
 	// config.json 的 defaultModes / defaultConfig：新会话的默认模式 / 模型（按 agent id，设置 → Agent 里改），建会话时现取
@@ -350,7 +352,7 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 		for _, list := range [][]ext.MCPServer{em.Settings().MCP, ext.ClaudeMCP(""), ext.CodexMCP()} {
 			for _, m := range list {
 				if m.Name == name && m.Enabled {
-					return native.CallTool(ctx, m, tool, args)
+					return native.CallTool(ctx, gerdrnative.MCPServer(m), tool, args)
 				}
 			}
 		}
@@ -509,14 +511,14 @@ func runACP(which string) error {
 			home, _ := os.UserHomeDir()
 			dir = filepath.Join(home, ".gerdr")
 		}
-		a = native.New(log, native.Options{Dir: filepath.Join(dir, "native"), Config: func() native.Config {
+		a = native.New(log, gerdrnative.Options(filepath.Join(dir, "native"), nil, func() native.Config {
 			var c struct {
 				LLM native.Config `json:"llm"`
 			}
 			b, _ := os.ReadFile(filepath.Join(dir, "config.json"))
 			_ = json.Unmarshal(b, &c)
-			return c.LLM.WithKeys(config.NewSecrets(filepath.Join(dir, "secrets.json")))
-		}})
+			return gerdrnative.WithKeys(c.LLM, config.NewSecrets(filepath.Join(dir, "secrets.json")))
+		}, ""))
 	default:
 		return fmt.Errorf("unknown agent %q (claude|codex|native)", which)
 	}

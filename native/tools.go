@@ -3,7 +3,6 @@ package native
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -20,8 +19,7 @@ import (
 
 	"github.com/coder/acp-go-sdk"
 
-	"github.com/gerdr-dev/gerdr/internal/agents/native/llm"
-	"github.com/gerdr-dev/gerdr/internal/sysenv"
+	"github.com/gerdr-dev/gerdr/native/llm"
 )
 
 // 工具：照 Claude Code / pi 的那一套（读、写、改、命令、搜内容、搜文件名、待办），名字用小写下划线
@@ -162,37 +160,51 @@ var readTool = &tool{
 	show:     pathShow("Read", acp.ToolKindRead),
 	run: func(c *call, args map[string]any) result {
 		p := c.abs(str(args, "path"))
-		st, err := os.Stat(p)
-		if err != nil {
-			return errResult("%v", err)
-		}
-		if st.IsDir() {
-			return errResult("%s is a directory; use bash `ls` or the glob tool to list it", p)
+		owned := c.owned(p)
+		var size int64
+		if !owned {
+			st, err := os.Stat(p)
+			if err != nil {
+				return errResult("%v", err)
+			}
+			if st.IsDir() {
+				return errResult("%s is a directory; use bash `ls` or the glob tool to list it", p)
+			}
+			size = st.Size()
 		}
 		if mime, ok := imageExt[strings.ToLower(filepath.Ext(p))]; ok {
 			if !c.r.model.seesImages() {
 				return errResult("the current model cannot view images")
 			}
-			if st.Size() > 8<<20 {
-				return errResult("image too large (%d bytes)", st.Size())
+			if size > 8<<20 {
+				return errResult("image too large (%d bytes)", size)
 			}
-			b, err := os.ReadFile(p)
+			b, err := c.readFile(p)
 			if err != nil {
 				return errResult("%v", err)
 			}
-			return result{text: fmt.Sprintf("Image %s (%d bytes)", p, len(b)), images: []llm.Part{{Type: "image", MIME: mime, Data: base64.StdEncoding.EncodeToString(b)}}}
+			img := c.r.s.a.imagePart(mime, b)
+			return result{text: fmt.Sprintf("Image %s (%d bytes)", p, len(b)), images: []llm.Part{img}}
 		}
-		f, err := os.Open(p)
+		var b []byte
+		var err error
+		if owned {
+			b, err = c.readFile(p)
+		} else {
+			var f *os.File
+			if f, err = os.Open(p); err == nil {
+				b, err = io.ReadAll(io.LimitReader(f, 64<<20))
+				f.Close()
+			}
+		}
 		if err != nil {
 			return errResult("%v", err)
 		}
-		defer f.Close()
-		b, err := io.ReadAll(io.LimitReader(f, 64<<20))
-		if err != nil {
-			return errResult("%v", err)
+		if size == 0 {
+			size = int64(len(b))
 		}
 		if bytes.IndexByte(b[:min(len(b), 8000)], 0) >= 0 {
-			return errResult("%s looks like a binary file (%d bytes)", p, st.Size())
+			return errResult("%s looks like a binary file (%d bytes)", p, size)
 		}
 		lines := strings.Split(string(b), "\n")
 		if len(lines) > 0 && lines[len(lines)-1] == "" {
@@ -225,7 +237,9 @@ var readTool = &tool{
 		if end < len(lines) {
 			fmt.Fprintf(&out, "\n[%d more lines; continue with offset=%d]", len(lines)-end, end+1)
 		}
-		c.r.s.markRead(p)
+		if !owned {
+			c.r.s.markRead(p, "")
+		}
 		return result{text: out.String(), display: []acp.ToolCallContent{}}
 	},
 }
@@ -254,18 +268,13 @@ var writeTool = &tool{
 	run: func(c *call, args map[string]any) result {
 		p := c.abs(str(args, "path"))
 		content := str(args, "content")
-		var old *string
-		if b, err := os.ReadFile(p); err == nil {
-			s := string(b)
-			old = &s
-		}
-		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		old := c.readOld(p)
+		if err := c.writeFile(p, []byte(content)); err != nil {
 			return errResult("%v", err)
 		}
-		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
-			return errResult("%v", err)
+		if !c.owned(p) {
+			c.r.s.markRead(p, "")
 		}
-		c.r.s.markRead(p)
 		verb := "Created"
 		if old != nil {
 			verb = "Overwrote"
@@ -289,7 +298,7 @@ var editTool = &tool{
 	run: func(c *call, args map[string]any) result {
 		p := c.abs(str(args, "path"))
 		oldS, newS := str(args, "old_string"), str(args, "new_string")
-		b, err := os.ReadFile(p)
+		b, err := c.readFile(p)
 		if err != nil {
 			return errResult("%v", err)
 		}
@@ -314,7 +323,7 @@ var editTool = &tool{
 		} else {
 			out = strings.Replace(src, oldS, newS, 1)
 		}
-		if err := os.WriteFile(p, []byte(out), 0o644); err != nil {
+		if err := c.writeFile(p, []byte(out)); err != nil {
 			return errResult("%v", err)
 		}
 		return result{text: fmt.Sprintf("Edited %s (%d replacement(s))", p, max(1, boolToInt(boolean(args, "replace_all"))*n)),
@@ -369,7 +378,11 @@ type proc struct {
 func startProc(c *call, command string) (*proc, error) {
 	cmd := exec.Command(shell(), "-c", command)
 	cmd.Dir = c.cwd()
-	cmd.Env = sysenv.ChildEnv(sessionEnvKey + "=" + c.r.s.currentID())
+	var extra []string
+	if f := c.r.s.a.opt.BashEnv; f != nil {
+		extra = f(c.r.s.currentID(), c.r.s.clientMetaMap())
+	}
+	cmd.Env = c.r.s.a.childEnv(extra...)
 	cmd.Stdin = nil
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	p := &proc{cmd: cmd, buf: &lockedBuf{}, done: make(chan error, 1), start: time.Now()}
@@ -488,9 +501,6 @@ loop:
 	}
 	return result{text: text, err: code != 0 || killed != "", display: display}
 }
-
-// sessionEnvKey：bash 里能看到自己是哪个会话（`gerdr session current` 拿它问 /api/resolve）。
-const sessionEnvKey = "GERDR_NATIVE_SESSION_ID"
 
 type lockedBuf struct {
 	mu   sync.Mutex
@@ -781,16 +791,9 @@ var todoTool = &tool{
 }
 
 // previewDiff：审批卡片上的 diff（还没改，算出改完的样子）。算不出来（找不到 old_string）就不给，执行时再报错。
-func previewDiff(cwd, name string, args map[string]any) []acp.ToolCallContent {
-	p := str(args, "path")
-	if !filepath.IsAbs(p) {
-		p = filepath.Join(cwd, p)
-	}
-	var old *string
-	if b, err := os.ReadFile(p); err == nil {
-		s := string(b)
-		old = &s
-	}
+func previewDiff(c *call, name string, args map[string]any) []acp.ToolCallContent {
+	p := c.abs(str(args, "path"))
+	old := c.readOld(p)
 	var next string
 	switch name {
 	case "write":

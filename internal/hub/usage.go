@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gerdr-dev/gerdr/internal/acpx"
+	"github.com/gerdr-dev/gerdr/acpx"
 	"github.com/gerdr-dev/gerdr/internal/agenthost"
 	"github.com/gerdr-dev/gerdr/internal/sysenv"
 )

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 )
 
@@ -45,6 +46,16 @@ func AnthropicURL(base, path string) string {
 		base += "/v1"
 	}
 	return base + path
+}
+
+var sonnet5 = regexp.MustCompile(`claude-sonnet-5([.-]|$)`)
+
+// thinkingOffType is thinking.type for "thinking off" on a Claude model, matched by model id (not by gateway).
+func thinkingOffType(model string) string {
+	if sonnet5.MatchString(strings.ToLower(model)) {
+		return "between_tools"
+	}
+	return "disabled"
 }
 
 const thinkingUpdatesBeta = "thinking-display-updates-2026-08-18"
@@ -99,6 +110,12 @@ func (c *anthropic) Stream(ctx context.Context, req Request, on func(Event)) (Re
 	}
 	if req.Effort != "" && !thinkingOff {
 		body["output_config"] = map[string]any{"effort": req.Effort}
+	}
+	if thinkingOff && (req.Thinking == "adaptive" || req.Thinking == "updates") {
+		// Leaving thinking out doesn't turn it off on models that think by default, and the off switch differs
+		// by model (found by shuttle): Sonnet 5.x rejects "disabled" with a 400 and takes "between_tools",
+		// Opus 5.5 takes only "disabled".
+		body["thinking"] = map[string]any{"type": thinkingOffType(req.Model)}
 	}
 
 	rc, err := postURL(ctx, AnthropicURL(c.ep.BaseURL, "/messages"), hdr, c.ep.Headers, body)

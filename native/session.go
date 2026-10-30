@@ -14,8 +14,8 @@ import (
 	"github.com/coder/acp-go-sdk"
 	"github.com/google/uuid"
 
-	"github.com/gerdr-dev/gerdr/internal/acpx"
-	"github.com/gerdr-dev/gerdr/internal/agents/native/llm"
+	"github.com/gerdr-dev/gerdr/acpx"
+	"github.com/gerdr-dev/gerdr/native/llm"
 )
 
 type session struct {
@@ -25,8 +25,8 @@ type session struct {
 	mu      sync.Mutex
 	entries []entry
 	meta    sessionMeta
-	rules   map[string]bool // 「以后不再问」的规则
-	read    map[string]bool // 读过的文件（写之前没读过的，给模型提个醒）
+	rules   map[string]bool   // 「以后不再问」的规则
+	read    map[string]string // files read this session → the version read (Options.Files; "" for local files)
 
 	// 一轮
 	busy         bool
@@ -43,6 +43,86 @@ type session struct {
 	bgOut map[string]*lockedBuf    // 后台命令的输出（task_output）
 
 	mcpWarned map[string]bool // 连不上的 MCP 服务器已经提示过了
+
+	// What the client sent with session/new (or the last resume / load): the raw _meta (handed to the
+	// SystemPrompt / BashEnv hooks and caller tools) and ACP mcpServers. In memory only: clients send them again
+	// when they resume.
+	clientMeta map[string]any
+	clientMCP  []MCPServer
+
+	usage acp.Usage // token usage of the current turn (PromptResponse.Usage)
+}
+
+// setClient records session/new's (or resume / load's) _meta and mcpServers. A resume without _meta keeps the
+// previous one.
+func (s *session) setClient(meta map[string]any, servers []acp.McpServer) {
+	var ms []MCPServer
+	for _, x := range servers {
+		switch {
+		case x.Stdio != nil:
+			env := map[string]string{}
+			for _, e := range x.Stdio.Env {
+				env[e.Name] = e.Value
+			}
+			ms = append(ms, MCPServer{Name: x.Stdio.Name, Command: x.Stdio.Command, Args: x.Stdio.Args, Env: env})
+		case x.Http != nil:
+			ms = append(ms, MCPServer{Name: x.Http.Name, Type: "http", URL: x.Http.Url, Headers: httpHeaders(x.Http.Headers)})
+		case x.Sse != nil:
+			ms = append(ms, MCPServer{Name: x.Sse.Name, Type: "sse", URL: x.Sse.Url, Headers: httpHeaders(x.Sse.Headers)})
+		}
+	}
+	s.mu.Lock()
+	if meta != nil {
+		s.clientMeta = meta
+	}
+	s.clientMCP = ms
+	s.mu.Unlock()
+}
+
+func httpHeaders(hs []acp.HttpHeader) map[string]string {
+	out := map[string]string{}
+	for _, h := range hs {
+		out[h.Name] = h.Value
+	}
+	return out
+}
+
+func (s *session) clientMetaMap() map[string]any {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.clientMeta
+}
+
+// addUsage adds one model call's usage to the turn's total.
+func (s *session) addUsage(u llm.Usage) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.usage.InputTokens += u.Input
+	s.usage.OutputTokens += u.Output
+	s.usage.TotalTokens += u.Input + u.Output
+	if u.CacheRead > 0 {
+		s.usage.CachedReadTokens = acp.Ptr(deref(s.usage.CachedReadTokens) + u.CacheRead)
+	}
+	if u.Reasoning > 0 {
+		s.usage.ThoughtTokens = acp.Ptr(deref(s.usage.ThoughtTokens) + u.Reasoning)
+	}
+}
+
+func deref(p *int) int {
+	if p == nil {
+		return 0
+	}
+	return *p
+}
+
+func (s *session) turnUsage() *acp.Usage {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.usage.TotalTokens == 0 {
+		return nil
+	}
+	u := s.usage
+	return &u
 }
 
 type queued struct {
@@ -99,10 +179,16 @@ func (s *session) setBgOut(id string, b *lockedBuf) {
 	s.mu.Unlock()
 }
 
-func (s *session) markRead(p string) {
+func (s *session) markRead(p, version string) {
 	s.mu.Lock()
-	s.read[p] = true
+	s.read[p] = version
 	s.mu.Unlock()
+}
+
+func (s *session) readVersion(p string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.read[p]
 }
 
 func (s *session) send(u acp.SessionUpdate) {
@@ -222,6 +308,7 @@ func (s *session) begin() (context.Context, func(), error) {
 	done := make(chan struct{})
 	s.busy, s.turnCancel, s.turnDone = true, cancel, done
 	s.tok.Reset()
+	s.usage = acp.Usage{}
 	var once sync.Once
 	return ctx, func() {
 		once.Do(func() {
@@ -259,8 +346,13 @@ func (s *session) cancel() {
 	}
 }
 
-// memory：这个会话的两层记忆目录（memory.go）。
-func (s *session) memory() memoryDirs { return memoryFor(s.a.st.dir, s.cwd()) }
+// memory：这个会话的两层记忆目录（memory.go）。Empty with Options.NoMemory, so nothing counts as a memory file.
+func (s *session) memory() memoryDirs {
+	if s.a.opt.NoMemory {
+		return memoryDirs{}
+	}
+	return memoryFor(s.a.st.dir, s.cwd())
+}
 
 func (s *session) newRun(ctx context.Context) *run {
 	cfg := s.a.config()
@@ -270,7 +362,10 @@ func (s *session) newRun(ctx context.Context) *run {
 	m, _ := cfg.find(model)
 	r := &run{s: s, model: m, effort: effort, tok: &s.tok}
 	r.tools = append([]*tool(nil), builtinTools...)
-	if servers := mcpServers(s.a.ext, cwd); len(servers) > 0 {
+	for _, t := range s.a.opt.Tools {
+		r.tools = append(r.tools, callerTool(t))
+	}
+	if servers := s.mcpServers(cwd); len(servers) > 0 {
 		// 第一次要起服务器（npx 下载之类）可能很慢：最多等 30 秒，没起完的这一轮先不带，起完了下一轮就有
 		clients, errs := s.a.mcp.get(ctx, servers, 30*time.Second)
 		for _, c := range clients {
@@ -289,11 +384,7 @@ func (s *session) newRun(ctx context.Context) *run {
 			}
 		}
 	}
-	mem := s.memory()
-	r.system = systemPrompt(cwd, skillsFor(s.a.ext, cwd), r.model, &mem)
-	if s.a.role != "" {
-		r.system += "\n" + s.a.role + "\n"
-	}
+	r.system = s.a.systemPrompt(s, cwd, r.model)
 	return r
 }
 
@@ -346,6 +437,7 @@ func (r *run) compact(ctx context.Context, extra string) error {
 		}
 	}
 	res, err := m.client().Stream(ctx, llm.Request{Model: m.ID, System: r.system, Messages: msgs, Thinking: m.Thinking, Effort: lowestEffort(m), CacheKey: r.s.currentID()}, func(llm.Event) {})
+	r.s.addUsage(res.Usage)
 	if err != nil || strings.TrimSpace(res.Message.Text) == "" {
 		r.out(acp.UpdateToolCall(acp.ToolCallId(id), acp.WithUpdateStatus(acp.ToolCallStatusFailed)))
 		if err == nil {
@@ -429,7 +521,7 @@ func (a *Agent) toParts(blocks []acp.ContentBlock, s *session) []llm.Part {
 			out = append(out, llm.TextPart(b.Text.Text))
 		case b.Image != nil:
 			if m.seesImages() {
-				out = append(out, llm.Part{Type: "image", MIME: b.Image.MimeType, Data: b.Image.Data})
+				out = append(out, a.imagePartB64(b.Image.MimeType, b.Image.Data))
 			} else if p := saveImage(b.Image.Data, b.Image.MimeType); p != "" {
 				out = append(out, llm.TextPart(fmt.Sprintf("[The user attached an image, saved at %s. The current model cannot view images.]", p)))
 			}

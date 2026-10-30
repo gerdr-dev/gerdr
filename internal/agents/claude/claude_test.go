@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/coder/acp-go-sdk"
-	"github.com/gerdr-dev/gerdr/internal/acpx"
+	"github.com/gerdr-dev/gerdr/acpx"
 )
 
 func TestDescribeTool(t *testing.T) {

@@ -18,7 +18,7 @@ import (
 
 // 真调模型（花钱）：NATIVE_LIVE_BASE / NATIVE_LIVE_KEY 给地址和 key，NATIVE_LIVE_MODELS 给模型 id（逗号分隔）。
 //
-//	NATIVE_LIVE_MODELS=gpt-6.1-sol,deepseek-v4-pro go test ./internal/agents/native -run Live -v
+//	NATIVE_LIVE_MODELS=gpt-6.1-sol,deepseek-v4-pro go test ./native -run Live -v
 func TestLiveAgent(t *testing.T) {
 	base, key := os.Getenv("NATIVE_LIVE_BASE"), os.Getenv("NATIVE_LIVE_KEY")
 	if base == "" || key == "" {

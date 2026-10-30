@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/gerdr-dev/gerdr/internal/acpx"
+	"github.com/gerdr-dev/gerdr/acpx"
 )
 
 // mcpReconnect asks every live claude process to reconnect one MCP server (control request mcp_reconnect, which the CLI

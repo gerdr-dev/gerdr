@@ -160,3 +160,22 @@ func TestAnthropicURL(t *testing.T) {
 		}
 	}
 }
+
+// Thinking off: Sonnet 5.x takes only between_tools, the other adaptive Claude models disabled.
+func TestAnthropicThinkingOff(t *testing.T) {
+	for model, want := range map[string]string{"claude-sonnet-5-5": "between_tools", "claude-sonnet-5": "between_tools", "claude-opus-5-5": "disabled", "claude-fable-5-1": "disabled"} {
+		var body map[string]any
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			json.NewDecoder(r.Body).Decode(&body)
+			w.Header().Set("Content-Type", "text/event-stream")
+			io.WriteString(w, "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n")
+		}))
+		c := New("anthropic", Endpoint{BaseURL: srv.URL})
+		c.Stream(context.Background(), Request{Model: model, Thinking: "updates", Effort: "off", Messages: []Message{{Role: "user", Content: []Part{TextPart("hi")}}}}, func(Event) {})
+		srv.Close()
+		th, _ := body["thinking"].(map[string]any)
+		if th["type"] != want || body["output_config"] != nil {
+			t.Errorf("%s: thinking %v output_config %v, want type %s", model, body["thinking"], body["output_config"], want)
+		}
+	}
+}

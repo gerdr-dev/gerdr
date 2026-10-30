@@ -1,6 +1,6 @@
 // Package memstore 是设置 →「记忆」那一页的后端：把三家 agent 的长期记忆列出来、读、改、删。
 //
-//   - Gerdr Agent（native）：<GERDR_DIR>/native/memory/{global,projects/<项目>}（internal/agents/native/memory.go）；
+//   - Gerdr Agent（native）：<GERDR_DIR>/native/memory/{global,projects/<项目>}（native/memory.go）；
 //   - Claude Code：~/.claude/projects/<cwd 变形>/memory/（它自己的自动记忆，格式和我们的一样：一条一个 .md + MEMORY.md 索引）；
 //   - Codex：~/.codex/memories/（它从过去的会话自动总结出来的文件；原始数据在 memories_*.sqlite，那是它的内部格式，不碰）。
 //

@@ -7,9 +7,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gerdr-dev/gerdr/internal/agents/native"
+	"github.com/gerdr-dev/gerdr/internal/agents/gerdrnative"
 	"github.com/gerdr-dev/gerdr/internal/ext"
 	"github.com/gerdr-dev/gerdr/internal/mcpauth"
+	"github.com/gerdr-dev/gerdr/native"
 )
 
 // MCP OAuth (Settings → MCP): sign-in state of every remote MCP server gerdr knows about — gerdr's
@@ -138,7 +139,7 @@ func (s *Server) mcpAuthRoutes(mux *http.ServeMux) {
 		ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
 		defer cancel()
 		res := map[string]any{}
-		if tools, err := native.ReconnectMCP(ctx, m); err != nil {
+		if tools, err := native.ReconnectMCP(ctx, gerdrnative.MCPServer(m)); err != nil {
 			res["error"] = err.Error()
 		} else {
 			res["tools"] = tools

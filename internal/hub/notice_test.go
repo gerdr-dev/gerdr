@@ -5,7 +5,7 @@ import (
 
 	"github.com/coder/acp-go-sdk"
 
-	"github.com/gerdr-dev/gerdr/internal/acpx"
+	"github.com/gerdr-dev/gerdr/acpx"
 )
 
 // TestRetryNoticeUntil: an adapter's retry notice carries its wait as noticeDelayMs; the hub turns it into a deadline

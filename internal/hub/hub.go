@@ -19,13 +19,14 @@ import (
 
 	"github.com/coder/acp-go-sdk"
 
-	"github.com/gerdr-dev/gerdr/internal/acpx"
+	"github.com/gerdr-dev/gerdr/acpx"
 	"github.com/gerdr-dev/gerdr/internal/agenthost"
 	"github.com/gerdr-dev/gerdr/internal/agents/claude"
 	"github.com/gerdr-dev/gerdr/internal/agents/codex"
-	"github.com/gerdr-dev/gerdr/internal/agents/native"
+	"github.com/gerdr-dev/gerdr/internal/agents/gerdrnative"
 	"github.com/gerdr-dev/gerdr/internal/ext"
 	"github.com/gerdr-dev/gerdr/internal/sysenv"
+	"github.com/gerdr-dev/gerdr/native"
 )
 
 // AgentDef 描述一种 agent。内置 claude / codex / native（gerdr 自己的，直接调模型接口，config.json 的 llm 配了模型才能用）；用户可以在 config.json 的 agents 里加两种：
@@ -377,7 +378,7 @@ func (h *Hub) startHost(ctx context.Context, agent string) (*agenthost.Host, err
 		return agenthost.StartInProc(sctx, codex.NewWith(log, em, codex.Options{Bin: def.Bin, Args: def.Args, Env: def.envList(), Prompt: def.Prompt}), handler, log)
 	case "native":
 		// 基于 Gerdr Agent 的角色和原版共用会话目录（id 是 uuid，撞不了）和记忆：记忆是人的偏好、项目的约定，不分角色
-		return agenthost.StartInProc(sctx, native.New(log, native.Options{Dir: filepath.Join(h.opt.Dir, "native"), Ext: em, Config: func() native.Config { return h.llm().Only(def.Providers) }, Prompt: def.Prompt}), handler, log)
+		return agenthost.StartInProc(sctx, native.New(log, gerdrnative.Options(filepath.Join(h.opt.Dir, "native"), em, func() native.Config { return h.llm().Only(def.Providers) }, def.Prompt)), handler, log)
 	}
 	home, _ := os.UserHomeDir()
 	return agenthost.StartProcess(sctx, def.Command, home, handler, log)

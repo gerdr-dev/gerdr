@@ -12,7 +12,7 @@ import (
 // 真调接口（花钱）：NATIVE_LIVE_BASE / NATIVE_LIVE_KEY 给地址和 key，NATIVE_LIVE_MODELS 给 "api:model,..."。
 // NATIVE_LIVE_EFFORT / NATIVE_LIVE_PROMPT override the effort and the question (to get thinking blocks replayed).
 //
-//	NATIVE_LIVE_MODELS=responses:gpt-6.1-sol,chat:deepseek-v4-pro,anthropic:claude-opus-5-5 go test ./internal/agents/native/llm -run Live -v
+//	NATIVE_LIVE_MODELS=responses:gpt-6.1-sol,chat:deepseek-v4-pro,anthropic:claude-opus-5-5 go test ./native/llm -run Live -v
 func TestLiveToolRoundTrip(t *testing.T) {
 	base, key := os.Getenv("NATIVE_LIVE_BASE"), os.Getenv("NATIVE_LIVE_KEY")
 	if base == "" || key == "" {
@@ -81,7 +81,7 @@ func TestLiveToolRoundTrip(t *testing.T) {
 // TestLiveCache: a long system prompt (well over the largest minimum cacheable prefix, 4096 tokens) and three
 // requests that each extend the last; the 2nd and 3rd should read most of their input from cache. Costs money.
 //
-//	NATIVE_LIVE_MODELS=anthropic:claude-opus-5-5 go test ./internal/agents/native/llm -run LiveCache -v
+//	NATIVE_LIVE_MODELS=anthropic:claude-opus-5-5 go test ./native/llm -run LiveCache -v
 func TestLiveCache(t *testing.T) {
 	base, key := os.Getenv("NATIVE_LIVE_BASE"), os.Getenv("NATIVE_LIVE_KEY")
 	if base == "" || key == "" {

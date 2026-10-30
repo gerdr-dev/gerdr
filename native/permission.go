@@ -7,8 +7,6 @@ import (
 	"strings"
 
 	"github.com/coder/acp-go-sdk"
-
-	"github.com/gerdr-dev/gerdr/internal/sysenv"
 )
 
 // 权限模式。没有沙箱（codex 那种），所以「自动」只放到改工作区里的文件为止，命令照样要问 ——
@@ -47,7 +45,8 @@ const (
 )
 
 // decide 按模式和已放行的规则判断一次工具调用。rule 是「以后不再问」时要记下的规则（空 = 不给这个选项）。
-func decide(mode string, t *tool, args map[string]any, cwd string, mem memoryDirs, allowed func(string) bool) (v verdict, rule string) {
+// safe: commands the embedder lets through in every mode (Options.SafeCommand; nil = none).
+func decide(mode string, t *tool, args map[string]any, cwd string, mem memoryDirs, allowed func(string) bool, safe func(string) bool) (v verdict, rule string) {
 	if t.readOnly {
 		return allow, ""
 	}
@@ -77,7 +76,7 @@ func decide(mode string, t *tool, args map[string]any, cwd string, mem memoryDir
 		return ask, ""
 	case "bash":
 		cmd := str(args, "command")
-		if mode == modeBypass || readOnlyCommand(cmd) || sysenv.SafeGerdrCLI(cmd) || memoryRm(cmd, cwd, mem) {
+		if mode == modeBypass || readOnlyCommand(cmd) || (safe != nil && safe(cmd)) || memoryRm(cmd, cwd, mem) {
 			return allow, ""
 		}
 		if mode == modeReadOnly {

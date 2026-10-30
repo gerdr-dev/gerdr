@@ -23,7 +23,7 @@ import (
 
 	"github.com/coder/acp-go-sdk"
 
-	"github.com/gerdr-dev/gerdr/internal/acpx"
+	"github.com/gerdr-dev/gerdr/acpx"
 	"github.com/gerdr-dev/gerdr/internal/ext"
 	"github.com/gerdr-dev/gerdr/internal/rpcline"
 	"github.com/gerdr-dev/gerdr/internal/sysenv"

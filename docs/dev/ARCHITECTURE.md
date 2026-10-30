@@ -21,7 +21,7 @@ React（ui/，不打包）  ←WebSocket / HTTP→  hub（internal/hub）  ←AC
   同一份代码 `gerdr acp claude` 就是一个 stdio ACP agent。参考实现是官方 TS 适配器
   `agentclientprotocol/claude-agent-acp` 和 `agentclientprotocol/codex-acp`（不是 zed-industries
   下那个已归档的）—— 改适配器前先去读它们对应的那段和测试，边界情况都在那儿。
-- ACP v1 没有的三件事是扩展方法（`internal/acpx`）：
+- ACP v1 没有的三件事是扩展方法（`acpx`）：
   - `_session/steering`：插话。名字和形状照抄两个官方适配器，以后换回官方的 hub 不用改。
   - `_gerdr/rewind`：回退对话（只管对话，文件归 hub）。
   - `_gerdr/ask`：agent → client 提问（claude 的 AskUserQuestion、codex 的 requestUserInput）。
@@ -113,7 +113,12 @@ React（ui/，不打包）  ←WebSocket / HTTP→  hub（internal/hub）  ←AC
 
 ## Gerdr Agent（native）—— 自己写的 agent，直接调模型接口
 
-`internal/agents/native`: no subprocess; the loop, tools and transcripts all live in gerdr. The model layer `native/llm`
+`native` (a public package: other programs embed it, e.g. Annulo; the protocol, extension methods and `_meta`
+conventions are in its package doc, an in-process example in `native/example_test.go`): no subprocess; the loop,
+tools and transcripts all live in gerdr. It imports none of gerdr's internal packages: gerdr's skills / MCP settings,
+MCP sign-in, the login shell's PATH, `GERDR_NATIVE_SESSION_ID` and secrets.json keys are injected through
+`native.Options` by `internal/agents/gerdrnative` (keep it that way — `go list -deps ./native | grep internal` must
+stay empty). The extension-method types moved to the public `acpx` package for the same reason. The model layer `native/llm`
 speaks three protocols (Chat Completions, Responses, Anthropic Messages; the protocol is picked per provider,
 `Provider.API`), each hand-written rather than through an SDK so every gateway quirk is visible and fixable in one place.
 Why not shuttle's pi: interjections, subagents and rewind are missing from or the wrong shape in pi's loop, and pi is
@@ -125,6 +130,9 @@ config.json (example in the README), read fresh every turn.
 1. **一条 assistant 的每个工具调用都要有结果**，少一个下一轮两家都 400。打断（cancel）时没跑完的调用补「被打断」的结果再结束；
    被打断的半截生成只留正文、不留工具调用和推理（半截的推理还回去会被拒）。
 2. **DeepSeek 开着思考时历史里每条 assistant 都要带 `reasoning_content`**（没有给空串），带工具调用的那条要把原来的思考带回去。
+   Thinking off ("off" effort, which embedders send even when the model doesn't list it): DeepSeek
+   `thinking:{type:disabled}`; Claude Sonnet 5.x `thinking:{type:"between_tools"}` (disabled is a 400), other adaptive
+   Claude (Opus 5.5…) `thinking:{type:"disabled"}` — leaving the param out keeps thinking on. Matched by model id.
    Responses 用 `store:false` + `include:["reasoning.encrypted_content"]`，推理 item 原样放回 input；中途换了协议的就丢掉。
 3. 经网关的 GPT 在 Chat Completions 里，工具调用第一片之后每片都带 `"name":""`，拼的时候不能拿空名字覆盖（经网关实测）。
    Responses 的 `input` 必须是数组。工具结果里放不了图：图另起一条 user 消息跟在这批结果后面。
@@ -180,7 +188,7 @@ config.json (example in the README), read fresh every turn.
       model's long English summary of the reasoning: always there, hard to follow. The default `omitted` streams thinking
       blocks with empty text. With `updates` but without the prompt line, eight steps in a row showed nothing at all.
 
-测试：`go test ./internal/agents/native/...` 用假接口跑主循环；`NATIVE_LIVE_BASE / NATIVE_LIVE_KEY / NATIVE_LIVE_MODELS` 设了才跑真模型（花钱）。
+测试：`go test ./native/...` 用假接口跑主循环；`NATIVE_LIVE_BASE / NATIVE_LIVE_KEY / NATIVE_LIVE_MODELS` 设了才跑真模型（花钱）。
 
 ## 用量额度（`_gerdr/usage` → hub/usage.go → `/api/usage` → 侧栏的 UsageMeter）
 
