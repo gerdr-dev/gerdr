@@ -31,6 +31,7 @@ node tabs.mjs                                # 然后跑场景，见下表
 | agent 输出时内容在动 / 不跟底 | `stream.mjs --at="用户说的话" [--up=600\|0]` | 截到那句话，后面那一轮流式灌进去；往上翻着看内容动没动 / 贴着底看跟没跟 |
 | Phone: switching panes shows a mid-chat frame, then snaps to the bottom | `panes.mjs [--stream] [--cpu=4] [--ro]` | One tab split in two, phone viewport, focus flipped back and forth (only the focused pane is drawn, so each switch remounts). `--cpu` slows the CPU like a phone, `--stream` feeds output in while switching, `--ro` judges the painted frames |
 | Can't scroll up from the bottom, gets pulled back | `scrollup.mjs [--step=40] [--steps=25]` | Small wheel steps up from the bottom must stick. Run it after touching anything that keeps the chat at the bottom: the first 80px up still count as at the bottom, and the virtual list resizes on every step |
+| A broken image / video makes the chat jump | `media.mjs [--src=/tmp/x.png] [--tab=1]` | Appends a message with missing media, parks it mid-screen, watches through every automatic retry, then scrolls it out and back in. Run it after touching `chat/ChatMedia.tsx` |
 | 某一行自己变高矮 | `rows.mjs [--tab=1]` | 行挂上后高度变没变（DOM 没变也会变）、Virtuoso 记的高度和实际对不对 |
 
 用户说「就在这儿闪」：拿那个会话，`fling.mjs --from="那段话"`，先翻到那儿再甩。闪不闪跟内容关系很大，别拿别的会话代替。
@@ -85,6 +86,12 @@ Virtuoso 在 ResizeObserver 里量行高、改布局，所以 rAF 里看到「�
   rows mount / unmount while scrolling; reacting to that pulled every small scroll up back to the bottom, caught by
   `scrollup.mjs`), and no user input on the scroller in the last 600ms. Headless Chrome on a laptop only shows this with `--cpu=4` and `--ro`: in rAF frames the lag
   shows up with or without the fix, in the painted frames only without it.
+- **Broken media retrying in place** (`chat/ChatMedia.tsx`, `media.mjs`): a failed image was remounted for each
+  automatic retry (1s, 3s, 8s), so its row went broken-image -> reloading -> failed-chip, each a different height, and the
+  virtual list restarted the whole cycle whenever the row scrolled back into view. Now the first failure switches to a
+  fixed-height chip (spinner while retrying, "can't open" after), retries probe in the background (`fileStat` for
+  local files) and only put the media back once the file is there, and the failure state is kept per URL across
+  remounts.
 - **Virtuoso 把行高取整**（默认 `Math.round(getBoundingClientRect().height)`）：41.5 记 42、39.8 记 40，
   卸掉的行越多攒得越多，量完缩回那一下整段挪一截（卸 32 行差 10px），会话越长越明显。`itemSize` 换成不取整的。
   `rows.mjs` 报「记的和实际不一样」就是这个。

@@ -1,6 +1,7 @@
-import { AlertCircle, ExternalLink, FileText, FolderOpen, RotateCw } from "lucide-react";
-import { useContext, useState } from "react";
+import { AlertCircle, ExternalLink, FileText, FolderOpen, Loader2, RotateCw } from "lucide-react";
+import { useContext, useEffect, useState } from "react";
 import { openPath } from "@/lib/actions";
+import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { isNative, nativeOpenPath } from "@/lib/native";
 import { openLightbox } from "../Lightbox";
@@ -18,6 +19,16 @@ const PDF = /\.pdf$/i;
 
 // Backoff (ms) between automatic reloads of a media file that failed to load.
 const RETRY_DELAYS = [1000, 3000, 8000];
+
+// Load failures by base URL, kept across remounts. A failed file shows one fixed-height chip ("loading" while retries
+// run, "can't open" after), and retries probe in the background (does the file exist yet?) without putting the media
+// back on screen until a probe passes. Remounting the broken <img> for each retry made the row change height at every
+// step (broken image, reloading, failed chip), and the virtual list restarted the cycle whenever the row scrolled back
+// into view, so a single broken image kept the chat jumping (tools/scrolltest/media.mjs).
+// tries: probes used so far. show: a probe passed, render the media again (a load clears the entry, an error sends it
+// back to the chip with tries kept, so a file that exists but won't decode can't loop).
+type Fail = { tries: number; show: boolean };
+const mediaFail = new Map<string, Fail>();
 
 const bare = (s: string) => s.split(/[?#]/)[0];
 
@@ -44,42 +55,114 @@ export function ChatMedia({ src, alt }: { src: string; alt?: string }) {
   const session = useContext(SessionContext);
   const cwd = session?.cwd;
   const path = localPath(src);
+  const k = bare(path ?? src);
+  const isVideo = VIDEO.test(k);
+  const isAudio = AUDIO.test(k);
   // Agents often post the reply while the file is still being written (a render finishing, an encoder rewriting the
   // mp4), so the first load can hit a missing or half-written file. Retry a few times with backoff, each with a fresh
   // query param so the browser doesn't hand back the cached failure; after that, offer a manual retry.
-  const [attempt, setAttempt] = useState(0);
-  const [failed, setFailed] = useState(false);
   const base = path ? rawURL(path, cwd) : src;
-  const url = attempt && path ? `${base}&r=${attempt}` : base;
-  const name = alt || nameOf(path ?? src);
-  const onError = () => {
-    if (attempt < RETRY_DELAYS.length) setTimeout(() => setAttempt((a) => a + 1), RETRY_DELAYS[attempt]);
-    else setFailed(true);
+  const [attempt, setAttempt] = useState(0);
+  const [fail, setFailState] = useState(() => mediaFail.get(base));
+  const setFail = (f: Fail | undefined) => {
+    if (f) mediaFail.set(base, f);
+    else mediaFail.delete(base);
+    setFailState(f);
   };
-  if (failed) {
+  const onError = () => {
+    const f = mediaFail.get(base);
+    if (!f?.show && f) return; // already showing the chip; a second report must not restart the backoff
+    setFail({ tries: f?.tries ?? 0, show: false });
+  };
+  const onLoad = () => mediaFail.has(base) && setFail(undefined);
+  const done = !!fail && !fail.show && fail.tries >= RETRY_DELAYS.length;
+  useEffect(() => {
+    if (!fail || fail.show || done) return;
+    let live = true;
+    const t = setTimeout(() => {
+      const probe = path
+        ? api.fileStat(path, cwd).then((st) => st.size > 0)
+        : VIDEO.test(k) || AUDIO.test(k)
+          ? Promise.resolve(true) // remote stream: nothing cheaper to ask than trying it again
+          : new Promise<boolean>((ok) => {
+              const im = new Image();
+              im.onload = () => ok(true);
+              im.onerror = () => ok(false);
+              im.src = `${src}${src.includes("?") ? "&" : "?"}r=${Date.now()}`;
+            });
+      probe.then(
+        (ok) => {
+          if (!live) return;
+          setFail({ tries: fail.tries + 1, show: ok });
+          if (ok) setAttempt((a) => a + 1);
+        },
+        () => live && setFail({ tries: fail.tries + 1, show: false }),
+      );
+    }, RETRY_DELAYS[fail.tries]);
+    return () => {
+      live = false;
+      clearTimeout(t);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-armed by fail only
+  }, [fail]);
+  // Chromium shares buffered media data between players with the same URL for the life of the page, ignoring
+  // Cache-Control. Agents keep re-rendering to the same file name, so a later message's player was fed the previous
+  // render's bytes (old duration) spliced with the new file's: a grey box that never plays and never errors. Putting
+  // the file's mtime and size in the URL gives each version its own cache entry. Images don't go through that cache.
+  const streamed = path != null && (isVideo || isAudio);
+  const [version, setVersion] = useState<string | null>(null);
+  useEffect(() => {
+    if (!streamed) return;
+    let live = true;
+    setVersion(null);
+    api.fileStat(path!, cwd).then(
+      (st) => live && (st.size > 0 ? setVersion(`${st.mtime}-${st.size}`) : onError()),
+      () => live && onError(),
+    );
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- onError only changes with attempt
+  }, [streamed, path, cwd, attempt]);
+  const url = (streamed && version ? `${base}&v=${version}` : base) + (attempt && path ? `&r=${attempt}` : "");
+  const name = alt || nameOf(path ?? src);
+  if (fail && !fail.show) {
+    // Same box while retrying and after giving up: only the icon and the words change, never the height.
     return (
       <button
         type="button"
-        title={`${path ?? src}\n点击重试`}
+        disabled={!done}
+        title={done ? `${path ?? src}\n点击重试` : (path ?? src)}
         onClick={() => {
-          setFailed(false);
+          // One more go: back to the media right away; if it fails again it comes straight back here.
+          setFail({ tries: RETRY_DELAYS.length, show: true });
           setAttempt((a) => a + 1);
         }}
-        className="my-1 inline-flex max-w-full items-center gap-1.5 rounded-md border border-border/60 px-2 py-1 align-middle text-xs text-muted-foreground hover:bg-accent"
+        className="my-1 inline-flex max-w-full items-center gap-1.5 rounded-md border border-border/60 px-2 py-1 align-middle text-xs text-muted-foreground enabled:hover:bg-accent"
       >
-        <AlertCircle className="size-3.5 shrink-0 text-bad" />
-        <span className="min-w-0 truncate">打不开：{path ?? src}</span>
-        <RotateCw className="size-3.5 shrink-0" />
+        {done ? <AlertCircle className="size-3.5 shrink-0 text-bad" /> : <Loader2 className="size-3.5 shrink-0 animate-spin" />}
+        <span className="min-w-0 truncate">
+          {done ? "打不开" : "加载中"}：{path ?? src}
+        </span>
+        {done && <RotateCw className="size-3.5 shrink-0" />}
       </button>
     );
   }
-  const k = bare(path ?? src);
-  const isVideo = VIDEO.test(k);
   let body;
   if (isVideo) {
-    body = <ChatVideo key={attempt} url={url} ratioKey={base} onError={onError} />;
-  } else if (AUDIO.test(k)) {
-    body = <audio key={attempt} src={url} controls preload="metadata" onError={onError} className="w-80 max-w-full" />;
+    body = <ChatVideo key={attempt} url={streamed && !version ? undefined : url} ratioKey={base} onError={onError} onLoad={onLoad} />;
+  } else if (isAudio) {
+    body = (
+      <audio
+        key={attempt}
+        src={streamed && !version ? undefined : url}
+        controls
+        preload="metadata"
+        onError={onError}
+        onLoadedMetadata={onLoad}
+        className="w-80 max-w-full"
+      />
+    );
   } else if (PDF.test(k)) {
     body = (
       <button
@@ -100,6 +183,7 @@ export function ChatMedia({ src, alt }: { src: string; alt?: string }) {
         loading="lazy"
         title="点击放大"
         onError={onError}
+        onLoad={onLoad}
         onClick={(e) => openLightbox([{ url, alt: name, path: path ?? undefined, cwd }], 0, e.currentTarget)}
         className="max-h-72 max-w-[min(24rem,100%)] cursor-zoom-in rounded-md border border-border/60"
       />
@@ -124,7 +208,7 @@ export function ChatMedia({ src, alt }: { src: string; alt?: string }) {
 // recordings and renders), which is exact for those and changes at most once for the rest.
 const videoRatio = new Map<string, number>();
 
-function ChatVideo({ url, ratioKey, onError }: { url: string; ratioKey: string; onError: () => void }) {
+function ChatVideo({ url, ratioKey, onError, onLoad }: { url?: string; ratioKey: string; onError: () => void; onLoad: () => void }) {
   const [ratio, setRatio] = useState(() => videoRatio.get(ratioKey) ?? 16 / 9);
   return (
     <video
@@ -133,6 +217,7 @@ function ChatVideo({ url, ratioKey, onError }: { url: string; ratioKey: string; 
       preload="metadata"
       onError={onError}
       onLoadedMetadata={(e) => {
+        onLoad();
         const v = e.currentTarget;
         if (!v.videoWidth || !v.videoHeight) return;
         const r = v.videoWidth / v.videoHeight;
