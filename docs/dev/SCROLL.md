@@ -29,6 +29,7 @@ node tabs.mjs                                # 然后跑场景，见下表
 | 滚着滚着一闪 | `fling.mjs [--tab=1] [--from="某段话"]` | 触控板式甩动（一串递减的滚轮），逐帧看内容有没有不跟着滚动走 |
 | 翻到顶补一段时跳 | `fling.mjs --to-top` | 一直往上甩到头，分段加载每补一段都看一遍 |
 | agent 输出时内容在动 / 不跟底 | `stream.mjs --at="用户说的话" [--up=600\|0]` | 截到那句话，后面那一轮流式灌进去；往上翻着看内容动没动 / 贴着底看跟没跟 |
+| Phone: switching panes shows a mid-chat frame, then snaps to the bottom | `panes.mjs [--stream] [--cpu=4] [--ro]` | One tab split in two, phone viewport, focus flipped back and forth (only the focused pane is drawn, so each switch remounts). `--cpu` slows the CPU like a phone, `--stream` feeds output in while switching, `--ro` judges the painted frames |
 | 某一行自己变高矮 | `rows.mjs [--tab=1]` | 行挂上后高度变没变（DOM 没变也会变）、Virtuoso 记的高度和实际对不对 |
 
 用户说「就在这儿闪」：拿那个会话，`fling.mjs --from="那段话"`，先翻到那儿再甩。闪不闪跟内容关系很大，别拿别的会话代替。
@@ -73,6 +74,14 @@ Virtuoso 在 ResizeObserver 里量行高、改布局，所以 rAF 里看到「�
   is now reserved from the aspect ratio (remembered per URL, 16:9 until known). Second trap found on the way: the
   wrapper was `w-fit` and the video's width a percentage of it, so the wrapper took the video's 300px default width and
   the reserved box came out half size. Anything sized as a percentage of a `w-fit` parent has this loop.
+- **Bottom-follow lagging behind a row that grew** (phone pane switch, `panes.mjs`): the user's screen recording showed,
+  after each switch, one or two frames of content from a few screens up, then a snap to the bottom. Following the
+  bottom relied on `totalListHeightChanged`, which Virtuoso only calls after it has measured and reported the new total:
+  one to several frames after the row actually grew (a remounted row going from its estimate to its real height, the
+  last row growing under a streaming reply). Those frames were painted short of the bottom. ChatView now also sticks
+  to the bottom from a ResizeObserver on the item list created after Virtuoso's (in an effect), so it runs before paint
+  with the same conditions. Headless Chrome on a laptop only shows this with `--cpu=4` and `--ro`: in rAF frames the lag
+  shows up with or without the fix, in the painted frames only without it.
 - **Virtuoso 把行高取整**（默认 `Math.round(getBoundingClientRect().height)`）：41.5 记 42、39.8 记 40，
   卸掉的行越多攒得越多，量完缩回那一下整段挪一截（卸 32 行差 10px），会话越长越明显。`itemSize` 换成不取整的。
   `rows.mjs` 报「记的和实际不一样」就是这个。

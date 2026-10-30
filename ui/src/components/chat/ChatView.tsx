@@ -408,6 +408,29 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
     bottomRef.current = b;
     setAtBottom(b);
   };
+  // Stick to the bottom before the frame is painted. totalListHeightChanged only fires once Virtuoso has measured and
+  // reported the new total, which lands one to several frames after a row actually grew: the last row grew under a
+  // streaming reply (or a freshly mounted row went from its estimated 41.5px to its real height) and for those frames
+  // the list was drawn short of the bottom, then snapped down (measured frame by frame in tools/scrolltest/panes.mjs
+  // --stream: up to 60px off for ~200ms, single-frame jumps of 100-155px). A ResizeObserver created after Virtuoso's
+  // (effects run after the list mounted) runs in the same phase, after Virtuoso has applied its own corrections and
+  // before paint (docs/dev/SCROLL.md "哪一帧画出来了"). Same conditions as totalListHeightChanged: only when it was at the
+  // bottom at the last measurement, and not while an expand the user just clicked is growing.
+  const hasList = loaded && msgs.length > 0;
+  useEffect(() => {
+    const el = scrollerEl.current;
+    const lst = el?.querySelector("[data-testid=virtuoso-item-list]");
+    if (!el || !lst) return;
+    const ro = new ResizeObserver(() => {
+      if (!activeRef.current) return;
+      const wasAtBottom = lastH.current - el.clientHeight - el.scrollTop < 80;
+      const grew = el.scrollHeight > lastH.current;
+      if (bottomRef.current && wasAtBottom && !(grew && holding()) && el.scrollHeight - el.clientHeight - el.scrollTop > 1) el.scrollTop = el.scrollHeight;
+      lastH.current = el.scrollHeight;
+    });
+    ro.observe(lst);
+    return () => ro.disconnect();
+  }, [hasList]);
   // 行是 memo 的，回调要稳定（不然每次都重渲染），但又要拿到最新的 —— 放在 ref 里转一手
   const latest = useRef({ doRewind, sessionId: session.id, openGroups, setOpenGroups });
   latest.current = { doRewind, sessionId: session.id, openGroups, setOpenGroups };

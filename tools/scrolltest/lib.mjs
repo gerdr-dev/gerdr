@@ -67,11 +67,13 @@ export async function setConfig(page, patch) {
 
 /** 点第 n 个 tab（从 1 起；tab 名是「n.目录名」） */
 export async function tab(page, n) {
-  const names = (await page.locator("text=/^\\d+\\./").allInnerTexts()).filter((t) => /^\d+\.\S+$/.test(t));
-  const name = names.find((t) => t.startsWith(`${n}.`));
-  if (!name) throw new Error(`没有第 ${n} 个 tab（有：${names.join(" ")}）`);
-  await page.getByText(name, { exact: true }).first().click();
-  return name;
+  // Tab labels can carry a status mark after the name ("2.gerdr ‖" while the session runs), so match the prefix only.
+  const tabs = page.locator("text=/^\\d+\\.\\S+/");
+  const names = await tabs.allInnerTexts();
+  const i = names.findIndex((t) => /^\d+\.\S+/.test(t) && t.startsWith(`${n}.`));
+  if (i < 0) throw new Error(`没有第 ${n} 个 tab（有：${names.join(" ")}）`);
+  await tabs.nth(i).click();
+  return names[i];
 }
 
 /** 离底部多远（0 = 在最底下），每个滚动区一项 */

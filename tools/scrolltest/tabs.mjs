@@ -10,7 +10,8 @@ const { browser, page } = await launch();
 await open(page);
 await useStore(page);
 await setConfig(page, { keepTabs: a.keep });
-const n = (await page.locator("text=/^\\d+\\./").allInnerTexts()).filter((t) => /^\d+\.\S+$/.test(t)).length;
+// Prefix match only: a tab label can carry a status mark after the name ("2.gerdr ‖"), see tab() in lib.mjs.
+const n = (await page.locator("text=/^\\d+\\.\\S+/").allInnerTexts()).length;
 if (n < 2) throw new Error("要 ≥ 2 个 tab（setup.mjs 给两个会话）");
 let bad = 0;
 for (let r = 0; r < a.rounds; r++) {
