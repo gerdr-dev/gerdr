@@ -1,20 +1,21 @@
-import { ArrowUp, ImagePlus, Square, X, CornerDownRight, Zap, Pin, PinOff } from "lucide-react";
+import { ArrowUp, ImagePlus, Loader2, Square, X, CornerDownRight, Zap, Pin, PinOff } from "lucide-react";
 import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { api, type Holder, isNetworkError } from "@/lib/api";
+import { api, fileRawURL, type Holder, isNetworkError } from "@/lib/api";
 import { closeAgentInPane } from "@/lib/actions";
 import { get, sendShown, set, setConfig, transcript, useStore } from "@/lib/store";
 import type { ContentBlock, SessionSummary } from "@/lib/types";
-import { dropShellContext } from "@/lib/transcript";
+import { dropShellContext, videoLinkPath } from "@/lib/transcript";
 import { MODE, defaultsOf, flatOptions, setDefault, setDefaults } from "@/lib/defaults";
 import { isCoarse, usePhone } from "@/lib/phone";
 import { askKey } from "@/lib/askkeys";
 import { cn } from "@/lib/utils";
 import { UsagePanel } from "@/components/UsageMeter";
 import { HeldDialog } from "./HeldDialog";
+import { PlayBadge } from "./PlayBadge";
 import { OptionMenu, OptionsMenu, type OptGroup } from "./OptionMenu";
 import { openLightbox } from "../Lightbox";
 import { TasksChip } from "./TasksBar";
@@ -27,14 +28,17 @@ export type ComposerHandle = {
   ctrlC(): void;
 };
 
-type Img = { data: string; mimeType: string; url: string };
+// A video can't go to the agent inline: it's uploaded to the gerdr machine (api.upload) and sent as a resource_link
+// to that path. `path` stays unset while the upload is still running; `data` is empty for videos.
+type Img = { data: string; mimeType: string; url: string; path?: string; name?: string };
+const isVideo = (im: Img) => im.mimeType.startsWith("video/");
 
 function toImgs(blocks: ContentBlock[]): Img[] {
-  return (blocks.filter((c) => c.type === "image") as { data: string; mimeType: string }[]).map((im) => ({
-    data: im.data,
-    mimeType: im.mimeType,
-    url: `data:${im.mimeType};base64,${im.data}`,
-  }));
+  return blocks.flatMap((c): Img[] => {
+    if (c.type === "image") return [{ data: c.data, mimeType: c.mimeType, url: `data:${c.mimeType};base64,${c.data}` }];
+    const v = videoLinkPath(c);
+    return v && c.type === "resource_link" ? [{ data: "", mimeType: "video/*", url: fileRawURL(v), path: v, name: c.name }] : [];
+  });
 }
 
 // gerdr 自己接的命令（runLocal）：和 agent 报的同名时用这边的（claude 也报 /usage，发过去会起一轮、进对话记录）
@@ -294,8 +298,17 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
     const to = alias && ALIASES[alias[1]];
     if (to && !(session.commands ?? []).some((c) => c.name === alias[1]) && (session.commands ?? []).some((c) => c.name === to)) t = `/${to}${alias[2]}`;
     if (!t && !imgs.length) return;
+    if (imgs.some((im) => isVideo(im) && !im.path)) {
+      toast("视频还在上传，传完再发");
+      return;
+    }
     const content: ContentBlock[] = [];
-    for (const im of imgs) content.push({ type: "image", data: im.data, mimeType: im.mimeType });
+    for (const im of imgs)
+      content.push(
+        im.path
+          ? { type: "resource_link", uri: `file://${im.path}`, name: im.name ?? im.path.slice(im.path.lastIndexOf("/") + 1) }
+          : { type: "image", data: im.data, mimeType: im.mimeType },
+      );
     if (t) content.push({ type: "text", text: t });
     setBusy(true);
     const prev = text;
@@ -425,6 +438,10 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
 
   const addFiles = (files: FileList | File[]) => {
     for (const f of Array.from(files)) {
+      if (f.type.startsWith("video/")) {
+        addVideo(f);
+        continue;
+      }
       if (!f.type.startsWith("image/")) continue;
       if (f.size > 20 << 20) {
         toast.error(`${f.name} 太大了（超过 20MB）`);
@@ -438,6 +455,32 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
       r.readAsDataURL(f);
     }
   };
+
+  // Show the video right away from a local object URL, upload it in the background; send waits until it has a path.
+  const addVideo = (f: File) => {
+    if (f.size > 1 << 30) {
+      toast.error(`${f.name} 太大了（超过 1GB）`);
+      return;
+    }
+    const url = URL.createObjectURL(f);
+    setImgs((xs) => [...xs, { data: "", mimeType: f.type, url, name: f.name }]);
+    api.upload(f).then(
+      ({ path }) => setImgs((xs) => xs.map((x) => (x.url === url ? { ...x, path } : x))),
+      (e) => {
+        toast.error(`${f.name} 没传上去：${e.message ?? e}`);
+        setImgs((xs) => xs.filter((x) => x.url !== url));
+        URL.revokeObjectURL(url);
+      },
+    );
+  };
+
+  // Enlarge an attachment: images and videos page together in the lightbox, where a video starts playing.
+  const preview = (i: number, from: Element) =>
+    openLightbox(
+      imgs.map((x) => ({ url: x.url, video: isVideo(x) })),
+      i,
+      from,
+    );
 
   // 选中的那张图上按键：← → 在图之间挑（最后一张再按 → 回输入框），退格 / Delete 删掉它，Esc 回输入框，回车放大看。
   // 删完焦点落到原位置上的下一张（退格往前一张，像删字），一张不剩就回输入框
@@ -464,11 +507,7 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
       toText();
     } else if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
-      openLightbox(
-        imgs.map((x) => ({ url: x.url })),
-        i,
-        e.currentTarget,
-      );
+      preview(i, e.currentTarget);
     } else if (e.key.length === 1) {
       // 选着图直接打字：回输入框接着打，这个字不丢
       toText();
@@ -722,17 +761,20 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
                 onKeyDown={(e) => onImgKey(e, i)}
                 className="group/img relative rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-card"
               >
-                <img
-                  src={im.url}
-                  onClick={(e) =>
-                    openLightbox(
-                      imgs.map((x) => ({ url: x.url })),
-                      i,
-                      e.currentTarget,
-                    )
-                  }
-                  className="size-14 cursor-zoom-in rounded-md border object-cover"
-                />
+                {isVideo(im) ? (
+                  <div onClick={(e) => preview(i, e.currentTarget)} className="relative size-14 cursor-zoom-in overflow-hidden rounded-md border bg-muted">
+                    <video src={`${im.url}#t=0.1`} muted playsInline preload="metadata" className="pointer-events-none size-full object-cover" />
+                    {im.path ? (
+                      <PlayBadge small />
+                    ) : (
+                      <div className="absolute inset-0 flex items-center justify-center bg-background/40 text-foreground">
+                        <Loader2 className="size-5 animate-spin" />
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <img src={im.url} onClick={(e) => preview(i, e.currentTarget)} className="size-14 cursor-zoom-in rounded-md border object-cover" />
+                )}
                 <button
                   className="absolute -right-1.5 -top-1.5 hidden rounded-full bg-foreground p-0.5 text-background group-hover/img:block [@media(hover:none)]:block"
                   onClick={() => setImgs(imgs.filter((_, j) => j !== i))}
@@ -759,7 +801,7 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
           onKeyDown={onKeyDown}
           onPaste={(e) => {
             const files = Array.from(e.clipboardData.files);
-            if (files.some((f) => f.type.startsWith("image/"))) {
+            if (files.some((f) => f.type.startsWith("image/") || f.type.startsWith("video/"))) {
               e.preventDefault();
               addFiles(files);
             }
@@ -791,7 +833,7 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
                   <ImagePlus className="size-4" />
                   <input
                     type="file"
-                    accept="image/*"
+                    accept="image/*,video/*"
                     multiple
                     className="hidden"
                     onChange={(e) => {
@@ -804,7 +846,7 @@ export const Composer = forwardRef<ComposerHandle, { session: SessionSummary; pa
                   />
                 </label>
               </TooltipTrigger>
-              <TooltipContent>附图（也可以直接粘贴 / 拖进来）</TooltipContent>
+              <TooltipContent>附图片 / 视频（也可以直接粘贴 / 拖进来）</TooltipContent>
             </Tooltip>
             {pinnedCmds.length > 0 && (
               <DropdownMenu>

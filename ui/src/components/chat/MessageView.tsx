@@ -14,6 +14,7 @@ import { AskCard, PermissionCard, PlanCard, QuickReplies } from "./Cards";
 import { ToolCall } from "./ToolCall";
 import { UsageCard } from "./UsageCard";
 import { openLightbox } from "../Lightbox";
+import { PlayBadge } from "./PlayBadge";
 import { TaskDoneCard } from "./TasksBar";
 import { ShellCard } from "./ShellCard";
 import { fmtElapsed, fmtTokens } from "./StatusLine";
@@ -98,23 +99,28 @@ export const MessageView = memo(function MessageView({
           >
             {files.length > 0 && (
               <div className="flex flex-wrap gap-1.5">
-                {files.map((f: any, i) => (
-                  // 高度定死在图片自己身上（宽度按比例自动算）：对话是虚拟列表，行高要在图片加载完之前就定下来。
-                  // 只给 max-h 的话行先按 0 高量、解码完再长 160px，滚动跟着修正又把行卸载 / 重挂，来回抽搐。
-                  // 别套一层定高的 div 再给 img max-w-full：外层宽度又取决于 img，循环依赖，图片宽度会被算成 0（踩过，图没了）
-                  <img
-                    key={i}
-                    src={f.url}
-                    onClick={(e) =>
-                      openLightbox(
-                        files.map((x: any) => ({ url: x.url })),
-                        i,
-                        e.currentTarget,
-                      )
-                    }
-                    className="h-40 w-auto max-w-full cursor-zoom-in rounded-xl border object-contain"
-                  />
-                ))}
+                {files.map((f: any, i) => {
+                  // Images and videos page together in one lightbox; a video only plays once opened there.
+                  const open = (e: React.MouseEvent<HTMLElement>) =>
+                    openLightbox(
+                      files.map((x: any) => ({ url: x.url, video: x.mediaType?.startsWith("video/") })),
+                      i,
+                      e.currentTarget,
+                    );
+                  return f.mediaType?.startsWith("video/") ? (
+                    // Fixed height on the <video> itself, same reason as the images below. The wrapper takes max-w-full
+                    // instead of the video, so its width doesn't depend on itself.
+                    <div key={i} onClick={open} className="relative max-w-full cursor-zoom-in overflow-hidden rounded-xl border bg-muted">
+                      <video src={`${f.url}#t=0.1`} muted playsInline preload="metadata" className="pointer-events-none h-40 w-auto" />
+                      <PlayBadge />
+                    </div>
+                  ) : (
+                    // 高度定死在图片自己身上（宽度按比例自动算）：对话是虚拟列表，行高要在图片加载完之前就定下来。
+                    // 只给 max-h 的话行先按 0 高量、解码完再长 160px，滚动跟着修正又把行卸载 / 重挂，来回抽搐。
+                    // 别套一层定高的 div 再给 img max-w-full：外层宽度又取决于 img，循环依赖，图片宽度会被算成 0（踩过，图没了）
+                    <img key={i} src={f.url} onClick={open} className="h-40 w-auto max-w-full cursor-zoom-in rounded-xl border object-contain" />
+                  );
+                })}
               </div>
             )}
             {text}

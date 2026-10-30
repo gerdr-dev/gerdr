@@ -11,6 +11,8 @@ import { cn } from "@/lib/utils";
  * - 看细节：手机上双指捏合缩放、单指拖动、双击放大 / 还原；电脑上点图放大 / 还原、滚轮（触控板捏合）缩放、拖动；
  * - 关：点空白处、Esc、右上角 ✕；没放大时往下划也能关（和手机相册一样）；
  * - 本机文件右上角多一个「在查看器里打开」（gerdr 的 FileViewer，能看路径、用系统程序打开）。
+ * - Videos (item.video) open the same way and start playing; the player's own controls take the pointer, so there is
+ *   no zoom / drag on them — swipe on the backdrop to page, tap it to close.
  *
  * 缩放 / 拖动全是自己算的 transform（transform-origin 在图的左上角，view = 平移 + 倍数），不靠浏览器的页面缩放：
  * 页面缩放会把整个 gerdr 一起放大，松手也不会弹回来。所以整层 touch-action: none，手势全归这里。
@@ -20,7 +22,7 @@ import { cn } from "@/lib/utils";
  * 而对话是虚拟列表，行随时会被卸载，灯箱不能挂在行里面。
  */
 
-export type LightboxItem = { url: string; alt?: string; path?: string; cwd?: string };
+export type LightboxItem = { url: string; alt?: string; path?: string; cwd?: string; video?: boolean };
 
 type State = { items: LightboxItem[]; index: number; origin?: { el: Element; index: number } } | null;
 
@@ -75,6 +77,12 @@ function viewFor(fit: Box, r: DOMRect): View {
 
 /** 缩略图本身就是这张图、已经加载好的话，直接拿它的原始尺寸（灯箱不用等加载，第一帧就能开始放大） */
 function natOf(el: Element | undefined, url: string): { w: number; h: number } | null {
+  const vid = el instanceof HTMLVideoElement ? el : el?.querySelector("video");
+  if (vid) {
+    // Thumbnails carry a #t= fragment (so Safari paints a first frame); compare without it.
+    if (!vid.videoWidth || vid.src.split("#")[0] !== new URL(url, location.href).href) return null;
+    return { w: vid.videoWidth, h: vid.videoHeight };
+  }
   const img = el instanceof HTMLImageElement ? el : el?.querySelector("img");
   if (!img || !img.complete || !img.naturalWidth) return null;
   if (img.src !== new URL(url, location.href).href) return null;
@@ -84,7 +92,7 @@ function natOf(el: Element | undefined, url: string): { w: number; h: number } |
 function Lightbox({ items, index, origin }: { items: LightboxItem[]; index: number; origin?: { el: Element; index: number } }) {
   const it = items[index];
   const many = items.length > 1;
-  const imgRef = useRef<HTMLImageElement>(null);
+  const imgRef = useRef<HTMLImageElement & HTMLVideoElement>(null);
   const bgRef = useRef<HTMLDivElement>(null);
   const chromeRef = useRef<HTMLDivElement>(null);
   const [nat, setNat] = useState(() => natOf(origin?.index === index ? origin.el : undefined, it.url));
@@ -223,6 +231,7 @@ function Lightbox({ items, index, origin }: { items: LightboxItem[]; index: numb
     if (!el) return;
     const wheel = (e: WheelEvent) => {
       e.preventDefault();
+      if (e.target instanceof HTMLVideoElement) return;
       const k = Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.002));
       zoomAt(view.current.s * k, e.clientX, e.clientY);
     };
@@ -265,7 +274,8 @@ function Lightbox({ items, index, origin }: { items: LightboxItem[]; index: numb
   };
 
   const onDown = (e: React.PointerEvent) => {
-    if (closing.current || (e.target as HTMLElement).closest("button")) return;
+    // A video's own controls (play, seek, volume) get the pointer, not our gestures.
+    if (closing.current || (e.target as HTMLElement).closest("button, video")) return;
     if (e.pointerType === "mouse" && e.button !== 0) return;
     ptrs.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
@@ -361,19 +371,33 @@ function Lightbox({ items, index, origin }: { items: LightboxItem[]; index: numb
       onPointerCancel={onUp}
     >
       <div ref={bgRef} className="absolute inset-0 bg-background/90 backdrop-blur-sm" style={{ opacity: 0 }} />
-      <img
-        key={`${index}:${it.url}`}
-        ref={imgRef}
-        src={it.url}
-        alt={it.alt}
-        draggable={false}
-        onLoad={(e) => !nat && setNat({ w: e.currentTarget.naturalWidth || 800, h: e.currentTarget.naturalHeight || 800 })}
-        className={cn(
-          "absolute top-0 left-0 max-w-none rounded-md shadow-2xl will-change-transform",
-          zoomed ? "cursor-grab active:cursor-grabbing" : "cursor-zoom-in",
-        )}
-        style={fit ? { left: fit.left, top: fit.top, width: fit.w, height: fit.h, transformOrigin: "0 0" } : { opacity: 0 }}
-      />
+      {it.video ? (
+        <video
+          key={`${index}:${it.url}`}
+          ref={imgRef}
+          src={it.url}
+          controls
+          autoPlay
+          playsInline
+          onLoadedMetadata={(e) => !nat && setNat({ w: e.currentTarget.videoWidth || 800, h: e.currentTarget.videoHeight || 450 })}
+          className="absolute top-0 left-0 max-w-none rounded-md bg-black shadow-2xl will-change-transform"
+          style={fit ? { left: fit.left, top: fit.top, width: fit.w, height: fit.h, transformOrigin: "0 0" } : { opacity: 0 }}
+        />
+      ) : (
+        <img
+          key={`${index}:${it.url}`}
+          ref={imgRef}
+          src={it.url}
+          alt={it.alt}
+          draggable={false}
+          onLoad={(e) => !nat && setNat({ w: e.currentTarget.naturalWidth || 800, h: e.currentTarget.naturalHeight || 800 })}
+          className={cn(
+            "absolute top-0 left-0 max-w-none rounded-md shadow-2xl will-change-transform",
+            zoomed ? "cursor-grab active:cursor-grabbing" : "cursor-zoom-in",
+          )}
+          style={fit ? { left: fit.left, top: fit.top, width: fit.w, height: fit.h, transformOrigin: "0 0" } : { opacity: 0 }}
+        />
+      )}
       <div ref={chromeRef} style={{ opacity: 0 }}>
         <div className="absolute top-3 right-3 flex gap-2">
           {it.path && (
@@ -403,7 +427,7 @@ function Lightbox({ items, index, origin }: { items: LightboxItem[]; index: numb
           </>
         )}
         {(many || it.alt) && !zoomed && (
-          <div className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center px-4">
+          <div className={cn("pointer-events-none absolute inset-x-0 flex justify-center px-4", it.video ? "top-4" : "bottom-4")}>
             <span className="max-w-full truncate rounded-full bg-background/70 px-3 py-1 text-[12px] text-muted-foreground ring-1 ring-border backdrop-blur">
               {many && (
                 <span className="tabular-nums">

@@ -336,6 +336,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/fs/stat", s.fileStat)
 	mux.HandleFunc("GET /api/fs/raw", s.fileRaw)
 	mux.HandleFunc("POST /api/fs/exists", s.fileExists)
+	mux.HandleFunc("POST /api/fs/upload", s.fileUpload)
 	mux.HandleFunc("GET /ws", s.ws)
 	mux.HandleFunc("GET /api/ui/status", func(w http.ResponseWriter, r *http.Request) {
 		fatal, issues := s.UI.Status()

@@ -3,6 +3,7 @@
 // 增量的：apply() 一条条吃事件，只换掉被改到的那条消息（新对象），没动的消息保持同一个引用
 // —— 流式输出时只有最后一条消息在重渲染。reset 时整份重来。
 import type { DynamicToolUIPart, UIMessage } from "ai";
+import { fileRawURL } from "./api";
 import type { AgentTask, AskRequest, ContentBlock, HubEvent, PermissionRequest } from "./types";
 
 export type PlanEntry = { content: string; status: "pending" | "in_progress" | "completed"; priority?: string };
@@ -197,6 +198,7 @@ export class Transcript {
     for (const c of content) {
       if (c.type === "text") parts.push({ type: "text", text: c.text });
       else if (c.type === "image") parts.push({ type: "file", mediaType: c.mimeType, url: imageURL(c) });
+      else if (c.type === "resource_link") parts.push(linkPart(c));
     }
     this.sending = [...this.sending, { id: messageId, role: "user", parts, metadata: { messageId, sending: true, ts: Date.now(), content } }];
   }
@@ -343,7 +345,7 @@ export class Transcript {
           if (c.type === "text" && isShellContext(c.text)) continue; // `!命令` 带过去的输出：上面已经有那张命令卡片了
           if (c.type === "text") parts.push({ type: "text", text: mb?.text ?? c.text });
           else if (c.type === "image") parts.push({ type: "file", mediaType: c.mimeType, url: imageURL(c) });
-          else if (c.type === "resource_link") parts.push({ type: "text", text: `@${c.uri.replace(/^file:\/\//, "")}` });
+          else if (c.type === "resource_link") parts.push(linkPart(c));
         }
         if (e.messageId) this.dropSending(e.messageId);
         this.messages = [...this.messages];
@@ -656,6 +658,22 @@ export class Transcript {
 }
 
 /** 图片：推过来时多半已换成地址（blob，服务端存着），老的 / 接口原样回的还是 base64。 */
+// Videos the user attached go to the agent as a resource_link to the uploaded file (agents take no video blocks).
+// Recognised by extension so the bubble can play them again when the log is replayed.
+const VIDEO_EXT = /\.(mp4|m4v|mov|webm|mkv|avi|3gp|3g2|ogv)$/i;
+
+/** The local path of a resource_link that points at a video, else null. */
+export function videoLinkPath(c: ContentBlock): string | null {
+  if (c.type !== "resource_link") return null;
+  const p = c.uri.replace(/^file:\/\//, "");
+  return VIDEO_EXT.test(p) ? p : null;
+}
+
+function linkPart(c: ContentBlock & { type: "resource_link" }): GPart {
+  const v = videoLinkPath(c);
+  return v ? { type: "file", mediaType: "video/*", url: fileRawURL(v), filename: c.name } : { type: "text", text: `@${c.uri.replace(/^file:\/\//, "")}` };
+}
+
 function imageURL(c: { data?: string; mimeType?: string; blob?: string }) {
   return c.blob ?? `data:${c.mimeType};base64,${c.data}`;
 }

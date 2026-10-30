@@ -1,7 +1,10 @@
 package server
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
+	"io"
 	"mime"
 	"net/http"
 	"os"
@@ -219,4 +222,43 @@ func (s *Server) fileRaw(w http.ResponseWriter, r *http.Request) {
 		h.Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": filepath.Base(p)}))
 	}
 	http.ServeContent(w, r, filepath.Base(p), st.ModTime(), f)
+}
+
+// MaxUpload caps POST /api/fs/upload. Videos from a phone run to a few hundred MB; more than this is almost
+// certainly a mistake, and the body streams through the relay when remote.
+const MaxUpload = 1 << 30
+
+// fileUpload stores a file the user attached in the composer that can't go to the agent inline (a video: agents
+// only take text and images) and returns its absolute path, which the UI then sends as a resource_link so the
+// agent can open it with its own tools (ffmpeg…). The body is the raw file; ?name= is its original name, kept so
+// the agent sees a meaningful file name and extension. Each upload gets its own directory so equal names never
+// collide. Same permission tier as the rest of /api/fs: whoever can call this can already make the agent write files.
+func (s *Server) fileUpload(w http.ResponseWriter, r *http.Request) {
+	name := filepath.Base(strings.ReplaceAll(r.URL.Query().Get("name"), "\\", "/"))
+	if name == "" || name == "." || name == "/" || strings.HasPrefix(name, ".") {
+		name = "upload" + name
+	}
+	b := make([]byte, 8)
+	_, _ = rand.Read(b)
+	dir := filepath.Join(s.Dir, "uploads", hex.EncodeToString(b))
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		httpError(w, 500, err.Error())
+		return
+	}
+	p := filepath.Join(dir, name)
+	f, err := os.OpenFile(p, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		httpError(w, 500, err.Error())
+		return
+	}
+	_, err = io.Copy(f, http.MaxBytesReader(w, r.Body, MaxUpload))
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		os.RemoveAll(dir)
+		httpError(w, 400, err.Error())
+		return
+	}
+	writeJSON(w, map[string]string{"path": p})
 }

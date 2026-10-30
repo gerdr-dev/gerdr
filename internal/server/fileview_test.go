@@ -111,3 +111,31 @@ func TestFileExists(t *testing.T) {
 		t.Errorf("got %v, want %v", got.Exists, want)
 	}
 }
+
+// Uploads land under <Dir>/uploads/<random>/ with the original base name; a name can't climb out of that dir.
+func TestFileUpload(t *testing.T) {
+	s := &Server{Dir: t.TempDir()}
+	up := func(name, body string) string {
+		w := httptest.NewRecorder()
+		s.fileUpload(w, httptest.NewRequest("POST", "/api/fs/upload?name="+url.QueryEscape(name), strings.NewReader(body)))
+		if w.Code != 200 {
+			t.Fatalf("upload %q: %d %s", name, w.Code, w.Body)
+		}
+		var res struct{ Path string }
+		json.Unmarshal(w.Body.Bytes(), &res)
+		return res.Path
+	}
+	a, b := up("clip.mp4", "aaa"), up("clip.mp4", "bbb")
+	if a == b || filepath.Base(a) != "clip.mp4" {
+		t.Fatalf("paths %q %q", a, b)
+	}
+	if got, _ := os.ReadFile(a); string(got) != "aaa" {
+		t.Errorf("content = %q", got)
+	}
+	for _, n := range []string{"../../evil.mp4", `..\..\evil.mp4`, ".."} {
+		p := up(n, "x")
+		if rel, _ := filepath.Rel(filepath.Join(s.Dir, "uploads"), p); strings.HasPrefix(rel, "..") || strings.Count(rel, string(filepath.Separator)) != 1 {
+			t.Errorf("name %q escaped: %q", n, p)
+		}
+	}
+}

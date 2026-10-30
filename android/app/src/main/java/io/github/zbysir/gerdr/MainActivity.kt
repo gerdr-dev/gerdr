@@ -512,6 +512,13 @@ class MainActivity : ComponentActivity() {
             fileCb = cb
             val intent = params.createIntent()
             if (params.mode == FileChooserParams.MODE_OPEN_MULTIPLE) intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+            // createIntent only uses the first accept type, so the composer's "image/*,video/*" would offer images
+            // alone. Hand the picker all of them instead.
+            val types = params.acceptTypes.flatMap { it.split(',') }.map { it.trim() }.filter { it.isNotEmpty() }
+            if (types.size > 1) {
+                intent.type = "*/*"
+                intent.putExtra(Intent.EXTRA_MIME_TYPES, types.toTypedArray())
+            }
             return try {
                 pickFiles.launch(intent)
                 true

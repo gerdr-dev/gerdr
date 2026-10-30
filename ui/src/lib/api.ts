@@ -142,6 +142,18 @@ export const api = {
   termInfo: (id: string, liveCwd?: boolean) => req<TermInfo>("GET", `/api/terms/${encodeURIComponent(id)}${liveCwd ? "?cwd=1" : ""}`),
   termKill: (id: string) => req("DELETE", `/api/terms/${encodeURIComponent(id)}`),
   send: sendWithRetry,
+  /** Stores a composer attachment the agent can't take inline (a video) on the gerdr machine; returns its absolute path. */
+  upload: async (f: File) => {
+    const res = await fetch(`/api/fs/upload?name=${encodeURIComponent(f.name)}`, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "X-Gerdr": "1" },
+      body: f,
+    });
+    const data = await res.json().catch(() => undefined);
+    if (!res.ok) throw new ApiError(res.status, data?.error || res.statusText, data);
+    return data as { path: string };
+  },
   /** 输入框里的 `!命令`：gerdr 在会话目录里直接跑，不经过 agent；输出进对话、跟着下一条消息带给 agent */
   shell: (id: string, command: string) => req<{ id: string }>("POST", `/api/sessions/${id}/shell`, { command, id: uuid() }),
   stopShell: (id: string, run: string) => req("POST", `/api/sessions/${id}/shell/${run}/stop`, {}),
