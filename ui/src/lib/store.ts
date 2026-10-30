@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { api, clientId, uuid, type FileStat } from "./api";
+import { api, clientId, uuid, type DoctorReport, type FileStat } from "./api";
 import { DEFAULT_KEYS, IS_MAC, type KeyAction } from "./keys";
 import { activeTab, defaultLayout, leaves, phoneRoot, validLayout, viewOf, withView, type Layout, type View } from "./layout";
 import { isPhone } from "./phone";
@@ -36,6 +36,9 @@ export type Config = {
   keepAwakeRemote?: boolean;
   /** 实验室：选中即复制（和 herdr 的 ui.copy_on_select 一样），lib/copysel.ts。 */
   copyOnSelect?: boolean;
+  /** Labs → Diagnosis: which install of claude / codex to run, when PATH finds a stale or blocked one.
+   *  Read by the backend (cmd/gerdr's applyBins). */
+  agentBins?: Record<string, string>;
   agents?: AgentDef[];
   /** 输入框里 pin 住的 / 命令（命令名，不带 /）：附图按钮旁边多一个 / 按钮，点开就是这些。存 config 是让手机和电脑共用一份。 */
   pinnedCommands?: string[];
@@ -130,6 +133,8 @@ type State = {
   agents: AgentInfo[];
   /** 正在连着的远程界面：设置里「远程访问」tab 上的红点和「正在连接」列表。 */
   remoteConns: RemoteConn[];
+  /** Latest diagnosis (Labs → Diagnosis); a "bad" one puts a red dot by Settings in the sidebar. */
+  doctor: DoctorReport | null;
   sessions: Record<string, SessionSummary>;
   /** 每个会话的对话（只有订阅着的会话有）；tv 是它的版本号，变了就重画。 */
   tv: Record<string, number>;
@@ -215,6 +220,7 @@ export const useStore = create<State>(() => ({
   pluginsDir: "",
   agents: [],
   remoteConns: [],
+  doctor: null,
   sessions: {},
   tv: {},
   older: {},

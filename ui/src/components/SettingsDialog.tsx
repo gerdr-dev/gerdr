@@ -11,6 +11,7 @@ import { closeDialog, fontSizeOf, set, setConfig, setFontSize, useStore, type Th
 import { AgentSettings } from "./AgentSettings";
 import { AndroidSettings } from "./AndroidSettings";
 import { AwakeSetting } from "./AwakeSetting";
+import { DoctorPanel } from "./DoctorPanel";
 import { MCPSettings, SkillSettings } from "./ExtSettings";
 import { KeySettings } from "./KeySettings";
 import { MemorySettings } from "./MemorySettings";
@@ -28,6 +29,7 @@ export function SettingsDialog({ open }: { open: boolean }) {
   useStore((s) => s.pluginVersion);
   const [tabOpen, setTabOpen] = useState("general");
   const remoteConns = useStore((s) => s.remoteConns.length);
+  const doctorBad = useStore((s) => s.doctor?.level === "bad");
   // 从别处直接打开某一页（比如「去批准」→ 远程访问）
   const wantTab = useStore((s) => (s.dialog?.kind === "settings" ? s.dialog.tab : undefined));
   useEffect(() => {
@@ -61,7 +63,11 @@ export function SettingsDialog({ open }: { open: boolean }) {
                   </span>
                 )}
               </TabsTrigger>
-              <TabsTrigger value="labs">实验室</TabsTrigger>
+              <TabsTrigger value="labs">
+                实验室
+                {/* the diagnosis found something broken */}
+                {doctorBad && <span className="ml-1 size-1.5 rounded-full bg-bad" />}
+              </TabsTrigger>
             </TabsList>
           </DialogHeader>
           <div className="min-h-0 min-w-0 flex-1 overflow-auto px-6 pb-6 max-md:px-4 max-md:[&_[data-slot=button]:not([data-size^=icon])]:h-7 max-md:[&_[data-slot=button]:not([data-size^=icon])]:px-2.5 max-md:[&_[data-slot=button]]:text-[13px]">
@@ -225,6 +231,9 @@ export function SettingsDialog({ open }: { open: boolean }) {
                 <Switch checked={!!cfg.keepAwakeRemote} onCheckedChange={(v) => setConfig({ keepAwakeRemote: v })} />
               </Row>
               <AwakeSetting open={open && tabOpen === "labs"} />
+              <div className="border-t pt-4">
+                <DoctorPanel />
+              </div>
             </TabsContent>
             <TabsContent value="remote" className="pt-2">
               <RemoteSettings open={open && tabOpen === "remote"} />

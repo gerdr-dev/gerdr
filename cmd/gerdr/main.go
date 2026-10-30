@@ -27,6 +27,7 @@ import (
 	"github.com/gerdr-dev/gerdr/internal/agents/native"
 	"github.com/gerdr-dev/gerdr/internal/awake"
 	"github.com/gerdr-dev/gerdr/internal/config"
+	"github.com/gerdr-dev/gerdr/internal/doctor"
 	"github.com/gerdr-dev/gerdr/internal/ext"
 	"github.com/gerdr-dev/gerdr/internal/hub"
 	"github.com/gerdr-dev/gerdr/internal/plugins"
@@ -278,7 +279,20 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 		keeper.SetLid(c.KeepAwakeRemote)
 	}
 	applyAwake()
+	// Which install of claude / codex to run, picked in Settings → Labs → Diagnosis when PATH finds a
+	// stale or blocked one. Applied before SetAgents so the agent list reflects it.
+	applyBins := func() {
+		var c struct {
+			AgentBins map[string]string `json:"agentBins"`
+		}
+		_ = json.Unmarshal(cfg.Get(), &c)
+		for _, id := range []string{"claude", "codex"} {
+			sysenv.SetAgentBin(id, c.AgentBins[id])
+		}
+	}
+	applyBins()
 	applyAgents := func() {
+		applyBins()
 		h.SetAgents(cfgAgents())
 		h.Broadcast("agents", h.Agents())
 		applyAwake()
@@ -318,6 +332,12 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 		UI: ui, ESM: uisite.NewESM(env.ESMCDN, filepath.Join(env.Dir, "cache", "esm")), Remote: rm, Awake: keeper,
 		Service: svc, Terms: term.New(func() []string { return sysenv.ChildEnv() }, log)}
 	defer srv.Terms.Close()
+	// Diagnosis: a light check now and then, so a broken PATH shows up as a red dot by Settings
+	// instead of as "npx not found" in some agent's reply.
+	srv.Doctor = doctor.New(h.CachedUsage, func(r doctor.Report) { h.Broadcast("doctor", r) })
+	doctorCtx, stopDoctor := context.WithCancel(context.Background())
+	defer stopDoctor()
+	go srv.Doctor.Watch(doctorCtx, 10*time.Minute)
 	// 打开后台常驻时，App 起的这个后端让位：退出（errHandover → 退出码 75），后台服务拿到锁接手，
 	// App 看到 75 就重起一个后端，它只连后台、不自己干活（desktop/main.js）。
 	handover := make(chan struct{})

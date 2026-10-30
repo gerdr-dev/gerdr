@@ -21,6 +21,11 @@
 
 - 不放 `GERDR_TOKEN` 和 DNS 凭据：`launchctl print` 谁都能看。令牌在 `~/.gerdr/token`，DNS 凭据在 `remote.json`，起来自己读。
 - 不放 PATH：`sysenv.AdoptLoginPath` 开机问登录 shell（和从访达起的 App 同一个问题）。
+  That read can fail (it timed out once on a busy machine right after a restart). It used to be a `sync.Once`, so
+  one failure left every agent of that service without node / npx / go / ffmpeg until the next restart, and
+  gerdr ran a stale `/usr/local/bin/codex` that macOS kills as malware. Now a failure still adds the fallback dirs,
+  is logged ("login shell PATH not read"), and retries on the next agent spawn. Settings → Labs → Diagnosis
+  (`internal/doctor`) compares the service's PATH with a fresh login shell's and can re-read it without a restart.
 - `ProcessType=Interactive`：不写会被当后台任务限速（App Nap）。
 
 ## 坑

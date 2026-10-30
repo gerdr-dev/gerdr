@@ -77,6 +77,10 @@ export async function boot() {
     if (wantSpace) import("./actions").then((a) => a.switchSpace(wantSpace));
     connect();
     startHeartbeat();
+    api.doctor().then(
+      (doctor) => set({ doctor }),
+      () => {},
+    );
   } catch (e) {
     if (e instanceof ApiError && e.status === 401) {
       set({ authError: true, ready: true });
@@ -259,6 +263,9 @@ function handle(m: any) {
       break;
     case "remote_conns":
       if (Array.isArray(m.data)) set({ remoteConns: m.data });
+      break;
+    case "doctor":
+      if (m.data?.checks) set({ doctor: m.data });
       break;
     case "pong":
       break;

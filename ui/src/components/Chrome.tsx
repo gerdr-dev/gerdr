@@ -318,6 +318,7 @@ export function Sidebar({ className }: { className?: string }) {
   const sessions = useStore((s) => s.sessions);
   const unread = useStore((s) => s.unread);
   const connected = useStore((s) => s.connected);
+  const doctorBad = useStore((s) => s.doctor?.level === "bad");
   useStore((s) => s.pluginVersion);
   const list = spaceWorkspaces(layout); // only the session being shown (herdr-style; switch with SpaceSwitcher)
   const listRef = useRef<HTMLDivElement>(null);
@@ -367,9 +368,15 @@ export function Sidebar({ className }: { className?: string }) {
           variant="ghost"
           size="sm"
           className="h-7 flex-1 justify-start gap-2 text-[12px] text-muted-foreground"
-          onClick={() => set({ dialog: { kind: "settings" } })}
+          onClick={() => set({ dialog: { kind: "settings", tab: doctorBad ? "labs" : undefined } })}
         >
           <Settings className="size-3.5" /> 设置
+          {/* Labs → Diagnosis found something broken (agents missing PATH dirs, a blocked codex…) */}
+          {doctorBad && (
+            <span className="ml-auto flex items-center gap-1 text-[11px] text-bad" title="诊断发现了问题：设置 → 实验室 → 诊断">
+              <span className="size-1.5 rounded-full bg-bad" /> 有问题
+            </span>
+          )}
         </Button>
         <Tooltip>
           <TooltipTrigger asChild>

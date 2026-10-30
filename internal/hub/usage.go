@@ -2,6 +2,7 @@ package hub
 
 import (
 	"context"
+	"sort"
 	"sync"
 	"time"
 
@@ -119,4 +120,18 @@ func (h *Hub) queryUsage(ctx context.Context, agent string) (acpx.UsageResponse,
 		return acpx.UsageResponse{}, err
 	}
 	return agenthost.Call[acpx.UsageResponse](ctx, c, acpx.MethodUsage, map[string]any{})
+}
+
+// CachedUsage: what the last usage queries returned, from the cache only (never asks an agent).
+// The diagnosis page reads the errors from it.
+func (h *Hub) CachedUsage() []UsageInfo {
+	c := h.usageCache()
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	var out []UsageInfo
+	for _, v := range c.info {
+		out = append(out, *v)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Agent < out[j].Agent })
+	return out
 }

@@ -9,6 +9,22 @@ export type UsageLimit = { kind: string; label: string; percent: number; resetsA
 /** 一家 agent 账号的额度（后端 hub.UsageInfo）：出错时 data 还是上一次拿到的，at 是它的时间 */
 export type UsageInfo = { agent: string; name: string; data?: { plan?: string; limits: UsageLimit[] }; error?: string; at?: number };
 
+/** Settings → Labs → Diagnosis (internal/doctor). */
+export type DoctorLevel = "ok" | "info" | "warn" | "bad";
+export type DoctorFix = { kind: "reloadPath" | "useBin"; label: string; agent?: string; path?: string };
+export type DoctorInstall = { path: string; version?: string; error?: string; blocked?: boolean; current?: boolean };
+export type DoctorCheck = {
+  id: string;
+  group: "path" | "agent" | "tool" | "usage";
+  title: string;
+  level: DoctorLevel;
+  summary: string;
+  detail?: string;
+  installs?: DoctorInstall[];
+  fixes?: DoctorFix[];
+};
+export type DoctorReport = { at: number; deep: boolean; level: DoctorLevel; checks: DoctorCheck[] };
+
 export class ApiError extends Error {
   status: number;
   /** 远程那条路上的细分原因：reason="stepup"（再加 passkey 前先验一次）、need="pair" | "passkey"（见 docs/dev/REMOTE.md） */
@@ -128,6 +144,10 @@ export const api = {
   memoryDelete: (path: string) => req("DELETE", `/api/memory/file?path=${encodeURIComponent(path)}`),
   // Gerdr Agent 实际在用的 MCP 和连接状态；probe = 现在就连一遍
   llmTest: (provider: LLMProvider, model: LLMModel) => req<{ reply: string; api: string }>("POST", "/api/llm/test", { provider, model }),
+  doctor: () => req<DoctorReport | null>("GET", "/api/doctor"),
+  /** deep = also run every claude / codex install found (can pop macOS's "malware blocked" dialog for a blocked one) */
+  doctorRun: (deep: boolean) => req<DoctorReport>("POST", "/api/doctor/run", { deep }),
+  doctorFix: (f: DoctorFix) => req<DoctorReport>("POST", "/api/doctor/fix", f),
   awake: () => req<AwakeStatus>("GET", "/api/awake"),
   setAwake: (b: { minutes?: number; until?: number; forever?: boolean }) => req<AwakeStatus>("PUT", "/api/awake", b),
   setupLid: () => req<AwakeStatus>("POST", "/api/awake/lid-setup", {}),

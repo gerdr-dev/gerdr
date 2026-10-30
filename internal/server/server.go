@@ -33,6 +33,7 @@ import (
 	"github.com/gerdr-dev/gerdr/internal/auth"
 	"github.com/gerdr-dev/gerdr/internal/awake"
 	"github.com/gerdr-dev/gerdr/internal/config"
+	"github.com/gerdr-dev/gerdr/internal/doctor"
 	"github.com/gerdr-dev/gerdr/internal/ext"
 	"github.com/gerdr-dev/gerdr/internal/hub"
 	"github.com/gerdr-dev/gerdr/internal/plugins"
@@ -64,7 +65,9 @@ type Server struct {
 	// Terms：界面里的终端。nil = 不开（测试里）。
 	Terms *term.Manager
 	// Awake：有远程设备连着时不让电脑睡（设置 → 实验室）。nil = 不管（测试里）。
-	Awake       *awake.Keeper
+	Awake *awake.Keeper
+	// Doctor: Settings → Labs → Diagnosis (doctorapi.go). nil = off (tests).
+	Doctor      *doctor.Doctor
 	remoteConns remoteConns // 正在连着的远程界面（remoteconns.go）
 	appWatch    appWatch    // 安卓 App 后台通知的长轮询（appwatch.go）
 	// OnServiceInstalled：刚打开后台常驻、本进程是 App 起的后端时让位（见 cmd/gerdr 的 handover）。
@@ -318,6 +321,7 @@ func (s *Server) Handler() http.Handler {
 	s.llmRoutes(mux)
 	s.memoryRoutes(mux)
 	s.importRoutes(mux)
+	s.doctorRoutes(mux)
 	if s.Remote != nil {
 		s.remoteRoutes(mux)
 		s.appRoutes(mux)

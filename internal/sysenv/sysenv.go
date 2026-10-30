@@ -21,6 +21,7 @@ var (
 	pathDone bool      // got the login shell's PATH; never ask again
 	pathLast time.Time // last attempt, to space out retries after a failure
 	pathBase string    // PATH this process started with, before any merge
+	pathErr  error     // last attempt's error, nil once it worked (for the diagnosis page)
 )
 
 // AdoptLoginPath merges the login shell's PATH into this process's.
@@ -40,16 +41,45 @@ func AdoptLoginPath() error {
 	if pathDone || !pathLast.IsZero() && time.Since(pathLast) < pathRetry {
 		return nil
 	}
+	return adoptLocked()
+}
+
+// ReloadLoginPath asks the login shell again even if it already worked, e.g. after the user edited .zshrc
+// or installed something into a new dir. Only processes started afterwards see the new PATH.
+func ReloadLoginPath() error {
+	pathMu.Lock()
+	defer pathMu.Unlock()
+	return adoptLocked()
+}
+
+// PathStatus: how the last attempt to read the login shell's PATH went.
+type PathStatus struct {
+	OK    bool      `json:"ok"`
+	Error string    `json:"error,omitempty"`
+	At    time.Time `json:"at"`
+	Base  string    `json:"base"` // what this process started with
+}
+
+func LoginPathStatus() PathStatus {
+	pathMu.Lock()
+	defer pathMu.Unlock()
+	st := PathStatus{OK: pathDone && pathErr == nil, At: pathLast, Base: pathBase}
+	if pathErr != nil {
+		st.Error = pathErr.Error()
+	}
+	return st
+}
+
+func adoptLocked() error {
 	if pathLast.IsZero() {
 		pathBase = os.Getenv("PATH")
 	}
 	pathLast = time.Now()
-	login, err := loginShellPath()
+	login, err := LoginShellPath()
+	pathErr = err
 	if err == nil {
 		pathDone = true
 	}
-	home, _ := os.UserHomeDir()
-	fallback := strings.Join([]string{filepath.Join(home, ".local/bin"), "/opt/homebrew/bin", "/usr/local/bin"}, ":")
 	// The login shell's order wins over the bare system PATH launchd hands us: it is what decides that
 	// ~/.version-fox/shims beats an old /usr/local/bin/codex. A real inherited PATH (started from a
 	// terminal, maybe inside a venv) keeps going first.
@@ -57,13 +87,20 @@ func AdoptLoginPath() error {
 	if isBarePath(pathBase) {
 		merged = mergePath(login, pathBase)
 	}
-	os.Setenv("PATH", mergePath(merged, fallback))
+	os.Setenv("PATH", mergePath(merged, strings.Join(FallbackDirs(), ":")))
 	return err
+}
+
+// FallbackDirs: where claude / codex / brew usually live, added even when the login shell can't be read.
+func FallbackDirs() []string {
+	home, _ := os.UserHomeDir()
+	return []string{filepath.Join(home, ".local/bin"), "/opt/homebrew/bin", "/usr/local/bin"}
 }
 
 const pathRetry = 30 * time.Second
 
-func loginShellPath() (string, error) {
+// LoginShellPath runs the user's login shell (-l -i, so .zprofile and .zshrc both apply) and returns its PATH.
+func LoginShellPath() (string, error) {
 	shell := os.Getenv("SHELL")
 	if shell == "" {
 		shell = "/bin/zsh"
@@ -172,10 +209,37 @@ func SetGerdrContext(dir string) {
 	}
 }
 
-// FindClaude 找 claude 可执行文件。GERDR_CLAUDE_BIN 优先。
+var (
+	binMu       sync.Mutex
+	binOverride = map[string]string{}
+)
+
+// SetAgentBin pins which install of a built-in agent ("claude" / "codex") is used: config.json's agentBins,
+// set from Settings → Labs → Diagnosis when PATH picks a stale or blocked copy. "" clears it.
+// GERDR_CLAUDE_BIN / GERDR_CODEX_BIN still win (they're set by whoever started gerdr, on purpose).
+func SetAgentBin(agent, path string) {
+	binMu.Lock()
+	defer binMu.Unlock()
+	if path == "" {
+		delete(binOverride, agent)
+	} else {
+		binOverride[agent] = path
+	}
+}
+
+func agentBin(agent string) string {
+	binMu.Lock()
+	defer binMu.Unlock()
+	return binOverride[agent]
+}
+
+// FindClaude 找 claude 可执行文件。GERDR_CLAUDE_BIN 优先，然后是设置里指定的那一份。
 func FindClaude() (string, error) {
 	if p := os.Getenv("GERDR_CLAUDE_BIN"); p != "" {
 		return p, nil
+	}
+	if p := agentBin("claude"); p != "" {
+		return FindBin(p)
 	}
 	AdoptLoginPath()
 	if p, err := exec.LookPath("claude"); err == nil {
@@ -216,6 +280,16 @@ func FindCodex() (string, error) {
 	if p := os.Getenv("GERDR_CODEX_BIN"); p != "" {
 		return p, nil
 	}
+	if p := agentBin("codex"); p != "" {
+		p, err := FindBin(p)
+		if err != nil {
+			return "", err
+		}
+		if native := nativeCodex(p); native != "" {
+			return native, nil
+		}
+		return p, nil
+	}
 	AdoptLoginPath()
 	p, err := exec.LookPath("codex")
 	if err != nil {
@@ -225,6 +299,43 @@ func FindCodex() (string, error) {
 		return native, nil
 	}
 	return p, nil
+}
+
+// Installs lists every copy of name ("claude" / "codex") found in dirs plus the usual places, resolved the
+// way the Find* functions would run it (codex's npm shim → its native binary), deduplicated by real path.
+// The diagnosis page shows them so a stale copy shadowing the one the user actually uses is visible.
+func Installs(name string, dirs []string) []string {
+	home, _ := os.UserHomeDir()
+	dirs = append(append([]string{}, dirs...), FallbackDirs()...)
+	if name == "claude" {
+		dirs = append(dirs, filepath.Join(home, ".claude/local"))
+	}
+	seen := map[string]bool{}
+	var out []string
+	for _, d := range dirs {
+		if d == "" {
+			continue
+		}
+		p := filepath.Join(d, name)
+		if !isExec(p) {
+			continue
+		}
+		if name == "codex" {
+			if native := nativeCodex(p); native != "" {
+				p = native
+			}
+		}
+		real := p
+		if r, err := filepath.EvalSymlinks(p); err == nil {
+			real = r
+		}
+		if seen[real] {
+			continue
+		}
+		seen[real] = true
+		out = append(out, p)
+	}
+	return out
 }
 
 func nativeCodex(shim string) string {
