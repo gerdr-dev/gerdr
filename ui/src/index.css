@@ -1,5 +1,13 @@
 @custom-variant dark (&:is(.dark *));
 
+/* Compile dialog frame classes up front. Tailwind browser only generates a class once it appears in the DOM, so a
+   dialog mounting with a width nobody used yet (sm:max-w-3xl) renders its first frame at the fallback
+   max-w-[calc(100%-2rem)] and visibly shrinks under the zoom-in animation. Add a size here when a dialog uses a new one. */
+@source inline("{,sm:,max-md:,data-[size=default]:sm:,data-[size=sm]:}max-w-{xs,sm,md,lg,xl,2xl,3xl,4xl,5xl,full,[calc(100%-2rem)]}");
+@source inline("{,max-md:}{h-full,max-h-none,max-h-[85vh],max-h-[90vh],h-[75vh],rounded-none,border-0}");
+@source inline("fixed inset-0 z-50 m-auto grid h-fit content-start w-full bg-black/50 duration-200");
+@source inline("data-[state=open]:{animate-in,fade-in-0,zoom-in-95} data-[state=closed]:{animate-out,fade-out-0,zoom-out-95}");
+
 /* 灰阶纯灰（不带色相），强调色只有一个 —— 和终端里那些彩色输出放一起不脏。 */
 :root {
   /* 圆角就这几档（sm 6 / md 8 / lg 10 / xl 14 px），按东西的大小挑，别写死像素：

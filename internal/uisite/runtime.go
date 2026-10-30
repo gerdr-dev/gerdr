@@ -141,12 +141,18 @@ var runtimeVersion = func() string {
 	return hex.EncodeToString(s[:6])
 }()
 
-// Tailwind browser 编不了 @import（除了 tailwindcss 本身，它自带）和 @plugin；@source 也用不着（它直接扫页面上的 class）。
+// Tailwind browser can't compile @import (except tailwindcss itself, which it bundles) or @plugin. Path @source is
+// pointless (it scans the classes on the page), but @source inline(...) is kept: the browser build only generates a
+// class once it shows up in the DOM, so a dialog that mounts with fresh classes renders a frame unstyled (full width,
+// then snapping to size under its open animation). Listing such classes inline compiles them up front.
 var cssUnsupportedRE = regexp.MustCompile(`(?m)^\s*@(import|plugin|source)\s+[^;]*;\s*\n?`)
 
 func browserCSS(css string) (out string, dropped []string) {
 	out = cssUnsupportedRE.ReplaceAllStringFunc(css, func(line string) string {
 		t := strings.TrimSpace(line)
+		if strings.HasPrefix(t, "@source inline(") || strings.HasPrefix(t, "@source not inline(") {
+			return line
+		}
 		if t != `@import "tailwindcss";` && t != `@import 'tailwindcss';` && !strings.HasPrefix(t, "@source") {
 			dropped = append(dropped, t)
 		}
