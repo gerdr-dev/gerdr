@@ -168,6 +168,17 @@ config.json (example in the README), read fresh every turn.
     接口能写文件，所以只认这几个目录里的 .md：原样路径对原样根、解开链接的路径对解开链接的根各判一次（macOS 的 /var、/tmp 本身是链接，
     混着比会对不上），新建的文件解开最深一层存在的目录；Claude 那边只认 `<项目>/memory/` 下面的（同一层还有会话记录）。
     Claude 的项目目录名是 cwd 的有损变形，认不回路径：从同目录的会话记录（.jsonl 每行带 cwd）读。删一条时把 MEMORY.md 里指向它的行一起删。
+16. **What the user sees while it works** comes from two things that only work together (measured on claude-opus-5-5
+    through an Anthropic-compatible gateway, 2026-10-30):
+    - The "keep the user posted" line in `basePrompt` (`prompt.go`), copied from Claude Code's system prompt: before
+      the first tool call say in a sentence what you're about to do, give a brief update when something matters or the
+      direction changes, in the user's language. Without it the model often ran several tool calls in a row without a
+      word, and there was nothing to show. It helps every model (GPT / DeepSeek notes show as text between tool calls).
+    - Claude's `thinking.display` (`Model.Thinking`): `updates` (beta `thinking-display-updates-2026-08-18`, default on
+      Opus / Sonnet 5.5 and Fable 5+, what Claude Code sends) hides the reasoning and returns only the model's own short
+      notes, sometimes as thinking, mostly as text. `adaptive` (= `summarized`, default on older Claude) is a separate
+      model's long English summary of the reasoning: always there, hard to follow. The default `omitted` streams thinking
+      blocks with empty text. With `updates` but without the prompt line, eight steps in a row showed nothing at all.
 
 测试：`go test ./internal/agents/native/...` 用假接口跑主循环；`NATIVE_LIVE_BASE / NATIVE_LIVE_KEY / NATIVE_LIVE_MODELS` 设了才跑真模型（花钱）。
 
