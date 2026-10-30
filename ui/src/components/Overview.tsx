@@ -241,7 +241,7 @@ function OverviewList({
           <Button variant="ghost" size="icon" className="size-7" onClick={onClose} aria-label="返回">
             <ArrowLeft className="size-4" />
           </Button>
-          <span className="flex-1 truncate text-[13px] font-medium">全部 agent</span>
+          <span className="flex-1 truncate text-[13px] font-medium">加入待办</span>
         </div>
       ) : (
         // The same top row as the Code sidebar and Work mode (asked for): project, then the Code / overview / Work switch
