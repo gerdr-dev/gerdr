@@ -147,6 +147,8 @@ function describeBusy(b) {
 }
 
 let applying = false;
+// With automatic updates off, a downloaded backend still waits for a click, unless that click said "when idle".
+let idleOK = "";
 // The update being swapped in, until the running gerdr reports it (Settings shows "upgrading"); also keeps the poll
 // from restarting again and again when a swap didn't take (e.g. the service didn't come back new).
 let upgrading = { version: "", at: 0 };
@@ -167,6 +169,7 @@ async function applyUpdate(ask) {
         defaultId: 1,
         cancelId: 2,
       });
+      if (response === 1) idleOK = p.version;
       if (response !== 0) return;
     }
   }
@@ -190,6 +193,7 @@ function updateStatus() {
   const p = updater.pending();
   return {
     enabled: updater.enabled(),
+    auto: updater.auto(),
     app: app.getVersion(),
     backend: updater.backend().version,
     running: lastBusy?.version ?? "",
@@ -222,7 +226,7 @@ async function pushUpdate(only) {
 }
 
 // Every 15s: what would a restart cut off, is the running gerdr behind what we have (noteRunning), and if an update
-// is waiting and nothing would be cut off, apply it. A whole-App update quits and reopens the windows, so that one
+// is waiting and nothing would be cut off, apply it (with automatic updates on, see the check below). A whole-App update quits and reopens the windows, so that one
 // always waits for a click.
 function watchUpdates() {
   if (!updater.enabled()) return;
@@ -237,6 +241,9 @@ function watchUpdates() {
     const p = updater.pending();
     if (changed && p === before) pushUpdate();
     if (p?.kind !== "backend" || !isIdle(b) || upgradingNow(p)) return;
+    // Automatic updates off: a downloaded release waits for a click. Catching the service up with the bundle (an App
+    // installed by hand) isn't an update to hold back: that one goes ahead either way.
+    if (!updater.auto() && !updater.backend().bundled && idleOK !== p.version) return;
     applyUpdate(false);
   };
   setTimeout(poll, 5 * 1000);
@@ -481,7 +488,10 @@ ipcMain.on("gerdr", (e, m) => {
       break;
     case "update":
       // the page asking for the update status (it just loaded), "check now" / "update now" in Settings or the toast
-      if (m.apply) applyUpdate(true);
+      if (typeof m.auto === "boolean") {
+        updater.setAuto(m.auto);
+        pushUpdate(win);
+      } else if (m.apply) applyUpdate(true);
       else if (m.check) updater.check().then(() => pushUpdate(win));
       else pushUpdate(win);
       break;

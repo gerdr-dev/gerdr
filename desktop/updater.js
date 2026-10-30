@@ -31,17 +31,22 @@ const EXE = process.platform === "win32" ? "gerdr.exe" : "gerdr";
 const root = () => path.join(app.getPath("userData"), "backend");
 const stagingDir = () => path.join(app.getPath("userData"), "update");
 
-/** Only x.y.z: local builds (git describe: 0.2.3-5-gabc, 0.1.0-dev) never update themselves over a release. */
+/**
+ * A release (x.y.z) or a local build (git describe: x.y.z-N-gabc, maybe -dirty) as [x, y, z, N]: N commits past
+ * the x.y.z tag, 0 for the release. So a local build is behind the next release (0.2.3-70 < 0.2.4) and updates
+ * like any other install, but never "updates" back to the release it was built on top of (0.2.4-3 > 0.2.4).
+ * Anything else (0.1.0-dev) doesn't update.
+ */
 function parseVer(v) {
-  const m = /^(\d+)\.(\d+)\.(\d+)$/.exec(String(v || ""));
-  return m ? m.slice(1).map(Number) : null;
+  const m = /^(\d+)\.(\d+)\.(\d+)(?:-(\d+)-g[0-9a-f]+)?(?:-dirty)?$/.exec(String(v || ""));
+  return m ? [m[1], m[2], m[3], m[4] || 0].map(Number) : null;
 }
 
 function newer(a, b) {
   const x = parseVer(a);
   const y = parseVer(b);
   if (!x || !y) return false;
-  for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] > y[i];
+  for (let i = 0; i < 4; i++) if (x[i] !== y[i]) return x[i] > y[i];
   return false;
 }
 
@@ -262,6 +267,23 @@ function openInstaller(file) {
 
 // ---- schedule ----
 
+// Automatic updates (Settings → 版本, on by default): look for releases and download them by itself, and apply a
+// downloaded backend once idle (main.js). Off: only "check for updates" looks, and what it downloads waits for a click.
+// Kept here in userData, per machine: the shell needs it before any page is up, and it's about this App, not gerdr.
+const prefsFile = () => path.join(app.getPath("userData"), "update-prefs.json");
+function auto() {
+  try {
+    return JSON.parse(fs.readFileSync(prefsFile(), "utf8")).auto !== false;
+  } catch {
+    return true;
+  }
+}
+function setAuto(on) {
+  fs.writeFileSync(prefsFile(), JSON.stringify({ auto: !!on }));
+  if (on) check().then((m) => console.log("update:", m)); // turned back on: don't wait hours for the next round
+  emit();
+}
+
 let timer = null;
 function start(changed) {
   onChange = changed;
@@ -269,9 +291,21 @@ function start(changed) {
   if (!enabled()) return;
   const tick = () => check().then((m) => console.log("update:", m));
   timer = setTimeout(function loop() {
-    tick();
+    if (auto()) tick();
     timer = setTimeout(loop, 4 * 3600 * 1000);
   }, 20 * 1000);
 }
 
-module.exports = { backend, start, check, noteRunning, installApp, enabled, pending: () => pending, state: () => ({ ...state }), newer };
+module.exports = {
+  backend,
+  start,
+  check,
+  noteRunning,
+  installApp,
+  enabled,
+  auto,
+  setAuto,
+  pending: () => pending,
+  state: () => ({ ...state }),
+  newer,
+};

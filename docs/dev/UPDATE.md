@@ -25,8 +25,10 @@ and keep the shell ↔ page bridge tolerant: an old shell runs new backends (and
 
 Never write into the bundle: it breaks the ad-hoc code signature, and macOS App Management can block it.
 
-Only release builds update (version is exactly x.y.z and `gerdrShell` is set); `make app` builds (`0.2.3-5-gabc`),
-`GERDR_BIN` and `GERDR_NO_UPDATE=1` don't. Apps from before v0.2.4 have no updater: they need one manual install.
+Releases and local builds both update: versions compare as `[x, y, z, commits past the tag]`, so a `make app`
+build (`0.2.3-5-gabc`, maybe `-dirty`) is behind the next release (`0.2.4`) and takes it, but never goes back to the
+release it was built on top of. Versions that aren't a tag or git describe (`0.1.0-dev`), `GERDR_BIN` and
+`GERDR_NO_UPDATE=1` don't update. Apps from before v0.2.4 have no updater: they need one manual install.
 
 ## When to apply: only when nothing would be cut off
 
@@ -37,6 +39,10 @@ A backend restart kills running turns, pending permission requests, background t
   page shows a toast (`window.gerdr.appUpdate`, an older UI without the hook gets a system notification); "update now"
   with something running asks first, offering "when idle".
 - A whole-App update always waits for a click (it closes the windows).
+- Settings → 版本 has an "automatic updates" switch (on by default; `update-prefs.json` in userData, kept by the
+  shell since it decides before any page is up). Off: no checks on the 4-hour timer, and a downloaded backend waits
+  for "update now" (or "when idle" picked in that dialog). Catching the service up with a hand-installed App isn't
+  held back: that's `backend().bundled`, not a downloaded release. Only shells that send `auto` in the status show it.
 - Background service (on by default, docs/dev/SERVICE.md): the App's backend only attaches to it, so restarting that
   does nothing. The attacher (`appAttach`) restarts an outdated service only when `/api/busy` is all zero, checking
   every 10s, unless started with `GERDR_UPGRADE_NOW=1` (the shell sets it when the person chose "now" or it just saw

@@ -68,7 +68,8 @@ export function nativeMenuKeys(keys: Record<string, string | null>) {
 
 /** The desktop App's update status, pushed by the shell (desktop/main.js updateStatus) to window.gerdr.appUpdate. */
 export type AppUpdateStatus = {
-  enabled: boolean; // false: a local build, it doesn't update itself
+  enabled: boolean; // false: this build doesn't update itself (0.1.0-dev, GERDR_BIN, GERDR_NO_UPDATE)
+  auto?: boolean; // automatic updates (Settings → 版本); absent from shells before the switch existed
   app: string; // the App (shell) version
   backend: string; // the backend the App runs: the bundle's or a downloaded newer one
   running: string; // the version of the gerdr actually answering (the background service may still be older)
@@ -86,14 +87,19 @@ export function nativeAskUpdate(check = false) {
   bridge()?.postMessage({ type: "update", check });
 }
 
+/** App 里：turn automatic updates on / off (the shell keeps it, desktop/updater.js setAuto). */
+export function nativeSetAutoUpdate(on: boolean) {
+  bridge()?.postMessage({ type: "update", auto: on });
+}
+
 /** App 里：apply the downloaded update now (the shell asks first if it would cut something off). */
 export function nativeApplyUpdate() {
   bridge()?.postMessage({ type: "update", apply: true });
 }
 
 /**
- * Keep the status for Settings, and toast a downloaded update once per version — unless nothing is running, then the
- * shell applies it by itself in a few seconds anyway (a whole-App update always waits for a click).
+ * Keep the status for Settings, and toast a downloaded update once per version — unless nothing is running and automatic
+ * updates are on, then the shell applies it by itself in a few seconds anyway (a whole-App update always waits for a click).
  */
 let toasted = "";
 export function onAppUpdate(u: AppUpdateStatus) {
@@ -102,13 +108,14 @@ export function onAppUpdate(u: AppUpdateStatus) {
   if (!p || u.phase === "applying") return void toast.dismiss("app-update");
   const b = u.busy;
   const idle = !!b && b.turns + b.waiting + b.tasks + b.terms === 0;
-  if (toasted === p.version || (p.kind === "backend" && idle)) return;
+  const auto = u.auto !== false;
+  if (toasted === p.version || (p.kind === "backend" && idle && auto)) return;
   toasted = p.version;
   toast(`Gerdr ${p.version} 已下载好`, {
     id: "app-update",
     duration: Infinity,
     closeButton: true,
-    description: p.kind === "app" ? "这次要换整个 App：会退出再重新打开" : "没有 agent 在跑、没开终端时会自己更新",
+    description: p.kind === "app" ? "这次要换整个 App：会退出再重新打开" : auto ? "没有 agent 在跑、没开终端时会自己更新" : "自动更新关着：点了才更新",
     action: { label: "现在更新", onClick: nativeApplyUpdate },
   });
 }

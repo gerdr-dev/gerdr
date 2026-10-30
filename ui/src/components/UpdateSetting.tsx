@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { isNative, nativeApplyUpdate, nativeAskUpdate, type AppUpdateStatus } from "@/lib/native";
+import { Switch } from "@/components/ui/switch";
+import { isNative, nativeApplyUpdate, nativeAskUpdate, nativeSetAutoUpdate, type AppUpdateStatus } from "@/lib/native";
 import { useStore } from "@/lib/store";
 
 // Settings → 通用 →「版本」: which gerdr is running and where the App's self-update is (desktop/updater.js, pushed
@@ -35,23 +36,37 @@ export function UpdateSetting() {
   const p = u?.pending;
 
   return (
-    <div className="flex items-center justify-between gap-4">
-      <div className="min-w-0">
-        <div className="text-[13px]">版本</div>
-        <div className="text-[12px] text-muted-foreground">{shown}</div>
-        {text && <div className={cn("text-[12px]", tone || "text-muted-foreground")}>{text}</div>}
+    <>
+      <div className="flex items-center justify-between gap-4">
+        <div className="min-w-0">
+          <div className="text-[13px]">版本</div>
+          <div className="text-[12px] text-muted-foreground">{shown}</div>
+          {text && <div className={cn("text-[12px]", tone || "text-muted-foreground")}>{text}</div>}
+        </div>
+        {u?.enabled &&
+          (p ? (
+            <Button size="sm" disabled={u.phase === "applying"} onClick={nativeApplyUpdate}>
+              现在更新
+            </Button>
+          ) : (
+            <Button size="sm" variant="outline" disabled={u.phase !== "idle"} onClick={() => nativeAskUpdate(true)}>
+              检查更新
+            </Button>
+          ))}
       </div>
-      {u?.enabled &&
-        (p ? (
-          <Button size="sm" disabled={u.phase === "applying"} onClick={nativeApplyUpdate}>
-            现在更新
-          </Button>
-        ) : (
-          <Button size="sm" variant="outline" disabled={u.phase !== "idle"} onClick={() => nativeAskUpdate(true)}>
-            检查更新
-          </Button>
-        ))}
-    </div>
+      {/* Only from a shell that knows the switch (u.auto present): an older one would ignore it */}
+      {u?.enabled && typeof u.auto === "boolean" && (
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <div className="text-[13px]">自动更新</div>
+            <div className="text-[12px] text-muted-foreground">
+              {u.auto ? "自己检查、下载，没有 agent 在跑、没开终端时换上" : "不自己检查和下载：点「检查更新」下好后，再点「现在更新」"}
+            </div>
+          </div>
+          <Switch checked={u.auto} onCheckedChange={nativeSetAutoUpdate} />
+        </div>
+      )}
+    </>
   );
 }
 
@@ -70,11 +85,12 @@ function describe(u: AppUpdateStatus, service: boolean): { text: string; tone: s
     if (b.waiting) wait.push(`${b.waiting} 个请求被批准`);
     if (b.tasks) wait.push(`${b.tasks} 个后台任务结束`);
     if (b.terms) wait.push(`${b.terms} 个终端关掉`);
+    if (u.auto === false) return { text: `有升级：${p.version}，点「现在更新」换上`, tone: "text-brand" };
     if (!wait.length) return { text: `有升级：${p.version}，马上自动升级`, tone: "text-brand" };
     return { text: `${who}等待升级到 ${p.version}：等 ${wait.join("、")}`, tone: "text-warn" };
   }
   if (u.error) return { text: `检查更新失败：${u.error}`, tone: "text-bad" };
-  if (!u.enabled) return { text: "本地构建，不自动更新", tone: "" };
+  if (!u.enabled) return { text: "这个构建不自动更新（开发版或设了 GERDR_NO_UPDATE）", tone: "" };
   if (!u.checkedAt) return { text: "", tone: "" };
   const at = new Date(u.checkedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   return { text: `已是最新（${at} 检查过）`, tone: "" };
