@@ -44,7 +44,8 @@ function useTick(on: boolean) {
 // （试过再留 1 秒显示「结束了」，用户不要）。
 const SHOW_AFTER = 2000;
 
-export function TasksChip({ session }: { session: SessionSummary }) {
+/** `short`: the composer row has no room, show just the icon and the count (the list is still a tap away). */
+export function TasksChip({ session, short }: { session: SessionSummary; short?: boolean }) {
   const all = session.tasks ?? [];
   const running = all.filter((t) => t.status === "running");
   const [open, setOpen] = useState(false);
@@ -61,14 +62,14 @@ export function TasksChip({ session }: { session: SessionSummary }) {
       <PopoverTrigger asChild>
         <button
           className={cn(
-            "flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-[12px] text-muted-foreground hover:bg-muted hover:text-foreground",
+            "flex h-7 shrink-0 items-center gap-1 rounded-md px-1.5 text-[12px] text-muted-foreground hover:bg-muted hover:text-foreground",
             open && "bg-muted text-foreground",
           )}
-          title="后台任务"
+          title={`${running.length} 个后台任务`}
         >
           {/* 不转圈：对话里那条工具调用和状态行已经在转了 */}
           <Activity className="size-3.5" />
-          <span className="tabular-nums">{running.length} 个后台任务</span>
+          <span className="tabular-nums">{short ? running.length : `${running.length} 个后台任务`}</span>
         </button>
       </PopoverTrigger>
       <PopoverContent side="top" align="end" className="w-[min(28rem,90vw)] p-0 text-[12px]">

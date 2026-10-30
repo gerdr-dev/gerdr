@@ -76,11 +76,23 @@ const LOUD_MODE = /plan|read-?only|bypass|full-access|dontAsk/i;
 // 手机上输入框底栏放不下模式 / 模型 / 思考强度三个下拉（挤得要横着滑）：收成一个按钮，
 // 点开是一张按组排的单列菜单 —— 不用子菜单，触屏上子菜单往右弹会出屏幕。
 // 按钮上写模型和思考强度（「Opus 5.5 · medium」，要一眼看得到在用哪个）；模式平时就那样，只有落在 LOUD_MODE 里才写出来。
-export function OptionsMenu({ groups, mode, onSetDefault }: { groups: OptGroup[]; mode?: OptGroup; onSetDefault?: () => void }) {
+export function OptionsMenu({
+  groups,
+  mode,
+  onSetDefault,
+  short,
+}: {
+  groups: OptGroup[];
+  mode?: OptGroup;
+  onSetDefault?: () => void;
+  /** No room on the row: name only the model (the effort etc. are one tap away in the menu) */
+  short?: boolean;
+}) {
   const all = mode ? [mode, ...groups] : groups;
   const nameOf = (g: OptGroup) => g.options.find((o) => o.value === g.value)?.name ?? g.value;
   const modeName = mode && LOUD_MODE.test(mode.value) ? nameOf(mode) : undefined;
-  const summary = groups.map(nameOf).filter(Boolean).join(" · ");
+  const shown = short ? groups.filter((g) => g.id === "model").slice(0, 1) : groups;
+  const summary = (shown.length ? shown : groups.slice(0, 1)).map(nameOf).filter(Boolean).join(" · ");
   if (!all.length) return null;
   return (
     <DropdownMenu>

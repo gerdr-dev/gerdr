@@ -1,4 +1,5 @@
 import { ArrowUp, ImagePlus, Loader2, Square, X, CornerDownRight, Zap, Pin, PinOff } from "lucide-react";
+import { flushSync } from "react-dom";
 import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -109,10 +110,15 @@ export const Composer = forwardRef<
   // doesn't fit the box, not just on a phone: a split pane or Work mode's chat column squeezed the dropdowns to "A…" "GP…".
   // Decided by measuring, not a fixed width: how much room the row needs depends on the agent's option names.
   const [narrow, setNarrow] = useState(false);
-  const [, setRootW] = useState(0);
+  const [, setRootW] = useState(0); // a render counter, bumped on resize
   const optsRow = useRef<HTMLDivElement>(null);
   const needW = useRef(0); // the box width the full row needed when it last overflowed
   const compact = phone || narrow;
+  // One step further for a compact row that still overflows (a phone with the context meter and a background task up):
+  // the task chip drops to icon + count and the options menu shows only the model. Measured like `narrow`, so with
+  // nothing else on the row there is still room for the model and its effort
+  const [tight, setTight] = useState(false);
+  const tightKey = useRef("");
   const imgs = useStore((s) => s.draftImgs[paneId] ?? NO_IMGS);
   // 读图片的回调可能在切走（卸载）之后才回来，所以每次都从 store 里取最新的再改，别用渲染时的 imgs
   const setImgs = (v: Img[] | ((cur: Img[]) => Img[])) =>
@@ -279,8 +285,13 @@ export const Composer = forwardRef<
   useEffect(() => {
     const el = root.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setRootW(el.clientWidth));
+    // flushSync: ResizeObserver runs after layout but before paint; a plain setState here would render in a later task,
+    // after the overflowing row has already been painted for a frame
+    const ro = new ResizeObserver(() => flushSync(() => setRootW((n) => n + 1)));
     ro.observe(el);
+    // The options row also narrows when something next to it shows up on its own (the task chip appears 2s into a task
+    // without the composer re-rendering): re-render then too, so the checks below see it
+    if (optsRow.current) ro.observe(optsRow.current);
     return () => ro.disconnect();
   }, []);
   // Every render (the row also changes with running / the options): full row overflowing → compact, remembering how wide
@@ -296,6 +307,26 @@ export const Composer = forwardRef<
         setNarrow(true);
       }
     } else if (r.clientWidth >= needW.current) setNarrow(false);
+  });
+  useLayoutEffect(() => {
+    const o = optsRow.current;
+    const r = root.current;
+    if (!o || !r || !r.clientWidth) return;
+    if (!compact) {
+      if (tight) setTight(false);
+      return;
+    }
+    // Whether the longer row fits can't be measured while the short one is up, so whenever what sits on the row changes
+    // (width, chips / buttons coming and going, the chosen options) try the long one again; it is redone before paint
+    const key = `${r.clientWidth}|${o.parentElement?.childElementCount}|${optsKey}`;
+    if (key !== tightKey.current) {
+      tightKey.current = key;
+      if (tight) {
+        setTight(false);
+        return;
+      }
+    }
+    if (!tight && o.scrollWidth - o.clientWidth > 1) setTight(true);
   });
 
   useLayoutEffect(() => {
@@ -848,6 +879,7 @@ export const Composer = forwardRef<
   useStore((s) => s.config.llm);
   const defs = defaultsOf(session.agent);
   const hasText = text.trim().length > 0 || imgs.length > 0;
+  const optsKey = [modes?.currentModeId, ...opts.map((o) => o.currentValue)].join("|");
   const modeGroup: OptGroup | undefined = modes?.availableModes.length
     ? {
         id: MODE,
@@ -1072,6 +1104,7 @@ export const Composer = forwardRef<
               <OptionsMenu
                 mode={modeGroup}
                 groups={optGroups}
+                short={tight}
                 onSetDefault={() => {
                   setDefaults(session.agent, Object.fromEntries([modeGroup, ...optGroups].filter((g) => !!g).map((g) => [g!.id, g!.value])));
                   toast.success("之后新开的会话按这个来");
@@ -1097,7 +1130,7 @@ export const Composer = forwardRef<
               )
             )}
           </div>
-          <TasksChip session={session} />
+          <TasksChip session={session} short={compact && tight} />
           {session.context && <ContextMeter c={session.context} short={compact} />}
           {/* 手机上底栏放不下「打断 / 立即发 / 发送」三个圆钮（再挤下拉就又被截了）：照 ChatGPT 共用一个位置 ——
               在跑、没打字时是打断；打了字是立即发 + 插进去。电脑上地方够，三个都摆着 */}
