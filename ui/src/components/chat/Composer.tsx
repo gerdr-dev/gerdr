@@ -537,6 +537,9 @@ export const Composer = forwardRef<
   const ctrlCAt = useRef(0);
   const escPending = useRef(false);
   const escaping = useRef(false);
+  // The stop button while an Esc is on its way: the request returns only once the turn has really stopped, so without
+  // this a slow stop looked like a press that did nothing and got pressed over and over (asked for)
+  const [stopping, setStopping] = useState(false);
   // ↑ 翻的历史：人说过的话，加上跑过的 `!命令`（照 Claude Code：它们在同一份输入历史里）。命令卡片挂在助手消息里，按出现的先后排进去
   const userTexts = () =>
     transcript(session.id)
@@ -595,6 +598,7 @@ export const Composer = forwardRef<
     // 上一次还没回来时连按 Esc（或 ↑ 的撤回还在路上）不再发：几次撤回一起跑，会各自把同一句话还回来，输入框里叠好几遍（踩过）
     if (escaping.current) return;
     escaping.current = true;
+    setStopping(true);
     try {
       const r = await api.escape(session.id);
       if (!r.content?.length) return;
@@ -604,6 +608,7 @@ export const Composer = forwardRef<
       toast.error(err.message);
     } finally {
       escaping.current = false;
+      setStopping(false);
     }
   };
 
@@ -1099,11 +1104,18 @@ export const Composer = forwardRef<
           {running && (!compact || !hasText) && (
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button size="icon" variant={compact ? "default" : "ghost"} className="size-8 rounded-full" onMouseDown={keepFocus} onClick={() => escape()}>
-                  <Square className="size-3.5 fill-current" />
+                <Button
+                  size="icon"
+                  variant={compact ? "default" : "ghost"}
+                  className="size-8 rounded-full"
+                  disabled={stopping}
+                  onMouseDown={keepFocus}
+                  onClick={() => escape()}
+                >
+                  {stopping ? <Loader2 className="size-3.5 animate-spin" /> : <Square className="size-3.5 fill-current" />}
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>打断（Esc）</TooltipContent>
+              <TooltipContent>{stopping ? "正在打断…" : "打断（Esc）"}</TooltipContent>
             </Tooltip>
           )}
           {running && (!compact || hasText) && (

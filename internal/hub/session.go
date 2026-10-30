@@ -1291,7 +1291,17 @@ func (s *Session) Escape(ctx context.Context) (EscapeResult, error) {
 	}
 	untouched := start >= 0 && lastOut == start && !auto && turnMsg != ""
 
+	// A stop that takes seconds was reported (codex, from the phone) but didn't reproduce: log where the time goes when
+	// it's slow, so the next one shows which step it was.
+	t0 := time.Now()
+	var tAttach, tWithdraw, tCancel time.Duration
+	defer func() {
+		if d := time.Since(t0); d > time.Second {
+			s.h.log.Warn("escape: slow", "session", s.ID(), "agent", s.rec.Agent, "took", d, "attach", tAttach, "withdraw", tWithdraw, "cancel", tCancel)
+		}
+	}()
 	c, err := s.ensureAttached(ctx)
+	tAttach = time.Since(t0)
 	if err != nil {
 		return out, err
 	}
@@ -1307,9 +1317,11 @@ func (s *Session) Escape(ctx context.Context) (EscapeResult, error) {
 			}
 		}
 	}
+	tWithdraw = time.Since(t0)
 	if err := s.Cancel(ctx); err != nil {
 		return out, err
 	}
+	tCancel = time.Since(t0)
 	// 等这一轮真停下来（回退要求没在跑）
 	for i := 0; i < 200; i++ {
 		s.mu.Lock()
