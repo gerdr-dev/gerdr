@@ -26,7 +26,7 @@ func apply(t *testing.T, raw string, calls ...func() (string, LayoutParams)) (st
 	var res any
 	for _, f := range calls {
 		m, p := f()
-		out, r, err := ApplyLayout(json.RawMessage(raw), opsSessions, "A", m, p)
+		out, r, err := ApplyLayout(json.RawMessage(raw), opsSessions, "A", SessionSpaces(json.RawMessage(raw))["A"], m, p)
 		if err != nil {
 			t.Fatalf("%s %+v: %v", m, p, err)
 		}
@@ -71,10 +71,10 @@ func TestLayoutListScopedToCallersSession(t *testing.T) {
 	if strings.Contains(string(b), `"w2"`) || !strings.Contains(string(b), `"w3"`) {
 		t.Errorf("list should hold w1, w3 but not w2: %s", b)
 	}
-	if _, _, err := ApplyLayout(json.RawMessage(opsLayout), opsSessions, "A", "pane.move", LayoutParams{ID: "D", Workspace: "a"}); err == nil {
+	if _, _, err := ApplyLayout(json.RawMessage(opsLayout), opsSessions, "A", SessionSpaces(json.RawMessage(opsLayout))["A"], "pane.move", LayoutParams{ID: "D", Workspace: "a"}); err == nil {
 		t.Error("an agent reached a pane in another session")
 	}
-	if _, _, err := ApplyLayout(json.RawMessage(opsLayout), opsSessions, "", "pane.move", LayoutParams{ID: "p3", Workspace: "a"}); err == nil {
+	if _, _, err := ApplyLayout(json.RawMessage(opsLayout), opsSessions, "", "", "pane.move", LayoutParams{ID: "p3", Workspace: "a"}); err == nil {
 		t.Error("an unknown caller moved a pane across sessions")
 	}
 }
@@ -109,7 +109,7 @@ func TestTabMoveByNumberCountsOwnSessionOnly(t *testing.T) {
 	s := shape(t, raw)
 	eq(t, s, "empty", "row(p1, p2)")
 	eq(t, s, "a", "p4")
-	if _, _, err := ApplyLayout(json.RawMessage(opsLayout), opsSessions, "A", "tab.move", LayoutParams{ID: "t1", Workspace: "3"}); err == nil {
+	if _, _, err := ApplyLayout(json.RawMessage(opsLayout), opsSessions, "A", SessionSpaces(json.RawMessage(opsLayout))["A"], "tab.move", LayoutParams{ID: "t1", Workspace: "3"}); err == nil {
 		t.Error("workspace 3 shouldn't resolve")
 	}
 }
@@ -127,7 +127,7 @@ func TestTabMergeAndWorkspaceClose(t *testing.T) {
 	if !strings.Contains(raw, `"ratio":0.3`) {
 		t.Errorf("merged tab should take 0.3: %s", raw)
 	}
-	if _, _, err := ApplyLayout(json.RawMessage(opsLayout), opsSessions, "A", "workspace.close", LayoutParams{ID: "a"}); err == nil {
+	if _, _, err := ApplyLayout(json.RawMessage(opsLayout), opsSessions, "A", SessionSpaces(json.RawMessage(opsLayout))["A"], "workspace.close", LayoutParams{ID: "a"}); err == nil {
 		t.Error("closed a workspace that still shows conversations")
 	}
 }

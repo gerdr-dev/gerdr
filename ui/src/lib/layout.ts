@@ -61,6 +61,49 @@ export function validLayout(x: any): x is Layout {
 
 export const spaceOf = (w: Workspace) => w.space || DEFAULT_SPACE;
 
+// A project's id is its name: the address (/<name>) and its Work directory (projects/<name>/work) are named after it, so
+// closing a project and creating one with the same name later finds its Work again. Hence no renaming either.
+const RESERVED = new Set(["work", "api", "auth", "rescue", "ws", "mcp-oauth", "_ui", "_esm", "projects"]);
+
+/** Why `name` can't be a new project's name ("" = it can). */
+export function projectNameError(l: Layout, name: string): string {
+  const n = name.trim();
+  if (!n) return "起个名字";
+  if ([...n].length > 64) return "名字太长了（最多 64 个字）";
+  if (/[/\\.\x00-\x1f]/.test(n)) return "名字里不能有 / \\ 和 .（名字会出现在地址和目录名里）";
+  if (RESERVED.has(n.toLowerCase())) return `「${n}」是 gerdr 自己用的名字，换一个`;
+  // Case-insensitive: on macOS / Windows "abc" and "ABC" would be the same Work directory
+  const same = spaceList(l).find((s) => s.id.toLowerCase() === n.toLowerCase());
+  if (same) return `已经有叫「${same.id}」的项目了`;
+  return "";
+}
+
+/** Projects made before ids were names (random ids like s236q0e1) get their name as id; a clash or a bad character gets fixed up. */
+export function nameSpaceIds(l: Layout): Layout {
+  const spaces = l.spaces ?? [];
+  if (spaces.every((s) => s.id === s.name || s.id === DEFAULT_SPACE)) return l;
+  const taken = new Set(spaces.filter((s) => s.id === s.name || s.id === DEFAULT_SPACE).map((s) => s.id.toLowerCase()));
+  const ids = new Map<string, string>();
+  for (const s of spaces) {
+    if (s.id === s.name || s.id === DEFAULT_SPACE) continue;
+    const base =
+      s.name
+        .trim()
+        .replace(/[/\\.\x00-\x1f]/g, "-")
+        .slice(0, 60) || "project";
+    let id = RESERVED.has(base.toLowerCase()) ? base + "-1" : base;
+    for (let i = 2; taken.has(id.toLowerCase()); i++) id = `${base} ${i}`;
+    taken.add(id.toLowerCase());
+    ids.set(s.id, id);
+  }
+  const map = (id?: string) => (id && ids.get(id)) || id;
+  return {
+    ...l,
+    spaces: spaces.map((s) => (ids.has(s.id) ? { ...s, id: ids.get(s.id)!, name: ids.get(s.id)! } : s)),
+    workspaces: l.workspaces.map((w) => (w.space && ids.has(w.space) ? { ...w, space: map(w.space) } : w)),
+  };
+}
+
 /** All spaces, in order: the stored list, plus the default one and any a workspace points at that the list lacks (old / hand-edited layouts). */
 export function spaceList(l: Layout): Space[] {
   const out = [...(l.spaces ?? [])];
@@ -336,6 +379,7 @@ export function viewOf(l: Layout): View {
 
 /** 把 v 套到 l 上：v 里说的东西在 l 里还在才用，不在了（被别的端关掉了）就用 l 自己的。没变的部分原样返回同一个对象。 */
 export function withView(l: Layout, v: View | null | undefined): Layout {
+  l = nameSpaceIds(l); // every layout that comes in passes here (loaded at start / pushed by another device)
   if (!v) return l;
   const hasWs = (id?: string) => !!id && l.workspaces.some((w) => w.id === id);
   let changed = false;

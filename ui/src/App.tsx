@@ -7,6 +7,7 @@ import { PaneSwitcher } from "./components/PaneSwitcher";
 import { Dialogs } from "./components/Dialogs";
 import { LightboxHost } from "./components/Lightbox";
 import { TabActive, TabView } from "./components/Panes";
+import { WorkView } from "./components/WorkView";
 import { tabName } from "./lib/actions";
 import { handleKeydown } from "./lib/commands";
 import { ACTION_TITLES, setPrefixLabel, toAccelerator, type KeyAction } from "./lib/keys";
@@ -137,7 +138,7 @@ export default function App() {
     if (!phone) set({ drawer: false, switcher: false });
   }, [phone]);
   // Which (herdr-style) session this window shows: in the title when there's more than one (tells the App's windows apart),
-  // in the address (?space=, so a reload or a window opened for a session stays on it), and told to the App shell
+  // in the address (/<project id>, so a reload or a window opened for a project stays on it), and told to the App shell
   const spaceId = useStore((s) => currentSpace(s.layout));
   const spaceName = useStore((s) => spaceList(s.layout).find((x) => x.id === spaceId)?.name ?? spaceId);
   const many = useStore((s) => spaceList(s.layout).length > 1);
@@ -146,10 +147,12 @@ export default function App() {
     document.title = space.many ? `${tabName(tab)} · ${space.name} · Gerdr` : `${tabName(tab)} · Gerdr`;
   }, [tab, space.name, space.many]);
   useEffect(() => {
-    if (!ready) return; // the layout isn't loaded yet: don't overwrite the ?space= this window was opened with
+    if (!ready) return; // the layout isn't loaded yet: don't overwrite the project this window was opened with
     const u = new URL(location.href);
-    if (u.searchParams.get("space") !== space.id) {
-      u.searchParams.set("space", space.id);
+    const path = "/" + encodeURIComponent(space.id);
+    if (u.pathname !== path || u.searchParams.has("space")) {
+      u.pathname = path;
+      u.searchParams.delete("space");
       history.replaceState(history.state, "", u);
     }
     nativeSpace(space.id, space.name);
@@ -162,6 +165,8 @@ export default function App() {
     useStore((s) => s.config.keepTabs ?? 6),
   );
   const prevKept = useStore((s) => s.keptTabs);
+  const mode = useStore((s) => s.mode);
+  useEffect(() => syncWatch(), [mode]);
   const all = new Map<string, Tab>();
   for (const w of layout.workspaces) for (const t of w.tabs) all.set(t.id, t);
   const kept = [tab.id, ...prevKept.filter((id) => id !== tab.id && all.has(id))].slice(0, keep);
@@ -196,7 +201,8 @@ export default function App() {
   return (
     <TooltipProvider delayDuration={400}>
       <div className="flex h-full">
-        {sidebar && !phone && <Sidebar />}
+        {/* Work mode has its own top bar with the Code / Work switch, and the Work project draws its own menu */}
+        {sidebar && !phone && mode !== "work" && <Sidebar />}
         {/* 手机上侧栏是盖在上面的抽屉（并排放的话对话只剩一百多 px 宽） */}
         {phone && drawer && (
           <div className="fixed inset-0 z-40 flex">
@@ -204,7 +210,13 @@ export default function App() {
             <div className="flex-1 bg-background/50" onClick={() => set({ drawer: false })} />
           </div>
         )}
-        <div className="flex min-w-0 flex-1 flex-col">
+        <div className="relative flex min-w-0 flex-1 flex-col">
+          {/* Work mode covers the agent tabs instead of unmounting them: back in Code mode everything is where it was */}
+          {mode === "work" && (
+            <div className="absolute inset-0 z-30">
+              <WorkView />
+            </div>
+          )}
           {phone ? <PhoneBar /> : <TabBar />}
           <div className="relative min-h-0 flex-1">
             {/* 按 id 排个固定顺序再画，不能直接用 kept（最近用的排最前）：那样每切一次 tab 顺序就变，React 会在 DOM 里

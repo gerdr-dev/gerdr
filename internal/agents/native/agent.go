@@ -51,7 +51,9 @@ func New(log *slog.Logger, o Options) *Agent {
 	if o.Config == nil {
 		o.Config = func() Config { return Config{} }
 	}
-	return &Agent{log: log.With("agent", "native"), st: store{dir: o.Dir}, ext: o.Ext, cfg: o.Config, role: strings.TrimSpace(o.Prompt), sessions: map[string]*session{}}
+	a := &Agent{log: log.With("agent", "native"), st: store{dir: o.Dir}, ext: o.Ext, cfg: o.Config, role: strings.TrimSpace(o.Prompt), sessions: map[string]*session{}}
+	registerPool(&a.mcp) // so Settings → MCP's reconnect reaches it (ReconnectMCP)
+	return a
 }
 
 func (a *Agent) SetConn(c *acp.AgentSideConnection) { a.conn = c }

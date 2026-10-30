@@ -15,6 +15,7 @@ import {
   insertBeside,
   parentSplit,
   findLeaf,
+  projectNameError,
   leaves,
   locateSession,
   neighbor,
@@ -38,6 +39,7 @@ import {
   type Workspace,
 } from "./layout";
 import { get, markRead, set, setLayout, toggleSidebar } from "./store";
+import { workProjectOf } from "./work";
 import type { ContentBlock } from "./types";
 
 export const basename = (p: string) => p.replace(/\/+$/, "").split("/").pop() || p;
@@ -105,7 +107,8 @@ export function duplicateFocused(dir: "right" | "down") {
 
 /**
  * 别的 agent 用 `gerdr session new` 开的会话：放在发起它的那个会话旁边（右边分一屏）。
- * 默认不抢焦点（人可能正在别处打字）；找不到发起方就在当前工作空间后台开个 tab。
+ * 默认不抢焦点（人可能正在别处打字）；发起方是 Work 助手（不在任何 pane 里）就开在它那个项目的工作空间里，
+ * 都找不到就在当前工作空间后台开个 tab。
  */
 export function openSessionNear(sessionId: string, near?: string, focus = false) {
   if (locateSession(get().layout, sessionId)) {
@@ -121,7 +124,10 @@ export function openSessionNear(sessionId: string, near?: string, focus = false)
         return focus ? next : { ...next, focus: tab.focus };
       });
     }
-    const ws = activeWs(l);
+    // Asked by a Work agent (no pane of its own): into its project's workspace, not whichever one is on screen
+    const project = near ? workProjectOf(near) : undefined;
+    const home = project && project !== currentSpace(l) ? spaceWorkspaces(l, project) : [];
+    const ws = home.find((w) => w.id === spaceList(l).find((s) => s.id === project)?.active) ?? home[0] ?? activeWs(l);
     const t = newTab(undefined, sessionId);
     return updateWs(l, ws.id, (w) => ({ ...w, tabs: [...w.tabs, t], activeTab: focus ? t.id : w.activeTab }));
   });
@@ -772,17 +778,27 @@ export function stepSpace(delta: number) {
   if (list.length > 1) switchSpace(list[(i + delta + list.length) % list.length].id);
 }
 
-export function addSpace(name: string) {
+/**
+ * New project named `name` (its id is the name, see projectNameError). A project that existed before under that name gets its
+ * workspaces back from its directory (server work/layout.go keeps each project's copy current), so closing and re-creating it
+ * restores its Code — tabs, splits, the conversations in them — as well as its Work. Returns why it couldn't, "" when it could.
+ */
+export async function addSpace(name: string): Promise<string> {
+  const err = projectNameError(get().layout, name);
+  if (err) return err;
+  const id = name.trim();
+  const saved = await api.projectLayout(id).catch(() => ({}) as { workspaces?: Workspace[]; active?: string });
   setLayout((l) => {
     const prev = rememberSpace(l);
-    const sp = { id: rid("s"), name: name.trim() || `session ${prev.spaces!.length + 1}` };
-    const w = { ...newWorkspace("default"), space: sp.id };
-    return { ...prev, spaces: [...prev.spaces!, sp], workspaces: [...l.workspaces, w], active: w.id, lastActive: l.active };
+    const sp = { id, name: id };
+    const back = (saved.workspaces ?? [])
+      .filter((w) => w?.id && Array.isArray(w.tabs) && !l.workspaces.some((x) => x.id === w.id))
+      .map((w) => ({ ...w, space: id }));
+    const ws = back.length ? back : [{ ...newWorkspace("default"), space: id }];
+    const active = ws.find((w) => w.id === saved.active)?.id ?? ws[0].id;
+    return { ...prev, spaces: [...prev.spaces!, sp], workspaces: [...l.workspaces, ...ws], active, lastActive: l.active };
   });
-}
-
-export function renameSpace(id: string, name: string) {
-  setLayout((l) => ({ ...l, spaces: spaceList(l).map((s) => (s.id === id ? { ...s, name: name.trim() || s.name } : s)) }));
+  return "";
 }
 
 /** Close a whole session: all its workspaces (their agents stop, records stay — same as closing the workspaces one by one). */
@@ -1120,10 +1136,6 @@ export function runAction(a: KeyAction) {
       return stepSpace(1);
     case "prevSpace":
       return stepSpace(-1);
-    case "renameSpace": {
-      const sp = spaceList(l).find((x) => x.id === currentSpace(l))!;
-      return set({ dialog: { kind: "rename", target: "space", id: sp.id, value: sp.name } });
-    }
     case "sessions":
       return set({ dialog: { kind: "sessions" } });
     case "toggleSidebar":

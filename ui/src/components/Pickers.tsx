@@ -69,7 +69,7 @@ export function SessionsDialog({ open }: { open: boolean }) {
         <CommandEmpty>没有</CommandEmpty>
         {opened.length > 0 && <CommandGroup heading={`开着的 · ${opened.length}`}>{opened.map((s) => row(s, true))}</CommandGroup>}
         {elsewhere.length > 0 && (
-          <CommandGroup heading={`在别的 session 里 · ${elsewhere.length}`}>{elsewhere.map((s) => row(s, true, spaceName(s.id)))}</CommandGroup>
+          <CommandGroup heading={`在别的项目里 · ${elsewhere.length}`}>{elsewhere.map((s) => row(s, true, spaceName(s.id)))}</CommandGroup>
         )}
         {closed.length > 0 && <CommandGroup heading={`关掉的 · ${closed.length}`}>{closed.map((s) => row(s, false))}</CommandGroup>}
       </CommandList>

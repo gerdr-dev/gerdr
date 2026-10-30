@@ -30,6 +30,7 @@ import (
 	"github.com/gerdr-dev/gerdr/internal/doctor"
 	"github.com/gerdr-dev/gerdr/internal/ext"
 	"github.com/gerdr-dev/gerdr/internal/hub"
+	"github.com/gerdr-dev/gerdr/internal/mcpauth"
 	"github.com/gerdr-dev/gerdr/internal/plugins"
 	"github.com/gerdr-dev/gerdr/internal/remote"
 	"github.com/gerdr-dev/gerdr/internal/server"
@@ -38,6 +39,7 @@ import (
 	"github.com/gerdr-dev/gerdr/internal/uisite"
 	"github.com/gerdr-dev/gerdr/internal/version"
 	"github.com/gerdr-dev/gerdr/internal/webui"
+	"github.com/gerdr-dev/gerdr/internal/work"
 )
 
 func main() {
@@ -87,12 +89,12 @@ func main() {
 		Short: "打印版本",
 		Run:   func(cmd *cobra.Command, args []string) { fmt.Println(version.Version) },
 	})
-	root.AddCommand(sessionCmd(), uiCmd(), remoteCmd(), workspaceCmd(), tabCmd(), paneCmd())
+	root.AddCommand(addProjectFlag(sessionCmd()), uiCmd(), workCmd(), remoteCmd(), addProjectFlag(workspaceCmd()), addProjectFlag(tabCmd()), addProjectFlag(paneCmd()))
 	if err := root.Execute(); err != nil {
 		if errors.Is(err, errHandover) {
 			os.Exit(exitHandover)
 		}
-		if len(os.Args) > 1 && slices.Contains([]string{"session", "ui", "workspace", "tab", "pane"}, os.Args[1]) {
+		if len(os.Args) > 1 && slices.Contains([]string{"session", "ui", "work", "workspace", "tab", "pane"}, os.Args[1]) {
 			fail(err) // for agents: errors are JSON too
 		}
 		fmt.Fprintln(os.Stderr, "gerdr:", err)
@@ -235,6 +237,7 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 		return c.Agents
 	}
 	em := ext.New(env.Dir)
+	mcpauth.Default = mcpauth.New(env.Dir)
 	if added, err := em.MigrateNativeMCP(); err != nil {
 		log.Warn("migrate native mcp", "err", err)
 	} else if len(added) > 0 {
@@ -328,7 +331,25 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 		return err
 	}
 	defer rm.Close()
-	srv := &server.Server{Dir: env.Dir, Hub: h, Token: token, Config: cfg, Layout: layout, Plugins: pm, Ext: em, Log: log, OnConfig: applyAgents,
+	// Work view: local functions whose ctx.mcp reaches gerdr's MCP servers first, then Claude Code's and Codex's.
+	wr := work.New(env.Dir, func(ctx context.Context, name, tool string, args map[string]any) (json.RawMessage, error) {
+		for _, list := range [][]ext.MCPServer{em.Settings().MCP, ext.ClaudeMCP(""), ext.CodexMCP()} {
+			for _, m := range list {
+				if m.Name == name && m.Enabled {
+					return native.CallTool(ctx, m, tool, args)
+				}
+			}
+		}
+		return nil, fmt.Errorf("no MCP server named %q (add it in Settings → MCP or in Claude Code)", name)
+	})
+	if _, err := wr.Ensure(work.DefaultProject); err != nil {
+		log.Warn("install work files", "err", err)
+	}
+	// Every project keeps its own copy of its workspaces in its directory (work/layout.go): refreshed on each
+	// layout save, and once now for the projects that are open.
+	layout.OnSet = wr.SaveLayouts
+	wr.SaveLayouts(layout.Get())
+	srv := &server.Server{Dir: env.Dir, Hub: h, Token: token, Config: cfg, Layout: layout, Plugins: pm, Ext: em, Work: wr, Log: log, OnConfig: applyAgents,
 		UI: ui, ESM: uisite.NewESM(env.ESMCDN, filepath.Join(env.Dir, "cache", "esm")), Remote: rm, Awake: keeper,
 		Service: svc, Terms: term.New(func() []string { return sysenv.ChildEnv() }, log)}
 	defer srv.Terms.Close()

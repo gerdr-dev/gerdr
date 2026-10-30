@@ -137,16 +137,16 @@ function activeWin() {
 }
 
 /**
- * The page's address, optionally opened on one session (?space=, which the page switches to). origin is the login link
- * (/auth?token=…), so the page path goes in its `next` (see rescueURL).
+ * The page's address, optionally opened on one project (/<project id>, which the page switches to). origin is the login
+ * link (/auth?token=…), so the page path goes in its `next` (see rescueURL).
  */
 function pageURL(space) {
   const u = new URL(origin);
-  const page = space ? `/?space=${encodeURIComponent(space)}` : "/";
+  const page = space ? `/${encodeURIComponent(space)}` : "/";
   if (u.pathname === "/auth") u.searchParams.set("next", page);
   else {
-    u.pathname = "/";
-    u.search = space ? `?space=${encodeURIComponent(space)}` : "";
+    u.pathname = page;
+    u.search = "";
   }
   return u.toString();
 }

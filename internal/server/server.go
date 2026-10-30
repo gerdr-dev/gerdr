@@ -43,6 +43,7 @@ import (
 	"github.com/gerdr-dev/gerdr/internal/uisite"
 	"github.com/gerdr-dev/gerdr/internal/version"
 	"github.com/gerdr-dev/gerdr/internal/webui"
+	"github.com/gerdr-dev/gerdr/internal/work"
 )
 
 type Server struct {
@@ -53,9 +54,11 @@ type Server struct {
 	Layout  *config.Store
 	Plugins *plugins.Manager
 	Ext     *ext.Manager
-	UI      *uisite.Renderer
-	ESM     *uisite.ESM
-	Log     *slog.Logger
+	// Work：the Work view's local functions (internal/work). nil = off (tests).
+	Work *work.Runner
+	UI   *uisite.Renderer
+	ESM  *uisite.ESM
+	Log  *slog.Logger
 	// OnConfig：界面上存了 config.json 之后（agents 那一节要热换）
 	OnConfig func()
 	// Remote：远程访问（设备表、passkey、中继）。nil = 这个进程不管远程（测试里）。
@@ -70,6 +73,7 @@ type Server struct {
 	Doctor      *doctor.Doctor
 	remoteConns remoteConns // 正在连着的远程界面（remoteconns.go）
 	appWatch    appWatch    // 安卓 App 后台通知的长轮询（appwatch.go）
+	workUIs     workUIs     // each project's Work site, started on first use (workapi.go)
 	// OnServiceInstalled：刚打开后台常驻、本进程是 App 起的后端时让位（见 cmd/gerdr 的 handover）。
 	OnServiceInstalled func()
 }
@@ -318,6 +322,8 @@ func (s *Server) Handler() http.Handler {
 	})
 	mux.HandleFunc("GET /api/importable", s.importable)
 	s.extRoutes(mux)
+	s.mcpAuthRoutes(mux)
+	s.workRoutes(mux)
 	s.llmRoutes(mux)
 	s.memoryRoutes(mux)
 	s.importRoutes(mux)

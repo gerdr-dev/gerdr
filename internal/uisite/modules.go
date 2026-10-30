@@ -290,9 +290,10 @@ type graph struct {
 	importers map[string][]string  // 路径 → import 了它的文件
 	version   map[string]string    // 路径 → 版本（URL 里的 v）
 	errs      []string             // 编译报错（带文件、行列）
+	base      string               // the Renderer's URL prefix ("" for gerdr's own UI)
 }
 
-func moduleURL(rel, version string) string { return "/_ui/m/" + rel + "?v=" + version }
+func moduleURL(base, rel, version string) string { return base + "/_ui/m/" + rel + "?v=" + version }
 
 // buildGraph 从 roots（页面文件）出发编译整张图，并发编译、结果按文件缓存。
 func (c *moduleCache) buildGraph(dir string, roots []string) *graph {
@@ -426,7 +427,7 @@ func (g *graph) link(rel string) string {
 	m := g.mods[rel]
 	code := m.Code
 	for _, d := range append(append([]string{}, m.Deps...), m.Lazy...) {
-		code = strings.ReplaceAll(code, `"`+depPlaceholder+d+`"`, `"`+moduleURL(d, g.version[d])+`"`)
+		code = strings.ReplaceAll(code, `"`+depPlaceholder+d+`"`, `"`+moduleURL(g.base, d, g.version[d])+`"`)
 	}
 	return code + "\n//# sourceMappingURL=" + path.Base(rel) + ".map?v=" + g.version[rel] + "\n"
 }

@@ -13,7 +13,7 @@ const errorsScript = `(function(){
   // 页面里的报错也报给服务端：agent 改了界面之后用 gerdr ui status 能看到「改坏了没有」。
   var queue = [], timer = 0;
   function send(){ timer = 0; var items = queue; queue = [];
-    try { fetch("/api/ui/errors", { method: "POST", headers: { "Content-Type": "application/json", "X-Gerdr": "1" }, body: JSON.stringify({ build: (window.__GERDR_UI__ || {}).build, items: items }) }).catch(function(){}) } catch (_) {} }
+    try { fetch(((window.__GERDR_UI__ || {}).base || "") + "/api/ui/errors", { method: "POST", headers: { "Content-Type": "application/json", "X-Gerdr": "1" }, body: JSON.stringify({ build: (window.__GERDR_UI__ || {}).build, items: items }) }).catch(function(){}) } catch (_) {} }
   function push(source, message, detail){
     var item = { level: "error", source: source, build: (window.__GERDR_UI__ || {}).build, message: String(message), detail: String(detail || "").slice(0, 4000) };
     var hold = window.__GERDR_HOLD__;
@@ -59,12 +59,21 @@ func (r *Renderer) ServePage(w http.ResponseWriter, req *http.Request, nonce str
 	s.WriteString("</head>\n<body>\n<div id=\"root\">" + loadingHTML + "</div>\n<script" + n + ">")
 	s.WriteString("setTimeout(function(){var e=document.getElementById('__gerdr_loading_slow');if(e)e.style.visibility='visible'},5000);\n")
 	s.WriteString("window.__GERDR_UI__ = " + string(mustJSON(map[string]any{
+		"base":    r.base,
 		"build":   b.id,
 		"entry":   b.entry,
 		"modules": b.manifest,
 		"error":   b.fatal,
 	})) + ";</script>\n")
-	s.WriteString(`<script type="module" src="/_ui/m/@runtime.js?v=` + runtimeVersion + `"></script>` + "\n")
+	s.WriteString(`<script type="module" src="` + r.base + `/_ui/m/@runtime.js?v=` + runtimeVersion + `"></script>` + "\n")
+	if r.base != "" {
+		// A mounted site (the Work project) has no rescue panel: gerdr around it still works when it breaks.
+		s.WriteString("</body>\n</html>\n")
+		w.Header().Set("content-type", "text/html; charset=utf-8")
+		w.Header().Set("cache-control", "no-store")
+		w.Write([]byte(s.String()))
+		return
+	}
 	// 急救面板（internal/server/rescue）：编进二进制、自带 React，挂在主界面右边、和它不共享任何东西 ——
 	// 界面目录怎么改坏都打得开。放在页面外壳里而不是界面目录里，就是为了谁也改不掉它。
 	s.WriteString(`<script defer src="/rescue/app.js"></script>` + "\n")

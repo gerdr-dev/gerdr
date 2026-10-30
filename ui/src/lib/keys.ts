@@ -58,7 +58,6 @@ export type KeyAction =
   | "newSpace"
   | "nextSpace"
   | "prevSpace"
-  | "renameSpace"
   | "sessions"
   | "toggleSidebar"
   | "help"
@@ -122,10 +121,9 @@ export const ACTION_TITLES: Record<KeyAction, string> = {
   ws7: "工作空间 7",
   ws8: "工作空间 8",
   ws9: "工作空间 9",
-  newSpace: "新 session",
-  nextSpace: "下一个 session",
-  prevSpace: "上一个 session",
-  renameSpace: "重命名 session",
+  newSpace: "新项目",
+  nextSpace: "下一个项目",
+  prevSpace: "上一个项目",
   sessions: "会话列表（接着以前的聊）",
   toggleSidebar: "显示 / 隐藏侧栏",
   help: "快捷键帮助",
@@ -205,7 +203,6 @@ const MAC_KEYS: Record<KeyAction, string[]> = {
   // have a window of its own the two would fight
   nextSpace: ["meta+ctrl+]", "prefix+]"],
   prevSpace: ["meta+ctrl+[", "prefix+["],
-  renameSpace: [],
   sessions: ["prefix+g", "meta+o"],
   toggleSidebar: ["prefix+b", "meta+ctrl+s"],
   help: ["prefix+?", "meta+/"],
@@ -289,7 +286,7 @@ export const KEY_GROUPS: [string, KeyAction[]][] = [
   ],
   ["tab", ["newTab", "terminalTab", "nextTab", "prevTab", "lastTab", "tab1", "closeTab", "reopenClosed", "renameTab"]],
   ["工作空间", ["newWorkspace", "workspaces", "nextWorkspace", "prevWorkspace", "ws1", "renameWorkspace", "closeWorkspace"]],
-  ["session", ["newSpace", "nextSpace", "prevSpace", "renameSpace"]],
+  ["项目", ["newSpace", "nextSpace", "prevSpace"]],
   ["会话", ["sessions", "nextAttention", "prevAttention", "focusAttention", "renamePane", "stop"]],
   ["其他", ["palette", "toggleSidebar", "settings", "help", "importHerdr"]],
 ];

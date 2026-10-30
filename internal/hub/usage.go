@@ -135,3 +135,22 @@ func (h *Hub) CachedUsage() []UsageInfo {
 	sort.Slice(out, func(i, j int) bool { return out[i].Agent < out[j].Agent })
 	return out
 }
+
+// ReconnectMCP asks the agents that are running (not starting any) to reconnect one MCP server in each of their live
+// processes (acpx.MethodMCPReconnect). Returns how many processes did; agents that don't support it are skipped.
+func (h *Hub) ReconnectMCP(ctx context.Context, server string) int {
+	h.mu.Lock()
+	hosts := make([]*agenthost.Host, 0, len(h.hosts))
+	for _, c := range h.hosts {
+		hosts = append(hosts, c)
+	}
+	h.mu.Unlock()
+	n := 0
+	for _, c := range hosts {
+		res, err := agenthost.Call[acpx.MCPReconnectResponse](ctx, c, acpx.MethodMCPReconnect, acpx.MCPReconnectRequest{Server: server})
+		if err == nil {
+			n += res.Reconnected
+		}
+	}
+	return n
+}

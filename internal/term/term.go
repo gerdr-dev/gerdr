@@ -89,8 +89,11 @@ func (m *Manager) Create(o CreateOptions) (*Term, error) {
 	if !hasEnv(env, "LANG") && !hasEnv(env, "LC_ALL") && !hasEnv(env, "LC_CTYPE") {
 		env = append(env, "LANG=en_US.UTF-8")
 	}
-	env = append(env, "TERM=xterm-256color", "COLORTERM=truecolor", "TERM_PROGRAM=gerdr")
-	t := &Term{id: uuid.NewString()[:8], cwd: cwd, shell: shell, created: time.Now(), subs: map[*sub]struct{}{}, done: make(chan struct{})}
+	id := uuid.NewString()[:8]
+	// GERDR_TERM: `gerdr …` run in this terminal finds the pane showing it, and from that its project (server.ResolveSpace).
+	// The terminal's id rather than a project name: the pane can be moved to another project, an env var can't follow.
+	env = append(env, "TERM=xterm-256color", "COLORTERM=truecolor", "TERM_PROGRAM=gerdr", "GERDR_TERM="+id)
+	t := &Term{id: id, cwd: cwd, shell: shell, created: time.Now(), subs: map[*sub]struct{}{}, done: make(chan struct{})}
 	if err := t.start(env, o.Cols, o.Rows); err != nil {
 		return nil, err
 	}

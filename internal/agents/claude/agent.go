@@ -649,6 +649,12 @@ func (a *Agent) HandleExtensionMethod(ctx context.Context, method string, params
 	switch method {
 	case acpx.MethodUsage:
 		return a.usage(ctx)
+	case acpx.MethodMCPReconnect:
+		var p acpx.MCPReconnectRequest
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, acp.NewInvalidParams(err.Error())
+		}
+		return a.mcpReconnect(ctx, p.Server), nil
 	case acpx.MethodComplete:
 		var p acpx.CompleteRequest
 		if err := json.Unmarshal(params, &p); err != nil {

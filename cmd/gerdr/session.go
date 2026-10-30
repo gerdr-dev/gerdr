@@ -11,7 +11,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/gerdr-dev/gerdr/internal/acpx"
 	"io"
 	"net/http"
 	"net/url"
@@ -20,6 +19,9 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/gerdr-dev/gerdr/internal/acpx"
+	"github.com/gerdr-dev/gerdr/internal/work"
 
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
@@ -34,6 +36,25 @@ type apiClient struct {
 	token string
 	http  *http.Client
 	self  *string // selfID, cached: list() needs it on every call
+}
+
+// projectFlag is --project on the session / workspace / tab / pane commands: which project to act in when it can't be told
+// from where the command runs (a shell outside gerdr). Inside gerdr it's found by itself (server.ResolveSpace).
+var projectFlag string
+
+func addProjectFlag(cmd *cobra.Command) *cobra.Command {
+	cmd.PersistentFlags().StringVar(&projectFlag, "project", "", "project to act in (default: the one this agent / terminal is in)")
+	return cmd
+}
+
+// caller: who's running this command, for the server to work out the project (server.ResolveSpace).
+func (c *apiClient) caller() server.Caller {
+	return server.Caller{Project: projectFlag, Session: c.selfID(), Term: os.Getenv("GERDR_TERM")}
+}
+
+// workProject: the project whose Work directory a path is in (the Work agent's cwd), as the server sees it.
+func workProject() func(string) (string, bool) {
+	return work.New(config.FromEnv().Dir, nil).WorkProject
 }
 
 func newAPIClient() (*apiClient, error) {
@@ -187,8 +208,8 @@ func (c *apiClient) lookupSelf() string {
 	return s.ID
 }
 
-// list: the sessions the caller may see. An agent only sees its own herdr-style session (the "space" of the workspace it's in,
-// server.SessionSpaces): sessions open in another one are left out, like herdr where each session has its own socket.
+// list: the sessions the caller may see. An agent only sees its own project (server.ResolveSpace: the pane it's in, its Work
+// directory, its terminal, --project): sessions in another one are left out, like herdr where each session has its own socket.
 // Closed sessions (no pane anywhere) belong to no session and stay visible; opening one puts it next to the caller, in the caller's.
 func (c *apiClient) list() ([]sessInfo, error) {
 	var h struct {
@@ -199,11 +220,23 @@ func (c *apiClient) list() ([]sessInfo, error) {
 		return nil, err
 	}
 	spaces := server.SessionSpaces(h.Layout)
-	mine, scoped := spaces[c.selfID()]
+	wp := workProject()
+	who := c.caller()
+	for _, s := range h.Sessions {
+		if s.ID == who.Session {
+			who.SessionCwd = s.Cwd
+		}
+	}
+	mine := server.ResolveSpace(h.Layout, who, wp)
 	out := h.Sessions[:0]
 	for _, s := range h.Sessions {
 		sp, open := spaces[s.ID]
-		if scoped && open && sp != mine {
+		// A Work agent is in no pane but belongs to its project all the same
+		owned := open
+		if !owned {
+			sp, owned = wp(s.Cwd)
+		}
+		if mine != "" && owned && sp != mine {
 			continue
 		}
 		s.inUI = &open
@@ -745,6 +778,61 @@ func fail(err error) {
 	b, _ := json.Marshal(map[string]string{"error": err.Error()})
 	fmt.Fprintln(os.Stderr, string(b))
 	os.Exit(1)
+}
+
+// gerdr work …: for the Work agent (see internal/work/builtin/CLAUDE.md). The project is the one whose
+// Work directory the current directory is in (that's where the Work agent runs), or --project.
+func workCmd() *cobra.Command {
+	cmd := &cobra.Command{Use: "work", Short: "The Work view: local functions and the Work site of a project"}
+	var project string
+	cmd.PersistentFlags().StringVar(&project, "project", "", "project id (default: the one the current directory belongs to)")
+	which := func() string {
+		if project != "" {
+			return project
+		}
+		wd, _ := os.Getwd()
+		return work.New(config.FromEnv().Dir, nil).ProjectOf(wd)
+	}
+	cmd.AddCommand(&cobra.Command{
+		Use:   "run <file.export> [input JSON]",
+		Short: "Run a local function the way a page does, e.g. gerdr work run okr.summary '{\"quarter\":\"2026Q4\"}'",
+		Args:  cobra.RangeArgs(1, 2),
+		RunE: func(_ *cobra.Command, args []string) error {
+			c, err := newAPIClient()
+			if err != nil {
+				return err
+			}
+			var input any
+			if len(args) > 1 {
+				if err := json.Unmarshal([]byte(args[1]), &input); err != nil {
+					return fmt.Errorf("input isn't JSON: %w", err)
+				}
+			}
+			var out map[string]any
+			if err := c.do("POST", "/api/work/run", map[string]any{"project": which(), "fn": args[0], "input": input}, &out); err != nil {
+				return err
+			}
+			printJSON(out["result"])
+			return nil
+		},
+	})
+	cmd.AddCommand(&cobra.Command{
+		Use:   "status",
+		Short: "The project's Work site (ui/): build error and runtime errors from the open page",
+		RunE: func(_ *cobra.Command, _ []string) error {
+			c, err := newAPIClient()
+			if err != nil {
+				return err
+			}
+			var out map[string]any
+			if err := c.do("GET", "/api/work/ui/status?project="+url.QueryEscape(which()), nil, &out); err != nil {
+				return err
+			}
+			printJSON(out)
+			return nil
+		},
+	})
+	return cmd
 }
 
 // gerdr ui …：给改界面的 agent 用（内置的 gerdr-ui skill）。

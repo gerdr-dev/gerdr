@@ -70,7 +70,11 @@ export function SettingsDialog({ open }: { open: boolean }) {
               </TabsTrigger>
             </TabsList>
           </DialogHeader>
-          <div className="min-h-0 min-w-0 flex-1 overflow-auto px-6 pb-6 max-md:px-4 max-md:[&_[data-slot=button]:not([data-size^=icon])]:h-7 max-md:[&_[data-slot=button]:not([data-size^=icon])]:px-2.5 max-md:[&_[data-slot=button]]:text-[13px]">
+          {/* One size for the whole panel. Text nobody sized is 13px (section titles are 13px, descriptions 12px); shadcn's controls
+              default to 14px text and 36px height (Input also sets md:text-sm), which looked oversized next to that, so on desktop
+              every button / input / textarea / select here is 12px and the default-sized ones 32px tall, like size="sm". Pages can
+              still size a control themselves; icon buttons keep their size. */}
+          <div className="min-h-0 min-w-0 flex-1 overflow-auto px-6 pb-6 text-[13px] max-md:px-4 max-md:[&_[data-slot=button]:not([data-size^=icon])]:h-7 max-md:[&_[data-slot=button]:not([data-size^=icon])]:px-2.5 max-md:[&_[data-slot=button]]:text-[13px] md:[&_[data-slot=button]]:text-[12px] md:[&_[data-slot=button][data-size=default]]:h-8 md:[&_[data-slot=button][data-size=default]]:px-3 md:[&_[data-slot=input]]:h-8 md:[&_[data-slot=input]]:text-[12px] md:[&_[data-slot=textarea]]:text-[12px] md:[&_[data-slot=select-trigger]]:text-[12px] md:[&_[data-slot=select-trigger][data-size=default]]:h-8">
             <TabsContent value="general" className="space-y-6 pt-2">
               {/* 设置分两种：存 gerdr 服务端、所有设备共用（config.json），和只存这台设备（localStorage / 安卓壳）。
                   不分组的话在手机上调了一项，电脑上跟着变还是不变，用户猜不出来 */}

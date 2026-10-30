@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { api, clientId, uuid, type DoctorReport, type FileStat } from "./api";
 import { DEFAULT_KEYS, IS_MAC, type KeyAction } from "./keys";
-import { activeTab, defaultLayout, leaves, phoneRoot, validLayout, viewOf, withView, type Layout, type View } from "./layout";
+import { activeTab, currentSpace, defaultLayout, leaves, phoneRoot, validLayout, viewOf, withView, type Layout, type View } from "./layout";
 import { isPhone } from "./phone";
 import { Transcript } from "./transcript";
 import type { AgentInfo, ContentBlock, HubEvent, RemoteConn, SessionSummary } from "./types";
@@ -22,6 +22,13 @@ export type Config = {
   notifications: boolean;
   /** 发送：enter（回车发、Shift+回车换行）或 mod+enter（⌘/Ctrl+回车发）。 */
   sendKey: "enter" | "mod+enter";
+  /** Per project (layout space id): the Work view's current agent conversation (the chat on its right), shared by all devices. */
+  workSessions?: Record<string, string>;
+  /** Before projects: the default project's Work conversation. Read as a fallback (lib/work.ts). */
+  workSession?: string;
+  /** Per project: which agent (engine or role from Settings → Agent) new Work conversations use; missing = workAgent, then defaultAgent. */
+  workAgents?: Record<string, string>;
+  workAgent?: string;
   keepTabs: number; // 切走之后还留在页面里的 tab 数（展开状态、滚动位置都保住）；1 = 不留
   /** 改文件 / 新建文件的工具调用默认展开 diff。关掉后只剩一行（文件名、+/- 行数），点开再看。 */
   expandEdits?: boolean;
@@ -145,6 +152,8 @@ type State = {
   prefixActive: boolean;
   dialog: Dialog;
   sidebar: boolean;
+  /** Which view fills the main area: the agent tabs, or the Work dashboard (WorkView). Per device, in localStorage. */
+  mode: "agents" | "work";
   /**
    * 字号（px）：每台设备各一份，存本机（localStorage），不进 config —— config 存服务端、所有设备共用，
    * 手机上调大了字，电脑上不该跟着变大。0 = 这台还没设过，用 config.fontSize（以前存在那儿的，老用户设过的照旧生效）。
@@ -201,6 +210,14 @@ export function setFontSize(n: number) {
   } catch {}
 }
 
+function loadMode(): "agents" | "work" {
+  try {
+    return localStorage.getItem("gerdr.mode") === "work" ? "work" : "agents";
+  } catch {
+    return "agents";
+  }
+}
+
 function loadSidebar(): boolean {
   try {
     return localStorage.getItem("gerdr.sidebar") !== "0";
@@ -229,6 +246,7 @@ export const useStore = create<State>(() => ({
   prefixActive: false,
   dialog: null,
   sidebar: loadSidebar(),
+  mode: loadMode(),
   localFont: loadLocalFont(),
   drawer: false,
   switcher: false,
@@ -446,6 +464,13 @@ export function markUnread(id: string) {
   });
 }
 
+export function setMode(mode: "agents" | "work") {
+  set({ mode, drawer: false });
+  try {
+    localStorage.setItem("gerdr.mode", mode);
+  } catch {}
+}
+
 export function toggleSidebar() {
   // 手机上侧栏是抽屉，开合不动桌面那份记忆（gerdr.sidebar）
   if (isPhone()) {
@@ -470,6 +495,13 @@ export function visibleSessions(l: Layout, phone = false): string[] {
 /** 要订阅日志的会话：看得见的 + 留在页面里没卸载的 tab 里的（它们切回来时不用整份重推、组件不用重建）。 */
 export function watchedSessions(l: Layout, kept: string[]): string[] {
   const out = new Set(visibleSessions(l));
+  // The Work view's chat isn't in the layout; it's on screen while the Work view is.
+  if (get().mode === "work") {
+    const space = currentSpace(l);
+    const c = get().config;
+    const work = c.workSessions?.[space] ?? (space === "default" ? c.workSession : undefined);
+    if (work) out.add(work);
+  }
   const want = new Set(kept);
   for (const ws of l.workspaces)
     for (const t of ws.tabs)

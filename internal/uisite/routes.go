@@ -69,7 +69,7 @@ func buildRoutes(files []string) []route {
 // entrySource 是入口模块（/_ui/m/@entry.js）：每个页面一条 react-router 路由，页面组件收到 { params }。
 // 它不自己挂载，导出 createApp() 交给运行时（runtime.go）：运行时先接好 React Refresh 再渲染，
 // 热更新整个换掉时也是拿新入口的 createApp 重新渲染。
-func entrySource(routes []route, layout string, url func(file string) string) string {
+func entrySource(routes []route, layout, base string, url func(file string) string) string {
 	var b strings.Builder
 	b.WriteString(`import React from "react";
 import { createBrowserRouter, RouterProvider, Outlet, useParams, useRouteError } from "react-router";
@@ -125,11 +125,15 @@ const children = [
 	b.WriteString(`];
 
 export function createApp() {
-  const router = createBrowserRouter([{ path: "/", Component: Layout, ErrorBoundary: RouteError, children: children }]);
+  const router = createBrowserRouter([{ path: "/", Component: Layout, ErrorBoundary: RouteError, children: children }], BASENAME);
   return h(RouterProvider, { router: router });
 }
 `)
-	return b.String()
+	opts := "undefined"
+	if base != "" {
+		opts = fmt.Sprintf("{ basename: %q }", base)
+	}
+	return strings.Replace(b.String(), "BASENAME", opts, 1)
 }
 
 func formatMessage(m api.Message) string {

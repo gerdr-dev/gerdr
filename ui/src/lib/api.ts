@@ -142,7 +142,6 @@ export const api = {
   memoryRead: (path: string) => req<{ content: string }>("GET", `/api/memory/file?path=${encodeURIComponent(path)}`),
   memoryWrite: (path: string, content: string) => req("PUT", "/api/memory/file", { path, content }),
   memoryDelete: (path: string) => req("DELETE", `/api/memory/file?path=${encodeURIComponent(path)}`),
-  // Gerdr Agent 实际在用的 MCP 和连接状态；probe = 现在就连一遍
   llmTest: (provider: LLMProvider, model: LLMModel) => req<{ reply: string; api: string }>("POST", "/api/llm/test", { provider, model }),
   doctor: () => req<DoctorReport | null>("GET", "/api/doctor"),
   /** deep = also run every claude / codex install found (can pop macOS's "malware blocked" dialog for a blocked one) */
@@ -214,6 +213,19 @@ export const api = {
   writeSkill: (name: string, content: string) => req<ExtView>("PUT", `/api/ext/skills/${encodeURIComponent(name)}`, { content }),
   deleteSkill: (name: string) => req<ExtView>("DELETE", `/api/ext/skills/${encodeURIComponent(name)}`),
   importSkill: (dir: string) => req<ExtView>("POST", "/api/ext/skills/import", { dir }),
+  // MCP OAuth (Settings → MCP): sign-in state of every remote server; refresh = probe them all now
+  mcpAuth: (refresh?: boolean) => req<MCPAuth[]>("GET", `/api/mcp/auth${refresh ? "?refresh=1" : ""}`),
+  mcpAuthStart: (name: string, url: string) => req<{ url: string }>("POST", `/api/mcp/auth/${encodeURIComponent(name)}/start`, { url }),
+  /** Reconnect one MCP server: gerdr's own connections (tools = what it offers now) and every live Claude Code process (agents). */
+  mcpReconnect: (name: string, url: string) =>
+    req<{ tools?: number; error?: string; agents?: number }>("POST", `/api/mcp/${encodeURIComponent(name)}/reconnect`, { url }),
+  mcpAuthLogout: (name: string) => req("DELETE", `/api/mcp/auth/${encodeURIComponent(name)}`),
+  // Work view: run a local function (~/.gerdr/work/local/<file>.ts, "file.export")
+  /** A project's saved Code layout (its workspaces), {} when it has none: re-creating a closed project brings it back. */
+  projectLayout: (name: string) =>
+    req<{ workspaces?: import("./layout").Workspace[]; active?: string }>("GET", `/api/projects/${encodeURIComponent(name)}/layout`),
+  work: (project: string) => req<{ dir: string }>("GET", `/api/work?project=${encodeURIComponent(project)}`),
+  workRun: <T = any>(fn: string, input?: unknown) => req<{ result: T }>("POST", "/api/work/run", { fn, input }).then((r) => r.result),
   dirs: (path: string) =>
     req<{ path: string; parent: string; dirs: string[]; home: string; git: boolean }>("GET", `/api/fs/dirs?path=${encodeURIComponent(path)}`),
   fileStat: (path: string, cwd?: string) => req<FileStat>("GET", `/api/fs/stat?path=${encodeURIComponent(path)}&cwd=${encodeURIComponent(cwd ?? "")}`),
@@ -291,6 +303,19 @@ export type RemoteCertInput = { dns: string; email: string; staging: boolean; en
 /** temp：配对码进来的临时设备，expires 定死、不续期；在那台设备上过一次 passkey 就转正 */
 export type RemoteDevice = { id: string; label: string; created: string; lastSeen: string; lastIp: string; expires: string; temp?: boolean };
 export type PasskeyInfo = { id: string; label: string; created: string; lastUsed: string };
+
+export type MCPAuth = {
+  name: string;
+  url: string;
+  from: "gerdr" | "claude";
+  state: "ok" | "needs_auth" | "error";
+  // which credentials got in: none needed / the config's own header / Claude Code's login / gerdr's own login
+  auth?: "none" | "headers" | "claude" | "gerdr";
+  error?: string;
+  pending?: boolean;
+  hasOwn?: boolean;
+  checkedAt: number;
+};
 
 export type FileStat = { path: string; name: string; dir: boolean; size: number; mtime: number; mime: string };
 

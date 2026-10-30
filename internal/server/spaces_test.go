@@ -50,3 +50,36 @@ func TestCrossSpace(t *testing.T) {
 		}
 	}
 }
+
+func TestResolveSpace(t *testing.T) {
+	raw := json.RawMessage(`{"version":1,"active":"w1","workspaces":[
+ {"id":"w1","tabs":[{"id":"t1","root":{"type":"pane","id":"p1","sessionId":"A"}}]},
+ {"id":"w2","space":"客户 A","tabs":[{"id":"t2","root":{"type":"split","a":{"type":"pane","id":"p2","sessionId":"C"},"b":{"type":"pane","id":"p3","term":{"id":"tm1","cwd":"/"}}}}]}
+]}`)
+	wp := func(dir string) (string, bool) {
+		if dir == "/g/projects/客户 A/work" {
+			return "客户 A", true
+		}
+		return "", false
+	}
+	for _, c := range []struct {
+		name string
+		who  Caller
+		want string
+	}{
+		{"agent in a pane", Caller{Session: "C"}, "客户 A"},
+		{"pane beats an old cwd", Caller{Session: "A", SessionCwd: "/g/projects/客户 A/work"}, "default"},
+		{"Work agent: no pane, by its Work directory", Caller{Session: "W", SessionCwd: "/g/projects/客户 A/work"}, "客户 A"},
+		{"terminal in a pane", Caller{Term: "tm1"}, "客户 A"},
+		{"--project wins", Caller{Session: "C", Project: "ccc"}, "ccc"},
+		{"outside gerdr: not scoped", Caller{}, ""},
+		{"unknown terminal", Caller{Term: "gone"}, ""},
+	} {
+		if got := ResolveSpace(raw, c.who, wp); got != c.want {
+			t.Errorf("%s: %q, want %q", c.name, got, c.want)
+		}
+	}
+	if got := TermSpaces(raw); got["tm1"] != "客户 A" {
+		t.Errorf("TermSpaces = %v", got)
+	}
+}

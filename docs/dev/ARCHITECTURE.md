@@ -287,6 +287,64 @@ cwd 以外改的文件（Bash 写 `~/.zshrc`、隔壁项目）管不到；同一
   要先 `thread/unsubscribe` 让它卸载再 resume（实测）。
 - 内置 skill（`internal/ext/builtin/`：gerdr、gerdr-ui）不管来源选什么都给，设置里能单个关。
 
+## MCP OAuth (internal/mcpauth + server/mcpauthapi.go)
+
+- Status = probe: an `initialize` POST per remote server. Claude Code's token is tried first (macOS keychain
+  `Claude Code-credentials` → `mcpOAuth`, matched by server URL; elsewhere `~/.claude/.credentials.json`), then gerdr's own
+  (`<GERDR_DIR>/mcp-auth/<name>.json`). So a server already authorized in Claude Code is "signed in" here too, and when that
+  token dies the row flips to "needs auth" and gerdr can sign in by itself. We never refresh Claude Code's token: a refresh
+  can rotate the refresh token and log Claude Code out.
+- A 401 doesn't land in the native MCP pool's one-minute failure cache, so a fresh login is used on the next call.
+- The callback is `/mcp-oauth/callback`, outside `/api`: the authorization server redirects there cross-site, and the
+  SameSite=Strict login cookie isn't sent. The single-use, in-memory `state` is the credential.
+- Only gerdr-side MCP clients use these tokens (Native engine, Work functions). Claude Code / Codex sessions still sign in
+  their own way.
+
+- Reconnecting one server (Settings → MCP, `POST /api/mcp/{name}/reconnect`): `native.ReconnectMCP` drops its connections in
+  every pool of this process (each native agent's and Work's, registered at creation), forgets recent failures, connects once
+  to report the tool count or the error; then `_gerdr/mcp_reconnect` asks every live Claude Code process to reconnect it too
+  (stream-json control request `mcp_reconnect` with `serverName`, found in the CLI; a process without that server errors and is
+  skipped). Codex has no equivalent, so its sessions aren't touched.
+- Settings → MCP is one list: a row per server however many configs list it (same name + address), tagged Gerdr / Claude /
+  Codex; status = last reconnect, else the sign-in check; edit / disable / delete / add-to-Gerdr / sign out live in its menu.
+
+## Work view (internal/work + server/workapi.go + ui WorkView.tsx)
+
+- **Project** = a layout space (herdr's "session", renamed in the UI): its Code workspaces plus its own Work. **Its id is its
+  name** (`layout.ts` projectNameError; no `/ \ .`, not a gerdr route name, unique ignoring case since macOS / Windows paths
+  are), and there's no renaming: the address `/<name>` and the Work directory are named after it, so closing a project and
+  creating one with the same name later gets its Work back. Older random ids (`s236q0e1`) are renamed to the name on load
+  (`nameSpaceIds`, in `withView`). A project's Code comes back too: every layout.json save also writes each open project's
+  workspaces to `<GERDR_DIR>/projects/<name>/layout.json` (`config.Store.OnSet` → `work.Runner.SaveLayouts`; closed projects
+  keep their last copy), and creating a project reads it back (`GET /api/projects/{name}/layout`, `addSpace`). The global
+  layout.json stays the live state of the open projects (windows, devices and `gerdr workspace` work on it). Each project has a
+  Work directory — default project `<GERDR_DIR>/work` (where it lived before projects), others `<GERDR_DIR>/projects/<id>/work`
+  (`work.Runner.Dir`), installed on first use. The Work agent's current conversation and default agent are per project
+  (`config.workSessions` / `workAgents`).
+- Which project a `gerdr` command acts in (`server.ResolveSpace`, used by the CLI's `session list` and the layout API alike)
+  is looked up from where the caller is, never fixed in an env var at start-up, because workspaces move between projects:
+  `--project`, else the pane showing the agent's session, else the Work directory the session runs in (the Work agent is in
+  no pane), else the pane showing the terminal (`GERDR_TERM`, the terminal's id, set in every gerdr shell), else unscoped
+  (outside gerdr). `crossSpace` places a Work agent in its project the same way, so it can't reach other projects either, and
+  sessions it starts open in its project's workspace (`openSessionNear`). Work conversations get no title at creation: a given
+  title counts as the user's and would turn off automatic naming.
+- Code / Work is gerdr's own switch, at the start of the top row in both modes together with the project switcher (sidebar
+  header / Work top bar, same classes) so switching modes doesn't move it; `store.mode` per device. Everything inside Work is
+  the user's: `<work dir>/ui` is a React site with no build step, served by its own `uisite.Renderer` under
+  `/work/<project>/` (`uisite.NewAt`: module / event / public URLs and the router basename carry the prefix; `/_esm/` is shared),
+  started on first request. Menu, pages and styling are plain code in that site, not configuration.
+- It runs in a same-origin iframe (the only page allowed to be framed: `X-Frame-Options: SAMEORIGIN`, `frame-ancestors 'self'`),
+  so a broken Work page can't take gerdr down; there's no rescue panel inside it. It calls `/api/work/run` with the same
+  cookie and talks to gerdr by postMessage: `gerdr:ask` (send a task to the agent), `gerdr:settings`, and gerdr pushes
+  `gerdr:theme`. `gerdr work status` shows its build / runtime errors.
+- Page logic lives in local functions `<GERDR_DIR>/work/local/*.ts` (esbuild → goja, `ctx.mcp(server, tool, args)`), called by
+  name (`gerdr work run file.export`). Bundled files (`internal/work/builtin/base` for every project: site skeleton, blank
+  home page, CLAUDE.md; `builtin/okr` laid over it in the default project only) are upgraded unless edited, and removed when
+  no longer shipped for that project unless edited.
+- The right-hand agent is an ordinary session in the project's Work directory (its CLAUDE.md / AGENTS.md teach it the site),
+  not in the layout; `watchedSessions` adds it while in Work mode. `gerdr work run|status` find the project from the cwd.
+  New conversations use an engine or a role from Settings → Agent (prompt, skills, MCP, default model).
+
 ## 角色和新会话默认（设置 → Agent）
 
 - **角色** = config.json `agents` 里一条带 base（claude / codex / native）的定义：追加的系统提示（`prompt`）、只给哪些 skill / MCP

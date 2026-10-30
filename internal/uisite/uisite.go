@@ -28,6 +28,7 @@ import (
 
 type Renderer struct {
 	dir     string
+	base    string // URL prefix the whole site lives under ("" = the root, gerdr's own UI; "/work" = the Work project)
 	log     *slog.Logger
 	modules *moduleCache
 	events  hub
@@ -134,6 +135,17 @@ func New(dir, cacheDir string, log *slog.Logger) *Renderer {
 
 func (r *Renderer) Dir() string { return r.dir }
 
+// NewAt is New for a site mounted under a URL prefix (e.g. "/work"): module, event and public URLs and
+// the router's basename all carry it. Used for the Work view's project, a second, user-owned UI that
+// gerdr shows in a frame next to the Work agent.
+func NewAt(dir, cacheDir, base string, log *slog.Logger) *Renderer {
+	r := New(dir, cacheDir, log)
+	r.base = strings.TrimRight(base, "/")
+	return r
+}
+
+func (r *Renderer) Base() string { return r.base }
+
 func shortHash(parts ...string) string {
 	h := sha256.New()
 	for _, p := range parts {
@@ -229,6 +241,7 @@ func (r *Renderer) build(files []string, sig string) *build {
 		}
 	}
 	g := r.modules.buildGraph(r.dir, roots)
+	g.base = r.base
 	b.graph = g
 	fatal = append(fatal, g.errs...)
 
@@ -254,17 +267,17 @@ func (r *Renderer) build(files []string, sig string) *build {
 		}
 		bare = append(bare, m.Bare...)
 		b.served[p] = served{ver: g.version[p], code: g.link(p), sourcemap: m.Map}
-		b.manifest[p] = moduleInfo{URL: moduleURL(p, g.version[p]), Lazy: !static[p]}
+		b.manifest[p] = moduleInfo{URL: moduleURL(r.base, p, g.version[p]), Lazy: !static[p]}
 	}
 	im, missing := buildImportMap(deps, uniq(bare))
 	b.importMap = im
 	if len(missing) > 0 {
 		fatal = append(fatal, "代码里用到了这些包，但 package.json 的 dependencies 里没写版本："+strings.Join(missing, ", "))
 	}
-	entry := entrySource(b.routes, b.layout, func(f string) string { return moduleURL(f, g.version[f]) })
+	entry := entrySource(b.routes, b.layout, r.base, func(f string) string { return moduleURL(r.base, f, g.version[f]) })
 	ev := shortHash(entry)
 	b.served["@entry.js"] = served{ver: ev, code: entry}
-	b.entry = moduleURL("@entry.js", ev)
+	b.entry = moduleURL(r.base, "@entry.js", ev)
 	b.fatal = strings.Join(fatal, "\n\n")
 	imj, _ := json.Marshal(b.importMap)
 	b.id = shortHash(ev, b.css, string(imj), b.fatal, b.title, b.favicon)
@@ -382,7 +395,7 @@ func (r *Renderer) Watch(stop <-chan struct{}) {
 
 // ServeModule 处理 /_ui/m/<路径>?v=<版本>（和 .map）。版本对不上当前和上一次构建的就 404：页面会整页刷新。
 func (r *Renderer) ServeModule(w http.ResponseWriter, req *http.Request) {
-	rel := strings.TrimPrefix(req.URL.Path, "/_ui/m/")
+	rel := strings.TrimPrefix(req.URL.Path, r.base+"/_ui/m/")
 	ver := req.URL.Query().Get("v")
 	if rel == "@runtime.js" {
 		w.Header().Set("content-type", "text/javascript; charset=utf-8")
@@ -424,7 +437,7 @@ func (r *Renderer) lookup(rel, ver string) (served, bool) {
 
 // ServePublic：界面目录 public/ 下的文件挂在根路径（图标、图片）。
 func (r *Renderer) ServePublic(w http.ResponseWriter, req *http.Request) bool {
-	clean := path.Clean("/" + req.URL.Path)
+	clean := path.Clean("/" + strings.TrimPrefix(req.URL.Path, r.base))
 	if clean == "/" {
 		return false
 	}

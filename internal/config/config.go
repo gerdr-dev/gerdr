@@ -89,6 +89,9 @@ type Store struct {
 	mu   sync.Mutex
 	data json.RawMessage
 	mod  time.Time
+	// OnSet, if set, runs after every successful Set with what was written (layout.json uses it to keep
+	// each project's own copy of its workspaces in the project directory, see work.Runner.SaveLayouts).
+	OnSet func(json.RawMessage)
 }
 
 func NewStore(path, def string) *Store {
@@ -121,6 +124,16 @@ func (s *Store) Get() json.RawMessage {
 }
 
 func (s *Store) Set(b json.RawMessage) error {
+	if err := s.set(b); err != nil {
+		return err
+	}
+	if s.OnSet != nil {
+		s.OnSet(b)
+	}
+	return nil
+}
+
+func (s *Store) set(b json.RawMessage) error {
 	if !json.Valid(b) {
 		return os.ErrInvalid
 	}

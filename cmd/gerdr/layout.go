@@ -16,7 +16,8 @@ func layoutCall(method string, p server.LayoutParams) error {
 		return err
 	}
 	var out any
-	if err := c.do("POST", "/api/layout/op", map[string]any{"method": method, "from": c.selfID(), "params": p}, &out); err != nil {
+	who := c.caller()
+	if err := c.do("POST", "/api/layout/op", map[string]any{"method": method, "from": who.Session, "term": who.Term, "project": who.Project, "params": p}, &out); err != nil {
 		return err
 	}
 	printJSON(out)

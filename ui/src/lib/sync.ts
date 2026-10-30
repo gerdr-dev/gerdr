@@ -22,9 +22,9 @@ import {
 } from "./store";
 import type { HubEvent, SessionSummary } from "./types";
 
-// The session this window was opened on (?space=, the App's "open in new window"), read before anything renders: App.tsx
-// rewrites the parameter to the session being shown, and it renders the not-yet-loaded default layout first
-const wantSpace = new URLSearchParams(location.search).get("space");
+// The project this window was opened on (the address /<project id>; ?space= from older App shells), read before anything
+// renders: App.tsx rewrites the address to the project being shown, and it renders the not-yet-loaded default layout first
+const wantSpace = decodeURIComponent(location.pathname.split("/")[1] ?? "") || new URLSearchParams(location.search).get("space");
 
 let ws: WebSocket | null = null;
 let retry = 0;

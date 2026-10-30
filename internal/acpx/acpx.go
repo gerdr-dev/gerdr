@@ -57,7 +57,20 @@ const (
 	// 走 agent 自己的 CLI，是因为 gerdr 手里没有 API key —— 账号都在 agent 那边（变体的另一个账号也一样）。
 	// claude 用 haiku；codex 用它默认的模型、低推理档。不支持的 agent 回 method not found。
 	MethodComplete = "_gerdr/complete"
+	// MethodMCPReconnect：client → agent. Reconnect one MCP server (by name) in every live process of this agent
+	// (Settings → MCP's reconnect button). claude: the stream-json control request mcp_reconnect, per process; a process
+	// that doesn't have that server answers with an error and is skipped. Unsupported agents answer method not found.
+	MethodMCPReconnect = "_gerdr/mcp_reconnect"
 )
+
+type MCPReconnectRequest struct {
+	Server string `json:"server"`
+}
+
+type MCPReconnectResponse struct {
+	Reconnected int    `json:"reconnected"` // processes that reconnected it
+	Error       string `json:"error,omitempty"`
+}
 
 type CompleteRequest struct {
 	Prompt string `json:"prompt"`

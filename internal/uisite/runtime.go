@@ -129,7 +129,7 @@ async function apply(u) {
 }
 
 let chain = Promise.resolve();
-const es = new EventSource("/_ui/events");
+const es = new EventSource((window.__GERDR_UI__.base || "") + "/_ui/events");
 es.onmessage = (e) => {
   const u = JSON.parse(e.data);
   chain = chain.then(() => apply(u)).catch((err) => { console.error("[gerdr-ui] hot update failed, reloading", err); location.reload(); });

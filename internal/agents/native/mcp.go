@@ -25,6 +25,7 @@ import (
 
 	"github.com/gerdr-dev/gerdr/internal/agents/native/llm"
 	"github.com/gerdr-dev/gerdr/internal/ext"
+	"github.com/gerdr-dev/gerdr/internal/mcpauth"
 	"github.com/gerdr-dev/gerdr/internal/sysenv"
 )
 
@@ -173,7 +174,10 @@ func (p *mcpPool) client(ctx context.Context, s ext.MCPServer) (*mcpClient, erro
 		p.mu.Lock()
 		delete(p.starting, key)
 		if err != nil {
-			p.failed[key] = mcpFailure{err, time.Now()}
+			// Not signed in isn't "broken": retry right away once the user has authorized.
+			if !strings.Contains(err.Error(), "HTTP 401") {
+				p.failed[key] = mcpFailure{err, time.Now()}
+			}
 		} else {
 			p.clients[key] = c
 			delete(p.failed, key)
@@ -215,7 +219,15 @@ func startMCP(ctx context.Context, s ext.MCPServer) (*mcpClient, error) {
 	case s.Type == "sse":
 		conn, err = dialSSE(ctx, expand(s.URL), expandMap(s.Headers))
 	case s.Remote():
-		conn = &httpConn{url: expand(s.URL), headers: expandMap(s.Headers)}
+		hc := &httpConn{url: expand(s.URL), headers: expandMap(s.Headers)}
+		// OAuth servers: the token comes from mcpauth (Claude Code's login, else gerdr's own) and is
+		// fetched per request, so a refresh or a fresh login takes effect without reconnecting.
+		if st := mcpauth.Default; st != nil && !mcpauth.HasAuthHeader(s.Headers) {
+			name, u, headers := s.Name, hc.url, hc.headers
+			hc.bearer = func(ctx context.Context) string { return st.Token(ctx, name, u, headers) }
+			hc.unauthorized = func() { st.Invalidate(name, u) }
+		}
+		conn = hc
 	default:
 		conn, err = startStdio(s)
 	}
@@ -254,6 +266,77 @@ func startMCP(ctx context.Context, s ext.MCPServer) (*mcpClient, error) {
 		cursor = res.NextCursor
 	}
 	return c, nil
+}
+
+// sharedPool backs CallTool: connections for callers outside an agent session (work functions).
+var sharedPool mcpPool
+
+// pools: every connection pool in this process (each native agent's and sharedPool), for ReconnectMCP.
+var pools struct {
+	sync.Mutex
+	all []*mcpPool
+}
+
+func registerPool(p *mcpPool) {
+	pools.Lock()
+	pools.all = append(pools.all, p)
+	pools.Unlock()
+}
+
+func init() { registerPool(&sharedPool) }
+
+// ReconnectMCP drops every connection to the server named s.Name (in all pools, so native agents reconnect on their next
+// call), forgets a recent failure, then connects once to report how it went: the number of tools it offers, or the error.
+func ReconnectMCP(ctx context.Context, s ext.MCPServer) (tools int, err error) {
+	pools.Lock()
+	all := append([]*mcpPool(nil), pools.all...)
+	pools.Unlock()
+	for _, p := range all {
+		p.forget(s.Name)
+	}
+	c, err := sharedPool.client(ctx, s)
+	if err != nil {
+		return 0, err
+	}
+	return len(c.tools), nil
+}
+
+// forget closes and drops this pool's connections (and remembered failures) for a server name.
+func (p *mcpPool) forget(name string) {
+	p.mu.Lock()
+	var gone []*mcpClient
+	for k, c := range p.clients {
+		if c.name == name {
+			gone = append(gone, c)
+			delete(p.clients, k)
+		}
+	}
+	p.failed = map[string]mcpFailure{} // keyed by config hash, not name: clearing all costs at most one retry each
+	p.mu.Unlock()
+	for _, c := range gone {
+		c.conn.close()
+	}
+}
+
+// CallTool calls one MCP tool outside any agent session and returns the raw tools/call result.
+// Same transports, OAuth and connection reuse as the agent's own MCP tools.
+func CallTool(ctx context.Context, s ext.MCPServer, tool string, args map[string]any) (json.RawMessage, error) {
+	c, err := sharedPool.client(ctx, s)
+	if err != nil {
+		return nil, err
+	}
+	if args == nil {
+		args = map[string]any{}
+	}
+	raw, err := c.conn.call(ctx, "tools/call", map[string]any{"name": tool, "arguments": args})
+	if err != nil {
+		var dead *mcpDead
+		if errors.As(err, &dead) || strings.Contains(err.Error(), "HTTP 401") {
+			sharedPool.drop(c)
+		}
+		return nil, err
+	}
+	return raw, nil
 }
 
 // ${VAR} / $VAR 展开（Claude Code 的 MCP 配置也认）。
@@ -605,9 +688,12 @@ func (w *tailWriter) String() string {
 type httpConn struct {
 	url     string
 	headers map[string]string
-	next    atomic.Int64
-	mu      sync.Mutex
-	session string
+	// bearer / unauthorized: set for servers signed in through mcpauth (nil otherwise).
+	bearer       func(context.Context) string
+	unauthorized func()
+	next         atomic.Int64
+	mu           sync.Mutex
+	session      string
 }
 
 var mcpHTTP = &http.Client{Timeout: 10 * time.Minute}
@@ -622,6 +708,11 @@ func (c *httpConn) post(ctx context.Context, body []byte) (*http.Response, error
 	req.Header.Set("MCP-Protocol-Version", mcpProtocol)
 	for k, v := range c.headers {
 		req.Header.Set(k, v)
+	}
+	if c.bearer != nil {
+		if tok := c.bearer(ctx); tok != "" {
+			req.Header.Set("Authorization", "Bearer "+tok)
+		}
 	}
 	c.mu.Lock()
 	if c.session != "" {
@@ -641,7 +732,11 @@ func (c *httpConn) post(ctx context.Context, body []byte) (*http.Response, error
 		b, _ := io.ReadAll(io.LimitReader(res.Body, 4096))
 		res.Body.Close()
 		if res.StatusCode == 401 {
-			return nil, fmt.Errorf("HTTP 401: the server needs authorization (OAuth is not supported; put a token in the server's headers)")
+			if c.unauthorized != nil {
+				c.unauthorized()
+				return nil, fmt.Errorf("HTTP 401: not signed in to this MCP server (or the login expired); authorize it in Settings → MCP")
+			}
+			return nil, fmt.Errorf("HTTP 401: the server needs authorization; put a token in the server's headers")
 		}
 		return nil, fmt.Errorf("HTTP %d: %s", res.StatusCode, oneLine(string(b), 300))
 	}

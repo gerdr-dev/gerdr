@@ -48,6 +48,7 @@ import {
   type Workspace,
 } from "@/lib/layout";
 import { applyTabLabel, applyWorkspaceLabel } from "@/lib/plugins";
+import { ModeSwitch } from "@/components/WorkView";
 import { focusedSession, get, keyFor, set, setLayout, toggleSidebar, useStore } from "@/lib/store";
 import type { SessionSummary } from "@/lib/types";
 import { compareSessions } from "@/lib/order";
@@ -334,6 +335,8 @@ export function Sidebar({ className }: { className?: string }) {
         <ConnStatus />
         {/* 安卓 App 里走哪条路（详情在设置 → 通用 → 安卓 App）。原来是顶栏上的一个绿 / 蓝点，和状态点挤在一起分不清，挪到侧栏里写成字 */}
         {connected && isAndroid() && <RouteLabel />}
+        {/* Project first, Code / Work at the right: Work mode's top bar repeats this row at the same width (WorkView WorkBar), so switching modes doesn't move it */}
+        <ModeSwitch />
         <Button variant="ghost" size="icon" className="size-7" onClick={toggleSidebar} style={{ WebkitAppRegion: "no-drag" } as any}>
           <PanelLeft className="size-4" />
         </Button>
@@ -506,7 +509,7 @@ function WorkspaceItem({
           <ContextMenuItem onClick={() => addTab({ workspaceId: w.id })}>新建 tab</ContextMenuItem>
           {others.length > 0 && (
             <ContextMenuSub>
-              <ContextMenuSubTrigger>移到 session</ContextMenuSubTrigger>
+              <ContextMenuSubTrigger>移到项目</ContextMenuSubTrigger>
               <ContextMenuSubContent>
                 {others.map((sp) => (
                   <ContextMenuItem key={sp.id} onClick={() => moveWorkspaceToSpace(w.id, sp.id)}>
@@ -549,8 +552,8 @@ function spaceStatus(l: Layout, sp: Space, sessions: Record<string, SessionSumma
 async function askCloseSpace(sp: Space) {
   const n = spaceWorkspaces(get().layout, sp.id).length;
   const ok = await askConfirm({
-    title: `关闭 session「${sp.name}」？`,
-    description: `连同它的 ${n} 个工作空间一起关掉，里面的 agent 会停掉（会话记录留着，能再打开）。`,
+    title: `关闭项目「${sp.name}」？`,
+    description: `连同它的 ${n} 个工作空间一起关掉，里面的 agent 会停掉（会话记录留着，能再打开）。项目的工作空间布局和 Work 都留在它的目录里：以后再建一个同名的项目，就都回来了。`,
     action: "关闭",
     destructive: true,
   });
@@ -564,7 +567,7 @@ const newSpaceDialog = () => set({ dialog: { kind: "rename", target: "newSpace",
  * (one click to switch, asked for); when they don't, it folds into a dropdown (SpaceMenu). Fitting is measured on an invisible
  * copy of the row, re-measured when the header resizes or a name changes.
  */
-function SpaceSwitcher() {
+export function SpaceSwitcher() {
   const layout = useStore((s) => s.layout);
   const sessions = useStore((s) => s.sessions);
   const unread = useStore((s) => s.unread);
@@ -598,7 +601,6 @@ function SpaceSwitcher() {
         )}
         style={{ WebkitAppRegion: "no-drag" } as any}
         onClick={live ? () => switchSpace(sp.id) : undefined}
-        onDoubleClick={live ? () => set({ dialog: { kind: "rename", target: "space", id: sp.id, value: sp.name } }) : undefined}
       >
         <span className="min-w-0 truncate">{sp.name}</span>
         {st && <StatusDot status={st.status} unread={st.unread} />}
@@ -608,7 +610,7 @@ function SpaceSwitcher() {
   const plus = (live: boolean) => (
     <button
       tabIndex={live ? undefined : -1}
-      title="新 session（不同 session 里的 agent 互相看不见）"
+      title="新项目（每个项目有自己的工作空间、agent 和 Work，互相看不见）"
       className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/60 hover:text-foreground"
       style={{ WebkitAppRegion: "no-drag" } as any}
       onClick={live ? newSpaceDialog : undefined}
@@ -629,14 +631,11 @@ function SpaceSwitcher() {
               <ContextMenuTrigger asChild>{chip(sp, true)}</ContextMenuTrigger>
               <ContextMenuContent>
                 {isNative() && <ContextMenuItem onClick={() => nativeNewWindow(sp.id)}>在新窗口打开</ContextMenuItem>}
-                <ContextMenuItem onClick={() => set({ dialog: { kind: "rename", target: "space", id: sp.id, value: sp.name } })}>重命名</ContextMenuItem>
+                {isNative() && spaces.length > 1 && <ContextMenuSeparator />}
                 {spaces.length > 1 && (
-                  <>
-                    <ContextMenuSeparator />
-                    <ContextMenuItem variant="destructive" onClick={() => askCloseSpace(sp)}>
-                      关闭 session
-                    </ContextMenuItem>
-                  </>
+                  <ContextMenuItem variant="destructive" onClick={() => askCloseSpace(sp)}>
+                    关闭项目
+                  </ContextMenuItem>
                 )}
               </ContextMenuContent>
             </ContextMenu>
@@ -676,7 +675,7 @@ function SpaceMenu() {
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-52">
-        <DropdownMenuLabel className="text-[11px] font-normal text-muted-foreground">不同 session 里的 agent 互相看不见</DropdownMenuLabel>
+        <DropdownMenuLabel className="text-[11px] font-normal text-muted-foreground">每个项目的 agent 互相看不见</DropdownMenuLabel>
         {spaces.map((sp) => {
           const st = spaceStatus(layout, sp, sessions, unread);
           return (
@@ -691,10 +690,7 @@ function SpaceMenu() {
         <DropdownMenuSeparator />
         {isNative() && <DropdownMenuItem onClick={() => nativeNewWindow(cur.id)}>在新窗口打开「{cur.name}」</DropdownMenuItem>}
         <DropdownMenuItem onClick={newSpaceDialog}>
-          <Plus className="size-3.5" /> 新 session
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => set({ dialog: { kind: "rename", target: "space", id: cur.id, value: cur.name } })}>
-          重命名「{cur.name}」
+          <Plus className="size-3.5" /> 新项目
         </DropdownMenuItem>
         {spaces.length > 1 && (
           <DropdownMenuItem variant="destructive" onClick={() => askCloseSpace(cur)}>

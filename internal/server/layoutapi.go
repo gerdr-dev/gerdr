@@ -62,7 +62,8 @@ type layoutCall struct {
 }
 
 // ApplyLayout runs one layout method against raw (layout.json). out is the new layout, nil when the method only reads.
-func ApplyLayout(raw json.RawMessage, sessions []LayoutSession, from, method string, p LayoutParams) (out json.RawMessage, result any, err error) {
+// from is the calling agent's gerdr session, space the project the caller is in (ResolveSpace; "" = not scoped).
+func ApplyLayout(raw json.RawMessage, sessions []LayoutSession, from, space, method string, p LayoutParams) (out json.RawMessage, result any, err error) {
 	var l node
 	if json.Unmarshal(raw, &l) != nil || len(arr(l, "workspaces")) == 0 {
 		return nil, nil, errors.New("no layout yet: open gerdr's window once")
@@ -71,9 +72,7 @@ func ApplyLayout(raw json.RawMessage, sessions []LayoutSession, from, method str
 	for _, s := range sessions {
 		c.sessions[s.ID] = s
 	}
-	if from != "" {
-		c.space = SessionSpaces(raw)[from]
-	}
+	c.space = space
 	result, err = c.run(method, p)
 	if err != nil || !c.changed {
 		return nil, result, err
@@ -1052,8 +1051,9 @@ var layoutMu sync.Mutex // one layout change at a time (read, edit, save)
 
 func (s *Server) layoutOp(w http.ResponseWriter, r *http.Request) {
 	var b struct {
-		Method string       `json:"method"`
-		From   string       `json:"from"` // the calling agent's gerdr session: scopes everything to its herdr-style session
+		Method string `json:"method"`
+		// Who's calling (the agent's gerdr session, its terminal, an explicit --project): scopes everything to its project
+		Caller
 		Params LayoutParams `json:"params"`
 	}
 	if err := decode(r, &b); err != nil {
@@ -1066,7 +1066,13 @@ func (s *Server) layoutOp(w http.ResponseWriter, r *http.Request) {
 	for _, x := range s.Hub.List() {
 		sessions = append(sessions, LayoutSession{ID: x.ID, Title: x.Title, Agent: x.Agent, Cwd: x.Cwd, Status: x.Status})
 	}
-	out, res, err := ApplyLayout(s.Layout.Get(), sessions, b.From, b.Method, b.Params)
+	raw := s.Layout.Get()
+	for _, x := range sessions {
+		if x.ID == b.Session {
+			b.SessionCwd = x.Cwd
+		}
+	}
+	out, res, err := ApplyLayout(raw, sessions, b.Session, ResolveSpace(raw, b.Caller, s.workProject()), b.Method, b.Params)
 	if err != nil {
 		httpError(w, 400, err.Error())
 		return
