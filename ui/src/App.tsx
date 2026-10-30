@@ -2,7 +2,7 @@ import { KeyRound } from "lucide-react";
 import { useEffect, useLayoutEffect, useState } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { PhoneBar, Sidebar, TabBar } from "./components/Chrome";
+import { PhoneBar, PhoneConnToast, Sidebar, TabBar } from "./components/Chrome";
 import { PaneSwitcher } from "./components/PaneSwitcher";
 import { Dialogs } from "./components/Dialogs";
 import { LightboxHost } from "./components/Lightbox";
@@ -260,6 +260,7 @@ export default function App() {
       <CliApprove />
       {/* 手机上底部是输入框和软键盘，toast 放顶上 */}
       <Toaster position={phone ? "top-center" : "bottom-right"} />
+      {phone && <PhoneConnToast />}
     </TooltipProvider>
   );
 }

@@ -61,6 +61,7 @@ import { WorkspaceDragLayer, useWorkspaceDrag } from "./WorkspaceDrag";
 import { UsageMeter } from "./UsageMeter";
 import { isAndroid } from "@/lib/android";
 import { reconnectNow } from "@/lib/sync";
+import { toast } from "sonner";
 import { askConfirm } from "@/lib/confirm";
 import { isNative, nativeNewWindow } from "@/lib/native";
 import { useRoute } from "./AndroidSettings";
@@ -294,7 +295,6 @@ export function PhoneBar() {
         {/* 只有一个 pane 时不画：下面 pane 标题栏那个点就是同一个会话，一行里三个点太乱。好几个 pane 时它是整个 tab 的汇总，留着 */}
         {leaves(tab.root).length > 1 && <StatusDot status={st.status} unread={st.unread} />}
         <span className="min-w-0 shrink-[2] truncate text-[11px] text-muted-foreground">{applyWorkspaceLabel(ws, wi, ws.name)}</span>
-        <ConnStatus />
       </button>
       <Button variant={switcher ? "secondary" : "ghost"} size="icon" className="relative size-9" aria-label="面板一览" onClick={openSwitcher}>
         <LayoutList className="size-[18px]" />
@@ -356,6 +356,49 @@ export function ConnStatus() {
       </button>
     </span>
   );
+}
+
+/**
+ * The phone's connection status: a toast at the top instead of ConnStatus in the top bar. The bar has no room for it (it got
+ * squeezed out by the tab name) and Work mode covers it entirely, so a dropped connection showed nowhere. Same timing as
+ * ConnStatus (blips under a second show nothing); the toast stays until the connection is back, then goes away.
+ */
+export function PhoneConnToast() {
+  const connected = useStore((s) => s.connected);
+  const conn = useStore((s) => s.conn);
+  const [shown, setShown] = useState(false);
+  const [, tick] = useState(0);
+  useEffect(() => {
+    setShown(false);
+    if (connected) return;
+    const t = setTimeout(() => setShown(true), 1000);
+    return () => clearTimeout(t);
+  }, [connected]);
+  useEffect(() => {
+    if (connected || conn.state !== "waiting") return;
+    const t = setInterval(() => tick((x) => x + 1), 250);
+    return () => clearInterval(t);
+  });
+  const on = shown && !connected;
+  const left = conn.state === "waiting" ? Math.ceil((conn.at - Date.now()) / 1000) : 0;
+  // A wait under a second would flash a "1 s" countdown between attempts: show it as still connecting
+  const text = left > 1 ? `和 gerdr 的连接断了，${left} 秒后重连` : "正在重连 gerdr…";
+  useEffect(() => {
+    if (!on) return;
+    toast.loading(text, {
+      id: "conn",
+      duration: Infinity,
+      dismissible: false,
+      // preventDefault: sonner closes a toast on its action by default, which would flash it away and back
+      action: left > 1 ? { label: "重连", onClick: (e) => (e.preventDefault(), reconnectNow()) } : undefined,
+    });
+  }, [on, text, left > 1]);
+  useEffect(() => {
+    if (on) return;
+    toast.dismiss("conn");
+  }, [on]);
+  useEffect(() => () => void toast.dismiss("conn"), []);
+  return null;
 }
 
 function RouteLabel() {
