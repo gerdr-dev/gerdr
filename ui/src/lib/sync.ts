@@ -71,6 +71,7 @@ async function start() {
       ready: true,
       authError: false,
       version: h.version,
+      installedAt: h.installedAt ?? 0,
       home: h.home,
       pluginsDir: h.pluginsDir,
       agents: h.agents,

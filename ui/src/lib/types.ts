@@ -137,6 +137,8 @@ export type AskRequest = { sessionId: string; toolCallId?: string; questions: As
 
 export type Hello = {
   version: string;
+  /** When the running backend was installed (unix ms); missing from older backends. */
+  installedAt?: number;
   agents: AgentInfo[];
   sessions: SessionSummary[];
   layout: any;

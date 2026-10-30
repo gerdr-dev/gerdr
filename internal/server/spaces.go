@@ -46,8 +46,8 @@ func paneSpaces(raw json.RawMessage) (sessions, terms map[string]string) {
 	var walk func(n json.RawMessage, space string)
 	walk = func(n json.RawMessage, space string) {
 		var x struct {
-			Type      string          `json:"type"`
-			SessionID string          `json:"sessionId"`
+			Type      string `json:"type"`
+			SessionID string `json:"sessionId"`
 			Term      *struct {
 				ID string `json:"id"`
 			} `json:"term"`

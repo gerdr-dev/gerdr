@@ -24,8 +24,13 @@ export function UpdateSetting() {
       .catch(() => {});
   }, []);
 
+  const installedAt = useStore((s) => s.installedAt);
   const running = u?.running || version;
-  const shown = u && u.app !== running ? `gerdr ${running} · App ${u.app}` : `gerdr ${running}`;
+  // When it was installed, not just which commit: a dirty-tree build keeps the same version string for days
+  const when = installedAt
+    ? ` · 装于 ${new Date(installedAt).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}（${since(installedAt)}）`
+    : "";
+  const shown = (u && u.app !== running ? `gerdr ${running} · App ${u.app}` : `gerdr ${running}`) + when;
   const { text, tone } = u ? describe(u, service) : { text: "", tone: "" };
   const p = u?.pending;
 
@@ -73,4 +78,12 @@ function describe(u: AppUpdateStatus, service: boolean): { text: string; tone: s
   if (!u.checkedAt) return { text: "", tone: "" };
   const at = new Date(u.checkedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   return { text: `已是最新（${at} 检查过）`, tone: "" };
+}
+
+function since(t: number) {
+  const m = Math.max(0, Math.floor((Date.now() - t) / 60000));
+  if (m < 1) return "刚刚";
+  if (m < 60) return `${m} 分钟前`;
+  if (m < 1440) return `${Math.floor(m / 60)} 小时前`;
+  return `${Math.floor(m / 1440)} 天前`;
 }

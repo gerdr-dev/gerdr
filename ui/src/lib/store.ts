@@ -137,6 +137,8 @@ type State = {
   conn: { state: "connecting" } | { state: "waiting"; at: number };
   keptTabs: string[]; // 现在挂在页面里的 tab（当前那个排第一），App 维护
   version: string;
+  /** When the running backend was installed (unix ms; 0 = unknown): the version string alone doesn't say how old it is. */
+  installedAt: number;
   /** The desktop App's update status (desktop/main.js updateStatus); null in a browser / before the shell answered. */
   appUpdate: AppUpdateStatus | null;
   home: string;
@@ -242,6 +244,7 @@ export const useStore = create<State>(() => ({
   conn: { state: "connecting" },
   keptTabs: [],
   version: "",
+  installedAt: 0,
   appUpdate: null,
   home: "",
   pluginsDir: "",

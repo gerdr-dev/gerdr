@@ -430,10 +430,19 @@ func (s *Server) auth(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, next, http.StatusFound)
 }
 
+// installedAt: when the running binary was installed (unix ms), 0 if unknown. Settings shows it next to the version.
+func installedAt() int64 {
+	if t := version.Installed(); !t.IsZero() {
+		return t.UnixMilli()
+	}
+	return 0
+}
+
 func (s *Server) hello(w http.ResponseWriter, r *http.Request) {
 	home, _ := os.UserHomeDir()
 	writeJSON(w, map[string]any{
 		"version":     version.Version,
+		"installedAt": installedAt(),
 		"agents":      s.Hub.Agents(),
 		"sessions":    s.Hub.List(),
 		"layout":      s.Layout.Get(),
