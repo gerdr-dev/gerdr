@@ -13,7 +13,7 @@
 // the person picks the moment. The background service (docs/dev/SERVICE.md) follows the same rule in cmd/gerdr
 // appAttach. Idle sessions don't mind: the next message resumes them.
 const { app, net } = require("electron");
-const { spawn, execFile } = require("node:child_process");
+const { spawn, execFile, execFileSync } = require("node:child_process");
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -61,11 +61,33 @@ function readCurrent() {
 }
 
 /**
+ * The version of the backend in the bundle as it is on disk now. app.getVersion() is fixed when the App starts, so a
+ * bundle swapped under the running App (`make install`, or an App installed by hand) would look as old as before:
+ * with a downloaded backend in use, it then never got picked, and the service stayed on the download for good.
+ * Asking the binary itself costs one exec each time the file changes (mtime + size), not every poll.
+ */
+let bundledSeen = { key: "", version: "" };
+function bundledVersion(exe) {
+  try {
+    const st = fs.statSync(exe);
+    const key = `${st.mtimeMs}:${st.size}`;
+    if (key !== bundledSeen.key) {
+      const v = String(execFileSync(exe, ["version"], { timeout: 10_000, windowsHide: true })).trim();
+      bundledSeen = { key, version: parseVer(v) ? v : app.getVersion() };
+    }
+    return bundledSeen.version;
+  } catch {
+    return bundledSeen.version || app.getVersion(); // mid-swap (Makefile install renames) or unreadable: keep what we knew
+  }
+}
+
+/**
  * The backend to run: a downloaded one if it was built for this shell and is newer than the bundle's, else the
  * bundle's. A newer App installed over an older download wins by version, the download is then dropped (cleanup).
  */
 function backend() {
-  const bundled = { path: path.join(process.resourcesPath, EXE), version: app.getVersion(), bundled: true };
+  const exe = path.join(process.resourcesPath, EXE);
+  const bundled = { path: exe, version: enabled() ? bundledVersion(exe) : app.getVersion(), bundled: true };
   if (!enabled()) return bundled;
   const c = readCurrent();
   if (!c || c.shell !== SHELL || !newer(c.version, bundled.version)) return bundled;

@@ -23,7 +23,8 @@ Claude Code / Codex 的图形界面：Go 后端（ACP 适配器 + hub + HTTP/WS�
   once nothing is running — no turn, no pending permission, no background task, no open terminal (`GET /api/busy`,
   `appAttach` in cmd/gerdr/attach.go) — so it happens after your turn ends. The App has to be open for that (it is
   what watches); if the user turned the background service off, tell them to reopen the App when they're idle.
-  Exception: an App opened before edbb169 runs an old watcher that never notices the new file. Tell the user to quit
+  Exception: an App opened before edbb169 runs an old watcher that never notices the new file; same for an App
+  opened before the shell read the bundle's version from disk, while it runs a downloaded backend. Tell the user to quit
   and reopen the App once; with the background service on that is safe even mid-turn (it only replaces the watcher,
   the service and its agents keep running), and the new watcher then restarts the service once idle.
   Same rule as App updates: docs/dev/UPDATE.md.

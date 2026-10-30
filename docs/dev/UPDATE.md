@@ -52,6 +52,12 @@ A backend restart kills running turns, pending permission requests, background t
 Local builds follow the same rule: `make install` swaps the bundle under the running App, and `appAttach` re-reads
 its own binary's buildID every round, so it notices and restarts the service once idle. Staleness is decided by
 `Build` (file mtime + size), not the compiled-in version, which stays the old one in a process whose file was replaced.
+That only covers a backend running from the bundle. When the App runs a downloaded one (`backend/<v>/gerdr`), the
+bundle swap doesn't touch that file, so the shell has to notice: `updater.backend()` takes the bundle's version from
+the binary on disk (`gerdr version`, re-run when its mtime + size change), not `app.getVersion()`, which is frozen at
+App start. A newer bundle then wins over the download, `noteRunning` marks it pending, and the 15s poll restarts the
+backend once idle (whose `appAttach` then moves the service over). Before this, the service stayed on the download
+until the App was reopened.
 
 Not done: keeping turns alive across a restart. That needs agent processes and PTYs owned by a small long-lived holder
 (like a tmux server / containerd-shim) that gerdr reconnects to, plus replaying in-flight protocol state.
