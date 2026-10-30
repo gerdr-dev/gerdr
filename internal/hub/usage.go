@@ -8,7 +8,7 @@ import (
 
 	"github.com/gerdr-dev/gerdr/acpx"
 	"github.com/gerdr-dev/gerdr/internal/agenthost"
-	"github.com/gerdr-dev/gerdr/internal/sysenv"
+	"github.com/gerdr-dev/gerdr/sysenv"
 )
 
 // UsageInfo：一个 agent 账号的用量额度（acpx.MethodUsage），界面常驻显示用。

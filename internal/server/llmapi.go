@@ -3,8 +3,8 @@ package server
 import (
 	"net/http"
 
-	"github.com/gerdr-dev/gerdr/internal/agents/gerdrnative"
-	"github.com/gerdr-dev/gerdr/native"
+	"github.com/gerdr-dev/gerdr/internal/agentwire"
+	"github.com/gerdr-dev/gerdr/agents/native"
 )
 
 // Gerdr Agent（native）的模型设置页用的探测接口。配置本身走 config.json（PUT /api/config），这里只是帮着填：
@@ -17,7 +17,7 @@ func (s *Server) llmRoutes(mux *http.ServeMux) {
 			httpError(w, 400, err.Error())
 			return
 		}
-		ids, err := native.ListModels(r.Context(), gerdrnative.WithKey(p, s.Secrets))
+		ids, err := native.ListModels(r.Context(), agentwire.WithKey(p, s.Secrets))
 		if err != nil {
 			httpError(w, 502, err.Error())
 			return
@@ -33,7 +33,7 @@ func (s *Server) llmRoutes(mux *http.ServeMux) {
 			httpError(w, 400, err.Error())
 			return
 		}
-		reply, api, err := native.TestModel(r.Context(), gerdrnative.WithKey(b.Provider, s.Secrets), b.Model)
+		reply, api, err := native.TestModel(r.Context(), agentwire.WithKey(b.Provider, s.Secrets), b.Model)
 		if err != nil {
 			httpError(w, 502, err.Error())
 			return

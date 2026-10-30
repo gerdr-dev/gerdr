@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/gerdr-dev/gerdr/native/llm"
+	"github.com/gerdr-dev/gerdr/agents/native/llm"
 )
 
 // Config is the model configuration: providers and their models. In gerdr it is config.json's "llm"; the Agent

@@ -18,7 +18,7 @@ import (
 	"github.com/coder/acp-go-sdk"
 
 	"github.com/gerdr-dev/gerdr/acpx"
-	"github.com/gerdr-dev/gerdr/internal/sysenv"
+	"github.com/gerdr-dev/gerdr/sysenv"
 )
 
 // Handler 是 hub 那一侧：收 agent 推来的东西。

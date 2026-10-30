@@ -1,17 +1,18 @@
-// Package gerdrnative wires the public native agent (github.com/gerdr-dev/gerdr/native) into gerdr: skills and
+// Package agentwire wires the public agents (github.com/gerdr-dev/gerdr/agents/...) into gerdr. For native: skills and
 // MCP servers from gerdr's settings (internal/ext), MCP sign-in (internal/mcpauth), the login shell's PATH and the
-// child environment (internal/sysenv), and API keys kept in secrets.json (internal/config). native itself imports
-// none of these, so other programs can embed it; everything gerdr-specific comes in through native.Options here.
-package gerdrnative
+// child environment (sysenv), and API keys kept in secrets.json (internal/config); for claude / codex, gerdr's
+// skill / MCP settings (cli.go). The agents import none of gerdr's internal packages, so other programs can embed
+// them; everything gerdr-specific comes in through their Options here.
+package agentwire
 
 import (
 	"context"
 
+	"github.com/gerdr-dev/gerdr/agents/native"
 	"github.com/gerdr-dev/gerdr/internal/config"
 	"github.com/gerdr-dev/gerdr/internal/ext"
 	"github.com/gerdr-dev/gerdr/internal/mcpauth"
-	"github.com/gerdr-dev/gerdr/internal/sysenv"
-	"github.com/gerdr-dev/gerdr/native"
+	"github.com/gerdr-dev/gerdr/sysenv"
 )
 
 // SessionEnvKey: bash commands see which session they run in (`gerdr session current` asks /api/resolve with it).
@@ -19,7 +20,7 @@ const SessionEnvKey = "GERDR_NATIVE_SESSION_ID"
 
 // Options is native.Options as gerdr runs it. em nil = only Claude Code's skills and no MCP servers (the
 // stand-alone `gerdr acp native`).
-func Options(dir string, em *ext.Manager, cfg func() native.Config, prompt string) native.Options {
+func NativeOptions(dir string, em *ext.Manager, cfg func() native.Config, prompt string) native.Options {
 	return native.Options{
 		Dir: dir, Config: cfg, Prompt: prompt,
 		Skills: func(cwd string) []native.Skill { return skillsFor(em, cwd) },

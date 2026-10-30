@@ -15,7 +15,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/gerdr-dev/gerdr/acpx"
-	"github.com/gerdr-dev/gerdr/native/llm"
+	"github.com/gerdr-dev/gerdr/agents/native/llm"
 )
 
 type session struct {

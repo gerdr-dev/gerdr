@@ -404,14 +404,25 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
   // 离开底部只认人：贴着底、这会儿人没动过（滚轮 / 触摸 / 按键 / 按住拖），scrollTop 却离了底 —— 那是布局变了把它带走的，推回去。
   // 不然一次性的布局变化就把「在底部」记成 false，之后再长高也不追了、还记进 scrollMem：
   // tab 不保留时切回来要重新挂、边挂边量高度，量的过程中被推离底部一截就停在半中间，下次切回来照记的位置恢复，还是半中间（用户报的）
+  // Direction matters, not just distance: the first 80px up still measure as "at the bottom", so with distance alone a
+  // user scrolling up in small steps while a reply streams in stayed stuck, and every chunk of output pulled them back.
+  // So the user scrolling up by any amount leaves the bottom, and only coming back down (or landing on the very bottom)
+  // re-sticks; a row growing under someone parked 40px up doesn't drag them back in.
+  const lastTop = useRef(0);
   const syncBottom = () => {
     const el = scrollerEl.current;
     if (!el || !activeRef.current) return;
-    const b = el.scrollHeight - el.clientHeight - el.scrollTop < 80;
-    if (!b && bottomRef.current && performance.now() - lastInputOf(el) > 600) {
-      el.scrollTop = el.scrollHeight;
+    const dist = el.scrollHeight - el.clientHeight - el.scrollTop;
+    const user = performance.now() - lastInputOf(el) < 600;
+    const up = el.scrollTop < lastTop.current - 0.5;
+    const down = el.scrollTop > lastTop.current + 0.5;
+    lastTop.current = el.scrollTop;
+    if (bottomRef.current && !user) {
+      if (dist >= 80) el.scrollTop = el.scrollHeight;
       return;
     }
+    const b = bottomRef.current ? dist < 80 && !(up && dist > 1) : dist <= 1 || (dist < 80 && user && down);
+    if (b === bottomRef.current) return;
     bottomRef.current = b;
     setAtBottom(b);
   };
@@ -514,8 +525,9 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
               // 每行差一点、攒起来眼前的内容整段挪一截 —— 打开会话量完缩回那一下抖（逐帧量过：卸掉 32 行，实际 1823px 记成 1833px，
               // 往下挪 10px），会话越长卸得越多抖得越厉害；滚动时边挂边卸的几像素小抖也是它
               itemSize={(el) => el.getBoundingClientRect().height}
-              // 在底部就跟着新内容走（直接跳，不要动画）；人往上翻了就不打扰
-              followOutput={(bottom) => (bottom && !holding() ? "auto" : false)}
+              // Follow new output while at the bottom (jump, no animation). Ask bottomRef, not Virtuoso's own flag: that one
+              // stays true for the first 80px up, so a user scrolling up slowly mid-reply kept getting pulled back.
+              followOutput={() => (bottomRef.current && !holding() ? "auto" : false)}
               // 重新挂载（切回一个被卸载过的 tab）时回到上次的位置：在底部就回底部，不在就回那个高度
               {...(saved && !saved.bottom ? { initialScrollTop: saved.top } : { initialTopMostItemIndex: { index: "LAST" as const, align: "end" as const } })}
               atBottomThreshold={80}

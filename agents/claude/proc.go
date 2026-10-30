@@ -16,7 +16,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/gerdr-dev/gerdr/acpx"
-	"github.com/gerdr-dev/gerdr/internal/sysenv"
+	"github.com/gerdr-dev/gerdr/sysenv"
 )
 
 // proc 是一个 claude CLI 进程（headless，stream-json 双向）。一个会话一个。
@@ -59,7 +59,8 @@ type spawnOpts struct {
 	resumeAt  string // --resume-session-at（配 --fork-session）
 	fork      bool
 	extra     []string // skill / MCP 那几个（ext.ClaudeArgs）+ 变体自己配的参数
-	prompt    string   // 角色追加的系统提示（Options.Prompt）
+	prompt    string   // 角色追加的系统提示（Options.Prompt + AppendPrompt）
+	noHint    bool     // Options.NoGUIHint
 	env       []string // 变体配的环境变量，盖在继承来的上面
 }
 
@@ -67,15 +68,20 @@ func spawn(o spawnOpts, log *slog.Logger, onLine func(map[string]json.RawMessage
 	// 告诉它 gerdr 的界面能直接显示图片 / 视频 / 音频、能让人敲 `!命令`（acpx.GUIHint）；角色的提示接在后面 ——
 	// 只给一个 --append-system-prompt：给两个的话后一个把前一个盖掉。
 	hint := acpx.GUIHint
+	if o.noHint {
+		hint = ""
+	}
 	if p := strings.TrimSpace(o.prompt); p != "" {
-		hint += "\n\n" + p
+		hint = strings.TrimSpace(hint + "\n\n" + p)
 	}
 	args := []string{
 		"--output-format", "stream-json", "--verbose",
 		"--input-format", "stream-json",
 		"--permission-prompt-tool", "stdio",
 		"--include-partial-messages",
-		"--append-system-prompt", hint,
+	}
+	if hint != "" {
+		args = append(args, "--append-system-prompt", hint)
 	}
 	if o.model != "" && o.model != "default" {
 		args = append(args, "--model", o.model)

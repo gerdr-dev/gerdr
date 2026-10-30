@@ -15,7 +15,7 @@ import (
 	"github.com/coder/acp-go-sdk"
 
 	"github.com/gerdr-dev/gerdr/acpx"
-	"github.com/gerdr-dev/gerdr/native"
+	"github.com/gerdr-dev/gerdr/agents/native"
 )
 
 // client is the embedding program's side of ACP: it receives session updates, answers permission requests and

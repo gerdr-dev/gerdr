@@ -8,7 +8,7 @@ import (
 	"github.com/coder/acp-go-sdk"
 
 	"github.com/gerdr-dev/gerdr/acpx"
-	"github.com/gerdr-dev/gerdr/native/llm"
+	"github.com/gerdr-dev/gerdr/agents/native/llm"
 )
 
 // 后台任务：bash 的 run_in_background、task（子 agent）的 run_in_background，以及界面上「转到后台」（= claude 的 ctrl+b，

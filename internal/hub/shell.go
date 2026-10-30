@@ -17,7 +17,7 @@ import (
 	"github.com/coder/acp-go-sdk"
 	"github.com/google/uuid"
 
-	"github.com/gerdr-dev/gerdr/internal/sysenv"
+	"github.com/gerdr-dev/gerdr/sysenv"
 )
 
 // 输入框里的 `!命令`（照 Claude Code 的 bash 模式）：gerdr 自己在会话目录里跑，不经过 agent —— 不起一轮、不花 token。

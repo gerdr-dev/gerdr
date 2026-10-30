@@ -8,7 +8,7 @@ import (
 
 // Options configures an Agent. The zero value works: models come from Config, transcripts go to Dir, and
 // everything gerdr-specific (its skill and MCP settings, MCP sign-in, the login shell's PATH) is off unless
-// injected. gerdr itself injects its implementations in internal/agents/gerdrnative.
+// injected. gerdr itself injects its implementations in internal/agentwire.
 type Options struct {
 	// Dir holds the transcripts (<Dir>/sessions/<id>.jsonl) and long-term memory (<Dir>/memory).
 	Dir string

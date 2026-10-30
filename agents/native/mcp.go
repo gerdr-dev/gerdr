@@ -23,7 +23,7 @@ import (
 
 	"github.com/coder/acp-go-sdk"
 
-	"github.com/gerdr-dev/gerdr/native/llm"
+	"github.com/gerdr-dev/gerdr/agents/native/llm"
 )
 
 // MCP 客户端：只做 agent 要用的 —— initialize、tools/list、tools/call。三种传输：

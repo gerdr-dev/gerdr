@@ -9,7 +9,7 @@ import (
 	"image/jpeg"
 	"image/png"
 
-	"github.com/gerdr-dev/gerdr/native/llm"
+	"github.com/gerdr-dev/gerdr/agents/native/llm"
 )
 
 // imagePart turns image bytes into a model message part, applying Options.Images.

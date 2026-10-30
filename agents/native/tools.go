@@ -19,7 +19,7 @@ import (
 
 	"github.com/coder/acp-go-sdk"
 
-	"github.com/gerdr-dev/gerdr/native/llm"
+	"github.com/gerdr-dev/gerdr/agents/native/llm"
 )
 
 // 工具：照 Claude Code / pi 的那一套（读、写、改、命令、搜内容、搜文件名、待办），名字用小写下划线

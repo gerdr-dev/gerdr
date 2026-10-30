@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/gerdr-dev/gerdr/native/llm"
+	"github.com/gerdr-dev/gerdr/agents/native/llm"
 )
 
 // Complete runs one model call outside any session: no tools, no transcript. model is "provider/model" ("" =

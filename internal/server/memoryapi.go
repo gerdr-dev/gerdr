@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gerdr-dev/gerdr/internal/memstore"
-	"github.com/gerdr-dev/gerdr/native"
+	"github.com/gerdr-dev/gerdr/agents/native"
 )
 
 // 设置 →「记忆」：三家 agent 的长期记忆（Gerdr Agent、Claude Code、Codex），看、改、删。

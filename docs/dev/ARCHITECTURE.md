@@ -16,7 +16,7 @@ React（ui/，不打包）  ←WebSocket / HTTP→  hub（internal/hub）  ←AC
                                                         ←ACP（stdio）→  外部 ACP agent（gemini…）
 ```
 
-- **适配器是完整的 ACP agent**（`internal/agents/{claude,codex}`，实现 acp-go-sdk 的 `Agent`）。
+- **适配器是完整的 ACP agent**（`agents/{claude,codex}`，实现 acp-go-sdk 的 `Agent`）。
   hub 和它们之间走的是真的 ACP JSON-RPC，只是管道在进程内（`agenthost.StartInProc`）。
   同一份代码 `gerdr acp claude` 就是一个 stdio ACP agent。参考实现是官方 TS 适配器
   `agentclientprotocol/claude-agent-acp` 和 `agentclientprotocol/codex-acp`（不是 zed-industries
@@ -113,12 +113,14 @@ React（ui/，不打包）  ←WebSocket / HTTP→  hub（internal/hub）  ←AC
 
 ## Gerdr Agent（native）—— 自己写的 agent，直接调模型接口
 
-`native` (a public package: other programs embed it, e.g. Annulo; the protocol, extension methods and `_meta`
-conventions are in its package doc, an in-process example in `native/example_test.go`): no subprocess; the loop,
+`agents/native` (a public package: other programs embed it, e.g. Annulo; the protocol, extension methods and `_meta`
+conventions are in its package doc, an in-process example in `agents/native/example_test.go`, what the three engines
+support in `agents/EMBEDDING.md`): no subprocess; the loop,
 tools and transcripts all live in gerdr. It imports none of gerdr's internal packages: gerdr's skills / MCP settings,
 MCP sign-in, the login shell's PATH, `GERDR_NATIVE_SESSION_ID` and secrets.json keys are injected through
-`native.Options` by `internal/agents/gerdrnative` (keep it that way — `go list -deps ./native | grep internal` must
-stay empty). The extension-method types moved to the public `acpx` package for the same reason. The model layer `native/llm`
+`native.Options` by `internal/agentwire` (keep it that way — `go list -deps ./agents/... | grep gerdr/internal` must
+stay empty; the claude / codex adapters get gerdr's skill / MCP settings the same way, through their `Ext`
+interfaces). `acpx`, `sysenv` and `rpcline` are public for the same reason. The model layer `native/llm`
 speaks three protocols (Chat Completions, Responses, Anthropic Messages; the protocol is picked per provider,
 `Provider.API`), each hand-written rather than through an SDK so every gateway quirk is visible and fixable in one place.
 Why not shuttle's pi: interjections, subagents and rewind are missing from or the wrong shape in pi's loop, and pi is
@@ -188,7 +190,7 @@ config.json (example in the README), read fresh every turn.
       model's long English summary of the reasoning: always there, hard to follow. The default `omitted` streams thinking
       blocks with empty text. With `updates` but without the prompt line, eight steps in a row showed nothing at all.
 
-测试：`go test ./native/...` 用假接口跑主循环；`NATIVE_LIVE_BASE / NATIVE_LIVE_KEY / NATIVE_LIVE_MODELS` 设了才跑真模型（花钱）。
+测试：`go test ./agents/native/...` 用假接口跑主循环；`NATIVE_LIVE_BASE / NATIVE_LIVE_KEY / NATIVE_LIVE_MODELS` 设了才跑真模型（花钱）。
 
 ## 用量额度（`_gerdr/usage` → hub/usage.go → `/api/usage` → 侧栏的 UsageMeter）
 

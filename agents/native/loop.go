@@ -14,7 +14,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/gerdr-dev/gerdr/acpx"
-	"github.com/gerdr-dev/gerdr/native/llm"
+	"github.com/gerdr-dev/gerdr/agents/native/llm"
 )
 
 // 主循环：调模型 → 有工具调用就执行、把结果接上再调 → 没有了就结束。

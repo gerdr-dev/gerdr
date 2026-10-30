@@ -1,10 +1,10 @@
-// Package claude 是 Claude Code 的 ACP 适配器：对上实现 ACP agent，对下直接驱动 `claude` CLI
-// 的 stream-json 模式。参考的是 agentclientprotocol/claude-agent-acp（TS，依赖 Agent SDK），
-// 这里不经过 SDK —— 少一个 node 进程。
+// Package claude is the ACP adapter for Claude Code: an ACP agent on top, the `claude` CLI's stream-json mode
+// underneath. Modelled on agentclientprotocol/claude-agent-acp (TypeScript, on the Agent SDK) but without the SDK —
+// one node process fewer. Other programs can embed it; see agents/EMBEDDING.md.
 //
-// 进程模型：**一个会话一个 claude 进程**（这是 CLI 的结构，躲不掉），每个 200–400MB。
-// 所以闲着的会话会被收掉（Options.IdleTimeout），下一轮再 `--resume` 起来 —— 同时开着
-// 十几个会话、实际在跑的只有两三个，是这个设计要省的那部分内存。
+// Process model: **one claude process per session** (that's how the CLI works), 200–400MB each. So idle sessions
+// are reaped (Options.IdleTimeout) and `--resume`d on their next turn: with a dozen sessions open and two or three
+// actually running, that is the memory this design saves.
 package claude
 
 import (
@@ -24,15 +24,14 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/gerdr-dev/gerdr/acpx"
-	"github.com/gerdr-dev/gerdr/internal/ext"
-	"github.com/gerdr-dev/gerdr/internal/sysenv"
+	"github.com/gerdr-dev/gerdr/sysenv"
 )
 
 type Options struct {
 	// IdleTimeout：会话闲着多久就收掉它的进程。0 = 默认 15 分钟；负数 = 永不。
 	IdleTimeout time.Duration
 	// Ext：skill / MCP 从哪来（nil = 全用 claude 自己的）。改了之后每个会话下一轮前换进程。
-	Ext *ext.Manager
+	Ext Ext
 	// 下面三样是「另一个 claude」用的（设置里配的变体，比如换一个账号）：Bin 换可执行文件，Args 追加在
 	// 我们自己那串参数后面，Env（KEY=VALUE）盖在继承来的环境上。账号靠 env 切：ANTHROPIC_API_KEY /
 	// ANTHROPIC_BASE_URL，或者 CLAUDE_CONFIG_DIR（登录态、会话记录都跟着这个目录走）。
@@ -41,6 +40,30 @@ type Options struct {
 	Env  []string
 	// Prompt：角色（设置 → Agent）追加的系统提示，和 MediaHint 一起走 --append-system-prompt。
 	Prompt string
+
+	// For programs embedding the adapter (gerdr leaves these zero):
+
+	// NoGUIHint drops gerdr's GUI hint (images render inline, `!cmd` run buttons) from --append-system-prompt.
+	NoGUIHint bool
+	// AppendPrompt adds per-session text to --append-system-prompt, after Prompt. meta is session/new's _meta
+	// (or the last resume / load's). Read when the claude process starts: a change applies after it restarts.
+	AppendPrompt func(sessionID, cwd string, meta map[string]any) string
+	// SessionEnv adds per-session environment variables (K=V) on top of Env.
+	SessionEnv func(sessionID string, meta map[string]any) []string
+	// StrictMCP: only the mcpServers passed in session/new (or resume / load) — none of the user's own MCP
+	// servers or claude.ai connectors (--strict-mcp-config). Either way the client's servers are added and their
+	// tools never ask for approval.
+	StrictMCP bool
+}
+
+// Ext is where skills and MCP servers come from besides claude's own configuration (gerdr's settings).
+type Ext interface {
+	// Fingerprint changes when the settings do; each session restarts its process before its next turn.
+	Fingerprint() string
+	// Args are extra CLI arguments for a session's process (--mcp-config, --settings with skill overrides…).
+	Args(sessionID, cwd string) []string
+	// MCPFingerprint fingerprints claude's own MCP configuration for cwd: a change restarts the process on /clear.
+	MCPFingerprint(cwd string) string
 }
 
 // configDir：这个实例的 claude 把东西写在哪（CLAUDE_CONFIG_DIR，变体里配的优先）。会话记录在它的 projects/ 下 ——
@@ -354,7 +377,7 @@ func validMode(m string) bool {
 }
 
 func (a *Agent) newSession(id, cwd string, meta map[string]any) *session {
-	s := &session{a: a, id: id, cwd: cwd, tools: map[string]*toolState{}, lastUsed: time.Now()}
+	s := &session{a: a, id: id, cwd: cwd, tools: map[string]*toolState{}, lastUsed: time.Now(), meta: meta}
 	if m := metaStr(meta, "mode"); validMode(m) {
 		s.mode = m
 	}
@@ -375,6 +398,7 @@ func (a *Agent) NewSession(ctx context.Context, p acp.NewSessionRequest) (acp.Ne
 		return acp.NewSessionResponse{}, err
 	}
 	s := a.newSession(uuid.NewString(), p.Cwd, p.Meta)
+	s.setMCP(p.McpServers)
 	s.fresh = true
 	// 新会话马上在后台起进程（人通常马上就要说话了），但不等它：起进程 + initialize 要一到几秒（MCP 多更久），
 	// 等的话界面那几秒只能干看着「正在开」，开不出对话框（用户嫌）。先拿缓存的模型列表 / 模式回话；
@@ -403,6 +427,7 @@ func (a *Agent) ResumeSession(ctx context.Context, p acp.ResumeSessionRequest) (
 	if s == nil {
 		s = a.newSession(string(p.SessionId), p.Cwd, p.Meta)
 	}
+	s.setMCP(p.McpServers)
 	if s.mode == "" {
 		s.mode = a.defaultMode()
 	}

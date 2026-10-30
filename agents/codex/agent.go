@@ -1,8 +1,9 @@
-// Package codex 是 Codex 的 ACP 适配器：对上实现 ACP agent，对下说 codex app-server 的
-// JSON-RPC（stdio）。参考的是 agentclientprotocol/codex-acp（TS），只搬了 gerdr 用得到的那部分。
+// Package codex is the ACP adapter for Codex: an ACP agent on top, `codex app-server`'s JSON-RPC (stdio)
+// underneath. Modelled on agentclientprotocol/codex-acp (TypeScript), only the parts gerdr uses. Other programs can
+// embed it; see agents/EMBEDDING.md.
 //
-// 进程模型：**一个 app-server 进程挂所有会话**（app-server 原生支持多 thread），常驻约 50MB。
-// ACP 的 sessionId 就是 codex 的 threadId。
+// Process model: **one app-server for all sessions** (it handles many threads), about 50MB resident. The ACP
+// sessionId is codex's threadId.
 package codex
 
 import (
@@ -24,9 +25,8 @@ import (
 	"github.com/coder/acp-go-sdk"
 
 	"github.com/gerdr-dev/gerdr/acpx"
-	"github.com/gerdr-dev/gerdr/internal/ext"
-	"github.com/gerdr-dev/gerdr/internal/rpcline"
-	"github.com/gerdr-dev/gerdr/internal/sysenv"
+	"github.com/gerdr-dev/gerdr/rpcline"
+	"github.com/gerdr-dev/gerdr/sysenv"
 )
 
 const (
@@ -77,7 +77,7 @@ type Agent struct {
 	cmd      *exec.Cmd
 	sessions map[string]*session
 	models   []modelInfo
-	ext      *ext.Manager
+	ext      Ext
 	opts     Options
 }
 
@@ -89,6 +89,36 @@ type Options struct {
 	Env  []string
 	// Prompt：角色（设置 → Agent）追加的指令，跟在 developerInstructions 后面。
 	Prompt string
+
+	// For programs embedding the adapter (gerdr leaves these zero):
+
+	// NoGUIHint drops gerdr's GUI hint from developerInstructions.
+	NoGUIHint bool
+	// AppendPrompt adds per-session text to the thread's developerInstructions (codex's own system-level
+	// instructions; no need to prepend them to the first message), after Prompt. sessionID is "" when the thread
+	// is being created; meta is session/new's _meta (or resume / load's).
+	AppendPrompt func(sessionID, cwd string, meta map[string]any) string
+	// SessionEnv adds environment variables (K=V) to the commands a session runs. One app-server serves every
+	// session, so they go in as the thread's shell_environment_policy.set (replacing one in config.toml).
+	SessionEnv func(sessionID string, meta map[string]any) []string
+	// StrictMCP: only the mcpServers passed in session/new (or resume / load); every server in the user's
+	// ~/.codex/config.toml is turned off for the thread. Either way the client's servers are added
+	// (stdio and streamable HTTP; codex has no legacy SSE).
+	StrictMCP bool
+	// Network gives the workspace-write sandbox (the ask and auto modes) network access.
+	Network bool
+	// NoApprovals: codex never asks (approval policy "never"); what the sandbox doesn't allow fails instead.
+	// With mode auto + Network: workspace-write, network on, no questions.
+	NoApprovals bool
+}
+
+// Ext is where skills and MCP servers come from besides codex's own configuration (gerdr's settings).
+type Ext interface {
+	// Fingerprint changes when the settings do; a thread is re-attached with the new config before its next turn.
+	Fingerprint() string
+	// Config is the thread/start | thread/resume config override for cwd. rpc reaches the app-server (for
+	// skills/list, skills/extraRoots/set…).
+	Config(ctx context.Context, rpc *rpcline.Conn, cwd string, log *slog.Logger) map[string]any
 }
 
 type session struct {
@@ -106,7 +136,9 @@ type session struct {
 	// 按 clientId 找不回来（findTurn），回退到它头上只能靠这张表。只在内存里：
 	// gerdr 重启之后回退到那条 /compact 会报找不到（回退到更早的消息不受影响）。
 	compacts map[string]string
-	extFP    string // 接上 thread 时 skill / MCP 设置的指纹；对不上下一轮前重接
+	extFP    string          // 接上 thread 时 skill / MCP 设置的指纹；对不上下一轮前重接
+	meta     map[string]any  // session/new's _meta (Options.AppendPrompt / SessionEnv)
+	mcp      []acp.McpServer // session/new's mcpServers
 
 	tasks  map[string]*acpx.Task // 子 agent（subagents.go），key 是子 thread id
 	tok    acpx.TokenMeter       // 这一轮输出了多少 token（状态行）；按请求分，req 是当前这次请求的编号
@@ -133,20 +165,29 @@ type itemState struct {
 }
 
 // New：e 管 skill / MCP 从哪来（nil = 全用 codex 自己的）。
-func New(log *slog.Logger, e *ext.Manager) *Agent {
+func New(log *slog.Logger, e Ext) *Agent {
 	return NewWith(log, e, Options{})
 }
 
-func NewWith(log *slog.Logger, e *ext.Manager, o Options) *Agent {
+func NewWith(log *slog.Logger, e Ext, o Options) *Agent {
 	return &Agent{log: log.With("agent", "codex"), sessions: map[string]*session{}, ext: e, opts: o}
 }
 
-// instructions：每个 thread 的 developerInstructions —— 界面能显示媒体的提示，加上角色追加的指令。
-func (a *Agent) instructions() string {
-	if p := strings.TrimSpace(a.opts.Prompt); p != "" {
-		return acpx.GUIHint + "\n\n" + p
+// instructions：每个 thread 的 developerInstructions —— 界面能显示媒体的提示，加上角色追加的指令（和 AppendPrompt 的）。
+func (a *Agent) instructions(sid, cwd string, meta map[string]any) string {
+	var parts []string
+	if !a.opts.NoGUIHint {
+		parts = append(parts, acpx.GUIHint)
 	}
-	return acpx.GUIHint
+	if p := strings.TrimSpace(a.opts.Prompt); p != "" {
+		parts = append(parts, p)
+	}
+	if f := a.opts.AppendPrompt; f != nil {
+		if p := strings.TrimSpace(f(sid, cwd, meta)); p != "" {
+			parts = append(parts, p)
+		}
+	}
+	return strings.Join(parts, "\n\n")
 }
 
 // SetConn 必须在连接建好之后、处理任何请求之前调。
@@ -225,11 +266,14 @@ func (a *Agent) onExit() {
 }
 
 func (a *Agent) resumeThread(ctx context.Context, rpc *rpcline.Conn, s *session) error {
-	p := map[string]any{"threadId": s.id, "excludeTurns": true, "developerInstructions": a.instructions()}
+	s.mu.Lock()
+	meta, servers := s.meta, s.mcp
+	s.mu.Unlock()
+	p := map[string]any{"threadId": s.id, "excludeTurns": true, "developerInstructions": a.instructions(s.id, s.cwd, meta)}
 	if s.cwd != "" {
 		p["cwd"] = s.cwd
 	}
-	cfg, fp := a.extConfig(ctx, rpc, s.cwd)
+	cfg, fp := a.threadConfig(ctx, rpc, s.id, s.cwd, meta, servers)
 	if cfg != nil {
 		p["config"] = cfg
 	}
@@ -242,94 +286,14 @@ func (a *Agent) resumeThread(ctx context.Context, rpc *rpcline.Conn, s *session)
 	return nil
 }
 
-// extConfig 把 skill / MCP 设置翻成 thread/start、thread/resume 的 config 覆盖。
-// 覆盖是**合并**进用户配置的，所以「关掉 codex 自己的」只能逐个列出来关（见 ext 包注释）。
+// extConfig 把 skill / MCP 设置翻成 thread/start、thread/resume 的 config 覆盖（Options.Ext; gerdr's is in
+// internal/agentwire）。覆盖是**合并**进用户配置的，所以「关掉 codex 自己的」只能逐个列出来关。
 func (a *Agent) extConfig(ctx context.Context, rpc *rpcline.Conn, cwd string) (map[string]any, string) {
 	if a.ext == nil {
 		return nil, ""
 	}
 	fp := a.ext.Fingerprint()
-	st := a.ext.Settings()
-	cfg := a.ext.CodexMCPOverrides()
-	if st.MCPSource == ext.SourceGerdr || a.ext.LimitsMCP() {
-		mine := map[string]bool{}
-		if st.MCPSource.UsesGerdr() {
-			for _, v := range st.MCP {
-				mine[v.Name] = true
-			}
-		}
-		// 只用 gerdr 的：codex 自己的全关；角色限定了 MCP：codex 自己的里没挑的关（gerdr 那份已经在 CodexMCPOverrides 里筛过）
-		for _, v := range ext.CodexMCP() {
-			if !mine[v.Name] && (st.MCPSource == ext.SourceGerdr || !a.ext.AllowMCP(v.Name)) {
-				cfg["mcp_servers."+v.Name+".enabled"] = false
-			}
-		}
-	}
-	// gerdr 的 skill 目录是整个 app-server 的设置：每次接 thread 前按当前设置摆一遍。
-	// 内置 skill（多会话协作、改界面）不管来源选什么都给；gerdr 自己那份要选了才给。
-	a.ext.Builtin() // 确保已经装到磁盘上
-	roots := []string{a.ext.BuiltinDir()}
-	if st.SkillSource.UsesGerdr() {
-		roots = append(roots, a.ext.SkillsDir())
-	}
-	if err := rpc.Call(ctx, "skills/extraRoots/set", map[string]any{"extraRoots": roots}, nil); err != nil {
-		a.log.Warn("skills/extraRoots/set failed", "err", err)
-	}
-	if st.SkillSource != ext.SourceAgent || len(st.DisabledSkills) > 0 || a.ext.LimitsSkills() {
-		var res struct {
-			Data []struct {
-				Skills []struct {
-					Name    string `json:"name"`
-					Path    string `json:"path"`
-					Scope   string `json:"scope"`
-					Enabled bool   `json:"enabled"`
-				} `json:"skills"`
-			} `json:"data"`
-		}
-		params := map[string]any{"forceReload": true}
-		if cwd != "" {
-			params["cwds"] = []string{cwd}
-		}
-		if err := rpc.Call(ctx, "skills/list", params, &res); err != nil {
-			a.log.Warn("skills/list failed", "err", err)
-		}
-		dis := map[string]bool{}
-		for _, n := range st.DisabledSkills {
-			dis[n] = true
-		}
-		// codex 报回来的路径是解开过符号链接的（/var → /private/var），比前缀前这边也解一遍。
-		under := func(p, dir string) bool {
-			if real, err := filepath.EvalSymlinks(dir); err == nil && strings.HasPrefix(p, real+string(filepath.Separator)) {
-				return true
-			}
-			return strings.HasPrefix(p, dir+string(filepath.Separator))
-		}
-		// skills.config 整个被覆盖掉，所以用户自己在 config.toml 里关掉的也要照抄一遍。
-		off := []map[string]any{}
-		for _, e := range res.Data {
-			for _, sk := range e.Skills {
-				var disable bool
-				switch {
-				case !sk.Enabled:
-					disable = true
-				case under(sk.Path, a.ext.BuiltinDir()):
-					disable = dis[sk.Name]
-				case under(sk.Path, a.ext.SkillsDir()):
-					disable = dis[sk.Name] || !st.SkillSource.UsesGerdr()
-				default:
-					disable = st.SkillSource == ext.SourceGerdr && sk.Scope != "system"
-				}
-				// 角色限定了 skill：没挑的也关。codex 自带的（system）界面上列不出来、挑不了，不动它们。
-				if !disable && sk.Scope != "system" && !a.ext.AllowSkill(sk.Name) {
-					disable = true
-				}
-				if disable {
-					off = append(off, map[string]any{"path": sk.Path, "enabled": false})
-				}
-			}
-		}
-		cfg["skills.config"] = off
-	}
+	cfg := a.ext.Config(ctx, rpc, cwd, a.log)
 	if len(cfg) == 0 {
 		return nil, fp
 	}
@@ -461,9 +425,9 @@ func (a *Agent) NewSession(ctx context.Context, p acp.NewSessionRequest) (acp.Ne
 		return acp.NewSessionResponse{}, err
 	}
 	mode := modeFromMeta(p.Meta, modeAuto)
-	ap, sb := modeParams(mode)
-	params := map[string]any{"cwd": p.Cwd, "approvalPolicy": ap, "sandbox": sandboxMode(sb), "developerInstructions": a.instructions()}
-	cfg, fp := a.extConfig(ctx, rpc, p.Cwd)
+	ap, sb := a.modeParams(mode)
+	params := map[string]any{"cwd": p.Cwd, "approvalPolicy": ap, "sandbox": sandboxMode(sb), "developerInstructions": a.instructions("", p.Cwd, p.Meta)}
+	cfg, fp := a.threadConfig(ctx, rpc, "", p.Cwd, p.Meta, p.McpServers)
 	if cfg != nil {
 		params["config"] = cfg
 	}
@@ -476,7 +440,7 @@ func (a *Agent) NewSession(ctx context.Context, p acp.NewSessionRequest) (acp.Ne
 	if err := rpc.Call(ctx, "thread/start", params, &res); err != nil {
 		return acp.NewSessionResponse{}, err
 	}
-	s := &session{id: res.Thread.ID, cwd: p.Cwd, mode: mode, model: res.Model, items: map[string]*itemState{}, extFP: fp, roll: newRollTail(res.Thread.ID, false)}
+	s := &session{id: res.Thread.ID, cwd: p.Cwd, mode: mode, model: res.Model, items: map[string]*itemState{}, extFP: fp, roll: newRollTail(res.Thread.ID, false), meta: p.Meta, mcp: p.McpServers}
 	if res.ReasoningEffort != nil {
 		s.effort = *res.ReasoningEffort
 	}
@@ -492,7 +456,7 @@ func (a *Agent) NewSession(ctx context.Context, p acp.NewSessionRequest) (acp.Ne
 }
 
 func (a *Agent) ResumeSession(ctx context.Context, p acp.ResumeSessionRequest) (acp.ResumeSessionResponse, error) {
-	s, err := a.attach(ctx, string(p.SessionId), p.Cwd, p.Meta)
+	s, err := a.attach(ctx, string(p.SessionId), p.Cwd, p.Meta, p.McpServers)
 	if err != nil {
 		return acp.ResumeSessionResponse{}, err
 	}
@@ -502,18 +466,30 @@ func (a *Agent) ResumeSession(ctx context.Context, p acp.ResumeSessionRequest) (
 	}, nil
 }
 
-func (a *Agent) attach(ctx context.Context, id, cwd string, meta map[string]any) (*session, error) {
+func (a *Agent) attach(ctx context.Context, id, cwd string, meta map[string]any, servers []acp.McpServer) (*session, error) {
 	rpc, err := a.client(ctx)
 	if err != nil {
 		return nil, err
 	}
 	mode := modeFromMeta(meta, modeAuto)
-	ap, sb := modeParams(mode)
-	params := map[string]any{"threadId": id, "excludeTurns": true, "approvalPolicy": ap, "sandbox": sandboxMode(sb), "developerInstructions": a.instructions()}
+	a.mu.Lock()
+	if old := a.sessions[id]; old != nil {
+		old.mu.Lock()
+		if meta == nil {
+			meta = old.meta
+		}
+		if servers == nil {
+			servers = old.mcp
+		}
+		old.mu.Unlock()
+	}
+	a.mu.Unlock()
+	ap, sb := a.modeParams(mode)
+	params := map[string]any{"threadId": id, "excludeTurns": true, "approvalPolicy": ap, "sandbox": sandboxMode(sb), "developerInstructions": a.instructions(id, cwd, meta)}
 	if cwd != "" {
 		params["cwd"] = cwd
 	}
-	cfg, fp := a.extConfig(ctx, rpc, cwd)
+	cfg, fp := a.threadConfig(ctx, rpc, id, cwd, meta, servers)
 	if cfg != nil {
 		params["config"] = cfg
 	}
@@ -521,7 +497,7 @@ func (a *Agent) attach(ctx context.Context, id, cwd string, meta map[string]any)
 	if err := rpc.Call(ctx, "thread/resume", params, &res); err != nil {
 		return nil, err
 	}
-	s := &session{id: id, cwd: res.Thread.Cwd, mode: mode, model: res.Model, items: map[string]*itemState{}, extFP: fp, roll: newRollTail(id, true)}
+	s := &session{id: id, cwd: res.Thread.Cwd, mode: mode, model: res.Model, items: map[string]*itemState{}, extFP: fp, roll: newRollTail(id, true), meta: meta, mcp: servers}
 	if s.cwd == "" {
 		s.cwd = cwd
 	}
@@ -545,7 +521,7 @@ func (a *Agent) attach(ctx context.Context, id, cwd string, meta map[string]any)
 
 // LoadSession = resume + 把历史当成 session/update 重放一遍（导入在别处开过的会话时用）。
 func (a *Agent) LoadSession(ctx context.Context, p acp.LoadSessionRequest) (acp.LoadSessionResponse, error) {
-	s, err := a.attach(ctx, string(p.SessionId), p.Cwd, p.Meta)
+	s, err := a.attach(ctx, string(p.SessionId), p.Cwd, p.Meta, p.McpServers)
 	if err != nil {
 		return acp.LoadSessionResponse{}, err
 	}
@@ -765,11 +741,11 @@ func (a *Agent) listModels(ctx context.Context) []modelInfo {
 // 旧 id 留作别名（同 claude 的 adoptID），hub 换 id 之前路上的调用照样找得到。
 func (a *Agent) clear(ctx context.Context, rpc *rpcline.Conn, s *session) (acp.PromptResponse, error) {
 	s.mu.Lock()
-	old, cwd, mode, model := s.id, s.cwd, s.mode, s.model
+	old, cwd, mode, model, meta, servers := s.id, s.cwd, s.mode, s.model, s.meta, s.mcp
 	s.mu.Unlock()
-	ap, sb := modeParams(mode)
-	params := map[string]any{"cwd": cwd, "approvalPolicy": ap, "sandbox": sandboxMode(sb), "developerInstructions": a.instructions()}
-	cfg, fp := a.extConfig(ctx, rpc, cwd)
+	ap, sb := a.modeParams(mode)
+	params := map[string]any{"cwd": cwd, "approvalPolicy": ap, "sandbox": sandboxMode(sb), "developerInstructions": a.instructions("", cwd, meta)}
+	cfg, fp := a.threadConfig(ctx, rpc, "", cwd, meta, servers)
 	if cfg != nil {
 		params["config"] = cfg
 	}
@@ -838,7 +814,7 @@ func (a *Agent) Prompt(ctx context.Context, p acp.PromptRequest) (acp.PromptResp
 			return acp.PromptResponse{}, err
 		}
 	} else {
-		ap, sb := modeParams(mode)
+		ap, sb := a.modeParams(mode)
 		params := map[string]any{
 			"threadId":       s.id,
 			"input":          toInputs(p.Prompt),
@@ -1330,6 +1306,17 @@ func (a *Agent) itemTitle(threadID, itemID, def string) string {
 }
 
 // ---- 杂项 ----
+
+func (a *Agent) modeParams(mode string) (approval any, sandbox map[string]any) {
+	ap, sb := modeParams(mode)
+	if sb["type"] == "workspaceWrite" && a.opts.Network {
+		sb["networkAccess"] = true
+	}
+	if a.opts.NoApprovals {
+		ap = "never"
+	}
+	return ap, sb
+}
 
 func modeParams(mode string) (approval any, sandbox map[string]any) {
 	ws := map[string]any{"type": "workspaceWrite", "writableRoots": []string{}, "networkAccess": false, "excludeTmpdirEnvVar": false, "excludeSlashTmp": false}

@@ -21,12 +21,12 @@ import (
 
 	"github.com/gerdr-dev/gerdr/acpx"
 	"github.com/gerdr-dev/gerdr/internal/agenthost"
-	"github.com/gerdr-dev/gerdr/internal/agents/claude"
-	"github.com/gerdr-dev/gerdr/internal/agents/codex"
-	"github.com/gerdr-dev/gerdr/internal/agents/gerdrnative"
+	"github.com/gerdr-dev/gerdr/agents/claude"
+	"github.com/gerdr-dev/gerdr/agents/codex"
+	"github.com/gerdr-dev/gerdr/internal/agentwire"
 	"github.com/gerdr-dev/gerdr/internal/ext"
-	"github.com/gerdr-dev/gerdr/internal/sysenv"
-	"github.com/gerdr-dev/gerdr/native"
+	"github.com/gerdr-dev/gerdr/sysenv"
+	"github.com/gerdr-dev/gerdr/agents/native"
 )
 
 // AgentDef 描述一种 agent。内置 claude / codex / native（gerdr 自己的，直接调模型接口，config.json 的 llm 配了模型才能用）；用户可以在 config.json 的 agents 里加两种：
@@ -373,12 +373,12 @@ func (h *Hub) startHost(ctx context.Context, agent string) (*agenthost.Host, err
 	em := h.opt.Ext.Scoped(def.only())
 	switch base {
 	case "claude":
-		return agenthost.StartInProc(sctx, claude.New(log, claude.Options{IdleTimeout: h.opt.ClaudeIdle, Ext: em, Bin: def.Bin, Args: def.Args, Env: def.envList(), Prompt: def.Prompt}), handler, log)
+		return agenthost.StartInProc(sctx, claude.New(log, claude.Options{IdleTimeout: h.opt.ClaudeIdle, Ext: agentwire.ClaudeExt(em), Bin: def.Bin, Args: def.Args, Env: def.envList(), Prompt: def.Prompt}), handler, log)
 	case "codex":
-		return agenthost.StartInProc(sctx, codex.NewWith(log, em, codex.Options{Bin: def.Bin, Args: def.Args, Env: def.envList(), Prompt: def.Prompt}), handler, log)
+		return agenthost.StartInProc(sctx, codex.NewWith(log, agentwire.CodexExt(em), codex.Options{Bin: def.Bin, Args: def.Args, Env: def.envList(), Prompt: def.Prompt}), handler, log)
 	case "native":
 		// 基于 Gerdr Agent 的角色和原版共用会话目录（id 是 uuid，撞不了）和记忆：记忆是人的偏好、项目的约定，不分角色
-		return agenthost.StartInProc(sctx, native.New(log, gerdrnative.Options(filepath.Join(h.opt.Dir, "native"), em, func() native.Config { return h.llm().Only(def.Providers) }, def.Prompt)), handler, log)
+		return agenthost.StartInProc(sctx, native.New(log, agentwire.NativeOptions(filepath.Join(h.opt.Dir, "native"), em, func() native.Config { return h.llm().Only(def.Providers) }, def.Prompt)), handler, log)
 	}
 	home, _ := os.UserHomeDir()
 	return agenthost.StartProcess(sctx, def.Command, home, handler, log)

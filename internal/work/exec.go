@@ -13,7 +13,7 @@ import (
 
 	"github.com/dop251/goja"
 
-	"github.com/gerdr-dev/gerdr/internal/sysenv"
+	"github.com/gerdr-dev/gerdr/sysenv"
 )
 
 // ctx.exec waits 30 seconds by default, 10 minutes at most; stdout and stderr keep 10MB each, the rest is cut

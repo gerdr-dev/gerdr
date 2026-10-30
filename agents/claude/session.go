@@ -18,6 +18,9 @@ import (
 type session struct {
 	a *Agent
 
+	meta map[string]any  // session/new's _meta (Options.AppendPrompt / SessionEnv)
+	mcp  []acp.McpServer // session/new's mcpServers, passed to claude with --mcp-config
+
 	mu   sync.Mutex
 	id   string // 当前 claude 会话 id（= ACP sessionId；回退分叉后会变）
 	cwd  string
@@ -131,12 +134,21 @@ func (s *session) start(ctx context.Context) error {
 		return err
 	}
 	s.mu.Lock()
-	o := spawnOpts{bin: bin, cwd: s.cwd, model: s.model, mode: s.mode, effort: s.effort, env: s.a.opts.Env, prompt: s.a.opts.Prompt}
-	s.mcpFP = s.a.opts.Ext.ClaudeMCPFingerprint(s.cwd)
+	o := spawnOpts{bin: bin, cwd: s.cwd, model: s.model, mode: s.mode, effort: s.effort, env: s.a.opts.Env, prompt: s.a.opts.Prompt, noHint: s.a.opts.NoGUIHint}
+	if f := s.a.opts.AppendPrompt; f != nil {
+		if p := strings.TrimSpace(f(s.id, s.cwd, s.meta)); p != "" {
+			o.prompt = strings.TrimSpace(o.prompt + "\n\n" + p)
+		}
+	}
+	if f := s.a.opts.SessionEnv; f != nil {
+		o.env = append(append([]string(nil), o.env...), f(s.id, s.meta)...)
+	}
+	s.mcpFP = s.a.mcpFingerprint(s.cwd)
 	if e := s.a.opts.Ext; e != nil {
 		s.extFP = e.Fingerprint()
-		o.extra = e.ClaudeArgs(s.id, s.cwd)
+		o.extra = e.Args(s.id, s.cwd)
 	}
+	o.extra = append(o.extra, s.clientMCPArgs()...)
 	o.extra = append(o.extra, s.a.opts.Args...)
 	fresh, from, at := s.pendingLocked()
 	switch {
@@ -315,7 +327,7 @@ func (s *session) adoptID(ctx context.Context, id string) {
 	// the cleared context would stay on a process holding the old MCP config (a server added or fixed
 	// with `claude mcp add` mid-session stayed "needs authentication"). Check again here, where every
 	// /clear ends up, and swap the process before the next turn.
-	fp := s.a.opts.Ext.ClaudeMCPFingerprint(s.cwd)
+	fp := s.a.mcpFingerprint(s.cwd)
 	s.mu.Lock()
 	s.id = id
 	s.fresh, s.forkFrom, s.forkAt = false, "", ""
@@ -355,7 +367,7 @@ func (s *session) prompt(ctx context.Context, blocks []acp.ContentBlock, msgID s
 	s.abortWait = abort
 	s.mu.Unlock()
 	if isClear(blocks) {
-		fp := s.a.opts.Ext.ClaudeMCPFingerprint(s.cwd)
+		fp := s.a.mcpFingerprint(s.cwd)
 		s.mu.Lock()
 		if s.p != nil && s.turn == nil && s.mcpFP != fp { // 正在跑的那一轮不能被换掉（这句随后也会被拒）
 			s.respawn = true

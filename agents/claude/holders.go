@@ -12,7 +12,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/gerdr-dev/gerdr/acpx"
-	"github.com/gerdr-dev/gerdr/internal/sysenv"
+	"github.com/gerdr-dev/gerdr/sysenv"
 )
 
 // 同一个 claude 会话被两处同时开着（gerdr 里接着聊、herdr / 终端里那个交互式 claude 也还开着）：

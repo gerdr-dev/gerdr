@@ -1,4 +1,4 @@
-package gerdrnative
+package agentwire
 
 import (
 	"encoding/json"
@@ -15,7 +15,7 @@ func TestMCPNotBorrowedFromClaude(t *testing.T) {
 	cwd := t.TempDir()
 	cfg, _ := json.Marshal(map[string]any{"mcpServers": map[string]any{"fake": map[string]any{"command": "x"}}})
 	os.WriteFile(filepath.Join(cwd, ".mcp.json"), cfg, 0o644)
-	o := Options(t.TempDir(), ext.New(t.TempDir()), nil, "")
+	o := NativeOptions(t.TempDir(), ext.New(t.TempDir()), nil, "")
 	if got := o.MCP(cwd); len(got) != 0 {
 		t.Fatalf("不该借 Claude Code 的 MCP：%v", got)
 	}
@@ -28,7 +28,7 @@ func TestEnabledMCPOnly(t *testing.T) {
 	if err := m.Save(st); err != nil {
 		t.Fatal(err)
 	}
-	got := Options(t.TempDir(), m, nil, "").MCP("")
+	got := NativeOptions(t.TempDir(), m, nil, "").MCP("")
 	if len(got) != 1 || got[0].Name != "on" || got[0].Command != "a" {
 		t.Fatalf("%+v", got)
 	}

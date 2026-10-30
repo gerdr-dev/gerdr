@@ -25,7 +25,7 @@ import (
 	"time"
 
 	"github.com/gerdr-dev/gerdr/internal/hub"
-	"github.com/gerdr-dev/gerdr/internal/sysenv"
+	"github.com/gerdr-dev/gerdr/sysenv"
 )
 
 type Level string

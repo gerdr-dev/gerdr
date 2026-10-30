@@ -27,8 +27,9 @@ import (
 
 	"github.com/gerdr-dev/gerdr/acpx"
 	"github.com/gerdr-dev/gerdr/internal/agenthost"
-	"github.com/gerdr-dev/gerdr/internal/agents/claude"
-	"github.com/gerdr-dev/gerdr/internal/agents/codex"
+	"github.com/gerdr-dev/gerdr/agents/claude"
+	"github.com/gerdr-dev/gerdr/agents/codex"
+	"github.com/gerdr-dev/gerdr/internal/agentwire"
 	"github.com/gerdr-dev/gerdr/internal/ext"
 )
 
@@ -142,9 +143,9 @@ func startExt(t *testing.T, which string, r *rec, em *ext.Manager) *agenthost.Ho
 	var ag agenthost.InProcAgent
 	switch which {
 	case "codex":
-		ag = codex.New(log, em)
+		ag = codex.New(log, agentwire.CodexExt(em))
 	case "claude":
-		ag = claude.New(log, claude.Options{Ext: em})
+		ag = claude.New(log, claude.Options{Ext: agentwire.ClaudeExt(em)})
 	}
 	h, err := agenthost.StartInProc(context.Background(), ag, r, log)
 	if err != nil {
