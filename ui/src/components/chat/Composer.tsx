@@ -244,10 +244,13 @@ export const Composer = forwardRef<
       document.removeEventListener("pointerup", up, true);
     };
   }, []);
-  // 点发送 / 打断按钮不抢输入框的焦点：抢走了，接着按 Esc 打断、回车再发都没反应（用户报的）
+  // The send / stop buttons don't take focus from the text box: if they did, Esc to stop or Enter to send again did
+  // nothing afterwards (reported). On touch screens they don't give it focus either: focusing the box pops the soft
+  // keyboard, and tapping send with the keyboard down shouldn't bring it up (reported). preventDefault alone keeps
+  // focus wherever it already is.
   const keepFocus = (e: React.MouseEvent) => {
     e.preventDefault();
-    ta.current?.focus();
+    if (!isCoarse()) ta.current?.focus();
   };
   const putText = (t: string) => {
     setText(t);
