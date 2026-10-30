@@ -20,13 +20,13 @@ import (
 	"github.com/coder/acp-go-sdk"
 
 	"github.com/gerdr-dev/gerdr/acpx"
-	"github.com/gerdr-dev/gerdr/internal/agenthost"
 	"github.com/gerdr-dev/gerdr/agents/claude"
 	"github.com/gerdr-dev/gerdr/agents/codex"
+	"github.com/gerdr-dev/gerdr/agents/native"
+	"github.com/gerdr-dev/gerdr/internal/agenthost"
 	"github.com/gerdr-dev/gerdr/internal/agentwire"
 	"github.com/gerdr-dev/gerdr/internal/ext"
 	"github.com/gerdr-dev/gerdr/sysenv"
-	"github.com/gerdr-dev/gerdr/agents/native"
 )
 
 // AgentDef 描述一种 agent。内置 claude / codex / native（gerdr 自己的，直接调模型接口，config.json 的 llm 配了模型才能用）；用户可以在 config.json 的 agents 里加两种：
@@ -489,12 +489,12 @@ func (h *Hub) load() error {
 	}
 	for _, r := range recs {
 		s := newSession(h, r)
-		evs, err := readLog(s.lf.path)
+		evs, err := readLog(s.lf.Path)
 		if err != nil {
 			h.log.Warn("read session log", "id", r.ID, "err", err)
 		}
 		s.events = evs
-		s.lf.flushed = len(evs)
+		s.lf.Flushed = len(evs)
 		for _, e := range evs {
 			if e.Seq > h.seq {
 				h.seq = e.Seq
@@ -855,7 +855,7 @@ func (h *Hub) Delete(ctx context.Context, id string) error {
 	}
 	s.close(ctx)
 	h.unregister(s)
-	_ = os.Remove(s.lf.path)
+	_ = os.Remove(s.lf.Path)
 	_ = os.RemoveAll(s.shellDir()) // `!命令` 的完整输出（shell.go）
 	h.saveIndex()
 	h.broadcast(Msg{T: "session_removed", ID: id})

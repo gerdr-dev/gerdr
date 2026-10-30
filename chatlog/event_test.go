@@ -1,4 +1,4 @@
-package hub
+package chatlog
 
 import (
 	"encoding/json"
@@ -31,14 +31,14 @@ func TestChunkMerge(t *testing.T) {
 
 func TestRetryWaits(t *testing.T) {
 	var sum time.Duration
-	for i, d := range retryWaits {
-		if d > time.Minute || (i > 0 && d > 2*retryWaits[i-1]) {
+	for i, d := range RetryWaits {
+		if d > time.Minute || (i > 0 && d > 2*RetryWaits[i-1]) {
 			t.Fatalf("第 %d 次等 %v", i, d)
 		}
 		sum += d
 	}
 	if sum != 5*time.Minute {
-		t.Fatalf("总共等 %v，应该是 5 分钟：%v", sum, retryWaits)
+		t.Fatalf("总共等 %v，应该是 5 分钟：%v", sum, RetryWaits)
 	}
 }
 
@@ -57,7 +57,7 @@ func TestRetryable(t *testing.T) {
 		{"Failed to authenticate. API Error: 403 Request not allowed", true},
 		{"Failed to authenticate. API Error: 401 Invalid authentication credentials", false},
 	} {
-		if got := retryable(c.msg); got != c.want {
+		if got := Retryable(c.msg); got != c.want {
 			t.Errorf("%q: got %v", c.msg, got)
 		}
 	}

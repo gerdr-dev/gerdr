@@ -18,6 +18,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/gerdr-dev/gerdr/acpx"
+	"github.com/gerdr-dev/gerdr/chatlog"
 	"github.com/gerdr-dev/gerdr/internal/agenthost"
 )
 
@@ -160,7 +161,7 @@ func (s *Session) Pending() []PendingReq {
 
 func newSession(h *Hub, r Record) *Session {
 	return &Session{h: h, rec: r, status: StIdle, pending: map[string]*pending{}, steering: map[string]string{},
-		lf: logFile{path: filepath.Join(h.opt.Dir, "sessions", r.ID+".jsonl")}}
+		lf: logFile{Path: filepath.Join(h.opt.Dir, "sessions", r.ID+".jsonl")}}
 }
 
 func newID() string {
@@ -303,32 +304,12 @@ func (s *Session) Events() []*Event {
 	return out
 }
 
-// emit 记一条日志并广播。merge=true 时尝试并进上一条流式片段（只并内存里、还没落盘的）。
+// emit 记一条日志并广播（流式片段并进上一条还没落盘的，见 chatlog.Add）。
 func (s *Session) emit(e *Event) {
 	e.Seq = s.h.nextSeq()
 	e.TS = now()
 	s.mu.Lock()
-	merged := false
-	if e.Kind == EvUpdate {
-		if key, text, ok := chunkKey(e.Update); ok {
-			if n := len(s.events); n > 0 && n > s.lf.flushed {
-				last := s.events[n-1]
-				if last.Kind == EvUpdate {
-					if k2, _, ok2 := chunkKey(last.Update); ok2 && k2 == key {
-						// 合并后的那条换成新对象：广播出去的旧指针可能还在别的 goroutine 里被序列化。
-						cp := *last
-						cp.Update = mergeChunk(last.Update, text)
-						cp.Seq = e.Seq
-						s.events[n-1] = &cp
-						merged = true
-					}
-				}
-			}
-		}
-	}
-	if !merged {
-		s.events = append(s.events, e)
-	}
+	s.events, _ = chatlog.Add(s.events, s.lf.Flushed, e)
 	s.rec.UpdatedAt = e.TS
 	s.mu.Unlock()
 	s.h.broadcastEvents(s.rec.ID, []*Event{e}, false)
@@ -339,23 +320,23 @@ func (s *Session) flush(force bool) {
 	s.mu.Lock()
 	n := len(s.events)
 	if !force && n > 0 && s.events[n-1].Kind == EvUpdate {
-		if _, _, ok := chunkKey(s.events[n-1].Update); ok {
+		if chatlog.IsChunk(s.events[n-1].Update) {
 			n--
 		}
 	}
-	if n <= s.lf.flushed {
+	if n <= s.lf.Flushed {
 		s.mu.Unlock()
 		return
 	}
-	batch := append([]*Event(nil), s.events[s.lf.flushed:n]...)
-	from := s.lf.flushed
-	s.lf.flushed = n
+	batch := append([]*Event(nil), s.events[s.lf.Flushed:n]...)
+	from := s.lf.Flushed
+	s.lf.Flushed = n
 	s.mu.Unlock()
-	if err := s.lf.append(batch); err != nil {
+	if err := s.lf.Append(batch); err != nil {
 		s.h.log.Warn("write session log", "id", s.rec.ID, "err", err)
 		s.mu.Lock()
-		if s.lf.flushed == n {
-			s.lf.flushed = from
+		if s.lf.Flushed == n {
+			s.lf.Flushed = from
 		}
 		s.mu.Unlock()
 	}
@@ -652,43 +633,9 @@ func (s *Session) SendFrom(ctx context.Context, content []acp.ContentBlock, clie
 	return SendResult{MessageID: msgID}, nil
 }
 
-// retryWaits：一轮因为网络出错失败时自动重试的间隔（agent 自己的重试已经用完了才会走到这里）。
-// 指数回退：5 秒起翻倍，单次最多 1 分钟，所有等待加起来不超过 5 分钟 —— 偶发的 403 / 过载常常要一两分钟才缓过来，
-// 原来固定三次（5/15/30 秒）不到一分钟就放弃了；再往后多半是真坏了，别让人一直等。
-var retryWaits = backoff(5*time.Second, time.Minute, 5*time.Minute)
+var retryWaits = chatlog.RetryWaits
 
-func backoff(first, max, total time.Duration) []time.Duration {
-	var out []time.Duration
-	for d, sum := first, time.Duration(0); sum < total; d *= 2 {
-		d = min(d, max, total-sum)
-		out = append(out, d)
-		sum += d
-	}
-	return out
-}
-
-// retryable：值得自动重来的错误 —— 网络 / 过载 / agent 进程半路死了。额度用完、参数错这类不重试
-// （重试也一样，还白白烧钱）。
-func retryable(msg string) bool {
-	m := strings.ToLower(msg)
-	// 「API Error: 403 Request not allowed」：API 那边偶发的拒绝（前面还挂着一句 Failed to authenticate），
-	// 不是登录失效，过一会儿就好（用户报的）—— 先于下面的 403 判掉。
-	if strings.Contains(m, "request not allowed") {
-		return true
-	}
-	for _, k := range []string{"rate limit", "usage limit", "quota", "invalid", "unauthorized", "401", "403", "credit"} {
-		if strings.Contains(m, k) {
-			return false
-		}
-	}
-	for _, k := range []string{"econnreset", "etimedout", "enotfound", "eai_again", "econnrefused", "socket hang up", "network", "connection",
-		"timeout", "timed out", "overloaded", "529", "502", "503", "504", "stream disconnected", "fetch failed", "进程意外退出", "进程退出了"} {
-		if strings.Contains(m, k) {
-			return true
-		}
-	}
-	return false
-}
+func retryable(msg string) bool { return chatlog.Retryable(msg) }
 
 func (s *Session) runTurn(c *agenthost.Host, agentSID, msgID string, content []acp.ContentBlock) {
 	res, err := c.Conn.Prompt(context.Background(), acp.PromptRequest{SessionId: acp.SessionId(agentSID), MessageId: &msgID, Prompt: content})
@@ -889,33 +836,19 @@ func (s *Session) onUpdate(u acp.SessionUpdate) {
 			s.onGerdrInfo(g)
 		}
 		if g, ok := u.SessionInfoUpdate.Meta["gerdr"].(map[string]any); ok {
-			if n, ok := g["notice"].(string); ok && n != "" {
-				lv, _ := g["noticeLevel"].(string)
-				if lv == "" {
-					lv = "warn"
-				}
-				ev := &Event{Kind: EvNotice, Level: lv, Text: n}
-				// The adapter reports how long the wait is; turn it into a deadline here so the UI can count down
-				// (a bare "9 秒后" stays at 9 forever, and a replayed log would restart the count)
-				if d := num(g["noticeDelayMs"]); d > 0 {
-					ev.Until = now() + d
-				}
+			if ev := chatlog.NoticeFromInfo(g, now()); ev != nil {
 				s.emit(ev)
 			}
 			// 插话排队 / 被读到：只记用户发过的那几条（command_lifecycle 对每条写进去的消息都报）
-			if st, ok := g["steer"].(map[string]any); ok {
-				id, _ := st["id"].(string)
-				state, _ := st["state"].(string)
-				if id != "" && (state == "queued" || state == "started") {
-					s.mu.Lock()
-					_, early := s.steering[id]
-					if early {
-						s.steering[id] = state // 消息还没记进日志：先存着，记完再补（started 会盖掉 queued）
-					}
-					s.mu.Unlock()
-					if !early && s.isSteer(id) {
-						s.emit(&Event{Kind: EvSteerState, MessageID: id, Text: state})
-					}
+			if id, state, ok := chatlog.SteerFromInfo(g); ok {
+				s.mu.Lock()
+				_, early := s.steering[id]
+				if early {
+					s.steering[id] = state // 消息还没记进日志：先存着，记完再补（started 会盖掉 queued）
+				}
+				s.mu.Unlock()
+				if !early && s.isSteer(id) {
+					s.emit(&Event{Kind: EvSteerState, MessageID: id, Text: state})
 				}
 			}
 			// agent 那边换了会话 id（claude 的 /clear）：之后回退、恢复都按新的来；对话里留一条分隔线
@@ -985,28 +918,15 @@ func (s *Session) onGerdrInfo(g map[string]any) {
 		s.mu.Unlock()
 		s.h.broadcastSession(s)
 	}
-	if v, ok := g["tasks"]; ok {
-		var list []acpx.Task
-		b, _ := json.Marshal(v)
-		_ = json.Unmarshal(b, &list)
+	if list, ok := chatlog.TasksFromInfo(g); ok {
 		s.mu.Lock()
-		prev := map[string]string{}
-		for _, t := range s.tasks {
-			prev[t.ID] = t.Status
-		}
+		prev := s.tasks
 		s.tasks = list
 		s.mu.Unlock()
 		s.h.broadcastSession(s)
 		// 刚结束的（之前在跑、或者一出现就已经结束）：记进对话。子 agent 自己起的不记，在它的面板里看。
-		for _, t := range list {
-			if t.Status == "running" || t.Parent != "" {
-				continue
-			}
-			if st, seen := prev[t.ID]; seen && st != "running" {
-				continue
-			}
-			tb, _ := json.Marshal(t)
-			s.emit(&Event{Kind: EvTask, Task: tb})
+		for _, ev := range chatlog.FinishedTasks(prev, list) {
+			s.emit(ev)
 		}
 	}
 	if v, ok := g[acpx.AutoTurnKey].(bool); ok {
@@ -1260,36 +1180,9 @@ func (s *Session) Escape(ctx context.Context) (EscapeResult, error) {
 	if !running {
 		return out, nil
 	}
-	start := -1
-	for i := len(evs) - 1; i >= 0; i-- {
-		if evs[i].Kind == EvTurnStart {
-			start = i
-			break
-		}
-	}
-	lastOut := start
-	for i := start + 1; i < len(evs); i++ {
-		switch evs[i].Kind {
-		case EvUpdate, EvPermission, EvAsk, EvTask:
-			lastOut = i
-		}
-	}
-	// 要收回的插话：最后一次 agent 有动静之后的用户消息，加上这一轮里还标着「排队中」（steer_state 没到 started）的插话 ——
-	// 插话默认排到下一个空档（priority next），排着的时候 agent 照样在出字，只看「动静之后」会漏掉它们，
-	// 打断后被带进下一轮（用户报的）
-	state := map[string]string{}
-	for i := start + 1; i < len(evs); i++ {
-		if evs[i].Kind == EvSteerState {
-			state[evs[i].MessageID] = evs[i].Text
-		}
-	}
-	var tail []*Event
-	for i := start + 1; i < len(evs); i++ {
-		if e := evs[i]; e.Kind == EvUser && (i > lastOut || (e.Steer && state[e.MessageID] == "queued")) {
-			tail = append(tail, e)
-		}
-	}
-	untouched := start >= 0 && lastOut == start && !auto && turnMsg != ""
+	// 要收回的插话：最后一次 agent 有动静之后的用户消息，加上这一轮里还标着「排队中」的插话（chatlog.StopPlan）
+	tail, quiet := chatlog.StopPlan(evs)
+	untouched := quiet && !auto && turnMsg != ""
 
 	// A stop that takes seconds was reported (codex, from the phone) but didn't reproduce: log where the time goes when
 	// it's slow, so the next one shows which step it was.
@@ -1385,36 +1278,7 @@ func (s *Session) WithdrawLast(ctx context.Context) (EscapeResult, error) {
 // lastQueuedLocked：最后一条插话还在 agent 队列里没被读到，就回它的 id。
 // 看排队状态（steer_state：queued / started）。原来看「它后面 agent 还有没有动静」：插话默认排到下一个空档（priority next）后，
 // 排着的时候 agent 照样在出字，那样判断一条都收不回（用户报的）。不报排队状态的 agent 才退回老办法。
-func (s *Session) lastQueuedLocked() string {
-	state := map[string]string{}
-	busy := false
-	for i := len(s.events) - 1; i >= 0; i-- {
-		e := s.events[i]
-		switch e.Kind {
-		case EvSteerState:
-			if _, ok := state[e.MessageID]; !ok {
-				state[e.MessageID] = e.Text // 倒着走，先碰到的是最新的
-			}
-		case EvUpdate, EvPermission, EvAsk:
-			busy = true
-		case EvUser:
-			if !e.Steer {
-				return ""
-			}
-			if st, ok := state[e.MessageID]; ok {
-				if st == "queued" {
-					return e.MessageID
-				}
-				return "" // 最后一条都读到了，前面的更早，也读到了
-			}
-			if busy {
-				return "" // agent 在它之后有动静：已经用上了
-			}
-			return e.MessageID
-		}
-	}
-	return ""
-}
+func (s *Session) lastQueuedLocked() string { return chatlog.LastQueued(s.events) }
 
 // Withdraw：收回一条还没被 agent 读到的插话（「排队中」那行的撤回 / 立即发、输入框里按 ↑）。
 // 已经被读到的收不回，agent 回空，这里什么也不动（Withdrawn = 0）。
@@ -1463,7 +1327,7 @@ func (s *Session) truncateFrom(msgID string) {
 	s.lastErr = ""
 	all := append([]*Event(nil), s.events...)
 	s.mu.Unlock()
-	if err := s.lf.rewrite(all); err != nil {
+	if err := s.lf.Rewrite(all); err != nil {
 		s.h.log.Warn("rewrite log", "err", err)
 	}
 	s.h.broadcastEvents(s.rec.ID, all, true)
@@ -1473,19 +1337,13 @@ func (s *Session) truncateFrom(msgID string) {
 // dropUserEvents：把收回的那几条用户消息从日志里删掉（内容收进 out），整份重推。
 func (s *Session) dropUserEvents(ids map[string]bool, out *EscapeResult) {
 	s.mu.Lock()
-	kept := s.events[:0:0]
-	for _, e := range s.events {
-		if e.Kind == EvUser && ids[e.MessageID] {
-			out.Content = append(out.Content, e.Content...)
-			out.Withdrawn++
-			continue
-		}
-		kept = append(kept, e)
-	}
+	kept, content, n := chatlog.DropUsers(s.events, ids)
+	out.Content = append(out.Content, content...)
+	out.Withdrawn += n
 	s.events = kept
 	all := append([]*Event(nil), kept...)
 	s.mu.Unlock()
-	if err := s.lf.rewrite(all); err != nil {
+	if err := s.lf.Rewrite(all); err != nil {
 		s.h.log.Warn("rewrite log", "err", err)
 	}
 	s.h.broadcastEvents(s.rec.ID, all, true)
@@ -1517,33 +1375,11 @@ func (s *Session) Rewind(ctx context.Context, messageID string) (RewindResult, e
 	// 两种用户消息：gerdr 自己发的（EvUser），和导入 / 追上时从 agent 记录重放的（user_message_chunk，
 	// messageId 就是记录里那条的 uuid，一条带图的消息拆成几块、同一个 id）。只认前一种的话，
 	// 重新载入过的会话上面那些消息全都「找不到这条消息」（踩过）。
-	idx := -1
-	var content []json.RawMessage
-	steer := false
-	for i, e := range s.events {
-		if e.Kind == EvUser && e.MessageID == messageID {
-			idx, content, steer = i, e.Content, e.Steer
-			break
-		}
-		if id, c, ok := userChunk(e); ok && id == messageID {
-			if idx < 0 {
-				idx = i
-			}
-			content = append(content, c)
-		} else if idx >= 0 {
-			break
-		}
-	}
-	if idx < 0 {
+	// /clear 之后 claude 换了一个新会话，这条之前的消息都在旧会话里 —— 回不去（chatlog.ErrBeforeClear）
+	idx, content, steer, err := chatlog.RewindPoint(s.events, messageID)
+	if err != nil {
 		s.mu.Unlock()
-		return RewindResult{}, errors.New("找不到这条消息")
-	}
-	// /clear 之后 claude 换了一个新会话，这条之前的消息都在旧会话里 —— 回不去
-	for _, e := range s.events[idx:] {
-		if e.Kind == EvNotice && e.Level == "clear" {
-			s.mu.Unlock()
-			return RewindResult{}, errors.New("这条消息在 /clear 之前：清空之后只能回退到清空以后发的消息")
-		}
+		return RewindResult{}, err
 	}
 	agentSID := s.rec.AgentSessionID
 	s.mu.Unlock()
@@ -1577,7 +1413,7 @@ func (s *Session) Rewind(ctx context.Context, messageID string) (RewindResult, e
 	s.lastErr = ""
 	evs := append([]*Event(nil), s.events...)
 	s.mu.Unlock()
-	if err := s.lf.rewrite(evs); err != nil {
+	if err := s.lf.Rewrite(evs); err != nil {
 		s.h.log.Warn("rewrite log", "err", err)
 	}
 	s.h.broadcastEvents(s.rec.ID, evs, true)
@@ -1796,20 +1632,7 @@ func (s *Session) adoptOrphanTurn(lastTS int64) {
 }
 
 // userChunk：从 agent 记录重放的一块用户消息（user_message_chunk），取出它的 messageId 和内容块。
-func userChunk(e *Event) (id string, content json.RawMessage, ok bool) {
-	if e.Kind != EvUpdate {
-		return "", nil, false
-	}
-	var u struct {
-		SessionUpdate string          `json:"sessionUpdate"`
-		MessageID     string          `json:"messageId"`
-		Content       json.RawMessage `json:"content"`
-	}
-	if json.Unmarshal(e.Update, &u) != nil || u.SessionUpdate != "user_message_chunk" || u.MessageID == "" {
-		return "", nil, false
-	}
-	return u.MessageID, u.Content, true
-}
+func userChunk(e *Event) (string, json.RawMessage, bool) { return chatlog.UserChunk(e) }
 
 // userTextSet：gerdr 日志里人说过的话（自己发的 + 导入 / 重新载入时从记录重放的），归一化过。
 func (s *Session) userTextSet() map[string]bool {
@@ -1885,7 +1708,7 @@ func (s *Session) Reload(ctx context.Context) error {
 	s.lastErr = ""
 	rec := s.rec
 	s.mu.Unlock()
-	if err := s.lf.rewrite(nil); err != nil {
+	if err := s.lf.Rewrite(nil); err != nil {
 		s.h.log.Warn("rewrite log", "err", err)
 	}
 	s.h.broadcastEvents(rec.ID, []*Event{}, true)

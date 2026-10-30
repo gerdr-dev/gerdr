@@ -14,6 +14,8 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/gerdr-dev/gerdr/chatlog"
+
 	"github.com/coder/acp-go-sdk"
 	"github.com/google/uuid"
 
@@ -30,9 +32,9 @@ import (
 // 「哪些还没带给 agent」从日志里推（最后一条用户消息之后跑完的），不另存状态：重启、撤回、回退之后自然对得上 ——
 // 撤回 / 回退掉的那条消息不在日志里了，它带着的命令又算回「还没带」。
 const (
-	EvShell     = "shell"      // MessageID = 这次运行的 id，Text = 命令
-	EvShellOut  = "shell_out"  // Text = 一段输出（stdout、stderr 混在一起，按出现的先后）
-	EvShellDone = "shell_done" // Exit = 退出码；Level = stopped（人点了停止）/ lost（gerdr 重启时还在跑）
+	EvShell     = chatlog.EvShell
+	EvShellOut  = chatlog.EvShellOut
+	EvShellDone = chatlog.EvShellDone
 )
 
 const (
@@ -116,7 +118,7 @@ type shellRun struct {
 
 // shellDir：这个会话 `!命令` 的完整输出放在哪（和会话日志挨着，删会话时一起删）。
 func (s *Session) shellDir() string {
-	return filepath.Join(filepath.Dir(s.lf.path), s.rec.ID+".shell")
+	return filepath.Join(filepath.Dir(s.lf.Path), s.rec.ID+".shell")
 }
 
 func userShell() string {

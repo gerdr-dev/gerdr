@@ -77,7 +77,7 @@ func TestClearSplitsOff(t *testing.T) {
 	if h.byAgent["claude:old"] != o || h.byAgent["claude:new"] != s {
 		t.Fatal("byAgent not updated")
 	}
-	if evs, _ := readLog(o.lf.path); len(evs) != 3 {
+	if evs, _ := readLog(o.lf.Path); len(evs) != 3 {
 		t.Fatalf("old log on disk has %d events", len(evs))
 	}
 }

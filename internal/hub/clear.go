@@ -18,7 +18,7 @@ func (h *Hub) splitOffCleared(s *Session, prev Record) {
 	rest := append([]*Event(nil), s.events...)
 	s.rec.SyncedSize = 0 // that was the old agent file's size; it goes with the old conversation
 	s.mu.Unlock()
-	if err := s.lf.rewrite(rest); err != nil {
+	if err := s.lf.Rewrite(rest); err != nil {
 		h.log.Warn("rewrite log", "err", err)
 	}
 	h.broadcastEvents(s.rec.ID, rest, true)
@@ -62,7 +62,7 @@ func (h *Hub) archive(rec Record, evs []*Event) *Session {
 	rec.UpdatedAt = evs[len(evs)-1].TS
 	o := newSession(h, rec)
 	o.events = evs
-	if err := o.lf.rewrite(evs); err != nil {
+	if err := o.lf.Rewrite(evs); err != nil {
 		h.log.Warn("write session log", "id", rec.ID, "err", err)
 		return nil
 	}
@@ -138,7 +138,7 @@ func (h *Hub) migrateCleared() {
 		}
 		s.events = append([]*Event(nil), s.events[end:]...)
 		s.rec.Cleared = nil
-		if err := s.lf.rewrite(s.events); err != nil {
+		if err := s.lf.Rewrite(s.events); err != nil {
 			h.log.Warn("rewrite log", "id", s.rec.ID, "err", err)
 		}
 	}
