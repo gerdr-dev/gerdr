@@ -296,14 +296,8 @@ export function renderPart(p: GPart, i: number, ctx: PartCtx): ReactNode {
     case "dynamic-tool": {
       const tp = p as ToolPart;
       if (tp.toolMetadata?.parent && ctx.children.size && [...ctx.children.values()].some((arr) => arr.includes(tp))) return null;
-      const kids = ctx.children.get(tp.toolCallId);
-      return (
-        <ToolCall key={tp.toolCallId} part={tp} running={ctx.running} keep={ctx.keep || undefined}>
-          {kids?.map((k) => (
-            <ToolCall key={k.toolCallId} part={k} running={ctx.running} />
-          ))}
-        </ToolCall>
-      );
+      // A subagent's own tool calls aren't drawn under its card (they buried the main conversation); "查看对话" opens them.
+      return <ToolCall key={tp.toolCallId} part={tp} running={ctx.running} keep={ctx.keep || undefined} agent={ctx.children.has(tp.toolCallId)} />;
     }
     case "data-plan":
       return <PlanCard key={i} entries={p.data.entries} />;

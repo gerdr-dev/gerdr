@@ -13,6 +13,7 @@ import {
   Wrench,
   ArrowRightLeft,
   Brain,
+  Bot,
 } from "lucide-react";
 import { diffLines } from "diff";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
@@ -153,9 +154,8 @@ export function ToolBody({ meta, input, keep }: { meta: ToolMeta; input: unknown
   );
 }
 
-export function ToolCall({ part, children, running, keep: keepOpen }: { part: ToolPart; children?: ReactNode; running: boolean; keep?: string }) {
+export function ToolCall({ part, agent, running, keep: keepOpen }: { part: ToolPart; agent?: boolean; running: boolean; keep?: string }) {
   const meta = (part.toolMetadata ?? { kind: "other", status: "pending" }) as ToolMeta;
-  const Icon = ICONS[meta.kind] ?? Wrench;
   const busy = (part.state === "input-streaming" || part.state === "input-available") && running;
   const failed = part.state === "output-error";
   const hasDiff = (meta.content ?? []).some(
@@ -167,7 +167,7 @@ export function ToolCall({ part, children, running, keep: keepOpen }: { part: To
   // 展开没展开记在组件外面：对话是虚拟列表，滚出屏幕会卸载，滚回来要还是原样
   const keep = session ? `${session.id}:tool:${part.toolCallId}` : undefined;
   const [open, setOpen] = useKept<boolean | undefined>(keepOpen ?? keep, undefined);
-  const isOpen = open ?? ((hasDiff && expandEdits) || !!children);
+  const isOpen = open ?? (hasDiff && expandEdits);
   const title = part.title || part.toolName;
   const inp = part.input && typeof part.input === "object" ? (part.input as Record<string, unknown>) : undefined;
   const cmd = meta.kind === "execute" && typeof inp?.command === "string" ? inp.command : undefined;
@@ -176,6 +176,10 @@ export function ToolCall({ part, children, running, keep: keepOpen }: { part: To
   const took = meta.startedAt && meta.endedAt && meta.endedAt - meta.startedAt >= 1000 ? elapsed(meta.startedAt, meta.endedAt) : undefined;
   const task = session?.tasks?.find((t) => t.toolCallId === part.toolCallId);
   useTick(!!task && task.status === "running");
+  // Claude reports a subagent (Task / Agent tool) with kind "think", which drew a brain and made it look like a thinking step.
+  // agent: it has tool calls of its own, which marks a subagent even before its task is reported.
+  const isAgent = !!task && (task.type === "local_agent" || !!task.subagent);
+  const Icon = isAgent || agent ? Bot : (ICONS[meta.kind] ?? Wrench);
   // 任务的进度 / 摘要：和行里已经写着的（说明、标题、任务描述）一样就不再写一遍
   const note = task && (task.status === "running" ? task.progress : task.summary);
   const taskNote =
@@ -243,7 +247,7 @@ export function ToolCall({ part, children, running, keep: keepOpen }: { part: To
         )}
         {/* 后面的按钮和展开箭头都靠右 */}
         <span className="flex-1" />
-        {task && (task.type === "local_agent" || task.subagent) && (
+        {task && isAgent && (
           <span
             role="button"
             className="shrink-0 rounded-sm px-1.5 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -300,7 +304,6 @@ export function ToolCall({ part, children, running, keep: keepOpen }: { part: To
       </CollapsibleTrigger>
       <CollapsibleContent className="pl-[22px] pr-1 pt-1 pb-2">
         <ToolBody meta={meta} input={part.input} keep={keep} />
-        {children && <div className="mt-2 space-y-1 border-l pl-2">{children}</div>}
       </CollapsibleContent>
     </Collapsible>
   );
