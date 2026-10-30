@@ -1,4 +1,5 @@
 import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { TabActive } from "../Panes";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { ArrowDown, CornerDownRight } from "lucide-react";
@@ -359,30 +360,41 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
   // 那句话早滚没了却不显示，要往上翻一截离开底部才冒出来（用户报的）。行是虚拟列表的，只能从 DOM 上的 data-index 认出顶上是第几行。
   const [pinned, setPinned] = useState<number | null>(null);
   const pinRaf = useRef(0);
+  const pinnedRef = useRef<number | null>(null);
   const rowsRef = useRef(rows);
   rowsRef.current = rows;
+  // Commit with flushSync: a plain setState from a rAF / ResizeObserver callback renders after the frame is painted,
+  // so on opening a chat the list showed up one or two frames before the pinned prompt (measured: 40-80ms, user report).
+  const pinNow = () => {
+    const el = scrollerEl.current;
+    if (!el) return;
+    const top = el.getBoundingClientRect().top;
+    let topIdx = -1;
+    for (const it of el.querySelectorAll<HTMLElement>("[data-index]")) {
+      if (it.getBoundingClientRect().bottom > top + 1) {
+        topIdx = Number(it.dataset.index);
+        break;
+      }
+    }
+    const rs = rowsRef.current;
+    let u = -1;
+    for (let i = Math.min(topIdx, rs.length - 1); i >= 0; i--)
+      if (rs[i].kind === "user") {
+        u = i;
+        break;
+      }
+    // Virtuoso keeps the list visibility: hidden until it has placed the initial scroll position; pinning then would
+    // show the prompt over an empty pane ahead of the rows.
+    const lst = el.querySelector<HTMLElement>("[data-testid=virtuoso-item-list]");
+    const hidden = !!lst && getComputedStyle(lst).visibility === "hidden";
+    const p = !hidden && u >= 0 && u < topIdx ? u : null;
+    if (p === pinnedRef.current) return;
+    pinnedRef.current = p;
+    flushSync(() => setPinned(p));
+  };
   const updatePinned = () => {
     cancelAnimationFrame(pinRaf.current);
-    pinRaf.current = requestAnimationFrame(() => {
-      const el = scrollerEl.current;
-      if (!el) return;
-      const top = el.getBoundingClientRect().top;
-      let topIdx = -1;
-      for (const it of el.querySelectorAll<HTMLElement>("[data-index]")) {
-        if (it.getBoundingClientRect().bottom > top + 1) {
-          topIdx = Number(it.dataset.index);
-          break;
-        }
-      }
-      const rs = rowsRef.current;
-      let u = -1;
-      for (let i = Math.min(topIdx, rs.length - 1); i >= 0; i--)
-        if (rs[i].kind === "user") {
-          u = i;
-          break;
-        }
-      setPinned(u >= 0 && u < topIdx ? u : null);
-    });
+    pinRaf.current = requestAnimationFrame(pinNow);
   };
   useEffect(() => () => cancelAnimationFrame(pinRaf.current), []);
   const lastH = useRef(0); // 上一次量到的总高（推到底之前用它判断「刚才是不是贴着底」）
@@ -423,6 +435,9 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
     if (!el || !lst) return;
     const ro = new ResizeObserver(() => {
       if (!activeRef.current) return;
+      // Runs after Virtuoso laid the rows out and before paint: the pinned prompt lands in the same frame as the rows.
+      cancelAnimationFrame(pinRaf.current);
+      pinNow();
       // Only when the content's total height changed. The item list also resizes whenever the virtual list mounts or
       // unmounts rows as you scroll, with scrollHeight unchanged; pushing then ate every small scroll up from the bottom
       // (the first 80px up still count as at the bottom), so the chat couldn't be scrolled up at all (tools/scrolltest/
@@ -434,7 +449,14 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
       lastH.current = el.scrollHeight;
     });
     ro.observe(lst);
-    return () => ro.disconnect();
+    // Virtuoso un-hides the list (see pinNow) without resizing it, so the observer above doesn't fire then. A
+    // MutationObserver callback is a microtask, still ahead of the paint that first shows the rows.
+    const mo = new MutationObserver(() => activeRef.current && pinNow());
+    mo.observe(lst, { attributes: true, attributeFilter: ["style"] });
+    return () => {
+      ro.disconnect();
+      mo.disconnect();
+    };
   }, [hasList]);
   // 行是 memo 的，回调要稳定（不然每次都重渲染），但又要拿到最新的 —— 放在 ref 里转一手
   const latest = useRef({ doRewind, sessionId: session.id, openGroups, setOpenGroups });
