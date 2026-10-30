@@ -30,6 +30,7 @@ node tabs.mjs                                # 然后跑场景，见下表
 | 翻到顶补一段时跳 | `fling.mjs --to-top` | 一直往上甩到头，分段加载每补一段都看一遍 |
 | agent 输出时内容在动 / 不跟底 | `stream.mjs --at="用户说的话" [--up=600\|0]` | 截到那句话，后面那一轮流式灌进去；往上翻着看内容动没动 / 贴着底看跟没跟 |
 | Phone: switching panes shows a mid-chat frame, then snaps to the bottom | `panes.mjs [--stream] [--cpu=4] [--ro]` | One tab split in two, phone viewport, focus flipped back and forth (only the focused pane is drawn, so each switch remounts). `--cpu` slows the CPU like a phone, `--stream` feeds output in while switching, `--ro` judges the painted frames |
+| Can't scroll up from the bottom, gets pulled back | `scrollup.mjs [--step=40] [--steps=25]` | Small wheel steps up from the bottom must stick. Run it after touching anything that keeps the chat at the bottom: the first 80px up still count as at the bottom, and the virtual list resizes on every step |
 | 某一行自己变高矮 | `rows.mjs [--tab=1]` | 行挂上后高度变没变（DOM 没变也会变）、Virtuoso 记的高度和实际对不对 |
 
 用户说「就在这儿闪」：拿那个会话，`fling.mjs --from="那段话"`，先翻到那儿再甩。闪不闪跟内容关系很大，别拿别的会话代替。
@@ -80,7 +81,9 @@ Virtuoso 在 ResizeObserver 里量行高、改布局，所以 rAF 里看到「�
   one to several frames after the row actually grew (a remounted row going from its estimate to its real height, the
   last row growing under a streaming reply). Those frames were painted short of the bottom. ChatView now also sticks
   to the bottom from a ResizeObserver on the item list created after Virtuoso's (in an effect), so it runs before paint
-  with the same conditions. Headless Chrome on a laptop only shows this with `--cpu=4` and `--ro`: in rAF frames the lag
+  with the same conditions, plus two: the content height must actually have changed (the item list also resizes when
+  rows mount / unmount while scrolling; reacting to that pulled every small scroll up back to the bottom, caught by
+  `scrollup.mjs`), and no user input on the scroller in the last 600ms. Headless Chrome on a laptop only shows this with `--cpu=4` and `--ro`: in rAF frames the lag
   shows up with or without the fix, in the painted frames only without it.
 - **Virtuoso 把行高取整**（默认 `Math.round(getBoundingClientRect().height)`）：41.5 记 42、39.8 记 40，
   卸掉的行越多攒得越多，量完缩回那一下整段挪一截（卸 32 行差 10px），会话越长越明显。`itemSize` 换成不取整的。

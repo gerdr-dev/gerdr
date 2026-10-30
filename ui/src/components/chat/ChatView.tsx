@@ -423,6 +423,11 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
     if (!el || !lst) return;
     const ro = new ResizeObserver(() => {
       if (!activeRef.current) return;
+      // Only when the content's total height changed. The item list also resizes whenever the virtual list mounts or
+      // unmounts rows as you scroll, with scrollHeight unchanged; pushing then ate every small scroll up from the bottom
+      // (the first 80px up still count as at the bottom), so the chat couldn't be scrolled up at all (tools/scrolltest/
+      // scrollup.mjs). And never right after the user touched the scroller: that scroll is theirs (same rule as syncBottom).
+      if (el.scrollHeight === lastH.current || performance.now() - lastInputOf(el) < 600) return;
       const wasAtBottom = lastH.current - el.clientHeight - el.scrollTop < 80;
       const grew = el.scrollHeight > lastH.current;
       if (bottomRef.current && wasAtBottom && !(grew && holding()) && el.scrollHeight - el.clientHeight - el.scrollTop > 1) el.scrollTop = el.scrollHeight;
