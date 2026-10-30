@@ -143,6 +143,30 @@ func TestReplayUserImage(t *testing.T) {
 	}
 }
 
+// After an auto-compaction Claude Code writes the summary as a user message (isCompactSummary). Replay must not
+// show it as something the person said (it did: a huge "This session is being continued…" bubble), nor count it as
+// a message sent elsewhere; the compact_boundary before it becomes the same note the live stream shows.
+func TestReplayCompaction(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "s.jsonl")
+	lines := `{"type":"user","uuid":"u1","message":{"role":"user","content":"hi"}}
+{"type":"system","subtype":"compact_boundary","uuid":"b1","content":"Conversation compacted"}
+{"type":"user","uuid":"u2","isCompactSummary":true,"isVisibleInTranscriptOnly":true,"message":{"role":"user","content":"This session is being continued from a previous conversation…"}}
+`
+	if err := os.WriteFile(p, []byte(lines), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var got []acp.SessionUpdate
+	if err := replayTranscript(p, func(u acp.SessionUpdate) { got = append(got, u) }); err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0].UserMessageChunk == nil || got[1].AgentThoughtChunk == nil {
+		t.Fatalf("want the user message then the compaction note, got %+v", got)
+	}
+	if texts := userTextsFrom(p, 0); !slices.Equal(texts, []string{"hi"}) {
+		t.Fatalf("userTextsFrom = %q", texts)
+	}
+}
+
 // claude 自己补写的那几行不是人说的话：被打断的记号、后台任务的汇报。算进去的话追上就误报「在别处接着聊过」。
 func TestUserTextsFromSkipsInterrupt(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "s.jsonl")

@@ -287,9 +287,12 @@ func (s *session) onSystem(ctx context.Context, m map[string]json.RawMessage, ra
 			}
 		}
 	case "compact_boundary":
-		s.update(ctx, acp.SessionUpdate{AgentThoughtChunk: &acp.SessionUpdateAgentThoughtChunk{Content: acp.TextBlock("（上下文已压缩）\n")}})
+		s.update(ctx, compactedNote)
 	}
 }
+
+// compactedNote marks a compaction in the chat, live and on replay (transcript.go).
+var compactedNote = acp.SessionUpdate{AgentThoughtChunk: &acp.SessionUpdateAgentThoughtChunk{Content: acp.TextBlock("（上下文已压缩）\n")}}
 
 func (s *session) onStreamEvent(ctx context.Context, raw json.RawMessage, apiID string) {
 	var ev struct {

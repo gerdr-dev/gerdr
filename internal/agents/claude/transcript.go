@@ -67,6 +67,10 @@ type entry struct {
 		Type       string `json:"type"`
 		SourceUUID string `json:"source_uuid"`
 	} `json:"attachment"`
+	// IsCompactSummary: the summary Claude Code writes as a user message right after a compaction
+	// ("This session is being continued from a previous conversation…"). Not something the person said.
+	IsCompactSummary bool   `json:"isCompactSummary"`
+	Subtype          string `json:"subtype"` // type=system: compact_boundary marks where a compaction happened
 }
 
 func scan(path string, fn func(e *entry, raw []byte) bool) error {
@@ -113,7 +117,7 @@ type userMsg struct {
 
 // userText 取一条用户消息里人说的话；工具结果、命令包装、系统注入的返回 ""。
 func userText(e *entry) string {
-	if e.Type != "user" || e.IsSidechain || e.IsMeta {
+	if e.Type != "user" || e.IsSidechain || e.IsMeta || e.IsCompactSummary {
 		return ""
 	}
 	var m userMsg
@@ -219,7 +223,7 @@ func listTranscripts(root, cwd string, limit int) ([]acp.SessionInfo, error) {
 // userImages 取一条用户消息里贴的图（base64 那种），和 userText 认的是同一类消息（人说的、不是工具结果）。
 // 重放时和文字一起发：不发的话，会话在别处接着聊过、整份重放一次之后，带截图的消息就只剩文字（踩过：截图没了）。
 func userImages(e *entry) []acp.ContentBlock {
-	if e.Type != "user" || e.IsSidechain || e.IsMeta {
+	if e.Type != "user" || e.IsSidechain || e.IsMeta || e.IsCompactSummary {
 		return nil
 	}
 	var m userMsg
@@ -285,6 +289,11 @@ func replayTranscriptUntil(path, last string, emit func(acp.SessionUpdate)) erro
 						rec.toolResult(b, e.ToolResult)
 					}
 				}
+			}
+		case "system":
+			// Same marker the live stream shows for it (stream.go); the summary message itself is skipped by userText.
+			if e.Subtype == "compact_boundary" {
+				emit(compactedNote)
 			}
 		case "assistant":
 			var m struct {
