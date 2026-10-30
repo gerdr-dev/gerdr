@@ -12,7 +12,7 @@ import { pushDraft, sameDraft } from "@/lib/sync";
 import type { ContentBlock, SessionSummary } from "@/lib/types";
 import { dropShellContext, videoLinkPath } from "@/lib/transcript";
 import { MODE, defaultsOf, flatOptions, setDefault, setDefaults } from "@/lib/defaults";
-import { isCoarse, usePhone } from "@/lib/phone";
+import { isCoarse, keyboardUp, usePhone } from "@/lib/phone";
 import { askKey } from "@/lib/askkeys";
 import { cn } from "@/lib/utils";
 import { UsagePanel } from "@/components/UsageMeter";
@@ -245,12 +245,13 @@ export const Composer = forwardRef<
     };
   }, []);
   // The send / stop buttons don't take focus from the text box: if they did, Esc to stop or Enter to send again did
-  // nothing afterwards (reported). On touch screens they don't give it focus either: focusing the box pops the soft
-  // keyboard, and tapping send with the keyboard down shouldn't bring it up (reported). preventDefault alone keeps
-  // focus wherever it already is.
+  // nothing afterwards (reported). On touch screens a tap on them mustn't bring the soft keyboard up when it is down
+  // (reported): don't focus the box, and if it still has focus with the keyboard hidden (Android keeps it focused when
+  // the keyboard's own hide button or a swipe closes it, and the next tap reopens the keyboard), let go of it.
   const keepFocus = (e: React.MouseEvent) => {
     e.preventDefault();
     if (!isCoarse()) ta.current?.focus();
+    else if (document.activeElement === ta.current && !keyboardUp()) ta.current?.blur();
   };
   const putText = (t: string) => {
     setText(t);

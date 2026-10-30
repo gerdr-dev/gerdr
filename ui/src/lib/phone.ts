@@ -39,6 +39,7 @@ export function useViewportHeight() {
     const vv = window.visualViewport;
     if (!vv) return;
     const f = () => {
+      seen(vv);
       document.documentElement.style.setProperty("--vvh", `${Math.round(vv.height)}px`);
       // 键盘弹起时 iOS 会把整页往上推一截（滚动的是 window），我们已经自己缩了高度，推回来
       if (window.scrollY) window.scrollTo(0, 0);
@@ -51,4 +52,25 @@ export function useViewportHeight() {
       vv.removeEventListener("scroll", f);
     };
   }, []);
+}
+
+// The tallest the visual viewport has been at the current width: the height with no soft keyboard. Reset when the
+// width changes (rotation, split screen), since the old height means nothing there.
+let tallest = 0;
+let tallestW = 0;
+const seen = (vv: VisualViewport) => {
+  if (vv.width !== tallestW) ((tallestW = vv.width), (tallest = 0));
+  tallest = Math.max(tallest, vv.height);
+};
+
+/**
+ * Whether the soft keyboard is showing. Focus doesn't tell: on Android, hiding the keyboard with its own button or a
+ * swipe leaves the text box focused, and a later tap anywhere in the page brings the keyboard back. So this goes by
+ * the viewport instead: more than 150px shorter than its keyboard-less height means a keyboard is taking the space.
+ */
+export function keyboardUp() {
+  const vv = window.visualViewport;
+  if (!vv) return true;
+  seen(vv);
+  return vv.height < tallest - 150;
 }
