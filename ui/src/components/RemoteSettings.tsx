@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, type PasskeyInfo, type RemoteDevice, type RemoteStatus } from "@/lib/api";
 import { isCancel, isStepUp, passkeySupported, registerPasskey } from "@/lib/passkey";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useStore } from "@/lib/store";
 import type { RemoteConn } from "@/lib/types";
 import { RemoteCert } from "@/components/RemoteCert";
@@ -101,7 +102,7 @@ export function RemoteSettings({ open }: { open: boolean }) {
             </div>
             <div className="text-[12px] text-muted-foreground">
               中继 {st.relayURL} · {st.state || "—"}
-              {st.certExpires && <> · 证书 {new Date(st.certExpires).toLocaleDateString()} 到期</>}
+              {st.certExpires && isRemote && <> · 证书 {new Date(st.certExpires).toLocaleDateString()} 到期</>}
             </div>
             {st.err && <div className="text-[12px] text-bad">{st.err}</div>}
             {st.locked && (
@@ -122,59 +123,59 @@ export function RemoteSettings({ open }: { open: boolean }) {
 
       {st.enabled && !isRemote && <StepUpApprovals open={open} />}
 
-      {st.enabled && !isRemote && <RemoteCert host={st.host ?? ""} onSaved={load} />}
-
-      {st.enabled && !isRemote && (
-        <div className="space-y-1.5">
-          <div className="text-[13px] font-medium">配对新设备</div>
-          {pair ? (
-            <div className="flex items-start gap-4 rounded-md border p-3 max-md:flex-col">
-              {/* 图本身是白底黑块（服务端画的 PNG）：扫码要对比度，深色模式下也不反色 */}
-              {pair.qr && <img src={pair.qr} alt="配对二维码" className="size-40 shrink-0 rounded-sm" />}
-              <div className="space-y-1.5">
-                <div>用手机相机扫这个二维码，或者打开 {st.url} 输入：</div>
-                <div className="font-mono text-[20px] tracking-[.3em]">
-                  {pair.code.slice(0, 4)} {pair.code.slice(4)}
-                </div>
-                <div className="text-[12px] text-muted-foreground">
-                  {new Date(pair.expires).toLocaleTimeString()} 前有效，用一次就废。
-                  {st.pairMinutes > 0 && <>配进来的设备只能用 {st.pairMinutes} 分钟，在那台设备上过一次 passkey 才长期有效。</>}
-                </div>
-                <Button size="sm" variant="outline" onClick={() => setPair(null)}>
-                  收起
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <Button size="sm" onClick={() => run(async () => setPair(await api.remotePairCode()))}>
-              出一个配对码
-            </Button>
-          )}
-        </div>
-      )}
+      {st.enabled && !isRemote && <RemoteCert host={st.host ?? ""} expires={st.certExpires} onSaved={load} />}
 
       <div className="space-y-1.5">
         <div className="flex items-center justify-between">
           <div className="text-[13px] font-medium">配过对的设备</div>
-          {devs.length + keys.length > 0 && (
-            // 两下才生效：这是急停，连 passkey 一起清（只清设备的话，留着的 passkey 能立刻换回一份新凭据）
-            <Button
-              size="sm"
-              variant={confirmAll ? "destructive" : "outline"}
-              onBlur={() => setConfirmAll(false)}
-              onClick={() => {
-                if (!confirmAll) return setConfirmAll(true);
-                setConfirmAll(false);
-                run(async () => {
-                  const r = await api.remoteRevokeAll();
-                  setMsg(`踢掉了 ${r.revoked} 台设备${r.passkeys ? `，并删掉了 ${r.passkeys} 把 passkey` : ""}`);
-                  if (isRemote) location.reload();
-                });
-              }}
-            >
-              {confirmAll ? "再点一下：全部踢掉（含 passkey）" : "全部踢掉"}
-            </Button>
-          )}
+          <div className="flex items-center gap-2">
+            {/* Pairing codes only come from the machine itself (see the note at the top). A fresh code each time the
+              popover opens; closing it drops the code from the page. */}
+            {st.enabled && !isRemote && (
+              <Popover open={!!pair} onOpenChange={(o) => (o ? run(async () => setPair(await api.remotePairCode())) : setPair(null))}>
+                {/* The trigger goes on a wrapper: asChild straight on the Button would overwrite its data-slot, and the
+                    settings dialog sizes buttons by [data-slot=button] (SettingsDialog.tsx). */}
+                <PopoverTrigger asChild>
+                  <span className="inline-flex">
+                    <Button size="sm">添加设备</Button>
+                  </span>
+                </PopoverTrigger>
+                {pair && (
+                  <PopoverContent align="end" className="w-80 space-y-2 text-[13px]">
+                    {/* 图本身是白底黑块（服务端画的 PNG）：扫码要对比度，深色模式下也不反色 */}
+                    {pair.qr && <img src={pair.qr} alt="配对二维码" className="mx-auto size-48 rounded-sm" />}
+                    <div>用手机相机扫这个二维码，或者打开 {st.url} 输入：</div>
+                    <div className="text-center font-mono text-[20px] tracking-[.3em]">
+                      {pair.code.slice(0, 4)} {pair.code.slice(4)}
+                    </div>
+                    <div className="text-[12px] text-muted-foreground">
+                      {new Date(pair.expires).toLocaleTimeString()} 前有效，用一次就废。
+                      {st.pairMinutes > 0 && <>配进来的设备只能用 {st.pairMinutes} 分钟，在那台设备上过一次 passkey 才长期有效。</>}
+                    </div>
+                  </PopoverContent>
+                )}
+              </Popover>
+            )}
+            {devs.length + keys.length > 0 && (
+              // 两下才生效：这是急停，连 passkey 一起清（只清设备的话，留着的 passkey 能立刻换回一份新凭据）
+              <Button
+                size="sm"
+                variant={confirmAll ? "destructive" : "outline"}
+                onBlur={() => setConfirmAll(false)}
+                onClick={() => {
+                  if (!confirmAll) return setConfirmAll(true);
+                  setConfirmAll(false);
+                  run(async () => {
+                    const r = await api.remoteRevokeAll();
+                    setMsg(`踢掉了 ${r.revoked} 台设备${r.passkeys ? `，并删掉了 ${r.passkeys} 把 passkey` : ""}`);
+                    if (isRemote) location.reload();
+                  });
+                }}
+              >
+                {confirmAll ? "再点一下：全部踢掉（含 passkey）" : "全部踢掉"}
+              </Button>
+            )}
+          </div>
         </div>
         <div className="divide-y rounded-md border">
           {devs.length === 0 && <div className="p-3 text-muted-foreground">还没有。</div>}
