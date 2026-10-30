@@ -22,9 +22,10 @@ import (
 //   - Claude 4.6+ thinks with thinking:{type:adaptive} + output_config.effort; display defaults to "omitted" on newer
 //     models (thinking blocks with empty text), so we ask for something. "summarized" is a separate model's long
 //     English summary of the reasoning; "updates" (beta, Opus/Sonnet 5.5, Fable 5+) is the model's own one- or
-//     two-line progress notes between tool calls, in the conversation's language — what Claude Code asks for by
-//     default, and much easier to follow. Request.Thinking picks: "updates" where the model takes it, else
-//     "adaptive" (= summarized). budget_tokens is a 400 on Claude 4.7+ and is never sent.
+//     two-line progress notes between tool calls, in the conversation's language (Claude Code asks for it). But in
+//     "updates" the model decides whether to write a note at all, sometimes as text instead of thinking, and over
+//     a gateway it often wrote none for many steps: the reasoning is hidden, so nothing showed. So "adaptive"
+//     (= summarized) is the default and "updates" is opt-in per model. budget_tokens is a 400 on 4.7+, never sent.
 //   - Prompt caching is opt-in: cache_control on the system prompt, the last tool and the last block of the last
 //     message (3 of the 4 allowed breakpoints). usage.input_tokens excludes cache reads and writes; Usage.Input adds
 //     them back so it means the same thing as on the other protocols.

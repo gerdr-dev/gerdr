@@ -618,10 +618,10 @@ func TestAnthropicProviderDefaults(t *testing.T) {
 		{ID: "claude-opus-5-5", API: "chat"}, {ID: "claude-sonnet-4-6"}, {ID: "claude-haiku-4-5"}, {ID: "glm-5"},
 	}}}}
 	ms := c.models()
-	if ms[0].API != "anthropic" || ms[0].Thinking != "updates" || ms[0].DefaultEffort != "high" || len(ms[0].Efforts) != 5 || ms[0].MaxOutput != 64_000 {
+	if ms[0].API != "anthropic" || ms[0].Thinking != "adaptive" || ms[0].DefaultEffort != "high" || len(ms[0].Efforts) != 5 || ms[0].MaxOutput != 64_000 {
 		t.Fatalf("opus 5.5: %+v", ms[0].Model)
 	}
-	if len(ms[1].Efforts) != 4 || ms[1].Thinking != "adaptive" { // no xhigh before 4.7, no "updates" display
+	if len(ms[1].Efforts) != 4 { // no xhigh before 4.7
 		t.Fatalf("sonnet 4.6: %+v", ms[1].Efforts)
 	}
 	for _, m := range ms[2:] {

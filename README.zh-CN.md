@@ -251,7 +251,7 @@ API key 就写 `ANTHROPIC_API_KEY=…`。还能换可执行文件、追加命令
 ```
 
 不想把 key 写进文件就用 `"apiKeyEnv": "环境变量名"`。模型只写 id 就行，协议、思考档位、上下文窗口按 id 猜；猜错了在模型上写
-`api`（chat / responses）、`efforts`、`window`、`images`、`maxOutput`。也可以在设置 → Agent 最下面配（能从接口拉模型列表、单个试一下）。
+`api`（chat / responses）、`efforts`、`window`、`images`、`maxOutput`，Claude 还可以写 `thinking: "updates"`（思考只显示模型自己写的简短进度说明，不是推理摘要；有时模型一句都不写）。也可以在设置 → Agent 最下面配（能从接口拉模型列表、单个试一下）。
 会话记录在 `~/.gerdr/native/`。插话、回退、审批、子 agent（可以放后台）、后台命令、网页抓取、`/compact`、`/clear`、skill、
 MCP（用 Claude Code 配的那些 + gerdr 自己的，不支持要 OAuth 登录的）都支持。
 **长期记忆**：你纠正过它的、你的偏好、项目的约定它会自己记下来，新会话也记得。记在 `~/.gerdr/native/memory/`（`global/` 是全局的，
