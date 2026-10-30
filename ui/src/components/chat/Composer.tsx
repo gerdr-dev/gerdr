@@ -83,6 +83,7 @@ export const Composer = forwardRef<
   const [busy, setBusy] = useState(false);
   const [cmdIdx, setCmdIdx] = useState(0);
   const ta = useRef<HTMLTextAreaElement>(null);
+  const root = useRef<HTMLDivElement>(null);
   const imgRefs = useRef<(HTMLDivElement | null)[]>([]);
   const setText = (t: string) => set((s) => ({ drafts: { ...s.drafts, [paneId]: t } }));
 
@@ -98,6 +99,29 @@ export const Composer = forwardRef<
     putBack: (blocks: ContentBlock[]) => putBack(blocks),
     ctrlC: () => ctrlC(),
   }));
+  // Touch screens: a tap anywhere outside the composer lets go of the text box, so the soft keyboard goes away. Tapping
+  // non-focusable things (a <video>'s controls, plain text) doesn't move focus on its own, so the box stayed active and
+  // the keyboard kept popping back. Only a tap counts: a drag that turns into a scroll fires pointercancel, and
+  // scrolling the chat while typing shouldn't close the keyboard. Taps inside the composer (send, attach…) keep focus.
+  useEffect(() => {
+    if (!isCoarse()) return;
+    let outside = false;
+    const down = (e: PointerEvent) => (outside = !root.current?.contains(e.target as Node));
+    const cancel = () => (outside = false);
+    const up = (e: PointerEvent) => {
+      const el = ta.current;
+      if (!outside || !el || document.activeElement !== el || root.current?.contains(e.target as Node)) return;
+      el.blur();
+    };
+    document.addEventListener("pointerdown", down, true);
+    document.addEventListener("pointercancel", cancel, true);
+    document.addEventListener("pointerup", up, true);
+    return () => {
+      document.removeEventListener("pointerdown", down, true);
+      document.removeEventListener("pointercancel", cancel, true);
+      document.removeEventListener("pointerup", up, true);
+    };
+  }, []);
   // 点发送 / 打断按钮不抢输入框的焦点：抢走了，接着按 Esc 打断、回车再发都没反应（用户报的）
   const keepFocus = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -676,7 +700,7 @@ export const Composer = forwardRef<
 
   sendRef.current = send;
   return (
-    <div className="relative px-3 pb-3">
+    <div ref={root} className="relative px-3 pb-3">
       {usage && <UsagePanel agent={base} onClose={() => setUsage(false)} />}
       <HeldDialog sessionId={session.id} holders={held} onClose={() => setHeld(null)} onDone={() => setTimeout(() => sendRef.current(), 50)} />
       {slash && !(session.commands ?? []).length && (
