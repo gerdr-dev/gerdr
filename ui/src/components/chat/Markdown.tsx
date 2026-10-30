@@ -1,7 +1,7 @@
 import { ChevronDown, Play, SquareTerminal, Terminal } from "lucide-react";
 import { useContext, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
-import { defaultComponents, defaultRehypePlugins, type Components } from "streamdown";
+import { defaultComponents, defaultRehypePlugins, defaultRemarkPlugins, type Components, type StreamdownProps } from "streamdown";
 import { MessageResponse } from "@/components/ai-elements/message";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -20,6 +20,13 @@ import { SessionContext } from "./sessionContext";
  * 我们的插件排在默认那几个后面：harden / sanitize 跑完了才加 data-gerdr-path，不会被它们清掉。
  */
 const rehypePlugins = [...Object.values(defaultRehypePlugins), rehypePaths, rehypeImageGroups];
+
+// GFM by default also reads a pair of single tildes as strikethrough, so a sentence naming two home paths
+// (`~/.claude.json、~/.codex/config.toml`) came out crossed through. Only `~~text~~` strikes now.
+const remarkPlugins = Object.values({
+  ...defaultRemarkPlugins,
+  gfm: [(defaultRemarkPlugins.gfm as [any, object])[0], { singleTilde: false }],
+}) as StreamdownProps["remarkPlugins"];
 
 const DefaultA = (defaultComponents as Record<string, any>).a ?? "a";
 
@@ -208,7 +215,7 @@ const components: Components = { a: A, img: Img, p: P, inlineCode: InlineCode, c
 
 export function Markdown({ children }: { children: string }) {
   return (
-    <MessageResponse rehypePlugins={rehypePlugins} components={components} urlTransform={urlTransform}>
+    <MessageResponse remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins} components={components} urlTransform={urlTransform}>
       {children}
     </MessageResponse>
   );

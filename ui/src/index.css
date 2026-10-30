@@ -171,6 +171,10 @@
 .gerdr-md {
   font-size: 1em;
   line-height: 1.7;
+  /* A long path or URL in prose (`~/.codex/config.toml）。`) has no break opportunity, so on a phone it pushed the
+     whole chat into horizontal scroll. break-word only splits a word when it would overflow, and unlike `anywhere`
+     it leaves min-content alone, so table columns don't collapse. */
+  overflow-wrap: break-word;
 }
 /* 块之间：段落 / 列表 / 代码块统一一个间距，标题上面多留一点、下面贴着正文。
    （第一版收得太紧，长回复读着累，放松到现在这档：行高 1.7、段间 0.85em；列表项之间照 Codex 几乎不留缝，只靠行高） */
