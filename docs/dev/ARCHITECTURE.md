@@ -248,6 +248,10 @@ cwd 以外改的文件（Bash 写 `~/.zshrc`、隔壁项目）管不到；同一
   其余 `GERDR_*`（令牌、端口）不往下传，CLI 自己从 `<dir>/server.json`、`<dir>/token` 读。
 - 认自己：claude 给命令的环境里有 `CLAUDE_CODE_SESSION_ID`，codex 有 `CODEX_THREAD_ID`（实测），CLI 拿它们问
   `/api/resolve` 换 gerdr 会话 id。claude 回退之后会话 id 会变，hub 那边跟着 rekey，所以按 agent id 查永远是当前的。
+  `/clear` changes the id too, but the tab's gerdr session keeps running under the new one and the conversation before
+  it is split off into a detached session that keeps the old agent id and title (`hub/clear.go`): one gerdr session per
+  agent session, so /resume lists it like any other. A side list of old ids on the tab (`Record.Cleared`, now migrated
+  away on load) went stale once an old context was resumed and showed up twice.
 - 发消息带 `from`，对方界面上标「来自会话 X」；`gerdr session new` 默认让界面在调用者旁边分屏打开、不抢焦点（WS 推 `open`）。
 - **自动放行**：codex 的沙箱连本机端口都算联网，每条 `gerdr session …` 都会来要审批；codex 的「本会话都允许」又只放行一模一样的那条
   命令 —— 协作时每一步都要人点，没法用。所以两个适配器对「只是一条 gerdr session / ui / workspace / tab / pane 命令」直接放行（`sysenv.SafeGerdrCLI`：

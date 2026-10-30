@@ -29,10 +29,7 @@ export type Row =
       peek?: string;
     }
   | { key: string; kind: "working"; empty: boolean; first: boolean }
-  | { key: string; kind: "group"; first: boolean; open: boolean; summary: string; failed: number; busy: boolean; tight?: boolean }
-  | { key: string; kind: "cleared"; n: number; first: true };
-
-const isClear = (p: GPart) => p.type === "data-notice" && (p as any).data?.level === "clear";
+  | { key: string; kind: "group"; first: boolean; open: boolean; summary: string; failed: number; busy: boolean; tight?: boolean };
 
 // 连续的工具调用 / 思考折成一组（照 Claude 桌面版）：一轮里常常是几十行 `cd … && grep …`，夹着几行「思考」，
 // 真正要读的那几段话被挤得找不到。改文件的不折（默认展开看 diff 是它的主要用途），带子 agent 的不折（有「查看对话」）。
@@ -148,7 +145,6 @@ function summarize(parts: GPart[]): { summary: string; failed: number } {
 export function buildRows(
   msgs: GMessage[],
   running: boolean,
-  showCleared = false,
   openGroups: Record<string, boolean> = {},
   liveTasks: Set<string> = new Set(),
   now = Date.now(),
@@ -161,23 +157,7 @@ export function buildRows(
   // 排着队的插话、发送中的挂在最底下（见 Transcript.queued / sending），还在跑的那条是它们前面那条
   let liveIdx = lastIdx;
   while (liveIdx >= 0 && (msgs[liveIdx].metadata?.queued || msgs[liveIdx].metadata?.sending)) liveIdx--;
-  // /clear 之前的对话默认收起（照 Claude Code：清空就是清屏），顶上留一行「展开」—— 记录还在，只是不挡眼
-  let cut = -1,
-    cutPart = -1;
-  if (!showCleared) {
-    for (let mi = lastIdx; mi >= 0 && cut < 0; mi--) {
-      const ps = msgs[mi].parts;
-      for (let pi = ps.length - 1; pi >= 0; pi--)
-        if (isClear(ps[pi])) {
-          [cut, cutPart] = [mi, pi];
-          break;
-        }
-    }
-    const n = cut > 0 ? msgs.slice(0, cut).filter((m) => m.role === "user").length : 0; // cut = -1 时 slice(0,-1) 是「除了最后一条」，别算进去
-    if (n > 0) rows.push({ key: "cleared", kind: "cleared", n, first: true });
-  }
   msgs.forEach((m, mi) => {
-    if (mi < cut) return;
     if (m.role === "user") {
       const last = rows[rows.length - 1];
       const prev = last?.kind === "user";
@@ -190,7 +170,6 @@ export function buildRows(
     const lastPart = m.parts.length - 1;
     const parts: Extract<Row, { kind: "part" }>[] = [];
     m.parts.forEach((p, i) => {
-      if (mi === cut && i < cutPart) return;
       if (!partVisible(p, children)) return;
       if (redundantTaskDone(p, parts[parts.length - 1]?.part)) return;
       const tp = p.type === "dynamic-tool" ? (p as ToolPart) : undefined;
@@ -250,8 +229,7 @@ export function buildRows(
   // key 跟着还在跑的那条走：插话排进来、落下去时状态行不重新挂载
   const tail = msgs[lastIdx];
   const owner = msgs[liveIdx] ?? tail;
-  if (running && (tail?.role === "user" || liveIdx !== lastIdx) && lastIdx >= cut)
-    rows.push({ key: `${owner.id}:working`, kind: "working", empty: true, first: true });
+  if (running && (tail?.role === "user" || liveIdx !== lastIdx)) rows.push({ key: `${owner.id}:working`, kind: "working", empty: true, first: true });
   // 行距（照 Codex）：工具调用 / 思考这类一行小字，连着的几条挨紧（tight）；它和正文之间留开，像分段一样 ——
   // 原来一律挨着，正文和一串命令挤成一团
   const toolish = (r: Row) =>
@@ -271,9 +249,6 @@ export type RowEnv = {
   steerRewind?: boolean;
   onWithdraw?: (messageId: string, now: boolean) => void;
   onQuickReply: (s: string) => void;
-  onShowCleared?: () => void;
-  /** Resume the conversation from before /clear (with its context), not just show its messages. Missing when gerdr didn't record the old id. */
-  onResumeCleared?: () => void;
   onToggleGroup?: (key: string) => void;
 };
 
@@ -323,25 +298,6 @@ export const RowView = memo(
             stackPrev={row.prev}
             stackNext={row.next}
           />
-        </Frame>
-      );
-    }
-    if (row.kind === "cleared") {
-      return (
-        <Frame first>
-          <div className="flex items-center justify-center gap-1 text-[12px] text-muted-foreground">
-            <button className="rounded-md px-2 py-1 hover:bg-accent/50 hover:text-foreground" onClick={env.onShowCleared}>
-              展开 /clear 之前的对话（{row.n} 条）
-            </button>
-            {env.onResumeCleared && (
-              <>
-                <span>·</span>
-                <button className="rounded-md px-2 py-1 hover:bg-accent/50 hover:text-foreground" onClick={env.onResumeCleared}>
-                  回到那段对话
-                </button>
-              </>
-            )}
-          </div>
         </Frame>
       );
     }
@@ -398,8 +354,6 @@ export const RowView = memo(
         x.tight === y.tight &&
         a.env.onToggleGroup === b.env.onToggleGroup
       );
-    if (x.kind === "cleared" && y.kind === "cleared")
-      return x.n === y.n && a.env.onShowCleared === b.env.onShowCleared && a.env.onResumeCleared === b.env.onResumeCleared;
     if (x.kind === "part" && y.kind === "part")
       return x.part === y.part && x.streaming === y.streaming && x.live === y.live && x.tight === y.tight && x.peek === y.peek && sameKids(x.kids, y.kids);
     return false;

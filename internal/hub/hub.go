@@ -502,6 +502,7 @@ func (h *Hub) load() error {
 		h.sessions[r.ID] = s
 		h.byAgent[r.Agent+":"+r.AgentSessionID] = s
 	}
+	h.migrateCleared()
 	return nil
 }
 
@@ -874,22 +875,11 @@ func (h *Hub) ListImportable(ctx context.Context, agent, cwd string) ([]acp.Sess
 	if err != nil {
 		return nil, err
 	}
-	// Skip ones already in gerdr, and contexts a gerdr session dropped with /clear: /resume lists those from
-	// Record.Cleared, under the title they had in gerdr rather than their first message.
+	// Skip ones already in gerdr (that includes conversations a /clear split off: clear.go)
 	h.mu.Lock()
-	cleared := map[string]bool{}
-	for _, s := range h.sessions {
-		s.mu.Lock()
-		if s.rec.Agent == agent {
-			for _, c := range s.rec.Cleared {
-				cleared[c.ID] = true
-			}
-		}
-		s.mu.Unlock()
-	}
 	var out []acp.SessionInfo
 	for _, si := range res.Sessions {
-		if h.byAgent[agent+":"+string(si.SessionId)] == nil && !cleared[string(si.SessionId)] {
+		if h.byAgent[agent+":"+string(si.SessionId)] == nil {
 			out = append(out, si)
 		}
 	}

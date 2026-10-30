@@ -9,12 +9,10 @@ import { set, useStore } from "@/lib/store";
 
 // /resume (like Claude Code): switch this pane to an earlier conversation in the same directory.
 // claude in stream-json mode doesn't take /resume (it's the interactive picker), so gerdr does it, from one list sorted by time:
-//   - gerdr's other sessions for this agent + directory (closed ones too; picking one resumes it);
-//   - contexts dropped by /clear (Record.cleared): the old agent session is still on disk and resumable, but gerdr's record moved
-//     on to the new id. Listed under the title they had here, so they're found the way the user remembers them;
+//   - gerdr's other sessions for this agent + directory (closed ones too; picking one resumes it). That includes conversations
+//     a /clear left behind: the hub splits them off into sessions of their own, under the title they had (hub/clear.go);
 //   - the agent's own sessions gerdr hasn't seen (run in a terminal): picking one imports it.
-// There used to be a separate "agent's own records (run in a terminal)" group at the bottom: pre-clear contexts sank into it
-// under their first message and nobody found them. Where a conversation came from isn't what you search by; when you last had it is.
+// Where a conversation came from isn't what you search by; when you last had it is.
 // The session switched away from isn't deleted; it's still in the sessions list.
 
 type Native = { sessionId: string; cwd: string; title?: string; updatedAt?: string };
@@ -56,20 +54,7 @@ export function ResumeDialog() {
   };
 
   const here = Object.values(sessions).filter((s) => s.agent === cur.agent && s.cwd === cur.cwd);
-  const byAgentId = new Map(here.map((s) => [s.agentSessionId, s]));
   const entries: Entry[] = [];
-  for (const s of here)
-    for (const c of s.cleared ?? []) {
-      // Already imported: it's a gerdr session now and gets listed below
-      if (!byAgentId.has(c.id))
-        entries.push({
-          key: `cleared:${s.id}:${c.id}`,
-          search: `${c.id} ${c.title ?? ""} ${s.title ?? ""}`,
-          title: c.title || c.id.slice(0, 8),
-          at: c.at,
-          pick: () => pickNative({ sessionId: c.id, cwd: cur.cwd, title: c.title }),
-        });
-    }
   for (const s of here)
     // 一句话都没说过的空会话（新建了没用的 pane）没什么可恢复的，不列
     if (s.id !== cur.id && (s.lastSeq > 0 || !!s.title))
@@ -105,7 +90,8 @@ export function ResumeDialog() {
             <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">{ago(cur.updatedAt)}</span>
           </CommandItem>
           {entries.map((e) => (
-            <CommandItem key={e.key} value={e.search} className="gap-2.5" disabled={busy} onSelect={e.pick}>
+            // cmdk tracks the highlighted item by value: two equal values light up together, so the key keeps it unique
+            <CommandItem key={e.key} value={`${e.key} ${e.search}`} className="gap-2.5" disabled={busy} onSelect={e.pick}>
               <AgentIcon agent={cur.agent} className="size-4 shrink-0" />
               <span className="min-w-0 truncate">{e.title}</span>
               <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">{e.at ? ago(e.at) : ""}</span>

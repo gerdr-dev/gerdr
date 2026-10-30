@@ -9,7 +9,7 @@ import { buildRows, RowView, type Row, type RowEnv } from "./Rows";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { withdrawSteer } from "@/lib/actions";
-import { get, loadOlder, sendShown, set, subTranscript, transcript, useStore } from "@/lib/store";
+import { get, loadOlder, sendShown, subTranscript, transcript, useStore } from "@/lib/store";
 import { useKept } from "@/lib/kept";
 import { Loader2 } from "lucide-react";
 import type { GMessage } from "@/lib/transcript";
@@ -191,7 +191,6 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
     return () => clearTimeout(t);
   }, [virtualList, measured]);
   useEffect(() => () => clearTimeout(measureTimer.current), []);
-  const [showCleared, setShowCleared] = useKept(`cleared:${session.id}:${sub ?? ""}`, false);
   const [openGroups, setOpenGroups] = useKept<Record<string, boolean>>(`groups:${session.id}:${sub ?? ""}`, {});
   // 还在跑的后台任务：拼成串当依赖，任务进度一直在推，不能每推一次就重排整份对话
   const liveTaskIds = (session.tasks ?? [])
@@ -202,11 +201,8 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
   const [tick, setTick] = useState(0);
   const [rows, wake] = useMemo(() => {
     const out: { wake?: number } = {};
-    return [
-      buildRows(msgs, running, showCleared, openGroups, new Set(liveTaskIds.split(" ").filter(Boolean)), Date.now(), out, showThinking),
-      out.wake,
-    ] as const;
-  }, [msgs, running, showCleared, openGroups, liveTaskIds, tick, showThinking]);
+    return [buildRows(msgs, running, openGroups, new Set(liveTaskIds.split(" ").filter(Boolean)), Date.now(), out, showThinking), out.wake] as const;
+  }, [msgs, running, openGroups, liveTaskIds, tick, showThinking]);
   useEffect(() => {
     if (wake === undefined) return;
     const t = setTimeout(() => setTick((x) => x + 1), Math.max(0, wake - Date.now()));
@@ -214,8 +210,7 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
   }, [wake]);
   // 往前补了更早的消息（loadOlder）：告诉 Virtuoso 前面多了几行（firstItemIndex 往小改），它保住眼前这行不动。
   // 不改的话它当成整份换了，滚动位置留在原来的像素高度上 —— 眼前的内容被新插进来的顶走。
-  // 顶上是折起来的 /clear 之前的对话：更早的拉来也是折在里面，先不拉（点了「展开」再接着拉）
-  const older = useStore((s) => (rows[0]?.kind === "cleared" ? undefined : s.older[session.id]));
+  const older = useStore((s) => s.older[session.id]);
   // 前面多了几行：拿原来的前几行去新的里找，位置差就是。不只认第一行 —— 接缝那儿的行可能变了（折叠组并进了新来的工具调用）
   const firstIdx = useRef(1_000_000);
   const prevRows = useRef<Row[]>([]);
@@ -288,7 +283,7 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
   const listCtx = useMemo(() => ({ older }), [older]);
   // 离顶不到一屏 / 内容还不满一屏：接着拉更早的
   const nearTop = (el: HTMLElement) => {
-    if (rowsRef.current[0]?.kind !== "cleared" && get().older[session.id] === "more" && el.scrollTop < Math.max(400, el.clientHeight)) loadOlder(session.id);
+    if (get().older[session.id] === "more" && el.scrollTop < Math.max(400, el.clientHeight)) loadOlder(session.id);
   };
   // 要重新量：行的结构变了（中间展开 / 收起一组、回退，后面的行全换了序号，Virtuoso 按序号记的高度就对不上了）。
   // 只在末尾追加 / 换掉最后一两行（流式输出、状态行）不算：那些行就在眼前，挂上就量
@@ -462,7 +457,6 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
   const latest = useRef({ doRewind, sessionId: session.id, openGroups, setOpenGroups });
   latest.current = { doRewind, sessionId: session.id, openGroups, setOpenGroups };
   const steerRewind = (session.base ?? session.agent) === "claude";
-  const hasCleared = !!session.cleared?.length;
   const env = useMemo<RowEnv>(
     () => ({
       sessionId: session.id,
@@ -476,17 +470,13 @@ export function ChatView({ session, paneId, focused, sub }: { session: SessionSu
             if (c?.length) composer.current?.putBack(c);
           },
       onQuickReply: (s) => sendShown(latest.current.sessionId, [{ type: "text", text: s }]).catch((e) => toast.error(e.message)),
-      onShowCleared: () => setShowCleared(true),
-      // Expanding only shows the old messages; the agent's context stays cleared. Going back means resuming the old
-      // agent session, which /resume lists at the top under "before /clear".
-      onResumeCleared: sub || !hasCleared ? undefined : () => set({ dialog: { kind: "resume", sessionId: session.id, paneId } }),
       onToggleGroup: (key) => {
         const { openGroups: g, setOpenGroups: set } = latest.current;
         hold();
         set({ ...g, [key]: !g[key] });
       },
     }),
-    [session.id, running, sub, steerRewind, hasCleared, paneId],
+    [session.id, running, sub, steerRewind],
   );
   return (
     <SessionContext.Provider value={session}>

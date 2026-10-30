@@ -43,9 +43,8 @@ type Record struct {
 	// Fork：回退出来、agent 还没写出记录的会话从哪儿来（acpx.RewindResponse.Fork）。接回会话时带给 agent：
 	// 它重启过的话自己记的就没了，起成一个空会话，前面的对话全丢。换 id 时清掉（rekey）；agent 那边记录有了就不再理它。
 	Fork *acpx.PendingFork `json:"fork,omitempty"`
-	// Cleared: the agent session ids this conversation had before each /clear, oldest first. rekey forgets the old id, so
-	// without this the pre-clear conversation (still on disk, resumable) only turned up in /resume as a stranger
-	// session under its first message instead of the title it had here — users couldn't find it.
+	// Cleared: legacy. Indexes written before /clear split the old conversation into its own session (clear.go) list
+	// the agent session ids this tab had before each /clear here; migrateCleared turns them into sessions on load.
 	Cleared []ClearedCtx `json:"cleared,omitempty"`
 }
 
@@ -918,17 +917,14 @@ func (s *Session) onUpdate(u acp.SessionUpdate) {
 			// agent 那边换了会话 id（claude 的 /clear）：之后回退、恢复都按新的来；对话里留一条分隔线
 			if id, ok := g["sessionId"].(string); ok && id != "" {
 				s.mu.Lock()
-				prev, prevTitle := s.rec.AgentSessionID, s.rec.Title
+				prev := s.rec
 				s.mu.Unlock()
 				s.h.rekey(s, id)
 				if c, _ := g["cleared"].(bool); c {
-					s.mu.Lock()
-					if prev != "" && prev != id {
-						s.rec.Cleared = append(s.rec.Cleared, ClearedCtx{ID: prev, Title: prevTitle, At: time.Now().UnixMilli()})
-						if n := len(s.rec.Cleared); n > 20 {
-							s.rec.Cleared = s.rec.Cleared[n-20:]
-						}
+					if prev.AgentSessionID != "" && prev.AgentSessionID != id {
+						s.h.splitOffCleared(s, prev)
 					}
+					s.mu.Lock()
 					// The title belongs to what was cleared away, renamed or not (a /rename names that piece of work, not
 					// the tab): the next message replaces it and auto-naming starts over for the new context (title.go).
 					s.rec.TitleStale, s.rec.CustomTitle = true, false
