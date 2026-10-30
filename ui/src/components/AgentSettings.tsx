@@ -201,8 +201,9 @@ export function AgentSettings() {
                   一长就把名字和引擎挤成两三行（用户报的） */}
               <div className="flex items-center gap-2 whitespace-nowrap">
                 <AgentIcon agent={a.id} className="size-4" />
-                <span className="min-w-0 truncate font-medium">{a.name}</span>
-                <span className="shrink-0 text-[12px] text-muted-foreground">
+                {/* The engine label gives way first, the name only past 60% (on phones it got cut to "Claude…") */}
+                <span className="max-w-[60%] shrink-0 truncate font-medium">{a.name}</span>
+                <span className="min-w-0 truncate text-[12px] text-muted-foreground">
                   引擎 {KIND_NAME[(def ? (def.base ?? "command") : a.id) as Kind]}
                   {!def && " · 内置"}
                 </span>
@@ -252,8 +253,11 @@ export function AgentSettings() {
           style={{ maxWidth: "min(42rem, calc(100% - 2rem))" }}
           onInteractOutside={(e) => dirty && e.preventDefault()}
         >
-          <DialogHeader>
-            <DialogTitle>{!edit ? "" : edit.builtin ? `${edit.name} · 新会话默认` : isNew ? "新建 Agent" : `编辑「${edit.name}」`}</DialogTitle>
+          {/* Room for the close button on the right; left-aligned on phones too, a centered long title ran under the X */}
+          <DialogHeader className="min-w-0 pr-6 text-left">
+            <DialogTitle className="leading-snug max-md:text-[15px]">
+              {!edit ? "" : edit.builtin ? `${edit.name} · 新会话默认` : isNew ? "新建 Agent" : `编辑「${edit.name}」`}
+            </DialogTitle>
           </DialogHeader>
           {edit && <Editor d={edit} onChange={setEdit} onSave={save} onCancel={() => setEdit(null)} />}
         </DialogContent>
@@ -279,12 +283,17 @@ function Engines({ agents }: { agents: AgentInfo[] }) {
   const cli = (id: string, name: string, how: string) => {
     const a = agents.find((x) => x.id === id);
     return (
-      <div className="flex items-center gap-2 rounded-md border px-3 py-2">
+      // On phones the one-line description goes to its own row: squeezed into the first row it wrapped the name and
+      // pushed the status into one character per line
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded-md border px-3 py-2">
         <AgentIcon agent={id} className="size-4" />
-        <span className="font-medium">{name}</span>
-        <span className="text-[12px] text-muted-foreground">{how}</span>
-        <span className="flex-1" />
-        {a?.available ? <span className="text-[12px] text-ok">装了</span> : <span className="truncate text-[12px] text-bad">{a?.error || "没装"}</span>}
+        <span className="shrink-0 font-medium whitespace-nowrap">{name}</span>
+        <span className="min-w-0 flex-1 text-[12px] text-muted-foreground max-md:order-last max-md:basis-full max-md:pl-6">{how}</span>
+        {a?.available ? (
+          <span className="ml-auto shrink-0 text-[12px] text-ok">装了</span>
+        ) : (
+          <span className="ml-auto min-w-0 truncate text-[12px] text-bad">{a?.error || "没装"}</span>
+        )}
       </div>
     );
   };
@@ -314,7 +323,7 @@ function Editor({ d, onChange, onSave, onCancel }: { d: Draft; onChange: (d: Dra
   const [adv, setAdv] = useState(!!(d.env || d.bin || d.args) || d.kind === "command");
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-[88px_1fr] items-center gap-x-3 gap-y-2.5">
+      <div className="grid grid-cols-[88px_minmax(0,1fr)] max-md:grid-cols-[72px_minmax(0,1fr)] items-center gap-x-3 gap-y-2.5">
         <span className="text-muted-foreground">名字</span>
         {d.builtin ? (
           <span className="font-medium">{d.name}</span>
@@ -329,7 +338,7 @@ function Editor({ d, onChange, onSave, onCancel }: { d: Draft; onChange: (d: Dra
               // 换到 Native 时先把服务商全勾上（至少要勾一个，省得人再去点）
               onValueChange={(v) => set({ kind: v as Kind, ...(v === "native" && !d.providers.length ? { providers: allProviders() } : {}) })}
             >
-              <SelectTrigger size="sm" className="w-56">
+              <SelectTrigger size="sm" className="w-56 max-w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -404,7 +413,7 @@ function Editor({ d, onChange, onSave, onCancel }: { d: Draft; onChange: (d: Dra
             </button>
           )}
           {(adv || d.kind === "command") && (
-            <div className="grid grid-cols-[88px_1fr] items-center gap-x-3 gap-y-2.5">
+            <div className="grid grid-cols-[88px_minmax(0,1fr)] max-md:grid-cols-[72px_minmax(0,1fr)] items-center gap-x-3 gap-y-2.5">
               {d.kind === "command" ? (
                 <>
                   <span className="text-muted-foreground">启动命令</span>
@@ -662,7 +671,7 @@ function DefaultsEditor({
           还不知道它有哪些模式和模型：先开一个这种会话，回来就能选；或者在会话输入框下面的下拉里选好，点「设为新会话的默认」。
         </div>
       ) : (
-        <div className="grid grid-cols-[88px_1fr] items-center gap-x-3 gap-y-2">
+        <div className="grid grid-cols-[88px_minmax(0,1fr)] max-md:grid-cols-[72px_minmax(0,1fr)] items-center gap-x-3 gap-y-2">
           {rows.map((r) => {
             const v = value[r.key];
             const known = !v || r.options.some((x) => x.value === v);
@@ -670,7 +679,7 @@ function DefaultsEditor({
               <div key={r.key} className="contents">
                 <span className="text-muted-foreground">{r.label}</span>
                 <Select value={v ?? UNSET} onValueChange={(x) => put(r.key, x)}>
-                  <SelectTrigger size="sm" className="w-64">
+                  <SelectTrigger size="sm" className="w-64 max-w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>

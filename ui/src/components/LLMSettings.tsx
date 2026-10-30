@@ -87,15 +87,17 @@ export function LLMSettings() {
   // 和上面 Claude Code / Codex 两张引擎卡片一个样子：图标 + 名字 + 一句话 + 右边状态；服务商列在卡片里面
   return (
     <div className="space-y-2.5 rounded-md border px-3 py-2 text-[13px]">
-      <div className="flex items-center gap-2">
+      {/* Same layout as the CLI engine cards: on phones the description gets its own row instead of being cut */}
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
         <AgentIcon agent="native" className="size-4" />
-        <span className="font-medium">Native</span>
-        <span className="min-w-0 truncate text-[12px] text-muted-foreground">Gerdr 自己的引擎，直接调下面这些模型服务商（OpenAI 兼容或 Anthropic 接口）</span>
-        <span className="flex-1" />
+        <span className="shrink-0 font-medium">Native</span>
+        <span className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground max-md:order-last max-md:basis-full max-md:pl-6 max-md:whitespace-normal">
+          Gerdr 自己的引擎，直接调下面这些模型服务商（OpenAI 兼容或 Anthropic 接口）
+        </span>
         {providers.some((p) => p.models.length) ? (
-          <span className="shrink-0 text-[12px] text-ok">配了 {providers.length} 家</span>
+          <span className="ml-auto shrink-0 text-[12px] text-ok">配了 {providers.length} 家</span>
         ) : (
-          <span className="shrink-0 text-[12px] text-bad">还没配服务商</span>
+          <span className="ml-auto shrink-0 text-[12px] text-bad">还没配服务商</span>
         )}
       </div>
       <div className="text-[12px] text-muted-foreground">
@@ -105,9 +107,10 @@ export function LLMSettings() {
       {providers.map((p) => (
         <div key={p.id} className="space-y-1.5 rounded-md bg-muted/40 px-3 py-2">
           <div className="flex items-center gap-2">
-            <span className="font-medium">{p.name || p.id}</span>
+            {/* Capped and truncated rather than wrapped: the URL next to it shrinks first */}
+            <span className="max-w-[50%] shrink-0 truncate font-medium">{p.name || p.id}</span>
             {p.api === "anthropic" && <span className="shrink-0 rounded-sm bg-muted px-1 text-[11px] text-muted-foreground">Anthropic</span>}
-            <span className="truncate font-mono text-[12px] text-muted-foreground">{p.baseUrl}</span>
+            <span className="min-w-0 truncate font-mono text-[12px] text-muted-foreground">{p.baseUrl}</span>
             {!p.apiKey && !p.apiKeyEnv && <span className="shrink-0 text-[12px] text-warn">没填 key</span>}
             {p.apiKeyEnv && !p.apiKey && <span className="shrink-0 text-[12px] text-muted-foreground">key 取自 ${p.apiKeyEnv}</span>}
             <span className="flex-1" />
@@ -227,7 +230,7 @@ function Editor({
 
   return (
     <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
-      <div className="grid grid-cols-[88px_1fr] items-center gap-x-3 gap-y-2.5">
+      <div className="grid grid-cols-[88px_minmax(0,1fr)] max-md:grid-cols-[72px_minmax(0,1fr)] items-center gap-x-3 gap-y-2.5">
         <span className="text-muted-foreground">名字</span>
         <Input
           value={d.name}
@@ -238,7 +241,7 @@ function Editor({
         />
         <span className="text-muted-foreground">协议</span>
         <Select value={d.api} onValueChange={(v) => set({ api: v as Protocol })}>
-          <SelectTrigger size="sm" className="w-40">
+          <SelectTrigger size="sm" className="w-40 max-w-full">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -260,7 +263,7 @@ function Editor({
         <span className="text-muted-foreground">API key</span>
         <div className="flex items-center gap-2">
           <Select value={d.keyMode} onValueChange={(v) => set({ keyMode: v as Draft["keyMode"] })}>
-            <SelectTrigger size="sm" className="w-32 shrink-0">
+            <SelectTrigger size="sm" className="w-32 shrink-0 max-md:w-24">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
