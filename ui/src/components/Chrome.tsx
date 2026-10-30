@@ -29,6 +29,7 @@ import {
   duplicateTab,
   focusSession,
   moveWorkspaceToSpace,
+  focusedSessionId,
   selectWorkspace,
   switchSpace,
   tabName,
@@ -52,7 +53,7 @@ import { ModeSwitch } from "@/components/WorkView";
 import { focusedSession, get, keyFor, set, setLayout, setSidebarW, SIDEBAR_W, toggleSidebar, useStore } from "@/lib/store";
 import type { SessionSummary } from "@/lib/types";
 import { compareSessions } from "@/lib/order";
-import { toggleOverview } from "@/lib/overview";
+import { MAX_TILES, showInOverview, toggleOverview } from "@/lib/overview";
 import { cn } from "@/lib/utils";
 import { AgentIcon, StatusDot } from "./AgentIcon";
 import { fmtElapsed } from "./chat/StatusLine";
@@ -304,13 +305,56 @@ export function PhoneBar() {
           </span>
         )}
       </Button>
-      <Button variant="ghost" size="icon" className="size-9" aria-label="全部 agent 总览" onClick={() => toggleOverview(true)}>
-        <LayoutGrid className="size-[18px]" />
-      </Button>
+      <OverviewButton />
       <Button variant="ghost" size="icon" className="size-9" aria-label="新建 tab" onClick={() => addTab()}>
         <Plus className="size-[18px]" />
       </Button>
     </div>
+  );
+}
+
+/**
+ * The phone bar's overview button. Tap opens the overview; long-press (or right-click) puts the pane you're on into it
+ * and goes to that tile. Our own timer rather than relying on contextmenu: iOS Safari never fires it on a long-press.
+ */
+function OverviewButton() {
+  const timer = useRef<number | undefined>(undefined);
+  const held = useRef(false);
+  const hold = () => {
+    held.current = true;
+    const id = focusedSessionId();
+    if (!id) return toggleOverview(true); // a terminal or an empty pane: nothing to put in
+    if (!showInOverview(id)) toast(`总览最多放 ${MAX_TILES} 个，先移出几个`);
+  };
+  const cancel = () => clearTimeout(timer.current);
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      // No text selection / iOS callout from the long-press
+      className="size-9 select-none [-webkit-touch-callout:none]"
+      aria-label="全部 agent 总览（长按：把当前面板放进去）"
+      onPointerDown={() => {
+        held.current = false;
+        cancel();
+        timer.current = window.setTimeout(hold, 500);
+      }}
+      onPointerUp={cancel}
+      onPointerLeave={cancel}
+      onPointerCancel={cancel}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        cancel();
+        if (!held.current) hold();
+      }}
+      onClick={() => {
+        // The click that ends a long-press already did its thing
+        if (held.current) return void (held.current = false);
+        toggleOverview(true);
+      }}
+    >
+      <LayoutGrid className="size-[18px]" />
+    </Button>
   );
 }
 

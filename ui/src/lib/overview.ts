@@ -63,6 +63,17 @@ export function clearTiles() {
   setOverview((o) => ({ ...o, ids: [], main: undefined }));
 }
 
+/** Open the overview on this session: put it in as a tile and focus it. False (overview left alone) when the grid is full. */
+export function showInOverview(id: string): boolean {
+  if (!overviewIds(get().overview, get().layout, get().sessions, get().config).includes(id)) {
+    addTiles([id]);
+    if (!get().overview.ids.includes(id)) return false;
+  }
+  focusTile(id);
+  toggleOverview(true);
+  return true;
+}
+
 export function focusTile(id: string) {
   // Zoomed in, moving to another tile zooms that one instead (as panes do: actions.focusPane)
   setOverview((o) => (o.focus === id ? o : { ...o, focus: id, zoom: o.zoom ? id : undefined }));
