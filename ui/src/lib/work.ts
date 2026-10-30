@@ -21,13 +21,24 @@ export function workDir(project = workProject()): Promise<string> {
   return dirP[project];
 }
 
-/** The project a Work agent conversation belongs to (it's in no pane): a project's current one, or one opened in a known Work directory. */
+/**
+ * The project a Work agent conversation belongs to, undefined for any other session. By its working directory — the Work
+ * directory of a project (<GERDR_DIR>/work for the default one, <GERDR_DIR>/projects/<name>/work, server work.Runner.Dir) —
+ * so an old conversation is recognised too, not just each project's current one.
+ */
 export function workProjectOf(sessionId: string): string | undefined {
   const c = getApp().config;
   for (const [p, id] of Object.entries(c.workSessions ?? {})) if (id === sessionId) return p;
   if (c.workSession === sessionId) return "default";
   const cwd = getApp().sessions[sessionId]?.cwd;
-  return cwd ? Object.keys(dirs).find((p) => dirs[p] === cwd) : undefined;
+  if (!cwd) return undefined;
+  const known = Object.keys(dirs).find((p) => dirs[p] === cwd);
+  if (known) return known;
+  const root = getApp().pluginsDir.replace(/\/plugins\/?$/, ""); // <GERDR_DIR>/plugins
+  if (!root || root === getApp().pluginsDir) return undefined;
+  if (cwd === root + "/work" || cwd.startsWith(root + "/work/")) return "default";
+  const m = cwd.slice(root.length).match(/^\/projects\/([^/]+)\/work(\/|$)/);
+  return m ? m[1] : undefined;
 }
 
 /** The project's current Work conversation. The default project's used to live in config.workSession (before projects). */
@@ -91,8 +102,8 @@ export async function ensureWorkSession(project = workProject()): Promise<string
   return newWorkChat(undefined, project);
 }
 
-export function openWorkChat(id: string) {
-  setWorkSession(workProject(), id);
+export function openWorkChat(id: string, project = workProject()) {
+  setWorkSession(project, id);
 }
 
 /** Hand a task to the project's Work agent (opens one if there isn't any). The agent queues it if it's busy. */

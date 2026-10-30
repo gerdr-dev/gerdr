@@ -38,8 +38,8 @@ import {
   type Tab,
   type Workspace,
 } from "./layout";
-import { get, markRead, set, setLayout, toggleSidebar } from "./store";
-import { workProjectOf } from "./work";
+import { get, markRead, set, setLayout, setMode, toggleSidebar } from "./store";
+import { openWorkChat, workProjectOf } from "./work";
 import type { ContentBlock } from "./types";
 
 export const basename = (p: string) => p.replace(/\/+$/, "").split("/").pop() || p;
@@ -111,6 +111,11 @@ export function duplicateFocused(dir: "right" | "down") {
  * 都找不到就在当前工作空间后台开个 tab。
  */
 export function openSessionNear(sessionId: string, near?: string, focus = false) {
+  if (workProjectOf(sessionId)) {
+    // An agent opening a Work conversation (`gerdr session open`): it stays in its Work view; switch there only when asked to focus
+    if (focus) openInWork(sessionId);
+    return;
+  }
   if (locateSession(get().layout, sessionId)) {
     if (focus) focusSession(sessionId); // 已经开着：要焦点就切过去
     return;
@@ -976,7 +981,24 @@ export function resumeInPane(paneId: string, sessionId: string) {
 }
 
 /** 把一个会话放到眼前：已经在某个 pane 里就切过去，不在就开一个新 tab 放它。 */
+/**
+ * A Work agent conversation lives in its project's Work view (right-hand chat), never in a Code pane. Every way of bringing a
+ * session up (a notification, next-needs-you, the palette, the session lists) goes through here first; without it they all
+ * added a tab to whatever workspace was on screen, and the Work chat showed up in Code. Returns whether it handled the session.
+ */
+function openInWork(sessionId: string): boolean {
+  if (locateSession(get().layout, sessionId)) return false; // already in a pane (from before this check): leave it there
+  const project = workProjectOf(sessionId);
+  if (!project) return false;
+  if (currentSpace(get().layout) !== project && spaceList(get().layout).some((s) => s.id === project)) switchSpace(project);
+  setMode("work");
+  openWorkChat(sessionId, project);
+  markRead(sessionId);
+  return true;
+}
+
 export function focusSession(sessionId: string) {
+  if (openInWork(sessionId)) return;
   const loc = locateSession(get().layout, sessionId);
   if (loc) focusPane(loc.pane.id);
   else addTab({ sessionId });
@@ -985,6 +1007,7 @@ export function focusSession(sessionId: string) {
 
 /** 在焦点 pane 里换成另一个会话。 */
 export function openSessionHere(sessionId: string) {
+  if (openInWork(sessionId)) return;
   const loc = locateSession(get().layout, sessionId);
   if (loc) return focusPane(loc.pane.id);
   const p = focusedLeaf(get().layout);
