@@ -311,9 +311,17 @@ func (s *session) adoptID(ctx context.Context, id string) {
 		return
 	}
 	s.update(ctx, acp.SessionUpdate{SessionInfoUpdate: &acp.SessionSessionInfoUpdate{Meta: acpx.Meta(map[string]any{"sessionId": id, "cleared": true})}})
+	// A /clear typed while a turn was running goes in as a steer, so prompt()'s MCP check never saw it:
+	// the cleared context would stay on a process holding the old MCP config (a server added or fixed
+	// with `claude mcp add` mid-session stayed "needs authentication"). Check again here, where every
+	// /clear ends up, and swap the process before the next turn.
+	fp := s.a.opts.Ext.ClaudeMCPFingerprint(s.cwd)
 	s.mu.Lock()
 	s.id = id
 	s.fresh, s.forkFrom, s.forkAt = false, "", ""
+	if s.mcpFP != fp {
+		s.respawn = true
+	}
 	s.mu.Unlock()
 	s.a.mu.Lock()
 	s.a.sessions[id] = s
