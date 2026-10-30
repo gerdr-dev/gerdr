@@ -107,8 +107,14 @@ export function ShellCard({ sessionId, data }: { sessionId: string; data: GData[
           ref={pre}
           className={cn(
             "ml-5.5 rounded-md bg-muted/60 px-2.5 py-1.5 font-mono text-[12px] leading-relaxed text-muted-foreground",
-            folded ? "overflow-hidden whitespace-pre text-ellipsis" : "max-h-96 overflow-auto whitespace-pre-wrap break-all",
+            folded
+              ? "cursor-pointer overflow-hidden whitespace-pre text-ellipsis hover:text-foreground"
+              : "max-h-96 overflow-auto whitespace-pre-wrap break-all",
           )}
+          // The folded preview expands on click too, not just the small link under it. Only while folded: once open, a
+          // click is someone selecting or scrolling the output. Dragging out a selection in the preview shouldn't expand it.
+          onClick={folded ? () => window.getSelection()?.isCollapsed !== false && setOpen(true) : undefined}
+          title={folded ? "点一下展开" : undefined}
         >
           {shown.join("\n")}
         </pre>
