@@ -200,6 +200,9 @@ export class Transcript {
 
   /** 先画一条发送中的（id 用 messageId：日志里那条的 id 也是它，换过去时 React 不重建这一行） */
   addSending(messageId: string, content: ContentBlock[]) {
+    // Something gerdr sends for the user that's drawn as a notice, not a bubble ("allow and retry"): no bubble meanwhile
+    // either, it would show the raw tags until the server's copy comes back
+    if (content.length === 1 && content[0].type === "text" && machineBlock(content[0].text)?.notice) return;
     const parts: GPart[] = [];
     for (const c of content) {
       if (c.type === "text") parts.push({ type: "text", text: c.text });
@@ -341,6 +344,8 @@ export class Transcript {
       case "user": {
         const only = e.content?.length === 1 && e.content[0].type === "text" ? e.content[0].text : undefined;
         const mb = only !== undefined ? machineBlock(only) : undefined;
+        // Before the notice branch: it breaks early, and a sending bubble left behind stays on screen for good
+        if (e.messageId) this.dropSending(e.messageId);
         if (mb?.notice) {
           this.messages = [...this.messages];
           this.pushPart(this.assistant(e.ts), { type: "data-notice", data: mb.notice });
@@ -353,7 +358,6 @@ export class Transcript {
           else if (c.type === "image") parts.push({ type: "file", mediaType: c.mimeType, url: imageURL(c) });
           else if (c.type === "resource_link") parts.push(linkPart(c));
         }
-        if (e.messageId) this.dropSending(e.messageId);
         this.messages = [...this.messages];
         this.messages.push({
           id: e.messageId ?? this.uid(),
