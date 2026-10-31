@@ -1,4 +1,4 @@
-import { BatteryLow, Check, CircleAlert, HelpCircle, Inbox as InboxIcon, ShieldAlert, X } from "lucide-react";
+import { BatteryLow, Check, CircleAlert, HelpCircle, Inbox as InboxIcon, Settings, ShieldAlert, X } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -7,8 +7,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { focusSession } from "@/lib/actions";
 import { api } from "@/lib/api";
-import { clearAll, dismiss, markSeen, useInbox, type InboxItem } from "@/lib/inbox";
-import { set } from "@/lib/store";
+import { clearAll, dismiss, markSeen, sessionName, useInbox, type InboxItem } from "@/lib/inbox";
+import { set, useStore } from "@/lib/store";
 import type { AskQuestion, PermissionOption } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -71,16 +71,19 @@ function InboxPanel({ close }: { close: () => void }) {
             全部清除
           </Button>
         )}
+        {/* An icon the size of each item's ×, so the two line up on the right edge */}
         <Button
           variant="ghost"
-          size="sm"
-          className="h-7 px-2 text-[12px] text-muted-foreground"
+          size="icon"
+          className="size-7 text-muted-foreground"
+          aria-label="收件箱设置"
+          title="收件箱设置"
           onClick={() => {
             close();
             set({ dialog: { kind: "settings", tab: "inbox" } });
           }}
         >
-          设置
+          <Settings className="size-3.5" />
         </Button>
       </div>
       {items.length ? (
@@ -124,26 +127,37 @@ function Item({ it, close }: { it: InboxItem; close: () => void }) {
   // Simple enough to settle right here: an approval that isn't a plan, a single question
   const inline =
     live && it.reqId && ((it.kind === "permission" && req?.toolCall?.kind !== "switch_mode") || (it.kind === "ask" && req?.questions?.length === 1));
+  // The session's current name (it may have been renamed since), falling back to the one saved with the item
+  const name = useStore((s) => (it.sessionId && s.sessions[it.sessionId] ? sessionName(s.sessions[it.sessionId]) : undefined));
+  const head = it.sessionId ? (name ?? it.title) : LABEL[it.kind];
+  // A single question shows itself in the inline answer; battery's level is its title
+  const text = it.kind === "battery" ? it.title : inline && it.kind === "ask" ? undefined : it.body;
   return (
     <div className="group px-3 py-2.5">
-      <div className="flex items-center gap-1.5 text-[12px]">
-        {ICON[it.kind]}
-        <span className="text-muted-foreground">{LABEL[it.kind]}</span>
-        <span className="text-muted-foreground/70">· {ago(it.at)}</span>
-        <span className="flex-1" />
-        <button className="-mr-1 rounded-sm p-1 text-muted-foreground hover:bg-accent hover:text-foreground" aria-label="移除" onClick={() => dismiss(it.id)}>
-          <X className="size-3.5" />
+      <div className="-my-1 flex items-center gap-1.5 text-[12px]">
+        <span className="shrink-0" title={LABEL[it.kind]}>
+          {ICON[it.kind]}
+        </span>
+        <button
+          className={cn("min-w-0 truncate text-left font-medium", go ? "cursor-pointer hover:underline" : "cursor-default")}
+          disabled={!go}
+          onClick={go}
+          title={go ? "跳到这个 agent" : undefined}
+        >
+          {head}
         </button>
+        <span className="shrink-0 text-muted-foreground/70">· {ago(it.at)}</span>
+        <span className="flex-1" />
+        <Button variant="ghost" size="icon" className="size-7 shrink-0 text-muted-foreground" aria-label="移除" onClick={() => dismiss(it.id)}>
+          <X className="size-3.5" />
+        </Button>
       </div>
-      <button
-        className={cn("mt-0.5 block w-full min-w-0 text-left", go ? "cursor-pointer" : "cursor-default")}
-        disabled={!go}
-        onClick={go}
-        title={go ? "跳到这个 agent" : undefined}
-      >
-        <div className={cn("truncate text-[13px] font-medium", go && "hover:underline")}>{it.title}</div>
-        {it.body && it.kind !== "ask" && <div className="mt-0.5 line-clamp-3 text-[12px] break-all whitespace-pre-wrap text-muted-foreground">{it.body}</div>}
-      </button>
+      {text && (
+        <div className={cn("mt-1 line-clamp-3 text-[13px] break-all whitespace-pre-wrap", it.kind === "error" && "text-[12px] text-muted-foreground")}>
+          {text}
+        </div>
+      )}
+      {it.kind === "battery" && it.body && <div className="mt-0.5 text-[12px] text-muted-foreground">{it.body}</div>}
       {it.reqId && !live && (
         <div className="mt-1 flex items-center gap-1 text-[12px] text-muted-foreground">
           <Check className="size-3 text-ok" /> 已处理
