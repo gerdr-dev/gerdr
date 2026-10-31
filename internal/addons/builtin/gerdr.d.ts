@@ -132,7 +132,8 @@ declare global {
     /**
      * Put a component in one of gerdr's slots. It is re-rendered with gerdr; one that throws is dropped and its error
      * shown in Settings → Add-ons. Several add-ons in one slot: by order, then by add-on id.
-     *   "sidebar"    the left sidebar, above its bottom row (full width, no props)
+     *   "sidebar"    the left sidebar, above its bottom row (full width, no props). The slot pads above and below
+     *                once for all blocks: give yours horizontal padding only, or two blocks leave a gap between them
      *   "paneTitle"  every pane's title bar, before its ⋯ menu (props: { pane: PaneInfo; tab: TabInfo }); keep it small
      */
     slot(name: "sidebar", component: Component<{}>, opts?: { order?: number }): Dispose;

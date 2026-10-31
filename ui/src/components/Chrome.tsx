@@ -533,7 +533,8 @@ export function Sidebar({ className }: { className?: string }) {
       </div>
       <AgentList />
       {/* Add-ons' sidebar blocks (g.slot("sidebar")): the quota meter and today's numbers live in add-ons now */}
-      <AddonSlot name="sidebar" className="shrink-0 border-t empty:hidden" />
+      {/* The vertical padding is given once here, not by each block: two blocks each padding themselves left a wide gap */}
+      <AddonSlot name="sidebar" className="shrink-0 border-t py-1 empty:hidden" />
       <SidebarFooter sidebarToggle />
     </div>
   );
