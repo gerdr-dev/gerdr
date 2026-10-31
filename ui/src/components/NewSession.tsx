@@ -1,10 +1,11 @@
 import { ChevronUp, Folder, FolderGit2, History, Loader2, Play, Settings2, SquareTerminal } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import { closeFocusedPane, createInPane, focusPane, focusSession, openTerminal, resumeInPane } from "@/lib/actions";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import { get, set, useStore, type AgentDef } from "@/lib/store";
 import { locateSession, type PaneLeaf } from "@/lib/layout";
 import { cn } from "@/lib/utils";
@@ -15,6 +16,31 @@ function tilde(p: string, home: string) {
   return home && p.startsWith(home) ? "~" + p.slice(home.length) : p;
 }
 
+const expand = (v: string, home: string) => (v.startsWith("~") && home ? home + v.slice(1) : v);
+const trimSlash = (p: string) => p.replace(/\/+$/, "") || "/";
+/** A bare word (no leading / or ~) isn't a path: it searches the directories already used. */
+const isQuery = (v: string) => !!v && !v.startsWith("/") && !v.startsWith("~");
+
+/**
+ * Creates the directory (and its parents) if it isn't there: starting a session or a workspace in a path that doesn't
+ * exist yet just makes it, the picker says so beforehand. A backend from before /api/fs/mkdir answers 404: carry on,
+ * opening the session then fails with its own message.
+ */
+export async function ensureDir(path: string) {
+  if (!path.startsWith("/")) return;
+  await api.mkdir(path).catch((e) => {
+    if (!(e instanceof ApiError && e.status === 404)) throw e;
+  });
+}
+
+type Row = { path: string; label: string; kind: "recent" | "dir" | "up"; git?: boolean };
+
+/**
+ * The working-directory input used everywhere a path is typed (new session, new workspace). Suggests as you type:
+ * the directories already used (sessions' and workspaces' cwds, newest first) — typing a bare name like "gerdr" searches
+ * them — and the subfolders of what's typed so far. ↑↓ pick, Tab completes into the input, Enter takes it.
+ * A path that doesn't exist is said so under the input: it gets created on submit (ensureDir).
+ */
 export function DirPicker({
   value,
   onChange,
@@ -23,121 +49,189 @@ export function DirPicker({
 }: {
   value: string;
   onChange: (v: string) => void;
-  onEnter?: () => void;
+  /** Gets the chosen value: picking a row and submitting happen in the same tick, before the parent's state has it. */
+  onEnter?: (v: string) => void;
   autoFocus?: boolean;
 }) {
   const home = useStore((s) => s.home);
   const sessions = useStore((s) => s.sessions);
-  const [open, setOpen] = useState(false);
+  const workspaces = useStore((s) => s.layout.workspaces);
+  const [focused, setFocused] = useState(false);
   const [list, setList] = useState<{ path: string; parent: string; dirs: string[]; git: boolean } | null>(null);
-  const [err, setErr] = useState("");
-  const recent = useMemo(() => {
+  const [hi, setHi] = useState(-1);
+  // What the typed path is: ok / missing (created on submit) / bad (a file, no permission: the server's message)
+  const [state, setState] = useState<{ path: string; kind: "ok" | "missing" | "bad"; msg?: string } | null>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  // Every directory used before, newest first: sessions' cwds (not Work agents', those live in gerdr's own dir), then
+  // workspaces' that have no session yet.
+  const known = useMemo(() => {
     const seen = new Set<string>();
-    return Object.values(sessions)
+    const out: string[] = [];
+    const add = (c?: string) => c && !seen.has(c) && (seen.add(c), out.push(c));
+    Object.values(sessions)
+      .filter((s) => !workProjectOf(s.id))
       .sort((a, b) => b.updatedAt - a.updatedAt)
-      .map((s) => s.cwd)
-      .filter((c) => (seen.has(c) ? false : (seen.add(c), true)))
-      .slice(0, 8);
-  }, [sessions]);
+      .forEach((s) => add(s.cwd));
+    workspaces.forEach((w) => add(w.cwd));
+    return out;
+  }, [sessions, workspaces]);
+
   const browse = (p: string) => {
-    api
-      .dirs(p)
-      .then((r) => {
-        setList(r);
-        setErr("");
-      })
-      .catch((e) => setErr(e.message));
+    api.dirs(p).then(setList, () => {});
   };
+  // List the folder the typed path is in (or the path itself when it ends with /)
+  const abs = expand(value, home);
+  const dirOf = abs.endsWith("/") ? trimSlash(abs) : abs.slice(0, abs.lastIndexOf("/")) || "/";
   useEffect(() => {
-    if (!open) return;
-    const p = value.endsWith("/") ? value : value.slice(0, value.lastIndexOf("/") + 1) || value;
-    browse(value && !value.endsWith("/") ? value : p || home);
+    if (!focused || isQuery(value)) return;
+    if (!list || list.path !== dirOf) browse(value ? dirOf : home);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
-  const shown = value.startsWith("~") && home ? home + value.slice(1) : value;
-  const filter = list && shown.startsWith(list.path + "/") ? shown.slice(list.path.length + 1).toLowerCase() : "";
+  }, [focused, dirOf]);
+
+  // Does the typed path exist? Checked a moment after typing stops.
+  useEffect(() => {
+    if (!value.trim() || isQuery(value)) return setState(null);
+    const p = trimSlash(abs);
+    const t = setTimeout(() => {
+      api.dirs(p).then(
+        () => setState({ path: p, kind: "ok" }),
+        (e) => setState(e instanceof ApiError && e.status === 404 ? { path: p, kind: "missing" } : { path: p, kind: "bad", msg: e.message }),
+      );
+    }, 200);
+    return () => clearTimeout(t);
+  }, [abs]);
+  const status = state && state.path === trimSlash(abs) ? state : null;
+
+  const rows: Row[] = useMemo(() => {
+    if (isQuery(value)) {
+      const q = value.toLowerCase();
+      const base = (p: string) => p.slice(p.lastIndexOf("/") + 1).toLowerCase();
+      // Folder-name matches first, then anywhere in the path
+      return [...known.filter((p) => base(p).includes(q)), ...known.filter((p) => !base(p).includes(q) && p.toLowerCase().includes(q))]
+        .slice(0, 50)
+        .map((p) => ({ path: p, label: tilde(p, home), kind: "recent" as const }));
+    }
+    const out: Row[] = [];
+    const filter =
+      list && abs.startsWith(list.path === "/" ? "/" : list.path + "/") ? abs.slice(list.path === "/" ? 1 : list.path.length + 1).toLowerCase() : "";
+    if (!filter && (!value || value === "~/" || value === "~" || value === "/")) {
+      known.slice(0, 8).forEach((p) => out.push({ path: p, label: tilde(p, home), kind: "recent" }));
+    }
+    if (list && list.path === dirOf) {
+      if (!filter) out.push({ path: list.parent, label: tilde(list.path, home), kind: "up", git: list.git });
+      list.dirs
+        .filter((d) => !filter || d.toLowerCase().includes(filter))
+        .sort((a, b) => (filter ? +!a.toLowerCase().startsWith(filter) - +!b.toLowerCase().startsWith(filter) : 0))
+        .slice(0, 200)
+        .forEach((d) => {
+          const full = (list.path === "/" ? "" : list.path) + "/" + d;
+          out.push({ path: full, label: d, kind: "dir" });
+        });
+    }
+    return out;
+  }, [value, known, list, abs, dirOf, home]);
+
+  // A bare word picks its first match on Enter; while typing a path nothing is picked until ↑↓ (Enter takes what's typed)
+  useEffect(() => setHi(isQuery(value) && rows.length ? 0 : -1), [value, rows.length]);
+  useEffect(() => {
+    if (hi >= 0) listRef.current?.querySelector(`[data-row="${hi}"]`)?.scrollIntoView({ block: "nearest" });
+  }, [hi]);
+
+  // Into the input, ready to go deeper; up = the parent folder
+  const complete = (r: Row) => {
+    onChange(tilde(r.path, home) + (r.path === "/" ? "" : "/"));
+    if (r.kind !== "recent") browse(r.path);
+  };
+  // A click only fills it in (so it can still be checked or changed); Enter / double-click also submit
+  const take = (r: Row, submit: boolean) => {
+    const v = tilde(r.path, home);
+    onChange(v);
+    setFocused(false);
+    if (submit) onEnter?.(v);
+  };
+  const open = focused && rows.length > 0;
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverAnchor asChild>
-        <div className="relative">
-          <Folder className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            autoFocus={autoFocus}
-            className="pl-8 font-mono text-[13px]"
-            value={value}
-            placeholder="~/project"
-            onFocus={() => setOpen(true)}
-            onChange={(e) => {
-              onChange(e.target.value);
-              const v = e.target.value.startsWith("~") && home ? home + e.target.value.slice(1) : e.target.value;
-              const dir = v.endsWith("/") ? v.slice(0, -1) || "/" : v.slice(0, v.lastIndexOf("/")) || "/";
-              if (!list || list.path !== dir) browse(dir);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.nativeEvent.isComposing) {
-                setOpen(false);
-                onEnter?.();
-              }
-              if (e.key === "Escape") setOpen(false);
-            }}
-          />
-        </div>
-      </PopoverAnchor>
-      <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] min-w-80 p-1" onOpenAutoFocus={(e) => e.preventDefault()}>
-        {recent.length > 0 && !filter && (
-          <div className="mb-1 border-b pb-1">
-            <div className="px-2 py-1 text-[11px] text-muted-foreground">最近</div>
-            {recent.map((r) => (
-              <button
-                key={r}
-                className="flex w-full items-center gap-2 rounded-sm px-2 py-1 text-left font-mono text-[12px] hover:bg-accent"
-                onClick={() => (onChange(tilde(r, home)), setOpen(false))}
-              >
-                <History className="size-3.5 text-muted-foreground" />
-                <span className="truncate">{tilde(r, home)}</span>
-              </button>
-            ))}
+    <div className="space-y-1">
+      <Popover open={open}>
+        <PopoverAnchor asChild>
+          <div className="relative">
+            <Folder className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              autoFocus={autoFocus}
+              className={cn("pl-8 font-mono text-[13px]", status?.kind === "missing" && "border-warn", status?.kind === "bad" && "border-bad")}
+              value={value}
+              placeholder="~/project，或输入名字搜用过的目录"
+              onFocus={() => setFocused(true)}
+              onBlur={() => setFocused(false)}
+              onChange={(e) => {
+                onChange(e.target.value);
+                setFocused(true);
+              }}
+              onKeyDown={(e) => {
+                if (e.nativeEvent.isComposing) return;
+                if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                  if (!rows.length) return;
+                  e.preventDefault();
+                  setFocused(true);
+                  const d = e.key === "ArrowDown" ? 1 : -1;
+                  setHi((h) => (h < 0 ? (d > 0 ? 0 : rows.length - 1) : (h + d + rows.length) % rows.length));
+                } else if (e.key === "Tab" && open && !e.shiftKey) {
+                  const r = rows[hi >= 0 ? hi : rows.findIndex((x) => x.kind !== "up")];
+                  if (r) {
+                    e.preventDefault();
+                    complete(r);
+                  }
+                } else if (e.key === "Enter") {
+                  e.preventDefault();
+                  if (open && hi >= 0 && rows[hi]) return take(rows[hi], true);
+                  if (isQuery(value)) return; // a name with no match isn't a path
+                  setFocused(false);
+                  onEnter?.(value);
+                } else if (e.key === "Escape" && open) {
+                  e.preventDefault();
+                  e.stopPropagation(); // close the list, not the dialog around it
+                  setFocused(false);
+                }
+              }}
+            />
           </div>
-        )}
-        {err && <div className="px-2 py-1 text-[12px] text-bad">{err}</div>}
-        {list && (
-          <div className="max-h-72 overflow-auto">
-            <button
-              className="flex w-full items-center gap-2 rounded-sm px-2 py-1 text-left font-mono text-[12px] text-muted-foreground hover:bg-accent"
-              onClick={() => (onChange(tilde(list.parent, home) + "/"), browse(list.parent))}
-            >
-              <ChevronUp className="size-3.5" />
-              {tilde(list.path, home)}
-              {list.git && <FolderGit2 className="size-3.5 text-brand" />}
-            </button>
-            {list.dirs
-              .filter((d) => !filter || d.toLowerCase().includes(filter))
-              .slice(0, 200)
-              .map((d) => {
-                const full = (list.path === "/" ? "" : list.path) + "/" + d;
-                return (
-                  <button
-                    key={d}
-                    className="flex w-full items-center gap-2 rounded-sm px-2 py-1 text-left font-mono text-[12px] hover:bg-accent"
-                    onClick={() => {
-                      onChange(tilde(full, home));
-                      browse(full);
-                    }}
-                    onDoubleClick={() => {
-                      onChange(tilde(full, home));
-                      setOpen(false);
-                      onEnter?.();
-                    }}
-                  >
-                    <Folder className="size-3.5 text-muted-foreground" />
-                    {d}
-                  </button>
-                );
-              })}
+        </PopoverAnchor>
+        <PopoverContent
+          align="start"
+          className="w-[var(--radix-popover-trigger-width)] min-w-80 p-1"
+          onOpenAutoFocus={(e) => e.preventDefault()}
+          // Clicking a row mustn't blur the input (that closes the list before the click lands)
+          onMouseDown={(e) => e.preventDefault()}
+        >
+          <div ref={listRef} className="max-h-72 overflow-auto">
+            {rows.map((r, i) => {
+              const Icon = r.kind === "recent" ? History : r.kind === "up" ? ChevronUp : Folder;
+              return (
+                <button
+                  key={r.kind + r.path}
+                  data-row={i}
+                  className={cn(
+                    "flex w-full items-center gap-2 rounded-sm px-2 py-1 text-left font-mono text-[12px] hover:bg-accent",
+                    i === hi && "bg-accent",
+                    r.kind === "up" && "text-muted-foreground",
+                  )}
+                  onMouseEnter={() => setHi(i)}
+                  onClick={() => (r.kind === "recent" ? take(r, false) : complete(r))}
+                  onDoubleClick={() => r.kind === "dir" && take(r, true)}
+                >
+                  <Icon className="size-3.5 shrink-0 text-muted-foreground" />
+                  <span className="truncate">{r.label}</span>
+                  {r.git && <FolderGit2 className="size-3.5 shrink-0 text-brand" />}
+                </button>
+              );
+            })}
           </div>
-        )}
-      </PopoverContent>
-    </Popover>
+        </PopoverContent>
+      </Popover>
+      {status?.kind === "missing" && <div className="truncate text-[12px] text-warn">这个目录还不存在，会自动创建</div>}
+      {status?.kind === "bad" && <div className="truncate text-[12px] text-bad">{status.msg}</div>}
+    </div>
   );
 }
 
@@ -187,12 +281,20 @@ export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean
   const agentName = agents.find((a) => a.id === agent)?.name ?? agent;
 
   // as：双击某个 agent 卡片直接开，这时 setAgent 还没生效，得显式传进来
-  const start = async (imp?: string, title?: string, as = agent) => {
+  // dir: a path the picker just chose, before this render's cwd has it
+  const start = async (imp?: string, title?: string, as = agent, dir?: string) => {
     if (busy) return;
     setBusy(true);
     try {
       // 接以前的会话：标题沿用列表里那个（agent 那边改过名就是改过的名字，没改过是第一句话）
-      await createInPane(pane.id, { agent: as, cwd: abs, import: imp, title });
+      const cwd = dir !== undefined ? expand(dir, home) : abs;
+      try {
+        await ensureDir(cwd);
+      } catch (e: any) {
+        toast.error(e.message ?? String(e)); // createInPane reports its own failures; this one would go unseen
+        throw e;
+      }
+      await createInPane(pane.id, { agent: as, cwd, import: imp, title });
     } catch {
       setBusy(false);
     }
@@ -255,7 +357,7 @@ export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean
             </button>
           ))}
         </div>
-        <DirPicker value={cwd} onChange={setCwd} onEnter={() => start()} />
+        <DirPicker value={cwd} onChange={setCwd} onEnter={(v) => start(undefined, undefined, agent, v)} />
         <div className="flex gap-2">
           <Button ref={startRef} className="flex-1" disabled={busy} onClick={() => start()} onKeyDown={(e) => e.key === "Enter" && start()}>
             {busy ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}

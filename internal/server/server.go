@@ -382,6 +382,7 @@ func (s *Server) Handler() http.Handler {
 	}
 	mux.HandleFunc("GET /api/system/stats", s.stats)
 	mux.HandleFunc("GET /api/fs/dirs", s.dirs)
+	mux.HandleFunc("POST /api/fs/mkdir", s.mkdir)
 	mux.HandleFunc("GET /api/fs/stat", s.fileStat)
 	mux.HandleFunc("GET /api/fs/raw", s.fileRaw)
 	mux.HandleFunc("POST /api/fs/link", s.fileLinkIssue)
@@ -638,7 +639,12 @@ func (s *Server) dirs(w http.ResponseWriter, r *http.Request) {
 	p = filepath.Clean(p)
 	ents, err := os.ReadDir(p)
 	if err != nil {
-		httpError(w, 400, err.Error())
+		// 404 tells the path picker "doesn't exist" (created on submit) apart from "not a folder" / no permission
+		code := 400
+		if os.IsNotExist(err) {
+			code = 404
+		}
+		httpError(w, code, err.Error())
 		return
 	}
 	dirs := []string{}
@@ -657,6 +663,29 @@ func (s *Server) dirs(w http.ResponseWriter, r *http.Request) {
 	sort.Slice(dirs, func(i, j int) bool { return strings.ToLower(dirs[i]) < strings.ToLower(dirs[j]) })
 	_, gerr := os.Stat(filepath.Join(p, ".git"))
 	writeJSON(w, map[string]any{"path": p, "parent": filepath.Dir(p), "dirs": dirs, "home": home, "git": gerr == nil})
+}
+
+// mkdir: creates the folder a new session / workspace is started in when it doesn't exist yet. Parents are created too (a new
+// project is often two levels down, ~/dev/new-org/new-repo). Nothing more than an agent or terminal here can already do.
+func (s *Server) mkdir(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Path string `json:"path"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || strings.TrimSpace(body.Path) == "" {
+		httpError(w, 400, "path is required")
+		return
+	}
+	p := body.Path
+	if !strings.HasPrefix(p, "~") && !filepath.IsAbs(p) {
+		httpError(w, 400, "need an absolute path: "+p)
+		return
+	}
+	p = resolvePath(p, "")
+	if err := os.MkdirAll(p, 0o755); err != nil {
+		httpError(w, 400, err.Error())
+		return
+	}
+	writeJSON(w, map[string]any{"path": p})
 }
 
 var upgrader = websocket.Upgrader{

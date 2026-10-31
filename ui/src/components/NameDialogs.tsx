@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { addSpace, addWorkspace, basename, renameTab, renameWorkspace } from "@/lib/actions";
 import { api } from "@/lib/api";
 import { closeDialog, useStore } from "@/lib/store";
-import { DirPicker } from "./NewSession";
+import { DirPicker, ensureDir } from "./NewSession";
 
 // The small forms that ask for a name: renaming a tab / workspace / conversation / session, a new session, a new workspace.
 
@@ -74,10 +74,17 @@ export function NewWorkspace({ open }: { open: boolean }) {
       setCwd("~/");
     }
   }, [open]);
-  const create = () => {
-    const abs = cwd.startsWith("~") ? home + cwd.slice(1) : cwd;
-    const n = name.trim() || (cwd.replace(/\/+$/, "") && cwd !== "~" ? basename(abs) : "");
-    addWorkspace(n, abs.replace(/\/+$/, "") || undefined);
+  // dir: a path the picker just chose, before this render's cwd has it
+  const create = async (dir = cwd) => {
+    const abs = dir.startsWith("~") ? home + dir.slice(1) : dir;
+    const n = name.trim() || (dir.replace(/\/+$/, "") && dir !== "~" ? basename(abs) : "");
+    const p = abs.replace(/\/+$/, "");
+    try {
+      if (p) await ensureDir(p); // a path that doesn't exist yet is created (the picker says so)
+    } catch (e: any) {
+      return toast.error(e.message ?? String(e));
+    }
+    addWorkspace(n, p || undefined);
     closeDialog();
   };
   return (
@@ -103,7 +110,7 @@ export function NewWorkspace({ open }: { open: boolean }) {
           </div>
         </div>
         <DialogFooter>
-          <Button onClick={create}>
+          <Button onClick={() => create()}>
             <FolderOpen className="size-4" /> 创建
           </Button>
         </DialogFooter>

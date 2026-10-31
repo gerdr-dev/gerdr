@@ -249,6 +249,8 @@ export const api = {
   workRun: <T = any>(fn: string, input?: unknown) => req<{ result: T }>("POST", "/api/work/run", { fn, input }).then((r) => r.result),
   dirs: (path: string) =>
     req<{ path: string; parent: string; dirs: string[]; home: string; git: boolean }>("GET", `/api/fs/dirs?path=${encodeURIComponent(path)}`),
+  /** Create a folder (and its parents) for the path picker; absolute or ~ paths only. */
+  mkdir: (path: string) => req<{ path: string }>("POST", "/api/fs/mkdir", { path }),
   fileStat: (path: string, cwd?: string) => req<FileStat>("GET", `/api/fs/stat?path=${encodeURIComponent(path)}&cwd=${encodeURIComponent(cwd ?? "")}`),
   /** A cookie-less /f/<token>/<name> link to one file for the system browser, valid 5 minutes (server/filelink.go). */
   fileLink: (path: string) => req<{ url: string }>("POST", "/api/fs/link", { path }),

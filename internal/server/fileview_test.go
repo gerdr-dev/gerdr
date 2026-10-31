@@ -139,3 +139,37 @@ func TestFileUpload(t *testing.T) {
 		}
 	}
 }
+
+// The path picker tells "doesn't exist" (404, offers to create it) from "not a folder", and creates nested folders.
+func TestDirsMissingAndMkdir(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "f"), []byte("x"), 0o644)
+	s := &Server{}
+	list := func(p string) int {
+		w := httptest.NewRecorder()
+		s.dirs(w, httptest.NewRequest("GET", "/api/fs/dirs?path="+url.QueryEscape(p), nil))
+		return w.Code
+	}
+	if c := list(filepath.Join(dir, "a/b")); c != 404 {
+		t.Errorf("missing dir: %d, want 404", c)
+	}
+	if c := list(filepath.Join(dir, "f")); c != 400 {
+		t.Errorf("a file: %d, want 400", c)
+	}
+	mk := func(p string) int {
+		w := httptest.NewRecorder()
+		s.mkdir(w, httptest.NewRequest("POST", "/api/fs/mkdir", strings.NewReader(`{"path":`+strconvQuote(p)+`}`)))
+		return w.Code
+	}
+	if c := mk(filepath.Join(dir, "a/b")); c != 200 {
+		t.Fatalf("mkdir: %d", c)
+	}
+	if c := list(filepath.Join(dir, "a/b")); c != 200 {
+		t.Errorf("after mkdir: %d, want 200", c)
+	}
+	if c := mk("rel/path"); c != 400 {
+		t.Errorf("relative path: %d, want 400", c)
+	}
+}
+
+func strconvQuote(s string) string { b, _ := json.Marshal(s); return string(b) }
