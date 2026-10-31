@@ -36,6 +36,7 @@ import { usePhone } from "@/lib/phone";
 import { markRead, toggleSidebar, useStore } from "@/lib/store";
 import type { SessionSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { FadeText } from "./FadeText";
 import { BOX_TRANSITION, useLayoutAnim, useZoomAnim } from "@/lib/zoomAnim";
 import { AgentIcon, StatusDot, dotStatus } from "./AgentIcon";
 import { ChatView } from "./chat/ChatView";
@@ -50,20 +51,23 @@ function projectOf(l: Layout, c: WorkConf, id: string): string | undefined {
   return Object.entries(workChats(c, l)).find(([, x]) => x === id)?.[0];
 }
 
-/** "project · workspace · tab" of a session's pane, or "project · Work" (the project only when there's more than one). */
+/**
+ * "tab · workspace · project" of a session's pane, or "Work · project" (the project only when there's more than one).
+ * Most specific first: the tab is what tells rows apart, and a narrow row truncates the end.
+ */
 function whereOf(l: Layout, c: WorkConf, id: string): string {
   const loc = locateSession(l, id);
   const spaces = spaceList(l);
   if (!loc) {
     const p = projectOf(l, c, id);
     if (!p) return "";
-    return spaces.length > 1 ? `${spaces.find((s) => s.id === p)?.name ?? p} · Work` : "Work";
+    return spaces.length > 1 ? `Work · ${spaces.find((s) => s.id === p)?.name ?? p}` : "Work";
   }
   // No "3." tab position: the tab bar doesn't show it. An unnamed tab is named after its first agent's title, so for that
   // agent the tab part would only repeat the row's title; leave it out.
   const tab = tabName(loc.tab);
-  const parts = tab === useStore.getState().sessions[id]?.title ? [loc.ws.name] : [loc.ws.name, tab];
-  if (spaces.length > 1) parts.unshift(spaces.find((s) => s.id === spaceOf(loc.ws))?.name ?? spaceOf(loc.ws));
+  const parts = tab === useStore.getState().sessions[id]?.title ? [loc.ws.name] : [tab, loc.ws.name];
+  if (spaces.length > 1) parts.push(spaces.find((s) => s.id === spaceOf(loc.ws))?.name ?? spaceOf(loc.ws));
   return parts.join(" · ");
 }
 
@@ -140,7 +144,8 @@ function PhoneOverview({ ids, focus, shown, onPick }: { ids: string[]; focus?: s
     <TabActive.Provider value={shown}>
       <div className="flex h-full flex-col bg-background">
         <div className="flex h-11 shrink-0 items-center gap-1 border-b bg-sidebar px-1.5">
-          <Button variant="ghost" size="icon" className="size-8 shrink-0" aria-label="返回" onClick={() => toggleOverview(false)}>
+          {/* size-9 like PhoneBar's ☰ (Chrome.tsx): the two bars swap in the same spot, so their first icons line up */}
+          <Button variant="ghost" size="icon" className="size-9 shrink-0" aria-label="返回" onClick={() => toggleOverview(false)}>
             <ArrowLeft className="size-[18px]" />
           </Button>
           {/* Both scrollbar hiders: Android's WebView ignores scrollbar-width and drew a bar under the chips */}
@@ -195,7 +200,7 @@ function TileChip({ id, current, className, onClick }: { id: string; current: bo
     >
       {/* An idle one has no dot: StatusDot is transparent then but would still leave a gap */}
       {(dotStatus(s) !== "idle" || unread) && <StatusDot status={dotStatus(s)} unread={unread} />}
-      <span className="truncate">{s.title || basename(s.cwd)}</span>
+      <FadeText>{s.title || basename(s.cwd)}</FadeText>
     </button>
   );
 }
@@ -708,7 +713,8 @@ function Tile({
     >
       <div
         className={cn(
-          "flex h-8 shrink-0 items-center gap-2 border-b px-3 text-[12px]",
+          // max-md:pl-4 like a pane's title bar (Panes.tsx): on a phone the two show in the same spot, so the icons line up
+          "flex h-8 shrink-0 items-center gap-2 border-b px-3 text-[12px] max-md:pl-4",
           // The status is the whole title bar's tint instead of a dot (asked for): readable at a glance across a dozen tiles.
           // Dimming an unfocused tile goes on the contents only, so the tint keeps its strength.
           statusTint(session.status, unread),
@@ -725,10 +731,10 @@ function Tile({
       >
         {onDragStart && <GripVertical className="-mx-1.5 size-3.5 shrink-0 text-muted-foreground/60" />}
         <AgentIcon agent={session.agent} className="size-4" />
-        <span className="min-w-[3em] max-w-[50%] shrink truncate font-medium">{title}</span>
+        <FadeText className="min-w-[3em] max-w-[50%] shrink font-medium">{title}</FadeText>
         <StatusDot status={dotStatus(session)} unread={unread} />
         {session.pending ? <span className="shrink-0 whitespace-nowrap rounded-sm bg-bad/15 px-1.5 text-[11px] text-bad">等你</span> : null}
-        <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">{where}</span>
+        <FadeText className="min-w-0 flex-1 text-[11px] text-muted-foreground">{where}</FadeText>
         {!phone && (
           <>
             <TileButton title={main ? "取消固定" : "固定在左边"} onClick={() => toggleMain(id)}>

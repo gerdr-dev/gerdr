@@ -24,6 +24,9 @@ export function InboxButton({ phone }: { phone?: boolean }) {
     setOpen(v);
     if (v) markSeen();
   };
+  // The phone's top bar is short on room: an empty inbox's button only leads to an empty list. Kept while open, so
+  // clearing the last item doesn't pull the panel out from under the finger.
+  if (phone && !count && !open) return null;
   const trigger = (
     <Button
       variant={open ? "secondary" : "ghost"}

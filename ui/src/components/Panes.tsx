@@ -41,6 +41,7 @@ import { get, markRead, set, setLayout, useStore } from "@/lib/store";
 import { addTiles, MAX_TILES, overviewIds, removeTile } from "@/lib/overview";
 import { usePhone } from "@/lib/phone";
 import { cn } from "@/lib/utils";
+import { FadeText } from "./FadeText";
 import { AgentIcon, StatusDot, dotStatus } from "./AgentIcon";
 import { ChatView } from "./chat/ChatView";
 import { NewSession } from "./NewSession";
@@ -280,8 +281,8 @@ function SubPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; tab
         className={cn("flex h-8 shrink-0 items-center gap-2 border-b px-3 text-[12px] max-md:pl-4", !focused && many && "opacity-70")}
       >
         <Bot className="size-4 shrink-0 text-muted-foreground" />
-        <span className="min-w-0 shrink-[2] truncate text-muted-foreground">{task?.subagent || "子 agent"}</span>
-        <span className="min-w-0 flex-1 truncate font-medium">{title}</span>
+        <FadeText className="min-w-0 shrink-[2] text-muted-foreground">{task?.subagent || "子 agent"}</FadeText>
+        <FadeText className="min-w-0 flex-1 font-medium">{title}</FadeText>
         {task?.status === "running" && <StatusDot status="running" />}
         <PaneCount count={count} />
         {/* Shrinks too (truncated), so in a narrow pane the close button still fits */}
@@ -333,7 +334,8 @@ function TermPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; ta
         className={cn("flex h-8 shrink-0 items-center gap-2 border-b px-3 text-[12px] max-md:pl-4", !focused && many && "opacity-70")}
       >
         <SquareTerminal className="size-4 text-muted-foreground" />
-        <span className="min-w-[3em] max-w-[60%] shrink truncate font-medium">{title}</span>
+        {/* The 60% cap leaves room for the path, which a phone hides: there it only left a gap before the ⋯ */}
+        <FadeText className="min-w-[3em] max-w-[60%] shrink font-medium max-md:max-w-none">{title}</FadeText>
         <PaneCount count={count} />
         <span className="hidden min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground md:block" title={cwd}>
           {cwd}
@@ -436,7 +438,8 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
         ) : (
           <PanelTopOpen className="size-3.5 text-muted-foreground" />
         )}
-        <span className="min-w-[3em] max-w-[60%] shrink truncate font-medium">{title}</span>
+        {/* The 60% cap leaves room for the path, which a phone hides: there it only left a gap before the ⋯ */}
+        <FadeText className="min-w-[3em] max-w-[60%] shrink font-medium max-md:max-w-none">{title}</FadeText>
         <StatusDot status={dotStatus(session)} unread={unread} />
         {session?.pending ? <span className="shrink-0 whitespace-nowrap rounded-sm bg-bad/15 px-1.5 text-[11px] text-bad">等你</span> : null}
         <PaneCount count={count} />

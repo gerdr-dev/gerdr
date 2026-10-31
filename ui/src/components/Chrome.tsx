@@ -75,6 +75,7 @@ import type { SessionSummary } from "@/lib/types";
 import { compareSessions } from "@/lib/order";
 import { addTiles, MAX_TILES, overviewIds, removeTile, showInOverview, toggleOverview } from "@/lib/overview";
 import { cn } from "@/lib/utils";
+import { FadeText } from "./FadeText";
 import { AgentIcon, StatusDot, dotStatus, dotRank } from "./AgentIcon";
 import { fmtElapsed } from "./chat/StatusLine";
 import { TabDragLayer, useTabDrag } from "./TabDrag";
@@ -331,10 +332,11 @@ export function PhoneBar() {
       {/* Lined up with the pane title bar below (Panes.tsx: pl-4, 16px icon, gap-2): both icons are centred at 24px and both
           titles start at 40px — 6px padding + 36px button + 4px gap − 6px pulled back (asked for) */}
       <button className="-ml-1.5 flex h-9 min-w-0 flex-1 items-center gap-1.5 rounded-md pr-1.5 pl-0 text-left" onClick={openSwitcher}>
-        <span className="min-w-0 truncate text-[13px] font-medium">{applyTabLabel(tab, ti, ws, tabName(tab))}</span>
+        <FadeText className="min-w-0 text-[13px] font-medium">{applyTabLabel(tab, ti, ws, tabName(tab))}</FadeText>
         {/* 只有一个 pane 时不画：下面 pane 标题栏那个点就是同一个会话，一行里三个点太乱。好几个 pane 时它是整个 tab 的汇总，留着 */}
         {leaves(tab.root).length > 1 && <StatusDot status={st.status} unread={st.unread} />}
-        <span className="min-w-0 shrink-[2] truncate text-[11px] text-muted-foreground">{applyWorkspaceLabel(ws, wi, ws.name)}</span>
+        {/* The workspace never gives way to a long tab name (asked for): it is the one place on a phone that says which one you're in */}
+        <FadeText className="max-w-[40%] shrink-0 text-[11px] text-muted-foreground">{applyWorkspaceLabel(ws, wi, ws.name)}</FadeText>
       </button>
       <Button variant={switcher ? "secondary" : "ghost"} size="icon" className="relative size-9" aria-label="面板一览" onClick={openSwitcher}>
         <LayoutList className="size-[18px]" />
