@@ -116,7 +116,7 @@ export function PaneSwitcher() {
           session: sid ? sessions[sid] : undefined,
           ws: applyWorkspaceLabel(w, wi, w.name),
           wsId: w.id,
-          tab: `${w.tabs.indexOf(tab) + 1}.${tabName(tab)}${at}`,
+          tab: `${tabName(tab)}${at}`,
           i,
         };
       });

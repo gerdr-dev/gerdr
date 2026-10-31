@@ -59,8 +59,10 @@ function whereOf(l: Layout, c: WorkConf, id: string): string {
     if (!p) return "";
     return spaces.length > 1 ? `${spaces.find((s) => s.id === p)?.name ?? p} · Work` : "Work";
   }
-  const ti = loc.ws.tabs.indexOf(loc.tab);
-  const parts = [loc.ws.name, `${ti + 1}.${tabName(loc.tab)}`];
+  // No "3." tab position: the tab bar doesn't show it. An unnamed tab is named after its first agent's title, so for that
+  // agent the tab part would only repeat the row's title; leave it out.
+  const tab = tabName(loc.tab);
+  const parts = tab === useStore.getState().sessions[id]?.title ? [loc.ws.name] : [loc.ws.name, tab];
   if (spaces.length > 1) parts.unshift(spaces.find((s) => s.id === spaceOf(loc.ws))?.name ?? spaceOf(loc.ws));
   return parts.join(" · ");
 }
