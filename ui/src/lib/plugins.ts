@@ -5,7 +5,7 @@
 import { api } from "./api";
 import { activeTab, activeWs, leaves, type Layout, type PaneLeaf, type Tab, type Workspace } from "./layout";
 import { get, set, useStore, visibleSessions } from "./store";
-import type { PluginBuild, SessionSummary } from "./types";
+import type { PluginBuild, PluginService, SessionSummary } from "./types";
 
 type TabLabelFn = (tab: any, ctx: any) => string | void;
 type PaneTitleFn = (pane: any, ctx: any) => string | void;
@@ -21,8 +21,11 @@ const wsLabels: Reg<WsLabelFn>[] = [];
 const sessionTitles: Reg<SessionTitleFn>[] = [];
 export const pluginCommands: PluginCommand[] = [];
 const listeners: { plugin: string; event: string; fn: (e: any) => void }[] = [];
+// g.service.on: messages / status changes from a plugin's own backend process
+const serviceListeners: { plugin: string; event: "message" | "status"; fn: (e: any) => void }[] = [];
+const serviceStates = new Map<string, PluginService>();
 
-export type PluginStatus = { id: string; path: string; error?: string; loaded: boolean };
+export type PluginStatus = { id: string; path: string; error?: string; loaded: boolean; service?: PluginService };
 export let pluginStatus: PluginStatus[] = [];
 
 const disposers = new Map<string, () => void>();
@@ -238,6 +241,20 @@ function makeApi(id: string) {
     },
     notify: (text: string, opts?: any) => import("./notify").then((n) => n.notify(text, opts)),
     state: () => stateSnapshot(),
+    service: {
+      status: () => serviceStates.get(id),
+      send: async (data: unknown) => {
+        await api.pluginMessage(id, data);
+      },
+      on: (event: "message" | "status", fn: (e: any) => void) => {
+        const l = { plugin: id, event, fn };
+        serviceListeners.push(l);
+        return () => {
+          const i = serviceListeners.indexOf(l);
+          if (i >= 0) serviceListeners.splice(i, 1);
+        };
+      },
+    },
     actions: {
       newTab: async (o?: any) => (await import("./actions")).addTab(o),
       duplicateTab: async (tabId: string, where: "after" | "before") => (await import("./actions")).duplicateTab(tabId, where),
@@ -295,6 +312,31 @@ function unload(id: string) {
   remove(sessionTitles, id);
   remove(pluginCommands, id);
   remove(listeners, id);
+  remove(serviceListeners, id);
+}
+
+function emitService(id: string, event: "message" | "status", e: unknown) {
+  for (const l of serviceListeners.filter((x) => x.plugin === id && x.event === event)) {
+    try {
+      l.fn(e);
+    } catch (err) {
+      fail(id, err);
+    }
+  }
+}
+
+export function serviceStatusChanged(id: string | undefined, st: PluginService | undefined) {
+  if (!id || !st) return;
+  if (st.state === "stopped") serviceStates.delete(id);
+  else serviceStates.set(id, st);
+  const p = pluginStatus.find((x) => x.id === id);
+  if (p) p.service = serviceStates.get(id);
+  emitService(id, "status", st);
+  bump();
+}
+
+export function serviceMessage(id: string | undefined, data: unknown) {
+  if (id) emitService(id, "message", data);
 }
 
 let loadedHashes = new Map<string, string>();
@@ -315,15 +357,19 @@ async function doReload() {
   }
   const seen = new Set<string>();
   const status: PluginStatus[] = [];
+  serviceStates.clear();
+  for (const b of builds) if (b.service) serviceStates.set(b.id, b.service);
   for (const b of builds) {
     seen.add(b.id);
     if (loadedHashes.get(b.id) === b.hash) {
-      status.push(pluginStatus.find((p) => p.id === b.id) ?? { id: b.id, path: b.path, loaded: true });
+      const prev = pluginStatus.find((p) => p.id === b.id) ?? { id: b.id, path: b.path, loaded: true };
+      status.push({ ...prev, service: b.service });
       continue;
     }
     unload(b.id);
     loadedHashes.set(b.id, b.hash);
-    const st: PluginStatus = { id: b.id, path: b.path, loaded: false, error: b.error };
+    // No code and no error: a plugin that is only a service (plugin.json), nothing to load in the UI
+    const st: PluginStatus = { id: b.id, path: b.path, loaded: !b.error && !b.code, error: b.error, service: b.service };
     status.push(st);
     if (b.error || !b.code) continue;
     const url = URL.createObjectURL(new Blob([b.code], { type: "text/javascript" }));

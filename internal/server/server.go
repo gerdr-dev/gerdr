@@ -54,7 +54,9 @@ type Server struct {
 	Secrets *config.Secrets // API keys moved out of config.json (config/secrets.go)
 	Layout  *config.Store
 	Plugins *plugins.Manager
-	Ext     *ext.Manager
+	// PluginSvc runs the plugins' services (plugin.json); RunPluginServices starts it.
+	PluginSvc *plugins.Services
+	Ext       *ext.Manager
 	// Work：the Work view's local functions (internal/work). nil = off (tests).
 	Work *work.Runner
 	UI   *uisite.Renderer
@@ -91,6 +93,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /auth", s.auth)
 	mux.HandleFunc("GET /api/hello", s.hello)
 	mux.HandleFunc("GET /api/plugins", s.plugins)
+	mux.HandleFunc("POST /api/plugins/{id}/message", s.pluginMessage)
 	mux.HandleFunc("GET /api/config", func(w http.ResponseWriter, r *http.Request) { writeRaw(w, s.Config.Get()) })
 	mux.HandleFunc("PUT /api/config", s.putStore(s.Config, "config"))
 	mux.HandleFunc("GET /api/layout", func(w http.ResponseWriter, r *http.Request) { writeRaw(w, s.Layout.Get()) })
@@ -471,7 +474,19 @@ func (s *Server) hello(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) plugins(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, s.Plugins.List())
+	type view struct {
+		*plugins.Plugin
+		Service *plugins.ServiceStatus `json:"service,omitempty"`
+	}
+	out := []view{}
+	for _, p := range s.Plugins.List() {
+		v := view{Plugin: p}
+		if s.PluginSvc != nil {
+			v.Service = s.PluginSvc.Status(p.ID)
+		}
+		out = append(out, v)
+	}
+	writeJSON(w, out)
 }
 
 func (s *Server) putStore(st *config.Store, name string) http.HandlerFunc {

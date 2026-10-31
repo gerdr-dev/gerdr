@@ -300,6 +300,12 @@ function handle(m: any) {
     case "plugins":
       import("./plugins").then((p) => p.reloadPlugins());
       break;
+    case "plugin_service":
+      import("./plugins").then((p) => p.serviceStatusChanged(m.data?.id, m.data?.service));
+      break;
+    case "plugin_message":
+      import("./plugins").then((p) => p.serviceMessage(m.data?.id, m.data?.data));
+      break;
     case "stepup":
       // 远程设备请求加 passkey，要坐在电脑前的人批准（RemoteSettings）。只在本机这边提醒：远程那头批不了
       if (!location.protocol.startsWith("https")) {

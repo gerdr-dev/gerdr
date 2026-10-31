@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { isAndroid } from "@/lib/android";
 import { isNative, nativeOpenPath } from "@/lib/native";
 import { pluginStatus } from "@/lib/plugins";
+import type { PluginService } from "@/lib/types";
 import { closeDialog, fontSizeOf, set, setConfig, setFontSize, useStore, type Theme } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { AgentSettings } from "./AgentSettings";
@@ -232,6 +233,7 @@ export function SettingsDialog({ open }: { open: boolean }) {
                       <span className="shrink-0 font-medium">{p.id}</span>
                       <span className="truncate font-mono text-[11px] text-muted-foreground">{p.path}</span>
                     </div>
+                    {p.service && <PluginServiceLine s={p.service} />}
                     {p.error && <pre className="mt-1.5 whitespace-pre-wrap rounded-sm bg-bad/10 p-2 font-mono text-[11px] text-bad">{p.error}</pre>}
                   </div>
                 ))}
@@ -329,6 +331,25 @@ function Row({ label, hint, local, children }: { label: string; hint?: string; l
         {hint && <div className="text-[12px] text-muted-foreground">{hint}</div>}
       </div>
       {children}
+    </div>
+  );
+}
+
+// A plugin's backend process (plugin.json): running or not, its own status line, and why it died.
+function PluginServiceLine({ s }: { s: PluginService }) {
+  const label = { starting: "后台进程启动中", running: "后台进程在跑", exited: "后台进程退出了，稍后重启", stopped: "后台进程已停止" }[s.state];
+  return (
+    <div className="mt-1.5 space-y-1 pl-5.5 text-[12px]">
+      <div className="flex items-center gap-1.5">
+        <span className={cn("size-1.5 shrink-0 rounded-full", s.state === "running" ? "bg-ok" : s.state === "exited" ? "bg-bad" : "bg-warn")} />
+        <span className="text-muted-foreground">
+          {label}
+          {s.pid ? `（pid ${s.pid}）` : ""}
+          {s.restarts ? ` · 重启过 ${s.restarts} 次` : ""}
+        </span>
+        {s.text && <span className="truncate">{s.text}</span>}
+      </div>
+      {s.error && <pre className="whitespace-pre-wrap rounded-sm bg-bad/10 p-2 font-mono text-[11px] text-bad">{s.error}</pre>}
     </div>
   );
 }

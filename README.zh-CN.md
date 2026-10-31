@@ -175,7 +175,10 @@ export default definePlugin({
 });
 ```
 
-完整 API 在插件目录的 `gerdr.d.ts` 里。
+插件也可以是一个带 `plugin.json` 的目录，声明一个**后台进程**：gerdr 后端负责起、挂了重启、插件删了停掉。
+它从 stdin 一行一个 JSON 收到开着的会话，也能和插件的界面那一半（`g.service`）互发消息 —— 比如一直连着蓝牙手环、把 agent 状态推上去。
+
+完整 API（含后台进程的协议）在插件目录的 `gerdr.d.ts` 里。
 
 ## 配置
 

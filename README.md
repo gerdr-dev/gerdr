@@ -192,7 +192,11 @@ export default definePlugin({
 });
 ```
 
-The full API is in `gerdr.d.ts` in the plugin directory.
+A plugin can also be a directory with a `plugin.json` naming a **service**: a long-running process gerdr's backend
+starts, restarts and stops with the plugin. It gets the open sessions as JSON lines on stdin, and talks to the
+plugin's UI half (`g.service`) — e.g. a bridge that keeps a Bluetooth wristband connected and shows agents on it.
+
+The full API, service protocol included, is in `gerdr.d.ts` in the plugin directory.
 
 ## configuration
 

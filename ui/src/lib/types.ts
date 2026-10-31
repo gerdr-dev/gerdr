@@ -59,7 +59,16 @@ export type Hello = {
 /** 正在连着的远程界面（一条远程 /ws 一条；internal/server/remoteconns.go）。since 是 unix 毫秒。 */
 export type RemoteConn = { id: number; device: string; label: string; ip: string; client: string; since: number };
 
-export type PluginBuild = { id: string; path: string; code?: string; error?: string; hash: string; mtime: number };
+export type PluginBuild = { id: string; path: string; code?: string; error?: string; hash: string; mtime: number; service?: PluginService };
+/** A plugin's backend process (plugin.json "service"; internal/plugins/service.go). */
+export type PluginService = {
+  state: "starting" | "running" | "exited" | "stopped";
+  pid?: number;
+  text?: string;
+  error?: string;
+  restarts?: number;
+  since: number;
+};
 
 // ---- skill / MCP（internal/ext）----
 export type ExtSource = "agent" | "both" | "gerdr";

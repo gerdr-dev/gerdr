@@ -281,7 +281,13 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 	if err := pm.Install(); err != nil {
 		log.Warn("install builtin plugins", "err", err)
 	}
-	pm.Watch(func() { h.Broadcast("plugins", nil) })
+	// Plugin services (plugin.json): processes this backend keeps running. Started once the server listens (below).
+	psvc := plugins.NewServices(pm, env.Dir, log)
+	psvc.Env = func() []string { return sysenv.ChildEnv() }
+	pm.Watch(func() {
+		h.Broadcast("plugins", nil)
+		go psvc.Sync()
+	})
 	// 有远程连着时不让电脑睡：界面配置里的实验室开关（keepAwakeRemote），和 agents 一样存了就生效。
 	// 开着就连合盖也不睡（原来是两个开关，合成一个：要远程用电脑，合盖睡着了一样连不上）；手动时段的合盖也跟着它。
 	keeper := awake.New(log, env.Dir)
@@ -388,7 +394,7 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 	// layout save, and once now for the projects that are open.
 	layout.OnSet = wr.SaveLayouts
 	wr.SaveLayouts(layout.Get())
-	srv := &server.Server{Dir: env.Dir, Hub: h, Token: token, Config: cfg, Secrets: secrets, Layout: layout, Plugins: pm, Ext: em, Work: wr, Log: log, OnConfig: applyAgents,
+	srv := &server.Server{Dir: env.Dir, Hub: h, Token: token, Config: cfg, Secrets: secrets, Layout: layout, Plugins: pm, PluginSvc: psvc, Ext: em, Work: wr, Log: log, OnConfig: applyAgents,
 		UI: ui, ESM: esm, Remote: rm, Awake: keeper,
 		Service: svc, Terms: term.New(func() []string { return sysenv.ChildEnv() }, log)}
 	defer srv.Terms.Close()
@@ -431,6 +437,8 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 	}()
 	// 远程那条路和本机口是同一个 handler，只是先盖一个「从远程进来的」章（规则完全不同，见 server.remoteGuard）
 	rm.Start(server.RemoteHandler(handler))
+	svcCtx, stopSvcs := context.WithCancel(context.Background())
+	srv.RunPluginServices(svcCtx)
 	u := loginURL(env.Host, port, token)
 	if appMode {
 		fmt.Println("GERDR_READY " + u)
@@ -457,6 +465,8 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 		log.Info("background service installed, handing over")
 	}
 	log.Info("shutting down")
+	stopSvcs()
+	psvc.Close() // each gets stdin closed and a few seconds to let go of its device
 	cancelBase()
 	sctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()

@@ -5,6 +5,32 @@
 //
 // 插件在界面里跑（和页面同一个环境），能改的是界面上的东西：tab / pane / 工作空间的显示名、
 // 加命令和快捷键、听会话事件、弹通知。
+//
+// Services. A UI plugin runs in every open window (the App, a remote browser, the phone) and in none while no window
+// is open. Work that must keep running and exist exactly once — holding a Bluetooth wristband, which accepts one
+// connection at a time — goes in a service: a directory plugin's plugin.json names a process, and gerdr's backend
+// starts it, restarts it when it dies, and stops it when the plugin is removed or renamed to _…:
+//
+//   ~/.gerdr/plugins/band/plugin.json   {"service": {"command": "wristkit", "args": ["gerdr"], "env": {"K": "V"}}}
+//   ~/.gerdr/plugins/band/index.ts      (optional) the UI half, talks to the process through g.service
+//
+// command: a name on PATH (the login shell's, like agents get), an absolute path, or "./bin/x" relative to the plugin.
+// The process runs in the plugin's directory, with GERDR_PLUGIN (the plugin's name), GERDR_PLUGIN_DIR and
+// GERDR_PLUGIN_DATA set and the gerdr command on PATH. Keep files in GERDR_PLUGIN_DATA, not the plugin directory:
+// any change there counts as editing the plugin and reloads plugins in every open window. It talks to gerdr in JSON lines over stdin / stdout:
+//
+//   gerdr → process (stdin)
+//     {"type":"hello","version":"…","plugin":"band"}     first line of every start
+//     {"type":"sessions","sessions":[ServiceSession…]}   the sessions open in the UI: once after hello, then only when
+//                                                         a field changes (a turn streaming tokens is not a change)
+//     {"type":"message","data":…}                        sent by the UI half, g.service.send(data)
+//   process → gerdr (stdout)
+//     {"type":"status","text":"band connected"}          shown under the plugin in Settings → Plugins
+//     {"type":"message","data":…}                        to g.service.on("message") in every open window
+//
+// Other stdout lines go to gerdr's log; stderr goes to ~/.gerdr/logs/plugins/<plugin>.log.
+// stdin closing means gerdr is stopping it (quitting, plugin removed): clean up (let go of the device) and exit.
+// gerdr waits 3 seconds, then kills the process group. A process that exits is restarted after 1s, backing off to 1min.
 
 export {};
 
@@ -58,6 +84,17 @@ declare global {
     /** 当前界面状态的只读快照。 */
     state(): StateSnapshot;
 
+    /** This plugin's own service (plugin.json, see the top of this file). Without one, status() is undefined and send rejects. */
+    service: {
+      status(): ServiceStatus | undefined;
+      /** Writes {"type":"message","data":data} to the process's stdin. Rejects when it isn't running. */
+      send(data: unknown): Promise<void>;
+      /** {"type":"message","data":…} the process wrote to stdout; fn gets data. */
+      on(event: "message", fn: (data: any) => void): Dispose;
+      /** The process started, exited, or changed its status line. */
+      on(event: "status", fn: (status: ServiceStatus) => void): Dispose;
+    };
+
     actions: {
       newTab(opts?: { workspaceId?: string; cwd?: string; agent?: string; name?: string }): Promise<void>;
       duplicateTab(tabId: string, where: "after" | "before"): Promise<void>;
@@ -75,6 +112,33 @@ declare global {
       get<T = unknown>(key: string): T | undefined;
       set(key: string, value: unknown): void;
     };
+  }
+
+  interface ServiceStatus {
+    /** exited: died, waiting to be restarted. stopped: the plugin is gone. */
+    state: "starting" | "running" | "exited" | "stopped";
+    pid?: number;
+    /** The process's own status line ({"type":"status"}). */
+    text?: string;
+    /** Why it isn't running: command not found, or how it last exited plus the end of its stderr. */
+    error?: string;
+    restarts?: number;
+    /** When it entered this state (unix ms). */
+    since: number;
+  }
+
+  /** One entry of the "sessions" line a service gets. Means the same as `gerdr session list` (sessions open in the UI). */
+  interface ServiceSession {
+    id: string;
+    agent: string;
+    cwd: string;
+    title: string;
+    status: "idle" | "running" | "waiting" | "error" | "starting";
+    /** What it waits for, one line ("回答：…", "审批：Write x.txt"). */
+    waiting?: string;
+    error?: string;
+    /** When status last changed (unix ms): sort by it to put what just happened first. Doesn't move while a turn runs. */
+    since: number;
   }
 
   interface SessionTitleContext {

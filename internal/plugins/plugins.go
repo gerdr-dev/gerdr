@@ -1,8 +1,9 @@
-// Package plugins 管用户的 TS 插件：扫 ~/.gerdr/plugins、用 esbuild（Go 版，不需要 node）
-// 编成浏览器能直接跑的 ESM、文件一变就重编并通知前端。
+// Package plugins manages the user's plugins in ~/.gerdr/plugins: TS compiled by esbuild (the Go one, no node needed)
+// into ESM the browser runs directly, rebuilt and pushed to the UI whenever a file changes.
 //
-// 插件**在前端跑**（它们改的是界面：tab 名、pane 标题、快捷键、命令），所以这里只负责
-// 「把 TS 变成一段 JS」。插件能碰到什么由前端注入的那个 API 对象决定（见 gerdr.d.ts）。
+// The TS half **runs in the UI** (it changes UI things: tab names, pane titles, keys, commands), so all this package
+// does for it is turn TS into JS; what a plugin can touch is the API object the UI hands it (gerdr.d.ts).
+// A directory plugin can also declare a service in plugin.json — a process the backend keeps running (service.go).
 package plugins
 
 import (
@@ -27,7 +28,7 @@ var builtin embed.FS
 
 type Plugin struct {
 	ID    string `json:"id"`
-	Path  string `json:"path"`
+	Path  string `json:"path"` // the entry file; plugin.json for a plugin that only has a service
 	Code  string `json:"code,omitempty"`
 	Error string `json:"error,omitempty"`
 	Hash  string `json:"hash"`
@@ -84,8 +85,8 @@ func (m *Manager) Install() error {
 	})
 }
 
-// entries 找插件入口：顶层的 *.ts / *.tsx / *.js，或者子目录里的 index.(ts|tsx|js)。
-// 以 . 或 _ 开头的、*.d.ts 跳过。
+// entries finds the plugins: top-level *.ts / *.tsx / *.js, or a subdirectory with index.(ts|tsx|js) or plugin.json
+// (a service, with or without a UI half). Names starting with . or _, and *.d.ts, are skipped.
 func (m *Manager) entries() map[string]string {
 	out := map[string]string{}
 	ents, err := os.ReadDir(m.dir)
@@ -99,7 +100,7 @@ func (m *Manager) entries() map[string]string {
 		}
 		full := filepath.Join(m.dir, name)
 		if e.IsDir() {
-			for _, idx := range []string{"index.ts", "index.tsx", "index.js"} {
+			for _, idx := range []string{"index.ts", "index.tsx", "index.js", "plugin.json"} {
 				if _, err := os.Stat(filepath.Join(full, idx)); err == nil {
 					out[name] = filepath.Join(full, idx)
 					break
@@ -166,6 +167,20 @@ func (m *Manager) rebuild() {
 		if st, err := os.Stat(path); err == nil {
 			p.Mtime = st.ModTime().UnixMilli()
 		}
+		var mfErr error
+		if filepath.Dir(path) != m.dir {
+			_, mfErr = readManifest(filepath.Dir(path))
+		}
+		if filepath.Base(path) == "plugin.json" || mfErr != nil {
+			// Service only (nothing to build), or a broken plugin.json: say so instead of loading half a plugin
+			if mfErr != nil {
+				p.Error = mfErr.Error()
+			}
+			h := sha256.Sum256([]byte(p.Error + "\x00" + path))
+			p.Hash = hex.EncodeToString(h[:8])
+			m.cache[id] = p
+			continue
+		}
 		res := api.Build(api.BuildOptions{
 			EntryPoints:   []string{path},
 			Bundle:        true,
@@ -221,3 +236,24 @@ func (m *Manager) Watch(onChange func()) {
 }
 
 func (m *Manager) Dir() string { return m.dir }
+
+type serviceEntry struct {
+	dir  string
+	spec ServiceSpec
+}
+
+// services: the directory plugins whose plugin.json declares a service (a broken plugin.json declares none; List
+// reports why).
+func (m *Manager) services() map[string]serviceEntry {
+	out := map[string]serviceEntry{}
+	for id, path := range m.entries() {
+		dir := filepath.Dir(path)
+		if dir == m.dir {
+			continue // a top-level .ts file
+		}
+		if mf, err := readManifest(dir); err == nil && mf != nil && mf.Service != nil {
+			out[id] = serviceEntry{dir: dir, spec: *mf.Service}
+		}
+	}
+	return out
+}

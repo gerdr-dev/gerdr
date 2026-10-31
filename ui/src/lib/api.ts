@@ -133,6 +133,7 @@ export const api = {
     }>("POST", "/api/import/herdr", { workspaces }),
   hello: () => req<Hello>("GET", "/api/hello"),
   plugins: () => req<PluginBuild[]>("GET", "/api/plugins"),
+  pluginMessage: (id: string, data: unknown) => req("POST", `/api/plugins/${encodeURIComponent(id)}/message`, { data }),
   putLayout: (data: unknown, client: string) => req("PUT", "/api/layout", { data, client }),
   putConfig: (data: unknown, client: string) => req("PUT", "/api/config", { data, client }),
   // Gerdr Agent 的模型设置：拉服务商的模型列表、拿一个模型试说一句（服务商参数是页面上的草稿，不用先保存）
