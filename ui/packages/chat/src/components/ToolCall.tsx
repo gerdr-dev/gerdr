@@ -245,7 +245,10 @@ function DefaultToolCall({ part, agent, running, keep: keepOpen }: { part: ToolP
   // Claude reports a subagent (Task / Agent tool) with kind "think", which drew a brain and made it look like a thinking step.
   // agent: it has tool calls of its own, which marks a subagent even before its task is reported.
   const isAgent = !!task && (task.type === "local_agent" || !!task.subagent);
-  const Icon = isAgent || agent ? Bot : (ICONS[meta.kind] ?? Wrench);
+  // A subagent even once its task is gone: the adapter keeps only the latest finished tasks, and none after a restart
+  const sub = isAgent || !!agent;
+  const bg = task?.background || inp?.run_in_background === true;
+  const Icon = sub ? Bot : (ICONS[meta.kind] ?? Wrench);
   // 任务的进度 / 摘要：和行里已经写着的（说明、标题、任务描述）一样就不再写一遍
   const note = task && (task.status === "running" ? task.progress : task.summary);
   const taskNote =
@@ -298,13 +301,13 @@ function DefaultToolCall({ part, agent, running, keep: keepOpen }: { part: ToolP
             {stat.del > 0 && <span className="text-bad">-{stat.del}</span>}
           </span>
         )}
-        {!task && took && <span className="shrink-0 text-[11px] tabular-nums opacity-70">{took}</span>}
+        {!task && bg && <span className="shrink-0 rounded-sm bg-muted px-1 text-[11px]">{t("task.background")}</span>}
+        {/* A background call's own time is only how long it took to launch, not how long it ran */}
+        {!task && took && !bg && <span className="shrink-0 text-[11px] tabular-nums opacity-70">{took}</span>}
         {task && (
           <>
             {/* Claude only sets is_backgrounded for ctrl+b; a Bash call with run_in_background is a background command too */}
-            {(task.background || inp?.run_in_background === true) && (
-              <span className="shrink-0 rounded-sm bg-muted px-1 text-[11px]">{t("task.background")}</span>
-            )}
+            {bg && <span className="shrink-0 rounded-sm bg-muted px-1 text-[11px]">{t("task.background")}</span>}
             {/* 进度文字可以截断，耗时不能（截成「3.」看不懂）。跑完后 CLI 自动写的「Background command "…" completed」
                 不显示：就是把标题和状态又说一遍 */}
             {/* shrink-[100]: when the row is short of room (a phone) the progress text gives way first, so the title stays
@@ -317,14 +320,14 @@ function DefaultToolCall({ part, agent, running, keep: keepOpen }: { part: ToolP
         {/* Buttons and the chevron sit at the right. -ml-2 cancels one of the two gaps around this spacer: on a phone that
             gap is room the title could use */}
         <span className="-ml-2 flex-1" />
-        {task && isAgent && chatHost().openSubagent && (
+        {sub && session && chatHost().openSubagent && (
           <span
             role="button"
             className="shrink-0 rounded-sm px-1.5 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
             title={t("tool.openSubagent")}
             onClick={(e) => {
               e.stopPropagation();
-              chatHost().openSubagent?.(session!.id, part.toolCallId, task.description);
+              chatHost().openSubagent?.(session!.id, part.toolCallId, task?.description || title);
             }}
           >
             {t("task.viewChat")}
@@ -378,7 +381,7 @@ function DefaultToolCall({ part, agent, running, keep: keepOpen }: { part: ToolP
         />
       </CollapsibleTrigger>
       <CollapsibleContent className="pl-[22px] pr-1 pt-1 pb-2">
-        {(isAgent || agent) && session && !failed ? (
+        {sub && session && !failed ? (
           <SubagentBody
             sessionId={session.id}
             toolCallId={part.toolCallId}
