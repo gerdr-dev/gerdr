@@ -75,7 +75,7 @@ import type { SessionSummary } from "@/lib/types";
 import { compareSessions } from "@/lib/order";
 import { addTiles, MAX_TILES, overviewIds, removeTile, showInOverview, toggleOverview } from "@/lib/overview";
 import { cn } from "@/lib/utils";
-import { AgentIcon, StatusDot } from "./AgentIcon";
+import { AgentIcon, StatusDot, dotStatus, dotRank } from "./AgentIcon";
 import { fmtElapsed } from "./chat/StatusLine";
 import { TabDragLayer, useTabDrag } from "./TabDrag";
 import { WorkspaceDragLayer, useWorkspaceDrag } from "./WorkspaceDrag";
@@ -133,10 +133,10 @@ export function tabStatus(tab: Tab, sessions: Record<string, SessionSummary>, un
   for (const p of leaves(tab.root)) {
     const s = p.sessionId ? sessions[p.sessionId] : undefined;
     if (!s) continue;
-    const r = s.status === "waiting" ? 0 : s.status === "error" ? 1 : s.status === "running" ? 2 : unread[s.id] ? 3 : 9;
+    const r = dotRank(dotStatus(s), !!unread[s.id]);
     if (r < rank) {
       rank = r;
-      status = s.status;
+      status = dotStatus(s);
       isUnread = !!unread[s.id];
     }
   }
@@ -708,7 +708,7 @@ function AgentList() {
                     {s.status === "running" && s.turn && <Elapsed since={s.turn.startedAt} />}
                   </div>
                 </div>
-                <StatusDot status={s.status} unread={!!unread[s.id]} className="mt-1.5" />
+                <StatusDot status={dotStatus(s)} unread={!!unread[s.id]} className="mt-1.5" />
               </button>
             </ContextMenuTrigger>
             <AgentMenu s={s} unread={!!unread[s.id]} />
@@ -850,7 +850,7 @@ function spaceStatus(l: Layout, sp: Space, sessions: Record<string, SessionSumma
   for (const w of spaceWorkspaces(l, sp.id))
     for (const t of w.tabs) {
       const st = tabStatus(t, sessions, unread);
-      const r = st.status === "waiting" ? 0 : st.status === "error" ? 1 : st.status === "running" ? 2 : st.unread ? 3 : 9;
+      const r = dotRank(st.status, st.unread);
       if (r < rank) {
         rank = r;
         best = st;
@@ -1032,7 +1032,7 @@ export function WsDot({
   let rank = 9;
   for (const t of w.tabs) {
     const st = tabStatus(t, sessions, unread);
-    const r = st.status === "waiting" ? 0 : st.status === "error" ? 1 : st.status === "running" ? 2 : st.unread ? 3 : 9;
+    const r = dotRank(st.status, st.unread);
     if (r < rank) {
       rank = r;
       best = st;

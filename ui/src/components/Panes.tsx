@@ -40,7 +40,7 @@ import { get, markRead, set, setLayout, useStore } from "@/lib/store";
 import { addTiles, MAX_TILES, overviewIds, removeTile } from "@/lib/overview";
 import { usePhone } from "@/lib/phone";
 import { cn } from "@/lib/utils";
-import { AgentIcon, StatusDot } from "./AgentIcon";
+import { AgentIcon, StatusDot, dotStatus } from "./AgentIcon";
 import { ChatView } from "./chat/ChatView";
 import { NewSession } from "./NewSession";
 import { PixelLoader } from "./chat/PixelLoader";
@@ -435,7 +435,7 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
           <PanelTopOpen className="size-3.5 text-muted-foreground" />
         )}
         <span className="min-w-[3em] max-w-[60%] shrink truncate font-medium">{title}</span>
-        <StatusDot status={session?.status} unread={unread} />
+        <StatusDot status={dotStatus(session)} unread={unread} />
         {session?.pending ? <span className="shrink-0 whitespace-nowrap rounded-sm bg-bad/15 px-1.5 text-[11px] text-bad">等你</span> : null}
         <PaneCount count={count} />
         {session ? (

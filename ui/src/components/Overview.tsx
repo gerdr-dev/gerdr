@@ -37,7 +37,7 @@ import { markRead, toggleSidebar, useStore } from "@/lib/store";
 import type { SessionSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { BOX_TRANSITION, useLayoutAnim, useZoomAnim } from "@/lib/zoomAnim";
-import { AgentIcon, StatusDot } from "./AgentIcon";
+import { AgentIcon, StatusDot, dotStatus } from "./AgentIcon";
 import { ChatView } from "./chat/ChatView";
 import { Elapsed, SidebarEdge, SidebarFooter, SidebarHeader } from "./Chrome";
 import { TabActive } from "./Panes";
@@ -192,7 +192,7 @@ function TileChip({ id, current, className, onClick }: { id: string; current: bo
       onClick={onClick}
     >
       {/* An idle one has no dot: StatusDot is transparent then but would still leave a gap */}
-      {(s.status !== "idle" || unread) && <StatusDot status={s.status} unread={unread} />}
+      {(dotStatus(s) !== "idle" || unread) && <StatusDot status={dotStatus(s)} unread={unread} />}
       <span className="truncate">{s.title || basename(s.cwd)}</span>
     </button>
   );
@@ -331,7 +331,7 @@ function OverviewList({
                       <X className="size-3" />
                     </button>
                   ) : null}
-                  <StatusDot status={s.status} unread={!!unread[s.id]} className={cn("mt-1.5", on && "group-hover:hidden")} />
+                  <StatusDot status={dotStatus(s)} unread={!!unread[s.id]} className={cn("mt-1.5", on && "group-hover:hidden")} />
                 </div>
               );
             })}
@@ -724,7 +724,7 @@ function Tile({
         {onDragStart && <GripVertical className="-mx-1.5 size-3.5 shrink-0 text-muted-foreground/60" />}
         <AgentIcon agent={session.agent} className="size-4" />
         <span className="min-w-[3em] max-w-[50%] shrink truncate font-medium">{title}</span>
-        <StatusDot status={session.status} unread={unread} />
+        <StatusDot status={dotStatus(session)} unread={unread} />
         {session.pending ? <span className="shrink-0 whitespace-nowrap rounded-sm bg-bad/15 px-1.5 text-[11px] text-bad">等你</span> : null}
         <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">{where}</span>
         {!phone && (

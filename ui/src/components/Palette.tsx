@@ -4,7 +4,7 @@ import { allCommands, runCommand } from "@/lib/commands";
 import { formatCombo } from "@/lib/keys";
 import { locateSession } from "@/lib/layout";
 import { closeDialog, useStore } from "@/lib/store";
-import { AgentIcon, StatusDot } from "./AgentIcon";
+import { AgentIcon, StatusDot, dotStatus } from "./AgentIcon";
 
 // The command palette (prefix+: / ⌘K): commands, then the conversations open in a pane.
 export function Palette({ open }: { open: boolean }) {
@@ -50,7 +50,7 @@ export function Palette({ open }: { open: boolean }) {
                 <AgentIcon agent={s.agent} className="size-4" />
                 <span className="truncate">{s.title || basename(s.cwd)}</span>
                 <span className="truncate font-mono text-[11px] text-muted-foreground">{basename(s.cwd)}</span>
-                <StatusDot status={s.status} />
+                <StatusDot status={dotStatus(s)} />
               </CommandItem>
             ))}
         </CommandGroup>

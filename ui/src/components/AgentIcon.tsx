@@ -2,6 +2,7 @@ import { useId } from "react";
 import { Bot } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
+import type { SessionSummary } from "@/lib/types";
 
 // 厂商自己的 logo：Claude 的橙色星芒、Codex 的渐变云朵（里面镂空一个 >_）。路径取自 simple-icons / lobehub icons。
 // 两个都不带底色块，深浅色主题下都是原色。变体（设置里加的「Claude 2」）用底子的 logo。
@@ -39,6 +40,21 @@ export function AgentIcon({ agent: id, className }: { agent: string; className?:
   return <Bot className={cn("shrink-0 text-muted-foreground", className)} />;
 }
 
+/**
+ * What a session's dot shows: its own status, or "background" when the turn is over (or not started) but tasks it
+ * sent to the background are still running, so the agent isn't really done yet.
+ */
+export function dotStatus(s?: Pick<SessionSummary, "status" | "tasks">): string | undefined {
+  if (!s) return undefined;
+  if (s.status === "idle" && s.tasks?.some((t) => t.status === "running")) return "background";
+  return s.status;
+}
+
+/** Which dot wins when several sessions share one (a tab, a workspace): lower is more urgent, 9 shows nothing. */
+export function dotRank(status: string | undefined, unread: boolean): number {
+  return status === "waiting" ? 0 : status === "error" ? 1 : status === "running" ? 2 : unread ? 3 : status === "background" ? 4 : 9;
+}
+
 export function StatusDot({ status, unread, className }: { status?: string; unread?: boolean; className?: string }) {
   const c =
     status === "waiting"
@@ -49,8 +65,10 @@ export function StatusDot({ status, unread, className }: { status?: string; unre
           ? "bg-bad"
           : unread
             ? "bg-ok"
-            : status === "starting"
-              ? "bg-muted-foreground/50"
-              : "bg-transparent";
+            : status === "background"
+              ? "bg-muted-foreground"
+              : status === "starting"
+                ? "bg-muted-foreground/50"
+                : "bg-transparent";
   return <span className={cn("inline-block size-2 shrink-0 rounded-full", c, className)} />;
 }

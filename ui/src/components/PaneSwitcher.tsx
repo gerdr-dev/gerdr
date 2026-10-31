@@ -8,7 +8,7 @@ import { applyWorkspaceLabel } from "@/lib/plugins";
 import { set, useStore } from "@/lib/store";
 import type { SessionSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { StatusDot } from "./AgentIcon";
+import { StatusDot, dotStatus } from "./AgentIcon";
 import { compareSessions, sessionRank } from "@/lib/order";
 import { WsDot } from "./Chrome";
 
@@ -318,7 +318,7 @@ export function PaneSwitcher() {
                           {(s || r.pane.term) && <span className="min-w-0 truncate font-mono">{shortCwd(s?.cwd ?? r.pane.term?.cwd ?? "")}</span>}
                         </span>
                       </span>
-                      <StatusDot status={s?.status} unread={!!(s && unread[s.id])} />
+                      <StatusDot status={dotStatus(s)} unread={!!(s && unread[s.id])} />
                     </button>
                   );
                 })}

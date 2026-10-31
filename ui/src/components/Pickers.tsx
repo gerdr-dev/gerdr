@@ -5,7 +5,7 @@ import { basename, deleteSession, focusSession, openSessionHere, selectWorkspace
 import { currentSpace, locateSession, spaceList, spaceOf, spaceWorkspaces } from "@/lib/layout";
 import { closeDialog, useStore } from "@/lib/store";
 import type { SessionSummary } from "@/lib/types";
-import { AgentIcon, StatusDot } from "./AgentIcon";
+import { AgentIcon, StatusDot, dotStatus } from "./AgentIcon";
 import { ago } from "./NewSession";
 
 // Pick-one-and-go lists built on CommandDialog: every conversation (prefix+g) and the current session's workspaces (prefix+w).
@@ -44,7 +44,7 @@ export function SessionsDialog({ open }: { open: boolean }) {
       <span className="min-w-0 shrink truncate font-mono text-[11px] text-muted-foreground">{basename(s.cwd)}</span>
       <span className="ml-auto flex shrink-0 items-center gap-2">
         {space && <span className="max-w-24 truncate rounded-sm bg-muted px-1 text-[11px] text-muted-foreground">{space}</span>}
-        <StatusDot status={s.status} unread={!!unread[s.id]} />
+        <StatusDot status={dotStatus(s)} unread={!!unread[s.id]} />
         <span className="w-16 text-right text-[11px] text-muted-foreground">{ago(s.updatedAt)}</span>
         {!shown && (
           <button
