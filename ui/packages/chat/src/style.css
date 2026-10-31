@@ -8,6 +8,9 @@
   [data-gerdr-chat] :where(*, ::before, ::after) {
     box-sizing: border-box;
     border: 0 solid;
+    /* The shorthand also resets the color to currentColor, and this selector outranks the app's own
+       `* { border-color }`: without this every bare `border` / `border-l` in the chat was drawn in the text color. */
+    border-color: var(--border, currentColor);
   }
   [data-gerdr-chat] :where(button, input, textarea, select) {
     font: inherit;
