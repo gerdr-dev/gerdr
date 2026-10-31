@@ -38,6 +38,7 @@ const titlePrompt = "下面 <msgs> 里是一段对话里用户依次说的话（
 func (s *Session) Prompts() []string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.loadLocked()
 	var out []string
 	for _, e := range s.events {
 		switch {

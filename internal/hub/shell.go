@@ -161,6 +161,7 @@ func (s *Session) Shell(command, clientID string) (string, error) {
 		s.mu.Unlock()
 		return id, nil
 	}
+	s.loadLocked()
 	for _, e := range s.events {
 		if e.Kind == EvShell && e.MessageID == id {
 			s.mu.Unlock()
@@ -277,6 +278,7 @@ func (s *Session) stopShells() {
 // pendingShellLocked：最后一条用户消息之后跑完的命令，拼成带给 agent 的文字块（一条命令一块）。
 // 还在跑的不带（等它跑完，跟着再下一条走）。
 func (s *Session) pendingShellLocked() []acp.ContentBlock {
+	s.loadLocked()
 	last := -1
 	for i := len(s.events) - 1; i >= 0; i-- {
 		if s.events[i].Kind == EvUser {

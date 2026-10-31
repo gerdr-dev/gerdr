@@ -140,7 +140,7 @@ func TestMigrateCleared(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(h2.sessions) != 4 || !eq(texts(h2.sessions["A"].events), []string{"/clear", "现在的事"}) {
+	if len(h2.sessions) != 4 || !eq(texts(h2.sessions["A"].Events()), []string{"/clear", "现在的事"}) {
 		t.Fatal("second load differs")
 	}
 }

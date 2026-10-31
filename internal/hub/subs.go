@@ -105,6 +105,7 @@ func (h *Hub) eventsAfter(s *Session, since int64) ([]*Event, bool) {
 		return nil, false
 	}
 	s.mu.Lock()
+	s.loadLocked()
 	var evs []*Event
 	found := false
 	for i := len(s.events) - 1; i >= 0; i-- {

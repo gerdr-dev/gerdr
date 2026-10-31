@@ -13,7 +13,7 @@ func userEv(text string) *Event {
 
 // clear 之后从头数；斜杠命令不算
 func TestPromptsSinceClear(t *testing.T) {
-	s := &Session{events: []*Event{
+	s := &Session{loaded: true, events: []*Event{
 		userEv("修一下登录页"), userEv("再看看注册"), userEv("/clear"),
 		{Kind: EvNotice, Level: "clear"},
 		userEv("/model haiku"), userEv("给侧栏加个搜索框"), userEv("  "),

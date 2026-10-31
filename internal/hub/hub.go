@@ -489,18 +489,13 @@ func (h *Hub) load() error {
 	}
 	for _, r := range recs {
 		s := newSession(h, r)
-		evs, err := readLog(s.lf.Path)
+		s.loaded = false // read on first use (memory.go)
+		sc, err := scanLog(s.lf.Path)
 		if err != nil {
 			h.log.Warn("read session log", "id", r.ID, "err", err)
 		}
-		s.events = evs
-		s.lf.Flushed = len(evs)
-		for _, e := range evs {
-			if e.Seq > h.seq {
-				h.seq = e.Seq
-			}
-		}
-		s.orphanSince = s.recoverAfterRestart()
+		h.seq = max(h.seq, sc.lastSeq)
+		s.orphanSince = s.recoverAfterRestart(sc)
 		h.sessions[r.ID] = s
 		h.byAgent[r.Agent+":"+r.AgentSessionID] = s
 	}
@@ -537,6 +532,7 @@ func (h *Hub) flusher() {
 		for _, s := range ss {
 			s.flush(false)
 		}
+		h.unloadIdle()
 	}
 }
 

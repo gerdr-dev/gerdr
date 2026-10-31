@@ -12,6 +12,7 @@ package hub
 // splitOffCleared runs right after s was rekeyed by /clear. prev is s's record from before the rekey.
 func (h *Hub) splitOffCleared(s *Session, prev Record) {
 	s.mu.Lock()
+	s.loadLocked()
 	cut := clearCut(s.events, len(s.events), s.turnMsg)
 	old := append([]*Event(nil), s.events[:cut]...)
 	s.events = append([]*Event(nil), s.events[cut:]...)
@@ -92,6 +93,7 @@ func (h *Hub) migrateCleared() {
 			continue
 		}
 		tabs = append(tabs, s)
+		s.loadLocked() // still before New returns: nothing else holds s yet
 		var cuts []int // where each pre-clear conversation ends
 		for i, e := range s.events {
 			if e.Kind == EvNotice && e.Level == "clear" {

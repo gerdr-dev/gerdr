@@ -30,6 +30,10 @@ React（ui/，不打包）  ←WebSocket / HTTP→  hub（internal/hub）  ←AC
   AI SDK 的 `UIMessage[]`（`ui/src/lib/transcript.ts`），用 AI Elements 画。刷新、换设备、
   重启看到的都一样。同一条消息的流式片段在内存里合并后才落盘（`chunkKey`），一轮几千个
   token 级片段落到文件里只剩几条。
+  **Memory stays flat however many sessions there are** (internal/hub/memory.go): images live in `blobs/<sha256>`, not in
+  the log (memory or disk); a session's events load on first use and are dropped when it goes idle or the loaded ones
+  pass a budget; startup only scans the logs. Anything touching `s.events` must call `loadLocked` first. Measured with
+  171 sessions / 280 MB of logs: ~900 MB footprint before, ~30 MB at startup and ~150 MB peak opening all of them after.
 - **布局**（工作空间 / tab / pane 树）存在 `~/.gerdr/layout.json`，服务端不解释，前端说了算，
   多个窗口之间靠广播同步。
   The one exception is `gerdr workspace|tab|pane …` (internal/server/layoutapi.go, for agents): the server edits layout.json

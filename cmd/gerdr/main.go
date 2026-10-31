@@ -13,6 +13,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"slices"
 	"strconv"
 	"sync"
@@ -171,7 +172,14 @@ func running(env config.Env) (serverInfo, string, bool) {
 	return si, loginURL(si.Host, si.Port, tok), true
 }
 
+// memLimit: the backend's soft memory limit unless GOMEMLIMIT says otherwise. Its live heap stays well under it
+// (internal/hub/memory.go); without a limit the GC lets garbage grow to twice the live heap before collecting.
+const memLimit = 128 << 20
+
 func runServe(open, appMode, serviceMode bool, parentPID int) error {
+	if os.Getenv("GOMEMLIMIT") == "" {
+		debug.SetMemoryLimit(memLimit)
+	}
 	env := config.FromEnv()
 	level := slog.LevelInfo
 	if os.Getenv("GERDR_DEBUG") != "" {

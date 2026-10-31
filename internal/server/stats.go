@@ -11,7 +11,8 @@ import (
 )
 
 // 资源占用（设置 →「资源」）：后端自己、它起的每个 agent 进程（连带 agent 自己起的 MCP 之类的子进程）、
-// 以及界面所在的 WebView 进程（mac App 经 webpid 告诉我们；浏览器里没有）。都用 ps 量 RSS，和活动监视器对得上。
+// 以及界面所在的 WebView 进程（mac App 经 webpid 告诉我们；浏览器里没有）。
+// Measured as the physical footprint on macOS (what Activity Monitor shows, footprint_darwin.go), RSS from ps elsewhere.
 
 type procInfo struct {
 	PID     int    `json:"pid"`
@@ -42,6 +43,9 @@ func psAll() map[int]*psRow {
 		pid, _ := strconv.Atoi(f[0])
 		ppid, _ := strconv.Atoi(f[1])
 		rss, _ := strconv.ParseInt(f[2], 10, 64)
+		if fp, ok := footprintKB(pid); ok {
+			rss = fp
+		}
 		rows[pid] = &psRow{pid: pid, ppid: ppid, rss: rss, cmd: strings.Join(f[3:], " ")}
 	}
 	return rows

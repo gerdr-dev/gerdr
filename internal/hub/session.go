@@ -75,11 +75,16 @@ type Session struct {
 	h  *Hub
 	lf logFile
 
-	mu          sync.Mutex
-	escMu       sync.Mutex // Escape 一次只跑一个：连按几下 Esc 的话，并发的几次会各自把同一句话还回去（输入框里叠好几遍，踩过）
-	rec         Record
-	events      []*Event
-	attached    bool // agent 那边接上了（gerdr 重启后要先 ResumeSession）
+	mu     sync.Mutex
+	escMu  sync.Mutex // Escape 一次只跑一个：连按几下 Esc 的话，并发的几次会各自把同一句话还回去（输入框里叠好几遍，踩过）
+	rec    Record
+	events []*Event
+	// loaded: events holds the log. False = it's only on disk (memory.go): idle sessions don't keep their history in
+	// memory, every access goes through loadLocked first.
+	loaded      bool
+	lastSeq     int64     // Seq of the log's last event, kept while unloaded (Summary.LastSeq)
+	lastUse     time.Time // last loadLocked: idle sessions get unloaded (Hub.unloadIdle)
+	attached    bool      // agent 那边接上了（gerdr 重启后要先 ResumeSession）
 	status      string
 	running     bool
 	catchingUp  bool
@@ -160,7 +165,7 @@ func (s *Session) Pending() []PendingReq {
 }
 
 func newSession(h *Hub, r Record) *Session {
-	return &Session{h: h, rec: r, status: StIdle, pending: map[string]*pending{}, steering: map[string]string{},
+	return &Session{h: h, rec: r, status: StIdle, pending: map[string]*pending{}, steering: map[string]string{}, loaded: true,
 		lf: logFile{Path: filepath.Join(h.opt.Dir, "sessions", r.ID+".jsonl")}}
 }
 
@@ -174,47 +179,31 @@ func newID() string {
 // 但那一轮**不一定**真断了：gerdr 被强杀 / 崩溃时来不及杀 claude，claude 只看到 stdin 断了，会把手上这一轮
 // 跑完再退（实测：gerdr 重启后它又跑了一分钟，回复写进了自己的记录，gerdr 这边只剩半句 + 「中断」）。
 // 所以返回日志里最后一条的时间（没有没收尾的轮次 = 0），由 adoptOrphanTurn 去核对、追回来。
-func (s *Session) recoverAfterRestart() (openSince int64) {
-	open := false
-	for _, e := range s.events {
-		switch e.Kind {
-		case EvTurnStart:
-			open = true
-		case EvTurnEnd:
-			open = false
-		}
-	}
-	if open {
-		openSince = s.events[len(s.events)-1].TS
-		s.events = append(s.events, &Event{Seq: s.h.nextSeqLocked(), TS: now(), Kind: EvTurnEnd, StopReason: "cancelled", Error: "gerdr 重启，这一轮被中断了"})
+// It works from a scan of the log (scanLog) and appends straight to the file: startup doesn't load any log (memory.go).
+func (s *Session) recoverAfterRestart(sc logScan) (openSince int64) {
+	var add []*Event
+	if sc.open {
+		openSince = sc.lastTS
+		add = append(add, &Event{Seq: s.h.nextSeqLocked(), TS: now(), Kind: EvTurnEnd, StopReason: "cancelled", Error: "gerdr 重启，这一轮被中断了"})
 	}
 	// 还在跑的 `!命令`：进程跟着 gerdr 没了（或者成了没人管的孤儿），补一个结束，卡片别一直转
-	shellDone := map[string]bool{}
-	for _, e := range s.events {
-		if e.Kind == EvShellDone {
-			shellDone[e.MessageID] = true
-		}
-	}
-	for _, e := range s.events {
-		if e.Kind == EvShell && !shellDone[e.MessageID] {
-			s.events = append(s.events, &Event{Seq: s.h.nextSeqLocked(), TS: now(), Kind: EvShellDone, MessageID: e.MessageID, Level: "lost"})
-		}
+	for _, id := range sc.shells {
+		add = append(add, &Event{Seq: s.h.nextSeqLocked(), TS: now(), Kind: EvShellDone, MessageID: id, Level: "lost"})
 	}
 	// 没回答的审批 / 提问也一样作废。
-	answered := map[string]bool{}
-	for _, e := range s.events {
-		if e.Kind == EvPermissionDone || e.Kind == EvAskDone {
-			answered[e.ReqID] = true
+	for _, r := range sc.unanswered {
+		kind := EvPermissionDone
+		if r.Kind == EvAsk {
+			kind = EvAskDone
 		}
+		add = append(add, &Event{Seq: s.h.nextSeqLocked(), TS: now(), Kind: kind, ReqID: r.ReqID, Response: json.RawMessage(`{"cancelled":true}`)})
 	}
-	for _, e := range s.events {
-		if (e.Kind == EvPermission || e.Kind == EvAsk) && !answered[e.ReqID] {
-			kind := EvPermissionDone
-			if e.Kind == EvAsk {
-				kind = EvAskDone
-			}
-			s.events = append(s.events, &Event{Seq: s.h.nextSeqLocked(), TS: now(), Kind: kind, ReqID: e.ReqID, Response: json.RawMessage(`{"cancelled":true}`)})
+	s.lastSeq = sc.lastSeq
+	if len(add) > 0 {
+		if err := s.lf.Append(add); err != nil {
+			s.h.log.Warn("write session log", "id", s.rec.ID, "err", err)
 		}
+		s.lastSeq = add[len(add)-1].Seq
 	}
 	return openSince
 }
@@ -274,8 +263,8 @@ func (s *Session) turnInfoLocked() *TurnInfo {
 func (s *Session) Summary() Summary {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	var last int64
-	if n := len(s.events); n > 0 {
+	last := s.lastSeq
+	if n := len(s.events); s.loaded && n > 0 {
 		last = s.events[n-1].Seq
 	}
 	cmds, cached := s.commands, false
@@ -299,6 +288,7 @@ func (s *Session) ID() string { return s.rec.ID }
 func (s *Session) Events() []*Event {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.loadLocked()
 	out := make([]*Event, len(s.events))
 	copy(out, s.events)
 	return out
@@ -308,7 +298,11 @@ func (s *Session) Events() []*Event {
 func (s *Session) emit(e *Event) {
 	e.Seq = s.h.nextSeq()
 	e.TS = now()
+	if s.h.opt.Dir != "" {
+		e = s.h.slim(e) // pasted images go to blobs/ before the event is kept (memory.go)
+	}
 	s.mu.Lock()
+	s.loadLocked()
 	s.events, _ = chatlog.Add(s.events, s.lf.Flushed, e)
 	s.rec.UpdatedAt = e.TS
 	s.mu.Unlock()
@@ -318,6 +312,10 @@ func (s *Session) emit(e *Event) {
 // flush 把还没落盘的日志写下去。force=false 时最后一条流式片段先不写（它可能还会长）。
 func (s *Session) flush(force bool) {
 	s.mu.Lock()
+	if !s.loaded {
+		s.mu.Unlock()
+		return
+	}
 	n := len(s.events)
 	if !force && n > 0 && s.events[n-1].Kind == EvUpdate {
 		if chatlog.IsChunk(s.events[n-1].Update) {
@@ -419,6 +417,7 @@ func (s *Session) ensureAttached(ctx context.Context) (*agenthost.Host, error) {
 func (s *Session) hasUserMessages() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.loadLocked()
 	for _, e := range s.events {
 		if e.Kind == EvUser {
 			return true
@@ -501,6 +500,7 @@ func (s *Session) SendFrom(ctx context.Context, content []acp.ContentBlock, clie
 			s.mu.Unlock()
 			return SendResult{}, errors.New("这条消息正在发送")
 		}
+		s.loadLocked()
 		for _, e := range s.events {
 			if e.Kind == EvUser && e.MessageID == msgID {
 				s.mu.Unlock()
@@ -1063,6 +1063,7 @@ func (s *Session) resolve(reqID, kind string, resp json.RawMessage) {
 	_, had := s.pending[reqID]
 	delete(s.pending, reqID)
 	answered := false
+	s.loadLocked()
 	for _, e := range s.events {
 		if (e.Kind == EvPermissionDone || e.Kind == EvAskDone) && e.ReqID == reqID {
 			answered = true
@@ -1175,6 +1176,7 @@ func (s *Session) Escape(ctx context.Context) (EscapeResult, error) {
 	defer s.escMu.Unlock()
 	s.mu.Lock()
 	running, auto, turnMsg, agentSID := s.running, s.auto, s.turnMsg, s.rec.AgentSessionID
+	s.loadLocked()
 	evs := append([]*Event(nil), s.events...)
 	s.mu.Unlock()
 	if !running {
@@ -1238,7 +1240,7 @@ func (s *Session) Escape(ctx context.Context) (EscapeResult, error) {
 			out.RolledBack = true
 			for _, e := range evs {
 				if e.Kind == EvUser && (e.MessageID == turnMsg || containsEvent(tail, e)) {
-					out.Content = append(out.Content, e.Content...)
+					out.Content = append(out.Content, s.h.inflate(e.Content)...)
 				}
 			}
 			return out, nil
@@ -1278,7 +1280,10 @@ func (s *Session) WithdrawLast(ctx context.Context) (EscapeResult, error) {
 // lastQueuedLocked：最后一条插话还在 agent 队列里没被读到，就回它的 id。
 // 看排队状态（steer_state：queued / started）。原来看「它后面 agent 还有没有动静」：插话默认排到下一个空档（priority next）后，
 // 排着的时候 agent 照样在出字，那样判断一条都收不回（用户报的）。不报排队状态的 agent 才退回老办法。
-func (s *Session) lastQueuedLocked() string { return chatlog.LastQueued(s.events) }
+func (s *Session) lastQueuedLocked() string {
+	s.loadLocked()
+	return chatlog.LastQueued(s.events)
+}
 
 // Withdraw：收回一条还没被 agent 读到的插话（「排队中」那行的撤回 / 立即发、输入框里按 ↑）。
 // 已经被读到的收不回，agent 回空，这里什么也不动（Withdrawn = 0）。
@@ -1287,6 +1292,7 @@ func (s *Session) Withdraw(ctx context.Context, msgID string) (EscapeResult, err
 	s.mu.Lock()
 	agentSID := s.rec.AgentSessionID
 	found := false
+	s.loadLocked()
 	for _, e := range s.events {
 		if e.Kind == EvUser && e.MessageID == msgID && e.Steer {
 			found = true
@@ -1312,6 +1318,7 @@ func (s *Session) Withdraw(ctx context.Context, msgID string) (EscapeResult, err
 // truncateFrom：日志从这条用户消息起全部删掉（agent 那边没有它，不用回退 agent）。
 func (s *Session) truncateFrom(msgID string) {
 	s.mu.Lock()
+	s.loadLocked()
 	idx := -1
 	for i, e := range s.events {
 		if e.Kind == EvUser && e.MessageID == msgID {
@@ -1337,8 +1344,9 @@ func (s *Session) truncateFrom(msgID string) {
 // dropUserEvents：把收回的那几条用户消息从日志里删掉（内容收进 out），整份重推。
 func (s *Session) dropUserEvents(ids map[string]bool, out *EscapeResult) {
 	s.mu.Lock()
+	s.loadLocked()
 	kept, content, n := chatlog.DropUsers(s.events, ids)
-	out.Content = append(out.Content, content...)
+	out.Content = append(out.Content, s.h.inflate(content)...)
 	out.Withdrawn += n
 	s.events = kept
 	all := append([]*Event(nil), kept...)
@@ -1376,6 +1384,7 @@ func (s *Session) Rewind(ctx context.Context, messageID string) (RewindResult, e
 	// messageId 就是记录里那条的 uuid，一条带图的消息拆成几块、同一个 id）。只认前一种的话，
 	// 重新载入过的会话上面那些消息全都「找不到这条消息」（踩过）。
 	// /clear 之后 claude 换了一个新会话，这条之前的消息都在旧会话里 —— 回不去（chatlog.ErrBeforeClear）
+	s.loadLocked()
 	idx, content, steer, err := chatlog.RewindPoint(s.events, messageID)
 	if err != nil {
 		s.mu.Unlock()
@@ -1403,8 +1412,9 @@ func (s *Session) Rewind(ctx context.Context, messageID string) (RewindResult, e
 		s.rec.Fork = res.Fork
 		s.mu.Unlock()
 	}
-	out := RewindResult{Content: content}
+	out := RewindResult{Content: s.h.inflate(content)}
 	s.mu.Lock()
+	s.loadLocked()
 	s.events = s.events[:idx]
 	if steer {
 		// Cut mid-turn: the turn_end went with the rest. Close the turn so a reload doesn't leave it open.
@@ -1637,6 +1647,7 @@ func userChunk(e *Event) (string, json.RawMessage, bool) { return chatlog.UserCh
 // userTextSet：gerdr 日志里人说过的话（自己发的 + 导入 / 重新载入时从记录重放的），归一化过。
 func (s *Session) userTextSet() map[string]bool {
 	s.mu.Lock()
+	s.loadLocked()
 	evs := append([]*Event(nil), s.events...)
 	s.mu.Unlock()
 	out := map[string]bool{}
@@ -1704,7 +1715,7 @@ func (s *Session) Reload(ctx context.Context) error {
 		return err
 	}
 	s.mu.Lock()
-	s.events = nil
+	s.events, s.loaded = nil, true
 	s.lastErr = ""
 	rec := s.rec
 	s.mu.Unlock()
@@ -1741,6 +1752,7 @@ func (s *Session) Reload(ctx context.Context) error {
 func (s *Session) isSteer(msgID string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.loadLocked()
 	for i := len(s.events) - 1; i >= 0; i-- {
 		if e := s.events[i]; e.Kind == EvUser && e.MessageID == msgID {
 			return e.Steer

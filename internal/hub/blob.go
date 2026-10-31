@@ -16,7 +16,8 @@ import (
 //
 // 为什么：日志原样推出去，一个会话动辄几 MB 到几十 MB，大头是贴的截图（base64，压缩也压不动），
 // 远程（中继 / 手机流量）打开时一帧传不完、被写期限掐断，重连又整份重推，永远打不开。
-// 盘上的日志不动（agent 恢复会话、`gerdr session read` 都要原样的），只改推出去的那份。
+// Images also leave the events kept in memory and on disk (memory.go): nothing reads them back from the log, the
+// agents resume from their own transcripts. Content handed back to the composer is inflated again.
 
 // TailBudget：打开会话先推的那一段大概多大（换掉图片之后的 JSON 字节）；更早的往上翻再拉（OlderEvents）。
 const TailBudget = 256 << 10
