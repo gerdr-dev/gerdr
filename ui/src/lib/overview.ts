@@ -291,12 +291,24 @@ export function swapTiles(from: string, to: string) {
 
 export type DropSide = "left" | "right" | "up" | "down";
 
+/** Every way to cut n tiles into lines (compositions of n), in both directions. 2^(n-1) × 2: 4096 at the 12-tile cap. */
+function allShapes(n: number): Shape[] {
+  const out: Shape[] = [];
+  const walk = (left: number, acc: number[]) => {
+    if (!left) return out.push({ counts: acc }, { counts: acc, cols: true });
+    for (let c = 1; c <= left; c++) walk(left - c, [...acc, c]);
+  };
+  walk(n, []);
+  return out;
+}
+
 /**
  * Drop tile `from` on an edge of tile `to` (asked for: arrange the overview by dragging, like panes in a tab): `from`
- * moves next to `to` in the order, and the grid takes whichever shape puts it on that side: the current one, it turned
- * the other way (rows <-> columns), or the same with the lines reversed. The pick is remembered per tile count, so two
- * agents can sit side by side even where the auto layout stacks them. No shape does it (e.g. a 2×2 asked for a third
- * tile in a row): they just trade places. `shown` = the tiles in the grid now, w×h its size.
+ * moves next to `to` in the order, and the grid takes a shape that puts it on that side. Of all the shapes that do, the
+ * one that moves the other tiles least: trying only the current shape turned / reversed (as before) never reached three
+ * in a row from "1 | 1/1" (asked for), and judging by how far the rest move picks it as soon as it's what the drop says.
+ * Shapes whose tiles get too small to read only count when none fits. The pick is remembered per tile count. No shape
+ * does it: they just trade places. `shown` = the tiles in the grid now, w×h its size.
  */
 export function placeTile(from: string, to: string, side: DropSide, shown: string[], w: number, h: number) {
   if (from === to) return;
@@ -315,9 +327,7 @@ export function placeTile(from: string, to: string, side: DropSide, shown: strin
   const regionW = hasMain ? w * (1 - o.ratio) : w;
   const cur = shapeOf(n, hasMain, regionW, h, o.shapes);
   const auto = gridShape(n, regionW, h);
-  const turn = (s: Shape): Shape => ({ counts: s.counts, cols: !s.cols });
-  const rev = (s: Shape): Shape => ({ counts: [...s.counts].reverse(), cols: s.cols });
-  const tries = [cur, turn(cur), rev(cur), rev(turn(cur)), auto, turn(auto)];
+  const same = (a: Shape, b: Shape) => !!a.cols === !!b.cols && a.counts.join() === b.counts.join();
   const onSide = (a: Box, b: Box) => {
     const e = 1e-6;
     const vOverlap = a.y < b.y + b.h - e && a.y + a.h > b.y + e;
@@ -327,12 +337,24 @@ export function placeTile(from: string, to: string, side: DropSide, shown: strin
     if (side === "up") return hOverlap && a.y + a.h <= b.y + e;
     return hOverlap && a.y >= b.y + b.h - e;
   };
-  const hit = tries.find((s) => {
-    const { boxes } = arrange(vis, o.main, o.ratio, w, h, {}, { [countKey(n, hasMain)]: s });
-    return onSide(boxes.get(from)!, boxes.get(to)!);
-  });
-  if (!hit) return swapTiles(from, to);
-  const same = (a: Shape, b: Shape) => !!a.cols === !!b.cols && a.counts.join() === b.counts.join();
+  const before = arrange(shown, o.main, o.ratio, w, h, {}, o.shapes).boxes;
+  let best: { shape: Shape; score: number } | undefined;
+  for (const shape of allShapes(n)) {
+    const { boxes } = arrange(vis, o.main, o.ratio, w, h, {}, { [countKey(n, hasMain)]: shape });
+    if (!onSide(boxes.get(from)!, boxes.get(to)!)) continue;
+    let score = 0;
+    for (const [id, b] of boxes) {
+      if (id === from) continue;
+      const a = before.get(id)!;
+      score += Math.abs(a.x - b.x) + Math.abs(a.y - b.y) + Math.abs(a.w - b.w) + Math.abs(a.h - b.h);
+    }
+    const small = [...boxes.values()].some((b) => b.w * w < MIN_TILE_W || b.h * h < MIN_TILE_H);
+    // Too small loses to any that fits; on a tie the current shape, then the auto one (it needs no pin)
+    score += (small ? 100 : 0) + (same(shape, cur) ? 0 : 1e-4) + (same(shape, auto) ? 0 : 1e-5);
+    if (!best || score < best.score) best = { shape, score };
+  }
+  if (!best) return swapTiles(from, to);
+  const hit = best.shape;
   setOverview((x) => {
     const shapes = { ...x.shapes };
     // The auto shape needs no pin: leaving it unset lets it follow the window again
