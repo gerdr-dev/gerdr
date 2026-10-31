@@ -5,8 +5,9 @@ import { MessageResponse } from "@/components/ai-elements/message";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { openPath } from "@/lib/actions";
-import { fileRawURL, type FileStat } from "@/lib/api";
-import { isNative } from "@/lib/native";
+import { isAndroid, postAndroid } from "@/lib/android";
+import { api, fileRawURL, type FileStat } from "@/lib/api";
+import { isNative, nativeOpenURL } from "@/lib/native";
 import { set, useStore } from "@/lib/store";
 
 /** 文本最多读这么多：再大的多半是日志 / 数据文件，整个塞进 DOM 手机上会卡死，给下载。 */
@@ -89,8 +90,11 @@ function Body({ stat }: { stat: FileStat }) {
         >
           <Copy className="size-4" />
         </Button>
-        {/* mac App 里没有「新标签页」，而外部浏览器没有登录 cookie —— 那边只给下载 */}
-        {!isNative() && (
+        {isNative() || isAndroid() ? (
+          <Button variant="ghost" size="icon" className="size-8" title="在浏览器里打开" onClick={() => openOutside(stat)}>
+            <ExternalLink className="size-4" />
+          </Button>
+        ) : (
           <Button variant="ghost" size="icon" className="size-8" title="在新标签页打开" asChild>
             <a href={url} target="_blank" rel="noreferrer">
               <ExternalLink className="size-4" />
@@ -118,7 +122,11 @@ function Body({ stat }: { stat: FileStat }) {
             <audio src={url} controls className="w-full max-w-md" />
           </div>
         ) : stat.mime === "application/pdf" ? (
-          <iframe src={url} title={stat.name} className="h-[80vh] w-full max-md:h-full" />
+          canShowPDF() ? (
+            <iframe src={url} title={stat.name} className="h-[80vh] w-full max-md:h-full" />
+          ) : (
+            <NoPreview stat={stat} why="这里看不了 PDF，下载下来用手机上的程序打开。" />
+          )
         ) : (
           <TextBody stat={stat} url={url} />
         )}
@@ -149,7 +157,7 @@ function TextBody({ stat, url }: { stat: FileStat; url: string }) {
       live = false;
     };
   }, [url, stat.size]);
-  if (why) return <div className="p-10 text-center text-[13px] text-muted-foreground">{why}</div>;
+  if (why) return <NoPreview stat={stat} why={why} />;
   if (text === null) return <div className="p-10 text-center text-[13px] text-muted-foreground">读取中…</div>;
   if (stat.mime === "text/markdown")
     return (
@@ -158,4 +166,41 @@ function TextBody({ stat, url }: { stat: FileStat; url: string }) {
       </div>
     );
   return <pre className="min-w-max p-4 font-mono text-[12px] leading-relaxed whitespace-pre">{text}</pre>;
+}
+
+/**
+ * The Apps hand the address to the system browser, which has no gerdr cookie: give it a short-lived link that needs
+ * none (server/filelink.go) instead of the plain /api/fs/raw one, which would be a 401 there.
+ */
+async function openOutside(stat: FileStat) {
+  try {
+    const { url } = await api.fileLink(stat.path);
+    const abs = new URL(url, location.href).href;
+    if (isAndroid()) postAndroid({ t: "open", url: abs });
+    else nativeOpenURL(abs);
+  } catch (e) {
+    toast.error((e as Error).message);
+  }
+}
+
+/**
+ * Phones (Chrome on Android, the Android App's WebView) have no built-in PDF viewer: an iframe there shows nothing, or
+ * worse, the App's WebView treats it as a download the moment the viewer opens. Older browsers without the flag do
+ * have one (desktop Safari / Chrome before it existed).
+ */
+const canShowPDF = () => (navigator as { pdfViewerEnabled?: boolean }).pdfViewerEnabled ?? true;
+
+/** Whatever can't be shown here (binary, too big, a PDF on a phone) still gets a big download button, not just the header icon. */
+function NoPreview({ stat, why }: { stat: FileStat; why: string }) {
+  return (
+    <div className="flex flex-col items-center gap-4 p-10 text-center text-[13px] text-muted-foreground">
+      <div>{why}</div>
+      <Button asChild>
+        <a href={fileRawURL(stat.path, true)} download={stat.name}>
+          <Download className="size-4" />
+          下载（{fmtSize(stat.size)}）
+        </a>
+      </Button>
+    </div>
+  );
 }

@@ -16,6 +16,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"mime"
 	"net"
 	"net/http"
 	"net/url"
@@ -77,6 +78,7 @@ type Server struct {
 	remoteConns remoteConns // 正在连着的远程界面（remoteconns.go）
 	appWatch    appWatch    // 安卓 App 后台通知的长轮询（appwatch.go）
 	workUIs     workUIs     // each project's Work site, started on first use (workapi.go)
+	links       fileLinks   // cookie-less links to one file, for opening it in the system browser (filelink.go)
 	// OnServiceInstalled：刚打开后台常驻、本进程是 App 起的后端时让位（见 cmd/gerdr 的 handover）。
 	OnServiceInstalled func()
 }
@@ -366,6 +368,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/fs/dirs", s.dirs)
 	mux.HandleFunc("GET /api/fs/stat", s.fileStat)
 	mux.HandleFunc("GET /api/fs/raw", s.fileRaw)
+	mux.HandleFunc("POST /api/fs/link", s.fileLinkIssue)
+	mux.HandleFunc("GET /f/{token}/{name}", s.fileLinkServe)
 	mux.HandleFunc("POST /api/fs/exists", s.fileExists)
 	mux.HandleFunc("POST /api/fs/upload", s.fileUpload)
 	mux.HandleFunc("GET /ws", s.ws)
@@ -713,6 +717,21 @@ func (s *Server) blob(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
 	// 内容是用户贴的 / 工具读的，类型靠嗅：万一是个 HTML 也别让它在我们的源下跑脚本
 	w.Header().Set("Content-Security-Policy", "sandbox")
+	// The lightbox's download button: blobs have no name of their own, so make one from the hash and the sniffed
+	// type (the Android App's DownloadManager names the file from this header, not from the <a download> name).
+	if r.URL.Query().Get("download") == "1" {
+		head := make([]byte, 512)
+		n, _ := io.ReadFull(f, head)
+		if _, err := f.Seek(0, io.SeekStart); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		name := "image-" + r.PathValue("hash")[:min(8, len(r.PathValue("hash")))]
+		if exts, _ := mime.ExtensionsByType(http.DetectContentType(head[:n])); len(exts) > 0 {
+			name += exts[len(exts)-1]
+		}
+		w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": name}))
+	}
 	http.ServeContent(w, r, "", st.ModTime(), f)
 }
 

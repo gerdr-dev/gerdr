@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, FileSearch, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, FileSearch, X } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { chatHost } from "../host";
 import { t } from "../i18n";
@@ -52,6 +52,18 @@ export function LightboxHost() {
   if (!s) return null;
   return <Lightbox items={s.items} index={s.index} origin={s.origin} />;
 }
+
+/**
+ * Our own files (/api/fs/raw, /api/blobs) are asked for with ?download=1 so the server sends an attachment header:
+ * the Android App's WebView hands downloads to its DownloadManager, which ignores the <a download> name and goes by
+ * the header. Anything else (data:, another site's image) is linked as is.
+ */
+function downloadURL(url: string) {
+  if (!/^\/api\/(fs\/raw|blobs\/)/.test(url)) return url;
+  return url + (url.includes("?") ? "&" : "?") + "download=1";
+}
+
+const downloadName = (it: LightboxItem) => it.path?.split("/").pop() || it.alt || "";
 
 type View = { s: number; x: number; y: number };
 type Box = { left: number; top: number; w: number; h: number };
@@ -278,7 +290,7 @@ function Lightbox({ items, index, origin }: { items: LightboxItem[]; index: numb
 
   const onDown = (e: React.PointerEvent) => {
     // A video's own controls (play, seek, volume) get the pointer, not our gestures.
-    if (closing.current || (e.target as HTMLElement).closest("button, video")) return;
+    if (closing.current || (e.target as HTMLElement).closest("button, a, video")) return;
     if (e.pointerType === "mouse" && e.button !== 0) return;
     ptrs.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
@@ -415,6 +427,9 @@ function Lightbox({ items, index, origin }: { items: LightboxItem[]; index: numb
               <FileSearch className="size-4" />
             </button>
           )}
+          <a className={btn} title={t("lightbox.download")} href={downloadURL(it.url)} download={downloadName(it)}>
+            <Download className="size-4" />
+          </a>
           <button className={btn} title={t("lightbox.close")} onClick={close}>
             <X className="size-4" />
           </button>

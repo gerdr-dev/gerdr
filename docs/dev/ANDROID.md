@@ -85,6 +85,18 @@ App 关着 / 锁屏时，一个前台服务（`NoticeService`）挂在两个长�
 - 点通知带着会话 id，页面 hello 之后壳发 `focus`，页面切到那个会话。App 在前台时不弹（网页自己有提示）。
 - 小米 HyperOS 那几个坑（频道级别、RemoteViews 按 view id 认控件）见 NoticeService.kt / widget 布局里的注释。
 
+## Downloads
+
+Files (`/api/fs/raw`, `/api/blobs`) sit behind the same device cookie, which only the WebView has. So a download
+(`setDownloadListener`) must not go to the browser: it gets a 401 ("not authorized"). `MainActivity.download` hands
+it to `DownloadManager` with that cookie copied into a `Cookie:` header, for our own origin only, into the shared
+Downloads folder (an App-private folder on Android 9, which would need a storage permission). DownloadManager names the
+file from `Content-Disposition` and ignores `<a download>`, so the UI always asks with `?download=1` (an attachment
+header). It doesn't go through LanRoute, so it always takes the public address.
+
+The WebView has no PDF viewer: an `<iframe>` of a PDF becomes a download the moment it loads. FileViewer checks
+`navigator.pdfViewerEnabled` and shows a download button instead.
+
 ## 桥
 
 页面 ↔ 壳 是 JSON 字符串、按 `t` 分派；JS 对象 `gerdrAndroid`，壳用 `addWebMessageListener` **只对服务器那个 origin 注入**

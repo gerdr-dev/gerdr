@@ -44,7 +44,8 @@ func remotePublic(r *http.Request) bool {
 		"/.well-known/assetlinks.json", "/api/remote/cli/start", "/api/remote/cli/poll":
 		return true
 	}
-	return false
+	// A file link for the system browser (filelink.go): the token in the path is the credential
+	return strings.HasPrefix(r.URL.Path, "/f/")
 }
 
 // remoteGuard 代替 guard 里令牌那一段。走到这儿的请求一定来自隧道。

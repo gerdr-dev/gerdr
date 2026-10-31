@@ -129,6 +129,20 @@ GERDR_* 本来就不往 agent 的环境里传（`sysenv.ChildEnv`）；acme 把�
   验的那几毫秒再占一个全局名额（`MaxInflight`，换着 IP 并发也有上限；退避的睡眠不占，不然被罚的 IP 睡着就把名额占满了）。
   熔断前最多大约 `GlobalTrip + MaxInflight` 次猜测，对 31⁸ 的码空间可以忽略。`TestRemotePairConcurrentGuesses` 钉着。
 
+## File links: the one cookie-less door
+
+`/f/<token>/<name>` (`internal/server/filelink.go`) is the only path besides the pair page that answers without a
+device cookie (`remotePublic`). It exists for the file viewer's "open externally" button in the Android / desktop
+App: those hand the address to the system browser, which has no cookie, so a plain `/api/fs/raw` link is a 401
+there. The page first gets a link from `POST /api/fs/link` (normal auth), and then the token is the credential:
+
+- random, in memory only (a restart revokes all of them), bound to one file, issued only to a signed-in device;
+- valid 5 minutes from issue, flat, opened or not (a video still seeking after that has to be opened again);
+- at most 1000 live at once.
+
+Whoever gets the URL in that window can read that one file, which is why the page never shows or copies it. Don't
+widen it: no directory links, no reuse across files, no extending the life.
+
 ## 没做的
 
 - 端到端（真中继（dialhome）+ 真证书 + 手机）只能部署之后验：假中继的测试管协议格式，不管 Traefik 路由、CAA、证书链。

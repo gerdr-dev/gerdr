@@ -1,13 +1,16 @@
 package io.github.zbysir.gerdr
 
 import android.annotation.SuppressLint
+import android.app.DownloadManager
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.net.Uri
 import android.net.http.SslError
+import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.os.Message
 import android.text.InputType
 import android.view.Gravity
@@ -20,6 +23,7 @@ import android.webkit.CookieManager
 import android.webkit.PermissionRequest
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.SslErrorHandler
+import android.webkit.URLUtil
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
@@ -378,7 +382,7 @@ class MainActivity : ComponentActivity() {
         }
         w.webViewClient = Client()
         w.webChromeClient = chrome
-        w.setDownloadListener { url, _, _, _, _ -> openExternal(url) }
+        w.setDownloadListener { url, ua, disposition, mime, _ -> download(url, ua, disposition, mime) }
         web = w
         bridge = Bridge(this, w, o)
         root.addView(w, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
@@ -911,6 +915,50 @@ class MainActivity : ComponentActivity() {
         window.setBackgroundDrawable(ColorDrawable(c))
         bars.isAppearanceLightStatusBars = light
         bars.isAppearanceLightNavigationBars = light
+    }
+
+    /**
+     * A download the page started (the file viewer's / lightbox's download button, or a PDF the WebView can't show).
+     * Done here with DownloadManager rather than handed to the browser: files live behind the device cookie, which
+     * only this WebView has, so the browser just gets 401. The cookie is copied onto the request, and only for our
+     * own server; anything else still goes to the browser. DownloadManager doesn't go through LanRoute, so it takes
+     * the public (relay) address even when the page is on a LAN direct connection.
+     */
+    private fun download(url: String, ua: String?, disposition: String?, mime: String?) {
+        val u = Uri.parse(url)
+        if (u.scheme != "http" && u.scheme != "https") {
+            Toast.makeText(this, "这个文件没法下载", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (Server.origin(u) != origin) return openExternal(url)
+        val name = fileName(url, disposition, mime)
+        val req = DownloadManager.Request(u)
+            .setTitle(name)
+            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+            .addRequestHeader("User-Agent", ua?.takeIf { it.isNotEmpty() } ?: webUA)
+        CookieManager.getInstance().getCookie(url)?.let { req.addRequestHeader("Cookie", it) }
+        if (!mime.isNullOrEmpty()) req.setMimeType(mime)
+        // Android 10+ writes to the shared Downloads without a permission; 9 would need WRITE_EXTERNAL_STORAGE,
+        // so there it goes to the App's own folder (still opened from the download notification)
+        if (Build.VERSION.SDK_INT >= 29) req.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, name)
+        else req.setDestinationInExternalFilesDir(this, Environment.DIRECTORY_DOWNLOADS, name)
+        try {
+            (getSystemService(DOWNLOAD_SERVICE) as DownloadManager).enqueue(req)
+            Toast.makeText(this, "开始下载 $name", Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            Toast.makeText(this, "下载失败：${e.message}", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    /**
+     * The server names the file in `filename*=utf-8''…` when it isn't plain ASCII (Go's mime.FormatMediaType), which
+     * URLUtil.guessFileName doesn't read, so Chinese names would come out as "downloadfile.bin". Read that first.
+     */
+    private fun fileName(url: String, disposition: String?, mime: String?): String {
+        val ext = disposition?.let { Regex("""filename\*\s*=\s*(?i:utf-8)''([^;]+)""").find(it) }?.groupValues?.get(1)
+        val name = ext?.let { runCatching { Uri.decode(it.trim()) }.getOrNull() }
+            ?: URLUtil.guessFileName(url, disposition, mime)
+        return name.replace('/', '_').ifEmpty { "download" }
     }
 
     fun openExternal(url: String) {

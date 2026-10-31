@@ -182,7 +182,12 @@ func (s *Server) fileExists(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) fileRaw(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	p := resolvePath(q.Get("path"), q.Get("cwd"))
+	serveRaw(w, r, resolvePath(q.Get("path"), q.Get("cwd")), q.Get("download") == "1")
+}
+
+// serveRaw sends a file's bytes with headers that keep it from running as a page of ours. Shared by /api/fs/raw
+// and the cookie-less links of filelink.go.
+func serveRaw(w http.ResponseWriter, r *http.Request, p string, download bool) {
 	f, err := os.Open(p)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -218,7 +223,7 @@ func (s *Server) fileRaw(w http.ResponseWriter, r *http.Request) {
 	} else {
 		h.Set("Content-Security-Policy", "sandbox; default-src 'none'; img-src 'self' data:; media-src 'self'; style-src 'unsafe-inline'; frame-ancestors 'self'")
 	}
-	if q.Get("download") == "1" {
+	if download {
 		h.Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": filepath.Base(p)}))
 	}
 	http.ServeContent(w, r, filepath.Base(p), st.ModTime(), f)
