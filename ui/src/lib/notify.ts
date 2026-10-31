@@ -1,11 +1,11 @@
 import { toast } from "sonner";
 import { nativeNotify } from "./native";
 import { locateSession, spaceOf } from "./layout";
-import { get } from "./store";
+import { get, prefOf } from "./store";
 
 /** 系统通知：mac App 走原生通知，浏览器走 Notification API（要权限，第一次会问）。 */
 export function systemNotify(title: string, body: string, sessionId?: string) {
-  if (!get().config.notifications) return;
+  if (!prefOf(get(), "notifications")) return;
   const loc = sessionId ? locateSession(get().layout, sessionId) : undefined;
   if (nativeNotify(title, body, sessionId, loc && spaceOf(loc.ws))) return;
   if (!("Notification" in window)) return;

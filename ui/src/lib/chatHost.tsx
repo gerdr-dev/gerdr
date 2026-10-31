@@ -4,7 +4,7 @@ import { api, type Holder } from "./api";
 import { closeAgentInPane, focusSession, openPath, openSubagent, refocusAfterDialog, withdrawSteer } from "./actions";
 import { defaultsOf, setDefault, setDefaults } from "./defaults";
 import { isNative, nativeOpenPath } from "./native";
-import { get, loadOlder, sendShown, set, setConfig, subTranscript, transcript, useStore, type DraftImg, type SharedDraft } from "./store";
+import { get, loadOlder, prefOf, sendShown, set, setConfig, subTranscript, transcript, useStore, type DraftImg, type SharedDraft } from "./store";
 import { pushDraft, sameDraft } from "./sync";
 import { AddonComposerActions } from "@/components/AddonSlot";
 import { useAddonTurnStat } from "./addons";
@@ -206,6 +206,7 @@ function useTranscript(sessionId: string, sub?: string) {
 
 export function GerdrChatProvider({ children }: { children: ReactNode }) {
   const config = useStore((s) => s.config);
+  const device = useStore((s) => s.device);
   const agents = useStore((s) => s.agents);
   const host = useMemo<ChatHost>(
     () => ({
@@ -262,16 +263,16 @@ export function GerdrChatProvider({ children }: { children: ReactNode }) {
         },
       },
       settings: {
-        sendKey: config.sendKey,
+        sendKey: prefOf({ config, device }, "sendKey"),
         showThinking: config.showThinking,
-        virtualList: config.virtualList,
+        virtualList: prefOf({ config, device }, "virtualList"),
         expandEdits: config.expandEdits,
         confirmLinks: config.confirmLinks,
         pinnedCommands: config.pinnedCommands,
       },
       setPinnedCommands: (names) => setConfig({ pinnedCommands: names }),
     }),
-    [config, agents],
+    [config, device, agents],
   );
   return <ChatProvider host={host}>{children}</ChatProvider>;
 }

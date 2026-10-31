@@ -155,6 +155,10 @@ gerdr config set agents.reviewer.prompt "Review only, don't edit"   # array elem
 gerdr config unset defaultConfig.codex
 ```
 
+`theme`, `sendKey`, `notifications`, `keepTabs`, `virtualList` and `copyOnSelect` are per device: a device that
+picked its own in Settings (marked 仅本设备) keeps it, `gerdr config set` only changes the others. If the user says
+it didn't take, tell them to change it in Settings on that device.
+
 API keys read back as `<hidden>`; the real ones are in secrets.json. Don't open that file or print the
 environment variables named in `apiKeyEnv`: whatever you read ends up in this transcript. To set a key the
 user gives you, `gerdr config set llm.providers.<id>.apiKey <key>`.

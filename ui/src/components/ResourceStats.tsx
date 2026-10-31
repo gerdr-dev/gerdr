@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { focusSession } from "@/lib/actions";
 import { nativeWebPid } from "@/lib/native";
-import { set, useStore } from "@/lib/store";
+import { prefOf, set, useStore } from "@/lib/store";
 
 // 设置 →「资源」：内存都花在哪了。每 2 秒刷新一次（只在这一页开着时）。
 // 后端和 agent 进程用 ps 量（和活动监视器对得上）；界面这边：mac App 里量 WebView 进程，浏览器里只有 JS 堆（Chromium 才有）和 DOM 节点数。
@@ -17,7 +17,7 @@ export function ResourceStats({ open }: { open: boolean }) {
   const [err, setErr] = useState("");
   const [page, setPage] = useState({ heap: 0, nodes: 0 });
   const kept = useStore((st) => st.keptTabs.length);
-  const keep = useStore((st) => st.config.keepTabs ?? 6);
+  const keep = useStore((st) => prefOf(st, "keepTabs") ?? 6);
   useEffect(() => {
     if (!open) return;
     let stop = false;

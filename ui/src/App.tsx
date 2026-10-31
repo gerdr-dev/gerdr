@@ -25,14 +25,14 @@ import { systemNotify } from "./lib/notify";
 import { watchInbox } from "./lib/inbox";
 import { watchCopyOnSelect } from "./lib/copysel";
 import { reloadAddons, setTabNameFn } from "./lib/addons";
-import { fontSizeOf, get, keyFor, markUnread, set, useStore, visibleSessions } from "./lib/store";
+import { fontSizeOf, get, keyFor, prefOf, markUnread, set, useStore, visibleSessions } from "./lib/store";
 import { boot } from "./lib/sync";
 import type { SessionSummary } from "./lib/types";
 
 setTabNameFn(tabName);
 
 function useTheme() {
-  const theme = useStore((s) => s.config.theme);
+  const theme = useStore((s) => prefOf(s, "theme"));
   const font = useStore(fontSizeOf);
   // Layout effect, not a plain effect: .dark has to be on <html> before the first frame is painted, or that frame
   // comes out light (a white flash on a dark phone, right as the Android app's loading cover fades out)
@@ -172,7 +172,7 @@ export default function App() {
   // 藏用 visibility 不用 display:none（后者把滚动位置丢了）。占多少内存在设置 →「资源」里看。
   const keep = Math.max(
     1,
-    useStore((s) => s.config.keepTabs ?? 6),
+    useStore((s) => prefOf(s, "keepTabs") ?? 6),
   );
   const prevKept = useStore((s) => s.keptTabs);
   const mode = useStore((s) => s.mode);

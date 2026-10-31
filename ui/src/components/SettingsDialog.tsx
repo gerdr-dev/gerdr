@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { isAndroid } from "@/lib/android";
-import { closeDialog, fontSizeOf, set, setConfig, setFontSize, useStore, type Theme } from "@/lib/store";
+import { closeDialog, fontSizeOf, set, setConfig, setFontSize, setPref, useStore, type Theme } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { AddonSettings } from "./AddonSettings";
 import { AgentSettings } from "./AgentSettings";
@@ -31,6 +31,9 @@ export function SettingsDialog({ open }: { open: boolean }) {
   const cfg = useStore((s) => s.config);
   const bat = cfg.batteryAlert ?? { on: true, percent: 20 };
   const fontSize = useStore(fontSizeOf);
+  // The settings each device keeps for itself (DEVICE_KEYS): its own value, else the shared one
+  const device = useStore((s) => s.device);
+  const dev = { ...cfg, ...device };
   const agents = useStore((s) => s.agents);
   const [tabOpen, setTabOpen] = useState("general");
   const [agentTab, setAgentTab] = useState("roles");
@@ -100,8 +103,8 @@ export function SettingsDialog({ open }: { open: boolean }) {
                 设置存在跑 gerdr 的电脑上，电脑、手机、别的浏览器打开都是这一份；标了 <LocalTag /> 的只管这台设备。
               </div>
               <Section title="外观">
-                <Row label="主题">
-                  <Select value={cfg.theme} onValueChange={(v) => setConfig({ theme: v as Theme })}>
+                <Row label="主题" local>
+                  <Select value={dev.theme} onValueChange={(v) => setPref({ theme: v as Theme })}>
                     <SelectTrigger className="w-36">
                       <SelectValue />
                     </SelectTrigger>
@@ -128,8 +131,8 @@ export function SettingsDialog({ open }: { open: boolean }) {
                 </Row>
               </Section>
               <Section title="对话">
-                <Row label="发送键" hint="另一种组合换行；手机上选「回车」时键盘的回车键直接发送">
-                  <Select value={cfg.sendKey} onValueChange={(v) => setConfig({ sendKey: v as any })}>
+                <Row label="发送键" hint="另一种组合换行；手机上选「回车」时键盘的回车键直接发送" local>
+                  <Select value={dev.sendKey} onValueChange={(v) => setPref({ sendKey: v as any })}>
                     <SelectTrigger className="w-36">
                       <SelectValue />
                     </SelectTrigger>
@@ -162,8 +165,8 @@ export function SettingsDialog({ open }: { open: boolean }) {
                 <Row label="打开链接前确认" hint="点对话里的外部链接先弹框，显示完整地址，可以复制或打开；关掉就直接打开">
                   <Switch checked={cfg.confirmLinks !== false} onCheckedChange={(v) => setConfig({ confirmLinks: v })} />
                 </Row>
-                <Row label="切走的 tab 留在页面里" hint="展开状态、滚动位置都保住；越多越占内存（设置 → 资源 里看）">
-                  <Select value={String(cfg.keepTabs ?? 6)} onValueChange={(v) => setConfig({ keepTabs: Number(v) })}>
+                <Row label="切走的 tab 留在页面里" hint="展开状态、滚动位置都保住；越多越占内存（设置 → 资源 里看）" local>
+                  <Select value={String(dev.keepTabs ?? 6)} onValueChange={(v) => setPref({ keepTabs: Number(v) })}>
                     <SelectTrigger className="w-36">
                       <SelectValue />
                     </SelectTrigger>
@@ -178,8 +181,8 @@ export function SettingsDialog({ open }: { open: boolean }) {
                 </Row>
               </Section>
               <Section title="通知">
-                <Row label="系统通知" hint="看不见的会话跑完了 / 在等你时">
-                  <Switch checked={cfg.notifications} onCheckedChange={(v) => setConfig({ notifications: v })} />
+                <Row label="系统通知" hint="看不见的会话跑完了 / 在等你时" local>
+                  <Switch checked={dev.notifications} onCheckedChange={(v) => setPref({ notifications: v })} />
                 </Row>
                 <Row label="电量低提醒" hint="运行 gerdr 的电脑用电池、电量低于这个数时放一条进收件箱（每次放电只提醒一次）">
                   <div className="flex items-center gap-2">
@@ -264,11 +267,11 @@ export function SettingsDialog({ open }: { open: boolean }) {
             </TabsContent>
             <TabsContent value="labs" className="space-y-4 pt-2">
               <div className="text-[13px] text-muted-foreground">还在试的功能，默认关着。</div>
-              <Row label="对话虚拟滚动" hint="只渲染屏幕附近的消息，很长的对话更省内存；往上翻时带图的消息可能会跳动">
-                <Switch checked={!!cfg.virtualList} onCheckedChange={(v) => setConfig({ virtualList: v })} />
+              <Row label="对话虚拟滚动" hint="只渲染屏幕附近的消息，很长的对话更省内存；往上翻时带图的消息可能会跳动" local>
+                <Switch checked={!!dev.virtualList} onCheckedChange={(v) => setPref({ virtualList: v })} />
               </Row>
-              <Row label="选中即复制" hint="和 herdr 一样：拖着选中文字，松开鼠标就复制到剪贴板；双击选词也会复制。对话和终端里都管用，输入框里不复制">
-                <Switch checked={!!cfg.copyOnSelect} onCheckedChange={(v) => setConfig({ copyOnSelect: v })} />
+              <Row label="选中即复制" hint="和 herdr 一样：拖着选中文字，松开鼠标就复制到剪贴板；双击选词也会复制。对话和终端里都管用，输入框里不复制" local>
+                <Switch checked={!!dev.copyOnSelect} onCheckedChange={(v) => setPref({ copyOnSelect: v })} />
               </Row>
               <Row
                 label="远程连着时不休眠"

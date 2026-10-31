@@ -7,12 +7,12 @@
 // 输入框 / 可编辑区域里的选区不管：在那里选字是为了改、为了删，复制走了还清掉选区就没法改了。
 import { toast } from "sonner";
 import { isCoarse } from "./phone";
-import { get } from "./store";
+import { get, prefOf } from "./store";
 
 const HIGHLIGHT_MS = 500; // herdr 的 PANE_COPY_HIGHLIGHT_DURATION
 const TOAST_MS = 2000; // herdr 的 COPY_FEEDBACK_DURATION
 
-export const copyOnSelectOn = () => !!get().config.copyOnSelect;
+export const copyOnSelectOn = () => !!prefOf(get(), "copyOnSelect");
 
 // 还没到点的「清选区」：三击时第二下（双击）复制完会定一个，第三下又定一个。新的一次复制要先把旧的撤掉 —— 不然旧的提前
 // 跑，整行的高亮刚出来就被清掉、焦点进了输入框；接着第三下的再清一次，清掉的就是输入框里的光标了（还聚焦着却没光标，

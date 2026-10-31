@@ -1,11 +1,12 @@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { allCommands } from "@/lib/commands";
 import { ACTION_TITLES, KEY_GROUPS, formatCombo } from "@/lib/keys";
-import { closeDialog, keyFor, useStore } from "@/lib/store";
+import { closeDialog, keyFor, prefOf, useStore } from "@/lib/store";
 
 // The shortcut sheet (prefix+?): the configured keys by group, plugin commands with keys, and the composer's own keys.
 export function KeyHelp({ open }: { open: boolean }) {
   const cfg = useStore((s) => s.config);
+  const sendKey = useStore((s) => prefOf(s, "sendKey"));
   useStore((s) => s.addonVersion);
   const plugin = open ? allCommands().filter((c) => c.source !== "builtin" && c.keys.length) : [];
   return (
@@ -48,9 +49,9 @@ export function KeyHelp({ open }: { open: boolean }) {
           <div>
             <div className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">输入框里</div>
             {[
-              ["发送 / 插话（等这一步做完）", cfg.sendKey === "enter" ? "↵" : "⌘↵"],
-              ...(cfg.sendKey === "enter" ? [["立即插话（打断这一步）", "Ctrl+↵"]] : []),
-              ["换行", cfg.sendKey === "enter" ? "⇧↵" : "↵"],
+              ["发送 / 插话（等这一步做完）", sendKey === "enter" ? "↵" : "⌘↵"],
+              ...(sendKey === "enter" ? [["立即插话（打断这一步）", "Ctrl+↵"]] : []),
+              ["换行", sendKey === "enter" ? "⇧↵" : "↵"],
               ["打断这一轮", "Esc"],
               ["斜杠命令", "/"],
             ].map(([a, k]) => (

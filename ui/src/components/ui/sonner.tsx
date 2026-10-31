@@ -7,11 +7,11 @@ import {
   OctagonXIcon,
   TriangleAlertIcon,
 } from "lucide-react"
-import { useStore } from "@/lib/store"
+import { prefOf, useStore } from "@/lib/store"
 import { Toaster as Sonner, type ToasterProps } from "sonner"
 
 const Toaster = ({ ...props }: ToasterProps) => {
-  const theme = useStore((s) => s.config.theme)
+  const theme = useStore((s) => prefOf(s, "theme"))
 
   return (
     <Sonner

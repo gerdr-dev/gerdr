@@ -181,6 +181,8 @@ type State = {
    * 手机上调大了字，电脑上不该跟着变大。0 = 这台还没设过，用 config.fontSize（以前存在那儿的，老用户设过的照旧生效）。
    */
   localFont: number;
+  /** This device's own values for the settings in DEVICE_KEYS (localStorage); read them with prefOf. */
+  device: DevicePrefs;
   /** 手机上：侧栏抽屉开着没有（不存盘 —— 每次打开页面都该先看见对话）。 */
   drawer: boolean;
   /** 手机上：面板一览（PaneSwitcher）开着没有。 */
@@ -245,6 +247,37 @@ export function setFontSize(n: number) {
   } catch {}
 }
 
+/**
+ * Settings each device keeps for itself, like the font size: one computer wants a light theme and the phone a dark one,
+ * the phone's keyboard wants Enter to send, a phone has less memory for kept tabs. Stored in localStorage; a device that
+ * never picked one uses the shared config's value (where they all lived before, so old choices still apply), which is
+ * also what `gerdr config set` changes.
+ */
+export const DEVICE_KEYS = ["theme", "sendKey", "notifications", "keepTabs", "virtualList", "copyOnSelect"] as const;
+export type DeviceKey = (typeof DEVICE_KEYS)[number];
+export type DevicePrefs = Partial<Pick<Config, DeviceKey>>;
+
+const DEVICE = "gerdr.device";
+function loadDevice(): DevicePrefs {
+  try {
+    const v = JSON.parse(localStorage.getItem(DEVICE) ?? "{}");
+    return v && typeof v === "object" ? v : {};
+  } catch {
+    return {};
+  }
+}
+
+/** The value this device uses: its own, else the shared config's. */
+export const prefOf = <K extends DeviceKey>(s: { device: DevicePrefs; config: Config }, k: K): Config[K] => (s.device[k] ?? s.config[k]) as Config[K];
+
+export function setPref(patch: DevicePrefs) {
+  const device = { ...get().device, ...patch };
+  set({ device });
+  try {
+    localStorage.setItem(DEVICE, JSON.stringify(device));
+  } catch {}
+}
+
 function loadMode(): "agents" | "work" {
   try {
     return localStorage.getItem("gerdr.mode") === "work" ? "work" : "agents";
@@ -302,6 +335,7 @@ export const useStore = create<State>(() => ({
   older: {},
   layout: defaultLayout(),
   config: DEFAULT_CONFIG,
+  device: loadDevice(),
   prefixActive: false,
   dialog: null,
   sidebar: loadSidebar(),
