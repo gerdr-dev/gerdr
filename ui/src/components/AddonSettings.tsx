@@ -152,17 +152,31 @@ function InstalledRow({ a, newer }: { a: AddonStatus; newer?: StoreAddon }) {
     if (ok) await run(() => api.uninstallAddon(a.id));
   };
   return (
-    <div className="flex gap-3 p-3">
-      <AddonIcon src={a.icon ? assetURL(a.id, a.icon, a.hash) : undefined} />
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[13px]">
+    // Same shape as a store row (StoreRow): the controls sit on the name's line, the rest goes under it, full width on a phone
+    <div className="p-3">
+      <div className="flex items-start gap-3">
+        <AddonIcon src={a.icon ? assetURL(a.id, a.icon, a.hash) : undefined} />
+        <div className="flex min-h-9 min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-0.5 text-[13px]">
           <span className="font-medium">{a.name}</span>
           {a.version && <span className="text-[11px] text-muted-foreground">v{a.version}</span>}
           {a.name !== a.id && <span className="font-mono text-[11px] text-muted-foreground">{a.id}</span>}
           {a.source ? <Tag>{a.source.store}</Tag> : <Tag>本地</Tag>}
           {a.modified && <Tag className="text-warn">本地改过</Tag>}
         </div>
-        {a.description && <div className="mt-0.5 text-[12px] text-muted-foreground">{a.description}</div>}
+        <div className="flex min-h-9 shrink-0 items-center gap-1.5">
+          {newer && (
+            <Button size="sm" variant="outline" disabled={busy} onClick={() => run(() => install(a.source!.store, newer))}>
+              更新{newer.version && newer.version !== a.version ? ` v${newer.version}` : ""}
+            </Button>
+          )}
+          <Button size="icon-sm" variant="ghost" disabled={busy} title="卸载" onClick={uninstall}>
+            <Trash2 className="size-3.5" />
+          </Button>
+          <Switch checked={!a.disabled} disabled={busy} onCheckedChange={(on) => run(() => api.setAddonEnabled(a.id, on))} />
+        </div>
+      </div>
+      <div className="min-w-0 pl-12 max-md:pl-0">
+        {a.description && <div className="mt-1 text-[12px] text-muted-foreground">{a.description}</div>}
         <div className="mt-1 flex items-center gap-1.5 text-[12px] text-muted-foreground">
           {a.disabled ? (
             <span>已关闭</span>
@@ -180,17 +194,6 @@ function InstalledRow({ a, newer }: { a: AddonStatus; newer?: StoreAddon }) {
         </div>
         {a.service && <ServiceLine s={a.service} />}
         {a.error && <pre className="mt-1.5 whitespace-pre-wrap rounded-sm bg-bad/10 p-2 font-mono text-[11px] text-bad">{a.error}</pre>}
-      </div>
-      <div className="flex shrink-0 items-start gap-1.5">
-        {newer && (
-          <Button size="sm" variant="outline" disabled={busy} onClick={() => run(() => install(a.source!.store, newer))}>
-            更新{newer.version && newer.version !== a.version ? ` v${newer.version}` : ""}
-          </Button>
-        )}
-        <Button size="icon-sm" variant="ghost" disabled={busy} title="卸载" onClick={uninstall}>
-          <Trash2 className="size-3.5" />
-        </Button>
-        <Switch className="mt-1" checked={!a.disabled} disabled={busy} onCheckedChange={(on) => run(() => api.setAddonEnabled(a.id, on))} />
       </div>
     </div>
   );
@@ -258,16 +261,18 @@ function StoreSection({ store }: { store: AddonStore }) {
   const url = store.local ? undefined : `https://github.com/${store.source.replace(/#.*/, "")}`;
   return (
     <div className="space-y-2">
-      <div className="flex items-center gap-2 text-[13px]">
-        <span className="truncate font-medium">{store.source}</span>
+      {/* On a phone the refresh time takes a line of its own (order-last + basis-full): next to the name it squeezed the
+          name down to "ge…" and the tag to one character a line */}
+      <div className="flex flex-wrap items-center gap-x-2 text-[13px]">
+        <span className="min-w-0 truncate font-medium">{store.source}</span>
         {url && (
-          <a href={url} target="_blank" rel="noreferrer" className="text-muted-foreground hover:text-foreground" title={url}>
+          <a href={url} target="_blank" rel="noreferrer" className="shrink-0 text-muted-foreground hover:text-foreground" title={url}>
             <ExternalLink className="size-3.5" />
           </a>
         )}
         {store.default && <Tag>默认</Tag>}
         {store.local && <Tag>本地文件夹</Tag>}
-        <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">
+        <span className="ml-auto shrink-0 text-[11px] text-muted-foreground max-md:order-last max-md:ml-0 max-md:basis-full">
           {busy || fetching.has(store.source)
             ? "下载中…"
             : store.local
@@ -276,7 +281,7 @@ function StoreSection({ store }: { store: AddonStore }) {
                 ? `${new Date(store.fetchedAt).toLocaleString()} 刷新`
                 : "还没下载"}
         </span>
-        <Button size="icon-sm" variant="ghost" title="刷新" disabled={busy} onClick={doRefresh}>
+        <Button size="icon-sm" variant="ghost" title="刷新" className="max-md:ml-auto" disabled={busy} onClick={doRefresh}>
           <RefreshCw className={cn("size-3.5", busy && "animate-spin")} />
         </Button>
         <Button size="icon-sm" variant="ghost" title="移除商店" onClick={remove}>
@@ -309,16 +314,31 @@ function StoreRow({ source, a }: { source: string; a: StoreAddon }) {
   const file = (path: string) =>
     `${location.origin}/api/addon-stores/file?source=${encodeURIComponent(source)}&id=${encodeURIComponent(a.id)}&path=${encodeURIComponent(path)}&v=${a.hash}`;
   return (
-    <div className="flex gap-3 p-3">
-      <AddonIcon src={a.icon ? file(a.icon) : undefined} />
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[13px]">
+    // The button sits on the name's line and the rest goes under it: as a column of its own it left the description
+    // and screenshots a third of a phone's width. The body lines up with the name (pl-12), and takes the full width on a phone
+    <div className="p-3">
+      <div className="flex items-start gap-3">
+        <AddonIcon src={a.icon ? file(a.icon) : undefined} />
+        <div className="flex min-h-9 min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-0.5 text-[13px]">
           <span className="font-medium">{a.name}</span>
           {a.version && <span className="text-[11px] text-muted-foreground">v{a.version}</span>}
           {a.name !== a.id && <span className="font-mono text-[11px] text-muted-foreground">{a.id}</span>}
           {a.hasService && <Tag>后台进程</Tag>}
         </div>
-        {a.description && <div className="mt-0.5 text-[12px] text-muted-foreground">{a.description}</div>}
+        <div className="flex min-h-9 shrink-0 items-center">
+          {label ? (
+            <Button size="sm" variant={label === "安装" ? "default" : "outline"} disabled={busy} onClick={go}>
+              {busy ? "安装中…" : label}
+            </Button>
+          ) : (
+            <span className="flex items-center gap-1 text-[12px] text-muted-foreground">
+              <Check className="size-3.5 text-ok" /> 已安装
+            </span>
+          )}
+        </div>
+      </div>
+      <div className="min-w-0 pl-12 max-md:pl-0">
+        {a.description && <div className="mt-1 text-[12px] text-muted-foreground">{a.description}</div>}
         {!!a.screenshots?.length && (
           <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
             {a.screenshots.map((p, i) => (
@@ -353,17 +373,6 @@ function StoreRow({ source, a }: { source: string; a: StoreAddon }) {
               <Markdown>{relinkImages(dropTitle(a.readme), file)}</Markdown>
             </CollapsibleContent>
           </Collapsible>
-        )}
-      </div>
-      <div className="shrink-0">
-        {label ? (
-          <Button size="sm" variant={label === "安装" ? "default" : "outline"} disabled={busy} onClick={go}>
-            {busy ? "安装中…" : label}
-          </Button>
-        ) : (
-          <span className="flex items-center gap-1 text-[12px] text-muted-foreground">
-            <Check className="size-3.5 text-ok" /> 已安装
-          </span>
         )}
       </div>
     </div>
@@ -406,7 +415,7 @@ function AddonIcon({ src }: { src?: string }) {
 }
 
 function Tag({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <span className={cn("rounded-sm bg-muted px-1.5 py-px text-[11px] text-muted-foreground", className)}>{children}</span>;
+  return <span className={cn("shrink-0 whitespace-nowrap rounded-sm bg-muted px-1.5 py-px text-[11px] text-muted-foreground", className)}>{children}</span>;
 }
 
 // An add-on's backend process (addon.json "service"): running or not, its own status line, and why it died.
