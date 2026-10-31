@@ -21,12 +21,14 @@ import {
   moveSeam,
   setGridSizes,
   setOverview,
+  placeTile,
   swapTiles,
   toggleMain,
   toggleOverview,
   useOverviewIds,
   workChats,
   type Box,
+  type DropSide,
   type Seam,
 } from "@/lib/overview";
 import type { WorkConf } from "@/lib/overviewState";
@@ -343,6 +345,7 @@ function OverviewList({
 
 const pct = (v: number) => `${v * 100}%`;
 const NO_SIZES = {};
+const NO_SHAPES = {};
 /** Height of the "more" row under the grid, holding the tiles that didn't fit. */
 const MORE_H = 30;
 
@@ -378,7 +381,12 @@ const DRAG_TOUCH = "touch-none";
 const SEAM_COL_COARSE = "pointer-coarse:w-6";
 const SEAM_ROW_COARSE = "pointer-coarse:h-6";
 
-type TileDrag = { id: string; x: number; y: number; over?: string; label: string };
+/** Where a dragged tile would land on `over`: an edge puts it on that side (placeTile), the middle swaps the two. */
+type TileDrag = { id: string; x: number; y: number; over?: string; side?: DropSide; label: string };
+
+/** How far in from a tile's edge (share of its size) a drop still means "beside it"; deeper in, it's a swap. */
+const EDGE = 0.3;
+const SIDE_TEXT: Record<DropSide, string> = { left: "放到左边", right: "放到右边", up: "放到上面", down: "放到下面" };
 
 function Grid({
   ids,
@@ -401,6 +409,7 @@ function Grid({
   const main = useStore((s) => s.overview.main);
   const ratio = useStore((s) => s.overview.ratio);
   const saved = useStore((s) => s.overview.sizes) ?? NO_SIZES;
+  const picked = useStore((s) => s.overview.shapes) ?? NO_SHAPES;
   const [drag, setDrag] = useState<TileDrag>();
   useLayoutEffect(() => {
     const el = wrap.current!;
@@ -419,7 +428,7 @@ function Grid({
   const more = ids.filter((id) => !shownIds.includes(id));
   const size = { w: area.w, h: more.length ? area.h - MORE_H : area.h };
   const key = shownIds.join(",");
-  const lay = useMemo(() => arrange(shownIds, main, ratio, size.w, size.h, saved), [key, main, ratio, size.w, size.h, saved]);
+  const lay = useMemo(() => arrange(shownIds, main, ratio, size.w, size.h, saved, picked), [key, main, ratio, size.w, size.h, saved, picked]);
   // Focusing a tile that's in "more" (from there, the list, the keys) brings it into the grid in place of the last one
   useEffect(() => {
     if (!focus || !ids.includes(focus) || shownIds.includes(focus)) return;
@@ -434,7 +443,7 @@ function Grid({
   const pin = anim && box.current ? { width: box.current.clientWidth - 8, height: box.current.clientHeight - 8 } : undefined;
   // Re-arranging (pin, swap, add / remove a tile) slides every tile to its new box the same way; seam drags and window
   // resizes follow the pointer / window and don't animate. Each chat is laid out at its final size meanwhile (tilePin).
-  const moved = useLayoutAnim(`${key}|${main ?? ""}`);
+  const moved = useLayoutAnim(`${key}|${main ?? ""}|${lay.key}`);
   // Not before the grid has been measured: a chat laid out in a 0-wide box wraps everything (the composer stayed huge)
   const tilePin = (b: Box) => (size.w ? { width: b.w * size.w - 8, height: b.h * size.h - 8 } : undefined);
 
@@ -457,16 +466,30 @@ function Grid({
     });
   };
 
-  // Drag a tile by its title bar onto another one: the two trade places. Starts after a few px, so a click still focuses.
+  // Drag a tile by its title bar onto another one: near one of its edges it goes on that side, in the middle the two trade
+  // places. Starts after a few px, so a click still focuses. The main tile only swaps (it has its own column).
   const dragTile = (e: React.PointerEvent, id: string, label: string) => {
     if (e.button !== 0 || (e.target as HTMLElement).closest("button")) return;
     const sx = e.clientX;
     const sy = e.clientY;
     let on = false;
-    const overAt = (ev: PointerEvent) => {
+    const overAt = (ev: PointerEvent): Pick<TileDrag, "over" | "side"> => {
       const el = document.elementFromPoint(ev.clientX, ev.clientY)?.closest<HTMLElement>("[data-ov-tile]");
       const over = el?.dataset.ovTile;
-      return over && over !== id ? over : undefined;
+      if (!el || !over || over === id) return {};
+      if (main && (over === main || id === main) && shownIds.length > 1) return { over };
+      const r = el.getBoundingClientRect();
+      const fx = (ev.clientX - r.left) / r.width;
+      const fy = (ev.clientY - r.top) / r.height;
+      const [side, d] = (
+        [
+          ["left", fx],
+          ["right", 1 - fx],
+          ["up", fy],
+          ["down", 1 - fy],
+        ] as [DropSide, number][]
+      ).sort((a, b) => a[1] - b[1])[0];
+      return d < EDGE ? { over, side } : { over };
     };
     track(
       e,
@@ -474,12 +497,13 @@ function Grid({
       (ev) => {
         if (!on && Math.hypot(ev.clientX - sx, ev.clientY - sy) < 5) return;
         on = true;
-        setDrag({ id, label, x: ev.clientX, y: ev.clientY, over: overAt(ev) });
+        setDrag({ id, label, x: ev.clientX, y: ev.clientY, ...overAt(ev) });
       },
       (ev) => {
-        const over = on ? overAt(ev) : undefined;
+        const { over, side } = on ? overAt(ev) : {};
         setDrag(undefined);
-        if (over) swapTiles(id, over);
+        if (over && side) placeTile(id, over, side, shownIds, size.w, size.h);
+        else if (over) swapTiles(id, over);
       },
     );
     onFocus(id);
@@ -527,7 +551,7 @@ function Grid({
                 focused={shown && focus === id}
                 main={main === id}
                 zoomed={zoom === id}
-                target={drag?.over === id}
+                target={drag?.over === id && !drag.side}
                 onFocus={() => onFocus(id)}
                 onZoom={() => onZoom(id)}
                 onDragStart={zoom ? undefined : (e, label) => dragTile(e, id, label)}
@@ -592,6 +616,7 @@ function Grid({
           ))}
         </div>
       )}
+      {drag?.over && drag.side && <DropPreview over={drag.over} side={drag.side} />}
       {drag && (
         <div
           className="pointer-events-none fixed z-50 max-w-60 truncate rounded-md border bg-popover px-2 py-1 text-[12px] shadow-md"
@@ -600,6 +625,26 @@ function Grid({
           {drag.label}
         </div>
       )}
+    </div>
+  );
+}
+
+/** The half of tile `over` a dragged tile would take (same look as dropping a pane beside another, TabDrag). */
+function DropPreview({ over, side }: { over: string; side: DropSide }) {
+  const el = document.querySelector<HTMLElement>(`[data-ov-tile="${CSS.escape(over)}"]`);
+  if (!el) return null;
+  const r = el.getBoundingClientRect();
+  const half = { left: r.left + 3, top: r.top + 3, width: r.width - 6, height: r.height - 6 };
+  if (side === "left" || side === "right") half.width /= 2;
+  else half.height /= 2;
+  if (side === "right") half.left += half.width;
+  if (side === "down") half.top += half.height;
+  return (
+    <div
+      className="pointer-events-none fixed z-40 flex items-center justify-center rounded-md border-2 border-brand bg-brand/15 transition-all duration-150 ease-out"
+      style={half}
+    >
+      <span className="rounded-md bg-background/90 px-2 py-1 text-[12px] text-foreground shadow-sm">{SIDE_TEXT[side]}</span>
     </div>
   );
 }
@@ -674,7 +719,7 @@ function Tile({
         // Middle click closes it, like a browser tab (mousedown is cancelled so the browser doesn't start auto-scroll)
         onMouseDown={(e) => e.button === 1 && e.preventDefault()}
         onAuxClick={(e) => e.button === 1 && removeTile(id)}
-        title="拖到别的格子上交换位置，双击放大，中键关闭"
+        title="拖到别的格子边上放到它旁边，拖到中间交换位置；双击放大，中键关闭"
       >
         {onDragStart && <GripVertical className="-mx-1.5 size-3.5 shrink-0 text-muted-foreground/60" />}
         <AgentIcon agent={session.agent} className="size-4" />

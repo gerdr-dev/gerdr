@@ -21,6 +21,8 @@ export type Overview = {
   focus?: string;
   /** Seam positions the user dragged to, per grid shape (overview.ts shapeKey / GridSizes). */
   sizes: Record<string, { rows: number[]; cols: number[][] }>;
+  /** Grid shape the user picked by dropping a tile on another's edge, per tile count (overview.ts shapeOf / placeTile). */
+  shapes: Record<string, { counts: number[]; cols?: boolean }>;
 };
 
 export const OVERVIEW_KEY = "gerdr.overview";
@@ -28,7 +30,7 @@ export const OVERVIEW_KEY = "gerdr.overview";
 export const MAX_TILES = 12;
 
 export function loadOverview(): Overview {
-  const d: Overview = { on: false, ids: [], ratio: 0.5, follow: false, sort: "status", sizes: {} };
+  const d: Overview = { on: false, ids: [], ratio: 0.5, follow: false, sort: "status", sizes: {}, shapes: {} };
   try {
     const v = JSON.parse(localStorage.getItem(OVERVIEW_KEY) ?? "null");
     if (!v) return d;
@@ -40,6 +42,7 @@ export function loadOverview(): Overview {
       follow: !!v.follow,
       sort: v.sort === "project" ? "project" : "status",
       sizes: v.sizes && typeof v.sizes === "object" ? v.sizes : {},
+      shapes: v.shapes && typeof v.shapes === "object" ? v.shapes : {},
       focus: typeof v.focus === "string" ? v.focus : undefined,
     };
   } catch {

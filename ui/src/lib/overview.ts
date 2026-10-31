@@ -238,15 +238,33 @@ export function moveSeam(arr: number[], index: number, at: number, min = 0.08): 
 
 export type Arranged = { boxes: Map<string, Box>; seams: Seam[]; key: string; sizes: GridSizes; region: Box };
 
+/** Which saved shape (Overview.shapes) applies: one per tile count, with and without a main tile. */
+const countKey = (n: number, hasMain: boolean) => (hasMain ? "m" : "") + n;
+
+/** The shape n tiles take: the one the user picked by dropping (placeTile) while it still fits n, else gridShape. */
+function shapeOf(n: number, hasMain: boolean, w: number, h: number, picked: Record<string, Shape> | undefined): Shape {
+  const p = picked?.[countKey(n, hasMain)];
+  const ok = p && Array.isArray(p.counts) && p.counts.every((c) => c > 0) && p.counts.reduce((a, b) => a + b, 0) === n;
+  return ok ? { counts: p.counts, cols: !!p.cols } : gridShape(n, w, h);
+}
+
 /**
  * Where every tile goes: with a main tile it takes the left `ratio` and the others share the right side's grid, else
  * the grid fills the area. Seams and the region are in area fractions; seam positions are within the region.
  */
-export function arrange(ids: string[], main: string | undefined, ratio: number, w: number, h: number, saved: Record<string, GridSizes>): Arranged {
+export function arrange(
+  ids: string[],
+  main: string | undefined,
+  ratio: number,
+  w: number,
+  h: number,
+  saved: Record<string, GridSizes>,
+  picked?: Record<string, Shape>,
+): Arranged {
   const hasMain = !!main && ids.includes(main) && ids.length > 1;
   const rest = hasMain ? ids.filter((id) => id !== main) : ids;
   const region: Box = hasMain ? { x: ratio, y: 0, w: 1 - ratio, h: 1 } : { x: 0, y: 0, w: 1, h: 1 };
-  const shape = gridShape(rest.length, w * region.w, h);
+  const shape = shapeOf(rest.length, hasMain, w * region.w, h, picked);
   const key = shapeKey(shape, hasMain);
   const { boxes, seams, sizes } = layoutTiles(shape, saved[key]);
   const out = new Map<string, Box>();
@@ -286,6 +304,59 @@ export function swapTiles(from: string, to: string) {
     [ids[a], ids[b]] = [ids[b], ids[a]];
     const main = o.main === to ? from : o.main === from ? to : o.main;
     return { ...o, ids, main };
+  });
+}
+
+export type DropSide = "left" | "right" | "up" | "down";
+
+/**
+ * Drop tile `from` on an edge of tile `to` (asked for: arrange the overview by dragging, like panes in a tab): `from`
+ * moves next to `to` in the order, and the grid takes whichever shape puts it on that side: the current one, it turned
+ * the other way (rows <-> columns), or the same with the lines reversed. The pick is remembered per tile count, so two
+ * agents can sit side by side even where the auto layout stacks them. No shape does it (e.g. a 2×2 asked for a third
+ * tile in a row): they just trade places. `shown` = the tiles in the grid now, w×h its size.
+ */
+export function placeTile(from: string, to: string, side: DropSide, shown: string[], w: number, h: number) {
+  if (from === to) return;
+  const o = get().overview;
+  const hasMain = !!o.main && shown.includes(o.main) && shown.length > 1;
+  if (from === o.main || to === o.main) return swapTiles(from, to);
+  const after = side === "right" || side === "down";
+  const move = (list: string[]) => {
+    if (!list.includes(to)) return list;
+    const out = list.filter((x) => x !== from);
+    out.splice(out.indexOf(to) + (after ? 1 : 0), 0, from);
+    return out;
+  };
+  const vis = move(shown);
+  const n = hasMain ? vis.length - 1 : vis.length;
+  const regionW = hasMain ? w * (1 - o.ratio) : w;
+  const cur = shapeOf(n, hasMain, regionW, h, o.shapes);
+  const auto = gridShape(n, regionW, h);
+  const turn = (s: Shape): Shape => ({ counts: s.counts, cols: !s.cols });
+  const rev = (s: Shape): Shape => ({ counts: [...s.counts].reverse(), cols: s.cols });
+  const tries = [cur, turn(cur), rev(cur), rev(turn(cur)), auto, turn(auto)];
+  const onSide = (a: Box, b: Box) => {
+    const e = 1e-6;
+    const vOverlap = a.y < b.y + b.h - e && a.y + a.h > b.y + e;
+    const hOverlap = a.x < b.x + b.w - e && a.x + a.w > b.x + e;
+    if (side === "left") return vOverlap && a.x + a.w <= b.x + e;
+    if (side === "right") return vOverlap && a.x >= b.x + b.w - e;
+    if (side === "up") return hOverlap && a.y + a.h <= b.y + e;
+    return hOverlap && a.y >= b.y + b.h - e;
+  };
+  const hit = tries.find((s) => {
+    const { boxes } = arrange(vis, o.main, o.ratio, w, h, {}, { [countKey(n, hasMain)]: s });
+    return onSide(boxes.get(from)!, boxes.get(to)!);
+  });
+  if (!hit) return swapTiles(from, to);
+  const same = (a: Shape, b: Shape) => !!a.cols === !!b.cols && a.counts.join() === b.counts.join();
+  setOverview((x) => {
+    const shapes = { ...x.shapes };
+    // The auto shape needs no pin: leaving it unset lets it follow the window again
+    if (same(hit, auto)) delete shapes[countKey(n, hasMain)];
+    else shapes[countKey(n, hasMain)] = { counts: hit.counts, ...(hit.cols ? { cols: true } : {}) };
+    return { ...x, ids: move(x.ids), shapes };
   });
 }
 
