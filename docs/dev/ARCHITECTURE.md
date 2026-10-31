@@ -483,8 +483,9 @@ cwd 以外改的文件（Bash 写 `~/.zshrc`、隔壁项目）管不到；同一
 - 快捷键按 `KeyboardEvent.code` 认，不按 `key`：中文输入法开着时 key 是 "Process"。进前缀时
   还会让输入框失焦（不然第二个键先进输入法组字，preventDefault 都拦不住），做完动作再还回来。
 - 输入框里回车要挡输入法（`isComposing` / `keyCode 229`）：中文选词就是按回车。
-- 插件在前端跑：服务端用 esbuild（Go 版，不需要 node）编成 ESM，前端用 Blob URL `import()`。
-  CSP 因此放行 `blob:` 脚本。插件钩子全部 try/catch，出错只记在插件名下。
+- Add-ons run in the page: the backend bundles them with esbuild (the Go one, no node) into ESM, the page `import()`s
+  them from a Blob URL, so the CSP allows `blob:` scripts. Every add-on hook is wrapped in try/catch; errors are kept
+  under the add-on's name. Folders, manifest, stores: docs/dev/ADDONS.md.
 - A session summary carries its slash commands as `commandsKey`, not the list (hub/commands.go cmdSets): a list is
   ~60 KB, every session of an agent shares one of a few, and summaries go out with the whole session list on load and
   on every streamed chunk. Inline, 181 sessions made /api/hello 8.7 MB (3.3 MB gzipped: the copies sit beyond gzip's

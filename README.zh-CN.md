@@ -48,7 +48,7 @@ agent 之间还能互相对话：开新会话、派活、等回复、读回复�
 **DIY 自己的 Gerdr**
 
 - **界面让 agent 改**：整个界面都可以让 agent 改，添加按钮、快捷键、显示内容，直接跟 AI 说就行。无需发版、无需部署，即刻生效；改坏了有改不坏的急救面板。
-- **TS 插件**：改 tab 名、pane 标题，加命令和快捷键。
+- **TS 扩展**：改 tab 名、pane 标题，加命令和快捷键；商店里一键装。
 - **skill / MCP**：用 agent 自己的、gerdr 的，或两者都用。
 
 **在哪用**
@@ -141,7 +141,7 @@ gerdr 是天天用 [herdr](https://github.com/herdrdev/herdr) 用出来的：分
 | 普通 shell | 每个 pane 都是 | 终端 pane，和会话并排 |
 | agent 指挥 agent | `herdr agent …` 命令 + socket 接口 | `gerdr session …` 命令 + 内置 skill |
 | 远程 | 存好的 SSH 机器放在一个窗口里 | 中继（端到端 TLS）、配对码、passkey；安卓局域网直连 |
-| 定制 | 插件 | TS 插件，整个界面也是能热更新的源码 |
+| 定制 | 插件 | TS 扩展（带商店），整个界面也是能热更新的源码 |
 | 体量 | 一个二进制，没有 Electron | 一个 Go 二进制；桌面 App 多一层 Electron |
 
 **用 herdr**：常待在终端里、要走 SSH，或者要用的 agent gerdr 没有适配。
@@ -157,17 +157,23 @@ agent 的 TUI 加个新选项、改个交互，原来发的按键可能就完全
 gerdr 换了条路：不经过终端，直接用 agent 的结构化接口说话，界面自己画。审批、提问、回退都是接口调用，
 agent 升级了也不会因为屏幕长得不一样就坏。
 
-## 插件
+## 扩展
 
-插件目录 `~/.gerdr/plugins/`，一个 `.ts` 文件一个插件，保存即生效（不用装 node，gerdr 自己编译）。
-自带的：
+扩展放在 `~/.gerdr/addons/`，一个文件夹一个，保存即生效（不用装 node，gerdr 自己编译）。「设置 → 扩展」里能看到装了哪些、
+开关它们，还有一个**商店**页：商店就是一个 GitHub 仓库，里面每个带 `addon.json` 的文件夹是一个扩展；离线浏览、手动刷新、
+点一下安装。默认商店是 [gerdr-dev/gerdr-addon](https://github.com/gerdr-dev/gerdr-addon)（`prefix+a` 复制 tab、
+看不见的会话跑完了弹通知……），也能加任意 `owner/repo`。
 
-- `duplicate-tab.ts` —— `prefix+a` / `prefix+i` 复制当前 tab 到后面 / 前面；
-- `_notify-when-done.ts` —— 示例，默认关（文件名以 `_` 开头的不加载）。
+```
+~/.gerdr/addons/hello/
+  addon.json   {"name": "Hello", "version": "1.0.0", "description": "…", "icon": "icon.png"}（可选）
+  index.ts     代码，可以 import 同文件夹里的别的文件
+  icon.png     随扩展带的文件：g.asset("icon.png") 就是它的地址
+```
 
 ```ts
-/// <reference path="./gerdr.d.ts" />
-export default definePlugin({
+/// <reference path="../gerdr.d.ts" />
+export default defineAddon({
   setup(g) {
     g.paneTitle((pane, { label }) => `🤖 ${label}`);
     g.command({ id: "hello", title: "Say hello", key: "prefix+y", run: () => g.notify("hello") });
@@ -175,10 +181,10 @@ export default definePlugin({
 });
 ```
 
-插件也可以是一个带 `plugin.json` 的目录，声明一个**后台进程**：gerdr 后端负责起、挂了重启、插件删了停掉。
-它从 stdin 一行一个 JSON 收到开着的会话，也能和插件的界面那一半（`g.service`）互发消息 —— 比如一直连着蓝牙手环、把 agent 状态推上去。
+`addon.json` 还可以声明一个**后台进程**：gerdr 后端负责起、挂了重启、扩展删了或关了就停掉。
+它从 stdin 一行一个 JSON 收到开着的会话，也能和扩展的界面那一半（`g.service`）互发消息 —— 比如一直连着蓝牙手环、把 agent 状态推上去。
 
-完整 API（含后台进程的协议）在插件目录的 `gerdr.d.ts` 里。
+完整 API（含后台进程的协议）在扩展目录的 `gerdr.d.ts` 里。（以前叫插件；原来的 `~/.gerdr/plugins` 会自动搬到 `~/.gerdr/addons`。）
 
 ## 配置
 
@@ -188,7 +194,7 @@ export default definePlugin({
 |---|---|---|
 | `GERDR_PORT` | `7870` | 监听端口（被占了会自动换一个） |
 | `GERDR_HOST` | `127.0.0.1` | 监听地址 |
-| `GERDR_DIR` | `~/.gerdr` | 数据目录（会话、布局、插件） |
+| `GERDR_DIR` | `~/.gerdr` | 数据目录（会话、布局、扩展） |
 | `GERDR_TOKEN` | 自动生成 | 登录令牌，存在 `~/.gerdr/token` |
 | `GERDR_CLAUDE_IDLE_MINUTES` | `15` | Claude 会话闲多久就收掉它的进程（下次说话自动接回）；`0` = 不收 |
 | `GERDR_UI` | `~/.gerdr/ui` | 界面源码目录（比如单独克隆的 gerdr-ui 仓库） |

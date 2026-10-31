@@ -1,6 +1,6 @@
 //go:build !windows
 
-package plugins
+package addons
 
 import (
 	"encoding/json"
@@ -22,7 +22,7 @@ while IFS= read -r line; do
   printf '{"type":"message","data":%s}\n' "$line"
   case "$line" in *crash*) exit 3;; esac
 done
-touch exited # cwd: the plugin dir, which moves along when it is renamed
+touch exited # cwd: the add-on folder
 `
 
 type recorder struct {
@@ -64,24 +64,24 @@ func waitFor(t *testing.T, what string, ok func() bool) {
 
 func TestService(t *testing.T) {
 	dir := t.TempDir()
-	pdir := filepath.Join(dir, "band")
+	pdir := filepath.Join(dir, "addons", "band")
 	_ = os.MkdirAll(pdir, 0o755)
 	if err := os.WriteFile(filepath.Join(pdir, "svc.sh"), []byte(echoService), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(pdir, "plugin.json"), []byte(`{"service":{"command":"./svc.sh"}}`), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(pdir, "addon.json"), []byte(`{"service":{"command":"./svc.sh"}}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	m := New(dir, slog.Default())
-	// A service-only plugin is listed, with nothing to build and no error
+	// A service-only add-on is listed, with nothing to build and no error
 	list := m.List()
 	if len(list) != 1 || list[0].ID != "band" || list[0].Error != "" || list[0].Code != "" {
 		t.Fatalf("list = %+v", list)
 	}
 
 	rec := &recorder{}
-	s := NewServices(m, filepath.Join(dir, "gerdr"), slog.Default())
-	s.Greeting = func(id string) [][]byte { return [][]byte{[]byte(`{"type":"hello","plugin":"` + id + `"}`)} }
+	s := NewServices(m, slog.Default())
+	s.Greeting = func(id string) [][]byte { return [][]byte{[]byte(`{"type":"hello","addon":"` + id + `"}`)} }
 	s.OnMessage = func(id string, data json.RawMessage) {
 		rec.mu.Lock()
 		rec.msgs = append(rec.msgs, id+":"+string(data))
@@ -95,7 +95,7 @@ func TestService(t *testing.T) {
 	s.Sync()
 	defer s.Close()
 
-	rec.waitMsg(t, `band:{"type":"hello","plugin":"band"}`) // greeting reached stdin
+	rec.waitMsg(t, `band:{"type":"hello","addon":"band"}`) // greeting reached stdin
 	waitFor(t, "status text", func() bool { st := s.Status("band"); return st != nil && st.Text == "up" && st.State == "running" })
 	if err := s.Send("band", []byte(`{"type":"message","data":{"n":1}}`)); err != nil {
 		t.Fatal(err)
@@ -112,45 +112,45 @@ func TestService(t *testing.T) {
 	}
 	rec.waitMsg(t, `"again"`)
 
-	// Disabled (renamed to _band): stopped politely — stdin closed, the script exits on its own
-	if err := os.Rename(pdir, filepath.Join(dir, "_band")); err != nil {
+	// Switched off: stopped politely — stdin closed, the script exits on its own
+	if err := m.SetEnabled("band", false); err != nil {
 		t.Fatal(err)
 	}
 	s.Sync()
 	if s.Status("band") != nil {
 		t.Fatal("still has a service")
 	}
-	if _, err := os.Stat(filepath.Join(dir, "_band", "exited")); err != nil {
+	if _, err := os.Stat(filepath.Join(pdir, "exited")); err != nil {
 		t.Fatal("service was not given the chance to exit on its own")
 	}
 	if err := s.Send("band", []byte(`{}`)); err == nil {
 		t.Fatal("send to a removed service succeeded")
 	}
-	if b, _ := os.ReadFile(filepath.Join(dir, "gerdr", "logs", "plugins", "band.log")); !strings.Contains(string(b), "start") {
+	if b, _ := os.ReadFile(filepath.Join(dir, "logs", "addons", "band.log")); !strings.Contains(string(b), "start") {
 		t.Fatalf("log = %q", b)
 	}
 }
 
 func TestServiceBadManifest(t *testing.T) {
 	dir := t.TempDir()
-	pdir := filepath.Join(dir, "x")
+	pdir := filepath.Join(dir, "addons", "x")
 	_ = os.MkdirAll(pdir, 0o755)
-	_ = os.WriteFile(filepath.Join(pdir, "plugin.json"), []byte(`{"service":{}}`), 0o644)
+	_ = os.WriteFile(filepath.Join(pdir, "addon.json"), []byte(`{"service":{}}`), 0o644)
 	m := New(dir, slog.Default())
 	if l := m.List(); len(l) != 1 || !strings.Contains(l[0].Error, "command") {
 		t.Fatalf("list = %+v", l)
 	}
 	if len(m.services()) != 0 {
-		t.Fatal("broken plugin.json started a service")
+		t.Fatal("broken addon.json started a service")
 	}
 }
 
 func TestServiceCommandNotFound(t *testing.T) {
 	dir := t.TempDir()
-	pdir := filepath.Join(dir, "x")
+	pdir := filepath.Join(dir, "addons", "x")
 	_ = os.MkdirAll(pdir, 0o755)
-	_ = os.WriteFile(filepath.Join(pdir, "plugin.json"), []byte(`{"service":{"command":"no-such-cmd-gerdr"}}`), 0o644)
-	s := NewServices(New(dir, slog.Default()), filepath.Join(dir, "gerdr"), slog.Default())
+	_ = os.WriteFile(filepath.Join(pdir, "addon.json"), []byte(`{"service":{"command":"no-such-cmd-gerdr"}}`), 0o644)
+	s := NewServices(New(dir, slog.Default()), slog.Default())
 	s.Sync()
 	defer s.Close()
 	waitFor(t, "error", func() bool {

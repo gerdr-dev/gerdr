@@ -1,7 +1,7 @@
 import type { AppUpdateStatus } from "./native";
 import type { LLMModel, LLMProvider } from "./store";
 import type { AvailableCommand } from "@gerdr/chat/types";
-import type { ContentBlock, ExtSettings, ExtView, Hello, HubEvent, MemoryStore, PluginBuild, SessionSummary, TermInfo } from "./types";
+import type { ContentBlock, ExtSettings, ExtView, Hello, HubEvent, MemoryStore, AddonBuild, AddonStore, SessionSummary, TermInfo } from "./types";
 
 /** 正开着某个会话的别的进程（herdr / 终端里的交互式 claude） */
 export type Holder = { pid: number; name?: string; status?: string; cwd?: string };
@@ -147,8 +147,16 @@ export const api = {
       errors?: string[];
     }>("POST", "/api/import/herdr", { workspaces }),
   hello: () => req<Hello>("GET", "/api/hello"),
-  plugins: () => req<PluginBuild[]>("GET", "/api/plugins"),
-  pluginMessage: (id: string, data: unknown) => req("POST", `/api/plugins/${encodeURIComponent(id)}/message`, { data }),
+  addons: () => req<AddonBuild[]>("GET", "/api/addons"),
+  addonMessage: (id: string, data: unknown) => req("POST", `/api/addons/${encodeURIComponent(id)}/message`, { data }),
+  setAddonEnabled: (id: string, enabled: boolean) => req("PUT", `/api/addons/${encodeURIComponent(id)}/enabled`, { enabled }),
+  uninstallAddon: (id: string) => req("DELETE", `/api/addons/${encodeURIComponent(id)}`),
+  addonStores: () => req<AddonStore[]>("GET", "/api/addon-stores"),
+  addAddonStore: (source: string) => req<{ source: string }>("POST", "/api/addon-stores", { source }),
+  removeAddonStore: (source: string) => req("DELETE", `/api/addon-stores?source=${encodeURIComponent(source)}`),
+  refreshAddonStore: (source: string) => req("POST", "/api/addon-stores/refresh", { source }),
+  /** 409 with code "conflict": the folder isn't from a store, or was changed after installing; force overwrites. */
+  installAddon: (source: string, id: string, force = false) => req("POST", "/api/addon-stores/install", { source, id, force }),
   putLayout: (data: unknown, client: string) => req("PUT", "/api/layout", { data, client }),
   putConfig: (data: unknown, client: string) => req("PUT", "/api/config", { data, client }),
   // Gerdr Agent 的模型设置：拉服务商的模型列表、拿一个模型试说一句（服务商参数是页面上的草稿，不用先保存）

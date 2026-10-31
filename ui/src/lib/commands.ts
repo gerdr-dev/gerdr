@@ -1,8 +1,8 @@
-// 命令面板里的命令 = 内置动作（同快捷键那张表）+ 插件注册的。
-// 按键分发也在这里：前缀状态机、插件命令的键、直接组合键。
+// Commands in the palette = built-in actions (the shortcut table) + those add-ons register.
+// Key dispatch lives here too: the prefix state machine, add-on commands' keys, direct combos.
 import { runAction } from "./actions";
 import { ACTION_TITLES, DEFAULT_KEYS, isModifierOnly, matches, parseCombo, type KeyAction } from "./keys";
-import { pluginCommands, runCommand } from "./plugins";
+import { addonCommands, runCommand } from "./addons";
 import { get, keyFor, set } from "./store";
 
 export type CommandItem = { id: string; title: string; keys: string[]; source: "builtin" | string };
@@ -12,7 +12,7 @@ export function allCommands(): CommandItem[] {
   const out: CommandItem[] = (Object.keys(ACTION_TITLES) as KeyAction[])
     .filter((a) => !/^tab\d$/.test(a))
     .map((a) => ({ id: a, title: ACTION_TITLES[a], keys: keyFor(cfg, a), source: "builtin" }));
-  for (const c of pluginCommands) out.push({ id: c.id, title: c.title, keys: c.key ? [c.key] : [], source: c.plugin });
+  for (const c of addonCommands) out.push({ id: c.id, title: c.title, keys: c.key ? [c.key] : [], source: c.addon });
   return out;
 }
 
@@ -39,8 +39,8 @@ function bindings(): Binding[] {
       if (combo) out.push({ combo, run: () => runAction(a) });
     }
   }
-  // 插件的键排在后面：和内置的撞了，内置优先（插件想覆盖就让用户在设置里把内置那条改掉）。
-  for (const c of pluginCommands) {
+  // Add-on keys come after: on a clash the built-in wins (to take it over, change the built-in one in Settings).
+  for (const c of addonCommands) {
     if (!c.key) continue;
     const combo = parseCombo(c.key);
     if (combo) out.push({ combo, run: () => void runCommand(c.id) });

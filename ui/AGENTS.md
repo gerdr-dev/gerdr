@@ -58,7 +58,7 @@ src/lib/
   actions.ts       分屏、开会话、切 tab 这些动作
   keys.ts          快捷键
   phone.ts         手机那一档（usePhone，< 768px）、--vvh（软键盘弹起时的可视高度）
-  plugins.ts       TS 插件的运行时（~/.gerdr/plugins 下的插件）
+  addons.ts        the add-on runtime (~/.gerdr/addons); Settings → Add-ons is components/AddonSettings.tsx
 ```
 
 ## 规矩（编译器就是这么认的）

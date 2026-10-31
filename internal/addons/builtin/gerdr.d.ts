@@ -1,56 +1,76 @@
-// gerdr 插件 API。这个文件每次启动都会被 gerdr 覆盖成当前版本 —— 别改它，改你自己的插件。
+// gerdr add-on API. gerdr overwrites this file with the current version on every start: don't edit it, edit your
+// add-on.
 //
-// 一个插件就是插件目录（~/.gerdr/plugins）里的一个 .ts 文件（或者一个带 index.ts 的子目录），
-// 默认导出 definePlugin({...})。保存即生效，不用重启。文件名以 _ 开头的不加载。
+// An add-on is a folder in the add-on directory (~/.gerdr/addons/<id>/):
 //
-// 插件在界面里跑（和页面同一个环境），能改的是界面上的东西：tab / pane / 工作空间的显示名、
-// 加命令和快捷键、听会话事件、弹通知。
+//   addon.json   optional: {"name": "…", "version": "1.0.0", "description": "…", "icon": "icon.png",
+//                           "main": "index.ts", "service": {…}}
+//   index.ts     the UI half (or what "main" names): export default defineAddon({...}). It may import other files of
+//                the folder; images, sounds and other files it ships are reached with g.asset("icon.png").
 //
-// Services. A UI plugin runs in every open window (the App, a remote browser, the phone) and in none while no window
-// is open. Work that must keep running and exist exactly once — holding a Bluetooth wristband, which accepts one
-// connection at a time — goes in a service: a directory plugin's plugin.json names a process, and gerdr's backend
-// starts it, restarts it when it dies, and stops it when the plugin is removed or renamed to _…:
+// Saving takes effect at once, no restart. A folder whose name starts with _ isn't loaded; Settings → Add-ons
+// switches one off without renaming it. Add-ons from a store (Settings → Add-ons → Store) are folders like any other;
+// editing one is fine, but the next update from the store asks before overwriting it.
 //
-//   ~/.gerdr/plugins/band/plugin.json   {"service": {"command": "wristkit", "args": ["gerdr"], "env": {"K": "V"}}}
-//   ~/.gerdr/plugins/band/index.ts      (optional) the UI half, talks to the process through g.service
+// The UI half runs in the UI (the same page), and changes UI things: the names of tabs / panes / workspaces, commands
+// and keys, session events, notifications.
 //
-// command: a name on PATH (the login shell's, like agents get), an absolute path, or "./bin/x" relative to the plugin.
-// The process runs in the plugin's directory, with GERDR_PLUGIN (the plugin's name), GERDR_PLUGIN_DIR and
-// GERDR_PLUGIN_DATA set and the gerdr command on PATH. Keep files in GERDR_PLUGIN_DATA, not the plugin directory:
-// any change there counts as editing the plugin and reloads plugins in every open window. It talks to gerdr in JSON lines over stdin / stdout:
+// Services. A UI half runs in every open window (the App, a remote browser, the phone) and in none while no window is
+// open. Work that must keep running and exist exactly once — holding a Bluetooth wristband, which accepts one
+// connection at a time — goes in a service: addon.json names a process, and gerdr's backend starts it, restarts it
+// when it dies, and stops it when the add-on is removed or switched off:
+//
+//   ~/.gerdr/addons/band/addon.json   {"service": {"command": "wristkit", "args": ["gerdr"], "env": {"K": "V"}}}
+//   ~/.gerdr/addons/band/index.ts     (optional) the UI half, talks to the process through g.service
+//
+// command: a name on PATH (the login shell's, like agents get), an absolute path, or "./bin/x" relative to the add-on.
+// The process runs in the add-on's folder, with GERDR_ADDON (its id), GERDR_ADDON_DIR and GERDR_ADDON_DATA set and the
+// gerdr command on PATH. Keep files in GERDR_ADDON_DATA, not the add-on's folder: any change there counts as editing
+// the add-on and reloads add-ons in every open window, and an update from a store replaces the folder. It talks to
+// gerdr in JSON lines over stdin / stdout:
 //
 //   gerdr → process (stdin)
-//     {"type":"hello","version":"…","plugin":"band"}     first line of every start
+//     {"type":"hello","version":"…","addon":"band"}      first line of every start
 //     {"type":"sessions","sessions":[ServiceSession…]}   the sessions open in the UI: once after hello, then only when
 //                                                         a field changes (a turn streaming tokens is not a change)
 //     {"type":"message","data":…}                        sent by the UI half, g.service.send(data)
 //   process → gerdr (stdout)
-//     {"type":"status","text":"band connected"}          shown under the plugin in Settings → Plugins
+//     {"type":"status","text":"band connected"}          shown under the add-on in Settings → Add-ons
 //     {"type":"message","data":…}                        to g.service.on("message") in every open window
 //
-// Other stdout lines go to gerdr's log; stderr goes to ~/.gerdr/logs/plugins/<plugin>.log.
-// stdin closing means gerdr is stopping it (quitting, plugin removed): clean up (let go of the device) and exit.
+// Other stdout lines go to gerdr's log; stderr goes to ~/.gerdr/logs/addons/<id>.log.
+// stdin closing means gerdr is stopping it (quitting, add-on removed): clean up (let go of the device) and exit.
 // gerdr waits 3 seconds, then kills the process group. A process that exits is restarted after 1s, backing off to 1min.
 
 export {};
 
 declare global {
-  function definePlugin(plugin: GerdrPlugin): GerdrPlugin;
+  function defineAddon(addon: GerdrAddon): GerdrAddon;
+  /** @deprecated the old name, from when add-ons were plugins: use defineAddon. */
+  function definePlugin(addon: GerdrAddon): GerdrAddon;
 
-  interface GerdrPlugin {
+  interface GerdrAddon {
     name?: string;
-    /** 返回一个函数的话，插件被卸载（文件改了 / 删了）时会调它做清理。 */
+    /** Return a function to clean up when the add-on is unloaded (edited, removed, switched off). */
     setup(g: Gerdr): void | (() => void);
   }
 
-  /** 取消注册。 */
+  /** Undoes a registration. */
   type Dispose = () => void;
 
   interface Gerdr {
+    /** gerdr's version. */
     readonly version: string;
+    /** This add-on's id: its folder name. */
+    readonly id: string;
+    /**
+     * A URL for a file of this add-on's folder, for an <img src>, an Audio, a fetch():
+     * g.asset("icon.png"), g.asset("sounds/done.wav"). Changes when the add-on is reloaded, so a new version shows.
+     */
+    asset(path: string): string;
 
     /**
-     * 改 tab 在标签栏上显示的名字。多个插件按文件名顺序串起来：ctx.label 是前面的插件
+     * 改 tab 在标签栏上显示的名字。多个扩展按文件夹名顺序串起来：ctx.label 是前面的扩展
      * （或默认规则）给出的名字。返回 undefined 表示不改。tab.name 是用户起的原名。
      */
     tabLabel(fn: (tab: TabInfo, ctx: { index: number; workspace: WorkspaceInfo; label: string }) => string | void): Dispose;
@@ -63,7 +83,7 @@ declare global {
      * 给会话起标题（侧栏、pane 顶上那个）。每一轮结束时调；返回字符串就用它，返回 undefined 不改。
      *
      * 不注册的话 gerdr 自己起：每段上下文（两次 /clear 之间）的第 1 句和第 3 句话那一轮结束时，拿这段里说过的话
-     * 让模型起一个。插件给出过名字后，这段上下文里默认的就不再动它（/clear 之后重新算）；人改过名的会话不会调到这里。
+     * 让模型起一个。扩展给出过名字后，这段上下文里默认的就不再动它（/clear 之后重新算）；人改过名的会话不会调到这里。
      */
     sessionTitle(fn: (session: SessionInfo, ctx: SessionTitleContext) => string | void | Promise<string | void>): Dispose;
 
@@ -84,7 +104,7 @@ declare global {
     /** 当前界面状态的只读快照。 */
     state(): StateSnapshot;
 
-    /** This plugin's own service (plugin.json, see the top of this file). Without one, status() is undefined and send rejects. */
+    /** This add-on's own service (addon.json, see the top of this file). Without one, status() is undefined and send rejects. */
     service: {
       status(): ServiceStatus | undefined;
       /** Writes {"type":"message","data":data} to the process's stdin. Rejects when it isn't running. */
@@ -107,7 +127,7 @@ declare global {
       runCommand(id: string): Promise<void>;
     };
 
-    /** 插件自己的小存储（存在这个浏览器 / App 里）。 */
+    /** The add-on's own small storage (kept in this browser / App). */
     storage: {
       get<T = unknown>(key: string): T | undefined;
       set(key: string, value: unknown): void;
@@ -115,7 +135,7 @@ declare global {
   }
 
   interface ServiceStatus {
-    /** exited: died, waiting to be restarted. stopped: the plugin is gone. */
+    /** exited: died, waiting to be restarted. stopped: the add-on is gone or switched off. */
     state: "starting" | "running" | "exited" | "stopped";
     pid?: number;
     /** The process's own status line ({"type":"status"}). */
@@ -142,7 +162,7 @@ declare global {
   }
 
   interface SessionTitleContext {
-    /** 当前标题（多个插件时是前面的插件给出的）。 */
+    /** 当前标题（多个扩展时是前面的扩展给出的）。 */
     title: string;
     /** 这段上下文（最后一次 /clear 之后）用户说过的话，按顺序；斜杠命令不算。 */
     prompts: string[];

@@ -6,7 +6,7 @@ import { closeDialog, keyFor, useStore } from "@/lib/store";
 // The shortcut sheet (prefix+?): the configured keys by group, plugin commands with keys, and the composer's own keys.
 export function KeyHelp({ open }: { open: boolean }) {
   const cfg = useStore((s) => s.config);
-  useStore((s) => s.pluginVersion);
+  useStore((s) => s.addonVersion);
   const plugin = open ? allCommands().filter((c) => c.source !== "builtin" && c.keys.length) : [];
   return (
     <Dialog open={open} onOpenChange={(o) => !o && closeDialog()}>

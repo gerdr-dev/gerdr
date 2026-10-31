@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { addTab, basename, focusPane, selectWorkspace, tabName } from "@/lib/actions";
 import { allLeaves, currentSpace, leaves, spaceOf, spaceWorkspaces, type PaneLeaf } from "@/lib/layout";
 import { isCoarse } from "@/lib/phone";
-import { applyWorkspaceLabel } from "@/lib/plugins";
+import { applyWorkspaceLabel } from "@/lib/addons";
 import { set, useStore } from "@/lib/store";
 import type { SessionSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -58,7 +58,7 @@ export function PaneSwitcher() {
   const layout = useStore((s) => s.layout);
   const sessions = useStore((s) => s.sessions);
   const unread = useStore((s) => s.unread);
-  useStore((s) => s.pluginVersion);
+  useStore((s) => s.addonVersion);
   const close = () => set({ switcher: false });
 
   const [q, setQ] = useState("");

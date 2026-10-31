@@ -38,7 +38,7 @@ Windows 上要出 App 的话，系统 WebView 是 WebView2（Chromium），**mac
   1. **agent 能改界面**：内置的 `gerdr-ui` skill 靠的是「界面是一目录 React 源码、保存即热替换」（`internal/uisite`），
      用户的改动靠 git 三方合并保住（`internal/webui`）。换成编译进二进制的 Go 界面，这一套没了。
   2. **浏览器 / 手机能打开同一份界面**（本机浏览器、远程访问那条路）。原生 UI 只有桌面，网页那份还得留着 —— 两套界面。
-  3. **TS 插件**（`~/.gerdr/plugins`）跑在页面里。
+  3. **TS add-ons** (`~/.gerdr/addons`) run in the page.
   4. **对话里那些现成的东西**：Markdown（含表格、代码高亮）、diff、跨消息选中复制、长列表虚拟化。原生 UI 里，
      流式长 Markdown + 自由选字恰恰是最难做好的部分。
 - 另外它还年轻（要求 Go 1.27.3+），桌面 API 和打包在 Electron 那边是十年的积累。

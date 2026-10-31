@@ -8,5 +8,5 @@
     "lib": ["ES2022", "DOM"],
     "types": []
   },
-  "include": ["*.ts", "*/**/*.ts", "gerdr.d.ts"]
+  "include": ["*/**/*.ts", "*/**/*.tsx", "gerdr.d.ts"]
 }

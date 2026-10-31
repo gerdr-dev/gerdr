@@ -24,7 +24,7 @@ import { CliApprove } from "./components/CliApprove";
 import { systemNotify } from "./lib/notify";
 import { watchInbox } from "./lib/inbox";
 import { watchCopyOnSelect } from "./lib/copysel";
-import { reloadPlugins, setTabNameFn } from "./lib/plugins";
+import { reloadAddons, setTabNameFn } from "./lib/addons";
 import { fontSizeOf, get, keyFor, markUnread, set, useStore, visibleSessions } from "./lib/store";
 import { boot } from "./lib/sync";
 import type { SessionSummary } from "./lib/types";
@@ -97,7 +97,7 @@ export default function App() {
 
   useEffect(() => {
     boot().then(() => {
-      reloadPlugins();
+      reloadAddons();
       initAndroid();
     });
     const onKey = (e: KeyboardEvent) => handleKeydown(e);
@@ -108,7 +108,7 @@ export default function App() {
     if (isNative()) document.documentElement.classList.add("native");
     // mac App 的菜单和通知点击走这两个入口。
     (window as any).gerdr = {
-      runCommand: (id: string) => import("./lib/plugins").then((p) => p.runCommand(id)),
+      runCommand: (id: string) => import("./lib/addons").then((p) => p.runCommand(id)),
       focusSession: (id: string) => import("./lib/actions").then((a) => a.focusSession(id)),
       appUpdate: onAppUpdate, // desktop/main.js pushUpdate
     };

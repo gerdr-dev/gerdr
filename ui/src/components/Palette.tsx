@@ -8,7 +8,7 @@ import { AgentIcon, StatusDot, dotStatus } from "./AgentIcon";
 
 // The command palette (prefix+: / ⌘K): commands, then the conversations open in a pane.
 export function Palette({ open }: { open: boolean }) {
-  useStore((s) => s.pluginVersion);
+  useStore((s) => s.addonVersion);
   const sessions = useStore((s) => s.sessions);
   const layout = useStore((s) => s.layout);
   const cmds = open ? allCommands() : [];

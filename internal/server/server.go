@@ -37,7 +37,7 @@ import (
 	"github.com/gerdr-dev/gerdr/internal/doctor"
 	"github.com/gerdr-dev/gerdr/internal/ext"
 	"github.com/gerdr-dev/gerdr/internal/hub"
-	"github.com/gerdr-dev/gerdr/internal/plugins"
+	"github.com/gerdr-dev/gerdr/internal/addons"
 	"github.com/gerdr-dev/gerdr/internal/remote"
 	"github.com/gerdr-dev/gerdr/internal/service"
 	"github.com/gerdr-dev/gerdr/internal/term"
@@ -54,9 +54,9 @@ type Server struct {
 	Config  *config.Store
 	Secrets *config.Secrets // API keys moved out of config.json (config/secrets.go)
 	Layout  *config.Store
-	Plugins *plugins.Manager
-	// PluginSvc runs the plugins' services (plugin.json); RunPluginServices starts it.
-	PluginSvc *plugins.Services
+	Addons *addons.Manager
+	// AddonSvc runs the add-ons' services (addon.json); RunAddonServices starts it.
+	AddonSvc *addons.Services
 	Ext       *ext.Manager
 	// Work：the Work view's local functions (internal/work). nil = off (tests).
 	Work *work.Runner
@@ -98,8 +98,7 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /auth", s.auth)
 	mux.HandleFunc("GET /api/hello", s.hello)
-	mux.HandleFunc("GET /api/plugins", s.plugins)
-	mux.HandleFunc("POST /api/plugins/{id}/message", s.pluginMessage)
+	s.addonRoutes(mux)
 	mux.HandleFunc("GET /api/config", func(w http.ResponseWriter, r *http.Request) { writeRaw(w, s.Config.Get()) })
 	mux.HandleFunc("PUT /api/config", s.putStore(s.Config, "config"))
 	mux.HandleFunc("GET /api/layout", func(w http.ResponseWriter, r *http.Request) { writeRaw(w, s.Layout.Get()) })
@@ -492,25 +491,9 @@ func (s *Server) hello(w http.ResponseWriter, r *http.Request) {
 		"layout":      s.Layout.Get(),
 		"config":      s.Config.Get(),
 		"home":        home,
-		"pluginsDir":  s.Plugins.Dir(),
+		"addonsDir":   s.Addons.Dir(),
 		"remoteConns": s.remoteConns.list(),
 	})
-}
-
-func (s *Server) plugins(w http.ResponseWriter, r *http.Request) {
-	type view struct {
-		*plugins.Plugin
-		Service *plugins.ServiceStatus `json:"service,omitempty"`
-	}
-	out := []view{}
-	for _, p := range s.Plugins.List() {
-		v := view{Plugin: p}
-		if s.PluginSvc != nil {
-			v.Service = s.PluginSvc.Status(p.ID)
-		}
-		out = append(out, v)
-	}
-	writeJSON(w, out)
 }
 
 func (s *Server) putStore(st *config.Store, name string) http.HandlerFunc {

@@ -35,7 +35,7 @@ import {
   toggleZoom,
 } from "@/lib/actions";
 import { leaves, phoneRoot, setRatio, updateTab, type PaneLeaf, type PaneNode, type PaneSplit, type Tab } from "@/lib/layout";
-import { applyPaneTitle } from "@/lib/plugins";
+import { applyPaneTitle } from "@/lib/addons";
 import { get, markRead, set, setLayout, useStore } from "@/lib/store";
 import { addTiles, MAX_TILES, overviewIds, removeTile } from "@/lib/overview";
 import { usePhone } from "@/lib/phone";
@@ -313,7 +313,7 @@ function TermPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; ta
   const focused = useContext(TabActive) && tab.focus === pane.id;
   const many = framed || zoomed;
   const [osc, setOsc] = useState("");
-  useStore((s) => s.pluginVersion);
+  useStore((s) => s.addonVersion);
   const title = applyPaneTitle(pane, tab, osc || basename(cwd));
   const drag = usePaneDrag(pane.id, { label: title, term: true });
   return (
@@ -402,7 +402,7 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
   const starting = useStore((s) => !!s.starting[pane.id]);
   const inTodo = useStore((s) => !!pane.sessionId && overviewIds(s.overview, s.layout, s.sessions, s.config).includes(pane.sessionId));
   const agents = useStore((s) => s.agents);
-  useStore((s) => s.pluginVersion);
+  useStore((s) => s.addonVersion);
   const focused = useContext(TabActive) && tab.focus === pane.id;
   const many = framed || zoomed;
 

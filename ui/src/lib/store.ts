@@ -154,7 +154,7 @@ type State = {
   /** The desktop App's update status (desktop/main.js updateStatus); null in a browser / before the shell answered. */
   appUpdate: AppUpdateStatus | null;
   home: string;
-  pluginsDir: string;
+  addonsDir: string;
   agents: AgentInfo[];
   /** 正在连着的远程界面：设置里「远程访问」tab 上的红点和「正在连接」列表。 */
   remoteConns: RemoteConn[];
@@ -200,7 +200,10 @@ type State = {
    * out in any other session or agent. Memory only, like drafts.
    */
   stash: { text: string; imgs: State["draftImgs"][string] } | null;
-  pluginVersion: number;
+  /** Bumped when add-ons load / unload or their state changes: what reads them re-renders. */
+  addonVersion: number;
+  /** Bumped on "addon_stores": the store tab fetches again. */
+  addonStoresVersion: number;
   /** 正在直接开会话的 pane（⌘D 复制）：开好之前别画空面板（挑 agent 那一屏闪一下再变成对话，用户不想看见）。不存盘。 */
   starting: Record<string, true>;
 };
@@ -290,7 +293,7 @@ export const useStore = create<State>(() => ({
   installedAt: 0,
   appUpdate: null,
   home: "",
-  pluginsDir: "",
+  addonsDir: "",
   agents: [],
   remoteConns: [],
   doctor: null,
@@ -313,7 +316,8 @@ export const useStore = create<State>(() => ({
   draftImgs: {},
   sharedDrafts: {},
   stash: null,
-  pluginVersion: 0,
+  addonVersion: 0,
+  addonStoresVersion: 0,
   starting: {},
 }));
 

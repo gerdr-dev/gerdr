@@ -34,8 +34,8 @@ export function workProjectOf(sessionId: string): string | undefined {
   if (!cwd) return undefined;
   const known = Object.keys(dirs).find((p) => dirs[p] === cwd);
   if (known) return known;
-  const root = getApp().pluginsDir.replace(/\/plugins\/?$/, ""); // <GERDR_DIR>/plugins
-  if (!root || root === getApp().pluginsDir) return undefined;
+  const root = getApp().addonsDir.replace(/\/addons\/?$/, ""); // <GERDR_DIR>/addons
+  if (!root || root === getApp().addonsDir) return undefined;
   if (cwd === root + "/work" || cwd.startsWith(root + "/work/")) return "default";
   const m = cwd.slice(root.length).match(/^\/projects\/([^/]+)\/work(\/|$)/);
   return m ? m[1] : undefined;

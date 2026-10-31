@@ -54,16 +54,49 @@ export type Hello = {
   layout: any;
   config: any;
   home: string;
-  pluginsDir: string;
+  addonsDir: string;
   remoteConns?: RemoteConn[];
 };
 
 /** 正在连着的远程界面（一条远程 /ws 一条；internal/server/remoteconns.go）。since 是 unix 毫秒。 */
 export type RemoteConn = { id: number; device: string; label: string; ip: string; client: string; since: number };
 
-export type PluginBuild = { id: string; path: string; code?: string; error?: string; hash: string; mtime: number; service?: PluginService };
-/** A plugin's backend process (plugin.json "service"; internal/plugins/service.go). */
-export type PluginService = {
+/** An installed add-on (internal/addons Addon): its manifest, where it came from, and its UI half built. */
+export type AddonBuild = {
+  id: string;
+  dir: string;
+  path?: string;
+  name: string;
+  version?: string;
+  description?: string;
+  icon?: string;
+  hasService?: boolean;
+  disabled?: boolean;
+  /** Installed from a store; modified: its files changed since (an update asks before overwriting). */
+  source?: { store: string; version?: string; hash: string; at: number };
+  modified?: boolean;
+  code?: string;
+  error?: string;
+  hash: string;
+  mtime: number;
+  service?: AddonService;
+};
+/** One add-on a store offers (internal/addons StoreAddon). */
+export type StoreAddon = {
+  id: string;
+  path: string;
+  name: string;
+  version?: string;
+  description?: string;
+  icon?: string;
+  readme?: string;
+  hasService?: boolean;
+  hash: string;
+};
+/** A store (internal/addons StoreView): a GitHub repository, or a local folder while writing one. */
+export type AddonStore = { source: string; local?: boolean; default?: boolean; fetchedAt?: number; error?: string; addons: StoreAddon[] };
+/** An add-on's backend process (addon.json "service"; internal/addons/service.go). */
+export type AddonService = {
   state: "starting" | "running" | "exited" | "stopped";
   pid?: number;
   text?: string;

@@ -3,16 +3,15 @@ package server
 import (
 	"context"
 	"encoding/json"
-	"net/http"
 	"sync"
 	"time"
 
 	"github.com/gerdr-dev/gerdr/internal/hub"
-	"github.com/gerdr-dev/gerdr/internal/plugins"
+	"github.com/gerdr-dev/gerdr/internal/addons"
 	"github.com/gerdr-dev/gerdr/internal/version"
 )
 
-// The bridge between the hub and plugin services (plugins/service.go): what the sessions are doing, sent to every
+// The bridge between the hub and add-on services (addons/service.go): what the sessions are doing, sent to every
 // service's stdin.
 //
 // Only when it changes, and only the fields worth reacting to. The hub broadcasts a session on every token of a
@@ -33,7 +32,7 @@ type svcSession struct {
 	Since int64 `json:"since"`
 }
 
-type pluginBridge struct {
+type addonBridge struct {
 	s *Server
 
 	mu    sync.Mutex
@@ -46,7 +45,7 @@ type svcSince struct {
 	at     int64
 }
 
-func (b *pluginBridge) sessions() []svcSession {
+func (b *addonBridge) sessions() []svcSession {
 	spaces := SessionSpaces(b.s.Layout.Get())
 	out := []svcSession{}
 	seen := map[string]bool{}
@@ -79,7 +78,7 @@ func (b *pluginBridge) sessions() []svcSession {
 }
 
 // line: the current sessions line. Called from the greeting (service goroutines) and the pump.
-func (b *pluginBridge) line() []byte {
+func (b *addonBridge) line() []byte {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	l, _ := json.Marshal(map[string]any{"type": "sessions", "sessions": b.sessions()})
@@ -87,7 +86,7 @@ func (b *pluginBridge) line() []byte {
 }
 
 // changed: the current line, and whether it differs from what was broadcast last.
-func (b *pluginBridge) changed() ([]byte, bool) {
+func (b *addonBridge) changed() ([]byte, bool) {
 	l := b.line()
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -98,20 +97,20 @@ func (b *pluginBridge) changed() ([]byte, bool) {
 	return l, true
 }
 
-// RunPluginServices wires s.PluginSvc to the hub and the UI, starts the services, and keeps their session list
+// RunAddonServices wires s.AddonSvc to the hub and the UI, starts the services, and keeps their session list
 // current until ctx ends. Call once the HTTP server is listening (a service may run `gerdr session …` right away).
-func (s *Server) RunPluginServices(ctx context.Context) {
-	ps := s.PluginSvc
-	b := &pluginBridge{s: s, since: map[string]svcSince{}}
+func (s *Server) RunAddonServices(ctx context.Context) {
+	ps := s.AddonSvc
+	b := &addonBridge{s: s, since: map[string]svcSince{}}
 	ps.Greeting = func(id string) [][]byte {
-		hello, _ := json.Marshal(map[string]any{"type": "hello", "version": version.Version, "plugin": id})
+		hello, _ := json.Marshal(map[string]any{"type": "hello", "version": version.Version, "addon": id})
 		return [][]byte{hello, b.line()}
 	}
-	ps.OnStatus = func(id string, st plugins.ServiceStatus) {
-		s.Hub.Broadcast("plugin_service", map[string]any{"id": id, "service": st})
+	ps.OnStatus = func(id string, st addons.ServiceStatus) {
+		s.Hub.Broadcast("addon_service", map[string]any{"id": id, "service": st})
 	}
 	ps.OnMessage = func(id string, data json.RawMessage) {
-		s.Hub.Broadcast("plugin_message", map[string]any{"id": id, "data": data})
+		s.Hub.Broadcast("addon_message", map[string]any{"id": id, "data": data})
 	}
 	ps.Sync()
 	go func() {
@@ -152,21 +151,3 @@ func pumpSessions(ctx context.Context, sub *hub.Sub, flush func()) {
 	}
 }
 
-func (s *Server) pluginMessage(w http.ResponseWriter, r *http.Request) {
-	var b struct {
-		Data json.RawMessage `json:"data"`
-	}
-	if err := decode(r, &b); err != nil {
-		httpError(w, 400, err.Error())
-		return
-	}
-	if len(b.Data) == 0 {
-		b.Data = json.RawMessage("null")
-	}
-	line, _ := json.Marshal(map[string]any{"type": "message", "data": b.Data})
-	if err := s.PluginSvc.Send(r.PathValue("id"), line); err != nil {
-		httpError(w, http.StatusConflict, err.Error())
-		return
-	}
-	writeJSON(w, map[string]any{"ok": true})
-}

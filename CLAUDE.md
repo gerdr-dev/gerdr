@@ -33,5 +33,6 @@ Claude Code / Codex 的图形界面：Go 后端（ACP 适配器 + hub + HTTP/WS�
   `gerdr ui sync` 会一起更新清单（不然下次升级会把它当成被人改过），那边被人改过时也会拒绝覆盖。
 - 界面怎么写（能 import 什么、样式、目录）在 ui/AGENTS.md；那份也是给用户的 agent 看的（内置的 gerdr-ui skill 让它先读）。
 - 内置 skill 在 internal/ext/builtin/，会随二进制发给每个 agent：改 `gerdr session` / `gerdr ui` 的命令行时同步改它们。
-- 内置插件（internal/plugins/builtin）和界面的插件 API（ui/src/lib/plugins.ts）要和 `gerdr.d.ts` 一致。
+- Add-ons (`internal/addons`, `ui/src/lib/addons.ts`, Settings → Add-ons): docs/dev/ADDONS.md. The UI's add-on API
+  must match `internal/addons/builtin/gerdr.d.ts`; the add-ons themselves live in the gerdr-dev/gerdr-addon repo.
 - 界面组件里不写具体颜色，用 index.css 里的 token（bg / muted / brand / ok / warn / bad…）。

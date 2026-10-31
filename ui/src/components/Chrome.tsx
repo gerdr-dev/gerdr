@@ -68,7 +68,7 @@ import {
   type Tab,
   type Workspace,
 } from "@/lib/layout";
-import { applyTabLabel, applyWorkspaceLabel } from "@/lib/plugins";
+import { applyTabLabel, applyWorkspaceLabel } from "@/lib/addons";
 import { ModeSwitch } from "@/components/WorkView";
 import { focusedSession, get, keyFor, markRead, set, setLayout, setSidebarW, SIDEBAR_W, toggleSidebar, useStore } from "@/lib/store";
 import type { SessionSummary } from "@/lib/types";
@@ -152,7 +152,7 @@ export function TabBar() {
   const sidebar = useStore((s) => s.sidebar);
   const prefixActive = useStore((s) => s.prefixActive);
   const prefix = useStore((s) => s.config.prefix);
-  useStore((s) => s.pluginVersion);
+  useStore((s) => s.addonVersion);
   const ws = activeWs(layout);
   const barRef = useRef<HTMLDivElement>(null);
   const { drag, onPointerDown } = useTabDrag(ws, barRef);
@@ -304,7 +304,7 @@ export function PhoneBar() {
   const sessions = useStore((s) => s.sessions);
   const unread = useStore((s) => s.unread);
   const switcher = useStore((s) => s.switcher);
-  useStore((s) => s.pluginVersion);
+  useStore((s) => s.addonVersion);
   const ws = activeWs(layout);
   const wi = spaceWorkspaces(layout).indexOf(ws);
   const ti = ws.tabs.findIndex((t) => t.id === ws.activeTab);
@@ -496,7 +496,7 @@ export function Sidebar({ className }: { className?: string }) {
   const layout = useStore((s) => s.layout);
   const sessions = useStore((s) => s.sessions);
   const unread = useStore((s) => s.unread);
-  useStore((s) => s.pluginVersion);
+  useStore((s) => s.addonVersion);
   const sidebarW = useStore((s) => s.sidebarW);
   const list = spaceWorkspaces(layout); // only the session being shown (herdr-style; switch with SpaceSwitcher)
   const listRef = useRef<HTMLDivElement>(null);

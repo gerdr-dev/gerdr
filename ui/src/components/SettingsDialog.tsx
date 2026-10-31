@@ -1,4 +1,3 @@
-import { Check, FolderOpen } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -6,11 +5,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { isAndroid } from "@/lib/android";
-import { isNative, nativeOpenPath } from "@/lib/native";
-import { pluginStatus } from "@/lib/plugins";
-import type { PluginService } from "@/lib/types";
 import { closeDialog, fontSizeOf, set, setConfig, setFontSize, useStore, type Theme } from "@/lib/store";
 import { cn } from "@/lib/utils";
+import { AddonSettings } from "./AddonSettings";
 import { AgentSettings } from "./AgentSettings";
 import { AndroidSettings } from "./AndroidSettings";
 import { AwakeSetting } from "./AwakeSetting";
@@ -28,14 +25,12 @@ import { UpdateSetting } from "./UpdateSetting";
 // older code) still land on them.
 const AGENT_SECTIONS = ["roles", "skills", "mcp", "memory"];
 
-// Settings (prefix+s / ⌘,). The general and plugins pages and labs live here; every other page is its own component file.
+// Settings (prefix+s / ⌘,). The general page and labs live here; every other page is its own component file.
 export function SettingsDialog({ open }: { open: boolean }) {
   const cfg = useStore((s) => s.config);
   const bat = cfg.batteryAlert ?? { on: true, percent: 20 };
   const fontSize = useStore(fontSizeOf);
   const agents = useStore((s) => s.agents);
-  const pluginsDir = useStore((s) => s.pluginsDir);
-  useStore((s) => s.pluginVersion);
   const [tabOpen, setTabOpen] = useState("general");
   const [agentTab, setAgentTab] = useState("roles");
   const remoteConns = useStore((s) => s.remoteConns.length);
@@ -65,7 +60,7 @@ export function SettingsDialog({ open }: { open: boolean }) {
               <TabsTrigger value="general">通用</TabsTrigger>
               <TabsTrigger value="keys">快捷键</TabsTrigger>
               <TabsTrigger value="agents">Agent</TabsTrigger>
-              <TabsTrigger value="plugins">插件</TabsTrigger>
+              <TabsTrigger value="addons">扩展</TabsTrigger>
               <TabsTrigger value="remote">
                 远程访问
                 {/* 有远程界面连着：数字红点（谁连着、连了多久在 tab 里面） */}
@@ -224,40 +219,8 @@ export function SettingsDialog({ open }: { open: boolean }) {
             <TabsContent value="resources" className="pt-2">
               <ResourceStats open={open && tabOpen === "resources"} />
             </TabsContent>
-            <TabsContent value="plugins" className="space-y-3 pt-2">
-              <div className="flex items-start justify-between gap-4">
-                <div className="text-[13px]">
-                  插件放在 <code className="rounded-sm bg-muted px-1 font-mono text-[12px]">{pluginsDir}</code>，一个 .ts 文件一个，保存即生效。API 见同目录的{" "}
-                  <code className="font-mono text-[12px]">gerdr.d.ts</code>。
-                </div>
-                {/* 只有 App 里能开本机目录；浏览器里（可能是远程连进来的）开不了，就不放这个按钮 */}
-                {isNative() && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="shrink-0"
-                    disabled={!pluginsDir}
-                    title={pluginsDir}
-                    onClick={() => nativeOpenPath(pluginsDir, undefined, false)}
-                  >
-                    <FolderOpen className="size-3.5" /> 打开目录
-                  </Button>
-                )}
-              </div>
-              <div className="divide-y rounded-md border">
-                {pluginStatus.length === 0 && <div className="p-3 text-[13px] text-muted-foreground">没有插件</div>}
-                {pluginStatus.map((p) => (
-                  <div key={p.id} className="p-3">
-                    <div className="flex items-center gap-2 text-[13px]">
-                      {p.loaded ? <Check className="size-3.5 text-ok" /> : <span className="size-2 rounded-full bg-bad" />}
-                      <span className="shrink-0 font-medium">{p.id}</span>
-                      <span className="truncate font-mono text-[11px] text-muted-foreground">{p.path}</span>
-                    </div>
-                    {p.service && <PluginServiceLine s={p.service} />}
-                    {p.error && <pre className="mt-1.5 whitespace-pre-wrap rounded-sm bg-bad/10 p-2 font-mono text-[11px] text-bad">{p.error}</pre>}
-                  </div>
-                ))}
-              </div>
+            <TabsContent value="addons" className="pt-2">
+              <AddonSettings open={open && tabOpen === "addons"} />
             </TabsContent>
             {/* What an agent is and what it can use: roles, Skill, MCP, memory. Were four top-level pages; one page with
                 sections keeps the top row short enough to read (ten tabs didn't fit, and these four belong together) */}
@@ -351,25 +314,6 @@ function Row({ label, hint, local, children }: { label: string; hint?: string; l
         {hint && <div className="text-[12px] text-muted-foreground">{hint}</div>}
       </div>
       {children}
-    </div>
-  );
-}
-
-// A plugin's backend process (plugin.json): running or not, its own status line, and why it died.
-function PluginServiceLine({ s }: { s: PluginService }) {
-  const label = { starting: "后台进程启动中", running: "后台进程在跑", exited: "后台进程退出了，稍后重启", stopped: "后台进程已停止" }[s.state];
-  return (
-    <div className="mt-1.5 space-y-1 pl-5.5 text-[12px]">
-      <div className="flex items-center gap-1.5">
-        <span className={cn("size-1.5 shrink-0 rounded-full", s.state === "running" ? "bg-ok" : s.state === "exited" ? "bg-bad" : "bg-warn")} />
-        <span className="text-muted-foreground">
-          {label}
-          {s.pid ? `（pid ${s.pid}）` : ""}
-          {s.restarts ? ` · 重启过 ${s.restarts} 次` : ""}
-        </span>
-        {s.text && <span className="truncate">{s.text}</span>}
-      </div>
-      {s.error && <pre className="whitespace-pre-wrap rounded-sm bg-bad/10 p-2 font-mono text-[11px] text-bad">{s.error}</pre>}
     </div>
   );
 }

@@ -1,53 +1,56 @@
-// 插件运行时：服务端用 esbuild 把 ~/.gerdr/plugins 里的 TS 编成 ESM，这里用 Blob URL
-// import 进来，给它一个 Gerdr API 对象（见 internal/plugins/builtin/gerdr.d.ts —— 两边对齐）。
+// Add-on runtime: the backend bundles each add-on in ~/.gerdr/addons with esbuild into ESM, imported here through a
+// Blob URL and handed a Gerdr API object (internal/addons/builtin/gerdr.d.ts — keep the two in step).
 //
-// 插件出错不能把界面拖垮：每个钩子调用都包 try/catch，出错记在插件名下（设置里能看到）。
+// An add-on's mistakes must not take the UI down: every hook call is wrapped in try/catch, and errors are kept under
+// the add-on's name (Settings → Add-ons shows them).
 import { api } from "./api";
 import { activeTab, activeWs, leaves, type Layout, type PaneLeaf, type Tab, type Workspace } from "./layout";
 import { get, set, useStore, visibleSessions } from "./store";
-import type { PluginBuild, PluginService, SessionSummary } from "./types";
+import type { AddonBuild, AddonService, SessionSummary } from "./types";
 
 type TabLabelFn = (tab: any, ctx: any) => string | void;
 type PaneTitleFn = (pane: any, ctx: any) => string | void;
 type WsLabelFn = (ws: any, ctx: any) => string | void;
 type SessionTitleFn = (session: any, ctx: any) => string | void | Promise<string | void>;
-export type PluginCommand = { id: string; title: string; key?: string; run: (ctx: any) => void | Promise<void>; plugin: string };
+export type AddonCommand = { id: string; title: string; key?: string; run: (ctx: any) => void | Promise<void>; addon: string };
 
-type Reg<T> = { plugin: string; fn: T };
+type Reg<T> = { addon: string; fn: T };
 
 const tabLabels: Reg<TabLabelFn>[] = [];
 const paneTitles: Reg<PaneTitleFn>[] = [];
 const wsLabels: Reg<WsLabelFn>[] = [];
 const sessionTitles: Reg<SessionTitleFn>[] = [];
-export const pluginCommands: PluginCommand[] = [];
-const listeners: { plugin: string; event: string; fn: (e: any) => void }[] = [];
-// g.service.on: messages / status changes from a plugin's own backend process
-const serviceListeners: { plugin: string; event: "message" | "status"; fn: (e: any) => void }[] = [];
-const serviceStates = new Map<string, PluginService>();
+export const addonCommands: AddonCommand[] = [];
+const listeners: { addon: string; event: string; fn: (e: any) => void }[] = [];
+// g.service.on: messages / status changes from an add-on's own backend process
+const serviceListeners: { addon: string; event: "message" | "status"; fn: (e: any) => void }[] = [];
+const serviceStates = new Map<string, AddonService>();
 
-export type PluginStatus = { id: string; path: string; error?: string; loaded: boolean; service?: PluginService };
-export let pluginStatus: PluginStatus[] = [];
+/** An installed add-on as the backend lists it, plus whether its UI half loaded in this window. */
+export type AddonStatus = AddonBuild & { loaded: boolean };
+export let addonStatus: AddonStatus[] = [];
 
 const disposers = new Map<string, () => void>();
 
-(globalThis as any).definePlugin = (p: unknown) => p;
+(globalThis as any).defineAddon = (p: unknown) => p;
+(globalThis as any).definePlugin = (p: unknown) => p; // the old name, still in add-ons migrated from plugins
 
 function bump() {
-  set((s) => ({ pluginVersion: s.pluginVersion + 1 }));
+  set((s) => ({ addonVersion: s.addonVersion + 1 }));
 }
 
-function remove<T extends { plugin: string }>(arr: T[], plugin: string) {
-  for (let i = arr.length - 1; i >= 0; i--) if (arr[i].plugin === plugin) arr.splice(i, 1);
+function remove<T extends { addon: string }>(arr: T[], addon: string) {
+  for (let i = arr.length - 1; i >= 0; i--) if (arr[i].addon === addon) arr.splice(i, 1);
 }
 
 function fail(id: string, err: unknown) {
   const msg = err instanceof Error ? `${err.message}` : String(err);
-  console.error(`[gerdr plugin ${id}]`, err);
-  const st = pluginStatus.find((p) => p.id === id);
+  console.error(`[gerdr addon ${id}]`, err);
+  const st = addonStatus.find((p) => p.id === id);
   if (st) st.error = msg;
 }
 
-// ---- 给插件看的只读快照 ----
+// ---- read-only snapshots handed to add-ons ----
 
 function sessionInfo(s?: SessionSummary) {
   if (!s) return undefined;
@@ -97,7 +100,7 @@ export function applyTabLabel(tab: Tab, index: number, ws: Workspace, base: stri
       const v = r.fn(info, { index, workspace: wsi, label });
       if (typeof v === "string") label = v;
     } catch (e) {
-      fail(r.plugin, e);
+      fail(r.addon, e);
     }
   }
   return label;
@@ -113,7 +116,7 @@ export function applyPaneTitle(pane: PaneLeaf, tab: Tab, base: string): string {
       const v = r.fn(info, { label, tab: ti });
       if (typeof v === "string") label = v;
     } catch (e) {
-      fail(r.plugin, e);
+      fail(r.addon, e);
     }
   }
   return label;
@@ -128,7 +131,7 @@ export function applyWorkspaceLabel(ws: Workspace, index: number, base: string):
       const v = r.fn(info, { index, label });
       if (typeof v === "string") label = v;
     } catch (e) {
-      fail(r.plugin, e);
+      fail(r.addon, e);
     }
   }
   return label;
@@ -140,12 +143,12 @@ export function emit(event: string, payload: any) {
     try {
       l.fn(payload);
     } catch (e) {
-      fail(l.plugin, e);
+      fail(l.addon, e);
     }
   }
 }
 
-/** 会话状态变化 → 插件事件（turnEnd / needsInput / sessionCreated）。sync.ts 在收到推送时调。 */
+/** A session changed → add-on events (turnEnd / needsInput / sessionCreated). sync.ts calls it on every push. */
 export function emitSessionChange(prev: SessionSummary | undefined, next: SessionSummary) {
   const visible = visibleSessions(get().layout).includes(next.id) && document.visibilityState === "visible";
   const info = sessionInfo(next);
@@ -160,9 +163,11 @@ export function emitSessionChange(prev: SessionSummary | undefined, next: Sessio
   }
 }
 
-// 一轮结束 → 问插件要不要改会话标题。多个插件按文件名顺序串起来（ctx.title 是前面给出的）；有插件给出了名字就交给
-// 后端（auto：人改过名时不生效，这段上下文里后端的默认起名让开，见 internal/hub/title.go）。
-// 每个开着的窗口都会跑一遍：后端对同样的 summarize 只真跑一次，起出来的名字一样，不会来回跳。
+// A turn ended → ask add-ons for a session title. Several chain in folder-name order (ctx.title is what the previous
+// gave); a name given goes to
+// the backend (auto: ignored once a person renamed it; the backend's own naming steps aside for this context, see
+// internal/hub/title.go). Every open window runs this: the backend runs the same summarize only once, so the name
+// doesn't flip between windows.
 async function runSessionTitle(info: ReturnType<typeof sessionInfo> & {}) {
   let st: { title: string; customTitle: boolean; prompts: string[] };
   try {
@@ -182,7 +187,7 @@ async function runSessionTitle(info: ReturnType<typeof sessionInfo> & {}) {
         changed = true;
       }
     } catch (e) {
-      fail(r.plugin, e);
+      fail(r.addon, e);
     }
   }
   if (changed) api.rename(info.id, title, true).catch(() => {});
@@ -201,11 +206,11 @@ useStore.subscribe((s, prev) => {
   emit("focusChanged", { pane: snap.activePane, tab: snap.activeTab, workspace: snap.activeWorkspace });
 });
 
-// ---- 加载 ----
+// ---- loading ----
 
-function makeApi(id: string) {
+function makeApi(id: string, hash: string) {
   const own = <T>(arr: Reg<T>[], fn: T) => {
-    const r = { plugin: id, fn };
+    const r = { addon: id, fn };
     arr.push(r);
     bump();
     return () => {
@@ -214,25 +219,28 @@ function makeApi(id: string) {
       bump();
     };
   };
+  // Kept under the old prefix: what an add-on stored when it was a plugin is still there.
   const storeKey = (k: string) => `gerdr.plugin.${id}.${k}`;
   return {
     version: get().version,
+    id,
+    asset: (path: string) => assetURL(id, path, hash),
     tabLabel: (fn: TabLabelFn) => own(tabLabels, fn),
     paneTitle: (fn: PaneTitleFn) => own(paneTitles, fn),
     workspaceLabel: (fn: WsLabelFn) => own(wsLabels, fn),
     sessionTitle: (fn: SessionTitleFn) => own(sessionTitles, fn),
-    command: (c: Omit<PluginCommand, "plugin">) => {
-      const cmd = { ...c, plugin: id };
-      pluginCommands.push(cmd);
+    command: (c: Omit<AddonCommand, "addon">) => {
+      const cmd = { ...c, addon: id };
+      addonCommands.push(cmd);
       bump();
       return () => {
-        const i = pluginCommands.indexOf(cmd);
-        if (i >= 0) pluginCommands.splice(i, 1);
+        const i = addonCommands.indexOf(cmd);
+        if (i >= 0) addonCommands.splice(i, 1);
         bump();
       };
     },
     on: (event: string, fn: (e: any) => void) => {
-      const l = { plugin: id, event, fn };
+      const l = { addon: id, event, fn };
       listeners.push(l);
       return () => {
         const i = listeners.indexOf(l);
@@ -244,10 +252,10 @@ function makeApi(id: string) {
     service: {
       status: () => serviceStates.get(id),
       send: async (data: unknown) => {
-        await api.pluginMessage(id, data);
+        await api.addonMessage(id, data);
       },
       on: (event: "message" | "status", fn: (e: any) => void) => {
-        const l = { plugin: id, event, fn };
+        const l = { addon: id, event, fn };
         serviceListeners.push(l);
         return () => {
           const i = serviceListeners.indexOf(l);
@@ -288,13 +296,13 @@ function makeApi(id: string) {
 export async function runCommand(id: string) {
   const { runBuiltinCommand } = await import("./commands");
   if (runBuiltinCommand(id)) return;
-  const c = pluginCommands.find((x) => x.id === id);
+  const c = addonCommands.find((x) => x.id === id);
   if (!c) return;
   try {
     await c.run({ state: stateSnapshot() });
   } catch (e) {
-    fail(c.plugin, e);
-    import("./notify").then((n) => n.notify(`插件 ${c.plugin} 出错：${e}`, { level: "error" }));
+    fail(c.addon, e);
+    import("./notify").then((n) => n.notify(`扩展 ${c.addon} 出错：${e}`, { level: "error" }));
   }
 }
 
@@ -310,13 +318,13 @@ function unload(id: string) {
   remove(paneTitles, id);
   remove(wsLabels, id);
   remove(sessionTitles, id);
-  remove(pluginCommands, id);
+  remove(addonCommands, id);
   remove(listeners, id);
   remove(serviceListeners, id);
 }
 
 function emitService(id: string, event: "message" | "status", e: unknown) {
-  for (const l of serviceListeners.filter((x) => x.plugin === id && x.event === event)) {
+  for (const l of serviceListeners.filter((x) => x.addon === id && x.event === event)) {
     try {
       l.fn(e);
     } catch (err) {
@@ -325,11 +333,11 @@ function emitService(id: string, event: "message" | "status", e: unknown) {
   }
 }
 
-export function serviceStatusChanged(id: string | undefined, st: PluginService | undefined) {
+export function serviceStatusChanged(id: string | undefined, st: AddonService | undefined) {
   if (!id || !st) return;
   if (st.state === "stopped") serviceStates.delete(id);
   else serviceStates.set(id, st);
-  const p = pluginStatus.find((x) => x.id === id);
+  const p = addonStatus.find((x) => x.id === id);
   if (p) p.service = serviceStates.get(id);
   emitService(id, "status", st);
   bump();
@@ -342,47 +350,58 @@ export function serviceMessage(id: string | undefined, data: unknown) {
 let loadedHashes = new Map<string, string>();
 let loading: Promise<void> | null = null;
 
-export function reloadPlugins(): Promise<void> {
-  if (loading) return loading.then(() => reloadPlugins());
+/** The URL of a file in an add-on's folder. The hash makes a reloaded add-on fetch its files again. */
+export function assetURL(id: string, path: string, hash = "") {
+  const rel = path
+    .replace(/^\.?\//, "")
+    .split("/")
+    .map(encodeURIComponent)
+    .join("/");
+  return `/api/addons/${encodeURIComponent(id)}/files/${rel}${hash ? `?v=${hash}` : ""}`;
+}
+
+export function reloadAddons(): Promise<void> {
+  if (loading) return loading.then(() => reloadAddons());
   loading = doReload().finally(() => (loading = null));
   return loading;
 }
 
 async function doReload() {
-  let builds: PluginBuild[];
+  let builds: AddonBuild[];
   try {
-    builds = await api.plugins();
+    builds = await api.addons();
   } catch {
     return;
   }
   const seen = new Set<string>();
-  const status: PluginStatus[] = [];
+  const status: AddonStatus[] = [];
   serviceStates.clear();
   for (const b of builds) if (b.service) serviceStates.set(b.id, b.service);
   for (const b of builds) {
     seen.add(b.id);
+    const { code: _code, ...meta } = b;
     if (loadedHashes.get(b.id) === b.hash) {
-      const prev = pluginStatus.find((p) => p.id === b.id) ?? { id: b.id, path: b.path, loaded: true };
-      status.push({ ...prev, service: b.service });
+      const prev = addonStatus.find((p) => p.id === b.id);
+      status.push({ ...meta, loaded: prev?.loaded ?? true, error: prev?.error ?? b.error });
       continue;
     }
     unload(b.id);
     loadedHashes.set(b.id, b.hash);
-    // No code and no error: a plugin that is only a service (plugin.json), nothing to load in the UI
-    const st: PluginStatus = { id: b.id, path: b.path, loaded: !b.error && !b.code, error: b.error, service: b.service };
+    // No code: switched off, broken, or only a service (addon.json) — nothing to load in the UI
+    const st: AddonStatus = { ...meta, loaded: false };
     status.push(st);
     if (b.error || !b.code) continue;
     const url = URL.createObjectURL(new Blob([b.code], { type: "text/javascript" }));
     try {
       const mod = await import(/* @vite-ignore */ url);
-      const plugin = mod.default ?? mod.plugin;
-      if (!plugin || typeof plugin.setup !== "function") throw new Error("插件要 export default definePlugin({ setup(g) { … } })");
-      const d = plugin.setup(makeApi(b.id));
+      const addon = mod.default ?? mod.addon ?? mod.plugin;
+      if (!addon || typeof addon.setup !== "function") throw new Error("扩展要 export default defineAddon({ setup(g) { … } })");
+      const d = addon.setup(makeApi(b.id, b.hash));
       if (typeof d === "function") disposers.set(b.id, d);
       st.loaded = true;
     } catch (e) {
       st.error = e instanceof Error ? e.message : String(e);
-      console.error(`[gerdr plugin ${b.id}]`, e);
+      console.error(`[gerdr addon ${b.id}]`, e);
     } finally {
       URL.revokeObjectURL(url);
     }
@@ -393,6 +412,6 @@ async function doReload() {
       loadedHashes.delete(id);
     }
   }
-  pluginStatus = status;
+  addonStatus = status;
   bump();
 }

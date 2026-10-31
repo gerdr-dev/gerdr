@@ -1,35 +1,34 @@
-package plugins
+package addons
 
-// Plugin services: a directory plugin can carry a plugin.json that names a long-running process
-// ({"service": {"command": …}}). gerdr's backend starts it, restarts it when it dies, and stops it when the plugin is
-// removed, disabled (renamed to _…) or its plugin.json changes.
+// Add-on services: an add-on's addon.json can name a long-running process ({"service": {"command": …}}). gerdr's
+// backend starts it, restarts it when it dies, and stops it when the add-on is removed, switched off or its
+// addon.json changes.
 //
-// Why the backend and not the UI: UI plugins run in every window that is open — the App, a remote browser, the
-// phone — and none of them while no window is. Something that owns a device (a Bluetooth wristband accepts one
+// Why the backend and not the UI: an add-on's UI half runs in every window that is open — the App, a remote browser,
+// the phone — and none of them while no window is. Something that owns a device (a Bluetooth wristband accepts one
 // connection at a time) or has to keep running needs exactly one copy, alive as long as gerdr is: the backend.
 //
 // Protocol: newline-delimited JSON over stdin / stdout, one object per line with a "type".
 //
 //	gerdr → service (stdin)
-//	  {"type":"hello","version":"…","plugin":"<id>"}   first line of every start
+//	  {"type":"hello","version":"…","addon":"<id>"}     first line of every start
 //	  {"type":"sessions","sessions":[…]}                the open sessions; right after hello, then whenever one of
-//	                                                    the fields changes (not on every token: see server/pluginsvc.go)
-//	  {"type":"message","data":…}                       sent by the plugin's UI half (g.service.send)
+//	                                                    the fields changes (not on every token: see server/addonsvc.go)
+//	  {"type":"message","data":…}                       sent by the add-on's UI half (g.service.send)
 //	service → gerdr (stdout)
-//	  {"type":"status","text":"…"}                      one line shown under the plugin in Settings → Plugins
-//	  {"type":"message","data":…}                       to the plugin's UI half in every open window (g.service.on)
+//	  {"type":"status","text":"…"}                      one line shown under the add-on in Settings → Add-ons
+//	  {"type":"message","data":…}                       to the add-on's UI half in every open window (g.service.on)
 //
 // stdin closing means gerdr is going away: the service should clean up (close its device) and exit. gerdr waits a few
-// seconds for that before it kills the process group. stderr goes to <dir>/logs/plugins/<id>.log.
+// seconds for that before it kills the process group. stderr goes to <dir>/logs/addons/<id>.log.
 //
-// GERDR_PLUGIN_DATA (<dir>/plugin-data/<id>) is where a service keeps its files. Not the plugin directory: every
-// change there counts as the plugin being edited (Manager.Watch), so a service writing into it would reload the
-// plugins in every open window once a second.
+// GERDR_ADDON_DATA (<dir>/addon-data/<id>) is where a service keeps its files. Not the add-on's folder: every change
+// there counts as the add-on being edited (Manager.Watch), so a service writing into it would reload the add-ons in
+// every open window once a second — and an update from a store replaces that folder.
 
 import (
 	"bufio"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -42,20 +41,15 @@ import (
 	"time"
 )
 
-// Manifest is a directory plugin's plugin.json.
-type Manifest struct {
-	Service *ServiceSpec `json:"service,omitempty"`
-}
-
 type ServiceSpec struct {
 	// Command: a name looked up on PATH (the login shell's, like agents get), an absolute path, or a path relative to
-	// the plugin's directory ("./bin/x"). ~ is expanded.
+	// the add-on's folder ("./bin/x"). ~ is expanded.
 	Command string            `json:"command"`
 	Args    []string          `json:"args,omitempty"`
 	Env     map[string]string `json:"env,omitempty"`
 }
 
-// ServiceStatus is what Settings → Plugins and g.service.status() show.
+// ServiceStatus is what Settings → Add-ons and g.service.status() show.
 type ServiceStatus struct {
 	State    string `json:"state"`           // starting / running / exited (waiting to restart) / stopped
 	PID      int    `json:"pid,omitempty"`   // while running
@@ -65,25 +59,7 @@ type ServiceStatus struct {
 	Since    int64  `json:"since"` // unix ms of the last state change
 }
 
-func readManifest(dir string) (*Manifest, error) {
-	b, err := os.ReadFile(filepath.Join(dir, "plugin.json"))
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	var m Manifest
-	if err := json.Unmarshal(b, &m); err != nil {
-		return nil, fmt.Errorf("plugin.json: %w", err)
-	}
-	if m.Service != nil && strings.TrimSpace(m.Service.Command) == "" {
-		return nil, errors.New(`plugin.json: service.command is empty`)
-	}
-	return &m, nil
-}
-
-// Services runs the plugins' services. The zero value is not usable: NewServices.
+// Services runs the add-ons' services. The zero value is not usable: NewServices.
 type Services struct {
 	m       *Manager
 	log     *slog.Logger
@@ -114,13 +90,13 @@ type svcProc struct {
 	in chan []byte // stdin of the current run; nil while not running
 }
 
-// NewServices: dir is gerdr's data directory (logs and per-plugin data go under it).
-func NewServices(m *Manager, dir string, log *slog.Logger) *Services {
-	return &Services{m: m, log: log, logDir: filepath.Join(dir, "logs", "plugins"), dataDir: filepath.Join(dir, "plugin-data"),
+// NewServices: logs and per-add-on data go under the manager's root (gerdr's data directory).
+func NewServices(m *Manager, log *slog.Logger) *Services {
+	return &Services{m: m, log: log, logDir: filepath.Join(m.root, "logs", "addons"), dataDir: filepath.Join(m.root, "addon-data"),
 		procs: map[string]*svcProc{}}
 }
 
-// Sync starts, stops and restarts services to match the plugin directory. Call it at startup and whenever the
+// Sync starts, stops and restarts services to match the add-on directory. Call it at startup and whenever the
 // directory changes (Manager.Watch).
 func (s *Services) Sync() {
 	s.syncMu.Lock()
@@ -153,7 +129,7 @@ func (s *Services) Sync() {
 	for _, p := range stopping {
 		close(p.stop)
 	}
-	// A changed plugin.json: the old process has to be gone before the new one opens the same device.
+	// A changed addon.json: the old process has to be gone before the new one opens the same device.
 	for _, p := range stopping {
 		<-p.done
 		if _, ok := want[p.id]; !ok {
@@ -180,7 +156,7 @@ func (s *Services) Close() {
 	}
 }
 
-// Status of one plugin's service; nil when it has none.
+// Status of one add-on's service; nil when it has none.
 func (s *Services) Status(id string) *ServiceStatus {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -201,16 +177,16 @@ func (s *Services) Send(id string, line []byte) error {
 	}
 	s.mu.Unlock()
 	if p == nil {
-		return fmt.Errorf("plugin %q has no service", id)
+		return fmt.Errorf("add-on %q has no service", id)
 	}
 	if in == nil {
-		return fmt.Errorf("plugin %q: service is not running", id)
+		return fmt.Errorf("add-on %q: service is not running", id)
 	}
 	select {
 	case in <- line:
 		return nil
 	default:
-		return fmt.Errorf("plugin %q: service is not reading its stdin", id)
+		return fmt.Errorf("add-on %q: service is not reading its stdin", id)
 	}
 }
 
@@ -230,7 +206,7 @@ func (s *Services) Broadcast(line []byte) {
 		select {
 		case in <- line:
 		default:
-			s.log.Warn("plugin service not reading stdin, dropped a line", "plugin", ids[i])
+			s.log.Warn("addon service not reading stdin, dropped a line", "addon", ids[i])
 		}
 	}
 }
@@ -269,7 +245,7 @@ func (s *Services) run(p *svcProc) {
 		if err != nil {
 			msg = err.Error()
 		}
-		s.log.Warn("plugin service stopped, restarting", "plugin", p.id, "err", msg, "in", backoff)
+		s.log.Warn("addon service stopped, restarting", "addon", p.id, "err", msg, "in", backoff)
 		s.setStatus(p, func(st *ServiceStatus) {
 			st.State, st.PID, st.Error, st.Since = "exited", 0, msg, time.Now().UnixMilli()
 			st.Restarts++
@@ -319,7 +295,7 @@ func (s *Services) runOnce(p *svcProc) error {
 	}
 	data := filepath.Join(s.dataDir, p.id)
 	_ = os.MkdirAll(data, 0o700)
-	env = append(env, "GERDR_PLUGIN="+p.id, "GERDR_PLUGIN_DIR="+p.dir, "GERDR_PLUGIN_DATA="+data)
+	env = append(env, "GERDR_ADDON="+p.id, "GERDR_ADDON_DIR="+p.dir, "GERDR_ADDON_DATA="+data)
 	for k, v := range p.spec.Env {
 		env = append(env, k+"="+v)
 	}
@@ -351,7 +327,7 @@ func (s *Services) runOnce(p *svcProc) error {
 	s.setStatus(p, func(st *ServiceStatus) {
 		st.State, st.PID, st.Error, st.Text, st.Since = "running", cmd.Process.Pid, "", "", time.Now().UnixMilli()
 	})
-	s.log.Info("plugin service started", "plugin", p.id, "cmd", bin, "pid", cmd.Process.Pid)
+	s.log.Info("addon service started", "addon", p.id, "cmd", bin, "pid", cmd.Process.Pid)
 
 	// stdin: greeting first, then whatever arrives. Closing stdin is the "please exit" signal.
 	stopWriting := make(chan struct{})
@@ -440,7 +416,7 @@ func (s *Services) readStdout(p *svcProc, r io.Reader) {
 			Data json.RawMessage `json:"data"`
 		}
 		if json.Unmarshal(line, &m) != nil || m.Type == "" {
-			s.log.Info("plugin service", "plugin", p.id, "stdout", string(line))
+			s.log.Info("addon service", "addon", p.id, "stdout", string(line))
 			continue
 		}
 		switch m.Type {
@@ -455,7 +431,7 @@ func (s *Services) readStdout(p *svcProc, r io.Reader) {
 				s.OnMessage(p.id, append(json.RawMessage(nil), data...))
 			}
 		default:
-			s.log.Info("plugin service: unknown message type", "plugin", p.id, "type", m.Type)
+			s.log.Info("addon service: unknown message type", "addon", p.id, "type", m.Type)
 		}
 	}
 	// Drain anything after an over-long line so the process doesn't block writing to a full pipe.

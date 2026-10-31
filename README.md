@@ -51,7 +51,7 @@ opens the file; away from your desk, keep watching and steering from your phone.
 
 - **a UI your agent can change** — the whole interface: add buttons, shortcuts, what gets shown. Just tell the AI;
   no release, no deploy, live at once. Break it and an unbreakable rescue panel gets you back.
-- **TypeScript plugins** — rename tabs, title panes, add commands and keys.
+- **TypeScript add-ons** — rename tabs, title panes, add commands and keys; install more from a store.
 - **skills and MCP** — the agent's own, gerdr's, or both.
 
 **anywhere**
@@ -155,7 +155,7 @@ the agents themselves.**
 | plain shells | every pane is one | terminal panes next to sessions |
 | agents driving each other | `herdr agent …` CLI + socket API | `gerdr session …` CLI + built-in skill |
 | remote | saved SSH machines in one window | relay with end-to-end TLS, pairing codes, passkeys; LAN direct on Android |
-| customizing | plugins | TS plugins, plus the whole UI is editable source with hot reload |
+| customizing | plugins | TS add-ons with a store, plus the whole UI is editable source with hot reload |
 | footprint | one binary, no Electron | one Go binary; the desktop app adds Electron |
 
 **Pick herdr** if you live in the terminal, work over SSH, or use agents gerdr has no adapter for.
@@ -175,16 +175,24 @@ gerdr takes another route: it skips the terminal and talks to the agent through 
 its own UI. Approvals, questions and rewinds are API calls, so an agent update doesn't break things just because
 the screen looks different.
 
-## plugins
+## add-ons
 
-Plugins live in `~/.gerdr/plugins/`, one `.ts` file each, live on save (no Node needed, gerdr compiles them). Bundled:
+Add-ons live in `~/.gerdr/addons/`, one folder each, live on save (no Node needed, gerdr compiles them). Settings →
+Add-ons lists them, switches them on and off, and has a **Store** tab: a store is a GitHub repository whose folders
+holding an `addon.json` are add-ons, browsed offline, refreshed when you ask, installed with one click. The default
+store is [gerdr-dev/gerdr-addon](https://github.com/gerdr-dev/gerdr-addon) (duplicate a tab with `prefix+a`, a
+notification when a hidden session finishes, …); add any `owner/repo`.
 
-- `duplicate-tab.ts` — `prefix+a` / `prefix+i` duplicates the current tab after / before itself;
-- `_notify-when-done.ts` — an example, off by default (files starting with `_` aren't loaded).
+```
+~/.gerdr/addons/hello/
+  addon.json   {"name": "Hello", "version": "1.0.0", "description": "…", "icon": "icon.png"}  (optional)
+  index.ts     the code; may import other files of the folder
+  icon.png     any files it ships: g.asset("icon.png") is their URL
+```
 
 ```ts
-/// <reference path="./gerdr.d.ts" />
-export default definePlugin({
+/// <reference path="../gerdr.d.ts" />
+export default defineAddon({
   setup(g) {
     g.paneTitle((pane, { label }) => `🤖 ${label}`);
     g.command({ id: "hello", title: "Say hello", key: "prefix+y", run: () => g.notify("hello") });
@@ -192,11 +200,12 @@ export default definePlugin({
 });
 ```
 
-A plugin can also be a directory with a `plugin.json` naming a **service**: a long-running process gerdr's backend
-starts, restarts and stops with the plugin. It gets the open sessions as JSON lines on stdin, and talks to the
-plugin's UI half (`g.service`) — e.g. a bridge that keeps a Bluetooth wristband connected and shows agents on it.
+`addon.json` can also name a **service**: a long-running process gerdr's backend starts, restarts and stops with the
+add-on. It gets the open sessions as JSON lines on stdin, and talks to the add-on's UI half (`g.service`) — e.g. a
+bridge that keeps a Bluetooth wristband connected and shows agents on it.
 
-The full API, service protocol included, is in `gerdr.d.ts` in the plugin directory.
+The full API, service protocol included, is in `gerdr.d.ts` in the add-on directory. (They were called plugins
+before; `~/.gerdr/plugins` moves to `~/.gerdr/addons` by itself.)
 
 ## configuration
 
@@ -207,7 +216,7 @@ itself reads environment variables:
 |---|---|---|
 | `GERDR_PORT` | `7870` | listen port (picks another if taken) |
 | `GERDR_HOST` | `127.0.0.1` | listen address |
-| `GERDR_DIR` | `~/.gerdr` | data directory (sessions, layout, plugins) |
+| `GERDR_DIR` | `~/.gerdr` | data directory (sessions, layout, add-ons) |
 | `GERDR_TOKEN` | generated | login token, stored in `~/.gerdr/token` |
 | `GERDR_CLAUDE_IDLE_MINUTES` | `15` | stop an idle Claude session's process after this long (resumed on the next message); `0` = never |
 | `GERDR_UI` | `~/.gerdr/ui` | UI source directory (e.g. a separate clone) |

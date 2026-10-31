@@ -5,7 +5,7 @@ import { api, ApiError, clientId } from "./api";
 import { toast } from "sonner";
 import { validLayout, withView } from "./layout";
 import { isNative, nativeNotify, runRelayedUpdateOp } from "./native";
-import { emitSessionChange } from "./plugins";
+import { emitSessionChange } from "./addons";
 import {
   applyEvents,
   applyRemoteLayout,
@@ -77,7 +77,7 @@ async function start() {
       version: h.version,
       installedAt: h.installedAt ?? 0,
       home: h.home,
-      pluginsDir: h.pluginsDir,
+      addonsDir: h.addonsDir,
       agents: h.agents,
       sessions,
       config: mergeConfig(h.config),
@@ -304,14 +304,17 @@ function handle(m: any) {
     case "close":
       import("./actions").then((a) => a.closeSessionPanes(m.data?.id));
       break;
-    case "plugins":
-      import("./plugins").then((p) => p.reloadPlugins());
+    case "addons":
+      import("./addons").then((p) => p.reloadAddons());
       break;
-    case "plugin_service":
-      import("./plugins").then((p) => p.serviceStatusChanged(m.data?.id, m.data?.service));
+    case "addon_stores":
+      set((s) => ({ addonStoresVersion: s.addonStoresVersion + 1 }));
       break;
-    case "plugin_message":
-      import("./plugins").then((p) => p.serviceMessage(m.data?.id, m.data?.data));
+    case "addon_service":
+      import("./addons").then((p) => p.serviceStatusChanged(m.data?.id, m.data?.service));
+      break;
+    case "addon_message":
+      import("./addons").then((p) => p.serviceMessage(m.data?.id, m.data?.data));
       break;
     case "stepup":
       // 远程设备请求加 passkey，要坐在电脑前的人批准（RemoteSettings）。只在本机这边提醒：远程那头批不了

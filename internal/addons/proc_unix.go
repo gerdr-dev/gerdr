@@ -1,6 +1,6 @@
 //go:build !windows
 
-package plugins
+package addons
 
 import (
 	"os/exec"
