@@ -338,7 +338,8 @@ function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; chi
       onClick={onClick}
       className={cn(
         "flex h-7 shrink-0 items-center gap-1.5 rounded-md border px-2 text-[12px]",
-        on ? "border-transparent bg-foreground/12 font-medium text-foreground" : "text-muted-foreground hover:bg-foreground/5",
+        // Same fill as the selected row below and the sidebar's active workspace (bg-accent)
+        on ? "border-transparent bg-accent font-medium text-foreground" : "text-muted-foreground hover:bg-accent/60",
       )}
     >
       {children}
