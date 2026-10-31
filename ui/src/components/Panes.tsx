@@ -35,7 +35,8 @@ import {
   toggleZoom,
 } from "@/lib/actions";
 import { leaves, phoneRoot, setRatio, updateTab, type PaneLeaf, type PaneNode, type PaneSplit, type Tab } from "@/lib/layout";
-import { applyPaneTitle } from "@/lib/addons";
+import { applyPaneTitle, paneSnapshot, tabSnapshot } from "@/lib/addons";
+import { AddonSlot } from "./AddonSlot";
 import { get, markRead, set, setLayout, useStore } from "@/lib/store";
 import { addTiles, MAX_TILES, overviewIds, removeTile } from "@/lib/overview";
 import { usePhone } from "@/lib/phone";
@@ -338,6 +339,7 @@ function TermPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; ta
           {cwd}
         </span>
         <div className="flex-1 md:hidden" />
+        <AddonSlot name="paneTitle" props={{ pane: paneSnapshot(pane), tab: tabSnapshot(tab) }} />
         {zoomed && (
           <Button variant="ghost" size="icon" className="size-6" onClick={toggleZoom} title="还原（prefix+z）">
             <Minimize2 className="size-3.5" />
@@ -454,6 +456,7 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
         ) : null}
         {/* 路径那段手机上藏了，没它撑开的话 ⋯ 会紧跟在标题后面；和终端 pane 一样补一个手机上的占位 */}
         <div className={cn("flex-1", session && "md:hidden")} />
+        <AddonSlot name="paneTitle" props={{ pane: paneSnapshot(pane), tab: tabSnapshot(tab) }} />
         {zoomed && (
           <Button variant="ghost" size="icon" className="size-6" onClick={toggleZoom} title="还原（prefix+z）">
             <Minimize2 className="size-3.5" />

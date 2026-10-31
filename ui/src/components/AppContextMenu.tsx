@@ -1,7 +1,10 @@
-import { Clipboard, Copy, Download, ExternalLink, FileText, Image as ImageIcon, Scissors, TextSelect } from "lucide-react";
+import { Clipboard, Copy, Download, ExternalLink, FileText, Image as ImageIcon, Puzzle, Scissors, TextSelect } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
+import { fail as addonFail, menuItems } from "@/lib/addons";
 import { androidCan, androidCopyImage, isAndroid } from "@/lib/android";
+import { leaves } from "@/lib/layout";
+import { get } from "@/lib/store";
 import { isNative, nativeOpenURL } from "@/lib/native";
 
 /**
@@ -101,6 +104,22 @@ function editable(el: Element | null): HTMLElement | null {
   return e;
 }
 
+// The session of the pane the click is in (for add-ons' menu items)
+function paneSession(t: Element): string | undefined {
+  const id = t.closest<HTMLElement>("[data-pane-id]")?.dataset.paneId;
+  for (const w of get().layout.workspaces) for (const tab of w.tabs) for (const p of leaves(tab.root)) if (p.id === id) return p.sessionId;
+  return undefined;
+}
+
+function safe(addon: string, f: () => boolean) {
+  try {
+    return f();
+  } catch (e) {
+    addonFail(addon, e);
+    return false;
+  }
+}
+
 function buildMenu(e: MouseEvent, touch: boolean): Item[][] {
   const t = e.target instanceof Element ? e.target : null;
   const groups: Item[][] = [];
@@ -146,6 +165,13 @@ function buildMenu(e: MouseEvent, touch: boolean): Item[][] {
       },
     ]);
   }
+  // Add-ons' items (g.contextMenu), for the selected text by default
+  const ctx = { selection: selectedText(), sessionId: t?.closest<HTMLElement>("[data-pane-id]") ? paneSession(t) : undefined };
+  const extra = menuItems.filter((m) => (m.when ? safe(m.addon, () => m.when!(ctx)) : !!ctx.selection.trim()));
+  if (extra.length)
+    groups.push(
+      extra.map((m) => ({ label: m.title, icon: <Puzzle className={icon} />, run: () => Promise.resolve(m.run(ctx)).catch((e) => addonFail(m.addon, e)) })),
+    );
   const a = t?.closest<HTMLAnchorElement>("a[href]");
   if (a && /^(https?|mailto):/i.test(a.href) && new URL(a.href).origin !== location.origin) {
     const href = a.href;

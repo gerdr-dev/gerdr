@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gerdr-dev/gerdr/internal/hub"
 	"github.com/gerdr-dev/gerdr/internal/addons"
+	"github.com/gerdr-dev/gerdr/internal/hub"
 	"github.com/gerdr-dev/gerdr/internal/version"
 )
 
@@ -150,4 +150,3 @@ func pumpSessions(ctx context.Context, sub *hub.Sub, flush func()) {
 		}
 	}
 }
-

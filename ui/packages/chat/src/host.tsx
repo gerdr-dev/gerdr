@@ -97,7 +97,8 @@ export interface ChatHost {
   codeActions?(code: string, lang: string, session: ChatSession): ReactNode;
   /** Slots around the composer: above it (chips), in its bottom bar (model menu), and an overlay (dialogs). */
   composerTop?(session: ChatSession): ReactNode;
-  composerBar?(session: ChatSession): ReactNode;
+  /** ctx.paneId: the composer's key in ChatHost drafts, to write into this composer from the bar. */
+  composerBar?(session: ChatSession, ctx: { paneId: string }): ReactNode;
   composerOverlay?(session: ChatSession): ReactNode;
   /** Composer hooks for host-only features (gerdr: shared drafts, /resume, "session open elsewhere"…). */
   composer?: ComposerHooks;

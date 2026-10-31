@@ -183,10 +183,10 @@ func TestLocalStore(t *testing.T) {
 
 func TestNormalizeSource(t *testing.T) {
 	for in, want := range map[string]string{
-		"gerdr-dev/gerdr-addon":                   "gerdr-dev/gerdr-addon",
+		"gerdr-dev/gerdr-addon":                    "gerdr-dev/gerdr-addon",
 		"https://github.com/gerdr-dev/gerdr-addon": "gerdr-dev/gerdr-addon",
-		"github.com/a/b.git":                      "a/b",
-		"a/b#v1.2":                                "a/b#v1.2",
+		"github.com/a/b.git":                       "a/b",
+		"a/b#v1.2":                                 "a/b#v1.2",
 	} {
 		if got, err := NormalizeSource(in); err != nil || got != want {
 			t.Errorf("%q → %q, %v", in, got, err)

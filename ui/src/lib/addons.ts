@@ -3,7 +3,14 @@
 //
 // An add-on's mistakes must not take the UI down: every hook call is wrapped in try/catch, and errors are kept under
 // the add-on's name (Settings → Add-ons shows them).
+import * as icons from "lucide-react";
+import * as React from "react";
+import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Switch } from "@/components/ui/switch";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { api } from "./api";
+import { cn } from "./utils";
 import { activeTab, activeWs, leaves, type Layout, type PaneLeaf, type Tab, type Workspace } from "./layout";
 import { get, set, useStore, visibleSessions } from "./store";
 import type { AddonBuild, AddonService, SessionSummary } from "./types";
@@ -15,6 +22,24 @@ type SessionTitleFn = (session: any, ctx: any) => string | void | Promise<string
 export type AddonCommand = { id: string; title: string; key?: string; run: (ctx: any) => void | Promise<void>; addon: string };
 
 type Reg<T> = { addon: string; fn: T };
+
+// ---- what add-ons draw: slots, composer buttons, context-menu items ----
+
+/** Where an add-on can put a component: the sidebar (above its bottom row), a pane's title bar (props: pane, tab). */
+export type SlotName = "sidebar" | "paneTitle";
+export type SlotReg = { addon: string; key: string; Component: React.ComponentType<any>; order: number };
+export const slots: Record<SlotName, SlotReg[]> = { sidebar: [], paneTitle: [] };
+export type ComposerAction = { addon: string; id: string; title: string; icon?: React.ReactNode; run: (ctx: ComposerCtx) => void | Promise<void> };
+export type ComposerCtx = { sessionId: string; text: string; insert(text: string): void; setText(text: string): void };
+export const composerActions: ComposerAction[] = [];
+export type MenuItem = { addon: string; id: string; title: string; when?: (ctx: MenuCtx) => boolean; run: (ctx: MenuCtx) => void | Promise<void> };
+export type MenuCtx = { selection: string; sessionId?: string };
+export const menuItems: MenuItem[] = [];
+
+// JSX in add-ons compiles to these two (internal/addons build: JSXFactory / JSXFragment). Not gerdr.h: the desktop
+// shell owns window.gerdr.
+(globalThis as any).__gerdrH = React.createElement;
+(globalThis as any).__gerdrFragment = React.Fragment;
 
 const tabLabels: Reg<TabLabelFn>[] = [];
 const paneTitles: Reg<PaneTitleFn>[] = [];
@@ -43,7 +68,7 @@ function remove<T extends { addon: string }>(arr: T[], addon: string) {
   for (let i = arr.length - 1; i >= 0; i--) if (arr[i].addon === addon) arr.splice(i, 1);
 }
 
-function fail(id: string, err: unknown) {
+export function fail(id: string, err: unknown) {
   const msg = err instanceof Error ? `${err.message}` : String(err);
   console.error(`[gerdr addon ${id}]`, err);
   const st = addonStatus.find((p) => p.id === id);
@@ -74,6 +99,10 @@ export function setTabNameFn(fn: (t: Tab) => string) {
 function wsInfo(w: Workspace) {
   return { id: w.id, name: w.name, tabs: w.tabs.map((t) => tabInfo(t, tabNameFn(t))) };
 }
+
+/** The read-only views add-ons get of a pane / tab (the paneTitle slot's props). */
+export const paneSnapshot = (p: PaneLeaf) => paneInfo(p);
+export const tabSnapshot = (t: Tab) => tabInfo(t, tabNameFn(t));
 
 export function stateSnapshot(l: Layout = get().layout) {
   const ws = activeWs(l);
@@ -274,7 +303,51 @@ function makeApi(id: string, hash: string) {
         await (await import("./actions")).send(sid, text);
       },
       runCommand: async (cid: string) => runCommand(cid),
+      // Drafts are per pane: write into the panes showing this session (the focused one first, usually the only one)
+      insertText: (sid: string, text: string) => {
+        const l = get().layout;
+        const panes = l.workspaces.flatMap((w) => w.tabs.flatMap((t) => leaves(t.root))).filter((p) => p.sessionId === sid);
+        const focus = activeTab(l).focus;
+        const p = panes.find((x) => x.id === focus) ?? panes[0];
+        if (p) set((s) => ({ drafts: { ...s.drafts, [p.id]: (s.drafts[p.id] ?? "") + text } }));
+      },
     },
+    // React and gerdr's own building blocks, so an add-on's UI looks like the rest without bundling its own copy
+    React,
+    ui: { Button, Popover, PopoverTrigger, PopoverContent, Tooltip, TooltipTrigger, TooltipContent, Switch, cn },
+    icons,
+    slot: (name: SlotName, Component: React.ComponentType<any>, o?: { order?: number }) => {
+      if (!slots[name]) throw new Error(`没有这个插槽：${name}`);
+      const r: SlotReg = { addon: id, key: `${id}:${slots[name].length}:${Math.random().toString(36).slice(2, 6)}`, Component, order: o?.order ?? 0 };
+      slots[name].push(r);
+      slots[name].sort((a, b) => a.order - b.order || a.addon.localeCompare(b.addon));
+      bump();
+      return () => {
+        const i = slots[name].indexOf(r);
+        if (i >= 0) slots[name].splice(i, 1);
+        bump();
+      };
+    },
+    composerAction: (a: Omit<ComposerAction, "addon">) => {
+      const r = { ...a, addon: id };
+      composerActions.push(r);
+      bump();
+      return () => {
+        const i = composerActions.indexOf(r);
+        if (i >= 0) composerActions.splice(i, 1);
+        bump();
+      };
+    },
+    contextMenu: (m: Omit<MenuItem, "addon">) => {
+      const r = { ...m, addon: id };
+      menuItems.push(r);
+      return () => {
+        const i = menuItems.indexOf(r);
+        if (i >= 0) menuItems.splice(i, 1);
+      };
+    },
+    usage: (force?: boolean) => api.usage(force),
+    stats: (days?: number) => api.dayStats(days),
     storage: {
       get: (k: string) => {
         try {
@@ -321,6 +394,9 @@ function unload(id: string) {
   remove(addonCommands, id);
   remove(listeners, id);
   remove(serviceListeners, id);
+  for (const k of Object.keys(slots) as SlotName[]) remove(slots[k], id);
+  remove(composerActions, id);
+  remove(menuItems, id);
 }
 
 function emitService(id: string, event: "message" | "status", e: unknown) {

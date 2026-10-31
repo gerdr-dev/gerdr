@@ -104,8 +104,13 @@ func (s *session) onLine(pr *proc, m map[string]json.RawMessage, raw []byte) {
 			Result     string   `json:"result"`
 			StopReason string   `json:"stop_reason"`
 			Errors     []string `json:"errors"`
+			CostUSD    *float64 `json:"total_cost_usd"`
 		}
 		_ = json.Unmarshal(raw, &r)
+		if r.CostUSD != nil && *r.CostUSD > 0 {
+			// The process's running total; the hub turns it into today's cost (hub/stats.go)
+			s.update(ctx, acp.SessionUpdate{SessionInfoUpdate: &acp.SessionSessionInfoUpdate{Meta: acpx.Cost(*r.CostUSD)}})
+		}
 		s.mu.Lock()
 		t := s.turn
 		sawState := s.sawState

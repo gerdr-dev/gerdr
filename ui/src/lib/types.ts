@@ -90,6 +90,7 @@ export type StoreAddon = {
   description?: string;
   icon?: string;
   readme?: string;
+  screenshots?: string[];
   hasService?: boolean;
   hash: string;
 };

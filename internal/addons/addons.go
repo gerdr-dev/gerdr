@@ -43,10 +43,12 @@ const ManifestFile = "addon.json"
 
 // Manifest is addon.json.
 type Manifest struct {
-	Name        string       `json:"name,omitempty"` // shown in Settings; the folder name when empty
-	Version     string       `json:"version,omitempty"`
-	Description string       `json:"description,omitempty"`
-	Icon        string       `json:"icon,omitempty"` // a file of the add-on (png / svg …), relative to its folder
+	Name        string `json:"name,omitempty"` // shown in Settings; the folder name when empty
+	Version     string `json:"version,omitempty"`
+	Description string `json:"description,omitempty"`
+	Icon        string `json:"icon,omitempty"` // a file of the add-on (png / svg …), relative to its folder
+	// Screenshots: files of the add-on, shown in the store before installing (a picture says what it does)
+	Screenshots []string     `json:"screenshots,omitempty"`
 	Main        string       `json:"main,omitempty"` // the UI half's entry; index.ts / index.tsx / index.js when empty
 	Service     *ServiceSpec `json:"service,omitempty"`
 }
@@ -272,7 +274,8 @@ func (m *Manager) build(id, path string) (code, errText string) {
 		Sourcemap:     api.SourceMapInline,
 		SourceRoot:    "gerdr-addon://" + id + "/",
 		JSX:           api.JSXTransform,
-		JSXFactory:    "gerdr.h",
+		JSXFactory:    "__gerdrH", // set by ui/src/lib/addons.ts (React.createElement)
+		JSXFragment:   "__gerdrFragment",
 		LogLevel:      api.LogLevelSilent,
 		AbsWorkingDir: filepath.Dir(path),
 		TsconfigRaw:   `{"compilerOptions":{"target":"es2022","useDefineForClassFields":true}}`,

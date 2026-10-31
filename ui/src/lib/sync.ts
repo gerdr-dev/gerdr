@@ -307,6 +307,9 @@ function handle(m: any) {
     case "addons":
       import("./addons").then((p) => p.reloadAddons());
       break;
+    case "stats":
+      import("./addons").then((p) => p.emit("stats", {}));
+      break;
     case "addon_stores":
       set((s) => ({ addonStoresVersion: s.addonStoresVersion + 1 }));
       break;

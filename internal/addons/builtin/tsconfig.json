@@ -6,7 +6,10 @@
     "strict": true,
     "noEmit": true,
     "lib": ["ES2022", "DOM"],
-    "types": []
+    "types": [],
+    "jsx": "react",
+    "jsxFactory": "__gerdrH",
+    "jsxFragmentFactory": "__gerdrFragment"
   },
   "include": ["*/**/*.ts", "*/**/*.tsx", "gerdr.d.ts"]
 }

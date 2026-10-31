@@ -310,6 +310,9 @@ func (s *Session) emit(e *Event) {
 	s.rec.UpdatedAt = e.TS
 	s.mu.Unlock()
 	s.h.broadcastEvents(s.rec.ID, []*Event{e}, false)
+	if e.Kind == EvTurnEnd {
+		s.h.countDone(e.StopReason)
+	}
 }
 
 // flush 把还没落盘的日志写下去。force=false 时最后一条流式片段先不写（它可能还会长）。
@@ -920,6 +923,11 @@ func (s *Session) onGerdrInfo(g map[string]any) {
 		}
 		s.mu.Unlock()
 		s.h.broadcastSession(s)
+	}
+	if c, ok := g[acpx.CostKey].(map[string]any); ok {
+		if usd, ok := c["totalUSD"].(float64); ok {
+			s.h.addCost(s.rec.ID, s.rec.Agent, usd)
+		}
 	}
 	if list, ok := chatlog.TasksFromInfo(g); ok {
 		s.mu.Lock()

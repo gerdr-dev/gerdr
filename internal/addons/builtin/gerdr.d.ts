@@ -96,6 +96,8 @@ declare global {
     on(event: "turnEnd", fn: (e: SessionEvent & { stopReason: string; error?: string }) => void): Dispose;
     on(event: "needsInput", fn: (e: SessionEvent & { kind: "permission" | "ask" }) => void): Dispose;
     on(event: "sessionCreated", fn: (e: SessionEvent) => void): Dispose;
+    /** Today's turns done or cost changed (g.stats()). Coalesced: at most every couple of seconds. */
+    on(event: "stats", fn: () => void): Dispose;
     on(event: "focusChanged", fn: (e: { pane?: PaneInfo; tab?: TabInfo; workspace?: WorkspaceInfo }) => void): Dispose;
 
     /** 弹一条提示。system: true 时用系统通知（mac App / 浏览器通知权限）。 */
@@ -103,6 +105,54 @@ declare global {
 
     /** 当前界面状态的只读快照。 */
     state(): StateSnapshot;
+
+    // ---- drawing ----
+    // JSX works in .tsx files (it compiles to gerdr's React.createElement); hooks come from g.React. Style with Tailwind
+    // classes and gerdr's color tokens (bg-muted, text-muted-foreground, bg-brand, text-ok / text-warn / text-bad…),
+    // so it looks right in light and dark.
+
+    /** gerdr's React: the components an add-on draws are mounted by it, so hooks must come from here. */
+    readonly React: GerdrReact;
+    /** gerdr's own building blocks (shadcn/ui), so an add-on looks like the rest of the app. */
+    readonly ui: {
+      Button: Component<{ variant?: "default" | "outline" | "ghost" | "secondary" | "destructive"; size?: "default" | "sm" | "icon" | "icon-sm"; className?: string; title?: string; disabled?: boolean; onClick?: (e: any) => void; children?: any }>;
+      Popover: Component<{ open?: boolean; onOpenChange?: (open: boolean) => void; children?: any }>;
+      PopoverTrigger: Component<{ asChild?: boolean; children?: any }>;
+      PopoverContent: Component<{ side?: "top" | "bottom" | "left" | "right"; align?: "start" | "center" | "end"; className?: string; children?: any }>;
+      Tooltip: Component<{ children?: any }>;
+      TooltipTrigger: Component<{ asChild?: boolean; children?: any }>;
+      TooltipContent: Component<{ side?: "top" | "bottom" | "left" | "right"; children?: any }>;
+      Switch: Component<{ checked?: boolean; onCheckedChange?: (v: boolean) => void; disabled?: boolean }>;
+      /** Joins class names, later Tailwind classes winning (clsx + tailwind-merge). */
+      cn(...classes: any[]): string;
+    };
+    /** Every lucide-react icon: <g.icons.Timer className="size-3.5" />. */
+    readonly icons: Record<string, Component<{ className?: string }>>;
+
+    /**
+     * Put a component in one of gerdr's slots. It is re-rendered with gerdr; one that throws is dropped and its error
+     * shown in Settings → Add-ons. Several add-ons in one slot: by order, then by add-on id.
+     *   "sidebar"    the left sidebar, above its bottom row (full width, no props)
+     *   "paneTitle"  every pane's title bar, before its ⋯ menu (props: { pane: PaneInfo; tab: TabInfo }); keep it small
+     */
+    slot(name: "sidebar", component: Component<{}>, opts?: { order?: number }): Dispose;
+    slot(name: "paneTitle", component: Component<{ pane: PaneInfo; tab: TabInfo }>, opts?: { order?: number }): Dispose;
+
+    /** A button in the composer's bottom bar (next to the model menu). icon: an element, e.g. <g.icons.Zap />. */
+    composerAction(action: { id: string; title: string; icon?: any; run(ctx: ComposerContext): void | Promise<void> }): Dispose;
+
+    /**
+     * An item in the right-click menu (the desktop App and the Android App; a browser keeps its own menu). Shown when
+     * when(ctx) is true; without when, only while text is selected.
+     */
+    contextMenu(item: { id: string; title: string; when?(ctx: MenuContext): boolean; run(ctx: MenuContext): void | Promise<void> }): Dispose;
+
+    // ---- data ----
+
+    /** The accounts' quotas (Claude Code, Codex): what the composer's /usage shows. force: skip the cache. */
+    usage(force?: boolean): Promise<UsageInfo[]>;
+    /** Turns done and money spent per day, the last `days` (default 1), today last. g.on("stats") says when they change. */
+    stats(days?: number): Promise<DayStats[]>;
 
     /** This add-on's own service (addon.json, see the top of this file). Without one, status() is undefined and send rejects. */
     service: {
@@ -125,6 +175,8 @@ declare global {
       /** 给某个会话发一句话（它在跑就插进去）。 */
       send(sessionId: string, text: string): Promise<void>;
       runCommand(id: string): Promise<void>;
+      /** Append text to a session's composer (what is typed there, not sent). */
+      insertText(sessionId: string, text: string): void;
     };
 
     /** The add-on's own small storage (kept in this browser / App). */
@@ -132,6 +184,79 @@ declare global {
       get<T = unknown>(key: string): T | undefined;
       set(key: string, value: unknown): void;
     };
+  }
+
+  type Component<P> = (props: P) => any;
+
+  /** What JSX compiles to (set by gerdr; tsconfig.json points JSX at them). */
+  const __gerdrH: any;
+  const __gerdrFragment: any;
+
+  interface GerdrReact {
+    createElement(type: any, props?: any, ...children: any[]): any;
+    Fragment: any;
+    useState<T>(initial: T | (() => T)): [T, (v: T | ((prev: T) => T)) => void];
+    useEffect(effect: () => void | (() => void), deps?: readonly unknown[]): void;
+    useMemo<T>(f: () => T, deps: readonly unknown[]): T;
+    useCallback<T extends (...args: any[]) => any>(f: T, deps: readonly unknown[]): T;
+    useRef<T>(initial: T): { current: T };
+  }
+
+  namespace JSX {
+    type Element = any;
+    interface IntrinsicElements {
+      [tag: string]: any;
+    }
+    interface ElementChildrenAttribute {
+      children: {};
+    }
+  }
+
+  interface ComposerContext {
+    sessionId: string;
+    /** What is typed in the composer now. */
+    readonly text: string;
+    /** Append to what is typed. */
+    insert(text: string): void;
+    /** Replace what is typed. */
+    setText(text: string): void;
+  }
+
+  interface MenuContext {
+    /** The selected text ("" when nothing is). */
+    selection: string;
+    /** The session of the pane that was clicked, if any. */
+    sessionId?: string;
+  }
+
+  interface UsageLimit {
+    kind: string;
+    /** Shown as is: "5 小时", "本周", "本周 · Opus"… */
+    label: string;
+    /** 0–100 */
+    percent: number;
+    /** unix ms; 0 = unknown */
+    resetsAt?: number;
+    windowMins?: number;
+  }
+
+  /** One agent account's quotas. When a refresh failed, data is still the last one fetched and error says why. */
+  interface UsageInfo {
+    agent: string;
+    name: string;
+    data?: { plan?: string; limits: UsageLimit[] };
+    error?: string;
+    /** When data was fetched (unix ms). */
+    at?: number;
+  }
+
+  interface DayStats {
+    /** 2026-10-31, local time */
+    date: string;
+    /** Turns that ended normally (not cancelled, not failed). */
+    done: number;
+    /** USD by agent, as the agent reported it: only Claude Code reports money. */
+    cost?: Record<string, number>;
   }
 
   interface ServiceStatus {

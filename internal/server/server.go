@@ -31,13 +31,13 @@ import (
 	"github.com/coder/acp-go-sdk"
 	"github.com/gorilla/websocket"
 
+	"github.com/gerdr-dev/gerdr/internal/addons"
 	"github.com/gerdr-dev/gerdr/internal/auth"
 	"github.com/gerdr-dev/gerdr/internal/awake"
 	"github.com/gerdr-dev/gerdr/internal/config"
 	"github.com/gerdr-dev/gerdr/internal/doctor"
 	"github.com/gerdr-dev/gerdr/internal/ext"
 	"github.com/gerdr-dev/gerdr/internal/hub"
-	"github.com/gerdr-dev/gerdr/internal/addons"
 	"github.com/gerdr-dev/gerdr/internal/remote"
 	"github.com/gerdr-dev/gerdr/internal/service"
 	"github.com/gerdr-dev/gerdr/internal/term"
@@ -54,10 +54,10 @@ type Server struct {
 	Config  *config.Store
 	Secrets *config.Secrets // API keys moved out of config.json (config/secrets.go)
 	Layout  *config.Store
-	Addons *addons.Manager
+	Addons  *addons.Manager
 	// AddonSvc runs the add-ons' services (addon.json); RunAddonServices starts it.
 	AddonSvc *addons.Services
-	Ext       *ext.Manager
+	Ext      *ext.Manager
 	// Work：the Work view's local functions (internal/work). nil = off (tests).
 	Work *work.Runner
 	UI   *uisite.Renderer
@@ -154,6 +154,11 @@ func (s *Server) Handler() http.Handler {
 	// 账号的用量额度（claude / codex 各一份）。?force=1：人点了刷新，绕过缓存（hub 里仍有最小间隔）
 	mux.HandleFunc("GET /api/usage", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, s.Hub.Usage(r.Context(), r.URL.Query().Get("force") == "1"))
+	})
+	// Turns done and cost per day, today last (hub/stats.go). ?days=7; "stats" is broadcast when they change.
+	mux.HandleFunc("GET /api/stats", func(w http.ResponseWriter, r *http.Request) {
+		n, _ := strconv.Atoi(r.URL.Query().Get("days"))
+		writeJSON(w, s.Hub.Stats(min(max(n, 1), 400)))
 	})
 	mux.HandleFunc("GET /api/pending", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, s.Hub.Pending()) })
 	mux.HandleFunc("GET /api/busy", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, s.busy()) })
@@ -409,6 +414,7 @@ func (s *Server) Handler() http.Handler {
 		writeJSON(w, map[string]any{})
 	})
 	mux.HandleFunc("DELETE /api/ui/errors", func(w http.ResponseWriter, r *http.Request) {
+		s.Log.Info("ui errors dismissed in the rescue panel", "count", len(s.UI.ClientErrors()))
 		s.UI.ClearClientErrors()
 		writeJSON(w, map[string]any{})
 	})

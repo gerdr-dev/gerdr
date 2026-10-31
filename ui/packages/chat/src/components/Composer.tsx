@@ -1108,7 +1108,7 @@ export const Composer = forwardRef<
                   ),
               )
             )}
-            {host.composerBar?.(session)}
+            {host.composerBar?.(session, { paneId })}
           </div>
           <TasksChip session={session} short={compact && tight > 0} />
           {session.context && <ContextMeter c={session.context} short={compact} />}

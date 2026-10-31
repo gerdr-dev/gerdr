@@ -19,6 +19,24 @@ sees: `internal/addons/builtin/gerdr.d.ts`, copied into `~/.gerdr/addons` on eve
   don't be compatible. Mods a user installs with `claude plugin install` still run their non-UI hooks in gerdr's
   claude sessions, since gerdr drives the real CLI.
 
+## Drawing and data
+
+- `g.slot("sidebar" | "paneTitle", Component)`, `g.composerAction`, `g.contextMenu` (ui/src/components/AddonSlot.tsx,
+  AppContextMenu.tsx). Add-on JSX compiles to the globals `__gerdrH` / `__gerdrFragment` (React.createElement /
+  Fragment, set in lib/addons.ts) — not `gerdr.h`: the desktop shell owns `window.gerdr`. Hooks must come from
+  `g.React` (the same React that mounts them); `g.ui` hands out gerdr's shadcn pieces and `g.icons` all of lucide, so
+  an add-on looks native without bundling its own copies. Each slot entry sits in its own error boundary.
+- Drafts are keyed by **pane**, not session: `composerBar(session, { paneId })` passes the key, and
+  `g.actions.insertText(sessionId)` writes into the focused pane showing that session.
+- The context menu only exists in the desktop and Android Apps (a browser keeps its own), so `g.contextMenu` items
+  show there only.
+- `g.usage()` is /api/usage (the quotas). `g.stats()` is /api/stats (internal/hub/stats.go): turns that ended with
+  end_turn, and cost from Claude Code's `result.total_cost_usd` (a per-process running total, sent by the adapter as
+  `_meta.gerdr.cost`; the hub adds the growth, a smaller total = a new process). Codex reports no money. Changes are
+  broadcast as "stats" (coalesced to one per 2s) and reach add-ons as `g.on("stats")`.
+- The sidebar's quota meter used to be built in (UsageMeter); it is the `usage-meter` add-on now, and "today" (tasks
+  done, cost) is the `today` add-on. Without them the sidebar has neither — install from the store.
+
 ## Layout on disk
 
 ```
@@ -62,5 +80,7 @@ folders (one or two levels down) holding an `addon.json` are its add-ons; no ind
     is a 409 `conflict`, and the UI asks before sending `force`.
 - Uninstall deletes the folder, keeps `addon-data/<id>`.
 - The default store is `gerdr-dev/gerdr-addon`; removing it sticks (the state file stores `stores: []`).
+- An add-on in a store should have `screenshots` in addon.json (shown as thumbnails in the store list) and a
+  README.md; relative image paths in the README are served from the store's copy.
 - The add-ons that used to ship inside the binary (duplicate-tab, notify-when-done, session-title) moved there.
   Users who had them keep them through the migration; new users install them from the store.

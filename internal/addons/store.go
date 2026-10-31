@@ -39,15 +39,16 @@ var ErrConflict = errors.New("conflict")
 
 // StoreAddon is one add-on a store offers.
 type StoreAddon struct {
-	ID          string `json:"id"`
-	Path        string `json:"path"` // its folder in the store, slash-separated
-	Name        string `json:"name"`
-	Version     string `json:"version,omitempty"`
-	Description string `json:"description,omitempty"`
-	Icon        string `json:"icon,omitempty"`
-	Readme      string `json:"readme,omitempty"` // README.md of its folder
-	HasService  bool   `json:"hasService,omitempty"`
-	Hash        string `json:"hash"`
+	ID          string   `json:"id"`
+	Path        string   `json:"path"` // its folder in the store, slash-separated
+	Name        string   `json:"name"`
+	Version     string   `json:"version,omitempty"`
+	Description string   `json:"description,omitempty"`
+	Icon        string   `json:"icon,omitempty"`
+	Readme      string   `json:"readme,omitempty"` // README.md of its folder
+	Screenshots []string `json:"screenshots,omitempty"`
+	HasService  bool     `json:"hasService,omitempty"`
+	Hash        string   `json:"hash"`
 }
 
 // StoreView is a store as Settings → Add-ons → Store shows it.
@@ -181,7 +182,7 @@ func scanStore(root string) []StoreAddon {
 			}
 			seen[name] = true
 			a := StoreAddon{ID: name, Path: r, Name: name, Version: mf.Version, Description: mf.Description, Icon: mf.Icon,
-				HasService: mf.Service != nil, Hash: hashDir(full)}
+				Screenshots: mf.Screenshots, HasService: mf.Service != nil, Hash: hashDir(full)}
 			if mf.Name != "" {
 				a.Name = mf.Name
 			}
@@ -230,7 +231,9 @@ func (m *Manager) RemoveStore(source string) error {
 	return nil
 }
 
-func (m *Manager) hasStore(source string) bool { return slices.Contains(m.readState().stores(), source) }
+func (m *Manager) hasStore(source string) bool {
+	return slices.Contains(m.readState().stores(), source)
+}
 
 // RefreshStore downloads a store again. A failed download keeps what was there and records why.
 func (m *Manager) RefreshStore(ctx context.Context, source string) error {

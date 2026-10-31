@@ -79,7 +79,7 @@ import { AgentIcon, StatusDot, dotStatus, dotRank } from "./AgentIcon";
 import { fmtElapsed } from "./chat/StatusLine";
 import { TabDragLayer, useTabDrag } from "./TabDrag";
 import { WorkspaceDragLayer, useWorkspaceDrag } from "./WorkspaceDrag";
-import { UsageMeter } from "./UsageMeter";
+import { AddonSlot } from "./AddonSlot";
 import { isAndroid } from "@/lib/android";
 import { reconnectNow } from "@/lib/sync";
 import { toast } from "sonner";
@@ -530,7 +530,8 @@ export function Sidebar({ className }: { className?: string }) {
         </button>
       </div>
       <AgentList />
-      <UsageMeter />
+      {/* Add-ons' sidebar blocks (g.slot("sidebar")): the quota meter and today's numbers live in add-ons now */}
+      <AddonSlot name="sidebar" className="shrink-0 border-t empty:hidden" />
       <SidebarFooter sidebarToggle />
     </div>
   );
@@ -680,12 +681,12 @@ function AgentList() {
   const seen = new Set<string>();
   // This session's agents only: another session's are out of sight like in herdr (their state shows on the session switcher)
   spaceWorkspaces(layout).forEach((w, wi) =>
-    w.tabs.forEach((t, ti) => {
+    w.tabs.forEach((t) => {
       for (const p of leaves(t.root)) {
         const s = p.sessionId ? sessions[p.sessionId] : undefined;
         if (!s || seen.has(s.id)) continue;
         seen.add(s.id);
-        rows.push({ s, where: `${applyWorkspaceLabel(w, wi, w.name)} · ${ti + 1}.${tabName(t)}` });
+        rows.push({ s, where: `${applyWorkspaceLabel(w, wi, w.name)} · ${tabName(t)}` });
       }
     }),
   );

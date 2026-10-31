@@ -305,15 +305,11 @@ function StoreRow({ source, a }: { source: string; a: StoreAddon }) {
     await install(source, a, false);
     setBusy(false);
   };
+  const file = (path: string) =>
+    `${location.origin}/api/addon-stores/file?source=${encodeURIComponent(source)}&id=${encodeURIComponent(a.id)}&path=${encodeURIComponent(path)}&v=${a.hash}`;
   return (
     <div className="flex gap-3 p-3">
-      <AddonIcon
-        src={
-          a.icon
-            ? `/api/addon-stores/file?source=${encodeURIComponent(source)}&id=${encodeURIComponent(a.id)}&path=${encodeURIComponent(a.icon)}&v=${a.hash}`
-            : undefined
-        }
-      />
+      <AddonIcon src={a.icon ? file(a.icon) : undefined} />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[13px]">
           <span className="font-medium">{a.name}</span>
@@ -322,13 +318,22 @@ function StoreRow({ source, a }: { source: string; a: StoreAddon }) {
           {a.hasService && <Tag>后台进程</Tag>}
         </div>
         {a.description && <div className="mt-0.5 text-[12px] text-muted-foreground">{a.description}</div>}
+        {!!a.screenshots?.length && (
+          <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+            {a.screenshots.map((p) => (
+              <a key={p} href={file(p)} target="_blank" rel="noreferrer" className="shrink-0">
+                <img src={file(p)} alt="" className="h-28 rounded-md border object-cover hover:opacity-90" />
+              </a>
+            ))}
+          </div>
+        )}
         {a.readme && (
           <Collapsible className="mt-1">
             <CollapsibleTrigger className="group flex items-center gap-0.5 text-[12px] text-muted-foreground hover:text-foreground">
               <ChevronRight className="size-3.5 transition-transform group-data-[state=open]:rotate-90" /> 说明
             </CollapsibleTrigger>
             <CollapsibleContent className="mt-1.5 rounded-sm bg-muted/50 p-2.5 text-[13px]">
-              <Markdown>{a.readme}</Markdown>
+              <Markdown>{relinkImages(a.readme, file)}</Markdown>
             </CollapsibleContent>
           </Collapsible>
         )}
@@ -346,6 +351,11 @@ function StoreRow({ source, a }: { source: string; a: StoreAddon }) {
       </div>
     </div>
   );
+}
+
+// A README's images point at files next to it (![](shot.png)): serve them from the store's copy.
+function relinkImages(md: string, file: (path: string) => string) {
+  return md.replace(/(!\[[^\]]*\]\()(?!https?:|data:|\/)\.?\/?([^)\s]+)/g, (_, pre: string, path: string) => pre + file(path));
 }
 
 function AddonIcon({ src }: { src?: string }) {
