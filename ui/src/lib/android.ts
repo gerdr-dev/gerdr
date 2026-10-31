@@ -10,11 +10,10 @@
 
 import { toast } from "sonner";
 import { hasAsk, watchAsks } from "@gerdr/chat/askkeys";
-import { keyboardUp } from "./phone";
 import { lightboxOpen } from "@/components/Lightbox";
 import { focusSession } from "./actions";
-import { activeTab } from "./layout";
-import { get, set, useStore } from "./store";
+import { get, set, useStore, visibleSessions } from "./store";
+import { isPhone, keyboardUp } from "./phone";
 
 export type AndroidMsg = { t: string; [k: string]: unknown };
 
@@ -210,8 +209,7 @@ const openList = () => document.querySelector<HTMLElement>('[role="listbox"][dat
  */
 let arrows: boolean | undefined;
 function syncArrows() {
-  const pane = activeTab(get().layout).focus;
-  const now = keyboardUp() || !!openList() || (!!pane && hasAsk(pane));
+  const now = keyboardUp() || !!openList() || visibleSessions(get().layout, isPhone()).some(hasAsk);
   if (now === arrows) return;
   arrows = now;
   postAndroid({ t: "arrows", on: now });
@@ -230,7 +228,7 @@ function watchArrows() {
   const mo = new MutationObserver(later);
   mo.observe(document.body, { childList: true });
   const offAsks = watchAsks(later);
-  const offStore = useStore.subscribe((s, p) => s.layout !== p.layout && later());
+  const offStore = useStore.subscribe((s, p) => (s.layout !== p.layout || s.overview !== p.overview) && later());
   syncArrows();
   return () => {
     cancelAnimationFrame(raf);
@@ -249,21 +247,25 @@ function watchArrows() {
  * 不聚焦输入框：聚焦会把软键盘弹起来。一个下拉 / 菜单开着时给它（焦点在它里面）。
  */
 function volumeKey(key: "ArrowUp" | "ArrowDown") {
+  const press = (el: Element) => el.dispatchEvent(new KeyboardEvent("keydown", { key, code: key, bubbles: true, cancelable: true }));
   const list = openList();
-  if (list) {
-    const to = list.contains(document.activeElement) ? (document.activeElement as HTMLElement) : list;
-    to.dispatchEvent(new KeyboardEvent("keydown", { key, code: key, bubbles: true, cancelable: true }));
-    return;
-  }
-  // Typing somewhere else than a composer (the command palette's search, a rename box): the arrows are for that box
-  const a = document.activeElement as HTMLElement | null;
-  if (a && (a.tagName === "INPUT" || a.tagName === "TEXTAREA") && !a.hasAttribute("data-composer")) {
-    a.dispatchEvent(new KeyboardEvent("keydown", { key, code: key, bubbles: true, cancelable: true }));
-    return;
-  }
-  const pane = activeTab(get().layout).focus;
-  const box = pane ? document.querySelector<HTMLTextAreaElement>(`textarea[data-composer="${CSS.escape(pane)}"]`) : null;
-  box?.dispatchEvent(new KeyboardEvent("keydown", { key, code: key, bubbles: true, cancelable: true }));
+  if (list) return press(list.contains(document.activeElement) ? document.activeElement! : list);
+  // Typing somewhere (a composer, the command palette's search, a rename box): the arrows are for that box. The
+  // focused pane's composer isn't necessarily it: in the all-agents overview the one being typed in is the tile's
+  // (pane id ov-…), and the tab's composer underneath is hidden
+  const a = document.activeElement;
+  if (a && (a.tagName === "INPUT" || a.tagName === "TEXTAREA")) return press(a);
+  // Not typing (a question waiting): the composer of the session on screen, without focusing it (that would bring
+  // the soft keyboard up)
+  const box = composerOf(visibleSessions(get().layout, isPhone())[0]);
+  if (box) press(box);
+}
+
+/** The composer of this session that is showing (a hidden kept tab or the tab under the overview has one too). */
+function composerOf(session: string | undefined) {
+  if (!session) return null;
+  const all = document.querySelectorAll<HTMLTextAreaElement>(`textarea[data-session="${CSS.escape(session)}"]`);
+  return [...all].find((el) => el.checkVisibility()) ?? null;
 }
 
 /** The App's self-update (AppUpdate.kt) as the shell reports it; Settings draws it (AndroidSettings). */

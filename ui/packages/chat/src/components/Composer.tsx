@@ -988,6 +988,7 @@ export const Composer = forwardRef<
         <textarea
           ref={ta}
           data-composer={paneId}
+          data-session={session.id}
           rows={1}
           enterKeyHint={sendKey === "enter" ? "send" : "enter"}
           value={text}
