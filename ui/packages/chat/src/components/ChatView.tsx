@@ -368,9 +368,10 @@ export function ChatView({
     };
   }, [tabActive]);
   const scrollerEl = useRef<HTMLElement | null>(null);
-  // 顶上钉一条「这段回复是回哪句话的」（照 Claude Code）：屏幕最上面那一行往前找最近的用户消息，
-  // 它已经滚出屏幕了就钉出来，点一下跳回去。贴着底也钉：原来只在往上翻时才出，回复一长、人停在底部看输出时
-  // 那句话早滚没了却不显示，要往上翻一截离开底部才冒出来（用户报的）。行是虚拟列表的，只能从 DOM 上的 data-index 认出顶上是第几行。
+  // Pin "which prompt this reply answers" at the top (as Claude Code does): the nearest user message above the top row
+  // of the screen, click to jump back to it. If the top row is a prompt, the one before it is pinned, so the bar is
+  // always there. Also pinned at the bottom: a long reply scrolls the prompt away while the user sits at the bottom
+  // reading output (user report). The list is virtual, so the top row is found from the DOM's data-index.
   const [pinned, setPinned] = useState<number | null>(null);
   const pinRaf = useRef(0);
   const pinnedRef = useRef<number | null>(null);
@@ -390,8 +391,11 @@ export function ChatView({
       }
     }
     const rs = rowsRef.current;
+    // The nearest user message strictly above the top row. When the top row is a user message itself (it is on
+    // screen), pin the one before it instead: the bar stays up as a way back to the previous prompt rather than
+    // vanishing whenever a prompt scrolls into view.
     let u = -1;
-    for (let i = Math.min(topIdx, rs.length - 1); i >= 0; i--)
+    for (let i = Math.min(topIdx - 1, rs.length - 1); i >= 0; i--)
       if (rs[i].kind === "user") {
         u = i;
         break;
@@ -400,7 +404,7 @@ export function ChatView({
     // show the prompt over an empty pane ahead of the rows.
     const lst = el.querySelector<HTMLElement>("[data-testid=virtuoso-item-list]");
     const hidden = !!lst && getComputedStyle(lst).visibility === "hidden";
-    const p = !hidden && u >= 0 && u < topIdx ? u : null;
+    const p = !hidden && u >= 0 ? u : null;
     if (p === pinnedRef.current) return;
     pinnedRef.current = p;
     flushSync(() => setPinned(p));
