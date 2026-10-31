@@ -30,8 +30,9 @@ you as messages (e.g. "write this week's progress reports").
   gerdr without a model (a button press takes seconds, costs no tokens, gives the same result every
   time) and called from pages with `run()`. They can run the user's command-line tools (`ctx.exec`:
   `git`, `glab`, `gh`, `kubectl`…), `fetch`, call MCP tools, read and write files here (`ctx.fs`),
-  and report progress. **Read `FUNCTIONS.md` before writing one**: the ctx API, the rules, how to try
-  and debug them. Keep pages to drawing; work a page needs again and again goes into a function, not
+  hand a task to a coding agent in any repository and follow it (`ctx.sessions`, with `ctx.dirs` /
+  `ctx.workspaces` to pick where), and report progress. **Read `FUNCTIONS.md` before writing one** (the
+  rules, how to try and debug them), and `local/ctx.d.ts` for the ctx API. Keep pages to drawing; work a page needs again and again goes into a function, not
   into you running the same commands each time.
 - `gerdr work …` acts on the project of the current directory, so run it from here.
 - Other projects have their own Work directories; don't touch them.

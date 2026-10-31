@@ -56,6 +56,7 @@ type Runner struct {
 	MCP        CallMCP
 	MCPServers func() []MCPServer       // ctx.mcp.servers()
 	Secret     func(name string) string // ctx.secrets.get; "" = none
+	Host       Host                     // ctx.sessions / ctx.workspaces / ctx.dirs.recent (host.go); nil = not available
 	Log        *slog.Logger
 
 	mu        sync.Mutex

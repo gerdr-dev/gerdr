@@ -363,6 +363,10 @@ func (r *runner) ctxObject() *goja.Object {
 	// await ctx.exec(cmd, [args…], { cwd, input, timeout, env }) → { code, stdout, stderr, truncated } (exec.go)
 	_ = c.Set("exec", r.exec)
 	_ = c.Set("fs", r.fsObject())
+	// Handing work to agents (host.go). ctx.workspace (singular, below) is this Work project; ctx.workspaces are Code's.
+	_ = c.Set("sessions", r.sessionsObject())
+	_ = c.Set("workspaces", r.workspacesObject())
+	_ = c.Set("dirs", r.dirsObject())
 	_ = c.Set("workspace", map[string]any{"project": r.project, "dir": r.dir, "logs_dir": r.r.logDir(r.project)})
 	// gerdr's interface is Chinese: messages meant for the user can follow this
 	_ = c.Set("locale", "zh")

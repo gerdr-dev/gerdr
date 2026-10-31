@@ -8,7 +8,7 @@ and let the page call it.**
 
 ```ts
 // local/mrs.ts → called as "mrs.open"
-export async function open(input: { repo?: string }, ctx: any) {
+export async function open(input: { repo?: string }, ctx: Ctx) {
   const args = ['mr', 'list', '-F', 'json', '--per-page', '50']
   if (input.repo) args.push('-R', input.repo)
   const r = await ctx.exec('glab', args, { timeout: 60_000 })
@@ -31,21 +31,17 @@ export async function open(input: { repo?: string }, ctx: any) {
 
 ## What a function can use
 
-| | |
-|---|---|
-| `await ctx.exec(cmd, [args…], { cwd, input, timeout, env })` | Runs a command-line tool and returns `{ code, stdout, stderr, truncated }`. A non-zero exit isn't an error: look at `code`. Only a missing command, a timeout or a bad `cwd` reject. **The command and its arguments go apart, with no shell in between**: put URLs and user input straight into the array, never into a command string. For pipes and redirects: `ctx.exec('sh', ['-c', 'git log --oneline "$1" \| head -20', '_', branch])`, values passed as `$1`, `$2`; a longer script goes in a file here (`scripts/x.sh`), run as `ctx.exec('sh', ['scripts/x.sh', arg])`. Commands are found on the user's login shell PATH (Homebrew ones too). `cwd` is relative to this directory and can't leave it: for another repo pass its path as an argument (`git -C ~/dev/x`, `glab -R group/repo`). stdin is empty unless you give `input`. `timeout` in ms, 30 s by default, 10 min at most; the whole process tree is killed on timeout or stop. stdout and stderr keep 10MB each. Pass keys through `env: { TOKEN: ctx.secrets.get('TOKEN') }`, not as arguments (those show in the process list). Try the command in your shell first, then put it in the function |
-| `await fetch(url, { method, headers, body })` | The global `fetch` (there's no `ctx.fetch`). Returns at the headers: `{ ok, status, statusText, url, headers.get(), body, text(), json(), arrayBuffer(), timing: { ttfb_ms, total_ms }, truncated }`. `body` can be a string or an object (sent as JSON). Bodies up to 10MB: `text()` / `json()` read it all, cut and `truncated: true` past that. **Streams (SSE, slow APIs): read as it comes**: `const reader = res.body.getReader(), dec = new TextDecoder()`, loop `const { done, value } = await reader.read()`, `dec.decode(value, { stream: true })`. Waits 2 minutes for the headers, then gives up after 1 minute without data; no total limit. Local and company-internal addresses are fine |
-| `await ctx.fetchAll([url or { url, method, headers, body }, …])` | Fetches 4 at a time and returns the responses in order; a failed one is `{ ok: false, status: 0, url, error }` and doesn't fail the rest. For a batch of pages |
-| `ctx.html(text)` | Parses HTML: `.find('css selector')` → `[{ tag, text, attrs }]`, `.text()` the visible text, `.markdown()` the page as Markdown |
-| `await ctx.mcp(server, tool, args)` | Calls an MCP tool (the `mcp__<server>__<tool>` you see) and returns `structuredContent`, else the text parsed as JSON, else the text; a tool error rejects. Servers: gerdr's own (Settings → MCP), then Claude Code's (`~/.claude.json`), then Codex's. **A platform's data goes through its MCP when there is one**; wrap it in one file (`local/_okr.ts`) so a change in the tool is one edit. `ctx.mcp.servers()` → `[{ name, status: 'enabled' \| 'disabled', source: 'gerdr' \| 'claude' \| 'codex' }]`: to show a feature only when its server is there, rather than guessing from errors |
-| `ctx.secrets.get('NAME')` | A key the user stored with `gerdr work secret set NAME` (the value is read from stdin; the user runs it in a terminal, or you pipe it in when they hand it to you). `null` when there's none: throw an error that says which command to run. Never put keys in the code, the page or files here |
-| `ctx.fs` | Files in this Work directory (`ctx.fs.root`), for data a function keeps between runs, exports, reports. Paths are relative with `/`, no absolute paths, no `..`. All synchronous: `list(dir?)` → `[{ path, dir, size, mtime, etag }]` (all levels down, skipping `.` entries and `node_modules`, 5000 at most; a missing dir is `[]`); `stat(path)` → one of those or `null`; `read(path)` → text (10MB at most); `write(path, text, { etag }?)` (creates directories; with the `etag` you read, a file changed since isn't overwritten, it throws) → `{ etag }`; `mkdir(path)`; `move(from, to)`; `copy(from, to)` (both throw if `to` exists); `trash(path)` (into the Trash); `open(path, { reveal })` (opens it with its app / shows it in Finder). `mtime` is in ms. Keep data under a folder of its own (`data/`), not among `ui/` and `local/` |
-| `ctx.progress({ done, total, message })` | Progress the page shows while the function runs (and `gerdr work run` prints) |
-| `ctx.log(…)` / `console.log` / `.warn` / `.error` | Log lines, shown live and kept in the run log (below). Never log keys, cookies or tokens |
-| `await ctx.sleep(ms)` | Waits, 60 s at most per call |
-| `ctx.workspace` | `{ project, dir, logs_dir }`: this project's id, this directory, where its run logs are |
-| `ctx.locale` | `'zh'`: gerdr's interface language, for messages meant for the user |
-| Globals | `fetch`, `URL` (with `searchParams.get/has`), `TextEncoder` / `TextDecoder`, `btoa` / `atob`, `console`, and `Number.prototype.toLocaleString` with thousands separators |
+**`ctx` is described in `local/ctx.d.ts`**: every member with its arguments, what it returns and its
+limits. Read it before writing a function and type the argument `ctx: Ctx` (no import needed). In short:
+`exec` (command-line tools), `mcp` (MCP tools), `fetchAll`, `html`, `secrets`, `fs` (files in this
+Work directory), `sessions` (hand a task to a coding agent and follow it), `workspaces` (the Code
+side's workspaces), `dirs` (directories anywhere on disk, read-only), `progress`, `log`, `sleep`.
+
+Globals: `fetch(url, { method, headers, body })` (there's no `ctx.fetch`; `body` can be an object, sent
+as JSON; bodies up to 10 MB; waits 2 minutes for the headers, then gives up after 1 minute without data; for
+streams read `res.body.getReader()` as it comes; local and company-internal addresses are fine), `URL`,
+`TextEncoder` / `TextDecoder`, `btoa` / `atob`, `console`, and `Number.prototype.toLocaleString` with
+thousands separators.
 
 Not here (Annulo has them, gerdr doesn't): `ctx.db`, `ctx.oauth`, `ctx.upload`, `ctx.file`,
 `ctx.folders`, `ctx.browser`, `ctx.llm`, `ctx.agent`, `ctx.user`, `ctx.chat_id`. Keep data in files
