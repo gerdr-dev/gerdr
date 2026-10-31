@@ -97,6 +97,20 @@ header). It doesn't go through LanRoute, so it always takes the public address.
 The WebView has no PDF viewer: an `<iframe>` of a PDF becomes a download the moment it loads. FileViewer checks
 `navigator.pdfViewerEnabled` and shows a download button instead.
 
+## Self-update
+
+The App updates itself straight from GitHub (`AppUpdate.kt`), not through the gerdr it's connected to. The release's
+android job writes `android.json` (version, file, size, sha256) next to the APK, and the App reads
+`releases/latest/download/android.json` when it comes to the front, at most every 6 h (debug builds never). A newer
+version is downloaded into the cache by itself and checked against the sha256; Settings and a toast offer "安装".
+
+- Installing always takes a tap: Android only installs a sideloaded app once the person allows "install unknown apps"
+  for gerdr (the App sends them there the first time) and confirms the installer's dialog. On Android 12+ the session
+  asks for no confirmation (`setRequireUserAction`), which the system may grant once the App installed itself before;
+  MIUI / HyperOS tend to ask anyway.
+- Android refuses an APK signed with another key, so a tampered download can't get in; the sha256 catches truncation.
+- Versions compare as numbers (`0.2.10` > `0.2.9`); a local build is `0.1.0`, behind every release.
+
 ## 桥
 
 页面 ↔ 壳 是 JSON 字符串、按 `t` 分派；JS 对象 `gerdrAndroid`，壳用 `addWebMessageListener` **只对服务器那个 origin 注入**

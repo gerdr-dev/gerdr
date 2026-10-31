@@ -89,10 +89,17 @@ jobs:
           echo "want $want"; echo "got  $got"
           [ -n "$want" ] && [ "$want" = "$got" ]
       - run: mv android/app/build/outputs/apk/release/app-release.apk "Gerdr-${{ needs.version.outputs.version }}-android.apk"
+      # The App's self-update feed (android/…/AppUpdate.kt reads releases/latest/download/android.json)
+      - run: |
+          f="Gerdr-${{ needs.version.outputs.version }}-android.apk"
+          printf '{"version":"%s","file":"%s","size":%d,"sha256":"%s"}\n' "${{ needs.version.outputs.version }}" "$f" "$(wc -c < "$f" | tr -d ' ')" "$(sha256sum "$f" | cut -d' ' -f1)" > android.json
+          cat android.json
       - uses: actions/upload-artifact@v7
         with:
           name: android
-          path: Gerdr-*.apk
+          path: |
+            Gerdr-*.apk
+            android.json
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
@@ -104,4 +111,4 @@ jobs:
           merge-multiple: true
       - env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" Gerdr-* gerdr-* update.json --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes
+        run: gh release create "$GITHUB_REF_NAME" Gerdr-* gerdr-* update.json android.json --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes

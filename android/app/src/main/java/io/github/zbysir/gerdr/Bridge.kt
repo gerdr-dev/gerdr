@@ -63,7 +63,7 @@ class Bridge(private val act: MainActivity, web: WebView, origin: String) {
                 send(
                     JSONObject().put("t", "hello").put("platform", "android")
                         .put("version", BuildInfo.version(act)).put("webauthn", act.webAuthn).put("scan", true)
-                        .put("copyImage", true),
+                        .put("copyImage", true).put("update", true),
                 )
                 send(LanRoute.snapshot()) // 顶栏那个「直连 / 中继」标签的初值
                 pendingFocus?.let { focus(it) }
@@ -82,6 +82,12 @@ class Bridge(private val act: MainActivity, web: WebView, origin: String) {
                 val r = JSONObject().put("t", "copyImage").put("ok", err == null)
                 if (err != null) r.put("error", err)
                 send(r)
+            }
+            // Self-update (AppUpdate.kt): answered with the state as `update`, and again on every change
+            "update" -> when (m.optString("op")) {
+                "check" -> AppUpdate.check(act)
+                "install" -> AppUpdate.install(act)
+                else -> send(AppUpdate.state(act))
             }
             "theme" -> act.applyTheme(m.optString("bg"), m.optBoolean("light"))
             "open" -> act.openExternal(m.optString("url"))
@@ -117,6 +123,9 @@ class Bridge(private val act: MainActivity, web: WebView, origin: String) {
         pendingFocus = null
         send(JSONObject().put("t", "focus").put("session", session))
     }
+
+    /** Self-update state (AppUpdate.state), on every change */
+    fun update(m: JSONObject) = send(m)
 
     /** 音量键（MainActivity.dispatchKeyEvent）：`dir` 是 up / down，`repeat` 是按住不放的连发 */
     fun key(dir: String, repeat: Boolean) = send(JSONObject().put("t", "key").put("k", dir).put("repeat", repeat))

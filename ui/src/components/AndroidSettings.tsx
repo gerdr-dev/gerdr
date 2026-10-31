@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { isAndroid, onAndroid, postAndroid } from "@/lib/android";
+import { androidCan, isAndroid, onAndroid, postAndroid, type AndroidUpdate } from "@/lib/android";
 import { cn } from "@/lib/utils";
 
 /**
@@ -12,16 +13,20 @@ import { cn } from "@/lib/utils";
 export function AndroidSettings() {
   const [n, setN] = useState<{ on: boolean; perm: boolean; battery: boolean } | null>(null);
   const [vol, setVol] = useState<boolean | null>(null);
+  const [up, setUp] = useState<AndroidUpdate | null>(null);
   const route = useRoute();
 
   useEffect(() => {
     const off1 = onAndroid("notify", (m) => setN({ on: !!m.on, perm: !!m.perm, battery: !!m.battery }));
     const off2 = onAndroid("volkeys", (m) => setVol(!!m.on));
+    const off3 = onAndroid("update", (m) => setUp(m as unknown as AndroidUpdate));
     postAndroid({ t: "notify", op: "get" });
     postAndroid({ t: "volkeys", op: "get" });
+    if (androidCan("update")) postAndroid({ t: "update", op: "get" });
     return () => {
       off1();
       off2();
+      off3();
     };
   }, []);
 
@@ -41,6 +46,8 @@ export function AndroidSettings() {
           换服务器
         </Button>
       </div>
+
+      {up && <UpdateRow u={up} />}
 
       {n && (
         <div>
@@ -84,6 +91,48 @@ export function AndroidSettings() {
           </div>
           <Switch checked={vol} onCheckedChange={(v) => postAndroid({ t: "volkeys", op: "set", on: v })} />
         </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The App's own version and self-update (AppUpdate.kt): checked against GitHub when the App comes to the front
+ * (every 6 h at most) and downloaded by itself; installing takes a tap because Android asks.
+ */
+function UpdateRow({ u }: { u: AndroidUpdate }) {
+  const busy = u.phase === "checking" || u.phase === "downloading" || u.phase === "installing";
+  const text =
+    u.phase === "checking"
+      ? "正在检查更新…"
+      : u.phase === "downloading"
+        ? `正在下载 ${u.latest}（${u.progress}%）`
+        : u.phase === "installing"
+          ? `正在安装 ${u.latest}…`
+          : u.phase === "ready"
+            ? `${u.latest} 已下载好，点「安装」`
+            : u.error
+              ? `检查更新失败：${u.error}`
+              : u.checkedAt
+                ? `已是最新（${new Date(u.checkedAt).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })} 检查过）`
+                : "每次打开 App 时检查，最多 6 小时一次";
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <div className="min-w-0">
+        <div className="text-[13px]">App 版本 {u.version}</div>
+        <div className={cn("text-[12px]", u.phase === "ready" ? "text-brand" : u.error && u.phase === "idle" ? "text-bad" : "text-muted-foreground")}>
+          {text}
+        </div>
+      </div>
+      {u.phase === "ready" ? (
+        <Button size="sm" onClick={() => postAndroid({ t: "update", op: "install" })}>
+          安装
+        </Button>
+      ) : (
+        <Button size="sm" variant="outline" disabled={busy} onClick={() => postAndroid({ t: "update", op: "check" })}>
+          {busy && <Loader2 className="size-3.5 animate-spin" />}
+          检查更新
+        </Button>
       )}
     </div>
   );

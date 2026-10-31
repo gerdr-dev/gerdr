@@ -8,6 +8,7 @@
 // 壳用 addWebMessageListener 注入 gerdrAndroid，**只对它连的那台服务器的 origin 注入** —— 所以「有这个对象」
 // 就是「我在 App 里，而且是 App 认的那台」。对象在页面脚本跑之前就在了，模块顶层读一次就够。
 
+import { toast } from "sonner";
 import { lightboxOpen } from "@/components/Lightbox";
 import { focusSession } from "./actions";
 import { activeTab } from "./layout";
@@ -108,6 +109,7 @@ export function initAndroid() {
     onAndroid("back", () => postAndroid({ t: "back", handled: closeTop() }), false),
     onAndroid("focus", (m) => typeof m.session === "string" && focusSession(m.session), false),
     onAndroid("key", (m) => (volumeKey(m.k === "up" ? "ArrowUp" : "ArrowDown"), syncMedia()), false),
+    onAndroid("update", updateReady),
   ];
   // Media events don't bubble, but they do go through the capture phase
   for (const ev of MEDIA_EVENTS) document.addEventListener(ev, syncMedia, true);
@@ -200,4 +202,29 @@ function volumeKey(key: "ArrowUp" | "ArrowDown") {
   const pane = activeTab(get().layout).focus;
   const box = pane ? document.querySelector<HTMLTextAreaElement>(`textarea[data-composer="${CSS.escape(pane)}"]`) : null;
   box?.dispatchEvent(new KeyboardEvent("keydown", { key, code: key, bubbles: true, cancelable: true }));
+}
+
+/** The App's self-update (AppUpdate.kt) as the shell reports it; Settings draws it (AndroidSettings). */
+export type AndroidUpdate = {
+  version: string;
+  phase: "idle" | "checking" | "downloading" | "ready" | "installing";
+  latest: string;
+  progress: number;
+  error: string;
+  checkedAt: number;
+};
+
+/** A new App downloaded by itself: offer to install it, once per version (installing needs a tap on Android anyway). */
+let offered = "";
+function updateReady(m: AndroidMsg) {
+  const u = m as unknown as AndroidUpdate;
+  if (u.phase !== "ready" || !u.latest || offered === u.latest) return;
+  offered = u.latest;
+  toast(`gerdr App ${u.latest} 已下载好`, {
+    id: "android-update",
+    duration: Infinity,
+    closeButton: true,
+    description: `现在是 ${u.version}。安装时系统会问一下，装完重新打开 App。`,
+    action: { label: "安装", onClick: () => postAndroid({ t: "update", op: "install" }) },
+  });
 }
