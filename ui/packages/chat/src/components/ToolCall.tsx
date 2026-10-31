@@ -248,15 +248,18 @@ function DefaultToolCall({ part, agent, running, keep: keepOpen }: { part: ToolP
             )}
             {/* 进度文字可以截断，耗时不能（截成「3.」看不懂）。跑完后 CLI 自动写的「Background command "…" completed」
                 不显示：就是把标题和状态又说一遍 */}
-            {taskNote && <span className="min-w-0 shrink truncate text-[11px] text-muted-foreground">{taskNote}</span>}
+            {/* shrink-[100]: when the row is short of room (a phone) the progress text gives way first, so the title stays
+                readable instead of both being cut to "M…" */}
+            {taskNote && <span className="min-w-0 shrink-[100] truncate text-[11px] text-muted-foreground">{taskNote}</span>}
             <span className="shrink-0 text-[11px] tabular-nums opacity-70">
               {elapsed(task.startedAt, task.endedAt)}
               {task.toolUses ? t("task.tools", { n: task.toolUses }) : ""}
             </span>
           </>
         )}
-        {/* 后面的按钮和展开箭头都靠右 */}
-        <span className="flex-1" />
+        {/* Buttons and the chevron sit at the right. -ml-2 cancels one of the two gaps around this spacer: on a phone that
+            gap is room the title could use */}
+        <span className="-ml-2 flex-1" />
         {task && isAgent && chatHost().openSubagent && (
           <span
             role="button"
@@ -312,7 +315,10 @@ function DefaultToolCall({ part, agent, running, keep: keepOpen }: { part: ToolP
             {part.errorText}
           </span>
         )}
-        <ChevronDown className={cn("size-3.5 shrink-0 opacity-0 transition group-hover/row:opacity-60", isOpen && "rotate-180 opacity-60")} />
+        {/* Without hover the chevron never shows, yet it held an empty slot at the row's end: drop it there while closed */}
+        <ChevronDown
+          className={cn("size-3.5 shrink-0 opacity-0 transition group-hover/row:opacity-60", isOpen ? "rotate-180 opacity-60" : "[@media(hover:none)]:hidden")}
+        />
       </CollapsibleTrigger>
       <CollapsibleContent className="pl-[22px] pr-1 pt-1 pb-2">
         <ToolBody meta={meta} input={part.input} keep={keep} />
