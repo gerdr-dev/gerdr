@@ -198,3 +198,27 @@ func TestNormalizeSource(t *testing.T) {
 		}
 	}
 }
+
+func TestSettings(t *testing.T) {
+	root := t.TempDir()
+	m := New(root, slog.Default())
+	d := filepath.Join(m.Dir(), "clock")
+	write(t, filepath.Join(d, "addon.json"), `{"settings":[{"key":"ttl","type":"number","default":60,"min":1,"max":1440}]}`)
+	write(t, filepath.Join(d, "index.ts"), `export default defineAddon({ setup() {} });`)
+	if err := m.SetSettings("clock", map[string]any{"ttl": 30.0}); err != nil {
+		t.Fatal(err)
+	}
+	a := m.List()[0]
+	if len(a.Settings) != 1 || a.SettingValues["ttl"] != 30.0 {
+		t.Fatalf("addon = %+v", a)
+	}
+	if err := m.SetSettings("clock", map[string]any{"ttl": 0.0}); err == nil {
+		t.Fatal("out of range accepted")
+	}
+	if err := m.SetSettings("clock", map[string]any{"nope": 1.0}); err == nil {
+		t.Fatal("unknown key accepted")
+	}
+	if err := m.SetSettings("clock", map[string]any{"ttl": nil}); err != nil || m.List()[0].SettingValues != nil {
+		t.Fatal("reset to default failed", err)
+	}
+}

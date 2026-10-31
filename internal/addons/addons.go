@@ -48,9 +48,11 @@ type Manifest struct {
 	Description string `json:"description,omitempty"`
 	Icon        string `json:"icon,omitempty"` // a file of the add-on (png / svg …), relative to its folder
 	// Screenshots: files of the add-on, shown in the store before installing (a picture says what it does)
-	Screenshots []string     `json:"screenshots,omitempty"`
-	Main        string       `json:"main,omitempty"` // the UI half's entry; index.ts / index.tsx / index.js when empty
-	Service     *ServiceSpec `json:"service,omitempty"`
+	Screenshots []string `json:"screenshots,omitempty"`
+	// Settings: what the person can set in Settings → Add-ons, read with g.settings.get(key)
+	Settings []SettingSpec `json:"settings,omitempty"`
+	Main     string        `json:"main,omitempty"` // the UI half's entry; index.ts / index.tsx / index.js when empty
+	Service  *ServiceSpec  `json:"service,omitempty"`
 }
 
 func readManifest(dir string) (*Manifest, error) {
@@ -99,7 +101,10 @@ type Addon struct {
 	Description string `json:"description,omitempty"`
 	Icon        string `json:"icon,omitempty"`
 	HasService  bool   `json:"hasService,omitempty"`
-	Disabled    bool   `json:"disabled,omitempty"`
+	// Settings the add-on declares, and what was set (only keys that were changed from the default)
+	Settings      []SettingSpec  `json:"settings,omitempty"`
+	SettingValues map[string]any `json:"settingValues,omitempty"`
+	Disabled      bool           `json:"disabled,omitempty"`
 	// Source: installed from a store; Modified: its files changed since (an update would overwrite that).
 	Source   *Installed `json:"source,omitempty"`
 	Modified bool       `json:"modified,omitempty"`
@@ -242,6 +247,8 @@ func (m *Manager) rebuild() {
 				a.Name = mf.Name
 			}
 			a.Version, a.Description, a.Icon, a.HasService = mf.Version, mf.Description, mf.Icon, mf.Service != nil
+			a.Settings = mf.Settings
+			a.SettingValues = st.Settings[id]
 		}
 		a.Path = entry(dir, mf)
 		if p := a.Path; p != "" {

@@ -13,7 +13,7 @@ import { api, ApiError } from "@/lib/api";
 import { askConfirm } from "@/lib/confirm";
 import { isNative, nativeOpenPath } from "@/lib/native";
 import { useStore } from "@/lib/store";
-import type { AddonService, AddonStore, StoreAddon } from "@/lib/types";
+import type { AddonService, AddonSetting, AddonStore, StoreAddon } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 // Settings → Add-ons: what is installed (switch on / off, update, uninstall) and the stores to install from
@@ -194,7 +194,79 @@ function InstalledRow({ a, newer }: { a: AddonStatus; newer?: StoreAddon }) {
         </div>
         {a.service && <ServiceLine s={a.service} />}
         {a.error && <pre className="mt-1.5 whitespace-pre-wrap rounded-sm bg-bad/10 p-2 font-mono text-[11px] text-bad">{a.error}</pre>}
+        {!!a.settings?.length && (
+          <Collapsible className="mt-1">
+            <CollapsibleTrigger className="group flex items-center gap-0.5 text-[12px] text-muted-foreground hover:text-foreground">
+              <ChevronRight className="size-3.5 transition-transform group-data-[state=open]:rotate-90" /> 设置
+            </CollapsibleTrigger>
+            <CollapsibleContent className="mt-1.5 space-y-2.5 rounded-sm bg-muted/50 p-2.5">
+              {a.settings.map((s) => (
+                <SettingField key={s.key} id={a.id} spec={s} value={a.settingValues?.[s.key]} />
+              ))}
+            </CollapsibleContent>
+          </Collapsible>
+        )}
       </div>
+    </div>
+  );
+}
+
+// One entry of an add-on's addon.json "settings". Saved on change (a number on blur / Enter); stored by gerdr, so
+// every window and device sees the same value.
+function SettingField({ id, spec, value }: { id: string; spec: AddonSetting; value: unknown }) {
+  const shown = value !== undefined ? value : spec.default;
+  const [draft, setDraft] = useState(String(shown ?? ""));
+  useEffect(() => setDraft(String(shown ?? "")), [shown]);
+  const save = (v: unknown) => api.setAddonSettings(id, { [spec.key]: v }).catch((e) => toast.error((e as Error).message));
+  const commitNumber = () => {
+    const n = Number(draft);
+    if (draft.trim() === "" || Number.isNaN(n)) return setDraft(String(shown ?? ""));
+    if (n !== shown) save(n);
+  };
+  return (
+    <div className="text-[12px]">
+      <div className="flex items-center gap-2">
+        <span className="min-w-0 flex-1">{spec.title || spec.key}</span>
+        {spec.type === "boolean" ? (
+          <Switch checked={!!shown} onCheckedChange={(v) => save(v)} />
+        ) : spec.type === "select" ? (
+          <select
+            className="h-7 rounded-md border bg-background px-1.5 text-[12px]"
+            value={JSON.stringify(shown)}
+            onChange={(e) => save(JSON.parse(e.target.value))}
+          >
+            {(spec.options ?? []).map((o) => (
+              <option key={JSON.stringify(o.value)} value={JSON.stringify(o.value)}>
+                {o.label ?? String(o.value)}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <span className="flex items-center gap-1">
+            <Input
+              className={cn("h-7 text-[12px]", spec.type === "number" ? "w-20 text-right" : "w-48")}
+              type={spec.type === "number" ? "number" : "text"}
+              min={spec.min}
+              max={spec.max}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onBlur={() => (spec.type === "number" ? commitNumber() : draft !== shown && save(draft))}
+              onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+            />
+            {spec.unit && <span className="text-muted-foreground">{spec.unit}</span>}
+          </span>
+        )}
+      </div>
+      {(spec.description || value !== undefined) && (
+        <div className="mt-0.5 flex gap-2 text-[11px] text-muted-foreground">
+          <span className="min-w-0 flex-1">{spec.description}</span>
+          {value !== undefined && (
+            <button type="button" className="shrink-0 hover:text-foreground" onClick={() => save(null)}>
+              恢复默认（{String(spec.default)}）
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

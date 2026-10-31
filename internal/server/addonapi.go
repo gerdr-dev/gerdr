@@ -13,6 +13,7 @@ import (
 //	GET    /api/addons                         installed add-ons, built, with their service status
 //	POST   /api/addons/{id}/message            to the add-on's service (g.service.send)
 //	PUT    /api/addons/{id}/enabled            {"enabled": bool}
+//	PUT    /api/addons/{id}/settings           {"values": {key: value | null}} (null = back to the default)
 //	DELETE /api/addons/{id}                    uninstall (delete its folder)
 //	GET    /api/addons/{id}/files/{path...}    a file of its folder (g.asset, the icon)
 //	GET    /api/addon-stores                   the stores and what they offer, from the cache (no network)
@@ -41,6 +42,21 @@ func (s *Server) addonRoutes(mux *http.ServeMux) {
 			return
 		}
 		s.addonsChanged()
+		writeJSON(w, map[string]any{"ok": true})
+	})
+	mux.HandleFunc("PUT /api/addons/{id}/settings", func(w http.ResponseWriter, r *http.Request) {
+		var b struct {
+			Values map[string]any `json:"values"`
+		}
+		if err := decode(r, &b); err != nil {
+			httpError(w, 400, err.Error())
+			return
+		}
+		if err := s.Addons.SetSettings(r.PathValue("id"), b.Values); err != nil {
+			httpError(w, 400, err.Error())
+			return
+		}
+		s.Hub.Broadcast("addons", nil) // right away, not at the watcher's next tick
 		writeJSON(w, map[string]any{"ok": true})
 	})
 	mux.HandleFunc("DELETE /api/addons/{id}", func(w http.ResponseWriter, r *http.Request) {

@@ -2,6 +2,8 @@ package addons
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -28,6 +30,9 @@ type state struct {
 	Installed map[string]Installed `json:"installed,omitempty"`
 	// Stores: nil = never touched (the default store); [] = all removed.
 	Stores *[]string `json:"stores,omitempty"`
+	// Settings: add-on id → key → value, what was set in Settings → Add-ons. Kept here, not in the browser, so every
+	// window and device reads the same; and not in the add-on's folder, which an update replaces.
+	Settings map[string]map[string]any `json:"settings,omitempty"`
 }
 
 func (s *state) disabled(id string) bool { return slices.Contains(s.Disabled, id) }
@@ -74,6 +79,71 @@ func (m *Manager) SetEnabled(id string, on bool) error {
 		st.Disabled = slices.DeleteFunc(st.Disabled, func(x string) bool { return x == id })
 		if !on {
 			st.Disabled = append(st.Disabled, id)
+		}
+		return nil
+	})
+}
+
+// SettingSpec is one entry of addon.json "settings".
+type SettingSpec struct {
+	Key         string   `json:"key"`
+	Title       string   `json:"title,omitempty"`
+	Description string   `json:"description,omitempty"`
+	Type        string   `json:"type"` // number / string / boolean / select
+	Default     any      `json:"default,omitempty"`
+	Min         *float64 `json:"min,omitempty"`
+	Max         *float64 `json:"max,omitempty"`
+	Unit        string   `json:"unit,omitempty"` // shown after a number ("分钟")
+	Options     []struct {
+		Value any    `json:"value"`
+		Label string `json:"label,omitempty"`
+	} `json:"options,omitempty"`
+}
+
+// SetSettings stores an add-on's settings (keys it declares only); a null value goes back to the default. The state
+// file's change reaches every window through the watcher, and g.settings reads the new values.
+func (m *Manager) SetSettings(id string, values map[string]any) error {
+	if !validID(id) {
+		return errors.New("bad add-on id")
+	}
+	mf, err := readManifest(filepath.Join(m.dir, id))
+	if err != nil {
+		return err
+	}
+	known := map[string]SettingSpec{}
+	if mf != nil {
+		for _, s := range mf.Settings {
+			known[s.Key] = s
+		}
+	}
+	for k, v := range values {
+		s, ok := known[k]
+		if !ok {
+			return fmt.Errorf("%s has no setting %q", id, k)
+		}
+		if n, ok := v.(float64); ok && s.Type == "number" && (s.Min != nil && n < *s.Min || s.Max != nil && n > *s.Max) {
+			return fmt.Errorf("%s: %v is out of range", k, n)
+		}
+	}
+	return m.updateState(func(st *state) error {
+		if st.Settings == nil {
+			st.Settings = map[string]map[string]any{}
+		}
+		cur := st.Settings[id]
+		if cur == nil {
+			cur = map[string]any{}
+		}
+		for k, v := range values {
+			if v == nil {
+				delete(cur, k)
+			} else {
+				cur[k] = v
+			}
+		}
+		if len(cur) == 0 {
+			delete(st.Settings, id)
+		} else {
+			st.Settings[id] = cur
 		}
 		return nil
 	})

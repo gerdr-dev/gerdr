@@ -71,6 +71,9 @@ export type AddonBuild = {
   description?: string;
   icon?: string;
   hasService?: boolean;
+  /** addon.json "settings", and the values set (only those changed from the default). */
+  settings?: AddonSetting[];
+  settingValues?: Record<string, unknown>;
   disabled?: boolean;
   /** Installed from a store; modified: its files changed since (an update asks before overwriting). */
   source?: { store: string; version?: string; hash: string; at: number };
@@ -80,6 +83,18 @@ export type AddonBuild = {
   hash: string;
   mtime: number;
   service?: AddonService;
+};
+/** One entry of addon.json "settings" (internal/addons SettingSpec). */
+export type AddonSetting = {
+  key: string;
+  title?: string;
+  description?: string;
+  type: "number" | "string" | "boolean" | "select";
+  default?: unknown;
+  min?: number;
+  max?: number;
+  unit?: string;
+  options?: { value: unknown; label?: string }[];
 };
 /** One add-on a store offers (internal/addons StoreAddon). */
 export type StoreAddon = {

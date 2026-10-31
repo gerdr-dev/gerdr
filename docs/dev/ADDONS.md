@@ -30,6 +30,10 @@ sees: `internal/addons/builtin/gerdr.d.ts`, copied into `~/.gerdr/addons` on eve
   plain callback: answers depend on the time (cache-clock colors by prompt-cache age), so gerdr's implementation
   (`useAddonTurnStat`) re-renders every 30s while any add-on uses it. `latest` (the newest turn's line) is worked out in
   `buildRows`, since only the chat's transcript knows which turn is last.
+- Settings: addon.json `settings` (number / string / boolean / select) become a form under the add-on in Settings →
+  Add-ons; values live in addons-state.json (`settings[id][key]`, only keys changed from the default), not in the
+  browser's localStorage like `g.storage`, so every window and the phone agree. `g.settings.get` reads the latest
+  `/api/addons` build each call, so a change applies without reloading the add-on (its hash doesn't include values).
 - Drafts are keyed by **pane**, not session: `composerBar(session, { paneId })` passes the key, and
   `g.actions.insertText(sessionId)` writes into the focused pane showing that session.
 - The context menu only exists in the desktop and Android Apps (a browser keeps its own), so `g.contextMenu` items

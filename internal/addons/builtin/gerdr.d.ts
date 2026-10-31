@@ -4,7 +4,10 @@
 // An add-on is a folder in the add-on directory (~/.gerdr/addons/<id>/):
 //
 //   addon.json   optional: {"name": "…", "version": "1.0.0", "description": "…", "icon": "icon.png",
-//                           "main": "index.ts", "service": {…}}
+//                           "screenshots": ["shot.png"], "main": "index.ts", "service": {…}, "settings": [AddonSetting…]}
+//                "settings" become a form in Settings → Add-ons; read them with g.settings.get(key):
+//                  {"key": "ttl", "title": "缓存时长", "type": "number", "default": 60, "min": 1, "max": 1440, "unit": "分钟"}
+//                type: number / string / boolean / select (with "options": [{"value": 5, "label": "5 分钟"}])
 //   index.ts     the UI half (or what "main" names): export default defineAddon({...}). It may import other files of
 //                the folder; images, sounds and other files it ships are reached with g.asset("icon.png").
 //
@@ -185,6 +188,15 @@ declare global {
       runCommand(id: string): Promise<void>;
       /** Append text to a session's composer (what is typed there, not sent). */
       insertText(sessionId: string, text: string): void;
+    };
+
+    /**
+     * The values of addon.json "settings" as set in Settings → Add-ons (the default until changed). Stored by gerdr,
+     * the same in every window and device. Read it when you need it rather than once in setup: a change made in
+     * Settings shows up here without reloading the add-on.
+     */
+    settings: {
+      get<T = unknown>(key: string): T;
     };
 
     /** The add-on's own small storage (kept in this browser / App). */

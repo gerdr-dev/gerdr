@@ -381,6 +381,14 @@ function makeApi(id: string, hash: string) {
       };
     },
     turnStat: (fn: TurnStatFn) => own(turnStats, fn),
+    // Read on every call: a value changed in Settings → Add-ons reaches the add-on without reloading it
+    settings: {
+      get: (key: string) => {
+        const a = latestBuild.get(id);
+        const v = a?.settingValues?.[key];
+        return v !== undefined ? v : a?.settings?.find((s) => s.key === key)?.default;
+      },
+    },
     usage: (force?: boolean) => api.usage(force),
     stats: (days?: number) => api.dayStats(days),
     storage: {
@@ -460,6 +468,7 @@ export function serviceMessage(id: string | undefined, data: unknown) {
 }
 
 let loadedHashes = new Map<string, string>();
+let latestBuild = new Map<string, AddonBuild>();
 let loading: Promise<void> | null = null;
 
 /** The URL of a file in an add-on's folder. The hash makes a reloaded add-on fetch its files again. */
@@ -489,6 +498,8 @@ async function doReload() {
   const status: AddonStatus[] = [];
   serviceStates.clear();
   for (const b of builds) if (b.service) serviceStates.set(b.id, b.service);
+  // Before any setup runs: g.settings.get in setup must already see this build's values
+  latestBuild = new Map(builds.map((b) => [b.id, b]));
   for (const b of builds) {
     seen.add(b.id);
     const { code: _code, ...meta } = b;
