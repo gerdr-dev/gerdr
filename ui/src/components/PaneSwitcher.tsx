@@ -186,7 +186,7 @@ export function PaneSwitcher() {
     <>
       {/* 点面板外面就关：手机上没有 Esc，右上角那个 × 又小 */}
       <div className="absolute inset-0 z-20 bg-background/40" onClick={close} />
-      <aside className="absolute inset-x-2 top-1.5 z-20 flex max-h-[calc(100%-12px)] flex-col overflow-hidden rounded-xl border bg-popover text-popover-foreground shadow-[0_24px_60px_-16px_rgba(0,0,0,.45)] md:right-2.5 md:left-auto md:w-[480px]">
+      <aside className="absolute inset-x-2 top-1.5 z-20 flex max-h-[calc(100%-12px)] flex-col overflow-hidden rounded-xl border bg-background text-foreground shadow-[0_24px_60px_-16px_rgba(0,0,0,.45)] md:right-2.5 md:left-auto md:w-[480px]">
         <div className="flex shrink-0 items-center gap-1.5 border-b p-2">
           <div className="relative min-w-0 flex-1">
             <Search className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -293,8 +293,8 @@ export function PaneSwitcher() {
                       type="button"
                       className={cn(
                         // 一行至少 44px：手机上手指的下限；整块都是热区
-                        // 选中的和侧栏一样用灰底、不用品牌色描边。但面板底（popover）比侧栏底亮，bg-accent 在这上面差得太少、
-                        // 看不出来（用户报的）：用前景色叠一层，深浅两种主题都拉得开
+                        // The selected row gets a grey fill like the sidebar, not a brand outline. bg-accent is too close to the
+                        // panel's background to see (user report): a foreground overlay stands out in both themes
                         "flex min-h-11 w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left leading-tight outline-none",
                         "hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring/40",
                         r.pane.id === focusedPane && "bg-foreground/12 [&_.title]:font-medium",
