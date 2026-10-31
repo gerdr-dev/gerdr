@@ -28,6 +28,8 @@ export type Row =
       live: boolean;
       tight?: boolean;
       peek?: string;
+      /** The latest finished turn's metadata line (data-turnStat): the host may mark it (prompt-cache age, ChatHost.turnStat) */
+      latest?: boolean;
     }
   | { key: string; kind: "working"; empty: boolean; first: boolean }
   | { key: string; kind: "group"; first: boolean; open: boolean; summary: string; failed: number; busy: boolean; tight?: boolean };
@@ -159,6 +161,17 @@ export function buildRows(
   // 排着队的插话、发送中的挂在最底下（见 Transcript.queued / sending），还在跑的那条是它们前面那条
   let liveIdx = lastIdx;
   while (liveIdx >= 0 && (msgs[liveIdx].metadata?.queued || msgs[liveIdx].metadata?.sending)) liveIdx--;
+  // The latest turn's metadata line: the last data-turnStat of the last message that has one
+  let latestStat = "";
+  for (let mi = msgs.length - 1; mi >= 0 && !latestStat; mi--) {
+    const m = msgs[mi];
+    for (let i = m.parts.length - 1; i >= 0; i--) {
+      if (m.parts[i].type === "data-turnStat") {
+        latestStat = `${m.id}:${i}`;
+        break;
+      }
+    }
+  }
   msgs.forEach((m, mi) => {
     if (m.role === "user") {
       const last = rows[rows.length - 1];
@@ -185,6 +198,7 @@ export function buildRows(
         first: false,
         streaming: live && running && i === lastPart,
         live,
+        latest: p.type === "data-turnStat" && `${m.id}:${i}` === latestStat,
       });
     });
     let first = true;
@@ -331,6 +345,7 @@ export const RowView = memo(
             onQuickReply: env.onQuickReply,
             quickEnabled: row.live,
             keep: row.peek && `${env.sessionId}:peek:${row.peek}`,
+            latest: row.latest,
           })}
         </div>
       </Frame>
@@ -357,7 +372,15 @@ export const RowView = memo(
         a.env.onToggleGroup === b.env.onToggleGroup
       );
     if (x.kind === "part" && y.kind === "part")
-      return x.part === y.part && x.streaming === y.streaming && x.live === y.live && x.tight === y.tight && x.peek === y.peek && sameKids(x.kids, y.kids);
+      return (
+        x.part === y.part &&
+        x.streaming === y.streaming &&
+        x.live === y.live &&
+        x.tight === y.tight &&
+        x.peek === y.peek &&
+        x.latest === y.latest &&
+        sameKids(x.kids, y.kids)
+      );
     return false;
   },
 );

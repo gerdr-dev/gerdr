@@ -7,6 +7,7 @@ import { isNative, nativeOpenPath } from "./native";
 import { get, loadOlder, sendShown, set, setConfig, subTranscript, transcript, useStore, type DraftImg, type SharedDraft } from "./store";
 import { pushDraft, sameDraft } from "./sync";
 import { AddonComposerActions } from "@/components/AddonSlot";
+import { useAddonTurnStat } from "./addons";
 import { UsagePanel } from "@/components/UsageMeter";
 import { HeldDialog } from "@/components/chat/HeldDialog";
 import { RunButton } from "@/components/chat/RunButton";
@@ -240,6 +241,7 @@ export function GerdrChatProvider({ children }: { children: ReactNode }) {
       refocus: refocusAfterDialog,
       codeActions: (code, lang, session) => (lang === "bang" ? <RunButton cmd={code} session={session} /> : null),
       composerOverlay: (session) => <Overlay session={session} />,
+      useTurnStat: useAddonTurnStat,
       composerBar: (session, { paneId }) => <AddonComposerActions sessionId={session.id} paneId={paneId} />,
       composer: {
         drafts,

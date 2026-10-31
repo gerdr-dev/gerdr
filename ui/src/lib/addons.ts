@@ -35,6 +35,40 @@ export const composerActions: ComposerAction[] = [];
 export type MenuItem = { addon: string; id: string; title: string; when?: (ctx: MenuCtx) => boolean; run: (ctx: MenuCtx) => void | Promise<void> };
 export type MenuCtx = { selection: string; sessionId?: string };
 export const menuItems: MenuItem[] = [];
+type TurnStatFn = (info: any) => { className?: string; title?: string; after?: React.ReactNode } | void;
+const turnStats: Reg<TurnStatFn>[] = [];
+
+/**
+ * ChatHost.useTurnStat: what add-ons make of a turn's metadata line (g.turnStat). Re-renders every 30s while any
+ * add-on decorates, so an answer that depends on the time (a prompt cache running out) follows it.
+ */
+export function useAddonTurnStat(info: { sessionId: string; ts?: number; ms: number; tokens: number; latest: boolean }) {
+  useStore((s) => s.addonVersion);
+  const agent = useStore((s) => s.sessions[info.sessionId]?.agent ?? "");
+  const [now, setNow] = React.useState(Date.now);
+  const on = turnStats.length > 0;
+  React.useEffect(() => {
+    if (!on) return;
+    const t = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(t);
+  }, [on]);
+  if (!on) return undefined;
+  const classes: string[] = [];
+  const after: React.ReactNode[] = [];
+  let title: string | undefined;
+  for (const r of turnStats) {
+    try {
+      const d = r.fn({ ...info, agent, now });
+      if (!d) continue;
+      if (d.className) classes.push(d.className);
+      if (d.title) title = d.title;
+      if (d.after != null) after.push(React.createElement(React.Fragment, { key: r.addon }, d.after));
+    } catch (e) {
+      fail(r.addon, e);
+    }
+  }
+  return { timeClassName: classes.join(" ") || undefined, title, after: after.length ? after : undefined };
+}
 
 // JSX in add-ons compiles to these two (internal/addons build: JSXFactory / JSXFragment). Not gerdr.h: the desktop
 // shell owns window.gerdr.
@@ -346,6 +380,7 @@ function makeApi(id: string, hash: string) {
         if (i >= 0) menuItems.splice(i, 1);
       };
     },
+    turnStat: (fn: TurnStatFn) => own(turnStats, fn),
     usage: (force?: boolean) => api.usage(force),
     stats: (days?: number) => api.dayStats(days),
     storage: {
@@ -396,6 +431,7 @@ function unload(id: string) {
   remove(serviceListeners, id);
   for (const k of Object.keys(slots) as SlotName[]) remove(slots[k], id);
   remove(composerActions, id);
+  remove(turnStats, id);
   remove(menuItems, id);
 }
 

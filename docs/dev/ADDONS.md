@@ -26,6 +26,10 @@ sees: `internal/addons/builtin/gerdr.d.ts`, copied into `~/.gerdr/addons` on eve
   Fragment, set in lib/addons.ts) — not `gerdr.h`: the desktop shell owns `window.gerdr`. Hooks must come from
   `g.React` (the same React that mounts them); `g.ui` hands out gerdr's shadcn pieces and `g.icons` all of lucide, so
   an add-on looks native without bundling its own copies. Each slot entry sits in its own error boundary.
+- `g.turnStat` decorates the line under each finished turn through `ChatHost.useTurnStat`, a **hook** rather than a
+  plain callback: answers depend on the time (cache-clock colors by prompt-cache age), so gerdr's implementation
+  (`useAddonTurnStat`) re-renders every 30s while any add-on uses it. `latest` (the newest turn's line) is worked out in
+  `buildRows`, since only the chat's transcript knows which turn is last.
 - Drafts are keyed by **pane**, not session: `composerBar(session, { paneId })` passes the key, and
   `g.actions.insertText(sessionId)` writes into the focused pane showing that session.
 - The context menu only exists in the desktop and Android Apps (a browser keeps its own), so `g.contextMenu` items

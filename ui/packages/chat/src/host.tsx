@@ -97,6 +97,12 @@ export interface ChatHost {
   codeActions?(code: string, lang: string, session: ChatSession): ReactNode;
   /** Slots around the composer: above it (chips), in its bottom bar (model menu), and an overlay (dialogs). */
   composerTop?(session: ChatSession): ReactNode;
+  /**
+   * Decorate a turn's metadata line ("18:36 · 用时 59s · 4.1k tokens"): a class and tooltip for the time, and a node
+   * drawn right after it. latest: the newest finished turn of the session. A React hook, called while the line
+   * renders: it may hold state and timers, so what it shows can change with time (a prompt cache running out).
+   */
+  useTurnStat?(info: TurnStatInfo): TurnStatDeco | undefined;
   /** ctx.paneId: the composer's key in ChatHost drafts, to write into this composer from the bar. */
   composerBar?(session: ChatSession, ctx: { paneId: string }): ReactNode;
   composerOverlay?(session: ChatSession): ReactNode;
@@ -152,6 +158,9 @@ export type ComposerHooks = {
   /** Defaults for new sessions ("make this the default" in the option menus). Called as a hook. */
   useDefaults?(agent: string): { values: Record<string, string>; set(id: string, value: string): void; setAll(values: Record<string, string>): void };
 };
+
+export type TurnStatInfo = { sessionId: string; ts?: number; ms: number; tokens: number; latest: boolean };
+export type TurnStatDeco = { timeClassName?: string; title?: string; after?: ReactNode };
 
 export type ComposerContext = {
   session: ChatSession;

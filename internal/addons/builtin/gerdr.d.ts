@@ -139,6 +139,13 @@ declare global {
     slot(name: "sidebar", component: Component<{}>, opts?: { order?: number }): Dispose;
     slot(name: "paneTitle", component: Component<{ pane: PaneInfo; tab: TabInfo }>, opts?: { order?: number }): Dispose;
 
+    /**
+     * Decorate the line under each finished turn ("18:36 · 用时 59s · 4.1k tokens"): a class for the time (color it:
+     * "text-ok" / "text-warn" / "text-bad"), its tooltip, and something drawn right after it. Called whenever the line
+     * renders, and every 30s while any add-on uses this, so an answer that depends on info.now stays current.
+     */
+    turnStat(fn: (info: TurnStatInfo) => { className?: string; title?: string; after?: any } | void): Dispose;
+
     /** A button in the composer's bottom bar (next to the model menu). icon: an element, e.g. <g.icons.Zap />. */
     composerAction(action: { id: string; title: string; icon?: any; run(ctx: ComposerContext): void | Promise<void> }): Dispose;
 
@@ -211,6 +218,22 @@ declare global {
     interface ElementChildrenAttribute {
       children: {};
     }
+  }
+
+  interface TurnStatInfo {
+    sessionId: string;
+    /** claude / codex / … */
+    agent: string;
+    /** When the turn ended (unix ms); missing on very old turns. */
+    ts?: number;
+    /** How long it ran (ms). */
+    ms: number;
+    /** Output tokens. */
+    tokens: number;
+    /** The newest finished turn of the session (the one the next message continues from). */
+    latest: boolean;
+    /** The current time (unix ms), refreshed every 30s. */
+    now: number;
   }
 
   interface ComposerContext {

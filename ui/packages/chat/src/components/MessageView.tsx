@@ -219,6 +219,8 @@ export type PartCtx = {
   quickEnabled: boolean;
   /** 展开状态记在这个 key 下（不按块自己记），见 buildRows 的 peek */
   keep?: string;
+  /** This part is the latest finished turn's metadata line (buildRows) */
+  latest?: boolean;
 };
 
 /** 思考过程：展开没展开记在组件外面（虚拟列表滚出去会卸载）。 */
@@ -280,6 +282,26 @@ export function childTools(msg: GMessage): Map<string, ToolPart[]> {
 
 const USAGE = /^Current [^\n:]+:\s*\d+% used/m;
 
+// A turn's metadata line: end time · took · output tokens (after Astryx ChatMessageMetadata's "9:46 AM · Claude Opus").
+// h-5 like the running turn's StatusLine it replaces, so the swap doesn't jump. The host may restyle the time and add
+// something after it (ChatHost.turnStat: gerdr hands that to add-ons, e.g. coloring by prompt-cache age).
+function TurnStat({ sessionId, data, latest }: { sessionId: string; data: { ms: number; tokens: number; ts?: number }; latest: boolean }) {
+  const host = useChatHost();
+  const deco = host.useTurnStat?.({ sessionId, ts: data.ts, ms: data.ms, tokens: data.tokens, latest });
+  const rest = [t("msg.took", { time: fmtElapsed(data.ms) }), data.tokens > 0 && `${fmtTokens(data.tokens)} tokens`].filter(Boolean);
+  return (
+    <div className="flex h-5 items-center gap-1 text-[12px] text-muted-foreground tabular-nums">
+      {data.ts ? (
+        <span className={deco?.timeClassName} title={deco?.title}>
+          {fmtTime(data.ts)}
+        </span>
+      ) : null}
+      {deco?.after}
+      <span>{(data.ts ? ["", ...rest] : rest).join(" · ")}</span>
+    </div>
+  );
+}
+
 export function renderPart(p: GPart, i: number, ctx: PartCtx): ReactNode {
   switch (p.type) {
     case "text":
@@ -309,15 +331,7 @@ export function renderPart(p: GPart, i: number, ctx: PartCtx): ReactNode {
     case "data-quickReplies":
       return <QuickReplies key={i} data={p.data} onPick={ctx.onQuickReply} enabled={ctx.quickEnabled} />;
     case "data-turnStat":
-      return (
-        // 一轮的元信息：结束时间 · 用时 · 输出 token（照 Astryx ChatMessageMetadata 的「9:46 AM · Claude Opus」）
-        // h-5 like the running turn's StatusLine it replaces, so the swap doesn't jump
-        <div key={i} className="flex h-5 items-center text-[12px] text-muted-foreground tabular-nums">
-          {[fmtTime(p.data.ts), t("msg.took", { time: fmtElapsed(p.data.ms) }), p.data.tokens > 0 && `${fmtTokens(p.data.tokens)} tokens`]
-            .filter(Boolean)
-            .join(" · ")}
-        </div>
-      );
+      return <TurnStat key={i} sessionId={ctx.sessionId} data={p.data} latest={!!ctx.latest} />;
     case "data-task":
       return <TaskDoneCard key={i} sessionId={ctx.sessionId} t={p.data.task} woke={p.data.woke} command={p.data.command} />;
     case "data-shell":
