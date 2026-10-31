@@ -39,7 +39,7 @@ import {
   type Workspace,
 } from "./layout";
 import { get, markRead, overviewShown, set, setLayout, setMode, toggleSidebar, useStore } from "./store";
-import { focusTile, overviewFocus, overviewIds, overviewKey, toggleOverview } from "./overview";
+import { focusTile, MAX_TILES, overviewFocus, overviewIds, overviewKey, setOverview, toggleOverview } from "./overview";
 import { openWorkChat, workProjectOf } from "./work";
 import type { ContentBlock } from "./types";
 
@@ -105,6 +105,50 @@ export function duplicateFocused(dir: "right" | "down") {
         return { starting: rest };
       }),
     );
+}
+
+/**
+ * ⌘D / ⌘T with the overview up, and its "new agent" button: start an agent like the focused tile's (agent, directory,
+ * mode) and put it in as the next tile. Its pane is a new tab right after the focused tile's, in that tile's workspace,
+ * opened in the background: the tabs under the overview don't move, so closing the overview lands where it was.
+ * Returns false when no tile is focused (nothing to copy); the caller falls back to the plain key.
+ */
+export function newAgentInOverview(): boolean {
+  const o = get().overview;
+  const cur = overviewFocus(o, get().layout, get().sessions, get().config);
+  const s = cur ? get().sessions[cur] : undefined;
+  if (!s) return false;
+  if (overviewIds(o, get().layout, get().sessions, get().config).length >= MAX_TILES) {
+    toast(`待办最多放 ${MAX_TILES} 个，先移出几个`);
+    return true;
+  }
+  const opening = toast.loading("正在开新 agent…");
+  api
+    .createSession({ agent: s.agent, cwd: s.cwd, mode: s.modes?.currentModeId ?? s.mode })
+    .then((n) => {
+      set((st) => ({ sessions: { ...st.sessions, [n.id]: n } }));
+      setLayout((l) => {
+        const loc = locateSession(l, s.id);
+        // A Work conversation's tile has no pane: its project's workspace, as openSessionNear does
+        const project = loc ? undefined : workProjectOf(s.id);
+        const home = project ? spaceWorkspaces(l, project) : [];
+        const ws = loc?.ws ?? home.find((w) => w.id === spaceList(l).find((x) => x.id === project)?.active) ?? home[0] ?? activeWs(l);
+        const t = newTab(undefined, n.id);
+        const tabs = [...ws.tabs];
+        const at = loc ? tabs.findIndex((x) => x.id === loc.tab.id) + 1 : tabs.length;
+        tabs.splice(at, 0, t);
+        return updateWs(l, ws.id, (w) => ({ ...w, tabs }));
+      });
+      setOverview((x) => {
+        const ids = x.ids.filter((id) => id !== n.id);
+        ids.splice(ids.indexOf(s.id) + 1, 0, n.id);
+        return { ...x, ids };
+      });
+      focusTile(n.id);
+      toast.dismiss(opening);
+    })
+    .catch((e) => toast.error(`开会话失败：${e.message ?? e}`, { id: opening }));
+  return true;
 }
 
 /**
@@ -1119,6 +1163,8 @@ export function stepAttention(delta: number) {
 // ---- 快捷键动作 ----
 
 export function runAction(a: KeyAction) {
+  // A new agent from the overview stays in it, next to the tile it copies (only with no tile to copy does it fall through)
+  if (overviewShown() && (a === "duplicateRight" || a === "duplicateDown" || a === "newTab") && newAgentInOverview()) return;
   if (overviewShown() && overviewKey(a)) return;
   const l = get().layout;
   switch (a) {

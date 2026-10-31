@@ -1,8 +1,8 @@
-import { ArrowLeft, ArrowUpRight, Eraser, GripVertical, ClipboardCheck, Maximize2, Minimize2, PanelLeft, Pin, PinOff, Plus, X } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, Eraser, GripVertical, ClipboardCheck, Maximize2, Minimize2, PanelLeft, Pin, PinOff, Plus, SquarePen, X } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { basename, focusSession, tabName } from "@/lib/actions";
+import { basename, focusSession, newAgentInOverview, tabName } from "@/lib/actions";
 import { locateSession, spaceList, spaceOf, type Layout } from "@/lib/layout";
 import { compareSessions } from "@/lib/order";
 import {
@@ -228,6 +228,7 @@ function OverviewList({
   const attention = all.filter((s) => s.status === "running" || s.status === "waiting" || s.status === "error" || unread[s.id]);
   const missing = attention.filter((s) => !tiles.has(s.id)).length;
   const full = tiles.size >= MAX_TILES;
+  const cur = current && tiles.has(current) ? sessions[current] : undefined;
 
   // By status: one list in sessionRank order. By project: grouped under each project, layout order inside.
   const groups: { name?: string; rows: SessionSummary[] }[] = [];
@@ -257,6 +258,19 @@ function OverviewList({
         <SidebarHeader />
       )}
       <div className="shrink-0 space-y-2 border-b p-1.5">
+        {/* The way to start one without leaving (asked for); ⌘D / ⌘T do the same (actions.newAgentInOverview) */}
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 w-full justify-start gap-2 text-[12px]"
+          disabled={!cur || full}
+          title={cur ? `同 ${cur.title || basename(cur.cwd)} 的 agent 和目录` : "先选中一个"}
+          onClick={() => newAgentInOverview() && onClose?.()}
+        >
+          <SquarePen className="size-3.5" />
+          新开 agent
+          {cur && <span className="ml-auto min-w-0 truncate text-muted-foreground">{basename(cur.cwd)}</span>}
+        </Button>
         <Button
           variant="outline"
           size="sm"
