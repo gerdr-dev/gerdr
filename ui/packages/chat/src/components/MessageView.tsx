@@ -81,8 +81,9 @@ export const MessageView = memo(function MessageView({
     // 元信息（时间、来源）在气泡下面一行小灰字（照 Astryx ChatMessageMetadata）；一摞连发的只在最后一条下面写时间
     const showMeta = !stackNext || !!meta?.from || !!meta?.steer;
     return (
-      // 发送中（服务端还没记下，见 Transcript.sending）：整条半透明，记下了换成正常的那条
-      <Message from="user" className={cn("group/user gap-1 transition-opacity", meta?.sending && "opacity-50")}>
+      // Sending (the server hasn't logged it yet, see Transcript.sending): half transparent. The logged copy keeps the row's
+      // key (messageId), so the same element fades in; slow enough to be seen (asked for: the default 150ms read as a jump)
+      <Message from="user" className={cn("group/user gap-1 transition-opacity duration-500 ease-out", meta?.sending && "opacity-50")}>
         {/* 回退按钮悬停时浮在气泡左边，不占高度 */}
         <div className="relative ml-auto flex min-w-0 max-w-[max(80%,280px)] justify-end">
           {canRewind && (
