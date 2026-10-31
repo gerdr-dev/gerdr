@@ -327,7 +327,9 @@ export function PhoneBar() {
       <Button variant="ghost" size="icon" className="size-9" aria-label="侧栏" onClick={() => set({ drawer: true, switcher: false })}>
         <Menu className="size-[18px]" />
       </Button>
-      <button className="flex h-9 min-w-0 flex-1 items-center gap-1.5 rounded-md px-1.5 text-left" onClick={openSwitcher}>
+      {/* Lined up with the pane title bar below (Panes.tsx: pl-4, 16px icon, gap-2): both icons are centred at 24px and both
+          titles start at 40px — 6px padding + 36px button + 4px gap − 6px pulled back (asked for) */}
+      <button className="-ml-1.5 flex h-9 min-w-0 flex-1 items-center gap-1.5 rounded-md pr-1.5 pl-0 text-left" onClick={openSwitcher}>
         <span className="min-w-0 truncate text-[13px] font-medium">{applyTabLabel(tab, ti, ws, tabName(tab))}</span>
         {/* 只有一个 pane 时不画：下面 pane 标题栏那个点就是同一个会话，一行里三个点太乱。好几个 pane 时它是整个 tab 的汇总，留着 */}
         {leaves(tab.root).length > 1 && <StatusDot status={st.status} unread={st.unread} />}
@@ -342,10 +344,10 @@ export function PhoneBar() {
         )}
       </Button>
       <OverviewButton />
+      <InboxButton phone />
       <Button variant="ghost" size="icon" className="size-9" aria-label="新建 tab" onClick={() => addTab()}>
         <Plus className="size-[18px]" />
       </Button>
-      <InboxButton phone />
     </div>
   );
 }

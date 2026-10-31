@@ -293,11 +293,11 @@ export function PaneSwitcher() {
                       type="button"
                       className={cn(
                         // 一行至少 44px：手机上手指的下限；整块都是热区
-                        // The selected row gets a grey fill like the sidebar, not a brand outline. bg-accent is too close to the
-                        // panel's background to see (user report): a foreground overlay stands out in both themes
+                        // The selected row uses the same fill as the sidebar's active workspace / tab (bg-accent), so the two read
+                        // as one highlight (asked for: a darker foreground overlay here looked like a different thing)
                         "flex min-h-11 w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left leading-tight outline-none",
-                        "hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring/40",
-                        r.pane.id === focusedPane && "bg-foreground/12 [&_.title]:font-medium",
+                        "hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring/40",
+                        r.pane.id === focusedPane && "bg-accent [&_.title]:font-medium",
                       )}
                       {...tap(r.pane.id)}
                     >
