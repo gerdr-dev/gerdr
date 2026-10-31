@@ -70,6 +70,48 @@ export function useAddonTurnStat(info: { sessionId: string; ts?: number; ms: num
   return { timeClassName: classes.join(" ") || undefined, title, after: after.length ? after : undefined };
 }
 
+// ---- g.theme: color tokens of index.css overridden by add-ons ----
+
+type ThemeVars = Record<string, string | undefined | null | false>;
+type ThemeSpec = { light?: ThemeVars; dark?: ThemeVars };
+type ThemeFn = ThemeSpec | (() => ThemeSpec | void);
+const themes: Reg<ThemeFn>[] = [];
+// Token names only (index.css's custom properties without "--"): an add-on can't slip a "}" into the sheet.
+const TOKEN = /^[a-z][a-z0-9-]*$/;
+
+/**
+ * Rewrites the add-on theme <style> from every g.theme registration (folder order, later wins). Called on register /
+ * dispose and after every add-on reload, which is also how a changed setting arrives: a function spec is evaluated
+ * again then. Selectors beat index.css's :root / .dark on specificity, and each one only matches its own mode, so a
+ * light-only override never leaks into dark.
+ */
+function applyThemes() {
+  const sides: Record<"light" | "dark", Map<string, string>> = { light: new Map(), dark: new Map() };
+  for (const r of [...themes].sort((a, b) => a.addon.localeCompare(b.addon))) {
+    try {
+      const spec = typeof r.fn === "function" ? r.fn() : r.fn;
+      if (!spec) continue;
+      for (const side of ["light", "dark"] as const) {
+        for (const [k, v] of Object.entries(spec[side] ?? {})) {
+          if (!TOKEN.test(k)) throw new Error(`g.theme: not a token name: ${k}`);
+          if (typeof v === "string" && v.trim() && !/[;{}]/.test(v)) sides[side].set(k, v.trim());
+        }
+      }
+    } catch (e) {
+      fail(r.addon, e);
+    }
+  }
+  let el = document.getElementById("gerdr-addon-theme");
+  if (!sides.light.size && !sides.dark.size) return el?.remove();
+  if (!el) {
+    el = document.createElement("style");
+    el.id = "gerdr-addon-theme";
+    document.head.appendChild(el);
+  }
+  const block = (sel: string, m: Map<string, string>) => (m.size ? `${sel} {\n${[...m].map(([k, v]) => `  --${k}: ${v};`).join("\n")}\n}\n` : "");
+  el.textContent = block("html:root:not(.dark)", sides.light) + block("html:root.dark", sides.dark);
+}
+
 // JSX in add-ons compiles to these two (internal/addons build: JSXFactory / JSXFragment). Not gerdr.h: the desktop
 // shell owns window.gerdr.
 (globalThis as any).__gerdrH = React.createElement;
@@ -381,6 +423,16 @@ function makeApi(id: string, hash: string) {
       };
     },
     turnStat: (fn: TurnStatFn) => own(turnStats, fn),
+    theme: (spec: ThemeFn) => {
+      const r = { addon: id, fn: spec };
+      themes.push(r);
+      applyThemes();
+      return () => {
+        const i = themes.indexOf(r);
+        if (i >= 0) themes.splice(i, 1);
+        applyThemes();
+      };
+    },
     // Read on every call: a value changed in Settings → Add-ons reaches the add-on without reloading it
     settings: {
       get: (key: string) => {
@@ -441,6 +493,10 @@ function unload(id: string) {
   remove(composerActions, id);
   remove(turnStats, id);
   remove(menuItems, id);
+  if (themes.some((r) => r.addon === id)) {
+    remove(themes, id);
+    applyThemes();
+  }
 }
 
 function emitService(id: string, event: "message" | "status", e: unknown) {
@@ -536,5 +592,7 @@ async function doReload() {
     }
   }
   addonStatus = status;
+  // Settings may have changed without any add-on reloading (values aren't in the hash): re-read function themes
+  if (themes.length) applyThemes();
   bump();
 }

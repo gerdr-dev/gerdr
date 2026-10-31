@@ -6,6 +6,8 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { addonStatus, assetURL, type AddonStatus } from "@/lib/addons";
@@ -221,17 +223,21 @@ function SettingField({ id, spec, value }: { id: string; spec: AddonSetting; val
         {spec.type === "boolean" ? (
           <Switch checked={!!shown} onCheckedChange={(v) => save(v)} />
         ) : spec.type === "select" ? (
-          <select
-            className="h-7 rounded-md border bg-background px-1.5 text-[12px]"
-            value={JSON.stringify(shown)}
-            onChange={(e) => save(JSON.parse(e.target.value))}
-          >
-            {(spec.options ?? []).map((o) => (
-              <option key={JSON.stringify(o.value)} value={JSON.stringify(o.value)}>
-                {o.label ?? String(o.value)}
-              </option>
-            ))}
-          </select>
+          // Values can be numbers or strings: Radix wants strings, so they travel as JSON
+          <Select value={JSON.stringify(shown)} onValueChange={(v) => save(JSON.parse(v))}>
+            <SelectTrigger size="sm" className="h-7 text-[12px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {(spec.options ?? []).map((o) => (
+                <SelectItem key={JSON.stringify(o.value)} value={JSON.stringify(o.value)} className="text-[12px]">
+                  {o.label ?? String(o.value)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : spec.type === "color" ? (
+          <ColorField value={String(shown ?? "")} onSave={save} />
         ) : (
           <span className="flex items-center gap-1">
             <Input
@@ -259,6 +265,65 @@ function SettingField({ id, spec, value }: { id: string; spec: AddonSetting; val
         </div>
       )}
     </div>
+  );
+}
+
+// A "color" setting: a swatch opening a palette plus the hex, editable (any color the palette lacks).
+// prettier-ignore
+const SWATCHES = [
+  "#2f6fd0", "#1f9ed1", "#14a39a", "#2f9e5b", "#7aa02c", "#d9a21b",
+  "#e8772e", "#dc4b3e", "#e5569b", "#c04fc8", "#8a5cf0", "#5b6472",
+];
+
+function ColorField({ value, onSave }: { value: string; onSave: (v: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState(value);
+  useEffect(() => setDraft(value), [value, open]);
+  const valid = (v: string) => /^#[0-9a-f]{6}$/i.test(v);
+  const pick = (v: string) => {
+    v = v.trim().toLowerCase();
+    if (!valid(v)) return setDraft(value);
+    if (v !== value.toLowerCase()) onSave(v);
+  };
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button type="button" className="flex h-7 items-center gap-1.5 rounded-md border px-1.5 font-mono text-[12px] hover:bg-accent">
+          <span className="size-4 rounded-sm border" style={{ background: valid(value) ? value : undefined }} />
+          {value}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-auto p-2">
+        <div className="grid grid-cols-6 gap-1.5">
+          {SWATCHES.map((c) => (
+            <button
+              key={c}
+              type="button"
+              title={c}
+              onClick={() => (pick(c), setOpen(false))}
+              className={cn(
+                "flex size-6 items-center justify-center rounded-sm transition-transform hover:scale-110",
+                c === value.toLowerCase() && "ring-2 ring-foreground/40 ring-offset-1 ring-offset-popover",
+              )}
+              style={{ background: c }}
+            >
+              {c === value.toLowerCase() && <Check className="size-3.5 text-white" />}
+            </button>
+          ))}
+        </div>
+        <div className="mt-2 flex items-center gap-1.5">
+          <span className="size-6 shrink-0 rounded-sm border" style={{ background: valid(draft) ? draft : undefined }} />
+          <Input
+            className="h-7 flex-1 font-mono text-[12px]"
+            value={draft}
+            placeholder="#rrggbb"
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={() => pick(draft)}
+            onKeyDown={(e) => e.key === "Enter" && (pick(draft), setOpen(false))}
+          />
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 

@@ -7,7 +7,8 @@
 //                           "screenshots": ["shot.png"], "main": "index.ts", "service": {…}, "settings": [AddonSetting…]}
 //                "settings" become a form in Settings → Add-ons; read them with g.settings.get(key):
 //                  {"key": "ttl", "title": "缓存时长", "type": "number", "default": 60, "min": 1, "max": 1440, "unit": "分钟"}
-//                type: number / string / boolean / select (with "options": [{"value": 5, "label": "5 分钟"}])
+//                type: number / string / boolean / select (with "options": [{"value": 5, "label": "5 分钟"}]) /
+//                color (a "#rrggbb" string, picked from a palette or typed)
 //   index.ts     the UI half (or what "main" names): export default defineAddon({...}). It may import other files of
 //                the folder; images, sounds and other files it ships are reached with g.asset("icon.png").
 //
@@ -149,6 +150,16 @@ declare global {
      */
     turnStat(fn: (info: TurnStatInfo) => { className?: string; title?: string; after?: any } | void): Dispose;
 
+    /**
+     * Recolor gerdr: override its color tokens, per mode. A value is any CSS color, including relative ones
+     * ("oklch(from #e5569b calc(l + 0.1) c h)"); a token left out (or "") keeps gerdr's own. Several add-ons: by
+     * add-on id, the later one winning per token. Undone when disposed or the add-on is unloaded.
+     * Pass a function to depend on settings: it is called again whenever the add-ons reload, which includes a change
+     * in Settings → Add-ons.
+     *   g.theme(() => { const c = g.settings.get<string>("color"); return { light: { brand: c }, dark: { brand: c } }; })
+     */
+    theme(spec: ThemeSpec | (() => ThemeSpec | void)): Dispose;
+
     /** A button in the composer's bottom bar (next to the model menu). icon: an element, e.g. <g.icons.Zap />. */
     composerAction(action: { id: string; title: string; icon?: any; run(ctx: ComposerContext): void | Promise<void> }): Dispose;
 
@@ -247,6 +258,41 @@ declare global {
     /** The current time (unix ms), refreshed every 30s. */
     now: number;
   }
+
+  interface ThemeSpec {
+    light?: ThemeVars;
+    dark?: ThemeVars;
+  }
+
+  /**
+   * gerdr's color tokens (the custom properties of the UI's src/index.css, without "--"). The Tailwind classes follow
+   * them: brand → bg-brand / text-brand, muted-foreground → text-muted-foreground…
+   */
+  type ThemeToken =
+    | "brand"
+    | "ok"
+    | "warn"
+    | "bad"
+    | "background"
+    | "foreground"
+    | "card"
+    | "card-foreground"
+    | "popover"
+    | "popover-foreground"
+    | "primary"
+    | "primary-foreground"
+    | "secondary"
+    | "secondary-foreground"
+    | "muted"
+    | "muted-foreground"
+    | "accent"
+    | "accent-foreground"
+    | "destructive"
+    | "border"
+    | "input"
+    | "ring"
+    | "sidebar";
+  type ThemeVars = Partial<Record<ThemeToken, string | undefined>>;
 
   interface ComposerContext {
     sessionId: string;

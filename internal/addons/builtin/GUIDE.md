@@ -129,6 +129,23 @@ Rules that keep it looking like Gerdr:
 - `g.turnStat`'s `fn` runs on every render of the line and every 30s: keep it cheap. `info.latest` marks the newest
   turn, `info.now` is the time to compare against.
 
+### Recolor
+
+`g.theme({ light, dark })` overrides the theme's tokens themselves (the ones above, plus `background`, `foreground`,
+`border`, `ring`…; the full list is `ThemeToken` in gerdr.d.ts), so everything drawn with them follows: user bubbles,
+buttons, links. Give each mode its own value, or derive the dark one with a relative color. Pass a function to follow
+a setting; it is called again when settings change:
+
+```ts
+g.theme(() => {
+  const c = g.settings.get<string>("color"); // a "color" setting: "#e5569b"
+  return { light: { brand: c }, dark: { brand: `oklch(from ${c} calc(l + 0.1) c h)` } };
+});
+```
+
+Unloading the add-on puts Gerdr's colors back. Don't reach for `document.documentElement.style` instead: it misses
+the light / dark switch and outlives the add-on.
+
 ### Data
 
 | call | what |
@@ -152,7 +169,8 @@ every device:
   { "key": "sound", "title": "提示音", "type": "boolean", "default": true },
   { "key": "style", "title": "样式", "type": "select", "default": "dot",
     "options": [{ "value": "dot", "label": "圆点" }, { "value": "text", "label": "文字" }] },
-  { "key": "prefix", "title": "前缀", "type": "string", "default": "" }
+  { "key": "prefix", "title": "前缀", "type": "string", "default": "" },
+  { "key": "color", "title": "颜色", "type": "color", "default": "#e5569b" }
 ]
 ```
 
