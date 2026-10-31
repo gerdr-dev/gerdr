@@ -11,8 +11,6 @@ export type Overview = {
   main?: string;
   /** Width share of the main tile. */
   ratio: number;
-  /** Put agents in by themselves when they start running or need you. */
-  follow: boolean;
   /** Left list order. */
   sort: "status" | "project";
   /** The tile shown full size (zoomed), if any. Not restored on reload. */
@@ -30,7 +28,7 @@ export const OVERVIEW_KEY = "gerdr.overview";
 export const MAX_TILES = 12;
 
 export function loadOverview(): Overview {
-  const d: Overview = { on: false, ids: [], ratio: 0.5, follow: false, sort: "status", sizes: {}, shapes: {} };
+  const d: Overview = { on: false, ids: [], ratio: 0.5, sort: "status", sizes: {}, shapes: {} };
   try {
     const v = JSON.parse(localStorage.getItem(OVERVIEW_KEY) ?? "null");
     if (!v) return d;
@@ -39,7 +37,6 @@ export function loadOverview(): Overview {
       ids: Array.isArray(v.ids) ? v.ids.filter((x: unknown) => typeof x === "string") : [],
       main: typeof v.main === "string" ? v.main : undefined,
       ratio: typeof v.ratio === "number" ? Math.min(0.8, Math.max(0.2, v.ratio)) : 0.5,
-      follow: !!v.follow,
       sort: v.sort === "project" ? "project" : "status",
       sizes: v.sizes && typeof v.sizes === "object" ? v.sizes : {},
       shapes: v.shapes && typeof v.shapes === "object" ? v.shapes : {},

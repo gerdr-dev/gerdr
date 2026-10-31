@@ -8,7 +8,7 @@
 // drop out on their own (overviewIds), so the overview never keeps an agent alive that the layout let go of.
 // Each project's current Work conversation counts as open too (overviewState.workChats): it has no pane, Work mode shows it.
 import { allLeaves, type Layout } from "./layout";
-import { isOpen, MAX_TILES, OVERVIEW_KEY, overviewFocus, overviewIds, workChats, type Overview, type WorkConf } from "./overviewState";
+import { MAX_TILES, OVERVIEW_KEY, overviewFocus, overviewIds, workChats, type Overview, type WorkConf } from "./overviewState";
 import { sessionRank } from "./order";
 import { get, set, useStore } from "./store";
 import { syncWatch } from "./sync";
@@ -99,24 +99,6 @@ export function attentionIds(): string[] {
     .filter((s) => sessionRank(s, unread) <= 3)
     .sort((a, b) => sessionRank(a, unread) - sessionRank(b, unread))
     .map((s) => s.id);
-}
-
-/** Follow mode: an agent that starts running or starts waiting comes in by itself. Started once from App. */
-export function watchFollow() {
-  let prev = get().sessions;
-  return useStore.subscribe((s) => {
-    if (s.sessions === prev) return;
-    const before = prev;
-    prev = s.sessions;
-    if (!s.overview.follow) return;
-    const add: string[] = [];
-    for (const cur of Object.values(s.sessions)) {
-      const old = before[cur.id];
-      const busy = (x?: SessionSummary) => x?.status === "running" || x?.status === "waiting";
-      if (busy(cur) && !busy(old) && isOpen(s.layout, s.config, cur.id)) add.push(cur.id);
-    }
-    if (add.length) addTiles(add);
-  });
 }
 
 // ---- auto arrangement ----

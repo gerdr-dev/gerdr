@@ -10,7 +10,6 @@ import { AppContextMenu } from "./components/AppContextMenu";
 import { TabActive, TabView } from "./components/Panes";
 import { WorkView } from "./components/WorkView";
 import { OverviewView } from "./components/Overview";
-import { watchFollow } from "./lib/overview";
 import { tabName } from "./lib/actions";
 import { handleKeydown } from "./lib/commands";
 import { ACTION_TITLES, setPrefixLabel, toAccelerator, type KeyAction } from "./lib/keys";
@@ -103,7 +102,6 @@ export default function App() {
     const onKey = (e: KeyboardEvent) => handleKeydown(e);
     window.addEventListener("keydown", onKey, true);
     const unwatchCopy = watchCopyOnSelect(); // 实验室「选中即复制」，没开时什么都不做
-    const unwatchFollow = watchFollow(); // overview: put agents that start running in by themselves (when switched on)
     const unwatchInbox = watchInbox(); // errors, questions / approvals, low battery → the inbox
     if (isNative()) document.documentElement.classList.add("native");
     // mac App 的菜单和通知点击走这两个入口。
@@ -116,7 +114,6 @@ export default function App() {
     return () => {
       window.removeEventListener("keydown", onKey, true);
       unwatchCopy();
-      unwatchFollow();
       unwatchInbox();
     };
   }, []);

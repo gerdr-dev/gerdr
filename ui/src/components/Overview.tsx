@@ -1,7 +1,6 @@
 import { ArrowLeft, ArrowUpRight, Eraser, GripVertical, ClipboardCheck, Maximize2, Minimize2, PanelLeft, Pin, PinOff, Plus, SquarePen, X } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
 import { basename, focusSession, newAgentInOverview, tabName } from "@/lib/actions";
 import { locateSession, spaceList, spaceOf, type Layout } from "@/lib/layout";
 import { compareSessions } from "@/lib/order";
@@ -282,10 +281,6 @@ function OverviewList({
           放入运行中和未读
           <span className="ml-auto tabular-nums text-muted-foreground">{missing || ""}</span>
         </Button>
-        <label className="flex items-center gap-2 px-1 text-[12px] text-muted-foreground" title="有 agent 开始跑或在等你时，自动放进来">
-          <Switch size="sm" checked={o.follow} onCheckedChange={(v) => setOverview((x) => ({ ...x, follow: v }))} />
-          自动放入开始运行的
-        </label>
       </div>
       <div className="flex shrink-0 items-center gap-1 px-3.5 pt-2 pb-1 text-[11px] text-muted-foreground">
         <button
