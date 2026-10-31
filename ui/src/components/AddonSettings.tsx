@@ -1,4 +1,5 @@
 import { Markdown } from "@gerdr/chat";
+import { openLightbox } from "@/components/Lightbox";
 import { Check, ChevronRight, ExternalLink, FolderOpen, Puzzle, RefreshCw, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -320,10 +321,21 @@ function StoreRow({ source, a }: { source: string; a: StoreAddon }) {
         {a.description && <div className="mt-0.5 text-[12px] text-muted-foreground">{a.description}</div>}
         {!!a.screenshots?.length && (
           <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
-            {a.screenshots.map((p) => (
-              <a key={p} href={file(p)} target="_blank" rel="noreferrer" className="shrink-0">
+            {a.screenshots.map((p, i) => (
+              <button
+                key={p}
+                type="button"
+                className="shrink-0 cursor-zoom-in"
+                onClick={(e) =>
+                  openLightbox(
+                    a.screenshots!.map((s) => ({ url: file(s), alt: a.name })),
+                    i,
+                    e.currentTarget.firstElementChild,
+                  )
+                }
+              >
                 <img src={file(p)} alt="" className="h-28 rounded-md border object-cover hover:opacity-90" />
-              </a>
+              </button>
             ))}
           </div>
         )}
@@ -332,8 +344,13 @@ function StoreRow({ source, a }: { source: string; a: StoreAddon }) {
             <CollapsibleTrigger className="group flex items-center gap-0.5 text-[12px] text-muted-foreground hover:text-foreground">
               <ChevronRight className="size-3.5 transition-transform group-data-[state=open]:rotate-90" /> 说明
             </CollapsibleTrigger>
-            <CollapsibleContent className="mt-1.5 rounded-sm bg-muted/50 p-2.5 text-[13px]">
-              <Markdown>{relinkImages(a.readme, file)}</Markdown>
+            <CollapsibleContent
+              // A README is a document, not a reply: headings at chat sizes dwarfed the row (its title repeats the
+              // add-on's name anyway and is dropped). Its images open in the lightbox, not as a page of their own.
+              className="mt-1.5 rounded-sm bg-muted/50 p-2.5 text-[13px] [&_h1]:!text-[15px] [&_h2]:!text-[14px] [&_h3]:!text-[13px] [&_:is(h1,h2,h3)]:!mt-3 [&_:is(h1,h2,h3)]:!mb-1.5 [&_:is(h1,h2,h3)]:!font-semibold [&_img]:max-h-64 [&_img]:w-auto [&_img]:cursor-zoom-in [&_img]:rounded-md [&_img]:border"
+              onClickCapture={zoomImage}
+            >
+              <Markdown>{relinkImages(dropTitle(a.readme), file)}</Markdown>
             </CollapsibleContent>
           </Collapsible>
         )}
@@ -350,6 +367,23 @@ function StoreRow({ source, a }: { source: string; a: StoreAddon }) {
         )}
       </div>
     </div>
+  );
+}
+
+// The README's own "# Name" line: the row already shows the name.
+const dropTitle = (md: string) => md.replace(/^\s*#\s[^\n]*\n+/, "");
+
+// A click on an image in the README: the lightbox over every image in it, starting at that one.
+function zoomImage(e: React.MouseEvent<HTMLElement>) {
+  const img = (e.target as Element).closest("img");
+  if (!img) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const all = Array.from(e.currentTarget.querySelectorAll("img"));
+  openLightbox(
+    all.map((x) => ({ url: x.currentSrc || x.src, alt: x.alt })),
+    all.indexOf(img),
+    img,
   );
 }
 

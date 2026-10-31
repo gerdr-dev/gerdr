@@ -379,7 +379,9 @@ function Lightbox({ items, index, origin }: { items: LightboxItem[]; index: numb
       ref={rootRef}
       role="dialog"
       aria-label={t("lightbox.label")}
-      className="fixed inset-0 z-[200] touch-none select-none"
+      // pointer-events-auto: an open modal dialog (Settings showing an add-on's screenshots) sets pointer-events: none
+      // on <body>, and the lightbox is outside it
+      className="pointer-events-auto fixed inset-0 z-[200] touch-none select-none"
       onPointerDown={onDown}
       onPointerMove={onMove}
       onPointerUp={onUp}

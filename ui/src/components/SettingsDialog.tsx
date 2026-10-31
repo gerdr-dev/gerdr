@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { lightboxOpen } from "@/components/Lightbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -48,7 +49,13 @@ export function SettingsDialog({ open }: { open: boolean }) {
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && closeDialog()}>
-      <DialogContent className="max-h-[85vh] overflow-hidden p-0 sm:max-w-3xl">
+      <DialogContent
+        className="max-h-[85vh] overflow-hidden p-0 sm:max-w-3xl"
+        // The lightbox (an add-on's screenshots) sits above this dialog but outside it: clicking or pressing Esc
+        // there is for the lightbox, not a reason to close Settings
+        onPointerDownOutside={(e) => lightboxOpen() && e.preventDefault()}
+        onEscapeKeyDown={(e) => lightboxOpen() && e.preventDefault()}
+      >
         <Tabs defaultValue="general" value={tabOpen} onValueChange={setTabOpen} className="flex h-[75vh] min-w-0 flex-col">
           {/* 手机上整页缩一号（标题 15px、分页 13px、按钮矮一档）：组件默认的 18 / 14px 是照桌面定的，放进不到 400px 宽的弹窗里
               标题和按钮显得又大又挤（用户在安卓 App 里截图报的）。只在 max-md 下生效，桌面不动 */}
