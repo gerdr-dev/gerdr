@@ -143,7 +143,7 @@ func (s *session) backgroundTask(toolCallID string) bool {
 	return false
 }
 
-// taskListLocked：在跑的全部 + 最近结束的几个（按开始时间）。
+// taskListLocked: every running task plus the latest finished ones (maxDoneTasks subagents and as many others), by start time.
 func (s *session) taskListLocked() []acpx.Task {
 	var running, done []acpx.Task
 	for _, t := range s.tasks {
@@ -154,13 +154,23 @@ func (s *session) taskListLocked() []acpx.Task {
 		}
 	}
 	sort.Slice(done, func(i, j int) bool { return done[i].EndedAt > done[j].EndedAt })
-	if len(done) > maxDoneTasks {
-		for _, t := range done[maxDoneTasks:] {
-			delete(s.tasks, t.ID)
+	// Subagents and commands are capped apart: a session that runs many slow commands (each is a task) pushed its
+	// subagents out within minutes, and a subagent's row needs its task (background tag, real duration, its report).
+	var kept []acpx.Task
+	agents, others := 0, 0
+	for _, t := range done {
+		n := &others
+		if t.Type == "local_agent" || t.Subagent != "" {
+			n = &agents
 		}
-		done = done[:maxDoneTasks]
+		if *n >= maxDoneTasks {
+			delete(s.tasks, t.ID)
+			continue
+		}
+		*n++
+		kept = append(kept, t)
 	}
-	out := append(running, done...)
+	out := append(running, kept...)
 	sort.Slice(out, func(i, j int) bool { return out[i].StartedAt < out[j].StartedAt })
 	if out == nil {
 		out = []acpx.Task{}
