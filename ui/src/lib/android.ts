@@ -209,7 +209,7 @@ const openList = () => document.querySelector<HTMLElement>('[role="listbox"][dat
  */
 let arrows: boolean | undefined;
 function syncArrows() {
-  const now = keyboardUp() || !!openList() || visibleSessions(get().layout, isPhone()).some(hasAsk);
+  const now = keyboardUp() || !!openList() || (!document.querySelector("[role=dialog]") && visibleSessions(get().layout, isPhone()).some(hasAsk));
   if (now === arrows) return;
   arrows = now;
   postAndroid({ t: "arrows", on: now });
@@ -228,7 +228,10 @@ function watchArrows() {
   const mo = new MutationObserver(later);
   mo.observe(document.body, { childList: true });
   const offAsks = watchAsks(later);
-  const offStore = useStore.subscribe((s, p) => (s.layout !== p.layout || s.overview !== p.overview) && later());
+  // The drawer and pane switcher aren't portals on <body> like the dialogs (the observer above): watch the store for them
+  const offStore = useStore.subscribe(
+    (s, p) => (s.layout !== p.layout || s.overview !== p.overview || s.drawer !== p.drawer || s.switcher !== p.switcher) && later(),
+  );
   syncArrows();
   return () => {
     cancelAnimationFrame(raf);
@@ -242,30 +245,17 @@ function watchArrows() {
 }
 
 /**
- * 音量键当 ↑ / ↓（设置里能关）：等于在焦点那个会话的输入框里按方向键 —— 输入框空着时翻之前发过的话，
- * agent 在问问题时在选项间移动（Composer 的 onKeyDown 那一套）。手机竖屏上不用去够软键盘。
- * 不聚焦输入框：聚焦会把软键盘弹起来。一个下拉 / 菜单开着时给它（焦点在它里面）。
+ * A volume key is an arrow key press (the setting can turn it off), dispatched where a real one lands: the focused
+ * element, so the desktop's rules apply unchanged. Typing in a box → that box (history, the cursor, the / and @ lists);
+ * focus in a dialog → the dialog; nothing focused → bubbles to the focused pane's ChatView, which gives it to a
+ * waiting question unless a [role=dialog] is open (the phone's drawer and pane switcher say role="dialog" too).
+ * An open dropdown takes it even when its focus is off.
  */
 function volumeKey(key: "ArrowUp" | "ArrowDown") {
-  const press = (el: Element) => el.dispatchEvent(new KeyboardEvent("keydown", { key, code: key, bubbles: true, cancelable: true }));
   const list = openList();
-  if (list) return press(list.contains(document.activeElement) ? document.activeElement! : list);
-  // Typing somewhere (a composer, the command palette's search, a rename box): the arrows are for that box. The
-  // focused pane's composer isn't necessarily it: in the all-agents overview the one being typed in is the tile's
-  // (pane id ov-…), and the tab's composer underneath is hidden
   const a = document.activeElement;
-  if (a && (a.tagName === "INPUT" || a.tagName === "TEXTAREA")) return press(a);
-  // Not typing (a question waiting): the composer of the session on screen, without focusing it (that would bring
-  // the soft keyboard up)
-  const box = composerOf(visibleSessions(get().layout, isPhone())[0]);
-  if (box) press(box);
-}
-
-/** The composer of this session that is showing (a hidden kept tab or the tab under the overview has one too). */
-function composerOf(session: string | undefined) {
-  if (!session) return null;
-  const all = document.querySelectorAll<HTMLTextAreaElement>(`textarea[data-session="${CSS.escape(session)}"]`);
-  return [...all].find((el) => el.checkVisibility()) ?? null;
+  const target = list && !list.contains(a) ? list : (a ?? document.body);
+  target.dispatchEvent(new KeyboardEvent("keydown", { key, code: key, bubbles: true, cancelable: true }));
 }
 
 /** The App's self-update (AppUpdate.kt) as the shell reports it; Settings draws it (AndroidSettings). */

@@ -226,7 +226,7 @@ export default function App() {
           {sidebar && !phone && mode !== "work" && <Sidebar />}
           {/* 手机上侧栏是盖在上面的抽屉（并排放的话对话只剩一百多 px 宽） */}
           {phone && drawer && (
-            <div className="fixed inset-0 z-40 flex">
+            <div role="dialog" aria-modal="true" className="fixed inset-0 z-40 flex">
               <Sidebar className="w-[min(18rem,85vw)] shadow-xl" />
               <div className="flex-1 bg-background/50" onClick={() => set({ drawer: false })} />
             </div>

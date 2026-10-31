@@ -186,7 +186,11 @@ export function PaneSwitcher() {
     <>
       {/* 点面板外面就关：手机上没有 Esc，右上角那个 × 又小 */}
       <div className="absolute inset-0 z-20 bg-background/40" onClick={close} />
-      <aside className="absolute inset-x-2 top-1.5 z-20 flex max-h-[calc(100%-12px)] flex-col overflow-hidden rounded-xl border bg-background text-foreground shadow-[0_24px_60px_-16px_rgba(0,0,0,.45)] md:right-2.5 md:left-auto md:w-[480px]">
+      <aside
+        role="dialog"
+        aria-modal="true"
+        className="absolute inset-x-2 top-1.5 z-20 flex max-h-[calc(100%-12px)] flex-col overflow-hidden rounded-xl border bg-background text-foreground shadow-[0_24px_60px_-16px_rgba(0,0,0,.45)] md:right-2.5 md:left-auto md:w-[480px]"
+      >
         <div className="flex shrink-0 items-center gap-1.5 border-b p-2">
           <div className="relative min-w-0 flex-1">
             <Search className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" />
