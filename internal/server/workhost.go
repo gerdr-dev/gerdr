@@ -243,7 +243,8 @@ func spaceOr(project string) string {
 
 // placeSession puts a conversation started by a Work function into its project's Code layout, so it's in the window
 // (and kept alive, see layout.ts) whether or not a window is open now: a new tab in workspace wsID, else in the
-// workspace whose directory is cwd (or the closest one above it), else in a new workspace for cwd. Tabs stay
+// workspace whose directory is cwd (or the closest one above it), else in a new workspace for cwd. wsID "new" always
+// makes a new one (the user picked that over the match). Tabs stay
 // where the user is looking: the active tab doesn't change. real is cwd with symlinks resolved (what the hub keeps:
 // /tmp/x is /private/tmp/x on macOS); a workspace's directory is matched against both, as typed in the UI either way.
 func (s *Server) placeSession(project, id, cwd, real, wsID string) error {
@@ -259,7 +260,7 @@ func (s *Server) placeSession(project, id, cwd, real, wsID string) error {
 	var w node
 	best := -1
 	for _, x := range c.wss() {
-		if spaceOfWs(x) != space {
+		if spaceOfWs(x) != space || wsID == "new" {
 			continue
 		}
 		if wsID != "" {
@@ -282,7 +283,7 @@ func (s *Server) placeSession(project, id, cwd, real, wsID string) error {
 		}
 	}
 	if w == nil {
-		if wsID != "" {
+		if wsID != "" && wsID != "new" {
 			return fmt.Errorf("no workspace %q in project %q", wsID, space)
 		}
 		w, _ = c.newWorkspace(filepath.Base(cwd), cwd, space)

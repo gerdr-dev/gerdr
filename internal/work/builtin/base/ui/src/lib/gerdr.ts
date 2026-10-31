@@ -1,11 +1,16 @@
 // The bridge between this Work project and gerdr around it.
 //
+// Don't edit this file: gerdr upgrades it, and an edited copy is left alone from then on, so it misses what later
+// versions add (an old one doesn't follow the sidebar's width: the menu stops lining up and can't be resized). Put your
+// own helpers in a file of their own.
+//
 // - run(fn, input, { onProgress, onLog, signal }): call a local function (local/<file>.ts, "file.export"). Logic and data
 //   access (commands, APIs, MCP) live there, not in the page: the page only draws. The run streams its progress and
 //   console output while it goes; it doesn't stop when the page closes (signal / abort() stop it).
 // - functions(): what can be called.
 // - ask(text): hand a task to the Work agent on the right of the page (gerdr sends it as a message;
-//   it queues if the agent is busy).
+//   it queues if the agent is busy); resolves with the conversation's id. openChat(id) shows that conversation.
+// - openSession(id): show a coding-agent conversation a local function started (ctx.sessions.start), in Code.
 // - The page follows gerdr's light / dark theme by itself (see the listener at the bottom).
 // - The menu's width is --gerdr-sidebar-w, which follows gerdr's sidebar: the user resizes them together by dragging the
 //   menu's right edge (gerdr draws that handle over this page). Keep using the variable for the menu width.
@@ -103,8 +108,21 @@ async function follow<T>(body: ReadableStream<Uint8Array>, id: string | undefine
   throw new RunError("the connection closed before the run ended (it may still be running)", undefined, id);
 }
 
-export function ask(text: string) {
-  window.parent.postMessage({ type: "gerdr:ask", text }, location.origin);
+let askSeq = 0;
+const asking = new Map<number, { resolve: (session: string) => void; reject: (e: Error) => void }>();
+
+/** Hands a task to the Work agent on the right (queued if it's busy); resolves with that conversation's id once sent. */
+export function ask(text: string): Promise<string> {
+  const id = ++askSeq;
+  return new Promise((resolve, reject) => {
+    asking.set(id, { resolve, reject });
+    window.parent.postMessage({ type: "gerdr:ask", id, text }, location.origin);
+  });
+}
+
+/** Shows a Work agent conversation (e.g. the one ask() resolved with) on the right; on a phone switches to its tab. */
+export function openChat(session: string) {
+  window.parent.postMessage({ type: "gerdr:openChat", session }, location.origin);
 }
 
 /** Shows a coding-agent conversation a local function started (ctx.sessions.start): switches to Code, at its pane. */
@@ -124,6 +142,12 @@ window.addEventListener("message", (e) => {
     document.documentElement.style.colorScheme = e.data.dark ? "dark" : "light";
   } else if (e.data?.type === "gerdr:sidebar" && typeof e.data.width === "number") {
     document.documentElement.style.setProperty("--gerdr-sidebar-w", `${e.data.width}px`);
+  } else if (e.data?.type === "gerdr:asked") {
+    const p = asking.get(e.data.id);
+    if (!p) return;
+    asking.delete(e.data.id);
+    if (e.data.error) p.reject(new Error(e.data.error));
+    else p.resolve(e.data.session);
   }
 });
 window.parent.postMessage({ type: "gerdr:ready" }, location.origin);

@@ -88,7 +88,10 @@ interface Ctx {
       title?: string;
       /** Permission mode (claude: default / acceptEdits / plan / auto; codex: ask / auto / read-only). Default: the user's default, unless that one approves everything. */
       mode?: string;
-      /** A workspace id from `ctx.workspaces.list()` to put it in, instead of finding one by `cwd`. */
+      /**
+       * Which Code workspace it goes in: a workspace id from `ctx.workspaces.list()`, or `"new"` for a new one named
+       * after the directory. Default: the workspace whose directory is `cwd` (or the closest one above it), else a new one.
+       */
       workspace?: string;
       /** Switch the open windows to it. Default false: don't pull the user away from what they're doing. */
       focus?: boolean;

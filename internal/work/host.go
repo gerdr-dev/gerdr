@@ -45,7 +45,7 @@ type StartOptions struct {
 	Agent     string `json:"agent,omitempty"`     // claude / codex / native / a variant's id; "" = the default agent
 	Title     string `json:"title,omitempty"`     // the tab's name until the agent's own title replaces it
 	Mode      string `json:"mode,omitempty"`      // permission mode; "" = the agent's default (never a permissive one)
-	Workspace string `json:"workspace,omitempty"` // a workspace id from ctx.workspaces.list; "" = found by cwd
+	Workspace string `json:"workspace,omitempty"` // a workspace id from ctx.workspaces.list; "new"; "" = found by cwd
 	Focus     bool   `json:"focus,omitempty"`     // switch the open windows to it
 }
 

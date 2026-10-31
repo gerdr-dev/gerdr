@@ -60,6 +60,10 @@ func TestPlaceSession(t *testing.T) {
 			t.Errorf("w3 has %d tabs, want the empty one replaced", len(tabsOf(w)))
 		}
 	}
+	l, _ = place("", "N8", "/r", "new")
+	if ws, _, cwd := where(l, "N8"); ws == "w1" || ws == "" || cwd != "/r" {
+		t.Errorf(`"new" though w1 matches: in %q (cwd %q), want a new workspace`, ws, cwd)
+	}
 	if _, err := place("", "N5", "/r", "w2"); err == nil {
 		t.Error("a workspace in another project: want an error")
 	}
