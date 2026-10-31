@@ -291,10 +291,11 @@ func (s *Server) placeSession(project, id, cwd, real, wsID string) error {
 	t := node{"id": rid("t"), "root": p, "focus": p["id"]}
 	c.insertTab(w, t, 0)
 	c.normalize()
-	out, err := json.Marshal(c.l)
+	b, err := json.Marshal(c.l)
 	if err != nil {
 		return err
 	}
+	out := json.RawMessage(b) // not []byte: that would go out to the windows as a base64 string, which they drop
 	if err := s.Layout.Set(out); err != nil {
 		return err
 	}

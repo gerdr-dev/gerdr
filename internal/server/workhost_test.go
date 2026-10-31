@@ -83,6 +83,36 @@ func TestPlaceSession(t *testing.T) {
 	}
 }
 
+// The windows take the new layout from the broadcast: it must go out as the layout object (a []byte would be
+// marshalled as a base64 string, which they drop, and then write their stale copy back over it).
+func TestPlaceSessionBroadcast(t *testing.T) {
+	h, err := hub.New(hub.Options{Dir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	st := config.NewStore(filepath.Join(t.TempDir(), "layout.json"), `null`)
+	_ = st.Set(json.RawMessage(opsLayout))
+	s := &Server{Layout: st, Hub: h}
+	sub := h.Subscribe()
+	defer h.Unsubscribe(sub)
+	if err := s.placeSession("", "N1", "/new", "/new", ""); err != nil {
+		t.Fatal(err)
+	}
+	m := <-sub.C()
+	b, _ := json.Marshal(m)
+	var got struct {
+		T    string `json:"t"`
+		Data struct {
+			Data struct {
+				Workspaces []map[string]any `json:"workspaces"`
+			} `json:"data"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(b, &got); err != nil || got.T != "layout" || len(got.Data.Data.Workspaces) != 4 {
+		t.Errorf("broadcast %s: %v", b[:min(len(b), 200)], err)
+	}
+}
+
 func TestLastReply(t *testing.T) {
 	up := func(kind, text string, meta string) *hub.Event {
 		u := `{"sessionUpdate":"` + kind + `","content":{"type":"text","text":` + quote(text) + `}` + meta + `}`
