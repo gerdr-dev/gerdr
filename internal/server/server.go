@@ -154,6 +154,18 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/pending", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, s.Hub.Pending()) })
 	mux.HandleFunc("GET /api/busy", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, s.busy()) })
 	s.appUpdateRoutes(mux)
+	// A session's slash commands by the key in its summary (hub cmdSets). The key is a hash of the content, so the
+	// browser may keep it for good.
+	mux.HandleFunc("GET /api/commands/{key}", func(w http.ResponseWriter, r *http.Request) {
+		cmds := s.Hub.CommandSet(r.PathValue("key"))
+		if cmds == nil {
+			httpError(w, 404, "no such command list")
+			return
+		}
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
+		_ = json.NewEncoder(w).Encode(cmds)
+	})
 	mux.HandleFunc("POST /api/sessions/{id}/answer", s.sessionOp(func(r *http.Request, sess *hub.Session) (any, error) {
 		var b struct {
 			ReqID    string          `json:"reqId"`

@@ -485,6 +485,11 @@ cwd 以外改的文件（Bash 写 `~/.zshrc`、隔壁项目）管不到；同一
 - 输入框里回车要挡输入法（`isComposing` / `keyCode 229`）：中文选词就是按回车。
 - 插件在前端跑：服务端用 esbuild（Go 版，不需要 node）编成 ESM，前端用 Blob URL `import()`。
   CSP 因此放行 `blob:` 脚本。插件钩子全部 try/catch，出错只记在插件名下。
+- A session summary carries its slash commands as `commandsKey`, not the list (hub/commands.go cmdSets): a list is
+  ~60 KB, every session of an agent shares one of a few, and summaries go out with the whole session list on load and
+  on every streamed chunk. Inline, 181 sessions made /api/hello 8.7 MB (3.3 MB gzipped: the copies sit beyond gzip's
+  32 KB window) and the phone App sat on "连接中…" for 5-10 s. The page fetches `/api/commands/<key>` (immutable)
+  only for sessions on screen (ui/src/lib/commandSets.ts, used by components/chat/ChatView.tsx).
 - WebSocket 推送攒 30ms 一帧（流式片段很碎）；`Msg.Events` 不能 `omitempty`——空日志的会话也要
   推一帧 reset，前端靠它知道「加载完了」（踩过：空会话永远显示「加载中」）。
 - The composer is shared per session across devices (phone and computer see the same box): the tab sends

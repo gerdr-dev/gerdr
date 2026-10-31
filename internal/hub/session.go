@@ -216,11 +216,14 @@ func (h *Hub) nextSeqLocked() int64 {
 // Summary 是侧栏 / 面板一览要的那点东西。
 type Summary struct {
 	Record
-	Status   string                    `json:"status"`
-	Error    string                    `json:"error,omitempty"`
-	Modes    *acp.SessionModeState     `json:"modes,omitempty"`
-	Config   []acp.SessionConfigOption `json:"configOptions,omitempty"`
-	Commands []acp.AvailableCommand    `json:"commands,omitempty"`
+	Status string                    `json:"status"`
+	Error  string                    `json:"error,omitempty"`
+	Modes  *acp.SessionModeState     `json:"modes,omitempty"`
+	Config []acp.SessionConfigOption `json:"configOptions,omitempty"`
+	// Commands goes out as CommandsKey (fetched from /api/commands/<key>, see cmdSets): the list was ~60 KB in every
+	// Summary of every session, on every page load and every streamed chunk.
+	Commands    []acp.AvailableCommand `json:"-"`
+	CommandsKey string                 `json:"commandsKey,omitempty"`
 	// CommandsCached：Commands 是借的缓存（这个会话的 agent 进程还没起，用这个 agent 上次报的）。
 	// 缓存可能是旧版写的（升级 gerdr 后适配器多接了命令、claude 多了 skill），界面打 / 时照样先把进程起起来拿新的。
 	CommandsCached bool         `json:"commandsCached,omitempty"`
@@ -279,7 +282,7 @@ func (s *Session) Summary() Summary {
 	if (modes == nil || len(config) == 0) && s.h.opts != nil {
 		modes, config = s.optsFallbackLocked(modes, config)
 	}
-	return Summary{Record: s.rec, Status: s.status, Error: s.lastErr, Modes: modes, Config: config, Commands: cmds, CommandsCached: cached && len(cmds) > 0, Pending: len(s.pending), LastSeq: last, Tasks: s.tasks, Turn: s.turnInfoLocked(), Context: s.contextLocked(), Base: s.h.Base(s.rec.Agent), Branch: gitBranch(s.rec.Cwd), Waiting: s.waitingLocked()}
+	return Summary{Record: s.rec, Status: s.status, Error: s.lastErr, Modes: modes, Config: config, Commands: cmds, CommandsKey: s.h.cmdSets.key(cmds), CommandsCached: cached && len(cmds) > 0, Pending: len(s.pending), LastSeq: last, Tasks: s.tasks, Turn: s.turnInfoLocked(), Context: s.contextLocked(), Base: s.h.Base(s.rec.Agent), Branch: gitBranch(s.rec.Cwd), Waiting: s.waitingLocked()}
 }
 
 func (s *Session) ID() string { return s.rec.ID }

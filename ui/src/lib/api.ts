@@ -1,5 +1,6 @@
 import type { AppUpdateStatus } from "./native";
 import type { LLMModel, LLMProvider } from "./store";
+import type { AvailableCommand } from "@gerdr/chat/types";
 import type { ContentBlock, ExtSettings, ExtView, Hello, HubEvent, MemoryStore, PluginBuild, SessionSummary, TermInfo } from "./types";
 
 /** 正开着某个会话的别的进程（herdr / 终端里的交互式 claude） */
@@ -251,6 +252,7 @@ export const api = {
   remoteDeletePasskey: (id: string) => req("DELETE", `/api/remote/passkeys/${encodeURIComponent(id)}`),
   remoteUnlock: () => req("POST", "/api/remote/unlock", {}),
   service: () => req<ServiceStatus>("GET", "/api/service"),
+  commandSet: (key: string) => req<AvailableCommand[]>("GET", `/api/commands/${key}`),
   /** The desktop App's update status as its page last relayed it (null: no App window lately); server/appupdate.go. */
   appUpdate: () => req<{ status: AppUpdateStatus | null; client: string }>("GET", "/api/app-update"),
   reportAppUpdate: (status: AppUpdateStatus) => req<{}>("PUT", "/api/app-update", { client: clientId, status }),

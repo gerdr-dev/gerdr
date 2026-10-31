@@ -175,7 +175,9 @@ type Hub struct {
 	opt  Options
 	log  *slog.Logger
 	cmds *cmdCache
-	opts *optCache
+	// cmdSets: command lists by content, so a Summary carries a key instead of the list (commands.go)
+	cmdSets cmdSets
+	opts    *optCache
 
 	mu       sync.Mutex
 	hosts    map[string]*agenthost.Host // agent id → 连接（懒起）

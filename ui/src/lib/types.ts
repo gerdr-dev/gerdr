@@ -34,6 +34,8 @@ export type SessionSummary = ChatSession & {
   modes?: { availableModes: SessionMode[]; currentModeId: string };
   configOptions?: ConfigOption[];
   commands?: AvailableCommand[];
+  /** The server sends the list as this key (fetched on demand from /api/commands/<key>, see useCommandSet), not inline */
+  commandsKey?: string;
   /** commands 是借的缓存（这个会话的 agent 进程还没起，用这个 agent 上次报的；可能是旧版写的） */
   commandsCached?: boolean;
   pending: number;

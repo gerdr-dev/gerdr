@@ -1,6 +1,8 @@
 package hub
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -100,4 +102,52 @@ func (c *optCache) get(agent string) (o agentOpts, ok bool) {
 		return o, false
 	}
 	return o, json.Unmarshal(b, &o) == nil
+}
+
+// cmdSets hands command lists out by content instead of inside every Summary. A list runs to ~60 KB (claude with
+// many skills), the same few lists are shared by every session of an agent, and a Summary goes out with the session
+// list on every page load and with every streamed chunk of a running turn: 181 sessions made /api/hello 8.7 MB
+// (3.3 MB gzipped: the copies sit further apart than gzip's 32 KB window), which took 5-10 s to open over the relay.
+// Now a Summary carries the list's key and the page fetches /api/commands/<key> once, only for the sessions it shows.
+type cmdSets struct {
+	mu    sync.Mutex
+	byKey map[string][]acp.AvailableCommand
+	// last remembers the key of a slice already hashed, by its first element: Summary runs on every chunk, and the
+	// lists are replaced, never edited in place. Holding the slice in byKey keeps its memory from being reused for
+	// another list while the pointer is remembered.
+	last map[*acp.AvailableCommand]string
+}
+
+// cmdSetsMax: distinct lists kept; past it everything is dropped and rebuilt from what Summary sees next. A page that
+// asks for a dropped key gets a 404 and asks again once the next Summary brings the key back.
+const cmdSetsMax = 64
+
+func (c *cmdSets) key(cmds []acp.AvailableCommand) string {
+	if len(cmds) == 0 {
+		return ""
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.byKey == nil || len(c.byKey) >= cmdSetsMax {
+		c.byKey, c.last = map[string][]acp.AvailableCommand{}, map[*acp.AvailableCommand]string{}
+	}
+	p := &cmds[0]
+	if k, ok := c.last[p]; ok && len(c.byKey[k]) == len(cmds) {
+		return k
+	}
+	b, _ := json.Marshal(cmds)
+	sum := sha256.Sum256(b)
+	k := hex.EncodeToString(sum[:8])
+	if _, ok := c.byKey[k]; !ok {
+		c.byKey[k] = cmds
+	}
+	c.last[p] = k
+	return k
+}
+
+// CommandSet: the command list a Summary's CommandsKey stands for (nil if unknown).
+func (h *Hub) CommandSet(key string) []acp.AvailableCommand {
+	h.cmdSets.mu.Lock()
+	defer h.cmdSets.mu.Unlock()
+	return h.cmdSets.byKey[key]
 }
