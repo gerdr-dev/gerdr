@@ -97,6 +97,9 @@ function seen(id: string) {
   return visibleSessions(getApp().layout, isPhone()).includes(id);
 }
 
+/** Settings → Inbox: the user can keep a kind out (missing = on). Battery has its own switch (batteryAlert). */
+const wanted = (kind: "permission" | "ask" | "error") => getApp().config.inbox?.[kind] !== false;
+
 // ---- approvals / questions ----
 
 let pendingTimer: ReturnType<typeof setTimeout> | undefined;
@@ -115,7 +118,7 @@ function refreshPending() {
         .filter(Boolean),
     );
     const skip = new Set(gone());
-    const fresh = reqs.filter((r) => !have.has(r.reqId) && !skip.has(r.reqId));
+    const fresh = reqs.filter((r) => !have.has(r.reqId) && !skip.has(r.reqId) && wanted(r.kind));
     useInbox.setState({ live: Object.fromEntries(reqs.map((r) => [r.reqId, true as const])) });
     add(
       fresh.reverse().map((r) => ({
@@ -187,7 +190,7 @@ export function watchInbox() {
     const errs: InboxItem[] = [];
     for (const cur of Object.values(s.sessions)) {
       const old = before[cur.id];
-      if (!old || cur.status !== "error" || old.status === "error") continue;
+      if (!old || cur.status !== "error" || old.status === "error" || !wanted("error")) continue;
       if (old.status !== "running" && old.status !== "waiting") continue;
       errs.push({ id: `err:${cur.id}:${Date.now()}`, kind: "error", at: Date.now(), sessionId: cur.id, title: sessionName(cur), body: cur.error });
     }

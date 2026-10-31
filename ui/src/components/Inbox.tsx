@@ -77,7 +77,7 @@ function InboxPanel({ close }: { close: () => void }) {
           className="h-7 px-2 text-[12px] text-muted-foreground"
           onClick={() => {
             close();
-            set({ dialog: { kind: "settings" } });
+            set({ dialog: { kind: "settings", tab: "inbox" } });
           }}
         >
           设置

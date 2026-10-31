@@ -61,6 +61,8 @@ export type Config = {
   pinnedCommands?: string[];
   /** Inbox: put an item in when the gerdr machine runs on battery at or below `percent`. Missing = on at 20%. */
   batteryAlert?: { on: boolean; percent: number };
+  /** Inbox: which kinds of item go in (Settings → General → Inbox). Missing field = on, the old behaviour. */
+  inbox?: { permission?: boolean; ask?: boolean; error?: boolean };
   /** Gerdr Agent（native）用的模型服务商，后端读（cmd/gerdr 的 cfgLLM），设置 → Agent 里编辑。 */
   llm?: LLMConfig;
 };

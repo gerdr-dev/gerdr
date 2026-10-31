@@ -30,6 +30,7 @@ const AGENT_SECTIONS = ["roles", "skills", "mcp", "memory"];
 export function SettingsDialog({ open }: { open: boolean }) {
   const cfg = useStore((s) => s.config);
   const bat = cfg.batteryAlert ?? { on: true, percent: 20 };
+  const inb = cfg.inbox ?? {};
   const fontSize = useStore(fontSizeOf);
   // The settings each device keeps for itself (DEVICE_KEYS): its own value, else the shared one
   const device = useStore((s) => s.device);
@@ -46,6 +47,11 @@ export function SettingsDialog({ open }: { open: boolean }) {
     if (AGENT_SECTIONS.includes(wantTab)) {
       setTabOpen("agents");
       setAgentTab(wantTab);
+    } else if (wantTab === "inbox") {
+      // Not a page of its own, a section far down General: the inbox's 设置 button landing on the top of General
+      // left people wondering what it had to do with the inbox
+      setTabOpen("general");
+      requestAnimationFrame(() => document.getElementById("settings-inbox")?.scrollIntoView({ block: "start" }));
     } else setTabOpen(wantTab);
   }, [open, wantTab]);
   const agentOpen = open && tabOpen === "agents";
@@ -184,6 +190,17 @@ export function SettingsDialog({ open }: { open: boolean }) {
                 <Row label="系统通知" hint="看不见的会话跑完了 / 在等你时" local>
                   <Switch checked={dev.notifications} onCheckedChange={(v) => setPref({ notifications: v })} />
                 </Row>
+              </Section>
+              <Section title="收件箱" id="settings-inbox">
+                <Row label="等你批准" hint="agent 要运行命令、改文件，在等你点允许">
+                  <Switch checked={inb.permission !== false} onCheckedChange={(v) => setConfig({ inbox: { ...inb, permission: v } })} />
+                </Row>
+                <Row label="在问你问题" hint="agent 停下来等你回答">
+                  <Switch checked={inb.ask !== false} onCheckedChange={(v) => setConfig({ inbox: { ...inb, ask: v } })} />
+                </Row>
+                <Row label="出错结束" hint="正在跑的会话因为出错停了">
+                  <Switch checked={inb.error !== false} onCheckedChange={(v) => setConfig({ inbox: { ...inb, error: v } })} />
+                </Row>
                 <Row label="电量低提醒" hint="运行 gerdr 的电脑用电池、电量低于这个数时放一条进收件箱（每次放电只提醒一次）">
                   <div className="flex items-center gap-2">
                     {bat.on && (
@@ -294,9 +311,9 @@ export function SettingsDialog({ open }: { open: boolean }) {
   );
 }
 
-function Section({ title, hint, local, children }: { title: string; hint?: string; local?: boolean; children: React.ReactNode }) {
+function Section({ id, title, hint, local, children }: { id?: string; title: string; hint?: string; local?: boolean; children: React.ReactNode }) {
   return (
-    <section className="space-y-4">
+    <section id={id} className="space-y-4">
       <div className="border-b pb-1.5">
         <div className="flex items-center gap-1.5 text-[12px] font-medium text-muted-foreground">
           {title}
