@@ -157,14 +157,15 @@
   }
   /* No antialiased (grayscale smoothing) in either theme: on macOS it thins glyphs, so the same weight reads a notch
      lighter and blurrier. The system default rendering is more solid. */
-  /* 细滚动条：8px 在窄的侧栏里像一道竖杠（用户报的），6px 刚好看得见、抓得住 */
+  /* Thin scrollbars: 8px, then 6px, still read as a bar of their own next to the sidebar and chat (user report).
+     4px is enough to see where you are and still grab. */
   ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: 4px;
+    height: 4px;
   }
   ::-webkit-scrollbar-thumb {
     background: color-mix(in oklch, var(--foreground) 18%, transparent);
-    border-radius: 3px;
+    border-radius: 2px;
   }
   ::-webkit-scrollbar-track {
     background: transparent;
