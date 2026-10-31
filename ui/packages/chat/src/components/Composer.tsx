@@ -305,6 +305,13 @@ export const Composer = forwardRef<
         .slice(0, 40)
     );
   }, [slash?.[1], session.commands, pinned, localCmds]);
+  // Width of the name column, from every command this session has (not just the filtered ones, so it doesn't
+  // shift while typing). Capped so one very long skill name doesn't squeeze the descriptions; longer ones truncate.
+  // `ch` is exact here because the names are monospace; +1 for the "/".
+  const cmdNameW = useMemo(() => {
+    const longest = Math.max(0, ...[...localCmds, ...(session.commands ?? [])].map((c) => c.name.length));
+    return `${Math.min(longest, 16) + 1}ch`;
+  }, [session.commands, localCmds]);
   useEffect(() => setCmdIdx(0), [slash?.[1]]);
   // pin 住的命令：config 里只存名字（所有设备、所有会话共用一份），这里只列这个会话的 agent 真报了的 ——
   // claude 和 codex 的命令不一样，别的 agent 的 pin 在这儿点了也发不出去
@@ -899,7 +906,10 @@ export const Composer = forwardRef<
                 setText(`/${c.name} `);
               }}
             >
-              <span className="shrink-0 font-mono">/{c.name}</span>
+              {/* One width for every name in the list (the longest, capped) so the descriptions line up in a column */}
+              <span className="shrink-0 truncate font-mono font-semibold" style={{ width: cmdNameW }} title={`/${c.name}`}>
+                /{c.name}
+              </span>
               <span className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground">{c.description}</span>
               {/* pin 开关：按钮里不能再套按钮，用 span 接 mousedown（和整行一样用 mousedown，免得输入框先失焦、列表跟着关了） */}
               {host.setPinnedCommands && (
