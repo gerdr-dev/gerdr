@@ -1,6 +1,6 @@
 import { Markdown } from "@gerdr/chat";
 import { openLightbox } from "@/components/Lightbox";
-import { Check, ChevronRight, ExternalLink, FolderOpen, Puzzle, RefreshCw, Trash2, X } from "lucide-react";
+import { Check, ChevronRight, CircleAlert, ExternalLink, FolderOpen, Puzzle, RefreshCw, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -177,27 +177,18 @@ function InstalledRow({ a, newer }: { a: AddonStatus; newer?: StoreAddon }) {
       </div>
       <div className="min-w-0 pl-12 max-md:pl-0">
         {a.description && <div className="mt-1 text-[12px] text-muted-foreground">{a.description}</div>}
-        <div className="mt-1 flex items-center gap-1.5 text-[12px] text-muted-foreground">
-          {a.disabled ? (
-            <span>已关闭</span>
-          ) : a.error ? (
-            <span className="text-bad">加载出错</span>
-          ) : a.loaded ? (
-            <>
-              <Check className="size-3.5 text-ok" /> 已加载
-            </>
-          ) : a.hasService && !a.path ? (
-            <span>只有后台进程</span>
-          ) : (
-            <span>加载中…</span>
-          )}
-        </div>
+        {/* No "loaded" / "off" line: the switch already says that. Only a failure gets a line (its text is below) */}
+        {a.error && !a.disabled && (
+          <div className="mt-1 flex items-center gap-1.5 text-[12px] text-bad">
+            <CircleAlert className="size-3.5 shrink-0" /> 加载出错
+          </div>
+        )}
         {a.service && <ServiceLine s={a.service} />}
         {a.error && <pre className="mt-1.5 whitespace-pre-wrap rounded-sm bg-bad/10 p-2 font-mono text-[11px] text-bad">{a.error}</pre>}
         {!!a.settings?.length && (
           <Collapsible className="mt-1">
-            <CollapsibleTrigger className="group flex items-center gap-0.5 text-[12px] text-muted-foreground hover:text-foreground">
-              <ChevronRight className="size-3.5 transition-transform group-data-[state=open]:rotate-90" /> 设置
+            <CollapsibleTrigger className="group flex items-center gap-1.5 text-[12px] text-muted-foreground hover:text-foreground">
+              <ChevronRight className="size-3.5 shrink-0 transition-transform group-data-[state=open]:rotate-90" /> 设置
             </CollapsibleTrigger>
             <CollapsibleContent className="mt-1.5 space-y-2.5 rounded-sm bg-muted/50 p-2.5">
               {a.settings.map((s) => (
@@ -433,8 +424,8 @@ function StoreRow({ source, a }: { source: string; a: StoreAddon }) {
         )}
         {a.readme && (
           <Collapsible className="mt-1">
-            <CollapsibleTrigger className="group flex items-center gap-0.5 text-[12px] text-muted-foreground hover:text-foreground">
-              <ChevronRight className="size-3.5 transition-transform group-data-[state=open]:rotate-90" /> 说明
+            <CollapsibleTrigger className="group flex items-center gap-1.5 text-[12px] text-muted-foreground hover:text-foreground">
+              <ChevronRight className="size-3.5 shrink-0 transition-transform group-data-[state=open]:rotate-90" /> 说明
             </CollapsibleTrigger>
             <CollapsibleContent
               // A README is a document, not a reply: headings at chat sizes dwarfed the row (its title repeats the
@@ -496,7 +487,9 @@ function ServiceLine({ s }: { s: AddonService }) {
   return (
     <div className="mt-1.5 space-y-1 text-[12px]">
       <div className="flex items-center gap-1.5">
-        <span className={cn("size-1.5 shrink-0 rounded-full", s.state === "running" ? "bg-ok" : s.state === "exited" ? "bg-bad" : "bg-warn")} />
+        <span className="flex size-3.5 shrink-0 items-center justify-center">
+          <span className={cn("size-1.5 rounded-full", s.state === "running" ? "bg-ok" : s.state === "exited" ? "bg-bad" : "bg-warn")} />
+        </span>
         <span className="text-muted-foreground">
           {label}
           {s.pid ? `（pid ${s.pid}）` : ""}
