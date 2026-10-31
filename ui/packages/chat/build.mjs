@@ -45,7 +45,9 @@ fs.writeFileSync(
   `/* gerdr's theme for @gerdr/chat (light, and .dark on an ancestor). Copy it, or define the same variables from your own theme. */\n${block(":root")}\n\n${block(".dark")}\n`,
 );
 
-// Utilities: Tailwind 4 over the source, with the theme mapped onto the host's variables (@theme inline)
+// Utilities: Tailwind 4 over the source, with the theme mapped onto the host's variables (@theme inline).
+// streamdown's dist is scanned too: its Markdown elements carry their own classes (list-disc, table, headings, code
+// line numbers…) that gerdr gets from its runtime scan but a host app's preflight would otherwise leave bare.
 const entry = path.join(here, "dist/.style.entry.css");
 fs.writeFileSync(
   entry,
@@ -54,6 +56,7 @@ fs.writeFileSync(
 @import "tailwindcss/utilities.css" layer(utilities);
 @custom-variant dark (&:is(.dark *));
 @source "../src";
+@source "../node_modules/streamdown/dist";
 ${theme}
 ${fs.readFileSync(path.join(here, "src/style.css"), "utf8")}`,
 );

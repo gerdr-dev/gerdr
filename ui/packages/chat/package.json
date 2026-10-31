@@ -1,6 +1,6 @@
 {
   "name": "@gerdr/chat",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "gerdr's chat UI for coding agents (ACP): conversation, composer, tool calls, permission / question cards, rewind, interjections. Fed by an event log (chatlog in github.com/gerdr-dev/gerdr).",
   "license": "MIT",
   "type": "module",
