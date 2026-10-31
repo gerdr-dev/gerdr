@@ -135,7 +135,7 @@ export const MessageView = memo(function MessageView({
               (meta.queued ? (
                 // 排在 agent 的队列里、还没被读到（claude 要等手上这个工具调用结束）
                 <span className="flex items-center gap-1">
-                  <span className="flex items-center gap-1" title={t("msg.queuedTitle")}>
+                  <span className="mr-2 flex items-center gap-1" title={t("msg.queuedTitle")}>
                     <Loader2 className="size-3 shrink-0 animate-spin" />
                     {t("msg.queued")}
                   </span>
