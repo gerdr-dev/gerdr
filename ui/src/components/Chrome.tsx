@@ -1,4 +1,23 @@
-import { Check, ChevronsUpDown, Keyboard, ClipboardCheck, Loader2, LayoutList, Menu, PanelLeft, Plus, Settings, SquareTerminal, X } from "lucide-react";
+import {
+  Check,
+  ChevronsUpDown,
+  Copy,
+  Keyboard,
+  ClipboardCheck,
+  ListPlus,
+  ListX,
+  Loader2,
+  LayoutList,
+  MailCheck,
+  Menu,
+  PanelLeft,
+  Pencil,
+  Plus,
+  Settings,
+  SquareTerminal,
+  Trash2,
+  X,
+} from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,6 +45,7 @@ import {
   closeSpace,
   closeTab,
   closeWorkspace,
+  deleteSession,
   duplicateTab,
   focusSession,
   moveWorkspaceToSpace,
@@ -50,10 +70,10 @@ import {
 } from "@/lib/layout";
 import { applyTabLabel, applyWorkspaceLabel } from "@/lib/plugins";
 import { ModeSwitch } from "@/components/WorkView";
-import { focusedSession, get, keyFor, set, setLayout, setSidebarW, SIDEBAR_W, toggleSidebar, useStore } from "@/lib/store";
+import { focusedSession, get, keyFor, markRead, set, setLayout, setSidebarW, SIDEBAR_W, toggleSidebar, useStore } from "@/lib/store";
 import type { SessionSummary } from "@/lib/types";
 import { compareSessions } from "@/lib/order";
-import { MAX_TILES, showInOverview, toggleOverview } from "@/lib/overview";
+import { addTiles, MAX_TILES, overviewIds, removeTile, showInOverview, toggleOverview } from "@/lib/overview";
 import { cn } from "@/lib/utils";
 import { AgentIcon, StatusDot } from "./AgentIcon";
 import { fmtElapsed } from "./chat/StatusLine";
@@ -674,24 +694,71 @@ function AgentList() {
       <div className="min-h-0 flex-1 overflow-y-auto px-1.5 pb-2">
         {rows.length === 0 && <div className="px-2 py-1 text-[12px] text-muted-foreground">没有开着的会话</div>}
         {rows.map(({ s, where }) => (
-          <button
-            key={s.id}
-            className={cn("flex w-full items-start gap-2 rounded-md px-2 py-1 text-left hover:bg-accent/60", s.id === focused && "bg-accent")}
-            onClick={() => focusSession(s.id)}
-          >
-            <AgentIcon agent={s.agent} className="mt-0.5 size-3.5 shrink-0" />
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-[12px] leading-5">{s.title || basename(s.cwd)}</div>
-              <div className="flex text-[11px] leading-4 text-muted-foreground">
-                <span className="min-w-0 truncate">{where}</span>
-                {s.status === "running" && s.turn && <Elapsed since={s.turn.startedAt} />}
-              </div>
-            </div>
-            <StatusDot status={s.status} unread={!!unread[s.id]} className="mt-1.5" />
-          </button>
+          <ContextMenu key={s.id}>
+            <ContextMenuTrigger asChild>
+              <button
+                className={cn("flex w-full items-start gap-2 rounded-md px-2 py-1 text-left hover:bg-accent/60", s.id === focused && "bg-accent")}
+                onClick={() => focusSession(s.id)}
+              >
+                <AgentIcon agent={s.agent} className="mt-0.5 size-3.5 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[12px] leading-5">{s.title || basename(s.cwd)}</div>
+                  <div className="flex text-[11px] leading-4 text-muted-foreground">
+                    <span className="min-w-0 truncate">{where}</span>
+                    {s.status === "running" && s.turn && <Elapsed since={s.turn.startedAt} />}
+                  </div>
+                </div>
+                <StatusDot status={s.status} unread={!!unread[s.id]} className="mt-1.5" />
+              </button>
+            </ContextMenuTrigger>
+            <AgentMenu s={s} unread={!!unread[s.id]} />
+          </ContextMenu>
         ))}
       </div>
     </div>
+  );
+}
+
+/** Right-click menu of a row in the agent list: the session half of the pane's ⋯ menu (Panes.tsx), for a session without going to its pane. */
+function AgentMenu({ s, unread }: { s: SessionSummary; unread: boolean }) {
+  const inTodo = useStore((st) => overviewIds(st.overview, st.layout, st.sessions, st.config).includes(s.id));
+  return (
+    <ContextMenuContent>
+      {inTodo ? (
+        <ContextMenuItem onClick={() => removeTile(s.id)}>
+          <ListX /> 移出待办
+        </ContextMenuItem>
+      ) : (
+        <ContextMenuItem
+          onClick={() => {
+            addTiles([s.id]);
+            toast(get().overview.ids.includes(s.id) ? "已加入待办" : `待办最多放 ${MAX_TILES} 个，先移出几个`);
+          }}
+        >
+          <ListPlus /> 加入待办
+        </ContextMenuItem>
+      )}
+      {unread && (
+        <ContextMenuItem onClick={() => markRead(s.id)}>
+          <MailCheck /> 标为已读
+        </ContextMenuItem>
+      )}
+      <ContextMenuItem onClick={() => set({ dialog: { kind: "rename", target: "session", id: s.id, value: s.title ?? "" } })}>
+        <Pencil /> 重命名会话
+      </ContextMenuItem>
+      <ContextMenuItem
+        onClick={() => {
+          navigator.clipboard.writeText(s.agentSessionId);
+          toast("已复制 agent 会话 id");
+        }}
+      >
+        <Copy /> 复制 agent 会话 id
+      </ContextMenuItem>
+      <ContextMenuSeparator />
+      <ContextMenuItem variant="destructive" onClick={() => deleteSession(s.id).catch((e) => toast.error(e.message))}>
+        <Trash2 /> 删除会话
+      </ContextMenuItem>
+    </ContextMenuContent>
   );
 }
 
