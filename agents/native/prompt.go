@@ -16,7 +16,7 @@ import (
 // 指令文件：用户已经给 Claude Code / Codex 写过的那些（~/.claude/CLAUDE.md、项目里的 AGENTS.md / CLAUDE.md）
 // 原样带上 —— 用户的规矩（用中文回复、改完跑什么测试）不用再给这个 agent 写一遍。
 
-const basePrompt = `You are a coding agent running inside gerdr, working on the user's computer through tools. You help with software engineering and other tasks in the working directory.
+const basePrompt = `You are a coding agent running inside Gerdr, working on the user's computer through tools. You help with software engineering and other tasks in the working directory.
 
 # How to work
 - Be concise and direct. Do the work instead of describing it; when you have enough information to act, act.
@@ -32,7 +32,7 @@ const basePrompt = `You are a coding agent running inside gerdr, working on the 
 - Refer to code as path:line so the user can click it.
 - When the conversation runs long, earlier parts may be replaced by a summary; continue from it.`
 
-const subagentPrompt = `You are a sub-agent of a coding agent running inside gerdr. You were given one self-contained task. Work on it with the tools, then reply with a concise report of what you found or did — that final message is the only thing the parent agent sees, so include the concrete facts (paths, line numbers, commands, results) it needs. Do not ask the user questions.`
+const subagentPrompt = `You are a sub-agent of a coding agent running inside Gerdr. You were given one self-contained task. Work on it with the tools, then reply with a concise report of what you found or did — that final message is the only thing the parent agent sees, so include the concrete facts (paths, line numbers, commands, results) it needs. Do not ask the user questions.`
 
 // systemPrompt is a main session's system prompt: the base prompt (or Options.SystemPrompt), the environment,
 // instruction files, skills, memory, gerdr's GUI hint and the role's prompt, minus what Options turned off.

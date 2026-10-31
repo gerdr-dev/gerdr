@@ -1,4 +1,4 @@
-# gerdr
+# Gerdr
 
 <p align="center">
   <img src="ui/public/icon.svg" alt="gerdr" width="100" />
@@ -25,7 +25,7 @@
 和 [herdr](https://github.com/herdrdev/herdr) 一样：分屏、tab、工作空间，一个键把 pane 放大，还能分成几个互相隔离的 session；哪个 agent 卡住在等你，一眼就看到，一个键跳过去；
 agent 之间还能互相对话：开新会话、派活、等回复、读回复。
 
-不习惯终端？gerdr 是另一个同样好的选择，而且是图形界面：agent 给的图片、视频、PDF 直接在对话里看，点一下路径就打开文件；
+不习惯终端？Gerdr 是另一个同样好的选择，而且是图形界面：agent 给的图片、视频、PDF 直接在对话里看，点一下路径就打开文件；
 出门了用手机远程接着看、接着管。
 
 **对话**
@@ -49,7 +49,7 @@ agent 之间还能互相对话：开新会话、派活、等回复、读回复�
 
 - **界面让 agent 改**：整个界面都可以让 agent 改，添加按钮、快捷键、显示内容，直接跟 AI 说就行。无需发版、无需部署，即刻生效；改坏了有改不坏的急救面板。
 - **TS 扩展**：改 tab 名、pane 标题，加命令和快捷键；商店里一键装。
-- **skill / MCP**：用 agent 自己的、gerdr 的，或两者都用。
+- **skill / MCP**：用 agent 自己的、Gerdr 的，或两者都用。
 
 **在哪用**
 
@@ -67,7 +67,7 @@ npm i -g @openai/codex                           # Codex，然后 codex login
 **mac App**：下载 `Gerdr-x.y.z-mac-arm64.dmg`（Apple 芯片：M1 及以后）或 `Gerdr-x.y.z-mac-x64.dmg`（Intel），拖进「应用程序」。第一次打开如果提示「无法验证开发者」，
 在 Finder 里右键 → 打开（或 `xattr -dr com.apple.quarantine /Applications/Gerdr.app`）。
 
-**安卓**：下载 `Gerdr-x.y.z-android.apk`，连的是你自己那台 gerdr（要先配好下面的「远程访问」）。
+**安卓**：下载 `Gerdr-x.y.z-android.apk`，连的是你自己那台 Gerdr（要先配好下面的「远程访问」）。
 
 **Windows**：发版里还没有，先自己 `make win` 打安装包（没签名，SmartScreen 拦的话点「更多信息 → 仍要运行」）。
 
@@ -93,7 +93,7 @@ gerdr url         # 再拿一次登录链接
 gerdr acp claude  # 把内置适配器当 stdio ACP agent 跑（给 Zed 等 ACP 客户端用）
 ```
 
-桌面 App 和命令行可以同时用：App 发现已经有一个 gerdr 在跑，就直接连它，看到的是同一份会话。mac 上打开 设置 → 通用 →「后台常驻」，⌘Q 退出 App 会话也照跑（[细节](docs/dev/SERVICE.md)）。
+桌面 App 和命令行可以同时用：App 发现已经有一个 Gerdr 在跑，就直接连它，看到的是同一份会话。mac 上打开 设置 → 通用 →「后台常驻」，⌘Q 退出 App 会话也照跑（[细节](docs/dev/SERVICE.md)）。
 
 新建会话：选 agent、选目录、开始。下面会列出这个目录下以前的会话，点一下接着聊。
 
@@ -125,10 +125,10 @@ mac App 里另有 ⌘T 新 tab、⌘1…9 切 tab（按住 ⌘ tab 上会显示�
 
 ## 和 herdr 比
 
-gerdr 是天天用 [herdr](https://github.com/herdrdev/herdr) 用出来的：分屏、tab、工作空间和快捷键照搬，herdr 里的布局能直接导进来。
-两者差在站的那一层：**herdr 管的是 agent 的终端，gerdr 直接跟 agent 本身说话。**
+Gerdr 是天天用 [herdr](https://github.com/herdrdev/herdr) 用出来的：分屏、tab、工作空间和快捷键照搬，herdr 里的布局能直接导进来。
+两者差在站的那一层：**herdr 管的是 agent 的终端，Gerdr 直接跟 agent 本身说话。**
 
-| | herdr | gerdr |
+| | herdr | Gerdr |
 |---|---|---|
 | 是什么 | 给 agent 用的终端复用器（Rust TUI） | agent 的图形界面（Go 服务 + 网页界面，Electron 外壳） |
 | 在哪用 | 你现有的终端里，SSH 上也行 | 桌面 App、任意浏览器、安卓 App |
@@ -144,22 +144,22 @@ gerdr 是天天用 [herdr](https://github.com/herdrdev/herdr) 用出来的：分
 | 定制 | 插件 | TS 扩展（带商店），整个界面也是能热更新的源码 |
 | 体量 | 一个二进制，没有 Electron | 一个 Go 二进制；桌面 App 多一层 Electron |
 
-**用 herdr**：常待在终端里、要走 SSH，或者要用的 agent gerdr 没有适配。
-**用 gerdr**：想在界面上点审批、回退，想在手机上看 agent 跑得怎么样，或者想改界面本身。
-两个也能一起用：把 herdr 的布局导进 gerdr，其余的照样在 herdr 里跑。同一个会话别两边同时开着，两边写同一份记录会分叉，先在一边退出。
+**用 herdr**：常待在终端里、要走 SSH，或者要用的 agent Gerdr 没有适配。
+**用 Gerdr**：想在界面上点审批、回退，想在手机上看 agent 跑得怎么样，或者想改界面本身。
+两个也能一起用：把 herdr 的布局导进 Gerdr，其余的照样在 herdr 里跑。同一个会话别两边同时开着，两边写同一份记录会分叉，先在一边退出。
 
 ### 为什么不是 herdr-web
 
-[herdr-web](https://github.com/zbysir/herdr-web) 把 herdr 搬进浏览器和手机，gerdr 就是从它长出来的。卡住它的是终端本身：
+[herdr-web](https://github.com/zbysir/herdr-web) 把 herdr 搬进浏览器和手机，Gerdr 就是从它长出来的。卡住它的是终端本身：
 在手机上操作终端，提交一句话、敲一条命令都不自然。要在手机上好用，只能往终端里发按键、再读屏把话抽出来，这是很脆的补丁 ——
 agent 的 TUI 加个新选项、改个交互，原来发的按键可能就完全不管用了。
 
-gerdr 换了条路：不经过终端，直接用 agent 的结构化接口说话，界面自己画。审批、提问、回退都是接口调用，
+Gerdr 换了条路：不经过终端，直接用 agent 的结构化接口说话，界面自己画。审批、提问、回退都是接口调用，
 agent 升级了也不会因为屏幕长得不一样就坏。
 
 ## 扩展
 
-扩展放在 `~/.gerdr/addons/`，一个文件夹一个，保存即生效（不用装 node，gerdr 自己编译）。「设置 → 扩展」里能看到装了哪些、
+扩展放在 `~/.gerdr/addons/`，一个文件夹一个，保存即生效（不用装 node，Gerdr 自己编译）。「设置 → 扩展」里能看到装了哪些、
 开关它们，还有一个**商店**页：商店就是一个 GitHub 仓库，里面每个带 `addon.json` 的文件夹是一个扩展；离线浏览、手动刷新、
 点一下安装。默认商店是 [gerdr-dev/gerdr-addon](https://github.com/gerdr-dev/gerdr-addon)（`prefix+a` 复制 tab、
 看不见的会话跑完了弹通知……），也能加任意 `owner/repo`。
@@ -181,7 +181,7 @@ export default defineAddon({
 });
 ```
 
-`addon.json` 还可以声明一个**后台进程**：gerdr 后端负责起、挂了重启、扩展删了或关了就停掉。
+`addon.json` 还可以声明一个**后台进程**：Gerdr 后端负责起、挂了重启、扩展删了或关了就停掉。
 它从 stdin 一行一个 JSON 收到开着的会话，也能和扩展的界面那一半（`g.service`）互发消息 —— 比如一直连着蓝牙手环、把 agent 状态推上去。
 
 怎么写一个扩展（文件结构、每个 API 和例子、样式、设置项、后台进程、发到商店）见[扩展开发手册](internal/addons/builtin/GUIDE.md)
@@ -204,7 +204,7 @@ export default defineAddon({
 
 **用程序接**（手环、脚本）：看会话、读回复、发消息、替人点审批，都有 HTTP 接口，见 [docs/API.md](docs/API.md)。
 
-**安全**：gerdr 等于一个能在你机器上跑命令的入口，所以永远要令牌，哪怕只听 127.0.0.1。
+**安全**：Gerdr 等于一个能在你机器上跑命令的入口，所以永远要令牌，哪怕只听 127.0.0.1。
 别把它的端口转发到公网 —— 要从外面用，走下面的「远程访问」。
 
 ## 远程访问（手机 / 别的电脑）
@@ -224,12 +224,12 @@ gerdr remote join https://relay.example.com gerdr.example.com <邀请码> \
   --dns cloudflare --env CLOUDFLARE_DNS_API_TOKEN=…
 ```
 
-它会打出要加的 DNS 记录（A 指到中继、一条 CAA），配置写进 `~/.gerdr/remote/remote.json`，重启 gerdr 生效（mac App 也认）。
+它会打出要加的 DNS 记录（A 指到中继、一条 CAA），配置写进 `~/.gerdr/remote/remote.json`，重启 Gerdr 生效（mac App 也认）。
 
 然后：
 
 - **配对**：设置 →「远程访问」→ 出一个配对码（或 `gerdr remote pair`），手机扫码就进来了。码 5 分钟、用一次就废。
-- **passkey**：在手机上打开的 gerdr 里，设置 →「远程访问」→ 加一把 passkey。配过对的设备 24 小时没验证要再刷一次。
+- **passkey**：在手机上打开的 Gerdr 里，设置 →「远程访问」→ 加一把 passkey。配过对的设备 24 小时没验证要再刷一次。
 - **踢设备**：设置里点「踢掉」，或 `gerdr remote devices` / `gerdr remote revoke <id|all>`（all 连 passkey 一起清）。
 - `gerdr remote status` 看中继连没连上、证书什么时候到期。
 
@@ -247,7 +247,7 @@ API key 就写 `ANTHROPIC_API_KEY=…`。还能换可执行文件、追加命令
 存在 `config.json` 的 `agents` 里：
 `{"id": "claude-2", "name": "Claude 2", "base": "claude", "env": {"CLAUDE_CONFIG_DIR": "~/.claude-2"}, "bin": "", "args": []}`。
 
-**Gerdr Agent（直接用 GPT、DeepSeek、Claude 等模型的 API）**：gerdr 自带一个 agent，不经过 Claude Code / Codex，直接调 OpenAI 兼容的接口
+**Gerdr Agent（直接用 GPT、DeepSeek、Claude 等模型的 API）**：Gerdr 自带一个 agent，不经过 Claude Code / Codex，直接调 OpenAI 兼容的接口
 （GPT 走 Responses，DeepSeek 等走 Chat Completions）或 Anthropic 的接口（服务商上写 `"api": "anthropic"`，地址比如 `https://api.anthropic.com`）。在 `config.json` 里配了模型，新建会话时就多一个「Gerdr Agent」：
 
 ```json
@@ -263,7 +263,7 @@ API key 就写 `ANTHROPIC_API_KEY=…`。还能换可执行文件、追加命令
 不想把 key 写进文件就用 `"apiKeyEnv": "环境变量名"`。模型只写 id 就行，协议、思考档位、上下文窗口按 id 猜；猜错了在模型上写
 `api`（chat / responses）、`efforts`、`window`、`images`、`maxOutput`，Claude 还可以写 `thinking`（`updates`：只显示模型自己写的简短进度说明，Opus/Sonnet 5.5、Fable 5 及以后默认用它；`adaptive`：显示推理摘要）。也可以在设置 → Agent 最下面配（能从接口拉模型列表、单个试一下）。
 会话记录在 `~/.gerdr/native/`。插话、回退、审批、子 agent（可以放后台）、后台命令、网页抓取、`/compact`、`/clear`、skill、
-MCP（用 Claude Code 配的那些 + gerdr 自己的，不支持要 OAuth 登录的）都支持。
+MCP（用 Claude Code 配的那些 + Gerdr 自己的，不支持要 OAuth 登录的）都支持。
 **长期记忆**：你纠正过它的、你的偏好、项目的约定它会自己记下来，新会话也记得。记在 `~/.gerdr/native/memory/`（`global/` 是全局的，
 `projects/` 下按项目分），一条一个 Markdown 文件，可以直接看、改、删；`/memory` 看它记了什么，`/memory 忘掉 xxx` 让它删。设置 →「记忆」里能看、改、删，Claude Code 和 Codex 的记忆也在那一页。
 
@@ -272,7 +272,7 @@ MCP（用 Claude Code 配的那些 + gerdr 自己的，不支持要 OAuth 登录
 - Codex：所有会话共用一个 `codex app-server` 进程（几十 MB）。
 - Claude Code：一个会话一个 `claude` 进程（几百 MB，CLI 的结构）。闲置 15 分钟的会话会被收掉进程，
   下次说话时自动 `--resume`，对话不丢。
-- gerdr 本身：一个 Go 进程，没有 node。
+- Gerdr 本身：一个 Go 进程，没有 node。
 
 ## 开发
 

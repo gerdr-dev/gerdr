@@ -34,7 +34,7 @@ export function RemoteConnect({ relayURL, onDone }: { relayURL?: string; onDone:
       <div className="text-[13px] font-medium">连接中继</div>
       <div className="space-y-3 rounded-md border p-3">
         <div className="text-[12px] text-muted-foreground">
-          gerdr 经云端中继（dialhome）对外：TLS 在这台机器上终止，中继只转密文。填中继地址、给这台机器起的域名，和在中继后台里出的邀请码。
+          Gerdr 经云端中继（dialhome）对外：TLS 在这台机器上终止，中继只转密文。填中继地址、给这台机器起的域名，和在中继后台里出的邀请码。
         </div>
         <Field label="中继地址">
           <Input className="font-mono text-[12px]" placeholder="https://relay.example.com" value={relay} onChange={(e) => setRelay(e.target.value)} />

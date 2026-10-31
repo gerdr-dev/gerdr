@@ -364,7 +364,7 @@ func (s *Server) Handler() http.Handler {
 				}
 			}
 		}
-		httpError(w, 404, "不是 gerdr 里的会话")
+		httpError(w, 404, "不是 Gerdr 里的会话")
 	})
 	mux.HandleFunc("GET /api/importable", s.importable)
 	s.extRoutes(mux)
@@ -909,7 +909,7 @@ func (s *Server) ui() http.Handler {
 		case strings.HasPrefix(p, "/api/"):
 			// 不认识的接口别落到下面「前端路由」出页面：200 + HTML 会被界面当成成功（旧后端配新界面时踩过：
 			// 开终端拿到一页 HTML，布局里记了个空终端，渲染直接崩）。
-			httpError(w, 404, "没有这个接口（gerdr 版本旧了？）")
+			httpError(w, 404, "没有这个接口（Gerdr 版本旧了？）")
 		case path.Ext(p) != "" && !strings.HasSuffix(p, ".html"):
 			http.NotFound(w, r)
 		default:

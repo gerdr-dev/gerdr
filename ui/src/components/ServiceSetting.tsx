@@ -30,7 +30,7 @@ export function ServiceSetting() {
       : st.self
         ? `后台服务在跑（pid ${st.pid}），退出 App 不影响它，agent 会接着跑完。日志：${st.log}`
         : st.pid > 0
-          ? "已装好。现在答话的是另一个 gerdr（终端里起的？），它退出后由后台接手"
+          ? "已装好。现在答话的是另一个 Gerdr（终端里起的？），它退出后由后台接手"
           : `已装好，但后台服务没起来，看日志：${st.log}`;
 
   const toggle = async (v: boolean) => {

@@ -170,7 +170,7 @@ func (r Remote) Enabled() bool { return r.RelayURL != "" && r.Host != "" }
 func (r Remote) TLSProblem() string {
 	if r.ACMEDNS == "" && (r.TLSCert == "" || r.TLSKey == "") {
 		return "还差一张 " + r.Host + " 的证书：到「设置 → 远程访问 → 证书」选这个域名的 DNS 服务商（Cloudflare / 阿里云 / 腾讯云…）、" +
-			"填它的 API 凭据，gerdr 会自己去 Let's Encrypt 签；已经有证书的话在同一处指定证书和私钥两个文件"
+			"填它的 API 凭据，Gerdr 会自己去 Let's Encrypt 签；已经有证书的话在同一处指定证书和私钥两个文件"
 	}
 	return ""
 }

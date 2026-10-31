@@ -83,7 +83,7 @@ export function Panel({
           </div>
           <div className="title">
             <b>急救</b>
-            <span>内置在 gerdr 里，主界面怎么改坏它都在</span>
+            <span>内置在 Gerdr 里，主界面怎么改坏它都在</span>
           </div>
           <button className="icon" onClick={refresh} title="重新读一遍错误和历史">
             <RefreshCw size={15} />
@@ -119,7 +119,7 @@ export function Panel({
           </nav>
 
           {helloErr ? (
-            <div className="empty">连不上 gerdr：{helloErr}</div>
+            <div className="empty">连不上 Gerdr：{helloErr}</div>
           ) : !hello || !status ? (
             <div className="empty">读取中…</div>
           ) : (
@@ -267,7 +267,7 @@ function Versions({ tick, onRestored }: { tick: number; onRestored: () => void }
               </div>
               <div className="meta">
                 {c.current && <span className="tag brand">现在</span>}
-                {c.upstream && <span className="tag">gerdr 原版</span>}
+                {c.upstream && <span className="tag">Gerdr 原版</span>}
                 <code>{c.sha.slice(0, 8)}</code> · {ago(c.time)}
               </div>
             </div>

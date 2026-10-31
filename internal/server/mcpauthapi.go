@@ -183,7 +183,7 @@ type errString string
 
 func (e errString) Error() string { return string(e) }
 
-var callbackPage = template.Must(template.New("cb").Parse(`<!doctype html><meta charset="utf-8"><title>gerdr · MCP</title>
+var callbackPage = template.Must(template.New("cb").Parse(`<!doctype html><meta charset="utf-8"><title>Gerdr · MCP</title>
 <style>body{font:15px/1.6 system-ui,sans-serif;display:grid;place-items:center;height:100vh;margin:0;color:#333}@media(prefers-color-scheme:dark){body{background:#111;color:#ddd}}</style>
-<div>{{if .Error}}<p>Authorization failed: {{.Error}}</p><p>Go back to gerdr → Settings → Agent → MCP and try again.</p>
-{{else}}<p>Signed in to <b>{{.Name}}</b>. You can close this window and go back to gerdr.</p><script>setTimeout(()=>window.close(),800)</script>{{end}}</div>`))
+<div>{{if .Error}}<p>Authorization failed: {{.Error}}</p><p>Go back to Gerdr → Settings → Agent → MCP and try again.</p>
+{{else}}<p>Signed in to <b>{{.Name}}</b>. You can close this window and go back to Gerdr.</p><script>setTimeout(()=>window.close(),800)</script>{{end}}</div>`))

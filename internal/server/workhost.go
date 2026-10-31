@@ -253,7 +253,7 @@ func (s *Server) placeSession(project, id, cwd, real, wsID string) error {
 	raw := s.Layout.Get()
 	var l node
 	if json.Unmarshal(raw, &l) != nil || len(arr(l, "workspaces")) == 0 {
-		return errors.New("no layout yet: open gerdr's window once")
+		return errors.New("no layout yet: open Gerdr's window once")
 	}
 	space := spaceOr(project)
 	c := &layoutCall{l: l, space: space}

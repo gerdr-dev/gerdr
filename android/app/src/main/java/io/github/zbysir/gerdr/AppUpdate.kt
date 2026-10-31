@@ -108,7 +108,7 @@ object AppUpdate {
     fun install(act: Activity) {
         if (phase != "ready") return
         if (Build.VERSION.SDK_INT >= 26 && !act.packageManager.canRequestPackageInstalls()) {
-            Toast.makeText(act, "先允许 gerdr 安装应用，回来再点一次安装", Toast.LENGTH_LONG).show()
+            Toast.makeText(act, "先允许 Gerdr 安装应用，回来再点一次安装", Toast.LENGTH_LONG).show()
             act.startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${act.packageName}")))
             return
         }

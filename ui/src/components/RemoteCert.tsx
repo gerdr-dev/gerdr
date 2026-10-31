@@ -84,7 +84,7 @@ export function RemoteCert({ host, expires, onSaved }: { host: string; expires?:
                 用自己给的证书：<span className="font-mono text-[12px]">{c.tlsCert}</span>
               </>
             ) : (
-              <>gerdr 经 {label} 的 DNS 自己去 Let's Encrypt 签，到期前自动续。</>
+              <>Gerdr 经 {label} 的 DNS 自己去 Let's Encrypt 签，到期前自动续。</>
             )}
           </div>
           {expires && <div className="text-[12px] text-muted-foreground">现在这张 {new Date(expires).toLocaleDateString()} 到期。</div>}
@@ -93,7 +93,7 @@ export function RemoteCert({ host, expires, onSaved }: { host: string; expires?:
       ) : (
         <div className="space-y-3 rounded-md border p-3">
           <div className="text-[12px] text-muted-foreground">
-            手机浏览器要认 {host} 的证书。最省事的是让 gerdr 自己签：选 {host} 这个域名托管在哪家 DNS 服务商，填一个能改它 DNS 记录的 API
+            手机浏览器要认 {host} 的证书。最省事的是让 Gerdr 自己签：选 {host} 这个域名托管在哪家 DNS 服务商，填一个能改它 DNS 记录的 API
             凭据（签证书时临时加一条 TXT 记录证明域名是你的）。
           </div>
           <div className="flex gap-2">

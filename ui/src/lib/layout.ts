@@ -71,7 +71,7 @@ export function projectNameError(l: Layout, name: string): string {
   if (!n) return "起个名字";
   if ([...n].length > 64) return "名字太长了（最多 64 个字）";
   if (/[/\\.\x00-\x1f]/.test(n)) return "名字里不能有 / \\ 和 .（名字会出现在地址和目录名里）";
-  if (RESERVED.has(n.toLowerCase())) return `「${n}」是 gerdr 自己用的名字，换一个`;
+  if (RESERVED.has(n.toLowerCase())) return `「${n}」是 Gerdr 自己用的名字，换一个`;
   // Case-insensitive: on macOS / Windows "abc" and "ABC" would be the same Work directory
   const same = spaceList(l).find((s) => s.id.toLowerCase() === n.toLowerCase());
   if (same) return `已经有叫「${same.id}」的项目了`;

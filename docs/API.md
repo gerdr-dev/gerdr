@@ -1,7 +1,7 @@
-# 用程序接 gerdr（手环、脚本、自己的小工具）
+# 用程序接 Gerdr（手环、脚本、自己的小工具）
 
-gerdr 界面上能做的事都走一套 HTTP 接口，外面的程序拿着令牌也能调：看哪些会话在跑、读它说了什么、给它发消息、
-**替人点审批**。agent 自己用的是 `gerdr session …` 命令行（内置的 gerdr skill），见 `gerdr session --help`。
+Gerdr 界面上能做的事都走一套 HTTP 接口，外面的程序拿着令牌也能调：看哪些会话在跑、读它说了什么、给它发消息、
+**替人点审批**。agent 自己用的是 `gerdr session …` 命令行（内置的 Gerdr skill），见 `gerdr session --help`。
 
 > 命令行**有意**不提供审批：那是给 agent 用的，agent 不该批准自己（或自己派出去的活）要做的事。
 > 审批留给人 —— 人在界面上点，或者用下面这套接口，从手环 / 手机上点。
@@ -25,7 +25,7 @@ curl -s -H "Authorization: Bearer $T" http://127.0.0.1:7870/api/pending
 
 | 字段 | |
 |---|---|
-| `id` | gerdr 的会话 id（下面的接口都用它） |
+| `id` | Gerdr 的会话 id（下面的接口都用它） |
 | `agent` | `claude` / `codex` / 设置里加的变体 id；`base` 是它实际是哪一种 |
 | `title`、`cwd`、`branch` | 标题、目录、git 分支 |
 | `status` | `idle` / `running` / `waiting`（在等人审批或回答）/ `error` |
@@ -37,7 +37,7 @@ curl -s -H "Authorization: Bearer $T" http://127.0.0.1:7870/api/pending
 
 ## 读它说了什么
 
-`GET /api/sessions/{id}/events` —— 这个会话的完整日志（gerdr 界面就是拿它画的），一个事件数组。看 agent 说的话：
+`GET /api/sessions/{id}/events` —— 这个会话的完整日志（Gerdr 界面就是拿它画的），一个事件数组。看 agent 说的话：
 `kind: "update"` 且 `update.sessionUpdate == "agent_message_chunk"` 的 `update.content.text`。
 
 只要「最后一轮的回复」的话，命令行更省事：`gerdr session read <会话> --last 5`、`gerdr session wait <会话>`。
@@ -80,7 +80,7 @@ curl -s -H "Authorization: Bearer $T" http://127.0.0.1:7870/api/pending
    回过的、或者那一轮已经结束了的请求会报「这个请求已经过期了」—— 界面上和手环上同时点，后点的那个拿到这个错，正常。
 
 **选项按 `optionId` 挑，别按位置**：不同 agent、不同工具给的选项不一样多（有的没有「以后不再问」）。
-这也是用 gerdr 做这件事比往终端里模拟按键（herdr 的 `send-keys`）可靠的地方：不用猜光标停在哪一项上。
+这也是用 Gerdr 做这件事比往终端里模拟按键（herdr 的 `send-keys`）可靠的地方：不用猜光标停在哪一项上。
 
 ## 发消息
 

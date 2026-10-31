@@ -82,7 +82,7 @@ func (s *Server) apiCLI(w http.ResponseWriter, r *http.Request) {
 		}
 		// 一把 passkey 都没有：远程那边没人批得了（本机口能批，但人多半不在电脑前）—— 让 App 直接说「用配对码」
 		if rm.Passkeys.Count() == 0 {
-			writeJSONStatus(w, http.StatusConflict, map[string]any{"error": "这台 gerdr 还没注册 passkey，只能用配对码", "reason": "nopasskey"})
+			writeJSONStatus(w, http.StatusConflict, map[string]any{"error": "这台 Gerdr 还没注册 passkey，只能用配对码", "reason": "nopasskey"})
 			return
 		}
 		device := ""

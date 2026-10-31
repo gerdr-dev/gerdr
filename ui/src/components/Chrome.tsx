@@ -426,7 +426,7 @@ export function ConnStatus() {
   // A wait under a second would flash a "1 s" countdown between attempts: show it as still connecting
   if (left < 1000)
     return (
-      <span className="flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground" title="和 gerdr 后台的连接断了，正在重连">
+      <span className="flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground" title="和 Gerdr 后台的连接断了，正在重连">
         <Loader2 className="size-3 animate-spin" />
         重连中…
       </span>
@@ -434,7 +434,7 @@ export function ConnStatus() {
   return (
     <span
       className="flex shrink-0 items-center gap-1 text-[11px] text-warn tabular-nums"
-      title={`和 gerdr 后台的连接断了，${Math.ceil(left / 1000)} 秒后自动重连`}
+      title={`和 Gerdr 后台的连接断了，${Math.ceil(left / 1000)} 秒后自动重连`}
     >
       断开 · {Math.ceil(left / 1000)}s
       <button className="rounded-sm px-1 text-foreground hover:bg-accent" style={{ WebkitAppRegion: "no-drag" } as any} onClick={reconnectNow}>
@@ -468,7 +468,7 @@ export function PhoneConnToast() {
   const on = shown && !connected;
   const left = conn.state === "waiting" ? Math.ceil((conn.at - Date.now()) / 1000) : 0;
   // A wait under a second would flash a "1 s" countdown between attempts: show it as still connecting
-  const text = left > 1 ? `和 gerdr 的连接断了，${left} 秒后重连` : "正在重连 gerdr…";
+  const text = left > 1 ? `和 Gerdr 的连接断了，${left} 秒后重连` : "正在重连 Gerdr…";
   useEffect(() => {
     if (!on) return;
     toast.loading(text, {

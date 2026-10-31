@@ -392,7 +392,7 @@ func shellContext(cmd, output string, done *Event) string {
 	case done.Level == "stopped":
 		note = "Stopped by the user before it finished."
 	case done.Level == "lost":
-		note = "Interrupted: gerdr restarted while the command was running."
+		note = "Interrupted: Gerdr restarted while the command was running."
 	case done.Error != "":
 		note = done.Error
 	case done.Exit != nil && *done.Exit != 0:

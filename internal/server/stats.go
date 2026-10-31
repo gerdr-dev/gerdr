@@ -85,7 +85,7 @@ func (s *Server) stats(w http.ResponseWriter, r *http.Request) {
 	runtime.ReadMemStats(&ms)
 	out := map[string]any{"goHeap": ms.HeapAlloc / 1024, "goroutines": runtime.NumGoroutine()}
 	if p := rows[self]; p != nil {
-		out["server"] = procInfo{PID: self, Label: "gerdr 后端", RSS: p.rss, Total: p.rss, Procs: 1}
+		out["server"] = procInfo{PID: self, Label: "Gerdr 后端", RSS: p.rss, Total: p.rss, Procs: 1}
 	}
 	var agents []procInfo
 	for _, c := range kids[self] {

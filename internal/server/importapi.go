@@ -40,7 +40,7 @@ func (s *Server) herdrScan(ctx context.Context) (*herdrimport.Snapshot, map[stri
 				ip := &importPane{Pane: p}
 				switch {
 				case p.Agent == "":
-					ip.Skip = "普通终端（gerdr 只接 agent 会话）"
+					ip.Skip = "普通终端（Gerdr 只接 agent 会话）"
 				case p.Agent != "claude" && p.Agent != "codex":
 					ip.Skip = p.Agent + " 还不支持"
 				case !agents[p.Agent]:

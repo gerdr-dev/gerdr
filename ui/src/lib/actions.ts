@@ -877,7 +877,7 @@ export async function openTerminal(where: "right" | "down" | "tab" | { pane: str
     // 从终端旁边开的：跟着它 shell 现在的目录（cd 过之后分屏，和 tmux 一样）
     info = await api.termCreate({ cwd, from: !here && p?.term ? p.term.id : undefined });
     // 后端太旧（没有终端接口）时可能回一页 HTML 而不是报错：没 id 就当失败，别把空终端写进布局
-    if (!info?.id) throw new Error("后端没有终端接口，gerdr 要升级或重启");
+    if (!info?.id) throw new Error("后端没有终端接口，Gerdr 要升级或重启");
   } catch (e: any) {
     toast.error(`开终端失败：${e.message ?? e}`);
     return;
@@ -947,7 +947,7 @@ export async function runInTerminal(sessionId: string, cwd: string, command: str
   let info;
   try {
     info = await api.termCreate({ cwd, input: line });
-    if (!info?.id) throw new Error("后端没有终端接口，gerdr 要升级或重启");
+    if (!info?.id) throw new Error("后端没有终端接口，Gerdr 要升级或重启");
   } catch (e: any) {
     toast.error(`开终端失败：${e.message ?? e}`);
     return;

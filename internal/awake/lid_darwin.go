@@ -117,7 +117,7 @@ func SetupLid() error {
 	sh := `f=$(/usr/bin/mktemp /tmp/gerdr_pmset.XXXXXX) || exit 1; /usr/bin/printf '%s\n' '` + rule + `' > "$f" && /usr/sbin/visudo -cf "$f" && /usr/bin/install -m 0440 -o root -g wheel "$f" ` + ruleDst + `; r=$?; /bin/rm -f "$f"; exit $r`
 	esc := strings.NewReplacer(`\`, `\\`, `"`, `\"`)
 	script := `do shell script "` + esc.Replace(sh) + `" with administrator privileges with prompt "` +
-		esc.Replace("gerdr 要一次授权：合上盖子时也不让电脑睡（只放行 pmset disablesleep 这一条命令）") + `"`
+		esc.Replace("Gerdr 要一次授权：合上盖子时也不让电脑睡（只放行 pmset disablesleep 这一条命令）") + `"`
 	out, err := exec.Command("/usr/bin/osascript", "-e", script).CombinedOutput()
 	if err != nil {
 		s := strings.TrimSpace(string(out))

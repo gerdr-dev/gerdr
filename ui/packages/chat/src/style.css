@@ -1,5 +1,5 @@
 /* @gerdr/chat's own CSS: the conversation's Markdown typography (.gerdr-md) and the running loader. It uses the
-   theme tokens (see tokens.css). gerdr serves it from source (uisite adds a workspace package's src/style.css after
+   theme tokens (see tokens.css). Gerdr serves it from source (uisite adds a workspace package's src/style.css after
    the app's index.css); the npm build puts it into dist/style.css with the Tailwind utilities the components use. */
 
 /* The few resets the components count on (Tailwind's preflight has them; an app without it still renders right),

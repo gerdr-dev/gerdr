@@ -1,14 +1,14 @@
 ---
 name: gerdr
-description: "Coordinate other coding-agent sessions inside gerdr (Claude Code / Codex sessions in the gerdr GUI): list sessions, start a new agent session next to you, hand it a task, wait for it, read its reply, or message an existing session. Use when the user asks you to delegate to / start / ask / check on another agent or session in gerdr, or to run several agents in parallel. Also for arranging gerdr's layout: sorting tabs into workspaces, splitting panes together, renaming or reordering workspaces / tabs. Also for changing gerdr's own settings (theme, default agent / mode / model, shortcuts, agents, model providers) with `gerdr config`. Requires GERDR_ENV=1."
+description: "Coordinate other coding-agent sessions inside Gerdr (Claude Code / Codex sessions in the Gerdr GUI): list sessions, start a new agent session next to you, hand it a task, wait for it, read its reply, or message an existing session. Use when the user asks you to delegate to / start / ask / check on another agent or session in Gerdr, or to run several agents in parallel. Also for arranging Gerdr's layout: sorting tabs into workspaces, splitting panes together, renaming or reordering workspaces / tabs. Also for changing Gerdr's own settings (theme, default agent / mode / model, shortcuts, agents, model providers) with `gerdr config`. Requires GERDR_ENV=1."
 ---
 
-# gerdr：和其他会话协作
+# Gerdr：和其他会话协作
 
-gerdr 是一个跑 Claude Code / Codex 的图形界面，里面同时开着好几个会话（每个会话是一个 agent）。
+Gerdr 是一个跑 Claude Code / Codex 的图形界面，里面同时开着好几个会话（每个会话是一个 agent）。
 `gerdr session …` 这组命令让你列出它们、开新的、给它们派活、等它们做完、读它们说了什么。
 
-先确认你确实跑在 gerdr 里，不是就说明一下然后停：
+先确认你确实跑在 Gerdr 里，不是就说明一下然后停：
 
 ```bash
 test "${GERDR_ENV:-}" = 1
@@ -35,21 +35,21 @@ gerdr session list      # 全部；"self": true 是你自己
 
 - `idle`：闲着，可以派活；
 - `running`：正在干活（给它发消息 = 插话进它正在跑的这一轮）；
-- `waiting`：在等人审批命令或回答问题 —— 只有人能处理，告诉用户去 gerdr 界面上看，别替人决定；
+- `waiting`：在等人审批命令或回答问题 —— 只有人能处理，告诉用户去 Gerdr 界面上看，别替人决定；
 - `error`：上一轮出错了（`error` 字段是原因）。
 
 `list` 只列**开着的**会话 —— 就是用户在界面上看得见的（和 herdr 一样：用户关掉 pane 就是关掉那个会话）。
 关掉的会话记录还在、能接着聊：`gerdr session list --all` 能看到（`closed: true`），
 `gerdr session open <会话>` 把它开回界面上（开在你旁边，不抢焦点）；给它 `send` 也会自动开回来。
 
-The user splits gerdr into isolated **projects** (like herdr's `--session`): each has its own workspaces (Code) and its own
+The user splits Gerdr into isolated **projects** (like herdr's `--session`): each has its own workspaces (Code) and its own
 Work view with a Work agent. You only see, and can only reach, the conversations and workspaces of the project you're in:
 `list` leaves the others out, and naming one of them fails with "no such session". That is deliberate. Don't try to get
 around it, and don't ask the user to move things across for you unless they brought it up.
 
 Which project you're in is worked out from where you are, every time: the pane showing you, or for the Work agent its Work
-directory, or the gerdr terminal a command is typed in. `--project <name>` on `gerdr session|workspace|tab|pane` is only for
-running them from outside gerdr; don't use it to reach into another project.
+directory, or the Gerdr terminal a command is typed in. `--project <name>` on `gerdr session|workspace|tab|pane` is only for
+running them from outside Gerdr; don't use it to reach into another project.
 
 ## 开一个新会话派活
 
@@ -61,7 +61,7 @@ gerdr session new --agent codex --title reviewer \
   --wait --timeout 20m
 ```
 
-- `--agent` 是 `claude`、`codex` 或 `native`（gerdr 自带的 Gerdr Agent，直接用配置里的 GPT / DeepSeek 等模型，配了才有）；
+- `--agent` 是 `claude`、`codex` 或 `native`（Gerdr 自带的 Gerdr Agent，直接用配置里的 GPT / DeepSeek 等模型，配了才有）；
   用户在设置里建的**角色**（比如只读代码的 `reviewer`，带自己的提示词、只开某几个 skill / MCP）和另一个账号（`claude-2`）也用它的 id。
   `gerdr session agents` 列出全部能用的、角色带着它的提示词；用户说「让审查那个看看」这种就去那里找对应的角色。用户指定了哪个就用哪个；
 - `--title` 起个短名字，之后可以 `gerdr session send reviewer …`；
@@ -101,7 +101,7 @@ gerdr session send reviewer "/clear"  # 还要接着派活、但不想带着之�
 
 ## Arranging the layout (workspaces / tabs / panes)
 
-When the user asks you to tidy up gerdr (sort tabs into workspaces, put two conversations side by side, rename things), use
+When the user asks you to tidy up Gerdr (sort tabs into workspaces, put two conversations side by side, rename things), use
 `gerdr workspace|tab|pane …`. They're shaped like herdr's commands of the same names and output JSON. Only do what was asked:
 the layout is the user's desk.
 
@@ -141,9 +141,9 @@ gerdr workspace close <ws>;  gerdr tab close <tab>             # only empty ones
 - Plan the whole rearrangement from one `workspace list` + `pane list`, then run the moves. Ids don't change when things move,
   so you don't need to list again between moves.
 
-## Changing gerdr's settings
+## Changing Gerdr's settings
 
-When the user asks to change a gerdr setting (theme, send key, default agent / mode / model, shortcuts, agents
+When the user asks to change a Gerdr setting (theme, send key, default agent / mode / model, shortcuts, agents
 in Settings → Agent, Gerdr Agent's model providers…), use `gerdr config`, not an editor on config.json:
 it changes one field, checks the value, and open windows update within seconds.
 

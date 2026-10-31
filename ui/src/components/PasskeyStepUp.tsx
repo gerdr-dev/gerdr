@@ -61,7 +61,7 @@ export function PasskeyStepUp({ onDone, onCancel }: { onDone: (label: string) =>
         </>
       ) : state === "pending" ? (
         <>
-          <div>到跑 gerdr 的那台电脑上，打开 设置 → 远程访问，核对码一致就点「批准」：</div>
+          <div>到跑 Gerdr 的那台电脑上，打开 设置 → 远程访问，核对码一致就点「批准」：</div>
           <div className="font-mono text-[20px] tracking-[.3em]">{req.code}</div>
           <div className="text-[12px] text-muted-foreground">等着批准…（3 分钟内有效）</div>
           <Button size="sm" variant="ghost" onClick={onCancel}>

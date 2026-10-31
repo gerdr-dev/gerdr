@@ -64,7 +64,7 @@ func newAPIClient() (*apiClient, error) {
 	env := config.FromEnv()
 	b, err := os.ReadFile(infoPath(env))
 	if err != nil {
-		return nil, fmt.Errorf("gerdr 没在运行（找不到 %s）", infoPath(env))
+		return nil, fmt.Errorf("Gerdr 没在运行（找不到 %s）", infoPath(env))
 	}
 	var si serverInfo
 	if err := json.Unmarshal(b, &si); err != nil {
@@ -448,7 +448,7 @@ func waitResult(c *apiClient, id string, since int64, timeout time.Duration) err
 		out["timed_out"] = true
 	}
 	if s.Status == "waiting" {
-		out["note"] = "它在等人审批或回答问题：让用户去 gerdr 界面上处理"
+		out["note"] = "它在等人审批或回答问题：让用户去 Gerdr 界面上处理"
 	}
 	printJSON(out)
 	return nil
@@ -457,8 +457,8 @@ func waitResult(c *apiClient, id string, since int64, timeout time.Duration) err
 func sessionCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "session",
-		Short: "给 agent 用：列出 / 新开 / 指挥 gerdr 里的其他会话（输出 JSON）",
-		Long: `在 gerdr 里跑着的 agent 用这组命令和别的会话协作：开一个新会话（Claude Code 或 Codex）派活、
+		Short: "给 agent 用：列出 / 新开 / 指挥 Gerdr 里的其他会话（输出 JSON）",
+		Long: `在 Gerdr 里跑着的 agent 用这组命令和别的会话协作：开一个新会话（Claude Code 或 Codex）派活、
 等它做完、读它的回复。会话可以用完整 id、id 前缀（至少 4 位）或标题指定。`,
 	}
 	client := func() *apiClient {
@@ -501,7 +501,7 @@ func sessionCmd() *cobra.Command {
 			c := client()
 			self := c.selfID()
 			if self == "" {
-				return fmt.Errorf("认不出当前会话（不是在 gerdr 里跑的 agent？）")
+				return fmt.Errorf("认不出当前会话（不是在 Gerdr 里跑的 agent？）")
 			}
 			s, err := c.get(self)
 			if err != nil {
@@ -745,7 +745,7 @@ func sessionCmd() *cobra.Command {
 					return nil
 				}
 			}
-			return fmt.Errorf("界面没把它关掉（gerdr 的窗口没开着？）")
+			return fmt.Errorf("界面没把它关掉（Gerdr 的窗口没开着？）")
 		},
 	})
 
@@ -900,7 +900,7 @@ prints its stack and exits 1. Ctrl-C stops the run. --input-file - reads the inp
 			return c.do("POST", "/api/work/runs/"+url.PathEscape(args[0])+"/abort", map[string]any{}, nil)
 		},
 	})
-	secret := &cobra.Command{Use: "secret", Short: "Keys for ctx.secrets.get (stored in gerdr's secrets.json, never shown back)"}
+	secret := &cobra.Command{Use: "secret", Short: "Keys for ctx.secrets.get (stored in Gerdr's secrets.json, never shown back)"}
 	secret.AddCommand(&cobra.Command{
 		Use:   "set <name>",
 		Short: "Store a key; the value is read from stdin so it stays out of shell history and transcripts",
@@ -1049,7 +1049,7 @@ func uiCmd() *cobra.Command {
 	cmd := &cobra.Command{Use: "ui", Short: "界面源码在哪、现在有没有改坏（输出 JSON）"}
 	sync := &cobra.Command{
 		Use:   "sync <界面源码目录>",
-		Short: "把一份界面源码当成新版合进 gerdr 正在用的界面目录（git 合并，开着的窗口热更新，不用重启）",
+		Short: "把一份界面源码当成新版合进 Gerdr 正在用的界面目录（git 合并，开着的窗口热更新，不用重启）",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			env := config.FromEnv()

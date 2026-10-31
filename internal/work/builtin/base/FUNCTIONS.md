@@ -1,7 +1,7 @@
 # Local functions (`local/*.ts`)
 
 Deterministic work the pages need goes into a local function: reading a platform's data, running a
-CLI and parsing its output, checking a batch of things, writing a report file. gerdr runs it without a
+CLI and parsing its output, checking a batch of things, writing a report file. Gerdr runs it without a
 model, so a button press takes seconds, costs nothing and gives the same result every time. **Don't
 make the page ask you to run the same commands every time it opens: write the function once, try it,
 and let the page call it.**
@@ -43,7 +43,7 @@ streams read `res.body.getReader()` as it comes; local and company-internal addr
 `TextEncoder` / `TextDecoder`, `btoa` / `atob`, `console`, and `Number.prototype.toLocaleString` with
 thousands separators.
 
-Not here (Annulo has them, gerdr doesn't): `ctx.db`, `ctx.oauth`, `ctx.upload`, `ctx.file`,
+Not here (Annulo has them, Gerdr doesn't): `ctx.db`, `ctx.oauth`, `ctx.upload`, `ctx.file`,
 `ctx.folders`, `ctx.browser`, `ctx.llm`, `ctx.agent`, `ctx.user`, `ctx.chat_id`. Keep data in files
 (`ctx.fs`) or the platform it comes from.
 

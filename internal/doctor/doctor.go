@@ -214,7 +214,7 @@ func pathCheck(cur, login string, loginErr error) Check {
 	}
 	c.Level = Bad
 	c.Summary = strconv.Itoa(len(lost)) + " 个目录没进来，agent 里找不到 " + strconv.Itoa(n) + " 个命令"
-	c.Detail = "终端里有、gerdr 里没有的目录：\n" + strings.Join(lost, "\n")
+	c.Detail = "终端里有、Gerdr 里没有的目录：\n" + strings.Join(lost, "\n")
 	if startNote != "" {
 		c.Detail = startNote + "\n\n" + c.Detail
 	}
@@ -349,14 +349,14 @@ func agentCheck(ctx context.Context, id, title string, find func() (string, erro
 	switch {
 	case current == nil:
 	case current.Blocked:
-		c.Level, c.Summary = Bad, "gerdr 用的这一份一启动就被系统杀掉了（macOS 把它当恶意软件拦了）："+current.Path
+		c.Level, c.Summary = Bad, "Gerdr 用的这一份一启动就被系统杀掉了（macOS 把它当恶意软件拦了）："+current.Path
 	case current.Error != "":
-		c.Level, c.Summary = Bad, "gerdr 用的这一份启动不了："+current.Error
+		c.Level, c.Summary = Bad, "Gerdr 用的这一份启动不了："+current.Error
 	default:
 		c.Summary = current.Version + " · " + current.Path
 		if best != "" && newer(best, current.Version) {
 			c.Level = Warn
-			notes = append(notes, "装着更新的一份（"+best+"），gerdr 用的却是旧的")
+			notes = append(notes, "装着更新的一份（"+best+"），Gerdr 用的却是旧的")
 		}
 	}
 	for _, in := range c.Installs {

@@ -1,14 +1,14 @@
 ---
 name: gerdr-ui
-description: "Change the gerdr app's own interface (the GUI you are running inside): add a panel, a dialog, a page, a quota display, restyle something, add a shortcut. gerdr's UI is plain source code read live with hot reload, so edits show up immediately. Use when the user asks to change/customize gerdr's UI or add something to it. Requires GERDR_ENV=1."
+description: "Change the Gerdr app's own interface (the GUI you are running inside): add a panel, a dialog, a page, a quota display, restyle something, add a shortcut. Gerdr's UI is plain source code read live with hot reload, so edits show up immediately. Use when the user asks to change/customize Gerdr's UI or add something to it. Requires GERDR_ENV=1."
 ---
 
-# 改 gerdr 的界面
+# 改 Gerdr 的界面
 
-gerdr（你正跑在里面的这个图形界面）的界面就是一个目录里的 React 源码，**没有打包环节**：
+Gerdr（你正跑在里面的这个图形界面）的界面就是一个目录里的 React 源码，**没有打包环节**：
 改完保存，用户眼前的界面就跟着变（热更新）。所以「界面上加一个 X」这种要求，直接改源码就行。
 
-先确认在 gerdr 里：
+先确认在 Gerdr 里：
 
 ```bash
 test "${GERDR_ENV:-}" = 1
@@ -25,16 +25,16 @@ gerdr ui status        # .dir 是界面源码目录
 
 ## 2. 改之前存档
 
-界面目录是一个 git 仓库（gerdr 用它把新版界面和你们的改动三方合并：`upstream` 分支是 gerdr 发的版本，`main` 是正在用的）。
+界面目录是一个 git 仓库（Gerdr 用它把新版界面和你们的改动三方合并：`upstream` 分支是 Gerdr 发的版本，`main` 是正在用的）。
 改之前提交一次，改坏了能整个回去：
 
 ```bash
 cd "<界面目录>" && git add -A && git commit -qm "改界面之前" || true
 ```
 
-**只在 `main` 上改，别动 `upstream` 分支、别 rebase / 改历史** —— gerdr 升级时靠它算三方合并。
+**只在 `main` 上改，别动 `upstream` 分支、别 rebase / 改历史** —— Gerdr 升级时靠它算三方合并。
 
-如果 `gerdr ui status` 的 `git.pending_upstream` 为 true：gerdr 有新版界面因为和本地改动冲突没合进来。用户要的话：
+如果 `gerdr ui status` 的 `git.pending_upstream` 为 true：Gerdr 有新版界面因为和本地改动冲突没合进来。用户要的话：
 
 ```bash
 gerdr ui merge          # 冲突留在文件里（<<<<<<< 标记）；这时界面会编译失败，尽快解决
@@ -66,7 +66,7 @@ gerdr ui status
 改完提交一次（`git add -A && git commit -m "<改了什么>"`），告诉用户改了什么、在界面哪里能看到。
 改坏了又修不好，就 `git checkout -- .` 回到存档，跟用户说明。
 
-主界面坏到打不开时，用户还有一个内置的急救面板（页面右侧拉出来，和主界面并排；编进 gerdr、不在界面目录里，改不到）：
+主界面坏到打不开时，用户还有一个内置的急救面板（页面右侧拉出来，和主界面并排；编进 Gerdr、不在界面目录里，改不到）：
 在那里能看错误、退回之前的一版、开一个在界面目录里干活的对话叫 agent 修。你可能就是从那里被叫来的 ——
 你改的时候用户就在旁边看着主界面变化。
 

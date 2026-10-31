@@ -1,16 +1,16 @@
-# Embedding gerdr's agents
+# Embedding Gerdr's agents
 
 Three ACP agents (`acp.Agent` from github.com/coder/acp-go-sdk), importable by other Go programs:
 
 | Package | Engine | Process model |
 |---|---|---|
-| `github.com/gerdr-dev/gerdr/agents/native` | gerdr's own loop, calls model APIs directly (`native/llm`) | in-process, no subprocess |
+| `github.com/gerdr-dev/gerdr/agents/native` | Gerdr's own loop, calls model APIs directly (`native/llm`) | in-process, no subprocess |
 | `github.com/gerdr-dev/gerdr/agents/claude` | Claude Code (`claude` CLI, stream-json) | one `claude` process per session, idle ones reaped |
 | `github.com/gerdr-dev/gerdr/agents/codex` | Codex (`codex app-server`, JSON-RPC) | one app-server for all sessions |
 
-Supporting packages: `acpx` (gerdr's ACP extension methods and `_meta` keys), `sysenv` (finding the CLIs, the login
-shell's PATH, the child environment), `rpcline` (line-delimited JSON-RPC, used by codex). None of them import gerdr's
-`internal/` packages; gerdr injects its own settings through the same Options (`internal/agentwire`).
+Supporting packages: `acpx` (Gerdr's ACP extension methods and `_meta` keys), `sysenv` (finding the CLIs, the login
+shell's PATH, the child environment), `rpcline` (line-delimited JSON-RPC, used by codex). None of them import Gerdr's
+`internal/` packages; Gerdr injects its own settings through the same Options (`internal/agentwire`).
 
 Wiring is the same for all three: `a := X.New(log, opts)`, `conn := acp.NewAgentSideConnection(a, toClient, fromClient)`,
 `a.SetConn(conn)`, then talk to it from an `acp.NewClientSideConnection` over two `io.Pipe`s. A runnable example
@@ -18,7 +18,7 @@ Wiring is the same for all three: `a := X.New(log, opts)`, `conn := acp.NewAgent
 
 ## Options for embedders
 
-All zero by default (= gerdr's behaviour).
+All zero by default (= Gerdr's behaviour).
 
 native (`native.Options`): `Dir`, `Config`, `Prompt`, `SystemPrompt` (replaces the base prompt), `NoInstructionFiles`,
 `NoMemory`, `Skills`, `Tools` (Go tools), `MCP`, `MCPAuth`, `Env`, `BashEnv`, `SafeCommand`, `Files`, `Images`.
@@ -27,13 +27,13 @@ claude (`claude.Options`):
 
 - `Bin`, `Args` (extra CLI flags, e.g. `--allowedTools Bash`), `Env` (K=V on top of the inherited environment;
   `CLAUDE_CONFIG_DIR` picks another account), `Prompt`, `IdleTimeout`.
-- `NoGUIHint`: leave gerdr's GUI hint out of `--append-system-prompt`.
+- `NoGUIHint`: leave Gerdr's GUI hint out of `--append-system-prompt`.
 - `AppendPrompt func(sessionID, cwd string, meta map[string]any) string`: per-session text for
   `--append-system-prompt` (read when the session's process starts).
 - `SessionEnv func(sessionID string, meta map[string]any) []string`.
 - `StrictMCP`: only session/new's `mcpServers` (`--strict-mcp-config`: none of the user's servers, no claude.ai
   connectors). Client servers are always passed with `--mcp-config` and pre-approved (`--allowedTools mcp__<name>`).
-- `Ext`: gerdr's skill / MCP settings; nil = claude's own (`~/.claude/skills`, the project's `.claude/skills`…).
+- `Ext`: Gerdr's skill / MCP settings; nil = claude's own (`~/.claude/skills`, the project's `.claude/skills`…).
 - `claude.Check(ctx, opts) (Status, error)`: `*sysenv.NotFoundError` = not installed, `claude.ErrNotLoggedIn`.
 
 codex (`codex.NewWith(log, ext, codex.Options)`; ext nil = codex's own skills / MCP):
@@ -51,7 +51,7 @@ codex (`codex.NewWith(log, ext, codex.Options)`; ext nil = codex's own skills / 
 ## session/new `_meta`
 
 The whole `_meta` reaches the per-session hooks (`AppendPrompt`, `SessionEnv`, native's `SystemPrompt` / `BashEnv` /
-tools). gerdr's own keys live under `_meta.gerdr`:
+tools). Gerdr's own keys live under `_meta.gerdr`:
 
 | Key | native | claude | codex |
 |---|---|---|---|

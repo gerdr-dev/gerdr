@@ -105,7 +105,7 @@ func (s *Server) fileLinkServe(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(http.StatusNotFound)
-		_, _ = w.Write([]byte("链接已过期，回 gerdr 里再点一次「在外部打开」\n"))
+		_, _ = w.Write([]byte("链接已过期，回 Gerdr 里再点一次「在外部打开」\n"))
 		return
 	}
 	serveRaw(w, r, p, r.URL.Query().Get("download") == "1")

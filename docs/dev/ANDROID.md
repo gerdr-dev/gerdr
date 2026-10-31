@@ -1,10 +1,10 @@
 # 安卓 App：原生壳 + WebView
 
-**一句话**：`android/` 是一个很薄的原生壳，里面一个 WebView 加载你自己那台 gerdr 的远程地址（设置 → 远程访问里那个
+**一句话**：`android/` 是一个很薄的原生壳，里面一个 WebView 加载你自己那台 Gerdr 的远程地址（设置 → 远程访问里那个
 `https://…`）。界面整份复用网页；壳只做网页做不到的事：**局域网直连**、App 里刷 passkey、后台通知、返回键 / 音量键 /
 文件选择这些系统集成。
 
-照搬 herdr-web 的 `app/android`（它的 docs/dev/NATIVE-APP.md 和 RELAY.md §4 是完整的设计理由），这里只写 gerdr 的部分
+照搬 herdr-web 的 `app/android`（它的 docs/dev/NATIVE-APP.md 和 RELAY.md §4 是完整的设计理由），这里只写 Gerdr 的部分
 和搬过来时要对齐的地方。为什么不是浏览器 / PWA：浏览器不让网页决定「这个域名连到哪个 IP」，局域网直连只能换 origin，
 那一串坑（自签证书、交接凭据、IP 上用不了 passkey）herdr-web 走过、最后下掉了。
 
@@ -57,7 +57,7 @@ WebView ──CONNECT gerdr.example.com:443──▶ App 内的代理（127.0.0.
 - 壳给 WebView 开 `WebSettingsCompat.setWebAuthenticationSupport(WEB_AUTHENTICATION_SUPPORT_FOR_APP)`，页面上原有的
   `navigator.credentials`（配对页的「用 passkey 登录」、设置里的加 passkey / step-up）就走系统的 Credential Manager，**网页代码不用改**。
 - 前提是域名认这个 App：系统会去取 `https://<域名>/.well-known/assetlinks.json`，看里面有没有这个包名 + 签名证书。
-  一个通用 App 本来绑不了每个用户自己的域名（herdr-web 因此只能开浏览器）；**gerdr 自己就是这个域名的服务器**，自己发这份文件就行
+  一个通用 App 本来绑不了每个用户自己的域名（herdr-web 因此只能开浏览器）；**Gerdr 自己就是这个域名的服务器**，自己发这份文件就行
   （`server.assetLinks`，没认证也给）。
 - 这时 clientDataJSON 里的 origin 不是 `https://域名`，而是 `android:apk-key-hash:<签名证书 SHA-256 的 base64url>`，
   所以服务端的 RPOrigins 里要有它（`remote.Open` 按 `AndroidCerts` 加，`auth.AndroidOrigins` 算；规范说 base64url，实际小米上收到的是标准 base64，所以几种编码都认）。
@@ -99,13 +99,13 @@ The WebView has no PDF viewer: an `<iframe>` of a PDF becomes a download the mom
 
 ## Self-update
 
-The App updates itself straight from GitHub (`AppUpdate.kt`), not through the gerdr it's connected to. The release's
+The App updates itself straight from GitHub (`AppUpdate.kt`), not through the Gerdr it's connected to. The release's
 android job writes `android.json` (version, file, size, sha256) next to the APK, and the App reads
 `releases/latest/download/android.json` when it comes to the front, at most every 6 h (debug builds never). A newer
 version is downloaded into the cache by itself and checked against the sha256; Settings and a toast offer "安装".
 
 - Installing always takes a tap: Android only installs a sideloaded app once the person allows "install unknown apps"
-  for gerdr (the App sends them there the first time) and confirms the installer's dialog. On Android 12+ the session
+  for Gerdr (the App sends them there the first time) and confirms the installer's dialog. On Android 12+ the session
   asks for no confirmation (`setRequireUserAction`), which the system may grant once the App installed itself before;
   MIUI / HyperOS tend to ask anyway.
 - Android refuses an APK signed with another key, so a tampered download can't get in; the sha256 catches truncation.

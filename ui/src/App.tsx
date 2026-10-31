@@ -204,7 +204,7 @@ export default function App() {
           <KeyRound className="mx-auto size-8 text-muted-foreground" />
           <div className="text-[15px] font-medium">需要登录链接</div>
           <div className="text-[13px] text-muted-foreground">
-            gerdr 启动时会打印一个带令牌的链接（<code className="font-mono">http://127.0.0.1:7870/auth?token=…</code>）。在终端里运行{" "}
+            Gerdr 启动时会打印一个带令牌的链接（<code className="font-mono">http://127.0.0.1:7870/auth?token=…</code>）。在终端里运行{" "}
             <code className="font-mono">gerdr url</code> 再拿一次。
           </div>
         </div>

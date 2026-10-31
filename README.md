@@ -1,11 +1,11 @@
-# gerdr
+# Gerdr
 
 <p align="center">
   <img src="ui/public/icon.svg" alt="gerdr" width="100" />
 </p>
 
 <p align="center">
-  <a href="#install">install</a> · <a href="#usage">usage</a> · <a href="#gerdr-vs-herdr">gerdr vs herdr</a> · <a href="docs/API.md">http api</a> · <a href="docs/dev/ARCHITECTURE.md">architecture</a>
+  <a href="#install">install</a> · <a href="#usage">usage</a> · <a href="#gerdr-vs-herdr">Gerdr vs herdr</a> · <a href="docs/API.md">http api</a> · <a href="docs/dev/ARCHITECTURE.md">architecture</a>
 </p>
 
 <p align="center">
@@ -27,7 +27,7 @@ sessions to keep groups of workspaces apart; when an
 agent gets stuck waiting on you, you see it at once and one key takes you there; and agents can talk to each other:
 start sessions, hand out work, wait for the replies and read them.
 
-Not at home in a terminal? gerdr is an equally good choice, as an app: images, videos and PDFs from the agent show right in the chat, and clicking a path
+Not at home in a terminal? Gerdr is an equally good choice, as an app: images, videos and PDFs from the agent show right in the chat, and clicking a path
 opens the file; away from your desk, keep watching and steering from your phone.
 
 **chat**
@@ -47,12 +47,12 @@ opens the file; away from your desk, keep watching and steering from your phone.
 - **terminals** — `ctrl+b t` opens one alongside; it survives reloads and follows you to your phone.
 - **coming from herdr** — same keys; import your workspaces, tabs and splits, each agent reattached to its session.
 
-**DIY your own gerdr**
+**DIY your own Gerdr**
 
 - **a UI your agent can change** — the whole interface: add buttons, shortcuts, what gets shown. Just tell the AI;
   no release, no deploy, live at once. Break it and an unbreakable rescue panel gets you back.
 - **TypeScript add-ons** — rename tabs, title panes, add commands and keys; install more from a store.
-- **skills and MCP** — the agent's own, gerdr's, or both.
+- **skills and MCP** — the agent's own, Gerdr's, or both.
 
 **anywhere**
 
@@ -67,12 +67,12 @@ curl -fsSL https://claude.ai/install.sh | bash   # Claude Code, then run `claude
 npm i -g @openai/codex                           # Codex, then `codex login`
 ```
 
-Then grab gerdr from [releases](https://github.com/gerdr-dev/gerdr/releases/latest):
+Then grab Gerdr from [releases](https://github.com/gerdr-dev/gerdr/releases/latest):
 
 - **macOS** — `Gerdr-x.y.z-mac-arm64.dmg` (Apple silicon) or `Gerdr-x.y.z-mac-x64.dmg` (Intel); drag it into
   Applications. If macOS says the developer can't be verified, right-click → Open in Finder
   (or `xattr -dr com.apple.quarantine /Applications/Gerdr.app`).
-- **Android** — `Gerdr-x.y.z-android.apk`. It connects to your own gerdr through [remote access](#remote-access).
+- **Android** — `Gerdr-x.y.z-android.apk`. It connects to your own Gerdr through [remote access](#remote-access).
 - **Windows** — not in releases yet; build the installer with `make win` (unsigned: on SmartScreen click
   More info → Run anyway).
 
@@ -98,7 +98,7 @@ gerdr acp claude  # run the built-in adapter as a stdio ACP agent (for Zed and o
 
 > The UI is Chinese-only for now; menu and setting names in this README are translations.
 
-The desktop app and the CLI can run together: if a gerdr is already running, the app connects to it and you see the
+The desktop app and the CLI can run together: if a Gerdr is already running, the app connects to it and you see the
 same sessions. On macOS, Settings → General → *Run in background* installs a LaunchAgent so sessions keep running
 after you quit the app ([details](docs/dev/SERVICE.md)).
 
@@ -136,13 +136,13 @@ Settings → Shortcuts. The macOS app adds menu shortcuts: `⌘T` new tab, `⌘1
 the focused pane to the right / below (a new session with the same agent, directory and mode, or a terminal in the
 same directory).
 
-## gerdr vs herdr
+## Gerdr vs herdr
 
-gerdr grew out of using [herdr](https://github.com/herdrdev/herdr) daily: it keeps herdr's layout model and keys, and
-can import a herdr setup. The difference is the layer they work at. **herdr owns the agents' terminals; gerdr talks to
+Gerdr grew out of using [herdr](https://github.com/herdrdev/herdr) daily: it keeps herdr's layout model and keys, and
+can import a herdr setup. The difference is the layer they work at. **herdr owns the agents' terminals; Gerdr talks to
 the agents themselves.**
 
-| | herdr | gerdr |
+| | herdr | Gerdr |
 |---|---|---|
 | what it is | terminal multiplexer for agents (Rust TUI) | graphical client for agents (Go server + web UI, Electron shell) |
 | runs in | the terminal you already use, over SSH | desktop app, any browser, Android app |
@@ -158,26 +158,26 @@ the agents themselves.**
 | customizing | plugins | TS add-ons with a store, plus the whole UI is editable source with hot reload |
 | footprint | one binary, no Electron | one Go binary; the desktop app adds Electron |
 
-**Pick herdr** if you live in the terminal, work over SSH, or use agents gerdr has no adapter for.
-**Pick gerdr** if you want approvals and rewinds as UI, want to check on agents from your phone, or want to
-reshape the interface itself. They also mix: import a herdr setup into gerdr, keep using herdr for the rest. A session
+**Pick herdr** if you live in the terminal, work over SSH, or use agents Gerdr has no adapter for.
+**Pick Gerdr** if you want approvals and rewinds as UI, want to check on agents from your phone, or want to
+reshape the interface itself. They also mix: import a herdr setup into Gerdr, keep using herdr for the rest. A session
 open in both at once will fork its transcript, so quit it in one first.
 
 ### why not herdr-web?
 
-[herdr-web](https://github.com/zbysir/herdr-web) brings herdr to the browser and the phone, and gerdr grew out of it.
+[herdr-web](https://github.com/zbysir/herdr-web) brings herdr to the browser and the phone, and Gerdr grew out of it.
 What held it back is the terminal itself: on a phone, sending a message or typing a command into a terminal never
 feels natural. The only way to make it work is to send keystrokes into the terminal and scrape the screen for the
 reply, a fragile patch: when an agent's TUI gains a new option or changes an interaction, the keys you used to send
 can stop working altogether.
 
-gerdr takes another route: it skips the terminal and talks to the agent through its structured interface, drawing
+Gerdr takes another route: it skips the terminal and talks to the agent through its structured interface, drawing
 its own UI. Approvals, questions and rewinds are API calls, so an agent update doesn't break things just because
 the screen looks different.
 
 ## add-ons
 
-Add-ons live in `~/.gerdr/addons/`, one folder each, live on save (no Node needed, gerdr compiles them). Settings →
+Add-ons live in `~/.gerdr/addons/`, one folder each, live on save (no Node needed, Gerdr compiles them). Settings →
 Add-ons lists them, switches them on and off, and has a **Store** tab: a store is a GitHub repository whose folders
 holding an `addon.json` are add-ons, browsed offline, refreshed when you ask, installed with one click. The default
 store is [gerdr-dev/gerdr-addon](https://github.com/gerdr-dev/gerdr-addon) (duplicate a tab with `prefix+a`, a
@@ -200,7 +200,7 @@ export default defineAddon({
 });
 ```
 
-`addon.json` can also name a **service**: a long-running process gerdr's backend starts, restarts and stops with the
+`addon.json` can also name a **service**: a long-running process Gerdr's backend starts, restarts and stops with the
 add-on. It gets the open sessions as JSON lines on stdin, and talks to the add-on's UI half (`g.service`) — e.g. a
 bridge that keeps a Bluetooth wristband connected and shows agents on it.
 
@@ -228,7 +228,7 @@ itself reads environment variables:
 **Scripting** — listing sessions, reading replies, sending messages and answering approvals are all HTTP endpoints:
 [docs/API.md](docs/API.md).
 
-**Security** — gerdr is a way to run commands on your machine, so it always requires a token, even on 127.0.0.1.
+**Security** — Gerdr is a way to run commands on your machine, so it always requires a token, even on 127.0.0.1.
 Don't port-forward it to the internet; use [remote access](#remote-access) instead.
 
 ### more agents and accounts
@@ -243,7 +243,7 @@ page. Changes apply immediately. Stored under `agents` in `config.json`:
 
 ### Gerdr Agent (GPT, DeepSeek… straight from the API)
 
-gerdr ships its own agent that skips Claude Code / Codex and calls OpenAI-compatible APIs (Responses for GPT, Chat
+Gerdr ships its own agent that skips Claude Code / Codex and calls OpenAI-compatible APIs (Responses for GPT, Chat
 Completions for DeepSeek and others) or Anthropic's Messages API (`"api": "anthropic"` on the provider, with a base URL
 like `https://api.anthropic.com`). Configure models in `config.json` and *Gerdr Agent* appears when starting a
 session:
@@ -260,13 +260,13 @@ session:
 
 A key written into `apiKey` (by Settings, `gerdr config set`, or by hand) is moved to `~/.gerdr/secrets.json` (0600)
 and `config.json` keeps `"<hidden>"`, so an agent that reads your settings doesn't pull the key into its transcript.
-Or use `"apiKeyEnv": "VAR_NAME"` to take it from gerdr's environment; that variable is not passed on to agents or
+Or use `"apiKeyEnv": "VAR_NAME"` to take it from Gerdr's environment; that variable is not passed on to agents or
 terminals. A model id is usually enough; protocol, reasoning
 levels and context window are guessed from it, and you can override with `api` (chat / responses), `efforts`,
 `window`, `images`, `maxOutput`, and on Claude `thinking` (`updates`: the model's short progress notes, the default on Opus/Sonnet 5.5 and Fable 5+; `adaptive`: a summary of its reasoning). The bottom of Settings → Agents can do this too (fetch the model list, test a model).
 
 Transcripts go to `~/.gerdr/native/`. Interjecting, rewind, approvals, subagents (backgroundable), background
-commands, web fetch, `/compact`, `/clear`, skills and MCP (Claude Code's servers plus gerdr's; no OAuth servers) all
+commands, web fetch, `/compact`, `/clear`, skills and MCP (Claude Code's servers plus Gerdr's; no OAuth servers) all
 work. **Long-term memory**: corrections, your preferences and project conventions are remembered across sessions, one
 Markdown file each under `~/.gerdr/native/memory/` (`global/`, and `projects/` per project). `/memory` lists them,
 `/memory forget xxx` deletes one; Settings → Memory shows them too, alongside Claude Code's and Codex's.
@@ -290,11 +290,11 @@ gerdr remote join https://relay.example.com gerdr.example.com <invite> \
 ```
 
 It prints the DNS records to add (an A record to the relay, a CAA record), writes `~/.gerdr/remote/remote.json`, and
-takes effect after restarting gerdr (the macOS app reads it too). Then:
+takes effect after restarting Gerdr (the macOS app reads it too). Then:
 
 - **pair** — Settings → Remote access → issue a pairing code (or `gerdr remote pair`), scan it with your phone. Codes
   last 5 minutes and work once.
-- **passkey** — in gerdr on the phone, Settings → Remote access → add a passkey. Paired devices re-verify after 24
+- **passkey** — in Gerdr on the phone, Settings → Remote access → add a passkey. Paired devices re-verify after 24
   hours without one.
 - **revoke** — *Kick* in Settings, or `gerdr remote devices` / `gerdr remote revoke <id|all>` (`all` clears passkeys
   too).
@@ -313,7 +313,7 @@ you're home (same origin, same TLS), passkeys inside the app, and background not
 - Codex: one shared `codex app-server` process for all sessions (tens of MB).
 - Claude Code: one `claude` process per session (hundreds of MB, that's how the CLI works). Sessions idle for 15
   minutes have their process stopped and are `--resume`d on the next message; nothing is lost.
-- gerdr itself: one Go process, no Node.
+- Gerdr itself: one Go process, no Node.
 
 ## development
 

@@ -1,7 +1,7 @@
 # 远程访问：云端中继 + 配对码 + passkey
 
 照搬 herdr-web 的那一套（它的 `docs/dev/SECURITY.md` 和 `docs/dev/RELAY.md` 是完整的设计理由，动这块之前
-先读那两份）。这里只写 gerdr 和它**不一样**的地方，以及搬过来时会静默出错的几条。
+先读那两份）。这里只写 Gerdr 和它**不一样**的地方，以及搬过来时会静默出错的几条。
 
 ```
  手机浏览器 ──TLS──▶ dialhome（VPS）──按 SNI 原样转──▶ gerdr 的隧道（主动连出去的 WebSocket + yamux）
@@ -24,8 +24,8 @@ import 的；中继本身也在 dialhome 仓库里 —— 原来这里抄了一�
 CAA 0 issue "letsencrypt.org; accounturi=<这台机器的 ACME 账户>; validationmethods=dns-01"
 ```
 
-gerdr 有**自己的** ACME 账户（`~/.gerdr/remote/acme/account.json`），和同一台机器上的 herdr-web 不是同一个：已经有一条
-CAA 覆盖到这个名字（比如挂在上一级）时，要**再加一条** issue，不然 gerdr 签不下证书。`gerdr remote status` 打出 accounturi。
+Gerdr 有**自己的** ACME 账户（`~/.gerdr/remote/acme/account.json`），和同一台机器上的 herdr-web 不是同一个：已经有一条
+CAA 覆盖到这个名字（比如挂在上一级）时，要**再加一条** issue，不然 Gerdr 签不下证书。`gerdr remote status` 打出 accounturi。
 CAA 不配一切照常工作，只是中继多了一个后门，没有任何症状。
 
 The settings page has a one-click button that writes this record with the stored DNS credentials
@@ -35,12 +35,12 @@ has its own small client there, built on the SDK lego already links. It never to
 there it reads the set and writes it back with ours appended. Only Cloudflare and DigitalOcean have a fake-API test;
 the SDK-based ones (AliDNS, DNSPod, Route 53, Huawei) were not exercised against the real APIs.
 
-中继那边的 SNI 路由（Traefik 的 `HostSNI` 规则之类）也要放行 gerdr 的名字 —— 漏了的表现是「注册成功、隧道已连上、
-手机打不开」，gerdr 这边一个字都不报。
+中继那边的 SNI 路由（Traefik 的 `HostSNI` 规则之类）也要放行 Gerdr 的名字 —— 漏了的表现是「注册成功、隧道已连上、
+手机打不开」，Gerdr 这边一个字都不报。
 
 ## 两条路两套凭据（和 herdr-web 最大的不同）
 
-herdr-web 只有一套设备凭据；gerdr 本来就有一把令牌（`~/.gerdr/token`），mac App、`gerdr session`、agent 自己都靠它，
+herdr-web 只有一套设备凭据；Gerdr 本来就有一把令牌（`~/.gerdr/token`），mac App、`gerdr session`、agent 自己都靠它，
 而且它是**agent 读得到的明文**。所以：
 
 | | 本机口（127.0.0.1:7870） | 远程口（中继隧道） |
@@ -77,7 +77,7 @@ remote.json 的 `pairTTLMinutes`，0 = 和别的设备一样），用了也不�
 
 ## 远程起不来不拦启动
 
-herdr-web 配错了宁可拒绝启动（远程就是它的全部）。gerdr 的主界面在本机，mac App 起不来就什么都用不了，所以：证书签不下来、
+herdr-web 配错了宁可拒绝启动（远程就是它的全部）。Gerdr 的主界面在本机，mac App 起不来就什么都用不了，所以：证书签不下来、
 没 join 过、中继连不上，都只记在 `remote.Status` 里（设置 →「远程访问」、`gerdr remote status`）。第一次签证书要等 DNS
 传播（一两分钟），在后台等，不拖启动。
 
@@ -95,7 +95,7 @@ GERDR_* 本来就不往 agent 的环境里传（`sysenv.ChildEnv`）；acme 把�
 
 连上 / 移除中继也在设置页（`/api/remote/connect` `disconnect`，同样**只在本机口**：远程移除等于把自己锁在门外），
 `remote.Service.Connect` / `Disconnect` 改完 remote.json 走 `Reload` 整条重来，不用重启；`gerdr remote join` 写完文件也调
-`/api/remote/reload` 通知在跑的 gerdr。几条要守住的：
+`/api/remote/reload` 通知在跑的 Gerdr。几条要守住的：
 
 - **`Service.cfg` 运行中会整份换掉**，读一律走 `Config()`（持锁拷一份）。直接读字段就是数据竞争，`go test -race` 才看得出来。
 - **passkey 的 RPID 跟着主机名换**（`Passkeys.SetRP`）。`Available()` 和 ceremony 里判 `p.w` 都在锁里 —— 先判再上锁的话，
@@ -106,7 +106,7 @@ GERDR_* 本来就不往 agent 的环境里传（`sysenv.ChildEnv`）；acme 把�
 - 地址由环境变量 `GERDR_RELAY_URL` / `GERDR_RELAY_HOST` 给时（它们盖过文件），连接 / 移除直接拒（`envLocked`），不然点了什么都不变。
 
 **坑：写在 `~/.zshenv` / `.zshrc` 里的 `GERDR_*` App 看不到**（从访达起不读 shell 配置；`sysenv.AdoptLoginPath`
-只捞 PATH）。终端里起的 gerdr 看得到、App 里看不到，表现是「明明配了，App 里还说缺证书」—— 用设置页那一处。
+只捞 PATH）。终端里起的 Gerdr 看得到、App 里看不到，表现是「明明配了，App 里还说缺证书」—— 用设置页那一处。
 
 ## 照搬过来时要守住的几条（都在 herdr-web 踩过）
 

@@ -109,7 +109,7 @@ func merge(dst string, res *Result, leave bool) (*Result, error) {
 		res.Status = "conflict"
 		if !leave {
 			git(dst, nil, "merge", "--abort")
-			res.Note = "新版界面和本地改动有冲突，先没合：在 gerdr 里让 agent 运行 gerdr ui merge 解决"
+			res.Note = "新版界面和本地改动有冲突，先没合：在 Gerdr 里让 agent 运行 gerdr ui merge 解决"
 		}
 		return res, nil
 	}
@@ -201,7 +201,7 @@ func commitSnapshot(dst string, files map[string][]byte, ver, label string) (str
 	if err != nil {
 		return "", err
 	}
-	msg := "gerdr 界面"
+	msg := "Gerdr 界面"
 	if label != "" {
 		msg += "（" + label + "）"
 	}

@@ -184,7 +184,7 @@ func (s *Session) recoverAfterRestart(sc logScan) (openSince int64) {
 	var add []*Event
 	if sc.open {
 		openSince = sc.lastTS
-		add = append(add, &Event{Seq: s.h.nextSeqLocked(), TS: now(), Kind: EvTurnEnd, StopReason: "cancelled", Error: "gerdr 重启，这一轮被中断了"})
+		add = append(add, &Event{Seq: s.h.nextSeqLocked(), TS: now(), Kind: EvTurnEnd, StopReason: "cancelled", Error: "Gerdr 重启，这一轮被中断了"})
 	}
 	// 还在跑的 `!命令`：进程跟着 gerdr 没了（或者成了没人管的孤儿），补一个结束，卡片别一直转
 	for _, id := range sc.shells {
@@ -1503,7 +1503,7 @@ func (s *Session) Takeover(ctx context.Context, action string) error {
 	}
 	if res.SessionId != "" && string(res.SessionId) != sid {
 		s.h.rekey(s, string(res.SessionId))
-		s.emit(&Event{Kind: EvNotice, Level: "info", Text: "另起了一份接着聊：从这里往下只在 gerdr 里，别处那个会话不受影响"})
+		s.emit(&Event{Kind: EvNotice, Level: "info", Text: "另起了一份接着聊：从这里往下只在 Gerdr 里，别处那个会话不受影响"})
 	}
 	return nil
 }
@@ -1619,7 +1619,7 @@ func (s *Session) adoptOrphanTurn(lastTS int64) {
 		}
 		if !told {
 			told = true
-			s.emit(&Event{Kind: EvNotice, Level: "info", Text: fmt.Sprintf("gerdr 重启前的这一轮还在后台跑（claude，pid %d），跑完会自动同步过来", hs[0].Pid)})
+			s.emit(&Event{Kind: EvNotice, Level: "info", Text: fmt.Sprintf("Gerdr 重启前的这一轮还在后台跑（claude，pid %d），跑完会自动同步过来", hs[0].Pid)})
 		}
 		select {
 		case <-ctx.Done():
@@ -1645,9 +1645,9 @@ func (s *Session) adoptOrphanTurn(lastTS int64) {
 		return
 	}
 	// 没见到孤儿也可能走到这儿：这一轮在 gerdr 死之前已经跑完，只是日志还没落盘（或者 gerdr 停了很久才起来）
-	text := "gerdr 重启前这一轮有一段没记下来，已经从 agent 自己的记录补上"
+	text := "Gerdr 重启前这一轮有一段没记下来，已经从 agent 自己的记录补上"
 	if told {
-		text = "gerdr 重启后这一轮在后台跑完了，已经从 agent 自己的记录同步到最新"
+		text = "Gerdr 重启后这一轮在后台跑完了，已经从 agent 自己的记录同步到最新"
 	}
 	s.emit(&Event{Kind: EvNotice, Level: "info", Text: text})
 }

@@ -1,16 +1,16 @@
-# gerdr 的界面
+# Gerdr 的界面
 
-这个目录就是 gerdr 的整个界面，**没有打包环节**：gerdr 直接读这里的源码，每个文件用 esbuild 单独编译后发给浏览器，
-保存即生效（React Refresh 热替换，页面状态尽量保住）。不用 `npm install`、不用 build、不用重启 gerdr。
+这个目录就是 Gerdr 的整个界面，**没有打包环节**：Gerdr 直接读这里的源码，每个文件用 esbuild 单独编译后发给浏览器，
+保存即生效（React Refresh 热替换，页面状态尽量保住）。不用 `npm install`、不用 build、不用重启 Gerdr。
 
-界面目录是 git 仓库：`upstream` 分支是 gerdr 发的版本，`main` 是正在用的；gerdr 升级时把新版提交到 `upstream` 再合进 `main`
+界面目录是 git 仓库：`upstream` 分支是 Gerdr 发的版本，`main` 是正在用的；Gerdr 升级时把新版提交到 `upstream` 再合进 `main`
 （三方合并，你的改动保留）。只在 `main` 上改、别动 `upstream`。改之前先存个档，改坏了能回去：
 
 ```bash
 git -C <界面目录> add -A && git -C <界面目录> commit -qm "改界面之前" || true
 ```
 
-主界面改坏了用户也不至于没辙：页面右侧能拉出编进 gerdr 的急救面板（不在这个目录里，改不到），能看错误、退回之前的一版、叫 agent 来修。
+主界面改坏了用户也不至于没辙：页面右侧能拉出编进 Gerdr 的急救面板（不在这个目录里，改不到），能看错误、退回之前的一版、叫 agent 来修。
 
 改完查一下有没有改坏（编译错误、页面里冒出来的运行时错误都在里面；页面开着才有运行时错误）：
 
@@ -68,7 +68,7 @@ src/lib/
 
 - `@/x` 指 `src/x`。相对路径也行。
 - 第三方包：从 npm 包名 import（`import { X } from "lucide-react"`），**包必须写在 package.json 的 dependencies 里，写精确版本**
-  （`"recharts": "2.15.4"`，不要 `^`）。加了新包不用安装，浏览器从 esm.sh 拉（gerdr 本机缓存）。
+  （`"recharts": "2.15.4"`，不要 `^`）。加了新包不用安装，浏览器从 esm.sh 拉（Gerdr 本机缓存）。
   能不加新包就不加：图标用 lucide-react，组件优先用 src/components/ui 里现成的。
 - **不能在代码里 import CSS**、不能 `?raw` / `?url`。样式用 Tailwind class 写在组件上；全局的写进 `src/index.css`。
 - 样式是浏览器里的 Tailwind v4（Tailwind browser）：任何 class 都直接生效；`src/index.css` 里不能 `@import` / `@plugin`。
@@ -96,7 +96,7 @@ src/lib/
 - **beUI Pro**（https://pro.beui.dev ，左边栏 AGENTS 那一组）：运行中的像素转圈（AI Thinking Loaders 的 Pixel orbit
   → `packages/chat/src/components/PixelLoader.tsx`）、提问卡片（Questionnaire → `packages/chat/src/components/Cards.tsx` 的 AskCard）。
   **它是付费组件库：只照着看效果自己写，不要拷它的代码。**
-- **logo**：一只银灰色边境牧羊犬的狗头（扁平色块；herdr 是牧人、logo 是羊，gerdr 是帮他看住一群 agent 的狗）。
+- **logo**：一只银灰色边境牧羊犬的狗头（扁平色块；herdr 是牧人、logo 是羊，Gerdr 是帮他看住一群 agent 的狗）。
   `public/icon.svg` 是唯一的原稿，App 图标（`desktop/res/icon.png`）用仓库根上的 `make icon` 从它生成，改了要重跑。
   运行中的 loading 不用狗（16px 整条狗看不清、狗脸画不好看，试过），用上面 beUI 的像素转圈。
   备用素材在仓库的 `docs/brand/`：像素狗爪印 `paw.svg`、三个爪印一步步落下的动画 `paw-walk.svg`（都跟 currentColor 走），
@@ -107,7 +107,7 @@ src/lib/
 
 - **Add-on or UI edit?** A block in the sidebar or a pane's title bar, a button in the composer, a right-click item,
   a tag on the line under each turn, a command or key, a process that keeps running: write an **add-on** instead of
-  editing this directory. It survives gerdr upgrades without merges, can be switched off, and can be shared through a
+  editing this directory. It survives Gerdr upgrades without merges, can be switched off, and can be shared through a
   store. How: `~/.gerdr/addons/GUIDE.md` (the add-on guide; the API is `~/.gerdr/addons/gerdr.d.ts`). Edit the UI
   source only for what no add-on slot reaches.
 

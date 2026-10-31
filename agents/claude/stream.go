@@ -629,7 +629,7 @@ func (s *session) onControlRequest(pr *proc, reqID string, raw json.RawMessage) 
 	}
 	_ = json.Unmarshal(raw, &req)
 	if req.Subtype != "can_use_tool" {
-		pr.respond(reqID, nil, "gerdr does not handle "+req.Subtype)
+		pr.respond(reqID, nil, "Gerdr does not handle "+req.Subtype)
 		return
 	}
 	ctx, cancel := context.WithCancel(context.Background())

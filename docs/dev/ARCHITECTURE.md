@@ -1,9 +1,9 @@
-# gerdr 的结构和那些实测出来的坑
+# Gerdr 的结构和那些实测出来的坑
 
 ## 为什么不是 TUI
 
 herdr-web 那一套是往 TUI 的输入框里模拟按键、再读屏抽话。审批、提问、回退、接续会话全都
-只能这么做，脆（换个 agent 版本屏幕长得不一样就坏）。gerdr 直接对接 agent 的**结构化协议**，
+只能这么做，脆（换个 agent 版本屏幕长得不一样就坏）。Gerdr 直接对接 agent 的**结构化协议**，
 界面自己画。
 
 ## 分层
@@ -58,7 +58,7 @@ React（ui/，不打包）  ←WebSocket / HTTP→  hub（internal/hub）  ←AC
 2. **插话**就是往 stdin 再写一条 user 消息，带 `priority`：平时 `"now"`；正等人审批 / 回答时
    用 `"later"` —— `now` 会把那个等待中的 can_use_tool 回调掐掉，卡片撤了，这一轮卡死（官方
    适配器踩过）。user 消息要带 `origin:{kind:"human"}`。
-3. **回退**：每条 user 消息带 `uuid`（= gerdr 的 messageId，必须是 UUID），CLI 原样存进会话记录。
+3. **回退**：每条 user 消息带 `uuid`（= Gerdr 的 messageId，必须是 UUID），CLI 原样存进会话记录。
    回退时在 `~/.claude/projects/*/<sessionId>.jsonl` 里找到这条的 `parentUuid`，从那儿
    `--resume 旧 --resume-session-at parent --fork-session --session-id 新` 分叉。原会话不动；
    ACP 的 sessionId 因此会变（`RewindResponse.SessionId`），hub 要换 key。
@@ -69,7 +69,7 @@ React（ui/，不打包）  ←WebSocket / HTTP→  hub（internal/hub）  ←AC
    only cuts whole turns). The hub closes the cut turn with a `turn_end`, since the real one went with the rest.
    **分叉出来的新会话要等下一句话写进去才有记录**：进程起来了不算数（这句被 Esc 撤回、进程被收掉，下次还得照样分叉），
    适配器以「新会话的记录在不在」判断分叉成了没有。「从哪分叉」agent 只记在内存里，所以 `RewindResponse.Fork`
-   交给 hub 存进 `Record.Fork`，接回会话时放在 `_meta.gerdr.fork` 带回去 —— 不然 gerdr 一重启，
+   交给 hub 存进 `Record.Fork`，接回会话时放在 `_meta.gerdr.fork` 带回去 —— 不然 Gerdr 一重启，
    第 4 条的兜底会把它起成一个空会话，前面的对话全丢（踩过：claude 说「这是第一条消息」）。
 4. **建了会话没说过话就没有会话记录**，`--resume` 会报 "No conversation found"。适配器起进程前
    先看记录在不在，不在就按新会话（同一个 id）起；hub 那一侧对任意 agent 也兜了一层
@@ -120,10 +120,10 @@ React（ui/，不打包）  ←WebSocket / HTTP→  hub（internal/hub）  ←AC
 `agents/native` (a public package: other programs embed it, e.g. Annulo; the protocol, extension methods and `_meta`
 conventions are in its package doc, an in-process example in `agents/native/example_test.go`, what the three engines
 support in `agents/EMBEDDING.md`): no subprocess; the loop,
-tools and transcripts all live in gerdr. It imports none of gerdr's internal packages: gerdr's skills / MCP settings,
+tools and transcripts all live in Gerdr. It imports none of Gerdr's internal packages: Gerdr's skills / MCP settings,
 MCP sign-in, the login shell's PATH, `GERDR_NATIVE_SESSION_ID` and secrets.json keys are injected through
 `native.Options` by `internal/agentwire` (keep it that way — `go list -deps ./agents/... | grep gerdr/internal` must
-stay empty; the claude / codex adapters get gerdr's skill / MCP settings the same way, through their `Ext`
+stay empty; the claude / codex adapters get Gerdr's skill / MCP settings the same way, through their `Ext`
 interfaces). `acpx`, `sysenv` and `rpcline` are public for the same reason. The model layer `native/llm`
 speaks three protocols (Chat Completions, Responses, Anthropic Messages; the protocol is picked per provider,
 `Provider.API`), each hand-written rather than through an SDK so every gateway quirk is visible and fixable in one place.
@@ -155,12 +155,12 @@ config.json (example in the README), read fresh every turn.
 8. 会话记录 `<dir>/native/sessions/<id>.jsonl` 存**完整历史**，压缩是追加一条 `compact`，上下文从最后一条往后算 ——
    回退到压缩之前，截掉那条就回到压缩前的上下文。`/clear` 换新 id（和 claude / codex 的同一条路）。
 9. 指令文件：`~/.claude/CLAUDE.md`、`~/.codex/AGENTS.md`、git 根到 cwd 每层的 AGENTS.md / CLAUDE.md 都拼进系统提示词；
-   skill 列表（内置 + Claude Code 的 + gerdr 的，按设置的来源）只给名字、描述、路径，模型自己去读。
+   skill 列表（内置 + Claude Code 的 + Gerdr 的，按设置的来源）只给名字、描述、路径，模型自己去读。
 10. bash 的环境里有 `GERDR_NATIVE_SESSION_ID`，`gerdr session current` 拿它认自己。
 11. **后台任务**（`bg.go`）：bash / task 的 `run_in_background`，或界面上「转到后台」（`_gerdr/task_background`，前台的命令 / 子 agent
     在等的 select 里收到就把自己交给后台 goroutine）。跑完时会话在跑 → 通知排进插话队列；闲着 → 自己开一轮，前后发 `autoTurn` true / false
     （hub 当成 agent 自己跑起来了，和 claude 后台任务跑完一样）。子 agent 的 ctx 不挂在这一轮上，前台时这一轮被打断由 select 转达。
-    后台任务只在内存里，gerdr 重启就没了。
+    后台任务只在内存里，Gerdr 重启就没了。
 12. **MCP**（`mcp.go`，自己写的客户端，只有 initialize / tools/list / tools/call）：stdio、streamable HTTP（响应可能是 JSON 也可能是一段 SSE，
     带 Mcp-Session-Id）、老式 SSE（先等 endpoint 事件）。**只用 Gerdr 那份**（~/.gerdr/ext.json 里开着的），不看设置里的来源：
     以前「Agent 自己的」对它来说是借 Claude Code 配的（~/.claude.json、项目 .mcp.json），分出「引擎」之后用户看不懂一个引擎为什么跟着
@@ -213,7 +213,7 @@ codex 的 app-server 没这个命令）。代价是没有 claude 那段「用量
 
 ## 输入框里的 `!命令`（hub/shell.go）
 
-照 Claude Code 的 bash 模式：不发给 agent、不起一轮，gerdr 在会话目录里用登录 shell 直接跑（没有 stdin，自己一个进程组，停止时整组杀）。
+照 Claude Code 的 bash 模式：不发给 agent、不起一轮，Gerdr 在会话目录里用登录 shell 直接跑（没有 stdin，自己一个进程组，停止时整组杀）。
 stream-json / app-server 都没有这个口（Claude Code 的 `!` 是 TUI 输入框自己做的），三家 agent 一个做法。
 
 - 日志记 `shell` / `shell_out`（攒 200ms 一段，最多 256KB）/ `shell_done`（退出码；stopped / lost；Text = 完整输出的文件），界面画成命令卡片（chat/ShellCard）。
@@ -288,7 +288,7 @@ cwd 以外改的文件（Bash 写 `~/.zshrc`、隔壁项目）管不到；同一
 - 样式用 Tailwind browser（浏览器里扫 class 生成），所以 `src/index.css` 里不能 `@import` / `@plugin`，代码里不能 import CSS。
 - importMap 只能内联，内联脚本靠每次请求一个 nonce 过 CSP。
 - 页面里的报错（渲染出错、点按钮抛异常）POST 回 `/api/ui/errors`，`gerdr ui status` 能看到 —— agent 改完界面靠它确认没改坏。
-- 界面目录用 **git 三方合并**升级（`internal/webui/gitmerge.go`，照 shuttle 的模板升级）：`upstream` 分支的每个提交是 gerdr 发的一版
+- 界面目录用 **git 三方合并**升级（`internal/webui/gitmerge.go`，照 shuttle 的模板升级）：`upstream` 分支的每个提交是 Gerdr 发的一版
   界面快照（临时 index + commit-tree，不碰工作目录），`main` 是正在用的、人和 agent 在上面改。新版来自两处，走同一条路：
   App 内嵌的那份（启动时 `Install`）和开发时仓库的 ui/（`gerdr ui sync ui` / `make sync-ui`，开着的窗口直接热更新）。
   合之前先把 main 上没提交的改动提交掉；**冲突时 abort、照旧用现在这份** —— 冲突标记留在源码里界面当场编译失败，整个 App 就没法用了。
@@ -296,14 +296,14 @@ cwd 以外改的文件（Bash 写 `~/.zshrc`、隔壁项目）管不到；同一
   版本号是文件内容的哈希（快照提交里的「界面版本:」），内嵌那份和 sync 那份的排除规则必须一致（`skipFile` ↔ Makefile 的 rsync），
   不然同一份界面算出两个版本、每次启动都白合一次。没有 git 的机器退回老办法（按 `.gerdr-ui.json` 的哈希判断改没改过）。
 
-## 多个会话互相调用（`gerdr session …` + 内置的 gerdr skill）
+## 多个会话互相调用（`gerdr session …` + 内置的 Gerdr skill）
 
 和 herdr 的 `herdr agent …` 一个用途：一个会话里的 agent 开新会话、派活、等、读回复。
 
-- 找服务：gerdr 起 agent 时往环境里塞 `GERDR_ENV=1`、`GERDR_DIR`，并把 gerdr 所在目录加进 PATH（`sysenv.SetGerdrContext`）。
+- 找服务：Gerdr 起 agent 时往环境里塞 `GERDR_ENV=1`、`GERDR_DIR`，并把 Gerdr 所在目录加进 PATH（`sysenv.SetGerdrContext`）。
   其余 `GERDR_*`（令牌、端口）不往下传，CLI 自己从 `<dir>/server.json`、`<dir>/token` 读。
 - 认自己：claude 给命令的环境里有 `CLAUDE_CODE_SESSION_ID`，codex 有 `CODEX_THREAD_ID`（实测），CLI 拿它们问
-  `/api/resolve` 换 gerdr 会话 id。claude 回退之后会话 id 会变，hub 那边跟着 rekey，所以按 agent id 查永远是当前的。
+  `/api/resolve` 换 Gerdr 会话 id。claude 回退之后会话 id 会变，hub 那边跟着 rekey，所以按 agent id 查永远是当前的。
   `/clear` changes the id too, but the tab's gerdr session keeps running under the new one and the conversation before
   it is split off into a detached session that keeps the old agent id and title (`hub/clear.go`): one gerdr session per
   agent session, so /resume lists it like any other. A side list of old ids on the tab (`Record.Cleared`, now migrated
@@ -334,16 +334,16 @@ cwd 以外改的文件（Bash 写 `~/.zshrc`、隔壁项目）管不到；同一
 
 ## 内置 skill、skill / MCP 的来源（internal/ext）
 
-- 来源三选一（skill、MCP 各自选）：只用 agent 自己的（默认）/ 两者都用 / 只用 gerdr 的。gerdr 自己那份：skill 在
+- 来源三选一（skill、MCP 各自选）：只用 agent 自己的（默认）/ 两者都用 / 只用 Gerdr 的。Gerdr 自己那份：skill 在
   `~/.gerdr/skills/<名>/SKILL.md`，MCP 在 `~/.gerdr/ext.json`。
 - claude：skill 走 `--add-dir`（目录下的 `.claude/skills` 会被加载，名字不带前缀）。每次起进程建一个壳目录，只链进这次要给的 skill；
-  只用 gerdr 的时候 agent 自己的 skill 用 `skillOverrides: off` 关，**插件里的 skill 按名字关不掉**，只能整个插件 `enabledPlugins: false`。
-  MCP 走 `--mcp-config <json>`，只用 gerdr 的加 `--strict-mcp-config`。参数只能启动时给，所以设置一变（指纹）下一轮前换进程。
+  只用 Gerdr 的时候 agent 自己的 skill 用 `skillOverrides: off` 关，**插件里的 skill 按名字关不掉**，只能整个插件 `enabledPlugins: false`。
+  MCP 走 `--mcp-config <json>`，只用 Gerdr 的加 `--strict-mcp-config`。参数只能启动时给，所以设置一变（指纹）下一轮前换进程。
   claude 自己配的 MCP（~/.claude.json、.mcp.json）也只在启动时读一次，`claude mcp add` 之后进程里的 /clear 不会重读：
   它的指纹另记，变了只在 /clear 时换进程（`--resume` 再清空）—— 中途换的话工具列表变了，提示缓存全废，长对话下一轮整段重新计费。
 - codex：`thread/start` / `thread/resume` 的 `config` 是**合并**进用户配置的，给 `mcp_servers = {}` 删不掉任何东西，只能逐个
   `mcp_servers.<名>.enabled = false`；skill 用 `skills.config = [{path, enabled:false}]` 按会话关（会整个覆盖用户的那张表，所以用户自己关掉的要照抄）；
-  gerdr 的目录用 `skills/extraRoots/set`（整个 app-server 的设置）。**对一个已经加载着的 thread 再 resume，新 config 不生效**，
+  Gerdr 的目录用 `skills/extraRoots/set`（整个 app-server 的设置）。**对一个已经加载着的 thread 再 resume，新 config 不生效**，
   要先 `thread/unsubscribe` 让它卸载再 resume（实测）。
 - Scope: Gerdr only manages MCP servers from local config files (its own `ext.json`, `~/.claude.json`, `.mcp.json`,
   `~/.codex/config.toml` `[mcp_servers.*]`). Account-side connectors (claude.ai connectors, the apps connected to the
@@ -360,9 +360,9 @@ cwd 以外改的文件（Bash 写 `~/.zshrc`、隔壁项目）管不到；同一
 ## MCP OAuth (internal/mcpauth + server/mcpauthapi.go)
 
 - Status = probe: an `initialize` POST per remote server. Claude Code's token is tried first (macOS keychain
-  `Claude Code-credentials` → `mcpOAuth`, matched by server URL; elsewhere `~/.claude/.credentials.json`), then gerdr's own
+  `Claude Code-credentials` → `mcpOAuth`, matched by server URL; elsewhere `~/.claude/.credentials.json`), then Gerdr's own
   (`<GERDR_DIR>/mcp-auth/<name>.json`). So a server already authorized in Claude Code is "signed in" here too, and when that
-  token dies the row flips to "needs auth" and gerdr can sign in by itself. We never refresh Claude Code's token: a refresh
+  token dies the row flips to "needs auth" and Gerdr can sign in by itself. We never refresh Claude Code's token: a refresh
   can rotate the refresh token and log Claude Code out.
 - A 401 doesn't land in the native MCP pool's one-minute failure cache, so a fresh login is used on the next call.
 - The callback is `/mcp-oauth/callback`, outside `/api`: the authorization server redirects there cross-site, and the
@@ -381,7 +381,7 @@ cwd 以外改的文件（Bash 写 `~/.zshrc`、隔壁项目）管不到；同一
 ## Work view (internal/work + server/workapi.go + ui WorkView.tsx)
 
 - **Project** = a layout space (herdr's "session", renamed in the UI): its Code workspaces plus its own Work. **Its id is its
-  name** (`layout.ts` projectNameError; no `/ \ .`, not a gerdr route name, unique ignoring case since macOS / Windows paths
+  name** (`layout.ts` projectNameError; no `/ \ .`, not a Gerdr route name, unique ignoring case since macOS / Windows paths
   are), and there's no renaming: the address `/<name>` and the Work directory are named after it, so closing a project and
   creating one with the same name later gets its Work back. Older random ids (`s236q0e1`) are renamed to the name on load
   (`nameSpaceIds`, in `withView`). A project's Code comes back too: every layout.json save also writes each open project's
@@ -394,18 +394,18 @@ cwd 以外改的文件（Bash 写 `~/.zshrc`、隔壁项目）管不到；同一
 - Which project a `gerdr` command acts in (`server.ResolveSpace`, used by the CLI's `session list` and the layout API alike)
   is looked up from where the caller is, never fixed in an env var at start-up, because workspaces move between projects:
   `--project`, else the pane showing the agent's session, else the Work directory the session runs in (the Work agent is in
-  no pane), else the pane showing the terminal (`GERDR_TERM`, the terminal's id, set in every gerdr shell), else unscoped
-  (outside gerdr). `crossSpace` places a Work agent in its project the same way, so it can't reach other projects either, and
+  no pane), else the pane showing the terminal (`GERDR_TERM`, the terminal's id, set in every Gerdr shell), else unscoped
+  (outside Gerdr). `crossSpace` places a Work agent in its project the same way, so it can't reach other projects either, and
   sessions it starts open in its project's workspace (`openSessionNear`). Work conversations get no title at creation: a given
   title counts as the user's and would turn off automatic naming.
-- Code / Work is gerdr's own switch, at the start of the top row in both modes together with the project switcher (sidebar
+- Code / Work is Gerdr's own switch, at the start of the top row in both modes together with the project switcher (sidebar
   header / Work top bar, same classes) so switching modes doesn't move it; `store.mode` per device. Everything inside Work is
   the user's: `<work dir>/ui` is a React site with no build step, served by its own `uisite.Renderer` under
   `/work/<project>/` (`uisite.NewAt`: module / event / public URLs and the router basename carry the prefix; `/_esm/` is shared),
   started on first request. Menu, pages and styling are plain code in that site, not configuration.
 - It runs in a same-origin iframe (the only page allowed to be framed: `X-Frame-Options: SAMEORIGIN`, `frame-ancestors 'self'`),
-  so a broken Work page can't take gerdr down; there's no rescue panel inside it. It calls `/api/work/run` with the same
-  cookie and talks to gerdr by postMessage: `gerdr:ask` (send a task to the agent), `gerdr:settings`, and gerdr pushes
+  so a broken Work page can't take Gerdr down; there's no rescue panel inside it. It calls `/api/work/run` with the same
+  cookie and talks to Gerdr by postMessage: `gerdr:ask` (send a task to the agent), `gerdr:settings`, and Gerdr pushes
   `gerdr:theme`. `gerdr work status` shows its build / runtime errors.
 - Page logic lives in local functions `<GERDR_DIR>/work/local/*.ts` (esbuild → goja, `ctx.mcp(server, tool, args)`), called by
   name (`gerdr work run file.export`). Bundled files (`internal/work/builtin/base` for every project: site skeleton, blank
@@ -423,7 +423,7 @@ cwd 以外改的文件（Bash 写 `~/.zshrc`、隔壁项目）管不到；同一
 - 限定靠 `ext.Manager.Scoped`：设置、目录、锁和全局的是同一份（`core`；内置 skill 各装各的会在别的 claude 读着时把目录删了重写），
   只在三家各自取 skill / MCP 的地方再筛一遍。只能在「全局来源本来会给的」里面挑，不会加东西进来。
   - claude：skill 壳目录只链挑中的；claude 自己的 skill 没挑的走 `skillOverrides: off`；插件的 skill 关不了单个，**一个都没挑的插件整个关**
-    （它的 MCP / hook 一起没）。MCP 按名字关不掉：把挑中的（gerdr 的 + ~/.claude.json / .mcp.json 里的）全写进 `--mcp-config` 再 `--strict-mcp-config`，
+    （它的 MCP / hook 一起没）。MCP 按名字关不掉：把挑中的（Gerdr 的 + ~/.claude.json / .mcp.json 里的）全写进 `--mcp-config` 再 `--strict-mcp-config`，
     代价是插件的 MCP 和 claude.ai 的 connector 也没了。提示词和 MediaHint 拼成**一个** `--append-system-prompt`（给两个后一个盖前一个）。
   - codex：没挑的 `mcp_servers.<名>.enabled = false`、`skills.config` 里关；system 范围的 skill 界面列不出来，不动。提示词接在 `developerInstructions` 后面。
   - native：`skillsFor` / `resolveMCP` 里筛；提示词接在系统提示词最后。基于 native 的角色和原版共用会话目录和记忆。
@@ -444,7 +444,7 @@ cwd 以外改的文件（Bash 写 `~/.zshrc`、隔壁项目）管不到；同一
   停任务是 control `stop_task`，把前台的命令 / 子 agent 转后台是 `background_tasks {tool_use_id}`（= claude 里的 ctrl+b）。
 - **后台任务跑完后 CLI 会自己开一轮**（running → idle，前面没有 user 消息）。没有 session/prompt 对应，适配器用
   session_info_update 的 `_meta.gerdr.autoTurn` 告诉 hub；它可能比上一轮 Prompt 的响应先到，hub 用 `autoNext` 接上，不然那一轮在界面上是「闲着」。
-- **`--resume` 一个有没跑完的后台任务的会话**（进程被收掉 / 关了 pane / gerdr 重启时任务还在跑）：CLI 一起来先报那个任务
+- **`--resume` 一个有没跑完的后台任务的会话**（进程被收掉 / 关了 pane / Gerdr 重启时任务还在跑）：CLI 一起来先报那个任务
   stopped、自己跑起来，这时我们那句的 turn 还没挂上；那句常被并进同一段 running 跑完才 idle，中间不再有 running。
   所以「这一轮开始了」还要认 `command_lifecycle started`（command_uuid = 那句的 uuid），只认 running 的话一直转（实测）。
 - 子 agent：claude 的子 agent 工具调用带 `parent_tool_use_id`；它的话打上 `_meta.gerdr.subagent` 推出来（主对话不显示，只读面板显示）。
@@ -459,7 +459,7 @@ cwd 以外改的文件（Bash 写 `~/.zshrc`、隔壁项目）管不到；同一
   结构体不写 json tag 的话 x / y 靠大小写不敏感碰巧对上、宽高全是 0，比例全变 0（踩过）。
 - tab 名去掉 tab 编号插件加的「1.」「 Ⅱ」，纯数字（herdr 的默认名）当没有名字。
 - 会话还在 herdr 里开着：claude 能接（两边写同一份记录会分叉，界面上提醒先退出），codex 直接拒绝（`already has an active writer`）。
-- 已经在 gerdr 里的会话（按 agent 会话 id 认）复用，不导两份。布局是前端的，服务端只建会话、回「哪个位置放哪个会话」。
+- 已经在 Gerdr 里的会话（按 agent 会话 id 认）复用，不导两份。布局是前端的，服务端只建会话、回「哪个位置放哪个会话」。
 
 ## 重试
 
@@ -468,7 +468,7 @@ cwd 以外改的文件（Bash 写 `~/.zshrc`、隔壁项目）管不到；同一
 - 一轮因为网络 / 过载 / agent 进程死了失败：hub 等 5/15/30 秒发一句「继续」重来（不进对话记录，界面上是一行提示）。
   额度用完、参数错不重试。agent 自己在重试 API（claude 的 `api_retry`、codex 的 `willRetry`）也显示一行提示。
 - **关 pane = 关 agent 那边**（`Hub.Shutdown`，界面上 pane / tab / 工作空间关掉、会话在布局里哪儿都不显示了才调）：
-  claude 进程当场杀掉，不然要白挂到闲置超时（15 分钟、几百 MB）。gerdr 的记录留着，⌘⇧T 放回来、下次发话 `--resume` 接上。
+  claude 进程当场杀掉，不然要白挂到闲置超时（15 分钟、几百 MB）。Gerdr 的记录留着，⌘⇧T 放回来、下次发话 `--resume` 接上。
   杀进程让在跑的那一轮报「进程意外退出」—— 正好是上面会自动重试的那种，不拦的话 5 秒后发一句「继续」又把进程拉起来：
   `Session.shut` 标着「是我们关的」，这一轮记成取消、不重试，再接上时清掉。
 
@@ -529,29 +529,29 @@ cwd 以外改的文件（Bash 写 `~/.zshrc`、隔壁项目）管不到；同一
 
 ## 同一个会话在别处也开着（herdr / 终端 / Codex App）
 
-导入的会话、在终端里 resume 过的会话，常常同时在 gerdr 和别处开着。实测出来的语义：
+导入的会话、在终端里 resume 过的会话，常常同时在 Gerdr 和别处开着。实测出来的语义：
 
 - **claude 不拦**：两个进程同时 `--resume` 同一个会话，各自往同一个记录文件里追加、各接在自己看到的最后一条后面
   —— 记录分叉，两边都只看得见自己那一半。判据是交互式 claude 的登记文件 `<配置目录>/sessions/<pid>.json`
-  （退出时删，强杀会残留，所以还要核 pid 活着；gerdr 自己起的 stream-json 进程**不写**这个文件）。
+  （退出时删，强杀会残留，所以还要核 pid 活着；Gerdr 自己起的 stream-json 进程**不写**这个文件）。
   发消息前问一次（`_gerdr/holders`），有人占着就回 409，界面上挑：另起一份（`--fork-session` 复制出新会话）/
   关掉那边（SIGTERM，**等进程退出**而不是等登记文件消失：它先删文件、再把记录写完，中间差一两秒）。
-- **codex 自己拦**：一个 thread 同一时间只有一处能写。gerdr 先开着，终端里的 codex 显示「open in another app」；
-  终端先开着，gerdr 这边 `thread/resume` 报 `already has an active writer`。不会分叉，但光秃秃一句英文人不知道怎么办，
+- **codex 自己拦**：一个 thread 同一时间只有一处能写。Gerdr 先开着，终端里的 codex 显示「open in another app」；
+  终端先开着，Gerdr 这边 `thread/resume` 报 `already has an active writer`。不会分叉，但光秃秃一句英文人不知道怎么办，
   所以同样回 409，界面上给「另起一份」（`thread/fork`，不用先接上原来那个）/「已经在那边关掉了，重试」。
   没有登记文件，不知道是哪个进程，所以不提供「关掉那边」。
-- **追上**：gerdr 的对话日志只记它经手的事。别处接着聊过，agent 的记录文件会长 —— 但**文件变长不等于别处聊过**：
+- **追上**：Gerdr 的对话日志只记它经手的事。别处接着聊过，agent 的记录文件会长 —— 但**文件变长不等于别处聊过**：
   自己一轮刚完就重启（来不及记大小）、claude 一轮之后补写的收尾、切模式写的那一行，都会让它变长（第一版只比大小，
-  用户撞上了误报）。所以判据是「上次对齐之后（`Record.SyncedSize`），记录里有没有 gerdr 没发过的人话」：agent 把那一段
+  用户撞上了误报）。所以判据是「上次对齐之后（`Record.SyncedSize`），记录里有没有 Gerdr 没发过的人话」：agent 把那一段
   里人说的话列出来（`_gerdr/transcript_stat` 的 `since`），和自己日志里的比（空白归一、前 200 字）。有生人话才整份重放
   （`Session.Reload`），否则只把位置挪过去。claude 被打断时自己补写的 `[Request interrupted by user…]` 也是 user 消息，
   不算人话（不然重启一下 App 就误报「在别处接着聊过」）。重放出来的历史消息是 `user_message_chunk`（messageId = 记录里的 uuid），
-  不是 gerdr 自己记的 user 事件 —— 回退要两种都认，只认后者的话重新载入过的消息全都「找不到这条消息」。
-- **gerdr 被强杀时那一轮没断**：gerdr 被 SIGKILL / 崩溃（App 退出等不及也会：Electron 3 秒就强杀）时来不及杀 claude，
-  claude 只看到 stdin 断了，会**把手上这一轮跑完**、写进自己的记录才退（实测又跑了一分钟）。gerdr 日志停在半截、
+  不是 Gerdr 自己记的 user 事件 —— 回退要两种都认，只认后者的话重新载入过的消息全都「找不到这条消息」。
+- **Gerdr 被强杀时那一轮没断**：Gerdr 被 SIGKILL / 崩溃（App 退出等不及也会：Electron 3 秒就强杀）时来不及杀 claude，
+  claude 只看到 stdin 断了，会**把手上这一轮跑完**、写进自己的记录才退（实测又跑了一分钟）。Gerdr 日志停在半截、
   重启时补了「中断」，而上面的追上只认生人话，多出来的全是 agent 回复，救不回来。所以重启时日志里有没收尾的一轮，
   就单独核对（`adoptOrphanTurn`）：孤儿还在（stream-json 进程也登记 `sessions/<pid>.json`，重启后已不算自己起的，
-  holders 认得出）就等它退；之后记录在 gerdr 最后一条日志之后还被写过（超过日志落盘间隔），就整份重放，否则「中断」留着。
+  holders 认得出）就等它退；之后记录在 Gerdr 最后一条日志之后还被写过（超过日志落盘间隔），就整份重放，否则「中断」留着。
   这条路也顺带补回「一轮其实跑完了、日志没来得及落盘」的那一截。
 
 另一个**静默**的坑：在一个 Claude Code 的终端 pane 里敲 `gerdr`，它会继承那个 claude 给子进程打的标记
@@ -565,7 +565,7 @@ stream-json 模式下没人看得见）—— resume、回退、追上全部失�
 
 - 一个从页面右侧拉出来的面板，和主界面并排：一边看主界面坏成什么样、修好没有，一边和 agent 说话（主界面让出右边那块，不盖住）。
   源码在 `server/rescue/src`（React），`go generate ./internal/server` 用 esbuild 连 React 一起打成 `rescue/app.js` 入库、
-  `go:embed` 编进二进制（包从 `ui/node_modules` 取，编 gerdr 不需要 node）。由 uisite 的页面外壳直接 `<script>` 引入，
+  `go:embed` 编进二进制（包从 `ui/node_modules` 取，编 Gerdr 不需要 node）。由 uisite 的页面外壳直接 `<script>` 引入，
   不走界面目录的编译、不用 importmap / esm.sh、挂在自己的 Shadow DOM 里 —— 主界面可能就是坏在这几样上，崩了它也照样能用。
   开没开记在 localStorage，刷新后还在；外壳自己的全屏层（编译错误的红屏、加载中）开着面板时也让开右边。
 - 只做修界面要的：看 `/api/ui/status` 的错误、退回之前的一版、在界面目录里开一个会话对话
@@ -579,22 +579,22 @@ stream-json 模式下没人看得见）—— resume、回退、追上全部失�
 
 ## 终端（internal/term + server/termapi.go + ui/src/components/Terminal.tsx）
 
-终端是一种 pane（布局里 `PaneLeaf.term`），shell 跑在 gerdr 进程的 PTY 里（creack/pty），界面用 xterm.js 经
+终端是一种 pane（布局里 `PaneLeaf.term`），shell 跑在 Gerdr 进程的 PTY 里（creack/pty），界面用 xterm.js 经
 `/api/terms/{id}/ws` 连上来：二进制帧是输入 / 输出，文本帧是 resize / 退出码 / 心跳。
 
 - **断开再接**：和 tmux 一样，PTY 不跟着页面走。每个终端留最近 512KB 原始输出，连上时先重放一遍（客户端先 `reset` 再写）。
   不在服务端维护屏幕状态（要一个完整的终端模拟器）：重放跨过 resize 的那段可能错位，全屏程序 ctrl+l 一下就好。
   同一个终端可以同时开在几处（电脑 + 手机），输出广播给每个连着的；跟不上的连接直接踢掉，让它重连拿重放。
-- **gerdr 重启 = 终端全没**：PTY 是 gerdr 的子进程。布局里留着 id 和 cwd，pane 上给「在 xx 重开」。
+- **Gerdr 重启 = 终端全没**：PTY 是 Gerdr 的子进程。布局里留着 id 和 cwd，pane 上给「在 xx 重开」。
 - **关 pane 就杀 shell**（SIGHUP 给整个进程组，2 秒后 SIGKILL）：不然它在服务端没人看得见地一直跑。
   shell 自己退出（exit、ctrl+d）时 pane 自动收掉，**不看退出码**：ctrl+d 时 zsh 带的是上一条命令的退出码
-  （前面 ctrl+c 过就是 130，踩过）。只有被信号杀掉的（退出码 -1：gerdr 退出、被 kill）留着给「重开」。
+  （前面 ctrl+c 过就是 130，踩过）。只有被信号杀掉的（退出码 -1：Gerdr 退出、被 kill）留着给「重开」。
 - **先建后放**：开终端的动作先 `POST /api/terms` 拿到 id 再写进布局。布局是几个客户端共用的，「pane 里有终端但还没建」
   的中间态被别的客户端看见，它们会各自去建一个。
-- **环境**：`sysenv.ChildEnv` 那一份（去掉 claude 的子进程标记），加 TERM / COLORTERM；launchd 起的 gerdr 没有 LANG，
+- **环境**：`sysenv.ChildEnv` 那一份（去掉 claude 的子进程标记），加 TERM / COLORTERM；launchd 起的 Gerdr 没有 LANG，
   不补的话 zsh 把中文当转义序列。shell 用 `-l`（PATH 在 profile 里）。
 - **分屏跟着 shell 的当前目录**：从终端旁边开新终端时带 `from`，服务端问 shell 的 cwd（mac 上 `lsof -d cwd`，Linux 读 /proc）。
-- **前缀键**：全局的前缀状态机（lib/commands.ts）在 capture 阶段先拿到键，所以 ctrl+b 照样是 gerdr 的；按两下前缀
+- **前缀键**：全局的前缀状态机（lib/commands.ts）在 capture 阶段先拿到键，所以 ctrl+b 照样是 Gerdr 的；按两下前缀
   发 `gerdr:prefix-literal`，终端把 ^B 交给 shell（终端里跑着 tmux 时要用）。
 - xterm 的 CSS 不能 import，原样搬进了 index.css 末尾；配色从主题变量取，oklch 画到 canvas 上读回 rgb（xterm 只认 rgb / hex）。
 - Windows 上还没做（要走 ConPTY），建终端直接报错。
@@ -607,6 +607,6 @@ stream-json 模式下没人看得见）—— resume、回退、追上全部失�
 
 `desktop/main.js`：Electron 外壳，自带 Chromium（mac / Windows 同一个内核）。为什么不是系统 WebView / mygo / nsh、
 外壳的几条坑（退出、Windows 上的父进程、菜单、签名、通用包）都在 [WHY-ELECTRON.md](WHY-ELECTRON.md)。
-起内嵌的 `gerdr --app --parent-pid`，读 stdout 里的 `GERDR_READY <url>`；已经有 gerdr 在跑（同一个数据目录有锁）
+起内嵌的 `gerdr --app --parent-pid`，读 stdout 里的 `GERDR_READY <url>`；已经有 Gerdr 在跑（同一个数据目录有锁）
 就直接连它。从 Finder 起的 App 的 PATH 只有系统目录，所以后端开机会问一次登录 shell 的 PATH
 （`sysenv.AdoptLoginPath`），不然找不到 claude / codex。打包：`make app`（本机）/ `make dmg` / `make win`。

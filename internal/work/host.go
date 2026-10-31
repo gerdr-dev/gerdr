@@ -49,7 +49,7 @@ type StartOptions struct {
 	Focus     bool   `json:"focus,omitempty"`     // switch the open windows to it
 }
 
-var errNoHost = errors.New("not available here: ctx.sessions / ctx.workspaces need gerdr's server")
+var errNoHost = errors.New("not available here: ctx.sessions / ctx.workspaces need Gerdr's server")
 
 // opts reads an options object (or nothing) into v through JSON, the way the server would see it.
 func (r *runner) opts(arg goja.Value, v any) error {

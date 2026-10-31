@@ -337,7 +337,7 @@ func (m *Manager) ImportSkill(src Skill) error {
 	}
 	dst := filepath.Join(m.SkillsDir(), src.Name)
 	if _, err := os.Stat(dst); err == nil {
-		return fmt.Errorf("gerdr 里已经有一个叫 %s 的 skill 了", src.Name)
+		return fmt.Errorf("Gerdr 里已经有一个叫 %s 的 skill 了", src.Name)
 	}
 	return copyDir(src.Dir, dst)
 }

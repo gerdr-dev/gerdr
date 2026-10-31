@@ -1247,7 +1247,7 @@ func (a *Agent) HandleRequest(ctx context.Context, method string, params json.Ra
 		// MCP 服务器要表单：gerdr 还没有通用表单界面，先拒绝（agent 会照常往下走）。
 		return map[string]any{"action": "decline", "content": nil, "_meta": nil}, nil
 	}
-	return nil, &rpcline.Error{Code: -32601, Message: "gerdr does not handle " + method}
+	return nil, &rpcline.Error{Code: -32601, Message: "Gerdr does not handle " + method}
 }
 
 func decision(opt string) string {

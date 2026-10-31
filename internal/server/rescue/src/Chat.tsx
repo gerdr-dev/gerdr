@@ -82,8 +82,8 @@ export function Chat({ hello, uiDir, errors, upgrade, onTurnDone }: { hello: Hel
         "解决完 `git add -A && git commit`，再跑 `gerdr ui status`，确认没有错误、也没有 pending_upstream 了。";
       setInput(
         merge
-          ? "gerdr 出了新版界面，但和这个目录里本地的改动冲突，自动升级时没合进来。先读 AGENTS.md，然后" + mergeHow + "\n\n" + upgrade
-          : "gerdr 的界面（就是这个目录）被改坏了，帮我修好。先读 AGENTS.md，再跑 `gerdr ui status` 看错误；" +
+          ? "Gerdr 出了新版界面，但和这个目录里本地的改动冲突，自动升级时没合进来。先读 AGENTS.md，然后" + mergeHow + "\n\n" + upgrade
+          : "Gerdr 的界面（就是这个目录）被改坏了，帮我修好。先读 AGENTS.md，再跑 `gerdr ui status` 看错误；" +
               "修完再跑一次确认没有错误了。只改坏掉的地方，别顺手重构。" +
               (errors ? "\n\n现在报的错：\n" + errors : "") +
               (upgrade ? "\n\n修好之后还有一件：" + upgrade + "。" + mergeHow : ""),

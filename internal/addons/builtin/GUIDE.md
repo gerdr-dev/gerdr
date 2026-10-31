@@ -1,14 +1,14 @@
-# Writing gerdr add-ons
+# Writing Gerdr add-ons
 
-An add-on changes gerdr itself: what the sidebar shows, the names of tabs and panes, a button in the composer, the
-line under each turn, commands and keys, a process that keeps running. It is a folder of TypeScript; gerdr compiles it
+An add-on changes Gerdr itself: what the sidebar shows, the names of tabs and panes, a button in the composer, the
+line under each turn, commands and keys, a process that keeps running. It is a folder of TypeScript; Gerdr compiles it
 on save (no Node, no build step) and runs it in the page.
 
 Add-ons are not Claude Code or Codex plugins. Those extend the agent (skills, MCP, hooks on its tool calls) and run
 inside one agent process; an add-on extends the window around all of them, every session and every agent at once.
 
 This guide is installed as `~/.gerdr/addons/GUIDE.md` next to `gerdr.d.ts`, the exact API with a comment on every
-call. Both are rewritten on every gerdr start: read them, don't edit them. Working examples:
+call. Both are rewritten on every Gerdr start: read them, don't edit them. Working examples:
 https://github.com/gerdr-dev/gerdr-addon (each folder there is one add-on).
 
 ## Quick start
@@ -35,7 +35,7 @@ registers runs in a try/catch, every component it draws in its own error boundar
 
 - One folder per add-on; the folder name is its id. A folder whose name starts with `_` isn't loaded.
 - The entry is `index.ts` / `index.tsx` / `index.js`, or what `"main"` names. It may import other files of the folder
-  (`import { x } from "./lib"`); everything is bundled into one module. npm packages can't be imported: React, gerdr's
+  (`import { x } from "./lib"`); everything is bundled into one module. npm packages can't be imported: React, Gerdr's
   components and icons come through `g` instead.
 - `setup(g)` runs once per load. Return a function (or call the `Dispose` each registration returns) to clean up
   timers and listeners you made yourself; registrations made through `g` are removed for you on unload.
@@ -92,7 +92,7 @@ shows a toast or a system notification.
 ### Draw
 
 Name the file `.tsx` and write JSX. Hooks come from `g.React` (the React that mounts your components: never import
-your own). `g.ui` has gerdr's building blocks (`Button`, `Popover`, `Tooltip`, `Switch`, `cn`), `g.icons` every
+your own). `g.ui` has Gerdr's building blocks (`Button`, `Popover`, `Tooltip`, `Switch`, `cn`), `g.icons` every
 lucide icon (`<g.icons.Timer className="size-3.5" />`).
 
 | where | call | gets |
@@ -117,7 +117,7 @@ export default defineAddon({
 });
 ```
 
-Rules that keep it looking like gerdr:
+Rules that keep it looking like Gerdr:
 
 - Style with Tailwind classes; they work as written, nothing to configure.
 - No literal colors. Use the theme's tokens so light and dark both work: `text-muted-foreground`, `bg-muted`,
@@ -142,7 +142,7 @@ Rules that keep it looking like gerdr:
 
 ### Settings
 
-Declare them and gerdr draws the form (Settings → Add-ons → your add-on → 设置) and stores the values, the same on
+Declare them and Gerdr draws the form (Settings → Add-ons → your add-on → 设置) and stores the values, the same on
 every device:
 
 ```json
@@ -163,7 +163,7 @@ once in `setup`: a change applies at once, without reloading the add-on.
 
 UI code runs in every open window (the App, a browser, the phone) and in none while no window is open. Work that has
 to exist exactly once and keep running (holding a Bluetooth device, polling something) goes in a service: a process
-gerdr's backend starts, restarts when it dies (backing off to a minute) and stops when the add-on is switched off or
+Gerdr's backend starts, restarts when it dies (backing off to a minute) and stops when the add-on is switched off or
 removed.
 
 ```json
@@ -175,7 +175,7 @@ removed.
 - stdin: `{"type":"hello",…}` first, then `{"type":"sessions","sessions":[…]}` whenever an open session changes, and
   `{"type":"message","data":…}` from `g.service.send(data)`.
 - stdout: `{"type":"status","text":"…"}` (shown in Settings), `{"type":"message","data":…}` (to
-  `g.service.on("message")` in every window). Other lines go to gerdr's log; stderr to `~/.gerdr/logs/addons/<id>.log`.
+  `g.service.on("message")` in every window). Other lines go to Gerdr's log; stderr to `~/.gerdr/logs/addons/<id>.log`.
 - stdin closing means stop: let go of what you hold and exit within 3 seconds.
 - Keep files in `$GERDR_ADDON_DATA`, never in the add-on's folder (writing there reloads every window, and an update
   replaces the folder).
@@ -202,7 +202,7 @@ Before you push an add-on:
 - Nothing written into the folder at runtime, no secrets.
 
 Updates: when the store's copy of a folder differs from what was installed, the add-on shows 更新. If the person edited
-the installed copy, gerdr asks before overwriting it.
+the installed copy, Gerdr asks before overwriting it.
 
 While writing a store, add its local folder as a store (an absolute path works) and install from it; or put the
 add-on's folder straight into `~/.gerdr/addons`, where saving reloads it.

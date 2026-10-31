@@ -1,6 +1,6 @@
 # Add-ons
 
-What used to be "plugins": code that changes gerdr itself (tab / pane / workspace names, commands and keys, session
+What used to be "plugins": code that changes Gerdr itself (tab / pane / workspace names, commands and keys, session
 events, a process that keeps running). Code: `internal/addons` (backend), `internal/server/addonapi.go` (HTTP),
 `ui/src/lib/addons.ts` (runtime), `ui/src/components/AddonSettings.tsx` (Settings → Add-ons). The API an add-on
 sees: `internal/addons/builtin/gerdr.d.ts`, copied into `~/.gerdr/addons` on every start.
@@ -12,22 +12,22 @@ sees: `internal/addons/builtin/gerdr.d.ts`, copied into `~/.gerdr/addons` on eve
 - Claude Code's **mods** (function-hook plugins, `.claude-plugin/plugin.json` + `hooks/register.tsx`) were looked at
   (2026-10, Claude Code 2.1.314) and are a different layer. A mod runs inside **one** claude process: it can rewrite
   tool calls, prompts, the system prompt and transcript rows, and draw panes beside that one chat. It can't see
-  gerdr's tabs / workspaces, other sessions, or Codex; and its processes (`$.process.spawn`) live as long as the
+  Gerdr's tabs / workspaces, other sessions, or Codex; and its processes (`$.process.spawn`) live as long as the
   session — N sessions, N copies — so the one-connection wristband service can't be a mod. Drawing a mod's UI in
-  gerdr would mean speaking the `ui_attach` / `ui_render` / `ui_press` control requests on stream-json, all marked
+  Gerdr would mean speaking the `ui_attach` / `ui_render` / `ui_press` control requests on stream-json, all marked
   `@internal` and changing per release. Decided: borrow their shape (a folder with a manifest, owner/repo stores),
-  don't be compatible. Mods a user installs with `claude plugin install` still run their non-UI hooks in gerdr's
-  claude sessions, since gerdr drives the real CLI.
+  don't be compatible. Mods a user installs with `claude plugin install` still run their non-UI hooks in Gerdr's
+  claude sessions, since Gerdr drives the real CLI.
 
 ## Drawing and data
 
 - `g.slot("sidebar" | "paneTitle", Component)`, `g.composerAction`, `g.contextMenu` (ui/src/components/AddonSlot.tsx,
   AppContextMenu.tsx). Add-on JSX compiles to the globals `__gerdrH` / `__gerdrFragment` (React.createElement /
   Fragment, set in lib/addons.ts) — not `gerdr.h`: the desktop shell owns `window.gerdr`. Hooks must come from
-  `g.React` (the same React that mounts them); `g.ui` hands out gerdr's shadcn pieces and `g.icons` all of lucide, so
+  `g.React` (the same React that mounts them); `g.ui` hands out Gerdr's shadcn pieces and `g.icons` all of lucide, so
   an add-on looks native without bundling its own copies. Each slot entry sits in its own error boundary.
 - `g.turnStat` decorates the line under each finished turn through `ChatHost.useTurnStat`, a **hook** rather than a
-  plain callback: answers depend on the time (cache-clock colors by prompt-cache age), so gerdr's implementation
+  plain callback: answers depend on the time (cache-clock colors by prompt-cache age), so Gerdr's implementation
   (`useAddonTurnStat`) re-renders every 30s while any add-on uses it. `latest` (the newest turn's line) is worked out in
   `buildRows`, since only the chat's transcript knows which turn is last.
 - Settings: addon.json `settings` (number / string / boolean / select) become a form under the add-on in Settings →

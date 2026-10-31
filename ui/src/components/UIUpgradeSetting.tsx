@@ -28,7 +28,7 @@ export function UIUpgradeSetting() {
         <div className="text-[12px] text-muted-foreground">
           {g.merging
             ? "界面目录里还有没解决的冲突。"
-            : `gerdr 的新版界面${g.pending_version ? `（${g.pending_version}）` : ""}和你对界面的改动冲突，升级时跳过了，现在用的还是旧的。`}
+            : `Gerdr 的新版界面${g.pending_version ? `（${g.pending_version}）` : ""}和你对界面的改动冲突，升级时跳过了，现在用的还是旧的。`}
           {files.length > 0 && <div className="break-all">冲突的文件：{files.join(", ")}</div>}
         </div>
       </div>

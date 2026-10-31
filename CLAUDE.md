@@ -1,4 +1,4 @@
-# gerdr
+# Gerdr
 
 Claude Code / Codex 的图形界面：Go 后端（ACP 适配器 + hub + HTTP/WS）+ 界面源码（ui/，**没有打包环节**）+ 桌面 App 外壳（desktop/，Electron —— 为什么是它：docs/dev/WHY-ELECTRON.md）。
 使用说明见 README.md，设计理由和协议的坑见 docs/dev/ARCHITECTURE.md —— **改适配器 / hub / uisite 之前先读它**，
@@ -17,7 +17,7 @@ Claude Code / Codex 的图形界面：Go 后端（ACP 适配器 + hub + HTTP/WS�
   动了适配器要跑 `make test-e2e`（真 claude / codex，花钱）。
 - English-first：提交信息、代码注释、文档一律用英文写，说清**为什么**。已有的中文注释 / 文档不用专门去翻，改到哪段时顺手换成英文。
 - 起调试实例用独立的目录和端口，别碰默认的 `~/.gerdr` 和 7870：`make dev`（界面直接用仓库里的 ui/，改了立刻热更新）。
-- Putting a new backend on this machine (`make install`): **never restart gerdr yourself** (no `pkill gerdr`, no
+- Putting a new backend on this machine (`make install`): **never restart Gerdr yourself** (no `pkill gerdr`, no
   `launchctl kickstart`, no reopening the App). You are one of the agents running on it, and so are the user's others:
   a restart cuts every running turn off. The background service (on by default) picks the new binary up by itself
   once nothing is running — no turn, no pending permission, no background task, no open terminal (`GET /api/busy`,
@@ -28,8 +28,8 @@ Claude Code / Codex 的图形界面：Go 后端（ACP 适配器 + hub + HTTP/WS�
   and reopen the App once; with the background service on that is safe even mid-turn (it only replaces the watcher,
   the service and its agents keep running), and the new watcher then restarts the service once idle.
   Same rule as App updates: docs/dev/UPDATE.md.
-- 改完界面、看过没问题后跑 `make sync-ui`，同步到正在用的 `~/.gerdr/ui`（开着的 gerdr 直接热更新）：
-  正在用的 gerdr 读的是那份，不是仓库里的 ui/，不同步用户就看不到改动。别手动 cp 或在那边 git 提交 ——
+- 改完界面、看过没问题后跑 `make sync-ui`，同步到正在用的 `~/.gerdr/ui`（开着的 Gerdr 直接热更新）：
+  正在用的 Gerdr 读的是那份，不是仓库里的 ui/，不同步用户就看不到改动。别手动 cp 或在那边 git 提交 ——
   `gerdr ui sync` 会一起更新清单（不然下次升级会把它当成被人改过），那边被人改过时也会拒绝覆盖。
 - 界面怎么写（能 import 什么、样式、目录）在 ui/AGENTS.md；那份也是给用户的 agent 看的（内置的 gerdr-ui skill 让它先读）。
 - 内置 skill 在 internal/ext/builtin/，会随二进制发给每个 agent：改 `gerdr session` / `gerdr ui` 的命令行时同步改它们。

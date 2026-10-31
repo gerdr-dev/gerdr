@@ -173,7 +173,7 @@
 }
 
 /* The chat's own rules (Markdown, the running loader) live in the chat package: packages/chat/src/style.css,
-   added after this file by gerdr (workspace packages' style.css). */
+   added after this file by Gerdr (workspace packages' style.css). */
 
 
 /* ---- 终端（components/Terminal.tsx）：@xterm/xterm 5.5.0 的 css/xterm.css 原样搬过来（界面里不能 import CSS），

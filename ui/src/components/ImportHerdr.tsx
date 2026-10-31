@@ -35,7 +35,7 @@ export function ImportHerdr({ open }: { open: boolean }) {
       const r = await api.herdrImport([...pick]);
       addImportedWorkspaces(r.workspaces);
       const n = r.imported + r.reused;
-      toast.success(`导入了 ${r.workspaces.length} 个工作空间、${n} 个会话${r.reused ? `（${r.reused} 个本来就在 gerdr 里）` : ""}`);
+      toast.success(`导入了 ${r.workspaces.length} 个工作空间、${n} 个会话${r.reused ? `（${r.reused} 个本来就在 Gerdr 里）` : ""}`);
       if (r.errors?.length) toast.error(`${r.errors.length} 个会话没接上：${r.errors[0]}`, { duration: 10000 });
       set({ dialog: null });
     } catch (e: any) {
@@ -79,7 +79,7 @@ export function ImportHerdr({ open }: { open: boolean }) {
                 <div className="min-w-0 flex-1">
                   <div className="text-[13px] font-medium">{w.label}</div>
                   <div className="text-[12px] text-muted-foreground">
-                    {c.ok} 个会话{c.existing ? `（${c.existing} 个已经在 gerdr 里）` : ""} · {w.tabs.length} 个 tab
+                    {c.ok} 个会话{c.existing ? `（${c.existing} 个已经在 Gerdr 里）` : ""} · {w.tabs.length} 个 tab
                     {c.skipped ? ` · 跳过 ${c.skipped} 个（${c.why}）` : ""}
                   </div>
                 </div>
@@ -88,7 +88,7 @@ export function ImportHerdr({ open }: { open: boolean }) {
           })}
         </div>
         <div className="rounded-md bg-muted/60 p-2.5 text-[12px] text-muted-foreground">
-          这些会话在 herdr 里多半还开着。接着在 gerdr 里聊之前，先在 herdr 里退出对应的 agent —— 两边同时往一个会话里写，对话会分叉。
+          这些会话在 herdr 里多半还开着。接着在 Gerdr 里聊之前，先在 herdr 里退出对应的 agent —— 两边同时往一个会话里写，对话会分叉。
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={close} disabled={busy}>

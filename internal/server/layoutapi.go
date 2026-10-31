@@ -66,7 +66,7 @@ type layoutCall struct {
 func ApplyLayout(raw json.RawMessage, sessions []LayoutSession, from, space, method string, p LayoutParams) (out json.RawMessage, result any, err error) {
 	var l node
 	if json.Unmarshal(raw, &l) != nil || len(arr(l, "workspaces")) == 0 {
-		return nil, nil, errors.New("no layout yet: open gerdr's window once")
+		return nil, nil, errors.New("no layout yet: open Gerdr's window once")
 	}
 	c := &layoutCall{l: l, self: from, sessions: map[string]LayoutSession{}}
 	for _, s := range sessions {
@@ -221,7 +221,7 @@ func (c *layoutCall) run(method string, p LayoutParams) (any, error) {
 		ref := p.ID
 		if method == "pane.current" {
 			if c.self == "" {
-				return nil, errors.New("can't tell which session you are (not an agent running in gerdr?)")
+				return nil, errors.New("can't tell which session you are (not an agent running in Gerdr?)")
 			}
 			ref = c.self
 		}

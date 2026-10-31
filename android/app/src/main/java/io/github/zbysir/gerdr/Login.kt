@@ -40,8 +40,8 @@ class Login(private val origin: String, private val ua: String) {
         val (status, b) = post("/api/remote/cli/start", JSONObject(), cookie)
         when {
             status == 409 && b.optString("reason") == "nopasskey" ->
-                throw Failure("这台 gerdr 还没注册 passkey，只能用配对码")
-            status == 404 -> throw Failure("这台 gerdr 太旧了，不认 passkey 批准，先更新它")
+                throw Failure("这台 Gerdr 还没注册 passkey，只能用配对码")
+            status == 404 -> throw Failure("这台 Gerdr 太旧了，不认 passkey 批准，先更新它")
             status != 200 -> throw Failure(b.optString("error").ifEmpty { "发起失败（HTTP $status）" })
         }
         return Start(b.getString("id"), b.getString("poll"), b.getString("code"), b.getString("url"))

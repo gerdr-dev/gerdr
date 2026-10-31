@@ -40,7 +40,7 @@ export function UpdateSetting() {
   const when = installedAt
     ? ` · 装于 ${new Date(installedAt).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}（${since(installedAt)}）`
     : "";
-  const shown = (u && u.app !== running ? `gerdr ${running} · App ${u.app}` : `gerdr ${running}`) + when;
+  const shown = (u && u.app !== running ? `Gerdr ${running} · App ${u.app}` : `Gerdr ${running}`) + when;
   const { text, tone } = u ? describe(u, service) : { text: "", tone: "" };
   const p = u?.pending;
   const native = isNative();

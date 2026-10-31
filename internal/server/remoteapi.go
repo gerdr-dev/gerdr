@@ -80,7 +80,7 @@ func (s *Server) remoteGuard(w http.ResponseWriter, r *http.Request, next http.H
 	if p == "/auth" || p == "/api/remote/pair-code" || p == "/api/remote/unlock" || p == "/api/remote/cert" || p == "/api/remote/cert/caa" ||
 		p == "/api/remote/connect" || p == "/api/remote/disconnect" || p == "/api/remote/reload" || p == "/api/service" || p == "/api/awake/lid-setup" ||
 		p == "/api/remote/stepup/pending" || strings.HasPrefix(p, "/api/remote/stepup/approve/") {
-		httpError(w, http.StatusForbidden, "这个操作只能在跑 gerdr 的那台机器上做")
+		httpError(w, http.StatusForbidden, "这个操作只能在跑 Gerdr 的那台机器上做")
 		return
 	}
 	if r.Method == http.MethodGet && r.URL.Query().Get("pair") != "" && !strings.HasPrefix(p, "/api/") {
@@ -173,7 +173,7 @@ func (s *Server) gateCheck(w http.ResponseWriter, r *http.Request) (release func
 		if !g.Locked() {
 			return false
 		}
-		writeJSONStatus(w, http.StatusTooManyRequests, map[string]any{"error": "失败次数太多，已暂停接受新设备。在跑 gerdr 的机器上执行 gerdr remote unlock"})
+		writeJSONStatus(w, http.StatusTooManyRequests, map[string]any{"error": "失败次数太多，已暂停接受新设备。在跑 Gerdr 的机器上执行 gerdr remote unlock"})
 		return true
 	}
 	busy := func() {

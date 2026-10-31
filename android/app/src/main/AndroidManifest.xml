@@ -81,7 +81,7 @@
             android:foregroundServiceType="specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Long-poll the user's self-hosted gerdr server for agent notices" />
+                android:value="Long-poll the user's self-hosted Gerdr server for agent notices" />
         </service>
     </application>
 </manifest>

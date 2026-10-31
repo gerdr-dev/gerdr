@@ -398,7 +398,7 @@ func envLocked() bool {
 	return os.Getenv("GERDR_RELAY_URL") != "" || os.Getenv("GERDR_RELAY_HOST") != ""
 }
 
-var errEnvLocked = errors.New("中继地址 / 主机名是环境变量 GERDR_RELAY_URL / GERDR_RELAY_HOST 给的，这里改不动：去掉它们、重启 gerdr 再来")
+var errEnvLocked = errors.New("中继地址 / 主机名是环境变量 GERDR_RELAY_URL / GERDR_RELAY_HOST 给的，这里改不动：去掉它们、重启 Gerdr 再来")
 
 // Connect 是设置里的「连接」，等于 `gerdr remote join` 不带证书参数：拿邀请码注册到中继、写进 remote.json，
 // 然后当场把远程那条路拉起来，不用重启。证书之后在设置的「证书」那一节填（以前配过就沿用）。

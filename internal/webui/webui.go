@@ -81,7 +81,7 @@ func Install(dst string) (string, error) {
 		return "", err
 	}
 	if hasGit() {
-		res, err := upgradeGit(dst, files, "随 gerdr 发布", false)
+		res, err := upgradeGit(dst, files, "随 Gerdr 发布", false)
 		if err != nil {
 			return "", err
 		}
@@ -126,7 +126,7 @@ func legacyInstall(dst string, files map[string][]byte) (string, error) {
 		}
 	case os.IsNotExist(err):
 		if entries, _ := os.ReadDir(dst); len(entries) > 0 {
-			return fmt.Sprintf("界面目录 %s 已经有东西（不是 gerdr 装的），直接用它", dst), nil
+			return fmt.Sprintf("界面目录 %s 已经有东西（不是 Gerdr 装的），直接用它", dst), nil
 		}
 	default:
 		return "", err

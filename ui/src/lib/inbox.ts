@@ -166,7 +166,7 @@ async function checkBattery() {
   if (fired) return;
   localStorage.setItem(BAT, "1");
   const at = Date.now();
-  add([{ id: `bat:${at}`, kind: "battery", at, title: `电量 ${b.percent}%`, body: "运行 gerdr 的电脑在用电池，快没电了" }], false);
+  add([{ id: `bat:${at}`, kind: "battery", at, title: `电量 ${b.percent}%`, body: "运行 Gerdr 的电脑在用电池，快没电了" }], false);
 }
 
 /** Start feeding the inbox (once, from App). */

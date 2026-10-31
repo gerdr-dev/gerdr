@@ -106,7 +106,7 @@ export function upgradeText(st: UIStatus | null) {
   const g = st?.git;
   if (!g?.pending_upstream || g.merging) return "";
   const files = g.pending_conflicts?.length ? g.pending_conflicts.join(", ") : "";
-  return `gerdr 的新版界面${g.pending_version ? `（${g.pending_version}）` : ""}和本地对界面的改动有冲突，自动升级时没合进来，现在用的还是旧的。${files ? `会冲突的文件：${files}` : ""}`;
+  return `Gerdr 的新版界面${g.pending_version ? `（${g.pending_version}）` : ""}和本地对界面的改动有冲突，自动升级时没合进来，现在用的还是旧的。${files ? `会冲突的文件：${files}` : ""}`;
 }
 
 // 这个页面自己记的错（页面外壳的收集器记的，换了新版构建运行时会把旧版的丢掉）。警告（index.css 里用不了的写法这种）不算报错。

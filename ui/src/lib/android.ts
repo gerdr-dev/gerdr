@@ -284,11 +284,11 @@ function updateReady(m: AndroidMsg) {
   const u = m as unknown as AndroidUpdate;
   if (u.phase !== "ready" || !u.latest || offered === u.latest) return;
   offered = u.latest;
-  toast(`gerdr App ${u.latest} 已下载好`, {
+  toast(`Gerdr App ${u.latest} 已下载好`, {
     id: "android-update",
     duration: Infinity,
     closeButton: true,
-    description: `现在是 ${u.version}。安装时系统会问一下，装完重新打开 App。`,
+    description: `现在是 ${u.version}。点「安装」后安卓会弹出确认框，再点一次「安装」；装完 App 会关掉，重新打开即可。`,
     action: { label: "安装", onClick: () => postAndroid({ t: "update", op: "install" }) },
   });
 }

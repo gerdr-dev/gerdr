@@ -60,19 +60,19 @@ func main() {
 	root.Flags().BoolVar(&open, "open", false, "启动后用浏览器打开")
 	root.Flags().BoolVar(&appMode, "app", false, "给 mac App 用：就绪后打印一行 GERDR_READY <url>")
 	root.Flags().IntVar(&parentPID, "parent-pid", 0, "父进程退出时跟着退出")
-	root.Flags().BoolVar(&serviceMode, "service", false, "后台服务（launchd）用：数据目录被别的 gerdr 占着就等它退出再接手")
+	root.Flags().BoolVar(&serviceMode, "service", false, "后台服务（launchd）用：数据目录被别的 Gerdr 占着就等它退出再接手")
 	_ = root.Flags().MarkHidden("app")
 	_ = root.Flags().MarkHidden("service")
 	_ = root.Flags().MarkHidden("parent-pid")
 
 	root.AddCommand(&cobra.Command{
 		Use:   "url",
-		Short: "打印正在运行的 gerdr 的登录链接",
+		Short: "打印正在运行的 Gerdr 的登录链接",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			env := config.FromEnv()
 			u, ok := runningURL(env)
 			if !ok {
-				return fmt.Errorf("gerdr 没在运行")
+				return fmt.Errorf("Gerdr 没在运行")
 			}
 			fmt.Println(u)
 			return nil
@@ -220,19 +220,19 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 		}
 	case serviceMode:
 		// 多半是 App 自己起的那个后端还在：等它退出（⌘Q）再接手。不能退出 —— KeepAlive 会每 10 秒拉一次
-		log.Info("another gerdr is using the data dir, waiting to take over", "dir", env.Dir)
+		log.Info("another Gerdr is using the data dir, waiting to take over", "dir", env.Dir)
 		if lock, err = lockFileWait(lockPath(env)); err != nil {
 			return err
 		}
 	default:
 		if u, ok := runningURL(env); ok {
-			fmt.Println("gerdr 已经在运行：" + u)
+			fmt.Println("Gerdr 已经在运行：" + u)
 			if open {
 				openBrowser(u)
 			}
 			return nil
 		}
-		return fmt.Errorf("另一个 gerdr 正在用 %s：%w", env.Dir, err)
+		return fmt.Errorf("另一个 Gerdr 正在用 %s：%w", env.Dir, err)
 	}
 	defer lock.Close()
 
@@ -455,7 +455,7 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 	if appMode {
 		fmt.Println("GERDR_READY " + u)
 	} else {
-		fmt.Printf("gerdr %s\n  打开：%s\n  数据：%s\n", version.Version, u, env.Dir)
+		fmt.Printf("Gerdr %s\n  打开：%s\n  数据：%s\n", version.Version, u, env.Dir)
 		if r := rm.URL(); r != "" {
 			fmt.Printf("  远程：%s（新设备：gerdr remote pair）\n", r)
 		}
@@ -491,7 +491,7 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 }
 
 var (
-	errBusy     = errors.New("数据目录被另一个 gerdr 占着")
+	errBusy     = errors.New("数据目录被另一个 Gerdr 占着")
 	errHandover = errors.New("交给后台服务了")
 )
 

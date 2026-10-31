@@ -56,8 +56,8 @@ var configKeys = map[string]configKey{
 func configCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "config",
-		Short: "Read and change gerdr's settings (config.json); open windows update within seconds",
-		Long: `Read and change gerdr's settings (config.json); open windows update within seconds.
+		Short: "Read and change Gerdr's settings (config.json); open windows update within seconds",
+		Long: `Read and change Gerdr's settings (config.json); open windows update within seconds.
 
 A path is dot-separated; an array element is addressed by its index or by its "id" (agents.reviewer,
 llm.providers.deepseek). Values are JSON when they parse as JSON (true, 16, ["a"], {"k": 1}), a plain

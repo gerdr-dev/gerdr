@@ -268,7 +268,7 @@ export function RemoteSettings({ open }: { open: boolean }) {
         )}
         <div className="text-[12px] text-muted-foreground">
           有了 passkey，新设备不用回机器前拿配对码，Face ID / 指纹一下就进来；配过对的设备超过 {st.reauthHours || "—"} 小时没验证要再验一次。
-          {!pkOK && st.enabled && <> passkey 绑在 {st.host} 上，在那个地址打开 gerdr 才能加。</>}
+          {!pkOK && st.enabled && <> passkey 绑在 {st.host} 上，在那个地址打开 Gerdr 才能加。</>}
         </div>
         <div className="divide-y rounded-md border">
           {keys.length === 0 && <div className="p-3 text-muted-foreground">还没有。</div>}

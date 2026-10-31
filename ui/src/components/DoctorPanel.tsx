@@ -228,11 +228,11 @@ async function pinBin(agent: string, path: string) {
 
 function reportText(r: DoctorReport) {
   const lines = [
-    "gerdr 的诊断（设置 → 实验室 → 诊断）发现了下面的问题，请帮我查清原因并修好。",
+    "Gerdr 的诊断（设置 → 实验室 → 诊断）发现了下面的问题，请帮我查清原因并修好。",
     "",
     "- 要用 sudo、删除或改动系统文件的命令，先把命令和理由告诉我，等我同意再执行。",
-    "- gerdr 自己的修复（重新读取 PATH、指定用哪一份 claude / codex）在 设置 → 实验室 → 诊断 里有按钮，需要时告诉我去点。",
-    "- 你这个会话也是 gerdr 起的，PATH 可能同样缺目录：找不到命令时用绝对路径，或者在 `zsh -lic '…'` 里跑。",
+    "- Gerdr 自己的修复（重新读取 PATH、指定用哪一份 claude / codex）在 设置 → 实验室 → 诊断 里有按钮，需要时告诉我去点。",
+    "- 你这个会话也是 Gerdr 起的，PATH 可能同样缺目录：找不到命令时用绝对路径，或者在 `zsh -lic '…'` 里跑。",
     "",
   ];
   for (const c of r.checks) {
@@ -242,7 +242,7 @@ function reportText(r: DoctorReport) {
     if (c.installs?.length) {
       lines.push("", "找到的几份：");
       for (const i of c.installs) {
-        const tags = [i.current && "gerdr 在用", i.version, i.blocked && "启动就被系统杀掉", !i.blocked && i.error].filter(Boolean).join("，");
+        const tags = [i.current && "Gerdr 在用", i.version, i.blocked && "启动就被系统杀掉", !i.blocked && i.error].filter(Boolean).join("，");
         lines.push(`- \`${i.path}\`${tags ? `（${tags}）` : ""}`);
       }
     }

@@ -456,7 +456,7 @@ func (s *Store) Begin(ctx context.Context, name, u, redirect string) (string, er
 		a.ClientID, a.ClientSecret = old.ClientID, old.ClientSecret
 	} else {
 		if meta.RegistrationEndpoint == "" {
-			return "", errors.New("this server doesn't support dynamic client registration, so gerdr can't sign in to it by itself; put a token in the server's headers instead")
+			return "", errors.New("this server doesn't support dynamic client registration, so Gerdr can't sign in to it by itself; put a token in the server's headers instead")
 		}
 		if a.ClientID, a.ClientSecret, err = s.register(ctx, meta.RegistrationEndpoint, redirect); err != nil {
 			return "", err

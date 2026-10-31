@@ -324,7 +324,7 @@ function handle(m: any) {
       if (!location.protocol.startsWith("https")) {
         const body = `「${m.data?.label}」请求添加 passkey，核对码 ${m.data?.code}`;
         const open = () => set({ dialog: { kind: "settings", tab: "remote" } });
-        nativeNotify("gerdr：要你批准", body);
+        nativeNotify("Gerdr：要你批准", body);
         toast(body, { id: "stepup", duration: 30000, action: { label: "去批准", onClick: open } }); // a newer request replaces the old one
       }
       break;

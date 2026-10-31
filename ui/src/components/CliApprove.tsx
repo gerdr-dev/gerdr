@@ -161,7 +161,7 @@ export function CliApprove() {
               <p className="flex gap-2 rounded-md border border-warn/40 bg-warn/10 px-3 py-2 text-xs leading-relaxed text-warn">
                 <TriangleAlert className="mt-px size-4 shrink-0" />
                 <span>
-                  这个请求是从跑 gerdr 的<b>这台机器本身</b>发起的，不是手机。你没在这台机器上点登录的话别批准 —— 那可能是某个 agent 在让你替它开门。
+                  这个请求是从跑 Gerdr 的<b>这台机器本身</b>发起的，不是手机。你没在这台机器上点登录的话别批准 —— 那可能是某个 agent 在让你替它开门。
                 </span>
               </p>
             )}

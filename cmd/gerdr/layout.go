@@ -42,7 +42,7 @@ func moveFlags(cmd *cobra.Command, p *server.LayoutParams, what string) {
 }
 
 func workspaceCmd() *cobra.Command {
-	cmd := &cobra.Command{Use: "workspace", Short: "List / create / rename / reorder / close workspaces in gerdr (JSON, your session only)"}
+	cmd := &cobra.Command{Use: "workspace", Short: "List / create / rename / reorder / close workspaces in Gerdr (JSON, your session only)"}
 	cmd.AddCommand(&cobra.Command{
 		Use:   "list",
 		Short: "List workspaces, in sidebar order",
@@ -98,7 +98,7 @@ func workspaceCmd() *cobra.Command {
 }
 
 func tabCmd() *cobra.Command {
-	cmd := &cobra.Command{Use: "tab", Short: "List / create / rename / move / close tabs in gerdr (JSON, your session only)"}
+	cmd := &cobra.Command{Use: "tab", Short: "List / create / rename / move / close tabs in Gerdr (JSON, your session only)"}
 	var lp server.LayoutParams
 	list := &cobra.Command{
 		Use:   "list",
@@ -158,7 +158,7 @@ func tabCmd() *cobra.Command {
 func paneCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "pane",
-		Short: "List / inspect / move / swap panes in gerdr (JSON, your session only)",
+		Short: "List / inspect / move / swap panes in Gerdr (JSON, your session only)",
 		Long:  "A pane can be named by its pane id or by the conversation it shows (session id, 4+ character id prefix, or title).",
 	}
 	var lp server.LayoutParams

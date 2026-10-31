@@ -1,14 +1,14 @@
 # @gerdr/chat
 
-gerdr's conversation UI for coding agents, as a React component library: the message list (virtualized, sticks to the
+Gerdr's conversation UI for coding agents, as a React component library: the message list (virtualized, sticks to the
 bottom while output streams), Markdown with code / images / videos / local paths, tool call cards with diffs, permission
 and question cards, plans, background tasks, retry notices, stop, interjections (queued / delivered / withdraw / send
 now), rewind (on every user message, with confirmation, putting the message back into the composer), `/clear`, and the
 composer (images and videos, slash commands, @-files, ↑ history, Esc / Ctrl+C).
 
 It draws an **event log** and calls back into its **host** for everything else. The log comes from the Go package
-`github.com/gerdr-dev/gerdr/chatlog` (format: `chatlog/EVENTS.md` in the gerdr repo), which records an ACP session
-driven by any of gerdr's agents (`agents/native`, `agents/claude`, `agents/codex`). gerdr's own UI uses this package
+`github.com/gerdr-dev/gerdr/chatlog` (format: `chatlog/EVENTS.md` in the Gerdr repo), which records an ACP session
+driven by any of Gerdr's agents (`agents/native`, `agents/claude`, `agents/codex`). Gerdr's own UI uses this package
 from source; other apps install it from npm.
 
 ## Install
@@ -79,13 +79,13 @@ server's.
 Colors (any CSS color; `.dark` on an ancestor switches to the dark set): `--background --foreground --card
 --card-foreground --popover --popover-foreground --primary --primary-foreground --secondary --secondary-foreground
 --muted --muted-foreground --accent --accent-foreground --destructive --border --input --ring --brand --ok --warn --bad`,
-and `--radius` (lg; sm / md / xl are derived). `tokens.css` has gerdr's values to start from.
+and `--radius` (lg; sm / md / xl are derived). `tokens.css` has Gerdr's values to start from.
 
 An app on Tailwind 4 can map these onto its own theme (`--brand: var(--color-primary)`…). The components only use
 classes compiled into `style.css`, so the app's Tailwind doesn't need to scan the package.
 
 ## Developing
 
-The source is gerdr's live UI: gerdr serves `src/` unbuilt (a `workspace:*` dependency in `ui/package.json`, resolved by
-`internal/uisite`), so edits show up in gerdr immediately. Third-party imports must also be listed in `ui/package.json`
+The source is Gerdr's live UI: Gerdr serves `src/` unbuilt (a `workspace:*` dependency in `ui/package.json`, resolved by
+`internal/uisite`), so edits show up in Gerdr immediately. Third-party imports must also be listed in `ui/package.json`
 (same versions). No CSS imports in the code: styles go in `src/style.css`. `node build.mjs` builds `dist/` for npm.

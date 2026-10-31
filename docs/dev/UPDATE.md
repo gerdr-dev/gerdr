@@ -33,7 +33,7 @@ release it was built on top of. Versions that aren't a tag or git describe (`0.1
 ## When to apply: only when nothing would be cut off
 
 A backend restart kills running turns, pending permission requests, background tasks (memory only) and terminals
-(gerdr's child PTYs). Idle sessions don't care: the next message resumes them. `GET /api/busy` counts the four.
+(Gerdr's child PTYs). Idle sessions don't care: the next message resumes them. `GET /api/busy` counts the four.
 
 - The shell polls it every minute. Backend update waiting + all zero → restart the backend by itself. Otherwise the
   page shows a toast (`window.gerdr.appUpdate`, an older UI without the hook gets a system notification); "update now"
@@ -63,7 +63,7 @@ backend once idle (whose `appAttach` then moves the service over). Before this, 
 until the App was reopened.
 
 Not done: keeping turns alive across a restart. That needs agent processes and PTYs owned by a small long-lived holder
-(like a tmux server / containerd-shim) that gerdr reconnects to, plus replaying in-flight protocol state.
+(like a tmux server / containerd-shim) that Gerdr reconnects to, plus replaying in-flight protocol state.
 
 ## From a phone (or any device without the shell)
 

@@ -27,7 +27,7 @@ import (
 func remoteCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "remote",
-		Short: "远程访问：手机 / 别的电脑经云端中继打开这台机器上的 gerdr（配对码 + passkey）",
+		Short: "远程访问：手机 / 别的电脑经云端中继打开这台机器上的 Gerdr（配对码 + passkey）",
 	}
 	cmd.AddCommand(&cobra.Command{
 		Use:   "status",
@@ -72,7 +72,7 @@ func remoteCmd() *cobra.Command {
 		RunE: func(*cobra.Command, []string) error {
 			c, err := newAPIClient()
 			if err != nil {
-				return fmt.Errorf("%w\n  配对码只在内存里，要 gerdr 在跑才出得来", err)
+				return fmt.Errorf("%w\n  配对码只在内存里，要 Gerdr 在跑才出得来", err)
 			}
 			var out struct {
 				Code    string
@@ -159,7 +159,7 @@ func remoteCmd() *cobra.Command {
 			}
 			keys := s.Passkeys.List()
 			if len(keys) == 0 {
-				fmt.Println("  还没有注册过 passkey。在远程打开的 gerdr 里：设置 → 远程访问 → 加一把 passkey。")
+				fmt.Println("  还没有注册过 passkey。在远程打开的 Gerdr 里：设置 → 远程访问 → 加一把 passkey。")
 			}
 			for _, k := range keys {
 				fmt.Printf("  %s  %-22s 添加于 %s，最后用 %s\n", k.ID, k.Label, k.Created.Local().Format("2006-01-02"), k.LastUsed.Local().Format("01-02 15:04"))
@@ -175,7 +175,7 @@ func remoteCmd() *cobra.Command {
 			// 服务在跑时它内存里那份才算数，得走它；它没有「只清 passkey」的口 —— 要急停就该连设备一起踢
 			if c, err := newAPIClient(); err == nil {
 				if args[0] == "all" {
-					return fmt.Errorf("gerdr 在跑：要全删请用 gerdr remote revoke all（连设备一起踢），或者先停掉 gerdr")
+					return fmt.Errorf("Gerdr 在跑：要全删请用 gerdr remote revoke all（连设备一起踢），或者先停掉 Gerdr")
 				}
 				return c.do("DELETE", "/api/remote/passkeys/"+url.PathEscape(args[0]), nil, nil)
 			}
@@ -200,7 +200,7 @@ func remoteCmd() *cobra.Command {
 		RunE: func(*cobra.Command, []string) error {
 			c, err := newAPIClient()
 			if err != nil {
-				return fmt.Errorf("%w（熔断只在内存里，gerdr 没在跑就没有熔断）", err)
+				return fmt.Errorf("%w（熔断只在内存里，Gerdr 没在跑就没有熔断）", err)
 			}
 			return c.do("POST", "/api/remote/unlock", nil, nil)
 		},
@@ -252,9 +252,9 @@ func joinCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use:   "join <中继地址> <主机名> <邀请码>",
 		Short: "用邀请码把这台机器注册到云端中继（dialhome）上（邀请码在中继的网页后台里出，或者 VPS 上 dialhome invite <主机名>）",
-		Long: "注册到中继，并把配置写进 <数据目录>/remote/remote.json（0600）；gerdr 在跑就当场生效，没在跑就下次启动生效。\n" +
+		Long: "注册到中继，并把配置写进 <数据目录>/remote/remote.json（0600）；Gerdr 在跑就当场生效，没在跑就下次启动生效。\n" +
 			"也可以不敲命令：设置 → 远程访问里填同样三样。\n" +
-			"证书可以一起给：--dns 让 gerdr 走 DNS-01 自己签（推荐），或者 --cert / --key 指两个文件；\n" +
+			"证书可以一起给：--dns 让 Gerdr 走 DNS-01 自己签（推荐），或者 --cert / --key 指两个文件；\n" +
 			"也可以不给，注册完在 App 的设置 → 远程访问 → 证书里选服务商、填凭据。\n\n" +
 			"DNS 服务商的凭据用 --env 给（可以给多个），名字照 lego 的写法、不带 GERDR_ 前缀：\n\n" +
 			"  gerdr remote join https://relay.example.com gerdr.example.com <邀请码> \\\n" +
@@ -309,10 +309,10 @@ func joinCmd() *cobra.Command {
 				return fmt.Errorf("注册好了，但配置没写进去：%w", err)
 			}
 			// gerdr 在跑就让它当场重读，不用重启
-			applied := "重启 gerdr 之后生效（mac App 退出再开）"
+			applied := "重启 Gerdr 之后生效（mac App 退出再开）"
 			if c, err := newAPIClient(); err == nil {
 				if err := c.do("POST", "/api/remote/reload", nil, nil); err == nil {
-					applied = "正在跑的 gerdr 已经换上了"
+					applied = "正在跑的 Gerdr 已经换上了"
 				}
 			}
 			fmt.Printf("\n  ✓ 注册好了：%s → %s\n  配置写在 %s/remote.json，%s。\n",
@@ -337,7 +337,7 @@ func printRelayDNS(dir, host string) {
 	}
 	acct := remote.AccountURI(dir)
 	if acct == "" {
-		acct = "<这台机器的 ACME 账户：gerdr 签下第一张证书之后 gerdr remote status 里有>"
+		acct = "<这台机器的 ACME 账户：Gerdr 签下第一张证书之后 gerdr remote status 里有>"
 	}
 	fmt.Printf(`
   最后去 DNS 上加几条（一次性）：

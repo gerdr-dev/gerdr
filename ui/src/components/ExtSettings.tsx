@@ -447,7 +447,7 @@ function rowStatus(r: MCPRow, a: MCPAuth | undefined, rc: Reconnect | undefined,
       dot: "bg-ok",
       text: a.auth === "claude" ? "已登录 · 用 Claude Code 的" : a.auth === "gerdr" ? "已登录" : "可用",
       cls: "text-muted-foreground",
-      title: a.auth === "claude" ? "Claude Code 里授权过，gerdr 直接用它的登录；那边失效了这里会变成「未登录」" : undefined,
+      title: a.auth === "claude" ? "Claude Code 里授权过，Gerdr 直接用它的登录；那边失效了这里会变成「未登录」" : undefined,
     };
   return { dot: "bg-muted-foreground/40", text: isRemote(r.server) ? "检查中…" : "", cls: "text-muted-foreground" };
 }
@@ -602,7 +602,7 @@ export function MCPSettings({ open }: { open: boolean }) {
                   )}
                   {a?.hasOwn && (
                     <DropdownMenuItem onClick={() => auth.logout(m)}>
-                      <LogOut /> 退出 gerdr 的登录
+                      <LogOut /> 退出 Gerdr 的登录
                     </DropdownMenuItem>
                   )}
                   {mine && (

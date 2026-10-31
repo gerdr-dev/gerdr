@@ -128,7 +128,7 @@ class MainActivity : ComponentActivity() {
         val u = Server.parse(raw)
         val code = u?.getQueryParameter("pair")
         when {
-            u == null || code.isNullOrEmpty() || u.scheme != "https" -> bridge?.scanResult(null, "这不是 gerdr 的配对二维码")
+            u == null || code.isNullOrEmpty() || u.scheme != "https" -> bridge?.scanResult(null, "这不是 Gerdr 的配对二维码")
             Server.origin(u) == origin -> bridge?.scanResult(code, null)
             else -> {
                 val o = Server.origin(u)
@@ -240,7 +240,7 @@ class MainActivity : ComponentActivity() {
         logo(col)
         val card = cardBox()
         col.addView(card, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
-        card.addView(look.title("连接到你的 gerdr"))
+        card.addView(look.title("连接到你的 Gerdr"))
         card.addView(
             look.lead("填远程访问的地址，或者直接粘贴配对链接。"),
             LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) },
@@ -261,7 +261,7 @@ class MainActivity : ComponentActivity() {
         val scan = look.button("扫码配对", primary = false)
         card.addView(scan, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) })
         card.addView(
-            foot("地址在跑 gerdr 的那台电脑上：设置 → 远程访问，就是那个 https://…。「配对新设备」给的链接（…/?pair=…）可以直接粘贴，或者点「扫码配对」扫它的二维码。"),
+            foot("地址在跑 Gerdr 的那台电脑上：设置 → 远程访问，就是那个 https://…。「配对新设备」给的链接（…/?pair=…）可以直接粘贴，或者点「扫码配对」扫它的二维码。"),
             LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(18) },
         )
 
@@ -291,7 +291,7 @@ class MainActivity : ComponentActivity() {
         scan.setOnClickListener {
             scanQR { raw ->
                 if (Server.parse(raw)?.getQueryParameter("pair").isNullOrEmpty()) {
-                    err.text = "这不是 gerdr 的配对二维码"
+                    err.text = "这不是 Gerdr 的配对二维码"
                     err.visibility = View.VISIBLE
                 } else {
                     input.setText(raw.trim())
@@ -537,7 +537,7 @@ class MainActivity : ComponentActivity() {
         }
 
         override fun onReceivedError(view: WebView, req: WebResourceRequest, err: WebResourceError) {
-            if (req.isForMainFrame) showError("连不上这台 gerdr", err.description?.toString())
+            if (req.isForMainFrame) showError("连不上这台 Gerdr", err.description?.toString())
         }
 
         /**
@@ -767,7 +767,7 @@ class MainActivity : ComponentActivity() {
 
     private fun copyCode(code: String, toast: Boolean) {
         val cm = getSystemService(android.content.ClipboardManager::class.java)
-        cm.setPrimaryClip(android.content.ClipData.newPlainText("gerdr 批准码", code))
+        cm.setPrimaryClip(android.content.ClipData.newPlainText("Gerdr 批准码", code))
         // Android 13+ 系统自己会弹「已复制」，别再叠一条
         if (toast && android.os.Build.VERSION.SDK_INT < 33) Toast.makeText(this, "已复制", Toast.LENGTH_SHORT).show()
     }

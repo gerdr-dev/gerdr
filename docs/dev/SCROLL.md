@@ -19,7 +19,7 @@ node tabs.mjs                                # 然后跑场景，见下表
 ```
 
 脚本只对着调试实例（`~/.gerdr-dev`、7871）跑，指到正在用的 7870 会拒绝：它们会点 tab、改 keepTabs，会把用户的布局点乱。
-换实例用 `SCROLLTEST_PORT` / `SCROLLTEST_DIR`（**不读 `GERDR_PORT` / `GERDR_DIR`**：在 gerdr 里跑的 agent 环境里
+换实例用 `SCROLLTEST_PORT` / `SCROLLTEST_DIR`（**不读 `GERDR_PORT` / `GERDR_DIR`**：在 Gerdr 里跑的 agent 环境里
 这两个指着正在用的那个）。每个脚本有问题时退出码是 1。
 
 | 场景 | 脚本 | 查什么 |

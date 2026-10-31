@@ -49,7 +49,7 @@ func (m *Manager) Why() string {
 	}
 	// go run 出来的二进制在临时目录里，装上去下次登录就找不到了
 	if m.Exec == "" || strings.HasPrefix(m.Exec, filepath.Clean(os.TempDir())) || strings.Contains(m.Exec, "go-build") {
-		return "这个 gerdr 是临时编出来的（" + m.Exec + "），装不了后台服务：用 App 里的那个"
+		return "这个 Gerdr 是临时编出来的（" + m.Exec + "），装不了后台服务：用 App 里的那个"
 	}
 	// 调试实例（make dev）用的是别的数据目录：装上去会和日常用的那份抢同一个 Label
 	if def := filepath.Join(m.home, ".gerdr"); filepath.Clean(m.Dir) != def {

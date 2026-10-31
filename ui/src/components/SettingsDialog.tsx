@@ -106,7 +106,7 @@ export function SettingsDialog({ open }: { open: boolean }) {
                   font size a screen away from the theme (and without saying it, people can't guess whether a change on the
                   phone follows them to the computer). */}
               <div className="text-[12px] text-muted-foreground">
-                设置存在跑 gerdr 的电脑上，电脑、手机、别的浏览器打开都是这一份；标了 <LocalTag /> 的只管这台设备。
+                设置存在跑 Gerdr 的电脑上，电脑、手机、别的浏览器打开都是这一份；标了 <LocalTag /> 的只管这台设备。
               </div>
               <Section title="外观">
                 <Row label="主题" local>
@@ -201,7 +201,7 @@ export function SettingsDialog({ open }: { open: boolean }) {
                 <Row label="出错结束" hint="正在跑的会话因为出错停了">
                   <Switch checked={inb.error !== false} onCheckedChange={(v) => setConfig({ inbox: { ...inb, error: v } })} />
                 </Row>
-                <Row label="电量低提醒" hint="运行 gerdr 的电脑用电池、电量低于这个数时放一条进收件箱（每次放电只提醒一次）">
+                <Row label="电量低提醒" hint="运行 Gerdr 的电脑用电池、电量低于这个数时放一条进收件箱（每次放电只提醒一次）">
                   <div className="flex items-center gap-2">
                     {bat.on && (
                       <Select value={String(bat.percent)} onValueChange={(v) => setConfig({ batteryAlert: { ...bat, percent: Number(v) } })}>

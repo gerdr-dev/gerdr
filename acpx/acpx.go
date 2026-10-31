@@ -292,7 +292,7 @@ func AskDeclined(reason, text string) string {
 		}
 		return "The user did not pick an option; they replied in the chat instead. Their next message is their answer to this question — read it and continue. Do not ask this question again."
 	case "skipped":
-		return "The user deliberately chose not to answer this question (they clicked \"skip\" in the gerdr UI; the question was displayed fine — this is not a UI problem). Do not ask it again with the question tool. Continue with your best judgment, or ask in plain text in your reply if you really need the answer."
+		return "The user deliberately chose not to answer this question (they clicked \"skip\" in the Gerdr UI; the question was displayed fine — this is not a UI problem). Do not ask it again with the question tool. Continue with your best judgment, or ask in plain text in your reply if you really need the answer."
 	}
 	return "The question was withdrawn because the turn was interrupted. Do not re-ask it unless the user brings it up."
 }
@@ -373,7 +373,7 @@ func DescribeRequest(kind string, raw json.RawMessage) string {
 // asked about README.zh-CN.md it listed the headings with bare `:45` line numbers and no clickable path, so the
 // user had to ask again for the full path to open it. Bare relative names like `README.md` aren't recognized
 // as paths (no slash), hence "absolute".
-const MediaHint = "You are running inside gerdr, a GUI for coding agents. Its chat view renders Markdown image syntax inline: " +
+const MediaHint = "You are running inside Gerdr, a GUI for coding agents. Its chat view renders Markdown image syntax inline: " +
 	"when the user should see or hear a local image, video, audio file or PDF (a screenshot, a generated or downloaded image/video, a QR code, a voice-over…), " +
 	"embed it in your reply with image syntax and an absolute path, e.g. ![login QR code](/Users/me/project/out/qr.png) " +
 	"(wrap the path in <> if it contains spaces: ![demo](</Users/me/my dir/demo.mp4>)). Several images on consecutive lines show as a grid. " +
@@ -387,7 +387,7 @@ const MediaHint = "You are running inside gerdr, a GUI for coding agents. Its ch
 // 只给一句，照 Claude Code 那句的写法：试过五句、八句的长版，用户嫌啰嗦。括号里那半句不能省：只有一句时 agent 把
 // `! gh auth login` 当成点一下就能跑的给出来，在对话里跑没有 stdin，点了一直卡着（实测）。
 const ShellHint = "If you need the user to run a shell command themselves (e.g., an interactive login like `gcloud auth login`), " +
-	"suggest it as inline code starting with `!` (e.g. `! gcloud auth login`) — gerdr shows a run button next to it that runs the command in this session and brings its output back to you " +
+	"suggest it as inline code starting with `!` (e.g. `! gcloud auth login`) — Gerdr shows a run button next to it that runs the command in this session and brings its output back to you " +
 	"(it gets no stdin, so for commands that need input, tell the user to use the terminal option in the button's menu instead)."
 
 // GUIHint：起 agent 时追加的全部说明（MediaHint + ShellHint）。
