@@ -202,11 +202,17 @@ export function AppContextMenu() {
       setPos(null);
       setMenu(groups.length ? { x: e.clientX, y: e.clientY, groups } : null);
     };
+    // Android's WebView starts dragging an image on the same long press that opens this menu. While that drag is on
+    // it swallows every tap: the menu couldn't be picked over the file viewer, and afterwards even the lightbox
+    // wouldn't open (user report). Nothing on the phone takes a dropped image, so images don't drag there at all.
+    const noDrag = (e: DragEvent) => touch && e.target instanceof HTMLImageElement && e.preventDefault();
     document.addEventListener("pointerdown", down, true);
     document.addEventListener("contextmenu", open);
+    document.addEventListener("dragstart", noDrag, true);
     return () => {
       document.removeEventListener("pointerdown", down, true);
       document.removeEventListener("contextmenu", open);
+      document.removeEventListener("dragstart", noDrag, true);
     };
   }, []);
 

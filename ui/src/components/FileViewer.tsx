@@ -110,7 +110,7 @@ function Body({ stat }: { stat: FileStat }) {
       <div className="min-h-0 flex-1 overflow-auto overscroll-contain">
         {kind === "image" ? (
           <div className="flex min-h-full items-center justify-center bg-muted/40 p-3">
-            <img src={url} alt={stat.name} className="max-h-full max-w-full object-contain" />
+            <img src={url} alt={stat.name} draggable={false} className="max-h-full max-w-full object-contain" />
           </div>
         ) : kind === "video" ? (
           // playsInline：iOS 上不加会直接进系统全屏播放器，关掉之后回不到这儿
