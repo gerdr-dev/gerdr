@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { Loader2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -43,9 +44,14 @@ export function UpdateSetting() {
   const { text, tone } = u ? describe(u, service) : { text: "", tone: "" };
   const p = u?.pending;
   const native = isNative();
-  const ask = native ? () => nativeAskUpdate(true) : () => relay("check");
-  const apply = native ? nativeApplyUpdate : () => relay("apply");
-  const setAuto = native ? nativeSetAutoUpdate : (on: boolean) => relay("auto", on);
+  const checking = useChecking(u);
+  const ask = () => {
+    checking.start();
+    if (native) nativeAskUpdate(true);
+    else relay("check").catch(checking.stop);
+  };
+  const apply = native ? nativeApplyUpdate : () => relay("apply").catch(() => {});
+  const setAuto = native ? nativeSetAutoUpdate : (on: boolean) => relay("auto", on).catch(() => {});
 
   return (
     <>
@@ -62,7 +68,8 @@ export function UpdateSetting() {
               现在更新
             </Button>
           ) : (
-            <Button size="sm" variant="outline" disabled={u.phase !== "idle"} onClick={ask}>
+            <Button size="sm" variant="outline" disabled={u.phase !== "idle" || checking.on} onClick={ask}>
+              {(u.phase === "checking" || checking.on) && <Loader2 className="size-3.5 animate-spin" />}
               检查更新
             </Button>
           ))}
@@ -85,7 +92,44 @@ export function UpdateSetting() {
 
 /** Off the App: the backend hands it to the App's page, whose next status report shows what happened. */
 function relay(op: "check" | "apply" | "auto", on?: boolean) {
-  api.appUpdateOp(op, on).catch((e) => toast.error((e as Error).message));
+  return api.appUpdateOp(op, on).catch((e) => {
+    toast.error((e as Error).message);
+    throw e;
+  });
+}
+
+/**
+ * "检查更新" spins from the click until that check's answer is in: the shell's "checking" phase alone lasts a few
+ * hundred ms, and off the App it comes through a relay, so it would mostly never show. Done = checkedAt or the error
+ * moved, a download started, or it went through "checking" and back (a repeat of the same failure moves neither);
+ * at least 600ms so it doesn't just flicker, at most 30s in case the answer is lost.
+ */
+function useChecking(u: AppUpdateStatus | null) {
+  const [on, setOn] = useState(false);
+  const from = useRef({ at: 0, checkedAt: 0, error: "", saw: false });
+  const stop = () => setOn(false);
+  useEffect(() => {
+    if (!on || !u) return;
+    const f = from.current;
+    if (u.phase === "checking") f.saw = true;
+    const done = u.checkedAt !== f.checkedAt || u.error !== f.error || u.phase === "downloading" || !!u.pending || (f.saw && u.phase === "idle");
+    if (!done) return;
+    const t = setTimeout(stop, Math.max(0, f.at + 600 - Date.now()));
+    return () => clearTimeout(t);
+  }, [on, u]);
+  useEffect(() => {
+    if (!on) return;
+    const t = setTimeout(stop, 30_000);
+    return () => clearTimeout(t);
+  }, [on]);
+  return {
+    on,
+    stop,
+    start: () => {
+      from.current = { at: Date.now(), checkedAt: u?.checkedAt ?? 0, error: u?.error ?? "", saw: false };
+      setOn(true);
+    },
+  };
 }
 
 function describe(u: AppUpdateStatus, service: boolean): { text: string; tone: string } {
