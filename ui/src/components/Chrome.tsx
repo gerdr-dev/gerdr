@@ -185,35 +185,49 @@ export function TabBar() {
                     closeTab(t.id);
                   }}
                   className={cn(
-                    "group/tab flex h-7 w-52 min-w-[88px] shrink cursor-default items-center gap-2 rounded-md px-1.5 text-[12px] select-none",
+                    // A size container so the tab can drop its icon / close button when squeezed (see below)
+                    "group/tab @container/tab relative flex h-7 w-52 min-w-[44px] shrink cursor-default items-center gap-2 rounded-md px-1.5 text-[12px] select-none @max-[8rem]/tab:gap-1",
                     active ? "bg-accent font-medium text-foreground" : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
                     drag?.tabId === t.id && "opacity-40",
                     // Mark which tab the context menu belongs to while it's open (Radix sets data-state on the trigger)
                     "data-[state=open]:bg-accent data-[state=open]:text-foreground data-[state=open]:ring-1 data-[state=open]:ring-brand/60",
                   )}
                 >
-                  {/* Holding ⌘ (Ctrl elsewhere) lays the tab's ⌘1–9 number over the icon on a translucent veil, so the target is
-                      readable right when you're about to press it without the icon jumping away; the name stays plain for plugins / renames. */}
-                  {(agent || first?.term || (numbers && i < 9)) && (
-                    <span className="relative flex size-4 shrink-0 items-center justify-center">
+                  {/* Crowded (narrow tab): text only, like Chrome — the name is what tells tabs apart, the icon just eats it. */}
+                  {(agent || first?.term) && (
+                    <span className="flex size-4 shrink-0 items-center justify-center @max-[8rem]/tab:hidden">
                       {agent ? (
                         <AgentIcon agent={agent} className={cn("size-4", !active && "opacity-60")} />
                       ) : (
-                        first?.term && <SquareTerminal className="size-4 shrink-0 text-muted-foreground" />
-                      )}
-                      {numbers && i < 9 && (
-                        <span className="absolute -inset-0.5 flex items-center justify-center rounded-sm bg-background/70 text-[12px] font-medium text-foreground/70 tabular-nums">
-                          {i + 1}
-                        </span>
+                        <SquareTerminal className="size-4 shrink-0 text-muted-foreground" />
                       )}
                     </span>
                   )}
-                  <span className="min-w-0 flex-1 truncate">{label}</span>
-                  <StatusDot status={st.status} unread={st.unread} />
-                  {/* 关闭键一直占着位置（照 Chrome）：当前 tab 一直显示，别的 hover 才显示。原来是 hover 时才插进来，
-                      tab 当场变宽、后面的 tab 全跟着挪 —— 鼠标划过 tab 栏就是一路闪动（用户报的） */}
+                  {/* Names that don't fit fade out at the right edge instead of ending in "…" (like Chrome): an ellipsis costs three
+                      characters' room, which is most of a crowded tab. A short name never reaches the fade, so it is always on. */}
+                  <span className="min-w-0 flex-1 overflow-hidden whitespace-nowrap [mask-image:linear-gradient(to_right,black_calc(100%-1rem),transparent)]">
+                    {label}
+                  </span>
+                  {/* Holding ⌘ (Ctrl elsewhere) lays the tab's ⌘1–9 number on a veil at the tab's left edge — over the icon when there
+                      is one, over the start of the name when not (no icon, or crowded). It used to live in the icon's slot and conjure
+                      that slot up when missing, which only worked for some tabs and shoved the names over on every ⌘ press. As an
+                      overlay it shows on every tab and moves nothing; the name stays plain for plugins / renames. */}
+                  {numbers && i < 9 && (
+                    <span className="absolute top-1 left-1 flex size-5 items-center justify-center rounded-sm bg-background text-[12px] font-medium text-foreground/80 tabular-nums ring-1 ring-border">
+                      {i + 1}
+                    </span>
+                  )}
+                  {/* An idle tab's dot is transparent but still takes 8px + the gap: crowded, that room goes to the name instead */}
+                  <StatusDot status={st.status} unread={st.unread} className={cn(!st.status && !st.unread && "@max-[8rem]/tab:hidden")} />
+                  {/* The close button keeps its slot (like Chrome): always shown on the active tab, on hover for the others. Inserting
+                      it on hover made the tab widen and every tab after it shift, so the bar flickered as the mouse crossed it.
+                      Crowded (narrow tab): no slot at all, so the name gets the room; only the active tab shows it, on hover. That
+                      changes no tab's width (tabs are sized by the bar), it just truncates this tab's name a bit more. */}
                   <button
-                    className={cn("-mr-1 rounded-sm p-0.5 hover:bg-muted", active ? "visible" : "invisible group-hover/tab:visible")}
+                    className={cn(
+                      "-mr-1 rounded-sm p-0.5 hover:bg-muted @max-[8rem]/tab:hidden",
+                      active ? "visible @max-[8rem]/tab:group-hover/tab:block" : "invisible group-hover/tab:visible",
+                    )}
                     onClick={(e) => {
                       e.stopPropagation();
                       closeTab(t.id);
