@@ -59,6 +59,8 @@ export type Config = {
   agents?: AgentDef[];
   /** 输入框里 pin 住的 / 命令（命令名，不带 /）：附图按钮旁边多一个 / 按钮，点开就是这些。存 config 是让手机和电脑共用一份。 */
   pinnedCommands?: string[];
+  /** Inbox: put an item in when the gerdr machine runs on battery at or below `percent`. Missing = on at 20%. */
+  batteryAlert?: { on: boolean; percent: number };
   /** Gerdr Agent（native）用的模型服务商，后端读（cmd/gerdr 的 cfgLLM），设置 → Agent 里编辑。 */
   llm?: LLMConfig;
 };

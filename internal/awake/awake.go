@@ -62,6 +62,9 @@ type Battery struct {
 	Charging  bool `json:"charging"`
 }
 
+// ReadBattery reads this machine's battery right now (GET /api/battery). Percent -1 = no battery or not macOS.
+func ReadBattery() Battery { return battery() }
+
 // low：用电池且电量 ≤ 20%，合盖模式放手的线。
 func (b Battery) low() bool { return b.OnBattery && b.Percent >= 0 && b.Percent <= 20 }
 

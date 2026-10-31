@@ -22,6 +22,7 @@ import { isNative, nativeAskUpdate, nativeBadge, nativeMenuKeys, nativeSpace, on
 import { initAndroid, syncAndroidTheme } from "./lib/android";
 import { CliApprove } from "./components/CliApprove";
 import { systemNotify } from "./lib/notify";
+import { watchInbox } from "./lib/inbox";
 import { watchCopyOnSelect } from "./lib/copysel";
 import { reloadPlugins, setTabNameFn } from "./lib/plugins";
 import { fontSizeOf, get, keyFor, markUnread, set, useStore, visibleSessions } from "./lib/store";
@@ -103,6 +104,7 @@ export default function App() {
     window.addEventListener("keydown", onKey, true);
     const unwatchCopy = watchCopyOnSelect(); // 实验室「选中即复制」，没开时什么都不做
     const unwatchFollow = watchFollow(); // overview: put agents that start running in by themselves (when switched on)
+    const unwatchInbox = watchInbox(); // errors, questions / approvals, low battery → the inbox
     if (isNative()) document.documentElement.classList.add("native");
     // mac App 的菜单和通知点击走这两个入口。
     (window as any).gerdr = {
@@ -115,6 +117,7 @@ export default function App() {
       window.removeEventListener("keydown", onKey, true);
       unwatchCopy();
       unwatchFollow();
+      unwatchInbox();
     };
   }, []);
 

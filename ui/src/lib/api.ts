@@ -119,6 +119,19 @@ export type AwakeStatus = {
   battery: { percent: number; onBattery: boolean; charging: boolean };
 };
 
+/** One approval / question waiting on someone (hub.PendingReq). */
+export type PendingReq = {
+  sessionId: string;
+  title?: string;
+  agent: string;
+  cwd: string;
+  reqId: string;
+  kind: "permission" | "ask";
+  request: any;
+  summary: string;
+  at: number;
+};
+
 /** 等批准的一次 App 登录（auth.CLIRequest） */
 export type CliRequest = { label: string; ip: string; local: boolean; device: string; deviceLabel?: string; expires: string };
 
@@ -151,6 +164,9 @@ export const api = {
   doctorRun: (deep: boolean) => req<DoctorReport>("POST", "/api/doctor/run", { deep }),
   doctorFix: (f: DoctorFix) => req<DoctorReport>("POST", "/api/doctor/fix", f),
   awake: () => req<AwakeStatus>("GET", "/api/awake"),
+  battery: () => req<AwakeStatus["battery"]>("GET", "/api/battery"),
+  /** Every approval / question waiting on someone, across all sessions, oldest first (hub.PendingReq). */
+  pending: () => req<PendingReq[]>("GET", "/api/pending"),
   setAwake: (b: { minutes?: number; until?: number; forever?: boolean }) => req<AwakeStatus>("PUT", "/api/awake", b),
   setupLid: () => req<AwakeStatus>("POST", "/api/awake/lid-setup", {}),
   createSession: (o: { agent: string; cwd: string; mode?: string; config?: Record<string, string>; import?: string; title?: string }) =>

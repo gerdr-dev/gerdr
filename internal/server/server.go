@@ -103,6 +103,8 @@ func (s *Server) Handler() http.Handler {
 	// awake：不让电脑睡（设置 → 实验室）。远程也能调：手机上要能手动续一段，这个口最坏也就是电脑不睡。
 	mux.HandleFunc("GET /api/awake", s.awakeStatus)
 	mux.HandleFunc("PUT /api/awake", s.setAwake)
+	// The inbox's low-battery alert polls this once a minute; /api/awake would also run sudo -l each time.
+	mux.HandleFunc("GET /api/battery", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, awake.ReadBattery()) })
 	// 合盖不睡要一次管理员授权（弹 macOS 的密码框）：只在本机口（remoteGuard 挡掉远程）—— 远程点了，框弹在没人的电脑上
 	mux.HandleFunc("POST /api/awake/lid-setup", func(w http.ResponseWriter, r *http.Request) {
 		if s.Awake == nil {

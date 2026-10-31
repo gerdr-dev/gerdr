@@ -86,6 +86,8 @@ import { toast } from "sonner";
 import { askConfirm } from "@/lib/confirm";
 import { isNative, nativeNewWindow } from "@/lib/native";
 import { useRoute } from "./AndroidSettings";
+import { usePhone } from "@/lib/phone";
+import { InboxButton } from "./Inbox";
 
 /** 一个 tab 的汇总状态：里面任何一个会话在等你 → 等你；在跑 → 在跑；…… */
 /**
@@ -343,6 +345,7 @@ export function PhoneBar() {
       <Button variant="ghost" size="icon" className="size-9" aria-label="新建 tab" onClick={() => addTab()}>
         <Plus className="size-[18px]" />
       </Button>
+      <InboxButton phone />
     </div>
   );
 }
@@ -560,6 +563,7 @@ export function SidebarHeader({ className, style }: { className?: string; style?
 export function SidebarFooter({ sidebarToggle }: { sidebarToggle?: boolean }) {
   const connected = useStore((s) => s.connected);
   const doctorBad = useStore((s) => s.doctor?.level === "bad");
+  const phone = usePhone();
   return (
     <div className="flex h-10 shrink-0 items-center gap-1 border-t bg-sidebar px-1.5">
       <Button
@@ -582,6 +586,8 @@ export function SidebarFooter({ sidebarToggle }: { sidebarToggle?: boolean }) {
         <ConnStatus />
         {connected && isAndroid() && <RouteLabel />}
       </div>
+      {/* On a phone the inbox is in the top bar (PhoneBar); this row is in the drawer there */}
+      {!phone && <InboxButton />}
       <Tooltip>
         <TooltipTrigger asChild>
           <Button variant="ghost" size="icon" className="size-7 text-muted-foreground" onClick={() => set({ dialog: { kind: "help" } })}>

@@ -31,6 +31,7 @@ const AGENT_SECTIONS = ["roles", "skills", "mcp", "memory"];
 // Settings (prefix+s / ⌘,). The general and plugins pages and labs live here; every other page is its own component file.
 export function SettingsDialog({ open }: { open: boolean }) {
   const cfg = useStore((s) => s.config);
+  const bat = cfg.batteryAlert ?? { on: true, percent: 20 };
   const fontSize = useStore(fontSizeOf);
   const agents = useStore((s) => s.agents);
   const pluginsDir = useStore((s) => s.pluginsDir);
@@ -176,6 +177,25 @@ export function SettingsDialog({ open }: { open: boolean }) {
               <Section title="通知">
                 <Row label="系统通知" hint="看不见的会话跑完了 / 在等你时">
                   <Switch checked={cfg.notifications} onCheckedChange={(v) => setConfig({ notifications: v })} />
+                </Row>
+                <Row label="电量低提醒" hint="运行 gerdr 的电脑用电池、电量低于这个数时放一条进收件箱（每次放电只提醒一次）">
+                  <div className="flex items-center gap-2">
+                    {bat.on && (
+                      <Select value={String(bat.percent)} onValueChange={(v) => setConfig({ batteryAlert: { ...bat, percent: Number(v) } })}>
+                        <SelectTrigger className="w-24">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {[5, 10, 15, 20, 30, 40, 50].map((n) => (
+                            <SelectItem key={n} value={String(n)}>
+                              {n}%
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                    <Switch checked={bat.on} onCheckedChange={(v) => setConfig({ batteryAlert: { ...bat, on: v } })} />
+                  </div>
                 </Row>
               </Section>
               {/* Only in the Android App (its shell keeps these): notifications in the background, volume keys, server */}
