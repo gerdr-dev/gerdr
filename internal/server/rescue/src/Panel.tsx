@@ -93,44 +93,47 @@ export function Panel({
           </button>
         </header>
 
-        {/* A skipped upgrade alone isn't "broken": say that instead of the green "no errors" */}
-        {!(upgrade && !err) && <StatusCard status={status} error={statusErr} text={err} onDismiss={() => dismissErrors().then(loadStatus)} />}
-        {upgrade && (
-          <div className="status warn">
-            <div className="row">
-              <ArrowUpCircle size={15} />
-              <span className="grow">有新版界面没合上</span>
+        {/* Everything below the header scrolls when the screen is too short (landscape phone, keyboard up) */}
+        <div className="body">
+          {/* A skipped upgrade alone isn't "broken": say that instead of the green "no errors" */}
+          {!(upgrade && !err) && <StatusCard status={status} error={statusErr} text={err} onDismiss={() => dismissErrors().then(loadStatus)} />}
+          {upgrade && (
+            <div className="status warn">
+              <div className="row">
+                <ArrowUpCircle size={15} />
+                <span className="grow">有新版界面没合上</span>
+              </div>
+              <p>{upgrade}</p>
+              <small>开个新对话，让 agent 把新版合进来、两边的改动都留着。</small>
             </div>
-            <p>{upgrade}</p>
-            <small>开个新对话，让 agent 把新版合进来、两边的改动都留着。</small>
-          </div>
-        )}
+          )}
 
-        <nav className="tabs">
-          <button className={tab === "chat" ? "on" : ""} onClick={() => setTab("chat")}>
-            <MessageSquare size={14} />叫 agent 修
-          </button>
-          <button className={tab === "history" ? "on" : ""} onClick={() => setTab("history")}>
-            <History size={14} />
-            回到之前的一版
-          </button>
-        </nav>
+          <nav className="tabs">
+            <button className={tab === "chat" ? "on" : ""} onClick={() => setTab("chat")}>
+              <MessageSquare size={14} />叫 agent 修
+            </button>
+            <button className={tab === "history" ? "on" : ""} onClick={() => setTab("history")}>
+              <History size={14} />
+              回到之前的一版
+            </button>
+          </nav>
 
-        {helloErr ? (
-          <div className="empty">连不上 gerdr：{helloErr}</div>
-        ) : !hello || !status ? (
-          <div className="empty">读取中…</div>
-        ) : (
-          <>
-            {/* 两页都一直挂着（只是藏起来）：切过去再切回来，输入框里没发的字和滚动位置都还在 */}
-            <div className="page" hidden={tab !== "chat"}>
-              <Chat hello={hello} uiDir={status.dir} errors={err} upgrade={upgrade} onTurnDone={refresh} />
-            </div>
-            <div className="page" hidden={tab !== "history"}>
-              <Versions tick={histTick} onRestored={() => setTimeout(loadStatus, 800)} />
-            </div>
-          </>
-        )}
+          {helloErr ? (
+            <div className="empty">连不上 gerdr：{helloErr}</div>
+          ) : !hello || !status ? (
+            <div className="empty">读取中…</div>
+          ) : (
+            <>
+              {/* 两页都一直挂着（只是藏起来）：切过去再切回来，输入框里没发的字和滚动位置都还在 */}
+              <div className="page" hidden={tab !== "chat"}>
+                <Chat hello={hello} uiDir={status.dir} errors={err} upgrade={upgrade} onTurnDone={refresh} />
+              </div>
+              <div className="page" hidden={tab !== "history"}>
+                <Versions tick={histTick} onRestored={() => setTimeout(loadStatus, 800)} />
+              </div>
+            </>
+          )}
+        </div>
       </aside>
     </div>
   );

@@ -64,9 +64,12 @@ function mount() {
   const root = createRoot(box);
   const render = () => {
     store.set(OPEN_KEY, open ? "1" : null);
-    // 页面外壳自己的全屏层（编译出错的红屏、加载中）也让开，不然正好把面板盖住
+    // The page shell's own full-screen layers (build-error overlay, loading screen) sit above the panel in z-order:
+    // on wide screens they move out of its way; on phones the panel fills the screen, so hide them (the panel shows
+    // the same error itself), otherwise they cover it completely.
     squeeze.textContent = open
-      ? `@media (min-width: 768px) { html { padding-right: ${width}px !important; } #__gerdr_overlay, #__gerdr_loading { right: ${width}px !important; } }`
+      ? `@media (min-width: 768px) { html { padding-right: ${width}px !important; } #__gerdr_overlay, #__gerdr_loading { right: ${width}px !important; } }` +
+        `@media (max-width: 767px) { #__gerdr_overlay, #__gerdr_loading { display: none !important; } }`
       : "";
     root.render(<Panel open={open} width={width} onOpen={setOpen} onWidth={setWidth} />);
   };

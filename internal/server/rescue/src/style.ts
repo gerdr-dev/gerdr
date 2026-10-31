@@ -86,7 +86,10 @@ pre, code { font-family: var(--mono); }
   border: 0; border-radius: 6px; background: none; color: var(--muted-fg); font-size: 12.5px;
 }
 .tabs button.on { background: var(--card); color: var(--fg); box-shadow: 0 1px 2px rgb(0 0 0 / .08); }
-.page { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+/* Below the header: scrolls as a whole when short. The page keeps a usable height instead of squashing to nothing
+   (basis 0 so a long chat log still scrolls inside it rather than stretching the page). */
+.body { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
+.page { flex: 1 0 0; min-height: 320px; display: flex; flex-direction: column; }
 
 .btn {
   display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 10px; flex-shrink: 0;
