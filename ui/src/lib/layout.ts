@@ -5,6 +5,8 @@
  * sub：子 agent 的只读面板（不占 sessionId —— 那样「定位到会话」「关 pane 停掉这一轮」都会认错）。
  * term：终端。id 是服务端的终端（shell 跑在 gerdr 那边，关页面不断）；cwd 是开它时的目录，gerdr 重启过、
  * 终端没了的时候拿它重开一个。
+ * file: a file opened beside the chat (⌥-click on a path, or its right-click menu), read-only like the file viewer.
+ * path is absolute (resolved when it was opened), so the pane doesn't depend on which session's directory it came from.
  */
 export type PaneLeaf = {
   type: "pane";
@@ -13,6 +15,7 @@ export type PaneLeaf = {
   draft?: { agent?: string; cwd?: string };
   sub?: { sessionId: string; toolCallId: string; title?: string };
   term?: { id: string; cwd: string };
+  file?: { path: string };
 };
 export type PaneSplit = { type: "split"; id: string; dir: "row" | "col"; ratio: number; a: PaneNode; b: PaneNode };
 export type PaneNode = PaneLeaf | PaneSplit;

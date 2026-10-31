@@ -23,7 +23,7 @@ import { WsDot } from "./Chrome";
 const LS_SORT = "gerdr.panesSort";
 
 /** tab 带序号、分屏的 pane 带「第几个」：同一个 tab 里两个空 pane、或两个同名 tab，只有这两样分得开。 */
-type Row = { pane: PaneLeaf; session?: SessionSummary; ws: string; wsId: string; tab: string; i: number };
+type Row = { pane: PaneLeaf; session?: SessionSummary; ws: string; wsId: string; tab: string; at: string; i: number };
 
 /**
  * 优先级分档：和侧栏 agents 那张表同一套（lib/order.ts），只是多了最后一档 5 = 还没开会话的空 pane
@@ -110,13 +110,14 @@ export function PaneSwitcher() {
         const wi = mine.indexOf(w);
         const sid = pane.sub?.sessionId ?? pane.sessionId;
         const ls = leaves(tab.root);
-        const at = ls.length > 1 ? ` · ${ls.indexOf(pane) + 1}/${ls.length}` : "";
+        const at = ls.length > 1 ? `${ls.indexOf(pane) + 1}/${ls.length}` : "";
         return {
           pane,
           session: sid ? sessions[sid] : undefined,
           ws: applyWorkspaceLabel(w, wi, w.name),
           wsId: w.id,
-          tab: `${tabName(tab)}${at}`,
+          tab: tabName(tab),
+          at,
           i,
         };
       });
@@ -124,7 +125,7 @@ export function PaneSwitcher() {
     const hit = (r: Row) =>
       (!ws || r.wsId === ws) &&
       (!kw ||
-        `${r.session?.title ?? ""} ${r.session?.agent ?? ""} ${r.session?.cwd ?? ""} ${r.ws} ${r.tab} ${r.pane.sub?.title ?? ""} ${r.pane.term ? "终端 " + r.pane.term.cwd : ""}`
+        `${r.session?.title ?? ""} ${r.session?.agent ?? ""} ${r.session?.cwd ?? ""} ${r.ws} ${r.tab} ${r.pane.sub?.title ?? ""} ${r.pane.term ? "终端 " + r.pane.term.cwd : ""} ${r.pane.file?.path ?? ""}`
           .toLowerCase()
           .includes(kw));
     const list = out.filter(hit);
@@ -273,7 +274,7 @@ export function PaneSwitcher() {
           </div>
         )}
 
-        <div className="min-h-0 overflow-y-auto overscroll-contain p-1.5">
+        <div className="min-h-0 overflow-x-hidden overflow-y-auto overscroll-contain p-1.5">
           {rows.length === 0 && <p className="px-1 py-6 text-center text-[12px] text-muted-foreground">没有匹配的 pane</p>}
           {groups.map((g) => (
             <section key={g.ws || "all"} className="mb-1">
@@ -288,9 +289,13 @@ export function PaneSwitcher() {
                       ? s.title || basename(s.cwd)
                       : r.pane.term
                         ? `终端 · ${basename(r.pane.term.cwd ?? "")}`
-                        : "新会话";
+                        : r.pane.file
+                          ? `文件 · ${basename(r.pane.file.path)}`
+                          : "新会话";
                   // 第二行：在哪（工作空间 · tab）+ 路径。手机上按工作空间认项目，路径兜底分开同名的
-                  const where = sort === "group" ? r.tab : `${r.ws} · ${r.tab}`;
+                  // An unnamed tab is named after its first agent's title: on that agent's row the tab part only repeats the
+                  // title, so it is left out (same as the sidebar's agent list)
+                  const where = [sort === "group" ? "" : r.ws, r.tab === title ? "" : r.tab, r.at].filter(Boolean).join(" · ");
                   return (
                     <button
                       key={r.pane.id}
@@ -318,8 +323,10 @@ export function PaneSwitcher() {
                           </span>
                         </span>
                         <span className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                          <span className="shrink-0">{where}</span>
-                          {(s || r.pane.term) && <span className="min-w-0 truncate font-mono">{shortCwd(s?.cwd ?? r.pane.term?.cwd ?? "")}</span>}
+                          {/* Both halves can shrink: a long tab title (often a whole sentence) used to be shrink-0 and pushed the row
+                              past the screen edge on a phone. The path gives way first (shrink-[4]), then the title */}
+                          {where && <span className="min-w-0 truncate">{where}</span>}
+                          {(s || r.pane.term) && <span className="min-w-0 shrink-[4] truncate font-mono">{shortCwd(s?.cwd ?? r.pane.term?.cwd ?? "")}</span>}
                         </span>
                       </span>
                       <StatusDot status={dotStatus(s)} unread={!!(s && unread[s.id])} />

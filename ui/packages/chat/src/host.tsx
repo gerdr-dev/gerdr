@@ -71,8 +71,11 @@ export interface ChatHost {
   fileExists?(names: string[], cwd: string): Promise<{ exists: Record<string, boolean> }>;
   /** @-mentions in the composer: files matching q in the session's directory. */
   searchFiles?(sessionId: string, q: string): Promise<string[]>;
-  /** Open a local path (a click on a path, a diff header, an image's "show file"). */
-  openPath?(path: string, cwd?: string): void;
+  /**
+   * Open a local path (a click on a path, a diff header, an image's "show file"). beside: in a pane next to the chat
+   * instead of a dialog (⌥-click). The host's right-click menu finds path links by data-gerdr-file / data-gerdr-cwd.
+   */
+  openPath?(path: string, cwd?: string, opts?: { beside?: boolean }): void;
   /** Open with the system's default app / reveal in the file manager (desktop apps). */
   openNative?(path: string, cwd: string | undefined, reveal: boolean): void;
 

@@ -1,11 +1,28 @@
-import { Clipboard, Copy, Download, ExternalLink, FileText, Image as ImageIcon, Puzzle, Scissors, TextSelect } from "lucide-react";
+import {
+  AppWindow,
+  Clipboard,
+  Columns2,
+  Copy,
+  Download,
+  ExternalLink,
+  FileText,
+  FolderOpen,
+  Image as ImageIcon,
+  Puzzle,
+  Scissors,
+  TextSelect,
+} from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
+import { openPath } from "@/lib/actions";
 import { fail as addonFail, menuItems } from "@/lib/addons";
 import { androidCan, androidCopyImage, isAndroid } from "@/lib/android";
 import { leaves } from "@/lib/layout";
 import { get } from "@/lib/store";
-import { isNative, nativeOpenURL } from "@/lib/native";
+import { IS_MAC } from "@/lib/keys";
+import { isNative, nativeOpenPath, nativeOpenURL } from "@/lib/native";
+import { stripLineAnchor } from "@/lib/paths";
+import { isPhone } from "@/lib/phone";
 
 /**
  * Right-click menu for the desktop App. Electron has no menu of its own, so a right-click did nothing: no copying a
@@ -20,9 +37,14 @@ import { isNative, nativeOpenURL } from "@/lib/native";
  *
  * Elements that draw their own menu (sidebar tabs, Radix ContextMenu) call preventDefault first and are left alone;
  * so are terminals, where xterm owns the mouse and its selection isn't a DOM selection.
+ *
+ * File paths in the chat (data-gerdr-file, set by the chat package) get this menu in a browser tab too: the browser's
+ * own menu has nothing useful for a link to "#". It lists what a click and a ⌥-click do, with the modifier next to
+ * each, since nobody finds ⌥-click (open beside the chat) on their own.
  */
 
-type Item = { label: string; icon: ReactNode; run: () => unknown; disabled?: boolean };
+/** hint: the click / key that does the same without the menu, shown greyed on the right. */
+type Item = { label: string; icon: ReactNode; run: () => unknown; disabled?: boolean; hint?: string };
 type Menu = { x: number; y: number; groups: Item[][] };
 
 const icon = "size-3.5";
@@ -44,14 +66,16 @@ const selectedText = () => saved.map((r) => r.toString()).join("");
 const onSelection = (x: number, y: number) =>
   saved.some((r) => Array.from(r.getClientRects()).some((b) => x >= b.left && x <= b.right && y >= b.top && y <= b.bottom));
 
+// A relative path is relative to its session's directory
+const absPath = (p: string, cwd?: string) => (p.startsWith("/") || p.startsWith("~") || !cwd ? p : `${cwd.replace(/\/$/, "")}/${p.replace(/^\.\//, "")}`);
+
 // Chat media from this machine is served as /api/fs/raw?path=…&cwd=… (ChatMedia). Someone copying it wants the file
 // path, not a localhost URL that stops working when the port changes.
 function localFile(src: string): string | null {
   const u = new URL(src, location.href);
   const p = u.searchParams.get("path");
   if (u.origin !== location.origin || u.pathname !== "/api/fs/raw" || !p) return null;
-  const cwd = u.searchParams.get("cwd");
-  return p.startsWith("/") || p.startsWith("~") || !cwd ? p : `${cwd.replace(/\/$/, "")}/${p.replace(/^\.\//, "")}`;
+  return absPath(p, u.searchParams.get("cwd") ?? undefined);
 }
 
 const fail = (e: unknown) => {
@@ -97,6 +121,28 @@ const fileName = (src: string, alt?: string) => {
   const f = localFile(src) ?? new URL(src, location.href).pathname;
   return f.split("/").pop() || alt || "image.png";
 };
+
+function fileItems(link: HTMLElement): Item[] {
+  const path = link.dataset.gerdrFile!;
+  const cwd = link.dataset.gerdrCwd || undefined;
+  const items: Item[] = [{ label: "打开", icon: <FileText className={icon} />, run: () => openPath(path, cwd), hint: "点击" }];
+  // A phone shows one pane at a time: "beside" would be the same dialog
+  if (!isPhone())
+    items.push({
+      label: "在旁边打开",
+      icon: <Columns2 className={icon} />,
+      run: () => openPath(path, cwd, { beside: true }),
+      hint: IS_MAC ? "⌥ 点击" : "Alt+点击",
+    });
+  // The system app gets the path without a `:42` / `#L21` anchor, which it would read as part of the name
+  if (isNative())
+    items.push(
+      { label: "用默认应用打开", icon: <AppWindow className={icon} />, run: () => nativeOpenPath(stripLineAnchor(path), cwd, false) },
+      { label: IS_MAC ? "在访达中显示" : "在文件夹中显示", icon: <FolderOpen className={icon} />, run: () => nativeOpenPath(stripLineAnchor(path), cwd, true) },
+    );
+  items.push({ label: "复制路径", icon: <Copy className={icon} />, run: () => copyText(absPath(path, cwd)) });
+  return items;
+}
 
 function editable(el: Element | null): HTMLElement | null {
   const e = el?.closest<HTMLElement>("input, textarea, [contenteditable]:not([contenteditable=false])");
@@ -172,6 +218,8 @@ function buildMenu(e: MouseEvent, touch: boolean): Item[][] {
     groups.push(
       extra.map((m) => ({ label: m.title, icon: <Puzzle className={icon} />, run: () => Promise.resolve(m.run(ctx)).catch((e) => addonFail(m.addon, e)) })),
     );
+  const fileLink = t?.closest<HTMLElement>("[data-gerdr-file]");
+  if (fileLink) groups.push(fileItems(fileLink));
   const a = t?.closest<HTMLAnchorElement>("a[href]");
   if (a && /^(https?|mailto):/i.test(a.href) && new URL(a.href).origin !== location.origin) {
     const href = a.href;
@@ -211,7 +259,8 @@ export function AppContextMenu() {
 
   useEffect(() => {
     const touch = isAndroid();
-    if (!isNative() && !touch) return;
+    // A browser tab keeps the browser's menu everywhere but on chat file paths
+    const web = !isNative() && !touch;
     const down = (e: PointerEvent) => {
       if (e.button !== 2) return;
       const sel = window.getSelection();
@@ -219,7 +268,7 @@ export function AppContextMenu() {
     };
     const open = (e: MouseEvent) => {
       const t = e.target instanceof Element ? e.target : null;
-      if (e.defaultPrevented || t?.closest(".xterm")) return;
+      if (e.defaultPrevented || t?.closest(".xterm") || (web && !t?.closest("[data-gerdr-file]"))) return;
       const groups = buildMenu(e, touch);
       // Nothing to offer on Android: let the long press go on to the system's text selection
       if (touch && !groups.length) return;
@@ -304,6 +353,7 @@ export function AppContextMenu() {
             >
               {it.icon}
               {it.label}
+              {it.hint && <span className="ml-auto pl-6 text-xs text-muted-foreground">{it.hint}</span>}
             </button>
           ))}
         </div>

@@ -3,6 +3,7 @@ import {
   Columns2,
   Copy,
   ExternalLink,
+  FileText,
   GitBranch,
   ListPlus,
   ListX,
@@ -20,7 +21,8 @@ import {
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { api } from "@/lib/api";
+import { api, type FileStat } from "@/lib/api";
+import { FileActions, FileContent } from "./FileViewer";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import {
   basename,
@@ -220,6 +222,7 @@ function usePaneDrag(paneId: string, ghost: TabGhost) {
 function PaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; tab: Tab; framed: boolean; zoomed?: boolean; count?: Count }) {
   if (pane.sub) return <SubPaneView pane={pane} tab={tab} framed={framed} zoomed={zoomed} count={count} />;
   if (pane.term) return <TermPaneView pane={pane} tab={tab} framed={framed} zoomed={zoomed} count={count} />;
+  if (pane.file) return <FilePaneView pane={pane} tab={tab} framed={framed} zoomed={zoomed} count={count} />;
   return <SessionPaneView pane={pane} tab={tab} framed={framed} zoomed={zoomed} count={count} />;
 }
 
@@ -301,6 +304,72 @@ function SubPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; tab
         ) : (
           <div className="py-16 text-center text-[13px] text-muted-foreground">这个会话已经不在了</div>
         )}
+      </PaneBody>
+    </div>
+  );
+}
+
+/**
+ * A file opened beside the chat (⌥-click on a path): title bar + the same view as the file viewer dialog. Stats the
+ * path when it shows and on ↻, so a file the agent rewrote since is read again.
+ */
+function FilePaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; tab: Tab; framed: boolean; zoomed?: boolean; count?: Count }) {
+  const path = pane.file!.path;
+  const focused = useContext(TabActive) && tab.focus === pane.id;
+  const many = framed || zoomed;
+  const [stat, setStat] = useState<FileStat | null>(null);
+  const [err, setErr] = useState("");
+  const [rev, setRev] = useState(0);
+  useEffect(() => {
+    let live = true;
+    setErr("");
+    api
+      .fileStat(path)
+      .then((s) => live && setStat(s))
+      .catch((e) => live && (setStat(null), setErr(e.message ?? String(e))));
+    return () => {
+      live = false;
+    };
+  }, [path, rev]);
+  const drag = usePaneDrag(pane.id, { label: basename(path) });
+  return (
+    <div
+      data-pane-id={pane.id}
+      className={cn(
+        "flex h-full min-h-0 flex-col",
+        framed && "overflow-hidden rounded-md border",
+        framed && (focused ? "border-brand" : "border-border"),
+        drag.dragging && "opacity-40",
+      )}
+      onMouseDown={() => !focused && focusPane(pane.id)}
+    >
+      <div
+        onPointerDown={drag.onPointerDown}
+        className={cn("flex h-8 shrink-0 items-center gap-2 border-b px-3 text-[12px] max-md:pl-4", !focused && many && "opacity-70")}
+      >
+        <FileText className="size-4 shrink-0 text-muted-foreground" />
+        <FadeText className="min-w-[3em] max-w-[60%] shrink font-medium max-md:max-w-none">{basename(path)}</FadeText>
+        <PaneCount count={count} />
+        <span className="hidden min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground md:block" title={path}>
+          {path}
+        </span>
+        <div className="flex-1 md:hidden" />
+        <Button variant="ghost" size="icon" className="size-6 shrink-0" title="重新读取" onClick={() => setRev((r) => r + 1)}>
+          <RefreshCw className="size-3.5" />
+        </Button>
+        {stat && <FileActions stat={stat} small />}
+        <Button variant="ghost" size="icon" className="size-6 shrink-0" title="关闭" onClick={() => (focusPane(pane.id), closeFocusedPane())}>
+          <X className="size-3.5" />
+        </Button>
+      </div>
+      <PaneBody>
+        <div className="h-full overflow-auto overscroll-contain">
+          {stat ? (
+            <FileContent key={`${stat.mtime}-${stat.size}`} stat={stat} fill />
+          ) : (
+            <div className="py-16 text-center text-[13px] text-muted-foreground">{err || "读取中…"}</div>
+          )}
+        </div>
       </PaneBody>
     </div>
   );

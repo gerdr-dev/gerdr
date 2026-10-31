@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { api, ApiError } from "./api";
 import type { KeyAction } from "./keys";
 import { stripLineAnchor } from "./paths";
+import { isPhone } from "./phone";
 import {
   activeTab,
   activeWs,
@@ -54,6 +55,7 @@ export function tabName(tab: Tab): string {
     const s = p.sessionId ? sessions[p.sessionId] : undefined;
     if (s) return s.title || basename(s.cwd);
     if (p.term?.cwd) return basename(p.term.cwd);
+    if (p.file) return basename(p.file.path);
     if (p.draft?.cwd) return basename(p.draft.cwd);
   }
   return "new";
@@ -465,7 +467,7 @@ function remember(c: Closed) {
 }
 
 /** 里面什么都没有的 pane / tab（还没开会话的空 pane）。 */
-const blankLeaf = (p: PaneLeaf) => !p.sessionId && !p.term && !p.sub;
+const blankLeaf = (p: PaneLeaf) => !p.sessionId && !p.term && !p.sub && !p.file;
 const blankTab = (t: Tab) => !t.name && t.root.type === "pane" && blankLeaf(t.root);
 /**
  * 空 tab 也要记：⌘T 开个新 tab 随手 ⌘W 关掉，再按 ⌘⇧T 却说「没有刚关掉的」，和浏览器对不上（用户报的）。
@@ -1319,12 +1321,16 @@ export function refocusAfterDialog() {
 let openSeq = 0;
 
 /**
- * 原地打开一条路径（对话里点的）。先按原样问一次，找不到再把行号锚点剥掉重试：
- * agent 爱写 `a.md#L21` / `main.go:42`，那几位不是文件名的一部分；但 `notes#1.md` 是合法文件名，所以不能先剥。
- * 慢的时候（路径在网络盘上）点了别的就丢掉迟到的结果，免得过一会儿突然弹出一个查看器。
+ * Open a path clicked in the chat. Asks as written first and only then without a line anchor: agents like to write
+ * `a.md#L21` / `main.go:42`, which aren't part of the name, but `notes#1.md` is a valid file name, so it can't be
+ * stripped up front. When it's slow (a network drive) and something else was clicked meanwhile, the late answer is
+ * dropped instead of a viewer popping up out of nowhere.
+ * beside: in a pane next to the focused one (⌥-click) instead of the viewer dialog; a phone shows one pane at a time,
+ * so there it is the dialog anyway.
  */
-export async function openPath(raw: string, cwd?: string) {
+export async function openPath(raw: string, cwd?: string, opts: { beside?: boolean } = {}) {
   const seq = ++openSeq;
+  const beside = opts.beside && !isPhone();
   (document.activeElement as HTMLElement | null)?.blur?.(); // 手机上收键盘，不然查看器只露半截
   const tries = [raw];
   const bare = stripLineAnchor(raw);
@@ -1338,18 +1344,37 @@ export async function openPath(raw: string, cwd?: string) {
         toast(`这是个目录：${stat.path}`);
         return;
       }
-      set({ dialog: { kind: "file", stat } });
+      if (beside) openFilePane(stat.path);
+      else set({ dialog: { kind: "file", stat } });
       return;
     } catch (e) {
       // 写短了的路径对上好几个文件（服务端按后缀找的）：让人挑一个
       if (e instanceof ApiError && e.candidates?.length) {
-        if (seq === openSeq) set({ dialog: { kind: "pickFile", path: p, candidates: e.candidates } });
+        if (seq === openSeq) set({ dialog: { kind: "pickFile", path: p, candidates: e.candidates, beside } });
         return;
       }
       err = e;
     }
   }
   if (seq === openSeq) toast.error((err as Error)?.message ?? "打不开这个路径");
+}
+
+/**
+ * Show a file in a pane beside the focused one. A tab that already has a file pane reuses it (like an editor's side
+ * group): ⌥-clicking down a list of paths swaps what that pane shows instead of splitting the chat ever thinner.
+ * Focus stays where it was, so the composer keeps the keyboard.
+ */
+function openFilePane(path: string) {
+  setLayout((l) => {
+    const t = activeTab(l);
+    const ls = leaves(t.root);
+    const same = ls.find((p) => p.file?.path === path);
+    if (same) return updateTab(l, t.id, (tab) => ({ ...tab, zoom: undefined }));
+    const old = ls.find((p) => p.file);
+    if (old) return updateTab(setPane(l, old.id, { file: { path } }), t.id, (tab) => ({ ...tab, zoom: undefined }));
+    const fresh: PaneLeaf = { type: "pane", id: rid("p"), file: { path } };
+    return updateTab(l, t.id, (tab) => ({ ...split(tab, tab.zoom ?? tab.focus, "row", fresh), focus: tab.focus }));
+  });
 }
 
 /**

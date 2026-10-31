@@ -108,7 +108,7 @@ the layout is the user's desk.
 ```bash
 gerdr workspace list                     # workspace_id, label, number (sidebar order), tab_count
 gerdr tab list [--workspace <ws>]        # tab_id, label, pane_count, split: row(a, b) = a left of b, col(a, b) = a above b
-gerdr pane list [--workspace <ws>]       # pane_id, kind (agent / terminal / empty), session {id, title, status, cwd}; self: true is you
+gerdr pane list [--workspace <ws>]       # pane_id, kind (agent / terminal / subagent / file / empty), session {id, title, status, cwd}; self: true is you
 gerdr pane current                       # your own pane
 gerdr pane layout [<pane>] [--tab <tab>] # each pane's rect in its tab
 ```

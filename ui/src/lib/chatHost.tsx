@@ -235,7 +235,7 @@ export function GerdrChatProvider({ children }: { children: ReactNode }) {
       fileStat: (p, cwd) => api.fileStat(p, cwd),
       fileExists: (names, cwd) => api.fileExists(names, cwd),
       searchFiles: (id, q) => api.searchFiles(id, q).then((r) => r.files),
-      openPath: (p, cwd) => void openPath(p, cwd),
+      openPath: (p, cwd, opts) => void openPath(p, cwd, opts),
       openNative: isNative() ? (p, cwd, reveal) => nativeOpenPath(p, cwd, reveal) : undefined,
       openSubagent,
       focusSession,

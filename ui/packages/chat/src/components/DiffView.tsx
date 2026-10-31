@@ -77,7 +77,9 @@ export function DiffView({
             <button
               className="truncate text-left hover:text-foreground hover:underline"
               title={t("diff.open")}
-              onClick={() => host.openPath?.(path, session?.cwd)}
+              data-gerdr-file={path}
+              data-gerdr-cwd={session?.cwd}
+              onClick={(e) => host.openPath?.(path, session?.cwd, { beside: e.altKey })}
             >
               {path}
             </button>

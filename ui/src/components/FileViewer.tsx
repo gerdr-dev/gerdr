@@ -53,7 +53,12 @@ export function FilePicker() {
             const s = shortPath(c);
             const head = s.slice(0, s.length - pick.path.length);
             return (
-              <button key={c} className="truncate rounded-md px-2 py-1.5 text-left font-mono text-[12px] hover:bg-muted" title={c} onClick={() => openPath(c)}>
+              <button
+                key={c}
+                className="truncate rounded-md px-2 py-1.5 text-left font-mono text-[12px] hover:bg-muted"
+                title={c}
+                onClick={() => openPath(c, undefined, { beside: pick.beside })}
+              >
                 <span className="text-muted-foreground">{head}</span>
                 {s.slice(head.length)}
               </button>
@@ -66,9 +71,6 @@ export function FilePicker() {
 }
 
 function Body({ stat }: { stat: FileStat }) {
-  // Versioned so a file rewritten in place isn't played from Chromium's per-URL media buffer (see ChatMedia).
-  const url = `${fileRawURL(stat.path)}&v=${stat.mtime}-${stat.size}`;
-  const kind = stat.mime.split("/")[0];
   return (
     <>
       <div className="flex shrink-0 items-center gap-2 border-b py-2 pr-12 pl-4">
@@ -78,60 +80,81 @@ function Body({ stat }: { stat: FileStat }) {
             {fmtSize(stat.size)} · {shortPath(stat.path)}
           </DialogDescription>
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-8"
-          title="复制路径"
-          onClick={() => {
-            navigator.clipboard.writeText(stat.path);
-            toast("已复制路径");
-          }}
-        >
-          <Copy className="size-4" />
-        </Button>
-        {isNative() || isAndroid() ? (
-          <Button variant="ghost" size="icon" className="size-8" title="在浏览器里打开" onClick={() => openOutside(stat)}>
-            <ExternalLink className="size-4" />
-          </Button>
-        ) : (
-          <Button variant="ghost" size="icon" className="size-8" title="在新标签页打开" asChild>
-            <a href={url} target="_blank" rel="noreferrer">
-              <ExternalLink className="size-4" />
-            </a>
-          </Button>
-        )}
-        <Button variant="ghost" size="icon" className="size-8" title="下载" asChild>
-          <a href={fileRawURL(stat.path, true)} download={stat.name}>
-            <Download className="size-4" />
-          </a>
-        </Button>
+        <FileActions stat={stat} />
       </div>
       <div className="min-h-0 flex-1 overflow-auto overscroll-contain">
-        {kind === "image" ? (
-          <div className="flex min-h-full items-center justify-center bg-muted/40 p-3">
-            <img src={url} alt={stat.name} draggable={false} className="max-h-full max-w-full object-contain" />
-          </div>
-        ) : kind === "video" ? (
-          // playsInline：iOS 上不加会直接进系统全屏播放器，关掉之后回不到这儿
-          <div className="flex min-h-full items-center justify-center bg-muted/40">
-            <video src={url} controls playsInline className="max-h-[80vh] max-w-full max-md:max-h-full" />
-          </div>
-        ) : kind === "audio" ? (
-          <div className="flex justify-center p-8">
-            <audio src={url} controls className="w-full max-w-md" />
-          </div>
-        ) : stat.mime === "application/pdf" ? (
-          canShowPDF() ? (
-            <iframe src={url} title={stat.name} className="h-[80vh] w-full max-md:h-full" />
-          ) : (
-            <NoPreview stat={stat} why="这里看不了 PDF，下载下来用手机上的程序打开。" />
-          )
-        ) : (
-          <TextBody stat={stat} url={url} />
-        )}
+        <FileContent stat={stat} />
       </div>
     </>
+  );
+}
+
+/** Copy path / open outside / download: the viewer dialog's header, and a file pane's title bar (Panes.tsx). */
+export function FileActions({ stat, small }: { stat: FileStat; small?: boolean }) {
+  const btn = small ? "size-6" : "size-8";
+  const ic = small ? "size-3.5" : "size-4";
+  return (
+    <>
+      <Button
+        variant="ghost"
+        size="icon"
+        className={btn}
+        title="复制路径"
+        onClick={() => {
+          navigator.clipboard.writeText(stat.path);
+          toast("已复制路径");
+        }}
+      >
+        <Copy className={ic} />
+      </Button>
+      {isNative() || isAndroid() ? (
+        <Button variant="ghost" size="icon" className={btn} title="在浏览器里打开" onClick={() => openOutside(stat)}>
+          <ExternalLink className={ic} />
+        </Button>
+      ) : (
+        <Button variant="ghost" size="icon" className={btn} title="在新标签页打开" asChild>
+          <a href={fileURL(stat)} target="_blank" rel="noreferrer">
+            <ExternalLink className={ic} />
+          </a>
+        </Button>
+      )}
+      <Button variant="ghost" size="icon" className={btn} title="下载" asChild>
+        <a href={fileRawURL(stat.path, true)} download={stat.name}>
+          <Download className={ic} />
+        </a>
+      </Button>
+    </>
+  );
+}
+
+// Versioned so a file rewritten in place isn't played from Chromium's per-URL media buffer (see ChatMedia).
+const fileURL = (stat: FileStat) => `${fileRawURL(stat.path)}&v=${stat.mtime}-${stat.size}`;
+
+/** The file itself, drawn by kind: the viewer dialog's body, and a file pane's (Panes.tsx; fill: as tall as the pane). */
+export function FileContent({ stat, fill }: { stat: FileStat; fill?: boolean }) {
+  const url = fileURL(stat);
+  const kind = stat.mime.split("/")[0];
+  return kind === "image" ? (
+    <div className="flex min-h-full items-center justify-center bg-muted/40 p-3">
+      <img src={url} alt={stat.name} draggable={false} className="max-h-full max-w-full object-contain" />
+    </div>
+  ) : kind === "video" ? (
+    // playsInline：iOS 上不加会直接进系统全屏播放器，关掉之后回不到这儿
+    <div className="flex min-h-full items-center justify-center bg-muted/40">
+      <video src={url} controls playsInline className={fill ? "max-h-full max-w-full" : "max-h-[80vh] max-w-full max-md:max-h-full"} />
+    </div>
+  ) : kind === "audio" ? (
+    <div className="flex justify-center p-8">
+      <audio src={url} controls className="w-full max-w-md" />
+    </div>
+  ) : stat.mime === "application/pdf" ? (
+    canShowPDF() ? (
+      <iframe src={url} title={stat.name} className={fill ? "h-full w-full" : "h-[80vh] w-full max-md:h-full"} />
+    ) : (
+      <NoPreview stat={stat} why="这里看不了 PDF，下载下来用手机上的程序打开。" />
+    )
+  ) : (
+    <TextBody stat={stat} url={url} />
   );
 }
 

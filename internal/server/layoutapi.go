@@ -950,6 +950,9 @@ func (c *layoutCall) paneView(w, t, p node) node {
 	case p["sub"] != nil:
 		v["kind"] = "subagent"
 		v["parent_session"] = asNode(p["sub"])["sessionId"]
+	case p["file"] != nil:
+		v["kind"] = "file"
+		v["path"] = asNode(p["file"])["path"]
 	default:
 		v["kind"] = "empty"
 	}

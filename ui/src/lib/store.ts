@@ -137,7 +137,7 @@ type Dialog =
   | { kind: "importAgent"; agent: string; cwd: string; paneId: string }
   | { kind: "resume"; sessionId: string; paneId: string }
   | { kind: "file"; stat: FileStat }
-  | { kind: "pickFile"; path: string; candidates: string[] }
+  | { kind: "pickFile"; path: string; candidates: string[]; beside?: boolean }
   | null;
 
 type State = {

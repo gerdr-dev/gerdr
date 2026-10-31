@@ -40,16 +40,30 @@ function A(props: any) {
     );
   }
   return (
+    <PathLink path={path} cwd={session?.cwd}>
+      {props.children}
+    </PathLink>
+  );
+}
+
+/**
+ * A local path in a reply: click opens it in the host's viewer, ⌥-click (Alt-click) beside the chat. data-gerdr-file /
+ * data-gerdr-cwd let the host's right-click menu offer both, which is where people find the ⌥-click.
+ */
+function PathLink({ path, cwd, children }: { path: string; cwd?: string; children: React.ReactNode }) {
+  return (
     <a
       href="#"
       title={path}
       className={pathLink}
+      data-gerdr-file={path}
+      data-gerdr-cwd={cwd}
       onClick={(e) => {
         e.preventDefault();
-        host.openPath?.(path, session?.cwd);
+        chatHost().openPath?.(path, cwd, { beside: e.altKey });
       }}
     >
-      {props.children}
+      {children}
     </a>
   );
 }
@@ -91,17 +105,9 @@ function InlineCode(props: any) {
   const code = <DefaultCode {...props} />;
   if (name && found)
     return (
-      <a
-        href="#"
-        title={name}
-        className={pathLink}
-        onClick={(e) => {
-          e.preventDefault();
-          chatHost().openPath?.(name, session?.cwd);
-        }}
-      >
+      <PathLink path={name} cwd={session?.cwd}>
         {code}
-      </a>
+      </PathLink>
     );
   const actions = cmd && session ? chatHost().codeActions?.(cmd, "bang", session) : undefined;
   if (!actions) return code;
