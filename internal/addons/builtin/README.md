@@ -13,7 +13,7 @@ my-addon/
   installs more. A folder whose name starts with `_` isn't loaded.
 - `addon.json` can also declare a service: a process gerdr's backend keeps running (holding a device like a
   wristband, anything that must run once and all the time). How it talks to gerdr: the top of `gerdr.d.ts`.
-- The API is in `gerdr.d.ts` (gerdr refreshes it on every start: don't edit it).
+- How to write one: `GUIDE.md`. The exact API: `gerdr.d.ts`. gerdr refreshes both on every start: don't edit them.
 - A broken add-on doesn't take the UI down: its error shows in Settings → Add-ons.
 
 The smallest add-on, `hello/index.ts`:

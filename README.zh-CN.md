@@ -184,7 +184,8 @@ export default defineAddon({
 `addon.json` 还可以声明一个**后台进程**：gerdr 后端负责起、挂了重启、扩展删了或关了就停掉。
 它从 stdin 一行一个 JSON 收到开着的会话，也能和扩展的界面那一半（`g.service`）互发消息 —— 比如一直连着蓝牙手环、把 agent 状态推上去。
 
-完整 API（含后台进程的协议）在扩展目录的 `gerdr.d.ts` 里。（以前叫插件；原来的 `~/.gerdr/plugins` 会自动搬到 `~/.gerdr/addons`。）
+怎么写一个扩展（文件结构、每个 API 和例子、样式、设置项、后台进程、发到商店）见[扩展开发手册](internal/addons/builtin/GUIDE.md)
+（也装在 `~/.gerdr/addons/GUIDE.md`）；准确的 API 在同目录的 `gerdr.d.ts`。（以前叫插件；原来的 `~/.gerdr/plugins` 会自动搬到 `~/.gerdr/addons`。）
 
 ## 配置
 

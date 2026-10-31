@@ -204,7 +204,9 @@ export default defineAddon({
 add-on. It gets the open sessions as JSON lines on stdin, and talks to the add-on's UI half (`g.service`) — e.g. a
 bridge that keeps a Bluetooth wristband connected and shows agents on it.
 
-The full API, service protocol included, is in `gerdr.d.ts` in the add-on directory. (They were called plugins
+How to write one — files, every API with examples, styling, settings, services, publishing to a store — is in the
+[add-on guide](internal/addons/builtin/GUIDE.md) (also installed as `~/.gerdr/addons/GUIDE.md`); the exact API is in
+`gerdr.d.ts` next to it. (They were called plugins
 before; `~/.gerdr/plugins` moves to `~/.gerdr/addons` by itself.)
 
 ## configuration

@@ -136,8 +136,8 @@ func New(root string, log *slog.Logger) *Manager {
 
 func (m *Manager) Dir() string { return m.dir }
 
-// Install puts the API declarations (gerdr.d.ts, tsconfig.json) into the add-on directory, refreshed on every start:
-// they describe this version's API. README.md only when missing (someone may have edited it).
+// Install puts the API declarations and the guide (gerdr.d.ts, tsconfig.json, GUIDE.md) into the add-on directory,
+// refreshed on every start: they describe this version's API. README.md only when missing (someone may have edited it).
 func (m *Manager) Install() error {
 	if err := os.MkdirAll(m.dir, 0o755); err != nil {
 		return err

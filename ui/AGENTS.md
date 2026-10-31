@@ -105,6 +105,12 @@ src/lib/
 
 ## 常见的改法
 
+- **Add-on or UI edit?** A block in the sidebar or a pane's title bar, a button in the composer, a right-click item,
+  a tag on the line under each turn, a command or key, a process that keeps running: write an **add-on** instead of
+  editing this directory. It survives gerdr upgrades without merges, can be switched off, and can be shared through a
+  store. How: `~/.gerdr/addons/GUIDE.md` (the add-on guide; the API is `~/.gerdr/addons/gerdr.d.ts`). Edit the UI
+  source only for what no add-on slot reaches.
+
 - **加一块显示**（比如每周 / 每月额度）：数据从哪来先看 `src/lib/api.ts`（已有接口）和 `src/lib/types.ts`；
   只有前端能算出来的直接在组件里算。放在哪：侧栏底部 `Chrome.tsx` 的 Sidebar、pane 标题栏 `Panes.tsx`、输入框下面（`src/lib/chatHost.tsx` 的 composerBar 插槽）。
 - **加一个弹窗**：新建一个组件文件（照 `NameDialogs.tsx` 的写法，关掉用 `closeDialog()`），在 store 的 `Dialog` 类型里加一种 `kind`，
