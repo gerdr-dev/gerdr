@@ -49,6 +49,7 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
+  onInteractOutside,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
@@ -63,6 +64,12 @@ function DialogContent({
           "fixed inset-0 z-50 m-auto grid h-fit content-start w-full max-w-[calc(100%-2rem)] gap-4 rounded-xl border bg-background p-6 shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 sm:max-w-lg",
           className
         )}
+        // The app's long-press / right-click menu (AppContextMenu) lives outside the dialog: picking "copy image" in
+        // it must not count as clicking outside and close the dialog under it
+        onInteractOutside={(e) => {
+          if ((e.target as Element | null)?.closest?.("[data-app-context-menu]")) e.preventDefault()
+          onInteractOutside?.(e)
+        }}
         {...props}
       >
         {children}

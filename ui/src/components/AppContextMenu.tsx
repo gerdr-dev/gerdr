@@ -242,14 +242,16 @@ export function AppContextMenu() {
   }, [menu]);
 
   if (!menu) return null;
-  // Above everything, the lightbox (z-200) included: right-clicking the enlarged image has to show the menu too
+  // Above everything, the lightbox (z-200) included: right-clicking the enlarged image has to show the menu too.
+  // pointer-events-auto: an open modal dialog (the file viewer) sets pointer-events: none on <body>, and this menu is
+  // outside it, so without it a tap on "复制图片" went nowhere — no copy, no error (user report)
   return (
     <div
       ref={box}
       role="menu"
       data-app-context-menu
       style={pos ?? { left: menu.x, top: menu.y, visibility: "hidden" }}
-      className="fixed z-[300] min-w-40 rounded-lg border bg-popover p-1 text-sm text-popover-foreground shadow-md select-none"
+      className="pointer-events-auto fixed z-[300] min-w-40 rounded-lg border bg-popover p-1 text-sm text-popover-foreground shadow-md select-none"
       onContextMenu={(e) => e.preventDefault()}
       // Keep focus and the selection where they were: clicking an item must not clear what it is about to copy
       onMouseDown={(e) => e.preventDefault()}
