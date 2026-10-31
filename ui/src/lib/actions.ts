@@ -48,10 +48,11 @@ export const basename = (p: string) => p.replace(/\/+$/, "").split("/").pop() ||
 /** tab 的默认名字：用户起过就用它，不然是它第一个会话所在目录的名字。 */
 export function tabName(tab: Tab): string {
   if (tab.name) return tab.name;
+  // Unnamed tab: follow its first pane, so it reads like the agent's title (most tabs are never named by hand).
   const { sessions } = get();
   for (const p of leaves(tab.root)) {
     const s = p.sessionId ? sessions[p.sessionId] : undefined;
-    if (s) return basename(s.cwd);
+    if (s) return s.title || basename(s.cwd);
     if (p.term?.cwd) return basename(p.term.cwd);
     if (p.draft?.cwd) return basename(p.draft.cwd);
   }
