@@ -686,7 +686,10 @@ function AgentList() {
         const s = p.sessionId ? sessions[p.sessionId] : undefined;
         if (!s || seen.has(s.id)) continue;
         seen.add(s.id);
-        rows.push({ s, where: `${applyWorkspaceLabel(w, wi, w.name)} · ${tabName(t)}` });
+        // An unnamed tab is named after its first agent's title: for that agent the tab part only repeats the row's title.
+        const ws = applyWorkspaceLabel(w, wi, w.name);
+        const tab = tabName(t);
+        rows.push({ s, where: tab === s.title ? ws : `${ws} · ${tab}` });
       }
     }),
   );
