@@ -262,8 +262,9 @@ function WorkBar({ narrow }: { narrow: boolean }) {
   // status are in the bottom row gerdr lays over the site's menu (WorkView), as in the other two modes.
   // Narrow: the site has no side menu to line up with (useNarrow), so the header takes the whole width.
   const sidebarW = useStore((s) => s.sidebarW);
+  const phone = usePhone();
   return (
-    <div className="flex h-10 shrink-0 border-b bg-sidebar" style={{ WebkitAppRegion: "drag" } as any}>
+    <div className={cn("flex shrink-0 border-b bg-sidebar", phone ? "h-11" : "h-10")} style={{ WebkitAppRegion: "drag" } as any}>
       <SidebarHeader className={narrow ? "flex-1 border-b-0" : "border-r border-b-0"} style={narrow ? undefined : { width: sidebarW }} />
     </div>
   );

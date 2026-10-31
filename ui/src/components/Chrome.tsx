@@ -550,8 +550,13 @@ export function Sidebar({ className }: { className?: string }) {
  * bottom row now, SidebarFooter).
  */
 export function SidebarHeader({ className, style }: { className?: string; style?: React.CSSProperties }) {
+  // As tall as the phone's top bar (PhoneBar, h-11): the drawer slides in beside it, and the two bottom borders should line up
+  const phone = usePhone();
   return (
-    <div className={cn("flex h-10 shrink-0 items-center gap-1 border-b px-1.5", className)} style={{ WebkitAppRegion: "drag", ...style } as any}>
+    <div
+      className={cn("flex shrink-0 items-center gap-1 border-b px-1.5", phone ? "h-11" : "h-10", className)}
+      style={{ WebkitAppRegion: "drag", ...style } as any}
+    >
       <div className="native-traffic-light-gap" />
       {/* The session switcher takes the title's place (asked for). Only the button is no-drag, so the rest of the bar still moves the window */}
       <div className="flex min-w-16 flex-1">
