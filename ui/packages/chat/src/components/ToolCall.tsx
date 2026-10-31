@@ -177,24 +177,35 @@ function SubagentBody({ sessionId, toolCallId, prompt, done, keep }: { sessionId
   const sub = useChatHost().useTranscript(sessionId, toolCallId);
   const report = done ? lastReport(sub.all) : "";
   const [all, setAll] = useKept(keep && `${keep}:prompt`, false);
-  const long = !!prompt && (prompt.length > 280 || prompt.split("\n").length > 4);
+  const [allReport, setAllReport] = useKept(keep && `${keep}:report`, false);
+  // Both stay short until asked: a long prompt or report filled a phone screen and pushed the conversation away
+  const long = !!prompt && (prompt.length > 200 || prompt.split("\n").length > 3);
+  const longReport = report.length > 400 || report.split("\n").length > 8;
+  const more = (open: boolean, toggle: () => void) => (
+    <button className="text-[11px] text-muted-foreground hover:text-foreground" onClick={toggle}>
+      {open ? t("common.collapse") : t("tool.subPromptAll")}
+    </button>
+  );
   return (
     <div className="space-y-2 text-[13px]">
       {prompt && (
         <div className="rounded-lg border bg-muted/30 px-2.5 py-1.5">
           <div className="text-[11px] text-muted-foreground">{t("tool.subPrompt")}</div>
-          <div className={cn("whitespace-pre-wrap break-words", long && !all && "line-clamp-4")}>{prompt}</div>
-          {long && (
-            <button className="text-[11px] text-muted-foreground hover:text-foreground" onClick={() => setAll(!all)}>
-              {all ? t("common.collapse") : t("tool.subPromptAll")}
-            </button>
-          )}
+          <div className={cn("whitespace-pre-wrap break-words", long && !all && "line-clamp-3")}>{prompt}</div>
+          {long && more(all, () => setAll(!all))}
         </div>
       )}
       {report && (
         <div className="px-2.5">
           <div className="text-[11px] text-muted-foreground">{t("tool.subReport")}</div>
-          <Markdown>{report}</Markdown>
+          {/* gerdr-md: the chat's own Markdown sizes (without it streamdown's headings came out text-3xl). Collapsed it
+              shows the first ~8 lines, fading out */}
+          <div
+            className={cn("gerdr-md", longReport && !allReport && "max-h-[11em] overflow-hidden [mask-image:linear-gradient(to_bottom,black_60%,transparent)]")}
+          >
+            <Markdown>{report}</Markdown>
+          </div>
+          {longReport && more(allReport, () => setAllReport(!allReport))}
         </div>
       )}
     </div>
