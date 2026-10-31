@@ -1,3 +1,4 @@
+import type { AppUpdateStatus } from "./native";
 import type { LLMModel, LLMProvider } from "./store";
 import type { ContentBlock, ExtSettings, ExtView, Hello, HubEvent, MemoryStore, PluginBuild, SessionSummary, TermInfo } from "./types";
 
@@ -250,6 +251,11 @@ export const api = {
   remoteDeletePasskey: (id: string) => req("DELETE", `/api/remote/passkeys/${encodeURIComponent(id)}`),
   remoteUnlock: () => req("POST", "/api/remote/unlock", {}),
   service: () => req<ServiceStatus>("GET", "/api/service"),
+  /** The desktop App's update status as its page last relayed it (null: no App window lately); server/appupdate.go. */
+  appUpdate: () => req<{ status: AppUpdateStatus | null; client: string }>("GET", "/api/app-update"),
+  reportAppUpdate: (status: AppUpdateStatus) => req<{}>("PUT", "/api/app-update", { client: clientId, status }),
+  /** A button in Settings → 版本 pressed off the App: the App's page carries it to the shell. */
+  appUpdateOp: (op: "check" | "apply" | "auto", on?: boolean) => req<{}>("POST", "/api/app-update/op", { op, on: !!on }),
   uiStatus: () => req<UIStatus>("GET", "/api/ui/status"),
   setService: (on: boolean) => req("POST", "/api/service", { on }),
   stepUpRequest: () => req<{ id: string; code: string; expires: string }>("POST", "/api/remote/stepup/request", {}),

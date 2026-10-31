@@ -79,6 +79,7 @@ type Server struct {
 	appWatch    appWatch    // 安卓 App 后台通知的长轮询（appwatch.go）
 	workUIs     workUIs     // each project's Work site, started on first use (workapi.go)
 	links       fileLinks   // cookie-less links to one file, for opening it in the system browser (filelink.go)
+	appUpdate   appUpdate   // the desktop App's update status, relayed by its page for other devices (appupdate.go)
 	// OnServiceInstalled：刚打开后台常驻、本进程是 App 起的后端时让位（见 cmd/gerdr 的 handover）。
 	OnServiceInstalled func()
 }
@@ -152,6 +153,7 @@ func (s *Server) Handler() http.Handler {
 	})
 	mux.HandleFunc("GET /api/pending", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, s.Hub.Pending()) })
 	mux.HandleFunc("GET /api/busy", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, s.busy()) })
+	s.appUpdateRoutes(mux)
 	mux.HandleFunc("POST /api/sessions/{id}/answer", s.sessionOp(func(r *http.Request, sess *hub.Session) (any, error) {
 		var b struct {
 			ReqID    string          `json:"reqId"`

@@ -1,15 +1,17 @@
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Switch } from "@/components/ui/switch";
 import { isNative, nativeApplyUpdate, nativeAskUpdate, nativeSetAutoUpdate, type AppUpdateStatus } from "@/lib/native";
-import { useStore } from "@/lib/store";
+import { set, useStore } from "@/lib/store";
 
 // Settings → 通用 →「版本」: which gerdr is running and where the App's self-update is (desktop/updater.js, pushed
 // by desktop/main.js updateStatus): downloading, waiting for agents to finish, upgrading. A downloaded backend
 // update is applied by the App only when nothing would be cut off (docs/dev/UPDATE.md), so "waiting" says on what.
-// In a browser there's no shell: just the version.
+// Off the App (a phone over remote access, a browser) there's no shell: the App's own page relays its status and the
+// buttons through the backend (server/appupdate.go), which works while the App has a window open on the computer.
 
 export function UpdateSetting() {
   const version = useStore((s) => s.version);
@@ -17,7 +19,13 @@ export function UpdateSetting() {
   const [service, setService] = useState(false);
 
   useEffect(() => {
-    if (!isNative()) return;
+    if (!isNative()) {
+      api
+        .appUpdate()
+        .then((r) => set({ appUpdate: r.status }))
+        .catch(() => {});
+      return;
+    }
     nativeAskUpdate();
     api
       .service()
@@ -34,6 +42,10 @@ export function UpdateSetting() {
   const shown = (u && u.app !== running ? `gerdr ${running} · App ${u.app}` : `gerdr ${running}`) + when;
   const { text, tone } = u ? describe(u, service) : { text: "", tone: "" };
   const p = u?.pending;
+  const native = isNative();
+  const ask = native ? () => nativeAskUpdate(true) : () => relay("check");
+  const apply = native ? nativeApplyUpdate : () => relay("apply");
+  const setAuto = native ? nativeSetAutoUpdate : (on: boolean) => relay("auto", on);
 
   return (
     <>
@@ -42,14 +54,15 @@ export function UpdateSetting() {
           <div className="text-[13px]">版本</div>
           <div className="text-[12px] text-muted-foreground">{shown}</div>
           {text && <div className={cn("text-[12px]", tone || "text-muted-foreground")}>{text}</div>}
+          {!u && !native && <div className="text-[12px] text-muted-foreground">电脑上的 Gerdr App 开着窗口时，这里能检查和安装更新</div>}
         </div>
         {u?.enabled &&
           (p ? (
-            <Button size="sm" disabled={u.phase === "applying"} onClick={nativeApplyUpdate}>
+            <Button size="sm" disabled={u.phase === "applying"} onClick={apply}>
               现在更新
             </Button>
           ) : (
-            <Button size="sm" variant="outline" disabled={u.phase !== "idle"} onClick={() => nativeAskUpdate(true)}>
+            <Button size="sm" variant="outline" disabled={u.phase !== "idle"} onClick={ask}>
               检查更新
             </Button>
           ))}
@@ -63,11 +76,16 @@ export function UpdateSetting() {
               {u.auto ? "自己检查、下载，没有 agent 在跑、没开终端时换上" : "不自己检查和下载：点「检查更新」下好后，再点「现在更新」"}
             </div>
           </div>
-          <Switch checked={u.auto} onCheckedChange={nativeSetAutoUpdate} />
+          <Switch checked={u.auto} onCheckedChange={setAuto} />
         </div>
       )}
     </>
   );
+}
+
+/** Off the App: the backend hands it to the App's page, whose next status report shows what happened. */
+function relay(op: "check" | "apply" | "auto", on?: boolean) {
+  api.appUpdateOp(op, on).catch((e) => toast.error((e as Error).message));
 }
 
 function describe(u: AppUpdateStatus, service: boolean): { text: string; tone: string } {

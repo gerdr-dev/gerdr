@@ -64,3 +64,16 @@ until the App was reopened.
 
 Not done: keeping turns alive across a restart. That needs agent processes and PTYs owned by a small long-lived holder
 (like a tmux server / containerd-shim) that gerdr reconnects to, plus replaying in-flight protocol state.
+
+## From a phone (or any device without the shell)
+
+Settings → 版本 on a phone over remote access has no shell to ask. A page inside the App relays instead
+(`internal/server/appupdate.go`, `ui/src/lib/native.ts` relayUpdate): it PUTs the status the shell pushes to it
+to `/api/app-update` (local door only), re-sending every 30s. The phone reads it there and gets changes over `/ws`
+(`app_update`). A button pressed on the phone goes `POST /api/app-update/op` → `/ws` `app_update_op` addressed to
+the reporting page's client id → that page calls the same shell message its own button would.
+
+The shell itself is untouched on purpose: changing its files would make the next release a full download. So this
+only works while the App has a window open; past 90s without a report the phone shows nothing. "Apply" from the
+phone is refused while anything is busy: the shell would ask in a dialog on the computer, which nobody at the phone
+can answer. With automatic updates on it applies by itself once idle anyway.

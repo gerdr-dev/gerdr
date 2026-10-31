@@ -4,7 +4,7 @@
 import { api, ApiError, clientId } from "./api";
 import { toast } from "sonner";
 import { validLayout, withView } from "./layout";
-import { nativeNotify } from "./native";
+import { isNative, nativeNotify, runRelayedUpdateOp } from "./native";
 import { emitSessionChange } from "./plugins";
 import {
   applyEvents,
@@ -290,6 +290,13 @@ function handle(m: any) {
       if (m.data?.checks) set({ doctor: m.data });
       break;
     case "pong":
+      break;
+    // The desktop App's update status relayed by its page (server/appupdate.go): the App's own pages have it first-hand
+    case "app_update":
+      if (!isNative()) set({ appUpdate: m.data?.status ?? null });
+      break;
+    case "app_update_op":
+      if (isNative() && m.data?.client === clientId) runRelayedUpdateOp(m.data.op, !!m.data.on);
       break;
     case "open":
       import("./actions").then((a) => a.openSessionNear(m.data?.id, m.data?.near, !!m.data?.focus));

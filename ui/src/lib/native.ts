@@ -3,6 +3,7 @@
 // 两边消息形状一样，都认。
 
 import { toast } from "sonner";
+import { api } from "./api";
 import { set } from "./store";
 
 type Bridge = { postMessage(m: unknown): void };
@@ -104,6 +105,7 @@ export function nativeApplyUpdate() {
 let toasted = "";
 export function onAppUpdate(u: AppUpdateStatus) {
   set({ appUpdate: u });
+  relayUpdate(u);
   const p = u.pending;
   if (!p || u.phase === "applying") return void toast.dismiss("app-update");
   const b = u.busy;
@@ -118,4 +120,23 @@ export function onAppUpdate(u: AppUpdateStatus) {
     description: p.kind === "app" ? "这次要换整个 App：会退出再重新打开" : auto ? "没有 agent 在跑、没开终端时会自己更新" : "自动更新关着：点了才更新",
     action: { label: "现在更新", onClick: nativeApplyUpdate },
   });
+}
+
+/**
+ * Pass the status on to the backend for devices without a shell (a phone over remote access, server/appupdate.go),
+ * and keep re-sending it: the backend takes a window that went quiet for 90s as closed.
+ */
+let relayed: AppUpdateStatus | null = null;
+function relayUpdate(u: AppUpdateStatus) {
+  const first = !relayed;
+  relayed = u;
+  api.reportAppUpdate(u).catch(() => {});
+  if (first) setInterval(() => relayed && api.reportAppUpdate(relayed).catch(() => {}), 30_000);
+}
+
+/** A button pressed on another device ("app_update_op", addressed to this page): do it as if pressed here. */
+export function runRelayedUpdateOp(op: string, on: boolean) {
+  if (op === "check") nativeAskUpdate(true);
+  else if (op === "apply") nativeApplyUpdate();
+  else if (op === "auto") nativeSetAutoUpdate(on);
 }
