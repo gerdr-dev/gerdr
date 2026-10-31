@@ -251,10 +251,8 @@ function DefaultToolCall({ part, agent, running, keep: keepOpen }: { part: ToolP
             {/* shrink-[100]: when the row is short of room (a phone) the progress text gives way first, so the title stays
                 readable instead of both being cut to "M…" */}
             {taskNote && <span className="min-w-0 shrink-[100] truncate text-[11px] text-muted-foreground">{taskNote}</span>}
-            <span className="shrink-0 text-[11px] tabular-nums opacity-70">
-              {elapsed(task.startedAt, task.endedAt)}
-              {task.toolUses ? t("task.tools", { n: task.toolUses }) : ""}
-            </span>
+            {/* No tool-call count: it ate room the title needed on a phone and told the user little */}
+            <span className="shrink-0 text-[11px] tabular-nums opacity-70">{elapsed(task.startedAt, task.endedAt)}</span>
           </>
         )}
         {/* Buttons and the chevron sit at the right. -ml-2 cancels one of the two gaps around this spacer: on a phone that

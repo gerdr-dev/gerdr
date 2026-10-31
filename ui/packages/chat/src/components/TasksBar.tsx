@@ -133,7 +133,6 @@ export function TaskDoneCard({ sessionId, t, woke, command }: { sessionId: strin
         {/* 成功时写明「跑完」：图标、文字、角标都和启动它的那条工具调用一样，不写看着像重复了一行 */}
         {ok && tr("task.doneDot")}
         {elapsed(t.startedAt, t.endedAt)}
-        {t.toolUses ? tr("task.tools", { n: t.toolUses }) : ""}
       </span>
       {/* 它一结束 agent 就自己接着干了：交代下面这段话是怎么来的（transcript 的 turn_start auto） */}
       {woke && <span className="shrink-0 text-[11px]">{tr("task.woke")}</span>}
