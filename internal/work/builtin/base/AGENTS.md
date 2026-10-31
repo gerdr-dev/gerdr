@@ -18,7 +18,8 @@ you as messages (e.g. "write this week's progress reports").
   - `ui/src/pages/*.tsx` — one file per page, routed by file name (`index.tsx` → `/`,
     `weekly.tsx` → `/weekly`, `okr/[id].tsx` → `/okr/:id`); default-export a component.
   - `ui/src/lib/gerdr.ts` — the bridge: `run(fn, input, { onProgress, onLog, signal })` calls a local
-    function, `ask(text)` sends a task to you, `openSettings(tab)` opens gerdr's settings. Light / dark
+    function, `ask(text)` sends a task to you, `openSession(id)` shows a conversation a function started
+    (`ctx.sessions.start`), `openSettings(tab)` opens gerdr's settings. Light / dark
     follows gerdr.
   - `ui/src/index.css` — theme tokens (same as gerdr's). Style with Tailwind classes using them:
     `bg-background`, `text-muted-foreground`, `border`, `bg-accent`, `text-ok` / `text-warn` /

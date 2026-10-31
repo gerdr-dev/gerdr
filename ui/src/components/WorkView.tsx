@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { AgentIcon, StatusDot } from "@/components/AgentIcon";
 import { COL_EDGE, SidebarEdge, SidebarFooter, SidebarHeader, startColResize } from "@/components/Chrome";
+import { focusSession } from "@/lib/actions";
 import { formatCombo } from "@/lib/keys";
 import { toggleOverview } from "@/lib/overview";
 import { ChatView } from "@/components/chat/ChatView";
@@ -148,6 +149,11 @@ function WorkFrame({ project, onShowChat }: { project: string; onShowChat?: () =
       } else if (m.type === "gerdr:openChat" && typeof m.session === "string") {
         openWorkChat(m.session);
         onShowChat?.();
+      } else if (m.type === "gerdr:openSession" && typeof m.session === "string") {
+        // A conversation a local function started (ctx.sessions) lives in Code, not in this chat: go to its pane
+        toggleOverview(false);
+        setMode("agents");
+        focusSession(m.session);
       } else if (m.type === "gerdr:settings") set({ dialog: { kind: "settings", tab: typeof m.tab === "string" ? m.tab : undefined } });
     };
     window.addEventListener("message", f);

@@ -107,6 +107,11 @@ export function ask(text: string) {
   window.parent.postMessage({ type: "gerdr:ask", text }, location.origin);
 }
 
+/** Shows a coding-agent conversation a local function started (ctx.sessions.start): switches to Code, at its pane. */
+export function openSession(session: string) {
+  window.parent.postMessage({ type: "gerdr:openSession", session }, location.origin);
+}
+
 /** Opens gerdr's settings (e.g. "mcp" to sign in to an MCP server). */
 export function openSettings(tab?: string) {
   window.parent.postMessage({ type: "gerdr:settings", tab }, location.origin);
