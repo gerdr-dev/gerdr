@@ -513,9 +513,10 @@ func (s *session) onToolResult(ctx context.Context, raw json.RawMessage, structu
 	text := resultText(b.Content)
 	if isAgentTool(st.name) {
 		text = subReport(text)
-		// 后台子 agent 的工具结果是 CLI 写给模型看的一大段内部说明（agentId、「别告诉用户」……），人不用看。
+		// A background agent's result is the CLI's notice to the model (agentId, "don't tell the user"…), nothing for a
+		// person; the row's 后台 tag already says it was launched. Its report arrives with task_notification.
 		if strings.HasPrefix(text, "Async agent launched") {
-			text = "已在后台启动，跑完会自动通知。"
+			text = ""
 		}
 	}
 	opts := []acp.ToolCallUpdateOpt{acp.WithUpdateStatus(status)}

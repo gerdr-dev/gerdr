@@ -18,7 +18,8 @@ import {
 import { diffLines } from "diff";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../ui/collapsible";
-import { allowRetryText, isCommandText, type ToolContent, type ToolMeta, type ToolPart } from "../transcript";
+import { allowRetryText, isCommandText, type GMessage, type ToolContent, type ToolMeta, type ToolPart } from "../transcript";
+import { Markdown } from "./Markdown";
 import { cn } from "../utils";
 import { DiffView } from "./DiffView";
 import { useSession } from "./sessionContext";
@@ -148,6 +149,53 @@ export function ToolBody({ meta, input, keep }: { meta: ToolMeta; input: unknown
         <pre className="max-h-64 overflow-auto rounded-lg bg-muted/40 px-2 py-1.5 font-mono text-[11px] text-muted-foreground">
           {JSON.stringify(input, null, 2)}
         </pre>
+      )}
+    </div>
+  );
+}
+
+/** The report at the end of a subagent's own conversation: the text after its last tool call in its last message. */
+function lastReport(all: GMessage[]): string {
+  const m = [...all].reverse().find((m) => m.role === "assistant");
+  if (!m) return "";
+  const out: string[] = [];
+  for (let i = m.parts.length - 1; i >= 0; i--) {
+    const p = m.parts[i];
+    if (p.type === "text") out.unshift(p.text);
+    else if (p.type !== "reasoning" && p.type !== "step-start") break;
+  }
+  return out.join("").trim();
+}
+
+/**
+ * A subagent opened: what it was asked to do and, once done, what it reported. Its own tool calls stay behind
+ * "查看对话" so they don't bury the main conversation. The report comes from its conversation (the backend appends
+ * it there for foreground and background agents alike), not the tool result: a background agent's result is only the
+ * CLI's "launched" notice.
+ */
+function SubagentBody({ sessionId, toolCallId, prompt, done, keep }: { sessionId: string; toolCallId: string; prompt?: string; done: boolean; keep?: string }) {
+  const sub = useChatHost().useTranscript(sessionId, toolCallId);
+  const report = done ? lastReport(sub.all) : "";
+  const [all, setAll] = useKept(keep && `${keep}:prompt`, false);
+  const long = !!prompt && (prompt.length > 280 || prompt.split("\n").length > 4);
+  return (
+    <div className="space-y-2 text-[13px]">
+      {prompt && (
+        <div className="rounded-lg border bg-muted/30 px-2.5 py-1.5">
+          <div className="text-[11px] text-muted-foreground">{t("tool.subPrompt")}</div>
+          <div className={cn("whitespace-pre-wrap break-words", long && !all && "line-clamp-4")}>{prompt}</div>
+          {long && (
+            <button className="text-[11px] text-muted-foreground hover:text-foreground" onClick={() => setAll(!all)}>
+              {all ? t("common.collapse") : t("tool.subPromptAll")}
+            </button>
+          )}
+        </div>
+      )}
+      {report && (
+        <div className="px-2.5">
+          <div className="text-[11px] text-muted-foreground">{t("tool.subReport")}</div>
+          <Markdown>{report}</Markdown>
+        </div>
       )}
     </div>
   );
@@ -319,7 +367,17 @@ function DefaultToolCall({ part, agent, running, keep: keepOpen }: { part: ToolP
         />
       </CollapsibleTrigger>
       <CollapsibleContent className="pl-[22px] pr-1 pt-1 pb-2">
-        <ToolBody meta={meta} input={part.input} keep={keep} />
+        {(isAgent || agent) && session && !failed ? (
+          <SubagentBody
+            sessionId={session.id}
+            toolCallId={part.toolCallId}
+            prompt={typeof inp?.prompt === "string" ? inp.prompt : undefined}
+            done={!busy && task?.status !== "running"}
+            keep={keep}
+          />
+        ) : (
+          <ToolBody meta={meta} input={part.input} keep={keep} />
+        )}
       </CollapsibleContent>
     </Collapsible>
   );
