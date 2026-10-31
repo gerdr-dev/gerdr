@@ -39,7 +39,8 @@ type Renderer struct {
 	waitingOn *vendorBuild
 
 	errMu     sync.Mutex
-	clientErr []ClientError // 页面报上来的运行时错误（只留当前这一版构建的）
+	clientErr []ClientError   // 页面报上来的运行时错误（只留当前这一版构建的）
+	logged    map[string]bool // build+source+message already written to the log, so a render loop doesn't flood it
 }
 
 // ClientError：页面里冒出来的错误（渲染出错、点按钮抛异常……），按构建号归档。
@@ -52,6 +53,9 @@ type ClientError struct {
 }
 
 // ReportClientErrors：页面经 POST /api/ui/errors 报上来的。只认当前这一版（旧版的错，改完已经不相干了），最多留 30 条。
+// Every distinct error also goes to gerdr.log, whatever its build: the list here lives in memory and is gone after
+// "ignore", a rollback or a restart, so without the log nobody can tell afterwards what the page showed before the
+// user reached for the rescue panel.
 func (r *Renderer) ReportClientErrors(build string, items []errorItem) {
 	r.mu.Lock()
 	cur := ""
@@ -59,11 +63,22 @@ func (r *Renderer) ReportClientErrors(build string, items []errorItem) {
 		cur = r.cur.id
 	}
 	r.mu.Unlock()
+	r.errMu.Lock()
+	defer r.errMu.Unlock()
+	for _, it := range items {
+		key := build + "\x00" + it.Source + "\x00" + it.Message
+		if r.logged[key] { // once per build: a render loop reports the same error over and over
+			continue
+		}
+		if r.logged == nil || len(r.logged) > 500 {
+			r.logged = map[string]bool{}
+		}
+		r.logged[key] = true
+		r.log.Warn("ui client error", "dir", r.dir, "build", build, "current", build == cur, "source", it.Source, "message", it.Message, "detail", firstLines(it.Detail, 8))
+	}
 	if build != cur {
 		return
 	}
-	r.errMu.Lock()
-	defer r.errMu.Unlock()
 	for _, it := range items {
 		r.clientErr = append(r.clientErr, ClientError{Build: build, Source: it.Source, Message: it.Message, Detail: it.Detail, At: time.Now().UnixMilli()})
 	}
@@ -528,6 +543,15 @@ func (r *Renderer) ServePublic(w http.ResponseWriter, req *http.Request) bool {
 func firstLine(s string) string {
 	s, _, _ = strings.Cut(s, "\n")
 	return s
+}
+
+// firstLines keeps the top of a stack trace: enough to find the file, short enough for one log line.
+func firstLines(s string, n int) string {
+	lines := strings.SplitN(s, "\n", n+1)
+	if len(lines) > n {
+		lines = lines[:n]
+	}
+	return strings.Join(lines, "\n")
 }
 
 var sourceExts = map[string]bool{".ts": true, ".tsx": true, ".js": true, ".jsx": true, ".mjs": true, ".css": true, ".json": true}
