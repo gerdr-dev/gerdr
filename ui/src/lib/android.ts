@@ -9,10 +9,12 @@
 // 就是「我在 App 里，而且是 App 认的那台」。对象在页面脚本跑之前就在了，模块顶层读一次就够。
 
 import { toast } from "sonner";
+import { hasAsk, watchAsks } from "@gerdr/chat/askkeys";
+import { keyboardUp } from "./phone";
 import { lightboxOpen } from "@/components/Lightbox";
 import { focusSession } from "./actions";
 import { activeTab } from "./layout";
-import { get, set } from "./store";
+import { get, set, useStore } from "./store";
 
 export type AndroidMsg = { t: string; [k: string]: unknown };
 
@@ -115,8 +117,12 @@ export function initAndroid() {
   for (const ev of MEDIA_EVENTS) document.addEventListener(ev, syncMedia, true);
   playing = false;
   syncMedia();
+  // What decides whether the volume keys are arrows right now (syncArrows): the keyboard coming up or going (focus,
+  // viewport height), a menu / list opening (Radix portals land on <body>), a question card, the focused pane
+  const arrowOffs = watchArrows();
   g.__gerdrAndroidOff = () => {
     for (const ev of MEDIA_EVENTS) document.removeEventListener(ev, syncMedia, true);
+    arrowOffs();
     document.removeEventListener("visibilitychange", onVisible);
     offs.forEach((off) => off());
   };
@@ -193,12 +199,68 @@ function syncMedia() {
   postAndroid({ t: "media", playing: now });
 }
 
+/** An open dropdown / menu (Radix Select, DropdownMenu): it holds the focus and takes arrows. */
+const openList = () => document.querySelector<HTMLElement>('[role="listbox"][data-state="open"], [role="menu"][data-state="open"]');
+
+/**
+ * Volume keys are ↑ / ↓ only while there's something to move through: the soft keyboard is up (history, the cursor,
+ * the / and @ lists), a dropdown is open, or the focused session's agent is asking a question. The rest of the time
+ * (reading a chat, the session list) they are volume keys again: asked for, an always-on remap made the volume
+ * impossible to change. The shell can't ask the page in the middle of a key press, so the page keeps it told.
+ */
+let arrows: boolean | undefined;
+function syncArrows() {
+  const pane = activeTab(get().layout).focus;
+  const now = keyboardUp() || !!openList() || (!!pane && hasAsk(pane));
+  if (now === arrows) return;
+  arrows = now;
+  postAndroid({ t: "arrows", on: now });
+}
+
+function watchArrows() {
+  arrows = undefined;
+  let raf = 0;
+  const later = () => {
+    cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(syncArrows);
+  };
+  document.addEventListener("focusin", later);
+  document.addEventListener("focusout", later);
+  window.visualViewport?.addEventListener("resize", later);
+  const mo = new MutationObserver(later);
+  mo.observe(document.body, { childList: true });
+  const offAsks = watchAsks(later);
+  const offStore = useStore.subscribe((s, p) => s.layout !== p.layout && later());
+  syncArrows();
+  return () => {
+    cancelAnimationFrame(raf);
+    document.removeEventListener("focusin", later);
+    document.removeEventListener("focusout", later);
+    window.visualViewport?.removeEventListener("resize", later);
+    mo.disconnect();
+    offAsks();
+    offStore();
+  };
+}
+
 /**
  * 音量键当 ↑ / ↓（设置里能关）：等于在焦点那个会话的输入框里按方向键 —— 输入框空着时翻之前发过的话，
  * agent 在问问题时在选项间移动（Composer 的 onKeyDown 那一套）。手机竖屏上不用去够软键盘。
- * 不聚焦输入框：聚焦会把软键盘弹起来。
+ * 不聚焦输入框：聚焦会把软键盘弹起来。一个下拉 / 菜单开着时给它（焦点在它里面）。
  */
 function volumeKey(key: "ArrowUp" | "ArrowDown") {
+  const list = openList();
+  if (list) {
+    const to = list.contains(document.activeElement) ? (document.activeElement as HTMLElement) : list;
+    to.dispatchEvent(new KeyboardEvent("keydown", { key, code: key, bubbles: true, cancelable: true }));
+    return;
+  }
+  // Typing somewhere else than a composer (the command palette's search, a rename box): the arrows are for that box
+  const a = document.activeElement as HTMLElement | null;
+  if (a && (a.tagName === "INPUT" || a.tagName === "TEXTAREA") && !a.hasAttribute("data-composer")) {
+    a.dispatchEvent(new KeyboardEvent("keydown", { key, code: key, bubbles: true, cancelable: true }));
+    return;
+  }
   const pane = activeTab(get().layout).focus;
   const box = pane ? document.querySelector<HTMLTextAreaElement>(`textarea[data-composer="${CSS.escape(pane)}"]`) : null;
   box?.dispatchEvent(new KeyboardEvent("keydown", { key, code: key, bubbles: true, cancelable: true }));

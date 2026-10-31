@@ -45,9 +45,18 @@ class Bridge(private val act: MainActivity, web: WebView, origin: String) {
     var mediaPlaying = false
         private set
 
+    /**
+     * Whether the page has something for ↑ / ↓ right now (keyboard up, a dropdown open, a question waiting: android.ts
+     * syncArrows); otherwise the volume keys stay volume keys. null = the page never said (a page from before this
+     * message): keep the old always-on behaviour rather than never mapping them.
+     */
+    var arrows: Boolean? = null
+        private set
+
     fun reset() {
         page = null
         mediaPlaying = false
+        arrows = null
         backCb?.invoke(false)
         backCb = null
     }
@@ -103,6 +112,7 @@ class Bridge(private val act: MainActivity, web: WebView, origin: String) {
             }
             // A video / audio in the page started or stopped playing (android.ts syncMedia)
             "media" -> mediaPlaying = m.optBoolean("playing")
+            "arrows" -> arrows = m.optBoolean("on")
             "volkeys" -> {
                 if (m.optString("op") == "set") act.setVolumeKeys(m.optBoolean("on"))
                 send(JSONObject().put("t", "volkeys").put("on", act.volumeKeys()))

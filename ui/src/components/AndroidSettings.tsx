@@ -33,7 +33,7 @@ export function AndroidSettings() {
   if (!isAndroid()) return null;
   const live = n?.on && n.perm;
   return (
-    <div className="space-y-4 rounded-lg border p-3">
+    <div className="space-y-4">
       <div className="flex items-center justify-between gap-4">
         <div>
           <div className="text-[13px]">安卓 App</div>
@@ -87,7 +87,9 @@ export function AndroidSettings() {
         <div className="flex items-center justify-between gap-4">
           <div>
             <div className="text-[13px]">音量键当 ↑ / ↓</div>
-            <div className="text-[12px] text-muted-foreground">输入框空着时翻之前发过的话；agent 提问时在选项间移动</div>
+            <div className="text-[12px] text-muted-foreground">
+              只在键盘弹起、下拉菜单开着、agent 在提问时这样用（翻历史、挪光标、选选项）；其他时候还是调音量
+            </div>
           </div>
           <Switch checked={vol} onCheckedChange={(v) => postAndroid({ t: "volkeys", op: "set", on: v })} />
         </div>

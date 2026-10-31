@@ -864,8 +864,8 @@ class MainActivity : ComponentActivity() {
         val up = e.keyCode == KeyEvent.KEYCODE_VOLUME_UP
         if (up || e.keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
             val b = bridge
-            // Playing a video / audio (inline or fullscreen): the keys are volume again
-            if (b != null && b.ready && volumeKeys() && video == null && !b.mediaPlaying) {
+            // Playing a video / audio (inline or fullscreen), or nothing in the page to move through: volume again
+            if (b != null && b.ready && volumeKeys() && video == null && !b.mediaPlaying && b.arrows != false) {
                 if (e.action == KeyEvent.ACTION_DOWN) b.key(if (up) "up" else "down", e.repeatCount > 0)
                 return true
             }

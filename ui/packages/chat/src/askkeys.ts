@@ -5,12 +5,26 @@
 type Handler = (e: KeyboardEvent) => boolean;
 
 const handlers = new Map<string, Handler>();
+const watchers = new Set<() => void>();
+const changed = () => watchers.forEach((fn) => fn());
 
 export function registerAsk(sessionId: string, fn: Handler) {
   handlers.set(sessionId, fn);
+  changed();
   return () => {
-    if (handlers.get(sessionId) === fn) handlers.delete(sessionId);
+    if (handlers.get(sessionId) !== fn) return;
+    handlers.delete(sessionId);
+    changed();
   };
+}
+
+/** Whether this session has a question card waiting for an answer (mounted). */
+export const hasAsk = (sessionId: string) => handlers.has(sessionId);
+
+/** Called whenever a question card starts or stops waiting (the Android App's volume keys follow it). */
+export function watchAsks(fn: () => void) {
+  watchers.add(fn);
+  return () => void watchers.delete(fn);
 }
 
 /** 交给这个会话的提问卡处理；它认了这个键（调用方该 preventDefault）就返回 true。 */
