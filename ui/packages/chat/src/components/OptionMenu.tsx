@@ -34,7 +34,7 @@ export function OptionMenu({
   const cur = options.find((o) => o.value === value);
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className="flex h-7 min-w-0 max-w-44 items-center gap-1 rounded-md px-2 text-[12px] max-md:max-w-none max-md:shrink-0 max-md:px-1.5 text-muted-foreground outline-none hover:bg-muted hover:text-foreground data-[state=open]:bg-muted">
+      <DropdownMenuTrigger className="flex h-7 min-w-0 max-w-44 items-center gap-1 rounded-md px-1.5 text-[12px] max-md:max-w-none max-md:shrink-0 text-muted-foreground outline-none hover:bg-muted hover:text-foreground data-[state=open]:bg-muted">
         <span className="truncate">{cur?.name ?? (value || label)}</span>
         {/* 手机上省掉箭头：底栏就这么宽，留给名字 */}
         <ChevronDown className="size-3 shrink-0 opacity-60 max-md:hidden" />
