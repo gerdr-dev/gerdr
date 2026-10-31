@@ -239,16 +239,17 @@ export function TabBar() {
                       {i + 1}
                     </span>
                   )}
-                  {/* An idle tab's dot is transparent but still takes 8px + the gap: crowded, that room goes to the name instead */}
-                  <StatusDot status={st.status} unread={st.unread} className={cn(!st.status && !st.unread && "@max-[8rem]/tab:hidden")} />
-                  {/* The close button keeps its slot (like Chrome): always shown on the active tab, on hover for the others. Inserting
-                      it on hover made the tab widen and every tab after it shift, so the bar flickered as the mouse crossed it.
-                      Crowded (narrow tab): no slot at all, so the name gets the room; only the active tab shows it, on hover. That
-                      changes no tab's width (tabs are sized by the bar), it just truncates this tab's name a bit more. */}
+                  {/* No dot on an idle tab: StatusDot draws it transparent, which still took 8px + the gap from the name */}
+                  {(st.status || st.unread) && <StatusDot status={st.status} unread={st.unread} />}
+                  {/* The close button: always on the active tab, on hover for the others (crowded: the active tab's, on hover only).
+                      A hidden one takes no room so the name gets it. Showing it can't shift other tabs: tabs are sized by the bar,
+                      not by their content (back when they were, inserting it on hover made the whole bar jump). */}
                   <button
                     className={cn(
-                      "-mr-1 rounded-sm p-0.5 hover:bg-muted @max-[8rem]/tab:hidden",
-                      active ? "visible @max-[8rem]/tab:group-hover/tab:block" : "invisible group-hover/tab:visible",
+                      "-mr-1 rounded-sm p-0.5 hover:bg-muted",
+                      active
+                        ? "block @max-[8rem]/tab:hidden @max-[8rem]/tab:group-hover/tab:block"
+                        : "hidden group-hover/tab:block @max-[8rem]/tab:group-hover/tab:hidden",
                     )}
                     onClick={(e) => {
                       e.stopPropagation();
