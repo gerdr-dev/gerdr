@@ -173,39 +173,31 @@ function lastReport(all: GMessage[]): string {
  * it there for foreground and background agents alike), not the tool result: a background agent's result is only the
  * CLI's "launched" notice.
  */
-function SubagentBody({ sessionId, toolCallId, prompt, done, keep }: { sessionId: string; toolCallId: string; prompt?: string; done: boolean; keep?: string }) {
+function SubagentBody({ sessionId, toolCallId, prompt, done }: { sessionId: string; toolCallId: string; prompt?: string; done: boolean }) {
   const sub = useChatHost().useTranscript(sessionId, toolCallId);
   const report = done ? lastReport(sub.all) : "";
-  const [all, setAll] = useKept(keep && `${keep}:prompt`, false);
-  const [allReport, setAllReport] = useKept(keep && `${keep}:report`, false);
-  // Both stay short until asked: a long prompt or report filled a phone screen and pushed the conversation away
-  const long = !!prompt && (prompt.length > 200 || prompt.split("\n").length > 3);
-  const longReport = report.length > 400 || report.split("\n").length > 8;
-  const more = (open: boolean, toggle: () => void) => (
-    <button className="text-[11px] text-muted-foreground hover:text-foreground" onClick={toggle}>
-      {open ? t("common.collapse") : t("tool.subPromptAll")}
-    </button>
-  );
+  // Both stay short, with no show-all: a long prompt or report filled a phone screen, and 查看对话 has the whole of it
   return (
     <div className="space-y-2 text-[13px]">
       {prompt && (
         <div className="rounded-lg border bg-muted/30 px-2.5 py-1.5">
           <div className="text-[11px] text-muted-foreground">{t("tool.subPrompt")}</div>
-          <div className={cn("whitespace-pre-wrap break-words", long && !all && "line-clamp-3")}>{prompt}</div>
-          {long && more(all, () => setAll(!all))}
+          <div className="line-clamp-3 whitespace-pre-wrap break-words">{prompt}</div>
         </div>
       )}
       {report && (
         <div className="px-2.5">
           <div className="text-[11px] text-muted-foreground">{t("tool.subReport")}</div>
-          {/* gerdr-md: the chat's own Markdown sizes (without it streamdown's headings came out text-3xl). Collapsed it
-              shows the first ~8 lines, fading out */}
+          {/* gerdr-md: the chat's own Markdown sizes (without it streamdown's headings came out text-3xl). The first ~8
+              lines, fading out when there is more */}
           <div
-            className={cn("gerdr-md", longReport && !allReport && "max-h-[11em] overflow-hidden [mask-image:linear-gradient(to_bottom,black_60%,transparent)]")}
+            className={cn(
+              "gerdr-md max-h-[11em] overflow-hidden",
+              (report.length > 400 || report.split("\n").length > 8) && "[mask-image:linear-gradient(to_bottom,black_60%,transparent)]",
+            )}
           >
             <Markdown>{report}</Markdown>
           </div>
-          {longReport && more(allReport, () => setAllReport(!allReport))}
         </div>
       )}
     </div>
@@ -387,7 +379,6 @@ function DefaultToolCall({ part, agent, running, keep: keepOpen }: { part: ToolP
             toolCallId={part.toolCallId}
             prompt={typeof inp?.prompt === "string" ? inp.prompt : undefined}
             done={!busy && task?.status !== "running"}
-            keep={keep}
           />
         ) : (
           <ToolBody meta={meta} input={part.input} keep={keep} />
