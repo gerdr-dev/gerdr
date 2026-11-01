@@ -1,10 +1,24 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ChatProvider, type ChatHost, type ChatSession, type ComposerContext, type DraftImage, type DraftStore } from "@gerdr/chat";
+import { toast } from "sonner";
 import { api, type Holder } from "./api";
 import { closeAgentInPane, focusSession, openPath, openSubagent, refocusAfterDialog, withdrawSteer } from "./actions";
 import { defaultsOf, setDefault, setDefaults } from "./defaults";
 import { isNative, nativeOpenPath } from "./native";
-import { get, loadOlder, prefOf, sendShown, set, setConfig, subTranscript, transcript, useStore, type DraftImg, type SharedDraft } from "./store";
+import {
+  get,
+  loadOlder,
+  prefOf,
+  replayLastTurn,
+  sendShown,
+  set,
+  setConfig,
+  subTranscript,
+  transcript,
+  useStore,
+  type DraftImg,
+  type SharedDraft,
+} from "./store";
 import { pushDraft, sameDraft } from "./sync";
 import { AddonComposerActions } from "@/components/AddonSlot";
 import { useAddonTurnStat } from "./addons";
@@ -194,6 +208,14 @@ const localCommands = (session: ChatSession) =>
       run: (paneId: string) => set({ dialog: { kind: "resume", sessionId: session.id, paneId } }),
     },
     { name: "usage", description: "看账号的用量额度（不发给 agent）", run: () => setUsageFor(session.id) },
+    {
+      name: "replay",
+      description: "把上一轮回复重新逐字放一遍（只在界面里，不发给 agent；试滚动用）",
+      run: () => {
+        if (session.status === "running") return void toast("agent 在跑，跑完再重放");
+        if (!replayLastTurn(session.id)) toast("没有可以重放的回复");
+      },
+    },
   ].filter((c) => c.name !== "usage" || ["claude", "codex"].includes(session.base ?? session.agent));
 
 function useTranscript(sessionId: string, sub?: string) {

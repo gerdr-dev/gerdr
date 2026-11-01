@@ -464,6 +464,77 @@ export function applyEvents(id: string, events: HubEvent[], reset: boolean, olde
 }
 
 /**
+ * /replay: play the last turn of a chat back as if the agent were writing it now, in this window only (no agent, no
+ * server). Asked for to try how the chat scrolls while output streams in without waiting on a model: cut the log at the
+ * user message of the latest turn with some length to it, feed the rest back a few characters at a time (about 150 a
+ * second), and put the full log back at the end. Stops
+ * early (and restores) when anything real arrives meanwhile. Returns false when there's nothing to replay.
+ */
+const replays = new Map<string, () => void>();
+export function replayLastTurn(id: string, opts: { chars?: number; every?: number; at?: string } = {}): boolean {
+  replays.get(id)?.();
+  const raw = rawEvents.get(id);
+  if (!raw) return false;
+  const isUser = (e: HubEvent) => e.kind === "user" || (e.kind === "update" && (e.update as any)?.sessionUpdate === "user_message_chunk");
+  const textOf = (e: HubEvent): string | undefined => {
+    const u = e.kind === "update" ? (e.update as any) : undefined;
+    return (u?.sessionUpdate === "agent_message_chunk" || u?.sessionUpdate === "agent_thought_chunk") && u.content?.type === "text"
+      ? u.content.text
+      : undefined;
+  };
+  // The latest turn with a screen or so of text (a two-line answer is over before you can scroll), else the last one
+  let cut = -1;
+  let n = 0;
+  for (let i = raw.length - 1; i >= 0; i--) {
+    if (!isUser(raw[i])) {
+      n += textOf(raw[i])?.length ?? 0;
+      continue;
+    }
+    if (cut < 0 && i < raw.length - 1) cut = i;
+    if (n >= 400) {
+      cut = i;
+      break;
+    }
+    n = 0;
+  }
+  // A given turn instead (tools/scrolltest): the user message containing `at`
+  if (opts.at) cut = raw.findIndex((e) => isUser(e) && JSON.stringify((e as any).content ?? (e as any).update?.content ?? "").includes(opts.at!));
+  if (cut < 0) return false;
+  const chars = opts.chars ?? 6;
+  const pieces: HubEvent[] = [];
+  for (const e of raw.slice(cut + 1)) {
+    const text = textOf(e);
+    if (text === undefined) {
+      pieces.push(e);
+      continue;
+    }
+    const u = (e as any).update;
+    // Same seq for every piece: message ids come from it, and the transcript's lastSeq never passes the real log's
+    for (let k = 0; k < text.length; k += chars) pieces.push({ ...e, update: { ...u, content: { ...u.content, text: text.slice(k, k + chars) } } } as HubEvent);
+  }
+  const t = transcript(id);
+  const bump = () => set((s) => ({ tv: { ...s.tv, [id]: (s.tv[id] ?? 0) + 1 } }));
+  const len = raw.length;
+  let i = 0;
+  const stop = () => {
+    clearInterval(timer);
+    replays.delete(id);
+    // Something real came in (a reset replaced the array, or a live event was added): show the real log
+    t.reset(rawEvents.get(id) ?? raw);
+    bump();
+  };
+  const timer = window.setInterval(() => {
+    if (rawEvents.get(id) !== raw || raw.length !== len || i >= pieces.length) return stop();
+    t.apply(pieces[i++]);
+    bump();
+  }, opts.every ?? 40);
+  replays.set(id, stop);
+  t.reset(raw.slice(0, cut + 1));
+  bump();
+  return true;
+}
+
+/**
  * 发一条消息，点下去就先在对话最底下画一条半透明的（见 Transcript.sending），日志里那条到了换掉。
  * 失败就拿掉、错误照旧抛给调用方（它负责把字放回输入框）。
  */
