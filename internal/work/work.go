@@ -35,9 +35,10 @@ import (
 	"unicode/utf8"
 )
 
-// builtin/base goes into every project's Work directory (the site skeleton, a starting page, the agent's
-// CLAUDE.md); builtin/okr is laid over it in the default project only — the OKR page is one person's
-// thing, a new project starts blank.
+// builtin/base goes into every project's Work directory (the site skeleton, a blank starting page, the
+// agent's CLAUDE.md). The default project used to get an OKR page laid over it; that was one person's
+// setup, not a default, so every project now starts blank and install removes the old OKR files unless
+// they were edited.
 //
 //go:embed builtin
 var builtin embed.FS
@@ -133,7 +134,7 @@ func (r *Runner) Ensure(project string) (string, error) {
 	done := r.installed[dir]
 	r.mu.Unlock()
 	if !done {
-		if err := r.install(dir, project == "" || project == DefaultProject); err != nil {
+		if err := r.install(dir); err != nil {
 			return "", err
 		}
 		r.mu.Lock()
@@ -144,27 +145,22 @@ func (r *Runner) Ensure(project string) (string, error) {
 }
 
 // bundled is the files a Work directory gets: rel path → content.
-func bundled(withOKR bool) map[string][]byte {
+func bundled() map[string][]byte {
 	out := map[string][]byte{}
-	layers := []string{"builtin/base"}
-	if withOKR {
-		layers = append(layers, "builtin/okr")
-	}
-	for _, root := range layers {
-		_ = fs.WalkDir(builtin, root, func(p string, d fs.DirEntry, err error) error {
-			if err == nil && !d.IsDir() {
-				out[strings.TrimPrefix(p, root+"/")], _ = builtin.ReadFile(p)
-			}
-			return nil
-		})
-	}
+	const root = "builtin/base"
+	_ = fs.WalkDir(builtin, root, func(p string, d fs.DirEntry, err error) error {
+		if err == nil && !d.IsDir() {
+			out[strings.TrimPrefix(p, root+"/")], _ = builtin.ReadFile(p)
+		}
+		return nil
+	})
 	return out
 }
 
 // install copies the bundled files into dir. A file the user edited is left alone; one still identical
 // to what an older gerdr installed is upgraded, or removed when gerdr no longer ships it (hashes of what
 // was installed are kept in .builtin.json).
-func (r *Runner) install(dir string, withOKR bool) error {
+func (r *Runner) install(dir string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if err := os.MkdirAll(filepath.Join(dir, "local"), 0o755); err != nil {
@@ -175,7 +171,7 @@ func (r *Runner) install(dir string, withOKR bool) error {
 	if b, err := os.ReadFile(markFile); err == nil {
 		_ = json.Unmarshal(b, &marks)
 	}
-	files := bundled(withOKR)
+	files := bundled()
 	for rel, want := range files {
 		dst := filepath.Join(dir, filepath.FromSlash(rel))
 		cur, err := os.ReadFile(dst)

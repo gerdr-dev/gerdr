@@ -416,8 +416,8 @@ cwd 以外改的文件（Bash 写 `~/.zshrc`、隔壁项目）管不到；同一
   `gerdr:theme`. `gerdr work status` shows its build / runtime errors.
 - Page logic lives in local functions `<GERDR_DIR>/work/local/*.ts` (esbuild → goja, `ctx.mcp(server, tool, args)`), called by
   name (`gerdr work run file.export`). Bundled files (`internal/work/builtin/base` for every project: site skeleton, blank
-  home page, CLAUDE.md; `builtin/okr` laid over it in the default project only) are upgraded unless edited, and removed when
-  no longer shipped for that project unless edited.
+  home page, CLAUDE.md — the same for the default project; it used to get an OKR page on top) are upgraded unless edited,
+  and removed when no longer shipped unless edited.
 - The right-hand agent is an ordinary session in the project's Work directory (its CLAUDE.md / AGENTS.md teach it the site),
   not in the layout; `watchedSessions` adds it while in Work mode. `gerdr work run|status` find the project from the cwd.
   New conversations use an engine or a role from Settings → Agent (prompt, skills, MCP, default model).
