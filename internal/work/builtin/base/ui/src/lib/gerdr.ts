@@ -142,6 +142,8 @@ window.addEventListener("message", (e) => {
     document.documentElement.style.colorScheme = e.data.dark ? "dark" : "light";
   } else if (e.data?.type === "gerdr:sidebar" && typeof e.data.width === "number") {
     document.documentElement.style.setProperty("--gerdr-sidebar-w", `${e.data.width}px`);
+    // How much of the menu's bottom gerdr covers (its settings row plus add-on blocks like the quota meter)
+    if (typeof e.data.bottom === "number") document.documentElement.style.setProperty("--gerdr-menu-bottom", `${e.data.bottom}px`);
   } else if (e.data?.type === "gerdr:asked") {
     const p = asking.get(e.data.id);
     if (!p) return;

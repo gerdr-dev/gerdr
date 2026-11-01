@@ -39,7 +39,7 @@ import { FadeText } from "./FadeText";
 import { BOX_TRANSITION, useLayoutAnim, useZoomAnim } from "@/lib/zoomAnim";
 import { AgentIcon, StatusDot, dotStatus } from "./AgentIcon";
 import { ChatView } from "./chat/ChatView";
-import { Elapsed, SidebarEdge, SidebarFooter, SidebarHeader } from "./Chrome";
+import { Elapsed, SidebarBottom, SidebarEdge, SidebarHeader } from "./Chrome";
 import { TabActive } from "./Panes";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -354,7 +354,7 @@ function OverviewList({
           </div>
         ))}
       </div>
-      {!phone && <SidebarFooter sidebarToggle />}
+      {!phone && <SidebarBottom sidebarToggle />}
     </div>
   );
 }

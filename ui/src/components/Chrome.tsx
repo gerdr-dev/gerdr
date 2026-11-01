@@ -557,11 +557,23 @@ export function Sidebar({ className }: { className?: string }) {
         </button>
       </div>
       <AgentList />
-      {/* Add-ons' sidebar blocks (g.slot("sidebar")): the quota meter and today's numbers live in add-ons now */}
-      {/* The vertical padding is given once here, not by each block: two blocks each padding themselves left a wide gap */}
-      <AddonSlot name="sidebar" className="shrink-0 border-t py-1 empty:hidden" />
-      <SidebarFooter sidebarToggle />
+      <SidebarBottom sidebarToggle />
     </div>
+  );
+}
+
+/**
+ * The bottom of the left column in all three modes: add-ons' sidebar blocks (g.slot("sidebar"): the quota meter,
+ * today's numbers…) over the settings row. Shared so the add-ons are in sight whichever mode is open (asked for).
+ */
+export function SidebarBottom({ sidebarToggle }: { sidebarToggle?: boolean }) {
+  return (
+    <>
+      {/* The vertical padding is given once here, not by each block: two blocks each padding themselves left a wide gap.
+          bg-sidebar: in Work mode this is laid over the site's menu */}
+      <AddonSlot name="sidebar" className="shrink-0 border-t bg-sidebar py-1 empty:hidden" />
+      <SidebarFooter sidebarToggle={sidebarToggle} />
+    </>
   );
 }
 

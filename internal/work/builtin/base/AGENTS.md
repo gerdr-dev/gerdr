@@ -13,8 +13,9 @@ you as messages (e.g. "write this week's progress reports").
     change it however the user wants (groups, icons, badges, styling). Keep its width
     `w-(--gerdr-sidebar-w)` (and keep it the leftmost thing on the page): it lines up with Gerdr's bar above
     and the user resizes both by dragging the menu's right edge (Gerdr draws that handle over the page).
-    Gerdr also draws its bottom row (settings, connection status) over the menu's last
-    `--gerdr-menu-bottom` px: keep the menu's bottom padding at least that, as layout.tsx does.
+    Gerdr also draws its bottom strip (add-on blocks, settings, connection status) over the menu's last
+    `--gerdr-menu-bottom` px (it sets the variable to the strip's height): keep the menu's bottom padding at least
+    that, as layout.tsx does.
   - `ui/src/pages/*.tsx` — one file per page, routed by file name (`index.tsx` → `/`,
     `weekly.tsx` → `/weekly`, `okr/[id].tsx` → `/okr/:id`); default-export a component.
   - `ui/src/lib/gerdr.ts` — the bridge: `run(fn, input, { onProgress, onLog, signal })` calls a local

@@ -2,7 +2,7 @@ import { Briefcase, Check, ChevronDown, Code2, History, ClipboardCheck, MessageS
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { AgentIcon, StatusDot } from "@/components/AgentIcon";
-import { COL_EDGE, SidebarEdge, SidebarFooter, SidebarHeader, startColResize } from "@/components/Chrome";
+import { COL_EDGE, SidebarBottom, SidebarEdge, SidebarHeader, startColResize } from "@/components/Chrome";
 import { focusSession } from "@/lib/actions";
 import { formatCombo } from "@/lib/keys";
 import { toggleOverview } from "@/lib/overview";
@@ -120,21 +120,26 @@ function useDark() {
 }
 
 /** One project's Work site. Keyed by project by the caller, so switching projects loads the other site. */
-function WorkFrame({ project, onShowChat }: { project: string; onShowChat?: () => void }) {
+function WorkFrame({ project, onShowChat, menuBottom = 0 }: { project: string; onShowChat?: () => void; menuBottom?: number }) {
   const ref = useRef<HTMLIFrameElement>(null);
   const dark = useDark();
   const send = (m: unknown) => ref.current?.contentWindow?.postMessage(m, location.origin);
   useEffect(() => send({ type: "gerdr:theme", dark }), [dark]);
-  // The site's menu takes the sidebar's width (--gerdr-sidebar-w, its lib/gerdr.ts); dragged by SidebarEdge in WorkView
+  // The site's menu takes the sidebar's width (--gerdr-sidebar-w, its lib/gerdr.ts); dragged by SidebarEdge in WorkView.
+  // bottom: how tall the strip gerdr lays over the menu's bottom is (add-on blocks + settings row), so the site keeps
+  // that much free (--gerdr-menu-bottom). 0 = not measured yet / no menu: the site keeps its own default.
   const sidebarW = useStore((s) => s.sidebarW);
-  useEffect(() => send({ type: "gerdr:sidebar", width: sidebarW }), [sidebarW]);
+  const bottom = useRef(menuBottom);
+  bottom.current = menuBottom;
+  const sidebarMsg = (width: number) => ({ type: "gerdr:sidebar", width, ...(bottom.current > 0 && { bottom: bottom.current }) });
+  useEffect(() => send(sidebarMsg(sidebarW)), [sidebarW, menuBottom]);
   useEffect(() => {
     const f = (e: MessageEvent) => {
       if (e.origin !== location.origin || e.source !== ref.current?.contentWindow) return;
       const m = e.data ?? {};
       if (m.type === "gerdr:ready") {
         send({ type: "gerdr:theme", dark: document.documentElement.classList.contains("dark") });
-        send({ type: "gerdr:sidebar", width: get().sidebarW });
+        send(sidebarMsg(get().sidebarW));
       } else if (m.type === "gerdr:ask" && typeof m.text === "string") {
         // With a request id the page shows its own notice: answer it with the conversation (or the error) instead of a toast
         const rid = m.id;
@@ -297,6 +302,14 @@ export function WorkView() {
   const showChat = useCallback(() => setSide("chat"), []);
   const col = useRef<HTMLDivElement>(null);
   const narrow = useNarrow(col);
+  // The bottom strip's height (it grows with the add-on blocks, which load and change size on their own)
+  const [menuBottom, setMenuBottom] = useState(0);
+  const bottomRef = useCallback((el: HTMLDivElement | null) => {
+    if (!el) return;
+    const o = new ResizeObserver(() => setMenuBottom(Math.ceil(el.offsetHeight)));
+    o.observe(el);
+    return () => o.disconnect();
+  }, []);
   if (phone) {
     return (
       <div className="flex h-full flex-col bg-background">
@@ -334,20 +347,20 @@ export function WorkView() {
       <div ref={col} className="relative flex min-w-0 flex-1 flex-col">
         <WorkBar narrow={narrow} />
         <div className="min-h-0 flex-1">
-          <WorkFrame key={project} project={project} />
+          <WorkFrame key={project} project={project} menuBottom={narrow ? 0 : menuBottom} />
         </div>
         {/* Narrow: no side menu in the site to lay the settings row over or to resize, so the row goes under the page (useNarrow) */}
         {narrow ? (
-          <SidebarFooter />
+          <SidebarBottom />
         ) : (
           // The sidebar's resize handle, over the top bar and the site's menu edge alike (the site lays its menu out at
           // the same width): it's ours, so it works whatever the site does, and captures the pointer so the frame can't take it
           <div className="pointer-events-none absolute inset-y-0 left-0 [&>*]:pointer-events-auto" style={{ width: sidebarW }}>
             <SidebarEdge />
-            {/* Settings at the bottom of the left column, like the Code sidebar (asked for). The site keeps that strip free
-              (--gerdr-menu-bottom in its index.css, used by its layout.tsx) */}
-            <div className="absolute inset-x-0 bottom-0 border-r">
-              <SidebarFooter />
+            {/* Add-on blocks and settings at the bottom of the left column, like the Code sidebar (asked for). Its height
+              goes to the site (WorkFrame's menuBottom → --gerdr-menu-bottom), which keeps that strip of its menu free */}
+            <div ref={bottomRef} className="absolute inset-x-0 bottom-0 flex flex-col border-r">
+              <SidebarBottom />
             </div>
           </div>
         )}

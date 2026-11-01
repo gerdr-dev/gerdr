@@ -10,7 +10,8 @@
   --radius: 0.625rem;
   /* The menu's width: gerdr sets it to its sidebar's (lib/gerdr.ts), so the two line up and resize together */
   --gerdr-sidebar-w: 224px;
-  /* gerdr lays its bottom row (settings, connection status) over the menu's last 40px: keep them free */
+  /* gerdr lays its bottom strip (add-on blocks, settings, connection status) over the menu's last px: keep them free.
+     40px is the settings row alone; gerdr sets the real height (lib/gerdr.ts) */
   --gerdr-menu-bottom: 40px;
   --background: oklch(0.99 0 0);
   --foreground: oklch(0.2 0 0);
