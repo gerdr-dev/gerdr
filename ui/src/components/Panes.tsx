@@ -39,7 +39,7 @@ import {
 import { leaves, phoneRoot, setRatio, updateTab, type PaneLeaf, type PaneNode, type PaneSplit, type Tab } from "@/lib/layout";
 import { applyPaneTitle, paneSnapshot, tabSnapshot } from "@/lib/addons";
 import { AddonSlot } from "./AddonSlot";
-import { markRead, set, setLayout, useStore } from "@/lib/store";
+import { markRead, prefOf, set, setLayout, useStore } from "@/lib/store";
 import { activeIds, addToActive, removeActive } from "@/lib/overview";
 import { usePhone } from "@/lib/phone";
 import { cn } from "@/lib/utils";
@@ -213,6 +213,16 @@ type Count = { i: number; n: number };
  * 标题栏按住拖：把这个 pane 挪到别处（见 TabDrag.tsx 的 startPaneDrag）。手机上一次只看一个 pane，不给拖。
  * 被拖着的那个 pane 淡下去，和 tab 栏里被拖的 tab 一样。
  */
+/**
+ * A lone pane's title bar sits right beside the Labs sidebar's header (no tab bar above it then), so it takes that
+ * header's height and the two bottom borders line up. Split panes are framed and keep the short bar.
+ */
+function usePaneHeadHeight(framed: boolean) {
+  const phone = usePhone();
+  const besideSidebar = useStore((s) => !!prefOf(s, "unifiedSidebar") && s.sidebar);
+  return !framed && besideSidebar && !phone ? "h-10" : "h-8";
+}
+
 function usePaneDrag(paneId: string, ghost: TabGhost) {
   const phone = usePhone();
   const dragging = useDrag()?.paneId === paneId;
@@ -264,6 +274,7 @@ function SubPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; tab
   const session = useStore((s) => s.sessions[sub.sessionId]);
   const focused = useContext(TabActive) && tab.focus === pane.id;
   const many = framed || zoomed;
+  const headH = usePaneHeadHeight(framed);
   const task = session?.tasks?.find((t) => t.toolCallId === sub.toolCallId);
   const title = task?.description || sub.title || "子 agent";
   const drag = usePaneDrag(pane.id, { label: title });
@@ -281,7 +292,7 @@ function SubPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; tab
       {/* 手机上和顶栏两头对齐：左 16px，16px 图标的中线落在 24px（= ☰：px-1.5 + 36px 按钮）；右边照旧 12px，24px 的 ⋯ 按钮中线也落在 24px（= 右上角 +）。三种 pane 的标题栏同一个边距 */}
       <div
         onPointerDown={drag.onPointerDown}
-        className={cn("flex h-8 shrink-0 items-center gap-2 border-b px-3 text-[12px] max-md:pl-4", !focused && many && "opacity-70")}
+        className={cn("flex shrink-0 items-center gap-2 border-b px-3 text-[12px] max-md:pl-4", headH, !focused && many && "opacity-70")}
       >
         <Bot className="size-4 shrink-0 text-muted-foreground" />
         <FadeText className="min-w-0 shrink-[2] text-muted-foreground">{task?.subagent || "子 agent"}</FadeText>
@@ -317,6 +328,7 @@ function FilePaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; ta
   const path = pane.file!.path;
   const focused = useContext(TabActive) && tab.focus === pane.id;
   const many = framed || zoomed;
+  const headH = usePaneHeadHeight(framed);
   const [stat, setStat] = useState<FileStat | null>(null);
   const [err, setErr] = useState("");
   const [rev, setRev] = useState(0);
@@ -345,7 +357,7 @@ function FilePaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; ta
     >
       <div
         onPointerDown={drag.onPointerDown}
-        className={cn("flex h-8 shrink-0 items-center gap-2 border-b px-3 text-[12px] max-md:pl-4", !focused && many && "opacity-70")}
+        className={cn("flex shrink-0 items-center gap-2 border-b px-3 text-[12px] max-md:pl-4", headH, !focused && many && "opacity-70")}
       >
         <FileText className="size-4 shrink-0 text-muted-foreground" />
         <FadeText className="min-w-[3em] max-w-[60%] shrink font-medium max-md:max-w-none">{basename(path)}</FadeText>
@@ -383,6 +395,7 @@ function TermPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; ta
   const cwd = term.cwd || home;
   const focused = useContext(TabActive) && tab.focus === pane.id;
   const many = framed || zoomed;
+  const headH = usePaneHeadHeight(framed);
   const [osc, setOsc] = useState("");
   useStore((s) => s.addonVersion);
   const title = applyPaneTitle(pane, tab, osc || basename(cwd));
@@ -400,7 +413,7 @@ function TermPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; ta
     >
       <div
         onPointerDown={drag.onPointerDown}
-        className={cn("flex h-8 shrink-0 items-center gap-2 border-b px-3 text-[12px] max-md:pl-4", !focused && many && "opacity-70")}
+        className={cn("flex shrink-0 items-center gap-2 border-b px-3 text-[12px] max-md:pl-4", headH, !focused && many && "opacity-70")}
       >
         <SquareTerminal className="size-4 text-muted-foreground" />
         {/* The 60% cap leaves room for the path, which a phone hides: there it only left a gap before the ⋯ */}
@@ -478,6 +491,7 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
   useStore((s) => s.addonVersion);
   const focused = useContext(TabActive) && tab.focus === pane.id;
   const many = framed || zoomed;
+  const headH = usePaneHeadHeight(framed);
 
   useEffect(() => {
     if (focused && pane.sessionId && unread) markRead(pane.sessionId);
@@ -500,7 +514,7 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
     >
       <div
         onPointerDown={drag.onPointerDown}
-        className={cn("flex h-8 shrink-0 items-center gap-2 border-b px-3 text-[12px] max-md:pl-4", !focused && many && "opacity-70")}
+        className={cn("flex shrink-0 items-center gap-2 border-b px-3 text-[12px] max-md:pl-4", headH, !focused && many && "opacity-70")}
       >
         {session || (starting && pane.draft?.agent) ? (
           <AgentIcon agent={session?.agent ?? pane.draft!.agent!} className="size-4" />
