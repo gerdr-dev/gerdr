@@ -263,7 +263,8 @@ and `config.json` keeps `"<hidden>"`, so an agent that reads your settings doesn
 Or use `"apiKeyEnv": "VAR_NAME"` to take it from Gerdr's environment; that variable is not passed on to agents or
 terminals. A model id is usually enough; protocol, reasoning
 levels and context window are guessed from it, and you can override with `api` (chat / responses), `efforts`,
-`window`, `images`, `maxOutput`, and on Claude `thinking` (`updates`: the model's short progress notes, the default on Opus/Sonnet 5.5 and Fable 5+; `adaptive`: a summary of its reasoning). The bottom of Settings → Agents can do this too (fetch the model list, test a model).
+`window`, `compactAt` (tokens at which the context is auto-compacted; default 90% of `window`), `images`,
+`maxOutput`, and on Claude `thinking` (`updates`: the model's short progress notes, the default on Opus/Sonnet 5.5 and Fable 5+; `adaptive`: a summary of its reasoning). The bottom of Settings → Agents can do this too (fetch the model list, test a model).
 
 Transcripts go to `~/.gerdr/native/`. Interjecting, rewind, approvals, subagents (backgroundable), background
 commands, web fetch, `/compact`, `/clear`, skills and MCP (Claude Code's servers plus Gerdr's; no OAuth servers) all

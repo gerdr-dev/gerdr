@@ -160,6 +160,12 @@ gerdr config unset defaultConfig.codex
 picked its own in Settings (marked 仅本设备) keeps it, `gerdr config set` only changes the others. If the user says
 it didn't take, tell them to change it in Settings on that device.
 
+Gerdr Agent compacts the context automatically at 90% of the model's window (the composer's context % counts
+against the whole window). To compact earlier or later, set `compactAt` on that model, in tokens, not percent:
+`gerdr config set llm.providers.<provider>.models.<model>.compactAt 500000` (on a 1M window that is 50%). `window`
+on the same model fixes a wrong guess of the window size. Claude Code and Codex compact on their own; this doesn't
+touch them.
+
 API keys read back as `<hidden>`; the real ones are in secrets.json. Don't open that file or print the
 environment variables named in `apiKeyEnv`: whatever you read ends up in this transcript. To set a key the
 user gives you, `gerdr config set llm.providers.<id>.apiKey <key>`.
