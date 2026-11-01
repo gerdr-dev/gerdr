@@ -216,7 +216,10 @@ func (s *session) contextMessages() []llm.Message {
 }
 
 func (s *session) addMsg(m llm.Message, id string, ui *toolUI) {
-	e := entry{T: "msg", At: time.Now().UnixMilli(), ID: id, Msg: &m, UI: ui}
+	s.addEntry(entry{T: "msg", At: time.Now().UnixMilli(), ID: id, Msg: &m, UI: ui})
+}
+
+func (s *session) addEntry(e entry) {
 	s.mu.Lock()
 	s.entries = append(s.entries, e)
 	sid := s.id
@@ -306,7 +309,8 @@ func (s *session) drainQueue() {
 			s.addMsg(llm.Message{Role: "user", Content: []llm.Part{llm.TextPart(x.note)}}, "", nil)
 			continue
 		}
-		s.addMsg(llm.Message{Role: "user", Content: s.a.toParts(x.blocks, s)}, x.id, nil)
+		m := llm.Message{Role: "user", Content: s.a.toParts(x.blocks, s)}
+		s.addEntry(entry{T: "msg", At: time.Now().UnixMilli(), ID: x.id, Msg: &m, Steer: true})
 		s.steerState(x.id, "started")
 	}
 }

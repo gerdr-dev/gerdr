@@ -32,6 +32,9 @@ type entry struct {
 	UI *toolUI `json:"ui,omitempty"`
 	// Summary：compact 的摘要，之后的上下文从它开始。
 	Summary string `json:"summary,omitempty"`
+	// Steer: a user message that came in mid-turn (_session/steering). Stored as typed (replay, rewind and the
+	// session title read it); buildContext wraps it for the model, see steerPrefix.
+	Steer bool `json:"steer,omitempty"`
 }
 
 type sessionMeta struct {
@@ -197,11 +200,25 @@ func buildContext(es []entry) []llm.Message {
 	}
 	for _, e := range es[start:] {
 		if e.T == "msg" && e.Msg != nil {
-			out = append(out, *e.Msg)
+			m := *e.Msg
+			if e.Steer {
+				m.Content = append(append([]llm.Part{llm.TextPart(steerPrefix)}, m.Content...), llm.TextPart(steerSuffix))
+			}
+			out = append(out, m)
 		}
 	}
 	return out
 }
+
+// steerPrefix / steerSuffix wrap an interjection the way Claude Code does (its wording, minus its own name). A bare user
+// message reads to the model as a new request that replaces the old one: it answers the interjection, then
+// ends the turn and asks whether to go on with the original task. Saying it arrived mid-turn keeps it working.
+const (
+	steerPrefix = "The user sent a new message while you were working:\n"
+	steerSuffix = "\n\nThis is how messages the user sends mid-turn are surfaced — within the running turn, " +
+		"often alongside the next tool result, rather than as a separate conversation turn. " +
+		"Address the message above as you continue this turn."
+)
 
 const summaryPrefix = "This session is being continued from an earlier conversation that ran out of context. " +
 	"The summary below covers the earlier part of the conversation.\n\n"

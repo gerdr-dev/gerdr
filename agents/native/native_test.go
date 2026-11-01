@@ -314,6 +314,10 @@ func TestSteerDuringTool(t *testing.T) {
 	if lastRole(msgs) != "user" || !strings.Contains(lastUser(msgs), "also this") {
 		t.Fatalf("steer not appended after tool result: %v", msgs)
 	}
+	// Wrapped as a mid-turn message, or the model treats it as a new request and stops after answering it.
+	if u := lastUser(msgs); !strings.Contains(u, "sent a new message while you were working") || !strings.Contains(u, "as you continue this turn") {
+		t.Fatalf("steer not wrapped: %q", u)
+	}
 	if e.llm.count() != 2 {
 		t.Fatalf("want 2 calls, got %d", e.llm.count())
 	}

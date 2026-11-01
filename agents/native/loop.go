@@ -21,7 +21,8 @@ import (
 //
 // 插话（_session/steering）不打断正在跑的工具：排进 s.queue，下一次调模型之前接到历史末尾（Claude Code 输入框的
 // 默认行为）；Now=true 时连正在流的那次生成一起掐掉（已经出来的字留着）马上带着它重调。模型说完了、队里还有话，
-// 接着调 —— 不会出现「插的那句话没人回」。
+// 接着调 —— 不会出现「插的那句话没人回」。The model sees it wrapped as a mid-turn message (steerPrefix in
+// store.go), so it answers it and goes back to the task instead of ending the turn there.
 //
 // 打断（session/cancel）：掐掉生成和正在跑的命令，**把这批工具调用的结果补齐**（没跑完的写「被打断」）再结束 ——
 // 历史里有 tool_call 没 tool 结果，下一轮两家接口都会 400。
