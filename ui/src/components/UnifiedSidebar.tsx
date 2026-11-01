@@ -15,7 +15,6 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -42,9 +41,9 @@ import {
   tabName,
 } from "@/lib/actions";
 import { applyWorkspaceLabel } from "@/lib/addons";
-import { activeWs, leaves, locateSession, spaceList, spaceOf, spaceWorkspaces, type PaneLeaf, type Tab, type Workspace } from "@/lib/layout";
-import { addTiles, focusTile, MAX_TILES, removeTile, toggleOverview, useOverviewIds } from "@/lib/overview";
-import { compareSessions, sessionRank } from "@/lib/order";
+import { activeWs, leaves, spaceList, spaceOf, spaceWorkspaces, type PaneLeaf, type Tab, type Workspace } from "@/lib/layout";
+import { focusTile, MAX_TILES, removeTile, setOverview, toggleOverview, useOverviewIds } from "@/lib/overview";
+import { compareSessions, sessionRank, sessionSince } from "@/lib/order";
 import { markRead, set, useStore } from "@/lib/store";
 import type { SessionSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -58,12 +57,13 @@ import { TabDragLayer, startPaneDrag } from "./TabDrag";
  *
  * - Every workspace of the project is a group, all shown at once (no switching), each collapsible. A group lists its tabs,
  *   one row per pane: a tab split in several panes shows its rows joined by a bar, so each agent's state stays visible.
- * - Pinned agents sit on top. "Pin" is the to-do list under another name (same storage, lib/overview.ts), and its grid
- *   opens over the main area, next to this list, instead of covering the whole window with a list of its own.
  * - The status filter (needs you / running) flattens the groups to the rows that match.
- * - "Active" above the groups: what needs you, runs, or was touched in the last ACTIVE_HOURS, flat in the old agents list's
- *   order (lib/order.ts: needs you, then running, then idle, newest first). The groups below still hold everything, so these
- *   rows show twice: the top is where to look, the groups are where things live.
+ * - "Active" above the groups replaces both the to-do list and the agents list: what needs you, runs, or was touched in the
+ *   last ACTIVE_HOURS joins on its own, anything else can be added by hand (and stays until removed); all of it flat in the
+ *   agents list's order (lib/order.ts: needs you, then running, then idle, newest first). Removing one that joined on its
+ *   own hides it until it does something new. Its grid (the to-do grid, lib/overview.ts) shows the same agents, over the
+ *   main area next to this list. The groups below still hold everything, so these rows show twice: the top is where to
+ *   look, the groups are where things live.
  *
  * Kept out of Chrome.tsx so the experiment can be dropped (or promoted) by touching a few lines in App.tsx.
  */
@@ -72,6 +72,8 @@ type Filter = "all" | "you" | "run";
 
 const FOLD_KEY = "gerdr.unified.folded";
 const ACTIVE_FOLD_KEY = "gerdr.unified.activeFolded";
+const ADDED_KEY = "gerdr.unified.added";
+const DISMISSED_KEY = "gerdr.unified.dismissed";
 /** An idle, read session stays in "active" this long after its last activity. */
 const ACTIVE_HOURS = 6;
 
@@ -141,9 +143,13 @@ function goPane(paneId: string, sessionId?: string) {
   if (sessionId) markRead(sessionId);
 }
 
-function pin(id: string) {
-  addTiles([id]);
-  if (!useStore.getState().overview.ids.includes(id)) toast(`最多 Pin ${MAX_TILES} 个，先取消几个`);
+/** Added by hand: starts as the to-do list (the old pins), so switching the lab on keeps what you had there. */
+function loadAdded(): string[] {
+  try {
+    const raw = localStorage.getItem(ADDED_KEY);
+    if (raw != null) return JSON.parse(raw);
+  } catch {}
+  return [...useStore.getState().overview.ids];
 }
 
 export function UnifiedSidebar() {
@@ -154,11 +160,13 @@ export function UnifiedSidebar() {
   const gridOn = useStore((s) => s.overview.on);
   const gridFocus = useStore((s) => s.overview.focus);
   useStore((s) => s.addonVersion);
-  const pinned = useOverviewIds().split(",").filter(Boolean);
-  const pinnedSet = new Set(pinned);
+  const tiles = useOverviewIds().split(",").filter(Boolean);
   const [filter, setFilter] = useState<Filter>("all");
   const [folded, setFolded] = useFolded();
   const [activeFolded, setActiveFolded] = useLocal(ACTIVE_FOLD_KEY, false);
+  const [added, setAddedRaw] = useState<string[]>(loadAdded);
+  // Removed from "active" while it had joined on its own: id → when (sessionSince) it was removed
+  const [dismissed, setDismissed] = useLocal<Record<string, number>>(DISMISSED_KEY, {});
   const list = spaceWorkspaces(layout);
   const cur = activeWs(layout);
   const curTab = cur.tabs.find((t) => t.id === cur.activeTab);
@@ -187,10 +195,67 @@ export function UnifiedSidebar() {
   const byPriority = (xs: Item[]) => [...xs].sort((a, b) => compareItems(a, b, unread));
   const matches = byPriority(all.filter((x) => (filter === "you" ? needsYou(x.s, unread) : x.s?.status === "running")));
   const now = Date.now();
-  const active = byPriority(all.filter((x) => !!x.s && (sessionRank(x.s, unread) < 4 || now - x.s.updatedAt < ACTIVE_HOURS * 36e5)));
-  const flatRow = (x: Item) => (
-    <Row key={x.pane.id} {...rowProps(x.ws, x.tab, x.pane, x.split)} where={applyWorkspaceLabel(x.ws, list.indexOf(x.ws), x.ws.name)} />
-  );
+  const addedSet = new Set(added);
+  const isActive = (s: SessionSummary) => {
+    if (addedSet.has(s.id)) return true;
+    const rank = sessionRank(s, unread);
+    // Needs you (waiting, errored, finished unseen) always shows; a removed one stays out until it starts or finishes something
+    if (rank < 3) return true;
+    const d = dismissed[s.id];
+    if (d !== undefined && sessionSince(s) <= d) return false;
+    return rank === 3 || now - s.updatedAt < ACTIVE_HOURS * 36e5;
+  };
+  const active = byPriority(all.filter((x) => !!x.s && isActive(x.s)));
+  const activeIds = active.map((x) => x.s!.id);
+  const activeKey = activeIds.join(",");
+
+  const setAdded = (next: string[]) => {
+    setAddedRaw(next);
+    try {
+      localStorage.setItem(ADDED_KEY, JSON.stringify(next));
+    } catch {}
+  };
+  const addActive = (id: string) => {
+    if (!addedSet.has(id)) setAdded([...added, id]);
+    if (id in dismissed) {
+      const { [id]: _, ...rest } = dismissed;
+      setDismissed(rest);
+    }
+  };
+  const removeActive = (s: SessionSummary) => {
+    setAdded(added.filter((x) => x !== s.id));
+    if (unread[s.id]) markRead(s.id);
+    // Forget the closed ones while at it, so the map doesn't grow forever
+    const keep = Object.fromEntries(Object.entries(dismissed).filter(([id]) => sessions[id]));
+    setDismissed({ ...keep, [s.id]: sessionSince(s) });
+    removeTile(s.id);
+  };
+
+  // The grid shows what "active" lists: keep its tiles in step while it's open (tiles already there keep their place)
+  useEffect(() => {
+    if (!gridOn) return;
+    const want = activeIds.slice(0, MAX_TILES);
+    const cur = useStore.getState().overview.ids;
+    const next = [...cur.filter((id) => want.includes(id)), ...want.filter((id) => !cur.includes(id))];
+    if (next.join(",") !== cur.join(",")) setOverview((o) => ({ ...o, ids: next, main: o.main && next.includes(o.main) ? o.main : undefined }));
+  }, [gridOn, activeKey]);
+  const gridFocusId = gridFocus && tiles.includes(gridFocus) ? gridFocus : tiles[0];
+
+  const flatRow = (x: Item, top = false) => {
+    const p = rowProps(x.ws, x.tab, x.pane, x.split);
+    const id = x.s?.id;
+    return (
+      <Row
+        key={x.pane.id}
+        {...p}
+        where={applyWorkspaceLabel(x.ws, list.indexOf(x.ws), x.ws.name)}
+        top={top}
+        // In the grid, a row of "active" picks its tile instead of leaving the grid
+        current={top && gridOn ? id === gridFocusId : p.current}
+        onPick={top && gridOn && id && tiles.includes(id) ? () => (focusTile(id), markRead(id)) : undefined}
+      />
+    );
+  };
 
   const rowProps = (ws: Workspace, tab: Tab, pane: PaneLeaf, inSplit: boolean) => {
     const s = pane.sessionId ? sessions[pane.sessionId] : undefined;
@@ -201,7 +266,9 @@ export function UnifiedSidebar() {
       s,
       inSplit,
       unread: !!(s && unread[s.id]),
-      pinned: !!(s && pinnedSet.has(s.id)),
+      added: !!(s && addedSet.has(s.id)),
+      inActive: !!(s && activeIds.includes(s.id)),
+      onActive: (on: boolean) => s && (on ? addActive(s.id) : removeActive(s)),
       // In a split, the focused pane is the current one; its neighbours get a lighter tint (they're on screen too)
       current: here && (!inSplit || tab.focus === pane.id),
       visible: here && inSplit,
@@ -225,26 +292,37 @@ export function UnifiedSidebar() {
         </FilterChip>
       </div>
       <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto px-1.5 pb-2">
-        <PinSection ids={pinned} gridOn={gridOn} gridFocus={gridFocus} sessions={sessions} unread={unread} />
         {filter !== "all" ? (
           <div className="pt-1">
             {matches.length === 0 && <div className="px-2 py-1 text-[12px] text-muted-foreground">{filter === "you" ? "没有在等你的" : "没有在跑的"}</div>}
-            {matches.map(flatRow)}
+            {matches.map((x) => flatRow(x))}
           </div>
         ) : (
           <>
-            {active.length > 0 && (
+            {(active.length > 0 || gridOn) && (
               <div className="mb-1 border-b pb-1.5">
-                <button
-                  className="flex h-7 w-full items-center gap-1 rounded-md px-1 text-[11px] font-medium text-muted-foreground hover:bg-accent/60 hover:text-foreground"
-                  title={`等你、在跑、没看的，和 ${ACTIVE_HOURS} 小时内动过的；按该不该先看排`}
+                <div
+                  role="button"
+                  className="group/act flex h-7 w-full cursor-default items-center gap-1 rounded-md px-1 text-[11px] font-medium text-muted-foreground select-none hover:bg-accent/60 hover:text-foreground"
+                  title={`等你、在跑、没看的，${ACTIVE_HOURS} 小时内动过的，和你右键加进来的；按该不该先看排`}
                   onClick={() => setActiveFolded(!activeFolded)}
                 >
                   <ChevronRight className={cn("size-3.5 shrink-0 transition-transform", !activeFolded && "rotate-90")} />
                   <span className="flex-1 text-left">进行中</span>
-                  <span className="tabular-nums">{active.length}</span>
-                </button>
-                {!activeFolded && active.map(flatRow)}
+                  <button
+                    className={cn(
+                      "flex h-5 items-center gap-1 rounded-sm px-1",
+                      gridOn ? "bg-brand/15 text-foreground" : "hover:bg-muted hover:text-foreground",
+                    )}
+                    title={gridOn ? "关掉网格，回到 tab" : `把进行中的 agent 摆成网格一起看（最多 ${MAX_TILES} 个）`}
+                    onClick={(e) => (e.stopPropagation(), toggleOverview(!gridOn))}
+                  >
+                    <LayoutGrid className="size-3" />
+                    {gridOn ? "网格中" : "网格"}
+                  </button>
+                  <span className="w-4 text-right tabular-nums">{active.length}</span>
+                </div>
+                {!activeFolded && active.map((x) => flatRow(x, true))}
               </div>
             )}
             {list.map((ws, wi) => (
@@ -320,90 +398,6 @@ function FootButton({ onClick, title, children }: { onClick: () => void; title: 
     >
       {children}
     </button>
-  );
-}
-
-/** Pinned agents on top, from every project (like the to-do list was). The header opens / closes their grid. */
-function PinSection({
-  ids,
-  gridOn,
-  gridFocus,
-  sessions,
-  unread,
-}: {
-  ids: string[];
-  gridOn: boolean;
-  gridFocus?: string;
-  sessions: Record<string, SessionSummary>;
-  unread: Record<string, true>;
-}) {
-  const layout = useStore((s) => s.layout);
-  if (!ids.length && !gridOn) return null;
-  const focus = gridFocus && ids.includes(gridFocus) ? gridFocus : ids[0];
-  return (
-    <div className="mb-1 border-b pb-1.5">
-      <button
-        className={cn(
-          "flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-medium",
-          gridOn ? "bg-brand/15 text-foreground" : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
-        )}
-        title={gridOn ? "关掉网格，回到 tab" : "把 Pin 的 agent 摆成网格一起看"}
-        onClick={() => toggleOverview(!gridOn)}
-      >
-        <Pin className="size-3" />
-        <span className="flex-1 text-left">Pin</span>
-        <LayoutGrid className="size-3" />
-        <span>{gridOn ? "网格中" : "网格"}</span>
-      </button>
-      {ids.length === 0 && <div className="px-2 py-1 text-[12px] text-muted-foreground">右键一行 → Pin</div>}
-      {ids.map((id) => {
-        const s = sessions[id];
-        if (!s) return null;
-        const loc = locateSession(layout, id);
-        const current = gridOn && id === focus;
-        return (
-          <ContextMenu key={id}>
-            <ContextMenuTrigger asChild>
-              <div
-                role="button"
-                data-row-current={current || undefined}
-                className={cn(
-                  "group flex h-7 cursor-default items-center gap-2 rounded-md px-2 text-[12px] select-none hover:bg-accent/60",
-                  current && "bg-accent font-medium",
-                  "data-[state=open]:ring-1 data-[state=open]:ring-brand/60",
-                )}
-                onClick={() => {
-                  if (gridOn) return (focusTile(id), markRead(id));
-                  if (loc) goPane(loc.pane.id, id);
-                }}
-              >
-                <AgentIcon agent={s.agent} className="size-3.5 shrink-0" />
-                <span className="min-w-0 flex-1 truncate">{s.title || basename(s.cwd)}</span>
-                <span className="max-w-[40%] shrink-0 truncate text-[11px] text-muted-foreground group-hover:hidden">{loc ? loc.ws.name : "Work"}</span>
-                <button
-                  className="hidden size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground group-hover:flex hover:text-foreground"
-                  title="取消 Pin"
-                  onClick={(e) => (e.stopPropagation(), removeTile(id))}
-                >
-                  <X className="size-3" />
-                </button>
-                <StatusDot status={dotStatus(s)} unread={!!unread[id]} />
-              </div>
-            </ContextMenuTrigger>
-            <ContextMenuContent>
-              {loc && (
-                <ContextMenuItem onClick={() => goPane(loc.pane.id, id)}>
-                  <ChevronRight /> 去它的 tab
-                </ContextMenuItem>
-              )}
-              <ContextMenuItem onClick={() => removeTile(id)}>
-                <PinOff /> 取消 Pin
-              </ContextMenuItem>
-            </ContextMenuContent>
-          </ContextMenu>
-        );
-      })}
-    </div>
   );
 }
 
@@ -518,7 +512,11 @@ function Row({
   s,
   inSplit,
   unread,
-  pinned,
+  added,
+  inActive,
+  onActive,
+  top,
+  onPick,
   current,
   visible,
   activeTabId,
@@ -529,7 +527,14 @@ function Row({
   s?: SessionSummary;
   inSplit: boolean;
   unread: boolean;
-  pinned: boolean;
+  /** Added to "active" by hand (not only for what it's doing now). */
+  added: boolean;
+  inActive: boolean;
+  onActive: (on: boolean) => void;
+  /** A row of the "active" section: its ✕ and middle click take it off the section instead of closing the tab. */
+  top?: boolean;
+  /** Replaces going to the pane (the grid picks a tile). */
+  onPick?: () => void;
   current: boolean;
   visible: boolean;
   activeTabId: string;
@@ -540,6 +545,7 @@ function Row({
   // An unnamed tab is named after its first agent: only a renamed tab adds something worth showing
   const tabLabel = !inSplit && tab.name && tab.name !== title ? tab.name : undefined;
   const close = () => (inSplit ? closePaneById(pane.id) : closeTab(tab.id));
+  const dismiss = top && s ? () => onActive(false) : close;
   // Already in the tab on screen (alone or in its split): nothing to put beside it
   const canBeside = tab.id !== activeTabId;
   const openBeside = () => {
@@ -557,10 +563,10 @@ function Row({
           data-row-current={current || undefined}
           // Drag onto a pane (split beside it) or onto another group (move the tab there): TabDrag.tsx
           onPointerDown={(e) => startPaneDrag(e, pane.id, { label: title, agent: s?.agent, term: !!pane.term })}
-          onClick={() => goPane(pane.id, s?.id)}
+          onClick={() => (onPick ? onPick() : goPane(pane.id, s?.id))}
           onDoubleClick={() => !inSplit && set({ dialog: { kind: "rename", target: "tab", id: tab.id, value: tab.name ?? tabName(tab) } })}
           onMouseDown={(e) => e.button === 1 && e.preventDefault()}
-          onAuxClick={(e) => e.button === 1 && (e.preventDefault(), close())}
+          onAuxClick={(e) => e.button === 1 && (e.preventDefault(), dismiss())}
           className={cn(
             "group flex h-7 cursor-default items-center gap-2 rounded-md px-2 text-[12px] select-none",
             current ? "bg-accent font-medium" : visible ? "bg-accent/40" : "hover:bg-accent/60",
@@ -578,14 +584,14 @@ function Row({
               title
             )}
           </span>
-          {pinned && <Pin className="size-3 shrink-0 text-muted-foreground" />}
+          {top && added && <Pin className="size-3 shrink-0 text-muted-foreground" />}
           <span className="flex max-w-[40%] shrink-0 items-center text-[11px] text-muted-foreground group-hover:hidden">
             {s?.status === "running" && s.turn ? <Elapsed since={s.turn.startedAt} /> : <span className="truncate">{where ?? sub}</span>}
           </span>
           <button
             className="hidden size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground group-hover:flex hover:text-foreground"
-            title={inSplit ? "关掉这一格" : "关闭 tab"}
-            onClick={(e) => (e.stopPropagation(), close())}
+            title={top && s ? "移出进行中" : inSplit ? "关掉这一格" : "关闭 tab"}
+            onClick={(e) => (e.stopPropagation(), dismiss())}
           >
             <X className="size-3" />
           </button>
@@ -594,13 +600,13 @@ function Row({
       </ContextMenuTrigger>
       <ContextMenuContent>
         {s &&
-          (pinned ? (
-            <ContextMenuItem onClick={() => removeTile(s.id)}>
-              <PinOff /> 取消 Pin
+          (inActive ? (
+            <ContextMenuItem onClick={() => onActive(false)}>
+              <PinOff /> 移出进行中
             </ContextMenuItem>
           ) : (
-            <ContextMenuItem onClick={() => pin(s.id)}>
-              <Pin /> Pin
+            <ContextMenuItem onClick={() => onActive(true)}>
+              <Pin /> 加入进行中
             </ContextMenuItem>
           ))}
         {s && unread && (
