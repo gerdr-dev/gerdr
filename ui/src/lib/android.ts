@@ -119,12 +119,37 @@ export function initAndroid() {
   // What decides whether the volume keys are arrows right now (syncArrows): the keyboard coming up or going (focus,
   // viewport height), a menu / list opening (Radix portals land on <body>), a question card, the focused pane
   const arrowOffs = watchArrows();
+  document.addEventListener("touchstart", gateStretch, { capture: true, passive: true });
   g.__gerdrAndroidOff = () => {
+    document.removeEventListener("touchstart", gateStretch, true);
+    document.documentElement.style.overscrollBehavior = "";
     for (const ev of MEDIA_EVENTS) document.removeEventListener(ev, syncMedia, true);
     arrowOffs();
     document.removeEventListener("visibilitychange", onVisible);
     offs.forEach((off) => off());
   };
+}
+
+/**
+ * Android 12+ WebView stretches the whole page when a drag runs past an edge, even when nothing can scroll — drag
+ * the header and the entire UI squashes. The effect is gated only by the root's overscroll-behavior (inner
+ * scrollers chain their overscroll to it), so a fixed `none` in CSS would also kill the stretch at the end of the
+ * chat list, which should stay. Decide per gesture instead: no scrollable element under the finger → no stretch.
+ * Set on touchstart; the compositor picks it up a frame later, before the drag gets past the touch slop.
+ */
+function gateStretch(e: TouchEvent) {
+  let el = e.target instanceof Element ? e.target : null;
+  let scrolls = false;
+  for (; el && el !== document.documentElement; el = el.parentElement) {
+    const s = getComputedStyle(el);
+    const y = /auto|scroll/.test(s.overflowY) && el.scrollHeight > el.clientHeight + 1;
+    const x = /auto|scroll/.test(s.overflowX) && el.scrollWidth > el.clientWidth + 1;
+    if (x || y) {
+      scrolls = true;
+      break;
+    }
+  }
+  document.documentElement.style.overscrollBehavior = scrolls ? "" : "none";
 }
 
 /**
