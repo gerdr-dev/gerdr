@@ -1,10 +1,8 @@
 import {
-  ArrowDownWideNarrow,
   ChevronRight,
   CircleX,
   Columns2,
   FileText,
-  FolderTree,
   LayoutGrid,
   MailCheck,
   Pencil,
@@ -63,20 +61,19 @@ import { TabDragLayer, startPaneDrag } from "./TabDrag";
  * - Pinned agents sit on top. "Pin" is the to-do list under another name (same storage, lib/overview.ts), and its grid
  *   opens over the main area, next to this list, instead of covering the whole window with a list of its own.
  * - The status filter (needs you / running) flattens the groups to the rows that match.
- * - "By priority" flattens everything in the old agents list's order (lib/order.ts: needs you, then running, then idle,
- *   newest first), with sessions untouched for STALE_DAYS in a foldable tail: what you're on now is always on top.
+ * - "Active" above the groups: what needs you, runs, or was touched in the last ACTIVE_HOURS, flat in the old agents list's
+ *   order (lib/order.ts: needs you, then running, then idle, newest first). The groups below still hold everything, so these
+ *   rows show twice: the top is where to look, the groups are where things live.
  *
  * Kept out of Chrome.tsx so the experiment can be dropped (or promoted) by touching a few lines in App.tsx.
  */
 
 type Filter = "all" | "you" | "run";
-type Arrange = "group" | "priority";
 
 const FOLD_KEY = "gerdr.unified.folded";
-const ARRANGE_KEY = "gerdr.unified.arrange";
-const STALE_KEY = "gerdr.unified.staleFolded";
-/** Idle (and read) sessions untouched this long go to the tail of the priority list. */
-const STALE_DAYS = 3;
+const ACTIVE_FOLD_KEY = "gerdr.unified.activeFolded";
+/** An idle, read session stays in "active" this long after its last activity. */
+const ACTIVE_HOURS = 6;
 
 /** A small per-device setting kept in localStorage (like the folded groups). */
 function useLocal<T>(key: string, init: T) {
@@ -161,8 +158,7 @@ export function UnifiedSidebar() {
   const pinnedSet = new Set(pinned);
   const [filter, setFilter] = useState<Filter>("all");
   const [folded, setFolded] = useFolded();
-  const [arrange, setArrange] = useLocal<Arrange>(ARRANGE_KEY, "group");
-  const [staleFolded, setStaleFolded] = useLocal(STALE_KEY, false);
+  const [activeFolded, setActiveFolded] = useLocal(ACTIVE_FOLD_KEY, false);
   const list = spaceWorkspaces(layout);
   const cur = activeWs(layout);
   const curTab = cur.tabs.find((t) => t.id === cur.activeTab);
@@ -191,10 +187,7 @@ export function UnifiedSidebar() {
   const byPriority = (xs: Item[]) => [...xs].sort((a, b) => compareItems(a, b, unread));
   const matches = byPriority(all.filter((x) => (filter === "you" ? needsYou(x.s, unread) : x.s?.status === "running")));
   const now = Date.now();
-  const isStale = (x: Item) => !!x.s && sessionRank(x.s, unread) === 4 && now - x.s.updatedAt > STALE_DAYS * 864e5;
-  const ranked = arrange === "priority" && filter === "all" ? byPriority(all) : [];
-  const fresh = ranked.filter((x) => !isStale(x));
-  const stale = ranked.filter(isStale);
+  const active = byPriority(all.filter((x) => !!x.s && (sessionRank(x.s, unread) < 4 || now - x.s.updatedAt < ACTIVE_HOURS * 36e5)));
   const flatRow = (x: Item) => (
     <Row key={x.pane.id} {...rowProps(x.ws, x.tab, x.pane, x.split)} where={applyWorkspaceLabel(x.ws, list.indexOf(x.ws), x.ws.name)} />
   );
@@ -230,15 +223,6 @@ export function UnifiedSidebar() {
         <FilterChip on={filter === "run"} onClick={() => setFilter(filter === "run" ? "all" : "run")}>
           运行中 <span className="tabular-nums opacity-70">{runN}</span>
         </FilterChip>
-        <span className="flex-1" />
-        <button
-          className="flex h-6 shrink-0 items-center gap-1 rounded-md px-1.5 whitespace-nowrap text-muted-foreground hover:bg-accent hover:text-foreground"
-          title={arrange === "priority" ? "现在按优先级（等你、在跑的在前，久没动的在后）· 点一下改成按分组" : "现在按分组 · 点一下改成按优先级"}
-          onClick={() => setArrange(arrange === "priority" ? "group" : "priority")}
-        >
-          {arrange === "priority" ? <ArrowDownWideNarrow className="size-3.5" /> : <FolderTree className="size-3.5" />}
-          {arrange === "priority" ? "优先级" : "分组"}
-        </button>
       </div>
       <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto px-1.5 pb-2">
         <PinSection ids={pinned} gridOn={gridOn} gridFocus={gridFocus} sessions={sessions} unread={unread} />
@@ -247,53 +231,52 @@ export function UnifiedSidebar() {
             {matches.length === 0 && <div className="px-2 py-1 text-[12px] text-muted-foreground">{filter === "you" ? "没有在等你的" : "没有在跑的"}</div>}
             {matches.map(flatRow)}
           </div>
-        ) : arrange === "priority" ? (
-          <div className="pt-1">
-            {fresh.map(flatRow)}
-            {stale.length > 0 && (
-              <>
-                <button
-                  className="mt-1 flex h-7 w-full items-center gap-1 rounded-md px-1 text-[11px] text-muted-foreground hover:bg-accent/60 hover:text-foreground"
-                  onClick={() => setStaleFolded(!staleFolded)}
-                >
-                  <ChevronRight className={cn("size-3.5 shrink-0 transition-transform", !staleFolded && "rotate-90")} />
-                  <span className="flex-1 text-left">{STALE_DAYS} 天以上没动</span>
-                  <span className="tabular-nums">{stale.length}</span>
-                </button>
-                {!staleFolded && stale.map(flatRow)}
-              </>
-            )}
-          </div>
         ) : (
-          list.map((ws, wi) => (
-            <Group
-              key={ws.id}
-              ws={ws}
-              index={wi}
-              folded={folded.includes(ws.id)}
-              onFold={() => toggleFold(ws.id)}
-              sessions={sessions}
-              unread={unread}
-              current={ws.id === cur.id}
-            >
-              {ws.tabs.map((tab) => {
-                const ps = leaves(tab.root);
-                if (ps.length === 1) return <Row key={tab.id} {...rowProps(ws, tab, ps[0], false)} />;
-                return (
-                  // A split tab: its panes as rows joined by a bar on the left
-                  <div
-                    key={tab.id}
-                    className="relative my-0.5 ml-3 before:absolute before:top-1.5 before:bottom-1.5 before:left-0 before:w-0.5 before:rounded-full before:bg-brand/40"
-                  >
-                    {ps.map((p) => (
-                      <Row key={p.id} {...rowProps(ws, tab, p, true)} />
-                    ))}
-                  </div>
-                );
-              })}
-              {ws.tabs.length === 0 && <div className="py-1 pl-7 text-[12px] text-muted-foreground">空的</div>}
-            </Group>
-          ))
+          <>
+            {active.length > 0 && (
+              <div className="mb-1 border-b pb-1.5">
+                <button
+                  className="flex h-7 w-full items-center gap-1 rounded-md px-1 text-[11px] font-medium text-muted-foreground hover:bg-accent/60 hover:text-foreground"
+                  title={`等你、在跑、没看的，和 ${ACTIVE_HOURS} 小时内动过的；按该不该先看排`}
+                  onClick={() => setActiveFolded(!activeFolded)}
+                >
+                  <ChevronRight className={cn("size-3.5 shrink-0 transition-transform", !activeFolded && "rotate-90")} />
+                  <span className="flex-1 text-left">进行中</span>
+                  <span className="tabular-nums">{active.length}</span>
+                </button>
+                {!activeFolded && active.map(flatRow)}
+              </div>
+            )}
+            {list.map((ws, wi) => (
+              <Group
+                key={ws.id}
+                ws={ws}
+                index={wi}
+                folded={folded.includes(ws.id)}
+                onFold={() => toggleFold(ws.id)}
+                sessions={sessions}
+                unread={unread}
+                current={ws.id === cur.id}
+              >
+                {ws.tabs.map((tab) => {
+                  const ps = leaves(tab.root);
+                  if (ps.length === 1) return <Row key={tab.id} {...rowProps(ws, tab, ps[0], false)} />;
+                  return (
+                    // A split tab: its panes as rows joined by a bar on the left
+                    <div
+                      key={tab.id}
+                      className="relative my-0.5 ml-3 before:absolute before:top-1.5 before:bottom-1.5 before:left-0 before:w-0.5 before:rounded-full before:bg-brand/40"
+                    >
+                      {ps.map((p) => (
+                        <Row key={p.id} {...rowProps(ws, tab, p, true)} />
+                      ))}
+                    </div>
+                  );
+                })}
+                {ws.tabs.length === 0 && <div className="py-1 pl-7 text-[12px] text-muted-foreground">空的</div>}
+              </Group>
+            ))}
+          </>
         )}
         <div className="mt-1 flex gap-1 px-0.5">
           <FootButton onClick={() => (toggleOverview(false), addTab())} title="在当前工作空间新开一个 tab">
