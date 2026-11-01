@@ -182,13 +182,71 @@ function TextBody({ stat, url }: { stat: FileStat; url: string }) {
   }, [url, stat.size]);
   if (why) return <NoPreview stat={stat} why={why} />;
   if (text === null) return <div className="p-10 text-center text-[13px] text-muted-foreground">读取中…</div>;
-  if (stat.mime === "text/markdown")
+  if (stat.mime === "text/markdown") {
+    const { meta, body } = splitFrontMatter(text);
     return (
       <div className="gerdr-md mx-auto max-w-[860px] px-5 py-4">
-        <MessageResponse>{text}</MessageResponse>
+        {meta !== null && <FrontMatter raw={meta} />}
+        <MessageResponse>{body}</MessageResponse>
       </div>
     );
+  }
   return <pre className="min-w-max p-4 font-mono text-[12px] leading-relaxed whitespace-pre">{text}</pre>;
+}
+
+/**
+ * YAML front matter (`---` … `---` at the very top: SKILL.md, memory files, docs sites). Markdown has no such thing,
+ * so left in the body it rendered as a rule followed by one run-on paragraph of `key: value` text.
+ */
+function splitFrontMatter(text: string): { meta: string | null; body: string } {
+  const m = /^\uFEFF?---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/.exec(text);
+  return m ? { meta: m[1], body: text.slice(m[0].length) } : { meta: null, body: text };
+}
+
+/**
+ * Front matter as `key: value` pairs. Only the flat shape these files use: scalars, quoted strings, `|` / `>` blocks
+ * and indented continuation lines (lists, nested maps kept as written). Anything else is shown as the raw YAML
+ * rather than guessed at — no YAML library for a header.
+ */
+function parseFrontMatter(raw: string): [string, string][] | null {
+  const out: [string, string, string[]][] = []; // key, inline value, continuation lines
+  for (const line of raw.split(/\r?\n/)) {
+    const kv = /^([A-Za-z0-9_.-]+):(?:\s+(.*)|\s*)$/.exec(line);
+    if (kv) out.push([kv[1], (kv[2] ?? "").trim(), []]);
+    else if (out.length && (/^\s/.test(line) || line === "")) out[out.length - 1][2].push(line);
+    else if (line.trim() && !line.trimStart().startsWith("#")) return null;
+  }
+  return out.map(([k, v, more]) => {
+    const lines = more.join("\n").replace(/\s+$/, "");
+    const indent = Math.min(...more.filter((l) => l.trim()).map((l) => l.match(/^\s*/)![0].length));
+    const block = more
+      .map((l) => l.slice(Number.isFinite(indent) ? indent : 0))
+      .join("\n")
+      .trim();
+    if (/^[|>][-+]?$/.test(v)) return [k, v.startsWith(">") ? block.replace(/\n(?!\n)/g, " ") : block];
+    if (!lines) return [k, /^(["']).*\1$/.test(v) ? v.slice(1, -1) : v];
+    return [k, v ? `${v} ${block.replace(/\n/g, " ")}` : block]; // plain multi-line scalar, or a list / map as written
+  });
+}
+
+function FrontMatter({ raw }: { raw: string }) {
+  const rows = parseFrontMatter(raw);
+  return (
+    <div className="not-prose mb-5 rounded-md border bg-muted/40 text-[12.5px]">
+      {rows ? (
+        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 px-3 py-2.5">
+          {rows.map(([k, v], i) => (
+            <div key={i} className="contents">
+              <dt className="font-mono text-muted-foreground">{k}</dt>
+              <dd className="min-w-0 break-words whitespace-pre-wrap">{v}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : (
+        <pre className="overflow-x-auto px-3 py-2.5 font-mono text-[12px] whitespace-pre">{raw}</pre>
+      )}
+    </div>
+  );
 }
 
 /**
