@@ -9,6 +9,7 @@ import { AppContextMenu } from "./components/AppContextMenu";
 import { TabActive, TabView } from "./components/Panes";
 import { WorkView } from "./components/WorkView";
 import { OverviewView } from "./components/Overview";
+import { UnifiedSidebar } from "./components/UnifiedSidebar";
 import { tabName } from "./lib/actions";
 import { handleKeydown } from "./lib/commands";
 import { ACTION_TITLES, setPrefixLabel, toAccelerator, type KeyAction } from "./lib/keys";
@@ -176,6 +177,9 @@ export default function App() {
   // The overview covers sidebar and tabs (on a phone too, one tile at a time). Once opened it stays mounted, hidden, so reopening keeps each
   // chat's scroll position, like the kept tabs below.
   const overview = useStore((s) => s.overview.on) && mode !== "work";
+  // Labs → 新侧栏 (desktop only): one list replaces the workspace list, tab bar and agents list; the pin grid (the
+  // overview) opens over the main area beside it instead of over the whole window
+  const unified = useStore((s) => !!prefOf(s, "unifiedSidebar")) && !phone;
   const [overviewMounted, setOverviewMounted] = useState(overview);
   if (overview && !overviewMounted) setOverviewMounted(true);
   const all = new Map<string, Tab>();
@@ -213,13 +217,13 @@ export default function App() {
     <GerdrChatProvider>
       <TooltipProvider delayDuration={400}>
         <div className="relative flex h-full">
-          {overviewMounted && (
+          {overviewMounted && !unified && (
             <div className={cn("absolute inset-0 z-30", !overview && "pointer-events-none invisible")} aria-hidden={!overview}>
               <OverviewView shown={overview} />
             </div>
           )}
           {/* Work mode has its own top bar with the Code / Work switch, and the Work project draws its own menu */}
-          {sidebar && !phone && mode !== "work" && <Sidebar />}
+          {sidebar && !phone && mode !== "work" && (unified ? <UnifiedSidebar /> : <Sidebar />)}
           {/* 手机上侧栏是盖在上面的抽屉（并排放的话对话只剩一百多 px 宽） */}
           {phone && drawer && (
             <div role="dialog" aria-modal="true" className="fixed inset-0 z-40 flex">
@@ -234,8 +238,14 @@ export default function App() {
                 <WorkView />
               </div>
             )}
-            {phone ? <PhoneBar /> : <TabBar />}
+            {/* The unified sidebar lists the tabs itself; with it hidden the tab bar comes back (and its show-sidebar button) */}
+            {phone ? <PhoneBar /> : !(unified && sidebar) && <TabBar />}
             <div className="relative min-h-0 flex-1">
+              {overviewMounted && unified && (
+                <div className={cn("absolute inset-0 z-30", !overview && "pointer-events-none invisible")} aria-hidden={!overview}>
+                  <OverviewView shown={overview} bare={sidebar} />
+                </div>
+              )}
               {/* 按 id 排个固定顺序再画，不能直接用 kept（最近用的排最前）：那样每切一次 tab 顺序就变，React 会在 DOM 里
                 挪这些节点，而**挪动 DOM 节点会把里面的滚动位置清零** —— 切走的 tab 一藏起来就回到最顶上（踩过）。
                 顺序固定的话切 tab 只改 invisible，节点不动。 */}

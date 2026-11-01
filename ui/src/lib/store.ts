@@ -53,6 +53,9 @@ export type Config = {
   keepAwakeRemote?: boolean;
   /** 实验室：选中即复制（和 herdr 的 ui.copy_on_select 一样），lib/copysel.ts。 */
   copyOnSelect?: boolean;
+  /** Labs: one sidebar list instead of workspace switcher + tab bar + agents list + to-do view (components/UnifiedSidebar.tsx).
+   *  Every workspace is a collapsible group showing its tabs; pinned agents (the to-do tiles) sit on top and open as a grid. */
+  unifiedSidebar?: boolean;
   /** Labs → Diagnosis: which install of claude / codex to run, when PATH finds a stale or blocked one.
    *  Read by the backend (cmd/gerdr's applyBins). */
   agentBins?: Record<string, string>;
@@ -105,6 +108,7 @@ export const DEFAULT_CONFIG: Config = {
   virtualList: false,
   keepAwakeRemote: false,
   copyOnSelect: false,
+  unifiedSidebar: false,
 };
 
 export function mergeConfig(raw: any): Config {
@@ -257,7 +261,7 @@ export function setFontSize(n: number) {
  * never picked one uses the shared config's value (where they all lived before, so old choices still apply), which is
  * also what `gerdr config set` changes.
  */
-export const DEVICE_KEYS = ["theme", "sendKey", "notifications", "keepTabs", "virtualList", "copyOnSelect"] as const;
+export const DEVICE_KEYS = ["theme", "sendKey", "notifications", "keepTabs", "virtualList", "copyOnSelect", "unifiedSidebar"] as const;
 export type DeviceKey = (typeof DEVICE_KEYS)[number];
 export type DevicePrefs = Partial<Pick<Config, DeviceKey>>;
 

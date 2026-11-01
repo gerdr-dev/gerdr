@@ -129,11 +129,15 @@ function startDrag(e: React.PointerEvent<HTMLElement>, tabId: string, from: numb
 
   const showTab = (id: string) => setLayout((l) => ({ ...l, workspaces: l.workspaces.map((w) => (w.id === ws.id ? { ...w, activeTab: id } : w)) }));
 
+  // The workspace the dragged tab / pane lives in: dropping on its own workspace moves nothing. Not always the active one:
+  // the unified sidebar (labs) lists every workspace's tabs, so a drag can start in another.
+  const srcWs = get().layout.workspaces.find((w) => w.tabs.some((t) => t.id === tabId))?.id ?? ws.id;
+
   const locate = (x: number, y: number): Target | null => {
+    // No tab bar (the unified sidebar replaces it): no reordering here, but dropping on panes / workspaces still works
     const b = tabBar();
-    if (!b) return null;
-    const br = b.getBoundingClientRect();
-    if (y < br.bottom + 2) {
+    const br = b?.getBoundingClientRect();
+    if (b && br && y < br.bottom + 2) {
       const els = [...b.querySelectorAll<HTMLElement>("[data-tab-id]")];
       if (!els.length) return null;
       const rs = els.map((x) => x.getBoundingClientRect());
@@ -154,7 +158,7 @@ function startDrag(e: React.PointerEvent<HTMLElement>, tabId: string, from: numb
     }
     const hit = document.elementFromPoint(x, y) as HTMLElement | null;
     const wsEl = hit?.closest<HTMLElement>("[data-ws-id]");
-    if (wsEl) return wsEl.dataset.wsId === ws.id ? null : { kind: "ws", wsId: wsEl.dataset.wsId!, rect: box(wsEl.getBoundingClientRect()) };
+    if (wsEl) return wsEl.dataset.wsId === srcWs ? null : { kind: "ws", wsId: wsEl.dataset.wsId!, rect: box(wsEl.getBoundingClientRect()) };
     const paneEl = hit?.closest<HTMLElement>("[data-pane-id]");
     if (!paneEl) return null;
     const overPane = paneEl.dataset.paneId!;

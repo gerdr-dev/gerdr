@@ -18,7 +18,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { PHONE_MAX, usePhone } from "@/lib/phone";
-import { get, keyFor, set, setMode, useStore } from "@/lib/store";
+import { get, keyFor, prefOf, set, setMode, useStore } from "@/lib/store";
 import { syncWatch } from "@/lib/sync";
 import { cn } from "@/lib/utils";
 import { askWorkAgent, ensureWorkSession, newWorkChat, openWorkChat, useWorkChats, useWorkProject, useWorkSession, workAgent } from "@/lib/work";
@@ -79,7 +79,9 @@ function ChatEdge({ width, onWidth }: { width: number; onWidth: (w: number) => v
 export function ModeSwitch() {
   const mode = useStore((s) => s.mode);
   const overview = useStore((s) => s.overview.on);
-  const cur = mode === "work" ? "work" : overview ? "overview" : "agents";
+  const phone = usePhone();
+  const unified = useStore((s) => !!prefOf(s, "unifiedSidebar")) && !phone;
+  const cur = mode === "work" ? "work" : overview && !unified ? "overview" : "agents";
   const go = (m: typeof cur) => {
     setMode(m === "work" ? "work" : "agents");
     if (m !== "work") toggleOverview(m === "overview");
@@ -101,7 +103,8 @@ export function ModeSwitch() {
   return (
     <div className="flex shrink-0 gap-0.5 rounded-lg bg-muted p-0.5" style={{ WebkitAppRegion: "no-drag" } as any}>
       {item("agents", "Code", Code2)}
-      {item("overview", `待办（${formatCombo(keyFor(get().config, "overview")[0] ?? "")}）`, ClipboardCheck)}
+      {/* The unified sidebar (labs) opens the pin grid from its own list: no third view to switch to */}
+      {!unified && item("overview", `待办（${formatCombo(keyFor(get().config, "overview")[0] ?? "")}）`, ClipboardCheck)}
       {item("work", "Work", Briefcase)}
     </div>
   );

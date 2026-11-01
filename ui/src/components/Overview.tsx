@@ -75,7 +75,8 @@ function whereOf(l: Layout, c: WorkConf, id: string): string {
  * auto-arranged on the right. Covers the sidebar and the tabs; they stay mounted underneath (TabActive off) so closing
  * this lands back exactly where things were. `shown` false = kept mounted but hidden, for the same reason.
  */
-export function OverviewView({ shown }: { shown: boolean }) {
+/** `bare`: just the grid, for the unified sidebar (labs), which lists the pinned agents itself and stays beside it. */
+export function OverviewView({ shown, bare }: { shown: boolean; bare?: boolean }) {
   const phone = usePhone();
   const ids = useOverviewIds().split(",").filter(Boolean);
   const zoom = useStore((s) => s.overview.zoom);
@@ -93,7 +94,7 @@ export function OverviewView({ shown }: { shown: boolean }) {
       <div className="flex h-full bg-background">
         {/* Hidden with the Code sidebar (one setting, asked for: as in Code mode); a thin rail keeps the way back where the
             hide button was, at the bottom (the top-left corner is the window's traffic lights in the desktop App) */}
-        {sidebar ? (
+        {bare ? null : sidebar ? (
           <OverviewList current={cur} onPick={pick} />
         ) : (
           <div className="flex w-10 shrink-0 flex-col justify-end border-r bg-sidebar">
