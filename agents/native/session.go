@@ -495,6 +495,60 @@ func (r *run) maybeCompact(ctx context.Context) error {
 	return r.compact(ctx, "")
 }
 
+// ---- Context-full notice ----
+//
+// Compaction drops the conversation for a summary, and whatever the summary misses (an exact error, a finding
+// not yet acted on, the plan for the next steps) is gone. So shortly before it, the model is told once that
+// the context is nearly full and asked to make its progress survive: update the todo list, write down what a
+// summary would lose. Same idea as Claude Code; there the signal comes from the API for the models with
+// "context awareness" (<system_warning>Token usage: …</system_warning> after each tool call, Sonnet 4.5+ / Haiku
+// 4.5) and from its own <system-reminder> attachments. We send ours to every model: most of ours get nothing
+// from their API, and for the ones that do, a second signal does no harm.
+//
+// Once per compaction cycle, not a countdown on every step: a running count of what's left makes models wrap
+// up early ("context anxiety"), which is why Claude Code's default reminder doesn't report the real window
+// either. The prompt (basePrompt) says compaction lets the work go on, so the notice reads as "save", not "stop".
+
+// contextNoteAt: when the notice is given — at 80% of the compaction threshold, which leaves the model room
+// (180k tokens on a 1M window, ~23k on 128k) to do it before compaction kicks in.
+func (m resolved) contextNoteAt() int { return m.compactAt() * 8 / 10 }
+
+const contextNote = "<system-reminder>Context usage: about %d of %d tokens. The conversation will be compacted automatically " +
+	"at about %d tokens: the earlier messages get replaced by a summary of them, and you continue from that summary. " +
+	"Make sure your progress survives it: update the todo list so it shows what is done and what comes next, and if " +
+	"there are details a summary would likely lose (exact error messages, findings not acted on yet, the plan for the " +
+	"next steps), state them briefly in a message now. Then carry on with the task. Do not stop or cut the work short " +
+	"because of this: compaction lets you keep going.</system-reminder>"
+
+// maybeNoteContext gives the notice when the last request's input passed contextNoteAt and this compaction
+// cycle hasn't had it yet. It goes at the end of the history (after the tool results / the user's message), so
+// the cached prefix stays intact. No message ID: it isn't something the user typed, so replay doesn't show it.
+func (r *run) maybeNoteContext() {
+	at := r.model.contextNoteAt()
+	r.s.mu.Lock()
+	n := r.s.lastInput
+	if n == 0 || at <= 0 || n < at || n >= r.model.compactAt() || noted(r.s.entries) {
+		r.s.mu.Unlock()
+		return
+	}
+	r.s.mu.Unlock()
+	note := fmt.Sprintf(contextNote, n, r.model.Window, r.model.compactAt())
+	r.s.addEntry(entry{T: "msg", At: time.Now().UnixMilli(), Msg: &llm.Message{Role: "user", Content: []llm.Part{llm.TextPart(note)}}, ContextNote: true})
+}
+
+// noted: the notice was given since the last compaction.
+func noted(es []entry) bool {
+	for i := len(es) - 1; i >= 0; i-- {
+		switch {
+		case es[i].T == "compact":
+			return false
+		case es[i].ContextNote:
+			return true
+		}
+	}
+	return false
+}
+
 // compact 让模型把目前的对话总结成一段，之后的上下文从摘要开始（store.go 的 buildContext）。
 // 界面上是一张「压缩上下文」的卡片。
 func (r *run) compact(ctx context.Context, extra string) error {

@@ -98,6 +98,7 @@ func (r *run) loop(ctx context.Context) error {
 				}
 				return err
 			}
+			r.maybeNoteContext()
 		}
 		res, interrupted, err := r.callModel(ctx)
 		if err != nil {

@@ -157,6 +157,11 @@ config.json (example in the README), read fresh every turn.
 7. bash 起在单独的进程组里，打断 / 超时整组杀（`sh -c` 起的 go test、npm 不跟着死会一直挂着）。
 8. 会话记录 `<dir>/native/sessions/<id>.jsonl` 存**完整历史**，压缩是追加一条 `compact`，上下文从最后一条往后算 ——
    回退到压缩之前，截掉那条就回到压缩前的上下文。`/clear` 换新 id（和 claude / codex 的同一条路）。
+   Before compaction the model is warned once (input past 80% of the threshold, `maybeNoteContext` in session.go) to
+   save its progress — todo list, details a summary would lose — and the system prompt says compaction lets it go on.
+   Once per cycle, never a running countdown: telling a model how little is left makes it wrap up early, which is
+   why Claude Code's default reminder doesn't report the real window either. The notice is a user message with no
+   ID (replay and titles skip it), marked `contextNote` so the cycle knows it had one.
 9. 指令文件：`~/.claude/CLAUDE.md`、`~/.codex/AGENTS.md`、git 根到 cwd 每层的 AGENTS.md / CLAUDE.md 都拼进系统提示词；
    skill 列表（内置 + Claude Code 的 + Gerdr 的，按设置的来源）只给名字、描述、路径，模型自己去读。
 10. bash 的环境里有 `GERDR_NATIVE_SESSION_ID`，`gerdr session current` 拿它认自己。

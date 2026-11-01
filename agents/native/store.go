@@ -35,6 +35,9 @@ type entry struct {
 	// Steer: a user message that came in mid-turn (_session/steering). Stored as typed (replay, rewind and the
 	// session title read it); buildContext wraps it for the model, see steerPrefix.
 	Steer bool `json:"steer,omitempty"`
+	// ContextNote: the "context is nearly full, save your progress" notice (maybeNoteContext). Marked so it is
+	// given once per compaction cycle: one after the last compact entry means this cycle already had it.
+	ContextNote bool `json:"contextNote,omitempty"`
 }
 
 type sessionMeta struct {

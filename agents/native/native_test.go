@@ -174,6 +174,12 @@ type env struct {
 
 func setup(t *testing.T, script func(n int, msgs []any) reply) *env {
 	t.Helper()
+	return setupModel(t, Model{ID: "fake-model", API: "chat"}, script)
+}
+
+// setupModel: setup with the fake provider serving this model (e.g. a small Window to test compaction).
+func setupModel(t *testing.T, model Model, script func(n int, msgs []any) reply) *env {
+	t.Helper()
 	// 别读到真的 ~/.claude.json、~/.claude/skills：会把本机配的 MCP 服务器真起起来
 	t.Setenv("HOME", t.TempDir())
 	f := &fakeLLM{t: t, script: script}
@@ -181,7 +187,7 @@ func setup(t *testing.T, script func(n int, msgs []any) reply) *env {
 	t.Cleanup(srv.Close)
 	dir := t.TempDir()
 	cwd := t.TempDir()
-	cfg := Config{Providers: []Provider{{ID: "fake", BaseURL: srv.URL, APIKey: "k", Models: []Model{{ID: "fake-model", API: "chat"}}}}}
+	cfg := Config{Providers: []Provider{{ID: "fake", BaseURL: srv.URL, APIKey: "k", Models: []Model{model}}}}
 	ag := New(slog.New(slog.NewTextHandler(io.Discard, nil)), Options{Dir: dir, Config: func() Config { return cfg }})
 	h := &handler{}
 	c, err := agenthost.StartInProc(context.Background(), ag, h, slog.New(slog.NewTextHandler(io.Discard, nil)))
@@ -801,5 +807,47 @@ func TestAnthropicProviderDefaults(t *testing.T) {
 		if m.API != "anthropic" || m.Thinking != "" || len(m.Efforts) != 0 || m.Window != 200_000 {
 			t.Fatalf("%s: %+v", m.ID, m.Model)
 		}
+	}
+}
+
+// The fake reports 100 input tokens per request: with a 120-token window compaction is at 108 and the notice
+// at 86, so the second request carries the notice, and only that one (once per compaction cycle).
+func TestContextNote(t *testing.T) {
+	e := setupModel(t, Model{ID: "fake-model", API: "chat", Window: 120}, func(n int, msgs []any) reply {
+		if n < 2 {
+			return reply{calls: [][2]string{{"bash", `{"command":"echo hi"}`}}}
+		}
+		return reply{text: "done"}
+	})
+	sid := e.newSession(modeBypass)
+	if _, err := e.prompt(sid, uuid.NewString(), "go"); err != nil {
+		t.Fatal(err)
+	}
+	if e.llm.count() != 3 {
+		t.Fatalf("want 3 model calls, got %d", e.llm.count())
+	}
+	notes := func(i int) int {
+		b, _ := json.Marshal(e.llm.request(i)["messages"])
+		return strings.Count(string(b), "Context usage: about 100 of 120 tokens")
+	}
+	if notes(0) != 0 {
+		t.Fatal("first request already has the notice")
+	}
+	msgs := e.llm.request(1)["messages"].([]any)
+	if lastRole(msgs) != "user" || !strings.Contains(lastUser(msgs), "compacted automatically at about 108") {
+		t.Fatalf("second request should end with the notice: %v", msgs[len(msgs)-1])
+	}
+	if notes(2) != 1 {
+		t.Fatalf("the notice should be given once, got %d in the third request", notes(2))
+	}
+}
+
+func TestNotedResetsOnCompact(t *testing.T) {
+	es := []entry{{T: "msg", ContextNote: true}, {T: "msg"}}
+	if !noted(es) {
+		t.Fatal("notice after the last compaction not seen")
+	}
+	if noted(append(es, entry{T: "compact"}, entry{T: "msg"})) {
+		t.Fatal("a compaction should start a new cycle")
 	}
 }
