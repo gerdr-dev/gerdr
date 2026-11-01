@@ -1,7 +1,9 @@
-import { Activity, Bot, CircleX, MessagesSquare, Square, SquareTerminal, Workflow } from "lucide-react";
+import { Activity, Bot, ChevronDown, CircleX, MessagesSquare, Square, SquareTerminal, Workflow } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "../ui/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../ui/collapsible";
+import { useKept } from "../kept";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { chatHost } from "../host";
 import { t as tr } from "../i18n";
@@ -151,34 +153,42 @@ export function TaskDoneCard({ sessionId, t, woke, command }: { sessionId: strin
 
 /**
  * An auto turn woken by a task with no "finished" row right above: which task, and what it reported (a Monitor's new
- * output; or how it ended). Same one-line shape as TaskDoneCard.
+ * output; or how it ended). Same one-line shape as TaskDoneCard. A Monitor's output rarely fits after the task's name (on
+ * a phone hardly a word of it did), so that row opens, like a tool call, to show it whole.
  */
-export function WakeRow({ w }: { w: Wake }) {
-  const monitor = !!w.event;
-  const ok = monitor || !w.status || w.status === "completed";
-  const event = w.event
-    ?.split("\n")
-    .map((l) => l.trim())
-    .filter(Boolean)
-    .join(" · ");
+export function WakeRow({ w, keep }: { w: Wake; keep: string }) {
+  // Kept outside the component: the chat is a virtual list, a row scrolled away unmounts
+  const [open, setOpen] = useKept<boolean>(keep, false);
+  if (w.event) {
+    const preview = w.event
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean)
+      .join(" · ");
+    return (
+      <Collapsible open={open} onOpenChange={setOpen}>
+        <CollapsibleTrigger className="-ml-1.5 flex w-[calc(100%+0.375rem)] min-w-0 items-center gap-2 rounded-md px-1.5 py-[3px] text-left text-[13px] text-muted-foreground hover:bg-muted/60 hover:text-foreground">
+          <Activity className="size-3.5 shrink-0" />
+          <span className="max-w-[50%] min-w-0 shrink-0 truncate">{w.description || w.task}</span>
+          <span className="shrink-0 rounded-sm bg-muted px-1 text-[11px]">{tr("task.monitor")}</span>
+          <span className="min-w-0 flex-1 truncate font-mono text-[11px]">{preview}</span>
+          <ChevronDown className={cn("size-3.5 shrink-0 opacity-60 transition", open && "rotate-180")} />
+        </CollapsibleTrigger>
+        <CollapsibleContent className="pt-1 pr-1 pb-2 pl-[22px]">
+          <pre className="max-h-[420px] overflow-auto rounded-md bg-muted/40 px-2.5 py-1.5 font-mono text-[12px] leading-[1.5] break-all whitespace-pre-wrap text-muted-foreground">
+            {w.event}
+          </pre>
+        </CollapsibleContent>
+      </Collapsible>
+    );
+  }
+  const ok = !w.status || w.status === "completed";
   return (
     <div className="-ml-1.5 flex min-w-0 items-center gap-2 px-1.5 py-[3px] text-[13px] text-muted-foreground">
-      {!ok ? (
-        <CircleX className="size-3.5 shrink-0 text-bad" />
-      ) : monitor ? (
-        <Activity className="size-3.5 shrink-0" />
-      ) : (
-        <SquareTerminal className="size-3.5 shrink-0" />
-      )}
-      <span className="max-w-[50%] min-w-0 shrink-0 truncate">{w.description || w.task}</span>
-      <span className="shrink-0 rounded-sm bg-muted px-1 text-[11px]">{monitor ? tr("task.monitor") : tr("task.background")}</span>
-      {monitor ? (
-        <span className="min-w-0 truncate font-mono text-[11px]" title={w.event}>
-          {event}
-        </span>
-      ) : (
-        <span className={cn("shrink-0 text-[11px]", !ok && "text-bad")}>{ok ? tr("task.ended") : statusText(w.status!)}</span>
-      )}
+      {ok ? <SquareTerminal className="size-3.5 shrink-0" /> : <CircleX className="size-3.5 shrink-0 text-bad" />}
+      <span className="min-w-0 truncate">{w.description || w.task}</span>
+      <span className="shrink-0 rounded-sm bg-muted px-1 text-[11px]">{tr("task.background")}</span>
+      <span className={cn("shrink-0 text-[11px]", !ok && "text-bad")}>{ok ? tr("task.ended") : statusText(w.status!)}</span>
     </div>
   );
 }

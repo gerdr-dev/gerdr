@@ -207,9 +207,10 @@ var (
 // wakeOf: the <task-notification> the CLI just fed the agent to start this auto turn. stream-json doesn't carry it
 // (measured, 2.1.x): a Monitor event wakes the agent with nothing but session_state_changed running — no
 // task_notification, no user message — and a finished task's task_notification doesn't say it was the one that woke
-// it. The CLI writes the notification into the transcript (a user message with origin.kind "task-notification") within
-// a few ms of going running, sometimes just after, so poll briefly. This holds up the stream reader for at most
-// ~300ms, and only when nothing turns up (a turn woken by something else).
+// it. The CLI writes the notification into the transcript (a user message with origin.kind "task-notification") as it
+// goes running, but the write lands late at times (seen: over 300ms), so poll. This holds up the stream reader for at
+// most 1.5s, and only that long when nothing turns up (a turn woken by something else); the model's first words take
+// longer than that anyway.
 func (s *session) wakeOf() *acpx.Wake {
 	s.mu.Lock()
 	id, cwd, last := s.id, s.cwd, s.lastWake
@@ -218,7 +219,7 @@ func (s *session) wakeOf() *acpx.Wake {
 	if err != nil {
 		return nil
 	}
-	for try := 0; try < 10; try++ {
+	for try := 0; try < 50; try++ {
 		if try > 0 {
 			time.Sleep(30 * time.Millisecond)
 		}
