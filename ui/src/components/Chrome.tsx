@@ -74,7 +74,7 @@ import { ModeSwitch } from "@/components/WorkView";
 import { focusedSession, get, keyFor, markRead, set, setLayout, setSidebarW, SIDEBAR_W, toggleSidebar, useStore } from "@/lib/store";
 import type { SessionSummary } from "@/lib/types";
 import { compareSessions } from "@/lib/order";
-import { addTiles, MAX_TILES, overviewIds, removeTile, showInOverview, toggleOverview } from "@/lib/overview";
+import { addToTodo, MAX_TILES, overviewIds, removeTile, showInOverview, toggleOverview } from "@/lib/overview";
 import { cn } from "@/lib/utils";
 import { FadeText } from "./FadeText";
 import { AgentIcon, StatusDot, dotStatus, dotRank } from "./AgentIcon";
@@ -765,12 +765,7 @@ function AgentMenu({ s, unread }: { s: SessionSummary; unread: boolean }) {
           <ListX /> 移出待办
         </ContextMenuItem>
       ) : (
-        <ContextMenuItem
-          onClick={() => {
-            addTiles([s.id]);
-            toast(get().overview.ids.includes(s.id) ? "已加入待办" : `待办最多放 ${MAX_TILES} 个，先移出几个`);
-          }}
-        >
+        <ContextMenuItem onClick={() => addToTodo(s.id)}>
           <ListPlus /> 加入待办
         </ContextMenuItem>
       )}

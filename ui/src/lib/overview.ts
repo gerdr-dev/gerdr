@@ -7,6 +7,7 @@
 // the sidebar / mode), and closing a tile only takes it off this list. Ids whose session no longer has a pane anywhere
 // drop out on their own (overviewIds), so the overview never keeps an agent alive that the layout let go of.
 // Each project's current Work conversation counts as open too (overviewState.workChats): it has no pane, Work mode shows it.
+import { toast } from "sonner";
 import { allLeaves, type Layout } from "./layout";
 import { MAX_TILES, OVERVIEW_KEY, overviewFocus, overviewIds, workChats, type Overview, type WorkConf } from "./overviewState";
 import { sessionRank } from "./order";
@@ -72,6 +73,13 @@ export function showInOverview(id: string): boolean {
   focusTile(id);
   toggleOverview(true);
   return true;
+}
+
+/** "Add to to-do" from a menu: stay where you are, but the toast offers a way to jump to the tile. */
+export function addToTodo(id: string) {
+  addTiles([id]);
+  if (!get().overview.ids.includes(id)) return void toast(`待办最多放 ${MAX_TILES} 个，先移出几个`);
+  toast("已加入待办", { action: { label: "查看", onClick: () => showInOverview(id) } });
 }
 
 export function focusTile(id: string) {

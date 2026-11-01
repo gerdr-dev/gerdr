@@ -39,8 +39,8 @@ import {
 import { leaves, phoneRoot, setRatio, updateTab, type PaneLeaf, type PaneNode, type PaneSplit, type Tab } from "@/lib/layout";
 import { applyPaneTitle, paneSnapshot, tabSnapshot } from "@/lib/addons";
 import { AddonSlot } from "./AddonSlot";
-import { get, markRead, set, setLayout, useStore } from "@/lib/store";
-import { addTiles, MAX_TILES, overviewIds, removeTile } from "@/lib/overview";
+import { markRead, set, setLayout, useStore } from "@/lib/store";
+import { addToTodo, overviewIds, removeTile } from "@/lib/overview";
 import { usePhone } from "@/lib/phone";
 import { cn } from "@/lib/utils";
 import { FadeText } from "./FadeText";
@@ -566,12 +566,7 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
                     <ListX /> 移出待办
                   </DropdownMenuItem>
                 ) : (
-                  <DropdownMenuItem
-                    onClick={() => {
-                      addTiles([session.id]);
-                      toast(get().overview.ids.includes(session.id) ? "已加入待办" : `待办最多放 ${MAX_TILES} 个，先移出几个`);
-                    }}
-                  >
+                  <DropdownMenuItem onClick={() => addToTodo(session.id)}>
                     <ListPlus /> 加入待办
                   </DropdownMenuItem>
                 )}
