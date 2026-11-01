@@ -5,7 +5,7 @@
 // sessions again would break both (focus lands in the wrong place; closing a tile here could stop the agent, or keep a
 // closed one alive). So the overview is a view over the layout: a list of session ids, per device (localStorage, like
 // the sidebar / mode), and closing a tile only takes it off this list. The tiles are "active" (in progress,
-// overviewState.activeIds): agents that need you, run or ran lately join on their own, others are put in by hand; only
+// overviewState.activeIds): agents join on their status (need you, run) and then stay until taken out, others are put in by hand; only
 // open sessions count, so the overview never keeps an agent alive that the layout let go of.
 // Each project's current Work conversation counts as open too (overviewState.workChats): it has no pane, Work mode shows it.
 import { toast } from "sonner";
@@ -17,6 +17,7 @@ import {
   openSessionsWithProject,
   overviewFocus,
   overviewIds,
+  toPin,
   workChats,
   type Overview,
   type WorkConf,
@@ -61,6 +62,14 @@ export function toggleOverview(on = !get().overview.on) {
   setOverview((o) => ({ ...o, on }));
 }
 
+// An agent that joined "active" on its status (started running, asks you something…) stays once that passes: finishing
+// doesn't take it out, only you do (removeActive, "移出已完成的").
+useStore.subscribe((s, p) => {
+  if (s.sessions === p.sessions && s.unread === p.unread && s.layout === p.layout) return;
+  const ids = toPin(s);
+  if (ids.length) setOverview((o) => ({ ...o, added: [...o.added, ...ids.filter((id) => !o.added.includes(id))] }));
+});
+
 /** Put agents in "active" by hand: they stay until taken out. */
 export function addActive(ids: string[]) {
   setOverview((o) => {
@@ -72,8 +81,7 @@ export function addActive(ids: string[]) {
 }
 
 /**
- * Take an agent out of "active" (it keeps running). Added by hand: gone. Joined on its own: out until it starts or ends a
- * turn. Unseen output counts as seen, else "finished unseen" would put it straight back.
+ * Take an agent out of "active" (it keeps running): unpinned, and out until it starts or ends a turn. Unseen output counts as seen, else "finished unseen" would put it straight back.
  */
 export function removeActive(id: string) {
   const s = get().sessions[id];
@@ -108,7 +116,7 @@ export function workingOutIds(st = get()): string[] {
     .map((x) => x.s.id);
 }
 
-/** Put them back: forget the dismissal, so they follow the usual rules again (not pinned). */
+/** Put them back: forget the dismissal; being at work, they rejoin (and get pinned again). */
 export function restoreWorking() {
   const ids = workingOutIds();
   setOverview((o) => ({ ...o, dismissed: Object.fromEntries(Object.entries(o.dismissed).filter(([k]) => !ids.includes(k))) }));

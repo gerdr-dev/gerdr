@@ -8,7 +8,7 @@ export type Overview = {
   on: boolean;
   /** Tile order last shown, so tiles keep their place as others come and go. Read the tiles through overviewIds. */
   ids: string[];
-  /** Put in "active" by hand: stays until taken out (what joins on its own comes and goes, activeIds). */
+  /** Pinned in "active": put in by hand, or joined on its status once (activeIds). Stays until taken out. */
   added: string[];
   /** Taken out of "active" while it had joined on its own: id → its sessionSince then. Out until it starts or ends a turn. */
   dismissed: Record<string, number>;
@@ -105,12 +105,29 @@ export function openSessionsWithProject(l: Layout, sessions: Record<string, Sess
   return out;
 }
 
+/** Joins "active" by its status: needs you (waiting, errored, finished unseen), or running and not taken out this turn. */
+export function joinsOnItsOwn(s: SessionSummary, st: Pick<ActiveSrc, "overview" | "unread">): boolean {
+  const rank = sessionRank(s, st.unread);
+  if (rank < 3) return true;
+  const d = st.overview.dismissed[s.id];
+  return rank === 3 && !(d !== undefined && sessionSince(s) <= d);
+}
+
+/** Open agents (any project) that joined on their own but aren't pinned yet: lib/overview.ts pins them, so they stay. */
+export function toPin(st: ActiveSrc): string[] {
+  const added = new Set(st.overview.added);
+  return openSessionsWithProject(st.layout, st.sessions, st.config)
+    .filter((x) => !added.has(x.s.id) && joinsOnItsOwn(x.s, st))
+    .map((x) => x.s.id);
+}
+
 /**
  * "Active" (in progress): the agents worth keeping in view, in the agents list's order (lib/order.ts). Who's in:
  * - put in by hand (stays until taken out);
  * - needs you: waiting, errored, finished unseen (always: taking one out marks it read);
  * - running, unless taken out since its current turn started.
- * Nothing joins for being recent (asked for: status and your own picks only); a finished one you've seen leaves.
+ * Whatever joins on its status is then pinned (lib/overview.ts, toPin), so finishing doesn't take it out: it stays until
+ * you take it out. Nothing joins for being recent (asked for: status and your own picks only).
  * Both the desktop sidebar and the overview grid show this list: the current project's agents, or every
  * project's when that project is in overview.allIn (each project chooses on its own).
  */
@@ -119,13 +136,7 @@ export function activeIds(st: ActiveSrc): string[] {
   const space = currentSpace(st.layout);
   const all = o.allIn.includes(space);
   const added = new Set(o.added);
-  const isActive = (s: SessionSummary) => {
-    if (added.has(s.id)) return true;
-    const rank = sessionRank(s, st.unread);
-    if (rank < 3) return true;
-    const d = o.dismissed[s.id];
-    return rank === 3 && !(d !== undefined && sessionSince(s) <= d);
-  };
+  const isActive = (s: SessionSummary) => added.has(s.id) || joinsOnItsOwn(s, st);
   return openSessionsWithProject(st.layout, st.sessions, st.config)
     .filter((x) => (all || x.project === space) && isActive(x.s))
     .map((x) => x.s)

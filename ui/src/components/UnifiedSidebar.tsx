@@ -266,7 +266,7 @@ export function UnifiedSidebar({ className }: { className?: string }) {
               <div
                 role="button"
                 className="group/act flex h-7 w-full cursor-default items-center gap-1 rounded-md px-1 text-[11px] font-medium text-muted-foreground select-none hover:bg-accent/60 hover:text-foreground"
-                title="等你、在跑、报错、跑完没看的，和你右键加进来的；按该不该先看排"
+                title="等你、在跑、报错的会自己进来，跑完也留着，直到你移出；也可以右键加进来。按该不该先看排"
                 onClick={() => setActiveFolded(!activeFolded)}
               >
                 <ChevronRight className={cn("size-3.5 shrink-0 transition-transform", !activeFolded && "rotate-90")} />
