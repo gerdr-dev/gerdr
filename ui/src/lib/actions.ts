@@ -1401,18 +1401,18 @@ export async function openPath(raw: string, cwd?: string, opts: { beside?: boole
 /**
  * Show a file in a pane beside the focused one. A tab that already has a file pane reuses it (like an editor's side
  * group): ⌥-clicking down a list of paths swaps what that pane shows instead of splitting the chat ever thinner.
- * Focus stays where it was, so the composer keeps the keyboard.
+ * The file pane takes focus: the user asked to look at it, so that is where the highlight (and keys) should go.
  */
 function openFilePane(path: string) {
   setLayout((l) => {
     const t = activeTab(l);
     const ls = leaves(t.root);
     const same = ls.find((p) => p.file?.path === path);
-    if (same) return updateTab(l, t.id, (tab) => ({ ...tab, zoom: undefined }));
+    if (same) return updateTab(l, t.id, (tab) => ({ ...tab, zoom: undefined, focus: same.id }));
     const old = ls.find((p) => p.file);
-    if (old) return updateTab(setPane(l, old.id, { file: { path } }), t.id, (tab) => ({ ...tab, zoom: undefined }));
+    if (old) return updateTab(setPane(l, old.id, { file: { path } }), t.id, (tab) => ({ ...tab, zoom: undefined, focus: old.id }));
     const fresh: PaneLeaf = { type: "pane", id: rid("p"), file: { path } };
-    return updateTab(l, t.id, (tab) => ({ ...split(tab, tab.zoom ?? tab.focus, "row", fresh), focus: tab.focus }));
+    return updateTab(l, t.id, (tab) => ({ ...split(tab, tab.zoom ?? tab.focus, "row", fresh), focus: fresh.id }));
   });
 }
 
