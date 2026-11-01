@@ -11,7 +11,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Gerdr · 配对</title>
 <style>
   /* 和 ui/src/index.css 的 token 同一组值（这一页不加载界面，抄过来） */
@@ -32,10 +32,13 @@
   body {
     background: var(--bg); color: var(--fg);
     font: 14px/1.6 -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", sans-serif;
-    display: grid; place-items: center; padding: 16px;
+    /* minmax(0, …): an auto track grows to the card's min-content width, and one wide child then
+       pushes the page past the screen (shifted card, pinch-zoomable page on phones) */
+    display: grid; grid-template-columns: minmax(0, 400px); justify-content: center; align-content: center;
+    padding: 16px; overflow-wrap: anywhere;
   }
   .card {
-    width: 100%; max-width: 400px; background: var(--card); border: 1px solid var(--line);
+    background: var(--card); border: 1px solid var(--line);
     border-radius: 14px; padding: 22px;
   }
   h1 { font-size: 17px; font-weight: 600; margin: 0 0 6px; }
@@ -52,7 +55,8 @@
   .row { display: flex; gap: 8px; }
   input {
     /* 16px：小于 16px 时 iOS 聚焦输入框会把整页放大 */
-    flex: 1; min-width: 0; font: 16px ui-monospace, Menlo, monospace; text-align: center;
+    /* width: 0 — an input's default width is ~20 characters, too wide next to two buttons on a phone */
+    flex: 1; width: 0; min-width: 0; font: 16px ui-monospace, Menlo, monospace; text-align: center;
     text-transform: uppercase; letter-spacing: .3em; padding: 9px 10px; border-radius: 8px;
     border: 1px solid var(--line); background: var(--bg); color: var(--fg); outline: none;
   }
@@ -61,6 +65,7 @@
   .hint { font-size: 12px; color: var(--muted); margin: 6px 0 16px; }
   .err { color: var(--bad); font-size: 13px; margin: 12px 0 0; min-height: 1em; }
   .foot { margin: 18px 0 0; padding-top: 14px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+  a { color: var(--brand); }
   [hidden] { display: none !important; }
 </style>
 </head>
