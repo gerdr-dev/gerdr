@@ -1,8 +1,10 @@
 import {
+  ArrowDownWideNarrow,
   ChevronRight,
   CircleX,
   Columns2,
   FileText,
+  FolderTree,
   LayoutGrid,
   MailCheck,
   Pencil,
@@ -44,6 +46,7 @@ import {
 import { applyWorkspaceLabel } from "@/lib/addons";
 import { activeWs, leaves, locateSession, spaceList, spaceOf, spaceWorkspaces, type PaneLeaf, type Tab, type Workspace } from "@/lib/layout";
 import { addTiles, focusTile, MAX_TILES, removeTile, toggleOverview, useOverviewIds } from "@/lib/overview";
+import { compareSessions, sessionRank } from "@/lib/order";
 import { markRead, set, useStore } from "@/lib/store";
 import type { SessionSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -60,13 +63,39 @@ import { TabDragLayer, startPaneDrag } from "./TabDrag";
  * - Pinned agents sit on top. "Pin" is the to-do list under another name (same storage, lib/overview.ts), and its grid
  *   opens over the main area, next to this list, instead of covering the whole window with a list of its own.
  * - The status filter (needs you / running) flattens the groups to the rows that match.
+ * - "By priority" flattens everything in the old agents list's order (lib/order.ts: needs you, then running, then idle,
+ *   newest first), with sessions untouched for STALE_DAYS in a foldable tail: what you're on now is always on top.
  *
  * Kept out of Chrome.tsx so the experiment can be dropped (or promoted) by touching a few lines in App.tsx.
  */
 
 type Filter = "all" | "you" | "run";
+type Arrange = "group" | "priority";
 
 const FOLD_KEY = "gerdr.unified.folded";
+const ARRANGE_KEY = "gerdr.unified.arrange";
+const STALE_KEY = "gerdr.unified.staleFolded";
+/** Idle (and read) sessions untouched this long go to the tail of the priority list. */
+const STALE_DAYS = 3;
+
+/** A small per-device setting kept in localStorage (like the folded groups). */
+function useLocal<T>(key: string, init: T) {
+  const [v, setV] = useState<T>(() => {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw == null ? init : (JSON.parse(raw) as T);
+    } catch {
+      return init;
+    }
+  });
+  const save = (next: T) => {
+    setV(next);
+    try {
+      localStorage.setItem(key, JSON.stringify(next));
+    } catch {}
+  };
+  return [v, save] as const;
+}
 
 function loadFolded(): string[] {
   try {
@@ -87,6 +116,14 @@ function useFolded() {
     } catch {}
   };
   return [folded, save] as const;
+}
+
+type Item = { ws: Workspace; tab: Tab; pane: PaneLeaf; split: boolean; s?: SessionSummary };
+
+/** The agents list's order (lib/order.ts); panes without an agent (terminals, files, new conversations) after the idle ones. Stable on ties. */
+function compareItems(a: Item, b: Item, unread: Record<string, true>): number {
+  if (a.s && b.s) return compareSessions(a.s, b.s, unread);
+  return (a.s ? sessionRank(a.s, unread) : 5) - (b.s ? sessionRank(b.s, unread) : 5);
 }
 
 const needsYou = (s: SessionSummary | undefined, unread: Record<string, true>) => !!s && (s.status === "waiting" || s.status === "error" || !!unread[s.id]);
@@ -124,6 +161,8 @@ export function UnifiedSidebar() {
   const pinnedSet = new Set(pinned);
   const [filter, setFilter] = useState<Filter>("all");
   const [folded, setFolded] = useFolded();
+  const [arrange, setArrange] = useLocal<Arrange>(ARRANGE_KEY, "group");
+  const [staleFolded, setStaleFolded] = useLocal(STALE_KEY, false);
   const list = spaceWorkspaces(layout);
   const cur = activeWs(layout);
   const curTab = cur.tabs.find((t) => t.id === cur.activeTab);
@@ -141,12 +180,24 @@ export function UnifiedSidebar() {
   const toggleFold = (id: string) => setFolded(folded.includes(id) ? folded.filter((x) => x !== id) : [...folded, id]);
 
   // Every pane of this project, for the filter and its counts
-  const all: { ws: Workspace; tab: Tab; pane: PaneLeaf; s?: SessionSummary }[] = [];
+  const all: Item[] = [];
   for (const ws of list)
-    for (const tab of ws.tabs) for (const pane of leaves(tab.root)) all.push({ ws, tab, pane, s: pane.sessionId ? sessions[pane.sessionId] : undefined });
+    for (const tab of ws.tabs) {
+      const ps = leaves(tab.root);
+      for (const pane of ps) all.push({ ws, tab, pane, split: ps.length > 1, s: pane.sessionId ? sessions[pane.sessionId] : undefined });
+    }
   const youN = all.filter((x) => needsYou(x.s, unread)).length;
   const runN = all.filter((x) => x.s?.status === "running").length;
-  const matches = all.filter((x) => (filter === "you" ? needsYou(x.s, unread) : x.s?.status === "running"));
+  const byPriority = (xs: Item[]) => [...xs].sort((a, b) => compareItems(a, b, unread));
+  const matches = byPriority(all.filter((x) => (filter === "you" ? needsYou(x.s, unread) : x.s?.status === "running")));
+  const now = Date.now();
+  const isStale = (x: Item) => !!x.s && sessionRank(x.s, unread) === 4 && now - x.s.updatedAt > STALE_DAYS * 864e5;
+  const ranked = arrange === "priority" && filter === "all" ? byPriority(all) : [];
+  const fresh = ranked.filter((x) => !isStale(x));
+  const stale = ranked.filter(isStale);
+  const flatRow = (x: Item) => (
+    <Row key={x.pane.id} {...rowProps(x.ws, x.tab, x.pane, x.split)} where={applyWorkspaceLabel(x.ws, list.indexOf(x.ws), x.ws.name)} />
+  );
 
   const rowProps = (ws: Workspace, tab: Tab, pane: PaneLeaf, inSplit: boolean) => {
     const s = pane.sessionId ? sessions[pane.sessionId] : undefined;
@@ -169,7 +220,7 @@ export function UnifiedSidebar() {
     <div className="relative flex h-full shrink-0 flex-col border-r bg-sidebar" style={{ width: sidebarW }}>
       <SidebarEdge />
       <SidebarHeader />
-      <div className="flex shrink-0 items-center gap-1 px-2.5 pt-2 pb-1 text-[11px]">
+      <div className="flex shrink-0 items-center gap-0.5 overflow-hidden px-2 pt-2 pb-1 text-[11px]">
         <FilterChip on={filter === "all"} onClick={() => setFilter("all")}>
           全部 <span className="tabular-nums opacity-70">{all.length}</span>
         </FilterChip>
@@ -179,15 +230,39 @@ export function UnifiedSidebar() {
         <FilterChip on={filter === "run"} onClick={() => setFilter(filter === "run" ? "all" : "run")}>
           运行中 <span className="tabular-nums opacity-70">{runN}</span>
         </FilterChip>
+        <span className="flex-1" />
+        <button
+          className="flex h-6 shrink-0 items-center gap-1 rounded-md px-1.5 whitespace-nowrap text-muted-foreground hover:bg-accent hover:text-foreground"
+          title={arrange === "priority" ? "现在按优先级（等你、在跑的在前，久没动的在后）· 点一下改成按分组" : "现在按分组 · 点一下改成按优先级"}
+          onClick={() => setArrange(arrange === "priority" ? "group" : "priority")}
+        >
+          {arrange === "priority" ? <ArrowDownWideNarrow className="size-3.5" /> : <FolderTree className="size-3.5" />}
+          {arrange === "priority" ? "优先级" : "分组"}
+        </button>
       </div>
       <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto px-1.5 pb-2">
         <PinSection ids={pinned} gridOn={gridOn} gridFocus={gridFocus} sessions={sessions} unread={unread} />
         {filter !== "all" ? (
           <div className="pt-1">
             {matches.length === 0 && <div className="px-2 py-1 text-[12px] text-muted-foreground">{filter === "you" ? "没有在等你的" : "没有在跑的"}</div>}
-            {matches.map((x) => (
-              <Row key={x.pane.id} {...rowProps(x.ws, x.tab, x.pane, false)} where={applyWorkspaceLabel(x.ws, list.indexOf(x.ws), x.ws.name)} />
-            ))}
+            {matches.map(flatRow)}
+          </div>
+        ) : arrange === "priority" ? (
+          <div className="pt-1">
+            {fresh.map(flatRow)}
+            {stale.length > 0 && (
+              <>
+                <button
+                  className="mt-1 flex h-7 w-full items-center gap-1 rounded-md px-1 text-[11px] text-muted-foreground hover:bg-accent/60 hover:text-foreground"
+                  onClick={() => setStaleFolded(!staleFolded)}
+                >
+                  <ChevronRight className={cn("size-3.5 shrink-0 transition-transform", !staleFolded && "rotate-90")} />
+                  <span className="flex-1 text-left">{STALE_DAYS} 天以上没动</span>
+                  <span className="tabular-nums">{stale.length}</span>
+                </button>
+                {!staleFolded && stale.map(flatRow)}
+              </>
+            )}
           </div>
         ) : (
           list.map((ws, wi) => (
@@ -242,7 +317,7 @@ function FilterChip({ on, tone, onClick, children }: { on: boolean; tone?: "bad"
   return (
     <button
       className={cn(
-        "flex h-6 items-center gap-1 rounded-md px-2",
+        "flex h-6 shrink-0 items-center gap-0.5 rounded-md px-1.5 whitespace-nowrap",
         on ? "bg-foreground text-background" : "text-muted-foreground hover:bg-accent hover:text-foreground",
         !on && tone === "bad" && "text-bad",
       )}
