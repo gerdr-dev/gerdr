@@ -62,8 +62,12 @@ const jump = await stopFrameLog(page);
 // Chrome on a laptop measures fast enough that no frame shows it; a phone jumped by whole screens (user's recording).
 const fr = a.ro ? ro : raf;
 let remounts = 0;
+// Rows below the lowest item index seen so far are older messages coming in, mounted once to be measured: not a remount
+let low = fr[0]?.minIdx ?? Infinity;
 for (let i = 1; i < fr.length; i++) {
-  if (fr[i].mounted - fr[i - 1].mounted <= 20) continue;
+  const older = fr[i].minIdx < low;
+  low = Math.min(low, fr[i].minIdx);
+  if (older || fr[i].mounted - fr[i - 1].mounted <= 20) continue;
   remounts++;
   console.log(`  ${fr[i].t}ms the whole chat mounted again: ${fr[i - 1].mounted} -> ${fr[i].mounted} rows`);
 }

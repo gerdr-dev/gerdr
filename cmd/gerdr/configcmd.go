@@ -43,7 +43,7 @@ var configKeys = map[string]configKey{
 	"confirmLinks":    {kind: "bool", desc: "ask before opening an external link from a chat (default on)"},
 	"copyOnSelect":    {kind: "bool", desc: "Labs: copy text as soon as it is selected (a device that picked its own in Settings keeps that; this is the value for the others)"},
 	"virtualList":     {kind: "bool", desc: "Labs: virtual scrolling for chats (a device that picked its own in Settings keeps that; this is the value for the others)"},
-	"tanstackList":    {kind: "bool", desc: "Labs: draw the chat list with TanStack Virtual instead of react-virtuoso (every device)"},
+	"ownList":         {kind: "bool", desc: "Labs: draw the chat list with Gerdr's own virtual list instead of react-virtuoso (every device)"},
 	"keepAwakeRemote": {kind: "bool", desc: "Labs: keep the computer awake (lid closed too) while a remote device is connected"},
 	"defaultAgent":    {kind: "string", desc: "agent id new sessions use (claude, codex, native, or an id from agents)"},
 	"defaultModes":    {kind: "object", desc: `per agent id: the mode new sessions start in, e.g. {"claude": "acceptEdits"}`},

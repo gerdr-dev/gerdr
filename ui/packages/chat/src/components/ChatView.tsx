@@ -16,7 +16,7 @@ import { Composer, type ComposerHandle } from "./Composer";
 import { SessionContext } from "./sessionContext";
 import { askKey } from "../askkeys";
 import { isCoarse } from "../device";
-import { TanList, type ListHandle } from "./TanList";
+import { ChatList, type ListHandle } from "./ChatList";
 
 /** sub：子 agent 的只读面板（值 = 它在主会话里那张卡片的 toolCallId）。没有输入框、不能回退。 */
 // 最后一条和输入框之间留一截（照 ChatGPT 桌面版的留白）：贴太近的话最后那行元信息和输入框挤在一起。
@@ -242,9 +242,9 @@ export function ChatView({
 
   const msgs = t.all;
   const virtualList = !!settings.virtualList;
-  // Labs: the list on TanStack Virtual instead of react-virtuoso (TanList.tsx). The Virtuoso-only fixes below find none of
-  // Virtuoso's elements then and do nothing.
-  const tan = !!settings.tanstackList;
+  // Labs: our own list instead of react-virtuoso (ChatList.tsx). The Virtuoso-only fixes below find none of Virtuoso's
+  // elements then and do nothing.
+  const own = !!settings.ownList;
   const showThinking = settings.showThinking !== false;
   // 虚拟滚动开着时，打开会话先把所有行渲染一次、量出真实高度，再缩回只渲染屏幕附近（Virtuoso 记得量过的高度，行卸载了也不忘）。
   // 不先量的话，往上翻时新进渲染范围的行只能按估的高度占位，实际一挂上高度对不上，整段内容被推走一截，Virtuoso 下一帧才补回来 ——
@@ -634,8 +634,8 @@ export function ChatView({
               <div className="font-mono text-[12px]">{session.cwd}</div>
             </div>
           )}
-          {loaded && msgs.length > 0 && tan && (
-            <TanList
+          {loaded && msgs.length > 0 && own && (
+            <ChatList
               ref={list as Ref<ListHandle>}
               rows={rows}
               env={env}
@@ -652,7 +652,7 @@ export function ChatView({
                 nearTop(el);
               }}
               onAtBottom={(b) =>
-                // From the virtualizer's onChange, which can run while React renders: set state after
+                // Can come from a layout pass while React renders: set state after
                 queueMicrotask(() => {
                   if (b === bottomRef.current) return;
                   bottomRef.current = b;
@@ -667,7 +667,7 @@ export function ChatView({
               }}
             />
           )}
-          {loaded && msgs.length > 0 && !tan && (
+          {loaded && msgs.length > 0 && !own && (
             <Virtuoso
               ref={list as Ref<VirtuosoHandle>}
               className="h-full"

@@ -1,5 +1,5 @@
 // 准备调试实例：把正在用的 gerdr 里的几个会话复制到 ~/.gerdr-dev，每个会话一个 tab，打开虚拟滚动。
-//   node setup.mjs <会话 id> [<会话 id>…] [--list=tanstack]
+//   node setup.mjs <会话 id> [<会话 id>…] [--list=own]
 // 会话 id 用 `gerdr session list` 看；闪的那个会话直接拿来最好 —— 闪不闪跟内容关系很大（代码块、表格、图片、几千行的大回复）。
 // 只读 ~/.gerdr，不改它。要在调试实例没开着的时候跑（开着的话它退出时会把自己的布局写回去，盖掉这里写的）。
 import fs from "node:fs";
@@ -8,7 +8,7 @@ import os from "node:os";
 import path from "node:path";
 import { DIR, PORT } from "./lib.mjs";
 
-// --list=tanstack: the chat list on TanStack Virtual (Labs → new chat list), else react-virtuoso
+// --list=own: Gerdr's own chat list (Labs → new chat list, ChatList.tsx), else react-virtuoso
 const list = process.argv.find((x) => x.startsWith("--list="))?.slice(7) ?? "virtuoso";
 const ids = process.argv.slice(2).filter((x) => !x.startsWith("--"));
 if (!ids.length) {
@@ -38,6 +38,6 @@ const tabs = picked.map((e, i) => ({ id: `t${i + 1}`, focus: `p${i + 1}`, root: 
 fs.writeFileSync(path.join(DIR, "layout.json"), JSON.stringify({ version: 1, active: "w1", workspaces: [{ id: "w1", name: "default", activeTab: "t1", tabs }] }));
 const cfgPath = path.join(DIR, "config.json");
 const cfg = fs.existsSync(cfgPath) ? JSON.parse(fs.readFileSync(cfgPath, "utf8")) : {};
-fs.writeFileSync(cfgPath, JSON.stringify({ ...cfg, virtualList: true, tanstackList: list === "tanstack" }));
+fs.writeFileSync(cfgPath, JSON.stringify({ ...cfg, virtualList: true, ownList: list === "own" }));
 for (const [i, e] of picked.entries()) console.log(`tab ${i + 1}: ${e.id}  ${e.title ?? ""}  (${(fs.statSync(path.join(DIR, "sessions", e.id + ".jsonl")).size / 1e6).toFixed(1)} MB)`);
 console.log("好了：make dev（或 GERDR_UI=$PWD/ui GERDR_DIR=~/.gerdr-dev GERDR_PORT=7871 go run ./cmd/gerdr）起调试实例");

@@ -26,7 +26,7 @@ if (a.type) {
   await page.keyboard.type("这是一段很长的话，用来把输入框撑到第二行，看看对话会不会跟着跳。".repeat(2));
   await page.waitForTimeout(800);
   // The clamp itself: any scroll event that leaves the bottom while nobody scrolls. The list puts it back a frame later
-  // (TanList's fallback), so frames alone barely show it; a phone painted it for a good while.
+  // (ChatList's fallback), so frames alone barely show it; a phone painted it for a good while.
   await page.evaluate(() => {
     const sc = [...document.querySelectorAll("[data-chat-scroller], [data-virtuoso-scroller]")].find((x) => !x.closest(".invisible"));
     window.__clamps = [];
@@ -53,10 +53,10 @@ if (a.type) {
     await page.waitForTimeout(300);
   }
 }
-const { ro, frames } = await stopFrameLog(page);
+const { ro } = await stopFrameLog(page);
 // Painted frames (the late ResizeObserver's, docs/dev/SCROLL.md) short of the bottom
-const off = (a.type ? frames : ro).filter((f) => !f.hidden && f.sh - f.ch - f.st > 1);
+const off = ro.filter((f) => !f.hidden && f.sh - f.ch - f.st > 1);
 for (const f of off.slice(0, 10)) console.log(`  ${f.t}ms ${f.sh - f.ch - f.st}px from the bottom`);
-console.log(`${(a.type ? frames : ro).length} frames, ${a.type ? `${a.rounds} keys typed on the composer's second line` : `the chat changed height ${a.rounds} times`}, ${off.length} short of the bottom`);
+console.log(`${ro.length} painted frames, ${a.type ? `${a.rounds} keys typed on the composer's second line` : `the chat changed height ${a.rounds} times`}, ${off.length} short of the bottom`);
 await browser.close();
 process.exit(off.length || clamped ? 1 : 0);

@@ -18,7 +18,7 @@ make dev                                     # 回仓库根起调试实例（787
 node tabs.mjs                                # 然后跑场景，见下表
 ```
 
-`setup.mjs --list=tanstack` runs the scripts against the TanStack Virtual list (Labs, `TanList.tsx`); they find either
+`setup.mjs --list=own` runs the scripts against Gerdr's own list (Labs → 新的对话列表, `ChatList.tsx`); they find either
 list (`[data-virtuoso-scroller], [data-chat-scroller]`). If the debug build doesn't compile (someone else's work in
 progress), start the installed binary instead: `GERDR_UI=$PWD/ui GERDR_DIR=~/.gerdr-dev GERDR_PORT=7871 gerdr`.
 Run `panes.mjs` / `tabs.mjs` / `open.mjs` last or `setup.mjs` again after them: they leave the debug layout split or
@@ -40,6 +40,7 @@ on another tab, and the scripts after them find no chat.
 | Scrolling up while a reply streams in gets pulled back | `streamup.mjs [--step=30] [--steps=5] [--gap=1500]` | Small wheel steps up from the bottom with pauses longer than 600ms while output keeps arriving. Leaving the bottom goes by direction, not distance: any user scroll up leaves it, only scrolling back down (or reaching the very bottom) re-sticks (`syncBottom`) |
 | Phone: a finger drags up a little mid-reply and stays down; the text under it bobs or runs on | `touchhold.mjs [--up=40] [--hold=3000] [--creep] [--height=462] [--cpu=4] [--ro]` | Touch drag (CDP touch events, phone viewport) from the bottom while a reply streams in, then holds still: no row may move. `--creep`: the finger keeps inching up the chat while held (the content may only follow it); `--height=462` is a phone with the keyboard up. `--up` under ~15px is eaten by the touch slop (no scroll, exit 2) |
 | Phone: reading a reply as it's written, dragging / flicking now and then; whole screens jump | `touchscroll.mjs [--at="what the user said"] [--fling] [--cpu=4]` | Plays a turn back like `/replay` while dragging, checks every frame, and fails on a whole-chat remount mid-reply (laptop Chrome measures fast enough that no frame shows it; a phone jumps). Use `--at` the turn the user saw it in, steers included |
+| The jump-to-bottom button stutters on the way down | `tobottom.mjs [--mobile] [--cpu=4] [--screens=20]` | Scrolls ~20 screens up (wheel, or a touch gesture with `--mobile`), presses the button and checks every frame: only ever moving down, no frame standing still or moving over 400px after the first, none over 50ms, ends at the bottom. rAF frames: a scroll resizes nothing, so `--ro` would see none |
 | Phone: typing at the bottom of a chat; the chat jumps a line on each key | `keyboard.mjs [--type] [--cpu=4]` | The chat changes height while a reply plays (the keyboard / IME candidate bar coming and going): every painted frame must stay at the bottom. `--type`: types on the composer's second line and fails on any scroll event that leaves the bottom on its own (the composer's measuring clamped the chat, see below) |
 | A broken image / video makes the chat jump | `media.mjs [--src=/tmp/x.png] [--tab=1]` | Appends a message with missing media, parks it mid-screen, watches through every automatic retry, then scrolls it out and back in. Run it after touching `chat/ChatMedia.tsx` |
 | 某一行自己变高矮 | `rows.mjs [--tab=1]` | 行挂上后高度变没变（DOM 没变也会变）、Virtuoso 记的高度和实际对不对 |
@@ -162,6 +163,32 @@ Virtuoso 在 ResizeObserver 里量行高、改布局，所以 rAF 里看到「�
   up instead of at the bottom (not reproduced headless, CPU x6, reload or reopening from the list), and the
   jump-to-bottom button scrolling in stutters. Lesson for our own list: one place that owns scrollTop, sizes known
   before paint, the bottom followed by us, positions by row key.
+- **Our own list (`ChatList.tsx`, Labs → 新的对话列表).** Built on that lesson: one function (`sync`) measures rows,
+  lays them out from sizes kept by key, writes positions to the DOM and puts scrollTop where it belongs, all before
+  paint (after every commit and from a ResizeObserver on the rows). At the bottom: the end. Otherwise the row at the
+  top of the screen keeps its distance from the screen's top, found by key in the layout from before the change; that
+  one rule covers rows above changing size, older messages going in front, and a reply growing under the top row.
+  What the scripts caught while building it:
+  - The jump-to-bottom button: Virtuoso's smooth scroll (the default list) jumps up to 2000px in a frame and drops
+    frames on a phone profile (`tobottom.mjs --mobile --cpu=4`: 10 steps over 400px, 3 frames over 50ms), the stutter
+    the user saw. Ours animates itself, towards a target recomputed each frame, after skipping to 1.5 screens short.
+  - A finger's touchmoves stop reaching the list when the row under it is replaced (a tool call's "peek" row becomes
+    its group: a new key, the touched node detached). The scroll still happens but the list never heard the finger
+    move up, stayed stuck and pulled back to the bottom on every line (`touchhold.mjs --height=462`, only when the
+    finger lands on such a row). So a scroll up while a finger is down (from touchstart) leaves the bottom too. The
+    Virtuoso path's `trackScrollDir` reads touchmove the same way and has the same hole.
+  - Some rows finish rendering a frame after they mount (one grew 200px): hidden for two frames on opening, as Virtuoso
+    does (`open.mjs --reload`).
+  - Frames from the previous tab's chat counted as a "whole screen swapped" when switching tabs: the frame log now
+    tags each frame with its scroller and only compares frames of the same one.
+  - Older messages coming in: the rows of a message cut off at the top get new keys once the rest of it arrives, so
+    the anchor row's key can vanish; then the next row from before that still exists anchors (`fling.mjs --to-top`:
+    the whole screen swapped on the first load). The new rows are mounted once beside the range, measured and dropped,
+    instead of mounting the whole chat again (`touchscroll.mjs --fling --height=462`). The remount check there skips
+    frames that mount rows with a lower item index than any seen before: those are older messages, not a remount.
+  - `keyboard.mjs --type` judged rAF frames, which run before layout and show the composer's new height before the
+    list has stuck to the bottom. The `--ro` log now also watches the scroller, so it sees frames where only the chat's
+    own size changed, and both modes judge painted frames.
 - **Virtuoso 把行高取整**（默认 `Math.round(getBoundingClientRect().height)`）：41.5 记 42、39.8 记 40，
   卸掉的行越多攒得越多，量完缩回那一下整段挪一截（卸 32 行差 10px），会话越长越明显。`itemSize` 换成不取整的。
   `rows.mjs` 报「记的和实际不一样」就是这个。

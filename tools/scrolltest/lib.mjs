@@ -98,6 +98,7 @@ export function fromBottom(page) {
  * 记录器本身由 launch 用 init script 装进每个页面（window.__startFrameLog），所以也能从页面加载的第一帧记起（launch 的 logFromLoad）。
  */
 function installFrameLogger() {
+  window.__scids = 0;
   window.__startFrameLog = ({ point: pt, sid, ro } = {}) => {
     const find = () => {
       const at = pt ? document.elementFromPoint(pt[0], pt[1])?.closest("[data-virtuoso-scroller], [data-chat-scroller]") : null;
@@ -110,8 +111,10 @@ function installFrameLogger() {
       const rows = {};
       let n = 0;
       const boxes = [];
+      let minIdx = Infinity;
       for (const it of sc.querySelectorAll("[data-item-index]")) {
         n++;
+        minIdx = Math.min(minIdx, +it.dataset.itemIndex);
         const r = it.getBoundingClientRect();
         boxes.push([+it.dataset.itemIndex, r.top, r.bottom]);
         if (r.bottom > top0 && r.top < bot0) rows[it.dataset.itemIndex] = [+(r.top - top0).toFixed(1), +r.height.toFixed(1)];
@@ -122,13 +125,17 @@ function installFrameLogger() {
       let overlap = 0;
       for (let i = 1; i < boxes.length; i++) if (boxes[i][0] === boxes[i - 1][0] + 1) overlap = Math.max(overlap, boxes[i - 1][2] - boxes[i][1]);
       const lst = sc.querySelector("[data-testid=virtuoso-item-list], [data-chat-list]");
+      // Which scroller: switching tabs, the frames before the new chat shows come from the old one
+      if (!sc.__scid) sc.__scid = ++window.__scids;
       return {
         t: Math.round(performance.now()),
+        sc: sc.__scid,
         st: Math.round(sc.scrollTop),
         sh: sc.scrollHeight,
         ch: sc.clientHeight,
         hidden: !!lst && getComputedStyle(lst).visibility === "hidden",
         mounted: n,
+        minIdx,
         overlap: +overlap.toFixed(1),
         rows,
         older: sid && window.__store ? window.__store.get().older[sid] : undefined,
@@ -150,6 +157,8 @@ function installFrameLogger() {
       });
       o.observe(sc.querySelector("[data-testid=virtuoso-item-list], [data-chat-list]"));
       o.observe(sc.firstElementChild);
+      // The chat's own size too (the keyboard): our list's content doesn't resize then
+      o.observe(sc);
       window.__ro = o;
     }
   };
@@ -180,7 +189,7 @@ export function analyze(frames, { scrolling = false, threshold = 2, step = 60 } 
   const out = [];
   for (let i = 1; i < frames.length; i++) {
     const a = frames[i - 1], c = frames[i];
-    if (c.hidden) continue;
+    if (c.hidden || c.sc !== a.sc) continue;
     const ds = c.st - a.st;
     const common = Object.keys(c.rows).filter((k) => k in a.rows);
     const base = { i, t: c.t, ds, sh: [a.sh, c.sh], mounted: [a.mounted, c.mounted], st: [a.st, c.st] };
