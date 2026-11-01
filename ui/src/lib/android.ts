@@ -228,7 +228,8 @@ function watchArrows() {
   const mo = new MutationObserver(later);
   mo.observe(document.body, { childList: true });
   const offAsks = watchAsks(later);
-  // The drawer and pane switcher aren't portals on <body> like the dialogs (the observer above): watch the store for them
+  // The drawer isn't a portal on <body> like the dialogs (the observer above): watch the store for it (and the pane
+  // switcher, a popover portal now, but its store flip is the earlier signal)
   const offStore = useStore.subscribe(
     (s, p) => (s.layout !== p.layout || s.overview !== p.overview || s.drawer !== p.drawer || s.switcher !== p.switcher) && later(),
   );

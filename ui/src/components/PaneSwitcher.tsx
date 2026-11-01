@@ -1,6 +1,7 @@
 import { Plus, Search, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { PopoverContent } from "@/components/ui/popover";
 import { addTab, basename, focusPane, selectWorkspace, tabName } from "@/lib/actions";
 import { allLeaves, currentSpace, leaves, spaceOf, spaceWorkspaces, type PaneLeaf } from "@/lib/layout";
 import { isCoarse } from "@/lib/phone";
@@ -20,8 +21,6 @@ import { WsDot } from "./Chrome";
  *
  * 它是**索引，不是第二个管理界面**：只有「去哪个」和「新开一个」，关 / 改名 / 分屏还在 pane 标题栏的菜单里。
  */
-const LS_SORT = "gerdr.panesSort";
-
 /** tab 带序号、分屏的 pane 带「第几个」：同一个 tab 里两个空 pane、或两个同名 tab，只有这两样分得开。 */
 type Row = { pane: PaneLeaf; session?: SessionSummary; ws: string; wsId: string; tab: string; at: string; i: number };
 
@@ -54,7 +53,27 @@ function ago(ms: number | undefined, now: number) {
   return `${Math.round(h / 24)}d`;
 }
 
+/**
+ * The panel itself, as the content of the phone bar's popover (Chrome.tsx PhoneBar owns the Popover and anchors it on
+ * the bar): the same component as the inbox, so it gets the same open / close animation, Esc and tap-outside handling.
+ * Body sits inside PopoverContent so it is remounted on every open (filter / workspace start fresh).
+ */
 export function PaneSwitcher() {
+  return (
+    <PopoverContent
+      align="center"
+      sideOffset={6}
+      collisionPadding={8}
+      // Touch: don't focus the search box on open, it would push the keyboard up (the rows are for thumbs, not typing)
+      onOpenAutoFocus={(e) => isCoarse() && e.preventDefault()}
+      className="flex max-h-[calc(var(--vvh,100vh)-64px)] w-[min(480px,calc(100vw-16px))] flex-col gap-0 overflow-hidden rounded-xl p-0 shadow-[0_24px_60px_-16px_rgba(0,0,0,.45)]"
+    >
+      <Body />
+    </PopoverContent>
+  );
+}
+
+function Body() {
   const layout = useStore((s) => s.layout);
   const sessions = useStore((s) => s.sessions);
   const unread = useStore((s) => s.unread);
@@ -67,32 +86,12 @@ export function PaneSwitcher() {
   // "全部" is one tap away. The panel is remounted on every open, so this is read fresh each time.
   const [ws, setWs] = useState(() => layout.active ?? "");
   const [adding, setAdding] = useState(false);
-  const [sort, setSort] = useState<"rank" | "group">(() => {
-    try {
-      return localStorage.getItem(LS_SORT) === "group" ? "group" : "rank";
-    } catch {
-      return "rank";
-    }
-  });
-  const flipSort = () => {
-    const v = sort === "rank" ? "group" : "rank";
-    setSort(v);
-    try {
-      localStorage.setItem(LS_SORT, v);
-    } catch {}
-  };
 
   // 「3m」那一列的 now：最小刻度是分钟，15 秒推一次足够。状态本身是 WebSocket 实时推的，不用轮询。
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 15000);
     return () => clearInterval(t);
-  }, []);
-
-  useEffect(() => {
-    const k = (e: KeyboardEvent) => e.key === "Escape" && close();
-    window.addEventListener("keydown", k);
-    return () => window.removeEventListener("keydown", k);
   }, []);
 
   const focusedPane = useMemo(() => {
@@ -128,25 +127,10 @@ export function PaneSwitcher() {
         `${r.session?.title ?? ""} ${r.session?.agent ?? ""} ${r.session?.cwd ?? ""} ${r.ws} ${r.tab} ${r.pane.sub?.title ?? ""} ${r.pane.term ? "终端 " + r.pane.term.cwd : ""} ${r.pane.file?.path ?? ""}`
           .toLowerCase()
           .includes(kw));
-    const list = out.filter(hit);
-    if (sort === "group") return list;
-    return list.sort(
-      (a, b) => rankOf(a, unread) - rankOf(b, unread) || (a.session && b.session ? compareSessions(a.session, b.session, unread) : 0) || a.i - b.i,
-    );
-  }, [layout, sessions, unread, q, ws, sort]);
-
-  // 「分组」按工作空间分组（和侧栏里看到的一样）；优先级是全局排序，分组会把它切碎，所以那边是一条平铺的表。
-  const groups = useMemo(() => {
-    if (sort !== "group") return [{ ws: "", items: rows }];
-    const out: { ws: string; items: Row[] }[] = [];
-    for (const r of rows) {
-      const g = out.find((x) => x.ws === r.wsId);
-      if (g) g.items.push(r);
-      else out.push({ ws: r.wsId, items: [r] });
-    }
-    // 当前工作空间那组放最上面（和上面那排标签一个顺序）
-    return out.sort((a, b) => +(b.ws === layout.active) - +(a.ws === layout.active));
-  }, [rows, sort, layout.active]);
+    return out
+      .filter(hit)
+      .sort((a, b) => rankOf(a, unread) - rankOf(b, unread) || (a.session && b.session ? compareSessions(a.session, b.session, unread) : 0) || a.i - b.i);
+  }, [layout, sessions, unread, q, ws]);
 
   const go = (paneId: string) => {
     focusPane(paneId);
@@ -185,35 +169,20 @@ export function PaneSwitcher() {
 
   return (
     <>
-      {/* 点面板外面就关：手机上没有 Esc，右上角那个 × 又小 */}
-      <div className="absolute inset-0 z-20 bg-background/40" onClick={close} />
-      <aside
-        role="dialog"
-        aria-modal="true"
-        className="absolute inset-x-2 top-1.5 z-20 flex max-h-[calc(100%-12px)] flex-col overflow-hidden rounded-xl border bg-background text-foreground shadow-[0_24px_60px_-16px_rgba(0,0,0,.45)] md:right-2.5 md:left-auto md:w-[480px]"
-      >
-        <div className="flex shrink-0 items-center gap-1.5 border-b p-2">
+      {/* Search, "new" and the workspace chips are one header block: no lines between them, one line under it */}
+      <div className="shrink-0 border-b">
+        <div className="flex items-center gap-1 p-2 pb-1.5">
           <div className="relative min-w-0 flex-1">
-            <Search className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-            {/* 13px 和列表一个调子；只有 iOS 留 16px：小于 16px 的输入框一聚焦，iOS 会把整页放大 */}
-            {/* 触屏上不自动聚焦：一开面板就顶出键盘，而这儿多半是用手指扫，不是打字 */}
+            <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
+            {/* 13px matches the list; iOS only gets 16px: a smaller input makes iOS zoom the page on focus */}
             <input
-              className="h-8 w-full rounded-md border bg-transparent pr-2 pl-7 text-[13px] outline-none placeholder:text-muted-foreground/70 focus-visible:ring-2 focus-visible:ring-ring/40 supports-[-webkit-touch-callout:none]:text-[16px]"
+              className="h-8 w-full rounded-lg bg-muted/60 pr-2 pl-8 text-[13px] outline-none placeholder:text-muted-foreground/70 focus-visible:ring-2 focus-visible:ring-ring/40 supports-[-webkit-touch-callout:none]:text-[16px]"
               placeholder="筛 标题 / tab / 路径"
               value={q}
               autoFocus={!isCoarse()}
               onChange={(e) => setQ(e.target.value)}
             />
           </div>
-          <Button
-            size="sm"
-            variant={sort === "group" ? "secondary" : "ghost"}
-            className="h-8 px-2 text-[12px]"
-            title="按优先级 / 按工作空间分组"
-            onClick={flipSort}
-          >
-            {sort === "group" ? "分组" : "优先级"}
-          </Button>
           {/* 「新开」挨着关闭键放，不跟工作空间那一行混：那一行是「选」，这个是「建」 */}
           <Button size="icon" variant={adding ? "secondary" : "ghost"} className="size-8" aria-label="新开" onClick={() => setAdding((v) => !v)}>
             <Plus className="size-4" />
@@ -224,7 +193,7 @@ export function PaneSwitcher() {
         </div>
 
         {adding && (
-          <div className="flex shrink-0 items-center gap-1.5 border-b px-2 py-1.5 text-[12px]">
+          <div className="flex items-center gap-1.5 px-2 pb-1.5 text-[12px]">
             <span className="text-muted-foreground">新开</span>
             <Button
               size="sm"
@@ -249,7 +218,7 @@ export function PaneSwitcher() {
           切过去之后多半还要在它里面挑一个，两件事本来就是一起要的。横滑，不换行（换行会吃掉好几行列表）。
         */}
         {spaceWorkspaces(layout).length > 1 && (
-          <div className="flex shrink-0 items-center gap-1.5 overflow-x-auto border-b px-2 py-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="flex items-center gap-1 overflow-x-auto px-2 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <Chip on={!ws} onClick={() => setWs("")}>
               全部
             </Chip>
@@ -273,71 +242,63 @@ export function PaneSwitcher() {
               ))}
           </div>
         )}
+      </div>
 
-        <div className="min-h-0 overflow-x-hidden overflow-y-auto overscroll-contain p-1.5">
-          {rows.length === 0 && <p className="px-1 py-6 text-center text-[12px] text-muted-foreground">没有匹配的 pane</p>}
-          {groups.map((g) => (
-            <section key={g.ws || "all"} className="mb-1">
-              {g.ws && <h4 className="px-2 pt-1 pb-0.5 text-[11px] font-medium text-muted-foreground">{g.items[0]?.ws}</h4>}
-              <div className="flex flex-col gap-0.5">
-                {g.items.map((r) => {
-                  const s = r.session;
-                  const chip = CHIP[rankOf(r, unread)];
-                  const title = r.pane.sub
-                    ? `子 agent · ${r.pane.sub.title || ""}`.replace(/ · $/, "")
-                    : s
-                      ? s.title || basename(s.cwd)
-                      : r.pane.term
-                        ? `终端 · ${basename(r.pane.term.cwd ?? "")}`
-                        : r.pane.file
-                          ? `文件 · ${basename(r.pane.file.path)}`
-                          : "新会话";
-                  // 第二行：在哪（工作空间 · tab）+ 路径。手机上按工作空间认项目，路径兜底分开同名的
-                  // An unnamed tab is named after its first agent's title: on that agent's row the tab part only repeats the
-                  // title, so it is left out (same as the sidebar's agent list)
-                  const where = [sort === "group" ? "" : r.ws, r.tab === title ? "" : r.tab, r.at].filter(Boolean).join(" · ");
-                  return (
-                    <button
-                      key={r.pane.id}
-                      type="button"
-                      className={cn(
-                        // 一行至少 44px：手机上手指的下限；整块都是热区
-                        // The selected row uses the same fill as the sidebar's active workspace / tab (bg-accent), so the two read
-                        // as one highlight (asked for: a darker foreground overlay here looked like a different thing)
-                        "flex min-h-11 w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left leading-tight outline-none",
-                        "hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring/40",
-                        r.pane.id === focusedPane && "bg-accent [&_.title]:font-medium",
-                      )}
-                      {...tap(r.pane.id)}
-                    >
-                      {/* 不画打头的 agent 图标：几乎全是同一个 C，占一列宽却分不出谁是谁；终端 / 子 agent 标题里已经写着 */}
-                      <span className="min-w-0 flex-1">
-                        <span className="flex items-center gap-1.5">
-                          <span className="title truncate text-[12px]">{title}</span>
-                          {chip && <span className={cn("shrink-0 rounded-sm border px-1 py-px text-[10px]", chip.cls)}>{chip.text}</span>}
-                          <span
-                            className="ml-auto shrink-0 text-[10px] text-muted-foreground tabular-nums"
-                            title={s ? new Date(s.updatedAt).toLocaleString() : ""}
-                          >
-                            {ago(s?.updatedAt, now)}
-                          </span>
-                        </span>
-                        <span className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                          {/* Both halves can shrink: a long tab title (often a whole sentence) used to be shrink-0 and pushed the row
+      <div className="min-h-0 overflow-x-hidden overflow-y-auto overscroll-contain p-1.5">
+        {rows.length === 0 && <p className="px-1 py-6 text-center text-[12px] text-muted-foreground">没有匹配的 pane</p>}
+        <div className="flex flex-col gap-0.5">
+          {rows.map((r) => {
+            const s = r.session;
+            const chip = CHIP[rankOf(r, unread)];
+            const title = r.pane.sub
+              ? `子 agent · ${r.pane.sub.title || ""}`.replace(/ · $/, "")
+              : s
+                ? s.title || basename(s.cwd)
+                : r.pane.term
+                  ? `终端 · ${basename(r.pane.term.cwd ?? "")}`
+                  : r.pane.file
+                    ? `文件 · ${basename(r.pane.file.path)}`
+                    : "新会话";
+            // 第二行：在哪（工作空间 · tab）+ 路径。手机上按工作空间认项目，路径兜底分开同名的
+            // An unnamed tab is named after its first agent's title: on that agent's row the tab part only repeats the
+            // title, so it is left out (same as the sidebar's agent list)
+            const where = [r.ws, r.tab === title ? "" : r.tab, r.at].filter(Boolean).join(" · ");
+            return (
+              <button
+                key={r.pane.id}
+                type="button"
+                className={cn(
+                  // 一行至少 44px：手机上手指的下限；整块都是热区
+                  // The selected row uses the same fill as the sidebar's active workspace / tab (bg-accent), so the two read
+                  // as one highlight (asked for: a darker foreground overlay here looked like a different thing)
+                  "flex min-h-11 w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left leading-tight outline-none",
+                  "hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring/40",
+                  r.pane.id === focusedPane && "bg-accent [&_.title]:font-medium",
+                )}
+                {...tap(r.pane.id)}
+              >
+                {/* 不画打头的 agent 图标：几乎全是同一个 C，占一列宽却分不出谁是谁；终端 / 子 agent 标题里已经写着 */}
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-1.5">
+                    <span className="title truncate text-[12px]">{title}</span>
+                    {chip && <span className={cn("shrink-0 rounded-sm border px-1 py-px text-[10px]", chip.cls)}>{chip.text}</span>}
+                    <span className="ml-auto shrink-0 text-[10px] text-muted-foreground tabular-nums" title={s ? new Date(s.updatedAt).toLocaleString() : ""}>
+                      {ago(s?.updatedAt, now)}
+                    </span>
+                  </span>
+                  <span className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                    {/* Both halves can shrink: a long tab title (often a whole sentence) used to be shrink-0 and pushed the row
                               past the screen edge on a phone. The path gives way first (shrink-[4]), then the title */}
-                          {where && <span className="min-w-0 truncate">{where}</span>}
-                          {(s || r.pane.term) && <span className="min-w-0 shrink-[4] truncate font-mono">{shortCwd(s?.cwd ?? r.pane.term?.cwd ?? "")}</span>}
-                        </span>
-                      </span>
-                      <StatusDot status={dotStatus(s)} unread={!!(s && unread[s.id])} />
-                    </button>
-                  );
-                })}
-              </div>
-            </section>
-          ))}
+                    {where && <span className="min-w-0 truncate">{where}</span>}
+                    {(s || r.pane.term) && <span className="min-w-0 shrink-[4] truncate font-mono">{shortCwd(s?.cwd ?? r.pane.term?.cwd ?? "")}</span>}
+                  </span>
+                </span>
+                <StatusDot status={dotStatus(s)} unread={!!(s && unread[s.id])} />
+              </button>
+            );
+          })}
         </div>
-      </aside>
+      </div>
     </>
   );
 }
@@ -348,9 +309,10 @@ function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; chi
       type="button"
       onClick={onClick}
       className={cn(
-        "flex h-7 shrink-0 items-center gap-1.5 rounded-md border px-2 text-[12px]",
-        // Same fill as the selected row below and the sidebar's active workspace (bg-accent)
-        on ? "border-transparent bg-accent font-medium text-foreground" : "text-muted-foreground hover:bg-accent/60",
+        // No outline: a row of bordered pills on top of the bordered search box read as a grid of boxes. Only the selected
+        // one is filled, with the same fill as the selected row below and the sidebar's active workspace (bg-accent)
+        "flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-[12px]",
+        on ? "bg-accent font-medium text-foreground" : "text-muted-foreground hover:bg-accent/60",
       )}
     >
       {children}

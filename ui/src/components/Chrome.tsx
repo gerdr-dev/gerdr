@@ -90,6 +90,8 @@ import { isNative, nativeNewWindow } from "@/lib/native";
 import { useRoute } from "./AndroidSettings";
 import { usePhone } from "@/lib/phone";
 import { InboxButton } from "./Inbox";
+import { PaneSwitcher } from "./PaneSwitcher";
+import { Popover, PopoverAnchor } from "@/components/ui/popover";
 
 /** 一个 tab 的汇总状态：里面任何一个会话在等你 → 等你；在跑 → 在跑；…… */
 /**
@@ -321,40 +323,59 @@ export function PhoneBar() {
       .map((x) => x.pane.sessionId),
   ).size;
   const openSwitcher = () => {
+    // A tap on these buttons while the panel is open first counts as a tap outside it (the popover closes itself on
+    // pointerdown); toggling on the click that follows would open it straight back
+    if (!switcher && Date.now() - switcherClosedAt < 400) return;
     // 先把键盘收掉：键盘占着半个屏时，点面板里第一下只会收键盘
     (document.activeElement as HTMLElement | null)?.blur?.();
     set({ switcher: !switcher, drawer: false });
   };
   return (
-    <div className="flex h-11 shrink-0 items-center gap-1 border-b bg-sidebar px-1.5">
-      <Button variant="ghost" size="icon" className="size-9" aria-label="侧栏" onClick={() => set({ drawer: true, switcher: false })}>
-        <Menu className="size-[18px]" />
-      </Button>
-      {/* Lined up with the pane title bar below (Panes.tsx: pl-4, 16px icon, gap-2): both icons are centred at 24px and both
+    // The pane switcher is a popover anchored on the whole bar (same component as the inbox, for its animation); the
+    // store's `switcher` drives it because the pane title bar's 1/2 count opens it too
+    <Popover
+      open={switcher}
+      onOpenChange={(v) => {
+        if (!v) switcherClosedAt = Date.now();
+        set({ switcher: v });
+      }}
+      modal
+    >
+      <PopoverAnchor asChild>
+        <div className="flex h-11 shrink-0 items-center gap-1 border-b bg-sidebar px-1.5">
+          <Button variant="ghost" size="icon" className="size-9" aria-label="侧栏" onClick={() => set({ drawer: true, switcher: false })}>
+            <Menu className="size-[18px]" />
+          </Button>
+          {/* Lined up with the pane title bar below (Panes.tsx: pl-4, 16px icon, gap-2): both icons are centred at 24px and both
           titles start at 40px — 6px padding + 36px button + 4px gap − 6px pulled back (asked for) */}
-      <button className="-ml-1.5 flex h-9 min-w-0 flex-1 items-center gap-1.5 rounded-md pr-1.5 pl-0 text-left" onClick={openSwitcher}>
-        <FadeText className="min-w-0 text-[13px] font-medium">{applyTabLabel(tab, ti, ws, tabName(tab))}</FadeText>
-        {/* 只有一个 pane 时不画：下面 pane 标题栏那个点就是同一个会话，一行里三个点太乱。好几个 pane 时它是整个 tab 的汇总，留着 */}
-        {leaves(tab.root).length > 1 && <StatusDot status={st.status} unread={st.unread} />}
-        {/* The workspace never gives way to a long tab name (asked for): it is the one place on a phone that says which one you're in */}
-        <FadeText className="max-w-[40%] shrink-0 text-[11px] text-muted-foreground">{applyWorkspaceLabel(ws, wi, ws.name)}</FadeText>
-      </button>
-      <Button variant={switcher ? "secondary" : "ghost"} size="icon" className="relative size-9" aria-label="面板一览" onClick={openSwitcher}>
-        <LayoutList className="size-[18px]" />
-        {waiting > 0 && (
-          <span className="absolute top-1 right-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-bad px-0.5 text-[9px] leading-none font-semibold text-white tabular-nums">
-            {waiting}
-          </span>
-        )}
-      </Button>
-      <OverviewButton />
-      <InboxButton phone />
-      <Button variant="ghost" size="icon" className="size-9" aria-label="新建 tab" onClick={() => addTab()}>
-        <Plus className="size-[18px]" />
-      </Button>
-    </div>
+          <button className="-ml-1.5 flex h-9 min-w-0 flex-1 items-center gap-1.5 rounded-md pr-1.5 pl-0 text-left" onClick={openSwitcher}>
+            <FadeText className="min-w-0 text-[13px] font-medium">{applyTabLabel(tab, ti, ws, tabName(tab))}</FadeText>
+            {/* 只有一个 pane 时不画：下面 pane 标题栏那个点就是同一个会话，一行里三个点太乱。好几个 pane 时它是整个 tab 的汇总，留着 */}
+            {leaves(tab.root).length > 1 && <StatusDot status={st.status} unread={st.unread} />}
+            {/* The workspace never gives way to a long tab name (asked for): it is the one place on a phone that says which one you're in */}
+            <FadeText className="max-w-[40%] shrink-0 text-[11px] text-muted-foreground">{applyWorkspaceLabel(ws, wi, ws.name)}</FadeText>
+          </button>
+          <Button variant={switcher ? "secondary" : "ghost"} size="icon" className="relative size-9" aria-label="面板一览" onClick={openSwitcher}>
+            <LayoutList className="size-[18px]" />
+            {waiting > 0 && (
+              <span className="absolute top-1 right-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-bad px-0.5 text-[9px] leading-none font-semibold text-white tabular-nums">
+                {waiting}
+              </span>
+            )}
+          </Button>
+          <OverviewButton />
+          <InboxButton phone />
+          <Button variant="ghost" size="icon" className="size-9" aria-label="新建 tab" onClick={() => addTab()}>
+            <Plus className="size-[18px]" />
+          </Button>
+        </div>
+      </PopoverAnchor>
+      <PaneSwitcher />
+    </Popover>
   );
 }
+
+let switcherClosedAt = 0;
 
 /**
  * The phone bar's overview button. Tap opens the overview; long-press (or right-click) puts the pane you're on into it

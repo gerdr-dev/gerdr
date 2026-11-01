@@ -3,7 +3,6 @@ import { useEffect, useLayoutEffect, useState } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { PhoneBar, PhoneConnToast, Sidebar, TabBar } from "./components/Chrome";
-import { PaneSwitcher } from "./components/PaneSwitcher";
 import { Dialogs } from "./components/Dialogs";
 import { GerdrChatProvider } from "./lib/chatHost";
 import { AppContextMenu } from "./components/AppContextMenu";
@@ -89,7 +88,6 @@ export default function App() {
   const sidebar = useStore((s) => s.sidebar);
   const prefix = useStore((s) => s.config.prefix);
   const drawer = useStore((s) => s.drawer);
-  const switcher = useStore((s) => s.switcher);
   const phone = usePhone();
   useTheme();
   useViewportHeight();
@@ -252,7 +250,6 @@ export default function App() {
                   </div>
                 );
               })}
-              {switcher && phone && <PaneSwitcher />}
             </div>
           </div>
         </div>
