@@ -529,9 +529,10 @@ export function Sidebar({ className }: { className?: string }) {
   const listRef = useRef<HTMLDivElement>(null);
   const { drag, onPointerDown } = useWorkspaceDrag(listRef, list.map((w) => w.id).join(","));
   const wsRef = useRef<HTMLDivElement>(null);
-  const [wsH, setWsH] = useWorkspacesH();
-  // The phone drawer keeps the default: no room there to share out, and fingers would catch the edge while scrolling
-  const fixed = !className && wsH !== undefined;
+  // The phone drawer (className set) gets the edge too (asked for), with its own saved height: a desktop height is
+  // meaningless on a phone screen and the other way round.
+  const [wsH, setWsH] = useWorkspacesH(className ? WS_H_KEY + ".phone" : WS_H_KEY);
+  const fixed = wsH !== undefined;
   return (
     // className = the phone drawer, which sets its own width; on the desktop the width is the user's (SidebarEdge)
     <div className={cn("relative flex h-full shrink-0 flex-col border-r bg-sidebar", className)} style={className ? undefined : { width: sidebarW }}>
@@ -564,7 +565,7 @@ export function Sidebar({ className }: { className?: string }) {
           <Plus className="size-3.5" /> 新工作空间
         </button>
       </div>
-      {!className && <WorkspacesEdge list={wsRef} onHeight={setWsH} />}
+      <WorkspacesEdge list={wsRef} onHeight={setWsH} />
       <AgentList />
       <SidebarBottom sidebarToggle />
     </div>
@@ -744,10 +745,10 @@ const WS_H_MIN = 40;
  * The workspace list's height in the sidebar: undefined = sized by its content up to 45% (the default), a number = what
  * the user dragged it to (WorkspacesEdge), kept across reloads.
  */
-function useWorkspacesH() {
+function useWorkspacesH(key: string) {
   const [h, setH] = useState<number | undefined>(() => {
     try {
-      return Number(localStorage.getItem(WS_H_KEY)) || undefined;
+      return Number(localStorage.getItem(key)) || undefined;
     } catch {
       return undefined;
     }
@@ -755,8 +756,8 @@ function useWorkspacesH() {
   const save = (v: number | undefined) => {
     setH(v);
     try {
-      if (v) localStorage.setItem(WS_H_KEY, String(v));
-      else localStorage.removeItem(WS_H_KEY);
+      if (v) localStorage.setItem(key, String(v));
+      else localStorage.removeItem(key);
     } catch {}
   };
   return [h, save] as const;
