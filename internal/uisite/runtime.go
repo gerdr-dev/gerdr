@@ -145,9 +145,14 @@ var runtimeVersion = func() string {
 // pointless (it scans the classes on the page), but @source inline(...) is kept: the browser build only generates a
 // class once it shows up in the DOM, so a dialog that mounts with fresh classes renders a frame unstyled (full width,
 // then snapping to size under its open animation). Listing such classes inline compiles them up front.
+var cssCommentRE = regexp.MustCompile(`(?s)/\*.*?\*/`)
+
 var cssUnsupportedRE = regexp.MustCompile(`(?m)^\s*@(import|plugin|source)\s+[^;]*;\s*\n?`)
 
 func browserCSS(css string) (out string, dropped []string) {
+	// Tailwind browser fails on the whole stylesheet — the UI loses every style, no error shown — when the text
+	// "@import" shows up inside a comment (measured with 4.1.11). Comments explaining an import are natural to write.
+	css = cssCommentRE.ReplaceAllStringFunc(css, func(c string) string { return strings.ReplaceAll(c, "@import", "import") })
 	out = cssUnsupportedRE.ReplaceAllStringFunc(css, func(line string) string {
 		t := strings.TrimSpace(line)
 		if strings.HasPrefix(t, "@source inline(") || strings.HasPrefix(t, "@source not inline(") {

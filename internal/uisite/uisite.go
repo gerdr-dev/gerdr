@@ -246,10 +246,15 @@ func (r *Renderer) build(files []string, sig string) *build {
 		fatal = append(fatal, err.Error())
 		deps = map[string]string{}
 	}
-	cssRaw, _ := os.ReadFile(filepath.Join(r.dir, "src", "index.css"))
+	indexCSS := filepath.Join(r.dir, "src", "index.css")
+	cssRaw, _ := os.ReadFile(indexCSS)
+	// index.css may split itself into files with @import "./x.css" (src/animate.css); they are inlined here
+	cssText, cssWarns := inlineCSSImports(filepath.Join(r.dir, "src"), indexCSS, string(cssRaw))
+	for _, w := range cssWarns {
+		b.issues = append(b.issues, errorItem{Level: "warn", Source: "css", Message: w})
+	}
 	// Workspace packages bring their own CSS (src/style.css): the app's index.css can't @import it (Tailwind browser)
-	cssRaw = append(cssRaw, packagesCSS(r.dir)...)
-	css, dropped := browserCSS(string(cssRaw))
+	css, dropped := browserCSS(cssText + string(packagesCSS(r.dir)))
 	b.css = css
 	for _, d := range dropped {
 		b.issues = append(b.issues, errorItem{Level: "warn", Source: "css", Message: fmt.Sprintf("src/index.css 里的 %s 用不了（Tailwind browser 不支持），已经跳过", d)})

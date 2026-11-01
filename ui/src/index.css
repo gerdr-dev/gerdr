@@ -1,5 +1,8 @@
 @custom-variant dark (&:is(.dark *));
 
+/* tw-animate-css, what shadcn's animate-in / fade-in / slide-in-from-* classes need (see the file for why it is copied in) */
+@import "./animate.css";
+
 /* Compile dialog frame classes up front. Tailwind browser only generates a class once it appears in the DOM, so a
    dialog mounting with a width nobody used yet (sm:max-w-3xl) renders its first frame at the fallback
    max-w-[calc(100%-2rem)] and visibly shrinks under the zoom-in animation. Add a size here when a dialog uses a new one. */
@@ -10,6 +13,14 @@
    compiled a frame late animates in from 0 and reads as the dialog changing width on its first open. */
 @source inline("{gap-3,gap-4,rounded-xl,border,bg-background,p-6,shadow-lg,outline-none}");
 @source inline("data-[state=open]:{animate-in,fade-in-0,zoom-in-95} data-[state=closed]:{animate-out,fade-out-0,zoom-out-95}");
+/* Popups mount with animation classes too (menus, selects, tooltips, popovers, sheets): compiled a frame late, the
+   first frame shows unanimated at full size, then the animation restarts from its start */
+@source inline("{,data-[state=open]:,data-[state=closed]:}{animate-in,animate-out,fade-in-0,fade-out-0,zoom-in-95,zoom-out-95}");
+@source inline("data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2");
+@source inline("data-[state=open]:slide-in-from-top-2 data-[state=closed]:slide-out-to-top-2");
+/* The Sheet (components/ui/sheet.tsx): its frame and the slide for every side */
+@source inline("fixed z-50 flex flex-col gap-4 bg-background shadow-lg transition ease-in-out data-[state=closed]:duration-300 data-[state=open]:duration-500 inset-y-0 inset-x-0 top-0 right-0 bottom-0 left-0 h-full h-auto w-3/4 border-l border-r border-t border-b sm:max-w-sm");
+@source inline("data-[state=open]:slide-in-from-{top,right,bottom,left} data-[state=closed]:slide-out-to-{top,right,bottom,left}");
 
 /* Views are hidden with `invisible` and kept mounted (the overview, kept tabs, panes behind a zoomed one). Tailwind v4's
    `transition` / `transition-all` (every Button) include visibility, and a visibility transition stays visible until it

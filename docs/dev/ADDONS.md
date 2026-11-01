@@ -45,10 +45,11 @@ sees: `internal/addons/builtin/gerdr.d.ts`, copied into `~/.gerdr/addons` on eve
   show there only.
 - `"overlay"` is mounted once in App.tsx next to the app's own dialogs: an add-on's command needs somewhere to draw
   a dialog that exists whatever the layout is (the sidebar slot is gone while collapsed, on a phone, in Work mode).
-  `g.ui` hands out the Dialog pieces for it; a drawer is DialogContent restyled, so there's no separate Sheet.
-- `g.fetch` is POST /api/addons/{id}/fetch (internal/server/addonfetch.go): the backend makes the request. The page's
-  origin is Gerdr's, so a plain fetch() to a third-party API dies on CORS, and add-on authors usually can't change
-  the API. It grants nothing new — add-ons are trusted code that can already run a service — and it sits behind the
+  `g.ui` hands out the Dialog and Sheet (drawer) pieces for it; their animations come from ui/src/animate.css.
+- `g.fetch` is POST /api/addons/{id}/fetch (internal/server/addonfetch.go): the backend makes the request. A plain
+  fetch() to a third-party API can't work: the page's CSP is `connect-src 'self'`, which blocks it even when the API
+  sends CORS headers (the SubHub add-on shipped a CORS fallback that never ran for that reason), and add-on authors
+  usually can't change the API anyway. It grants nothing new — add-ons are trusted code that can already run a service — and it sits behind the
   same auth as every /api call. Bodies are text both ways; an error status is data (like fetch()), only a transport
   failure is a 502. 30s timeout, 10 MB cap, no cookie jar.
 - `g.usage()` is /api/usage (the quotas). `g.stats()` is /api/stats (internal/hub/stats.go): turns that ended with

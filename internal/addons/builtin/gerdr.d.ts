@@ -129,9 +129,8 @@ declare global {
       TooltipContent: Component<{ side?: "top" | "bottom" | "left" | "right"; children?: any }>;
       Switch: Component<{ checked?: boolean; onCheckedChange?: (v: boolean) => void; disabled?: boolean }>;
       /**
-       * A modal (Radix Dialog). Render it from the "overlay" slot and open it from a command. DialogContent is centered;
-       * restyle it with className to make a drawer, e.g. "inset-y-0 right-0 left-auto m-0 h-full max-w-md sm:max-w-md
-       * rounded-none rounded-l-xl" (cn merges, later classes win). showCloseButton={false} drops the ✕.
+       * A centered modal (Radix Dialog). Render it from the "overlay" slot and open it from a command.
+       * showCloseButton={false} drops the ✕. For a drawer use Sheet below.
        */
       Dialog: Component<{ open?: boolean; onOpenChange?: (open: boolean) => void; children?: any }>;
       DialogContent: Component<{ className?: string; showCloseButton?: boolean; children?: any }>;
@@ -141,6 +140,18 @@ declare global {
       DialogFooter: Component<{ className?: string; children?: any }>;
       /** Closes the dialog it is in; asChild to make your own button do it. */
       DialogClose: Component<{ asChild?: boolean; children?: any }>;
+      /**
+       * A drawer (shadcn Sheet: a Radix Dialog sliding in from an edge), used like Dialog. SheetContent defaults to
+       * side="right", 3/4 of the width up to sm:max-w-sm; widen with className="sm:max-w-md". It has no padding of its
+       * own besides SheetHeader / SheetFooter (p-4).
+       */
+      Sheet: Component<{ open?: boolean; onOpenChange?: (open: boolean) => void; children?: any }>;
+      SheetContent: Component<{ side?: "top" | "right" | "bottom" | "left"; className?: string; showCloseButton?: boolean; children?: any }>;
+      SheetHeader: Component<{ className?: string; children?: any }>;
+      SheetTitle: Component<{ className?: string; children?: any }>;
+      SheetDescription: Component<{ className?: string; children?: any }>;
+      SheetFooter: Component<{ className?: string; children?: any }>;
+      SheetClose: Component<{ asChild?: boolean; children?: any }>;
       /** Joins class names, later Tailwind classes winning (clsx + tailwind-merge). */
       cn(...classes: any[]): string;
     };

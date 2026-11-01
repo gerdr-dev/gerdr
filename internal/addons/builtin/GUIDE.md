@@ -139,8 +139,9 @@ g.slot("overlay", Details);
 g.command({ id: "x.details", title: "Show details", run: () => setOpen(true) });
 ```
 
-A drawer is the same dialog restyled: `<DialogContent className="inset-y-0 right-0 left-auto m-0 h-full max-w-md
-sm:max-w-md rounded-none rounded-l-xl">`. For a one-line message, `g.notify` is enough.
+For a drawer, `g.ui.Sheet` / `SheetContent` (`side="right"` by default, also `left` / `top` / `bottom`) /
+`SheetHeader` / `SheetTitle` / `SheetDescription` / `SheetFooter` / `SheetClose` work the same way and slide in from
+the edge; widen it with `<SheetContent className="sm:max-w-md">`. For a one-line message, `g.notify` is enough.
 
 Rules that keep it looking like Gerdr:
 

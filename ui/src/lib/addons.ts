@@ -7,6 +7,7 @@ import * as icons from "lucide-react";
 import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Sheet, SheetClose, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -411,6 +412,13 @@ function makeApi(id: string, hash: string) {
       DialogDescription,
       DialogFooter,
       DialogClose,
+      Sheet,
+      SheetContent,
+      SheetHeader,
+      SheetTitle,
+      SheetDescription,
+      SheetFooter,
+      SheetClose,
       cn,
     },
     icons,

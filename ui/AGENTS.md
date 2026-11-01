@@ -71,7 +71,8 @@ src/lib/
   （`"recharts": "2.15.4"`，不要 `^`）。加了新包不用安装，浏览器从 esm.sh 拉（Gerdr 本机缓存）。
   能不加新包就不加：图标用 lucide-react，组件优先用 src/components/ui 里现成的。
 - **不能在代码里 import CSS**、不能 `?raw` / `?url`。样式用 Tailwind class 写在组件上；全局的写进 `src/index.css`。
-- 样式是浏览器里的 Tailwind v4（Tailwind browser）：任何 class 都直接生效；`src/index.css` 里不能 `@import` / `@plugin`。
+- 样式是浏览器里的 Tailwind v4（Tailwind browser）：任何 class 都直接生效；`src/index.css` 里不能 `@import` 包或 `@plugin`；
+  `@import "./x.css"` 引用 src/ 里自己的 CSS 文件可以（gerdr 后端把它展开，比如 `src/animate.css` 就是这样接进来的动画类）。
 - 颜色用主题变量对应的 class（`bg-background`、`text-muted-foreground`、`border`、`bg-brand`、`text-ok`、`text-bad`、`text-warn`），
   不要写死颜色 —— 深浅色两套都要好看。
 - 圆角用 `rounded-sm/md/lg/xl` 这几档（哪种东西用哪档见 `src/index.css` 里 `--radius` 上面的注释），别用裸 `rounded` 或写死像素。
