@@ -957,8 +957,9 @@ export async function openTerminal(where: "right" | "down" | "tab" | { pane: str
 }
 
 // ---- 对话里的「运行」放到终端里跑 ----
-// 默认的「运行」在对话里跑（hub/shell.go），输出带给 agent，但没有 stdin；要交互的（gh auth login 选选项、输密码）放进终端跑，
-// 代价是 agent 看不到输出。
+// The plain "run" runs in the chat (hub/shell.go) and hands the output to the agent, but has no stdin; interactive ones
+// (gh auth login picking options, typing a password) go into a terminal. Their output stays out of the chat: the agent
+// reads it with `gerdr pane read` (which finds the terminal next to it).
 
 /** 这个会话所在的 pane 和它的 tab（同一个会话开在几处时优先当前 tab） */
 function sessionPane(l: Layout, sessionId: string) {

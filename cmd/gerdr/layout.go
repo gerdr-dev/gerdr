@@ -5,6 +5,8 @@ package main
 // caller's herdr-style session; these commands only parse flags and print the JSON it returns.
 
 import (
+	"fmt"
+
 	"github.com/spf13/cobra"
 
 	"github.com/gerdr-dev/gerdr/internal/server"
@@ -180,6 +182,37 @@ func paneCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE:  func(_ *cobra.Command, a []string) error { return layoutCall("pane.get", server.LayoutParams{ID: a[0]}) },
 	})
+	var rp server.LayoutParams
+	read := &cobra.Command{
+		Use:   "read [pane]",
+		Short: "A terminal pane's recent output as plain text (default: the terminal next to you in your tab)",
+		Long: "Prints what the terminal shows, colors and cursor tricks removed: e.g. the output of a command the user ran there\n" +
+			"from the chat's \"run in terminal\". Full-screen programs (vim, less) aren't captured while they're open.",
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(_ *cobra.Command, a []string) error {
+			if len(a) == 1 {
+				rp.ID = a[0]
+			}
+			if rp.Lines == 0 {
+				rp.Lines = -1 // all; 0 on the wire means the default
+			}
+			c, err := newAPIClient()
+			if err != nil {
+				return err
+			}
+			who := c.caller()
+			var out struct {
+				Text string `json:"text"`
+			}
+			if err := c.do("POST", "/api/layout/op", map[string]any{"method": "pane.read", "from": who.Session, "term": who.Term, "project": who.Project, "params": rp}, &out); err != nil {
+				return err
+			}
+			fmt.Println(out.Text)
+			return nil
+		},
+	}
+	read.Flags().IntVar(&rp.Lines, "lines", 100, "how many of the last lines (0 = all that's kept)")
+	cmd.AddCommand(read)
 	var yp server.LayoutParams
 	layout := &cobra.Command{
 		Use:   "layout [pane]",

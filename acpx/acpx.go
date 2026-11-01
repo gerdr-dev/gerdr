@@ -399,9 +399,12 @@ const MediaHint = "You are running inside Gerdr, a GUI for coding agents. Its ch
 // 写成 `!` 开头的行内代码（或每行都以 `! ` 开头的代码块），界面在旁边画「运行」按钮，点一下就跑（chat/Markdown.tsx）；
 // 只给一句，照 Claude Code 那句的写法：试过五句、八句的长版，用户嫌啰嗦。括号里那半句不能省：只有一句时 agent 把
 // `! gh auth login` 当成点一下就能跑的给出来，在对话里跑没有 stdin，点了一直卡着（实测）。
+// The last clause: after the user ran something in the terminal and said "it failed", the agent answered
+// "I can't see the panel next to you" and went digging in log files; it has to be told it can read the terminal.
 const ShellHint = "If you need the user to run a shell command themselves (e.g., an interactive login like `gcloud auth login`), " +
 	"suggest it as inline code starting with `!` (e.g. `! gcloud auth login`) — Gerdr shows a run button next to it that runs the command in this session and brings its output back to you " +
-	"(it gets no stdin, so for commands that need input, tell the user to use the terminal option in the button's menu instead)."
+	"(it gets no stdin, so for commands that need input, tell the user to use the terminal option in the button's menu instead; " +
+	"you don't see a terminal's output unless you read it with `gerdr pane read`)."
 
 // GUIHint：起 agent 时追加的全部说明（MediaHint + ShellHint）。
 const GUIHint = MediaHint + "\n\n" + ShellHint

@@ -155,3 +155,32 @@ func TestWorkspaceCreateMoveAndSwap(t *testing.T) {
 		t.Errorf("p1 should still show A: %v %v", p, err)
 	}
 }
+
+// pane.read with no pane picks the terminal in the caller's tab (focused one first); it never reaches into another tab.
+func TestPaneReadFindsTerminalNextToCaller(t *testing.T) {
+	read := func(raw, ref string) (string, error) {
+		_, r, err := ApplyLayout(json.RawMessage(raw), opsSessions, "A", "default", "pane.read", LayoutParams{ID: ref})
+		if err != nil {
+			return "", err
+		}
+		return str(asNode(asNode(r)["pane"]), "term_id"), nil
+	}
+	if _, err := read(opsLayout, ""); err == nil {
+		t.Fatal("no terminal in the caller's tab: want an error")
+	}
+	if _, err := read(opsLayout, "p2"); err == nil {
+		t.Fatal("a conversation pane isn't readable: want an error")
+	}
+	two := strings.Replace(opsLayout, `"b":{"type":"pane","id":"p2","sessionId":"B"}`,
+		`"b":{"type":"split","id":"y","dir":"col","ratio":0.5,"a":{"type":"pane","id":"p5","term":{"id":"T1","cwd":"/r"}},"b":{"type":"pane","id":"p6","term":{"id":"T2","cwd":"/r"}}}`, 1)
+	if id, err := read(two, ""); err != nil || id != "T2" {
+		t.Fatalf("no focused terminal: want the last one T2, got %q %v", id, err)
+	}
+	focused := strings.Replace(two, `"focus":"p1"`, `"focus":"p5"`, 1)
+	if id, err := read(focused, ""); err != nil || id != "T1" {
+		t.Fatalf("want the focused terminal T1, got %q %v", id, err)
+	}
+	if id, err := read(two, "p5"); err != nil || id != "T1" {
+		t.Fatalf("by pane id: want T1, got %q %v", id, err)
+	}
+}

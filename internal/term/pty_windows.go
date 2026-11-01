@@ -11,4 +11,6 @@ func (t *Term) Resize(cols, rows uint16) error { return nil }
 
 func (t *Term) kill() {}
 
+func (t *Term) width() int { return 0 }
+
 func (t *Term) LiveCwd() string { return "" }

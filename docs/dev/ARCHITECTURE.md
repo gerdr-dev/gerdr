@@ -232,8 +232,19 @@ stream-json / app-server 都没有这个口（Claude Code 的 `!` 是 TUI 输入
   代码里的取反 `!Se()` 都不能冒按钮（都踩过）。
 - 「运行」旁边的箭头还能放进终端跑（actions.runInTerminal）：新开一个（会话右边分屏，建终端时带 `input`，shell 还在读 profile 时写进去也不丢，
   PTY 先攒着；代价是那行命令会在提示符出来之前先回显一次），或者敲进会话旁边已经开着的终端（`POST /api/terms/{id}/input`，那个 shell 没了就新开）。
-  终端能交互（gh auth login 选选项、输密码），但输出不进对话、agent 看不到。ShellHint 只有一句（照 Claude Code 原话的写法），
+  终端能交互（gh auth login 选选项、输密码），但输出不进对话。ShellHint 只有一句（照 Claude Code 原话的写法），
   末尾括号里交代没有 stdin、要输入的让人从菜单改在终端跑 —— 省掉的话 agent 会把 `! gh auth login` 当成点了就能跑的（实测）。
+- The terminal's output reaches the agent only if it asks: `gerdr pane read [<pane>] [--lines N]` (layoutapi.go `pane.read`,
+  term/text.go). With no pane it reads the terminal in the caller's tab — focused one, else the last — the same one
+  "run in the current terminal" types into. The last clause of ShellHint tells the agent it exists: without it, after
+  the user ran `npm publish` in the terminal and said "it failed", the agent said it couldn't see the panel and went
+  reading npm's log files. Not pushed into the next message like the in-chat run: a terminal has no "command finished"
+  (no shell integration), so there's nothing to cut at.
+  The ring holds raw PTY bytes, so `Text` replays them with just enough terminal for line-oriented output: \r, erase
+  line / below, cursor left/right/up/down, wrapping at the PTY's current width (zsh redraws a long command line counting
+  on it; wrapped rows are joined back), and the alternate screen dropped (vim / less). Absolute cursor moves aren't
+  followed: a full-screen program still open reads as garbage. The first line of a "run in new terminal" is the
+  command echoed before the prompt (see above).
 
 ## 回退只回退对话，不动文件
 

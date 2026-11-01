@@ -28,6 +28,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/gerdr-dev/gerdr/internal/term"
 )
 
 // LayoutSession is what the layout calls need to know about a conversation shown in a pane.
@@ -49,6 +51,7 @@ type LayoutParams struct {
 	TabLabel     string  `json:"tab_label,omitempty"`
 	Cwd          string  `json:"cwd,omitempty"`
 	Position     int     `json:"position,omitempty"` // 1-based place among its siblings; 0 = last
+	Lines        int     `json:"lines,omitempty"`    // pane.read: how many of the last lines
 }
 
 type node = map[string]any
@@ -246,6 +249,13 @@ func (c *layoutCall) run(method string, p LayoutParams) (any, error) {
 			return nil, err
 		}
 		return c.layoutView(w, t), nil
+	case "pane.read":
+		// Only finds the terminal; the server reads its output (Server.layoutOp), this file knows no terminals.
+		w, t, pn, err := c.readTarget(p.ID)
+		if err != nil {
+			return nil, err
+		}
+		return node{"pane": c.paneView(w, t, pn)}, nil
 	case "pane.move":
 		return c.movePane(p)
 	case "pane.swap":
@@ -859,6 +869,41 @@ func (c *layoutCall) pane(ref string) (w, t, p node, err error) {
 	return nil, nil, nil, fmt.Errorf("%q matches several conversations: use the pane_id", ref)
 }
 
+// readTarget: the terminal pane `gerdr pane read` reads. No ref = the terminal next to the caller, the one the chat's
+// "run in terminal" types into (ui/src/lib/actions.ts terminalNear): in the caller's tab, the focused one, else the last.
+func (c *layoutCall) readTarget(ref string) (w, t, p node, err error) {
+	if ref != "" {
+		if w, t, p, err = c.pane(ref); err != nil {
+			return nil, nil, nil, err
+		}
+		if p["term"] == nil {
+			return nil, nil, nil, fmt.Errorf("pane %s isn't a terminal (a conversation's replies: gerdr session read)", str(p, "id"))
+		}
+		return w, t, p, nil
+	}
+	if c.self == "" {
+		return nil, nil, nil, errors.New("which pane? (gerdr pane list: kind terminal)")
+	}
+	if w, t, _, err = c.pane(c.self); err != nil {
+		return nil, nil, nil, err
+	}
+	var terms []node
+	for _, x := range leaves(asNode(t["root"])) {
+		if x["term"] != nil {
+			terms = append(terms, x)
+		}
+	}
+	if len(terms) == 0 {
+		return nil, nil, nil, errors.New("no terminal next to you in your tab; name one (gerdr pane list: kind terminal)")
+	}
+	for _, x := range terms {
+		if x["id"] == t["focus"] {
+			return w, t, x, nil
+		}
+	}
+	return w, t, terms[len(terms)-1], nil
+}
+
 func one(hits []node, ref, what string) (node, error) {
 	switch len(hits) {
 	case 1:
@@ -947,6 +992,7 @@ func (c *layoutCall) paneView(w, t, p node) node {
 	case p["term"] != nil:
 		v["kind"] = "terminal"
 		v["cwd"] = asNode(p["term"])["cwd"]
+		v["term_id"] = asNode(p["term"])["id"]
 	case p["sub"] != nil:
 		v["kind"] = "subagent"
 		v["parent_session"] = asNode(p["sub"])["sessionId"]
@@ -1078,6 +1124,24 @@ func (s *Server) layoutOp(w http.ResponseWriter, r *http.Request) {
 	out, res, err := ApplyLayout(raw, sessions, b.Session, ResolveSpace(raw, b.Caller, s.workProject()), b.Method, b.Params)
 	if err != nil {
 		httpError(w, 400, err.Error())
+		return
+	}
+	if b.Method == "pane.read" {
+		pv := asNode(asNode(res)["pane"])
+		tm := s.Terms.Get(str(pv, "term_id"))
+		if tm == nil {
+			httpError(w, 404, term.ErrNotFound.Error())
+			return
+		}
+		lines := b.Params.Lines
+		if lines == 0 {
+			lines = 100
+		}
+		cwd := tm.LiveCwd()
+		if cwd == "" {
+			cwd = tm.Info().Cwd
+		}
+		writeJSON(w, node{"pane_id": pv["pane_id"], "cwd": cwd, "exited": tm.Info().Exited, "text": tm.Text(lines)})
 		return
 	}
 	if out != nil {

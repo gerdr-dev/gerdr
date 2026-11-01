@@ -46,6 +46,18 @@ func (t *Term) Resize(cols, rows uint16) error {
 	return pty.Setsize(t.tty, &pty.Winsize{Cols: cols, Rows: rows})
 }
 
+// width: the PTY's current columns (0 = unknown), for Text to wrap lines where the screen did.
+func (t *Term) width() int {
+	if t.tty == nil {
+		return 0
+	}
+	_, cols, err := pty.Getsize(t.tty)
+	if err != nil {
+		return 0
+	}
+	return cols
+}
+
 // kill：SIGHUP 给整个进程组（关终端窗口时 shell 收到的就是它），2 秒没退再 SIGKILL。
 func (t *Term) kill() {
 	select {

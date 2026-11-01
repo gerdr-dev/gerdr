@@ -111,6 +111,7 @@ gerdr tab list [--workspace <ws>]        # tab_id, label, pane_count, split: row
 gerdr pane list [--workspace <ws>]       # pane_id, kind (agent / terminal / subagent / file / empty), session {id, title, status, cwd}; self: true is you
 gerdr pane current                       # your own pane
 gerdr pane layout [<pane>] [--tab <tab>] # each pane's rect in its tab
+gerdr pane read [<pane>] [--lines 100]   # a terminal pane's recent output as plain text; no pane = the terminal in your tab
 ```
 
 A workspace is named by its id, number or label; a tab by its id or label; a pane by its id or by the conversation it shows
