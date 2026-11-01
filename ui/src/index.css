@@ -11,7 +11,20 @@
 @source inline("fixed inset-0 z-50 m-auto grid h-fit content-start w-full bg-black/50 duration-200");
 /* The frame's box too: duration-200 without a transition-property transitions every property, so a padding / gap
    compiled a frame late animates in from 0 and reads as the dialog changing width on its first open. */
-@source inline("{gap-3,gap-4,rounded-xl,border,bg-background,p-6,shadow-lg,outline-none}");
+@source inline("{gap-0,gap-3,gap-4,rounded-xl,border,bg-background,p-0,p-6,shadow-lg,outline-none}");
+/* Every dialog's close button (components/ui/dialog.tsx) */
+@source inline("absolute top-4 right-4 rounded-xs opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground");
+/* The file viewer (FileViewer.tsx), full screen on a phone. Its header and scroll box compiled ~50ms into the fade:
+   the padding / gap animated under duration-200, and overflow-auto turned the body into its own scroll layer
+   mid-fade, which a phone painted for a frame bright over the chat with the overlay and frame missing. */
+@source inline("flex flex-col overflow-hidden shrink-0 items-center gap-2 border-b py-2 pr-12 pl-4 min-w-0 flex-1 truncate text-[14px] text-[11px] min-h-0 overflow-auto overscroll-contain p-10 mx-auto max-w-[860px] px-5 py-4");
+/* Streamdown's Markdown elements (headings, code blocks with line numbers, tables, quotes, lists, mermaid). Fixed per
+   element, so known in advance: without this the first heading / code block on a page (a chat, the file viewer)
+   rendered unstyled and reflowed ~100ms later. Collected by rendering a file with every element and listing the
+   classes under .gerdr-md; redo that after upgrading streamdown. */
+@source inline("space-y-4 whitespace-normal size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 mt-6 mb-2 font-semibold text-3xl text-2xl text-xl text-lg text-base text-sm rounded bg-muted px-1.5 py-0.5 font-mono wrap-anywhere appearance-none text-left font-medium text-primary underline my-4 border-muted-foreground/30 border-l-4 pl-4 text-muted-foreground italic list-inside list-disc [li_&]:pl-6 py-1 [&>p]:inline list-decimal my-6 border-border gap-1 rounded-lg bg-sidebar p-2 justify-end relative cursor-pointer p-1 transition-all hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50 border-collapse overflow-x-auto overflow-y-auto rounded-md w-full divide-y divide-border bg-muted/80 whitespace-nowrap px-4 rounded-xl h-8 text-xs ml-1 lowercase pointer-events-none top-2 right-2 z-10 pointer-events-auto border-sidebar bg-sidebar/80 supports-[backdrop-filter]:bg-sidebar/70 supports-[backdrop-filter]:backdrop-blur p-4 block group inline-block max-w-full hidden bg-black/10 group-hover:block");
+@source inline("bg-[var(--sdm-bg,inherit)] dark:bg-[var(--shiki-dark-bg,var(--sdm-bg,inherit))] bg-[var(--sdm-tbg)] dark:bg-[var(--shiki-dark-bg,var(--sdm-tbg))] text-[var(--sdm-c,inherit)] dark:text-[var(--shiki-dark,var(--sdm-c,inherit))]");
+@source inline("[counter-reset:line] [counter-increment:line_0] before:content-[counter(line)] before:inline-block before:[counter-increment:line] before:w-6 before:mr-4 before:text-[13px] before:text-right before:text-muted-foreground/50 before:font-mono before:select-none");
 @source inline("data-[state=open]:{animate-in,fade-in-0,zoom-in-95} data-[state=closed]:{animate-out,fade-out-0,zoom-out-95}");
 /* Popups mount with animation classes too (menus, selects, tooltips, popovers, sheets): compiled a frame late, the
    first frame shows unanimated at full size, then the animation restarts from its start */

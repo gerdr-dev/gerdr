@@ -19,6 +19,13 @@ Seen so far:
   a first frame unanimated at full size, then restarted the animation.
   Fix: `@source inline(...)` in `ui/src/index.css` compiles those classes up front. Add a dialog size there when a
   dialog uses a new one.
+- **The phone's full-screen file viewer** (`FileViewer.tsx`): two rewrites landed inside its 150ms fade. At ~50ms
+  its own frame classes (`p-0 gap-0 overflow-auto py-2 pr-12`, the close button's): padding / gap animated under
+  `duration-200`, and `overflow-auto` made the body its own scroll layer mid-fade; on the phone one frame showed that
+  layer bright over the chat with the overlay and the dialog frame gone, text on text. At ~100ms Streamdown's
+  heading / code-block classes, reflowing the text. Fix: both sets in `@source inline`. To check a dialog, list the
+  selectors each rewrite adds while it opens (diff the generated `<style>`'s rules before / after): nothing may arrive.
+  The Streamdown list was collected by rendering a file with every Markdown element; redo it after upgrading it.
 - **Transitions added on a state change** (pane zoom in `Panes.tsx`, the overview in `Overview.tsx`): a `transition-*`
   class added in the same change that moves the box is compiled one style change too late, so the first zoom of a page
   load jumped instead of animating. Fix: the transition is an inline style.
