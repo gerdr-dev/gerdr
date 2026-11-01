@@ -15,7 +15,7 @@ import {
   Pencil,
   Rows2,
   SquareTerminal,
-  Trash2,
+  CircleX,
   X,
 } from "lucide-react";
 import { createContext, useContext, useEffect, useRef, useState } from "react";
@@ -27,7 +27,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import {
   basename,
   closeFocusedPane,
-  deleteSession,
+  closeSession,
   focusPane,
   focusSession,
   openTerminal,
@@ -599,8 +599,8 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
                     <RefreshCw /> 从 agent 记录重新载入
                   </DropdownMenuItem>
                 )}
-                <DropdownMenuItem variant="destructive" onClick={() => deleteSession(session.id).catch((e) => toast.error(e.message))}>
-                  <Trash2 /> 删除会话
+                <DropdownMenuItem onClick={() => closeSession(session.id)}>
+                  <CircleX /> 关闭会话
                 </DropdownMenuItem>
               </>
             )}

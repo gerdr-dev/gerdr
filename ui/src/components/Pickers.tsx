@@ -1,7 +1,5 @@
-import { Trash2 } from "lucide-react";
-import { toast } from "sonner";
 import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { basename, deleteSession, focusSession, openSessionHere, selectWorkspace, tabName } from "@/lib/actions";
+import { basename, focusSession, openSessionHere, selectWorkspace, tabName } from "@/lib/actions";
 import { currentSpace, locateSession, spaceList, spaceOf, spaceWorkspaces } from "@/lib/layout";
 import { closeDialog, useStore } from "@/lib/store";
 import type { SessionSummary } from "@/lib/types";
@@ -46,19 +44,6 @@ export function SessionsDialog({ open }: { open: boolean }) {
         {space && <span className="max-w-24 truncate rounded-sm bg-muted px-1 text-[11px] text-muted-foreground">{space}</span>}
         <StatusDot status={dotStatus(s)} unread={!!unread[s.id]} />
         <span className="w-16 text-right text-[11px] text-muted-foreground">{ago(s.updatedAt)}</span>
-        {!shown && (
-          <button
-            className="hidden rounded-sm p-0.5 text-muted-foreground hover:text-bad group-data-[selected=true]:block"
-            title="删掉这条记录（agent 自己的会话记录不动）"
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation();
-              deleteSession(s.id).catch((err) => toast.error(err.message));
-            }}
-          >
-            <Trash2 className="size-3.5" />
-          </button>
-        )}
       </span>
     </CommandItem>
   );

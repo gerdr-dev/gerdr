@@ -185,7 +185,6 @@ export const api = {
   setupLid: () => req<AwakeStatus>("POST", "/api/awake/lid-setup", {}),
   createSession: (o: { agent: string; cwd: string; mode?: string; config?: Record<string, string>; import?: string; title?: string }) =>
     req<SessionSummary>("POST", "/api/sessions", o),
-  deleteSession: (id: string) => req("DELETE", `/api/sessions/${id}`),
   /** input：建好就敲进去的字（对话里「在新终端里运行」） */
   termCreate: (o: { cwd?: string; from?: string; cols?: number; rows?: number; input?: string }) => req<TermInfo>("POST", "/api/terms", o),
   /** 往终端里敲字（对话里「在当前终端里运行」） */

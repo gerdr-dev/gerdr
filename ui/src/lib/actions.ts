@@ -1,6 +1,7 @@
 // 所有「动作」：快捷键、命令面板、侧栏菜单、插件都调这里，各处不再自己写一份。
 import { toast } from "sonner";
 import { api, ApiError } from "./api";
+import { askConfirm } from "./confirm";
 import type { KeyAction } from "./keys";
 import { stripLineAnchor } from "./paths";
 import { isPhone } from "./phone";
@@ -1086,12 +1087,30 @@ export function openSessionHere(sessionId: string) {
   else addTab({ sessionId });
 }
 
-export async function deleteSession(id: string) {
-  await api.deleteSession(id);
+/**
+ * "Close session": end the conversation but keep the pane, turned back into a new-session page for the same agent and
+ * directory — what you want when you're done with a chat and about to start the next one. Nothing is lost: the session
+ * stays in the sessions list and can be reopened. Unlike closing the pane this doesn't disturb the split / tab layout.
+ * Only asks when the agent is mid-turn, since closing cancels that turn.
+ */
+export async function closeSession(id: string) {
+  const s = get().sessions[id];
+  if (!s) return;
+  if (s.status === "running" || s.status === "waiting") {
+    const ok = await askConfirm({
+      title: "agent 还在跑，关闭会话？",
+      description: "这一轮会被中断。会话记录留着，能再打开。",
+      action: "关闭",
+      destructive: true,
+    });
+    if (!ok) return;
+  }
   setLayout((l) => {
-    const loc = locateSession(l, id);
-    return loc ? setPane(l, loc.pane.id, { sessionId: undefined, draft: { agent: get().sessions[id]?.agent, cwd: get().sessions[id]?.cwd } }) : l;
+    for (let loc = locateSession(l, id); loc; loc = locateSession(l, id))
+      l = setPane(l, loc.pane.id, { sessionId: undefined, draft: { agent: s.agent, cwd: s.cwd } });
+    return l;
   });
+  api.shutdown(id).catch(() => {});
 }
 
 export async function send(sessionId: string, content: ContentBlock[] | string) {

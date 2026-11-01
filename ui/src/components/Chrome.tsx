@@ -15,7 +15,7 @@ import {
   Plus,
   Settings,
   SquareTerminal,
-  Trash2,
+  CircleX,
   X,
 } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -45,7 +45,7 @@ import {
   closeSpace,
   closeTab,
   closeWorkspace,
-  deleteSession,
+  closeSession,
   duplicateTab,
   focusSession,
   moveWorkspaceToSpace,
@@ -776,8 +776,8 @@ function AgentMenu({ s, unread }: { s: SessionSummary; unread: boolean }) {
         <Copy /> 复制 agent 会话 id
       </ContextMenuItem>
       <ContextMenuSeparator />
-      <ContextMenuItem variant="destructive" onClick={() => deleteSession(s.id).catch((e) => toast.error(e.message))}>
-        <Trash2 /> 删除会话
+      <ContextMenuItem onClick={() => closeSession(s.id)}>
+        <CircleX /> 关闭会话
       </ContextMenuItem>
     </ContextMenuContent>
   );
