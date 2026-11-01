@@ -11,6 +11,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { api, type MCPAuth } from "@/lib/api";
 import { isNative, nativeOpenURL } from "@/lib/native";
+import { useStore } from "@/lib/store";
 import type { ExtSettings, ExtSkill, ExtSource, ExtView, MCPServer } from "@/lib/types";
 
 // 设置 →「Skill」「MCP」两页。gerdr 自己那份在这里增删改；agent 自己的只读，能导入。
@@ -25,9 +26,10 @@ const stop = (e: React.KeyboardEvent) => e.stopPropagation();
 
 function useExt(open: boolean) {
   const [v, setV] = useState<ExtView | null>(null);
+  const version = useStore((s) => s.extVersion); // changed by `gerdr skill` / `gerdr mcp` or by hand
   useEffect(() => {
     if (open) api.ext().then(setV, (e) => toast.error(e.message));
-  }, [open]);
+  }, [open, version]);
   const run = async (p: Promise<ExtView>) => {
     try {
       setV(await p);

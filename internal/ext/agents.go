@@ -127,7 +127,7 @@ func (m *Manager) ClaudeArgs(id, cwd string) []string {
 	s := m.Settings()
 	var args []string
 	var own []MCPServer // gerdr 那份里开着的
-	if s.MCPSource.UsesGerdr() {
+	if m.GerdrMCPOn(s) {
 		for _, v := range s.MCP {
 			if v.Enabled {
 				own = append(own, v)
@@ -136,19 +136,17 @@ func (m *Manager) ClaudeArgs(id, cwd string) []string {
 	}
 	switch {
 	case m.LimitsMCP():
-		// 角色限定了 MCP：claude 自己配的按名字关不掉，干脆把要的那几个（gerdr 的 + claude 自己配的里挑出来的）
-		// 全写进 --mcp-config，再 --strict-mcp-config 让它别的一概不读。代价：插件带的 MCP、claude.ai 账号里连的
-		// connector 也一起没了（它们不在 ~/.claude.json 里，挑不出来）。
+		// 角色限定了 MCP：claude 自己配的按名字关不掉，干脆把要的那几个（gerdr 的 + claude 自己配的里挑出来的，
+		// whatever the source says: see GerdrMCPOn）全写进 --mcp-config，再 --strict-mcp-config 让它别的一概不读。
+		// 代价：插件带的 MCP、claude.ai 账号里连的 connector 也一起没了（它们不在 ~/.claude.json 里，挑不出来）。
 		list := own
-		if s.MCPSource != SourceGerdr {
-			seen := map[string]bool{}
-			for _, v := range own {
-				seen[v.Name] = true
-			}
-			for _, v := range ClaudeMCP(cwd) {
-				if !seen[v.Name] {
-					list = append(list, v)
-				}
+		seen := map[string]bool{}
+		for _, v := range own {
+			seen[v.Name] = true
+		}
+		for _, v := range ClaudeMCP(cwd) {
+			if !seen[v.Name] {
+				list = append(list, v)
 			}
 		}
 		args = append(args, "--mcp-config", claudeMCPConfig(m.FilterMCP(list)), "--strict-mcp-config")
@@ -160,27 +158,14 @@ func (m *Manager) ClaudeArgs(id, cwd string) []string {
 	}
 	settings := map[string]any{}
 	overrides := map[string]string{}
-	if dir, err := m.ClaudeAddDir(id, s.SkillSource.UsesGerdr()); err == nil && dir != "" {
+	if dir, err := m.ClaudeAddDir(id, m.GerdrSkillsOn(s)); err == nil && dir != "" {
 		args = append(args, "--add-dir", dir)
 	}
 	// 插件里的 skill 按名字关不掉（实测），只能把插件整个关了 —— 它带的 hook / MCP 也跟着没了。
 	plugins := map[string]bool{}
 	switch {
-	case s.SkillSource == SourceGerdr:
-		gerdr := map[string]bool{}
-		for _, sk := range append(m.Skills(), m.Builtin()...) {
-			gerdr[sk.Name] = true
-		}
-		for _, sk := range ClaudeSkills(cwd) {
-			if !strings.HasPrefix(sk.Origin, "claude-plugin:") && !gerdr[sk.Name] {
-				overrides[sk.Name] = "off"
-			}
-		}
-		for _, p := range ClaudePlugins(cwd) {
-			plugins[p.ID] = false
-		}
 	case m.LimitsSkills():
-		// 角色限定了 skill：claude 自己的里没挑的按名字关；插件里一个都没挑的整个插件关，挑了一个就整个留着（关不了单个）。
+		// 角色限定了 skill（checked first: it overrides the source, see GerdrSkillsOn）：claude 自己的里没挑的按名字关；插件里一个都没挑的整个插件关，挑了一个就整个留着（关不了单个）。
 		// gerdr 那份和内置的不用管，ClaudeAddDir 只链了挑中的。
 		keep := map[string]bool{}
 		for _, sk := range ClaudeSkills(cwd) {
@@ -202,7 +187,22 @@ func (m *Manager) ClaudeArgs(id, cwd string) []string {
 				plugins[pl] = false
 			}
 		}
+
+	case s.SkillSource == SourceGerdr:
+		gerdr := map[string]bool{}
+		for _, sk := range append(m.Skills(), m.Builtin()...) {
+			gerdr[sk.Name] = true
+		}
+		for _, sk := range ClaudeSkills(cwd) {
+			if !strings.HasPrefix(sk.Origin, "claude-plugin:") && !gerdr[sk.Name] {
+				overrides[sk.Name] = "off"
+			}
+		}
+		for _, p := range ClaudePlugins(cwd) {
+			plugins[p.ID] = false
+		}
 	}
+
 	if len(plugins) > 0 {
 		settings["enabledPlugins"] = plugins
 	}
@@ -249,7 +249,7 @@ func CodexSkills() []Skill {
 // 只取 mcpServers 那几段：~/.claude.json 里统计、缓存一直在变，整份哈希会动不动就换进程。
 // 只用 gerdr 的（--strict-mcp-config）时 claude 自己的不生效，给空。m 可以是 nil（没开 skill / MCP 设置）。
 func (m *Manager) ClaudeMCPFingerprint(cwd string) string {
-	if m != nil && m.Settings().MCPSource == SourceGerdr {
+	if m != nil && !m.OwnMCPOn(m.Settings()) {
 		return ""
 	}
 	b, _ := json.Marshal(ClaudeMCP(cwd))
@@ -293,7 +293,7 @@ func CodexMCP() []MCPServer {
 func (m *Manager) CodexMCPOverrides() map[string]any {
 	s := m.Settings()
 	out := map[string]any{}
-	if !s.MCPSource.UsesGerdr() {
+	if !m.GerdrMCPOn(s) {
 		return out
 	}
 	for _, v := range s.MCP {

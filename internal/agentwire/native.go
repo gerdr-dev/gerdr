@@ -90,15 +90,15 @@ func resolveMCP(m *ext.Manager) []ext.MCPServer {
 // 设置里的来源（只用 agent 的 / 两者 / 只用 gerdr 的）照常生效。同名的先到先得。
 func skillsFor(m *ext.Manager, cwd string) []native.Skill {
 	var all []ext.Skill
-	src := ext.SourceAgent
+	var st ext.Settings // zero source = agent, for m == nil
 	if m != nil {
 		all = append(all, m.Builtin()...)
-		src = m.Settings().SkillSource
-		if src.UsesGerdr() {
+		st = m.Settings()
+		if m.GerdrSkillsOn(st) {
 			all = append(all, m.Skills()...)
 		}
 	}
-	if src != ext.SourceGerdr {
+	if m.OwnSkillsOn(st) {
 		all = append(all, ext.ClaudeSkills(cwd)...)
 	}
 	seen := map[string]bool{}

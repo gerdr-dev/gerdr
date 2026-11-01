@@ -11,6 +11,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -25,6 +26,7 @@ type configKey struct {
 	kind string // bool | number | string | object | array
 	enum []string
 	desc string
+	more string // longer help, printed by `gerdr config keys <name>`
 }
 
 // configKeys mirrors ui/src/lib/store.ts's Config. Keep them in step.
@@ -46,12 +48,41 @@ var configKeys = map[string]configKey{
 	"defaultModes":    {kind: "object", desc: `per agent id: the mode new sessions start in, e.g. {"claude": "acceptEdits"}`},
 	"defaultConfig":   {kind: "object", desc: `per agent id: option id → value for new sessions, e.g. {"claude": {"model": "opus", "effort": "high"}}`},
 	"pinnedCommands":  {kind: "array", desc: "slash commands (no /) pinned beside the input box"},
-	"agents":          {kind: "array", desc: "agents (roles) from Settings → Agent: {id, name, base: claude|codex|native, prompt, skills, mcp, providers, env…}; address one as agents.<id>"},
+	"agents":          {kind: "array", desc: "agents (roles) from Settings → Agent: {id, name, base: claude|codex|native, prompt, skills, mcp, providers, env…}; address one as agents.<id>; `gerdr config keys agents` for every field", more: agentsHelp},
 	"agentBins":       {kind: "object", desc: "which claude / codex executable to run: {\"claude\": \"/path/to/claude\"}"},
 	"llm":             {kind: "object", desc: "Gerdr Agent's model providers: {providers: [{id, name, api (omit = OpenAI-compatible, \"anthropic\" = Anthropic Messages), baseUrl, apiKey, apiKeyEnv, models: [{id}]}], defaultModel: \"provider/model\"}; apiKey is stored in secrets.json and reads back as <hidden>"},
 	"workSessions":    {kind: "object", desc: "managed by the UI: each project's Work conversation"},
 	"workAgents":      {kind: "object", desc: "managed by the UI: each project's Work agent"},
 }
+
+// agentsHelp mirrors hub.AgentDef and Settings → Agent's editor (ui/src/components/AgentSettings.tsx).
+const agentsHelp = `Each element of agents is one agent (role) offered when starting a session:
+
+  id         unique, [a-z0-9-]; not claude / codex / native (those are the built-in ones)
+  name       shown in the UI
+  base       the engine: claude (Claude Code) | codex (Codex) | native (Gerdr Agent, calls the model API itself)
+  command    instead of base: an external ACP agent's command line, e.g. ["gemini", "--experimental-acp"]
+  prompt     extra system prompt appended for this agent
+  skills     only these skills, by name. Omit = whatever the global Skill settings give; [] = none.
+  mcp        only these MCP servers, by name. Omit = whatever the global MCP settings give; [] = none.
+  providers  native only: which llm.providers ids it may use (gerdr config get llm.providers); omit = all
+  bin, args, env   claude / codex only: another executable, extra arguments, environment variables
+                   (e.g. {"CLAUDE_CONFIG_DIR": "~/.claude-work"} for a second account)
+
+skills / mcp may name any switched-on skill / MCP server: built-in, gerdr's own (gerdr skill add, gerdr mcp add)
+or the engine's own (Claude Code's / Codex's), whatever the global source says. Switched-off ones are never given.
+The names: ` + "`gerdr skill list`" + ` / ` + "`gerdr mcp list`" + `. A name that isn't there is ignored.
+To set up an agent with new skills / MCP in one go, use ` + "`gerdr agent create`" + ` instead.
+
+New sessions' defaults are stored per agent id, outside agents:
+  defaultModes.<id>    mode, e.g. bypassPermissions (Full access), acceptEdits, default, plan
+  defaultConfig.<id>   option id → value, e.g. {"model": "opus", "effort": "high"}
+  defaultAgent         the agent id the new-session screen picks first
+
+  gerdr config add agents '{"id":"reviewer","name":"Reviewer","base":"claude","prompt":"Review only, don't edit","skills":["code-review"],"mcp":[]}'
+  gerdr config set agents.reviewer.mcp '["github"]'
+  gerdr config set defaultModes.reviewer plan
+  gerdr config unset agents.reviewer`
 
 func configCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -67,16 +98,28 @@ string otherwise.
   gerdr config get theme
   gerdr config set theme dark
   gerdr config set defaultModes.claude acceptEdits
+  gerdr config add agents '{"id": "reviewer", "name": "Reviewer", "base": "claude"}'
   gerdr config unset defaultConfig.codex
 
 API keys (llm.providers.*.apiKey) are stored in secrets.json and always read back as <hidden>.`,
 	}
 	var force bool
 	cmd.AddCommand(&cobra.Command{
-		Use:   "keys",
-		Short: "List the settings with what they do",
-		Args:  cobra.NoArgs,
-		Run: func(_ *cobra.Command, _ []string) {
+		Use:   "keys [name]",
+		Short: "List the settings with what they do (with a name: that one in full)",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(_ *cobra.Command, a []string) error {
+			if len(a) == 1 {
+				d, ok := configKeys[a[0]]
+				if !ok {
+					return fmt.Errorf("unknown setting %q", a[0])
+				}
+				fmt.Printf("%s (%s): %s\n", a[0], d.kind, d.desc)
+				if d.more != "" {
+					fmt.Printf("\n%s\n", d.more)
+				}
+				return nil
+			}
 			names := make([]string, 0, len(configKeys))
 			for k := range configKeys {
 				names = append(names, k)
@@ -90,6 +133,7 @@ API keys (llm.providers.*.apiKey) are stored in secrets.json and always read bac
 				}
 				fmt.Printf("%-16s %-18s %s\n", k, t, d.desc)
 			}
+			return nil
 		},
 	})
 	cmd.AddCommand(&cobra.Command{
@@ -128,6 +172,18 @@ API keys (llm.providers.*.apiKey) are stored in secrets.json and always read bac
 	set.Flags().BoolVar(&force, "force", false, "allow a key `gerdr config keys` doesn't list")
 	cmd.AddCommand(set)
 	cmd.AddCommand(&cobra.Command{
+		Use:   "add <path> <value>",
+		Short: "Append an element to a list (agents, llm.providers…); an element with the same id is refused",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(_ *cobra.Command, a []string) error {
+			var v any
+			if err := json.Unmarshal([]byte(a[1]), &v); err != nil {
+				v = a[1]
+			}
+			return appendConfig(a[0], v)
+		},
+	})
+	cmd.AddCommand(&cobra.Command{
 		Use:   "unset <path>",
 		Short: "Remove a setting (back to its default)",
 		Args:  cobra.ExactArgs(1),
@@ -165,31 +221,78 @@ func editConfig(path string, v any, del, force bool) error {
 	if err != nil {
 		return fmt.Errorf("%s: %w", path, err)
 	}
-	b, _ := json.Marshal(root)
-	if err := st.Set(b); err != nil {
+	return writeConfig(st, sec, root, path)
+}
+
+// appendConfig adds v to the end of the list at path (creating the list if it isn't there). Without it a new
+// agent meant reading the whole agents array and writing it back, which also undoes whatever the UI saved between.
+func appendConfig(path string, v any) error {
+	p := splitPath(path)
+	if len(p) == 0 {
+		return fmt.Errorf("empty path")
+	}
+	if k, ok := configKeys[p[0]]; !ok {
+		return fmt.Errorf("unknown setting %q (see `gerdr config keys`)", p[0])
+	} else if len(p) == 1 && k.kind != "array" {
+		return fmt.Errorf("%s takes a %s, not a list", p[0], k.kind)
+	}
+	st, sec := openConfig()
+	var root any
+	if err := json.Unmarshal(st.Get(), &root); err != nil {
+		return fmt.Errorf("config.json: %w", err)
+	}
+	cur, ok := getPath(root, p)
+	var arr []any
+	if ok && cur != nil {
+		if arr, ok = cur.([]any); !ok {
+			return fmt.Errorf("%s is a %T, not a list", path, cur)
+		}
+	}
+	if m, isObj := v.(map[string]any); isObj {
+		if id, _ := m["id"].(string); id != "" && index(arr, id) >= 0 {
+			return fmt.Errorf("%s already has an element with id %q (change it with `gerdr config set %s.%s.<field> …`)", path, id, path, id)
+		}
+	}
+	root, err := setPath(root, p, append(arr, v), false)
+	if err != nil {
+		return fmt.Errorf("%s: %w", path, err)
+	}
+	if m, isObj := v.(map[string]any); isObj {
+		if id, _ := m["id"].(string); id != "" {
+			path += "." + id
+		}
+	}
+	return writeConfig(st, sec, root, path)
+}
+
+func writeConfig(st *config.Store, sec *config.Secrets, root any, path string) error {
+	if err := saveConfig(st, sec, root, splitPath(path)[0] == "agents"); err != nil {
 		return err
 	}
-	sec.Prune(st.Get())
-	out, _ := getPath(mustDecode(st.Get()), p)
+	out, _ := getPath(mustDecode(st.Get()), splitPath(path))
 	printJSON(map[string]any{"ok": true, "path": path, "value": out})
 	return nil
 }
 
-func checkKind(name string, k configKey, v any) error {
-	got := "object"
+// kindOf names a decoded JSON value's type the way configKey.kind does.
+func kindOf(v any) string {
 	switch v.(type) {
 	case bool:
-		got = "bool"
+		return "bool"
 	case float64:
-		got = "number"
+		return "number"
 	case string:
-		got = "string"
+		return "string"
 	case []any:
-		got = "array"
+		return "array"
 	case nil:
-		got = "null"
+		return "null"
 	}
-	if got != k.kind {
+	return "object"
+}
+
+func checkKind(name string, k configKey, v any) error {
+	if got := kindOf(v); got != k.kind {
 		return fmt.Errorf("%s takes a %s, not a %s", name, k.kind, got)
 	}
 	if len(k.enum) > 0 {
@@ -300,4 +403,85 @@ func mustDecode(b []byte) any {
 	var v any
 	_ = json.Unmarshal(b, &v)
 	return v
+}
+
+// saveConfig writes root as config.json (API keys split off to secrets.json), checking agents first if asked.
+func saveConfig(st *config.Store, sec *config.Secrets, root any, agents bool) error {
+	if agents {
+		if err := checkAgents(root); err != nil {
+			return err
+		}
+	}
+	b, _ := json.Marshal(root)
+	if err := st.Set(b); err != nil {
+		return err
+	}
+	sec.Prune(st.Get())
+	return nil
+}
+
+var agentFields = map[string]string{
+	"id": "string", "name": "string", "base": "string", "command": "array", "bin": "string", "args": "array",
+	"env": "object", "prompt": "string", "skills": "array", "mcp": "array", "providers": "array",
+}
+
+// checkAgents refuses an agents list the backend would quietly drop entries from (hub.ValidAgentDefs) or misread,
+// and warns about field names it doesn't know (a typo like "skill" would otherwise just do nothing).
+func checkAgents(root any) error {
+	v, _ := getPath(root, []string{"agents"})
+	if v == nil {
+		return nil
+	}
+	arr, ok := v.([]any)
+	if !ok {
+		return fmt.Errorf("agents takes a list")
+	}
+	seen := map[string]bool{"claude": true, "codex": true, "native": true}
+	for i, e := range arr {
+		m, ok := e.(map[string]any)
+		if !ok {
+			return fmt.Errorf("agents[%d] is not an object", i)
+		}
+		id, _ := m["id"].(string)
+		switch {
+		case id == "":
+			return fmt.Errorf("agents[%d] has no id", i)
+		case strings.ContainsAny(id, ". "):
+			return fmt.Errorf("agent id %q: no dots or spaces", id)
+		case id == "claude" || id == "codex" || id == "native":
+			return fmt.Errorf("agent id %q is a built-in one; pick another", id)
+		case seen[id]:
+			return fmt.Errorf("two agents with id %q", id)
+		}
+		seen[id] = true
+		for k, val := range m {
+			want, known := agentFields[k]
+			if !known {
+				fmt.Fprintf(os.Stderr, "warning: agents.%s: unknown field %q (see `gerdr config keys agents`)\n", id, k)
+				continue
+			}
+			if val == nil {
+				continue
+			}
+			if kindOf(val) != want {
+				return fmt.Errorf("agents.%s.%s takes %s", id, k, map[string]string{"string": "a string", "array": "a list", "object": "an object"}[want])
+			}
+			if want == "array" {
+				for _, x := range val.([]any) {
+					if _, ok := x.(string); !ok {
+						return fmt.Errorf("agents.%s.%s is a list of strings", id, k)
+					}
+				}
+			}
+		}
+		base, _ := m["base"].(string)
+		cmd, _ := m["command"].([]any)
+		switch {
+		case base != "" && base != "claude" && base != "codex" && base != "native":
+			return fmt.Errorf("agents.%s.base is claude, codex or native, not %q", id, base)
+		case base == "" && len(cmd) == 0:
+			return fmt.Errorf("agents.%s needs a base (claude / codex / native) or a command", id)
+		}
+	}
+	return nil
 }

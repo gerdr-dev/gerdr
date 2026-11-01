@@ -1,6 +1,6 @@
 ---
 name: gerdr
-description: "Coordinate other coding-agent sessions inside Gerdr (Claude Code / Codex sessions in the Gerdr GUI): list sessions, start a new agent session next to you, hand it a task, wait for it, read its reply, or message an existing session. Use when the user asks you to delegate to / start / ask / check on another agent or session in Gerdr, or to run several agents in parallel. Also for arranging Gerdr's layout: sorting tabs into workspaces, splitting panes together, renaming or reordering workspaces / tabs. Also for changing Gerdr's own settings (theme, default agent / mode / model, shortcuts, agents, model providers) with `gerdr config`. Requires GERDR_ENV=1."
+description: "Coordinate other coding-agent sessions inside Gerdr (Claude Code / Codex sessions in the Gerdr GUI): list sessions, start a new agent session next to you, hand it a task, wait for it, read its reply, or message an existing session. Use when the user asks you to delegate to / start / ask / check on another agent or session in Gerdr, or to run several agents in parallel. Also for arranging Gerdr's layout: sorting tabs into workspaces, splitting panes together, renaming or reordering workspaces / tabs. Also for changing Gerdr's own settings (theme, default agent / mode / model, shortcuts, model providers) with `gerdr config`, and for setting up agents (roles) with their own prompt, skills and MCP servers (`gerdr agent`, `gerdr skill`, `gerdr mcp`). Requires GERDR_ENV=1."
 ---
 
 # Gerdr：和其他会话协作
@@ -162,6 +162,31 @@ it didn't take, tell them to change it in Settings on that device.
 API keys read back as `<hidden>`; the real ones are in secrets.json. Don't open that file or print the
 environment variables named in `apiKeyEnv`: whatever you read ends up in this transcript. To set a key the
 user gives you, `gerdr config set llm.providers.<id>.apiKey <key>`.
+
+## Setting up an agent (role)
+
+An agent in Settings → Agent is an engine (claude / codex / native) plus its own prompt, skills, MCP servers and
+new-session defaults. Skills and MCP servers live in one shared pool; an agent lists the names it gets.
+
+1. Read what exists: `gerdr config keys agents` (every field), `gerdr skill list`, `gerdr mcp list`, `gerdr session agents`.
+2. Create it in one step with a spec — the agent's fields, plus `define` for skills / MCP servers that don't exist yet,
+   plus `defaults`. `gerdr agent create --help` has the full shape:
+
+   ```bash
+   gerdr agent create --file reviewer.json   # or the JSON as an argument, or on stdin
+   ```
+
+   It writes everything or nothing; an existing skill / MCP server with different content is refused unless `--replace`.
+3. Done when `gerdr agent show <id>` prints the agent with its skills / MCP and stderr had no `note:` lines left
+   unexplained (a `note:` names a skill / MCP that doesn't exist or is switched off).
+
+Changing one later: `gerdr config set agents.<id>.<field> …` (`skills` / `mcp` take the whole list), new pool entries with
+`gerdr skill add` / `gerdr mcp add`, removal with `gerdr agent rm <id>` (`--prune` also deletes the pool entries only it
+used). An agent's `skills` / `mcp` list gets exactly those names whatever the global source; leaving the field out means
+"what the global settings give"; `[]` means none.
+
+MCP tokens (headers, env) are secrets like API keys: put in only what the user hands you; `list` / `show` print them as
+`<hidden>`, and `create` fills a `<hidden>` back from the pool entry of the same name.
 
 ## 并行
 

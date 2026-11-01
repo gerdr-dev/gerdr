@@ -494,23 +494,34 @@ function Editor({ d, onChange, onSave, onCancel }: { d: Draft; onChange: (d: Dra
   );
 }
 
-type Cand = { name: string; from: string; description?: string };
+/** global: given with "全部" (the global source includes it); every Cand can be picked. */
+type Cand = { name: string; from: string; description?: string; global: boolean };
 
-/** 这种 agent 在全局设置下本来会拿到的 skill / MCP（角色只能在这里面挑）。agent 自己那份：Gerdr Agent 用的是 Claude Code 的。 */
+/**
+ * What an agent on this engine can pick (`skills` / `mcp`) and what it gets with "全部" (global settings).
+ * A pick isn't bound by the global source (backend ext.GerdrSkillsOn…): every switched-on one is offered, gerdr's
+ * pool and the engine's own; switched-off ones aren't (off is a global kill switch). Gerdr Agent's own skills are
+ * Claude Code's; for MCP it only ever uses gerdr's.
+ */
 function candidates(v: ExtView, kind: "claude" | "codex" | "native") {
   const s = v.settings;
   const own = kind === "codex" ? "Codex" : "Claude Code";
   const skills: Cand[] = [];
   const mcp: Cand[] = [];
-  const add = (list: Cand[], c: Cand) => !list.some((x) => x.name === c.name) && list.push(c);
-  for (const sk of v.builtin) if (sk.enabled) add(skills, { name: sk.name, from: "内置", description: sk.description });
-  if (s.skillSource !== "agent") for (const sk of v.skills) if (sk.enabled) add(skills, { name: sk.name, from: "Gerdr", description: sk.description });
-  if (s.skillSource !== "gerdr")
-    for (const sk of kind === "codex" ? v.agent.codexSkills : v.agent.claudeSkills) add(skills, { name: sk.name, from: own, description: sk.description });
-  // Native 引擎只用 Gerdr 那份 MCP（不看来源、不借 Claude Code 的）；另外两个按来源
-  if (kind === "native" || s.mcpSource !== "agent") for (const m of s.mcp) if (m.enabled) add(mcp, { name: m.name, from: "Gerdr" });
-  if (kind !== "native" && s.mcpSource !== "gerdr")
-    for (const m of kind === "codex" ? v.agent.codexMCP : v.agent.claudeMCP) if (m.enabled) add(mcp, { name: m.name, from: own });
+  const add = (list: Cand[], c: Cand) => {
+    const had = list.find((x) => x.name === c.name);
+    if (had)
+      had.global ||= c.global; // same name on both sides: the engine gets one of them under "全部"
+    else list.push(c);
+  };
+  for (const sk of v.builtin) if (sk.enabled) add(skills, { name: sk.name, from: "内置", description: sk.description, global: true });
+  for (const sk of v.skills) if (sk.enabled) add(skills, { name: sk.name, from: "Gerdr", description: sk.description, global: s.skillSource !== "agent" });
+  for (const sk of kind === "codex" ? v.agent.codexSkills : v.agent.claudeSkills)
+    add(skills, { name: sk.name, from: own, description: sk.description, global: s.skillSource !== "gerdr" });
+  for (const m of s.mcp) if (m.enabled) add(mcp, { name: m.name, from: "Gerdr", global: kind === "native" || s.mcpSource !== "agent" });
+  if (kind !== "native")
+    for (const m of kind === "codex" ? v.agent.codexMCP : v.agent.claudeMCP)
+      if (m.enabled) add(mcp, { name: m.name, from: own, global: s.mcpSource !== "gerdr" });
   return { skills, mcp };
 }
 
@@ -526,12 +537,13 @@ function ExtPicker({
   onChange: (p: { skills?: string[] | null; mcp?: string[] | null }) => void;
 }) {
   const [view, setView] = useState<ExtView | null>(null);
+  const version = useStore((s) => s.extVersion);
   useEffect(() => {
     api
       .ext()
       .then(setView)
       .catch((e) => toast.error(`读 Skill / MCP 列表失败：${e.message}`));
-  }, []);
+  }, [version]);
   if (!view) return <div className="text-[12px] text-muted-foreground">读 Skill / MCP 列表…</div>;
   const c = candidates(view, kind);
   return (
@@ -555,7 +567,7 @@ function ExtPicker({
         value={mcp}
         onChange={(v) => onChange({ mcp: v })}
         note={kind === "claude" ? "限定之后只给勾上的：插件带的 MCP、claude.ai 账号里连的 connector 都不给。" : undefined}
-        allHint={kind === "native" ? `用「设置 → Agent → MCP」里 Gerdr 的 MCP 开着的那些，${c.mcp.length} 个。` : undefined}
+        allHint={kind === "native" ? `用「设置 → Agent → MCP」里 Gerdr 的 MCP 开着的那些，${c.mcp.filter((i) => i.global).length} 个。` : undefined}
       />
     </div>
   );
@@ -579,7 +591,7 @@ function Pick({
 }) {
   const limited = value !== null;
   // 存着的名字现在列表里没有了（skill 删了、MCP 改名了）：也列出来，不然勾不掉
-  const gone = (value ?? []).filter((n) => !items.some((i) => i.name === n)).map((n): Cand => ({ name: n, from: "已不在" }));
+  const gone = (value ?? []).filter((n) => !items.some((i) => i.name === n)).map((n): Cand => ({ name: n, from: "已不在", global: false }));
   return (
     <div className="space-y-1.5 rounded-md border bg-card p-2.5">
       <div className="flex items-center gap-2">
@@ -596,7 +608,8 @@ function Pick({
                 "px-2 py-0.5 first:rounded-l-md last:rounded-r-md",
                 limited === on ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground",
               )}
-              onClick={() => onChange(on ? (value ?? items.map((i) => i.name)) : null)}
+              // switching to a pick starts from what "全部" gives, so nothing changes until a box is touched
+              onClick={() => onChange(on ? (value ?? items.filter((i) => i.global).map((i) => i.name)) : null)}
             >
               {t as string}
             </button>
@@ -604,7 +617,7 @@ function Pick({
         </div>
       </div>
       {!limited ? (
-        <div className="text-[12px] text-muted-foreground">{allHint ?? `照「设置 → ${label}」里的来源，${items.length} 个。`}</div>
+        <div className="text-[12px] text-muted-foreground">{allHint ?? `照「设置 → ${label}」里的来源，${items.filter((i) => i.global).length} 个。`}</div>
       ) : (
         <div className="max-h-52 space-y-0.5 overflow-auto">
           {items.length + gone.length === 0 && <div className="text-[12px] text-muted-foreground">没有可选的</div>}

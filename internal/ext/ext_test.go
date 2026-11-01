@@ -118,3 +118,74 @@ func TestMigrateNativeMCP(t *testing.T) {
 		t.Fatalf("只做一次：%v", added)
 	}
 }
+
+// A role that names its skills / MCP gets gerdr's pool even when the global source is "agent" (it used to be
+// dropped silently), and the engine's own even when the source is "gerdr"; switched-off ones still aren't given.
+func TestScopedOverridesSource(t *testing.T) {
+	h := t.TempDir()
+	t.Setenv("HOME", h)
+	cwd := t.TempDir()
+	if err := os.WriteFile(filepath.Join(h, ".claude.json"), []byte(`{"mcpServers":{"own":{"command":"x"}}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	d := filepath.Join(h, ".claude", "skills", "mine")
+	_ = os.MkdirAll(d, 0o755)
+	_ = os.WriteFile(filepath.Join(d, "SKILL.md"), []byte("---\nname: mine\ndescription: d\n---\n"), 0o644)
+	g := New(t.TempDir())
+	for _, n := range []string{"cr", "off"} {
+		if err := g.WriteSkill(n, "---\nname: "+n+"\ndescription: d\n---\n"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mcp := []MCPServer{{Name: "gh", URL: "https://x", Type: "http", Enabled: true}, {Name: "dead", Command: "y", Enabled: false}}
+	parse := func(args []string) (servers map[string]any, links []string, overrides map[string]string) {
+		get := func(flag string) string {
+			for i, a := range args {
+				if a == flag && i+1 < len(args) {
+					return args[i+1]
+				}
+			}
+			return ""
+		}
+		var mc struct {
+			MCPServers map[string]any `json:"mcpServers"`
+		}
+		_ = json.Unmarshal([]byte(get("--mcp-config")), &mc)
+		ents, _ := os.ReadDir(filepath.Join(get("--add-dir"), ".claude", "skills"))
+		for _, e := range ents {
+			links = append(links, e.Name())
+		}
+		var st struct {
+			SkillOverrides map[string]string `json:"skillOverrides"`
+		}
+		_ = json.Unmarshal([]byte(get("--settings")), &st)
+		return mc.MCPServers, links, st.SkillOverrides
+	}
+	role := g.Scoped(Only{Skills: []string{"cr", "off", "mine"}, MCP: []string{"gh", "dead", "own"}})
+
+	if err := g.Save(Settings{MCPSource: SourceAgent, SkillSource: SourceAgent, MCP: mcp, DisabledSkills: []string{"off"}}); err != nil {
+		t.Fatal(err)
+	}
+	servers, links, overrides := parse(role.ClaudeArgs("s1", cwd))
+	if servers["gh"] == nil || servers["own"] == nil || servers["dead"] != nil {
+		t.Fatalf("source agent: want gh + own, not the switched-off dead: %v", servers)
+	}
+	if !slices.Equal(links, []string{"cr"}) || overrides["mine"] != "" {
+		t.Fatalf("source agent: want gerdr's cr linked (not the switched-off one) and claude's mine kept: %v %v", links, overrides)
+	}
+	if o := role.CodexMCPOverrides(); o["mcp_servers.gh"] == nil || o["mcp_servers.dead"] != nil {
+		t.Fatalf("codex overrides: %v", o)
+	}
+
+	if err := g.Save(Settings{MCPSource: SourceGerdr, SkillSource: SourceGerdr, MCP: mcp}); err != nil {
+		t.Fatal(err)
+	}
+	servers, _, overrides = parse(role.ClaudeArgs("s2", cwd))
+	if servers["own"] == nil || overrides["mine"] == "off" {
+		t.Fatalf("source gerdr: a named own server / skill should stay: %v %v", servers, overrides)
+	}
+	// without a role the source still rules
+	if _, links, _ := parse(New(g.dir).ClaudeArgs("s3", cwd)); !slices.Contains(links, "cr") {
+		t.Fatalf("source gerdr, no role: gerdr's skills linked: %v", links)
+	}
+}

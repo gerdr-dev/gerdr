@@ -52,14 +52,14 @@ func (x codexExt) Config(ctx context.Context, rpc *rpcline.Conn, cwd string, log
 	cfg := x.m.CodexMCPOverrides()
 	if st.MCPSource == ext.SourceGerdr || x.m.LimitsMCP() {
 		mine := map[string]bool{}
-		if st.MCPSource.UsesGerdr() {
+		if x.m.GerdrMCPOn(st) {
 			for _, v := range st.MCP {
 				mine[v.Name] = true
 			}
 		}
 		// 只用 gerdr 的：codex 自己的全关；角色限定了 MCP：codex 自己的里没挑的关（gerdr 那份已经在 CodexMCPOverrides 里筛过）
 		for _, v := range ext.CodexMCP() {
-			if !mine[v.Name] && (st.MCPSource == ext.SourceGerdr || !x.m.AllowMCP(v.Name)) {
+			if !mine[v.Name] && (!x.m.OwnMCPOn(st) || !x.m.AllowMCP(v.Name)) {
 				cfg["mcp_servers."+v.Name+".enabled"] = false
 			}
 		}
@@ -68,7 +68,7 @@ func (x codexExt) Config(ctx context.Context, rpc *rpcline.Conn, cwd string, log
 	// 内置 skill（多会话协作、改界面）不管来源选什么都给；gerdr 自己那份要选了才给。
 	x.m.Builtin() // 确保已经装到磁盘上
 	roots := []string{x.m.BuiltinDir()}
-	if st.SkillSource.UsesGerdr() {
+	if x.m.GerdrSkillsOn(st) {
 		roots = append(roots, x.m.SkillsDir())
 	}
 	if err := rpc.Call(ctx, "skills/extraRoots/set", map[string]any{"extraRoots": roots}, nil); err != nil {
@@ -114,9 +114,9 @@ func (x codexExt) Config(ctx context.Context, rpc *rpcline.Conn, cwd string, log
 				case under(sk.Path, x.m.BuiltinDir()):
 					disable = dis[sk.Name]
 				case under(sk.Path, x.m.SkillsDir()):
-					disable = dis[sk.Name] || !st.SkillSource.UsesGerdr()
+					disable = dis[sk.Name] || !x.m.GerdrSkillsOn(st)
 				default:
-					disable = st.SkillSource == ext.SourceGerdr && sk.Scope != "system"
+					disable = !x.m.OwnSkillsOn(st) && sk.Scope != "system"
 				}
 				// 角色限定了 skill：没挑的也关。codex 自带的（system）界面上列不出来、挑不了，不动它们。
 				if !disable && sk.Scope != "system" && !x.m.AllowSkill(sk.Name) {

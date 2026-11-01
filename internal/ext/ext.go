@@ -27,6 +27,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 )
 
 // Source：从哪儿取。
@@ -126,6 +127,20 @@ func (m *Manager) AllowMCP(name string) bool {
 	return !m.LimitsMCP() || contains(m.only.MCP, name)
 }
 
+// GerdrSkillsOn / OwnSkillsOn / GerdrMCPOn / OwnMCPOn: does this agent get gerdr's pool / the engine's own
+// skills (MCP servers). The global source only decides for an agent that doesn't name its skills (MCP); one that
+// does gets exactly the names it lists, from either side, so a role can use a gerdr skill without switching the
+// source for every session (it used to be filtered out silently). Switched-off ones (Enabled false) are never
+// given either way: off stays a global kill switch. m may be nil.
+func (m *Manager) GerdrSkillsOn(s Settings) bool {
+	return m.LimitsSkills() || s.SkillSource.UsesGerdr()
+}
+func (m *Manager) OwnSkillsOn(s Settings) bool {
+	return m.LimitsSkills() || s.SkillSource != SourceGerdr
+}
+func (m *Manager) GerdrMCPOn(s Settings) bool { return m.LimitsMCP() || s.MCPSource.UsesGerdr() }
+func (m *Manager) OwnMCPOn(s Settings) bool   { return m.LimitsMCP() || s.MCPSource != SourceGerdr }
+
 // FilterSkills / FilterMCP：按角色限定筛（没限定原样返回）。
 func (m *Manager) FilterSkills(in []Skill) []Skill {
 	if !m.LimitsSkills() {
@@ -188,6 +203,24 @@ func (m *Manager) Settings() Settings {
 }
 
 func (m *Manager) Save(s Settings) error {
+	if err := s.Validate(); err != nil {
+		return err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	b, _ := json.MarshalIndent(s, "", "  ")
+	if err := os.MkdirAll(m.dir, 0o700); err != nil {
+		return err
+	}
+	tmp := m.file() + ".tmp"
+	if err := os.WriteFile(tmp, b, 0o600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, m.file())
+}
+
+// Validate: what Save refuses (bad source, bad / duplicate MCP names, a server with neither command nor URL).
+func (s Settings) Validate() error {
 	if !s.MCPSource.valid() || !s.SkillSource.valid() {
 		return errors.New("来源只能是 agent / both / gerdr")
 	}
@@ -208,17 +241,7 @@ func (m *Manager) Save(s Settings) error {
 			return fmt.Errorf("MCP %q 缺命令", v.Name)
 		}
 	}
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	b, _ := json.MarshalIndent(s, "", "  ")
-	if err := os.MkdirAll(m.dir, 0o700); err != nil {
-		return err
-	}
-	tmp := m.file() + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o600); err != nil {
-		return err
-	}
-	return os.Rename(tmp, m.file())
+	return nil
 }
 
 // Fingerprint：设置 + gerdr skill 目录的样子。claude 的进程拿它判断要不要换（参数只能启动时给）。
@@ -229,7 +252,7 @@ func (m *Manager) Fingerprint() string {
 	for _, sk := range m.Builtin() {
 		fmt.Fprintln(h, "builtin", sk.Name, sk.Enabled)
 	}
-	if s.SkillSource != SourceAgent {
+	if m.GerdrSkillsOn(s) {
 		for _, sk := range m.Skills() {
 			fmt.Fprintln(h, sk.Name, sk.Enabled)
 		}
@@ -342,6 +365,57 @@ func (m *Manager) ImportSkill(src Skill) error {
 	return copyDir(src.Dir, dst)
 }
 
+// AddSkillDir copies a whole skill folder (SKILL.md plus its scripts / references) into gerdr's skills as name.
+// Any local path: only the CLI calls it, as the user; the HTTP API keeps to ImportSkill's listed folders.
+func (m *Manager) AddSkillDir(name, src string, replace bool) error {
+	if _, err := m.skillPath(name); err != nil {
+		return err
+	}
+	if _, err := os.Stat(filepath.Join(src, "SKILL.md")); err != nil {
+		return fmt.Errorf("%s has no SKILL.md", src)
+	}
+	dst := filepath.Join(m.SkillsDir(), name)
+	if _, err := os.Stat(dst); err == nil {
+		if !replace {
+			return fmt.Errorf("gerdr already has a skill named %s (--replace to overwrite it)", name)
+		}
+		if err := os.RemoveAll(dst); err != nil {
+			return err
+		}
+	}
+	return copyDir(src, dst)
+}
+
+// Signature changes whenever ext.json or gerdr's skills folder does (a skill added, removed or edited), so the
+// backend can tell open Settings pages to reload after `gerdr skill` / `gerdr mcp` or a hand edit.
+func (m *Manager) Signature() string {
+	h := sha256.New()
+	b, _ := os.ReadFile(m.file())
+	h.Write(b)
+	ents, _ := os.ReadDir(m.SkillsDir())
+	for _, e := range ents {
+		if st, err := os.Stat(filepath.Join(m.SkillsDir(), e.Name(), "SKILL.md")); err == nil {
+			fmt.Fprintln(h, e.Name(), st.Size(), st.ModTime().UnixNano())
+		}
+	}
+	return hex.EncodeToString(h.Sum(nil))[:16]
+}
+
+// Watch polls Signature and calls onChange when it moves. Polling, like config.Store.Watch: a handful of stats a
+// second, and no fsnotify dependency or per-OS quirks.
+func (m *Manager) Watch(onChange func()) {
+	go func() {
+		last := m.Signature()
+		for {
+			time.Sleep(1500 * time.Millisecond)
+			if sig := m.Signature(); sig != last {
+				last = sig
+				onChange()
+			}
+		}
+	}()
+}
+
 // ClaudeAddDir：给 claude `--add-dir` 的目录。它要的布局是 <dir>/.claude/skills/<名>/SKILL.md，
 // 所以做一个壳：.claude/skills 下只放这次要给它的那几个 skill 的符号链接（内置的 + 用得上 gerdr 的时候
 // gerdr 自己那份里开着的）。关掉的不链进来，用不着 skillOverrides。
@@ -405,6 +479,13 @@ func (m *Manager) installBuiltin() {
 // Builtin：gerdr 内置的 skill（多会话协作、改界面）。不管来源选的是什么都给 agent，除非在设置里关掉。
 func (m *Manager) Builtin() []Skill {
 	m.installBuiltin()
+	return m.InstalledBuiltin()
+}
+
+// InstalledBuiltin lists the built-in skills as they are on disk, without (re)installing them. For the CLI
+// (`gerdr skill`): installing deletes and rewrites builtin-skills, which would pull the files out from under the
+// running backend's claude processes, and would write this binary's copy over the backend's.
+func (m *Manager) InstalledBuiltin() []Skill {
 	dis := map[string]bool{}
 	for _, n := range m.Settings().DisabledSkills {
 		dis[n] = true
@@ -442,6 +523,9 @@ func scanSkills(root, origin string) []Skill {
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out
 }
+
+// Frontmatter is frontmatter for the CLI (`gerdr skill add` checks a SKILL.md before storing it).
+func Frontmatter(s string) (name, desc string) { return frontmatter(s) }
 
 // frontmatter 读 SKILL.md 开头 --- 之间的 name / description。description 可以是多行的
 // （`description: >` / `|` 后面跟缩进的几行，或者直接换行接着写），拼成一行。

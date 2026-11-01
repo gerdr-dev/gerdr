@@ -91,12 +91,12 @@ func main() {
 		Short: "打印版本",
 		Run:   func(cmd *cobra.Command, args []string) { fmt.Println(version.Version) },
 	})
-	root.AddCommand(addProjectFlag(sessionCmd()), uiCmd(), workCmd(), remoteCmd(), configCmd(), addProjectFlag(workspaceCmd()), addProjectFlag(tabCmd()), addProjectFlag(paneCmd()))
+	root.AddCommand(addProjectFlag(sessionCmd()), uiCmd(), workCmd(), remoteCmd(), configCmd(), agentCmd(), mcpCmd(), skillCmd(), addProjectFlag(workspaceCmd()), addProjectFlag(tabCmd()), addProjectFlag(paneCmd()))
 	if err := root.Execute(); err != nil {
 		if errors.Is(err, errHandover) {
 			os.Exit(exitHandover)
 		}
-		if len(os.Args) > 1 && slices.Contains([]string{"session", "ui", "work", "workspace", "tab", "pane", "config"}, os.Args[1]) {
+		if len(os.Args) > 1 && slices.Contains([]string{"session", "ui", "work", "workspace", "tab", "pane", "config", "agent", "mcp", "skill"}, os.Args[1]) {
 			fail(err) // for agents: errors are JSON too
 		}
 		fmt.Fprintln(os.Stderr, "gerdr:", err)
@@ -336,6 +336,8 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 		h.Broadcast("config", map[string]any{"data": cfg.Get()})
 		applyAgents()
 	})
+	// Skill / MCP changed outside the Settings page (`gerdr skill` / `gerdr mcp`, a hand edit): open pages reload.
+	em.Watch(func() { h.Broadcast("ext", nil) })
 
 	// 界面：源码目录，没有打包。默认目录第一次启动从内嵌的那份装出来（webui 包注释讲了升级怎么不覆盖人家的改动）。
 	if env.UI == filepath.Join(env.Dir, "ui") {

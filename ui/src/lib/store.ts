@@ -208,6 +208,8 @@ type State = {
   addonVersion: number;
   /** Bumped on "addon_stores": the store tab fetches again. */
   addonStoresVersion: number;
+  /** Bumped on "ext" (gerdr's skills / MCP changed outside the Settings page): what lists them fetches again. */
+  extVersion: number;
   /** 正在直接开会话的 pane（⌘D 复制）：开好之前别画空面板（挑 agent 那一屏闪一下再变成对话，用户不想看见）。不存盘。 */
   starting: Record<string, true>;
 };
@@ -354,6 +356,7 @@ export const useStore = create<State>(() => ({
   stash: null,
   addonVersion: 0,
   addonStoresVersion: 0,
+  extVersion: 0,
   starting: {},
 }));
 

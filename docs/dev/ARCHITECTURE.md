@@ -356,6 +356,13 @@ cwd 以外改的文件（Bash 写 `~/.zshrc`、隔壁项目）管不到；同一
   for a clean set anyway. Keeping the connectors would mean dropping strict and denying the local servers by name
   (`permissions.deny: ["mcp__<name>"]`), which still starts their processes.
 - 内置 skill（`internal/ext/builtin/`：gerdr、gerdr-ui）不管来源选什么都给，设置里能单个关。
+- Agents change all of this from the CLI: `gerdr skill` / `gerdr mcp` (cmd/gerdr/extcmd.go) write ext.json and the
+  skills folder directly, like `gerdr config`, so they work with gerdr stopped. `ext.Manager.Watch` polls a signature of
+  both and broadcasts `ext`, which makes open Settings pages refetch (store `extVersion`). The CLI lists built-in skills
+  with `InstalledBuiltin`, never `Builtin`: installing deletes and rewrites builtin-skills under running claude processes.
+  `gerdr agent create` (agentcmd.go) does a role, its new pool entries and its defaults in one go, all checked before
+  anything is written and undone if a later write fails; the pool stays shared (reuse, OAuth keyed by server name,
+  secrets in one file) rather than inlined per role.
 
 ## MCP OAuth (internal/mcpauth + server/mcpauthapi.go)
 
@@ -421,7 +428,13 @@ cwd 以外改的文件（Bash 写 `~/.zshrc`、隔壁项目）管不到；同一
   （`skills` / `mcp`，按名字；**不写 = 照全局，空数组 = 一个不给**，所以 hub.AgentDef 的这两项不能加 omitempty）、换账号用的 bin / args / env。
   每个角色是一个单独的适配器实例（和「另一个账号」的变体一样），定义一改 SetAgents 就收掉它的连接。
 - 限定靠 `ext.Manager.Scoped`：设置、目录、锁和全局的是同一份（`core`；内置 skill 各装各的会在别的 claude 读着时把目录删了重写），
-  只在三家各自取 skill / MCP 的地方再筛一遍。只能在「全局来源本来会给的」里面挑，不会加东西进来。
+  只在三家各自取 skill / MCP 的地方再筛一遍。
+  A role that lists names gets exactly those, **whatever the global source** (`GerdrSkillsOn` / `OwnSkillsOn` /
+  `GerdrMCPOn` / `OwnMCPOn`): gerdr's pool with source "agent", the engine's own with source "gerdr". It used to pick
+  only from what the source already handed over, so a role naming a gerdr skill under the default source silently got
+  nothing, and giving one role a skill meant switching the source for every session. Switched-off entries are still
+  never given: off is the global kill switch. The source now only decides for roles without a list. The UI's picker
+  (`candidates()` in AgentSettings.tsx) offers every switched-on entry and marks which ones "全部" gives.
   - claude：skill 壳目录只链挑中的；claude 自己的 skill 没挑的走 `skillOverrides: off`；插件的 skill 关不了单个，**一个都没挑的插件整个关**
     （它的 MCP / hook 一起没）。MCP 按名字关不掉：把挑中的（Gerdr 的 + ~/.claude.json / .mcp.json 里的）全写进 `--mcp-config` 再 `--strict-mcp-config`，
     代价是插件的 MCP 和 claude.ai 的 connector 也没了。提示词和 MediaHint 拼成**一个** `--append-system-prompt`（给两个后一个盖前一个）。
