@@ -21,7 +21,9 @@ let pendingClear: ReturnType<typeof setTimeout> | undefined;
 
 /** 复制并提示；clear 是清掉选区的办法，多击时晚一点再清。 */
 export function copySelected(text: string, multiClick: boolean, clear: () => void) {
-  if (!text) return; // herdr：空内容不写剪贴板、不提示
+  // Empty or whitespace-only: don't touch the clipboard or toast. Double-clicking blank space selects an invisible
+  // newline / run of spaces (in the DOM and in xterm alike), which would otherwise report "copied" for nothing.
+  if (!text.trim()) return;
   clearTimeout(pendingClear);
   const done = () => {
     toast("已复制", { id: "copy-on-select", duration: TOAST_MS });
