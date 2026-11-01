@@ -249,6 +249,10 @@ function DefaultToolCall({ part, agent, running, keep: keepOpen }: { part: ToolP
   // 子 agent 的工具调用（meta.parent）不给：那是它自己那一轮里的事，转后台得由它决定。
   // 跑满 3 秒才露出来：大部分命令一两秒就完，按钮一闪而过，还会把行尾的耗时挤来挤去
   const slow = useAfter(busy, meta.startedAt, 3000);
+  // A long-running call (waiting on a build, a test run) showed no time at all until it ended, so it looked stuck.
+  // Count up live once it passes the same 3 s mark, so short commands don't flash a number.
+  const live = slow && !task && !bg && !!meta.startedAt;
+  useTick(live);
   const canBackground =
     slow &&
     busy &&
@@ -295,7 +299,8 @@ function DefaultToolCall({ part, agent, running, keep: keepOpen }: { part: ToolP
         )}
         {!task && bg && <span className="shrink-0 rounded-sm bg-muted px-1 text-[11px]">{t("task.background")}</span>}
         {/* A background call's own time is only how long it took to launch, not how long it ran */}
-        {!task && took && !bg && <span className="shrink-0 text-[11px] tabular-nums opacity-70">{took}</span>}
+        {live && <span className="shrink-0 text-[11px] tabular-nums opacity-70">{elapsed(meta.startedAt!)}</span>}
+        {!live && !task && took && !bg && <span className="shrink-0 text-[11px] tabular-nums opacity-70">{took}</span>}
         {task && (
           <>
             {/* Claude only sets is_backgrounded for ctrl+b; a Bash call with run_in_background is a background command too */}
