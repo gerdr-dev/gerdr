@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { hasAsk, watchAsks } from "@gerdr/chat/askkeys";
 import { lightboxOpen } from "@/components/Lightbox";
 import { focusSession } from "./actions";
+import { toggleOverview } from "./overview";
 import { get, set, useStore, visibleSessions } from "./store";
 import { isPhone, keyboardUp } from "./phone";
 
@@ -204,6 +205,8 @@ function closeTop(): boolean {
   // 软键盘开着：先收键盘（输入框失焦）
   const a = document.activeElement as HTMLElement | null;
   if (a && (a.tagName === "TEXTAREA" || a.tagName === "INPUT")) return (a.blur(), true);
+  // The overview (进行中) covers the main view like a page of its own, with a ← in its bar: back does what that ← does
+  if (s.overview.on) return (toggleOverview(false), true);
   return false;
 }
 
