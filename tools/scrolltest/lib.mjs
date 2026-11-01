@@ -30,12 +30,12 @@ export function args(defaults = {}) {
  * 默认开着滚动条：headless 默认藏滚动条（--hide-scrollbars），而 mac 接了鼠标时滚动条是常显的、占宽度，
  * 宽度不同行高就不同，复现不出来。dpr 默认 2（Retina，行高常常是 .5 的小数，取整误差就是在这上面攒出来的）
  */
-export async function launch({ width = 1150, height = 900, dpr = 2, scrollbars = true, video, logFromLoad = false } = {}) {
+export async function launch({ width = 1150, height = 900, dpr = 2, scrollbars = true, video, logFromLoad = false, mobile = false } = {}) {
   const browser = await chromium.launch({
     ...(process.env.CHROME ? { executablePath: process.env.CHROME } : { channel: "chrome" }),
     ignoreDefaultArgs: scrollbars ? ["--hide-scrollbars"] : [],
   });
-  const ctx = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: dpr, ...(video ? { recordVideo: { dir: video, size: { width, height } } } : {}) });
+  const ctx = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: dpr, ...(mobile ? { isMobile: true, hasTouch: true } : {}), ...(video ? { recordVideo: { dir: video, size: { width, height } } } : {}) });
   const page = await ctx.newPage();
   await page.addInitScript(installFrameLogger);
   if (logFromLoad) await page.addInitScript(() => window.__startFrameLog());

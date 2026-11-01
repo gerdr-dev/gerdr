@@ -1,0 +1,105 @@
+// Phone: a finger drags the chat a little while a reply streams in, then stays down without moving. What's under the
+// finger must stay put; it used to bob up and down (the reply pulled it toward the bottom, the finger dragged it back).
+//   node touchhold.mjs [--at="something the user said"] [--tab=1] [--up=40] [--hold=3000] [--dt=60] [--size=6] [--cpu=1] [--ro] [--height=860] [--creep]
+// --height=462: a phone with the keyboard up (the chat area is then shorter than the reply being written). --creep: the
+// finger keeps inching down while held; the content may then only move down with it.
+// --up: how far the finger drags down (= scrolls up), from the bottom. 40 stays inside the 80px that still count as "at
+// the bottom"; 300+ is reading inside the reply being written. --hold: how long the finger then stays still.
+// Without --at it takes the user message followed by the most agent text. Feeds that turn in on the UI side only.
+import { args, launch, open, readEvents, replay, startFrameLog, stopFrameLog, streamify, tab, useStore } from "./lib.mjs";
+
+const a = args({ tab: 1, up: 40, hold: 3000, dt: 60, size: 6, cpu: 1, height: 860 });
+const { browser, ctx, page } = await launch({ width: 400, height: a.height, dpr: 3, scrollbars: false, mobile: true });
+await open(page);
+await useStore(page);
+const cdp = await ctx.newCDPSession(page);
+if (a.cpu > 1) await cdp.send("Emulation.setCPUThrottlingRate", { rate: a.cpu });
+const sid = await page.evaluate(() => {
+  const l = window.__store.get().layout;
+  const w = l.workspaces.find((x) => x.id === l.active);
+  return w.tabs.find((t) => t.id === w.activeTab)?.root.sessionId;
+});
+const all = readEvents(sid);
+const isUser = (e) => e.kind === "user" || e.update?.sessionUpdate === "user_message_chunk";
+const textLen = (e) => (e.update?.sessionUpdate === "agent_message_chunk" ? (e.update.content?.text?.length ?? 0) : 0);
+let cut = -1;
+if (a.at) cut = all.findIndex((e) => isUser(e) && JSON.stringify(e.content ?? e.update?.content ?? "").includes(a.at));
+else {
+  let best = 0;
+  for (let i = 0; i < all.length; i++) {
+    if (!isUser(all[i])) continue;
+    let n = 0;
+    for (let j = i + 1; j < all.length && !isUser(all[j]); j++) n += textLen(all[j]);
+    if (n > best) (best = n), (cut = i);
+  }
+}
+if (cut < 0) throw new Error("no user message to cut at");
+let end = all.findIndex((e, i) => i > cut && e.kind === "turn_end");
+if (end < 0) end = all.length - 1;
+const rest = streamify(all.slice(cut + 1, end + 1), { size: a.size });
+await page.evaluate(([sid, base]) => window.__store.applyEvents(sid, base, true), [sid, all.slice(0, cut + 1)]);
+await page.waitForTimeout(2500);
+const feeding = replay(page, sid, rest, { dt: a.dt }).catch(() => {}); // rejects once the browser closes
+await page.waitForTimeout(2500); // the reply gets going (and a screen tall) first
+const touch = (type, y) => cdp.send("Input.dispatchTouchEvent", { type, touchPoints: type === "touchEnd" ? [] : [{ x: 200, y }] });
+const y0 = 300;
+await touch("touchStart", y0);
+const moves = Math.max(4, Math.round(a.up / 8));
+for (let i = 1; i <= moves; i++) {
+  await touch("touchMove", y0 + (a.up * i) / moves);
+  await page.waitForTimeout(16);
+}
+await page.waitForTimeout(150);
+// A drag shorter than the touch slop (~15px) never starts a scroll: the chat rightly keeps following then
+const dist = await page.evaluate(() => {
+  const sc = [...document.querySelectorAll("[data-virtuoso-scroller]")].find((x) => !x.closest(".invisible"));
+  return sc.scrollHeight - sc.clientHeight - sc.scrollTop;
+});
+if (dist < 1) {
+  console.log(`--up=${a.up}: the drag didn't scroll (touch slop), nothing to check; try a longer --up`);
+  await touch("touchEnd");
+  await browser.close();
+  await feeding.catch(() => {});
+  process.exit(2);
+}
+if (a.v)
+  await page.evaluate(() => {
+    const sc = [...document.querySelectorAll("[data-virtuoso-scroller]")].find((x) => !x.closest(".invisible"));
+    const d = Object.getOwnPropertyDescriptor(Element.prototype, "scrollTop");
+    const who = () => new Error().stack.split("\n").slice(2, 6).map((l) => l.trim().replace(/\(?http[^)]*\/([^/?)]+)[^)]*\)?/, "@$1")).join(" < ");
+    Object.defineProperty(sc, "scrollTop", { get() { return d.get.call(this); }, set(v) { console.log(`DEBUG set ${Math.round(performance.now())} ${v} from ${d.get.call(this)} ${who()}`); d.set.call(this, v); }, configurable: true });
+    for (const m of ["scrollTo", "scrollBy"]) { const f = sc[m]; sc[m] = function (...x) { console.log(`DEBUG ${m} ${Math.round(performance.now())} ${JSON.stringify(x[0])} st ${d.get.call(sc)} ${who()}`); return f.apply(this, x); }; }
+    sc.addEventListener("scroll", () => console.log(`DEBUG scroll ${Math.round(performance.now())} st ${d.get.call(sc)}`));
+  });
+await startFrameLog(page, { ro: !!a.ro });
+if (a.creep) {
+  // The finger keeps inching down (= reading further up), 1px every 100ms, as on the user's phone
+  let y = y0 + a.up;
+  for (let t = 0; t < a.hold; t += 100) {
+    await touch("touchMove", ++y);
+    await page.waitForTimeout(100);
+  }
+} else await page.waitForTimeout(a.hold);
+const { frames: raf, ro } = await stopFrameLog(page);
+await touch("touchEnd");
+const frames = a.ro ? ro : raf;
+// Finger down and still: no row on screen may move at all. Track the row nearest the top (what's being read).
+let moved = 0, worst = 0, path = [];
+for (let i = 1; i < frames.length; i++) {
+  const p = frames[i - 1], c = frames[i];
+  const common = Object.keys(c.rows).filter((k) => k in p.rows);
+  if (!common.length) continue;
+  const k = common[0];
+  const vis = c.rows[k][0] - p.rows[k][0];
+  // --creep: the finger scrolls up, so the content may move down with it, never up (text running on)
+  if (a.creep ? vis < -1 : Math.abs(vis) > 1) {
+    moved++;
+    worst = Math.max(worst, Math.abs(vis));
+    if (path.length < 15) path.push(`${c.t}ms row ${k} ${vis > 0 ? "+" : ""}${vis.toFixed(1)} (st ${p.st}->${c.st}, sh ${p.sh}->${c.sh})`);
+  }
+}
+for (const l of path) console.log("  " + l);
+console.log(`--up=${a.up}: ${frames.length} frames while holding still, content moved in ${moved} (worst ${worst.toFixed(1)}px)`);
+await feeding.catch(() => {});
+await browser.close();
+process.exit(moved ? 1 : 0);

@@ -32,10 +32,22 @@ node tabs.mjs                                # 然后跑场景，见下表
 | Phone: switching panes shows a mid-chat frame, then snaps to the bottom | `panes.mjs [--stream] [--cpu=4] [--ro]` | One tab split in two, phone viewport, focus flipped back and forth (only the focused pane is drawn, so each switch remounts). `--cpu` slows the CPU like a phone, `--stream` feeds output in while switching, `--ro` judges the painted frames |
 | Can't scroll up from the bottom, gets pulled back | `scrollup.mjs [--step=40] [--steps=25]` | Small wheel steps up from the bottom must stick. Run it after touching anything that keeps the chat at the bottom: the first 80px up still count as at the bottom, and the virtual list resizes on every step |
 | Scrolling up while a reply streams in gets pulled back | `streamup.mjs [--step=30] [--steps=5] [--gap=1500]` | Small wheel steps up from the bottom with pauses longer than 600ms while output keeps arriving. Leaving the bottom goes by direction, not distance: any user scroll up leaves it, only scrolling back down (or reaching the very bottom) re-sticks (`syncBottom`) |
+| Phone: a finger drags up a little mid-reply and stays down; the text under it bobs or runs on | `touchhold.mjs [--up=40] [--hold=3000] [--creep] [--height=462] [--cpu=4] [--ro]` | Touch drag (CDP touch events, phone viewport) from the bottom while a reply streams in, then holds still: no row may move. `--creep`: the finger keeps inching up the chat while held (the content may only follow it); `--height=462` is a phone with the keyboard up. `--up` under ~15px is eaten by the touch slop (no scroll, exit 2) |
+| Phone: reading a reply as it's written, dragging / flicking now and then; whole screens jump | `touchscroll.mjs [--at="what the user said"] [--fling] [--cpu=4]` | Plays a turn back like `/replay` while dragging, checks every frame, and fails on a whole-chat remount mid-reply (laptop Chrome measures fast enough that no frame shows it; a phone jumps). Use `--at` the turn the user saw it in, steers included |
 | A broken image / video makes the chat jump | `media.mjs [--src=/tmp/x.png] [--tab=1]` | Appends a message with missing media, parks it mid-screen, watches through every automatic retry, then scrolls it out and back in. Run it after touching `chat/ChatMedia.tsx` |
 | 某一行自己变高矮 | `rows.mjs [--tab=1]` | 行挂上后高度变没变（DOM 没变也会变）、Virtuoso 记的高度和实际对不对 |
 
 用户说「就在这儿闪」：拿那个会话，`fling.mjs --from="那段话"`，先翻到那儿再甩。闪不闪跟内容关系很大，别拿别的会话代替。
+
+When the phone shows what the scripts don't, measure on the phone: put a trace into ChatView (every scroll event,
+every `scrollTop` / `scrollTo` / `scrollBy` with a short stack, input direction, at-bottom changes), collect it during
+`/replay` and POST it to `/api/ui/errors` under a `build` that isn't the current one: the server logs it to
+`~/.gerdr/logs/gerdr.log` and the rescue panel never shows it. That is how Virtuoso's compensation below was caught;
+neither cause showed in headless Chrome (an 860px viewport, no keyboard).
+
+To try it by hand (on a phone too, against the Gerdr you use): type `/replay` in a chat. It plays the latest turn with
+some length back in that window only, about 150 characters a second, then puts the log back (`store.replayLastTurn`;
+no agent, nothing sent).
 
 ## 量的是什么（`lib.mjs` 的 analyze）
 
@@ -93,6 +105,35 @@ Virtuoso 在 ResizeObserver 里量行高、改布局，所以 rAF 里看到「�
   fixed-height chip (spinner while retrying, "can't open" after), retries probe in the background (`fileStat` for
   local files) and only put the media back once the file is there, and the failure state is kept per URL across
   remounts.
+- **A short scroll up mid-reply pulled back to the bottom** (`touchhold.mjs`): two causes, both needed fixing.
+  (1) Leaving the bottom was read from the scroll event, which lands a frame after the input; a push to the bottom from
+  new output in between undid the move, or landed on the very bottom afterwards and re-stuck it. Now the input itself
+  decides (wheel up, finger dragging down, ↑ / PageUp / Home: `trackScrollDir`), and for 600ms after a move up landing
+  on the bottom doesn't re-stick. (2) Virtuoso's `followOutput` as a function is only asked for a new row: when the
+  list merely grows while Virtuoso counts itself at the bottom (its 80px threshold) it scrolls down for any value but
+  `false` (`autoscrollToBottom`, "SIZE_INCREASED"). So off the bottom ChatView passes `false`, not a function returning
+  false. Long drags (> 80px) never showed it, which is why "a long drag holds, a short one bobs".
+- **A steer waiting at the bottom remounted the whole chat on every tool call** (`touchscroll.mjs --at=…`, from a phone
+  recording where whole screens jumped while reading). A queued steer's bubble and the working row are the last two
+  rows, so each new tool call changed the third row from the end, which the "rows changed in the middle, measure again"
+  rule (`setMeasured(false)`, every row mounted and measured) took for a structural change. Now only a change above the
+  first mounted row counts: from there down rows are measured as they are, and a change below the screen moves nothing
+  in view. Strictly above: with `>=`, older messages put in front while scrolled to the top (row 0 changes, row 0 is the
+  first mounted) skipped the measuring and `fling.mjs --to-top` jumped.
+- **Virtuoso's "upward scrolling compensation" is off; ChatView keeps the top row in place itself** (trace from the
+  user's phone, keyboard up so the chat was ~290px tall). While the last scroll went up, Virtuoso `scrollBy`s every
+  change of its idea of the total height, as if rows above the screen changed. Two ways that was wrong: a reply being
+  written grows at its bottom, below the top of the screen (taller than the screen, so its top was above it), so the
+  text ran forward a line (+25.5px) every ~150ms while the user dragged up; and its per-index sizes went stale as rows
+  shifted (a steer landing, tool rows coming and going): `scrollBy -225` four times in a second while the real height
+  grew 40px each, throwing the user back to their own message. `keepBottomOnShrink` now drops Virtuoso's `scrollBy`
+  except while older messages go in front (`settle` works with that one), and `keepAnchor` does the job: the row at the
+  top of the screen, by key (`data-chat-row`), keeps its place on screen when its place in the content moves (rows
+  above really changed). Run from the list's ResizeObserver, the MutationObserver on its style (top padding) and
+  onScroll; the user's own scrolling moves no row within the content, so it isn't undone. A first try that tallied
+  height changes below the top and swallowed matching compensations missed both: the compensation comes up to a few
+  frames after the resize, and the stale-size ones match nothing. Switching compensation off without `keepAnchor`
+  showed in `touchscroll.mjs`: rows above that really change while a reply streams (-229 / +501px) jumped.
 - **Virtuoso 把行高取整**（默认 `Math.round(getBoundingClientRect().height)`）：41.5 记 42、39.8 记 40，
   卸掉的行越多攒得越多，量完缩回那一下整段挪一截（卸 32 行差 10px），会话越长越明显。`itemSize` 换成不取整的。
   `rows.mjs` 报「记的和实际不一样」就是这个。
