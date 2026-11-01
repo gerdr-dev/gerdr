@@ -312,10 +312,10 @@ export function UnifiedSidebar() {
                 const ps = leaves(tab.root);
                 if (ps.length === 1) return <Row key={tab.id} {...rowProps(ws, tab, ps[0], false)} />;
                 return (
-                  // A split tab: its panes as rows joined by a bar on the left
+                  // A split tab: its panes as rows joined by a bar in the group's left gutter, so their icons line up with the other rows
                   <div
                     key={tab.id}
-                    className="relative my-0.5 ml-3 before:absolute before:top-1.5 before:bottom-1.5 before:left-0 before:w-0.5 before:rounded-full before:bg-brand/40"
+                    className="relative my-0.5 before:absolute before:top-1.5 before:bottom-1.5 before:-left-1.5 before:w-0.5 before:rounded-full before:bg-brand/40"
                   >
                     {ps.map((p) => (
                       <Row key={p.id} {...rowProps(ws, tab, p, true)} />
@@ -572,7 +572,6 @@ function Row({
           className={cn(
             "group flex h-7 cursor-default items-center gap-2 rounded-md px-2 text-[12px] select-none",
             current ? "bg-accent font-medium" : visible ? "bg-accent/40" : "hover:bg-accent/60",
-            inSplit && "pl-2.5",
             "data-[state=open]:ring-1 data-[state=open]:ring-brand/60",
           )}
         >
