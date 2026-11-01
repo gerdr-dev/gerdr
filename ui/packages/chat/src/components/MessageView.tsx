@@ -135,9 +135,9 @@ export const MessageView = memo(function MessageView({
               (meta.queued ? (
                 // 排在 agent 的队列里、还没被读到（claude 要等手上这个工具调用结束）
                 <span className="flex items-center gap-1">
-                  <span className="mr-2 flex items-center gap-1" title={t("msg.queuedTitle")}>
+                  <span className="mr-2 flex items-center gap-1" title={t(meta.now ? "msg.cuttingInTitle" : "msg.queuedTitle")}>
                     <Loader2 className="size-3 shrink-0 animate-spin" />
-                    {t("msg.queued")}
+                    {t(meta.now ? "msg.cuttingIn" : "msg.queued")}
                   </span>
                   {meta.messageId && onWithdraw && (
                     <>
@@ -148,13 +148,19 @@ export const MessageView = memo(function MessageView({
                       >
                         {t("msg.withdraw")}
                       </button>
-                      <button
-                        className="rounded-sm px-1.5 hover:bg-muted hover:text-foreground"
-                        title={t("msg.sendNowTitle")}
-                        onClick={() => onWithdraw(meta.messageId!, true)}
-                      >
-                        {t("msg.sendNow")}
-                      </button>
+                      {/* Already sent as urgent: no "Send now". Clicking it again withdrew the urgent steer and resent it,
+                          and withdrawing a queued urgent steer trips a Claude Code bug — no urgent steer then gets in
+                          before the running tool ends. Claude needs a couple of seconds into a command before it can move
+                          it aside, which is when people clicked again. */}
+                      {!meta.now && (
+                        <button
+                          className="rounded-sm px-1.5 hover:bg-muted hover:text-foreground"
+                          title={t("msg.sendNowTitle")}
+                          onClick={() => onWithdraw(meta.messageId!, true)}
+                        >
+                          {t("msg.sendNow")}
+                        </button>
+                      )}
                     </>
                   )}
                 </span>

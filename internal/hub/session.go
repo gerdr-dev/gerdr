@@ -597,7 +597,7 @@ func (s *Session) SendFrom(ctx context.Context, content []acp.ContentBlock, clie
 				return SendResult{}, err
 			}
 			if res.Outcome == acpx.SteerInjected {
-				s.emit(&Event{Kind: EvUser, MessageID: msgID, Content: raw, Steer: true, From: from})
+				s.emit(&Event{Kind: EvUser, MessageID: msgID, Content: raw, Steer: true, Now: urgent, From: from})
 				s.mu.Lock()
 				early := s.steering[msgID]
 				delete(s.steering, msgID)

@@ -9,7 +9,7 @@ Every event has `seq` (increasing; ordering) and `ts` (unix ms) and a `kind`:
 
 | kind | fields | meaning |
 |---|---|---|
-| `user` | `messageId`, `content` (ACP ContentBlock[]), `steer`, `from` | A user message. `steer`: sent as an interjection into a running turn. `from`: another session that sent it (Gerdr's `gerdr session send`). |
+| `user` | `messageId`, `content` (ACP ContentBlock[]), `steer`, `now`, `from` | A user message. `steer`: sent as an interjection into a running turn. `now`: that interjection was sent to cut in right away (Send now / Ctrl+↵) rather than wait for the current step. `from`: another session that sent it (Gerdr's `gerdr session send`). |
 | `turn_start` | `messageId` (the user message that started it), `auto` | A turn began. `auto`: the agent started it by itself (a background task finished), no user message before it. |
 | `turn_end` | `messageId`, `stopReason` (end_turn · cancelled · error · max_tokens · refusal…), `error`, `durationMs`, `outputTokens`, `auto` | The turn ended. |
 | `update` | `update`: an ACP `SessionUpdate`, verbatim | Message / thought chunks, tool calls and updates, plans, user_message_chunk (replayed history). Consecutive text chunks of one message are merged into one event when written. Not logged: available_commands_update, config_option_update, current_mode_update, usage_update, session_info_update (those go to the session state, or become the events below). |

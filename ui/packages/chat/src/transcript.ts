@@ -14,6 +14,8 @@ export type GMeta = {
   steer?: boolean;
   /** 插话还在 agent 的队列里排着、没被读进这一轮（claude 要等手上这个工具调用结束才读） */
   queued?: boolean;
+  /** The steer was sent to cut in right away: while queued it shows "Cutting in…" and no "Send now" (see MessageView) */
+  now?: boolean;
   /** 刚点了发送、服务端还没记进日志（见 Transcript.sending）：半透明画着 */
   sending?: boolean;
   from?: string; // 别的会话发来的：发送方会话 id
@@ -374,7 +376,7 @@ export class Transcript {
           id: e.messageId ?? this.uid(),
           role: "user",
           parts,
-          metadata: { messageId: e.messageId, steer: e.steer, from: e.from, ts: e.ts, content: e.content },
+          metadata: { messageId: e.messageId, steer: e.steer, now: e.now, from: e.from, ts: e.ts, content: e.content },
         });
         this.chunks.clear();
         this.lastChunkKey = "";

@@ -18,16 +18,20 @@ type Event struct {
 	MessageID string            `json:"messageId,omitempty"`
 	Content   []json.RawMessage `json:"content,omitempty"` // ACP ContentBlock
 	Steer     bool              `json:"steer,omitempty"`
-	From      string            `json:"from,omitempty"` // 别的会话（agent）经 gerdr session send 发来的：发送方的会话 id
+	// Now: a steer sent to cut in right away (Send now / Ctrl+↵), not to wait for the current step. The UI then stops
+	// offering "Send now" on it: withdrawing a queued urgent steer to resend it trips a Claude Code bug (no urgent steer
+	// reaches the agent before the running tool ends), and repeated clicks were exactly that.
+	Now  bool   `json:"now,omitempty"`
+	From string `json:"from,omitempty"` // 别的会话（agent）经 gerdr session send 发来的：发送方的会话 id
 
 	// update：原样的 ACP SessionUpdate
 	Update json.RawMessage `json:"update,omitempty"`
 
 	// turn_start / turn_end：Auto = 这一轮是 agent 自己开的（后台任务跑完了在汇报），前面没有用户消息
-	Auto       bool   `json:"auto,omitempty"`
+	Auto bool `json:"auto,omitempty"`
 	// turn_start auto: what woke the agent (acpx.Wake), when the adapter could tell
-	Wake json.RawMessage `json:"wake,omitempty"`
-	StopReason string `json:"stopReason,omitempty"`
+	Wake       json.RawMessage `json:"wake,omitempty"`
+	StopReason string          `json:"stopReason,omitempty"`
 	// turn_end：这一轮用了多久、输出了多少 token（对话里那行「用时 1m 5s · ↓ 2.2k tokens」）
 	DurationMs   int64  `json:"durationMs,omitempty"`
 	OutputTokens int    `json:"outputTokens,omitempty"`
