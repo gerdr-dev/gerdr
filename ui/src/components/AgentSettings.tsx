@@ -515,8 +515,8 @@ function Editor({
         {restarts && (
           <div className={cn("mr-auto text-[12px]", busy ? "text-warn" : "text-muted-foreground")}>
             {busy
-              ? `保存会立即终止这个 Agent 上正在跑的 ${busy} 个会话：手上这一轮会中断、不会自己继续，要你再发一条消息（对话记录不丢，按新配置接着聊）。改名字和新会话默认不会。`
-              : "保存会让这个 Agent 重启，那一刻在跑的会话会被立即终止（现在没有）。改名字和新会话默认不会。"}
+              ? `保存会立即终止这个 Agent 上正在跑的 ${busy} 个会话：手上这一轮会中断、不会自己继续，要你再发一条消息（对话记录不丢，按新配置接着聊）。`
+              : "保存会让这个 Agent 重启，那一刻在跑的会话会被立即终止（现在没有）。"}
           </div>
         )}
         <Button size="sm" variant="ghost" onClick={onCancel}>
