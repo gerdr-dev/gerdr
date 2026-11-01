@@ -405,6 +405,7 @@ var builtinCommands = []acp.AvailableCommand{
 	{Name: "clear", Description: "清空上下文：另起一段新对话，之前说过的不再带上"},
 	{Name: "compact", Description: "压缩上下文：把之前的对话总结成摘要，腾出上下文空间（后面可以跟要求）"},
 	{Name: "memory", Description: "看它跨会话记住了什么；后面跟话就是关于记忆的要求（比如「/memory 忘掉 xxx」「/memory 记住 xxx」）"},
+	{Name: "rename", Description: "给会话改名：/rename <名字>；不跟名字就按聊过的内容起一个"},
 	{Name: "mcp", Description: "MCP 服务器：连上没有、报了什么错、有哪些工具；/mcp <名字> 看工具说明，/mcp reconnect [名字] 重连"},
 }
 
@@ -454,6 +455,9 @@ func (a *Agent) Prompt(ctx context.Context, p acp.PromptRequest) (acp.PromptResp
 	}
 	if name == "mcp" {
 		return a.mcpCommand(ctx, s, args)
+	}
+	if name == "rename" {
+		return a.rename(ctx, s, args)
 	}
 	tctx, end, err := s.begin()
 	if err != nil {
@@ -535,6 +539,7 @@ func (a *Agent) clear(s *session) (acp.PromptResponse, error) {
 	nid := uuid.NewString()
 	m := s.meta
 	m.Created = time.Now().UnixMilli()
+	m.Title = "" // it named the work that was cleared away (hub/title.go drops it too)
 	s.id, s.meta, s.entries, s.lastInput, s.queue = nid, m, nil, 0, nil
 	s.mu.Unlock()
 	a.mu.Lock()
@@ -556,6 +561,13 @@ func (a *Agent) Cancel(ctx context.Context, p acp.CancelNotification) error {
 
 func (a *Agent) HandleExtensionMethod(ctx context.Context, method string, params json.RawMessage) (any, error) {
 	switch method {
+	case acpx.MethodComplete:
+		var p acpx.CompleteRequest
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, acp.NewInvalidParams(err.Error())
+		}
+		t, err := a.complete(ctx, "", p.Prompt)
+		return acpx.CompleteResponse{Text: t}, err
 	case acpx.MethodSteer:
 		var p acpx.SteerRequest
 		if err := json.Unmarshal(params, &p); err != nil {

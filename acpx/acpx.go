@@ -55,7 +55,8 @@ const (
 	MethodUsage = "_gerdr/usage"
 	// MethodComplete：client → agent。用这个 agent 自己的账号跑一次不带工具、不留记录的小问答（起会话标题用）。
 	// 走 agent 自己的 CLI，是因为 gerdr 手里没有 API key —— 账号都在 agent 那边（变体的另一个账号也一样）。
-	// claude 用 haiku；codex 用它默认的模型、低推理档。不支持的 agent 回 method not found。
+	// claude 用 haiku；codex 用它默认的模型、低推理档；native uses its small model (else the default one) with
+	// thinking off. 不支持的 agent 回 method not found。
 	MethodComplete = "_gerdr/complete"
 	// MethodMCPReconnect：client → agent. Reconnect one MCP server (by name) in every live process of this agent
 	// (Settings → MCP's reconnect button). claude: the stream-json control request mcp_reconnect, per process; a process

@@ -196,8 +196,9 @@ var (
 	completeCache = map[string]*completeCall{}
 )
 
-// Complete：用某个 agent 的账号跑一次小问答（acpx.MethodComplete）。claude / codex 及它们的变体用自己的
-// （哪个账号的会话就记在哪个账号上）；别的 agent（native、外部 ACP）借内置的 claude，没有再借 codex。
+// Complete runs one small question on an agent's account (acpx.MethodComplete). claude / codex, their variants and
+// native use their own (each session is billed to its own account / model); other agents (external ACP), or any of
+// those failing, borrow the built-in claude, then codex.
 //
 // 同样的提问 10 分钟内只真跑一次：插件在每个开着的窗口里都会跑，几个窗口同时起同一个会话的名，
 // 不去重的话各起各的、标题来回跳。
@@ -239,7 +240,8 @@ func (h *Hub) Complete(ctx context.Context, agent, prompt string) (string, error
 func (h *Hub) complete(ctx context.Context, agent, prompt string) (string, error) {
 	var tries []string
 	def, _ := h.agentDef(agent)
-	if base := def.Base; builtinAgent(agent) && agent != "native" || base == "claude" || base == "codex" {
+	// native answers with the user's own configured model (no models configured → error → borrow claude / codex)
+	if base := def.Base; builtinAgent(agent) || base == "claude" || base == "codex" || base == "native" {
 		tries = append(tries, agent)
 	}
 	tries = append(tries, "claude", "codex")

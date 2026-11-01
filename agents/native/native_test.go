@@ -469,6 +469,70 @@ func TestClear(t *testing.T) {
 	}
 }
 
+// renames: the titles reported with renamed=true, in order.
+func (h *handler) renames() []string {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	var out []string
+	for _, n := range h.updates {
+		if u := n.Update.SessionInfoUpdate; u != nil && u.Title != nil {
+			if v, _ := acpx.GetMeta(u.Meta, "renamed"); v == true {
+				out = append(out, *u.Title)
+			}
+		}
+	}
+	return out
+}
+
+func TestRename(t *testing.T) {
+	e := setup(t, func(n int, msgs []any) reply {
+		if strings.Contains(lastUser(msgs), "<msgs>") {
+			return reply{text: "「Fix the login bug」。"}
+		}
+		return reply{text: "ok"}
+	})
+	sid := e.newSession(modeBypass)
+	e.prompt(sid, uuid.NewString(), "the login page 500s, fix it")
+
+	// a given name: no model call, reported as set by a person, kept for ListSessions
+	calls := e.llm.count()
+	if _, err := e.prompt(sid, uuid.NewString(), "/rename  My  name "); err != nil {
+		t.Fatal(err)
+	}
+	if e.llm.count() != calls {
+		t.Fatal("/rename <name> called the model")
+	}
+	if r := e.h.renames(); len(r) != 1 || r[0] != "My name" {
+		t.Fatalf("renames %q", r)
+	}
+	ls, _ := e.c.Conn.ListSessions(context.Background(), acp.ListSessionsRequest{})
+	if len(ls.Sessions) != 1 || *ls.Sessions[0].Title != "My name" {
+		t.Fatalf("listed %+v", ls.Sessions)
+	}
+
+	// a bare /rename: named by the model from what the user said, and the command stays out of the context
+	if _, err := e.prompt(sid, uuid.NewString(), "/rename"); err != nil {
+		t.Fatal(err)
+	}
+	q := lastUser(e.llm.request(-1)["messages"].([]any))
+	if !strings.Contains(q, "the login page 500s") || strings.Contains(q, "/rename") {
+		t.Fatalf("title prompt %q", q)
+	}
+	if r := e.h.renames(); len(r) != 2 || r[1] != "Fix the login bug" {
+		t.Fatalf("renames %q", r)
+	}
+	e.prompt(sid, uuid.NewString(), "next")
+	if msgs := e.llm.request(-1)["messages"].([]any); len(msgs) != 4 { // system, user, assistant, user
+		t.Fatalf("context %v", msgs)
+	}
+
+	// _gerdr/complete (Gerdr's auto-naming) answers with the configured model
+	res, err := agenthost.Call[acpx.CompleteResponse](context.Background(), e.c, acpx.MethodComplete, acpx.CompleteRequest{Prompt: "<msgs>x</msgs>"})
+	if err != nil || res.Text != "「Fix the login bug」。" {
+		t.Fatalf("complete %q %v", res.Text, err)
+	}
+}
+
 func TestReadOnlyCommand(t *testing.T) {
 	for cmd, want := range map[string]bool{
 		"ls -la":                      true,

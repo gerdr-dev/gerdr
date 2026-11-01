@@ -42,6 +42,8 @@ type sessionMeta struct {
 	Created int64  `json:"created,omitempty"`
 	// Allow：「以后不再问」放行过的规则（permission.go），跟着会话走、重启后还在。
 	Allow []string `json:"allow,omitempty"`
+	// Title: set by /rename (rename.go). Auto-naming lives in the client (Gerdr's hub), not here.
+	Title string `json:"title,omitempty"`
 }
 
 type toolUI struct {
@@ -133,7 +135,7 @@ type listed struct {
 	Updated time.Time
 }
 
-// list 列出所有会话（新的在前）。标题是第一句人话。
+// list lists every session, newest first. The title is the /rename one, else the first thing the user said.
 func (st store) list() []listed {
 	ents, _ := os.ReadDir(filepath.Join(st.dir, "sessions"))
 	var out []listed
@@ -149,6 +151,7 @@ func (st store) list() []listed {
 		}
 		es, _ := st.load(id)
 		l := listed{ID: id, Updated: info.ModTime()}
+		named := lastMeta(es).Title
 		for _, x := range es {
 			if x.Meta != nil && l.Cwd == "" {
 				l.Cwd = x.Meta.Cwd
@@ -159,6 +162,9 @@ func (st store) list() []listed {
 		}
 		if l.Title == "" {
 			continue // 没说过话的不列
+		}
+		if named != "" {
+			l.Title = named
 		}
 		out = append(out, l)
 	}
