@@ -278,7 +278,6 @@ export function UnifiedSidebar() {
                   <LayoutGrid className="size-3" />
                   {gridOn ? "网格中" : "网格"}
                 </button>
-                <span className="w-4 text-right tabular-nums">{active.length}</span>
               </div>
               {!activeFolded &&
                 active.map((x) =>
