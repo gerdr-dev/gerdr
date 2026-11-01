@@ -271,12 +271,12 @@ export function UnifiedSidebar() {
                   </DropdownMenuContent>
                 </DropdownMenu>
                 <button
-                  className={cn("flex h-5 items-center gap-1 rounded-sm px-1", gridOn ? "bg-brand/15 text-foreground" : "hover:bg-muted hover:text-foreground")}
+                  className="flex h-5 items-center gap-1 rounded-sm px-1 hover:bg-muted hover:text-foreground"
                   title={gridOn ? "关掉网格，回到 tab" : `把进行中的 agent 摆成网格一起看（最多 ${MAX_TILES} 个）`}
                   onClick={(e) => (e.stopPropagation(), toggleOverview(!gridOn))}
                 >
-                  <LayoutGrid className="size-3" />
-                  {gridOn ? "网格中" : "网格"}
+                  <LayoutGrid className={cn("size-3", gridOn && "text-brand")} />
+                  网格
                 </button>
               </div>
               {!activeFolded &&
