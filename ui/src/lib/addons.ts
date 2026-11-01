@@ -6,6 +6,7 @@
 import * as icons from "lucide-react";
 import * as React from "react";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -25,10 +26,14 @@ type Reg<T> = { addon: string; fn: T };
 
 // ---- what add-ons draw: slots, composer buttons, context-menu items ----
 
-/** Where an add-on can put a component: the sidebar (above its bottom row), a pane's title bar (props: pane, tab). */
-export type SlotName = "sidebar" | "paneTitle";
+/**
+ * Where an add-on can put a component: the sidebar (above its bottom row), a pane's title bar (props: pane, tab), and
+ * "overlay" — mounted once at the app's root and always there, for the dialogs / drawers an add-on opens from a
+ * command (the sidebar isn't mounted while collapsed or on a phone, so it can't host them).
+ */
+export type SlotName = "sidebar" | "paneTitle" | "overlay";
 export type SlotReg = { addon: string; key: string; Component: React.ComponentType<any>; order: number };
-export const slots: Record<SlotName, SlotReg[]> = { sidebar: [], paneTitle: [] };
+export const slots: Record<SlotName, SlotReg[]> = { sidebar: [], paneTitle: [], overlay: [] };
 export type ComposerAction = { addon: string; id: string; title: string; icon?: React.ReactNode; run: (ctx: ComposerCtx) => void | Promise<void> };
 export type ComposerCtx = { sessionId: string; text: string; insert(text: string): void; setText(text: string): void };
 export const composerActions: ComposerAction[] = [];
@@ -390,7 +395,24 @@ function makeApi(id: string, hash: string) {
     },
     // React and gerdr's own building blocks, so an add-on's UI looks like the rest without bundling its own copy
     React,
-    ui: { Button, Popover, PopoverTrigger, PopoverContent, Tooltip, TooltipTrigger, TooltipContent, Switch, cn },
+    ui: {
+      Button,
+      Popover,
+      PopoverTrigger,
+      PopoverContent,
+      Tooltip,
+      TooltipTrigger,
+      TooltipContent,
+      Switch,
+      Dialog,
+      DialogContent,
+      DialogHeader,
+      DialogTitle,
+      DialogDescription,
+      DialogFooter,
+      DialogClose,
+      cn,
+    },
     icons,
     slot: (name: SlotName, Component: React.ComponentType<any>, o?: { order?: number }) => {
       if (!slots[name]) throw new Error(`没有这个插槽：${name}`);
@@ -440,6 +462,24 @@ function makeApi(id: string, hash: string) {
         const v = a?.settingValues?.[key];
         return v !== undefined ? v : a?.settings?.find((s) => s.key === key)?.default;
       },
+    },
+    fetch: async (url: string, init?: { method?: string; headers?: Record<string, string>; body?: unknown }) => {
+      const headers = { ...init?.headers };
+      let body: string | undefined;
+      if (typeof init?.body === "string") body = init.body;
+      else if (init?.body !== undefined) {
+        body = JSON.stringify(init.body);
+        if (!Object.keys(headers).some((k) => k.toLowerCase() === "content-type")) headers["Content-Type"] = "application/json";
+      }
+      const r = await api.addonFetch(id, { url, method: init?.method, headers, body });
+      return {
+        ok: r.status >= 200 && r.status < 300,
+        status: r.status,
+        statusText: r.statusText,
+        headers: r.headers,
+        text: r.body,
+        json: () => JSON.parse(r.body),
+      };
     },
     usage: (force?: boolean) => api.usage(force),
     stats: (days?: number) => api.dayStats(days),

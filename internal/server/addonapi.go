@@ -12,6 +12,7 @@ import (
 //
 //	GET    /api/addons                         installed add-ons, built, with their service status
 //	POST   /api/addons/{id}/message            to the add-on's service (g.service.send)
+//	POST   /api/addons/{id}/fetch              an HTTP request made by the backend (g.fetch; addonfetch.go)
 //	PUT    /api/addons/{id}/enabled            {"enabled": bool}
 //	PUT    /api/addons/{id}/settings           {"values": {key: value | null}} (null = back to the default)
 //	DELETE /api/addons/{id}                    uninstall (delete its folder)
@@ -29,6 +30,7 @@ import (
 func (s *Server) addonRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/addons", s.addonList)
 	mux.HandleFunc("POST /api/addons/{id}/message", s.addonMessage)
+	mux.HandleFunc("POST /api/addons/{id}/fetch", s.addonFetch)
 	mux.HandleFunc("PUT /api/addons/{id}/enabled", func(w http.ResponseWriter, r *http.Request) {
 		var b struct {
 			Enabled bool `json:"enabled"`

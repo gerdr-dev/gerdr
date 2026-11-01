@@ -98,6 +98,7 @@ lucide icon (`<g.icons.Timer className="size-3.5" />`).
 | where | call | gets |
 |---|---|---|
 | Sidebar, above its bottom row | `g.slot("sidebar", Component, { order })` | no props |
+| The app's root, always mounted, no space taken | `g.slot("overlay", Component)` | no props |
 | Every pane's title bar | `g.slot("paneTitle", Component)` | `{ pane, tab }` |
 | The composer's bottom bar | `g.composerAction({ id, title, icon, run })` | `run(ctx)`: `ctx.text`, `ctx.insert()`, `ctx.setText()` |
 | Right-click menu (desktop and Android App) | `g.contextMenu({ id, title, when, run })` | `{ selection, sessionId }` |
@@ -116,6 +117,30 @@ export default defineAddon({
   },
 });
 ```
+
+`g.ui` also has `Dialog` / `DialogContent` / `DialogHeader` / `DialogTitle` / `DialogDescription` / `DialogFooter` /
+`DialogClose`. To open one from a command, draw it in the `"overlay"` slot (the sidebar isn't mounted while collapsed
+or on a phone) and keep the open flag outside the component, so `run()` can set it:
+
+```tsx
+let open = false;
+const subs = new Set<() => void>();
+const setOpen = (v: boolean) => { open = v; subs.forEach((f) => f()); };
+function Details() {
+  const [, rerender] = g.React.useState(0);
+  g.React.useEffect(() => { const f = () => rerender((n) => n + 1); subs.add(f); return () => { subs.delete(f); }; }, []);
+  return (
+    <g.ui.Dialog open={open} onOpenChange={setOpen}>
+      <g.ui.DialogContent>…</g.ui.DialogContent>
+    </g.ui.Dialog>
+  );
+}
+g.slot("overlay", Details);
+g.command({ id: "x.details", title: "Show details", run: () => setOpen(true) });
+```
+
+A drawer is the same dialog restyled: `<DialogContent className="inset-y-0 right-0 left-auto m-0 h-full max-w-md
+sm:max-w-md rounded-none rounded-l-xl">`. For a one-line message, `g.notify` is enough.
 
 Rules that keep it looking like Gerdr:
 
@@ -154,7 +179,8 @@ the light / dark switch and outlives the add-on.
 | `g.usage(force?)` | The Claude Code / Codex quotas, as `/usage` shows them. |
 | `g.stats(days?)` | Per day: turns finished, and money spent (USD by agent; only Claude Code reports money). |
 | `g.settings.get(key)` | This add-on's [settings](#settings). |
-| `g.storage.get/set` | Small private storage, kept in this browser / App (not shared between devices). |
+| `g.storage.get/set` | Small private storage, kept in this browser / App (not shared between devices). A cache: store `{ at: Date.now(), data }` and refetch when it's older than you like. |
+| `g.fetch(url, init)` | An HTTP request made by Gerdr's backend, so the API needs no CORS. Resolves `{ ok, status, headers, text, json() }`; a non-string `body` goes as JSON. |
 | `g.asset(path)` | A URL for a file of the add-on's folder: `<img src={g.asset("logo.png")} />`, `new Audio(g.asset("done.wav"))`. |
 
 ### Settings

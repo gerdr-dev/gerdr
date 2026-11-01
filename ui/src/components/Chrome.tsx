@@ -2,6 +2,7 @@ import {
   Check,
   ChevronsUpDown,
   Copy,
+  Command,
   Keyboard,
   ClipboardCheck,
   ListPlus,
@@ -600,14 +601,28 @@ export function SidebarFooter({ sidebarToggle }: { sidebarToggle?: boolean }) {
       </div>
       {/* On a phone the inbox is in the top bar (PhoneBar); this row is in the drawer there */}
       {!phone && <InboxButton />}
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button variant="ghost" size="icon" className="size-7 text-muted-foreground" onClick={() => set({ dialog: { kind: "help" } })}>
-            <Keyboard className="size-3.5" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>快捷键</TooltipContent>
-      </Tooltip>
+      {/* A phone has no ⌘K and no keyboard to need a shortcut list: the slot opens the palette instead, the only way
+          to reach add-on commands there. The drawer closes so the palette isn't under it on the way back. */}
+      {phone ? (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-7 text-muted-foreground"
+          aria-label="命令面板"
+          onClick={() => set({ drawer: false, dialog: { kind: "palette" } })}
+        >
+          <Command className="size-3.5" />
+        </Button>
+      ) : (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button variant="ghost" size="icon" className="size-7 text-muted-foreground" onClick={() => set({ dialog: { kind: "help" } })}>
+              <Keyboard className="size-3.5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>快捷键</TooltipContent>
+        </Tooltip>
+      )}
       {sidebarToggle && (
         <Tooltip>
           <TooltipTrigger asChild>

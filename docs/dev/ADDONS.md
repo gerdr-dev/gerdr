@@ -43,6 +43,14 @@ sees: `internal/addons/builtin/gerdr.d.ts`, copied into `~/.gerdr/addons` on eve
   `g.actions.insertText(sessionId)` writes into the focused pane showing that session.
 - The context menu only exists in the desktop and Android Apps (a browser keeps its own), so `g.contextMenu` items
   show there only.
+- `"overlay"` is mounted once in App.tsx next to the app's own dialogs: an add-on's command needs somewhere to draw
+  a dialog that exists whatever the layout is (the sidebar slot is gone while collapsed, on a phone, in Work mode).
+  `g.ui` hands out the Dialog pieces for it; a drawer is DialogContent restyled, so there's no separate Sheet.
+- `g.fetch` is POST /api/addons/{id}/fetch (internal/server/addonfetch.go): the backend makes the request. The page's
+  origin is Gerdr's, so a plain fetch() to a third-party API dies on CORS, and add-on authors usually can't change
+  the API. It grants nothing new — add-ons are trusted code that can already run a service — and it sits behind the
+  same auth as every /api call. Bodies are text both ways; an error status is data (like fetch()), only a transport
+  failure is a 502. 30s timeout, 10 MB cap, no cookie jar.
 - `g.usage()` is /api/usage (the quotas). `g.stats()` is /api/stats (internal/hub/stats.go): turns that ended with
   end_turn, and cost from Claude Code's `result.total_cost_usd` (a per-process running total, sent by the adapter as
   `_meta.gerdr.cost`; the hub adds the growth, a smaller total = a new process). Codex reports no money. Changes are

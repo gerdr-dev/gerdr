@@ -127,6 +127,19 @@ declare global {
       TooltipTrigger: Component<{ asChild?: boolean; children?: any }>;
       TooltipContent: Component<{ side?: "top" | "bottom" | "left" | "right"; children?: any }>;
       Switch: Component<{ checked?: boolean; onCheckedChange?: (v: boolean) => void; disabled?: boolean }>;
+      /**
+       * A modal (Radix Dialog). Render it from the "overlay" slot and open it from a command. DialogContent is centered;
+       * restyle it with className to make a drawer, e.g. "inset-y-0 right-0 left-auto m-0 h-full max-w-md sm:max-w-md
+       * rounded-none rounded-l-xl" (cn merges, later classes win). showCloseButton={false} drops the ✕.
+       */
+      Dialog: Component<{ open?: boolean; onOpenChange?: (open: boolean) => void; children?: any }>;
+      DialogContent: Component<{ className?: string; showCloseButton?: boolean; children?: any }>;
+      DialogHeader: Component<{ className?: string; children?: any }>;
+      DialogTitle: Component<{ className?: string; children?: any }>;
+      DialogDescription: Component<{ className?: string; children?: any }>;
+      DialogFooter: Component<{ className?: string; children?: any }>;
+      /** Closes the dialog it is in; asChild to make your own button do it. */
+      DialogClose: Component<{ asChild?: boolean; children?: any }>;
       /** Joins class names, later Tailwind classes winning (clsx + tailwind-merge). */
       cn(...classes: any[]): string;
     };
@@ -139,8 +152,13 @@ declare global {
      *   "sidebar"    the left sidebar, above its bottom row (full width, no props). The slot pads above and below
      *                once for all blocks: give yours horizontal padding only, or two blocks leave a gap between them
      *   "paneTitle"  every pane's title bar, before its ⋯ menu (props: { pane: PaneInfo; tab: TabInfo }); keep it small
+     *   "overlay"    mounted once at the app's root and always there (no props, takes no space): where a dialog or
+     *                drawer opened by a command lives. The sidebar slot can't host one: it isn't mounted while the
+     *                sidebar is collapsed or on a phone. Keep the open state outside the component (a variable plus a
+     *                listener) so a command's run() can flip it.
      */
     slot(name: "sidebar", component: Component<{}>, opts?: { order?: number }): Dispose;
+    slot(name: "overlay", component: Component<{}>, opts?: { order?: number }): Dispose;
     slot(name: "paneTitle", component: Component<{ pane: PaneInfo; tab: TabInfo }>, opts?: { order?: number }): Dispose;
 
     /**
@@ -171,6 +189,13 @@ declare global {
 
     // ---- data ----
 
+    /**
+     * An HTTP request made by gerdr's backend, not the page, so the API needs no CORS headers (a plain fetch() from
+     * an add-on is cross-origin). Text in, text out: a body that isn't a string is sent as JSON (Content-Type set
+     * unless you set it). Like fetch(), an error status resolves (check ok); it rejects only when the server can't be
+     * reached, the URL isn't http(s), or 30s pass. Responses over 10 MB are refused.
+     */
+    fetch(url: string, init?: { method?: string; headers?: Record<string, string>; body?: unknown }): Promise<FetchResult>;
     /** The accounts' quotas (Claude Code, Codex): what the composer's /usage shows. force: skip the cache. */
     usage(force?: boolean): Promise<UsageInfo[]>;
     /** Turns done and money spent per day, the last `days` (default 1), today last. g.on("stats") says when they change. */
@@ -309,6 +334,17 @@ declare global {
     selection: string;
     /** The session of the pane that was clicked, if any. */
     sessionId?: string;
+  }
+
+  interface FetchResult {
+    ok: boolean;
+    status: number;
+    statusText: string;
+    /** Lower-cased names. */
+    headers: Record<string, string>;
+    text: string;
+    /** JSON.parse(text); throws when it isn't JSON. */
+    json<T = any>(): T;
   }
 
   interface UsageLimit {

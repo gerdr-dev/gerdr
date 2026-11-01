@@ -24,6 +24,7 @@ import { systemNotify } from "./lib/notify";
 import { watchInbox } from "./lib/inbox";
 import { watchCopyOnSelect } from "./lib/copysel";
 import { reloadAddons, setTabNameFn } from "./lib/addons";
+import { AddonSlot } from "./components/AddonSlot";
 import { fontSizeOf, get, keyFor, prefOf, markUnread, set, useStore, visibleSessions } from "./lib/store";
 import { boot } from "./lib/sync";
 import type { SessionSummary } from "./lib/types";
@@ -256,6 +257,8 @@ export default function App() {
           </div>
         </div>
         <Dialogs />
+        {/* Add-ons' dialogs / drawers (g.slot("overlay")): always mounted, whatever the sidebar or mode is doing */}
+        <AddonSlot name="overlay" />
         <AppContextMenu />
         <CliApprove />
         {/* 手机上底部是输入框和软键盘，toast 放顶上 */}
