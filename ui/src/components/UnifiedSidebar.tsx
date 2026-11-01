@@ -310,11 +310,18 @@ export function UnifiedSidebar() {
             >
               {ws.tabs.map((tab) => {
                 const ps = leaves(tab.root);
-                if (ps.length === 1) return <Row key={tab.id} {...rowProps(ws, tab, ps[0], false)} />;
+                // data-side-tab(s): drag a row between two others to reorder (TabDrag.tsx)
+                if (ps.length === 1)
+                  return (
+                    <div key={tab.id} data-side-tab={tab.id}>
+                      <Row {...rowProps(ws, tab, ps[0], false)} />
+                    </div>
+                  );
                 return (
                   // A split tab: its panes as rows joined by a bar in the group's left gutter, so their icons line up with the other rows
                   <div
                     key={tab.id}
+                    data-side-tab={tab.id}
                     className="relative my-0.5 before:absolute before:top-1.5 before:bottom-1.5 before:-left-1.5 before:w-0.5 before:rounded-full before:bg-brand/40"
                   >
                     {ps.map((p) => (
@@ -506,7 +513,11 @@ function Group({
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
-      {!folded && <div className="pl-2">{children}</div>}
+      {!folded && (
+        <div className="pl-2" data-side-tabs={ws.id}>
+          {children}
+        </div>
+      )}
     </div>
   );
 }

@@ -15,6 +15,7 @@ import { AgentIcon } from "./AgentIcon";
  *   接着往下拖进它的某个 pane，就能挑贴在哪一边；
  * - 拖到下面的 pane 上 → 贴到这个 pane 离指针最近的那一边，那半边铺一层预览（和 VS Code 拖编辑器一样）；
  * - 拖到侧栏的别的工作空间上 → 挪过去。
+ * - 桌面侧栏（UnifiedSidebar）里，落在某个分组的 tab 行之间 → 插到那儿（同一组是排序，别的组是挪过去），那条缝上亮一根横线。
  *
  * 不用 HTML5 原生拖拽：它的拖影是浏览器截的半透明图、拖动中改不了样子，也没法在 pane 区域上算「贴哪边」
  * （dragover 进 xterm / 对话这些子元素会一路被打断）。这里用 pointer 事件 + setPointerCapture 自己画。
@@ -29,7 +30,8 @@ import { AgentIcon } from "./AgentIcon";
  */
 
 type Target =
-  | { kind: "reorder"; to: number; x: number; top: number; h: number }
+  /** Insert before the `to`-th tab of wsId (indices after taking the dragged tab out); `line` is the gap to light up. */
+  | { kind: "reorder"; wsId: string; to: number; line: Box }
   | { kind: "tab"; tabId: string; rect: Box }
   | { kind: "pane"; tabId: string; paneId: string; side: Side; rect: Box }
   | { kind: "ws"; wsId: string; rect: Box };
@@ -134,7 +136,7 @@ function startDrag(e: React.PointerEvent<HTMLElement>, tabId: string, from: numb
   const srcWs = get().layout.workspaces.find((w) => w.tabs.some((t) => t.id === tabId))?.id ?? ws.id;
 
   const locate = (x: number, y: number): Target | null => {
-    // No tab bar (the unified sidebar replaces it): no reordering here, but dropping on panes / workspaces still works
+    // The tab bar, when it's shown (the desktop sidebar hidden, or the old layout)
     const b = tabBar();
     const br = b?.getBoundingClientRect();
     if (b && br && y < br.bottom + 2) {
@@ -154,9 +156,28 @@ function startDrag(e: React.PointerEvent<HTMLElement>, tabId: string, from: numb
       if (from >= 0 && (ins === from || ins === from + 1)) return null; // 原地
       const lx = ins < rs.length ? rs[ins].left - GAP / 2 : rs[rs.length - 1].right + GAP / 2;
       // 拖 pane 时 from = -1：to 就是插入的位置
-      return { kind: "reorder", to: from >= 0 && ins > from ? ins - 1 : ins, x: lx, top: r.top, h: r.height };
+      return {
+        kind: "reorder",
+        wsId: ws.id,
+        to: from >= 0 && ins > from ? ins - 1 : ins,
+        line: { left: lx - 1, top: r.top + 2, width: 2, height: r.height - 4 },
+      };
     }
     const hit = document.elementFromPoint(x, y) as HTMLElement | null;
+    // The desktop sidebar's tab rows (UnifiedSidebar): between two of them = insert there, in this group or another one
+    const list = hit?.closest<HTMLElement>("[data-side-tabs]");
+    const rows = list ? [...list.querySelectorAll<HTMLElement>("[data-side-tab]")] : [];
+    if (list && rows.length) {
+      const wsId = list.dataset.sideTabs!;
+      const rs = rows.map((x) => x.getBoundingClientRect());
+      let ins = rs.findIndex((r) => y < r.top + r.height / 2);
+      if (ins < 0) ins = rs.length;
+      const own = wsId === srcWs && from >= 0 ? from : -1; // a whole tab moving inside its own group
+      if (own >= 0 && (ins === own || ins === own + 1)) return null;
+      const ly = ins < rs.length ? rs[ins].top : rs[rs.length - 1].bottom;
+      const lr = list.getBoundingClientRect();
+      return { kind: "reorder", wsId, to: own >= 0 && ins > own ? ins - 1 : ins, line: { left: lr.left + 2, top: ly - 1, width: lr.width - 4, height: 2 } };
+    }
     const wsEl = hit?.closest<HTMLElement>("[data-ws-id]");
     if (wsEl) return wsEl.dataset.wsId === srcWs ? null : { kind: "ws", wsId: wsEl.dataset.wsId!, rect: box(wsEl.getBoundingClientRect()) };
     const paneEl = hit?.closest<HTMLElement>("[data-pane-id]");
@@ -242,12 +263,15 @@ function startDrag(e: React.PointerEvent<HTMLElement>, tabId: string, from: numb
     }
     if (!t) restore();
     else if (paneId) {
-      if (t.kind === "reorder") (restore(), movePane(paneId, { wsId: ws.id, index: t.to }));
+      if (t.kind === "reorder") (restore(), movePane(paneId, { wsId: t.wsId, index: t.to }));
       else if (t.kind === "tab") movePane(paneId, { tabId: t.tabId, side: "right" });
       else if (t.kind === "pane") movePane(paneId, { tabId: t.tabId, paneId: t.paneId, side: t.side });
       else movePane(paneId, { wsId: t.wsId });
-    } else if (t.kind === "reorder") (restore(), moveTab(ws.id, from, t.to));
-    else if (t.kind === "tab") mergeTab(tabId, t.tabId, undefined, "right");
+    } else if (t.kind === "reorder") {
+      restore();
+      if (t.wsId === srcWs) moveTab(srcWs, from, t.to);
+      else moveTabToWorkspace(tabId, t.wsId, t.to);
+    } else if (t.kind === "tab") mergeTab(tabId, t.tabId, undefined, "right");
     else if (t.kind === "pane") mergeTab(tabId, t.tabId, t.paneId, t.side);
     else moveTabToWorkspace(tabId, t.wsId);
     update(null);
@@ -273,7 +297,9 @@ export function TabDragLayer() {
   const drag = useDrag();
   if (!drag) return null;
   const t = drag.target;
-  const compact = !!t && t.kind !== "reorder";
+  // Reordering in the tab bar (a vertical gap line) keeps the full tab under the pointer; anything else, sidebar rows included,
+  // shrinks it to a pill beside the pointer so it doesn't hide where it lands
+  const compact = !!t && !(t.kind === "reorder" && t.line.height > t.line.width);
   const fixed = (b: Box): React.CSSProperties => ({ left: b.left, top: b.top, width: b.width, height: b.height });
   return createPortal(
     <div className="pointer-events-none fixed inset-0 z-[100]">
@@ -315,9 +341,7 @@ export function TabDragLayer() {
         <span className="min-w-0 flex-1 truncate">{drag.ghost.label}</span>
       </div>
       {/* 排序的落点竖线画在拖影上面：拖影跟着指针，常常正好压在那条缝上 */}
-      {t?.kind === "reorder" && (
-        <div className="fixed w-0.5 shadow-[0_0_0_1px_var(--background)] rounded-full bg-brand" style={{ left: t.x - 1, top: t.top + 2, height: t.h - 4 }} />
-      )}
+      {t?.kind === "reorder" && <div className="fixed rounded-full bg-brand shadow-[0_0_0_1px_var(--background)]" style={fixed(t.line)} />}
       <style>{`@keyframes gerdr-spring { from { width: 0 } to { width: 100% } }`}</style>
     </div>,
     document.body,

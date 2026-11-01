@@ -676,12 +676,16 @@ export function movePane(paneId: string, to: { tabId: string; paneId?: string; s
 }
 
 /** 把 tab 挪到另一个工作空间（拖到侧栏的工作空间上）：放到最后、切过去看着它。 */
-export function moveTabToWorkspace(tabId: string, wsId: string) {
+export function moveTabToWorkspace(tabId: string, wsId: string, index?: number) {
   setLayout((l) => {
     const fw = l.workspaces.find((w) => w.tabs.some((t) => t.id === tabId));
     const tab = fw?.tabs.find((t) => t.id === tabId);
     if (!fw || !tab || fw.id === wsId || !l.workspaces.some((w) => w.id === wsId)) return l;
-    const out = updateWs(removeTab(l, fw, tabId), wsId, (w) => ({ ...w, tabs: [...w.tabs, tab], activeTab: tab.id, lastTab: w.activeTab }));
+    const out = updateWs(removeTab(l, fw, tabId), wsId, (w) => {
+      const tabs = [...w.tabs];
+      tabs.splice(index ?? tabs.length, 0, tab);
+      return { ...w, tabs, activeTab: tab.id, lastTab: w.activeTab };
+    });
     return { ...out, active: wsId, lastActive: l.active };
   });
 }
