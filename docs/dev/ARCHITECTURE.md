@@ -211,6 +211,16 @@ config.json (example in the README), read fresh every turn.
     from disk (`limitHistory`, in memory only, so sessions saved before the limits work again). Not copied: Claude Code
     first tries palette PNG for an over-size PNG; the standard library has no decent quantizer, so we go straight to
     JPEG.
+    Codex does the same thing for OpenAI models with other numbers (`codex-rs/utils/image`, `core/src/image_preparation.rs`,
+    read at cb1bc0a, 2026-11-01): images are fitted when they enter the history (and again on replay), by the image's
+    `detail`. `high` (the default): each edge ≤ 2048 px and at most 2500 patches of 32×32; `original` (only models with
+    `supports_image_detail_original`, or every image under the `UnifiedImageBudget` feature): ≤ 6000 px and 10000
+    patches. Edge first, then shrink by area and round the patch grid down. No byte limit (1 GB sanity guard only);
+    it keeps PNG / JPEG / WebP (JPEG re-encoded at 85), GIF becomes PNG; MCP images pass through untouched. The point
+    there is matching the server's own downscaling so context accounting is right, not avoiding a 400.
+    Examples (Claude Code / Codex high / Codex original): 1440×3310 → 870×2000 / 891×2048 / unchanged; 3024×1898 →
+    2000×1255 / 1989×1248 / unchanged; 2000×2000 → 1932×1932 / 1600×1600 / unchanged. Today native applies Claude
+    Code's limits to every model; per-protocol limits (Codex's for OpenAI) would be the next step if it matters.
 
 测试：`go test ./agents/native/...` 用假接口跑主循环；`NATIVE_LIVE_BASE / NATIVE_LIVE_KEY / NATIVE_LIVE_MODELS` 设了才跑真模型（花钱）。
 
