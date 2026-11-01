@@ -88,6 +88,10 @@ export type AgentDef = {
   mcp?: string[];
   /** 引擎是 native 时只用这几家模型服务商（llm.providers 的 id）；不写 = 全部 */
   providers?: string[];
+  /** a built-in glyph (components/AgentGlyph.tsx); not set = vendor logo for claude / codex, an automatic glyph otherwise */
+  icon?: string;
+  /** a PALETTE key for the icon (components/AgentGlyph.tsx); not set = its own colours */
+  color?: string;
 };
 
 export const DEFAULT_CONFIG: Config = {

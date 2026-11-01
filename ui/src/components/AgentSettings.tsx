@@ -2,6 +2,7 @@ import { Copy, Pencil, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { AgentIcon } from "@/components/AgentIcon";
+import { AgentGlyph, GLYPHS, LINES, PALETTE, autoGlyph } from "@/components/AgentGlyph";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -45,6 +46,8 @@ type Draft = {
   mcp: string[] | null;
   defaults: Record<string, string>; // MODE / 配置项 id → 值
   providers: string[]; // 引擎是 native 时只用这几家服务商；空 = 全部
+  icon: string; // a GLYPHS / LINES key; "" = default (vendor logo / automatic)
+  color: string; // a PALETTE key; "" = the icon's own colours
 };
 
 const KIND_NAME: Record<Kind, string> = { claude: "Claude Code", codex: "Codex", native: "Native", command: "外部 ACP" };
@@ -65,6 +68,8 @@ const toDraft = (d: AgentDef): Draft => ({
   defaults: defaultsOf(d.id),
   // 以前存的「不写 = 全部」：打开编辑时摊成全部勾上（现在至少要勾一个，后端仍把空当全部，兼容老配置）
   providers: d.providers?.length ? d.providers : d.base === "native" ? allProviders() : [],
+  icon: d.icon ?? "",
+  color: d.color ?? "",
 });
 
 function fromDraft(d: Draft): AgentDef {
@@ -80,7 +85,7 @@ function fromDraft(d: Draft): AgentDef {
   if (!d.name.trim()) throw new Error("起个名字");
   if (d.kind === "command") {
     if (!d.command.trim()) throw new Error("外部 Agent 要填启动命令");
-    return { id: d.id, name: d.name.trim(), command: words(d.command), env: Object.keys(env).length ? env : undefined };
+    return { id: d.id, name: d.name.trim(), command: words(d.command), env: Object.keys(env).length ? env : undefined, ...looks(d) };
   }
   const native = d.kind === "native"; // Native 引擎没有可执行文件，启动参数 / 环境变量用不上
   if (native && !d.providers.length) throw new Error("至少勾一个服务商");
@@ -95,14 +100,19 @@ function fromDraft(d: Draft): AgentDef {
     skills: d.skills ?? undefined,
     mcp: d.mcp ?? undefined,
     providers: native ? d.providers : undefined,
+    ...looks(d),
   };
 }
+
+/** Icon and colour as saved; a colour only means something on a built-in icon (not on the Claude Code / Codex logo). */
+const looks = (d: Draft) => ({ icon: d.icon || undefined, color: (hasGlyph(d) && d.color) || undefined });
+const hasGlyph = (d: Draft) => !!d.icon || (d.kind !== "claude" && d.kind !== "codex");
 
 /**
  * The part of a draft the backend bakes into the agent's process (hub.sameProcess): changing it makes the backend
  * close that process on save, which cuts off every turn running on it. The name and the new-session defaults don't.
  */
-const processKey = ({ name: _n, defaults: _d, ...rest }: Draft) => JSON.stringify(rest);
+const processKey = ({ name: _n, defaults: _d, icon: _i, color: _c, ...rest }: Draft) => JSON.stringify(rest);
 
 const allProviders = () => (get().config.llm?.providers ?? []).map((p) => p.id);
 
@@ -157,6 +167,8 @@ export function AgentSettings() {
     mcp: null,
     defaults: {},
     providers: [],
+    icon: "",
+    color: "",
   });
   // 打开时的样子：改过了（和它不一样）就不许点弹窗外面关掉，免得误点把填了半天的丢了（用户要的）；关闭按钮、取消、Esc 照常
   const [orig, setOrig] = useState("");
@@ -256,13 +268,15 @@ export function AgentSettings() {
         {/* 宽度写成内联样式：界面的 Tailwind 是浏览器里现编的，页面上头一回出现的 class（sm:max-w-2xl）样式要晚一拍才生成，
             第一次打开时先按没限宽铺满全屏、再缩回来（用户报的），第二次才正常 */}
         <DialogContent
-          className="max-h-[85vh] overflow-auto text-[13px]"
+          // Three parts: title and buttons stay put, only the form between them scrolls (Editor)
+          className="flex max-h-[85vh] flex-col gap-0 overflow-hidden p-0 text-[13px]"
           style={{ maxWidth: "min(42rem, calc(100% - 2rem))" }}
           onInteractOutside={(e) => dirty && e.preventDefault()}
         >
           {/* Room for the close button on the right; left-aligned on phones too, a centered long title ran under the X */}
-          <DialogHeader className="min-w-0 pr-6 text-left">
-            <DialogTitle className="leading-snug max-md:text-[15px]">
+          {/* Same title as the Settings dialog under it (SettingsDialog.tsx): size, padding, the phone's 15px */}
+          <DialogHeader className="min-w-0 shrink-0 border-b px-6 pt-5 pr-12 pb-4 text-left max-md:px-4 max-md:pt-3 max-md:pb-3">
+            <DialogTitle className="truncate leading-normal max-md:text-[15px]">
               {!edit ? "" : edit.builtin ? `${edit.name} · 新会话默认` : isNew ? "新建 Agent" : `编辑「${edit.name}」`}
             </DialogTitle>
           </DialogHeader>
@@ -351,167 +365,177 @@ function Editor({
   // 「高级」里填过东西（另一个账号）就展开着，不然收起来：大多数角色用不到
   const [adv, setAdv] = useState(!!(d.env || d.bin || d.args) || d.kind === "command");
   return (
-    <div className="space-y-3">
-      {/* Phones: one column, each label pulled up against the field under it (a label column left the fields too narrow) */}
-      <div className="grid grid-cols-[88px_minmax(0,1fr)] items-center gap-x-3 max-md:grid-cols-1 gap-y-2.5 max-md:[&>span.text-muted-foreground]:-mb-1.5 max-md:[&>span.text-muted-foreground]:pt-0">
-        <span className="text-muted-foreground">名字</span>
-        {d.builtin ? (
-          <span className="font-medium">{d.name}</span>
-        ) : (
-          <Input value={d.name} onChange={(e) => set({ name: e.target.value })} onKeyDown={stop} className="h-8" />
-        )}
-        {!d.builtin && (
-          <>
-            <span className="text-muted-foreground">引擎</span>
-            <Select
-              value={d.kind}
-              // 换到 Native 时先把服务商全勾上（至少要勾一个，省得人再去点）
-              onValueChange={(v) => set({ kind: v as Kind, ...(v === "native" && !d.providers.length ? { providers: allProviders() } : {}) })}
-            >
-              <SelectTrigger size="sm" className="w-56 max-w-full max-md:w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="claude">Claude Code</SelectItem>
-                <SelectItem value="codex">Codex</SelectItem>
-                {(providers.length > 0 || d.kind === "native") && <SelectItem value="native">Native</SelectItem>}
-                <SelectItem value="command">外部 ACP Agent</SelectItem>
-              </SelectContent>
-            </Select>
-          </>
-        )}
-        {d.kind === "native" && !d.builtin && (
-          <>
-            <span className="self-start pt-1 text-muted-foreground">服务商</span>
-            <div className="space-y-1">
-              <div className="flex flex-wrap gap-x-4 gap-y-1">
-                {[
-                  ...providers.map((p) => ({ id: p.id, name: p.name || p.id })),
-                  ...d.providers.filter((id) => !providers.some((p) => p.id === id)).map((id) => ({ id, name: `${id}（已删）` })),
-                ].map((p) => (
-                  <label key={p.id} className="flex cursor-pointer items-center gap-1.5">
-                    <Checkbox
-                      checked={d.providers.includes(p.id)}
-                      onCheckedChange={(on) => {
-                        const next = on ? [...d.providers, p.id] : d.providers.filter((x) => x !== p.id);
-                        // 默认模型不在新的服务商里了就清掉，免得存一个用不上的
-                        const m = d.defaults.model;
-                        const defaults = m && next.length && !next.some((x) => m.startsWith(x + "/")) ? (({ model: _, ...r }) => r)(d.defaults) : d.defaults;
-                        set({ providers: next, defaults });
-                      }}
-                    />
-                    {p.name}
-                  </label>
-                ))}
+    <div className="flex min-h-0 flex-1 flex-col">
+      {/* the scrolling part, its scrollbar at the dialog's edge */}
+      <div className="min-h-0 flex-1 space-y-3 overflow-auto px-6 py-4 max-md:px-4">
+        {/* Phones: one column, each label pulled up against the field under it (a label column left the fields too narrow) */}
+        <div className="grid grid-cols-[88px_minmax(0,1fr)] items-center gap-x-3 max-md:grid-cols-1 gap-y-2.5 max-md:[&>span.text-muted-foreground]:-mb-1.5 max-md:[&>span.text-muted-foreground]:pt-0">
+          <span className="text-muted-foreground">名字</span>
+          {d.builtin ? (
+            <span className="font-medium">{d.name}</span>
+          ) : (
+            <Input value={d.name} onChange={(e) => set({ name: e.target.value })} onKeyDown={stop} className="h-8" />
+          )}
+          {!d.builtin && (
+            <>
+              <span className="self-start pt-1.5 text-muted-foreground">图标</span>
+              <IconPicker d={d} onChange={set} />
+            </>
+          )}
+          {!d.builtin && (
+            <>
+              <span className="text-muted-foreground">引擎</span>
+              <Select
+                value={d.kind}
+                // 换到 Native 时先把服务商全勾上（至少要勾一个，省得人再去点）
+                onValueChange={(v) => set({ kind: v as Kind, ...(v === "native" && !d.providers.length ? { providers: allProviders() } : {}) })}
+              >
+                <SelectTrigger size="sm" className="w-56 max-w-full max-md:w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="claude">Claude Code</SelectItem>
+                  <SelectItem value="codex">Codex</SelectItem>
+                  {(providers.length > 0 || d.kind === "native") && <SelectItem value="native">Native</SelectItem>}
+                  <SelectItem value="command">外部 ACP Agent</SelectItem>
+                </SelectContent>
+              </Select>
+            </>
+          )}
+          {d.kind === "native" && !d.builtin && (
+            <>
+              <span className="self-start pt-1 text-muted-foreground">服务商</span>
+              <div className="space-y-1">
+                <div className="flex flex-wrap gap-x-4 gap-y-1">
+                  {[
+                    ...providers.map((p) => ({ id: p.id, name: p.name || p.id })),
+                    ...d.providers.filter((id) => !providers.some((p) => p.id === id)).map((id) => ({ id, name: `${id}（已删）` })),
+                  ].map((p) => (
+                    <label key={p.id} className="flex cursor-pointer items-center gap-1.5">
+                      <Checkbox
+                        checked={d.providers.includes(p.id)}
+                        onCheckedChange={(on) => {
+                          const next = on ? [...d.providers, p.id] : d.providers.filter((x) => x !== p.id);
+                          // 默认模型不在新的服务商里了就清掉，免得存一个用不上的
+                          const m = d.defaults.model;
+                          const defaults = m && next.length && !next.some((x) => m.startsWith(x + "/")) ? (({ model: _, ...r }) => r)(d.defaults) : d.defaults;
+                          set({ providers: next, defaults });
+                        }}
+                      />
+                      {p.name}
+                    </label>
+                  ))}
+                </div>
+                <div className="text-[11px] text-muted-foreground">只用勾上的这几家的模型，至少勾一个。服务商在下面「引擎 → Native」里配。</div>
               </div>
-              <div className="text-[11px] text-muted-foreground">只用勾上的这几家的模型，至少勾一个。服务商在下面「引擎 → Native」里配。</div>
-            </div>
-          </>
-        )}
-        {role && (
-          <>
-            <span className="self-start pt-1.5 text-muted-foreground">提示词</span>
-            <div className="space-y-1">
-              <textarea
-                className="min-h-24 w-full rounded-md border bg-card p-2 text-[12px]"
-                value={d.prompt}
-                onChange={(e) => set({ prompt: e.target.value })}
-                onKeyDown={stop}
-                placeholder="这个角色是干什么的、要守什么规矩。比如：你是代码审查员，只读代码、不改文件，按严重程度列出问题。"
-              />
-              <div className="text-[11px] text-muted-foreground">追加在 Agent 自己的系统提示后面（CLAUDE.md / AGENTS.md 照样读）。</div>
-            </div>
-          </>
+            </>
+          )}
+          {role && (
+            <>
+              <span className="self-start pt-1.5 text-muted-foreground">提示词</span>
+              <div className="space-y-1">
+                <textarea
+                  className="min-h-24 w-full rounded-md border bg-card p-2 text-[12px]"
+                  value={d.prompt}
+                  onChange={(e) => set({ prompt: e.target.value })}
+                  onKeyDown={stop}
+                  placeholder="这个角色是干什么的、要守什么规矩。比如：你是代码审查员，只读代码、不改文件，按严重程度列出问题。"
+                />
+                <div className="text-[11px] text-muted-foreground">追加在 Agent 自己的系统提示后面（CLAUDE.md / AGENTS.md 照样读）。</div>
+              </div>
+            </>
+          )}
+        </div>
+
+        {role && <ExtPicker kind={d.kind as "claude" | "codex" | "native"} skills={d.skills} mcp={d.mcp} onChange={(p) => set(p)} />}
+
+        <DefaultsEditor
+          id={d.id}
+          base={d.builtin ? d.id : d.kind}
+          providers={d.kind === "native" ? d.providers : undefined}
+          value={d.defaults}
+          onChange={(v) => set({ defaults: v })}
+        />
+
+        {!d.builtin && d.kind !== "native" && (
+          <div className="space-y-2.5">
+            {d.kind !== "command" && (
+              <button className="text-[12px] text-muted-foreground hover:text-foreground" onClick={() => setAdv(!adv)}>
+                {adv ? "▾" : "▸"} 高级：换账号 / 可执行文件 / 启动参数
+              </button>
+            )}
+            {(adv || d.kind === "command") && (
+              <div className="grid grid-cols-[88px_minmax(0,1fr)] items-center gap-x-3 max-md:grid-cols-1 gap-y-2.5 max-md:[&>span.text-muted-foreground]:-mb-1.5 max-md:[&>span.text-muted-foreground]:pt-0">
+                {d.kind === "command" ? (
+                  <>
+                    <span className="text-muted-foreground">启动命令</span>
+                    <Input
+                      value={d.command}
+                      onChange={(e) => set({ command: e.target.value })}
+                      onKeyDown={stop}
+                      className="h-8 font-mono text-[12px]"
+                      placeholder="gemini --experimental-acp"
+                    />
+                  </>
+                ) : (
+                  <>
+                    <span className="text-muted-foreground">可执行文件</span>
+                    <Input
+                      value={d.bin}
+                      onChange={(e) => set({ bin: e.target.value })}
+                      onKeyDown={stop}
+                      className="h-8 font-mono text-[12px]"
+                      placeholder={`留空 = 和原版一样找 ${d.kind}`}
+                    />
+                    <span className="text-muted-foreground">额外参数</span>
+                    <Input
+                      value={d.args}
+                      onChange={(e) => set({ args: e.target.value })}
+                      onKeyDown={stop}
+                      className="h-8 font-mono text-[12px]"
+                      placeholder={d.kind === "claude" ? "比如 --settings ~/my-settings.json" : "比如 -c model=o3"}
+                    />
+                  </>
+                )}
+                <span className="self-start pt-1.5 text-muted-foreground">环境变量</span>
+                <textarea
+                  className="h-24 w-full rounded-md border bg-card p-2 font-mono text-[12px]"
+                  value={d.env}
+                  spellCheck={false}
+                  onChange={(e) => set({ env: e.target.value })}
+                  onKeyDown={stop}
+                  placeholder="KEY=VALUE，一行一个"
+                />
+              </div>
+            )}
+            {adv && d.kind === "claude" && (
+              <div className="space-y-1.5 rounded-md bg-muted/60 p-2.5 text-[12px] text-muted-foreground">
+                <div>
+                  换账号两种做法：① 用订阅账号：给一个单独的 <code className="font-mono">CLAUDE_CONFIG_DIR</code>
+                  （登录态和会话记录都存在那个目录，和原版互不相干）， 然后在终端里用这个目录登录一次；② 用 API key：写{" "}
+                  <code className="font-mono">ANTHROPIC_API_KEY=sk-…</code>（要走代理再加 <code className="font-mono">ANTHROPIC_BASE_URL</code>
+                  ）。不换账号就留空，和原版共用登录。
+                </div>
+                {login && (
+                  <LoginHint cmd={login} then="进去之后输入 /login 登录，完了 /exit 退出（注意：设了这个变量之后哪怕指向 ~/.claude 也要单独登录一次）。" />
+                )}
+              </div>
+            )}
+            {adv && d.kind === "codex" && (
+              <div className="space-y-1.5 rounded-md bg-muted/60 p-2.5 text-[12px] text-muted-foreground">
+                <div>
+                  换账号：给一个单独的 <code className="font-mono">CODEX_HOME</code> 并用它登录一次，或者写 <code className="font-mono">OPENAI_API_KEY=…</code>
+                  。不换账号就留空。
+                </div>
+                {login && <LoginHint cmd={login} />}
+              </div>
+            )}
+          </div>
         )}
       </div>
 
-      {role && <ExtPicker kind={d.kind as "claude" | "codex" | "native"} skills={d.skills} mcp={d.mcp} onChange={(p) => set(p)} />}
-
-      <DefaultsEditor
-        id={d.id}
-        base={d.builtin ? d.id : d.kind}
-        providers={d.kind === "native" ? d.providers : undefined}
-        value={d.defaults}
-        onChange={(v) => set({ defaults: v })}
-      />
-
-      {!d.builtin && d.kind !== "native" && (
-        <div className="space-y-2.5">
-          {d.kind !== "command" && (
-            <button className="text-[12px] text-muted-foreground hover:text-foreground" onClick={() => setAdv(!adv)}>
-              {adv ? "▾" : "▸"} 高级：换账号 / 可执行文件 / 启动参数
-            </button>
-          )}
-          {(adv || d.kind === "command") && (
-            <div className="grid grid-cols-[88px_minmax(0,1fr)] items-center gap-x-3 max-md:grid-cols-1 gap-y-2.5 max-md:[&>span.text-muted-foreground]:-mb-1.5 max-md:[&>span.text-muted-foreground]:pt-0">
-              {d.kind === "command" ? (
-                <>
-                  <span className="text-muted-foreground">启动命令</span>
-                  <Input
-                    value={d.command}
-                    onChange={(e) => set({ command: e.target.value })}
-                    onKeyDown={stop}
-                    className="h-8 font-mono text-[12px]"
-                    placeholder="gemini --experimental-acp"
-                  />
-                </>
-              ) : (
-                <>
-                  <span className="text-muted-foreground">可执行文件</span>
-                  <Input
-                    value={d.bin}
-                    onChange={(e) => set({ bin: e.target.value })}
-                    onKeyDown={stop}
-                    className="h-8 font-mono text-[12px]"
-                    placeholder={`留空 = 和原版一样找 ${d.kind}`}
-                  />
-                  <span className="text-muted-foreground">额外参数</span>
-                  <Input
-                    value={d.args}
-                    onChange={(e) => set({ args: e.target.value })}
-                    onKeyDown={stop}
-                    className="h-8 font-mono text-[12px]"
-                    placeholder={d.kind === "claude" ? "比如 --settings ~/my-settings.json" : "比如 -c model=o3"}
-                  />
-                </>
-              )}
-              <span className="self-start pt-1.5 text-muted-foreground">环境变量</span>
-              <textarea
-                className="h-24 w-full rounded-md border bg-card p-2 font-mono text-[12px]"
-                value={d.env}
-                spellCheck={false}
-                onChange={(e) => set({ env: e.target.value })}
-                onKeyDown={stop}
-                placeholder="KEY=VALUE，一行一个"
-              />
-            </div>
-          )}
-          {adv && d.kind === "claude" && (
-            <div className="space-y-1.5 rounded-md bg-muted/60 p-2.5 text-[12px] text-muted-foreground">
-              <div>
-                换账号两种做法：① 用订阅账号：给一个单独的 <code className="font-mono">CLAUDE_CONFIG_DIR</code>
-                （登录态和会话记录都存在那个目录，和原版互不相干）， 然后在终端里用这个目录登录一次；② 用 API key：写{" "}
-                <code className="font-mono">ANTHROPIC_API_KEY=sk-…</code>（要走代理再加 <code className="font-mono">ANTHROPIC_BASE_URL</code>
-                ）。不换账号就留空，和原版共用登录。
-              </div>
-              {login && (
-                <LoginHint cmd={login} then="进去之后输入 /login 登录，完了 /exit 退出（注意：设了这个变量之后哪怕指向 ~/.claude 也要单独登录一次）。" />
-              )}
-            </div>
-          )}
-          {adv && d.kind === "codex" && (
-            <div className="space-y-1.5 rounded-md bg-muted/60 p-2.5 text-[12px] text-muted-foreground">
-              <div>
-                换账号：给一个单独的 <code className="font-mono">CODEX_HOME</code> 并用它登录一次，或者写 <code className="font-mono">OPENAI_API_KEY=…</code>
-                。不换账号就留空。
-              </div>
-              {login && <LoginHint cmd={login} />}
-            </div>
-          )}
-        </div>
-      )}
-
-      <div className="flex items-center justify-end gap-2">
+      {/* Outside the scrolling part, so Save is always in reach on a long form; flush with the dialog's bottom edge */}
+      <div className="flex shrink-0 items-center justify-end gap-2 border-t px-6 py-3 max-md:px-4">
         {restarts && (
           <div className={cn("mr-auto text-[12px]", busy ? "text-warn" : "text-muted-foreground")}>
             {busy
@@ -526,6 +550,57 @@ function Editor({
           保存
         </Button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * The role's icon: "默认" (the vendor logo for Claude Code / Codex, an automatic glyph otherwise), a colourful glyph or a
+ * line icon; then a colour for whichever built-in icon shows (none for the vendor logos: those are the vendors' own).
+ */
+function IconPicker({ d, onChange }: { d: Draft; onChange: (p: Partial<Draft>) => void }) {
+  const cell = (on: boolean, title: string, onClick: () => void, body: React.ReactNode, key?: string) => (
+    <button
+      key={key}
+      type="button"
+      title={title}
+      onClick={onClick}
+      className={cn("flex size-8 items-center justify-center rounded-md border", on ? "border-brand bg-accent" : "border-transparent hover:bg-accent")}
+    >
+      {body}
+    </button>
+  );
+  const vendor = d.kind === "claude" || d.kind === "codex";
+  const icons = (list: Record<string, { name: string }>) =>
+    Object.entries(list).map(([k, g]) =>
+      cell(d.icon === k, g.name, () => onChange({ icon: k }), <AgentGlyph name={k} color={d.color} className="size-5" />, k),
+    );
+  return (
+    <div className="space-y-1">
+      <div className="flex flex-wrap gap-1">
+        {cell(
+          !d.icon,
+          vendor ? `默认（${KIND_NAME[d.kind]} 的 logo）` : "默认（自动分一个）",
+          () => onChange({ icon: "" }),
+          vendor ? <AgentIcon agent={d.kind} className="size-5" /> : <AgentGlyph name={autoGlyph(d.id)} color={d.color} className="size-5" />,
+        )}
+        {icons(GLYPHS)}
+      </div>
+      <div className="flex flex-wrap gap-1">{icons(LINES)}</div>
+      {hasGlyph(d) && (
+        <div className="flex flex-wrap gap-1 border-t pt-1">
+          {cell(!d.color, "默认颜色", () => onChange({ color: "" }), <AgentGlyph name={d.icon || autoGlyph(d.id)} className="size-5" />)}
+          {Object.entries(PALETTE).map(([k, c]) =>
+            cell(
+              d.color === k,
+              c.name,
+              () => onChange({ color: k }),
+              <span className="size-4 rounded-full" style={{ background: `linear-gradient(135deg, ${c.from}, ${c.to})` }} />,
+              k,
+            ),
+          )}
+        </div>
+      )}
     </div>
   );
 }

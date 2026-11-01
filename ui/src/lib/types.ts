@@ -7,6 +7,10 @@ export type AgentInfo = {
   available: boolean;
   error?: string;
   base?: string;
+  /** the built-in glyph the role picked (components/AgentGlyph.tsx); none = vendor logo / automatic */
+  icon?: string;
+  /** a PALETTE key for the icon; none = its own colours */
+  color?: string;
   options?: { modes?: { availableModes: SessionMode[]; currentModeId: string }; config?: ConfigOption[] };
 };
 

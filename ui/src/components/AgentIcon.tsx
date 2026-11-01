@@ -1,15 +1,23 @@
 import { useId } from "react";
-import { Bot } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import type { SessionSummary } from "@/lib/types";
+import { AgentGlyph, NATIVE_GLYPH, autoGlyph } from "./AgentGlyph";
 
-// 厂商自己的 logo：Claude 的橙色星芒、Codex 的渐变云朵（里面镂空一个 >_）。路径取自 simple-icons / lobehub icons。
-// 两个都不带底色块，深浅色主题下都是原色。变体（设置里加的「Claude 2」）用底子的 logo。
+// An agent's icon: the glyph its role picked (Settings → Agent); else the vendor logo for Claude Code / Codex and
+// their variants (Claude's orange starburst, Codex's gradient cloud with a >_ cut out; paths from simple-icons /
+// lobehub icons, no backing tile, original colours on both themes); else a built-in abstract glyph — fixed for
+// Gerdr Agent, picked from the id for everything else, so two Native roles don't look the same.
 export function AgentIcon({ agent: id, className }: { agent: string; className?: string }) {
-  const agent = useStore((s) => s.agents.find((a) => a.id === id)?.base) || id;
-  // 渐变要一个页面内唯一的 id：同一页上会画很多个
+  const info = useStore((s) => s.agents.find((a) => a.id === id));
+  // config first: it changes the moment the role is saved, and an older backend doesn't pass `icon` through
+  const def = useStore((s) => s.config.agents?.find((a) => a.id === id));
+  const icon = def ? def.icon : info?.icon;
+  const color = def ? def.color : info?.color;
+  const agent = info?.base || id;
+  // the gradient needs an id unique on the page: many of these are drawn at once
   const gid = useId();
+  if (icon) return <AgentGlyph name={icon} color={color} className={className} />;
   if (agent === "claude")
     return (
       <svg viewBox="0 0 24 24" className={cn("shrink-0", className)} aria-label="Claude Code">
@@ -37,7 +45,7 @@ export function AgentIcon({ agent: id, className }: { agent: string; className?:
         />
       </svg>
     );
-  return <Bot className={cn("shrink-0 text-muted-foreground", className)} />;
+  return <AgentGlyph name={id === "native" ? NATIVE_GLYPH : autoGlyph(id)} color={color} className={className} />;
 }
 
 /**

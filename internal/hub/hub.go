@@ -52,6 +52,9 @@ type AgentDef struct {
 	// Skills / MCP：只给这几个（按名字）。不写 = 照全局设置；写了空列表 = 一个都不给。
 	Skills []string `json:"skills"`
 	MCP    []string `json:"mcp"`
+	// Icon: a built-in glyph picked in Settings → Agent (ui/src/components/AgentGlyph.tsx); only the UI reads it.
+	Icon  string `json:"icon,omitempty"`
+	Color string `json:"color,omitempty"` // a palette key recolouring the icon; same file
 }
 
 // only：这个角色对 skill / MCP 的限定。
@@ -163,6 +166,7 @@ func (h *Hub) SetAgents(defs []AgentDef) {
 // ("peer disconnected before response").
 func sameProcess(a, b AgentDef) bool {
 	a.Name, b.Name = "", ""
+	a.Icon, b.Icon, a.Color, b.Color = "", "", "", "" // looks only: changing it mustn't cut off running turns
 	return reflect.DeepEqual(a, b)
 }
 
@@ -260,6 +264,12 @@ func (h *Hub) Agents() []map[string]any {
 	}
 	for _, a := range h.extra() {
 		m := map[string]any{"id": a.ID, "name": a.Name, "available": true, "base": a.Base}
+		if a.Icon != "" {
+			m["icon"] = a.Icon
+		}
+		if a.Color != "" {
+			m["color"] = a.Color
+		}
 		switch {
 		case a.Base != "" && a.Base != "native" && a.Bin != "":
 			if _, err := sysenv.FindBin(a.Bin); err != nil {
