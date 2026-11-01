@@ -222,27 +222,28 @@ export function AgentSettings() {
                 <AgentIcon agent={a.id} className="size-4" />
                 {/* The engine label gives way first, the name only past 60% (on phones it got cut to "Claude…") */}
                 <span className="max-w-[60%] shrink-0 truncate font-medium">{a.name}</span>
-                <span className="min-w-0 truncate text-[12px] text-muted-foreground">
+                <span className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground">
                   引擎 {KIND_NAME[(def ? (def.base ?? "command") : a.id) as Kind]}
                   {!def && " · 内置"}
                 </span>
-                {a.available ? <span className="shrink-0 text-[12px] text-ok">可用</span> : <span className="shrink-0 text-[12px] text-bad">不可用</span>}
-                <span className="flex-1" />
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="size-7"
-                  title={def ? "编辑" : "新会话默认"}
-                  onClick={() => open(def ? toDraft(def) : { ...blank(a.id as Kind, a.name), id: a.id, builtin: true, defaults: defaultsOf(a.id) }, false)}
-                >
-                  <Pencil className="size-3.5" />
-                </Button>
-                {def && (
-                  <ConfirmDelete
-                    title="删除（已有的会话留着，只是没法再接着聊）"
-                    onConfirm={() => setConfig({ agents: defs.filter((x) => x.id !== def.id), ...withoutDefaults(def.id) })}
-                  />
-                )}
+                <span className={cn("shrink-0 text-[12px]", a.available ? "text-ok" : "text-bad")}>{a.available ? "可用" : "不可用"}</span>
+                <div className="flex shrink-0 items-center gap-2">
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="size-7"
+                    title={def ? "编辑" : "新会话默认"}
+                    onClick={() => open(def ? toDraft(def) : { ...blank(a.id as Kind, a.name), id: a.id, builtin: true, defaults: defaultsOf(a.id) }, false)}
+                  >
+                    <Pencil className="size-3.5" />
+                  </Button>
+                  {def && (
+                    <ConfirmDelete
+                      title="删除（已有的会话留着，只是没法再接着聊）"
+                      onConfirm={() => setConfig({ agents: defs.filter((x) => x.id !== def.id), ...withoutDefaults(def.id) })}
+                    />
+                  )}
+                </div>
               </div>
               {!a.available && a.error && <div className="mt-1 pl-6 text-[12px] text-bad">{a.error}</div>}
               {(summary || chips.length > 0) && (
