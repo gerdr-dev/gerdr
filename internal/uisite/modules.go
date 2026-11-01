@@ -35,14 +35,15 @@ type compiled struct {
 	Exports    []string          `json:"exports"`     // 导出名
 	ExportStar bool              `json:"export_star"` // 有 export * from：判断不了导出了什么，不当 Refresh 边界
 	Bare       []string          `json:"bare"`        // 用到的第三方包（import 写的原样，比如 react-dom/client）
+	Classes    []string          `json:"classes"`     // candidate Tailwind classes in its string literals (classes.go)
 	Error      string            `json:"error,omitempty"`
 	Resolved   map[string]string `json:"-"`
 }
 
 const depPlaceholder = "/@gerdr-dep/"
 
-// 编译选项变了（改了下面的 esbuild 参数）要改这个，旧缓存就不用了
-const compileCacheVersion = "g1"
+// Bump when the esbuild options below or the class extraction (classes.go) change: old cache entries are then ignored
+const compileCacheVersion = "g3"
 
 var moduleExts = []string{".tsx", ".ts", ".jsx", ".js", ".mjs", ".json"}
 
@@ -231,6 +232,7 @@ func compileSource(dir, rel string, src []byte, local map[string]string) *compil
 	}
 	m.Deps, m.Lazy, m.Bare = uniq(deps), uniq(lazy), uniq(bare)
 	m.ExportStar = exportStarRE.Match(src)
+	m.Classes = extractClasses(src)
 	return m
 }
 

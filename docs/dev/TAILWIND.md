@@ -38,6 +38,35 @@ Picking a fix: classes known in advance → `@source inline(...)`; a style that 
 it → inline style; a whole subtree of unpredictable classes (Markdown, tool output) → hide only until the page's
 first one has rendered, never on every mount.
 
+### Source classes are compiled up front (backend)
+
+Since the fixes above were written, the backend scans every local source file the page can load (the module graph,
+lazy imports included) for candidate classes and appends them to the served CSS as `@source inline(...)` lines
+(`internal/uisite/classes.go`). Loose on purpose, like Tailwind's own file scanner: every word in a string literal
+that could be a class, junk included (Tailwind drops what isn't a class). The words are cached with each file's compile
+result, so an edit re-scans one file, and the list is sorted, so the CSS changes (and the browser recompiles) only
+when the set of classes does. Measured on gerdr's UI: ~2800 candidates; the page-load compile went 36→50ms on desktop
+and 145→190ms at 4x CPU throttling; the stylesheet went 51→152KB in one write at load, with no rewrites afterwards
+while opening dialogs and menus.
+
+So most of the hand-written lists in `index.css` are now redundant (dialog / sheet / popup classes live in local
+files) but harmless. What the scan can't see still arrives late and still needs the fixes above: classes from
+third-party packages (Streamdown's Markdown elements, keep that list) and classes assembled at runtime (`"w-" + n`).
+The chat list's two hidden frames (`ChatList.tsx`) were not re-measured; check with `tools/scrolltest/` before dropping them.
+
+Traps of the browser build's `@source inline` (4.1.11, each silent: the rest of that line's classes just aren't
+generated):
+
+- **One word with an unclosed `(` / `[`** (`min(42rem,` from a JS expression in a template literal) drops every class
+  after it in the same `@source inline`.
+- **One lone `'`** (the apostrophe in UI text like `Can't`) does the same.
+- Quotes, backslashes and braces can't appear at all (they end the string / are brace expansion).
+
+`extractClasses` filters all of these, and the list is split into lines of 200 so anything it misses costs one line,
+not the UI. To check: take the generated lines from the served page, append a marker class (`pb-[7.25px]`) to each,
+and see whether it's generated; bisect a failing line down to the word. The scan results sit in the on-disk compile
+cache: changing the extraction rules means bumping `compileCacheVersion` (modules.go), or old files keep old results.
+
 Measuring: log per `requestAnimationFrame` the element's rect / computed style (`getComputedStyle(el).animationName`,
 width, padding) with playwright, as in `tools/scrolltest/`, not by eye. To tie a change to Tailwind, log the
 rewrites of its style sheet alongside: a `MutationObserver` on `document` with `childList`, `subtree` and

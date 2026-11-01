@@ -277,6 +277,7 @@ func (r *Renderer) build(files []string, sig string) *build {
 	g := r.modules.buildGraph(r.dir, roots)
 	g.base = r.base
 	b.graph = g
+	b.css += sourceInlineCSS(g)
 	fatal = append(fatal, g.errs...)
 
 	static := map[string]bool{}
