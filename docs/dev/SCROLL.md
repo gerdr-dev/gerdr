@@ -196,6 +196,12 @@ Virtuoso 在 ResizeObserver 里量行高、改布局，所以 rAF 里看到「�
     pages loaded, ~700ms in the user's profile per pane zoom. Now only the mounted rows are measured; the rest keep
     their old-width size as an estimate until they mount, and the top row's anchor absorbs the difference
     (`fling.mjs --resize [--to-top]`: the same jumps as before the change, all rows resizing on their own).
+  - A tab not kept mounted (keepTabs 1) remounts its chat on every switch, and opening measured every loaded row by
+    mounting them all: 768ms switching back to a 15MB session with older pages loaded (headless). Measured sizes now
+    outlive the list in a module-level cache by pane + session (`memKey`, the scroll memory's key), used when the width
+    is the same: only the rows near where it opens are mounted (156ms). Stale cached sizes are measured as their rows
+    mount, like after a width change. `tabs.mjs --keep=1`, `open.mjs --reload`, `scrollup.mjs`: no jumps; a position
+    mid-chat comes back to the same row and offset.
   - `keyboard.mjs --type` judged rAF frames, which run before layout and show the composer's new height before the
     list has stuck to the bottom. The `--ro` log now also watches the scroller, so it sees frames where only the chat's
     own size changed, and both modes judge painted frames.

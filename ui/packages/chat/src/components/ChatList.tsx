@@ -19,7 +19,7 @@ import { RowView, type Row, type RowEnv } from "./Rows";
  *   written) moves nothing either, and the user's own scrolling isn't a layout change, so it's never undone.
  * - Stuck = the user was at the very bottom (2px). Leaving is decided by the input, the moment the user scrolls up
  *   (wheel up, a finger dragging down, up keys, dragging the scrollbar up): the scroll event lands a frame later.
- * - Every row is rendered and measured once when the chat opens (and when the width changes or older messages come
+ * - Every row is rendered and measured once when the chat first opens at a width (and when older messages come
  *   in), then only the rows near the screen stay mounted: a row scrolled back into view comes in at its real height.
  * - Smooth scrolls (jump to bottom, to a prompt) are animated here, frame by frame towards a target recomputed each
  *   frame, so a layout change during the animation neither cuts it short nor sends it to a stale place.
@@ -34,6 +34,12 @@ const OVERSCAN = 800; // px mounted above and below the screen
 const HEAD = 32; // the "load older" line
 // A chat has been shown in this page: Tailwind has written the CSS its rows use (see the open effect below)
 let stylesWarm = false;
+// Row sizes measured by earlier mounts of a list (memKey), at the scroller width w. A tab not kept mounted remounts its
+// chat on every switch; without these the whole chat was mounted and measured again each time (~700ms on a 15MB
+// session). Rows whose cached size went stale (a group expanded before, collapsed now) are measured as they mount and
+// the top row's anchor absorbs the difference, as after a width change.
+const sizeMem = new Map<string, { w: number; sizes: Map<string, number> }>();
+const SIZE_MEM_MAX = 40;
 
 type Layout = { keys: string[]; tops: number[]; sizes: number[]; total: number; missing: number };
 
@@ -47,6 +53,8 @@ export const ChatList = forwardRef<
     firstIdx: number;
     /** Render every row (the virtual-list switch off). */
     all: boolean;
+    /** Keeps measured row sizes across remounts under this key (one list at a time per key). */
+    memKey?: string;
     /** Where to open: a remembered scrollTop, else the bottom. */
     startTop?: number;
     /** A click just expanded something: don't follow the bottom while it grows (the clicked row stays put). */
@@ -57,12 +65,20 @@ export const ChatList = forwardRef<
     /** Rows changed height or the list changed size (the pinned prompt follows). */
     onLayout: () => void;
   }
->(function ChatList({ rows, env, older, firstIdx, all, startTop, holding, scrollerRef, onScroll, onAtBottom, onLayout }, ref) {
+>(function ChatList({ rows, env, older, firstIdx, all, memKey, startTop, holding, scrollerRef, onScroll, onAtBottom, onLayout }, ref) {
   const el = useRef<HTMLDivElement | null>(null);
   const box = useRef<HTMLDivElement | null>(null);
   const phone = typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches;
   const foot = phone ? 20 : 48; // the gap above the composer
-  const sizes = useRef(new Map<string, number>());
+  // Sizes from an earlier mount: used if the width is still the same (checked on opening)
+  const mem = useRef(memKey ? sizeMem.get(memKey) : undefined);
+  const sizes = useRef(mem.current?.sizes ?? new Map<string, number>());
+  if (memKey && !mem.current) {
+    mem.current = { w: 0, sizes: sizes.current };
+    sizeMem.set(memKey, mem.current);
+    if (sizeMem.size > SIZE_MEM_MAX) sizeMem.delete(sizeMem.keys().next().value!);
+  }
+  const warm = useRef(!!mem.current?.w);
   const rowsRef = useRef(rows);
   rowsRef.current = rows;
   const cb = useRef({ holding, onScroll, onAtBottom, onLayout });
@@ -79,7 +95,7 @@ export const ChatList = forwardRef<
   // (2s at most). Rows never measured (older messages put in front) are mounted along with the range for one commit,
   // measured and dropped (`missing`): mounting the whole chat again for them was a phone's worst frame
   // (touchscroll.mjs --cpu=4 counts it as a remount).
-  const measuring = useRef(true);
+  const measuring = useRef(!warm.current);
   const settle = useRef(0);
   const settleMax = useRef(0);
   const [, render] = useReducer((x: number) => x + 1, 0);
@@ -126,7 +142,11 @@ export const ChatList = forwardRef<
   const shown = useRef<Layout>({ keys: [], tops: [], sizes: [], total: 0, missing: 0 });
   const range = useRef<[number, number]>([0, 0]); // rows mounted by the last render, [from, to)
   const extra = useRef(0); // rows never measured mounted by the last render besides the range
-  const lastTop = useRef(0); // scrollTop the range was computed for
+  // scrollTop the range was computed for. Opening with known sizes, the first render mounts only the rows near where it
+  // opens: guess the screen's height until there is one.
+  const lastTop = useRef(0);
+  if (warm.current && !el.current && lastTop.current === 0)
+    lastTop.current = startTop ?? Math.max(0, layout(rows).total - (typeof window !== "undefined" ? window.innerHeight : 800));
 
   const want = (lay: Layout, top: number, height: number): [number, number] => {
     const n = lay.keys.length;
@@ -266,9 +286,16 @@ export const ChatList = forwardRef<
   useLayoutEffect(() => {
     const s = el.current;
     if (!s) return;
+    if (mem.current?.w && s.clientWidth && Math.abs(mem.current.w - s.clientWidth) > 1) {
+      // Another width since: those sizes are someone else's
+      sizes.current.clear();
+      warm.current = false;
+    }
+    if (mem.current && s.clientWidth) mem.current.w = s.clientWidth;
     if (startTop !== undefined) s.scrollTop = startTop;
     else s.scrollTop = endOf(s);
-    measureAll(true);
+    if (warm.current) sync(undefined, true);
+    else measureAll(true);
     let r2 = 0;
     const r1 = requestAnimationFrame(() => {
       r2 = requestAnimationFrame(() => {
@@ -303,6 +330,7 @@ export const ChatList = forwardRef<
       if (!s.clientWidth) return;
       const reflow = Math.abs(s.clientWidth - w) > 1;
       w = s.clientWidth;
+      if (mem.current) mem.current.w = w;
       sync(reflow ? undefined : []);
     });
     r.observe(s);

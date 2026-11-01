@@ -349,6 +349,7 @@ export function ChatView({
               env={env}
               older={older}
               firstIdx={firstIdx.current}
+              memKey={scrollKey}
               all={!virtualList}
               startTop={saved && !saved.bottom ? saved.top : undefined}
               holding={holding}
