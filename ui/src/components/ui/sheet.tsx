@@ -2,6 +2,7 @@ import * as React from "react"
 import { cn } from "@/lib/utils"
 import { XIcon } from "lucide-react"
 import { Dialog as SheetPrimitive } from "radix-ui"
+import { keepLayer } from "@/components/ui/dialog"
 
 // shadcn/ui's Sheet (a Radix Dialog sliding in from an edge). The animate-in / slide-in-from-* classes come from
 // src/animate.css (tw-animate-css); index.css precompiles them so the first frame is already off-screen.
@@ -22,7 +23,7 @@ function SheetPortal({ ...props }: React.ComponentProps<typeof SheetPrimitive.Po
   return <SheetPrimitive.Portal data-slot="sheet-portal" {...props} />
 }
 
-function SheetOverlay({ className, ...props }: React.ComponentProps<typeof SheetPrimitive.Overlay>) {
+function SheetOverlay({ className, style, ...props }: React.ComponentProps<typeof SheetPrimitive.Overlay>) {
   return (
     <SheetPrimitive.Overlay
       data-slot="sheet-overlay"
@@ -30,6 +31,8 @@ function SheetOverlay({ className, ...props }: React.ComponentProps<typeof Sheet
         "fixed inset-0 z-50 bg-black/50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0",
         className
       )}
+      // Same as the dialog's: no layer change when the animation ends (keepLayer in dialog.tsx)
+      style={{ ...keepLayer, ...style }}
       {...props}
     />
   )
@@ -41,6 +44,7 @@ function SheetContent({
   side = "right",
   showCloseButton = true,
   onInteractOutside,
+  style,
   ...props
 }: React.ComponentProps<typeof SheetPrimitive.Content> & {
   side?: "top" | "right" | "bottom" | "left"
@@ -68,6 +72,7 @@ function SheetContent({
           if ((e.target as Element | null)?.closest?.("[data-app-context-menu]")) e.preventDefault()
           onInteractOutside?.(e)
         }}
+        style={{ ...keepLayer, ...style }}
         {...props}
       >
         {children}

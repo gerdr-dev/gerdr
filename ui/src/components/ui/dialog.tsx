@@ -29,8 +29,17 @@ function DialogClose({
   return <DialogPrimitive.Close data-slot="dialog-close" {...props} />
 }
 
+// Keeps a dialog's overlay and frame on their own compositing layer for as long as they're open, not just while the
+// enter animation runs. When the animation ended, Chromium dropped those layers and repainted them into the page's;
+// an Android phone composited one frame before that repaint landed: the chat at full brightness with only the
+// viewer's scroll box (a layer of its own) on top, text on text, ~200ms after opening anything in the file viewer.
+// Inline, not a class: a class compiled a frame late by Tailwind browser would change the layers mid-animation.
+// opacity, not transform: a transform layer blurs a dialog's text in WebKit (see the centering note below).
+export const keepLayer: React.CSSProperties = { willChange: "opacity" }
+
 function DialogOverlay({
   className,
+  style,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Overlay>) {
   return (
@@ -40,6 +49,7 @@ function DialogOverlay({
         "fixed inset-0 z-50 bg-black/50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0",
         className
       )}
+      style={{ ...keepLayer, ...style }}
       {...props}
     />
   )
@@ -50,6 +60,7 @@ function DialogContent({
   children,
   showCloseButton = true,
   onInteractOutside,
+  style,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
@@ -70,6 +81,7 @@ function DialogContent({
           if ((e.target as Element | null)?.closest?.("[data-app-context-menu]")) e.preventDefault()
           onInteractOutside?.(e)
         }}
+        style={{ ...keepLayer, ...style }}
         {...props}
       >
         {children}
