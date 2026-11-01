@@ -48,28 +48,28 @@ export function RunButton({ cmd, session, className }: { cmd: string; session: C
             <ChevronDown className="size-3" />
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-72">
-          <DropdownMenuItem onSelect={inChat} className="flex-col items-start gap-0">
+        <DropdownMenuContent align="start" className="w-64">
+          <DropdownMenuItem onSelect={inChat} className="flex-col items-start gap-0 py-1 text-xs">
             <span className="flex items-center gap-1.5">
               <Play className="size-3.5" />
               在对话里运行
             </span>
-            <span className="pl-5 text-[11px] text-muted-foreground">输出带给 agent；没有输入，要交互的命令会卡住</span>
+            <span className="pl-5 text-[11px] leading-4 text-muted-foreground">输出带给 agent；没有输入，要交互的命令会卡住</span>
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => runInTerminal(session.id, session.cwd, cmd, "new")} className="flex-col items-start gap-0">
+          <DropdownMenuItem onSelect={() => runInTerminal(session.id, session.cwd, cmd, "new")} className="flex-col items-start gap-0 py-1 text-xs">
             <span className="flex items-center gap-1.5">
               <SquareTerminal className="size-3.5" />
               在新终端里运行
             </span>
-            <span className="pl-5 text-[11px] text-muted-foreground">在右边开一个终端，能交互；agent 看不到输出</span>
+            <span className="pl-5 text-[11px] leading-4 text-muted-foreground">在右边开一个终端，能交互；agent 看不到输出</span>
           </DropdownMenuItem>
           {near?.term && (
-            <DropdownMenuItem onSelect={() => runInTerminal(session.id, session.cwd, cmd, "near")} className="flex-col items-start gap-0">
+            <DropdownMenuItem onSelect={() => runInTerminal(session.id, session.cwd, cmd, "near")} className="flex-col items-start gap-0 py-1 text-xs">
               <span className="flex items-center gap-1.5">
                 <Terminal className="size-3.5" />
                 在当前终端里运行
               </span>
-              <span className="max-w-full truncate pl-5 text-[11px] text-muted-foreground">敲进旁边开着的终端（{basename(near.term.cwd)}）</span>
+              <span className="max-w-full truncate pl-5 text-[11px] leading-4 text-muted-foreground">敲进旁边开着的终端（{basename(near.term.cwd)}）</span>
             </DropdownMenuItem>
           )}
         </DropdownMenuContent>
