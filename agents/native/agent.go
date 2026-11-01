@@ -184,6 +184,7 @@ func (a *Agent) attach(id, cwd string, meta map[string]any, servers []acp.McpSer
 	if err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
+	a.limitHistory(es)
 	m := lastMeta(es)
 	if m.Cwd == "" {
 		m.Cwd = cwd

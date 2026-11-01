@@ -37,8 +37,15 @@ func NativeOptions(dir string, em *ext.Manager, cfg func() native.Config, prompt
 			return []string{SessionEnvKey + "=" + sessionID}
 		},
 		SafeCommand: sysenv.SafeGerdrCLI,
+		Images:      ImageLimits,
 	}
 }
+
+// ImageLimits are Claude Code's (2.1.316): every edge within 2000 px whatever the model allows (Anthropic rejects
+// a request with many images if any edge is over 2000-3000 px, and the image then fails every later turn since it
+// stays in the history), at most 4784 tiles of 28×28 (the newer models' image_limits.maxImageTokens; older ones
+// scale bigger images down server-side anyway), and 3.75 MB raw, which is the API's 5 MB once base64-encoded.
+var ImageLimits = native.ImageLimits{MaxEdge: 2000, MaxTokens: 4784, MaxBytes: 3932160}
 
 // ChildEnv is the environment for the agent's child processes: the login shell's PATH, minus the variables that
 // would make them mistake who they are (sysenv.ChildEnv).

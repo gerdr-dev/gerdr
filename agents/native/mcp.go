@@ -416,14 +416,19 @@ func (a *Agent) mcpTools(c *mcpClient) []*tool {
 					}
 					return errResult("MCP call failed: %v", err)
 				}
-				return mcpResult(raw, cl.r.model.seesImages())
+				var img func(mime, data string) llm.Part
+				if cl.r.model.seesImages() {
+					img = a.imagePartB64
+				}
+				return mcpResult(raw, img)
 			},
 		})
 	}
 	return out
 }
 
-func mcpResult(raw json.RawMessage, images bool) result {
+// mcpResult: img turns a base64 image into a part (applying Options.Images); nil = the model can't see images.
+func mcpResult(raw json.RawMessage, img func(mime, data string) llm.Part) result {
 	var res struct {
 		Content []struct {
 			Type     string `json:"type"`
@@ -448,8 +453,8 @@ func mcpResult(raw json.RawMessage, images bool) result {
 		case "text":
 			texts = append(texts, c.Text)
 		case "image":
-			if images {
-				imgs = append(imgs, llm.Part{Type: "image", MIME: c.MimeType, Data: c.Data})
+			if img != nil {
+				imgs = append(imgs, img(c.MimeType, c.Data))
 			} else {
 				texts = append(texts, "[image omitted: the current model cannot view images]")
 			}

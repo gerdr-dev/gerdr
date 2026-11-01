@@ -8,6 +8,7 @@ import (
 	_ "image/gif" // decoders for image.Decode
 	"image/jpeg"
 	"image/png"
+	"math"
 
 	"github.com/gerdr-dev/gerdr/agents/native/llm"
 )
@@ -24,14 +25,37 @@ func (a *Agent) imagePartB64(mime, data string) llm.Part {
 		return llm.Part{Type: "image", MIME: mime, Data: data}
 	}
 	b, err := base64.StdEncoding.DecodeString(data)
-	if err != nil {
+	if err != nil || len(b) == 0 {
 		return llm.Part{Type: "image", MIME: mime, Data: data}
 	}
-	return a.imagePart(mime, b)
+	m, out := limitImage(mime, b, a.opt.Images)
+	if len(out) == len(b) && &out[0] == &b[0] { // untouched: skip re-encoding
+		return llm.Part{Type: "image", MIME: mime, Data: data}
+	}
+	return llm.Part{Type: "image", MIME: m, Data: base64.StdEncoding.EncodeToString(out)}
 }
 
-// limitImage scales an image whose long edge is over MaxEdge down to it, then re-encodes it as JPEG if it is
-// still over MaxBytes. Formats the standard library can't decode (webp) pass through as they are.
+// limitHistory applies Options.Images to the images in a loaded transcript. Sessions from before the limits (or
+// with images that came in unlimited) would otherwise send the same oversized image on every turn and fail every
+// time. Only the in-memory copy changes; assistant messages are left alone (Anthropic wants those verbatim), and
+// they hold no images anyway.
+func (a *Agent) limitHistory(es []entry) {
+	if a.opt.Images == (ImageLimits{}) {
+		return
+	}
+	for _, e := range es {
+		if e.Msg == nil || e.Msg.Role == "assistant" {
+			continue
+		}
+		for i, p := range e.Msg.Content {
+			if p.Type == "image" {
+				e.Msg.Content[i] = a.imagePartB64(p.MIME, p.Data)
+			}
+		}
+	}
+}
+
+// limitImage scales an image down to fitImage's size, then re-encodes it as JPEG if it is still over MaxBytes. Formats the standard library can't decode (webp) pass through as they are.
 func limitImage(mime string, data []byte, l ImageLimits) (string, []byte) {
 	if l == (ImageLimits{}) {
 		return mime, data
@@ -40,19 +64,18 @@ func limitImage(mime string, data []byte, l ImageLimits) (string, []byte) {
 	if err != nil {
 		return mime, data
 	}
-	long := max(cfg.Width, cfg.Height)
-	tooWide := l.MaxEdge > 0 && long > l.MaxEdge
+	w, h := fitImage(cfg.Width, cfg.Height, l)
+	resize := w != cfg.Width || h != cfg.Height
 	tooBig := l.MaxBytes > 0 && len(data) > l.MaxBytes
-	if !tooWide && !tooBig {
+	if !resize && !tooBig {
 		return mime, data
 	}
 	img, _, err := image.Decode(bytes.NewReader(data))
 	if err != nil {
 		return mime, data
 	}
-	if tooWide {
-		w, h := cfg.Width*l.MaxEdge/long, cfg.Height*l.MaxEdge/long
-		img = downscale(img, max(w, 1), max(h, 1))
+	if resize {
+		img = downscale(img, w, h)
 		var buf bytes.Buffer
 		if mime == "image/png" && png.Encode(&buf, img) == nil {
 			mime, data = "image/png", buf.Bytes()
@@ -62,7 +85,7 @@ func limitImage(mime string, data []byte, l ImageLimits) (string, []byte) {
 	}
 	if l.MaxBytes > 0 && len(data) > l.MaxBytes {
 		flat := flatten(img)
-		for _, q := range []int{85, 75, 60} {
+		for _, q := range []int{80, 60, 40, 20} { // Claude Code's steps
 			var buf bytes.Buffer
 			if jpeg.Encode(&buf, flat, &jpeg.Options{Quality: q}) != nil {
 				break
@@ -75,6 +98,39 @@ func limitImage(mime string, data []byte, l ImageLimits) (string, []byte) {
 	}
 	return mime, data
 }
+
+// fitImage is the size an image is scaled down to, the way Claude Code does it: each edge within MaxEdge (keeping
+// the aspect ratio), then the largest size whose tile count stays within MaxTokens.
+func fitImage(w, h int, l ImageLimits) (int, int) {
+	scale := func(v, num, den int) int { return max(int(math.Round(float64(v)*float64(num)/float64(den))), 1) }
+	if l.MaxEdge > 0 && w > l.MaxEdge {
+		h, w = scale(h, l.MaxEdge, w), l.MaxEdge
+	}
+	if l.MaxEdge > 0 && h > l.MaxEdge {
+		w, h = scale(w, l.MaxEdge, h), l.MaxEdge
+	}
+	if l.MaxTokens <= 0 || imageTokens(w, h) <= l.MaxTokens {
+		return w, h
+	}
+	if h > w {
+		nh, nw := fitImage(h, w, ImageLimits{MaxTokens: l.MaxTokens})
+		return nw, nh
+	}
+	ratio := float64(w) / float64(h)
+	lo, hi := 1, w // binary search the widest width that fits
+	for lo+1 < hi {
+		mid := (lo + hi) / 2
+		if imageTokens(mid, max(int(math.Round(float64(mid)/ratio)), 1)) <= l.MaxTokens {
+			lo = mid
+		} else {
+			hi = mid
+		}
+	}
+	return lo, max(int(math.Round(float64(lo)/ratio)), 1)
+}
+
+// imageTokens: Anthropic bills an image one token per 28×28 tile.
+func imageTokens(w, h int) int { return ((w + 27) / 28) * ((h + 27) / 28) }
 
 // downscale shrinks src to w×h by averaging each destination pixel's source area (box filter): sharp enough for
 // screenshots, no extra dependency.

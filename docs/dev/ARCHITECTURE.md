@@ -196,6 +196,21 @@ config.json (example in the README), read fresh every turn.
       notes, sometimes as thinking, mostly as text. `adaptive` (= `summarized`, default on older Claude) is a separate
       model's long English summary of the reasoning: always there, hard to follow. The default `omitted` streams thinking
       blocks with empty text. With `updates` but without the prompt line, eight steps in a row showed nothing at all.
+17. **Images are shrunk before they enter the history, the way Claude Code does it** (`images.go`, limits set in
+    `agentwire.ImageLimits`; native's own default is none, for embedders). Anthropic's per-image limit depends on how
+    many images the *whole request* carries: up to ~20 an edge may be 8000 px, past that 2000-3000 px ("image
+    dimensions exceed max allowed size for many-image requests"). A tall screenshot read early goes through fine; once
+    images pile up after the last compaction the same request is a 400 on every turn, because the image stays in the
+    history (seen 2026-11-02: a 1440×3310 screenshot as the 23rd image since the last compaction). So size can't be
+    decided per request; every image is fitted once, on the way in, to Claude Code 2.1.316's limits (read from its
+    binary): each edge ≤ 2000 px whatever the model allows (its model table says 2576 for new models, but every
+    provider is capped at 2000), at most 4784 tiles of 28×28 (`ceil(w/28)·ceil(h/28)`, the newer models'
+    `maxImageTokens`; binary search for the largest size that fits), and 3.75 MB raw (5 MB base64), re-encoding as JPEG
+    at quality 80 / 60 / 40 / 20. `TestFitImageMatchesClaudeCode` holds sizes computed with its algorithm. Every path
+    goes through it: pasted images, `read`, caller tools, MCP results (these used to skip it), and transcripts loaded
+    from disk (`limitHistory`, in memory only, so sessions saved before the limits work again). Not copied: Claude Code
+    first tries palette PNG for an over-size PNG; the standard library has no decent quantizer, so we go straight to
+    JPEG.
 
 测试：`go test ./agents/native/...` 用假接口跑主循环；`NATIVE_LIVE_BASE / NATIVE_LIVE_KEY / NATIVE_LIVE_MODELS` 设了才跑真模型（花钱）。
 

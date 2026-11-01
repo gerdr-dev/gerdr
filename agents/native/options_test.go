@@ -3,6 +3,7 @@ package native
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"image"
@@ -16,6 +17,8 @@ import (
 
 	"github.com/coder/acp-go-sdk"
 	"github.com/google/uuid"
+
+	"github.com/gerdr-dev/gerdr/agents/native/llm"
 )
 
 func systemText(req map[string]any) string {
@@ -167,6 +170,19 @@ func TestFilesRedirect(t *testing.T) {
 	}
 }
 
+// Expected sizes computed with Claude Code 2.1.316's own resize (2000 px edge, 4784 tiles).
+func TestFitImageMatchesClaudeCode(t *testing.T) {
+	l := ImageLimits{MaxEdge: 2000, MaxTokens: 4784}
+	for _, c := range [][4]int{
+		{1440, 3310, 870, 2000}, {3024, 1898, 2000, 1255}, {2000, 2000, 1932, 1932}, {1200, 2670, 899, 2000},
+		{1000, 800, 1000, 800}, {1280, 8000, 320, 2000}, {3000, 1000, 2000, 667},
+	} {
+		if w, h := fitImage(c[0], c[1], l); w != c[2] || h != c[3] {
+			t.Errorf("%dx%d → %dx%d, want %dx%d", c[0], c[1], w, h, c[2], c[3])
+		}
+	}
+}
+
 func TestLimitImage(t *testing.T) {
 	img := image.NewNRGBA(image.Rect(0, 0, 3000, 1000))
 	for y := 0; y < 1000; y++ {
@@ -178,11 +194,28 @@ func TestLimitImage(t *testing.T) {
 	png.Encode(&buf, img)
 	mime, out := limitImage("image/png", buf.Bytes(), ImageLimits{MaxEdge: 1568, MaxBytes: 768 << 10})
 	cfg, _, err := image.DecodeConfig(bytes.NewReader(out))
-	if err != nil || cfg.Width != 1568 || cfg.Height != 522 || len(out) > 768<<10 {
+	if err != nil || cfg.Width != 1568 || cfg.Height != 523 || len(out) > 768<<10 {
 		t.Fatalf("%s %dx%d %d bytes err %v", mime, cfg.Width, cfg.Height, len(out), err)
 	}
 	if m, same := limitImage("image/png", buf.Bytes(), ImageLimits{}); m != "image/png" || !bytes.Equal(same, buf.Bytes()) {
 		t.Fatal("no limits must pass the image through")
+	}
+
+	// A transcript saved before the limits: the oversized image in it is shrunk on load, small ones are kept as is.
+	big := base64.StdEncoding.EncodeToString(buf.Bytes())
+	var sb bytes.Buffer
+	png.Encode(&sb, image.NewNRGBA(image.Rect(0, 0, 10, 10)))
+	small := base64.StdEncoding.EncodeToString(sb.Bytes())
+	es := []entry{{T: "msg", Msg: &llm.Message{Role: "tool", Content: []llm.Part{
+		{Type: "image", MIME: "image/png", Data: big}, {Type: "image", MIME: "image/png", Data: small}}}}}
+	a := &Agent{opt: Options{Images: ImageLimits{MaxEdge: 2000}}}
+	a.limitHistory(es)
+	got, _ := base64.StdEncoding.DecodeString(es[0].Msg.Content[0].Data)
+	if cfg, _, err := image.DecodeConfig(bytes.NewReader(got)); err != nil || cfg.Width != 2000 {
+		t.Fatalf("history image not shrunk: %dx%d %v", cfg.Width, cfg.Height, err)
+	}
+	if es[0].Msg.Content[1].Data != small {
+		t.Fatal("small history image changed")
 	}
 }
 

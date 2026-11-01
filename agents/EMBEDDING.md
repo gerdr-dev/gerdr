@@ -22,6 +22,9 @@ All zero by default (= Gerdr's behaviour).
 
 native (`native.Options`): `Dir`, `Config`, `Prompt`, `SystemPrompt` (replaces the base prompt), `NoInstructionFiles`,
 `NoMemory`, `Skills`, `Tools` (Go tools), `MCP`, `MCPAuth`, `Env`, `BashEnv`, `SafeCommand`, `Files`, `Images`.
+Set `Images` if the model is Claude: with it zero, one tall screenshot (edge over 2000-3000 px in a session with many
+images) makes every later request in that session fail with a 400. Gerdr uses Claude Code's limits,
+`agentwire.ImageLimits` (2000 px edge, 4784 tiles, 3.75 MB).
 
 claude (`claude.Options`):
 

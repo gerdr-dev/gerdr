@@ -133,11 +133,13 @@ type Files interface {
 	Write(ctx context.Context, path string, data []byte, version string) error
 }
 
-// ImageLimits: images whose long edge is over MaxEdge pixels are scaled down; ones still over MaxBytes are
-// re-encoded as JPEG. Zero fields don't limit.
+// ImageLimits: images whose long edge is over MaxEdge pixels, or that cost more than MaxTokens (Anthropic counts
+// one token per 28×28 tile: ceil(w/28)·ceil(h/28)), are scaled down to fit; ones still over MaxBytes are re-encoded
+// as JPEG. Zero fields don't limit.
 type ImageLimits struct {
-	MaxEdge  int
-	MaxBytes int
+	MaxEdge   int
+	MaxTokens int
+	MaxBytes  int
 }
 
 // ---- defaults ----
