@@ -287,11 +287,28 @@ func TestSteerDuringTool(t *testing.T) {
 		done <- res
 	}()
 	time.Sleep(300 * time.Millisecond) // 在 sleep 1 里面
-	sr, err := agenthost.Call[acpx.SteerResponse](context.Background(), e.c, acpx.MethodSteer, acpx.SteerRequest{SessionId: sid, MessageId: uuid.NewString(), Prompt: []acp.ContentBlock{acp.TextBlock("also this")}})
+	steerID := uuid.NewString()
+	sr, err := agenthost.Call[acpx.SteerResponse](context.Background(), e.c, acpx.MethodSteer, acpx.SteerRequest{SessionId: sid, MessageId: steerID, Prompt: []acp.ContentBlock{acp.TextBlock("also this")}})
 	if err != nil || sr.Outcome != acpx.SteerInjected {
 		t.Fatalf("steer: %v %v", sr, err)
 	}
 	<-done
+	// Queue state reported in order (the UI keeps the bubble at the bottom until "started", not mid-text).
+	var states []string
+	e.h.mu.Lock()
+	for _, n := range e.h.updates {
+		if u := n.Update.SessionInfoUpdate; u != nil {
+			if v, ok := acpx.GetMeta(u.Meta, "steer"); ok {
+				if m, _ := v.(map[string]any); m["id"] == steerID {
+					states = append(states, m["state"].(string))
+				}
+			}
+		}
+	}
+	e.h.mu.Unlock()
+	if strings.Join(states, ",") != "queued,started" {
+		t.Fatalf("steer states %v", states)
+	}
 	// 第二次请求：工具结果之后紧跟插的话（同一次请求带上），模型回 got the steer
 	msgs := e.llm.request(1)["messages"].([]any)
 	if lastRole(msgs) != "user" || !strings.Contains(lastUser(msgs), "also this") {

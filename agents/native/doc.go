@@ -62,6 +62,8 @@
 //   - sessionId + cleared: true, sent on the old id after "/clear": the session continues under the new id
 //     (the old one stays an alias).
 //   - notice (+ noticeLevel "retry" and noticeDelayMs while retrying a model error): a line for the user.
+//   - steer: {id, state: "queued" | "started"}, an interjection's place in the queue: queued when steering
+//     accepts it, started when it joins the history before the next model call.
 //
 // Sub-agents: their tool calls carry _meta.gerdr.parentToolCallId (the task tool call), their message / thought
 // chunks _meta.gerdr.subagent, and the task they were given arrives as a user_message_chunk with

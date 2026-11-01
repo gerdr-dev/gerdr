@@ -243,15 +243,30 @@ func (s *session) saveMeta() {
 
 func (s *session) enqueue(id string, blocks []acp.ContentBlock, now bool) bool {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	if !s.busy {
+		s.mu.Unlock()
 		return false
 	}
 	s.queue = append(s.queue, queued{id: id, blocks: blocks})
 	if now && s.streamCancel != nil {
 		s.streamCancel()
 	}
+	s.mu.Unlock()
+	// Report it as queued: the hub logs the user message as soon as steering returns, while the model may still be
+	// streaming. Without this the bubble lands in the middle of that text; "queued" keeps it at the bottom of the
+	// view until drainQueue says "started", where it really joins the history.
+	s.steerState(id, "queued")
 	return true
+}
+
+// steerState reports an interjection's place in the queue (_meta.gerdr.steer, same as the claude adapter).
+func (s *session) steerState(id, state string) {
+	if id == "" {
+		return
+	}
+	s.send(acp.SessionUpdate{SessionInfoUpdate: &acp.SessionSessionInfoUpdate{Meta: acpx.Meta(map[string]any{
+		"steer": map[string]any{"id": id, "state": state},
+	})}})
 }
 
 func (s *session) withdraw(ids []string) []string {
@@ -292,6 +307,7 @@ func (s *session) drainQueue() {
 			continue
 		}
 		s.addMsg(llm.Message{Role: "user", Content: s.a.toParts(x.blocks, s)}, x.id, nil)
+		s.steerState(x.id, "started")
 	}
 }
 
