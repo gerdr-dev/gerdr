@@ -130,7 +130,7 @@ function startDrag(e: React.PointerEvent<HTMLElement>, tabId: string, from: numb
   const showTab = (id: string) => setLayout((l) => ({ ...l, workspaces: l.workspaces.map((w) => (w.id === ws.id ? { ...w, activeTab: id } : w)) }));
 
   // The workspace the dragged tab / pane lives in: dropping on its own workspace moves nothing. Not always the active one:
-  // the unified sidebar (labs) lists every workspace's tabs, so a drag can start in another.
+  // the desktop sidebar lists every workspace's tabs, so a drag can start in another.
   const srcWs = get().layout.workspaces.find((w) => w.tabs.some((t) => t.id === tabId))?.id ?? ws.id;
 
   const locate = (x: number, y: number): Target | null => {

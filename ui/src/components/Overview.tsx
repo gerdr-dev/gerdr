@@ -77,7 +77,7 @@ function whereOf(l: Layout, c: WorkConf, id: string): string {
  * auto-arranged on the right. Covers the sidebar and the tabs; they stay mounted underneath (TabActive off) so closing
  * this lands back exactly where things were. `shown` false = kept mounted but hidden, for the same reason.
  */
-/** `bare`: just the grid, for the unified sidebar (labs), which lists the pinned agents itself and stays beside it. */
+/** `bare`: just the grid, for the desktop sidebar, which lists the pinned agents itself and stays beside it. */
 export function OverviewView({ shown, bare }: { shown: boolean; bare?: boolean }) {
   const phone = usePhone();
   const ids = useOverviewIds().split(",").filter(Boolean);

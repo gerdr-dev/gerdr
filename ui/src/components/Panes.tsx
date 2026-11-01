@@ -39,7 +39,7 @@ import {
 import { leaves, phoneRoot, setRatio, updateTab, type PaneLeaf, type PaneNode, type PaneSplit, type Tab } from "@/lib/layout";
 import { applyPaneTitle, paneSnapshot, tabSnapshot } from "@/lib/addons";
 import { AddonSlot } from "./AddonSlot";
-import { markRead, prefOf, set, setLayout, useStore } from "@/lib/store";
+import { markRead, set, setLayout, useStore } from "@/lib/store";
 import { activeIds, addToActive, removeActive } from "@/lib/overview";
 import { usePhone } from "@/lib/phone";
 import { cn } from "@/lib/utils";
@@ -214,12 +214,12 @@ type Count = { i: number; n: number };
  * 被拖着的那个 pane 淡下去，和 tab 栏里被拖的 tab 一样。
  */
 /**
- * A lone pane's title bar sits right beside the Labs sidebar's header (no tab bar above it then), so it takes that
+ * A lone pane's title bar sits right beside the desktop sidebar's header (no tab bar above it then), so it takes that
  * header's height and the two bottom borders line up. Split panes are framed and keep the short bar.
  */
 function usePaneHeadHeight(framed: boolean) {
   const phone = usePhone();
-  const besideSidebar = useStore((s) => !!prefOf(s, "unifiedSidebar") && s.sidebar);
+  const besideSidebar = useStore((s) => s.sidebar);
   return !framed && besideSidebar && !phone ? "h-10" : "h-8";
 }
 

@@ -75,7 +75,7 @@ import { Elapsed, SidebarBottom, SidebarEdge, SidebarHeader, WsDot } from "./Chr
 import { TabDragLayer, startPaneDrag } from "./TabDrag";
 
 /*
- * Labs → "新侧栏" (config.unifiedSidebar), desktop only. One list in place of four things that each listed the same agents:
+ * The desktop sidebar (the phone keeps the drawer Sidebar in Chrome.tsx). One list in place of four things that each listed the same agents:
  * the workspace switcher, the tab bar, the agents list and the to-do view.
  *
  * - Every workspace of the project is a group, all shown at once (no switching), each collapsible. A group lists its tabs,

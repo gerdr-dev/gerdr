@@ -177,9 +177,9 @@ export default function App() {
   // The overview covers sidebar and tabs (on a phone too, one tile at a time). Once opened it stays mounted, hidden, so reopening keeps each
   // chat's scroll position, like the kept tabs below.
   const overview = useStore((s) => s.overview.on) && mode !== "work";
-  // Labs → 新侧栏 (desktop only): one list replaces the workspace list, tab bar and agents list; the pin grid (the
-  // overview) opens over the main area beside it instead of over the whole window
-  const unified = useStore((s) => !!prefOf(s, "unifiedSidebar")) && !phone;
+  // Desktop: one sidebar list (UnifiedSidebar) replaces the workspace list, tab bar and agents list; the active grid
+  // (the overview) opens over the main area beside it. The phone keeps the drawer sidebar and the full-window overview.
+  const unified = !phone;
   const [overviewMounted, setOverviewMounted] = useState(overview);
   if (overview && !overviewMounted) setOverviewMounted(true);
   const all = new Map<string, Tab>();

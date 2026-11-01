@@ -113,7 +113,7 @@ export function openSessionsWithProject(l: Layout, sessions: Record<string, Sess
  * - put in by hand (stays until taken out);
  * - needs you: waiting, errored, finished unseen (always: taking one out marks it read);
  * - running, or touched in the last ACTIVE_HOURS, unless taken out since its current turn started / its last activity.
- * Both the unified sidebar (labs) and the overview grid show this list: the current project's agents, or every
+ * Both the desktop sidebar and the overview grid show this list: the current project's agents, or every
  * project's when that project is in overview.allIn (each project chooses on its own).
  */
 export function activeIds(st: ActiveSrc, now = Date.now()): string[] {

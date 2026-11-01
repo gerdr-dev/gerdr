@@ -291,13 +291,6 @@ export function SettingsDialog({ open }: { open: boolean }) {
                 <Switch checked={!!dev.copyOnSelect} onCheckedChange={(v) => setPref({ copyOnSelect: v })} />
               </Row>
               <Row
-                label="新侧栏"
-                hint="一条列表代替工作空间切换、顶部 tab 栏、agents 列表和进行中视图：最上面是「进行中」（等你、在跑、最近动过的和你加进来的，按该不该先看排，点「网格」一起看），下面每个工作空间是一个能折叠的组，里面列出 tab（分屏的几个连在一起）。只在电脑上生效"
-                local
-              >
-                <Switch checked={!!dev.unifiedSidebar} onCheckedChange={(v) => setPref({ unifiedSidebar: v })} />
-              </Row>
-              <Row
                 label="远程连着时不休眠"
                 hint="手机等远程设备连着时电脑不睡，合上盖子也醒着（和 Amphetamine 一样），断开 15 分钟后恢复；下面的手动时段也合盖不睡。合盖要授权一次，用电池且电量 ≤ 20% 时自动放手，塞包里会发热。仅 macOS"
               >
