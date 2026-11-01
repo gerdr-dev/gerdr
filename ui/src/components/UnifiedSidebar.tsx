@@ -271,7 +271,7 @@ export function UnifiedSidebar() {
                   </DropdownMenuContent>
                 </DropdownMenu>
                 <button
-                  className="flex h-5 items-center gap-1 rounded-sm px-1 hover:bg-muted hover:text-foreground"
+                  className={cn("flex h-5 items-center gap-1 rounded-sm px-1", gridOn ? "bg-brand/15 text-foreground" : "hover:bg-muted hover:text-foreground")}
                   title={gridOn ? "关掉网格，回到 tab" : `把进行中的 agent 摆成网格一起看（最多 ${MAX_TILES} 个）`}
                   onClick={(e) => (e.stopPropagation(), toggleOverview(!gridOn))}
                 >
