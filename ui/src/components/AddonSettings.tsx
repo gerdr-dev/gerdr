@@ -155,29 +155,29 @@ function InstalledRow({ a, newer }: { a: AddonStatus; newer?: StoreAddon }) {
   };
   return (
     // Same shape as a store row (StoreRow): the controls sit on the name's line, the rest goes under it, full width on a phone
-    <div className="p-3">
-      <div className="flex items-start gap-3">
+    <div className={rowGrid}>
+      <div className="md:row-span-2">
         <AddonIcon src={a.icon ? assetURL(a.id, a.icon, a.hash) : undefined} />
-        <div className="flex min-h-9 min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-0.5 text-[13px]">
-          <span className="font-medium">{a.name}</span>
-          {a.version && <span className="text-[11px] text-muted-foreground">v{a.version}</span>}
-          {a.name !== a.id && <span className="font-mono text-[11px] text-muted-foreground">{a.id}</span>}
-          {a.source ? <Tag>{a.source.store}</Tag> : <Tag>本地</Tag>}
-          {a.modified && <Tag className="text-warn">本地改过</Tag>}
-        </div>
-        <div className="flex min-h-9 shrink-0 items-center gap-1.5">
-          {newer && (
-            <Button size="sm" variant="outline" disabled={busy} onClick={() => run(() => install(a.source!.store, newer))}>
-              更新{newer.version && newer.version !== a.version ? ` v${newer.version}` : ""}
-            </Button>
-          )}
-          <Button size="icon-sm" variant="ghost" disabled={busy} title="卸载" onClick={uninstall}>
-            <Trash2 className="size-3.5" />
-          </Button>
-          <Switch checked={!a.disabled} disabled={busy} onCheckedChange={(on) => run(() => api.setAddonEnabled(a.id, on))} />
-        </div>
       </div>
-      <div className="min-w-0 pl-12 max-md:pl-0">
+      <div className={rowTitle}>
+        <span className="font-medium">{a.name}</span>
+        {a.version && <span className="text-[11px] text-muted-foreground">v{a.version}</span>}
+        {a.name !== a.id && <span className="font-mono text-[11px] text-muted-foreground">{a.id}</span>}
+        {a.source ? <Tag>{a.source.store}</Tag> : <Tag>本地</Tag>}
+        {a.modified && <Tag className="text-warn">本地改过</Tag>}
+      </div>
+      <div className="flex min-h-9 shrink-0 items-center gap-1.5 md:-my-1 md:min-h-0">
+        {newer && (
+          <Button size="sm" variant="outline" disabled={busy} onClick={() => run(() => install(a.source!.store, newer))}>
+            更新{newer.version && newer.version !== a.version ? ` v${newer.version}` : ""}
+          </Button>
+        )}
+        <Button size="icon-sm" variant="ghost" disabled={busy} title="卸载" onClick={uninstall}>
+          <Trash2 className="size-3.5" />
+        </Button>
+        <Switch checked={!a.disabled} disabled={busy} onCheckedChange={(on) => run(() => api.setAddonEnabled(a.id, on))} />
+      </div>
+      <div className={rowBody}>
         {a.description && <div className="mt-1 text-[12px] text-muted-foreground">{a.description}</div>}
         {/* No "loaded" / "off" line: the switch already says that. Only a failure gets a line (its text is below) */}
         {a.error && !a.disabled && (
@@ -453,29 +453,29 @@ function StoreRow({ source, a }: { source: string; a: StoreAddon }) {
     `${location.origin}/api/addon-stores/file?source=${encodeURIComponent(source)}&id=${encodeURIComponent(a.id)}&path=${encodeURIComponent(path)}&v=${a.hash}`;
   return (
     // The button sits on the name's line and the rest goes under it: as a column of its own it left the description
-    // and screenshots a third of a phone's width. The body lines up with the name (pl-12), and takes the full width on a phone
-    <div className="p-3">
-      <div className="flex items-start gap-3">
+    // and screenshots a third of a phone's width. The body lines up with the name, and takes the full width on a phone (rowGrid)
+    <div className={rowGrid}>
+      <div className="md:row-span-2">
         <AddonIcon src={a.icon ? file(a.icon) : undefined} />
-        <div className="flex min-h-9 min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-0.5 text-[13px]">
-          <span className="font-medium">{a.name}</span>
-          {a.version && <span className="text-[11px] text-muted-foreground">v{a.version}</span>}
-          {a.name !== a.id && <span className="font-mono text-[11px] text-muted-foreground">{a.id}</span>}
-          {a.hasService && <Tag>后台进程</Tag>}
-        </div>
-        <div className="flex min-h-9 shrink-0 items-center">
-          {label ? (
-            <Button size="sm" variant={label === "安装" ? "default" : "outline"} disabled={busy} onClick={go}>
-              {busy ? "安装中…" : label}
-            </Button>
-          ) : (
-            <span className="flex items-center gap-1 text-[12px] text-muted-foreground">
-              <Check className="size-3.5 text-ok" /> 已安装
-            </span>
-          )}
-        </div>
       </div>
-      <div className="min-w-0 pl-12 max-md:pl-0">
+      <div className={rowTitle}>
+        <span className="font-medium">{a.name}</span>
+        {a.version && <span className="text-[11px] text-muted-foreground">v{a.version}</span>}
+        {a.name !== a.id && <span className="font-mono text-[11px] text-muted-foreground">{a.id}</span>}
+        {a.hasService && <Tag>后台进程</Tag>}
+      </div>
+      <div className="flex min-h-9 shrink-0 items-center md:-my-1 md:min-h-0">
+        {label ? (
+          <Button size="sm" variant={label === "安装" ? "default" : "outline"} disabled={busy} onClick={go}>
+            {busy ? "安装中…" : label}
+          </Button>
+        ) : (
+          <span className="flex items-center gap-1 text-[12px] text-muted-foreground">
+            <Check className="size-3.5 text-ok" /> 已安装
+          </span>
+        )}
+      </div>
+      <div className={rowBody}>
         {a.description && <div className="mt-1 text-[12px] text-muted-foreground">{a.description}</div>}
         {!!a.screenshots?.length && (
           <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
@@ -538,6 +538,14 @@ function zoomImage(e: React.MouseEvent<HTMLElement>) {
 function relinkImages(md: string, file: (path: string) => string) {
   return md.replace(/(!\[[^\]]*\]\()(?!https?:|data:|\/)\.?\/?([^)\s]+)/g, (_, pre: string, path: string) => pre + file(path));
 }
+
+// Layout shared by an installed row and a store row. On a wide screen the icon spans both rows, so the name sits at
+// the icon's top edge with the description right under it (centring the name on the icon pushed the description
+// below the icon and left a gap). The name line has no min height there, so its text starts at the icon's top; the
+// controls (taller than that line) overhang it evenly with -my-1 to stay centred on it. On a phone the icon stays on the name's line and the body takes the full width.
+const rowGrid = "grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-3 p-3";
+const rowTitle = "flex min-h-9 min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-[13px] leading-5 md:min-h-0";
+const rowBody = "col-span-3 min-w-0 md:col-span-2 md:col-start-2";
 
 function AddonIcon({ src }: { src?: string }) {
   const [broken, setBroken] = useState(false);
