@@ -15,7 +15,7 @@ import { ToolCall } from "./ToolCall";
 import { UsageCard } from "./UsageCard";
 import { openLightbox } from "./Lightbox";
 import { PlayBadge } from "./PlayBadge";
-import { TaskDoneCard } from "./TasksBar";
+import { TaskDoneCard, WakeRow } from "./TasksBar";
 import { ShellCard } from "./ShellCard";
 import { fmtElapsed, fmtTokens } from "./StatusLine";
 
@@ -335,6 +335,8 @@ export function renderPart(p: GPart, i: number, ctx: PartCtx): ReactNode {
       return <TurnStat key={i} sessionId={ctx.sessionId} data={p.data} latest={!!ctx.latest} />;
     case "data-task":
       return <TaskDoneCard key={i} sessionId={ctx.sessionId} t={p.data.task} woke={p.data.woke} command={p.data.command} />;
+    case "data-wake":
+      return <WakeRow key={i} w={p.data.wake} />;
     case "data-shell":
       return <ShellCard key={p.data.id} sessionId={ctx.sessionId} data={p.data} />;
     case "data-notice":

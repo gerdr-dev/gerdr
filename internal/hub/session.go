@@ -102,6 +102,7 @@ type Session struct {
 	// autoNext：「agent 自己开了一轮」先于上一轮 session/prompt 的响应到了（两条路，顺序不保证）。
 	// runTurn 收尾时看到它就直接接上一个 auto 的轮次，不然这一轮在界面上是「闲着」。
 	autoNext bool
+	autoWake json.RawMessage // what woke that auto turn (acpx.AutoTurnWakeKey), for its turn_start
 	// closeAfter：会话自己 `gerdr session close` 了自己（用户叫它「做完就关掉 pane」）。当场关会把它正在跑的这一轮
 	// （就是发出这条命令的这一轮）掐掉，收尾的话说不出来；所以记下来，这一轮跑完再关（Hub.CloseAfterTurn）
 	closeAfter  bool
@@ -691,7 +692,8 @@ func (s *Session) runTurn(c *agenthost.Host, agentSID, msgID string, content []a
 		s.lastErr = ev.Error
 	}
 	next := s.autoNext && err == nil
-	s.autoNext = false
+	wake := s.autoWake
+	s.autoNext, s.autoWake = false, nil
 	// agent 自己又接着开了一轮（后台任务回来了）就等那一轮也跑完。出错了、人按了停止就不关了：人要看一眼 / 改主意了
 	closeNow := s.closeAfter && !next && err == nil && ev.StopReason != "cancelled"
 	if !next {
@@ -705,7 +707,7 @@ func (s *Session) runTurn(c *agenthost.Host, agentSID, msgID string, content []a
 	s.emit(ev)
 	go s.autoTitle()
 	if next {
-		s.emit(&Event{Kind: EvTurnStart, Auto: true})
+		s.emit(&Event{Kind: EvTurnStart, Auto: true, Wake: wake})
 	}
 	s.flush(true)
 	s.setStatus()
@@ -941,13 +943,17 @@ func (s *Session) onGerdrInfo(g map[string]any) {
 		}
 	}
 	if v, ok := g[acpx.AutoTurnKey].(bool); ok {
+		var wake json.RawMessage
+		if w, ok := g[acpx.AutoTurnWakeKey]; ok {
+			wake, _ = json.Marshal(w)
+		}
 		s.mu.Lock()
 		start := v && !s.running
 		if v && s.running && !s.auto {
-			s.autoNext = true
+			s.autoNext, s.autoWake = true, wake
 		}
 		if !v {
-			s.autoNext = false
+			s.autoNext, s.autoWake = false, nil
 		}
 		end := !v && s.auto
 		if start {
@@ -963,7 +969,7 @@ func (s *Session) onGerdrInfo(g map[string]any) {
 		}
 		s.mu.Unlock()
 		if start {
-			s.emit(&Event{Kind: EvTurnStart, Auto: true})
+			s.emit(&Event{Kind: EvTurnStart, Auto: true, Wake: wake})
 			s.setStatus()
 		}
 		if end {

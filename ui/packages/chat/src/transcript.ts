@@ -5,7 +5,7 @@
 import type { DynamicToolUIPart, UIMessage } from "ai";
 import { chatHost } from "./host";
 import { t } from "./i18n";
-import type { AgentTask, AskRequest, ContentBlock, HubEvent, PermissionRequest } from "./types";
+import type { AgentTask, AskRequest, ContentBlock, HubEvent, PermissionRequest, Wake } from "./types";
 
 export type PlanEntry = { content: string; status: "pending" | "in_progress" | "completed"; priority?: string };
 
@@ -30,6 +30,8 @@ export type GData = {
   /** woke：这个任务一结束 agent 就自己开了一轮（turn_start auto），卡片上标「→ agent 接着处理」 */
   /** command: the command of the tool call that started it, so the card can tell whether its description is that command (monospace) or prose */
   task: { task: AgentTask; woke?: boolean; command?: string };
+  /** An auto turn woken by a task that has no "finished" row right above it: a Monitor's new output, or a task that ended earlier */
+  wake: { wake: Wake };
   turnStat: { ms: number; tokens: number; ts?: number };
   turnEnd: { stopReason: string; error?: string };
   quickReplies: { questions: { question: string; options: string[] }[] };
@@ -382,13 +384,16 @@ export class Transcript {
         this.running = true;
         this.messages = [...this.messages];
         const i = this.assistant(e.ts);
-        // agent 自己开的一轮（后台任务跑完了）：前面没有用户消息，标一下这段话是怎么来的。
-        // 紧挨着的就是那张「任务结束」卡片时标在卡片上（「哪个任务跑完、agent 因此接着干」一行说清）；
-        // 另起一行居中提示会和卡片重复说一遍，还看着像警告（用户报的）。没有卡片（别的原因唤醒）才单独提示。
+        // A turn the agent started by itself: no user message above it, so say what woke it. When the task's
+        // "finished" row is right above, mark that row (one line says which task and that the agent picked it up); a
+        // separate line would repeat it. Otherwise a row naming the task and what it reported (a Monitor wakes the
+        // agent on every new line while it still runs, so "a task finished" was wrong there and didn't say which one).
         if (e.auto) {
           const parts = this.messages[i].parts;
           const last = parts[parts.length - 1];
-          if (last?.type === "data-task") this.setPart({ msg: i, part: parts.length - 1 }, { ...last, data: { ...last.data, woke: true } });
+          if (last?.type === "data-task" && (!e.wake || last.data.task.id === e.wake.task))
+            this.setPart({ msg: i, part: parts.length - 1 }, { ...last, data: { ...last.data, woke: true } });
+          else if (e.wake) this.pushPart(i, { type: "data-wake", data: { wake: e.wake } });
           else this.pushPart(i, { type: "data-notice", data: { level: "auto", text: t("notice.autoTurn") } });
         }
         break;

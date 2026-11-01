@@ -25,6 +25,8 @@ type Event struct {
 
 	// turn_start / turn_end：Auto = 这一轮是 agent 自己开的（后台任务跑完了在汇报），前面没有用户消息
 	Auto       bool   `json:"auto,omitempty"`
+	// turn_start auto: what woke the agent (acpx.Wake), when the adapter could tell
+	Wake json.RawMessage `json:"wake,omitempty"`
 	StopReason string `json:"stopReason,omitempty"`
 	// turn_end：这一轮用了多久、输出了多少 token（对话里那行「用时 1m 5s · ↓ 2.2k tokens」）
 	DurationMs   int64  `json:"durationMs,omitempty"`

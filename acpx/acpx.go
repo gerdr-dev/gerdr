@@ -151,6 +151,18 @@ type AllowRulesRequest struct {
 //     （claude 后台任务跑完会这样）。
 const AutoTurnKey = "autoTurn"
 
+// AutoTurnWakeKey rides along with autoTurn true: what woke the agent (Wake), when the adapter can tell. Without it the
+// UI could only say "a background task finished", which is wrong for a Monitor (it wakes the agent on every output
+// line while still running) and doesn't say which task.
+const AutoTurnWakeKey = "autoTurnWake"
+
+type Wake struct {
+	Task        string `json:"task"`                  // the task's id
+	Description string `json:"description,omitempty"` // its description, if the adapter knows the task
+	Event       string `json:"event,omitempty"`       // a Monitor's new output (the task is still running)
+	Status      string `json:"status,omitempty"`      // the task ended: completed | failed | killed …
+}
+
 type Task struct {
 	ID          string `json:"id"`
 	Type        string `json:"type"` // local_bash | local_agent | …（agent 原样报的）

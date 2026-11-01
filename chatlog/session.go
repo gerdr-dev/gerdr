@@ -39,6 +39,7 @@ type Session struct {
 	running  bool
 	auto     bool // the running turn was started by the agent itself (autoTurn), nobody waits on a Prompt
 	autoNext bool // autoTurn true arrived before the previous Prompt returned
+	autoWake json.RawMessage // what woke that auto turn (acpx.AutoTurnWakeKey), for its turn_start
 	turnMsg  string
 	pending  map[string]*pendingReq
 	steering map[string]string // interjections being sent → early queue state (see Send)
@@ -438,7 +439,8 @@ func (s *Session) runTurn(msgID string, content []acp.ContentBlock) {
 	}
 	s.running, s.turnMsg = false, ""
 	next := s.autoNext && err == nil
-	s.autoNext = false
+	wake := s.autoWake
+	s.autoNext, s.autoWake = false, nil
 	if next {
 		s.running, s.auto = true, true
 		s.st.TurnStarted, s.st.TurnTokens = now(), 0
@@ -446,7 +448,7 @@ func (s *Session) runTurn(msgID string, content []acp.ContentBlock) {
 	s.mu.Unlock()
 	s.emit(ev)
 	if next {
-		s.emit(&Event{Kind: EvTurnStart, Auto: true})
+		s.emit(&Event{Kind: EvTurnStart, Auto: true, Wake: wake})
 	}
 	s.flush(true)
 	s.changed()
@@ -808,13 +810,17 @@ func (s *Session) onInfo(g map[string]any) {
 		changed = true
 	}
 	if v, ok := g[acpx.AutoTurnKey].(bool); ok {
+		var wake json.RawMessage
+		if w, ok := g[acpx.AutoTurnWakeKey]; ok {
+			wake, _ = json.Marshal(w)
+		}
 		s.mu.Lock()
 		start := v && !s.running
 		if v && s.running && !s.auto {
-			s.autoNext = true
+			s.autoNext, s.autoWake = true, wake
 		}
 		if !v {
-			s.autoNext = false
+			s.autoNext, s.autoWake = false, nil
 		}
 		end := !v && s.auto
 		if start {
@@ -834,7 +840,7 @@ func (s *Session) onInfo(g map[string]any) {
 		}
 		s.mu.Unlock()
 		if start {
-			s.emit(&Event{Kind: EvTurnStart, Auto: true})
+			s.emit(&Event{Kind: EvTurnStart, Auto: true, Wake: wake})
 		}
 		if end {
 			s.emit(&Event{Kind: EvTurnEnd, StopReason: string(acp.StopReasonEndTurn), Auto: true, DurationMs: dur, OutputTokens: tok})

@@ -242,7 +242,7 @@ func (s *session) onSystem(ctx context.Context, m map[string]json.RawMessage, ra
 		s.mu.Unlock()
 		if autoStart {
 			s.tok.Reset()
-			s.autoTurn(ctx, true)
+			s.autoStart(ctx)
 		}
 		if autoEnd {
 			s.autoTurn(ctx, false)

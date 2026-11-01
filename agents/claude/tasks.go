@@ -1,9 +1,15 @@
 package claude
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
+	"io"
+	"os"
+	"regexp"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/coder/acp-go-sdk"
@@ -181,6 +187,114 @@ func (s *session) taskListLocked() []acpx.Task {
 // autoTurn：CLI 在没有 session/prompt 的时候自己跑起来 / 停下来了。
 func (s *session) autoTurn(ctx context.Context, running bool) {
 	s.update(ctx, acp.SessionUpdate{SessionInfoUpdate: &acp.SessionSessionInfoUpdate{Meta: acpx.Meta(map[string]any{acpx.AutoTurnKey: running})}})
+}
+
+// autoStart: the CLI started a turn by itself; say which task woke it (acpx.AutoTurnWakeKey) when we can find out.
+func (s *session) autoStart(ctx context.Context) {
+	m := map[string]any{acpx.AutoTurnKey: true}
+	if w := s.wakeOf(); w != nil {
+		m[acpx.AutoTurnWakeKey] = w
+	}
+	s.update(ctx, acp.SessionUpdate{SessionInfoUpdate: &acp.SessionSessionInfoUpdate{Meta: acpx.Meta(m)}})
+}
+
+var (
+	wakeTaskRe   = regexp.MustCompile(`<task-id>([^<]*)</task-id>`)
+	wakeStatusRe = regexp.MustCompile(`<status>([^<]*)</status>`)
+	wakeEventRe  = regexp.MustCompile(`(?s)<event>(.*?)</event>`)
+)
+
+// wakeOf: the <task-notification> the CLI just fed the agent to start this auto turn. stream-json doesn't carry it
+// (measured, 2.1.x): a Monitor event wakes the agent with nothing but session_state_changed running — no
+// task_notification, no user message — and a finished task's task_notification doesn't say it was the one that woke
+// it. The CLI writes the notification into the transcript (a user message with origin.kind "task-notification") within
+// a few ms of going running, sometimes just after, so poll briefly. This holds up the stream reader for at most
+// ~300ms, and only when nothing turns up (a turn woken by something else).
+func (s *session) wakeOf() *acpx.Wake {
+	s.mu.Lock()
+	id, cwd, last := s.id, s.cwd, s.lastWake
+	s.mu.Unlock()
+	path, err := findTranscript(s.a.projectsDir(), id, cwd)
+	if err != nil {
+		return nil
+	}
+	for try := 0; try < 10; try++ {
+		if try > 0 {
+			time.Sleep(30 * time.Millisecond)
+		}
+		uuid, text := lastTaskNotification(path, time.Now().Add(-10*time.Second))
+		if uuid == "" || uuid == last {
+			continue
+		}
+		m := wakeTaskRe.FindStringSubmatch(text)
+		if m == nil {
+			return nil
+		}
+		w := &acpx.Wake{Task: strings.TrimSpace(m[1])}
+		if m := wakeStatusRe.FindStringSubmatch(text); m != nil {
+			w.Status = strings.TrimSpace(m[1])
+		}
+		if m := wakeEventRe.FindStringSubmatch(text); m != nil {
+			w.Event = strings.TrimSpace(m[1])
+		}
+		s.mu.Lock()
+		s.lastWake = uuid
+		if t := s.tasks[w.Task]; t != nil {
+			w.Description = t.Description
+		}
+		s.mu.Unlock()
+		return w
+	}
+	return nil
+}
+
+// lastTaskNotification: uuid and text of the last task notification in the transcript's tail, if that is the last user
+// message there (anything the person or a tool said after it means it isn't what just woke the agent) and was written
+// after since (an older one woke an earlier turn; the one for this turn may not be written yet).
+func lastTaskNotification(path string, since time.Time) (uuid, text string) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", ""
+	}
+	defer f.Close()
+	const tail = 256 << 10
+	if st, err := f.Stat(); err == nil && st.Size() > tail {
+		_, _ = f.Seek(st.Size()-tail, io.SeekStart)
+	}
+	sc := bufio.NewScanner(f)
+	sc.Buffer(make([]byte, 0, 1<<20), 64<<20)
+	for sc.Scan() {
+		if !bytes.Contains(sc.Bytes(), []byte(`"type":"user"`)) {
+			continue
+		}
+		var e struct {
+			entry
+			Origin struct {
+				Kind string `json:"kind"`
+			} `json:"origin"`
+		}
+		if json.Unmarshal(sc.Bytes(), &e) != nil {
+			continue
+		}
+		if ts, err := time.Parse(time.RFC3339Nano, e.Timestamp); e.Origin.Kind != "task-notification" || err != nil || ts.Before(since) {
+			uuid, text = "", ""
+			continue
+		}
+		var m userMsg
+		_ = json.Unmarshal(e.Message, &m)
+		var str string
+		if json.Unmarshal(m.Content, &str) != nil {
+			var parts []struct {
+				Text string `json:"text"`
+			}
+			_ = json.Unmarshal(m.Content, &parts)
+			for _, p := range parts {
+				str += p.Text
+			}
+		}
+		uuid, text = e.UUID, str
+	}
+	return uuid, text
 }
 
 // stopTask：停掉一个后台任务（和 claude 界面里任务列表的「停止」一样）。

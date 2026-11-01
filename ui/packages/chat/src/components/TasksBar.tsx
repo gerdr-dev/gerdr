@@ -5,7 +5,7 @@ import { Button } from "../ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { chatHost } from "../host";
 import { t as tr } from "../i18n";
-import type { AgentTask, ChatSession } from "../types";
+import type { AgentTask, ChatSession, Wake } from "../types";
 import { isCommandText } from "../transcript";
 import { cn } from "../utils";
 
@@ -144,6 +144,40 @@ export function TaskDoneCard({ sessionId, t, woke, command }: { sessionId: strin
         >
           {tr("task.viewChat")}
         </button>
+      )}
+    </div>
+  );
+}
+
+/**
+ * An auto turn woken by a task with no "finished" row right above: which task, and what it reported (a Monitor's new
+ * output; or how it ended). Same one-line shape as TaskDoneCard.
+ */
+export function WakeRow({ w }: { w: Wake }) {
+  const monitor = !!w.event;
+  const ok = monitor || !w.status || w.status === "completed";
+  const event = w.event
+    ?.split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .join(" · ");
+  return (
+    <div className="-ml-1.5 flex min-w-0 items-center gap-2 px-1.5 py-[3px] text-[13px] text-muted-foreground">
+      {!ok ? (
+        <CircleX className="size-3.5 shrink-0 text-bad" />
+      ) : monitor ? (
+        <Activity className="size-3.5 shrink-0" />
+      ) : (
+        <SquareTerminal className="size-3.5 shrink-0" />
+      )}
+      <span className="max-w-[50%] min-w-0 shrink-0 truncate">{w.description || w.task}</span>
+      <span className="shrink-0 rounded-sm bg-muted px-1 text-[11px]">{monitor ? tr("task.monitor") : tr("task.background")}</span>
+      {monitor ? (
+        <span className="min-w-0 truncate font-mono text-[11px]" title={w.event}>
+          {event}
+        </span>
+      ) : (
+        <span className={cn("shrink-0 text-[11px]", !ok && "text-bad")}>{ok ? tr("task.ended") : statusText(w.status!)}</span>
       )}
     </div>
   );

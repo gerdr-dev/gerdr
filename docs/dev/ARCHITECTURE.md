@@ -444,6 +444,11 @@ cwd 以外改的文件（Bash 写 `~/.zshrc`、隔壁项目）管不到；同一
   停任务是 control `stop_task`，把前台的命令 / 子 agent 转后台是 `background_tasks {tool_use_id}`（= claude 里的 ctrl+b）。
 - **后台任务跑完后 CLI 会自己开一轮**（running → idle，前面没有 user 消息）。没有 session/prompt 对应，适配器用
   session_info_update 的 `_meta.gerdr.autoTurn` 告诉 hub；它可能比上一轮 Prompt 的响应先到，hub 用 `autoNext` 接上，不然那一轮在界面上是「闲着」。
+- **What woke an auto turn isn't in stream-json** (measured, 2.1.x). A Monitor wakes the agent on every new output line while
+  it still runs, and the stream shows nothing but `session_state_changed running`: no task_notification, no user message.
+  The CLI writes the `<task-notification>` (task id, the Monitor's `<event>` or the task's `<status>`) into the transcript as
+  a user message with `origin.kind = task-notification`, a few ms around going running, so the adapter polls the transcript
+  tail briefly (`wakeOf`) and sends it as `_meta.gerdr.autoTurnWake`; the hub keeps it on the turn_start (`wake`).
 - **`--resume` 一个有没跑完的后台任务的会话**（进程被收掉 / 关了 pane / Gerdr 重启时任务还在跑）：CLI 一起来先报那个任务
   stopped、自己跑起来，这时我们那句的 turn 还没挂上；那句常被并进同一段 running 跑完才 idle，中间不再有 running。
   所以「这一轮开始了」还要认 `command_lifecycle started`（command_uuid = 那句的 uuid），只认 running 的话一直转（实测）。

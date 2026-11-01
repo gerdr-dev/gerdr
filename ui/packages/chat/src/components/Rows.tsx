@@ -249,7 +249,7 @@ export function buildRows(
   // 行距（照 Codex）：工具调用 / 思考这类一行小字，连着的几条挨紧（tight）；它和正文之间留开，像分段一样 ——
   // 原来一律挨着，正文和一串命令挤成一团
   const toolish = (r: Row) =>
-    r.kind === "group" || (r.kind === "part" && ["dynamic-tool", "reasoning", "data-permission", "data-task", "data-shell"].includes(r.part.type));
+    r.kind === "group" || (r.kind === "part" && ["dynamic-tool", "reasoning", "data-permission", "data-task", "data-wake", "data-shell"].includes(r.part.type));
   for (let i = 1; i < rows.length; i++) {
     const r = rows[i];
     if ((r.kind === "part" || r.kind === "group") && !r.first) rows[i] = { ...r, tight: toolish(r) && toolish(rows[i - 1]) };

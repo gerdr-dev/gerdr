@@ -52,6 +52,7 @@ type session struct {
 
 	tasks                map[string]*acpx.Task // 后台任务 / 子 agent（tasks.go）
 	auto                 bool                  // CLI 自己开的一轮正在跑（没有 session/prompt 对应）
+	lastWake             string                // uuid of the last <task-notification> an auto turn was put down to (wakeOf)
 	tok                  acpx.TokenMeter       // 这一轮输出了多少 token（状态行）
 	ctxTokens, ctxWindow int                   // 上下文用量（最近一次请求的输入、模型窗口）
 

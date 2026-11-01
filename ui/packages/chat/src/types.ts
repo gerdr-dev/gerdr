@@ -17,6 +17,9 @@ export type AvailableCommand = { name: string; description: string; input?: { hi
 export type SessionStatus = "idle" | "running" | "waiting" | "error" | "starting";
 
 /** 后台任务 / 子 agent（acpx.Task）。 */
+/** event: a Monitor's new output (the task still runs); status: the task ended */
+export type Wake = { task: string; description?: string; event?: string; status?: string };
+
 export type AgentTask = {
   id: string;
   type: string; // local_bash | local_agent | …
@@ -60,6 +63,8 @@ export type HubEvent = {
     | "shell_out"
     | "shell_done";
   task?: AgentTask;
+  /** turn_start auto: which background task woke the agent (backend acpx.Wake), when the adapter could tell */
+  wake?: Wake;
   messageId?: string;
   content?: ContentBlock[];
   steer?: boolean;
