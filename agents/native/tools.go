@@ -149,7 +149,8 @@ var imageExt = map[string]string{".png": "image/png", ".jpg": "image/jpeg", ".jp
 var readTool = &tool{
 	name: "read",
 	desc: "Read a file from the local filesystem. Returns the content with line numbers (`<n>\\t<line>`), at most 2000 lines per call — use offset/limit to page through long files. " +
-		"Images (png/jpg/gif/webp) are returned as images when the model supports it. Use this instead of `cat`/`head`/`tail` in bash. " +
+		"Images (png/jpg/gif/webp) are returned as images when the model supports it. PDFs are returned as their text, page by page (on macOS). " +
+		"Use this instead of `cat`/`head`/`tail` in bash. " +
 		"Read a file before editing it.",
 	params: obj(map[string]any{
 		"path":   prop("string", "Absolute path, or relative to the working directory"),
@@ -188,7 +189,15 @@ var readTool = &tool{
 		}
 		var b []byte
 		var err error
-		if owned {
+		if !owned && strings.EqualFold(filepath.Ext(p), ".pdf") {
+			// Its text, then paged through like any text file (offset / limit count its lines)
+			if b, err = pdfText(c.ctx, p); err != nil {
+				return errResult("%v", err)
+			}
+			if !pdfHasText(b) {
+				return errResult("%s has no text layer (a scan?); render its pages to images to look at them", p)
+			}
+		} else if owned {
 			b, err = c.readFile(p)
 		} else {
 			var f *os.File

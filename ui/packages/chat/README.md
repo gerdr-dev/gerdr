@@ -55,16 +55,18 @@ function Chat({ session, events }: { session: ChatSession; events: HubEvent[] })
 A runnable version with a fake agent is in `example/` (`node build.mjs` in the package, then in `example/`, and open
 `example/dist/index.html` over HTTP).
 
-- `ChatView({ session, paneId, focused, sub?, active? })`: `session` is a `ChatSession` (status, modes / config
-  options, commands, tasks, context size — `chatlog.State` has the same fields), `paneId` names this composer (drafts,
-  scroll position), `focused` lets it take the keyboard, `sub` shows a sub-agent's read-only conversation, `active=false`
-  while hidden.
+- `ChatView({ session, paneId, focused, sub?, active?, children? })`: `session` is a `ChatSession` (status, modes /
+  config options, commands, tasks, context size — `chatlog.State` has the same fields), `paneId` names this composer
+  (drafts, scroll position), `focused` lets it take the keyboard, `sub` shows a sub-agent's read-only conversation,
+  `active=false` while hidden. `children` are drawn over the conversation (a host's own empty state) and are part of
+  the area files can be dropped on.
 - `ChatProvider({ host, locale, messages })`: one near the root of the page. It also mounts the image viewer and the
   tooltip context.
 - The host contract is `ChatHost` in `src/host.tsx`; every member is documented there. Required: `useTranscript`,
   `send`, `stop`, `answer`, `fileURL`. Everything else is optional and turns its feature off when missing (no rewind
   buttons without `rewind`, no "stop task" without `stopTask`, no `!` command mode without `shell`, no video upload
-  without `upload`…).
+  without `upload`…). With `localPath` (a desktop shell that knows a `File`'s path) any file or folder can be attached
+  by picking, pasting or dropping it: the agent gets its path as a `resource_link`, nothing is read or uploaded.
 - Slots: `composerTop`, `composerBar`, `composerOverlay`; `renderTool`, `codeBlocks`, `codeActions`, `onLink`.
   Composer hooks (`host.composer`): a draft store, `localCommands`, `onSendError`, `onExit`, `useDefaults`, `useExtras`.
 

@@ -65,6 +65,13 @@ export interface ChatHost {
   fileURL(path: string, cwd?: string): string;
   /** Upload a file the user attached that can't go inline (videos): its path on the agent's machine. */
   upload?(file: File): Promise<{ path: string }>;
+  /**
+   * Desktop apps where the agent runs on this machine: the path of a file the user picked / pasted / dropped
+   * (Electron's webUtils.getPathForFile). With it any file can be attached (a PDF, a 100 MB zip, a folder): it goes to
+   * the agent as a resource_link to that path, nothing is read or uploaded. undefined for a file that has no path
+   * (a pasted screenshot): images still go inline, other files fall back to upload.
+   */
+  localPath?(file: File): string | undefined;
   /** Size of a local file, to tell a playable video from a missing one. */
   fileStat?(path: string, cwd?: string): Promise<{ size: number; mtime: number }>;
   /** Which bare file names (README.md) open under cwd; they become links. */

@@ -705,11 +705,15 @@ export function videoLinkPath(c: ContentBlock): string | null {
   return VIDEO_EXT.test(p) ? p : null;
 }
 
+/** mediaType of a file the user attached by its local path (ChatHost.localPath): url is that path, not something to fetch. */
+export const LOCAL_FILE = "application/x-local-file";
+
 function linkPart(c: ContentBlock & { type: "resource_link" }): GPart {
   const v = videoLinkPath(c);
+  const p = c.uri.replace(/^file:\/\//, "");
   return v
     ? { type: "file", mediaType: "video/*", url: chatHost().fileURL(v), filename: c.name }
-    : { type: "text", text: `@${c.uri.replace(/^file:\/\//, "")}` };
+    : { type: "file", mediaType: LOCAL_FILE, url: p, filename: c.name || p.replace(/\/+$/, "").split("/").pop() || p };
 }
 
 function imageURL(c: { data?: string; mimeType?: string; blob?: string }) {

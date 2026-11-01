@@ -552,7 +552,10 @@ func (a *Agent) toParts(blocks []acp.ContentBlock, s *session) []llm.Part {
 				out = append(out, llm.TextPart(fmt.Sprintf("[The user attached an image, saved at %s. The current model cannot view images.]", p)))
 			}
 		case b.ResourceLink != nil:
-			out = append(out, llm.TextPart(fmt.Sprintf("[Attached: %s]", strings.TrimPrefix(b.ResourceLink.Uri, "file://"))))
+			// Only the path goes over, not the contents. Said plainly: a bare "[Attached: …]" read to some models as an
+			// attachment that failed to arrive, and they asked the user to upload it again instead of opening it.
+			out = append(out, llm.TextPart(fmt.Sprintf("[The user attached a file or folder on this machine: %s — open or process it with your tools]",
+				strings.TrimPrefix(b.ResourceLink.Uri, "file://"))))
 		case b.Resource != nil:
 			if t := b.Resource.Resource.TextResourceContents; t != nil {
 				out = append(out, llm.TextPart(fmt.Sprintf("<file path=%q>\n%s\n</file>", strings.TrimPrefix(t.Uri, "file://"), t.Text)))

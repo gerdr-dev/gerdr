@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { ArrowDown, CornerDownRight } from "lucide-react";
 import { Button } from "../ui/button";
@@ -46,6 +46,7 @@ const scrollMem = new Map<string, { top: number; bottom: boolean }>();
  * One session's conversation: the message list and the composer. paneId tells composers apart (their drafts, scroll
  * positions); focused: this one takes the keyboard; active: false while hidden (a background tab), so scroll
  * positions aren't recorded then. sub: a sub-agent's read-only view (the toolCallId of its card): no composer, no rewind.
+ * children: drawn over the conversation (e.g. a host's own empty state), inside the area that takes dropped files.
  */
 export function ChatView({
   session,
@@ -53,12 +54,14 @@ export function ChatView({
   focused,
   sub,
   active = true,
+  children,
 }: {
   session: ChatSession;
   paneId: string;
   focused: boolean;
   sub?: string;
   active?: boolean;
+  children?: ReactNode;
 }) {
   const host = useChatHost();
   const settings = useChatSettings();
@@ -68,6 +71,8 @@ export function ChatView({
   const loaded = t.loaded;
   const agentName = host.agentName?.(session.agent) ?? session.agent;
   const composer = useRef<ComposerHandle>(null);
+  const [dragging, setDragging] = useState(false);
+  const dragDepth = useRef(0); // dragenter / dragleave 进出子元素也会触发：数层数，出到最外面才算离开
 
   // 焦点切到这个 pane（或者前缀动作做完）时，把光标放回输入框。
   // 触屏上不做：聚焦输入框就弹软键盘，切个面板键盘就盖住半屏。手机上只有点了输入框本身才弹（和 Terminal 一样）。
@@ -298,10 +303,36 @@ export function ChatView({
     <SessionContext.Provider value={session}>
       <div
         data-gerdr-chat=""
-        className="flex h-full min-h-0 flex-col"
+        className="relative flex h-full min-h-0 flex-col"
         onMouseUp={clickToType}
         onClickCapture={(e) => (e.target as HTMLElement).closest("[aria-expanded]") && hold()}
+        // 文件拖到对话里任何地方都收（不只输入框）：附到输入框里。不接的话浏览器会把文件当页面打开
+        onDragEnter={(e) => {
+          if (sub || !e.dataTransfer.types.includes("Files")) return;
+          dragDepth.current++;
+          setDragging(true);
+        }}
+        onDragOver={(e) => {
+          if (!sub && e.dataTransfer.types.includes("Files")) e.preventDefault();
+        }}
+        onDragLeave={() => {
+          if (dragDepth.current > 0 && --dragDepth.current === 0) setDragging(false);
+        }}
+        onDrop={(e) => {
+          dragDepth.current = 0;
+          setDragging(false);
+          if (sub || !e.dataTransfer.files.length) return;
+          e.preventDefault();
+          composer.current?.addFiles(e.dataTransfer.files);
+          composer.current?.focus();
+        }}
       >
+        {children}
+        {dragging && (
+          <div className="pointer-events-none absolute inset-2 z-30 flex items-center justify-center rounded-xl border-2 border-dashed border-brand/60 bg-background/80 text-sm text-foreground">
+            {tr("composer.dropFiles")}
+          </div>
+        )}
         <div className="relative min-h-0 flex-1">
           {!loaded && <div className="py-10 text-center text-[13px] text-muted-foreground">{tr("chat.loading")}</div>}
           {loaded && msgs.length === 0 && sub && <div className="py-16 text-center text-[13px] text-muted-foreground">{tr("chat.subagentEmpty")}</div>}

@@ -1,4 +1,4 @@
-import { ArrowUp, ImagePlus, Loader2, Square, X, CornerDownRight, Zap, Pin, PinOff } from "lucide-react";
+import { ArrowUp, File as FileIcon, ImagePlus, Loader2, Paperclip, Square, X, CornerDownRight, Zap, Pin, PinOff } from "lucide-react";
 import { flushSync } from "react-dom";
 import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -24,11 +24,21 @@ export type ComposerHandle = {
   setContent(blocks: ContentBlock[]): void;
   putBack(blocks: ContentBlock[]): void;
   ctrlC(): void;
+  /** Attach files (dropped anywhere on the chat, ChatView). */
+  addFiles(files: FileList | File[]): void;
 };
 
-// See DraftImage (drafts.ts): images carry their bytes, videos an uploaded path.
+// See DraftImage (drafts.ts): images carry their bytes, videos an uploaded path, other files (host.localPath) the
+// path they have on this machine.
 type Img = DraftImage;
 const isVideo = (im: Img) => im.mimeType.startsWith("video/");
+// Neither an inline image nor a video: drawn as a chip with its name, not a thumbnail
+const isFile = (im: Img) => !isVideo(im) && !(im.mimeType.startsWith("image/") && !im.path);
+const baseName = (p: string) =>
+  p
+    .replace(/[\\/]+$/, "")
+    .split(/[\\/]/)
+    .pop() || p;
 
 /** The option group id of the mode (not a config option) in the option menus and the defaults. */
 export const MODE = "__mode";
@@ -58,8 +68,11 @@ async function blobData(url: string) {
 function toImgs(blocks: ContentBlock[]): Img[] {
   return blocks.flatMap((c): Img[] => {
     if (c.type === "image") return [{ data: c.data, mimeType: c.mimeType, url: `data:${c.mimeType};base64,${c.data}` }];
+    if (c.type !== "resource_link") return [];
     const v = videoLinkPath(c);
-    return v && c.type === "resource_link" ? [{ data: "", mimeType: "video/*", url: chatHost().fileURL(v), path: v, name: c.name }] : [];
+    if (v) return [{ data: "", mimeType: "video/*", url: chatHost().fileURL(v), path: v, name: c.name }];
+    const p = c.uri.replace(/^file:\/\//, "");
+    return [{ data: "", mimeType: "application/octet-stream", url: "", path: p, name: c.name || baseName(p) }];
   });
 }
 
@@ -135,6 +148,7 @@ export const Composer = forwardRef<
   useImperativeHandle(ref, () => ({
     focus: () => ta.current?.focus(),
     setText: (t: string) => putText(t),
+    addFiles: (files: FileList | File[]) => addFilesRef.current(files),
     // 回退：整条消息放回来，文字和贴的图都要（只放文字的话截图就丢了）
     setContent: (blocks0: ContentBlock[]) => {
       const blocks = dropShellContext(blocks0); // `!命令` 带过去的输出不放回来：命令卡片还在对话里，下一条照样带上
@@ -454,8 +468,8 @@ export const Composer = forwardRef<
     const to = alias && ALIASES[alias[1]];
     if (to && !(session.commands ?? []).some((c) => c.name === alias[1]) && (session.commands ?? []).some((c) => c.name === to)) t = `/${to}${alias[2]}`;
     if (!t && !imgs.length) return;
-    if (imgs.some((im) => isVideo(im) && !im.path)) {
-      toast(tr("composer.videoUploading"));
+    if (imgs.some((im) => (isVideo(im) || isFile(im)) && !im.path)) {
+      toast(tr(isVideo(imgs.find((im) => !im.path)!) ? "composer.videoUploading" : "composer.fileUploading"));
       return;
     }
     // Images that came from another device have only the reference: fetch the bytes now
@@ -607,13 +621,30 @@ export const Composer = forwardRef<
     toast(tr("composer.ctrlCAgain"), { id: "ctrlc", duration: 2000 });
   };
 
+  // ChatView's drop zone calls in through the handle (made once): always the latest addFiles
+  const addFilesRef = useRef<(files: FileList | File[]) => void>(() => {});
+  addFilesRef.current = (files) => addFiles(files);
+  // Any file, not only images: the host can hand its path on this machine to the agent (localPath) or upload it
+  const anyFile = !!(host.upload || host.localPath);
   const addFiles = (files: FileList | File[]) => {
     for (const f of Array.from(files)) {
+      const local = host.localPath?.(f);
       if (f.type.startsWith("video/")) {
-        addVideo(f);
+        if (local) addLocal(f, local);
+        else addVideo(f);
         continue;
       }
-      if (!f.type.startsWith("image/")) continue;
+      if (!f.type.startsWith("image/")) {
+        if (local) addLocal(f, local);
+        else if (host.upload) addVideo(f);
+        else if (anyFile) toast.error(tr("composer.noLocalFile", { name: f.name }));
+        continue;
+      }
+      // Images go inline (the model sees them); one too big for that goes by its path when it has one
+      if (f.size > 20 << 20 && local) {
+        addLocal(f, local);
+        continue;
+      }
       if (f.size > 20 << 20) {
         toast.error(tr("composer.tooBig", { name: f.name, max: "20MB" }));
         continue;
@@ -627,7 +658,18 @@ export const Composer = forwardRef<
     }
   };
 
+  // A file on this machine: attach its path as is, nothing read or copied (a folder works too)
+  const addLocal = (f: File, path: string) => {
+    if (imgs.some((x) => x.path === path)) return;
+    const video = f.type.startsWith("video/");
+    setImgs((xs) => [
+      ...xs,
+      { data: "", mimeType: f.type || "application/octet-stream", url: video ? host.fileURL(path) : "", path, name: f.name || baseName(path) },
+    ]);
+  };
+
   // Show the video right away from a local object URL, upload it in the background; send waits until it has a path.
+  // Other files without a local path take the same way (chip instead of a thumbnail).
   const addVideo = (f: File) => {
     const upload = host.upload;
     if (!upload) {
@@ -651,12 +693,20 @@ export const Composer = forwardRef<
   };
 
   // Enlarge an attachment: images and videos page together in the lightbox, where a video starts playing.
-  const preview = (i: number, from: Element) =>
+  // A file chip opens with the system's app instead (desktop hosts), nothing to enlarge
+  const preview = (i: number, from: Element) => {
+    const im = imgs[i];
+    if (isFile(im)) {
+      if (im.path) host.openNative?.(im.path, undefined, false);
+      return;
+    }
+    const media = imgs.map((x, j) => ({ x, j })).filter(({ x }) => !isFile(x));
     openLightbox(
-      imgs.map((x) => ({ url: x.url, video: isVideo(x) })),
-      i,
+      media.map(({ x }) => ({ url: x.url, video: isVideo(x) })),
+      media.findIndex(({ j }) => j === i),
       from,
     );
+  };
 
   // 选中的那张图上按键：← → 在图之间挑（最后一张再按 → 回输入框），退格 / Delete 删掉它，Esc 回输入框，回车放大看。
   // 删完焦点落到原位置上的下一张（退格往前一张，像删字），一张不剩就回输入框
@@ -948,13 +998,6 @@ export const Composer = forwardRef<
           running && "border-brand/40",
           shellMode && "border-warn/60 focus-within:border-warn/80",
         )}
-        onDragOver={(e) => e.preventDefault()}
-        onDrop={(e) => {
-          if (e.dataTransfer.files.length) {
-            e.preventDefault();
-            addFiles(e.dataTransfer.files);
-          }
-        }}
       >
         {imgs.length > 0 && (
           <div className="flex flex-wrap gap-2 px-3 pt-3">
@@ -968,7 +1011,23 @@ export const Composer = forwardRef<
                 onKeyDown={(e) => onImgKey(e, i)}
                 className="group/img relative rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-card"
               >
-                {isVideo(im) ? (
+                {isFile(im) ? (
+                  <div
+                    onClick={(e) => preview(i, e.currentTarget)}
+                    title={im.path ?? im.name}
+                    className={cn("flex h-14 max-w-56 items-center gap-2 rounded-md border bg-muted/50 px-3", im.path && host.openNative && "cursor-pointer")}
+                  >
+                    {im.path ? (
+                      <FileIcon className="size-5 shrink-0 text-muted-foreground" />
+                    ) : (
+                      <Loader2 className="size-5 shrink-0 animate-spin text-muted-foreground" />
+                    )}
+                    <div className="min-w-0 text-left leading-tight">
+                      <div className="truncate text-[13px]">{im.name ?? (im.path ? baseName(im.path) : "")}</div>
+                      {im.path && <div className="truncate text-[11px] text-muted-foreground">{im.path.replace(/^\/Users\/[^/]+/, "~")}</div>}
+                    </div>
+                  </div>
+                ) : isVideo(im) ? (
                   <div onClick={(e) => preview(i, e.currentTarget)} className="relative size-14 cursor-zoom-in overflow-hidden rounded-md border bg-muted">
                     <video src={`${im.url}#t=0.1`} muted playsInline preload="metadata" className="pointer-events-none size-full object-cover" />
                     {im.path ? (
@@ -1013,7 +1072,7 @@ export const Composer = forwardRef<
           onKeyDown={onKeyDown}
           onPaste={(e) => {
             const files = Array.from(e.clipboardData.files);
-            if (files.some((f) => f.type.startsWith("image/") || f.type.startsWith("video/"))) {
+            if (files.length && (anyFile || files.some((f) => f.type.startsWith("image/") || f.type.startsWith("video/")))) {
               e.preventDefault();
               addFiles(files);
             }
@@ -1047,15 +1106,16 @@ export const Composer = forwardRef<
             <Tooltip>
               <TooltipTrigger asChild>
                 <label className="flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground">
-                  <ImagePlus className="size-4" />
+                  {anyFile ? <Paperclip className="size-4" /> : <ImagePlus className="size-4" />}
                   <input
                     type="file"
-                    accept={host.upload ? "image/*,video/*" : "image/*"}
+                    accept={host.localPath ? undefined : host.upload ? "image/*,video/*" : "image/*"}
                     multiple
                     className="hidden"
                     onChange={(e) => {
                       if (!e.target.files?.length) return;
                       addFiles(e.target.files);
+                      e.target.value = ""; // 同一个文件删掉后还能再选
                       // 触屏上选完图直接弹键盘：附了图基本都要配一句话，省得再点一下输入框。
                       // 要在 change 回调里同步聚焦 —— 选图还算这次点击，晚了（等读完图）浏览器不给弹键盘
                       if (isCoarse()) ta.current?.focus();
@@ -1063,7 +1123,7 @@ export const Composer = forwardRef<
                   />
                 </label>
               </TooltipTrigger>
-              <TooltipContent>{host.upload ? tr("composer.attach") : tr("composer.attachImage")}</TooltipContent>
+              <TooltipContent>{host.localPath ? tr("composer.attachFile") : host.upload ? tr("composer.attach") : tr("composer.attachImage")}</TooltipContent>
             </Tooltip>
             {pinnedCmds.length > 0 && (
               <DropdownMenu>

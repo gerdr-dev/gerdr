@@ -1,11 +1,11 @@
-import { Bot, Brain, ChevronDown, CircleAlert, Info, Loader2, CornerDownRight } from "lucide-react";
+import { Bot, Brain, ChevronDown, CircleAlert, File as FileIcon, Info, Loader2, CornerDownRight } from "lucide-react";
 import { RewindButton } from "./RewindButton";
 import { memo, useEffect, useState, type ReactNode } from "react";
 import { Message, MessageContent } from "../ai/message";
 import { Markdown } from "./Markdown";
 import { Reasoning, ReasoningContent, ReasoningTrigger } from "../ai/reasoning";
 import { Shimmer } from "../ai/shimmer";
-import type { GMessage, GPart, ToolPart } from "../transcript";
+import { LOCAL_FILE, type GMessage, type GPart, type ToolPart } from "../transcript";
 import { cn } from "../utils";
 import { useKept } from "../kept";
 import { useChatHost, useChatSettings } from "../host";
@@ -61,6 +61,24 @@ function fmtTime(ts?: number) {
   return d.toDateString() === new Date().toDateString() ? hm : `${d.getMonth() + 1}/${d.getDate()} ${hm}`;
 }
 
+/** A file the user attached by its local path (not uploaded): name and path; a click opens it with the system. */
+function LocalFileChip({ path, name }: { path: string; name: string }) {
+  const host = useChatHost();
+  return (
+    <div
+      title={path}
+      onClick={() => host.openNative?.(path, undefined, false)}
+      className={cn("flex max-w-64 items-center gap-2 rounded-lg bg-white/15 px-2.5 py-1.5", host.openNative && "cursor-pointer hover:bg-white/25")}
+    >
+      <FileIcon className="size-4 shrink-0 opacity-80" />
+      <div className="min-w-0 text-left leading-tight">
+        <div className="truncate text-[13px]">{name}</div>
+        <div className="truncate text-[11px] opacity-70">{path.replace(/^\/Users\/[^/]+/, "~")}</div>
+      </div>
+    </div>
+  );
+}
+
 export const MessageView = memo(function MessageView({
   msg,
   sessionId,
@@ -75,7 +93,10 @@ export const MessageView = memo(function MessageView({
 }: Props) {
   if (msg.role === "user") {
     const text = msg.parts.map((p) => (p.type === "text" ? p.text : "")).join("");
-    const files = msg.parts.filter((p) => p.type === "file");
+    const all = msg.parts.filter((p) => p.type === "file");
+    // Images and videos as thumbnails (one lightbox pages through them); files sent by their local path as chips
+    const files = all.filter((p: any) => p.mediaType !== LOCAL_FILE);
+    const locals = all.filter((p: any) => p.mediaType === LOCAL_FILE);
     const meta = msg.metadata;
     const canRewind = !!onRewind && !!meta?.messageId && (!meta?.steer || steerRewind) && !meta?.sending && !running;
     // 元信息（时间、来源）在气泡下面一行小灰字（照 Astryx ChatMessageMetadata）；一摞连发的只在最后一条下面写时间
@@ -123,6 +144,13 @@ export const MessageView = memo(function MessageView({
                     <img key={i} src={f.url} onClick={open} className="h-40 w-auto max-w-full cursor-zoom-in rounded-xl border object-contain" />
                   );
                 })}
+              </div>
+            )}
+            {locals.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {locals.map((f: any, i) => (
+                  <LocalFileChip key={i} path={f.url} name={f.filename} />
+                ))}
               </div>
             )}
             {text}
