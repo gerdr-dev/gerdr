@@ -28,7 +28,7 @@ export function Dialogs() {
       <SessionsDialog open={d?.kind === "sessions"} />
       <WorkspacesDialog open={d?.kind === "workspaces"} />
       <Rename />
-      <NewWorkspace open={d?.kind === "newWorkspace"} />
+      <NewWorkspace open={d?.kind === "newWorkspace" || d?.kind === "editWorkspace"} editId={d?.kind === "editWorkspace" ? d.id : undefined} />
       <ImportHerdr open={d?.kind === "importHerdr"} />
       <ResumeDialog />
       <ImportAgentDialog />

@@ -790,6 +790,11 @@ export function renameWorkspace(id: string, name: string) {
   setLayout((l) => updateWs(l, id, (w) => ({ ...w, name: name.trim() || w.name })));
 }
 
+/** Change a workspace's directory (and name). The directory is only the default for tabs opened later; open ones keep theirs. */
+export function editWorkspace(id: string, name: string, cwd?: string) {
+  setLayout((l) => updateWs(l, id, (w) => ({ ...w, name: name.trim() || w.name, cwd })));
+}
+
 /**
  * Where to go once workspace `gone` disappears from `l`: the last one you were on if it's in the same session, else the first one left
  * in that session. Returns undefined when the session has none left.
@@ -1316,8 +1321,7 @@ export function runAction(a: KeyAction) {
     case "newWorkspace":
       return set({ dialog: { kind: "newWorkspace" } });
     case "renameWorkspace": {
-      const w = activeWs(l);
-      return set({ dialog: { kind: "rename", target: "workspace", id: w.id, value: w.name } });
+      return set({ dialog: { kind: "editWorkspace", id: activeWs(l).id } });
     }
     case "closeWorkspace":
       return closeWorkspace();
