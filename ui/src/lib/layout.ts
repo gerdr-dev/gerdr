@@ -22,7 +22,8 @@ export type PaneNode = PaneLeaf | PaneSplit;
 
 export type Tab = { id: string; name?: string; root: PaneNode; focus: string; zoom?: string };
 /** space: which session (see Space below) it belongs to; unset = the default one. */
-export type Workspace = { id: string; name: string; cwd?: string; tabs: Tab[]; activeTab: string; lastTab?: string; space?: string };
+/** rows: the sidebar's own order for this group (pane ids), see sideRows. Only the list; the screen doesn't follow it. */
+export type Workspace = { id: string; name: string; cwd?: string; tabs: Tab[]; activeTab: string; lastTab?: string; space?: string; rows?: string[] };
 /**
  * Space = herdr's "session": an isolated set of workspaces. The UI shows one at a time (the one the active workspace is in),
  * and agents in different spaces can't see or message each other through `gerdr session …` (cmd/gerdr/session.go,
@@ -152,6 +153,32 @@ export function activeWs(l: Layout): Workspace {
 export function activeTab(l: Layout): Tab {
   const w = activeWs(l);
   return w.tabs.find((t) => t.id === w.activeTab) ?? w.tabs[0];
+}
+
+/** A sidebar row: one pane, with the workspace and tab it really lives in (clicking it goes there). */
+export type SideRow = { ws: Workspace; tab: Tab; pane: PaneLeaf };
+
+/**
+ * The sidebar's groups: the panes each of a project's workspaces lists, in order. Decoupled from the screen (asked for):
+ * the panes of one split can sit in different groups. A pane is listed where it was dragged to (some workspace's `rows`,
+ * the first one claiming it), else under its own tab's workspace, after the ones placed by hand, in tab order.
+ */
+export function sideRows(l: Layout, space = currentSpace(l)): Map<string, SideRow[]> {
+  const wss = spaceWorkspaces(l, space);
+  const byPane = new Map<string, SideRow>();
+  for (const ws of wss) for (const tab of ws.tabs) for (const pane of leaves(tab.root)) byPane.set(pane.id, { ws, tab, pane });
+  const out = new Map<string, SideRow[]>();
+  const claimed = new Set<string>();
+  for (const g of wss) {
+    const rows: SideRow[] = [];
+    for (const id of g.rows ?? []) {
+      const r = byPane.get(id);
+      if (r && !claimed.has(id)) (claimed.add(id), rows.push(r));
+    }
+    out.set(g.id, rows);
+  }
+  for (const r of byPane.values()) if (!claimed.has(r.pane.id)) out.get(r.ws.id)!.push(r);
+  return out;
 }
 
 export function allLeaves(l: Layout): { ws: Workspace; tab: Tab; pane: PaneLeaf }[] {

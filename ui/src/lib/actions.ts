@@ -26,6 +26,7 @@ import {
   newWorkspace,
   rid,
   setPane,
+  sideRows,
   spaceList,
   spaceOf,
   spaceWorkspaces,
@@ -683,12 +684,36 @@ export function moveTabToWorkspace(tabId: string, wsId: string, index?: number) 
     const fw = l.workspaces.find((w) => w.tabs.some((t) => t.id === tabId));
     const tab = fw?.tabs.find((t) => t.id === tabId);
     if (!fw || !tab || fw.id === wsId || !l.workspaces.some((w) => w.id === wsId)) return l;
+    // Its panes' sidebar places go too: they follow the tab to the new workspace's group
+    const ids = new Set(leaves(tab.root).map((p) => p.id));
+    l = { ...l, workspaces: l.workspaces.map((w) => (w.rows?.some((id) => ids.has(id)) ? { ...w, rows: w.rows.filter((id) => !ids.has(id)) } : w)) };
     const out = updateWs(removeTab(l, fw, tabId), wsId, (w) => {
       const tabs = [...w.tabs];
       tabs.splice(index ?? tabs.length, 0, tab);
       return { ...w, tabs, activeTab: tab.id, lastTab: w.activeTab };
     });
     return { ...out, active: wsId, lastActive: l.active };
+  });
+}
+
+/**
+ * The sidebar only: list pane `paneId` in group `wsId` at `index` (counted without it). Tabs and splits stay as they are:
+ * the sidebar's groups are just how the list is arranged (layout.sideRows).
+ */
+export function placeRow(paneId: string, wsId: string, index: number) {
+  setLayout((l) => {
+    const owner = allLeaves(l).find((x) => x.pane.id === paneId);
+    const groups = owner && sideRows(l, spaceOf(owner.ws));
+    const rows = groups?.get(wsId);
+    if (!rows) return l;
+    const ids = rows.map((r) => r.pane.id).filter((id) => id !== paneId);
+    ids.splice(Math.min(index, ids.length), 0, paneId);
+    return {
+      ...l,
+      workspaces: l.workspaces.map((w) =>
+        w.id === wsId ? { ...w, rows: ids } : w.rows?.includes(paneId) ? { ...w, rows: w.rows.filter((x) => x !== paneId) } : w,
+      ),
+    };
   });
 }
 

@@ -45,7 +45,20 @@ import {
   tabName,
 } from "@/lib/actions";
 import { applyWorkspaceLabel } from "@/lib/addons";
-import { activeWs, currentSpace, leaves, locateSession, spaceList, spaceOf, spaceWorkspaces, type PaneLeaf, type Tab, type Workspace } from "@/lib/layout";
+import {
+  activeWs,
+  currentSpace,
+  leaves,
+  locateSession,
+  sideRows,
+  spaceList,
+  spaceOf,
+  spaceWorkspaces,
+  type PaneLeaf,
+  type SideRow,
+  type Tab,
+  type Workspace,
+} from "@/lib/layout";
 import {
   activeAllProjects,
   addActive,
@@ -81,10 +94,12 @@ import { TabDragLayer, startPaneDrag } from "./TabDrag";
  * The sidebar (on a phone, the drawer). One list in place of four things that each listed the same agents:
  * the workspace switcher, the tab bar, the agents list and the to-do view.
  *
- * - Every workspace of the project is a group, all shown at once (no switching), each collapsible. A group lists its tabs,
- *   one row per pane: a tab split in several panes shows its rows joined by a bar, so each agent's state stays visible.
+ * - Every workspace of the project is a group, all shown at once (no switching), each collapsible. A group lists one row
+ *   per pane, each on its own: panes split together on screen are not tied together here. Where a row sits (group and
+ *   order) is the sidebar's own (Workspace.rows, lib/layout.ts sideRows); dragging it never touches the split on screen.
+ *   Panes shown next to the current one are tinted lightly.
  * - "Active" above the groups replaces both the to-do list and the agents list. Who's in is overviewState.activeIds,
- *   shared with the overview: what needs you, runs, or was touched lately joins on its own, anything else can be added by
+ *   shared with the overview: what needs you or runs joins on its own, anything else can be added by
  *   hand; flat in the agents list's order. Each project chooses (the section's ⋯ menu) whether it lists every project's
  *   agents. Its grid (the overview's, lib/overview.ts) opens over the main area next to this list. The groups below still
  *   hold everything, so these rows show twice: the top is where to look, the groups are where things live.
@@ -173,6 +188,7 @@ export function UnifiedSidebar({ className }: { className?: string }) {
   const [folded, setFolded] = useFolded();
   const [activeFolded, setActiveFolded] = useLocal(ACTIVE_FOLD_KEY, false);
   const list = spaceWorkspaces(layout);
+  const groups = sideRows(layout);
   const cur = activeWs(layout);
   const curTab = cur.tabs.find((t) => t.id === cur.activeTab);
   const scroller = useRef<HTMLDivElement>(null);
@@ -308,30 +324,16 @@ export function UnifiedSidebar({ className }: { className?: string }) {
               sessions={sessions}
               unread={unread}
               current={ws.id === cur.id}
+              rows={groups.get(ws.id) ?? []}
             >
-              {ws.tabs.map((tab) => {
-                const ps = leaves(tab.root);
-                // data-side-tab(s): drag a row between two others to reorder (TabDrag.tsx)
-                if (ps.length === 1)
-                  return (
-                    <div key={tab.id} data-side-tab={tab.id}>
-                      <Row {...rowProps(ws, tab, ps[0], false)} />
-                    </div>
-                  );
-                return (
-                  // A split tab: its panes as rows joined by a bar in the group's left gutter, so their icons line up with the other rows
-                  <div
-                    key={tab.id}
-                    data-side-tab={tab.id}
-                    className="relative my-0.5 before:absolute before:top-1.5 before:bottom-1.5 before:-left-1.5 before:w-0.5 before:rounded-full before:bg-brand/40"
-                  >
-                    {ps.map((p) => (
-                      <Row key={p.id} {...rowProps(ws, tab, p, true)} />
-                    ))}
-                  </div>
-                );
-              })}
-              {ws.tabs.length === 0 && <div className="py-1 pl-7 text-[12px] text-muted-foreground">空的</div>}
+              {/* One row per pane, wherever it was dragged to (layout.sideRows): the panes of a split aren't tied together here,
+                  the ones on screen just light up. data-side-row(s): drag a row between two others to move it (TabDrag.tsx) */}
+              {groups.get(ws.id)?.map((r) => (
+                <div key={r.pane.id} data-side-row={r.pane.id}>
+                  <Row {...rowProps(r.ws, r.tab, r.pane, leaves(r.tab.root).length > 1)} />
+                </div>
+              ))}
+              {!groups.get(ws.id)?.length && <div className="py-1 pl-7 text-[12px] text-muted-foreground">空的</div>}
             </Group>
           ))}
         </div>
@@ -422,6 +424,7 @@ function Group({
   sessions,
   unread,
   current,
+  rows,
   children,
 }: {
   ws: Workspace;
@@ -431,19 +434,20 @@ function Group({
   sessions: Record<string, SessionSummary>;
   unread: Record<string, true>;
   current: boolean;
+  rows: SideRow[];
   children: React.ReactNode;
 }) {
   const layout = useStore((s) => s.layout);
   const others = spaceList(layout).filter((sp) => sp.id !== spaceOf(ws));
   const label = applyWorkspaceLabel(ws, index, ws.name);
-  const n = ws.tabs.reduce((k, t) => k + leaves(t.root).length, 0);
-  const waiting = ws.tabs.reduce((k, t) => k + leaves(t.root).filter((p) => needsYou(p.sessionId ? sessions[p.sessionId] : undefined, unread)).length, 0);
+  const n = rows.length;
+  const waiting = rows.filter((r) => needsYou(r.pane.sessionId ? sessions[r.pane.sessionId] : undefined, unread)).length;
   const rename = () => set({ dialog: { kind: "rename", target: "workspace", id: ws.id, value: ws.name } });
   return (
     <div className="mt-1">
       <ContextMenu>
         <ContextMenuTrigger asChild>
-          {/* data-ws-id: dropping a dragged row here moves its tab into this workspace (TabDrag.tsx) */}
+          {/* data-ws-id: dropping a sidebar row here lists it at the end of this group; a tab from the tab bar moves here (TabDrag.tsx) */}
           <div
             data-ws-id={ws.id}
             role="button"
@@ -515,7 +519,7 @@ function Group({
         </ContextMenuContent>
       </ContextMenu>
       {!folded && (
-        <div className="pl-2" data-side-tabs={ws.id}>
+        <div className="pl-2" data-side-rows={ws.id}>
           {children}
         </div>
       )}
