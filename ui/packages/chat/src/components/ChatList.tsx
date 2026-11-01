@@ -290,17 +290,20 @@ export const ChatList = forwardRef<
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // The scroller's own size: the keyboard, the IME candidate bar, a seam dragged. Width changes reflow every row.
+  // The scroller's own size: the keyboard, the IME candidate bar, a seam dragged, a pane zoomed. Width changes reflow
+  // every row, but only the mounted ones are measured again: the rest keep their size from the old width as an estimate
+  // and are measured when they mount, which the top row's anchor in sync absorbs. Mounting the whole chat to measure it
+  // here (as on opening) cost ~700ms per pane zoom on a long session, more with every page of older messages loaded.
   useEffect(() => {
     const s = el.current;
     if (!s) return;
     let w = s.clientWidth;
     const r = new ResizeObserver(() => {
-      if (Math.abs(s.clientWidth - w) > 1) {
-        w = s.clientWidth;
-        measureAll(false);
-      }
-      sync([]);
+      // Hidden (display:none) reads as width 0: not a width change, it comes back at the old one
+      if (!s.clientWidth) return;
+      const reflow = Math.abs(s.clientWidth - w) > 1;
+      w = s.clientWidth;
+      sync(reflow ? undefined : []);
     });
     r.observe(s);
     return () => r.disconnect();

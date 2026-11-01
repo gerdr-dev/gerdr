@@ -191,6 +191,11 @@ Virtuoso 在 ResizeObserver 里量行高、改布局，所以 rAF 里看到「�
     the whole screen swapped on the first load). The new rows are mounted once beside the range, measured and dropped,
     instead of mounting the whole chat again (`touchscroll.mjs --fling --height=462`). The remount check there skips
     frames that mount rows with a lower item index than any seen before: those are older messages, not a remount.
+  - A width change (sidebar toggled, seam dragged, a split pane zoomed) used to measure every row again the way
+    opening does: the whole chat mounted in one flushSync, ~600ms headless per change on a 15MB session with older
+    pages loaded, ~700ms in the user's profile per pane zoom. Now only the mounted rows are measured; the rest keep
+    their old-width size as an estimate until they mount, and the top row's anchor absorbs the difference
+    (`fling.mjs --resize [--to-top]`: the same jumps as before the change, all rows resizing on their own).
   - `keyboard.mjs --type` judged rAF frames, which run before layout and show the composer's new height before the
     list has stuck to the bottom. The `--ro` log now also watches the scroller, so it sees frames where only the chat's
     own size changed, and both modes judge painted frames.

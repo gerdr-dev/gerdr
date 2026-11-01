@@ -21,6 +21,12 @@ if (a.from) {
     await page.waitForTimeout(50);
   }
 }
+// --resize: change the chat's width first (the sidebar toggled, like a pane zoom): rows off screen still carry their
+// height from the old width and must not jump when they come in
+if (a.resize) {
+  await page.evaluate(() => window.__store.set((s) => ({ sidebar: !s.sidebar })));
+  await page.waitForTimeout(800);
+}
 await startFrameLog(page, { sid });
 if (a["to-top"]) {
   for (let i = 0; i < 400; i++) {
