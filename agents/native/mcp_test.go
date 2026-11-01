@@ -90,6 +90,63 @@ func TestMCPStdio(t *testing.T) {
 	}
 }
 
+// /mcp answers from the agent itself: no model call, nothing added to the history.
+func TestMCPCommand(t *testing.T) {
+	e := setup(t, mcpScript("mcp__fake__echo"))
+	useMCP(t, e,
+		MCPServer{Name: "fake", Command: os.Args[0], Env: map[string]string{"FAKE_MCP": "1"}},
+		MCPServer{Name: "broken", Command: "/nonexistent/mcp-server"},
+	)
+	sid := e.newSession(modeDefault)
+	say := func(text string) string {
+		t.Helper()
+		e.h.mu.Lock()
+		from := len(e.h.updates)
+		e.h.mu.Unlock()
+		if _, err := e.prompt(sid, uuid.NewString(), text); err != nil {
+			t.Fatal(err)
+		}
+		e.h.mu.Lock()
+		defer e.h.mu.Unlock()
+		var b strings.Builder
+		for _, n := range e.h.updates[from:] {
+			if c := n.Update.AgentMessageChunk; c != nil && c.Content.Text != nil {
+				b.WriteString(c.Content.Text.Text)
+			}
+		}
+		return b.String()
+	}
+	out := say("/mcp")
+	for _, want := range []string{"**fake**", "已连上，1 个工具", "`echo`", "**broken**", "没连上", "/nonexistent/mcp-server"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("/mcp output lacks %q:\n%s", want, out)
+		}
+	}
+	if out := say("/mcp fake"); !strings.Contains(out, "Echo text") || !strings.Contains(out, "只读") || strings.Contains(out, "broken") {
+		t.Fatalf("/mcp fake:\n%s", out)
+	}
+	if out := say("/mcp reconnect fake"); !strings.Contains(out, "已重连") || !strings.Contains(out, "已连上") {
+		t.Fatalf("/mcp reconnect fake:\n%s", out)
+	}
+	if out := say("/mcp nope"); !strings.Contains(out, "没有叫 `nope`") {
+		t.Fatalf("/mcp nope:\n%s", out)
+	}
+	if n := e.llm.count(); n != 0 {
+		t.Fatalf("/mcp called the model %d times", n)
+	}
+	s, _ := e.ag.session(sid)
+	if msgs := s.contextMessages(); len(msgs) != 0 {
+		t.Fatalf("/mcp went into the history: %v", msgs)
+	}
+	// The reconnected server is used by the next real turn.
+	if _, err := e.prompt(sid, uuid.NewString(), "use it"); err != nil {
+		t.Fatal(err)
+	}
+	if c := e.llm.request(1)["messages"].([]any)[3].(map[string]any)["content"]; c != "echo: hi" {
+		t.Fatalf("mcp result after reconnect %v", c)
+	}
+}
+
 func TestMCPHTTP(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var msg map[string]any

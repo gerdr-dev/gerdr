@@ -21,7 +21,9 @@
 //     turn thinking off. Changing the model resets the effort to the model's default.
 //   - session/prompt: give every user message a messageId (rewind finds messages by it). A prompt that is
 //     exactly "/clear" starts a fresh context (below); "/compact [instructions]" summarises the history now;
-//     "/memory [request]" works on long-term memory; "/<skill> [args]" runs a skill. PromptResponse.Usage is
+//     "/memory [request]" works on long-term memory; "/mcp [name]" reports the MCP servers (connected or the
+//     error, tools) and "/mcp reconnect [name]" reconnects them — answered without a model call and not kept in the
+//     history; "/<skill> [args]" runs a skill. PromptResponse.Usage is
 //     the turn's token usage (all model calls, compaction and sub-agents included).
 //   - _meta on session/new (and load / resume) is kept per session and handed to Options.SystemPrompt,
 //     Options.BashEnv and caller tools (ToolCall.Meta). Its "gerdr" key holds gerdr's own settings (mode, model).

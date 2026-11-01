@@ -405,6 +405,7 @@ var builtinCommands = []acp.AvailableCommand{
 	{Name: "clear", Description: "清空上下文：另起一段新对话，之前说过的不再带上"},
 	{Name: "compact", Description: "压缩上下文：把之前的对话总结成摘要，腾出上下文空间（后面可以跟要求）"},
 	{Name: "memory", Description: "看它跨会话记住了什么；后面跟话就是关于记忆的要求（比如「/memory 忘掉 xxx」「/memory 记住 xxx」）"},
+	{Name: "mcp", Description: "MCP 服务器：连上没有、报了什么错、有哪些工具；/mcp <名字> 看工具说明，/mcp reconnect [名字] 重连"},
 }
 
 func (a *Agent) announceCommands(s *session) {
@@ -450,6 +451,9 @@ func (a *Agent) Prompt(ctx context.Context, p acp.PromptRequest) (acp.PromptResp
 	name, args := slash(p.Prompt)
 	if name == "clear" && args == "" {
 		return a.clear(s)
+	}
+	if name == "mcp" {
+		return a.mcpCommand(ctx, s, args)
 	}
 	tctx, end, err := s.begin()
 	if err != nil {
