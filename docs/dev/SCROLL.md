@@ -1,6 +1,7 @@
 # 对话列表的滚动：闪、跳、停不到底，怎么复现、怎么查
 
-对话是虚拟列表（react-virtuoso，`ui/src/components/chat/ChatView.tsx`）：只挂屏幕附近的行，滚出去的卸掉，
+对话是虚拟列表（our own `ui/packages/chat/src/components/ChatList.tsx`; it was react-virtuoso until fb9189f, the
+old code is in git history）：只挂屏幕附近的行，滚出去的卸掉，
 卸掉的行用记下的高度垫着占位。所以**任何一行「记的高度」和「实际高度」对不上，滚到那儿就会跳**；
 任何一次「布局变了但 scrollTop 没跟上」，眼前的内容就会被推走。这类问题肉眼只看得到「闪了一下」，
 靠猜几乎改不对（4caa31c 之前在补偿逻辑上打过好几轮补丁，都是在别处跳得更厉害）。办法只有一个：**逐帧量**。
@@ -18,8 +19,8 @@ make dev                                     # 回仓库根起调试实例（787
 node tabs.mjs                                # 然后跑场景，见下表
 ```
 
-`setup.mjs --list=own` runs the scripts against Gerdr's own list (Labs → 新的对话列表, `ChatList.tsx`); they find either
-list (`[data-virtuoso-scroller], [data-chat-scroller]`). If the debug build doesn't compile (someone else's work in
+The scripts still find the old react-virtuoso list too (`[data-virtuoso-scroller], [data-chat-scroller]`), for
+checking out an older commit. If the debug build doesn't compile (someone else's work in
 progress), start the installed binary instead: `GERDR_UI=$PWD/ui GERDR_DIR=~/.gerdr-dev GERDR_PORT=7871 gerdr`.
 Run `panes.mjs` / `tabs.mjs` / `open.mjs` last or `setup.mjs` again after them: they leave the debug layout split or
 on another tab, and the scripts after them find no chat.
@@ -163,7 +164,8 @@ Virtuoso 在 ResizeObserver 里量行高、改布局，所以 rAF 里看到「�
   up instead of at the bottom (not reproduced headless, CPU x6, reload or reopening from the list), and the
   jump-to-bottom button scrolling in stutters. Lesson for our own list: one place that owns scrollTop, sizes known
   before paint, the bottom followed by us, positions by row key.
-- **Our own list (`ChatList.tsx`, Labs → 新的对话列表).** Built on that lesson: one function (`sync`) measures rows,
+- **Our own list (`ChatList.tsx`), the chat list since; react-virtuoso and its patches in `ChatView.tsx` removed.** The
+  Virtuoso entries above describe that removed code; they stay as the record of what a chat list has to handle. Built on that lesson: one function (`sync`) measures rows,
   lays them out from sizes kept by key, writes positions to the DOM and puts scrollTop where it belongs, all before
   paint (after every commit and from a ResizeObserver on the rows). At the bottom: the end. Otherwise the row at the
   top of the screen keeps its distance from the screen's top, found by key in the layout from before the change; that

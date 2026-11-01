@@ -6,7 +6,7 @@ import { cn } from "../utils";
 import { t, type MessageKey } from "../i18n";
 import { childTools, MessageView, partVisible, renderPart } from "./MessageView";
 
-// 对话是虚拟列表（react-virtuoso），只渲染屏幕附近的行。长对话卡的是两样：DOM 太多、每次更新都要重排一长串 markdown。
+// 对话是虚拟列表（ChatList.tsx），只渲染屏幕附近的行。长对话卡的是两样：DOM 太多、每次更新都要重排一长串 markdown。
 //
 // 「一行」不是一条消息，是消息里的一块：用户的一句话一行；助手一轮回复里的每段文字、每个工具调用、每张卡片各一行。
 // 一轮回复常常就有几百个工具调用 —— 按消息切的话，最长的那一轮照样整个渲染，虚拟化等于没做。

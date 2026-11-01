@@ -287,9 +287,6 @@ export function SettingsDialog({ open }: { open: boolean }) {
               <Row label="对话虚拟滚动" hint="只渲染屏幕附近的消息，很长的对话更省内存；往上翻时带图的消息可能会跳动" local>
                 <Switch checked={!!dev.virtualList} onCheckedChange={(v) => setPref({ virtualList: v })} />
               </Row>
-              <Row label="新的对话列表" hint="对话列表换成 Gerdr 自己写的虚拟列表（替代 react-virtuoso），为了解决输出时往上翻跳动的问题。所有设备一起生效">
-                <Switch checked={!!cfg.ownList} onCheckedChange={(v) => setConfig({ ownList: v })} />
-              </Row>
               <Row label="选中即复制" hint="和 herdr 一样：拖着选中文字，松开鼠标就复制到剪贴板；双击选词也会复制。对话和终端里都管用，输入框里不复制" local>
                 <Switch checked={!!dev.copyOnSelect} onCheckedChange={(v) => setPref({ copyOnSelect: v })} />
               </Row>

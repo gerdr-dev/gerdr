@@ -5,7 +5,7 @@ import { t as tr } from "../i18n";
 import { RowView, type Row, type RowEnv } from "./Rows";
 
 /**
- * Gerdr's own virtual list for the chat (Labs → "own chat list"), in place of react-virtuoso. Why our own: Virtuoso and
+ * Gerdr's own virtual list for the chat, in place of react-virtuoso (removed; in git history). Why our own: Virtuoso and
  * then TanStack Virtual each kept several parties writing scrollTop (the library's compensation, its following of the
  * end, our patches on top), each from a different frame, and the chat jumped wherever they disagreed
  * (docs/dev/SCROLL.md). Here one function, `sync`, owns scrollTop and the rows' positions:

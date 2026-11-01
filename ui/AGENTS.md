@@ -77,7 +77,7 @@ src/lib/
 - 圆角用 `rounded-sm/md/lg/xl` 这几档（哪种东西用哪档见 `src/index.css` 里 `--radius` 上面的注释），别用裸 `rounded` 或写死像素。
 - 一个 `.tsx` 文件里只导出组件（大写开头 / default）时，改它能热替换、不丢状态；导出了别的（函数、常量）的文件改了会整个重新渲染。
 
-- 对话是**虚拟列表**（react-virtuoso）：「设置 → 实验室」里打开虚拟滚动时，只渲染屏幕附近的行，滚出去的会被卸载（默认关着，但组件要按开着写）。所以对话里的组件**别用 useState 记「展开没」这类状态**
+- 对话是**虚拟列表**（`packages/chat/src/components/ChatList.tsx`）：「设置 → 实验室」里打开虚拟滚动时，只渲染屏幕附近的行，滚出去的会被卸载（默认关着，但组件要按开着写）。所以对话里的组件**别用 useState 记「展开没」这类状态**
   （滚回来就没了），用 `packages/chat/src/kept.ts` 的 `useKept(key, 初值)`，key 带上会话 id 和这块东西的 id。
 - 格式按 `.prettierrc.json`（行宽 160、双引号、分号），`src/` 下的 ts / tsx 已经全部是 prettier 3.9.10 排过的：改完对改了的文件跑
   `npx prettier@3.9.10 --write <文件>`，**要在界面目录里跑** —— 在别处跑（或者把文件拷到 /tmp 再排）读不到 `.prettierrc.json`，

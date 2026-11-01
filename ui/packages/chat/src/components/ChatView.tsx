@@ -1,10 +1,9 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type Ref } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
-import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { ArrowDown, CornerDownRight } from "lucide-react";
 import { Button } from "../ui/button";
 import { cn } from "../utils";
-import { buildRows, RowView, type Row, type RowEnv } from "./Rows";
+import { buildRows, type Row, type RowEnv } from "./Rows";
 import { toast } from "sonner";
 import { useChatHost, useChatSettings } from "../host";
 import { t as tr } from "../i18n";
@@ -19,47 +18,6 @@ import { isCoarse } from "../device";
 import { ChatList, type ListHandle } from "./ChatList";
 
 /** sub：子 agent 的只读面板（值 = 它在主会话里那张卡片的 toolCallId）。没有输入框、不能回退。 */
-// 最后一条和输入框之间留一截（照 ChatGPT 桌面版的留白）：贴太近的话最后那行元信息和输入框挤在一起。
-// 手机上只留一点：屏幕本来就矮，一截空白占掉两三行字（用户报的）
-const ListFooter = () => <div className="h-12 max-md:h-5" />;
-
-// 顶上一行：前面还有更早的消息（打开会话只拉了最近一段，翻到这儿自动接着拉）。高度固定，拉完了也留着空白 ——
-// 顶上的东西一变高矮，下面整段内容就跟着跳。
-const ListHeader = ({ context }: { context?: { older?: "more" | "loading" } }) => (
-  <div className="flex h-8 items-center justify-center text-[12px] text-muted-foreground">
-    {context?.older === "loading" && <Loader2 className="size-3.5 animate-spin" />}
-    {context?.older === "more" && tr("chat.scrollForOlder")}
-  </div>
-);
-
-/**
- * 贴着底时，不让 Virtuoso 往上「补偿」。一行的顶已经滚出视野上沿、这时把它收起来（展开的长工具输出），
- * Virtuoso 当它是「视野上面的行变矮了」，scrollBy 负的那么多，想让下面的内容不动 —— 可浏览器已经把 scrollTop 夹回底部了，
- * 再往上推就离开了底部：收起之后反而不贴底、冒出「回到底部」（用户报的）。
- * 只在调用那一刻确实在底部时才吞：人往上翻时位置早已不在底部，那时的补偿照旧（不然翻的时候内容会跳）。
- */
-function keepBottomOnShrink(el: HTMLElement, bottomRef: { current: boolean }, prepending: () => boolean) {
-  if ((el as any).__keepBottom) return;
-  (el as any).__keepBottom = true;
-  const scrollBy = el.scrollBy.bind(el) as (o: ScrollToOptions) => void;
-  el.scrollBy = ((o: ScrollToOptions) => {
-    const atBottom = el.scrollHeight - el.clientHeight - el.scrollTop < 80;
-    if (typeof o === "object" && (o.top ?? 0) < 0 && atBottom && bottomRef.current) return;
-    // Virtuoso's other scrollBy is its "upward scrolling compensation": while the last scroll went up, whenever its idea
-    // of the list's total height changes it scrolls by the difference, assuming rows above the screen changed. Here
-    // that's about always wrong, so it only runs while older messages are being put in front (loadOlder, where the
-    // shift is real and the settle code below works with it). Every row is measured when a chat opens (`measured`),
-    // so Virtuoso already has the real heights of rows above; what it compensated for instead was (a) a reply being
-    // written growing at its bottom, below the top of the screen: the text the user was reading ran forward a line at a
-    // time while they dragged up; (b) its per-index sizes going stale when rows shift (a queued steer landing, tool
-    // call rows coming and going): scrollBy -225 four times in a second while the real height grew 40px each, throwing
-    // the user back to their own message. Both from a trace taken on the user's phone (keyboard up, a ~290px chat);
-    // tools/scrolltest/touchhold.mjs --creep catches (a).
-    if (!prepending()) return;
-    scrollBy(o);
-  }) as typeof el.scrollBy;
-}
-
 // 顶上钉着的那句用户消息：一行，太长截掉；图片 / 文件写成 [图片] 这种占位
 function PinnedPrompt({ msg, onClick }: { msg: GMessage; onClick: () => void }) {
   const text = msg.parts
@@ -83,66 +41,6 @@ function PinnedPrompt({ msg, onClick }: { msg: GMessage; onClick: () => void }) 
 
 // 每个 pane 的滚动位置（在不在底部、滚到哪）：列表被卸载再挂回来（tab 被挤出保留数、虚拟列表重建）时照它恢复。
 const scrollMem = new Map<string, { top: number; bottom: boolean }>();
-
-/**
- * 人最近一次在这个对话的滚动区里动手（滚轮、触摸、按键、按下 / 按住拖滚动条）的时刻：分清滚动是人滚的还是布局变了带的（见 syncBottom）。
- * 只认滚动区里面的：切 tab 本身就是一次点击 / 按键，紧跟着就是重新挂载、边挂边量 —— 全局算的话正好把这段放过去了。
- * 触控板惯性也是一串 wheel，一直在续。
- */
-function lastInputOf(el: HTMLElement): number {
-  const s = el as HTMLElement & { __lastInput?: number };
-  if (s.__lastInput === undefined) {
-    s.__lastInput = 0;
-    const mark = () => (s.__lastInput = performance.now());
-    for (const ev of ["wheel", "touchstart", "touchmove", "keydown", "pointerdown"]) el.addEventListener(ev, mark, { passive: true });
-    el.addEventListener("pointermove", (e) => e.buttons && mark(), { passive: true });
-  }
-  return s.__lastInput;
-}
-
-/**
- * Which way the user last scrolled, and when: wheel, a finger dragging, ↑↓ / PageUp / PageDown / Home / End. Calls
- * `leave` the moment it's up. Leaving the bottom is decided here, from the input, not from the scroll event it causes:
- * that one lands a frame later, and a reply streaming in meanwhile had already pushed the list back to the bottom, so the
- * scroll looked like no move up and the chat stayed stuck to the bottom. A wheel paused between steps rarely hit that; a
- * finger moving every 16ms always did, so a short drag up from the bottom kept getting pulled back down and the text
- * under the finger bobbed (user report, tools/scrolltest/touchhold.mjs). Wheel and touch go the same way.
- */
-type Dir = { up: boolean; t: number };
-function trackScrollDir(el: HTMLElement, leave: () => void): Dir {
-  const s = el as HTMLElement & { __dir?: Dir; __leave?: () => void };
-  s.__leave = leave;
-  if (s.__dir) return s.__dir;
-  const dir: Dir = (s.__dir = { up: false, t: 0 });
-  const mark = (up: boolean) => {
-    dir.up = up;
-    dir.t = performance.now();
-    // Nothing above to scroll to (a short chat): not a move up
-    if (up && el.scrollTop > 0) s.__leave!();
-  };
-  el.addEventListener("wheel", (e) => e.deltaY && mark(e.deltaY < 0), { passive: true });
-  let y: number | undefined;
-  el.addEventListener("touchstart", (e) => (y = e.touches[0]?.clientY), { passive: true });
-  el.addEventListener(
-    "touchmove",
-    (e) => {
-      const ny = e.touches[0]?.clientY;
-      if (ny !== undefined && y !== undefined && ny !== y) mark(ny > y);
-      y = ny;
-    },
-    { passive: true },
-  );
-  const keys: Record<string, boolean> = { ArrowUp: true, PageUp: true, Home: true, ArrowDown: false, PageDown: false, End: false };
-  el.addEventListener("keydown", (e) => e.key in keys && mark(keys[e.key]));
-  return dir;
-}
-
-/** A scroll the user asked for from outside the scroller (the pinned prompt): count it as input so syncBottom lets it leave the bottom. */
-function markInput(el: HTMLElement | null) {
-  if (!el) return;
-  lastInputOf(el);
-  (el as HTMLElement & { __lastInput?: number }).__lastInput = performance.now();
-}
 
 /**
  * One session's conversation: the message list and the composer. paneId tells composers apart (their drafts, scroll
@@ -242,23 +140,7 @@ export function ChatView({
 
   const msgs = t.all;
   const virtualList = !!settings.virtualList;
-  // Labs: our own list instead of react-virtuoso (ChatList.tsx). The Virtuoso-only fixes below find none of Virtuoso's
-  // elements then and do nothing.
-  const own = !!settings.ownList;
   const showThinking = settings.showThinking !== false;
-  // 虚拟滚动开着时，打开会话先把所有行渲染一次、量出真实高度，再缩回只渲染屏幕附近（Virtuoso 记得量过的高度，行卸载了也不忘）。
-  // 不先量的话，往上翻时新进渲染范围的行只能按估的高度占位，实际一挂上高度对不上，整段内容被推走一截，Virtuoso 下一帧才补回来 ——
-  // 一翻一闪（用户报的；录屏逐帧比过：小步连续滚 300 下，45 处 -223 / +223 来回跳）。在补偿上打补丁试过几种（浏览器原生锚定、
-  // 自己在 ResizeObserver 里抢先补），都会在别处跳得更厉害。代价是打开时一次性全量渲染，量完就释放。
-  const [measured, setMeasured] = useState(false);
-  const measureTimer = useRef(0);
-  // 量完 = 总高度连续 300ms 不再变（totalListHeightChanged 里续），最长等 2 秒
-  useEffect(() => {
-    if (!virtualList || measured) return;
-    const t = setTimeout(() => setMeasured(true), 2000);
-    return () => clearTimeout(t);
-  }, [virtualList, measured]);
-  useEffect(() => () => clearTimeout(measureTimer.current), []);
   const [openGroups, setOpenGroups] = useKept<Record<string, boolean>>(`groups:${session.id}:${sub ?? ""}`, {});
   // 还在跑的后台任务：拼成串当依赖，任务进度一直在推，不能每推一次就重排整份对话
   const liveTaskIds = (session.tasks ?? [])
@@ -276,15 +158,13 @@ export function ChatView({
     const t = setTimeout(() => setTick((x) => x + 1), Math.max(0, wake - Date.now()));
     return () => clearTimeout(t);
   }, [wake]);
-  // 往前补了更早的消息（loadOlder）：告诉 Virtuoso 前面多了几行（firstItemIndex 往小改），它保住眼前这行不动。
-  // 不改的话它当成整份换了，滚动位置留在原来的像素高度上 —— 眼前的内容被新插进来的顶走。
+  // Older messages put in front (loadOlder): firstIdx goes down by as many rows, so a row keeps its data-item-index.
   const older = t.older;
   const olderRef = useRef(t);
   olderRef.current = t;
   // 前面多了几行：拿原来的前几行去新的里找，位置差就是。不只认第一行 —— 接缝那儿的行可能变了（折叠组并进了新来的工具调用）
   const firstIdx = useRef(1_000_000);
   const prevRows = useRef<Row[]>([]);
-  const prepended = useRef(0); // 刚往前补过：到这个时刻为止盯着眼前那一行（见下面 settle）
   if (rows !== prevRows.current) {
     const prev = prevRows.current;
     if (prev.length && rows.length > prev.length && prev[0].key !== rows[0].key) {
@@ -294,110 +174,17 @@ export function ChatView({
         if (i === undefined) continue;
         if (i > j) {
           firstIdx.current -= i - j;
-          prepended.current = performance.now() + 1500;
         }
         break;
       }
     }
     prevRows.current = rows;
   }
-  // 光改 firstItemIndex 不够：Virtuoso 只在插进来那一下按估的行高 scrollBy 一次，等新行挂上、量出真实高度（往往差几千像素），
-  // 差的那截它不再补 —— scrollTop 不动、上面变高，眼前的内容被整段顶走（逐帧量过：补一段 scrollBy +5700，170ms 后总高又涨 6482，
-  // scrollTop 没动）。所以补完这一小会儿自己盯着眼前顶上那一行：它在内容里的位置（offset）变了、scrollTop 没跟上的那截替它补上。
-  // 人这时可能还在甩（惯性），不能把它钉死在屏幕上原来的位置 —— 只补「上面变高 / 变矮」的那部分。
-  // 在哪儿补：ResizeObserver 里，而且这个 observer 比 Virtuoso 的晚建 —— 同一阶段按创建顺序跑，轮到它时 Virtuoso 该补的已经补完，
-  // 这时的样子就是这一帧要画的。放在 rAF 里补晚了一帧（rAF 在 ResizeObserver 之前，新行是在那之后量出来的：错位先画出来一帧），
-  // 而且会抢在 Virtuoso 前面，它本来会补的也被补了两遍。
-  // 认行用 data-item-index（= firstItemIndex + 位置）：往前补时同一行的它不变。别用 data-index（在 rows 里的位置）配 rows ——
-  // 换数据的那一两帧 DOM 上还是旧行、rows 已经是新的，一配就认错行（踩过：补反了，一下跳回几千像素之前）
-  const settle = useRef<{ idx: string; o: number; st: number } | null>(null);
-  const settleFix = useRef<(() => void) | null>(null);
-  useLayoutEffect(() => {
-    const el = scrollerEl.current;
-    const lst = el?.querySelector("[data-testid=virtuoso-item-list]");
-    if (!el || !lst || performance.now() > prepended.current) return;
-    const offset = (it: HTMLElement) => it.getBoundingClientRect().top - el.getBoundingClientRect().top + el.scrollTop;
-    const anchorOf = () => {
-      const top = el.getBoundingClientRect().top;
-      for (const it of el.querySelectorAll<HTMLElement>("[data-item-index]"))
-        if (it.getBoundingClientRect().bottom > top + 1) return { idx: it.dataset.itemIndex!, o: offset(it), st: el.scrollTop };
-      return null;
-    };
-    const fix = () => {
-      if (performance.now() > prepended.current) return stop();
-      const a = settle.current;
-      const it = a && el.querySelector<HTMLElement>(`[data-item-index="${a.idx}"]`);
-      if (a && it) {
-        // 上面的行变高 / 变矮了 dO，scrollTop 同时动了 dSt（Virtuoso 自己补的 + 人滚的）：没补够的差 = dO - dSt
-        const dO = offset(it) - a.o;
-        const miss = dO - (el.scrollTop - a.st);
-        if (Math.abs(dO) > 1 && Math.abs(miss) > 1) el.scrollTop += miss;
-      }
-      settle.current = anchorOf();
-    };
-    const ro = new ResizeObserver(fix);
-    const stop = () => {
-      ro.disconnect();
-      settle.current = null;
-      settleFix.current = null;
-    };
-    ro.observe(lst);
-    settleFix.current = fix; // 人滚动（onScroll）时也过一遍：布局没变就只是记下新的位置
-    if (!settle.current) settle.current = anchorOf();
-    const t = setTimeout(stop, prepended.current - performance.now());
-    return () => {
-      clearTimeout(t);
-      ro.disconnect();
-    };
-  }, [rows]);
-  const listCtx = useMemo(() => ({ older }), [older]);
   // 离顶不到一屏 / 内容还不满一屏：接着拉更早的
   const nearTop = (el: HTMLElement) => {
     if (olderRef.current.older === "more" && el.scrollTop < Math.max(400, el.clientHeight)) olderRef.current.loadOlder?.();
   };
-  // 要重新量：行的结构变了（中间展开 / 收起一组、回退，后面的行全换了序号，Virtuoso 按序号记的高度就对不上了）。
-  // 只在末尾追加 / 换掉最后一两行（流式输出、状态行）不算：那些行就在眼前，挂上就量
-  const prevKeys = useRef<string[]>([]);
-  useEffect(() => {
-    const prev = prevKeys.current;
-    const cur = rows.map((r) => r.key);
-    prevKeys.current = cur;
-    let k = 0;
-    while (k < prev.length && k < cur.length && prev[k] === cur[k]) k++;
-    if (!prev.length || k >= Math.min(prev.length, cur.length) - 2) return;
-    // Only a change above the rows mounted now goes stale: from the first mounted row down, rows are measured as they
-    // are, and a change below what's on screen moves nothing in view. Without this, a steer waiting at the bottom (its
-    // bubble and the working row are the last two rows) made every new tool call a change "in the middle": the whole
-    // chat was mounted and measured again on each one, and on a phone the screen jumped by whole pages while the user
-    // read (screen recording; tools/scrolltest/touchscroll.mjs --at the turn with the steer).
-    // Strictly below it: older messages put in front (loadOlder) change row 0, and scrolled to the top row 0 is the first
-    // mounted one; those rows have never been measured (tools/scrolltest/fling.mjs caught this with >=).
-    const first = scrollerEl.current?.querySelector<HTMLElement>("[data-index]");
-    if (first && k > Number(first.dataset.index)) return;
-    setMeasured(false);
-  }, [rows]);
-  // 宽度变了（拖分屏、改窗口）：每一行的高度都变了，也重新量
-  const widthRO = useRef<{ ro: ResizeObserver; el: HTMLElement; w: number } | null>(null);
-  const watchWidth = (el: HTMLElement | null) => {
-    if (widthRO.current?.el === el) return;
-    widthRO.current?.ro.disconnect();
-    widthRO.current = null;
-    if (!el) return;
-    const cur = {
-      el,
-      w: el.clientWidth,
-      ro: new ResizeObserver(() => {
-        if (Math.abs(el.clientWidth - cur.w) > 1) {
-          cur.w = el.clientWidth;
-          setMeasured(false);
-        }
-      }),
-    };
-    cur.ro.observe(el);
-    widthRO.current = cur;
-  };
-  useEffect(() => () => widthRO.current?.ro.disconnect(), []);
-  const list = useRef<ListHandle | VirtuosoHandle>(null);
+  const list = useRef<ListHandle>(null);
   const scrollKey = `${paneId}:${session.id}:${sub ?? ""}`;
   const saved = scrollMem.get(scrollKey);
   const [atBottom, setAtBottom] = useState(saved ? saved.bottom : true);
@@ -462,9 +249,9 @@ export function ChatView({
         u = i;
         break;
       }
-    // Virtuoso keeps the list visibility: hidden until it has placed the initial scroll position; pinning then would
+    // The list is hidden for its first frames, until it has placed the initial scroll position; pinning then would
     // show the prompt over an empty pane ahead of the rows.
-    const lst = el.querySelector<HTMLElement>("[data-testid=virtuoso-item-list], [data-chat-list]");
+    const lst = el.querySelector<HTMLElement>("[data-chat-list]");
     const hidden = !!lst && getComputedStyle(lst).visibility === "hidden";
     const p = !hidden && u >= 0 ? u : null;
     if (p === pinnedRef.current) return;
@@ -476,121 +263,11 @@ export function ChatView({
     pinRaf.current = requestAnimationFrame(pinNow);
   };
   useEffect(() => () => cancelAnimationFrame(pinRaf.current), []);
-  const lastH = useRef(0); // 上一次量到的总高（推到底之前用它判断「刚才是不是贴着底」）
   // 人刚点了展开（工具调用、折叠组、思考）：这一小会儿内容变高不追到底，点的那一行留在原地，展开的东西往下长。
   // 不然贴着底时一展开就被推到最底下，刚点的那行顶出屏幕（用户报的）。收起变矮不受影响，照样贴底。
   const holdUntil = useRef(0);
   const hold = () => (holdUntil.current = performance.now() + 500);
   const holding = () => performance.now() < holdUntil.current;
-  // 贴没贴底直接量 DOM，不信 Virtuoso 的 atBottom：贴着底时把上面一块展开的东西收起来，内容变矮、浏览器把 scrollTop
-  // 往回夹，Virtuoso 拿旧的总高一算以为人往上翻了，报 false 之后就不再改回来 —— 明明在底部却冒出「回到底部」，
-  // 新输出也不跟了（用户报的）。
-  // 离开底部只认人：贴着底、这会儿人没动过（滚轮 / 触摸 / 按键 / 按住拖），scrollTop 却离了底 —— 那是布局变了把它带走的，推回去。
-  // 不然一次性的布局变化就把「在底部」记成 false，之后再长高也不追了、还记进 scrollMem：
-  // tab 不保留时切回来要重新挂、边挂边量高度，量的过程中被推离底部一截就停在半中间，下次切回来照记的位置恢复，还是半中间（用户报的）
-  // Direction matters, not just distance: the first 80px up still measure as "at the bottom", so with distance alone a
-  // user scrolling up in small steps while a reply streams in stayed stuck, and every chunk of output pulled them back.
-  // So the user scrolling up by any amount leaves the bottom, and only coming back down (or landing on the very bottom)
-  // re-sticks; a row growing under someone parked 40px up doesn't drag them back in.
-  const lastTop = useRef(0);
-  const scrollDir = useRef<Dir>({ up: false, t: 0 });
-  const syncBottom = () => {
-    const el = scrollerEl.current;
-    if (!el || !activeRef.current) return;
-    const dist = el.scrollHeight - el.clientHeight - el.scrollTop;
-    const user = performance.now() - lastInputOf(el) < 600;
-    const up = el.scrollTop < lastTop.current - 0.5;
-    const down = el.scrollTop > lastTop.current + 0.5;
-    lastTop.current = el.scrollTop;
-    if (bottomRef.current && !user) {
-      if (dist >= 80) el.scrollTop = el.scrollHeight;
-      return;
-    }
-    // Just scrolled up: a push to the bottom queued before that (followOutput, a resize) may still land on the very
-    // bottom; that's not the user coming back, it would re-stick them and every new line would pull them down again
-    const goingUp = scrollDir.current.up && performance.now() - scrollDir.current.t < 600;
-    const b = bottomRef.current ? dist < 80 && !(up && dist > 1) : !goingUp && (dist <= 1 || (dist < 80 && user && down));
-    if (b === bottomRef.current) return;
-    bottomRef.current = b;
-    setAtBottom(b);
-  };
-  // Stick to the bottom before the frame is painted. totalListHeightChanged only fires once Virtuoso has measured and
-  // reported the new total, which lands one to several frames after a row actually grew: the last row grew under a
-  // streaming reply (or a freshly mounted row went from its estimated 41.5px to its real height) and for those frames
-  // the list was drawn short of the bottom, then snapped down (measured frame by frame in tools/scrolltest/panes.mjs
-  // --stream: up to 60px off for ~200ms, single-frame jumps of 100-155px). A ResizeObserver created after Virtuoso's
-  // (effects run after the list mounted) runs in the same phase, after Virtuoso has applied its own corrections and
-  // before paint (docs/dev/SCROLL.md "哪一帧画出来了"). Same conditions as totalListHeightChanged: only when it was at the
-  // bottom at the last measurement, and not while an expand the user just clicked is growing.
-  // Keep what's on screen in place when rows above it change height, by the row at the top of the screen: if its place
-  // in the content moved, the scroll moves the same. Instead of Virtuoso's "upward scrolling compensation" (switched
-  // off in keepBottomOnShrink), which went by the list's total height and so also pushed the screen for rows growing
-  // below it (a reply being written) and for its own stale per-index sizes. A row by key, not index: indexes shift
-  // when a steer lands or tool rows come and go. The user's own scrolling moves no row within the content, so it's
-  // never undone. Not at the bottom (that follows the end instead) nor while older messages go in front (settle).
-  const anchor = useRef<{ key: string; o: number } | null>(null);
-  const keepAnchor = () => {
-    const el = scrollerEl.current;
-    if (!el || !activeRef.current || bottomRef.current || performance.now() < prepended.current) return void (anchor.current = null);
-    const top = el.getBoundingClientRect().top;
-    const offset = (it: Element) => it.getBoundingClientRect().top - top + el.scrollTop;
-    const a = anchor.current;
-    const it = a && el.querySelector(`[data-chat-row="${CSS.escape(a.key)}"]`)?.parentElement;
-    if (a && it) {
-      const d = offset(it) - a.o;
-      if (Math.abs(d) > 0.5) el.scrollTop += d;
-    }
-    anchor.current = null;
-    for (const row of el.querySelectorAll<HTMLElement>("[data-chat-row]")) {
-      const box = row.parentElement!;
-      if (box.getBoundingClientRect().bottom > top + 1) {
-        anchor.current = { key: row.dataset.chatRow!, o: offset(box) };
-        break;
-      }
-    }
-  };
-  const hasList = loaded && msgs.length > 0;
-  useEffect(() => {
-    const el = scrollerEl.current;
-    const lst = el?.querySelector("[data-testid=virtuoso-item-list]");
-    if (!el || !lst) return;
-    const ro = new ResizeObserver(() => {
-      keepAnchor();
-      if (!activeRef.current) return;
-      // Runs after Virtuoso laid the rows out and before paint: the pinned prompt lands in the same frame as the rows.
-      cancelAnimationFrame(pinRaf.current);
-      pinNow();
-      // Only when the content's total height changed. The item list also resizes whenever the virtual list mounts or
-      // unmounts rows as you scroll, with scrollHeight unchanged; pushing then ate every small scroll up from the bottom
-      // (the first 80px up still count as at the bottom), so the chat couldn't be scrolled up at all (tools/scrolltest/
-      // scrollup.mjs). And never right after the user touched the scroller: that scroll is theirs (same rule as syncBottom).
-      if (el.scrollHeight === lastH.current || performance.now() - lastInputOf(el) < 600) return;
-      const wasAtBottom = lastH.current - el.clientHeight - el.scrollTop < 80;
-      const grew = el.scrollHeight > lastH.current;
-      if (bottomRef.current && wasAtBottom && !(grew && holding()) && el.scrollHeight - el.clientHeight - el.scrollTop > 1) el.scrollTop = el.scrollHeight;
-      lastH.current = el.scrollHeight;
-    });
-    ro.observe(lst);
-    // The scroller itself got shorter / narrower (a seam dragged, an overview tile re-arranged) with the content's height
-    // unchanged, so the observer above doesn't act: at the bottom before, still at the bottom (was left up to 60px short).
-    const box = new ResizeObserver(() => {
-      if (activeRef.current && bottomRef.current && el.scrollHeight - el.clientHeight - el.scrollTop > 1) el.scrollTop = el.scrollHeight;
-    });
-    box.observe(el);
-    // Virtuoso un-hides the list (see pinNow) without resizing it, so the observer above doesn't fire then. A
-    // MutationObserver callback is a microtask, still ahead of the paint that first shows the rows.
-    // Also where the list's top padding changes (rows above mounted / unmounted), which doesn't resize it: keepAnchor.
-    const mo = new MutationObserver(() => {
-      keepAnchor();
-      if (activeRef.current) pinNow();
-    });
-    mo.observe(lst, { attributes: true, attributeFilter: ["style"] });
-    return () => {
-      ro.disconnect();
-      box.disconnect();
-      mo.disconnect();
-    };
-  }, [hasList]);
   // 行是 memo 的，回调要稳定（不然每次都重渲染），但又要拿到最新的 —— 放在 ref 里转一手
   const latest = useRef({ doRewind, sessionId: session.id, openGroups, setOpenGroups });
   latest.current = { doRewind, sessionId: session.id, openGroups, setOpenGroups };
@@ -634,9 +311,9 @@ export function ChatView({
               <div className="font-mono text-[12px]">{session.cwd}</div>
             </div>
           )}
-          {loaded && msgs.length > 0 && own && (
+          {loaded && msgs.length > 0 && (
             <ChatList
-              ref={list as Ref<ListHandle>}
+              ref={list}
               rows={rows}
               env={env}
               older={older}
@@ -667,95 +344,10 @@ export function ChatView({
               }}
             />
           )}
-          {loaded && msgs.length > 0 && !own && (
-            <Virtuoso
-              ref={list as Ref<VirtuosoHandle>}
-              className="h-full"
-              data={rows}
-              firstItemIndex={firstIdx.current}
-              context={listCtx}
-              computeItemKey={(_, r) => r.key}
-              // data-chat-row: which row this is by key, for keepAnchor (item indexes shift when rows come and go mid-list)
-              itemContent={(_, r) => (
-                <div data-chat-row={r.key} className="contents">
-                  <RowView row={r} env={env} />
-                </div>
-              )}
-              // 行高照实记、不取整。Virtuoso 默认 Math.round(高度)：41.5 记成 42、39.8 记成 40，行一卸载就拿这些整数垫占位，
-              // 每行差一点、攒起来眼前的内容整段挪一截 —— 打开会话量完缩回那一下抖（逐帧量过：卸掉 32 行，实际 1823px 记成 1833px，
-              // 往下挪 10px），会话越长卸得越多抖得越厉害；滚动时边挂边卸的几像素小抖也是它
-              itemSize={(el) => el.getBoundingClientRect().height}
-              // Follow new output while at the bottom (jump, no animation). Ask bottomRef, not Virtuoso's own flag: that one
-              // stays true for the first 80px up, so a user scrolling up slowly mid-reply kept getting pulled back.
-              // Off the bottom it must be false, not a function returning false: Virtuoso only calls the function for a
-              // new row; when the list just grows while it thinks it's at the bottom (its 80px) it scrolls down whenever
-              // followOutput is anything but false (autoscrollToBottom, "SIZE_INCREASED"), so a short drag up mid-reply
-              // was pulled back on every line (tools/scrolltest/touchhold.mjs).
-              followOutput={atBottom ? () => (bottomRef.current && !holding() ? "auto" : false) : false}
-              // 重新挂载（切回一个被卸载过的 tab）时回到上次的位置：在底部就回底部，不在就回那个高度
-              {...(saved && !saved.bottom ? { initialScrollTop: saved.top } : { initialTopMostItemIndex: { index: "LAST" as const, align: "end" as const } })}
-              atBottomThreshold={80}
-              atBottomStateChange={() => {
-                syncBottom();
-                requestAnimationFrame(syncBottom); // 它报的那一刻高度可能还没量完，下一帧再量一次
-              }}
-              scrollerRef={(el) => {
-                scrollerEl.current = el as HTMLElement | null;
-                if (el) {
-                  keepBottomOnShrink(el as HTMLElement, bottomRef, () => performance.now() < prepended.current);
-                  scrollDir.current = trackScrollDir(el as HTMLElement, () => {
-                    if (!bottomRef.current) return;
-                    bottomRef.current = false;
-                    setAtBottom(false);
-                  });
-                  lastInputOf(el as HTMLElement); // 挂上监听：挂载过程里没人动过
-                }
-                watchWidth(el as HTMLElement | null);
-              }}
-              onScroll={(e) => {
-                if (!activeRef.current) return; // 藏着期间的滚动（WebKit 清零）不算
-                const el = e.currentTarget as HTMLElement;
-                keepAnchor();
-                lastH.current = el.scrollHeight;
-                syncBottom();
-                scrollMem.set(scrollKey, { top: el.scrollTop, bottom: bottomRef.current });
-                updatePinned();
-                settleFix.current?.();
-                nearTop(el);
-              }}
-              // 流式输出时最后一行在长高：followOutput 要等下一拍才跟，会落后一两行、一顿一顿的。
-              // 总高度一变、原来在底部，就当场推到底。
-              // 但只在「上次量的时候确实贴着底」才推：人一下子把滚动条拖上去时，新进视野的行一量高度总高就变了，
-              // 这时 atBottom 还没来得及变 false，只看它会把人拽回底部（踩过）。
-              totalListHeightChanged={() => {
-                const el = scrollerEl.current;
-                if (!el) return;
-                const wasAtBottom = lastH.current - el.clientHeight - el.scrollTop < 80;
-                const grew = el.scrollHeight > lastH.current;
-                if (bottomRef.current && wasAtBottom && !(grew && holding())) el.scrollTop = el.scrollHeight;
-                lastH.current = el.scrollHeight;
-                syncBottom();
-                updatePinned(); // 行变高矮时顶上是哪行也跟着变，不一定有 onScroll
-                // 内容不满一屏（翻不动，就等不到 onScroll）：接着拉。满了就等人自己往上翻，别一口气连拉
-                if (activeRef.current && el.scrollHeight <= el.clientHeight + 50) nearTop(el);
-                if (!measured) {
-                  clearTimeout(measureTimer.current);
-                  measureTimer.current = window.setTimeout(() => setMeasured(true), 300);
-                }
-              }}
-              // 虚拟滚动是实验室开关（默认关）：关着时渲染范围放到无限大 = 所有行一次挂好、不再卸载，
-              // 贴底 / 回到底部 / 顶上钉的那句话这些照旧走 Virtuoso，不用另写一套
-              increaseViewportBy={virtualList && measured ? { top: 800, bottom: 800 } : { top: 1e7, bottom: 1e7 }}
-              components={{ Header: ListHeader, Footer: ListFooter }}
-            />
-          )}
           {pinned !== null && rows[pinned]?.kind === "user" && (
             <PinnedPrompt
               msg={(rows[pinned] as Extract<Row, { kind: "user" }>).msg}
               onClick={() => {
-                // The button sits outside the scroller, so the click isn't seen as user input (lastInputOf): starting from the bottom,
-                // syncBottom took the smooth scroll for a layout shift and snapped it back. Count the click as input on the scroller.
-                markInput(scrollerEl.current);
                 list.current?.scrollToIndex({ index: pinned, align: "start", behavior: "smooth" });
               }}
             />
