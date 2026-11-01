@@ -67,7 +67,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { compareSessions, sessionRank } from "@/lib/order";
 import { markRead, set, useStore } from "@/lib/store";
 import type { SessionSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -81,7 +80,6 @@ import { TabDragLayer, startPaneDrag } from "./TabDrag";
  *
  * - Every workspace of the project is a group, all shown at once (no switching), each collapsible. A group lists its tabs,
  *   one row per pane: a tab split in several panes shows its rows joined by a bar, so each agent's state stays visible.
- * - The status filter (needs you / running) flattens the groups to the rows that match.
  * - "Active" above the groups replaces both the to-do list and the agents list. Who's in is overviewState.activeIds,
  *   shared with the overview: what needs you, runs, or was touched lately joins on its own, anything else can be added by
  *   hand; flat in the agents list's order. Each project chooses (the section's ⋯ menu) whether it lists every project's
@@ -90,8 +88,6 @@ import { TabDragLayer, startPaneDrag } from "./TabDrag";
  *
  * Kept out of Chrome.tsx so the experiment can be dropped (or promoted) by touching a few lines in App.tsx.
  */
-
-type Filter = "all" | "you" | "run";
 
 const FOLD_KEY = "gerdr.unified.folded";
 const ACTIVE_FOLD_KEY = "gerdr.unified.activeFolded";
@@ -138,12 +134,6 @@ function useFolded() {
 
 type Item = { ws: Workspace; tab: Tab; pane: PaneLeaf; split: boolean; s?: SessionSummary };
 
-/** The agents list's order (lib/order.ts); panes without an agent (terminals, files, new conversations) after the idle ones. Stable on ties. */
-function compareItems(a: Item, b: Item, unread: Record<string, true>): number {
-  if (a.s && b.s) return compareSessions(a.s, b.s, unread);
-  return (a.s ? sessionRank(a.s, unread) : 5) - (b.s ? sessionRank(b.s, unread) : 5);
-}
-
 const needsYou = (s: SessionSummary | undefined, unread: Record<string, true>) => !!s && (s.status === "waiting" || s.status === "error" || !!unread[s.id]);
 
 /** What a row shows for a pane: an agent, a terminal, a file, a subagent, or a new conversation not started yet. */
@@ -174,7 +164,6 @@ export function UnifiedSidebar() {
   const activeIds = useActiveIds().split(",").filter(Boolean);
   const addedSet = new Set(useStore((s) => s.overview.added));
   const allProjects = useStore((s) => activeAllProjects(s));
-  const [filter, setFilter] = useState<Filter>("all");
   const [folded, setFolded] = useFolded();
   const [activeFolded, setActiveFolded] = useLocal(ACTIVE_FOLD_KEY, false);
   const list = spaceWorkspaces(layout);
@@ -193,17 +182,6 @@ export function UnifiedSidebar() {
 
   const toggleFold = (id: string) => setFolded(folded.includes(id) ? folded.filter((x) => x !== id) : [...folded, id]);
 
-  // Every pane of this project, for the filter and its counts
-  const all: Item[] = [];
-  for (const ws of list)
-    for (const tab of ws.tabs) {
-      const ps = leaves(tab.root);
-      for (const pane of ps) all.push({ ws, tab, pane, split: ps.length > 1, s: pane.sessionId ? sessions[pane.sessionId] : undefined });
-    }
-  const youN = all.filter((x) => needsYou(x.s, unread)).length;
-  const runN = all.filter((x) => x.s?.status === "running").length;
-  const byPriority = (xs: Item[]) => [...xs].sort((a, b) => compareItems(a, b, unread));
-  const matches = byPriority(all.filter((x) => (filter === "you" ? needsYou(x.s, unread) : x.s?.status === "running")));
   const spaces = spaceList(layout);
   const here = currentSpace(layout);
   // "active" can reach other projects (allProjects) and Work conversations (no pane): find each one's place
@@ -259,110 +237,89 @@ export function UnifiedSidebar() {
     <div className="relative flex h-full shrink-0 flex-col border-r bg-sidebar" style={{ width: sidebarW }}>
       <SidebarEdge />
       <SidebarHeader />
-      <div className="flex shrink-0 items-center gap-0.5 overflow-hidden px-2 pt-2 pb-1 text-[11px]">
-        <FilterChip on={filter === "all"} onClick={() => setFilter("all")}>
-          全部 <span className="tabular-nums opacity-70">{all.length}</span>
-        </FilterChip>
-        <FilterChip on={filter === "you"} onClick={() => setFilter(filter === "you" ? "all" : "you")} tone={youN ? "bad" : undefined}>
-          等你 <span className="tabular-nums opacity-70">{youN}</span>
-        </FilterChip>
-        <FilterChip on={filter === "run"} onClick={() => setFilter(filter === "run" ? "all" : "run")}>
-          运行中 <span className="tabular-nums opacity-70">{runN}</span>
-        </FilterChip>
-      </div>
       <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto px-1.5 pb-2">
-        {filter !== "all" ? (
-          <div className="pt-1">
-            {matches.length === 0 && <div className="px-2 py-1 text-[12px] text-muted-foreground">{filter === "you" ? "没有在等你的" : "没有在跑的"}</div>}
-            {matches.map((x) => flatRow(x))}
-          </div>
-        ) : (
-          <>
-            {(active.length > 0 || gridOn || allProjects) && (
-              <div className="mb-1 border-b pb-1.5">
-                <div
-                  role="button"
-                  className="group/act flex h-7 w-full cursor-default items-center gap-1 rounded-md px-1 text-[11px] font-medium text-muted-foreground select-none hover:bg-accent/60 hover:text-foreground"
-                  title={`等你、在跑、没看的，${ACTIVE_HOURS} 小时内动过的，和你右键加进来的；按该不该先看排`}
-                  onClick={() => setActiveFolded(!activeFolded)}
-                >
-                  <ChevronRight className={cn("size-3.5 shrink-0 transition-transform", !activeFolded && "rotate-90")} />
-                  <span className="flex-1 truncate text-left">进行中{allProjects && <span className="font-normal"> · 所有项目</span>}</span>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button
-                        className="flex size-5 items-center justify-center rounded-sm hover:bg-muted hover:text-foreground"
-                        title="进行中的设置"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <Ellipsis className="size-3.5" />
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-                      <DropdownMenuCheckboxItem checked={allProjects} onCheckedChange={(v) => setActiveAllProjects(!!v)}>
-                        显示所有项目的 agent
-                      </DropdownMenuCheckboxItem>
-                      <div className="px-2 pb-1 text-[11px] text-muted-foreground">只改这个项目，别的项目各自设</div>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem disabled={!activeIds.length} onClick={clearActive}>
-                        <Eraser /> 全部移出（等你的会留下）
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                  <button
-                    className={cn(
-                      "flex h-5 items-center gap-1 rounded-sm px-1",
-                      gridOn ? "bg-brand/15 text-foreground" : "hover:bg-muted hover:text-foreground",
-                    )}
-                    title={gridOn ? "关掉网格，回到 tab" : `把进行中的 agent 摆成网格一起看（最多 ${MAX_TILES} 个）`}
-                    onClick={(e) => (e.stopPropagation(), toggleOverview(!gridOn))}
-                  >
-                    <LayoutGrid className="size-3" />
-                    {gridOn ? "网格中" : "网格"}
-                  </button>
-                  <span className="w-4 text-right tabular-nums">{active.length}</span>
-                </div>
-                {!activeFolded &&
-                  active.map((x) =>
-                    x.item ? (
-                      flatRow(x.item, true)
-                    ) : (
-                      <WorkRow key={x.id} id={x.id} added={addedSet.has(x.id)} current={gridOn && x.id === gridFocusId} grid={gridOn && tiles.includes(x.id)} />
-                    ),
-                  )}
-              </div>
-            )}
-            {list.map((ws, wi) => (
-              <Group
-                key={ws.id}
-                ws={ws}
-                index={wi}
-                folded={folded.includes(ws.id)}
-                onFold={() => toggleFold(ws.id)}
-                sessions={sessions}
-                unread={unread}
-                current={ws.id === cur.id}
+        <div className="pt-1.5">
+          {(active.length > 0 || gridOn || allProjects) && (
+            <div className="mb-1 border-b pb-1.5">
+              <div
+                role="button"
+                className="group/act flex h-7 w-full cursor-default items-center gap-1 rounded-md px-1 text-[11px] font-medium text-muted-foreground select-none hover:bg-accent/60 hover:text-foreground"
+                title={`等你、在跑、没看的，${ACTIVE_HOURS} 小时内动过的，和你右键加进来的；按该不该先看排`}
+                onClick={() => setActiveFolded(!activeFolded)}
               >
-                {ws.tabs.map((tab) => {
-                  const ps = leaves(tab.root);
-                  if (ps.length === 1) return <Row key={tab.id} {...rowProps(ws, tab, ps[0], false)} />;
-                  return (
-                    // A split tab: its panes as rows joined by a bar on the left
-                    <div
-                      key={tab.id}
-                      className="relative my-0.5 ml-3 before:absolute before:top-1.5 before:bottom-1.5 before:left-0 before:w-0.5 before:rounded-full before:bg-brand/40"
+                <ChevronRight className={cn("size-3.5 shrink-0 transition-transform", !activeFolded && "rotate-90")} />
+                <span className="flex-1 truncate text-left">进行中{allProjects && <span className="font-normal"> · 所有项目</span>}</span>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      className="flex size-5 items-center justify-center rounded-sm hover:bg-muted hover:text-foreground"
+                      title="进行中的设置"
+                      onClick={(e) => e.stopPropagation()}
                     >
-                      {ps.map((p) => (
-                        <Row key={p.id} {...rowProps(ws, tab, p, true)} />
-                      ))}
-                    </div>
-                  );
-                })}
-                {ws.tabs.length === 0 && <div className="py-1 pl-7 text-[12px] text-muted-foreground">空的</div>}
-              </Group>
-            ))}
-          </>
-        )}
+                      <Ellipsis className="size-3.5" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                    <DropdownMenuCheckboxItem checked={allProjects} onCheckedChange={(v) => setActiveAllProjects(!!v)}>
+                      显示所有项目的 agent
+                    </DropdownMenuCheckboxItem>
+                    <div className="px-2 pb-1 text-[11px] text-muted-foreground">只改这个项目，别的项目各自设</div>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem disabled={!activeIds.length} onClick={clearActive}>
+                      <Eraser /> 全部移出（等你的会留下）
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <button
+                  className={cn("flex h-5 items-center gap-1 rounded-sm px-1", gridOn ? "bg-brand/15 text-foreground" : "hover:bg-muted hover:text-foreground")}
+                  title={gridOn ? "关掉网格，回到 tab" : `把进行中的 agent 摆成网格一起看（最多 ${MAX_TILES} 个）`}
+                  onClick={(e) => (e.stopPropagation(), toggleOverview(!gridOn))}
+                >
+                  <LayoutGrid className="size-3" />
+                  {gridOn ? "网格中" : "网格"}
+                </button>
+                <span className="w-4 text-right tabular-nums">{active.length}</span>
+              </div>
+              {!activeFolded &&
+                active.map((x) =>
+                  x.item ? (
+                    flatRow(x.item, true)
+                  ) : (
+                    <WorkRow key={x.id} id={x.id} added={addedSet.has(x.id)} current={gridOn && x.id === gridFocusId} grid={gridOn && tiles.includes(x.id)} />
+                  ),
+                )}
+            </div>
+          )}
+          {list.map((ws, wi) => (
+            <Group
+              key={ws.id}
+              ws={ws}
+              index={wi}
+              folded={folded.includes(ws.id)}
+              onFold={() => toggleFold(ws.id)}
+              sessions={sessions}
+              unread={unread}
+              current={ws.id === cur.id}
+            >
+              {ws.tabs.map((tab) => {
+                const ps = leaves(tab.root);
+                if (ps.length === 1) return <Row key={tab.id} {...rowProps(ws, tab, ps[0], false)} />;
+                return (
+                  // A split tab: its panes as rows joined by a bar on the left
+                  <div
+                    key={tab.id}
+                    className="relative my-0.5 ml-3 before:absolute before:top-1.5 before:bottom-1.5 before:left-0 before:w-0.5 before:rounded-full before:bg-brand/40"
+                  >
+                    {ps.map((p) => (
+                      <Row key={p.id} {...rowProps(ws, tab, p, true)} />
+                    ))}
+                  </div>
+                );
+              })}
+              {ws.tabs.length === 0 && <div className="py-1 pl-7 text-[12px] text-muted-foreground">空的</div>}
+            </Group>
+          ))}
+        </div>
         <div className="mt-1 flex gap-1 px-0.5">
           <FootButton onClick={() => (toggleOverview(false), addTab())} title="在当前工作空间新开一个 tab">
             <Plus className="size-3.5" /> 新 tab
@@ -378,21 +335,6 @@ export function UnifiedSidebar() {
       <SidebarBottom sidebarToggle />
       <TabDragLayer />
     </div>
-  );
-}
-
-function FilterChip({ on, tone, onClick, children }: { on: boolean; tone?: "bad"; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      className={cn(
-        "flex h-6 shrink-0 items-center gap-0.5 rounded-md px-1.5 whitespace-nowrap",
-        on ? "bg-foreground text-background" : "text-muted-foreground hover:bg-accent hover:text-foreground",
-        !on && tone === "bad" && "text-bad",
-      )}
-      onClick={onClick}
-    >
-      {children}
-    </button>
   );
 }
 
@@ -595,7 +537,7 @@ function Row({
   current: boolean;
   visible: boolean;
   activeTabId: string;
-  /** Shown instead of the directory (the filtered list, where groups are gone). */
+  /** Shown instead of the directory (rows of "active", out of their group). */
   where?: string;
 }) {
   const { title, sub } = paneLabel(pane, s);
