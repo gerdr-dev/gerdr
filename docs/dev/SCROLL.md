@@ -180,7 +180,11 @@ Virtuoso 在 ResizeObserver 里量行高、改布局，所以 rAF 里看到「�
     finger lands on such a row). So a scroll up while a finger is down (from touchstart) leaves the bottom too. The
     Virtuoso path's `trackScrollDir` reads touchmove the same way and has the same hole.
   - Some rows finish rendering a frame after they mount (one grew 200px): hidden for two frames on opening, as Virtuoso
-    does (`open.mjs --reload`).
+    does (`open.mjs --reload`). The cause turned out to be Tailwind running in the browser: it writes the CSS for
+    classes it hasn't seen a frame or so after they mount (its style sheet grew 9KB at the moment all 29 mounted rows
+    resized). So only the first chat opened in a page is hidden; hiding every open showed a blank chat for two frames on
+    each session switch on a phone (`panes.mjs --cpu=4` reports `hidden 0` now). A session using classes no chat before
+    it used can still resize once on its first open.
   - Frames from the previous tab's chat counted as a "whole screen swapped" when switching tabs: the frame log now
     tags each frame with its scroller and only compares frames of the same one.
   - Older messages coming in: the rows of a message cut off at the top get new keys once the rest of it arrives, so

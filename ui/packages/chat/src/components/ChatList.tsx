@@ -32,6 +32,8 @@ const END = 2; // px from the end that still count as the bottom
 const EST = 60; // a row never measured
 const OVERSCAN = 800; // px mounted above and below the screen
 const HEAD = 32; // the "load older" line
+// A chat has been shown in this page: Tailwind has written the CSS its rows use (see the open effect below)
+let stylesWarm = false;
 
 type Layout = { keys: string[]; tops: number[]; sizes: number[]; total: number; missing: number };
 
@@ -255,10 +257,12 @@ export const ChatList = forwardRef<
     [],
   );
 
-  // Open where it was, else at the bottom. Hidden for the first two frames: some rows finish rendering a frame after
-  // they mount (tools/scrolltest/open.mjs --reload: a row 200px taller one frame after the first paint, so at the
-  // bottom everything above it moved up).
-  const ready = useRef(false);
+  // Open where it was, else at the bottom. The first chat opened in this page stays hidden for two frames: the UI runs
+  // Tailwind in the browser, which writes the CSS for classes it hasn't seen yet a frame or so after they mount, so
+  // every row resizes once (open.mjs --reload: 29 rows, the chat 320px shorter, everything on screen moved). Later
+  // opens find those styles already there and show from the first frame: hiding them too was a blank chat for two
+  // frames on every session switch (a phone screen recording).
+  const ready = useRef(stylesWarm);
   useLayoutEffect(() => {
     const s = el.current;
     if (!s) return;
@@ -268,8 +272,11 @@ export const ChatList = forwardRef<
     let r2 = 0;
     const r1 = requestAnimationFrame(() => {
       r2 = requestAnimationFrame(() => {
-        ready.current = true;
-        flushSync(render);
+        stylesWarm = true;
+        if (!ready.current) {
+          ready.current = true;
+          flushSync(render);
+        }
         cb.current.onLayout();
       });
     });
