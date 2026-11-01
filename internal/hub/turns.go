@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/gerdr-dev/gerdr/acpx"
 )
 
 // The turn log: one line per finished turn, every session, every agent, in <dir>/turns/2026-11.jsonl (local month).
@@ -30,6 +32,23 @@ type TurnRecord struct {
 	DurationMs   int64   `json:"durationMs,omitempty"`
 	OutputTokens int     `json:"outputTokens,omitempty"`
 	CostUSD      float64 `json:"costUsd,omitempty"` // what the agent reported for this turn (Claude Code only; Codex reports tokens)
+	// Tokens: what the turn's model calls used, one entry per model (Gerdr Agent only, acpx.TokensKey). Tokens, not
+	// money: pricing them is the add-on's call (the `today` add-on keeps a price table in its settings).
+	Tokens []acpx.Tokens `json:"tokens,omitempty"`
+}
+
+// addTokens adds one model call's report onto the entry of its model.
+func addTokens(list []acpx.Tokens, t acpx.Tokens) []acpx.Tokens {
+	for i := range list {
+		if list[i].Model == t.Model {
+			list[i].Input += t.Input
+			list[i].Output += t.Output
+			list[i].CacheRead += t.CacheRead
+			list[i].CacheWrite += t.CacheWrite
+			return list
+		}
+	}
+	return append(list, t)
 }
 
 type turnLog struct {

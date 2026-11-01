@@ -85,7 +85,10 @@ type Usage struct {
 	Input     int `json:"input"` // 含缓存命中的部分
 	Output    int `json:"output"`
 	CacheRead int `json:"cacheRead,omitempty"`
-	Reasoning int `json:"reasoning,omitempty"`
+	// CacheWrite: prompt tokens written to the cache (Anthropic bills them above plain input; OpenAI-style APIs
+	// don't report any). Part of Input, like CacheRead.
+	CacheWrite int `json:"cacheWrite,omitempty"`
+	Reasoning  int `json:"reasoning,omitempty"`
 }
 
 // Event 是流式片段。

@@ -197,6 +197,7 @@ every device:
   { "key": "style", "title": "样式", "type": "select", "default": "dot",
     "options": [{ "value": "dot", "label": "圆点" }, { "value": "text", "label": "文字" }] },
   { "key": "prefix", "title": "前缀", "type": "string", "default": "" },
+  { "key": "phrases", "title": "短语", "type": "text", "default": "谢谢\n继续" },
   { "key": "color", "title": "颜色", "type": "color", "default": "#e5569b" },
   { "key": "token", "title": "令牌", "type": "secret", "default": "" }
 ]
@@ -204,6 +205,8 @@ every device:
 
 Read with `g.settings.get<number>("ttlMinutes")` (the default until changed), at the moment you need it rather than
 once in `setup`: a change applies at once, without reloading the add-on.
+
+A `text` is a string of several lines, edited in a box under its title (a list, a table you parse yourself).
 
 A `secret` is a string the form keeps masked (an eye button shows it) — for API tokens and keys. Only the display
 differs: it is stored like any other setting (`~/.gerdr/addons-state.json`, not the add-on folder) and

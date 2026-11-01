@@ -182,7 +182,7 @@ func (r *run) callModel(ctx context.Context) (llm.Result, bool, error) {
 			}
 		}
 	})
-	r.s.addUsage(res.Usage)
+	r.s.addUsage(r.model.Key, res.Usage)
 	if res.Usage.Output > 0 && r.tok != nil {
 		r.tok.Exact(key, res.Usage.Output)
 		r.s.send(acp.SessionUpdate{SessionInfoUpdate: &acp.SessionSessionInfoUpdate{Meta: acpx.Progress(r.tok.Total())}})

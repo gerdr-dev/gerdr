@@ -7,7 +7,7 @@
 //                           "screenshots": ["shot.png"], "main": "index.ts", "service": {…}, "settings": [AddonSetting…]}
 //                "settings" become a form in Settings → Add-ons; read them with g.settings.get(key):
 //                  {"key": "ttl", "title": "缓存时长", "type": "number", "default": 60, "min": 1, "max": 1440, "unit": "分钟"}
-//                type: number / string / boolean / select (with "options": [{"value": 5, "label": "5 分钟"}]) /
+//                type: number / string / text (several lines: a list, a table) / boolean / select (with "options": [{"value": 5, "label": "5 分钟"}]) /
 //                color (a "#rrggbb" string, picked from a palette or typed) / secret (a string the form masks:
 //                tokens, keys; g.settings.get returns it in the clear)
 //   index.ts     the UI half (or what "main" names): export default defineAddon({...}). It may import other files of
@@ -403,6 +403,23 @@ declare global {
     outputTokens?: number;
     /** USD, as the agent reported it for this turn. Only Claude Code reports money (its estimate at API prices). */
     costUsd?: number;
+    /**
+     * What the turn's model calls used, one entry per model. Gerdr Agent only (Claude Code reports costUsd, Codex
+     * neither). Tokens, not money: price them yourself.
+     */
+    tokens?: TurnTokens[];
+  }
+
+  /** One model's tokens in a turn (TurnRecord.tokens). */
+  interface TurnTokens {
+    /** The agent's model key; Gerdr Agent: "provider/model", e.g. "anthropic/claude-opus-4-5". */
+    model: string;
+    /** Every prompt token, the cached ones included: uncached input = input - cacheRead - cacheWrite. */
+    input?: number;
+    output?: number;
+    cacheRead?: number;
+    /** Prompt tokens written to the cache (Anthropic bills them above plain input). */
+    cacheWrite?: number;
   }
 
   interface ServiceStatus {

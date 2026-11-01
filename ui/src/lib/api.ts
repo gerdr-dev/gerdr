@@ -19,6 +19,8 @@ export type TurnRecord = {
   durationMs?: number;
   outputTokens?: number;
   costUsd?: number;
+  /** One entry per model (acpx.Tokens); input includes cacheRead and cacheWrite. */
+  tokens?: { model: string; input?: number; output?: number; cacheRead?: number; cacheWrite?: number }[];
 };
 /** 一家 agent 账号的额度（后端 hub.UsageInfo）：出错时 data 还是上一次拿到的，at 是它的时间 */
 export type UsageInfo = { agent: string; name: string; data?: { plan?: string; limits: UsageLimit[] }; error?: string; at?: number };

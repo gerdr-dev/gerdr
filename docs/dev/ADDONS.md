@@ -35,7 +35,7 @@ sees: `internal/addons/builtin/gerdr.d.ts`, copied into `~/.gerdr/addons` on eve
   load order doesn't matter, and a light-only override can't win in dark mode the way a plain `html:root` would.
   Only token names (`[a-z0-9-]`) and values without `;{}` get in. A function spec is re-run at the end of every
   `doReload`: a settings change broadcasts "addons" but doesn't change the hash, so no add-on re-runs `setup`.
-- Settings: addon.json `settings` (number / string / boolean / select / color / secret) become a form under the add-on in Settings →
+- Settings: addon.json `settings` (number / string / text / boolean / select / color / secret) become a form under the add-on in Settings →
   Add-ons; values live in addons-state.json (`settings[id][key]`, only keys changed from the default), not in the
   browser's localStorage like `g.storage`, so every window and the phone agree. `g.settings.get` reads the latest
   `/api/addons` build each call, so a change applies without reloading the add-on (its hash doesn't include values).
@@ -65,6 +65,11 @@ sees: `internal/addons/builtin/gerdr.d.ts`, copied into `~/.gerdr/addons` on eve
   `proc` (agents/claude/proc.go `costDelta`) and reports the growth as `_meta.gerdr.cost = {usd}`; the hub sums the
   reports that arrive during a turn onto its `turn_end` (`costUsd`; acp-go-sdk processes notifications before the
   response that follows them, so they're in before the turn ends). Codex reports tokens, not money.
+- Tokens: Gerdr Agent reports every model call as `_meta.gerdr.tokens = {model, input, output, cacheRead, cacheWrite}`
+  (acpx.TokensKey; sub-agents and compaction on the small model included, each under its own model key), and the hub
+  sums them per model onto the turn record (`tokens`, not the session log). No prices in the core: they change, and a
+  relay charges its own, so the `today` add-on keeps a price table in its settings and converts. Before
+  this, every Gerdr Agent turn showed $0 — it had the usage but nothing turned it into money.
 - The sidebar's quota meter used to be built in (UsageMeter); it is the `usage-meter` add-on now, and "today" (tasks
   done, cost) is the `today` add-on. Without them the sidebar has neither — install from the store.
 

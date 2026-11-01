@@ -112,6 +112,7 @@ type Session struct {
 	turnStarted int64                // 这一轮几点开始的（状态行：跑了多久）
 	turnTokens  int                  // 这一轮输出了多少 token（状态行）
 	turnCost    float64              // what the agent reported spending since the last turn_end (emit puts it on the next one)
+	turnUse     []acpx.Tokens        // the token reports since the last turn_end, one entry per model (same as turnCost)
 	sending     map[string]bool      // 正在处理的 client 消息 id（同一条重发时挡住并发的那次）
 	retryCancel chan struct{}        // 自动重试正在等：关掉它 = 人按了停止
 	shut        bool                 // Hub.Shutdown 关掉的（关了 pane）：这一轮因为进程被杀报的错不算错、不自动重试；再接上时清掉
@@ -305,11 +306,13 @@ func (s *Session) Events() []*Event {
 func (s *Session) emit(e *Event) {
 	e.Seq = s.h.nextSeq()
 	e.TS = now()
+	var use []acpx.Tokens
 	if e.Kind == EvTurnEnd {
-		// The cost reports that came in since the last turn ended (the agent sends its turn's before the turn ends:
-		// acp-go-sdk processes notifications before the response that follows them)
+		// The cost and token reports that came in since the last turn ended (the agent sends its turn's before the
+		// turn ends: acp-go-sdk processes notifications before the response that follows them)
 		s.mu.Lock()
 		e.CostUSD, s.turnCost = s.turnCost, 0
+		use, s.turnUse = s.turnUse, nil
 		s.mu.Unlock()
 	}
 	if s.h.opt.Dir != "" {
@@ -324,7 +327,7 @@ func (s *Session) emit(e *Event) {
 	if e.Kind == EvTurnEnd {
 		s.mu.Lock()
 		r := TurnRecord{TS: e.TS, SessionID: s.rec.ID, Agent: s.rec.Agent, Cwd: s.rec.Cwd, StopReason: e.StopReason, Auto: e.Auto,
-			DurationMs: e.DurationMs, OutputTokens: e.OutputTokens, CostUSD: e.CostUSD}
+			DurationMs: e.DurationMs, OutputTokens: e.OutputTokens, CostUSD: e.CostUSD, Tokens: use}
 		s.mu.Unlock()
 		s.h.recordTurn(r)
 	}
@@ -946,6 +949,14 @@ func (s *Session) onGerdrInfo(g map[string]any) {
 		if usd, ok := c["usd"].(float64); ok && usd > 0 {
 			s.mu.Lock()
 			s.turnCost += usd
+			s.mu.Unlock()
+		}
+	}
+	if v, ok := g[acpx.TokensKey]; ok {
+		var t acpx.Tokens
+		if b, err := json.Marshal(v); err == nil && json.Unmarshal(b, &t) == nil && (t.Input > 0 || t.Output > 0) {
+			s.mu.Lock()
+			s.turnUse = addTokens(s.turnUse, t)
 			s.mu.Unlock()
 		}
 	}

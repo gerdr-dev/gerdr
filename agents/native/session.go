@@ -93,8 +93,14 @@ func (s *session) clientMetaMap() map[string]any {
 	return s.clientMeta
 }
 
-// addUsage adds one model call's usage to the turn's total.
-func (s *session) addUsage(u llm.Usage) {
+// addUsage adds one model call's usage to the turn's total and reports it to the client per model (acpx.TokensKey:
+// the hub keeps it on the turn record, add-ons price it). model is the key of the model that served the call.
+func (s *session) addUsage(model string, u llm.Usage) {
+	if u.Input > 0 || u.Output > 0 {
+		s.send(acp.SessionUpdate{SessionInfoUpdate: &acp.SessionSessionInfoUpdate{Meta: acpx.TokensReport(acpx.Tokens{
+			Model: model, Input: u.Input, Output: u.Output, CacheRead: u.CacheRead, CacheWrite: u.CacheWrite,
+		})}})
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.usage.InputTokens += u.Input
@@ -102,6 +108,9 @@ func (s *session) addUsage(u llm.Usage) {
 	s.usage.TotalTokens += u.Input + u.Output
 	if u.CacheRead > 0 {
 		s.usage.CachedReadTokens = acp.Ptr(deref(s.usage.CachedReadTokens) + u.CacheRead)
+	}
+	if u.CacheWrite > 0 {
+		s.usage.CachedWriteTokens = acp.Ptr(deref(s.usage.CachedWriteTokens) + u.CacheWrite)
 	}
 	if u.Reasoning > 0 {
 		s.usage.ThoughtTokens = acp.Ptr(deref(s.usage.ThoughtTokens) + u.Reasoning)
@@ -457,7 +466,7 @@ func (r *run) compact(ctx context.Context, extra string) error {
 		}
 	}
 	res, err := m.client().Stream(ctx, llm.Request{Model: m.ID, System: r.system, Messages: msgs, Thinking: m.Thinking, Effort: lowestEffort(m), CacheKey: r.s.currentID()}, func(llm.Event) {})
-	r.s.addUsage(res.Usage)
+	r.s.addUsage(m.Key, res.Usage)
 	if err != nil || strings.TrimSpace(res.Message.Text) == "" {
 		r.out(acp.UpdateToolCall(acp.ToolCallId(id), acp.WithUpdateStatus(acp.ToolCallStatusFailed)))
 		if err == nil {

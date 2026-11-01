@@ -10,6 +10,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import { addonStatus, assetURL, type AddonStatus } from "@/lib/addons";
 import { api, ApiError } from "@/lib/api";
 import { askConfirm } from "@/lib/confirm";
@@ -220,11 +221,26 @@ function SettingField({ id, spec, value }: { id: string; spec: AddonSetting; val
   // On a phone the label goes above its field: side by side, a long label wrapped a character per line next to the
   // input. A switch stays on the label's line, it's small enough.
   const stacked = spec.type !== "boolean";
+  // A "text" (several lines: a list, a table) gets the whole width under its label, on every screen
+  const below = spec.type === "text";
   return (
     <div className="text-[12px]">
-      <div className={cn("flex gap-2", stacked ? "max-md:flex-col max-md:items-stretch max-md:gap-1 md:items-center" : "items-center")}>
+      <div
+        className={cn(
+          "flex gap-2",
+          below ? "flex-col items-stretch gap-1" : stacked ? "max-md:flex-col max-md:items-stretch max-md:gap-1 md:items-center" : "items-center",
+        )}
+      >
         <span className={cn("min-w-0", stacked ? "md:flex-1" : "flex-1")}>{spec.title || spec.key}</span>
-        {spec.type === "boolean" ? (
+        {spec.type === "text" ? (
+          <Textarea
+            className="min-h-20 font-mono text-[12px]"
+            spellCheck={false}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={() => draft !== shown && save(draft)}
+          />
+        ) : spec.type === "boolean" ? (
           <Switch checked={!!shown} onCheckedChange={(v) => save(v)} />
         ) : spec.type === "select" ? (
           // Values can be numbers or strings: Radix wants strings, so they travel as JSON
@@ -272,7 +288,7 @@ function SettingField({ id, spec, value }: { id: string; spec: AddonSetting; val
           {value !== undefined && (
             <button type="button" className="shrink-0 hover:text-foreground" onClick={() => save(null)}>
               {/* A secret's default is not echoed either (usually empty anyway) */}
-              {spec.type === "secret" ? "清除" : `恢复默认（${String(spec.default)}）`}
+              {spec.type === "secret" ? "清除" : spec.type === "text" ? "恢复默认" : `恢复默认（${String(spec.default)}）`}
             </button>
           )}
         </div>

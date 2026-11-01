@@ -76,6 +76,27 @@ func Cost(usd float64) map[string]any {
 	return Meta(map[string]any{CostKey: map[string]any{"usd": usd}})
 }
 
+// TokensKey: session_info_update._meta.gerdr.tokens = Tokens, one model call's usage (Gerdr Agent sends one per
+// request, sub-agents and compaction included). Tokens, not money: what a token costs is the add-on's call (the
+// `today` add-on prices them from its own table), so a price change or a gateway's own rates never need a release.
+// The hub sums the reports of a turn per model onto its turn record (TurnRecord.Tokens).
+const TokensKey = "tokens"
+
+// Tokens is one model call's usage. Input counts every prompt token, the cached ones included: uncached input is
+// Input - CacheRead - CacheWrite.
+type Tokens struct {
+	Model      string `json:"model"` // the agent's model key (Gerdr Agent: "provider/model")
+	Input      int    `json:"input,omitempty"`
+	Output     int    `json:"output,omitempty"`
+	CacheRead  int    `json:"cacheRead,omitempty"`
+	CacheWrite int    `json:"cacheWrite,omitempty"`
+}
+
+// TokensReport: the meta of a token report.
+func TokensReport(t Tokens) map[string]any {
+	return Meta(map[string]any{TokensKey: t})
+}
+
 // ProgressKey：session_info_update._meta.gerdr.progress = {"outputTokens": n}
 const ProgressKey = "progress"
 

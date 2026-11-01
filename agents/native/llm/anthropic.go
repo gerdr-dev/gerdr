@@ -340,7 +340,8 @@ func (u *anthropicUsage) merge(o anthropicUsage) {
 }
 
 func (u anthropicUsage) toUsage() Usage {
-	return Usage{Input: u.InputTokens + u.CacheReadTokens + u.CacheCreationTokens, Output: u.OutputTokens, CacheRead: u.CacheReadTokens}
+	return Usage{Input: u.InputTokens + u.CacheReadTokens + u.CacheCreationTokens, Output: u.OutputTokens, CacheRead: u.CacheReadTokens,
+		CacheWrite: u.CacheCreationTokens}
 }
 
 func anthropicMessages(msgs []Message) []map[string]any {
