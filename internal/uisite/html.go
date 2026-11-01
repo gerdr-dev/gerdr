@@ -40,7 +40,7 @@ func (r *Renderer) ServePage(w http.ResponseWriter, req *http.Request, nonce str
 	b := r.ensure()
 	n := ` nonce="` + nonce + `"`
 	var s strings.Builder
-	s.WriteString("<!DOCTYPE html>\n<html lang=\"zh-CN\" style=\"color-scheme: light dark\">\n<head>\n<meta charset=\"UTF-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />\n")
+	s.WriteString("<!DOCTYPE html>\n<html lang=\"zh-CN\" style=\"color-scheme: light dark\">\n<head>\n<meta charset=\"UTF-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no\" />\n")
 	s.WriteString("<title>" + html.EscapeString(b.title) + "</title>\n")
 	if b.favicon != "" {
 		s.WriteString(`<link rel="icon" href="` + html.EscapeString(b.favicon) + `" />` + "\n")
@@ -96,7 +96,7 @@ func (r *Renderer) ServePage(w http.ResponseWriter, req *http.Request, nonce str
 // loading screen and reload once a new build is out: the hot reload stream says hello with the current build id.
 func (r *Renderer) servePreparing(w http.ResponseWriter, b *build, n string) {
 	var s strings.Builder
-	s.WriteString("<!DOCTYPE html>\n<html lang=\"zh-CN\" style=\"color-scheme: light dark\">\n<head>\n<meta charset=\"UTF-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />\n")
+	s.WriteString("<!DOCTYPE html>\n<html lang=\"zh-CN\" style=\"color-scheme: light dark\">\n<head>\n<meta charset=\"UTF-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no\" />\n")
 	s.WriteString("<title>" + html.EscapeString(b.title) + "</title>\n</head>\n<body>\n")
 	s.WriteString(strings.Replace(loadingHTML, "加载中…", "正在准备界面用到的包（新装或加了包之后只这一次）…", 1))
 	s.WriteString("<script" + n + ">var B=" + string(mustJSON(b.id)) + ";var es=new EventSource(" + string(mustJSON(r.base+"/_ui/events")) +

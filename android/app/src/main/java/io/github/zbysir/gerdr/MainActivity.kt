@@ -362,6 +362,9 @@ class MainActivity : ComponentActivity() {
             mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
             // 系统字体放大会按比例改网页字号 —— 终端的行列数是按字宽量出来的，放大后整屏对不齐
             textZoom = 100
+            // It's an app UI, not a document: a stray pinch zooms the whole layout and leaves it off-screen
+            setSupportZoom(false)
+            builtInZoomControls = false
             // target=_blank / window.open 走 onCreateWindow，在那儿转给系统浏览器
             setSupportMultipleWindows(true)
             javaScriptCanOpenWindowsAutomatically = true
