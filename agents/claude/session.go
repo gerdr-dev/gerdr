@@ -55,6 +55,10 @@ type session struct {
 	lastWake             string                // uuid of the last <task-notification> an auto turn was put down to (wakeOf)
 	tok                  acpx.TokenMeter       // 这一轮输出了多少 token（状态行）
 	ctxTokens, ctxWindow int                   // 上下文用量（最近一次请求的输入、模型窗口）
+	// The "Compacting context" card of the compaction in progress (stream.go): Claude repeats status=compacting
+	// while it works, and each repeat used to add another line. compactOpen: the card still spins.
+	compactID   string
+	compactOpen bool
 
 	tools    map[string]*toolState
 	msgDelta map[string]bool // 哪些 API 消息已经按 delta 推过正文了

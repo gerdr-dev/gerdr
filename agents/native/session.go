@@ -454,6 +454,12 @@ func (r *run) compact(ctx context.Context, extra string) error {
 	_ = r.s.a.st.append(sid, e)
 	r.out(acp.UpdateToolCall(acp.ToolCallId(id), acp.WithUpdateStatus(acp.ToolCallStatusCompleted),
 		acp.WithUpdateContent([]acp.ToolCallContent{acp.ToolContent(acp.TextBlock(res.Message.Text))})))
+	// Tell the composer the context shrank: after a /compact no request follows to report it, and the old
+	// percentage stayed up as if nothing happened. The summary's size is a lower bound (the system prompt and
+	// tools come on top); the next request reports the exact figure.
+	if res.Usage.Output > 0 && r.sub == nil {
+		r.s.send(acp.SessionUpdate{SessionInfoUpdate: &acp.SessionSessionInfoUpdate{Meta: acpx.ContextProgress(res.Usage.Output, r.model.Window)}})
+	}
 	return nil
 }
 

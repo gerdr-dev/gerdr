@@ -211,7 +211,42 @@
 .gerdr-pixel-orbit {
   animation: gerdr-pixel-orbit 1.2s linear infinite;
 }
+/* Shimmering label ("思考中…", ai/shimmer.tsx): the text is painted in a real color and a moving mask dims it except for a
+   bright band. It used to be transparent text painted only by background-clip:text, which phones' Chromium sometimes
+   skipped, leaving a blank gap where the label was. If the mask fails now, the label just stops shimmering. */
+.gerdr-shimmer {
+  color: var(--foreground);
+  -webkit-mask-image: var(--gerdr-shimmer-mask);
+  mask-image: var(--gerdr-shimmer-mask);
+  -webkit-mask-size: 250% 100%;
+  mask-size: 250% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  animation: gerdr-shimmer var(--gerdr-shimmer-duration, 2s) linear infinite;
+  --gerdr-shimmer-mask: linear-gradient(
+    90deg,
+    rgb(0 0 0 / 0.45) calc(50% - var(--gerdr-shimmer-spread, 40px)),
+    #000 50%,
+    rgb(0 0 0 / 0.45) calc(50% + var(--gerdr-shimmer-spread, 40px))
+  );
+}
+@keyframes gerdr-shimmer {
+  from {
+    -webkit-mask-position: 100% center;
+    mask-position: 100% center;
+  }
+  to {
+    -webkit-mask-position: 0% center;
+    mask-position: 0% center;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
+  .gerdr-shimmer {
+    animation: none;
+    -webkit-mask-image: none;
+    mask-image: none;
+    color: var(--muted-foreground);
+  }
   .gerdr-pixel-orbit {
     animation: none;
     opacity: 0.6;

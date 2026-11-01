@@ -293,7 +293,7 @@ func replayTranscriptUntil(path, last string, emit func(acp.SessionUpdate)) erro
 		case "system":
 			// Same marker the live stream shows for it (stream.go); the summary message itself is skipped by userText.
 			if e.Subtype == "compact_boundary" {
-				emit(compactedNote)
+				emit(compactedCard("compact-" + e.UUID))
 			}
 		case "assistant":
 			var m struct {

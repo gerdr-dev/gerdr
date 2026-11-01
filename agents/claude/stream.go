@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/coder/acp-go-sdk"
+	"github.com/google/uuid"
 
 	"github.com/gerdr-dev/gerdr/acpx"
 	"github.com/gerdr-dev/gerdr/sysenv"
@@ -282,11 +283,12 @@ func (s *session) onSystem(ctx context.Context, m map[string]json.RawMessage, ra
 	case "status":
 		var st struct {
 			Status         *string `json:"status"`
+			CompactResult  string  `json:"compact_result"`
 			PermissionMode string  `json:"permissionMode"`
 		}
 		_ = json.Unmarshal(raw, &st)
-		if st.Status != nil && *st.Status == "compacting" {
-			s.update(ctx, acp.SessionUpdate{AgentThoughtChunk: &acp.SessionUpdateAgentThoughtChunk{Content: acp.TextBlock("（正在压缩上下文…）\n")}})
+		if st.Status != nil {
+			s.compactStatus(ctx, *st.Status == "compacting", st.CompactResult)
 		}
 		if st.PermissionMode != "" {
 			s.mu.Lock()
@@ -298,12 +300,76 @@ func (s *session) onSystem(ctx context.Context, m map[string]json.RawMessage, ra
 			}
 		}
 	case "compact_boundary":
-		s.update(ctx, compactedNote)
+		var b struct {
+			Meta struct {
+				PostTokens int `json:"post_tokens"`
+			} `json:"compact_metadata"`
+		}
+		_ = json.Unmarshal(raw, &b)
+		s.compactBoundary(ctx, b.Meta.PostTokens)
 	}
 }
 
-// compactedNote marks a compaction in the chat, live and on replay (transcript.go).
-var compactedNote = acp.SessionUpdate{AgentThoughtChunk: &acp.SessionUpdateAgentThoughtChunk{Content: acp.TextBlock("（上下文已压缩）\n")}}
+// A compaction shows as one tool card, the same one the native agent draws (agents/native/session.go compact):
+// spinning while status=compacting, ticked once it is done. It used to append a thought line per status message,
+// which stacked up "（正在压缩上下文…）" several times inside a "thinking" block.
+//
+// What the CLI sends (2.1.x, measured): status=compacting (repeated while it works), then status=null with
+// compact_result ("success" or not), then compact_boundary carrying compact_metadata.post_tokens.
+func (s *session) compactStatus(ctx context.Context, compacting bool, result string) {
+	s.mu.Lock()
+	start, done := compacting && !s.compactOpen, !compacting && s.compactOpen
+	if start {
+		s.compactID = "compact-" + uuid.NewString()
+	}
+	s.compactOpen = compacting
+	id := s.compactID
+	failed := done && result != "" && result != "success"
+	if failed {
+		s.compactID = "" // no boundary follows a failed one
+	}
+	s.mu.Unlock()
+	switch {
+	case start:
+		s.update(ctx, acp.StartToolCall(acp.ToolCallId(id), compactTitle, acp.WithStartKind(acp.ToolKindThink), acp.WithStartStatus(acp.ToolCallStatusInProgress)))
+	case failed:
+		s.update(ctx, acp.UpdateToolCall(acp.ToolCallId(id), acp.WithUpdateStatus(acp.ToolCallStatusFailed)))
+	case done:
+		// The boundary right after it finds the id taken and adds no second card.
+		s.update(ctx, acp.UpdateToolCall(acp.ToolCallId(id), acp.WithUpdateStatus(acp.ToolCallStatusCompleted)))
+	}
+}
+
+// compactBoundary closes the card and reports the compacted context's size: without it the composer kept showing
+// the pre-compaction percentage after a /compact (no request follows one to report the new size), which read as
+// "compaction did nothing".
+func (s *session) compactBoundary(ctx context.Context, post int) {
+	s.mu.Lock()
+	id, open := s.compactID, s.compactOpen
+	s.compactID, s.compactOpen = "", false
+	if post > 0 {
+		s.ctxTokens = post
+	}
+	w := s.ctxWindow
+	s.mu.Unlock()
+	switch {
+	case open:
+		s.update(ctx, acp.UpdateToolCall(acp.ToolCallId(id), acp.WithUpdateStatus(acp.ToolCallStatusCompleted)))
+	case id == "":
+		// No status=compacting came first (older CLIs): show the finished card on its own.
+		s.update(ctx, compactedCard("compact-"+uuid.NewString()))
+	}
+	if post > 0 {
+		s.update(ctx, acp.SessionUpdate{SessionInfoUpdate: &acp.SessionSessionInfoUpdate{Meta: acpx.ContextProgress(post, w)}})
+	}
+}
+
+const compactTitle = "Compacting context"
+
+// compactedCard is a finished compaction, live and on replay (transcript.go).
+func compactedCard(id string) acp.SessionUpdate {
+	return acp.StartToolCall(acp.ToolCallId(id), compactTitle, acp.WithStartKind(acp.ToolKindThink), acp.WithStartStatus(acp.ToolCallStatusCompleted))
+}
 
 func (s *session) onStreamEvent(ctx context.Context, raw json.RawMessage, apiID string) {
 	var ev struct {

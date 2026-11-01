@@ -179,8 +179,8 @@ func TestReplayCompaction(t *testing.T) {
 	if err := replayTranscript(p, func(u acp.SessionUpdate) { got = append(got, u) }); err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 2 || got[0].UserMessageChunk == nil || got[1].AgentThoughtChunk == nil {
-		t.Fatalf("want the user message then the compaction note, got %+v", got)
+	if len(got) != 2 || got[0].UserMessageChunk == nil || got[1].ToolCall == nil || got[1].ToolCall.Status != acp.ToolCallStatusCompleted {
+		t.Fatalf("want the user message then a finished compaction card, got %+v", got)
 	}
 	if texts := userTextsFrom(p, 0); !slices.Equal(texts, []string{"hi"}) {
 		t.Fatalf("userTextsFrom = %q", texts)
@@ -335,6 +335,51 @@ func TestTurnEndsWhenQueuedIntoAutoRun(t *testing.T) {
 		}
 	default:
 		t.Fatal("idle 之后这一轮没结束")
+	}
+}
+
+// The live sequence a /compact sends (claude 2.1.314, measured): repeated status=compacting, status=null with
+// compact_result, then compact_boundary with post_tokens. One card, closed once, and the context size reported.
+func TestLiveCompaction(t *testing.T) {
+	a := &Agent{opts: Options{Env: []string{"CLAUDE_CONFIG_DIR=" + t.TempDir()}}, sessions: map[string]*session{}, log: slog.New(slog.DiscardHandler)}
+	s := a.newSession("11111111-2222-4333-8444-555555555555", "/p", nil)
+	var got []acp.SessionUpdate
+	s.emitHook = func(u acp.SessionUpdate) { got = append(got, u) }
+	line := func(js string) {
+		var m map[string]json.RawMessage
+		if err := json.Unmarshal([]byte(js), &m); err != nil {
+			t.Fatal(err)
+		}
+		s.onLine(nil, m, []byte(js))
+	}
+	line(`{"type":"system","subtype":"status","status":"compacting"}`)
+	line(`{"type":"system","subtype":"status","status":"compacting"}`)
+	line(`{"type":"system","subtype":"status","status":null,"compact_result":"success"}`)
+	line(`{"type":"system","subtype":"compact_boundary","compact_metadata":{"trigger":"manual","pre_tokens":32880,"post_tokens":10795}}`)
+	var starts, ends int
+	var ctxTokens any
+	for _, u := range got {
+		switch {
+		case u.ToolCall != nil:
+			starts++
+		case u.ToolCallUpdate != nil:
+			ends++
+			if u.ToolCallUpdate.Status == nil || *u.ToolCallUpdate.Status != acp.ToolCallStatusCompleted {
+				t.Fatalf("card not completed: %+v", u.ToolCallUpdate)
+			}
+		case u.SessionInfoUpdate != nil:
+			if p, ok := u.SessionInfoUpdate.Meta[acpx.MetaKey].(map[string]any)[acpx.ProgressKey].(map[string]any); ok {
+				ctxTokens = p["contextTokens"]
+			}
+		case u.AgentThoughtChunk != nil:
+			t.Fatalf("compaction leaked into thinking: %+v", u.AgentThoughtChunk)
+		}
+	}
+	if starts != 1 || ends != 1 {
+		t.Fatalf("want one card closed once, got %d starts %d updates", starts, ends)
+	}
+	if ctxTokens != 10795 {
+		t.Fatalf("context size after compaction = %v", ctxTokens)
 	}
 }
 
