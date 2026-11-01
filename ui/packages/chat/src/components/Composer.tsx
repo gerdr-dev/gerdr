@@ -185,12 +185,19 @@ export const Composer = forwardRef<
     });
   };
 
-  // 高度跟着内容走，最多到 pane 高度的四成。
+  // The box grows with its text, up to 40% of the pane's height. Measured by collapsing it to "auto" and reading
+  // scrollHeight, which lays the page out with a one-line box for a moment; the box around it is held at its height
+  // meanwhile, or the chat above got a line taller in that layout, the browser clamped its scroll position to the new
+  // bottom, and it stayed a line short once the box grew back: at the bottom of a chat, every key typed on a second
+  // line made the chat jump (user's screen recording; the first line didn't, "auto" is one line there anyway).
   const fitHeight = () => {
     const el = ta.current;
     if (!el) return;
+    const box = el.parentElement;
+    if (box) box.style.minHeight = box.offsetHeight + "px";
     el.style.height = "auto";
     el.style.height = Math.min(el.scrollHeight, Math.max(160, window.innerHeight * 0.4)) + "px";
+    if (box) box.style.minHeight = "";
   };
   useEffect(fitHeight, [text]);
   // And when the width changes: measured while the box was briefly narrow (an overview tile appearing or sliding into
