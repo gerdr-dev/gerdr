@@ -14,6 +14,7 @@ import { chatHost, useChatHost, useChatSettings } from "../host";
 import { t as tr } from "../i18n";
 import { memoryDrafts, type DraftImage } from "../drafts";
 import { PlayBadge } from "./PlayBadge";
+import { VideoThumb } from "./VideoThumb";
 import { OptionMenu, OptionsMenu, type OptGroup } from "./OptionMenu";
 import { openLightbox } from "./Lightbox";
 import { TasksChip } from "./TasksBar";
@@ -1029,7 +1030,7 @@ export const Composer = forwardRef<
                   </div>
                 ) : isVideo(im) ? (
                   <div onClick={(e) => preview(i, e.currentTarget)} className="relative size-14 cursor-zoom-in overflow-hidden rounded-md border bg-muted">
-                    <video src={`${im.url}#t=0.1`} muted playsInline preload="metadata" className="pointer-events-none size-full object-cover" />
+                    <VideoThumb url={im.url} fill />
                     {im.path ? (
                       <PlayBadge small />
                     ) : (

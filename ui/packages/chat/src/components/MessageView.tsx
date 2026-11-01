@@ -15,6 +15,7 @@ import { ToolCall } from "./ToolCall";
 import { UsageCard } from "./UsageCard";
 import { openLightbox } from "./Lightbox";
 import { PlayBadge } from "./PlayBadge";
+import { VideoThumb } from "./VideoThumb";
 import { TaskDoneCard, WakeRow } from "./TasksBar";
 import { ShellCard } from "./ShellCard";
 import { fmtElapsed, fmtTokens } from "./StatusLine";
@@ -181,10 +182,10 @@ export const MessageView = memo(function MessageView({
                       e.currentTarget,
                     );
                   return f.mediaType?.startsWith("video/") ? (
-                    // Fixed height on the <video> itself, same reason as the images below. The wrapper takes max-w-full
-                    // instead of the video, so its width doesn't depend on itself.
+                    // Fixed height on the thumbnail itself, same reason as the images below. The wrapper takes max-w-full
+                    // instead of the thumbnail, so its width doesn't depend on itself.
                     <div key={i} onClick={open} className="relative max-w-full cursor-zoom-in overflow-hidden rounded-xl border bg-muted">
-                      <video src={`${f.url}#t=0.1`} muted playsInline preload="metadata" className="pointer-events-none h-40 w-auto" />
+                      <VideoThumb url={f.url} />
                       <PlayBadge />
                     </div>
                   ) : (
