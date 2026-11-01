@@ -1043,6 +1043,25 @@ export function resumeInPane(paneId: string, sessionId: string) {
   focusPane(paneId);
 }
 
+/**
+ * Picking an earlier conversation while another agent is chosen (the new-session page, /resume): carry it on with that
+ * agent in this pane. Same agent = just resume it. A different one gets a new session that copies the conversation and
+ * hands it to the new agent with the next message (hub/handoff.go); the original stays as it was.
+ */
+export async function continueInPane(paneId: string, sessionId: string, agent: string) {
+  const from = get().sessions[sessionId];
+  if (!from || from.agent === agent) return resumeInPane(paneId, sessionId);
+  try {
+    const s = await api.createSession({ agent, cwd: from.cwd, continueFrom: sessionId });
+    set((st) => ({ sessions: { ...st.sessions, [s.id]: s } }));
+    resumeInPane(paneId, s.id);
+    return s;
+  } catch (e: any) {
+    toast.error(`换 agent 接着聊失败：${e.message ?? e}`);
+    throw e;
+  }
+}
+
 /** 把一个会话放到眼前：已经在某个 pane 里就切过去，不在就开一个新 tab 放它。 */
 /**
  * A Work agent conversation lives in its project's Work view (right-hand chat), never in a Code pane. Every way of bringing a

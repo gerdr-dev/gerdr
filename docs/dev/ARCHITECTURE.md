@@ -242,6 +242,28 @@ cwd 以外改的文件（Bash 写 `~/.zshrc`、隔壁项目）管不到；同一
 会话的改动一起退掉；大目录打快照拖慢发消息。两家 agent 自带的文件回退也靠不住（claude 的 checkpoint
 不管 Bash 改的文件，codex 没有），所以干脆不做，要回文件让人自己用 git。
 
+## Continuing a conversation with another agent (hub/handoff.go)
+
+The New Session history list and /resume show every agent's sessions in the cwd; picking one while a different
+agent is selected (e.g. Claude's quota ran out, continue in Codex) calls `POST /api/sessions` with `continueFrom`.
+No agent can load another's transcript, so the hub makes a **new** session for the target agent whose log is a
+copy of the source's events plus a `notice` with `level:"handoff"`; the source session is left untouched (it can
+still be resumed with its own agent). Title / TitleKey / CustomTitle are copied so the list reads the same.
+
+- The target agent learns the history from the first user message after the handoff notice: `SendFrom` prepends a
+  `<gerdr-handoff from="…">` text block (same mechanism as `!command` output in shell.go). Inline it carries user
+  and assistant text plus tool titles only, capped at 80000 runes and cut at a `\n## ` turn boundary, keeping the
+  newest turns; the full transcript with tool outputs goes to `sessions/<id>.handoff.md` and the block points
+  there, so the agent can read details on demand without blowing its context on turn one.
+- Replies are labelled "Assistant", not the agent's name: after chained handoffs (Claude → Codex → Claude) the
+  copied log mixes agents and a name per turn would be wrong half the time.
+- The block is only sent while no user message has gone out since the latest handoff notice, so it is sent once.
+  The UI hides it (transcript.ts `isHandoffContext`) and the title code skips it.
+- Rewinding to a message before the handoff notice is refused (`chatlog.ErrBeforeHandoff`): the target agent never
+  had those turns as real turns, so there is nothing on its side to roll back to.
+- Refused when the source is running (the copy would miss the tail) or when the agent is the same (that's a plain
+  resume).
+
 ## 界面：没有打包环节（internal/uisite，照 shuttle 的 internal/localsite）
 
 界面就是 `ui/` 这个目录的源码（默认装到 `~/.gerdr/ui`，`GERDR_UI` 指到别处）。目的是**让 agent 能直接改界面**：

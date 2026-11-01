@@ -588,6 +588,8 @@ type CreateOptions struct {
 	// Import：接上一个在别处开过的会话（agent 自己的 session id），历史从它那儿重放。
 	Import string `json:"import,omitempty"`
 	Title  string `json:"title,omitempty"`
+	// ContinueFrom: a gerdr session of another agent whose conversation this new session carries on (handoff.go).
+	ContinueFrom string `json:"continueFrom,omitempty"`
 	// FromCLI：`gerdr session new` 开的（agent 自己跑的命令）。这时默认模式是「全放开」那种的不套：
 	// 那条命令不审批就放行（sysenv.SafeGerdrCLI 不许带 --mode 就是为这个），沙箱里的 agent 不能借用户的默认值开一个不设防的会话。
 	FromCLI bool `json:"-"`
@@ -597,6 +599,9 @@ type CreateOptions struct {
 var permissive = regexp.MustCompile(`(?i)bypass|full-access|dontAsk`)
 
 func (h *Hub) Create(ctx context.Context, o CreateOptions) (*Session, error) {
+	if o.ContinueFrom != "" {
+		return h.continueFrom(ctx, o)
+	}
 	if _, ok := h.agentDef(o.Agent); !ok {
 		return nil, fmt.Errorf("unknown agent %q", o.Agent)
 	}
@@ -863,6 +868,7 @@ func (h *Hub) Delete(ctx context.Context, id string) error {
 	h.unregister(s)
 	_ = os.Remove(s.lf.Path)
 	_ = os.RemoveAll(s.shellDir()) // `!命令` 的完整输出（shell.go）
+	_ = os.Remove(s.handoffFile()) // the transcript handed to the agent (handoff.go)
 	h.saveIndex()
 	h.broadcast(Msg{T: "session_removed", ID: id})
 	return nil

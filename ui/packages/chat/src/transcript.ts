@@ -149,8 +149,16 @@ const SHELL_CTX = /^<bash-input>([\s\S]*?)<\/bash-input>\n<bash-stdout>([\s\S]*?
 
 export const isShellContext = (text: string) => SHELL_CTX.test(text);
 
-/** 消息内容里去掉 `!命令` 带的那几块（撤回、回退放回输入框时用：命令还在对话里，下一条照样会带上） */
-export const dropShellContext = (blocks: ContentBlock[]) => blocks.filter((c) => !(c.type === "text" && isShellContext(c.text)));
+/*
+ * The earlier conversation handed to a new agent (hub/handoff.go): rides in front of the first message after another
+ * agent took the conversation over. The history it carries is on screen already (copied above the handoff notice), so
+ * the block isn't drawn; replayed from the agent's own transcript (after a reload) it becomes a one-line notice.
+ */
+const HANDOFF = /^<gerdr-handoff from="([^"]*)">/;
+export const isHandoffContext = (text: string) => HANDOFF.test(text);
+
+/** 消息内容里去掉 `!命令` 带的那几块和换 agent 时带上的之前的对话（撤回、回退放回输入框时用：命令还在对话里，下一条照样会带上） */
+export const dropShellContext = (blocks: ContentBlock[]) => blocks.filter((c) => !(c.type === "text" && (isShellContext(c.text) || isHandoffContext(c.text))));
 
 /**
  * Whether a row's text is the command itself rather than a description of it. Only command text is drawn
@@ -356,6 +364,7 @@ export class Transcript {
         const parts: GPart[] = [];
         for (const c of e.content ?? []) {
           if (c.type === "text" && isShellContext(c.text)) continue; // `!命令` 带过去的输出：上面已经有那张命令卡片了
+          if (c.type === "text" && isHandoffContext(c.text)) continue; // the earlier conversation: it's on screen above
           if (c.type === "text") parts.push({ type: "text", text: mb?.text ?? c.text });
           else if (c.type === "image") parts.push({ type: "file", mediaType: c.mimeType, url: imageURL(c) });
           else if (c.type === "resource_link") parts.push(linkPart(c));
@@ -584,6 +593,11 @@ export class Transcript {
           const i = this.assistant(ts);
           const id = `r${this.curSeq}-${this.messages[i].parts.length}`; // 一条消息里可能带了好几条命令
           this.pushPart(i, { type: "data-shell", data: { id, command: sh[1], output: sh[2], running: false, error: sh[3] || undefined, replayed: true } });
+          break;
+        }
+        const ho = u.content?.type === "text" ? HANDOFF.exec(u.content.text ?? "") : null;
+        if (ho) {
+          this.pushPart(this.assistant(ts), { type: "data-notice", data: { level: "info", text: t("notice.handoff", { from: ho[1] }) } });
           break;
         }
         if (u.content?.type === "text" && u.content.text) {

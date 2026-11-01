@@ -137,6 +137,10 @@ func LastQueued(evs []*Event) string {
 // ErrBeforeClear: the message is from before a /clear, whose context the agent no longer has.
 var ErrBeforeClear = errors.New("这条消息在 /clear 之前：清空之后只能回退到清空以后发的消息")
 
+// ErrBeforeHandoff: the message is from before another agent took the conversation over (a "handoff" notice); it lives
+// in the previous agent's session, which this one can't cut.
+var ErrBeforeHandoff = errors.New("这条消息是换 agent 之前说的：只能回退到换过来以后发的消息")
+
 // ErrNoMessage: no user message with that id in the log.
 var ErrNoMessage = errors.New("找不到这条消息")
 
@@ -166,6 +170,9 @@ func RewindPoint(evs []*Event, msgID string) (idx int, content []json.RawMessage
 	for _, e := range evs[idx:] {
 		if e.Kind == EvNotice && e.Level == "clear" {
 			return -1, nil, false, ErrBeforeClear
+		}
+		if e.Kind == EvNotice && e.Level == "handoff" {
+			return -1, nil, false, ErrBeforeHandoff
 		}
 	}
 	return idx, content, steer, nil

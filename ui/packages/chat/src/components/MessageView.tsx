@@ -349,6 +349,15 @@ export function renderPart(p: GPart, i: number, ctx: PartCtx): ReactNode {
             <div className="h-px flex-1 bg-border" />
           </div>
         );
+      if (p.data.level === "handoff")
+        // Another agent took the conversation over here (hub/handoff.go): a divider like /clear's, above it is the old agent's
+        return (
+          <div key={i} className="flex items-center gap-3 py-2 text-[12px] text-muted-foreground">
+            <div className="h-px flex-1 bg-border" />
+            <span className="min-w-0 text-center">{p.data.text}</span>
+            <div className="h-px flex-1 bg-border" />
+          </div>
+        );
       if (p.data.level === "auto")
         // agent 自己开的一轮：只是交代这段话怎么来的，左对齐的淡字，和 turnStat 一个分量，不用居中 + 图标（那是错误 / 警告的样子）
         return (

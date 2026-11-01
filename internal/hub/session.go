@@ -53,6 +53,8 @@ type Record struct {
 	// and claude only reports the window at the end of a turn, so not even during the first one.
 	CtxTokens int `json:"ctxTokens,omitempty"`
 	CtxWindow int `json:"ctxWindow,omitempty"`
+	// Handoff: this session carries on another agent's conversation (handoff.go).
+	Handoff *Handoff `json:"handoff,omitempty"`
 }
 
 // ClearedCtx is one context dropped by /clear: its agent session id and what it was called at the time.
@@ -568,6 +570,8 @@ func (s *Session) SendFrom(ctx context.Context, content []acp.ContentBlock, clie
 	s.mu.Lock()
 	content = withShell(s.pendingShellLocked(), content)
 	s.mu.Unlock()
+	// First message after taking over another agent's conversation: the earlier conversation goes in front (handoff.go)
+	content = withShell(s.pendingHandoff(), content)
 	raw := make([]json.RawMessage, 0, len(content))
 	for _, b := range content {
 		j, _ := json.Marshal(b)
@@ -742,7 +746,7 @@ func (s *Session) touchTitle(content []acp.ContentBlock) {
 		return
 	}
 	for _, b := range content {
-		if b.Text != nil && strings.TrimSpace(b.Text.Text) != "" && !strings.HasPrefix(strings.TrimSpace(b.Text.Text), "/") && !strings.HasPrefix(b.Text.Text, shellPrefix) {
+		if b.Text != nil && strings.TrimSpace(b.Text.Text) != "" && !strings.HasPrefix(strings.TrimSpace(b.Text.Text), "/") && !strings.HasPrefix(b.Text.Text, shellPrefix) && !strings.HasPrefix(b.Text.Text, handoffPrefix) {
 			t := strings.Join(strings.Fields(b.Text.Text), " ")
 			if utf8.RuneCountInString(t) > 60 {
 				t = string([]rune(t)[:60]) + "…"

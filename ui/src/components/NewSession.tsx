@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
-import { closeFocusedPane, createInPane, focusPane, focusSession, openTerminal, resumeInPane } from "@/lib/actions";
+import { closeFocusedPane, continueInPane, createInPane, focusPane, focusSession, openTerminal, resumeInPane } from "@/lib/actions";
 import { api, ApiError } from "@/lib/api";
 import { get, set, useStore, type AgentDef } from "@/lib/store";
 import { locateSession, type PaneLeaf } from "@/lib/layout";
@@ -265,20 +265,36 @@ export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean
   }, [focused]);
 
   const abs = cwd.startsWith("~") ? home + cwd.slice(1) : cwd;
-  // Earlier conversations here = gerdr's own sessions for this agent and directory. Ones a pane already shows are listed too,
-  // marked, and clicking one jumps to its pane instead of opening it a second time. Not the agent's native history: that's a
-  // one-off import (ImportAgentDialog), and as conversations move into gerdr it would only empty out. Work agent conversations
+  // Earlier conversations here = gerdr's own sessions in this directory, whatever agent had them: the agent picked above is
+  // the one that carries on (a conversation of another agent is handed over to it, hub/handoff.go), so running out of one
+  // agent's quota doesn't strand a conversation. Ones a pane already shows are listed too, marked, and clicking one with the
+  // same agent jumps to its pane instead of opening it a second time. Not the agent's native history: that's a one-off
+  // import (ImportAgentDialog), and as conversations move into gerdr it would only empty out. Work agent conversations
   // belong to their Work view, and never-used sessions (an empty pane) have nothing to resume.
   const sessions = useStore((s) => s.sessions);
   const layout = useStore((s) => s.layout);
   // Untitled = nothing said in it yet (a fresh pane, or a tab right after /clear): nothing to pick up, see ResumeDialog
   const old = Object.values(sessions)
-    .filter((s) => s.agent === agent && s.cwd === abs && !!s.title && !workProjectOf(s.id))
+    .filter((s) => s.cwd === abs && !!s.title && !workProjectOf(s.id))
     // A running session bumps updatedAt with every streamed chunk, so two running ones kept swapping places: order those by
     // when their turn started instead, which holds still for the whole turn.
     .sort((a, b) => (b.turn?.startedAt ?? b.updatedAt) - (a.turn?.startedAt ?? a.updatedAt))
     .map((s) => ({ s, open: !!locateSession(layout, s.id) }));
-  const agentName = agents.find((a) => a.id === agent)?.name ?? agent;
+  const nameOf = (id: string) => agents.find((a) => a.id === id)?.name ?? id;
+  const agentName = nameOf(agent);
+
+  // An earlier conversation, carried on by the agent picked above
+  const pick = async (id: string, open: boolean) => {
+    const o = sessions[id];
+    if (o?.agent === agent) return open ? focusSession(id) : resumeInPane(pane.id, id);
+    if (busy) return;
+    setBusy(true);
+    try {
+      await continueInPane(pane.id, id, agent);
+    } catch {
+      setBusy(false);
+    }
+  };
 
   // as：双击某个 agent 卡片直接开，这时 setAgent 还没生效，得显式传进来
   // dir: a path the picker just chose, before this render's cwd has it
@@ -386,11 +402,15 @@ export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean
               <button
                 key={o.id}
                 disabled={busy}
-                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] hover:bg-accent"
-                title={open ? "已经开着：点了跳过去" : undefined}
-                onClick={() => (open ? focusSession(o.id) : resumeInPane(pane.id, o.id))}
+                className="group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] hover:bg-accent"
+                title={
+                  o.agent !== agent ? `原来是 ${nameOf(o.agent)} 的对话：点了换 ${agentName} 接着聊（原来的不动）` : open ? "已经开着：点了跳过去" : undefined
+                }
+                onClick={() => pick(o.id, open)}
               >
+                <AgentIcon agent={o.agent} className="size-3.5 shrink-0" />
                 <span className="min-w-0 flex-1 truncate">{o.title || o.id}</span>
+                {o.agent !== agent && <span className="hidden shrink-0 text-[11px] text-muted-foreground group-hover:inline">换 {agentName} 接着聊</span>}
                 {open && (
                   <span className="flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground">
                     <StatusDot status={o.status} />

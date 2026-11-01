@@ -18,7 +18,7 @@ Every event has `seq` (increasing; ordering) and `ts` (unix ms) and a `kind`:
 | `ask` | `reqId`, `request` (acpx.AskRequest) | The agent asks the user questions. |
 | `ask_done` | `reqId`, `response` (acpx.AskResponse) | Answered, cancelled, or void. |
 | `steer_state` | `messageId`, `text`: `queued` · `started` | Where an interjection is in the agent's queue (claude reports it; "queued" ones can be withdrawn). |
-| `notice` | `level` (info · warn · error · retry · clear), `text`, `until` (retry: unix ms when it fires) | A line in the conversation. `retry` collapses once the agent writes again; `clear` marks a /clear (rewinding past it isn't possible). |
+| `notice` | `level` (info · warn · error · retry · clear · handoff), `text`, `until` (retry: unix ms when it fires) | A line in the conversation. `retry` collapses once the agent writes again; `clear` marks a /clear (rewinding past it isn't possible); `handoff` marks where a session copied from another agent's session starts (hub/handoff.go; rewinding past it isn't possible either). |
 | `task` | `task` (acpx.Task) | A background task or sub-agent finished (the tasks bar shows running ones from the session state). |
 | `shell` · `shell_out` · `shell_done` | `messageId` (run id), `text` (command / output), `exit`, `level` (stopped · lost) | Gerdr only: a `!command` the user ran from the composer. |
 

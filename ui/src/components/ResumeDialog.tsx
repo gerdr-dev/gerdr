@@ -3,26 +3,29 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { AgentIcon } from "@/components/AgentIcon";
 import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { resumeInPane } from "@/lib/actions";
+import { continueInPane, resumeInPane } from "@/lib/actions";
 import { api } from "@/lib/api";
 import { set, useStore } from "@/lib/store";
 
 // /resume (like Claude Code): switch this pane to an earlier conversation in the same directory.
 // claude in stream-json mode doesn't take /resume (it's the interactive picker), so gerdr does it, from one list sorted by time:
-//   - gerdr's other sessions for this agent + directory (closed ones too; picking one resumes it). That includes conversations
-//     a /clear left behind: the hub splits them off into sessions of their own, under the title they had (hub/clear.go);
+//   - gerdr's other sessions in this directory, whatever agent had them (closed ones too; picking one resumes it). That
+//     includes conversations a /clear left behind: the hub splits them off into sessions of their own, under the title they
+//     had (hub/clear.go). One of another agent is carried on by this pane's agent (continueInPane, hub/handoff.go), the
+//     same as on the new-session page: which agent answers is the pane's, the history is everyone's;
 //   - the agent's own sessions gerdr hasn't seen (run in a terminal): picking one imports it.
 // Where a conversation came from isn't what you search by; when you last had it is.
 // The session switched away from isn't deleted; it's still in the sessions list.
 
 type Native = { sessionId: string; cwd: string; title?: string; updatedAt?: string };
-type Entry = { key: string; search: string; title: string; at: number; pick: () => void };
+type Entry = { key: string; agent: string; search: string; title: string; at: number; pick: () => void };
 
 export function ResumeDialog() {
   const d = useStore((s) => s.dialog);
   const open = d?.kind === "resume";
   const cur = useStore((s) => (open ? s.sessions[d.sessionId] : undefined));
   const sessions = useStore((s) => s.sessions);
+  const agents = useStore((s) => s.agents);
   const [native, setNative] = useState<Native[] | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -33,6 +36,7 @@ export function ResumeDialog() {
   }, [open, cur?.id]);
 
   if (!open || !cur) return null;
+  const agentName = agents.find((a) => a.id === cur.agent)?.name ?? cur.agent;
   const paneId = d.paneId;
   const close = () => set({ dialog: null });
 
@@ -48,12 +52,23 @@ export function ResumeDialog() {
       setBusy(false);
     }
   };
-  const pickMine = (id: string) => {
-    close();
-    resumeInPane(paneId, id);
+  const pickMine = async (id: string) => {
+    if (sessions[id]?.agent === cur.agent) {
+      close();
+      return resumeInPane(paneId, id);
+    }
+    setBusy(true);
+    try {
+      await continueInPane(paneId, id, cur.agent);
+      close();
+    } catch {
+      // continueInPane said why
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const here = Object.values(sessions).filter((s) => s.agent === cur.agent && s.cwd === cur.cwd);
+  const here = Object.values(sessions).filter((s) => s.cwd === cur.cwd);
   const entries: Entry[] = [];
   for (const s of here)
     // Nothing said in it, nothing to resume: a pane opened and left unused, or what a /clear leaves behind (only the
@@ -61,6 +76,7 @@ export function ResumeDialog() {
     if (s.id !== cur.id && !!s.title)
       entries.push({
         key: s.id,
+        agent: s.agent,
         search: `${s.id} ${s.title ?? ""}`,
         title: s.title || "（没有标题）",
         at: s.updatedAt,
@@ -69,6 +85,7 @@ export function ResumeDialog() {
   for (const n of native ?? [])
     entries.push({
       key: `native:${n.sessionId}`,
+      agent: cur.agent,
       search: `${n.sessionId} ${n.title ?? ""}`,
       title: n.title || n.sessionId.slice(0, 8),
       at: n.updatedAt ? Date.parse(n.updatedAt) : 0,
@@ -93,8 +110,9 @@ export function ResumeDialog() {
           {entries.map((e) => (
             // cmdk tracks the highlighted item by value: two equal values light up together, so the key keeps it unique
             <CommandItem key={e.key} value={`${e.key} ${e.search}`} className="gap-2.5" disabled={busy} onSelect={e.pick}>
-              <AgentIcon agent={cur.agent} className="size-4 shrink-0" />
+              <AgentIcon agent={e.agent} className="size-4 shrink-0" />
               <span className="min-w-0 truncate">{e.title}</span>
+              {e.agent !== cur.agent && <span className="shrink-0 text-[11px] text-muted-foreground">换 {agentName} 接着聊</span>}
               <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">{e.at ? ago(e.at) : ""}</span>
             </CommandItem>
           ))}

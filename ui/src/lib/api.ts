@@ -186,7 +186,8 @@ export const api = {
   pending: () => req<PendingReq[]>("GET", "/api/pending"),
   setAwake: (b: { minutes?: number; until?: number; forever?: boolean }) => req<AwakeStatus>("PUT", "/api/awake", b),
   setupLid: () => req<AwakeStatus>("POST", "/api/awake/lid-setup", {}),
-  createSession: (o: { agent: string; cwd: string; mode?: string; config?: Record<string, string>; import?: string; title?: string }) =>
+  /** continueFrom: another agent's session whose conversation the new one carries on (hub/handoff.go) */
+  createSession: (o: { agent: string; cwd: string; mode?: string; config?: Record<string, string>; import?: string; title?: string; continueFrom?: string }) =>
     req<SessionSummary>("POST", "/api/sessions", o),
   /** input：建好就敲进去的字（对话里「在新终端里运行」） */
   termCreate: (o: { cwd?: string; from?: string; cols?: number; rows?: number; input?: string }) => req<TermInfo>("POST", "/api/terms", o),
