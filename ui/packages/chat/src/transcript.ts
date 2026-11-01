@@ -433,6 +433,20 @@ export class Transcript {
         }
         break;
       }
+      case "withdrawn": {
+        // Taken back (Withdraw / Send now / ↑ / Esc): drop the bubble in place. The hub used to push the whole log
+        // again instead, which rebuilt a long conversation and made the withdraw feel slow.
+        if (!e.messageId) break;
+        if (this.queued.some((m) => m.metadata?.messageId === e.messageId)) {
+          this.queued = this.queued.filter((m) => m.metadata?.messageId !== e.messageId);
+          break;
+        }
+        const i = this.messages.findIndex((m) => m.role === "user" && m.metadata?.messageId === e.messageId);
+        if (i < 0) break;
+        this.messages = [...this.messages];
+        this.removeMessage(i);
+        break;
+      }
       case "turn_end": {
         this.messages = [...this.messages];
         this.clearRetry();

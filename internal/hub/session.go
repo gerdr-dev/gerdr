@@ -1387,10 +1387,20 @@ func (s *Session) truncateFrom(msgID string) {
 	s.setStatus()
 }
 
-// dropUserEvents：把收回的那几条用户消息从日志里删掉（内容收进 out），整份重推。
+// dropUserEvents：把收回的那几条用户消息从日志里删掉（内容收进 out）, then tells the UIs with one EvWithdrawn per
+// message. It used to push the whole log again (reset): on a long session that rebuilt the whole conversation in
+// every open view and dropped the older pages scrolled in, which is what made a withdraw feel slow (user report; the
+// rewrite itself is ~70ms on a 14MB log). The marker is logged, so a client catching up by seq gets it too, and a
+// replay where the message is already gone ignores it.
 func (s *Session) dropUserEvents(ids map[string]bool, out *EscapeResult) {
 	s.mu.Lock()
 	s.loadLocked()
+	var gone []string
+	for _, e := range s.events {
+		if e.Kind == EvUser && ids[e.MessageID] {
+			gone = append(gone, e.MessageID)
+		}
+	}
 	kept, content, n := chatlog.DropUsers(s.events, ids)
 	out.Content = append(out.Content, s.h.inflate(content)...)
 	out.Withdrawn += n
@@ -1400,7 +1410,9 @@ func (s *Session) dropUserEvents(ids map[string]bool, out *EscapeResult) {
 	if err := s.lf.Rewrite(all); err != nil {
 		s.h.log.Warn("rewrite log", "err", err)
 	}
-	s.h.broadcastEvents(s.rec.ID, all, true)
+	for _, id := range gone {
+		s.emit(&Event{Kind: EvWithdrawn, MessageID: id})
+	}
 }
 
 func containsEvent(list []*Event, e *Event) bool {

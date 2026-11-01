@@ -25,6 +25,7 @@ const (
 	EvNotice         = chatlog.EvNotice
 	EvSteerState     = chatlog.EvSteerState
 	EvTask           = chatlog.EvTask
+	EvWithdrawn      = chatlog.EvWithdrawn
 )
 
 func now() int64 { return time.Now().UnixMilli() }

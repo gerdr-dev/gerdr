@@ -74,6 +74,9 @@ const (
 	EvShell     = "shell"      // MessageID = 这次运行的 id，Text = 命令
 	EvShellOut  = "shell_out"  // Text = 一段输出（stdout、stderr 混在一起，按出现的先后）
 	EvShellDone = "shell_done" // Exit = 退出码；Level = stopped（人点了停止）/ lost（gerdr 重启时还在跑）
+	// gerdr only: user message MessageID was withdrawn (already dropped from the log); the UI removes it in place
+	// instead of being handed the whole log again.
+	EvWithdrawn = "withdrawn"
 )
 
 // Add appends e to events, merging a streaming text chunk into the previous event when both are chunks of the same

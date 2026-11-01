@@ -146,3 +146,37 @@ func TestTurnHeadUserChunk(t *testing.T) {
 		}
 	}
 }
+
+// A withdraw drops the message from the log and tells clients with a withdrawn marker, not a whole-log reset: a reset
+// rebuilt the whole view of a long session. A client catching up from before the marker gets it.
+func TestWithdrawIsIncremental(t *testing.T) {
+	h, err := New(Options{Dir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := newSession(h, Record{ID: "s1"})
+	s.emit(&Event{Kind: EvUser, MessageID: "u1"})
+	s.emit(&Event{Kind: EvTurnStart, MessageID: "u1"})
+	mark := s.events[1].Seq
+	s.emit(&Event{Kind: EvUser, MessageID: "st", Steer: true, Content: []json.RawMessage{json.RawMessage(`{"type":"text","text":"hi"}`)}})
+	s.emit(&Event{Kind: EvSteerState, MessageID: "st", Text: "queued"})
+	var out EscapeResult
+	s.dropUserEvents(map[string]bool{"st": true}, &out)
+	if out.Withdrawn != 1 || len(out.Content) != 1 {
+		t.Fatalf("result %+v", out)
+	}
+	var kinds []string
+	for _, e := range s.Events() {
+		kinds = append(kinds, e.Kind+":"+e.MessageID)
+	}
+	if got := strings.Join(kinds, " "); got != "user:u1 turn_start:u1 steer_state:st withdrawn:st" {
+		t.Fatalf("log %s", got)
+	}
+	if h.resetAt["s1"] != 0 {
+		t.Fatal("withdraw pushed the whole log again")
+	}
+	evs, ok := h.eventsAfter(s, mark)
+	if !ok || evs[len(evs)-1].Kind != EvWithdrawn {
+		t.Fatalf("catch-up %v %v", ok, evs)
+	}
+}

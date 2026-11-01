@@ -61,7 +61,9 @@ export type HubEvent = {
     | "steer_state"
     | "shell"
     | "shell_out"
-    | "shell_done";
+    | "shell_done"
+    /** Gerdr only: user message messageId was taken back (already gone from the log), remove it in place */
+    | "withdrawn";
   task?: AgentTask;
   /** turn_start auto: which background task woke the agent (backend acpx.Wake), when the adapter could tell */
   wake?: Wake;
