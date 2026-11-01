@@ -528,12 +528,20 @@ export function Sidebar({ className }: { className?: string }) {
   const list = spaceWorkspaces(layout); // only the session being shown (herdr-style; switch with SpaceSwitcher)
   const listRef = useRef<HTMLDivElement>(null);
   const { drag, onPointerDown } = useWorkspaceDrag(listRef, list.map((w) => w.id).join(","));
+  const wsRef = useRef<HTMLDivElement>(null);
+  const [wsH, setWsH] = useWorkspacesH();
+  // The phone drawer keeps the default: no room there to share out, and fingers would catch the edge while scrolling
+  const fixed = !className && wsH !== undefined;
   return (
     // className = the phone drawer, which sets its own width; on the desktop the width is the user's (SidebarEdge)
     <div className={cn("relative flex h-full shrink-0 flex-col border-r bg-sidebar", className)} style={className ? undefined : { width: sidebarW }}>
       {!className && <SidebarEdge />}
       <SidebarHeader />
-      <div className="max-h-[45%] shrink-0 overflow-y-auto px-1.5 pt-1.5 pb-2">
+      <div
+        ref={wsRef}
+        className={cn("shrink-0 overflow-y-auto px-1.5 pt-1.5 pb-2", !fixed && "max-h-[45%]")}
+        style={fixed ? { height: wsH, maxHeight: "calc(100% - 220px)" } : undefined}
+      >
         <div ref={listRef}>
           {list.map((w, wi) => (
             <WorkspaceItem
@@ -556,6 +564,7 @@ export function Sidebar({ className }: { className?: string }) {
           <Plus className="size-3.5" /> 新工作空间
         </button>
       </div>
+      {!className && <WorkspacesEdge list={wsRef} onHeight={setWsH} />}
       <AgentList />
       <SidebarBottom sidebarToggle />
     </div>
@@ -681,15 +690,16 @@ export const COL_EDGE = "z-20 cursor-col-resize touch-none bg-clip-content trans
  * re-renders the sidebar or the chat column; per pointer event that's several times a frame on a phone). Captured, so a
  * frame next to the handle (Work mode's site) can't swallow the moves.
  */
-export function startColResize(e: React.PointerEvent, onDx: (dx: number) => void) {
+export function startColResize(e: React.PointerEvent, onDx: (dx: number) => void, axis: "x" | "y" = "x") {
   e.preventDefault();
   const el = e.currentTarget as HTMLElement;
   el.setPointerCapture(e.pointerId);
-  const x0 = e.clientX;
+  const pos = (ev: { clientX: number; clientY: number }) => (axis === "x" ? ev.clientX : ev.clientY);
+  const x0 = pos(e);
   let x = x0;
   let raf = 0;
   const move = (ev: PointerEvent) => {
-    x = ev.clientX;
+    x = pos(ev);
     raf ||= requestAnimationFrame(() => {
       raf = 0;
       onDx(x - x0);
@@ -702,7 +712,7 @@ export function startColResize(e: React.PointerEvent, onDx: (dx: number) => void
     el.removeEventListener("pointermove", move);
     document.body.style.cursor = "";
   };
-  document.body.style.cursor = "col-resize";
+  document.body.style.cursor = axis === "x" ? "col-resize" : "row-resize";
   el.addEventListener("pointermove", move);
   for (const t of ["pointerup", "pointercancel", "lostpointercapture"]) el.addEventListener(t, end);
 }
@@ -724,6 +734,57 @@ export function SidebarEdge() {
       title="拖动调宽窄，双击还原"
       style={{ WebkitAppRegion: "no-drag" } as any}
     />
+  );
+}
+
+const WS_H_KEY = "gerdr.workspacesH";
+const WS_H_MIN = 40;
+
+/**
+ * The workspace list's height in the sidebar: undefined = sized by its content up to 45% (the default), a number = what
+ * the user dragged it to (WorkspacesEdge), kept across reloads.
+ */
+function useWorkspacesH() {
+  const [h, setH] = useState<number | undefined>(() => {
+    try {
+      return Number(localStorage.getItem(WS_H_KEY)) || undefined;
+    } catch {
+      return undefined;
+    }
+  });
+  const save = (v: number | undefined) => {
+    setH(v);
+    try {
+      if (v) localStorage.setItem(WS_H_KEY, String(v));
+      else localStorage.removeItem(WS_H_KEY);
+    } catch {}
+  };
+  return [h, save] as const;
+}
+
+/**
+ * The line between the workspace list and the agents: drag it to give one more room than the other (asked for),
+ * double-click for the default. It starts from the list's drawn height, so the first drag doesn't jump.
+ */
+function WorkspacesEdge({ list, onHeight }: { list: React.RefObject<HTMLDivElement | null>; onHeight: (h: number | undefined) => void }) {
+  const start = (e: React.PointerEvent) => {
+    const el = list.current;
+    if (!el) return;
+    const h0 = el.offsetHeight;
+    // Leave the agents (the block right after this edge) at least ~120px, a few rows
+    const agents = (e.currentTarget as HTMLElement).parentElement?.nextElementSibling as HTMLElement | null;
+    const max = h0 + (agents?.offsetHeight ?? 0) - 120;
+    startColResize(e, (dy) => onHeight(Math.round(Math.max(WS_H_MIN, Math.min(max, h0 + dy)))), "y");
+  };
+  return (
+    <div className="relative h-0 shrink-0">
+      <div
+        className="absolute inset-x-0 -top-1 z-20 h-2 cursor-row-resize touch-none bg-clip-content py-[3px] transition-colors hover:bg-brand/50 pointer-coarse:-top-3 pointer-coarse:h-6 pointer-coarse:py-[11px]"
+        onPointerDown={start}
+        onDoubleClick={() => onHeight(undefined)}
+        title="拖动调高矮，双击还原"
+      />
+    </div>
   );
 }
 
