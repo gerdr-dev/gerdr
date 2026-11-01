@@ -1,7 +1,7 @@
 import { ArrowLeft, ArrowUpRight, GripVertical, ClipboardCheck, Maximize2, Minimize2, PanelLeft, Pin, PinOff, Plus, X } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { basename, focusSession, tabName } from "@/lib/actions";
+import { basename, focusSession, newAgentInOverview, tabName } from "@/lib/actions";
 import { locateSession, spaceList, spaceOf, type Layout } from "@/lib/layout";
 import { compareSessions } from "@/lib/order";
 import {
@@ -145,7 +145,8 @@ function PhoneOverview({ ids, focus, shown }: { ids: string[]; focus?: string; s
               <TileChip key={id} id={id} current={id === focus} className="h-8 max-w-36" onClick={() => focusTile(id)} />
             ))}
           </div>
-          <Button variant="ghost" size="icon" className="size-9 shrink-0" aria-label="全部 agent" onClick={openList}>
+          {/* A new agent like the shown one (same agent and directory, Cmd+D in the grid); with no tile yet, the list to pick from */}
+          <Button variant="ghost" size="icon" className="size-9 shrink-0" aria-label="新 agent" onClick={() => newAgentInOverview() || openList()}>
             <Plus className="size-[18px]" />
           </Button>
         </div>
