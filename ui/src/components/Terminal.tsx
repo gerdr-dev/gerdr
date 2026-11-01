@@ -207,7 +207,11 @@ export function TerminalView({
       ro.disconnect();
       mo.disconnect();
       ws?.close();
-      term.dispose();
+      // Dispose one task later: xterm 5.5's Viewport queues setTimeout(syncScrollArea) when the terminal opens, and if
+      // the terminal is disposed before that fires (switching workspaces quickly mounts and unmounts this pane), the
+      // callback reads the already-disposed renderer and throws "reading 'dimensions'". Same-delay timers run in
+      // order, so this one runs after xterm's.
+      setTimeout(() => term.dispose());
       xt.current = null;
     };
   }, [termId, paneId]);
