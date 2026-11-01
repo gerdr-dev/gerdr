@@ -89,7 +89,7 @@ type SettingSpec struct {
 	Key         string   `json:"key"`
 	Title       string   `json:"title,omitempty"`
 	Description string   `json:"description,omitempty"`
-	Type        string   `json:"type"` // number / string / boolean / select / color ("#rrggbb")
+	Type        string   `json:"type"` // number / string / boolean / select / color ("#rrggbb") / secret (a string the form masks)
 	Default     any      `json:"default,omitempty"`
 	Min         *float64 `json:"min,omitempty"`
 	Max         *float64 `json:"max,omitempty"`

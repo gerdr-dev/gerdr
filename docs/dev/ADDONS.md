@@ -35,7 +35,7 @@ sees: `internal/addons/builtin/gerdr.d.ts`, copied into `~/.gerdr/addons` on eve
   load order doesn't matter, and a light-only override can't win in dark mode the way a plain `html:root` would.
   Only token names (`[a-z0-9-]`) and values without `;{}` get in. A function spec is re-run at the end of every
   `doReload`: a settings change broadcasts "addons" but doesn't change the hash, so no add-on re-runs `setup`.
-- Settings: addon.json `settings` (number / string / boolean / select / color) become a form under the add-on in Settings →
+- Settings: addon.json `settings` (number / string / boolean / select / color / secret) become a form under the add-on in Settings →
   Add-ons; values live in addons-state.json (`settings[id][key]`, only keys changed from the default), not in the
   browser's localStorage like `g.storage`, so every window and the phone agree. `g.settings.get` reads the latest
   `/api/addons` build each call, so a change applies without reloading the add-on (its hash doesn't include values).

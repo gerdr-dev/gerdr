@@ -1,6 +1,6 @@
 import { Markdown } from "@gerdr/chat";
 import { openLightbox } from "@/components/Lightbox";
-import { Check, ChevronRight, CircleAlert, ExternalLink, FolderOpen, Puzzle, RefreshCw, Trash2, X } from "lucide-react";
+import { Check, ChevronRight, CircleAlert, ExternalLink, Eye, EyeOff, FolderOpen, Puzzle, RefreshCw, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -210,6 +210,7 @@ function SettingField({ id, spec, value }: { id: string; spec: AddonSetting; val
   const shown = value !== undefined ? value : spec.default;
   const [draft, setDraft] = useState(String(shown ?? ""));
   useEffect(() => setDraft(String(shown ?? "")), [shown]);
+  const [reveal, setReveal] = useState(false); // a "secret" shown in the clear
   const save = (v: unknown) => api.setAddonSettings(id, { [spec.key]: v }).catch((e) => toast.error((e as Error).message));
   const commitNumber = () => {
     const n = Number(draft);
@@ -242,7 +243,10 @@ function SettingField({ id, spec, value }: { id: string; spec: AddonSetting; val
           <span className="flex items-center gap-1">
             <Input
               className={cn("h-7 text-[12px]", spec.type === "number" ? "w-20 text-right" : "w-48")}
-              type={spec.type === "number" ? "number" : "text"}
+              type={spec.type === "number" ? "number" : spec.type === "secret" && !reveal ? "password" : "text"}
+              // Keep the browser's password manager away from add-on tokens
+              autoComplete={spec.type === "secret" ? "off" : undefined}
+              spellCheck={spec.type === "secret" ? false : undefined}
               min={spec.min}
               max={spec.max}
               value={draft}
@@ -250,6 +254,11 @@ function SettingField({ id, spec, value }: { id: string; spec: AddonSetting; val
               onBlur={() => (spec.type === "number" ? commitNumber() : draft !== shown && save(draft))}
               onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
             />
+            {spec.type === "secret" && (
+              <Button size="icon-sm" variant="ghost" title={reveal ? "隐藏" : "显示"} aria-label={reveal ? "隐藏" : "显示"} onClick={() => setReveal(!reveal)}>
+                {reveal ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+              </Button>
+            )}
             {spec.unit && <span className="text-muted-foreground">{spec.unit}</span>}
           </span>
         )}
@@ -259,7 +268,8 @@ function SettingField({ id, spec, value }: { id: string; spec: AddonSetting; val
           <span className="min-w-0 flex-1">{spec.description}</span>
           {value !== undefined && (
             <button type="button" className="shrink-0 hover:text-foreground" onClick={() => save(null)}>
-              恢复默认（{String(spec.default)}）
+              {/* A secret's default is not echoed either (usually empty anyway) */}
+              {spec.type === "secret" ? "清除" : `恢复默认（${String(spec.default)}）`}
             </button>
           )}
         </div>

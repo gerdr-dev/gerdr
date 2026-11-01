@@ -89,7 +89,7 @@ export type AddonSetting = {
   key: string;
   title?: string;
   description?: string;
-  type: "number" | "string" | "boolean" | "select" | "color";
+  type: "number" | "string" | "boolean" | "select" | "color" | "secret";
   default?: unknown;
   min?: number;
   max?: number;

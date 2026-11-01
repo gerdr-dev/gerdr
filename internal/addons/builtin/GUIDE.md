@@ -180,7 +180,7 @@ the light / dark switch and outlives the add-on.
 | `g.stats(days?)` | Per day: turns finished, and money spent (USD by agent; only Claude Code reports money). |
 | `g.settings.get(key)` | This add-on's [settings](#settings). |
 | `g.storage.get/set` | Small private storage, kept in this browser / App (not shared between devices). A cache: store `{ at: Date.now(), data }` and refetch when it's older than you like. |
-| `g.fetch(url, init)` | An HTTP request made by Gerdr's backend, so the API needs no CORS. Resolves `{ ok, status, headers, text, json() }`; a non-string `body` goes as JSON. |
+| `g.fetch(url, init)` | An HTTP request made by Gerdr's backend, so the API needs no CORS. The only way out: the page's own `fetch` is limited to Gerdr itself (CSP `connect-src 'self'`), CORS or not. Resolves `{ ok, status, headers, text, json() }`; a non-string `body` goes as JSON. |
 | `g.asset(path)` | A URL for a file of the add-on's folder: `<img src={g.asset("logo.png")} />`, `new Audio(g.asset("done.wav"))`. |
 
 ### Settings
@@ -196,12 +196,17 @@ every device:
   { "key": "style", "title": "样式", "type": "select", "default": "dot",
     "options": [{ "value": "dot", "label": "圆点" }, { "value": "text", "label": "文字" }] },
   { "key": "prefix", "title": "前缀", "type": "string", "default": "" },
-  { "key": "color", "title": "颜色", "type": "color", "default": "#e5569b" }
+  { "key": "color", "title": "颜色", "type": "color", "default": "#e5569b" },
+  { "key": "token", "title": "令牌", "type": "secret", "default": "" }
 ]
 ```
 
 Read with `g.settings.get<number>("ttlMinutes")` (the default until changed), at the moment you need it rather than
 once in `setup`: a change applies at once, without reloading the add-on.
+
+A `secret` is a string the form keeps masked (an eye button shows it) — for API tokens and keys. Only the display
+differs: it is stored like any other setting (`~/.gerdr/addons-state.json`, not the add-on folder) and
+`g.settings.get<string>("token")` returns it in the clear.
 
 ### Services
 

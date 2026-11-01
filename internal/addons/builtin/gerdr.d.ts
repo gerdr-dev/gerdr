@@ -8,7 +8,8 @@
 //                "settings" become a form in Settings → Add-ons; read them with g.settings.get(key):
 //                  {"key": "ttl", "title": "缓存时长", "type": "number", "default": 60, "min": 1, "max": 1440, "unit": "分钟"}
 //                type: number / string / boolean / select (with "options": [{"value": 5, "label": "5 分钟"}]) /
-//                color (a "#rrggbb" string, picked from a palette or typed)
+//                color (a "#rrggbb" string, picked from a palette or typed) / secret (a string the form masks:
+//                tokens, keys; g.settings.get returns it in the clear)
 //   index.ts     the UI half (or what "main" names): export default defineAddon({...}). It may import other files of
 //                the folder; images, sounds and other files it ships are reached with g.asset("icon.png").
 //
