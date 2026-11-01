@@ -40,7 +40,7 @@ import { leaves, phoneRoot, setRatio, updateTab, type PaneLeaf, type PaneNode, t
 import { applyPaneTitle, paneSnapshot, tabSnapshot } from "@/lib/addons";
 import { AddonSlot } from "./AddonSlot";
 import { markRead, set, setLayout, useStore } from "@/lib/store";
-import { addToTodo, overviewIds, removeTile } from "@/lib/overview";
+import { activeIds, addToActive, removeActive } from "@/lib/overview";
 import { usePhone } from "@/lib/phone";
 import { cn } from "@/lib/utils";
 import { FadeText } from "./FadeText";
@@ -473,7 +473,7 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
   const session = useStore((s) => (pane.sessionId ? s.sessions[pane.sessionId] : undefined));
   const unread = useStore((s) => (pane.sessionId ? !!s.unread[pane.sessionId] : false));
   const starting = useStore((s) => !!s.starting[pane.id]);
-  const inTodo = useStore((s) => !!pane.sessionId && overviewIds(s.overview, s.layout, s.sessions, s.config).includes(pane.sessionId));
+  const inTodo = useStore((s) => !!pane.sessionId && activeIds(s).includes(pane.sessionId));
   const agents = useStore((s) => s.agents);
   useStore((s) => s.addonVersion);
   const focused = useContext(TabActive) && tab.focus === pane.id;
@@ -562,12 +562,12 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
               <>
                 <DropdownMenuSeparator />
                 {inTodo ? (
-                  <DropdownMenuItem onClick={() => removeTile(session.id)}>
-                    <ListX /> 移出待办
+                  <DropdownMenuItem onClick={() => removeActive(session.id)}>
+                    <ListX /> 移出进行中
                   </DropdownMenuItem>
                 ) : (
-                  <DropdownMenuItem onClick={() => addToTodo(session.id)}>
-                    <ListPlus /> 加入待办
+                  <DropdownMenuItem onClick={() => addToActive(session.id)}>
+                    <ListPlus /> 加入进行中
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuItem onClick={() => set({ dialog: { kind: "rename", target: "session", id: session.id, value: session.title ?? "" } })}>

@@ -292,7 +292,7 @@ export function SettingsDialog({ open }: { open: boolean }) {
               </Row>
               <Row
                 label="新侧栏"
-                hint="一条列表代替工作空间切换、顶部 tab 栏、agents 列表和待办：每个工作空间是一个能折叠的组，里面列出 tab（分屏的几个连在一起）；Pin 的 agent 放在最上面，点「Pin」看网格。只在电脑上生效"
+                hint="一条列表代替工作空间切换、顶部 tab 栏、agents 列表和进行中视图：最上面是「进行中」（等你、在跑、最近动过的和你加进来的，按该不该先看排，点「网格」一起看），下面每个工作空间是一个能折叠的组，里面列出 tab（分屏的几个连在一起）。只在电脑上生效"
                 local
               >
                 <Switch checked={!!dev.unifiedSidebar} onCheckedChange={(v) => setPref({ unifiedSidebar: v })} />

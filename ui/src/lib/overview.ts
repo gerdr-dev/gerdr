@@ -4,19 +4,21 @@
 // focusSession find "the" pane, and shutdownGone stops an agent once no pane shows it. A workspace holding the same
 // sessions again would break both (focus lands in the wrong place; closing a tile here could stop the agent, or keep a
 // closed one alive). So the overview is a view over the layout: a list of session ids, per device (localStorage, like
-// the sidebar / mode), and closing a tile only takes it off this list. Ids whose session no longer has a pane anywhere
-// drop out on their own (overviewIds), so the overview never keeps an agent alive that the layout let go of.
+// the sidebar / mode), and closing a tile only takes it off this list. The tiles are "active" (in progress,
+// overviewState.activeIds): agents that need you, run or ran lately join on their own, others are put in by hand; only
+// open sessions count, so the overview never keeps an agent alive that the layout let go of.
 // Each project's current Work conversation counts as open too (overviewState.workChats): it has no pane, Work mode shows it.
 import { toast } from "sonner";
 import { allLeaves, type Layout } from "./layout";
-import { MAX_TILES, OVERVIEW_KEY, overviewFocus, overviewIds, workChats, type Overview, type WorkConf } from "./overviewState";
-import { sessionRank } from "./order";
-import { get, set, useStore } from "./store";
+import { ACTIVE_HOURS, activeIds, MAX_TILES, OVERVIEW_KEY, overviewFocus, overviewIds, workChats, type Overview, type WorkConf } from "./overviewState";
+import { sessionSince } from "./order";
+import { currentSpace } from "./layout";
+import { get, markRead, set, useStore } from "./store";
 import { syncWatch } from "./sync";
 import type { KeyAction } from "./keys";
 import type { SessionSummary } from "./types";
 
-export { MAX_TILES, overviewFocus, overviewIds, workChats, type Overview };
+export { ACTIVE_HOURS, activeIds, MAX_TILES, overviewFocus, overviewIds, workChats, type Overview };
 
 export function setOverview(fn: (o: Overview) => Overview) {
   const next = fn(get().overview);
@@ -41,45 +43,70 @@ export function openSessions(l: Layout, sessions: Record<string, SessionSummary>
   return out;
 }
 
-export const useOverviewIds = () => useStore((s) => overviewIds(s.overview, s.layout, s.sessions, s.config).join(","));
+export const useOverviewIds = () => useStore((s) => overviewIds(s).join(","));
+/** "Active" (overviewState.activeIds), joined: the grid shows its first MAX_TILES. */
+export const useActiveIds = () => useStore((s) => activeIds(s).join(","));
 
 export function toggleOverview(on = !get().overview.on) {
   setOverview((o) => ({ ...o, on }));
 }
 
-export function addTiles(ids: string[]) {
+/** Put agents in "active" by hand: they stay until taken out. */
+export function addActive(ids: string[]) {
   setOverview((o) => {
-    const live = overviewIds(o, get().layout, get().sessions, get().config);
-    const add = ids.filter((id) => !live.includes(id));
-    if (!add.length) return o;
-    return { ...o, ids: [...live, ...add].slice(0, MAX_TILES) };
+    const add = ids.filter((id) => !o.added.includes(id));
+    const dismissed = { ...o.dismissed };
+    for (const id of ids) delete dismissed[id];
+    return { ...o, added: [...o.added, ...add], dismissed };
   });
 }
 
-export function removeTile(id: string) {
-  setOverview((o) => ({ ...o, ids: o.ids.filter((x) => x !== id), main: o.main === id ? undefined : o.main }));
+/**
+ * Take an agent out of "active" (it keeps running). Added by hand: gone. Joined on its own: out until it starts or ends a
+ * turn. Unseen output counts as seen, else "finished unseen" would put it straight back.
+ */
+export function removeActive(id: string) {
+  const s = get().sessions[id];
+  if (s && get().unread[id]) markRead(id);
+  setOverview((o) => {
+    // Forget sessions gone since, so the map doesn't grow forever
+    const dismissed = Object.fromEntries(Object.entries(o.dismissed).filter(([k]) => get().sessions[k]));
+    if (s) dismissed[id] = sessionSince(s);
+    return { ...o, added: o.added.filter((x) => x !== id), dismissed, main: o.main === id ? undefined : o.main };
+  });
 }
 
-export function clearTiles() {
-  setOverview((o) => ({ ...o, ids: [], main: undefined }));
+/** Take everything out of "active" (what needs you comes back: it always shows). */
+export function clearActive() {
+  for (const id of activeIds(get())) removeActive(id);
 }
 
-/** Open the overview on this session: put it in as a tile and focus it. False (overview left alone) when the grid is full. */
+/** Whether this project's "active" lists every project's agents (each project has its own setting). */
+export function activeAllProjects(st: { overview: Overview; layout: Layout } = get()): boolean {
+  return st.overview.allIn.includes(currentSpace(st.layout));
+}
+
+export function setActiveAllProjects(on: boolean) {
+  const sp = currentSpace(get().layout);
+  setOverview((o) => ({ ...o, allIn: on ? [...o.allIn.filter((x) => x !== sp), sp] : o.allIn.filter((x) => x !== sp) }));
+}
+
+/** Open the grid on this session: put it in "active" and focus its tile. False (grid left alone) when it can't be a tile. */
 export function showInOverview(id: string): boolean {
-  if (!overviewIds(get().overview, get().layout, get().sessions, get().config).includes(id)) {
-    addTiles([id]);
-    if (!get().overview.ids.includes(id)) return false;
+  if (!overviewIds(get()).includes(id)) {
+    addActive([id]);
+    if (!overviewIds(get()).includes(id)) return false;
   }
   focusTile(id);
   toggleOverview(true);
   return true;
 }
 
-/** "Add to to-do" from a menu: stay where you are, but the toast offers a way to jump to the tile. */
-export function addToTodo(id: string) {
-  addTiles([id]);
-  if (!get().overview.ids.includes(id)) return void toast(`待办最多放 ${MAX_TILES} 个，先移出几个`);
-  toast("已加入待办", { action: { label: "查看", onClick: () => showInOverview(id) } });
+/** "Add to active" from a menu: stay where you are, but the toast offers a way to jump to the tile. */
+export function addToActive(id: string) {
+  addActive([id]);
+  if (!activeIds(get()).includes(id)) return void toast("加进去了，但它不在这个项目里：在「进行中」的设置里打开「显示所有项目」才看得到");
+  toast("已加入进行中", { action: { label: "查看", onClick: () => showInOverview(id) } });
 }
 
 export function focusTile(id: string) {
@@ -90,7 +117,7 @@ export function focusTile(id: string) {
 /** Zoom the tile to the whole grid, or back (`id` defaults to the focused tile). */
 export function toggleTileZoom(id?: string) {
   setOverview((o) => {
-    const t = id ?? overviewFocus(o, get().layout, get().sessions, get().config);
+    const t = id ?? overviewFocus({ ...get(), overview: o });
     if (!t) return o;
     return { ...o, zoom: o.zoom === t ? undefined : t, focus: t };
   });
@@ -98,15 +125,6 @@ export function toggleTileZoom(id?: string) {
 
 export function toggleMain(id: string) {
   setOverview((o) => ({ ...o, main: o.main === id ? undefined : id }));
-}
-
-/** The agents worth a look: running, waiting for you, errored, or finished unseen (sessionRank 0–3). */
-export function attentionIds(): string[] {
-  const { layout, sessions, unread, config } = get();
-  return openSessions(layout, sessions, config)
-    .filter((s) => sessionRank(s, unread) <= 3)
-    .sort((a, b) => sessionRank(a, unread) - sessionRank(b, unread))
-    .map((s) => s.id);
 }
 
 // ---- auto arrangement ----
@@ -287,7 +305,7 @@ export function fitTiles(ids: string[], main: string | undefined, ratio: number,
 export function swapTiles(from: string, to: string) {
   if (from === to) return;
   setOverview((o) => {
-    const ids = [...o.ids];
+    const ids = overviewIds({ ...get(), overview: o });
     const a = ids.indexOf(from);
     const b = ids.indexOf(to);
     if (a < 0 || b < 0) return o;
@@ -368,7 +386,7 @@ export function placeTile(from: string, to: string, side: DropSide, shown: strin
     // The auto shape needs no pin: leaving it unset lets it follow the window again
     if (same(hit, auto)) delete shapes[countKey(n, hasMain)];
     else shapes[countKey(n, hasMain)] = { counts: hit.counts, ...(hit.cols ? { cols: true } : {}) };
-    return { ...x, ids: move(x.ids), shapes };
+    return { ...x, ids: move(overviewIds({ ...get(), overview: x })), shapes };
   });
 }
 
@@ -433,9 +451,9 @@ const NEUTRAL = new Set<KeyAction>([
  */
 export function overviewKey(a: KeyAction): boolean {
   if (NEUTRAL.has(a) || a === "stop" || a === "renamePane" || a === "stash") return false;
-  const { overview: o, layout, sessions, config } = get();
-  const ids = overviewIds(o, layout, sessions, config);
-  const cur = overviewFocus(o, layout, sessions, config);
+  const o = get().overview;
+  const ids = overviewIds(get());
+  const cur = overviewFocus(get());
   const dirOf: Partial<Record<KeyAction, Dir>> = {
     focusLeft: "left",
     focusRight: "right",
@@ -454,7 +472,7 @@ export function overviewKey(a: KeyAction): boolean {
       if (cur) {
         const i = ids.indexOf(cur);
         const next = ids[i + 1] ?? ids[i - 1];
-        removeTile(cur);
+        removeActive(cur);
         if (next) focusTile(next);
       }
       return true;

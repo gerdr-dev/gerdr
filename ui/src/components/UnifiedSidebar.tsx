@@ -2,6 +2,8 @@ import {
   ChevronRight,
   CircleX,
   Columns2,
+  Ellipsis,
+  Eraser,
   FileText,
   LayoutGrid,
   MailCheck,
@@ -32,6 +34,7 @@ import {
   closeTab,
   closeWorkspace,
   focusPane,
+  focusSession,
   mergeTab,
   movePane,
   moveWorkspaceToSpace,
@@ -41,9 +44,30 @@ import {
   tabName,
 } from "@/lib/actions";
 import { applyWorkspaceLabel } from "@/lib/addons";
-import { activeWs, leaves, spaceList, spaceOf, spaceWorkspaces, type PaneLeaf, type Tab, type Workspace } from "@/lib/layout";
-import { focusTile, MAX_TILES, removeTile, setOverview, toggleOverview, useOverviewIds } from "@/lib/overview";
-import { compareSessions, sessionRank, sessionSince } from "@/lib/order";
+import { activeWs, currentSpace, leaves, locateSession, spaceList, spaceOf, spaceWorkspaces, type PaneLeaf, type Tab, type Workspace } from "@/lib/layout";
+import {
+  ACTIVE_HOURS,
+  activeAllProjects,
+  addActive,
+  clearActive,
+  focusTile,
+  MAX_TILES,
+  removeActive,
+  setActiveAllProjects,
+  toggleOverview,
+  useActiveIds,
+  useOverviewIds,
+  workChats,
+} from "@/lib/overview";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { compareSessions, sessionRank } from "@/lib/order";
 import { markRead, set, useStore } from "@/lib/store";
 import type { SessionSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -58,12 +82,11 @@ import { TabDragLayer, startPaneDrag } from "./TabDrag";
  * - Every workspace of the project is a group, all shown at once (no switching), each collapsible. A group lists its tabs,
  *   one row per pane: a tab split in several panes shows its rows joined by a bar, so each agent's state stays visible.
  * - The status filter (needs you / running) flattens the groups to the rows that match.
- * - "Active" above the groups replaces both the to-do list and the agents list: what needs you, runs, or was touched in the
- *   last ACTIVE_HOURS joins on its own, anything else can be added by hand (and stays until removed); all of it flat in the
- *   agents list's order (lib/order.ts: needs you, then running, then idle, newest first). Removing one that joined on its
- *   own hides it until it does something new. Its grid (the to-do grid, lib/overview.ts) shows the same agents, over the
- *   main area next to this list. The groups below still hold everything, so these rows show twice: the top is where to
- *   look, the groups are where things live.
+ * - "Active" above the groups replaces both the to-do list and the agents list. Who's in is overviewState.activeIds,
+ *   shared with the overview: what needs you, runs, or was touched lately joins on its own, anything else can be added by
+ *   hand; flat in the agents list's order. Each project chooses (the section's ⋯ menu) whether it lists every project's
+ *   agents. Its grid (the overview's, lib/overview.ts) opens over the main area next to this list. The groups below still
+ *   hold everything, so these rows show twice: the top is where to look, the groups are where things live.
  *
  * Kept out of Chrome.tsx so the experiment can be dropped (or promoted) by touching a few lines in App.tsx.
  */
@@ -72,10 +95,6 @@ type Filter = "all" | "you" | "run";
 
 const FOLD_KEY = "gerdr.unified.folded";
 const ACTIVE_FOLD_KEY = "gerdr.unified.activeFolded";
-const ADDED_KEY = "gerdr.unified.added";
-const DISMISSED_KEY = "gerdr.unified.dismissed";
-/** An idle, read session stays in "active" this long after its last activity. */
-const ACTIVE_HOURS = 6;
 
 /** A small per-device setting kept in localStorage (like the folded groups). */
 function useLocal<T>(key: string, init: T) {
@@ -143,15 +162,6 @@ function goPane(paneId: string, sessionId?: string) {
   if (sessionId) markRead(sessionId);
 }
 
-/** Added by hand: starts as the to-do list (the old pins), so switching the lab on keeps what you had there. */
-function loadAdded(): string[] {
-  try {
-    const raw = localStorage.getItem(ADDED_KEY);
-    if (raw != null) return JSON.parse(raw);
-  } catch {}
-  return [...useStore.getState().overview.ids];
-}
-
 export function UnifiedSidebar() {
   const layout = useStore((s) => s.layout);
   const sessions = useStore((s) => s.sessions);
@@ -161,12 +171,12 @@ export function UnifiedSidebar() {
   const gridFocus = useStore((s) => s.overview.focus);
   useStore((s) => s.addonVersion);
   const tiles = useOverviewIds().split(",").filter(Boolean);
+  const activeIds = useActiveIds().split(",").filter(Boolean);
+  const addedSet = new Set(useStore((s) => s.overview.added));
+  const allProjects = useStore((s) => activeAllProjects(s));
   const [filter, setFilter] = useState<Filter>("all");
   const [folded, setFolded] = useFolded();
   const [activeFolded, setActiveFolded] = useLocal(ACTIVE_FOLD_KEY, false);
-  const [added, setAddedRaw] = useState<string[]>(loadAdded);
-  // Removed from "active" while it had joined on its own: id → when (sessionSince) it was removed
-  const [dismissed, setDismissed] = useLocal<Record<string, number>>(DISMISSED_KEY, {});
   const list = spaceWorkspaces(layout);
   const cur = activeWs(layout);
   const curTab = cur.tabs.find((t) => t.id === cur.activeTab);
@@ -194,51 +204,20 @@ export function UnifiedSidebar() {
   const runN = all.filter((x) => x.s?.status === "running").length;
   const byPriority = (xs: Item[]) => [...xs].sort((a, b) => compareItems(a, b, unread));
   const matches = byPriority(all.filter((x) => (filter === "you" ? needsYou(x.s, unread) : x.s?.status === "running")));
-  const now = Date.now();
-  const addedSet = new Set(added);
-  const isActive = (s: SessionSummary) => {
-    if (addedSet.has(s.id)) return true;
-    const rank = sessionRank(s, unread);
-    // Needs you (waiting, errored, finished unseen) always shows; a removed one stays out until it starts or finishes something
-    if (rank < 3) return true;
-    const d = dismissed[s.id];
-    if (d !== undefined && sessionSince(s) <= d) return false;
-    return rank === 3 || now - s.updatedAt < ACTIVE_HOURS * 36e5;
+  const spaces = spaceList(layout);
+  const here = currentSpace(layout);
+  // "active" can reach other projects (allProjects) and Work conversations (no pane): find each one's place
+  const active = activeIds.map((id) => {
+    const loc = locateSession(layout, id);
+    if (!loc) return { id };
+    const item: Item = { ws: loc.ws, tab: loc.tab, pane: loc.pane, split: leaves(loc.tab.root).length > 1, s: sessions[id] };
+    return { id, item };
+  });
+  const wsLabel = (ws: Workspace) => {
+    const i = list.indexOf(ws);
+    const label = i >= 0 ? applyWorkspaceLabel(ws, i, ws.name) : ws.name;
+    return spaceOf(ws) === here ? label : `${spaces.find((sp) => sp.id === spaceOf(ws))?.name ?? spaceOf(ws)} · ${label}`;
   };
-  const active = byPriority(all.filter((x) => !!x.s && isActive(x.s)));
-  const activeIds = active.map((x) => x.s!.id);
-  const activeKey = activeIds.join(",");
-
-  const setAdded = (next: string[]) => {
-    setAddedRaw(next);
-    try {
-      localStorage.setItem(ADDED_KEY, JSON.stringify(next));
-    } catch {}
-  };
-  const addActive = (id: string) => {
-    if (!addedSet.has(id)) setAdded([...added, id]);
-    if (id in dismissed) {
-      const { [id]: _, ...rest } = dismissed;
-      setDismissed(rest);
-    }
-  };
-  const removeActive = (s: SessionSummary) => {
-    setAdded(added.filter((x) => x !== s.id));
-    if (unread[s.id]) markRead(s.id);
-    // Forget the closed ones while at it, so the map doesn't grow forever
-    const keep = Object.fromEntries(Object.entries(dismissed).filter(([id]) => sessions[id]));
-    setDismissed({ ...keep, [s.id]: sessionSince(s) });
-    removeTile(s.id);
-  };
-
-  // The grid shows what "active" lists: keep its tiles in step while it's open (tiles already there keep their place)
-  useEffect(() => {
-    if (!gridOn) return;
-    const want = activeIds.slice(0, MAX_TILES);
-    const cur = useStore.getState().overview.ids;
-    const next = [...cur.filter((id) => want.includes(id)), ...want.filter((id) => !cur.includes(id))];
-    if (next.join(",") !== cur.join(",")) setOverview((o) => ({ ...o, ids: next, main: o.main && next.includes(o.main) ? o.main : undefined }));
-  }, [gridOn, activeKey]);
   const gridFocusId = gridFocus && tiles.includes(gridFocus) ? gridFocus : tiles[0];
 
   const flatRow = (x: Item, top = false) => {
@@ -248,7 +227,7 @@ export function UnifiedSidebar() {
       <Row
         key={x.pane.id}
         {...p}
-        where={applyWorkspaceLabel(x.ws, list.indexOf(x.ws), x.ws.name)}
+        where={wsLabel(x.ws)}
         top={top}
         // In the grid, a row of "active" picks its tile instead of leaving the grid
         current={top && gridOn ? id === gridFocusId : p.current}
@@ -268,7 +247,7 @@ export function UnifiedSidebar() {
       unread: !!(s && unread[s.id]),
       added: !!(s && addedSet.has(s.id)),
       inActive: !!(s && activeIds.includes(s.id)),
-      onActive: (on: boolean) => s && (on ? addActive(s.id) : removeActive(s)),
+      onActive: (on: boolean) => s && (on ? addActive([s.id]) : removeActive(s.id)),
       // In a split, the focused pane is the current one; its neighbours get a lighter tint (they're on screen too)
       current: here && (!inSplit || tab.focus === pane.id),
       visible: here && inSplit,
@@ -299,7 +278,7 @@ export function UnifiedSidebar() {
           </div>
         ) : (
           <>
-            {(active.length > 0 || gridOn) && (
+            {(active.length > 0 || gridOn || allProjects) && (
               <div className="mb-1 border-b pb-1.5">
                 <div
                   role="button"
@@ -308,7 +287,28 @@ export function UnifiedSidebar() {
                   onClick={() => setActiveFolded(!activeFolded)}
                 >
                   <ChevronRight className={cn("size-3.5 shrink-0 transition-transform", !activeFolded && "rotate-90")} />
-                  <span className="flex-1 text-left">进行中</span>
+                  <span className="flex-1 truncate text-left">进行中{allProjects && <span className="font-normal"> · 所有项目</span>}</span>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        className="flex size-5 items-center justify-center rounded-sm hover:bg-muted hover:text-foreground"
+                        title="进行中的设置"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Ellipsis className="size-3.5" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                      <DropdownMenuCheckboxItem checked={allProjects} onCheckedChange={(v) => setActiveAllProjects(!!v)}>
+                        显示所有项目的 agent
+                      </DropdownMenuCheckboxItem>
+                      <div className="px-2 pb-1 text-[11px] text-muted-foreground">只改这个项目，别的项目各自设</div>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem disabled={!activeIds.length} onClick={clearActive}>
+                        <Eraser /> 全部移出（等你的会留下）
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                   <button
                     className={cn(
                       "flex h-5 items-center gap-1 rounded-sm px-1",
@@ -322,7 +322,14 @@ export function UnifiedSidebar() {
                   </button>
                   <span className="w-4 text-right tabular-nums">{active.length}</span>
                 </div>
-                {!activeFolded && active.map((x) => flatRow(x, true))}
+                {!activeFolded &&
+                  active.map((x) =>
+                    x.item ? (
+                      flatRow(x.item, true)
+                    ) : (
+                      <WorkRow key={x.id} id={x.id} added={addedSet.has(x.id)} current={gridOn && x.id === gridFocusId} grid={gridOn && tiles.includes(x.id)} />
+                    ),
+                  )}
               </div>
             )}
             {list.map((ws, wi) => (
@@ -398,6 +405,56 @@ function FootButton({ onClick, title, children }: { onClick: () => void; title: 
     >
       {children}
     </button>
+  );
+}
+
+/** A Work conversation in "active": no pane, so no group or tab; going to it opens Work mode (actions.focusSession). */
+function WorkRow({ id, added, current, grid }: { id: string; added: boolean; current: boolean; grid: boolean }) {
+  const s = useStore((st) => st.sessions[id]);
+  const unread = useStore((st) => !!st.unread[id]);
+  const project = useStore((st) => {
+    const p = Object.entries(workChats(st.config, st.layout)).find(([, x]) => x === id)?.[0];
+    return spaceList(st.layout).find((sp) => sp.id === p)?.name ?? p;
+  });
+  if (!s) return null;
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <div
+          role="button"
+          data-row-current={current || undefined}
+          className={cn(
+            "group flex h-7 cursor-default items-center gap-2 rounded-md px-2 text-[12px] select-none",
+            current ? "bg-accent font-medium" : "hover:bg-accent/60",
+            "data-[state=open]:ring-1 data-[state=open]:ring-brand/60",
+          )}
+          onClick={() => (grid ? (focusTile(id), markRead(id)) : focusSession(id))}
+          onMouseDown={(e) => e.button === 1 && e.preventDefault()}
+          onAuxClick={(e) => e.button === 1 && (e.preventDefault(), removeActive(id))}
+        >
+          <AgentIcon agent={s.agent} className="size-3.5 shrink-0" />
+          <span className="min-w-0 flex-1 truncate">{s.title || basename(s.cwd)}</span>
+          {added && <Pin className="size-3 shrink-0 text-muted-foreground" />}
+          <span className="max-w-[40%] shrink-0 truncate text-[11px] text-muted-foreground group-hover:hidden">Work{project ? ` · ${project}` : ""}</span>
+          <button
+            className="hidden size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground group-hover:flex hover:text-foreground"
+            title="移出进行中"
+            onClick={(e) => (e.stopPropagation(), removeActive(id))}
+          >
+            <X className="size-3" />
+          </button>
+          <StatusDot status={dotStatus(s)} unread={unread} />
+        </div>
+      </ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuItem onClick={() => focusSession(id)}>
+          <ChevronRight /> 去 Work 模式
+        </ContextMenuItem>
+        <ContextMenuItem onClick={() => removeActive(id)}>
+          <PinOff /> 移出进行中
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }
 

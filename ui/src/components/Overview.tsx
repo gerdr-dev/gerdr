@@ -5,18 +5,19 @@ import { basename, focusSession, newAgentInOverview, tabName } from "@/lib/actio
 import { locateSession, spaceList, spaceOf, type Layout } from "@/lib/layout";
 import { compareSessions } from "@/lib/order";
 import {
-  addTiles,
+  activeAllProjects,
+  activeIds,
+  addActive,
   arrange,
-  attentionIds,
-  clearTiles,
+  clearActive,
   fitTiles,
   focusTile,
   toggleTileZoom,
   MAX_TILES,
-  openSessions,
   overviewFocus,
   overviewIds,
-  removeTile,
+  removeActive,
+  setActiveAllProjects,
   moveSeam,
   setGridSizes,
   setOverview,
@@ -30,7 +31,8 @@ import {
   type DropSide,
   type Seam,
 } from "@/lib/overview";
-import type { WorkConf } from "@/lib/overviewState";
+import { openSessionsWithProject, type WorkConf } from "@/lib/overviewState";
+import { currentSpace } from "@/lib/layout";
 import { usePhone } from "@/lib/phone";
 import { markRead, toggleSidebar, useStore } from "@/lib/store";
 import type { SessionSummary } from "@/lib/types";
@@ -81,13 +83,18 @@ export function OverviewView({ shown, bare }: { shown: boolean; bare?: boolean }
   const ids = useOverviewIds().split(",").filter(Boolean);
   const zoom = useStore((s) => s.overview.zoom);
   const sidebar = useStore((s) => s.sidebar);
-  const cur = useStore((s) => overviewFocus(s.overview, s.layout, s.sessions, s.config));
+  const cur = useStore((s) => overviewFocus(s));
   // A tile taken out while zoomed: back to the grid
   const zoomed = zoom && ids.includes(zoom) ? zoom : undefined;
   const pick = (id: string) => {
-    if (!ids.includes(id)) addTiles([id]);
+    if (!ids.includes(id)) addActive([id]);
     focusTile(id);
   };
+  // Remember the order the tiles are shown in (overviewIds keeps it), so newcomers don't push the others around
+  const idsKey = ids.join(",");
+  useEffect(() => {
+    if (shown && useStore.getState().overview.ids.join(",") !== idsKey) setOverview((o) => ({ ...o, ids }));
+  }, [shown, idsKey]);
   if (phone) return <PhoneOverview ids={ids} focus={cur} shown={shown} onPick={pick} />;
   return (
     <TabActive.Provider value={shown}>
@@ -164,7 +171,7 @@ function PhoneOverview({ ids, focus, shown, onPick }: { ids: string[]; focus?: s
           ) : (
             <div className="flex h-full flex-col items-center justify-center gap-3 px-8 text-center text-[13px] text-muted-foreground">
               <ClipboardCheck className="size-6" />
-              待办是空的
+              进行中是空的
               <Button size="sm" variant="outline" onClick={() => setList(true)}>
                 <Plus className="size-3.5" /> 挑几个
               </Button>
@@ -223,10 +230,15 @@ function OverviewList({
   const o = useStore((s) => s.overview);
   const sidebarW = useStore((s) => s.sidebarW);
   const config = useStore((s) => s.config);
-  const tiles = new Set(overviewIds(o, layout, sessions, config));
-  const all = openSessions(layout, sessions, config);
-  const attention = all.filter((s) => s.status === "running" || s.status === "waiting" || s.status === "error" || unread[s.id]);
-  const missing = attention.filter((s) => !tiles.has(s.id)).length;
+  const st = { overview: o, layout, sessions, config, unread };
+  const tiles = new Set(overviewIds(st));
+  const active = new Set(activeIds(st));
+  const allProjects = activeAllProjects(st);
+  const space = currentSpace(layout);
+  // The same scope as "active": this project's agents, or every project's when this project says so
+  const all = openSessionsWithProject(layout, sessions, config)
+    .filter((x) => allProjects || x.project === space)
+    .map((x) => x.s);
   const full = tiles.size >= MAX_TILES;
   const cur = current && tiles.has(current) ? sessions[current] : undefined;
 
@@ -251,7 +263,7 @@ function OverviewList({
           <Button variant="ghost" size="icon" className="size-7" onClick={onClose} aria-label="返回">
             <ArrowLeft className="size-4" />
           </Button>
-          <span className="flex-1 truncate text-[13px] font-medium">加入待办</span>
+          <span className="flex-1 truncate text-[13px] font-medium">加入进行中</span>
         </div>
       ) : (
         // The same top row as the Code sidebar and Work mode (asked for): project, then the Code / overview / Work switch
@@ -271,17 +283,13 @@ function OverviewList({
           新开 agent
           {cur && <span className="ml-auto min-w-0 truncate text-muted-foreground">{basename(cur.cwd)}</span>}
         </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-7 w-full justify-start gap-2 text-[12px]"
-          disabled={!missing || full}
-          onClick={() => addTiles(attentionIds())}
+        <label
+          className="flex h-6 cursor-pointer items-center gap-2 px-1 text-[12px] whitespace-nowrap text-muted-foreground select-none"
+          title="进行中也列出别的项目的 agent。只改这个项目，别的项目各自设"
         >
-          <Plus className="size-3.5" />
-          放入运行中和未读
-          <span className="ml-auto tabular-nums text-muted-foreground">{missing || ""}</span>
-        </Button>
+          <input type="checkbox" className="accent-brand" checked={allProjects} onChange={(e) => setActiveAllProjects(e.target.checked)} />
+          显示所有项目的 agent
+        </label>
       </div>
       <div className="flex shrink-0 items-center gap-1 px-3.5 pt-2 pb-1 text-[11px] text-muted-foreground">
         <button
@@ -298,11 +306,11 @@ function OverviewList({
           按项目
         </button>
         <span className="flex-1" />
-        <span className="tabular-nums">
-          {tiles.size}/{all.length}
+        <span className="tabular-nums" title="进行中 / 全部">
+          {active.size}/{all.length}
         </span>
-        {tiles.size > 0 && (
-          <button className="ml-1 hover:text-foreground" title="全部移出" onClick={clearTiles}>
+        {active.size > 0 && (
+          <button className="ml-1 hover:text-foreground" title="全部移出进行中（等你的会留下）" onClick={clearActive}>
             <Eraser className="size-3" />
           </button>
         )}
@@ -313,7 +321,8 @@ function OverviewList({
           <div key={g.name ?? gi}>
             {g.name && <div className="truncate px-2 pt-2 pb-0.5 text-[11px] font-medium text-muted-foreground">{g.name}</div>}
             {g.rows.map((s) => {
-              const on = tiles.has(s.id);
+              // In "active"; past the grid's MAX_TILES it's in the list but not a tile
+              const on = active.has(s.id);
               return (
                 <div
                   key={s.id}
@@ -323,10 +332,10 @@ function OverviewList({
                   className={cn(
                     "group relative flex w-full cursor-default items-start gap-2 rounded-md px-2 py-1 text-left hover:bg-accent/60",
                     s.id === current && on && "bg-brand/15 hover:bg-brand/20",
-                    !on && full && "opacity-50",
+                    !tiles.has(s.id) && full && "opacity-50",
                   )}
-                  title={on ? "在右边（点一下聚焦）" : full ? `最多放 ${MAX_TILES} 个` : "放到右边"}
-                  onClick={() => (on || !full) && onPick(s.id)}
+                  title={tiles.has(s.id) ? "在右边（点一下聚焦）" : on ? `网格只放得下 ${MAX_TILES} 个` : "加入进行中"}
+                  onClick={() => onPick(s.id)}
                 >
                   {on && <span className="absolute top-1.5 bottom-1.5 left-0 w-[3px] rounded-full bg-brand" />}
                   <AgentIcon agent={s.agent} className="mt-0.5 size-3.5 shrink-0" />
@@ -342,8 +351,8 @@ function OverviewList({
                   {on ? (
                     <button
                       className="mt-0.5 hidden size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground group-hover:flex hover:text-foreground"
-                      title="从右边移出"
-                      onClick={(e) => (e.stopPropagation(), removeTile(s.id))}
+                      title="移出进行中"
+                      onClick={(e) => (e.stopPropagation(), removeActive(s.id))}
                     >
                       <X className="size-3" />
                     </button>
@@ -533,7 +542,7 @@ function Grid({
         {ids.length === 0 && (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-[13px] text-muted-foreground">
             <ClipboardCheck className="size-6" />
-            待办是空的：在左边点 agent 放进来，或者点「放入运行中和未读」
+            进行中是空的：等你的、在跑的、最近动过的会自动出现，也可以在左边点 agent 加进来
           </div>
         )}
         {/* Flat and keyed by session, positioned absolutely (like Panes.TabView): re-arranging only moves boxes, the chats don't remount */}
@@ -736,7 +745,7 @@ function Tile({
         onPointerDown={onDragStart && ((e) => onDragStart(e, title))}
         // Middle click closes it, like a browser tab (mousedown is cancelled so the browser doesn't start auto-scroll)
         onMouseDown={(e) => e.button === 1 && e.preventDefault()}
-        onAuxClick={(e) => e.button === 1 && removeTile(id)}
+        onAuxClick={(e) => e.button === 1 && removeActive(id)}
         title="拖到别的格子边上放到它旁边，拖到中间交换位置；双击放大，中键关闭"
       >
         {onDragStart && <GripVertical className="-mx-1.5 size-3.5 shrink-0 text-muted-foreground/60" />}
@@ -758,7 +767,7 @@ function Tile({
         <TileButton title={inWork ? "去 Work 模式" : "回到它所在的 tab"} onClick={jump}>
           <ArrowUpRight className="size-3.5" />
         </TileButton>
-        <TileButton title="完成，移出待办（agent 不受影响）" onClick={() => removeTile(id)}>
+        <TileButton title="完成，移出进行中（agent 不受影响）" onClick={() => removeActive(id)}>
           <X className="size-3.5" />
         </TileButton>
       </div>

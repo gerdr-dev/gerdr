@@ -684,7 +684,7 @@ export function visibleSessions(l: Layout, phone = false): string[] {
   // The overview covers the tabs. Only the focused tile counts as looked at, the
   // others are just in view: one that finishes there still gets the unread dot (asked for). They're all watched, see below.
   if (overviewShown()) {
-    const f = overviewFocus(get().overview, l, get().sessions, get().config);
+    const f = overviewFocus({ ...get(), layout: l });
     return f ? [f] : [];
   }
   const tab = activeTab(l);
@@ -708,7 +708,7 @@ export function watchedSessions(l: Layout, kept: string[]): string[] {
   }
   // The tabs under the overview stay watched (kept), so closing it doesn't reload them
   // On a phone only the shown tile is mounted (Overview PhoneOverview): don't stream the rest
-  if (overviewShown()) for (const id of isPhone() ? visibleSessions(l) : overviewIds(get().overview, l, get().sessions, get().config)) out.add(id);
+  if (overviewShown()) for (const id of isPhone() ? visibleSessions(l) : overviewIds({ ...get(), layout: l })) out.add(id);
   const want = new Set(kept);
   for (const ws of l.workspaces)
     for (const t of ws.tabs)

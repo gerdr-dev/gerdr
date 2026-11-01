@@ -117,12 +117,11 @@ export function duplicateFocused(dir: "right" | "down") {
  * Returns false when no tile is focused (nothing to copy); the caller falls back to the plain key.
  */
 export function newAgentInOverview(): boolean {
-  const o = get().overview;
-  const cur = overviewFocus(o, get().layout, get().sessions, get().config);
+  const cur = overviewFocus(get());
   const s = cur ? get().sessions[cur] : undefined;
   if (!s) return false;
-  if (overviewIds(o, get().layout, get().sessions, get().config).length >= MAX_TILES) {
-    toast(`待办最多放 ${MAX_TILES} 个，先移出几个`);
+  if (overviewIds(get()).length >= MAX_TILES) {
+    toast(`网格最多放 ${MAX_TILES} 个，先从进行中移出几个`);
     return true;
   }
   const opening = toast.loading("正在开新 agent…");
@@ -1083,7 +1082,7 @@ function openInWork(sessionId: string): boolean {
 export function focusSession(sessionId: string) {
   // Already a tile in the overview on screen: go to that tile, closing the overview would only lose the user's place
   const st = get();
-  if (overviewShown() && overviewIds(st.overview, st.layout, st.sessions, st.config).includes(sessionId)) {
+  if (overviewShown() && overviewIds(st).includes(sessionId)) {
     focusTile(sessionId);
     markRead(sessionId);
     return;
@@ -1151,7 +1150,7 @@ export function stashDraft() {
   const el = document.activeElement as HTMLElement | null;
   const leaf = focusedLeaf(get().layout);
   // The composer being typed in (also the Work view's, which isn't a pane), else the focused pane's
-  const ovFocus = overviewShown() ? overviewFocus(get().overview, get().layout, get().sessions, get().config) : undefined;
+  const ovFocus = overviewShown() ? overviewFocus(get()) : undefined;
   const paneId = el?.dataset.composer ?? (ovFocus ? `ov-${ovFocus}` : leaf?.sessionId ? leaf.id : undefined);
   const box = paneId ? document.querySelector<HTMLTextAreaElement>(`textarea[data-composer="${CSS.escape(paneId)}"]`) : null;
   if (!paneId || !box) return toast("没有可以暂存的输入框");
@@ -1174,7 +1173,7 @@ export function stashDraft() {
 
 export function focusedSessionId(): string | undefined {
   // With the overview up, the focused tile is the one you're on (not the pane hidden under it)
-  if (overviewShown()) return overviewFocus(get().overview, get().layout, get().sessions, get().config);
+  if (overviewShown()) return overviewFocus(get());
   return focusedLeaf(get().layout)?.sessionId;
 }
 

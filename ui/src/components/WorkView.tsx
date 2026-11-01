@@ -104,7 +104,7 @@ export function ModeSwitch() {
     <div className="flex shrink-0 gap-0.5 rounded-lg bg-muted p-0.5" style={{ WebkitAppRegion: "no-drag" } as any}>
       {item("agents", "Code", Code2)}
       {/* The unified sidebar (labs) opens the pin grid from its own list: no third view to switch to */}
-      {!unified && item("overview", `待办（${formatCombo(keyFor(get().config, "overview")[0] ?? "")}）`, ClipboardCheck)}
+      {!unified && item("overview", `进行中（${formatCombo(keyFor(get().config, "overview")[0] ?? "")}）`, ClipboardCheck)}
       {item("work", "Work", Briefcase)}
     </div>
   );

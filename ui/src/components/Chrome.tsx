@@ -74,7 +74,7 @@ import { ModeSwitch } from "@/components/WorkView";
 import { focusedSession, get, keyFor, markRead, set, setLayout, setSidebarW, SIDEBAR_W, toggleSidebar, useStore } from "@/lib/store";
 import type { SessionSummary } from "@/lib/types";
 import { compareSessions } from "@/lib/order";
-import { addToTodo, MAX_TILES, overviewIds, removeTile, showInOverview, toggleOverview } from "@/lib/overview";
+import { activeIds, addToActive, MAX_TILES, removeActive, showInOverview, toggleOverview } from "@/lib/overview";
 import { cn } from "@/lib/utils";
 import { FadeText } from "./FadeText";
 import { AgentIcon, StatusDot, dotStatus, dotRank } from "./AgentIcon";
@@ -388,7 +388,7 @@ function OverviewButton() {
     held.current = true;
     const id = focusedSessionId();
     if (!id) return toggleOverview(true); // a terminal or an empty pane: nothing to put in
-    if (!showInOverview(id)) toast(`待办最多放 ${MAX_TILES} 个，先移出几个`);
+    if (!showInOverview(id)) toast(`网格最多放 ${MAX_TILES} 个，先从进行中移出几个`);
   };
   const cancel = () => clearTimeout(timer.current);
   return (
@@ -397,7 +397,7 @@ function OverviewButton() {
       size="icon"
       // No text selection / iOS callout from the long-press
       className="size-9 select-none [-webkit-touch-callout:none]"
-      aria-label="待办（长按：把当前面板加进去）"
+      aria-label="进行中（长按：把当前面板加进去）"
       onPointerDown={() => {
         held.current = false;
         cancel();
@@ -852,16 +852,16 @@ function AgentList() {
 
 /** Right-click menu of a row in the agent list: the session half of the pane's ⋯ menu (Panes.tsx), for a session without going to its pane. */
 function AgentMenu({ s, unread }: { s: SessionSummary; unread: boolean }) {
-  const inTodo = useStore((st) => overviewIds(st.overview, st.layout, st.sessions, st.config).includes(s.id));
+  const inTodo = useStore((st) => activeIds(st).includes(s.id));
   return (
     <ContextMenuContent>
       {inTodo ? (
-        <ContextMenuItem onClick={() => removeTile(s.id)}>
-          <ListX /> 移出待办
+        <ContextMenuItem onClick={() => removeActive(s.id)}>
+          <ListX /> 移出进行中
         </ContextMenuItem>
       ) : (
-        <ContextMenuItem onClick={() => addToTodo(s.id)}>
-          <ListPlus /> 加入待办
+        <ContextMenuItem onClick={() => addToActive(s.id)}>
+          <ListPlus /> 加入进行中
         </ContextMenuItem>
       )}
       {unread && (
