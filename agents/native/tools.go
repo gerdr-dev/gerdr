@@ -13,7 +13,6 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 	"unicode/utf8"
 
@@ -393,7 +392,7 @@ func startProc(c *call, command string) (*proc, error) {
 	}
 	cmd.Env = c.r.s.a.childEnv(extra...)
 	cmd.Stdin = nil
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	setProcGroup(cmd)
 	p := &proc{cmd: cmd, buf: &lockedBuf{}, done: make(chan error, 1), start: time.Now()}
 	cmd.Stdout = p.buf
 	cmd.Stderr = p.buf
@@ -406,12 +405,12 @@ func startProc(c *call, command string) (*proc, error) {
 
 // kill：整个进程组一起杀（sh -c 起的子进程 —— npm、go test 起的一串 —— 不跟着死的话会一直挂着），等它退出。
 func (p *proc) kill() error {
-	_ = syscall.Kill(-p.cmd.Process.Pid, syscall.SIGTERM)
+	killProcGroup(p.cmd.Process, false)
 	select {
 	case err := <-p.done:
 		return err
 	case <-time.After(2 * time.Second):
-		_ = syscall.Kill(-p.cmd.Process.Pid, syscall.SIGKILL)
+		killProcGroup(p.cmd.Process, true)
 		return <-p.done
 	}
 }
