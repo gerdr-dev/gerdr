@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type Ref } from "react";
 import { flushSync } from "react-dom";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { ArrowDown, CornerDownRight } from "lucide-react";
@@ -16,6 +16,7 @@ import { Composer, type ComposerHandle } from "./Composer";
 import { SessionContext } from "./sessionContext";
 import { askKey } from "../askkeys";
 import { isCoarse } from "../device";
+import { TanList, type ListHandle } from "./TanList";
 
 /** sub：子 agent 的只读面板（值 = 它在主会话里那张卡片的 toolCallId）。没有输入框、不能回退。 */
 // 最后一条和输入框之间留一截（照 ChatGPT 桌面版的留白）：贴太近的话最后那行元信息和输入框挤在一起。
@@ -241,6 +242,9 @@ export function ChatView({
 
   const msgs = t.all;
   const virtualList = !!settings.virtualList;
+  // Labs: the list on TanStack Virtual instead of react-virtuoso (TanList.tsx). The Virtuoso-only fixes below find none of
+  // Virtuoso's elements then and do nothing.
+  const tan = !!settings.tanstackList;
   const showThinking = settings.showThinking !== false;
   // 虚拟滚动开着时，打开会话先把所有行渲染一次、量出真实高度，再缩回只渲染屏幕附近（Virtuoso 记得量过的高度，行卸载了也不忘）。
   // 不先量的话，往上翻时新进渲染范围的行只能按估的高度占位，实际一挂上高度对不上，整段内容被推走一截，Virtuoso 下一帧才补回来 ——
@@ -393,7 +397,7 @@ export function ChatView({
     widthRO.current = cur;
   };
   useEffect(() => () => widthRO.current?.ro.disconnect(), []);
-  const list = useRef<VirtuosoHandle>(null);
+  const list = useRef<ListHandle | VirtuosoHandle>(null);
   const scrollKey = `${paneId}:${session.id}:${sub ?? ""}`;
   const saved = scrollMem.get(scrollKey);
   const [atBottom, setAtBottom] = useState(saved ? saved.bottom : true);
@@ -460,7 +464,7 @@ export function ChatView({
       }
     // Virtuoso keeps the list visibility: hidden until it has placed the initial scroll position; pinning then would
     // show the prompt over an empty pane ahead of the rows.
-    const lst = el.querySelector<HTMLElement>("[data-testid=virtuoso-item-list]");
+    const lst = el.querySelector<HTMLElement>("[data-testid=virtuoso-item-list], [data-chat-list]");
     const hidden = !!lst && getComputedStyle(lst).visibility === "hidden";
     const p = !hidden && u >= 0 ? u : null;
     if (p === pinnedRef.current) return;
@@ -630,9 +634,42 @@ export function ChatView({
               <div className="font-mono text-[12px]">{session.cwd}</div>
             </div>
           )}
-          {loaded && msgs.length > 0 && (
+          {loaded && msgs.length > 0 && tan && (
+            <TanList
+              ref={list as Ref<ListHandle>}
+              rows={rows}
+              env={env}
+              older={older}
+              firstIdx={firstIdx.current}
+              all={!virtualList}
+              startTop={saved && !saved.bottom ? saved.top : undefined}
+              holding={holding}
+              scrollerRef={(el) => (scrollerEl.current = el)}
+              onScroll={(el) => {
+                if (!activeRef.current) return; // 藏着期间的滚动（WebKit 清零）不算
+                scrollMem.set(scrollKey, { top: el.scrollTop, bottom: bottomRef.current });
+                updatePinned();
+                nearTop(el);
+              }}
+              onAtBottom={(b) =>
+                // From the virtualizer's onChange, which can run while React renders: set state after
+                queueMicrotask(() => {
+                  if (b === bottomRef.current) return;
+                  bottomRef.current = b;
+                  setAtBottom(b);
+                })
+              }
+              onLayout={() => {
+                updatePinned();
+                const el = scrollerEl.current;
+                // Not a screenful yet (nothing to scroll, so no onScroll): keep loading older
+                if (el && activeRef.current && el.scrollHeight <= el.clientHeight + 50) nearTop(el);
+              }}
+            />
+          )}
+          {loaded && msgs.length > 0 && !tan && (
             <Virtuoso
-              ref={list}
+              ref={list as Ref<VirtuosoHandle>}
               className="h-full"
               data={rows}
               firstItemIndex={firstIdx.current}

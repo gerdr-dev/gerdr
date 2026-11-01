@@ -5,7 +5,7 @@
 //   node touchscroll.mjs [--at="what the user said"] [--fling] [--tab=1] [--rounds=8] [--cpu=1] [--ro] [--v]
 // --at: replay the turn of that user message (default: the latest long one, as /replay). --fling: quick flicks that
 // carry on by momentum after the finger lifts, instead of slow drags with pauses.
-import { analyze, args, launch, open, report, startFrameLog, stopFrameLog, useStore } from "./lib.mjs";
+import { analyze, args, fromBottom, launch, open, overlaps, report, startFrameLog, stopFrameLog, useStore } from "./lib.mjs";
 
 const a = args({ tab: 1, rounds: 8, cpu: 1, height: 860 });
 const { browser, ctx, page } = await launch({ width: 400, height: a.height, dpr: 3, scrollbars: false, mobile: true });
@@ -32,7 +32,7 @@ async function drag(y, dy, hold) {
   await page.waitForTimeout(hold);
   await touch("touchEnd");
 }
-await startFrameLog(page, { ro: !!a.ro });
+await startFrameLog(page, { ro: true });
 for (let r = 0; r < a.rounds; r++) {
   if (a.fling) {
     await drag(300, 250, 0); // flick down = scroll up, momentum after
@@ -47,6 +47,17 @@ for (let r = 0; r < a.rounds; r++) {
   await page.waitForTimeout(300);
 }
 const { frames: raf, ro } = await stopFrameLog(page);
+// The jump-to-bottom button mid-reply (a smooth scroll while rows grow). Logged apart: the smooth scroll rightly swaps the
+// whole screen from frame to frame; what counts there is rows drawn over each other, and ending at the bottom.
+await drag(300, 300, 0);
+await page.waitForTimeout(600);
+await startFrameLog(page, { ro: true });
+await page.locator("button:has(svg.lucide-arrow-down)").first().click().catch(() => console.log("  no jump-to-bottom button"));
+await page.waitForTimeout(2500);
+// Back at the bottom with the reply still coming in: it has to stay there (follow the bottom)
+const fb = (await fromBottom(page)).find((x) => x.visible)?.fromBottom ?? 0;
+console.log(`after jump-to-bottom: ${fb}px from the bottom`);
+const jump = await stopFrameLog(page);
 // The whole chat mounted again mid-reply (ChatView's "measured" reset: every row rendered and measured anew). Headless
 // Chrome on a laptop measures fast enough that no frame shows it; a phone jumped by whole screens (user's recording).
 const fr = a.ro ? ro : raf;
@@ -57,7 +68,9 @@ for (let i = 1; i < fr.length; i++) {
   console.log(`  ${fr[i].t}ms the whole chat mounted again: ${fr[i - 1].mounted} -> ${fr[i].mounted} rows`);
 }
 const ev = analyze(fr, { scrolling: true, step: 40 });
-const bad = report(ev, { limit: a.v ? 40 : 10 }) + remounts;
+// Rows over each other only in painted frames (the late ResizeObserver's): a rAF frame can catch a row grown but not yet
+// moved past, which the list fixes before paint (docs/dev/SCROLL.md "哪一帧画出来了")
+const bad = report(ev, { limit: a.v ? 40 : 10 }) + remounts + overlaps(ro) + overlaps(jump.ro) + (fb > 2 ? 1 : 0);
 console.log(`whole-chat remounts mid-reply: ${remounts}`);
 await browser.close();
 process.exit(bad ? 1 : 0);

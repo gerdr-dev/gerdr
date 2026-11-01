@@ -79,7 +79,7 @@ export async function tab(page, n) {
 /** 离底部多远（0 = 在最底下），每个滚动区一项 */
 export function fromBottom(page) {
   return page.evaluate(() =>
-    [...document.querySelectorAll("[data-virtuoso-scroller]")].map((sc) => ({
+    [...document.querySelectorAll("[data-virtuoso-scroller], [data-chat-scroller]")].map((sc) => ({
       visible: !sc.closest(".invisible"),
       fromBottom: Math.round(sc.scrollHeight - sc.clientHeight - sc.scrollTop),
       scrollTop: Math.round(sc.scrollTop),
@@ -100,8 +100,8 @@ export function fromBottom(page) {
 function installFrameLogger() {
   window.__startFrameLog = ({ point: pt, sid, ro } = {}) => {
     const find = () => {
-      const at = pt ? document.elementFromPoint(pt[0], pt[1])?.closest("[data-virtuoso-scroller]") : null;
-      return at || [...document.querySelectorAll("[data-virtuoso-scroller]")].find((s) => !s.closest(".invisible"));
+      const at = pt ? document.elementFromPoint(pt[0], pt[1])?.closest("[data-virtuoso-scroller], [data-chat-scroller]") : null;
+      return at || [...document.querySelectorAll("[data-virtuoso-scroller], [data-chat-scroller]")].find((s) => !s.closest(".invisible"));
     };
     const snap = () => {
       const sc = find();
@@ -109,12 +109,19 @@ function installFrameLogger() {
       const top0 = sc.getBoundingClientRect().top, bot0 = top0 + sc.clientHeight;
       const rows = {};
       let n = 0;
+      const boxes = [];
       for (const it of sc.querySelectorAll("[data-item-index]")) {
         n++;
         const r = it.getBoundingClientRect();
+        boxes.push([+it.dataset.itemIndex, r.top, r.bottom]);
         if (r.bottom > top0 && r.top < bot0) rows[it.dataset.itemIndex] = [+(r.top - top0).toFixed(1), +r.height.toFixed(1)];
       }
-      const lst = sc.querySelector("[data-testid=virtuoso-item-list]");
+      // Rows drawn over each other: one starts above the bottom of the one before it (a stale height in a list that
+      // positions rows absolutely); the most it overlaps by, in px
+      boxes.sort((a, b) => a[0] - b[0]);
+      let overlap = 0;
+      for (let i = 1; i < boxes.length; i++) if (boxes[i][0] === boxes[i - 1][0] + 1) overlap = Math.max(overlap, boxes[i - 1][2] - boxes[i][1]);
+      const lst = sc.querySelector("[data-testid=virtuoso-item-list], [data-chat-list]");
       return {
         t: Math.round(performance.now()),
         st: Math.round(sc.scrollTop),
@@ -122,6 +129,7 @@ function installFrameLogger() {
         ch: sc.clientHeight,
         hidden: !!lst && getComputedStyle(lst).visibility === "hidden",
         mounted: n,
+        overlap: +overlap.toFixed(1),
         rows,
         older: sid && window.__store ? window.__store.get().older[sid] : undefined,
       };
@@ -140,7 +148,7 @@ function installFrameLogger() {
         const s = snap();
         if (s) window.__roFrames.push(s);
       });
-      o.observe(sc.querySelector("[data-testid=virtuoso-item-list]"));
+      o.observe(sc.querySelector("[data-testid=virtuoso-item-list], [data-chat-list]"));
       o.observe(sc.firstElementChild);
       window.__ro = o;
     }
@@ -204,6 +212,13 @@ export function analyze(frames, { scrolling = false, threshold = 2, step = 60 } 
     for (const r of common) if (Math.abs(c.rows[r][1] - a.rows[r][1]) > 1) out.push({ ...base, kind: "row-resized", row: r, h: [a.rows[r][1], c.rows[r][1]] });
   }
   return out;
+}
+
+/** Frames where rows were drawn over each other by more than 1px (see `overlap` in the frame logger). */
+export function overlaps(frames) {
+  const bad = frames.filter((f) => f.overlap > 1);
+  if (bad.length) console.log(`rows drawn over each other in ${bad.length} frames, by up to ${Math.max(...bad.map((f) => f.overlap))}px`);
+  return bad.length;
 }
 
 export function report(events, { limit = 40 } = {}) {

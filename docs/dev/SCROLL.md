@@ -18,6 +18,12 @@ make dev                                     # 回仓库根起调试实例（787
 node tabs.mjs                                # 然后跑场景，见下表
 ```
 
+`setup.mjs --list=tanstack` runs the scripts against the TanStack Virtual list (Labs, `TanList.tsx`); they find either
+list (`[data-virtuoso-scroller], [data-chat-scroller]`). If the debug build doesn't compile (someone else's work in
+progress), start the installed binary instead: `GERDR_UI=$PWD/ui GERDR_DIR=~/.gerdr-dev GERDR_PORT=7871 gerdr`.
+Run `panes.mjs` / `tabs.mjs` / `open.mjs` last or `setup.mjs` again after them: they leave the debug layout split or
+on another tab, and the scripts after them find no chat.
+
 脚本只对着调试实例（`~/.gerdr-dev`、7871）跑，指到正在用的 7870 会拒绝：它们会点 tab、改 keepTabs，会把用户的布局点乱。
 换实例用 `SCROLLTEST_PORT` / `SCROLLTEST_DIR`（**不读 `GERDR_PORT` / `GERDR_DIR`**：在 Gerdr 里跑的 agent 环境里
 这两个指着正在用的那个）。每个脚本有问题时退出码是 1。
@@ -34,6 +40,7 @@ node tabs.mjs                                # 然后跑场景，见下表
 | Scrolling up while a reply streams in gets pulled back | `streamup.mjs [--step=30] [--steps=5] [--gap=1500]` | Small wheel steps up from the bottom with pauses longer than 600ms while output keeps arriving. Leaving the bottom goes by direction, not distance: any user scroll up leaves it, only scrolling back down (or reaching the very bottom) re-sticks (`syncBottom`) |
 | Phone: a finger drags up a little mid-reply and stays down; the text under it bobs or runs on | `touchhold.mjs [--up=40] [--hold=3000] [--creep] [--height=462] [--cpu=4] [--ro]` | Touch drag (CDP touch events, phone viewport) from the bottom while a reply streams in, then holds still: no row may move. `--creep`: the finger keeps inching up the chat while held (the content may only follow it); `--height=462` is a phone with the keyboard up. `--up` under ~15px is eaten by the touch slop (no scroll, exit 2) |
 | Phone: reading a reply as it's written, dragging / flicking now and then; whole screens jump | `touchscroll.mjs [--at="what the user said"] [--fling] [--cpu=4]` | Plays a turn back like `/replay` while dragging, checks every frame, and fails on a whole-chat remount mid-reply (laptop Chrome measures fast enough that no frame shows it; a phone jumps). Use `--at` the turn the user saw it in, steers included |
+| Phone: typing at the bottom of a chat; the chat jumps a line on each key | `keyboard.mjs [--type] [--cpu=4]` | The chat changes height while a reply plays (the keyboard / IME candidate bar coming and going): every painted frame must stay at the bottom. `--type`: types on the composer's second line and fails on any scroll event that leaves the bottom on its own (the composer's measuring clamped the chat, see below) |
 | A broken image / video makes the chat jump | `media.mjs [--src=/tmp/x.png] [--tab=1]` | Appends a message with missing media, parks it mid-screen, watches through every automatic retry, then scrolls it out and back in. Run it after touching `chat/ChatMedia.tsx` |
 | 某一行自己变高矮 | `rows.mjs [--tab=1]` | 行挂上后高度变没变（DOM 没变也会变）、Virtuoso 记的高度和实际对不对 |
 
@@ -134,6 +141,27 @@ Virtuoso 在 ResizeObserver 里量行高、改布局，所以 rAF 里看到「�
   height changes below the top and swallowed matching compensations missed both: the compensation comes up to a few
   frames after the resize, and the stale-size ones match nothing. Switching compensation off without `keepAnchor`
   showed in `touchscroll.mjs`: rows above that really change while a reply streams (-229 / +501px) jumped.
+- **The composer measuring itself clamped the chat a line short of the bottom.** `fitHeight` set the textarea to
+  `height: auto` and read `scrollHeight`: in that forced layout the box is one line tall, the chat above a few lines
+  taller, and the browser clamps the chat's scroll position to the new bottom; it stays there when the box grows back
+  (measured: 196px off the bottom). Only from the second line on (on the first, "auto" is one line anyway); the chat's
+  size is the same before and after, so no ResizeObserver hears of it. The box around the textarea is now held at its
+  height while it measures. Rows in rAF frames lie here too: judge painted frames (`--ro`) or the scroll events.
+- **TanStack Virtual, tried in Labs (`TanList.tsx`, "新的对话列表"), then set aside for a list of our own.** What it
+  needed on top of its chat mode (`anchorTo: "end"`), each found by these scripts or on the user's phone:
+  following the bottom ourselves (its `followOnAppend` follows appends only: a reply growing in place, rows measured
+  after opening and the log being replaced all left it short of the bottom, up to 17000px); "at the bottom" = 2px,
+  not 80 (else the distance from the end is kept while output grows, and text runs under a finger 40px up); leaving it
+  by input direction (as above); every row measured once before shrinking to the rows near the screen (else 6-7
+  jumps scrolling up, rows coming in at the estimate); hidden until positioned (the first render shows rows 0-2);
+  sizes of rows on screen and below handed over by our own ResizeObserver before paint (its own hands them over a
+  frame or more later: rows drawn over each other, the bottom lagging; on a phone ~0.5s), but rows wholly above the
+  screen left to it (sizing those ahead of it broke its prepend anchoring: 2-4 jumps); rows absolutely placed (in
+  normal flow a row growing above the screen moves what's on screen before it compensates); following the chat's
+  own size changes (keyboard). Still wrong when set aside, on the user's phone only: a very long chat opened partway
+  up instead of at the bottom (not reproduced headless, CPU x6, reload or reopening from the list), and the
+  jump-to-bottom button scrolling in stutters. Lesson for our own list: one place that owns scrollTop, sizes known
+  before paint, the bottom followed by us, positions by row key.
 - **Virtuoso 把行高取整**（默认 `Math.round(getBoundingClientRect().height)`）：41.5 记 42、39.8 记 40，
   卸掉的行越多攒得越多，量完缩回那一下整段挪一截（卸 32 行差 10px），会话越长越明显。`itemSize` 换成不取整的。
   `rows.mjs` 报「记的和实际不一样」就是这个。

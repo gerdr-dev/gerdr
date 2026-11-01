@@ -12,7 +12,7 @@ await useStore(page);
 await tab(page, a.tab);
 await page.waitForTimeout(1500);
 await page.evaluate(() => {
-  const sc = [...document.querySelectorAll("[data-virtuoso-scroller]")].find((s) => !s.closest(".invisible"));
+  const sc = [...document.querySelectorAll("[data-virtuoso-scroller], [data-chat-scroller]")].find((s) => !s.closest(".invisible"));
   window.__hist = {};
   window.__known = [];
   const look = () => {
@@ -26,7 +26,7 @@ await page.evaluate(() => {
     }
   };
   new MutationObserver(look).observe(sc, { childList: true, subtree: true });
-  new ResizeObserver(look).observe(sc.querySelector("[data-testid=virtuoso-item-list]"));
+  new ResizeObserver(look).observe(sc.querySelector("[data-testid=virtuoso-item-list], [data-chat-list]"));
 });
 const vp = page.viewportSize();
 await page.mouse.move(vp.width * 0.6, vp.height * 0.45);

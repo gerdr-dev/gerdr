@@ -25,7 +25,7 @@ await startFrameLog(page, { sid });
 if (a["to-top"]) {
   for (let i = 0; i < 400; i++) {
     await fling(page, -1);
-    const done = await page.evaluate(([sid]) => !window.__store.get().older[sid] && document.querySelector("[data-virtuoso-scroller]:not(.invisible *)")?.scrollTop < 5, [sid]);
+    const done = await page.evaluate(([sid]) => !window.__store.get().older[sid] && document.querySelector("[data-virtuoso-scroller]:not(.invisible *), [data-chat-scroller]:not(.invisible *)")?.scrollTop < 5, [sid]);
     if (done) break;
   }
 } else {

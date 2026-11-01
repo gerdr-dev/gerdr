@@ -30,7 +30,7 @@ await page.evaluate(([sid, ev]) => window.__store.applyEvents(sid, ev, false), [
 await page.waitForTimeout(800);
 // Put the broken media in the middle of the screen.
 const placed = await page.evaluate((src) => {
-  const sc = [...document.querySelectorAll("[data-virtuoso-scroller]")].find((s) => !s.closest(".invisible"));
+  const sc = [...document.querySelectorAll("[data-virtuoso-scroller], [data-chat-scroller]")].find((s) => !s.closest(".invisible"));
   const name = src.split("/").pop();
   const el = [...sc.querySelectorAll("img, video, button")].find((e) => (e.getAttribute("src") || "").includes(encodeURIComponent(name)) || (e.textContent || "").includes(name));
   if (!el) return false;
@@ -84,14 +84,14 @@ if (!clicked) {
 const vp = page.viewportSize();
 await page.mouse.move(vp.width * 0.6, vp.height * 0.45);
 for (let r = 0; r < 2; r++) {
-  const st = await page.evaluate(() => [...document.querySelectorAll("[data-virtuoso-scroller]")].find((s) => !s.closest(".invisible")).scrollTop);
+  const st = await page.evaluate(() => [...document.querySelectorAll("[data-virtuoso-scroller], [data-chat-scroller]")].find((s) => !s.closest(".invisible")).scrollTop);
   await page.evaluate(() => {
-    const sc = [...document.querySelectorAll("[data-virtuoso-scroller]")].find((s) => !s.closest(".invisible"));
+    const sc = [...document.querySelectorAll("[data-virtuoso-scroller], [data-chat-scroller]")].find((s) => !s.closest(".invisible"));
     sc.scrollTop -= 6000;
   });
   await page.waitForTimeout(600);
   await page.evaluate((st) => {
-    const sc = [...document.querySelectorAll("[data-virtuoso-scroller]")].find((s) => !s.closest(".invisible"));
+    const sc = [...document.querySelectorAll("[data-virtuoso-scroller], [data-chat-scroller]")].find((s) => !s.closest(".invisible"));
     sc.scrollTop = st;
   }, st);
   console.log(`== remounted (round ${r + 1}), watching ${a.watch}ms`);

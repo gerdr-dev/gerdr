@@ -52,7 +52,7 @@ for (let i = 1; i <= moves; i++) {
 await page.waitForTimeout(150);
 // A drag shorter than the touch slop (~15px) never starts a scroll: the chat rightly keeps following then
 const dist = await page.evaluate(() => {
-  const sc = [...document.querySelectorAll("[data-virtuoso-scroller]")].find((x) => !x.closest(".invisible"));
+  const sc = [...document.querySelectorAll("[data-virtuoso-scroller], [data-chat-scroller]")].find((x) => !x.closest(".invisible"));
   return sc.scrollHeight - sc.clientHeight - sc.scrollTop;
 });
 if (dist < 1) {
@@ -64,7 +64,7 @@ if (dist < 1) {
 }
 if (a.v)
   await page.evaluate(() => {
-    const sc = [...document.querySelectorAll("[data-virtuoso-scroller]")].find((x) => !x.closest(".invisible"));
+    const sc = [...document.querySelectorAll("[data-virtuoso-scroller], [data-chat-scroller]")].find((x) => !x.closest(".invisible"));
     const d = Object.getOwnPropertyDescriptor(Element.prototype, "scrollTop");
     const who = () => new Error().stack.split("\n").slice(2, 6).map((l) => l.trim().replace(/\(?http[^)]*\/([^/?)]+)[^)]*\)?/, "@$1")).join(" < ");
     Object.defineProperty(sc, "scrollTop", { get() { return d.get.call(this); }, set(v) { console.log(`DEBUG set ${Math.round(performance.now())} ${v} from ${d.get.call(this)} ${who()}`); d.set.call(this, v); }, configurable: true });

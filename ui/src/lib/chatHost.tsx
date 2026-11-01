@@ -288,6 +288,7 @@ export function GerdrChatProvider({ children }: { children: ReactNode }) {
         sendKey: prefOf({ config, device }, "sendKey"),
         showThinking: config.showThinking,
         virtualList: prefOf({ config, device }, "virtualList"),
+        tanstackList: config.tanstackList,
         expandEdits: config.expandEdits,
         confirmLinks: config.confirmLinks,
         pinnedCommands: config.pinnedCommands,

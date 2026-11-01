@@ -136,6 +136,8 @@ export type ChatSettings = {
   showThinking?: boolean;
   /** Virtualize the message list (only render rows near the viewport). */
   virtualList?: boolean;
+  /** Draw the message list with TanStack Virtual instead of react-virtuoso (Labs). */
+  tanstackList?: boolean;
   /** Expand edit diffs by default. */
   expandEdits?: boolean;
   /** Ask before opening links. */
