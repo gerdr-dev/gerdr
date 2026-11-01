@@ -217,16 +217,19 @@ function SettingField({ id, spec, value }: { id: string; spec: AddonSetting; val
     if (draft.trim() === "" || Number.isNaN(n)) return setDraft(String(shown ?? ""));
     if (n !== shown) save(n);
   };
+  // On a phone the label goes above its field: side by side, a long label wrapped a character per line next to the
+  // input. A switch stays on the label's line, it's small enough.
+  const stacked = spec.type !== "boolean";
   return (
     <div className="text-[12px]">
-      <div className="flex items-center gap-2">
-        <span className="min-w-0 flex-1">{spec.title || spec.key}</span>
+      <div className={cn("flex gap-2", stacked ? "max-md:flex-col max-md:items-stretch max-md:gap-1 md:items-center" : "items-center")}>
+        <span className={cn("min-w-0", stacked ? "md:flex-1" : "flex-1")}>{spec.title || spec.key}</span>
         {spec.type === "boolean" ? (
           <Switch checked={!!shown} onCheckedChange={(v) => save(v)} />
         ) : spec.type === "select" ? (
           // Values can be numbers or strings: Radix wants strings, so they travel as JSON
           <Select value={JSON.stringify(shown)} onValueChange={(v) => save(JSON.parse(v))}>
-            <SelectTrigger size="sm" className="h-7 text-[12px]">
+            <SelectTrigger size="sm" className="h-7 text-[12px] max-md:w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -242,7 +245,7 @@ function SettingField({ id, spec, value }: { id: string; spec: AddonSetting; val
         ) : (
           <span className="flex items-center gap-1">
             <Input
-              className={cn("h-7 text-[12px]", spec.type === "number" ? "w-20 text-right" : "w-48")}
+              className={cn("h-7 text-[12px]", spec.type === "number" ? "w-20 text-right" : "w-48 max-md:w-auto max-md:flex-1")}
               type={spec.type === "number" ? "number" : spec.type === "secret" && !reveal ? "password" : "text"}
               // Keep the browser's password manager away from add-on tokens
               autoComplete={spec.type === "secret" ? "off" : undefined}
