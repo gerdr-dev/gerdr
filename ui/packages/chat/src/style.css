@@ -252,3 +252,11 @@
     opacity: 0.6;
   }
 }
+
+/* Find in the conversation (FindBar): CSS Custom Highlight ranges, so the DOM isn't touched. */
+::highlight(gerdr-find) {
+  background-color: color-mix(in oklch, var(--warn) 35%, transparent);
+}
+::highlight(gerdr-find-current) {
+  background-color: color-mix(in oklch, var(--warn) 80%, transparent);
+}

@@ -26,6 +26,8 @@ import { RowView, type Row, type RowEnv } from "./Rows";
  */
 export type ListHandle = {
   scrollToIndex(o: { index: number | "LAST"; align?: "start" | "end"; behavior?: "smooth" | "auto" }): void;
+  /** Put scrollTop at top, leaving the bottom (find in the chat: a match inside a row taller than the screen). */
+  scrollTo(top: number): void;
 };
 
 const END = 2; // px from the end that still count as the bottom
@@ -389,6 +391,13 @@ export const ChatList = forwardRef<
         const t = target();
         if (t !== undefined) s.scrollTop = t;
       }
+    },
+    scrollTo: (top) => {
+      const s = el.current;
+      if (!s) return;
+      setStuck(false);
+      stopAnim();
+      s.scrollTop = Math.max(0, top);
     },
   }));
 

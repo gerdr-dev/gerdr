@@ -16,6 +16,7 @@ import { SessionContext } from "./sessionContext";
 import { askKey } from "../askkeys";
 import { isCoarse } from "../device";
 import { ChatList, type ListHandle } from "./ChatList";
+import { FindBar } from "./FindBar";
 
 /** sub：子 agent 的只读面板（值 = 它在主会话里那张卡片的 toolCallId）。没有输入框、不能回退。 */
 // 顶上钉着的那句用户消息：一行，太长截掉；图片 / 文件写成 [图片] 这种占位
@@ -115,6 +116,26 @@ export function ChatView({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [focused, sub, session.id]);
+
+  // ⌘F (Ctrl+F off the mac) in the focused pane: find in this conversation (FindBar). Not Ctrl+F on the mac: that is
+  // the cursor moving forward in the composer. A host that binds the key itself prevents the default first.
+  const [find, setFind] = useState(0); // 0 closed, else goes up on every ⌘F (refocuses the open bar)
+  useEffect(() => {
+    if (!focused) return;
+    const mac = /Mac/.test(navigator.platform);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || e.code !== "KeyF" || e.altKey || e.shiftKey || (mac ? !e.metaKey || e.ctrlKey : !e.ctrlKey || e.metaKey)) return;
+      if (document.querySelector("[role=dialog]")) return;
+      e.preventDefault();
+      setFind((n) => n + 1);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [focused]);
+  const closeFind = () => {
+    setFind(0);
+    if (!sub && !isCoarse()) composer.current?.focus();
+  };
 
   // 点对话区任何地方（不是在选字、也不是点按钮 / 链接这些）：光标回到输入框，直接打字（用户点名的）
   // 触屏不做：手指点对话区多半是想滚动 / 看内容，一点就弹键盘很烦。
@@ -384,6 +405,7 @@ export function ChatView({
               }}
             />
           )}
+          {find > 0 && <FindBar rows={rows} list={list} scroller={scrollerEl} seq={find} older={older} loadOlder={t.loadOlder} onClose={closeFind} />}
           {!atBottom && msgs.length > 0 && (
             <Button
               size="icon"
