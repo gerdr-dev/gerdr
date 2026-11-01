@@ -105,18 +105,20 @@ export function NewWorkspace({ open, editId }: { open: boolean; editId?: string 
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
-          <div className="space-y-1.5">
-            <Label>目录</Label>
-            <DirPicker value={cwd} onChange={setCwd} onEnter={create} autoFocus />
-          </div>
+          {/* Name first and focused: the directory's suggestions open on focus, downward, and would cover it */}
           <div className="space-y-1.5">
             <Label>名字</Label>
             <Input
+              autoFocus
               value={name}
               placeholder="留空 = 目录名"
               onChange={(e) => setName(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && !e.nativeEvent.isComposing && create()}
             />
+          </div>
+          <div className="space-y-1.5">
+            <Label>目录</Label>
+            <DirPicker value={cwd} onChange={setCwd} onEnter={create} />
           </div>
         </div>
         <DialogFooter>
