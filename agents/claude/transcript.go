@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/coder/acp-go-sdk"
+	"github.com/gerdr-dev/gerdr/acpx"
 )
 
 // claude 把会话记录写在 ~/.claude/projects/<cwd 变形>/<sessionId>.jsonl，每行一条，
@@ -293,7 +294,7 @@ func replayTranscriptUntil(path, last string, emit func(acp.SessionUpdate)) erro
 		case "system":
 			// Same marker the live stream shows for it (stream.go); the summary message itself is skipped by userText.
 			if e.Subtype == "compact_boundary" {
-				emit(compactedCard("compact-" + e.UUID))
+				emit(compactedCard(acpx.CompactIDPrefix + e.UUID))
 			}
 		case "assistant":
 			var m struct {

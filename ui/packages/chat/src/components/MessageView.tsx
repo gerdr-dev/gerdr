@@ -1,4 +1,4 @@
-import { Bot, Brain, ChevronDown, CircleAlert, File as FileIcon, Info, Loader2, CornerDownRight } from "lucide-react";
+import { Bot, Brain, ChevronDown, CircleAlert, File as FileIcon, FoldVertical, Info, Loader2, CornerDownRight } from "lucide-react";
 import { RewindButton } from "./RewindButton";
 import { memo, useEffect, useState, type ReactNode } from "react";
 import { Message, MessageContent } from "../ai/message";
@@ -338,6 +338,58 @@ export function childTools(msg: GMessage): Map<string, ToolPart[]> {
 
 const USAGE = /^Current [^\n:]+:\s*\d+% used/m;
 
+// The toolCallId prefix of a context compaction's card (acpx.CompactIDPrefix on the Go side).
+const COMPACT_PREFIX = "compact-";
+
+// A context compaction, drawn as a centered notice like the turn-end line ("已中断") rather than a gray tool row: from
+// here on the model no longer sees the earlier conversation, only a summary of it, and that should not slip by
+// unnoticed. When the agent sent the summary along (the native agent does), the line opens it.
+function CompactNotice({ part, running, keep }: { part: ToolPart; running: boolean; keep: string }) {
+  const [open, setOpen] = useKept(keep, false);
+  const m = part.toolMetadata;
+  const busy = running && (part.state === "input-streaming" || part.state === "input-available");
+  const failed = part.state === "output-error";
+  const summary = (m?.content ?? [])
+    .map((c: any) => (c.type === "content" && c.content?.type === "text" ? c.content.text : ""))
+    .join("\n")
+    .trim();
+  const took = m?.startedAt && m.endedAt && m.endedAt - m.startedAt >= 1000 ? fmtElapsed(m.endedAt - m.startedAt) : "";
+  const stopped = failed && (part as any).errorText === t("tool.interrupted");
+  const label = busy ? t("compact.running") : stopped ? t("compact.interrupted") : failed ? t("compact.failed") : t("compact.done");
+  const Icon = busy ? Loader2 : failed ? CircleAlert : FoldVertical;
+  const line = (
+    <>
+      <Icon className={cn("mt-0.5 size-3.5 shrink-0", busy && "animate-spin")} />
+      <span className="min-w-0">
+        {label}
+        {took && !busy ? ` · ${took}` : ""}
+      </span>
+      {summary && <ChevronDown className={cn("mt-0.5 size-3.5 shrink-0 opacity-60 transition-transform", open && "rotate-180")} />}
+    </>
+  );
+  return (
+    <div className="flex flex-col items-center py-1">
+      {summary ? (
+        <button
+          type="button"
+          onClick={() => setOpen(!open)}
+          title={t("compact.showSummary")}
+          className="flex items-start gap-1.5 rounded-md px-2 py-0.5 text-[12px] text-muted-foreground hover:bg-muted/60"
+        >
+          {line}
+        </button>
+      ) : (
+        <div className={cn("flex items-start gap-1.5 px-2 py-0.5 text-[12px]", failed && !stopped ? "text-bad" : "text-muted-foreground")}>{line}</div>
+      )}
+      {summary && open && (
+        <div className="gerdr-md mt-1 w-full rounded-md border bg-muted/30 px-4 py-2 text-[0.92em] text-muted-foreground">
+          <Markdown>{summary}</Markdown>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // A turn's metadata line: end time · took · output tokens (after Astryx ChatMessageMetadata's "9:46 AM · Claude Opus").
 // h-5 like the running turn's StatusLine it replaces, so the swap doesn't jump. The host may restyle the time and add
 // something after it (ChatHost.turnStat: gerdr hands that to add-ons, e.g. coloring by prompt-cache age).
@@ -375,6 +427,8 @@ export function renderPart(p: GPart, i: number, ctx: PartCtx): ReactNode {
     case "dynamic-tool": {
       const tp = p as ToolPart;
       if (tp.toolMetadata?.parent && ctx.children.size && [...ctx.children.values()].some((arr) => arr.includes(tp))) return null;
+      if (tp.toolCallId.startsWith(COMPACT_PREFIX))
+        return <CompactNotice key={tp.toolCallId} part={tp} running={ctx.running} keep={ctx.keep || `${ctx.sessionId}:compact:${tp.toolCallId}`} />;
       // A subagent's own tool calls aren't drawn under its card (they buried the main conversation); "查看对话" opens them.
       return <ToolCall key={tp.toolCallId} part={tp} running={ctx.running} keep={ctx.keep || undefined} agent={ctx.children.has(tp.toolCallId)} />;
     }

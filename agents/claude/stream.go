@@ -321,7 +321,7 @@ func (s *session) compactStatus(ctx context.Context, compacting bool, result str
 	s.mu.Lock()
 	start, done := compacting && !s.compactOpen, !compacting && s.compactOpen
 	if start {
-		s.compactID = "compact-" + uuid.NewString()
+		s.compactID = acpx.CompactIDPrefix + uuid.NewString()
 	}
 	s.compactOpen = compacting
 	id := s.compactID
@@ -358,7 +358,7 @@ func (s *session) compactBoundary(ctx context.Context, post int) {
 		s.update(ctx, acp.UpdateToolCall(acp.ToolCallId(id), acp.WithUpdateStatus(acp.ToolCallStatusCompleted)))
 	case id == "":
 		// No status=compacting came first (older CLIs): show the finished card on its own.
-		s.update(ctx, compactedCard("compact-"+uuid.NewString()))
+		s.update(ctx, compactedCard(acpx.CompactIDPrefix+uuid.NewString()))
 	}
 	if post > 0 {
 		s.update(ctx, acp.SessionUpdate{SessionInfoUpdate: &acp.SessionSessionInfoUpdate{Meta: acpx.ContextProgress(post, w)}})

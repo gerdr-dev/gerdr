@@ -322,6 +322,12 @@ type AskResponse struct {
 	Text   string `json:"text,omitempty"` // reason=replied 时：人在对话里说的那句话
 }
 
+// CompactIDPrefix starts the toolCallId of the card a context compaction shows as (native and claude adapters).
+// The UI (@gerdr/chat MessageView) recognises compaction by it and draws a centered notice instead of a tool row:
+// a compaction drops the earlier conversation from the model's view, which is worth noticing. An id prefix and not
+// a _meta flag because every compaction ever logged already carries it, so old transcripts render the same way.
+const CompactIDPrefix = "compact-"
+
 // MetaKey 是 gerdr 往 ACP `_meta` 里塞东西时用的命名空间。
 const MetaKey = "gerdr"
 

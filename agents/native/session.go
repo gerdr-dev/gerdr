@@ -498,7 +498,7 @@ func (r *run) maybeCompact(ctx context.Context) error {
 // compact 让模型把目前的对话总结成一段，之后的上下文从摘要开始（store.go 的 buildContext）。
 // 界面上是一张「压缩上下文」的卡片。
 func (r *run) compact(ctx context.Context, extra string) error {
-	id := "compact-" + uuid.NewString()
+	id := acpx.CompactIDPrefix + uuid.NewString()
 	r.out(acp.StartToolCall(acp.ToolCallId(id), "Compacting context", acp.WithStartKind(acp.ToolKindThink), acp.WithStartStatus(acp.ToolCallStatusInProgress)))
 	msgs := r.history()
 	if len(msgs) == 0 {
