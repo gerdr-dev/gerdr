@@ -3,6 +3,7 @@ import { useLayoutEffect, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { mergeTab, movePane, moveTab, moveTabToWorkspace, placeRow } from "@/lib/actions";
 import { activeWs, allLeaves, type Side, type Workspace } from "@/lib/layout";
+import { activeIds, addActive } from "@/lib/overview";
 import { get, setLayout } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { AgentIcon } from "./AgentIcon";
@@ -17,6 +18,8 @@ import { AgentIcon } from "./AgentIcon";
  * - 拖到侧栏的别的工作空间上 → 挪过去。
  * - 侧栏（UnifiedSidebar）里拖一行，落在某个分组的两行之间 → 这一行列到那儿（layout.sideRows），那条缝上亮一根横线；
  *   落在分组标题上 → 列到那一组的最后。只改侧栏怎么列，屏幕上的 tab、分屏都不动。
+ * - Anything carrying one agent (a sidebar row, a pane header, a tab of one pane) dropped on the sidebar's "active"
+ *   section joins it (overview.addActive); nothing moves. While such a drag runs the section shows even when empty.
  *
  * 不用 HTML5 原生拖拽：它的拖影是浏览器截的半透明图、拖动中改不了样子，也没法在 pane 区域上算「贴哪边」
  * （dragover 进 xterm / 对话这些子元素会一路被打断）。这里用 pointer 事件 + setPointerCapture 自己画。
@@ -37,7 +40,9 @@ type Target =
   | { kind: "row"; wsId: string; pane: string; to: number; line: Box }
   | { kind: "tab"; tabId: string; rect: Box }
   | { kind: "pane"; tabId: string; paneId: string; side: Side; rect: Box }
-  | { kind: "ws"; wsId: string; rect: Box };
+  | { kind: "ws"; wsId: string; rect: Box }
+  /** The sidebar's "active" section (UnifiedSidebar, data-active-drop): the dragged agent joins it, nothing moves. */
+  | { kind: "active"; session: string; rect: Box };
 
 type Box = { left: number; top: number; width: number; height: number };
 
@@ -56,6 +61,8 @@ type Drag = {
   w: number;
   h: number;
   ghost: TabGhost;
+  /** The agent being dragged (a lone pane, or a tab of one pane): only then can it be dropped into "active". */
+  session?: string;
   target: Target | null;
   spring?: string;
 };
@@ -139,6 +146,9 @@ function startDrag(e: React.PointerEvent<HTMLElement>, tabId: string, from: numb
   const srcWs = get().layout.workspaces.find((w) => w.tabs.some((t) => t.id === tabId))?.id ?? ws.id;
   // Started on a sidebar row: the pane it lists. Dropped in the sidebar it only moves in the list (actions.placeRow)
   const sideRow = el.closest<HTMLElement>("[data-side-row]")?.dataset.sideRow;
+  // The agent it carries: a pane, or a tab holding just one pane (a split tab is several agents, none of them "the" one)
+  const srcTab = allLeaves(get().layout).filter((x) => x.tab.id === tabId);
+  const session = (paneId ? srcTab.find((x) => x.pane.id === paneId) : srcTab.length === 1 ? srcTab[0] : undefined)?.pane.sessionId;
 
   const locate = (x: number, y: number): Target | null => {
     // The tab bar, when it's shown (the desktop sidebar hidden, or the old layout)
@@ -169,6 +179,9 @@ function startDrag(e: React.PointerEvent<HTMLElement>, tabId: string, from: numb
       };
     }
     const hit = document.elementFromPoint(x, y) as HTMLElement | null;
+    // Onto the sidebar's "active" section: the agent joins it (already in: nothing to do)
+    const act = hit?.closest<HTMLElement>("[data-active-drop]");
+    if (act) return session && !activeIds(get()).includes(session) ? { kind: "active", session, rect: box(act.getBoundingClientRect()) } : null;
     // A sidebar row dragged between two others (UnifiedSidebar): list it there, in this group or another one
     const list = sideRow ? hit?.closest<HTMLElement>("[data-side-rows]") : null;
     const rows = list ? [...list.querySelectorAll<HTMLElement>("[data-side-row]")] : [];
@@ -225,7 +238,7 @@ function startDrag(e: React.PointerEvent<HTMLElement>, tabId: string, from: numb
       const w = header ? Math.min(r.width, 208) : r.width;
       const h = header ? 28 : r.height;
       const off = header ? { offX: w / 2, offY: h / 2 } : { offX: sx - r.left, offY: sy - r.top };
-      d = { tabId, from, paneId, x: sx, y: sy, ...off, w, h, ghost, target: null };
+      d = { tabId, from, paneId, x: sx, y: sy, ...off, w, h, ghost, session, target: null };
     }
     const target = locate(ev.clientX, ev.clientY);
     // 停在别的 tab 中间：过一会儿把它切出来，好接着往下拖进它的 pane
@@ -268,6 +281,7 @@ function startDrag(e: React.PointerEvent<HTMLElement>, tabId: string, from: numb
       flipPending = m;
     }
     if (!t) restore();
+    else if (t.kind === "active") (restore(), addActive([t.session]));
     else if (t.kind === "row") placeRow(t.pane, t.wsId, t.to);
     else if (t.kind === "ws" && sideRow) placeRow(sideRow, t.wsId, Infinity);
     else if (paneId) {
@@ -327,6 +341,7 @@ export function TabDragLayer() {
           <span className="rounded-md bg-background/90 px-2 py-1 text-[12px] text-foreground shadow-sm">{SIDE_TEXT[t.side]}</span>
         </div>
       )}
+      {t?.kind === "active" && <div className="fixed rounded-md bg-brand/10 ring-2 ring-brand" style={fixed(t.rect)} />}
       {t?.kind === "ws" && <div className="fixed rounded-md bg-brand/10 ring-2 ring-brand" style={fixed(t.rect)} />}
       {/* 拖影：在 tab 栏里排序时就是这个 tab 本身（不透明，盖住下面的字）；要合并 / 分屏 / 挪走时缩成指针右下角的小胶囊，
           不然它正好盖住要落的那个 tab / 那半边 pane，看不清落在哪 */}

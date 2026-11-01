@@ -88,7 +88,7 @@ import type { SessionSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { AgentIcon, StatusDot, dotStatus } from "./AgentIcon";
 import { Elapsed, SidebarBottom, SidebarEdge, SidebarHeader, WsDot } from "./Chrome";
-import { TabDragLayer, startPaneDrag } from "./TabDrag";
+import { TabDragLayer, startPaneDrag, useDrag } from "./TabDrag";
 
 /*
  * The sidebar (on a phone, the drawer). One list in place of four things that each listed the same agents:
@@ -193,6 +193,8 @@ export function UnifiedSidebar({ className }: { className?: string }) {
   const cur = activeWs(layout);
   const curTab = cur.tabs.find((t) => t.id === cur.activeTab);
   const scroller = useRef<HTMLDivElement>(null);
+  // An agent being dragged: "active" turns into a drop target, shown even when empty
+  const dragAgent = useDrag()?.session;
 
   // Switching into a folded group by keyboard (⌃⌘1–9, a notification) unfolds it: otherwise you can't see where you are
   useEffect(() => {
@@ -261,8 +263,9 @@ export function UnifiedSidebar({ className }: { className?: string }) {
       <SidebarHeader />
       <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto px-1.5 pb-2">
         <div className="pt-1.5">
-          {(active.length > 0 || gridOn || allProjects) && (
-            <div className="mb-1 border-b pb-1.5">
+          {(active.length > 0 || gridOn || allProjects || dragAgent) && (
+            // data-active-drop: drop an agent here to put it in (TabDrag.tsx)
+            <div data-active-drop className="mb-1 border-b pb-1.5">
               <div
                 role="button"
                 className="group/act flex h-7 w-full cursor-default items-center gap-1 rounded-md px-1 text-[11px] font-medium text-muted-foreground select-none hover:bg-accent/60 hover:text-foreground"
@@ -313,6 +316,8 @@ export function UnifiedSidebar({ className }: { className?: string }) {
                     <WorkRow key={x.id} id={x.id} current={gridOn && x.id === gridFocusId} grid={gridOn && tiles.includes(x.id)} />
                   ),
                 )}
+              {/* Only when empty: a row appearing mid-drag would push the rows under the pointer */}
+              {dragAgent && !active.length && !activeFolded && <div className="py-1 pl-7 text-[12px] text-muted-foreground">拖到这里加入进行中</div>}
             </div>
           )}
           {list.map((ws, wi) => (
