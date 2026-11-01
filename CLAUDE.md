@@ -34,6 +34,13 @@ Claude Code / Codex 的图形界面：Go 后端（ACP 适配器 + hub + HTTP/WS�
 - Tailwind runs in the browser: something drawn unstyled / at the wrong size for a frame after it mounts, or a class /
   CSS rule that silently does nothing → docs/dev/TAILWIND.md. Also there: a phone drawing one wrong frame (boxes missing,
   text on text) when an animation ends, which looks like Tailwind and is compositing.
+- `@gerdr/chat` (ui/packages/chat) also serves outside hosts (Annulo installs it from npm), and every change they need
+  costs an npm publish that the user has to approve in a browser. So a host's new chat feature lives in the host, built
+  on the existing slots, `ChatHost` hooks and `memoryDrafts`. When the package itself must change, add a general hook
+  that hands the whole class of behaviour to hosts, not the one feature. Two known gaps, left open on purpose until the
+  next host need hits one: attachments (the Composer only knows images / videos and `localPath`; a hook would let the
+  host turn a picked / pasted / dropped file into content blocks, or refuse it) and message content (a hook would let
+  the host draw its own block types, e.g. an element-reference card).
 - 界面怎么写（能 import 什么、样式、目录）在 ui/AGENTS.md；那份也是给用户的 agent 看的（内置的 gerdr-ui skill 让它先读）。
 - 内置 skill 在 internal/ext/builtin/，会随二进制发给每个 agent：改 `gerdr session` / `gerdr ui` 的命令行时同步改它们。
 - Add-ons (`internal/addons`, `ui/src/lib/addons.ts`, Settings → Add-ons): docs/dev/ADDONS.md for how it works;
