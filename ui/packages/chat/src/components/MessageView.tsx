@@ -188,10 +188,7 @@ export const MessageView = memo(function MessageView({
                       <PlayBadge />
                     </div>
                   ) : (
-                    // 高度定死在图片自己身上（宽度按比例自动算）：对话是虚拟列表，行高要在图片加载完之前就定下来。
-                    // 只给 max-h 的话行先按 0 高量、解码完再长 160px，滚动跟着修正又把行卸载 / 重挂，来回抽搐。
-                    // 别套一层定高的 div 再给 img max-w-full：外层宽度又取决于 img，循环依赖，图片宽度会被算成 0（踩过，图没了）
-                    <img key={i} src={f.url} onClick={open} className="h-40 w-auto max-w-full cursor-zoom-in rounded-xl border object-contain" />
+                    <SizedImg key={i} src={f.url} onClick={open} heightRem={10} className="rounded-xl" />
                   );
                 })}
               </div>
@@ -502,17 +499,56 @@ export function renderPart(p: GPart, i: number, ctx: PartCtx): ReactNode {
         </div>
       );
     case "file":
-      // 同用户消息里的图：高度定死在 img 上，行高不随图片加载变（虚拟列表会抽搐）
       return (
-        <img
+        <SizedImg
           key={i}
           src={(p as any).url}
           onClick={(e) => openLightbox([{ url: (p as any).url }], 0, e.currentTarget)}
-          className="h-60 w-auto max-w-full cursor-zoom-in self-start rounded-md border object-contain"
+          heightRem={15}
+          className="self-start rounded-md"
         />
       );
   }
   return null;
+}
+
+// Aspect ratio of every message image seen on this page, by URL.
+const imgRatio = new Map<string, number>();
+
+/**
+ * An attached image whose box height is known before it loads: the chat is a virtual list, and a row that grows
+ * from 0 to its image's height once decoded made scrolling correct itself, unmount / remount the row, and twitch.
+ * Unseen images reserve a fixed `heightRem` box; once the ratio is known (cached for remounts) the box follows it,
+ * so an image wider than the column shrinks to its real height instead of floating in an empty, bordered 160px box.
+ * Width is an explicit length capped by max-w-full, never a percentage: a fixed-height wrapper with a max-w-full img
+ * made the wrapper's width depend on the img, and the image came out 0 wide.
+ */
+function SizedImg({
+  src,
+  heightRem,
+  className,
+  onClick,
+}: {
+  src: string;
+  heightRem: number;
+  className?: string;
+  onClick: (e: React.MouseEvent<HTMLElement>) => void;
+}) {
+  const [ratio, setRatio] = useState(() => imgRatio.get(src));
+  return (
+    <img
+      src={src}
+      onClick={onClick}
+      onLoad={(e) => {
+        const { naturalWidth: w, naturalHeight: h } = e.currentTarget;
+        if (!w || !h) return;
+        imgRatio.set(src, w / h);
+        if (ratio === undefined || Math.abs(w / h - ratio) > 0.01) setRatio(w / h);
+      }}
+      style={ratio ? { aspectRatio: ratio, width: `${(heightRem * ratio).toFixed(3)}rem` } : { height: `${heightRem}rem` }}
+      className={cn("max-w-full cursor-zoom-in border object-contain", ratio ? "h-auto" : "w-auto", className)}
+    />
+  );
 }
 
 /**
