@@ -528,7 +528,11 @@ func findSkill(ss []Skill, name string) *Skill {
 }
 
 // clear：/clear 另起一个新会话（同目录、同设置），用旧 id 报 sessionId + cleared，hub 把记录换成新 id
-// （和 claude / codex 的 /clear 走同一条路）。旧 id 留作别名。
+// （和 claude / codex 的 /clear 走同一条路）。
+// The running object (tasks, terminals, client settings) moves to the new id, and the old id is dropped from the
+// map rather than kept as an alias: the hub gives the cleared conversation a session of its own under the old id
+// (internal/hub/clear.go), and resuming it must load that conversation from disk. An alias handed it this object
+// instead, so a message sent there ran inside the new conversation and showed up in the other tab.
 func (a *Agent) clear(s *session) (acp.PromptResponse, error) {
 	s.mu.Lock()
 	if s.busy {
@@ -544,6 +548,9 @@ func (a *Agent) clear(s *session) (acp.PromptResponse, error) {
 	s.mu.Unlock()
 	a.mu.Lock()
 	a.sessions[nid] = s
+	if a.sessions[old] == s {
+		delete(a.sessions, old)
+	}
 	a.mu.Unlock()
 	s.saveMeta()
 	a.send(old, acp.SessionUpdate{SessionInfoUpdate: &acp.SessionSessionInfoUpdate{Meta: acpx.Meta(map[string]any{"sessionId": nid, "cleared": true})}})

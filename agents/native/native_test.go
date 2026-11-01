@@ -488,6 +488,19 @@ func TestClear(t *testing.T) {
 	if len(msgs) != 2 {
 		t.Fatalf("context not cleared: %v", msgs)
 	}
+	// The old id is the cleared conversation again (the hub keeps it as its own session), not an alias of the new one
+	if _, err := e.c.Conn.ResumeSession(context.Background(), acp.ResumeSessionRequest{SessionId: sid, Cwd: e.cwd}); err != nil {
+		t.Fatal(err)
+	}
+	e.prompt(sid, uuid.NewString(), "zz-old-again")
+	old := fmt.Sprint(e.llm.request(-1)["messages"])
+	if !strings.Contains(old, "remember 42") || strings.Contains(old, "what?") {
+		t.Fatalf("old id did not resume the cleared conversation: %s", old)
+	}
+	e.prompt(acp.SessionId(nid), uuid.NewString(), "again")
+	if cur := fmt.Sprint(e.llm.request(-1)["messages"]); strings.Contains(cur, "remember 42") || strings.Contains(cur, "zz-old-again") {
+		t.Fatalf("new id picked up the old conversation: %s", cur)
+	}
 }
 
 // renames: the titles reported with renamed=true, in order.

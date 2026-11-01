@@ -61,7 +61,7 @@
 //   - autoTurn: true / false around a turn the agent started by itself (a background task finished while the
 //     session was idle). Its updates arrive without a session/prompt.
 //   - sessionId + cleared: true, sent on the old id after "/clear": the session continues under the new id
-//     (the old one stays an alias).
+//     (the old id goes back to the cleared conversation: resume / load it to continue that one).
 //   - notice (+ noticeLevel "retry" and noticeDelayMs while retrying a model error): a line for the user.
 //   - steer: {id, state: "queued" | "started"}, an interjection's place in the queue: queued when steering
 //     accepts it, started when it joins the history before the next model call.
