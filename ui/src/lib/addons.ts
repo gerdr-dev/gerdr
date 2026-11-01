@@ -490,7 +490,7 @@ function makeApi(id: string, hash: string) {
       };
     },
     usage: (force?: boolean) => api.usage(force),
-    stats: (days?: number) => api.dayStats(days),
+    turns: (r: { since: number; until?: number }) => api.turns(r.since, r.until),
     storage: {
       get: (k: string) => {
         try {

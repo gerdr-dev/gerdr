@@ -111,6 +111,7 @@ type Session struct {
 	tasks       []acpx.Task
 	turnStarted int64                // 这一轮几点开始的（状态行：跑了多久）
 	turnTokens  int                  // 这一轮输出了多少 token（状态行）
+	turnCost    float64              // what the agent reported spending since the last turn_end (emit puts it on the next one)
 	sending     map[string]bool      // 正在处理的 client 消息 id（同一条重发时挡住并发的那次）
 	retryCancel chan struct{}        // 自动重试正在等：关掉它 = 人按了停止
 	shut        bool                 // Hub.Shutdown 关掉的（关了 pane）：这一轮因为进程被杀报的错不算错、不自动重试；再接上时清掉
@@ -304,6 +305,13 @@ func (s *Session) Events() []*Event {
 func (s *Session) emit(e *Event) {
 	e.Seq = s.h.nextSeq()
 	e.TS = now()
+	if e.Kind == EvTurnEnd {
+		// The cost reports that came in since the last turn ended (the agent sends its turn's before the turn ends:
+		// acp-go-sdk processes notifications before the response that follows them)
+		s.mu.Lock()
+		e.CostUSD, s.turnCost = s.turnCost, 0
+		s.mu.Unlock()
+	}
 	if s.h.opt.Dir != "" {
 		e = s.h.slim(e) // pasted images go to blobs/ before the event is kept (memory.go)
 	}
@@ -314,7 +322,11 @@ func (s *Session) emit(e *Event) {
 	s.mu.Unlock()
 	s.h.broadcastEvents(s.rec.ID, []*Event{e}, false)
 	if e.Kind == EvTurnEnd {
-		s.h.countDone(e.StopReason)
+		s.mu.Lock()
+		r := TurnRecord{TS: e.TS, SessionID: s.rec.ID, Agent: s.rec.Agent, Cwd: s.rec.Cwd, StopReason: e.StopReason, Auto: e.Auto,
+			DurationMs: e.DurationMs, OutputTokens: e.OutputTokens, CostUSD: e.CostUSD}
+		s.mu.Unlock()
+		s.h.recordTurn(r)
 	}
 }
 
@@ -931,8 +943,10 @@ func (s *Session) onGerdrInfo(g map[string]any) {
 		s.h.broadcastSession(s)
 	}
 	if c, ok := g[acpx.CostKey].(map[string]any); ok {
-		if usd, ok := c["totalUSD"].(float64); ok {
-			s.h.addCost(s.rec.ID, s.rec.Agent, usd)
+		if usd, ok := c["usd"].(float64); ok && usd > 0 {
+			s.mu.Lock()
+			s.turnCost += usd
+			s.mu.Unlock()
 		}
 	}
 	if list, ok := chatlog.TasksFromInfo(g); ok {

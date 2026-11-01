@@ -81,7 +81,7 @@ g.on("turnEnd", (e) => { if (!e.visible) g.notify(`${e.session.title} finished`,
 g.on("needsInput", (e) => …);    // a permission or a question is waiting
 g.on("sessionCreated", (e) => …);
 g.on("focusChanged", (e) => …);
-g.on("stats", () => …);          // today's numbers changed (see g.stats)
+g.on("turn", (t) => …);          // a turn ended, with its facts (see g.turns)
 ```
 
 `g.state()` is a read-only snapshot of workspaces, tabs, panes and sessions. `g.actions` does things: `newTab`,
@@ -178,7 +178,7 @@ the light / dark switch and outlives the add-on.
 |---|---|
 | `g.state()` | Workspaces, tabs, panes, sessions (status, agent, title, cwd). |
 | `g.usage(force?)` | The Claude Code / Codex quotas, as `/usage` shows them. |
-| `g.stats(days?)` | Per day: turns finished, and money spent (USD by agent; only Claude Code reports money). |
+| `g.turns({ since, until? })` | Every turn that ended in the range (unix ms), oldest first: session, agent, stop reason, whether the agent started it itself, duration, tokens, cost (USD; only Claude Code reports money). Gerdr keeps no daily totals: add them up yourself. |
 | `g.settings.get(key)` | This add-on's [settings](#settings). |
 | `g.storage.get/set` | Small private storage, kept in this browser / App (not shared between devices). A cache: store `{ at: Date.now(), data }` and refetch when it's older than you like. |
 | `g.fetch(url, init)` | An HTTP request made by Gerdr's backend, so the API needs no CORS. The only way out: the page's own `fetch` is limited to Gerdr itself (CSP `connect-src 'self'`), CORS or not. Resolves `{ ok, status, headers, text, json() }`; a non-string `body` goes as JSON. |

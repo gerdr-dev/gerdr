@@ -36,6 +36,8 @@ type Event struct {
 	DurationMs   int64  `json:"durationMs,omitempty"`
 	OutputTokens int    `json:"outputTokens,omitempty"`
 	Error        string `json:"error,omitempty"`
+	// turn_end: what the agent reported this turn cost, USD (Claude Code only; acpx.CostKey)
+	CostUSD float64 `json:"costUsd,omitempty"`
 
 	// permission / ask 及其 _done
 	ReqID    string          `json:"reqId,omitempty"`

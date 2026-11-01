@@ -52,10 +52,19 @@ sees: `internal/addons/builtin/gerdr.d.ts`, copied into `~/.gerdr/addons` on eve
   usually can't change the API anyway. It grants nothing new — add-ons are trusted code that can already run a service — and it sits behind the
   same auth as every /api call. Bodies are text both ways; an error status is data (like fetch()), only a transport
   failure is a 502. 30s timeout, 10 MB cap, no cookie jar.
-- `g.usage()` is /api/usage (the quotas). `g.stats()` is /api/stats (internal/hub/stats.go): turns that ended with
-  end_turn, and cost from Claude Code's `result.total_cost_usd` (a per-process running total, sent by the adapter as
-  `_meta.gerdr.cost`; the hub adds the growth, a smaller total = a new process). Codex reports no money. Changes are
-  broadcast as "stats" (coalesced to one per 2s) and reach add-ons as `g.on("stats")`.
+- `g.usage()` is /api/usage (the quotas). `g.turns()` is /api/turns (internal/hub/turns.go): one record per finished
+  turn — session, agent, stop reason, auto, duration, tokens, cost — appended to `~/.gerdr/turns/<yyyy-mm>.jsonl`
+  and broadcast as "turn" (`g.on("turn")`). Gerdr keeps **facts, not tallies**: what counts as a task done, which day
+  a turn belongs to, whether to price Codex's tokens, is the add-on's call (the `today` add-on sums a day's). It used
+  to keep daily totals itself (stats.go, `g.stats`, until 2026-11): that put a definition of "done" in the core
+  (every end_turn, a quarter of which were the agent waking itself after a background task) and the per-process cost
+  arithmetic in the hub, guessing process restarts from the running total going down. The log is kept in the core,
+  not an add-on, because only the hub sees each turn exactly once: a UI add-on runs in every open window and in none
+  while no window is open, and a service would need a runtime to be shipped with it.
+- Cost: Claude Code's `result.total_cost_usd` is a running total per process. The adapter keeps the last one on its
+  `proc` (agents/claude/proc.go `costDelta`) and reports the growth as `_meta.gerdr.cost = {usd}`; the hub sums the
+  reports that arrive during a turn onto its `turn_end` (`costUsd`; acp-go-sdk processes notifications before the
+  response that follows them, so they're in before the turn ends). Codex reports tokens, not money.
 - The sidebar's quota meter used to be built in (UsageMeter); it is the `usage-meter` add-on now, and "today" (tasks
   done, cost) is the `today` add-on. Without them the sidebar has neither — install from the store.
 

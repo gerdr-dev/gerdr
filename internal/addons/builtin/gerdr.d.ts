@@ -101,8 +101,11 @@ declare global {
     on(event: "turnEnd", fn: (e: SessionEvent & { stopReason: string; error?: string }) => void): Dispose;
     on(event: "needsInput", fn: (e: SessionEvent & { kind: "permission" | "ask" }) => void): Dispose;
     on(event: "sessionCreated", fn: (e: SessionEvent) => void): Dispose;
-    /** Today's turns done or cost changed (g.stats()). Coalesced: at most every couple of seconds. */
-    on(event: "stats", fn: () => void): Dispose;
+    /**
+     * A turn ended, any session, as the backend logged it (the same record g.turns returns). Unlike turnEnd it carries
+     * the turn's facts (cost, tokens, whether the agent started it itself) and comes once per turn per window.
+     */
+    on(event: "turn", fn: (turn: TurnRecord) => void): Dispose;
     on(event: "focusChanged", fn: (e: { pane?: PaneInfo; tab?: TabInfo; workspace?: WorkspaceInfo }) => void): Dispose;
 
     /** 弹一条提示。system: true 时用系统通知（mac App / 浏览器通知权限）。 */
@@ -210,8 +213,12 @@ declare global {
     fetch(url: string, init?: { method?: string; headers?: Record<string, string>; body?: unknown }): Promise<FetchResult>;
     /** The accounts' quotas (Claude Code, Codex): what the composer's /usage shows. force: skip the cache. */
     usage(force?: boolean): Promise<UsageInfo[]>;
-    /** Turns done and money spent per day, the last `days` (default 1), today last. g.on("stats") says when they change. */
-    stats(days?: number): Promise<DayStats[]>;
+    /**
+     * The turns that ended in [since, until) (unix ms; until defaults to now), oldest first, every session and agent.
+     * Gerdr logs each turn once, window or not; counting is yours: what is "a task", which day it falls on, what to add
+     * up. Today's: g.turns({ since: new Date().setHours(0, 0, 0, 0) }). g.on("turn") brings each new one.
+     */
+    turns(range: { since: number; until?: number }): Promise<TurnRecord[]>;
 
     /** This add-on's own service (addon.json, see the top of this file). Without one, status() is undefined and send rejects. */
     service: {
@@ -380,13 +387,22 @@ declare global {
     at?: number;
   }
 
-  interface DayStats {
-    /** 2026-10-31, local time */
-    date: string;
-    /** Turns that ended normally (not cancelled, not failed). */
-    done: number;
-    /** USD by agent, as the agent reported it: only Claude Code reports money. */
-    cost?: Record<string, number>;
+  /** One finished turn (g.turns, g.on("turn")). */
+  interface TurnRecord {
+    /** When it ended (unix ms). */
+    ts: number;
+    sessionId: string;
+    /** claude / codex / … (a variant like claude-2 as is) */
+    agent: string;
+    cwd?: string;
+    /** end_turn (finished normally) · cancelled · error · max_tokens · refusal … */
+    stopReason: string;
+    /** The agent started it itself (a background task finished and it reported back): no message from a person. */
+    auto?: boolean;
+    durationMs?: number;
+    outputTokens?: number;
+    /** USD, as the agent reported it for this turn. Only Claude Code reports money (its estimate at API prices). */
+    costUsd?: number;
   }
 
   interface ServiceStatus {

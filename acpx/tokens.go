@@ -66,13 +66,14 @@ func (m *TokenMeter) Due() bool {
 	return true
 }
 
-// CostKey: session_info_update._meta.gerdr.cost = {"totalUSD": n}, what the agent process has cost so far (Claude
-// Code's result.total_cost_usd). The hub adds the growth to the day's cost (hub/stats.go).
+// CostKey: session_info_update._meta.gerdr.cost = {"usd": n}, what the agent's last turn cost (Claude Code: the
+// growth of result.total_cost_usd, which is a running total per process). A fact for the turn: the hub sums the reports
+// that arrive during a turn onto its turn_end (costUsd), and add-ons add those up however they like (g.turns).
 const CostKey = "cost"
 
 // Cost: the meta of a cost report.
-func Cost(totalUSD float64) map[string]any {
-	return Meta(map[string]any{CostKey: map[string]any{"totalUSD": totalUSD}})
+func Cost(usd float64) map[string]any {
+	return Meta(map[string]any{CostKey: map[string]any{"usd": usd}})
 }
 
 // ProgressKey：session_info_update._meta.gerdr.progress = {"outputTokens": n}

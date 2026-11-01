@@ -330,8 +330,8 @@ function handle(m: any) {
     case "addons":
       import("./addons").then((p) => p.reloadAddons());
       break;
-    case "stats":
-      import("./addons").then((p) => p.emit("stats", {}));
+    case "turn":
+      import("./addons").then((p) => p.emit("turn", m.data));
       break;
     case "ext":
       set((s) => ({ extVersion: s.extVersion + 1 }));

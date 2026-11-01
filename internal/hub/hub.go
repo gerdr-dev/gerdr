@@ -200,7 +200,7 @@ type Hub struct {
 	usageOnce sync.Once
 	usage     *usageCache // 用量额度的缓存（usage.go）
 
-	stats *stats // turns done and cost per day (stats.go); nil without a data directory
+	turns *turnLog // one line per finished turn (turns.go); nil without a data directory
 }
 
 func New(opt Options) (*Hub, error) {
@@ -219,7 +219,7 @@ func New(opt Options) (*Hub, error) {
 	h.defs = ValidAgentDefs(opt.ExtraAgents)
 	h.cmds = newCmdCache(opt.Dir)
 	if opt.Dir != "" {
-		h.stats = newStats(opt.Dir)
+		h.turns = newTurnLog(opt.Dir)
 	}
 	h.opts = newOptCache(opt.Dir)
 	if err := h.load(); err != nil {
@@ -401,9 +401,6 @@ func (h *Hub) Close() {
 		ss = append(ss, s)
 	}
 	h.mu.Unlock()
-	if h.stats != nil {
-		h.stats.save()
-	}
 	for _, s := range ss {
 		s.flush(true)
 	}

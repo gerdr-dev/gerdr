@@ -41,6 +41,9 @@ type proc struct {
 	done    chan struct{}
 	exitErr error
 	stderr  *ringBuf
+	// The last result.total_cost_usd: Claude Code reports what this process has cost so far, so a turn's cost is the
+	// growth since the previous result (stream.go). Kept per process because a new process starts again from zero.
+	costUSD float64
 }
 
 type ctlResult struct {
@@ -306,4 +309,20 @@ func truncate(s string, n int) string {
 		return s
 	}
 	return s[:n] + "…"
+}
+
+// costDelta: what this turn cost, given the process's running total from its result. A total lower than the last
+// one (not seen so far) counts from zero rather than going negative. nil (tests feeding lines by hand): the total.
+func (p *proc) costDelta(total float64) float64 {
+	if p == nil {
+		return total
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	d := total - p.costUSD
+	if d < 0 {
+		d = total
+	}
+	p.costUSD = total
+	return d
 }

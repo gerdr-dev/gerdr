@@ -8,8 +8,18 @@ export type Holder = { pid: number; name?: string; status?: string; cwd?: string
 
 /** 一条用量额度（后端 acpx.UsageLimit）：label 直接显示，percent 0–100，resetsAt unix ms（0 = 不知道） */
 export type UsageLimit = { kind: string; label: string; percent: number; resetsAt?: number; windowMins?: number };
-/** One day of internal/hub/stats.go: turns that ended normally, and what Claude Code reported spending. */
-export type DayStats = { date: string; done: number; cost?: Record<string, number> };
+/** One finished turn (internal/hub/turns.go). */
+export type TurnRecord = {
+  ts: number;
+  sessionId: string;
+  agent: string;
+  cwd?: string;
+  stopReason: string;
+  auto?: boolean;
+  durationMs?: number;
+  outputTokens?: number;
+  costUsd?: number;
+};
 /** 一家 agent 账号的额度（后端 hub.UsageInfo）：出错时 data 还是上一次拿到的，at 是它的时间 */
 export type UsageInfo = { agent: string; name: string; data?: { plan?: string; limits: UsageLimit[] }; error?: string; at?: number };
 
@@ -139,8 +149,8 @@ export type CliRequest = { label: string; ip: string; local: boolean; device: st
 
 export const api = {
   usage: (force?: boolean) => req<UsageInfo[]>("GET", `/api/usage${force ? "?force=1" : ""}`),
-  /** Turns done and cost (USD by agent) per day, today last (internal/hub/stats.go). */
-  dayStats: (days = 1) => req<DayStats[]>("GET", `/api/stats?days=${days}`),
+  /** The turns that ended in [since, until) (unix ms), oldest first (internal/hub/turns.go). */
+  turns: (since: number, until?: number) => req<TurnRecord[]>("GET", `/api/turns?since=${since}${until ? `&until=${until}` : ""}`),
   stats: (webpid?: number) => req<any>("GET", `/api/system/stats${webpid ? `?webpid=${webpid}` : ""}`),
   herdrScan: () => req<{ workspaces: HerdrWorkspace[] }>("GET", "/api/import/herdr"),
   herdrImport: (workspaces: string[]) =>

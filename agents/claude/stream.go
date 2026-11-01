@@ -109,9 +109,10 @@ func (s *session) onLine(pr *proc, m map[string]json.RawMessage, raw []byte) {
 			CostUSD    *float64 `json:"total_cost_usd"`
 		}
 		_ = json.Unmarshal(raw, &r)
-		if r.CostUSD != nil && *r.CostUSD > 0 {
-			// The process's running total; the hub turns it into today's cost (hub/stats.go)
-			s.update(ctx, acp.SessionUpdate{SessionInfoUpdate: &acp.SessionSessionInfoUpdate{Meta: acpx.Cost(*r.CostUSD)}})
+		if r.CostUSD != nil {
+			if d := pr.costDelta(*r.CostUSD); d > 0 {
+				s.update(ctx, acp.SessionUpdate{SessionInfoUpdate: &acp.SessionSessionInfoUpdate{Meta: acpx.Cost(d)}})
+			}
 		}
 		s.mu.Lock()
 		t := s.turn

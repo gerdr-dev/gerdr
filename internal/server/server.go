@@ -155,10 +155,12 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/usage", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, s.Hub.Usage(r.Context(), r.URL.Query().Get("force") == "1"))
 	})
-	// Turns done and cost per day, today last (hub/stats.go). ?days=7; "stats" is broadcast when they change.
-	mux.HandleFunc("GET /api/stats", func(w http.ResponseWriter, r *http.Request) {
-		n, _ := strconv.Atoi(r.URL.Query().Get("days"))
-		writeJSON(w, s.Hub.Stats(min(max(n, 1), 400)))
+	// One line per finished turn in [since, until) (unix ms; until defaults to now), oldest first (hub/turns.go):
+	// add-ons count what they want from it. "turn" is broadcast with each new one.
+	mux.HandleFunc("GET /api/turns", func(w http.ResponseWriter, r *http.Request) {
+		since, _ := strconv.ParseInt(r.URL.Query().Get("since"), 10, 64)
+		until, _ := strconv.ParseInt(r.URL.Query().Get("until"), 10, 64)
+		writeJSON(w, s.Hub.Turns(since, until))
 	})
 	mux.HandleFunc("GET /api/pending", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, s.Hub.Pending()) })
 	mux.HandleFunc("GET /api/busy", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, s.busy()) })

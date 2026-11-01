@@ -33,3 +33,17 @@ func TestParseUsage(t *testing.T) {
 		t.Fatalf("api key: %+v %v", u, err)
 	}
 }
+
+func TestCostDelta(t *testing.T) {
+	p := &proc{}
+	for _, c := range []struct{ total, want float64 }{
+		{1.5, 1.5},   // the process's first turn
+		{2.0, 0.5},   // growth since the last result
+		{2.0, 0},     // nothing new
+		{0.25, 0.25}, // went down: counted from zero, never negative
+	} {
+		if got := p.costDelta(c.total); got != c.want {
+			t.Fatalf("costDelta(%v) = %v, want %v", c.total, got, c.want)
+		}
+	}
+}
