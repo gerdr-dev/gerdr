@@ -145,7 +145,7 @@ func (h *Hub) SetAgents(defs []AgentDef) {
 	var stale []*agenthost.Host
 	h.mu.Lock()
 	for id, d := range old {
-		if n, ok := now[id]; !ok || !reflect.DeepEqual(n, d) {
+		if n, ok := now[id]; !ok || !sameProcess(n, d) {
 			if c := h.hosts[id]; c != nil {
 				stale = append(stale, c)
 				delete(h.hosts, id)
@@ -156,6 +156,14 @@ func (h *Hub) SetAgents(defs []AgentDef) {
 	for _, c := range stale {
 		c.Close()
 	}
+}
+
+// sameProcess: whether a running host started from a still matches b. Name is display-only (read live from
+// h.extra() wherever it shows), so a rename must not close the host: closing it cuts every running turn on it off
+// ("peer disconnected before response").
+func sameProcess(a, b AgentDef) bool {
+	a.Name, b.Name = "", ""
+	return reflect.DeepEqual(a, b)
 }
 
 // Base：这个 agent 实际是哪一种（claude / codex / 外部 agent 自己的 id）。界面上图标、哪些功能可用都按它判断。

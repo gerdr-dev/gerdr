@@ -98,6 +98,12 @@ function fromDraft(d: Draft): AgentDef {
   };
 }
 
+/**
+ * The part of a draft the backend bakes into the agent's process (hub.sameProcess): changing it makes the backend
+ * close that process on save, which cuts off every turn running on it. The name and the new-session defaults don't.
+ */
+const processKey = ({ name: _n, defaults: _d, ...rest }: Draft) => JSON.stringify(rest);
+
 const allProviders = () => (get().config.llm?.providers ?? []).map((p) => p.id);
 
 function newId(name: string, taken: Set<string>) {
@@ -173,7 +179,8 @@ export function AgentSettings() {
       } else {
         const d = fromDraft(edit);
         setDefaults(edit.id, values, { agents: isNew ? [...defs, d] : defs.map((x) => (x.id === d.id ? d : x)) });
-        toast.success(isNew ? `加好了：新建会话时选「${d.name}」` : "已保存（正在跑的会话下一轮按新配置接上）");
+        const restarted = !isNew && processKey(edit) !== processKey(JSON.parse(orig));
+        toast.success(isNew ? `加好了：新建会话时选「${d.name}」` : restarted ? "已保存：Agent 已重启，之后发的消息按新配置走" : "已保存");
       }
       setEdit(null);
     } catch (e: any) {
@@ -259,7 +266,15 @@ export function AgentSettings() {
               {!edit ? "" : edit.builtin ? `${edit.name} · 新会话默认` : isNew ? "新建 Agent" : `编辑「${edit.name}」`}
             </DialogTitle>
           </DialogHeader>
-          {edit && <Editor d={edit} onChange={setEdit} onSave={save} onCancel={() => setEdit(null)} />}
+          {edit && (
+            <Editor
+              d={edit}
+              restarts={!isNew && !edit.builtin && processKey(edit) !== processKey(JSON.parse(orig))}
+              onChange={setEdit}
+              onSave={save}
+              onCancel={() => setEdit(null)}
+            />
+          )}
         </DialogContent>
       </Dialog>
 
@@ -312,8 +327,22 @@ function Engines({ agents }: { agents: AgentInfo[] }) {
   );
 }
 
-function Editor({ d, onChange, onSave, onCancel }: { d: Draft; onChange: (d: Draft) => void; onSave: () => void; onCancel: () => void }) {
+function Editor({
+  d,
+  restarts,
+  onChange,
+  onSave,
+  onCancel,
+}: {
+  d: Draft;
+  restarts: boolean;
+  onChange: (d: Draft) => void;
+  onSave: () => void;
+  onCancel: () => void;
+}) {
   const set = (p: Partial<Draft>) => onChange({ ...d, ...p });
+  // Sessions on this agent with a turn in flight: saving a restarting change cuts them off
+  const busy = useStore((s) => Object.values(s.sessions).filter((x) => x.agent === d.id && (x.status === "running" || x.status === "waiting")).length);
   const providers = useStore((s) => s.config.llm?.providers) ?? NO_PROVIDERS;
   const dir = /^CLAUDE_CONFIG_DIR=(.+)$/m.exec(d.env)?.[1]?.trim();
   const codexHome = /^CODEX_HOME=(.+)$/m.exec(d.env)?.[1]?.trim();
@@ -482,7 +511,14 @@ function Editor({ d, onChange, onSave, onCancel }: { d: Draft; onChange: (d: Dra
         </div>
       )}
 
-      <div className="flex justify-end gap-2">
+      <div className="flex items-center justify-end gap-2">
+        {restarts && (
+          <div className={cn("mr-auto text-[12px]", busy ? "text-warn" : "text-muted-foreground")}>
+            {busy
+              ? `保存会立即终止这个 Agent 上正在跑的 ${busy} 个会话：手上这一轮会中断、不会自己继续，要你再发一条消息（对话记录不丢，按新配置接着聊）。改名字和新会话默认不会。`
+              : "保存会让这个 Agent 重启，那一刻在跑的会话会被立即终止（现在没有）。改名字和新会话默认不会。"}
+          </div>
+        )}
         <Button size="sm" variant="ghost" onClick={onCancel}>
           取消
         </Button>

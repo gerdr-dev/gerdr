@@ -43,6 +43,20 @@ func TestAgentVariants(t *testing.T) {
 	}
 }
 
+// A rename is display-only: it must not close the running host (that cuts off every turn on it).
+func TestSameProcessIgnoresName(t *testing.T) {
+	a := AgentDef{ID: "r", Name: "Old", Base: "native", Prompt: "p"}
+	b := a
+	b.Name = "New"
+	if !sameProcess(a, b) {
+		t.Fatal("rename should keep the host")
+	}
+	b.Prompt = "q"
+	if sameProcess(a, b) {
+		t.Fatal("a prompt change should restart the host")
+	}
+}
+
 func TestReadBranch(t *testing.T) {
 	d := t.TempDir()
 	_ = os.MkdirAll(filepath.Join(d, ".git"), 0o755)
