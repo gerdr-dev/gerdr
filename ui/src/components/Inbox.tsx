@@ -144,7 +144,14 @@ function Item({ it, close }: { it: InboxItem; close: () => void }) {
   // A single question shows itself in the inline answer; battery's level is its title
   const text = it.kind === "battery" ? it.title : inline && it.kind === "ask" ? undefined : it.body;
   return (
-    <div className="group px-3 py-2.5">
+    <div
+      className={cn("group px-3 py-2.5", go && "cursor-pointer hover:bg-accent/50")}
+      onClick={(e) => {
+        // Buttons and inline answer controls handle their own clicks without opening the session.
+        if ((e.target as HTMLElement).closest("button, input, textarea, select, a, [role='checkbox']")) return;
+        go?.();
+      }}
+    >
       <div className="-my-1 flex items-center gap-1.5 text-[12px]">
         <span className="shrink-0" title={LABEL[it.kind]}>
           {ICON[it.kind]}
