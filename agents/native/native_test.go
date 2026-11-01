@@ -654,6 +654,81 @@ func TestDetachForegroundBash(t *testing.T) {
 	waitFor(t, "notification", func() bool { return strings.Contains(lastUser(e.llm.request(-1)["messages"].([]any)), "late") })
 }
 
+// An urgent steer gets past a running command: it moves to the background after the grace, and the batch's next
+// call isn't started; the model reads the steer right away.
+func TestSteerNowMovesCommandAside(t *testing.T) {
+	old := urgentGrace
+	urgentGrace = 200 * time.Millisecond
+	t.Cleanup(func() { urgentGrace = old })
+	e := setup(t, func(n int, msgs []any) reply {
+		switch {
+		case n == 0:
+			return reply{calls: [][2]string{{"bash", `{"command":"sleep 1.5; echo late"}`}, {"bash", `{"command":"echo second"}`}}}
+		case strings.Contains(lastUser(msgs), "background-task-notification"):
+			return reply{text: "noted"}
+		}
+		return reply{text: "on it"}
+	})
+	sid := e.newSession(modeBypass)
+	done := make(chan struct{})
+	go func() { e.prompt(sid, uuid.NewString(), "go"); close(done) }()
+	time.Sleep(300 * time.Millisecond)
+	t0 := time.Now()
+	agenthost.Call[acpx.SteerResponse](context.Background(), e.c, acpx.MethodSteer, acpx.SteerRequest{SessionId: sid, MessageId: uuid.NewString(), Now: true, Prompt: []acp.ContentBlock{acp.TextBlock("wait, do Y")}})
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("urgent steer still waiting for the command")
+	}
+	if d := time.Since(t0); d < 150*time.Millisecond {
+		t.Fatalf("no grace before moving the command aside: %v", d)
+	}
+	msgs := e.llm.request(1)["messages"].([]any)
+	var tools []string
+	for _, m := range msgs {
+		if mm := m.(map[string]any); mm["role"] == "tool" {
+			tools = append(tools, fmt.Sprint(mm["content"]))
+		}
+	}
+	if len(tools) != 2 || !strings.Contains(tools[0], "Moved to the background") || !strings.Contains(tools[1], "Not run") {
+		t.Fatalf("tool results %q", tools)
+	}
+	if !strings.Contains(lastUser(msgs), "wait, do Y") {
+		t.Fatalf("steer not in the next request: %v", msgs)
+	}
+	waitFor(t, "notification", func() bool { return strings.Contains(lastUser(e.llm.request(-1)["messages"].([]any)), "late") })
+}
+
+// Withdrawing the urgent steer within the grace leaves the command running in the foreground.
+func TestSteerNowWithdrawnKeepsCommand(t *testing.T) {
+	old := urgentGrace
+	urgentGrace = 300 * time.Millisecond
+	t.Cleanup(func() { urgentGrace = old })
+	e := setup(t, func(n int, msgs []any) reply {
+		if n == 0 {
+			return reply{calls: [][2]string{{"bash", `{"command":"sleep 0.8; echo finished"}`}}}
+		}
+		return reply{text: "done"}
+	})
+	sid := e.newSession(modeBypass)
+	done := make(chan struct{})
+	go func() { e.prompt(sid, uuid.NewString(), "go"); close(done) }()
+	time.Sleep(200 * time.Millisecond)
+	id := uuid.NewString()
+	agenthost.Call[acpx.SteerResponse](context.Background(), e.c, acpx.MethodSteer, acpx.SteerRequest{SessionId: sid, MessageId: id, Now: true, Prompt: []acp.ContentBlock{acp.TextBlock("never mind")}})
+	w, err := agenthost.Call[acpx.WithdrawResponse](context.Background(), e.c, acpx.MethodWithdraw, acpx.WithdrawRequest{SessionId: sid, MessageIds: []string{id}})
+	if err != nil || len(w.Withdrawn) != 1 {
+		t.Fatalf("withdraw: %v %v", w, err)
+	}
+	<-done
+	msgs := e.llm.request(1)["messages"].([]any)
+	for _, m := range msgs {
+		if mm := m.(map[string]any); mm["role"] == "tool" && !strings.Contains(fmt.Sprint(mm["content"]), "finished") {
+			t.Fatalf("command didn't finish in place: %v", mm["content"])
+		}
+	}
+}
+
 func TestBackgroundSubagent(t *testing.T) {
 	e := setup(t, func(n int, msgs []any) reply {
 		sys, _ := msgs[0].(map[string]any)["content"].(string)

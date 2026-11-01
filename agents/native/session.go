@@ -35,6 +35,10 @@ type session struct {
 	turnDone     chan struct{}
 	queue        []queued
 	lastInput    int // 最近一次请求的输入 token，判断要不要压缩
+	// An urgent (Now) steer is waiting: urgent is closed when one comes in, so a foreground command can move itself
+	// to the background (runBash) and the rest of a tool batch is skipped (runTools). Reset once the queue is read.
+	urgent   chan struct{}
+	urgentOn bool
 
 	tok   acpx.TokenMeter
 	tasks map[string]*acpx.Task    // 任务栏：子 agent、后台命令
@@ -138,6 +142,7 @@ type queued struct {
 	id     string
 	blocks []acp.ContentBlock
 	note   string // 不是人说的话：后台任务的通知（bg.go）
+	now    bool   // sent to cut in right away (see session.urgent)
 }
 
 func (s *session) currentID() string {
@@ -259,9 +264,14 @@ func (s *session) enqueue(id string, blocks []acp.ContentBlock, now bool) bool {
 		s.mu.Unlock()
 		return false
 	}
-	s.queue = append(s.queue, queued{id: id, blocks: blocks})
-	if now && s.streamCancel != nil {
-		s.streamCancel()
+	s.queue = append(s.queue, queued{id: id, blocks: blocks, now: now})
+	if now {
+		// Cut in right away: stop the generation that is streaming, and tell a running command to step aside.
+		// Only stopping the stream made a Now steer wait out a minutes-long command, like a plain one (user report).
+		if s.streamCancel != nil {
+			s.streamCancel()
+		}
+		s.fireUrgentLocked()
 	}
 	s.mu.Unlock()
 	// Report it as queued: the hub logs the user message as soon as steering returns, while the model may still be
@@ -290,15 +300,54 @@ func (s *session) withdraw(ids []string) []string {
 	defer s.mu.Unlock()
 	var keep []queued
 	var out []string
+	urgent := false
 	for _, q := range s.queue {
 		if want[q.id] {
 			out = append(out, q.id)
 		} else {
 			keep = append(keep, q)
+			urgent = urgent || q.now
 		}
 	}
 	s.queue = keep
+	if !urgent {
+		// The urgent steer was taken back: a command still in its grace period keeps running in the foreground
+		s.clearUrgentLocked()
+	}
 	return out
+}
+
+// urgentWait is closed when an urgent steer comes in (see session.urgent).
+func (s *session) urgentWait() <-chan struct{} {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.urgent == nil {
+		s.urgent = make(chan struct{})
+	}
+	return s.urgent
+}
+
+func (s *session) isUrgent() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.urgentOn
+}
+
+func (s *session) fireUrgentLocked() {
+	if s.urgentOn {
+		return
+	}
+	s.urgentOn = true
+	if s.urgent == nil {
+		s.urgent = make(chan struct{})
+	}
+	close(s.urgent)
+}
+
+func (s *session) clearUrgentLocked() {
+	if s.urgentOn {
+		s.urgentOn, s.urgent = false, nil
+	}
 }
 
 func (s *session) hasQueued() bool {
@@ -312,6 +361,7 @@ func (s *session) drainQueue() {
 	s.mu.Lock()
 	q := s.queue
 	s.queue = nil
+	s.clearUrgentLocked()
 	s.mu.Unlock()
 	for _, x := range q {
 		if x.note != "" {
@@ -336,6 +386,7 @@ func (s *session) begin() (context.Context, func(), error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	s.busy, s.turnCancel, s.turnDone = true, cancel, done
+	s.clearUrgentLocked()
 	s.tok.Reset()
 	s.usage = acp.Usage{}
 	var once sync.Once

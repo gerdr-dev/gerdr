@@ -20,7 +20,9 @@ import (
 // 主循环：调模型 → 有工具调用就执行、把结果接上再调 → 没有了就结束。
 //
 // 插话（_session/steering）不打断正在跑的工具：排进 s.queue，下一次调模型之前接到历史末尾（Claude Code 输入框的
-// 默认行为）；Now=true 时连正在流的那次生成一起掐掉（已经出来的字留着）马上带着它重调。模型说完了、队里还有话，
+// 默认行为）；Now=true 时连正在流的那次生成一起掐掉（已经出来的字留着）马上带着它重调。A Now steer also gets past a
+// running tool: a foreground bash moves itself to the background after urgentGrace, and the batch's calls not yet
+// started are skipped (sub-agents and read-only parallel batches are still waited out). 模型说完了、队里还有话，
 // 接着调 —— 不会出现「插的那句话没人回」。The model sees it wrapped as a mid-turn message (steerPrefix in
 // store.go), so it answers it and goes back to the task instead of ending the turn there.
 //
@@ -301,6 +303,12 @@ func (r *run) runTools(ctx context.Context, calls []llm.ToolCall) error {
 		for _, p := range ps {
 			if ctx.Err() != nil {
 				break
+			}
+			// An urgent steer is waiting: don't start the rest of the batch, the model reads the message first
+			// (what it says may change the plan). Already-finished calls keep their results.
+			if r.sub == nil && !p.done && r.s.isUrgent() {
+				p.res, p.done = result{text: "Not run: the user sent a message mid-turn, read it first. Run this again if it still applies.", err: true}, true
+				continue
 			}
 			exec(p)
 		}

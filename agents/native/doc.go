@@ -35,7 +35,8 @@
 //
 //   - _session/steering (acpx.SteerRequest → acpx.SteerResponse): interject while a turn runs. The message is
 //     queued and joins the history before the next model call (a running tool isn't interrupted); Now: true
-//     also cuts the current generation short. Outcome "injected", or "promptRequired" when no turn is running
+//     also cuts the current generation short, moves a running bash to the background after a short grace and
+//     skips the tool calls of the batch not started yet. Outcome "injected", or "promptRequired" when no turn is running
 //     (send it as session/prompt instead).
 //   - _gerdr/withdraw (acpx.WithdrawRequest → acpx.WithdrawResponse): take back queued interjections by
 //     messageId; returns the ones that hadn't been picked up yet.

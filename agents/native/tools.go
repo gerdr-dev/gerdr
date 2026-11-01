@@ -427,6 +427,10 @@ func exitCode(err error) int {
 	return -1
 }
 
+// urgentGrace: how long a foreground command may still run after an urgent steer before it is moved to the
+// background. A var so tests can shorten it.
+var urgentGrace = 1500 * time.Millisecond
+
 func runBash(c *call, args map[string]any) result {
 	command := str(args, "command")
 	if strings.TrimSpace(command) == "" {
@@ -456,6 +460,13 @@ func runBash(c *call, args map[string]any) result {
 	defer cancel()
 	detach, undetach := s.detachable(c.id)
 	defer undetach()
+	// An urgent steer moves the command aside (the way Claude Code does) after a short grace, so quick commands
+	// still finish in place. Only the main session's own commands: a sub-agent's steer goes nowhere.
+	var urgent <-chan struct{}
+	var grace <-chan time.Time
+	if c.r.sub == nil {
+		urgent = s.urgentWait()
+	}
 	tick := time.NewTicker(400 * time.Millisecond)
 	defer tick.Stop()
 	var werr error
@@ -469,6 +480,19 @@ loop:
 			if out, changed := p.buf.snapshot(); changed {
 				c.progress(tailStr(out, 16<<10))
 			}
+		case <-urgent:
+			urgent, grace = nil, time.After(urgentGrace)
+		case <-grace:
+			grace = nil
+			if !s.isUrgent() { // the urgent steer was withdrawn
+				urgent = s.urgentWait()
+				continue
+			}
+			s.setBgOut(c.id, p.buf)
+			c.bgBash(p, desc)
+			out, _ := p.buf.snapshot()
+			return result{text: fmt.Sprintf("Moved to the background because the user sent a message mid-turn (task id %s); it is still running. You will be notified when it finishes. Output so far:\n%s", c.id, headTail(out, outMax/2)),
+				display: []acp.ToolCallContent{acp.ToolContent(acp.TextBlock(tailStr(out, 64<<10)))}}
 		case <-detach:
 			// 界面上点了「转到后台」：命令接着跑，这一轮往下走
 			s.setBgOut(c.id, p.buf)

@@ -263,7 +263,7 @@ export type RowEnv = {
   onRewind?: (m: GMessage) => void;
   /** Steers can be rewound on their own (claude: forks before the steer, like its own /rewind). Codex can't: a steer joins the running turn and revert cuts whole turns. */
   steerRewind?: boolean;
-  onWithdraw?: (messageId: string, now: boolean) => void;
+  onWithdraw?: (messageId: string, now: boolean) => Promise<void> | void;
   onQuickReply: (s: string) => void;
   onToggleGroup?: (key: string) => void;
 };

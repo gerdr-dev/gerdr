@@ -34,7 +34,7 @@ type Props = {
   running: boolean;
   onRewind?: (m: GMessage) => void;
   steerRewind?: boolean;
-  onWithdraw?: (messageId: string, now: boolean) => void;
+  onWithdraw?: (messageId: string, now: boolean) => Promise<void> | void;
   onQuickReply: (s: string) => void;
   stackPrev?: boolean; // 用户消息：上 / 下紧挨着也是用户消息（叠成一摞）
   stackNext?: boolean;
@@ -76,6 +76,56 @@ function LocalFileChip({ path, name }: { path: string; name: string }) {
         <div className="truncate text-[11px] opacity-70">{path.replace(/^\/Users\/[^/]+/, "~")}</div>
       </div>
     </div>
+  );
+}
+
+/** A queued interjection's status and its Withdraw / Send now buttons. */
+function QueuedSteer({ messageId, now, onWithdraw }: { messageId?: string; now: boolean; onWithdraw?: Props["onWithdraw"] }) {
+  // One request at a time: the round trip can take a moment on a long session, the buttons stayed live, and a second
+  // click found the message already taken back and reported "it has already read this" (user report).
+  const [busy, setBusy] = useState(false);
+  const act = async (sendNow: boolean) => {
+    if (busy || !messageId || !onWithdraw) return;
+    setBusy(true);
+    try {
+      await onWithdraw(messageId, sendNow);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <span className={cn("flex items-center gap-1", busy && "opacity-50")}>
+      <span className="mr-2 flex items-center gap-1" title={t(now ? "msg.cuttingInTitle" : "msg.queuedTitle")}>
+        <Loader2 className="size-3 shrink-0 animate-spin" />
+        {t(now ? "msg.cuttingIn" : "msg.queued")}
+      </span>
+      {messageId && onWithdraw && (
+        <>
+          <button
+            className="rounded-sm px-1.5 hover:bg-muted hover:text-foreground disabled:pointer-events-none"
+            disabled={busy}
+            title={t("msg.withdrawTitle")}
+            onClick={() => act(false)}
+          >
+            {t("msg.withdraw")}
+          </button>
+          {/* Already sent as urgent: no "Send now". Clicking it again withdrew the urgent steer and resent it,
+              and withdrawing a queued urgent steer trips a Claude Code bug — no urgent steer then gets in
+              before the running tool ends. Claude needs a couple of seconds into a command before it can move
+              it aside, which is when people clicked again. */}
+          {!now && (
+            <button
+              className="rounded-sm px-1.5 hover:bg-muted hover:text-foreground disabled:pointer-events-none"
+              disabled={busy}
+              title={t("msg.sendNowTitle")}
+              onClick={() => act(true)}
+            >
+              {t("msg.sendNow")}
+            </button>
+          )}
+        </>
+      )}
+    </span>
   );
 }
 
@@ -162,36 +212,7 @@ export const MessageView = memo(function MessageView({
             {meta?.steer &&
               (meta.queued ? (
                 // 排在 agent 的队列里、还没被读到（claude 要等手上这个工具调用结束）
-                <span className="flex items-center gap-1">
-                  <span className="mr-2 flex items-center gap-1" title={t(meta.now ? "msg.cuttingInTitle" : "msg.queuedTitle")}>
-                    <Loader2 className="size-3 shrink-0 animate-spin" />
-                    {t(meta.now ? "msg.cuttingIn" : "msg.queued")}
-                  </span>
-                  {meta.messageId && onWithdraw && (
-                    <>
-                      <button
-                        className="rounded-sm px-1.5 hover:bg-muted hover:text-foreground"
-                        title={t("msg.withdrawTitle")}
-                        onClick={() => onWithdraw(meta.messageId!, false)}
-                      >
-                        {t("msg.withdraw")}
-                      </button>
-                      {/* Already sent as urgent: no "Send now". Clicking it again withdrew the urgent steer and resent it,
-                          and withdrawing a queued urgent steer trips a Claude Code bug — no urgent steer then gets in
-                          before the running tool ends. Claude needs a couple of seconds into a command before it can move
-                          it aside, which is when people clicked again. */}
-                      {!meta.now && (
-                        <button
-                          className="rounded-sm px-1.5 hover:bg-muted hover:text-foreground"
-                          title={t("msg.sendNowTitle")}
-                          onClick={() => onWithdraw(meta.messageId!, true)}
-                        >
-                          {t("msg.sendNow")}
-                        </button>
-                      )}
-                    </>
-                  )}
-                </span>
+                <QueuedSteer messageId={meta.messageId} now={!!meta.now} onWithdraw={onWithdraw} />
               ) : (
                 <span className="flex items-center gap-1">
                   <CornerDownRight className="size-3 shrink-0" />

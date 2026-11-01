@@ -146,7 +146,10 @@ config.json (example in the README), read fresh every turn.
    from Text / Reasoning / ToolCalls: thinking blocks carry signatures, newer Claude models check that earlier turns
    weren't edited, and the split fields lose the block order. Anything that edits a message must clear `Blocks`
    (`keepPartial` does). Thinking needs `display:"summarized"`, or newer models stream empty thinking text.
-4. **插话不打断工具**：排队，下一次调模型前接到历史末尾；`Now` 只掐当前这次生成。「模型说完了 → 标成空闲」和插话入队在同一把锁里
+4. **插话不打断工具**：排队，下一次调模型前接到历史末尾。`Now` 掐当前这次生成；正在跑工具时，前台 bash 等 `urgentGrace`（1.5s）
+   还没完就自己转后台，同一批里还没开始的调用直接回「没跑：先读用户的话」。Only cutting the stream made an urgent steer wait out a
+   two-minute command like a plain one, and people kept withdrawing and resending it. Sub-agents and read-only parallel
+   batches are still waited out. 「模型说完了 → 标成空闲」和插话入队在同一把锁里
    （`endIfIdle`），不然中间进来的插话被回成 injected 却没人处理。
 5. 流断了（没有 finish_reason / response.completed）报 `stream disconnected`，hub 的 `retryable` 认它、发「继续」重来；
    拿到响应头之前的 429 / 5xx / 网络错误在 llm 层自己重试几次。
