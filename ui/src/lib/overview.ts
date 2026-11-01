@@ -10,7 +10,18 @@
 // Each project's current Work conversation counts as open too (overviewState.workChats): it has no pane, Work mode shows it.
 import { toast } from "sonner";
 import { allLeaves, type Layout } from "./layout";
-import { ACTIVE_HOURS, activeIds, MAX_TILES, OVERVIEW_KEY, overviewFocus, overviewIds, workChats, type Overview, type WorkConf } from "./overviewState";
+import {
+  ACTIVE_HOURS,
+  activeIds,
+  MAX_TILES,
+  OVERVIEW_KEY,
+  openSessionsWithProject,
+  overviewFocus,
+  overviewIds,
+  workChats,
+  type Overview,
+  type WorkConf,
+} from "./overviewState";
 import { sessionSince } from "./order";
 import { currentSpace } from "./layout";
 import { get, markRead, set, useStore } from "./store";
@@ -76,9 +87,32 @@ export function removeActive(id: string) {
   });
 }
 
-/** Take everything out of "active" (what needs you comes back: it always shows). */
+/** The finished ones (seen or not): what's still running, waiting on you or failed stays. */
+export function doneActiveIds(st = get()): string[] {
+  return activeIds(st).filter((id) => st.sessions[id] && !working(st.sessions[id]));
+}
+
+/** Take the finished agents out of "active". */
 export function clearActive() {
-  for (const id of activeIds(get())) removeActive(id);
+  for (const id of doneActiveIds()) removeActive(id);
+}
+
+const working = (s: SessionSummary) => s.status === "running" || s.status === "waiting" || s.status === "error";
+
+/** Agents still at work (running, waiting on you, failed) that were taken out of "active", in this list's scope. */
+export function workingOutIds(st = get()): string[] {
+  const all = activeAllProjects(st);
+  const space = currentSpace(st.layout);
+  const shown = new Set(activeIds(st));
+  return openSessionsWithProject(st.layout, st.sessions, st.config)
+    .filter((x) => (all || x.project === space) && working(x.s) && !shown.has(x.s.id))
+    .map((x) => x.s.id);
+}
+
+/** Put them back: forget the dismissal, so they follow the usual rules again (not pinned). */
+export function restoreWorking() {
+  const ids = workingOutIds();
+  setOverview((o) => ({ ...o, dismissed: Object.fromEntries(Object.entries(o.dismissed).filter(([k]) => !ids.includes(k))) }));
 }
 
 /** Whether this project's "active" lists every project's agents (each project has its own setting). */

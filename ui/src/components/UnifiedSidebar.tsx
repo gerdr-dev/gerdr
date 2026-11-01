@@ -4,6 +4,7 @@ import {
   Columns2,
   Ellipsis,
   Eraser,
+  ListPlus,
   FileText,
   LayoutGrid,
   MailCheck,
@@ -50,6 +51,9 @@ import {
   activeAllProjects,
   addActive,
   clearActive,
+  doneActiveIds,
+  restoreWorking,
+  workingOutIds,
   focusTile,
   MAX_TILES,
   removeActive,
@@ -162,7 +166,9 @@ export function UnifiedSidebar() {
   useStore((s) => s.addonVersion);
   const tiles = useOverviewIds().split(",").filter(Boolean);
   const activeIds = useActiveIds().split(",").filter(Boolean);
-  const addedSet = new Set(useStore((s) => s.overview.added));
+  // Counts for the ⋯ menu; recomputed on every render of the sidebar, which already follows sessions and the overview
+  const doneN = useStore((s) => doneActiveIds(s).length);
+  const outN = useStore((s) => workingOutIds(s).length);
   const allProjects = useStore((s) => activeAllProjects(s));
   const [folded, setFolded] = useFolded();
   const [activeFolded, setActiveFolded] = useLocal(ACTIVE_FOLD_KEY, false);
@@ -223,7 +229,6 @@ export function UnifiedSidebar() {
       s,
       inSplit,
       unread: !!(s && unread[s.id]),
-      added: !!(s && addedSet.has(s.id)),
       inActive: !!(s && activeIds.includes(s.id)),
       onActive: (on: boolean) => s && (on ? addActive([s.id]) : removeActive(s.id)),
       // In a split, the focused pane is the current one; its neighbours get a lighter tint (they're on screen too)
@@ -265,8 +270,11 @@ export function UnifiedSidebar() {
                     </DropdownMenuCheckboxItem>
                     <div className="px-2 pb-1 text-[11px] text-muted-foreground">只改这个项目，别的项目各自设</div>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem disabled={!activeIds.length} onClick={clearActive}>
-                      <Eraser /> 全部移出（等你的会留下）
+                    <DropdownMenuItem disabled={!outN} onClick={restoreWorking}>
+                      <ListPlus /> 移入所有在做的{outN ? `（${outN}）` : ""}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem disabled={!doneN} onClick={clearActive}>
+                      <Eraser /> 移出已完成的{doneN ? `（${doneN}）` : ""}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -284,7 +292,7 @@ export function UnifiedSidebar() {
                   x.item ? (
                     flatRow(x.item, true)
                   ) : (
-                    <WorkRow key={x.id} id={x.id} added={addedSet.has(x.id)} current={gridOn && x.id === gridFocusId} grid={gridOn && tiles.includes(x.id)} />
+                    <WorkRow key={x.id} id={x.id} current={gridOn && x.id === gridFocusId} grid={gridOn && tiles.includes(x.id)} />
                   ),
                 )}
             </div>
@@ -350,7 +358,7 @@ function FootButton({ onClick, title, children }: { onClick: () => void; title: 
 }
 
 /** A Work conversation in "active": no pane, so no group or tab; going to it opens Work mode (actions.focusSession). */
-function WorkRow({ id, added, current, grid }: { id: string; added: boolean; current: boolean; grid: boolean }) {
+function WorkRow({ id, current, grid }: { id: string; current: boolean; grid: boolean }) {
   const s = useStore((st) => st.sessions[id]);
   const unread = useStore((st) => !!st.unread[id]);
   const project = useStore((st) => {
@@ -375,7 +383,6 @@ function WorkRow({ id, added, current, grid }: { id: string; added: boolean; cur
         >
           <AgentIcon agent={s.agent} className="size-3.5 shrink-0" />
           <span className="min-w-0 flex-1 truncate">{s.title || basename(s.cwd)}</span>
-          {added && <Pin className="size-3 shrink-0 text-muted-foreground" />}
           <span className="max-w-[40%] shrink-0 truncate text-[11px] text-muted-foreground group-hover:hidden">Work{project ? ` · ${project}` : ""}</span>
           <button
             className="hidden size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground group-hover:flex hover:text-foreground"
@@ -510,7 +517,6 @@ function Row({
   s,
   inSplit,
   unread,
-  added,
   inActive,
   onActive,
   top,
@@ -525,8 +531,6 @@ function Row({
   s?: SessionSummary;
   inSplit: boolean;
   unread: boolean;
-  /** Added to "active" by hand (not only for what it's doing now). */
-  added: boolean;
   inActive: boolean;
   onActive: (on: boolean) => void;
   /** A row of the "active" section: its ✕ and middle click take it off the section instead of closing the tab. */
@@ -582,7 +586,6 @@ function Row({
               title
             )}
           </span>
-          {top && added && <Pin className="size-3 shrink-0 text-muted-foreground" />}
           <span className="flex max-w-[40%] shrink-0 items-center text-[11px] text-muted-foreground group-hover:hidden">
             {s?.status === "running" && s.turn ? <Elapsed since={s.turn.startedAt} /> : <span className="truncate">{where ?? sub}</span>}
           </span>
