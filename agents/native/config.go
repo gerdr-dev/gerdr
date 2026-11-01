@@ -61,7 +61,10 @@ type Model struct {
 	Efforts       []string `json:"efforts,omitempty"`
 	DefaultEffort string   `json:"defaultEffort,omitempty"`
 	Window        int      `json:"window,omitempty"` // 上下文窗口（token）
-	// CompactAt：上下文到多少 token 时自动压缩。空 = min(窗口的 80%, 200k) —— 窗口 1M 的模型真用满了一次请求很贵，也慢。
+	// CompactAt: compact automatically once the context reaches this many tokens. Empty = 90% of the window, as
+	// Claude Code does. It used to be capped at 200k to keep 1M-window requests cheap, but the composer shows
+	// usage against the whole window, so the percentage never got past 20% and compaction looked broken.
+	// Set it lower per model when long requests get too slow or expensive.
 	CompactAt int   `json:"compactAt,omitempty"`
 	Images    *bool `json:"images,omitempty"` // 能不能看图
 	// MaxOutput: max_tokens per request. 0 = don't send it (OpenAI protocols) / 32000 (Anthropic, where it is
@@ -123,7 +126,7 @@ func (r resolved) compactAt() int {
 	if r.CompactAt > 0 {
 		return r.CompactAt
 	}
-	return min(r.Window*8/10, 200_000)
+	return r.Window * 9 / 10
 }
 
 // models 列出所有模型（补好默认值），按配置里的顺序。
