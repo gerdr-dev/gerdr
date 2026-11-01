@@ -1043,6 +1043,8 @@ export const Composer = forwardRef<
                 )}
                 <button
                   className="absolute -right-1.5 -top-1.5 hidden rounded-full bg-foreground p-0.5 text-background group-hover/img:block [@media(hover:none)]:block"
+                  // Removing an attachment hands focus back to the text box, like the send button (not on touch screens).
+                  onMouseDown={keepFocus}
                   onClick={() => setImgs(imgs.filter((_, j) => j !== i))}
                 >
                   <X className="size-3" />
