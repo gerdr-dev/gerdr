@@ -1,5 +1,5 @@
 import { BatteryLow, Check, CircleAlert, HelpCircle, Inbox as InboxIcon, Settings, ShieldAlert, X } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -20,12 +20,13 @@ export function InboxButton({ phone }: { phone?: boolean }) {
   const fresh = useInbox((s) => s.fresh);
   const count = useInbox((s) => s.items.length);
   const [open, setOpen] = useState(false);
+  const close = useCallback(() => setOpen(false), []);
   const onOpen = (v: boolean) => {
     setOpen(v);
     if (v) markSeen();
   };
-  // The phone's top bar is short on room: an empty inbox's button only leads to an empty list. Kept while open, so
-  // clearing the last item doesn't pull the panel out from under the finger.
+  // The phone's top bar is short on room: an empty inbox's button only leads to an empty list. Kept while open, so the
+  // popover's anchor doesn't vanish under it (emptying the list closes the panel anyway).
   if (phone && !count && !open) return null;
   const trigger = (
     <Button
@@ -56,7 +57,7 @@ export function InboxButton({ phone }: { phone?: boolean }) {
         collisionPadding={8}
         className="flex max-h-[min(70vh,calc(var(--vvh,100vh)-80px))] w-[min(380px,calc(100vw-16px))] flex-col gap-0 overflow-hidden p-0"
       >
-        <InboxPanel close={() => setOpen(false)} />
+        <InboxPanel close={close} />
       </PopoverContent>
     </Popover>
   );
@@ -64,6 +65,13 @@ export function InboxButton({ phone }: { phone?: boolean }) {
 
 function InboxPanel({ close }: { close: () => void }) {
   const items = useInbox((s) => s.items);
+  // Emptied while open (cleared, the last × clicked, the last request handled): close rather than show an empty list.
+  // Opening an already-empty inbox still shows the empty note.
+  const had = useRef(items.length);
+  useEffect(() => {
+    if (had.current && !items.length) close();
+    had.current = items.length;
+  }, [items.length, close]);
   return (
     <>
       <div className="flex h-10 shrink-0 items-center gap-2 border-b px-3">

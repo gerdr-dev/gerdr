@@ -5,9 +5,9 @@ import { get as getApp, useStore, visibleSessions } from "./store";
 import type { SessionSummary } from "./types";
 
 /**
- * The inbox: things that need the user, kept until they dismiss them (asked for: items only go away with their ×).
- * Approvals / questions (from GET /api/pending), agents that ended in an error, and the gerdr machine's battery running
- * low. Per device (localStorage), like the unread dots: dismissing on the phone shouldn't clear the desktop's.
+ * The inbox: things that need the user. Approvals / questions (from GET /api/pending) leave by themselves once they're
+ * no longer pending; agents that ended in an error and the gerdr machine's battery running low stay until their × is
+ * clicked (they have no "done" state). Per device (localStorage), like the unread dots: dismissing on the phone shouldn't clear the desktop's.
  */
 export type InboxItem = {
   /** req:<reqId> | err:<session>:<at> | bat:<at> */
@@ -26,8 +26,8 @@ type InboxState = {
   items: InboxItem[];
   /** Something came in since the inbox was last opened: the red dot. */
   fresh: boolean;
-  /** reqIds still waiting (last /api/pending): the others are answered, their item shows that and drops its buttons.
-   *  null = not fetched yet (don't call everything answered meanwhile). */
+  /** reqIds still waiting (last /api/pending): the others are answered, their item shows that and drops its buttons
+   *  until it's removed. null = not fetched yet (don't call everything answered meanwhile). */
   live: Record<string, true> | null;
 };
 
@@ -102,6 +102,8 @@ const wanted = (kind: "permission" | "ask" | "error") => getApp().config.inbox?.
 
 // ---- approvals / questions ----
 
+const HANDLED_LINGER = 2000;
+
 let pendingTimer: ReturnType<typeof setTimeout> | undefined;
 function refreshPending() {
   clearTimeout(pendingTimer);
@@ -119,7 +121,21 @@ function refreshPending() {
     );
     const skip = new Set(gone());
     const fresh = reqs.filter((r) => !have.has(r.reqId) && !skip.has(r.reqId) && wanted(r.kind));
-    useInbox.setState({ live: Object.fromEntries(reqs.map((r) => [r.reqId, true as const])) });
+    const live: Record<string, true> = Object.fromEntries(reqs.map((r) => [r.reqId, true as const]));
+    useInbox.setState({ live });
+    // No longer pending (answered here or elsewhere, or the turn ended): nothing left to do with it, so it goes. After
+    // a moment showing "已处理", so an answer clicked in the panel visibly lands and the next item doesn't jump up under
+    // a second click (which could approve something unread).
+    const done = new Set(
+      get()
+        .items.filter((x) => x.reqId && !live[x.reqId])
+        .map((x) => x.id),
+    );
+    if (done.size)
+      setTimeout(() => {
+        useInbox.setState((s) => ({ items: s.items.filter((x) => !done.has(x.id)) }));
+        save();
+      }, HANDLED_LINGER);
     add(
       fresh.reverse().map((r) => ({
         id: `req:${r.reqId}`,
