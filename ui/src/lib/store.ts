@@ -534,6 +534,12 @@ export function replayLastTurn(id: string, opts: { chars?: number; every?: numbe
   return true;
 }
 
+// Checks the push connection (sync.ts registers it; it imports this file, so not the other way round).
+let probeConn: () => Promise<boolean> = async () => true;
+export function setConnProbe(f: () => Promise<boolean>) {
+  probeConn = f;
+}
+
 /**
  * 发一条消息，点下去就先在对话最底下画一条半透明的（见 Transcript.sending），日志里那条到了换掉。
  * 失败就拿掉、错误照旧抛给调用方（它负责把字放回输入框）。
@@ -546,13 +552,24 @@ export async function sendShown(id: string, content: ContentBlock[], onRetry?: (
   bump();
   try {
     const r = await api.send(id, content, onRetry, now, msgId);
-    // 服务端回成功之前已经记下这条、推出来了，正常早就换掉了；推送断了的话重连会整份重推，也会换掉。
-    // 万一两样都没赶上，别让一条半透明的永远挂着
-    setTimeout(() => {
-      if (!t.sending.some((m) => m.id === msgId)) return;
-      t.dropSending(msgId);
-      bump();
-    }, 10_000);
+    // The server logs and pushes the message before answering, so the logged copy normally replaced the bubble
+    // already. Still missing a moment later means the push connection is likely dead while looking open: check it
+    // (a dead one reconnects, and the full re-push replaces the bubble). Dropping the bubble on a timer instead made
+    // a delivered message look lost: seen on a phone over remote, the message and the reply reached the server, the
+    // phone showed neither, the bubble vanished after 10s and the user sent it again. Give the bubble up only when
+    // the connection answers and the copy still isn't there, so it doesn't hang half transparent for good.
+    const pending = () => t.sending.some((m) => m.id === msgId);
+    const check = async (tries: number) => {
+      if (!pending()) return;
+      if ((await probeConn()) || tries <= 0) {
+        if (!pending()) return;
+        t.dropSending(msgId);
+        bump();
+        return;
+      }
+      setTimeout(() => void check(tries - 1), 10_000);
+    };
+    setTimeout(() => void check(5), 2_000);
     return r;
   } catch (e) {
     t.dropSending(msgId);

@@ -15,6 +15,7 @@ import {
   onLayoutChange,
   removeSession,
   set,
+  setConnProbe,
   setLayout,
   transcripts,
   upsertSession,
@@ -230,21 +231,43 @@ function startHeartbeat() {
 function wake() {
   if (document.visibilityState === "hidden") return;
   if (!ws) return scheduleReconnect(true);
-  if (ws.readyState !== WebSocket.OPEN) return;
   // 刚醒来：问一下，8 秒没回音就重连。
   // 只收问的那一条：focus / visibilitychange / online 常常一起来，3 秒的版本在远程慢网上会把刚连上的新连接也当死的收掉，
   // 一直重连（服务端「正在连接」里一台手机列好几条）。8 秒是给远程留的：pong 会排在正在写的一大帧日志后面。
+  void probe();
+}
+
+/**
+ * Ping the push connection; resolves true once anything comes back, false (and the connection dropped for a
+ * reconnect) when nothing does within 8s. False too while there is no open connection: one is already on its way.
+ */
+function probe(): Promise<boolean> {
   const sock = ws;
+  if (!sock || sock.readyState !== WebSocket.OPEN) return Promise.resolve(false);
   const asked = Date.now();
   try {
     sock.send(JSON.stringify({ t: "ping" }));
   } catch {
-    return dropStale();
+    dropStale();
+    return Promise.resolve(false);
   }
-  setTimeout(() => {
-    if (ws === sock && lastHeard < asked) dropStale();
-  }, 8000);
+  return new Promise((resolve) => {
+    const poll = setInterval(() => {
+      if (ws !== sock) {
+        clearInterval(poll);
+        resolve(false);
+      } else if (lastHeard >= asked) {
+        clearInterval(poll);
+        resolve(true);
+      } else if (Date.now() - asked > 8000) {
+        clearInterval(poll);
+        dropStale();
+        resolve(false);
+      }
+    }, 200);
+  });
 }
+setConnProbe(probe);
 
 async function refreshHello() {
   try {
@@ -309,6 +332,9 @@ function handle(m: any) {
       break;
     case "stats":
       import("./addons").then((p) => p.emit("stats", {}));
+      break;
+    case "ext":
+      set((s) => ({ extVersion: s.extVersion + 1 }));
       break;
     case "addon_stores":
       set((s) => ({ addonStoresVersion: s.addonStoresVersion + 1 }));
