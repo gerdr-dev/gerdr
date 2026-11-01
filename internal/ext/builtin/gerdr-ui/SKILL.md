@@ -14,6 +14,11 @@ Gerdr（你正跑在里面的这个图形界面）的界面就是一个目录里
 test "${GERDR_ENV:-}" = 1
 ```
 
+## 0. Maybe an add-on already does it
+
+Quota meters, per-turn cache clocks, notifications, tab shortcuts and the like exist as add-ons. Run
+`gerdr addon store` first; if one fits, `gerdr addon install <id>` (the gerdr skill has the rest) instead of editing the UI.
+
 ## 1. 找到界面目录、读规矩
 
 ```bash

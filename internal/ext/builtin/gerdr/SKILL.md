@@ -1,6 +1,6 @@
 ---
 name: gerdr
-description: "Coordinate other coding-agent sessions inside Gerdr (Claude Code / Codex sessions in the Gerdr GUI): list sessions, start a new agent session next to you, hand it a task, wait for it, read its reply, or message an existing session. Use when the user asks you to delegate to / start / ask / check on another agent or session in Gerdr, or to run several agents in parallel. Also for arranging Gerdr's layout: sorting tabs into workspaces, splitting panes together, renaming or reordering workspaces / tabs. Also for changing Gerdr's own settings (theme, default agent / mode / model, shortcuts, model providers) with `gerdr config`, and for setting up agents (roles) with their own prompt, skills and MCP servers (`gerdr agent`, `gerdr skill`, `gerdr mcp`). Requires GERDR_ENV=1."
+description: "Coordinate other coding-agent sessions inside Gerdr (Claude Code / Codex sessions in the Gerdr GUI): list sessions, start a new agent session next to you, hand it a task, wait for it, read its reply, or message an existing session. Use when the user asks you to delegate to / start / ask / check on another agent or session in Gerdr, or to run several agents in parallel. Also for arranging Gerdr's layout: sorting tabs into workspaces, splitting panes together, renaming or reordering workspaces / tabs. Also for changing Gerdr's own settings (theme, default agent / mode / model, shortcuts, model providers) with `gerdr config`, and for setting up agents (roles) with their own prompt, skills and MCP servers (`gerdr agent`, `gerdr skill`, `gerdr mcp`). Also for add-ons (`gerdr addon`): browsing add-on stores, installing / updating / removing add-ons, switching them on or off, changing their settings. Requires GERDR_ENV=1."
 ---
 
 # Gerdr：和其他会话协作
@@ -187,6 +187,33 @@ used). An agent's `skills` / `mcp` list gets exactly those names whatever the gl
 
 MCP tokens (headers, env) are secrets like API keys: put in only what the user hands you; `list` / `show` print them as
 `<hidden>`, and `create` fills a `<hidden>` back from the pool entry of the same name.
+
+## Add-ons (Settings → Add-ons)
+
+Add-ons change Gerdr itself: a sidebar panel (quota meter, today's stats), a line under each turn (cache clock),
+commands and keys (duplicate tab), notifications. They come from stores (GitHub `owner/repo`, default
+`gerdr-dev/gerdr-addon`). When the user asks for something like that, check the store before writing UI code.
+Use `gerdr addon`, not file edits: it checks values, keeps install records, and open windows follow within a second.
+
+```bash
+gerdr addon store                       # what the stores offer, marked installed / update
+gerdr addon info cache-clock            # details, settings, README
+gerdr addon install cache-clock         # also updates an installed one
+gerdr addon list                        # installed: on / off, store, update, service status, errors
+gerdr addon update                      # refresh the stores, update everything with a newer copy
+gerdr addon config cache-clock          # settings with type / default / range / options
+gerdr addon config cache-clock warnMinutes=3   # --unset warnMinutes goes back to the default
+gerdr addon enable|disable cache-clock
+gerdr addon rm cache-clock              # deletes the folder; its data stays
+gerdr addon store add owner/repo        # or an absolute folder; store rm / store refresh [source]
+```
+
+- A `conflict` from install / update means the folder didn't come from a store or the user edited it. Ask before
+  `--force`: it throws their changes away.
+- Secret settings print as `<hidden>`; set one only with a value the user gives you.
+- Done when `gerdr addon list` shows it with the expected `enabled` and no `error`. A non-empty `error` is a broken
+  addon.json or code that doesn't build; a service add-on's stderr is in its `log`.
+- Writing a new add-on: read `~/.gerdr/addons/GUIDE.md` first.
 
 ## 并行
 

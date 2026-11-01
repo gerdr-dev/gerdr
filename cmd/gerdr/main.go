@@ -91,12 +91,12 @@ func main() {
 		Short: "打印版本",
 		Run:   func(cmd *cobra.Command, args []string) { fmt.Println(version.Version) },
 	})
-	root.AddCommand(addProjectFlag(sessionCmd()), uiCmd(), workCmd(), remoteCmd(), configCmd(), agentCmd(), mcpCmd(), skillCmd(), addProjectFlag(workspaceCmd()), addProjectFlag(tabCmd()), addProjectFlag(paneCmd()))
+	root.AddCommand(addProjectFlag(sessionCmd()), uiCmd(), workCmd(), remoteCmd(), configCmd(), agentCmd(), mcpCmd(), skillCmd(), addonCmd(), addProjectFlag(workspaceCmd()), addProjectFlag(tabCmd()), addProjectFlag(paneCmd()))
 	if err := root.Execute(); err != nil {
 		if errors.Is(err, errHandover) {
 			os.Exit(exitHandover)
 		}
-		if len(os.Args) > 1 && slices.Contains([]string{"session", "ui", "work", "workspace", "tab", "pane", "config", "agent", "mcp", "skill"}, os.Args[1]) {
+		if len(os.Args) > 1 && slices.Contains([]string{"session", "ui", "work", "workspace", "tab", "pane", "config", "agent", "mcp", "skill", "addon"}, os.Args[1]) {
 			fail(err) // for agents: errors are JSON too
 		}
 		fmt.Fprintln(os.Stderr, "gerdr:", err)

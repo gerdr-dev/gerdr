@@ -229,36 +229,59 @@ func (m *Manager) List() []*Addon {
 	return out
 }
 
+// Describe lists the add-ons without building them: what the CLI prints (gerdr addon list). Code, Hash and Mtime
+// stay empty; Error only says when addon.json is broken, not whether the code compiles.
+func (m *Manager) Describe() []*Addon {
+	st := m.readState()
+	out := []*Addon{}
+	for _, id := range m.ids() {
+		a := m.describe(id, st)
+		a.Path = entry(a.Dir, a.manifest)
+		out = append(out, a)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out
+}
+
+// describe: an add-on's manifest, switch and install record (no build).
+func (m *Manager) describe(id string, st *state) *Addon {
+	dir := filepath.Join(m.dir, id)
+	a := &Addon{ID: id, Dir: dir, Name: id, Disabled: st.disabled(id)}
+	if rec, ok := st.Installed[id]; ok {
+		r := rec
+		a.Source = &r
+		a.Modified = hashDir(dir) != rec.Hash
+	}
+	mf, err := readManifest(dir)
+	if err != nil {
+		a.Error = err.Error()
+	}
+	if mf != nil {
+		a.manifest = mf
+		if mf.Name != "" {
+			a.Name = mf.Name
+		}
+		a.Version, a.Description, a.Icon, a.HasService = mf.Version, mf.Description, mf.Icon, mf.Service != nil
+		a.Settings = mf.Settings
+		a.SettingValues = st.Settings[id]
+	}
+	return a
+}
+
 func (m *Manager) rebuild() {
 	st := m.readState()
 	m.cache = map[string]*Addon{}
 	for _, id := range m.ids() {
-		dir := filepath.Join(m.dir, id)
-		a := &Addon{ID: id, Dir: dir, Name: id, Disabled: st.disabled(id)}
-		if rec, ok := st.Installed[id]; ok {
-			r := rec
-			a.Source = &r
-			a.Modified = hashDir(dir) != rec.Hash
-		}
-		mf, err := readManifest(dir)
-		if mf != nil {
-			a.manifest = mf
-			if mf.Name != "" {
-				a.Name = mf.Name
-			}
-			a.Version, a.Description, a.Icon, a.HasService = mf.Version, mf.Description, mf.Icon, mf.Service != nil
-			a.Settings = mf.Settings
-			a.SettingValues = st.Settings[id]
-		}
-		a.Path = entry(dir, mf)
+		a := m.describe(id, st)
+		a.Path = entry(a.Dir, a.manifest)
 		if p := a.Path; p != "" {
 			if info, err := os.Stat(p); err == nil {
 				a.Mtime = info.ModTime().UnixMilli()
 			}
 		}
 		switch {
-		case err != nil:
-			a.Error = err.Error() // a broken addon.json: say so instead of loading half an add-on
+		case a.Error != "":
+			// a broken addon.json: say so instead of loading half an add-on
 		case a.Disabled || a.Path == "":
 			// off, or a service only: nothing to build
 		default:
