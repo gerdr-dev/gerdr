@@ -222,14 +222,8 @@ export function RemoteSettings({ open }: { open: boolean }) {
             </Button>
           </div>
           <div className="text-[12px] text-muted-foreground">
-            App 填 {st.url} 就能用；手机刷不了 passkey 时 App 会显示一个 8 位码，点上面的按钮输进去批准。
-            {st.lanErr ? (
-              <span className="text-bad"> {st.lanErr}</span>
-            ) : st.lanPort ? (
-              <> 在家时 App 直接连局域网口 {st.lanOrigins?.length ? st.lanOrigins.join("、") : `:${st.lanPort}（现在没有局域网地址）`}，不绕中继。</>
-            ) : (
-              <> 局域网直连没开（GERDR_LAN_PORT=0）。</>
-            )}
+            App 填 {st.url} 就能用。「批准 App 登录」只有当安卓 App 不支持 passkey 时才需要：这时 App 会显示一个 8 位码，点上面的按钮输进去批准。
+            {st.lanErr && <span className="text-bad"> {st.lanErr}</span>}
           </div>
         </div>
       )}
