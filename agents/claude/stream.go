@@ -303,11 +303,12 @@ func (s *session) onSystem(ctx context.Context, m map[string]json.RawMessage, ra
 	case "compact_boundary":
 		var b struct {
 			Meta struct {
+				PreTokens  int `json:"pre_tokens"`
 				PostTokens int `json:"post_tokens"`
 			} `json:"compact_metadata"`
 		}
 		_ = json.Unmarshal(raw, &b)
-		s.compactBoundary(ctx, b.Meta.PostTokens)
+		s.compactBoundary(ctx, b.Meta.PreTokens, b.Meta.PostTokens)
 	}
 }
 
@@ -343,22 +344,28 @@ func (s *session) compactStatus(ctx context.Context, compacting bool, result str
 
 // compactBoundary closes the card and reports the compacted context's size: without it the composer kept showing
 // the pre-compaction percentage after a /compact (no request follows one to report the new size), which read as
-// "compaction did nothing".
-func (s *session) compactBoundary(ctx context.Context, post int) {
+// "compaction did nothing". It also puts the sizes on the card (acpx.CompactKey), with an update even when the
+// card was ticked already.
+func (s *session) compactBoundary(ctx context.Context, pre, post int) {
 	s.mu.Lock()
 	id, open := s.compactID, s.compactOpen
 	s.compactID, s.compactOpen = "", false
+	if pre <= 0 {
+		pre = s.ctxTokens // the last request's input: close enough when the CLI leaves pre_tokens out
+	}
 	if post > 0 {
 		s.ctxTokens = post
 	}
 	w := s.ctxWindow
 	s.mu.Unlock()
-	switch {
-	case open:
-		s.update(ctx, acp.UpdateToolCall(acp.ToolCallId(id), acp.WithUpdateStatus(acp.ToolCallStatusCompleted)))
-	case id == "":
+	meta := acpx.CompactMeta(pre, post, w)
+	if id == "" {
 		// No status=compacting came first (older CLIs): show the finished card on its own.
-		s.update(ctx, compactedCard(acpx.CompactIDPrefix+uuid.NewString()))
+		s.update(ctx, compactedCard(acpx.CompactIDPrefix+uuid.NewString(), meta))
+	} else if open || meta != nil {
+		u := acp.UpdateToolCall(acp.ToolCallId(id), acp.WithUpdateStatus(acp.ToolCallStatusCompleted))
+		u.ToolCallUpdate.Meta = meta
+		s.update(ctx, u)
 	}
 	if post > 0 {
 		s.update(ctx, acp.SessionUpdate{SessionInfoUpdate: &acp.SessionSessionInfoUpdate{Meta: acpx.ContextProgress(post, w)}})
@@ -368,8 +375,10 @@ func (s *session) compactBoundary(ctx context.Context, post int) {
 const compactTitle = "Compacting context"
 
 // compactedCard is a finished compaction, live and on replay (transcript.go).
-func compactedCard(id string) acp.SessionUpdate {
-	return acp.StartToolCall(acp.ToolCallId(id), compactTitle, acp.WithStartKind(acp.ToolKindThink), acp.WithStartStatus(acp.ToolCallStatusCompleted))
+func compactedCard(id string, meta map[string]any) acp.SessionUpdate {
+	u := acp.StartToolCall(acp.ToolCallId(id), compactTitle, acp.WithStartKind(acp.ToolKindThink), acp.WithStartStatus(acp.ToolCallStatusCompleted))
+	u.ToolCall.Meta = meta
+	return u
 }
 
 func (s *session) onStreamEvent(ctx context.Context, raw json.RawMessage, apiID string) {

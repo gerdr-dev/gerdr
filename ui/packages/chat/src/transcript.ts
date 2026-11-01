@@ -62,6 +62,8 @@ export type ToolMeta = {
   endedAt?: number;
   /** 被 auto 模式的分类器拦了：加上这些权限规则就能放行（claude 适配器给的，界面画「允许并重试」） */
   autoDenied?: string[];
+  /** A context compaction's sizes (acpx.CompactKey): how full the context was before it, what it shrank to. */
+  compact?: { preTokens?: number; postTokens?: number; contextWindow?: number };
 };
 
 export type ToolPart = DynamicToolUIPart & { toolMetadata?: ToolMeta & Record<string, any> };
@@ -666,6 +668,7 @@ export class Transcript {
       parent: u._meta?.gerdr?.parentToolCallId,
       rawOutput: u.rawOutput,
       startedAt: ts,
+      compact: u._meta?.gerdr?.compact,
     };
     if (meta.status === "completed" || meta.status === "failed") meta.endedAt = ts;
     const part: ToolPart = {
@@ -693,6 +696,7 @@ export class Transcript {
     if ((meta.status === "completed" || meta.status === "failed") && !meta.endedAt) meta.endedAt = ts;
     if (u.rawOutput !== undefined) meta.rawOutput = u.rawOutput;
     if (u._meta?.gerdr?.autoDenied) meta.autoDenied = u._meta.gerdr.autoDenied;
+    if (u._meta?.gerdr?.compact) meta.compact = u._meta.gerdr.compact;
     const next: any = {
       ...p,
       title: u.title ?? p.title,

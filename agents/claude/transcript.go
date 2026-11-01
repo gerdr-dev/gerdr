@@ -72,6 +72,12 @@ type entry struct {
 	// ("This session is being continued from a previous conversation…"). Not something the person said.
 	IsCompactSummary bool   `json:"isCompactSummary"`
 	Subtype          string `json:"subtype"` // type=system: compact_boundary marks where a compaction happened
+	// The boundary's sizes (camelCase here; the live stream's compact_metadata is snake_case). No window: the
+	// transcript doesn't record the model's context size, so the notice falls back to a token count.
+	CompactMetadata struct {
+		PreTokens  int `json:"preTokens"`
+		PostTokens int `json:"postTokens"`
+	} `json:"compactMetadata"`
 }
 
 func scan(path string, fn func(e *entry, raw []byte) bool) error {
@@ -294,7 +300,7 @@ func replayTranscriptUntil(path, last string, emit func(acp.SessionUpdate)) erro
 		case "system":
 			// Same marker the live stream shows for it (stream.go); the summary message itself is skipped by userText.
 			if e.Subtype == "compact_boundary" {
-				emit(compactedCard(acpx.CompactIDPrefix + e.UUID))
+				emit(compactedCard(acpx.CompactIDPrefix+e.UUID, acpx.CompactMeta(e.CompactMetadata.PreTokens, e.CompactMetadata.PostTokens, 0)))
 			}
 		case "assistant":
 			var m struct {

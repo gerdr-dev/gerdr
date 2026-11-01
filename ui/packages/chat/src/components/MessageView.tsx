@@ -353,12 +353,19 @@ function CompactNotice({ part, running, keep }: { part: ToolPart; running: boole
   const took = m?.startedAt && m.endedAt && m.endedAt - m.startedAt >= 1000 ? fmtElapsed(m.endedAt - m.startedAt) : "";
   const stopped = failed && (part as any).errorText === t("tool.interrupted");
   const label = busy ? t("compact.running") : stopped ? t("compact.interrupted") : failed ? t("compact.failed") : t("compact.done");
+  // How full the context was before it: a share of the window when the agent knew it, else the token count (Claude's
+  // own transcript doesn't record the window). Exact figures on hover.
+  const c = m?.compact;
+  const pre = c?.preTokens;
+  const before = pre ? t("compact.before", { size: c?.contextWindow ? `${Math.min(100, Math.round((pre / c.contextWindow) * 100))}%` : fmtTokens(pre) }) : "";
+  const sizes = pre ? t("compact.sizes", { pre: pre.toLocaleString(), post: c?.postTokens ? c.postTokens.toLocaleString() : "?" }) : undefined;
   const Icon = busy ? Loader2 : failed ? CircleAlert : FoldVertical;
   const line = (
     <>
       <Icon className={cn("mt-0.5 size-3.5 shrink-0", busy && "animate-spin")} />
       <span className="min-w-0">
         {label}
+        {before && !busy ? ` · ${before}` : ""}
         {took && !busy ? ` · ${took}` : ""}
       </span>
       {summary && <ChevronDown className={cn("mt-0.5 size-3.5 shrink-0 opacity-60 transition-transform", open && "rotate-180")} />}
@@ -370,13 +377,15 @@ function CompactNotice({ part, running, keep }: { part: ToolPart; running: boole
         <button
           type="button"
           onClick={() => setOpen(!open)}
-          title={t("compact.showSummary")}
+          title={sizes ? `${t("compact.showSummary")}\n${sizes}` : t("compact.showSummary")}
           className="flex items-start gap-1.5 rounded-md px-2 py-0.5 text-[12px] text-muted-foreground hover:bg-muted/60"
         >
           {line}
         </button>
       ) : (
-        <div className={cn("flex items-start gap-1.5 px-2 py-0.5 text-[12px]", failed && !stopped ? "text-bad" : "text-muted-foreground")}>{line}</div>
+        <div title={sizes} className={cn("flex items-start gap-1.5 px-2 py-0.5 text-[12px]", failed && !stopped ? "text-bad" : "text-muted-foreground")}>
+          {line}
+        </div>
       )}
       {summary && open && (
         <div className="gerdr-md mt-1 w-full rounded-md border bg-muted/30 px-4 py-2 text-[0.92em] text-muted-foreground">

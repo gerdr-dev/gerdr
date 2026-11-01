@@ -328,6 +328,26 @@ type AskResponse struct {
 // a _meta flag because every compaction ever logged already carries it, so old transcripts render the same way.
 const CompactIDPrefix = "compact-"
 
+// CompactKey: a finished compaction card's _meta.gerdr.compact = {preTokens, postTokens, contextWindow}, any of them
+// left out when unknown. The notice shows how full the context was before it ("压缩前 92%"): the composer's meter
+// only ever shows the shrunk size afterwards, so how close it came to the limit was lost.
+const CompactKey = "compact"
+
+// CompactMeta is the _meta for a compaction card; nil when the size before it is unknown.
+func CompactMeta(pre, post, window int) map[string]any {
+	if pre <= 0 {
+		return nil
+	}
+	m := map[string]any{"preTokens": pre}
+	if post > 0 {
+		m["postTokens"] = post
+	}
+	if window > 0 {
+		m["contextWindow"] = window
+	}
+	return Meta(map[string]any{CompactKey: m})
+}
+
 // MetaKey 是 gerdr 往 ACP `_meta` 里塞东西时用的命名空间。
 const MetaKey = "gerdr"
 

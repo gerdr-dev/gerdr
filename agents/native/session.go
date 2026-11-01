@@ -528,12 +528,15 @@ func (r *run) compact(ctx context.Context, extra string) error {
 	e := entry{T: "compact", At: time.Now().UnixMilli(), Summary: res.Message.Text}
 	r.s.mu.Lock()
 	r.s.entries = append(r.s.entries, e)
+	pre := r.s.lastInput // the last request's input: how full the context was before this
 	r.s.lastInput = 0
 	sid := r.s.id
 	r.s.mu.Unlock()
 	_ = r.s.a.st.append(sid, e)
-	r.out(acp.UpdateToolCall(acp.ToolCallId(id), acp.WithUpdateStatus(acp.ToolCallStatusCompleted),
-		acp.WithUpdateContent([]acp.ToolCallContent{acp.ToolContent(acp.TextBlock(res.Message.Text))})))
+	u := acp.UpdateToolCall(acp.ToolCallId(id), acp.WithUpdateStatus(acp.ToolCallStatusCompleted),
+		acp.WithUpdateContent([]acp.ToolCallContent{acp.ToolContent(acp.TextBlock(res.Message.Text))}))
+	u.ToolCallUpdate.Meta = acpx.CompactMeta(pre, res.Usage.Output, r.model.Window)
+	r.out(u)
 	// Tell the composer the context shrank: after a /compact no request follows to report it, and the old
 	// percentage stayed up as if nothing happened. The summary's size is a lower bound (the system prompt and
 	// tools come on top); the next request reports the exact figure.

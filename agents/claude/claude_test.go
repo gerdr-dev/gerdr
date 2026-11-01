@@ -339,7 +339,7 @@ func TestTurnEndsWhenQueuedIntoAutoRun(t *testing.T) {
 }
 
 // The live sequence a /compact sends (claude 2.1.314, measured): repeated status=compacting, status=null with
-// compact_result, then compact_boundary with post_tokens. One card, closed once, and the context size reported.
+// compact_result, then compact_boundary with pre/post_tokens. One card, its sizes, and the context size reported.
 func TestLiveCompaction(t *testing.T) {
 	a := &Agent{opts: Options{Env: []string{"CLAUDE_CONFIG_DIR=" + t.TempDir()}}, sessions: map[string]*session{}, log: slog.New(slog.DiscardHandler)}
 	s := a.newSession("11111111-2222-4333-8444-555555555555", "/p", nil)
@@ -357,7 +357,7 @@ func TestLiveCompaction(t *testing.T) {
 	line(`{"type":"system","subtype":"status","status":null,"compact_result":"success"}`)
 	line(`{"type":"system","subtype":"compact_boundary","compact_metadata":{"trigger":"manual","pre_tokens":32880,"post_tokens":10795}}`)
 	var starts, ends int
-	var ctxTokens any
+	var ctxTokens, preTokens any
 	for _, u := range got {
 		switch {
 		case u.ToolCall != nil:
@@ -366,6 +366,9 @@ func TestLiveCompaction(t *testing.T) {
 			ends++
 			if u.ToolCallUpdate.Status == nil || *u.ToolCallUpdate.Status != acp.ToolCallStatusCompleted {
 				t.Fatalf("card not completed: %+v", u.ToolCallUpdate)
+			}
+			if c, ok := u.ToolCallUpdate.Meta[acpx.MetaKey].(map[string]any)[acpx.CompactKey].(map[string]any); ok {
+				preTokens = c["preTokens"]
 			}
 		case u.SessionInfoUpdate != nil:
 			if p, ok := u.SessionInfoUpdate.Meta[acpx.MetaKey].(map[string]any)[acpx.ProgressKey].(map[string]any); ok {
@@ -377,6 +380,9 @@ func TestLiveCompaction(t *testing.T) {
 	}
 	if starts != 1 || ends != 1 {
 		t.Fatalf("want one card closed once, got %d starts %d updates", starts, ends)
+	}
+	if preTokens != 32880 {
+		t.Fatalf("size before compaction on the card = %v", preTokens)
 	}
 	if ctxTokens != 10795 {
 		t.Fatalf("context size after compaction = %v", ctxTokens)
