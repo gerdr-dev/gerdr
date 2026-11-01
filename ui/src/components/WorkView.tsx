@@ -1,10 +1,9 @@
-import { Briefcase, Check, ChevronDown, Code2, History, ClipboardCheck, MessageSquarePlus, Settings } from "lucide-react";
+import { Briefcase, Check, ChevronDown, Code2, History, MessageSquarePlus, Settings } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { AgentIcon, StatusDot } from "@/components/AgentIcon";
 import { COL_EDGE, SidebarBottom, SidebarEdge, SidebarHeader, startColResize } from "@/components/Chrome";
 import { focusSession } from "@/lib/actions";
-import { formatCombo } from "@/lib/keys";
 import { toggleOverview } from "@/lib/overview";
 import { ChatView } from "@/components/chat/ChatView";
 import { PixelLoader } from "@/components/chat/PixelLoader";
@@ -18,7 +17,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { PHONE_MAX, usePhone } from "@/lib/phone";
-import { get, keyFor, set, setMode, useStore } from "@/lib/store";
+import { get, set, setMode, useStore } from "@/lib/store";
 import { syncWatch } from "@/lib/sync";
 import { cn } from "@/lib/utils";
 import { askWorkAgent, ensureWorkSession, newWorkChat, openWorkChat, useWorkChats, useWorkProject, useWorkSession, workAgent } from "@/lib/work";
@@ -73,18 +72,15 @@ function ChatEdge({ width, onWidth }: { width: number; onWidth: (w: number) => v
 }
 
 /**
- * Code / overview / Work: gerdr's own switch, at the right of the left column's top row in all three (Chrome.tsx
- * SidebarHeader). The overview isn't a `mode` (it lays over Code: lib/overview.ts), but to the user it's a third view.
+ * Code / Work: gerdr's own switch, at the right of the left column's top row in both (Chrome.tsx SidebarHeader). The
+ * active grid (the overview) isn't a view of its own here: the sidebar's 进行中 section opens it.
  */
 export function ModeSwitch() {
   const mode = useStore((s) => s.mode);
-  const overview = useStore((s) => s.overview.on);
-  const phone = usePhone();
-  const unified = !phone;
-  const cur = mode === "work" ? "work" : overview && !unified ? "overview" : "agents";
+  const cur = mode === "work" ? "work" : "agents";
   const go = (m: typeof cur) => {
-    setMode(m === "work" ? "work" : "agents");
-    if (m !== "work") toggleOverview(m === "overview");
+    setMode(m);
+    if (m !== "work") toggleOverview(false);
   };
   // Icons, not words: the project name next to it needs the room (the sidebar is 224px by default)
   const item = (m: typeof cur, label: string, Icon: typeof Code2) => (
@@ -103,8 +99,6 @@ export function ModeSwitch() {
   return (
     <div className="flex shrink-0 gap-0.5 rounded-lg bg-muted p-0.5" style={{ WebkitAppRegion: "no-drag" } as any}>
       {item("agents", "Code", Code2)}
-      {/* The desktop sidebar opens the pin grid from its own list: no third view to switch to */}
-      {!unified && item("overview", `进行中（${formatCombo(keyFor(get().config, "overview")[0] ?? "")}）`, ClipboardCheck)}
       {item("work", "Work", Briefcase)}
     </div>
   );

@@ -92,9 +92,6 @@ export type ActiveSrc = {
   unread: Record<string, true>;
 };
 
-/** An idle, seen session stays in "active" this long after its last activity. */
-export const ACTIVE_HOURS = 6;
-
 /** Open agents (some pane shows them, or a project's Work conversation) with their project, panes first, each once. */
 export function openSessionsWithProject(l: Layout, sessions: Record<string, SessionSummary>, c: WorkConf): { s: SessionSummary; project: string }[] {
   const seen = new Set<string>();
@@ -112,11 +109,12 @@ export function openSessionsWithProject(l: Layout, sessions: Record<string, Sess
  * "Active" (in progress): the agents worth keeping in view, in the agents list's order (lib/order.ts). Who's in:
  * - put in by hand (stays until taken out);
  * - needs you: waiting, errored, finished unseen (always: taking one out marks it read);
- * - running, or touched in the last ACTIVE_HOURS, unless taken out since its current turn started / its last activity.
+ * - running, unless taken out since its current turn started.
+ * Nothing joins for being recent (asked for: status and your own picks only); a finished one you've seen leaves.
  * Both the desktop sidebar and the overview grid show this list: the current project's agents, or every
  * project's when that project is in overview.allIn (each project chooses on its own).
  */
-export function activeIds(st: ActiveSrc, now = Date.now()): string[] {
+export function activeIds(st: ActiveSrc): string[] {
   const o = st.overview;
   const space = currentSpace(st.layout);
   const all = o.allIn.includes(space);
@@ -126,8 +124,7 @@ export function activeIds(st: ActiveSrc, now = Date.now()): string[] {
     const rank = sessionRank(s, st.unread);
     if (rank < 3) return true;
     const d = o.dismissed[s.id];
-    if (d !== undefined && sessionSince(s) <= d) return false;
-    return rank === 3 || now - s.updatedAt < ACTIVE_HOURS * 36e5;
+    return rank === 3 && !(d !== undefined && sessionSince(s) <= d);
   };
   return openSessionsWithProject(st.layout, st.sessions, st.config)
     .filter((x) => (all || x.project === space) && isActive(x.s))

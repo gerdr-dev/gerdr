@@ -41,7 +41,7 @@ import {
   type Workspace,
 } from "./layout";
 import { get, markRead, overviewShown, set, setLayout, setMode, toggleSidebar, useStore } from "./store";
-import { focusTile, MAX_TILES, overviewFocus, overviewIds, overviewKey, setOverview, toggleOverview } from "./overview";
+import { addActive, focusTile, MAX_TILES, overviewFocus, overviewIds, overviewKey, setOverview, toggleOverview } from "./overview";
 import { openWorkChat, workProjectOf } from "./work";
 import type { ContentBlock } from "./types";
 
@@ -141,6 +141,8 @@ export function newAgentInOverview(): boolean {
         tabs.splice(at, 0, t);
         return updateWs(l, ws.id, (w) => ({ ...w, tabs }));
       });
+      // Started from the grid: it's in "active" by hand (a blank conversation wouldn't join on its own)
+      addActive([n.id]);
       setOverview((x) => {
         const ids = x.ids.filter((id) => id !== n.id);
         ids.splice(ids.indexOf(s.id) + 1, 0, n.id);

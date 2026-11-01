@@ -2,7 +2,7 @@ import { KeyRound } from "lucide-react";
 import { useEffect, useLayoutEffect, useState } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { PhoneBar, PhoneConnToast, Sidebar, TabBar } from "./components/Chrome";
+import { PhoneBar, PhoneConnToast, TabBar } from "./components/Chrome";
 import { Dialogs } from "./components/Dialogs";
 import { GerdrChatProvider } from "./lib/chatHost";
 import { AppContextMenu } from "./components/AppContextMenu";
@@ -177,8 +177,8 @@ export default function App() {
   // The overview covers sidebar and tabs (on a phone too, one tile at a time). Once opened it stays mounted, hidden, so reopening keeps each
   // chat's scroll position, like the kept tabs below.
   const overview = useStore((s) => s.overview.on) && mode !== "work";
-  // Desktop: one sidebar list (UnifiedSidebar) replaces the workspace list, tab bar and agents list; the active grid
-  // (the overview) opens over the main area beside it. The phone keeps the drawer sidebar and the full-window overview.
+  // Desktop: the active grid (the overview) opens over the main area, beside the sidebar. The phone has its own
+  // full-window overview (PhoneOverview); its sidebar is the same UnifiedSidebar, as a drawer.
   const unified = !phone;
   const [overviewMounted, setOverviewMounted] = useState(overview);
   if (overview && !overviewMounted) setOverviewMounted(true);
@@ -223,11 +223,11 @@ export default function App() {
             </div>
           )}
           {/* Work mode has its own top bar with the Code / Work switch, and the Work project draws its own menu */}
-          {sidebar && !phone && mode !== "work" && (unified ? <UnifiedSidebar /> : <Sidebar />)}
+          {sidebar && !phone && mode !== "work" && <UnifiedSidebar />}
           {/* 手机上侧栏是盖在上面的抽屉（并排放的话对话只剩一百多 px 宽） */}
           {phone && drawer && (
             <div role="dialog" aria-modal="true" className="fixed inset-0 z-40 flex">
-              <Sidebar className="w-[min(18rem,85vw)] shadow-xl" />
+              <UnifiedSidebar className="w-[min(18rem,85vw)] shadow-xl" />
               <div className="flex-1 bg-background/50" onClick={() => set({ drawer: false })} />
             </div>
           )}
@@ -243,7 +243,7 @@ export default function App() {
             <div className="relative min-h-0 flex-1">
               {overviewMounted && unified && (
                 <div className={cn("absolute inset-0 z-30", !overview && "pointer-events-none invisible")} aria-hidden={!overview}>
-                  <OverviewView shown={overview} bare={sidebar} />
+                  <OverviewView shown={overview} />
                 </div>
               )}
               {/* 按 id 排个固定顺序再画，不能直接用 kept（最近用的排最前）：那样每切一次 tab 顺序就变，React 会在 DOM 里

@@ -11,7 +11,6 @@
 import { toast } from "sonner";
 import { allLeaves, type Layout } from "./layout";
 import {
-  ACTIVE_HOURS,
   activeIds,
   MAX_TILES,
   OVERVIEW_KEY,
@@ -29,7 +28,7 @@ import { syncWatch } from "./sync";
 import type { KeyAction } from "./keys";
 import type { SessionSummary } from "./types";
 
-export { ACTIVE_HOURS, activeIds, MAX_TILES, overviewFocus, overviewIds, workChats, type Overview };
+export { activeIds, MAX_TILES, overviewFocus, overviewIds, workChats, type Overview };
 
 export function setOverview(fn: (o: Overview) => Overview) {
   const next = fn(get().overview);

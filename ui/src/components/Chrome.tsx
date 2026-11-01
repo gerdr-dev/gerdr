@@ -1,36 +1,21 @@
 import {
   Check,
   ChevronsUpDown,
-  Copy,
   Command,
   Keyboard,
   ClipboardCheck,
-  ListPlus,
-  ListX,
   Loader2,
   LayoutList,
-  MailCheck,
   Menu,
   PanelLeft,
-  Pencil,
   Plus,
   Settings,
   SquareTerminal,
-  CircleX,
   X,
 } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuSeparator,
-  ContextMenuSub,
-  ContextMenuSubContent,
-  ContextMenuSubTrigger,
-  ContextMenuTrigger,
-} from "@/components/ui/context-menu";
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -40,22 +25,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import {
-  addTab,
-  basename,
-  closeSpace,
-  closeTab,
-  closeWorkspace,
-  closeSession,
-  duplicateTab,
-  focusSession,
-  moveWorkspaceToSpace,
-  focusedSessionId,
-  selectWorkspace,
-  switchSpace,
-  tabName,
-} from "@/lib/actions";
-import { formatCombo, IS_MAC, type KeyAction } from "@/lib/keys";
+import { addTab, closeSpace, closeTab, duplicateTab, focusedSessionId, switchSpace, tabName } from "@/lib/actions";
+import { formatCombo, IS_MAC } from "@/lib/keys";
 import {
   activeWs,
   allLeaves,
@@ -71,16 +42,14 @@ import {
 } from "@/lib/layout";
 import { applyTabLabel, applyWorkspaceLabel } from "@/lib/addons";
 import { ModeSwitch } from "@/components/WorkView";
-import { focusedSession, get, keyFor, markRead, set, setLayout, setSidebarW, SIDEBAR_W, toggleSidebar, useStore } from "@/lib/store";
+import { get, keyFor, set, setLayout, setSidebarW, SIDEBAR_W, toggleSidebar, useStore } from "@/lib/store";
 import type { SessionSummary } from "@/lib/types";
-import { compareSessions } from "@/lib/order";
-import { activeIds, addToActive, MAX_TILES, removeActive, showInOverview, toggleOverview } from "@/lib/overview";
+import { MAX_TILES, showInOverview, toggleOverview } from "@/lib/overview";
 import { cn } from "@/lib/utils";
 import { FadeText } from "./FadeText";
 import { AgentIcon, StatusDot, dotStatus, dotRank } from "./AgentIcon";
 import { fmtElapsed } from "./chat/StatusLine";
 import { TabDragLayer, useTabDrag } from "./TabDrag";
-import { WorkspaceDragLayer, useWorkspaceDrag } from "./WorkspaceDrag";
 import { AddonSlot } from "./AddonSlot";
 import { isAndroid } from "@/lib/android";
 import { reconnectNow } from "@/lib/sync";
@@ -519,59 +488,6 @@ function RouteLabel() {
   );
 }
 
-export function Sidebar({ className }: { className?: string }) {
-  const layout = useStore((s) => s.layout);
-  const sessions = useStore((s) => s.sessions);
-  const unread = useStore((s) => s.unread);
-  useStore((s) => s.addonVersion);
-  const sidebarW = useStore((s) => s.sidebarW);
-  const list = spaceWorkspaces(layout); // only the session being shown (herdr-style; switch with SpaceSwitcher)
-  const listRef = useRef<HTMLDivElement>(null);
-  const { drag, onPointerDown } = useWorkspaceDrag(listRef, list.map((w) => w.id).join(","));
-  const wsRef = useRef<HTMLDivElement>(null);
-  // The phone drawer (className set) gets the edge too (asked for), with its own saved height: a desktop height is
-  // meaningless on a phone screen and the other way round.
-  const [wsH, setWsH] = useWorkspacesH(className ? WS_H_KEY + ".phone" : WS_H_KEY);
-  const fixed = wsH !== undefined;
-  return (
-    // className = the phone drawer, which sets its own width; on the desktop the width is the user's (SidebarEdge)
-    <div className={cn("relative flex h-full shrink-0 flex-col border-r bg-sidebar", className)} style={className ? undefined : { width: sidebarW }}>
-      {!className && <SidebarEdge />}
-      <SidebarHeader />
-      <div
-        ref={wsRef}
-        className={cn("shrink-0 overflow-y-auto px-1.5 pt-1.5 pb-2", !fixed && "max-h-[45%]")}
-        style={fixed ? { height: wsH, maxHeight: "calc(100% - 220px)" } : undefined}
-      >
-        <div ref={listRef}>
-          {list.map((w, wi) => (
-            <WorkspaceItem
-              key={w.id}
-              w={w}
-              index={wi}
-              active={w.id === layout.active}
-              dragging={drag?.wsId === w.id}
-              sessions={sessions}
-              unread={unread}
-              onPointerDown={(e) => onPointerDown(e, w.id, wi, applyWorkspaceLabel(w, wi, w.name))}
-            />
-          ))}
-        </div>
-        <WorkspaceDragLayer index={(id) => list.findIndex((w) => w.id === id)} />
-        <button
-          className="mt-1 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[12px] text-muted-foreground hover:bg-accent"
-          onClick={() => set({ dialog: { kind: "newWorkspace" } })}
-        >
-          <Plus className="size-3.5" /> 新工作空间
-        </button>
-      </div>
-      <WorkspacesEdge list={wsRef} onHeight={setWsH} />
-      <AgentList />
-      <SidebarBottom sidebarToggle />
-    </div>
-  );
-}
-
 /**
  * The bottom of the left column in all three modes: add-ons' sidebar blocks (g.slot("sidebar"): the quota meter,
  * today's numbers…) over the settings row. Shared so the add-ons are in sight whichever mode is open (asked for).
@@ -738,157 +654,6 @@ export function SidebarEdge() {
   );
 }
 
-const WS_H_KEY = "gerdr.workspacesH";
-const WS_H_MIN = 40;
-
-/**
- * The workspace list's height in the sidebar: undefined = sized by its content up to 45% (the default), a number = what
- * the user dragged it to (WorkspacesEdge), kept across reloads.
- */
-function useWorkspacesH(key: string) {
-  const [h, setH] = useState<number | undefined>(() => {
-    try {
-      return Number(localStorage.getItem(key)) || undefined;
-    } catch {
-      return undefined;
-    }
-  });
-  const save = (v: number | undefined) => {
-    setH(v);
-    try {
-      if (v) localStorage.setItem(key, String(v));
-      else localStorage.removeItem(key);
-    } catch {}
-  };
-  return [h, save] as const;
-}
-
-/**
- * The line between the workspace list and the agents: drag it to give one more room than the other (asked for),
- * double-click for the default. It starts from the list's drawn height, so the first drag doesn't jump.
- */
-function WorkspacesEdge({ list, onHeight }: { list: React.RefObject<HTMLDivElement | null>; onHeight: (h: number | undefined) => void }) {
-  const start = (e: React.PointerEvent) => {
-    const el = list.current;
-    if (!el) return;
-    const h0 = el.offsetHeight;
-    // Leave the agents (the block right after this edge) at least ~120px, a few rows
-    const agents = (e.currentTarget as HTMLElement).parentElement?.nextElementSibling as HTMLElement | null;
-    const max = h0 + (agents?.offsetHeight ?? 0) - 120;
-    startColResize(e, (dy) => onHeight(Math.round(Math.max(WS_H_MIN, Math.min(max, h0 + dy)))), "y");
-  };
-  return (
-    <div className="relative h-0 shrink-0">
-      <div
-        className="absolute inset-x-0 -top-1 z-20 h-2 cursor-row-resize touch-none bg-clip-content py-[3px] transition-colors hover:bg-brand/50 pointer-coarse:-top-3 pointer-coarse:h-6 pointer-coarse:py-[11px]"
-        onPointerDown={start}
-        onDoubleClick={() => onHeight(undefined)}
-        title="拖动调高矮，双击还原"
-      />
-    </div>
-  );
-}
-
-/**
- * 侧栏下半截：所有开着的 agent（= 界面上有 pane 显示的会话），跨工作空间，和 herdr 侧栏的 agents 一样。
- * 排序见 lib/order.ts（和手机上的面板一览共用）：在等你的 → 出错的 → 跑完没看的 → 在跑的 → 闲着的。
- */
-function AgentList() {
-  const layout = useStore((s) => s.layout);
-  const sessions = useStore((s) => s.sessions);
-  const unread = useStore((s) => s.unread);
-  const focused = focusedSession(layout);
-  const rows: { s: SessionSummary; where: string }[] = [];
-  const seen = new Set<string>();
-  // This session's agents only: another session's are out of sight like in herdr (their state shows on the session switcher)
-  spaceWorkspaces(layout).forEach((w, wi) =>
-    w.tabs.forEach((t) => {
-      for (const p of leaves(t.root)) {
-        const s = p.sessionId ? sessions[p.sessionId] : undefined;
-        if (!s || seen.has(s.id)) continue;
-        seen.add(s.id);
-        // An unnamed tab is named after its first agent's title: for that agent the tab part only repeats the row's title.
-        const ws = applyWorkspaceLabel(w, wi, w.name);
-        const tab = tabName(t);
-        rows.push({ s, where: tab === s.title ? ws : `${ws} · ${tab}` });
-      }
-    }),
-  );
-  // 和手机上的面板一览同一套顺序（lib/order.ts）；分不出来时保持界面上的先后（sort 是稳定的）
-  rows.sort((a, b) => compareSessions(a.s, b.s, unread));
-  return (
-    <div className="flex min-h-0 flex-1 flex-col border-t">
-      <div className="flex shrink-0 items-center px-3.5 pt-2 pb-1 text-[11px] font-medium text-muted-foreground">
-        <span className="flex-1">agents</span>
-        <span className="tabular-nums">{rows.length}</span>
-      </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-1.5 pb-2">
-        {rows.length === 0 && <div className="px-2 py-1 text-[12px] text-muted-foreground">没有开着的会话</div>}
-        {rows.map(({ s, where }) => (
-          <ContextMenu key={s.id}>
-            <ContextMenuTrigger asChild>
-              <button
-                className={cn("flex w-full items-start gap-2 rounded-md px-2 py-1 text-left hover:bg-accent/60", s.id === focused && "bg-accent")}
-                onClick={() => focusSession(s.id)}
-              >
-                <AgentIcon agent={s.agent} className="mt-0.5 size-3.5 shrink-0" />
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-[12px] leading-5">{s.title || basename(s.cwd)}</div>
-                  <div className="flex text-[11px] leading-4 text-muted-foreground">
-                    <span className="min-w-0 truncate">{where}</span>
-                    {s.status === "running" && s.turn && <Elapsed since={s.turn.startedAt} />}
-                  </div>
-                </div>
-                <StatusDot status={dotStatus(s)} unread={!!unread[s.id]} className="mt-1.5" />
-              </button>
-            </ContextMenuTrigger>
-            <AgentMenu s={s} unread={!!unread[s.id]} />
-          </ContextMenu>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/** Right-click menu of a row in the agent list: the session half of the pane's ⋯ menu (Panes.tsx), for a session without going to its pane. */
-function AgentMenu({ s, unread }: { s: SessionSummary; unread: boolean }) {
-  const inTodo = useStore((st) => activeIds(st).includes(s.id));
-  return (
-    <ContextMenuContent>
-      {inTodo ? (
-        <ContextMenuItem onClick={() => removeActive(s.id)}>
-          <ListX /> 移出进行中
-        </ContextMenuItem>
-      ) : (
-        <ContextMenuItem onClick={() => addToActive(s.id)}>
-          <ListPlus /> 加入进行中
-        </ContextMenuItem>
-      )}
-      {unread && (
-        <ContextMenuItem onClick={() => markRead(s.id)}>
-          <MailCheck /> 标为已读
-        </ContextMenuItem>
-      )}
-      <ContextMenuItem onClick={() => set({ dialog: { kind: "rename", target: "session", id: s.id, value: s.title ?? "" } })}>
-        <Pencil /> 重命名会话
-      </ContextMenuItem>
-      <ContextMenuItem
-        onClick={() => {
-          navigator.clipboard.writeText(s.agentSessionId);
-          toast("已复制 agent 会话 id");
-        }}
-      >
-        <Copy /> 复制 agent 会话 id
-      </ContextMenuItem>
-      <ContextMenuSeparator />
-      <ContextMenuItem onClick={() => closeSession(s.id)}>
-        <CircleX /> 关闭会话
-      </ContextMenuItem>
-    </ContextMenuContent>
-  );
-}
-
-// 在跑的这一轮跑了多久（和对话里状态行的用时同一个数）。单独一个组件自己每秒走，整张列表不跟着每秒重画。
 export function Elapsed({ since }: { since: number }) {
   const [, tick] = useState(0);
   useEffect(() => {
@@ -896,77 +661,6 @@ export function Elapsed({ since }: { since: number }) {
     return () => clearInterval(t);
   }, []);
   return <span className="shrink-0 tabular-nums">&nbsp;· {fmtElapsed(Date.now() - since)}</span>;
-}
-
-function WorkspaceItem({
-  w,
-  index,
-  active,
-  dragging,
-  sessions,
-  unread,
-  onPointerDown,
-}: {
-  w: Workspace;
-  index: number;
-  active: boolean;
-  dragging: boolean;
-  sessions: Record<string, SessionSummary>;
-  unread: Record<string, true>;
-  onPointerDown: (e: React.PointerEvent<HTMLElement>) => void;
-}) {
-  const label = applyWorkspaceLabel(w, index, w.name);
-  const layout = useStore((s) => s.layout);
-  const others = spaceList(layout).filter((sp) => sp.id !== spaceOf(w));
-  return (
-    // No gap between rows (asked for); data-ws-id is also the drop target when dragging a tab onto a workspace (TabDrag.tsx)
-    <div data-ws-id={w.id} onPointerDown={onPointerDown}>
-      <ContextMenu>
-        <ContextMenuTrigger asChild>
-          <button
-            className={cn(
-              "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px]",
-              active ? "bg-accent font-medium" : "hover:bg-accent/60",
-              // Mark which workspace the context menu belongs to while it's open
-              "data-[state=open]:bg-accent data-[state=open]:ring-1 data-[state=open]:ring-brand/60",
-              dragging && "opacity-40",
-            )}
-            onClick={() => selectWorkspace(w.id)}
-            onDoubleClick={() => set({ dialog: { kind: "rename", target: "workspace", id: w.id, value: w.name } })}
-          >
-            <span
-              className="w-4 shrink-0 text-center font-mono text-[11px] text-muted-foreground"
-              title={index < 9 ? `${formatCombo(keyFor(get().config, `ws${index + 1}` as KeyAction)[0] ?? "")} 跳到这里` : undefined}
-            >
-              {index + 1}
-            </span>
-            <span className="min-w-0 flex-1 truncate">{label}</span>
-            <WsDot w={w} sessions={sessions} unread={unread} />
-          </button>
-        </ContextMenuTrigger>
-        <ContextMenuContent>
-          <ContextMenuItem onClick={() => set({ dialog: { kind: "rename", target: "workspace", id: w.id, value: w.name } })}>重命名</ContextMenuItem>
-          <ContextMenuItem onClick={() => addTab({ workspaceId: w.id })}>新建 tab</ContextMenuItem>
-          {others.length > 0 && (
-            <ContextMenuSub>
-              <ContextMenuSubTrigger>移到项目</ContextMenuSubTrigger>
-              <ContextMenuSubContent>
-                {others.map((sp) => (
-                  <ContextMenuItem key={sp.id} onClick={() => moveWorkspaceToSpace(w.id, sp.id)}>
-                    {sp.name}
-                  </ContextMenuItem>
-                ))}
-              </ContextMenuSubContent>
-            </ContextMenuSub>
-          )}
-          <ContextMenuSeparator />
-          <ContextMenuItem variant="destructive" onClick={() => closeWorkspace(w.id)}>
-            关闭工作空间
-          </ContextMenuItem>
-        </ContextMenuContent>
-      </ContextMenu>
-    </div>
-  );
 }
 
 /** A session's overall state for the switcher: the most urgent of its workspaces' (same ranking as WsDot). */

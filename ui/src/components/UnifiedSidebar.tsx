@@ -47,7 +47,6 @@ import {
 import { applyWorkspaceLabel } from "@/lib/addons";
 import { activeWs, currentSpace, leaves, locateSession, spaceList, spaceOf, spaceWorkspaces, type PaneLeaf, type Tab, type Workspace } from "@/lib/layout";
 import {
-  ACTIVE_HOURS,
   activeAllProjects,
   addActive,
   clearActive,
@@ -79,7 +78,7 @@ import { Elapsed, SidebarBottom, SidebarEdge, SidebarHeader, WsDot } from "./Chr
 import { TabDragLayer, startPaneDrag } from "./TabDrag";
 
 /*
- * The desktop sidebar (the phone keeps the drawer Sidebar in Chrome.tsx). One list in place of four things that each listed the same agents:
+ * The sidebar (on a phone, the drawer). One list in place of four things that each listed the same agents:
  * the workspace switcher, the tab bar, the agents list and the to-do view.
  *
  * - Every workspace of the project is a group, all shown at once (no switching), each collapsible. A group lists its tabs,
@@ -156,7 +155,8 @@ function goPane(paneId: string, sessionId?: string) {
   if (sessionId) markRead(sessionId);
 }
 
-export function UnifiedSidebar() {
+/** `className`: the phone drawer, which sets its own width (no resize edge there). */
+export function UnifiedSidebar({ className }: { className?: string }) {
   const layout = useStore((s) => s.layout);
   const sessions = useStore((s) => s.sessions);
   const unread = useStore((s) => s.unread);
@@ -215,7 +215,7 @@ export function UnifiedSidebar() {
         top={top}
         // In the grid, a row of "active" picks its tile instead of leaving the grid
         current={top && gridOn ? id === gridFocusId : p.current}
-        onPick={top && gridOn && id && tiles.includes(id) ? () => (focusTile(id), markRead(id)) : undefined}
+        onPick={top && gridOn && id && tiles.includes(id) ? () => (focusTile(id), markRead(id), set({ drawer: false })) : undefined}
       />
     );
   };
@@ -239,8 +239,8 @@ export function UnifiedSidebar() {
   };
 
   return (
-    <div className="relative flex h-full shrink-0 flex-col border-r bg-sidebar" style={{ width: sidebarW }}>
-      <SidebarEdge />
+    <div className={cn("relative flex h-full shrink-0 flex-col border-r bg-sidebar", className)} style={className ? undefined : { width: sidebarW }}>
+      {!className && <SidebarEdge />}
       <SidebarHeader />
       <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto px-1.5 pb-2">
         <div className="pt-1.5">
@@ -249,7 +249,7 @@ export function UnifiedSidebar() {
               <div
                 role="button"
                 className="group/act flex h-7 w-full cursor-default items-center gap-1 rounded-md px-1 text-[11px] font-medium text-muted-foreground select-none hover:bg-accent/60 hover:text-foreground"
-                title={`等你、在跑、没看的，${ACTIVE_HOURS} 小时内动过的，和你右键加进来的；按该不该先看排`}
+                title="等你、在跑、报错、跑完没看的，和你右键加进来的；按该不该先看排"
                 onClick={() => setActiveFolded(!activeFolded)}
               >
                 <ChevronRight className={cn("size-3.5 shrink-0 transition-transform", !activeFolded && "rotate-90")} />
@@ -281,7 +281,8 @@ export function UnifiedSidebar() {
                 <button
                   className={cn("flex h-5 items-center gap-1 rounded-sm px-1", gridOn ? "bg-brand/15 text-foreground" : "hover:bg-muted hover:text-foreground")}
                   title={gridOn ? "关掉网格，回到 tab" : `把进行中的 agent 摆成网格一起看（最多 ${MAX_TILES} 个）`}
-                  onClick={(e) => (e.stopPropagation(), toggleOverview(!gridOn))}
+                  // On a phone the grid is behind the drawer: close it
+                  onClick={(e) => (e.stopPropagation(), toggleOverview(!gridOn), set({ drawer: false }))}
                 >
                   <LayoutGrid className={cn("size-3", gridOn && "text-brand")} />
                   网格
