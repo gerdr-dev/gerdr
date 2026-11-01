@@ -19,13 +19,12 @@ Seen so far:
   a first frame unanimated at full size, then restarted the animation.
   Fix: `@source inline(...)` in `ui/src/index.css` compiles those classes up front. Add a dialog size there when a
   dialog uses a new one.
-- **The phone's full-screen file viewer** (`FileViewer.tsx`): two rewrites landed inside its 150ms fade. At ~50ms
-  its own frame classes (`p-0 gap-0 overflow-auto py-2 pr-12`, the close button's): padding / gap animated under
-  `duration-200`, and `overflow-auto` made the body its own scroll layer mid-fade; on the phone one frame showed that
-  layer bright over the chat with the overlay and the dialog frame gone, text on text. At ~100ms Streamdown's
-  heading / code-block classes, reflowing the text. Fix: both sets in `@source inline`. To check a dialog, list the
-  selectors each rewrite adds while it opens (diff the generated `<style>`'s rules before / after): nothing may arrive.
-  The Streamdown list was collected by rendering a file with every Markdown element; redo it after upgrading it.
+- **The file viewer** (`FileViewer.tsx`): two rewrites landed inside its fade. At ~50ms its own frame classes
+  (`p-0 gap-0 overflow-auto py-2 pr-12`, the close button's): padding / gap animated under `duration-200`. At ~100ms
+  Streamdown's heading / code-block classes, reflowing the text. Fix: both sets in `@source inline`. To check a dialog,
+  list the selectors each rewrite adds while it opens (diff the generated `<style>`'s rules before / after): nothing
+  may arrive. The Streamdown list was collected by rendering a file with every Markdown element; redo it after
+  upgrading it. (This was first blamed for a phone flash it didn't cause, see the next section.)
 - **Transitions added on a state change** (pane zoom in `Panes.tsx`, the overview in `Overview.tsx`): a `transition-*`
   class added in the same change that moves the box is compiled one style change too late, so the first zoom of a page
   load jumped instead of animating. Fix: the transition is an inline style.
@@ -45,6 +44,40 @@ rewrites of its style sheet alongside: a `MutationObserver` on `document` with `
 `characterData`, recording the time and `textContent.length` of `<style>` elements that change. A jump in that
 length in the frame things move is Tailwind. rAF runs before ResizeObserver callbacks and paint, so what a rAF sees
 isn't necessarily what got drawn (SCROLL.md, "哪一帧画出来了").
+
+## Looks like Tailwind, isn't: one bad frame when an animation ends (phone)
+
+Opening any file in the viewer on the Android app flashed one frame: the chat at full brightness with only the
+viewer's text on top, text on text; the overlay and the dialog's background gone, the next frame fine. It looked like
+Tailwind's late CSS and wasn't: precompiling every class that arrived late (above) left it exactly as it was.
+
+The cause is compositing. While an `animate-in` runs, Chromium gives the animated box (overlay, dialog frame) its own
+compositing layer. When the animation ends the layer is dropped and the box repainted into the layer under it; the
+phone composited one frame before that repaint landed. What still showed was what had a layer of its own anyway: the
+chat underneath, and the viewer's scroll box (an `overflow-auto` scroller is composited by itself). Fix
+(`ui/src/components/ui/dialog.tsx` `keepLayer`, also used by `sheet.tsx`; a68a156, not yet confirmed on the phone
+when written: if it still flashes, update this): `will-change: opacity` on the overlay and
+content for as long as they're open, so the layers don't change when the animation ends. Inline, not a class (a class
+compiled a frame late changes the layers mid-animation); opacity, not transform (a transform layer blurs dialog text
+in WebKit). Any other box that animates in over a large area and then sits still needs the same if a phone shows it.
+
+How it was found, and what didn't work:
+
+- **Time the bad frame against the animation.** Pull every frame of the user's screen recording, not a resampled
+  rate: `ffmpeg -ss <t> -t 0.6 -i rec.mp4 -fps_mode passthrough out/%04d.png` (phone recordings are variable rate;
+  `-vf fps=8` skipped the bad frame or blended it with its neighbours). The bad frame came ~200ms after the fade
+  started, after several fully opaque frames: the content's `duration-200` ending (the overlay's 150ms didn't show).
+  A Tailwind rewrite would land at 40–100ms, inside the fade.
+- **Read the bad frame for what's missing.** Missing overlay + missing background + one sub-box still there = layers,
+  not styles. A late class shows a wrong size, padding or font, not a box dropping out.
+- **Desktop Chrome can't show it**, throttled or not: rAF logs, `getComputedStyle` opacity and CDP screencast frames
+  (`Page.startScreencast`, compositor frames) were all clean. A reduced repro (keyframes in a sheet rewritten
+  mid-animation, main thread blocked) was clean too. CDP `LayerTree` snapshots didn't update after the first one and
+  showed no animation reasons; don't rely on them for this. Only the phone shows it: confirm a fix there (the user's
+  screen recording, or `adb` with remote debugging).
+- **Wrong turns**: turning the viewer's animation off on phones (hides it for one dialog; the cause stays for every
+  other); blaming Tailwind's stylesheet rewrite restarting the composited fade (never measured, and the timing is
+  wrong).
 
 ## CSS that silently does nothing
 
