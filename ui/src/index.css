@@ -11,6 +11,14 @@
 @source inline("{gap-3,gap-4,rounded-xl,border,bg-background,p-6,shadow-lg,outline-none}");
 @source inline("data-[state=open]:{animate-in,fade-in-0,zoom-in-95} data-[state=closed]:{animate-out,fade-out-0,zoom-out-95}");
 
+/* Views are hidden with `invisible` and kept mounted (the overview, kept tabs, panes behind a zoomed one). Tailwind v4's
+   `transition` / `transition-all` (every Button) include visibility, and a visibility transition stays visible until it
+   ends: the inherited hidden reached those descendants 150ms late, so icon buttons of a view just left lingered on top
+   of the next one. Nothing inside a hidden box can be seen anyway, so its descendants don't transition at all. */
+.invisible * {
+  transition: none !important;
+}
+
 /* 灰阶纯灰（不带色相），强调色只有一个 —— 和终端里那些彩色输出放一起不脏。 */
 :root {
   /* 圆角就这几档（sm 6 / md 8 / lg 10 / xl 14 px），按东西的大小挑，别写死像素：
