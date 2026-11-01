@@ -545,8 +545,15 @@ function SizedImg({
         imgRatio.set(src, w / h);
         if (ratio === undefined || Math.abs(w / h - ratio) > 0.01) setRatio(w / h);
       }}
-      style={ratio ? { aspectRatio: ratio, width: `${(heightRem * ratio).toFixed(3)}rem` } : { height: `${heightRem}rem` }}
-      className={cn("max-w-full cursor-zoom-in border object-contain", ratio ? "h-auto" : "w-auto", className)}
+      // content-box once the ratio is known: under the default border-box, aspect-ratio sizes the box including its
+      // border, so a short image's content area came out a few % wider than the image and object-contain left
+      // empty strips at both sides. max-width then has to leave room for the 1px border on each side.
+      style={
+        ratio
+          ? { aspectRatio: ratio, width: `${(heightRem * ratio).toFixed(3)}rem`, boxSizing: "content-box", maxWidth: "calc(100% - 2px)" }
+          : { height: `${heightRem}rem` }
+      }
+      className={cn("cursor-zoom-in border object-contain", ratio ? "h-auto" : "w-auto max-w-full", className)}
     />
   );
 }
