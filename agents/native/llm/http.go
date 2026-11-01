@@ -21,7 +21,33 @@ type HTTPError struct {
 }
 
 func (e *HTTPError) Error() string {
-	return fmt.Sprintf("model API %d: %s", e.Status, oneLine(e.Body, 600))
+	return fmt.Sprintf("model API %d: %s", e.Status, oneLine(bodyMessage(e.Body), 600))
+}
+
+// bodyMessage 取出错误响应体里给人看的那句话：OpenAI / Anthropic / 多数网关都是 {"error":{"message":…}}，
+// 有的是 {"error":"…"} 或 {"message":"…"}。认不出就原样返回（界面上直接显示一坨 JSON，用户读不懂，比如「积分不足」藏在里面）
+func bodyMessage(body string) string {
+	var v struct {
+		Error   json.RawMessage `json:"error"`
+		Message string          `json:"message"`
+	}
+	if json.Unmarshal([]byte(strings.TrimSpace(body)), &v) != nil {
+		return body
+	}
+	var inner struct {
+		Message string `json:"message"`
+	}
+	if len(v.Error) > 0 && json.Unmarshal(v.Error, &inner) == nil && strings.TrimSpace(inner.Message) != "" {
+		return inner.Message
+	}
+	var str string
+	if len(v.Error) > 0 && json.Unmarshal(v.Error, &str) == nil && strings.TrimSpace(str) != "" {
+		return str
+	}
+	if strings.TrimSpace(v.Message) != "" {
+		return v.Message
+	}
+	return body
 }
 
 // 重试几次、等多久：网关偶发的 502 / 429 一般几秒就好；再久就交给 hub 的整轮重试（它会发「继续」）。
