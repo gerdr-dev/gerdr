@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/coder/acp-go-sdk"
 
@@ -238,6 +239,11 @@ func (s *session) onSystem(ctx context.Context, m map[string]json.RawMessage, ra
 		}
 		if autoEnd || t != nil {
 			s.auto = false
+		}
+		// The idle clock counts from the last work, auto turns included: otherwise a session whose last user turn
+		// was 15 minutes ago is reaped right after an auto turn, along with whatever that turn started.
+		if autoStart || autoEnd {
+			s.lastUsed = time.Now()
 		}
 		s.mu.Unlock()
 		if autoStart {

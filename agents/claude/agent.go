@@ -290,7 +290,7 @@ func (a *Agent) reaper() {
 		a.mu.Unlock()
 		for _, s := range ss {
 			s.mu.Lock()
-			idle := s.p != nil && s.turn == nil && s.openInputs == 0 && time.Since(s.lastUsed) > a.opts.IdleTimeout
+			idle := s.reapableLocked(a.opts.IdleTimeout)
 			s.mu.Unlock()
 			if idle {
 				a.log.Info("reap idle claude", "session", s.id)
@@ -298,6 +298,14 @@ func (a *Agent) reaper() {
 			}
 		}
 	}
+}
+
+// reapableLocked: the process has had nothing to do for `idle`. An auto turn (the CLI reporting a finished background
+// task) has no s.turn, and a background task (run_in_background command, background subagent, Monitor) lives inside
+// this process: reaping either stops the work mid-way, and nothing wakes the agent to carry on. Caller holds s.mu.
+func (s *session) reapableLocked(idle time.Duration) bool {
+	return s.p != nil && s.turn == nil && !s.auto && s.openInputs == 0 && !s.runningTaskLocked() &&
+		time.Since(s.lastUsed) > idle
 }
 
 func (a *Agent) session(id acp.SessionId) (*session, error) {

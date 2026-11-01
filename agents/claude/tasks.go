@@ -137,6 +137,16 @@ func (s *session) taskEvent(ctx context.Context, sub string, raw []byte) {
 	s.update(ctx, acp.SessionUpdate{SessionInfoUpdate: &acp.SessionSessionInfoUpdate{Meta: acpx.Meta(map[string]any{"tasks": list})}})
 }
 
+// runningTaskLocked: some task is still running in this process, so it isn't idle. Caller holds s.mu.
+func (s *session) runningTaskLocked() bool {
+	for _, t := range s.tasks {
+		if t.Status == "running" {
+			return true
+		}
+	}
+	return false
+}
+
 // backgroundTask：这个工具调用开的是不是后台任务（后台子 agent 的工具结果只是「已启动」）。
 func (s *session) backgroundTask(toolCallID string) bool {
 	s.mu.Lock()
