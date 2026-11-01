@@ -307,27 +307,9 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
   `react-router` 不在依赖图里，importMap 要无条件带上（漏过一次：入口加载失败、整页卡在「加载中」）。
 - 热更新：250ms 扫一次签名，稳定一轮才建（agent 一次改好几个文件别推好几次），经 SSE（`/_ui/events`）推给页面。
   能找到 React Refresh 边界（导出全是组件的 .tsx）就就地替换、状态保留；找不到就重新渲染入口；编译出错盖一层报错，修好整页刷新。
-- 样式用 Tailwind browser（浏览器里扫 class 生成），所以 `src/index.css` 里不能 `@import` 包或 `@plugin`，代码里不能 import CSS。
-  Relative `@import "./x.css"` of a file inside src/ is inlined by the backend (internal/uisite/cssimport.go), which is how
-  `src/animate.css` (a copy of tw-animate-css, what shadcn's animate-in / slide-in-from-* classes need) gets in.
-  Traps found getting it in, each of them silent:
-  - **The text `@import` inside a CSS comment makes Tailwind browser (4.1.11) fail on the whole stylesheet**: the
-    page renders with no styles at all and nothing in the console. Found by bisecting the served CSS; a comment
-    explaining the import was enough. `browserCSS` now rewrites `@import` inside comments to `import`
-    (`TestBrowserCSSDefusesImportInComments`). `@plugin` / `@property` in a comment are harmless.
-  - **Classes from a plugin that isn't loaded are no-ops, not errors.** shadcn's components were copied in with
-    `data-[state=open]:animate-in zoom-in-95 …` while tw-animate-css never was, so no dialog, menu or popover in the
-    UI ever animated and nobody noticed. Seeing the class in the DOM proves nothing: check
-    `getComputedStyle(el).animationName` (it was `none`).
-  - tw-animate-css's source nests its `@property` rules in `:root {}`; its own build hoists them, plain CSS doesn't
-    allow it. animate.css has them at the top level — redo that when updating it.
-  - A class first seen when an element mounts is compiled a frame late, so that frame is unstyled: a dialog shows at
-    full width, a sheet sits mid-screen and then jumps right, an enter animation restarts. `@source inline(...)` in
-    index.css precompiles frame and animation classes. Measure with a requestAnimationFrame loop logging the element's
-    rect and computed animation per frame (playwright, as in tools/scrolltest/), not by eye.
-  - An older backend serving a newer ui/ drops the `@import "./animate.css"` line with a warning: everything works
-    but nothing animates until the backend is upgraded. Keep it that way — nothing may depend on animate.css to
-    function.
+- Styles come from Tailwind's browser build (classes compiled in the page as they show up): no CSS imports in code, no
+  packages or `@plugin` in `src/index.css`. Its traps (CSS a frame late, CSS silently doing nothing) are in
+  docs/dev/TAILWIND.md.
 - The page's CSP is `connect-src 'self'`: the UI (add-ons included) can't fetch another origin, whatever CORS headers
   that server sends. Add-ons go through `g.fetch` (POST /api/addons/{id}/fetch, the backend makes the request).
 - importMap 只能内联，内联脚本靠每次请求一个 nonce 过 CSP。
