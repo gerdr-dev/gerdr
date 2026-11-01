@@ -75,6 +75,8 @@ src/lib/
   `@import "./x.css"` 引用 src/ 里自己的 CSS 文件可以（gerdr 后端把它展开，比如 `src/animate.css` 就是这样接进来的动画类）。
 - 颜色用主题变量对应的 class（`bg-background`、`text-muted-foreground`、`border`、`bg-brand`、`text-ok`、`text-bad`、`text-warn`），
   不要写死颜色 —— 深浅色两套都要好看。
+- **放不下的单行文字在右边淡出，不用「…」**（和 tab 名一个样子）。直接写 Tailwind 的 `truncate`：`src/index.css` 把它改成了
+  「溢出时才淡出」；在 React 里要量宽度的用 `FadeText`。不要写 `text-ellipsis`，也不要在字符串末尾手工拼「…」。
 - 圆角用 `rounded-sm/md/lg/xl` 这几档（哪种东西用哪档见 `src/index.css` 里 `--radius` 上面的注释），别用裸 `rounded` 或写死像素。
 - 一个 `.tsx` 文件里只导出组件（大写开头 / default）时，改它能热替换、不丢状态；导出了别的（函数、常量）的文件改了会整个重新渲染。
 

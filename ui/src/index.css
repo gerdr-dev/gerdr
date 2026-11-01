@@ -204,6 +204,27 @@
   }
 }
 
+/* `truncate` fades text out at its right edge instead of ending it in "…", the same look as the tab names and FadeText
+   (asked for: every cut-off text the same). The fade must only be there when the text overflows, else it eats the end of a
+   short one: an overflow:hidden box is a scroll container, and its scroll timeline is active only when there's something
+   to scroll, so this animation (which turns the fade on) runs exactly while the text doesn't fit. Without
+   scroll-driven animations (older Safari) it stays the plain "…". Unlayered on purpose, to win over Tailwind's own
+   `.truncate`; it touches nothing else. */
+@supports (animation-timeline: scroll()) {
+  .truncate {
+    text-overflow: clip;
+    mask-image: linear-gradient(to right, black calc(100% - var(--truncate-fade, 0px)), transparent);
+    animation: truncate-fade linear both;
+    animation-timeline: scroll(self inline);
+  }
+}
+@keyframes truncate-fade {
+  from,
+  to {
+    --truncate-fade: 1rem;
+  }
+}
+
 /* The chat's own rules (Markdown, the running loader) live in the chat package: packages/chat/src/style.css,
    added after this file by Gerdr (workspace packages' style.css). */
 
