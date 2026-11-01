@@ -152,7 +152,8 @@ function useFolded() {
 
 type Item = { ws: Workspace; tab: Tab; pane: PaneLeaf; split: boolean; s?: SessionSummary };
 
-const needsYou = (s: SessionSummary | undefined, unread: Record<string, true>) => !!s && (s.status === "waiting" || s.status === "error" || !!unread[s.id]);
+/** Stuck on you: asking or failed. Finished-and-unread is not counted, it isn't waiting on anything. */
+const needsYou = (s: SessionSummary | undefined) => !!s && (s.status === "waiting" || s.status === "error");
 
 /** What a row shows for a pane: an agent, a terminal, a file, a subagent, or a new conversation not started yet. */
 function paneLabel(p: PaneLeaf, s: SessionSummary | undefined): { title: string; sub: string } {
@@ -441,8 +442,8 @@ function Group({
   const others = spaceList(layout).filter((sp) => sp.id !== spaceOf(ws));
   const label = applyWorkspaceLabel(ws, index, ws.name);
   const n = rows.length;
-  const waiting = rows.filter((r) => needsYou(r.pane.sessionId ? sessions[r.pane.sessionId] : undefined, unread)).length;
-  const rename = () => set({ dialog: { kind: "rename", target: "workspace", id: ws.id, value: ws.name } });
+  const waiting = rows.filter((r) => needsYou(r.pane.sessionId ? sessions[r.pane.sessionId] : undefined)).length;
+  const edit = () => set({ dialog: { kind: "editWorkspace", id: ws.id } });
   return (
     <div className="mt-1">
       <ContextMenu>
@@ -456,7 +457,7 @@ function Group({
               "data-[state=open]:ring-1 data-[state=open]:ring-brand/60",
             )}
             onClick={onFold}
-            onDoubleClick={rename}
+            onDoubleClick={edit}
             title={ws.cwd ? ws.cwd : undefined}
           >
             <ChevronRight className={cn("size-3.5 shrink-0 text-muted-foreground transition-transform", !folded && "rotate-90")} />
@@ -497,8 +498,8 @@ function Group({
           >
             <SquareTerminal /> 新终端
           </ContextMenuItem>
-          <ContextMenuItem onClick={rename}>
-            <Pencil /> 重命名
+          <ContextMenuItem onClick={edit}>
+            <Pencil /> 编辑…
           </ContextMenuItem>
           {others.length > 0 && (
             <ContextMenuSub>
