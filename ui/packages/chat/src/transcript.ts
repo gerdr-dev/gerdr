@@ -20,6 +20,8 @@ export type GMeta = {
   held?: boolean;
   /** 刚点了发送、服务端还没记进日志（见 Transcript.sending）：半透明画着 */
   sending?: boolean;
+  /** A `!` command card run while the turn was going, parked at the bottom until the turn ends (see Transcript.parked) */
+  parked?: boolean;
   from?: string; // 别的会话发来的：发送方会话 id
   ts: number;
   content?: ContentBlock[];
@@ -204,13 +206,20 @@ export class Transcript {
    * 发失败就拿掉（字放回输入框）。不是日志重放出来的，reset 不清 —— 重放里有它的那条会顺手把它换掉。
    */
   sending: GMessage[] = [];
-  private allCache: { m: GMessage[]; q: GMessage[]; s: GMessage[]; all: GMessage[] } | null = null;
-  /** 界面要画的全部：正文 + 排着队的插话 + 发送中的。都没换就返回同一个数组（下游靠引用判断要不要重算）。 */
+  /**
+   * `!` commands run while a turn is going (one message each, holding its data-shell card). Put into messages they
+   * landed wherever the agent happened to be, splitting its reply in two around the card (user report). Like queued
+   * interjections they hang at the bottom instead and land at the end of the turn. Replaying the log does the same.
+   */
+  parked: GMessage[] = [];
+  private allCache: { m: GMessage[]; p: GMessage[]; q: GMessage[]; s: GMessage[]; all: GMessage[] } | null = null;
+  /** 界面要画的全部：正文 + 运行中跑的命令 + 排着队的插话 + 发送中的。都没换就返回同一个数组（下游靠引用判断要不要重算）。 */
   get all(): GMessage[] {
     const c = this.allCache;
-    if (c && c.m === this.messages && c.q === this.queued && c.s === this.sending) return c.all;
-    const all = this.queued.length || this.sending.length ? [...this.messages, ...this.queued, ...this.sending] : this.messages;
-    this.allCache = { m: this.messages, q: this.queued, s: this.sending, all };
+    if (c && c.m === this.messages && c.p === this.parked && c.q === this.queued && c.s === this.sending) return c.all;
+    const all =
+      this.parked.length || this.queued.length || this.sending.length ? [...this.messages, ...this.parked, ...this.queued, ...this.sending] : this.messages;
+    this.allCache = { m: this.messages, p: this.parked, q: this.queued, s: this.sending, all };
     return all;
   }
 
@@ -249,6 +258,7 @@ export class Transcript {
   reset(events: HubEvent[]) {
     this.messages = [];
     this.queued = [];
+    this.parked = [];
     this.running = false;
     this.pending.clear();
     this.tools.clear();
@@ -280,6 +290,19 @@ export class Transcript {
     this.chunks.clear();
     this.lastChunkKey = "";
     this.planLoc = null;
+  }
+
+  /** The parked `!` cards go to the end of the text, each where an idle-time one would have gone. */
+  private landParked() {
+    if (!this.parked.length) return;
+    const ps = this.parked;
+    this.parked = [];
+    this.messages = [...this.messages];
+    for (const m of ps) {
+      const p = m.parts[0] as any;
+      this.shells.set(p.data.id, this.pushPart(this.assistant(m.metadata!.ts), p));
+    }
+    this.lastChunkKey = "";
   }
 
   /** 从正文里拿掉第 i 条（转去排队的插话）：后面那些消息里记着的位置都往前挪一格。 */
@@ -396,6 +419,8 @@ export class Transcript {
         break;
       }
       case "turn_start": {
+        // A turn whose end never made it into the log (Gerdr went down mid-turn): its parked cards land before the next
+        this.landParked();
         this.running = true;
         this.messages = [...this.messages];
         const i = this.assistant(e.ts);
@@ -475,6 +500,7 @@ export class Transcript {
             } as any);
           }
         }
+        this.landParked();
         // 这一轮完了还没被读到的插话：claude 会把它们带进下一轮，就落在这一轮的末尾（别让圈一直转着）
         if (this.queued.length) {
           const q = this.queued;
@@ -524,23 +550,35 @@ export class Transcript {
         break;
       }
       case "shell": {
-        this.messages = [...this.messages];
         const id = e.messageId!;
-        this.shells.set(id, this.pushPart(this.assistant(e.ts), { type: "data-shell", data: { id, command: e.text ?? "", output: "", running: true } }));
+        const part: GPart = { type: "data-shell", data: { id, command: e.text ?? "", output: "", running: true } };
+        if (this.running) {
+          this.parked = [...this.parked, { id: this.uid(), role: "assistant", parts: [part], metadata: { ts: e.ts, parked: true } }];
+          break;
+        }
+        this.messages = [...this.messages];
+        this.shells.set(id, this.pushPart(this.assistant(e.ts), part));
         this.lastChunkKey = "";
         break;
       }
       case "shell_out":
       case "shell_done": {
+        const edit = (p: any) =>
+          e.kind === "shell_out"
+            ? { ...p.data, output: p.data.output + (e.text ?? "") }
+            : { ...p.data, running: false, exit: e.exit, end: e.level, error: e.error, path: e.text || undefined };
+        const k = this.parked.findIndex((m) => (m.parts[0] as any).data.id === e.messageId);
+        if (k >= 0) {
+          const m = this.parked[k];
+          const p = m.parts[0] as any;
+          this.parked = this.parked.map((x, j) => (j === k ? { ...m, parts: [{ ...p, data: edit(p) }] } : x));
+          break;
+        }
         const loc = this.shells.get(e.messageId!);
         const p = loc && (this.messages[loc.msg]?.parts[loc.part] as any);
         if (!p || p.type !== "data-shell") break;
         this.messages = [...this.messages];
-        const data =
-          e.kind === "shell_out"
-            ? { ...p.data, output: p.data.output + (e.text ?? "") }
-            : { ...p.data, running: false, exit: e.exit, end: e.level, error: e.error, path: e.text || undefined };
-        this.setPart(loc!, { ...p, data });
+        this.setPart(loc!, { ...p, data: edit(p) });
         break;
       }
       case "notice": {

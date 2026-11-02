@@ -158,9 +158,9 @@ export function buildRows(
   const rows: Row[] = [];
   const young = youngTest(now, out);
   const lastIdx = msgs.length - 1;
-  // 排着队的插话、发送中的挂在最底下（见 Transcript.queued / sending），还在跑的那条是它们前面那条
+  // 排着队的插话、发送中的、运行中跑的 `!` 命令挂在最底下（见 Transcript.queued / sending / parked），还在跑的那条是它们前面那条
   let liveIdx = lastIdx;
-  while (liveIdx >= 0 && (msgs[liveIdx].metadata?.queued || msgs[liveIdx].metadata?.sending)) liveIdx--;
+  while (liveIdx >= 0 && (msgs[liveIdx].metadata?.queued || msgs[liveIdx].metadata?.sending || msgs[liveIdx].metadata?.parked)) liveIdx--;
   // The latest turn's metadata line: the last data-turnStat of the last message that has one
   let latestStat = "";
   for (let mi = msgs.length - 1; mi >= 0 && !latestStat; mi--) {
@@ -189,7 +189,9 @@ export function buildRows(
       if (redundantTaskDone(p, parts[parts.length - 1]?.part)) return;
       const tp = p.type === "dynamic-tool" ? (p as ToolPart) : undefined;
       parts.push({
-        key: `${m.id}:${tp ? tp.toolCallId : i}`,
+        // A `!` card keys on its command: run mid-turn it moves from the bottom into the turn when the turn ends, and
+        // must not remount there (it would lose its open / closed state)
+        key: p.type === "data-shell" ? `shell:${(p as any).data.id}` : `${m.id}:${tp ? tp.toolCallId : i}`,
         kind: "part",
         part: p,
         i,
