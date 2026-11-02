@@ -38,7 +38,7 @@ React（ui/，不打包）  ←WebSocket / HTTP→  hub（internal/hub）  ←AC
   多个窗口之间靠广播同步。
   The one exception is `gerdr workspace|tab|pane …` (internal/server/layoutapi.go, for agents): the server edits layout.json
   itself, then broadcasts it exactly like a PUT from a window. That way it runs once (not once per open window) and works with no
-  window open. It edits generic JSON so fields it doesn't know survive. Its tree rules mirror ui/src/lib/actions.ts (movePane,
+  window open. It edits generic JSON so fields it doesn't know survive. Its tree rules mirror ui/src/lib/actions/ (movePane,
   mergeTab, removeTab), so change both together. Last writer wins: a window that changed the layout less than 300 ms before (its
   PUT still pending) takes the server's version when the broadcast arrives and drops its own change, which the user then redoes.
 

@@ -616,7 +616,7 @@ func (c *layoutCall) newWorkspace(label, cwd, space string) (w, t node) {
 }
 
 // placeWs moves w to position pos (1-based) among its session's workspaces; pos < 1 leaves it where it is (new ones are last).
-// Other sessions' workspaces keep their places, like moveWorkspace in ui/src/lib/actions.ts.
+// Other sessions' workspaces keep their places, like moveWorkspace in ui/src/lib/actions/workspaces.ts.
 func (c *layoutCall) placeWs(w node, pos int) {
 	if pos < 1 {
 		return
@@ -870,7 +870,7 @@ func (c *layoutCall) pane(ref string) (w, t, p node, err error) {
 }
 
 // readTarget: the terminal pane `gerdr pane read` reads. No ref = the terminal next to the caller, the one the chat's
-// "run in terminal" types into (ui/src/lib/actions.ts terminalNear): in the caller's tab, the focused one, else the last.
+// "run in terminal" types into (ui/src/lib/actions/terminal.ts terminalNear): in the caller's tab, the focused one, else the last.
 func (c *layoutCall) readTarget(ref string) (w, t, p node, err error) {
 	if ref != "" {
 		if w, t, p, err = c.pane(ref); err != nil {
@@ -916,7 +916,7 @@ func one(hits []node, ref, what string) (node, error) {
 
 // ---- views (field names follow herdr's) ----
 
-// tabLabel is what the tab bar shows: its own name, else the folder of the first thing in it (ui/src/lib/actions.ts tabName).
+// tabLabel is what the tab bar shows: its own name, else the folder of the first thing in it (ui/src/lib/actions/panes.ts tabName).
 func (c *layoutCall) tabLabel(t node) string {
 	if n := str(t, "name"); n != "" {
 		return n
