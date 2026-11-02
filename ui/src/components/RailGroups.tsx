@@ -98,10 +98,11 @@ function GroupButton({ g }: { g: ResolvedGroup }) {
         <FaceView face={g.group.face} blocks={g.blocks} />
       </button>
       {createPortal(
-        // The vertical padding is given once here, not by each block: two blocks each padding themselves left a wide gap
+        // The vertical padding is given once here, not by each block: two blocks each padding themselves left a wide gap.
+        // py-1.5 matches the px-1.5 blocks give themselves (GUIDE.md), so a block's hover fill sits evenly in the panel
         <div
           ref={panel}
-          className={cn("fixed z-50 w-72 rounded-lg border bg-popover py-1 text-popover-foreground shadow-md", !open && "hidden")}
+          className={cn("fixed z-50 w-72 rounded-lg border bg-popover py-1.5 text-popover-foreground shadow-md", !open && "hidden")}
           style={pos}
           onPointerEnter={hover(true)}
           onPointerLeave={hover(false)}
