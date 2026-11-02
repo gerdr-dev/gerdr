@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { useStore } from "./store";
+import { get, useStore } from "./store";
 
 // Past this, draw the cached (stale) transcript anyway rather than leave a tap looking ignored on a slow connection.
-const HOLD_MS = 500;
+export const HOLD_MS = 500;
 
 /**
  * What to draw while switching from one view to another (a tab, a phone overview tile): `want`, unless one of its
@@ -29,4 +29,19 @@ export function useCaughtUp(want: string | undefined, sessions: string[], canHol
     drawn.current = out;
   });
   return out;
+}
+
+/** Run `fn` once session `id` has caught up (store.catchingUp), right away if it isn't waiting, after HOLD_MS at most. */
+export function whenCaughtUp(id: string, fn: () => void) {
+  if (!get().catchingUp[id]) return fn();
+  let done = false;
+  const finish = () => {
+    if (done) return;
+    done = true;
+    unsub();
+    clearTimeout(timer);
+    fn();
+  };
+  const unsub = useStore.subscribe((s) => !s.catchingUp[id] && finish());
+  const timer = setTimeout(finish, HOLD_MS);
 }

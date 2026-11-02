@@ -1,5 +1,5 @@
 import { KeyRound } from "lucide-react";
-import { useEffect, useLayoutEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { PhoneBar, PhoneConnToast, TabBar } from "./components/Chrome";
@@ -14,7 +14,7 @@ import { tabName } from "./lib/actions";
 import { handleKeydown } from "./lib/commands";
 import { ACTION_TITLES, setPrefixLabel, toAccelerator, type KeyAction } from "./lib/keys";
 import { activeTab, currentSpace, leaves, spaceList, type Tab } from "./lib/layout";
-import { useCaughtUp } from "./lib/catchup";
+import { HOLD_MS, useCaughtUp } from "./lib/catchup";
 import { isPhone, usePhone, useViewportHeight } from "./lib/phone";
 import { cn } from "./lib/utils";
 import { syncWatch } from "./lib/sync";
@@ -26,7 +26,7 @@ import { watchInbox } from "./lib/inbox";
 import { watchCopyOnSelect } from "./lib/copysel";
 import { reloadAddons, setTabNameFn } from "./lib/addons";
 import { AddonSlot } from "./components/AddonSlot";
-import { fontSizeOf, get, keyFor, prefOf, markUnread, set, useStore, visibleSessions } from "./lib/store";
+import { focusedSession, fontSizeOf, get, keyFor, prefOf, markUnread, set, useStore, visibleSessions } from "./lib/store";
 import { boot } from "./lib/sync";
 import type { SessionSummary } from "./lib/types";
 
@@ -132,11 +132,26 @@ export default function App() {
   }, [keys]);
 
   const tab = activeTab(layout);
-  // 抽屉里点了工作空间 / agent（= 换了眼前那个 pane）就收起来：在手机上，去了别处还挡着半个屏没有意义
+  // Picking a project / agent in the drawer (= the pane in front changed) closes it: on a phone it would only cover half
+  // the screen. Not before that session has loaded or caught up, though (lib/catchup): closing at once uncovered the
+  // session we came from, which the new one then replaced a moment later (reported). The picked row lights up meanwhile.
   const here = `${tab.id}/${tab.focus}`;
+  const hereSession = focusedSession(layout);
+  const hereCatching = useStore((s) => !!hereSession && !!s.catchingUp[hereSession]);
+  const closeDrawer = useRef(false);
   useEffect(() => {
-    if (get().drawer) set({ drawer: false });
+    if (get().drawer) closeDrawer.current = true;
   }, [here]);
+  useEffect(() => {
+    if (!closeDrawer.current) return;
+    const close = () => {
+      closeDrawer.current = false;
+      if (get().drawer) set({ drawer: false });
+    };
+    if (!hereCatching) return close();
+    const t = setTimeout(close, HOLD_MS);
+    return () => clearTimeout(t);
+  }, [here, hereCatching]);
   const dialogOpen = useStore((s) => !!s.dialog);
   useEffect(() => {
     if (dialogOpen) set({ drawer: false });

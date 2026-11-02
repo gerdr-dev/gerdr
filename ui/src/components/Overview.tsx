@@ -34,6 +34,7 @@ import { useCaughtUp } from "@/lib/catchup";
 import { markRead, toggleSidebar, useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { FadeText } from "./FadeText";
+import { BorderFlow, useSlowCatchUp } from "./BorderFlow";
 import { BOX_TRANSITION, useLayoutAnim, useZoomAnim } from "@/lib/zoomAnim";
 import { AgentIcon, StatusDot, dotStatus } from "./AgentIcon";
 import { ChatView } from "./chat/ChatView";
@@ -174,18 +175,22 @@ function PhoneOverview({ ids, focus, shown }: { ids: string[]; focus?: string; s
 function TileChip({ id, current, className, onClick }: { id: string; current: boolean; className?: string; onClick: () => void }) {
   const s = useStore((st) => st.sessions[id]);
   const unread = useStore((st) => !!st.unread[id]);
+  // Picked and its tile still loading after a moment (PhoneOverview keeps the old tile up meanwhile): the flow replaces
+  // the current chip's solid border, which would hide it
+  const loading = useSlowCatchUp(current ? id : undefined);
   if (!s) return null;
   return (
     <button
       data-current={current || undefined}
       className={cn(
-        "flex shrink-0 items-center gap-1.5 rounded-md border px-2 text-[12px]",
+        "relative flex shrink-0 items-center gap-1.5 rounded-md border px-2 text-[12px]",
         statusTint(s.status, unread),
-        current ? "border-brand font-medium" : "border-transparent text-muted-foreground",
+        current ? cn("font-medium", loading ? "border-transparent" : "border-brand") : "border-transparent text-muted-foreground",
         className,
       )}
       onClick={onClick}
     >
+      {loading && <BorderFlow />}
       {/* An idle one has no dot: StatusDot is transparent then but would still leave a gap */}
       {(dotStatus(s) !== "idle" || unread) && <StatusDot status={dotStatus(s)} unread={unread} />}
       <FadeText>{s.title || basename(s.cwd)}</FadeText>

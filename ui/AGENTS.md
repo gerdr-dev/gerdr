@@ -126,6 +126,26 @@ src/lib/
 
 后端没有的数据（比如要查 API 用量）界面拿不到：告诉用户需要后端加接口，别在前端硬凑。
 
+## Switching to something that loads
+
+A tap that switches the view to a session (a tab, a pane, an overview tile, a sidebar row) often lands on one whose
+transcript isn't here yet or is behind. Drawing it at once shows "loading" or the stale cache, then the real thing: a
+flash, worst on a phone over the remote link. Any new switcher or page follows the same choreography, so there is
+exactly **one visible change, from the old view straight to the ready new one**:
+
+1. **The control answers at once**: the picked row / chip takes its selected look on the tap (change the layout right
+   away; only the drawing waits).
+2. **Hold the old view** until the new one is ready: draw through `useCaughtUp(key, sessionIds, canHold)` (`src/lib/catchup.ts`;
+   examples in `App.tsx` for tabs, `Panes.tsx` `HeldSessionPane`, `Overview.tsx` `PhoneOverview`). Effects that would
+   uncover the view (closing the phone drawer) go through `whenCaughtUp(id, fn)`. Both give up after `HOLD_MS` (500ms)
+   and draw what there is.
+3. **Past 200ms, mark the control**: `<BorderFlow />` inside it (the control is `relative`), shown while
+   `useSlowCatchUp(id)` is true: a brand segment running round its border. That is the loading mark of a picked control;
+   spinners and skeletons stay for content with no old view to hold.
+
+Waiting is decided in `sync.ts` `syncWatch` (`store.catchingUp`): only when the session list's `lastSeq` is past what the
+UI holds, so an agent with nothing new switches instantly. Keep it that way: a hold on every switch made switching feel slow.
+
 ## 类型检查（可选）
 
 运行不需要，想在改完跑一下 TypeScript 检查的话：`pnpm install && npx tsc --noEmit`（第一次要装开发依赖）。

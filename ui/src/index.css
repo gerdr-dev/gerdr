@@ -225,6 +225,33 @@
   }
 }
 
+/* BorderFlow (components/BorderFlow.tsx): a brand segment running round a picked row / button while what it opens loads.
+   The rect's size is CSS (SVG attributes can't do calc); pathLength=100 makes the dash a quarter of the way round
+   whatever the size. Reduced motion: a still brand outline instead. */
+.border-flow {
+  width: calc(100% - 1.5px);
+  height: calc(100% - 1.5px);
+  rx: var(--radius-md);
+  fill: none;
+  stroke: var(--brand);
+  stroke-width: 1.5px;
+  stroke-linecap: round;
+  stroke-dasharray: 25 75;
+  animation: border-flow 1.2s linear infinite;
+}
+@keyframes border-flow {
+  to {
+    stroke-dashoffset: -100;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .border-flow {
+    stroke-dasharray: none;
+    animation: none;
+    opacity: 0.6;
+  }
+}
+
 /* The chat's own rules (Markdown, the running loader) live in the chat package: packages/chat/src/style.css,
    added after this file by Gerdr (workspace packages' style.css). */
 

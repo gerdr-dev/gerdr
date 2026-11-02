@@ -84,6 +84,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { markRead, set, useStore } from "@/lib/store";
+import { whenCaughtUp } from "@/lib/catchup";
+import { BorderFlow, useSlowCatchUp } from "./BorderFlow";
 import type { SessionSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { AgentIcon, StatusDot, dotStatus } from "./AgentIcon";
@@ -234,7 +236,8 @@ export function UnifiedSidebar({ className }: { className?: string }) {
         top={top}
         // In the grid, a row of "active" picks its tile instead of leaving the grid
         current={top && gridOn ? id === gridFocusId : p.current}
-        onPick={top && gridOn && id && tiles.includes(id) ? () => (focusTile(id), markRead(id), set({ drawer: false })) : undefined}
+        // The drawer closes once the tile has loaded: closing at once showed the tile we came from first (lib/catchup)
+        onPick={top && gridOn && id && tiles.includes(id) ? () => (focusTile(id), markRead(id), whenCaughtUp(id, () => set({ drawer: false }))) : undefined}
       />
     );
   };
@@ -579,6 +582,8 @@ function Row({
     else mergeTab(tab.id, activeTabId, undefined, "right");
   };
   const Icon = pane.term ? SquareTerminal : pane.file ? FileText : pane.sub ? Columns2 : SquareDashed;
+  // Picked and still loading after a moment (the drawer stays open till then, App.tsx): say so on the row itself
+  const loading = useSlowCatchUp(current ? s?.id : undefined);
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
@@ -592,11 +597,12 @@ function Row({
           onMouseDown={(e) => e.button === 1 && e.preventDefault()}
           onAuxClick={(e) => e.button === 1 && (e.preventDefault(), dismiss())}
           className={cn(
-            "group flex h-7 cursor-default items-center gap-2 rounded-md px-2 text-[12px] select-none",
+            "group relative flex h-7 cursor-default items-center gap-2 rounded-md px-2 text-[12px] select-none",
             current ? "bg-accent font-medium" : visible ? "bg-accent/40" : "hover:bg-accent/60",
             "data-[state=open]:ring-1 data-[state=open]:ring-brand/60",
           )}
         >
+          {loading && <BorderFlow />}
           {s ? <AgentIcon agent={s.agent} className="size-3.5 shrink-0" /> : <Icon className="size-3.5 shrink-0 text-muted-foreground" />}
           <span className={cn("min-w-0 flex-1 truncate", pane.term && "font-mono text-[11.5px]", !s && !pane.term && "text-muted-foreground")}>
             {tabLabel ? (
