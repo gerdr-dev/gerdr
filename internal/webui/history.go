@@ -1,12 +1,15 @@
 package webui
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/gerdr-dev/gerdr/internal/i18n"
 )
 
 // 急救面板（/rescue）的「回到之前的一版」。界面被 agent 改坏、而且坏到没法在主界面里叫 agent 修的时候，
@@ -29,7 +32,7 @@ var shaRE = regexp.MustCompile(`^[0-9a-f]{7,40}$`)
 // History：main 上最近 n 个提交，外加 upstream 的最新一个（原版，放最后）。
 func History(dst string, n int) ([]Commit, error) {
 	if _, err := os.Stat(filepath.Join(dst, ".git")); err != nil || !hasGit() {
-		return nil, fmt.Errorf("界面目录不是 git 仓库（或者这台机器上没有 git），没有历史可回")
+		return nil, errors.New(i18n.S("界面目录不是 git 仓库（或者这台机器上没有 git），没有历史可回", "The UI directory isn't a git repository (or git isn't installed), so there's no history to go back to"))
 	}
 	out, err := git(dst, nil, "log", "-n", strconv.Itoa(n), "--first-parent", "--format=%H%x1f%ct%x1f%s", "HEAD")
 	if err != nil {
@@ -74,7 +77,7 @@ func parseLog(out string) []Commit {
 // 返回回退之前存档的那个提交（坏的那版），没有改动可存时为空。
 func Restore(dst, sha string) (saved string, err error) {
 	if !shaRE.MatchString(sha) {
-		return "", fmt.Errorf("版本号不对：%q", sha)
+		return "", fmt.Errorf(i18n.S("版本号不对：%q", "invalid version: %q"), sha)
 	}
 	if _, err := os.Stat(filepath.Join(dst, ".git", "MERGE_HEAD")); err == nil {
 		// 合并到一半（有冲突标记）：先收掉，不然 commit 会把冲突一起提交
@@ -83,10 +86,10 @@ func Restore(dst, sha string) (saved string, err error) {
 		}
 	}
 	if _, err := git(dst, nil, "cat-file", "-e", sha+"^{commit}"); err != nil {
-		return "", fmt.Errorf("没有这个版本：%s", sha)
+		return "", fmt.Errorf(i18n.S("没有这个版本：%s", "no such version: %s"), sha)
 	}
 	before, _ := git(dst, nil, "rev-parse", "HEAD")
-	if err := commitAll(dst, "急救：回退之前的样子（存档）"); err != nil {
+	if err := commitAll(dst, i18n.S("急救：回退之前的样子（存档）", "Rescue: snapshot before reverting")); err != nil {
 		return "", err
 	}
 	after, _ := git(dst, nil, "rev-parse", "HEAD")
@@ -101,5 +104,5 @@ func Restore(dst, sha string) (saved string, err error) {
 	if len(short) > 8 {
 		short = short[:8]
 	}
-	return saved, commitAll(dst, "急救：回到 "+short+" 那一版")
+	return saved, commitAll(dst, fmt.Sprintf(i18n.S("急救：回到 %s 那一版", "Rescue: back to %s"), short))
 }

@@ -4,7 +4,10 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"regexp"
+	"strconv"
 	"strings"
+
+	"github.com/gerdr-dev/gerdr/internal/i18n"
 )
 
 // runtimeJS 是页面里的运行时（/_ui/m/@runtime.js），照 shuttle 的 localsite/runtime.go：
@@ -19,7 +22,7 @@ import (
 //     - error：构建出错，盖一层报错，修好后刷新一次；reload：importMap 变了，整页刷新。
 //
 // 组件注册在运行时这边做（import 之后对导出注册），Go 不改写源码：没导出的内部组件改了会重新挂载。
-const runtimeJS = `const S = window.__GERDR_UI__;
+var runtimeJS = `const S = window.__GERDR_UI__;
 const errors = (window.__GERDR_UI_ERRORS__ = window.__GERDR_UI_ERRORS__ || []);
 function report(source, e) {
   if (window.__GERDR_REPORT__) window.__GERDR_REPORT__(source, (e && e.message) || e, (e && e.stack) || "");
@@ -38,12 +41,12 @@ function overlay(text) {
     el.style.cssText = "position:fixed;inset:0;z-index:2147483647;margin:0;padding:24px;overflow:auto;white-space:pre-wrap;font:12px/1.6 ui-monospace,monospace;color:#e5484d;background:rgba(10,10,10,.94)";
     document.body.appendChild(el);
   }
-  el.textContent = "界面代码编译出错（改好之后自动恢复）：\n\n" + text + "\n\n";
+  el.textContent = ` + strconv.Quote(i18n.S("界面代码编译出错（改好之后自动恢复）：\n\n", "The UI code doesn't compile (recovers automatically once fixed):\n\n")) + ` + text + "\n\n";
   // 急救面板是编进 gerdr 的，界面目录怎么坏都打得开（就在右边拉出来；脚本没加载到就走 /rescue 刷新一下再开）
   const a = document.createElement("a");
   a.href = "/rescue";
   a.onclick = (ev) => { if (window.__gerdrRescue) { ev.preventDefault(); window.__gerdrRescue.open(); } };
-  a.textContent = "打开急救面板，叫 agent 来修 →";
+  a.textContent = ` + strconv.Quote(i18n.S("打开急救面板，叫 agent 来修 →", "Open the rescue panel and have an agent fix it →")) + `;
   a.style.cssText = "font:14px system-ui,sans-serif;color:#7aa2f7";
   el.appendChild(a);
 }

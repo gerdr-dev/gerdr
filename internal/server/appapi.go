@@ -8,6 +8,7 @@ import (
 
 	"github.com/gerdr-dev/gerdr/internal/auth"
 	"github.com/gerdr-dev/gerdr/internal/config"
+	"github.com/gerdr-dev/gerdr/internal/i18n"
 )
 
 // 安卓 App（android/）要的那几个口。设计见 docs/dev/ANDROID.md：
@@ -71,25 +72,25 @@ func (s *Server) assetLinks(w http.ResponseWriter, r *http.Request) {
 func (s *Server) apiCLI(w http.ResponseWriter, r *http.Request) {
 	rm := s.Remote
 	if rm == nil || !rm.Config().Enabled() {
-		httpError(w, http.StatusConflict, "还没开远程访问")
+		httpError(w, http.StatusConflict, i18n.S("还没开远程访问", "Remote access isn't on"))
 		return
 	}
 	switch op := r.PathValue("op"); op {
 	case "start":
 		if !auth.FromRemote(r) {
-			httpError(w, http.StatusConflict, "本机不用登录")
+			httpError(w, http.StatusConflict, i18n.S("本机不用登录", "No sign-in needed on this computer"))
 			return
 		}
 		// 一把 passkey 都没有：远程那边没人批得了（本机口能批，但人多半不在电脑前）—— 让 App 直接说「用配对码」
 		if rm.Passkeys.Count() == 0 {
-			writeJSONStatus(w, http.StatusConflict, map[string]any{"error": "这台 Gerdr 还没注册 passkey，只能用配对码", "reason": "nopasskey"})
+			writeJSONStatus(w, http.StatusConflict, map[string]any{"error": i18n.S("这台 Gerdr 还没注册 passkey，只能用配对码", "This Gerdr has no passkey yet; use a pairing code"), "reason": "nopasskey"})
 			return
 		}
 		device := ""
 		if _, err := r.Cookie(auth.CookieName); err == nil {
 			id := rm.Auth.Authenticate(r)
 			if id == nil {
-				httpError(w, http.StatusUnauthorized, "这份凭据不认了（被撤销或过期了）")
+				httpError(w, http.StatusUnauthorized, i18n.S("这份凭据不认了（被撤销或过期了）", "This credential is no longer valid (revoked or expired)"))
 				return
 			}
 			device = id.Device.ID
@@ -163,7 +164,7 @@ func (s *Server) apiCLI(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, req)
 
 	default:
-		httpError(w, http.StatusNotFound, "没有这个接口")
+		httpError(w, http.StatusNotFound, i18n.S("没有这个接口", "No such endpoint"))
 	}
 }
 
@@ -176,7 +177,7 @@ func (s *Server) cliStepUp(w http.ResponseWriter, r *http.Request) bool {
 	if id := s.Remote.Auth.Authenticate(r); id != nil && time.Since(id.PasskeyAt) <= stepUpWindow {
 		return false
 	}
-	writeJSONStatus(w, http.StatusForbidden, map[string]any{"error": "批准之前先用 passkey 验一次", "reason": "stepup"})
+	writeJSONStatus(w, http.StatusForbidden, map[string]any{"error": i18n.S("批准之前先用 passkey 验一次", "Verify with your passkey before approving"), "reason": "stepup"})
 	return true
 }
 

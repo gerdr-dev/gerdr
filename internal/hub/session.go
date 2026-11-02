@@ -12,6 +12,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gerdr-dev/gerdr/internal/i18n"
+
 	"github.com/coder/acp-go-sdk"
 
 	"github.com/gerdr-dev/gerdr/acpx"
@@ -143,7 +145,7 @@ func (s *Session) waitingLocked() string {
 	}
 	w := acpx.DescribeRequest(first.kind, first.req)
 	if n := len(s.pending); n > 1 {
-		w += fmt.Sprintf("（还有 %d 个）", n-1)
+		w += fmt.Sprintf(i18n.S("（还有 %d 个）", " (+%d more)"), n-1)
 	}
 	return w
 }
@@ -193,7 +195,7 @@ func (s *Session) recoverAfterRestart(sc logScan) (openSince int64) {
 	var add []*Event
 	if sc.open {
 		openSince = sc.lastTS
-		add = append(add, &Event{Seq: s.h.nextSeqLocked(), TS: now(), Kind: EvTurnEnd, StopReason: "cancelled", Error: "Gerdr 重启，这一轮被中断了"})
+		add = append(add, &Event{Seq: s.h.nextSeqLocked(), TS: now(), Kind: EvTurnEnd, StopReason: "cancelled", Error: i18n.S("Gerdr 重启，这一轮被中断了", "Gerdr restarted and this turn was interrupted")})
 	}
 	// 还在跑的 `!命令`：进程跟着 gerdr 没了（或者成了没人管的孤儿），补一个结束，卡片别一直转
 	for _, id := range sc.shells {
@@ -460,7 +462,7 @@ func (s *Session) ensureAttached(ctx context.Context) (*agenthost.Host, error) {
 				return c, nil
 			}
 		}
-		return nil, fmt.Errorf("接回会话失败：%s", errText(err))
+		return nil, fmt.Errorf(i18n.S("接回会话失败：%s", "reattaching the session failed: %s"), errText(err))
 	}
 	s.mu.Lock()
 	s.attached, s.shut = true, false
@@ -613,13 +615,13 @@ type HeldError struct{ Holders []acpx.Holder }
 func (e *HeldError) Error() string {
 	h := e.Holders[0]
 	if h.Pid == 0 {
-		return "这个会话正在" + h.Name + "里开着，这里接不上"
+		return fmt.Sprintf(i18n.S("这个会话正在%s里开着，这里接不上", "This session is open in %s, so it can't be picked up here"), h.Name)
 	}
-	where := "别的终端"
+	where := i18n.S("别的终端", "another terminal")
 	if h.Name != "" {
-		where = "「" + h.Name + "」"
+		where = i18n.S("「"+h.Name+"」", "\""+h.Name+"\"")
 	}
-	return fmt.Sprintf("这个会话还在%s里开着（claude，pid %d）。两边同时写会分叉，谁也看不见对方说的话", where, h.Pid)
+	return fmt.Sprintf(i18n.S("这个会话还在%s里开着（claude，pid %d）。两边同时写会分叉，谁也看不见对方说的话", "This session is still open in %s (claude, pid %d). Writing from both places would fork it, and neither side would see the other's messages"), where, h.Pid)
 }
 
 func (s *Session) heldElsewhere(ctx context.Context, c *agenthost.Host) []acpx.Holder {
@@ -645,11 +647,11 @@ func (s *Session) Takeover(ctx context.Context, action string) error {
 	s.mu.Unlock()
 	res, err := agenthost.Call[acpx.TakeoverResponse](ctx, c, acpx.MethodTakeover, acpx.TakeoverRequest{SessionId: acp.SessionId(sid), Action: action})
 	if err != nil {
-		return fmt.Errorf("处理失败：%s", errText(err))
+		return fmt.Errorf(i18n.S("处理失败：%s", "failed: %s"), errText(err))
 	}
 	if res.SessionId != "" && string(res.SessionId) != sid {
 		s.h.rekey(s, string(res.SessionId))
-		s.emit(&Event{Kind: EvNotice, Level: "info", Text: "另起了一份接着聊：从这里往下只在 Gerdr 里，别处那个会话不受影响"})
+		s.emit(&Event{Kind: EvNotice, Level: "info", Text: i18n.S("另起了一份接着聊：从这里往下只在 Gerdr 里，别处那个会话不受影响", "Forked into a new copy: from here on it lives only in Gerdr; the session elsewhere is unaffected")})
 	}
 	return nil
 }

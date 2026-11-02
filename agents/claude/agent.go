@@ -11,6 +11,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -19,6 +20,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/gerdr-dev/gerdr/internal/i18n"
 
 	"github.com/coder/acp-go-sdk"
 	"github.com/google/uuid"
@@ -105,7 +108,7 @@ func (a *Agent) loginHint(msg string) string {
 			cmd = kv + " " + cmd
 		}
 	}
-	return msg + "\n\n在终端里跑 `" + cmd + "`，进去之后输入 /login 登录，完了 /exit，再回来重试。"
+	return msg + fmt.Sprintf(i18n.S("\n\n在终端里跑 `%s`，进去之后输入 /login 登录，完了 /exit，再回来重试。", "\n\nRun `%s` in a terminal, type /login to sign in, then /exit and come back to try again."), cmd)
 }
 
 // defaultEffort：claude 不带 --effort 起来时用哪一档 —— settings 里的 effortLevel，后读的盖前面的：
@@ -178,11 +181,11 @@ func (a *Agent) bin() (string, error) {
 }
 
 var modes = []acp.SessionMode{
-	{Id: "default", Name: "Default", Description: acp.Ptr("改文件、跑命令前都问你")},
-	{Id: "acceptEdits", Name: "Accept edits", Description: acp.Ptr("改文件不问，跑命令照样问")},
-	{Id: "plan", Name: "Plan", Description: acp.Ptr("只读，先出计划给你批")},
-	{Id: "auto", Name: "Auto", Description: acp.Ptr("由分类器判断哪些要问")},
-	{Id: "bypassPermissions", Name: "Bypass", Description: acp.Ptr("什么都不问")},
+	{Id: "default", Name: "Default", Description: acp.Ptr(i18n.S("改文件、跑命令前都问你", "Asks before editing files or running commands"))},
+	{Id: "acceptEdits", Name: "Accept edits", Description: acp.Ptr(i18n.S("改文件不问，跑命令照样问", "Edits files without asking; still asks before running commands"))},
+	{Id: "plan", Name: "Plan", Description: acp.Ptr(i18n.S("只读，先出计划给你批", "Read-only: drafts a plan for you to approve first"))},
+	{Id: "auto", Name: "Auto", Description: acp.Ptr(i18n.S("由分类器判断哪些要问", "A classifier decides what needs asking"))},
+	{Id: "bypassPermissions", Name: "Bypass", Description: acp.Ptr(i18n.S("什么都不问", "Never asks"))},
 }
 
 type Agent struct {
@@ -613,7 +616,7 @@ func (a *Agent) configOptions(s *session) []acp.SessionConfigOption {
 		name, desc := m.DisplayName, m.Description
 		if m.Value == "default" {
 			if n, rest, ok := strings.Cut(desc, " · "); ok && n != "" {
-				name, desc = n, "默认 · "+rest
+				name, desc = n, i18n.S("默认 · ", "Default · ")+rest
 			}
 		} else if defResolved != "" && m.ResolvedModel == defResolved && cur != m.Value {
 			continue
@@ -641,9 +644,9 @@ func (a *Agent) configOptions(s *session) []acp.SessionConfigOption {
 		}
 		var eo acp.SessionConfigSelectOptionsUngrouped
 		if def != "" {
-			eo = append(eo, acp.SessionConfigSelectOption{Value: "", Name: def, Description: acp.Ptr("默认 · 跟着 settings 里的 effortLevel")})
+			eo = append(eo, acp.SessionConfigSelectOption{Value: "", Name: def, Description: acp.Ptr(i18n.S("默认 · 跟着 settings 里的 effortLevel", "Default · follows effortLevel in settings"))})
 		} else {
-			eo = append(eo, acp.SessionConfigSelectOption{Value: "", Name: "默认", Description: acp.Ptr("不指定，由 Claude Code 决定")})
+			eo = append(eo, acp.SessionConfigSelectOption{Value: "", Name: i18n.S("默认", "Default"), Description: acp.Ptr(i18n.S("不指定，由 Claude Code 决定", "Not set; Claude Code decides"))})
 		}
 		for _, e := range curModel.SupportedEffortLevels {
 			if e == def && effort != e {

@@ -5,6 +5,8 @@ import (
 	"encoding/hex"
 	"os"
 	"sync"
+
+	"github.com/gerdr-dev/gerdr/internal/i18n"
 )
 
 // tamperGuard 记住「我们最后一次读到 / 写出的内容」，用来发现外部改动。
@@ -49,6 +51,16 @@ func (g *tamperGuard) check(what string, alert func(string)) {
 		return
 	}
 	g.warned = true
+	if !i18n.IsZH() {
+		how := "was modified"
+		if got == "" {
+			how = "was deleted or can't be read"
+		}
+		alert(g.path + " " + how + ", and not by this process.\n" +
+			"     This process uses its in-memory copy, so anything written there from outside **has no effect now** (it's read on restart).\n" +
+			"     But do find out who changed it: adding a line to " + what + " is the same as handing yourself a credential that gets in.")
+		return
+	}
 	how := "被改过"
 	if got == "" {
 		how = "被删了或者读不出来了"

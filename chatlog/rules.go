@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/gerdr-dev/gerdr/acpx"
+	"github.com/gerdr-dev/gerdr/internal/i18n"
 )
 
 // The rules that turn ACP traffic into log events and read the log back (what to withdraw on stop, where a rewind
@@ -135,14 +136,14 @@ func LastQueued(evs []*Event) string {
 }
 
 // ErrBeforeClear: the message is from before a /clear, whose context the agent no longer has.
-var ErrBeforeClear = errors.New("这条消息在 /clear 之前：清空之后只能回退到清空以后发的消息")
+var ErrBeforeClear = errors.New(i18n.S("这条消息在 /clear 之前：清空之后只能回退到清空以后发的消息", "This message is from before /clear; after clearing you can only rewind to messages sent since"))
 
 // ErrBeforeHandoff: the message is from before another agent took the conversation over (a "handoff" notice); it lives
 // in the previous agent's session, which this one can't cut.
-var ErrBeforeHandoff = errors.New("这条消息是换 agent 之前说的：只能回退到换过来以后发的消息")
+var ErrBeforeHandoff = errors.New(i18n.S("这条消息是换 agent 之前说的：只能回退到换过来以后发的消息", "This message is from before the agent switch; you can only rewind to messages sent since"))
 
 // ErrNoMessage: no user message with that id in the log.
-var ErrNoMessage = errors.New("找不到这条消息")
+var ErrNoMessage = errors.New(i18n.S("找不到这条消息", "Message not found"))
 
 // RewindPoint finds where rewinding to user message msgID cuts the log: its index, its content (back into the
 // composer) and whether it was an interjection. Two kinds of user messages count: the ones sent through the log

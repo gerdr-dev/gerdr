@@ -196,6 +196,7 @@ export default defineAddon({
 | `GERDR_PORT` | `7870` | 监听端口（被占了会自动换一个） |
 | `GERDR_HOST` | `127.0.0.1` | 监听地址 |
 | `GERDR_DIR` | `~/.gerdr` | 数据目录（会话、布局、扩展） |
+| `GERDR_LANG` | 系统语言 | `zh` / `en`：命令行和后端写进会话的文字用哪种语言（界面自己的语言在设置里选） |
 | `GERDR_TOKEN` | 自动生成 | 登录令牌，存在 `~/.gerdr/token` |
 | `GERDR_CLAUDE_IDLE_MINUTES` | `15` | Claude 会话闲多久就收掉它的进程（下次说话自动接回）；`0` = 不收 |
 | `GERDR_UI` | `~/.gerdr/ui` | 界面源码目录（比如单独克隆的 gerdr-ui 仓库） |

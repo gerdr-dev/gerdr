@@ -24,6 +24,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/gerdr-dev/gerdr/internal/i18n"
 )
 
 type Renderer struct {
@@ -234,7 +236,7 @@ func (r *Renderer) build(files []string, sig string) *build {
 	var cfg uiConfig
 	if raw, err := os.ReadFile(filepath.Join(r.dir, "ui.json")); err == nil {
 		if err := json.Unmarshal(raw, &cfg); err != nil {
-			fatal = append(fatal, "ui.json 写错了："+err.Error())
+			fatal = append(fatal, i18n.S("ui.json 写错了：", "ui.json is invalid: ")+err.Error())
 		}
 	}
 	if cfg.Title != "" {
@@ -257,12 +259,12 @@ func (r *Renderer) build(files []string, sig string) *build {
 	css, dropped := browserCSS(cssText + string(packagesCSS(r.dir)))
 	b.css = css
 	for _, d := range dropped {
-		b.issues = append(b.issues, errorItem{Level: "warn", Source: "css", Message: fmt.Sprintf("src/index.css 里的 %s 用不了（Tailwind browser 不支持），已经跳过", d)})
+		b.issues = append(b.issues, errorItem{Level: "warn", Source: "css", Message: fmt.Sprintf(i18n.S("src/index.css 里的 %s 用不了（Tailwind browser 不支持），已经跳过", "%s in src/index.css isn't supported by Tailwind browser; skipped"), d)})
 	}
 
 	b.routes = buildRoutes(files)
 	if len(b.routes) == 0 {
-		fatal = append(fatal, "src/pages/ 下面一个页面都没有（至少要有 src/pages/index.tsx）")
+		fatal = append(fatal, i18n.S("src/pages/ 下面一个页面都没有（至少要有 src/pages/index.tsx）", "No pages under src/pages/ (at least src/pages/index.tsx is needed)"))
 	}
 	var roots []string
 	for _, rt := range b.routes {
@@ -311,7 +313,7 @@ func (r *Renderer) build(files []string, sig string) *build {
 	im, missing := buildImportMap(deps, uniq(bare))
 	b.importMap = im
 	if len(missing) > 0 {
-		fatal = append(fatal, "代码里用到了这些包，但 package.json 的 dependencies 里没写版本："+strings.Join(missing, ", "))
+		fatal = append(fatal, i18n.S("代码里用到了这些包，但 package.json 的 dependencies 里没写版本：", "These packages are used in code but have no version in package.json dependencies: ")+strings.Join(missing, ", "))
 	} else if r.esm != nil {
 		r.useVendor(b, deps, append(staticBare, runtimeBare...))
 	}
@@ -339,7 +341,7 @@ func (r *Renderer) useVendor(b *build, deps map[string]string, staticBare []stri
 	select {
 	case <-vb.done:
 		if vb.err != nil {
-			b.issues = append(b.issues, errorItem{Level: "warn", Source: "vendor", Message: "第三方包没能打成 vendor 包，退回逐个从 esm.sh 加载（首次打开会慢）：" + firstLine(vb.err.Error()), Detail: vb.err.Error()})
+			b.issues = append(b.issues, errorItem{Level: "warn", Source: "vendor", Message: i18n.S("第三方包没能打成 vendor 包，退回逐个从 esm.sh 加载（首次打开会慢）：", "Couldn't bundle third-party packages into a vendor bundle; loading them one by one from esm.sh instead (first load will be slow): ") + firstLine(vb.err.Error()), Detail: vb.err.Error()})
 			return
 		}
 		for spec, u := range vb.imports {

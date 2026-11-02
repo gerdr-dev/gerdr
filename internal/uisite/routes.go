@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"path"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/evanw/esbuild/pkg/api"
+	"github.com/gerdr-dev/gerdr/internal/i18n"
 )
 
 // route 是 src/pages/ 下的一个页面：
@@ -99,8 +101,8 @@ function RouteError() {
   }, [e]);
   return h("div", { style: { padding: 24, font: "12px/1.6 ui-monospace, monospace" } },
     h("pre", { style: { margin: 0, whiteSpace: "pre-wrap", color: "#e5484d" } }, text),
-    h("p", { style: { marginTop: 16, opacity: 0.6, fontFamily: "system-ui" } }, "界面代码出错了。改好之后会自动刷新。"),
-    h("a", { href: "/rescue", onClick: function (ev) { if (window.__gerdrRescue) { ev.preventDefault(); window.__gerdrRescue.open(); } }, style: { fontFamily: "system-ui", fontSize: 14, color: "#7aa2f7" } }, "打开急救面板，叫 agent 来修 →"));
+    h("p", { style: { marginTop: 16, opacity: 0.6, fontFamily: "system-ui" } }, ` + strconv.Quote(i18n.S("界面代码出错了。改好之后会自动刷新。", "The UI code has an error. The page reloads once it's fixed.")) + `),
+    h("a", { href: "/rescue", onClick: function (ev) { if (window.__gerdrRescue) { ev.preventDefault(); window.__gerdrRescue.open(); } }, style: { fontFamily: "system-ui", fontSize: 14, color: "#7aa2f7" } }, ` + strconv.Quote(i18n.S("打开急救面板，叫 agent 来修 →", "Open the rescue panel and have an agent fix it →")) + `));
 }
 function NotFound() {
   return h("div", { style: { padding: 24, font: "14px system-ui", opacity: 0.6 } }, "404 · " + location.pathname);

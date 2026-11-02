@@ -3,12 +3,15 @@ package webui
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/gerdr-dev/gerdr/internal/i18n"
 )
 
 // 界面目录用 git 管（照 shuttle 的 internal/wsgit 模板升级）：
@@ -70,7 +73,7 @@ func upgradeGit(dst string, files map[string][]byte, label string, leave bool) (
 	if _, err := os.Stat(filepath.Join(dst, ".git", "MERGE_HEAD")); err == nil {
 		res.Status = "conflict"
 		res.Conflicts = conflicted(dst)
-		res.Note = "上一次合并新版界面还有冲突没解决完"
+		res.Note = i18n.S("上一次合并新版界面还有冲突没解决完", "The last merge of the new UI still has unresolved conflicts")
 		return res, nil
 	}
 	if tip, err := git(dst, nil, "log", "-1", "--format=%B", upstream); err == nil {
@@ -79,7 +82,7 @@ func upgradeGit(dst string, files map[string][]byte, label string, leave bool) (
 			// the snapshot and the merge left it on upstream alone, and every later sync then said up_to_date
 			// while the live UI kept the old code.
 			if _, err := git(dst, nil, "merge-base", "--is-ancestor", upstream, "HEAD"); err != nil {
-				if err := commitAll(dst, "合并新版界面之前的改动"); err != nil {
+				if err := commitAll(dst, i18n.S("合并新版界面之前的改动", "Changes before merging the new UI")); err != nil {
 					return nil, err
 				}
 				return merge(dst, res, leave)
@@ -88,7 +91,7 @@ func upgradeGit(dst string, files map[string][]byte, label string, leave bool) (
 			return res, nil
 		}
 	}
-	if err := commitAll(dst, "合并新版界面之前的改动"); err != nil {
+	if err := commitAll(dst, i18n.S("合并新版界面之前的改动", "Changes before merging the new UI")); err != nil {
 		return nil, err
 	}
 	if _, err := commitSnapshot(dst, files, ver, label); err != nil {
@@ -100,7 +103,7 @@ func upgradeGit(dst string, files map[string][]byte, label string, leave bool) (
 // merge 把 upstream 合进当前分支。
 func merge(dst string, res *Result, leave bool) (*Result, error) {
 	before, _ := git(dst, nil, "rev-parse", "HEAD")
-	if _, err := git(dst, nil, "merge", "--no-ff", "--allow-unrelated-histories", "-m", "合入新版界面 "+res.Version, upstream); err != nil {
+	if _, err := git(dst, nil, "merge", "--no-ff", "--allow-unrelated-histories", "-m", i18n.S("合入新版界面 ", "Merge new UI ")+res.Version, upstream); err != nil {
 		res.Conflicts = conflicted(dst)
 		if len(res.Conflicts) == 0 {
 			git(dst, nil, "merge", "--abort")
@@ -109,7 +112,7 @@ func merge(dst string, res *Result, leave bool) (*Result, error) {
 		res.Status = "conflict"
 		if !leave {
 			git(dst, nil, "merge", "--abort")
-			res.Note = "新版界面和本地改动有冲突，先没合：在 Gerdr 里让 agent 运行 gerdr ui merge 解决"
+			res.Note = i18n.S("新版界面和本地改动有冲突，先没合：在 Gerdr 里让 agent 运行 gerdr ui merge 解决", "The new UI conflicts with local changes, so it wasn't merged: in Gerdr, have an agent run gerdr ui merge to resolve it")
 		}
 		return res, nil
 	}
@@ -159,7 +162,7 @@ func initRepo(dst string, files map[string][]byte, ver, label string) (*Result, 
 		return res, nil
 	}
 	// 有别人放的东西 / 改过的老版本：现状先提交成 main，新版做成 upstream（没有共同祖先，按无关历史合并）。
-	if err := commitAll(dst, "现有界面（换成 git 管理之前）"); err != nil {
+	if err := commitAll(dst, i18n.S("现有界面（换成 git 管理之前）", "Existing UI (before switching to git)")); err != nil {
 		return nil, err
 	}
 	if _, err := commitSnapshot(dst, files, ver, label); err != nil {
@@ -201,9 +204,9 @@ func commitSnapshot(dst string, files map[string][]byte, ver, label string) (str
 	if err != nil {
 		return "", err
 	}
-	msg := "Gerdr 界面"
+	msg := i18n.S("Gerdr 界面", "Gerdr UI")
 	if label != "" {
-		msg += "（" + label + "）"
+		msg += i18n.S("（", "(") + label + i18n.S("）", ")")
 	}
 	msg += "\n\n界面版本: " + ver
 	args := []string{"commit-tree", strings.TrimSpace(tree), "-m", msg}
@@ -302,12 +305,12 @@ func wouldConflict(dst string) []string {
 // Merge：把 upstream 上还没合进来的新版界面合进来，冲突留在文件里（给 agent 解决：改好之后 git add + git commit）。
 func Merge(dst string) (*Result, error) {
 	if !hasGit() {
-		return nil, fmt.Errorf("这台机器上没有 git")
+		return nil, errors.New(i18n.S("这台机器上没有 git", "git isn't installed on this computer"))
 	}
 	if _, err := os.Stat(filepath.Join(dst, ".git", "MERGE_HEAD")); err == nil {
-		return &Result{Status: "conflict", Conflicts: conflicted(dst), Note: "合并进行中：解决冲突后 git add -A && git commit"}, nil
+		return &Result{Status: "conflict", Conflicts: conflicted(dst), Note: i18n.S("合并进行中：解决冲突后 git add -A && git commit", "Merge in progress: resolve the conflicts, then git add -A && git commit")}, nil
 	}
-	if err := commitAll(dst, "合并新版界面之前的改动"); err != nil {
+	if err := commitAll(dst, i18n.S("合并新版界面之前的改动", "Changes before merging the new UI")); err != nil {
 		return nil, err
 	}
 	ver := ""

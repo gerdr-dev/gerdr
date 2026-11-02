@@ -14,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/gerdr-dev/gerdr/internal/i18n"
 )
 
 var (
@@ -276,7 +278,7 @@ func FindClaude() (string, error) {
 			return p, nil
 		}
 	}
-	return "", &NotFoundError{Name: "claude", Hint: "安装 Claude Code：curl -fsSL https://claude.ai/install.sh | bash，或设 GERDR_CLAUDE_BIN"}
+	return "", &NotFoundError{Name: "claude", Hint: i18n.S("安装 Claude Code：curl -fsSL https://claude.ai/install.sh | bash，或设 GERDR_CLAUDE_BIN", "Install Claude Code: curl -fsSL https://claude.ai/install.sh | bash, or set GERDR_CLAUDE_BIN")}
 }
 
 // FindBin 找设置里配的可执行文件：绝对路径（~/ 展开）直接用，光秃秃的名字按登录 shell 的 PATH 找。
@@ -289,12 +291,12 @@ func FindBin(name string) (string, error) {
 		if isExec(name) {
 			return name, nil
 		}
-		return "", &NotFoundError{Name: name, Hint: "这个路径不存在或不能执行"}
+		return "", &NotFoundError{Name: name, Hint: i18n.S("这个路径不存在或不能执行", "the path doesn't exist or isn't executable")}
 	}
 	AdoptLoginPath()
 	p, err := exec.LookPath(name)
 	if err != nil {
-		return "", &NotFoundError{Name: name, Hint: "PATH 里找不到它"}
+		return "", &NotFoundError{Name: name, Hint: i18n.S("PATH 里找不到它", "not found on PATH")}
 	}
 	return p, nil
 }
@@ -318,7 +320,7 @@ func FindCodex() (string, error) {
 	AdoptLoginPath()
 	p, err := exec.LookPath("codex")
 	if err != nil {
-		return "", &NotFoundError{Name: "codex", Hint: "安装 Codex CLI：npm i -g @openai/codex 或 brew install codex，或设 GERDR_CODEX_BIN"}
+		return "", &NotFoundError{Name: "codex", Hint: i18n.S("安装 Codex CLI：npm i -g @openai/codex 或 brew install codex，或设 GERDR_CODEX_BIN", "Install Codex CLI: npm i -g @openai/codex or brew install codex, or set GERDR_CODEX_BIN")}
 	}
 	if native := nativeCodex(p); native != "" {
 		return native, nil

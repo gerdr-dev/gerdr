@@ -3,6 +3,8 @@ package auth
 import (
 	"sync"
 	"time"
+
+	"github.com/gerdr-dev/gerdr/internal/i18n"
 )
 
 // Gate 是猜凭据这条路上的闸门：指数退避 + 按 IP 封锁 + 全局熔断。只挂在远程那条路上 ——
@@ -155,12 +157,18 @@ func (g *Gate) Fail(ip string) {
 		e.n = 0
 		e.first = now
 		e.strikes++
-		g.alert("有人在猜配对码：" + ip + " 已封 " + d.String() + "（第 " + itoa(e.strikes) + " 次）")
+		if i18n.IsZH() {
+			g.alert("有人在猜配对码：" + ip + " 已封 " + d.String() + "（第 " + itoa(e.strikes) + " 次）")
+		} else {
+			g.alert("Someone is guessing pairing codes: blocked " + ip + " for " + d.String() + " (strike " + itoa(e.strikes) + ")")
+		}
 	}
 	if !g.locked && len(g.global) >= g.GlobalTrip {
 		g.locked = true
-		g.alert("失败次数超过全局阈值，已停止接受新设备配对。已有会话不受影响；" +
-			"在这台机器上执行 `gerdr remote unlock` 解开。")
+		g.alert(i18n.S("失败次数超过全局阈值，已停止接受新设备配对。已有会话不受影响；"+
+			"在这台机器上执行 `gerdr remote unlock` 解开。",
+			"Too many failed attempts overall: new device pairing is stopped. Existing sessions are unaffected; "+
+				"run `gerdr remote unlock` on this machine to resume."))
 	}
 }
 

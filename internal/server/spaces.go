@@ -2,7 +2,9 @@ package server
 
 import (
 	"encoding/json"
-	"fmt"
+	"errors"
+
+	"github.com/gerdr-dev/gerdr/internal/i18n"
 )
 
 // DefaultSpace is the session a workspace without a "space" field belongs to (ui/src/lib/layout.ts DEFAULT_SPACE).
@@ -131,7 +133,7 @@ func (s *Server) crossSpace(from, to string) error {
 	a, okA := s.sessionSpace(sp, from)
 	b, okB := s.sessionSpace(sp, to)
 	if okA && okB && a != b {
-		return fmt.Errorf("它在另一个项目里：不同项目里的 agent 不能互相调用")
+		return errors.New(i18n.S("它在另一个项目里：不同项目里的 agent 不能互相调用", "It's in another project: agents in different projects can't call each other"))
 	}
 	return nil
 }

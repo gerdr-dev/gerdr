@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gerdr-dev/gerdr/internal/i18n"
+
 	"github.com/coder/acp-go-sdk"
 	"github.com/google/uuid"
 
@@ -200,7 +202,7 @@ func (s *session) start(ctx context.Context) error {
 	if err != nil {
 		pr.stop()
 		if e := pr.err(); e != nil {
-			return fmt.Errorf("claude 启动失败：%w", e)
+			return fmt.Errorf(i18n.S("claude 启动失败：%w", "claude failed to start: %w"), e)
 		}
 		return fmt.Errorf("claude initialize: %w", err)
 	}
@@ -302,7 +304,7 @@ func (s *session) onExit(pr *proc) {
 		if t.cancelled {
 			t.done <- turnResult{stop: acp.StopReasonCancelled}
 		} else {
-			t.done <- turnResult{err: fmt.Errorf("claude 进程意外退出：%v", pr.err())}
+			t.done <- turnResult{err: fmt.Errorf(i18n.S("claude 进程意外退出：%v", "the claude process exited unexpectedly: %v"), pr.err())}
 		}
 	}
 }

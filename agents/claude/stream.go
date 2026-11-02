@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gerdr-dev/gerdr/internal/i18n"
+
 	"github.com/coder/acp-go-sdk"
 	"github.com/google/uuid"
 
@@ -208,13 +210,13 @@ func (s *session) onSystem(ctx context.Context, m map[string]json.RawMessage, ra
 			Error       string `json:"error"`
 		}
 		_ = json.Unmarshal(raw, &r)
-		why := "连不上 API"
+		why := i18n.S("连不上 API", "Can't reach the API")
 		if r.ErrorStatus != nil {
-			why = fmt.Sprintf("API 返回 %d", *r.ErrorStatus)
+			why = fmt.Sprintf(i18n.S("API 返回 %d", "API returned %d"), *r.ErrorStatus)
 		}
 		s.update(ctx, acp.SessionUpdate{SessionInfoUpdate: &acp.SessionSessionInfoUpdate{Meta: acpx.Meta(map[string]any{
 			// Same wording as the hub's own retry notice: the UI counts "N 秒后自动重试" down using noticeDelayMs
-			"notice": fmt.Sprintf("%s，%.0f 秒后自动重试（第 %d/%d 次）", why, float64(r.DelayMS)/1000, r.Attempt, r.MaxRetries),
+			"notice": fmt.Sprintf(i18n.S("%s，%.0f 秒后自动重试（第 %d/%d 次）", "%s, retrying in %.0fs (attempt %d/%d)"), why, float64(r.DelayMS)/1000, r.Attempt, r.MaxRetries),
 			// retry：界面上重试成功（agent 又出字了）就收起这行，不然它一直挂着
 			"noticeLevel":   "retry",
 			"noticeDelayMs": r.DelayMS,
@@ -783,9 +785,9 @@ func (s *session) onControlRequest(pr *proc, reqID string, raw json.RawMessage) 
 	case "ExitPlanMode":
 		plan, _ := req.Input["plan"].(string)
 		opt, err := s.askPermission(ctx, req.ToolUseID, "Ready to code?", acp.ToolKindSwitchMode, req.Input, plan, []acp.PermissionOption{
-			{OptionId: "acceptEdits", Name: "开始做，改文件不用问", Kind: acp.PermissionOptionKindAllowAlways},
-			{OptionId: "default", Name: "开始做，改文件前问我", Kind: acp.PermissionOptionKindAllowOnce},
-			{OptionId: "plan", Name: "接着规划", Kind: acp.PermissionOptionKindRejectOnce},
+			{OptionId: "acceptEdits", Name: i18n.S("开始做，改文件不用问", "Start, and edit files without asking"), Kind: acp.PermissionOptionKindAllowAlways},
+			{OptionId: "default", Name: i18n.S("开始做，改文件前问我", "Start, and ask before editing files"), Kind: acp.PermissionOptionKindAllowOnce},
+			{OptionId: "plan", Name: i18n.S("接着规划", "Keep planning"), Kind: acp.PermissionOptionKindRejectOnce},
 		})
 		if err != nil || opt == "plan" || opt == "" {
 			deny("The user wants to keep planning. Ask what to change in the plan.")
@@ -808,11 +810,11 @@ func (s *session) onControlRequest(pr *proc, reqID string, raw json.RawMessage) 
 	if req.Title != "" {
 		title = req.Title
 	}
-	opts := []acp.PermissionOption{{OptionId: "allow_once", Name: "允许", Kind: acp.PermissionOptionKindAllowOnce}}
+	opts := []acp.PermissionOption{{OptionId: "allow_once", Name: i18n.S("允许", "Allow"), Kind: acp.PermissionOptionKindAllowOnce}}
 	if len(req.Suggestions) > 0 {
-		opts = append(opts, acp.PermissionOption{OptionId: "allow_always", Name: "允许，以后不再问", Kind: acp.PermissionOptionKindAllowAlways})
+		opts = append(opts, acp.PermissionOption{OptionId: "allow_always", Name: i18n.S("允许，以后不再问", "Allow, and don't ask again"), Kind: acp.PermissionOptionKindAllowAlways})
 	}
-	opts = append(opts, acp.PermissionOption{OptionId: "reject_once", Name: "拒绝", Kind: acp.PermissionOptionKindRejectOnce})
+	opts = append(opts, acp.PermissionOption{OptionId: "reject_once", Name: i18n.S("拒绝", "Deny"), Kind: acp.PermissionOptionKindRejectOnce})
 	detail := req.Description
 	if detail == "" {
 		detail = req.Reason

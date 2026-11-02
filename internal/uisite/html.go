@@ -5,6 +5,8 @@ import (
 	"html"
 	"net/http"
 	"strings"
+
+	"github.com/gerdr-dev/gerdr/internal/i18n"
 )
 
 // 页面一开始就接管报错，记进 __GERDR_UI_ERRORS__（agent 改界面改坏了，GET /api/ui/errors 能读到）。
@@ -27,12 +29,17 @@ const errorsScript = `(function(){
   addEventListener("unhandledrejection", function(e){ var r = e.reason; push("unhandledrejection", r && r.message ? (r.name || "Error") + ": " + r.message : r, r && r.stack) });
 })()`
 
-const loadingHTML = `<div id="__gerdr_loading" style="position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;font:13px/1.5 system-ui,-apple-system,sans-serif;color:CanvasText;background:Canvas">` +
-	`<style>@keyframes __gerdr_spin{to{transform:rotate(360deg)}}</style>` +
-	`<div style="width:22px;height:22px;border-radius:50%;border:2px solid color-mix(in srgb,CanvasText 15%,transparent);border-top-color:color-mix(in srgb,CanvasText 60%,transparent);animation:__gerdr_spin .8s linear infinite"></div>` +
-	`<div style="opacity:.6">加载中…</div>` +
-	`<div id="__gerdr_loading_slow" style="opacity:.45;max-width:320px;text-align:center;visibility:hidden">第一次打开要下载界面用到的包，可能要一会儿。一直打不开的话：<a href="/rescue" onclick="if(window.__gerdrRescue){__gerdrRescue.open();return false}" style="color:inherit">急救面板</a></div>` +
-	`</div>`
+// loadingHTML: the loading screen, with text in place of the line under the spinner.
+func loadingHTML(text string) string {
+	return `<div id="__gerdr_loading" style="position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;font:13px/1.5 system-ui,-apple-system,sans-serif;color:CanvasText;background:Canvas">` +
+		`<style>@keyframes __gerdr_spin{to{transform:rotate(360deg)}}</style>` +
+		`<div style="width:22px;height:22px;border-radius:50%;border:2px solid color-mix(in srgb,CanvasText 15%,transparent);border-top-color:color-mix(in srgb,CanvasText 60%,transparent);animation:__gerdr_spin .8s linear infinite"></div>` +
+		`<div style="opacity:.6">` + html.EscapeString(text) + `</div>` +
+		`<div id="__gerdr_loading_slow" style="opacity:.45;max-width:320px;text-align:center;visibility:hidden">` +
+		i18n.S("第一次打开要下载界面用到的包，可能要一会儿。一直打不开的话：", "The first launch downloads the packages the UI uses, which may take a while. If it never loads: ") +
+		`<a href="/rescue" onclick="if(window.__gerdrRescue){__gerdrRescue.open();return false}" style="color:inherit">` + i18n.S("急救面板", "Rescue panel") + `</a></div>` +
+		`</div>`
+}
 
 // ServePage 出页面：importMap + 模块清单（window.__GERDR_UI__）+ 运行时，运行时 import 入口再渲染。
 // nonce：内联脚本靠它过 CSP（importMap 只能内联）。
@@ -40,7 +47,7 @@ func (r *Renderer) ServePage(w http.ResponseWriter, req *http.Request, nonce str
 	b := r.ensure()
 	n := ` nonce="` + nonce + `"`
 	var s strings.Builder
-	s.WriteString("<!DOCTYPE html>\n<html lang=\"zh-CN\" style=\"color-scheme: light dark\">\n<head>\n<meta charset=\"UTF-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no\" />\n")
+	s.WriteString("<!DOCTYPE html>\n<html lang=\"" + i18n.S("zh-CN", "en") + "\" style=\"color-scheme: light dark\">\n<head>\n<meta charset=\"UTF-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no\" />\n")
 	s.WriteString("<title>" + html.EscapeString(b.title) + "</title>\n")
 	if b.favicon != "" {
 		s.WriteString(`<link rel="icon" href="` + html.EscapeString(b.favicon) + `" />` + "\n")
@@ -64,7 +71,7 @@ func (r *Renderer) ServePage(w http.ResponseWriter, req *http.Request, nonce str
 		s.WriteString(`<link rel="modulepreload" href="` + html.EscapeString(u) + `">` + "\n")
 	}
 	s.WriteString(`<script type="module" src="/_esm/` + tailwindBrowser + `"></script>` + "\n")
-	s.WriteString("</head>\n<body>\n<div id=\"root\">" + loadingHTML + "</div>\n<script" + n + ">")
+	s.WriteString("</head>\n<body>\n<div id=\"root\">" + loadingHTML(i18n.S("加载中…", "Loading…")) + "</div>\n<script" + n + ">")
 	s.WriteString("setTimeout(function(){var e=document.getElementById('__gerdr_loading_slow');if(e)e.style.visibility='visible'},5000);\n")
 	s.WriteString("window.__GERDR_UI__ = " + string(mustJSON(map[string]any{
 		"base":    r.base,
@@ -96,9 +103,9 @@ func (r *Renderer) ServePage(w http.ResponseWriter, req *http.Request, nonce str
 // loading screen and reload once a new build is out: the hot reload stream says hello with the current build id.
 func (r *Renderer) servePreparing(w http.ResponseWriter, b *build, n string) {
 	var s strings.Builder
-	s.WriteString("<!DOCTYPE html>\n<html lang=\"zh-CN\" style=\"color-scheme: light dark\">\n<head>\n<meta charset=\"UTF-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no\" />\n")
+	s.WriteString("<!DOCTYPE html>\n<html lang=\"" + i18n.S("zh-CN", "en") + "\" style=\"color-scheme: light dark\">\n<head>\n<meta charset=\"UTF-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no\" />\n")
 	s.WriteString("<title>" + html.EscapeString(b.title) + "</title>\n</head>\n<body>\n")
-	s.WriteString(strings.Replace(loadingHTML, "加载中…", "正在准备界面用到的包（新装或加了包之后只这一次）…", 1))
+	s.WriteString(loadingHTML(i18n.S("正在准备界面用到的包（新装或加了包之后只这一次）…", "Preparing the packages the UI uses (only after an install or a new package)…")))
 	s.WriteString("<script" + n + ">var B=" + string(mustJSON(b.id)) + ";var es=new EventSource(" + string(mustJSON(r.base+"/_ui/events")) +
 		");es.onmessage=function(e){try{if(JSON.parse(e.data).build!==B)location.reload()}catch(_){}};" +
 		"setTimeout(function(){var e=document.getElementById('__gerdr_loading_slow');if(e)e.style.visibility='visible'},20000);</script>\n")

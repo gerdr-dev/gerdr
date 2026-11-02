@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gerdr-dev/gerdr/internal/i18n"
 	hwbasic "github.com/huaweicloud/huaweicloud-sdk-go-v3/core/auth/basic"
 	hwconfig "github.com/huaweicloud/huaweicloud-sdk-go-v3/core/config"
 	hwdns "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/dns/v2"
@@ -22,27 +23,27 @@ import (
 func huaweiCAA(_ context.Context, host, value string, apply bool) (bool, error) {
 	id, secret, region := credEnv("HUAWEICLOUD_ACCESS_KEY_ID"), credEnv("HUAWEICLOUD_SECRET_ACCESS_KEY"), credEnv("HUAWEICLOUD_REGION")
 	if id == "" || secret == "" || region == "" {
-		return false, errors.New("没找到华为云的 Access Key / Region")
+		return false, errors.New(i18n.S("没找到华为云的 Access Key / Region", "no Huawei Cloud access key / region found"))
 	}
 	auth, err := hwbasic.NewCredentialsBuilder().WithAk(id).WithSk(secret).SafeBuild()
 	if err != nil {
-		return false, fmt.Errorf("华为云：%w", err)
+		return false, fmt.Errorf(i18n.S("华为云：%w", "Huawei Cloud: %w"), err)
 	}
 	reg, err := hwregion.SafeValueOf(region)
 	if err != nil {
-		return false, fmt.Errorf("华为云：%w", err)
+		return false, fmt.Errorf(i18n.S("华为云：%w", "Huawei Cloud: %w"), err)
 	}
 	c, err := hwdns.DnsClientBuilder().
 		WithHttpConfig(hwconfig.DefaultHttpConfig().WithTimeout(30 * time.Second)).
 		WithRegion(reg).WithCredential(auth).SafeBuild()
 	if err != nil {
-		return false, fmt.Errorf("华为云：%w", err)
+		return false, fmt.Errorf(i18n.S("华为云：%w", "Huawei Cloud: %w"), err)
 	}
 
 	limit := int32(500)
 	zr, err := c.Sync(&hwmodel.ListPublicZonesRequest{Limit: &limit}, hwdns.GenReqDefForListPublicZones())
 	if err != nil {
-		return false, fmt.Errorf("华为云列域名失败：%w", err)
+		return false, fmt.Errorf(i18n.S("华为云列域名失败：%w", "Huawei Cloud: listing domains: %w"), err)
 	}
 	ids := map[string]string{}
 	var zones []string
@@ -63,7 +64,7 @@ func huaweiCAA(_ context.Context, host, value string, apply bool) (bool, error) 
 
 	rr, err := c.Sync(&hwmodel.ListRecordSetsByZoneRequest{ZoneId: zoneID, Name: &fqdn, Type: &typ}, hwdns.GenReqDefForListRecordSetsByZone())
 	if err != nil {
-		return false, fmt.Errorf("华为云读记录失败：%w", err)
+		return false, fmt.Errorf(i18n.S("华为云读记录失败：%w", "Huawei Cloud: reading records: %w"), err)
 	}
 	rec := caaRecord(value)
 	if sets := rr.(*hwmodel.ListRecordSetsByZoneResponse).Recordsets; sets != nil {
@@ -89,7 +90,7 @@ func huaweiCAA(_ context.Context, host, value string, apply bool) (bool, error) 
 				Name: set.Name, Description: set.Description, Type: set.Type, Ttl: set.Ttl, Records: &vals,
 			}}, hwdns.GenReqDefForUpdateRecordSet())
 			if err != nil {
-				return false, fmt.Errorf("华为云改记录失败：%w", err)
+				return false, fmt.Errorf(i18n.S("华为云改记录失败：%w", "Huawei Cloud: updating the record: %w"), err)
 			}
 			return true, nil
 		}
@@ -102,7 +103,7 @@ func huaweiCAA(_ context.Context, host, value string, apply bool) (bool, error) 
 		Name: fqdn, Type: typ, Ttl: &ttl, Records: []string{rec},
 	}}, hwdns.GenReqDefForCreateRecordSet())
 	if err != nil {
-		return false, fmt.Errorf("华为云加记录失败：%w", err)
+		return false, fmt.Errorf(i18n.S("华为云加记录失败：%w", "Huawei Cloud: adding the record: %w"), err)
 	}
 	return true, nil
 }

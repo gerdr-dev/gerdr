@@ -17,6 +17,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gerdr-dev/gerdr/internal/i18n"
+
 	"github.com/coder/acp-go-sdk"
 
 	"github.com/gerdr-dev/gerdr/acpx"
@@ -283,7 +285,7 @@ func (h *Hub) Agents() []map[string]any {
 			err := native.Available(h.llm().Only(a.Providers))
 			if err != nil && len(a.Providers) > 0 && len(h.llm().Only(a.Providers).Providers) == 0 {
 				// 勾的服务商都被删了（比 Available 那句「去加一个」更说得清）
-				err = fmt.Errorf("勾的服务商（%s）已经删了：编辑它重新勾一个", strings.Join(a.Providers, "、"))
+				err = fmt.Errorf(i18n.S("勾的服务商（%s）已经删了：编辑它重新勾一个", "The selected providers (%s) have been deleted: edit it to pick another"), strings.Join(a.Providers, i18n.S("、", ", ")))
 			}
 			m["available"], m["error"] = err == nil, errStr(err)
 		}
@@ -935,10 +937,10 @@ func normCwd(p string) (string, error) {
 	}
 	st, err := os.Stat(abs)
 	if err != nil {
-		return "", fmt.Errorf("目录不存在：%s", abs)
+		return "", fmt.Errorf(i18n.S("目录不存在：%s", "directory doesn't exist: %s"), abs)
 	}
 	if !st.IsDir() {
-		return "", fmt.Errorf("不是目录：%s", abs)
+		return "", fmt.Errorf(i18n.S("不是目录：%s", "not a directory: %s"), abs)
 	}
 	return abs, nil
 }
@@ -971,5 +973,5 @@ func checkMode(mode string, modes *acp.SessionModeState) error {
 		}
 		ids = append(ids, string(m.Id))
 	}
-	return fmt.Errorf("不支持的模式 %q，可选：%s", mode, strings.Join(ids, "、"))
+	return fmt.Errorf(i18n.S("不支持的模式 %q，可选：%s", "unsupported mode %q; options: %s"), mode, strings.Join(ids, i18n.S("、", ", ")))
 }

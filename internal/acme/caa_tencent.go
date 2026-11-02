@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/gerdr-dev/gerdr/internal/i18n"
 	dnspod "github.com/go-acme/tencentclouddnspod/v20210323"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 	sdkerr "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/errors"
@@ -16,7 +17,7 @@ import (
 func tencentCAA(ctx context.Context, host, value string, apply bool) (bool, error) {
 	id, secret := credEnv("TENCENTCLOUD_SECRET_ID"), credEnv("TENCENTCLOUD_SECRET_KEY")
 	if id == "" || secret == "" {
-		return false, errors.New("没找到腾讯云的 SecretId / SecretKey")
+		return false, errors.New(i18n.S("没找到腾讯云的 SecretId / SecretKey", "no Tencent Cloud SecretId / SecretKey found"))
 	}
 	cred := common.NewCredential(id, secret)
 	if t := credEnv("TENCENTCLOUD_SESSION_TOKEN"); t != "" {
@@ -26,7 +27,7 @@ func tencentCAA(ctx context.Context, host, value string, apply bool) (bool, erro
 	cpf.HttpProfile.Endpoint = "dnspod.tencentcloudapi.com"
 	c, err := dnspod.NewClient(cred, credEnv("TENCENTCLOUD_REGION"), cpf)
 	if err != nil {
-		return false, fmt.Errorf("腾讯云：%w", err)
+		return false, fmt.Errorf(i18n.S("腾讯云：%w", "Tencent Cloud: %w"), err)
 	}
 
 	// Match on the punycode form (host is ASCII), call the API with the name DNSPod knows the domain by.
@@ -36,7 +37,7 @@ func tencentCAA(ctx context.Context, host, value string, apply bool) (bool, erro
 	for {
 		r, err := dnspod.DescribeDomainListWithContext(ctx, c, list)
 		if err != nil {
-			return false, fmt.Errorf("腾讯云列域名失败：%w", err)
+			return false, fmt.Errorf(i18n.S("腾讯云列域名失败：%w", "Tencent Cloud: listing domains: %w"), err)
 		}
 		for _, d := range r.Response.DomainList {
 			p := strings.ToLower(*d.Punycode)
@@ -60,7 +61,7 @@ func tencentCAA(ctx context.Context, host, value string, apply bool) (bool, erro
 	switch {
 	case errors.As(err, &se) && se.Code == dnspod.RESOURCENOTFOUND_NODATAOFRECORD:
 	case err != nil:
-		return false, fmt.Errorf("腾讯云读记录失败：%w", err)
+		return false, fmt.Errorf(i18n.S("腾讯云读记录失败：%w", "Tencent Cloud: reading records: %w"), err)
 	default:
 		for _, rec := range r.Response.RecordList {
 			if sameCAA(*rec.Value, value) {
@@ -75,7 +76,7 @@ func tencentCAA(ctx context.Context, host, value string, apply bool) (bool, erro
 	add.Domain, add.SubDomain, add.RecordType = common.StringPtr(names[zone]), common.StringPtr(rr), common.StringPtr("CAA")
 	add.RecordLine, add.Value = common.StringPtr("默认"), common.StringPtr(caaRecord(value))
 	if _, err := dnspod.CreateRecordWithContext(ctx, c, add); err != nil {
-		return false, fmt.Errorf("腾讯云加记录失败：%w", err)
+		return false, fmt.Errorf(i18n.S("腾讯云加记录失败：%w", "Tencent Cloud: adding the record: %w"), err)
 	}
 	return true, nil
 }

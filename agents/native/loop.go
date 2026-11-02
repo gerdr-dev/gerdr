@@ -10,6 +10,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gerdr-dev/gerdr/internal/i18n"
+
 	"github.com/coder/acp-go-sdk"
 	"github.com/google/uuid"
 
@@ -159,7 +161,7 @@ func (r *run) callModel(ctx context.Context) (llm.Result, bool, error) {
 		// retry 级别：界面原地更新同一行、重试成功（又出字）就收起；不带级别会按 warn 每次重试新起一行
 		r.s.send(acp.SessionUpdate{SessionInfoUpdate: &acp.SessionSessionInfoUpdate{Meta: acpx.Meta(map[string]any{
 			// "N 秒后自动重试" + noticeDelayMs: the UI counts the wait down (same as the claude adapter and the hub's own retries)
-			"notice":        fmt.Sprintf("模型接口出错：%s（%d 秒后自动重试，第 %d 次）", oneLine(err.Error(), 160), int(wait.Seconds()), attempt),
+			"notice":        fmt.Sprintf(i18n.S("模型接口出错：%s（%d 秒后自动重试，第 %d 次）", "Model API error: %s (retrying in %ds, attempt %d)"), oneLine(err.Error(), 160), int(wait.Seconds()), attempt),
 			"noticeLevel":   "retry",
 			"noticeDelayMs": wait.Milliseconds(),
 		})}})
@@ -396,20 +398,20 @@ func (r *run) exec(ctx context.Context, p *pending) result {
 }
 
 func (r *run) askPermission(ctx context.Context, p *pending, rule string) (string, error) {
-	opts := []acp.PermissionOption{{OptionId: "allow_once", Name: "允许", Kind: acp.PermissionOptionKindAllowOnce}}
+	opts := []acp.PermissionOption{{OptionId: "allow_once", Name: i18n.S("允许", "Allow"), Kind: acp.PermissionOptionKindAllowOnce}}
 	if rule != "" {
-		name := "本会话都允许"
+		name := i18n.S("本会话都允许", "Always allow in this session")
 		switch {
 		case rule == "edit":
-			name = "允许，本会话改文件都不再问"
+			name = i18n.S("允许，本会话改文件都不再问", "Allow, and don't ask again for file edits in this session")
 		case strings.HasPrefix(rule, "bash:"):
-			name = "允许，本会话 `" + strings.TrimPrefix(rule, "bash:") + "` 开头的命令都不再问"
+			name = fmt.Sprintf(i18n.S("允许，本会话 `%s` 开头的命令都不再问", "Allow, and don't ask again for commands starting with `%s` in this session"), strings.TrimPrefix(rule, "bash:"))
 		case strings.HasPrefix(rule, "fetch:"):
-			name = "允许，本会话访问 " + strings.TrimPrefix(rule, "fetch:") + " 都不再问"
+			name = fmt.Sprintf(i18n.S("允许，本会话访问 %s 都不再问", "Allow, and don't ask again for %s in this session"), strings.TrimPrefix(rule, "fetch:"))
 		}
 		opts = append(opts, acp.PermissionOption{OptionId: "allow_always", Name: name, Kind: acp.PermissionOptionKindAllowAlways})
 	}
-	opts = append(opts, acp.PermissionOption{OptionId: "reject_once", Name: "拒绝", Kind: acp.PermissionOptionKindRejectOnce})
+	opts = append(opts, acp.PermissionOption{OptionId: "reject_once", Name: i18n.S("拒绝", "Deny"), Kind: acp.PermissionOptionKindRejectOnce})
 	tc := acp.ToolCallUpdate{
 		ToolCallId: acp.ToolCallId(p.tc.ID), Title: acp.Ptr(p.ui.Title), Kind: acp.Ptr(p.ui.Kind),
 		Status: acp.Ptr(acp.ToolCallStatusPending), RawInput: p.args, Locations: p.ui.Locs,

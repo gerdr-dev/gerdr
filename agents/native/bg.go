@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/gerdr-dev/gerdr/internal/i18n"
+
 	"github.com/coder/acp-go-sdk"
 
 	"github.com/gerdr-dev/gerdr/acpx"
@@ -140,7 +142,7 @@ func (s *session) autoTurn(note string) {
 		}
 	}
 	if err != nil && err != errStopped && ctx.Err() == nil {
-		r.notice("处理后台任务的结果时出错：" + oneLine(err.Error(), 200))
+		r.notice(i18n.S("处理后台任务的结果时出错：", "Error handling a background task's result: ") + oneLine(err.Error(), 200))
 	}
 }
 

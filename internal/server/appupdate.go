@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gerdr-dev/gerdr/internal/auth"
+	"github.com/gerdr-dev/gerdr/internal/i18n"
 )
 
 // Settings → 版本 on a device without the desktop App's shell (a phone over remote access, a plain browser).
@@ -48,7 +49,7 @@ func (s *Server) appUpdateRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/app-update", func(w http.ResponseWriter, r *http.Request) {
 		// The App is always on this machine: a remote device reporting an App status would only be lying
 		if auth.FromRemote(r) {
-			httpError(w, http.StatusForbidden, "只有电脑上的 App 能报更新状态")
+			httpError(w, http.StatusForbidden, i18n.S("只有电脑上的 App 能报更新状态", "Only the desktop app can report update status"))
 			return
 		}
 		var b struct {
@@ -56,7 +57,7 @@ func (s *Server) appUpdateRoutes(mux *http.ServeMux) {
 			Status json.RawMessage `json:"status"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&b); err != nil || b.Client == "" || len(b.Status) == 0 || b.Status[0] != '{' {
-			httpError(w, 400, "要 client 和 status")
+			httpError(w, 400, i18n.S("要 client 和 status", "client and status are required"))
 			return
 		}
 		a := &s.appUpdate
@@ -79,19 +80,19 @@ func (s *Server) appUpdateRoutes(mux *http.ServeMux) {
 			return
 		}
 		if b.Op != "check" && b.Op != "apply" && b.Op != "auto" {
-			httpError(w, 400, "op 只能是 check / apply / auto")
+			httpError(w, 400, i18n.S("op 只能是 check / apply / auto", "op must be check, apply or auto"))
 			return
 		}
 		_, client := s.appUpdate.get(time.Now())
 		if client == "" {
-			httpError(w, http.StatusConflict, "电脑上的 Gerdr App 没开着窗口，没法检查更新")
+			httpError(w, http.StatusConflict, i18n.S("电脑上的 Gerdr App 没开着窗口，没法检查更新", "The Gerdr app on the computer has no window open, so it can't check for updates"))
 			return
 		}
 		// Applying while busy makes the shell ask in a dialog on the computer, which nobody at a phone can answer.
 		// With automatic updates on it goes ahead by itself once idle anyway.
 		if b.Op == "apply" && s.Hub != nil {
 			if x := s.busy(); x.Turns+x.Waiting+x.Tasks+x.Terms > 0 {
-				httpError(w, http.StatusConflict, "还有 agent 在跑或终端开着，现在更新会打断它们：等空闲了再点")
+				httpError(w, http.StatusConflict, i18n.S("还有 agent 在跑或终端开着，现在更新会打断它们：等空闲了再点", "Agents are running or terminals are open, and updating now would interrupt them. Try again when things are idle"))
 				return
 			}
 		}

@@ -17,6 +17,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -24,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gerdr-dev/gerdr/internal/i18n"
 	"github.com/go-acme/lego/v4/certcrypto"
 	"github.com/go-acme/lego/v4/certificate"
 	"github.com/go-acme/lego/v4/challenge"
@@ -76,23 +78,29 @@ type Field struct {
 
 var providers = []Provider{
 	{Name: "cloudflare", Label: "Cloudflare",
-		Help:   "Cloudflare 后台 → 右上角头像 → My Profile → API Tokens → Create Token → 用「Edit zone DNS」模板，Zone Resources 选这个域名所在的 zone。",
+		Help: i18n.S("Cloudflare 后台 → 右上角头像 → My Profile → API Tokens → Create Token → 用「Edit zone DNS」模板，Zone Resources 选这个域名所在的 zone。",
+			"In the Cloudflare dashboard: profile icon (top right) → My Profile → API Tokens → Create Token → use the \"Edit zone DNS\" template, and set Zone Resources to the zone this domain is in."),
 		Fields: []Field{{"CLOUDFLARE_DNS_API_TOKEN", "API Token", true}}},
-	{Name: "alidns", Label: "阿里云",
-		Help:   "阿里云 RAM 控制台建一个子用户，只给 AliyunDNSFullAccess 权限，创建它的 AccessKey。",
+	{Name: "alidns", Label: i18n.S("阿里云", "Alibaba Cloud"),
+		Help: i18n.S("阿里云 RAM 控制台建一个子用户，只给 AliyunDNSFullAccess 权限，创建它的 AccessKey。",
+			"In the Alibaba Cloud RAM console, create a RAM user with only the AliyunDNSFullAccess permission, then create an AccessKey for it."),
 		Fields: []Field{{"ALICLOUD_ACCESS_KEY", "AccessKey ID", false}, {"ALICLOUD_SECRET_KEY", "AccessKey Secret", true}}},
-	{Name: "tencentcloud", Label: "腾讯云 / DNSPod",
-		Help:   "腾讯云访问管理建一个子用户，只给 QcloudDNSPodFullAccess 权限，创建它的 API 密钥。",
+	{Name: "tencentcloud", Label: i18n.S("腾讯云 / DNSPod", "Tencent Cloud / DNSPod"),
+		Help: i18n.S("腾讯云访问管理建一个子用户，只给 QcloudDNSPodFullAccess 权限，创建它的 API 密钥。",
+			"In Tencent Cloud CAM, create a sub-user with only the QcloudDNSPodFullAccess permission, then create an API key for it."),
 		Fields: []Field{{"TENCENTCLOUD_SECRET_ID", "SecretId", false}, {"TENCENTCLOUD_SECRET_KEY", "SecretKey", true}}},
 	{Name: "route53", Label: "AWS Route 53",
-		Help:   "IAM 建一个用户，给 route53:GetChange / ChangeResourceRecordSets / ListResourceRecordSets / ListHostedZonesByName 权限，创建 Access Key。",
-		Fields: []Field{{"AWS_ACCESS_KEY_ID", "Access Key ID", false}, {"AWS_SECRET_ACCESS_KEY", "Secret Access Key", true}, {"AWS_REGION", "Region（如 us-east-1）", false}}},
+		Help: i18n.S("IAM 建一个用户，给 route53:GetChange / ChangeResourceRecordSets / ListResourceRecordSets / ListHostedZonesByName 权限，创建 Access Key。",
+			"In IAM, create a user with the route53:GetChange / ChangeResourceRecordSets / ListResourceRecordSets / ListHostedZonesByName permissions, then create an access key."),
+		Fields: []Field{{"AWS_ACCESS_KEY_ID", "Access Key ID", false}, {"AWS_SECRET_ACCESS_KEY", "Secret Access Key", true}, {"AWS_REGION", i18n.S("Region（如 us-east-1）", "Region (e.g. us-east-1)"), false}}},
 	{Name: "digitalocean", Label: "DigitalOcean",
-		Help:   "DigitalOcean 后台 → API → Generate New Token，要有写权限。",
+		Help: i18n.S("DigitalOcean 后台 → API → Generate New Token，要有写权限。",
+			"In the DigitalOcean dashboard: API → Generate New Token, with write scope."),
 		Fields: []Field{{"DO_AUTH_TOKEN", "API Token", true}}},
-	{Name: "huaweicloud", Label: "华为云",
-		Help:   "华为云 IAM 建一个用户，给 DNS FullAccess 权限，创建访问密钥。",
-		Fields: []Field{{"HUAWEICLOUD_ACCESS_KEY_ID", "Access Key ID", false}, {"HUAWEICLOUD_SECRET_ACCESS_KEY", "Secret Access Key", true}, {"HUAWEICLOUD_REGION", "Region（如 cn-north-4）", false}}},
+	{Name: "huaweicloud", Label: i18n.S("华为云", "Huawei Cloud"),
+		Help: i18n.S("华为云 IAM 建一个用户，给 DNS FullAccess 权限，创建访问密钥。",
+			"In Huawei Cloud IAM, create a user with the DNS FullAccess permission, then create an access key."),
+		Fields: []Field{{"HUAWEICLOUD_ACCESS_KEY_ID", "Access Key ID", false}, {"HUAWEICLOUD_SECRET_ACCESS_KEY", "Secret Access Key", true}, {"HUAWEICLOUD_REGION", i18n.S("Region（如 cn-north-4）", "Region (e.g. cn-north-4)"), false}}},
 }
 
 // AllProviders 是全部服务商（设置页的下拉框）。
@@ -149,11 +157,14 @@ func newDNS(name string) (challenge.Provider, error) {
 	case "huaweicloud":
 		return huaweicloud.NewDNSProvider()
 	}
-	return nil, fmt.Errorf("不认识的 DNS 服务商 %q，编译进来的有：%s",
+	return nil, fmt.Errorf(i18n.S("不认识的 DNS 服务商 %q，编译进来的有：%s", "unknown DNS provider %q; built-in ones: %s"),
 		name, strings.Join(Providers(), " / "))
 }
 
 /* ------------------------------------------------------------------ 对外 */
+
+// IssueFailed 开头的是签发那一步的错误；remote 用它判断要不要再补一个开头。
+var IssueFailed = i18n.S("签证书失败", "Certificate issuance failed")
 
 // Files 是证书落盘的位置。
 //
@@ -173,7 +184,7 @@ func (c Config) Files() (certFile, keyFile string) {
 func (c Config) Ensure() (certFile, keyFile string, renewed bool, err error) {
 	certFile, keyFile = c.Files()
 	if len(c.Domains) == 0 {
-		return "", "", false, fmt.Errorf("没有域名，签不了证书（设 GERDR_RELAY_HOST）")
+		return "", "", false, errors.New(i18n.S("没有域名，签不了证书（设 GERDR_RELAY_HOST）", "no domain, so no certificate can be issued (set GERDR_RELAY_HOST)"))
 	}
 	if left, ok := validFor(certFile, c.Domains); ok && left > RenewBefore {
 		return certFile, keyFile, false, nil
@@ -195,7 +206,7 @@ func (c Config) obtain(certFile, keyFile string) error {
 	if err != nil {
 		if h := EnvHint(c.DNS); h != "" {
 			// lego 自己的措辞会把两组备选凭据一起列出来，容易看花。补一句我们推荐的那组。
-			return fmt.Errorf("%w\n  %s 要的是：%s", err, c.DNS, h)
+			return fmt.Errorf(i18n.S("%w\n  %s 要的是：%s", "%w\n  %s needs: %s"), err, c.DNS, h)
 		}
 		return err
 	}
@@ -222,7 +233,7 @@ func (c Config) obtain(certFile, keyFile string) error {
 	if acct.Reg == nil {
 		reg, err := client.Registration.Register(registration.RegisterOptions{TermsOfServiceAgreed: true})
 		if err != nil {
-			return fmt.Errorf("注册 ACME 账号失败: %w", err)
+			return fmt.Errorf(i18n.S("注册 ACME 账号失败: %w", "registering the ACME account: %w"), err)
 		}
 		acct.Reg = reg
 		if err := acct.save(); err != nil {
@@ -234,7 +245,7 @@ func (c Config) obtain(certFile, keyFile string) error {
 		Domains: c.Domains, Bundle: true,
 	})
 	if err != nil {
-		return fmt.Errorf("签证书失败（DNS 服务商 %s，要的环境变量：%s）: %w",
+		return fmt.Errorf(IssueFailed+i18n.S("（DNS 服务商 %s，要的环境变量：%s）: %w", " (DNS provider %s, needs env vars %s): %w"),
 			c.DNS, EnvHint(c.DNS), err)
 	}
 

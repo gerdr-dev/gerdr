@@ -11,6 +11,7 @@ import (
 	"embed"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -18,6 +19,8 @@ import (
 	"slices"
 	"sort"
 	"strings"
+
+	"github.com/gerdr-dev/gerdr/internal/i18n"
 )
 
 //go:embed all:ui
@@ -81,17 +84,17 @@ func Install(dst string) (string, error) {
 		return "", err
 	}
 	if hasGit() {
-		res, err := upgradeGit(dst, files, "随 Gerdr 发布", false)
+		res, err := upgradeGit(dst, files, i18n.S("随 Gerdr 发布", "shipped with Gerdr"), false)
 		if err != nil {
 			return "", err
 		}
 		switch res.Status {
 		case "installed":
-			return "界面已安装到 " + dst, nil
+			return i18n.S("界面已安装到 ", "UI installed to ") + dst, nil
 		case "merged":
-			return fmt.Sprintf("新版界面已合入 %s（改到 %d 个文件）", dst, len(res.Files)), nil
+			return fmt.Sprintf(i18n.S("新版界面已合入 %s（改到 %d 个文件）", "New UI merged into %s (%d files changed)"), dst, len(res.Files)), nil
 		case "conflict":
-			return res.Note + "（冲突文件：" + strings.Join(res.Conflicts, ", ") + "）", nil
+			return res.Note + i18n.S("（冲突文件：", "(conflicting files: ") + strings.Join(res.Conflicts, ", ") + i18n.S("）", ")"), nil
 		}
 		return "", nil
 	}
@@ -118,7 +121,7 @@ func legacyInstall(dst string, files map[string][]byte) (string, error) {
 				if err := write(alt, files, next); err != nil {
 					return "", err
 				}
-				return fmt.Sprintf("界面目录 %s 有本地修改（比如 %s），没有覆盖；新版界面放在 %s", dst, rel, alt), nil
+				return fmt.Sprintf(i18n.S("界面目录 %s 有本地修改（比如 %s），没有覆盖；新版界面放在 %s", "The UI directory %s has local changes (e.g. %s), so it wasn't overwritten; the new UI is in %s"), dst, rel, alt), nil
 			}
 		}
 		for rel := range cur.Files {
@@ -126,7 +129,7 @@ func legacyInstall(dst string, files map[string][]byte) (string, error) {
 		}
 	case os.IsNotExist(err):
 		if entries, _ := os.ReadDir(dst); len(entries) > 0 {
-			return fmt.Sprintf("界面目录 %s 已经有东西（不是 Gerdr 装的），直接用它", dst), nil
+			return fmt.Sprintf(i18n.S("界面目录 %s 已经有东西（不是 Gerdr 装的），直接用它", "The UI directory %s already has content not installed by Gerdr; using it as is"), dst), nil
 		}
 	default:
 		return "", err
@@ -134,7 +137,7 @@ func legacyInstall(dst string, files map[string][]byte) (string, error) {
 	if err := write(dst, files, next); err != nil {
 		return "", err
 	}
-	return "界面已安装到 " + dst, nil
+	return i18n.S("界面已安装到 ", "UI installed to ") + dst, nil
 }
 
 func manifestOf(files map[string][]byte) manifest {
@@ -199,7 +202,7 @@ func ReadDir(src string) (map[string][]byte, error) {
 	})
 	if err == nil {
 		if _, ok := files["package.json"]; !ok {
-			return nil, fmt.Errorf("%s 不像界面目录（没有 package.json）", src)
+			return nil, fmt.Errorf(i18n.S("%s 不像界面目录（没有 package.json）", "%s doesn't look like a UI directory (no package.json)"), src)
 		}
 	}
 	return files, err
@@ -209,13 +212,13 @@ func ReadDir(src string) (map[string][]byte, error) {
 // 开着的窗口热更新，人在 dst 里的改动保留。冲突时不合（照旧用现在的），结果里列出冲突文件。
 func SyncFrom(src, dst string) (*Result, error) {
 	if !hasGit() {
-		return nil, fmt.Errorf("这台机器上没有 git")
+		return nil, errors.New(i18n.S("这台机器上没有 git", "git isn't installed on this computer"))
 	}
 	files, err := ReadDir(src)
 	if err != nil {
 		return nil, err
 	}
-	return upgradeGit(dst, files, "从 "+src+" 同步", false)
+	return upgradeGit(dst, files, fmt.Sprintf(i18n.S("从 %s 同步", "synced from %s"), src), false)
 }
 
 func write(dst string, files map[string][]byte, m manifest) error {

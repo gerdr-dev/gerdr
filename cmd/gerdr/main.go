@@ -33,6 +33,7 @@ import (
 	"github.com/gerdr-dev/gerdr/internal/doctor"
 	"github.com/gerdr-dev/gerdr/internal/ext"
 	"github.com/gerdr-dev/gerdr/internal/hub"
+	"github.com/gerdr-dev/gerdr/internal/i18n"
 	"github.com/gerdr-dev/gerdr/internal/mcpauth"
 	"github.com/gerdr-dev/gerdr/internal/remote"
 	"github.com/gerdr-dev/gerdr/internal/server"
@@ -47,7 +48,7 @@ import (
 func main() {
 	root := &cobra.Command{
 		Use:           "gerdr",
-		Short:         "Claude Code 和 Codex 的图形界面（ACP），可以中途插话、回退、审批",
+		Short:         i18n.S("Claude Code 和 Codex 的图形界面（ACP），可以中途插话、回退、审批", "A GUI for Claude Code and Codex (ACP): interject mid-turn, rewind, approve"),
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
@@ -57,22 +58,22 @@ func main() {
 		return runServe(open, appMode, serviceMode, parentPID)
 	}
 	root.RunE = serve
-	root.Flags().BoolVar(&open, "open", false, "启动后用浏览器打开")
-	root.Flags().BoolVar(&appMode, "app", false, "给 mac App 用：就绪后打印一行 GERDR_READY <url>")
-	root.Flags().IntVar(&parentPID, "parent-pid", 0, "父进程退出时跟着退出")
-	root.Flags().BoolVar(&serviceMode, "service", false, "后台服务（launchd）用：数据目录被别的 Gerdr 占着就等它退出再接手")
+	root.Flags().BoolVar(&open, "open", false, i18n.S("启动后用浏览器打开", "open in the browser once started"))
+	root.Flags().BoolVar(&appMode, "app", false, i18n.S("给 mac App 用：就绪后打印一行 GERDR_READY <url>", "for the mac App: print a GERDR_READY <url> line when ready"))
+	root.Flags().IntVar(&parentPID, "parent-pid", 0, i18n.S("父进程退出时跟着退出", "exit when the parent process exits"))
+	root.Flags().BoolVar(&serviceMode, "service", false, i18n.S("后台服务（launchd）用：数据目录被别的 Gerdr 占着就等它退出再接手", "for the background service (launchd): if another Gerdr holds the data dir, wait for it to exit and take over"))
 	_ = root.Flags().MarkHidden("app")
 	_ = root.Flags().MarkHidden("service")
 	_ = root.Flags().MarkHidden("parent-pid")
 
 	root.AddCommand(&cobra.Command{
 		Use:   "url",
-		Short: "打印正在运行的 Gerdr 的登录链接",
+		Short: i18n.S("打印正在运行的 Gerdr 的登录链接", "Print the login link of the running Gerdr"),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			env := config.FromEnv()
 			u, ok := runningURL(env)
 			if !ok {
-				return fmt.Errorf("Gerdr 没在运行")
+				return errors.New(i18n.S("Gerdr 没在运行", "Gerdr is not running"))
 			}
 			fmt.Println(u)
 			return nil
@@ -80,7 +81,7 @@ func main() {
 	})
 	root.AddCommand(&cobra.Command{
 		Use:   "acp <claude|codex|native>",
-		Short: "把内置的适配器当成一个 stdio ACP agent 跑（给 Zed 之类的 ACP 客户端用）",
+		Short: i18n.S("把内置的适配器当成一个 stdio ACP agent 跑（给 Zed 之类的 ACP 客户端用）", "Run a built-in adapter as a stdio ACP agent (for ACP clients like Zed)"),
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runACP(args[0])
@@ -88,7 +89,7 @@ func main() {
 	})
 	root.AddCommand(&cobra.Command{
 		Use:   "version",
-		Short: "打印版本",
+		Short: i18n.S("打印版本", "Print the version"),
 		Run:   func(cmd *cobra.Command, args []string) { fmt.Println(version.Version) },
 	})
 	root.AddCommand(addProjectFlag(sessionCmd()), uiCmd(), workCmd(), remoteCmd(), configCmd(), agentCmd(), mcpCmd(), skillCmd(), addonCmd(), addProjectFlag(workspaceCmd()), addProjectFlag(tabCmd()), addProjectFlag(paneCmd()))
@@ -226,13 +227,13 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 		}
 	default:
 		if u, ok := runningURL(env); ok {
-			fmt.Println("Gerdr 已经在运行：" + u)
+			fmt.Println(i18n.S("Gerdr 已经在运行：", "Gerdr is already running: ") + u)
 			if open {
 				openBrowser(u)
 			}
 			return nil
 		}
-		return fmt.Errorf("另一个 Gerdr 正在用 %s：%w", env.Dir, err)
+		return fmt.Errorf(i18n.S("另一个 Gerdr 正在用 %s：%w", "another Gerdr is using %s: %w"), env.Dir, err)
 	}
 	defer lock.Close()
 
@@ -349,7 +350,7 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 		}
 	}
 	if _, err := os.Stat(filepath.Join(env.UI, "package.json")); err != nil {
-		return fmt.Errorf("界面目录 %s 不对（没有 package.json）：用 GERDR_UI 指到界面源码目录", env.UI)
+		return fmt.Errorf(i18n.S("界面目录 %s 不对（没有 package.json）：用 GERDR_UI 指到界面源码目录", "UI dir %s is invalid (no package.json): point GERDR_UI at the UI source dir"), env.UI)
 	}
 	esm := uisite.NewESM(env.ESMCDN, filepath.Join(env.Dir, "cache", "esm"))
 	ui := uisite.New(env.UI, filepath.Join(env.Dir, "cache", "ui"), log)
@@ -361,7 +362,7 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 	// 起不来（证书签不下来、没 join 过）不拦启动，原因在设置 → 远程访问里看。
 	rcfg, err := config.LoadRemote(env.Dir)
 	if err != nil {
-		return fmt.Errorf("读远程访问配置（%s）失败：%w", config.RemoteDir(env.Dir), err)
+		return fmt.Errorf(i18n.S("读远程访问配置（%s）失败：%w", "reading remote access config (%s): %w"), config.RemoteDir(env.Dir), err)
 	}
 	rm, err := remote.Open(env.Dir, rcfg, log)
 	if err != nil {
@@ -458,9 +459,9 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 	if appMode {
 		fmt.Println("GERDR_READY " + u)
 	} else {
-		fmt.Printf("Gerdr %s\n  打开：%s\n  数据：%s\n", version.Version, u, env.Dir)
+		fmt.Printf(i18n.S("Gerdr %s\n  打开：%s\n  数据：%s\n", "Gerdr %s\n  Open: %s\n  Data: %s\n"), version.Version, u, env.Dir)
 		if r := rm.URL(); r != "" {
-			fmt.Printf("  远程：%s（新设备：gerdr remote pair）\n", r)
+			fmt.Printf(i18n.S("  远程：%s（新设备：gerdr remote pair）\n", "  Remote: %s (new device: gerdr remote pair)\n"), r)
 		}
 	}
 	if open {
@@ -494,8 +495,8 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 }
 
 var (
-	errBusy     = errors.New("数据目录被另一个 Gerdr 占着")
-	errHandover = errors.New("交给后台服务了")
+	errBusy     = errors.New(i18n.S("数据目录被另一个 Gerdr 占着", "the data dir is held by another Gerdr"))
+	errHandover = errors.New(i18n.S("交给后台服务了", "handed over to the background service"))
 )
 
 // exitHandover：App 看到这个退出码就重起一个后端（它会去连后台服务），不当成出错。和 desktop/main.js 一致。

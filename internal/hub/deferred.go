@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gerdr-dev/gerdr/internal/i18n"
+
 	"github.com/coder/acp-go-sdk"
 
 	"github.com/gerdr-dev/gerdr/internal/agenthost"
@@ -148,7 +150,7 @@ func (s *Session) sendDeferred(d *deferredMsg) {
 	defer cancel()
 	if _, err := s.SendFrom(ctx, d.content, d.id, d.from, false); err != nil {
 		s.h.log.Warn("deferred command", "session", s.ID(), "err", err)
-		s.emit(&Event{Kind: EvNotice, Level: "error", Text: "排着的消息没发出去：" + oneLine(errText(err), 200)})
+		s.emit(&Event{Kind: EvNotice, Level: "error", Text: i18n.S("排着的消息没发出去：", "A queued message wasn't sent: ") + oneLine(errText(err), 200)})
 		// Nothing started, so no turn end will send the ones behind it
 		s.mu.Lock()
 		var next *deferredMsg

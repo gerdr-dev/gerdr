@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gerdr-dev/gerdr/internal/i18n"
+
 	"github.com/coder/acp-go-sdk"
 
 	"github.com/gerdr-dev/gerdr/acpx"
@@ -247,7 +249,7 @@ func (s *Session) Rewind(ctx context.Context, messageID string) (RewindResult, e
 	s.mu.Lock()
 	if s.running {
 		s.mu.Unlock()
-		return RewindResult{}, errors.New("先停下这一轮再回退")
+		return RewindResult{}, errors.New(i18n.S("先停下这一轮再回退", "Stop the current turn before rewinding"))
 	}
 	// 两种用户消息：gerdr 自己发的（EvUser），和导入 / 追上时从 agent 记录重放的（user_message_chunk，
 	// messageId 就是记录里那条的 uuid，一条带图的消息拆成几块、同一个 id）。只认前一种的话，
@@ -267,11 +269,11 @@ func (s *Session) Rewind(ctx context.Context, messageID string) (RewindResult, e
 		return RewindResult{}, err
 	}
 	if steer && !c.SteerRewind() {
-		return RewindResult{}, errors.New("插话的消息不能单独回退，回退它所在那一轮开头的那条")
+		return RewindResult{}, errors.New(i18n.S("插话的消息不能单独回退，回退它所在那一轮开头的那条", "A message sent mid-turn can't be rewound on its own; rewind the message that started its turn"))
 	}
 	res, err := agenthost.Call[acpx.RewindResponse](ctx, c, acpx.MethodRewind, acpx.RewindRequest{SessionId: acp.SessionId(agentSID), MessageId: messageID})
 	if err != nil {
-		return RewindResult{}, fmt.Errorf("回退对话失败：%s", errText(err))
+		return RewindResult{}, fmt.Errorf(i18n.S("回退对话失败：%s", "rewinding the conversation failed: %s"), errText(err))
 	}
 	if res.SessionId != "" && string(res.SessionId) != agentSID {
 		s.h.rekey(s, string(res.SessionId))

@@ -7,6 +7,7 @@ import (
 	"path"
 	"strings"
 
+	"github.com/gerdr-dev/gerdr/internal/i18n"
 	"github.com/gerdr-dev/gerdr/internal/uisite"
 	"github.com/gerdr-dev/gerdr/internal/webui"
 )
@@ -51,7 +52,7 @@ func (s *Server) ui() http.Handler {
 		case strings.HasPrefix(p, "/api/"):
 			// 不认识的接口别落到下面「前端路由」出页面：200 + HTML 会被界面当成成功（旧后端配新界面时踩过：
 			// 开终端拿到一页 HTML，布局里记了个空终端，渲染直接崩）。
-			httpError(w, 404, "没有这个接口（Gerdr 版本旧了？）")
+			httpError(w, 404, i18n.S("没有这个接口（Gerdr 版本旧了？）", "No such endpoint (is Gerdr out of date?)"))
 		case path.Ext(p) != "" && !strings.HasSuffix(p, ".html"):
 			http.NotFound(w, r)
 		default:

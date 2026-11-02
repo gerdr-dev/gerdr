@@ -7,6 +7,7 @@ import (
 
 	openapi "github.com/alibabacloud-go/darabonba-openapi/v2/client"
 	"github.com/alibabacloud-go/tea/dara"
+	"github.com/gerdr-dev/gerdr/internal/i18n"
 	alidns "github.com/go-acme/alidns-20150109/v4/client"
 )
 
@@ -14,7 +15,7 @@ import (
 func alidnsCAA(ctx context.Context, host, value string, apply bool) (bool, error) {
 	id, secret := credEnv("ALICLOUD_ACCESS_KEY"), credEnv("ALICLOUD_SECRET_KEY")
 	if id == "" || secret == "" {
-		return false, errors.New("没找到阿里云的 AccessKey")
+		return false, errors.New(i18n.S("没找到阿里云的 AccessKey", "no Alibaba Cloud AccessKey found"))
 	}
 	region := credEnv("ALICLOUD_REGION_ID")
 	if region == "" {
@@ -26,7 +27,7 @@ func alidnsCAA(ctx context.Context, host, value string, apply bool) (bool, error
 	}
 	c, err := alidns.NewClient(cfg)
 	if err != nil {
-		return false, fmt.Errorf("阿里云：%w", err)
+		return false, fmt.Errorf(i18n.S("阿里云：%w", "Alibaba Cloud: %w"), err)
 	}
 	rt := &dara.RuntimeOptions{}
 
@@ -34,7 +35,7 @@ func alidnsCAA(ctx context.Context, host, value string, apply bool) (bool, error
 	for page := int64(1); ; page++ {
 		r, err := alidns.DescribeDomainsWithContext(ctx, c, new(alidns.DescribeDomainsRequest).SetPageNumber(page).SetPageSize(100), rt)
 		if err != nil {
-			return false, fmt.Errorf("阿里云列域名失败：%w", err)
+			return false, fmt.Errorf(i18n.S("阿里云列域名失败：%w", "Alibaba Cloud: listing domains: %w"), err)
 		}
 		for _, d := range r.Body.Domains.Domain {
 			zones = append(zones, dara.StringValue(d.DomainName))
@@ -51,7 +52,7 @@ func alidnsCAA(ctx context.Context, host, value string, apply bool) (bool, error
 	req := new(alidns.DescribeDomainRecordsRequest).SetDomainName(zone).SetRRKeyWord(rr).SetType("CAA").SetPageSize(500)
 	r, err := alidns.DescribeDomainRecordsWithContext(ctx, c, req, rt)
 	if err != nil {
-		return false, fmt.Errorf("阿里云读记录失败：%w", err)
+		return false, fmt.Errorf(i18n.S("阿里云读记录失败：%w", "Alibaba Cloud: reading records: %w"), err)
 	}
 	for _, rec := range r.Body.DomainRecords.Record {
 		// RRKeyWord is a fuzzy match: "gerdr" also returns "gerdr2"
@@ -64,7 +65,7 @@ func alidnsCAA(ctx context.Context, host, value string, apply bool) (bool, error
 	}
 	add := new(alidns.AddDomainRecordRequest).SetDomainName(zone).SetRR(rr).SetType("CAA").SetValue(caaRecord(value))
 	if _, err := alidns.AddDomainRecordWithContext(ctx, c, add, rt); err != nil {
-		return false, fmt.Errorf("阿里云加记录失败：%w", err)
+		return false, fmt.Errorf(i18n.S("阿里云加记录失败：%w", "Alibaba Cloud: adding the record: %w"), err)
 	}
 	return true, nil
 }

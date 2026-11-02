@@ -14,6 +14,8 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/gerdr-dev/gerdr/internal/i18n"
+
 	"github.com/coder/acp-go-sdk"
 	"github.com/google/uuid"
 
@@ -133,7 +135,7 @@ func userShell() string {
 func (s *Session) Shell(command, clientID string) (string, error) {
 	command = strings.TrimSpace(command)
 	if command == "" {
-		return "", errors.New("命令是空的")
+		return "", errors.New(i18n.S("命令是空的", "The command is empty"))
 	}
 	id := uuid.NewString()
 	if _, err := uuid.Parse(clientID); err == nil {
@@ -208,7 +210,7 @@ func (s *Session) Shell(command, clientID string) (string, error) {
 		}
 		t := out.take(true)
 		if out.cut {
-			t += fmt.Sprintf("\n…（输出超过 %d KB，这里只显示开头，完整的在文件里）\n", shellLogMax>>10)
+			t += fmt.Sprintf(i18n.S("\n…（输出超过 %d KB，这里只显示开头，完整的在文件里）\n", "\n…(output over %d KB; only the start is shown, the full output is in the file)\n"), shellLogMax>>10)
 		}
 		if t != "" {
 			s.emit(&Event{Kind: EvShellOut, MessageID: id, Text: t})
@@ -328,7 +330,7 @@ func shellOutput(logged, path string) string {
 	if size < 0 {
 		r := []rune(logged)
 		head, tail := r[:shellCtxMax/3], r[len(r)-shellCtxMax*2/3:]
-		return string(head) + fmt.Sprintf("\n…（中间省略 %d 字）…\n", len(r)-len(head)-len(tail)) + string(tail)
+		return string(head) + fmt.Sprintf(i18n.S("\n…（中间省略 %d 字）…\n", "\n…(%d characters omitted)…\n"), len(r)-len(head)-len(tail)) + string(tail)
 	}
 	head, tail := peekFile(path, size)
 	var b strings.Builder

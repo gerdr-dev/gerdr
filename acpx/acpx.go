@@ -12,6 +12,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/gerdr-dev/gerdr/internal/i18n"
+
 	"github.com/coder/acp-go-sdk"
 )
 
@@ -382,26 +384,26 @@ func DescribeRequest(kind string, raw json.RawMessage) string {
 		}
 		_ = json.Unmarshal(raw, &r)
 		if r.ToolCall.Title == "" {
-			return "审批"
+			return i18n.S("审批", "Approval")
 		}
-		return "审批：" + r.ToolCall.Title
+		return i18n.S("审批：", "Approve: ") + r.ToolCall.Title
 	case "ask":
 		var r AskRequest
 		_ = json.Unmarshal(raw, &r)
 		if len(r.Questions) == 0 {
-			return "回答问题"
+			return i18n.S("回答问题", "Answer a question")
 		}
 		q := r.Questions[0]
-		s := "回答：" + q.Question
+		s := i18n.S("回答：", "Answer: ") + q.Question
 		var opts []string
 		for _, o := range q.Options {
 			opts = append(opts, o.Label)
 		}
 		if len(opts) > 0 {
-			s += "（" + strings.Join(opts, " / ") + "）"
+			s += i18n.S("（", " (") + strings.Join(opts, " / ") + i18n.S("）", ")")
 		}
 		if n := len(r.Questions); n > 1 {
-			s += fmt.Sprintf(" 等 %d 道题", n)
+			s += fmt.Sprintf(i18n.S(" 等 %d 道题", " and %d more"), n)
 		}
 		return s
 	}

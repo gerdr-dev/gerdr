@@ -1,5 +1,6 @@
 // 急救面板用到的后端接口和数据。只写用得到的字段 —— 完整的类型在 ui/src/lib/types.ts，这里故意不 import 那边：
 // 界面目录是会被改的，急救面板不能和它有任何牵连。
+import { t } from "./i18n";
 
 export type Agent = { id: string; name: string; available: boolean };
 
@@ -76,10 +77,10 @@ export const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : String(Date
 
 export function ago(sec: number) {
   const m = Math.floor((Date.now() / 1000 - sec) / 60);
-  if (m < 1) return "刚刚";
-  if (m < 60) return `${m} 分钟前`;
+  if (m < 1) return t("ago.now");
+  if (m < 60) return t("ago.min", { n: m });
   const h = Math.floor(m / 60);
-  return h < 24 ? `${h} 小时前` : `${Math.floor(h / 24)} 天前`;
+  return h < 24 ? t("ago.hour", { n: h }) : t("ago.day", { n: Math.floor(h / 24) });
 }
 
 // 现在报的错拼成一段文字：左边显示、新开对话时带给 agent
@@ -88,14 +89,14 @@ export function ago(sec: number) {
 export function errorText(st: UIStatus | null) {
   if (!st) return "";
   const parts: string[] = [];
-  if (st.build_error) parts.push("编译错误：\n" + st.build_error);
+  if (st.build_error) parts.push(t("err.build") + st.build_error);
   const seen = new Set<string>();
   for (const e of [...(st.runtime_errors || []), ...pageErrors().filter((e) => e.source !== "build")]) {
     if (seen.has(e.message)) continue;
     seen.add(e.message);
-    parts.push(`运行时错误（${e.source || ""}）：${e.message}${e.detail ? "\n" + e.detail : ""}`);
+    parts.push(t("err.runtime", { source: e.source || "", message: e.message }) + (e.detail ? "\n" + e.detail : ""));
   }
-  if (st.git?.merging) parts.push("界面目录正合并到一半，有冲突：" + (st.git.conflicts || []).join(", "));
+  if (st.git?.merging) parts.push(t("err.merging") + (st.git.conflicts || []).join(", "));
   return parts.join("\n\n").slice(0, 6000);
 }
 
@@ -106,7 +107,10 @@ export function upgradeText(st: UIStatus | null) {
   const g = st?.git;
   if (!g?.pending_upstream || g.merging) return "";
   const files = g.pending_conflicts?.length ? g.pending_conflicts.join(", ") : "";
-  return `Gerdr 的新版界面${g.pending_version ? `（${g.pending_version}）` : ""}和本地对界面的改动有冲突，自动升级时没合进来，现在用的还是旧的。${files ? `会冲突的文件：${files}` : ""}`;
+  return t("upgrade.text", {
+    version: g.pending_version ? t("upgrade.version", { v: g.pending_version }) : "",
+    files: files ? t("upgrade.files", { files }) : "",
+  });
 }
 
 // 这个页面自己记的错（页面外壳的收集器记的，换了新版构建运行时会把旧版的丢掉）。警告（index.css 里用不了的写法这种）不算报错。

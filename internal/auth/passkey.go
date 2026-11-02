@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gerdr-dev/gerdr/internal/i18n"
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
 )
@@ -104,7 +105,7 @@ func (p *Passkeys) SetRP(rpid string, origins []string) error {
 		var err error
 		w, err = webauthn.New(&webauthn.Config{RPID: rpid, RPDisplayName: display, RPOrigins: origins})
 		if err != nil {
-			return fmt.Errorf("passkey 配置不对（RPID=%q origins=%v）: %w", rpid, origins, err)
+			return fmt.Errorf(i18n.S("passkey 配置不对（RPID=%q origins=%v）: %w", "bad passkey config (RPID=%q origins=%v): %w"), rpid, origins, err)
 		}
 	}
 	p.mu.Lock()
@@ -116,7 +117,7 @@ func (p *Passkeys) SetRP(rpid string, origins []string) error {
 
 // CheckTampered 看一眼 passkey 文件有没有被外部改过。
 func (p *Passkeys) CheckTampered(alert func(string)) {
-	p.guard.check("passkey 文件", alert)
+	p.guard.check(i18n.S("passkey 文件", "the passkey file"), alert)
 }
 
 // Available：这个部署能不能用 passkey。
@@ -291,7 +292,7 @@ func (p *Passkeys) userLocked() *passkeyUser {
 
 /* ------------------------------------------------------------------ 注册 */
 
-var ErrNoPasskey = errors.New("这个部署用不了 passkey：需要用域名访问（裸 IP 不能当 WebAuthn 的 RPID）")
+var ErrNoPasskey = errors.New(i18n.S("这个部署用不了 passkey：需要用域名访问（裸 IP 不能当 WebAuthn 的 RPID）", "passkeys aren't available here: they need a domain name (a bare IP can't be a WebAuthn RPID)"))
 
 // BeginRegister 返回给浏览器的 options 和一个 ceremony id。
 func (p *Passkeys) BeginRegister() (any, string, error) {
@@ -327,7 +328,7 @@ func (p *Passkeys) FinishRegister(ceremony, ua string, r *http.Request) (*Passke
 
 	session := p.takeLocked(ceremony)
 	if session == nil {
-		return nil, errors.New("这次注册已经过期了，重新点一次")
+		return nil, errors.New(i18n.S("这次注册已经过期了，重新点一次", "this registration expired; try again"))
 	}
 	cred, err := p.w.FinishRegistration(p.userLocked(), *session, r)
 	if err != nil {
@@ -353,7 +354,7 @@ func (p *Passkeys) BeginLogin() (any, string, error) {
 		return nil, "", ErrNoPasskey
 	}
 	if len(p.keys) == 0 {
-		return nil, "", errors.New("还没有注册过 passkey")
+		return nil, "", errors.New(i18n.S("还没有注册过 passkey", "no passkey registered yet"))
 	}
 	opts, session, err := p.w.BeginDiscoverableLogin(
 		webauthn.WithUserVerification(protocol.VerificationRequired),
@@ -373,7 +374,7 @@ func (p *Passkeys) FinishLogin(ceremony string, r *http.Request) (*Passkey, erro
 
 	session := p.takeLocked(ceremony)
 	if session == nil {
-		return nil, errors.New("这次验证已经过期了，重新点一次")
+		return nil, errors.New(i18n.S("这次验证已经过期了，重新点一次", "this sign-in expired; try again"))
 	}
 	// 只有一个「用户」，所以这个回调总是返回它；真正的身份判断在签名校验里。
 	cred, err := p.w.FinishDiscoverableLogin(
@@ -391,7 +392,7 @@ func (p *Passkeys) FinishLogin(ceremony string, r *http.Request) (*Passkey, erro
 			return k, nil
 		}
 	}
-	return nil, errors.New("这把 passkey 不在名单里（可能已经被删掉了）")
+	return nil, errors.New(i18n.S("这把 passkey 不在名单里（可能已经被删掉了）", "this passkey isn't on the list (it may have been deleted)"))
 }
 
 /* ------------------------------------------------------------------ 小工具 */
@@ -422,7 +423,7 @@ func (p *Passkeys) takeLocked(id string) *webauthn.SessionData {
 func randBytes(n int) []byte {
 	b := make([]byte, n)
 	if _, err := rand.Read(b); err != nil {
-		panic("crypto/rand 读不出来：" + err.Error())
+		panic(i18n.S("crypto/rand 读不出来：", "can't read crypto/rand: ") + err.Error())
 	}
 	return b
 }

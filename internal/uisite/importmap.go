@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/gerdr-dev/gerdr/internal/i18n"
 )
 
 // importMap：第三方包怎么加载。没有 node_modules、没有打包 —— 浏览器按 importMap 从 /_esm/（本机代理 + 磁盘缓存，
@@ -34,11 +36,11 @@ type packageJSON struct {
 func readPackageJSON(dir string) (map[string]string, error) {
 	b, err := os.ReadFile(filepath.Join(dir, "package.json"))
 	if err != nil {
-		return nil, fmt.Errorf("读不到 package.json：%w", err)
+		return nil, fmt.Errorf(i18n.S("读不到 package.json：%w", "can't read package.json: %w"), err)
 	}
 	var p packageJSON
 	if err := json.Unmarshal(b, &p); err != nil {
-		return nil, fmt.Errorf("package.json 写错了：%w", err)
+		return nil, fmt.Errorf(i18n.S("package.json 写错了：%w", "package.json is invalid: %w"), err)
 	}
 	out := map[string]string{}
 	for k, v := range p.Dependencies {

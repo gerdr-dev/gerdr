@@ -11,6 +11,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gerdr-dev/gerdr/internal/i18n"
+
 	"github.com/coder/acp-go-sdk"
 	"github.com/google/uuid"
 
@@ -469,7 +471,7 @@ func (s *session) newRun(ctx context.Context) *run {
 			s.mcpWarned[name] = true
 			s.mu.Unlock()
 			if !warned {
-				r.notice("MCP 服务器 " + name + " 没连上：" + oneLine(err.Error(), 200))
+				r.notice(fmt.Sprintf(i18n.S("MCP 服务器 %s 没连上：%s", "MCP server %s didn't connect: %s"), name, oneLine(err.Error(), 200)))
 			}
 		}
 	}

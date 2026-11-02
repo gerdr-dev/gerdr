@@ -16,6 +16,9 @@ Claude Code / Codex 的图形界面：Go 后端（ACP 适配器 + hub + HTTP/WS�
 - 改完跑 `make test`（Go 测试）；动了界面先 `make fmt` 再跑 `make typecheck`（要先 `cd ui && pnpm install`；它也查格式）。
   动了适配器要跑 `make test-e2e`（真 claude / codex，花钱）。
 - English-first：提交信息、代码注释、文档一律用英文写，说清**为什么**。已有的中文注释 / 文档不用专门去翻，改到哪段时顺手换成英文。
+- Bilingual (zh / en): UI text goes in ui/src/lib/text/<area>.ts via t() (ui/AGENTS.md); backend text people see (CLI,
+  errors the UI shows, notices / options written into sessions) is `i18n.S("中文", "English")` from internal/i18n — the
+  computer's language, `GERDR_LANG` overrides; logs and model prompts stay as they are. Under `go test` it is zh.
 - 起调试实例用独立的目录和端口，别碰默认的 `~/.gerdr` 和 7870：`make dev`（界面直接用仓库里的 ui/，改了立刻热更新）。
 - Putting a new backend on this machine (`make install`): **never restart Gerdr yourself** (no `pkill gerdr`, no
   `launchctl kickstart`, no reopening the App). You are one of the agents running on it, and so are the user's others:

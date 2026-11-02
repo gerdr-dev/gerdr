@@ -3,11 +3,14 @@ package claude
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
+
+	"github.com/gerdr-dev/gerdr/internal/i18n"
 )
 
 // auto 模式下分类器拦下的调用不走 can_use_tool（CLI 自己就拒了），只在工具结果里留一句：
@@ -121,7 +124,7 @@ func addAllowRules(cwd string, rules []string) error {
 	doc := map[string]any{}
 	if b, err := os.ReadFile(path); err == nil {
 		if err := json.Unmarshal(b, &doc); err != nil {
-			return errors.New(path + " 不是合法的 JSON，没敢改：" + err.Error())
+			return fmt.Errorf(i18n.S("%s 不是合法的 JSON，没敢改：%s", "%s isn't valid JSON, so it was left unchanged: %s"), path, err.Error())
 		}
 	} else if !os.IsNotExist(err) {
 		return err

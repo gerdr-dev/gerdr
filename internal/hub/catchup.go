@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gerdr-dev/gerdr/internal/i18n"
+
 	"github.com/coder/acp-go-sdk"
 
 	"github.com/gerdr-dev/gerdr/acpx"
@@ -91,7 +93,7 @@ func (s *Session) CatchUp(ctx context.Context) {
 		s.h.log.Warn("catch up", "session", s.rec.ID, "err", err)
 		return
 	}
-	s.emit(&Event{Kind: EvNotice, Level: "info", Text: fmt.Sprintf("这个会话在别处（herdr / 终端）接着聊过（%d 条消息），已经从 agent 自己的记录同步到最新", foreign)})
+	s.emit(&Event{Kind: EvNotice, Level: "info", Text: fmt.Sprintf(i18n.S("这个会话在别处（herdr / 终端）接着聊过（%d 条消息），已经从 agent 自己的记录同步到最新", "This session continued elsewhere (herdr / terminal) with %d messages; synced to the latest from the agent's own records"), foreign)})
 }
 
 // adoptOrphanTurn：gerdr 重启时日志里有一轮没收尾（recoverAfterRestart 补了「中断」），核对它是不是真断了。
@@ -126,7 +128,7 @@ func (s *Session) adoptOrphanTurn(lastTS int64) {
 		}
 		if !told {
 			told = true
-			s.emit(&Event{Kind: EvNotice, Level: "info", Text: fmt.Sprintf("Gerdr 重启前的这一轮还在后台跑（claude，pid %d），跑完会自动同步过来", hs[0].Pid)})
+			s.emit(&Event{Kind: EvNotice, Level: "info", Text: fmt.Sprintf(i18n.S("Gerdr 重启前的这一轮还在后台跑（claude，pid %d），跑完会自动同步过来", "The turn from before Gerdr restarted is still running in the background (claude, pid %d); it will sync here when done"), hs[0].Pid)})
 		}
 		select {
 		case <-ctx.Done():
@@ -152,9 +154,9 @@ func (s *Session) adoptOrphanTurn(lastTS int64) {
 		return
 	}
 	// 没见到孤儿也可能走到这儿：这一轮在 gerdr 死之前已经跑完，只是日志还没落盘（或者 gerdr 停了很久才起来）
-	text := "Gerdr 重启前这一轮有一段没记下来，已经从 agent 自己的记录补上"
+	text := i18n.S("Gerdr 重启前这一轮有一段没记下来，已经从 agent 自己的记录补上", "Part of this turn wasn't recorded before Gerdr restarted; filled in from the agent's own records")
 	if told {
-		text = "Gerdr 重启后这一轮在后台跑完了，已经从 agent 自己的记录同步到最新"
+		text = i18n.S("Gerdr 重启后这一轮在后台跑完了，已经从 agent 自己的记录同步到最新", "This turn finished in the background after Gerdr restarted; synced to the latest from the agent's own records")
 	}
 	s.emit(&Event{Kind: EvNotice, Level: "info", Text: text})
 }
@@ -215,7 +217,7 @@ func (s *Session) Reload(ctx context.Context) error {
 	s.mu.Lock()
 	if s.running {
 		s.mu.Unlock()
-		return errors.New("先停下这一轮再重新载入")
+		return errors.New(i18n.S("先停下这一轮再重新载入", "Stop the current turn before reloading"))
 	}
 	if s.catchingUp {
 		s.mu.Unlock()

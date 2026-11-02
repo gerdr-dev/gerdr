@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net"
 	"net/http"
 	"net/url"
@@ -14,6 +15,7 @@ import (
 	qrcode "github.com/skip2/go-qrcode"
 
 	"github.com/gerdr-dev/gerdr/internal/auth"
+	"github.com/gerdr-dev/gerdr/internal/i18n"
 	"github.com/gerdr-dev/gerdr/internal/remote"
 )
 
@@ -64,14 +66,14 @@ func (s *Server) remoteGuard(w http.ResponseWriter, r *http.Request, next http.H
 	if !sameHost(r.Host, cfg.Host) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(http.StatusMisdirectedRequest)
-		_, _ = w.Write([]byte("Host 不对：这里只服务 " + cfg.Host + "\n"))
+		_, _ = w.Write([]byte(i18n.S("Host 不对：这里只服务 ", "Wrong host: this only serves ") + cfg.Host + "\n"))
 		return
 	}
 	// 写接口一律要自定义头（跨站页面发不出来：要 CORS 预检，而我们不答），外加 Origin 同源。
 	// cookie 是浏览器自动带的，SameSite=Strict 之外再叠这两道。配对 / passkey 登录也算：
 	// 跨站页面替你提交一个配对码，就能把**它的**设备配进来。
 	if r.Method != http.MethodGet && r.Method != http.MethodHead && (r.Header.Get("X-Gerdr") != "1" || !originOK(r)) {
-		httpError(w, http.StatusForbidden, "跨站请求被拒")
+		httpError(w, http.StatusForbidden, i18n.S("跨站请求被拒", "Cross-site request refused"))
 		return
 	}
 	p := r.URL.Path
@@ -80,7 +82,7 @@ func (s *Server) remoteGuard(w http.ResponseWriter, r *http.Request, next http.H
 	if p == "/auth" || p == "/api/remote/pair-code" || p == "/api/remote/unlock" || p == "/api/remote/cert" || p == "/api/remote/cert/caa" ||
 		p == "/api/remote/connect" || p == "/api/remote/disconnect" || p == "/api/remote/reload" || p == "/api/service" || p == "/api/awake/lid-setup" ||
 		p == "/api/remote/stepup/pending" || strings.HasPrefix(p, "/api/remote/stepup/approve/") {
-		httpError(w, http.StatusForbidden, "这个操作只能在跑 Gerdr 的那台机器上做")
+		httpError(w, http.StatusForbidden, i18n.S("这个操作只能在跑 Gerdr 的那台机器上做", "This can only be done on the computer running Gerdr"))
 		return
 	}
 	if r.Method == http.MethodGet && r.URL.Query().Get("pair") != "" && !strings.HasPrefix(p, "/api/") {
@@ -101,7 +103,7 @@ func (s *Server) remoteGuard(w http.ResponseWriter, r *http.Request, next http.H
 	if need != "" {
 		if strings.HasPrefix(p, "/api/") || p == "/ws" || strings.HasPrefix(p, "/_") || (path0Ext(p) && !strings.HasSuffix(p, ".html")) {
 			// need 让前端区分「没配对」和「配过但要重新验一次」：一个要配对码，一个只要点一下 Face ID
-			writeJSONStatus(w, http.StatusUnauthorized, map[string]any{"error": "这台设备还没配对", "need": need})
+			writeJSONStatus(w, http.StatusUnauthorized, map[string]any{"error": i18n.S("这台设备还没配对", "This device isn't paired yet"), "need": need})
 			return
 		}
 		s.servePairPage(w, r)
@@ -173,12 +175,12 @@ func (s *Server) gateCheck(w http.ResponseWriter, r *http.Request) (release func
 		if !g.Locked() {
 			return false
 		}
-		writeJSONStatus(w, http.StatusTooManyRequests, map[string]any{"error": "失败次数太多，已暂停接受新设备。在跑 Gerdr 的机器上执行 gerdr remote unlock"})
+		writeJSONStatus(w, http.StatusTooManyRequests, map[string]any{"error": i18n.S("失败次数太多，已暂停接受新设备。在跑 Gerdr 的机器上执行 gerdr remote unlock", "Too many failed attempts; new devices are paused. Run gerdr remote unlock on the computer running Gerdr")})
 		return true
 	}
 	busy := func() {
 		w.Header().Set("Retry-After", "2")
-		writeJSONStatus(w, http.StatusTooManyRequests, map[string]any{"error": "太快了，等一下再试"})
+		writeJSONStatus(w, http.StatusTooManyRequests, map[string]any{"error": i18n.S("太快了，等一下再试", "Too fast; wait a moment and try again")})
 	}
 	if locked() {
 		return nil, false
@@ -192,7 +194,7 @@ func (s *Server) gateCheck(w http.ResponseWriter, r *http.Request) (release func
 	if blocked {
 		g.Leave(ip)
 		w.Header().Set("Retry-After", itoa(int(retry.Seconds())+1))
-		writeJSONStatus(w, http.StatusTooManyRequests, map[string]any{"error": "试错太多次了，" + retry.Round(time.Minute).String() + " 后再试"})
+		writeJSONStatus(w, http.StatusTooManyRequests, map[string]any{"error": fmt.Sprintf(i18n.S("试错太多次了，%s 后再试", "Too many wrong tries; try again in %s"), retry.Round(time.Minute).String())})
 		return nil, false
 	}
 	if delay > 0 {
@@ -235,7 +237,7 @@ func (s *Server) remoteRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/remote/pair-code", func(w http.ResponseWriter, r *http.Request) {
 		rm := s.Remote
 		if !rm.Config().Enabled() {
-			httpError(w, http.StatusConflict, "还没开远程访问：先在设置 → 远程访问里连上中继")
+			httpError(w, http.StatusConflict, i18n.S("还没开远程访问：先在设置 → 远程访问里连上中继", "Remote access isn't on: connect a relay first in Settings → Remote access"))
 			return
 		}
 		code, exp := rm.Auth.MintCode()
@@ -341,7 +343,7 @@ func (s *Server) remoteRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/remote/devices/{id}", func(w http.ResponseWriter, r *http.Request) {
 		label, ok := s.Remote.Auth.Revoke(r.PathValue("id"))
 		if !ok {
-			httpError(w, 404, "没有这台设备")
+			httpError(w, 404, i18n.S("没有这台设备", "No such device"))
 			return
 		}
 		if s.myDevice(r) == r.PathValue("id") {
@@ -355,7 +357,7 @@ func (s *Server) remoteRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/remote/passkeys/{id}", func(w http.ResponseWriter, r *http.Request) {
 		label, ok := s.Remote.Passkeys.Delete(r.PathValue("id"))
 		if !ok {
-			httpError(w, 404, "没有这把 passkey")
+			httpError(w, 404, i18n.S("没有这把 passkey", "No such passkey"))
 			return
 		}
 		writeJSON(w, map[string]any{"deleted": 1, "label": label})
@@ -366,7 +368,7 @@ func (s *Server) remoteRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/remote/stepup/request", func(w http.ResponseWriter, r *http.Request) {
 		id := s.Remote.Auth.Authenticate(r)
 		if id == nil || !auth.FromRemote(r) {
-			httpError(w, http.StatusUnauthorized, "这台设备还没配对")
+			httpError(w, http.StatusUnauthorized, i18n.S("这台设备还没配对", "This device isn't paired yet"))
 			return
 		}
 		a := s.Remote.Approvals.Request(id.Device.ID, id.Label)
@@ -379,7 +381,7 @@ func (s *Server) remoteRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/remote/stepup/request/{id}", func(w http.ResponseWriter, r *http.Request) {
 		id := s.Remote.Auth.Authenticate(r)
 		if id == nil {
-			httpError(w, http.StatusUnauthorized, "这台设备还没配对")
+			httpError(w, http.StatusUnauthorized, i18n.S("这台设备还没配对", "This device isn't paired yet"))
 			return
 		}
 		writeJSON(w, map[string]any{"state": s.Remote.Approvals.State(r.PathValue("id"), id.Device.ID)})
@@ -397,7 +399,7 @@ func (s *Server) remoteRoutes(mux *http.ServeMux) {
 		}
 		dev, found := s.Remote.Approvals.Decide(r.PathValue("id"), b.OK)
 		if !found {
-			httpError(w, http.StatusNotFound, "这个请求已经过期了")
+			httpError(w, http.StatusNotFound, i18n.S("这个请求已经过期了", "This request has expired"))
 			return
 		}
 		if b.OK {
@@ -451,7 +453,7 @@ func (s *Server) remoteWhoami(w http.ResponseWriter, r *http.Request) {
 func (s *Server) remotePair(w http.ResponseWriter, r *http.Request) {
 	rm := s.Remote
 	if !auth.FromRemote(r) {
-		httpError(w, http.StatusConflict, "本机不用配对")
+		httpError(w, http.StatusConflict, i18n.S("本机不用配对", "No pairing needed on this computer"))
 		return
 	}
 	var b struct{ Code string }
@@ -496,24 +498,24 @@ func (s *Server) remotePasskey(w http.ResponseWriter, r *http.Request) {
 	action, step := r.PathValue("action"), r.PathValue("step")
 	if !s.passkeyOK(r) {
 		// 本机口上直接拒，别让 WebAuthn 库在后面报一个看不懂的 origin 错
-		where := "用远程地址打开"
+		where := i18n.S("用远程地址打开", "open it at the remote address")
 		if u := rm.URL(); u != "" {
-			where = "换 " + u + " 打开"
+			where = fmt.Sprintf(i18n.S("换 %s 打开", "open %s instead"), u)
 		}
-		httpError(w, http.StatusConflict, "这个地址上用不了 passkey（它绑在远程访问的域名上）："+where)
+		httpError(w, http.StatusConflict, i18n.S("这个地址上用不了 passkey（它绑在远程访问的域名上）：", "Passkeys don't work at this address (they're bound to the remote access domain): ")+where)
 		return
 	}
 	switch action + "/" + step {
 	case "register/begin", "register/finish":
 		id := rm.Auth.Authenticate(r)
 		if id == nil {
-			httpError(w, http.StatusUnauthorized, "这台设备还没配对")
+			httpError(w, http.StatusUnauthorized, i18n.S("这台设备还没配对", "This device isn't paired yet"))
 			return
 		}
 		// begin 和 finish **两处都要挡**：光挡 begin 的话，自己拼一个 finish 请求就绕过去了。
 		// 用 403 + reason=stepup 不用 401：401 会把整个界面弹回登录屏，这儿只是「再验一下指纹」。
 		if auth.StepUpNeeded(id, stepUpWindow, rm.Passkeys.Count(), time.Now()) {
-			writeJSONStatus(w, http.StatusForbidden, map[string]any{"error": "再加一把 passkey 之前，先用已有的那把验一次", "reason": "stepup"})
+			writeJSONStatus(w, http.StatusForbidden, map[string]any{"error": i18n.S("再加一把 passkey 之前，先用已有的那把验一次", "Verify with your existing passkey before adding another"), "reason": "stepup"})
 			return
 		}
 		if step == "begin" {
@@ -574,7 +576,7 @@ func (s *Server) remotePasskey(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"ok": true, "label": dev.Label, "passkey": k.Label})
 
 	default:
-		httpError(w, 404, "没有这个接口")
+		httpError(w, 404, i18n.S("没有这个接口", "No such endpoint"))
 	}
 }
 

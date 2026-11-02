@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gerdr-dev/gerdr/internal/i18n"
+
 	"github.com/coder/acp-go-sdk"
 	"github.com/google/uuid"
 
@@ -77,7 +79,7 @@ func (s *session) takeover(action string) (acpx.TakeoverResponse, error) {
 				time.Sleep(100 * time.Millisecond)
 			}
 			if sysenv.PidAlive(h.Pid) {
-				return acpx.TakeoverResponse{}, fmt.Errorf("pid %d 没有退出", h.Pid)
+				return acpx.TakeoverResponse{}, fmt.Errorf(i18n.S("pid %d 没有退出", "pid %d didn't exit"), h.Pid)
 			}
 		}
 		return acpx.TakeoverResponse{SessionId: acp.SessionId(id)}, nil

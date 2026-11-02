@@ -219,6 +219,7 @@ itself reads environment variables:
 | `GERDR_PORT` | `7870` | listen port (picks another if taken) |
 | `GERDR_HOST` | `127.0.0.1` | listen address |
 | `GERDR_DIR` | `~/.gerdr` | data directory (sessions, layout, add-ons) |
+| `GERDR_LANG` | system language | `zh` / `en`: language of the CLI and of the texts the backend writes into sessions (the UI picks its own in Settings) |
 | `GERDR_TOKEN` | generated | login token, stored in `~/.gerdr/token` |
 | `GERDR_CLAUDE_IDLE_MINUTES` | `15` | stop an idle Claude session's process after this long (resumed on the next message); `0` = never |
 | `GERDR_UI` | `~/.gerdr/ui` | UI source directory (e.g. a separate clone) |

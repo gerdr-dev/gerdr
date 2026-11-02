@@ -3,6 +3,7 @@ package native
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -10,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/gerdr-dev/gerdr/internal/i18n"
 
 	"github.com/coder/acp-go-sdk"
 	"github.com/google/uuid"
@@ -81,7 +84,7 @@ func (a *Agent) session(id acp.SessionId) (*session, error) {
 // Available：配置里有没有能用的模型（hub 的 agent 列表据此显示能不能用）。
 func Available(c Config) error {
 	if len(c.models()) == 0 {
-		return fmt.Errorf("没有可用的模型：在设置 → Agent 的「引擎 → Native」里加一个模型服务商")
+		return errors.New(i18n.S("没有可用的模型：在设置 → Agent 的「引擎 → Native」里加一个模型服务商", "No models available: add a model provider in Settings → Agent, under Engine → Native"))
 	}
 	return nil
 }
@@ -354,7 +357,10 @@ func (a *Agent) SetSessionConfigOption(ctx context.Context, p acp.SetSessionConf
 	return acp.SetSessionConfigOptionResponse{ConfigOptions: a.configOptions(s)}, nil
 }
 
-var effortNames = map[string]string{"off": "关", "none": "关", "minimal": "最低", "low": "低", "medium": "中", "high": "高", "xhigh": "超高", "max": "最高"}
+var effortNames = map[string]string{
+	"off": i18n.S("关", "Off"), "none": i18n.S("关", "Off"), "minimal": i18n.S("最低", "Minimal"), "low": i18n.S("低", "Low"),
+	"medium": i18n.S("中", "Medium"), "high": i18n.S("高", "High"), "xhigh": i18n.S("超高", "Extra high"), "max": i18n.S("最高", "Max"),
+}
 
 func (a *Agent) configOptions(s *session) []acp.SessionConfigOption {
 	cfg := a.config()
@@ -404,13 +410,13 @@ func (a *Agent) configOptions(s *session) []acp.SessionConfigOption {
 // ---- 斜杠命令 ----
 
 var builtinCommands = []acp.AvailableCommand{
-	{Name: "clear", Description: "清空上下文：另起一段新对话，之前说过的不再带上"},
-	{Name: "compact", Description: "压缩上下文：把之前的对话总结成摘要，腾出上下文空间（后面可以跟要求）"},
-	{Name: "memory", Description: "看它跨会话记住了什么；后面跟话就是关于记忆的要求（比如「/memory 忘掉 xxx」「/memory 记住 xxx」）"},
+	{Name: "clear", Description: i18n.S("清空上下文：另起一段新对话，之前说过的不再带上", "Clear the context: start a fresh conversation, leaving earlier messages behind")},
+	{Name: "compact", Description: i18n.S("压缩上下文：把之前的对话总结成摘要，腾出上下文空间（后面可以跟要求）", "Compact the context: summarize the conversation so far to free up space (optionally followed by instructions)")},
+	{Name: "memory", Description: i18n.S("看它跨会话记住了什么；后面跟话就是关于记忆的要求（比如「/memory 忘掉 xxx」「/memory 记住 xxx」）", "See what it remembers across sessions; add text to give memory instructions (e.g. \"/memory forget xxx\", \"/memory remember xxx\")")},
 	// midTurn: sent while a turn runs it comes in as a steer and runs right away (it only renames); the hub holds the
 	// other commands back until the turn ends (internal/hub/deferred.go).
-	{Name: "rename", Description: "给会话改名：/rename <名字>；不跟名字就按聊过的内容起一个", Meta: map[string]any{"midTurn": true}},
-	{Name: "mcp", Description: "MCP 服务器：连上没有、报了什么错、有哪些工具；/mcp <名字> 看工具说明，/mcp reconnect [名字] 重连"},
+	{Name: "rename", Description: i18n.S("给会话改名：/rename <名字>；不跟名字就按聊过的内容起一个", "Rename the session: /rename <name>; without a name, one is generated from the conversation"), Meta: map[string]any{"midTurn": true}},
+	{Name: "mcp", Description: i18n.S("MCP 服务器：连上没有、报了什么错、有哪些工具；/mcp <名字> 看工具说明，/mcp reconnect [名字] 重连", "MCP servers: connection status, errors and tools; /mcp <name> shows tool descriptions, /mcp reconnect [name] reconnects")},
 }
 
 func (a *Agent) announceCommands(s *session) {

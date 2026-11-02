@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gerdr-dev/gerdr/internal/i18n"
+
 	"github.com/gerdr-dev/gerdr/acpx"
 )
 
@@ -110,13 +112,13 @@ func parseUsage(raw json.RawMessage) (acpx.UsageResponse, error) {
 			window := 0
 			switch l.Kind {
 			case "session":
-				label, window = "5 小时", 300
+				label, window = i18n.S("5 小时", "5 hours"), 300
 			case "weekly_all":
-				label, window = "本周", 7*24*60
+				label, window = i18n.S("本周", "This week"), 7*24*60
 			case "weekly_scoped":
-				label, window = "本周", 7*24*60
+				label, window = i18n.S("本周", "This week"), 7*24*60
 				if l.Scope != nil && l.Scope.Model != nil && l.Scope.Model.DisplayName != nil {
-					label = "本周 · " + *l.Scope.Model.DisplayName
+					label = i18n.S("本周 · ", "This week · ") + *l.Scope.Model.DisplayName
 				}
 			default:
 				label = strings.ReplaceAll(l.Kind, "_", " ")
@@ -132,8 +134,8 @@ func parseUsage(raw json.RawMessage) (acpx.UsageResponse, error) {
 		}
 		out.Limits = append(out.Limits, acpx.UsageLimit{Kind: kind, Label: label, Percent: *w.Utilization, ResetsAt: isoMs(w.ResetsAt), WindowMins: window})
 	}
-	add("session", "5 小时", 300, rl.FiveHour)
-	add("weekly_all", "本周", 7*24*60, rl.SevenDay)
+	add("session", i18n.S("5 小时", "5 hours"), 300, rl.FiveHour)
+	add("weekly_all", i18n.S("本周", "This week"), 7*24*60, rl.SevenDay)
 	return out, nil
 }
 

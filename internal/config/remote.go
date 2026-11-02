@@ -3,11 +3,14 @@ package config
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/gerdr-dev/gerdr/internal/i18n"
 )
 
 // Remote 是远程访问（云端中继）的配置。和别的服务配置不一样，它**也能写在文件里**
@@ -169,8 +172,10 @@ func (r Remote) Enabled() bool { return r.RelayURL != "" && r.Host != "" }
 // 而且得是浏览器认的真证书 —— 自签的话手机上每次都是警告页，passkey 也按不动。
 func (r Remote) TLSProblem() string {
 	if r.ACMEDNS == "" && (r.TLSCert == "" || r.TLSKey == "") {
-		return "还差一张 " + r.Host + " 的证书：到「设置 → 远程访问 → 证书」选这个域名的 DNS 服务商（Cloudflare / 阿里云 / 腾讯云…）、" +
-			"填它的 API 凭据，Gerdr 会自己去 Let's Encrypt 签；已经有证书的话在同一处指定证书和私钥两个文件"
+		return fmt.Sprintf(i18n.S("还差一张 %s 的证书：到「设置 → 远程访问 → 证书」选这个域名的 DNS 服务商（Cloudflare / 阿里云 / 腾讯云…）、"+
+			"填它的 API 凭据，Gerdr 会自己去 Let's Encrypt 签；已经有证书的话在同一处指定证书和私钥两个文件",
+			"A certificate for %s is still needed: in Settings → Remote access → Certificate, pick the domain's DNS provider (Cloudflare, Alibaba Cloud, Tencent Cloud…) "+
+				"and enter its API credentials, and Gerdr will get one from Let's Encrypt. If you already have a certificate, set its certificate and key files there"), r.Host)
 	}
 	return ""
 }

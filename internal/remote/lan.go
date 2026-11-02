@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/gerdr-dev/gerdr/internal/config"
+	"github.com/gerdr-dev/gerdr/internal/i18n"
 	"github.com/gerdr-dev/gerdr/internal/lan"
 )
 
@@ -36,7 +37,7 @@ func (s *Service) startLan(ctx context.Context, cfg config.Remote, cf *certFile,
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		s.mu.Lock()
-		s.lanErr = "局域网直连口 " + addr + " 起不来：" + err.Error()
+		s.lanErr = fmt.Sprintf(i18n.S("局域网直连口 %s 起不来：%v", "the LAN port %s won't start: %v"), addr, err)
 		s.mu.Unlock()
 		s.log.Warn("remote: lan port", "err", err)
 		return
@@ -54,7 +55,7 @@ func (s *Service) startLan(ctx context.Context, cfg config.Remote, cf *certFile,
 	go func() {
 		if err := hs.Serve(tl); err != nil && !errors.Is(err, http.ErrServerClosed) && ctx.Err() == nil {
 			s.mu.Lock()
-			s.lanErr = "局域网直连口挂了：" + err.Error()
+			s.lanErr = i18n.S("局域网直连口挂了：", "the LAN port went down: ") + err.Error()
 			s.mu.Unlock()
 		}
 	}()
@@ -78,9 +79,10 @@ func lanOnly(next http.Handler, alert func(string)) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !lan.PeerIsLocal(r.RemoteAddr) {
 			once.Do(func() {
-				alert("局域网直连口收到了来自 " + r.RemoteAddr + " 的连接 —— 不是本地地址，已拒绝。这个口大概被暴露到公网了（端口转发 / UPnP / 全局 IPv6）")
+				alert(fmt.Sprintf(i18n.S("局域网直连口收到了来自 %s 的连接 —— 不是本地地址，已拒绝。这个口大概被暴露到公网了（端口转发 / UPnP / 全局 IPv6）",
+					"The LAN port got a connection from %s, which isn't a local address, and refused it. The port is probably exposed to the internet (port forwarding / UPnP / global IPv6)."), r.RemoteAddr))
 			})
-			http.Error(w, "这个口只服务本地网络。", http.StatusForbidden)
+			http.Error(w, i18n.S("这个口只服务本地网络。", "This port only serves the local network."), http.StatusForbidden)
 			return
 		}
 		next.ServeHTTP(w, r)

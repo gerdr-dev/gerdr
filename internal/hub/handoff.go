@@ -23,6 +23,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/gerdr-dev/gerdr/internal/i18n"
+
 	"github.com/coder/acp-go-sdk"
 )
 
@@ -72,10 +74,10 @@ func (h *Hub) continueFrom(ctx context.Context, o CreateOptions) (*Session, erro
 	}
 	src.mu.Unlock()
 	if running {
-		return nil, errors.New("这个会话还在跑：先停下这一轮，再换 agent 接着聊")
+		return nil, errors.New(i18n.S("这个会话还在跑：先停下这一轮，再换 agent 接着聊", "This session is still running: stop the current turn before switching agents"))
 	}
 	if srcRec.Agent == o.Agent {
-		return nil, errors.New("同一个 agent 直接打开这个会话就行，不用换")
+		return nil, errors.New(i18n.S("同一个 agent 直接打开这个会话就行，不用换", "It's the same agent: just open this session, no need to switch"))
 	}
 	if o.Cwd == "" {
 		o.Cwd = srcRec.Cwd
@@ -98,7 +100,7 @@ func (h *Hub) adoptHistory(s *Session, srcRec Record, evs []*Event) {
 	})
 	h.broadcastEvents(s.rec.ID, all, true)
 	from, to := h.agentName(srcRec.Agent), h.agentName(s.rec.Agent)
-	s.emit(&Event{Kind: EvNotice, Level: handoffLevel, Text: fmt.Sprintf("换 %s 接着聊：上面是和 %s 的对话，下一条消息会把它一起带给 %s", to, from, to)})
+	s.emit(&Event{Kind: EvNotice, Level: handoffLevel, Text: fmt.Sprintf(i18n.S("换 %s 接着聊：上面是和 %s 的对话，下一条消息会把它一起带给 %s", "Switched to %s: above is the conversation with %s; your next message will bring it along to %s"), to, from, to)})
 	h.saveIndex()
 	h.broadcastSession(s)
 }

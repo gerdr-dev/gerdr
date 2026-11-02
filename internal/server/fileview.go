@@ -12,6 +12,8 @@ import (
 	"slices"
 	"sort"
 	"strings"
+
+	"github.com/gerdr-dev/gerdr/internal/i18n"
 )
 
 // 对话里点一条路径 → 原地看那个文件（图片 / 视频 / 文本……），手机上尤其要：那边没有 Finder 可以去翻。
@@ -117,13 +119,13 @@ func (s *Server) fileStat(w http.ResponseWriter, r *http.Request) {
 		default:
 			w.Header().Set("Content-Type", "application/json; charset=utf-8")
 			w.WriteHeader(404)
-			_ = json.NewEncoder(w).Encode(map[string]any{"error": "有好几个文件都对得上：" + q.Get("path"), "candidates": c})
+			_ = json.NewEncoder(w).Encode(map[string]any{"error": i18n.S("有好几个文件都对得上：", "Several files match: ") + q.Get("path"), "candidates": c})
 			return
 		}
 	}
 	if err != nil {
 		if os.IsNotExist(err) {
-			httpError(w, 404, "没有这个文件："+p)
+			httpError(w, 404, i18n.S("没有这个文件：", "No such file: ")+p)
 			return
 		}
 		httpError(w, 400, err.Error())
@@ -191,7 +193,7 @@ func serveRaw(w http.ResponseWriter, r *http.Request, p string, download bool) {
 	f, err := os.Open(p)
 	if err != nil {
 		if os.IsNotExist(err) {
-			httpError(w, 404, "没有这个文件："+p)
+			httpError(w, 404, i18n.S("没有这个文件：", "No such file: ")+p)
 			return
 		}
 		httpError(w, 400, err.Error())
@@ -200,7 +202,7 @@ func serveRaw(w http.ResponseWriter, r *http.Request, p string, download bool) {
 	defer f.Close()
 	st, err := f.Stat()
 	if err != nil || st.IsDir() {
-		httpError(w, 400, "这是个目录："+p)
+		httpError(w, 400, i18n.S("这是个目录：", "That's a directory: ")+p)
 		return
 	}
 	t := fileMime(p)

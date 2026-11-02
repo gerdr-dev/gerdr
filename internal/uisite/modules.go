@@ -14,6 +14,7 @@ import (
 	"sync"
 
 	"github.com/evanw/esbuild/pkg/api"
+	"github.com/gerdr-dev/gerdr/internal/i18n"
 )
 
 // 按文件编译（照 shuttle 的 internal/localsite，那边又是照 folia-web 编辑器预览）：
@@ -250,7 +251,7 @@ func uniq(s []string) []string {
 // resolveLocal 把 from 文件里的 import 路径解析成项目里的文件：补扩展名、目录的 index。
 func resolveLocal(dir, from, spec string) (string, error) {
 	if strings.Contains(spec, "?") {
-		return "", fmt.Errorf("%s: 不支持 %q 这种带 ? 的 import（?raw / ?url）", from, spec)
+		return "", fmt.Errorf(i18n.S("%s: 不支持 %q 这种带 ? 的 import（?raw / ?url）", "%s: imports with a query like %q aren't supported (?raw / ?url)"), from, spec)
 	}
 	var p string
 	if strings.HasPrefix(spec, "/") {
@@ -259,10 +260,10 @@ func resolveLocal(dir, from, spec string) (string, error) {
 		p = path.Clean(path.Join(path.Dir(from), spec))
 	}
 	if strings.HasPrefix(p, "../") || p == ".." {
-		return "", fmt.Errorf("%s: import %q 指到了界面目录外面", from, spec)
+		return "", fmt.Errorf(i18n.S("%s: import %q 指到了界面目录外面", "%s: import %q points outside the UI directory"), from, spec)
 	}
 	if strings.HasSuffix(strings.ToLower(p), ".css") {
-		return "", fmt.Errorf("%s: 不支持在代码里 import CSS（%q），样式写进 src/index.css", from, spec)
+		return "", fmt.Errorf(i18n.S("%s: 不支持在代码里 import CSS（%q），样式写进 src/index.css", "%s: importing CSS from code isn't supported (%q); put styles in src/index.css"), from, spec)
 	}
 	exists := func(q string) bool {
 		fi, err := os.Stat(filepath.Join(dir, filepath.FromSlash(q)))
@@ -282,10 +283,10 @@ func resolveLocal(dir, from, spec string) (string, error) {
 					return q, nil
 				}
 			}
-			return "", fmt.Errorf("%s: import %q 不是代码文件", from, spec)
+			return "", fmt.Errorf(i18n.S("%s: import %q 不是代码文件", "%s: import %q is not a code file"), from, spec)
 		}
 	}
-	return "", fmt.Errorf("%s: 找不到 import 的文件 %q", from, spec)
+	return "", fmt.Errorf(i18n.S("%s: 找不到 import 的文件 %q", "%s: imported file %q not found"), from, spec)
 }
 
 // graph 是从页面出发能走到的全部本地模块（静态 import 和动态 import 都算）。

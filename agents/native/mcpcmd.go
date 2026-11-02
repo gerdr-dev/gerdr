@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gerdr-dev/gerdr/internal/i18n"
+
 	"github.com/coder/acp-go-sdk"
 	"github.com/google/uuid"
 )
@@ -25,7 +27,7 @@ func (a *Agent) mcpCommand(ctx context.Context, s *session, args string) (acp.Pr
 	fields := strings.Fields(args)
 	switch {
 	case len(servers) == 0:
-		b.WriteString("这个会话没有配 MCP 服务器。")
+		b.WriteString(i18n.S("这个会话没有配 MCP 服务器。", "No MCP servers are configured for this session."))
 	case len(fields) > 0 && fields[0] == "reconnect":
 		target := servers
 		if len(fields) > 1 {
@@ -44,7 +46,7 @@ func (a *Agent) mcpCommand(ctx context.Context, s *session, args string) (acp.Pr
 			delete(s.mcpWarned, m.Name)
 		}
 		s.mu.Unlock()
-		b.WriteString("已重连。")
+		b.WriteString(i18n.S("已重连。", "Reconnected."))
 		a.mcpReport(ctx, &b, target, false)
 	case len(fields) == 1:
 		target := pickServers(servers, fields[0])
@@ -54,10 +56,10 @@ func (a *Agent) mcpCommand(ctx context.Context, s *session, args string) (acp.Pr
 		}
 		a.mcpReport(ctx, &b, target, true)
 	case len(fields) > 1:
-		b.WriteString("用法：`/mcp`、`/mcp <名字>`、`/mcp reconnect [名字]`")
+		b.WriteString(i18n.S("用法：`/mcp`、`/mcp <名字>`、`/mcp reconnect [名字]`", "Usage: `/mcp`, `/mcp <name>`, `/mcp reconnect [name]`"))
 	default:
 		a.mcpReport(ctx, &b, servers, false)
-		b.WriteString("\n`/mcp <名字>` 看工具说明，`/mcp reconnect [名字]` 重连。")
+		b.WriteString(i18n.S("\n`/mcp <名字>` 看工具说明，`/mcp reconnect [名字]` 重连。", "\n`/mcp <name>` shows tool descriptions, `/mcp reconnect [name]` reconnects."))
 	}
 	if ctx.Err() != nil {
 		return acp.PromptResponse{StopReason: acp.StopReasonCancelled}, nil
@@ -79,23 +81,29 @@ func (a *Agent) mcpReport(ctx context.Context, b *strings.Builder, servers []MCP
 		c := byName[m.Name]
 		if c == nil {
 			err := errs[m.Name]
-			msg := "没连上"
+			msg := i18n.S("没连上", "Not connected")
 			if errors.Is(err, context.DeadlineExceeded) {
-				msg = "30 秒内没连上（可能还在启动，过一会儿再看）"
+				msg = i18n.S("30 秒内没连上（可能还在启动，过一会儿再看）", "Didn't connect within 30 seconds (it may still be starting; check again in a moment)")
 			} else if err != nil {
-				msg = "没连上：" + oneLine(err.Error(), 400)
+				msg = i18n.S("没连上：", "Not connected: ") + oneLine(err.Error(), 400)
 			}
 			b.WriteString("- " + msg + "\n")
 			continue
 		}
 		tools := append([]mcpTool(nil), c.tools...)
 		sort.Slice(tools, func(i, j int) bool { return tools[i].Name < tools[j].Name })
-		fmt.Fprintf(b, "- 已连上，%d 个工具\n", len(tools))
+		if i18n.IsZH() {
+			fmt.Fprintf(b, "- 已连上，%d 个工具\n", len(tools))
+		} else if len(tools) == 1 {
+			b.WriteString("- Connected, 1 tool\n")
+		} else {
+			fmt.Fprintf(b, "- Connected, %d tools\n", len(tools))
+		}
 		if detail {
 			for _, t := range tools {
 				ro := ""
 				if t.Annotations != nil && t.Annotations.ReadOnlyHint {
-					ro = "（只读，不用审批）"
+					ro = i18n.S("（只读，不用审批）", " (read-only, no approval needed)")
 				}
 				fmt.Fprintf(b, "  - `%s`%s %s\n", t.Name, ro, oneLine(t.Description, 200))
 			}
@@ -136,5 +144,5 @@ func unknownServer(name string, servers []MCPServer) string {
 	for i, m := range servers {
 		names[i] = "`" + m.Name + "`"
 	}
-	return fmt.Sprintf("没有叫 `%s` 的 MCP 服务器。这个会话有：%s", name, strings.Join(names, " "))
+	return fmt.Sprintf(i18n.S("没有叫 `%s` 的 MCP 服务器。这个会话有：%s", "No MCP server named `%s`. This session has: %s"), name, strings.Join(names, " "))
 }

@@ -20,13 +20,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gerdr-dev/gerdr/internal/i18n"
 	"github.com/google/uuid"
 )
 
 // ringSize：每个终端留多少最近输出给重连时重放。太大重连慢（远程那条路要走中继），太小 scrollback 回来得少。
 const ringSize = 512 << 10
 
-var ErrNotFound = errors.New("终端不在了（Gerdr 重启过，或者已经关掉）")
+var ErrNotFound = errors.New(i18n.S("终端不在了（Gerdr 重启过，或者已经关掉）", "The terminal is gone (Gerdr restarted, or it was closed)"))
 
 type Info struct {
 	ID      string `json:"id"`

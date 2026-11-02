@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/gerdr-dev/gerdr/acpx"
+	"github.com/gerdr-dev/gerdr/internal/i18n"
 	"github.com/gerdr-dev/gerdr/internal/work"
 
 	"github.com/google/uuid"
@@ -64,7 +65,7 @@ func newAPIClient() (*apiClient, error) {
 	env := config.FromEnv()
 	b, err := os.ReadFile(infoPath(env))
 	if err != nil {
-		return nil, fmt.Errorf("Gerdr 没在运行（找不到 %s）", infoPath(env))
+		return nil, fmt.Errorf(i18n.S("Gerdr 没在运行（找不到 %s）", "Gerdr is not running (%s not found)"), infoPath(env))
 	}
 	var si serverInfo
 	if err := json.Unmarshal(b, &si); err != nil {
@@ -74,7 +75,7 @@ func newAPIClient() (*apiClient, error) {
 	if tok == "" {
 		tb, err := os.ReadFile(filepath.Join(env.Dir, "token"))
 		if err != nil {
-			return nil, fmt.Errorf("读不到登录令牌：%w", err)
+			return nil, fmt.Errorf(i18n.S("读不到登录令牌：%w", "cannot read the login token: %w"), err)
 		}
 		tok = strings.TrimSpace(string(tb))
 	}
@@ -142,7 +143,7 @@ type sessInfo struct {
 // errNoSession is also what an agent gets for a session open in another herdr-style session (list leaves those out):
 // to an agent, other sessions don't exist, same as in herdr.
 func errNoSession(ref string) error {
-	return fmt.Errorf("没有会话 %q（gerdr session list 看有哪些）", ref)
+	return fmt.Errorf(i18n.S("没有会话 %q（gerdr session list 看有哪些）", "no session %q (gerdr session list shows what there is)"), ref)
 }
 
 func (s sessInfo) view(self string) map[string]any {
@@ -269,7 +270,7 @@ func (c *apiClient) resolve(ref string) (sessInfo, error) {
 	case 0:
 		return sessInfo{}, errNoSession(ref)
 	}
-	return sessInfo{}, fmt.Errorf("%q 对应好几个会话，用完整 id", ref)
+	return sessInfo{}, fmt.Errorf(i18n.S("%q 对应好几个会话，用完整 id", "%q matches several sessions; use the full id"), ref)
 }
 
 func (c *apiClient) get(id string) (sessInfo, error) {
@@ -315,7 +316,8 @@ func transcript(evs []hubEvent) []entry {
 		}
 		push(entry{Role: role, Text: text, seq: seq})
 	}
-	waitAt := map[string]int{} // reqId → out 里那一条
+	waitAt := map[string]int{}      // reqId → out 里那一条
+	waitDesc := map[string]string{} // reqId → 问的是什么（答过之后换个前缀重写那一条，不用去匹配文字）
 	for _, e := range evs {
 		switch e.Kind {
 		case "user":
@@ -330,7 +332,7 @@ func transcript(evs []hubEvent) []entry {
 				case "text":
 					parts = append(parts, b.Text)
 				case "image":
-					parts = append(parts, "[图片]")
+					parts = append(parts, i18n.S("[图片]", "[image]"))
 				}
 			}
 			push(entry{Role: "user", Text: strings.Join(parts, "\n"), From: e.From, seq: e.Seq})
@@ -362,9 +364,9 @@ func transcript(evs []hubEvent) []entry {
 			}
 		case "turn_end":
 			if e.Error != "" {
-				push(entry{Role: "notice", Text: "出错：" + e.Error, seq: e.Seq})
+				push(entry{Role: "notice", Text: i18n.S("出错：", "Error: ") + e.Error, seq: e.Seq})
 			} else if e.StopReason != "" && e.StopReason != "end_turn" {
-				push(entry{Role: "notice", Text: "这一轮结束：" + e.StopReason, seq: e.Seq})
+				push(entry{Role: "notice", Text: i18n.S("这一轮结束：", "Turn ended: ") + e.StopReason, seq: e.Seq})
 			}
 		case "notice":
 			push(entry{Role: "notice", Text: e.Text, seq: e.Seq})
@@ -372,11 +374,13 @@ func transcript(evs []hubEvent) []entry {
 			// 带上问的是什么（DescribeRequest）；答过的后面会改成「答过了」—— 原来一律写「在等人回答问题」，
 			// 早就答过的也这么写，读的 agent 以为对方还卡着
 			waitAt[e.ReqID] = len(out)
-			push(entry{Role: "waiting", Text: "在等人" + acpx.DescribeRequest(e.Kind, e.Request), seq: e.Seq})
+			desc := acpx.DescribeRequest(e.Kind, e.Request)
+			waitDesc[e.ReqID] = desc
+			push(entry{Role: "waiting", Text: i18n.S("在等人", "Waiting · ") + desc, seq: e.Seq})
 		case "permission_done", "ask_done":
 			if i, ok := waitAt[e.ReqID]; ok && i < len(out) {
 				out[i].Role = "answered"
-				out[i].Text = strings.Replace(out[i].Text, "在等人", "已处理 · ", 1) + answerNote(e.Response)
+				out[i].Text = i18n.S("已处理 · ", "Handled · ") + waitDesc[e.ReqID] + answerNote(e.Response)
 			}
 		}
 	}
@@ -448,7 +452,7 @@ func waitResult(c *apiClient, id string, since int64, timeout time.Duration) err
 		out["timed_out"] = true
 	}
 	if s.Status == "waiting" {
-		out["note"] = "它在等人审批或回答问题：让用户去 Gerdr 界面上处理"
+		out["note"] = i18n.S("它在等人审批或回答问题：让用户去 Gerdr 界面上处理", "It is waiting for the user to approve or answer a question: ask the user to handle it in the Gerdr UI")
 	}
 	printJSON(out)
 	return nil
@@ -457,9 +461,10 @@ func waitResult(c *apiClient, id string, since int64, timeout time.Duration) err
 func sessionCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "session",
-		Short: "给 agent 用：列出 / 新开 / 指挥 Gerdr 里的其他会话（输出 JSON）",
-		Long: `在 Gerdr 里跑着的 agent 用这组命令和别的会话协作：开一个新会话（Claude Code 或 Codex）派活、
-等它做完、读它的回复。会话可以用完整 id、id 前缀（至少 4 位）或标题指定。`,
+		Short: i18n.S("给 agent 用：列出 / 新开 / 指挥 Gerdr 里的其他会话（输出 JSON）", "For agents: list, create and direct other sessions in Gerdr (JSON output)"),
+		Long: i18n.S(`在 Gerdr 里跑着的 agent 用这组命令和别的会话协作：开一个新会话（Claude Code 或 Codex）派活、
+等它做完、读它的回复。会话可以用完整 id、id 前缀（至少 4 位）或标题指定。`, `Agents running in Gerdr use these commands to work with other sessions: start a new session (Claude Code or Codex)
+and hand it a task, wait for it to finish, read its reply. Refer to a session by full id, id prefix (at least 4 characters) or title.`),
 	}
 	client := func() *apiClient {
 		c, err := newAPIClient()
@@ -472,7 +477,7 @@ func sessionCmd() *cobra.Command {
 	var listAll bool
 	listCmd := &cobra.Command{
 		Use:   "list",
-		Short: "列出开着的会话（界面上看得见的；self: true 是你自己），最近有动静的在前（updatedAt）。--all 连关掉的一起",
+		Short: i18n.S("列出开着的会话（界面上看得见的；self: true 是你自己），最近有动静的在前（updatedAt）。--all 连关掉的一起", "List open sessions (the ones visible in the UI; self: true is you), most recently active first (updatedAt). --all includes closed ones"),
 		RunE: func(_ *cobra.Command, _ []string) error {
 			c := client()
 			self := c.selfID()
@@ -492,16 +497,16 @@ func sessionCmd() *cobra.Command {
 			return nil
 		},
 	}
-	listCmd.Flags().BoolVar(&listAll, "all", false, "连关掉的会话一起列（closed: true）")
+	listCmd.Flags().BoolVar(&listAll, "all", false, i18n.S("连关掉的会话一起列（closed: true）", "include closed sessions (closed: true)"))
 	cmd.AddCommand(listCmd)
 	cmd.AddCommand(&cobra.Command{
 		Use:   "current",
-		Short: "你自己所在的会话",
+		Short: i18n.S("你自己所在的会话", "The session you are in"),
 		RunE: func(_ *cobra.Command, _ []string) error {
 			c := client()
 			self := c.selfID()
 			if self == "" {
-				return fmt.Errorf("认不出当前会话（不是在 Gerdr 里跑的 agent？）")
+				return errors.New(i18n.S("认不出当前会话（不是在 Gerdr 里跑的 agent？）", "cannot tell which session this is (not an agent running in Gerdr?)"))
 			}
 			s, err := c.get(self)
 			if err != nil {
@@ -514,7 +519,7 @@ func sessionCmd() *cobra.Command {
 
 	cmd.AddCommand(&cobra.Command{
 		Use:   "agents",
-		Short: "能开哪些 agent（new --agent 填 id）：内置的 + 用户在设置里建的角色，角色带它的提示词（看它是干什么的）",
+		Short: i18n.S("能开哪些 agent（new --agent 填 id）：内置的 + 用户在设置里建的角色，角色带它的提示词（看它是干什么的）", "Agents you can start (pass the id to new --agent): built-in ones + roles the user made in Settings, each role with its prompt (so you can see what it's for)"),
 		RunE: func(_ *cobra.Command, _ []string) error {
 			var h struct {
 				Agents []map[string]any `json:"agents"`
@@ -551,7 +556,7 @@ func sessionCmd() *cobra.Command {
 	var nTimeout time.Duration
 	newCmd := &cobra.Command{
 		Use:   "new",
-		Short: "开一个新会话（默认在你旁边分屏打开，不抢焦点）",
+		Short: i18n.S("开一个新会话（默认在你旁边分屏打开，不抢焦点）", "Start a new session (opens in a split next to you by default, without taking focus)"),
 		RunE: func(_ *cobra.Command, _ []string) error {
 			c := client()
 			self := c.selfID()
@@ -586,21 +591,21 @@ func sessionCmd() *cobra.Command {
 			return waitResult(c, s.ID, 0, nTimeout)
 		},
 	}
-	newCmd.Flags().StringVar(&nAgent, "agent", "claude", "claude、codex、native（Gerdr Agent），或者设置里加的变体 / 外部 agent 的 id")
-	newCmd.Flags().StringVar(&nCwd, "cwd", "", "工作目录（默认当前目录）")
-	newCmd.Flags().StringVar(&nTitle, "title", "", "会话标题（之后可以用它指代这个会话）")
-	newCmd.Flags().StringVar(&nMode, "mode", "", "权限模式（claude: default/acceptEdits/plan/auto/bypassPermissions；codex: ask/auto/read-only/full-access；native: default/acceptEdits/plan/bypassPermissions）。不给 = 用户在设置里给这种 agent 定的默认模式（全放开的那种不算）")
-	newCmd.Flags().StringVar(&nPrompt, "prompt", "", "开好之后马上发的第一句话")
-	newCmd.Flags().BoolVar(&nWait, "wait", false, "和 --prompt 一起用：等它做完，输出它的回复")
-	newCmd.Flags().DurationVar(&nTimeout, "timeout", 30*time.Minute, "--wait 最多等多久")
-	newCmd.Flags().BoolVar(&nFocus, "focus", false, "打开后把焦点切过去（默认不切，别打断人）")
+	newCmd.Flags().StringVar(&nAgent, "agent", "claude", i18n.S("claude、codex、native（Gerdr Agent），或者设置里加的变体 / 外部 agent 的 id", "claude, codex, native (Gerdr Agent), or the id of a variant / external agent added in Settings"))
+	newCmd.Flags().StringVar(&nCwd, "cwd", "", i18n.S("工作目录（默认当前目录）", "working directory (default: current directory)"))
+	newCmd.Flags().StringVar(&nTitle, "title", "", i18n.S("会话标题（之后可以用它指代这个会话）", "session title (you can refer to the session by it later)"))
+	newCmd.Flags().StringVar(&nMode, "mode", "", i18n.S("权限模式（claude: default/acceptEdits/plan/auto/bypassPermissions；codex: ask/auto/read-only/full-access；native: default/acceptEdits/plan/bypassPermissions）。不给 = 用户在设置里给这种 agent 定的默认模式（全放开的那种不算）", "permission mode (claude: default/acceptEdits/plan/auto/bypassPermissions; codex: ask/auto/read-only/full-access; native: default/acceptEdits/plan/bypassPermissions). Omitted = the default mode the user set for this agent in Settings (fully permissive ones excepted)"))
+	newCmd.Flags().StringVar(&nPrompt, "prompt", "", i18n.S("开好之后马上发的第一句话", "first message to send once it's started"))
+	newCmd.Flags().BoolVar(&nWait, "wait", false, i18n.S("和 --prompt 一起用：等它做完，输出它的回复", "with --prompt: wait for it to finish and print its reply"))
+	newCmd.Flags().DurationVar(&nTimeout, "timeout", 30*time.Minute, i18n.S("--wait 最多等多久", "how long --wait waits at most"))
+	newCmd.Flags().BoolVar(&nFocus, "focus", false, i18n.S("打开后把焦点切过去（默认不切，别打断人）", "switch focus to it once opened (off by default, so as not to interrupt the user)"))
 	cmd.AddCommand(newCmd)
 
 	var sWait bool
 	var sTimeout time.Duration
 	sendCmd := &cobra.Command{
-		Use:   "send <会话> <消息>",
-		Short: "给一个会话发消息（它在跑就插话进去）",
+		Use:   i18n.S("send <会话> <消息>", "send <session> <message>"),
+		Short: i18n.S("给一个会话发消息（它在跑就插话进去）", "Send a message to a session (interjects if it's running)"),
 		Args:  cobra.ExactArgs(2),
 		RunE: func(_ *cobra.Command, args []string) error {
 			c := client()
@@ -610,7 +615,7 @@ func sessionCmd() *cobra.Command {
 				return err
 			}
 			if s.ID == self {
-				return fmt.Errorf("不能给自己发")
+				return errors.New(i18n.S("不能给自己发", "cannot send to yourself"))
 			}
 			evs, err := c.events(s.ID)
 			if err != nil {
@@ -632,15 +637,15 @@ func sessionCmd() *cobra.Command {
 			return waitResult(c, s.ID, since, sTimeout)
 		},
 	}
-	sendCmd.Flags().BoolVar(&sWait, "wait", false, "等它做完，输出它这一轮的回复")
-	sendCmd.Flags().DurationVar(&sTimeout, "timeout", 30*time.Minute, "--wait 最多等多久")
+	sendCmd.Flags().BoolVar(&sWait, "wait", false, i18n.S("等它做完，输出它这一轮的回复", "wait for it to finish and print its reply for this turn"))
+	sendCmd.Flags().DurationVar(&sTimeout, "timeout", 30*time.Minute, i18n.S("--wait 最多等多久", "how long --wait waits at most"))
 	cmd.AddCommand(sendCmd)
 
 	var wTimeout time.Duration
 	var wSince int64
 	waitCmd := &cobra.Command{
-		Use:   "wait <会话>",
-		Short: "等一个会话停下来（跑完，或者在等人审批 / 回答），输出它最后的回复",
+		Use:   i18n.S("wait <会话>", "wait <session>"),
+		Short: i18n.S("等一个会话停下来（跑完，或者在等人审批 / 回答），输出它最后的回复", "Wait for a session to stop (finished, or waiting for the user to approve / answer) and print its last reply"),
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			c := client()
@@ -661,14 +666,14 @@ func sessionCmd() *cobra.Command {
 			return waitResult(c, s.ID, since, wTimeout)
 		},
 	}
-	waitCmd.Flags().DurationVar(&wTimeout, "timeout", 30*time.Minute, "最多等多久")
-	waitCmd.Flags().Int64Var(&wSince, "since", 0, "只要这个序号之后的回复（默认：最后一条用户消息之后）")
+	waitCmd.Flags().DurationVar(&wTimeout, "timeout", 30*time.Minute, i18n.S("最多等多久", "how long to wait at most"))
+	waitCmd.Flags().Int64Var(&wSince, "since", 0, i18n.S("只要这个序号之后的回复（默认：最后一条用户消息之后）", "only replies after this sequence number (default: after the last user message)"))
 	cmd.AddCommand(waitCmd)
 
 	var rLast int
 	readCmd := &cobra.Command{
-		Use:   "read <会话>",
-		Short: "读一个会话的对话（用户说的、agent 说的、调用的工具）",
+		Use:   i18n.S("read <会话>", "read <session>"),
+		Short: i18n.S("读一个会话的对话（用户说的、agent 说的、调用的工具）", "Read a session's conversation (what the user said, what the agent said, tools called)"),
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			c := client()
@@ -688,13 +693,13 @@ func sessionCmd() *cobra.Command {
 			return nil
 		},
 	}
-	readCmd.Flags().IntVar(&rLast, "last", 30, "只要最后几条（0 = 全部）")
+	readCmd.Flags().IntVar(&rLast, "last", 30, i18n.S("只要最后几条（0 = 全部）", "only the last N entries (0 = all)"))
 	cmd.AddCommand(readCmd)
 
 	var oFocus bool
 	openCmd := &cobra.Command{
-		Use:   "open <会话>",
-		Short: "把一个关掉的会话（closed: true）开回界面上，接着用。默认开在你旁边、不抢焦点",
+		Use:   i18n.S("open <会话>", "open <session>"),
+		Short: i18n.S("把一个关掉的会话（closed: true）开回界面上，接着用。默认开在你旁边、不抢焦点", "Reopen a closed session (closed: true) in the UI to keep using it. Opens next to you by default, without taking focus"),
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			c := client()
@@ -709,12 +714,12 @@ func sessionCmd() *cobra.Command {
 			return nil
 		},
 	}
-	openCmd.Flags().BoolVar(&oFocus, "focus", false, "打开后把焦点切过去")
+	openCmd.Flags().BoolVar(&oFocus, "focus", false, i18n.S("打开后把焦点切过去", "switch focus to it once opened"))
 	cmd.AddCommand(openCmd)
 
 	cmd.AddCommand(&cobra.Command{
-		Use:   "close <会话>",
-		Short: "关掉一个会话（从界面上收掉它的 pane；正在跑的那一轮会停掉，记录留着，open 能开回来；关自己是等这一轮跑完再关）",
+		Use:   i18n.S("close <会话>", "close <session>"),
+		Short: i18n.S("关掉一个会话（从界面上收掉它的 pane；正在跑的那一轮会停掉，记录留着，open 能开回来；关自己是等这一轮跑完再关）", "Close a session (removes its pane from the UI; a running turn is stopped, the history stays and open brings it back; closing yourself waits for the current turn to finish)"),
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			c := client()
@@ -745,13 +750,13 @@ func sessionCmd() *cobra.Command {
 					return nil
 				}
 			}
-			return fmt.Errorf("界面没把它关掉（Gerdr 的窗口没开着？）")
+			return errors.New(i18n.S("界面没把它关掉（Gerdr 的窗口没开着？）", "the UI did not close it (is the Gerdr window open?)"))
 		},
 	})
 
 	cmd.AddCommand(&cobra.Command{
-		Use:   "cancel <会话>",
-		Short: "打断一个会话正在跑的那一轮",
+		Use:   i18n.S("cancel <会话>", "cancel <session>"),
+		Short: i18n.S("打断一个会话正在跑的那一轮", "Interrupt a session's running turn"),
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			c := client()
@@ -1046,10 +1051,10 @@ func (c *apiClient) workRun(project, fn string, input any) error {
 
 // gerdr ui …：给改界面的 agent 用（内置的 gerdr-ui skill）。
 func uiCmd() *cobra.Command {
-	cmd := &cobra.Command{Use: "ui", Short: "界面源码在哪、现在有没有改坏（输出 JSON）"}
+	cmd := &cobra.Command{Use: "ui", Short: i18n.S("界面源码在哪、现在有没有改坏（输出 JSON）", "Where the UI source is and whether it's currently broken (JSON output)")}
 	sync := &cobra.Command{
-		Use:   "sync <界面源码目录>",
-		Short: "把一份界面源码当成新版合进 Gerdr 正在用的界面目录（git 合并，开着的窗口热更新，不用重启）",
+		Use:   i18n.S("sync <界面源码目录>", "sync <ui-source-dir>"),
+		Short: i18n.S("把一份界面源码当成新版合进 Gerdr 正在用的界面目录（git 合并，开着的窗口热更新，不用重启）", "Merge a copy of the UI source into the UI dir Gerdr is using as a new version (git merge; open windows hot-reload, no restart needed)"),
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			env := config.FromEnv()
@@ -1064,7 +1069,7 @@ func uiCmd() *cobra.Command {
 	}
 	merge := &cobra.Command{
 		Use:   "merge",
-		Short: "把还没合进来的新版界面合进来；有冲突就留在文件里，改好后 git add -A && git commit",
+		Short: i18n.S("把还没合进来的新版界面合进来；有冲突就留在文件里，改好后 git add -A && git commit", "Merge in a pending new UI version; conflicts are left in the files: fix them, then git add -A && git commit"),
 		RunE: func(_ *cobra.Command, _ []string) error {
 			env := config.FromEnv()
 			res, err := webui.Merge(env.UI)
@@ -1079,7 +1084,7 @@ func uiCmd() *cobra.Command {
 	cmd.AddCommand(sync)
 	cmd.AddCommand(&cobra.Command{
 		Use:   "status",
-		Short: "界面目录 + 编译错误 + 页面里报上来的运行时错误",
+		Short: i18n.S("界面目录 + 编译错误 + 页面里报上来的运行时错误", "UI dir + build errors + runtime errors reported by the page"),
 		RunE: func(_ *cobra.Command, _ []string) error {
 			c, err := newAPIClient()
 			if err != nil {
@@ -1115,11 +1120,11 @@ func answerNote(resp json.RawMessage) string {
 		}
 		return " → " + strings.Join(a, "；")
 	case r.Reason == "replied":
-		return " → 没选，在对话里直接回了"
+		return i18n.S(" → 没选，在对话里直接回了", " → no option picked, replied in the chat instead")
 	case r.Reason == "skipped":
-		return " → 跳过了"
+		return i18n.S(" → 跳过了", " → skipped")
 	case r.Cancelled:
-		return " → 作废（这一轮结束了）"
+		return i18n.S(" → 作废（这一轮结束了）", " → void (the turn ended)")
 	}
 	return ""
 }

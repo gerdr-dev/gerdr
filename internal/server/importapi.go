@@ -10,6 +10,7 @@ import (
 
 	"github.com/gerdr-dev/gerdr/internal/herdrimport"
 	"github.com/gerdr-dev/gerdr/internal/hub"
+	"github.com/gerdr-dev/gerdr/internal/i18n"
 )
 
 // 「从 herdr 导入」：herdr 的工作空间 / tab / 分屏原样搬过来，每个 agent pane 接上它的会话（resume，历史全在）。
@@ -40,13 +41,13 @@ func (s *Server) herdrScan(ctx context.Context) (*herdrimport.Snapshot, map[stri
 				ip := &importPane{Pane: p}
 				switch {
 				case p.Agent == "":
-					ip.Skip = "普通终端（Gerdr 只接 agent 会话）"
+					ip.Skip = i18n.S("普通终端（Gerdr 只接 agent 会话）", "Plain terminal (Gerdr only takes agent sessions)")
 				case p.Agent != "claude" && p.Agent != "codex":
-					ip.Skip = p.Agent + " 还不支持"
+					ip.Skip = p.Agent + i18n.S(" 还不支持", " isn't supported yet")
 				case !agents[p.Agent]:
-					ip.Skip = p.Agent + " 在这台机器上不可用"
+					ip.Skip = p.Agent + i18n.S(" 在这台机器上不可用", " isn't available on this computer")
 				case p.SessionID == "":
-					ip.Skip = "herdr 没记下它的会话 id（装了 herdr integration 之后重开过的 agent 才有）"
+					ip.Skip = i18n.S("herdr 没记下它的会话 id（装了 herdr integration 之后重开过的 agent 才有）", "herdr has no session id for it (only agents restarted after installing the herdr integration have one)")
 				default:
 					if sess := s.Hub.FindByAgent(p.Agent, p.SessionID); sess != nil {
 						ip.Existing = sess.Summary().ID
@@ -152,7 +153,7 @@ func (s *Server) importRoutes(mux *http.ServeMux) {
 					msg := err.Error()
 					// codex 一个 thread 同一时间只许一个进程写：herdr 里那个 codex 还开着就接不了。
 					if strings.Contains(msg, "active writer") {
-						msg = "这个 Codex 会话在 herdr 里还开着，先在 herdr 里退出它再导入"
+						msg = i18n.S("这个 Codex 会话在 herdr 里还开着，先在 herdr 里退出它再导入", "This Codex session is still open in herdr; quit it there first, then import")
 					}
 					errs = append(errs, fmt.Sprintf("「%s」：%s", p.Title, msg))
 					return

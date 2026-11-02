@@ -3,6 +3,7 @@
 import { ArrowUp, Check, Loader2, Plus, Square, X } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { type Ev, type Hello, type Session, req, uuid } from "./api";
+import { t } from "./i18n";
 import { Markdown } from "./Markdown";
 
 const AGENT_KEY = "gerdr.rescue.agent";
@@ -24,7 +25,13 @@ const local = {
   },
 };
 
-const STATUS: Record<string, string> = { idle: "空闲", running: "在干活…", waiting: "等你处理", error: "出错了", starting: "启动中…" };
+const STATUS: Record<string, string> = {
+  idle: t("chat.status.idle"),
+  running: t("chat.status.running"),
+  waiting: t("chat.status.waiting"),
+  error: t("chat.status.error"),
+  starting: t("chat.status.starting"),
+};
 
 export function Chat({ hello, uiDir, errors, upgrade, onTurnDone }: { hello: Hello; uiDir: string; errors: string; upgrade: string; onTurnDone: () => void }) {
   const [sessions, setSessions] = useState<Record<string, Session>>(() => Object.fromEntries(hello.sessions.map((s) => [s.id, s])));
@@ -72,25 +79,20 @@ export function Chat({ hello, uiDir, errors, upgrade, onTurnDone }: { hello: Hel
         agent,
         cwd: uiDir,
         mode: mode || undefined,
-        title: merge ? "急救：合入新版界面" : "急救：修界面",
+        title: merge ? t("chat.title.merge") : t("chat.title.fix"),
       });
       setSessions((m) => ({ ...m, [s.id]: s }));
       select(s.id);
-      // 先填好第一句（带上错误），人看一眼再发
-      const mergeHow =
-        "运行 `gerdr ui merge` 把冲突摆出来，逐个解决：新版的改动和本地的改动都要保留（看不懂本地那边为什么这么改，先看 git log）。" +
-        "解决完 `git add -A && git commit`，再跑 `gerdr ui status`，确认没有错误、也没有 pending_upstream 了。";
+      // 先填好第一句（带上错误），人看一眼再发。跟着面板的语言走（agent 用哪种语言回话多半跟着它）
+      const mergeHow = t("chat.prompt.mergeHow");
       setInput(
         merge
-          ? "Gerdr 出了新版界面，但和这个目录里本地的改动冲突，自动升级时没合进来。先读 AGENTS.md，然后" + mergeHow + "\n\n" + upgrade
-          : "Gerdr 的界面（就是这个目录）被改坏了，帮我修好。先读 AGENTS.md，再跑 `gerdr ui status` 看错误；" +
-              "修完再跑一次确认没有错误了。只改坏掉的地方，别顺手重构。" +
-              (errors ? "\n\n现在报的错：\n" + errors : "") +
-              (upgrade ? "\n\n修好之后还有一件：" + upgrade + "。" + mergeHow : ""),
+          ? t("chat.prompt.merge") + mergeHow + "\n\n" + upgrade
+          : t("chat.prompt.fix") + (errors ? t("chat.prompt.errors") + errors : "") + (upgrade ? t("chat.prompt.alsoUpgrade", { upgrade }) + mergeHow : ""),
       );
       setTimeout(() => ta.current?.focus());
     } catch (e: any) {
-      setAlert("开会话失败：" + e.message);
+      setAlert(t("chat.createFailed", { error: e.message }));
     } finally {
       setCreating(false);
     }
@@ -104,7 +106,7 @@ export function Chat({ hello, uiDir, errors, upgrade, onTurnDone }: { hello: Hel
       await req("POST", `/api/sessions/${current}/send`, { content: [{ type: "text", text }], id: uuid() });
       setInput("");
     } catch (e: any) {
-      setAlert("发送失败：" + e.message);
+      setAlert(t("chat.sendFailed", { error: e.message }));
     } finally {
       setSending(false);
     }
@@ -125,18 +127,23 @@ export function Chat({ hello, uiDir, errors, upgrade, onTurnDone }: { hello: Hel
       <div className="bar">
         {/* 不列历史对话：急救就接着最近那一个，要从头来点「新对话」 */}
         <span className="grow bar-hint">
-          {cur ? `${hello.agents.find((a) => a.id === cur.agent)?.name || cur.agent} · 接着上次的对话` : "还没开过急救对话"}
+          {cur ? t("chat.continuing", { agent: hello.agents.find((a) => a.id === cur.agent)?.name || cur.agent }) : t("chat.noSession")}
         </span>
-        <select className="agent" value={agent} onChange={(e) => (setAgent(e.target.value), local.set(AGENT_KEY, e.target.value))} title="新对话用哪个 agent">
+        <select
+          className="agent"
+          value={agent}
+          onChange={(e) => (setAgent(e.target.value), local.set(AGENT_KEY, e.target.value))}
+          title={t("chat.agent.title")}
+        >
           {hello.agents.map((a) => (
             <option key={a.id} value={a.id} disabled={!a.available}>
               {a.name}
             </option>
           ))}
         </select>
-        <button className="btn" onClick={newSession} disabled={creating || !agent} title="在界面目录里开一个新对话，错误信息自动带上">
+        <button className="btn" onClick={newSession} disabled={creating || !agent} title={t("chat.new.title")}>
           {creating ? <Loader2 size={14} className="spin" /> : <Plus size={14} />}
-          新对话
+          {t("chat.new")}
         </button>
       </div>
 
@@ -147,7 +154,7 @@ export function Chat({ hello, uiDir, errors, upgrade, onTurnDone }: { hello: Hel
           <div className="state">
             <span className={"dot " + cur.status} />
             {STATUS[cur.status] || cur.status}
-            {cur.status === "error" && cur.error ? "：" + cur.error : ""}
+            {cur.status === "error" && cur.error ? t("chat.statusSep") + cur.error : ""}
           </div>
         )}
         <div className="box">
@@ -156,7 +163,7 @@ export function Chat({ hello, uiDir, errors, upgrade, onTurnDone }: { hello: Hel
             rows={2}
             value={input}
             disabled={!current}
-            placeholder={current ? "告诉 agent 哪里坏了（⌘/Ctrl + Enter 发送）" : "先开一个新对话"}
+            placeholder={current ? t("chat.placeholder") : t("chat.placeholderNone")}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && !e.nativeEvent.isComposing) {
@@ -166,11 +173,15 @@ export function Chat({ hello, uiDir, errors, upgrade, onTurnDone }: { hello: Hel
             }}
           />
           {busy && !input.trim() ? (
-            <button className="send stop" title="打断" onClick={() => req("POST", `/api/sessions/${current}/cancel`, {}).catch((e) => setAlert(e.message))}>
+            <button
+              className="send stop"
+              title={t("chat.stop")}
+              onClick={() => req("POST", `/api/sessions/${current}/cancel`, {}).catch((e) => setAlert(e.message))}
+            >
               <Square size={12} fill="currentColor" />
             </button>
           ) : (
-            <button className="send" title="发送" disabled={!input.trim() || !current || sending} onClick={send}>
+            <button className="send" title={t("chat.send")} disabled={!input.trim() || !current || sending} onClick={send}>
               {sending ? <Loader2 size={15} className="spin" /> : <ArrowUp size={16} />}
             </button>
           )}
@@ -368,11 +379,11 @@ function Log({
     >
       {!current ? (
         <div className="empty big">
-          <b>开一个新对话</b>
-          agent 在界面目录里干活，上面的错误会自动带给它。修的时候左边的主界面跟着变。
+          <b>{t("chat.empty.title")}</b>
+          {t("chat.empty.body")}
         </div>
       ) : !items.length ? (
-        <div className="empty">{connected ? "还没有消息" : "连接中…"}</div>
+        <div className="empty">{connected ? t("chat.noMessages") : t("chat.connecting")}</div>
       ) : (
         items.map((it, i) => <Row key={i} it={it} answer={answer} />)
       )}
@@ -391,7 +402,7 @@ function Row({ it, answer }: { it: Item; answer: (reqId: string, r: unknown) => 
       return (
         <div className={"tool " + it.status} title={it.title}>
           {it.status === "completed" ? <Check size={13} /> : it.status === "failed" ? <X size={13} /> : <Loader2 size={13} className="spin" />}
-          <span>{it.title || "工具调用"}</span>
+          <span>{it.title || t("chat.tool")}</span>
         </div>
       );
     case "notice":
@@ -406,21 +417,22 @@ function Row({ it, answer }: { it: Item; answer: (reqId: string, r: unknown) => 
 function PermissionCard({ it, answer }: { it: Req; answer: (reqId: string, r: unknown) => void }) {
   const [sent, setSent] = useState(false);
   const r = it.request || {};
-  const title = r.toolCall?.title || "要你批准";
+  const title = r.toolCall?.title || t("chat.perm.title");
   const input = r.toolCall?.rawInput;
   const detail = input?.command || input?.file_path;
   if (it.done) {
     const opt = (r.options || []).find((o: any) => o.optionId === it.response?.optionId);
     return (
       <div className="card done">
-        <span className="muted">批准</span> {title} <span className="muted">→ {opt ? opt.name : "已取消"}</span>
+        <span className="muted">{t("chat.perm.done")}</span> {title} <span className="muted">→ {opt ? opt.name : t("chat.perm.cancelled")}</span>
       </div>
     );
   }
   return (
     <div className="card">
       <div className="q">
-        要你批准：<b>{title}</b>
+        {t("chat.perm.ask")}
+        <b>{title}</b>
       </div>
       {detail && <pre className="code">{detail}</pre>}
       <div className="opts">
@@ -450,7 +462,7 @@ function AskCard({ it, answer }: { it: Req; answer: (reqId: string, r: unknown) 
       <div className="card done">
         {qs.map((q) => (
           <div key={q.id}>
-            {q.question} <span className="muted">→ {(ans[q.id] || []).join(", ") || "（没回答）"}</span>
+            {q.question} <span className="muted">→ {(ans[q.id] || []).join(", ") || t("chat.ask.noAnswer")}</span>
           </div>
         ))}
       </div>
@@ -490,16 +502,16 @@ function AskCard({ it, answer }: { it: Req; answer: (reqId: string, r: unknown) 
                 {o.label}
               </button>
             ))}
-            <input placeholder="或者自己写" value={other[q.id] || ""} onChange={(e) => setOther((m) => ({ ...m, [q.id]: e.target.value }))} />
+            <input placeholder={t("chat.ask.other")} value={other[q.id] || ""} onChange={(e) => setOther((m) => ({ ...m, [q.id]: e.target.value }))} />
           </div>
         </div>
       ))}
       <div className="opts">
         <button className="btn sm primary" disabled={sent} onClick={submit}>
-          提交
+          {t("chat.ask.submit")}
         </button>
         <button className="btn sm" disabled={sent} onClick={() => (setSent(true), answer(it.reqId, { cancelled: true, reason: "skipped" }))}>
-          跳过
+          {t("chat.ask.skip")}
         </button>
       </div>
     </div>

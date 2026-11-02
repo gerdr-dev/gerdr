@@ -8,6 +8,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/gerdr-dev/gerdr/internal/i18n"
 )
 
 // 资源占用（设置 →「资源」）：后端自己、它起的每个 agent 进程（连带 agent 自己起的 MCP 之类的子进程）、
@@ -85,7 +87,7 @@ func (s *Server) stats(w http.ResponseWriter, r *http.Request) {
 	runtime.ReadMemStats(&ms)
 	out := map[string]any{"goHeap": ms.HeapAlloc / 1024, "goroutines": runtime.NumGoroutine()}
 	if p := rows[self]; p != nil {
-		out["server"] = procInfo{PID: self, Label: "Gerdr 后端", RSS: p.rss, Total: p.rss, Procs: 1}
+		out["server"] = procInfo{PID: self, Label: i18n.S("Gerdr 后端", "Gerdr backend"), RSS: p.rss, Total: p.rss, Procs: 1}
 	}
 	var agents []procInfo
 	for _, c := range kids[self] {
@@ -97,7 +99,7 @@ func (s *Server) stats(w http.ResponseWriter, r *http.Request) {
 		info := procInfo{PID: c, RSS: p.rss, Total: total, Procs: n, Label: p.cmd}
 		switch {
 		case strings.Contains(p.cmd, "app-server"):
-			info.Label = "Codex（所有 Codex 会话共用）"
+			info.Label = i18n.S("Codex（所有 Codex 会话共用）", "Codex (shared by all Codex sessions)")
 		case strings.Contains(p.cmd, "claude") || strings.Contains(p.cmd, "stream-json"):
 			info.Label = "Claude Code"
 			id := argAfter(p.cmd, "--session-id")
@@ -119,7 +121,7 @@ func (s *Server) stats(w http.ResponseWriter, r *http.Request) {
 	out["agents"] = agents
 	if pid, err := strconv.Atoi(r.URL.Query().Get("webpid")); err == nil && pid > 0 {
 		if p := rows[pid]; p != nil {
-			out["web"] = procInfo{PID: pid, Label: "界面（WebView）", RSS: p.rss, Total: p.rss, Procs: 1}
+			out["web"] = procInfo{PID: pid, Label: i18n.S("界面（WebView）", "UI (WebView)"), RSS: p.rss, Total: p.rss, Procs: 1}
 		}
 	}
 	writeJSON(w, out)

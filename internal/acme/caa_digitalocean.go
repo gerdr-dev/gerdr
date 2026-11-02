@@ -9,6 +9,8 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+
+	"github.com/gerdr-dev/gerdr/internal/i18n"
 )
 
 const doAPI = "https://api.digitalocean.com"
@@ -17,7 +19,7 @@ const doAPI = "https://api.digitalocean.com"
 func digitaloceanCAA(ctx context.Context, api, host, value string, apply bool) (bool, error) {
 	tok := credEnv("DO_AUTH_TOKEN")
 	if tok == "" {
-		return false, errors.New("没找到 DigitalOcean 的 API Token")
+		return false, errors.New(i18n.S("没找到 DigitalOcean 的 API Token", "no DigitalOcean API token found"))
 	}
 	if u := credEnv("DO_API_URL"); u != "" {
 		api = u
@@ -36,13 +38,13 @@ func digitaloceanCAA(ctx context.Context, api, host, value string, apply bool) (
 		r.Header.Set("Content-Type", "application/json")
 		resp, err := http.DefaultClient.Do(r)
 		if err != nil {
-			return fmt.Errorf("连不上 DigitalOcean：%w", err)
+			return fmt.Errorf(i18n.S("连不上 DigitalOcean：%w", "can't reach DigitalOcean: %w"), err)
 		}
 		defer resp.Body.Close()
 		if resp.StatusCode/100 != 2 {
 			var e struct{ Message string }
 			_ = json.NewDecoder(resp.Body).Decode(&e)
-			return fmt.Errorf("DigitalOcean 拒绝了（HTTP %d）：%s", resp.StatusCode, e.Message)
+			return fmt.Errorf(i18n.S("DigitalOcean 拒绝了（HTTP %d）：%s", "DigitalOcean refused (HTTP %d): %s"), resp.StatusCode, e.Message)
 		}
 		if out != nil {
 			return json.NewDecoder(resp.Body).Decode(out)

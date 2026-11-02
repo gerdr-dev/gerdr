@@ -9,6 +9,8 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/gerdr-dev/gerdr/internal/i18n"
+
 	"github.com/coder/acp-go-sdk"
 	"github.com/google/uuid"
 
@@ -51,7 +53,7 @@ func (s *Session) SendFrom(ctx context.Context, content []acp.ContentBlock, clie
 		s.mu.Lock()
 		if s.sending[msgID] {
 			s.mu.Unlock()
-			return SendResult{}, errors.New("这条消息正在发送")
+			return SendResult{}, errors.New(i18n.S("这条消息正在发送", "This message is already being sent"))
 		}
 		s.loadLocked()
 		for _, e := range s.events {
@@ -75,7 +77,7 @@ func (s *Session) SendFrom(ctx context.Context, content []acp.ContentBlock, clie
 	if err != nil {
 		// codex：别处（终端 / Codex App）开着这个 thread 时接不回来 —— 它自己防住了分叉，但光秃秃一句英文报错人不知道怎么办
 		if strings.Contains(err.Error(), "active writer") {
-			return SendResult{}, &HeldError{Holders: []acpx.Holder{{Name: "另一个 Codex（终端或 Codex App）"}}}
+			return SendResult{}, &HeldError{Holders: []acpx.Holder{{Name: i18n.S("另一个 Codex（终端或 Codex App）", "another Codex (terminal or Codex App)")}}}
 		}
 		return SendResult{}, err
 	}
@@ -190,13 +192,13 @@ func (s *Session) SendFrom(ctx context.Context, content []acp.ContentBlock, clie
 			}
 		}
 	} else if running {
-		return SendResult{}, errors.New("这个 agent 不支持中途插话，等这一轮结束再发")
+		return SendResult{}, errors.New(i18n.S("这个 agent 不支持中途插话，等这一轮结束再发", "This agent doesn't take messages mid-turn; send it after this turn ends"))
 	}
 
 	s.mu.Lock()
 	if s.running {
 		s.mu.Unlock()
-		return SendResult{}, errors.New("这一轮还在跑")
+		return SendResult{}, errors.New(i18n.S("这一轮还在跑", "This turn is still running"))
 	}
 	s.running = true
 	s.lastErr = ""
@@ -226,7 +228,7 @@ func (s *Session) runTurn(c *agenthost.Host, agentSID, msgID string, content []a
 	for attempt := 0; err != nil && attempt < len(retryWaits) && retryable(errText(err)) && !s.isShut(); attempt++ {
 		wait := retryWaits[attempt]
 		s.emit(&Event{Kind: EvNotice, Level: "retry", Until: now() + wait.Milliseconds(),
-			Text: fmt.Sprintf("出错了：%s。%d 秒后自动重试（第 %d/%d 次），按停止可以取消。", oneLine(errText(err), 200), int(wait.Seconds()), attempt+1, len(retryWaits))})
+			Text: fmt.Sprintf(i18n.S("出错了：%s。%d 秒后自动重试（第 %d/%d 次），按停止可以取消。", "Error: %s — retrying in %ds (attempt %d/%d); press Stop to cancel."), oneLine(errText(err), 200), int(wait.Seconds()), attempt+1, len(retryWaits))})
 		if !s.sleepUnlessCancelled(wait) || s.isShut() {
 			break
 		}
@@ -240,7 +242,7 @@ func (s *Session) runTurn(c *agenthost.Host, agentSID, msgID string, content []a
 		c, agentSID = c2, s.agentSID()
 		rid := uuid.NewString()
 		res, err = c.Conn.Prompt(context.Background(), acp.PromptRequest{SessionId: acp.SessionId(agentSID), MessageId: &rid, Prompt: []acp.ContentBlock{
-			acp.TextBlock("继续。上一次请求因为网络错误中断了，请从中断的地方接着做。"),
+			acp.TextBlock(i18n.S("继续。上一次请求因为网络错误中断了，请从中断的地方接着做。", "Continue. The last request was cut off by a network error; pick up where it stopped.")),
 		}})
 	}
 	ev := &Event{Kind: EvTurnEnd, MessageID: msgID}

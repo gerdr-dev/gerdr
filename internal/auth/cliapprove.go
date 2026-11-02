@@ -4,6 +4,8 @@ import (
 	"crypto/subtle"
 	"errors"
 	"time"
+
+	"github.com/gerdr-dev/gerdr/internal/i18n"
 )
 
 /* ------------------------------------------- App 登录：在浏览器里用 passkey 批准 */
@@ -30,8 +32,8 @@ const CLITTL = 5 * time.Minute
 const cliMax = 16
 
 var (
-	ErrCLIUnknown = errors.New("没有这个请求，或者已经过期了（5 分钟）")
-	ErrCLIBusy    = errors.New("同时等批准的请求太多了，过几分钟再试")
+	ErrCLIUnknown = errors.New(i18n.S("没有这个请求，或者已经过期了（5 分钟）", "no such request, or it expired (after 5 minutes)"))
+	ErrCLIBusy    = errors.New(i18n.S("同时等批准的请求太多了，过几分钟再试", "too many requests waiting for approval; try again in a few minutes"))
 )
 
 // CLIRequest 是一个等着被批准的登录。
@@ -131,7 +133,7 @@ func (s *Store) ApproveCLI(code string) (CLIRequest, error) {
 			}
 		}
 		if !ok {
-			return CLIRequest{}, errors.New("要重验的那台设备已经被撤销或过期了")
+			return CLIRequest{}, errors.New(i18n.S("要重验的那台设备已经被撤销或过期了", "the device to re-verify has been revoked or has expired"))
 		}
 		s.flushLocked()
 	}
@@ -183,7 +185,7 @@ func (s *Store) PollCLI(id, poll string) (CLIPoll, error) {
 					return CLIPoll{State: "approved", Device: &c}, nil
 				}
 			}
-			return CLIPoll{}, errors.New("那台设备已经被撤销了")
+			return CLIPoll{}, errors.New(i18n.S("那台设备已经被撤销了", "that device has been revoked"))
 		}
 		token := randToken()
 		d := &Device{

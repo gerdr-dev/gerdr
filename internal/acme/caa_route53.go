@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/route53"
 	r53 "github.com/aws/aws-sdk-go-v2/service/route53/types"
+	"github.com/gerdr-dev/gerdr/internal/i18n"
 )
 
 // route53CAA: Route 53 keeps all CAA values of a name in one record set, so "add" is read the set, append, UPSERT.
@@ -36,7 +37,7 @@ func route53CAA(ctx context.Context, host, value string, apply bool) (bool, erro
 		name := strings.Join(labels[i:], ".")
 		r, err := c.ListHostedZonesByName(ctx, &route53.ListHostedZonesByNameInput{DNSName: aws.String(name)})
 		if err != nil {
-			return false, fmt.Errorf("Route 53 列 hosted zone 失败：%w", err)
+			return false, fmt.Errorf(i18n.S("Route 53 列 hosted zone 失败：%w", "Route 53: listing hosted zones: %w"), err)
 		}
 		for _, z := range r.HostedZones {
 			if aws.ToString(z.Name) == name+"." && (z.Config == nil || !z.Config.PrivateZone) {
@@ -46,7 +47,7 @@ func route53CAA(ctx context.Context, host, value string, apply bool) (bool, erro
 		}
 	}
 	if zoneID == "" {
-		return false, fmt.Errorf("这份凭据下找不到 %s 所在的 hosted zone", host)
+		return false, fmt.Errorf(i18n.S("这份凭据下找不到 %s 所在的 hosted zone", "no hosted zone for %s under these credentials"), host)
 	}
 
 	set := r53.ResourceRecordSet{Name: aws.String(host + "."), Type: r53.RRTypeCaa, TTL: aws.Int64(300)}
@@ -54,7 +55,7 @@ func route53CAA(ctx context.Context, host, value string, apply bool) (bool, erro
 		HostedZoneId: aws.String(zoneID), StartRecordName: aws.String(host), StartRecordType: r53.RRTypeCaa, MaxItems: aws.Int32(1),
 	})
 	if err != nil {
-		return false, fmt.Errorf("Route 53 读记录失败（IAM 要有 route53:ListResourceRecordSets）：%w", err)
+		return false, fmt.Errorf(i18n.S("Route 53 读记录失败（IAM 要有 route53:ListResourceRecordSets）：%w", "Route 53: reading records (IAM needs route53:ListResourceRecordSets): %w"), err)
 	}
 	if len(r.ResourceRecordSets) > 0 && aws.ToString(r.ResourceRecordSets[0].Name) == host+"." && r.ResourceRecordSets[0].Type == r53.RRTypeCaa {
 		set = r.ResourceRecordSets[0]
@@ -76,7 +77,7 @@ func route53CAA(ctx context.Context, host, value string, apply bool) (bool, erro
 		},
 	})
 	if err != nil {
-		return false, fmt.Errorf("Route 53 写记录失败：%w", err)
+		return false, fmt.Errorf(i18n.S("Route 53 写记录失败：%w", "Route 53: writing the record: %w"), err)
 	}
 	return true, nil
 }

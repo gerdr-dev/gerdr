@@ -35,7 +35,8 @@ func Retryable(msg string) bool {
 		}
 	}
 	for _, k := range []string{"econnreset", "etimedout", "enotfound", "eai_again", "econnrefused", "socket hang up", "network", "connection",
-		"timeout", "timed out", "overloaded", "529", "502", "503", "504", "stream disconnected", "fetch failed", "进程意外退出", "进程退出了"} {
+		"timeout", "timed out", "overloaded", "529", "502", "503", "504", "stream disconnected", "fetch failed", "进程意外退出", "进程退出了",
+		"exited unexpectedly", "process exited"} {
 		if strings.Contains(m, k) {
 			return true
 		}

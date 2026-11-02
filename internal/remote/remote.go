@@ -27,6 +27,7 @@ import (
 	"github.com/gerdr-dev/gerdr/internal/acme"
 	"github.com/gerdr-dev/gerdr/internal/auth"
 	"github.com/gerdr-dev/gerdr/internal/config"
+	"github.com/gerdr-dev/gerdr/internal/i18n"
 	"github.com/gerdr-dev/gerdr/internal/lan"
 )
 
@@ -59,7 +60,7 @@ func Open(dataDir string, cfg config.Remote, log *slog.Logger) (*Service, error)
 	dir := config.RemoteDir(dataDir)
 	store, err := auth.New(auth.Config{Dir: dir, TTL: cfg.DeviceTTL, PairTTL: cfg.PairTTL})
 	if err != nil {
-		return nil, fmt.Errorf("读设备列表失败: %w", err)
+		return nil, fmt.Errorf(i18n.S("读设备列表失败: %w", "reading the device list: %w"), err)
 	}
 	rpid, origins := relyingParty(cfg)
 	pk, err := auth.NewPasskeys(auth.PasskeyConfig{Dir: dir, Display: "gerdr", RPID: rpid, Origins: origins})
@@ -169,8 +170,8 @@ func (s *Service) run() {
 				return // 等的时候配置又改了：这一轮作废，新的那轮已经起来了
 			}
 			if a.Err != "" {
-				if !strings.HasPrefix(a.Err, "签证书失败") { // 签发那一步的错误自己带着这个开头
-					a.Err = "签证书失败：" + a.Err
+				if !strings.HasPrefix(a.Err, acme.IssueFailed) { // 签发那一步的错误自己带着这个开头
+					a.Err = acme.IssueFailed + i18n.S("：", ": ") + a.Err
 				}
 				s.setErr(a.Err)
 				return
@@ -182,7 +183,7 @@ func (s *Service) run() {
 		}
 		cf, err := loadCert(certFile, keyFile)
 		if err != nil {
-			s.setErr("读证书失败：" + err.Error())
+			s.setErr(i18n.S("读证书失败：", "Can't read the certificate: ") + err.Error())
 			return
 		}
 		// 直连口在中继之前起：中继连不上（VPS 挂了）时人在家里照样能用
@@ -192,7 +193,7 @@ func (s *Service) run() {
 			Log: func(f string, a ...any) { s.log.Info("remote: " + fmt.Sprintf(f, a...)) },
 		})
 		if errors.Is(err, relay.ErrNotJoined) {
-			s.setErr(err.Error() + "：先跑一次 gerdr remote join")
+			s.setErr(err.Error() + i18n.S("：先跑一次 gerdr remote join", ": run gerdr remote join first"))
 			return
 		}
 		if err != nil {
@@ -212,7 +213,7 @@ func (s *Service) run() {
 		s.mu.Unlock()
 		ln := tls.NewListener(tn, &tls.Config{GetCertificate: cf.get, MinVersion: tls.VersionTLS12, NextProtos: []string{"h2", "http/1.1"}})
 		if err := hs.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) && !errors.Is(err, net.ErrClosed) && ctx.Err() == nil {
-			s.setErr("远程那个口挂了：" + err.Error())
+			s.setErr(i18n.S("远程那个口挂了：", "The remote listener went down: ") + err.Error())
 		}
 	}()
 }
@@ -252,7 +253,7 @@ func (s *Service) renewLoop(ctx context.Context, am *acme.Manager) {
 		case <-t.C:
 		}
 		if a := am.Ensure(false); a.Err != "" {
-			s.alert("证书续期失败（先看 DNS 凭据还在不在）：" + a.Err)
+			s.alert(i18n.S("证书续期失败（先看 DNS 凭据还在不在）：", "Certificate renewal failed (check the DNS credentials are still valid first): ") + a.Err)
 		} else if a.Renewed {
 			s.log.Info("remote: certificate renewed")
 		}
@@ -311,7 +312,7 @@ func (s *Service) Status() Status {
 	if s.tunnel != nil {
 		st.State = s.tunnel.State()
 	} else if st.Enabled && st.Err == "" {
-		st.State = "正在准备证书"
+		st.State = i18n.S("正在准备证书", "Preparing certificate")
 	}
 	certs := s.certs
 	s.mu.Unlock()
@@ -387,7 +388,7 @@ func (c *certFile) leaf() *x509.Certificate {
 func Join(ctx context.Context, dataDir, relayURL, host, invite string) error {
 	// 底下的错误常常只有一个「EOF」「connection refused」，不带上是哪一步、连的谁，人没法判断是地址错了还是码错了
 	if err := relay.Join(ctx, relay.HostConfig{URL: relayURL, Host: host, Dir: config.RemoteDir(dataDir) + "/relay"}, invite); err != nil {
-		return fmt.Errorf("注册到中继 %s 失败（地址对不对、邀请码是不是给 %s 出的、过没过期）：%w", relayURL, host, err)
+		return fmt.Errorf(i18n.S("注册到中继 %s 失败（地址对不对、邀请码是不是给 %s 出的、过没过期）：%w", "registering with relay %s failed (check the address, that the invite code was issued for %s, and that it hasn't expired): %w"), relayURL, host, err)
 	}
 	return nil
 }
@@ -398,7 +399,7 @@ func envLocked() bool {
 	return os.Getenv("GERDR_RELAY_URL") != "" || os.Getenv("GERDR_RELAY_HOST") != ""
 }
 
-var errEnvLocked = errors.New("中继地址 / 主机名是环境变量 GERDR_RELAY_URL / GERDR_RELAY_HOST 给的，这里改不动：去掉它们、重启 Gerdr 再来")
+var errEnvLocked = errors.New(i18n.S("中继地址 / 主机名是环境变量 GERDR_RELAY_URL / GERDR_RELAY_HOST 给的，这里改不动：去掉它们、重启 Gerdr 再来", "the relay address / host name come from the GERDR_RELAY_URL / GERDR_RELAY_HOST environment variables and can't be changed here: unset them and restart Gerdr"))
 
 // Connect 是设置里的「连接」，等于 `gerdr remote join` 不带证书参数：拿邀请码注册到中继、写进 remote.json，
 // 然后当场把远程那条路拉起来，不用重启。证书之后在设置的「证书」那一节填（以前配过就沿用）。
@@ -409,7 +410,7 @@ func (s *Service) Connect(ctx context.Context, relayURL, host, invite string) er
 		return errEnvLocked
 	}
 	if cur := s.Config(); cur.Enabled() {
-		return fmt.Errorf("已经连着 %s 了：先移除再连", cur.Host)
+		return fmt.Errorf(i18n.S("已经连着 %s 了：先移除再连", "already connected to %s: remove it first"), cur.Host)
 	}
 	host, err := relay.CleanHost(host)
 	if err != nil {
@@ -417,10 +418,10 @@ func (s *Service) Connect(ctx context.Context, relayURL, host, invite string) er
 	}
 	relayURL = strings.TrimRight(strings.TrimSpace(relayURL), "/")
 	if u, err := url.Parse(relayURL); err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
-		return errors.New("中继地址要写成 https://relay.example.com 这样")
+		return errors.New(i18n.S("中继地址要写成 https://relay.example.com 这样", "the relay address should look like https://relay.example.com"))
 	}
 	if invite = strings.TrimSpace(invite); invite == "" {
-		return errors.New("邀请码没填：在中继后台（或 VPS 上 dialhome invite " + host + "）出一个")
+		return errors.New(fmt.Sprintf(i18n.S("邀请码没填：在中继后台（或 VPS 上 dialhome invite %s）出一个", "no invite code: create one in the relay dashboard (or run dialhome invite %s on the VPS)"), host))
 	}
 	f, err := config.ReadRemoteFile(s.dataDir())
 	if err != nil {
@@ -435,7 +436,7 @@ func (s *Service) Connect(ctx context.Context, relayURL, host, invite string) er
 	}
 	f.RelayURL, f.Host = relayURL, host
 	if err := config.WriteRemoteFile(s.dataDir(), f); err != nil {
-		return fmt.Errorf("注册好了，但配置没写进去：%w", err)
+		return fmt.Errorf(i18n.S("注册好了，但配置没写进去：%w", "registered, but couldn't save the config: %w"), err)
 	}
 	return s.Reload()
 }
@@ -531,7 +532,7 @@ func (s *Service) CertConfig() (CertConfig, error) {
 func (s *Service) CAA(ctx context.Context, apply bool) (missing bool, err error) {
 	cfg := s.Config()
 	if !cfg.Enabled() {
-		return false, errors.New("还没连上中继：先在上面「连接」")
+		return false, errors.New(i18n.S("还没连上中继：先在上面「连接」", "not connected to a relay yet: use Connect above first"))
 	}
 	return acme.SetCAA(ctx, cfg.ACMEDNS, cfg.Host, acme.AccountURI(s.Dir), apply)
 }
@@ -551,7 +552,7 @@ type CertInput struct {
 // 换了服务商时，别家留在文件里的凭据一起删掉：用不上的密钥不该继续躺在盘上。
 func (s *Service) SaveCert(in CertInput) error {
 	if !s.Config().Enabled() {
-		return errors.New("还没连上中继：先在上面「连接」")
+		return errors.New(i18n.S("还没连上中继：先在上面「连接」", "not connected to a relay yet: use Connect above first"))
 	}
 	f, err := config.ReadRemoteFile(s.dataDir())
 	if err != nil {
@@ -565,7 +566,7 @@ func (s *Service) SaveCert(in CertInput) error {
 	case in.DNS != "":
 		p := acme.FindProvider(in.DNS)
 		if p == nil {
-			return fmt.Errorf("不认识的 DNS 服务商 %q", in.DNS)
+			return fmt.Errorf(i18n.S("不认识的 DNS 服务商 %q", "unknown DNS provider %q"), in.DNS)
 		}
 		keep := map[string]bool{}
 		for _, fd := range p.Fields {
@@ -574,7 +575,7 @@ func (s *Service) SaveCert(in CertInput) error {
 				f.Env[fd.Env] = v
 			}
 			if f.Env[fd.Env] == "" && os.Getenv("GERDR_"+fd.Env) == "" {
-				return fmt.Errorf("%s 的「%s」没填", p.Label, fd.Label)
+				return fmt.Errorf(i18n.S("%s 的「%s」没填", "%s: %s is missing"), p.Label, fd.Label)
 			}
 		}
 		for k := range f.Env {
@@ -585,11 +586,11 @@ func (s *Service) SaveCert(in CertInput) error {
 		f.ACMEDNS, f.TLSCert, f.TLSKey = in.DNS, "", ""
 	case in.TLSCert != "" && in.TLSKey != "":
 		if _, err := loadCert(in.TLSCert, in.TLSKey); err != nil {
-			return fmt.Errorf("证书文件读不了：%w", err)
+			return fmt.Errorf(i18n.S("证书文件读不了：%w", "can't read the certificate files: %w"), err)
 		}
 		f.ACMEDNS, f.TLSCert, f.TLSKey, f.Env = "", in.TLSCert, in.TLSKey, nil
 	default:
-		return errors.New("选一家 DNS 服务商，或者给证书和私钥两个文件")
+		return errors.New(i18n.S("选一家 DNS 服务商，或者给证书和私钥两个文件", "pick a DNS provider, or give both a certificate and a private key file"))
 	}
 	f.ACMEEmail, f.ACMEStaging = strings.TrimSpace(in.Email), in.Staging
 	if err := config.WriteRemoteFile(s.dataDir(), f); err != nil {

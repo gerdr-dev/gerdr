@@ -28,6 +28,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/gerdr-dev/gerdr/internal/i18n"
 )
 
 // Source：从哪儿取。
@@ -222,23 +224,23 @@ func (m *Manager) Save(s Settings) error {
 // Validate: what Save refuses (bad source, bad / duplicate MCP names, a server with neither command nor URL).
 func (s Settings) Validate() error {
 	if !s.MCPSource.valid() || !s.SkillSource.valid() {
-		return errors.New("来源只能是 agent / both / gerdr")
+		return errors.New(i18n.S("来源只能是 agent / both / gerdr", "source must be agent, both or gerdr"))
 	}
 	seen := map[string]bool{}
 	for _, v := range s.MCP {
 		if !ValidName(v.Name) {
-			return fmt.Errorf("MCP 名字 %q 不合法：只能用字母、数字、- 和 _", v.Name)
+			return fmt.Errorf(i18n.S("MCP 名字 %q 不合法：只能用字母、数字、- 和 _", "invalid MCP name %q: use only letters, digits, - and _"), v.Name)
 		}
 		if seen[v.Name] {
-			return fmt.Errorf("MCP 名字 %q 重复了", v.Name)
+			return fmt.Errorf(i18n.S("MCP 名字 %q 重复了", "duplicate MCP name %q"), v.Name)
 		}
 		seen[v.Name] = true
 		if v.Remote() {
 			if v.URL == "" {
-				return fmt.Errorf("MCP %q 缺 URL", v.Name)
+				return fmt.Errorf(i18n.S("MCP %q 缺 URL", "MCP %q has no URL"), v.Name)
 			}
 		} else if v.Command == "" {
-			return fmt.Errorf("MCP %q 缺命令", v.Name)
+			return fmt.Errorf(i18n.S("MCP %q 缺命令", "MCP %q has no command"), v.Name)
 		}
 	}
 	return nil
@@ -319,7 +321,7 @@ func (m *Manager) Skills() []Skill {
 
 func (m *Manager) skillPath(name string) (string, error) {
 	if !ValidName(name) {
-		return "", fmt.Errorf("skill 名字 %q 不合法：只能用字母、数字、- 和 _", name)
+		return "", fmt.Errorf(i18n.S("skill 名字 %q 不合法：只能用字母、数字、- 和 _", "invalid skill name %q: use only letters, digits, - and _"), name)
 	}
 	return filepath.Join(m.SkillsDir(), name, "SKILL.md"), nil
 }
@@ -356,11 +358,11 @@ func (m *Manager) DeleteSkill(name string) error {
 // src 必须是 AgentSkills 列出来的某一个 —— 调用方核过，这里不信任意路径。
 func (m *Manager) ImportSkill(src Skill) error {
 	if !ValidName(src.Name) {
-		return fmt.Errorf("skill 名字 %q 不合法", src.Name)
+		return fmt.Errorf(i18n.S("skill 名字 %q 不合法", "invalid skill name %q"), src.Name)
 	}
 	dst := filepath.Join(m.SkillsDir(), src.Name)
 	if _, err := os.Stat(dst); err == nil {
-		return fmt.Errorf("Gerdr 里已经有一个叫 %s 的 skill 了", src.Name)
+		return fmt.Errorf(i18n.S("Gerdr 里已经有一个叫 %s 的 skill 了", "Gerdr already has a skill named %s"), src.Name)
 	}
 	return copyDir(src.Dir, dst)
 }

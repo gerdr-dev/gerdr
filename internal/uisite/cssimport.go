@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/gerdr-dev/gerdr/internal/i18n"
 )
 
 // Tailwind browser can't follow @import, so a stylesheet split into files (src/index.css importing
@@ -30,16 +32,16 @@ func inlineCSS(root, file, css string, open map[string]bool, warns *[]string) st
 		spec := cssLocalImportRE.FindStringSubmatch(line)[1]
 		p := filepath.Join(filepath.Dir(file), filepath.FromSlash(spec))
 		if r, err := filepath.Rel(root, p); err != nil || r == ".." || strings.HasPrefix(r, ".."+string(filepath.Separator)) {
-			*warns = append(*warns, fmt.Sprintf("%s：@import %q 指到了 src/ 外面，已经跳过", rel(file), spec))
+			*warns = append(*warns, fmt.Sprintf(i18n.S("%s：@import %q 指到了 src/ 外面，已经跳过", "%s: @import %q points outside src/; skipped"), rel(file), spec))
 			return ""
 		}
 		if open[p] {
-			*warns = append(*warns, fmt.Sprintf("%s：@import %q 绕回来了（循环引用），已经跳过", rel(file), spec))
+			*warns = append(*warns, fmt.Sprintf(i18n.S("%s：@import %q 绕回来了（循环引用），已经跳过", "%s: @import %q is circular; skipped"), rel(file), spec))
 			return ""
 		}
 		b, err := os.ReadFile(p)
 		if err != nil {
-			*warns = append(*warns, fmt.Sprintf("%s：@import %q 读不到（%v），已经跳过", rel(file), spec, err))
+			*warns = append(*warns, fmt.Sprintf(i18n.S("%s：@import %q 读不到（%v），已经跳过", "%s: can't read @import %q (%v); skipped"), rel(file), spec, err))
 			return ""
 		}
 		open[p] = true

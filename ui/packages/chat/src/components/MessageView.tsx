@@ -583,7 +583,7 @@ function SizedImg({
 }
 
 /**
- * The retry notice's "N 秒后自动重试", counted down live: the server writes the wait once, so it used to sit at "10 秒"
+ * The retry notice's "N 秒后自动重试" / "retrying in Ns", counted down live: the server writes the wait once, so it used to sit at "10 秒"
  * while the seconds went by. Past the deadline the retry is under way (the notice is folded away once it succeeds or the turn ends).
  */
 function RetryText({ text, until }: { text: string; until: number }) {
@@ -595,5 +595,12 @@ function RetryText({ text, until }: { text: string; until: number }) {
     const t = setTimeout(() => setNow(Date.now()), ((until - Date.now()) % 1000 || 1000) + 5);
     return () => clearTimeout(t);
   }, [now, until, left]);
-  return <>{text.replace(/\d+ 秒后自动重试/, left > 0 ? `${left} 秒后自动重试` : "正在自动重试" /* the server's (Chinese) text, counted down in place */)}</>;
+  // the server's text is in the computer's language (Go internal/i18n): "N 秒后自动重试" or "retrying in Ns"
+  return (
+    <>
+      {text
+        .replace(/\d+ 秒后自动重试/, left > 0 ? `${left} 秒后自动重试` : "正在自动重试")
+        .replace(/retrying in \d+s/, left > 0 ? `retrying in ${left}s` : "retrying now")}
+    </>
+  );
 }

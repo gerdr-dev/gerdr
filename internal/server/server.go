@@ -32,6 +32,7 @@ import (
 	"github.com/gerdr-dev/gerdr/internal/doctor"
 	"github.com/gerdr-dev/gerdr/internal/ext"
 	"github.com/gerdr-dev/gerdr/internal/hub"
+	"github.com/gerdr-dev/gerdr/internal/i18n"
 	"github.com/gerdr-dev/gerdr/internal/remote"
 	"github.com/gerdr-dev/gerdr/internal/service"
 	"github.com/gerdr-dev/gerdr/internal/term"
@@ -105,7 +106,7 @@ func (s *Server) Handler() http.Handler {
 	// 合盖不睡要一次管理员授权（弹 macOS 的密码框）：只在本机口（remoteGuard 挡掉远程）—— 远程点了，框弹在没人的电脑上
 	mux.HandleFunc("POST /api/awake/lid-setup", func(w http.ResponseWriter, r *http.Request) {
 		if s.Awake == nil {
-			httpError(w, 501, "这个进程不管休眠")
+			httpError(w, 501, i18n.S("这个进程不管休眠", "This process doesn't manage sleep"))
 			return
 		}
 		if err := awake.SetupLid(); err != nil {
@@ -401,7 +402,7 @@ func (s *Server) setAwake(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if s.Awake == nil {
-		httpError(w, 501, "这个进程不管休眠")
+		httpError(w, 501, i18n.S("这个进程不管休眠", "This process doesn't manage sleep"))
 		return
 	}
 	var until time.Time

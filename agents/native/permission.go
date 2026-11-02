@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/gerdr-dev/gerdr/internal/i18n"
+
 	"github.com/coder/acp-go-sdk"
 )
 
@@ -20,10 +22,10 @@ const (
 
 // id 和 claude 的同名模式一致：hub / 界面按 id 认（比如 gerdr session new --mode）。
 var modes = []acp.SessionMode{
-	{Id: modeDefault, Name: "Ask", Description: acp.Ptr("改文件、跑命令前都问你（只读的命令不问）")},
-	{Id: modeAcceptEdits, Name: "Accept edits", Description: acp.Ptr("工作目录里的文件直接改；跑命令前问你")},
-	{Id: modeReadOnly, Name: "Read only", Description: acp.Ptr("只看不改：不改文件，只跑只读的命令")},
-	{Id: modeBypass, Name: "Full access", Description: acp.Ptr("什么都不问")},
+	{Id: modeDefault, Name: "Ask", Description: acp.Ptr(i18n.S("改文件、跑命令前都问你（只读的命令不问）", "Asks before editing files or running commands (read-only commands don't ask)"))},
+	{Id: modeAcceptEdits, Name: "Accept edits", Description: acp.Ptr(i18n.S("工作目录里的文件直接改；跑命令前问你", "Edits files in the working directory freely; asks before running commands"))},
+	{Id: modeReadOnly, Name: "Read only", Description: acp.Ptr(i18n.S("只看不改：不改文件，只跑只读的命令", "Looks but doesn't touch: no file edits, only read-only commands"))},
+	{Id: modeBypass, Name: "Full access", Description: acp.Ptr(i18n.S("什么都不问", "Never asks"))},
 }
 
 func validMode(m string) bool {

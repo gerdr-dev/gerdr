@@ -13,6 +13,7 @@ import (
 	"github.com/coder/acp-go-sdk"
 
 	"github.com/gerdr-dev/gerdr/internal/hub"
+	"github.com/gerdr-dev/gerdr/internal/i18n"
 )
 
 // sessionRoutes: /api/sessions and the operations on one session (send, answer, rewind, close…). Kept out of
@@ -97,7 +98,7 @@ func (s *Server) sessionRoutes(mux *http.ServeMux) {
 			return nil, err
 		}
 		if strings.TrimSpace(b.Prompt) == "" {
-			return nil, errors.New("prompt 是空的")
+			return nil, errors.New(i18n.S("prompt 是空的", "prompt is empty"))
 		}
 		t, err := s.Hub.Complete(r.Context(), sess.Summary().Agent, b.Prompt)
 		return map[string]string{"text": t}, err
@@ -118,7 +119,7 @@ func (s *Server) sessionRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/sessions/{id}/events/older", s.sessionOp(func(r *http.Request, sess *hub.Session) (any, error) {
 		before, err := strconv.ParseInt(r.URL.Query().Get("before"), 10, 64)
 		if err != nil {
-			return nil, errors.New("before 不对")
+			return nil, errors.New(i18n.S("before 不对", "invalid before"))
 		}
 		evs, more := sess.OlderEvents(before)
 		return map[string]any{"events": evs, "older": more}, nil
@@ -219,7 +220,7 @@ func (s *Server) sessionRoutes(mux *http.ServeMux) {
 				}
 			}
 		}
-		httpError(w, 404, "不是 Gerdr 里的会话")
+		httpError(w, 404, i18n.S("不是 Gerdr 里的会话", "Not a Gerdr session"))
 	})
 }
 

@@ -18,8 +18,8 @@ const plain = (s: string) =>
 
 // 收起时露几行（照 Claude Code：3 行，正好多 1 行时直接全露，不为一行折起来）
 const FOLD = 3;
-// hub/shell.go 在日志记满时补的那句：看到它说明这里只有开头，完整的得去文件里看
-const CUT_MARK = "完整的在文件里";
+// The note hub/shell.go adds when the log is full (in the computer's language): only the start is here, the rest is in the file
+const CUT_MARKS = ["完整的在文件里", "the full output is in the file"];
 
 /**
  * 输入框里 `!命令` 跑出来的那张卡片（gerdr 自己跑的，不经过 agent，见 hub/shell.go）：
@@ -39,7 +39,7 @@ export function ShellCard({ sessionId, data }: { sessionId: string; data: GData[
   const lines = out ? out.split("\n") : [];
   const folded = !open && lines.length > FOLD + 1;
   const shown = folded ? (data.running || failed ? lines.slice(-FOLD) : lines.slice(0, FOLD)) : lines;
-  const cut = !!data.path && data.output.includes(CUT_MARK);
+  const cut = !!data.path && CUT_MARKS.some((m) => data.output.includes(m));
   // 展开着、还在跑：跟着输出滚到底（人往上翻过就不跟了：离底部超过一行算翻过）
   useLayoutEffect(() => {
     const el = pre.current;

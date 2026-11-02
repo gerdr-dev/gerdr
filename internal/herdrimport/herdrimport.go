@@ -10,6 +10,7 @@ package herdrimport
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -18,6 +19,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/gerdr-dev/gerdr/internal/i18n"
 )
 
 type Pane struct {
@@ -66,7 +69,7 @@ func herdrBin() (string, error) {
 			return p, nil
 		}
 	}
-	return "", fmt.Errorf("找不到 herdr（没装，或者不在 PATH 里）")
+	return "", errors.New(i18n.S("找不到 herdr（没装，或者不在 PATH 里）", "herdr not found (not installed, or not on PATH)"))
 }
 
 func run(ctx context.Context, bin string, out any, args ...string) error {
@@ -90,7 +93,7 @@ func run(ctx context.Context, bin string, out any, args ...string) error {
 		Result json.RawMessage `json:"result"`
 	}
 	if err := json.Unmarshal(b, &env); err != nil {
-		return fmt.Errorf("herdr %s 的输出看不懂：%w", strings.Join(args, " "), err)
+		return fmt.Errorf(i18n.S("herdr %s 的输出看不懂：%w", "can't parse the output of herdr %s: %w"), strings.Join(args, " "), err)
 	}
 	return json.Unmarshal(env.Result, out)
 }

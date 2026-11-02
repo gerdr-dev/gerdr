@@ -3,6 +3,10 @@ import { AlertTriangle, ArrowUpCircle, CheckCircle2, ChevronDown, History, LifeB
 import { useCallback, useEffect, useRef, useState } from "react";
 import { type Commit, type Hello, type UIStatus, ago, dismissErrors, errorText, pageErrors, req, upgradeText } from "./api";
 import { Chat } from "./Chat";
+import { locale, t } from "./i18n";
+
+// 面板自己的 lang（在 Shadow DOM 里，不动主界面 <html> 上的）：字体回退、断行按这个语言来
+const LANG = locale() === "zh" ? "zh-CN" : "en";
 
 export function Panel({
   open,
@@ -57,14 +61,14 @@ export function Panel({
 
   if (!open)
     return broken ? (
-      <div className={"root" + (dark ? " dark" : "")}>
+      <div className={"root" + (dark ? " dark" : "")} lang={LANG}>
         <div className="pill">
-          <button className="open" onClick={() => onOpen(true)} title="界面报错了：打开急救面板，叫 agent 来修">
+          <button className="open" onClick={() => onOpen(true)} title={t("panel.pill.title")}>
             <LifeBuoy size={15} />
-            急救
+            {t("panel.name")}
           </button>
           {/* 临时的错、不想管的错：点掉，别一直挡着下面的按钮（手机上正好压在发送键上） */}
-          <button className="x" onClick={() => dismissErrors().then(recheck)} title="忽略这些错误">
+          <button className="x" onClick={() => dismissErrors().then(recheck)} title={t("panel.dismiss.title")}>
             <X size={14} />
           </button>
         </div>
@@ -74,7 +78,7 @@ export function Panel({
   const err = errorText(status);
   const upgrade = upgradeText(status);
   return (
-    <div className={"root" + (dark ? " dark" : "")}>
+    <div className={"root" + (dark ? " dark" : "")} lang={LANG}>
       <aside className="panel" style={{ width }}>
         <Resizer width={width} onWidth={onWidth} />
         <header className="head">
@@ -82,13 +86,13 @@ export function Panel({
             <LifeBuoy size={16} />
           </div>
           <div className="title">
-            <b>急救</b>
-            <span>内置在 Gerdr 里，主界面怎么改坏它都在</span>
+            <b>{t("panel.name")}</b>
+            <span>{t("panel.subtitle")}</span>
           </div>
-          <button className="icon" onClick={refresh} title="重新读一遍错误和历史">
+          <button className="icon" onClick={refresh} title={t("panel.refresh")}>
             <RefreshCw size={15} />
           </button>
-          <button className="icon" onClick={() => onOpen(false)} title="关闭急救面板">
+          <button className="icon" onClick={() => onOpen(false)} title={t("panel.close")}>
             <X size={16} />
           </button>
         </header>
@@ -101,27 +105,28 @@ export function Panel({
             <div className="status warn">
               <div className="row">
                 <ArrowUpCircle size={15} />
-                <span className="grow">有新版界面没合上</span>
+                <span className="grow">{t("panel.upgrade.title")}</span>
               </div>
               <p>{upgrade}</p>
-              <small>开个新对话，让 agent 把新版合进来、两边的改动都留着。</small>
+              <small>{t("panel.upgrade.hint")}</small>
             </div>
           )}
 
           <nav className="tabs">
             <button className={tab === "chat" ? "on" : ""} onClick={() => setTab("chat")}>
-              <MessageSquare size={14} />叫 agent 修
+              <MessageSquare size={14} />
+              {t("panel.tab.chat")}
             </button>
             <button className={tab === "history" ? "on" : ""} onClick={() => setTab("history")}>
               <History size={14} />
-              回到之前的一版
+              {t("panel.tab.history")}
             </button>
           </nav>
 
           {helloErr ? (
-            <div className="empty">连不上 Gerdr：{helloErr}</div>
+            <div className="empty">{t("panel.helloErr", { error: helloErr })}</div>
           ) : !hello || !status ? (
-            <div className="empty">读取中…</div>
+            <div className="empty">{t("panel.loading")}</div>
           ) : (
             <>
               {/* 两页都一直挂着（只是藏起来）：切过去再切回来，输入框里没发的字和滚动位置都还在 */}
@@ -180,7 +185,7 @@ function Resizer({ width, onWidth }: { width: number; onWidth: (w: number, done?
 
 function StatusCard({ status, error, text, onDismiss }: { status: UIStatus | null; error: string; text: string; onDismiss: () => void }) {
   const [more, setMore] = useState(false);
-  if (error) return <div className="status bad">读不到界面状态：{error}</div>;
+  if (error) return <div className="status bad">{t("status.err", { error })}</div>;
   if (!status) return null;
   const dirty = status.git?.uncommitted_files;
   if (!text)
@@ -188,8 +193,11 @@ function StatusCard({ status, error, text, onDismiss }: { status: UIStatus | nul
       <div className="status ok">
         <CheckCircle2 size={15} />
         <div>
-          界面现在没报错
-          <small>运行时错误要主界面开着才报得上来{dirty ? ` · ${dirty} 个文件改了还没提交` : ""}</small>
+          {t("status.ok")}
+          <small>
+            {t("status.okHint")}
+            {dirty ? t("status.dirty", { n: dirty }) : ""}
+          </small>
         </div>
       </div>
     );
@@ -197,15 +205,15 @@ function StatusCard({ status, error, text, onDismiss }: { status: UIStatus | nul
     <div className="status bad">
       <div className="row">
         <AlertTriangle size={15} />
-        <span className="grow">界面报错了</span>
+        <span className="grow">{t("status.bad")}</span>
         {/* 编译错误点了也没用（改好之前一直在），只给运行时错误 */}
         {!status.build_error && (
-          <button className="link" onClick={onDismiss} title="临时的错、已经修好了的错：清掉">
-            忽略
+          <button className="link" onClick={onDismiss} title={t("status.dismiss.title")}>
+            {t("status.dismiss")}
           </button>
         )}
         <button className="link" onClick={() => setMore(!more)}>
-          {more ? "收起" : "展开"}
+          {more ? t("status.collapse") : t("status.expand")}
           <ChevronDown size={13} style={{ transform: more ? "rotate(180deg)" : undefined }} />
         </button>
       </div>
@@ -241,10 +249,11 @@ function Versions({ tick, onRestored }: { tick: number; onRestored: () => void }
     setBusy(c.sha);
     try {
       const r = await req<{ saved?: string }>("POST", "/api/ui/restore", { sha: c.sha });
-      setFlash({ text: `已回到 ${c.sha.slice(0, 8)}${r.saved ? `，之前的样子存成了 ${r.saved.slice(0, 8)}` : ""}。左边的主界面会跟着变，没变就刷新一下。` });
+      const sha = c.sha.slice(0, 8);
+      setFlash({ text: r.saved ? t("versions.restoredSaved", { sha, saved: r.saved.slice(0, 8) }) : t("versions.restored", { sha }) });
       onRestored();
     } catch (e: any) {
-      setFlash({ text: "回退失败：" + e.message, bad: true });
+      setFlash({ text: t("versions.failed", { error: e.message }), bad: true });
     } finally {
       setBusy("");
       load();
@@ -253,10 +262,10 @@ function Versions({ tick, onRestored }: { tick: number; onRestored: () => void }
 
   return (
     <div className="versions">
-      <p className="hint">先让主界面能用上，再慢慢修。回退前现在的样子会先存一版，改动不会丢，还能再回来。</p>
+      <p className="hint">{t("versions.hint")}</p>
       {flash && <div className={"flash" + (flash.bad ? " bad" : "")}>{flash.text}</div>}
       {err && <div className="flash bad">{err}</div>}
-      {list && !list.length && <div className="empty">没有历史</div>}
+      {list && !list.length && <div className="empty">{t("versions.empty")}</div>}
       <ol>
         {list?.map((c) => (
           <li key={c.sha} className={c.current ? "cur" : ""}>
@@ -266,14 +275,14 @@ function Versions({ tick, onRestored }: { tick: number; onRestored: () => void }
                 {c.subject || c.sha.slice(0, 8)}
               </div>
               <div className="meta">
-                {c.current && <span className="tag brand">现在</span>}
-                {c.upstream && <span className="tag">Gerdr 原版</span>}
+                {c.current && <span className="tag brand">{t("versions.current")}</span>}
+                {c.upstream && <span className="tag">{t("versions.upstream")}</span>}
                 <code>{c.sha.slice(0, 8)}</code> · {ago(c.time)}
               </div>
             </div>
             {!c.current && (
               <button className={"btn sm" + (armed === c.sha ? " danger" : "")} disabled={!!busy} onClick={() => restore(c)}>
-                {busy === c.sha ? "回退中…" : armed === c.sha ? "确定？再点一次" : "回到这一版"}
+                {busy === c.sha ? t("versions.restoring") : armed === c.sha ? t("versions.confirm") : t("versions.restore")}
               </button>
             )}
           </li>

@@ -28,6 +28,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/gerdr-dev/gerdr/internal/i18n"
 )
 
 // CookieName 前端读不到（HttpOnly），只有服务端用。和本机口那个按令牌算的 cookie 名字不一样：
@@ -178,7 +180,7 @@ func (s *Store) MintCode() (string, time.Time) {
 	return code, exp
 }
 
-var ErrBadCode = errors.New("配对码不对或者已经过期了")
+var ErrBadCode = errors.New(i18n.S("配对码不对或者已经过期了", "wrong or expired pairing code"))
 
 // Redeem 用配对码换一台设备的长期凭据。返回的令牌明文只在这一次出现，之后只有哈希。
 func (s *Store) Redeem(code, ua, ip string) (*Device, string, error) {
@@ -336,7 +338,7 @@ func ClientIP(r *http.Request) string {
 
 // CheckTampered 看一眼凭据文件有没有被外部改过，被改过就调一次 alert。
 func (s *Store) CheckTampered(alert func(string)) {
-	s.guard.check("设备凭据文件", alert)
+	s.guard.check(i18n.S("设备凭据文件", "the device credentials file"), alert)
 }
 
 // MarkVerified 记一次刚做过的生物验证（passkey 断言成功）。
@@ -450,7 +452,7 @@ func randCode() string {
 
 func must(b []byte) {
 	if _, err := rand.Read(b); err != nil {
-		panic("crypto/rand 读不出来：" + err.Error()) // 这台机器上没有随机数，别硬撑
+		panic(i18n.S("crypto/rand 读不出来：", "can't read crypto/rand: ") + err.Error()) // 这台机器上没有随机数，别硬撑
 	}
 }
 
@@ -477,7 +479,7 @@ func normalizeCode(in string) string {
 
 // LabelFromUA 只求「在设备列表里能认出是哪台」，不求准。
 func LabelFromUA(ua string) string {
-	dev := "未知设备"
+	dev := i18n.S("未知设备", "Unknown device")
 	switch {
 	case strings.Contains(ua, "iPad"):
 		dev = "iPad"

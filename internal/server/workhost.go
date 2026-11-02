@@ -12,6 +12,7 @@ import (
 	"github.com/coder/acp-go-sdk"
 
 	"github.com/gerdr-dev/gerdr/internal/hub"
+	"github.com/gerdr-dev/gerdr/internal/i18n"
 	"github.com/gerdr-dev/gerdr/internal/work"
 )
 
@@ -224,9 +225,9 @@ func lastReply(evs []*hub.Event) string {
 		case hub.EvTurnEnd:
 			flush()
 			if e.Error != "" {
-				parts = append(parts, "出错："+e.Error)
+				parts = append(parts, i18n.S("出错：", "Error: ")+e.Error)
 			} else if e.StopReason != "" && e.StopReason != "end_turn" {
-				parts = append(parts, "这一轮结束："+e.StopReason)
+				parts = append(parts, i18n.S("这一轮结束：", "Turn ended: ")+e.StopReason)
 			}
 		}
 	}

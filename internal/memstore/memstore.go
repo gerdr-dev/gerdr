@@ -18,6 +18,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/gerdr-dev/gerdr/internal/i18n"
 )
 
 const Index = "MEMORY.md"
@@ -86,7 +88,7 @@ func List(r Roots, cwds []string, nativeSlug func(cwd string) string) []Store {
 	}
 	var out []Store
 	if r.Native != "" {
-		g := scan(Store{ID: filepath.Join(r.Native, "global"), Agent: "native", Scope: "global", Label: "全局（所有项目）", Dir: filepath.Join(r.Native, "global")})
+		g := scan(Store{ID: filepath.Join(r.Native, "global"), Agent: "native", Scope: "global", Label: i18n.S("全局（所有项目）", "Global (all projects)"), Dir: filepath.Join(r.Native, "global")})
 		out = append(out, g)
 		ents, _ := os.ReadDir(filepath.Join(r.Native, "projects"))
 		for _, e := range ents {
@@ -119,7 +121,7 @@ func List(r Roots, cwds []string, nativeSlug func(cwd string) string) []Store {
 			}
 			scope := "project"
 			if home != "" && e.Name() == claudeSlug(home) {
-				label = "~（在家目录里开的会话）"
+				label = i18n.S("~（在家目录里开的会话）", "~ (sessions started in the home directory)")
 			}
 			if s := scan(Store{ID: dir, Agent: "claude", Scope: scope, Label: label, Dir: dir}); len(s.Entries) > 0 || s.Index {
 				out = append(out, s)
@@ -128,7 +130,7 @@ func List(r Roots, cwds []string, nativeSlug func(cwd string) string) []Store {
 	}
 	if r.Codex != "" {
 		if _, err := os.Stat(r.Codex); err == nil {
-			out = append(out, scan(Store{ID: r.Codex, Agent: "codex", Scope: "global", Label: "全局（从过去的会话自动总结）", Dir: r.Codex}))
+			out = append(out, scan(Store{ID: r.Codex, Agent: "codex", Scope: "global", Label: i18n.S("全局（从过去的会话自动总结）", "Global (summarized from past sessions)"), Dir: r.Codex}))
 		}
 	}
 	order := map[string]int{"native": 0, "claude": 1, "codex": 2}
@@ -230,7 +232,7 @@ func gitRoot(dir string) string {
 
 // ---- 读 / 写 / 删 ----
 
-var ErrNotAllowed = errors.New("只能读写记忆目录里的 .md 文件")
+var ErrNotAllowed = errors.New(i18n.S("只能读写记忆目录里的 .md 文件", "Only .md files in the memory directory can be read or written"))
 
 // Allowed：p 是不是某家记忆目录里的 .md。符号链接解开再判断（链到别处的不算）；文件还不存在（新建）时看它所在的目录。
 func Allowed(r Roots, p string) (string, error) {
@@ -322,7 +324,7 @@ func Delete(r Roots, p string) error {
 		return err
 	}
 	if filepath.Base(p) == Index {
-		return errors.New("索引不能删，改它的内容就行")
+		return errors.New(i18n.S("索引不能删，改它的内容就行", "The index can't be deleted; edit its content instead"))
 	}
 	if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
 		return err

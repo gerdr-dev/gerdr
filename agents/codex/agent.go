@@ -22,6 +22,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gerdr-dev/gerdr/internal/i18n"
+
 	"github.com/coder/acp-go-sdk"
 
 	"github.com/gerdr-dev/gerdr/acpx"
@@ -37,17 +39,17 @@ const (
 )
 
 var modes = []acp.SessionMode{
-	{Id: modeAsk, Name: "Ask", Description: acp.Ptr("除了明显安全的读操作，每条命令都问你")},
-	{Id: modeAuto, Name: "Auto", Description: acp.Ptr("工作区内随便改、随便跑；越界（联网、写工作区外）才问")},
-	{Id: modeReadOnly, Name: "Read only", Description: acp.Ptr("只读，不改文件")},
-	{Id: modeFull, Name: "Full access", Description: acp.Ptr("不问、不设沙箱")},
+	{Id: modeAsk, Name: "Ask", Description: acp.Ptr(i18n.S("除了明显安全的读操作，每条命令都问你", "Asks before every command except clearly safe reads"))},
+	{Id: modeAuto, Name: "Auto", Description: acp.Ptr(i18n.S("工作区内随便改、随便跑；越界（联网、写工作区外）才问", "Edits and runs freely in the workspace; asks only to go beyond it (network, writing outside)"))},
+	{Id: modeReadOnly, Name: "Read only", Description: acp.Ptr(i18n.S("只读，不改文件", "Read-only: no file edits"))},
+	{Id: modeFull, Name: "Full access", Description: acp.Ptr(i18n.S("不问、不设沙箱", "Never asks, no sandbox"))},
 }
 
 // commands：app-server 不报斜杠命令（那是 TUI 的东西），我们接了哪几个就报哪几个。
 // 名字和描述照 claude 的同名命令：两边都有的常用命令在界面上用起来一样（/new 是界面上 /clear 的别名）。
 var commands = []acp.AvailableCommand{
-	{Name: "clear", Description: "清空上下文：另起一段新对话，之前说过的不再带上"},
-	{Name: "compact", Description: "压缩上下文：把之前的对话总结成摘要，腾出上下文空间"},
+	{Name: "clear", Description: i18n.S("清空上下文：另起一段新对话，之前说过的不再带上", "Clear the context: start a fresh conversation, leaving earlier messages behind")},
+	{Name: "compact", Description: i18n.S("压缩上下文：把之前的对话总结成摘要，腾出上下文空间", "Compact the context: summarize the conversation so far to free up space")},
 }
 
 // slashCommand 认「整条消息就是一个 /命令」：只有一段文字、没有图片，去掉首尾空白后是 /名字。
@@ -261,7 +263,7 @@ func (a *Agent) onExit() {
 	}
 	a.mu.Unlock()
 	for _, s := range ss {
-		s.finish(turnResult{status: "failed", err: &turnError{Message: "codex app-server 进程退出了"}})
+		s.finish(turnResult{status: "failed", err: &turnError{Message: i18n.S("codex app-server 进程退出了", "the codex app-server process exited")}})
 	}
 }
 
@@ -993,7 +995,7 @@ func (a *Agent) HandleExtensionMethod(ctx context.Context, method string, params
 		}
 		path := a.rolloutPath(string(p.SessionId))
 		if path == "" {
-			return nil, fmt.Errorf("找不到 thread %s 的记录", p.SessionId)
+			return nil, fmt.Errorf(i18n.S("找不到 thread %s 的记录", "no record of thread %s"), p.SessionId)
 		}
 		st, err := os.Stat(path)
 		if err != nil {
@@ -1013,7 +1015,7 @@ func (a *Agent) HandleExtensionMethod(ctx context.Context, method string, params
 			return nil, acp.NewInvalidParams(err.Error())
 		}
 		if p.Action != "fork" {
-			return nil, acp.NewInvalidParams(map[string]any{"action": p.Action, "error": "codex 只能另起一份"})
+			return nil, acp.NewInvalidParams(map[string]any{"action": p.Action, "error": i18n.S("codex 只能另起一份", "codex can only fork into a new copy")})
 		}
 		rpc, err := a.client(ctx)
 		if err != nil {
@@ -1270,12 +1272,12 @@ func decision(opt string) string {
 
 func (a *Agent) askPermission(ctx context.Context, threadID, itemID, title string, kind acp.ToolKind, raw map[string]any, always bool) (string, error) {
 	opts := []acp.PermissionOption{
-		{OptionId: "allow_once", Name: "允许", Kind: acp.PermissionOptionKindAllowOnce},
+		{OptionId: "allow_once", Name: i18n.S("允许", "Allow"), Kind: acp.PermissionOptionKindAllowOnce},
 	}
 	if always {
-		opts = append(opts, acp.PermissionOption{OptionId: "allow_always", Name: "本会话都允许", Kind: acp.PermissionOptionKindAllowAlways})
+		opts = append(opts, acp.PermissionOption{OptionId: "allow_always", Name: i18n.S("本会话都允许", "Always allow in this session"), Kind: acp.PermissionOptionKindAllowAlways})
 	}
-	opts = append(opts, acp.PermissionOption{OptionId: "reject_once", Name: "拒绝", Kind: acp.PermissionOptionKindRejectOnce})
+	opts = append(opts, acp.PermissionOption{OptionId: "reject_once", Name: i18n.S("拒绝", "Deny"), Kind: acp.PermissionOptionKindRejectOnce})
 	res, err := a.conn.RequestPermission(ctx, acp.RequestPermissionRequest{
 		SessionId: acp.SessionId(threadID),
 		ToolCall: acp.ToolCallUpdate{

@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+
+	"github.com/gerdr-dev/gerdr/internal/i18n"
 )
 
 // 合盖也不睡：caffeinate 管不了合盖（那是硬件层的睡眠），要 `pmset -a disablesleep 1` —— Amphetamine 的
@@ -49,7 +51,7 @@ func lidReady() bool {
 
 func lidOn(dir string) (func(), error) {
 	if !lidReady() {
-		return nil, errors.New("还没授权：设置 → 实验室里点「授权」（要在电脑上输一次密码）")
+		return nil, errors.New(i18n.S("还没授权：设置 → 实验室里点「授权」（要在电脑上输一次密码）", "not authorized yet: click \"Authorize\" in Settings → Labs (you'll enter your password once on this computer)"))
 	}
 	if err := setDisableSleep(true); err != nil {
 		return nil, err
@@ -111,23 +113,23 @@ func SetupLid() error {
 		return err
 	}
 	if !userRe.MatchString(u.Username) {
-		return fmt.Errorf("用户名 %q 不认识", u.Username)
+		return fmt.Errorf(i18n.S("用户名 %q 不认识", "unrecognized user name %q"), u.Username)
 	}
 	rule := u.Username + " ALL=(root) NOPASSWD: " + pmset + " -a disablesleep 1, " + pmset + " -a disablesleep 0"
 	sh := `f=$(/usr/bin/mktemp /tmp/gerdr_pmset.XXXXXX) || exit 1; /usr/bin/printf '%s\n' '` + rule + `' > "$f" && /usr/sbin/visudo -cf "$f" && /usr/bin/install -m 0440 -o root -g wheel "$f" ` + ruleDst + `; r=$?; /bin/rm -f "$f"; exit $r`
 	esc := strings.NewReplacer(`\`, `\\`, `"`, `\"`)
 	script := `do shell script "` + esc.Replace(sh) + `" with administrator privileges with prompt "` +
-		esc.Replace("Gerdr 要一次授权：合上盖子时也不让电脑睡（只放行 pmset disablesleep 这一条命令）") + `"`
+		esc.Replace(i18n.S("Gerdr 要一次授权：合上盖子时也不让电脑睡（只放行 pmset disablesleep 这一条命令）", "Gerdr needs one-time authorization to keep the computer awake with the lid closed (it only allows the pmset disablesleep command).")) + `"`
 	out, err := exec.Command("/usr/bin/osascript", "-e", script).CombinedOutput()
 	if err != nil {
 		s := strings.TrimSpace(string(out))
 		if strings.Contains(s, "-128") {
-			return errors.New("取消了授权")
+			return errors.New(i18n.S("取消了授权", "authorization canceled"))
 		}
-		return fmt.Errorf("授权失败：%s", s)
+		return fmt.Errorf(i18n.S("授权失败：%s", "authorization failed: %s"), s)
 	}
 	if !lidReady() {
-		return errors.New("装好了规则，但 sudo 还是不放行")
+		return errors.New(i18n.S("装好了规则，但 sudo 还是不放行", "the rule is installed, but sudo still refuses"))
 	}
 	return nil
 }

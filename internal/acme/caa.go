@@ -13,6 +13,8 @@ import (
 	"strings"
 	"time"
 	"unicode"
+
+	"github.com/gerdr-dev/gerdr/internal/i18n"
 )
 
 // CAA writes the record that pins issuance for a name to this machine's ACME account, through the same DNS
@@ -74,7 +76,7 @@ func pickZone(host string, zones []string) (zone, rr string, err error) {
 		}
 	}
 	if zone == "" {
-		return "", "", fmt.Errorf("这份凭据下找不到 %s 所在的域名（zone），确认它托管在这个账号下、凭据能读到它", host)
+		return "", "", fmt.Errorf(i18n.S("这份凭据下找不到 %s 所在的域名（zone），确认它托管在这个账号下、凭据能读到它", "no zone for %s under these credentials; make sure it's hosted in this account and the credentials can read it"), host)
 	}
 	if rr = strings.TrimSuffix(strings.TrimSuffix(host, zone), "."); rr == "" {
 		rr = "@"
@@ -88,11 +90,11 @@ func CAASupported(dns string) bool { return caaWriters[dns] != nil }
 // SetCAA reports whether host lacks the CAA record; with apply it adds it (missing=true then means "added now").
 func SetCAA(ctx context.Context, dns, host, accountURI string, apply bool) (missing bool, err error) {
 	if accountURI == "" {
-		return false, errors.New("还没签过证书，没有 ACME 账户可写进 CAA")
+		return false, errors.New(i18n.S("还没签过证书，没有 ACME 账户可写进 CAA", "no certificate issued yet, so there's no ACME account to put in the CAA record"))
 	}
 	w := caaWriters[dns]
 	if w == nil {
-		return false, fmt.Errorf("%s 还不支持自动加 CAA，照上面那条手动加", dns)
+		return false, fmt.Errorf(i18n.S("%s 还不支持自动加 CAA，照上面那条手动加", "%s can't add the CAA record automatically yet; add the record above by hand"), dns)
 	}
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
@@ -133,7 +135,7 @@ func cloudflareCAA(ctx context.Context, api, host, value string, apply bool) (bo
 		}
 		email, key := credEnv("CLOUDFLARE_EMAIL", "CF_API_EMAIL"), credEnv("CLOUDFLARE_API_KEY", "CF_API_KEY")
 		if email == "" || key == "" {
-			return errors.New("没找到 Cloudflare 的 API Token")
+			return errors.New(i18n.S("没找到 Cloudflare 的 API Token", "no Cloudflare API token found"))
 		}
 		r.Header.Set("X-Auth-Email", email)
 		r.Header.Set("X-Auth-Key", key)
@@ -155,7 +157,7 @@ func cloudflareCAA(ctx context.Context, api, host, value string, apply bool) (bo
 		r.Header.Set("Content-Type", "application/json")
 		resp, err := http.DefaultClient.Do(r)
 		if err != nil {
-			return fmt.Errorf("连不上 Cloudflare：%w", err)
+			return fmt.Errorf(i18n.S("连不上 Cloudflare：%w", "can't reach Cloudflare: %w"), err)
 		}
 		defer resp.Body.Close()
 		var env struct {
@@ -167,14 +169,14 @@ func cloudflareCAA(ctx context.Context, api, host, value string, apply bool) (bo
 			Result json.RawMessage `json:"result"`
 		}
 		if err := json.NewDecoder(resp.Body).Decode(&env); err != nil {
-			return fmt.Errorf("Cloudflare 返回了看不懂的东西（HTTP %d）", resp.StatusCode)
+			return fmt.Errorf(i18n.S("Cloudflare 返回了看不懂的东西（HTTP %d）", "unreadable response from Cloudflare (HTTP %d)"), resp.StatusCode)
 		}
 		if !env.Success {
 			var msgs []string
 			for _, e := range env.Errors {
 				msgs = append(msgs, fmt.Sprintf("%d %s", e.Code, e.Message))
 			}
-			return fmt.Errorf("Cloudflare 拒绝了（HTTP %d）：%s", resp.StatusCode, strings.Join(msgs, "; "))
+			return fmt.Errorf(i18n.S("Cloudflare 拒绝了（HTTP %d）：%s", "Cloudflare refused (HTTP %d): %s"), resp.StatusCode, strings.Join(msgs, "; "))
 		}
 		if out != nil {
 			return json.Unmarshal(env.Result, out)
@@ -197,7 +199,7 @@ func cloudflareCAA(ctx context.Context, api, host, value string, apply bool) (bo
 		}
 	}
 	if zoneID == "" {
-		return false, fmt.Errorf("这个 Cloudflare 凭据下找不到 %s 所在的 zone（token 要能读这个 zone）", host)
+		return false, fmt.Errorf(i18n.S("这个 Cloudflare 凭据下找不到 %s 所在的 zone（token 要能读这个 zone）", "no zone for %s under this Cloudflare token (it needs read access to the zone)"), host)
 	}
 
 	type caaData struct {

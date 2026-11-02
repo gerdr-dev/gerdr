@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/gerdr-dev/gerdr/internal/i18n"
 )
 
 // Cookie-less links to one file, for the file viewer's "open externally" button in the Android / desktop App.
@@ -83,16 +85,16 @@ func (s *Server) fileLinkIssue(w http.ResponseWriter, r *http.Request) {
 	p := resolvePath(body.Path, body.Cwd)
 	st, err := os.Stat(p)
 	if err != nil {
-		httpError(w, 404, "没有这个文件："+p)
+		httpError(w, 404, i18n.S("没有这个文件：", "No such file: ")+p)
 		return
 	}
 	if st.IsDir() {
-		httpError(w, 400, "这是个目录："+p)
+		httpError(w, 400, i18n.S("这是个目录：", "That's a directory: ")+p)
 		return
 	}
 	tok, ok := s.links.issue(p, time.Now())
 	if !ok {
-		httpError(w, http.StatusTooManyRequests, "链接太多了，过几分钟再试")
+		httpError(w, http.StatusTooManyRequests, i18n.S("链接太多了，过几分钟再试", "Too many links; try again in a few minutes"))
 		return
 	}
 	writeJSON(w, map[string]string{"url": "/f/" + tok + "/" + url.PathEscape(filepath.Base(p))})
@@ -105,7 +107,7 @@ func (s *Server) fileLinkServe(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(http.StatusNotFound)
-		_, _ = w.Write([]byte("链接已过期，回 Gerdr 里再点一次「在外部打开」\n"))
+		_, _ = w.Write([]byte(i18n.S("链接已过期，回 Gerdr 里再点一次「在外部打开」\n", "This link has expired. Go back to Gerdr and click \"Open externally\" again\n")))
 		return
 	}
 	serveRaw(w, r, p, r.URL.Query().Get("download") == "1")

@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gerdr-dev/gerdr/internal/ext"
+	"github.com/gerdr-dev/gerdr/internal/i18n"
 )
 
 // skill / MCP 管理（设置 → Skill / MCP）。agent 那边的只读：列出来给人看、能导入到 gerdr，
@@ -94,7 +95,7 @@ func (s *Server) extRoutes(mux *http.ServeMux) {
 				return
 			}
 		}
-		httpError(w, 404, "没有这个 skill")
+		httpError(w, 404, i18n.S("没有这个 skill", "No such skill"))
 	})
 }
 

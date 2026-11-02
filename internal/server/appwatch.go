@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gerdr-dev/gerdr/internal/hub"
+	"github.com/gerdr-dev/gerdr/internal/i18n"
 )
 
 // 安卓 App 的后台通知（android/ 的 NoticeService）：App 关着 / 锁屏时，一个前台服务挂在这两个口上长轮询。
@@ -149,7 +150,7 @@ func (s *Server) onSession(sum hub.Summary) {
 		case old.status != hub.StWaiting && sum.Status == hub.StWaiting:
 			text := sum.Waiting
 			if text == "" {
-				text = "需要你批准或回答问题"
+				text = i18n.S("需要你批准或回答问题", "Needs your approval or an answer")
 			}
 			n = &appNotice{Status: "waiting", Text: text}
 		case (old.status == hub.StRunning || old.status == hub.StWaiting) && (sum.Status == hub.StIdle || sum.Status == hub.StError):

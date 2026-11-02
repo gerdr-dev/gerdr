@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 
+	"github.com/gerdr-dev/gerdr/internal/i18n"
+
 	"github.com/coder/acp-go-sdk"
 
 	"github.com/gerdr-dev/gerdr/acpx"
@@ -83,7 +85,7 @@ func (s *Session) onUpdate(u acp.SessionUpdate) {
 					s.rec.CtxTokens = 0
 					s.mu.Unlock()
 					s.h.broadcastSession(s)
-					s.emit(&Event{Kind: EvNotice, Level: "clear", Text: "上下文已清空"})
+					s.emit(&Event{Kind: EvNotice, Level: "clear", Text: i18n.S("上下文已清空", "Context cleared")})
 				}
 			}
 		}
@@ -323,7 +325,7 @@ func (s *Session) Answer(reqID string, resp json.RawMessage) error {
 	}
 	s.mu.Unlock()
 	if p == nil {
-		return errors.New("这个请求已经过期了")
+		return errors.New(i18n.S("这个请求已经过期了", "This request has expired"))
 	}
 	kind := EvPermissionDone
 	if p.kind == "ask" {

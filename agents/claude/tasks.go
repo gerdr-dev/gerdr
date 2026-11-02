@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gerdr-dev/gerdr/internal/i18n"
+
 	"github.com/coder/acp-go-sdk"
 
 	"github.com/gerdr-dev/gerdr/acpx"
@@ -314,7 +316,7 @@ func (s *session) stopTask(ctx context.Context, id string) error {
 	pr := s.p
 	s.mu.Unlock()
 	if pr == nil {
-		return acp.NewInvalidRequest("claude 进程没在跑")
+		return acp.NewInvalidRequest(i18n.S("claude 进程没在跑", "the claude process isn't running"))
 	}
 	_, err := pr.control(ctx, map[string]any{"subtype": "stop_task", "task_id": id})
 	return err
@@ -327,7 +329,7 @@ func (s *session) backgroundTool(ctx context.Context, toolCallID string) (bool, 
 	pr := s.p
 	s.mu.Unlock()
 	if pr == nil {
-		return false, acp.NewInvalidRequest("claude 进程没在跑")
+		return false, acp.NewInvalidRequest(i18n.S("claude 进程没在跑", "the claude process isn't running"))
 	}
 	res, err := pr.control(ctx, map[string]any{"subtype": "background_tasks", "tool_use_id": toolCallID})
 	if err != nil {

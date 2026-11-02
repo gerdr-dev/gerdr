@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/gerdr-dev/gerdr/internal/i18n"
+
 	"github.com/gerdr-dev/gerdr/acpx"
 )
 
@@ -92,13 +94,23 @@ func convertRateLimits(res rateLimitsResp) acpx.UsageResponse {
 func windowLabel(mins int) string {
 	switch {
 	case mins <= 0:
-		return "额度"
+		return i18n.S("额度", "Quota")
 	case mins == 7*24*60:
-		return "本周"
+		return i18n.S("本周", "This week")
 	case mins%(24*60) == 0:
-		return fmt.Sprintf("%d 天", mins/(24*60))
+		return plural(mins/(24*60), "天", "day")
 	case mins%60 == 0:
-		return fmt.Sprintf("%d 小时", mins/60)
+		return plural(mins/60, "小时", "hour")
 	}
-	return fmt.Sprintf("%d 分钟", mins)
+	return plural(mins, "分钟", "minute")
+}
+
+func plural(n int, zh, en string) string {
+	if i18n.IsZH() {
+		return fmt.Sprintf("%d %s", n, zh)
+	}
+	if n == 1 {
+		return "1 " + en
+	}
+	return fmt.Sprintf("%d %ss", n, en)
 }

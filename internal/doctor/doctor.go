@@ -15,6 +15,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -25,6 +26,7 @@ import (
 	"time"
 
 	"github.com/gerdr-dev/gerdr/internal/hub"
+	"github.com/gerdr-dev/gerdr/internal/i18n"
 	"github.com/gerdr-dev/gerdr/sysenv"
 )
 
@@ -166,7 +168,7 @@ func (d *Doctor) Run(ctx context.Context, deep bool) Report {
 	return r
 }
 
-var reloadFix = Fix{Kind: "reloadPath", Label: "重新读取 PATH"}
+var reloadFix = Fix{Kind: "reloadPath", Label: i18n.S("重新读取 PATH", "Reload PATH")}
 
 // pathCheck: does this process's PATH have everything the login shell's has? A dir only counts as missing
 // when it brings commands the current PATH can't find otherwise — version-fox and friends put a fresh
@@ -176,11 +178,11 @@ func pathCheck(cur, login string, loginErr error) Check {
 	st := sysenv.LoginPathStatus()
 	var startNote string
 	if st.Error != "" {
-		startNote = "上一次读 login shell 的 PATH 失败（" + st.At.Format("01-02 15:04:05") + "）：" + st.Error
+		startNote = fmt.Sprintf(i18n.S("上一次读 login shell 的 PATH 失败（%s）：%s", "Last attempt to read the login shell's PATH failed (%s): %s"), st.At.Format("01-02 15:04:05"), st.Error)
 	}
 	if loginErr != nil {
 		c.Level = Warn
-		c.Summary = "读不到 login shell 的 PATH，没法比对"
+		c.Summary = i18n.S("读不到 login shell 的 PATH，没法比对", "Can't read the login shell's PATH to compare")
 		c.Detail = loginErr.Error()
 		if startNote != "" {
 			c.Detail += "\n" + startNote
@@ -206,15 +208,15 @@ func pathCheck(cur, login string, loginErr error) Check {
 		lost = append(lost, d+"（"+strings.Join(shown, ", ")+"）")
 	}
 	if len(lost) == 0 {
-		c.Summary = "和终端里一致"
+		c.Summary = i18n.S("和终端里一致", "Same as in the terminal")
 		if startNote != "" {
-			c.Detail = startNote + "\n后来重试成功了"
+			c.Detail = startNote + i18n.S("\n后来重试成功了", "\nA later retry succeeded")
 		}
 		return c
 	}
 	c.Level = Bad
-	c.Summary = strconv.Itoa(len(lost)) + " 个目录没进来，agent 里找不到 " + strconv.Itoa(n) + " 个命令"
-	c.Detail = "终端里有、Gerdr 里没有的目录：\n" + strings.Join(lost, "\n")
+	c.Summary = lostSummary(len(lost), n)
+	c.Detail = i18n.S("终端里有、Gerdr 里没有的目录：\n", "Directories in the terminal's PATH but not Gerdr's:\n") + strings.Join(lost, "\n")
 	if startNote != "" {
 		c.Detail = startNote + "\n\n" + c.Detail
 	}
@@ -276,16 +278,16 @@ func toolCheck(name, cur, login string, loginOK bool) Check {
 	switch {
 	case inCur == "" && inLogin != "":
 		// No fix button here: it'd be the PATH check's "re-read PATH" again, once per missing tool.
-		c.Level, c.Summary = Bad, "终端里有（"+inLogin+"），agent 里找不到"
+		c.Level, c.Summary = Bad, fmt.Sprintf(i18n.S("终端里有（%s），agent 里找不到", "In the terminal (%s), but agents can't find it"), inLogin)
 	case inCur == "" && loginOK:
-		c.Level, c.Summary = Info, "没装"
+		c.Level, c.Summary = Info, i18n.S("没装", "Not installed")
 	case inCur == "":
-		c.Level, c.Summary = Info, "找不到"
+		c.Level, c.Summary = Info, i18n.S("找不到", "Not found")
 	default:
 		c.Summary = inCur
 		if inLogin != "" && realPath(inLogin) != realPath(inCur) {
 			c.Level = Info
-			c.Detail = "终端里用的是另一份：" + inLogin
+			c.Detail = i18n.S("终端里用的是另一份：", "The terminal uses a different copy: ") + inLogin
 		}
 	}
 	return c
@@ -321,9 +323,9 @@ func agentCheck(ctx context.Context, id, title string, find func() (string, erro
 		c.Installs = append(c.Installs, in)
 	}
 	if findErr != nil {
-		c.Level, c.Summary = Bad, "找不到："+findErr.Error()
+		c.Level, c.Summary = Bad, i18n.S("找不到：", "Not found: ")+findErr.Error()
 		if len(paths) == 0 {
-			c.Level, c.Summary = Info, "没装"
+			c.Level, c.Summary = Info, i18n.S("没装", "Not installed")
 		}
 		c.Fixes = append(c.Fixes, reloadFix)
 		c.Fixes = append(c.Fixes, useFixes(id, c.Installs, deep)...)
@@ -331,7 +333,7 @@ func agentCheck(ctx context.Context, id, title string, find func() (string, erro
 	}
 	c.Summary = cur
 	if !deep {
-		c.Detail = "点「运行诊断」会实际跑一下每一份，看能不能启动、是什么版本"
+		c.Detail = i18n.S("点「运行诊断」会实际跑一下每一份，看能不能启动、是什么版本", "Click \"Run diagnostics\" to actually run each copy and see whether it starts and which version it is")
 		return c
 	}
 	var current *Install
@@ -349,14 +351,14 @@ func agentCheck(ctx context.Context, id, title string, find func() (string, erro
 	switch {
 	case current == nil:
 	case current.Blocked:
-		c.Level, c.Summary = Bad, "Gerdr 用的这一份一启动就被系统杀掉了（macOS 把它当恶意软件拦了）："+current.Path
+		c.Level, c.Summary = Bad, i18n.S("Gerdr 用的这一份一启动就被系统杀掉了（macOS 把它当恶意软件拦了）：", "The copy Gerdr uses is killed by the system as soon as it starts (macOS blocked it as malware): ")+current.Path
 	case current.Error != "":
-		c.Level, c.Summary = Bad, "Gerdr 用的这一份启动不了："+current.Error
+		c.Level, c.Summary = Bad, i18n.S("Gerdr 用的这一份启动不了：", "The copy Gerdr uses won't start: ")+current.Error
 	default:
 		c.Summary = current.Version + " · " + current.Path
 		if best != "" && newer(best, current.Version) {
 			c.Level = Warn
-			notes = append(notes, "装着更新的一份（"+best+"），Gerdr 用的却是旧的")
+			notes = append(notes, fmt.Sprintf(i18n.S("装着更新的一份（%s），Gerdr 用的却是旧的", "A newer copy is installed (%s), but Gerdr uses the old one"), best))
 		}
 	}
 	for _, in := range c.Installs {
@@ -364,7 +366,7 @@ func agentCheck(ctx context.Context, id, title string, find func() (string, erro
 			if c.Level.rank() < Warn.rank() {
 				c.Level = Warn
 			}
-			notes = append(notes, "还装着一份会被 macOS 拦掉的 "+id+"："+in.Path+"。PATH 一乱就会用到它，建议删掉或升级")
+			notes = append(notes, fmt.Sprintf(i18n.S("还装着一份会被 macOS 拦掉的 %s：%s。PATH 一乱就会用到它，建议删掉或升级", "There's also a copy of %s that macOS blocks: %s. It gets picked up if PATH changes; remove or upgrade it"), id, in.Path))
 		}
 	}
 	c.Detail = strings.Join(notes, "\n")
@@ -393,9 +395,9 @@ func useFixes(id string, ins []Install, deep bool) []Fix {
 		if in.Current || deep && in.Error != "" {
 			continue
 		}
-		label := "改用这一份"
+		label := i18n.S("改用这一份", "Use this one")
 		if in.Version != "" {
-			label = "改用 " + in.Version
+			label = i18n.S("改用 ", "Use ") + in.Version
 		}
 		out = append(out, Fix{Kind: "useBin", Label: label, Agent: id, Path: in.Path})
 	}
@@ -416,7 +418,7 @@ func version(ctx context.Context, bin string) (ver, errMsg string, blocked bool)
 		// SIGKILL right at exec, with nothing printed: on macOS that's the system refusing the binary
 		// (XProtect / a revoked signature); the user saw a "malware blocked" dialog for it.
 		if errors.As(err, &ee) && strings.Contains(ee.ProcessState.String(), "killed") && ctx.Err() == nil {
-			return "", "启动就被系统杀掉了（SIGKILL）", true
+			return "", i18n.S("启动就被系统杀掉了（SIGKILL）", "Killed by the system on start (SIGKILL)"), true
 		}
 		msg := err.Error()
 		if first != "" {
@@ -459,11 +461,11 @@ func newer(a, b string) bool {
 func usageChecks(list []hub.UsageInfo) []Check {
 	var out []Check
 	for _, u := range list {
-		c := Check{ID: "usage:" + u.Agent, Group: "usage", Title: u.Name + " 额度", Level: OK, Summary: "读得到"}
+		c := Check{ID: "usage:" + u.Agent, Group: "usage", Title: u.Name + i18n.S(" 额度", " usage"), Level: OK, Summary: i18n.S("读得到", "Readable")}
 		if u.Error != "" {
-			c.Level, c.Summary = Warn, "最近一次读失败："+readable(u.Error)
+			c.Level, c.Summary = Warn, i18n.S("最近一次读失败：", "Last read failed: ")+readable(u.Error)
 			if u.Data != nil {
-				c.Summary = "最近一次没刷新上（显示的是上一次的）：" + readable(u.Error)
+				c.Summary = i18n.S("最近一次没刷新上（显示的是上一次的）：", "Last refresh failed (showing the previous data): ") + readable(u.Error)
 			}
 		}
 		out = append(out, c)
@@ -489,4 +491,19 @@ func readable(s string) string {
 		return e.Message
 	}
 	return s
+}
+
+// lostSummary: "N dirs missing, M commands agents can't find".
+func lostSummary(dirs, cmds int) string {
+	if i18n.IsZH() {
+		return strconv.Itoa(dirs) + " 个目录没进来，agent 里找不到 " + strconv.Itoa(cmds) + " 个命令"
+	}
+	return fmt.Sprintf("%d %s missing; agents can't find %d %s", dirs, plural(dirs, "directory", "directories"), cmds, plural(cmds, "command", "commands"))
+}
+
+func plural(n int, one, many string) string {
+	if n == 1 {
+		return one
+	}
+	return many
 }

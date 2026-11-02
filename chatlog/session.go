@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/gerdr-dev/gerdr/acpx"
+	"github.com/gerdr-dev/gerdr/internal/i18n"
 )
 
 // Session drives one ACP session from the client side and records it as an event log that @gerdr/chat renders:
@@ -31,17 +32,17 @@ type Session struct {
 	log   *slog.Logger
 	file  *File
 
-	mu       sync.Mutex
-	escMu    sync.Mutex
+	mu    sync.Mutex
+	escMu sync.Mutex
 	// wmu orders the writes to file (flush's appends, replaced's rewrites): taken before mu, held through the IO,
 	// which runs outside mu. file.Flushed is only read and set under mu.
-	wmu sync.Mutex
+	wmu      sync.Mutex
 	events   []*Event
 	seq      int64
 	st       State
 	running  bool
-	auto     bool // the running turn was started by the agent itself (autoTurn), nobody waits on a Prompt
-	autoNext bool // autoTurn true arrived before the previous Prompt returned
+	auto     bool            // the running turn was started by the agent itself (autoTurn), nobody waits on a Prompt
+	autoNext bool            // autoTurn true arrived before the previous Prompt returned
 	autoWake json.RawMessage // what woke that auto turn (acpx.AutoTurnWakeKey), for its turn_start
 	turnMsg  string
 	pending  map[string]*pendingReq
@@ -128,7 +129,7 @@ func New(agent Agent, sessionID string, o Options) (*Session, error) {
 		o.RetryWaits = RetryWaits
 	}
 	if o.RetryPrompt == "" {
-		o.RetryPrompt = "继续。上一次请求因为网络错误中断了，请从中断的地方接着做。"
+		o.RetryPrompt = i18n.S("继续。上一次请求因为网络错误中断了，请从中断的地方接着做。", "Continue. The last request was cut off by a network error; pick up where it stopped.")
 	}
 	if o.Log == nil {
 		o.Log = slog.New(slog.DiscardHandler)
@@ -431,7 +432,7 @@ func (s *Session) runTurn(msgID string, content []acp.ContentBlock) {
 	for attempt := 0; err != nil && attempt < len(waits) && Retryable(errText(err)) && !s.isClosed(); attempt++ {
 		wait := waits[attempt]
 		s.emit(&Event{Kind: EvNotice, Level: "retry", Until: now() + wait.Milliseconds(),
-			Text: fmt.Sprintf("出错了：%s。%d 秒后自动重试（第 %d/%d 次），按停止可以取消。", oneLine(errText(err), 200), int(wait.Seconds()), attempt+1, len(waits))})
+			Text: fmt.Sprintf(i18n.S("出错了：%s。%d 秒后自动重试（第 %d/%d 次），按停止可以取消。", "Error: %s — retrying in %ds (attempt %d/%d); press Stop to cancel."), oneLine(errText(err), 200), int(wait.Seconds()), attempt+1, len(waits))})
 		if !s.sleepUnlessStopped(wait) {
 			break
 		}
@@ -664,11 +665,11 @@ func (s *Session) Rewind(ctx context.Context, messageID string) ([]json.RawMessa
 		return nil, err
 	}
 	if steer && !s.o.SteerRewind {
-		return nil, errors.New("插话的消息不能单独回退，回退它所在那一轮开头的那条")
+		return nil, errors.New(i18n.S("插话的消息不能单独回退，回退它所在那一轮开头的那条", "A message sent mid-turn can't be rewound on its own; rewind to the message that started its turn"))
 	}
 	raw, err := s.agent.CallExtension(ctx, acpx.MethodRewind, acpx.RewindRequest{SessionId: s.sid(), MessageId: messageID})
 	if err != nil {
-		return nil, fmt.Errorf("回退对话失败：%s", errText(err))
+		return nil, fmt.Errorf(i18n.S("回退对话失败：%s", "rewinding the conversation failed: %s"), errText(err))
 	}
 	var res acpx.RewindResponse
 	_ = json.Unmarshal(raw, &res)
@@ -816,7 +817,7 @@ func (s *Session) onInfo(g map[string]any) {
 		}
 		s.mu.Unlock()
 		if cleared {
-			s.emit(&Event{Kind: EvNotice, Level: "clear", Text: "上下文已清空"})
+			s.emit(&Event{Kind: EvNotice, Level: "clear", Text: i18n.S("上下文已清空", "Context cleared")})
 		}
 		changed = true
 	}

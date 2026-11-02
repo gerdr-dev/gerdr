@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/gerdr-dev/gerdr/internal/i18n"
 )
 
 // 长期记忆：跨会话记住「代码里看不出来」的东西 —— 用户的偏好、用户纠正过的做法、项目的背景和约定。
@@ -141,14 +143,15 @@ func memorySection(m memoryDirs) string {
 // memoryTitle：写记忆的工具调用在界面上的标题（不然是一长串 ../../.gerdr/native/memory/… 的路径）。
 func memoryTitle(m memoryDirs, p string) string {
 	name := strings.TrimSuffix(filepath.Base(p), filepath.Ext(p))
-	scope := "项目"
-	if m.Global != "" && within(p, m.Global) {
-		scope = "全局"
+	global := m.Global != "" && within(p, m.Global)
+	scope := i18n.S("项目", "project")
+	if global {
+		scope = i18n.S("全局", "global")
 	}
 	if filepath.Base(p) == memoryIndex {
-		return "更新" + scope + "记忆索引"
+		return i18n.S("更新"+scope+"记忆索引", "Update "+scope+" memory index")
 	}
-	return "记住（" + scope + "）：" + name
+	return i18n.S("记住（"+scope+"）：", "Remember ("+scope+"): ") + name
 }
 
 // ProjectMemorySlug：dir 这个项目的记忆目录名（设置页把目录名认回项目路径用，internal/memstore）。
