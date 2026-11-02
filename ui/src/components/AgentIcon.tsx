@@ -2,9 +2,15 @@ import { useId } from "react";
 import { useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import type { SessionSummary } from "@/lib/types";
+import { slots } from "@/lib/addons";
 import { AgentGlyph, NATIVE_GLYPH, autoGlyph } from "./AgentGlyph";
+import { FitSprite } from "./AddonSlot";
 
-// An agent's icon: the glyph its role picked (Settings → Agent); else the vendor logo for Claude Code / Codex and
+/** AgentDef.icon prefix for a sprite: "sprite:addon:id". */
+export const SPRITE = "sprite:";
+
+// An agent's icon: the glyph or sprite (an add-on's picture, g.slot("sprite"), standing still) its role picked
+// (Settings → Agent); else the vendor logo for Claude Code / Codex and
 // their variants (Claude's orange starburst, Codex's gradient cloud with a >_ cut out; paths from simple-icons /
 // lobehub icons, no backing tile, original colours on both themes); else a built-in abstract glyph — fixed for
 // Gerdr Agent, picked from the id for everything else, so two Native roles don't look the same.
@@ -17,7 +23,11 @@ export function AgentIcon({ agent: id, className }: { agent: string; className?:
   const agent = info?.base || id;
   // the gradient needs an id unique on the page: many of these are drawn at once
   const gid = useId();
-  if (icon) return <AgentGlyph name={icon} color={color} className={className} />;
+  useStore((s) => s.addonVersion);
+  // "sprite:<key>": drawn while its add-on is loaded; without it (disabled, removed, not loaded yet) the default below
+  const sprite = icon?.startsWith(SPRITE) ? slots.sprite.find((r) => r.key === icon.slice(SPRITE.length)) : undefined;
+  if (sprite) return <FitSprite reg={sprite} className={className} />;
+  if (icon && !icon.startsWith(SPRITE)) return <AgentGlyph name={icon} color={color} className={className} />;
   if (agent === "claude")
     return (
       <svg viewBox="0 0 24 24" className={cn("shrink-0", className)} aria-label="Claude Code">

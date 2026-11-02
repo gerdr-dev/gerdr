@@ -35,9 +35,12 @@ sees: `internal/addons/builtin/gerdr.d.ts`, copied into `~/.gerdr/addons` on eve
   that throws, falls back to the dots: a running turn must still look like it runs. The settings page previews each
   option through the real PixelLoader with a `LoaderPreview` context overriding the choice, so the dots come from
   the package without it exporting them.
-- `"sprite"` entries are pictures gerdr draws only where the user put them: the working indicator and rail button
-  faces. Props `{ state, width, height }`: "working" / "waiting" in the indicator (24×16, unclipped), "idle" on a
-  button (36×28, clipped). Why a slot of its own: clawd-loader first was both a loader and a rail face, so wanting
+- `"sprite"` entries are pictures gerdr draws only where the user put them: the working indicator, rail button
+  faces and agents' icons (AgentDef.icon "sprite:<key>", AgentIcon.tsx; the default icon while its add-on isn't
+  loaded). Props `{ state, width, height }`: "working" / "waiting" in the indicator (24×16, unclipped), "idle" on a
+  button (36×28, clipped) and as an icon (FitSprite: the box comes from size classes, so it's measured first). Sizes
+  are the sprite's business, not gerdr's: it gets the box and decides how to fill it. Not animated as an agent's icon
+  for now — a list of tabs all moving is loud; "working" there per session state is the obvious next step. Why a slot of its own: clawd-loader first was both a loader and a rail face, so wanting
   Clawd only on a button took a "don't replace the dots" switch, and both places had to show the same costume. With
   sprites an add-on brings pictures and the user places them, one per place; the old `"rail"` slot (Nov 2026, a few
   days) went into it — `g.slot("rail")` now throws "没有这个插槽", and a group face `{ addon }` from then falls back to

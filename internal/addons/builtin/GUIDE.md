@@ -127,7 +127,7 @@ lucide icon (`<g.icons.Timer className="size-3.5" />`).
 | where | call | gets |
 |---|---|---|
 | A block of an add-on panel; the user groups blocks into buttons on the rail (Settings → 扩展 → 分组) | `g.slot("sidebar", Component, { order, id, title, icon })` | no props |
-| A sprite: a small picture the user can put on a rail button or use as the working indicator (Settings → 扩展 → 素材) | `g.slot("sprite", Component, { id, title })` | `{ state, width, height }` |
+| A sprite: a small picture the user can use as the working indicator (Settings → 扩展 → 素材), on a rail button or as an agent's icon | `g.slot("sprite", Component, { id, title })` | `{ state, width, height }` |
 | The app's root, always mounted, no space taken | `g.slot("overlay", Component)` | no props |
 | Every pane's title bar | `g.slot("paneTitle", Component)` | `{ pane, tab }` |
 | The working indicator (the dots before "Pondering…", a 20px row), drawn your own way; the user picks which one draws. Only a picture? Make it a sprite | `g.slot("loader", Component)` | `{ paused, className, fallback }` (`fallback`: gerdr's own dots) |
@@ -184,8 +184,8 @@ Rules that keep it looking like Gerdr:
 - Sidebar blocks: give yours horizontal padding only (`px-1.5`); the panel pads above and below once for all of them.
   Which blocks share a rail button is the user's choice, not yours: don't assume yours sits next to another add-on's.
 - A sprite (`g.slot("sprite")`) gets its box as `width` × `height`: 24×16 in the working indicator (`state`
-  "working" / "waiting"), 36×28 on a rail button (`state` "idle": keep it still, the rail is always in sight). Draw it
-  to fit, text 10px or more, red (`bg-bad` / `text-bad`) only for a warning. One picture per registration (`id`,
+  "working" / "waiting"), 36×28 on a rail button and as small as 14×14 as an agent's icon (`state` "idle": keep it
+  still, those are always in sight). Draw it to fit — at 14px a simpler version may read better — text 10px or more, red (`bg-bad` / `text-bad`) only for a warning. One picture per registration (`id`,
   `title`): the user may want a different one in each place.
 - A phone has no hover: don't hide what matters in a `title` tooltip.
 - `g.turnStat`'s `fn` runs on every render of the line and every 30s: keep it cheap. `info.latest` marks the newest

@@ -1,7 +1,10 @@
 import { Copy, Pencil, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { AgentIcon } from "@/components/AgentIcon";
+import { FitSprite } from "@/components/AddonSlot";
+import { AgentIcon, SPRITE } from "@/components/AgentIcon";
+import { slots } from "@/lib/addons";
+import { spriteTitle } from "@/lib/rail";
 import { AgentGlyph, GLYPHS, LINES, PALETTE, autoGlyph } from "@/components/AgentGlyph";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -46,7 +49,7 @@ type Draft = {
   mcp: string[] | null;
   defaults: Record<string, string>; // MODE / 配置项 id → 值
   providers: string[]; // 引擎是 native 时只用这几家服务商；空 = 全部
-  icon: string; // a GLYPHS / LINES key; "" = default (vendor logo / automatic)
+  icon: string; // a GLYPHS / LINES key, or "sprite:<key>" (an add-on's sprite); "" = default (vendor logo / automatic)
   color: string; // a PALETTE key; "" = the icon's own colours
 };
 
@@ -104,9 +107,12 @@ function fromDraft(d: Draft): AgentDef {
   };
 }
 
-/** Icon and colour as saved; a colour only means something on a built-in icon (not on the Claude Code / Codex logo). */
+/**
+ * Icon and colour as saved; a colour only means something on a built-in icon (not on the Claude Code / Codex logo, nor
+ * on a sprite, which draws its own).
+ */
 const looks = (d: Draft) => ({ icon: d.icon || undefined, color: (hasGlyph(d) && d.color) || undefined });
-const hasGlyph = (d: Draft) => !!d.icon || (d.kind !== "claude" && d.kind !== "codex");
+const hasGlyph = (d: Draft) => (d.icon ? !d.icon.startsWith(SPRITE) : d.kind !== "claude" && d.kind !== "codex");
 
 /**
  * The part of a draft the backend bakes into the agent's process (hub.sameProcess): changing it makes the backend
@@ -556,10 +562,12 @@ function Editor({
 }
 
 /**
- * The role's icon: "默认" (the vendor logo for Claude Code / Codex, an automatic glyph otherwise), a colourful glyph or a
- * line icon; then a colour for whichever built-in icon shows (none for the vendor logos: those are the vendors' own).
+ * The role's icon: "默认" (the vendor logo for Claude Code / Codex, an automatic glyph otherwise), a colourful glyph, a
+ * line icon or a sprite add-ons brought (g.slot("sprite"), drawn still); then a colour for whichever built-in icon
+ * shows (none for the vendor logos and sprites: those draw their own).
  */
 function IconPicker({ d, onChange }: { d: Draft; onChange: (p: Partial<Draft>) => void }) {
+  useStore((s) => s.addonVersion);
   const cell = (on: boolean, title: string, onClick: () => void, body: React.ReactNode, key?: string) => (
     <button
       key={key}
@@ -588,6 +596,13 @@ function IconPicker({ d, onChange }: { d: Draft; onChange: (p: Partial<Draft>) =
         {icons(GLYPHS)}
       </div>
       <div className="flex flex-wrap gap-1">{icons(LINES)}</div>
+      {slots.sprite.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {slots.sprite.map((r) =>
+            cell(d.icon === SPRITE + r.key, spriteTitle(r), () => onChange({ icon: SPRITE + r.key }), <FitSprite reg={r} className="size-6" />, r.key),
+          )}
+        </div>
+      )}
       {hasGlyph(d) && (
         <div className="flex flex-wrap gap-1 border-t pt-1">
           {cell(!d.color, "默认颜色", () => onChange({ color: "" }), <AgentGlyph name={d.icon || autoGlyph(d.id)} className="size-5" />)}

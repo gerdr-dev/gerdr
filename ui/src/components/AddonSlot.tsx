@@ -1,4 +1,4 @@
-import { Component, createContext, useContext, type ReactNode } from "react";
+import { Component, createContext, useContext, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { composerActions, fail, slots, type SlotName, type SlotReg } from "@/lib/addons";
 import { get, set, useStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
@@ -64,6 +64,33 @@ export function SpriteView({
       <Guard key={reg.key} addon={reg.addon} fallback={fallback}>
         <C state={state} width={width} height={height} />
       </Guard>
+    </span>
+  );
+}
+
+/**
+ * A sprite filling a box sized by classes ("size-4"), not numbers: the box is measured, then the sprite is told it.
+ * For places that take a sprite in place of an icon (an agent's icon, components/AgentIcon.tsx), drawn still.
+ */
+export function FitSprite({ reg, className }: { reg: SlotReg; className?: string }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const [box, setBox] = useState<{ width: number; height: number }>();
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => {
+      const width = el.clientWidth;
+      const height = el.clientHeight;
+      setBox((b) => (b && b.width === width && b.height === height ? b : { width, height }));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return (
+    <span ref={ref} aria-hidden className={cn("inline-flex shrink-0 items-center justify-center overflow-hidden", className)}>
+      {box && box.width > 0 && <SpriteView reg={reg} state="idle" clip {...box} />}
     </span>
   );
 }

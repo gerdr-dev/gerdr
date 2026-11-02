@@ -195,15 +195,17 @@ declare global {
      *                it then also serves as a rail button's icon, and only shows where the user puts it
      *   "sprite"     a small picture — an animal, a symbol, a few tiny bars, a number — that gerdr draws nowhere by
      *                itself: the user picks sprites for the places that take one, the working indicator (Settings →
-     *                扩展 → 素材) and the rail's buttons (→ 分组). So a picture set changes nothing when installed, and
-     *                one set serves every such place. Register each picture separately (opts.id, opts.title: "Pirate")
-     *                so the user can put a different one in each place. Props: state — "working" / "waiting" (the
-     *                indicator: running, or waiting on the user) or "idle" (a button: always in sight, so keep it
-     *                still) — and width × height, the box you get, to scale to: 24×16 in the indicator (not clipped,
-     *                a hat may stick out), 36×28 on a button (32×24 on a phone; clipped). The box carries gerdr's
-     *                colour for the spot (currentColor: text-brand / text-warn in the indicator); else use the theme
-     *                tokens so it reads in light and dark. Don't make it interactive (a button wraps it on the rail).
-     *                An unpicked rail button uses a sprite of one of its blocks' add-ons, if there is one
+     *                扩展 → 素材), the rail's buttons (→ 分组) and an agent's icon (Settings → Agent). So a picture set
+     *                changes nothing when installed, and one set serves every such place. Register each picture
+     *                separately (opts.id, opts.title: "Pirate") so the user can put a different one in each place.
+     *                Props: state — "working" / "waiting" (the indicator: running, or waiting on the user) or "idle"
+     *                (a button, an agent's icon: always in sight, so keep it still) — and width × height, the box you
+     *                get, to scale to: 24×16 in the indicator (not clipped, a hat may stick out), 36×28 on a button
+     *                (32×24 on a phone), down to 14×14 as an agent's icon in a list (clipped). Fitting the box is
+     *                yours: shrink, or draw a simpler version when it's small. The box carries gerdr's colour for the
+     *                spot (currentColor: text-brand / text-warn in the indicator); else use the theme tokens so it
+     *                reads in light and dark. Don't make it interactive (a button wraps it on the rail). An unpicked
+     *                rail button uses a sprite of one of its blocks' add-ons, if there is one
      */
     slot(name: "loader", component: Component<{ paused: boolean; className?: string; fallback?: any }>, opts?: { order?: number }): Dispose;
     slot(name: "sidebar", component: Component<{}>, opts?: { order?: number; id?: string; title?: string; icon?: string }): Dispose;
