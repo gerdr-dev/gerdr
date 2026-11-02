@@ -13,7 +13,8 @@ import { AddonParts, SpriteView } from "./AddonSlot";
 
 /**
  * A button's face (lib/rail.ts): a built-in icon, typed characters, or a sprite (g.slot("sprite")) standing still —
- * the rail is always in sight, something moving there pulls the eye all day. A sprite gets a box 36×28 (32×24 small),
+ * the rail is always in sight, something moving there pulls the eye all day. A sprite gets a box 24×20 (20×16 small) —
+ * about the size of the rail's other icons; at the button's full 36×28 it outweighed them —
  * clipped: it can draw anything, but can't push the rail around.
  * `blocks`: the group's, for the automatic face when none was picked (a sprite of one of their add-ons, else the first
  * block's declared icon, else a gauge). `small`: the phone drawer's bottom row, a size down.
@@ -28,8 +29,8 @@ export function FaceView({ face, blocks, small }: { face?: RailFace; blocks: Slo
   return <Icon className={small ? "size-3.5" : "size-4"} />;
 }
 
-const FACE = { width: 36, height: 28 };
-const FACE_SMALL = { width: 32, height: 24 };
+const FACE = { width: 24, height: 20 };
+const FACE_SMALL = { width: 20, height: 16 };
 
 /** The rail's add-on buttons, one per group that has a loaded block. */
 export function RailGroupButtons() {

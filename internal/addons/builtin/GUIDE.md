@@ -184,7 +184,7 @@ Rules that keep it looking like Gerdr:
 - Sidebar blocks: give yours horizontal padding only (`px-1.5`); the panel pads above and below once for all of them.
   Which blocks share a rail button is the user's choice, not yours: don't assume yours sits next to another add-on's.
 - A sprite (`g.slot("sprite")`) gets its box as `width` × `height`: 24×16 in the working indicator (`state`
-  "working" / "waiting"), 36×28 on a rail button and as small as 14×14 as an agent's icon (`state` "idle": keep it
+  "working" / "waiting"), 24×20 on a rail button and as small as 14×14 as an agent's icon (`state` "idle": keep it
   still, those are always in sight). Draw it to fit — at 14px a simpler version may read better — text 10px or more, red (`bg-bad` / `text-bad`) only for a warning. One picture per registration (`id`,
   `title`): the user may want a different one in each place.
 - A phone has no hover: don't hide what matters in a `title` tooltip.

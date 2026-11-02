@@ -201,8 +201,8 @@ declare global {
      *                a different one in each place.
      *                Props: state — "working" / "waiting" (the indicator: running, or waiting on the user) or "idle"
      *                (a button, an agent's icon: always in sight, so keep it still) — and width × height, the box you
-     *                get, to scale to: 24×16 in the indicator (not clipped, a hat may stick out), 36×28 on a button
-     *                (32×24 on a phone), down to 14×14 as an agent's icon in a list (clipped). Fitting the box is
+     *                get, to scale to: 24×16 in the indicator (not clipped, a hat may stick out), 24×20 on a button
+     *                (20×16 on a phone), down to 14×14 as an agent's icon in a list (clipped). Fitting the box is
      *                yours: shrink, or draw a simpler version when it's small. The box carries gerdr's colour for the
      *                spot (currentColor: text-brand / text-warn in the indicator); else use the theme tokens so it
      *                reads in light and dark. Don't make it interactive (a button wraps it on the rail). An unpicked

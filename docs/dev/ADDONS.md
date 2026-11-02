@@ -40,7 +40,7 @@ sees: `internal/addons/builtin/gerdr.d.ts`, copied into `~/.gerdr/addons` on eve
 - `"sprite"` entries are pictures gerdr draws only where the user put them: the working indicator, rail button
   faces and agents' icons (AgentDef.icon "sprite:<key>", AgentIcon.tsx; the default icon while its add-on isn't
   loaded). Props `{ state, width, height }`: "working" / "waiting" in the indicator (24×16, unclipped), "idle" on a
-  button (36×28, clipped) and as an icon (FitSprite: the box comes from size classes, so it's measured first). Sizes
+  button (24×20, clipped: the size of the rail's other icons) and as an icon (FitSprite: the box comes from size classes, so it's measured first). Sizes
   are the sprite's business, not gerdr's: it gets the box and decides how to fill it. Not animated as an agent's icon
   for now — a list of tabs all moving is loud; "working" there per session state is the obvious next step. Why a slot of its own: clawd-loader first was both a loader and a rail face, so wanting
   Clawd only on a button took a "don't replace the dots" switch, and both places had to show the same costume. With
@@ -74,7 +74,7 @@ sees: `internal/addons/builtin/gerdr.d.ts`, copied into `~/.gerdr/addons` on eve
   by a key stable across reloads ("addon:id", the add-on's own id or its n-th entry in the slot). No config = one
   button with every block; a block no group lists joins the first group; keys of unloaded blocks keep their place.
   Each rail panel is kept mounted while closed (portal + `hidden`), as the blocks were in the old sidebar, so timers
-  and fetched state survive closing it; the phone's sheets mount on open. A sprite face gets a 36×28px box, clipped,
+  and fetched state survive closing it; the phone's sheets mount on open. A sprite face gets a 24×20px box, clipped,
   so an add-on can draw anything without pushing the rail around. History: the rail replaced the left column's bottom
   strip (docs/dev/ARCHITECTURE.md, "The rail"), first with one shared button, then these groups when the user wanted
   three add-ons in one button and a "¥" on it.
