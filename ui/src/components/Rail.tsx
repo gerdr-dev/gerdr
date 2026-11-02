@@ -96,10 +96,9 @@ export function Rail() {
   const modeItem = (m: typeof cur, label: string, Icon: typeof Code2) => {
     const on = cur === m;
     // The mode you're in again: Code toggles its list (as an activity bar does); Work has nothing to toggle.
-    // Icon over a small label (asked for: icons alone didn't say enough), with room between them (1px read as cramped).
-    // As wide and as round as the project chips above (36px, rounded-lg): wider ones stuck out past their edges.
-    // The current one is tinted, not raised with a shadow, which made it look a size bigger. Short screens drop the
-    // label to save height.
+    // Icons in one capsule, like the horizontal Code / Work switch this replaced, stood on end: the capsule is as wide
+    // as the project chips above (36px), the current mode raised inside it. Separate labelled buttons looked out of
+    // place next to the chips whatever their size; the names are in the tooltips.
     const title = on && m === "agents" ? `Code · ${sidebar ? "隐藏会话列表" : "显示会话列表"}` : label;
     return tip(
       title,
@@ -107,8 +106,8 @@ export function Rail() {
         aria-label={label}
         aria-pressed={on}
         className={cn(
-          "flex min-h-9 w-9 flex-col items-center justify-center gap-[5px] rounded-lg py-1.5 text-[10px] leading-none",
-          on ? "bg-accent font-medium text-foreground" : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
+          "flex size-8 items-center justify-center rounded-md",
+          on ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
         )}
         onClick={() => {
           if (on) return m === "agents" && toggleSidebar();
@@ -117,7 +116,6 @@ export function Rail() {
         }}
       >
         <Icon className="size-4" />
-        <span className="short:hidden">{label}</span>
       </button>,
     );
   };
@@ -142,7 +140,7 @@ export function Rail() {
           )}
         </div>
         <div className="my-2 h-px w-7 shrink-0 bg-border short:my-1.5" />
-        <div className="flex shrink-0 flex-col items-center gap-1">
+        <div className="flex shrink-0 flex-col items-center gap-0.5 rounded-lg bg-muted p-0.5">
           {modeItem("agents", "Code", Code2)}
           {modeItem("work", "Work", Briefcase)}
         </div>

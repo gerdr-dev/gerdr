@@ -605,7 +605,7 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
 ### The rail (ui/src/components/Rail.tsx)
 
 On wider screens gerdr's own controls live on a 48px strip down the left edge, the same in every mode: projects (one
-chip each, a dot when another project needs you), Code / Work, the add-on panel, inbox, shortcuts, settings, and on
+chip each, a dot when another project needs you), Code / Work (one vertical capsule, icons only), the add-on panel, inbox, shortcuts, settings, and on
 Android the LAN / relay route. Code mode's list sits to its right (its header only names the project and hides the
 list; the rail's Code button, pressed again, brings it back). In Work mode the rest of the window is the Work site's
 frame and the chat; nothing of gerdr's is drawn over the frame.
@@ -626,7 +626,7 @@ menu written for the variables keeps a sane width and no gap.
 - The desktop App has the system title bar, so the rail needs no room for the traffic lights.
 - A phone on its side is past the phone width (768) but ~400px tall, ~150px with the soft keyboard up: the whole rail
   scrolls (not just the projects, which got squeezed to nothing under the fixed rest), and below 560px tall
-  (`short:` variant, index.css) the gaps tighten and the mode buttons drop their labels. On a touch screen the shortcut-list button is
+  (`short:` variant, index.css) the gaps tighten. On a touch screen the shortcut-list button is
   the command palette instead.
 
 ## 手机上（< 768px，照 herdr-web）
