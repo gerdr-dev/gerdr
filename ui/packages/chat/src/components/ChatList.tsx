@@ -31,6 +31,8 @@ export type ListHandle = {
 };
 
 const END = 2; // px from the end that still count as the bottom
+const JITTER = 16; // px a touch may scroll the chat up and still not have left the bottom
+const SETTLE = 150; // ms without a scroll after the finger lifts that end a touch (its fling has stopped)
 const EST = 60; // a row never measured
 const OVERSCAN = 800; // px mounted above and below the screen
 const HEAD = 32; // the "load older" line
@@ -169,12 +171,23 @@ export const ChatList = forwardRef<
   };
 
   const dragging = useRef(false); // the scrollbar
-  // A finger is down. Its touchmoves can stop reaching the list: when the row under the finger is replaced (a tool
-  // call's "peek" row turning into its group, a new key), they go to the detached node and never bubble up. The scroll
-  // still happens, so a scroll up while a finger is down is the user's too (tools/scrolltest/touchhold.mjs --height=462:
-  // otherwise still stuck, and pulled back to the bottom on every line). The touchend can be lost the same way: the next
-  // touchstart resets it.
+  // A finger is down. The touchend can be lost when the row under the finger is replaced (a tool call's "peek" row
+  // turning into its group: events go to the detached node and never bubble up); the next touchstart resets it.
   const finger = useRef(false);
+  // A touch, from touchstart until its fling has settled (SETTLE after the last scroll once the finger is up). Touches
+  // are judged by where the chat actually scrolled, never by the finger's direction: at the bottom a finger pushing up,
+  // jittering or slipping back as it lifts reads as "scrolling up" though nothing can scroll, which left the bottom on
+  // every touch and put the jump-to-bottom button up at the very bottom (four phone screen recordings, patched three
+  // times by direction thresholds before this). Touchmoves needn't reach the list either (see above).
+  // - `up`: net px the chat scrolled up during the touch (positions we wrote ourselves don't count, see sync).
+  // - While it runs, stuck changes only on a real drag (up > JITTER). Until then a chat that moved at all (up > 0.5)
+  //   stops following, so nothing moves under the finger (touchhold.mjs: the text bobbed or ran on); one that didn't
+  //   move keeps following the output.
+  // - When it ends: at the very bottom → stuck, however it started (a drag up and back down to the end left the button
+  //   up at the bottom, a fifth recording). Still stuck (no real drag) → back to the end.
+  // Taps in quick succession are one touch (a touchstart before the settle carries the touch on).
+  const touch = useRef<{ up: number } | null>(null);
+  const settleTouch = useRef(0);
   // A smooth scroll we're animating: towards target(), recomputed each frame
   const anim = useRef<{ raf: number; target: () => number | undefined } | null>(null);
   const stopAnim = () => {
@@ -195,8 +208,13 @@ export const ChatList = forwardRef<
     if (!s || !b || !s.clientHeight) return;
     const prev = shown.current;
     const top = s.scrollTop;
-    // Scrolled up by a finger or the scrollbar since we last looked, its scroll event not in yet: theirs, not ours to undo
-    if (stuck.current && (finger.current || dragging.current) && top < lastTop.current - 0.5) setStuck(false);
+    // Moved since we last placed it, its scroll event maybe not in yet: a finger's or the scrollbar's, not ours to undo
+    const g = touch.current;
+    if (g && Math.abs(top - lastTop.current) > 0.5) {
+      g.up += lastTop.current - top;
+      if (stuck.current && g.up > JITTER) setStuck(false);
+    }
+    if (stuck.current && dragging.current && top < lastTop.current - 0.5) setStuck(false);
     // The row at the top of the screen in the layout on screen until now (where it starts relative to the screen's top
     // is prev.tops[a] - top)
     let a = -1;
@@ -229,7 +247,7 @@ export const ChatList = forwardRef<
       if (n.style.transform !== t) n.style.transform = t;
     }
     // Where scrollTop belongs
-    if (stuck.current && !cb.current.holding()) {
+    if (stuck.current && !cb.current.holding() && !(g && g.up > 0.5)) {
       if (!anim.current && Math.abs(endOf(s) - s.scrollTop) > 0.5) s.scrollTop = endOf(s);
     } else if (a >= 0) {
       // By key. If that row is gone, the next one still there: the rows of a message cut off at the top get new keys
@@ -367,6 +385,8 @@ export const ChatList = forwardRef<
     scrollToIndex: ({ index, align, behavior }) => {
       const s = el.current;
       if (!s) return;
+      clearTimeout(settleTouch.current);
+      touch.current = null;
       if (index === "LAST") {
         setStuck(true);
         if (behavior === "smooth") animate(() => endOf(s));
@@ -395,13 +415,29 @@ export const ChatList = forwardRef<
     scrollTo: (top) => {
       const s = el.current;
       if (!s) return;
+      clearTimeout(settleTouch.current);
+      touch.current = null;
       setStuck(false);
       stopAnim();
       s.scrollTop = Math.max(0, top);
     },
   }));
 
-  // Which way the user scrolls, from the input
+  const endTouch = () => {
+    clearTimeout(settleTouch.current);
+    const g = touch.current;
+    touch.current = null;
+    const s = el.current;
+    if (!g || !s) return;
+    if (!stuck.current && endOf(s) - s.scrollTop <= END) setStuck(true);
+    sync([]); // stuck: back to the end
+  };
+  const waitSettle = () => {
+    clearTimeout(settleTouch.current);
+    settleTouch.current = window.setTimeout(endTouch, SETTLE);
+  };
+
+  // Which way the user scrolls, from the input. Wheel and keys say it outright; touches see the touch ref above.
   useEffect(() => {
     const s = el.current;
     if (!s) return;
@@ -410,17 +446,15 @@ export const ChatList = forwardRef<
       if (s.scrollTop > 0) setStuck(false);
     };
     const wheel = (e: WheelEvent) => (e.deltaY < 0 ? up() : stopAnim());
-    let y: number | undefined;
-    const tstart = (e: TouchEvent) => {
+    const tstart = () => {
       stopAnim();
+      clearTimeout(settleTouch.current);
+      if (!touch.current) touch.current = { up: 0 };
       finger.current = true;
-      y = e.touches[0]?.clientY;
     };
-    const tend = (e: TouchEvent) => (finger.current = e.touches.length > 0);
-    const tmove = (e: TouchEvent) => {
-      const ny = e.touches[0]?.clientY;
-      if (ny !== undefined && y !== undefined && ny > y) up();
-      y = ny;
+    const tend = (e: TouchEvent) => {
+      finger.current = e.touches.length > 0;
+      if (!finger.current && touch.current) waitSettle();
     };
     const key = (e: KeyboardEvent) => {
       if (["ArrowUp", "PageUp", "Home"].includes(e.key)) up();
@@ -435,7 +469,6 @@ export const ChatList = forwardRef<
     const release = () => (dragging.current = false);
     s.addEventListener("wheel", wheel, { passive: true });
     s.addEventListener("touchstart", tstart, { passive: true });
-    s.addEventListener("touchmove", tmove, { passive: true });
     window.addEventListener("touchend", tend, { passive: true });
     window.addEventListener("touchcancel", tend, { passive: true });
     s.addEventListener("keydown", key);
@@ -445,7 +478,7 @@ export const ChatList = forwardRef<
     return () => {
       s.removeEventListener("wheel", wheel);
       s.removeEventListener("touchstart", tstart);
-      s.removeEventListener("touchmove", tmove);
+      clearTimeout(settleTouch.current);
       window.removeEventListener("touchend", tend);
       window.removeEventListener("touchcancel", tend);
       s.removeEventListener("keydown", key);
@@ -489,9 +522,13 @@ export const ChatList = forwardRef<
         const s = e.currentTarget;
         const dist = endOf(s) - s.scrollTop;
         const wentUp = s.scrollTop < lastTop.current - 0.5;
-        if ((dragging.current || finger.current) && wentUp) setStuck(false);
+        if (dragging.current && wentUp) setStuck(false);
+        // A touch decides when it ends (see touch); its fling keeps it going
+        if (touch.current) {
+          if (!finger.current) waitSettle();
+        }
         // Back at the very bottom (scrolled or dragged down to it): follow again
-        if (!stuck.current && dist <= END && !wentUp) setStuck(true);
+        else if (!stuck.current && dist <= END && !wentUp) setStuck(true);
         // Off the bottom while following it, not by the user: the browser clamped the scroll position in a layout where
         // the list was briefly shorter (the composer measuring itself did that). Back to the end.
         else if (stuck.current && dist > END && !anim.current && !cb.current.holding()) s.scrollTop = endOf(s);
