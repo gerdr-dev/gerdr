@@ -347,6 +347,23 @@ export function PhoneBar() {
 let switcherClosedAt = 0;
 
 /**
+ * A long-press that swaps the screen leaves the finger down on whatever was drawn under it, and the system's own
+ * long-press (Android: select the word, show copy / share) then lands on that. Refuse any selection until the finger lifts.
+ */
+function blockSelectionUntilLift() {
+  const block = (e: Event) => e.preventDefault();
+  const lift = () => {
+    document.removeEventListener("selectstart", block, true);
+    window.removeEventListener("pointerup", lift, true);
+    window.removeEventListener("pointercancel", lift, true);
+  };
+  document.addEventListener("selectstart", block, true);
+  window.addEventListener("pointerup", lift, true);
+  window.addEventListener("pointercancel", lift, true);
+  window.getSelection()?.removeAllRanges();
+}
+
+/**
  * The phone bar's overview button. Tap opens the overview; long-press (or right-click) puts the pane you're on into it
  * and goes to that tile. Our own timer rather than relying on contextmenu: iOS Safari never fires it on a long-press.
  */
@@ -355,6 +372,7 @@ function OverviewButton() {
   const held = useRef(false);
   const hold = () => {
     held.current = true;
+    blockSelectionUntilLift();
     const id = focusedSessionId();
     if (!id) return toggleOverview(true); // a terminal or an empty pane: nothing to put in
     if (!showInOverview(id)) toast(`网格最多放 ${MAX_TILES} 个，先从进行中移出几个`);

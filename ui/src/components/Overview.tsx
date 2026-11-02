@@ -142,7 +142,9 @@ function PhoneOverview({ ids, focus, shown }: { ids: string[]; focus?: string; s
   return (
     <TabActive.Provider value={shown}>
       <div className="flex h-full flex-col bg-background">
-        <div className="flex h-11 shrink-0 items-center gap-1 border-b bg-sidebar px-1.5">
+        {/* No text selection: a long-press on PhoneBar's overview button opens this with the finger still down on this
+        bar, and Android then turned that long-press into selecting a chip's title */}
+        <div className="flex h-11 shrink-0 items-center gap-1 border-b bg-sidebar px-1.5 select-none [-webkit-touch-callout:none]">
           {/* size-9 like PhoneBar's ☰ (Chrome.tsx): the two bars swap in the same spot, so their first icons line up */}
           <Button variant="ghost" size="icon" className="size-9 shrink-0" aria-label="返回" onClick={() => toggleOverview(false)}>
             <ArrowLeft className="size-[18px]" />
