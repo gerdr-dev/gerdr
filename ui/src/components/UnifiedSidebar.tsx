@@ -404,9 +404,8 @@ export function UnifiedSidebar({ className }: { className?: string }) {
                         网格
                       </button>
                     </div>
-                    {/* Indented like a group's rows (Group, pl-2): both sit under a title, and their icons line up */}
                     {!activeFolded && (
-                      <div className="pl-2">
+                      <div>
                         {active.map((x, i) => {
                           const num = numbers && i < 9 ? i + 1 : undefined;
                           return x.item ? (
@@ -418,7 +417,7 @@ export function UnifiedSidebar({ className }: { className?: string }) {
                       </div>
                     )}
                     {/* Only when empty: a row appearing mid-drag would push the rows under the pointer */}
-                    {dragAgent && !active.length && !activeFolded && <div className="py-1 pl-7 text-[12px] text-muted-foreground">拖到这里加入进行中</div>}
+                    {dragAgent && !active.length && !activeFolded && <div className="py-1 pl-[26px] text-[12px] text-muted-foreground">拖到这里加入进行中</div>}
                   </div>
                 )}
                 {list.map((ws, wi) => (
@@ -441,7 +440,7 @@ export function UnifiedSidebar({ className }: { className?: string }) {
                         <Row {...rowProps(r.ws, r.tab, r.pane, leaves(r.tab.root).length > 1)} />
                       </div>
                     ))}
-                    {!groups.get(ws.id)?.length && <div className="py-1 pl-7 text-[12px] text-muted-foreground">空的</div>}
+                    {!groups.get(ws.id)?.length && <div className="py-1 pl-[26px] text-[12px] text-muted-foreground">空的</div>}
                   </Group>
                 ))}
               </div>
@@ -508,7 +507,7 @@ function WorkRow({ id, current, grid, num }: { id: string; current: boolean; gri
           role="button"
           data-row-current={current || undefined}
           className={cn(
-            "group relative flex cursor-default items-center gap-2 rounded-md px-2 text-[12px] select-none",
+            "group relative flex cursor-default items-center gap-2 rounded-md pr-2 pl-1 text-[12px] select-none",
             roomy ? "min-h-11" : "h-7",
             current ? "bg-accent font-medium" : "hover:bg-accent/60",
             "data-[state=open]:ring-1 data-[state=open]:ring-brand/60",
@@ -663,9 +662,8 @@ function Group({
         </ContextMenuContent>
       </ContextMenu>
       {!folded && (
-        <div className="pl-2" data-side-rows={ws.id}>
-          {children}
-        </div>
+        // Not indented: a row's icon (pl-1) sits under the title's chevron (px-1), as in 进行中; the bold titles show the levels
+        <div data-side-rows={ws.id}>{children}</div>
       )}
     </div>
   );
@@ -763,7 +761,7 @@ function Row({
           onMouseDown={(e) => e.button === 1 && e.preventDefault()}
           onAuxClick={(e) => e.button === 1 && (e.preventDefault(), dismiss())}
           className={cn(
-            "group relative flex cursor-default items-center gap-2 rounded-md px-2 text-[12px] select-none",
+            "group relative flex cursor-default items-center gap-2 rounded-md pr-2 pl-1 text-[12px] select-none",
             roomy ? "min-h-11 py-1.5" : "h-7",
             current ? "bg-accent font-medium" : visible ? "bg-accent/40" : "hover:bg-accent/60",
             "data-[state=open]:ring-1 data-[state=open]:ring-brand/60",
