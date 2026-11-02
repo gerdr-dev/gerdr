@@ -202,6 +202,8 @@ export const MessageView = memo(function MessageView({
               </div>
             )}
             {text}
+            {/* Nothing said, only `!` output went along (an empty send after a command, see Composer.shellReady) */}
+            {!text && !all.length && <span className="italic opacity-80">{t("msg.shellOnly")}</span>}
           </MessageContent>
         </div>
         {showMeta && (

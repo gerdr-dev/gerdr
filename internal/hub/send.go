@@ -35,6 +35,16 @@ func (s *Session) Send(ctx context.Context, content []acp.ContentBlock, clientID
 // SendFrom：from 是发送方的会话 id（另一个 agent 经 `gerdr session send` 发来的），记在日志里给界面标出来。
 // urgent：在跑时立即插话（截断当前这次生成），见 acpx.SteerRequest.Now；不在跑时没区别。
 func (s *Session) SendFrom(ctx context.Context, content []acp.ContentBlock, clientID, from string, urgent bool) (SendResult, error) {
+	// Nothing typed is still a message when `!` output is waiting to go along (shell.go): sending it on its own is how
+	// the user hands the agent a command's result without having to say something
+	if len(content) == 0 {
+		s.mu.Lock()
+		n := len(s.pendingShellLocked())
+		s.mu.Unlock()
+		if n == 0 {
+			return SendResult{}, errors.New("empty message")
+		}
+	}
 	msgID := uuid.NewString()
 	if _, err := uuid.Parse(clientID); err == nil {
 		msgID = clientID

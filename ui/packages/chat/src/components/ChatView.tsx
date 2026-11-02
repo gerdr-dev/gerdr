@@ -165,6 +165,12 @@ export function ChatView({
   };
 
   const msgs = t.all;
+  // The chat ends on a finished `!` command (nothing said since): the Composer may send its output on its own
+  const shellDone = useMemo(() => {
+    const last = msgs[msgs.length - 1];
+    const p = last?.role === "assistant" ? last.parts[last.parts.length - 1] : undefined;
+    return p?.type === "data-shell" && !(p as any).data.running && !(p as any).data.replayed;
+  }, [msgs]);
   const virtualList = !!settings.virtualList;
   const showThinking = settings.showThinking !== false;
   const [openGroups, setOpenGroups] = useKept<Record<string, boolean>>(`groups:${session.id}:${sub ?? ""}`, {});
@@ -437,6 +443,7 @@ export function ChatView({
               paneId={paneId}
               running={t.running}
               history={() => olderRef.current.all}
+              shellDone={shellDone}
               onEmptyEnter={() => list.current?.scrollToIndex({ index: "LAST", align: "end", behavior: "smooth" })}
             />
           </div>

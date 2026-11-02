@@ -71,6 +71,28 @@ func TestShellPending(t *testing.T) {
 	}
 }
 
+// An empty send is refused unless finished `!` output is waiting to go along with it.
+func TestShellEmptySend(t *testing.T) {
+	t.Setenv("SHELL", "/bin/sh")
+	h, err := New(Options{Dir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := newSession(h, Record{ID: "s1", Cwd: t.TempDir()})
+	if _, err := s.Send(t.Context(), nil, ""); err == nil || err.Error() != "empty message" {
+		t.Fatalf("empty send with nothing pending: %v", err)
+	}
+	id, err := s.Shell("echo hi", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitShellDone(t, s, id)
+	// Gets past the check; with no agent behind this session it then fails somewhere else
+	if _, err := s.Send(t.Context(), nil, ""); err != nil && err.Error() == "empty message" {
+		t.Fatal("empty send refused although command output is pending")
+	}
+}
+
 // 停止：连同它起的子进程一起杀掉，结束标 stopped。
 func TestShellStop(t *testing.T) {
 	t.Setenv("SHELL", "/bin/sh")

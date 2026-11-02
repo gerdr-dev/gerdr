@@ -262,9 +262,7 @@ func (s *Server) send(r *http.Request, sess *hub.Session) (any, error) {
 	if err := decode(r, &b); err != nil {
 		return nil, err
 	}
-	if len(b.Content) == 0 {
-		return nil, errors.New("empty message")
-	}
+	// Empty content is allowed only when pending `!` output goes with it; the hub decides (Session.SendFrom)
 	if err := s.crossSpace(b.From, sess.ID()); err != nil {
 		return nil, err
 	}

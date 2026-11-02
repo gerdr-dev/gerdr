@@ -100,8 +100,10 @@ export const Composer = forwardRef<
     history: () => GMessage[];
     onSent?: () => void;
     onEmptyEnter?: () => void;
+    /** The chat ends on a finished `!` command: sending with an empty box hands its output to the agent. */
+    shellDone?: boolean;
   }
->(function Composer({ session, paneId, running, history, onSent, onEmptyEnter }, ref) {
+>(function Composer({ session, paneId, running, history, onSent, onEmptyEnter, shellDone }, ref) {
   const host = useChatHost();
   const hooks = host.composer ?? {};
   const drafts = hooks.drafts ?? memoryDrafts;
@@ -443,6 +445,9 @@ export const Composer = forwardRef<
   // `!命令`（照 Claude Code 的 bash 模式）：gerdr 在会话目录里直接跑，不发给 agent、不起一轮；输出进对话，
   // 跟着下一条消息带给 agent（hub/shell.go）。带图时不算（图没法给命令），照常当话发
   const shellMode = !!host.shell && !imgs.length && text.startsWith("!");
+  // Claude Code keeps `!` output out of the conversation until the next message; here an empty send right after one
+  // sends just that, for when the result is what the agent should look at
+  const shellReady = !!shellDone && !text.trim() && !imgs.length;
   const runShell = async (cmd: string) => {
     if (!cmd) return;
     const prev = text;
@@ -468,7 +473,8 @@ export const Composer = forwardRef<
     const alias = /^\/(\S+)(.*)$/s.exec(t);
     const to = alias && ALIASES[alias[1]];
     if (to && !(session.commands ?? []).some((c) => c.name === alias[1]) && (session.commands ?? []).some((c) => c.name === to)) t = `/${to}${alias[2]}`;
-    if (!t && !imgs.length) return;
+    // Empty box after a finished `!` command: send nothing of our own, the hub puts the output in front (hub/shell.go)
+    if (!t && !imgs.length && !shellReady) return;
     if (imgs.some((im) => (isVideo(im) || isFile(im)) && !im.path)) {
       toast(tr(isVideo(imgs.find((im) => !im.path)!) ? "composer.videoUploading" : "composer.fileUploading"));
       return;
@@ -868,7 +874,7 @@ export const Composer = forwardRef<
   };
   const enterSend = (mod = false) => {
     // Nothing to send: Enter jumps the chat to the bottom instead, so you don't have to reach for the ↓ button
-    if (!text.trim() && !imgs.length) return onEmptyEnter?.();
+    if (!text.trim() && !imgs.length && !shellReady) return onEmptyEnter?.();
     // 在跑时 Ctrl/⌘+回车 = 立即插话（照 Claude Code CLI）。发送键设成 ⌘+回车时这个组合就是普通发送，立即只能点按钮
     if (!busy) send(running && sendKey === "enter" && mod);
   };
@@ -897,7 +903,7 @@ export const Composer = forwardRef<
   // 新会话的默认值（宿主有才有「设为默认」）：设完下拉里马上显示「已是默认」
   const defaults = hooks.useDefaults?.(session.agent);
   const defs = defaults?.values ?? {};
-  const hasText = text.trim().length > 0 || imgs.length > 0;
+  const hasText = text.trim().length > 0 || imgs.length > 0 || shellReady;
   const optsKey = [modes?.currentModeId, ...opts.map((o) => o.currentValue)].join("|");
   const modeGroup: OptGroup | undefined =
     modes?.availableModes.length && host.setMode
@@ -1080,17 +1086,7 @@ export const Composer = forwardRef<
               addFiles(files);
             }
           }}
-          placeholder={
-            running
-              ? phone
-                ? tr("composer.busyPhone")
-                : sendKey === "enter"
-                  ? tr("composer.busyEnter")
-                  : tr("composer.busy")
-              : host.shell
-                ? tr("composer.idleShell")
-                : tr("composer.idle")
-          }
+          placeholder={shellReady ? tr("composer.sendShell") : running ? tr("composer.busy") : host.shell ? tr("composer.idleShell") : tr("composer.idle")}
           className="block max-h-[40vh] min-h-[44px] w-full resize-none bg-transparent px-4 pt-3 pb-1 text-[1em] max-md:text-[length:max(1em,15px)] max-md:supports-[-webkit-touch-callout:none]:text-[16px] leading-relaxed outline-none placeholder:text-muted-foreground/70"
         />
         {shellMode && (
