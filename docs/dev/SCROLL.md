@@ -22,6 +22,7 @@ node tabs.mjs                                # 然后跑场景，见下表
 The scripts still find the old react-virtuoso list too (`[data-virtuoso-scroller], [data-chat-scroller]`), for
 checking out an older commit. If the debug build doesn't compile (someone else's work in
 progress), start the installed binary instead: `GERDR_UI=$PWD/ui GERDR_DIR=~/.gerdr-dev GERDR_PORT=7871 gerdr`.
+With one session open the sidebar shows no numbered tab labels; `tab(page, 1)` then leaves things as they are.
 Run `panes.mjs` / `tabs.mjs` / `open.mjs` last or `setup.mjs` again after them: they leave the debug layout split or
 on another tab, and the scripts after them find no chat.
 
@@ -43,6 +44,7 @@ on another tab, and the scripts after them find no chat.
 | Phone: reading a reply as it's written, dragging / flicking now and then; whole screens jump | `touchscroll.mjs [--at="what the user said"] [--fling] [--cpu=4]` | Plays a turn back like `/replay` while dragging, checks every frame, and fails on a whole-chat remount mid-reply (laptop Chrome measures fast enough that no frame shows it; a phone jumps). Use `--at` the turn the user saw it in, steers included |
 | The jump-to-bottom button stutters on the way down | `tobottom.mjs [--mobile] [--cpu=4] [--screens=20]` | Scrolls ~20 screens up (wheel, or a touch gesture with `--mobile`), presses the button and checks every frame: only ever moving down, no frame standing still or moving over 400px after the first, none over 50ms, ends at the bottom. rAF frames: a scroll resizes nothing, so `--ro` would see none |
 | Phone: typing at the bottom of a chat; the chat jumps a line on each key | `keyboard.mjs [--type] [--cpu=4]` | The chat changes height while a reply plays (the keyboard / IME candidate bar coming and going): every painted frame must stay at the bottom. `--type`: types on the composer's second line and fails on any scroll event that leaves the bottom on its own (the composer's measuring clamped the chat, see below) |
+| Rows with images grow back each time they scroll into view | `images.mjs [--delay=200] [--rounds=6] [--width=390]` | Appends a message with three images (responses held back `--delay` ms), lets them load, then scrolls them out of the rendered range and back: no row on screen may change height. Run it after touching how `chat/ChatMedia.tsx` sizes images |
 | A broken image / video makes the chat jump | `media.mjs [--src=/tmp/x.png] [--tab=1]` | Appends a message with missing media, parks it mid-screen, watches through every automatic retry, then scrolls it out and back in. Run it after touching `chat/ChatMedia.tsx` |
 | 某一行自己变高矮 | `rows.mjs [--tab=1]` | 行挂上后高度变没变（DOM 没变也会变）、Virtuoso 记的高度和实际对不对 |
 
@@ -98,6 +100,13 @@ Virtuoso 在 ResizeObserver 里量行高、改布局，所以 rAF 里看到「�
   is now reserved from the aspect ratio (remembered per URL, 16:9 until known). Second trap found on the way: the
   wrapper was `w-fit` and the video's width a percentage of it, so the wrapper took the video's 300px default width and
   the reserved box came out half size. Anything sized as a percentage of a `w-fit` parent has this loop.
+- **Images in the chat (`<img>`, `chat/ChatMedia.tsx`)**: an image has no size until it loads, and decoding lands a
+  frame or more after mount even from the memory cache. Every remount in the virtual list started the row without its
+  images, then grew it back image by image (a row with three screenshots 1290 -> 2292px in steps, scrolling a real
+  session; 623 -> 1371px in `images.mjs`, about every other pass). `loading="lazy"` made it worse: rows mounted beside
+  the screen to be measured never loaded theirs. The box is now reserved from the natural size, remembered per URL
+  after the first load (`aspect-ratio: auto w / h` plus a width with no percentage in it, since the wrapper is `w-fit`),
+  and images aren't lazy. An image never loaded on this page still grows once.
 - **Bottom-follow lagging behind a row that grew** (phone pane switch, `panes.mjs`): the user's screen recording showed,
   after each switch, one or two frames of content from a few screens up, then a snap to the bottom. Following the
   bottom relied on `totalListHeightChanged`, which Virtuoso only calls after it has measured and reported the new total:

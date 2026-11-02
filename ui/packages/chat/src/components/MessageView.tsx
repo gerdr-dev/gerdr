@@ -13,6 +13,7 @@ import { t, type MessageKey } from "../i18n";
 import { AskCard, PermissionCard, PlanCard, QuickReplies } from "./Cards";
 import { ToolCall } from "./ToolCall";
 import { UsageCard } from "./UsageCard";
+import { imageSize, rememberImageSize } from "./imageSize";
 import { openLightbox } from "./Lightbox";
 import { PlayBadge } from "./PlayBadge";
 import { VideoThumb } from "./VideoThumb";
@@ -524,13 +525,10 @@ export function renderPart(p: GPart, i: number, ctx: PartCtx): ReactNode {
   return null;
 }
 
-// Aspect ratio of every message image seen on this page, by URL.
-const imgRatio = new Map<string, number>();
-
 /**
  * An attached image whose box height is known before it loads: the chat is a virtual list, and a row that grows
  * from 0 to its image's height once decoded made scrolling correct itself, unmount / remount the row, and twitch.
- * Unseen images reserve a fixed `heightRem` box; once the ratio is known (cached for remounts) the box follows it,
+ * Unseen images reserve a fixed `heightRem` box; once the ratio is known (imageSize.ts, kept for remounts) the box follows it,
  * so an image wider than the column shrinks to its real height instead of floating in an empty, bordered 160px box.
  * Width is an explicit length capped by max-w-full, never a percentage: a fixed-height wrapper with a max-w-full img
  * made the wrapper's width depend on the img, and the image came out 0 wide.
@@ -546,16 +544,17 @@ function SizedImg({
   className?: string;
   onClick: (e: React.MouseEvent<HTMLElement>) => void;
 }) {
-  const [ratio, setRatio] = useState(() => imgRatio.get(src));
+  const [ratio, setRatio] = useState(() => {
+    const s = imageSize(src);
+    return s && s.w / s.h;
+  });
   return (
     <img
       src={src}
       onClick={onClick}
       onLoad={(e) => {
-        const { naturalWidth: w, naturalHeight: h } = e.currentTarget;
-        if (!w || !h) return;
-        imgRatio.set(src, w / h);
-        if (ratio === undefined || Math.abs(w / h - ratio) > 0.01) setRatio(w / h);
+        const s = rememberImageSize(src, e.currentTarget);
+        if (s && (ratio === undefined || Math.abs(s.w / s.h - ratio) > 0.01)) setRatio(s.w / s.h);
       }}
       // content-box once the ratio is known: under the default border-box, aspect-ratio sizes the box including its
       // border, so a short image's content area came out a few % wider than the image and object-contain left

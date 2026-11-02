@@ -3,6 +3,7 @@ import { useContext, useEffect, useState } from "react";
 import { chatHost } from "../host";
 import { t } from "../i18n";
 import { cn } from "../utils";
+import { imageSize, rememberImageSize } from "./imageSize";
 import { openLightbox } from "./Lightbox";
 import { SessionContext } from "./sessionContext";
 
@@ -180,19 +181,7 @@ export function ChatMedia({ src, alt }: { src: string; alt?: string }) {
       </button>
     );
   } else {
-    body = (
-      <img
-        key={attempt}
-        src={url}
-        alt={name}
-        loading="lazy"
-        title={t("media.zoom")}
-        onError={onError}
-        onLoad={onLoad}
-        onClick={(e) => openLightbox([{ url, alt: name, path: path ?? undefined, cwd }], 0, e.currentTarget)}
-        className="max-h-72 max-w-[min(24rem,100%)] cursor-zoom-in rounded-md border border-border/60"
-      />
-    );
+    body = <ChatImage key={attempt} url={url} sizeKey={base} name={name} path={path} cwd={cwd} onError={onError} onLoad={onLoad} />;
   }
   return (
     // 独占一行（flex 不是 inline-flex）：agent 常把图和说明写在同一段（「![图](a.png)\n**a.png**：……」），
@@ -233,6 +222,35 @@ function ChatVideo({ url, ratioKey, onError, onLoad }: { url?: string; ratioKey:
       // height follows from aspect-ratio and is known before any frame loads.
       style={{ aspectRatio: ratio, width: `min(100%, ${(20 * ratio).toFixed(3)}rem)` }}
       className="h-auto rounded-md border border-border/60 bg-black/5"
+    />
+  );
+}
+
+// The box is reserved from the image's remembered natural size (imageSize.ts): a row with screenshots used to grow in
+// steps of ~250px every time the virtual list remounted it (tools/scrolltest/images.mjs).
+function ChatImage(props: { url: string; sizeKey: string; name: string; path: string | null; cwd?: string; onError: () => void; onLoad: () => void }) {
+  const { url, sizeKey, name, path, cwd } = props;
+  const [size] = useState(() => imageSize(sizeKey));
+  // Same bounds as the classes (at most 18rem tall, 24rem wide, never upscaled), as a width with no percentage in it:
+  // the wrapper is w-fit, and a percentage width would be resolved against a wrapper sized from the image itself.
+  // `auto w / h` applies the ratio to the content box like a loaded image does, so the height doesn't move on load.
+  const style = size
+    ? { aspectRatio: `auto ${size.w} / ${size.h}`, width: `min(24rem, ${size.w}px, ${((18 * size.w) / size.h).toFixed(3)}rem)`, height: "auto" }
+    : undefined;
+  return (
+    <img
+      src={url}
+      alt={name}
+      // Not lazy: the list mounts rows beside the screen to measure them, and a lazy image there never loads.
+      title={t("media.zoom")}
+      style={style}
+      onError={props.onError}
+      onLoad={(e) => {
+        props.onLoad();
+        rememberImageSize(sizeKey, e.currentTarget);
+      }}
+      onClick={(e) => openLightbox([{ url, alt: name, path: path ?? undefined, cwd }], 0, e.currentTarget)}
+      className="max-h-72 max-w-[min(24rem,100%)] cursor-zoom-in rounded-md border border-border/60"
     />
   );
 }

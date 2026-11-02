@@ -71,6 +71,8 @@ export async function tab(page, n) {
   const tabs = page.locator("text=/^\\d+\\.\\S+/");
   const names = await tabs.allInnerTexts();
   const i = names.findIndex((t) => /^\d+\.\S+/.test(t) && t.startsWith(`${n}.`));
+  // The sidebar no longer numbers its sessions: with no numbered labels, tab 1 is the one setup.mjs left open.
+  if (i < 0 && !names.length && n === 1) return "";
   if (i < 0) throw new Error(`没有第 ${n} 个 tab（有：${names.join(" ")}）`);
   await tabs.nth(i).click();
   return names[i];
