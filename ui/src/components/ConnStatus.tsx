@@ -57,11 +57,11 @@ export function ConnStatus() {
 }
 
 /**
- * The phone's connection status: a toast at the top instead of ConnStatus in the top bar. The bar has no room for it (it got
- * squeezed out by the tab name) and Work mode covers it entirely, so a dropped connection showed nowhere. Same timing as
- * ConnStatus (blips under a second show nothing); the toast stays until the connection is back, then goes away.
+ * The connection status as a toast, on every screen: a phone's top bar has no room for ConnStatus (it got squeezed out by
+ * the tab name) and Work mode covers it entirely; wider screens lost the bottom row it sat in to the rail (Rail.tsx).
+ * Same timing as ConnStatus (blips under a second show nothing); the toast stays until the connection is back.
  */
-export function PhoneConnToast() {
+export function ConnToast() {
   const connected = useStore((s) => s.connected);
   const conn = useStore((s) => s.conn);
   const [shown, setShown] = useState(false);

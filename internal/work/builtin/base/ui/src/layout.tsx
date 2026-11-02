@@ -5,8 +5,9 @@ import { project } from "./lib/gerdr";
 
 // The menu on the left and the page on the right. This whole folder is yours: add pages in
 // src/pages/ (file name = path) and links here; restyle anything.
-// Below md (a phone, or a narrow column next to a wide chat) the side menu turns into a row of tabs above the page:
-// gerdr then puts its own top bar and settings row across the whole column instead of over the menu.
+// The whole frame is this site's: gerdr draws nothing over it (its own controls are on the strip left of the frame),
+// so lay it out however the project needs. Below md (a phone, or a narrow column next to a wide chat) the side menu
+// turns into a row of tabs above the page.
 
 const MENU = [
   {
@@ -18,7 +19,7 @@ const MENU = [
 export default function Layout() {
   return (
     <div className="flex h-full">
-      <nav className="hidden w-(--gerdr-sidebar-w) shrink-0 flex-col gap-3 overflow-y-auto border-r bg-sidebar px-2 pt-3 pb-[calc(var(--gerdr-menu-bottom)+0.75rem)] md:flex">
+      <nav className="hidden w-56 shrink-0 flex-col gap-3 overflow-y-auto border-r bg-sidebar px-2 py-3 md:flex">
         {MENU.map((g) => (
           <div key={g.title}>
             <div className="px-2 pb-1 text-[11px] font-medium text-muted-foreground">{g.title}</div>

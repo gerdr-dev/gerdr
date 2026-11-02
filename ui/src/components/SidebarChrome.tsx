@@ -2,6 +2,7 @@ import { Command, Keyboard, PanelLeft, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ModeSwitch } from "@/components/WorkView";
+import { currentSpace, spaceList } from "@/lib/layout";
 import { get, set, setSidebarW, SIDEBAR_W, toggleSidebar, useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { AddonSlot } from "./AddonSlot";
@@ -11,15 +12,16 @@ import { InboxButton } from "./Inbox";
 import { ConnStatus, RouteLabel } from "./ConnStatus";
 import { SpaceSwitcher } from "./SpaceSwitcher";
 
-/**
- * The bottom of the left column in all three modes: add-ons' sidebar blocks (g.slot("sidebar"): the quota meter,
- * today's numbers…) over the settings row. Shared so the add-ons are in sight whichever mode is open (asked for).
+/*
+ * The phone drawer's top and bottom rows. Wider screens have the rail instead (Rail.tsx), which carries the same things
+ * (projects, Code / Work, add-ons, inbox, settings) in every mode; their list only gets ListHeader.
  */
+
+/** The bottom of the phone drawer: add-ons' sidebar blocks (g.slot("sidebar"): the quota meter, today's numbers…) over the settings row. */
 export function SidebarBottom({ sidebarToggle }: { sidebarToggle?: boolean }) {
   return (
     <>
-      {/* The vertical padding is given once here, not by each block: two blocks each padding themselves left a wide gap.
-          bg-sidebar: in Work mode this is laid over the site's menu */}
+      {/* The vertical padding is given once here, not by each block: two blocks each padding themselves left a wide gap */}
       <AddonSlot name="sidebar" className="shrink-0 border-t bg-sidebar py-1 empty:hidden" />
       <SidebarFooter sidebarToggle={sidebarToggle} />
     </>
@@ -27,11 +29,27 @@ export function SidebarBottom({ sidebarToggle }: { sidebarToggle?: boolean }) {
 }
 
 /**
- * The top row of the left column, the same in all three modes (asked for): the Code sidebar, the overview's list, and
- * Work mode's top bar. Project first, the Code / overview / Work switch at the right, so switching modes moves nothing.
- * Only these two: the connection status used to sit here too and squeezed the project name to "def…" (it's in the
- * bottom row now, SidebarFooter).
+ * The top of Code mode's list beside the rail: which project it lists, and the button that hides it (the rail's Code
+ * button brings it back, as does the tab bar's). The project switcher and the mode switch are on the rail.
  */
+export function ListHeader() {
+  const name = useStore((s) => spaceList(s.layout).find((x) => x.id === currentSpace(s.layout))?.name);
+  return (
+    <div className="flex h-10 shrink-0 items-center gap-1 border-b pr-1.5 pl-3" style={{ WebkitAppRegion: "drag" } as any}>
+      <span className="min-w-0 flex-1 truncate text-[12px] font-semibold">{name}</span>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button variant="ghost" size="icon" className="size-7 text-muted-foreground" style={{ WebkitAppRegion: "no-drag" } as any} onClick={toggleSidebar}>
+            <PanelLeft className="size-3.5" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>隐藏会话列表</TooltipContent>
+      </Tooltip>
+    </div>
+  );
+}
+
+/** The top row of the phone drawer: project switcher, then the Code / Work switch. */
 export function SidebarHeader({ className, style }: { className?: string; style?: React.CSSProperties }) {
   // As tall as the phone's top bar (PhoneBar, h-11): the drawer slides in beside it, and the two bottom borders should line up
   const phone = usePhone();
@@ -50,11 +68,7 @@ export function SidebarHeader({ className, style }: { className?: string; style?
   );
 }
 
-/**
- * The bottom row of the left column, the same in all three modes (asked for: settings always at the bottom): the Code
- * sidebar, the overview's list, and over the bottom of the Work site's menu (WorkView). `sidebarToggle`: the Code
- * sidebar and the overview's list (one setting) can be hidden; Work mode's menu can't.
- */
+/** The bottom row of the phone drawer: settings, connection / route status, the command palette. */
 export function SidebarFooter({ sidebarToggle }: { sidebarToggle?: boolean }) {
   const connected = useStore((s) => s.connected);
   const doctorBad = useStore((s) => s.doctor?.level === "bad");

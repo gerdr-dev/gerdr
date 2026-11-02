@@ -236,7 +236,7 @@ config.json (example in the README), read fresh every turn.
 
 测试：`go test ./agents/native/...` 用假接口跑主循环；`NATIVE_LIVE_BASE / NATIVE_LIVE_KEY / NATIVE_LIVE_MODELS` 设了才跑真模型（花钱）。
 
-## 用量额度（`_gerdr/usage` → hub/usage.go → `/api/usage` → 侧栏的 UsageMeter）
+## 用量额度（`_gerdr/usage` → hub/usage.go → `/api/usage` → 插件面板的 UsageMeter）
 
 不发 `/usage`（那会进对话记录、输出是给终端看的文字）。两边都有结构化的口：
 
@@ -392,7 +392,7 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
 - **Sessions (herdr's `--session`) keep agents apart.** In the layout a session is a `space` on each workspace
   (`ui/src/lib/layout.ts` `Space`; unset = `default`, so old layouts need no migration). Workspaces stay in one flat list, so
   everything that walks the whole layout (locating a conversation, shutting an agent down once no pane shows it) is unchanged;
-  only the views filter (sidebar workspaces and agents, the phone pane switcher, next / previous workspace). The current session
+  only the views filter (sidebar workspaces and agents, next / previous workspace). The current session
   is the active workspace's, and the active workspace is part of each client's own `View`, so each window shows its own session,
   like attaching to a herdr session. Focusing a conversation that's in another session (a notification) just switches over.
   Isolation for agents: `server.SessionSpaces` maps every conversation shown in a pane to its session; the CLI's `list` (and so
@@ -482,9 +482,8 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
   (outside Gerdr). `crossSpace` places a Work agent in its project the same way, so it can't reach other projects either, and
   sessions it starts open in its project's workspace (`openSessionNear`). Work conversations get no title at creation: a given
   title counts as the user's and would turn off automatic naming.
-- Code / Work is Gerdr's own switch, at the start of the top row in both modes together with the project switcher (sidebar
-  header / Work top bar, same classes) so switching modes doesn't move it; `store.mode` per device. Everything inside Work is
-  the user's: `<work dir>/ui` is a React site with no build step, served by its own `uisite.Renderer` under
+- Code / Work is Gerdr's own switch, on the rail with the project switcher (see "The rail" below) so switching modes
+  doesn't move it; `store.mode` per device. Everything between the rail and the Work chat is the user's: `<work dir>/ui` is a React site with no build step, served by its own `uisite.Renderer` under
   `/work/<project>/` (`uisite.NewAt`: module / event / public URLs and the router basename carry the prefix; `/_esm/` is shared),
   started on first request. Menu, pages and styling are plain code in that site, not configuration.
 - It runs in a same-origin iframe (the only page allowed to be framed: `X-Frame-Options: SAMEORIGIN`, `frame-ancestors 'self'`),
@@ -603,13 +602,37 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
     uploaded video as its path. A device that got an image this way has no base64 for it: send fetches the bytes then.
     Images still uploading stay out of the shared list and are kept at the end when a remote draft is applied.
 
+### The rail (ui/src/components/Rail.tsx)
+
+On wider screens gerdr's own controls live on a 56px strip down the left edge, the same in every mode: projects (one
+chip each, a dot when another project needs you), Code / Work, the add-on panel, inbox, shortcuts, settings, and on
+Android the LAN / relay route. Code mode's list sits to its right (its header only names the project and hides the
+list; the rail's Code button, pressed again, brings it back). In Work mode the rest of the window is the Work site's
+frame and the chat; nothing of gerdr's is drawn over the frame.
+
+Why: gerdr used to share the left column with the Work site — its header (project switcher + mode switch) and its
+settings row were laid over the site's menu, and the site had to size its menu with `--gerdr-sidebar-w` and pad its
+bottom by `--gerdr-menu-bottom`. That contract lived in code the Work agent rewrites, so it broke silently: a site
+from an older template kept its menu at every width while gerdr assumed tabs below 768px, which drew gerdr's bars
+across the menu and dropped its resize handle (seen on a tablet). With the rail there is nothing for a site to line
+up with. Old sites still get `gerdr:sidebar {width: 224, bottom: 0}` on load (WorkView.tsx `LEGACY_SIDEBAR`), so a
+menu written for the variables keeps a sane width and no gap.
+
+- The add-on blocks (`g.slot("sidebar")`) moved into a panel beside the rail, kept mounted while closed (docs/dev/ADDONS.md).
+  A lost connection shows as a toast on every screen (`ConnToast`): the row that showed it is gone.
+- The phone has no rail: its drawer keeps `SidebarHeader` / `SidebarBottom` (SidebarChrome.tsx), its top bar the rest.
+- The desktop App has the system title bar, so the rail needs no room for the traffic lights.
+
 ## 手机上（< 768px，照 herdr-web）
 
 - 一次只画焦点那一个 pane，**不改布局里的 zoom**：布局存在服务端、和桌面共用，手机上看一眼不该把电脑上的分屏变成放大。
-  换 pane / 换 tab 走「面板一览」（`PaneSwitcher`：所有工作空间的 pane 拍平，按 等你 > 出错 > 跑完没看 > 在跑 > 闲着 排）。
-  标题栏上的 `1/3` 说这个 tab 里还有别的 pane。侧栏变成抽屉，tab 栏换成一行 `PhoneBar`（角标 = 在等你的个数）。
-- 面板一览里点一行在 `pointerup` 上就跳，不等 `click`：键盘弹着时同一下先收键盘、`--vvh` 一变整张表重排，click 会派丢
-  （herdr-web 真机上实拍的「第一下只收键盘」）。
+  Switching panes / tabs goes through the sidebar, which becomes a drawer with roomier rows (two lines, ≥ 44px) and a
+  search box; ☰, the title in `PhoneBar` (the tab bar's stand-in, badge on ☰ = how many wait on you) and the pane title
+  bar's `1/3` all open it. There used to be a separate flat pane list (`PaneSwitcher`), dropped because it listed the same
+  panes as the drawer and every change had to be made twice.
+- A drawer row goes on `pointerup`, not `click`: with the keyboard up (the search box), the same tap first drops the
+  keyboard, `--vvh` changes, the list reflows and the click gets lost (herdr-web, measured on a real phone: "the first tap
+  only closes the keyboard").
 - `--vvh` = visualViewport 的高度：iOS 弹键盘不缩布局视口，不跟着它走输入框就被盖住。输入框在手机上 16px 字：小于 16px iOS 聚焦时整页放大。
   触屏上回车是换行（软键盘没有 Shift），发送走按钮。
 

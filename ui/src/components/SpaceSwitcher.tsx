@@ -20,7 +20,7 @@ import { isNative, nativeNewWindow } from "@/lib/native";
 import { tabStatus } from "./TabBar";
 
 /** A session's overall state for the switcher: the most urgent of its workspaces' (same ranking as WsDot). */
-function spaceStatus(l: Layout, sp: Space, sessions: Record<string, SessionSummary>, unread: Record<string, true>) {
+export function spaceStatus(l: Layout, sp: Space, sessions: Record<string, SessionSummary>, unread: Record<string, true>) {
   let best: { status?: string; unread: boolean } = { unread: false };
   let rank = 9;
   for (const w of spaceWorkspaces(l, sp.id))
@@ -39,7 +39,7 @@ function spaceStatus(l: Layout, sp: Space, sessions: Record<string, SessionSumma
  * Which herdr-style session the sidebar shows (layout.ts Space). One line above the workspaces: the current one's name, and a dot when
  * another session has something for you — its agents are out of the lists below, so this is the only place that tells you.
  */
-async function askCloseSpace(sp: Space) {
+export async function askCloseSpace(sp: Space) {
   const n = spaceWorkspaces(get().layout, sp.id).length;
   const ok = await askConfirm({
     title: `关闭项目「${sp.name}」？`,
@@ -50,7 +50,7 @@ async function askCloseSpace(sp: Space) {
   if (ok) closeSpace(sp.id);
 }
 
-const newSpaceDialog = () => set({ dialog: { kind: "rename", target: "newSpace", id: "", value: "" } });
+export const newSpaceDialog = () => set({ dialog: { kind: "rename", target: "newSpace", id: "", value: "" } });
 
 /**
  * The session switcher in the sidebar header. When every session's name fits on one line they sit side by side like tabs

@@ -12,9 +12,7 @@
 //   it queues if the agent is busy); resolves with the conversation's id. openChat(id) shows that conversation.
 // - openSession(id): show a coding-agent conversation a local function started (ctx.sessions.start), in Code.
 // - The page follows gerdr's light / dark theme by itself (see the listener at the bottom).
-// - The menu's width is --gerdr-sidebar-w, which follows gerdr's sidebar: the user resizes them together by dragging the
-//   menu's right edge (gerdr draws that handle over this page). Keep using the variable for the menu width.
-//   Below md the page is too narrow for a side menu (layout.tsx shows tabs instead); gerdr then lays nothing over it.
+// - The whole frame is the site's: gerdr's controls are on its own strip left of it, nothing is drawn over this page.
 
 /** The project this Work site belongs to: it's served at /work/<project>/. */
 export const project = decodeURIComponent(location.pathname.split("/")[2] || "default");
@@ -141,8 +139,9 @@ window.addEventListener("message", (e) => {
     document.documentElement.classList.toggle("dark", !!e.data.dark);
     document.documentElement.style.colorScheme = e.data.dark ? "dark" : "light";
   } else if (e.data?.type === "gerdr:sidebar" && typeof e.data.width === "number") {
+    // For sites made before gerdr moved its controls onto a strip of its own: their menu is w-(--gerdr-sidebar-w) and
+    // leaves --gerdr-menu-bottom free for a settings row gerdr used to lay over it. gerdr now sends a fixed width and 0.
     document.documentElement.style.setProperty("--gerdr-sidebar-w", `${e.data.width}px`);
-    // How much of the menu's bottom gerdr covers (its settings row plus add-on blocks like the quota meter)
     if (typeof e.data.bottom === "number") document.documentElement.style.setProperty("--gerdr-menu-bottom", `${e.data.bottom}px`);
   } else if (e.data?.type === "gerdr:asked") {
     const p = asking.get(e.data.id);

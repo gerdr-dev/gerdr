@@ -13,10 +13,11 @@ import type { AskQuestion, PermissionOption } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 /**
- * The inbox button and its panel: on a phone in the top bar's right corner, on wider screens in the sidebar's bottom row.
+ * The inbox button and its panel: on a phone in the top bar's right corner, on wider screens in the rail (Rail.tsx).
  * Red dot = something came in since it was last opened; items stay until their × is clicked.
+ * `className`: the button's size where the default (size-7) doesn't fit in.
  */
-export function InboxButton({ phone }: { phone?: boolean }) {
+export function InboxButton({ phone, className }: { phone?: boolean; className?: string }) {
   const fresh = useInbox((s) => s.fresh);
   const count = useInbox((s) => s.items.length);
   const [open, setOpen] = useState(false);
@@ -32,7 +33,7 @@ export function InboxButton({ phone }: { phone?: boolean }) {
     <Button
       variant={open ? "secondary" : "ghost"}
       size="icon"
-      className={cn("relative", phone ? "size-9" : "size-7 text-muted-foreground")}
+      className={cn("relative", phone ? "size-9" : "size-7 text-muted-foreground", className)}
       aria-label="收件箱"
     >
       <InboxIcon className={phone ? "size-[18px]" : "size-3.5"} />

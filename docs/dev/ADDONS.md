@@ -21,7 +21,7 @@ sees: `internal/addons/builtin/gerdr.d.ts`, copied into `~/.gerdr/addons` on eve
 
 ## Drawing and data
 
-- `g.slot("sidebar" | "paneTitle", Component)`, `g.composerAction`, `g.contextMenu` (ui/src/components/AddonSlot.tsx,
+- `g.slot("sidebar" | "rail" | "paneTitle", Component)`, `g.composerAction`, `g.contextMenu` (ui/src/components/AddonSlot.tsx,
   AppContextMenu.tsx). Add-on JSX compiles to the globals `__gerdrH` / `__gerdrFragment` (React.createElement /
   Fragment, set in lib/addons.ts) — not `gerdr.h`: the desktop shell owns `window.gerdr`. Hooks must come from
   `g.React` (the same React that mounts them); `g.ui` hands out Gerdr's shadcn pieces and `g.icons` all of lucide, so
@@ -44,7 +44,13 @@ sees: `internal/addons/builtin/gerdr.d.ts`, copied into `~/.gerdr/addons` on eve
 - The context menu only exists in the desktop and Android Apps (a browser keeps its own), so `g.contextMenu` items
   show there only.
 - `"overlay"` is mounted once in App.tsx next to the app's own dialogs: an add-on's command needs somewhere to draw
-  a dialog that exists whatever the layout is (the sidebar slot is gone while collapsed, on a phone, in Work mode).
+  a dialog that exists whatever the layout is (the "sidebar" panel is hidden while closed, on a phone only there
+  while the drawer is open).
+- `"sidebar"` is the add-on panel: on wider screens it opens beside the rail (Rail.tsx `AddonPanel`) and is kept
+  mounted while closed (portal + `hidden`), as the blocks were in the old sidebar, so timers and fetched state survive
+  closing it. `"rail"` is the button's face (≤ 40px wide), so an add-on can show a glance (tiny bars) on the rail
+  instead of a generic icon; it isn't interactive — the button around it opens the panel. Both came from moving
+  gerdr's own controls out of the left column onto the rail (docs/dev/ARCHITECTURE.md, "The rail").
   `g.ui` hands out the Dialog and Sheet (drawer) pieces for it; their animations come from ui/src/animate.css.
 - `g.fetch` is POST /api/addons/{id}/fetch (internal/server/addonfetch.go): the backend makes the request. A plain
   fetch() to a third-party API can't work: the page's CSP is `connect-src 'self'`, which blocks it even when the API

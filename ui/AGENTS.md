@@ -36,12 +36,13 @@ src/components/    组件
   chat/            gerdr-only pieces of the chat: ChatView (wraps the package's, tells it whether the tab shows), RunButton (`! command` in a reply),
                    HeldDialog (session open elsewhere)
   TabBar.tsx       the tab bar (desktop); PhoneBar.tsx: the phone's top row in its place
-  SidebarChrome.tsx the left column's header / footer / bottom (add-on blocks, settings) and its resize edge;
+  Rail.tsx         the strip down the left edge on wider screens, every mode: projects, Code / Work, add-on panel,
+                   inbox, settings. Nothing of gerdr's is drawn over the Work site (it owns everything right of the rail)
+  SidebarChrome.tsx Code mode's list header, the phone drawer's top / bottom rows, the list's resize edge;
                    UnifiedSidebar.tsx: the sidebar's lists; SpaceSwitcher.tsx: switching projects; WsDot.tsx: status dots
   ConnStatus.tsx   the connection status (reconnecting / offline)
   Panes.tsx        分屏和每个 pane 的标题栏（手机上只画焦点那一个 pane）
   Terminal.tsx     终端 pane 的内容（xterm.js，连服务端的 PTY；xterm 的样式在 index.css 末尾）
-  PaneSwitcher.tsx 手机上的「面板一览」：所有 pane 拍平，点一下就过去
   FileViewer.tsx   对话里点了路径之后的查看器（图片 / 视频 / 音频 / PDF / 文本）
   Dialogs.tsx      所有弹窗挂在这一处（store 里的 dialog 决定开哪个）；每个弹窗一个文件：
                    Palette（命令面板）、KeyHelp（快捷键表）、SettingsDialog（设置）、Pickers（会话列表 / 切工作空间）、
@@ -120,7 +121,7 @@ src/lib/
   source only for what no add-on slot reaches.
 
 - **加一块显示**（比如每周 / 每月额度）：数据从哪来先看 `src/lib/api.ts`（已有接口）和 `src/lib/types.ts`；
-  只有前端能算出来的直接在组件里算。放在哪：侧栏底部 `SidebarChrome.tsx` 的 SidebarBottom、pane 标题栏 `Panes.tsx`、输入框下面（`src/lib/chatHost.tsx` 的 composerBar 插槽）。
+  只有前端能算出来的直接在组件里算。放在哪：左边窄条 `Rail.tsx`（插件面板 / 图标按钮）、pane 标题栏 `Panes.tsx`、输入框下面（`src/lib/chatHost.tsx` 的 composerBar 插槽）。
 - **加一个弹窗**：新建一个组件文件（照 `NameDialogs.tsx` 的写法，关掉用 `closeDialog()`），在 store 的 `Dialog` 类型里加一种 `kind`，
   再到 `Dialogs.tsx` 里挂上；用 `@/components/ui/dialog`。
 - **加一个页面**：新建 `src/pages/<名字>.tsx`（default export 一个组件），用 `import { Link } from "react-router"` 链过去。

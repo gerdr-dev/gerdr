@@ -14,12 +14,13 @@ import {
   Pin,
   PinOff,
   Plus,
+  Search,
   SquareDashed,
   SquareTerminal,
   SquareSplitHorizontal,
   X,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -50,6 +51,7 @@ import {
 import { applyWorkspaceLabel } from "@/lib/addons";
 import {
   activeWs,
+  allLeaves,
   currentSpace,
   leaves,
   locateSession,
@@ -94,7 +96,7 @@ import type { SessionSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { AgentIcon, StatusDot, dotStatus } from "./AgentIcon";
 import { Elapsed } from "./Elapsed";
-import { SidebarBottom, SidebarEdge, SidebarHeader } from "./SidebarChrome";
+import { ListHeader, SidebarBottom, SidebarEdge, SidebarHeader } from "./SidebarChrome";
 import { WsDot } from "./WsDot";
 import { TabDragLayer, startPaneDrag, startWsDrag, useDrag } from "./TabDrag";
 
@@ -172,6 +174,25 @@ function paneLabel(p: PaneLeaf, s: SessionSummary | undefined): { title: string;
   return { title: "新会话", sub: p.draft?.cwd ? basename(p.draft.cwd) : "" };
 }
 
+/**
+ * The phone drawer's rows are roomier than the desktop list's: two lines (where it is, how long ago) and at least 44px
+ * tall, a finger's minimum. They took that from the phone's old flat pane list (PaneSwitcher), dropped because it listed
+ * the same panes as this drawer. `now` drives the "3m" column.
+ */
+const Roomy = createContext<{ now: number } | null>(null);
+
+/** How long since a session last moved, compact (`3m` `2h` `4d`): the column is a few dozen pixels on a phone. */
+function ago(ms: number | undefined, now: number) {
+  if (!ms) return "";
+  const s = Math.max(0, Math.round((now - ms) / 1000));
+  if (s < 45) return "刚刚";
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m}m`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h}h`;
+  return `${Math.round(h / 24)}d`;
+}
+
 /** Go to a pane: the pin grid would cover it, so that closes first. */
 function goPane(paneId: string, sessionId?: string) {
   toggleOverview(false);
@@ -199,6 +220,16 @@ export function UnifiedSidebar({ className }: { className?: string }) {
   const allProjects = useStore((s) => activeAllProjects(s));
   const [folded, setFolded] = useFolded();
   const [activeFolded, setActiveFolded] = useLocal(ACTIVE_FOLD_KEY, false);
+  const roomy = !!className;
+  // The drawer's search: not kept, it's "what am I looking for right now" (the drawer remounts on every open)
+  const [q, setQ] = useState("");
+  // The "3m" column's clock: minutes are its smallest step, a tick every 15s is plenty (statuses come over the socket)
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!roomy) return;
+    const t = setInterval(() => setNow(Date.now()), 15000);
+    return () => clearInterval(t);
+  }, [roomy]);
   const list = spaceWorkspaces(layout);
   const groups = sideRows(layout);
   const cur = activeWs(layout);
@@ -233,6 +264,19 @@ export function UnifiedSidebar({ className }: { className?: string }) {
     return spaceOf(ws) === here ? label : `${spaces.find((sp) => sp.id === spaceOf(ws))?.name ?? spaceOf(ws)} · ${label}`;
   };
   const gridFocusId = gridFocus && tiles.includes(gridFocus) ? gridFocus : tiles[0];
+  // Searching swaps the sections for one flat list of this project's panes that match
+  const kw = q.trim().toLowerCase();
+  const hits: Item[] = !kw
+    ? []
+    : allLeaves(layout)
+        .filter((x) => spaceOf(x.ws) === here)
+        .map(({ ws, tab, pane }) => ({ ws, tab, pane, split: leaves(tab.root).length > 1, s: pane.sessionId ? sessions[pane.sessionId] : undefined }))
+        .filter(({ ws, tab, pane, s }) =>
+          [s?.title, s?.agent, s?.cwd, wsLabel(ws), tabName(tab), pane.sub?.title, pane.term ? `终端 ${pane.term.cwd}` : "", pane.file?.path]
+            .join(" ")
+            .toLowerCase()
+            .includes(kw),
+        );
 
   const flatRow = (x: Item, top = false, num?: number) => {
     const p = rowProps(x.ws, x.tab, x.pane, x.split);
@@ -271,109 +315,137 @@ export function UnifiedSidebar({ className }: { className?: string }) {
   };
 
   return (
-    <div className={cn("relative flex h-full shrink-0 flex-col border-r bg-sidebar", className)} style={className ? undefined : { width: sidebarW }}>
-      {!className && <SidebarEdge />}
-      <SidebarHeader />
-      <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto px-1.5 pb-2">
-        {/* data-ws-groups: the groups a dragged group title reorders among (TabDrag.tsx startWsDrag) */}
-        <div className="pt-1.5" data-ws-groups>
-          {(active.length > 0 || gridOn || allProjects || dragAgent) && (
-            // data-active-drop: drop an agent here to put it in (TabDrag.tsx)
-            <div data-active-drop className="mb-1 border-b pb-1.5">
-              <div
-                role="button"
-                className="group/act flex h-7 w-full cursor-default items-center gap-1 rounded-md px-1 text-[11px] font-medium text-muted-foreground select-none hover:bg-accent/60 hover:text-foreground"
-                title="等你、在跑、报错的会自己进来，跑完也留着，直到你移出；也可以右键加进来。按该不该先看排"
-                onClick={() => setActiveFolded(!activeFolded)}
-              >
-                <ChevronRight className={cn("size-3.5 shrink-0 transition-transform", !activeFolded && "rotate-90")} />
-                <span className="flex-1 truncate text-left">进行中{allProjects && <span className="font-normal"> · 所有项目</span>}</span>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button
-                      className="flex size-5 items-center justify-center rounded-sm hover:bg-muted hover:text-foreground"
-                      title="进行中的设置"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <Ellipsis className="size-3.5" />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-                    <DropdownMenuCheckboxItem checked={allProjects} onCheckedChange={(v) => setActiveAllProjects(!!v)}>
-                      显示所有项目的 Agent
-                    </DropdownMenuCheckboxItem>
-                    <div className="px-2 pb-1 text-[11px] text-muted-foreground">只改这个项目，别的项目各自设</div>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem disabled={!outN} onClick={restoreWorking}>
-                      <ListPlus /> 移入所有在做的{outN ? `（${outN}）` : ""}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem disabled={!doneN} onClick={clearActive}>
-                      <Eraser /> 移出已完成的{doneN ? `（${doneN}）` : ""}
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                <button
-                  className={cn("flex h-5 items-center gap-1 rounded-sm px-1", gridOn ? "bg-brand/15 text-foreground" : "hover:bg-muted hover:text-foreground")}
-                  title={gridOn ? "关掉网格，回到 Tab" : `把进行中的 Agent 摆成网格一起看（最多 ${MAX_TILES} 个）`}
-                  // On a phone the grid is behind the drawer: close it
-                  onClick={(e) => (e.stopPropagation(), toggleOverview(!gridOn), set({ drawer: false }))}
-                >
-                  <LayoutGrid className={cn("size-3", gridOn && "text-brand")} />
-                  网格
-                </button>
-              </div>
-              {!activeFolded &&
-                active.map((x, i) => {
-                  const num = numbers && i < 9 ? i + 1 : undefined;
-                  return x.item ? (
-                    flatRow(x.item, true, num)
-                  ) : (
-                    <WorkRow key={x.id} id={x.id} current={gridOn && x.id === gridFocusId} grid={gridOn && tiles.includes(x.id)} num={num} />
-                  );
-                })}
-              {/* Only when empty: a row appearing mid-drag would push the rows under the pointer */}
-              {dragAgent && !active.length && !activeFolded && <div className="py-1 pl-7 text-[12px] text-muted-foreground">拖到这里加入进行中</div>}
+    <Roomy.Provider value={roomy ? { now } : null}>
+      <div className={cn("relative flex h-full shrink-0 flex-col border-r bg-sidebar", className)} style={className ? undefined : { width: sidebarW }}>
+        {!className && <SidebarEdge />}
+        {/* Beside the rail the project switcher, mode switch, add-ons and settings are on the rail (Rail.tsx); the phone's
+          drawer has no rail and keeps them in its own top and bottom rows */}
+        {className ? <SidebarHeader /> : <ListHeader />}
+        {roomy && (
+          <div className="relative shrink-0 px-2 pt-2">
+            <Search className="pointer-events-none absolute top-1/2 left-4.5 mt-1 size-3.5 -translate-y-1/2 text-muted-foreground" />
+            {/* iOS gets 16px: a smaller input makes iOS zoom the page on focus. Not focused on open: the keyboard would cover the list */}
+            <input
+              className="h-8 w-full rounded-lg bg-muted/60 pr-2 pl-8 text-[13px] outline-none placeholder:text-muted-foreground/70 focus-visible:ring-2 focus-visible:ring-ring/40 supports-[-webkit-touch-callout:none]:text-[16px]"
+              placeholder="筛 标题 / Tab / 路径"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+            />
+          </div>
+        )}
+        <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto px-1.5 pb-2">
+          {kw ? (
+            <div className="flex flex-col pt-1.5">
+              {hits.map((x) => flatRow(x))}
+              {!hits.length && <p className="px-1 py-6 text-center text-[12px] text-muted-foreground">没有匹配的 Pane</p>}
             </div>
-          )}
-          {list.map((ws, wi) => (
-            <Group
-              key={ws.id}
-              ws={ws}
-              index={wi}
-              last={wi === list.length - 1}
-              folded={folded.includes(ws.id)}
-              onFold={() => toggleFold(ws.id)}
-              sessions={sessions}
-              unread={unread}
-              current={ws.id === cur.id}
-              rows={groups.get(ws.id) ?? []}
-            >
-              {/* One row per pane, wherever it was dragged to (layout.sideRows): the panes of a split aren't tied together here,
+          ) : (
+            <>
+              {/* data-ws-groups: the groups a dragged group title reorders among (TabDrag.tsx startWsDrag) */}
+              <div className="pt-1.5" data-ws-groups>
+                {(active.length > 0 || gridOn || allProjects || dragAgent) && (
+                  // data-active-drop: drop an agent here to put it in (TabDrag.tsx)
+                  <div data-active-drop className="mb-1 border-b pb-1.5">
+                    <div
+                      role="button"
+                      className="group/act flex h-7 w-full cursor-default items-center gap-1 rounded-md px-1 text-[11px] font-medium text-muted-foreground select-none hover:bg-accent/60 hover:text-foreground"
+                      title="等你、在跑、报错的会自己进来，跑完也留着，直到你移出；也可以右键加进来。按该不该先看排"
+                      onClick={() => setActiveFolded(!activeFolded)}
+                    >
+                      <ChevronRight className={cn("size-3.5 shrink-0 transition-transform", !activeFolded && "rotate-90")} />
+                      <span className="flex-1 truncate text-left">进行中{allProjects && <span className="font-normal"> · 所有项目</span>}</span>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button
+                            className="flex size-5 items-center justify-center rounded-sm hover:bg-muted hover:text-foreground"
+                            title="进行中的设置"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <Ellipsis className="size-3.5" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                          <DropdownMenuCheckboxItem checked={allProjects} onCheckedChange={(v) => setActiveAllProjects(!!v)}>
+                            显示所有项目的 Agent
+                          </DropdownMenuCheckboxItem>
+                          <div className="px-2 pb-1 text-[11px] text-muted-foreground">只改这个项目，别的项目各自设</div>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem disabled={!outN} onClick={restoreWorking}>
+                            <ListPlus /> 移入所有在做的{outN ? `（${outN}）` : ""}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem disabled={!doneN} onClick={clearActive}>
+                            <Eraser /> 移出已完成的{doneN ? `（${doneN}）` : ""}
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                      <button
+                        className={cn(
+                          "flex h-5 items-center gap-1 rounded-sm px-1",
+                          gridOn ? "bg-brand/15 text-foreground" : "hover:bg-muted hover:text-foreground",
+                        )}
+                        title={gridOn ? "关掉网格，回到 Tab" : `把进行中的 Agent 摆成网格一起看（最多 ${MAX_TILES} 个）`}
+                        // On a phone the grid is behind the drawer: close it
+                        onClick={(e) => (e.stopPropagation(), toggleOverview(!gridOn), set({ drawer: false }))}
+                      >
+                        <LayoutGrid className={cn("size-3", gridOn && "text-brand")} />
+                        网格
+                      </button>
+                    </div>
+                    {!activeFolded &&
+                      active.map((x, i) => {
+                        const num = numbers && i < 9 ? i + 1 : undefined;
+                        return x.item ? (
+                          flatRow(x.item, true, num)
+                        ) : (
+                          <WorkRow key={x.id} id={x.id} current={gridOn && x.id === gridFocusId} grid={gridOn && tiles.includes(x.id)} num={num} />
+                        );
+                      })}
+                    {/* Only when empty: a row appearing mid-drag would push the rows under the pointer */}
+                    {dragAgent && !active.length && !activeFolded && <div className="py-1 pl-7 text-[12px] text-muted-foreground">拖到这里加入进行中</div>}
+                  </div>
+                )}
+                {list.map((ws, wi) => (
+                  <Group
+                    key={ws.id}
+                    ws={ws}
+                    index={wi}
+                    last={wi === list.length - 1}
+                    folded={folded.includes(ws.id)}
+                    onFold={() => toggleFold(ws.id)}
+                    sessions={sessions}
+                    unread={unread}
+                    current={ws.id === cur.id}
+                    rows={groups.get(ws.id) ?? []}
+                  >
+                    {/* One row per pane, wherever it was dragged to (layout.sideRows): the panes of a split aren't tied together here,
                   the ones on screen just light up. data-side-row(s): drag a row between two others to move it (TabDrag.tsx) */}
-              {groups.get(ws.id)?.map((r) => (
-                <div key={r.pane.id} data-side-row={r.pane.id}>
-                  <Row {...rowProps(r.ws, r.tab, r.pane, leaves(r.tab.root).length > 1)} />
-                </div>
-              ))}
-              {!groups.get(ws.id)?.length && <div className="py-1 pl-7 text-[12px] text-muted-foreground">空的</div>}
-            </Group>
-          ))}
+                    {groups.get(ws.id)?.map((r) => (
+                      <div key={r.pane.id} data-side-row={r.pane.id}>
+                        <Row {...rowProps(r.ws, r.tab, r.pane, leaves(r.tab.root).length > 1)} />
+                      </div>
+                    ))}
+                    {!groups.get(ws.id)?.length && <div className="py-1 pl-7 text-[12px] text-muted-foreground">空的</div>}
+                  </Group>
+                ))}
+              </div>
+              <div className="mt-1 flex gap-1 px-0.5">
+                <FootButton onClick={() => (toggleOverview(false), addTab())} title="在当前工作空间新开一个 Tab">
+                  <Plus className="size-3.5" /> 新 Tab
+                </FootButton>
+                <FootButton onClick={() => (toggleOverview(false), openTerminal("tab"))} title="在当前工作空间开一个终端">
+                  <SquareTerminal className="size-3.5" /> 终端
+                </FootButton>
+                <FootButton onClick={() => set({ dialog: { kind: "newWorkspace" } })} title="新工作空间（一个分组）">
+                  <Plus className="size-3.5" /> 分组
+                </FootButton>
+              </div>
+            </>
+          )}
         </div>
-        <div className="mt-1 flex gap-1 px-0.5">
-          <FootButton onClick={() => (toggleOverview(false), addTab())} title="在当前工作空间新开一个 Tab">
-            <Plus className="size-3.5" /> 新 Tab
-          </FootButton>
-          <FootButton onClick={() => (toggleOverview(false), openTerminal("tab"))} title="在当前工作空间开一个终端">
-            <SquareTerminal className="size-3.5" /> 终端
-          </FootButton>
-          <FootButton onClick={() => set({ dialog: { kind: "newWorkspace" } })} title="新工作空间（一个分组）">
-            <Plus className="size-3.5" /> 分组
-          </FootButton>
-        </div>
+        {className && <SidebarBottom sidebarToggle />}
+        <TabDragLayer />
       </div>
-      <SidebarBottom sidebarToggle />
-      <TabDragLayer />
-    </div>
+    </Roomy.Provider>
   );
 }
 
@@ -410,6 +482,7 @@ function WorkRow({ id, current, grid, num }: { id: string; current: boolean; gri
     const p = Object.entries(workChats(st.config, st.layout)).find(([, x]) => x === id)?.[0];
     return spaceList(st.layout).find((sp) => sp.id === p)?.name ?? p;
   });
+  const roomy = !!useContext(Roomy);
   if (!s) return null;
   return (
     <ContextMenu>
@@ -418,7 +491,8 @@ function WorkRow({ id, current, grid, num }: { id: string; current: boolean; gri
           role="button"
           data-row-current={current || undefined}
           className={cn(
-            "group relative flex h-7 cursor-default items-center gap-2 rounded-md px-2 text-[12px] select-none",
+            "group relative flex cursor-default items-center gap-2 rounded-md px-2 text-[12px] select-none",
+            roomy ? "min-h-11 text-[13px]" : "h-7",
             current ? "bg-accent font-medium" : "hover:bg-accent/60",
             "data-[state=open]:ring-1 data-[state=open]:ring-brand/60",
           )}
@@ -481,6 +555,7 @@ function Group({
   const n = rows.length;
   const waiting = rows.filter((r) => needsYou(r.pane.sessionId ? sessions[r.pane.sessionId] : undefined)).length;
   const edit = () => set({ dialog: { kind: "editWorkspace", id: ws.id } });
+  const roomy = !!useContext(Roomy);
   return (
     <div className="mt-1" data-ws-group={ws.id}>
       <ContextMenu>
@@ -492,7 +567,8 @@ function Group({
             onPointerDown={(e) => startWsDrag(e, ws.id, label)}
             role="button"
             className={cn(
-              "group/ws flex h-7 cursor-default items-center gap-1 rounded-md px-1 text-[12px] select-none hover:bg-accent/60",
+              "group/ws flex cursor-default items-center gap-1 rounded-md px-1 text-[12px] select-none hover:bg-accent/60",
+              roomy ? "h-9" : "h-7",
               "data-[state=open]:ring-1 data-[state=open]:ring-brand/60",
             )}
             onClick={onFold}
@@ -629,6 +705,21 @@ function Row({
   const Icon = pane.term ? SquareTerminal : pane.file ? FileText : pane.sub ? Columns2 : SquareDashed;
   // Picked and still loading after a moment (the drawer stays open till then, App.tsx): say so on the row itself
   const loading = useSlowCatchUp(current ? s?.id : undefined);
+  const roomy = useContext(Roomy);
+  const pick = () => {
+    if (onPick) return onPick();
+    goPane(pane.id, s?.id);
+    // The drawer closes when the pane in front changes (App.tsx); tapping the one you're already on changes nothing
+    if (current) set({ drawer: false });
+  };
+  /*
+   * In the drawer a finger's tap goes on `pointerup`, not `click` (measured on the old phone pane list): with the
+   * keyboard up from the search box, the same tap first drops the keyboard, --vvh changes, the list reflows and the
+   * browser sends the click elsewhere or not at all — "the first tap only closes the keyboard". Touch pointers are
+   * implicitly captured, so pointerup lands on the row pointerdown did. A hold is the long-press menu, not a tap.
+   */
+  const down = useRef<{ x: number; y: number; t: number } | null>(null);
+  const took = useRef(0);
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
@@ -636,32 +727,72 @@ function Row({
           role="button"
           data-row-current={current || undefined}
           // Drag onto a pane (split beside it) or onto another group (move the tab there): TabDrag.tsx
-          onPointerDown={(e) => startPaneDrag(e, pane.id, { label: title, agent: s?.agent, term: !!pane.term })}
-          onClick={() => (onPick ? onPick() : goPane(pane.id, s?.id))}
+          onPointerDown={(e) => {
+            down.current = roomy && e.pointerType !== "mouse" ? { x: e.clientX, y: e.clientY, t: e.timeStamp } : null;
+            startPaneDrag(e, pane.id, { label: title, agent: s?.agent, term: !!pane.term });
+          }}
+          onPointerCancel={() => (down.current = null)}
+          onPointerUp={(e) => {
+            const d = down.current;
+            down.current = null;
+            // Moved more than 10px = scrolling the list (pointercancel doesn't always come)
+            if (!d || e.timeStamp - d.t > 450 || Math.abs(e.clientX - d.x) > 10 || Math.abs(e.clientY - d.y) > 10) return;
+            took.current = e.timeStamp;
+            pick();
+          }}
+          onClick={(e) => e.timeStamp - took.current > 800 && pick()}
           onDoubleClick={() => !inSplit && set({ dialog: { kind: "rename", target: "tab", id: tab.id, value: tab.name ?? tabName(tab) } })}
           onMouseDown={(e) => e.button === 1 && e.preventDefault()}
           onAuxClick={(e) => e.button === 1 && (e.preventDefault(), dismiss())}
           className={cn(
-            "group relative flex h-7 cursor-default items-center gap-2 rounded-md px-2 text-[12px] select-none",
+            "group relative flex cursor-default items-center gap-2 rounded-md px-2 text-[12px] select-none",
+            roomy ? "min-h-11 py-1.5 text-[13px]" : "h-7",
             current ? "bg-accent font-medium" : visible ? "bg-accent/40" : "hover:bg-accent/60",
             "data-[state=open]:ring-1 data-[state=open]:ring-brand/60",
           )}
         >
           {loading && <BorderFlow />}
-          {s ? <AgentIcon agent={s.agent} className="size-3.5 shrink-0" /> : <Icon className="size-3.5 shrink-0 text-muted-foreground" />}
+          {s ? (
+            <AgentIcon agent={s.agent} className={cn("shrink-0", roomy ? "size-4" : "size-3.5")} />
+          ) : (
+            <Icon className={cn("shrink-0 text-muted-foreground", roomy ? "size-4" : "size-3.5")} />
+          )}
           <KeyNum n={num} />
-          <span className={cn("min-w-0 flex-1 truncate", pane.term && "font-mono text-[11.5px]", !s && !pane.term && "text-muted-foreground")}>
-            {tabLabel ? (
-              <>
-                {tabLabel} <span className="text-muted-foreground">· {title}</span>
-              </>
-            ) : (
-              title
-            )}
-          </span>
-          <span className="flex max-w-[40%] shrink-0 items-center text-[11px] text-muted-foreground group-hover:hidden">
-            {s?.status === "running" && s.turn ? <Elapsed since={s.turn.startedAt} /> : <span className="truncate">{where ?? sub}</span>}
-          </span>
+          {roomy ? (
+            // Two lines: what it is, then where it is and how long ago it last moved (running: for how long)
+            <span className="min-w-0 flex-1 leading-tight">
+              <span className={cn("block truncate", pane.term && "font-mono text-[12.5px]", !s && !pane.term && "text-muted-foreground")}>
+                {tabLabel ? (
+                  <>
+                    {tabLabel} <span className="text-muted-foreground">· {title}</span>
+                  </>
+                ) : (
+                  title
+                )}
+              </span>
+              <span className="mt-0.5 flex items-center gap-1.5 text-[11px] font-normal text-muted-foreground">
+                <span className="min-w-0 flex-1 truncate">{where ?? sub}</span>
+                <span className="shrink-0 tabular-nums" title={s ? new Date(s.updatedAt).toLocaleString() : ""}>
+                  {s?.status === "running" && s.turn ? <Elapsed since={s.turn.startedAt} /> : ago(s?.updatedAt, roomy.now)}
+                </span>
+              </span>
+            </span>
+          ) : (
+            <>
+              <span className={cn("min-w-0 flex-1 truncate", pane.term && "font-mono text-[11.5px]", !s && !pane.term && "text-muted-foreground")}>
+                {tabLabel ? (
+                  <>
+                    {tabLabel} <span className="text-muted-foreground">· {title}</span>
+                  </>
+                ) : (
+                  title
+                )}
+              </span>
+              <span className="flex max-w-[40%] shrink-0 items-center text-[11px] text-muted-foreground group-hover:hidden">
+                {s?.status === "running" && s.turn ? <Elapsed since={s.turn.startedAt} /> : <span className="truncate">{where ?? sub}</span>}
+              </span>
+            </>
+          )}
           <button
             className="hidden size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground group-hover:flex hover:text-foreground"
             title={top && s ? "移出进行中" : inSplit ? "关掉这一格" : "关闭 Tab"}

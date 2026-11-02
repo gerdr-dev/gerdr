@@ -12,7 +12,6 @@ import type { SessionSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { AgentIcon, StatusDot, dotStatus, dotRank } from "./AgentIcon";
 import { TabDragLayer, useTabDrag } from "./TabDrag";
-import { ConnStatus } from "./ConnStatus";
 
 /** 一个 tab 的汇总状态：里面任何一个会话在等你 → 等你；在跑 → 在跑；…… */
 export function tabStatus(tab: Tab, sessions: Record<string, SessionSummary>, unread: Record<string, true>) {
@@ -171,7 +170,6 @@ export function TabBar() {
           <TooltipContent>新建 Tab（{formatCombo(keyFor(get().config, "newTab")[0] ?? "")}）</TooltipContent>
         </Tooltip>
       </div>
-      {!sidebar && <ConnStatus />}
       {prefixActive && (
         <div className="shrink-0 rounded-md bg-brand px-2 py-0.5 font-mono text-[11px] text-white" style={{ WebkitAppRegion: "no-drag" } as any}>
           {formatCombo(prefix).replace(/\s.*/, "")} …

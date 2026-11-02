@@ -164,15 +164,22 @@ declare global {
     /**
      * Put a component in one of gerdr's slots. It is re-rendered with gerdr; one that throws is dropped and its error
      * shown in Settings → Add-ons. Several add-ons in one slot: by order, then by add-on id.
-     *   "sidebar"    the left sidebar, above its bottom row (full width, no props). The slot pads above and below
-     *                once for all blocks: give yours horizontal padding only, or two blocks leave a gap between them
+     *   "sidebar"    the add-on panel (288px wide, no props): on wider screens it opens beside the rail (the strip down
+     *                the window's left edge) when its add-on button is hovered or tapped, and stays mounted while
+     *                closed; on a phone it's the bottom of the drawer. The slot pads above and below once for all
+     *                blocks: give yours horizontal padding only, or two blocks leave a gap between them
+     *   "rail"       a glance on the rail itself (at most 40px wide, a few px to ~40px tall, no props): e.g. a few tiny
+     *                bars of what your "sidebar" block shows in full. It is the add-on button's face: hovering or
+     *                tapping it opens the panel, so don't make it interactive. Without one the button is an icon.
+     *                Not shown on a phone (no rail there)
      *   "paneTitle"  every pane's title bar, before its ⋯ menu (props: { pane: PaneInfo; tab: TabInfo }); keep it small
      *   "overlay"    mounted once at the app's root and always there (no props, takes no space): where a dialog or
-     *                drawer opened by a command lives. The sidebar slot can't host one: it isn't mounted while the
-     *                sidebar is collapsed or on a phone. Keep the open state outside the component (a variable plus a
-     *                listener) so a command's run() can flip it.
+     *                drawer opened by a command lives. The panel can't host one: it's hidden while closed and on a
+     *                phone it's only there while the drawer is open. Keep the open state outside the component (a
+     *                variable plus a listener) so a command's run() can flip it.
      */
     slot(name: "sidebar", component: Component<{}>, opts?: { order?: number }): Dispose;
+    slot(name: "rail", component: Component<{}>, opts?: { order?: number }): Dispose;
     slot(name: "overlay", component: Component<{}>, opts?: { order?: number }): Dispose;
     slot(name: "paneTitle", component: Component<{ pane: PaneInfo; tab: TabInfo }>, opts?: { order?: number }): Dispose;
 

@@ -2,7 +2,7 @@ import { Briefcase, Check, ChevronDown, Code2, History, MessageSquarePlus, Setti
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { AgentIcon, StatusDot } from "@/components/AgentIcon";
-import { COL_EDGE, SidebarBottom, SidebarEdge, SidebarHeader, startColResize } from "@/components/SidebarChrome";
+import { COL_EDGE, startColResize } from "@/components/SidebarChrome";
 import { focusSession } from "@/lib/actions";
 import { toggleOverview } from "@/lib/overview";
 import { ChatView } from "@/components/chat/ChatView";
@@ -16,8 +16,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { PHONE_MAX, usePhone } from "@/lib/phone";
-import { get, set, setMode, useStore } from "@/lib/store";
+import { usePhone } from "@/lib/phone";
+import { set, setMode, useStore } from "@/lib/store";
 import { syncWatch } from "@/lib/sync";
 import { cn } from "@/lib/utils";
 import { askWorkAgent, ensureWorkSession, isEmptyChat, newWorkChat, openWorkChat, useWorkChats, useWorkProject, useWorkSession, workAgent } from "@/lib/work";
@@ -72,7 +72,7 @@ function ChatEdge({ width, onWidth }: { width: number; onWidth: (w: number) => v
 }
 
 /**
- * Code / Work: gerdr's own switch, at the right of the left column's top row in both (SidebarChrome.tsx SidebarHeader). The
+ * Code / Work in the phone drawer's top row (SidebarChrome.tsx SidebarHeader); wider screens switch on the rail. The
  * active grid (the overview) isn't a view of its own here: the sidebar's 进行中 section opens it.
  */
 export function ModeSwitch() {
@@ -116,27 +116,27 @@ function useDark() {
   return dark;
 }
 
-/** One project's Work site. Keyed by project by the caller, so switching projects loads the other site. */
-function WorkFrame({ project, onShowChat, menuBottom = 0 }: { project: string; onShowChat?: () => void; menuBottom?: number }) {
+/**
+ * What sites written for the old shared left column get on load. Their menu is `w-(--gerdr-sidebar-w)` with room left
+ * at its bottom for gerdr's settings row (`--gerdr-menu-bottom`), and their lib/gerdr.ts sets both from this message.
+ * gerdr lays nothing over the site any more (the rail took its header and settings row), so: a fixed menu width and no
+ * strip to leave free. New sites don't use either variable.
+ */
+const LEGACY_SIDEBAR = { type: "gerdr:sidebar", width: 224, bottom: 0 };
+
+/** One project's Work site, the whole space between the rail and the chat. Keyed by project by the caller, so switching projects loads the other site. */
+function WorkFrame({ project, onShowChat }: { project: string; onShowChat?: () => void }) {
   const ref = useRef<HTMLIFrameElement>(null);
   const dark = useDark();
   const send = (m: unknown) => ref.current?.contentWindow?.postMessage(m, location.origin);
   useEffect(() => send({ type: "gerdr:theme", dark }), [dark]);
-  // The site's menu takes the sidebar's width (--gerdr-sidebar-w, its lib/gerdr.ts); dragged by SidebarEdge in WorkView.
-  // bottom: how tall the strip gerdr lays over the menu's bottom is (add-on blocks + settings row), so the site keeps
-  // that much free (--gerdr-menu-bottom). 0 = not measured yet / no menu: the site keeps its own default.
-  const sidebarW = useStore((s) => s.sidebarW);
-  const bottom = useRef(menuBottom);
-  bottom.current = menuBottom;
-  const sidebarMsg = (width: number) => ({ type: "gerdr:sidebar", width, ...(bottom.current > 0 && { bottom: bottom.current }) });
-  useEffect(() => send(sidebarMsg(sidebarW)), [sidebarW, menuBottom]);
   useEffect(() => {
     const f = (e: MessageEvent) => {
       if (e.origin !== location.origin || e.source !== ref.current?.contentWindow) return;
       const m = e.data ?? {};
       if (m.type === "gerdr:ready") {
         send({ type: "gerdr:theme", dark: document.documentElement.classList.contains("dark") });
-        send(sidebarMsg(get().sidebarW));
+        send(LEGACY_SIDEBAR);
       } else if (m.type === "gerdr:ask" && typeof m.text === "string") {
         // With a request id the page shows its own notice: answer it with the conversation (or the error) instead of a toast
         const rid = m.id;
@@ -221,7 +221,12 @@ function ChatHeader() {
   useStore((s) => s.config.workAgents); // re-render when the default changes
   const defaultId = workAgent();
   const defaultName = agents.find((a) => a.id === defaultId)?.name ?? defaultId;
-  const fresh = (agent?: string) => newWorkChat(agent).catch((e) => toast.error(e.message));
+  // Kept the current, still-empty chat (newWorkChat): say so, or the button looks like it did nothing
+  const fresh = (agent?: string) =>
+    newWorkChat(agent).then(
+      (id) => id === current && toast("这就是一个新对话，直接说就行"),
+      (e) => toast.error(e.message),
+    );
   const noDrag = { WebkitAppRegion: "no-drag" } as any;
   return (
     <div className="flex h-10 shrink-0 items-center gap-1 border-b px-2" style={{ WebkitAppRegion: "drag" } as any}>
@@ -249,12 +254,25 @@ function ChatHeader() {
       </DropdownMenu>
       <div className="flex-1" />
       <div className="flex items-center" style={noDrag}>
-        <Button variant="ghost" size="icon" className="size-7 rounded-r-none" title={`新对话（${defaultName}）`} onClick={() => fresh()}>
-          <MessageSquarePlus className="size-3.5" />
+        {/* Touch: bigger targets (the header is h-10, so up to 36px fits) */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-7 rounded-r-none pointer-coarse:size-9"
+          title={`新对话（${defaultName}）`}
+          aria-label="新对话"
+          onClick={() => fresh()}
+        >
+          <MessageSquarePlus className="size-3.5 pointer-coarse:size-4" />
         </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-7 w-4 rounded-l-none text-muted-foreground" title="用别的 Agent 开新对话">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-4 rounded-l-none text-muted-foreground pointer-coarse:h-9 pointer-coarse:w-6"
+              title="用别的 Agent 开新对话"
+            >
               <ChevronDown className="size-3" />
             </Button>
           </DropdownMenuTrigger>
@@ -282,56 +300,12 @@ function ChatHeader() {
   );
 }
 
-/** Top bar over the Work project: gerdr's own controls (mode switch, settings), apart from the project's menu. */
-function WorkBar({ narrow }: { narrow: boolean }) {
-  // The first sidebarW px are the same header as the sidebar's (SidebarChrome.tsx SidebarHeader), so the switch sits exactly where
-  // it does in Code mode; the Work site's own menu below is the same width (gerdr:sidebar). Settings and the connection
-  // status are in the bottom row gerdr lays over the site's menu (WorkView), as in the other two modes.
-  // Narrow: the site has no side menu to line up with (useNarrow), so the header takes the whole width.
-  const sidebarW = useStore((s) => s.sidebarW);
-  const phone = usePhone();
-  return (
-    <div className={cn("flex shrink-0 border-b bg-sidebar", phone ? "h-11" : "h-10")} style={{ WebkitAppRegion: "drag" } as any}>
-      <SidebarHeader className={narrow ? "flex-1 border-b-0" : "border-r border-b-0"} style={narrow ? undefined : { width: sidebarW }} />
-    </div>
-  );
-}
-
-/**
- * Whether the page column is narrower than the site's phone breakpoint (Tailwind's md, like gerdr's own PHONE_MAX):
- * a landscape phone or a small window with a wide chat. The site then drops its side menu for its phone layout (the
- * templates' layout.tsx), so gerdr's header and settings row, drawn sidebarW wide to sit on that menu, would stick out
- * over the page instead. It's the frame's width that counts, not the window's: the site's breakpoints see the frame.
- */
-function useNarrow(ref: React.RefObject<HTMLDivElement | null>) {
-  const [narrow, setNarrow] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const o = new ResizeObserver(() => setNarrow(el.clientWidth < PHONE_MAX));
-    o.observe(el);
-    return () => o.disconnect();
-  }, []);
-  return narrow;
-}
-
 export function WorkView() {
   const phone = usePhone();
-  const sidebarW = useStore((s) => s.sidebarW);
   const project = useWorkProject();
   const [chatW, setChatW] = useChatW();
   const [side, setSide] = useState<"page" | "chat">("page");
   const showChat = useCallback(() => setSide("chat"), []);
-  const col = useRef<HTMLDivElement>(null);
-  const narrow = useNarrow(col);
-  // The bottom strip's height (it grows with the add-on blocks, which load and change size on their own)
-  const [menuBottom, setMenuBottom] = useState(0);
-  const bottomRef = useCallback((el: HTMLDivElement | null) => {
-    if (!el) return;
-    const o = new ResizeObserver(() => setMenuBottom(Math.ceil(el.offsetHeight)));
-    o.observe(el);
-    return () => o.disconnect();
-  }, []);
   if (phone) {
     return (
       <div className="flex h-full flex-col bg-background">
@@ -365,27 +339,10 @@ export function WorkView() {
     );
   }
   return (
+    // The rail (Rail.tsx) is left of this: the site gets everything up to the chat, nothing of gerdr's laid over it
     <div className="flex h-full bg-background">
-      <div ref={col} className="relative flex min-w-0 flex-1 flex-col">
-        <WorkBar narrow={narrow} />
-        <div className="min-h-0 flex-1">
-          <WorkFrame key={project} project={project} menuBottom={narrow ? 0 : menuBottom} />
-        </div>
-        {/* Narrow: no side menu in the site to lay the settings row over or to resize, so the row goes under the page (useNarrow) */}
-        {narrow ? (
-          <SidebarBottom />
-        ) : (
-          // The sidebar's resize handle, over the top bar and the site's menu edge alike (the site lays its menu out at
-          // the same width): it's ours, so it works whatever the site does, and captures the pointer so the frame can't take it
-          <div className="pointer-events-none absolute inset-y-0 left-0 [&>*]:pointer-events-auto" style={{ width: sidebarW }}>
-            <SidebarEdge />
-            {/* Add-on blocks and settings at the bottom of the left column, like the Code sidebar (asked for). Its height
-              goes to the site (WorkFrame's menuBottom → --gerdr-menu-bottom), which keeps that strip of its menu free */}
-            <div ref={bottomRef} className="absolute inset-x-0 bottom-0 flex flex-col border-r">
-              <SidebarBottom />
-            </div>
-          </div>
-        )}
+      <div className="min-w-0 flex-1">
+        <WorkFrame key={project} project={project} />
       </div>
       {/* max-w: a window made smaller after dragging still leaves the Work site some room */}
       <div className="relative flex max-w-[70%] shrink-0 flex-col border-l" style={{ width: chatW }}>

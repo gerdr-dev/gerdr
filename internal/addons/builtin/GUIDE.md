@@ -97,7 +97,8 @@ lucide icon (`<g.icons.Timer className="size-3.5" />`).
 
 | where | call | gets |
 |---|---|---|
-| Sidebar, above its bottom row | `g.slot("sidebar", Component, { order })` | no props |
+| The add-on panel (beside the rail on wider screens, bottom of the phone's drawer) | `g.slot("sidebar", Component, { order })` | no props |
+| A glance on the rail, ≤ 40px wide (the face of the button that opens the panel) | `g.slot("rail", Component, { order })` | no props |
 | The app's root, always mounted, no space taken | `g.slot("overlay", Component)` | no props |
 | Every pane's title bar | `g.slot("paneTitle", Component)` | `{ pane, tab }` |
 | The composer's bottom bar | `g.composerAction({ id, title, icon, run })` | `run(ctx)`: `ctx.text`, `ctx.insert()`, `ctx.setText()` |
@@ -119,8 +120,8 @@ export default defineAddon({
 ```
 
 `g.ui` also has `Dialog` / `DialogContent` / `DialogHeader` / `DialogTitle` / `DialogDescription` / `DialogFooter` /
-`DialogClose`. To open one from a command, draw it in the `"overlay"` slot (the sidebar isn't mounted while collapsed
-or on a phone) and keep the open flag outside the component, so `run()` can set it:
+`DialogClose`. To open one from a command, draw it in the `"overlay"` slot (the panel is hidden while closed, and on a phone
+only there while the drawer is open) and keep the open flag outside the component, so `run()` can set it:
 
 ```tsx
 let open = false;

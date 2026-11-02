@@ -197,7 +197,7 @@ MCP tokens (headers, env) are secrets like API keys: put in only what the user h
 
 ## Add-ons (Settings → Add-ons)
 
-Add-ons change Gerdr itself: a sidebar panel (quota meter, today's stats), a line under each turn (cache clock),
+Add-ons change Gerdr itself: an add-on panel by the left rail (quota meter, today's stats), a line under each turn (cache clock),
 commands and keys (duplicate tab), notifications. They come from stores (GitHub `owner/repo`, default
 `gerdr-dev/gerdr-addon`). When the user asks for something like that, check the store before writing UI code.
 Use `gerdr addon`, not file edits: it checks values, keeps install records, and open windows follow within a second.

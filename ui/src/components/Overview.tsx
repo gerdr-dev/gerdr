@@ -1,11 +1,8 @@
-import { PanelLeft } from "lucide-react";
 import { useEffect } from "react";
-import { Button } from "@/components/ui/button";
 import { focusTile, toggleTileZoom, overviewFocus, setOverview, useOverviewIds } from "@/lib/overview";
 import { usePhone } from "@/lib/phone";
-import { toggleSidebar, useStore } from "@/lib/store";
+import { useStore } from "@/lib/store";
 import { TabActive } from "./Panes";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Grid } from "./OverviewGrid";
 import { PhoneOverview } from "./OverviewPhone";
 
@@ -19,7 +16,6 @@ export function OverviewView({ shown }: { shown: boolean }) {
   const phone = usePhone();
   const ids = useOverviewIds().split(",").filter(Boolean);
   const zoom = useStore((s) => s.overview.zoom);
-  const sidebar = useStore((s) => s.sidebar);
   const cur = useStore((s) => overviewFocus(s));
   // A tile taken out while zoomed: back to the grid
   const zoomed = zoom && ids.includes(zoom) ? zoom : undefined;
@@ -32,22 +28,7 @@ export function OverviewView({ shown }: { shown: boolean }) {
   return (
     <TabActive.Provider value={shown}>
       <div className="flex h-full bg-background">
-        {/* Hidden with the Code sidebar (one setting, asked for: as in Code mode); a thin rail keeps the way back where the
-            hide button was, at the bottom (the top-left corner is the window's traffic lights in the desktop App) */}
-        {!sidebar && (
-          <div className="flex w-10 shrink-0 flex-col justify-end border-r bg-sidebar">
-            <div className="flex h-10 shrink-0 items-center justify-center border-t">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon" className="size-7 text-muted-foreground" onClick={toggleSidebar}>
-                    <PanelLeft className="size-3.5" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="right">显示侧栏</TooltipContent>
-              </Tooltip>
-            </div>
-          </div>
-        )}
+        {/* With the list hidden the way back is the rail's Code button (Rail.tsx), right beside the grid */}
         <Grid ids={ids} focus={cur} zoom={zoomed} shown={shown} onFocus={focusTile} onZoom={toggleTileZoom} />
       </div>
     </TabActive.Provider>

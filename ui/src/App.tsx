@@ -2,7 +2,7 @@ import { KeyRound } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { PhoneConnToast } from "./components/ConnStatus";
+import { ConnToast } from "./components/ConnStatus";
 import { PhoneBar } from "./components/PhoneBar";
 import { TabBar } from "./components/TabBar";
 import { Dialogs } from "./components/Dialogs";
@@ -12,6 +12,7 @@ import { TabActive, TabView } from "./components/Panes";
 import { WorkView } from "./components/WorkView";
 import { OverviewView } from "./components/Overview";
 import { UnifiedSidebar } from "./components/UnifiedSidebar";
+import { Rail } from "./components/Rail";
 import { tabName } from "./lib/actions";
 import { handleKeydown } from "./lib/commands";
 import { ACTION_TITLES, setPrefixLabel, toAccelerator, type KeyAction } from "./lib/keys";
@@ -165,9 +166,9 @@ export default function App() {
   useEffect(() => {
     if (dialogOpen) set({ drawer: false });
   }, [dialogOpen]);
-  // 转到宽屏（平板横过来）时手机那两块浮层收掉，免得回到手机档时莫名其妙还开着
+  // Going wide (a tablet turned sideways) closes the phone drawer, so it isn't oddly still open when back to phone width
   useEffect(() => {
-    if (!phone) set({ drawer: false, switcher: false });
+    if (!phone) set({ drawer: false });
   }, [phone]);
   // Which (herdr-style) session this window shows: in the title when there's more than one (tells the App's windows apart),
   // in the address (/<project id>, so a reload or a window opened for a project stays on it), and told to the App shell
@@ -255,12 +256,14 @@ export default function App() {
               <OverviewView shown={overview} />
             </div>
           )}
-          {/* Work mode has its own top bar with the Code / Work switch, and the Work project draws its own menu */}
+          {/* gerdr's strip on the left in every mode (projects, Code / Work, add-ons, inbox, settings); Code mode's list
+              beside it. Work mode has no list: the rest is the Work site's, then its agent */}
+          {!phone && <Rail />}
           {sidebar && !phone && mode !== "work" && <UnifiedSidebar />}
           {/* 手机上侧栏是盖在上面的抽屉（并排放的话对话只剩一百多 px 宽） */}
           {phone && drawer && (
             <div role="dialog" aria-modal="true" className="fixed inset-0 z-40 flex">
-              <UnifiedSidebar className="w-[min(18rem,85vw)] shadow-xl" />
+              <UnifiedSidebar className="w-[min(20rem,88vw)] shadow-xl" />
               <div className="flex-1 bg-background/50" onClick={() => set({ drawer: false })} />
             </div>
           )}
@@ -303,7 +306,8 @@ export default function App() {
         <CliApprove />
         {/* 手机上底部是输入框和软键盘，toast 放顶上 */}
         <Toaster position={phone ? "top-center" : "bottom-right"} />
-        {phone && <PhoneConnToast />}
+        {/* A lost connection: a toast everywhere now; the bottom row that showed it on wider screens became the rail */}
+        <ConnToast />
       </TooltipProvider>
     </GerdrChatProvider>
   );

@@ -10,19 +10,17 @@ you as messages (e.g. "write this week's progress reports").
 - `ui/` — the Work project: a React site with **no build step**, same rules as Gerdr's own UI
   (Gerdr reads the source, compiles each file with esbuild, hot-reloads on save):
   - `ui/src/layout.tsx` — the menu on the left of the page + `<Outlet />`. The menu is plain code:
-    change it however the user wants (groups, icons, badges, styling). Keep its width
-    `w-(--gerdr-sidebar-w)` (and keep it the leftmost thing on the page): it lines up with Gerdr's bar above
-    and the user resizes both by dragging the menu's right edge (Gerdr draws that handle over the page).
-    Gerdr also draws its bottom strip (add-on blocks, settings, connection status) over the menu's last
-    `--gerdr-menu-bottom` px (it sets the variable to the strip's height): keep the menu's bottom padding at least
-    that, as layout.tsx does.
+    change it however the user wants (groups, icons, badges, a top bar instead, no menu at all). The whole
+    frame is the site's: Gerdr's own controls are on its strip left of the frame and nothing of Gerdr's is
+    drawn over the page, so there is nothing to line up with or leave room for. Keep a narrow-screen layout
+    (layout.tsx switches the menu to tabs below `md`): on a phone the frame is the whole screen.
   - `ui/src/pages/*.tsx` — one file per page, routed by file name (`index.tsx` → `/`,
     `weekly.tsx` → `/weekly`, `okr/[id].tsx` → `/okr/:id`); default-export a component.
   - `ui/src/lib/gerdr.ts` — the bridge: `run(fn, input, { onProgress, onLog, signal })` calls a local
     function, `ask(text)` sends a task to you, `openSession(id)` shows a conversation a function started
-    (`ctx.sessions.start`), `openSettings(tab)` opens Gerdr's settings. Light / dark and the menu's width
-    follow Gerdr through it. **Don't edit it**: an edited copy stops being upgraded and misses later
-    parts (an old one leaves the menu misaligned and not resizable). Put helpers in a file of their own.
+    (`ctx.sessions.start`), `openSettings(tab)` opens Gerdr's settings. Light / dark follows Gerdr through it.
+    **Don't edit it**: an edited copy stops being upgraded and misses later parts. Put helpers in a file
+    of their own.
   - `ui/src/index.css` — theme tokens (same as Gerdr's). Style with Tailwind classes using them:
     `bg-background`, `text-muted-foreground`, `border`, `bg-accent`, `text-ok` / `text-warn` /
     `text-bad`, `bg-brand`. No hard-coded colors; both themes must look right.

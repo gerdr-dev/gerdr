@@ -28,13 +28,14 @@ type Reg<T> = { addon: string; fn: T };
 // ---- what add-ons draw: slots, composer buttons, context-menu items ----
 
 /**
- * Where an add-on can put a component: the sidebar (above its bottom row), a pane's title bar (props: pane, tab), and
- * "overlay" — mounted once at the app's root and always there, for the dialogs / drawers an add-on opens from a
- * command (the sidebar isn't mounted while collapsed or on a phone, so it can't host them).
+ * Where an add-on can put a component: "sidebar" (the add-on panel: opened from the rail on wider screens, Rail.tsx; at
+ * the bottom of the phone's drawer), "rail" (a glance at most 40px wide on the rail itself, which opens that panel), a
+ * pane's title bar (props: pane, tab), and "overlay" — mounted once at the app's root and always there, for the dialogs /
+ * drawers an add-on opens from a command.
  */
-export type SlotName = "sidebar" | "paneTitle" | "overlay";
+export type SlotName = "sidebar" | "rail" | "paneTitle" | "overlay";
 export type SlotReg = { addon: string; key: string; Component: React.ComponentType<any>; order: number };
-export const slots: Record<SlotName, SlotReg[]> = { sidebar: [], paneTitle: [], overlay: [] };
+export const slots: Record<SlotName, SlotReg[]> = { sidebar: [], rail: [], paneTitle: [], overlay: [] };
 export type ComposerAction = { addon: string; id: string; title: string; icon?: React.ReactNode; run: (ctx: ComposerCtx) => void | Promise<void> };
 export type ComposerCtx = { sessionId: string; text: string; insert(text: string): void; setText(text: string): void };
 export const composerActions: ComposerAction[] = [];
