@@ -32,7 +32,7 @@ import { AgentGlyph, GLYPHS, LINES, PALETTE } from "./AgentGlyph";
 import { AddonParts } from "./AddonSlot";
 import { FaceView } from "./RailGroups";
 
-// Settings → 扩展 → 窄条: which add-on blocks go behind which button on the rail, and what each button shows
+// Settings → 扩展 → 分组: which add-on blocks go behind which button on the rail, and what each button shows
 // (lib/rail.ts). One card per button. Reordering is by menu, not drag: it works the same on a phone.
 
 export function RailSettings() {
@@ -40,19 +40,17 @@ export function RailSettings() {
   useStore((s) => s.config.rail);
   const groups = resolveGroups();
   if (!slots.sidebar.length && !slots.rail.length)
-    return (
-      <div className="py-6 text-center text-[13px] text-muted-foreground">还没有往窄条上放东西的插件。装一个带面板的插件（比如额度条）后，在这里分组。</div>
-    );
+    return <div className="py-6 text-center text-[13px] text-muted-foreground">还没有带面板的插件。装一个（比如额度条）后，在这里分组。</div>;
   return (
     <div className="space-y-3">
       <p className="text-[12px] text-muted-foreground">
-        插件的块放在窄条的哪个按钮里：一个按钮可以装几个插件的块，点开时按这里的顺序叠在一起。按钮上显示什么也在这里选。手机抽屉底部用的是同一套。
+        把插件的面板分成几组：每组是最左边一列里的一个按钮，可以装几个插件的块，点开时按这里的顺序叠在一起。按钮上显示什么也在这里选。手机抽屉底部用的是同一套。
       </p>
       {groups.map((g, i) => (
         <GroupCard key={g.group.id} g={g} index={i} groups={groups} />
       ))}
       <Button variant="outline" size="sm" className="w-full border-dashed text-muted-foreground" onClick={() => addGroup()}>
-        <Plus /> 新按钮
+        <Plus /> 新分组
       </Button>
     </div>
   );
@@ -65,24 +63,24 @@ function GroupCard({ g, index, groups }: { g: ResolvedGroup; index: number; grou
       <div className="flex items-center gap-2 border-b p-2.5">
         <FacePicker face={g.group.face} blocks={g.blocks} onPick={(f) => setFace(id, f)} />
         <NameInput key={g.group.name} value={g.group.name} onSave={(v) => renameGroup(id, v)} />
-        {!g.blocks.length && <span className="text-[12px] text-muted-foreground">空的，不显示在窄条上</span>}
+        {!g.blocks.length && <span className="text-[12px] text-muted-foreground">空的，不会显示</span>}
         <div className="flex-1" />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon-sm" aria-label="按钮的操作">
+            <Button variant="ghost" size="icon-sm" aria-label="分组的操作">
               <Ellipsis />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem disabled={index === 0} onClick={() => moveGroup(id, -1)}>
-              <ArrowUp /> 在窄条上上移
+              <ArrowUp /> 上移这个分组
             </DropdownMenuItem>
             <DropdownMenuItem disabled={index === groups.length - 1} onClick={() => moveGroup(id, 1)}>
-              <ArrowDown /> 在窄条上下移
+              <ArrowDown /> 下移这个分组
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem variant="destructive" disabled={groups.length < 2} onClick={() => removeGroup(id)}>
-              <Trash2 /> 删除按钮（里面的块移到第一个按钮）
+              <Trash2 /> 删除分组（里面的块移到第一个分组）
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -110,7 +108,7 @@ function NameInput({ value, onSave }: { value: string; onSave: (v: string) => vo
       onBlur={save}
       onKeyDown={(e) => e.key === "Enter" && (e.currentTarget as HTMLInputElement).blur()}
       className="h-8 w-40 text-[13px]"
-      aria-label="按钮名字"
+      aria-label="分组名字"
     />
   );
 }
@@ -147,7 +145,7 @@ function BlockRow({ b, first, last, groupId, groups }: { b: SlotReg; first: bool
             <ArrowDown /> 下移
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuLabel className="text-[11px] font-normal text-muted-foreground">移到按钮</DropdownMenuLabel>
+          <DropdownMenuLabel className="text-[11px] font-normal text-muted-foreground">移到分组</DropdownMenuLabel>
           {groups
             .filter((x) => x.group.id !== groupId)
             .map((x) => (
@@ -159,7 +157,7 @@ function BlockRow({ b, first, last, groupId, groups }: { b: SlotReg; first: bool
               </DropdownMenuItem>
             ))}
           <DropdownMenuItem onClick={() => moveBlock(b.key, "new")}>
-            <Plus /> 新按钮
+            <Plus /> 新分组
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

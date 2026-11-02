@@ -57,7 +57,7 @@ export type Config = {
   inbox?: { permission?: boolean; ask?: boolean; error?: boolean };
   /** Gerdr Agent（native）用的模型服务商，后端读（cmd/gerdr 的 cfgLLM），设置 → Agent 里编辑。 */
   llm?: LLMConfig;
-  /** The rail's add-on buttons (Settings → 扩展 → 窄条; lib/rail.ts). Missing = one button holding every add-on block. */
+  /** The rail's add-on buttons (Settings → 扩展 → 分组; lib/rail.ts). Missing = one button holding every add-on block. */
   rail?: RailConfig;
 };
 

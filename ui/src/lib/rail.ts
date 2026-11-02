@@ -5,7 +5,7 @@ import type { RailConfig, RailFace, RailGroup } from "./store/config";
 
 // The rail's add-on buttons. Add-ons register blocks (g.slot("sidebar")) and faces (g.slot("rail")); which blocks go
 // behind which button, and what each button shows, is the user's (config.rail, shared by every device), set in
-// Settings → 扩展 → 窄条. Add-ons can't group themselves: blocks that belong together (a "today" and two quota meters)
+// Settings → 扩展 → 分组. Add-ons can't group themselves: blocks that belong together (a "today" and two quota meters)
 // often come from different authors, and only the user knows they're one subject.
 //
 // Without a config there's one button holding every block (what the rail had before groups). A block no group lists
@@ -52,7 +52,7 @@ export function addonMeta(addon: string) {
   return addonStatus.find((a) => a.id === addon);
 }
 
-// ---- editing (Settings → 扩展 → 窄条) ----
+// ---- editing (Settings → 扩展 → 分组) ----
 
 /**
  * Saves a changed copy of the groups. The first edit writes the default out: it materializes the unlisted blocks into
@@ -104,7 +104,7 @@ export function removeGroup(id: string) {
 const newId = () => "g" + Math.random().toString(36).slice(2, 8);
 
 /** A new empty group at the end; returns its id. */
-export function addGroup(name = "新按钮"): string {
+export function addGroup(name = "新分组"): string {
   const id = newId();
   edit((gs) => [...gs, { id, name, blocks: [] }]);
   return id;
@@ -114,7 +114,7 @@ export function addGroup(name = "新按钮"): string {
 export function moveBlock(key: string, to: string) {
   edit((gs) => {
     let out = without(gs, key);
-    if (to === "new") return [...out, { id: newId(), name: "新按钮", blocks: [key] }];
+    if (to === "new") return [...out, { id: newId(), name: "新分组", blocks: [key] }];
     out = out.map((g) => (g.id === to ? { ...g, blocks: [...g.blocks, key] } : g));
     return out;
   });

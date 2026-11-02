@@ -29,7 +29,7 @@ export function AddonSettings({ open }: { open: boolean }) {
     <Tabs value={tab} onValueChange={setTab} className="gap-3">
       <TabsList>
         <TabsTrigger value="installed">已安装</TabsTrigger>
-        <TabsTrigger value="rail">窄条</TabsTrigger>
+        <TabsTrigger value="rail">分组</TabsTrigger>
         <TabsTrigger value="store">商店</TabsTrigger>
       </TabsList>
       <TabsContent value="installed">
