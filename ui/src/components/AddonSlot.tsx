@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import type { LoaderProps } from "@gerdr/chat";
 import type { LoaderChoice } from "@/lib/store/config";
 import { cn } from "@/lib/utils";
+import { BUILTIN_LOADERS, builtinLoader } from "./Loaders";
 
 // Where add-ons draw (g.slot, g.composerAction; lib/addons.ts). Each add-on's component sits in its own error
 // boundary: one that throws while rendering is dropped and its error shown in Settings → Add-ons, the rest draw on.
@@ -98,9 +99,15 @@ export function FitSprite({ reg, className }: { reg: SlotReg; className?: string
 /** The working indicator's box for a sprite: the dots' row is 20px tall, a sprite gets most of it. */
 export const LOADER_BOX = { width: 24, height: 16 };
 
-/** What config.loader resolves to now: an add-on's loader, a sprite, or nothing (gerdr's dots). */
-export function loaderPick(choice: LoaderChoice | undefined): { loader: SlotReg } | { sprite: SlotReg } | undefined {
+/** What config.loader resolves to now: a built-in, an add-on's loader, a sprite, or nothing (gerdr's dots). */
+export function loaderPick(
+  choice: LoaderChoice | undefined,
+): { builtin: (typeof BUILTIN_LOADERS)[number] } | { loader: SlotReg } | { sprite: SlotReg } | undefined {
   if (choice === "dots") return undefined;
+  if (choice?.startsWith("builtin:")) {
+    const b = builtinLoader(choice.slice(8));
+    return b && { builtin: b };
+  }
   if (choice?.startsWith("sprite:")) {
     const r = slots.sprite.find((x) => x.key === choice.slice(7));
     return r && { sprite: r };
@@ -113,10 +120,17 @@ export function loaderPick(choice: LoaderChoice | undefined): { loader: SlotReg 
   return slots.loader[0] && { loader: slots.loader[0] };
 }
 
+/** The config.loader value of a pick (what the settings show as chosen). */
+export function pickChoice(pick: ReturnType<typeof loaderPick>): LoaderChoice {
+  if (!pick) return "dots";
+  if ("builtin" in pick) return `builtin:${pick.builtin.id}`;
+  return "sprite" in pick ? `sprite:${pick.sprite.key}` : `loader:${pick.loader.key}`;
+}
+
 /** Draws the working indicators below with this choice instead of config.loader: the previews in Settings → General (LoaderSelect.tsx). */
 export const LoaderPreview = createContext<LoaderChoice | undefined>(undefined);
 
-// The working indicator (ChatHost.renderLoader): what the user picked in Settings → General → Loading 动画 (config.loader), else
+// The working indicator (ChatHost.renderLoader): what the user picked (a built-in, an add-on's, a sprite) in Settings → General → Loading 动画 (config.loader), else
 // the first "loader" add-on, else the chat's own dots. A pick whose add-on is gone, or one that throws, falls back to
 // the dots rather than to nothing, so a running turn still shows it runs.
 export function AddonLoader({ paused, className, fallback }: LoaderProps) {
@@ -125,6 +139,10 @@ export function AddonLoader({ paused, className, fallback }: LoaderProps) {
   const chosen = useStore((s) => s.config.loader);
   const pick = loaderPick(preview ?? chosen);
   if (!pick) return <>{fallback}</>;
+  if ("builtin" in pick) {
+    const B = pick.builtin.C;
+    return <B paused={paused} className={className} />;
+  }
   if ("sprite" in pick)
     return <SpriteView reg={pick.sprite} state={paused ? "waiting" : "working"} className={className} fallback={fallback} {...LOADER_BOX} />;
   const C = pick.loader.Component;

@@ -30,9 +30,10 @@ sees: `internal/addons/builtin/gerdr.d.ts`, copied into `~/.gerdr/addons` on eve
   agent). The package gets it through `ChatHost.renderLoader`, which hands the host the whole indicator with the
   default as `fallback` rather than a colour or a frame, so the next host's idea (a mascot, a spinner of its own) needs
   no new package release. Which one draws is config `loader`, picked in Settings → General → Loading 动画
-  (LoaderSelect.tsx, AddonSlot.tsx `loaderPick`): gerdr's dots, a "loader" entry, or a sprite. A Select row among
-  the looks, shown once an add-on brings an option: it first was a gallery page of its own (扩展 → 素材), which read
-  as one more concept to learn. Unset = the first "loader" entry, else the dots: an add-on whose whole point is the
+  (LoaderSelect.tsx, AddonSlot.tsx `loaderPick`): gerdr's dots, another built-in (components/Loaders.tsx: seven,
+  so there's a choice without any add-on; they live in the app, not the chat package, so adding one costs no npm
+  release), a "loader" entry, or a sprite. A Select row among the looks: it first was a gallery page of its own
+  (扩展 → 素材), which read as one more concept to learn. Unset = the first "loader" entry, else the dots: an add-on whose whole point is the
   indicator works once installed. A pick whose add-on is gone, or one that throws, falls back to the dots: a running
   turn must still look like it runs. The Select previews each option through the real PixelLoader with a
   `LoaderPreview` context overriding the choice, so the dots come from the package without it exporting them.

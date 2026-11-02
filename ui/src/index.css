@@ -282,6 +282,87 @@
   }
 }
 
+/* ---- Built-in working indicators (components/Loaders.tsx): one class per cell, delays set inline ---- */
+.ld-blink {
+  animation: ld-blink 1.2s linear infinite;
+}
+@keyframes ld-blink {
+  0% {
+    opacity: 1;
+  }
+  45%,
+  100% {
+    opacity: 0.18;
+  }
+}
+/* A tile comes in, holds, and leaves; staggered in a shuffled order it reads as tiles assembling */
+.ld-tile {
+  animation: ld-tile 1.8s ease-in-out infinite;
+}
+@keyframes ld-tile {
+  0%,
+  100% {
+    opacity: 0.15;
+    transform: scale(0.6);
+  }
+  20%,
+  60% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  75% {
+    opacity: 0.15;
+    transform: scale(0.6);
+  }
+}
+.ld-bar {
+  transform-origin: bottom;
+  animation: ld-bar 1s ease-in-out infinite;
+}
+@keyframes ld-bar {
+  0%,
+  100% {
+    transform: scaleY(0.35);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+.ld-node {
+  animation: ld-node 1.5s ease-in-out infinite;
+}
+@keyframes ld-node {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  30% {
+    opacity: 1;
+  }
+}
+/* Waiting on the user: no movement, the whole thing breathes slowly */
+.ld-paused {
+  animation: ld-breathe 1.6s ease-in-out infinite;
+}
+@keyframes ld-breathe {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ld-blink,
+  .ld-tile,
+  .ld-bar,
+  .ld-node {
+    animation: none;
+    opacity: 0.6;
+  }
+}
+
 /* The chat's own rules (Markdown, the running loader) live in the chat package: packages/chat/src/style.css,
    added after this file by Gerdr (workspace packages' style.css). */
 

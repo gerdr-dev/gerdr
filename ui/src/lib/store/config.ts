@@ -64,8 +64,11 @@ export type Config = {
   loader?: LoaderChoice;
 };
 
-/** gerdr's own dots, an add-on's "loader" entry, or a sprite (g.slot("sprite")), by slot key "addon:id". */
-export type LoaderChoice = "dots" | `loader:${string}` | `sprite:${string}`;
+/**
+ * gerdr's own dots, one of its other built-in indicators (components/Loaders.tsx id), an add-on's "loader" entry, or a
+ * sprite (g.slot("sprite")), the last two by slot key "addon:id".
+ */
+export type LoaderChoice = "dots" | `builtin:${string}` | `loader:${string}` | `sprite:${string}`;
 
 /**
  * One add-on button on the rail: which add-on blocks (g.slot("sidebar") entries, by block key "addon:id") its panel

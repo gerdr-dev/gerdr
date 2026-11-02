@@ -70,8 +70,15 @@ export const zh = {
   "settings.labs.keepAwake.hint":
     "手机等远程设备连着时电脑不睡，合上盖子也醒着（和 Amphetamine 一样），断开 15 分钟后恢复；下面的手动时段也合盖不睡。合盖要授权一次，用电池且电量 ≤ 20% 时自动放手，塞包里会发热。仅 macOS",
   "settings.loader": "Loading 动画",
-  "settings.loader.hint": "对话运行时 “Pondering…” 前面那个。插件可以带来别的，比如像素 Clawd",
-  "settings.loader.dots": "Gerdr 的点点",
+  "settings.loader.hint": "对话运行时 “Pondering…” 前面那个。插件还能带来更多，比如像素 Clawd",
+  "settings.loader.dots": "环绕点阵",
+  "settings.loader.scan": "逐行扫描",
+  "settings.loader.wave": "斜向波浪",
+  "settings.loader.assemble": "拼块",
+  "settings.loader.diamond": "菱形循环",
+  "settings.loader.nodes": "节点传递",
+  "settings.loader.bars": "跳动竖条",
+  "settings.loader.braille": "终端转圈",
 };
 
 export type MessageKey = keyof typeof zh;
@@ -143,6 +150,13 @@ export const en: Record<MessageKey, string> = {
   "settings.labs.keepAwake.hint":
     "While a phone or another remote device is connected the computer doesn't sleep, even with the lid closed (like Amphetamine), until 15 minutes after it disconnects; the manual periods below keep it awake with the lid closed too. The lid needs a one-time permission; on battery at 20% or less it lets go. It gets warm in a bag. macOS only",
   "settings.loader": "Working indicator",
-  "settings.loader.hint": "Shown before “Pondering…” while a turn runs. Add-ons can bring others, like Pixel Clawd",
-  "settings.loader.dots": "Gerdr's dots",
+  "settings.loader.hint": "Shown before “Pondering…” while a turn runs. Add-ons can bring more, like Pixel Clawd",
+  "settings.loader.dots": "Pixel orbit",
+  "settings.loader.scan": "Grid scan",
+  "settings.loader.wave": "Diagonal wave",
+  "settings.loader.assemble": "Assembling tiles",
+  "settings.loader.diamond": "Diamond loop",
+  "settings.loader.nodes": "Connected nodes",
+  "settings.loader.bars": "Equalizer",
+  "settings.loader.braille": "Terminal spinner",
 };
