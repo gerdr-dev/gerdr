@@ -31,7 +31,8 @@ export type Row =
       /** The latest finished turn's metadata line (data-turnStat): the host may mark it (prompt-cache age, ChatHost.turnStat) */
       latest?: boolean;
     }
-  | { key: string; kind: "working"; empty: boolean; first: boolean }
+  /** idle: a blank stand-in of the same height, held under a user message nothing has answered yet (see buildRows) */
+  | { key: string; kind: "working"; empty: boolean; first: boolean; idle?: boolean }
   | { key: string; kind: "group"; first: boolean; open: boolean; summary: string; failed: number; busy: boolean; tight?: boolean };
 
 // 连续的工具调用 / 思考折成一组（照 Claude 桌面版）：一轮里常常是几十行 `cd … && grep …`，夹着几行「思考」，
@@ -95,6 +96,9 @@ function youngTest(now: number, out: { wake?: number }) {
     return true;
   };
 }
+
+/** The working row's key: it is always the last row, and at most one exists */
+const WORKING_KEY = "working";
 
 const KIND_TEXT: Record<string, MessageKey> = {
   execute: "group.ran",
@@ -240,14 +244,18 @@ export function buildRows(
       a = b;
     }
     // 在跑的这一轮：最底下一行状态（照 Claude Code：转圈 + 动词 + 用时 + token 数）
-    if (live && running && liveIdx === lastIdx) rows.push({ key: `${m.id}:working`, kind: "working", empty: first, first });
+    if (live && running && liveIdx === lastIdx) rows.push({ key: WORKING_KEY, kind: "working", empty: first, first });
   });
-  // 最后一条是用户消息（排队中的插话、刚发出去它还没回）但这一轮在跑：状态行照样放在最底下。
-  // 原来状态行只挂在最后那条助手消息上，插话一排队就排到了它后面，转圈和用时那一行就没了（用户报的）。
-  // key 跟着还在跑的那条走：插话排进来、落下去时状态行不重新挂载
+  // The chat ends on a user message (a queued steer, or one just sent with no reply yet) while the turn runs: the status
+  // line still goes at the very bottom. It used to hang only off the last assistant message, so a queued steer sorted
+  // below it and the spinner / elapsed line vanished (user report).
+  // Not running yet (just sent, waiting for the server to start the turn): hold the line's place with a blank row of the
+  // same height. Otherwise the message lands at the bottom, then the status line shows up under it and pushes it up
+  // again a moment later (user report: the chat jolts on every send).
+  // One key for the working row wherever it hangs, so it never remounts: blank -> status line, a steer queueing up or
+  // landing, the reply's first message arriving.
   const tail = msgs[lastIdx];
-  const owner = msgs[liveIdx] ?? tail;
-  if (running && (tail?.role === "user" || liveIdx !== lastIdx)) rows.push({ key: `${owner.id}:working`, kind: "working", empty: true, first: true });
+  if (tail?.role === "user" || (running && liveIdx !== lastIdx)) rows.push({ key: WORKING_KEY, kind: "working", empty: true, first: true, idle: !running });
   // 行距（照 Codex）：工具调用 / 思考这类一行小字，连着的几条挨紧（tight）；它和正文之间留开，像分段一样 ——
   // 原来一律挨着，正文和一串命令挤成一团
   const toolish = (r: Row) =>
@@ -329,11 +337,7 @@ export const RowView = memo(
       );
     }
     if (row.kind === "working") {
-      return (
-        <Frame first={row.first}>
-          <StatusLine />
-        </Frame>
-      );
+      return <Frame first={row.first}>{row.idle ? <div aria-hidden className="h-5" /> : <StatusLine />}</Frame>;
     }
     const children = new Map<string, ToolPart[]>();
     if (row.kids && row.part.type === "dynamic-tool") children.set((row.part as ToolPart).toolCallId, row.kids);
@@ -365,7 +369,7 @@ export const RowView = memo(
       y = b.row;
     if (x.kind !== y.kind || x.first !== y.first) return false;
     if (x.kind === "user" && y.kind === "user") return x.msg === y.msg && x.prev === y.prev && x.next === y.next;
-    if (x.kind === "working" && y.kind === "working") return x.empty === y.empty;
+    if (x.kind === "working" && y.kind === "working") return x.empty === y.empty && x.idle === y.idle;
     if (x.kind === "group" && y.kind === "group")
       return (
         x.open === y.open &&

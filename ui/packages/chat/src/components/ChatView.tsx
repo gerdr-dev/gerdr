@@ -223,7 +223,9 @@ export function ChatView({
   const bottomRef = useRef(saved ? saved.bottom : true);
   // Last row seen while at the bottom: once the list has grown past it while scrolled up, the jump-to-bottom button turns
   // brand-colored so new output isn't missed. Keyed by row (not count) so loading older history on top doesn't light it.
-  const lastKey = rows[rows.length - 1]?.key;
+  // The working row has one key throughout (Rows.WORKING_KEY): look at the row above it.
+  const lastRow = rows[rows.length - 1];
+  const lastKey = (lastRow?.kind === "working" ? rows[rows.length - 2] : lastRow)?.key;
   const seenKey = useRef(lastKey);
   if (atBottom) seenKey.current = lastKey;
   const unread = !atBottom && lastKey !== seenKey.current;
