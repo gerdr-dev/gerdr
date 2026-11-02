@@ -59,6 +59,9 @@ export type Config = {
   llm?: LLMConfig;
   /** The rail's add-on buttons (Settings → 扩展 → 分组; lib/rail.ts). Missing = one button holding every add-on block. */
   rail?: RailConfig;
+  /** How a rail add-on button opens its panel with a mouse: on hover (missing, the first behaviour) or on click. A tap
+   *  on a touch screen always opens it. Its own field, not in `rail`: editing groups rewrites `rail` whole. */
+  railOpen?: "hover" | "click";
   /** What draws the working indicator (Settings → General → Loading 动画; components/AddonSlot.tsx AddonLoader). Missing = the first
    *  "loader" add-on, else gerdr's dots. */
   loader?: LoaderChoice;

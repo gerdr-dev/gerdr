@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { assetURL, slots, type SlotReg } from "@/lib/addons";
 import {
   addGroup,
@@ -27,7 +28,7 @@ import {
   type ResolvedGroup,
 } from "@/lib/rail";
 import type { RailFace } from "@/lib/store/config";
-import { useStore } from "@/lib/store";
+import { setConfig, useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { AgentGlyph, GLYPHS, LINES, PALETTE } from "./AgentGlyph";
 import { SpriteView } from "./AddonSlot";
@@ -45,14 +46,34 @@ export function RailSettings() {
   return (
     <div className="space-y-3">
       <p className="text-[12px] text-muted-foreground">
-        窗口最左边那条竖栏（左侧条）上，每个分组是一个按钮。鼠标移上去或点一下，按钮旁边会弹出这组插件的面板，按下面的顺序从上往下排。一个分组可以放好几个插件。
+        窗口最左边那条竖栏（左侧条）上，每个分组是一个按钮。打开按钮，旁边会弹出这组插件的面板，按下面的顺序从上往下排。一个分组可以放好几个插件。
       </p>
+      <OpenMode />
       {groups.map((g, i) => (
         <GroupCard key={g.group.id} g={g} index={i} groups={groups} />
       ))}
       <Button variant="outline" size="sm" className="w-full border-dashed text-muted-foreground" onClick={() => addGroup()}>
         <Plus /> 新分组
       </Button>
+    </div>
+  );
+}
+
+/** Hover or click to open a button's panel (config.railOpen; RailGroups.tsx). Touch screens always tap. */
+function OpenMode() {
+  const mode = useStore((s) => s.config.railOpen ?? "hover");
+  return (
+    <div className="flex items-center gap-3 text-[13px]">
+      <span className="flex-1">打开面板</span>
+      <Select value={mode} onValueChange={(v) => setConfig({ railOpen: v as "hover" | "click" })}>
+        <SelectTrigger size="sm" className="w-36">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="hover">鼠标移上去</SelectItem>
+          <SelectItem value="click">点击</SelectItem>
+        </SelectContent>
+      </Select>
     </div>
   );
 }
