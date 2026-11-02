@@ -11,6 +11,7 @@ import { focusPane } from "./panes";
 import { focusedLeaf, shutdownGone } from "./shared";
 import { switchSpace } from "./spaces";
 import { addTab } from "./tabs";
+import { t } from "../i18n";
 
 // ---- 会话 ----
 
@@ -23,7 +24,7 @@ export async function createInPane(paneId: string, o: { agent: string; cwd: stri
     setLayout((l) => setPane(l, paneId, { sessionId: s.id, draft: undefined }));
     return s;
   } catch (e: any) {
-    toast.error(`开会话失败：${e.message ?? e}`);
+    toast.error(t("actionsSessions.openFailed", { error: e.message ?? e }));
     throw e;
   }
 }
@@ -55,7 +56,7 @@ function resumeInTile(cur: string, sessionId: string) {
   const st = get();
   if (!isOpen(st.layout, st.config, sessionId)) {
     const here = locateSession(st.layout, cur);
-    if (!here) return void toast("这一格不在任何 Pane 里（Work 对话），换不了"); // a Work conversation: no pane to switch
+    if (!here) return void toast(t("actionsSessions.notInPane")); // a Work conversation: no pane to switch
     setPane0(here.pane.id, { sessionId, draft: undefined });
     shutdownGone([here.pane]);
   }
@@ -76,7 +77,7 @@ export async function continueInPane(paneId: string, sessionId: string, agent: s
     resumeInPane(paneId, s.id);
     return s;
   } catch (e: any) {
-    toast.error(`换 Agent 接着聊失败：${e.message ?? e}`);
+    toast.error(t("actionsSessions.switchAgentFailed", { error: e.message ?? e }));
     throw e;
   }
 }
@@ -136,9 +137,9 @@ export async function closeSession(id: string) {
   if (!s) return;
   if (s.status === "running" || s.status === "waiting") {
     const ok = await askConfirm({
-      title: "Agent 还在跑，关闭会话？",
-      description: "这一轮会被中断。会话记录留着，能再打开。",
-      action: "关闭",
+      title: t("actionsSessions.closeRunningTitle"),
+      description: t("actionsSessions.closeRunningBody"),
+      action: t("common.close"),
       destructive: true,
     });
     if (!ok) return;
@@ -172,16 +173,16 @@ export function stashDraft() {
   const ovFocus = overviewShown() ? overviewFocus(get()) : undefined;
   const paneId = el?.dataset.composer ?? (ovFocus ? `ov-${ovFocus}` : leaf?.sessionId ? leaf.id : undefined);
   const box = paneId ? document.querySelector<HTMLTextAreaElement>(`textarea[data-composer="${CSS.escape(paneId)}"]`) : null;
-  if (!paneId || !box) return toast("没有可以暂存的输入框");
+  if (!paneId || !box) return toast(t("actionsSessions.noComposer"));
   const { drafts, draftImgs, stash } = get();
   const text = drafts[paneId] ?? "";
   const imgs = draftImgs[paneId] ?? [];
   if (text.trim() !== "" || imgs.length > 0) {
     // A video still uploading gets its path written back into this pane's draft when it finishes; stashed, it'd stay pathless
-    if (imgs.some((im) => im.mimeType.startsWith("video/") && !im.path)) return toast("视频还在上传，传完再暂存");
+    if (imgs.some((im) => im.mimeType.startsWith("video/") && !im.path)) return toast(t("actionsSessions.videoUploading"));
     set((s) => ({ drafts: { ...s.drafts, [paneId]: "" }, draftImgs: { ...s.draftImgs, [paneId]: [] }, stash: { text, imgs } }));
   } else {
-    if (!stash) return toast("没有暂存的消息");
+    if (!stash) return toast(t("actionsSessions.noStash"));
     set((s) => ({ drafts: { ...s.drafts, [paneId]: stash.text }, draftImgs: { ...s.draftImgs, [paneId]: stash.imgs }, stash: null }));
   }
   requestAnimationFrame(() => {
@@ -210,7 +211,7 @@ export function attentionList(): string[] {
 export function stepAttention(delta: number) {
   const list = attentionList();
   if (!list.length) {
-    toast("没有要你处理的会话");
+    toast(t("actionsSessions.noAttention"));
     return;
   }
   const cur = focusedSessionId();
@@ -227,7 +228,7 @@ export async function withdrawSteer(sessionId: string, messageId: string, now: b
   try {
     const r = await api.withdraw(sessionId, messageId);
     if (!r.withdrawn) {
-      toast("它已经读到这条了");
+      toast(t("actionsSessions.alreadyRead"));
       return;
     }
     const content = r.content ?? [];

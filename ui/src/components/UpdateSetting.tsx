@@ -7,6 +7,8 @@ import { cn } from "@/lib/utils";
 import { Switch } from "@/components/ui/switch";
 import { isNative, nativeApplyUpdate, nativeAskUpdate, nativeSetAutoUpdate, type AppUpdateStatus } from "@/lib/native";
 import { set, useStore } from "@/lib/store";
+import { locale, t } from "@/lib/i18n";
+import type { MessageKey } from "@/lib/messages";
 
 // Settings → 通用 →「版本」: which gerdr is running and where the App's self-update is (desktop/updater.js, pushed
 // by desktop/main.js updateStatus): downloading, waiting for agents to finish, upgrading. A downloaded backend
@@ -38,7 +40,15 @@ export function UpdateSetting() {
   const running = u?.running || version;
   // When it was installed, not just which commit: a dirty-tree build keeps the same version string for days
   const when = installedAt
-    ? ` · 装于 ${new Date(installedAt).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}（${since(installedAt)}）`
+    ? t("updateSetting.installedAt", {
+        time: new Date(installedAt).toLocaleString(locale() === "zh" ? "zh-CN" : "en", {
+          month: "numeric",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+        since: since(installedAt),
+      })
     : "";
   const shown = (u && u.app !== running ? `Gerdr ${running} · App ${u.app}` : `Gerdr ${running}`) + when;
   const { text, tone } = u ? describe(u, service) : { text: "", tone: "" };
@@ -57,20 +67,20 @@ export function UpdateSetting() {
     <>
       <div className="flex items-center justify-between gap-4">
         <div className="min-w-0">
-          <div className="text-[13px]">版本</div>
+          <div className="text-[13px]">{t("updateSetting.version")}</div>
           <div className="text-[12px] text-muted-foreground">{shown}</div>
           {text && <div className={cn("text-[12px]", tone || "text-muted-foreground")}>{text}</div>}
-          {!u && !native && <div className="text-[12px] text-muted-foreground">电脑上的 Gerdr App 开着窗口时，这里能检查和安装更新</div>}
+          {!u && !native && <div className="text-[12px] text-muted-foreground">{t("updateSetting.remoteHint")}</div>}
         </div>
         {u?.enabled &&
           (p ? (
             <Button size="sm" disabled={u.phase === "applying"} onClick={apply}>
-              现在更新
+              {t("systemUpdate.updateNow")}
             </Button>
           ) : (
             <Button size="sm" variant="outline" disabled={u.phase !== "idle" || checking.on} onClick={ask}>
               {(u.phase === "checking" || checking.on) && <Loader2 className="size-3.5 animate-spin" />}
-              检查更新
+              {t("systemUpdate.check")}
             </Button>
           ))}
       </div>
@@ -78,10 +88,8 @@ export function UpdateSetting() {
       {u?.enabled && typeof u.auto === "boolean" && (
         <div className="flex items-center justify-between gap-4">
           <div>
-            <div className="text-[13px]">自动更新</div>
-            <div className="text-[12px] text-muted-foreground">
-              {u.auto ? "自己检查、下载，没有 Agent 在跑、没开终端时换上" : "不自己检查和下载：点「检查更新」下好后，再点「现在更新」"}
-            </div>
+            <div className="text-[13px]">{t("updateSetting.auto")}</div>
+            <div className="text-[12px] text-muted-foreground">{u.auto ? t("updateSetting.autoOn") : t("updateSetting.autoOff")}</div>
           </div>
           <Switch checked={u.auto} onCheckedChange={setAuto} />
         </div>
@@ -134,34 +142,37 @@ function useChecking(u: AppUpdateStatus | null) {
 
 function describe(u: AppUpdateStatus, service: boolean): { text: string; tone: string } {
   const p = u.pending;
-  if (u.phase === "applying" && p) return { text: `正在升级到 ${p.version}…`, tone: "text-brand" };
-  if (u.phase === "downloading") return { text: `正在下载 ${u.downloading}（${u.progress}%）`, tone: "" };
-  if (u.phase === "checking") return { text: "正在检查更新…", tone: "" };
-  if (p?.kind === "app") return { text: `有升级：${p.version}。这次要换整个 App，更新时会退出再打开`, tone: "text-brand" };
+  if (u.phase === "applying" && p) return { text: t("updateSetting.applying", { version: p.version }), tone: "text-brand" };
+  if (u.phase === "downloading") return { text: t("systemUpdate.downloading", { name: u.downloading, progress: u.progress }), tone: "" };
+  if (u.phase === "checking") return { text: t("systemUpdate.checking"), tone: "" };
+  if (p?.kind === "app") return { text: t("updateSetting.pendingApp", { version: p.version }), tone: "text-brand" };
   if (p) {
     const b = u.busy;
-    const who = service ? "后台服务" : "Gerdr";
-    if (!b) return { text: `有升级：${p.version}`, tone: "text-brand" };
+    const who = service ? t("updateSetting.whoService") : t("updateSetting.whoApp");
+    if (!b) return { text: t("updateSetting.pending", { version: p.version }), tone: "text-brand" };
     const wait: string[] = [];
-    if (b.turns) wait.push(`${b.turns} 个 Agent 跑完`);
-    if (b.waiting) wait.push(`${b.waiting} 个请求被批准`);
-    if (b.tasks) wait.push(`${b.tasks} 个后台任务结束`);
-    if (b.terms) wait.push(`${b.terms} 个终端关掉`);
-    if (u.auto === false) return { text: `有升级：${p.version}，点「现在更新」换上`, tone: "text-brand" };
-    if (!wait.length) return { text: `有升级：${p.version}，马上自动升级`, tone: "text-brand" };
-    return { text: `${who}等待升级到 ${p.version}：等 ${wait.join("、")}`, tone: "text-warn" };
+    if (b.turns) wait.push(plural("updateSetting.waitTurns", b.turns));
+    if (b.waiting) wait.push(plural("updateSetting.waitRequests", b.waiting));
+    if (b.tasks) wait.push(plural("updateSetting.waitTasks", b.tasks));
+    if (b.terms) wait.push(plural("updateSetting.waitTerms", b.terms));
+    if (u.auto === false) return { text: t("updateSetting.pendingManual", { version: p.version }), tone: "text-brand" };
+    if (!wait.length) return { text: t("updateSetting.pendingSoon", { version: p.version }), tone: "text-brand" };
+    return { text: t("updateSetting.waiting", { who, version: p.version, list: wait.join(t("updateSetting.listSep")) }), tone: "text-warn" };
   }
-  if (u.error) return { text: `检查更新失败：${u.error}`, tone: "text-bad" };
-  if (!u.enabled) return { text: "这个构建不自动更新（开发版或设了 GERDR_NO_UPDATE）", tone: "" };
+  if (u.error) return { text: t("systemUpdate.checkFailed", { error: u.error }), tone: "text-bad" };
+  if (!u.enabled) return { text: t("updateSetting.noAuto"), tone: "" };
   if (!u.checkedAt) return { text: "", tone: "" };
   const at = new Date(u.checkedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  return { text: `已是最新（${at} 检查过）`, tone: "" };
+  return { text: t("systemUpdate.upToDate", { time: at }), tone: "" };
 }
 
-function since(t: number) {
-  const m = Math.max(0, Math.floor((Date.now() - t) / 60000));
-  if (m < 1) return "刚刚";
-  if (m < 60) return `${m} 分钟前`;
-  if (m < 1440) return `${Math.floor(m / 60)} 小时前`;
-  return `${Math.floor(m / 1440)} 天前`;
+/** key.one / key.other by n (English needs both; zh has the same text in each). */
+const plural = (key: string, n: number) => t(`${key}.${n === 1 ? "one" : "other"}` as MessageKey, { n });
+
+function since(at: number) {
+  const m = Math.max(0, Math.floor((Date.now() - at) / 60000));
+  if (m < 1) return t("updateSetting.justNow");
+  if (m < 60) return t("updateSetting.minutesAgo", { n: m });
+  if (m < 1440) return t("updateSetting.hoursAgo", { n: Math.floor(m / 60) });
+  return t("updateSetting.daysAgo", { n: Math.floor(m / 1440) });
 }

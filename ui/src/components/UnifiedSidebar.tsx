@@ -99,6 +99,7 @@ import { Elapsed } from "./Elapsed";
 import { ListHeader, SidebarBottom, SidebarEdge, SidebarHeader } from "./SidebarChrome";
 import { WsDot } from "./WsDot";
 import { TabDragLayer, startPaneDrag, startWsDrag, useDrag } from "./TabDrag";
+import { t } from "@/lib/i18n";
 
 /*
  * The sidebar (on a phone, the drawer). One list in place of four things that each listed the same agents:
@@ -168,10 +169,10 @@ const needsYou = (s: SessionSummary | undefined) => !!s && (s.status === "waitin
 /** What a row shows for a pane: an agent, a terminal, a file, a subagent, or a new conversation not started yet. */
 function paneLabel(p: PaneLeaf, s: SessionSummary | undefined): { title: string; sub: string } {
   if (s) return { title: s.title || basename(s.cwd), sub: basename(s.cwd) };
-  if (p.term) return { title: "终端", sub: basename(p.term.cwd) };
-  if (p.file) return { title: basename(p.file.path), sub: "文件" };
-  if (p.sub) return { title: p.sub.title || "子 Agent", sub: "子 Agent" };
-  return { title: "新会话", sub: p.draft?.cwd ? basename(p.draft.cwd) : "" };
+  if (p.term) return { title: t("unifiedSidebar.terminal"), sub: basename(p.term.cwd) };
+  if (p.file) return { title: basename(p.file.path), sub: t("unifiedSidebar.file") };
+  if (p.sub) return { title: p.sub.title || t("unifiedSidebar.subagent"), sub: t("unifiedSidebar.subagent") };
+  return { title: t("unifiedSidebar.newSession"), sub: p.draft?.cwd ? basename(p.draft.cwd) : "" };
 }
 
 /**
@@ -185,7 +186,7 @@ const Roomy = createContext<{ now: number } | null>(null);
 function ago(ms: number | undefined, now: number) {
   if (!ms) return "";
   const s = Math.max(0, Math.round((now - ms) / 1000));
-  if (s < 45) return "刚刚";
+  if (s < 45) return t("nav.justNow");
   const m = Math.round(s / 60);
   if (m < 60) return `${m}m`;
   const h = Math.round(m / 60);
@@ -285,7 +286,16 @@ export function UnifiedSidebar({ className }: { className?: string }) {
         .filter((x) => spaceOf(x.ws) === here)
         .map(({ ws, tab, pane }) => ({ ws, tab, pane, split: leaves(tab.root).length > 1, s: pane.sessionId ? sessions[pane.sessionId] : undefined }))
         .filter(({ ws, tab, pane, s }) =>
-          [s?.title, s?.agent, s?.cwd, wsLabel(ws), tabName(tab), pane.sub?.title, pane.term ? `终端 ${pane.term.cwd}` : "", pane.file?.path]
+          [
+            s?.title,
+            s?.agent,
+            s?.cwd,
+            wsLabel(ws),
+            tabName(tab),
+            pane.sub?.title,
+            pane.term ? `${t("unifiedSidebar.terminal")} ${pane.term.cwd}` : "",
+            pane.file?.path,
+          ]
             .join(" ")
             .toLowerCase()
             .includes(kw),
@@ -340,7 +350,7 @@ export function UnifiedSidebar({ className }: { className?: string }) {
             {/* iOS gets 16px: a smaller input makes iOS zoom the page on focus. Not focused on open: the keyboard would cover the list */}
             <input
               className="h-8 w-full rounded-lg bg-muted/60 pr-2 pl-8 text-[13px] outline-none placeholder:text-muted-foreground/70 focus-visible:ring-2 focus-visible:ring-ring/40 supports-[-webkit-touch-callout:none]:text-[16px]"
-              placeholder="筛 标题 / Tab / 路径"
+              placeholder={t("unifiedSidebar.filterPlaceholder")}
               value={q}
               onChange={(e) => setQ(e.target.value)}
             />
@@ -350,7 +360,7 @@ export function UnifiedSidebar({ className }: { className?: string }) {
           {kw ? (
             <div className="flex flex-col pt-1.5">
               {hits.map((x) => flatRow(x))}
-              {!hits.length && <p className="px-1 py-6 text-center text-[12px] text-muted-foreground">没有匹配的 Pane</p>}
+              {!hits.length && <p className="px-1 py-6 text-center text-[12px] text-muted-foreground">{t("unifiedSidebar.noMatch")}</p>}
             </div>
           ) : (
             <>
@@ -362,17 +372,20 @@ export function UnifiedSidebar({ className }: { className?: string }) {
                     <div
                       role="button"
                       className="group/act flex h-7 w-full cursor-default items-center gap-1 rounded-md pr-1 pl-1.5 text-[11px] font-medium text-muted-foreground select-none hover:bg-accent/60 hover:text-foreground"
-                      title="等你、在跑、报错的会自己进来，跑完也留着，直到你移出；也可以右键加进来。按该不该先看排"
+                      title={t("unifiedSidebar.activeHint")}
                       onClick={() => setActiveFolded(!activeFolded)}
                     >
                       {/* The margin lines the title up with the rows' titles below (row icon + gap-2 vs chevron + gap-1) */}
                       <ChevronRight className={cn("size-3.5 shrink-0 transition-transform", roomy ? "mr-1.5" : "mr-1", !activeFolded && "rotate-90")} />
-                      <span className="flex-1 truncate text-left">进行中{allProjects && <span className="font-normal"> · 所有项目</span>}</span>
+                      <span className="flex-1 truncate text-left">
+                        {t("unifiedSidebar.active")}
+                        {allProjects && <span className="font-normal">{t("unifiedSidebar.allProjects")}</span>}
+                      </span>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <button
                             className="flex size-5 items-center justify-center rounded-sm hover:bg-muted hover:text-foreground"
-                            title="进行中的设置"
+                            title={t("unifiedSidebar.activeSettings")}
                             onClick={(e) => e.stopPropagation()}
                           >
                             <Ellipsis className="size-3.5" />
@@ -380,15 +393,15 @@ export function UnifiedSidebar({ className }: { className?: string }) {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
                           <DropdownMenuCheckboxItem checked={allProjects} onCheckedChange={(v) => setActiveAllProjects(!!v)}>
-                            显示所有项目的 Agent
+                            {t("unifiedSidebar.showAllProjects")}
                           </DropdownMenuCheckboxItem>
-                          <div className="px-2 pb-1 text-[11px] text-muted-foreground">只改这个项目，别的项目各自设</div>
+                          <div className="px-2 pb-1 text-[11px] text-muted-foreground">{t("unifiedSidebar.perProject")}</div>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem disabled={!outN} onClick={restoreWorking}>
-                            <ListPlus /> 移入所有在做的{outN ? `（${outN}）` : ""}
+                            <ListPlus /> {outN ? t("unifiedSidebar.restoreWorkingN", { n: outN }) : t("unifiedSidebar.restoreWorking")}
                           </DropdownMenuItem>
                           <DropdownMenuItem disabled={!doneN} onClick={clearActive}>
-                            <Eraser /> 移出已完成的{doneN ? `（${doneN}）` : ""}
+                            <Eraser /> {doneN ? t("unifiedSidebar.clearDoneN", { n: doneN }) : t("unifiedSidebar.clearDone")}
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -397,12 +410,12 @@ export function UnifiedSidebar({ className }: { className?: string }) {
                           "flex h-5 items-center gap-1 rounded-sm px-1",
                           gridOn ? "bg-brand/15 text-foreground" : "hover:bg-muted hover:text-foreground",
                         )}
-                        title={gridOn ? "关掉网格，回到 Tab" : `把进行中的 Agent 摆成网格一起看（最多 ${MAX_TILES} 个）`}
+                        title={gridOn ? t("unifiedSidebar.gridOff") : t("unifiedSidebar.gridOn", { n: MAX_TILES })}
                         // On a phone the grid is behind the drawer: close it
                         onClick={(e) => (e.stopPropagation(), toggleOverview(!gridOn), set({ drawer: false }))}
                       >
                         <LayoutGrid className={cn("size-3", gridOn && "text-brand")} />
-                        网格
+                        {t("unifiedSidebar.grid")}
                       </button>
                     </div>
                     {!activeFolded && (
@@ -418,7 +431,9 @@ export function UnifiedSidebar({ className }: { className?: string }) {
                       </div>
                     )}
                     {/* Only when empty: a row appearing mid-drag would push the rows under the pointer */}
-                    {dragAgent && !active.length && !activeFolded && <div className="py-1 pl-[26px] text-[12px] text-muted-foreground">拖到这里加入进行中</div>}
+                    {dragAgent && !active.length && !activeFolded && (
+                      <div className="py-1 pl-[26px] text-[12px] text-muted-foreground">{t("unifiedSidebar.dropToActive")}</div>
+                    )}
                   </div>
                 )}
                 {list.map((ws, wi) => (
@@ -441,19 +456,19 @@ export function UnifiedSidebar({ className }: { className?: string }) {
                         <Row {...rowProps(r.ws, r.tab, r.pane, leaves(r.tab.root).length > 1)} />
                       </div>
                     ))}
-                    {!groups.get(ws.id)?.length && <div className="py-1 pl-[26px] text-[12px] text-muted-foreground">空的</div>}
+                    {!groups.get(ws.id)?.length && <div className="py-1 pl-[26px] text-[12px] text-muted-foreground">{t("unifiedSidebar.emptyGroup")}</div>}
                   </Group>
                 ))}
               </div>
               <div className="mt-1 flex gap-1 px-0.5">
-                <FootButton onClick={() => (toggleOverview(false), addTab())} title="在当前工作空间新开一个 Tab">
-                  <Plus className="size-3.5" /> 新 Tab
+                <FootButton onClick={() => (toggleOverview(false), addTab())} title={t("unifiedSidebar.newTabHint")}>
+                  <Plus className="size-3.5" /> {t("unifiedSidebar.newTab")}
                 </FootButton>
-                <FootButton onClick={() => (toggleOverview(false), openTerminal("tab"))} title="在当前工作空间开一个终端">
-                  <SquareTerminal className="size-3.5" /> 终端
+                <FootButton onClick={() => (toggleOverview(false), openTerminal("tab"))} title={t("unifiedSidebar.terminalHint")}>
+                  <SquareTerminal className="size-3.5" /> {t("unifiedSidebar.terminal")}
                 </FootButton>
-                <FootButton onClick={() => set({ dialog: { kind: "newWorkspace" } })} title="新工作空间（一个分组）">
-                  <Plus className="size-3.5" /> 分组
+                <FootButton onClick={() => set({ dialog: { kind: "newWorkspace" } })} title={t("unifiedSidebar.newGroupHint")}>
+                  <Plus className="size-3.5" /> {t("unifiedSidebar.newGroup")}
                 </FootButton>
               </div>
             </>
@@ -528,7 +543,7 @@ function WorkRow({ id, current, grid, num }: { id: string; current: boolean; gri
           <span className="max-w-[40%] shrink-0 truncate text-[11px] text-muted-foreground group-hover:hidden">Work{project ? ` · ${project}` : ""}</span>
           <button
             className="hidden size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground group-hover:flex hover:text-foreground"
-            title="移出进行中"
+            title={t("nav.removeActive")}
             onClick={(e) => (e.stopPropagation(), removeActive(id))}
           >
             <X className="size-3" />
@@ -538,10 +553,10 @@ function WorkRow({ id, current, grid, num }: { id: string; current: boolean; gri
       </ContextMenuTrigger>
       <ContextMenuContent>
         <ContextMenuItem onClick={() => focusSession(id)}>
-          <ChevronRight /> 去 Work 模式
+          <ChevronRight /> {t("nav.goToWork")}
         </ContextMenuItem>
         <ContextMenuItem onClick={() => removeActive(id)}>
-          <PinOff /> 移出进行中
+          <PinOff /> {t("nav.removeActive")}
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
@@ -603,7 +618,9 @@ function Group({
             {ws.cwd && basename(ws.cwd) !== label && <span className="min-w-0 truncate text-[11px] text-muted-foreground">{basename(ws.cwd)}</span>}
             <span className="flex-1" />
             {folded && waiting > 0 ? (
-              <span className="shrink-0 rounded-full bg-bad px-1.5 text-[10px] leading-4 font-semibold text-white">{waiting} 等你</span>
+              <span className="shrink-0 rounded-full bg-bad px-1.5 text-[10px] leading-4 font-semibold text-white">
+                {t("unifiedSidebar.waitingN", { n: waiting })}
+              </span>
             ) : (
               <span className="flex shrink-0 items-center gap-1.5 text-[11px] text-muted-foreground tabular-nums group-hover/ws:hidden">
                 {folded && <WsDot w={ws} sessions={sessions} unread={unread} hideIdle />}
@@ -612,7 +629,7 @@ function Group({
             )}
             <button
               className="hidden size-5 shrink-0 items-center justify-center rounded-sm text-muted-foreground group-hover/ws:flex hover:bg-muted hover:text-foreground"
-              title="在这个分组里新开 Tab"
+              title={t("unifiedSidebar.newTabInGroup")}
               onClick={(e) => {
                 e.stopPropagation();
                 toggleOverview(false);
@@ -625,7 +642,7 @@ function Group({
         </ContextMenuTrigger>
         <ContextMenuContent>
           <ContextMenuItem onClick={() => (toggleOverview(false), addTab({ workspaceId: ws.id, cwd: ws.cwd }))}>
-            <Plus /> 新 Tab
+            <Plus /> {t("unifiedSidebar.newTab")}
           </ContextMenuItem>
           <ContextMenuItem
             onClick={() => {
@@ -634,25 +651,25 @@ function Group({
               openTerminal("tab");
             }}
           >
-            <SquareTerminal /> 新终端
+            <SquareTerminal /> {t("unifiedSidebar.newTerminal")}
           </ContextMenuItem>
           <ContextMenuItem onClick={edit}>
-            <Pencil /> 编辑…
+            <Pencil /> {t("unifiedSidebar.editEllipsis")}
           </ContextMenuItem>
           {/* Reordering on a touch screen, where the title can't be dragged (scrolling and this long-press menu own the finger) */}
           {index > 0 && (
             <ContextMenuItem onClick={() => moveWorkspace(ws.id, index - 1)}>
-              <ArrowUp /> 上移
+              <ArrowUp /> {t("unifiedSidebar.moveUp")}
             </ContextMenuItem>
           )}
           {!last && (
             <ContextMenuItem onClick={() => moveWorkspace(ws.id, index + 1)}>
-              <ArrowDown /> 下移
+              <ArrowDown /> {t("unifiedSidebar.moveDown")}
             </ContextMenuItem>
           )}
           {others.length > 0 && (
             <ContextMenuSub>
-              <ContextMenuSubTrigger>移到项目</ContextMenuSubTrigger>
+              <ContextMenuSubTrigger>{t("unifiedSidebar.moveToProject")}</ContextMenuSubTrigger>
               <ContextMenuSubContent>
                 {others.map((sp) => (
                   <ContextMenuItem key={sp.id} onClick={() => moveWorkspaceToSpace(ws.id, sp.id)}>
@@ -664,7 +681,7 @@ function Group({
           )}
           <ContextMenuSeparator />
           <ContextMenuItem variant="destructive" onClick={() => closeWorkspace(ws.id)}>
-            <CircleX /> 关闭分组
+            <CircleX /> {t("unifiedSidebar.closeGroup")}
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
@@ -819,7 +836,7 @@ function Row({
           )}
           <button
             className="hidden size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground group-hover:flex hover:text-foreground"
-            title={top && s ? "移出进行中" : inSplit ? "关掉这一格" : "关闭 Tab"}
+            title={top && s ? t("nav.removeActive") : inSplit ? t("unifiedSidebar.closeCell") : t("unifiedSidebar.closeTab")}
             onClick={(e) => (e.stopPropagation(), dismiss())}
           >
             <X className="size-3" />
@@ -833,41 +850,41 @@ function Row({
         {s &&
           (inActive ? (
             <ContextMenuItem onClick={() => onActive(false)}>
-              <PinOff /> 移出进行中
+              <PinOff /> {t("nav.removeActive")}
             </ContextMenuItem>
           ) : (
             <ContextMenuItem onClick={() => onActive(true)}>
-              <Pin /> 加入进行中
+              <Pin /> {t("unifiedSidebar.addActive")}
             </ContextMenuItem>
           ))}
         {s && unread && (
           <ContextMenuItem onClick={() => markRead(s.id)}>
-            <MailCheck /> 标为已读
+            <MailCheck /> {t("unifiedSidebar.markRead")}
           </ContextMenuItem>
         )}
         {canBeside && (
           <ContextMenuItem onClick={openBeside}>
-            <SquareSplitHorizontal /> 在右侧分屏打开
+            <SquareSplitHorizontal /> {t("unifiedSidebar.openBeside")}
           </ContextMenuItem>
         )}
         {inSplit && (
           <ContextMenuItem onClick={() => (toggleOverview(false), paneToTab(pane.id))}>
-            <Columns2 /> 拆成单独的 Tab
+            <Columns2 /> {t("unifiedSidebar.splitToTab")}
           </ContextMenuItem>
         )}
         {!inSplit && (
           <ContextMenuItem onClick={() => set({ dialog: { kind: "rename", target: "tab", id: tab.id, value: tab.name ?? tabName(tab) } })}>
-            <Pencil /> 重命名 Tab
+            <Pencil /> {t("unifiedSidebar.renameTab")}
           </ContextMenuItem>
         )}
         {s && (
           <ContextMenuItem onClick={() => set({ dialog: { kind: "rename", target: "session", id: s.id, value: s.title ?? "" } })}>
-            <Pencil /> 重命名会话
+            <Pencil /> {t("unifiedSidebar.renameSession")}
           </ContextMenuItem>
         )}
         <ContextMenuSeparator />
         <ContextMenuItem variant="destructive" onClick={close}>
-          <CircleX /> {inSplit ? "关掉这一格" : "关闭 Tab"}
+          <CircleX /> {inSplit ? t("unifiedSidebar.closeCell") : t("unifiedSidebar.closeTab")}
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

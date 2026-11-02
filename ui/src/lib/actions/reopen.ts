@@ -23,6 +23,7 @@ import { focusSession } from "./sessions";
 import { selectTabIn, shutdownGone } from "./shared";
 import { addTab } from "./tabs";
 import { reopenTerminal } from "./terminal";
+import { t } from "../i18n";
 
 // ---- 撤销关闭（⌘⇧T）----
 //
@@ -84,7 +85,7 @@ function reviveTree(n: PaneNode, l: Layout): PaneNode {
 export function reopenClosed() {
   const c = closed.pop();
   if (!c) {
-    toast("没有刚关掉的 Tab / Pane");
+    toast(t("actionsReopen.nothing"));
     return;
   }
   const l = get().layout;

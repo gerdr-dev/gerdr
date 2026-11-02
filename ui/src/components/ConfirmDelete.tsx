@@ -1,13 +1,22 @@
 import { Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { t } from "@/lib/i18n";
 
 const ARMED_MS = 3000;
 
 // 原地二次确认的删除按钮：点一下变成红色的「确认删除」，再点才删；3 秒没点就退回去，按钮底下一条进度条倒数（用户要的）。
 // 只按时间退，鼠标移开不退：一开始移开就退，手稍微一偏按钮就没了（用户报的）。
 // 不弹窗：删一个服务商 / Agent 这种事弹个框太重，但一下就删又容易误点（用户要的：删服务商要有原地的二次确认）。
-export function ConfirmDelete({ onConfirm, title = "删除", label = "确认删除" }: { onConfirm: () => void; title?: string; label?: string }) {
+export function ConfirmDelete({
+  onConfirm,
+  title = t("common.delete"),
+  label = t("confirmDelete.confirm"),
+}: {
+  onConfirm: () => void;
+  title?: string;
+  label?: string;
+}) {
   const [armed, setArmed] = useState(false);
   const bar = useRef<HTMLSpanElement>(null);
   useEffect(() => {

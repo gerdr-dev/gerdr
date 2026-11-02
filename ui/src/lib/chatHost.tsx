@@ -22,7 +22,7 @@ import {
 import { pushDraft, sameDraft } from "./sync";
 import { AddonComposerActions, AddonLoader } from "@/components/AddonSlot";
 import { useAddonTurnStat } from "./addons";
-import { locale } from "./i18n";
+import { locale, t } from "./i18n";
 import { UsagePanel } from "@/components/UsageMeter";
 import { HeldDialog } from "@/components/chat/HeldDialog";
 import { RunButton } from "@/components/chat/RunButton";
@@ -205,16 +205,16 @@ const localCommands = (session: ChatSession) =>
   [
     {
       name: "resume",
-      description: "换到这个目录下之前的一段对话",
+      description: t("chatHost.resume"),
       run: (paneId: string) => set({ dialog: { kind: "resume", sessionId: session.id, paneId } }),
     },
-    { name: "usage", description: "看账号的用量额度（不发给 Agent）", run: () => setUsageFor(session.id) },
+    { name: "usage", description: t("chatHost.usage"), run: () => setUsageFor(session.id) },
     {
       name: "replay",
-      description: "把上一轮回复重新逐字放一遍（只在界面里，不发给 Agent；试滚动用）",
+      description: t("chatHost.replay"),
       run: () => {
-        if (session.status === "running") return void toast("Agent 在跑，跑完再重放");
-        if (!replayLastTurn(session.id)) toast("没有可以重放的回复");
+        if (session.status === "running") return void toast(t("chatHost.replayRunning"));
+        if (!replayLastTurn(session.id)) toast(t("chatHost.replayNothing"));
       },
     },
   ].filter((c) => c.name !== "usage" || ["claude", "codex"].includes(session.base ?? session.agent));

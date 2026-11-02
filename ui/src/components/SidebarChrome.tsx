@@ -11,6 +11,7 @@ import { usePhone } from "@/lib/phone";
 import { InboxButton } from "./Inbox";
 import { ConnStatus, RouteLabel } from "./ConnStatus";
 import { SpaceSwitcher } from "./SpaceSwitcher";
+import { t } from "@/lib/i18n";
 
 /*
  * The phone drawer's top and bottom rows. Wider screens have the rail instead (Rail.tsx), which carries the same things
@@ -41,7 +42,7 @@ export function ListHeader() {
             <PanelLeft className="size-3.5" />
           </Button>
         </TooltipTrigger>
-        <TooltipContent>隐藏会话列表</TooltipContent>
+        <TooltipContent>{t("nav.hideSessionList")}</TooltipContent>
       </Tooltip>
     </div>
   );
@@ -79,11 +80,11 @@ export function SidebarFooter({ sidebarToggle }: { sidebarToggle?: boolean }) {
         className="h-7 shrink-0 justify-start gap-2 text-[12px] text-muted-foreground"
         onClick={() => set({ dialog: { kind: "settings", tab: doctorBad ? "labs" : undefined } })}
       >
-        <Settings className="size-3.5" /> 设置
+        <Settings className="size-3.5" /> {t("nav.settings")}
         {/* Labs → Diagnosis found something broken (agents missing PATH dirs, a blocked codex…) */}
         {doctorBad && (
-          <span className="ml-auto flex items-center gap-1 text-[11px] text-bad" title="诊断发现了问题：设置 → 实验室 → 诊断">
-            <span className="size-1.5 rounded-full bg-bad" /> 有问题
+          <span className="ml-auto flex items-center gap-1 text-[11px] text-bad" title={t("sidebarChrome.doctorBad")}>
+            <span className="size-1.5 rounded-full bg-bad" /> {t("sidebarChrome.hasProblem")}
           </span>
         )}
       </Button>
@@ -103,7 +104,7 @@ export function SidebarFooter({ sidebarToggle }: { sidebarToggle?: boolean }) {
           variant="ghost"
           size="icon"
           className="size-7 text-muted-foreground"
-          aria-label="命令面板"
+          aria-label={t("nav.commandPalette")}
           onClick={() => set({ drawer: false, dialog: { kind: "palette" } })}
         >
           <Command className="size-3.5" />
@@ -115,7 +116,7 @@ export function SidebarFooter({ sidebarToggle }: { sidebarToggle?: boolean }) {
               <Keyboard className="size-3.5" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent>快捷键</TooltipContent>
+          <TooltipContent>{t("nav.shortcuts")}</TooltipContent>
         </Tooltip>
       )}
       {sidebarToggle && (
@@ -125,7 +126,7 @@ export function SidebarFooter({ sidebarToggle }: { sidebarToggle?: boolean }) {
               <PanelLeft className="size-3.5" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent>隐藏侧栏</TooltipContent>
+          <TooltipContent>{t("sidebarChrome.hideSidebar")}</TooltipContent>
         </Tooltip>
       )}
     </div>
@@ -184,7 +185,7 @@ export function SidebarEdge() {
       className={cn("absolute top-0 -right-1 bottom-0 w-2 px-[3px] pointer-coarse:-right-3 pointer-coarse:w-6 pointer-coarse:px-[11px]", COL_EDGE)}
       onPointerDown={start}
       onDoubleClick={() => setSidebarW(SIDEBAR_W)}
-      title="拖动调宽窄，双击还原"
+      title={t("nav.dragResize")}
       style={{ WebkitAppRegion: "no-drag" } as any}
     />
   );

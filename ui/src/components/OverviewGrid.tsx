@@ -7,6 +7,8 @@ import { BOX_TRANSITION, useLayoutAnim, useZoomAnim } from "@/lib/zoomAnim";
 import { PickButton } from "./OverviewPick";
 import { Tile, TileChip } from "./OverviewTile";
 import { DRAG_TOUCH, SEAM_COL_COARSE, SEAM_ROW_COARSE } from "./tileInfo";
+import { t } from "@/lib/i18n";
+import type { MessageKey } from "@/lib/messages";
 
 const pct = (v: number) => `${v * 100}%`;
 const NO_SIZES = {};
@@ -46,7 +48,12 @@ type TileDrag = { id: string; x: number; y: number; over?: string; side?: DropSi
 
 /** How far in from a tile's edge (share of its size) a drop still means "beside it"; deeper in, it's a swap. */
 const EDGE = 0.3;
-const SIDE_TEXT: Record<DropSide, string> = { left: "放到左边", right: "放到右边", up: "放到上面", down: "放到下面" };
+const SIDE_TEXT = {
+  left: "overviewGrid.dropLeft",
+  right: "overviewGrid.dropRight",
+  up: "overviewGrid.dropUp",
+  down: "overviewGrid.dropDown",
+} as const satisfies Record<DropSide, MessageKey>;
 
 export function Grid({
   ids,
@@ -176,7 +183,7 @@ export function Grid({
         {ids.length === 0 && (
           <div className="flex h-full flex-col items-center justify-center gap-3 text-[13px] text-muted-foreground">
             <ClipboardCheck className="size-6" />
-            进行中是空的：等你的、在跑的、报错的会自动出现，也可以在左边右键 Agent 加进来
+            {t("overviewGrid.empty")}
             <PickButton />
           </div>
         )}
@@ -242,7 +249,7 @@ export function Grid({
                 }
                 onPointerDown={(e) => dragSeam(e, sm)}
                 onDoubleClick={() => setGridSizes(lay.key, undefined)}
-                title="拖动调大小，双击恢复等分"
+                title={t("overviewGrid.seamHint")}
               >
                 <SeamGrip row={row} />
               </div>
@@ -258,7 +265,7 @@ export function Grid({
             style={{ left: pct(ratio) }}
             onPointerDown={dragMain}
             onDoubleClick={() => setOverview((o) => ({ ...o, ratio: 0.5 }))}
-            title="拖动调宽窄，双击还原"
+            title={t("nav.dragResize")}
           >
             <SeamGrip row={false} />
           </div>
@@ -269,8 +276,8 @@ export function Grid({
           className="absolute inset-x-[6px] bottom-[3px] flex items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
           style={{ height: MORE_H }}
         >
-          <span className="shrink-0 px-1 text-[11px] text-muted-foreground" title="放不下了：点一个换进来，顶替最后一格">
-            更多 {more.length}
+          <span className="shrink-0 px-1 text-[11px] text-muted-foreground" title={t("overviewGrid.moreHint")}>
+            {t("overviewGrid.moreN", { n: more.length })}
           </span>
           {more.map((id) => (
             <TileChip key={id} id={id} current={false} className="h-6 max-w-40" onClick={() => onFocus(id)} />
@@ -305,7 +312,7 @@ function DropPreview({ over, side }: { over: string; side: DropSide }) {
       className="pointer-events-none fixed z-40 flex items-center justify-center rounded-md border-2 border-brand bg-brand/15 transition-all duration-150 ease-out"
       style={half}
     >
-      <span className="rounded-md bg-background/90 px-2 py-1 text-[12px] text-foreground shadow-sm">{SIDE_TEXT[side]}</span>
+      <span className="rounded-md bg-background/90 px-2 py-1 text-[12px] text-foreground shadow-sm">{t(SIDE_TEXT[side])}</span>
     </div>
   );
 }

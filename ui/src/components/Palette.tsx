@@ -5,6 +5,7 @@ import { formatCombo } from "@/lib/keys";
 import { locateSession } from "@/lib/layout";
 import { closeDialog, useStore } from "@/lib/store";
 import { AgentIcon, StatusDot, dotStatus } from "./AgentIcon";
+import { t } from "@/lib/i18n";
 
 // The command palette (prefix+: / ⌘K): commands, then the conversations open in a pane.
 export function Palette({ open }: { open: boolean }) {
@@ -13,11 +14,11 @@ export function Palette({ open }: { open: boolean }) {
   const layout = useStore((s) => s.layout);
   const cmds = open ? allCommands() : [];
   return (
-    <CommandDialog open={open} onOpenChange={(o) => !o && closeDialog()} title="命令面板" description="搜索命令或会话">
-      <CommandInput placeholder="命令、会话…" />
+    <CommandDialog open={open} onOpenChange={(o) => !o && closeDialog()} title={t("palette.title")} description={t("palette.description")}>
+      <CommandInput placeholder={t("palette.placeholder")} />
       <CommandList>
-        <CommandEmpty>没有匹配的</CommandEmpty>
-        <CommandGroup heading="命令">
+        <CommandEmpty>{t("palette.empty")}</CommandEmpty>
+        <CommandGroup heading={t("palette.commands")}>
           {cmds.map((c) => (
             <CommandItem
               key={c.id}
@@ -33,7 +34,7 @@ export function Palette({ open }: { open: boolean }) {
             </CommandItem>
           ))}
         </CommandGroup>
-        <CommandGroup heading="会话">
+        <CommandGroup heading={t("palette.sessions")}>
           {/* 只列开在 pane 里的：关掉的 pane 连 agent 一起关了（shutdownGone），这里再搜出来像没关掉。全部会话在 prefix+g */}
           {Object.values(sessions)
             .filter((s) => locateSession(layout, s.id))

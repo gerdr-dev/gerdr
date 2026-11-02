@@ -7,10 +7,11 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { focusSession } from "@/lib/actions";
 import { api } from "@/lib/api";
-import { clearAll, dismiss, LABEL, markSeen, sessionName, useInbox, type InboxItem } from "@/lib/inbox";
+import { clearAll, dismiss, kindLabel, markSeen, sessionName, useInbox, type InboxItem } from "@/lib/inbox";
 import { set, useStore } from "@/lib/store";
 import type { AskQuestion, PermissionOption } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { t } from "@/lib/i18n";
 
 /**
  * The inbox button and its panel: on a phone in the top bar's right corner, on wider screens in the rail (Rail.tsx).
@@ -32,7 +33,7 @@ export function InboxButton({ phone, rail }: { phone?: boolean; rail?: boolean }
   // The rail's buttons are plain ones (Rail.tsx railBtn): Button's ghost hover is fainter in dark mode and stood out there
   const trigger = rail ? (
     <button
-      aria-label="收件箱"
+      aria-label={t("inbox.title")}
       className={cn(
         "relative flex size-9 items-center justify-center rounded-md hover:bg-accent hover:text-foreground",
         open ? "bg-accent text-foreground" : "text-muted-foreground",
@@ -46,7 +47,7 @@ export function InboxButton({ phone, rail }: { phone?: boolean; rail?: boolean }
       variant={open ? "secondary" : "ghost"}
       size="icon"
       className={cn("relative", phone ? "size-9" : "size-7 text-muted-foreground")}
-      aria-label="收件箱"
+      aria-label={t("inbox.title")}
     >
       <InboxIcon className={phone ? "size-[18px]" : "size-3.5"} />
       {fresh && <span className={cn("absolute rounded-full bg-bad", phone ? "top-1.5 right-1.5 size-2" : "top-1 right-1 size-1.5")} />}
@@ -61,7 +62,7 @@ export function InboxButton({ phone, rail }: { phone?: boolean; rail?: boolean }
           <TooltipTrigger asChild>
             <PopoverTrigger asChild>{trigger}</PopoverTrigger>
           </TooltipTrigger>
-          <TooltipContent side={rail ? "right" : undefined}>收件箱{count ? `（${count}）` : ""}</TooltipContent>
+          <TooltipContent side={rail ? "right" : undefined}>{count ? t("inbox.titleN", { n: count }) : t("inbox.title")}</TooltipContent>
         </Tooltip>
       )}
       <PopoverContent
@@ -88,11 +89,11 @@ function InboxPanel({ close }: { close: () => void }) {
   return (
     <>
       <div className="flex h-10 shrink-0 items-center gap-2 border-b px-3">
-        <span className="text-[13px] font-medium">收件箱</span>
+        <span className="text-[13px] font-medium">{t("inbox.title")}</span>
         <span className="flex-1" />
         {items.length > 1 && (
           <Button variant="ghost" size="sm" className="h-7 px-2 text-[12px] text-muted-foreground" onClick={clearAll}>
-            全部清除
+            {t("inbox.clearAll")}
           </Button>
         )}
         {/* An icon the size of each item's ×, so the two line up on the right edge */}
@@ -100,8 +101,8 @@ function InboxPanel({ close }: { close: () => void }) {
           variant="ghost"
           size="icon"
           className="size-7 text-muted-foreground"
-          aria-label="收件箱设置"
-          title="收件箱设置"
+          aria-label={t("inbox.settings")}
+          title={t("inbox.settings")}
           onClick={() => {
             close();
             set({ dialog: { kind: "settings", tab: "inbox" } });
@@ -117,7 +118,7 @@ function InboxPanel({ close }: { close: () => void }) {
           ))}
         </div>
       ) : (
-        <div className="px-3 py-8 text-center text-[12px] text-muted-foreground">没有新消息。出错、在等你回答的 Agent 和电量低都会出现在这里。</div>
+        <div className="px-3 py-8 text-center text-[12px] text-muted-foreground">{t("inbox.empty")}</div>
       )}
     </>
   );
@@ -125,9 +126,9 @@ function InboxPanel({ close }: { close: () => void }) {
 
 function ago(at: number) {
   const s = Math.max(0, (Date.now() - at) / 1000);
-  if (s < 60) return "刚刚";
-  if (s < 3600) return `${Math.floor(s / 60)} 分钟前`;
-  if (s < 86400) return `${Math.floor(s / 3600)} 小时前`;
+  if (s < 60) return t("nav.justNow");
+  if (s < 3600) return t("nav.minutesAgo", { n: Math.floor(s / 60) });
+  if (s < 86400) return t("nav.hoursAgo", { n: Math.floor(s / 3600) });
   return new Date(at).toLocaleDateString();
 }
 
@@ -152,7 +153,7 @@ function Item({ it, close }: { it: InboxItem; close: () => void }) {
     live && it.reqId && ((it.kind === "permission" && req?.toolCall?.kind !== "switch_mode") || (it.kind === "ask" && req?.questions?.length === 1));
   // The session's current name (it may have been renamed since), falling back to the one saved with the item
   const name = useStore((s) => (it.sessionId && s.sessions[it.sessionId] ? sessionName(s.sessions[it.sessionId]) : undefined));
-  const head = it.sessionId ? (name ?? it.title) : LABEL[it.kind];
+  const head = it.sessionId ? (name ?? it.title) : kindLabel(it.kind);
   // A single question shows itself in the inline answer; battery's level is its title
   const text = it.kind === "battery" ? it.title : inline && it.kind === "ask" ? undefined : it.body;
   return (
@@ -165,20 +166,20 @@ function Item({ it, close }: { it: InboxItem; close: () => void }) {
       }}
     >
       <div className="-my-1 flex items-center gap-1.5 text-[12px]">
-        <span className="shrink-0" title={LABEL[it.kind]}>
+        <span className="shrink-0" title={kindLabel(it.kind)}>
           {ICON[it.kind]}
         </span>
         <button
           className={cn("min-w-0 truncate text-left font-medium", go ? "cursor-pointer hover:underline" : "cursor-default")}
           disabled={!go}
           onClick={go}
-          title={go ? "跳到这个 Agent" : undefined}
+          title={go ? t("inbox.jumpToAgent") : undefined}
         >
           {head}
         </button>
         <span className="shrink-0 text-muted-foreground/70">· {ago(it.at)}</span>
         <span className="flex-1" />
-        <Button variant="ghost" size="icon" className="size-7 shrink-0 text-muted-foreground" aria-label="移除" onClick={() => dismiss(it.id)}>
+        <Button variant="ghost" size="icon" className="size-7 shrink-0 text-muted-foreground" aria-label={t("common.remove")} onClick={() => dismiss(it.id)}>
           <X className="size-3.5" />
         </Button>
       </div>
@@ -190,14 +191,14 @@ function Item({ it, close }: { it: InboxItem; close: () => void }) {
       {it.kind === "battery" && it.body && <div className="mt-0.5 text-[12px] text-muted-foreground">{it.body}</div>}
       {it.reqId && !live && (
         <div className="mt-1 flex items-center gap-1 text-[12px] text-muted-foreground">
-          <Check className="size-3 text-ok" /> 已处理
+          <Check className="size-3 text-ok" /> {t("inbox.handled")}
         </div>
       )}
       {inline && it.kind === "permission" && <Permission it={it} />}
       {inline && it.kind === "ask" && <Ask it={it} q={req.questions[0]} />}
       {live && it.reqId && !inline && (
         <Button size="sm" variant="outline" className="mt-2 h-7 text-[12px]" onClick={go}>
-          {it.kind === "ask" ? "去回答" : "去处理"}
+          {it.kind === "ask" ? t("inbox.goAnswer") : t("inbox.goHandle")}
         </Button>
       )}
     </div>
@@ -278,7 +279,7 @@ function Ask({ it, q }: { it: InboxItem; q: AskQuestion }) {
           <input
             className="w-full rounded-md border border-dashed bg-transparent px-2 py-1.5 text-[12px] outline-none placeholder:text-muted-foreground/70 focus:border-solid focus:border-ring/60"
             type={q.secret ? "password" : "text"}
-            placeholder={opts.length ? "其他…" : "你的回答…"}
+            placeholder={opts.length ? t("inbox.otherPlaceholder") : t("inbox.answerPlaceholder")}
             value={other}
             disabled={busy}
             onChange={(e) => setOther(e.target.value)}
@@ -296,11 +297,11 @@ function Ask({ it, q }: { it: InboxItem; q: AskQuestion }) {
           disabled={busy}
           onClick={() => answer(it, { cancelled: true, reason: "skipped" }).catch(() => {})}
         >
-          跳过
+          {t("inbox.skip")}
         </Button>
         {(q.multiSelect || q.allowOther || !opts.length) && (
           <Button size="sm" className="h-7 text-[12px]" disabled={busy || (!sel.length && !other.trim())} onClick={() => send(sel)}>
-            提交
+            {t("inbox.submit")}
           </Button>
         )}
       </div>

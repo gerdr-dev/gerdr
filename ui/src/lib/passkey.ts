@@ -1,4 +1,5 @@
 import { ApiError, api } from "./api";
+import { t } from "./i18n";
 
 /**
  * WebAuthn 的浏览器侧胶水（照 herdr-web 的 web/src/lib/passkey.ts）。只在远程那个 origin 上能用：
@@ -43,7 +44,7 @@ async function ask<T>(run: () => Promise<T>): Promise<T> {
     return await run();
   } catch (e) {
     if ((e as { name?: string }).name === "NotAllowedError" && performance.now() - t0 < CANCEL_MS) {
-      throw new Blocked("浏览器没让做这次验证，而且不说原因。最常见的是这台设备上没有这个站点的 Passkey，或者地址栏显示「不安全」。");
+      throw new Blocked(t("passkey.blocked"));
     }
     throw e;
   }
@@ -79,7 +80,7 @@ async function doRegister(): Promise<string> {
     excludeCredentials: (pk.excludeCredentials ?? []).map((c) => ({ ...c, id: fromB64u(c.id) })),
   } as unknown as PublicKeyCredentialCreationOptions;
   const cred = (await ask(() => navigator.credentials.create({ publicKey: req }))) as PublicKeyCredential | null;
-  if (!cred) throw new Error("浏览器没有返回凭据");
+  if (!cred) throw new Error(t("passkey.noCredential"));
   const att = cred.response as AuthenticatorAttestationResponse;
   const r = await api.passkeyStep<{ label: string }>(
     "register",
@@ -106,7 +107,7 @@ export async function loginPasskey(): Promise<string> {
     allowCredentials: (pk.allowCredentials ?? []).map((c) => ({ ...c, id: fromB64u(c.id) })),
   } as unknown as PublicKeyCredentialRequestOptions;
   const cred = (await ask(() => navigator.credentials.get({ publicKey: req }))) as PublicKeyCredential | null;
-  if (!cred) throw new Error("浏览器没有返回凭据");
+  if (!cred) throw new Error(t("passkey.noCredential"));
   const asr = cred.response as AuthenticatorAssertionResponse;
   const r = await api.passkeyStep<{ label: string }>(
     "login",

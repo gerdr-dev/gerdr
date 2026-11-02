@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, type StepUpRequest } from "@/lib/api";
+import { t } from "@/lib/i18n";
 import { isCancel, registerPasskey, stepUpWithPasskey } from "@/lib/passkey";
 import { Button } from "@/components/ui/button";
 
@@ -15,12 +16,12 @@ export function PasskeyStepUp({ onDone, onCancel }: { onDone: (label: string) =>
 
   useEffect(() => {
     if (!req || state !== "pending") return;
-    const t = setInterval(async () => {
+    const timer = setInterval(async () => {
       try {
         setState((await api.stepUpState(req.id)).state);
       } catch {}
     }, 2000);
-    return () => clearInterval(t);
+    return () => clearInterval(timer);
   }, [req, state]);
 
   const attempt = async (fn: () => Promise<string>) => {
@@ -45,41 +46,41 @@ export function PasskeyStepUp({ onDone, onCancel }: { onDone: (label: string) =>
     <div className="space-y-2 rounded-md border p-3">
       {!req ? (
         <>
-          <div>已经有 Passkey 了，再加一把之前要先证明是你本人：</div>
+          <div>{t("passkeyStepUp.intro")}</div>
           <div className="flex flex-wrap gap-2">
             <Button size="sm" onClick={ask}>
-              到电脑上批准
+              {t("passkeyStepUp.approveOnComputer")}
             </Button>
             <Button size="sm" variant="outline" onClick={() => attempt(stepUpWithPasskey)}>
-              用已有的 Passkey 验证
+              {t("passkeyStepUp.usePasskey")}
             </Button>
             <Button size="sm" variant="ghost" onClick={onCancel}>
-              算了
+              {t("passkeyStepUp.nevermind")}
             </Button>
           </div>
-          <div className="text-[12px] text-muted-foreground">这台设备上还没有 Passkey 的话选「到电脑上批准」。</div>
+          <div className="text-[12px] text-muted-foreground">{t("passkeyStepUp.noPasskeyHint")}</div>
         </>
       ) : state === "pending" ? (
         <>
-          <div>到跑 Gerdr 的那台电脑上，打开 设置 → 远程访问，核对码一致就点「批准」：</div>
+          <div>{t("passkeyStepUp.pending")}</div>
           <div className="font-mono text-[20px] tracking-[.3em]">{req.code}</div>
-          <div className="text-[12px] text-muted-foreground">等着批准…（3 分钟内有效）</div>
+          <div className="text-[12px] text-muted-foreground">{t("passkeyStepUp.waiting")}</div>
           <Button size="sm" variant="ghost" onClick={onCancel}>
-            算了
+            {t("passkeyStepUp.nevermind")}
           </Button>
         </>
       ) : state === "approved" ? (
         <>
-          <div className="text-ok">电脑上批准了。</div>
+          <div className="text-ok">{t("passkeyStepUp.approved")}</div>
           <Button size="sm" onClick={() => attempt(registerPasskey)}>
-            现在添加 Passkey
+            {t("passkeyStepUp.addNow")}
           </Button>
         </>
       ) : (
         <>
-          <div className="text-warn">请求过期了（或者被拒了）。</div>
+          <div className="text-warn">{t("passkeyStepUp.expired")}</div>
           <Button size="sm" variant="outline" onClick={ask}>
-            再发一次
+            {t("passkeyStepUp.resend")}
           </Button>
         </>
       )}
@@ -99,8 +100,8 @@ export function StepUpApprovals({ open }: { open: boolean }) {
   useEffect(() => {
     if (!open) return;
     load();
-    const t = setInterval(load, 2000);
-    return () => clearInterval(t);
+    const timer = setInterval(load, 2000);
+    return () => clearInterval(timer);
   }, [open]);
   if (reqs.length === 0) return null;
   const decide = async (id: string, ok: boolean) => {
@@ -109,22 +110,22 @@ export function StepUpApprovals({ open }: { open: boolean }) {
   };
   return (
     <div className="space-y-1.5">
-      <div className="text-[13px] font-medium text-warn">等你批准</div>
+      <div className="text-[13px] font-medium text-warn">{t("passkeyStepUp.awaiting")}</div>
       <div className="divide-y rounded-md border border-warn/50">
         {reqs.map((r) => (
           <div key={r.id} className="flex items-center gap-3 px-3 py-2 max-md:flex-col max-md:items-stretch">
             <div className="min-w-0 flex-1">
-              <div className="truncate">「{r.label}」请求添加 Passkey</div>
+              <div className="truncate">{t("passkeyStepUp.request", { label: r.label })}</div>
               <div className="text-[12px] text-muted-foreground">
-                核对码 <span className="font-mono text-[14px] tracking-[.2em] text-foreground">{r.code}</span>，和那台设备上显示的一样才批准
+                {rich(t("passkeyStepUp.verifyCode"), { code: <span className="font-mono text-[14px] tracking-[.2em] text-foreground">{r.code}</span> })}
               </div>
             </div>
             <div className="flex gap-2">
               <Button size="sm" onClick={() => decide(r.id, true)}>
-                批准
+                {t("passkeyStepUp.approve")}
               </Button>
               <Button size="sm" variant="ghost" onClick={() => decide(r.id, false)}>
-                拒绝
+                {t("passkeyStepUp.decline")}
               </Button>
             </div>
           </div>
@@ -132,4 +133,9 @@ export function StepUpApprovals({ open }: { open: boolean }) {
       </div>
     </div>
   );
+}
+
+// A message with {name} placeholders filled by elements (a styled value in the middle of a sentence).
+function rich(text: string, parts: Record<string, React.ReactNode>): React.ReactNode[] {
+  return text.split(/\{(\w+)\}/).map((p, i) => (i % 2 ? <span key={i}>{parts[p]}</span> : p));
 }

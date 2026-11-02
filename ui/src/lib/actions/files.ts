@@ -4,6 +4,7 @@ import { stripLineAnchor } from "../paths";
 import { isPhone } from "../phone";
 import { activeTab, leaves, rid, setPane, split, updateTab, type PaneLeaf } from "../layout";
 import { set, setLayout } from "../store";
+import { t } from "../i18n";
 
 // ---- 文件 ----
 
@@ -30,7 +31,7 @@ export async function openPath(raw: string, cwd?: string, opts: { beside?: boole
       const stat = await api.fileStat(p, cwd);
       if (seq !== openSeq) return;
       if (stat.dir) {
-        toast(`这是个目录：${stat.path}`);
+        toast(t("actionsFiles.isDir", { path: stat.path }));
         return;
       }
       if (beside) openFilePane(stat.path);
@@ -45,7 +46,7 @@ export async function openPath(raw: string, cwd?: string, opts: { beside?: boole
       err = e;
     }
   }
-  if (seq === openSeq) toast.error((err as Error)?.message ?? "打不开这个路径");
+  if (seq === openSeq) toast.error((err as Error)?.message ?? t("actionsFiles.openFailed"));
 }
 
 /**

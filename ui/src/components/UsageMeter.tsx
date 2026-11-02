@@ -2,6 +2,7 @@ import { RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type UsageInfo } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { t } from "@/lib/i18n";
 
 /*
  * The quota panel for /usage in the composer. Data is structured (backend /api/usage → the adapter's _gerdr/usage:
@@ -54,10 +55,10 @@ function fmtReset(ms: number, now: number) {
   const d = new Date(ms);
   const when = `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   const left = ms - now;
-  if (left <= 0) return `${when} 重置`;
+  if (left <= 0) return t("usageMeter.resets", { when });
   const mins = Math.round(left / 60_000);
-  const rest = mins < 60 ? `${Math.max(1, mins)}m` : mins < 48 * 60 ? `${Math.round(mins / 60)}h` : `${Math.round(mins / 1440)} 天`;
-  return `${when} 重置 · 还剩 ${rest}`;
+  const rest = mins < 60 ? `${Math.max(1, mins)}m` : mins < 48 * 60 ? `${Math.round(mins / 60)}h` : t("usageMeter.days", { n: Math.round(mins / 1440) });
+  return t("usageMeter.resetsLeft", { when, left: rest });
 }
 
 /*
@@ -104,19 +105,21 @@ export function UsagePanel({ agent, onClose }: { agent: string; onClose: () => v
           className="flex items-center gap-1 rounded-sm px-1 text-[11px] text-muted-foreground hover:text-foreground"
           onClick={refresh}
           disabled={loading}
-          title={u?.at ? `${new Date(u.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} 更新` : "刷新"}
+          title={
+            u?.at ? t("usageMeter.updatedAt", { time: new Date(u.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) }) : t("common.refresh")
+          }
         >
           <RefreshCw className={cn("size-3", loading && "animate-spin")} />
         </button>
       </div>
       {!list ? (
-        <div className="py-1 text-muted-foreground">读取中…</div>
+        <div className="py-1 text-muted-foreground">{t("usageMeter.reading")}</div>
       ) : !u || (!limits.length && !u.error) ? (
         // API key / Bedrock 之类没有套餐额度；没装这个 agent 的 CLI 时 /api/usage 里也没有它
-        <div className="py-1 text-muted-foreground">这个账号没有套餐额度可看</div>
+        <div className="py-1 text-muted-foreground">{t("usageMeter.noPlan")}</div>
       ) : (
         <div className="space-y-2">
-          {u.error && <div className="text-warn">{u.data ? "没刷新上，下面是上一次的" : `拿不到：${u.error}`}</div>}
+          {u.error && <div className="text-warn">{u.data ? t("usageMeter.stale") : t("usageMeter.error", { error: u.error })}</div>}
           {limits.map((l) => (
             <div key={l.kind + l.label}>
               <div className="mb-1 flex items-baseline gap-2">

@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { api, type UIStatus } from "@/lib/api";
 import { closeDialog } from "@/lib/store";
+import { t } from "@/lib/i18n";
 
 // Settings → 通用 →「版本与后台」: a newer gerdr UI that the upgrade didn't merge because it conflicts with edits made
 // to this UI (webui's upgradeGit aborts rather than leave conflict markers that break the page). Without this the
@@ -24,16 +25,17 @@ export function UIUpgradeSetting() {
   return (
     <div className="flex items-center justify-between gap-4">
       <div className="min-w-0">
-        <div className="text-[13px] text-warn">{g.merging ? "新版界面合到一半" : "新版界面没合上"}</div>
+        <div className="text-[13px] text-warn">{g.merging ? t("uiUpgradeSetting.merging") : t("uiUpgradeSetting.pending")}</div>
         <div className="text-[12px] text-muted-foreground">
           {g.merging
-            ? "界面目录里还有没解决的冲突。"
-            : `Gerdr 的新版界面${g.pending_version ? `（${g.pending_version}）` : ""}和你对界面的改动冲突，升级时跳过了，现在用的还是旧的。`}
-          {files.length > 0 && <div className="break-all">冲突的文件：{files.join(", ")}</div>}
+            ? t("uiUpgradeSetting.mergingHint")
+            : t("uiUpgradeSetting.pendingHint", { version: g.pending_version ? t("uiUpgradeSetting.pendingVersion", { version: g.pending_version }) : "" })}
+          {files.length > 0 && <div className="break-all">{t("uiUpgradeSetting.files", { files: files.join(", ") })}</div>}
         </div>
       </div>
       <Button size="sm" variant="outline" className="shrink-0 gap-1.5" onClick={openRescue}>
-        <LifeBuoy className="size-3.5" />让 Agent 合并
+        <LifeBuoy className="size-3.5" />
+        {t("uiUpgradeSetting.merge")}
       </Button>
     </div>
   );

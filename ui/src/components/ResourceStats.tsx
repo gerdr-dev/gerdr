@@ -3,6 +3,7 @@ import { api } from "@/lib/api";
 import { focusSession } from "@/lib/actions";
 import { nativeWebPid } from "@/lib/native";
 import { prefOf, set, useStore } from "@/lib/store";
+import { t } from "@/lib/i18n";
 
 // 设置 →「资源」：内存都花在哪了。每 2 秒刷新一次（只在这一页开着时）。
 // 后端和 agent 进程用 ps 量（和活动监视器对得上）；界面这边：mac App 里量 WebView 进程，浏览器里只有 JS 堆（Chromium 才有）和 DOM 节点数。
@@ -62,45 +63,46 @@ export function ResourceStats({ open }: { open: boolean }) {
     <div className="min-w-0 space-y-4">
       {err && <div className="text-[13px] text-bad">{err}</div>}
       <div className="text-[13px]">
-        合计 <span className="font-mono tabular-nums">{s ? mb(total) : "…"}</span>
-        <span className="ml-2 text-[12px] text-muted-foreground">（每 2 秒刷新）</span>
+        {t("resourceStats.total")} <span className="font-mono tabular-nums">{s ? mb(total) : "…"}</span>
+        <span className="ml-2 text-[12px] text-muted-foreground">{t("resourceStats.refreshNote")}</span>
       </div>
 
       <div className="space-y-1.5">
-        <div className="text-[13px] font-medium">界面</div>
+        <div className="text-[13px] font-medium">{t("resourceStats.ui")}</div>
         <div className="divide-y rounded-md border">
           {s?.web ? (
-            <Row label="WebView 进程" value={mb(s.web.rss)} sub={`pid ${s.web.pid}`} />
+            <Row label={t("resourceStats.webview")} value={mb(s.web.rss)} sub={`pid ${s.web.pid}`} />
           ) : (
-            <Row label="WebView 进程" value="—" sub="只有 Mac App 里量得到（浏览器里看浏览器自己的任务管理器）" />
+            <Row label={t("resourceStats.webview")} value="—" sub={t("resourceStats.webviewOnlyMac")} />
           )}
-          {page.heap > 0 && <Row label="JS 堆" value={mb(page.heap)} />}
-          <Row label="DOM 节点" value={page.nodes.toLocaleString()} />
-          <Row label="留在页面里的 Tab" value={`${kept} / ${keep}`} sub="切走之后不卸载的 Tab（展开状态、滚动位置都保住）；数量在「通用」里调" />
+          {page.heap > 0 && <Row label={t("resourceStats.jsHeap")} value={mb(page.heap)} />}
+          <Row label={t("resourceStats.domNodes")} value={page.nodes.toLocaleString()} />
+          <Row label={t("resourceStats.keptTabs")} value={`${kept} / ${keep}`} sub={t("resourceStats.keptTabsHint")} />
         </div>
       </div>
 
       <div className="space-y-1.5">
-        <div className="text-[13px] font-medium">后端</div>
+        <div className="text-[13px] font-medium">{t("resourceStats.backend")}</div>
         <div className="divide-y rounded-md border">
-          {s?.server && <Row label="gerdr" value={mb(s.server.rss)} sub={`pid ${s.server.pid} · Go 堆 ${mb(s.goHeap)} · ${s.goroutines} 个 goroutine`} />}
+          {s?.server && (
+            <Row label="gerdr" value={mb(s.server.rss)} sub={t("resourceStats.serverSub", { pid: s.server.pid, heap: mb(s.goHeap), n: s.goroutines })} />
+          )}
         </div>
       </div>
 
       <div className="space-y-1.5">
         <div className="text-[13px] font-medium">
-          Agent 进程 {s?.agents?.length ? <span className="font-normal text-muted-foreground">· 共 {mb(agentsTotal)}</span> : null}
+          {t("resourceStats.agents")}{" "}
+          {s?.agents?.length ? <span className="font-normal text-muted-foreground">{t("resourceStats.agentsTotal", { size: mb(agentsTotal) })}</span> : null}
         </div>
         <div className="divide-y rounded-md border">
-          {!s?.agents?.length && (
-            <Row label="没有在跑的 Agent 进程" value="" sub="Claude 会话闲置 15 分钟会收掉进程（GERDR_CLAUDE_IDLE_MINUTES），下次说话自动接回" />
-          )}
+          {!s?.agents?.length && <Row label={t("resourceStats.noAgents")} value="" sub={t("resourceStats.noAgentsHint")} />}
           {s?.agents?.map((p) => (
             <Row
               key={p.pid}
               label={p.label}
               value={mb(p.total)}
-              sub={`pid ${p.pid}${p.procs > 1 ? ` · 连带 ${p.procs - 1} 个子进程（MCP 等），自己 ${mb(p.rss)}` : ""}`}
+              sub={`pid ${p.pid}${p.procs > 1 ? t(p.procs === 2 ? "resourceStats.children.one" : "resourceStats.children.other", { n: p.procs - 1, size: mb(p.rss) }) : ""}`}
               onClick={p.session ? () => (set({ dialog: null }), focusSession(p.session!)) : undefined}
             />
           ))}

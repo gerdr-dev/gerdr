@@ -13,7 +13,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { api } from "./api";
 import { cn } from "./utils";
-import { locale } from "./i18n";
+import { locale, t } from "./i18n";
 import { activeTab, activeWs, leaves, type Layout, type PaneLeaf, type Tab, type Workspace } from "./layout";
 import { get, set, useStore, visibleSessions } from "./store";
 import type { AddonBuild, AddonService, SessionSummary } from "./types";
@@ -454,10 +454,10 @@ function makeApi(id: string, hash: string) {
       // "sidebar": the panel slot's first name, from when blocks sat in the left column. Kept for good: add-ons in the
       // wild use it
       const name: SlotName = asked === "sidebar" ? "panel" : asked;
-      if (!slots[name]) throw new Error(`没有这个插槽：${name}`);
+      if (!slots[name]) throw new Error(t("addons.noSlot", { slot: name }));
       const own = slots[name].filter((x) => x.addon === id).length;
       const key = `${id}:${o?.id ?? own}`;
-      if (slots[name].some((x) => x.key === key)) throw new Error(`插槽 ${name} 里已经有 id 为 ${o?.id ?? own} 的组件了`);
+      if (slots[name].some((x) => x.key === key)) throw new Error(t("addons.slotTaken", { slot: name, id: o?.id ?? own }));
       const r: SlotReg = { addon: id, key, Component, order: o?.order ?? 0, title: o?.title, icon: o?.icon, open: o?.open, tallIcon: o?.tallIcon };
       slots[name].push(r);
       slots[name].sort((a, b) => a.order - b.order || a.addon.localeCompare(b.addon));
@@ -552,7 +552,7 @@ export async function runCommand(id: string) {
     await c.run({ state: stateSnapshot() });
   } catch (e) {
     fail(c.addon, e);
-    import("./notify").then((n) => n.notify(`扩展 ${c.addon} 出错：${e}`, { level: "error" }));
+    import("./notify").then((n) => n.notify(t("addons.failed", { addon: c.addon, error: String(e) }), { level: "error" }));
   }
 }
 
@@ -656,7 +656,7 @@ async function doReload() {
     try {
       const mod = await import(/* @vite-ignore */ url);
       const addon = mod.default ?? mod.addon ?? mod.plugin;
-      if (!addon || typeof addon.setup !== "function") throw new Error("扩展要 export default defineAddon({ setup(g) { … } })");
+      if (!addon || typeof addon.setup !== "function") throw new Error(t("addons.noSetup"));
       const d = addon.setup(makeApi(b.id, b.hash));
       if (typeof d === "function") disposers.set(b.id, d);
       st.loaded = true;

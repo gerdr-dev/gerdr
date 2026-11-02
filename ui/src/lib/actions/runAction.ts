@@ -11,6 +11,7 @@ import { stepSpace } from "./spaces";
 import { addTab, closeTab, lastTab, selectTab, stepTab } from "./tabs";
 import { openTerminal } from "./terminal";
 import { closeWorkspace, selectWorkspaceN, stepWorkspace } from "./workspaces";
+import { t } from "../i18n";
 
 // ---- 快捷键动作 ----
 
@@ -149,7 +150,7 @@ export function runAction(a: KeyAction) {
     case "focusAttention": {
       const first = attentionList()[0];
       if (first) focusSession(first);
-      else toast("没有在等你的会话");
+      else toast(t("actionsRunAction.noWaiting"));
       return;
     }
     case "renamePane": {

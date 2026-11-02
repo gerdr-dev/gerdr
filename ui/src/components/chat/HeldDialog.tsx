@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { api, type Holder } from "@/lib/api";
+import { t } from "@/lib/i18n";
 
 // 这个会话还在别处开着（herdr / 终端里的交互式 claude）。两边同时写，记录会分叉 —— 谁也看不见对方说过的话。
 // 发消息时服务端先查（acpx.MethodHolders），有人占着就不发、回 409，在这里让人挑：
@@ -39,28 +40,30 @@ export function HeldDialog({ sessionId, holders, onClose, onDone }: { sessionId:
     <AlertDialog open={!!holders} onOpenChange={(o) => !o && !busy && onClose()}>
       <AlertDialogContent className="max-w-lg">
         <AlertDialogHeader>
-          <AlertDialogTitle>这个会话还在别处开着</AlertDialogTitle>
+          <AlertDialogTitle>{t("heldDialog.title")}</AlertDialogTitle>
           <AlertDialogDescription asChild>
             <div className="space-y-2 text-[13px]">
               {known ? (
                 <p>
-                  {h?.name ? `「${h.name}」` : "另一个终端"}里的 Claude（PID {h?.pid}
-                  {h?.status ? `，${h.status === "busy" ? "正在干活" : "闲着"}` : ""}）也开着它。两边同时写，对话会分叉：谁也看不见对方说过的话。
+                  {t(h?.status ? (h.status === "busy" ? "heldDialog.knownBusy" : "heldDialog.knownIdle") : "heldDialog.known", {
+                    where: h?.name ? t("heldDialog.namedWhere", { name: h.name }) : t("heldDialog.otherTerminal"),
+                    pid: h?.pid ?? "",
+                  })}
                 </p>
               ) : (
-                <p>{h?.name ?? "别处"}正开着它，同一时间只能有一处接着聊。在那边关掉它再重试，或者在这里另起一份。</p>
+                <p>{t("heldDialog.unknown", { where: h?.name ?? t("heldDialog.elsewhere") })}</p>
               )}
-              <p>你的消息还没发出去，在输入框里。</p>
+              <p>{t("heldDialog.notSent")}</p>
             </div>
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter className="gap-2 sm:flex-col sm:items-stretch">
           <Button disabled={!!busy} onClick={() => run("fork")}>
-            {busy === "fork" ? "处理中…" : "另起一份，在这里接着聊（推荐）"}
+            {busy === "fork" ? t("heldDialog.working") : t("heldDialog.fork")}
           </Button>
           {known ? (
             <Button variant="outline" disabled={!!busy} onClick={() => run("kill")}>
-              {busy === "kill" ? "正在关掉那边…" : "关掉那边的 Claude，在这里接着聊"}
+              {busy === "kill" ? t("heldDialog.killing") : t("heldDialog.kill")}
             </Button>
           ) : (
             <Button
@@ -71,10 +74,10 @@ export function HeldDialog({ sessionId, holders, onClose, onDone }: { sessionId:
                 onDone();
               }}
             >
-              我已经在那边关掉了，重试
+              {t("heldDialog.closedRetry")}
             </Button>
           )}
-          <AlertDialogCancel disabled={!!busy}>取消</AlertDialogCancel>
+          <AlertDialogCancel disabled={!!busy}>{t("common.cancel")}</AlertDialogCancel>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

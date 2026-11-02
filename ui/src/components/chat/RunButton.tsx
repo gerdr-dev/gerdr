@@ -7,6 +7,7 @@ import { basename, runInTerminal, terminalNear } from "@/lib/actions";
 import type { PaneLeaf } from "@/lib/layout";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import type { ChatSession } from "@gerdr/chat";
+import { t } from "@/lib/i18n";
 
 // gerdr's actions on a `! command` in a reply (ChatHost.codeActions): the chat package draws the command, gerdr adds the
 // button that runs it, since only gerdr can (hub/shell.go, its terminals).
@@ -33,18 +34,13 @@ export function RunButton({ cmd, session, className }: { cmd: string; session: C
   const box = "inline-flex items-center text-[11px] leading-4 text-brand hover:bg-brand/10 disabled:opacity-50";
   return (
     <span className={cn("inline-flex items-stretch rounded-sm border border-brand/40", className)}>
-      <button
-        title={`在对话里运行：${cmd}\n目录：${session.cwd}\n输出会跟着你的下一条消息带给 Agent`}
-        disabled={busy}
-        className={cn(box, "gap-0.5 px-1")}
-        onClick={inChat}
-      >
+      <button title={t("runButton.title", { cmd, cwd: session.cwd })} disabled={busy} className={cn(box, "gap-0.5 px-1")} onClick={inChat}>
         <Play className="size-2.5 fill-current" />
-        运行
+        {t("runButton.run")}
       </button>
       <DropdownMenu onOpenChange={(o) => o && setNear(terminalNear(session.id))}>
         <DropdownMenuTrigger asChild>
-          <button title="换个地方运行" className={cn(box, "border-l border-brand/40 px-0.5")}>
+          <button title={t("runButton.elsewhere")} className={cn(box, "border-l border-brand/40 px-0.5")}>
             <ChevronDown className="size-3" />
           </button>
         </DropdownMenuTrigger>
@@ -52,24 +48,26 @@ export function RunButton({ cmd, session, className }: { cmd: string; session: C
           <DropdownMenuItem onSelect={inChat} className="flex-col items-start gap-0">
             <span className="flex items-center gap-1.5">
               <Play className="size-3.5" />
-              在对话里运行
+              {t("runButton.inChat")}
             </span>
-            <span className="pl-5 text-xs text-muted-foreground">输出带给 Agent；没有输入，要交互的命令会卡住</span>
+            <span className="pl-5 text-xs text-muted-foreground">{t("runButton.inChatHint")}</span>
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => runInTerminal(session.id, session.cwd, cmd, "new")} className="flex-col items-start gap-0">
             <span className="flex items-center gap-1.5">
               <SquareTerminal className="size-3.5" />
-              在新终端里运行
+              {t("runButton.newTerminal")}
             </span>
-            <span className="pl-5 text-xs text-muted-foreground">在右边开一个终端，能交互；Agent 要自己去读输出</span>
+            <span className="pl-5 text-xs text-muted-foreground">{t("runButton.newTerminalHint")}</span>
           </DropdownMenuItem>
           {near?.term && (
             <DropdownMenuItem onSelect={() => runInTerminal(session.id, session.cwd, cmd, "near")} className="flex-col items-start gap-0">
               <span className="flex items-center gap-1.5">
                 <Terminal className="size-3.5" />
-                在当前终端里运行
+                {t("runButton.nearTerminal")}
               </span>
-              <span className="max-w-full truncate pl-5 text-xs text-muted-foreground">敲进旁边开着的终端（{basename(near.term.cwd)}）</span>
+              <span className="max-w-full truncate pl-5 text-xs text-muted-foreground">
+                {t("runButton.nearTerminalHint", { dir: basename(near.term.cwd) })}
+              </span>
             </DropdownMenuItem>
           )}
         </DropdownMenuContent>

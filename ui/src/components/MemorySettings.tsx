@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
 import { askConfirm } from "@/lib/confirm";
+import { t } from "@/lib/i18n";
+import type { MessageKey } from "@/lib/messages";
 import type { MemoryEntry, MemoryStore } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -16,20 +18,25 @@ import { cn } from "@/lib/utils";
 const stop = (e: React.KeyboardEvent) => e.stopPropagation();
 
 const AGENTS: { id: MemoryStore["agent"] | "all"; name: string }[] = [
-  { id: "all", name: "全部" },
+  { id: "all", name: "" }, // shown as t("memorySettings.all")
   { id: "native", name: "Gerdr Agent" },
   { id: "claude", name: "Claude Code" },
   { id: "codex", name: "Codex" },
 ];
 
-const TYPE_NAMES: Record<string, string> = { user: "偏好", feedback: "纠正", project: "项目", reference: "资料" };
+const TYPE_NAMES: Record<string, MessageKey> = {
+  user: "memorySettings.type.user",
+  feedback: "memorySettings.type.feedback",
+  project: "memorySettings.type.project",
+  reference: "memorySettings.type.reference",
+};
 
 function ago(ms: number) {
   const s = (Date.now() - ms) / 1000;
-  if (s < 60) return "刚刚";
-  if (s < 3600) return `${Math.floor(s / 60)} 分钟前`;
-  if (s < 86400) return `${Math.floor(s / 3600)} 小时前`;
-  if (s < 86400 * 30) return `${Math.floor(s / 86400)} 天前`;
+  if (s < 60) return t("memorySettings.justNow");
+  if (s < 3600) return t("memorySettings.minutesAgo", { n: Math.floor(s / 60) });
+  if (s < 86400) return t("memorySettings.hoursAgo", { n: Math.floor(s / 3600) });
+  if (s < 86400 * 30) return t("memorySettings.daysAgo", { n: Math.floor(s / 86400) });
   return new Date(ms).toLocaleDateString();
 }
 
@@ -48,7 +55,7 @@ export function MemorySettings({ open }: { open: boolean }) {
     api
       .memory()
       .then((r) => setStores(r.stores))
-      .catch((e) => toast.error(`读不到记忆：${e.message}`));
+      .catch((e) => toast.error(t("memorySettings.loadFailed", { error: e.message })));
   useEffect(() => {
     if (open) load();
   }, [open]);
@@ -93,7 +100,7 @@ export function MemorySettings({ open }: { open: boolean }) {
         const file = edit.path.split("/").pop();
         await api.memoryWrite(idx, `${old.replace(/\n*$/, old ? "\n" : "")}- [${name}](${file})${desc ? ` — ${desc}` : ""}\n`);
       }
-      toast.success("已保存（Agent 下一轮就按新的来）");
+      toast.success(t("memorySettings.saved"));
       setEdit({ ...edit, saved: edit.content, isNew: false });
       load();
     } catch (e: any) {
@@ -105,15 +112,15 @@ export function MemorySettings({ open }: { open: boolean }) {
 
   const remove = async (e: MemoryEntry) => {
     const ok = await askConfirm({
-      title: "删掉这条记忆？",
-      description: `${e.name}\n${e.description ?? ""}\n\n索引里指向它的那行也会一起删。`,
-      action: "删除",
+      title: t("memorySettings.deleteTitle"),
+      description: t("memorySettings.deleteDescription", { name: e.name ?? "", description: e.description ?? "" }),
+      action: t("common.delete"),
       destructive: true,
     });
     if (!ok) return;
     try {
       await api.memoryDelete(e.path);
-      toast.success("删了");
+      toast.success(t("memorySettings.deleted"));
       setEdit(null);
       load();
     } catch (err: any) {
@@ -127,8 +134,8 @@ export function MemorySettings({ open }: { open: boolean }) {
     const type = cur.scope === "global" ? "user" : "project";
     setEdit({
       path: `${cur.dir}/${slug}.md`,
-      title: "新的一条",
-      content: `---\nname: ${slug}\ndescription: 一句话说这条记的是什么（Agent 靠它判断要不要读全文）\ntype: ${type}\n---\n\n要记住的事。\n`,
+      title: t("memorySettings.newTitle"),
+      content: `---\nname: ${slug}\ndescription: ${t("memorySettings.templateDescription")}\ntype: ${type}\n---\n\n${t("memorySettings.templateBody")}\n`,
       saved: "",
       isNew: true,
     });
@@ -137,7 +144,7 @@ export function MemorySettings({ open }: { open: boolean }) {
   if (!stores) {
     return (
       <div className="flex items-center gap-2 py-6 text-[13px] text-muted-foreground">
-        <Loader2 className="size-4 animate-spin" /> 读记忆…
+        <Loader2 className="size-4 animate-spin" /> {t("memorySettings.loading")}
       </div>
     );
   }
@@ -152,8 +159,11 @@ export function MemorySettings({ open }: { open: boolean }) {
             size="icon"
             variant="ghost"
             className="size-7"
-            title="返回"
-            onClick={async () => (!dirty || (await askConfirm({ title: "还没保存，放弃改动？", action: "放弃", destructive: true }))) && setEdit(null)}
+            title={t("common.back")}
+            onClick={async () =>
+              (!dirty || (await askConfirm({ title: t("memorySettings.discardTitle"), action: t("memorySettings.discard"), destructive: true }))) &&
+              setEdit(null)
+            }
           >
             <ArrowLeft className="size-4" />
           </Button>
@@ -161,18 +171,14 @@ export function MemorySettings({ open }: { open: boolean }) {
           <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground">{edit.path}</span>
           {entry && (
             <Button size="sm" variant="ghost" className="text-bad" onClick={() => remove(entry)}>
-              <Trash2 className="size-3.5" /> 删除
+              <Trash2 className="size-3.5" /> {t("common.delete")}
             </Button>
           )}
           <Button size="sm" onClick={save} disabled={busy || (!dirty && !edit.isNew)}>
-            保存
+            {t("common.save")}
           </Button>
         </div>
-        {edit.index && (
-          <div className="text-[12px] text-muted-foreground">
-            索引：一条记忆一行（- [标题](文件名.md) — 一句话）。Agent 每轮都会读到它，只靠它决定要不要去读哪条的全文。
-          </div>
-        )}
+        {edit.index && <div className="text-[12px] text-muted-foreground">{t("memorySettings.indexHint")}</div>}
         <textarea
           className="h-[52vh] w-full resize-none rounded-md border bg-card p-3 font-mono text-[12px] leading-relaxed"
           value={edit.content}
@@ -193,9 +199,7 @@ export function MemorySettings({ open }: { open: boolean }) {
 
   return (
     <div className="space-y-3 text-[13px]">
-      <div className="text-[12px] text-muted-foreground">
-        Agent 跨会话记住的东西：你纠正过它的、你的偏好、项目的约定。都是它自己写的 Markdown 文件，在这里看、改、删，下一轮就按新的来。
-      </div>
+      <div className="text-[12px] text-muted-foreground">{t("memorySettings.intro")}</div>
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex rounded-md bg-muted p-0.5">
           {AGENTS.map((a) => (
@@ -207,18 +211,24 @@ export function MemorySettings({ open }: { open: boolean }) {
                 setSel(null);
               }}
             >
-              {a.name}
+              {a.id === "all" ? t("memorySettings.all") : a.name}
             </button>
           ))}
         </div>
-        <Input value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={stop} className="h-8 w-48 flex-1 text-[12px]" placeholder="搜记忆" />
-        <Button size="icon" variant="ghost" className="size-8" title="刷新" onClick={load}>
+        <Input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          onKeyDown={stop}
+          className="h-8 w-48 flex-1 text-[12px]"
+          placeholder={t("memorySettings.search")}
+        />
+        <Button size="icon" variant="ghost" className="size-8" title={t("common.refresh")} onClick={load}>
           <RefreshCw className="size-3.5" />
         </Button>
       </div>
 
       {shown.length === 0 ? (
-        <div className="py-6 text-center text-muted-foreground">{q ? "没搜到" : "还没有记忆"}</div>
+        <div className="py-6 text-center text-muted-foreground">{q ? t("memorySettings.noResults") : t("memorySettings.empty")}</div>
       ) : (
         <div className="grid gap-3 md:grid-cols-[220px_1fr]">
           {/* 左边：记忆目录（手机上横着滑） */}
@@ -248,8 +258,8 @@ export function MemorySettings({ open }: { open: boolean }) {
                   <div className="truncate font-medium">{cur.label}</div>
                   <button
                     className="flex max-w-full items-center gap-1 truncate font-mono text-[11px] text-muted-foreground hover:text-foreground"
-                    title="复制路径"
-                    onClick={() => navigator.clipboard.writeText(cur.dir).then(() => toast.success("已复制路径"))}
+                    title={t("memorySettings.copyPath")}
+                    onClick={() => navigator.clipboard.writeText(cur.dir).then(() => toast.success(t("memorySettings.pathCopied")))}
                   >
                     <span className="truncate">{cur.dir}</span>
                     <Copy className="size-3 shrink-0" />
@@ -257,20 +267,18 @@ export function MemorySettings({ open }: { open: boolean }) {
                 </div>
                 {cur.agent !== "codex" && (
                   <>
-                    <Button size="sm" variant="ghost" onClick={() => openFile(`${cur.dir}/MEMORY.md`, "索引 MEMORY.md", true)}>
-                      <FileText className="size-3.5" /> 索引
+                    <Button size="sm" variant="ghost" onClick={() => openFile(`${cur.dir}/MEMORY.md`, t("memorySettings.indexTitle"), true)}>
+                      <FileText className="size-3.5" /> {t("memorySettings.index")}
                     </Button>
                     <Button size="sm" variant="outline" onClick={newEntry}>
-                      <Plus className="size-3.5" /> 新建一条
+                      <Plus className="size-3.5" /> {t("memorySettings.newEntry")}
                     </Button>
                   </>
                 )}
               </div>
               {cur.entries.length === 0 ? (
                 <div className="rounded-md border border-dashed px-3 py-6 text-center text-[12px] text-muted-foreground">
-                  {cur.agent === "codex"
-                    ? "Codex 还没有生成记忆（它的记忆是从过去的会话里自动总结的，要在 Codex 里开了记忆功能才会有）"
-                    : "还没有记忆：Agent 遇到该记的事（你纠正它、说了偏好）会自己写进来，也可以手动新建"}
+                  {cur.agent === "codex" ? t("memorySettings.codexEmpty") : t("memorySettings.emptyHint")}
                 </div>
               ) : (
                 <div className="divide-y rounded-md border">
@@ -283,7 +291,9 @@ export function MemorySettings({ open }: { open: boolean }) {
                       <div className="flex items-center gap-2">
                         <span className="min-w-0 truncate font-medium">{e.name || e.file}</span>
                         {e.type && (
-                          <span className="shrink-0 rounded-sm bg-muted px-1.5 text-[11px] text-muted-foreground">{TYPE_NAMES[e.type] ?? e.type}</span>
+                          <span className="shrink-0 rounded-sm bg-muted px-1.5 text-[11px] text-muted-foreground">
+                            {TYPE_NAMES[e.type] ? t(TYPE_NAMES[e.type]) : e.type}
+                          </span>
                         )}
                         <span className="flex-1" />
                         <span className="shrink-0 text-[11px] text-muted-foreground">{ago(e.modTime)}</span>

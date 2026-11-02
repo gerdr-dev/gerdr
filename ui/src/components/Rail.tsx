@@ -14,6 +14,7 @@ import { RouteLabel } from "./ConnStatus";
 import { InboxButton } from "./Inbox";
 import { SpaceDropLine, startSpaceDrag } from "./SpaceDrag";
 import { newSpaceDialog, SpaceMenuItems, spaceStatus } from "./SpaceSwitcher";
+import { t } from "@/lib/i18n";
 
 /*
  * The rail: gerdr's own strip down the left edge on wider screens, the same in every mode — projects, the Code / Work
@@ -96,7 +97,7 @@ export function Rail() {
     // Icons in one capsule, like the horizontal Code / Work switch this replaced, stood on end: the capsule is as wide
     // as the project chips above (36px), the current mode raised inside it. Separate labelled buttons looked out of
     // place next to the chips whatever their size; the names are in the tooltips.
-    const title = on && m === "agents" ? `Code · ${sidebar ? "隐藏会话列表" : "显示会话列表"}` : label;
+    const title = on && m === "agents" ? `Code · ${sidebar ? t("nav.hideSessionList") : t("rail.showSessionList")}` : label;
     return tip(
       title,
       <button
@@ -127,9 +128,9 @@ export function Rail() {
           {spaces.map(project)}
           <SpaceDropLine list="rail" axis="y" />
           {tip(
-            "新项目（每个项目有自己的工作空间、Agent 和 Work，互相看不见；右键项目可重命名、删除，拖动排序）",
+            t("rail.newProjectHint"),
             <button
-              aria-label="新项目"
+              aria-label={t("nav.newProject")}
               className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-dashed text-muted-foreground hover:text-foreground"
               onClick={newSpaceDialog}
             >
@@ -149,21 +150,21 @@ export function Rail() {
           {/* A touch screen seldom has a keyboard to need a shortcut list: the command palette instead, as in the phone's drawer */}
           {coarse
             ? tip(
-                "命令面板",
-                <button aria-label="命令面板" className={railBtn} onClick={() => set({ dialog: { kind: "palette" } })}>
+                t("nav.commandPalette"),
+                <button aria-label={t("nav.commandPalette")} className={railBtn} onClick={() => set({ dialog: { kind: "palette" } })}>
                   <Command className="size-4" />
                 </button>,
               )
             : tip(
-                "快捷键",
-                <button aria-label="快捷键" className={railBtn} onClick={() => set({ dialog: { kind: "help" } })}>
+                t("nav.shortcuts"),
+                <button aria-label={t("nav.shortcuts")} className={railBtn} onClick={() => set({ dialog: { kind: "help" } })}>
                   <Keyboard className="size-4" />
                 </button>,
               )}
           {tip(
-            doctorBad ? "设置（诊断发现了问题：设置 → 实验室 → 诊断）" : "设置",
+            doctorBad ? t("rail.settingsDoctorBad") : t("nav.settings"),
             <button
-              aria-label="设置"
+              aria-label={t("nav.settings")}
               className={cn(railBtn, "relative")}
               onClick={() => set({ dialog: { kind: "settings", tab: doctorBad ? "labs" : undefined } })}
             >

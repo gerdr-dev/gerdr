@@ -8,6 +8,7 @@
 import { toast } from "sonner";
 import { isCoarse } from "./phone";
 import { get, prefOf } from "./store";
+import { t } from "./i18n";
 
 const HIGHLIGHT_MS = 500; // herdr 的 PANE_COPY_HIGHLIGHT_DURATION
 const TOAST_MS = 2000; // herdr 的 COPY_FEEDBACK_DURATION
@@ -26,7 +27,7 @@ export function copySelected(text: string, multiClick: boolean, clear: () => voi
   if (!text.trim()) return;
   clearTimeout(pendingClear);
   const done = () => {
-    toast("已复制", { id: "copy-on-select", duration: TOAST_MS });
+    toast(t("common.copied"), { id: "copy-on-select", duration: TOAST_MS });
     clearTimeout(pendingClear);
     if (multiClick) pendingClear = setTimeout(clear, HIGHLIGHT_MS);
     else clear();

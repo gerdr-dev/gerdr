@@ -15,6 +15,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { LLMSettings } from "@/components/LLMSettings";
 import { api } from "@/lib/api";
 import { MODE, defaultsOf, flatOptions, setDefaults, withoutDefaults } from "@/lib/defaults";
+import { t } from "@/lib/i18n";
+import type { MessageKey } from "@/lib/messages";
 import { get, setConfig, useStore, type AgentDef, type LLMProvider } from "@/lib/store";
 import type { AgentInfo, ExtView } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -53,7 +55,7 @@ type Draft = {
   color: string; // a PALETTE key; "" = the icon's own colours
 };
 
-const KIND_NAME: Record<Kind, string> = { claude: "Claude Code", codex: "Codex", native: "Native", command: "外部 ACP" };
+const kindName = (k: Kind) => (k === "command" ? t("agentSettings.kind.command") : { claude: "Claude Code", codex: "Codex", native: "Native" }[k]);
 
 const toDraft = (d: AgentDef): Draft => ({
   id: d.id,
@@ -78,20 +80,20 @@ const toDraft = (d: AgentDef): Draft => ({
 function fromDraft(d: Draft): AgentDef {
   const env: Record<string, string> = {};
   for (const line of d.env.split("\n")) {
-    const t = line.trim();
-    if (!t || t.startsWith("#")) continue;
-    const i = t.indexOf("=");
-    if (i <= 0) throw new Error(`环境变量要写成 KEY=VALUE：${t}`);
-    env[t.slice(0, i).trim()] = t.slice(i + 1).trim();
+    const ln = line.trim();
+    if (!ln || ln.startsWith("#")) continue;
+    const i = ln.indexOf("=");
+    if (i <= 0) throw new Error(t("agentSettings.err.envFormat", { line: ln }));
+    env[ln.slice(0, i).trim()] = ln.slice(i + 1).trim();
   }
   const words = (s: string) => s.split(/\s+/).filter(Boolean);
-  if (!d.name.trim()) throw new Error("起个名字");
+  if (!d.name.trim()) throw new Error(t("agentSettings.err.nameRequired"));
   if (d.kind === "command") {
-    if (!d.command.trim()) throw new Error("外部 Agent 要填启动命令");
+    if (!d.command.trim()) throw new Error(t("agentSettings.err.commandRequired"));
     return { id: d.id, name: d.name.trim(), command: words(d.command), env: Object.keys(env).length ? env : undefined, ...looks(d) };
   }
   const native = d.kind === "native"; // Native 引擎没有可执行文件，启动参数 / 环境变量用不上
-  if (native && !d.providers.length) throw new Error("至少勾一个服务商");
+  if (native && !d.providers.length) throw new Error(t("agentSettings.err.providerRequired"));
   return {
     id: d.id,
     name: d.name.trim(),
@@ -193,12 +195,12 @@ export function AgentSettings() {
       for (const k of new Set([...Object.keys(before), ...Object.keys(edit.defaults)])) values[k] = edit.defaults[k] ?? "";
       if (edit.builtin) {
         setDefaults(edit.id, values);
-        toast.success("已保存：之后新开的会话按这个来");
+        toast.success(t("agentSettings.savedBuiltin"));
       } else {
         const d = fromDraft(edit);
         setDefaults(edit.id, values, { agents: isNew ? [...defs, d] : defs.map((x) => (x.id === d.id ? d : x)) });
         const restarted = !isNew && processKey(edit) !== processKey(JSON.parse(orig));
-        toast.success(isNew ? `加好了：新建会话时选「${d.name}」` : restarted ? "已保存：Agent 已重启，之后发的消息按新配置走" : "已保存");
+        toast.success(isNew ? t("agentSettings.added", { name: d.name }) : restarted ? t("agentSettings.savedRestarted") : t("common.saved"));
       }
       setEdit(null);
     } catch (e: any) {
@@ -210,9 +212,7 @@ export function AgentSettings() {
     <div className="space-y-4 text-[13px]">
       <div>
         <div className="font-medium">Agent</div>
-        <div className="text-[12px] text-muted-foreground">
-          新建会话时选的就是它们：一个引擎，加上自己的提示词、Skill / MCP、新会话默认。同一个引擎可以建好几个。
-        </div>
+        <div className="text-[12px] text-muted-foreground">{t("agentSettings.intro")}</div>
       </div>
       <div className="space-y-1.5">
         {agents.map((a) => {
@@ -229,23 +229,25 @@ export function AgentSettings() {
                 {/* The engine label gives way first, the name only past 60% (on phones it got cut to "Claude…") */}
                 <span className="max-w-[60%] shrink-0 truncate font-medium">{a.name}</span>
                 <span className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground">
-                  引擎 {KIND_NAME[(def ? (def.base ?? "command") : a.id) as Kind]}
-                  {!def && " · 内置"}
+                  {t("agentSettings.engineOf", { name: kindName((def ? (def.base ?? "command") : a.id) as Kind) })}
+                  {!def && t("agentSettings.builtinSuffix")}
                 </span>
-                <span className={cn("shrink-0 text-[12px]", a.available ? "text-ok" : "text-bad")}>{a.available ? "可用" : "不可用"}</span>
+                <span className={cn("shrink-0 text-[12px]", a.available ? "text-ok" : "text-bad")}>
+                  {a.available ? t("agentSettings.available") : t("agentSettings.unavailable")}
+                </span>
                 <div className="flex shrink-0 items-center gap-2">
                   <Button
                     size="icon"
                     variant="ghost"
                     className="size-7"
-                    title={def ? "编辑" : "新会话默认"}
+                    title={def ? t("common.edit") : t("agentSettings.newSessionDefaults")}
                     onClick={() => open(def ? toDraft(def) : { ...blank(a.id as Kind, a.name), id: a.id, builtin: true, defaults: defaultsOf(a.id) }, false)}
                   >
                     <Pencil className="size-3.5" />
                   </Button>
                   {def && (
                     <ConfirmDelete
-                      title="删除（已有的会话留着，只是没法再接着聊）"
+                      title={t("agentSettings.deleteTitle")}
                       onConfirm={() => setConfig({ agents: defs.filter((x) => x.id !== def.id), ...withoutDefaults(def.id) })}
                     />
                   )}
@@ -257,7 +259,7 @@ export function AgentSettings() {
                   {chips.map((c) => (
                     <span key={c}>{c}</span>
                   ))}
-                  {summary && <span>新会话默认：{summary}</span>}
+                  {summary && <span>{t("agentSettings.defaultsSummary", { summary })}</span>}
                 </div>
               )}
             </div>
@@ -266,8 +268,8 @@ export function AgentSettings() {
       </div>
 
       {/* 只一个「新建」：换账号、外部 ACP agent 都在弹窗里选「引擎」/ 展开「高级」 */}
-      <Button size="sm" variant="outline" onClick={() => open(blank("claude", "新角色"), true)}>
-        <Plus className="size-3.5" /> 新建
+      <Button size="sm" variant="outline" onClick={() => open(blank("claude", t("agentSettings.newRoleName")), true)}>
+        <Plus className="size-3.5" /> {t("agentSettings.new")}
       </Button>
 
       {/* 新建和编辑都在弹窗里（叠在设置弹窗上面）：原来展开在列表下面，列表一长就要往下找 */}
@@ -284,7 +286,13 @@ export function AgentSettings() {
           {/* Same title as the Settings dialog under it (SettingsDialog.tsx): size, padding, the phone's 15px */}
           <DialogHeader className="min-w-0 shrink-0 border-b px-6 pt-5 pr-12 pb-4 text-left max-md:px-4 max-md:pt-3 max-md:pb-3">
             <DialogTitle className="truncate leading-normal max-md:text-[15px]">
-              {!edit ? "" : edit.builtin ? `${edit.name} · 新会话默认` : isNew ? "新建 Agent" : `编辑「${edit.name}」`}
+              {!edit
+                ? ""
+                : edit.builtin
+                  ? t("agentSettings.titleBuiltin", { name: edit.name })
+                  : isNew
+                    ? t("agentSettings.titleNew")
+                    : t("agentSettings.titleEdit", { name: edit.name })}
             </DialogTitle>
           </DialogHeader>
           {edit && (
@@ -306,11 +314,24 @@ export function AgentSettings() {
 
 function roleChips(d: AgentDef, providers: LLMProvider[]) {
   const out: string[] = [];
-  if (d.prompt) out.push("有提示词");
-  if (d.skills) out.push(d.skills.length ? `Skill ${d.skills.length} 个` : "不用 Skill");
-  if (d.mcp) out.push(d.mcp.length ? `MCP ${d.mcp.length} 个` : "不用 MCP");
-  if (d.providers?.length) out.push(`服务商 ${d.providers.map((id) => providers.find((p) => p.id === id)?.name || `${id}（已删）`).join("、")}`);
-  if (d.env && Object.keys(d.env).length) out.push("自己的环境变量");
+  if (d.prompt) out.push(t("agentSettings.chip.prompt"));
+  if (d.skills)
+    out.push(
+      d.skills.length
+        ? t(d.skills.length === 1 ? "agentSettings.chip.skillsOne" : "agentSettings.chip.skills", { n: d.skills.length })
+        : t("agentSettings.chip.noSkills"),
+    );
+  if (d.mcp)
+    out.push(
+      d.mcp.length ? t(d.mcp.length === 1 ? "agentSettings.chip.mcpOne" : "agentSettings.chip.mcp", { n: d.mcp.length }) : t("agentSettings.chip.noMcp"),
+    );
+  if (d.providers?.length)
+    out.push(
+      t("agentSettings.chip.providers", {
+        list: d.providers.map((id) => providers.find((p) => p.id === id)?.name || t("agentSettings.deletedProvider", { id })).join(t("agentSettings.listSep")),
+      }),
+    );
+  if (d.env && Object.keys(d.env).length) out.push(t("agentSettings.chip.env"));
   return out;
 }
 
@@ -326,9 +347,9 @@ function Engines({ agents }: { agents: AgentInfo[] }) {
         <span className="shrink-0 font-medium whitespace-nowrap">{name}</span>
         <span className="min-w-0 flex-1 text-[12px] text-muted-foreground max-md:order-last max-md:basis-full max-md:pl-6">{how}</span>
         {a?.available ? (
-          <span className="ml-auto shrink-0 text-[12px] text-ok">装了</span>
+          <span className="ml-auto shrink-0 text-[12px] text-ok">{t("agentSettings.installed")}</span>
         ) : (
-          <span className="ml-auto min-w-0 truncate text-[12px] text-bad">{a?.error || "没装"}</span>
+          <span className="ml-auto min-w-0 truncate text-[12px] text-bad">{a?.error || t("agentSettings.notInstalled")}</span>
         )}
       </div>
     );
@@ -336,12 +357,12 @@ function Engines({ agents }: { agents: AgentInfo[] }) {
   return (
     <div className="space-y-3 border-t pt-4">
       <div>
-        <div className="font-medium">引擎</div>
-        <div className="text-[12px] text-muted-foreground">真正干活的那个。Agent 选哪个引擎，会话就跑在哪个上面。</div>
+        <div className="font-medium">{t("agentSettings.engines")}</div>
+        <div className="text-[12px] text-muted-foreground">{t("agentSettings.enginesHint")}</div>
       </div>
       <div className="space-y-1.5">
-        {cli("claude", "Claude Code", "本机的 Claude 命令，账号在它那边登录")}
-        {cli("codex", "Codex", "本机的 Codex 命令，账号在它那边登录")}
+        {cli("claude", "Claude Code", t("agentSettings.claudeHow"))}
+        {cli("codex", "Codex", t("agentSettings.codexHow"))}
       </div>
       <LLMSettings />
     </div>
@@ -377,7 +398,7 @@ function Editor({
       <div className="min-h-0 flex-1 space-y-3 overflow-auto px-6 py-4 max-md:px-4">
         {/* Phones: one column, each label pulled up against the field under it (a label column left the fields too narrow) */}
         <div className="grid grid-cols-[88px_minmax(0,1fr)] items-center gap-x-3 max-md:grid-cols-1 gap-y-2.5 max-md:[&>span.text-muted-foreground]:-mb-1.5 max-md:[&>span.text-muted-foreground]:pt-0">
-          <span className="text-muted-foreground">名字</span>
+          <span className="text-muted-foreground">{t("agentSettings.name")}</span>
           {d.builtin ? (
             <span className="font-medium">{d.name}</span>
           ) : (
@@ -385,13 +406,13 @@ function Editor({
           )}
           {!d.builtin && (
             <>
-              <span className="self-start pt-1.5 text-muted-foreground">图标</span>
+              <span className="self-start pt-1.5 text-muted-foreground">{t("agentSettings.icon")}</span>
               <IconPicker d={d} onChange={set} />
             </>
           )}
           {!d.builtin && (
             <>
-              <span className="text-muted-foreground">引擎</span>
+              <span className="text-muted-foreground">{t("agentSettings.engine")}</span>
               <Select
                 value={d.kind}
                 // 换到 Native 时先把服务商全勾上（至少要勾一个，省得人再去点）
@@ -404,19 +425,19 @@ function Editor({
                   <SelectItem value="claude">Claude Code</SelectItem>
                   <SelectItem value="codex">Codex</SelectItem>
                   {(providers.length > 0 || d.kind === "native") && <SelectItem value="native">Native</SelectItem>}
-                  <SelectItem value="command">外部 ACP Agent</SelectItem>
+                  <SelectItem value="command">{t("agentSettings.externalAcp")}</SelectItem>
                 </SelectContent>
               </Select>
             </>
           )}
           {d.kind === "native" && !d.builtin && (
             <>
-              <span className="self-start pt-1 text-muted-foreground">服务商</span>
+              <span className="self-start pt-1 text-muted-foreground">{t("agentSettings.providers")}</span>
               <div className="space-y-1">
                 <div className="flex flex-wrap gap-x-4 gap-y-1">
                   {[
                     ...providers.map((p) => ({ id: p.id, name: p.name || p.id })),
-                    ...d.providers.filter((id) => !providers.some((p) => p.id === id)).map((id) => ({ id, name: `${id}（已删）` })),
+                    ...d.providers.filter((id) => !providers.some((p) => p.id === id)).map((id) => ({ id, name: t("agentSettings.deletedProvider", { id }) })),
                   ].map((p) => (
                     <label key={p.id} className="flex cursor-pointer items-center gap-1.5">
                       <Checkbox
@@ -433,22 +454,22 @@ function Editor({
                     </label>
                   ))}
                 </div>
-                <div className="text-[11px] text-muted-foreground">只用勾上的这几家的模型，至少勾一个。服务商在下面「引擎 → Native」里配。</div>
+                <div className="text-[11px] text-muted-foreground">{t("agentSettings.providersHint")}</div>
               </div>
             </>
           )}
           {role && (
             <>
-              <span className="self-start pt-1.5 text-muted-foreground">提示词</span>
+              <span className="self-start pt-1.5 text-muted-foreground">{t("agentSettings.prompt")}</span>
               <div className="space-y-1">
                 <textarea
                   className="min-h-24 w-full rounded-md border bg-card p-2 text-[12px]"
                   value={d.prompt}
                   onChange={(e) => set({ prompt: e.target.value })}
                   onKeyDown={stop}
-                  placeholder="这个角色是干什么的、要守什么规矩。比如：你是代码审查员，只读代码、不改文件，按严重程度列出问题。"
+                  placeholder={t("agentSettings.promptPlaceholder")}
                 />
-                <div className="text-[11px] text-muted-foreground">追加在 Agent 自己的系统提示后面（CLAUDE.md / AGENTS.md 照样读）。</div>
+                <div className="text-[11px] text-muted-foreground">{t("agentSettings.promptHint")}</div>
               </div>
             </>
           )}
@@ -468,14 +489,14 @@ function Editor({
           <div className="space-y-2.5">
             {d.kind !== "command" && (
               <button className="text-[12px] text-muted-foreground hover:text-foreground" onClick={() => setAdv(!adv)}>
-                {adv ? "▾" : "▸"} 高级：换账号 / 可执行文件 / 启动参数
+                {adv ? "▾" : "▸"} {t("agentSettings.advanced")}
               </button>
             )}
             {(adv || d.kind === "command") && (
               <div className="grid grid-cols-[88px_minmax(0,1fr)] items-center gap-x-3 max-md:grid-cols-1 gap-y-2.5 max-md:[&>span.text-muted-foreground]:-mb-1.5 max-md:[&>span.text-muted-foreground]:pt-0">
                 {d.kind === "command" ? (
                   <>
-                    <span className="text-muted-foreground">启动命令</span>
+                    <span className="text-muted-foreground">{t("agentSettings.command")}</span>
                     <Input
                       value={d.command}
                       onChange={(e) => set({ command: e.target.value })}
@@ -486,53 +507,57 @@ function Editor({
                   </>
                 ) : (
                   <>
-                    <span className="text-muted-foreground">可执行文件</span>
+                    <span className="text-muted-foreground">{t("agentSettings.bin")}</span>
                     <Input
                       value={d.bin}
                       onChange={(e) => set({ bin: e.target.value })}
                       onKeyDown={stop}
                       className="h-8 font-mono text-[12px]"
-                      placeholder={`留空 = 和原版一样找 ${d.kind}`}
+                      placeholder={t("agentSettings.binPlaceholder", { kind: d.kind })}
                     />
-                    <span className="text-muted-foreground">额外参数</span>
+                    <span className="text-muted-foreground">{t("agentSettings.args")}</span>
                     <Input
                       value={d.args}
                       onChange={(e) => set({ args: e.target.value })}
                       onKeyDown={stop}
                       className="h-8 font-mono text-[12px]"
-                      placeholder={d.kind === "claude" ? "比如 --settings ~/my-settings.json" : "比如 -c model=o3"}
+                      placeholder={t("agentSettings.argsPlaceholder", { example: d.kind === "claude" ? "--settings ~/my-settings.json" : "-c model=o3" })}
                     />
                   </>
                 )}
-                <span className="self-start pt-1.5 text-muted-foreground">环境变量</span>
+                <span className="self-start pt-1.5 text-muted-foreground">{t("agentSettings.env")}</span>
                 <textarea
                   className="h-24 w-full rounded-md border bg-card p-2 font-mono text-[12px]"
                   value={d.env}
                   spellCheck={false}
                   onChange={(e) => set({ env: e.target.value })}
                   onKeyDown={stop}
-                  placeholder="KEY=VALUE，一行一个"
+                  placeholder={t("agentSettings.envPlaceholder")}
                 />
               </div>
             )}
             {adv && d.kind === "claude" && (
               <div className="space-y-1.5 rounded-md bg-muted/60 p-2.5 text-[12px] text-muted-foreground">
                 <div>
-                  换账号两种做法：① 用订阅账号：给一个单独的 <code className="font-mono">CLAUDE_CONFIG_DIR</code>
-                  （登录态和会话记录都存在那个目录，和原版互不相干）， 然后在终端里用这个目录登录一次；② 用 API key：写{" "}
-                  <code className="font-mono">ANTHROPIC_API_KEY=sk-…</code>（要走代理再加 <code className="font-mono">ANTHROPIC_BASE_URL</code>
-                  ）。不换账号就留空，和原版共用登录。
+                  {t("agentSettings.claudeAccount1")}
+                  <code className="font-mono">CLAUDE_CONFIG_DIR</code>
+                  {t("agentSettings.claudeAccount2")}
+                  <code className="font-mono">ANTHROPIC_API_KEY=sk-…</code>
+                  {t("agentSettings.claudeAccount3")}
+                  <code className="font-mono">ANTHROPIC_BASE_URL</code>
+                  {t("agentSettings.claudeAccount4")}
                 </div>
-                {login && (
-                  <LoginHint cmd={login} then="进去之后输入 /login 登录，完了 /exit 退出（注意：设了这个变量之后哪怕指向 ~/.claude 也要单独登录一次）。" />
-                )}
+                {login && <LoginHint cmd={login} then={t("agentSettings.claudeLoginThen")} />}
               </div>
             )}
             {adv && d.kind === "codex" && (
               <div className="space-y-1.5 rounded-md bg-muted/60 p-2.5 text-[12px] text-muted-foreground">
                 <div>
-                  换账号：给一个单独的 <code className="font-mono">CODEX_HOME</code> 并用它登录一次，或者写 <code className="font-mono">OPENAI_API_KEY=…</code>
-                  。不换账号就留空。
+                  {t("agentSettings.codexAccount1")}
+                  <code className="font-mono">CODEX_HOME</code>
+                  {t("agentSettings.codexAccount2")}
+                  <code className="font-mono">OPENAI_API_KEY=…</code>
+                  {t("agentSettings.codexAccount3")}
                 </div>
                 {login && <LoginHint cmd={login} />}
               </div>
@@ -545,16 +570,14 @@ function Editor({
       <div className="flex shrink-0 items-center justify-end gap-2 border-t px-6 py-3 max-md:px-4">
         {restarts && (
           <div className={cn("mr-auto text-[12px]", busy ? "text-warn" : "text-muted-foreground")}>
-            {busy
-              ? `保存会立即终止这个 Agent 上正在跑的 ${busy} 个会话：手上这一轮会中断、不会自己继续，要你再发一条消息（对话记录不丢，按新配置接着聊）。`
-              : "保存会让这个 Agent 重启，那一刻在跑的会话会被立即终止（现在没有）。"}
+            {busy ? t(busy === 1 ? "agentSettings.restartBusyOne" : "agentSettings.restartBusy", { n: busy }) : t("agentSettings.restartIdle")}
           </div>
         )}
         <Button size="sm" variant="ghost" onClick={onCancel}>
-          取消
+          {t("common.cancel")}
         </Button>
         <Button size="sm" onClick={onSave}>
-          保存
+          {t("common.save")}
         </Button>
       </div>
     </div>
@@ -580,16 +603,16 @@ function IconPicker({ d, onChange }: { d: Draft; onChange: (p: Partial<Draft>) =
     </button>
   );
   const vendor = d.kind === "claude" || d.kind === "codex";
-  const icons = (list: Record<string, { name: string }>) =>
+  const icons = (list: Record<string, { label: MessageKey }>) =>
     Object.entries(list).map(([k, g]) =>
-      cell(d.icon === k, g.name, () => onChange({ icon: k }), <AgentGlyph name={k} color={d.color} className="size-5" />, k),
+      cell(d.icon === k, t(g.label), () => onChange({ icon: k }), <AgentGlyph name={k} color={d.color} className="size-5" />, k),
     );
   return (
     <div className="space-y-1">
       <div className="flex flex-wrap gap-1">
         {cell(
           !d.icon,
-          vendor ? `默认（${KIND_NAME[d.kind]} 的 logo）` : "默认（自动分一个）",
+          vendor ? t("agentSettings.iconDefaultVendor", { name: kindName(d.kind) }) : t("agentSettings.iconDefaultAuto"),
           () => onChange({ icon: "" }),
           vendor ? <AgentIcon agent={d.kind} className="size-5" /> : <AgentGlyph name={autoGlyph(d.id)} color={d.color} className="size-5" />,
         )}
@@ -605,11 +628,11 @@ function IconPicker({ d, onChange }: { d: Draft; onChange: (p: Partial<Draft>) =
       )}
       {hasGlyph(d) && (
         <div className="flex flex-wrap gap-1 border-t pt-1">
-          {cell(!d.color, "默认颜色", () => onChange({ color: "" }), <AgentGlyph name={d.icon || autoGlyph(d.id)} className="size-5" />)}
+          {cell(!d.color, t("agentSettings.colorDefault"), () => onChange({ color: "" }), <AgentGlyph name={d.icon || autoGlyph(d.id)} className="size-5" />)}
           {Object.entries(PALETTE).map(([k, c]) =>
             cell(
               d.color === k,
-              c.name,
+              t(c.label),
               () => onChange({ color: k }),
               <span className="size-4 rounded-full" style={{ background: `linear-gradient(135deg, ${c.from}, ${c.to})` }} />,
               k,
@@ -641,7 +664,7 @@ function candidates(v: ExtView, kind: "claude" | "codex" | "native") {
       had.global ||= c.global; // same name on both sides: the engine gets one of them under "全部"
     else list.push(c);
   };
-  for (const sk of v.builtin) if (sk.enabled) add(skills, { name: sk.name, from: "内置", description: sk.description, global: true });
+  for (const sk of v.builtin) if (sk.enabled) add(skills, { name: sk.name, from: t("agentSettings.fromBuiltin"), description: sk.description, global: true });
   for (const sk of v.skills) if (sk.enabled) add(skills, { name: sk.name, from: "Gerdr", description: sk.description, global: s.skillSource !== "agent" });
   for (const sk of kind === "codex" ? v.agent.codexSkills : v.agent.claudeSkills)
     add(skills, { name: sk.name, from: own, description: sk.description, global: s.skillSource !== "gerdr" });
@@ -669,9 +692,9 @@ function ExtPicker({
     api
       .ext()
       .then(setView)
-      .catch((e) => toast.error(`读 Skill / MCP 列表失败：${e.message}`));
+      .catch((e) => toast.error(t("agentSettings.extLoadFailed", { error: e.message })));
   }, [version]);
-  if (!view) return <div className="text-[12px] text-muted-foreground">读 Skill / MCP 列表…</div>;
+  if (!view) return <div className="text-[12px] text-muted-foreground">{t("agentSettings.extLoading")}</div>;
   const c = candidates(view, kind);
   return (
     <div className="grid gap-3 md:grid-cols-2">
@@ -680,21 +703,15 @@ function ExtPicker({
         items={c.skills}
         value={skills}
         onChange={(v) => onChange({ skills: v })}
-        note={
-          kind === "claude"
-            ? "项目里的 Skill 这里列不出来：限定之后它们也不给。插件里的 Skill 关不了单个，一个都没勾的插件整个关掉（连它的 MCP、Hook）。"
-            : kind === "codex"
-              ? "Codex 自带的系统 Skill 不受影响。"
-              : undefined
-        }
+        note={kind === "claude" ? t("agentSettings.noteClaudeSkill") : kind === "codex" ? t("agentSettings.noteCodexSkill") : undefined}
       />
       <Pick
         label="MCP"
         items={c.mcp}
         value={mcp}
         onChange={(v) => onChange({ mcp: v })}
-        note={kind === "claude" ? "限定之后只给勾上的：插件带的 MCP、claude.ai 账号里连的 Connector 都不给。" : undefined}
-        allHint={kind === "native" ? `用「设置 → Agent → MCP」里 Gerdr 的 MCP 开着的那些，${c.mcp.filter((i) => i.global).length} 个。` : undefined}
+        note={kind === "claude" ? t("agentSettings.noteClaudeMcp") : undefined}
+        allHint={kind === "native" ? t("agentSettings.allHintNative", { n: c.mcp.filter((i) => i.global).length }) : undefined}
       />
     </div>
   );
@@ -718,19 +735,21 @@ function Pick({
 }) {
   const limited = value !== null;
   // 存着的名字现在列表里没有了（skill 删了、MCP 改名了）：也列出来，不然勾不掉
-  const gone = (value ?? []).filter((n) => !items.some((i) => i.name === n)).map((n): Cand => ({ name: n, from: "已不在", global: false }));
+  const gone = (value ?? []).filter((n) => !items.some((i) => i.name === n)).map((n): Cand => ({ name: n, from: t("agentSettings.fromGone"), global: false }));
   return (
     <div className="space-y-1.5 rounded-md border bg-card p-2.5">
       <div className="flex items-center gap-2">
         <span className="font-medium">{label}</span>
         <span className="flex-1" />
         <div className="flex rounded-md border text-[12px]">
-          {[
-            ["全部", false],
-            ["只用勾选的", true],
-          ].map(([t, on]) => (
+          {(
+            [
+              [t("agentSettings.pickAll"), false],
+              [t("agentSettings.pickSome"), true],
+            ] as const
+          ).map(([text, on]) => (
             <button
-              key={t as string}
+              key={text}
               className={cn(
                 "px-2 py-0.5 first:rounded-l-md last:rounded-r-md",
                 limited === on ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground",
@@ -738,16 +757,16 @@ function Pick({
               // switching to a pick starts from what "全部" gives, so nothing changes until a box is touched
               onClick={() => onChange(on ? (value ?? items.filter((i) => i.global).map((i) => i.name)) : null)}
             >
-              {t as string}
+              {text}
             </button>
           ))}
         </div>
       </div>
       {!limited ? (
-        <div className="text-[12px] text-muted-foreground">{allHint ?? `照「设置 → ${label}」里的来源，${items.filter((i) => i.global).length} 个。`}</div>
+        <div className="text-[12px] text-muted-foreground">{allHint ?? t("agentSettings.allHint", { label, n: items.filter((i) => i.global).length })}</div>
       ) : (
         <div className="max-h-52 space-y-0.5 overflow-auto">
-          {items.length + gone.length === 0 && <div className="text-[12px] text-muted-foreground">没有可选的</div>}
+          {items.length + gone.length === 0 && <div className="text-[12px] text-muted-foreground">{t("agentSettings.nothingToPick")}</div>}
           {[...items, ...gone].map((i) => (
             <label key={i.name} className="flex cursor-pointer items-start gap-2 rounded-sm px-1 py-0.5 hover:bg-accent" title={i.description}>
               <Checkbox
@@ -784,16 +803,21 @@ function DefaultsEditor({
   const llm = useStore((s) => s.config.llm);
   const o = optionsOf(agents, id, base);
   const rows: { key: string; label: string; options: { value: string; name: string }[] }[] = [];
-  if (o?.modes?.availableModes.length) rows.push({ key: MODE, label: "模式", options: o.modes.availableModes.map((m) => ({ value: m.id, name: m.name })) });
+  if (o?.modes?.availableModes.length)
+    rows.push({ key: MODE, label: t("agentSettings.mode"), options: o.modes.availableModes.map((m) => ({ value: m.id, name: m.name })) });
   for (const c of o?.config ?? [])
-    rows.push({ key: c.id, label: c.id === "model" ? "模型" : c.id === "effort" ? "思考强度" : c.name, options: flatOptions(c) });
+    rows.push({
+      key: c.id,
+      label: c.id === "model" ? t("agentSettings.model") : c.id === "effort" ? t("agentSettings.effort") : c.name,
+      options: flatOptions(c),
+    });
   if (base === "native") {
     // Native 的模型直接按配置里的服务商列（不靠上次报的那份：那份是全部服务商的，换了勾选也不跟着变）
     const ps = (llm?.providers ?? []).filter((p) => !providers?.length || providers.includes(p.id));
     const models = ps.flatMap((p) =>
       p.models.map((m) => ({ value: `${p.id}/${m.id}`, name: `${m.name || m.id}${ps.length > 1 ? ` · ${p.name || p.id}` : ""}` })),
     );
-    const row = { key: "model", label: "模型", options: models };
+    const row = { key: "model", label: t("agentSettings.model"), options: models };
     const i = rows.findIndex((r) => r.key === "model");
     if (i >= 0) rows[i] = row;
     else if (models.length) rows.push(row);
@@ -806,11 +830,9 @@ function DefaultsEditor({
   };
   return (
     <div className="space-y-1.5 rounded-md border bg-card p-2.5">
-      <div className="font-medium">新会话默认</div>
+      <div className="font-medium">{t("agentSettings.newSessionDefaults")}</div>
       {!rows.length ? (
-        <div className="text-[12px] text-muted-foreground">
-          还不知道它有哪些模式和模型：先开一个这种会话，回来就能选；或者在会话输入框下面的下拉里选好，点「设为新会话的默认」。
-        </div>
+        <div className="text-[12px] text-muted-foreground">{t("agentSettings.noOptions")}</div>
       ) : (
         <div className="grid grid-cols-[88px_minmax(0,1fr)] items-center gap-x-3 max-md:grid-cols-1 gap-y-2 max-md:gap-y-2.5 max-md:[&>div>span.text-muted-foreground]:-mb-1 max-md:[&>div>span.text-muted-foreground]:pt-0">
           {rows.map((r) => {
@@ -824,8 +846,12 @@ function DefaultsEditor({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={UNSET}>不指定（{id === "native" && r.key === "model" ? "第一个模型" : "跟 Agent 自己的默认"}）</SelectItem>
-                    {!known && <SelectItem value={v}>{v}（现在没有这个了）</SelectItem>}
+                    <SelectItem value={UNSET}>
+                      {t("agentSettings.unset", {
+                        what: id === "native" && r.key === "model" ? t("agentSettings.unsetFirstModel") : t("agentSettings.unsetAgentDefault"),
+                      })}
+                    </SelectItem>
+                    {!known && <SelectItem value={v}>{t("agentSettings.optionGone", { value: v })}</SelectItem>}
                     {r.options.map((x) => (
                       <SelectItem key={x.value} value={x.value}>
                         {x.name}
@@ -838,10 +864,7 @@ function DefaultsEditor({
           })}
         </div>
       )}
-      <div className="text-[11px] text-muted-foreground">
-        只管新开的会话；`gerdr session new` 不带 --mode 时也用这里的模式（全放开的那种除外，防 Agent
-        借它提权）。思考强度的选项跟着模型变，选的档位新模型不认就用模型的默认。
-      </div>
+      <div className="text-[11px] text-muted-foreground">{t("agentSettings.defaultsNote")}</div>
     </div>
   );
 }
@@ -849,15 +872,15 @@ function DefaultsEditor({
 function LoginHint({ cmd, then }: { cmd: string; then?: string }) {
   return (
     <div className="space-y-1">
-      <div>在终端里跑这一条{then ? `，${then}` : "。"}</div>
+      <div>{then ? t("agentSettings.runThisThen", { then }) : t("agentSettings.runThis")}</div>
       <div className="flex items-start gap-1.5">
         <code className="min-w-0 flex-1 rounded-sm bg-card px-2 py-1 font-mono break-all text-foreground">{cmd}</code>
         <Button
           size="icon"
           variant="ghost"
           className="size-7 shrink-0"
-          title="复制"
-          onClick={() => navigator.clipboard.writeText(cmd).then(() => toast.success("已复制"))}
+          title={t("common.copy")}
+          onClick={() => navigator.clipboard.writeText(cmd).then(() => toast.success(t("common.copied")))}
         >
           <Copy className="size-3.5" />
         </Button>

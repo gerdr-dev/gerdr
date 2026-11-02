@@ -7,6 +7,7 @@ import { createInPane } from "@/lib/actions";
 import { api } from "@/lib/api";
 import { set, useStore } from "@/lib/store";
 import { ago } from "./NewSession";
+import { t } from "@/lib/i18n";
 
 // "Import Claude Code conversations…" on a new-session pane: the agent's own conversations in that directory that gerdr
 // doesn't manage yet (run in a terminal, or from before gerdr), read from the agent's records (hub.ListImportable). Picking
@@ -45,14 +46,14 @@ export function ImportAgentDialog() {
   };
 
   return (
-    <CommandDialog open onOpenChange={(o) => !o && close()} title={`导入 ${agentName} 对话`} description={d.cwd}>
-      <CommandInput placeholder={`导入 ${agentName} 在这个目录下的对话…`} />
+    <CommandDialog open onOpenChange={(o) => !o && close()} title={t("importAgentDialog.title", { agent: agentName })} description={d.cwd}>
+      <CommandInput placeholder={t("importAgentDialog.placeholder", { agent: agentName })} />
       <CommandList>
-        {list && <CommandEmpty>这个目录下没有还没导入的 {agentName} 对话</CommandEmpty>}
+        {list && <CommandEmpty>{t("importAgentDialog.empty", { agent: agentName })}</CommandEmpty>}
         {err && <div className="px-3 py-2 text-[12px] text-bad">{err}</div>}
         {!list && !err && (
           <div className="flex items-center gap-2 px-3 py-2 text-[12px] text-muted-foreground">
-            <Loader2 className="size-3.5 animate-spin" /> 读 {agentName} 的对话记录…
+            <Loader2 className="size-3.5 animate-spin" /> {t("importAgentDialog.reading", { agent: agentName })}
           </div>
         )}
         {list && list.length > 0 && (

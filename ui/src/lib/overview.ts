@@ -32,6 +32,7 @@ import { get, markRead, set, setConfig, useStore } from "./store";
 import { syncWatch } from "./sync";
 import type { KeyAction } from "./keys";
 import type { SessionSummary } from "./types";
+import { t } from "./i18n";
 
 export { activeIds, MAX_TILES, overviewFocus, overviewIds, workChats, type Overview };
 
@@ -168,8 +169,8 @@ export function showInOverview(id: string): boolean {
 /** "Add to active" from a menu: stay where you are, but the toast offers a way to jump to the tile. */
 export function addToActive(id: string) {
   addActive([id]);
-  if (!activeIds(get()).includes(id)) return void toast("加进去了，但它不在这个项目里：在「进行中」的设置里打开「显示所有项目」才看得到");
-  toast("已加入进行中", { action: { label: "查看", onClick: () => showInOverview(id) } });
+  if (!activeIds(get()).includes(id)) return void toast(t("overview.addedElsewhere"));
+  toast(t("overview.added"), { action: { label: t("overview.view"), onClick: () => showInOverview(id) } });
 }
 
 export function focusTile(id: string) {

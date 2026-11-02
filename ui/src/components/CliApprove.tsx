@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { api, ApiError, type CliRequest } from "@/lib/api";
 import { isCancel, loginPasskey } from "@/lib/passkey";
 import { cn } from "@/lib/utils";
+import { t } from "@/lib/i18n";
 
 /**
  * 「批准 App 登录」：安卓 App 的 WebView 里刷不了 passkey 时（WebView 太旧、手机上没有凭据提供方），App 显示一个码、
@@ -108,8 +109,8 @@ export function CliApprove() {
     <Dialog open={open} onOpenChange={(o) => !o && close()}>
       <DialogContent className="sm:max-w-md" onOpenAutoFocus={(e) => (e.preventDefault(), box.current?.focus())}>
         <DialogHeader>
-          <DialogTitle>批准 App 登录</DialogTitle>
-          {step.at === "code" && <DialogDescription>安卓 App 上「在浏览器里批准」时会显示一个 8 位码，把它输到这里。</DialogDescription>}
+          <DialogTitle>{t("cliApprove.title")}</DialogTitle>
+          {step.at === "code" && <DialogDescription>{t("cliApprove.desc")}</DialogDescription>}
         </DialogHeader>
 
         {step.at === "code" && (
@@ -122,7 +123,7 @@ export function CliApprove() {
                 autoComplete="off"
                 spellCheck={false}
                 placeholder="XXXX-XXXX"
-                aria-label="App 上显示的码"
+                aria-label={t("cliApprove.codeLabel")}
                 className={cn("flex-1 text-center text-base uppercase", code && "tracking-[.25em]")}
                 onChange={(e) => {
                   const v = fmt(e.target.value);
@@ -134,46 +135,48 @@ export function CliApprove() {
                 onKeyDown={(e) => e.key === "Enter" && void peek()}
               />
               <Button disabled={busy || raw.length !== 8} onClick={() => void peek()}>
-                {busy ? "…" : "下一步"}
+                {busy ? "…" : t("cliApprove.next")}
               </Button>
             </div>
             <p className="border-t pt-3 text-xs leading-relaxed text-muted-foreground">
-              <b className="font-medium text-foreground">只有你自己刚在 App 上点了登录，才输码批准。</b>
-              谁让你「帮忙输一下这个码」都别理 —— 批准了就是给那台设备一份能远程登录的凭据。
+              <b className="font-medium text-foreground">{t("cliApprove.warnStrong")}</b>
+              {t("cliApprove.warnRest")}
             </p>
           </>
         )}
 
         {step.at === "confirm" && (
           <>
-            <p className="text-[13px] text-muted-foreground">看清是哪台设备再批准：</p>
+            <p className="text-[13px] text-muted-foreground">{t("cliApprove.check")}</p>
             <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 rounded-md border bg-muted/40 px-3 py-2.5 text-[13px]">
-              <dt className="text-muted-foreground">设备</dt>
+              <dt className="text-muted-foreground">{t("cliApprove.device")}</dt>
               <dd className="truncate font-medium">{step.req.label}</dd>
-              <dt className="text-muted-foreground">来自</dt>
+              <dt className="text-muted-foreground">{t("cliApprove.from")}</dt>
               <dd className="truncate font-mono text-muted-foreground">{step.req.ip || "—"}</dd>
-              <dt className="text-muted-foreground">做什么</dt>
+              <dt className="text-muted-foreground">{t("cliApprove.what")}</dt>
               <dd className="text-muted-foreground">
-                {step.req.device ? <>给已有的「{step.req.deviceLabel || step.req.device}」重新验证</> : "登录一台新设备（批准后出现在设备列表里）"}
+                {step.req.device ? t("cliApprove.reauth", { device: step.req.deviceLabel || step.req.device }) : t("cliApprove.newDevice")}
               </dd>
             </dl>
             {step.req.local && (
               <p className="flex gap-2 rounded-md border border-warn/40 bg-warn/10 px-3 py-2 text-xs leading-relaxed text-warn">
                 <TriangleAlert className="mt-px size-4 shrink-0" />
                 <span>
-                  这个请求是从跑 Gerdr 的<b>这台机器本身</b>发起的，不是手机。你没在这台机器上点登录的话别批准 —— 那可能是某个 Agent 在让你替它开门。
+                  {t("cliApprove.localBefore")}
+                  <b>{t("cliApprove.localStrong")}</b>
+                  {t("cliApprove.localAfter")}
                 </span>
               </p>
             )}
             <Button className="w-full" disabled={busy} onClick={() => void approve(step.req)}>
-              {busy ? "等 Passkey…" : "批准"}
+              {busy ? t("cliApprove.waitPasskey") : t("cliApprove.approve")}
             </Button>
             <div className="flex gap-2">
               <Button variant="destructive" className="flex-1" disabled={busy} onClick={() => void deny(step.req)}>
-                拒绝
+                {t("cliApprove.deny")}
               </Button>
               <Button variant="outline" className="flex-1" disabled={busy} onClick={reset}>
-                换一个码
+                {t("cliApprove.otherCode")}
               </Button>
             </div>
           </>
@@ -183,13 +186,11 @@ export function CliApprove() {
           <>
             <p className={cn("flex items-center gap-2 text-[15px]", step.ok ? "text-ok" : "text-muted-foreground")}>
               {step.ok ? <Check className="size-5" /> : <X className="size-5" />}
-              {step.ok ? (step.reauth ? "已批准，那台设备续上了" : "已批准") : "已拒绝"}
+              {step.ok ? (step.reauth ? t("cliApprove.approvedReauth") : t("cliApprove.approved")) : t("cliApprove.denied")}
             </p>
-            <p className="text-[13px] text-muted-foreground">
-              {step.ok ? "App 那边会自己进去，这一页可以关了。" : "App 那边会收到「被拒绝」，这个码也作废了。"}
-            </p>
+            <p className="text-[13px] text-muted-foreground">{step.ok ? t("cliApprove.approvedHint") : t("cliApprove.deniedHint")}</p>
             <Button variant="outline" className="w-full" onClick={close}>
-              关闭
+              {t("common.close")}
             </Button>
           </>
         )}

@@ -12,6 +12,7 @@ import { useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { AgentIcon, StatusDot, dotStatus } from "./AgentIcon";
 import { whereOf } from "./tileInfo";
+import { t } from "@/lib/i18n";
 
 /**
  * "Pick a few" on an empty grid: opens PickActive. It used to open the sidebar drawer, but there tapping an agent goes
@@ -22,7 +23,7 @@ export function PickButton() {
   return (
     <>
       <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
-        <Plus className="size-3.5" /> 挑几个
+        <Plus className="size-3.5" /> {t("overviewPick.pickSome")}
       </Button>
       <PickActive open={open} onClose={() => setOpen(false)} />
     </>
@@ -38,7 +39,7 @@ export function AddMenu({ focus }: { focus?: string }) {
   const s = useStore((st) => (focus ? st.sessions[focus] : undefined));
   const [pick, setPick] = useState(false);
   const button = (onClick?: () => void) => (
-    <Button variant="ghost" size="icon" className="size-9 shrink-0" aria-label="加 Agent" onClick={onClick}>
+    <Button variant="ghost" size="icon" className="size-9 shrink-0" aria-label={t("overviewPick.addAgent")} onClick={onClick}>
       <Plus className="size-[18px]" />
     </Button>
   );
@@ -50,10 +51,10 @@ export function AddMenu({ focus }: { focus?: string }) {
           <DropdownMenuContent align="end" className="max-w-72">
             <DropdownMenuItem onClick={() => newAgentInOverview()}>
               <AgentIcon agent={s.agent} className="size-4" />
-              <span className="min-w-0 truncate">新开一个 · {basename(s.cwd)}</span>
+              <span className="min-w-0 truncate">{t("overviewPick.newLike", { dir: basename(s.cwd) })}</span>
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => setPick(true)}>
-              <ListPlus /> 加入 Agent
+              <ListPlus /> {t("overviewPick.addExisting")}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -97,8 +98,8 @@ function PickActive({ open, onClose }: { open: boolean; onClose: () => void }) {
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="gap-3 p-4" onOpenAutoFocus={(e) => e.preventDefault()}>
         <DialogHeader>
-          <DialogTitle className="text-[15px]">加入进行中</DialogTitle>
-          <DialogDescription className="text-[12px]">勾上要一起看的 Agent，跑完也留着，直到你移出</DialogDescription>
+          <DialogTitle className="text-[15px]">{t("overviewPick.title")}</DialogTitle>
+          <DialogDescription className="text-[12px]">{t("overviewPick.desc")}</DialogDescription>
         </DialogHeader>
         {list.length ? (
           <div className="-mx-1 max-h-[55vh] overflow-y-auto">
@@ -129,17 +130,15 @@ function PickActive({ open, onClose }: { open: boolean; onClose: () => void }) {
             })}
           </div>
         ) : (
-          <div className="py-6 text-center text-[13px] text-muted-foreground">{all ? "开着的 Agent 都在进行中了" : "这个项目开着的 Agent 都在进行中了"}</div>
+          <div className="py-6 text-center text-[13px] text-muted-foreground">{all ? t("overviewPick.allIn") : t("overviewPick.allInProject")}</div>
         )}
-        {!all && spaceList(layout).length > 1 && (
-          <div className="text-[11px] text-muted-foreground">只列这个项目的；别的项目的要在「进行中」的设置里打开「显示所有项目的 Agent」</div>
-        )}
+        {!all && spaceList(layout).length > 1 && <div className="text-[11px] text-muted-foreground">{t("overviewPick.onlyThisProject")}</div>}
         <DialogFooter className="flex-row justify-end">
           <Button size="sm" variant="outline" onClick={onClose}>
-            取消
+            {t("common.cancel")}
           </Button>
           <Button size="sm" disabled={!picked.length} onClick={confirm}>
-            {picked.length ? `加入 ${picked.length} 个` : "加入"}
+            {picked.length ? t("overviewPick.addN", { n: picked.length }) : t("overviewPick.add")}
           </Button>
         </DialogFooter>
       </DialogContent>

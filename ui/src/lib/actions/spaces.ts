@@ -15,6 +15,7 @@ import {
 import { flushLayout, get, setConfig, setLayout } from "../store";
 import { workProjectOf } from "../work";
 import { inSpace, killTerms, shutdownGone } from "./shared";
+import { t } from "../i18n";
 
 // ---- sessions (herdr's: isolated groups of workspaces; Space in layout.ts) ----
 
@@ -155,7 +156,7 @@ export function snapshotSpace(id: string): () => void {
   return () => {
     const l1 = get().layout;
     const listed = spaceList(l1).find((s) => s.id.toLowerCase() === id.toLowerCase());
-    if (!space || (listed && (listed.id !== id || spaceWorkspaces(l1, id).length > 0))) throw new Error(`又有叫「${id}」的项目了`);
+    if (!space || (listed && (listed.id !== id || spaceWorkspaces(l1, id).length > 0))) throw new Error(t("actionsSpaces.nameTaken", { id }));
     setLayout((l) => {
       const ws = workspaces.filter((w) => !l.workspaces.some((x) => x.id === w.id));
       if (!ws.length) ws.push({ ...newWorkspace("default"), space: inSpace(id) });
@@ -186,7 +187,7 @@ export function closeSpaceUndoable(id: string): () => void {
  * directory, then the project as snapshotSpace has it. The default project can't be deleted.
  */
 export async function deleteSpace(id: string): Promise<{ trash: string; undo: () => Promise<void> }> {
-  if (id === DEFAULT_SPACE) throw new Error("默认项目不能删除");
+  if (id === DEFAULT_SPACE) throw new Error(t("actionsSpaces.defaultUndeletable"));
   const restore = snapshotSpace(id);
   const c = get().config;
   closeSpace(id);
@@ -198,7 +199,7 @@ export async function deleteSpace(id: string): Promise<{ trash: string; undo: ()
   const { trash } = await api.deleteProject(id);
 
   const undo = async () => {
-    if (spaceList(get().layout).some((s) => s.id.toLowerCase() === id.toLowerCase())) throw new Error(`又有叫「${id}」的项目了`);
+    if (spaceList(get().layout).some((s) => s.id.toLowerCase() === id.toLowerCase())) throw new Error(t("actionsSpaces.nameTaken", { id }));
     // The directory first: putting the workspaces back makes the server write the project's layout copy, which would
     // create the directory and leave the trash nowhere to go
     if (trash) await api.restoreProject(id, trash);

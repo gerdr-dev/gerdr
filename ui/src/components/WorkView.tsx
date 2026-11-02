@@ -21,6 +21,7 @@ import { set, setMode, useStore } from "@/lib/store";
 import { syncWatch } from "@/lib/sync";
 import { cn } from "@/lib/utils";
 import { askWorkAgent, ensureWorkSession, isEmptyChat, newWorkChat, openWorkChat, useWorkChats, useWorkProject, useWorkSession, workAgent } from "@/lib/work";
+import { t } from "@/lib/i18n";
 
 // Work mode: the user's own Work project on the left, one agent on the right (Annulo's layout, ../shuttle).
 //
@@ -65,7 +66,7 @@ function ChatEdge({ width, onWidth }: { width: number; onWidth: (w: number) => v
       className={cn("absolute top-0 -left-1 bottom-0 w-2 px-[3px] pointer-coarse:-left-3 pointer-coarse:w-6 pointer-coarse:px-[11px]", COL_EDGE)}
       onPointerDown={start}
       onDoubleClick={() => onWidth(CHAT_W)}
-      title="拖动调宽窄，双击还原"
+      title={t("nav.dragResize")}
       style={{ WebkitAppRegion: "no-drag" } as any}
     />
   );
@@ -141,7 +142,7 @@ function WorkFrame({ project, onShowChat }: { project: string; onShowChat?: () =
         // With a request id the page shows its own notice: answer it with the conversation (or the error) instead of a toast
         const rid = m.id;
         askWorkAgent(m.text, project).then(
-          (session) => (rid != null ? send({ type: "gerdr:asked", id: rid, session }) : toast.success("交给右边的助手了")),
+          (session) => (rid != null ? send({ type: "gerdr:asked", id: rid, session }) : toast.success(t("workView.handedOff"))),
           (err) => {
             const error = err.message ?? String(err);
             if (rid != null) send({ type: "gerdr:asked", id: rid, error });
@@ -183,14 +184,14 @@ function WorkChat() {
     <div className="flex h-full items-center justify-center gap-2 p-6 text-center text-[12px] text-muted-foreground">
       {err ? (
         <div className="space-y-2">
-          <div className="text-bad">开助手失败：{err}</div>
+          <div className="text-bad">{t("workView.openFailed", { error: err })}</div>
           <Button size="sm" variant="outline" onClick={() => (setErr(""), ensureWorkSession().catch((e) => setErr(e.message)))}>
-            重试
+            {t("common.retry")}
           </Button>
         </div>
       ) : (
         <>
-          <PixelLoader className="size-4" /> 正在开助手…
+          <PixelLoader className="size-4" /> {t("workView.opening")}
         </>
       )}
     </div>
@@ -199,9 +200,9 @@ function WorkChat() {
 
 function ago(iso: string) {
   const d = (Date.now() - new Date(iso).getTime()) / 1000;
-  if (d < 3600) return `${Math.max(1, Math.round(d / 60))} 分钟前`;
-  if (d < 86400) return `${Math.round(d / 3600)} 小时前`;
-  return `${Math.floor(d / 86400)} 天前`;
+  if (d < 3600) return t("nav.minutesAgo", { n: Math.max(1, Math.round(d / 60)) });
+  if (d < 86400) return t("nav.hoursAgo", { n: Math.round(d / 3600) });
+  return t("nav.daysAgo", { n: Math.floor(d / 86400) });
 }
 
 /**
@@ -213,7 +214,7 @@ function ChatHeader() {
   const all = useWorkChats();
   const current = useWorkSession();
   const unread = useStore((s) => s.unread);
-  const title = (t?: string) => (t && t !== "Work" ? t : "新对话");
+  const title = (s?: string) => (s && s !== "Work" ? s : t("workView.newChat"));
   const cur = all.find((c) => c.id === current);
   // Untouched conversations would all read "新对话" with nothing to tell them apart; the current one stays so it's marked
   const chats = all.filter((c) => c.id === current || !isEmptyChat(c));
@@ -224,7 +225,7 @@ function ChatHeader() {
   // Kept the current, still-empty chat (newWorkChat): say so, or the button looks like it did nothing
   const fresh = (agent?: string) =>
     newWorkChat(agent).then(
-      (id) => id === current && toast("这就是一个新对话，直接说就行"),
+      (id) => id === current && toast(t("workView.alreadyNew")),
       (e) => toast.error(e.message),
     );
   const noDrag = { WebkitAppRegion: "no-drag" } as any;
@@ -232,15 +233,15 @@ function ChatHeader() {
     <div className="flex h-10 shrink-0 items-center gap-1 border-b px-2" style={{ WebkitAppRegion: "drag" } as any}>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="sm" className="h-7 min-w-0 gap-1.5 px-2 text-[12px]" title="历史对话" style={noDrag}>
+          <Button variant="ghost" size="sm" className="h-7 min-w-0 gap-1.5 px-2 text-[12px]" title={t("workView.history")} style={noDrag}>
             {cur ? <AgentIcon agent={cur.agent} className="size-3.5 shrink-0" /> : <History className="size-3.5 shrink-0 text-muted-foreground" />}
             <span className="truncate">{title(cur?.title)}</span>
             <ChevronDown className="size-3 shrink-0 text-muted-foreground" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="max-h-96 w-72 overflow-y-auto">
-          <DropdownMenuLabel className="text-[11px] font-normal text-muted-foreground">历史对话</DropdownMenuLabel>
-          {chats.length === 0 && <DropdownMenuItem disabled>还没有对话</DropdownMenuItem>}
+          <DropdownMenuLabel className="text-[11px] font-normal text-muted-foreground">{t("workView.history")}</DropdownMenuLabel>
+          {chats.length === 0 && <DropdownMenuItem disabled>{t("workView.noChats")}</DropdownMenuItem>}
           {chats.map((c) => (
             <DropdownMenuItem key={c.id} onClick={() => openWorkChat(c.id)}>
               <AgentIcon agent={c.agent} className="size-3.5 shrink-0" />
@@ -259,8 +260,8 @@ function ChatHeader() {
           variant="ghost"
           size="icon"
           className="size-7 rounded-r-none pointer-coarse:size-9"
-          title={`新对话（${defaultName}）`}
-          aria-label="新对话"
+          title={t("workView.newChatWith", { name: defaultName })}
+          aria-label={t("workView.newChat")}
           onClick={() => fresh()}
         >
           <MessageSquarePlus className="size-3.5 pointer-coarse:size-4" />
@@ -271,27 +272,27 @@ function ChatHeader() {
               variant="ghost"
               size="icon"
               className="h-7 w-4 rounded-l-none text-muted-foreground pointer-coarse:h-9 pointer-coarse:w-6"
-              title="用别的 Agent 开新对话"
+              title={t("workView.newChatOtherAgent")}
             >
               <ChevronDown className="size-3" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-64">
-            <DropdownMenuLabel className="text-[11px] font-normal text-muted-foreground">开新对话</DropdownMenuLabel>
+            <DropdownMenuLabel className="text-[11px] font-normal text-muted-foreground">{t("workView.startNewChat")}</DropdownMenuLabel>
             {agents.map((a) => (
               <DropdownMenuItem key={a.id} disabled={!a.available} title={a.available ? undefined : a.error} onClick={() => fresh(a.id)}>
                 <AgentIcon agent={a.id} className="size-3.5" />
                 <span className="flex-1">{a.name}</span>
                 {!a.available ? (
-                  <span className="text-[11px] text-muted-foreground">不可用</span>
+                  <span className="text-[11px] text-muted-foreground">{t("workView.unavailable")}</span>
                 ) : (
-                  a.id === defaultId && <span className="text-[11px] text-muted-foreground">默认</span>
+                  a.id === defaultId && <span className="text-[11px] text-muted-foreground">{t("common.default")}</span>
                 )}
               </DropdownMenuItem>
             ))}
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => set({ dialog: { kind: "settings", tab: "agents" } })}>
-              <Settings /> 配置 Agent…
+              <Settings /> {t("workView.configureAgents")}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -321,7 +322,7 @@ export function WorkView() {
                   className={cn("h-7 rounded-md px-3 text-[12px]", side === v ? "bg-background shadow-sm" : "text-muted-foreground")}
                   onClick={() => setSide(v)}
                 >
-                  {v === "page" ? "页面" : "助手"}
+                  {v === "page" ? t("workView.page") : t("workView.assistant")}
                 </button>
               ))}
             </div>

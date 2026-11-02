@@ -23,6 +23,7 @@ import { IS_MAC } from "@/lib/keys";
 import { isNative, nativeOpenPath, nativeOpenURL } from "@/lib/native";
 import { stripLineAnchor } from "@/lib/paths";
 import { isPhone } from "@/lib/phone";
+import { t as tr } from "@/lib/i18n"; // `t` is the event target below
 
 /**
  * Right-click menu for the desktop App. Electron has no menu of its own, so a right-click did nothing: no copying a
@@ -93,18 +94,18 @@ async function copyImage(img: HTMLImageElement) {
     if (isAndroid()) {
       // The phone's clipboard takes the file as it is (jpg, gif…); no need to redraw it as PNG
       const r = await fetch(img.currentSrc || img.src, { credentials: "same-origin" });
-      if (!r.ok) throw new Error(`读不到图片（${r.status}）`);
+      if (!r.ok) throw new Error(tr("appContextMenu.imageReadFailed", { status: r.status }));
       await androidCopyImage(await r.blob());
       // Said here, not left to the system: HyperOS shows nothing when an app copies an image
-      return void toast.success("图片已复制");
+      return void toast.success(tr("appContextMenu.imageCopied"));
     }
     const c = document.createElement("canvas");
     c.width = img.naturalWidth;
     c.height = img.naturalHeight;
     c.getContext("2d")!.drawImage(img, 0, 0);
-    const blob = await new Promise<Blob>((ok, no) => c.toBlob((b) => (b ? ok(b) : no(new Error("复制不了这张图"))), "image/png"));
+    const blob = await new Promise<Blob>((ok, no) => c.toBlob((b) => (b ? ok(b) : no(new Error(tr("appContextMenu.imageCopyFailed")))), "image/png"));
     await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-    toast.success("图片已复制");
+    toast.success(tr("appContextMenu.imageCopied"));
   } catch (e) {
     fail(e);
   }
@@ -125,22 +126,26 @@ const fileName = (src: string, alt?: string) => {
 function fileItems(link: HTMLElement): Item[] {
   const path = link.dataset.gerdrFile!;
   const cwd = link.dataset.gerdrCwd || undefined;
-  const items: Item[] = [{ label: "打开", icon: <FileText className={icon} />, run: () => openPath(path, cwd), hint: "点击" }];
+  const items: Item[] = [{ label: tr("common.open"), icon: <FileText className={icon} />, run: () => openPath(path, cwd), hint: tr("appContextMenu.click") }];
   // A phone shows one pane at a time: "beside" would be the same dialog
   if (!isPhone())
     items.push({
-      label: "在旁边打开",
+      label: tr("appContextMenu.openBeside"),
       icon: <Columns2 className={icon} />,
       run: () => openPath(path, cwd, { beside: true }),
-      hint: IS_MAC ? "⌥ 点击" : "Alt+点击",
+      hint: IS_MAC ? tr("appContextMenu.altClickMac") : tr("appContextMenu.altClick"),
     });
   // The system app gets the path without a `:42` / `#L21` anchor, which it would read as part of the name
   if (isNative())
     items.push(
-      { label: "用默认应用打开", icon: <AppWindow className={icon} />, run: () => nativeOpenPath(stripLineAnchor(path), cwd, false) },
-      { label: IS_MAC ? "在访达中显示" : "在文件夹中显示", icon: <FolderOpen className={icon} />, run: () => nativeOpenPath(stripLineAnchor(path), cwd, true) },
+      { label: tr("appContextMenu.openDefaultApp"), icon: <AppWindow className={icon} />, run: () => nativeOpenPath(stripLineAnchor(path), cwd, false) },
+      {
+        label: IS_MAC ? tr("appContextMenu.revealFinder") : tr("appContextMenu.revealFolder"),
+        icon: <FolderOpen className={icon} />,
+        run: () => nativeOpenPath(stripLineAnchor(path), cwd, true),
+      },
     );
-  items.push({ label: "复制路径", icon: <Copy className={icon} />, run: () => copyText(absPath(path, cwd)) });
+  items.push({ label: tr("appContextMenu.copyPath"), icon: <Copy className={icon} />, run: () => copyText(absPath(path, cwd)) });
   return items;
 }
 
@@ -181,10 +186,10 @@ function buildMenu(e: MouseEvent, touch: boolean): Item[][] {
       document.execCommand(cmd);
     };
     groups.push([
-      { label: "剪切", icon: <Scissors className={icon} />, run: exec("cut"), disabled: ro || !hasSel },
-      { label: "复制", icon: <Copy className={icon} />, run: exec("copy"), disabled: !hasSel },
+      { label: tr("appContextMenu.cut"), icon: <Scissors className={icon} />, run: exec("cut"), disabled: ro || !hasSel },
+      { label: tr("common.copy"), icon: <Copy className={icon} />, run: exec("copy"), disabled: !hasSel },
       {
-        label: "粘贴",
+        label: tr("appContextMenu.paste"),
         icon: <Clipboard className={icon} />,
         disabled: ro,
         // execCommand("paste") is blocked in pages; read the clipboard and type it in so undo still works
@@ -194,14 +199,14 @@ function buildMenu(e: MouseEvent, touch: boolean): Item[][] {
           if (text) document.execCommand("insertText", false, text);
         },
       },
-      { label: "全选", icon: <TextSelect className={icon} />, run: exec("selectAll") },
+      { label: tr("appContextMenu.selectAll"), icon: <TextSelect className={icon} />, run: exec("selectAll") },
     ]);
     return groups;
   }
   if (!touch && selectedText().trim() && onSelection(e.clientX, e.clientY)) {
     groups.push([
       {
-        label: "复制",
+        label: tr("common.copy"),
         icon: <Copy className={icon} />,
         // execCommand keeps the formatting (a pasted table stays a table); writeText is the fallback
         run: () => {
@@ -224,8 +229,8 @@ function buildMenu(e: MouseEvent, touch: boolean): Item[][] {
   if (a && /^(https?|mailto):/i.test(a.href) && new URL(a.href).origin !== location.origin) {
     const href = a.href;
     groups.push([
-      { label: "在浏览器中打开链接", icon: <ExternalLink className={icon} />, run: () => nativeOpenURL(href) },
-      { label: "复制链接", icon: <Copy className={icon} />, run: () => copyText(href) },
+      { label: tr("appContextMenu.openLink"), icon: <ExternalLink className={icon} />, run: () => nativeOpenURL(href) },
+      { label: tr("appContextMenu.copyLink"), icon: <Copy className={icon} />, run: () => copyText(href) },
     ]);
   }
   const media = t?.closest<HTMLImageElement | HTMLVideoElement | HTMLAudioElement>("img, video, audio");
@@ -234,19 +239,25 @@ function buildMenu(e: MouseEvent, touch: boolean): Item[][] {
     const file = localFile(src);
     const isImg = media instanceof HTMLImageElement;
     groups.push([
-      ...(isImg && (!touch || androidCan("copyImage")) ? [{ label: "复制图片", icon: <ImageIcon className={icon} />, run: () => copyImage(media) }] : []),
+      ...(isImg && (!touch || androidCan("copyImage"))
+        ? [{ label: tr("appContextMenu.copyImage"), icon: <ImageIcon className={icon} />, run: () => copyImage(media) }]
+        : []),
       ...(touch
         ? []
         : [
             {
-              label: isImg ? "存储图片…" : "存储…",
+              label: isImg ? tr("appContextMenu.saveImage") : tr("appContextMenu.save"),
               icon: <Download className={icon} />,
               run: () => saveFile(src, fileName(src, isImg ? media.alt : undefined)),
             },
           ]),
       file
-        ? { label: "复制文件路径", icon: <FileText className={icon} />, run: () => copyText(file) }
-        : { label: isImg ? "复制图片地址" : "复制地址", icon: <Copy className={icon} />, run: () => copyText(new URL(src, location.href).href) },
+        ? { label: tr("appContextMenu.copyFilePath"), icon: <FileText className={icon} />, run: () => copyText(file) }
+        : {
+            label: isImg ? tr("appContextMenu.copyImageAddress") : tr("appContextMenu.copyAddress"),
+            icon: <Copy className={icon} />,
+            run: () => copyText(new URL(src, location.href).href),
+          },
     ]);
   }
   return groups;

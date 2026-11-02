@@ -7,6 +7,7 @@ import { continueInPane, resumeInPane } from "@/lib/actions";
 import { api } from "@/lib/api";
 import { isOpen } from "@/lib/overviewState";
 import { set, useStore } from "@/lib/store";
+import { t } from "@/lib/i18n";
 
 // /resume (like Claude Code): switch this pane to an earlier conversation in the same directory.
 // claude in stream-json mode doesn't take /resume (it's the interactive picker), so gerdr does it, from one list sorted by time:
@@ -81,7 +82,7 @@ export function ResumeDialog() {
         key: s.id,
         agent: s.agent,
         search: `${s.id} ${s.title ?? ""}`,
-        title: s.title || "（没有标题）",
+        title: s.title || t("resumeDialog.untitled"),
         at: s.updatedAt,
         open: isOpen(layout, config, s.id),
         pick: () => pickMine(s.id),
@@ -98,17 +99,23 @@ export function ResumeDialog() {
   entries.sort((a, b) => b.at - a.at);
 
   return (
-    <CommandDialog open onOpenChange={(o) => !o && !busy && close()} title="恢复对话" description="换到这个目录下之前的对话" className="max-w-3xl">
-      <CommandInput placeholder="搜对话…" />
+    <CommandDialog
+      open
+      onOpenChange={(o) => !o && !busy && close()}
+      title={t("resumeDialog.title")}
+      description={t("resumeDialog.description")}
+      className="max-w-3xl"
+    >
+      <CommandInput placeholder={t("resumeDialog.search")} />
       {/* 高度写在 style 上、且不许被压：WebKit 里弹窗（网格 + 限高）会把可滚动的这一块压到只剩一行（用户报的，导入弹窗同一个坑） */}
       <CommandList className="max-h-none shrink-0" style={{ height: "min(70vh, 720px)" }}>
-        <CommandEmpty>{native ? "这个目录下没有别的对话" : "读取中…"}</CommandEmpty>
+        <CommandEmpty>{native ? t("resumeDialog.empty") : t("resumeDialog.reading")}</CommandEmpty>
         <CommandGroup>
           {/* 当前这个也列出来（置灰、不能选）：一眼看见「我现在在哪个」，和别的对照着挑 */}
           <CommandItem value={`${cur.id} ${cur.title ?? ""}`} disabled className="gap-2.5 opacity-60">
             <AgentIcon agent={cur.agent} className="size-4 shrink-0" />
-            <span className="min-w-0 truncate">{cur.title || "（没有标题）"}</span>
-            <span className="shrink-0 rounded-sm bg-muted px-1.5 text-[11px] text-muted-foreground">当前</span>
+            <span className="min-w-0 truncate">{cur.title || t("resumeDialog.untitled")}</span>
+            <span className="shrink-0 rounded-sm bg-muted px-1.5 text-[11px] text-muted-foreground">{t("resumeDialog.current")}</span>
             <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">{ago(cur.updatedAt)}</span>
           </CommandItem>
           {entries.map((e) => (
@@ -117,15 +124,15 @@ export function ResumeDialog() {
               <AgentIcon agent={e.agent} className="size-4 shrink-0" />
               <span className="min-w-0 truncate">{e.title}</span>
               {/* Shown in a pane / Work view already: picking it brings that one over instead of opening it again */}
-              {e.open && <span className="shrink-0 rounded-sm bg-muted px-1.5 text-[11px] text-muted-foreground">已打开</span>}
-              {e.agent !== cur.agent && <span className="shrink-0 text-[11px] text-muted-foreground">换 {agentName} 接着聊</span>}
+              {e.open && <span className="shrink-0 rounded-sm bg-muted px-1.5 text-[11px] text-muted-foreground">{t("newSession.opened")}</span>}
+              {e.agent !== cur.agent && <span className="shrink-0 text-[11px] text-muted-foreground">{t("newSession.handoff", { agent: agentName })}</span>}
               <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">{e.at ? ago(e.at) : ""}</span>
             </CommandItem>
           ))}
         </CommandGroup>
         {native === null && (
           <div className="flex items-center gap-2 px-3 py-2 text-[12px] text-muted-foreground">
-            <Loader2 className="size-3.5 animate-spin" /> 读 Agent 自己的会话记录…
+            <Loader2 className="size-3.5 animate-spin" /> {t("resumeDialog.readingNative")}
           </div>
         )}
       </CommandList>
@@ -133,10 +140,10 @@ export function ResumeDialog() {
   );
 }
 
-function ago(t: number) {
-  const s = Math.max(0, (Date.now() - t) / 1000);
-  if (s < 60) return "刚刚";
-  if (s < 3600) return `${Math.floor(s / 60)} 分钟前`;
-  if (s < 86400) return `${Math.floor(s / 3600)} 小时前`;
-  return `${Math.floor(s / 86400)} 天前`;
+function ago(at: number) {
+  const s = Math.max(0, (Date.now() - at) / 1000);
+  if (s < 60) return t("newSession.ago.now");
+  if (s < 3600) return t("newSession.ago.min", { n: Math.floor(s / 60) });
+  if (s < 86400) return t("newSession.ago.hour", { n: Math.floor(s / 3600) });
+  return t("newSession.ago.day", { n: Math.floor(s / 86400) });
 }

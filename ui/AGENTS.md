@@ -59,8 +59,9 @@ src/lib/
   chatHost.tsx     gerdr's ChatHost (store, api, actions, and the composer features only gerdr has)
   api.ts           调 gerdr 后端的 HTTP 接口（所有接口都在这里有一个函数）
   i18n.ts          the interface's language (zh / en, each device its own, follows the system by default) and t();
-  messages.ts      the interface's texts, zh + en: new text goes here as t("area.key"), not inline. Being moved over one
-                   component at a time (Settings → General first); a component not moved yet still has Chinese literals
+  messages.ts      the interface's texts, zh + en, merged from text/<area>.ts (one file per area, each with zh and en;
+                   text/common.ts has shared words). New text goes in its area's file as t("file.key"), never inline:
+                   the key's first segment is the component's file name, so two files can't clash
   store.ts         global state (zustand): sessions, layout, config, transcripts. Re-exports store/: config.ts
                    (the Config type), prefs.ts (per-device settings), layoutSync.ts, transcripts.ts (session logs)
   sync.ts          WebSocket：服务端推来的会话变化、日志

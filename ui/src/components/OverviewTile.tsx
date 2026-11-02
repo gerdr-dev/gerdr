@@ -12,6 +12,7 @@ import { BorderFlow, useSlowCatchUp } from "./BorderFlow";
 import { AgentIcon, StatusDot, dotStatus } from "./AgentIcon";
 import { ChatView } from "./chat/ChatView";
 import { DRAG_TOUCH, statusTint, whereOf } from "./tileInfo";
+import { t } from "@/lib/i18n";
 
 /** A tile as a small chip tinted with its status: the phone's tile switcher, and the tiles that didn't fit in the grid. */
 export function TileChip({ id, current, className, onClick }: { id: string; current: boolean; className?: string; onClick: () => void }) {
@@ -108,28 +109,30 @@ export function Tile({
         // Middle click closes it, like a browser tab (mousedown is cancelled so the browser doesn't start auto-scroll)
         onMouseDown={(e) => e.button === 1 && e.preventDefault()}
         onAuxClick={(e) => e.button === 1 && removeActive(id)}
-        title="拖到别的格子边上放到它旁边，拖到中间交换位置；双击放大，中键关闭"
+        title={t("overviewTile.dragHint")}
       >
         {onDragStart && <GripVertical className="-mx-1.5 size-3.5 shrink-0 text-muted-foreground/60" />}
         <AgentIcon agent={session.agent} className="size-4" />
         <FadeText className="min-w-[3em] max-w-[50%] shrink font-medium">{title}</FadeText>
         <StatusDot status={dotStatus(session)} unread={unread} />
-        {session.pending ? <span className="shrink-0 whitespace-nowrap rounded-sm bg-bad/15 px-1.5 text-[11px] text-bad">等你</span> : null}
+        {session.pending ? (
+          <span className="shrink-0 whitespace-nowrap rounded-sm bg-bad/15 px-1.5 text-[11px] text-bad">{t("overviewTile.waiting")}</span>
+        ) : null}
         <FadeText className="min-w-0 flex-1 text-[11px] text-muted-foreground">{where}</FadeText>
         {!phone && (
           <>
-            <TileButton title={main ? "取消固定" : "固定在左边"} onClick={() => toggleMain(id)}>
+            <TileButton title={main ? t("overviewTile.unpin") : t("overviewTile.pinLeft")} onClick={() => toggleMain(id)}>
               {main ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
             </TileButton>
-            <TileButton title={zoomed ? "还原" : "放大（双击标题栏也行）"} onClick={onZoom}>
+            <TileButton title={zoomed ? t("overviewTile.restore") : t("overviewTile.zoom")} onClick={onZoom}>
               {zoomed ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
             </TileButton>
           </>
         )}
-        <TileButton title={inWork ? "去 Work 模式" : "回到它所在的 Tab"} onClick={jump}>
+        <TileButton title={inWork ? t("nav.goToWork") : t("overviewTile.backToTab")} onClick={jump}>
           <ArrowUpRight className="size-3.5" />
         </TileButton>
-        <TileButton title="完成，移出进行中（Agent 不受影响）" onClick={() => removeActive(id)}>
+        <TileButton title={t("overviewTile.done")} onClick={() => removeActive(id)}>
           <X className="size-3.5" />
         </TileButton>
       </div>

@@ -7,6 +7,8 @@ import { activeIds, addActive } from "@/lib/overview";
 import { get, setLayout } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { AgentIcon } from "./AgentIcon";
+import { t as tr } from "@/lib/i18n"; // `t` is the drop target below
+import type { MessageKey } from "@/lib/messages";
 
 /*
  * tab 栏的拖拽：排序 + 合并 + 挪到别的工作空间，一个手势里按松手的位置分：
@@ -394,7 +396,7 @@ export function startWsDrag(e: React.PointerEvent<HTMLElement>, wsId: string, la
   window.addEventListener("keydown", key, true);
 }
 
-const SIDE_TEXT: Record<Side, string> = { left: "放到左边", right: "放到右边", up: "放到上面", down: "放到下面" };
+const SIDE_TEXT: Record<Side, MessageKey> = { left: "tabDrag.left", right: "tabDrag.right", up: "tabDrag.up", down: "tabDrag.down" };
 
 /** 拖动中画在最上层的东西：跟着指针的 tab、排序的竖线、合并 / 分屏的预览。全都不接指针事件。 */
 export function TabDragLayer() {
@@ -420,7 +422,7 @@ export function TabDragLayer() {
           className="fixed flex items-center justify-center rounded-md border-2 border-brand bg-brand/15 transition-all duration-150 ease-out"
           style={fixed(t.rect)}
         >
-          <span className="rounded-md bg-background/90 px-2 py-1 text-[12px] text-foreground shadow-sm">{SIDE_TEXT[t.side]}</span>
+          <span className="rounded-md bg-background/90 px-2 py-1 text-[12px] text-foreground shadow-sm">{tr(SIDE_TEXT[t.side])}</span>
         </div>
       )}
       {t?.kind === "active" && <div className="fixed rounded-md bg-brand/10 ring-2 ring-brand" style={fixed(t.rect)} />}

@@ -13,6 +13,7 @@ import { eventKey } from "@/lib/keys";
 import { isCoarse } from "@/lib/phone";
 import { get } from "@/lib/store";
 import { cn } from "@/lib/utils";
+import { t } from "@/lib/i18n";
 
 type State = "connecting" | "live" | "exited" | "gone";
 
@@ -287,16 +288,17 @@ export function TerminalView({
       {state === "connecting" && (
         <div className="pointer-events-none absolute right-2 top-2 flex items-center gap-1.5 rounded-sm bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
           <Loader2 className="size-3 animate-spin" />
-          连接中
+          {t("terminal.connecting")}
         </div>
       )}
       {(state === "gone" || state === "exited") && (
         <div className="absolute inset-x-0 bottom-0 flex items-center gap-3 border-t bg-background/95 px-3 py-2 text-[12px]">
           <span className="text-muted-foreground">
-            {state === "gone" ? "这个终端已经不在了（Gerdr 重启过）" : code < 0 ? "Shell 被结束了" : `Shell 已退出（${code}）`}
+            {state === "gone" ? t("terminal.gone") : code < 0 ? t("terminal.killed") : t("terminal.exited", { code })}
           </span>
           <Button size="sm" variant="outline" className="ml-auto h-7" onClick={() => reopenTerminal(paneId, cwd)}>
-            <RotateCcw className="size-3.5" />在 {cwd.replace(/\/+$/, "").split("/").pop() || cwd} 重开
+            <RotateCcw className="size-3.5" />
+            {t("panes.reopenIn", { dir: cwd.replace(/\/+$/, "").split("/").pop() || cwd })}
           </Button>
         </div>
       )}

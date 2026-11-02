@@ -6,6 +6,7 @@ import { focusSession } from "@/lib/actions";
 import { api, type DoctorCheck, type DoctorFix, type DoctorLevel, type DoctorReport } from "@/lib/api";
 import { closeDialog, get, set, setConfig, useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
+import { t } from "@/lib/i18n";
 
 /*
  * Settings → Labs → Diagnosis (backend: internal/doctor). Checks that agents get the PATH the user has in their
@@ -19,11 +20,11 @@ import { cn } from "@/lib/utils";
 
 const dot: Record<DoctorLevel, string> = { ok: "bg-ok", info: "bg-muted-foreground/40", warn: "bg-warn", bad: "bg-bad" };
 
-const groups: { id: DoctorCheck["group"]; title: string }[] = [
-  { id: "path", title: "环境" },
-  { id: "agent", title: "Agent 程序" },
-  { id: "tool", title: "常用命令" },
-  { id: "usage", title: "额度" },
+const groups: { id: DoctorCheck["group"]; title: () => string }[] = [
+  { id: "path", title: () => t("doctorPanel.group.path") },
+  { id: "agent", title: () => t("doctorPanel.group.agent") },
+  { id: "tool", title: () => t("doctorPanel.group.tool") },
+  { id: "usage", title: () => t("doctorPanel.group.usage") },
 ];
 
 export function DoctorPanel() {
@@ -36,7 +37,7 @@ export function DoctorPanel() {
     try {
       set({ doctor: await api.doctorRun(deep) });
     } catch (e: any) {
-      toast.error(`诊断失败：${e.message ?? e}`);
+      toast.error(t("doctorPanel.runFailed", { error: e.message ?? e }));
     } finally {
       setBusy(null);
     }
@@ -48,13 +49,13 @@ export function DoctorPanel() {
       if (f.kind === "useBin" && f.agent && f.path) {
         await pinBin(f.agent, f.path);
         set({ doctor: await api.doctorRun(!!report?.deep) });
-        toast.success("改好了：之后新开的会话用这一份，已经开着的会话要重开");
+        toast.success(t("doctorPanel.binFixed"));
       } else {
         set({ doctor: await api.doctorFix(f) });
-        toast.success("PATH 重新读好了：之后新开的会话生效，已经开着的会话要重开");
+        toast.success(t("doctorPanel.pathFixed"));
       }
     } catch (e: any) {
-      toast.error(`没修好：${e.message ?? e}`);
+      toast.error(t("doctorPanel.fixFailed", { error: e.message ?? e }));
     } finally {
       setBusy(null);
     }
@@ -77,33 +78,35 @@ export function DoctorPanel() {
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex items-center gap-1.5 text-[13px]">
-            <Stethoscope className="size-3.5" /> 诊断
+            <Stethoscope className="size-3.5" /> {t("doctorPanel.title")}
           </div>
-          <div className="text-[12px] text-muted-foreground">
-            Agent 拿到的 PATH 和终端里是不是一样、Claude / Codex 能不能启动。完整诊断会实际跑一下找到的每一份程序，被 macOS
-            拦掉的那份会再弹一次系统提示，点「完成」就行
-          </div>
+          <div className="text-[12px] text-muted-foreground">{t("doctorPanel.desc")}</div>
         </div>
         <Button size="sm" variant="outline" className="shrink-0" disabled={!!busy} onClick={() => run(true)}>
-          <RefreshCw className={cn("size-3.5", busy === "run" && "animate-spin")} /> 运行诊断
+          <RefreshCw className={cn("size-3.5", busy === "run" && "animate-spin")} /> {t("doctorPanel.run")}
         </Button>
       </div>
 
       {!report ? (
-        <div className="text-[12px] text-muted-foreground">还没诊断过</div>
+        <div className="text-[12px] text-muted-foreground">{t("doctorPanel.never")}</div>
       ) : (
         <>
           <div className="text-[11px] text-muted-foreground tabular-nums">
             {new Date(report.at).toLocaleString([], { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}{" "}
-            {report.deep ? "完整诊断" : "后台快速检查（没跑程序）"}
-            {problems.length > 0 && <span className={report.level === "bad" ? "text-bad" : "text-warn"}> · {problems.length} 个问题</span>}
+            {report.deep ? t("doctorPanel.deep") : t("doctorPanel.light")}
+            {problems.length > 0 && (
+              <span className={report.level === "bad" ? "text-bad" : "text-warn"}>
+                {" "}
+                · {t(problems.length === 1 ? "doctorPanel.problems.one" : "doctorPanel.problems.other", { n: problems.length })}
+              </span>
+            )}
           </div>
           {groups.map((g) => {
             const list = report.checks.filter((c) => c.group === g.id);
             if (!list.length) return null;
             return (
               <div key={g.id} className="min-w-0 space-y-1">
-                <div className="text-[12px] font-medium text-muted-foreground">{g.title}</div>
+                <div className="text-[12px] font-medium text-muted-foreground">{g.title()}</div>
                 <div className="divide-y rounded-md border">
                   {list.map((c) => (
                     <CheckRow
@@ -122,9 +125,9 @@ export function DoctorPanel() {
           })}
           {problems.length > 0 && (
             <div className="flex items-center justify-between gap-4 rounded-md border border-dashed p-3">
-              <div className="text-[12px] text-muted-foreground">上面的按钮修不了的（删掉旧版本、要 sudo 的），交给 Agent：它会先把要跑的命令给你看</div>
+              <div className="text-[12px] text-muted-foreground">{t("doctorPanel.handOffHint")}</div>
               <Button size="sm" className="shrink-0" disabled={!!busy} onClick={() => handOff(report)}>
-                交给 Agent 修
+                {t("doctorPanel.handOff")}
               </Button>
             </div>
           )}
@@ -174,8 +177,8 @@ function CheckRow({
         <div className="ml-3.5 space-y-0.5">
           {c.installs.map((i) => (
             <div key={i.path} className="flex min-w-0 items-center gap-1.5 text-[11px]">
-              {i.current && <span className="shrink-0 rounded-sm bg-brand/15 px-1 text-brand">在用</span>}
-              {i.blocked && <span className="shrink-0 rounded-sm bg-bad/15 px-1 text-bad">被系统拦截</span>}
+              {i.current && <span className="shrink-0 rounded-sm bg-brand/15 px-1 text-brand">{t("doctorPanel.inUse")}</span>}
+              {i.blocked && <span className="shrink-0 rounded-sm bg-bad/15 px-1 text-bad">{t("doctorPanel.blocked")}</span>}
               {i.version && <span className="shrink-0 tabular-nums">{i.version}</span>}
               <span className="truncate font-mono text-muted-foreground" title={i.path}>
                 {i.path}
@@ -188,10 +191,11 @@ function CheckRow({
       {pinned && (
         <div className="ml-3.5 flex min-w-0 items-center gap-2 text-[11px] text-muted-foreground">
           <span className="truncate">
-            设置里指定了：<span className="font-mono">{pinned}</span>
+            {t("doctorPanel.pinned")}
+            <span className="font-mono">{pinned}</span>
           </span>
           <Button size="sm" variant="ghost" className="h-6 shrink-0 px-2 text-[11px]" disabled={!!busy} onClick={onUnpin}>
-            恢复按 PATH 找
+            {t("doctorPanel.unpin")}
           </Button>
         </div>
       )}
@@ -227,23 +231,22 @@ async function pinBin(agent: string, path: string) {
 }
 
 function reportText(r: DoctorReport) {
-  const lines = [
-    "Gerdr 的诊断（设置 → 实验室 → 诊断）发现了下面的问题，请帮我查清原因并修好。",
-    "",
-    "- 要用 sudo、删除或改动系统文件的命令，先把命令和理由告诉我，等我同意再执行。",
-    "- Gerdr 自己的修复（重新读取 PATH、指定用哪一份 Claude / Codex）在 设置 → 实验室 → 诊断 里有按钮，需要时告诉我去点。",
-    "- 你这个会话也是 Gerdr 起的，PATH 可能同样缺目录：找不到命令时用绝对路径，或者在 `zsh -lic '…'` 里跑。",
-    "",
-  ];
+  const lines = [t("doctorPanel.report.intro"), "", t("doctorPanel.report.sudo"), t("doctorPanel.report.buttons"), t("doctorPanel.report.path"), ""];
   for (const c of r.checks) {
     if (c.level !== "warn" && c.level !== "bad") continue;
-    lines.push(`## ${c.title}（${c.level === "bad" ? "严重" : "注意"}）`, "", c.summary);
+    lines.push(
+      t("doctorPanel.report.heading", { title: c.title, level: t(c.level === "bad" ? "doctorPanel.report.bad" : "doctorPanel.report.warn") }),
+      "",
+      c.summary,
+    );
     if (c.detail) lines.push("", "```", c.detail, "```");
     if (c.installs?.length) {
-      lines.push("", "找到的几份：");
+      lines.push("", t("doctorPanel.report.installs"));
       for (const i of c.installs) {
-        const tags = [i.current && "Gerdr 在用", i.version, i.blocked && "启动就被系统杀掉", !i.blocked && i.error].filter(Boolean).join("，");
-        lines.push(`- \`${i.path}\`${tags ? `（${tags}）` : ""}`);
+        const tags = [i.current && t("doctorPanel.report.inUse"), i.version, i.blocked && t("doctorPanel.report.killed"), !i.blocked && i.error]
+          .filter(Boolean)
+          .join(t("doctorPanel.report.tagSep"));
+        lines.push(`- \`${i.path}\`${tags ? t("doctorPanel.report.tags", { tags }) : ""}`);
       }
     }
     lines.push("");
@@ -259,16 +262,16 @@ async function handOff(r: DoctorReport) {
   const ok = (id?: string) => !!id && !broken.has(id) && st.agents.some((a) => a.id === id && a.available);
   const agent = [st.config.defaultAgent, "claude", "codex"].find(ok) ?? st.agents.find((a) => a.available && !broken.has(a.id))?.id;
   if (!agent) {
-    toast.error("没有能用的 Agent 可以交给它");
+    toast.error(t("doctorPanel.noAgent"));
     return;
   }
   try {
-    const s = await api.createSession({ agent, cwd: st.home, title: "诊断修复" });
+    const s = await api.createSession({ agent, cwd: st.home, title: t("doctorPanel.sessionTitle") });
     set((x) => ({ sessions: { ...x.sessions, [s.id]: s } }));
     closeDialog();
     focusSession(s.id);
     await api.send(s.id, [{ type: "text", text: reportText(r) }]);
   } catch (e: any) {
-    toast.error(`没交出去：${e.message ?? e}`);
+    toast.error(t("doctorPanel.handOffFailed", { error: e.message ?? e }));
   }
 }

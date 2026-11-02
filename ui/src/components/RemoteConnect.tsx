@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { api } from "@/lib/api";
+import { t } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Field } from "@/components/RemoteCert";
@@ -14,7 +15,7 @@ export function RemoteConnect({ relayURL, onDone }: { relayURL?: string; onDone:
   const [invite, setInvite] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
-  const h = host.trim().toLowerCase() || "<主机名>";
+  const h = host.trim().toLowerCase() || t("remoteConnect.hostSample");
 
   const connect = async () => {
     setErr("");
@@ -31,34 +32,32 @@ export function RemoteConnect({ relayURL, onDone }: { relayURL?: string; onDone:
 
   return (
     <div className="space-y-1.5">
-      <div className="text-[13px] font-medium">连接中继</div>
+      <div className="text-[13px] font-medium">{t("remoteConnect.title")}</div>
       <div className="space-y-3 rounded-md border p-3">
-        <div className="text-[12px] text-muted-foreground">
-          Gerdr 经云端中继（dialhome）对外：TLS 在这台机器上终止，中继只转密文。填中继地址、给这台机器起的域名，和在中继后台里出的邀请码。
-        </div>
-        <Field label="中继地址">
+        <div className="text-[12px] text-muted-foreground">{t("remoteConnect.intro")}</div>
+        <Field label={t("remoteConnect.relay")}>
           <Input className="font-mono text-[12px]" placeholder="https://relay.example.com" value={relay} onChange={(e) => setRelay(e.target.value)} />
         </Field>
-        <Field label="主机名">
+        <Field label={t("remoteConnect.host")}>
           <Input
             className="font-mono text-[12px]"
-            placeholder="gerdr.example.com（手机上打开的地址）"
+            placeholder={t("remoteConnect.hostPlaceholder")}
             spellCheck={false}
             value={host}
             onChange={(e) => setHost(e.target.value)}
           />
         </Field>
-        <Field label="邀请码">
+        <Field label={t("remoteConnect.invite")}>
           <Input className="font-mono text-[12px]" autoComplete="off" spellCheck={false} value={invite} onChange={(e) => setInvite(e.target.value)} />
         </Field>
         <div className="space-y-1 text-[12px] text-muted-foreground">
-          <div>邀请码在中继的网页后台里出（一次性，30 分钟内有效），或者在 VPS 上：</div>
+          <div>{t("remoteConnect.inviteHint")}</div>
           <pre className="overflow-x-auto rounded-md bg-muted p-2 font-mono">dialhome invite {h}</pre>
-          <div>DNS 上给 {h} 加一条 A 记录指向中继 VPS，中继那边的 SNI 路由也要放行这个名字 —— 漏了的表现是「已连上」但手机打不开，这里一个字都不报。</div>
+          <div>{t("remoteConnect.dnsHint", { host: h })}</div>
         </div>
         {err && <div className="text-[12px] text-bad">{err}</div>}
         <Button size="sm" disabled={busy || !relay.trim() || !host.trim() || !invite.trim()} onClick={connect}>
-          {busy ? "连接中…" : "连接"}
+          {busy ? t("remoteConnect.connecting") : t("remoteConnect.connect")}
         </Button>
       </div>
     </div>
