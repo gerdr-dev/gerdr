@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { api, type Holder } from "./api";
 import { closeAgentInPane, focusSession, openPath, openSubagent, refocusAfterDialog, withdrawSteer } from "./actions";
 import { defaultsOf, setDefault, setDefaults } from "./defaults";
-import { isNative, nativeOpenPath } from "./native";
+import { hasNativeFilePath, isNative, nativeFilePath, nativeOpenPath } from "./native";
 import {
   get,
   loadOlder,
@@ -255,6 +255,8 @@ export function GerdrChatProvider({ children }: { children: ReactNode }) {
       shell: { run: (id, cmd) => api.shell(id, cmd), stop: (id, run) => api.stopShell(id, run) },
       fileURL,
       upload: (f) => api.upload(f),
+      // Desktop App: attach files and folders by their path on this machine (the backend runs here too)
+      localPath: hasNativeFilePath() ? nativeFilePath : undefined,
       fileStat: (p, cwd) => api.fileStat(p, cwd),
       fileExists: (names, cwd) => api.fileExists(names, cwd),
       searchFiles: (id, q) => api.searchFiles(id, q).then((r) => r.files),

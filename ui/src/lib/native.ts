@@ -15,6 +15,17 @@ function bridge(): Bridge | undefined {
 
 export const isNative = () => !!bridge();
 
+/**
+ * Desktop App: where a picked / pasted / dropped File sits on this machine, so it is attached by its path (folders
+ * too) instead of uploaded. undefined in a browser, in a shell too old to have it, and for files not on disk.
+ */
+export function nativeFilePath(f: File): string | undefined {
+  const get = (window as any).gerdrNative?.getPathForFile;
+  return (typeof get === "function" && get(f)) || undefined;
+}
+
+export const hasNativeFilePath = () => typeof (window as any).gerdrNative?.getPathForFile === "function";
+
 /** space: the session (layout.ts Space) the conversation is in, so clicking it brings up the window showing that one. */
 export function nativeNotify(title: string, body: string, sessionId?: string, space?: string) {
   const b = bridge();

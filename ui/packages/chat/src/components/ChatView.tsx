@@ -378,7 +378,19 @@ export function ChatView({
           setDragging(false);
           if (sub || !e.dataTransfer.files.length) return;
           e.preventDefault();
-          composer.current?.addFiles(e.dataTransfer.files);
+          // A dropped folder arrives as an empty File whose bytes can't be read: it only works by its local path
+          // (host.localPath). Without one, say so here instead of letting an upload fail with "Failed to fetch".
+          // Entries can only be read during the drop event, so this can't wait for addFiles.
+          const files: File[] = [];
+          for (const it of Array.from(e.dataTransfer.items)) {
+            if (it.kind !== "file") continue;
+            const f = it.getAsFile();
+            if (!f) continue;
+            if (it.webkitGetAsEntry?.()?.isDirectory && !host.localPath?.(f)) toast.error(tr("composer.noFolder", { name: f.name }));
+            else files.push(f);
+          }
+          if (!files.length) return;
+          composer.current?.addFiles(files);
           composer.current?.focus();
         }}
       >
