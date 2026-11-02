@@ -361,11 +361,12 @@ export function UnifiedSidebar({ className }: { className?: string }) {
                   <div data-active-drop className="mb-1 border-b pb-1.5">
                     <div
                       role="button"
-                      className="group/act flex h-7 w-full cursor-default items-center gap-1 rounded-md px-1 text-[11px] font-medium text-muted-foreground select-none hover:bg-accent/60 hover:text-foreground"
+                      className="group/act flex h-7 w-full cursor-default items-center gap-1 rounded-md pr-1 pl-1.5 text-[11px] font-medium text-muted-foreground select-none hover:bg-accent/60 hover:text-foreground"
                       title="等你、在跑、报错的会自己进来，跑完也留着，直到你移出；也可以右键加进来。按该不该先看排"
                       onClick={() => setActiveFolded(!activeFolded)}
                     >
-                      <ChevronRight className={cn("size-3.5 shrink-0 transition-transform", !activeFolded && "rotate-90")} />
+                      {/* The margin lines the title up with the rows' titles below (row icon + gap-2 vs chevron + gap-1) */}
+                      <ChevronRight className={cn("size-3.5 shrink-0 transition-transform", roomy ? "mr-1.5" : "mr-1", !activeFolded && "rotate-90")} />
                       <span className="flex-1 truncate text-left">进行中{allProjects && <span className="font-normal"> · 所有项目</span>}</span>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -511,7 +512,7 @@ function WorkRow({ id, current, grid, num }: { id: string; current: boolean; gri
           role="button"
           data-row-current={current || undefined}
           className={cn(
-            "group relative flex cursor-default items-center gap-2 rounded-md pr-2 pl-1 text-[12px] select-none",
+            "group relative flex cursor-default items-center gap-2 rounded-md pr-2 pl-1.5 text-[12px] select-none",
             roomy ? "min-h-11" : "h-7",
             current ? "bg-accent font-medium" : "hover:bg-accent/60",
             "data-[state=open]:ring-1 data-[state=open]:ring-brand/60",
@@ -588,7 +589,7 @@ function Group({
             onPointerDown={(e) => startWsDrag(e, ws.id, label)}
             role="button"
             className={cn(
-              "group/ws flex cursor-default items-center gap-1 rounded-md px-1 text-[12px] select-none hover:bg-accent/60",
+              "group/ws flex cursor-default items-center gap-1 rounded-md pr-1 pl-1.5 text-[12px] select-none hover:bg-accent/60",
               roomy ? "h-9" : "h-7",
               "data-[state=open]:ring-1 data-[state=open]:ring-brand/60",
             )}
@@ -596,7 +597,8 @@ function Group({
             onDoubleClick={edit}
             title={ws.cwd ? ws.cwd : undefined}
           >
-            <ChevronRight className={cn("size-3.5 shrink-0 text-muted-foreground transition-transform", !folded && "rotate-90")} />
+            {/* The margin lines the group name up with its rows' titles (row icon + gap-2 vs chevron + gap-1) */}
+            <ChevronRight className={cn("size-3.5 shrink-0 text-muted-foreground transition-transform", roomy ? "mr-1.5" : "mr-1", !folded && "rotate-90")} />
             <span className={cn("min-w-0 truncate font-semibold", current ? "text-foreground" : "text-foreground/80")}>{label}</span>
             {ws.cwd && basename(ws.cwd) !== label && <span className="min-w-0 truncate text-[11px] text-muted-foreground">{basename(ws.cwd)}</span>}
             <span className="flex-1" />
@@ -766,7 +768,7 @@ function Row({
           onMouseDown={(e) => e.button === 1 && e.preventDefault()}
           onAuxClick={(e) => e.button === 1 && (e.preventDefault(), dismiss())}
           className={cn(
-            "group relative flex cursor-default items-center gap-2 rounded-md pr-2 pl-1 text-[12px] select-none",
+            "group relative flex cursor-default items-center gap-2 rounded-md pr-2 pl-1.5 text-[12px] select-none",
             roomy ? "min-h-11 py-1.5" : "h-7",
             current ? "bg-accent font-medium" : visible ? "bg-accent/40" : "hover:bg-accent/60",
             "data-[state=open]:ring-1 data-[state=open]:ring-brand/60",
