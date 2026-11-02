@@ -332,6 +332,18 @@ func TestSteerDuringTool(t *testing.T) {
 	if sr.Outcome != acpx.SteerPromptRequired {
 		t.Fatalf("idle steer: %v", sr.Outcome)
 	}
+	// Rewinding to the steer cuts right before it: the turn's tool call and result stay, the steer and what
+	// followed are gone.
+	if _, err := agenthost.Call[acpx.RewindResponse](context.Background(), e.c, acpx.MethodRewind, acpx.RewindRequest{SessionId: sid, MessageId: steerID}); err != nil {
+		t.Fatalf("rewind to steer: %v", err)
+	}
+	if _, err := e.prompt(sid, uuid.NewString(), "next"); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := json.Marshal(e.llm.request(-1)["messages"])
+	if s := string(b); strings.Contains(s, "also this") || strings.Contains(s, "got the steer") || !strings.Contains(s, "sleep 1") {
+		t.Fatalf("after rewind to steer: %s", s)
+	}
 }
 
 func TestSteerNowInterruptsGeneration(t *testing.T) {

@@ -67,7 +67,7 @@ type Options struct {
 	// Steering: the agent takes interjections (_session/steering), as InitializeResponse._meta.steering.supported
 	// says. Without it Send refuses while a turn runs.
 	Steering bool
-	// SteerRewind: the agent can rewind to an interjection (native and codex can; claude can't).
+	// SteerRewind: the agent can rewind to an interjection on its own (claude and native can; codex can't).
 	SteerRewind bool
 	// RetryWaits: how long to wait before each automatic retry of a turn that failed with a network-type error
 	// (Retryable). nil = RetryWaits; an empty slice turns retries off.

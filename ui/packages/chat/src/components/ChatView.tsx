@@ -297,7 +297,8 @@ export function ChatView({
   // 行是 memo 的，回调要稳定（不然每次都重渲染），但又要拿到最新的 —— 放在 ref 里转一手
   const latest = useRef({ doRewind, sessionId: session.id, openGroups, setOpenGroups });
   latest.current = { doRewind, sessionId: session.id, openGroups, setOpenGroups };
-  const steerRewind = (session.base ?? session.agent) === "claude";
+  // Agents that rewind to a steer on its own (they advertise steering.rewind); codex can't, its revert cuts whole turns.
+  const steerRewind = ["claude", "native"].includes(session.base ?? session.agent);
   const env = useMemo<RowEnv>(
     () => ({
       sessionId: session.id,

@@ -102,7 +102,8 @@ func (a *Agent) Initialize(ctx context.Context, p acp.InitializeRequest) (acp.In
 			},
 		},
 		AuthMethods: []acp.AuthMethod{},
-		Meta:        map[string]any{"steering": map[string]any{"supported": true}},
+		// rewind: a steer is stored as its own user message under its messageId, so rewind cuts right before it.
+		Meta: map[string]any{"steering": map[string]any{"supported": true, "rewind": true}},
 	}, nil
 }
 

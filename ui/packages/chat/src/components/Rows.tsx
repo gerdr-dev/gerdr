@@ -261,7 +261,7 @@ export type RowEnv = {
   sessionId: string;
   running: boolean;
   onRewind?: (m: GMessage) => void;
-  /** Steers can be rewound on their own (claude: forks before the steer, like its own /rewind). Codex can't: a steer joins the running turn and revert cuts whole turns. */
+  /** Steers can be rewound on their own (claude: forks before the steer, like its own /rewind; native: cuts its log right before it). Codex can't: a steer joins the running turn and revert cuts whole turns. */
   steerRewind?: boolean;
   onWithdraw?: (messageId: string, now: boolean) => Promise<void> | void;
   onQuickReply: (s: string) => void;
