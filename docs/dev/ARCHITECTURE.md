@@ -626,7 +626,7 @@ menu written for the variables keeps a sane width and no gap.
 - The desktop App has the system title bar, so the rail needs no room for the traffic lights.
 - A phone on its side is past the phone width (768) but ~400px tall, ~150px with the soft keyboard up: the whole rail
   scrolls (not just the projects, which got squeezed to nothing under the fixed rest), and below 560px tall
-  (`short:` variant, index.css) the gaps tighten. On a touch screen the shortcut-list button is
+  (`short:` variant, index.css) the gaps tighten and the mode buttons drop their labels. On a touch screen the shortcut-list button is
   the command palette instead.
 
 ## 手机上（< 768px，照 herdr-web）
