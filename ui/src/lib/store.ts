@@ -154,6 +154,13 @@ type State = {
    * connecting = an attempt is in flight; waiting = backing off, next attempt at `at` (ms). Meaningless while connected.
    */
   conn: { state: "connecting" } | { state: "waiting"; at: number };
+  /**
+   * The WebSocket has opened at least once since the page loaded. Before that the status says "connecting", not
+   * "reconnecting", and the very first attempt shows nothing (the page is already showing its own loading state).
+   */
+  everConnected: boolean;
+  /** Some connection attempt has failed or dropped since the page loaded: we're past the first try. */
+  connRetrying: boolean;
   keptTabs: string[]; // 现在挂在页面里的 tab（当前那个排第一），App 维护
   version: string;
   /** When the running backend was installed (unix ms; 0 = unknown): the version string alone doesn't say how old it is. */
@@ -335,6 +342,8 @@ export const useStore = create<State>(() => ({
   authError: false,
   connected: false,
   conn: { state: "connecting" },
+  everConnected: false,
+  connRetrying: false,
   keptTabs: [],
   version: "",
   installedAt: 0,

@@ -143,7 +143,7 @@ function connect() {
   sock.onopen = () => {
     retry = 0;
     lastHeard = Date.now();
-    set({ connected: true });
+    set({ connected: true, everConnected: true });
     watched = "";
     // Echoes of drafts sent on the old connection never come back: stop waiting for them. Then send what was typed
     // while offline, after the watch, so the server's (older) draft pushed on watch arrives while ours is in flight
@@ -176,7 +176,7 @@ function connect() {
 function scheduleReconnect(now = false) {
   if (stopped || reconnectTimer || ws) return;
   const delay = now ? 0 : Math.min(8000, 300 * 2 ** retry++);
-  set({ conn: delay ? { state: "waiting", at: Date.now() + delay } : { state: "connecting" } });
+  set({ connRetrying: true, conn: delay ? { state: "waiting", at: Date.now() + delay } : { state: "connecting" } });
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null;
     set({ conn: { state: "connecting" } });

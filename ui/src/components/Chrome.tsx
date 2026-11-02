@@ -412,24 +412,30 @@ export function ConnStatus() {
     const t = setInterval(() => tick((x) => x + 1), 250);
     return () => clearInterval(t);
   }, [connected, conn]);
-  if (connected || !shown) return null;
+  const ever = useStore((s) => s.everConnected);
+  const retrying = useStore((s) => s.connRetrying);
+  // The first attempt after opening: the page shows its own loading state, a "reconnecting" here would be wrong and redundant
+  if (connected || !shown || (!ever && !retrying)) return null;
   const left = conn.state === "waiting" ? conn.at - Date.now() : 0;
   // A wait under a second would flash a "1 s" countdown between attempts: show it as still connecting
   if (left < 1000)
     return (
-      <span className="flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground" title="和 Gerdr 后台的连接断了，正在重连">
+      <span
+        className="flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground"
+        title={ever ? "和 Gerdr 后台的连接断了，正在重连" : "正在连接 Gerdr 后台"}
+      >
         <Loader2 className="size-3 animate-spin" />
-        重连中…
+        {ever ? "重连中…" : "连接中…"}
       </span>
     );
   return (
     <span
       className="flex shrink-0 items-center gap-1 text-[11px] text-warn tabular-nums"
-      title={`和 Gerdr 后台的连接断了，${Math.ceil(left / 1000)} 秒后自动重连`}
+      title={`${ever ? "和 Gerdr 后台的连接断了" : "连不上 Gerdr 后台"}，${Math.ceil(left / 1000)} 秒后自动重试`}
     >
-      断开 · {Math.ceil(left / 1000)}s
+      {ever ? "断开" : "连不上"} · {Math.ceil(left / 1000)}s
       <button className="rounded-sm px-1 text-foreground hover:bg-accent" style={{ WebkitAppRegion: "no-drag" } as any} onClick={reconnectNow}>
-        重连
+        {ever ? "重连" : "重试"}
       </button>
     </span>
   );
@@ -456,10 +462,19 @@ export function PhoneConnToast() {
     const t = setInterval(() => tick((x) => x + 1), 250);
     return () => clearInterval(t);
   });
-  const on = shown && !connected;
+  const ever = useStore((s) => s.everConnected);
+  const retrying = useStore((s) => s.connRetrying);
+  // Same as ConnStatus: nothing during the first attempt after opening (the page is showing it's loading)
+  const on = shown && !connected && (ever || retrying);
   const left = conn.state === "waiting" ? Math.ceil((conn.at - Date.now()) / 1000) : 0;
   // A wait under a second would flash a "1 s" countdown between attempts: show it as still connecting
-  const text = left > 1 ? `和 Gerdr 的连接断了，${left} 秒后重连` : "正在重连 Gerdr…";
+  const text = ever
+    ? left > 1
+      ? `和 Gerdr 的连接断了，${left} 秒后重连`
+      : "正在重连 Gerdr…"
+    : left > 1
+      ? `连不上 Gerdr，${left} 秒后重试`
+      : "正在连接 Gerdr…";
   useEffect(() => {
     if (!on) return;
     toast.loading(text, {
@@ -467,7 +482,7 @@ export function PhoneConnToast() {
       duration: Infinity,
       dismissible: false,
       // preventDefault: sonner closes a toast on its action by default, which would flash it away and back
-      action: left > 1 ? { label: "重连", onClick: (e) => (e.preventDefault(), reconnectNow()) } : undefined,
+      action: left > 1 ? { label: ever ? "重连" : "重试", onClick: (e) => (e.preventDefault(), reconnectNow()) } : undefined,
     });
   }, [on, text, left > 1]);
   useEffect(() => {
