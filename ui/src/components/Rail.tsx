@@ -1,10 +1,7 @@
-import { Briefcase, Code2, Command, Gauge, Keyboard, Plus, Settings } from "lucide-react";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { Briefcase, Code2, Command, Keyboard, Plus, Settings } from "lucide-react";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { switchSpace } from "@/lib/actions";
-import { slots } from "@/lib/addons";
 import { isAndroid } from "@/lib/android";
 import { currentSpace, spaceList, type Space } from "@/lib/layout";
 import { isNative, nativeNewWindow } from "@/lib/native";
@@ -13,14 +10,14 @@ import { toggleOverview } from "@/lib/overview";
 import { set, setMode, toggleSidebar, useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { StatusDot } from "./AgentIcon";
-import { AddonSlot } from "./AddonSlot";
+import { RailGroupButtons } from "./RailGroups";
 import { RouteLabel } from "./ConnStatus";
 import { InboxButton } from "./Inbox";
 import { askCloseSpace, newSpaceDialog, spaceStatus } from "./SpaceSwitcher";
 
 /*
  * The rail: gerdr's own strip down the left edge on wider screens, the same in every mode — projects, the Code / Work
- * switch, the add-on panel, the inbox, settings. Everything gerdr needs at hand lives here, so nothing of gerdr's is laid
+ * switch, the add-on buttons (RailGroups.tsx), the inbox, settings. Everything gerdr needs at hand lives here, so nothing of gerdr's is laid
  * over the Work site: that page is a plain full-size frame its agent can lay out any way it likes (it used to share the
  * left column with gerdr's header and settings row, which every site had to leave room for and line its menu up with,
  * and which broke whenever one didn't). Code mode's list sits to the rail's right. The phone has no rail: its drawer
@@ -146,7 +143,7 @@ export function Rail() {
         </div>
         <div className="min-h-2 flex-1" />
         <div className="flex shrink-0 flex-col items-center gap-1 pb-2">
-          <AddonPanel />
+          <RailGroupButtons />
           <InboxButton rail />
           {/* A touch screen seldom has a keyboard to need a shortcut list: the command palette instead, as in the phone's drawer */}
           {coarse
@@ -186,75 +183,3 @@ export function Rail() {
 }
 
 const railBtn = "flex size-9 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground";
-
-/**
- * The add-on panel: the "sidebar" slot's blocks (quota meters, today's numbers…), which used to sit at the bottom of the
- * left column and don't fit a 48px rail. On the rail: the add-ons' own glance ("rail" slot, e.g. a few tiny bars) or a
- * plain icon; hovering it (mouse) or tapping it opens the full blocks beside it. The panel stays mounted while closed,
- * as the blocks did in the sidebar, so they keep their state and timers instead of reloading on every open.
- */
-function AddonPanel() {
-  useStore((s) => s.addonVersion);
-  const [open, setOpen] = useState(false);
-  const btn = useRef<HTMLButtonElement>(null);
-  const panel = useRef<HTMLDivElement>(null);
-  const timer = useRef(0);
-  const [pos, setPos] = useState({ left: 0, bottom: 0 });
-  // Mouse only: a tap on a touch screen sends pointerenter too, which would open it and the click would close it again
-  const hover = (v: boolean) => (e: React.PointerEvent) => {
-    if (e.pointerType !== "mouse") return;
-    clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => setOpen(v), v ? 250 : 200);
-  };
-  useLayoutEffect(() => {
-    if (!open || !btn.current) return;
-    const r = btn.current.getBoundingClientRect();
-    setPos({ left: r.right + 8, bottom: Math.max(8, window.innerHeight - r.bottom) });
-  }, [open]);
-  useEffect(() => {
-    if (!open) return;
-    const down = (e: PointerEvent) => {
-      const t = e.target as Node;
-      if (!panel.current?.contains(t) && !btn.current?.contains(t)) setOpen(false);
-    };
-    const key = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
-    document.addEventListener("pointerdown", down, true);
-    document.addEventListener("keydown", key);
-    return () => (document.removeEventListener("pointerdown", down, true), document.removeEventListener("keydown", key));
-  }, [open]);
-  useEffect(() => () => clearTimeout(timer.current), []);
-  const glance = slots.rail.length > 0;
-  if (!slots.sidebar.length && !glance) return null;
-  return (
-    <>
-      <button
-        ref={btn}
-        aria-label="插件"
-        aria-expanded={open}
-        title={glance ? undefined : "插件"}
-        className={cn(
-          "flex min-h-9 w-10 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground",
-          open && "bg-accent text-foreground",
-        )}
-        onPointerEnter={hover(true)}
-        onPointerLeave={hover(false)}
-        onClick={() => (clearTimeout(timer.current), setOpen(!open))}
-      >
-        {glance ? <AddonSlot name="rail" className="flex w-10 flex-col items-center gap-1 py-1.5" /> : <Gauge className="size-4" />}
-      </button>
-      {slots.sidebar.length > 0 &&
-        createPortal(
-          <div
-            ref={panel}
-            className={cn("fixed z-50 w-72 rounded-lg border bg-popover py-1 text-popover-foreground shadow-md", !open && "hidden")}
-            style={pos}
-            onPointerEnter={hover(true)}
-            onPointerLeave={hover(false)}
-          >
-            <AddonSlot name="sidebar" />
-          </div>,
-          document.body,
-        )}
-    </>
-  );
-}

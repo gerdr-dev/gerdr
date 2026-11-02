@@ -51,12 +51,17 @@ sees: `internal/addons/builtin/gerdr.d.ts`, copied into `~/.gerdr/addons` on eve
 - `"overlay"` is mounted once in App.tsx next to the app's own dialogs: an add-on's command needs somewhere to draw
   a dialog that exists whatever the layout is (the "sidebar" panel is hidden while closed, on a phone only there
   while the drawer is open).
-- `"sidebar"` is the add-on panel: on wider screens it opens beside the rail (Rail.tsx `AddonPanel`) and is kept
-  mounted while closed (portal + `hidden`), as the blocks were in the old sidebar, so timers and fetched state survive
-  closing it. `"rail"` is the button's face (≤ 40px wide), so an add-on can show a glance (tiny bars) on the rail
-  instead of a generic icon; it isn't interactive — the button around it opens the panel. Both came from moving
-  gerdr's own controls out of the left column onto the rail (docs/dev/ARCHITECTURE.md, "The rail").
-  `g.ui` hands out the Dialog and Sheet (drawer) pieces for it; their animations come from ui/src/animate.css.
+- `"sidebar"` entries are blocks and `"rail"` entries are button faces; which blocks share a rail button, in what
+  order, and the button's face (a built-in icon, typed characters, or any add-on's face) is the user's, in config
+  `rail.groups` (lib/rail.ts, Settings → 扩展 → 窄条 = RailSettings.tsx, buttons in RailGroups.tsx). Not the add-ons':
+  blocks that belong together often come from different authors (today + two quota meters). Groups refer to blocks
+  by a key stable across reloads ("addon:id", the add-on's own id or its n-th entry in the slot). No config = one
+  button with every block; a block no group lists joins the first group; keys of unloaded blocks keep their place.
+  Each rail panel is kept mounted while closed (portal + `hidden`), as the blocks were in the old sidebar, so timers
+  and fetched state survive closing it; the phone's sheets mount on open. A face gets a 36×28px box, clipped, so an
+  add-on can draw anything without pushing the rail around. History: the rail replaced the left column's bottom
+  strip (docs/dev/ARCHITECTURE.md, "The rail"), first with one shared button, then these groups when the user wanted
+  three add-ons in one button and a "¥" on it.
 - `g.fetch` is POST /api/addons/{id}/fetch (internal/server/addonfetch.go): the backend makes the request. A plain
   fetch() to a third-party API can't work: the page's CSP is `connect-src 'self'`, which blocks it even when the API
   sends CORS headers (the SubHub add-on shipped a CORS fallback that never ran for that reason), and add-on authors

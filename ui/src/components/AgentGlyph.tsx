@@ -1,16 +1,22 @@
 import { useId, type ReactNode } from "react";
 import {
+  Activity,
+  Bell,
   BookOpen,
   Bot,
   Brain,
   Briefcase,
   Bug,
+  Calendar,
   Cat,
+  ChartColumn,
   Code,
+  Coins,
   Compass,
   Database,
   Feather,
   FlaskConical,
+  Gauge,
   Ghost,
   Globe,
   GraduationCap,
@@ -22,6 +28,8 @@ import {
   Shield,
   Sparkles,
   Terminal,
+  Timer,
+  Wallet,
   Wrench,
   Zap,
   type LucideIcon,
@@ -64,6 +72,15 @@ export const LINES: Record<string, { name: string; icon: LucideIcon }> = {
   sparkles: { name: "灵感", icon: Sparkles },
   cat: { name: "猫", icon: Cat },
   ghost: { name: "幽灵", icon: Ghost },
+  // for the rail's add-on buttons (RailSettings.tsx), which use this same set
+  gauge: { name: "仪表", icon: Gauge },
+  coins: { name: "钱币", icon: Coins },
+  wallet: { name: "钱包", icon: Wallet },
+  timer: { name: "计时", icon: Timer },
+  calendar: { name: "日历", icon: Calendar },
+  chart: { name: "图表", icon: ChartColumn },
+  bell: { name: "提醒", icon: Bell },
+  activity: { name: "活动", icon: Activity },
 };
 
 /** Colours a role can give its glyph: the glyphs' own gradients, ordered by hue. */

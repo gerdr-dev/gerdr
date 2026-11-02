@@ -28,15 +28,20 @@ type Reg<T> = { addon: string; fn: T };
 // ---- what add-ons draw: slots, composer buttons, context-menu items ----
 
 /**
- * Where an add-on can put a component: "sidebar" (the add-on panel: opened from the rail on wider screens, Rail.tsx; at
- * a sheet from the phone drawer's bottom row), "rail" (a glance at most 40px wide on the button that opens that panel), a
- * pane's title bar (props: pane, tab), and "overlay" — mounted once at the app's root and always there, for the dialogs /
- * drawers an add-on opens from a command.
+ * Where an add-on can put a component: "sidebar" (a block of an add-on panel: the user groups blocks into buttons on the
+ * rail, lib/rail.ts), "rail" (a button face the user can pick for any of those buttons), a pane's title bar (props:
+ * pane, tab), and "overlay" — mounted once at the app's root and always there, for the dialogs / drawers an add-on opens
+ * from a command.
  * "loader" replaces the working indicator (the 3×3 dots before "Pondering…", ChatHost.renderLoader; props: paused,
  * className): only the first registration draws, since two indicators side by side make no sense.
  */
 export type SlotName = "sidebar" | "rail" | "paneTitle" | "overlay" | "loader";
-export type SlotReg = { addon: string; key: string; Component: React.ComponentType<any>; order: number };
+/**
+ * key: stable across reloads — "addon:id" with the id the add-on gave, else "addon:n" (its n-th entry in that slot, the
+ * same on every load since setup runs the same way): the rail's groups refer to blocks and faces by it.
+ * title / icon (a lucide icon name): how the block or face is listed in Settings → 扩展 → 窄条.
+ */
+export type SlotReg = { addon: string; key: string; Component: React.ComponentType<any>; order: number; title?: string; icon?: string };
 export const slots: Record<SlotName, SlotReg[]> = { sidebar: [], rail: [], paneTitle: [], overlay: [], loader: [] };
 export type ComposerAction = { addon: string; id: string; title: string; icon?: React.ReactNode; run: (ctx: ComposerCtx) => void | Promise<void> };
 export type ComposerCtx = { sessionId: string; text: string; insert(text: string): void; setText(text: string): void };
@@ -425,9 +430,12 @@ function makeApi(id: string, hash: string) {
       cn,
     },
     icons,
-    slot: (name: SlotName, Component: React.ComponentType<any>, o?: { order?: number }) => {
+    slot: (name: SlotName, Component: React.ComponentType<any>, o?: { order?: number; id?: string; title?: string; icon?: string }) => {
       if (!slots[name]) throw new Error(`没有这个插槽：${name}`);
-      const r: SlotReg = { addon: id, key: `${id}:${slots[name].length}:${Math.random().toString(36).slice(2, 6)}`, Component, order: o?.order ?? 0 };
+      const own = slots[name].filter((x) => x.addon === id).length;
+      const key = `${id}:${o?.id ?? own}`;
+      if (slots[name].some((x) => x.key === key)) throw new Error(`插槽 ${name} 里已经有 id 为 ${o?.id ?? own} 的组件了`);
+      const r: SlotReg = { addon: id, key, Component, order: o?.order ?? 0, title: o?.title, icon: o?.icon };
       slots[name].push(r);
       slots[name].sort((a, b) => a.order - b.order || a.addon.localeCompare(b.addon));
       bump();

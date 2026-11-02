@@ -1,5 +1,5 @@
 import { Component, type ReactNode } from "react";
-import { composerActions, fail, slots, type SlotName } from "@/lib/addons";
+import { composerActions, fail, slots, type SlotName, type SlotReg } from "@/lib/addons";
 import { get, set, useStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import type { LoaderProps } from "@gerdr/chat";
@@ -16,6 +16,19 @@ export function AddonSlot({ name, props, className }: { name: SlotName; props?: 
     </Guard>
   ));
   return className ? <div className={className}>{items}</div> : <>{items}</>;
+}
+
+/** Some entries of a slot, each in its own error boundary like AddonSlot's: a rail group's blocks, a face (lib/rail.ts). */
+export function AddonParts({ regs }: { regs: SlotReg[] }) {
+  return (
+    <>
+      {regs.map(({ key, addon, Component: C }) => (
+        <Guard key={key} addon={addon}>
+          <C />
+        </Guard>
+      ))}
+    </>
+  );
 }
 
 // The working indicator (ChatHost.renderLoader): the first "loader" add-on draws it, else the chat's own dots. One

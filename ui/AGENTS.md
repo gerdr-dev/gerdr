@@ -36,8 +36,8 @@ src/components/    组件
   chat/            gerdr-only pieces of the chat: ChatView (wraps the package's, tells it whether the tab shows), RunButton (`! command` in a reply),
                    HeldDialog (session open elsewhere)
   TabBar.tsx       the tab bar (desktop); PhoneBar.tsx: the phone's top row in its place
-  Rail.tsx         the strip down the left edge on wider screens, every mode: projects, Code / Work, add-on panel,
-                   inbox, settings. Nothing of gerdr's is drawn over the Work site (it owns everything right of the rail)
+  Rail.tsx         the strip down the left edge on wider screens, every mode: projects, Code / Work, add-on buttons
+                   (RailGroups.tsx; grouped by the user in RailSettings.tsx, lib/rail.ts), inbox, settings. Nothing of gerdr's is drawn over the Work site (it owns everything right of the rail)
   SidebarChrome.tsx Code mode's list header, the phone drawer's top / bottom rows, the list's resize edge;
                    UnifiedSidebar.tsx: the sidebar's lists; SpaceSwitcher.tsx: switching projects; WsDot.tsx: status dots
   ConnStatus.tsx   the connection status (reconnecting / offline)

@@ -1,6 +1,6 @@
 # Writing Gerdr add-ons
 
-An add-on changes Gerdr itself: what the sidebar shows, the names of tabs and panes, a button in the composer, the
+An add-on changes Gerdr itself: what the rail's panels show, the names of tabs and panes, a button in the composer, the
 line under each turn, commands and keys, a process that keeps running. It is a folder of TypeScript; Gerdr compiles it
 on save (no Node, no build step) and runs it in the page.
 
@@ -97,8 +97,8 @@ lucide icon (`<g.icons.Timer className="size-3.5" />`).
 
 | where | call | gets |
 |---|---|---|
-| The add-on panel (beside the rail on wider screens, a sheet from the phone drawer's bottom row) | `g.slot("sidebar", Component, { order })` | no props |
-| A glance on the rail, ≤ 40px wide (the face of the button that opens the panel) | `g.slot("rail", Component, { order })` | no props |
+| A block of an add-on panel; the user groups blocks into buttons on the rail (Settings → 扩展 → 窄条) | `g.slot("sidebar", Component, { order, id, title, icon })` | no props |
+| A button face the user can pick for a rail button: a symbol, tiny bars, anything (36×28px box, clipped) | `g.slot("rail", Component, { id, title })` | no props |
 | The app's root, always mounted, no space taken | `g.slot("overlay", Component)` | no props |
 | Every pane's title bar | `g.slot("paneTitle", Component)` | `{ pane, tab }` |
 | The working indicator (the dots before "Pondering…", a 20px row); only the first add-on's draws | `g.slot("loader", Component)` | `{ paused, className }` |
@@ -152,7 +152,10 @@ Rules that keep it looking like Gerdr:
   `bg-accent`, `border`, `text-brand` / `bg-brand`, `text-ok`, `text-warn`, `text-bad` (and `/10`-style opacity:
   `bg-warn/10`).
 - Sizes follow the surroundings: 11–12px text in the sidebar and under turns, 13px in panels.
-- Sidebar blocks: give yours horizontal padding only (`px-1.5`); the slot pads above and below once for all of them.
+- Sidebar blocks: give yours horizontal padding only (`px-1.5`); the panel pads above and below once for all of them.
+  Which blocks share a rail button is the user's choice, not yours: don't assume yours sits next to another add-on's.
+- A rail face (`g.slot("rail")`) is 36px wide and at most 28px tall: draw it at that size, text 10px or more, red
+  (`bg-bad` / `text-bad`) only for a warning.
 - A phone has no hover: don't hide what matters in a `title` tooltip.
 - `g.turnStat`'s `fn` runs on every render of the line and every 30s: keep it cheap. `info.latest` marks the newest
   turn, `info.now` is the time to compare against.
