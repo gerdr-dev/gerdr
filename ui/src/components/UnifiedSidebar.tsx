@@ -89,7 +89,9 @@ import { BorderFlow, useSlowCatchUp } from "./BorderFlow";
 import type { SessionSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { AgentIcon, StatusDot, dotStatus } from "./AgentIcon";
-import { Elapsed, SidebarBottom, SidebarEdge, SidebarHeader, WsDot } from "./Chrome";
+import { Elapsed } from "./Elapsed";
+import { SidebarBottom, SidebarEdge, SidebarHeader } from "./SidebarChrome";
+import { WsDot } from "./WsDot";
 import { TabDragLayer, startPaneDrag, useDrag } from "./TabDrag";
 
 /*
@@ -106,7 +108,7 @@ import { TabDragLayer, startPaneDrag, useDrag } from "./TabDrag";
  *   agents. Its grid (the overview's, lib/overview.ts) opens over the main area next to this list. The groups below still
  *   hold everything, so these rows show twice: the top is where to look, the groups are where things live.
  *
- * Kept out of Chrome.tsx so the experiment can be dropped (or promoted) by touching a few lines in App.tsx.
+ * Kept out of SidebarChrome.tsx so the experiment can be dropped (or promoted) by touching a few lines in App.tsx.
  */
 
 const FOLD_KEY = "gerdr.unified.folded";

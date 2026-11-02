@@ -2,7 +2,7 @@ import { Briefcase, Check, ChevronDown, Code2, History, MessageSquarePlus, Setti
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { AgentIcon, StatusDot } from "@/components/AgentIcon";
-import { COL_EDGE, SidebarBottom, SidebarEdge, SidebarHeader, startColResize } from "@/components/Chrome";
+import { COL_EDGE, SidebarBottom, SidebarEdge, SidebarHeader, startColResize } from "@/components/SidebarChrome";
 import { focusSession } from "@/lib/actions";
 import { toggleOverview } from "@/lib/overview";
 import { ChatView } from "@/components/chat/ChatView";
@@ -72,7 +72,7 @@ function ChatEdge({ width, onWidth }: { width: number; onWidth: (w: number) => v
 }
 
 /**
- * Code / Work: gerdr's own switch, at the right of the left column's top row in both (Chrome.tsx SidebarHeader). The
+ * Code / Work: gerdr's own switch, at the right of the left column's top row in both (SidebarChrome.tsx SidebarHeader). The
  * active grid (the overview) isn't a view of its own here: the sidebar's 进行中 section opens it.
  */
 export function ModeSwitch() {
@@ -259,7 +259,7 @@ function ChatHeader() {
 
 /** Top bar over the Work project: gerdr's own controls (mode switch, settings), apart from the project's menu. */
 function WorkBar({ narrow }: { narrow: boolean }) {
-  // The first sidebarW px are the same header as the sidebar's (Chrome.tsx SidebarHeader), so the switch sits exactly where
+  // The first sidebarW px are the same header as the sidebar's (SidebarChrome.tsx SidebarHeader), so the switch sits exactly where
   // it does in Code mode; the Work site's own menu below is the same width (gerdr:sidebar). Settings and the connection
   // status are in the bottom row gerdr lays over the site's menu (WorkView), as in the other two modes.
   // Narrow: the site has no side menu to line up with (useNarrow), so the header takes the whole width.

@@ -11,7 +11,7 @@ import type { SessionSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { StatusDot, dotStatus } from "./AgentIcon";
 import { compareSessions, sessionRank } from "@/lib/order";
-import { WsDot } from "./Chrome";
+import { WsDot } from "./WsDot";
 
 /**
  * 面板一览：**手机上换 pane 的那条路**（照 herdr-web 的 PaneSwitcher）。
@@ -54,7 +54,7 @@ function ago(ms: number | undefined, now: number) {
 }
 
 /**
- * The panel itself, as the content of the phone bar's popover (Chrome.tsx PhoneBar owns the Popover and anchors it on
+ * The panel itself, as the content of the phone bar's popover (PhoneBar.tsx owns the Popover and anchors it on
  * the bar): the same component as the inbox, so it gets the same open / close animation, Esc and tap-outside handling.
  * Body sits inside PopoverContent so it is remounted on every open (filter / workspace start fresh).
  */
