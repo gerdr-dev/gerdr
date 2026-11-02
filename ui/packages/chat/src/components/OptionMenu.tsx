@@ -104,7 +104,7 @@ export function OptionsMenu({
         )}
       >
         {!summary && !modeName && <SlidersHorizontal className="size-4" />}
-        {modeName && <span className="max-w-28 shrink-0 truncate text-warn">{modeName}</span>}
+        {modeName && <span className="max-w-28 shrink-0 truncate">{modeName}</span>}
         {summary && <span className="truncate">{summary}</span>}
       </DropdownMenuTrigger>
       <DropdownMenuContent side="top" align="start" className="max-h-[60vh] w-72 overflow-auto" onCloseAutoFocus={(e) => e.preventDefault()}>
