@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { basename, newAgentInOverview } from "@/lib/actions";
 import { currentSpace, spaceList } from "@/lib/layout";
 import { compareSessions } from "@/lib/order";
-import { activeIds, addActive, focusTile } from "@/lib/overview";
+import { activeAllProjects, activeIds, addActive, focusTile } from "@/lib/overview";
 import { openSessionsWithProject } from "@/lib/overviewState";
 import { useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -80,7 +80,7 @@ function PickActive({ open, onClose }: { open: boolean; onClose: () => void }) {
     if (open) setPicked([]);
   }, [open]);
   const space = currentSpace(layout);
-  const all = overview.allIn.includes(space);
+  const all = activeAllProjects({ config, layout });
   const inActive = new Set(activeIds({ overview, layout, sessions, config, unread }));
   const list = openSessionsWithProject(layout, sessions, config)
     .filter((x) => (all || x.project === space) && !inActive.has(x.s.id))

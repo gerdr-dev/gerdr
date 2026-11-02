@@ -47,7 +47,9 @@ type Server struct {
 	Config  *config.Store
 	Secrets *config.Secrets // API keys moved out of config.json (config/secrets.go)
 	Layout  *config.Store
-	Addons  *addons.Manager
+	// Unread: sessions that finished unseen, shared by every device (unread.go). nil = off (tests).
+	Unread *config.Store
+	Addons *addons.Manager
 	// AddonSvc runs the add-ons' services (addon.json); RunAddonServices starts it.
 	AddonSvc *addons.Services
 	Ext      *ext.Manager
@@ -114,6 +116,7 @@ func (s *Server) Handler() http.Handler {
 		writeJSON(w, s.Awake.Status())
 	})
 	mux.HandleFunc("PUT /api/layout", s.putStore(s.Layout, "layout"))
+	mux.HandleFunc("POST /api/unread", s.postUnread)
 	mux.HandleFunc("POST /api/layout/op", s.layoutOp) // gerdr workspace / tab / pane (layoutapi.go)
 	s.sessionRoutes(mux)
 	// 账号的用量额度（claude / codex 各一份）。?force=1：人点了刷新，绕过缓存（hub 里仍有最小间隔）
@@ -269,6 +272,7 @@ func (s *Server) hello(w http.ResponseWriter, r *http.Request) {
 		"sessions":    s.Hub.List(),
 		"layout":      s.Layout.Get(),
 		"config":      s.Config.Get(),
+		"unread":      s.unreadSet(),
 		"home":        home,
 		"addonsDir":   s.Addons.Dir(),
 		"remoteConns": s.remoteConns.list(),

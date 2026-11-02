@@ -246,6 +246,7 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 	secrets := config.NewSecrets(filepath.Join(env.Dir, "secrets.json"))
 	cfg.SetFilter(secrets.Split) // API keys live in secrets.json, config.json only says <hidden> (config/secrets.go)
 	layout := config.NewStore(filepath.Join(env.Dir, "layout.json"), `null`)
+	unread := config.NewStore(filepath.Join(env.Dir, "unread.json"), `{}`)
 
 	// config.json 的 agents：变体（另一个账号的 claude……）和外部 ACP agent。设置里改了 / 手改了文件都热换。
 	cfgAgents := func() []hub.AgentDef {
@@ -408,7 +409,7 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 	// layout save, and once now for the projects that are open.
 	layout.OnSet = wr.SaveLayouts
 	wr.SaveLayouts(layout.Get())
-	srv := &server.Server{Dir: env.Dir, Hub: h, Token: token, Config: cfg, Secrets: secrets, Layout: layout, Addons: am, AddonSvc: asvc, Ext: em, Work: wr, Log: log, OnConfig: applyAgents,
+	srv := &server.Server{Dir: env.Dir, Hub: h, Token: token, Config: cfg, Secrets: secrets, Layout: layout, Unread: unread, Addons: am, AddonSvc: asvc, Ext: em, Work: wr, Log: log, OnConfig: applyAgents,
 		UI: ui, ESM: esm, Remote: rm, Awake: keeper,
 		Service: svc, Terms: term.New(func() []string { return sysenv.ChildEnv() }, log)}
 	defer srv.Terms.Close()

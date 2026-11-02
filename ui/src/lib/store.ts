@@ -178,14 +178,34 @@ export function upsertSession(s: SessionSummary) {
   set((st) => ({ sessions: { ...st.sessions, [s.id]: s } }));
 }
 
+/**
+ * Unread is one set for every device, kept by the backend (server/unread.go): changes go there and come back to every
+ * client as an "unread" frame (sync.ts). `server` is false against a backend from before that (no `unread` in hello),
+ * which keeps the old per-device copy in localStorage until it restarts onto a new binary.
+ */
+export const unreadSync = { server: false };
+
+/** The set as the backend sent it (hello, "unread" frames). */
+export function gotUnread(raw: unknown) {
+  if (!raw || typeof raw !== "object") return;
+  const unread: Record<string, true> = {};
+  for (const [k, v] of Object.entries(raw)) if (v) unread[k] = true;
+  set({ unread });
+}
+
+function saveUnread(id: string, on: boolean, unread: Record<string, true>) {
+  if (unreadSync.server) return void api.setUnread(id, on, clientId).catch(() => {});
+  try {
+    localStorage.setItem("gerdr.unread", JSON.stringify(unread));
+  } catch {}
+}
+
 export function markRead(id: string) {
   if (!get().unread[id]) return;
   set((s) => {
     const unread = { ...s.unread };
     delete unread[id];
-    try {
-      localStorage.setItem("gerdr.unread", JSON.stringify(unread));
-    } catch {}
+    saveUnread(id, false, unread);
     return { unread };
   });
 }
@@ -194,9 +214,7 @@ export function markUnread(id: string) {
   if (get().unread[id]) return;
   set((s) => {
     const unread = { ...s.unread, [id]: true as const };
-    try {
-      localStorage.setItem("gerdr.unread", JSON.stringify(unread));
-    } catch {}
+    saveUnread(id, true, unread);
     return { unread };
   });
 }

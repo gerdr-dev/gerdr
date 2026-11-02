@@ -182,6 +182,7 @@ export const api = {
   installAddon: (source: string, id: string, force = false) => req("POST", "/api/addon-stores/install", { source, id, force }),
   putLayout: (data: unknown, client: string) => req("PUT", "/api/layout", { data, client }),
   putConfig: (data: unknown, client: string) => req("PUT", "/api/config", { data, client }),
+  setUnread: (id: string, unread: boolean, client: string) => req("POST", "/api/unread", { id, unread, client }),
   // Gerdr Agent 的模型设置：拉服务商的模型列表、拿一个模型试说一句（服务商参数是页面上的草稿，不用先保存）
   llmModels: (p: LLMProvider) => req<{ models: string[] }>("POST", "/api/llm/models", p),
   // 设置 →「记忆」：三家 agent 的长期记忆，只能读写它们记忆目录里的 .md

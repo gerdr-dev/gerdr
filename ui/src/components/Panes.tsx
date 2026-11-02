@@ -43,6 +43,7 @@ import {
 import { leaves, phoneRoot, setRatio, updateTab, type PaneLeaf, type PaneNode, type PaneSplit, type Tab } from "@/lib/layout";
 import { applyPaneTitle, paneSnapshot, tabSnapshot } from "@/lib/addons";
 import { AddonSlot } from "./AddonSlot";
+import { useWindowInFront } from "@/lib/front";
 import { get, markRead, set, setLayout, useStore } from "@/lib/store";
 import { activeIds, addToActive, removeActive } from "@/lib/overview";
 import { usePhone } from "@/lib/phone";
@@ -522,10 +523,13 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
   const focused = useContext(TabActive) && tab.focus === pane.id;
   const many = framed || zoomed;
   const headH = usePaneHeadHeight(framed);
+  const front = useWindowInFront();
 
+  // Only while the window is in front: unread is shared, and a pane left focused behind other windows would clear it
+  // for every device (lib/front.ts)
   useEffect(() => {
-    if (focused && pane.sessionId && unread) markRead(pane.sessionId);
-  }, [focused, pane.sessionId, unread]);
+    if (front && focused && pane.sessionId && unread) markRead(pane.sessionId);
+  }, [front, focused, pane.sessionId, unread]);
 
   const base = session ? session.title || basename(session.cwd) : starting && pane.draft?.cwd ? basename(pane.draft.cwd) : "新会话";
   const title = applyPaneTitle(pane, tab, base);

@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { basename, focusSession } from "@/lib/actions";
 import { locateSession } from "@/lib/layout";
 import { removeActive, toggleMain, toggleOverview } from "@/lib/overview";
+import { useWindowInFront } from "@/lib/front";
 import { markRead, useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { FadeText } from "./FadeText";
@@ -69,9 +70,11 @@ export function Tile({
   const unread = useStore((s) => !!s.unread[id]);
   const where = useStore((s) => whereOf(s.layout, s.config, id));
   const inWork = useStore((s) => !locateSession(s.layout, id)); // a Work conversation (no pane)
+  const front = useWindowInFront();
+  // Only while the window is in front (lib/front.ts)
   useEffect(() => {
-    if (focused && unread) markRead(id);
-  }, [focused, unread, id]);
+    if (front && focused && unread) markRead(id);
+  }, [front, focused, unread, id]);
   if (!session) return null;
   const title = session.title || basename(session.cwd);
   // A Work conversation goes to Work mode (actions.openInWork), any other to its pane

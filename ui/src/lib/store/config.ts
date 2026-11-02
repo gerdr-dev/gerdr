@@ -1,4 +1,5 @@
 import { DEFAULT_KEYS, IS_MAC, type KeyAction } from "../keys";
+import type { ActiveConf } from "../overviewState";
 
 export type Theme = "system" | "light" | "dark";
 
@@ -62,6 +63,9 @@ export type Config = {
   /** What draws the working indicator (Settings → General → Loading 动画; components/AddonSlot.tsx AddonLoader). Missing = the first
    *  "loader" add-on, else gerdr's dots. */
   loader?: LoaderChoice;
+  /** Who is in the sidebar's 进行中 / the overview grid, the same on every device (overviewState.ts ActiveConf; lib/overview.ts
+   *  writes it). Missing = not yet seeded from a device's old localStorage copy. */
+  active?: ActiveConf;
 };
 
 /**

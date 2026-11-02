@@ -10,6 +10,7 @@ import {
   applyEvents,
   applyRemoteLayout,
   get,
+  gotUnread,
   loadView,
   mergeConfig,
   onLayoutChange,
@@ -18,6 +19,7 @@ import {
   setConnProbe,
   setLayout,
   transcripts,
+  unreadSync,
   upsertSession,
   watchedSessions,
 } from "./store";
@@ -84,6 +86,8 @@ async function start() {
       config: mergeConfig(h.config),
       remoteConns: h.remoteConns ?? [],
     });
+    unreadSync.server = !!h.unread;
+    gotUnread(h.unread);
     // 打开页面：服务端那份布局 + 这个端上次自己看的位置（不然一刷新就跳到别的端最后看的地方）
     if (validLayout(h.layout)) set({ layout: withView(h.layout, loadView()) });
     else setLayout((l) => l); // 第一次：把默认布局存下去
@@ -276,6 +280,10 @@ async function refreshHello() {
     for (const s of h.sessions) sessions[s.id] = s;
     // version / installedAt too: a reconnect is usually the backend restarting onto a newly installed binary
     set({ sessions, agents: h.agents, remoteConns: h.remoteConns ?? [], version: h.version, installedAt: h.installedAt ?? 0 });
+    // Changed on another device meanwhile (config holds who is in 进行中 too); the backend may be a new one now
+    set({ config: mergeConfig(h.config) });
+    unreadSync.server = !!h.unread;
+    gotUnread(h.unread);
     if (validLayout(h.layout)) applyRemoteLayout(h.layout);
   } catch {}
 }
@@ -303,6 +311,10 @@ function handle(m: any) {
       break;
     case "config":
       if (m.data?.client !== clientId) set({ config: mergeConfig(m.data?.data) });
+      break;
+    case "unread":
+      // Our own changes too: the backend sends the whole set in the order it applied the changes, so the last frame is right
+      gotUnread(m.data?.data);
       break;
     case "agents":
       if (Array.isArray(m.data)) set({ agents: m.data });

@@ -3,15 +3,18 @@
 // Deliberately NOT a workspace in the layout. The layout assumes a session sits in exactly one pane: locateSession /
 // focusSession find "the" pane, and shutdownGone stops an agent once no pane shows it. A workspace holding the same
 // sessions again would break both (focus lands in the wrong place; closing a tile here could stop the agent, or keep a
-// closed one alive). So the overview is a view over the layout: a list of session ids, per device (localStorage, like
-// the sidebar / mode), and closing a tile only takes it off this list. The tiles are "active" (in progress,
+// closed one alive). So the overview is a view over the layout: a list of session ids, and closing a tile only takes it
+// off this list. Who is on the list is shared by every device (config.active); how the grid shows it is per device
+// (localStorage, like the sidebar / mode). The tiles are "active" (in progress,
 // overviewState.activeIds): agents join on their status (need you, run) and then stay until taken out, others are put in by hand; only
 // open sessions count, so the overview never keeps an agent alive that the layout let go of.
 // Each project's current Work conversation counts as open too (overviewState.workChats): it has no pane, Work mode shows it.
 import { toast } from "sonner";
 import { allLeaves, type Layout } from "./layout";
 import {
+  activeConf,
   activeIds,
+  loadLegacyActive,
   MAX_TILES,
   OVERVIEW_KEY,
   openSessionsWithProject,
@@ -19,12 +22,13 @@ import {
   overviewIds,
   toPin,
   workChats,
+  type ActiveConf,
   type Overview,
   type WorkConf,
 } from "./overviewState";
 import { sessionSince } from "./order";
 import { currentSpace } from "./layout";
-import { get, markRead, set, useStore } from "./store";
+import { get, markRead, set, setConfig, useStore } from "./store";
 import { syncWatch } from "./sync";
 import type { KeyAction } from "./keys";
 import type { SessionSummary } from "./types";
@@ -39,6 +43,20 @@ export function setOverview(fn: (o: Overview) => Overview) {
     localStorage.setItem(OVERVIEW_KEY, JSON.stringify(next));
   } catch {}
   syncWatch(); // which transcripts to stream changes with the tiles (store.watchedSessions)
+}
+
+/**
+ * Change who is in "active" (config.active, shared by every device). Not before the server's config is in: setConfig
+ * writes the whole config, and the defaults would overwrite everything else in it.
+ */
+function setActive(fn: (a: ActiveConf) => ActiveConf) {
+  const st = get();
+  if (!st.ready || st.authError) return;
+  const cur = activeConf(st.config);
+  const next = fn(cur);
+  if (next === cur) return;
+  setConfig({ active: next });
+  syncWatch();
 }
 
 /** Open agents = sessions some pane shows, in any project, then each project's Work conversation. */
@@ -64,19 +82,22 @@ export function toggleOverview(on = !get().overview.on) {
 
 // An agent that joined "active" on its status (started running, asks you something…) stays once that passes: finishing
 // doesn't take it out, only you do (removeActive, "移出已完成的").
+// Also seeds config.active once, from this device's old localStorage copy, when the config doesn't have it yet.
 useStore.subscribe((s, p) => {
-  if (s.sessions === p.sessions && s.unread === p.unread && s.layout === p.layout) return;
+  if (!s.ready || s.authError) return;
+  if (s.sessions === p.sessions && s.unread === p.unread && s.layout === p.layout && s.config === p.config && p.ready) return;
+  if (!s.config.active) return setActive(() => loadLegacyActive() ?? { added: [], dismissed: {}, allIn: [] });
   const ids = toPin(s);
-  if (ids.length) setOverview((o) => ({ ...o, added: [...o.added, ...ids.filter((id) => !o.added.includes(id))] }));
+  if (ids.length) setActive((a) => ({ ...a, added: [...a.added, ...ids.filter((id) => !a.added.includes(id))] }));
 });
 
 /** Put agents in "active" by hand: they stay until taken out. */
 export function addActive(ids: string[]) {
-  setOverview((o) => {
-    const add = ids.filter((id) => !o.added.includes(id));
-    const dismissed = { ...o.dismissed };
+  setActive((a) => {
+    const add = ids.filter((id) => !a.added.includes(id));
+    const dismissed = { ...a.dismissed };
     for (const id of ids) delete dismissed[id];
-    return { ...o, added: [...o.added, ...add], dismissed };
+    return { ...a, added: [...a.added, ...add], dismissed };
   });
 }
 
@@ -86,12 +107,13 @@ export function addActive(ids: string[]) {
 export function removeActive(id: string) {
   const s = get().sessions[id];
   if (s && get().unread[id]) markRead(id);
-  setOverview((o) => {
+  setActive((a) => {
     // Forget sessions gone since, so the map doesn't grow forever
-    const dismissed = Object.fromEntries(Object.entries(o.dismissed).filter(([k]) => get().sessions[k]));
+    const dismissed = Object.fromEntries(Object.entries(a.dismissed).filter(([k]) => get().sessions[k]));
     if (s) dismissed[id] = sessionSince(s);
-    return { ...o, added: o.added.filter((x) => x !== id), dismissed, main: o.main === id ? undefined : o.main };
+    return { ...a, added: a.added.filter((x) => x !== id), dismissed };
   });
+  setOverview((o) => (o.main === id ? { ...o, main: undefined } : o));
 }
 
 /** The finished ones (seen or not): what's still running, waiting on you or failed stays. */
@@ -119,17 +141,17 @@ export function workingOutIds(st = get()): string[] {
 /** Put them back: forget the dismissal; being at work, they rejoin (and get pinned again). */
 export function restoreWorking() {
   const ids = workingOutIds();
-  setOverview((o) => ({ ...o, dismissed: Object.fromEntries(Object.entries(o.dismissed).filter(([k]) => !ids.includes(k))) }));
+  setActive((a) => ({ ...a, dismissed: Object.fromEntries(Object.entries(a.dismissed).filter(([k]) => !ids.includes(k))) }));
 }
 
 /** Whether this project's "active" lists every project's agents (each project has its own setting). */
-export function activeAllProjects(st: { overview: Overview; layout: Layout } = get()): boolean {
-  return st.overview.allIn.includes(currentSpace(st.layout));
+export function activeAllProjects(st: { config: { active?: ActiveConf }; layout: Layout } = get()): boolean {
+  return activeConf(st.config).allIn.includes(currentSpace(st.layout));
 }
 
 export function setActiveAllProjects(on: boolean) {
   const sp = currentSpace(get().layout);
-  setOverview((o) => ({ ...o, allIn: on ? [...o.allIn.filter((x) => x !== sp), sp] : o.allIn.filter((x) => x !== sp) }));
+  setActive((a) => ({ ...a, allIn: on ? [...a.allIn.filter((x) => x !== sp), sp] : a.allIn.filter((x) => x !== sp) }));
 }
 
 /** Open the grid on this session: put it in "active" and focus its tile. False (grid left alone) when it can't be a tile. */

@@ -4,16 +4,38 @@ import { allLeaves, currentSpace, locateSession, spaceList, spaceOf, type Layout
 import { compareSessions, sessionRank, sessionSince } from "./order";
 import type { SessionSummary } from "./types";
 
-export type Overview = {
-  on: boolean;
-  /** Tile order last shown, so tiles keep their place as others come and go. Read the tiles through overviewIds. */
-  ids: string[];
+/**
+ * Who is in "active": one list for every device (asked for: the same everywhere), so it lives in the server-side
+ * config (Config.active), not in localStorage. How the grid shows it (Overview below) stays per device: tile sizes and
+ * shapes depend on the screen.
+ */
+export type ActiveConf = {
   /** Pinned in "active": put in by hand, or joined on its status once (activeIds). Stays until taken out. */
   added: string[];
   /** Taken out of "active" while it had joined on its own: id → its sessionSince then. Out until it starts or ends a turn. */
   dismissed: Record<string, number>;
   /** Projects whose "active" lists every project's agents; the others list their own only. Set from the section's menu. */
   allIn: string[];
+};
+
+const strs = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
+
+/** Config.active read defensively (hand-edited config.json, older UIs writing it). */
+export function activeConf(c: { active?: unknown }): ActiveConf {
+  const v = (c.active && typeof c.active === "object" ? c.active : {}) as Record<string, unknown>;
+  const d = v.dismissed && typeof v.dismissed === "object" ? (v.dismissed as Record<string, unknown>) : {};
+  return {
+    added: strs(v.added),
+    dismissed: Object.fromEntries(Object.entries(d).filter((e): e is [string, number] => typeof e[1] === "number")),
+    allIn: strs(v.allIn),
+  };
+}
+
+/** The grid as this device shows it (localStorage). */
+export type Overview = {
+  on: boolean;
+  /** Tile order last shown, so tiles keep their place as others come and go. Read the tiles through overviewIds. */
+  ids: string[];
   /** The tile pinned to the left, the rest auto-arranged on the right. */
   main?: string;
   /** Width share of the main tile. */
@@ -35,21 +57,13 @@ export const OVERVIEW_KEY = "gerdr.overview";
 export const MAX_TILES = 12;
 
 export function loadOverview(): Overview {
-  const d: Overview = { on: false, ids: [], added: [], dismissed: {}, allIn: [], ratio: 0.5, sort: "status", sizes: {}, shapes: {} };
+  const d: Overview = { on: false, ids: [], ratio: 0.5, sort: "status", sizes: {}, shapes: {} };
   try {
     const v = JSON.parse(localStorage.getItem(OVERVIEW_KEY) ?? "null");
     if (!v) return d;
-    const ids = Array.isArray(v.ids) ? v.ids.filter((x: unknown) => typeof x === "string") : [];
     return {
       on: !!v.on,
-      ids,
-      // Before "active", the tiles were all put in by hand: they carry over as added
-      added: Array.isArray(v.added) ? v.added.filter((x: unknown) => typeof x === "string") : ids,
-      dismissed:
-        v.dismissed && typeof v.dismissed === "object"
-          ? Object.fromEntries(Object.entries(v.dismissed).filter((e): e is [string, number] => typeof e[1] === "number"))
-          : {},
-      allIn: Array.isArray(v.allIn) ? v.allIn.filter((x: unknown) => typeof x === "string") : [],
+      ids: strs(v.ids),
       main: typeof v.main === "string" ? v.main : undefined,
       ratio: typeof v.ratio === "number" ? Math.min(0.8, Math.max(0.2, v.ratio)) : 0.5,
       sort: v.sort === "project" ? "project" : "status",
@@ -59,6 +73,21 @@ export function loadOverview(): Overview {
     };
   } catch {
     return d;
+  }
+}
+
+/**
+ * "Active" as this device kept it in localStorage before it moved to the config, or null if there's nothing there.
+ * The first device to load a UI with Config.active seeds it from this (lib/overview.ts).
+ */
+export function loadLegacyActive(): ActiveConf | null {
+  try {
+    const v = JSON.parse(localStorage.getItem(OVERVIEW_KEY) ?? "null");
+    if (!v || typeof v !== "object") return null;
+    // Before "active", the tiles were all put in by hand: they carry over as added
+    return activeConf({ active: { ...v, added: Array.isArray(v.added) ? v.added : v.ids } });
+  } catch {
+    return null;
   }
 }
 
@@ -88,7 +117,7 @@ export type ActiveSrc = {
   overview: Overview;
   layout: Layout;
   sessions: Record<string, SessionSummary>;
-  config: WorkConf;
+  config: WorkConf & { active?: ActiveConf };
   unread: Record<string, true>;
 };
 
@@ -105,17 +134,21 @@ export function openSessionsWithProject(l: Layout, sessions: Record<string, Sess
   return out;
 }
 
-/** Joins "active" by its status: needs you (waiting, errored, finished unseen), or running and not taken out this turn. */
-export function joinsOnItsOwn(s: SessionSummary, st: Pick<ActiveSrc, "overview" | "unread">): boolean {
+/**
+ * Joins "active" by its status: waiting on you or errored, always; finished unseen or running, unless taken out since
+ * (it rejoins when it starts or ends a turn). Unseen has to honour the dismissal too: unread is per device while
+ * "active" is shared, so another device that hasn't seen it would otherwise pin back what you just took out.
+ */
+export function joinsOnItsOwn(s: SessionSummary, st: Pick<ActiveSrc, "config" | "unread">): boolean {
   const rank = sessionRank(s, st.unread);
-  if (rank < 3) return true;
-  const d = st.overview.dismissed[s.id];
-  return rank === 3 && !(d !== undefined && sessionSince(s) <= d);
+  if (rank < 2) return true;
+  const d = activeConf(st.config).dismissed[s.id];
+  return rank <= 3 && !(d !== undefined && sessionSince(s) <= d);
 }
 
 /** Open agents (any project) that joined on their own but aren't pinned yet: lib/overview.ts pins them, so they stay. */
 export function toPin(st: ActiveSrc): string[] {
-  const added = new Set(st.overview.added);
+  const added = new Set(activeConf(st.config).added);
   return openSessionsWithProject(st.layout, st.sessions, st.config)
     .filter((x) => !added.has(x.s.id) && joinsOnItsOwn(x.s, st))
     .map((x) => x.s.id);
@@ -129,10 +162,10 @@ export function toPin(st: ActiveSrc): string[] {
  * Whatever joins on its status is then pinned (lib/overview.ts, toPin), so finishing doesn't take it out: it stays until
  * you take it out. Nothing joins for being recent (asked for: status and your own picks only).
  * Both the desktop sidebar and the overview grid show this list: the current project's agents, or every
- * project's when that project is in overview.allIn (each project chooses on its own).
+ * project's when that project is in config.active.allIn (each project chooses on its own).
  */
 export function activeIds(st: ActiveSrc): string[] {
-  const o = st.overview;
+  const o = activeConf(st.config);
   const space = currentSpace(st.layout);
   const all = o.allIn.includes(space);
   const added = new Set(o.added);

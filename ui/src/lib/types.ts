@@ -57,6 +57,8 @@ export type Hello = {
   sessions: SessionSummary[];
   layout: any;
   config: any;
+  /** Sessions finished unseen, shared by every device (server/unread.go); missing from older backends. */
+  unread?: Record<string, boolean>;
   home: string;
   addonsDir: string;
   remoteConns?: RemoteConn[];
