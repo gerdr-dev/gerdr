@@ -147,7 +147,7 @@ export function Rail() {
         <div className="min-h-2 flex-1" />
         <div className="flex shrink-0 flex-col items-center gap-1 pb-2">
           <AddonPanel />
-          <InboxButton className="size-9" />
+          <InboxButton rail />
           {/* A touch screen seldom has a keyboard to need a shortcut list: the command palette instead, as in the phone's drawer */}
           {coarse
             ? tip(

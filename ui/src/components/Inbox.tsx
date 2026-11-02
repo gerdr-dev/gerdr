@@ -15,9 +15,9 @@ import { cn } from "@/lib/utils";
 /**
  * The inbox button and its panel: on a phone in the top bar's right corner, on wider screens in the rail (Rail.tsx).
  * Red dot = something came in since it was last opened; items stay until their × is clicked.
- * `className`: the button's size where the default (size-7) doesn't fit in.
+ * `rail`: drawn like the rail's other buttons (size-9, 16px icon, tooltip to the right), not the sidebar header's small one.
  */
-export function InboxButton({ phone, className }: { phone?: boolean; className?: string }) {
+export function InboxButton({ phone, rail }: { phone?: boolean; rail?: boolean }) {
   const fresh = useInbox((s) => s.fresh);
   const count = useInbox((s) => s.items.length);
   const [open, setOpen] = useState(false);
@@ -29,11 +29,23 @@ export function InboxButton({ phone, className }: { phone?: boolean; className?:
   // The phone's top bar is short on room: an empty inbox's button only leads to an empty list. Kept while open, so the
   // popover's anchor doesn't vanish under it (emptying the list closes the panel anyway).
   if (phone && !count && !open) return null;
-  const trigger = (
+  // The rail's buttons are plain ones (Rail.tsx railBtn): Button's ghost hover is fainter in dark mode and stood out there
+  const trigger = rail ? (
+    <button
+      aria-label="收件箱"
+      className={cn(
+        "relative flex size-9 items-center justify-center rounded-md hover:bg-accent hover:text-foreground",
+        open ? "bg-accent text-foreground" : "text-muted-foreground",
+      )}
+    >
+      <InboxIcon className="size-4" />
+      {fresh && <span className="absolute top-1.5 right-1.5 size-1.5 rounded-full bg-bad" />}
+    </button>
+  ) : (
     <Button
       variant={open ? "secondary" : "ghost"}
       size="icon"
-      className={cn("relative", phone ? "size-9" : "size-7 text-muted-foreground", className)}
+      className={cn("relative", phone ? "size-9" : "size-7 text-muted-foreground")}
       aria-label="收件箱"
     >
       <InboxIcon className={phone ? "size-[18px]" : "size-3.5"} />
@@ -49,7 +61,7 @@ export function InboxButton({ phone, className }: { phone?: boolean; className?:
           <TooltipTrigger asChild>
             <PopoverTrigger asChild>{trigger}</PopoverTrigger>
           </TooltipTrigger>
-          <TooltipContent>收件箱{count ? `（${count}）` : ""}</TooltipContent>
+          <TooltipContent side={rail ? "right" : undefined}>收件箱{count ? `（${count}）` : ""}</TooltipContent>
         </Tooltip>
       )}
       <PopoverContent
