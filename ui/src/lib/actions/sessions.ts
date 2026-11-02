@@ -44,7 +44,7 @@ export function resumeInPane(paneId: string, sessionId: string) {
 }
 
 /**
- * /resume in an overview tile (Overview.tsx gives its chat the pane id `ov-<session>`, which is no pane in the layout:
+ * /resume in an overview tile (OverviewTile.tsx gives its chat the pane id `ov-<session>`, which is no pane in the layout:
  * the code above found nothing to change, or jumped to a pane hidden under the grid, so nothing visible happened).
  * The tile switches to the picked conversation. Already open somewhere: it only takes this tile's place in the grid,
  * the panes stay as they are (the grid is a view over them). Not open: the pane underneath switches to it, as /resume

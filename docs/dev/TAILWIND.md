@@ -25,7 +25,7 @@ Seen so far:
   list the selectors each rewrite adds while it opens (diff the generated `<style>`'s rules before / after): nothing
   may arrive. The Streamdown list was collected by rendering a file with every Markdown element; redo it after
   upgrading it. (This was first blamed for a phone flash it didn't cause, see the next section.)
-- **Transitions added on a state change** (pane zoom in `Panes.tsx`, the overview in `Overview.tsx`): a `transition-*`
+- **Transitions added on a state change** (pane zoom in `Panes.tsx`, the overview in `OverviewGrid.tsx`): a `transition-*`
   class added in the same change that moves the box is compiled one style change too late, so the first zoom of a page
   load jumped instead of animating. Fix: the transition is an inline style.
 - **The chat list's first open** (`ChatList.tsx`, docs/dev/SCROLL.md): on a page load every mounted row resized one

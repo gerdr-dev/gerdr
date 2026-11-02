@@ -252,7 +252,7 @@ export function watchedSessions(l: Layout, kept: string[]): string[] {
     if (work) out.add(work);
   }
   // The tabs under the overview stay watched (kept), so closing it doesn't reload them
-  // On a phone only the shown tile is mounted (Overview PhoneOverview): don't stream the rest
+  // On a phone only the shown tile is mounted (OverviewPhone.tsx): don't stream the rest
   if (overviewShown()) for (const id of isPhone() ? visibleSessions(l) : overviewIds({ ...get(), layout: l })) out.add(id);
   const want = new Set(kept);
   for (const ws of l.workspaces)
