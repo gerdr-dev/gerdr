@@ -29,7 +29,7 @@ type configKey struct {
 	more string // longer help, printed by `gerdr config keys <name>`
 }
 
-// configKeys mirrors ui/src/lib/store.ts's Config. Keep them in step.
+// configKeys mirrors ui/src/lib/store/config.ts's Config. Keep them in step.
 var configKeys = map[string]configKey{
 	"theme":           {kind: "string", enum: []string{"system", "light", "dark"}, desc: "color theme (a device that picked its own in Settings keeps that; this is the value for the others)"},
 	"fontSize":        {kind: "number", desc: "font size; only the starting value for a device that hasn't picked its own (each device keeps its own size)"},

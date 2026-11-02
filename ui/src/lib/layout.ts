@@ -386,10 +386,11 @@ export function cycle(tab: Tab, delta: number): Tab {
 }
 
 /**
- * 「看的位置」：在哪个工作空间、每个工作空间看哪个 tab、每个 tab 焦点在哪个 pane / 放大了哪个。
- * 每个端各看各的（主机上看着 A，手机上切到 B，主机不跟着动 —— 用户要的功能），所以收到别的端存的布局时
- * 结构照收、这一份留自己的（withView），自己的那份存在本机浏览器里（store.ts 的 gerdr.view）。
- * 服务端存的布局里也带着这些字段（最后一个存的端的），只给第一次打开、本地什么都没有的端当起点。
+ * "Where you're looking": which workspace, which tab in each workspace, which pane each tab focuses / zooms.
+ * Each client keeps its own (the host on A, a phone switches to B, the host doesn't follow: asked for), so a layout
+ * saved by another client is taken for its structure while this part stays ours (withView); ours is kept in this
+ * browser (gerdr.view, store/layoutSync.ts). The server's copy carries these fields too (from whoever saved last),
+ * used only as a starting point by a client opening for the first time with nothing local.
  */
 export type View = {
   active: string;

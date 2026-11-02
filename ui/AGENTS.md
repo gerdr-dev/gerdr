@@ -57,7 +57,8 @@ packages/chat/     the conversation UI itself, a package (@gerdr/chat) also publ
 src/lib/
   chatHost.tsx     gerdr's ChatHost (store, api, actions, and the composer features only gerdr has)
   api.ts           调 gerdr 后端的 HTTP 接口（所有接口都在这里有一个函数）
-  store.ts         全局状态（zustand）：sessions、layout、config、对话（transcript）
+  store.ts         global state (zustand): sessions, layout, config, transcripts. Re-exports store/: config.ts
+                   (the Config type), prefs.ts (per-device settings), layoutSync.ts, transcripts.ts (session logs)
   sync.ts          WebSocket：服务端推来的会话变化、日志
   transcript.ts    re-exports packages/chat/src/transcript.ts (会话日志 → AI SDK 的 UIMessage)
   types.ts         后端数据的类型（SessionSummary、HubEvent……）
