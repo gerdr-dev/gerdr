@@ -2,6 +2,7 @@ import { Component, type ReactNode } from "react";
 import { composerActions, fail, slots, type SlotName } from "@/lib/addons";
 import { get, set, useStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
+import type { LoaderProps } from "@gerdr/chat";
 
 // Where add-ons draw (g.slot, g.composerAction; lib/addons.ts). Each add-on's component sits in its own error
 // boundary: one that throws while rendering is dropped and its error shown in Settings → Add-ons, the rest draw on.
@@ -17,7 +18,21 @@ export function AddonSlot({ name, props, className }: { name: SlotName; props?: 
   return className ? <div className={className}>{items}</div> : <>{items}</>;
 }
 
-class Guard extends Component<{ addon: string; children: ReactNode }, { failed: boolean }> {
+// The working indicator (ChatHost.renderLoader): the first "loader" add-on draws it, else the chat's own dots. One
+// that throws falls back to the dots rather than to nothing, so a running turn still shows it runs.
+export function AddonLoader({ paused, className, fallback }: LoaderProps) {
+  useStore((s) => s.addonVersion);
+  const first = slots.loader[0];
+  if (!first) return <>{fallback}</>;
+  const C = first.Component;
+  return (
+    <Guard key={first.key} addon={first.addon} fallback={fallback}>
+      <C paused={paused} className={className} />
+    </Guard>
+  );
+}
+
+class Guard extends Component<{ addon: string; children: ReactNode; fallback?: ReactNode }, { failed: boolean }> {
   state = { failed: false };
   static getDerivedStateFromError() {
     return { failed: true };
@@ -26,7 +41,7 @@ class Guard extends Component<{ addon: string; children: ReactNode }, { failed: 
     fail(this.props.addon, e);
   }
   render() {
-    return this.state.failed ? null : this.props.children;
+    return this.state.failed ? (this.props.fallback ?? null) : this.props.children;
   }
 }
 

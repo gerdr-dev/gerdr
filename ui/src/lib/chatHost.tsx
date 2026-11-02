@@ -20,7 +20,7 @@ import {
   type SharedDraft,
 } from "./store";
 import { pushDraft, sameDraft } from "./sync";
-import { AddonComposerActions } from "@/components/AddonSlot";
+import { AddonComposerActions, AddonLoader } from "@/components/AddonSlot";
 import { useAddonTurnStat } from "./addons";
 import { UsagePanel } from "@/components/UsageMeter";
 import { HeldDialog } from "@/components/chat/HeldDialog";
@@ -266,6 +266,7 @@ export function GerdrChatProvider({ children }: { children: ReactNode }) {
       composerOverlay: (session) => <Overlay session={session} />,
       useTurnStat: useAddonTurnStat,
       composerBar: (session, { paneId }) => <AddonComposerActions sessionId={session.id} paneId={paneId} />,
+      renderLoader: (p) => <AddonLoader {...p} />,
       composer: {
         drafts,
         useExtras: useSharedDraft,

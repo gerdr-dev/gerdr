@@ -32,10 +32,12 @@ type Reg<T> = { addon: string; fn: T };
  * a sheet from the phone drawer's bottom row), "rail" (a glance at most 40px wide on the button that opens that panel), a
  * pane's title bar (props: pane, tab), and "overlay" — mounted once at the app's root and always there, for the dialogs /
  * drawers an add-on opens from a command.
+ * "loader" replaces the working indicator (the 3×3 dots before "Pondering…", ChatHost.renderLoader; props: paused,
+ * className): only the first registration draws, since two indicators side by side make no sense.
  */
-export type SlotName = "sidebar" | "rail" | "paneTitle" | "overlay";
+export type SlotName = "sidebar" | "rail" | "paneTitle" | "overlay" | "loader";
 export type SlotReg = { addon: string; key: string; Component: React.ComponentType<any>; order: number };
-export const slots: Record<SlotName, SlotReg[]> = { sidebar: [], rail: [], paneTitle: [], overlay: [] };
+export const slots: Record<SlotName, SlotReg[]> = { sidebar: [], rail: [], paneTitle: [], overlay: [], loader: [] };
 export type ComposerAction = { addon: string; id: string; title: string; icon?: React.ReactNode; run: (ctx: ComposerCtx) => void | Promise<void> };
 export type ComposerCtx = { sessionId: string; text: string; insert(text: string): void; setText(text: string): void };
 export const composerActions: ComposerAction[] = [];

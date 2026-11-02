@@ -1,4 +1,5 @@
 import { cn } from "../utils";
+import { peekChatHost } from "../host";
 
 // 运行中的 loading（照 beUI 的 AI Thinking Loaders · Pixel orbit，自己写的）：3×3 小方块，外圈一颗带尾巴的光点在转。
 // 外圈 8 格按顺时针排（[行, 列]）。每格跑同一段「亮 → 渐暗」的动画，起点按位置错开，连起来就是在绕圈。中间 1 格常暗，当底。
@@ -20,6 +21,13 @@ const DUR = 1.2; // 秒，转一圈
  * paused：停着等人（比如等审批）—— 不转，整体慢慢呼吸，看得出「在等，不是在跑」。
  */
 export function PixelLoader({ className, paused }: { className?: string; paused?: boolean }) {
+  const fallback = <DefaultLoader className={className} paused={paused} />;
+  // The host may draw its own (ChatHost.renderLoader); without one, or before any ChatProvider, the dots
+  const render = peekChatHost()?.renderLoader;
+  return render ? <>{render({ paused: !!paused, className, fallback })}</> : fallback;
+}
+
+function DefaultLoader({ className, paused }: { className?: string; paused?: boolean }) {
   const ring = new Map(RING.map(([r, c], i) => [r * N + c, i]));
   return (
     // 外面一层占 14px（size-3.5），和工具行、组头的图标一样宽、图形居中：竖着看图标一条线，后面的字也从同一处开始

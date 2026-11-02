@@ -177,7 +177,13 @@ declare global {
      *                drawer opened by a command lives. The panel can't host one: it's hidden while closed and on a
      *                phone it's only there while the drawer is open. Keep the open state outside the component (a
      *                variable plus a listener) so a command's run() can flip it.
+     *   "loader"     replaces the working indicator: the 3×3 dots before a running turn's "Pondering…" line (a row
+     *                20px tall), and the one shown while a pane starts an agent. Props: paused (the turn waits on the
+     *                user — a permission, a question — so show it's waiting, not working) and className (gerdr's size
+     *                and colour for that spot: text-brand running, text-warn waiting; pass it on to keep them). Only
+     *                the first registration draws; one that throws falls back to the dots.
      */
+    slot(name: "loader", component: Component<{ paused: boolean; className?: string }>, opts?: { order?: number }): Dispose;
     slot(name: "sidebar", component: Component<{}>, opts?: { order?: number }): Dispose;
     slot(name: "rail", component: Component<{}>, opts?: { order?: number }): Dispose;
     slot(name: "overlay", component: Component<{}>, opts?: { order?: number }): Dispose;

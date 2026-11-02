@@ -124,6 +124,12 @@ export interface ChatHost {
   composerOverlay?(session: ChatSession): ReactNode;
   /** Composer hooks for host-only features (gerdr: shared drafts, /resume, "session open elsewhere"…). */
   composer?: ComposerHooks;
+  /**
+   * Draw the "working" indicator yourself: the mark in front of a running turn's status line ("Pondering…"), and
+   * every other PixelLoader. Return props.fallback to keep the default. The whole indicator goes to the host, not a
+   * colour or a frame, so a host can put any animation there (gerdr hands it to an add-on).
+   */
+  renderLoader?(props: LoaderProps): ReactNode;
 
   // ---- settings ----
 
@@ -177,6 +183,11 @@ export type ComposerHooks = {
 
 export type TurnStatInfo = { sessionId: string; ts?: number; ms: number; tokens: number; latest: boolean };
 export type TurnStatDeco = { timeClassName?: string; title?: string; after?: ReactNode };
+/**
+ * paused: the turn waits on the user (a permission, a question), not working. className: size and colour from where
+ * it sits (text-brand while running, text-warn while waiting). fallback: the default PixelLoader.
+ */
+export type LoaderProps = { paused: boolean; className?: string; fallback: ReactNode };
 
 export type ComposerContext = {
   session: ChatSession;
@@ -230,6 +241,11 @@ export function useChatHost(): ChatHost {
 /** The host outside React (the transcript, path checks). The last ChatProvider rendered wins. */
 export function chatHost(): ChatHost {
   if (!current) throw new Error("@gerdr/chat: no ChatProvider rendered yet");
+  return current;
+}
+
+/** chatHost() without the throw: for pieces a host may also draw outside the chat, before any ChatProvider (PixelLoader). */
+export function peekChatHost(): ChatHost | null {
   return current;
 }
 

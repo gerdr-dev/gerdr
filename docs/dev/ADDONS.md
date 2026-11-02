@@ -26,6 +26,11 @@ sees: `internal/addons/builtin/gerdr.d.ts`, copied into `~/.gerdr/addons` on eve
   Fragment, set in lib/addons.ts) — not `gerdr.h`: the desktop shell owns `window.gerdr`. Hooks must come from
   `g.React` (the same React that mounts them); `g.ui` hands out Gerdr's shadcn pieces and `g.icons` all of lucide, so
   an add-on looks native without bundling its own copies. Each slot entry sits in its own error boundary.
+- `g.slot("loader", C)` replaces the working indicator (PixelLoader: the dots before "Pondering…", a pane starting an
+  agent). The package gets it through `ChatHost.renderLoader`, which hands the host the whole indicator with the
+  default as `fallback` rather than a colour or a frame, so the next host's idea (a mascot, a spinner of its own) needs
+  no new package release. Gerdr's AddonLoader draws only the first registration and falls back to the dots when it
+  throws: a running turn must still look like it runs.
 - `g.turnStat` decorates the line under each finished turn through `ChatHost.useTurnStat`, a **hook** rather than a
   plain callback: answers depend on the time (cache-clock colors by prompt-cache age), so Gerdr's implementation
   (`useAddonTurnStat`) re-renders every 30s while any add-on uses it. `latest` (the newest turn's line) is worked out in
