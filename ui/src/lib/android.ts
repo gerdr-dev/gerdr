@@ -200,7 +200,6 @@ function closeTop(): boolean {
   }
   const s = get();
   if (s.dialog) return (set({ dialog: null }), true);
-  if (s.switcher) return (set({ switcher: false }), true);
   if (s.drawer) return (set({ drawer: false }), true);
   // 软键盘开着：先收键盘（输入框失焦）
   const a = document.activeElement as HTMLElement | null;
@@ -256,11 +255,8 @@ function watchArrows() {
   const mo = new MutationObserver(later);
   mo.observe(document.body, { childList: true });
   const offAsks = watchAsks(later);
-  // The drawer isn't a portal on <body> like the dialogs (the observer above): watch the store for it (and the pane
-  // switcher, a popover portal now, but its store flip is the earlier signal)
-  const offStore = useStore.subscribe(
-    (s, p) => (s.layout !== p.layout || s.overview !== p.overview || s.drawer !== p.drawer || s.switcher !== p.switcher) && later(),
-  );
+  // The drawer isn't a portal on <body> like the dialogs (the observer above): watch the store for it
+  const offStore = useStore.subscribe((s, p) => (s.layout !== p.layout || s.overview !== p.overview || s.drawer !== p.drawer) && later());
   syncArrows();
   return () => {
     cancelAnimationFrame(raf);
@@ -277,7 +273,7 @@ function watchArrows() {
  * A volume key is an arrow key press (the setting can turn it off), dispatched where a real one lands: the focused
  * element, so the desktop's rules apply unchanged. Typing in a box → that box (history, the cursor, the / and @ lists);
  * focus in a dialog → the dialog; nothing focused → bubbles to the focused pane's ChatView, which gives it to a
- * waiting question unless a [role=dialog] is open (the phone's drawer and pane switcher say role="dialog" too).
+ * waiting question unless a [role=dialog] is open (the phone's drawer says role="dialog" too).
  * An open dropdown takes it even when its focus is off.
  */
 function volumeKey(key: "ArrowUp" | "ArrowDown") {

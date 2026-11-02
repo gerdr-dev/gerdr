@@ -1,8 +1,8 @@
 import type { SessionSummary } from "./types";
 
 /*
- * 会话按「该不该先看」排的顺序。侧栏的 agents 列表和手机上的面板一览（PaneSwitcher）共用这一份：
- * 两边各写一份时只修了一边（在跑的会话一直来回换位置，侧栏修了、面板一览漏了，用户报的）。
+ * Sessions in "which should you look at first" order, one copy for every list that ranks them (the overview and its
+ * pickers): with a copy per list, a fix once landed in one and not the other (a running session kept swapping places).
  */
 
 /** 分档：等你 0 > 出错 1 > 跑完没看 2 > 在跑 3 > 闲着 4 */

@@ -119,7 +119,7 @@ version is downloaded into the cache by itself and checked against the sha256; S
 | `t` | 方向 | 干什么 |
 |---|---|---|
 | `hello` | 页 → 壳 → 页 | 页面起来发一次；回 `platform` / `version` / `webauthn`。壳收到它才有回信的通道 |
-| `back` | 壳 → 页 → 壳 | 返回键：页面收最上面一层（弹窗 → 面板一览 → 抽屉 → 键盘），回 `handled`；没东西收壳把 App 退到后台 |
+| `back` | 壳 → 页 → 壳 | 返回键：页面收最上面一层（弹窗 → 抽屉 → 键盘），回 `handled`；没东西收壳把 App 退到后台 |
 | `theme` | 页 → 壳 | 系统栏底色（`rgb()` / `#hex` / `oklch()` 都认）和图标深浅 |
 | `lan` | 页 → 壳 | 局域网直连的候选 `origins` |
 | `route` | 壳 → 页 | 开着的连接各走哪条路（顶栏的点：绿 = 直连、蓝 = 中继） |

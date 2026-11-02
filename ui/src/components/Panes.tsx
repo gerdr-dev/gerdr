@@ -260,14 +260,15 @@ function PaneBody({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** 手机上「这个 tab 里有几个 pane、你在第几个」：别的 pane 在屏幕上看不见，得有个地方说它们还在。点开面板一览去挑。 */
+/** On a phone, how many panes this tab has and which one you're on: the others are off screen, something has to say
+ * they're there. A tap opens the drawer to pick one. */
 function PaneCount({ count }: { count?: Count }) {
   if (!count) return null;
   return (
     <button
       className="shrink-0 rounded-sm border px-1.5 py-px font-mono text-[10px] text-muted-foreground"
-      title="这个 Tab 里的 Pane（点开面板一览）"
-      onClick={() => set({ switcher: true, drawer: false })}
+      title="这个 Tab 里的 Pane（点开侧栏去挑）"
+      onClick={() => set({ drawer: true })}
     >
       {count.i}/{count.n}
     </button>

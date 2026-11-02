@@ -92,8 +92,6 @@ type State = {
   device: DevicePrefs;
   /** 手机上：侧栏抽屉开着没有（不存盘 —— 每次打开页面都该先看见对话）。 */
   drawer: boolean;
-  /** 手机上：面板一览（PaneSwitcher）开着没有。 */
-  switcher: boolean;
   unread: Record<string, true>;
   /** 每个 pane 输入框里还没发的字（切 tab 不丢）。 */
   drafts: Record<string, string>;
@@ -150,7 +148,6 @@ export const useStore = create<State>(() => ({
   overview: loadOverview(),
   localFont: loadLocalFont(),
   drawer: false,
-  switcher: false,
   unread: loadUnread(),
   drafts: {},
   draftImgs: {},
@@ -214,7 +211,7 @@ export function setMode(mode: "agents" | "work") {
 export function toggleSidebar() {
   // 手机上侧栏是抽屉，开合不动桌面那份记忆（gerdr.sidebar）
   if (isPhone()) {
-    set({ drawer: !get().drawer, switcher: false });
+    set({ drawer: !get().drawer });
     return;
   }
   const v = !get().sidebar;

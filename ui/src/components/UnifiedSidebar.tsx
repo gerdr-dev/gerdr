@@ -492,7 +492,7 @@ function WorkRow({ id, current, grid, num }: { id: string; current: boolean; gri
           data-row-current={current || undefined}
           className={cn(
             "group relative flex cursor-default items-center gap-2 rounded-md px-2 text-[12px] select-none",
-            roomy ? "min-h-11 text-[13px]" : "h-7",
+            roomy ? "min-h-11" : "h-7",
             current ? "bg-accent font-medium" : "hover:bg-accent/60",
             "data-[state=open]:ring-1 data-[state=open]:ring-brand/60",
           )}
@@ -746,7 +746,7 @@ function Row({
           onAuxClick={(e) => e.button === 1 && (e.preventDefault(), dismiss())}
           className={cn(
             "group relative flex cursor-default items-center gap-2 rounded-md px-2 text-[12px] select-none",
-            roomy ? "min-h-11 py-1.5 text-[13px]" : "h-7",
+            roomy ? "min-h-11 py-1.5" : "h-7",
             current ? "bg-accent font-medium" : visible ? "bg-accent/40" : "hover:bg-accent/60",
             "data-[state=open]:ring-1 data-[state=open]:ring-brand/60",
           )}
@@ -761,7 +761,7 @@ function Row({
           {roomy ? (
             // Two lines: what it is, then where it is and how long ago it last moved (running: for how long)
             <span className="min-w-0 flex-1 leading-tight">
-              <span className={cn("block truncate", pane.term && "font-mono text-[12.5px]", !s && !pane.term && "text-muted-foreground")}>
+              <span className={cn("block truncate", pane.term && "font-mono text-[11.5px]", !s && !pane.term && "text-muted-foreground")}>
                 {tabLabel ? (
                   <>
                     {tabLabel} <span className="text-muted-foreground">· {title}</span>
