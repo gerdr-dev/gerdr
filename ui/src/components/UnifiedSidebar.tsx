@@ -1,4 +1,6 @@
 import {
+  ArrowDown,
+  ArrowUp,
   ChevronRight,
   CircleX,
   Columns2,
@@ -38,6 +40,7 @@ import {
   focusSession,
   mergeTab,
   movePane,
+  moveWorkspace,
   moveWorkspaceToSpace,
   openTerminal,
   paneToTab,
@@ -93,7 +96,7 @@ import { AgentIcon, StatusDot, dotStatus } from "./AgentIcon";
 import { Elapsed } from "./Elapsed";
 import { SidebarBottom, SidebarEdge, SidebarHeader } from "./SidebarChrome";
 import { WsDot } from "./WsDot";
-import { TabDragLayer, startPaneDrag, useDrag } from "./TabDrag";
+import { TabDragLayer, startPaneDrag, startWsDrag, useDrag } from "./TabDrag";
 
 /*
  * The sidebar (on a phone, the drawer). One list in place of four things that each listed the same agents:
@@ -272,7 +275,8 @@ export function UnifiedSidebar({ className }: { className?: string }) {
       {!className && <SidebarEdge />}
       <SidebarHeader />
       <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto px-1.5 pb-2">
-        <div className="pt-1.5">
+        {/* data-ws-groups: the groups a dragged group title reorders among (TabDrag.tsx startWsDrag) */}
+        <div className="pt-1.5" data-ws-groups>
           {(active.length > 0 || gridOn || allProjects || dragAgent) && (
             // data-active-drop: drop an agent here to put it in (TabDrag.tsx)
             <div data-active-drop className="mb-1 border-b pb-1.5">
@@ -336,6 +340,7 @@ export function UnifiedSidebar({ className }: { className?: string }) {
               key={ws.id}
               ws={ws}
               index={wi}
+              last={wi === list.length - 1}
               folded={folded.includes(ws.id)}
               onFold={() => toggleFold(ws.id)}
               sessions={sessions}
@@ -450,6 +455,7 @@ function WorkRow({ id, current, grid, num }: { id: string; current: boolean; gri
 function Group({
   ws,
   index,
+  last,
   folded,
   onFold,
   sessions,
@@ -460,6 +466,7 @@ function Group({
 }: {
   ws: Workspace;
   index: number;
+  last: boolean;
   folded: boolean;
   onFold: () => void;
   sessions: Record<string, SessionSummary>;
@@ -475,12 +482,14 @@ function Group({
   const waiting = rows.filter((r) => needsYou(r.pane.sessionId ? sessions[r.pane.sessionId] : undefined)).length;
   const edit = () => set({ dialog: { kind: "editWorkspace", id: ws.id } });
   return (
-    <div className="mt-1">
+    <div className="mt-1" data-ws-group={ws.id}>
       <ContextMenu>
         <ContextMenuTrigger asChild>
-          {/* data-ws-id: dropping a sidebar row here lists it at the end of this group; a tab from the tab bar moves here (TabDrag.tsx) */}
+          {/* data-ws-id: dropping a sidebar row here lists it at the end of this group; a tab from the tab bar moves here.
+              Dragging the title itself reorders the groups (TabDrag.tsx) */}
           <div
             data-ws-id={ws.id}
+            onPointerDown={(e) => startWsDrag(e, ws.id, label)}
             role="button"
             className={cn(
               "group/ws flex h-7 cursor-default items-center gap-1 rounded-md px-1 text-[12px] select-none hover:bg-accent/60",
@@ -531,6 +540,17 @@ function Group({
           <ContextMenuItem onClick={edit}>
             <Pencil /> 编辑…
           </ContextMenuItem>
+          {/* Reordering on a touch screen, where the title can't be dragged (scrolling and this long-press menu own the finger) */}
+          {index > 0 && (
+            <ContextMenuItem onClick={() => moveWorkspace(ws.id, index - 1)}>
+              <ArrowUp /> 上移
+            </ContextMenuItem>
+          )}
+          {!last && (
+            <ContextMenuItem onClick={() => moveWorkspace(ws.id, index + 1)}>
+              <ArrowDown /> 下移
+            </ContextMenuItem>
+          )}
           {others.length > 0 && (
             <ContextMenuSub>
               <ContextMenuSubTrigger>移到项目</ContextMenuSubTrigger>

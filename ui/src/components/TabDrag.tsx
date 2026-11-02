@@ -1,7 +1,7 @@
 import { SquareTerminal } from "lucide-react";
 import { useLayoutEffect, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
-import { mergeTab, movePane, moveTab, moveTabToWorkspace, placeRow } from "@/lib/actions";
+import { mergeTab, movePane, moveTab, moveTabToWorkspace, moveWorkspace, placeRow } from "@/lib/actions";
 import { activeWs, allLeaves, type Side, type Workspace } from "@/lib/layout";
 import { activeIds, addActive } from "@/lib/overview";
 import { get, setLayout } from "@/lib/store";
@@ -20,6 +20,7 @@ import { AgentIcon } from "./AgentIcon";
  *   落在分组标题上 → 列到那一组的最后。只改侧栏怎么列，屏幕上的 tab、分屏都不动。
  * - Anything carrying one agent (a sidebar row, a pane header, a tab of one pane) dropped on the sidebar's "active"
  *   section joins it (overview.addActive); nothing moves. While such a drag runs the section shows even when empty.
+ * - A sidebar group's title dragged between two groups reorders the workspaces (startWsDrag).
  *
  * 不用 HTML5 原生拖拽：它的拖影是浏览器截的半透明图、拖动中改不了样子，也没法在 pane 区域上算「贴哪边」
  * （dragover 进 xterm / 对话这些子元素会一路被打断）。这里用 pointer 事件 + setPointerCapture 自己画。
@@ -42,7 +43,9 @@ type Target =
   | { kind: "pane"; tabId: string; paneId: string; side: Side; rect: Box }
   | { kind: "ws"; wsId: string; rect: Box }
   /** The sidebar's "active" section (UnifiedSidebar, data-active-drop): the dragged agent joins it, nothing moves. */
-  | { kind: "active"; session: string; rect: Box };
+  | { kind: "active"; session: string; rect: Box }
+  /** A sidebar group (workspace) put before the `to`-th group of its session, counted without it (actions.moveWorkspace). */
+  | { kind: "wsorder"; to: number; line: Box };
 
 type Box = { left: number; top: number; width: number; height: number };
 
@@ -271,7 +274,8 @@ function startDrag(e: React.PointerEvent<HTMLElement>, tabId: string, from: numb
     const eat = (ev: MouseEvent) => (ev.stopPropagation(), ev.preventDefault());
     window.addEventListener("click", eat, true);
     setTimeout(() => window.removeEventListener("click", eat, true), 0);
-    const t = commit ? d.target : null;
+    const t0 = commit ? d.target : null;
+    const t = t0?.kind === "wsorder" ? null : t0; // only a group drag (startWsDrag) has those
     const restore = () => shown !== origActive && get().layout.workspaces.some((w) => w.tabs.some((x) => x.id === origActive)) && showTab(origActive);
     const b = tabBar();
     if (t && b) {
@@ -297,6 +301,84 @@ function startDrag(e: React.PointerEvent<HTMLElement>, tabId: string, from: numb
     else if (t.kind === "pane") mergeTab(tabId, t.tabId, t.paneId, t.side);
     else moveTabToWorkspace(tabId, t.wsId);
     update(null);
+  };
+  const up = (ev: PointerEvent) => ev.pointerId === pid && finish(true);
+  const cancel = (ev: PointerEvent) => ev.pointerId === pid && finish(false);
+  const key = (ev: KeyboardEvent) => {
+    if (ev.key !== "Escape" || !d) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    finish(false);
+  };
+  window.addEventListener("pointermove", move);
+  window.addEventListener("pointerup", up);
+  window.addEventListener("pointercancel", cancel);
+  window.addEventListener("keydown", key, true);
+}
+
+/**
+ * Dragging a sidebar group by its title reorders the workspaces of the session (UnifiedSidebar marks each group with
+ * data-ws-group). The drop point is the gap nearest the pointer, by each group's vertical middle; a line lights up there.
+ * It shares the drag state and TabDragLayer with tab / pane drags, but nothing else: a group can't be merged or split.
+ */
+export function startWsDrag(e: React.PointerEvent<HTMLElement>, wsId: string, label: string) {
+  if (e.button !== 0 || e.pointerType === "touch" || (e.target as HTMLElement).closest("button")) return;
+  const el = e.currentTarget;
+  const r = el.getBoundingClientRect();
+  // Only the groups of the sidebar the drag started in (the phone drawer may hold another copy)
+  const scope = el.closest<HTMLElement>("[data-ws-groups]");
+  if (!scope) return;
+  const sx = e.clientX;
+  const sy = e.clientY;
+  const pid = e.pointerId;
+  let d: Drag | null = null;
+
+  const locate = (y: number): Target | null => {
+    const els = [...scope.querySelectorAll<HTMLElement>("[data-ws-group]")];
+    const own = els.findIndex((x) => x.dataset.wsGroup === wsId);
+    if (own < 0 || els.length < 2) return null;
+    const rs = els.map((x) => x.getBoundingClientRect());
+    let ins = rs.findIndex((x) => y < x.top + x.height / 2);
+    if (ins < 0) ins = rs.length;
+    if (ins === own || ins === own + 1) return null;
+    // In the gap above the group (the groups are mt-1 apart), or just under the last one
+    const ly = ins < rs.length ? rs[ins].top - 2 : rs[rs.length - 1].bottom + 1;
+    return { kind: "wsorder", to: ins > own ? ins - 1 : ins, line: { left: r.left + 2, top: ly - 1, width: r.width - 4, height: 2 } };
+  };
+
+  const move = (ev: PointerEvent) => {
+    if (ev.pointerId !== pid) return;
+    if (!d) {
+      if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < 5) return;
+      try {
+        el.setPointerCapture(pid);
+      } catch {}
+      document.body.style.cursor = "grabbing";
+      document.body.style.userSelect = "none";
+      d = { tabId: "", from: -1, x: sx, y: sy, offX: sx - r.left, offY: sy - r.top, w: r.width, h: r.height, ghost: { label }, target: null };
+    }
+    d = { ...d, x: ev.clientX, y: ev.clientY, target: locate(ev.clientY) };
+    setDrag(d);
+  };
+  const finish = (commit: boolean) => {
+    window.removeEventListener("pointermove", move);
+    window.removeEventListener("pointerup", up);
+    window.removeEventListener("pointercancel", cancel);
+    window.removeEventListener("keydown", key, true);
+    if (!d) return;
+    document.body.style.cursor = "";
+    document.body.style.userSelect = "";
+    try {
+      el.releasePointerCapture(pid);
+    } catch {}
+    // The click the browser adds after the drag would fold / unfold the group
+    const eat = (ev: MouseEvent) => (ev.stopPropagation(), ev.preventDefault());
+    window.addEventListener("click", eat, true);
+    setTimeout(() => window.removeEventListener("click", eat, true), 0);
+    const t = commit ? d.target : null;
+    if (t?.kind === "wsorder") moveWorkspace(wsId, t.to);
+    d = null;
+    setDrag(null);
   };
   const up = (ev: PointerEvent) => ev.pointerId === pid && finish(true);
   const cancel = (ev: PointerEvent) => ev.pointerId === pid && finish(false);
@@ -364,7 +446,7 @@ export function TabDragLayer() {
         <span className="min-w-0 flex-1 truncate">{drag.ghost.label}</span>
       </div>
       {/* 排序的落点竖线画在拖影上面：拖影跟着指针，常常正好压在那条缝上 */}
-      {(t?.kind === "reorder" || t?.kind === "row") && (
+      {(t?.kind === "reorder" || t?.kind === "row" || t?.kind === "wsorder") && (
         <div className="fixed rounded-full bg-brand shadow-[0_0_0_1px_var(--background)]" style={fixed(t.line)} />
       )}
       <style>{`@keyframes gerdr-spring { from { width: 0 } to { width: 100% } }`}</style>
