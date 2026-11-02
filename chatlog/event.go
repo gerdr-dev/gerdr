@@ -18,10 +18,12 @@ type Event struct {
 	MessageID string            `json:"messageId,omitempty"`
 	Content   []json.RawMessage `json:"content,omitempty"` // ACP ContentBlock
 	Steer     bool              `json:"steer,omitempty"`
-	// Now: a steer sent to cut in right away (Send now / Ctrl+↵), not to wait for the current step. The UI then stops
-	// offering "Send now" on it: withdrawing a queued urgent steer to resend it trips a Claude Code bug (no urgent steer
-	// reaches the agent before the running tool ends), and repeated clicks were exactly that.
-	Now  bool   `json:"now,omitempty"`
+	// Now: a steer sent to cut in right away (Ctrl+↵ with text), not to wait for the current step. The UI offers no
+	// "Send now" on it (it is already cutting in).
+	Now bool `json:"now,omitempty"`
+	// Held: a slash command the hub holds until the turn ends (internal/hub/deferred.go). Nothing can make it go in
+	// sooner, so the UI offers no "Send now" on it.
+	Held bool   `json:"held,omitempty"`
 	From string `json:"from,omitempty"` // 别的会话（agent）经 gerdr session send 发来的：发送方的会话 id
 
 	// update：原样的 ACP SessionUpdate

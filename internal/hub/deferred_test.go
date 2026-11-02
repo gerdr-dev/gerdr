@@ -235,6 +235,13 @@ func TestDeferredCommandWithdraw(t *testing.T) {
 	s, f := startFake(t, false)
 	send(t, s, "work")
 	r := send(t, s, "/compact")
+	held := false
+	for _, e := range s.Events() {
+		held = held || (e.Kind == EvUser && e.MessageID == r.MessageID && e.Steer && e.Held)
+	}
+	if !held {
+		t.Fatal("the held command isn't marked held (the UI offers Send now on it)")
+	}
 	res, err := s.Withdraw(context.Background(), r.MessageID)
 	if err != nil || res.Withdrawn != 1 {
 		t.Fatalf("withdraw: %v %+v", err, res)

@@ -37,6 +37,8 @@ type Props = {
   onRewind?: (m: GMessage) => void;
   steerRewind?: boolean;
   onWithdraw?: (messageId: string, now: boolean) => Promise<void> | void;
+  /** Get every queued interjection read now: moves the running command aside (ChatView.sendQueuedNow) */
+  onSendQueuedNow?: () => Promise<void> | void;
   onQuickReply: (s: string) => void;
   stackPrev?: boolean; // 用户消息：上 / 下紧挨着也是用户消息（叠成一摞）
   stackNext?: boolean;
@@ -82,50 +84,60 @@ function LocalFileChip({ path, name }: { path: string; name: string }) {
 }
 
 /** A queued interjection's status and its Withdraw / Send now buttons. */
-function QueuedSteer({ messageId, now, onWithdraw }: { messageId?: string; now: boolean; onWithdraw?: Props["onWithdraw"] }) {
+function QueuedSteer({
+  messageId,
+  now,
+  held,
+  onWithdraw,
+  onSendQueuedNow,
+}: {
+  messageId?: string;
+  now: boolean;
+  held: boolean;
+  onWithdraw?: Props["onWithdraw"];
+  onSendQueuedNow?: Props["onSendQueuedNow"];
+}) {
   // One request at a time: the round trip can take a moment on a long session, the buttons stayed live, and a second
   // click found the message already taken back and reported "it has already read this" (user report).
   const [busy, setBusy] = useState(false);
-  const act = async (sendNow: boolean) => {
-    if (busy || !messageId || !onWithdraw) return;
+  const act = async (f: () => Promise<void> | void) => {
+    if (busy) return;
     setBusy(true);
     try {
-      await onWithdraw(messageId, sendNow);
+      await f();
     } finally {
       setBusy(false);
     }
   };
   return (
     <span className={cn("flex items-center gap-1", busy && "opacity-50")}>
-      <span className="mr-2 flex items-center gap-1" title={t(now ? "msg.cuttingInTitle" : "msg.queuedTitle")}>
+      <span className="mr-2 flex items-center gap-1" title={t(held ? "msg.heldTitle" : now ? "msg.cuttingInTitle" : "msg.queuedTitle")}>
         <Loader2 className="size-3 shrink-0 animate-spin" />
         {t(now ? "msg.cuttingIn" : "msg.queued")}
       </span>
       {messageId && onWithdraw && (
-        <>
-          <button
-            className="rounded-sm px-1.5 hover:bg-muted hover:text-foreground disabled:pointer-events-none"
-            disabled={busy}
-            title={t("msg.withdrawTitle")}
-            onClick={() => act(false)}
-          >
-            {t("msg.withdraw")}
-          </button>
-          {/* Already sent as urgent: no "Send now". Clicking it again withdrew the urgent steer and resent it,
-              and withdrawing a queued urgent steer trips a Claude Code bug — no urgent steer then gets in
-              before the running tool ends. Claude needs a couple of seconds into a command before it can move
-              it aside, which is when people clicked again. */}
-          {!now && (
-            <button
-              className="rounded-sm px-1.5 hover:bg-muted hover:text-foreground disabled:pointer-events-none"
-              disabled={busy}
-              title={t("msg.sendNowTitle")}
-              onClick={() => act(true)}
-            >
-              {t("msg.sendNow")}
-            </button>
-          )}
-        </>
+        <button
+          className="rounded-sm px-1.5 hover:bg-muted hover:text-foreground disabled:pointer-events-none"
+          disabled={busy}
+          title={t("msg.withdrawTitle")}
+          onClick={() => act(() => onWithdraw(messageId, false))}
+        >
+          {t("msg.withdraw")}
+        </button>
+      )}
+      {/* Send now moves the running command aside (like Claude Code's own "now"), so every queued message is read at
+          the gap that makes, in the order sent. It used to withdraw this one and resend it as urgent: that put it ahead
+          of (claude) or behind (native) the others queued, and withdrawing a queued urgent steer trips a Claude Code bug.
+          Not on an urgent steer (it is already cutting in) or a held slash command (it waits for the turn's end). */}
+      {onSendQueuedNow && !now && !held && (
+        <button
+          className="rounded-sm px-1.5 hover:bg-muted hover:text-foreground disabled:pointer-events-none"
+          disabled={busy}
+          title={t("msg.sendNowTitle")}
+          onClick={() => act(onSendQueuedNow)}
+        >
+          {t("msg.sendNow")}
+        </button>
       )}
     </span>
   );
@@ -139,6 +151,7 @@ export const MessageView = memo(function MessageView({
   onRewind,
   steerRewind,
   onWithdraw,
+  onSendQueuedNow,
   onQuickReply,
   stackPrev,
   stackNext,
@@ -213,7 +226,7 @@ export const MessageView = memo(function MessageView({
             {meta?.steer &&
               (meta.queued ? (
                 // 排在 agent 的队列里、还没被读到（claude 要等手上这个工具调用结束）
-                <QueuedSteer messageId={meta.messageId} now={!!meta.now} onWithdraw={onWithdraw} />
+                <QueuedSteer messageId={meta.messageId} now={!!meta.now} held={!!meta.held} onWithdraw={onWithdraw} onSendQueuedNow={onSendQueuedNow} />
               ) : (
                 <span className="flex items-center gap-1">
                   <CornerDownRight className="size-3 shrink-0" />

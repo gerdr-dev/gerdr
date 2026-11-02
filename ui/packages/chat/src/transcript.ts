@@ -16,6 +16,8 @@ export type GMeta = {
   queued?: boolean;
   /** The steer was sent to cut in right away: while queued it shows "Cutting in…" and no "Send now" (see MessageView) */
   now?: boolean;
+  /** A slash command the hub holds until the turn ends (backend hub/deferred.go): no "Send now" either */
+  held?: boolean;
   /** 刚点了发送、服务端还没记进日志（见 Transcript.sending）：半透明画着 */
   sending?: boolean;
   from?: string; // 别的会话发来的：发送方会话 id
@@ -378,7 +380,7 @@ export class Transcript {
           id: e.messageId ?? this.uid(),
           role: "user",
           parts,
-          metadata: { messageId: e.messageId, steer: e.steer, now: e.now, from: e.from, ts: e.ts, content: e.content },
+          metadata: { messageId: e.messageId, steer: e.steer, now: e.now, held: e.held, from: e.from, ts: e.ts, content: e.content },
         });
         this.chunks.clear();
         this.lastChunkKey = "";
@@ -748,4 +750,29 @@ function toolState(status: string): ToolPart["state"] {
       return "input-available";
   }
   return "input-streaming";
+}
+
+/**
+ * The tool calls of the running turn that can be moved to the background (what the row's "To background" offers):
+ * the main session's commands and subagents still running in the foreground. Moving them aside is how "Send now"
+ * gets the queued interjections read: they wait for the next gap, and a call that returns right away is one; they all
+ * go in then, in the order sent. A turn's unfinished calls are closed at its turn_end, so in-progress ones are this
+ * turn's.
+ */
+export function backgroundableTools(messages: GMessage[], tasks: AgentTask[]): ToolPart[] {
+  const out: ToolPart[] = [];
+  for (const m of messages) {
+    if (m.role !== "assistant") continue;
+    for (const p of m.parts) {
+      if (p.type !== "dynamic-tool") continue;
+      const tp = p as ToolPart;
+      if (tp.state !== "input-streaming" && tp.state !== "input-available") continue;
+      const meta = tp.toolMetadata;
+      if (meta?.parent) continue; // a subagent's own call: its turn, its call
+      const task = tasks.find((t) => t.toolCallId === tp.toolCallId);
+      if (task?.background) continue;
+      if (meta?.kind === "execute" || task) out.push(tp);
+    }
+  }
+  return out;
 }

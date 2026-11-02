@@ -40,13 +40,19 @@ export interface ChatHost {
   stop(sessionId: string): Promise<{ content: ContentBlock[] }>;
   /** Take back the last interjection the agent hasn't read (↑ in an empty composer). */
   withdrawLast?(sessionId: string): Promise<{ content: ContentBlock[] }>;
-  /** Take back one queued interjection (its "withdraw" button); now = resend it as an urgent one instead. */
+  /**
+   * Take back one queued interjection (its "withdraw" button). The chat no longer passes now (resend it as an urgent
+   * one): "Send now" moves the running command to the background instead (backgroundTool), which keeps the order.
+   */
   withdraw?(sessionId: string, messageId: string, now?: boolean): Promise<ContentBlock[] | undefined>;
   /** Rewind to before this user message; its content goes back into the composer. No rewind buttons without it. */
   rewind?(sessionId: string, messageId: string): Promise<{ content: ContentBlock[] }>;
   /** Answer a permission request ({optionId} | {cancelled}) or a question ({answers} | {cancelled, reason}). */
   answer(sessionId: string, reqId: string, response: unknown): Promise<void>;
-  /** Background tasks: stop one, or move a running tool call to the background. */
+  /**
+   * Background tasks: stop one, or move a running tool call to the background. Also what "Send now" on a queued
+   * interjection (and Ctrl/⌘+↵ in an empty composer) does: without it those aren't offered.
+   */
   stopTask?(sessionId: string, taskId: string): Promise<void>;
   backgroundTool?(sessionId: string, toolCallId: string): Promise<boolean>;
   /** Allow what an auto-mode classifier blocked (claude), then the chat asks the agent to retry. */

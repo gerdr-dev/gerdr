@@ -99,7 +99,8 @@ export const Composer = forwardRef<
     /** The conversation so far (↑ walks back through what was said). */
     history: () => GMessage[];
     onSent?: () => void;
-    onEmptyEnter?: () => void;
+    /** Enter with nothing typed. mod: Ctrl/⌘ was held (ChatView: send the queued interjections now) */
+    onEmptyEnter?: (mod: boolean) => void;
     /** The chat ends on a finished `!` command: sending with an empty box hands its output to the agent. */
     shellDone?: boolean;
   }
@@ -874,7 +875,7 @@ export const Composer = forwardRef<
   };
   const enterSend = (mod = false) => {
     // Nothing to send: Enter jumps the chat to the bottom instead, so you don't have to reach for the ↓ button
-    if (!text.trim() && !imgs.length && !shellReady) return onEmptyEnter?.();
+    if (!text.trim() && !imgs.length && !shellReady) return onEmptyEnter?.(mod);
     // 在跑时 Ctrl/⌘+回车 = 立即插话（照 Claude Code CLI）。发送键设成 ⌘+回车时这个组合就是普通发送，立即只能点按钮
     if (!busy) send(running && sendKey === "enter" && mod);
   };

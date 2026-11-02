@@ -80,7 +80,7 @@ func (s *Session) deferCommand(msgID, from string, content []acp.ContentBlock, r
 	}
 	s.deferred = append(s.deferred, d)
 	s.mu.Unlock()
-	s.emit(&Event{Kind: EvUser, MessageID: msgID, Content: raw, Steer: true, From: from})
+	s.emit(&Event{Kind: EvUser, MessageID: msgID, Content: raw, Steer: true, Held: true, From: from})
 	s.emit(&Event{Kind: EvSteerState, MessageID: msgID, Text: "queued"})
 	close(d.logged)
 	return true

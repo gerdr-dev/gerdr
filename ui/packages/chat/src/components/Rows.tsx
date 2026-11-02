@@ -264,6 +264,7 @@ export type RowEnv = {
   /** Steers can be rewound on their own (claude: forks before the steer, like its own /rewind; native: cuts its log right before it). Codex can't: a steer joins the running turn and revert cuts whole turns. */
   steerRewind?: boolean;
   onWithdraw?: (messageId: string, now: boolean) => Promise<void> | void;
+  onSendQueuedNow?: () => Promise<void> | void;
   onQuickReply: (s: string) => void;
   onToggleGroup?: (key: string) => void;
 };
@@ -310,6 +311,7 @@ export const RowView = memo(
             onRewind={env.onRewind}
             steerRewind={env.steerRewind}
             onWithdraw={env.onWithdraw}
+            onSendQueuedNow={env.onSendQueuedNow}
             onQuickReply={env.onQuickReply}
             stackPrev={row.prev}
             stackNext={row.next}

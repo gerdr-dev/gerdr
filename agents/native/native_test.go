@@ -728,6 +728,46 @@ func TestDetachForegroundBash(t *testing.T) {
 	waitFor(t, "notification", func() bool { return strings.Contains(lastUser(e.llm.request(-1)["messages"].([]any)), "late") })
 }
 
+// "Send now" in the UI moves the running command to the background instead of resending a steer: every queued
+// steer then goes in at that gap, in the order sent, in the same model request.
+func TestQueuedSteersGoInWhenCommandMovesAside(t *testing.T) {
+	e := setup(t, func(n int, msgs []any) reply {
+		switch {
+		case n == 0:
+			return reply{calls: [][2]string{{"bash", `{"command":"sleep 2; echo late"}`}}}
+		case strings.Contains(lastUser(msgs), "background-task-notification"):
+			return reply{text: "noted"}
+		}
+		return reply{text: "read them"}
+	})
+	sid := e.newSession(modeBypass)
+	done := make(chan struct{})
+	go func() { e.prompt(sid, uuid.NewString(), "go"); close(done) }()
+	time.Sleep(300 * time.Millisecond)
+	for _, text := range []string{"first", "second", "third"} {
+		sr, err := agenthost.Call[acpx.SteerResponse](context.Background(), e.c, acpx.MethodSteer, acpx.SteerRequest{SessionId: sid, MessageId: uuid.NewString(), Prompt: []acp.ContentBlock{acp.TextBlock(text)}})
+		if err != nil || sr.Outcome != acpx.SteerInjected {
+			t.Fatalf("steer %s: %v %v", text, sr, err)
+		}
+	}
+	if r, err := agenthost.Call[acpx.TaskBackgroundResponse](context.Background(), e.c, acpx.MethodTaskBackground, acpx.TaskBackgroundRequest{SessionId: sid, ToolCallId: "call_0_0"}); err != nil || !r.Backgrounded {
+		t.Fatalf("background: %v %v", r, err)
+	}
+	select {
+	case <-done:
+	case <-time.After(1500 * time.Millisecond):
+		t.Fatal("the queued steers waited for the command")
+	}
+	// the request right after the command moved aside carries all three, in order
+	b, _ := json.Marshal(e.llm.request(1)["messages"])
+	s := string(b)
+	i1, i2, i3 := strings.Index(s, "first"), strings.Index(s, "second"), strings.Index(s, "third")
+	if i1 < 0 || i2 < i1 || i3 < i2 {
+		t.Fatalf("steers not all in, in order: %s", s)
+	}
+	waitFor(t, "notification", func() bool { return strings.Contains(lastUser(e.llm.request(-1)["messages"].([]any)), "late") })
+}
+
 // An urgent steer gets past a running command: it moves to the background after the grace, and the batch's next
 // call isn't started; the model reads the steer right away.
 func TestSteerNowMovesCommandAside(t *testing.T) {

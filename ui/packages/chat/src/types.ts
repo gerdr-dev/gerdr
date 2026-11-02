@@ -70,8 +70,10 @@ export type HubEvent = {
   messageId?: string;
   content?: ContentBlock[];
   steer?: boolean;
-  /** user steer: sent to cut in right away (Send now / Ctrl+↵) */
+  /** user steer: sent to cut in right away (Ctrl+↵ with text) */
   now?: boolean;
+  /** user steer: a slash command the hub holds until the turn ends (nothing makes it go in sooner) */
+  held?: boolean;
   auto?: boolean;
   from?: string;
   durationMs?: number;
