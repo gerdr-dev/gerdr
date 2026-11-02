@@ -39,9 +39,10 @@ import {
 import { leaves, phoneRoot, setRatio, updateTab, type PaneLeaf, type PaneNode, type PaneSplit, type Tab } from "@/lib/layout";
 import { applyPaneTitle, paneSnapshot, tabSnapshot } from "@/lib/addons";
 import { AddonSlot } from "./AddonSlot";
-import { markRead, set, setLayout, useStore } from "@/lib/store";
+import { get, markRead, set, setLayout, useStore } from "@/lib/store";
 import { activeIds, addToActive, removeActive } from "@/lib/overview";
 import { usePhone } from "@/lib/phone";
+import { useCaughtUp } from "@/lib/catchup";
 import { cn } from "@/lib/utils";
 import { FadeText } from "./FadeText";
 import { AgentIcon, StatusDot, dotStatus } from "./AgentIcon";
@@ -233,7 +234,7 @@ function PaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; tab: T
   if (pane.sub) return <SubPaneView pane={pane} tab={tab} framed={framed} zoomed={zoomed} count={count} />;
   if (pane.term) return <TermPaneView pane={pane} tab={tab} framed={framed} zoomed={zoomed} count={count} />;
   if (pane.file) return <FilePaneView pane={pane} tab={tab} framed={framed} zoomed={zoomed} count={count} />;
-  return <SessionPaneView pane={pane} tab={tab} framed={framed} zoomed={zoomed} count={count} />;
+  return <HeldSessionPane pane={pane} tab={tab} framed={framed} zoomed={zoomed} count={count} />;
 }
 
 /** Size of the whole pane at the end of a zoom animation in progress (TabView), for PaneBody. */
@@ -480,6 +481,17 @@ function TermPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; ta
       </PaneBody>
     </div>
   );
+}
+
+/**
+ * The pane switched to another session (picked from the sidebar) that hasn't loaded yet, or whose cache is behind: keep
+ * drawing the session it showed until the new one's first frame is in (lib/catchup). Drawing it right away showed a
+ * frame or two of the empty "loading" state, or the stale cache, before the content (reported on a phone).
+ */
+function HeldSessionPane(props: { pane: PaneLeaf; tab: Tab; framed: boolean; zoomed?: boolean; count?: Count }) {
+  const sid = props.pane.sessionId;
+  const shown = useCaughtUp(sid, sid ? [sid] : [], (id) => !!get().sessions[id]);
+  return <SessionPaneView {...props} pane={shown === sid ? props.pane : { ...props.pane, sessionId: shown }} />;
 }
 
 function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; tab: Tab; framed: boolean; zoomed?: boolean; count?: Count }) {

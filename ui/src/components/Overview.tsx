@@ -26,6 +26,7 @@ import {
 } from "@/lib/overview";
 import { type WorkConf } from "@/lib/overviewState";
 import { usePhone } from "@/lib/phone";
+import { useCaughtUp } from "@/lib/catchup";
 import { markRead, set, toggleSidebar, useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { FadeText } from "./FadeText";
@@ -120,6 +121,9 @@ function PhoneOverview({ ids, focus, shown }: { ids: string[]; focus?: string; s
   // Chips in the Code sidebar's agent-list order (asked for: what needs you first), not the order they were put in;
   // ties keep that order (sort is stable).
   const sorted = ids.filter((id) => sessions[id]).sort((a, b) => compareSessions(sessions[a], sessions[b], unread));
+  // Only the shown tile is watched, so the one switched to may not be loaded or caught up: keep the current tile up
+  // until it is (lib/catchup) instead of drawing "loading" / the old state and then flashing to the new.
+  const tile = useCaughtUp(focus, focus ? [focus] : [], (id) => sorted.includes(id));
   // Keep the current chip in view (on opening, switching from the list, a removal, a reorder). Scrolls the strip itself after layout:
   // scrollIntoView also moves ancestors, and run before the chips were laid out it left the current one off screen.
   const idsKey = sorted.join(",");
@@ -151,8 +155,8 @@ function PhoneOverview({ ids, focus, shown }: { ids: string[]; focus?: string; s
           </Button>
         </div>
         <div className="min-h-0 flex-1">
-          {focus ? (
-            <Tile key={focus} id={focus} focused={shown} main={false} zoomed={false} target={false} phone onFocus={() => {}} onZoom={() => {}} />
+          {tile ? (
+            <Tile key={tile} id={tile} focused={shown} main={false} zoomed={false} target={false} phone onFocus={() => {}} onZoom={() => {}} />
           ) : (
             <div className="flex h-full flex-col items-center justify-center gap-3 px-8 text-center text-[13px] text-muted-foreground">
               <ClipboardCheck className="size-6" />

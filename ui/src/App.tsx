@@ -13,7 +13,8 @@ import { UnifiedSidebar } from "./components/UnifiedSidebar";
 import { tabName } from "./lib/actions";
 import { handleKeydown } from "./lib/commands";
 import { ACTION_TITLES, setPrefixLabel, toAccelerator, type KeyAction } from "./lib/keys";
-import { activeTab, currentSpace, spaceList, type Tab } from "./lib/layout";
+import { activeTab, currentSpace, leaves, spaceList, type Tab } from "./lib/layout";
+import { useCaughtUp } from "./lib/catchup";
 import { isPhone, usePhone, useViewportHeight } from "./lib/phone";
 import { cn } from "./lib/utils";
 import { syncWatch } from "./lib/sync";
@@ -184,7 +185,15 @@ export default function App() {
   if (overview && !overviewMounted) setOverviewMounted(true);
   const all = new Map<string, Tab>();
   for (const w of layout.workspaces) for (const t of w.tabs) all.set(t.id, t);
-  const kept = [tab.id, ...prevKept.filter((id) => id !== tab.id && all.has(id))].slice(0, keep);
+  // Switched to a tab that wasn't kept: its transcripts are cached but behind until the catch-up arrives. Keep the
+  // tab we came from on screen till then (lib/catchup), else the old state draws first and the new one flashes in.
+  // It stays mounted meanwhile, over the keepTabs count if need be (with keepTabs = 1 it would unmount at once).
+  const tabSessions = leaves(tab.root)
+    .map((p) => p.sessionId ?? p.sub?.sessionId)
+    .filter((x): x is string => !!x);
+  const shownTab = useCaughtUp(tab.id, tabSessions, (id) => all.has(id) && prevKept.includes(id));
+  const held = shownTab && shownTab !== tab.id ? [shownTab] : [];
+  const kept = [tab.id, ...held, ...prevKept.filter((id) => id !== tab.id && id !== shownTab && all.has(id))].slice(0, keep + held.length);
   useEffect(() => {
     if (kept.join() !== prevKept.join()) {
       set({ keptTabs: kept });
@@ -251,7 +260,7 @@ export default function App() {
                 顺序固定的话切 tab 只改 invisible，节点不动。 */}
               {[...kept].sort().map((id) => {
                 const t = all.get(id)!;
-                const active = id === tab.id;
+                const active = id === shownTab;
                 return (
                   <div key={id} className={cn("absolute inset-0", !active && "pointer-events-none invisible")} aria-hidden={!active}>
                     <TabActive.Provider value={active && !overview}>

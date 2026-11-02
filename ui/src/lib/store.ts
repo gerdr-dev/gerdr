@@ -170,6 +170,11 @@ type State = {
   sessions: Record<string, SessionSummary>;
   /** 每个会话的对话（只有订阅着的会话有）；tv 是它的版本号，变了就重画。 */
   tv: Record<string, number>;
+  /**
+   * Sessions just subscribed to whose log has more than we hold (nothing cached, or the cache is behind), waiting for
+   * the server's catch-up frame (sync.ts syncWatch). Switching to one keeps the old view up until it's in (useCaughtUp).
+   */
+  catchingUp: Record<string, true>;
   /** 会话日志前面还有没拉的（打开时服务端只推最近一段）：more = 还有，loading = 正在拉。没有这一项 = 已经到头了。 */
   older: Record<string, "more" | "loading">;
   layout: Layout;
@@ -341,6 +346,7 @@ export const useStore = create<State>(() => ({
   doctor: null,
   sessions: {},
   tv: {},
+  catchingUp: {},
   older: {},
   layout: defaultLayout(),
   config: DEFAULT_CONFIG,

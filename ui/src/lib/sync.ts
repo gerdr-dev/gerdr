@@ -167,7 +167,7 @@ function connect() {
   };
   sock.onclose = () => {
     if (ws !== sock) return;
-    set({ connected: false });
+    set({ connected: false, catchingUp: {} });
     ws = null;
     scheduleReconnect();
   };
@@ -204,7 +204,7 @@ function dropStale() {
   const sock = ws;
   if (!sock) return;
   ws = null;
-  set({ connected: false });
+  set({ connected: false, catchingUp: {} });
   try {
     sock.close();
   } catch {}
@@ -292,6 +292,7 @@ function handle(m: any) {
       removeSession(m.id);
       break;
     case "events":
+      if (get().catchingUp[m.id]) set((s) => ({ catchingUp: omit(s.catchingUp, m.id) }));
       applyEvents(m.id, (m.events ?? []) as HubEvent[], !!m.reset, !!m.older);
       break;
     case "draft":
@@ -362,6 +363,7 @@ export function syncWatch() {
   const ids = watchedSessions(get().layout, get().keptTabs).sort();
   const key = ids.join(",");
   if (key === watched || !ws || ws.readyState !== WebSocket.OPEN) return;
+  const before = new Set(watched ? watched.split(",") : []);
   watched = key;
   // Sessions no longer watched won't echo our drafts back (hub.SetDraft only tells watchers)
   for (const id of draftsInFlight.keys()) if (!ids.includes(id)) draftsInFlight.delete(id);
@@ -371,7 +373,25 @@ export function syncWatch() {
     const n = transcripts.get(id)?.lastSeq;
     if (n) since[id] = n;
   }
+  // The server answers every newly watched session with one "events" frame, even an empty one (hub.Watch). Until it
+  // comes, the cached transcript of one we stopped watching may be behind: drawing it and then the catch-up flashes.
+  // Same with nothing cached yet: until it comes the chat shows its empty "loading" state. Only when the session list
+  // says the log has more than we hold, though: waiting out the round trip for a finished agent with nothing new just
+  // made switching feel slow (reported).
+  const catching: Record<string, true> = {};
+  const sessions = get().sessions;
+  for (const id of ids) {
+    const behind = (since[id] ?? 0) < (sessions[id]?.lastSeq ?? 0);
+    if (behind && (!before.has(id) || get().catchingUp[id])) catching[id] = true;
+  }
+  set({ catchingUp: catching });
   ws.send(JSON.stringify({ t: "watch", ids, since }));
+}
+
+function omit<T>(r: Record<string, T>, k: string): Record<string, T> {
+  const out = { ...r };
+  delete out[k];
+  return out;
 }
 
 onLayoutChange(() => syncWatch());
