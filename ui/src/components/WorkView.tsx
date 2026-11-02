@@ -20,7 +20,7 @@ import { PHONE_MAX, usePhone } from "@/lib/phone";
 import { get, set, setMode, useStore } from "@/lib/store";
 import { syncWatch } from "@/lib/sync";
 import { cn } from "@/lib/utils";
-import { askWorkAgent, ensureWorkSession, newWorkChat, openWorkChat, useWorkChats, useWorkProject, useWorkSession, workAgent } from "@/lib/work";
+import { askWorkAgent, ensureWorkSession, isEmptyChat, newWorkChat, openWorkChat, useWorkChats, useWorkProject, useWorkSession, workAgent } from "@/lib/work";
 
 // Work mode: the user's own Work project on the left, one agent on the right (Annulo's layout, ../shuttle).
 //
@@ -204,55 +204,80 @@ function ago(iso: string) {
   return `${Math.floor(d / 86400)} 天前`;
 }
 
+/**
+ * The chat column's header. Two separate jobs, kept apart so neither looks like the other: the title is the history
+ * (switch to an earlier conversation), the split button on the right starts a new one — its main half with the
+ * agent it names, its arrow with another (which then becomes the default for this project's next ones).
+ */
 function ChatHeader() {
-  const chats = useWorkChats();
+  const all = useWorkChats();
   const current = useWorkSession();
   const unread = useStore((s) => s.unread);
   const title = (t?: string) => (t && t !== "Work" ? t : "新对话");
-  const cur = chats.find((c) => c.id === current);
-  const fresh = () => newWorkChat().catch((e) => toast.error(e.message));
+  const cur = all.find((c) => c.id === current);
+  // Untouched conversations would all read "新对话" with nothing to tell them apart; the current one stays so it's marked
+  const chats = all.filter((c) => c.id === current || !isEmptyChat(c));
   const agents = useStore((s) => s.agents);
   useStore((s) => s.config.workAgents); // re-render when the default changes
   const defaultId = workAgent();
+  const defaultName = agents.find((a) => a.id === defaultId)?.name ?? defaultId;
+  const fresh = (agent?: string) => newWorkChat(agent).catch((e) => toast.error(e.message));
+  const noDrag = { WebkitAppRegion: "no-drag" } as any;
   return (
     <div className="flex h-10 shrink-0 items-center gap-1 border-b px-2" style={{ WebkitAppRegion: "drag" } as any}>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="sm" className="h-7 min-w-0 gap-1.5 px-2 text-[12px]" style={{ WebkitAppRegion: "no-drag" } as any}>
+          <Button variant="ghost" size="sm" className="h-7 min-w-0 gap-1.5 px-2 text-[12px]" title="历史对话" style={noDrag}>
             {cur ? <AgentIcon agent={cur.agent} className="size-3.5 shrink-0" /> : <History className="size-3.5 shrink-0 text-muted-foreground" />}
             <span className="truncate">{title(cur?.title)}</span>
             <ChevronDown className="size-3 shrink-0 text-muted-foreground" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="max-h-96 w-72 overflow-y-auto">
+          <DropdownMenuLabel className="text-[11px] font-normal text-muted-foreground">历史对话</DropdownMenuLabel>
+          {chats.length === 0 && <DropdownMenuItem disabled>还没有对话</DropdownMenuItem>}
           {chats.map((c) => (
-            <DropdownMenuItem key={c.id} onClick={() => openWorkChat(c.id)} className={cn(c.id === current && "bg-accent")}>
-              <span className="min-w-0 flex-1 truncate">{title(c.title)}</span>
+            <DropdownMenuItem key={c.id} onClick={() => openWorkChat(c.id)}>
+              <AgentIcon agent={c.agent} className="size-3.5 shrink-0" />
+              <span className={cn("min-w-0 flex-1 truncate", c.id === current && "font-medium")}>{title(c.title)}</span>
               <span className="shrink-0 text-[11px] text-muted-foreground">{ago(new Date(c.updatedAt).toISOString())}</span>
-              <StatusDot status={c.status} unread={!!unread[c.id]} />
+              {/* the current one is the chat below, its status is in plain sight: the slot marks it instead */}
+              {c.id === current ? <Check className="size-3.5 shrink-0 text-muted-foreground" /> : <StatusDot status={c.status} unread={!!unread[c.id]} />}
             </DropdownMenuItem>
           ))}
-          {chats.length > 0 && <DropdownMenuSeparator />}
-          <DropdownMenuLabel className="text-[11px] font-normal text-muted-foreground">新对话用</DropdownMenuLabel>
-          {agents
-            .filter((a) => a.available)
-            .map((a) => (
-              <DropdownMenuItem key={a.id} onClick={() => newWorkChat(a.id).catch((e) => toast.error(e.message))}>
-                <AgentIcon agent={a.id} className="size-3.5" />
-                <span className="flex-1">{a.name}</span>
-                {a.id === defaultId && <Check className="text-muted-foreground" />}
-              </DropdownMenuItem>
-            ))}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => set({ dialog: { kind: "settings", tab: "agents" } })}>
-            <Settings /> 配置 Agent（引擎、提示词、Skill、MCP、默认模型）…
-          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
       <div className="flex-1" />
-      <Button variant="ghost" size="icon" className="size-7" title="新对话" style={{ WebkitAppRegion: "no-drag" } as any} onClick={fresh}>
-        <MessageSquarePlus className="size-3.5" />
-      </Button>
+      <div className="flex items-center" style={noDrag}>
+        <Button variant="ghost" size="icon" className="size-7 rounded-r-none" title={`新对话（${defaultName}）`} onClick={() => fresh()}>
+          <MessageSquarePlus className="size-3.5" />
+        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-7 w-4 rounded-l-none text-muted-foreground" title="用别的 Agent 开新对话">
+              <ChevronDown className="size-3" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-64">
+            <DropdownMenuLabel className="text-[11px] font-normal text-muted-foreground">开新对话</DropdownMenuLabel>
+            {agents.map((a) => (
+              <DropdownMenuItem key={a.id} disabled={!a.available} title={a.available ? undefined : a.error} onClick={() => fresh(a.id)}>
+                <AgentIcon agent={a.id} className="size-3.5" />
+                <span className="flex-1">{a.name}</span>
+                {!a.available ? (
+                  <span className="text-[11px] text-muted-foreground">不可用</span>
+                ) : (
+                  a.id === defaultId && <span className="text-[11px] text-muted-foreground">默认</span>
+                )}
+              </DropdownMenuItem>
+            ))}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => set({ dialog: { kind: "settings", tab: "agents" } })}>
+              <Settings /> 配置 Agent…
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
     </div>
   );
 }

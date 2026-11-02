@@ -3,6 +3,7 @@ import { api } from "@/lib/api";
 import { currentSpace } from "@/lib/layout";
 import { get as getApp, set as setApp, setConfig, useStore } from "@/lib/store";
 import { syncWatch } from "@/lib/sync";
+import type { SessionSummary } from "@/lib/types";
 
 // The Work view per project (a layout "space": its Code workspaces plus its own Work). Each project has
 // a Work directory (default project: <GERDR_DIR>/work, others: <GERDR_DIR>/projects/<id>/work) with its
@@ -76,24 +77,42 @@ export function workAgent(project = workProject()): string {
   return a ? a.id : c.defaultAgent || "claude";
 }
 
-const creating: Record<string, Promise<string>> = {};
+/**
+ * A conversation nothing was said in yet: no event in its log and no title. The chat header leaves these out of the
+ * history (they'd all read "新对话"), and a new chat reuses the current one instead of piling up another.
+ */
+export const isEmptyChat = (s: Pick<SessionSummary, "lastSeq" | "title">) => !s.lastSeq && !s.title;
+
+const creating: Record<string, { agent: string; p: Promise<string> }> = {};
 
 /**
  * Opens a fresh conversation for the project's Work agent and makes it the one on the right. Passing an
  * agent (an engine, or a role from Settings → Agent with its own prompt / skills / MCP / default model)
- * also makes it the project's default for later ones.
+ * also makes it the project's default for later ones. If the current conversation is still empty and uses
+ * that agent, it is kept: clicking "new" twice shouldn't leave an untouched chat behind.
  */
 export function newWorkChat(agent?: string, project = workProject()): Promise<string> {
   if (agent && agent !== getApp().config.workAgents?.[project]) setConfig({ workAgents: { ...getApp().config.workAgents, [project]: agent } });
-  creating[project] ??= (async () => {
+  const want = agent || workAgent(project);
+  const prev = creating[project];
+  if (prev?.agent === want) return prev.p;
+  // A different agent picked while one is being created: let that finish first, then make this one
+  const p: Promise<string> = (async () => {
+    if (prev) await prev.p.catch(() => {});
+    const cur = workSessionOf(project);
+    const s0 = cur ? getApp().sessions[cur] : undefined;
+    if (s0 && s0.agent === want && isEmptyChat(s0)) return s0.id;
     const dir = await workDir(project);
     // No title: a given one counts as the user's (CustomTitle) and would stop the automatic naming Code sessions get (hub/title.go)
-    const s = await api.createSession({ agent: agent || workAgent(project), cwd: dir });
+    const s = await api.createSession({ agent: want, cwd: dir });
     setApp((st) => ({ sessions: { ...st.sessions, [s.id]: s } }));
     setWorkSession(project, s.id);
     return s.id;
-  })().finally(() => delete creating[project]);
-  return creating[project];
+  })().finally(() => {
+    if (creating[project]?.p === p) delete creating[project];
+  });
+  creating[project] = { agent: want, p };
+  return p;
 }
 
 export async function ensureWorkSession(project = workProject()): Promise<string> {
