@@ -54,9 +54,16 @@ func (s *Session) holdsCommand(c *agenthost.Host, content []acp.ContentBlock) bo
 	if c.SteerCommands() {
 		return false
 	}
+	ok, mid := s.agentCommand(content)
+	return ok && !mid
+}
+
+// agentCommand: whether the message is one of this agent's slash commands (a "/word" that isn't one is just text),
+// and whether the agent marks it _meta.midTurn. Not under s.mu.
+func (s *Session) agentCommand(content []acp.ContentBlock) (ok, midTurn bool) {
 	name := commandName(content)
 	if name == "" {
-		return false
+		return false, false
 	}
 	s.mu.Lock()
 	cmds := s.commands
@@ -67,10 +74,10 @@ func (s *Session) holdsCommand(c *agenthost.Host, content []acp.ContentBlock) bo
 	for _, cmd := range cmds {
 		if cmd.Name == name {
 			mid, _ := cmd.Meta["midTurn"].(bool)
-			return !mid
+			return true, mid
 		}
 	}
-	return false // not a command of this agent's: just text, a steer like any other
+	return false, false
 }
 
 // deferCommand holds the command until the running turn ends. False: the turn ended meanwhile, send it normally.

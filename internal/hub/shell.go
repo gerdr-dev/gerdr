@@ -281,7 +281,7 @@ func (s *Session) pendingShellLocked() []acp.ContentBlock {
 	s.loadLocked()
 	last := -1
 	for i := len(s.events) - 1; i >= 0; i-- {
-		if s.events[i].Kind == EvUser {
+		if e := s.events[i]; e.Kind == EvUser && !isCommandEvent(e) {
 			last = i
 			break
 		}
@@ -399,6 +399,20 @@ func shellContext(cmd, output string, done *Event) string {
 		note = fmt.Sprintf("Exit code %d", *done.Exit)
 	}
 	return fmt.Sprintf("<bash-input>%s</bash-input>\n<bash-stdout>%s</bash-stdout><bash-stderr>%s</bash-stderr>\n", cmd, output, note)
+}
+
+// isCommandEvent: a logged user message that starts with a slash command. Send doesn't put `!` output in front of
+// one, so it didn't carry any: the output after the message before it is still waiting. A message that did carry
+// output starts with <bash-input>, so this can't mistake one that did for one that didn't.
+func isCommandEvent(e *Event) bool {
+	if len(e.Content) == 0 {
+		return false
+	}
+	var b acp.ContentBlock
+	if json.Unmarshal(e.Content[0], &b) != nil {
+		return false
+	}
+	return commandName([]acp.ContentBlock{b}) != ""
 }
 
 // withShell：发给 agent 的内容前面接上还没带过去的命令输出。

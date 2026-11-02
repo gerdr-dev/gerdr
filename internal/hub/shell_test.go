@@ -71,6 +71,44 @@ func TestShellPending(t *testing.T) {
 	}
 }
 
+// `!` output doesn't go in front of a slash command (the agent would no longer see the command): a /compact after
+// it leaves the output waiting for the next real message.
+func TestShellSkipsCommand(t *testing.T) {
+	t.Setenv("SHELL", "/bin/sh")
+	h, err := New(Options{Dir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := newSession(h, Record{ID: "s1", Cwd: t.TempDir()})
+	s.commands = []acp.AvailableCommand{{Name: "compact"}}
+	id, err := s.Shell("echo hi", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitShellDone(t, s, id)
+	if ok, _ := s.agentCommand([]acp.ContentBlock{acp.TextBlock("/compact")}); !ok {
+		t.Fatal("/compact not recognised as a command")
+	}
+	if ok, _ := s.agentCommand([]acp.ContentBlock{acp.TextBlock("/tmp is full")}); ok {
+		t.Fatal("a /word that isn't a command counted as one")
+	}
+	block := func(b acp.ContentBlock) json.RawMessage { j, _ := json.Marshal(b); return j }
+	s.emit(&Event{Kind: EvUser, MessageID: "u1", Content: []json.RawMessage{block(acp.TextBlock("/compact"))}})
+	s.mu.Lock()
+	p := s.pendingShellLocked()
+	s.mu.Unlock()
+	if len(p) != 1 {
+		t.Fatalf("output lost behind /compact: pending %d", len(p))
+	}
+	s.emit(&Event{Kind: EvUser, MessageID: "u2", Content: []json.RawMessage{block(p[0]), block(acp.TextBlock("ok"))}})
+	s.mu.Lock()
+	p = s.pendingShellLocked()
+	s.mu.Unlock()
+	if len(p) != 0 {
+		t.Fatalf("carried output still pending: %d", len(p))
+	}
+}
+
 // An empty send is refused unless finished `!` output is waiting to go along with it.
 func TestShellEmptySend(t *testing.T) {
 	t.Setenv("SHELL", "/bin/sh")

@@ -126,9 +126,14 @@ func (s *Session) SendFrom(ctx context.Context, content []acp.ContentBlock, clie
 
 	// 人在这条之前用 `!` 跑过的命令：输出接在最前面一起发过去（shell.go）。日志里记的也是发出去的原样 ——
 	// agent 的记录里就是这样，回头比对（CatchUp）、重新载入才对得上；界面认出这几块，不画成人说的话
-	s.mu.Lock()
-	content = withShell(s.pendingShellLocked(), content)
-	s.mu.Unlock()
+	// Not in front of a slash command: agents only read a command from the first block, so `!` output ahead of a
+	// /compact turned it into plain text the model answered, and nothing was compacted (user report). The output
+	// stays pending and goes with the next real message (pendingShellLocked skips command messages).
+	if isCmd, _ := s.agentCommand(content); !isCmd {
+		s.mu.Lock()
+		content = withShell(s.pendingShellLocked(), content)
+		s.mu.Unlock()
+	}
 	// First message after taking over another agent's conversation: the earlier conversation goes in front (handoff.go)
 	content = withShell(s.pendingHandoff(), content)
 	raw := make([]json.RawMessage, 0, len(content))
