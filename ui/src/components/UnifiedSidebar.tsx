@@ -478,14 +478,18 @@ function FootButton({ onClick, title, children }: { onClick: () => void; title: 
 }
 
 /**
- * A row's ⌘1–9 number, shown while ⌘ is held: laid over the icon so nothing on the row moves (same as the tab bar used to).
- * The row has to be `relative`.
+ * A row's icon, with its ⌘1–9 number laid over it while ⌘ is held: the number fills the icon's own box, so it lines up
+ * whatever the row's padding or the icon's size, and nothing on the row moves. See-through, so the icon still shows.
  */
-function KeyNum({ n }: { n?: number }) {
-  if (!n) return null;
+function IconSlot({ n, children }: { n?: number; children: React.ReactNode }) {
   return (
-    <span className="absolute top-1 left-1 flex size-5 items-center justify-center rounded-sm bg-background text-[12px] font-medium text-foreground/80 tabular-nums ring-1 ring-border">
-      {n}
+    <span className="relative flex shrink-0">
+      {children}
+      {!!n && (
+        <span className="absolute inset-0 flex items-center justify-center rounded-[3px] bg-background/70 text-[10px] leading-none font-semibold text-foreground tabular-nums ring-1 ring-border/70">
+          {n}
+        </span>
+      )}
     </span>
   );
 }
@@ -516,8 +520,9 @@ function WorkRow({ id, current, grid, num }: { id: string; current: boolean; gri
           onMouseDown={(e) => e.button === 1 && e.preventDefault()}
           onAuxClick={(e) => e.button === 1 && (e.preventDefault(), removeActive(id))}
         >
-          <AgentIcon agent={s.agent} className="size-3.5 shrink-0" />
-          <KeyNum n={num} />
+          <IconSlot n={num}>
+            <AgentIcon agent={s.agent} className="size-3.5 shrink-0" />
+          </IconSlot>
           <span className="min-w-0 flex-1 truncate">{s.title || basename(s.cwd)}</span>
           <span className="max-w-[40%] shrink-0 truncate text-[11px] text-muted-foreground group-hover:hidden">Work{project ? ` · ${project}` : ""}</span>
           <button
@@ -768,12 +773,13 @@ function Row({
           )}
         >
           {loading && <BorderFlow />}
-          {s ? (
-            <AgentIcon agent={s.agent} className={cn("shrink-0", roomy ? "size-4" : "size-3.5")} />
-          ) : (
-            <Icon className={cn("shrink-0 text-muted-foreground", roomy ? "size-4" : "size-3.5")} />
-          )}
-          <KeyNum n={num} />
+          <IconSlot n={num}>
+            {s ? (
+              <AgentIcon agent={s.agent} className={cn("shrink-0", roomy ? "size-4" : "size-3.5")} />
+            ) : (
+              <Icon className={cn("shrink-0 text-muted-foreground", roomy ? "size-4" : "size-3.5")} />
+            )}
+          </IconSlot>
           {roomy ? (
             // Two lines: what it is, then where it is and how long ago it last moved (running: for how long)
             <span className="min-w-0 flex-1 leading-tight">
