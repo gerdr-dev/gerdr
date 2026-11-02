@@ -1,7 +1,7 @@
 import * as icons from "lucide-react";
 import { addonStatus, slots, type SlotReg } from "./addons";
 import { get, setConfig } from "./store";
-import type { RailConfig, RailFace, RailGroup } from "./store/config";
+import type { RailConfig, RailFace, RailGroup, RailOpen } from "./store/config";
 
 // The rail's add-on buttons. Add-ons register blocks (g.slot("sidebar")) and sprites (g.slot("sprite")); which blocks go
 // behind which button, and what each button shows, is the user's (config.rail, shared by every device), set in
@@ -80,6 +80,10 @@ export function renameGroup(id: string, name: string) {
   edit((gs) => gs.map((g) => (g.id === id ? { ...g, name } : g)));
 }
 
+export function setOpenMode(id: string, open: RailOpen) {
+  edit((gs) => gs.map((g) => (g.id === id ? { ...g, open: open === "hover" ? undefined : open } : g)));
+}
+
 export function setFace(id: string, face: RailFace | undefined) {
   edit((gs) => gs.map((g) => (g.id === id ? { ...g, face } : g)));
 }
@@ -123,6 +127,25 @@ export function moveBlock(key: string, to: string) {
     if (to === "new") return [...out, { id: newId(), name: "新分组", blocks: [key] }];
     out = out.map((g) => (g.id === to ? { ...g, blocks: [...g.blocks, key] } : g));
     return out;
+  });
+}
+
+/**
+ * Puts a block into a group before another block (`before`, a key in that group), or at its end; "new" makes a group
+ * for it. What a drag in Settings → 扩展 → 分组 drops. Dropping it before itself changes nothing.
+ */
+export function placeBlock(key: string, to: string, before?: string) {
+  if (before === key) return;
+  edit((gs) => {
+    const out = without(gs, key);
+    if (to === "new") return [...out, { id: newId(), name: "新分组", blocks: [key] }];
+    return out.map((g) => {
+      if (g.id !== to) return g;
+      const blocks = [...g.blocks];
+      const i = before ? blocks.indexOf(before) : -1;
+      blocks.splice(i < 0 ? blocks.length : i, 0, key);
+      return { ...g, blocks };
+    });
   });
 }
 

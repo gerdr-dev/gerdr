@@ -69,7 +69,8 @@ sees: `internal/addons/builtin/gerdr.d.ts`, copied into `~/.gerdr/addons` on eve
   while the drawer is open).
 - `"sidebar"` entries are blocks; which blocks share a rail button, in what order, and the button's face (a built-in
   icon, typed characters, or any add-on's sprite) is the user's, in config
-  `rail.groups` (lib/rail.ts, Settings → 扩展 → 分组 = RailSettings.tsx, buttons in RailGroups.tsx). Not the add-ons':
+  `rail.groups` (lib/rail.ts, Settings → 扩展 → 分组 = RailSettings.tsx: blocks move by drag, or a right-click menu;
+  each group picks hover or click to open; buttons in RailGroups.tsx). Not the add-ons':
   blocks that belong together often come from different authors (today + two quota meters). Groups refer to blocks
   by a key stable across reloads ("addon:id", the add-on's own id or its n-th entry in the slot). No config = one
   button with every block; a block no group lists joins the first group; keys of unloaded blocks keep their place.

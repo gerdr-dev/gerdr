@@ -57,9 +57,9 @@ function GroupButton({ g }: { g: ResolvedGroup }) {
   const panel = useRef<HTMLDivElement>(null);
   const timer = useRef(0);
   const [pos, setPos] = useState({ left: 0, bottom: 0 });
-  const onHover = useStore((s) => s.config.railOpen !== "click");
+  const onHover = g.group.open !== "click";
   // Mouse only: a tap on a touch screen sends pointerenter too, which would open it and the click would close it again.
-  // Set to open on click (Settings → 扩展 → 分组), hovering does nothing: it closes on a click elsewhere or Escape
+  // Set to open on click (per group, Settings → 扩展 → 分组), hovering does nothing: it closes on a click elsewhere or Escape
   const hover = (v: boolean) => (e: React.PointerEvent) => {
     if (e.pointerType !== "mouse" || !onHover) return;
     clearTimeout(timer.current);

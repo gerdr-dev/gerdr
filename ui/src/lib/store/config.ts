@@ -59,9 +59,6 @@ export type Config = {
   llm?: LLMConfig;
   /** The rail's add-on buttons (Settings → 扩展 → 分组; lib/rail.ts). Missing = one button holding every add-on block. */
   rail?: RailConfig;
-  /** How a rail add-on button opens its panel with a mouse: on hover (missing, the first behaviour) or on click. A tap
-   *  on a touch screen always opens it. Its own field, not in `rail`: editing groups rewrites `rail` whole. */
-  railOpen?: "hover" | "click";
   /** What draws the working indicator (Settings → General → Loading 动画; components/AddonSlot.tsx AddonLoader). Missing = the first
    *  "loader" add-on, else gerdr's dots. */
   loader?: LoaderChoice;
@@ -78,7 +75,10 @@ export type LoaderChoice = "dots" | `builtin:${string}` | `loader:${string}` | `
  * stacks, in order, and what the button looks like. Kept per user, not per add-on: which add-ons belong together (two
  * quota meters and a "today" from three authors) is the user's call.
  */
-export type RailGroup = { id: string; name: string; face?: RailFace; blocks: string[] };
+export type RailGroup = { id: string; name: string; face?: RailFace; blocks: string[]; open?: RailOpen };
+/** How a rail button opens its panel with a mouse: on hover (missing, the first behaviour) or on click. Per button: a
+ *  glance at quotas wants hover, a panel you work in wants to stay put until clicked. A tap always opens it. */
+export type RailOpen = "hover" | "click";
 /**
  * The button's face: a built-in icon (components/AgentGlyph.tsx GLYPHS / LINES key, PALETTE colour), one or two typed
  * characters ("¥"), or a sprite an add-on draws (g.slot("sprite") key). Missing = automatic (lib/rail.ts autoFace).
