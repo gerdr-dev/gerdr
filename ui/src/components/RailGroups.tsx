@@ -28,7 +28,7 @@ export function FaceView({ face, blocks, small }: { face?: RailFace; blocks: Slo
   return <Icon className={small ? "size-3.5" : "size-4"} />;
 }
 
-export const FACE = { width: 36, height: 28 };
+const FACE = { width: 36, height: 28 };
 const FACE_SMALL = { width: 32, height: 24 };
 
 /** The rail's add-on buttons, one per group that has a loaded block. */

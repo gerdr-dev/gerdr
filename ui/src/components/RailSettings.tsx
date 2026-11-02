@@ -31,7 +31,7 @@ import { useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { AgentGlyph, GLYPHS, LINES, PALETTE } from "./AgentGlyph";
 import { SpriteView } from "./AddonSlot";
-import { FACE, FaceView } from "./RailGroups";
+import { FaceView } from "./RailGroups";
 
 // Settings → 扩展 → 分组: which add-on blocks go behind which button on the rail, and what each button shows
 // (lib/rail.ts). One card per button. Reordering is by menu, not drag: it works the same on a phone.
@@ -244,20 +244,16 @@ function FacePicker({ face, blocks, onPick }: { face?: RailFace; blocks: SlotReg
           <section className="space-y-1.5">
             <div className="text-[11px] text-muted-foreground">素材</div>
             <div className="flex flex-wrap gap-1">
-              {slots.sprite.map((r) => (
-                <button
-                  key={r.key}
-                  type="button"
-                  title={spriteTitle(r)}
-                  onClick={() => pick({ sprite: r.key })}
-                  className={cn(
-                    "flex h-10 w-11 items-center justify-center rounded-md border",
-                    face && "sprite" in face && face.sprite === r.key ? "border-brand bg-accent" : "border-transparent bg-sidebar hover:bg-accent",
-                  )}
-                >
-                  <SpriteView reg={r} state="idle" clip {...FACE} />
-                </button>
-              ))}
+              {/* Same 32px cells as the icons above: a sprite shrinks into a 24×20 box here, not its rail size */}
+              {slots.sprite.map((r) =>
+                cell(
+                  !!face && "sprite" in face && face.sprite === r.key,
+                  spriteTitle(r),
+                  () => pick({ sprite: r.key }),
+                  <SpriteView reg={r} state="idle" clip width={24} height={20} />,
+                  r.key,
+                ),
+              )}
             </div>
           </section>
         )}
