@@ -89,6 +89,19 @@ sees: `internal/addons/builtin/gerdr.d.ts`, copied into `~/.gerdr/addons` on eve
 - The sidebar's quota meter used to be built in (UsageMeter); it is the `usage-meter` add-on now, and "today" (tasks
   done, cost) is the `today` add-on. Without them the sidebar has neither — install from the store.
 
+## Languages
+
+- addon.json's `i18n` ({locale: {name, description, settings: {key: {title, description, unit, options}}}}) is passed
+  through untouched (`Manifest.I18n` → `Addon.I18n` / `StoreAddon.I18n`); the UI lays the entry for its language over the
+  base texts once, in api.ts (`localizeAddon`), so Settings, the store and the rail's block names all read translated
+  names without each knowing about it. The backend doesn't pick: it doesn't know the language (each device has its
+  own, ui/src/lib/i18n.ts), and the same /api/addons answers a phone in English and a computer in Chinese.
+- A separate `i18n` object, not `"name": {"en": …}`: every existing addon.json and every reader of `name` as a string
+  keeps working, and an add-on is translated by adding one block instead of reshaping every field.
+- README.<locale>.md files are read into `StoreAddon.Readmes`; the store shows the one for the interface's language.
+- `g.locale()` is the interface's language. It never changes under a running add-on: a language change reloads the
+  page (lib/i18n.ts says why), so an add-on reads it once in setup.
+
 ## Layout on disk
 
 ```

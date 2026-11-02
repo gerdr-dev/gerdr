@@ -13,6 +13,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { api } from "./api";
 import { cn } from "./utils";
+import { locale } from "./i18n";
 import { activeTab, activeWs, leaves, type Layout, type PaneLeaf, type Tab, type Workspace } from "./layout";
 import { get, set, useStore, visibleSessions } from "./store";
 import type { AddonBuild, AddonService, SessionSummary } from "./types";
@@ -430,6 +431,8 @@ function makeApi(id: string, hash: string) {
       cn,
     },
     icons,
+    // fixed for the page's life: a language change reloads the page, which reloads the add-on too
+    locale,
     slot: (name: SlotName, Component: React.ComponentType<any>, o?: { order?: number; id?: string; title?: string; icon?: string }) => {
       if (!slots[name]) throw new Error(`没有这个插槽：${name}`);
       const own = slots[name].filter((x) => x.addon === id).length;

@@ -111,6 +111,12 @@ declare global {
     /** 弹一条提示。system: true 时用系统通知（mac App / 浏览器通知权限）。 */
     notify(text: string, opts?: { level?: "info" | "error"; system?: boolean }): void;
 
+    /**
+     * The interface's language: "zh" or "en". Fixed while the add-on runs (changing it reloads the page, and the
+     * add-on with it), so read it in setup and pick your texts. addon.json's own texts go in its "i18n" field instead.
+     */
+    locale(): "zh" | "en";
+
     /** 当前界面状态的只读快照。 */
     state(): StateSnapshot;
 

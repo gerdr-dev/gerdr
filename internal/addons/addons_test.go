@@ -222,3 +222,37 @@ func TestSettings(t *testing.T) {
 		t.Fatal("reset to default failed", err)
 	}
 }
+
+// addon.json's i18n reaches both listings untouched (the UI picks the language), and README.<locale>.md files are
+// read for the store by locale, next to README.md.
+func TestI18n(t *testing.T) {
+	root := t.TempDir()
+	m := New(root, slog.Default())
+	if err := m.Install(); err != nil {
+		t.Fatal(err)
+	}
+	manifest := `{"name":"Pixel","settings":[{"key":"size","type":"select","options":[{"value":"s","label":"Small"}]}],
+"i18n":{"zh":{"name":"像素","settings":{"size":{"title":"尺寸","options":{"s":"小"}}}}}}`
+	d := filepath.Join(m.Dir(), "pixel")
+	write(t, filepath.Join(d, "addon.json"), manifest)
+	write(t, filepath.Join(d, "index.ts"), `export default defineAddon({ setup() {} });`)
+	a := m.List()[0]
+	if a.Name != "Pixel" || a.I18n["zh"].Name != "像素" || a.I18n["zh"].Settings["size"].Options["s"] != "小" {
+		t.Fatalf("installed i18n = %+v", a.I18n)
+	}
+
+	store := filepath.Join(root, "store", "pixel")
+	write(t, filepath.Join(store, "addon.json"), manifest)
+	write(t, filepath.Join(store, "README.md"), "base")
+	write(t, filepath.Join(store, "README.zh.md"), "中文")
+	write(t, filepath.Join(store, "README.zh-CN.md"), "简体")
+	write(t, filepath.Join(store, "README.old.md"), "not a locale")
+	list := scanStore(filepath.Join(root, "store"))
+	if len(list) != 1 {
+		t.Fatalf("store = %+v", list)
+	}
+	s := list[0]
+	if s.Readme != "base" || s.I18n["zh"].Name != "像素" || len(s.Readmes) != 2 || s.Readmes["zh"] != "中文" || s.Readmes["zh-CN"] != "简体" {
+		t.Fatalf("store addon = %+v", s)
+	}
+}

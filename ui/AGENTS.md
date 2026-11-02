@@ -58,6 +58,9 @@ packages/chat/     the conversation UI itself, a package (@gerdr/chat) also publ
 src/lib/
   chatHost.tsx     gerdr's ChatHost (store, api, actions, and the composer features only gerdr has)
   api.ts           调 gerdr 后端的 HTTP 接口（所有接口都在这里有一个函数）
+  i18n.ts          the interface's language (zh / en, each device its own, follows the system by default) and t();
+  messages.ts      the interface's texts, zh + en: new text goes here as t("area.key"), not inline. Being moved over one
+                   component at a time (Settings → General first); a component not moved yet still has Chinese literals
   store.ts         global state (zustand): sessions, layout, config, transcripts. Re-exports store/: config.ts
                    (the Config type), prefs.ts (per-device settings), layoutSync.ts, transcripts.ts (session logs)
   sync.ts          WebSocket：服务端推来的会话变化、日志

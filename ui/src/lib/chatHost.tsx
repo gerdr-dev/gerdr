@@ -22,6 +22,7 @@ import {
 import { pushDraft, sameDraft } from "./sync";
 import { AddonComposerActions, AddonLoader } from "@/components/AddonSlot";
 import { useAddonTurnStat } from "./addons";
+import { locale } from "./i18n";
 import { UsagePanel } from "@/components/UsageMeter";
 import { HeldDialog } from "@/components/chat/HeldDialog";
 import { RunButton } from "@/components/chat/RunButton";
@@ -297,5 +298,10 @@ export function GerdrChatProvider({ children }: { children: ReactNode }) {
     }),
     [config, device, agents],
   );
-  return <ChatProvider host={host}>{children}</ChatProvider>;
+  // The chat has its own zh / en texts (packages/chat/src/messages.ts): same language as the rest of the interface
+  return (
+    <ChatProvider host={host} locale={locale()}>
+      {children}
+    </ChatProvider>
+  );
 }

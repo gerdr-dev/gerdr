@@ -54,6 +54,35 @@ All fields optional; a store only lists folders that have one.
 | `main` | The UI half's entry, when it isn't `index.*`. |
 | `settings` | A form in Settings → Add-ons; see [Settings](#settings). |
 | `service` | A process the backend keeps running; see [Services](#services). |
+| `i18n` | The texts above in other languages; see [Languages](#languages). |
+
+## Languages
+
+Gerdr's interface is in Chinese or English (Settings → General → Language; it follows the system by default). Write the
+fields of `addon.json` in one language, the base, and give the others under `i18n`, by locale. Anything left out keeps
+the base text:
+
+```json
+{
+  "name": "Pixel Clawd",
+  "description": "Replaces the working dots with a pixel crab.",
+  "settings": [
+    { "key": "size", "title": "Size", "type": "select", "default": "small",
+      "options": [{ "value": "small", "label": "Small" }, { "value": "medium", "label": "Medium" }] }
+  ],
+  "i18n": {
+    "zh": {
+      "name": "像素 Clawd",
+      "description": "把运行中的点点换成像素小螃蟹。",
+      "settings": { "size": { "title": "尺寸", "options": { "small": "小", "medium": "中" } } }
+    }
+  }
+}
+```
+
+A setting's entry can have `title`, `description`, `unit` and `options` (label by the option's value). The store shows
+`README.<locale>.md` (`README.zh.md`) in that language instead of `README.md`. In code, `g.locale()` is `"zh"` or
+`"en"`: pick the texts your components draw from it.
 
 ## What `g` can do
 

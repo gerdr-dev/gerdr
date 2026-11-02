@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { isAndroid } from "@/lib/android";
 import { closeDialog, fontSizeOf, set, setConfig, setFontSize, setPref, useStore, type Theme } from "@/lib/store";
 import { cn } from "@/lib/utils";
+import { languagePref, setLanguage, t, type LanguagePref } from "@/lib/i18n";
 import { AddonSettings } from "./AddonSettings";
 import { AgentSettings } from "./AgentSettings";
 import { AndroidSettings } from "./AndroidSettings";
@@ -69,16 +70,16 @@ export function SettingsDialog({ open }: { open: boolean }) {
           {/* 手机上整页缩一号（标题 15px、分页 13px、按钮矮一档）：组件默认的 18 / 14px 是照桌面定的，放进不到 400px 宽的弹窗里
               标题和按钮显得又大又挤（用户在安卓 App 里截图报的）。只在 max-md 下生效，桌面不动 */}
           <DialogHeader className="min-w-0 px-6 pt-5 max-md:gap-1 max-md:px-4 max-md:pt-3">
-            <DialogTitle className="max-md:text-[15px]">设置</DialogTitle>
+            <DialogTitle className="max-md:text-[15px]">{t("settings.title")}</DialogTitle>
             {/* The tabs don't fit one row on a phone: swipe sideways, no wrapping. overflow-x-auto makes y auto too, and Android's
                 WebView ignores scrollbar-width, so it drew both scrollbars (a bar under the tabs, a white corner square) */}
             <TabsList className="mt-2 max-w-full justify-start overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden max-md:mt-1 max-md:h-8 max-md:[&>button]:text-[13px]">
-              <TabsTrigger value="general">通用</TabsTrigger>
-              <TabsTrigger value="keys">快捷键</TabsTrigger>
+              <TabsTrigger value="general">{t("settings.tab.general")}</TabsTrigger>
+              <TabsTrigger value="keys">{t("settings.tab.keys")}</TabsTrigger>
               <TabsTrigger value="agents">Agent</TabsTrigger>
-              <TabsTrigger value="addons">扩展</TabsTrigger>
+              <TabsTrigger value="addons">{t("settings.tab.addons")}</TabsTrigger>
               <TabsTrigger value="remote">
-                远程访问
+                {t("settings.tab.remote")}
                 {/* 有远程界面连着：数字红点（谁连着、连了多久在 tab 里面） */}
                 {remoteConns > 0 && (
                   <span className="ml-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-bad px-1 text-[10px] leading-none font-medium text-white tabular-nums">
@@ -86,9 +87,9 @@ export function SettingsDialog({ open }: { open: boolean }) {
                   </span>
                 )}
               </TabsTrigger>
-              <TabsTrigger value="resources">资源</TabsTrigger>
+              <TabsTrigger value="resources">{t("settings.tab.resources")}</TabsTrigger>
               <TabsTrigger value="labs">
-                实验室
+                {t("settings.tab.labs")}
                 {/* the diagnosis found something broken */}
                 {doctorBad && <span className="ml-1 size-1.5 rounded-full bg-bad" />}
               </TabsTrigger>
@@ -106,22 +107,44 @@ export function SettingsDialog({ open }: { open: boolean }) {
                   font size a screen away from the theme (and without saying it, people can't guess whether a change on the
                   phone follows them to the computer). */}
               <div className="text-[12px] text-muted-foreground">
-                设置存在跑 Gerdr 的电脑上，电脑、手机、别的浏览器打开都是这一份；标了 <LocalTag /> 的只管这台设备。
+                {(() => {
+                  const [before, after] = t("settings.where").split("{tag}");
+                  return (
+                    <>
+                      {before}
+                      <LocalTag />
+                      {after}
+                    </>
+                  );
+                })()}
               </div>
-              <Section title="外观">
-                <Row label="主题" local>
+              <Section title={t("settings.look")}>
+                <Row label={t("settings.language")} hint={t("settings.language.hint")} local>
+                  <Select value={languagePref()} onValueChange={(v) => setLanguage(v as LanguagePref)}>
+                    <SelectTrigger className="w-36">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="system">{t("settings.language.system")}</SelectItem>
+                      {/* Each language in its own name: someone who can't read the current one still finds theirs */}
+                      <SelectItem value="zh">中文</SelectItem>
+                      <SelectItem value="en">English</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </Row>
+                <Row label={t("settings.theme")} local>
                   <Select value={dev.theme} onValueChange={(v) => setPref({ theme: v as Theme })}>
                     <SelectTrigger className="w-36">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="system">跟随系统</SelectItem>
-                      <SelectItem value="light">浅色</SelectItem>
-                      <SelectItem value="dark">深色</SelectItem>
+                      <SelectItem value="system">{t("settings.theme.system")}</SelectItem>
+                      <SelectItem value="light">{t("settings.theme.light")}</SelectItem>
+                      <SelectItem value="dark">{t("settings.theme.dark")}</SelectItem>
                     </SelectContent>
                   </Select>
                 </Row>
-                <Row label="字号" local>
+                <Row label={t("settings.fontSize")} local>
                   <Select value={String(fontSize)} onValueChange={(v) => setFontSize(Number(v))}>
                     <SelectTrigger className="w-36">
                       <SelectValue />
@@ -136,19 +159,19 @@ export function SettingsDialog({ open }: { open: boolean }) {
                   </Select>
                 </Row>
               </Section>
-              <Section title="对话">
-                <Row label="发送键" hint="另一种组合换行；手机上选「回车」时键盘的回车键直接发送" local>
+              <Section title={t("settings.chat")}>
+                <Row label={t("settings.sendKey")} hint={t("settings.sendKey.hint")} local>
                   <Select value={dev.sendKey} onValueChange={(v) => setPref({ sendKey: v as any })}>
                     <SelectTrigger className="w-36">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="enter">回车</SelectItem>
-                      <SelectItem value="mod+enter">⌘ / Ctrl + 回车</SelectItem>
+                      <SelectItem value="enter">{t("settings.sendKey.enter")}</SelectItem>
+                      <SelectItem value="mod+enter">{t("settings.sendKey.modEnter")}</SelectItem>
                     </SelectContent>
                   </Select>
                 </Row>
-                <Row label="默认 Agent" hint="新会话先选中它">
+                <Row label={t("settings.defaultAgent")} hint={t("settings.defaultAgent.hint")}>
                   <Select value={cfg.defaultAgent} onValueChange={(v) => setConfig({ defaultAgent: v })}>
                     <SelectTrigger className="w-36">
                       <SelectValue />
@@ -162,16 +185,16 @@ export function SettingsDialog({ open }: { open: boolean }) {
                     </SelectContent>
                   </Select>
                 </Row>
-                <Row label="改文件时展开 diff" hint="新建 / 编辑文件的那一行默认展开改动；关掉只留一行（文件名和 +/- 行数），点开再看">
+                <Row label={t("settings.expandEdits")} hint={t("settings.expandEdits.hint")}>
                   <Switch checked={cfg.expandEdits !== false} onCheckedChange={(v) => setConfig({ expandEdits: v })} />
                 </Row>
-                <Row label="显示思考" hint="Agent 的思考过程单独成行、直接展开。Claude 模型建议打开。">
+                <Row label={t("settings.showThinking")} hint={t("settings.showThinking.hint")}>
                   <Switch checked={cfg.showThinking !== false} onCheckedChange={(v) => setConfig({ showThinking: v })} />
                 </Row>
-                <Row label="打开链接前确认" hint="点对话里的外部链接先弹框，显示完整地址，可以复制或打开；关掉就直接打开">
+                <Row label={t("settings.confirmLinks")} hint={t("settings.confirmLinks.hint")}>
                   <Switch checked={cfg.confirmLinks !== false} onCheckedChange={(v) => setConfig({ confirmLinks: v })} />
                 </Row>
-                <Row label="切走的 Tab 留在页面里" hint="展开状态、滚动位置都保住；越多越占内存（设置 → 资源 里看）" local>
+                <Row label={t("settings.keepTabs")} hint={t("settings.keepTabs.hint")} local>
                   <Select value={String(dev.keepTabs ?? 6)} onValueChange={(v) => setPref({ keepTabs: Number(v) })}>
                     <SelectTrigger className="w-36">
                       <SelectValue />
@@ -179,29 +202,29 @@ export function SettingsDialog({ open }: { open: boolean }) {
                     <SelectContent>
                       {[1, 3, 6, 10, 20].map((n) => (
                         <SelectItem key={n} value={String(n)}>
-                          {n === 1 ? "不留" : `最近 ${n} 个`}
+                          {n === 1 ? t("settings.keepTabs.none") : t("settings.keepTabs.recent", { n })}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </Row>
               </Section>
-              <Section title="通知">
-                <Row label="系统通知" hint="看不见的会话跑完了，或收件箱来了新消息时" local>
+              <Section title={t("settings.notify")}>
+                <Row label={t("settings.notify.system")} hint={t("settings.notify.system.hint")} local>
                   <Switch checked={dev.notifications} onCheckedChange={(v) => setPref({ notifications: v })} />
                 </Row>
               </Section>
-              <Section title="收件箱" id="settings-inbox">
-                <Row label="等你批准" hint="Agent 要运行命令、改文件，在等你点允许">
+              <Section title={t("settings.inbox")} id="settings-inbox">
+                <Row label={t("settings.inbox.permission")} hint={t("settings.inbox.permission.hint")}>
                   <Switch checked={inb.permission !== false} onCheckedChange={(v) => setConfig({ inbox: { ...inb, permission: v } })} />
                 </Row>
-                <Row label="在问你问题" hint="Agent 停下来等你回答">
+                <Row label={t("settings.inbox.ask")} hint={t("settings.inbox.ask.hint")}>
                   <Switch checked={inb.ask !== false} onCheckedChange={(v) => setConfig({ inbox: { ...inb, ask: v } })} />
                 </Row>
-                <Row label="出错结束" hint="正在跑的会话因为出错停了">
+                <Row label={t("settings.inbox.error")} hint={t("settings.inbox.error.hint")}>
                   <Switch checked={inb.error !== false} onCheckedChange={(v) => setConfig({ inbox: { ...inb, error: v } })} />
                 </Row>
-                <Row label="电量低提醒" hint="运行 Gerdr 的电脑用电池、电量低于这个数时放一条进收件箱（每次放电只提醒一次）">
+                <Row label={t("settings.inbox.battery")} hint={t("settings.inbox.battery.hint")}>
                   <div className="flex items-center gap-2">
                     {bat.on && (
                       <Select value={String(bat.percent)} onValueChange={(v) => setConfig({ batteryAlert: { ...bat, percent: Number(v) } })}>
@@ -223,20 +246,20 @@ export function SettingsDialog({ open }: { open: boolean }) {
               </Section>
               {/* Only in the Android App (its shell keeps these): notifications in the background, volume keys, server */}
               {isAndroid() && (
-                <Section title="这台手机" local>
+                <Section title={t("settings.thisPhone")} local>
                   <AndroidSettings />
                 </Section>
               )}
               {/* The gerdr on the computer running it: which version, updating it (App only), the background service (macOS) */}
-              <Section title="版本与后台">
+              <Section title={t("settings.versions")}>
                 <UpdateSetting />
                 <UIUpgradeSetting />
                 <ServiceSetting />
               </Section>
-              <Section title="导入">
-                <Row label="从 Herdr 导入" hint="工作空间、Tab、分屏和每个 Agent 的会话">
+              <Section title={t("settings.import")}>
+                <Row label={t("settings.import.herdr")} hint={t("settings.import.herdr.hint")}>
                   <Button size="sm" variant="outline" onClick={() => set({ dialog: { kind: "importHerdr" } })}>
-                    导入…
+                    {t("settings.import.button")}
                   </Button>
                 </Row>
               </Section>
@@ -256,7 +279,7 @@ export function SettingsDialog({ open }: { open: boolean }) {
               <Tabs value={agentTab} onValueChange={setAgentTab} className="gap-4">
                 <TabsList variant="line" className="h-8 border-b w-full justify-start rounded-none p-0">
                   <TabsTrigger value="roles" className="flex-none px-3">
-                    角色
+                    {t("settings.agent.roles")}
                   </TabsTrigger>
                   <TabsTrigger value="skills" className="flex-none px-3">
                     Skill
@@ -265,7 +288,7 @@ export function SettingsDialog({ open }: { open: boolean }) {
                     MCP
                   </TabsTrigger>
                   <TabsTrigger value="memory" className="flex-none px-3">
-                    记忆
+                    {t("settings.agent.memory")}
                   </TabsTrigger>
                 </TabsList>
                 <TabsContent value="roles">
@@ -283,17 +306,14 @@ export function SettingsDialog({ open }: { open: boolean }) {
               </Tabs>
             </TabsContent>
             <TabsContent value="labs" className="space-y-4 pt-2">
-              <div className="text-[13px] text-muted-foreground">还在试的功能，默认关着。</div>
-              <Row label="对话虚拟滚动" hint="只渲染屏幕附近的消息，很长的对话更省内存；往上翻时带图的消息可能会跳动" local>
+              <div className="text-[13px] text-muted-foreground">{t("settings.labs.intro")}</div>
+              <Row label={t("settings.labs.virtualList")} hint={t("settings.labs.virtualList.hint")} local>
                 <Switch checked={!!dev.virtualList} onCheckedChange={(v) => setPref({ virtualList: v })} />
               </Row>
-              <Row label="选中即复制" hint="和 Herdr 一样：拖着选中文字，松开鼠标就复制到剪贴板；双击选词也会复制。对话和终端里都管用，输入框里不复制" local>
+              <Row label={t("settings.labs.copyOnSelect")} hint={t("settings.labs.copyOnSelect.hint")} local>
                 <Switch checked={!!dev.copyOnSelect} onCheckedChange={(v) => setPref({ copyOnSelect: v })} />
               </Row>
-              <Row
-                label="远程连着时不休眠"
-                hint="手机等远程设备连着时电脑不睡，合上盖子也醒着（和 Amphetamine 一样），断开 15 分钟后恢复；下面的手动时段也合盖不睡。合盖要授权一次，用电池且电量 ≤ 20% 时自动放手，塞包里会发热。仅 macOS"
-              >
+              <Row label={t("settings.labs.keepAwake")} hint={t("settings.labs.keepAwake.hint")}>
                 <Switch checked={!!cfg.keepAwakeRemote} onCheckedChange={(v) => setConfig({ keepAwakeRemote: v })} />
               </Row>
               <AwakeSetting open={open && tabOpen === "labs"} />
@@ -328,7 +348,9 @@ function Section({ id, title, hint, local, children }: { id?: string; title: str
 
 /** Marks a setting kept on this device only (localStorage / the Android shell), not in gerdr's shared config. */
 function LocalTag({ className }: { className?: string }) {
-  return <span className={cn("rounded-sm border px-1 py-px text-[10px] font-normal leading-none text-muted-foreground", className)}>仅本设备</span>;
+  return (
+    <span className={cn("rounded-sm border px-1 py-px text-[10px] font-normal leading-none text-muted-foreground", className)}>{t("settings.localTag")}</span>
+  );
 }
 
 function Row({ label, hint, local, children }: { label: string; hint?: string; local?: boolean; children: React.ReactNode }) {

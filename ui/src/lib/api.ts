@@ -1,4 +1,5 @@
 import type { AppUpdateStatus } from "./native";
+import { localizeAddon } from "./i18n";
 import type { LLMModel, LLMProvider } from "./store";
 import type { AvailableCommand } from "@gerdr/chat/types";
 import type { ContentBlock, ExtSettings, ExtView, Hello, HubEvent, MemoryStore, AddonBuild, AddonStore, SessionSummary, TermInfo } from "./types";
@@ -163,7 +164,8 @@ export const api = {
       errors?: string[];
     }>("POST", "/api/import/herdr", { workspaces }),
   hello: () => req<Hello>("GET", "/api/hello"),
-  addons: () => req<AddonBuild[]>("GET", "/api/addons"),
+  // In the interface's language: addon.json's i18n is applied here, once, so every place that shows a name reads it
+  addons: () => req<AddonBuild[]>("GET", "/api/addons").then((l) => l.map(localizeAddon)),
   addonMessage: (id: string, data: unknown) => req("POST", `/api/addons/${encodeURIComponent(id)}/message`, { data }),
   /** g.fetch: the backend makes the request, so the target needs no CORS (internal/server/addonfetch.go) */
   addonFetch: (id: string, b: { url: string; method?: string; headers?: Record<string, string>; body?: string }) =>
@@ -172,7 +174,7 @@ export const api = {
   /** null = back to the default */
   setAddonSettings: (id: string, values: Record<string, unknown>) => req("PUT", `/api/addons/${encodeURIComponent(id)}/settings`, { values }),
   uninstallAddon: (id: string) => req("DELETE", `/api/addons/${encodeURIComponent(id)}`),
-  addonStores: () => req<AddonStore[]>("GET", "/api/addon-stores"),
+  addonStores: () => req<AddonStore[]>("GET", "/api/addon-stores").then((l) => l.map((st) => ({ ...st, addons: st.addons.map(localizeAddon) }))),
   addAddonStore: (source: string) => req<{ source: string }>("POST", "/api/addon-stores", { source }),
   removeAddonStore: (source: string) => req("DELETE", `/api/addon-stores?source=${encodeURIComponent(source)}`),
   refreshAddonStore: (source: string) => req("POST", "/api/addon-stores/refresh", { source }),

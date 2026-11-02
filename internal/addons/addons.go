@@ -53,6 +53,25 @@ type Manifest struct {
 	Settings []SettingSpec `json:"settings,omitempty"`
 	Main     string        `json:"main,omitempty"` // the UI half's entry; index.ts / index.tsx / index.js when empty
 	Service  *ServiceSpec  `json:"service,omitempty"`
+	// I18n: the texts in other languages, by locale ("en", "zh"). The fields above are the base, shown when the
+	// interface's language has no entry; the UI picks (ui/src/lib/i18n.ts pick), the backend only passes it on.
+	I18n map[string]ManifestText `json:"i18n,omitempty"`
+}
+
+// ManifestText is addon.json's texts in one language: any field left out keeps the base one.
+type ManifestText struct {
+	Name        string `json:"name,omitempty"`
+	Description string `json:"description,omitempty"`
+	// Settings: by setting key
+	Settings map[string]SettingText `json:"settings,omitempty"`
+}
+
+// SettingText is one setting's texts in one language. Options: option label by the option's value (as a string).
+type SettingText struct {
+	Title       string            `json:"title,omitempty"`
+	Description string            `json:"description,omitempty"`
+	Unit        string            `json:"unit,omitempty"`
+	Options     map[string]string `json:"options,omitempty"`
 }
 
 func readManifest(dir string) (*Manifest, error) {
@@ -104,7 +123,9 @@ type Addon struct {
 	// Settings the add-on declares, and what was set (only keys that were changed from the default)
 	Settings      []SettingSpec  `json:"settings,omitempty"`
 	SettingValues map[string]any `json:"settingValues,omitempty"`
-	Disabled      bool           `json:"disabled,omitempty"`
+	// I18n: addon.json's texts in other languages (Manifest.I18n)
+	I18n     map[string]ManifestText `json:"i18n,omitempty"`
+	Disabled bool                    `json:"disabled,omitempty"`
 	// Source: installed from a store; Modified: its files changed since (an update would overwrite that).
 	Source   *Installed `json:"source,omitempty"`
 	Modified bool       `json:"modified,omitempty"`
@@ -264,6 +285,7 @@ func (m *Manager) describe(id string, st *state) *Addon {
 		a.Version, a.Description, a.Icon, a.HasService = mf.Version, mf.Description, mf.Icon, mf.Service != nil
 		a.Settings = mf.Settings
 		a.SettingValues = st.Settings[id]
+		a.I18n = mf.I18n
 	}
 	return a
 }

@@ -49,6 +49,10 @@ type StoreAddon struct {
 	Screenshots []string `json:"screenshots,omitempty"`
 	HasService  bool     `json:"hasService,omitempty"`
 	Hash        string   `json:"hash"`
+	// I18n: addon.json's texts in other languages; Readmes: README.<locale>.md files by locale (README.en.md → "en"),
+	// shown instead of README.md in that language
+	I18n    map[string]ManifestText `json:"i18n,omitempty"`
+	Readmes map[string]string       `json:"readmes,omitempty"`
 }
 
 // StoreView is a store as Settings → Add-ons → Store shows it.
@@ -182,13 +186,14 @@ func scanStore(root string) []StoreAddon {
 			}
 			seen[name] = true
 			a := StoreAddon{ID: name, Path: r, Name: name, Version: mf.Version, Description: mf.Description, Icon: mf.Icon,
-				Screenshots: mf.Screenshots, HasService: mf.Service != nil, Hash: hashDir(full)}
+				Screenshots: mf.Screenshots, HasService: mf.Service != nil, Hash: hashDir(full), I18n: mf.I18n}
 			if mf.Name != "" {
 				a.Name = mf.Name
 			}
 			if b, err := os.ReadFile(filepath.Join(full, "README.md")); err == nil && len(b) < 64<<10 {
 				a.Readme = string(b)
 			}
+			a.Readmes = localReadmes(full)
 			out = append(out, a)
 		}
 	}
@@ -502,4 +507,31 @@ func copyTree(src, dst string) error {
 		}
 		return err
 	})
+}
+
+// readmeLocale matches README.<locale>.md: a language code, optionally with a region (README.en.md, README.zh-CN.md).
+var readmeLocale = regexp.MustCompile(`^README\.([a-z]{2}(?:-[A-Za-z]{2,4})?)\.md$`)
+
+// localReadmes reads an add-on folder's README.<locale>.md files, by locale. Same size cap as README.md.
+func localReadmes(dir string) map[string]string {
+	ents, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+	var out map[string]string
+	for _, e := range ents {
+		m := readmeLocale.FindStringSubmatch(e.Name())
+		if m == nil || !e.Type().IsRegular() {
+			continue
+		}
+		b, err := os.ReadFile(filepath.Join(dir, e.Name()))
+		if err != nil || len(b) >= 64<<10 {
+			continue
+		}
+		if out == nil {
+			out = map[string]string{}
+		}
+		out[m[1]] = string(b)
+	}
+	return out
 }

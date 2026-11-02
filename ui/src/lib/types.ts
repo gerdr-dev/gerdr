@@ -78,6 +78,8 @@ export type AddonBuild = {
   /** addon.json "settings", and the values set (only those changed from the default). */
   settings?: AddonSetting[];
   settingValues?: Record<string, unknown>;
+  /** addon.json "i18n": its texts in other languages, by locale. Already applied by api.ts (lib/i18n.ts localizeAddon). */
+  i18n?: Record<string, AddonText>;
   disabled?: boolean;
   /** Installed from a store; modified: its files changed since (an update asks before overwriting). */
   source?: { store: string; version?: string; hash: string; at: number };
@@ -112,6 +114,15 @@ export type StoreAddon = {
   screenshots?: string[];
   hasService?: boolean;
   hash: string;
+  /** addon.json "i18n", and README.<locale>.md files by locale. Already applied by api.ts. */
+  i18n?: Record<string, AddonText>;
+  readmes?: Record<string, string>;
+};
+/** addon.json's texts in one language (internal/addons ManifestText): what's left out keeps the base text. */
+export type AddonText = {
+  name?: string;
+  description?: string;
+  settings?: Record<string, { title?: string; description?: string; unit?: string; options?: Record<string, string> }>;
 };
 /** A store (internal/addons StoreView): a GitHub repository, or a local folder while writing one. */
 export type AddonStore = { source: string; local?: boolean; default?: boolean; fetchedAt?: number; error?: string; addons: StoreAddon[] };
