@@ -194,9 +194,11 @@ declare global {
      *                20px tall), and the one shown while a pane starts an agent. Props: paused (the turn waits on the
      *                user — a permission, a question — so show it's waiting, not working) and className (gerdr's size
      *                and colour for that spot: text-brand running, text-warn waiting; pass it on to keep them). Only
-     *                the first registration draws; one that throws falls back to the dots.
+     *                the first registration draws; one that throws falls back to the dots. fallback: gerdr's own dots,
+     *                to return when your add-on is set not to replace them right now (a setting the user switched off:
+     *                setup doesn't run again on a settings change, so decide while rendering).
      */
-    slot(name: "loader", component: Component<{ paused: boolean; className?: string }>, opts?: { order?: number }): Dispose;
+    slot(name: "loader", component: Component<{ paused: boolean; className?: string; fallback?: any }>, opts?: { order?: number }): Dispose;
     slot(name: "sidebar", component: Component<{}>, opts?: { order?: number; id?: string; title?: string; icon?: string }): Dispose;
     slot(name: "rail", component: Component<{}>, opts?: { order?: number; id?: string; title?: string }): Dispose;
     slot(name: "overlay", component: Component<{}>, opts?: { order?: number }): Dispose;

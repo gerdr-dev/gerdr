@@ -30,7 +30,9 @@ sees: `internal/addons/builtin/gerdr.d.ts`, copied into `~/.gerdr/addons` on eve
   agent). The package gets it through `ChatHost.renderLoader`, which hands the host the whole indicator with the
   default as `fallback` rather than a colour or a frame, so the next host's idea (a mascot, a spinner of its own) needs
   no new package release. Gerdr's AddonLoader draws only the first registration and falls back to the dots when it
-  throws: a running turn must still look like it runs.
+  throws: a running turn must still look like it runs. The add-on gets that `fallback` too: a settings change doesn't
+  re-run setup, so an add-on with a "don't replace the dots" switch (clawd-loader, wanted only for its rail face)
+  decides while rendering and returns it.
 - `g.turnStat` decorates the line under each finished turn through `ChatHost.useTurnStat`, a **hook** rather than a
   plain callback: answers depend on the time (cache-clock colors by prompt-cache age), so Gerdr's implementation
   (`useAddonTurnStat`) re-renders every 30s while any add-on uses it. `latest` (the newest turn's line) is worked out in

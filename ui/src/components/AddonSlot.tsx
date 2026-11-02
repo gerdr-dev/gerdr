@@ -40,7 +40,7 @@ export function AddonLoader({ paused, className, fallback }: LoaderProps) {
   const C = first.Component;
   return (
     <Guard key={first.key} addon={first.addon} fallback={fallback}>
-      <C paused={paused} className={className} />
+      <C paused={paused} className={className} fallback={fallback} />
     </Guard>
   );
 }

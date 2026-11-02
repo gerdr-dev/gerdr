@@ -130,7 +130,7 @@ lucide icon (`<g.icons.Timer className="size-3.5" />`).
 | A button face the user can pick for a rail button: a symbol, tiny bars, anything (36×28px box, clipped) | `g.slot("rail", Component, { id, title })` | no props |
 | The app's root, always mounted, no space taken | `g.slot("overlay", Component)` | no props |
 | Every pane's title bar | `g.slot("paneTitle", Component)` | `{ pane, tab }` |
-| The working indicator (the dots before "Pondering…", a 20px row); only the first add-on's draws | `g.slot("loader", Component)` | `{ paused, className }` |
+| The working indicator (the dots before "Pondering…", a 20px row); only the first add-on's draws | `g.slot("loader", Component)` | `{ paused, className, fallback }` (return `fallback` for gerdr's own dots) |
 | The composer's bottom bar | `g.composerAction({ id, title, icon, run })` | `run(ctx)`: `ctx.text`, `ctx.insert()`, `ctx.setText()` |
 | Right-click menu (desktop and Android App) | `g.contextMenu({ id, title, when, run })` | `{ selection, sessionId }` |
 | The line under each finished turn | `g.turnStat(fn)` | `fn(info)` returns `{ className, title, after }` |
