@@ -618,12 +618,12 @@ across the menu and dropped its resize handle (seen on a tablet). With the rail 
 up with. Old sites still get `gerdr:sidebar {width: 224, bottom: 0}` on load (WorkView.tsx `LEGACY_SIDEBAR`), so a
 menu written for the variables keeps a sane width and no gap.
 
-- The add-on blocks (`g.slot("panel")`) open in panels beside the rail: one button per group the user set up in
-  Settings → 扩展 → 分组, each with the face the user picked (docs/dev/ADDONS.md).
+- The add-on blocks (`g.slot("panel")`) open in panels beside the rail: one button per add-on, with the icon the add-on
+  declared (docs/dev/ADDONS.md).
   A lost connection shows as a toast on every screen (`ConnToast`): the row that showed it is gone.
 - The phone has no rail: its drawer keeps `SidebarHeader` / `SidebarBottom` (SidebarChrome.tsx), its top bar the rest.
   The add-on blocks aren't in the drawer for good either (they took a quarter of a phone's height from the list): a
-  button per group in its bottom row opens them in a sheet (`PhoneGroupButtons`, RailGroups.tsx).
+  button per add-on in its bottom row opens them in a sheet (`PhoneAddonButtons`, RailAddons.tsx).
 - The desktop App has the system title bar, so the rail needs no room for the traffic lights.
 - A phone on its side is past the phone width (768) but ~400px tall, ~150px with the soft keyboard up: the whole rail
   scrolls (not just the projects, which got squeezed to nothing under the fixed rest), and below 560px tall

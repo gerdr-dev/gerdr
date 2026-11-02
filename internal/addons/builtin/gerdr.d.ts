@@ -170,16 +170,20 @@ declare global {
     /**
      * Put a component in one of gerdr's slots. It is re-rendered with gerdr; one that throws is dropped and its error
      * shown in Settings → Add-ons. Several add-ons in one slot: by order, then by add-on id.
-     *   "panel"      a block of an add-on panel (288px wide, no props). The user groups blocks into buttons on the
-     *                rail (the strip down the window's left edge) in Settings → 扩展 → 分组: one button can stack blocks
-     *                of several add-ons (a "today" and two quota meters), in the user's order. Hovering or tapping a
-     *                button opens its blocks beside the rail; on a phone a sheet from the drawer's bottom row. On the
-     *                rail a block stays mounted while its panel is closed. Blocks are padded above and below once per
-     *                panel: give yours horizontal padding only, or two blocks leave a gap between them.
-     *                opts.id: a stable id among your blocks (needed only when you register several and may change their
-     *                order: the user's grouping refers to "addon:id", by default your n-th block). opts.title, opts.icon
-     *                (a lucide icon name, "Gauge"): how the block is listed in that setting; default your add-on's name
-     *                and icon
+     *   "panel"      a block of your add-on's panel (288px wide, no props). Each add-on with blocks gets one button
+     *                on the rail (the strip down the window's left edge), in order (the smallest of your blocks');
+     *                hovering or tapping it opens your blocks, stacked, beside the rail; on a phone a sheet from the
+     *                drawer's bottom row. On the rail a block stays mounted while its panel is closed. Blocks are
+     *                padded above and below once per panel: give yours horizontal padding only.
+     *                The button is yours, from the first block that sets each option: opts.title (its tooltip;
+     *                default your add-on's name), opts.icon — a lucide icon name ("Gauge"), or a component drawn in a
+     *                box of { width, height } px: 32×20 on the rail, 28×16 on a phone, clipped. Use it to show live
+     *                data (three quota rings); keep it still and use the theme tokens. Default: your addon.json icon.
+     *                opts.tallIcon: true for a button two cells tall on the rail, its box 32×72 (24×24 on a phone),
+     *                when your marks need the room.
+     *                opts.open: "hover" (default) or "click", for a panel you work in rather than glance at.
+     *                Gerdr doesn't put several add-ons behind one button: to show other add-ons' blocks together
+     *                with yours, copy their code into your add-on (they're small) and turn them off
      *   "paneTitle"  every pane's title bar, before its ⋯ menu (props: { pane: PaneInfo; tab: TabInfo }); keep it small
      *   "overlay"    mounted once at the app's root and always there (no props, takes no space): where a dialog or
      *                drawer opened by a command lives. A panel can't host one: it's hidden while closed and on a
@@ -192,26 +196,23 @@ declare global {
      *                no choice made it draws as soon as you're installed (the first registration does); the user can
      *                pick another in Settings → General → Loading 动画. One that throws falls back to the dots.
      *                fallback: gerdr's own dots, if you want to show them sometimes. Just a picture that moves? Make it a sprite instead:
-     *                it then also serves as a rail button's icon, and only shows where the user puts it
+     *                it then also serves as an agent's icon, and only shows where the user puts it
      *   "sprite"     a small picture — an animal, a symbol, a few tiny bars, a number — that gerdr draws nowhere by
      *                itself: the user picks sprites for the places that take one: the working indicator (Settings →
-     *                General → Loading 动画), the rail's buttons (Settings → 扩展 → 分组) and an agent's icon
-     *                (Settings → Agent). So a picture set changes nothing when installed, and one set serves every
-     *                such place. Register each picture separately (opts.id, opts.title: "Pirate") so the user can put
-     *                a different one in each place.
+     *                General → Loading 动画) and an agent's icon (Settings → Agent). So a picture set changes nothing
+     *                when installed, and one set serves every such place. Register each picture separately (opts.id,
+     *                opts.title: "Pirate") so the user can put a different one in each place.
      *                Props: state — "working" / "waiting" (the indicator: running, or waiting on the user) or "idle"
-     *                (a button, an agent's icon: always in sight, so keep it still) — and width × height, the box you
-     *                get, to scale to: 24×16 in the indicator (not clipped, a hat may stick out), 24×20 on a button
-     *                (20×16 on a phone), down to 14×14 as an agent's icon in a list (clipped). Fitting the box is
-     *                yours: shrink, or draw a simpler version when it's small. The box carries gerdr's colour for the
-     *                spot (currentColor: text-brand / text-warn in the indicator); else use the theme tokens so it
-     *                reads in light and dark. Don't make it interactive (a button wraps it on the rail). An unpicked
-     *                rail button uses a sprite of one of its blocks' add-ons, if there is one
+     *                (an agent's icon: always in sight, so keep it still) — and width × height, the box you get, to
+     *                scale to: 24×16 in the indicator (not clipped, a hat may stick out), down to 14×14 as an agent's
+     *                icon in a list (clipped). Fitting the box is yours: shrink, or draw a simpler version when it's
+     *                small. The box carries gerdr's colour for the spot (currentColor: text-brand / text-warn in the
+     *                indicator); else use the theme tokens so it reads in light and dark. Don't make it interactive
      */
     slot(name: "loader", component: Component<{ paused: boolean; className?: string; fallback?: any }>, opts?: { order?: number }): Dispose;
-    slot(name: "panel", component: Component<{}>, opts?: { order?: number; id?: string; title?: string; icon?: string }): Dispose;
+    slot(name: "panel", component: Component<{}>, opts?: PanelOpts): Dispose;
     /** The "panel" slot's old name (blocks used to sit in the left column); still works the same. */
-    slot(name: "sidebar", component: Component<{}>, opts?: { order?: number; id?: string; title?: string; icon?: string }): Dispose;
+    slot(name: "sidebar", component: Component<{}>, opts?: PanelOpts): Dispose;
     slot(name: "sprite", component: Component<SpriteProps>, opts?: { order?: number; id?: string; title?: string }): Dispose;
     slot(name: "overlay", component: Component<{}>, opts?: { order?: number }): Dispose;
     slot(name: "paneTitle", component: Component<{ pane: PaneInfo; tab: TabInfo }>, opts?: { order?: number }): Dispose;
@@ -325,6 +326,20 @@ declare global {
     interface ElementChildrenAttribute {
       children: {};
     }
+  }
+
+  /** g.slot("panel") options; title / icon / open describe your rail button, the first block that sets one wins. */
+  interface PanelOpts {
+    order?: number;
+    /** A stable id among your blocks; default your n-th. */
+    id?: string;
+    title?: string;
+    /** A lucide icon name, or a component drawn in a box of width × height px (32×20 on the rail, 28×16 on a phone). */
+    icon?: string | Component<{ width: number; height: number }>;
+    /** A button two cells tall on the rail: the icon component gets 32×72 there, 24×24 on a phone. */
+    tallIcon?: boolean;
+    /** Open the panel on hover (default) or on click. */
+    open?: "hover" | "click";
   }
 
   /** g.slot("sprite"): where it's drawn now, and the box it gets there. */

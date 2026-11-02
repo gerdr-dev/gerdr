@@ -72,7 +72,6 @@ export const LINES: Record<string, { name: string; icon: LucideIcon }> = {
   sparkles: { name: "灵感", icon: Sparkles },
   cat: { name: "猫", icon: Cat },
   ghost: { name: "幽灵", icon: Ghost },
-  // for the rail's add-on buttons (RailSettings.tsx), which use this same set
   gauge: { name: "仪表", icon: Gauge },
   coins: { name: "钱币", icon: Coins },
   wallet: { name: "钱包", icon: Wallet },

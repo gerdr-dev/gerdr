@@ -10,14 +10,14 @@ import { toggleOverview } from "@/lib/overview";
 import { set, setMode, toggleSidebar, useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { StatusDot } from "./AgentIcon";
-import { RailGroupButtons } from "./RailGroups";
+import { RailAddonButtons } from "./RailAddons";
 import { RouteLabel } from "./ConnStatus";
 import { InboxButton } from "./Inbox";
 import { askCloseSpace, newSpaceDialog, spaceStatus } from "./SpaceSwitcher";
 
 /*
  * The rail: gerdr's own strip down the left edge on wider screens, the same in every mode — projects, the Code / Work
- * switch, the add-on buttons (RailGroups.tsx), the inbox, settings. Everything gerdr needs at hand lives here, so nothing of gerdr's is laid
+ * switch, the add-on buttons (RailAddons.tsx), the inbox, settings. Everything gerdr needs at hand lives here, so nothing of gerdr's is laid
  * over the Work site: that page is a plain full-size frame its agent can lay out any way it likes (it used to share the
  * left column with gerdr's header and settings row, which every site had to leave room for and line its menu up with,
  * and which broke whenever one didn't). Code mode's list sits to the rail's right. The phone has no rail: its drawer
@@ -143,7 +143,7 @@ export function Rail() {
         </div>
         <div className="min-h-2 flex-1" />
         <div className="flex shrink-0 flex-col items-center gap-1 pb-2">
-          <RailGroupButtons />
+          <RailAddonButtons />
           <InboxButton rail />
           {/* A touch screen seldom has a keyboard to need a shortcut list: the command palette instead, as in the phone's drawer */}
           {coarse

@@ -5,7 +5,7 @@ import { ModeSwitch } from "@/components/WorkView";
 import { currentSpace, spaceList } from "@/lib/layout";
 import { get, set, setSidebarW, SIDEBAR_W, toggleSidebar, useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
-import { PhoneGroupButtons } from "./RailGroups";
+import { PhoneAddonButtons } from "./RailAddons";
 import { isAndroid } from "@/lib/android";
 import { usePhone } from "@/lib/phone";
 import { InboxButton } from "./Inbox";
@@ -20,7 +20,7 @@ import { SpaceSwitcher } from "./SpaceSwitcher";
 /**
  * The bottom of the phone drawer. The add-on blocks (g.slot("panel"): quota meter, today's numbers…) used to sit
  * above it for good and took a quarter of a phone's height from the list; they open from the footer's button instead
- * (PhoneGroupButtons, one per group of Settings → 扩展 → 分组), as they open from the rail on wider screens.
+ * (PhoneAddonButtons, one per add-on), as they open from the rail on wider screens.
  */
 export function SidebarBottom({ sidebarToggle }: { sidebarToggle?: boolean }) {
   return <SidebarFooter sidebarToggle={sidebarToggle} />;
@@ -93,7 +93,7 @@ export function SidebarFooter({ sidebarToggle }: { sidebarToggle?: boolean }) {
         <ConnStatus />
         {connected && isAndroid() && <RouteLabel />}
       </div>
-      <PhoneGroupButtons />
+      <PhoneAddonButtons />
       {/* On a phone the inbox is in the top bar (PhoneBar); this row is in the drawer there */}
       {!phone && <InboxButton />}
       {/* A phone has no ⌘K and no keyboard to need a shortcut list: the slot opens the palette instead, the only way

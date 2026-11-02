@@ -14,21 +14,21 @@ export function AddonSlot({ name, props, className }: { name: SlotName; props?: 
   const list = slots[name];
   if (!list.length) return null;
   const items = list.map(({ key, addon, Component: C }) => (
-    <Guard key={key} addon={addon}>
+    <AddonGuard key={key} addon={addon}>
       <C {...props} />
-    </Guard>
+    </AddonGuard>
   ));
   return className ? <div className={className}>{items}</div> : <>{items}</>;
 }
 
-/** Some entries of a slot, each in its own error boundary like AddonSlot's: a rail group's blocks (lib/rail.ts). */
+/** Some entries of a slot, each in its own error boundary like AddonSlot's: an add-on's rail panel (lib/rail.ts). */
 export function AddonParts({ regs }: { regs: SlotReg[] }) {
   return (
     <>
       {regs.map(({ key, addon, Component: C }) => (
-        <Guard key={key} addon={addon}>
+        <AddonGuard key={key} addon={addon}>
           <C />
-        </Guard>
+        </AddonGuard>
       ))}
     </>
   );
@@ -38,7 +38,7 @@ export type SpriteState = "idle" | "working" | "waiting";
 
 /**
  * One sprite (g.slot("sprite")) in a box of width × height px, centred. The sprite is told the box so it can pick its
- * scale; `clip` for places that must not be pushed around (a rail button), off where a hat may stick out (the loader).
+ * scale; `clip` for places that must not be pushed around (an agent's icon in a list), off where a hat may stick out (the loader).
  * className goes on the box only (the loader's text-brand / text-warn): the sprite inherits it as currentColor, and a
  * size class in it ("size-4") loses to the box's own width / height.
  */
@@ -62,9 +62,9 @@ export function SpriteView({
   const C = reg.Component;
   return (
     <span aria-hidden className={cn("flex shrink-0 items-center justify-center", clip && "overflow-hidden", className)} style={{ width, height }}>
-      <Guard key={reg.key} addon={reg.addon} fallback={fallback}>
+      <AddonGuard key={reg.key} addon={reg.addon} fallback={fallback}>
         <C state={state} width={width} height={height} />
-      </Guard>
+      </AddonGuard>
     </span>
   );
 }
@@ -147,13 +147,14 @@ export function AddonLoader({ paused, className, fallback }: LoaderProps) {
     return <SpriteView reg={pick.sprite} state={paused ? "waiting" : "working"} className={className} fallback={fallback} {...LOADER_BOX} />;
   const C = pick.loader.Component;
   return (
-    <Guard key={pick.loader.key} addon={pick.loader.addon} fallback={fallback}>
+    <AddonGuard key={pick.loader.key} addon={pick.loader.addon} fallback={fallback}>
       <C paused={paused} className={className} fallback={fallback} />
-    </Guard>
+    </AddonGuard>
   );
 }
 
-class Guard extends Component<{ addon: string; children: ReactNode; fallback?: ReactNode }, { failed: boolean }> {
+/** An add-on's component that throws is dropped (or shows `fallback`) and its error kept for Settings → Add-ons. */
+export class AddonGuard extends Component<{ addon: string; children: ReactNode; fallback?: ReactNode }, { failed: boolean }> {
   state = { failed: false };
   static getDerivedStateFromError() {
     return { failed: true };

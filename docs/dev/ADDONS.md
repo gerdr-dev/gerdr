@@ -37,16 +37,16 @@ sees: `internal/addons/builtin/gerdr.d.ts`, copied into `~/.gerdr/addons` on eve
   indicator works once installed. A pick whose add-on is gone, or one that throws, falls back to the dots: a running
   turn must still look like it runs. The Select previews each option through the real PixelLoader with a
   `LoaderPreview` context overriding the choice, so the dots come from the package without it exporting them.
-- `"sprite"` entries are pictures gerdr draws only where the user put them: the working indicator, rail button
-  faces and agents' icons (AgentDef.icon "sprite:<key>", AgentIcon.tsx; the default icon while its add-on isn't
-  loaded). Props `{ state, width, height }`: "working" / "waiting" in the indicator (24×16, unclipped), "idle" on a
-  button (24×20, clipped: the size of the rail's other icons) and as an icon (FitSprite: the box comes from size classes, so it's measured first). Sizes
-  are the sprite's business, not gerdr's: it gets the box and decides how to fill it. Not animated as an agent's icon
-  for now — a list of tabs all moving is loud; "working" there per session state is the obvious next step. Why a slot of its own: clawd-loader first was both a loader and a rail face, so wanting
-  Clawd only on a button took a "don't replace the dots" switch, and both places had to show the same costume. With
-  sprites an add-on brings pictures and the user places them, one per place; the old `"rail"` slot (Nov 2026, a few
-  days) went into it — `g.slot("rail")` now throws "没有这个插槽", and a group face `{ addon }` from then falls back to
-  automatic.
+- `"sprite"` entries are pictures gerdr draws only where the user put them: the working indicator and agents' icons
+  (AgentDef.icon "sprite:<key>", AgentIcon.tsx; the default icon while its add-on isn't loaded). Props
+  `{ state, width, height }`: "working" / "waiting" in the indicator (24×16, unclipped), "idle" as an icon (FitSprite:
+  the box comes from size classes, so it's measured first). Sizes are the sprite's business, not gerdr's: it gets the
+  box and decides how to fill it. Not animated as an agent's icon for now — a list of tabs all moving is loud;
+  "working" there per session state is the obvious next step. Why a slot of its own: clawd-loader first was both a
+  loader and a rail face, so wanting Clawd only on a button took a "don't replace the dots" switch, and both places
+  had to show the same costume. With sprites an add-on brings pictures and the user places them, one per place; the
+  old `"rail"` slot (Nov 2026, a few days) went into it — `g.slot("rail")` now throws "没有这个插槽". Sprites were rail
+  button faces too while the rail had user-made groups; a button's icon is its add-on's own now (`"panel"` below).
 - `g.turnStat` decorates the line under each finished turn through `ChatHost.useTurnStat`, a **hook** rather than a
   plain callback: answers depend on the time (cache-clock colors by prompt-cache age), so Gerdr's implementation
   (`useAddonTurnStat`) re-renders every 30s while any add-on uses it. `latest` (the newest turn's line) is worked out in
@@ -68,18 +68,20 @@ sees: `internal/addons/builtin/gerdr.d.ts`, copied into `~/.gerdr/addons` on eve
   a dialog that exists whatever the layout is (a "panel" block is hidden while its panel is closed, on a phone only there
   while the drawer is open).
 - `"panel"` entries are blocks (`"sidebar"`, the slot's first name from when they sat in the left column, still maps
-  to it: add-ons in the wild use it); which blocks share a rail button, in what order, and the button's face (a built-in
-  icon, typed characters, or any add-on's sprite) is the user's, in config
-  `rail.groups` (lib/rail.ts, Settings → 扩展 → 分组 = RailSettings.tsx: blocks move by drag, or a right-click menu;
-  each group picks hover or click to open; buttons in RailGroups.tsx). Not the add-ons':
-  blocks that belong together often come from different authors (today + two quota meters). Groups refer to blocks
-  by a key stable across reloads ("addon:id", the add-on's own id or its n-th entry in the slot). No config = one
-  button with every block; a block no group lists joins the first group; keys of unloaded blocks keep their place.
+  to it: add-ons in the wild use it). Each add-on with blocks gets one rail button, its blocks stacked in the panel;
+  the button's title, icon (a lucide name, or a component drawn in a 32×20 box, 28×16 on a phone; `tallIcon` makes the button two cells
+  tall, a 32×72 box, 24×24 on a phone — three quota rings were cramped in one cell) and hover / click
+  opening come from the add-on's slot options (lib/rail.ts `railButtons`, RailAddons.tsx). Buttons are in slot order.
   Each rail panel is kept mounted while closed (portal + `hidden`), as the blocks were in the old sidebar, so timers
-  and fetched state survive closing it; the phone's sheets mount on open. A sprite face gets a 24×20px box, clipped,
-  so an add-on can draw anything without pushing the rail around. History: the rail replaced the left column's bottom
-  strip (docs/dev/ARCHITECTURE.md, "The rail"), first with one shared button, then these groups when the user wanted
-  three add-ons in one button and a "¥" on it.
+  and fetched state survive closing it; the phone's sheets mount on open. The icon box is clipped, so an add-on can
+  draw anything without pushing the rail around.
+  History: the rail replaced the left column's bottom strip (docs/dev/ARCHITECTURE.md, "The rail"), first with one
+  shared button; then (Nov 2026) user-made groups — Settings → 扩展 → 分组 dragged blocks of several add-ons behind one
+  button, with a face picked from built-in glyphs, typed characters or a sprite — because the user wanted three
+  add-ons (today + two quota meters) in one button with a "¥" on it. Dropped a few days later for one button per
+  add-on: add-ons are small source code an agent writes, so "these three together" is one add-on with their code
+  copied in. That also does what groups couldn't (rows lined up across sources, an icon drawn from all of the data:
+  three quota rings) and leaves no settings page to keep. `config.rail` from then is ignored.
 - `g.fetch` is POST /api/addons/{id}/fetch (internal/server/addonfetch.go): the backend makes the request. A plain
   fetch() to a third-party API can't work: the page's CSP is `connect-src 'self'`, which blocks it even when the API
   sends CORS headers (the SubHub add-on shipped a CORS fallback that never ran for that reason), and add-on authors

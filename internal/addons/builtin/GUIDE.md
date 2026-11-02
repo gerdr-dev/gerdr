@@ -1,6 +1,6 @@
 # Writing Gerdr add-ons
 
-An add-on changes Gerdr itself: what the rail's panels show, the names of tabs and panes, a button in the composer, the
+An add-on changes Gerdr itself: a button on the rail and the panel it opens, the names of tabs and panes, a button in the composer, the
 line under each turn, commands and keys, a process that keeps running. It is a folder of TypeScript; Gerdr compiles it
 on save (no Node, no build step) and runs it in the page.
 
@@ -126,8 +126,8 @@ lucide icon (`<g.icons.Timer className="size-3.5" />`).
 
 | where | call | gets |
 |---|---|---|
-| A block of an add-on panel; the user groups blocks into buttons on the rail (Settings → 扩展 → 分组) | `g.slot("panel", Component, { order, id, title, icon })` | no props |
-| A sprite: a small picture the user can use as the working indicator (Settings → General), on a rail button or as an agent's icon | `g.slot("sprite", Component, { id, title })` | `{ state, width, height }` |
+| A block of your panel, opened from your add-on's own button on the rail | `g.slot("panel", Component, { order, id, title, icon, tallIcon, open })` | no props |
+| A sprite: a small picture the user can use as the working indicator (Settings → General) or as an agent's icon | `g.slot("sprite", Component, { id, title })` | `{ state, width, height }` |
 | The app's root, always mounted, no space taken | `g.slot("overlay", Component)` | no props |
 | Every pane's title bar | `g.slot("paneTitle", Component)` | `{ pane, tab }` |
 | The working indicator (the dots before "Pondering…", a 20px row), drawn your own way; the user picks which one draws. Only a picture? Make it a sprite | `g.slot("loader", Component)` | `{ paused, className, fallback }` (`fallback`: gerdr's own dots) |
@@ -182,9 +182,15 @@ Rules that keep it looking like Gerdr:
   `bg-warn/10`).
 - Sizes follow the surroundings: 11–12px text in panel blocks and under turns, 13px in dialogs.
 - Panel blocks: give yours horizontal padding only (`px-1.5`); the panel pads above and below once for all of them.
-  Which blocks share a rail button is the user's choice, not yours: don't assume yours sits next to another add-on's.
+- Your add-on gets one rail button; its blocks stack in its panel. `icon` is a lucide name or a component drawn in a
+  `{ width, height }` box (32×20 on the rail, 28×16 on a phone, clipped): live data belongs there (quota rings, a
+  count), still, in theme tokens. Need more room? `tallIcon: true` makes your button two cells tall, its box 32×72
+  (24×24 on a phone). Without an icon the button shows your addon.json icon.
+- Want other add-ons' blocks behind the same button as yours (today's numbers next to two quota meters)? Copy their
+  code into your add-on (add-ons are small) and tell the user to turn the originals off. Gerdr has no grouping on
+  purpose: one add-on can line the rows up and draw one icon from all of the data, a grouping setting couldn't.
 - A sprite (`g.slot("sprite")`) gets its box as `width` × `height`: 24×16 in the working indicator (`state`
-  "working" / "waiting"), 24×20 on a rail button and as small as 14×14 as an agent's icon (`state` "idle": keep it
+  "working" / "waiting") and as small as 14×14 as an agent's icon (`state` "idle": keep it
   still, those are always in sight). Draw it to fit — at 14px a simpler version may read better — text 10px or more, red (`bg-bad` / `text-bad`) only for a warning. One picture per registration (`id`,
   `title`): the user may want a different one in each place.
 - A phone has no hover: don't hide what matters in a `title` tooltip.

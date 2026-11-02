@@ -18,7 +18,6 @@ import { isNative, nativeOpenPath } from "@/lib/native";
 import { useStore } from "@/lib/store";
 import type { AddonService, AddonSetting, AddonStore, StoreAddon } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { RailSettings } from "./RailSettings";
 
 // Settings → Add-ons: what is installed (switch on / off, update, uninstall) and the stores to install from
 // (internal/addons; the API is internal/server/addonapi.go).
@@ -29,14 +28,10 @@ export function AddonSettings({ open }: { open: boolean }) {
     <Tabs value={tab} onValueChange={setTab} className="gap-3">
       <TabsList>
         <TabsTrigger value="installed">已安装</TabsTrigger>
-        <TabsTrigger value="rail">分组</TabsTrigger>
         <TabsTrigger value="store">商店</TabsTrigger>
       </TabsList>
       <TabsContent value="installed">
         <Installed stores={stores} />
-      </TabsContent>
-      <TabsContent value="rail">
-        <RailSettings />
       </TabsContent>
       <TabsContent value="store">
         <Stores stores={stores} />

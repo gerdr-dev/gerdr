@@ -29,22 +29,33 @@ type Reg<T> = { addon: string; fn: T };
 // ---- what add-ons draw: slots, composer buttons, context-menu items ----
 
 /**
- * Where an add-on can put a component: "panel" (a block of an add-on panel: the user groups blocks into buttons on the
- * rail, lib/rail.ts), a pane's title bar (props: pane, tab), and "overlay" — mounted once at the app's root and always
- * there, for the dialogs / drawers an add-on opens from a command.
+ * Where an add-on can put a component: "panel" (a block of the add-on's panel: one rail button per add-on, lib/rail.ts),
+ * a pane's title bar (props: pane, tab), and "overlay" — mounted once at the app's root and always there, for the
+ * dialogs / drawers an add-on opens from a command.
  * "loader" replaces the working indicator (the 3×3 dots before "Pondering…", ChatHost.renderLoader; props: paused,
  * className, fallback). "sprite" is a small picture (props: state, className, width, height) that gerdr draws nowhere
- * by itself: the user picks sprites for the places that take one — the working indicator (Settings → General → Loading 动画) and
- * the rail's buttons (→ 分组). So an add-on that only brings pictures changes nothing until the user uses them, and
- * one picture set serves every such place; which loader / sprite draws is config.loader (components/AddonSlot.tsx).
+ * by itself: the user picks sprites for the places that take one — the working indicator (Settings → General → Loading
+ * 动画) and an agent's icon. So an add-on that only brings pictures changes nothing until the user uses them, and one
+ * picture set serves every such place; which loader / sprite draws is config.loader (components/AddonSlot.tsx).
  */
 export type SlotName = "panel" | "sprite" | "paneTitle" | "overlay" | "loader";
 /**
  * key: stable across reloads — "addon:id" with the id the add-on gave, else "addon:n" (its n-th entry in that slot, the
- * same on every load since setup runs the same way): the rail's groups and config.loader refer to entries by it.
- * title / icon (a lucide icon name): how the entry is listed in Settings → 扩展.
+ * same on every load since setup runs the same way): config.loader and agents' icons refer to entries by it.
+ * title: how the entry is listed (a sprite in a picker, a panel's rail button). icon / open: a panel's rail button —
+ * a lucide icon name or a component drawn in a box, and whether it opens on hover or click (lib/rail.ts).
  */
-export type SlotReg = { addon: string; key: string; Component: React.ComponentType<any>; order: number; title?: string; icon?: string };
+export type SlotReg = {
+  addon: string;
+  key: string;
+  Component: React.ComponentType<any>;
+  order: number;
+  title?: string;
+  icon?: string | React.ComponentType<{ width: number; height: number }>;
+  open?: "hover" | "click";
+  /** A panel's icon component wants a button two cells tall on the rail (a 32×72 box instead of 32×20). */
+  tallIcon?: boolean;
+};
 export const slots: Record<SlotName, SlotReg[]> = { panel: [], sprite: [], paneTitle: [], overlay: [], loader: [] };
 export type ComposerAction = { addon: string; id: string; title: string; icon?: React.ReactNode; run: (ctx: ComposerCtx) => void | Promise<void> };
 export type ComposerCtx = { sessionId: string; text: string; insert(text: string): void; setText(text: string): void };
@@ -435,15 +446,19 @@ function makeApi(id: string, hash: string) {
     icons,
     // fixed for the page's life: a language change reloads the page, which reloads the add-on too
     locale,
-    slot: (asked: SlotName | "sidebar", Component: React.ComponentType<any>, o?: { order?: number; id?: string; title?: string; icon?: string }) => {
+    slot: (
+      asked: SlotName | "sidebar",
+      Component: React.ComponentType<any>,
+      o?: { order?: number; id?: string; title?: string; icon?: SlotReg["icon"]; open?: SlotReg["open"]; tallIcon?: boolean },
+    ) => {
       // "sidebar": the panel slot's first name, from when blocks sat in the left column. Kept for good: add-ons in the
-      // wild use it, and keys ("addon:id") don't carry the slot, so groups set up either way are the same
+      // wild use it
       const name: SlotName = asked === "sidebar" ? "panel" : asked;
       if (!slots[name]) throw new Error(`没有这个插槽：${name}`);
       const own = slots[name].filter((x) => x.addon === id).length;
       const key = `${id}:${o?.id ?? own}`;
       if (slots[name].some((x) => x.key === key)) throw new Error(`插槽 ${name} 里已经有 id 为 ${o?.id ?? own} 的组件了`);
-      const r: SlotReg = { addon: id, key, Component, order: o?.order ?? 0, title: o?.title, icon: o?.icon };
+      const r: SlotReg = { addon: id, key, Component, order: o?.order ?? 0, title: o?.title, icon: o?.icon, open: o?.open, tallIcon: o?.tallIcon };
       slots[name].push(r);
       slots[name].sort((a, b) => a.order - b.order || a.addon.localeCompare(b.addon));
       bump();

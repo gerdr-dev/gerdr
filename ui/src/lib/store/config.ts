@@ -58,8 +58,6 @@ export type Config = {
   inbox?: { permission?: boolean; ask?: boolean; error?: boolean };
   /** Gerdr Agent（native）用的模型服务商，后端读（cmd/gerdr 的 cfgLLM），设置 → Agent 里编辑。 */
   llm?: LLMConfig;
-  /** The rail's add-on buttons (Settings → 扩展 → 分组; lib/rail.ts). Missing = one button holding every add-on block. */
-  rail?: RailConfig;
   /** What draws the working indicator (Settings → General → Loading 动画; components/AddonSlot.tsx AddonLoader). Missing = the first
    *  "loader" add-on, else gerdr's dots. */
   loader?: LoaderChoice;
@@ -73,23 +71,6 @@ export type Config = {
  * sprite (g.slot("sprite")), the last two by slot key "addon:id".
  */
 export type LoaderChoice = "dots" | `builtin:${string}` | `loader:${string}` | `sprite:${string}`;
-
-/**
- * One add-on button on the rail: which add-on blocks (g.slot("panel") entries, by block key "addon:id") its panel
- * stacks, in order, and what the button looks like. Kept per user, not per add-on: which add-ons belong together (two
- * quota meters and a "today" from three authors) is the user's call.
- */
-export type RailGroup = { id: string; name: string; face?: RailFace; blocks: string[]; open?: RailOpen };
-/** How a rail button opens its panel with a mouse: on hover (missing, the first behaviour) or on click. Per button: a
- *  glance at quotas wants hover, a panel you work in wants to stay put until clicked. A tap always opens it. */
-export type RailOpen = "hover" | "click";
-/**
- * The button's face: a built-in icon (components/AgentGlyph.tsx GLYPHS / LINES key, PALETTE colour), one or two typed
- * characters ("¥"), or a sprite an add-on draws (g.slot("sprite") key). Missing = automatic (lib/rail.ts autoFace).
- * (A face { addon } from before sprites, Nov 2026, is no longer drawn: the button shows its automatic face.)
- */
-export type RailFace = { glyph: string; color?: string } | { text: string } | { sprite: string };
-export type RailConfig = { groups: RailGroup[] };
 
 /** config.json 的 llm：Gerdr Agent 直接调的模型接口（OpenAI 兼容或 Anthropic）。模型只写 id 时协议、思考档位按 id 猜（后端 native/config.go）。 */
 export type LLMModel = { id: string; name?: string; api?: "chat" | "responses"; efforts?: string[]; window?: number };
