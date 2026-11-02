@@ -396,7 +396,14 @@ function Lightbox({ items, index, origin }: { items: LightboxItem[]; index: numb
           controls
           autoPlay
           playsInline
-          onLoadedMetadata={(e) => !nat && setNat({ w: e.currentTarget.videoWidth || 800, h: e.currentTarget.videoHeight || 450 })}
+          onLoadedMetadata={(e) => {
+            const v = e.currentTarget;
+            if (!nat) setNat({ w: v.videoWidth || 800, h: v.videoHeight || 450 });
+            // A video that hasn't played or seeked shows its poster, not its first frame, and Android's WebView
+            // supplies a poster of its own when there is none (autoPlay with sound is blocked there, so it stays).
+            // A tiny seek clears that state and the first frame is drawn instead.
+            if (v.paused && v.currentTime === 0) v.currentTime = 0.001;
+          }}
           className="absolute top-0 left-0 max-w-none rounded-md bg-black shadow-2xl will-change-transform"
           style={fit ? { left: fit.left, top: fit.top, width: fit.w, height: fit.h, transformOrigin: "0 0" } : { opacity: 0 }}
         />

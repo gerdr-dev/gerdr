@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.app.DownloadManager
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.net.Uri
@@ -610,6 +611,14 @@ class MainActivity : ComponentActivity() {
             resultMsg.sendToTarget()
             return true
         }
+
+        /**
+         * A <video> without a poster attribute gets this as its poster. WebView's own default is a grey box with a
+         * big play circle, stretched over the whole element, and a poster stays up until playback starts or a seek,
+         * covering an already decoded first frame. Transparent instead: the page's own background (or the frame, once
+         * the page seeks) shows through.
+         */
+        override fun getDefaultVideoPoster(): Bitmap = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
 
         // 相机 / 麦克风暂时不给（语音投稿走的是输入法，不是 getUserMedia）
         override fun onPermissionRequest(request: PermissionRequest) = request.deny()
