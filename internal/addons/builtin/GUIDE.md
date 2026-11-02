@@ -97,7 +97,7 @@ lucide icon (`<g.icons.Timer className="size-3.5" />`).
 
 | where | call | gets |
 |---|---|---|
-| The add-on panel (beside the rail on wider screens, bottom of the phone's drawer) | `g.slot("sidebar", Component, { order })` | no props |
+| The add-on panel (beside the rail on wider screens, a sheet from the phone drawer's bottom row) | `g.slot("sidebar", Component, { order })` | no props |
 | A glance on the rail, ≤ 40px wide (the face of the button that opens the panel) | `g.slot("rail", Component, { order })` | no props |
 | The app's root, always mounted, no space taken | `g.slot("overlay", Component)` | no props |
 | Every pane's title bar | `g.slot("paneTitle", Component)` | `{ pane, tab }` |

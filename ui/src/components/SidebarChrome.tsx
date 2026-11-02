@@ -1,5 +1,7 @@
-import { Command, Keyboard, PanelLeft, Settings } from "lucide-react";
+import { Command, Gauge, Keyboard, PanelLeft, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { slots } from "@/lib/addons";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ModeSwitch } from "@/components/WorkView";
 import { currentSpace, spaceList } from "@/lib/layout";
@@ -17,14 +19,37 @@ import { SpaceSwitcher } from "./SpaceSwitcher";
  * (projects, Code / Work, add-ons, inbox, settings) in every mode; their list only gets ListHeader.
  */
 
-/** The bottom of the phone drawer: add-ons' sidebar blocks (g.slot("sidebar"): the quota meter, today's numbers…) over the settings row. */
+/**
+ * The bottom of the phone drawer. The add-on blocks (g.slot("sidebar"): quota meter, today's numbers…) used to sit
+ * above it for good and took a quarter of a phone's height from the list; they open from the footer's button instead
+ * (AddonSheet), as they open from the rail on wider screens.
+ */
 export function SidebarBottom({ sidebarToggle }: { sidebarToggle?: boolean }) {
+  return <SidebarFooter sidebarToggle={sidebarToggle} />;
+}
+
+/**
+ * The phone's add-on button: the add-ons' glance ("rail" slot) or an icon; a tap opens their blocks in a sheet from the
+ * bottom. Only mounted while the drawer is open, so unlike the rail's panel there's nothing to keep alive while closed.
+ */
+function AddonSheet() {
+  useStore((s) => s.addonVersion);
+  const glance = slots.rail.length > 0;
+  if (!slots.sidebar.length) return null;
   return (
-    <>
-      {/* The vertical padding is given once here, not by each block: two blocks each padding themselves left a wide gap */}
-      <AddonSlot name="sidebar" className="shrink-0 border-t bg-sidebar py-1 empty:hidden" />
-      <SidebarFooter sidebarToggle={sidebarToggle} />
-    </>
+    <Sheet>
+      <SheetTrigger asChild>
+        <Button variant="ghost" className="h-7 min-w-7 px-1 text-muted-foreground" aria-label="插件">
+          {glance ? <AddonSlot name="rail" className="flex w-10 flex-col items-center gap-1" /> : <Gauge className="size-3.5" />}
+        </Button>
+      </SheetTrigger>
+      {/* No auto-focus: it put a focus ring on the close button of a sheet opened by a tap */}
+      <SheetContent side="bottom" className="gap-0 rounded-t-xl pb-[max(0.5rem,env(safe-area-inset-bottom))]" onOpenAutoFocus={(e) => e.preventDefault()}>
+        <SheetTitle className="px-4 pt-4 pb-1 text-[13px]">插件</SheetTitle>
+        {/* The vertical padding is given once here, not by each block: two blocks each padding themselves left a wide gap */}
+        <AddonSlot name="sidebar" className="py-1" />
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -95,6 +120,7 @@ export function SidebarFooter({ sidebarToggle }: { sidebarToggle?: boolean }) {
         <ConnStatus />
         {connected && isAndroid() && <RouteLabel />}
       </div>
+      <AddonSheet />
       {/* On a phone the inbox is in the top bar (PhoneBar); this row is in the drawer there */}
       {!phone && <InboxButton />}
       {/* A phone has no ⌘K and no keyboard to need a shortcut list: the slot opens the palette instead, the only way

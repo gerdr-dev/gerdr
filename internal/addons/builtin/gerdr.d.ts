@@ -166,12 +166,12 @@ declare global {
      * shown in Settings → Add-ons. Several add-ons in one slot: by order, then by add-on id.
      *   "sidebar"    the add-on panel (288px wide, no props): on wider screens it opens beside the rail (the strip down
      *                the window's left edge) when its add-on button is hovered or tapped, and stays mounted while
-     *                closed; on a phone it's the bottom of the drawer. The slot pads above and below once for all
+     *                closed; on a phone a sheet opened from the drawer's bottom row. The slot pads above and below once for all
      *                blocks: give yours horizontal padding only, or two blocks leave a gap between them
-     *   "rail"       a glance on the rail itself (at most 40px wide, a few px to ~40px tall, no props): e.g. a few tiny
-     *                bars of what your "sidebar" block shows in full. It is the add-on button's face: hovering or
-     *                tapping it opens the panel, so don't make it interactive. Without one the button is an icon.
-     *                Not shown on a phone (no rail there)
+     *   "rail"       a glance on the add-on button (at most 40px wide, a few px to ~40px tall, no props): e.g. a few
+     *                tiny bars of what your "sidebar" block shows in full. It is the button's face, on the rail and in
+     *                the phone drawer's bottom row: hovering or tapping it opens the panel, so don't make it
+     *                interactive. Without one the button is an icon
      *   "paneTitle"  every pane's title bar, before its ⋯ menu (props: { pane: PaneInfo; tab: TabInfo }); keep it small
      *   "overlay"    mounted once at the app's root and always there (no props, takes no space): where a dialog or
      *                drawer opened by a command lives. The panel can't host one: it's hidden while closed and on a
