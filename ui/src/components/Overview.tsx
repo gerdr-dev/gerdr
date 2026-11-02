@@ -175,8 +175,8 @@ function PhoneOverview({ ids, focus, shown }: { ids: string[]; focus?: string; s
 function TileChip({ id, current, className, onClick }: { id: string; current: boolean; className?: string; onClick: () => void }) {
   const s = useStore((st) => st.sessions[id]);
   const unread = useStore((st) => !!st.unread[id]);
-  // Picked and its tile still loading after a moment (PhoneOverview keeps the old tile up meanwhile): the flow replaces
-  // the current chip's solid border, which would hide it
+  // Picked and its tile still loading after a moment (PhoneOverview keeps the old tile up meanwhile): the current chip
+  // has a brand border, so the flow runs as a gap in it (BorderFlow draws the border meanwhile, in the same place)
   const loading = useSlowCatchUp(current ? id : undefined);
   if (!s) return null;
   return (
@@ -190,7 +190,7 @@ function TileChip({ id, current, className, onClick }: { id: string; current: bo
       )}
       onClick={onClick}
     >
-      {loading && <BorderFlow />}
+      {loading && <BorderFlow mode="gap" color="var(--brand)" />}
       {/* An idle one has no dot: StatusDot is transparent then but would still leave a gap */}
       {(dotStatus(s) !== "idle" || unread) && <StatusDot status={dotStatus(s)} unread={unread} />}
       <FadeText>{s.title || basename(s.cwd)}</FadeText>

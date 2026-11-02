@@ -225,30 +225,58 @@
   }
 }
 
-/* BorderFlow (components/BorderFlow.tsx): a brand segment running round a picked row / button while what it opens loads.
-   The rect's size is CSS (SVG attributes can't do calc); pathLength=100 makes the dash a quarter of the way round
-   whatever the size. Reduced motion: a still brand outline instead. */
+/* BorderFlow (components/BorderFlow.tsx): the loading mark of a picked control, a solid segment running round its border
+   (or a gap in it). Rect sizes are CSS because SVG attributes can't do calc; --bf-w is the stroke width. --bf-p is
+   where the segment's head is (0-100 round the border); --bf-grow takes it from nothing to its full --len as it starts
+   (asked for: it lengthens in rather than popping up), the head leading. Both are registered so they animate.
+   Reduced motion: nothing moves; the `line` kind leaves a still outline, the `gap` kind just its border. */
+@property --bf-p {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
+@property --bf-grow {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
 .border-flow {
-  width: calc(100% - 1.5px);
-  height: calc(100% - 1.5px);
+  animation:
+    bf-travel 1.4s linear infinite,
+    bf-grow 0.9s ease-out both;
+}
+.border-flow rect {
+  width: calc(100% - var(--bf-w));
+  height: calc(100% - var(--bf-w));
   rx: var(--radius-md);
   fill: none;
-  stroke: var(--brand);
-  stroke-width: 1.5px;
-  stroke-linecap: round;
-  stroke-dasharray: 25 75;
-  animation: border-flow 1.2s linear infinite;
+  stroke-width: var(--bf-w);
 }
-@keyframes border-flow {
+.border-flow .bf-dash {
+  --bf-l: calc(var(--len) * var(--bf-grow));
+  stroke-linecap: round;
+  stroke-dasharray: var(--bf-l) calc(100 - var(--bf-l));
+  stroke-dashoffset: calc(var(--bf-l) - var(--bf-p));
+}
+@keyframes bf-travel {
   to {
-    stroke-dashoffset: -100;
+    --bf-p: 100;
+  }
+}
+@keyframes bf-grow {
+  to {
+    --bf-grow: 1;
   }
 }
 @media (prefers-reduced-motion: reduce) {
   .border-flow {
-    stroke-dasharray: none;
     animation: none;
-    opacity: 0.6;
+  }
+  .border-flow .bf-dash {
+    stroke-dasharray: none;
+  }
+  .border-flow mask .bf-dash {
+    display: none;
   }
 }
 

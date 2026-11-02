@@ -140,8 +140,10 @@ exactly **one visible change, from the old view straight to the ready new one**:
    uncover the view (closing the phone drawer) go through `whenCaughtUp(id, fn)`. Both give up after `HOLD_MS` (500ms)
    and draw what there is.
 3. **Past 200ms, mark the control**: `<BorderFlow />` inside it (the control is `relative`), shown while
-   `useSlowCatchUp(id)` is true: a brand segment running round its border. That is the loading mark of a picked control;
-   spinners and skeletons stay for content with no old view to hold.
+   `useSlowCatchUp(id)` is true: a solid segment that lengthens in and runs round the border. A control without a border uses
+   the default `line`; one with a border uses `mode="gap"` with `color` = its border colour, so the border stays and a
+   gap runs round it (it drops its own border meanwhile; `TileChip` in `Overview.tsx`). That is the loading mark of a
+   picked control; spinners and skeletons stay for content with no old view to hold.
 
 Waiting is decided in `sync.ts` `syncWatch` (`store.catchingUp`): only when the session list's `lastSeq` is past what the
 UI holds, so an agent with nothing new switches instantly. Keep it that way: a hold on every switch made switching feel slow.
