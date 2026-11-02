@@ -6,12 +6,14 @@ import {
   leaves,
   newWorkspace,
   spaceList,
+  spaceNameError,
   spaceOf,
   spaceWorkspaces,
   type Layout,
   type Workspace,
 } from "../layout";
-import { get, setLayout } from "../store";
+import { flushLayout, get, setConfig, setLayout } from "../store";
+import { workProjectOf } from "../work";
 import { inSpace, killTerms, shutdownGone } from "./shared";
 
 // ---- sessions (herdr's: isolated groups of workspaces; Space in layout.ts) ----
@@ -110,4 +112,97 @@ export function moveWorkspaceToSpace(wsId: string, space: string) {
     // Moving the workspace you're on takes you along (otherwise the view would jump to a session you didn't pick)
     return next;
   });
+}
+
+/** Change the name a project shows. Its id (address, directory) stays: see projectNameError. Returns why it couldn't, "" when it could. */
+export function renameSpace(id: string, name: string): string {
+  const err = spaceNameError(get().layout, name, id);
+  if (err) return err;
+  const n = name.trim();
+  setLayout((l) => ({ ...l, spaces: spaceList(l).map((s) => (s.id === id ? { ...s, name: n, renamed: n !== s.id || undefined } : s)) }));
+  return "";
+}
+
+/** Put project `id` at position `to` of the list (counted without it). */
+export function moveSpace(id: string, to: number) {
+  setLayout((l) => {
+    const list = spaceList(l);
+    const from = list.findIndex((s) => s.id === id);
+    if (from < 0) return l;
+    const rest = list.filter((s) => s.id !== id);
+    const at = Math.max(0, Math.min(to, rest.length));
+    if (at === from) return l;
+    rest.splice(at, 0, list[from]);
+    return { ...l, spaces: rest };
+  });
+}
+
+/**
+ * Remember project `id` as it is now — its workspaces, its place in the list, its name, which workspace it was on, its Work
+ * agent — and return what puts it back after it was closed or deleted. Throws when that can't be done: a project with that
+ * id is open again (re-created since). The default project is never off the list, only emptied: then its workspaces just
+ * go back into it.
+ */
+export function snapshotSpace(id: string): () => void {
+  const l0 = get().layout;
+  const index = spaceList(l0).findIndex((s) => s.id === id);
+  const space = spaceList(l0)[index];
+  const workspaces = spaceWorkspaces(l0, id);
+  const wasHere = currentSpace(l0) === id;
+  const active = wasHere ? l0.active : space?.active;
+  const c = get().config;
+  const kept = { session: c.workSessions?.[id], agent: c.workAgents?.[id] };
+  return () => {
+    const l1 = get().layout;
+    const listed = spaceList(l1).find((s) => s.id.toLowerCase() === id.toLowerCase());
+    if (!space || (listed && (listed.id !== id || spaceWorkspaces(l1, id).length > 0))) throw new Error(`又有叫「${id}」的项目了`);
+    setLayout((l) => {
+      const ws = workspaces.filter((w) => !l.workspaces.some((x) => x.id === w.id));
+      if (!ws.length) ws.push({ ...newWorkspace("default"), space: inSpace(id) });
+      let spaces = spaceList(l);
+      if (!spaces.some((s) => s.id === id)) spaces.splice(Math.min(index, spaces.length), 0, { ...space, active: wasHere ? undefined : active });
+      else spaces = spaces.map((s) => (s.id === id ? { ...space, active: wasHere ? undefined : active } : s));
+      const next = { ...l, spaces, workspaces: [...l.workspaces, ...ws] };
+      if (!wasHere) return next;
+      return { ...rememberSpace(next), active: ws.find((w) => w.id === active)?.id ?? ws[0].id, lastActive: l.active };
+    });
+    const now = get().config;
+    if (kept.session) setConfig({ workSessions: { ...now.workSessions, [id]: kept.session } });
+    if (kept.agent) setConfig({ workAgents: { ...now.workAgents, [id]: kept.agent } });
+  };
+}
+
+/** Close a project, with an undo (snapshotSpace) that opens it again as it was. */
+export function closeSpaceUndoable(id: string): () => void {
+  const restore = snapshotSpace(id);
+  closeSpace(id);
+  return restore;
+}
+
+/**
+ * Delete a project: close it (its agents stop, their records stay), stop its Work agent, and move its directory (Work site,
+ * local functions, saved layout) to the trash on the server — soft, so nothing is lost, but a project created later under the
+ * same name starts blank. Returns where the directory went ("" = it had none) and an undo that puts it all back: the
+ * directory, then the project as snapshotSpace has it. The default project can't be deleted.
+ */
+export async function deleteSpace(id: string): Promise<{ trash: string; undo: () => Promise<void> }> {
+  if (id === DEFAULT_SPACE) throw new Error("默认项目不能删除");
+  const restore = snapshotSpace(id);
+  const c = get().config;
+  closeSpace(id);
+  for (const s of Object.keys(get().sessions)) if (workProjectOf(s) === id) api.shutdown(s).catch(() => {});
+  const drop = (m?: Record<string, string>) => (m && id in m ? Object.fromEntries(Object.entries(m).filter(([k]) => k !== id)) : m);
+  if (c.workSessions?.[id] || c.workAgents?.[id]) setConfig({ workSessions: drop(c.workSessions), workAgents: drop(c.workAgents) });
+  // The server refuses while its saved layout still has the project open (its next save would write the layout copy back)
+  await flushLayout();
+  const { trash } = await api.deleteProject(id);
+
+  const undo = async () => {
+    if (spaceList(get().layout).some((s) => s.id.toLowerCase() === id.toLowerCase())) throw new Error(`又有叫「${id}」的项目了`);
+    // The directory first: putting the workspaces back makes the server write the project's layout copy, which would
+    // create the directory and leave the trash nowhere to go
+    if (trash) await api.restoreProject(id, trash);
+    restore();
+  };
+  return { trash, undo };
 }

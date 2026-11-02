@@ -5,14 +5,14 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { addSpace, addWorkspace, basename, editWorkspace, renameTab } from "@/lib/actions";
+import { addSpace, addWorkspace, basename, editWorkspace, renameSpace, renameTab } from "@/lib/actions";
 import { api } from "@/lib/api";
 import { closeDialog, useStore } from "@/lib/store";
 import { DirPicker, ensureDir } from "./NewSession";
 
 // The small forms that ask for a name: renaming a tab / workspace / conversation / session, a new session, a new workspace.
 
-const RENAME_TITLE = { tab: "重命名 Tab", session: "重命名会话", space: "项目", newSpace: "新项目" };
+const RENAME_TITLE = { tab: "重命名 Tab", session: "重命名会话", space: "重命名项目", newSpace: "新项目" };
 
 export function Rename() {
   const d = useStore((s) => s.dialog);
@@ -30,7 +30,10 @@ export function Rename() {
       // A project's name is its id (and its Work directory's name), so a bad / taken one is refused here, not fixed up
       const e = await addSpace(v);
       if (e) return setErr(e);
-    } else if (r.target !== "space") api.rename(r.id, v).catch((e) => toast.error(e.message));
+    } else if (r.target === "space") {
+      const e = renameSpace(r.id, v);
+      if (e) return setErr(e);
+    } else api.rename(r.id, v).catch((e) => toast.error(e.message));
     closeDialog();
   };
   return (
@@ -41,9 +44,10 @@ export function Rename() {
           {r?.target === "newSpace" && (
             <DialogDescription>
               一个独立的项目：有自己的工作空间和 Agent（Code），也有自己的 Work 页面和助手。不同项目里的 Agent 互相看不见、不能互发消息。
-              名字就是项目的标识，建好后不能改；关掉以后再建同名的项目，它的 Work 还在。
+              这个名字也是项目的地址和目录名：以后改名只改显示的名字。关掉（不是删除）以后再建同名的项目，它的 Work 还在。
             </DialogDescription>
           )}
+          {r?.target === "space" && <DialogDescription>只改显示的名字；项目的地址和目录还叫「{r.id}」。</DialogDescription>}
         </DialogHeader>
         <Input
           autoFocus

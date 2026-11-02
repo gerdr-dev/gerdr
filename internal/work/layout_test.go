@@ -2,6 +2,8 @@ package work
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -33,5 +35,50 @@ func TestProjectLayouts(t *testing.T) {
 	}
 	if _, err := r.Layout("../x"); err == nil {
 		t.Fatal("bad name accepted")
+	}
+}
+
+func TestRemoveProject(t *testing.T) {
+	r := New(t.TempDir(), nil)
+	if _, err := r.Ensure("gone"); err != nil {
+		t.Fatal(err)
+	}
+	r.SaveLayouts(json.RawMessage(`{"version": 1, "active": "w1", "spaces": [{"id": "gone"}], "workspaces": [{"id": "w1", "space": "gone", "tabs": []}]}`))
+	trash, err := r.Remove("gone")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Soft: everything is still there, in the trash
+	if _, err := os.Stat(filepath.Join(trash, "work", "CLAUDE.md")); err != nil {
+		t.Fatalf("not kept in the trash (%s): %v", trash, err)
+	}
+	if l, _ := r.Layout("gone"); l != nil {
+		t.Fatalf("layout copy should be gone: %+v", l)
+	}
+	// Undo: it comes back as it was; only from the trash, and not over a project made since
+	if r.Restore("gone", filepath.Join(r.Root, "work")) == nil || r.Restore("other", trash) == nil {
+		t.Fatal("restore must only take this project's trash")
+	}
+	if err := r.Restore("gone", trash); err != nil {
+		t.Fatal(err)
+	}
+	if l, _ := r.Layout("gone"); l == nil {
+		t.Fatal("restored project lost its layout copy")
+	}
+	if trash, err = r.Remove("gone"); err != nil {
+		t.Fatal(err)
+	}
+	_, e1 := r.Remove("default")
+	_, e2 := r.Remove("../x")
+	if e1 == nil || e2 == nil {
+		t.Fatal("default / bad names must be refused")
+	}
+	// Re-created under the same name: the bundled files come back
+	dir, err := r.Ensure("gone")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "CLAUDE.md")); err != nil {
+		t.Fatalf("re-created project not reinstalled: %v", err)
 	}
 }

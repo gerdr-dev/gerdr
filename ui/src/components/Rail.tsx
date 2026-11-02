@@ -1,10 +1,9 @@
 import { Briefcase, Code2, Command, Keyboard, Plus, Settings } from "lucide-react";
-import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
+import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { switchSpace } from "@/lib/actions";
 import { isAndroid } from "@/lib/android";
 import { currentSpace, spaceList, type Space } from "@/lib/layout";
-import { isNative, nativeNewWindow } from "@/lib/native";
 import { isCoarse } from "@/lib/phone";
 import { toggleOverview } from "@/lib/overview";
 import { set, setMode, toggleSidebar, useStore } from "@/lib/store";
@@ -13,7 +12,8 @@ import { StatusDot } from "./AgentIcon";
 import { RailAddonButtons } from "./RailAddons";
 import { RouteLabel } from "./ConnStatus";
 import { InboxButton } from "./Inbox";
-import { askCloseSpace, newSpaceDialog, spaceStatus } from "./SpaceSwitcher";
+import { SpaceDropLine, startSpaceDrag } from "./SpaceDrag";
+import { newSpaceDialog, SpaceMenuItems, spaceStatus } from "./SpaceSwitcher";
 
 /*
  * The rail: gerdr's own strip down the left edge on wider screens, the same in every mode — projects, the Code / Work
@@ -57,34 +57,34 @@ export function Rail() {
     // Another project's agents are out of every list on screen: its dot is the only thing that tells you it needs you
     const st = on ? undefined : spaceStatus(layout, sp, sessions, unread);
     return (
+      // Tooltip outside, ContextMenuTrigger right on the button: a trigger with asChild hands its handlers to its child,
+      // and a <Tooltip> (not an element) dropped them, so right-click opened nothing.
       <ContextMenu key={sp.id}>
-        <ContextMenuTrigger asChild>
-          {tip(
-            sp.name,
-            <button
-              aria-label={sp.name}
-              aria-current={on || undefined}
-              className={cn(
-                "relative flex size-9 shrink-0 items-center justify-center rounded-lg border text-[12px] font-semibold",
-                on ? "border-foreground bg-foreground text-background" : "bg-background text-muted-foreground hover:text-foreground",
-                "data-[state=open]:ring-2 data-[state=open]:ring-brand/60",
-              )}
-              onClick={() => switchSpace(sp.id)}
-            >
-              {on && <span className="absolute top-2 -left-1.5 h-5 w-1 rounded-r bg-foreground" />}
-              <span className="max-w-full truncate px-0.5">{initials(sp.name)}</span>
-              {st && <StatusDot status={st.status} unread={st.unread} className="absolute -top-0.5 -right-0.5 ring-2 ring-sidebar" />}
-            </button>,
-          )}
-        </ContextMenuTrigger>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <ContextMenuTrigger asChild>
+              <button
+                data-space-id={sp.id}
+                aria-label={sp.name}
+                aria-current={on || undefined}
+                className={cn(
+                  "relative flex size-9 shrink-0 items-center justify-center rounded-lg border text-[12px] font-semibold",
+                  on ? "border-foreground bg-foreground text-background" : "bg-background text-muted-foreground hover:text-foreground",
+                  "data-[state=open]:ring-2 data-[state=open]:ring-brand/60",
+                )}
+                onClick={() => switchSpace(sp.id)}
+                onPointerDown={(e) => startSpaceDrag(e, sp.id, "y")}
+              >
+                {on && <span className="absolute top-2 -left-1.5 h-5 w-1 rounded-r bg-foreground" />}
+                <span className="max-w-full truncate px-0.5">{initials(sp.name)}</span>
+                {st && <StatusDot status={st.status} unread={st.unread} className="absolute -top-0.5 -right-0.5 ring-2 ring-sidebar" />}
+              </button>
+            </ContextMenuTrigger>
+          </TooltipTrigger>
+          <TooltipContent side="right">{sp.name}</TooltipContent>
+        </Tooltip>
         <ContextMenuContent>
-          {isNative() && <ContextMenuItem onClick={() => nativeNewWindow(sp.id)}>在新窗口打开</ContextMenuItem>}
-          {isNative() && spaces.length > 1 && <ContextMenuSeparator />}
-          {spaces.length > 1 && (
-            <ContextMenuItem variant="destructive" onClick={() => askCloseSpace(sp)}>
-              关闭项目
-            </ContextMenuItem>
-          )}
+          <SpaceMenuItems sp={sp} axis="y" />
         </ContextMenuContent>
       </ContextMenu>
     );
@@ -123,10 +123,11 @@ export function Rail() {
     // inside keeps the spacer pushing the bottom group down when there is room.
     <div className="h-full w-12 shrink-0 overflow-y-auto border-r bg-sidebar [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       <div className="flex min-h-full flex-col items-center">
-        <div className="flex w-full flex-col items-center gap-2 pt-2.5 pb-1 short:gap-1.5 short:pt-2">
+        <div data-space-list="rail" className="relative flex w-full flex-col items-center gap-2 pt-2.5 pb-1 short:gap-1.5 short:pt-2">
           {spaces.map(project)}
+          <SpaceDropLine list="rail" axis="y" />
           {tip(
-            "新项目（每个项目有自己的工作空间、Agent 和 Work，互相看不见）",
+            "新项目（每个项目有自己的工作空间、Agent 和 Work，互相看不见；右键项目可重命名、删除，拖动排序）",
             <button
               aria-label="新项目"
               className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-dashed text-muted-foreground hover:text-foreground"

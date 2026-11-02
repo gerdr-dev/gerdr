@@ -3,8 +3,12 @@ package work
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 )
 
 // A project's Code side lives in its project directory too: <GERDR_DIR>/projects/<name>/layout.json
@@ -93,6 +97,60 @@ func (r *Runner) SaveLayouts(raw json.RawMessage) {
 			_ = os.Rename(tmp, path)
 		}
 	}
+}
+
+// Remove deletes a project, softly: its whole directory (Work site, local functions, run logs, the saved
+// layout copy) moves to <GERDR_DIR>/trash/projects/<name>-<time>, so a project created later under the
+// same name starts blank while nothing the user made is lost (they can move it back by hand). Returns
+// where it went ("" when the project never had a directory). The default project can't be removed:
+// it's the one every layout falls back to.
+func (r *Runner) Remove(project string) (string, error) {
+	if project == "" || project == DefaultProject {
+		return "", errors.New("the default project can't be deleted")
+	}
+	dir, err := r.ProjectDir(project)
+	if err != nil {
+		return "", err
+	}
+	work, _ := r.Dir(project)
+	r.mu.Lock()
+	delete(r.installed, work) // a re-created project gets its bundled files again
+	r.mu.Unlock()
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		return "", nil
+	}
+	trash := filepath.Join(r.Root, "trash", "projects")
+	if err := os.MkdirAll(trash, 0o755); err != nil {
+		return "", err
+	}
+	dst := filepath.Join(trash, project+"-"+time.Now().Format("20060102-150405"))
+	for i := 2; ; i++ {
+		if _, err := os.Stat(dst); os.IsNotExist(err) {
+			break
+		}
+		dst = filepath.Join(trash, fmt.Sprintf("%s-%s-%d", project, time.Now().Format("20060102-150405"), i))
+	}
+	return dst, os.Rename(dir, dst)
+}
+
+// Restore undoes Remove: trash (what Remove returned) moves back to the project's directory. Refused when
+// trash isn't a project in the trash, or when the project has a directory again (made since).
+func (r *Runner) Restore(project, trash string) error {
+	dir, err := r.ProjectDir(project)
+	if err != nil {
+		return err
+	}
+	bin := filepath.Join(r.Root, "trash", "projects")
+	if filepath.Dir(filepath.Clean(trash)) != bin || !strings.HasPrefix(filepath.Base(trash), project+"-") {
+		return fmt.Errorf("%q is not %s in the trash", trash, project)
+	}
+	if _, err := os.Stat(dir); err == nil {
+		return fmt.Errorf("project %s exists again", project)
+	}
+	if err := os.MkdirAll(filepath.Dir(dir), 0o755); err != nil {
+		return err
+	}
+	return os.Rename(trash, dir)
 }
 
 // Layout is the project's saved Code layout; nil when it has none.

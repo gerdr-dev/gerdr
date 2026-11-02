@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"net/http"
+	"os"
 	"path"
 	"path/filepath"
 	"strconv"
@@ -18,8 +19,9 @@ import (
 // agent's CLAUDE.md. Requests name the project with ?project= / "project"; empty = the default one.
 
 type workUIs struct {
-	mu sync.Mutex
-	m  map[string]*uisite.Renderer
+	mu   sync.Mutex
+	m    map[string]*uisite.Renderer
+	stop map[string]chan struct{} // ends each one's Watch (a deleted project's)
 }
 
 // workUI is the project's Work site, served under /work/<project>/; started on first use and watched
@@ -41,8 +43,13 @@ func (s *Server) workUI(project string) (*uisite.Renderer, error) {
 	if ui == nil {
 		ui = uisite.NewAt(filepath.Join(dir, "ui"), filepath.Join(s.Dir, "cache", "work-ui", project), "/work/"+project, s.Log)
 		ui.UseESM(s.ESM)
-		go ui.Watch(nil)
+		stop := make(chan struct{})
+		go ui.Watch(stop)
 		s.workUIs.m[project] = ui
+		if s.workUIs.stop == nil {
+			s.workUIs.stop = map[string]chan struct{}{}
+		}
+		s.workUIs.stop[project] = stop
 	}
 	return ui, nil
 }
@@ -72,6 +79,45 @@ func (s *Server) workRoutes(mux *http.ServeMux) {
 			return
 		}
 		writeJSON(w, p)
+	})
+	// Delete a project: its directory moves to the trash (work.Runner.Remove), Work and all. Only once
+	// it's closed — the UI closes it and saves the layout first — or the next layout save would write its
+	// layout copy straight back and its open panes would point into a deleted directory.
+	mux.HandleFunc("DELETE /api/projects/{name}", func(w http.ResponseWriter, r *http.Request) {
+		name := r.PathValue("name")
+		if layoutHasSpace(s.Layout.Get(), name) {
+			httpError(w, http.StatusConflict, "project is still open; close it first")
+			return
+		}
+		s.workUIs.mu.Lock()
+		if stop := s.workUIs.stop[name]; stop != nil {
+			close(stop)
+			delete(s.workUIs.stop, name)
+		}
+		delete(s.workUIs.m, name)
+		s.workUIs.mu.Unlock()
+		trash, err := s.Work.Remove(name)
+		if err != nil {
+			httpError(w, 400, err.Error())
+			return
+		}
+		_ = os.RemoveAll(filepath.Join(s.Dir, "cache", "work-ui", name)) // only a build cache
+		writeJSON(w, map[string]any{"trash": trash})
+	})
+	// Undo a delete: the directory comes back from the trash (the UI puts the project's workspaces back after).
+	mux.HandleFunc("POST /api/projects/{name}/restore", func(w http.ResponseWriter, r *http.Request) {
+		var b struct {
+			Trash string `json:"trash"`
+		}
+		if json.NewDecoder(r.Body).Decode(&b) != nil || b.Trash == "" {
+			httpError(w, 400, "trash is required")
+			return
+		}
+		if err := s.Work.Restore(r.PathValue("name"), b.Trash); err != nil {
+			httpError(w, http.StatusConflict, err.Error())
+			return
+		}
+		writeJSON(w, map[string]any{"ok": true})
 	})
 	// Local functions (internal/work):
 	//
@@ -225,6 +271,28 @@ func streamRun(w http.ResponseWriter, r *http.Request, run *work.Run) {
 			return
 		}
 	}
+}
+
+// layoutHasSpace: does the saved layout still have a workspace in project `space`?
+func layoutHasSpace(raw json.RawMessage, space string) bool {
+	var l struct {
+		Workspaces []struct {
+			Space string `json:"space"`
+		} `json:"workspaces"`
+	}
+	if json.Unmarshal(raw, &l) != nil {
+		return false
+	}
+	for _, w := range l.Workspaces {
+		sp := w.Space
+		if sp == "" {
+			sp = work.DefaultProject
+		}
+		if sp == space {
+			return true
+		}
+	}
+	return false
 }
 
 // serveWorkUI serves /work/<project>/…: the project's Work site (a React site like gerdr's own ui/, no

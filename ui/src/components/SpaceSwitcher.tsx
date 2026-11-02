@@ -1,4 +1,4 @@
-import { Check, ChevronsUpDown, Plus } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, ChevronsUpDown, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useLayoutEffect, useRef, useState } from "react";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import {
@@ -9,14 +9,16 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { closeSpace, switchSpace } from "@/lib/actions";
-import { currentSpace, spaceList, spaceWorkspaces, type Layout, type Space } from "@/lib/layout";
+import { toast } from "sonner";
+import { closeSpaceUndoable, deleteSpace, moveSpace, switchSpace } from "@/lib/actions";
+import { currentSpace, DEFAULT_SPACE, spaceList, spaceWorkspaces, type Layout, type Space } from "@/lib/layout";
 import { get, set, useStore } from "@/lib/store";
 import type { SessionSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { StatusDot, dotRank } from "./AgentIcon";
 import { askConfirm } from "@/lib/confirm";
 import { isNative, nativeNewWindow } from "@/lib/native";
+import { SpaceDropLine, startSpaceDrag } from "./SpaceDrag";
 import { tabStatus } from "./TabBar";
 
 /** A session's overall state for the switcher: the most urgent of its workspaces' (same ranking as WsDot). */
@@ -43,14 +45,97 @@ export async function askCloseSpace(sp: Space) {
   const n = spaceWorkspaces(get().layout, sp.id).length;
   const ok = await askConfirm({
     title: `关闭项目「${sp.name}」？`,
-    description: `连同它的 ${n} 个工作空间一起关掉，里面的 Agent 会停掉（会话记录留着，能再打开）。项目的工作空间布局和 Work 都留在它的目录里：以后再建一个同名的项目，就都回来了。`,
+    description: `连同它的 ${n} 个工作空间一起关掉，里面的 Agent 会停掉（会话记录留着，能再打开）。项目的工作空间布局和 Work 都留在它的目录里：以后再建一个叫「${sp.id}」的项目，就都回来了。`,
     action: "关闭",
     destructive: true,
   });
-  if (ok) closeSpace(sp.id);
+  if (!ok) return;
+  const undo = closeSpaceUndoable(sp.id);
+  toast.success(`已关闭项目「${sp.name}」`, {
+    duration: 10000,
+    action: {
+      label: "撤销",
+      onClick: () => {
+        try {
+          undo();
+          toast.success(`已重新打开项目「${sp.name}」`);
+        } catch (e: any) {
+          toast.error(`恢复失败：${e?.message ?? e}`);
+        }
+      },
+    },
+  });
+}
+
+export async function askDeleteSpace(sp: Space) {
+  const n = spaceWorkspaces(get().layout, sp.id).length;
+  const ok = await askConfirm({
+    title: `删除项目「${sp.name}」？`,
+    description: `关掉它的 ${n} 个工作空间，里面的 Agent 会停掉（会话记录留着）；它的 Work 页面、本地函数和保存的布局移到 Gerdr 目录下的 trash/projects/ 里，不会真的删掉，要找回可以从那儿拿。以后再建同名的项目是全新的。`,
+    action: "删除",
+    destructive: true,
+  });
+  if (!ok) return;
+  try {
+    const { trash, undo } = await deleteSpace(sp.id);
+    toast.success(`已删除项目「${sp.name}」`, {
+      description: trash ? `文件移到了 ${trash}` : undefined,
+      duration: 10000,
+      action: {
+        label: "撤销",
+        onClick: () =>
+          undo().then(
+            () => toast.success(`已恢复项目「${sp.name}」`),
+            (e) => toast.error(`恢复失败：${e?.message ?? e}`),
+          ),
+      },
+    });
+  } catch (e: any) {
+    toast.error(`删除失败：${e?.message ?? e}`);
+  }
 }
 
 export const newSpaceDialog = () => set({ dialog: { kind: "rename", target: "newSpace", id: "", value: "" } });
+export const renameSpaceDialog = (sp: Space) => set({ dialog: { kind: "rename", target: "space", id: sp.id, value: sp.name } });
+
+/**
+ * A project chip's right-click (long-press) menu, the same on the rail and in the sidebar header. Moving is also here for
+ * touch screens, where a chip can't be dragged; `axis` names the directions after how the list runs.
+ */
+export function SpaceMenuItems({ sp, axis }: { sp: Space; axis: "x" | "y" }) {
+  const spaces = spaceList(useStore((s) => s.layout)); // not inside the selector: a new array each call loops the store
+  const i = spaces.findIndex((x) => x.id === sp.id);
+  const [Back, Fwd] = axis === "y" ? [ArrowUp, ArrowDown] : [ArrowLeft, ArrowRight];
+  return (
+    <>
+      {isNative() && <ContextMenuItem onClick={() => nativeNewWindow(sp.id)}>在新窗口打开</ContextMenuItem>}
+      <ContextMenuItem onClick={() => renameSpaceDialog(sp)}>
+        <Pencil /> 重命名…
+      </ContextMenuItem>
+      {i > 0 && (
+        <ContextMenuItem onClick={() => moveSpace(sp.id, i - 1)}>
+          <Back /> {axis === "y" ? "上移" : "左移"}
+        </ContextMenuItem>
+      )}
+      {i < spaces.length - 1 && (
+        <ContextMenuItem onClick={() => moveSpace(sp.id, i + 1)}>
+          <Fwd /> {axis === "y" ? "下移" : "右移"}
+        </ContextMenuItem>
+      )}
+      {(spaces.length > 1 || sp.id !== DEFAULT_SPACE) && <ContextMenuSeparator />}
+      {spaces.length > 1 && (
+        <ContextMenuItem onClick={() => askCloseSpace(sp)}>
+          <X /> 关闭项目
+        </ContextMenuItem>
+      )}
+      {sp.id !== DEFAULT_SPACE && (
+        <ContextMenuItem variant="destructive" onClick={() => askDeleteSpace(sp)}>
+          <Trash2 /> 删除项目…
+        </ContextMenuItem>
+      )}
+    </>
+  );
+}
 
 /**
  * The session switcher in the sidebar header. When every session's name fits on one line they sit side by side like tabs
@@ -82,6 +167,7 @@ export function SpaceSwitcher() {
     return (
       <button
         key={sp.id}
+        data-space-id={live ? sp.id : undefined}
         tabIndex={live ? undefined : -1}
         className={cn(
           "flex h-6 max-w-28 shrink-0 items-center gap-1 rounded-md px-1.5 text-[12px] font-semibold whitespace-nowrap",
@@ -91,6 +177,7 @@ export function SpaceSwitcher() {
         )}
         style={{ WebkitAppRegion: "no-drag" } as any}
         onClick={live ? () => switchSpace(sp.id) : undefined}
+        onPointerDown={live ? (e) => startSpaceDrag(e, sp.id, "x") : undefined}
       >
         <span className="min-w-0 truncate">{sp.name}</span>
         {st && <StatusDot status={st.status} unread={st.unread} />}
@@ -115,22 +202,17 @@ export function SpaceSwitcher() {
         {plus(false)}
       </div>
       {fits ? (
-        <div className="-ml-1 flex min-w-0 items-center gap-0.5">
+        <div data-space-list="header" className="relative -ml-1 flex min-w-0 items-center gap-0.5">
           {spaces.map((sp) => (
             <ContextMenu key={sp.id}>
               <ContextMenuTrigger asChild>{chip(sp, true)}</ContextMenuTrigger>
               <ContextMenuContent>
-                {isNative() && <ContextMenuItem onClick={() => nativeNewWindow(sp.id)}>在新窗口打开</ContextMenuItem>}
-                {isNative() && spaces.length > 1 && <ContextMenuSeparator />}
-                {spaces.length > 1 && (
-                  <ContextMenuItem variant="destructive" onClick={() => askCloseSpace(sp)}>
-                    关闭项目
-                  </ContextMenuItem>
-                )}
+                <SpaceMenuItems sp={sp} axis="x" />
               </ContextMenuContent>
             </ContextMenu>
           ))}
           {plus(true)}
+          <SpaceDropLine list="header" axis="x" />
         </div>
       ) : (
         <SpaceMenu />
@@ -182,9 +264,17 @@ function SpaceMenu() {
         <DropdownMenuItem onClick={newSpaceDialog}>
           <Plus className="size-3.5" /> 新项目
         </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => renameSpaceDialog(cur)}>
+          <Pencil className="size-3.5" /> 重命名「{cur.name}」…
+        </DropdownMenuItem>
         {spaces.length > 1 && (
-          <DropdownMenuItem variant="destructive" onClick={() => askCloseSpace(cur)}>
-            关闭「{cur.name}」
+          <DropdownMenuItem onClick={() => askCloseSpace(cur)}>
+            <X className="size-3.5" /> 关闭「{cur.name}」
+          </DropdownMenuItem>
+        )}
+        {cur.id !== DEFAULT_SPACE && (
+          <DropdownMenuItem variant="destructive" onClick={() => askDeleteSpace(cur)}>
+            <Trash2 className="size-3.5" /> 删除「{cur.name}」…
           </DropdownMenuItem>
         )}
       </DropdownMenuContent>

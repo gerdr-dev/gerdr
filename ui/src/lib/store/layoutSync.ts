@@ -35,6 +35,12 @@ export function setLayout(fn: (l: Layout) => Layout) {
   afterLayoutChange(prev, next);
 }
 
+/** Save the layout now instead of in 300ms (setLayout), for a step the server must see it for (deleting a closed project). */
+export function flushLayout(): Promise<unknown> {
+  clearTimeout(layoutTimer);
+  return api.putLayout(get().layout, clientId);
+}
+
 /** 别的端存的布局（或重连时服务端那份）：结构照收，「看的位置」留自己的 —— 手机上切 tab，主机不跟着动。 */
 export function applyRemoteLayout(l: unknown) {
   if (validLayout(l)) {

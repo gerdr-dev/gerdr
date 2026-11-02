@@ -277,6 +277,10 @@ export const api = {
   /** A project's saved Code layout (its workspaces), {} when it has none: re-creating a closed project brings it back. */
   projectLayout: (name: string) =>
     req<{ workspaces?: import("./layout").Workspace[]; active?: string }>("GET", `/api/projects/${encodeURIComponent(name)}/layout`),
+  /** Delete a closed project: its directory moves to <GERDR_DIR>/trash/projects/ (where it went is `trash`). */
+  deleteProject: (name: string) => req<{ trash: string }>("DELETE", `/api/projects/${encodeURIComponent(name)}`),
+  /** Undo deleteProject: `trash` (what it returned) moves back. */
+  restoreProject: (name: string, trash: string) => req("POST", `/api/projects/${encodeURIComponent(name)}/restore`, { trash }),
   work: (project: string) => req<{ dir: string }>("GET", `/api/work?project=${encodeURIComponent(project)}`),
   workRun: <T = any>(fn: string, input?: unknown) => req<{ result: T }>("POST", "/api/work/run", { fn, input }).then((r) => r.result),
   dirs: (path: string) =>
