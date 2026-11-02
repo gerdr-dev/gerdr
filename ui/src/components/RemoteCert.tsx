@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, type RemoteCert as Cert } from "@/lib/api";
+import { t } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -69,44 +70,37 @@ export function RemoteCert({ host, expires, onSaved }: { host: string; expires?:
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between">
-        <div className="text-[13px] font-medium">证书</div>
+        <div className="text-[13px] font-medium">{t("remoteCert.title")}</div>
         {configured && !editing && (
           <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
-            修改
+            {t("remoteCert.change")}
           </Button>
         )}
       </div>
       {!editing ? (
         <div className="space-y-1 rounded-md border p-3">
           <div>
-            {c.tlsCert ? (
-              <>
-                用自己给的证书：<span className="font-mono text-[12px]">{c.tlsCert}</span>
-              </>
-            ) : (
-              <>Gerdr 经 {label} 的 DNS 自己去 Let's Encrypt 签，到期前自动续。</>
-            )}
+            {c.tlsCert
+              ? rich(t("remoteCert.ownCert"), { path: <span className="font-mono text-[12px]">{c.tlsCert}</span> })
+              : t("remoteCert.autoCert", { provider: label })}
           </div>
-          {expires && <div className="text-[12px] text-muted-foreground">现在这张 {new Date(expires).toLocaleDateString()} 到期。</div>}
+          {expires && <div className="text-[12px] text-muted-foreground">{t("remoteCert.expires", { date: new Date(expires).toLocaleDateString() })}</div>}
           {c.dns && c.accountURI && <CAA host={host} account={c.accountURI} auto={c.caaAuto ? label : ""} />}
         </div>
       ) : (
         <div className="space-y-3 rounded-md border p-3">
-          <div className="text-[12px] text-muted-foreground">
-            手机浏览器要认 {host} 的证书。最省事的是让 Gerdr 自己签：选 {host} 这个域名托管在哪家 DNS 服务商，填一个能改它 DNS 记录的 API
-            凭据（签证书时临时加一条 TXT 记录证明域名是你的）。
-          </div>
+          <div className="text-[12px] text-muted-foreground">{t("remoteCert.intro", { host })}</div>
           <div className="flex gap-2">
             <Button size="sm" variant={mode === "dns" ? "default" : "outline"} onClick={() => setMode("dns")}>
-              自己签（推荐）
+              {t("remoteCert.modeDns")}
             </Button>
             <Button size="sm" variant={mode === "files" ? "default" : "outline"} onClick={() => setMode("files")}>
-              已经有证书文件
+              {t("remoteCert.modeFiles")}
             </Button>
           </div>
           {mode === "dns" ? (
             <>
-              <Field label="DNS 服务商">
+              <Field label={t("remoteCert.dnsProvider")}>
                 <Select value={dns} onValueChange={(v) => (setDns(v), setEnv({}))}>
                   <SelectTrigger className="w-48">
                     <SelectValue />
@@ -120,7 +114,7 @@ export function RemoteCert({ host, expires, onSaved }: { host: string; expires?:
                   </SelectContent>
                 </Select>
               </Field>
-              {p && <div className="text-[12px] text-muted-foreground">怎么拿：{p.help}</div>}
+              {p && <div className="text-[12px] text-muted-foreground">{t("remoteCert.howTo", { help: p.help })}</div>}
               {p?.fields.map((f) => {
                 const kept = dns === c.dns && c.set.includes(f.env);
                 return (
@@ -130,40 +124,40 @@ export function RemoteCert({ host, expires, onSaved }: { host: string; expires?:
                       autoComplete="off"
                       spellCheck={false}
                       className="font-mono text-[12px]"
-                      placeholder={kept ? "已经存着，留空就沿用" : f.env}
+                      placeholder={kept ? t("remoteCert.kept") : f.env}
                       value={env[f.env] ?? ""}
                       onChange={(e) => setEnv({ ...env, [f.env]: e.target.value })}
                     />
                   </Field>
                 );
               })}
-              <Field label="邮箱（可空）">
-                <Input placeholder="证书快到期还没续上时 Let's Encrypt 发提醒" value={email} onChange={(e) => setEmail(e.target.value)} />
+              <Field label={t("remoteCert.email")}>
+                <Input placeholder={t("remoteCert.emailPlaceholder")} value={email} onChange={(e) => setEmail(e.target.value)} />
               </Field>
             </>
           ) : (
             <>
-              <Field label="证书（fullchain）">
+              <Field label={t("remoteCert.certFile")}>
                 <Input className="font-mono text-[12px]" placeholder="/path/to/fullchain.pem" value={cert} onChange={(e) => setCert(e.target.value)} />
               </Field>
-              <Field label="私钥">
+              <Field label={t("remoteCert.keyFile")}>
                 <Input className="font-mono text-[12px]" placeholder="/path/to/privkey.pem" value={key} onChange={(e) => setKey(e.target.value)} />
               </Field>
-              <div className="text-[12px] text-muted-foreground">证书文件被替换后会自动换上新的，不用重启。</div>
+              <div className="text-[12px] text-muted-foreground">{t("remoteCert.reload")}</div>
             </>
           )}
           {err && <div className="text-[12px] text-bad">{err}</div>}
           <div className="flex gap-2">
             <Button size="sm" disabled={busy} onClick={save}>
-              {busy ? "保存中…" : "保存并生效"}
+              {busy ? t("remoteCert.saving") : t("remoteCert.saveApply")}
             </Button>
             {configured && (
               <Button size="sm" variant="ghost" onClick={() => (setEditing(false), load())}>
-                取消
+                {t("common.cancel")}
               </Button>
             )}
           </div>
-          {mode === "dns" && <div className="text-[12px] text-muted-foreground">保存后立刻去签，第一次要等 DNS 生效，一两分钟；结果看上面「地址」那一栏。</div>}
+          {mode === "dns" && <div className="text-[12px] text-muted-foreground">{t("remoteCert.dnsAfter")}</div>}
         </div>
       )}
     </div>
@@ -194,7 +188,7 @@ function CAA({ host, account, auto }: { host: string; account: string; auto: str
     api
       .remoteCheckCAA()
       .then((r) => setState(r.missing ? "missing" : "present"))
-      .catch((e) => (setErr(`查不到 ${auto} 上的 CAA：${(e as Error).message}`), setState("missing")));
+      .catch((e) => (setErr(t("remoteCert.caaCheckFailed", { provider: auto, error: (e as Error).message })), setState("missing")));
   }, [auto, host, account]);
   const add = async () => {
     setBusy(true);
@@ -209,19 +203,14 @@ function CAA({ host, account, auto }: { host: string; account: string; auto: str
     }
   };
   if (state === "checking" || state === "present") return null;
-  if (state === "added")
-    return (
-      <div className="pt-1 text-[12px] text-ok">
-        CAA 已经加到 {auto} 上了，只有这台机器能签 {host} 的证书。
-      </div>
-    );
+  if (state === "added") return <div className="pt-1 text-[12px] text-ok">{t("remoteCert.caaAdded", { provider: auto, host })}</div>;
   return (
     <div className="space-y-1 pt-1 text-[12px] text-muted-foreground">
       <div className="flex items-center justify-between gap-3">
-        <div>建议在 DNS 上加一条 CAA，只许这台机器签 {host} 的证书（已经有一条覆盖它的 CAA 时要再加这一条，不然签不下来）：</div>
+        <div>{t("remoteCert.caaHint", { host })}</div>
         {auto && (
           <Button size="sm" variant="outline" className="shrink-0" disabled={busy} onClick={add}>
-            {busy ? "添加中…" : "一键加上"}
+            {busy ? t("remoteCert.adding") : t("remoteCert.addCAA")}
           </Button>
         )}
       </div>
@@ -229,4 +218,9 @@ function CAA({ host, account, auto }: { host: string; account: string; auto: str
       {err && <div className="text-bad">{err}</div>}
     </div>
   );
+}
+
+// A message with {name} placeholders filled by elements (a styled value in the middle of a sentence).
+function rich(text: string, parts: Record<string, React.ReactNode>): React.ReactNode[] {
+  return text.split(/\{(\w+)\}/).map((p, i) => (i % 2 ? <span key={i}>{parts[p]}</span> : p));
 }

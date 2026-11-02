@@ -12,6 +12,7 @@ import type { SessionSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { AgentIcon, StatusDot, dotStatus, dotRank } from "./AgentIcon";
 import { TabDragLayer, useTabDrag } from "./TabDrag";
+import { t as tr } from "@/lib/i18n"; // `t` is the tab in the map below
 
 /** 一个 tab 的汇总状态：里面任何一个会话在等你 → 等你；在跑 → 在跑；…… */
 export function tabStatus(tab: Tab, sessions: Record<string, SessionSummary>, unread: Record<string, true>) {
@@ -149,13 +150,13 @@ export function TabBar() {
               </ContextMenuTrigger>
               <ContextMenuContent>
                 <ContextMenuItem onClick={() => set({ dialog: { kind: "rename", target: "tab", id: t.id, value: t.name ?? tabName(t) } })}>
-                  重命名
+                  {tr("common.rename")}
                 </ContextMenuItem>
-                <ContextMenuItem onClick={() => duplicateTab(t.id, "after")}>复制到后面</ContextMenuItem>
-                <ContextMenuItem onClick={() => duplicateTab(t.id, "before")}>复制到前面</ContextMenuItem>
+                <ContextMenuItem onClick={() => duplicateTab(t.id, "after")}>{tr("tabBar.duplicateAfter")}</ContextMenuItem>
+                <ContextMenuItem onClick={() => duplicateTab(t.id, "before")}>{tr("tabBar.duplicateBefore")}</ContextMenuItem>
                 <ContextMenuSeparator />
                 <ContextMenuItem variant="destructive" onClick={() => closeTab(t.id)}>
-                  关闭
+                  {tr("common.close")}
                 </ContextMenuItem>
               </ContextMenuContent>
             </ContextMenu>
@@ -167,7 +168,7 @@ export function TabBar() {
               <Plus className="size-4" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent>新建 Tab（{formatCombo(keyFor(get().config, "newTab")[0] ?? "")}）</TooltipContent>
+          <TooltipContent>{tr("tabBar.newTab", { key: formatCombo(keyFor(get().config, "newTab")[0] ?? "") })}</TooltipContent>
         </Tooltip>
       </div>
       {prefixActive && (

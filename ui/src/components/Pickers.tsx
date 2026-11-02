@@ -5,6 +5,7 @@ import { closeDialog, useStore } from "@/lib/store";
 import type { SessionSummary } from "@/lib/types";
 import { AgentIcon, StatusDot, dotStatus } from "./AgentIcon";
 import { ago } from "./NewSession";
+import { t } from "@/lib/i18n";
 
 // Pick-one-and-go lists built on CommandDialog: every conversation (prefix+g) and the current session's workspaces (prefix+w).
 
@@ -48,15 +49,21 @@ export function SessionsDialog({ open }: { open: boolean }) {
     </CommandItem>
   );
   return (
-    <CommandDialog open={open} onOpenChange={(o) => !o && closeDialog()} title="会话" description="所有会话" className="max-w-2xl">
-      <CommandInput placeholder="搜会话：标题、目录…" />
+    <CommandDialog
+      open={open}
+      onOpenChange={(o) => !o && closeDialog()}
+      title={t("pickers.sessions")}
+      description={t("pickers.allSessions")}
+      className="max-w-2xl"
+    >
+      <CommandInput placeholder={t("pickers.searchSessions")} />
       <CommandList className="max-h-[60vh]">
-        <CommandEmpty>没有</CommandEmpty>
-        {opened.length > 0 && <CommandGroup heading={`开着的 · ${opened.length}`}>{opened.map((s) => row(s, true))}</CommandGroup>}
+        <CommandEmpty>{t("pickers.none")}</CommandEmpty>
+        {opened.length > 0 && <CommandGroup heading={t("pickers.opened", { n: opened.length })}>{opened.map((s) => row(s, true))}</CommandGroup>}
         {elsewhere.length > 0 && (
-          <CommandGroup heading={`在别的项目里 · ${elsewhere.length}`}>{elsewhere.map((s) => row(s, true, spaceName(s.id)))}</CommandGroup>
+          <CommandGroup heading={t("pickers.elsewhere", { n: elsewhere.length })}>{elsewhere.map((s) => row(s, true, spaceName(s.id)))}</CommandGroup>
         )}
-        {closed.length > 0 && <CommandGroup heading={`关掉的 · ${closed.length}`}>{closed.map((s) => row(s, false))}</CommandGroup>}
+        {closed.length > 0 && <CommandGroup heading={t("pickers.closed", { n: closed.length })}>{closed.map((s) => row(s, false))}</CommandGroup>}
       </CommandList>
     </CommandDialog>
   );
@@ -66,10 +73,10 @@ export function WorkspacesDialog({ open }: { open: boolean }) {
   const layout = useStore((s) => s.layout);
   const list = spaceWorkspaces(layout); // only the current session's, like the sidebar
   return (
-    <CommandDialog open={open} onOpenChange={(o) => !o && closeDialog()} title="工作空间" description="切换工作空间">
-      <CommandInput placeholder="工作空间…" />
+    <CommandDialog open={open} onOpenChange={(o) => !o && closeDialog()} title={t("pickers.workspaces")} description={t("pickers.switchWorkspace")}>
+      <CommandInput placeholder={t("pickers.workspacePlaceholder")} />
       <CommandList>
-        <CommandEmpty>没有</CommandEmpty>
+        <CommandEmpty>{t("pickers.none")}</CommandEmpty>
         <CommandGroup>
           {list.map((w, i) => (
             <CommandItem

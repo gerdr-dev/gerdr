@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, type ServiceStatus } from "@/lib/api";
 import { Switch } from "@/components/ui/switch";
+import { t } from "@/lib/i18n";
 
 // 设置 → 通用 →「后台常驻」：打开后 gerdr 装成 launchd 的后台服务，⌘Q 退出 App 会话照跑、手机远程照样连得上，登录就起。
 // On by default: the App installs it at start unless it was turned off here (service.OptedOut).
@@ -26,12 +27,12 @@ export function ServiceSetting() {
   const hint = st.why
     ? st.why
     : !on
-      ? "关着：⌘Q 退出 App 会把正在跑的 Agent 一起停掉。打开后由后台服务一直跑着：退出 App 会话不断、手机远程照样能连，登录就自动起。打开时后端会重启一次，正在跑的 Agent 会被打断"
+      ? t("serviceSetting.off")
       : st.self
-        ? `后台服务在跑（PID ${st.pid}），退出 App 不影响它，Agent 会接着跑完。日志：${st.log}`
+        ? t("serviceSetting.running", { pid: st.pid, log: st.log })
         : st.pid > 0
-          ? "已装好。现在答话的是另一个 Gerdr（终端里起的？），它退出后由后台接手"
-          : `已装好，但后台服务没起来，看日志：${st.log}`;
+          ? t("serviceSetting.other")
+          : t("serviceSetting.down", { log: st.log });
 
   const toggle = async (v: boolean) => {
     setErr("");
@@ -49,7 +50,7 @@ export function ServiceSetting() {
   return (
     <div className="flex items-center justify-between gap-4">
       <div className="min-w-0">
-        <div className="text-[13px]">后台常驻</div>
+        <div className="text-[13px]">{t("serviceSetting.title")}</div>
         <div className="text-[12px] break-all text-muted-foreground">{hint}</div>
         {err && <div className="text-[12px] text-bad">{err}</div>}
       </div>

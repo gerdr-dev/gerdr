@@ -4,6 +4,7 @@
 
 import { toast } from "sonner";
 import { api } from "./api";
+import { t } from "./i18n";
 import { set } from "./store";
 
 type Bridge = { postMessage(m: unknown): void };
@@ -124,12 +125,12 @@ export function onAppUpdate(u: AppUpdateStatus) {
   const auto = u.auto !== false;
   if (toasted === p.version || (p.kind === "backend" && idle && auto)) return;
   toasted = p.version;
-  toast(`Gerdr ${p.version} 已下载好`, {
+  toast(t("native.updateReady", { version: p.version }), {
     id: "app-update",
     duration: Infinity,
     closeButton: true,
-    description: p.kind === "app" ? "这次要换整个 App：会退出再重新打开" : auto ? "没有 Agent 在跑、没开终端时会自己更新" : "自动更新关着：点了才更新",
-    action: { label: "现在更新", onClick: nativeApplyUpdate },
+    description: p.kind === "app" ? t("native.updateApp") : auto ? t("native.updateAuto") : t("native.updateManual"),
+    action: { label: t("systemUpdate.updateNow"), onClick: nativeApplyUpdate },
   });
 }
 

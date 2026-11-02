@@ -25,6 +25,7 @@ import {
 } from "./store";
 import type { DraftImg, SharedDraft } from "./store";
 import type { HubEvent, SessionSummary } from "./types";
+import { t } from "./i18n";
 
 // The project this window was opened on (the address /<project id>; ?space= from older App shells), read before anything
 // renders: App.tsx rewrites the address to the project being shown, and it renders the not-yet-loaded default layout first
@@ -361,10 +362,10 @@ function handle(m: any) {
     case "stepup":
       // 远程设备请求加 passkey，要坐在电脑前的人批准（RemoteSettings）。只在本机这边提醒：远程那头批不了
       if (!location.protocol.startsWith("https")) {
-        const body = `「${m.data?.label}」请求添加 Passkey，核对码 ${m.data?.code}`;
+        const body = t("sync.passkeyRequest", { label: m.data?.label, code: m.data?.code });
         const open = () => set({ dialog: { kind: "settings", tab: "remote" } });
-        nativeNotify("Gerdr：要你批准", body);
-        toast(body, { id: "stepup", duration: 30000, action: { label: "去批准", onClick: open } }); // a newer request replaces the old one
+        nativeNotify(t("sync.approvalNeeded"), body);
+        toast(body, { id: "stepup", duration: 30000, action: { label: t("sync.goApprove"), onClick: open } }); // a newer request replaces the old one
       }
       break;
   }

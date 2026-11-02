@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { refocusAfterDialog } from "@/lib/actions";
 import { settleConfirm, usePendingConfirm, type ConfirmOptions } from "@/lib/confirm";
+import { t } from "@/lib/i18n";
 
 // The dialog behind askConfirm (lib/confirm.ts). Mounted once in Dialogs.tsx.
 export function ConfirmDialog() {
@@ -30,9 +31,9 @@ export function ConfirmDialog() {
           {c?.description && <AlertDialogDescription className="whitespace-pre-line">{c.description}</AlertDialogDescription>}
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel onClick={() => settleConfirm(false)}>取消</AlertDialogCancel>
+          <AlertDialogCancel onClick={() => settleConfirm(false)}>{t("common.cancel")}</AlertDialogCancel>
           <AlertDialogAction variant={c?.destructive ? "destructive" : "default"} onClick={() => settleConfirm(true)}>
-            {c?.action ?? "确定"}
+            {c?.action ?? t("common.confirm")}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

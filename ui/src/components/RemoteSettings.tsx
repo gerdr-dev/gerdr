@@ -3,6 +3,7 @@ import { api, type PasskeyInfo, type RemoteDevice, type RemoteStatus } from "@/l
 import { isCancel, isStepUp, passkeySupported, registerPasskey } from "@/lib/passkey";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { t } from "@/lib/i18n";
 import { useStore } from "@/lib/store";
 import type { RemoteConn } from "@/lib/types";
 import { RemoteCert } from "@/components/RemoteCert";
@@ -15,6 +16,8 @@ import { PasskeyStepUp, StepUpApprovals } from "@/components/PasskeyStepUp";
 // 配对码只能坐在机器前出（远程能出码的话，手机被拿走一次就能留下一台踢不掉的设备），passkey 绑在那个域名上。
 
 const when = (s?: string) => (s ? new Date(s).toLocaleString() : "—");
+const devices = (n: number) => t(n === 1 ? "remoteSettings.devicesOne" : "remoteSettings.devices", { n });
+const passkeys = (n: number) => t(n === 1 ? "remoteSettings.passkeysOne" : "remoteSettings.passkeys", { n });
 
 export function RemoteSettings({ open }: { open: boolean }) {
   const [st, setSt] = useState<RemoteStatus | null>(null);
@@ -45,8 +48,8 @@ export function RemoteSettings({ open }: { open: boolean }) {
   useEffect(() => {
     if (!open) return;
     load();
-    const t = setInterval(load, 5000); // 中继状态会变（重连、证书签下来）
-    return () => clearInterval(t);
+    const timer = setInterval(load, 5000); // 中继状态会变（重连、证书签下来）
+    return () => clearInterval(timer);
   }, [open, load]);
 
   const run = async (fn: () => Promise<unknown>) => {
@@ -69,26 +72,28 @@ export function RemoteSettings({ open }: { open: boolean }) {
 
       {!st.enabled ? (
         st.envLocked ? (
-          <div className="text-[12px] text-muted-foreground">
-            中继地址 / 主机名由环境变量 GERDR_RELAY_URL / GERDR_RELAY_HOST 给，两个都给齐才算开了远程访问。
-          </div>
+          <div className="text-[12px] text-muted-foreground">{t("remoteSettings.envLocked")}</div>
         ) : (
           !isRemote && <RemoteConnect relayURL={st.relayURL} onDone={load} />
         )
       ) : (
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
-            <div className="text-[13px] font-medium">地址</div>
+            <div className="text-[13px] font-medium">{t("remoteSettings.address")}</div>
             {/* 远程那一侧不给：移除 = 把自己锁在门外（后端也拦着）。换地址 = 先移除再连 */}
             {!isRemote && !st.envLocked && (
               <ConfirmDelete
-                title="移除远程访问（换地址也是先移除、再连新的）：断开中继，配过的设备和 Passkey 全部清掉"
-                label="确认移除，设备和 Passkey 一起清掉"
+                title={t("remoteSettings.remove.title")}
+                label={t("remoteSettings.remove.label")}
                 onConfirm={() =>
                   run(async () => {
                     const r = await api.remoteDisconnect();
                     setPair(null);
-                    setMsg(`已移除远程访问，踢掉了 ${r.revoked} 台设备${r.passkeys ? `、删掉了 ${r.passkeys} 把 Passkey` : ""}。`);
+                    setMsg(
+                      r.passkeys
+                        ? t("remoteSettings.removedWithKeys", { devices: devices(r.revoked), passkeys: passkeys(r.passkeys) })
+                        : t("remoteSettings.removed", { devices: devices(r.revoked) }),
+                    );
                   })
                 }
               />
@@ -101,16 +106,16 @@ export function RemoteSettings({ open }: { open: boolean }) {
               </a>
             </div>
             <div className="text-[12px] text-muted-foreground">
-              中继 {st.relayURL} · {st.state || "—"}
-              {st.certExpires && isRemote && <> · 证书 {new Date(st.certExpires).toLocaleDateString()} 到期</>}
+              {t("remoteSettings.relayLine", { relay: st.relayURL ?? "", state: st.state || "—" })}
+              {st.certExpires && isRemote && t("remoteSettings.certExpires", { date: new Date(st.certExpires).toLocaleDateString() })}
             </div>
             {st.err && <div className="text-[12px] text-bad">{st.err}</div>}
             {st.locked && (
               <div className="flex items-center gap-2 text-[12px] text-warn">
-                有人猜配对码猜错太多次，已暂停接受新设备。
+                {t("remoteSettings.locked")}
                 {!isRemote && (
                   <Button size="sm" variant="outline" onClick={() => run(api.remoteUnlock)}>
-                    解开
+                    {t("remoteSettings.unlock")}
                   </Button>
                 )}
               </div>
@@ -127,7 +132,7 @@ export function RemoteSettings({ open }: { open: boolean }) {
 
       <div className="space-y-1.5">
         <div className="flex items-center justify-between">
-          <div className="text-[13px] font-medium">配过对的设备</div>
+          <div className="text-[13px] font-medium">{t("remoteSettings.paired")}</div>
           <div className="flex items-center gap-2">
             {/* Pairing codes only come from the machine itself (see the note at the top). A fresh code each time the
               popover opens; closing it drops the code from the page. */}
@@ -137,20 +142,20 @@ export function RemoteSettings({ open }: { open: boolean }) {
                     settings dialog sizes buttons by [data-slot=button] (SettingsDialog.tsx). */}
                 <PopoverTrigger asChild>
                   <span className="inline-flex">
-                    <Button size="sm">添加设备</Button>
+                    <Button size="sm">{t("remoteSettings.addDevice")}</Button>
                   </span>
                 </PopoverTrigger>
                 {pair && (
                   <PopoverContent align="end" className="w-80 space-y-2 text-[13px]">
                     {/* 图本身是白底黑块（服务端画的 PNG）：扫码要对比度，深色模式下也不反色 */}
-                    {pair.qr && <img src={pair.qr} alt="配对二维码" className="mx-auto size-48 rounded-sm" />}
-                    <div>用手机相机扫这个二维码，或者打开 {st.url} 输入：</div>
+                    {pair.qr && <img src={pair.qr} alt={t("remoteSettings.qrAlt")} className="mx-auto size-48 rounded-sm" />}
+                    <div>{t("remoteSettings.scan", { url: st.url ?? "" })}</div>
                     <div className="text-center font-mono text-[20px] tracking-[.3em]">
                       {pair.code.slice(0, 4)} {pair.code.slice(4)}
                     </div>
                     <div className="text-[12px] text-muted-foreground">
-                      {new Date(pair.expires).toLocaleTimeString()} 前有效，用一次就废。
-                      {st.pairMinutes > 0 && <>配进来的设备只能用 {st.pairMinutes} 分钟，在那台设备上过一次 Passkey 才长期有效。</>}
+                      {t("remoteSettings.codeValid", { time: new Date(pair.expires).toLocaleTimeString() })}
+                      {st.pairMinutes > 0 && t("remoteSettings.tempMinutes", { n: st.pairMinutes })}
                     </div>
                   </PopoverContent>
                 )}
@@ -167,33 +172,37 @@ export function RemoteSettings({ open }: { open: boolean }) {
                   setConfirmAll(false);
                   run(async () => {
                     const r = await api.remoteRevokeAll();
-                    setMsg(`踢掉了 ${r.revoked} 台设备${r.passkeys ? `，并删掉了 ${r.passkeys} 把 Passkey` : ""}`);
+                    setMsg(
+                      r.passkeys
+                        ? t("remoteSettings.revokedAllWithKeys", { devices: devices(r.revoked), passkeys: passkeys(r.passkeys) })
+                        : t("remoteSettings.revokedAll", { devices: devices(r.revoked) }),
+                    );
                     if (isRemote) location.reload();
                   });
                 }}
               >
-                {confirmAll ? "再点一下：全部踢掉（含 Passkey）" : "全部踢掉"}
+                {confirmAll ? t("remoteSettings.revokeAllConfirm") : t("remoteSettings.revokeAll")}
               </Button>
             )}
           </div>
         </div>
         <div className="divide-y rounded-md border">
-          {devs.length === 0 && <div className="p-3 text-muted-foreground">还没有。</div>}
+          {devs.length === 0 && <div className="p-3 text-muted-foreground">{t("remoteSettings.none")}</div>}
           {devs.map((d) => (
             <div key={d.id} className="flex items-center gap-3 px-3 py-2">
               <div className="min-w-0 flex-1">
                 <div className="truncate">
                   {d.label}
-                  {d.id === me && <span className="ml-2 text-[11px] text-brand">这台</span>}
+                  {d.id === me && <span className="ml-2 text-[11px] text-brand">{t("remoteSettings.thisDevice")}</span>}
                   {/* 配对码进来的临时设备：到点就掉，在那台设备上过一次 passkey 才转正（auth.Device.Temp） */}
                   {d.temp && (
                     <span className="ml-2 text-[11px] text-warn">
-                      临时 · {new Date(d.expires).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} 到期
+                      {t("remoteSettings.temp", { time: new Date(d.expires).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) })}
                     </span>
                   )}
                 </div>
                 <div className="truncate text-[11px] text-muted-foreground">
-                  最后 {when(d.lastSeen)} · {d.lastIp} · 配于 {when(d.created)}
+                  {t("remoteSettings.deviceMeta", { seen: when(d.lastSeen), ip: d.lastIp, created: when(d.created) })}
                 </div>
               </div>
               <Button
@@ -206,7 +215,7 @@ export function RemoteSettings({ open }: { open: boolean }) {
                   })
                 }
               >
-                踢掉
+                {t("remoteSettings.revoke")}
               </Button>
             </div>
           ))}
@@ -216,13 +225,13 @@ export function RemoteSettings({ open }: { open: boolean }) {
       {st.enabled && (
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
-            <div className="text-[13px] font-medium">安卓 App</div>
+            <div className="text-[13px] font-medium">{t("remoteSettings.android")}</div>
             <Button size="sm" variant="outline" onClick={() => window.dispatchEvent(new Event("gerdr:cli-approve"))}>
-              批准 App 登录
+              {t("remoteSettings.approveApp")}
             </Button>
           </div>
           <div className="text-[12px] text-muted-foreground">
-            App 填 {st.url} 就能用。「批准 App 登录」只有当安卓 App 不支持 Passkey 时才需要：这时 App 会显示一个 8 位码，点上面的按钮输进去批准。
+            {t("remoteSettings.androidHint", { url: st.url ?? "" })}
             {st.lanErr && <span className="text-bad"> {st.lanErr}</span>}
           </div>
         </div>
@@ -238,7 +247,7 @@ export function RemoteSettings({ open }: { open: boolean }) {
               onClick={() =>
                 run(async () => {
                   try {
-                    setMsg(`加好了：${await registerPasskey()}`);
+                    setMsg(t("remoteSettings.added", { label: await registerPasskey() }));
                   } catch (e) {
                     if (!isStepUp(e)) throw e;
                     setStepUp(true); // 已经有 passkey 了：先证明是本人（PasskeyStepUp）
@@ -246,7 +255,7 @@ export function RemoteSettings({ open }: { open: boolean }) {
                 })
               }
             >
-              加一把 Passkey
+              {t("remoteSettings.addPasskey")}
             </Button>
           )}
         </div>
@@ -255,27 +264,27 @@ export function RemoteSettings({ open }: { open: boolean }) {
             onCancel={() => setStepUp(false)}
             onDone={(label) => {
               setStepUp(false);
-              setMsg(`加好了：${label}`);
+              setMsg(t("remoteSettings.added", { label }));
               load();
             }}
           />
         )}
         <div className="text-[12px] text-muted-foreground">
-          有了 Passkey，新设备不用回机器前拿配对码，Face ID / 指纹一下就进来；配过对的设备超过 {st.reauthHours || "—"} 小时没验证要再验一次。
-          {!pkOK && st.enabled && <> Passkey 绑在 {st.host} 上，在那个地址打开 Gerdr 才能加。</>}
+          {t("remoteSettings.passkeyHint", { hours: st.reauthHours || "—" })}
+          {!pkOK && st.enabled && t("remoteSettings.passkeyHost", { host: st.host ?? "" })}
         </div>
         <div className="divide-y rounded-md border">
-          {keys.length === 0 && <div className="p-3 text-muted-foreground">还没有。</div>}
+          {keys.length === 0 && <div className="p-3 text-muted-foreground">{t("remoteSettings.none")}</div>}
           {keys.map((k) => (
             <div key={k.id} className="flex items-center gap-3 px-3 py-2">
               <div className="min-w-0 flex-1">
                 <div className="truncate">{k.label}</div>
                 <div className="truncate text-[11px] text-muted-foreground">
-                  添加于 {when(k.created)} · 最后用 {when(k.lastUsed)}
+                  {t("remoteSettings.passkeyMeta", { created: when(k.created), used: when(k.lastUsed) })}
                 </div>
               </div>
               <Button size="sm" variant="ghost" onClick={() => run(() => api.remoteDeletePasskey(k.id))}>
-                删掉
+                {t("remoteSettings.delete")}
               </Button>
             </div>
           ))}
@@ -293,7 +302,7 @@ export function RemoteSettings({ open }: { open: boolean }) {
             })
           }
         >
-          退出这台设备
+          {t("remoteSettings.logout")}
         </Button>
       )}
     </div>
@@ -303,12 +312,12 @@ export function RemoteSettings({ open }: { open: boolean }) {
 // 「多久」：连上到现在。
 function lasted(since: number, now: number) {
   const s = Math.max(0, Math.floor((now - since) / 1000));
-  if (s < 60) return `${s} 秒`;
+  if (s < 60) return t("remoteSettings.lasted.s", { s });
   const m = Math.floor(s / 60);
-  if (m < 60) return `${m} 分钟`;
+  if (m < 60) return t("remoteSettings.lasted.m", { m });
   const h = Math.floor(m / 60);
-  if (h < 24) return `${h} 小时 ${m % 60} 分`;
-  return `${Math.floor(h / 24)} 天 ${h % 24} 小时`;
+  if (h < 24) return t("remoteSettings.lasted.hm", { h, m: m % 60 });
+  return t("remoteSettings.lasted.dh", { d: Math.floor(h / 24), h: h % 24 });
 }
 
 // 正在连接：现在开着远程界面的设备（一个标签页一条）。列表是服务端推的（remote_conns），不用轮询；时长每秒走一下。
@@ -317,25 +326,28 @@ function RemoteConns({ me }: { me: string }) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     if (conns.length === 0) return;
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
   }, [conns.length]);
   return (
     <div className="space-y-1.5">
-      <div className="text-[13px] font-medium">正在连接{conns.length > 0 && <span className="ml-1 text-muted-foreground">{conns.length}</span>}</div>
+      <div className="text-[13px] font-medium">
+        {t("remoteSettings.conns")}
+        {conns.length > 0 && <span className="ml-1 text-muted-foreground">{conns.length}</span>}
+      </div>
       <div className="divide-y rounded-md border">
-        {conns.length === 0 && <div className="p-3 text-muted-foreground">现在没有远程设备连着。</div>}
+        {conns.length === 0 && <div className="p-3 text-muted-foreground">{t("remoteSettings.noConns")}</div>}
         {conns.map((c: RemoteConn) => (
           <div key={c.id} className="flex items-center gap-3 px-3 py-2">
             <span className="size-2 shrink-0 rounded-full bg-ok" />
             <div className="min-w-0 flex-1">
               <div className="truncate">
-                {c.label || "未知设备"}
+                {c.label || t("remoteSettings.unknownDevice")}
                 {c.client && c.client !== c.label && <span className="ml-2 text-[11px] text-muted-foreground">{c.client}</span>}
-                {me && c.device === me && <span className="ml-2 text-[11px] text-brand">这台</span>}
+                {me && c.device === me && <span className="ml-2 text-[11px] text-brand">{t("remoteSettings.thisDevice")}</span>}
               </div>
               <div className="truncate text-[11px] text-muted-foreground">
-                已连接 {lasted(c.since, now)} · {new Date(c.since).toLocaleTimeString()} 连上 · {c.ip}
+                {t("remoteSettings.connMeta", { dur: lasted(c.since, now), time: new Date(c.since).toLocaleTimeString(), ip: c.ip })}
               </div>
             </div>
           </div>

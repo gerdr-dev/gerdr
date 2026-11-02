@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { reconnectNow } from "@/lib/sync";
 import { toast } from "sonner";
 import { useRoute } from "./AndroidSettings";
+import { t } from "@/lib/i18n";
 
 /**
  * The connection status while disconnected from the gerdr backend. Used to be a bare red "offline", which read as "broken" while
@@ -37,20 +38,20 @@ export function ConnStatus() {
     return (
       <span
         className="flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground"
-        title={ever ? "和 Gerdr 后台的连接断了，正在重连" : "正在连接 Gerdr 后台"}
+        title={ever ? t("connStatus.reconnectingHint") : t("connStatus.connectingHint")}
       >
         <Loader2 className="size-3 animate-spin" />
-        {ever ? "重连中…" : "连接中…"}
+        {ever ? t("connStatus.reconnecting") : t("connStatus.connecting")}
       </span>
     );
   return (
     <span
       className="flex shrink-0 items-center gap-1 text-[11px] text-warn tabular-nums"
-      title={`${ever ? "和 Gerdr 后台的连接断了" : "连不上 Gerdr 后台"}，${Math.ceil(left / 1000)} 秒后自动重试`}
+      title={t(ever ? "connStatus.lostRetryIn" : "connStatus.unreachableRetryIn", { n: Math.ceil(left / 1000) })}
     >
-      {ever ? "断开" : "连不上"} · {Math.ceil(left / 1000)}s
+      {ever ? t("connStatus.disconnected") : t("connStatus.unreachable")} · {Math.ceil(left / 1000)}s
       <button className="rounded-sm px-1 text-foreground hover:bg-accent" style={{ WebkitAppRegion: "no-drag" } as any} onClick={reconnectNow}>
-        {ever ? "重连" : "重试"}
+        {ever ? t("connStatus.reconnect") : t("common.retry")}
       </button>
     </span>
   );
@@ -85,11 +86,11 @@ export function ConnToast() {
   // A wait under a second would flash a "1 s" countdown between attempts: show it as still connecting
   const text = ever
     ? left > 1
-      ? `和 Gerdr 的连接断了，${left} 秒后重连`
-      : "正在重连 Gerdr…"
+      ? t("connStatus.toastLost", { n: left })
+      : t("connStatus.toastReconnecting")
     : left > 1
-      ? `连不上 Gerdr，${left} 秒后重试`
-      : "正在连接 Gerdr…";
+      ? t("connStatus.toastUnreachable", { n: left })
+      : t("connStatus.toastConnecting");
   useEffect(() => {
     if (!on) return;
     toast.loading(text, {
@@ -97,7 +98,7 @@ export function ConnToast() {
       duration: Infinity,
       dismissible: false,
       // preventDefault: sonner closes a toast on its action by default, which would flash it away and back
-      action: left > 1 ? { label: ever ? "重连" : "重试", onClick: (e) => (e.preventDefault(), reconnectNow()) } : undefined,
+      action: left > 1 ? { label: ever ? t("connStatus.reconnect") : t("common.retry"), onClick: (e) => (e.preventDefault(), reconnectNow()) } : undefined,
     });
   }, [on, text, left > 1]);
   useEffect(() => {
@@ -113,7 +114,7 @@ export function RouteLabel() {
   return (
     <span title={r.detail} className="flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground">
       <span className={cn("size-1.5 rounded-full", r.via === "lan" ? "bg-ok" : "bg-brand")} />
-      {r.via === "lan" ? "局域网" : "中继"}
+      {r.via === "lan" ? t("connStatus.lan") : t("connStatus.relay")}
     </span>
   );
 }

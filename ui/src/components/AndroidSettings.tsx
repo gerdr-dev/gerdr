@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { androidCan, isAndroid, onAndroid, postAndroid, type AndroidUpdate } from "@/lib/android";
 import { cn } from "@/lib/utils";
+import { locale, t } from "@/lib/i18n";
 
 /**
  * 安卓 App 里才有的那几项（设置 → 通用）：后台通知、音量键、走的哪条路、换服务器。状态全在壳那边（android/），
@@ -36,14 +37,14 @@ export function AndroidSettings() {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <div className="text-[13px]">安卓 App</div>
+          <div className="text-[13px]">{t("androidSettings.title")}</div>
           <div className="text-[12px] text-muted-foreground">
             <span className={cn("mr-1.5 inline-block size-2 rounded-full align-middle", route.via === "lan" ? "bg-ok" : "bg-brand")} />
             {route.detail}
           </div>
         </div>
         <Button size="sm" variant="outline" onClick={() => postAndroid({ t: "setup" })}>
-          换服务器
+          {t("androidSettings.switchServer")}
         </Button>
       </div>
 
@@ -53,31 +54,27 @@ export function AndroidSettings() {
         <div>
           <div className="flex items-center justify-between gap-4">
             <div>
-              <div className="text-[13px]">后台通知</div>
+              <div className="text-[13px]">{t("androidSettings.notify")}</div>
               <div className="text-[12px] text-muted-foreground">
-                {!n.on
-                  ? "关着：Agent 等你、跑完了，只有打开 App 才看得到。"
-                  : !n.perm
-                    ? "系统没给通知权限：点「试一下」申请；拒过的话要去系统设置里打开。"
-                    : "App 关着 / 锁屏也能收到；通知栏常驻一条 Agent 状态一览。"}
+                {!n.on ? t("androidSettings.notifyOff") : !n.perm ? t("androidSettings.notifyNoPerm") : t("androidSettings.notifyOn")}
               </div>
             </div>
             <Switch checked={n.on} onCheckedChange={(v) => postAndroid({ t: "notify", op: "set", on: v })} />
           </div>
           <div className="mt-2 flex flex-wrap gap-2">
             <Button size="sm" variant="outline" onClick={() => postAndroid({ t: "notify", op: "test" })}>
-              试一下
+              {t("androidSettings.test")}
             </Button>
             {live && !n.battery && (
               <Button size="sm" variant="outline" onClick={() => postAndroid({ t: "notify", op: "battery" })}>
-                允许后台运行
+                {t("androidSettings.allowBackground")}
               </Button>
             )}
           </div>
           {live && (
             <p className="mt-1.5 text-[12px] leading-relaxed text-muted-foreground">
-              {n.battery ? "已经不受电池优化限制。" : "手机省电策略会把后台服务杀掉，点「允许后台运行」放行。"}
-              小米 / 华为 / OPPO / vivo 还要在系统设置里给这个 App 开「自启动」和「后台运行」，不然锁屏一会儿就收不到了。
+              {n.battery ? t("androidSettings.batteryOk") : t("androidSettings.batteryHint")}
+              {t("androidSettings.oemHint")}
             </p>
           )}
         </div>
@@ -86,10 +83,8 @@ export function AndroidSettings() {
       {vol !== null && (
         <div className="flex items-center justify-between gap-4">
           <div>
-            <div className="text-[13px]">音量键当 ↑ / ↓</div>
-            <div className="text-[12px] text-muted-foreground">
-              只在键盘弹起、下拉菜单开着、Agent 在提问时这样用（翻历史、挪光标、选选项）；其他时候还是调音量
-            </div>
+            <div className="text-[13px]">{t("androidSettings.volKeys")}</div>
+            <div className="text-[12px] text-muted-foreground">{t("androidSettings.volKeysHint")}</div>
           </div>
           <Switch checked={vol} onCheckedChange={(v) => postAndroid({ t: "volkeys", op: "set", on: v })} />
         </div>
@@ -106,34 +101,41 @@ function UpdateRow({ u }: { u: AndroidUpdate }) {
   const busy = u.phase === "checking" || u.phase === "downloading" || u.phase === "installing";
   const text =
     u.phase === "checking"
-      ? "正在检查更新…"
+      ? t("systemUpdate.checking")
       : u.phase === "downloading"
-        ? `正在下载 ${u.latest}（${u.progress}%）`
+        ? t("systemUpdate.downloading", { name: u.latest, progress: u.progress })
         : u.phase === "installing"
-          ? `正在安装 ${u.latest}…`
+          ? t("androidSettings.installing", { version: u.latest })
           : u.phase === "ready"
-            ? `${u.latest} 已下载好，点「安装」`
+            ? t("androidSettings.ready", { version: u.latest })
             : u.error
-              ? `检查更新失败：${u.error}`
+              ? t("systemUpdate.checkFailed", { error: u.error })
               : u.checkedAt
-                ? `已是最新（${new Date(u.checkedAt).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })} 检查过）`
-                : "每次打开 App 时检查，最多 6 小时一次";
+                ? t("systemUpdate.upToDate", {
+                    time: new Date(u.checkedAt).toLocaleString(locale() === "zh" ? "zh-CN" : "en", {
+                      month: "numeric",
+                      day: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    }),
+                  })
+                : t("androidSettings.checkSchedule");
   return (
     <div className="flex items-center justify-between gap-4">
       <div className="min-w-0">
-        <div className="text-[13px]">App 版本 {u.version}</div>
+        <div className="text-[13px]">{t("androidSettings.appVersion", { version: u.version })}</div>
         <div className={cn("text-[12px]", u.phase === "ready" ? "text-brand" : u.error && u.phase === "idle" ? "text-bad" : "text-muted-foreground")}>
           {text}
         </div>
       </div>
       {u.phase === "ready" ? (
         <Button size="sm" onClick={() => postAndroid({ t: "update", op: "install" })}>
-          安装
+          {t("common.install")}
         </Button>
       ) : (
         <Button size="sm" variant="outline" disabled={busy} onClick={() => postAndroid({ t: "update", op: "check" })}>
           {busy && <Loader2 className="size-3.5 animate-spin" />}
-          检查更新
+          {t("systemUpdate.check")}
         </Button>
       )}
     </div>
@@ -151,9 +153,11 @@ export function useRoute(): { via: "lan" | "relay"; detail: string } {
     () => onAndroid("route", (m) => setR({ lan: Number(m.lan) || 0, relay: Number(m.relay) || 0, next: String(m.next ?? ""), proxied: !!m.proxied })),
     [],
   );
-  if (!r?.proxied) return { via: "relay", detail: "经云端中继" };
-  if (r.relay > 0 && r.lan > 0) return { via: "relay", detail: "刚切到局域网：新连接走直连，有的还在中继上（重连一次就过去了）" };
-  if (r.relay > 0) return { via: "relay", detail: "经云端中继" };
-  if (r.lan > 0) return { via: "lan", detail: "局域网直连" };
-  return r.next === "lan" ? { via: "lan", detail: "局域网直连" } : { via: "relay", detail: "经云端中继" };
+  const relay = { via: "relay" as const, detail: t("androidSettings.routeRelay") };
+  const lan = { via: "lan" as const, detail: t("androidSettings.routeLan") };
+  if (!r?.proxied) return relay;
+  if (r.relay > 0 && r.lan > 0) return { via: "relay", detail: t("androidSettings.routeSwitching") };
+  if (r.relay > 0) return relay;
+  if (r.lan > 0) return lan;
+  return r.next === "lan" ? lan : relay;
 }

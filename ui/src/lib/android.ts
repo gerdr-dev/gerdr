@@ -9,6 +9,7 @@
 // 就是「我在 App 里，而且是 App 认的那台」。对象在页面脚本跑之前就在了，模块顶层读一次就够。
 
 import { toast } from "sonner";
+import { t } from "./i18n";
 import { hasAsk, watchAsks } from "@gerdr/chat/askkeys";
 import { lightboxOpen } from "@/components/Lightbox";
 import { focusSession } from "./actions";
@@ -75,14 +76,14 @@ export async function androidCopyImage(blob: Blob) {
     r.readAsDataURL(blob);
   });
   await new Promise<void>((ok, no) => {
-    const t = setTimeout(() => (off(), no(new Error("App 没有回应"))), 15000);
+    const timer = setTimeout(() => (off(), no(new Error(t("android.noAnswer")))), 15000);
     const off = onAndroid(
       "copyImage",
       (m) => {
-        clearTimeout(t);
+        clearTimeout(timer);
         off();
         if (m.ok) ok();
-        else no(new Error(String(m.error ?? "复制失败")));
+        else no(new Error(String(m.error ?? t("android.copyFailed"))));
       },
       false,
     );
@@ -299,11 +300,11 @@ function updateReady(m: AndroidMsg) {
   const u = m as unknown as AndroidUpdate;
   if (u.phase !== "ready" || !u.latest || offered === u.latest) return;
   offered = u.latest;
-  toast(`Gerdr App ${u.latest} 已下载好`, {
+  toast(t("android.updateReady", { version: u.latest }), {
     id: "android-update",
     duration: Infinity,
     closeButton: true,
-    description: `现在是 ${u.version}。点「安装」后安卓会弹出确认框，再点一次「安装」；装完 App 会关掉，重新打开即可。`,
-    action: { label: "安装", onClick: () => postAndroid({ t: "update", op: "install" }) },
+    description: t("android.updateReadyDesc", { version: u.version }),
+    action: { label: t("common.install"), onClick: () => postAndroid({ t: "update", op: "install" }) },
   });
 }

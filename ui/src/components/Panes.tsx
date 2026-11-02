@@ -58,6 +58,7 @@ import { PixelLoader } from "./chat/PixelLoader";
 import { startPaneDrag, useDrag, type TabGhost } from "./TabDrag";
 import { TerminalView } from "./Terminal";
 import { BOX_TRANSITION, useZoomAnim } from "@/lib/zoomAnim";
+import { t } from "@/lib/i18n";
 
 /** 这个 tab 是不是正显示着的那个（藏着的 tab 里的 pane 不算有焦点，不抢光标、不标已读）。 */
 export const TabActive = createContext(true);
@@ -268,7 +269,7 @@ function PaneCount({ count }: { count?: Count }) {
   return (
     <button
       className="shrink-0 rounded-sm border px-1.5 py-px font-mono text-[10px] text-muted-foreground"
-      title="这个 Tab 里的 Pane（点开侧栏去挑）"
+      title={t("panes.count")}
       onClick={() => set({ drawer: true })}
     >
       {count.i}/{count.n}
@@ -284,7 +285,7 @@ function SubPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; tab
   const many = framed || zoomed;
   const headH = usePaneHeadHeight(framed);
   const task = session?.tasks?.find((t) => t.toolCallId === sub.toolCallId);
-  const title = task?.description || sub.title || "子 Agent";
+  const title = task?.description || sub.title || t("panes.subAgent");
   const drag = usePaneDrag(pane.id, { label: title });
   return (
     <div
@@ -303,7 +304,7 @@ function SubPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; tab
         className={cn("flex shrink-0 items-center gap-2 border-b px-3 text-[12px] max-md:pl-4", headH, !focused && many && "opacity-70")}
       >
         <Bot className="size-4 shrink-0 text-muted-foreground" />
-        <FadeText className="min-w-0 shrink-[2] text-muted-foreground">{task?.subagent || "子 Agent"}</FadeText>
+        <FadeText className="min-w-0 shrink-[2] text-muted-foreground">{task?.subagent || t("panes.subAgent")}</FadeText>
         <FadeText className="min-w-0 flex-1 font-medium">{title}</FadeText>
         {task?.status === "running" && <StatusDot status="running" />}
         <PaneCount count={count} />
@@ -313,7 +314,7 @@ function SubPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; tab
             ← {session.title || basename(session.cwd)}
           </button>
         )}
-        <Button variant="ghost" size="icon" className="size-6 shrink-0" title="关闭" onClick={() => (focusPane(pane.id), closeFocusedPane())}>
+        <Button variant="ghost" size="icon" className="size-6 shrink-0" title={t("common.close")} onClick={() => (focusPane(pane.id), closeFocusedPane())}>
           <X className="size-3.5" />
         </Button>
       </div>
@@ -321,7 +322,7 @@ function SubPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; tab
         {session ? (
           <ChatView key={pane.id} session={session} paneId={pane.id} focused={focused} sub={sub.toolCallId} />
         ) : (
-          <div className="py-16 text-center text-[13px] text-muted-foreground">这个会话已经不在了</div>
+          <div className="py-16 text-center text-[13px] text-muted-foreground">{t("panes.sessionGone")}</div>
         )}
       </PaneBody>
     </div>
@@ -374,11 +375,11 @@ function FilePaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; ta
           {path}
         </span>
         <div className="flex-1 md:hidden" />
-        <Button variant="ghost" size="icon" className="size-6 shrink-0" title="重新读取" onClick={() => setRev((r) => r + 1)}>
+        <Button variant="ghost" size="icon" className="size-6 shrink-0" title={t("panes.reread")} onClick={() => setRev((r) => r + 1)}>
           <RefreshCw className="size-3.5" />
         </Button>
         {stat && <FileActions stat={stat} small />}
-        <Button variant="ghost" size="icon" className="size-6 shrink-0" title="关闭" onClick={() => (focusPane(pane.id), closeFocusedPane())}>
+        <Button variant="ghost" size="icon" className="size-6 shrink-0" title={t("common.close")} onClick={() => (focusPane(pane.id), closeFocusedPane())}>
           <X className="size-3.5" />
         </Button>
       </div>
@@ -387,7 +388,7 @@ function FilePaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; ta
           {stat ? (
             <FileContent key={`${stat.mtime}-${stat.size}`} stat={stat} fill />
           ) : (
-            <div className="py-16 text-center text-[13px] text-muted-foreground">{err || "读取中…"}</div>
+            <div className="py-16 text-center text-[13px] text-muted-foreground">{err || t("panes.reading")}</div>
           )}
         </div>
       </PaneBody>
@@ -433,7 +434,13 @@ function TermPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; ta
         <div className="flex-1 md:hidden" />
         <AddonSlot name="paneTitle" props={{ pane: paneSnapshot(pane), tab: tabSnapshot(tab) }} />
         {zoomed && (
-          <Button variant="ghost" size="icon" className="size-6" onClick={toggleZoom} title={keyText("zoom") ? `还原（${keyText("zoom")}）` : "还原"}>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-6"
+            onClick={toggleZoom}
+            title={keyText("zoom") ? t("panes.restoreKey", { key: keyText("zoom") }) : t("panes.restore")}
+          >
             <Minimize2 className="size-3.5" />
           </Button>
         )}
@@ -445,42 +452,42 @@ function TermPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; ta
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" onCloseAutoFocus={(e) => e.preventDefault()}>
             <DropdownMenuItem onClick={() => (focusPane(pane.id), openTerminal("right"))}>
-              <SquareTerminal /> 右边再开一个终端
+              <SquareTerminal /> {t("panes.termRight")}
               {/* ⌘D on a terminal is exactly this (duplicateFocused opens a terminal in the same directory) */}
               <ActionKeys action="duplicateRight" />
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => (focusPane(pane.id), openTerminal("down"))}>
-              <SquareTerminal /> 下面再开一个终端
+              <SquareTerminal /> {t("panes.termDown")}
               <ActionKeys action="duplicateDown" />
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => (focusPane(pane.id), splitFocused("right"))}>
-              <Columns2 /> 右边开会话
+              <Columns2 /> {t("panes.sessionRight")}
               <ActionKeys action="splitRight" />
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => (focusPane(pane.id), splitFocused("down"))}>
-              <Rows2 /> 下面开会话
+              <Rows2 /> {t("panes.sessionDown")}
               <ActionKeys action="splitDown" />
             </DropdownMenuItem>
             {/* Through runAction like ⌘T itself: with the overview up that opens a new agent there instead of a tab */}
             <DropdownMenuItem onClick={() => runAction("newTab")}>
-              <Plus /> 新 Tab
+              <Plus /> {t("panes.newTab")}
               <ActionKeys action="newTab" />
             </DropdownMenuItem>
             {!zoomed && !count && leaves(tab.root).length > 1 && (
               <DropdownMenuItem onClick={() => (focusPane(pane.id), toggleZoom())}>
-                <Maximize2 /> 放大
+                <Maximize2 /> {t("panes.zoom")}
                 <ActionKeys action="zoom" />
               </DropdownMenuItem>
             )}
             {leaves(tab.root).length > 1 && (
               // 合并 tab（把 tab 拖进别的 tab）的反操作
               <DropdownMenuItem onClick={() => paneToTab(pane.id)}>
-                <ExternalLink /> 移到新 Tab
+                <ExternalLink /> {t("panes.toNewTab")}
               </DropdownMenuItem>
             )}
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => (focusPane(pane.id), closeFocusedPane())}>
-              <X /> 关闭终端
+              <X /> {t("panes.closeTerminal")}
               <ActionKeys action="closePane" />
             </DropdownMenuItem>
           </DropdownMenuContent>
@@ -491,9 +498,10 @@ function TermPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; ta
           <TerminalView key={term.id} paneId={pane.id} termId={term.id} cwd={cwd} focused={focused} onTitle={setOsc} />
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-3 text-[13px] text-muted-foreground">
-            这个终端没开起来
+            {t("panes.termFailed")}
             <Button size="sm" variant="outline" onClick={() => reopenTerminal(pane.id, cwd)}>
-              <SquareTerminal className="size-3.5" />在 {basename(cwd)} 重开
+              <SquareTerminal className="size-3.5" />
+              {t("panes.reopenIn", { dir: basename(cwd) })}
             </Button>
           </div>
         )}
@@ -531,7 +539,7 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
     if (front && focused && pane.sessionId && unread) markRead(pane.sessionId);
   }, [front, focused, pane.sessionId, unread]);
 
-  const base = session ? session.title || basename(session.cwd) : starting && pane.draft?.cwd ? basename(pane.draft.cwd) : "新会话";
+  const base = session ? session.title || basename(session.cwd) : starting && pane.draft?.cwd ? basename(pane.draft.cwd) : t("panes.newSession");
   const title = applyPaneTitle(pane, tab, base);
   const drag = usePaneDrag(pane.id, { label: title, agent: session?.agent });
 
@@ -558,7 +566,7 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
         {/* The 60% cap leaves room for the path, which a phone hides: there it only left a gap before the ⋯ */}
         <FadeText className="min-w-[3em] max-w-[60%] shrink font-medium max-md:max-w-none">{title}</FadeText>
         <StatusDot status={dotStatus(session)} unread={unread} />
-        {session?.pending ? <span className="shrink-0 whitespace-nowrap rounded-sm bg-bad/15 px-1.5 text-[11px] text-bad">等你</span> : null}
+        {session?.pending ? <span className="shrink-0 whitespace-nowrap rounded-sm bg-bad/15 px-1.5 text-[11px] text-bad">{t("panes.waiting")}</span> : null}
         <PaneCount count={count} />
         {session ? (
           <span className="hidden min-w-0 flex-1 items-center gap-2 overflow-hidden font-mono text-[11px] text-muted-foreground md:flex">
@@ -567,7 +575,7 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
             </span>
             {/* 分支不许被截：窄的时候宁可截路径（路径的末段在标题里多半已经看得出来） */}
             {session.branch && (
-              <span className="flex shrink-0 items-center gap-1" title={`Git 分支：${session.branch}`}>
+              <span className="flex shrink-0 items-center gap-1" title={t("panes.branch", { branch: session.branch })}>
                 <GitBranch className="size-3" />
                 <span className="max-w-[16em] truncate">{session.branch}</span>
               </span>
@@ -578,7 +586,13 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
         <div className={cn("flex-1", session && "md:hidden")} />
         <AddonSlot name="paneTitle" props={{ pane: paneSnapshot(pane), tab: tabSnapshot(tab) }} />
         {zoomed && (
-          <Button variant="ghost" size="icon" className="size-6" onClick={toggleZoom} title={keyText("zoom") ? `还原（${keyText("zoom")}）` : "还原"}>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-6"
+            onClick={toggleZoom}
+            title={keyText("zoom") ? t("panes.restoreKey", { key: keyText("zoom") }) : t("panes.restore")}
+          >
             <Minimize2 className="size-3.5" />
           </Button>
         )}
@@ -590,41 +604,41 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" onCloseAutoFocus={(e) => e.preventDefault()}>
             <DropdownMenuItem onClick={() => (focusPane(pane.id), splitFocused("right"))}>
-              <Columns2 /> 左右分屏
+              <Columns2 /> {t("panes.splitRight")}
               <ActionKeys action="splitRight" />
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => (focusPane(pane.id), splitFocused("down"))}>
-              <Rows2 /> 上下分屏
+              <Rows2 /> {t("panes.splitDown")}
               <ActionKeys action="splitDown" />
             </DropdownMenuItem>
             {session && (
               // ⌘D / ⌘⇧D: a new session like this one (same agent, directory, mode) beside it, the way iTerm duplicates
               <>
                 <DropdownMenuItem onClick={() => (focusPane(pane.id), duplicateFocused("right"))}>
-                  <CopyPlus /> 复制到右边
+                  <CopyPlus /> {t("panes.duplicateRight")}
                   <ActionKeys action="duplicateRight" />
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => (focusPane(pane.id), duplicateFocused("down"))}>
-                  <CopyPlus /> 复制到下面
+                  <CopyPlus /> {t("panes.duplicateDown")}
                   <ActionKeys action="duplicateDown" />
                 </DropdownMenuItem>
               </>
             )}
             {/* Through runAction like ⌘T itself: with the overview up that opens a new agent there instead of a tab */}
             <DropdownMenuItem onClick={() => runAction("newTab")}>
-              <Plus /> 新 Tab
+              <Plus /> {t("panes.newTab")}
               <ActionKeys action="newTab" />
             </DropdownMenuItem>
             {!zoomed && !count && leaves(tab.root).length > 1 && (
               <DropdownMenuItem onClick={() => (focusPane(pane.id), toggleZoom())}>
-                <Maximize2 /> 放大
+                <Maximize2 /> {t("panes.zoom")}
                 <ActionKeys action="zoom" />
               </DropdownMenuItem>
             )}
             {leaves(tab.root).length > 1 && (
               // 合并 tab（把 tab 拖进别的 tab）的反操作
               <DropdownMenuItem onClick={() => paneToTab(pane.id)}>
-                <ExternalLink /> 移到新 Tab
+                <ExternalLink /> {t("panes.toNewTab")}
               </DropdownMenuItem>
             )}
             {session && (
@@ -632,24 +646,24 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
                 <DropdownMenuSeparator />
                 {inTodo ? (
                   <DropdownMenuItem onClick={() => removeActive(session.id)}>
-                    <ListX /> 移出进行中
+                    <ListX /> {t("panes.removeActive")}
                   </DropdownMenuItem>
                 ) : (
                   <DropdownMenuItem onClick={() => addToActive(session.id)}>
-                    <ListPlus /> 加入进行中
+                    <ListPlus /> {t("panes.addActive")}
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuItem onClick={() => set({ dialog: { kind: "rename", target: "session", id: session.id, value: session.title ?? "" } })}>
-                  <Pencil /> 重命名会话
+                  <Pencil /> {t("panes.renameSession")}
                   <ActionKeys action="renamePane" />
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() => {
                     navigator.clipboard.writeText(session.agentSessionId);
-                    toast("已复制 Agent 会话 ID");
+                    toast(t("panes.agentIdCopied"));
                   }}
                 >
-                  <Copy /> 复制 Agent 会话 ID
+                  <Copy /> {t("panes.copyAgentId")}
                 </DropdownMenuItem>
                 {["claude", "codex"].includes(session.base ?? session.agent) && (
                   // 在别处（herdr / 终端）接着聊过的会话，打开时会自动追上；这里是手动的那一下
@@ -657,21 +671,21 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
                     onClick={() =>
                       api
                         .reload(session.id)
-                        .then(() => toast.success("已从 Agent 自己的记录重新载入"))
+                        .then(() => toast.success(t("panes.reloaded")))
                         .catch((e) => toast.error(e.message))
                     }
                   >
-                    <RefreshCw /> 从 Agent 记录重新载入
+                    <RefreshCw /> {t("panes.reload")}
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuItem onClick={() => closeSession(session.id)}>
-                  <CircleX /> 关闭会话
+                  <CircleX /> {t("panes.closeSession")}
                 </DropdownMenuItem>
               </>
             )}
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => (focusPane(pane.id), closeFocusedPane())}>
-              <X /> 关闭 Pane
+              <X /> {t("panes.closePane")}
               <ActionKeys action="closePane" />
             </DropdownMenuItem>
           </DropdownMenuContent>
@@ -683,7 +697,7 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
         ) : starting ? (
           <div className="flex h-full items-center justify-center gap-2 text-[12px] text-muted-foreground">
             <PixelLoader className="size-4" />
-            正在开 {agents.find((a) => a.id === pane.draft?.agent)?.name ?? pane.draft?.agent}…
+            {t("panes.starting", { agent: agents.find((a) => a.id === pane.draft?.agent)?.name ?? pane.draft?.agent ?? "" })}
           </div>
         ) : (
           <NewSession key={pane.id + (pane.draft?.cwd ?? "")} pane={pane} focused={focused} />

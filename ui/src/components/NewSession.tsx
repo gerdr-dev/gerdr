@@ -12,6 +12,7 @@ import { locateSession, type PaneLeaf } from "@/lib/layout";
 import { cn } from "@/lib/utils";
 import { workProjectOf } from "@/lib/work";
 import { AgentIcon, StatusDot } from "./AgentIcon";
+import { t } from "@/lib/i18n";
 
 function tilde(p: string, home: string) {
   return home && p.startsWith(home) ? "~" + p.slice(home.length) : p;
@@ -162,7 +163,7 @@ export function DirPicker({
               autoFocus={autoFocus}
               className={cn("pl-8 font-mono text-[13px]", status?.kind === "missing" && "border-warn", status?.kind === "bad" && "border-bad")}
               value={value}
-              placeholder="~/project，或输入名字搜用过的目录"
+              placeholder={t("newSession.dirPlaceholder")}
               onFocus={() => setFocused(true)}
               onBlur={() => setFocused(false)}
               onChange={(e) => {
@@ -230,7 +231,7 @@ export function DirPicker({
           </div>
         </PopoverContent>
       </Popover>
-      {status?.kind === "missing" && <div className="truncate text-[12px] text-warn">这个目录还不存在，会自动创建</div>}
+      {status?.kind === "missing" && <div className="truncate text-[12px] text-warn">{t("newSession.dirMissing")}</div>}
       {status?.kind === "bad" && <div className="truncate text-[12px] text-bad">{status.msg}</div>}
     </div>
   );
@@ -242,7 +243,7 @@ const BASE_NAME: Record<string, string> = { claude: "Claude Code", codex: "Codex
 /** 自建 agent 卡片下面那行小字：有提示词就显示提示词开头（一眼看出它干什么的），没有就说用哪个引擎。 */
 function roleHint(d?: AgentDef) {
   if (!d?.base) return "";
-  return d.prompt?.trim().split("\n")[0] || `引擎 ${BASE_NAME[d.base]}`;
+  return d.prompt?.trim().split("\n")[0] || t("newSession.engine", { name: BASE_NAME[d.base] });
 }
 
 export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean }) {
@@ -340,14 +341,14 @@ export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean
     <div className="flex h-full items-start justify-center overflow-auto p-6">
       <div className="mt-[8vh] w-full max-w-lg space-y-5">
         <div className="flex items-center text-[13px] font-medium text-muted-foreground">
-          新会话（Ctrl+D 关掉）
+          {t("newSession.title")}
           {/* 角色、各 agent 新会话的默认模式 / 模型都在设置 → Agent 里，从这儿直接过去 */}
           <button
             className="ml-auto flex items-center gap-1 text-[11px] font-normal hover:text-foreground"
             onClick={() => set({ dialog: { kind: "settings", tab: "agents" } })}
           >
             <Settings2 className="size-3.5" />
-            Agent 设置
+            {t("newSession.agentSettings")}
           </button>
         </div>
         <div className="grid grid-cols-2 gap-2">
@@ -368,7 +369,9 @@ export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean
               <div className="min-w-0">
                 <div className="text-[13px] font-medium">{a.name}</div>
                 {(!a.available || roleHint(defs.find((d) => d.id === a.id))) && (
-                  <div className="truncate text-[11px] text-muted-foreground">{a.available ? roleHint(defs.find((d) => d.id === a.id)) : "没装"}</div>
+                  <div className="truncate text-[11px] text-muted-foreground">
+                    {a.available ? roleHint(defs.find((d) => d.id === a.id)) : t("newSession.notInstalled")}
+                  </div>
                 )}
               </div>
             </button>
@@ -378,31 +381,31 @@ export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean
         <div className="flex gap-2">
           <Button ref={startRef} className="flex-1" disabled={busy} onClick={() => start()} onKeyDown={(e) => e.key === "Enter" && start()}>
             {busy ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
-            开始
+            {t("newSession.start")}
           </Button>
           {/* 临时要敲几条命令：这个 pane 直接变成这个目录下的终端 */}
           <Button
             variant="outline"
             disabled={busy}
-            title={keyText("splitTerminal") ? `在这个目录开终端（${keyText("splitTerminal")} 在旁边开）` : "在这个目录开终端"}
+            title={keyText("splitTerminal") ? t("newSession.terminalHereKey", { key: keyText("splitTerminal") }) : t("newSession.terminalHere")}
             onClick={() => openTerminal({ pane: pane.id, cwd: abs })}
           >
             <SquareTerminal className="size-4" />
-            终端
+            {t("newSession.terminal")}
           </Button>
         </div>
         <div>
           <div className="mb-1.5 flex items-center gap-1.5 text-[12px] text-muted-foreground">
             <History className="size-3.5" />
-            接着以前的聊
+            {t("newSession.continue")}
             <button
               className="ml-auto text-[11px] font-normal hover:text-foreground"
               onClick={() => set({ dialog: { kind: "importAgent", agent, cwd: abs, paneId: pane.id } })}
             >
-              导入 {agentName} 对话…
+              {t("newSession.import", { agent: agentName })}
             </button>
           </div>
-          {old.length === 0 && <div className="text-[12px] text-muted-foreground">这个目录下还没有以前的会话</div>}
+          {old.length === 0 && <div className="text-[12px] text-muted-foreground">{t("newSession.noOld")}</div>}
           <div className="space-y-0.5">
             {old.slice(0, 12).map(({ s: o, open }) => (
               <button
@@ -410,17 +413,23 @@ export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean
                 disabled={busy}
                 className="group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] hover:bg-accent"
                 title={
-                  o.agent !== agent ? `原来是 ${nameOf(o.agent)} 的对话：点了换 ${agentName} 接着聊（原来的不动）` : open ? "已经开着：点了跳过去" : undefined
+                  o.agent !== agent
+                    ? t("newSession.handoffTitle", { from: nameOf(o.agent), agent: agentName })
+                    : open
+                      ? t("newSession.alreadyOpenTitle")
+                      : undefined
                 }
                 onClick={() => pick(o.id, open)}
               >
                 <AgentIcon agent={o.agent} className="size-3.5 shrink-0" />
                 <span className="min-w-0 flex-1 truncate">{o.title || o.id}</span>
-                {o.agent !== agent && <span className="hidden shrink-0 text-[11px] text-muted-foreground group-hover:inline">换 {agentName} 接着聊</span>}
+                {o.agent !== agent && (
+                  <span className="hidden shrink-0 text-[11px] text-muted-foreground group-hover:inline">{t("newSession.handoff", { agent: agentName })}</span>
+                )}
                 {open && (
                   <span className="flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground">
                     <StatusDot status={o.status} />
-                    已打开
+                    {t("newSession.opened")}
                   </span>
                 )}
                 <span className="shrink-0 text-[11px] text-muted-foreground">{ago(o.updatedAt)}</span>
@@ -433,13 +442,13 @@ export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean
   );
 }
 
-export function ago(t: string | number) {
-  const ms = Date.now() - (typeof t === "number" ? t : Date.parse(t));
+export function ago(at: string | number) {
+  const ms = Date.now() - (typeof at === "number" ? at : Date.parse(at));
   const m = Math.floor(ms / 60000);
-  if (m < 1) return "刚刚";
-  if (m < 60) return `${m} 分钟前`;
+  if (m < 1) return t("newSession.ago.now");
+  if (m < 60) return t("newSession.ago.min", { n: m });
   const h = Math.floor(m / 60);
-  if (h < 24) return `${h} 小时前`;
+  if (h < 24) return t("newSession.ago.hour", { n: h });
   const d = Math.floor(h / 24);
-  return `${d} 天前`;
+  return t("newSession.ago.day", { n: d });
 }

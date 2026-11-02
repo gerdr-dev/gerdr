@@ -32,6 +32,7 @@ import { rememberPane } from "./reopen";
 import { createInPane, focusSession, openInWork } from "./sessions";
 import { basename, focusedLeaf, inSpace, inheritDraft, killTerms, removeTab, selectTabIn, shutdownGone } from "./shared";
 import { openTerminal } from "./terminal";
+import { t } from "../i18n";
 
 // ---- panes ----
 
@@ -93,10 +94,10 @@ export function newAgentInOverview(): boolean {
   const s = cur ? get().sessions[cur] : undefined;
   if (!s) return false;
   if (overviewIds(get()).length >= MAX_TILES) {
-    toast(`网格最多放 ${MAX_TILES} 个，先从进行中移出几个`);
+    toast(t("actionsPanes.gridFull", { n: MAX_TILES }));
     return true;
   }
-  const opening = toast.loading("正在开新 Agent…");
+  const opening = toast.loading(t("actionsPanes.openingAgent"));
   api
     .createSession({ agent: s.agent, cwd: s.cwd, mode: s.modes?.currentModeId ?? s.mode })
     .then((n) => {
@@ -123,7 +124,7 @@ export function newAgentInOverview(): boolean {
       focusTile(n.id);
       toast.dismiss(opening);
     })
-    .catch((e) => toast.error(`开会话失败：${e.message ?? e}`, { id: opening }));
+    .catch((e) => toast.error(t("actionsSessions.openFailed", { error: e.message ?? e }), { id: opening }));
   return true;
 }
 
@@ -233,7 +234,7 @@ export function confirmCloseFocusedPane() {
     const armed = closeArmed?.paneId === p.id && Date.now() - closeArmed.at < 2000;
     if (!armed) {
       closeArmed = { paneId: p.id, at: Date.now() };
-      toast("Agent 还在跑，再按一次关闭", { id: "closepane", duration: 2000 });
+      toast(t("actionsPanes.closeArmed"), { id: "closepane", duration: 2000 });
       return;
     }
     toast.dismiss("closepane");

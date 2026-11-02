@@ -7,6 +7,11 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { addImportedWorkspaces } from "@/lib/actions";
 import { api, type HerdrWorkspace } from "@/lib/api";
 import { set } from "@/lib/store";
+import { t } from "@/lib/i18n";
+import type { MessageKey } from "@/lib/messages";
+
+/** key.one / key.other by n (English needs both; zh has the same text in each). */
+const plural = (key: string, n: number, vars?: Record<string, string | number>) => t(`${key}.${n === 1 ? "one" : "other"}` as MessageKey, { n, ...vars });
 
 // 从 herdr 导入：herdr 的工作空间 / tab / 分屏搬过来，每个 agent pane 接上它的会话（历史全在，接着聊走 resume）。
 export function ImportHerdr({ open }: { open: boolean }) {
@@ -35,8 +40,14 @@ export function ImportHerdr({ open }: { open: boolean }) {
       const r = await api.herdrImport([...pick]);
       addImportedWorkspaces(r.workspaces);
       const n = r.imported + r.reused;
-      toast.success(`导入了 ${r.workspaces.length} 个工作空间、${n} 个会话${r.reused ? `（${r.reused} 个本来就在 Gerdr 里）` : ""}`);
-      if (r.errors?.length) toast.error(`${r.errors.length} 个会话没接上：${r.errors[0]}`, { duration: 10000 });
+      toast.success(
+        t("importHerdr.done", {
+          workspaces: plural("importHerdr.workspaces", r.workspaces.length),
+          sessions: plural("importHerdr.sessions", n),
+          reused: r.reused ? t("importHerdr.doneReused", { n: r.reused }) : "",
+        }),
+      );
+      if (r.errors?.length) toast.error(plural("importHerdr.errors", r.errors.length, { error: r.errors[0] }), { duration: 10000 });
       set({ dialog: null });
     } catch (e: any) {
       toast.error(e.message);
@@ -50,8 +61,8 @@ export function ImportHerdr({ open }: { open: boolean }) {
     <Dialog open={open} onOpenChange={(o) => !o && close()}>
       <DialogContent className="max-w-xl">
         <DialogHeader>
-          <DialogTitle>从 Herdr 导入</DialogTitle>
-          <DialogDescription>按 Herdr 的工作空间、Tab、分屏建出来，每个 Agent 接上它的会话（历史全在，接着聊）。普通终端 Pane 跳过。</DialogDescription>
+          <DialogTitle>{t("importHerdr.title")}</DialogTitle>
+          <DialogDescription>{t("importHerdr.desc")}</DialogDescription>
         </DialogHeader>
         {/* 高度要写死：弹窗是网格 + 限高，这一行可滚动，WebKit（mac App）里它的自动最小高度按 0 算，整个列表被压成一条缝
             （Chrome 里正常，所以光在浏览器里验看不出来；用户报了两次「导入的 UI 烂了」）。 */}
@@ -59,7 +70,7 @@ export function ImportHerdr({ open }: { open: boolean }) {
           {err && <div className="text-[13px] text-bad">{err}</div>}
           {!list && !err && (
             <div className="flex items-center gap-2 text-[13px] text-muted-foreground">
-              <Loader2 className="size-3.5 animate-spin" /> 读 Herdr…
+              <Loader2 className="size-3.5 animate-spin" /> {t("importHerdr.reading")}
             </div>
           )}
           {list?.map((w) => {
@@ -79,24 +90,23 @@ export function ImportHerdr({ open }: { open: boolean }) {
                 <div className="min-w-0 flex-1">
                   <div className="text-[13px] font-medium">{w.label}</div>
                   <div className="text-[12px] text-muted-foreground">
-                    {c.ok} 个会话{c.existing ? `（${c.existing} 个已经在 Gerdr 里）` : ""} · {w.tabs.length} 个 Tab
-                    {c.skipped ? ` · 跳过 ${c.skipped} 个（${c.why}）` : ""}
+                    {plural("importHerdr.sessions", c.ok)}
+                    {c.existing ? t("importHerdr.existing", { n: c.existing }) : ""} · {plural("importHerdr.tabs", w.tabs.length)}
+                    {c.skipped ? t("importHerdr.skipped", { n: c.skipped, why: c.why }) : ""}
                   </div>
                 </div>
               </label>
             );
           })}
         </div>
-        <div className="rounded-md bg-muted/60 p-2.5 text-[12px] text-muted-foreground">
-          这些会话在 Herdr 里多半还开着。接着在 Gerdr 里聊之前，先在 Herdr 里退出对应的 Agent —— 两边同时往一个会话里写，对话会分叉。
-        </div>
+        <div className="rounded-md bg-muted/60 p-2.5 text-[12px] text-muted-foreground">{t("importHerdr.warning")}</div>
         <DialogFooter>
           <Button variant="ghost" onClick={close} disabled={busy}>
-            取消
+            {t("common.cancel")}
           </Button>
           <Button onClick={run} disabled={busy || total === 0}>
             {busy && <Loader2 className="size-3.5 animate-spin" />}
-            导入 {total} 个会话
+            {plural("importHerdr.import", total)}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -109,15 +119,15 @@ function count(w: HerdrWorkspace) {
     existing = 0,
     skipped = 0;
   const why = new Set<string>();
-  for (const t of w.tabs)
-    for (const p of t.panes) {
+  for (const tab of w.tabs)
+    for (const p of tab.panes) {
       if (p.skip) {
         skipped++;
-        why.add(p.agent ? "没有会话 ID" : "普通终端");
+        why.add(p.agent ? t("importHerdr.noSessionId") : t("importHerdr.plainTerminal"));
       } else {
         ok++;
         if (p.existing) existing++;
       }
     }
-  return { ok, existing, skipped, why: [...why].join("、") };
+  return { ok, existing, skipped, why: [...why].join(t("importHerdr.whySep")) };
 }

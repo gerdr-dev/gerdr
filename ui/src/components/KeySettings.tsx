@@ -8,6 +8,7 @@ import { isNative } from "@/lib/native";
 import { askConfirm } from "@/lib/confirm";
 import { keyFor, setConfig, useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
+import { t } from "@/lib/i18n";
 
 // 设置 → 快捷键。原来是每个动作一个文本框，手打「prefix+shift+-」这种写法，错了也不知道；⌘ 键还压根不在表里。
 // 现在：按分组列、键画成按键的样子，点 + 直接按下想要的组合（要用前缀就先按前缀再按键），撞了别的动作标黄。
@@ -83,23 +84,29 @@ export function KeySettings() {
     ),
   ]) as [string, KeyAction[]][];
 
-  const recLabel = (r: Rec) => (r.afterPrefix ? `${formatCombo(cfg.prefix)} 之后再按一个键…` : "按下组合键…");
+  const recLabel = (r: Rec) => (r.afterPrefix ? t("keySettings.recAfterPrefix", { prefix: formatCombo(cfg.prefix) }) : t("keySettings.recPress"));
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <div className="text-[13px]">前缀键</div>
-          <div className="text-[12px] text-muted-foreground">先按它松开，再按后面那个键（和 Tmux / Herdr 一样）。默认 ⌃B</div>
+          <div className="text-[13px]">{t("keySettings.prefix")}</div>
+          <div className="text-[12px] text-muted-foreground">{t("keySettings.prefixHint")}</div>
         </div>
         <div className="flex items-center gap-1">
           {rec?.target === "prefix" ? (
-            <RecChip label="按下组合键…" />
+            <RecChip label={t("keySettings.recPress")} />
           ) : (
             <Chip label={formatCombo(cfg.prefix)} onClick={() => setRec({ target: "prefix", afterPrefix: false })} />
           )}
           {cfg.prefix !== "ctrl+b" && (
-            <Button variant="ghost" size="icon" className="size-6 text-muted-foreground" title="恢复默认" onClick={() => setConfig({ prefix: "ctrl+b" })}>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-6 text-muted-foreground"
+              title={t("keySettings.reset")}
+              onClick={() => setConfig({ prefix: "ctrl+b" })}
+            >
               <RotateCcw className="size-3.5" />
             </Button>
           )}
@@ -109,22 +116,22 @@ export function KeySettings() {
       <div className="flex items-center gap-2">
         <div className="relative flex-1">
           <Search className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input className="h-8 pl-7 text-[13px]" placeholder="搜动作或按键" value={q} onChange={(e) => setQ(e.target.value)} />
+          <Input className="h-8 pl-7 text-[13px]" placeholder={t("keySettings.search")} value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
         {Object.keys(cfg.keys).length > 0 && (
           <Button
             variant="outline"
             size="sm"
             className="h-8"
-            onClick={async () => (await askConfirm({ title: "所有快捷键恢复成默认？", action: "恢复默认" })) && setConfig({ keys: {} })}
+            onClick={async () => (await askConfirm({ title: t("keySettings.resetAllConfirm"), action: t("keySettings.reset") })) && setConfig({ keys: {} })}
           >
-            全部恢复默认
+            {t("keySettings.resetAll")}
           </Button>
         )}
       </div>
       <div className="text-[12px] text-muted-foreground">
-        点 <Plus className="inline size-3" /> 再按下想要的键；要用前缀就先按前缀再按键。点键帽上的 × 删掉。
-        {!isNative() && " ⌘T、⌘W、⌘N、⌘1–9 这几个在浏览器里被浏览器自己占着，只在 App 里管用。"}
+        {t("keySettings.howToBefore")} <Plus className="inline size-3" /> {t("keySettings.howToAfter")}
+        {!isNative() && t("keySettings.browserNote")}
       </div>
 
       {groups.map(
@@ -142,7 +149,7 @@ export function KeySettings() {
                           character per line; with a floor the chips wrap instead */}
                       <span className="min-w-28 flex-1 text-[13px]">
                         {ACTION_TITLES[a]}
-                        {changed && <span className="ml-1.5 text-[11px] text-muted-foreground">已改</span>}
+                        {changed && <span className="ml-1.5 text-[11px] text-muted-foreground">{t("keySettings.changed")}</span>}
                       </span>
                       <div className="flex flex-wrap items-center justify-end gap-1">
                         {list.map((k) => {
@@ -151,7 +158,11 @@ export function KeySettings() {
                             <Chip
                               key={k}
                               label={formatCombo(k)}
-                              warn={others.length > 0 ? `也绑给了「${others.map((x) => ACTION_TITLES[x]).join("」「")}」` : undefined}
+                              warn={
+                                others.length > 0
+                                  ? t("keySettings.alsoBound", { actions: others.map((x) => ACTION_TITLES[x]).join(t("keySettings.alsoBoundSep")) })
+                                  : undefined
+                              }
                               onRemove={() =>
                                 setList(
                                   a,
@@ -168,7 +179,7 @@ export function KeySettings() {
                             variant="ghost"
                             size="icon"
                             className="size-6 text-muted-foreground"
-                            title="加一个键"
+                            title={t("keySettings.addKey")}
                             onClick={() => setRec({ target: a, afterPrefix: false })}
                           >
                             <Plus className="size-3.5" />
@@ -179,7 +190,7 @@ export function KeySettings() {
                           size="icon"
                           // Unchanged rows keep the slot so the + buttons line up on desktop; a phone can't spare the blank column
                           className={cn("size-6 text-muted-foreground", !changed && "invisible max-md:hidden")}
-                          title="恢复默认"
+                          title={t("keySettings.reset")}
                           onClick={() => setList(a, DEFAULT_KEYS[a])}
                         >
                           <RotateCcw className="size-3.5" />
@@ -192,7 +203,7 @@ export function KeySettings() {
             </div>
           ),
       )}
-      {groups.every(([, acts]) => acts.length === 0) && <div className="py-6 text-center text-[13px] text-muted-foreground">没有匹配的快捷键</div>}
+      {groups.every(([, acts]) => acts.length === 0) && <div className="py-6 text-center text-[13px] text-muted-foreground">{t("keySettings.noMatch")}</div>}
     </div>
   );
 }
@@ -212,7 +223,7 @@ function Chip({ label, warn, onClick, onRemove }: { label: string; warn?: string
       {onRemove && (
         <button
           className="-mr-0.5 rounded-sm text-muted-foreground opacity-0 group-hover/chip:opacity-100 hover:text-foreground [@media(hover:none)]:opacity-100"
-          title="删掉这个键"
+          title={t("keySettings.removeKey")}
           onClick={onRemove}
         >
           <X className="size-3" />
@@ -230,7 +241,7 @@ function RecChip({ label }: { label: string }) {
       className="inline-flex h-6 animate-pulse items-center rounded-md border border-brand px-1.5 text-[12px] text-brand"
     >
       {label}
-      <span className="ml-1.5 text-muted-foreground">Esc 取消</span>
+      <span className="ml-1.5 text-muted-foreground">{t("keySettings.escCancel")}</span>
     </span>
   );
 }

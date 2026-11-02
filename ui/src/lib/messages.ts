@@ -1,11 +1,20 @@
 /**
- * The interface's texts (lib/i18n.ts t()). Keys are grouped by where they show; en must have every key zh has
- * (typechecked). The chat's own texts are in packages/chat/src/messages.ts.
+ * The interface's texts (lib/i18n.ts t()). The general settings' texts are below; every other area has its own file in
+ * text/ (each with its zh and en, en typechecked against zh), merged here. A key's first segment names the file or
+ * component it belongs to, so two files can't define the same key. Shared words (buttons, states) are in
+ * text/common.ts. The chat's own texts are in packages/chat/src/messages.ts.
  *
- * Moving a component over: replace each literal with t("area.key"), add the key to both tables. Not moved yet: most
- * components still have Chinese literals; move one whole component at a time so a screen isn't half translated.
+ * New text goes in the table of the area it shows in, as t("area.key"); never inline.
  */
-export const zh = {
+import * as addonsRemote from "./text/addonsRemote";
+import * as agents from "./text/agents";
+import * as common from "./text/common";
+import * as misc from "./text/misc";
+import * as nav from "./text/nav";
+import * as system from "./text/system";
+import * as workbench from "./text/workbench";
+
+const settingsZh = {
   "settings.title": "设置",
   "settings.tab.general": "通用",
   "settings.tab.keys": "快捷键",
@@ -81,9 +90,20 @@ export const zh = {
   "settings.loader.braille": "终端转圈",
 };
 
+export const zh = {
+  ...settingsZh,
+  ...common.zh,
+  ...agents.zh,
+  ...addonsRemote.zh,
+  ...system.zh,
+  ...workbench.zh,
+  ...nav.zh,
+  ...misc.zh,
+};
+
 export type MessageKey = keyof typeof zh;
 
-export const en: Record<MessageKey, string> = {
+const settingsEn: Record<keyof typeof settingsZh, string> = {
   "settings.title": "Settings",
   "settings.tab.general": "General",
   "settings.tab.keys": "Shortcuts",
@@ -159,4 +179,15 @@ export const en: Record<MessageKey, string> = {
   "settings.loader.nodes": "Connected nodes",
   "settings.loader.bars": "Equalizer",
   "settings.loader.braille": "Terminal spinner",
+};
+
+export const en: Record<MessageKey, string> = {
+  ...settingsEn,
+  ...common.en,
+  ...agents.en,
+  ...addonsRemote.en,
+  ...system.en,
+  ...workbench.en,
+  ...nav.en,
+  ...misc.en,
 };

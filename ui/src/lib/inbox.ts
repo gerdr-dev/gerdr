@@ -5,6 +5,7 @@ import { systemNotify } from "./notify";
 import { isPhone } from "./phone";
 import { get as getApp, useStore, visibleSessions } from "./store";
 import type { SessionSummary } from "./types";
+import { t } from "./i18n";
 
 /**
  * The inbox: things that need the user. Approvals / questions (from GET /api/pending) leave by themselves once they're
@@ -64,7 +65,9 @@ function gone(): string[] {
   }
 }
 
-export const LABEL = { permission: "等你批准", ask: "在问你", error: "出错了", battery: "电量低" };
+/** What kind of item it is, as shown in the inbox and its notifications. */
+export const kindLabel = (k: InboxItem["kind"]) =>
+  ({ permission: t("inbox.label.permission"), ask: t("inbox.label.ask"), error: t("inbox.label.error"), battery: t("inbox.label.battery") })[k];
 
 /** `quiet`: the user is already looking at it (no red dot, no system notification); it still goes in the list. */
 function add(items: InboxItem[], quiet: boolean, notify = !quiet) {
@@ -75,7 +78,7 @@ function add(items: InboxItem[], quiet: boolean, notify = !quiet) {
   // A system notification per item, carrying what it actually is (the command, the question, the error), so it can be
   // judged without opening Gerdr. In a browser the session id is the tag, so a newer one from the same session replaces the older.
   for (const it of items) {
-    const title = it.kind === "battery" ? it.title : `${LABEL[it.kind]} · ${it.title}`;
+    const title = it.kind === "battery" ? it.title : `${kindLabel(it.kind)} · ${it.title}`;
     systemNotify(title, it.body ?? "", it.sessionId);
     toastItem(it, title);
   }
@@ -104,7 +107,10 @@ function toastItem(it: InboxItem, title: string) {
     closeButton: true,
     description: body,
     action: sid
-      ? { label: it.kind === "ask" ? "去回答" : it.kind === "error" ? "去看看" : "去处理", onClick: () => import("./actions").then((a) => a.focusSession(sid)) }
+      ? {
+          label: it.kind === "ask" ? t("inbox.goAnswer") : it.kind === "error" ? t("inbox.goLook") : t("inbox.goHandle"),
+          onClick: () => import("./actions").then((a) => a.focusSession(sid)),
+        }
       : undefined,
     onDismiss: () => toasts.delete(it.id),
   });
@@ -249,7 +255,7 @@ async function checkBattery() {
   if (fired) return;
   localStorage.setItem(BAT, "1");
   const at = Date.now();
-  add([{ id: `bat:${at}`, kind: "battery", at, title: `电量 ${b.percent}%`, body: "运行 Gerdr 的电脑在用电池，快没电了" }], false);
+  add([{ id: `bat:${at}`, kind: "battery", at, title: t("inbox.batteryTitle", { n: b.percent }), body: t("inbox.batteryBody") }], false);
 }
 
 /** Start feeding the inbox (once, from App). */

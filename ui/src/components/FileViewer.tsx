@@ -9,6 +9,7 @@ import { isAndroid, postAndroid } from "@/lib/android";
 import { api, fileRawURL, type FileStat } from "@/lib/api";
 import { isNative, nativeOpenURL } from "@/lib/native";
 import { set, useStore } from "@/lib/store";
+import { t } from "@/lib/i18n";
 
 /** 文本最多读这么多：再大的多半是日志 / 数据文件，整个塞进 DOM 手机上会卡死，给下载。 */
 const TEXT_MAX = 2 << 20;
@@ -41,12 +42,16 @@ export function FileViewer() {
 export function FilePicker() {
   const d = useStore((s) => s.dialog);
   const pick = d?.kind === "pickFile" ? d : null;
+  // the path sits mid-sentence, in its own <code>: split the message around it
+  const matches = t("fileViewer.matches", { n: pick?.candidates.length ?? 0, path: "\u0000" }).split("\u0000");
   return (
     <Dialog open={!!pick} onOpenChange={(o) => !o && set({ dialog: null })}>
       <DialogContent className="max-w-lg gap-3">
-        <DialogTitle className="text-[14px]">哪一个？</DialogTitle>
+        <DialogTitle className="text-[14px]">{t("fileViewer.whichOne")}</DialogTitle>
         <DialogDescription className="text-[12px]">
-          有 {pick?.candidates.length} 个文件都对得上 <code className="font-mono">{pick?.path}</code>
+          {matches[0]}
+          <code className="font-mono">{pick?.path}</code>
+          {matches[1]}
         </DialogDescription>
         <div className="-mx-2 flex max-h-[60vh] flex-col overflow-auto">
           {pick?.candidates.map((c) => {
@@ -99,26 +104,26 @@ export function FileActions({ stat, small }: { stat: FileStat; small?: boolean }
         variant="ghost"
         size="icon"
         className={btn}
-        title="复制路径"
+        title={t("fileViewer.copyPath")}
         onClick={() => {
           navigator.clipboard.writeText(stat.path);
-          toast("已复制路径");
+          toast(t("fileViewer.pathCopied"));
         }}
       >
         <Copy className={ic} />
       </Button>
       {isNative() || isAndroid() ? (
-        <Button variant="ghost" size="icon" className={btn} title="在浏览器里打开" onClick={() => openOutside(stat)}>
+        <Button variant="ghost" size="icon" className={btn} title={t("fileViewer.openInBrowser")} onClick={() => openOutside(stat)}>
           <ExternalLink className={ic} />
         </Button>
       ) : (
-        <Button variant="ghost" size="icon" className={btn} title="在新标签页打开" asChild>
+        <Button variant="ghost" size="icon" className={btn} title={t("fileViewer.openInNewTab")} asChild>
           <a href={fileURL(stat)} target="_blank" rel="noreferrer">
             <ExternalLink className={ic} />
           </a>
         </Button>
       )}
-      <Button variant="ghost" size="icon" className={btn} title="下载" asChild>
+      <Button variant="ghost" size="icon" className={btn} title={t("fileViewer.download")} asChild>
         <a href={fileRawURL(stat.path, true)} download={stat.name}>
           <Download className={ic} />
         </a>
@@ -151,7 +156,7 @@ export function FileContent({ stat, fill }: { stat: FileStat; fill?: boolean }) 
     canShowPDF() ? (
       <iframe src={url} title={stat.name} className={fill ? "h-full w-full" : "h-[80vh] w-full max-md:h-full"} />
     ) : (
-      <NoPreview stat={stat} why="这里看不了 PDF，下载下来用手机上的程序打开。" />
+      <NoPreview stat={stat} why={t("fileViewer.noPdf")} />
     )
   ) : (
     <TextBody stat={stat} url={url} />
@@ -164,24 +169,24 @@ function TextBody({ stat, url }: { stat: FileStat; url: string }) {
   const [why, setWhy] = useState("");
   useEffect(() => {
     if (stat.size > TEXT_MAX) {
-      setWhy(`文件太大（${fmtSize(stat.size)}），不在这里预览，下载下来看。`);
+      setWhy(t("fileViewer.tooBig", { size: fmtSize(stat.size) }));
       return;
     }
     let live = true;
     fetch(url, { credentials: "same-origin" })
       .then((r) => (r.ok ? r.text() : Promise.reject(new Error(r.statusText))))
-      .then((t) => {
+      .then((body) => {
         if (!live) return;
-        if (t.includes("\0")) setWhy("这是个二进制文件，没法预览。");
-        else setText(t);
+        if (body.includes("\0")) setWhy(t("fileViewer.binary"));
+        else setText(body);
       })
-      .catch((e) => live && setWhy(`读不了：${e.message}`));
+      .catch((e) => live && setWhy(t("fileViewer.cantRead", { error: e.message })));
     return () => {
       live = false;
     };
   }, [url, stat.size]);
   if (why) return <NoPreview stat={stat} why={why} />;
-  if (text === null) return <div className="p-10 text-center text-[13px] text-muted-foreground">读取中…</div>;
+  if (text === null) return <div className="p-10 text-center text-[13px] text-muted-foreground">{t("fileViewer.reading")}</div>;
   if (stat.mime === "text/markdown") {
     const { meta, body } = splitFrontMatter(text);
     return (
@@ -279,7 +284,7 @@ function NoPreview({ stat, why }: { stat: FileStat; why: string }) {
       <Button asChild>
         <a href={fileRawURL(stat.path, true)} download={stat.name}>
           <Download className="size-4" />
-          下载（{fmtSize(stat.size)}）
+          {t("fileViewer.downloadSize", { size: fmtSize(stat.size) })}
         </a>
       </Button>
     </div>

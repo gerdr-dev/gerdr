@@ -17,6 +17,7 @@ import { askConfirm } from "@/lib/confirm";
 import { isNative, nativeOpenPath } from "@/lib/native";
 import { useStore } from "@/lib/store";
 import type { AddonService, AddonSetting, AddonStore, StoreAddon } from "@/lib/types";
+import { t } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 // Settings → Add-ons: what is installed (switch on / off, update, uninstall) and the stores to install from
@@ -27,8 +28,8 @@ export function AddonSettings({ open }: { open: boolean }) {
   return (
     <Tabs value={tab} onValueChange={setTab} className="gap-3">
       <TabsList>
-        <TabsTrigger value="installed">已安装</TabsTrigger>
-        <TabsTrigger value="store">商店</TabsTrigger>
+        <TabsTrigger value="installed">{t("addonSettings.tab.installed")}</TabsTrigger>
+        <TabsTrigger value="store">{t("addonSettings.tab.store")}</TabsTrigger>
       </TabsList>
       <TabsContent value="installed">
         <Installed stores={stores} />
@@ -70,7 +71,7 @@ async function refresh(source: string, quiet = false) {
   try {
     await api.refreshAddonStore(source);
   } catch (e) {
-    if (!quiet) toast.error(`刷新 ${source} 失败：${(e as Error).message}`);
+    if (!quiet) toast.error(t("addonSettings.refreshFailed", { source, error: (e as Error).message }));
   } finally {
     fetching.delete(source);
   }
@@ -80,19 +81,19 @@ async function refresh(source: string, quiet = false) {
 async function install(source: string, a: StoreAddon, force = false): Promise<void> {
   try {
     await api.installAddon(source, a.id, force);
-    toast.success(`已安装 ${a.name}`);
+    toast.success(t("addonSettings.installedToast", { name: a.name }));
   } catch (e) {
     if (e instanceof ApiError && e.code === "conflict" && !force) {
       const ok = await askConfirm({
-        title: `覆盖本地的 ${a.id}？`,
-        description: `扩展目录里的 ${a.id} 不是从这个商店装的，或者装好之后改过。覆盖后那些改动就没了。`,
-        action: "覆盖",
+        title: t("addonSettings.overwrite.title", { id: a.id }),
+        description: t("addonSettings.overwrite.desc", { id: a.id }),
+        action: t("addonSettings.overwrite.action"),
         destructive: true,
       });
       if (ok) return install(source, a, true);
       return;
     }
-    toast.error(`安装 ${a.name} 失败：${(e as Error).message}`);
+    toast.error(t("addonSettings.installFailed", { name: a.name, error: (e as Error).message }));
   }
 }
 
@@ -108,18 +109,20 @@ function Installed({ stores }: { stores: AddonStore[] }) {
     <div className="space-y-3">
       <div className="flex items-start justify-between gap-4">
         <div className="text-[13px]">
-          扩展放在 <code className="rounded-sm bg-muted px-1 font-mono text-[12px]">{dir}</code>，一个文件夹一个，保存即生效。API 见同目录的{" "}
-          <code className="font-mono text-[12px]">gerdr.d.ts</code>。
+          {rich(t("addonSettings.where"), {
+            dir: <code className="rounded-sm bg-muted px-1 font-mono text-[12px]">{dir}</code>,
+            dts: <code className="font-mono text-[12px]">gerdr.d.ts</code>,
+          })}
         </div>
         {/* Only the App can open a folder on this machine; a browser (maybe a remote one) can't, so no button there */}
         {isNative() && (
           <Button size="sm" variant="outline" className="shrink-0" disabled={!dir} title={dir} onClick={() => nativeOpenPath(dir, undefined, false)}>
-            <FolderOpen className="size-3.5" /> 打开目录
+            <FolderOpen className="size-3.5" /> {t("addonSettings.openFolder")}
           </Button>
         )}
       </div>
       <div className="divide-y rounded-md border">
-        {addonStatus.length === 0 && <div className="p-3 text-[13px] text-muted-foreground">还没有扩展，去「商店」装一个</div>}
+        {addonStatus.length === 0 && <div className="p-3 text-[13px] text-muted-foreground">{t("addonSettings.empty")}</div>}
         {addonStatus.map((a) => (
           <InstalledRow key={a.id} a={a} newer={newer(a, storeAddon(stores, a))} />
         ))}
@@ -147,9 +150,9 @@ function InstalledRow({ a, newer }: { a: AddonStatus; newer?: StoreAddon }) {
   };
   const uninstall = async () => {
     const ok = await askConfirm({
-      title: `卸载 ${a.name}？`,
-      description: `会删掉 ${a.dir} 整个文件夹${a.source ? "" : "（它不是从商店装的，删了就找不回来了）"}。它存的数据（addon-data）留着，重新装上还在。`,
-      action: "卸载",
+      title: t("addonSettings.uninstall.title", { name: a.name }),
+      description: t(a.source ? "addonSettings.uninstall.desc" : "addonSettings.uninstall.descLocal", { dir: a.dir }),
+      action: t("common.uninstall"),
       destructive: true,
     });
     if (ok) await run(() => api.uninstallAddon(a.id));
@@ -164,16 +167,16 @@ function InstalledRow({ a, newer }: { a: AddonStatus; newer?: StoreAddon }) {
         <span className="font-medium">{a.name}</span>
         {a.version && <span className="text-[11px] text-muted-foreground">v{a.version}</span>}
         {a.name !== a.id && <span className="font-mono text-[11px] text-muted-foreground">{a.id}</span>}
-        {a.source ? <Tag>{a.source.store}</Tag> : <Tag>本地</Tag>}
-        {a.modified && <Tag className="text-warn">本地改过</Tag>}
+        {a.source ? <Tag>{a.source.store}</Tag> : <Tag>{t("addonSettings.tag.local")}</Tag>}
+        {a.modified && <Tag className="text-warn">{t("addonSettings.tag.modified")}</Tag>}
       </div>
       <div className="flex min-h-9 shrink-0 items-center gap-1.5 md:-my-1 md:min-h-0">
         {newer && (
           <Button size="sm" variant="outline" disabled={busy} onClick={() => run(() => install(a.source!.store, newer))}>
-            更新{newer.version && newer.version !== a.version ? ` v${newer.version}` : ""}
+            {newer.version && newer.version !== a.version ? t("addonSettings.updateTo", { version: newer.version }) : t("common.update")}
           </Button>
         )}
-        <Button size="icon-sm" variant="ghost" disabled={busy} title="卸载" onClick={uninstall}>
+        <Button size="icon-sm" variant="ghost" disabled={busy} title={t("common.uninstall")} onClick={uninstall}>
           <Trash2 className="size-3.5" />
         </Button>
         <Switch checked={!a.disabled} disabled={busy} onCheckedChange={(on) => run(() => api.setAddonEnabled(a.id, on))} />
@@ -183,7 +186,7 @@ function InstalledRow({ a, newer }: { a: AddonStatus; newer?: StoreAddon }) {
         {/* No "loaded" / "off" line: the switch already says that. Only a failure gets a line (its text is below) */}
         {a.error && !a.disabled && (
           <div className="mt-1 flex items-center gap-1.5 text-[12px] text-bad">
-            <CircleAlert className="size-3.5 shrink-0" /> 加载出错
+            <CircleAlert className="size-3.5 shrink-0" /> {t("addonSettings.loadError")}
           </div>
         )}
         {a.service && <ServiceLine s={a.service} />}
@@ -191,7 +194,7 @@ function InstalledRow({ a, newer }: { a: AddonStatus; newer?: StoreAddon }) {
         {!!a.settings?.length && (
           <Collapsible className="mt-1">
             <CollapsibleTrigger className="group flex items-center gap-1.5 text-[12px] text-muted-foreground hover:text-foreground">
-              <ChevronRight className="size-3.5 shrink-0 transition-transform group-data-[state=open]:rotate-90" /> 设置
+              <ChevronRight className="size-3.5 shrink-0 transition-transform group-data-[state=open]:rotate-90" /> {t("addonSettings.settings")}
             </CollapsibleTrigger>
             <CollapsibleContent className="mt-1.5 space-y-2.5 rounded-sm bg-muted/50 p-2.5">
               {a.settings.map((s) => (
@@ -274,7 +277,13 @@ function SettingField({ id, spec, value }: { id: string; spec: AddonSetting; val
               onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
             />
             {spec.type === "secret" && (
-              <Button size="icon-sm" variant="ghost" title={reveal ? "隐藏" : "显示"} aria-label={reveal ? "隐藏" : "显示"} onClick={() => setReveal(!reveal)}>
+              <Button
+                size="icon-sm"
+                variant="ghost"
+                title={reveal ? t("addonSettings.hide") : t("addonSettings.show")}
+                aria-label={reveal ? t("addonSettings.hide") : t("addonSettings.show")}
+                onClick={() => setReveal(!reveal)}
+              >
                 {reveal ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
               </Button>
             )}
@@ -288,7 +297,11 @@ function SettingField({ id, spec, value }: { id: string; spec: AddonSetting; val
           {value !== undefined && (
             <button type="button" className="shrink-0 hover:text-foreground" onClick={() => save(null)}>
               {/* A secret's default is not echoed either (usually empty anyway) */}
-              {spec.type === "secret" ? "清除" : spec.type === "text" ? "恢复默认" : `恢复默认（${String(spec.default)}）`}
+              {spec.type === "secret"
+                ? t("addonSettings.clear")
+                : spec.type === "text"
+                  ? t("addonSettings.resetDefault")
+                  : t("addonSettings.resetDefaultTo", { value: String(spec.default) })}
             </button>
           )}
         </div>
@@ -366,14 +379,14 @@ function Stores({ stores }: { stores: AddonStore[] }) {
       await api.addAddonStore(source.trim());
       setSource("");
     } catch (e) {
-      toast.error(`添加商店失败：${(e as Error).message}`);
+      toast.error(t("addonSettings.addStoreFailed", { error: (e as Error).message }));
     } finally {
       setAdding(false);
     }
   };
   return (
     <div className="space-y-4">
-      {stores.length === 0 && <div className="text-[13px] text-muted-foreground">没有商店。在下面加一个 GitHub 仓库。</div>}
+      {stores.length === 0 && <div className="text-[13px] text-muted-foreground">{t("addonSettings.noStores")}</div>}
       {stores.map((s) => (
         <StoreSection key={s.source} store={s} />
       ))}
@@ -381,18 +394,16 @@ function Stores({ stores }: { stores: AddonStore[] }) {
         <div className="flex gap-2">
           <Input
             value={source}
-            placeholder="owner/repo，或本机的一个文件夹（写扩展时用）"
+            placeholder={t("addonSettings.storePlaceholder")}
             className="h-8 text-[13px]"
             onChange={(e) => setSource(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && add()}
           />
           <Button size="sm" disabled={adding || !source.trim()} onClick={add}>
-            添加商店
+            {t("addonSettings.addStore")}
           </Button>
         </div>
-        <div className="text-[12px] text-muted-foreground">
-          商店就是一个 GitHub 仓库：里面每个带 <code className="font-mono">addon.json</code> 的文件夹是一个扩展。只在点「刷新」时重新下载。
-        </div>
+        <div className="text-[12px] text-muted-foreground">{rich(t("addonSettings.storeHint"), { file: <code className="font-mono">addon.json</code> })}</div>
       </div>
     </div>
   );
@@ -408,9 +419,9 @@ function StoreSection({ store }: { store: AddonStore }) {
   };
   const remove = async () => {
     const ok = await askConfirm({
-      title: `移除商店 ${store.source}？`,
-      description: "从它装的扩展留着，只是之后看不到它的更新。",
-      action: "移除",
+      title: t("addonSettings.removeStore.title", { source: store.source }),
+      description: t("addonSettings.removeStore.desc"),
+      action: t("common.remove"),
       destructive: true,
     });
     if (ok) api.removeAddonStore(store.source).catch((e) => toast.error((e as Error).message));
@@ -427,28 +438,28 @@ function StoreSection({ store }: { store: AddonStore }) {
             <ExternalLink className="size-3.5" />
           </a>
         )}
-        {store.default && <Tag>默认</Tag>}
-        {store.local && <Tag>本地文件夹</Tag>}
+        {store.default && <Tag>{t("common.default")}</Tag>}
+        {store.local && <Tag>{t("addonSettings.tag.localFolder")}</Tag>}
         <span className="ml-auto shrink-0 text-[11px] text-muted-foreground max-md:order-last max-md:ml-0 max-md:basis-full">
           {busy || fetching.has(store.source)
-            ? "下载中…"
+            ? t("addonSettings.downloading")
             : store.local
               ? ""
               : store.fetchedAt
-                ? `${new Date(store.fetchedAt).toLocaleString()} 刷新`
-                : "还没下载"}
+                ? t("addonSettings.refreshedAt", { time: new Date(store.fetchedAt).toLocaleString() })
+                : t("addonSettings.notDownloaded")}
         </span>
-        <Button size="icon-sm" variant="ghost" title="刷新" className="max-md:ml-auto" disabled={busy} onClick={doRefresh}>
+        <Button size="icon-sm" variant="ghost" title={t("common.refresh")} className="max-md:ml-auto" disabled={busy} onClick={doRefresh}>
           <RefreshCw className={cn("size-3.5", busy && "animate-spin")} />
         </Button>
-        <Button size="icon-sm" variant="ghost" title="移除商店" onClick={remove}>
+        <Button size="icon-sm" variant="ghost" title={t("addonSettings.removeStore")} onClick={remove}>
           <X className="size-3.5" />
         </Button>
       </div>
       {store.error && <div className="rounded-sm bg-bad/10 p-2 text-[12px] text-bad">{store.error}</div>}
       <div className="divide-y rounded-md border">
         {store.addons.length === 0 && (
-          <div className="p-3 text-[13px] text-muted-foreground">{store.fetchedAt ? "这个商店里没有扩展" : "刷新一下看看里面有什么"}</div>
+          <div className="p-3 text-[13px] text-muted-foreground">{store.fetchedAt ? t("addonSettings.storeEmpty") : t("addonSettings.storeNotFetched")}</div>
         )}
         {store.addons.map((a) => (
           <StoreRow key={a.id} source={store.source} a={a} />
@@ -462,7 +473,8 @@ function StoreRow({ source, a }: { source: string; a: StoreAddon }) {
   const [busy, setBusy] = useState(false);
   const mine = addonStatus.find((x) => x.id === a.id);
   const fromHere = mine?.source?.store === source;
-  const label = !mine ? "安装" : !fromHere ? "替换本地的" : mine.source!.hash !== a.hash ? "更新" : "";
+  const action = !mine ? "install" : !fromHere ? "replace" : mine.source!.hash !== a.hash ? "update" : "";
+  const label = { install: t("common.install"), replace: t("addonSettings.replaceLocal"), update: t("common.update"), "": "" }[action];
   const go = async () => {
     setBusy(true);
     await install(source, a, false);
@@ -481,16 +493,16 @@ function StoreRow({ source, a }: { source: string; a: StoreAddon }) {
         <span className="font-medium">{a.name}</span>
         {a.version && <span className="text-[11px] text-muted-foreground">v{a.version}</span>}
         {a.name !== a.id && <span className="font-mono text-[11px] text-muted-foreground">{a.id}</span>}
-        {a.hasService && <Tag>后台进程</Tag>}
+        {a.hasService && <Tag>{t("addonSettings.tag.service")}</Tag>}
       </div>
       <div className="flex min-h-9 shrink-0 items-center md:-my-1 md:min-h-0">
         {label ? (
-          <Button size="sm" variant={label === "安装" ? "default" : "outline"} disabled={busy} onClick={go}>
-            {busy ? "安装中…" : label}
+          <Button size="sm" variant={action === "install" ? "default" : "outline"} disabled={busy} onClick={go}>
+            {busy ? t("addonSettings.installing") : label}
           </Button>
         ) : (
           <span className="flex items-center gap-1 text-[12px] text-muted-foreground">
-            <Check className="size-3.5 text-ok" /> 已安装
+            <Check className="size-3.5 text-ok" /> {t("addonSettings.tab.installed")}
           </span>
         )}
       </div>
@@ -519,7 +531,7 @@ function StoreRow({ source, a }: { source: string; a: StoreAddon }) {
         {a.readme && (
           <Collapsible className="mt-1">
             <CollapsibleTrigger className="group flex items-center gap-1.5 text-[12px] text-muted-foreground hover:text-foreground">
-              <ChevronRight className="size-3.5 shrink-0 transition-transform group-data-[state=open]:rotate-90" /> 说明
+              <ChevronRight className="size-3.5 shrink-0 transition-transform group-data-[state=open]:rotate-90" /> {t("addonSettings.readme")}
             </CollapsibleTrigger>
             <CollapsibleContent
               // A README is a document, not a reply: headings at chat sizes dwarfed the row (its title repeats the
@@ -585,7 +597,7 @@ function Tag({ children, className }: { children: React.ReactNode; className?: s
 
 // An add-on's backend process (addon.json "service"): running or not, its own status line, and why it died.
 function ServiceLine({ s }: { s: AddonService }) {
-  const label = { starting: "后台进程启动中", running: "后台进程在跑", exited: "后台进程退出了，稍后重启", stopped: "后台进程已停止" }[s.state];
+  const label = t(`addonSettings.service.${s.state}`);
   return (
     <div className="mt-1.5 space-y-1 text-[12px]">
       <div className="flex items-center gap-1.5">
@@ -594,12 +606,17 @@ function ServiceLine({ s }: { s: AddonService }) {
         </span>
         <span className="text-muted-foreground">
           {label}
-          {s.pid ? `（PID ${s.pid}）` : ""}
-          {s.restarts ? ` · 重启过 ${s.restarts} 次` : ""}
+          {s.pid ? t("addonSettings.service.pid", { pid: s.pid }) : ""}
+          {s.restarts ? t(s.restarts === 1 ? "addonSettings.service.restartsOne" : "addonSettings.service.restarts", { n: s.restarts }) : ""}
         </span>
         {s.text && <span className="truncate">{s.text}</span>}
       </div>
       {s.error && <pre className="whitespace-pre-wrap rounded-sm bg-bad/10 p-2 font-mono text-[11px] text-bad">{s.error}</pre>}
     </div>
   );
+}
+
+// A message with {name} placeholders filled by elements (a <code> in the middle of a sentence).
+function rich(text: string, parts: Record<string, React.ReactNode>): React.ReactNode[] {
+  return text.split(/\{(\w+)\}/).map((p, i) => (i % 2 ? <span key={i}>{parts[p]}</span> : p));
 }

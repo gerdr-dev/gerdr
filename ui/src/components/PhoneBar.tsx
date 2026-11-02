@@ -11,6 +11,7 @@ import { StatusDot } from "./AgentIcon";
 import { toast } from "sonner";
 import { InboxButton } from "./Inbox";
 import { tabStatus } from "./TabBar";
+import { t } from "@/lib/i18n";
 
 /**
  * The phone's stand-in for the tab bar: ☰ (the drawer) · where you are · the overview · the inbox · new tab.
@@ -44,7 +45,7 @@ export function PhoneBar() {
   };
   return (
     <div className="flex h-11 shrink-0 items-center gap-1 border-b bg-sidebar px-1.5">
-      <Button variant="ghost" size="icon" className="relative size-9" aria-label="侧栏" onClick={openDrawer}>
+      <Button variant="ghost" size="icon" className="relative size-9" aria-label={t("phoneBar.sidebar")} onClick={openDrawer}>
         <Menu className="size-[18px]" />
         {waiting > 0 && (
           <span className="absolute top-1 right-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-bad px-0.5 text-[9px] leading-none font-semibold text-white tabular-nums">
@@ -63,7 +64,7 @@ export function PhoneBar() {
       </button>
       <OverviewButton />
       <InboxButton phone />
-      <Button variant="ghost" size="icon" className="size-9" aria-label="新建 Tab" onClick={() => addTab()}>
+      <Button variant="ghost" size="icon" className="size-9" aria-label={t("phoneBar.newTab")} onClick={() => addTab()}>
         <Plus className="size-[18px]" />
       </Button>
     </div>
@@ -99,7 +100,7 @@ function OverviewButton() {
     blockSelectionUntilLift();
     const id = focusedSessionId();
     if (!id) return toggleOverview(true); // a terminal or an empty pane: nothing to put in
-    if (!showInOverview(id)) toast(`网格最多放 ${MAX_TILES} 个，先从进行中移出几个`);
+    if (!showInOverview(id)) toast(t("phoneBar.gridFull", { n: MAX_TILES }));
   };
   const cancel = () => clearTimeout(timer.current);
   return (
@@ -108,7 +109,7 @@ function OverviewButton() {
       size="icon"
       // No text selection / iOS callout from the long-press
       className="size-9 select-none [-webkit-touch-callout:none]"
-      aria-label="进行中（长按：把当前面板加进去）"
+      aria-label={t("phoneBar.active")}
       onPointerDown={() => {
         held.current = false;
         cancel();

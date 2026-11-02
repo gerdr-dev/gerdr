@@ -10,16 +10,18 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { api, type MCPAuth } from "@/lib/api";
+import { t } from "@/lib/i18n";
+import type { MessageKey } from "@/lib/messages";
 import { isNative, nativeOpenURL } from "@/lib/native";
 import { useStore } from "@/lib/store";
 import type { ExtSettings, ExtSkill, ExtSource, ExtView, MCPServer } from "@/lib/types";
 
 // 设置 →「Skill」「MCP」两页。gerdr 自己那份在这里增删改；agent 自己的只读，能导入。
 
-const SOURCES: { v: ExtSource; label: string }[] = [
-  { v: "agent", label: "只用 Agent 自己的" },
-  { v: "both", label: "Agent 的 + Gerdr 的" },
-  { v: "gerdr", label: "只用 Gerdr 的" },
+const SOURCES: { v: ExtSource; label: MessageKey }[] = [
+  { v: "agent", label: "extSettings.source.agent" },
+  { v: "both", label: "extSettings.source.both" },
+  { v: "gerdr", label: "extSettings.source.gerdr" },
 ];
 
 const stop = (e: React.KeyboardEvent) => e.stopPropagation();
@@ -52,7 +54,7 @@ function SourcePicker({ value, onChange }: { value: ExtSource; onChange: (v: Ext
       <SelectContent>
         {SOURCES.map((s) => (
           <SelectItem key={s.v} value={s.v} className="text-[12px]">
-            {s.label}
+            {t(s.label)}
           </SelectItem>
         ))}
       </SelectContent>
@@ -69,7 +71,7 @@ function HelpTip({ lines }: { lines: string[] }) {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button className="text-muted-foreground hover:text-foreground" aria-label="说明">
+        <button className="text-muted-foreground hover:text-foreground" aria-label={t("extSettings.help")}>
           <Info className="size-3.5" />
         </button>
       </PopoverTrigger>
@@ -78,8 +80,8 @@ function HelpTip({ lines }: { lines: string[] }) {
         align="start"
         className="w-auto max-w-[min(24rem,calc(100vw-2rem))] space-y-1.5 px-3 py-2 text-[12px] leading-5 font-normal"
       >
-        {lines.map((t) => (
-          <p key={t}>{t}</p>
+        {lines.map((line) => (
+          <p key={line}>{line}</p>
         ))}
       </PopoverContent>
     </Popover>
@@ -104,7 +106,7 @@ function RowMenu({ children }: { children: React.ReactNode }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button size="icon" variant="ghost" className="size-7 shrink-0" title="更多">
+        <Button size="icon" variant="ghost" className="size-7 shrink-0" title={t("common.more")}>
           <MoreHorizontal className="size-3.5" />
         </Button>
       </DropdownMenuTrigger>
@@ -126,17 +128,15 @@ const LABEL = "text-[12px] font-normal text-muted-foreground";
 
 const TEMPLATE = (name: string) => `---
 name: ${name}
-description: 一句话说清楚什么时候该用这个 Skill（Agent 靠它判断）
+description: ${t("extSettings.templateDescription")}
 ---
 
 # ${name}
 
-在这里写给 Agent 的说明。
+${t("extSettings.templateBody")}
 `;
 
-const SKILL_HELP = [
-  "来源决定 Claude Code、Codex 和 Native 的会话用哪些（Native 没有自己的目录，「Agent 自己的」用 Claude Code 那些）。内置的不管来源都会给。Work 右边的助手按它用的引擎算，和 Code 里一样。改完从每个会话的下一轮起生效。",
-];
+const skillHelp = () => [t("extSettings.skillHelp")];
 
 type SkillRow = { key: string; sk: ExtSkill; group: "builtin" | "gerdr" | "claude" | "codex"; also: string[] };
 
@@ -159,7 +159,7 @@ function skillRows(v: ExtView): SkillRow[] {
 export function SkillSettings({ open }: { open: boolean }) {
   const { v, run, save } = useExt(open);
   const [edit, setEdit] = useState<{ name: string; content: string; isNew: boolean } | null>(null);
-  if (!v) return <Empty>加载中…</Empty>;
+  if (!v) return <Empty>{t("common.loading")}</Empty>;
   const s = v.settings;
   const mine = new Set(v.skills.map((x) => x.name));
   const toggle = (name: string, on: boolean) => {
@@ -183,7 +183,7 @@ export function SkillSettings({ open }: { open: boolean }) {
         onCancel={() => setEdit(null)}
         onSave={async (name, content) => {
           if (edit.isNew && mine.has(name)) {
-            toast.error(`已经有一个叫 ${name} 的 Skill 了`);
+            toast.error(t("extSettings.skillExists", { name }));
             return;
           }
           if (await run(api.writeSkill(name, content))) setEdit(null);
@@ -193,10 +193,10 @@ export function SkillSettings({ open }: { open: boolean }) {
 
   const rows = skillRows(v);
   const groups = [
-    { id: "builtin", title: "内置", hint: "不管来源都会给：在多个会话之间协作、按你说的改这个界面" },
-    { id: "gerdr", title: "Gerdr", hint: "~/.gerdr/skills；来源选了含 Gerdr 时给" },
-    { id: "claude", title: "Claude Code", hint: "~/.claude/skills 和启用的插件里的" },
-    { id: "codex", title: "Codex", hint: "~/.codex/skills、~/.agents/skills" },
+    { id: "builtin", title: t("extSettings.group.builtin"), hint: t("extSettings.group.builtinHint") },
+    { id: "gerdr", title: "Gerdr", hint: t("extSettings.group.gerdrSkillHint") },
+    { id: "claude", title: "Claude Code", hint: t("extSettings.group.claudeSkillHint") },
+    { id: "codex", title: "Codex", hint: t("extSettings.group.codexSkillHint") },
   ]
     .map((g) => ({ ...g, rows: rows.filter((r) => r.group === g.id) }))
     .filter((g) => g.rows.length || g.id === "gerdr");
@@ -208,20 +208,20 @@ export function SkillSettings({ open }: { open: boolean }) {
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex flex-1 items-center gap-1.5 text-[13px] font-medium">
           Skill
-          <HelpTip lines={SKILL_HELP} />
+          <HelpTip lines={skillHelp()} />
         </div>
         <div className="flex items-center gap-2 max-md:order-last max-md:w-full max-md:justify-between">
-          <span className="text-[12px] whitespace-nowrap text-muted-foreground">Agent 用：</span>
+          <span className="text-[12px] whitespace-nowrap text-muted-foreground">{t("extSettings.agentUses")}</span>
           <SourcePicker value={s.skillSource} onChange={(x) => save({ skillSource: x })} />
         </div>
         <Button size="sm" variant="outline" className="text-[12px]" onClick={() => setEdit({ name: "", content: "", isNew: true })}>
           <Plus className="size-3.5" />
-          新建
+          {t("extSettings.new")}
         </Button>
       </div>
       {groups.map((g) => (
         <Group key={g.id} title={g.title} count={g.rows.length} hint={g.hint}>
-          {g.rows.length === 0 && <Empty>还没有。点「新建」，或者在下面的「⋯」里把 Claude Code / Codex 的加进来。</Empty>}
+          {g.rows.length === 0 && <Empty>{t("extSettings.skillEmpty")}</Empty>}
           {g.rows.map((r) => {
             const sk = r.sk;
             const ours = r.group === "builtin" || r.group === "gerdr";
@@ -234,31 +234,31 @@ export function SkillSettings({ open }: { open: boolean }) {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5 text-[13px]">
                     <span className="truncate">{sk.name}</span>
-                    {plugin && <Tag>插件 {plugin}</Tag>}
-                    {r.also.map((t) => (
-                      <Tag key={t}>{t} 也有</Tag>
+                    {plugin && <Tag>{t("extSettings.plugin", { name: plugin })}</Tag>}
+                    {r.also.map((x) => (
+                      <Tag key={x}>{t("extSettings.alsoIn", { name: x })}</Tag>
                     ))}
                   </div>
                   {sk.description && <div className="truncate text-[11px] text-muted-foreground">{sk.description}</div>}
                 </div>
-                {off && <span className="shrink-0 text-[11px] text-muted-foreground">已停用</span>}
+                {off && <span className="shrink-0 text-[11px] text-muted-foreground">{t("extSettings.disabled")}</span>}
                 <RowMenu>
                   {r.group === "gerdr" && (
                     <DropdownMenuItem onClick={() => openEdit(sk.name)}>
-                      <Pencil /> 编辑
+                      <Pencil /> {t("common.edit")}
                     </DropdownMenuItem>
                   )}
                   {ours && (
                     <DropdownMenuItem onClick={() => toggle(sk.name, !sk.enabled)}>
-                      <Power /> {sk.enabled ? "停用" : "启用"}
+                      <Power /> {sk.enabled ? t("common.disable") : t("common.enable")}
                     </DropdownMenuItem>
                   )}
                   {!ours && (
                     <DropdownMenuItem
                       disabled={taken}
-                      onClick={() => run(api.importSkill(sk.dir)).then((ok) => ok && toast.success(`已加到 Gerdr：${sk.name}`))}
+                      onClick={() => run(api.importSkill(sk.dir)).then((ok) => ok && toast.success(t("extSettings.addedToGerdr", { name: sk.name })))}
                     >
-                      <Download /> {taken ? "Gerdr 里已有同名的" : "加到 Gerdr"}
+                      <Download /> {taken ? t("extSettings.gerdrHasSameName") : t("extSettings.addToGerdr")}
                     </DropdownMenuItem>
                   )}
                   {r.group === "gerdr" && (
@@ -266,9 +266,9 @@ export function SkillSettings({ open }: { open: boolean }) {
                       <DropdownMenuSeparator />
                       <DropdownMenuItem
                         variant="destructive"
-                        onClick={() => run(api.deleteSkill(sk.name)).then((ok) => ok && toast.success(`已删除 ${sk.name}`))}
+                        onClick={() => run(api.deleteSkill(sk.name)).then((ok) => ok && toast.success(t("extSettings.deleted", { name: sk.name })))}
                       >
-                        <Trash2 /> 删除
+                        <Trash2 /> {t("common.delete")}
                       </DropdownMenuItem>
                     </>
                   )}
@@ -278,11 +278,7 @@ export function SkillSettings({ open }: { open: boolean }) {
           })}
         </Group>
       ))}
-      {s.skillSource === "gerdr" && (
-        <div className="text-[12px] text-muted-foreground">
-          只用 Gerdr 的：Claude 插件里的 Skill 关不了单个，插件会整个关掉（带的 Hook、MCP 也没了）；想留哪个就加到 Gerdr。
-        </div>
-      )}
+      {s.skillSource === "gerdr" && <div className="text-[12px] text-muted-foreground">{t("extSettings.skillGerdrOnly")}</div>}
     </div>
   );
 }
@@ -301,10 +297,10 @@ function SkillEditor({
   const valid = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(name);
   return (
     <div className="min-w-0 space-y-3">
-      <div className="text-[13px] font-medium">{edit.isNew ? "新建 Skill" : `编辑「${edit.name}」`}</div>
+      <div className="text-[13px] font-medium">{edit.isNew ? t("extSettings.newSkill") : t("extSettings.editTitle", { name: edit.name })}</div>
       <div className="space-y-3 rounded-md border p-3">
         <div className="space-y-1.5">
-          <Label className={LABEL}>名字</Label>
+          <Label className={LABEL}>{t("extSettings.name")}</Label>
           <Input
             className={`h-8 font-mono ${TEXT12}`}
             placeholder="my-skill"
@@ -318,7 +314,7 @@ function SkillEditor({
             onKeyDown={stop}
             autoFocus={edit.isNew}
           />
-          {name && !valid && <div className="text-[12px] text-bad">名字只能用字母、数字、- 和 _</div>}
+          {name && !valid && <div className="text-[12px] text-bad">{t("extSettings.nameInvalid")}</div>}
         </div>
         <div className="space-y-1.5">
           <Label className={LABEL}>SKILL.md</Label>
@@ -333,10 +329,10 @@ function SkillEditor({
       </div>
       <div className="flex justify-end gap-2">
         <Button size="sm" variant="ghost" className="text-[12px]" onClick={onCancel}>
-          取消
+          {t("common.cancel")}
         </Button>
         <Button size="sm" className="text-[12px]" disabled={!valid} onClick={() => onSave(name, content)}>
-          保存
+          {t("common.save")}
         </Button>
       </div>
     </div>
@@ -380,8 +376,8 @@ function useMCPAuth(open: boolean) {
   const pending = list.some((a) => a.pending);
   useEffect(() => {
     if (!open || !pending) return;
-    const t = setInterval(() => api.mcpAuth().then(setList, () => {}), 2000);
-    return () => clearInterval(t);
+    const timer = setInterval(() => api.mcpAuth().then(setList, () => {}), 2000);
+    return () => clearInterval(timer);
   }, [open, pending]);
   const get = (m: MCPServer) => list.find((a) => a.name === m.name && a.url === m.url);
   const authorize = async (m: MCPServer) => {
@@ -439,26 +435,28 @@ type Reconnect = { busy?: boolean; tools?: number; error?: string };
 
 /** The status of one row: the last reconnect if there was one, else the remote sign-in check, else nothing known. */
 function rowStatus(r: MCPRow, a: MCPAuth | undefined, rc: Reconnect | undefined, off: boolean) {
-  if (off) return { dot: "border border-muted-foreground/50", text: "已停用", cls: "text-muted-foreground" };
-  if (rc?.error) return { dot: "bg-bad", text: "连不上", cls: "text-bad", title: rc.error };
-  if (rc?.tools !== undefined) return { dot: "bg-ok", text: `已连接 · ${rc.tools} 个工具`, cls: "text-muted-foreground" };
-  if (a?.state === "error") return { dot: "bg-bad", text: "连不上", cls: "text-bad", title: a.error };
-  if (a?.state === "needs_auth") return { dot: "bg-warn", text: a.pending ? "等浏览器里授权…" : "未登录", cls: "text-warn" };
+  if (off) return { dot: "border border-muted-foreground/50", text: t("extSettings.disabled"), cls: "text-muted-foreground" };
+  if (rc?.error) return { dot: "bg-bad", text: t("extSettings.cantConnect"), cls: "text-bad", title: rc.error };
+  if (rc?.tools !== undefined) return { dot: "bg-ok", text: t("extSettings.connected", { tools: toolCount(rc.tools) }), cls: "text-muted-foreground" };
+  if (a?.state === "error") return { dot: "bg-bad", text: t("extSettings.cantConnect"), cls: "text-bad", title: a.error };
+  if (a?.state === "needs_auth") return { dot: "bg-warn", text: a.pending ? t("extSettings.waitingAuth") : t("extSettings.signedOut"), cls: "text-warn" };
   if (a?.state === "ok")
     return {
       dot: "bg-ok",
-      text: a.auth === "claude" ? "已登录 · 用 Claude Code 的" : a.auth === "gerdr" ? "已登录" : "可用",
+      text: a.auth === "claude" ? t("extSettings.signedInClaude") : a.auth === "gerdr" ? t("extSettings.signedIn") : t("extSettings.available"),
       cls: "text-muted-foreground",
-      title: a.auth === "claude" ? "Claude Code 里授权过，Gerdr 直接用它的登录；那边失效了这里会变成「未登录」" : undefined,
+      title: a.auth === "claude" ? t("extSettings.claudeAuthTitle") : undefined,
     };
-  return { dot: "bg-muted-foreground/40", text: isRemote(r.server) ? "检查中…" : "", cls: "text-muted-foreground" };
+  return { dot: "bg-muted-foreground/40", text: isRemote(r.server) ? t("extSettings.checking") : "", cls: "text-muted-foreground" };
 }
 
-const MCP_HELP = [
-  "来源决定 Claude Code 和 Codex 的会话用哪些，Native 引擎只用 Gerdr 组的。Work 右边的助手按它用的引擎算，和 Code 里一样。改完从每个会话的下一轮起生效。",
+const toolCount = (n: number) => t(n === 1 ? "extSettings.toolsOne" : "extSettings.tools", { n });
+
+const mcpHelp = () => [
+  t("extSettings.mcpHelp1"),
   // Account-side connectors live in claude.ai / ChatGPT settings and Gerdr deliberately leaves them alone, so asking
   // an agent "what MCP do you have" lists more than this page does
-  "这里只列本机配置文件里的（Gerdr 的、~/.claude.json、.mcp.json、~/.codex/config.toml）。claude.ai / ChatGPT 账号里连接的应用（Notion、Figma、GitHub…）和 Codex 插件自带的不在这里，去各自的账号设置里管。",
+  t("extSettings.mcpHelp2"),
 ];
 
 export function MCPSettings({ open }: { open: boolean }) {
@@ -466,16 +464,16 @@ export function MCPSettings({ open }: { open: boolean }) {
   const auth = useMCPAuth(open);
   const [edit, setEdit] = useState<{ index: number; server: MCPServer } | null>(null);
   const [rc, setRc] = useState<Record<string, Reconnect>>({});
-  if (!v) return <Empty>加载中…</Empty>;
+  if (!v) return <Empty>{t("common.loading")}</Empty>;
   const s = v.settings;
   const names = new Set(s.mcp.map((m) => m.name));
   const put = (list: MCPServer[]) => save({ mcp: list });
   const rows = mcpRows(v);
   // Grouped by the main place a server is configured in — gerdr's own list first — each server once
   const groups = [
-    { tag: "Gerdr", title: "Gerdr", hint: "Native 引擎用；来源选了含 Gerdr 时 Claude Code / Codex 也用", rows: rows.filter((r) => r.gerdr >= 0) },
-    { tag: "Claude", title: "Claude Code", hint: "~/.claude.json 里配的", rows: rows.filter((r) => r.gerdr < 0 && r.claude) },
-    { tag: "Codex", title: "Codex", hint: "~/.codex/config.toml 里配的", rows: rows.filter((r) => r.gerdr < 0 && !r.claude && r.codex) },
+    { tag: "Gerdr", title: "Gerdr", hint: t("extSettings.group.gerdrMcpHint"), rows: rows.filter((r) => r.gerdr >= 0) },
+    { tag: "Claude", title: "Claude Code", hint: t("extSettings.group.claudeMcpHint"), rows: rows.filter((r) => r.gerdr < 0 && r.claude) },
+    { tag: "Codex", title: "Codex", hint: t("extSettings.group.codexMcpHint"), rows: rows.filter((r) => r.gerdr < 0 && !r.claude && r.codex) },
   ].filter((g) => g.rows.length);
   const reconnect = async (r: MCPRow) => {
     const m = r.server;
@@ -483,9 +481,9 @@ export function MCPSettings({ open }: { open: boolean }) {
     try {
       const res = await api.mcpReconnect(m.name, isRemote(m) ? (m.url ?? "") : "");
       setRc((x) => ({ ...x, [r.key]: res }));
-      const more = res.agents ? `，${res.agents} 个 Claude Code 会话也重连了` : "";
-      if (res.error) toast.error(`${m.name} 连不上：${res.error}`);
-      else toast.success(`${m.name} 已重连：${res.tools} 个工具${more}`);
+      const more = res.agents ? t(res.agents === 1 ? "extSettings.reconnectMoreOne" : "extSettings.reconnectMore", { n: res.agents }) : "";
+      if (res.error) toast.error(t("extSettings.reconnectFailed", { name: m.name, error: res.error }));
+      else toast.success(t("extSettings.reconnected", { name: m.name, tools: toolCount(res.tools ?? 0), more }));
       if (isRemote(m)) auth.reload();
     } catch (e: any) {
       setRc((x) => ({ ...x, [r.key]: { error: e.message } }));
@@ -512,24 +510,24 @@ export function MCPSettings({ open }: { open: boolean }) {
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex flex-1 items-center gap-1.5 text-[13px] font-medium">
           MCP
-          <HelpTip lines={MCP_HELP} />
+          <HelpTip lines={mcpHelp()} />
         </div>
         <div className="flex items-center gap-2 max-md:order-last max-md:w-full max-md:justify-between">
-          <span className="text-[12px] whitespace-nowrap text-muted-foreground">Claude Code / Codex 用：</span>
+          <span className="text-[12px] whitespace-nowrap text-muted-foreground">{t("extSettings.mcpUses")}</span>
           <SourcePicker value={s.mcpSource} onChange={(x) => save({ mcpSource: x })} />
         </div>
-        <Button size="icon" variant="ghost" className="size-8" title="重新检查状态" disabled={auth.busy} onClick={auth.reload}>
+        <Button size="icon" variant="ghost" className="size-8" title={t("extSettings.recheck")} disabled={auth.busy} onClick={auth.reload}>
           <RefreshCw className={`size-3.5 ${auth.busy ? "animate-spin" : ""}`} />
         </Button>
         <Button size="sm" variant="outline" className="text-[12px]" onClick={() => setEdit({ index: -1, server: blankServer() })}>
           <Plus className="size-3.5" />
-          添加
+          {t("common.add")}
         </Button>
       </div>
 
       {rows.length === 0 && (
         <div className="rounded-md border">
-          <Empty>还没有 MCP。点「添加」，或者在 Claude Code / Codex 里配了会出现在这里。</Empty>
+          <Empty>{t("extSettings.mcpEmpty")}</Empty>
         </div>
       )}
       {groups.map((g) => (
@@ -550,7 +548,7 @@ export function MCPSettings({ open }: { open: boolean }) {
                   <div className="flex items-center gap-1.5 text-[13px]">
                     <span className="truncate">{m.name}</span>
                     {from.map((f) => (
-                      <Tag key={f}>{f} 也有</Tag>
+                      <Tag key={f}>{t("extSettings.alsoIn", { name: f })}</Tag>
                     ))}
                   </div>
                   <div className="truncate font-mono text-[11px] text-muted-foreground" title={isRemote(m) ? m.url : hostOf(m)}>
@@ -574,20 +572,27 @@ export function MCPSettings({ open }: { open: boolean }) {
                 {a?.state === "needs_auth" && !off && (
                   <Button size="sm" variant="outline" className="h-7 shrink-0 text-[12px]" onClick={() => auth.authorize(m)}>
                     <KeyRound className="size-3.5" />
-                    {a.pending ? "重新打开" : "授权"}
+                    {a.pending ? t("extSettings.reopen") : t("extSettings.authorize")}
                   </Button>
                 )}
-                <Button size="icon" variant="ghost" className="size-7 shrink-0" title="重连" disabled={busy || off} onClick={() => reconnect(r)}>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="size-7 shrink-0"
+                  title={t("extSettings.reconnect")}
+                  disabled={busy || off}
+                  onClick={() => reconnect(r)}
+                >
                   <RotateCw className={`size-3.5 ${busy ? "animate-spin" : ""}`} />
                 </Button>
                 <RowMenu>
                   {mine ? (
                     <>
                       <DropdownMenuItem onClick={() => setEdit({ index: r.gerdr, server: mine })}>
-                        <Pencil /> 编辑
+                        <Pencil /> {t("common.edit")}
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => put(s.mcp.map((x, j) => (j === r.gerdr ? { ...x, enabled: !x.enabled } : x)))}>
-                        <Power /> {mine.enabled ? "停用" : "启用"}
+                        <Power /> {mine.enabled ? t("common.disable") : t("common.enable")}
                       </DropdownMenuItem>
                     </>
                   ) : (
@@ -595,23 +600,23 @@ export function MCPSettings({ open }: { open: boolean }) {
                       disabled={names.has(m.name)}
                       onClick={() =>
                         put([...s.mcp, { ...m, type: isRemote(m) ? m.type || "http" : "stdio", enabled: true }])?.then(
-                          (ok) => ok && toast.success(`已加到 Gerdr：${m.name}`),
+                          (ok) => ok && toast.success(t("extSettings.addedToGerdr", { name: m.name })),
                         )
                       }
                     >
-                      <Download /> {names.has(m.name) ? "Gerdr 里已有同名的" : "加到 Gerdr（Native 引擎也能用）"}
+                      <Download /> {names.has(m.name) ? t("extSettings.gerdrHasSameName") : t("extSettings.addToGerdrNative")}
                     </DropdownMenuItem>
                   )}
                   {a?.hasOwn && (
                     <DropdownMenuItem onClick={() => auth.logout(m)}>
-                      <LogOut /> 退出 Gerdr 的登录
+                      <LogOut /> {t("extSettings.logout")}
                     </DropdownMenuItem>
                   )}
                   {mine && (
                     <>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem variant="destructive" onClick={() => put(s.mcp.filter((_, j) => j !== r.gerdr))}>
-                        <Trash2 /> 从 Gerdr 删掉
+                        <Trash2 /> {t("extSettings.removeFromGerdr")}
                       </DropdownMenuItem>
                     </>
                   )}
@@ -621,11 +626,7 @@ export function MCPSettings({ open }: { open: boolean }) {
           })}
         </Group>
       ))}
-      {s.mcpSource === "gerdr" && (
-        <div className="text-[12px] text-muted-foreground">
-          只用 Gerdr 的：Claude 的 claude.ai 连接器会被一起关掉（--strict-mcp-config 连它们也去掉）；Codex 账号里的应用和插件自带的照常可用；Codex 不支持 SSE。
-        </div>
-      )}
+      {s.mcpSource === "gerdr" && <div className="text-[12px] text-muted-foreground">{t("extSettings.mcpGerdrOnly")}</div>}
     </div>
   );
 }
@@ -670,34 +671,34 @@ function MCPEditor({
     );
   return (
     <div className="min-w-0 space-y-3">
-      <div className="text-[13px] font-medium">{server.name ? `编辑「${server.name}」` : "添加 MCP"}</div>
+      <div className="text-[13px] font-medium">{server.name ? t("extSettings.editTitle", { name: server.name }) : t("extSettings.addMcp")}</div>
       <div className="space-y-3 rounded-md border p-3">
         <div className="flex gap-2">
           <div className="min-w-0 flex-1 space-y-1.5">
-            <Label className={label}>名字</Label>
+            <Label className={label}>{t("extSettings.name")}</Label>
             <Input className={field} placeholder="my-mcp" value={m.name} onChange={(e) => setM({ ...m, name: e.target.value })} onKeyDown={stop} autoFocus />
           </div>
           <div className="w-28 space-y-1.5">
-            <Label className={label}>类型</Label>
-            <Select value={m.type || "stdio"} onValueChange={(t) => setM({ ...m, type: t as any })}>
+            <Label className={label}>{t("extSettings.type")}</Label>
+            <Select value={m.type || "stdio"} onValueChange={(x) => setM({ ...m, type: x as any })}>
               <SelectTrigger size="sm" className={`w-full ${text}`}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {["stdio", "http", "sse"].map((t) => (
-                  <SelectItem key={t} value={t} className="text-[12px]">
-                    {t}
+                {["stdio", "http", "sse"].map((x) => (
+                  <SelectItem key={x} value={x} className="text-[12px]">
+                    {x}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
         </div>
-        {m.name && !nameOk && <div className="text-[12px] text-bad">{taken(m.name) ? "这个名字已经有了" : "名字只能用字母、数字、- 和 _"}</div>}
+        {m.name && !nameOk && <div className="text-[12px] text-bad">{taken(m.name) ? t("extSettings.nameTaken") : t("extSettings.nameInvalid")}</div>}
         {remote ? (
           <>
             <div className="space-y-1.5">
-              <Label className={label}>地址</Label>
+              <Label className={label}>{t("extSettings.url")}</Label>
               <Input
                 className={field}
                 placeholder="https://example.com/mcp"
@@ -707,28 +708,28 @@ function MCPEditor({
               />
             </div>
             <div className="space-y-1.5">
-              <Label className={label}>请求头，一行一个（Authorization: Bearer xxx；要 OAuth 的不用填，保存后点「授权」）</Label>
+              <Label className={label}>{t("extSettings.headers")}</Label>
               <Textarea className={area} value={headers} onChange={(e) => setHeaders(e.target.value)} onKeyDown={stop} />
             </div>
           </>
         ) : (
           <>
             <div className="space-y-1.5">
-              <Label className={label}>命令</Label>
+              <Label className={label}>{t("extSettings.command")}</Label>
               <Input
                 className={field}
-                placeholder="npx 或 /usr/local/bin/my-mcp"
+                placeholder={t("extSettings.commandPlaceholder")}
                 value={m.command ?? ""}
                 onChange={(e) => setM({ ...m, command: e.target.value })}
                 onKeyDown={stop}
               />
             </div>
             <div className="space-y-1.5">
-              <Label className={label}>参数，一行一个</Label>
+              <Label className={label}>{t("extSettings.args")}</Label>
               <Textarea className={area} value={args} onChange={(e) => setArgs(e.target.value)} onKeyDown={stop} />
             </div>
             <div className="space-y-1.5">
-              <Label className={label}>环境变量，一行一个（KEY=VALUE）</Label>
+              <Label className={label}>{t("extSettings.env")}</Label>
               <Textarea className={area} value={env} onChange={(e) => setEnv(e.target.value)} onKeyDown={stop} />
             </div>
           </>
@@ -736,10 +737,10 @@ function MCPEditor({
       </div>
       <div className="flex justify-end gap-2">
         <Button size="sm" variant="ghost" className="text-[12px]" onClick={onCancel}>
-          取消
+          {t("common.cancel")}
         </Button>
         <Button size="sm" className="text-[12px]" disabled={!ok} onClick={save}>
-          保存
+          {t("common.save")}
         </Button>
       </div>
     </div>

@@ -8,6 +8,7 @@ import { useStore } from "@/lib/store";
 import { TabActive } from "./Panes";
 import { AddMenu, PickButton } from "./OverviewPick";
 import { Tile, TileChip } from "./OverviewTile";
+import { t } from "@/lib/i18n";
 
 /**
  * The overview on a phone: no room for a grid, so one tile at a time. The top bar is the tile switcher, one chip per
@@ -42,7 +43,7 @@ export function PhoneOverview({ ids, focus, shown }: { ids: string[]; focus?: st
         bar, and Android then turned that long-press into selecting a chip's title */}
         <div className="flex h-11 shrink-0 items-center gap-1 border-b bg-sidebar px-1.5 select-none [-webkit-touch-callout:none]">
           {/* size-9 like PhoneBar's ☰ (PhoneBar.tsx): the two bars swap in the same spot, so their first icons line up */}
-          <Button variant="ghost" size="icon" className="size-9 shrink-0" aria-label="返回" onClick={() => toggleOverview(false)}>
+          <Button variant="ghost" size="icon" className="size-9 shrink-0" aria-label={t("common.back")} onClick={() => toggleOverview(false)}>
             <ArrowLeft className="size-[18px]" />
           </Button>
           {/* Both scrollbar hiders: Android's WebView ignores scrollbar-width and drew a bar under the chips */}
@@ -59,7 +60,7 @@ export function PhoneOverview({ ids, focus, shown }: { ids: string[]; focus?: st
           ) : (
             <div className="flex h-full flex-col items-center justify-center gap-3 px-8 text-center text-[13px] text-muted-foreground">
               <ClipboardCheck className="size-6" />
-              进行中是空的
+              {t("nav.activeEmpty")}
               <PickButton />
             </div>
           )}

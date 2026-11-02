@@ -32,6 +32,7 @@ import { AddonSlot } from "./components/AddonSlot";
 import { focusedSession, fontSizeOf, get, keyFor, prefOf, markUnread, set, useStore, visibleSessions } from "./lib/store";
 import { boot } from "./lib/sync";
 import type { SessionSummary } from "./lib/types";
+import { t } from "./lib/i18n";
 
 setTabNameFn(tabName);
 
@@ -80,12 +81,12 @@ function useAttention() {
         const seen = visible.has(cur.id) && !away;
         const name = cur.title || cur.cwd.split("/").pop() || cur.agent;
         if (old.status !== "waiting" && cur.status === "waiting" && !seen && !inboxWaits) {
-          systemNotify(`在等你 · ${name}`, "需要你批准或回答问题", cur.id);
+          systemNotify(t("app.notifyWaiting", { name }), t("app.notifyWaitingBody"), cur.id);
         }
         if ((old.status === "running" || old.status === "waiting") && (cur.status === "idle" || cur.status === "error") && !seen) {
           markUnread(cur.id);
-          if (cur.status === "idle") systemNotify(`完成 · ${name}`, "", cur.id);
-          else if (!inboxErrors) systemNotify(`出错了 · ${name}`, cur.error ?? "", cur.id);
+          if (cur.status === "idle") systemNotify(t("app.notifyDone", { name }), "", cur.id);
+          else if (!inboxErrors) systemNotify(t("app.notifyError", { name }), cur.error ?? "", cur.id);
         }
       }
       nativeBadge(Object.values(s.sessions).filter((x) => x.status === "waiting").length);
@@ -236,16 +237,17 @@ export default function App() {
       <div className="flex h-full items-center justify-center p-6">
         <div className="max-w-md space-y-3 text-center">
           <KeyRound className="mx-auto size-8 text-muted-foreground" />
-          <div className="text-[15px] font-medium">需要登录链接</div>
+          <div className="text-[15px] font-medium">{t("app.loginTitle")}</div>
           <div className="text-[13px] text-muted-foreground">
-            Gerdr 启动时会打印一个带令牌的链接（<code className="font-mono">http://127.0.0.1:7870/auth?token=…</code>）。在终端里运行{" "}
-            <code className="font-mono">gerdr url</code> 再拿一次。
+            {t("app.loginBefore")}
+            <code className="font-mono">http://127.0.0.1:7870/auth?token=…</code>
+            {t("app.loginMiddle")} <code className="font-mono">gerdr url</code> {t("app.loginAfter")}
           </div>
         </div>
       </div>
     );
   }
-  if (!ready) return <div className="flex h-full items-center justify-center text-[13px] text-muted-foreground">连接中…</div>;
+  if (!ready) return <div className="flex h-full items-center justify-center text-[13px] text-muted-foreground">{t("app.connecting")}</div>;
 
   return (
     <GerdrChatProvider>

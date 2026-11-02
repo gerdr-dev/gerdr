@@ -34,6 +34,8 @@ import {
   Zap,
   type LucideIcon,
 } from "lucide-react";
+import { t } from "@/lib/i18n";
+import type { MessageKey } from "@/lib/messages";
 import { cn } from "@/lib/utils";
 
 // Built-in abstract icons for agents (roles). The robot head they all used to share was hard to tell apart once there
@@ -44,65 +46,65 @@ import { cn } from "@/lib/utils";
 // uses; the robot head is one): grey by default, for a role whose job is easier to show than to tell apart by colour.
 // Either kind can be recoloured with one of the PALETTE gradients (`color` in config.json).
 
-type Glyph = { name: string; from: string; to: string; draw: (paint: string, id: string) => ReactNode };
+type Glyph = { label: MessageKey; from: string; to: string; draw: (paint: string, id: string) => ReactNode };
 
 /** Line icons a role can pick; drawn in the muted text colour unless it picked a colour. Keys share GLYPHS' space. */
-export const LINES: Record<string, { name: string; icon: LucideIcon }> = {
-  bot: { name: "机器人", icon: Bot },
-  brain: { name: "大脑", icon: Brain },
-  code: { name: "代码", icon: Code },
-  terminal: { name: "终端", icon: Terminal },
-  bug: { name: "调试", icon: Bug },
-  wrench: { name: "工具", icon: Wrench },
-  search: { name: "搜索", icon: Search },
-  shield: { name: "审查", icon: Shield },
-  book: { name: "文档", icon: BookOpen },
-  pen: { name: "写作", icon: PenTool },
-  feather: { name: "羽毛", icon: Feather },
-  palette: { name: "设计", icon: Palette },
-  flask: { name: "实验", icon: FlaskConical },
-  database: { name: "数据", icon: Database },
-  globe: { name: "网络", icon: Globe },
-  chat: { name: "对话", icon: MessageCircle },
-  cap: { name: "学习", icon: GraduationCap },
-  briefcase: { name: "工作", icon: Briefcase },
-  compass: { name: "探索", icon: Compass },
-  rocket: { name: "发布", icon: Rocket },
-  zap: { name: "闪电", icon: Zap },
-  sparkles: { name: "灵感", icon: Sparkles },
-  cat: { name: "猫", icon: Cat },
-  ghost: { name: "幽灵", icon: Ghost },
-  gauge: { name: "仪表", icon: Gauge },
-  coins: { name: "钱币", icon: Coins },
-  wallet: { name: "钱包", icon: Wallet },
-  timer: { name: "计时", icon: Timer },
-  calendar: { name: "日历", icon: Calendar },
-  chart: { name: "图表", icon: ChartColumn },
-  bell: { name: "提醒", icon: Bell },
-  activity: { name: "活动", icon: Activity },
+export const LINES: Record<string, { label: MessageKey; icon: LucideIcon }> = {
+  bot: { label: "agentGlyph.line.bot", icon: Bot },
+  brain: { label: "agentGlyph.line.brain", icon: Brain },
+  code: { label: "agentGlyph.line.code", icon: Code },
+  terminal: { label: "agentGlyph.line.terminal", icon: Terminal },
+  bug: { label: "agentGlyph.line.bug", icon: Bug },
+  wrench: { label: "agentGlyph.line.wrench", icon: Wrench },
+  search: { label: "agentGlyph.line.search", icon: Search },
+  shield: { label: "agentGlyph.line.shield", icon: Shield },
+  book: { label: "agentGlyph.line.book", icon: BookOpen },
+  pen: { label: "agentGlyph.line.pen", icon: PenTool },
+  feather: { label: "agentGlyph.line.feather", icon: Feather },
+  palette: { label: "agentGlyph.line.palette", icon: Palette },
+  flask: { label: "agentGlyph.line.flask", icon: FlaskConical },
+  database: { label: "agentGlyph.line.database", icon: Database },
+  globe: { label: "agentGlyph.line.globe", icon: Globe },
+  chat: { label: "agentGlyph.line.chat", icon: MessageCircle },
+  cap: { label: "agentGlyph.line.cap", icon: GraduationCap },
+  briefcase: { label: "agentGlyph.line.briefcase", icon: Briefcase },
+  compass: { label: "agentGlyph.line.compass", icon: Compass },
+  rocket: { label: "agentGlyph.line.rocket", icon: Rocket },
+  zap: { label: "agentGlyph.line.zap", icon: Zap },
+  sparkles: { label: "agentGlyph.line.sparkles", icon: Sparkles },
+  cat: { label: "agentGlyph.line.cat", icon: Cat },
+  ghost: { label: "agentGlyph.line.ghost", icon: Ghost },
+  gauge: { label: "agentGlyph.line.gauge", icon: Gauge },
+  coins: { label: "agentGlyph.line.coins", icon: Coins },
+  wallet: { label: "agentGlyph.line.wallet", icon: Wallet },
+  timer: { label: "agentGlyph.line.timer", icon: Timer },
+  calendar: { label: "agentGlyph.line.calendar", icon: Calendar },
+  chart: { label: "agentGlyph.line.chart", icon: ChartColumn },
+  bell: { label: "agentGlyph.line.bell", icon: Bell },
+  activity: { label: "agentGlyph.line.activity", icon: Activity },
 };
 
 /** Colours a role can give its glyph: the glyphs' own gradients, ordered by hue. */
-export const PALETTE: Record<string, { name: string; from: string; to: string }> = {
-  red: { name: "红", from: "#FCA5A5", to: "#B91C1C" },
-  rose: { name: "玫红", from: "#FDBA74", to: "#E11D48" },
-  orange: { name: "橙", from: "#FCD34D", to: "#C2410C" },
-  amber: { name: "金", from: "#FDE68A", to: "#D97706" },
-  green: { name: "绿", from: "#BEF264", to: "#15803D" },
-  teal: { name: "青绿", from: "#5EEAD4", to: "#0F766E" },
-  cyan: { name: "青", from: "#67E8F9", to: "#0E7490" },
-  sky: { name: "蓝", from: "#7DD3FC", to: "#0369A1" },
-  indigo: { name: "靛", from: "#A5B4FC", to: "#4F46E5" },
-  violet: { name: "紫", from: "#C4B5FD", to: "#7C3AED" },
-  pink: { name: "粉", from: "#F9A8D4", to: "#DB2777" },
-  slate: { name: "灰", from: "#CBD5E1", to: "#475569" },
+export const PALETTE: Record<string, { label: MessageKey; from: string; to: string }> = {
+  red: { label: "agentGlyph.color.red", from: "#FCA5A5", to: "#B91C1C" },
+  rose: { label: "agentGlyph.color.rose", from: "#FDBA74", to: "#E11D48" },
+  orange: { label: "agentGlyph.color.orange", from: "#FCD34D", to: "#C2410C" },
+  amber: { label: "agentGlyph.color.amber", from: "#FDE68A", to: "#D97706" },
+  green: { label: "agentGlyph.color.green", from: "#BEF264", to: "#15803D" },
+  teal: { label: "agentGlyph.color.teal", from: "#5EEAD4", to: "#0F766E" },
+  cyan: { label: "agentGlyph.color.cyan", from: "#67E8F9", to: "#0E7490" },
+  sky: { label: "agentGlyph.color.sky", from: "#7DD3FC", to: "#0369A1" },
+  indigo: { label: "agentGlyph.color.indigo", from: "#A5B4FC", to: "#4F46E5" },
+  violet: { label: "agentGlyph.color.violet", from: "#C4B5FD", to: "#7C3AED" },
+  pink: { label: "agentGlyph.color.pink", from: "#F9A8D4", to: "#DB2777" },
+  slate: { label: "agentGlyph.color.slate", from: "#CBD5E1", to: "#475569" },
 };
 
 const stroke = (paint: string, w = 2.2) => ({ fill: "none", stroke: paint, strokeWidth: w, strokeLinecap: "round" as const, strokeLinejoin: "round" as const });
 
 export const GLYPHS: Record<string, Glyph> = {
   orbit: {
-    name: "行星",
+    label: "agentGlyph.glyph.orbit",
     from: "#FDBA74",
     to: "#E11D48",
     draw: (p) => (
@@ -113,13 +115,13 @@ export const GLYPHS: Record<string, Glyph> = {
     ),
   },
   spark: {
-    name: "星芒",
+    label: "agentGlyph.glyph.spark",
     from: "#FDE68A",
     to: "#D97706",
     draw: (p) => <path fill={p} d="M12 1.5C12.8 8 16 11.2 22.5 12 16 12.8 12.8 16 12 22.5 11.2 16 8 12.8 1.5 12 8 11.2 11.2 8 12 1.5Z" />,
   },
   bloom: {
-    name: "花瓣",
+    label: "agentGlyph.glyph.bloom",
     from: "#F9A8D4",
     to: "#DB2777",
     draw: (p) => (
@@ -132,31 +134,31 @@ export const GLYPHS: Record<string, Glyph> = {
     ),
   },
   prism: {
-    name: "棱镜",
+    label: "agentGlyph.glyph.prism",
     from: "#C4B5FD",
     to: "#7C3AED",
     draw: (p) => <path fill={p} fillRule="evenodd" stroke={p} strokeWidth="1.5" strokeLinejoin="round" d="M12 3 21 19.5H3Z M12 10.5 7.9 17.5h8.2Z" />,
   },
   knot: {
-    name: "无限",
+    label: "agentGlyph.glyph.knot",
     from: "#A5B4FC",
     to: "#4F46E5",
     draw: (p) => <path {...stroke(p, 2.4)} d="M12 12C10 9 8 7.5 6 7.5a4.5 4.5 0 0 0 0 9c2 0 4-1.5 6-4.5s4-4.5 6-4.5a4.5 4.5 0 0 1 0 9c-2 0-4-1.5-6-4.5Z" />,
   },
   drop: {
-    name: "水滴",
+    label: "agentGlyph.glyph.drop",
     from: "#7DD3FC",
     to: "#0369A1",
     draw: (p) => <path fill={p} d="M12 2.5S5 10 5 14.5a7 7 0 0 0 14 0C19 10 12 2.5 12 2.5Z" />,
   },
   wave: {
-    name: "波纹",
+    label: "agentGlyph.glyph.wave",
     from: "#5EEAD4",
     to: "#0F766E",
     draw: (p) => <path {...stroke(p)} d="M3 7c3-3 6 3 9 0s6-3 9 0M3 12c3-3 6 3 9 0s6-3 9 0M3 17c3-3 6 3 9 0s6-3 9 0" />,
   },
   hex: {
-    name: "六边形",
+    label: "agentGlyph.glyph.hex",
     from: "#BEF264",
     to: "#15803D",
     draw: (p) => (
@@ -167,7 +169,7 @@ export const GLYPHS: Record<string, Glyph> = {
     ),
   },
   moon: {
-    name: "月牙",
+    label: "agentGlyph.glyph.moon",
     from: "#CBD5E1",
     to: "#475569",
     draw: (p, id) => (
@@ -181,7 +183,7 @@ export const GLYPHS: Record<string, Glyph> = {
     ),
   },
   layers: {
-    name: "叠层",
+    label: "agentGlyph.glyph.layers",
     from: "#FCA5A5",
     to: "#B91C1C",
     draw: (p) => (
@@ -192,7 +194,7 @@ export const GLYPHS: Record<string, Glyph> = {
     ),
   },
   link: {
-    name: "双环",
+    label: "agentGlyph.glyph.link",
     from: "#67E8F9",
     to: "#0E7490",
     draw: (p) => (
@@ -203,7 +205,7 @@ export const GLYPHS: Record<string, Glyph> = {
     ),
   },
   tiles: {
-    name: "方块",
+    label: "agentGlyph.glyph.tiles",
     from: "#FCD34D",
     to: "#C2410C",
     draw: (p) => (
@@ -251,13 +253,13 @@ export function AgentGlyph({ name, color, className }: { name: string; color?: s
     // lucide puts children inside its <svg>, so the gradient can live there too
     const Icon = line.icon;
     return (
-      <Icon className={cn("shrink-0", !c && "text-muted-foreground", className)} stroke={c ? `url(#${id})` : "currentColor"} aria-label={line.name}>
+      <Icon className={cn("shrink-0", !c && "text-muted-foreground", className)} stroke={c ? `url(#${id})` : "currentColor"} aria-label={t(line.label)}>
         {grad}
       </Icon>
     );
   }
   return (
-    <svg viewBox="0 0 24 24" className={cn("shrink-0", className)} aria-label={g.name}>
+    <svg viewBox="0 0 24 24" className={cn("shrink-0", className)} aria-label={t(g.label)}>
       {grad}
       {g.draw(`url(#${id})`, id)}
     </svg>

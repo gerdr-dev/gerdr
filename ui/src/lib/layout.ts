@@ -1,4 +1,5 @@
 // 布局模型：工作空间 → tab → pane 树（二叉分割）。纯函数，全部返回新对象。
+import { t } from "./i18n";
 // 结构和 herdr 一样（workspace / tab / pane），快捷键语义也照着它。
 
 /**
@@ -75,27 +76,27 @@ const RESERVED = new Set(["work", "api", "auth", "rescue", "ws", "mcp-oauth", "_
 /** Why `name` can't be a new project's name ("" = it can). */
 export function projectNameError(l: Layout, name: string): string {
   const n = name.trim();
-  if (!n) return "起个名字";
-  if ([...n].length > 64) return "名字太长了（最多 64 个字）";
-  if (/[/\\.\x00-\x1f]/.test(n)) return "名字里不能有 / \\ 和 .（名字会出现在地址和目录名里）";
-  if (RESERVED.has(n.toLowerCase())) return `「${n}」是 Gerdr 自己用的名字，换一个`;
+  if (!n) return t("layout.nameEmpty");
+  if ([...n].length > 64) return t("layout.nameTooLong");
+  if (/[/\\.\x00-\x1f]/.test(n)) return t("layout.nameBadChars");
+  if (RESERVED.has(n.toLowerCase())) return t("layout.nameReserved", { name: n });
   // Case-insensitive: on macOS / Windows "abc" and "ABC" would be the same Work directory
   const same = spaceList(l).find((s) => s.id.toLowerCase() === n.toLowerCase());
-  if (same) return same.name === same.id ? `已经有叫「${same.id}」的项目了` : `「${same.name}」建的时候叫「${same.id}」，这个名字被它占着`;
+  if (same) return same.name === same.id ? t("layout.nameTaken", { name: same.id }) : t("layout.nameTakenById", { name: same.name, id: same.id });
   return spaceNameTaken(l, n);
 }
 
 /** Why `name` can't be the name shown for a project ("" = it can); `self` is the project being renamed. */
 export function spaceNameError(l: Layout, name: string, self: string): string {
   const n = name.trim();
-  if (!n) return "起个名字";
-  if ([...n].length > 64) return "名字太长了（最多 64 个字）";
+  if (!n) return t("layout.nameEmpty");
+  if ([...n].length > 64) return t("layout.nameTooLong");
   return spaceNameTaken(l, n, self);
 }
 
 function spaceNameTaken(l: Layout, n: string, self?: string): string {
   const same = spaceList(l).find((s) => s.id !== self && s.name.toLowerCase() === n.toLowerCase());
-  return same ? `已经有叫「${same.name}」的项目了` : "";
+  return same ? t("layout.nameTaken", { name: same.name }) : "";
 }
 
 /** Projects made before ids were names (random ids like s236q0e1) get their name as id; a clash or a bad character gets fixed up. */

@@ -20,6 +20,7 @@ import { askConfirm } from "@/lib/confirm";
 import { isNative, nativeNewWindow } from "@/lib/native";
 import { SpaceDropLine, startSpaceDrag } from "./SpaceDrag";
 import { tabStatus } from "./TabBar";
+import { t } from "@/lib/i18n";
 
 /** A session's overall state for the switcher: the most urgent of its workspaces' (same ranking as WsDot). */
 export function spaceStatus(l: Layout, sp: Space, sessions: Record<string, SessionSummary>, unread: Record<string, true>) {
@@ -44,23 +45,23 @@ export function spaceStatus(l: Layout, sp: Space, sessions: Record<string, Sessi
 export async function askCloseSpace(sp: Space) {
   const n = spaceWorkspaces(get().layout, sp.id).length;
   const ok = await askConfirm({
-    title: `关闭项目「${sp.name}」？`,
-    description: `连同它的 ${n} 个工作空间一起关掉，里面的 Agent 会停掉（会话记录留着，能再打开）。项目的工作空间布局和 Work 都留在它的目录里：以后再建一个叫「${sp.id}」的项目，就都回来了。`,
-    action: "关闭",
+    title: t("spaceSwitcher.closeTitle", { name: sp.name }),
+    description: t("spaceSwitcher.closeDesc", { n, id: sp.id }),
+    action: t("common.close"),
     destructive: true,
   });
   if (!ok) return;
   const undo = closeSpaceUndoable(sp.id);
-  toast.success(`已关闭项目「${sp.name}」`, {
+  toast.success(t("spaceSwitcher.closed", { name: sp.name }), {
     duration: 10000,
     action: {
-      label: "撤销",
+      label: t("spaceSwitcher.undo"),
       onClick: () => {
         try {
           undo();
-          toast.success(`已重新打开项目「${sp.name}」`);
+          toast.success(t("spaceSwitcher.reopened", { name: sp.name }));
         } catch (e: any) {
-          toast.error(`恢复失败：${e?.message ?? e}`);
+          toast.error(t("spaceSwitcher.restoreFailed", { error: e?.message ?? e }));
         }
       },
     },
@@ -70,28 +71,28 @@ export async function askCloseSpace(sp: Space) {
 export async function askDeleteSpace(sp: Space) {
   const n = spaceWorkspaces(get().layout, sp.id).length;
   const ok = await askConfirm({
-    title: `删除项目「${sp.name}」？`,
-    description: `关掉它的 ${n} 个工作空间，里面的 Agent 会停掉（会话记录留着）；它的 Work 页面、本地函数和保存的布局移到 Gerdr 目录下的 trash/projects/ 里，不会真的删掉，要找回可以从那儿拿。以后再建同名的项目是全新的。`,
-    action: "删除",
+    title: t("spaceSwitcher.deleteTitle", { name: sp.name }),
+    description: t("spaceSwitcher.deleteDesc", { n }),
+    action: t("common.delete"),
     destructive: true,
   });
   if (!ok) return;
   try {
     const { trash, undo } = await deleteSpace(sp.id);
-    toast.success(`已删除项目「${sp.name}」`, {
-      description: trash ? `文件移到了 ${trash}` : undefined,
+    toast.success(t("spaceSwitcher.deleted", { name: sp.name }), {
+      description: trash ? t("spaceSwitcher.movedTo", { path: trash }) : undefined,
       duration: 10000,
       action: {
-        label: "撤销",
+        label: t("spaceSwitcher.undo"),
         onClick: () =>
           undo().then(
-            () => toast.success(`已恢复项目「${sp.name}」`),
-            (e) => toast.error(`恢复失败：${e?.message ?? e}`),
+            () => toast.success(t("spaceSwitcher.restored", { name: sp.name })),
+            (e) => toast.error(t("spaceSwitcher.restoreFailed", { error: e?.message ?? e })),
           ),
       },
     });
   } catch (e: any) {
-    toast.error(`删除失败：${e?.message ?? e}`);
+    toast.error(t("spaceSwitcher.deleteFailed", { error: e?.message ?? e }));
   }
 }
 
@@ -108,29 +109,29 @@ export function SpaceMenuItems({ sp, axis }: { sp: Space; axis: "x" | "y" }) {
   const [Back, Fwd] = axis === "y" ? [ArrowUp, ArrowDown] : [ArrowLeft, ArrowRight];
   return (
     <>
-      {isNative() && <ContextMenuItem onClick={() => nativeNewWindow(sp.id)}>在新窗口打开</ContextMenuItem>}
+      {isNative() && <ContextMenuItem onClick={() => nativeNewWindow(sp.id)}>{t("nav.openInNewWindow")}</ContextMenuItem>}
       <ContextMenuItem onClick={() => renameSpaceDialog(sp)}>
-        <Pencil /> 重命名…
+        <Pencil /> {t("spaceSwitcher.renameEllipsis")}
       </ContextMenuItem>
       {i > 0 && (
         <ContextMenuItem onClick={() => moveSpace(sp.id, i - 1)}>
-          <Back /> {axis === "y" ? "上移" : "左移"}
+          <Back /> {axis === "y" ? t("spaceSwitcher.moveUp") : t("spaceSwitcher.moveLeft")}
         </ContextMenuItem>
       )}
       {i < spaces.length - 1 && (
         <ContextMenuItem onClick={() => moveSpace(sp.id, i + 1)}>
-          <Fwd /> {axis === "y" ? "下移" : "右移"}
+          <Fwd /> {axis === "y" ? t("spaceSwitcher.moveDown") : t("spaceSwitcher.moveRight")}
         </ContextMenuItem>
       )}
       {(spaces.length > 1 || sp.id !== DEFAULT_SPACE) && <ContextMenuSeparator />}
       {spaces.length > 1 && (
         <ContextMenuItem onClick={() => askCloseSpace(sp)}>
-          <X /> 关闭项目
+          <X /> {t("spaceSwitcher.closeProject")}
         </ContextMenuItem>
       )}
       {sp.id !== DEFAULT_SPACE && (
         <ContextMenuItem variant="destructive" onClick={() => askDeleteSpace(sp)}>
-          <Trash2 /> 删除项目…
+          <Trash2 /> {t("spaceSwitcher.deleteProject")}
         </ContextMenuItem>
       )}
     </>
@@ -187,7 +188,7 @@ export function SpaceSwitcher() {
   const plus = (live: boolean) => (
     <button
       tabIndex={live ? undefined : -1}
-      title="新项目（每个项目有自己的工作空间、Agent 和 Work，互相看不见）"
+      title={t("spaceSwitcher.newProjectHint")}
       className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/60 hover:text-foreground"
       style={{ WebkitAppRegion: "no-drag" } as any}
       onClick={live ? newSpaceDialog : undefined}
@@ -247,7 +248,7 @@ function SpaceMenu() {
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-52">
-        <DropdownMenuLabel className="text-[11px] font-normal text-muted-foreground">每个项目的 Agent 互相看不见</DropdownMenuLabel>
+        <DropdownMenuLabel className="text-[11px] font-normal text-muted-foreground">{t("spaceSwitcher.isolated")}</DropdownMenuLabel>
         {spaces.map((sp) => {
           const st = spaceStatus(layout, sp, sessions, unread);
           return (
@@ -260,21 +261,23 @@ function SpaceMenu() {
           );
         })}
         <DropdownMenuSeparator />
-        {isNative() && <DropdownMenuItem onClick={() => nativeNewWindow(cur.id)}>在新窗口打开「{cur.name}」</DropdownMenuItem>}
+        {isNative() && (
+          <DropdownMenuItem onClick={() => nativeNewWindow(cur.id)}>{t("spaceSwitcher.openNamedInNewWindow", { name: cur.name })}</DropdownMenuItem>
+        )}
         <DropdownMenuItem onClick={newSpaceDialog}>
-          <Plus className="size-3.5" /> 新项目
+          <Plus className="size-3.5" /> {t("nav.newProject")}
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => renameSpaceDialog(cur)}>
-          <Pencil className="size-3.5" /> 重命名「{cur.name}」…
+          <Pencil className="size-3.5" /> {t("spaceSwitcher.renameNamed", { name: cur.name })}
         </DropdownMenuItem>
         {spaces.length > 1 && (
           <DropdownMenuItem onClick={() => askCloseSpace(cur)}>
-            <X className="size-3.5" /> 关闭「{cur.name}」
+            <X className="size-3.5" /> {t("spaceSwitcher.closeNamed", { name: cur.name })}
           </DropdownMenuItem>
         )}
         {cur.id !== DEFAULT_SPACE && (
           <DropdownMenuItem variant="destructive" onClick={() => askDeleteSpace(cur)}>
-            <Trash2 className="size-3.5" /> 删除「{cur.name}」…
+            <Trash2 className="size-3.5" /> {t("spaceSwitcher.deleteNamed", { name: cur.name })}
           </DropdownMenuItem>
         )}
       </DropdownMenuContent>
