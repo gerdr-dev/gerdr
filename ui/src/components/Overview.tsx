@@ -1,10 +1,14 @@
-import { ArrowLeft, ArrowUpRight, GripVertical, ClipboardCheck, Maximize2, Minimize2, PanelLeft, Pin, PinOff, Plus, X } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, Check, GripVertical, ClipboardCheck, ListPlus, Maximize2, Minimize2, PanelLeft, Pin, PinOff, Plus, X } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { basename, focusSession, newAgentInOverview, tabName } from "@/lib/actions";
-import { locateSession, spaceList, spaceOf, type Layout } from "@/lib/layout";
+import { currentSpace, locateSession, spaceList, spaceOf, type Layout } from "@/lib/layout";
 import { compareSessions } from "@/lib/order";
 import {
+  activeIds,
+  addActive,
   arrange,
   fitTiles,
   focusTile,
@@ -24,10 +28,10 @@ import {
   type DropSide,
   type Seam,
 } from "@/lib/overview";
-import { type WorkConf } from "@/lib/overviewState";
+import { openSessionsWithProject, type WorkConf } from "@/lib/overviewState";
 import { usePhone } from "@/lib/phone";
 import { useCaughtUp } from "@/lib/catchup";
-import { markRead, set, toggleSidebar, useStore } from "@/lib/store";
+import { markRead, toggleSidebar, useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { FadeText } from "./FadeText";
 import { BOX_TRANSITION, useLayoutAnim, useZoomAnim } from "@/lib/zoomAnim";
@@ -114,7 +118,6 @@ export function OverviewView({ shown }: { shown: boolean }) {
  * sidebar drawer (UnifiedSidebar), whose 进行中 rows pick the tile here. Only the shown tile is mounted (a phone can't afford a dozen live chats); its transcript stays cached.
  */
 function PhoneOverview({ ids, focus, shown }: { ids: string[]; focus?: string; shown: boolean }) {
-  const openList = () => set({ drawer: true, switcher: false });
   const chips = useRef<HTMLDivElement>(null);
   const sessions = useStore((s) => s.sessions);
   const unread = useStore((s) => s.unread);
@@ -149,10 +152,7 @@ function PhoneOverview({ ids, focus, shown }: { ids: string[]; focus?: string; s
               <TileChip key={id} id={id} current={id === focus} className="h-8 max-w-36" onClick={() => focusTile(id)} />
             ))}
           </div>
-          {/* A new agent like the shown one (same agent and directory, Cmd+D in the grid); with no tile yet, the list to pick from */}
-          <Button variant="ghost" size="icon" className="size-9 shrink-0" aria-label="新 agent" onClick={() => newAgentInOverview() || openList()}>
-            <Plus className="size-[18px]" />
-          </Button>
+          <AddMenu focus={tile} />
         </div>
         <div className="min-h-0 flex-1">
           {tile ? (
@@ -161,9 +161,7 @@ function PhoneOverview({ ids, focus, shown }: { ids: string[]; focus?: string; s
             <div className="flex h-full flex-col items-center justify-center gap-3 px-8 text-center text-[13px] text-muted-foreground">
               <ClipboardCheck className="size-6" />
               进行中是空的
-              <Button size="sm" variant="outline" onClick={openList}>
-                <Plus className="size-3.5" /> 挑几个
-              </Button>
+              <PickButton />
             </div>
           )}
         </div>
@@ -192,6 +190,140 @@ function TileChip({ id, current, className, onClick }: { id: string; current: bo
       {(dotStatus(s) !== "idle" || unread) && <StatusDot status={dotStatus(s)} unread={unread} />}
       <FadeText>{s.title || basename(s.cwd)}</FadeText>
     </button>
+  );
+}
+
+/**
+ * "Pick a few" on an empty grid: opens PickActive. It used to open the sidebar drawer, but there tapping an agent goes
+ * to its tab (leaving the grid) and "add to active" hides in the long-press menu, so on a phone nothing could be added.
+ */
+function PickButton() {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
+        <Plus className="size-3.5" /> 挑几个
+      </Button>
+      <PickActive open={open} onClose={() => setOpen(false)} />
+    </>
+  );
+}
+
+/**
+ * The phone bar's +. It used to start an agent like the shown tile's on a single tap (easy to hit by accident, and no
+ * way to add one already open) and, with no tile, open the drawer (where nothing can be added, see PickButton). Now:
+ * with a tile, a menu of the two (a new one like it, Cmd+D in the grid; or pick open ones); without, the picker.
+ */
+function AddMenu({ focus }: { focus?: string }) {
+  const s = useStore((st) => (focus ? st.sessions[focus] : undefined));
+  const [pick, setPick] = useState(false);
+  const button = (onClick?: () => void) => (
+    <Button variant="ghost" size="icon" className="size-9 shrink-0" aria-label="加 agent" onClick={onClick}>
+      <Plus className="size-[18px]" />
+    </Button>
+  );
+  return (
+    <>
+      {s ? (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>{button()}</DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="max-w-72">
+            <DropdownMenuItem onClick={() => newAgentInOverview()}>
+              <AgentIcon agent={s.agent} className="size-4" />
+              <span className="min-w-0 truncate">新开一个 · {basename(s.cwd)}</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setPick(true)}>
+              <ListPlus /> 加入 agent
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ) : (
+        button(() => setPick(true))
+      )}
+      <PickActive open={pick} onClose={() => setPick(false)} />
+    </>
+  );
+}
+
+/**
+ * Tick open agents that aren't in "active" yet and put them in at once. Lists the same scope "active" shows (this
+ * project, or all with allIn): one from elsewhere would be added but never appear.
+ */
+function PickActive({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const layout = useStore((s) => s.layout);
+  const sessions = useStore((s) => s.sessions);
+  const unread = useStore((s) => s.unread);
+  const config = useStore((s) => s.config);
+  const overview = useStore((s) => s.overview);
+  const [picked, setPicked] = useState<string[]>([]);
+  useEffect(() => {
+    if (open) setPicked([]);
+  }, [open]);
+  const space = currentSpace(layout);
+  const all = overview.allIn.includes(space);
+  const inActive = new Set(activeIds({ overview, layout, sessions, config, unread }));
+  const list = openSessionsWithProject(layout, sessions, config)
+    .filter((x) => (all || x.project === space) && !inActive.has(x.s.id))
+    .map((x) => x.s)
+    .sort((a, b) => compareSessions(a, b, unread));
+  const toggle = (id: string) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+  const confirm = () => {
+    addActive(picked);
+    // The first one ticked is the one shown (a phone shows one tile at a time)
+    focusTile(picked[0]);
+    onClose();
+  };
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="gap-3 p-4" onOpenAutoFocus={(e) => e.preventDefault()}>
+        <DialogHeader>
+          <DialogTitle className="text-[15px]">加入进行中</DialogTitle>
+          <DialogDescription className="text-[12px]">勾上要一起看的 agent，跑完也留着，直到你移出</DialogDescription>
+        </DialogHeader>
+        {list.length ? (
+          <div className="-mx-1 max-h-[55vh] overflow-y-auto">
+            {list.map((s) => {
+              const on = picked.includes(s.id);
+              return (
+                <button
+                  key={s.id}
+                  className={cn("flex h-11 w-full items-center gap-2.5 rounded-md px-2 text-left text-[13px]", on ? "bg-brand/10" : "hover:bg-accent/60")}
+                  onClick={() => toggle(s.id)}
+                >
+                  <span
+                    className={cn(
+                      "flex size-4 shrink-0 items-center justify-center rounded-sm border",
+                      on ? "border-brand bg-brand text-white" : "border-muted-foreground/50",
+                    )}
+                  >
+                    {on && <Check className="size-3" />}
+                  </span>
+                  <AgentIcon agent={s.agent} className="size-4 shrink-0" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate">{s.title || basename(s.cwd)}</span>
+                    <span className="block truncate text-[11px] text-muted-foreground">{whereOf(layout, config, s.id)}</span>
+                  </span>
+                  <StatusDot status={dotStatus(s)} unread={!!unread[s.id]} />
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="py-6 text-center text-[13px] text-muted-foreground">{all ? "开着的 agent 都在进行中了" : "这个项目开着的 agent 都在进行中了"}</div>
+        )}
+        {!all && spaceList(layout).length > 1 && (
+          <div className="text-[11px] text-muted-foreground">只列这个项目的；别的项目的要在「进行中」的设置里打开「显示所有项目的 agent」</div>
+        )}
+        <DialogFooter className="flex-row justify-end">
+          <Button size="sm" variant="outline" onClick={onClose}>
+            取消
+          </Button>
+          <Button size="sm" disabled={!picked.length} onClick={confirm}>
+            {picked.length ? `加入 ${picked.length} 个` : "加入"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -366,9 +498,10 @@ function Grid({
     <div ref={wrap} className="relative min-w-0 flex-1">
       <div ref={box} className="absolute inset-[3px]" style={more.length ? { bottom: 3 + MORE_H } : undefined}>
         {ids.length === 0 && (
-          <div className="flex h-full flex-col items-center justify-center gap-2 text-[13px] text-muted-foreground">
+          <div className="flex h-full flex-col items-center justify-center gap-3 text-[13px] text-muted-foreground">
             <ClipboardCheck className="size-6" />
             进行中是空的：等你的、在跑的、报错的会自动出现，也可以在左边右键 agent 加进来
+            <PickButton />
           </div>
         )}
         {/* Flat and keyed by session, positioned absolutely (like Panes.TabView): re-arranging only moves boxes, the chats don't remount */}
