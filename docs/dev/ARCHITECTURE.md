@@ -624,6 +624,10 @@ menu written for the variables keeps a sane width and no gap.
   The add-on blocks aren't in the drawer for good either (they took a quarter of a phone's height from the list): a
   button in its bottom row opens them in a sheet (`AddonSheet`).
 - The desktop App has the system title bar, so the rail needs no room for the traffic lights.
+- A phone on its side is past the phone width (768) but ~400px tall, ~150px with the soft keyboard up: the whole rail
+  scrolls (not just the projects, which got squeezed to nothing under the fixed rest), and below 560px tall
+  (`short:` variant, index.css) the mode buttons drop their labels. On a touch screen the shortcut-list button is
+  the command palette instead.
 
 ## 手机上（< 768px，照 herdr-web）
 

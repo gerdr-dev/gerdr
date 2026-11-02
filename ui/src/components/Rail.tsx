@@ -1,4 +1,4 @@
-import { Briefcase, Code2, Gauge, Keyboard, Plus, Settings } from "lucide-react";
+import { Briefcase, Code2, Command, Gauge, Keyboard, Plus, Settings } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
@@ -8,6 +8,7 @@ import { slots } from "@/lib/addons";
 import { isAndroid } from "@/lib/android";
 import { currentSpace, spaceList, type Space } from "@/lib/layout";
 import { isNative, nativeNewWindow } from "@/lib/native";
+import { isCoarse } from "@/lib/phone";
 import { toggleOverview } from "@/lib/overview";
 import { set, setMode, toggleSidebar, useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -52,6 +53,7 @@ export function Rail() {
   const spaces = spaceList(layout);
   const here = currentSpace(layout);
   const cur = mode === "work" ? "work" : "agents";
+  const coarse = isCoarse();
 
   const project = (sp: Space) => {
     const on = sp.id === here;
@@ -101,7 +103,7 @@ export function Rail() {
         aria-label={label}
         aria-pressed={on}
         className={cn(
-          "flex w-12 flex-col items-center gap-0.5 rounded-lg py-1.5 text-[10px] leading-none",
+          "flex w-12 flex-col items-center gap-0.5 rounded-lg py-1.5 text-[10px] leading-none short:py-2.5",
           on ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
         )}
         onClick={() => {
@@ -111,59 +113,71 @@ export function Rail() {
         }}
       >
         <Icon className="size-4" />
-        {label}
+        <span className="short:hidden">{label}</span>
       </button>,
     );
   };
 
   return (
-    <div className="flex h-full w-14 shrink-0 flex-col items-center border-r bg-sidebar">
-      {/* Projects scroll on their own when there are many; the rest of the rail stays put */}
-      <div className="flex min-h-0 w-full shrink flex-col items-center gap-2 overflow-y-auto pt-2.5 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {spaces.map(project)}
-        {tip(
-          "新项目（每个项目有自己的工作空间、Agent 和 Work，互相看不见）",
-          <button
-            aria-label="新项目"
-            className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-dashed text-muted-foreground hover:text-foreground"
-            onClick={newSpaceDialog}
-          >
-            <Plus className="size-4" />
-          </button>,
-        )}
-      </div>
-      <div className="my-2 h-px w-7 shrink-0 bg-border" />
-      <div className="flex shrink-0 flex-col items-center gap-1.5">
-        {modeItem("agents", "Code", Code2)}
-        {modeItem("work", "Work", Briefcase)}
-      </div>
-      <div className="min-h-2 flex-1" />
-      <div className="flex shrink-0 flex-col items-center gap-1 pb-2">
-        <AddonPanel />
-        <InboxButton className="size-9" />
-        {tip(
-          "快捷键",
-          <button aria-label="快捷键" className={railBtn} onClick={() => set({ dialog: { kind: "help" } })}>
-            <Keyboard className="size-4" />
-          </button>,
-        )}
-        {tip(
-          doctorBad ? "设置（诊断发现了问题：设置 → 实验室 → 诊断）" : "设置",
-          <button
-            aria-label="设置"
-            className={cn(railBtn, "relative")}
-            onClick={() => set({ dialog: { kind: "settings", tab: doctorBad ? "labs" : undefined } })}
-          >
-            <Settings className="size-4" />
-            {doctorBad && <span className="absolute top-1.5 right-1.5 size-1.5 rounded-full bg-bad" />}
-          </button>,
-        )}
-        {/* Which way the Android app reaches gerdr (details in Settings → General → Android app) */}
-        {connected && isAndroid() && (
-          <div className="pt-1 [&>span]:flex-col [&>span]:gap-0.5 [&>span]:text-[10px]">
-            <RouteLabel />
-          </div>
-        )}
+    // The whole rail scrolls when the window is too short for it (a phone on its side is ~400px tall, ~150px with the
+    // soft keyboard up). Only the projects scrolling squeezed them to nothing there, under the fixed rest. min-h-full
+    // inside keeps the spacer pushing the bottom group down when there is room.
+    <div className="h-full w-14 shrink-0 overflow-y-auto border-r bg-sidebar [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="flex min-h-full flex-col items-center">
+        <div className="flex w-full flex-col items-center gap-2 pt-2.5 pb-1 short:gap-1.5 short:pt-2">
+          {spaces.map(project)}
+          {tip(
+            "新项目（每个项目有自己的工作空间、Agent 和 Work，互相看不见）",
+            <button
+              aria-label="新项目"
+              className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-dashed text-muted-foreground hover:text-foreground"
+              onClick={newSpaceDialog}
+            >
+              <Plus className="size-4" />
+            </button>,
+          )}
+        </div>
+        <div className="my-2 h-px w-7 shrink-0 bg-border short:my-1.5" />
+        <div className="flex shrink-0 flex-col items-center gap-1.5">
+          {modeItem("agents", "Code", Code2)}
+          {modeItem("work", "Work", Briefcase)}
+        </div>
+        <div className="min-h-2 flex-1" />
+        <div className="flex shrink-0 flex-col items-center gap-1 pb-2">
+          <AddonPanel />
+          <InboxButton className="size-9" />
+          {/* A touch screen seldom has a keyboard to need a shortcut list: the command palette instead, as in the phone's drawer */}
+          {coarse
+            ? tip(
+                "命令面板",
+                <button aria-label="命令面板" className={railBtn} onClick={() => set({ dialog: { kind: "palette" } })}>
+                  <Command className="size-4" />
+                </button>,
+              )
+            : tip(
+                "快捷键",
+                <button aria-label="快捷键" className={railBtn} onClick={() => set({ dialog: { kind: "help" } })}>
+                  <Keyboard className="size-4" />
+                </button>,
+              )}
+          {tip(
+            doctorBad ? "设置（诊断发现了问题：设置 → 实验室 → 诊断）" : "设置",
+            <button
+              aria-label="设置"
+              className={cn(railBtn, "relative")}
+              onClick={() => set({ dialog: { kind: "settings", tab: doctorBad ? "labs" : undefined } })}
+            >
+              <Settings className="size-4" />
+              {doctorBad && <span className="absolute top-1.5 right-1.5 size-1.5 rounded-full bg-bad" />}
+            </button>,
+          )}
+          {/* Which way the Android app reaches gerdr (details in Settings → General → Android app) */}
+          {connected && isAndroid() && (
+            <div className="pt-1 [&>span]:flex-col [&>span]:gap-0.5 [&>span]:text-[10px]">
+              <RouteLabel />
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

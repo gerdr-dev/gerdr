@@ -1,4 +1,6 @@
 @custom-variant dark (&:is(.dark *));
+/* A short window: a phone on its side (~400px tall) or with the soft keyboard up. The rail (Rail.tsx) tightens up */
+@custom-variant short (@media (max-height: 560px));
 
 /* tw-animate-css, what shadcn's animate-in / fade-in / slide-in-from-* classes need (see the file for why it is copied in) */
 @import "./animate.css";
