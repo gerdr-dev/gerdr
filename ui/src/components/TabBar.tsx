@@ -1,10 +1,10 @@
 import { PanelLeft, Plus, SquareTerminal, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { addTab, closeTab, duplicateTab, tabName } from "@/lib/actions";
-import { formatCombo, IS_MAC } from "@/lib/keys";
+import { formatCombo } from "@/lib/keys";
 import { activeWs, leaves, type Tab } from "@/lib/layout";
 import { applyTabLabel } from "@/lib/addons";
 import { get, keyFor, set, setLayout, toggleSidebar, useStore } from "@/lib/store";
@@ -15,44 +15,6 @@ import { TabDragLayer, useTabDrag } from "./TabDrag";
 import { ConnStatus } from "./ConnStatus";
 
 /** 一个 tab 的汇总状态：里面任何一个会话在等你 → 等你；在跑 → 在跑；…… */
-/**
- * True while the tab shortcuts' modifier (⌘ on mac, Ctrl elsewhere) is held on its own. Waits a moment before turning on
- * so a quick ⌘C / ⌘V doesn't flash numbers across the tab bar. Listens in the capture phase because xterm and the
- * composer stop some keydowns; drops on blur since the keyup of a ⌘-Tab away never reaches the page.
- */
-function useModHeld() {
-  const [held, setHeld] = useState(false);
-  useEffect(() => {
-    const mod = IS_MAC ? "Meta" : "Control";
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const off = () => {
-      clearTimeout(timer);
-      timer = undefined;
-      setHeld(false);
-    };
-    const down = (e: KeyboardEvent) => {
-      // ⌘1–9 switches tabs while ⌘ is still down: keep the numbers up so the next pick is still readable.
-      if (/^[1-9]$/.test(e.key) && (IS_MAC ? e.metaKey : e.ctrlKey)) return;
-      if (e.key !== mod) return off();
-      if (e.repeat) return;
-      if (e.shiftKey || e.altKey || (IS_MAC ? e.ctrlKey : e.metaKey)) return;
-      clearTimeout(timer);
-      timer = setTimeout(() => setHeld(true), 250);
-    };
-    const up = (e: KeyboardEvent) => e.key === mod && off();
-    window.addEventListener("keydown", down, true);
-    window.addEventListener("keyup", up, true);
-    window.addEventListener("blur", off);
-    return () => {
-      off();
-      window.removeEventListener("keydown", down, true);
-      window.removeEventListener("keyup", up, true);
-      window.removeEventListener("blur", off);
-    };
-  }, []);
-  return held;
-}
-
 export function tabStatus(tab: Tab, sessions: Record<string, SessionSummary>, unread: Record<string, true>) {
   let rank = 9;
   let status: string | undefined;
@@ -82,7 +44,8 @@ export function TabBar() {
   const barRef = useRef<HTMLDivElement>(null);
   const { drag, onPointerDown } = useTabDrag(ws, barRef);
   const flush = sidebar;
-  const numbers = useModHeld();
+  // The tabs are prefix+1–9 (⌘1–9 went to "active", lib/modHeld.ts): number them once the prefix is pressed
+  const numbers = prefixActive;
   return (
     // 胶囊式标签：当前的是一块亮一点的圆角底（bg-accent），别的不画底、悬停时浮起一块淡的。
     // 原来是 Chrome 那种（当前标签和下面内容同色、连成一片），可深色下栏底和内容底色只差一点（0.14 / 0.165），
@@ -155,7 +118,7 @@ export function TabBar() {
                   <span className="min-w-0 flex-1 overflow-hidden whitespace-nowrap [mask-image:linear-gradient(to_right,black_calc(100%-1rem),transparent)]">
                     {label}
                   </span>
-                  {/* Holding ⌘ (Ctrl elsewhere) lays the tab's ⌘1–9 number on a veil at the tab's left edge — over the icon when there
+                  {/* After the prefix key, the tab's prefix+1–9 number lies on a veil at the tab's left edge — over the icon when there
                       is one, over the start of the name when not (no icon, or crowded). It used to live in the icon's slot and conjure
                       that slot up when missing, which only worked for some tabs and shoved the names over on every ⌘ press. As an
                       overlay it shows on every tab and moves nothing; the name stays plain for plugins / renames. */}

@@ -15,10 +15,11 @@ import { cn } from "@/lib/utils";
 type Target = KeyAction | "prefix";
 type Rec = { target: Target; afterPrefix: boolean };
 
-/** 设置页里 tab1 / ws1 展开成 1–9 各一行（帮助里合成一行）。 */
+/** Settings spells tab1 / active1 / ws1 out as one row per 1–9 (the help folds them into one). */
+const NUMBERED = new Set<KeyAction>(["tab1", "active1", "ws1"]);
 const ROWS: [string, KeyAction[]][] = KEY_GROUPS.map(([g, acts]) => [
   g,
-  acts.flatMap((a) => (a === "tab1" || a === "ws1" ? ([1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => `${a.slice(0, -1)}${i}`) as KeyAction[]) : [a])),
+  acts.flatMap((a) => (NUMBERED.has(a) ? ([1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => `${a.slice(0, -1)}${i}`) as KeyAction[]) : [a])),
 ]);
 
 const same = (a: string[], b: string[]) => a.length === b.length && a.every((x, i) => x === b[i]);

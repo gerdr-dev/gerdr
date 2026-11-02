@@ -3,6 +3,9 @@ import { allCommands } from "@/lib/commands";
 import { ACTION_TITLES, KEY_GROUPS, formatCombo } from "@/lib/keys";
 import { closeDialog, keyFor, prefOf, useStore } from "@/lib/store";
 
+/** The 1–9 families, folded into one line each. */
+const NUMBERED: Partial<Record<string, string>> = { tab1: "跳到 tab 1–9", active1: "跳到进行中第 1–9 个", ws1: "跳到工作空间 1–9" };
+
 // The shortcut sheet (prefix+?): the configured keys by group, plugin commands with keys, and the composer's own keys.
 export function KeyHelp({ open }: { open: boolean }) {
   const cfg = useStore((s) => s.config);
@@ -25,10 +28,10 @@ export function KeyHelp({ open }: { open: boolean }) {
               <div className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{g}</div>
               {acts.map((a) => (
                 <div key={a} className="flex items-center justify-between py-0.5 text-[13px]">
-                  <span>{a === "tab1" ? "跳到 tab 1–9" : a === "ws1" ? "跳到工作空间 1–9" : ACTION_TITLES[a]}</span>
+                  <span>{NUMBERED[a] ?? ACTION_TITLES[a]}</span>
                   <span className="font-mono text-[12px] text-muted-foreground">
                     {keyFor(cfg, a)
-                      .map((k) => (a === "tab1" || a === "ws1" ? formatCombo(k).replace(/1$/, "1…9") : formatCombo(k)))
+                      .map((k) => (NUMBERED[a] ? formatCombo(k).replace(/1$/, "1…9") : formatCombo(k)))
                       .join("  ") || "—"}
                   </span>
                 </div>

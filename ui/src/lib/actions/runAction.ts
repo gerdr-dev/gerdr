@@ -3,6 +3,7 @@ import type { KeyAction } from "../keys";
 import { activeTab, activeWs } from "../layout";
 import { get, overviewShown, set, setMode, toggleSidebar } from "../store";
 import { overviewKey, toggleOverview } from "../overview";
+import { activeAt } from "../modHeld";
 import { confirmCloseFocusedPane, cyclePane, duplicateFocused, focusDir, newAgentInOverview, splitFocused, swapDir, tabName, toggleZoom } from "./panes";
 import { reopenClosed } from "./reopen";
 import { attentionList, focusSession, focusedSessionId, stashDraft, stepAttention, stopFocused } from "./sessions";
@@ -83,6 +84,20 @@ export function runAction(a: KeyAction) {
     case "tab8":
     case "tab9":
       return selectTab(Number(a.slice(3)) - 1);
+    case "active1":
+    case "active2":
+    case "active3":
+    case "active4":
+    case "active5":
+    case "active6":
+    case "active7":
+    case "active8":
+    case "active9": {
+      // Same as clicking the row: a tile in the grid is focused there, anything else is brought up in its pane / Work
+      const id = activeAt(Number(a.slice(6)));
+      if (id) focusSession(id);
+      return;
+    }
     case "ws1":
     case "ws2":
     case "ws3":

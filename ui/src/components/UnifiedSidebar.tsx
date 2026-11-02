@@ -85,6 +85,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { markRead, set, useStore } from "@/lib/store";
 import { whenCaughtUp } from "@/lib/catchup";
+import { frozenOrder, useModFrozen, useModShown } from "@/lib/modHeld";
 import { BorderFlow, useSlowCatchUp } from "./BorderFlow";
 import type { SessionSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -185,7 +186,10 @@ export function UnifiedSidebar({ className }: { className?: string }) {
   const gridFocus = useStore((s) => s.overview.focus);
   useStore((s) => s.addonVersion);
   const tiles = useOverviewIds().split(",").filter(Boolean);
-  const activeIds = useActiveIds().split(",").filter(Boolean);
+  // Held still while ⌘ is down, so the numbers don't move under ⌘1–9 (lib/modHeld.ts)
+  const frozen = useModFrozen();
+  const activeIds = frozenOrder(useActiveIds().split(",").filter(Boolean), frozen);
+  const numbers = useModShown();
   // Counts for the ⋯ menu; recomputed on every render of the sidebar, which already follows sessions and the overview
   const doneN = useStore((s) => doneActiveIds(s).length);
   const outN = useStore((s) => workingOutIds(s).length);
@@ -227,7 +231,7 @@ export function UnifiedSidebar({ className }: { className?: string }) {
   };
   const gridFocusId = gridFocus && tiles.includes(gridFocus) ? gridFocus : tiles[0];
 
-  const flatRow = (x: Item, top = false) => {
+  const flatRow = (x: Item, top = false, num?: number) => {
     const p = rowProps(x.ws, x.tab, x.pane, x.split);
     const id = x.s?.id;
     return (
@@ -236,6 +240,7 @@ export function UnifiedSidebar({ className }: { className?: string }) {
         {...p}
         where={wsLabel(x.ws)}
         top={top}
+        num={num}
         // In the grid, a row of "active" picks its tile instead of leaving the grid
         current={top && gridOn ? id === gridFocusId : p.current}
         // The drawer closes once the tile has loaded: closing at once showed the tile we came from first (lib/catchup)
@@ -314,13 +319,14 @@ export function UnifiedSidebar({ className }: { className?: string }) {
                 </button>
               </div>
               {!activeFolded &&
-                active.map((x) =>
-                  x.item ? (
-                    flatRow(x.item, true)
+                active.map((x, i) => {
+                  const num = numbers && i < 9 ? i + 1 : undefined;
+                  return x.item ? (
+                    flatRow(x.item, true, num)
                   ) : (
-                    <WorkRow key={x.id} id={x.id} current={gridOn && x.id === gridFocusId} grid={gridOn && tiles.includes(x.id)} />
-                  ),
-                )}
+                    <WorkRow key={x.id} id={x.id} current={gridOn && x.id === gridFocusId} grid={gridOn && tiles.includes(x.id)} num={num} />
+                  );
+                })}
               {/* Only when empty: a row appearing mid-drag would push the rows under the pointer */}
               {dragAgent && !active.length && !activeFolded && <div className="py-1 pl-7 text-[12px] text-muted-foreground">拖到这里加入进行中</div>}
             </div>
@@ -378,8 +384,21 @@ function FootButton({ onClick, title, children }: { onClick: () => void; title: 
   );
 }
 
+/**
+ * A row's ⌘1–9 number, shown while ⌘ is held: laid over the icon so nothing on the row moves (same as the tab bar used to).
+ * The row has to be `relative`.
+ */
+function KeyNum({ n }: { n?: number }) {
+  if (!n) return null;
+  return (
+    <span className="absolute top-1 left-1 flex size-5 items-center justify-center rounded-sm bg-background text-[12px] font-medium text-foreground/80 tabular-nums ring-1 ring-border">
+      {n}
+    </span>
+  );
+}
+
 /** A Work conversation in "active": no pane, so no group or tab; going to it opens Work mode (actions.focusSession). */
-function WorkRow({ id, current, grid }: { id: string; current: boolean; grid: boolean }) {
+function WorkRow({ id, current, grid, num }: { id: string; current: boolean; grid: boolean; num?: number }) {
   const s = useStore((st) => st.sessions[id]);
   const unread = useStore((st) => !!st.unread[id]);
   const project = useStore((st) => {
@@ -394,7 +413,7 @@ function WorkRow({ id, current, grid }: { id: string; current: boolean; grid: bo
           role="button"
           data-row-current={current || undefined}
           className={cn(
-            "group flex h-7 cursor-default items-center gap-2 rounded-md px-2 text-[12px] select-none",
+            "group relative flex h-7 cursor-default items-center gap-2 rounded-md px-2 text-[12px] select-none",
             current ? "bg-accent font-medium" : "hover:bg-accent/60",
             "data-[state=open]:ring-1 data-[state=open]:ring-brand/60",
           )}
@@ -403,6 +422,7 @@ function WorkRow({ id, current, grid }: { id: string; current: boolean; grid: bo
           onAuxClick={(e) => e.button === 1 && (e.preventDefault(), removeActive(id))}
         >
           <AgentIcon agent={s.agent} className="size-3.5 shrink-0" />
+          <KeyNum n={num} />
           <span className="min-w-0 flex-1 truncate">{s.title || basename(s.cwd)}</span>
           <span className="max-w-[40%] shrink-0 truncate text-[11px] text-muted-foreground group-hover:hidden">Work{project ? ` · ${project}` : ""}</span>
           <button
@@ -552,6 +572,7 @@ function Row({
   visible,
   activeTabId,
   where,
+  num,
 }: {
   tab: Tab;
   pane: PaneLeaf;
@@ -569,6 +590,8 @@ function Row({
   activeTabId: string;
   /** Shown instead of the directory (rows of "active", out of their group). */
   where?: string;
+  /** Its ⌘1–9 number, while ⌘ is held (rows of "active"). */
+  num?: number;
 }) {
   const { title, sub } = paneLabel(pane, s);
   // An unnamed tab is named after its first agent: only a renamed tab adds something worth showing
@@ -606,6 +629,7 @@ function Row({
         >
           {loading && <BorderFlow />}
           {s ? <AgentIcon agent={s.agent} className="size-3.5 shrink-0" /> : <Icon className="size-3.5 shrink-0 text-muted-foreground" />}
+          <KeyNum n={num} />
           <span className={cn("min-w-0 flex-1 truncate", pane.term && "font-mono text-[11.5px]", !s && !pane.term && "text-muted-foreground")}>
             {tabLabel ? (
               <>

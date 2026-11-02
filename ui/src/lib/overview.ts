@@ -501,6 +501,16 @@ const NEUTRAL = new Set<KeyAction>([
   "prevAttention",
   "focusAttention",
   "toggleSidebar",
+  // ⌘1–9: focusSession picks the tile when it is one
+  "active1",
+  "active2",
+  "active3",
+  "active4",
+  "active5",
+  "active6",
+  "active7",
+  "active8",
+  "active9",
 ]);
 
 /**

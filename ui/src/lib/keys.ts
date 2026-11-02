@@ -40,6 +40,15 @@ export type KeyAction =
   | "tab7"
   | "tab8"
   | "tab9"
+  | "active1"
+  | "active2"
+  | "active3"
+  | "active4"
+  | "active5"
+  | "active6"
+  | "active7"
+  | "active8"
+  | "active9"
   | "newWorkspace"
   | "renameWorkspace"
   | "closeWorkspace"
@@ -108,6 +117,15 @@ export const ACTION_TITLES: Record<KeyAction, string> = {
   tab7: "tab 7",
   tab8: "tab 8",
   tab9: "tab 9",
+  active1: "进行中第 1 个",
+  active2: "进行中第 2 个",
+  active3: "进行中第 3 个",
+  active4: "进行中第 4 个",
+  active5: "进行中第 5 个",
+  active6: "进行中第 6 个",
+  active7: "进行中第 7 个",
+  active8: "进行中第 8 个",
+  active9: "进行中第 9 个",
   newWorkspace: "新建工作空间",
   renameWorkspace: "重命名工作空间",
   closeWorkspace: "关闭工作空间",
@@ -177,22 +195,33 @@ const MAC_KEYS: Record<KeyAction, string[]> = {
   // 和浏览器一样。浏览器里这个键被浏览器自己占着（重开它的标签页），只在桌面 App 里管用；那边用命令面板
   reopenClosed: ["meta+shift+t"],
   renameTab: ["prefix+shift+t"],
-  tab1: ["prefix+1", "meta+1"],
-  tab2: ["prefix+2", "meta+2"],
-  tab3: ["prefix+3", "meta+3"],
-  tab4: ["prefix+4", "meta+4"],
-  tab5: ["prefix+5", "meta+5"],
-  tab6: ["prefix+6", "meta+6"],
-  tab7: ["prefix+7", "meta+7"],
-  tab8: ["prefix+8", "meta+8"],
-  tab9: ["prefix+9", "meta+9"],
+  // ⌘1–9 used to be the tabs; the sidebar replaced the tab bar and its rows aren't numbered, so ⌘N now goes to the Nth agent
+  // of "active" (the section on top, numbered while ⌘ is held: lib/modHeld.ts). The tabs keep prefix+N.
+  tab1: ["prefix+1"],
+  tab2: ["prefix+2"],
+  tab3: ["prefix+3"],
+  tab4: ["prefix+4"],
+  tab5: ["prefix+5"],
+  tab6: ["prefix+6"],
+  tab7: ["prefix+7"],
+  tab8: ["prefix+8"],
+  tab9: ["prefix+9"],
+  active1: ["meta+1"],
+  active2: ["meta+2"],
+  active3: ["meta+3"],
+  active4: ["meta+4"],
+  active5: ["meta+5"],
+  active6: ["meta+6"],
+  active7: ["meta+7"],
+  active8: ["meta+8"],
+  active9: ["meta+9"],
   newWorkspace: ["prefix+shift+n", "meta+shift+n"],
   renameWorkspace: ["prefix+shift+w"],
   closeWorkspace: ["prefix+shift+d"],
   workspaces: ["prefix+w"],
   nextWorkspace: ["prefix+)"],
   prevWorkspace: ["prefix+("],
-  // ⌃⌘1–9: the numbers in front of the sidebar's workspaces (within the current session); ⌘1–9 are tabs. Not ⇧⌘1–9 (macOS keeps
+  // ⌃⌘1–9: the numbers in front of the sidebar's workspaces (within the current session); ⌘1–9 are "active". Not ⇧⌘1–9 (macOS keeps
   // ⇧⌘3 / 4 / 5 for screenshots, they never reach the page) nor ⌃1–9 (desktops, when Mission Control shortcuts are on)
   ws1: ["meta+ctrl+1"],
   ws2: ["meta+ctrl+2"],
@@ -242,7 +271,7 @@ const PC_EXTRA: Partial<Record<KeyAction, string[]>> = {
   reopenClosed: ["ctrl+shift+alt+t"],
   ...Object.fromEntries(
     [1, 2, 3, 4, 5, 6, 7, 8, 9].flatMap((i) => [
-      [`tab${i}`, [`ctrl+${i}`]],
+      [`active${i}`, [`ctrl+${i}`]],
       [`ws${i}`, [`alt+${i}`]],
     ]),
   ),
@@ -270,7 +299,7 @@ export const DEFAULT_KEYS: Record<KeyAction, string[]> = IS_MAC
       (Object.keys(MAC_KEYS) as KeyAction[]).map((a) => [a, [...MAC_KEYS[a].filter((k) => !/(^|\+)meta\+/.test(k)), ...(PC_EXTRA[a] ?? [])]]),
     ) as Record<KeyAction, string[]>);
 
-/** 设置页和帮助里的分组（tab1 代表 tab1–9，ws1 代表 ws1–9）。 */
+/** Groups in Settings and the help (tab1 / active1 / ws1 stand for their 1–9). */
 export const KEY_GROUPS: [string, KeyAction[]][] = [
   [
     "分屏",
@@ -296,7 +325,7 @@ export const KEY_GROUPS: [string, KeyAction[]][] = [
   ["tab", ["newTab", "terminalTab", "nextTab", "prevTab", "lastTab", "tab1", "closeTab", "reopenClosed", "renameTab"]],
   ["工作空间", ["newWorkspace", "workspaces", "nextWorkspace", "prevWorkspace", "ws1", "renameWorkspace", "closeWorkspace"]],
   ["项目", ["newSpace", "nextSpace", "prevSpace"]],
-  ["会话", ["sessions", "nextAttention", "prevAttention", "focusAttention", "renamePane", "stop", "stash"]],
+  ["会话", ["active1", "sessions", "nextAttention", "prevAttention", "focusAttention", "renamePane", "stop", "stash"]],
   ["其他", ["palette", "overview", "toggleSidebar", "settings", "help", "importHerdr"]],
 ];
 

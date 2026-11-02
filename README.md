@@ -132,7 +132,7 @@ Like herdr / tmux: press the prefix `ctrl+b`, release, then:
 | `?` | all shortcuts | | |
 
 Keys are matched by physical position, so they work with a CJK input method on. Rebind everything in
-Settings → Shortcuts. The macOS app adds menu shortcuts: `⌘T` new tab, `⌘1…9` switch tab (hold `⌘` to see the numbers on the tabs), `⌘E` back to the last tab even in another workspace, `⌘D` / `⌘⇧D` duplicate
+Settings → Shortcuts. The macOS app adds menu shortcuts: `⌘T` new tab, `⌘1…9` go to the Nth agent under "Active" in the sidebar (hold `⌘` to see the numbers; tabs are `prefix+1…9`), `⌘E` back to the last tab even in another workspace, `⌘D` / `⌘⇧D` duplicate
 the focused pane to the right / below (a new session with the same agent, directory and mode, or a terminal in the
 same directory).
 
