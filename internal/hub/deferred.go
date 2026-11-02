@@ -19,6 +19,9 @@ import (
 // "Queued", with Withdraw, and ↑ / Esc take it back), held here, and once the turn ends it is taken out of the log
 // and sent as a turn of its own — logged again at that point, so the log reads as if it had been sent then.
 //
+// A plain message takes the same path when the agent answers its steer with "hold" (acpx.SteerHold): the running
+// turn can't take one, e.g. Codex refuses a steer into a /compact turn.
+//
 // A command the agent marks _meta.midTurn runs right away instead (Gerdr Agent's /rename: it only renames, nothing
 // to wait for); it goes in as a steer and the agent runs it there.
 
@@ -138,7 +141,7 @@ func (s *Session) sendDeferred(d *deferredMsg) {
 	defer cancel()
 	if _, err := s.SendFrom(ctx, d.content, d.id, d.from, false); err != nil {
 		s.h.log.Warn("deferred command", "session", s.ID(), "err", err)
-		s.emit(&Event{Kind: EvNotice, Level: "error", Text: "排着的命令没发出去：" + oneLine(errText(err), 200)})
+		s.emit(&Event{Kind: EvNotice, Level: "error", Text: "排着的消息没发出去：" + oneLine(errText(err), 200)})
 		// Nothing started, so no turn end will send the ones behind it
 		s.mu.Lock()
 		var next *deferredMsg

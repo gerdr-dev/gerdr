@@ -218,6 +218,8 @@ type SteerRequest struct {
 // SteerResponse.Outcome：
 //   - injected：插进了正在跑的那一轮；
 //   - promptRequired：此刻没有在跑的一轮，消息没收下，client 自己改发 session/prompt。
+//   - hold: a turn is running but can't take a steer (Codex refuses one into a compact or review turn). Not taken;
+//     the client holds it and sends it as a turn of its own once this one ends (the hub: deferred.go).
 //
 // gerdr 的适配器永远走 promptRequired 那条（不替 client 偷偷开一轮 —— 那一轮没有
 // session/prompt 的响应，client 拿不到它的结束信号）。
@@ -228,6 +230,7 @@ type SteerResponse struct {
 const (
 	SteerInjected       = "injected"
 	SteerPromptRequired = "promptRequired"
+	SteerHold           = "hold"
 )
 
 type RewindRequest struct {

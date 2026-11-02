@@ -1068,7 +1068,13 @@ func (a *Agent) steer(ctx context.Context, p acpx.SteerRequest) (acpx.SteerRespo
 		s.mu.Lock()
 		still := s.turnID == tid
 		s.mu.Unlock()
-		if !still || strings.Contains(strings.ToLower(err.Error()), "active turn") {
+		e := strings.ToLower(err.Error())
+		if still && (strings.Contains(e, "cannot steer") || strings.Contains(e, "activeturnnotsteerable")) {
+			// A compact or review turn takes no steer ("cannot steer a compact turn", codex 0.166): have the hub
+			// hold it until this turn ends. Returning the error lost the message.
+			return acpx.SteerResponse{Outcome: acpx.SteerHold}, nil
+		}
+		if !still || strings.Contains(e, "active turn") {
 			return acpx.SteerResponse{Outcome: acpx.SteerPromptRequired}, nil
 		}
 		return acpx.SteerResponse{}, err

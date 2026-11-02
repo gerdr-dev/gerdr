@@ -486,25 +486,30 @@ func (a *Agent) Prompt(ctx context.Context, p acp.PromptRequest) (acp.PromptResp
 			}
 			return acp.PromptResponse{}, acp.NewInternalError(map[string]any{"message": err.Error()})
 		}
-		return acp.PromptResponse{StopReason: acp.StopReasonEndTurn, Usage: s.turnUsage()}, nil
-	}
-	if name == "memory" && !a.opt.NoMemory {
-		// 换成一句给模型的话（记忆就是文件，它自己会读写）；界面上显示的还是人打的 /memory
-		text := "Show me what you remember across conversations: read both memory indexes (global and project) and list the memories grouped by scope, one line each with its file path. Do not change anything."
-		if args != "" {
-			text = "About your long-term memory: " + args + "\n\n(Act on this by reading / writing / deleting files in your memory directories as described in your instructions, then tell me what changed.)"
+		// A steer sent while compacting was accepted (the session is busy) and sits in the queue: answer it now,
+		// on the compacted context. Returning here left it there unanswered (user report).
+		if s.endIfIdle(end) {
+			return acp.PromptResponse{StopReason: acp.StopReasonEndTurn, Usage: s.turnUsage()}, nil
 		}
-		blocks = append([]acp.ContentBlock{acp.TextBlock(text)}, blocks[1:]...)
-	} else if name != "" {
-		if sk := findSkill(a.skills(s.cwd()), name); sk != nil {
-			text := fmt.Sprintf("The user invoked the skill %q. Read %s with the read tool and follow it.", sk.Name, filepath.Join(sk.Dir, "SKILL.md"))
+	} else {
+		if name == "memory" && !a.opt.NoMemory {
+			// 换成一句给模型的话（记忆就是文件，它自己会读写）；界面上显示的还是人打的 /memory
+			text := "Show me what you remember across conversations: read both memory indexes (global and project) and list the memories grouped by scope, one line each with its file path. Do not change anything."
 			if args != "" {
-				text += "\n\nArguments: " + args
+				text = "About your long-term memory: " + args + "\n\n(Act on this by reading / writing / deleting files in your memory directories as described in your instructions, then tell me what changed.)"
 			}
 			blocks = append([]acp.ContentBlock{acp.TextBlock(text)}, blocks[1:]...)
+		} else if name != "" {
+			if sk := findSkill(a.skills(s.cwd()), name); sk != nil {
+				text := fmt.Sprintf("The user invoked the skill %q. Read %s with the read tool and follow it.", sk.Name, filepath.Join(sk.Dir, "SKILL.md"))
+				if args != "" {
+					text += "\n\nArguments: " + args
+				}
+				blocks = append([]acp.ContentBlock{acp.TextBlock(text)}, blocks[1:]...)
+			}
 		}
+		s.addMsg(llmUser(a.toParts(blocks, s)), msgID, nil)
 	}
-	s.addMsg(llmUser(a.toParts(blocks, s)), msgID, nil)
 
 	for {
 		err = r.loop(tctx)

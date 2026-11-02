@@ -20,6 +20,7 @@ import (
 type fakeAgent struct {
 	acp.Agent // unused methods panic
 	commands  bool
+	hold      bool // answer steers with hold (a turn that can't take one, like Codex's compact turn)
 
 	conn     *acp.AgentSideConnection
 	mu       sync.Mutex
@@ -71,8 +72,11 @@ func (f *fakeAgent) HandleExtensionMethod(ctx context.Context, method string, pa
 		var p acpx.SteerRequest
 		_ = json.Unmarshal(params, &p)
 		f.mu.Lock()
+		defer f.mu.Unlock()
+		if f.hold {
+			return acpx.SteerResponse{Outcome: acpx.SteerHold}, nil
+		}
 		f.steers = append(f.steers, contentText(mustRaw(p.Prompt)))
-		f.mu.Unlock()
 		return acpx.SteerResponse{Outcome: acpx.SteerInjected}, nil
 	case acpx.MethodWithdraw:
 		return acpx.WithdrawResponse{}, nil
@@ -203,6 +207,28 @@ func TestDeferredCommand(t *testing.T) {
 		if e.Kind == EvUser && contentText(e.Content) == "/compact keep the plan" && e.Steer {
 			t.Fatal("the command is logged again as a turn of its own, not a steer")
 		}
+	}
+}
+
+// A message the running turn can't take (the agent answers hold: Codex mid-/compact) waits for the turn to end, then
+// goes as a turn of its own. It used to come back as an error and was lost.
+func TestSteerHold(t *testing.T) {
+	s, f := startFake(t, false)
+	f.hold = true
+	send(t, s, "/compact")
+	if r := send(t, s, "update the layout"); !r.Steered {
+		t.Fatal("held message should report steered")
+	}
+	close(f.release)
+	if p := waitPrompt(t, f); p != "/compact" {
+		t.Fatalf("first turn %q", p)
+	}
+	if p := waitPrompt(t, f); p != "update the layout" {
+		t.Fatalf("held message ran as %q", p)
+	}
+	waitIdle(t, s)
+	if got := texts(s.Events()); !eq(got, []string{"/compact", "update the layout"}) {
+		t.Fatalf("log %q", got)
 	}
 }
 

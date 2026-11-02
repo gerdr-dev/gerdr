@@ -168,6 +168,14 @@ func (s *Session) SendFrom(ctx context.Context, content []acp.ContentBlock, clie
 				go s.autoTitle()
 				return SendResult{MessageID: msgID, Steered: true}, nil
 			}
+			if res.Outcome == acpx.SteerHold {
+				// This turn can't take a steer (Codex's compact turn): hold it like a mid-turn command and send it
+				// once the turn ends. It used to come back as an error and the message was gone (user report).
+				if s.deferCommand(msgID, from, content, raw) {
+					return SendResult{MessageID: msgID, Steered: true}, nil
+				}
+				break // the turn ended meanwhile: send it as a new one
+			}
 			time.Sleep(150 * time.Millisecond)
 			s.mu.Lock()
 			r := s.running

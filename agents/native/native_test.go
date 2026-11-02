@@ -346,6 +346,43 @@ func TestSteerDuringTool(t *testing.T) {
 	}
 }
 
+// A steer sent while /compact runs is answered once the summary is in, on the compacted context. It used to be
+// accepted and then left in the queue: /compact returned without looking at it (user report).
+func TestSteerDuringCompact(t *testing.T) {
+	e := setup(t, func(n int, msgs []any) reply {
+		switch n {
+		case 0:
+			return reply{text: "hello"}
+		case 1: // the summary, slow enough to steer into
+			return reply{text: "summary of the chat", delay: 100 * time.Millisecond}
+		}
+		return reply{text: "answering the steer"}
+	})
+	sid := e.newSession(modeBypass)
+	if _, err := e.prompt(sid, uuid.NewString(), "hi"); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan struct{})
+	go func() { e.prompt(sid, uuid.NewString(), "/compact"); close(done) }()
+	time.Sleep(150 * time.Millisecond)
+	sr, err := agenthost.Call[acpx.SteerResponse](context.Background(), e.c, acpx.MethodSteer, acpx.SteerRequest{SessionId: sid, MessageId: uuid.NewString(), Prompt: []acp.ContentBlock{acp.TextBlock("update the layout")}})
+	if err != nil || sr.Outcome != acpx.SteerInjected {
+		t.Fatalf("steer: %v %v", sr, err)
+	}
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("turn did not finish")
+	}
+	if e.llm.count() != 3 {
+		t.Fatalf("want hello + summary + steer answer, got %d calls", e.llm.count())
+	}
+	b, _ := json.Marshal(e.llm.request(2)["messages"])
+	if s := string(b); !strings.Contains(s, "summary of the chat") || !strings.Contains(s, "update the layout") || strings.Contains(s, "hello") {
+		t.Fatalf("steer not answered on the compacted context: %s", s)
+	}
+}
+
 func TestSteerNowInterruptsGeneration(t *testing.T) {
 	e := setup(t, func(n int, msgs []any) reply {
 		if n == 0 {
