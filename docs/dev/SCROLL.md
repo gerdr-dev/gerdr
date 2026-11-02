@@ -149,16 +149,21 @@ Virtuoso 在 ResizeObserver 里量行高、改布局，所以 rAF 里看到「�
   (measured: 196px off the bottom). Only from the second line on (on the first, "auto" is one line anyway); the chat's
   size is the same before and after, so no ResizeObserver hears of it. The box around the textarea is now held at its
   height while it measures. Rows in rAF frames lie here too: judge painted frames (`--ro`) or the scroll events.
-- **Touches judged by the finger's direction left the bottom at the bottom** (four phone screen recordings: the
+- **Touches judged by the finger's direction left the bottom at the bottom** (phone screen recordings: the
   jump-to-bottom button flashing or staying up while already at the very end). A finger pushing up where nothing can
-  scroll, jittering, or slipping back a pixel as it lifts (which flings the chat up ~10px) all read as "scrolling up";
-  three rounds of thresholds and re-stick timers each left a hole (taps in quick succession, the lift's fling). Now a
-  touch is one gesture, touchstart until its fling settles (`touch` in ChatList.tsx), judged by the net distance the
-  chat actually scrolled up: over 16px leaves the bottom at once; any movement stops following for the rest of the
-  touch (nothing moves under the finger); at the end, a touch that ends at the very bottom sticks (however it
-  started: a drag up and back down to the end used to leave the button up, a fifth recording), and one that never
-  really dragged is still stuck and goes back to the end. Touchmoves aren't read at all, so a replaced row swallowing
-  them no longer matters. `touchhold.mjs --up=-40 [--taps=3]`, `touchhold.mjs --up=40 --back`.
+  scroll, jittering, or slipping back as it lifts all read as "scrolling up"; rounds of direction thresholds and
+  re-stick timers each left a hole (quick taps, the lift's fling, a drag back down to the end). A 16px "still at the
+  bottom" threshold after that snapped deliberate small pulls back to the end (a trace from the phone: `up=12`, back to
+  the end on lifting). Now "at the bottom" is a position, for touches as for everything else: within `END` (2px) of
+  the end. A touch (touchstart until its fling settles, `touch` in ChatList.tsx) leaves the bottom once the user
+  scrolled the chat off the end, and sticks again when it ends at the end. Touchmoves aren't read. Checked by the
+  button matching the position: `touchhold.mjs --up=-40 [--taps=3]`, `--up=20`, `--back`; `flick.mjs` (quick flicks
+  up and down, real touch flings).
+  Then a slow drag couldn't leave the bottom at all: each scroll event of a slow finger on a dpr-3 phone is a third
+  of a pixel, under the "scrolled up by more than 0.5px since last time" test, and while stuck every one was put back
+  on the end, so it never added up to `END`. Now, while a touch runs, the stuck chat keeps the finger's offset (up to
+  `END`) instead of snapping back, and leaves the bottom by its distance from the end we last placed, not by the step
+  between two events. `touchhold.mjs --slow --up=30` (a third of a pixel every 50ms).
 - **TanStack Virtual, tried in Labs (`TanList.tsx`, "新的对话列表"), then set aside for a list of our own.** What it
   needed on top of its chat mode (`anchorTo: "end"`), each found by these scripts or on the user's phone:
   following the bottom ourselves (its `followOnAppend` follows appends only: a reply growing in place, rows measured

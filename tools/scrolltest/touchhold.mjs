@@ -1,13 +1,16 @@
 // Phone: a finger drags the chat a little while a reply streams in, then stays down without moving. What's under the
 // finger must stay put; it used to bob up and down (the reply pulled it toward the bottom, the finger dragged it back).
-//   node touchhold.mjs [--at="something the user said"] [--tab=1] [--up=40] [--hold=3000] [--dt=60] [--size=6] [--cpu=1] [--ro] [--height=860] [--creep]
+//   node touchhold.mjs [--at="something the user said"] [--tab=1] [--up=40] [--hold=3000] [--dt=60] [--size=6] [--cpu=1] [--ro] [--height=860] [--creep] [--slow]
 // --height=462: a phone with the keyboard up (the chat area is then shorter than the reply being written). --creep: the
 // finger keeps inching down while held; the content may then only move down with it.
 // --wait: ms of the reply streaming in before the finger lands (it must be a screen tall by then).
 // --up: how far the finger drags down (= scrolls up), from the bottom. 40 stays inside the 80px that still count as "at
 // the bottom"; 300+ is reading inside the reply being written. --hold: how long the finger then stays still.
 // --up=-40: the finger pushes up at the bottom (nothing to scroll) and slips back a pixel as it lifts; or --up under the
-// touch slop (~15px): either way nothing scrolls, and the chat must still follow the bottom after the finger lifts.
+// touch slop (~15px): either way nothing scrolls while the finger is down, so no jump-to-bottom button then; after it
+// lifts the button must match the position (shown exactly when off the end).
+// --slow: the drag goes a third of a pixel every 50ms. At the bottom each such step used to be put back on the end
+// (and a step under 0.5px didn't count as scrolling up), so a slow drag never got off it.
 // --taps=3 [--gap=80]: that gesture three times in quick succession. --back: after holding, the finger drags back
 // down past the end and lifts; the chat must follow the bottom again.
 // Without --at it takes the user message followed by the most agent text. Feeds that turn in on the UI side only.
@@ -52,10 +55,11 @@ const scrollTop = () =>
 const st0 = await scrollTop();
 const y0 = 300;
 await touch("touchStart", y0);
-const moves = Math.max(4, Math.round(Math.abs(a.up) / 8));
+// --slow: a third of a pixel every 50ms, a finger dragging slowly on a dpr-3 phone
+const moves = a.slow ? Math.abs(a.up) * 3 : Math.max(4, Math.round(Math.abs(a.up) / 8));
 for (let i = 1; i <= moves; i++) {
   await touch("touchMove", y0 + (a.up * i) / moves);
-  await page.waitForTimeout(16);
+  await page.waitForTimeout(a.slow ? 50 : 16);
 }
 // --up negative: the finger pushes up at the bottom (nothing to scroll) and slips back a pixel as it lifts
 if (a.up < 0) {
@@ -65,7 +69,13 @@ if (a.up < 0) {
 await page.waitForTimeout(150);
 // A drag shorter than the touch slop (~15px), or pushing up at the bottom, never scrolls up. By scrollTop, not the
 // distance from the end: the chat may stop following while the finger is down
-if ((await scrollTop()) >= st0 - 0.5) {
+const offEnd = () =>
+  page.evaluate(() => {
+    const sc = [...document.querySelectorAll("[data-virtuoso-scroller], [data-chat-scroller]")].find((x) => !x.closest(".invisible"));
+    return sc.scrollHeight - sc.clientHeight - sc.scrollTop;
+  });
+// scrollTop alone misses a drag while the chat was still following output (it kept growing past st0)
+if ((await scrollTop()) >= st0 - 0.5 && (await offEnd()) <= 2) {
   // Nothing scrolled, so the chat must still be following the bottom once the finger lifts (a tap or a jitter at the
   // bottom used to leave it unstuck: the jump-to-bottom button up at the very bottom, new output not followed).
   // Nor may it leave the bottom while the finger is still down: the button flashed up on every jitter
@@ -89,7 +99,10 @@ if ((await scrollTop()) >= st0 - 0.5) {
     // The jump-to-bottom button (one chat open in the debug instance)
     return [sc.scrollHeight - sc.clientHeight - sc.scrollTop, !!document.querySelector("button svg.lucide-arrow-down")];
   });
-  const stuck = after < 2 && !button && !whileDown;
+  // The button says where the chat is: shown exactly when it's off the end (a finger slipping back as it lifts can
+  // fling it up a few px, which is off the end too). Never while the finger is down, as nothing scrolled then
+  // --slow drags well past the touch slop: it has to scroll
+  const stuck = !whileDown && button === after > 2 && !a.slow;
   console.log(
     `--up=${a.up}: the drag didn't scroll; jump-to-bottom button ${whileDown ? "shown" : "hidden"} with the finger down; 1s after lifting it ${Math.round(after)}px off the bottom, button ${button ? "shown" : "hidden"}`,
   );

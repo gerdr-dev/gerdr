@@ -31,7 +31,6 @@ export type ListHandle = {
 };
 
 const END = 2; // px from the end that still count as the bottom
-const JITTER = 16; // px a touch may scroll the chat up and still not have left the bottom
 const SETTLE = 150; // ms without a scroll after the finger lifts that end a touch (its fling has stopped)
 const EST = 60; // a row never measured
 const OVERSCAN = 800; // px mounted above and below the screen
@@ -149,6 +148,7 @@ export const ChatList = forwardRef<
   // scrollTop the range was computed for. Opening with known sizes, the first render mounts only the rows near where it
   // opens: guess the screen's height until there is one.
   const lastTop = useRef(0);
+  const lastEnd = useRef(0); // endOf(scroller) when sync last placed it
   if (warm.current && !el.current && lastTop.current === 0)
     lastTop.current = startTop ?? Math.max(0, layout(rows).total - (typeof window !== "undefined" ? window.innerHeight : 800));
 
@@ -174,19 +174,17 @@ export const ChatList = forwardRef<
   // A finger is down. The touchend can be lost when the row under the finger is replaced (a tool call's "peek" row
   // turning into its group: events go to the detached node and never bubble up); the next touchstart resets it.
   const finger = useRef(false);
-  // A touch, from touchstart until its fling has settled (SETTLE after the last scroll once the finger is up). Touches
-  // are judged by where the chat actually scrolled, never by the finger's direction: at the bottom a finger pushing up,
-  // jittering or slipping back as it lifts reads as "scrolling up" though nothing can scroll, which left the bottom on
-  // every touch and put the jump-to-bottom button up at the very bottom (four phone screen recordings, patched three
-  // times by direction thresholds before this). Touchmoves needn't reach the list either (see above).
-  // - `up`: net px the chat scrolled up during the touch (positions we wrote ourselves don't count, see sync).
-  // - While it runs, stuck changes only on a real drag (up > JITTER). Until then a chat that moved at all (up > 0.5)
-  //   stops following, so nothing moves under the finger (touchhold.mjs: the text bobbed or ran on); one that didn't
-  //   move keeps following the output.
-  // - When it ends: at the very bottom → stuck, however it started (a drag up and back down to the end left the button
-  //   up at the bottom, a fifth recording). Still stuck (no real drag) → back to the end.
-  // Taps in quick succession are one touch (a touchstart before the settle carries the touch on).
-  const touch = useRef<{ up: number } | null>(null);
+  // A touch, from touchstart until its fling has settled (SETTLE after the last scroll once the finger is up). "At the
+  // bottom" is a position, the same for touches as for everything else: within END of the end. Never the finger's
+  // direction (at the bottom a finger pushing up, jittering or slipping back reads as "scrolling up" though nothing
+  // scrolls: the button showed at the very end, four phone recordings), nor a distance threshold (a deliberate pull of
+  // 12px snapped back to the end on lifting, read off a trace from the phone).
+  // - While it runs: the chat scrolled up by the user and now off the end → not stuck. Getting back to the end doesn't
+  //   stick again yet: a fling may still carry it on.
+  // - When it ends: at the end → stuck, however it started.
+  // Taps in quick succession are one touch (a touchstart before the settle carries it on). Touchmoves aren't read at
+  // all, so a replaced row swallowing them (above) doesn't matter.
+  const touch = useRef(false);
   const settleTouch = useRef(0);
   // A smooth scroll we're animating: towards target(), recomputed each frame
   const anim = useRef<{ raf: number; target: () => number | undefined } | null>(null);
@@ -208,13 +206,12 @@ export const ChatList = forwardRef<
     if (!s || !b || !s.clientHeight) return;
     const prev = shown.current;
     const top = s.scrollTop;
-    // Moved since we last placed it, its scroll event maybe not in yet: a finger's or the scrollbar's, not ours to undo
-    const g = touch.current;
-    if (g && Math.abs(top - lastTop.current) > 0.5) {
-      g.up += lastTop.current - top;
-      if (stuck.current && g.up > JITTER) setStuck(false);
-    }
-    if (stuck.current && dragging.current && top < lastTop.current - 0.5) setStuck(false);
+    // Scrolled up by a finger or the scrollbar since we last placed it, its scroll event maybe not in yet: theirs, not
+    // ours to undo
+    // A touch by how far it got from the end we last placed, not by each scroll event's step: a slow finger on a dpr-3
+    // phone moves a third of a pixel per event, never "up by more than 0.5" from the last one.
+    if (stuck.current && touch.current && top < lastTop.current && lastEnd.current - top > END) setStuck(false);
+    if (stuck.current && dragging.current && top < lastTop.current - 0.5 && endOf(s) - top > END) setStuck(false);
     // The row at the top of the screen in the layout on screen until now (where it starts relative to the screen's top
     // is prev.tops[a] - top)
     let a = -1;
@@ -247,8 +244,13 @@ export const ChatList = forwardRef<
       if (n.style.transform !== t) n.style.transform = t;
     }
     // Where scrollTop belongs
-    if (stuck.current && !cb.current.holding() && !(g && g.up > 0.5)) {
-      if (!anim.current && Math.abs(endOf(s) - s.scrollTop) > 0.5) s.scrollTop = endOf(s);
+    if (stuck.current && !cb.current.holding()) {
+      // A touch pulling up within END keeps its offset from the end instead of being put back: a slow drag moves ~1px
+      // per scroll event, and snapping each one back meant it never got past END and couldn't leave the bottom.
+      // Getting stuck again is up to the touch ending (endTouch).
+      const off = touch.current ? Math.min(END, Math.max(0, lastEnd.current - top)) : 0;
+      const to = endOf(s) - off;
+      if (!anim.current && Math.abs(to - s.scrollTop) > 0.5) s.scrollTop = to;
     } else if (a >= 0) {
       // By key. If that row is gone, the next one still there: the rows of a message cut off at the top get new keys
       // once the rest of it comes in with older messages (fling.mjs --to-top: the whole screen swapped on the first load)
@@ -261,6 +263,7 @@ export const ChatList = forwardRef<
       }
     }
     lastTop.current = s.scrollTop;
+    lastEnd.current = endOf(s);
     const [f, t] = want(lay, s.scrollTop, s.clientHeight);
     if (f !== range.current[0] || t !== range.current[1] || lay.missing !== extra.current) {
       if (inEffect) render();
@@ -386,7 +389,7 @@ export const ChatList = forwardRef<
       const s = el.current;
       if (!s) return;
       clearTimeout(settleTouch.current);
-      touch.current = null;
+      touch.current = false;
       if (index === "LAST") {
         setStuck(true);
         if (behavior === "smooth") animate(() => endOf(s));
@@ -416,7 +419,7 @@ export const ChatList = forwardRef<
       const s = el.current;
       if (!s) return;
       clearTimeout(settleTouch.current);
-      touch.current = null;
+      touch.current = false;
       setStuck(false);
       stopAnim();
       s.scrollTop = Math.max(0, top);
@@ -425,10 +428,10 @@ export const ChatList = forwardRef<
 
   const endTouch = () => {
     clearTimeout(settleTouch.current);
-    const g = touch.current;
-    touch.current = null;
+    const was = touch.current;
+    touch.current = false;
     const s = el.current;
-    if (!g || !s) return;
+    if (!was || !s) return;
     if (!stuck.current && endOf(s) - s.scrollTop <= END) setStuck(true);
     sync([]); // stuck: back to the end
   };
@@ -449,7 +452,7 @@ export const ChatList = forwardRef<
     const tstart = () => {
       stopAnim();
       clearTimeout(settleTouch.current);
-      if (!touch.current) touch.current = { up: 0 };
+      touch.current = true;
       finger.current = true;
     };
     const tend = (e: TouchEvent) => {
@@ -522,7 +525,7 @@ export const ChatList = forwardRef<
         const s = e.currentTarget;
         const dist = endOf(s) - s.scrollTop;
         const wentUp = s.scrollTop < lastTop.current - 0.5;
-        if (dragging.current && wentUp) setStuck(false);
+        if (dragging.current && wentUp && dist > END) setStuck(false);
         // A touch decides when it ends (see touch); its fling keeps it going
         if (touch.current) {
           if (!finger.current) waitSettle();
