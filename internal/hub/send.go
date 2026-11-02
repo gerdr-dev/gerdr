@@ -84,6 +84,21 @@ func (s *Session) SendFrom(ctx context.Context, content []acp.ContentBlock, clie
 		}
 	}
 	s.mu.Unlock()
+	// A slash command mid-turn that the agent can't take as a steer: hold it until the turn ends (deferred.go).
+	// Before answering a pending question with it and before the `!` output goes in front: both happen when it's sent.
+	if running && s.holdsCommand(c, content) {
+		raw := make([]json.RawMessage, 0, len(content))
+		for _, b := range content {
+			j, _ := json.Marshal(b)
+			raw = append(raw, j)
+		}
+		if s.deferCommand(msgID, from, content, raw) {
+			return SendResult{MessageID: msgID, Steered: true}, nil
+		}
+		s.mu.Lock()
+		running = s.running
+		s.mu.Unlock()
+	}
 	// 提问还挂着，人却直接打字说话了：照 Claude Code，这句话就是回答 —— 先把提问收掉（告诉 agent「他直接在对话里回了」），
 	// 再把话插进去。不收的话 agent 一直卡在等提问，插进去的话要等它超时 / 被关掉才轮得到。
 	if len(asks) > 0 {
@@ -241,6 +256,11 @@ func (s *Session) runTurn(c *agenthost.Host, agentSID, msgID string, content []a
 		s.running, s.auto = true, true
 		s.turnStarted, s.turnTokens = now(), 0
 	}
+	// A slash command held back while this turn ran goes next (deferred.go); after the agent's own turn if one follows
+	var held *deferredMsg
+	if !next {
+		held = s.popDeferredLocked()
+	}
 	s.mu.Unlock()
 	s.emit(ev)
 	go s.autoTitle()
@@ -252,6 +272,9 @@ func (s *Session) runTurn(c *agenthost.Host, agentSID, msgID string, content []a
 	s.h.saveIndex()
 	if closeNow {
 		go s.h.CloseUI(context.Background(), s.rec.ID)
+	}
+	if held != nil {
+		go s.sendDeferred(held)
 	}
 }
 

@@ -190,6 +190,16 @@ func (l *File) Append(events []*Event) error {
 
 // Rewrite replaces the whole file with events (via a temp file and a rename).
 func (l *File) Rewrite(events []*Event) error {
+	if err := l.WriteAll(events); err != nil {
+		return err
+	}
+	l.Flushed = len(events)
+	return nil
+}
+
+// WriteAll is Rewrite without touching Flushed, for a writer that keeps Flushed under its own lock and does the IO
+// outside it (internal/hub Session.rewriteLog).
+func (l *File) WriteAll(events []*Event) error {
 	tmp := l.Path + ".tmp"
 	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
@@ -206,7 +216,6 @@ func (l *File) Rewrite(events []*Event) error {
 		return err
 	}
 	f.Close()
-	l.Flushed = len(events)
 	return os.Rename(tmp, l.Path)
 }
 

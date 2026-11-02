@@ -91,16 +91,11 @@ func (h *Hub) continueFrom(ctx context.Context, o CreateOptions) (*Session, erro
 
 // adoptHistory puts src's log (evs, copies) in front of s's and marks where s's agent takes over.
 func (h *Hub) adoptHistory(s *Session, srcRec Record, evs []*Event) {
-	s.mu.Lock()
-	s.loadLocked()
-	all := append(evs, s.events...)
-	s.events = all
-	s.rec.Title, s.rec.CustomTitle, s.rec.TitleKey, s.rec.PluginTitleFor = srcRec.Title, srcRec.CustomTitle, srcRec.TitleKey, srcRec.PluginTitleFor
-	s.rec.Handoff = &Handoff{Session: srcRec.ID, Agent: srcRec.Agent}
-	s.mu.Unlock()
-	if err := s.lf.Rewrite(all); err != nil {
-		h.log.Warn("write session log", "id", s.rec.ID, "err", err)
-	}
+	all := s.rewriteLog(func() {
+		s.events = append(evs, s.events...)
+		s.rec.Title, s.rec.CustomTitle, s.rec.TitleKey, s.rec.PluginTitleFor = srcRec.Title, srcRec.CustomTitle, srcRec.TitleKey, srcRec.PluginTitleFor
+		s.rec.Handoff = &Handoff{Session: srcRec.ID, Agent: srcRec.Agent}
+	})
 	h.broadcastEvents(s.rec.ID, all, true)
 	from, to := h.agentName(srcRec.Agent), h.agentName(s.rec.Agent)
 	s.emit(&Event{Kind: EvNotice, Level: handoffLevel, Text: fmt.Sprintf("换 %s 接着聊：上面是和 %s 的对话，下一条消息会把它一起带给 %s", to, from, to)})

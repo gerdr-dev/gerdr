@@ -90,6 +90,7 @@ type Session struct {
 	adopting    bool              // 在等 gerdr 重启前没收尾的那一轮（adoptOrphanTurn），CatchUp 别插手
 	orphanSince int64             // 载入时日志里有一轮没收尾：最后一条日志的时间（只在 New 里用一次）
 	steering    map[string]string // 正在插的话（msgID → 早到的队列状态），见 SendFrom
+	deferred    []*deferredMsg    // slash commands sent mid-turn, waiting for the turn to end (deferred.go)
 	lastCatch   time.Time         // 正在从 agent 记录重新载入（CatchUp / Reload），别重入
 	lastErr     string
 	modes       *acp.SessionModeState
@@ -115,6 +116,12 @@ type Session struct {
 	shut        bool                 // Hub.Shutdown 关掉的（关了 pane）：这一轮因为进程被杀报的错不算错、不自动重试；再接上时清掉
 	shells      map[string]*shellRun // 输入框里 `!命令` 还在跑的（shell.go）
 	attachMu    sync.Mutex
+	// wmu orders the writes to the log file (flush's appends, rewriteLog's rewrites): taken before mu, held through
+	// the IO, which runs outside mu. Without it a rewrite (withdraw, rewind) ran unlocked next to flush and emit,
+	// which read and set lf.Flushed under mu: a race, and an append could land in the file just replaced.
+	wmu sync.Mutex
+	// writing: a write is under way, so events counted as flushed may not be on disk yet: don't unload (memory.go).
+	writing int
 }
 
 type pending struct {
@@ -332,6 +339,8 @@ func (s *Session) emit(e *Event) {
 
 // flush 把还没落盘的日志写下去。force=false 时最后一条流式片段先不写（它可能还会长）。
 func (s *Session) flush(force bool) {
+	s.wmu.Lock()
+	defer s.wmu.Unlock()
 	s.mu.Lock()
 	if !s.loaded {
 		s.mu.Unlock()
@@ -350,15 +359,43 @@ func (s *Session) flush(force bool) {
 	batch := append([]*Event(nil), s.events[s.lf.Flushed:n]...)
 	from := s.lf.Flushed
 	s.lf.Flushed = n
+	s.writing++
 	s.mu.Unlock()
-	if err := s.lf.Append(batch); err != nil {
+	err := s.lf.Append(batch)
+	s.mu.Lock()
+	s.writing--
+	if err != nil {
 		s.h.log.Warn("write session log", "id", s.rec.ID, "err", err)
-		s.mu.Lock()
 		if s.lf.Flushed == n {
 			s.lf.Flushed = from
 		}
-		s.mu.Unlock()
 	}
+	s.mu.Unlock()
+}
+
+// rewriteLog replaces the log file with the events after edit (run under mu, may be nil) changed them, and returns
+// them. The file is written outside mu (a long log takes tens of ms), with the events already counted as flushed so
+// emit doesn't merge a chunk into one being written; events emitted meanwhile go after them with the next flush.
+func (s *Session) rewriteLog(edit func()) []*Event {
+	s.wmu.Lock()
+	defer s.wmu.Unlock()
+	s.mu.Lock()
+	s.loadLocked()
+	if edit != nil {
+		edit()
+	}
+	all := append([]*Event(nil), s.events...)
+	s.lf.Flushed = len(all)
+	s.writing++
+	s.mu.Unlock()
+	err := s.lf.WriteAll(all)
+	s.mu.Lock()
+	s.writing--
+	s.mu.Unlock()
+	if err != nil {
+		s.h.log.Warn("rewrite log", "id", s.rec.ID, "err", err)
+	}
+	return all
 }
 
 func (s *Session) setStatus() {

@@ -33,6 +33,9 @@ type Session struct {
 
 	mu       sync.Mutex
 	escMu    sync.Mutex
+	// wmu orders the writes to file (flush's appends, replaced's rewrites): taken before mu, held through the IO,
+	// which runs outside mu. file.Flushed is only read and set under mu.
+	wmu sync.Mutex
 	events   []*Event
 	seq      int64
 	st       State
@@ -249,14 +252,20 @@ func (s *Session) emit(e *Event) {
 }
 
 func (s *Session) replaced() {
+	s.wmu.Lock()
 	s.mu.Lock()
 	all := append([]*Event(nil), s.events...)
+	if s.file != nil {
+		// counted as written before the IO: emit must not merge a chunk into an event being written
+		s.file.Flushed = len(all)
+	}
 	s.mu.Unlock()
 	if s.file != nil {
-		if err := s.file.Rewrite(all); err != nil {
+		if err := s.file.WriteAll(all); err != nil {
 			s.log.Warn("rewrite chat log", "err", err)
 		}
 	}
+	s.wmu.Unlock()
 	if s.o.OnEvents != nil {
 		s.o.OnEvents(all, true)
 	}
@@ -273,6 +282,8 @@ func (s *Session) flush(force bool) {
 	if s.file == nil {
 		return
 	}
+	s.wmu.Lock()
+	defer s.wmu.Unlock()
 	s.mu.Lock()
 	n := len(s.events)
 	if !force && n > 0 && s.events[n-1].Kind == EvUpdate && IsChunk(s.events[n-1].Update) {

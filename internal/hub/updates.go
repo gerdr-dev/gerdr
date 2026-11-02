@@ -174,12 +174,14 @@ func (s *Session) onGerdrInfo(g map[string]any) {
 			s.running, s.auto, s.lastErr = true, true, ""
 			s.turnStarted, s.turnTokens = now(), 0
 		}
+		var held *deferredMsg
 		if end {
 			s.running, s.auto = false, false
 			for id, p := range s.pending {
 				close(p.ch)
 				delete(s.pending, id)
 			}
+			held = s.popDeferredLocked()
 		}
 		s.mu.Unlock()
 		if start {
@@ -193,6 +195,9 @@ func (s *Session) onGerdrInfo(g map[string]any) {
 			s.emit(&Event{Kind: EvTurnEnd, StopReason: string(acp.StopReasonEndTurn), Auto: true, DurationMs: dur, OutputTokens: tok})
 			s.flush(true)
 			s.setStatus()
+			if held != nil {
+				go s.sendDeferred(held)
+			}
 		}
 	}
 }

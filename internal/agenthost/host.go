@@ -60,6 +60,14 @@ func (h *Host) SteerRewind() bool {
 	return ok && s["rewind"] == true
 }
 
+// SteerCommands reports whether a slash command sent mid-turn can go in as a steer: the agent runs it itself at the
+// right time (Claude Code holds it until the turn ends). Otherwise the hub holds it back and sends it as a turn of
+// its own once the running one ends (hub/deferred.go): to the others a steer is just text for the model.
+func (h *Host) SteerCommands() bool {
+	s, ok := h.Info.Meta["steering"].(map[string]any)
+	return ok && s["commands"] == true
+}
+
 func StartInProc(ctx context.Context, agent InProcAgent, handler Handler, log *slog.Logger) (*Host, error) {
 	c2aR, c2aW := io.Pipe()
 	a2cR, a2cW := io.Pipe()

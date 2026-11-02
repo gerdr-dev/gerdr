@@ -407,7 +407,9 @@ var builtinCommands = []acp.AvailableCommand{
 	{Name: "clear", Description: "清空上下文：另起一段新对话，之前说过的不再带上"},
 	{Name: "compact", Description: "压缩上下文：把之前的对话总结成摘要，腾出上下文空间（后面可以跟要求）"},
 	{Name: "memory", Description: "看它跨会话记住了什么；后面跟话就是关于记忆的要求（比如「/memory 忘掉 xxx」「/memory 记住 xxx」）"},
-	{Name: "rename", Description: "给会话改名：/rename <名字>；不跟名字就按聊过的内容起一个"},
+	// midTurn: sent while a turn runs it comes in as a steer and runs right away (it only renames); the hub holds the
+	// other commands back until the turn ends (internal/hub/deferred.go).
+	{Name: "rename", Description: "给会话改名：/rename <名字>；不跟名字就按聊过的内容起一个", Meta: map[string]any{"midTurn": true}},
 	{Name: "mcp", Description: "MCP 服务器：连上没有、报了什么错、有哪些工具；/mcp <名字> 看工具说明，/mcp reconnect [名字] 重连"},
 }
 
@@ -585,6 +587,15 @@ func (a *Agent) HandleExtensionMethod(ctx context.Context, method string, params
 		s, err := a.session(p.SessionId)
 		if err != nil {
 			return nil, err
+		}
+		if name, args := slash(p.Prompt); name == "rename" {
+			// /rename mid-turn (midTurn above): rename now, nothing for the model to read
+			if !s.isBusy() {
+				return acpx.SteerResponse{Outcome: acpx.SteerPromptRequired}, nil
+			}
+			s.steerState(p.MessageId, "started")
+			go a.rename(context.WithoutCancel(ctx), s, args)
+			return acpx.SteerResponse{Outcome: acpx.SteerInjected}, nil
 		}
 		if !s.enqueue(p.MessageId, p.Prompt, p.Now) {
 			return acpx.SteerResponse{Outcome: acpx.SteerPromptRequired}, nil

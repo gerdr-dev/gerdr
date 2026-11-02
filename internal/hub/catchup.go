@@ -233,13 +233,14 @@ func (s *Session) Reload(ctx context.Context) error {
 		return err
 	}
 	s.mu.Lock()
-	s.events, s.loaded = nil, true
-	s.lastErr = ""
-	rec := s.rec
+	s.events, s.loaded = nil, true // starting over: no point reading the old log back in (rewriteLog loads first)
 	s.mu.Unlock()
-	if err := s.lf.Rewrite(nil); err != nil {
-		s.h.log.Warn("rewrite log", "err", err)
-	}
+	var rec Record
+	s.rewriteLog(func() {
+		s.events = nil
+		s.lastErr = ""
+		rec = s.rec
+	})
 	s.h.broadcastEvents(rec.ID, []*Event{}, true)
 	meta := map[string]any{}
 	if rec.Mode != "" {

@@ -350,6 +350,12 @@ func (s *session) clearUrgentLocked() {
 	}
 }
 
+func (s *session) isBusy() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.busy
+}
+
 func (s *session) hasQueued() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()

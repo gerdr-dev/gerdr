@@ -11,17 +11,13 @@ package hub
 
 // splitOffCleared runs right after s was rekeyed by /clear. prev is s's record from before the rekey.
 func (h *Hub) splitOffCleared(s *Session, prev Record) {
-	s.mu.Lock()
-	s.loadLocked()
-	cut := clearCut(s.events, len(s.events), s.turnMsg)
-	old := append([]*Event(nil), s.events[:cut]...)
-	s.events = append([]*Event(nil), s.events[cut:]...)
-	rest := append([]*Event(nil), s.events...)
-	s.rec.SyncedSize = 0 // that was the old agent file's size; it goes with the old conversation
-	s.mu.Unlock()
-	if err := s.lf.Rewrite(rest); err != nil {
-		h.log.Warn("rewrite log", "err", err)
-	}
+	var old []*Event
+	rest := s.rewriteLog(func() {
+		cut := clearCut(s.events, len(s.events), s.turnMsg)
+		old = append([]*Event(nil), s.events[:cut]...)
+		s.events = append([]*Event(nil), s.events[cut:]...)
+		s.rec.SyncedSize = 0 // that was the old agent file's size; it goes with the old conversation
+	})
 	h.broadcastEvents(s.rec.ID, rest, true)
 	if o := h.archive(prev, old); o != nil {
 		h.broadcastSession(o)

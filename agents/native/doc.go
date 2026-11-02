@@ -37,7 +37,9 @@
 //     queued and joins the history before the next model call (a running tool isn't interrupted); Now: true
 //     also cuts the current generation short, moves a running bash to the background after a short grace and
 //     skips the tool calls of the batch not started yet. Outcome "injected", or "promptRequired" when no turn is running
-//     (send it as session/prompt instead).
+//     (send it as session/prompt instead). Slash commands are read from session/prompt only: a steer is text for the
+//     model, except "/rename" (announced with _meta.midTurn: true), which renames right away. Gerdr's hub holds the
+//     other commands until the turn ends and sends them as a prompt then.
 //   - _gerdr/withdraw (acpx.WithdrawRequest → acpx.WithdrawResponse): take back queued interjections by
 //     messageId; returns the ones that hadn't been picked up yet.
 //   - _gerdr/rewind (acpx.RewindRequest → acpx.RewindResponse): drop the user message with that messageId and

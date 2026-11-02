@@ -354,7 +354,9 @@ func (a *Agent) Initialize(ctx context.Context, p acp.InitializeRequest) (acp.In
 		},
 		AuthMethods: []acp.AuthMethod{},
 		// rewind: a steer can be rewound on its own (parentOf finds its queued_command attachment).
-		Meta: map[string]any{"steering": map[string]any{"supported": true, "rewind": true}},
+		// commands: a slash command steered in is the CLI's to handle (it holds it until the turn ends, then runs it),
+		// so the hub doesn't hold it back itself (internal/hub/deferred.go).
+		Meta: map[string]any{"steering": map[string]any{"supported": true, "rewind": true, "commands": true}},
 	}, nil
 }
 

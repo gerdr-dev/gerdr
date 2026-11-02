@@ -60,10 +60,17 @@ func (s *Session) Escape(ctx context.Context) (EscapeResult, error) {
 		return out, err
 	}
 	withdrawn := map[string]bool{}
+	// Slash commands the hub held for the end of this turn (deferred.go) are queued interjections like any other:
+	// taken back into the composer, and taken out first, so the turn ending below doesn't send them.
+	for _, id := range s.takeDeferred(nil) {
+		withdrawn[id] = true
+	}
 	if len(tail) > 0 && !untouched {
 		var ids []string
 		for _, e := range tail {
-			ids = append(ids, e.MessageID)
+			if !withdrawn[e.MessageID] {
+				ids = append(ids, e.MessageID)
+			}
 		}
 		if r, err := agenthost.Call[acpx.WithdrawResponse](ctx, c, acpx.MethodWithdraw, acpx.WithdrawRequest{SessionId: acp.SessionId(agentSID), MessageIds: ids}); err == nil {
 			for _, id := range r.Withdrawn {
@@ -162,6 +169,10 @@ func (s *Session) Withdraw(ctx context.Context, msgID string) (EscapeResult, err
 	if !found {
 		return out, nil
 	}
+	if len(s.takeDeferred(map[string]bool{msgID: true})) > 0 { // held by the hub, the agent never saw it (deferred.go)
+		s.dropUserEvents(map[string]bool{msgID: true}, &out)
+		return out, nil
+	}
 	c, err := s.ensureAttached(ctx)
 	if err != nil {
 		return out, err
@@ -176,25 +187,17 @@ func (s *Session) Withdraw(ctx context.Context, msgID string) (EscapeResult, err
 
 // truncateFrom：日志从这条用户消息起全部删掉（agent 那边没有它，不用回退 agent）。
 func (s *Session) truncateFrom(msgID string) {
-	s.mu.Lock()
-	s.loadLocked()
-	idx := -1
-	for i, e := range s.events {
-		if e.Kind == EvUser && e.MessageID == msgID {
-			idx = i
-			break
+	found := false
+	all := s.rewriteLog(func() {
+		for i, e := range s.events {
+			if e.Kind == EvUser && e.MessageID == msgID {
+				s.events, s.lastErr, found = s.events[:i], "", true
+				return
+			}
 		}
-	}
-	if idx < 0 {
-		s.mu.Unlock()
+	})
+	if !found {
 		return
-	}
-	s.events = s.events[:idx]
-	s.lastErr = ""
-	all := append([]*Event(nil), s.events...)
-	s.mu.Unlock()
-	if err := s.lf.Rewrite(all); err != nil {
-		s.h.log.Warn("rewrite log", "err", err)
 	}
 	s.h.broadcastEvents(s.rec.ID, all, true)
 	s.setStatus()
@@ -206,23 +209,18 @@ func (s *Session) truncateFrom(msgID string) {
 // rewrite itself is ~70ms on a 14MB log). The marker is logged, so a client catching up by seq gets it too, and a
 // replay where the message is already gone ignores it.
 func (s *Session) dropUserEvents(ids map[string]bool, out *EscapeResult) {
-	s.mu.Lock()
-	s.loadLocked()
 	var gone []string
-	for _, e := range s.events {
-		if e.Kind == EvUser && ids[e.MessageID] {
-			gone = append(gone, e.MessageID)
+	s.rewriteLog(func() {
+		for _, e := range s.events {
+			if e.Kind == EvUser && ids[e.MessageID] {
+				gone = append(gone, e.MessageID)
+			}
 		}
-	}
-	kept, content, n := chatlog.DropUsers(s.events, ids)
-	out.Content = append(out.Content, s.h.inflate(content)...)
-	out.Withdrawn += n
-	s.events = kept
-	all := append([]*Event(nil), kept...)
-	s.mu.Unlock()
-	if err := s.lf.Rewrite(all); err != nil {
-		s.h.log.Warn("rewrite log", "err", err)
-	}
+		kept, content, n := chatlog.DropUsers(s.events, ids)
+		out.Content = append(out.Content, s.h.inflate(content)...)
+		out.Withdrawn += n
+		s.events = kept
+	})
 	for _, id := range gone {
 		s.emit(&Event{Kind: EvWithdrawn, MessageID: id})
 	}
@@ -284,19 +282,14 @@ func (s *Session) Rewind(ctx context.Context, messageID string) (RewindResult, e
 		s.mu.Unlock()
 	}
 	out := RewindResult{Content: s.h.inflate(content)}
-	s.mu.Lock()
-	s.loadLocked()
-	s.events = s.events[:idx]
-	if steer {
-		// Cut mid-turn: the turn_end went with the rest. Close the turn so a reload doesn't leave it open.
-		s.events = append(s.events, &Event{Seq: s.h.nextSeqLocked(), TS: now(), Kind: EvTurnEnd, StopReason: string(acp.StopReasonEndTurn)})
-	}
-	s.lastErr = ""
-	evs := append([]*Event(nil), s.events...)
-	s.mu.Unlock()
-	if err := s.lf.Rewrite(evs); err != nil {
-		s.h.log.Warn("rewrite log", "err", err)
-	}
+	evs := s.rewriteLog(func() {
+		s.events = s.events[:idx]
+		if steer {
+			// Cut mid-turn: the turn_end went with the rest. Close the turn so a reload doesn't leave it open.
+			s.events = append(s.events, &Event{Seq: s.h.nextSeqLocked(), TS: now(), Kind: EvTurnEnd, StopReason: string(acp.StopReasonEndTurn)})
+		}
+		s.lastErr = ""
+	})
 	s.h.broadcastEvents(s.rec.ID, evs, true)
 	s.setStatus()
 	s.h.saveIndex()

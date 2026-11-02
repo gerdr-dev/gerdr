@@ -23,6 +23,13 @@ React（ui/，不打包）  ←WebSocket / HTTP→  hub（internal/hub）  ←AC
   下那个已归档的）—— 改适配器前先去读它们对应的那段和测试，边界情况都在那儿。
 - ACP v1 没有的三件事是扩展方法（`acpx`）：
   - `_session/steering`：插话。名字和形状照抄两个官方适配器，以后换回官方的 hub 不用改。
+    **A slash command sent mid-turn is not a steer for every agent** (`internal/hub/deferred.go`). Claude Code holds a
+    queued `/compact` / `/clear` / skill until the turn ends and runs it then, so the claude adapter advertises
+    `steering.commands` and gets them as steers. Gerdr Agent and Codex read commands only from `session/prompt`; to them
+    a steer is text for the model (a mid-turn `/compact` got "stopping here so you can compact" and compacted nothing).
+    For those the hub logs it as a queued interjection (bottom of the view, Withdraw / ↑ / Esc take it back), holds it,
+    and when the turn ends drops that entry and sends it as a turn of its own. A command announced with
+    `_meta.midTurn` (Gerdr Agent's `/rename`) is still steered: the agent runs it right away.
   - `_gerdr/rewind`：回退对话（只管对话，文件归 hub）。
   - `_gerdr/ask`：agent → client 提问（claude 的 AskUserQuestion、codex 的 requestUserInput）。
 - **hub 的会话日志是唯一事实来源**（`~/.gerdr/sessions/<id>.jsonl`）：用户消息、原样的 ACP

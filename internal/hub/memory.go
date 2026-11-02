@@ -58,7 +58,7 @@ func (s *Session) loadLocked() {
 // unloadableLocked: nothing in flight could need the events in memory, and all of them are on disk.
 func (s *Session) unloadableLocked() bool {
 	return s.loaded && !s.running && !s.catchingUp && !s.adopting && len(s.pending) == 0 && len(s.shells) == 0 &&
-		len(s.sending) == 0 && s.retryCancel == nil && s.lf.Flushed == len(s.events)
+		len(s.sending) == 0 && s.retryCancel == nil && s.writing == 0 && s.lf.Flushed == len(s.events)
 }
 
 func (s *Session) unloadLocked() {

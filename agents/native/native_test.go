@@ -536,6 +536,49 @@ func (h *handler) renames() []string {
 	return out
 }
 
+// /rename steered in mid-turn (it's marked midTurn, so the hub sends it as a steer): renamed right away, while the
+// turn still runs, and the model never sees it.
+func TestRenameMidTurn(t *testing.T) {
+	e := setup(t, func(n int, msgs []any) reply {
+		if n == 0 {
+			return reply{calls: [][2]string{{"bash", `{"command":"sleep 1"}`}}}
+		}
+		return reply{text: "done"}
+	})
+	sid := e.newSession(modeBypass)
+	done := make(chan struct{})
+	go func() {
+		e.prompt(sid, uuid.NewString(), "start")
+		close(done)
+	}()
+	time.Sleep(300 * time.Millisecond)
+	sr, err := agenthost.Call[acpx.SteerResponse](context.Background(), e.c, acpx.MethodSteer, acpx.SteerRequest{SessionId: sid, MessageId: uuid.NewString(), Prompt: []acp.ContentBlock{acp.TextBlock("/rename Mid turn")}})
+	if err != nil || sr.Outcome != acpx.SteerInjected {
+		t.Fatalf("steer: %v %v", sr, err)
+	}
+	for i := 0; i < 50 && len(e.h.renames()) == 0; i++ {
+		time.Sleep(10 * time.Millisecond)
+	}
+	select {
+	case <-done:
+		t.Fatal("the turn ended before the rename: it should run right away")
+	default:
+	}
+	if r := e.h.renames(); len(r) != 1 || r[0] != "Mid turn" {
+		t.Fatalf("renames %q", r)
+	}
+	<-done
+	b, _ := json.Marshal(e.llm.request(-1)["messages"])
+	if strings.Contains(string(b), "/rename") {
+		t.Fatalf("the model saw /rename: %s", b)
+	}
+	// idle: back to a turn of its own (the hub sends it as a prompt then)
+	sr, _ = agenthost.Call[acpx.SteerResponse](context.Background(), e.c, acpx.MethodSteer, acpx.SteerRequest{SessionId: sid, Prompt: []acp.ContentBlock{acp.TextBlock("/rename x")}})
+	if sr.Outcome != acpx.SteerPromptRequired {
+		t.Fatalf("idle rename steer: %v", sr.Outcome)
+	}
+}
+
 func TestRename(t *testing.T) {
 	e := setup(t, func(n int, msgs []any) reply {
 		if strings.Contains(lastUser(msgs), "<msgs>") {
