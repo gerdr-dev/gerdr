@@ -21,15 +21,22 @@ make -s ui
 [ "$TARGET" = mac-backend ] || ( cd desktop && [ -d node_modules ] || npm install --no-audit --no-fund )
 rm -rf desktop/bin && mkdir -p desktop/bin/mac desktop/bin/win
 
+# Brotli at max quality takes about a minute per backend, single-threaded: run them in the background, next to the
+# other arch's build, and wait for all of them before finishing (a failed one fails the build)
+pids=()
+compress() { node desktop/compress.js "$1" "$2" & pids+=($!); }
+compressed() { local p; for p in "${pids[@]}"; do wait "$p"; done; }
+
 case "$TARGET" in
 mac-backend)
   # Same flags and runner as the dmg's backend, so the .br is the binary a full build would have put in the dmg
   mkdir -p desktop/dist
   for arch in arm64 x64; do
     goarch=$arch && [ "$arch" = x64 ] && goarch=amd64
-    GOOS=darwin GOARCH=$goarch go build -ldflags "$LDFLAGS" -o desktop/bin/mac/gerdr ./cmd/gerdr
-    node desktop/compress.js desktop/bin/mac/gerdr "desktop/dist/gerdr-$VERSION-darwin-$arch.br"
+    GOOS=darwin GOARCH=$goarch go build -ldflags "$LDFLAGS" -o "desktop/bin/gerdr-$arch" ./cmd/gerdr
+    compress "desktop/bin/gerdr-$arch" "desktop/dist/gerdr-$VERSION-darwin-$arch.br"
   done
+  compressed
   ;;
 mac-dir)
   GOOS=darwin go build -ldflags "$LDFLAGS" -o desktop/bin/mac/gerdr ./cmd/gerdr
@@ -44,9 +51,12 @@ mac)
     GOOS=darwin GOARCH=$goarch go build -ldflags "$LDFLAGS" -o desktop/bin/mac/gerdr ./cmd/gerdr
     ( cd desktop && npx electron-builder --mac dmg --$arch --publish never "${EB_META[@]}" \
       -c.dmg.artifactName='${productName}-${version}-mac-${arch}.${ext}' )
-    # The backend alone, for updates that don't change the shell (desktop/updater.js): ~10MB (brotli, desktop/compress.js) instead of the dmg
-    node desktop/compress.js desktop/bin/mac/gerdr "desktop/dist/gerdr-$VERSION-darwin-$arch.br"
+    # The backend alone, for updates that don't change the shell (desktop/updater.js): ~10MB (brotli, desktop/compress.js)
+    # instead of the dmg. A copy, since the next arch's build overwrites bin/mac
+    cp desktop/bin/mac/gerdr "desktop/bin/gerdr-$arch"
+    compress "desktop/bin/gerdr-$arch" "desktop/dist/gerdr-$VERSION-darwin-$arch.br"
   done
+  compressed
   ;;
 win)
   GOOS=windows GOARCH=amd64 go build -ldflags "$LDFLAGS" -o desktop/bin/win/gerdr.exe ./cmd/gerdr
