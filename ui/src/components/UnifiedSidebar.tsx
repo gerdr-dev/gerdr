@@ -404,15 +404,19 @@ export function UnifiedSidebar({ className }: { className?: string }) {
                         网格
                       </button>
                     </div>
-                    {!activeFolded &&
-                      active.map((x, i) => {
-                        const num = numbers && i < 9 ? i + 1 : undefined;
-                        return x.item ? (
-                          flatRow(x.item, true, num)
-                        ) : (
-                          <WorkRow key={x.id} id={x.id} current={gridOn && x.id === gridFocusId} grid={gridOn && tiles.includes(x.id)} num={num} />
-                        );
-                      })}
+                    {/* Indented like a group's rows (Group, pl-2): both sit under a title, and their icons line up */}
+                    {!activeFolded && (
+                      <div className="pl-2">
+                        {active.map((x, i) => {
+                          const num = numbers && i < 9 ? i + 1 : undefined;
+                          return x.item ? (
+                            flatRow(x.item, true, num)
+                          ) : (
+                            <WorkRow key={x.id} id={x.id} current={gridOn && x.id === gridFocusId} grid={gridOn && tiles.includes(x.id)} num={num} />
+                          );
+                        })}
+                      </div>
+                    )}
                     {/* Only when empty: a row appearing mid-drag would push the rows under the pointer */}
                     {dragAgent && !active.length && !activeFolded && <div className="py-1 pl-7 text-[12px] text-muted-foreground">拖到这里加入进行中</div>}
                   </div>
