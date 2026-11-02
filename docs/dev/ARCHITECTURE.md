@@ -604,7 +604,7 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
 
 ### The rail (ui/src/components/Rail.tsx)
 
-On wider screens gerdr's own controls live on a 56px strip down the left edge, the same in every mode: projects (one
+On wider screens gerdr's own controls live on a 48px strip down the left edge, the same in every mode: projects (one
 chip each, a dot when another project needs you), Code / Work, the add-on panel, inbox, shortcuts, settings, and on
 Android the LAN / relay route. Code mode's list sits to its right (its header only names the project and hides the
 list; the rail's Code button, pressed again, brings it back). In Work mode the rest of the window is the Work site's

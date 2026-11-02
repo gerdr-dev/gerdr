@@ -74,7 +74,7 @@ export function Rail() {
               )}
               onClick={() => switchSpace(sp.id)}
             >
-              {on && <span className="absolute top-2 -left-2.5 h-5 w-1 rounded-r bg-foreground" />}
+              {on && <span className="absolute top-2 -left-1.5 h-5 w-1 rounded-r bg-foreground" />}
               <span className="max-w-full truncate px-0.5">{initials(sp.name)}</span>
               {st && <StatusDot status={st.status} unread={st.unread} className="absolute -top-0.5 -right-0.5 ring-2 ring-sidebar" />}
             </button>,
@@ -103,7 +103,7 @@ export function Rail() {
         aria-label={label}
         aria-pressed={on}
         className={cn(
-          "flex w-12 flex-col items-center gap-0.5 rounded-lg py-1.5 text-[10px] leading-none short:py-2.5",
+          "flex w-10 flex-col items-center gap-0.5 rounded-lg py-1.5 text-[10px] leading-none short:py-2.5",
           on ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
         )}
         onClick={() => {
@@ -122,7 +122,7 @@ export function Rail() {
     // The whole rail scrolls when the window is too short for it (a phone on its side is ~400px tall, ~150px with the
     // soft keyboard up). Only the projects scrolling squeezed them to nothing there, under the fixed rest. min-h-full
     // inside keeps the spacer pushing the bottom group down when there is room.
-    <div className="h-full w-14 shrink-0 overflow-y-auto border-r bg-sidebar [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <div className="h-full w-12 shrink-0 overflow-y-auto border-r bg-sidebar [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       <div className="flex min-h-full flex-col items-center">
         <div className="flex w-full flex-col items-center gap-2 pt-2.5 pb-1 short:gap-1.5 short:pt-2">
           {spaces.map(project)}
@@ -187,7 +187,7 @@ const railBtn = "flex size-9 items-center justify-center rounded-md text-muted-f
 
 /**
  * The add-on panel: the "sidebar" slot's blocks (quota meters, today's numbers…), which used to sit at the bottom of the
- * left column and don't fit a 56px rail. On the rail: the add-ons' own glance ("rail" slot, e.g. a few tiny bars) or a
+ * left column and don't fit a 48px rail. On the rail: the add-ons' own glance ("rail" slot, e.g. a few tiny bars) or a
  * plain icon; hovering it (mouse) or tapping it opens the full blocks beside it. The panel stays mounted while closed,
  * as the blocks did in the sidebar, so they keep their state and timers instead of reloading on every open.
  */
@@ -231,7 +231,7 @@ function AddonPanel() {
         aria-expanded={open}
         title={glance ? undefined : "插件"}
         className={cn(
-          "flex min-h-9 w-12 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground",
+          "flex min-h-9 w-10 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground",
           open && "bg-accent text-foreground",
         )}
         onPointerEnter={hover(true)}
