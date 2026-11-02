@@ -9,30 +9,27 @@ import type { RailFace } from "@/lib/store/config";
 import { useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { AgentGlyph } from "./AgentGlyph";
-import { AddonParts } from "./AddonSlot";
+import { AddonParts, SpriteView } from "./AddonSlot";
 
 /**
- * A button's face (lib/rail.ts): a built-in icon, typed characters, or what an add-on draws ("rail" slot). An add-on's
- * face gets a box 36px wide and at most 28px tall, clipped: it can draw anything, but can't push the rail around.
- * `blocks`: the group's, for the automatic face when none was picked (an add-on face of one of them, else the first
+ * A button's face (lib/rail.ts): a built-in icon, typed characters, or a sprite (g.slot("sprite")) standing still —
+ * the rail is always in sight, something moving there pulls the eye all day. A sprite gets a box 36×28 (32×24 small),
+ * clipped: it can draw anything, but can't push the rail around.
+ * `blocks`: the group's, for the automatic face when none was picked (a sprite of one of their add-ons, else the first
  * block's declared icon, else a gauge). `small`: the phone drawer's bottom row, a size down.
  */
 export function FaceView({ face, blocks, small }: { face?: RailFace; blocks: SlotReg[]; small?: boolean }) {
   const f = face ?? autoFace(blocks);
   if (f && "text" in f && f.text) return <span className={cn("leading-none font-semibold", small ? "text-[13px]" : "text-[15px]")}>{f.text}</span>;
   if (f && "glyph" in f) return <AgentGlyph name={f.glyph} color={f.color} className={small ? "size-4" : "size-[18px]"} />;
-  if (f && "addon" in f) {
-    const reg = slots.rail.find((r) => r.key === f.addon);
-    if (reg)
-      return (
-        <span className={cn("flex items-center justify-center overflow-hidden", small ? "max-h-6 w-8" : "max-h-7 w-9")}>
-          <AddonParts regs={[reg]} />
-        </span>
-      );
-  }
+  const reg = f && "sprite" in f ? slots.sprite.find((r) => r.key === f.sprite) : undefined;
+  if (reg) return <SpriteView reg={reg} state="idle" clip {...(small ? FACE_SMALL : FACE)} />;
   const Icon = lucideIcon(blocks[0]?.icon) ?? Gauge;
   return <Icon className={small ? "size-3.5" : "size-4"} />;
 }
+
+export const FACE = { width: 36, height: 28 };
+const FACE_SMALL = { width: 32, height: 24 };
 
 /** The rail's add-on buttons, one per group that has a loaded block. */
 export function RailGroupButtons() {

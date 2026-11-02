@@ -180,11 +180,6 @@ declare global {
      *                order: the user's grouping refers to "addon:id", by default your n-th block). opts.title, opts.icon
      *                (a lucide icon name, "Gauge"): how the block is listed in that setting; default your add-on's name
      *                and icon
-     *   "rail"       a button face (no props) the user can pick for any rail button, in the same setting: anything you
-     *                like — a symbol, a few tiny bars, a number. It gets a box 36px wide and at most 28px tall, clipped;
-     *                don't make it interactive (the button around it opens the panel). Use the theme tokens so it reads
-     *                in light and dark. A button whose face wasn't picked uses a face of one of its blocks' add-ons, if
-     *                there is one. opts.id / opts.title as for blocks
      *   "paneTitle"  every pane's title bar, before its ⋯ menu (props: { pane: PaneInfo; tab: TabInfo }); keep it small
      *   "overlay"    mounted once at the app's root and always there (no props, takes no space): where a dialog or
      *                drawer opened by a command lives. A panel can't host one: it's hidden while closed and on a
@@ -193,14 +188,26 @@ declare global {
      *   "loader"     replaces the working indicator: the 3×3 dots before a running turn's "Pondering…" line (a row
      *                20px tall), and the one shown while a pane starts an agent. Props: paused (the turn waits on the
      *                user — a permission, a question — so show it's waiting, not working) and className (gerdr's size
-     *                and colour for that spot: text-brand running, text-warn waiting; pass it on to keep them). Only
-     *                the first registration draws; one that throws falls back to the dots. fallback: gerdr's own dots,
-     *                to return when your add-on is set not to replace them right now (a setting the user switched off:
-     *                setup doesn't run again on a settings change, so decide while rendering).
+     *                and colour for that spot: text-brand running, text-warn waiting; pass it on to keep them). With
+     *                no choice made it draws as soon as you're installed (the first registration does); the user can
+     *                pick another in Settings → 扩展 → 素材. One that throws falls back to the dots. fallback: gerdr's
+     *                own dots, if you want to show them sometimes. Just a picture that moves? Make it a sprite instead:
+     *                it then also serves as a rail button's icon, and only shows where the user puts it
+     *   "sprite"     a small picture — an animal, a symbol, a few tiny bars, a number — that gerdr draws nowhere by
+     *                itself: the user picks sprites for the places that take one, the working indicator (Settings →
+     *                扩展 → 素材) and the rail's buttons (→ 分组). So a picture set changes nothing when installed, and
+     *                one set serves every such place. Register each picture separately (opts.id, opts.title: "Pirate")
+     *                so the user can put a different one in each place. Props: state — "working" / "waiting" (the
+     *                indicator: running, or waiting on the user) or "idle" (a button: always in sight, so keep it
+     *                still) — and width × height, the box you get, to scale to: 24×16 in the indicator (not clipped,
+     *                a hat may stick out), 36×28 on a button (32×24 on a phone; clipped). The box carries gerdr's
+     *                colour for the spot (currentColor: text-brand / text-warn in the indicator); else use the theme
+     *                tokens so it reads in light and dark. Don't make it interactive (a button wraps it on the rail).
+     *                An unpicked rail button uses a sprite of one of its blocks' add-ons, if there is one
      */
     slot(name: "loader", component: Component<{ paused: boolean; className?: string; fallback?: any }>, opts?: { order?: number }): Dispose;
     slot(name: "sidebar", component: Component<{}>, opts?: { order?: number; id?: string; title?: string; icon?: string }): Dispose;
-    slot(name: "rail", component: Component<{}>, opts?: { order?: number; id?: string; title?: string }): Dispose;
+    slot(name: "sprite", component: Component<SpriteProps>, opts?: { order?: number; id?: string; title?: string }): Dispose;
     slot(name: "overlay", component: Component<{}>, opts?: { order?: number }): Dispose;
     slot(name: "paneTitle", component: Component<{ pane: PaneInfo; tab: TabInfo }>, opts?: { order?: number }): Dispose;
 
@@ -313,6 +320,13 @@ declare global {
     interface ElementChildrenAttribute {
       children: {};
     }
+  }
+
+  /** g.slot("sprite"): where it's drawn now, and the box it gets there. */
+  interface SpriteProps {
+    state: "idle" | "working" | "waiting";
+    width: number;
+    height: number;
   }
 
   interface TurnStatInfo {

@@ -15,6 +15,7 @@ import { assetURL, slots, type SlotReg } from "@/lib/addons";
 import {
   addGroup,
   addonMeta,
+  spriteTitle,
   lucideIcon,
   moveBlock,
   moveGroup,
@@ -29,8 +30,8 @@ import type { RailFace } from "@/lib/store/config";
 import { useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { AgentGlyph, GLYPHS, LINES, PALETTE } from "./AgentGlyph";
-import { AddonParts } from "./AddonSlot";
-import { FaceView } from "./RailGroups";
+import { SpriteView } from "./AddonSlot";
+import { FACE, FaceView } from "./RailGroups";
 
 // Settings → 扩展 → 分组: which add-on blocks go behind which button on the rail, and what each button shows
 // (lib/rail.ts). One card per button. Reordering is by menu, not drag: it works the same on a phone.
@@ -39,7 +40,7 @@ export function RailSettings() {
   useStore((s) => s.addonVersion);
   useStore((s) => s.config.rail);
   const groups = resolveGroups();
-  if (!slots.sidebar.length && !slots.rail.length)
+  if (!slots.sidebar.length)
     return <div className="py-6 text-center text-[13px] text-muted-foreground">还没有带面板的插件。装一个（比如额度条）后，在这里分组。</div>;
   return (
     <div className="space-y-3">
@@ -167,7 +168,7 @@ function BlockRow({ b, first, last, groupId, groups }: { b: SlotReg; first: bool
 
 /**
  * The button's face: automatic, one or two typed characters, a built-in icon (the same set roles pick from in Settings →
- * Agent, with its colours), or a face an add-on draws (g.slot("rail")) — from any add-on, not only the group's.
+ * Agent, with its colours), or a sprite (g.slot("sprite")) — from any add-on, not only the group's.
  */
 function FacePicker({ face, blocks, onPick }: { face?: RailFace; blocks: SlotReg[]; onPick: (f: RailFace | undefined) => void }) {
   const [open, setOpen] = useState(false);
@@ -201,7 +202,7 @@ function FacePicker({ face, blocks, onPick }: { face?: RailFace; blocks: SlotReg
           <FaceView face={face} blocks={blocks} />
         </button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-80 space-y-3 p-3">
+      <PopoverContent align="start" className="max-h-(--radix-popover-content-available-height) w-80 space-y-3 overflow-y-auto p-3">
         <section className="space-y-1.5">
           <div className="text-[11px] text-muted-foreground">文字（一两个字符或 emoji）</div>
           <div className="flex gap-1.5">
@@ -220,7 +221,7 @@ function FacePicker({ face, blocks, onPick }: { face?: RailFace; blocks: SlotReg
         <section className="space-y-1.5">
           <div className="text-[11px] text-muted-foreground">图标</div>
           <div className="flex flex-wrap gap-1">
-            {cell(!face, "自动（组里插件画的外观，或第一个块的图标）", () => pick(undefined), <span className="text-[11px] text-muted-foreground">自动</span>)}
+            {cell(!face, "自动（组里插件的素材，或第一个块的图标）", () => pick(undefined), <span className="text-[11px] text-muted-foreground">自动</span>)}
             {icons(LINES)}
           </div>
           <div className="flex flex-wrap gap-1">{icons(GLYPHS)}</div>
@@ -239,24 +240,22 @@ function FacePicker({ face, blocks, onPick }: { face?: RailFace; blocks: SlotReg
             </div>
           )}
         </section>
-        {slots.rail.length > 0 && (
+        {slots.sprite.length > 0 && (
           <section className="space-y-1.5">
-            <div className="text-[11px] text-muted-foreground">插件画的外观</div>
+            <div className="text-[11px] text-muted-foreground">素材</div>
             <div className="flex flex-wrap gap-1">
-              {slots.rail.map((r) => (
+              {slots.sprite.map((r) => (
                 <button
                   key={r.key}
                   type="button"
-                  title={r.title ?? addonMeta(r.addon)?.name ?? r.addon}
-                  onClick={() => pick({ addon: r.key })}
+                  title={spriteTitle(r)}
+                  onClick={() => pick({ sprite: r.key })}
                   className={cn(
-                    "flex h-10 w-11 items-center justify-center overflow-hidden rounded-md border",
-                    face && "addon" in face && face.addon === r.key ? "border-brand bg-accent" : "border-transparent bg-sidebar hover:bg-accent",
+                    "flex h-10 w-11 items-center justify-center rounded-md border",
+                    face && "sprite" in face && face.sprite === r.key ? "border-brand bg-accent" : "border-transparent bg-sidebar hover:bg-accent",
                   )}
                 >
-                  <span className="flex max-h-7 w-9 items-center justify-center overflow-hidden">
-                    <AddonParts regs={[r]} />
-                  </span>
+                  <SpriteView reg={r} state="idle" clip {...FACE} />
                 </button>
               ))}
             </div>

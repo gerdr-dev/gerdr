@@ -3,7 +3,7 @@ import { addonStatus, slots, type SlotReg } from "./addons";
 import { get, setConfig } from "./store";
 import type { RailConfig, RailFace, RailGroup } from "./store/config";
 
-// The rail's add-on buttons. Add-ons register blocks (g.slot("sidebar")) and faces (g.slot("rail")); which blocks go
+// The rail's add-on buttons. Add-ons register blocks (g.slot("sidebar")) and sprites (g.slot("sprite")); which blocks go
 // behind which button, and what each button shows, is the user's (config.rail, shared by every device), set in
 // Settings → 扩展 → 分组. Add-ons can't group themselves: blocks that belong together (a "today" and two quota meters)
 // often come from different authors, and only the user knows they're one subject.
@@ -31,11 +31,11 @@ export function resolveGroups(cfg?: RailConfig): ResolvedGroup[] {
   return out;
 }
 
-/** What a button shows when the user picked nothing: a face from an add-on of its blocks, else the first block's icon. */
+/** What a button shows when the user picked nothing: a sprite from an add-on of its blocks, else the first block's icon. */
 export function autoFace(blocks: SlotReg[]): RailFace | undefined {
   const mine = new Set(blocks.map((b) => b.addon));
-  const face = slots.rail.find((f) => mine.has(f.addon));
-  if (face) return { addon: face.key };
+  const sprite = slots.sprite.find((f) => mine.has(f.addon));
+  if (sprite) return { sprite: sprite.key };
   return undefined;
 }
 
@@ -47,9 +47,15 @@ export function lucideIcon(name?: string): icons.LucideIcon | undefined {
   return typeof i === "object" || typeof i === "function" ? (i as icons.LucideIcon) : undefined;
 }
 
-/** The add-on's name and its addon.json icon, for listing a block or face. */
+/** The add-on's name and its addon.json icon, for listing a block or sprite. */
 export function addonMeta(addon: string) {
   return addonStatus.find((a) => a.id === addon);
+}
+
+/** How a sprite is listed: its title with its add-on's name ("Pirate · Pixel Clawd"), or just the add-on's name. */
+export function spriteTitle(r: SlotReg) {
+  const name = addonMeta(r.addon)?.name ?? r.addon;
+  return r.title && r.title !== name ? `${r.title} · ${name}` : name;
 }
 
 // ---- editing (Settings → 扩展 → 分组) ----

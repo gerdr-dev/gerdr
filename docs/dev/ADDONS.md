@@ -21,7 +21,7 @@ sees: `internal/addons/builtin/gerdr.d.ts`, copied into `~/.gerdr/addons` on eve
 
 ## Drawing and data
 
-- `g.slot("sidebar" | "rail" | "paneTitle", Component)`, `g.composerAction`, `g.contextMenu` (ui/src/components/AddonSlot.tsx,
+- `g.slot("sidebar" | "sprite" | "paneTitle", Component)`, `g.composerAction`, `g.contextMenu` (ui/src/components/AddonSlot.tsx,
   AppContextMenu.tsx). Add-on JSX compiles to the globals `__gerdrH` / `__gerdrFragment` (React.createElement /
   Fragment, set in lib/addons.ts) — not `gerdr.h`: the desktop shell owns `window.gerdr`. Hooks must come from
   `g.React` (the same React that mounts them); `g.ui` hands out Gerdr's shadcn pieces and `g.icons` all of lucide, so
@@ -29,10 +29,19 @@ sees: `internal/addons/builtin/gerdr.d.ts`, copied into `~/.gerdr/addons` on eve
 - `g.slot("loader", C)` replaces the working indicator (PixelLoader: the dots before "Pondering…", a pane starting an
   agent). The package gets it through `ChatHost.renderLoader`, which hands the host the whole indicator with the
   default as `fallback` rather than a colour or a frame, so the next host's idea (a mascot, a spinner of its own) needs
-  no new package release. Gerdr's AddonLoader draws only the first registration and falls back to the dots when it
-  throws: a running turn must still look like it runs. The add-on gets that `fallback` too: a settings change doesn't
-  re-run setup, so an add-on with a "don't replace the dots" switch (clawd-loader, wanted only for its rail face)
-  decides while rendering and returns it.
+  no new package release. Which one draws is config `loader` (Settings → 扩展 → 素材 = SpriteSettings.tsx,
+  AddonSlot.tsx `loaderPick`): gerdr's dots, a "loader" entry, or a sprite. Unset = the first "loader" entry, else
+  the dots: an add-on whose whole point is the indicator works once installed. A pick whose add-on is gone, or one
+  that throws, falls back to the dots: a running turn must still look like it runs. The settings page previews each
+  option through the real PixelLoader with a `LoaderPreview` context overriding the choice, so the dots come from
+  the package without it exporting them.
+- `"sprite"` entries are pictures gerdr draws only where the user put them: the working indicator and rail button
+  faces. Props `{ state, width, height }`: "working" / "waiting" in the indicator (24×16, unclipped), "idle" on a
+  button (36×28, clipped). Why a slot of its own: clawd-loader first was both a loader and a rail face, so wanting
+  Clawd only on a button took a "don't replace the dots" switch, and both places had to show the same costume. With
+  sprites an add-on brings pictures and the user places them, one per place; the old `"rail"` slot (Nov 2026, a few
+  days) went into it — `g.slot("rail")` now throws "没有这个插槽", and a group face `{ addon }` from then falls back to
+  automatic.
 - `g.turnStat` decorates the line under each finished turn through `ChatHost.useTurnStat`, a **hook** rather than a
   plain callback: answers depend on the time (cache-clock colors by prompt-cache age), so Gerdr's implementation
   (`useAddonTurnStat`) re-renders every 30s while any add-on uses it. `latest` (the newest turn's line) is worked out in
@@ -53,15 +62,15 @@ sees: `internal/addons/builtin/gerdr.d.ts`, copied into `~/.gerdr/addons` on eve
 - `"overlay"` is mounted once in App.tsx next to the app's own dialogs: an add-on's command needs somewhere to draw
   a dialog that exists whatever the layout is (the "sidebar" panel is hidden while closed, on a phone only there
   while the drawer is open).
-- `"sidebar"` entries are blocks and `"rail"` entries are button faces; which blocks share a rail button, in what
-  order, and the button's face (a built-in icon, typed characters, or any add-on's face) is the user's, in config
+- `"sidebar"` entries are blocks; which blocks share a rail button, in what order, and the button's face (a built-in
+  icon, typed characters, or any add-on's sprite) is the user's, in config
   `rail.groups` (lib/rail.ts, Settings → 扩展 → 分组 = RailSettings.tsx, buttons in RailGroups.tsx). Not the add-ons':
   blocks that belong together often come from different authors (today + two quota meters). Groups refer to blocks
   by a key stable across reloads ("addon:id", the add-on's own id or its n-th entry in the slot). No config = one
   button with every block; a block no group lists joins the first group; keys of unloaded blocks keep their place.
   Each rail panel is kept mounted while closed (portal + `hidden`), as the blocks were in the old sidebar, so timers
-  and fetched state survive closing it; the phone's sheets mount on open. A face gets a 36×28px box, clipped, so an
-  add-on can draw anything without pushing the rail around. History: the rail replaced the left column's bottom
+  and fetched state survive closing it; the phone's sheets mount on open. A sprite face gets a 36×28px box, clipped,
+  so an add-on can draw anything without pushing the rail around. History: the rail replaced the left column's bottom
   strip (docs/dev/ARCHITECTURE.md, "The rail"), first with one shared button, then these groups when the user wanted
   three add-ons in one button and a "¥" on it.
 - `g.fetch` is POST /api/addons/{id}/fetch (internal/server/addonfetch.go): the backend makes the request. A plain

@@ -30,20 +30,22 @@ type Reg<T> = { addon: string; fn: T };
 
 /**
  * Where an add-on can put a component: "sidebar" (a block of an add-on panel: the user groups blocks into buttons on the
- * rail, lib/rail.ts), "rail" (a button face the user can pick for any of those buttons), a pane's title bar (props:
- * pane, tab), and "overlay" — mounted once at the app's root and always there, for the dialogs / drawers an add-on opens
- * from a command.
+ * rail, lib/rail.ts), a pane's title bar (props: pane, tab), and "overlay" — mounted once at the app's root and always
+ * there, for the dialogs / drawers an add-on opens from a command.
  * "loader" replaces the working indicator (the 3×3 dots before "Pondering…", ChatHost.renderLoader; props: paused,
- * className): only the first registration draws, since two indicators side by side make no sense.
+ * className, fallback). "sprite" is a small picture (props: state, className, width, height) that gerdr draws nowhere
+ * by itself: the user picks sprites for the places that take one — the working indicator (Settings → 扩展 → 素材) and
+ * the rail's buttons (→ 分组). So an add-on that only brings pictures changes nothing until the user uses them, and
+ * one picture set serves every such place; which loader / sprite draws is config.loader (components/AddonSlot.tsx).
  */
-export type SlotName = "sidebar" | "rail" | "paneTitle" | "overlay" | "loader";
+export type SlotName = "sidebar" | "sprite" | "paneTitle" | "overlay" | "loader";
 /**
  * key: stable across reloads — "addon:id" with the id the add-on gave, else "addon:n" (its n-th entry in that slot, the
- * same on every load since setup runs the same way): the rail's groups refer to blocks and faces by it.
- * title / icon (a lucide icon name): how the block or face is listed in Settings → 扩展 → 分组.
+ * same on every load since setup runs the same way): the rail's groups and config.loader refer to entries by it.
+ * title / icon (a lucide icon name): how the entry is listed in Settings → 扩展.
  */
 export type SlotReg = { addon: string; key: string; Component: React.ComponentType<any>; order: number; title?: string; icon?: string };
-export const slots: Record<SlotName, SlotReg[]> = { sidebar: [], rail: [], paneTitle: [], overlay: [], loader: [] };
+export const slots: Record<SlotName, SlotReg[]> = { sidebar: [], sprite: [], paneTitle: [], overlay: [], loader: [] };
 export type ComposerAction = { addon: string; id: string; title: string; icon?: React.ReactNode; run: (ctx: ComposerCtx) => void | Promise<void> };
 export type ComposerCtx = { sessionId: string; text: string; insert(text: string): void; setText(text: string): void };
 export const composerActions: ComposerAction[] = [];

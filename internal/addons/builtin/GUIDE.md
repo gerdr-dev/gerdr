@@ -127,10 +127,10 @@ lucide icon (`<g.icons.Timer className="size-3.5" />`).
 | where | call | gets |
 |---|---|---|
 | A block of an add-on panel; the user groups blocks into buttons on the rail (Settings → 扩展 → 分组) | `g.slot("sidebar", Component, { order, id, title, icon })` | no props |
-| A button face the user can pick for a rail button: a symbol, tiny bars, anything (36×28px box, clipped) | `g.slot("rail", Component, { id, title })` | no props |
+| A sprite: a small picture the user can put on a rail button or use as the working indicator (Settings → 扩展 → 素材) | `g.slot("sprite", Component, { id, title })` | `{ state, width, height }` |
 | The app's root, always mounted, no space taken | `g.slot("overlay", Component)` | no props |
 | Every pane's title bar | `g.slot("paneTitle", Component)` | `{ pane, tab }` |
-| The working indicator (the dots before "Pondering…", a 20px row); only the first add-on's draws | `g.slot("loader", Component)` | `{ paused, className, fallback }` (return `fallback` for gerdr's own dots) |
+| The working indicator (the dots before "Pondering…", a 20px row), drawn your own way; the user picks which one draws. Only a picture? Make it a sprite | `g.slot("loader", Component)` | `{ paused, className, fallback }` (`fallback`: gerdr's own dots) |
 | The composer's bottom bar | `g.composerAction({ id, title, icon, run })` | `run(ctx)`: `ctx.text`, `ctx.insert()`, `ctx.setText()` |
 | Right-click menu (desktop and Android App) | `g.contextMenu({ id, title, when, run })` | `{ selection, sessionId }` |
 | The line under each finished turn | `g.turnStat(fn)` | `fn(info)` returns `{ className, title, after }` |
@@ -183,8 +183,10 @@ Rules that keep it looking like Gerdr:
 - Sizes follow the surroundings: 11–12px text in the sidebar and under turns, 13px in panels.
 - Sidebar blocks: give yours horizontal padding only (`px-1.5`); the panel pads above and below once for all of them.
   Which blocks share a rail button is the user's choice, not yours: don't assume yours sits next to another add-on's.
-- A rail face (`g.slot("rail")`) is 36px wide and at most 28px tall: draw it at that size, text 10px or more, red
-  (`bg-bad` / `text-bad`) only for a warning.
+- A sprite (`g.slot("sprite")`) gets its box as `width` × `height`: 24×16 in the working indicator (`state`
+  "working" / "waiting"), 36×28 on a rail button (`state` "idle": keep it still, the rail is always in sight). Draw it
+  to fit, text 10px or more, red (`bg-bad` / `text-bad`) only for a warning. One picture per registration (`id`,
+  `title`): the user may want a different one in each place.
 - A phone has no hover: don't hide what matters in a `title` tooltip.
 - `g.turnStat`'s `fn` runs on every render of the line and every 30s: keep it cheap. `info.latest` marks the newest
   turn, `info.now` is the time to compare against.
