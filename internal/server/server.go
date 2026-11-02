@@ -929,8 +929,11 @@ func newNonce() string {
 	return base64.StdEncoding.EncodeToString(b)
 }
 
+// media-src blob:: a video picked in the composer previews (thumbnail, lightbox) from an object URL while it uploads,
+// and on phones until the message is sent; without it media fell back to default-src and the video never loaded.
+// https: same as img-src: an agent's reply can embed a video or audio file by its web address.
 func cspWith(extraScript string) string {
-	return "default-src 'self'; script-src 'self' " + extraScript + " blob: 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; frame-ancestors 'none'"
+	return "default-src 'self'; script-src 'self' " + extraScript + " blob: 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' blob: https:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; frame-ancestors 'none'"
 }
 
 // ---- helpers ----
