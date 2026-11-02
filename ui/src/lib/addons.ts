@@ -29,7 +29,7 @@ type Reg<T> = { addon: string; fn: T };
 // ---- what add-ons draw: slots, composer buttons, context-menu items ----
 
 /**
- * Where an add-on can put a component: "sidebar" (a block of an add-on panel: the user groups blocks into buttons on the
+ * Where an add-on can put a component: "panel" (a block of an add-on panel: the user groups blocks into buttons on the
  * rail, lib/rail.ts), a pane's title bar (props: pane, tab), and "overlay" — mounted once at the app's root and always
  * there, for the dialogs / drawers an add-on opens from a command.
  * "loader" replaces the working indicator (the 3×3 dots before "Pondering…", ChatHost.renderLoader; props: paused,
@@ -38,14 +38,14 @@ type Reg<T> = { addon: string; fn: T };
  * the rail's buttons (→ 分组). So an add-on that only brings pictures changes nothing until the user uses them, and
  * one picture set serves every such place; which loader / sprite draws is config.loader (components/AddonSlot.tsx).
  */
-export type SlotName = "sidebar" | "sprite" | "paneTitle" | "overlay" | "loader";
+export type SlotName = "panel" | "sprite" | "paneTitle" | "overlay" | "loader";
 /**
  * key: stable across reloads — "addon:id" with the id the add-on gave, else "addon:n" (its n-th entry in that slot, the
  * same on every load since setup runs the same way): the rail's groups and config.loader refer to entries by it.
  * title / icon (a lucide icon name): how the entry is listed in Settings → 扩展.
  */
 export type SlotReg = { addon: string; key: string; Component: React.ComponentType<any>; order: number; title?: string; icon?: string };
-export const slots: Record<SlotName, SlotReg[]> = { sidebar: [], sprite: [], paneTitle: [], overlay: [], loader: [] };
+export const slots: Record<SlotName, SlotReg[]> = { panel: [], sprite: [], paneTitle: [], overlay: [], loader: [] };
 export type ComposerAction = { addon: string; id: string; title: string; icon?: React.ReactNode; run: (ctx: ComposerCtx) => void | Promise<void> };
 export type ComposerCtx = { sessionId: string; text: string; insert(text: string): void; setText(text: string): void };
 export const composerActions: ComposerAction[] = [];
@@ -435,7 +435,10 @@ function makeApi(id: string, hash: string) {
     icons,
     // fixed for the page's life: a language change reloads the page, which reloads the add-on too
     locale,
-    slot: (name: SlotName, Component: React.ComponentType<any>, o?: { order?: number; id?: string; title?: string; icon?: string }) => {
+    slot: (asked: SlotName | "sidebar", Component: React.ComponentType<any>, o?: { order?: number; id?: string; title?: string; icon?: string }) => {
+      // "sidebar": the panel slot's first name, from when blocks sat in the left column. Kept for good: add-ons in the
+      // wild use it, and keys ("addon:id") don't carry the slot, so groups set up either way are the same
+      const name: SlotName = asked === "sidebar" ? "panel" : asked;
       if (!slots[name]) throw new Error(`没有这个插槽：${name}`);
       const own = slots[name].filter((x) => x.addon === id).length;
       const key = `${id}:${o?.id ?? own}`;

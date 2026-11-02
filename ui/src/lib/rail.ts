@@ -3,7 +3,7 @@ import { addonStatus, slots, type SlotReg } from "./addons";
 import { get, setConfig } from "./store";
 import type { RailConfig, RailFace, RailGroup, RailOpen } from "./store/config";
 
-// The rail's add-on buttons. Add-ons register blocks (g.slot("sidebar")) and sprites (g.slot("sprite")); which blocks go
+// The rail's add-on buttons. Add-ons register blocks (g.slot("panel")) and sprites (g.slot("sprite")); which blocks go
 // behind which button, and what each button shows, is the user's (config.rail, shared by every device), set in
 // Settings → 扩展 → 分组. Add-ons can't group themselves: blocks that belong together (a "today" and two quota meters)
 // often come from different authors, and only the user knows they're one subject.
@@ -24,10 +24,10 @@ export type ResolvedGroup = { group: RailGroup; blocks: SlotReg[] };
 /** Each group with the blocks loaded now, in its order; unlisted loaded blocks appended to the first group. */
 export function resolveGroups(cfg?: RailConfig): ResolvedGroup[] {
   const groups = railGroups(cfg);
-  const byKey = new Map(slots.sidebar.map((r) => [r.key, r]));
+  const byKey = new Map(slots.panel.map((r) => [r.key, r]));
   const listed = new Set(groups.flatMap((g) => g.blocks));
   const out = groups.map((group) => ({ group, blocks: group.blocks.map((k) => byKey.get(k)).filter((r): r is SlotReg => !!r) }));
-  out[0].blocks.push(...slots.sidebar.filter((r) => !listed.has(r.key)));
+  out[0].blocks.push(...slots.panel.filter((r) => !listed.has(r.key)));
   return out;
 }
 
@@ -151,7 +151,7 @@ export function placeBlock(key: string, to: string, before?: string) {
 
 /** Moves a block up / down inside its group, past the loaded neighbours (keys of unloaded blocks keep their places). */
 export function stepBlock(key: string, by: -1 | 1) {
-  const loaded = new Set(slots.sidebar.map((r) => r.key));
+  const loaded = new Set(slots.panel.map((r) => r.key));
   edit((gs) =>
     gs.map((g) => {
       const i = g.blocks.indexOf(key);

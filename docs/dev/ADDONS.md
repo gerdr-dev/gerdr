@@ -21,7 +21,7 @@ sees: `internal/addons/builtin/gerdr.d.ts`, copied into `~/.gerdr/addons` on eve
 
 ## Drawing and data
 
-- `g.slot("sidebar" | "sprite" | "paneTitle", Component)`, `g.composerAction`, `g.contextMenu` (ui/src/components/AddonSlot.tsx,
+- `g.slot("panel" | "sprite" | "paneTitle", Component)`, `g.composerAction`, `g.contextMenu` (ui/src/components/AddonSlot.tsx,
   AppContextMenu.tsx). Add-on JSX compiles to the globals `__gerdrH` / `__gerdrFragment` (React.createElement /
   Fragment, set in lib/addons.ts) — not `gerdr.h`: the desktop shell owns `window.gerdr`. Hooks must come from
   `g.React` (the same React that mounts them); `g.ui` hands out Gerdr's shadcn pieces and `g.icons` all of lucide, so
@@ -65,9 +65,10 @@ sees: `internal/addons/builtin/gerdr.d.ts`, copied into `~/.gerdr/addons` on eve
 - The context menu only exists in the desktop and Android Apps (a browser keeps its own), so `g.contextMenu` items
   show there only.
 - `"overlay"` is mounted once in App.tsx next to the app's own dialogs: an add-on's command needs somewhere to draw
-  a dialog that exists whatever the layout is (the "sidebar" panel is hidden while closed, on a phone only there
+  a dialog that exists whatever the layout is (a "panel" block is hidden while its panel is closed, on a phone only there
   while the drawer is open).
-- `"sidebar"` entries are blocks; which blocks share a rail button, in what order, and the button's face (a built-in
+- `"panel"` entries are blocks (`"sidebar"`, the slot's first name from when they sat in the left column, still maps
+  to it: add-ons in the wild use it); which blocks share a rail button, in what order, and the button's face (a built-in
   icon, typed characters, or any add-on's sprite) is the user's, in config
   `rail.groups` (lib/rail.ts, Settings → 扩展 → 分组 = RailSettings.tsx: blocks move by drag, or a right-click menu;
   each group picks hover or click to open; buttons in RailGroups.tsx). Not the add-ons':

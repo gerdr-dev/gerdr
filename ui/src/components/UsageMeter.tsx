@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 /*
  * The quota panel for /usage in the composer. Data is structured (backend /api/usage → the adapter's _gerdr/usage:
  * claude's get_usage, codex's account/rateLimits/read). The sidebar's always-on meter is an add-on now
- * (gerdr-dev/gerdr-addon: usage-meter), drawn through g.slot("sidebar").
+ * (gerdr-dev/gerdr-addon: usage-meter), drawn through g.slot("panel").
  */
 
 const POLL = 3 * 60_000;

@@ -71,7 +71,7 @@ export type Config = {
 export type LoaderChoice = "dots" | `builtin:${string}` | `loader:${string}` | `sprite:${string}`;
 
 /**
- * One add-on button on the rail: which add-on blocks (g.slot("sidebar") entries, by block key "addon:id") its panel
+ * One add-on button on the rail: which add-on blocks (g.slot("panel") entries, by block key "addon:id") its panel
  * stacks, in order, and what the button looks like. Kept per user, not per add-on: which add-ons belong together (two
  * quota meters and a "today" from three authors) is the user's call.
  */

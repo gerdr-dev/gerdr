@@ -126,7 +126,7 @@ lucide icon (`<g.icons.Timer className="size-3.5" />`).
 
 | where | call | gets |
 |---|---|---|
-| A block of an add-on panel; the user groups blocks into buttons on the rail (Settings → 扩展 → 分组) | `g.slot("sidebar", Component, { order, id, title, icon })` | no props |
+| A block of an add-on panel; the user groups blocks into buttons on the rail (Settings → 扩展 → 分组) | `g.slot("panel", Component, { order, id, title, icon })` | no props |
 | A sprite: a small picture the user can use as the working indicator (Settings → General), on a rail button or as an agent's icon | `g.slot("sprite", Component, { id, title })` | `{ state, width, height }` |
 | The app's root, always mounted, no space taken | `g.slot("overlay", Component)` | no props |
 | Every pane's title bar | `g.slot("paneTitle", Component)` | `{ pane, tab }` |
@@ -144,7 +144,7 @@ export default defineAddon({
       useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
       return <div className="px-3.5 py-1 text-[11px] text-muted-foreground">{new Date(now).toLocaleTimeString()}</div>;
     }
-    return g.slot("sidebar", Clock);
+    return g.slot("panel", Clock);
   },
 });
 ```
@@ -180,8 +180,8 @@ Rules that keep it looking like Gerdr:
 - No literal colors. Use the theme's tokens so light and dark both work: `text-muted-foreground`, `bg-muted`,
   `bg-accent`, `border`, `text-brand` / `bg-brand`, `text-ok`, `text-warn`, `text-bad` (and `/10`-style opacity:
   `bg-warn/10`).
-- Sizes follow the surroundings: 11–12px text in the sidebar and under turns, 13px in panels.
-- Sidebar blocks: give yours horizontal padding only (`px-1.5`); the panel pads above and below once for all of them.
+- Sizes follow the surroundings: 11–12px text in panel blocks and under turns, 13px in dialogs.
+- Panel blocks: give yours horizontal padding only (`px-1.5`); the panel pads above and below once for all of them.
   Which blocks share a rail button is the user's choice, not yours: don't assume yours sits next to another add-on's.
 - A sprite (`g.slot("sprite")`) gets its box as `width` × `height`: 24×16 in the working indicator (`state`
   "working" / "waiting"), 24×20 on a rail button and as small as 14×14 as an agent's icon (`state` "idle": keep it

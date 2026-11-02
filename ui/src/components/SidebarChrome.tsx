@@ -18,7 +18,7 @@ import { SpaceSwitcher } from "./SpaceSwitcher";
  */
 
 /**
- * The bottom of the phone drawer. The add-on blocks (g.slot("sidebar"): quota meter, today's numbers…) used to sit
+ * The bottom of the phone drawer. The add-on blocks (g.slot("panel"): quota meter, today's numbers…) used to sit
  * above it for good and took a quarter of a phone's height from the list; they open from the footer's button instead
  * (PhoneGroupButtons, one per group of Settings → 扩展 → 分组), as they open from the rail on wider screens.
  */

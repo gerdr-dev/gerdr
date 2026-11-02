@@ -618,7 +618,7 @@ across the menu and dropped its resize handle (seen on a tablet). With the rail 
 up with. Old sites still get `gerdr:sidebar {width: 224, bottom: 0}` on load (WorkView.tsx `LEGACY_SIDEBAR`), so a
 menu written for the variables keeps a sane width and no gap.
 
-- The add-on blocks (`g.slot("sidebar")`) open in panels beside the rail: one button per group the user set up in
+- The add-on blocks (`g.slot("panel")`) open in panels beside the rail: one button per group the user set up in
   Settings → 扩展 → 分组, each with the face the user picked (docs/dev/ADDONS.md).
   A lost connection shows as a toast on every screen (`ConnToast`): the row that showed it is gone.
 - The phone has no rail: its drawer keeps `SidebarHeader` / `SidebarBottom` (SidebarChrome.tsx), its top bar the rest.

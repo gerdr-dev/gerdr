@@ -98,7 +98,7 @@ export function RailSettings() {
   useStore((s) => s.config.rail);
   const groups = resolveGroups();
   const dnd = useBlockDrag();
-  if (!slots.sidebar.length)
+  if (!slots.panel.length)
     return <div className="py-6 text-center text-[13px] text-muted-foreground">还没有带面板的插件。装一个（比如额度条）后，在这里分组。</div>;
   return (
     <DragCtx.Provider value={dnd}>
