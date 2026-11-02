@@ -7,7 +7,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { focusSession } from "@/lib/actions";
 import { api } from "@/lib/api";
-import { clearAll, dismiss, markSeen, sessionName, useInbox, type InboxItem } from "@/lib/inbox";
+import { clearAll, dismiss, LABEL, markSeen, sessionName, useInbox, type InboxItem } from "@/lib/inbox";
 import { set, useStore } from "@/lib/store";
 import type { AskQuestion, PermissionOption } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -124,7 +124,6 @@ const ICON = {
   error: <CircleAlert className="size-3.5 text-bad" />,
   battery: <BatteryLow className="size-3.5 text-warn" />,
 };
-const LABEL = { permission: "等你批准", ask: "在问你", error: "出错了", battery: "电量低" };
 
 function Item({ it, close }: { it: InboxItem; close: () => void }) {
   const live = useInbox((s) => (it.reqId && s.live ? !!s.live[it.reqId] : true));

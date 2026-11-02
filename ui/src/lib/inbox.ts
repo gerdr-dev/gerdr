@@ -1,5 +1,7 @@
+import { toast } from "sonner";
 import { create } from "zustand";
 import { api, type PendingReq } from "./api";
+import { systemNotify } from "./notify";
 import { isPhone } from "./phone";
 import { get as getApp, useStore, visibleSessions } from "./store";
 import type { SessionSummary } from "./types";
@@ -62,11 +64,69 @@ function gone(): string[] {
   }
 }
 
-function add(items: InboxItem[], quiet: boolean) {
+export const LABEL = { permission: "等你批准", ask: "在问你", error: "出错了", battery: "电量低" };
+
+/** `quiet`: the user is already looking at it (no red dot, no system notification); it still goes in the list. */
+function add(items: InboxItem[], quiet: boolean, notify = !quiet) {
   if (!items.length) return;
   useInbox.setState((s) => ({ items: [...items, ...s.items].slice(0, MAX), fresh: s.fresh || !quiet }));
   save();
+  if (!notify) return;
+  // A system notification per item, carrying what it actually is (the command, the question, the error), so it can be
+  // judged without opening Gerdr. In a browser the session id is the tag, so a newer one from the same session replaces the older.
+  for (const it of items) {
+    const title = it.kind === "battery" ? it.title : `${LABEL[it.kind]} · ${it.title}`;
+    systemNotify(title, it.body ?? "", it.sessionId);
+    toastItem(it, title);
+  }
 }
+
+// ---- in-app cards ----
+
+/** Inbox item id → its toast's id. One card per session (a newer item replaces its card), one per battery alert. */
+const toasts = new Map<string, string>();
+const BODY_MAX = 240;
+
+/**
+ * The in-app card, like the update one (native.ts onAppUpdate): stays until closed, since a system notification is
+ * easy to miss and an approval left unseen stalls the agent. It goes by itself once its item does (answered anywhere,
+ * ×'d in the panel) and when the inbox is opened (dropCards): it's a pointer to the inbox, not a second copy of it.
+ */
+function toastItem(it: InboxItem, title: string) {
+  const id = `inbox:${it.sessionId ?? it.id}`;
+  for (const [k, v] of toasts) if (v === id) toasts.delete(k);
+  toasts.set(it.id, id);
+  const body = it.body && it.body.length > BODY_MAX ? it.body.slice(0, BODY_MAX) + "…" : it.body;
+  const sid = it.sessionId;
+  toast(title, {
+    id,
+    duration: Infinity,
+    closeButton: true,
+    description: body,
+    action: sid
+      ? { label: it.kind === "ask" ? "去回答" : it.kind === "error" ? "去看看" : "去处理", onClick: () => import("./actions").then((a) => a.focusSession(sid)) }
+      : undefined,
+    onDismiss: () => toasts.delete(it.id),
+  });
+}
+
+function dropCards(keep?: (itemId: string) => boolean) {
+  for (const [k, v] of [...toasts]) {
+    if (keep?.(k)) continue;
+    toasts.delete(k);
+    toast.dismiss(v);
+  }
+}
+
+// An item left the list, or its request was answered (it lingers a moment as "已处理"): its card has nothing to offer
+useInbox.subscribe((s) => {
+  if (!toasts.size) return;
+  const byId = new Map(s.items.map((x) => [x.id, x]));
+  dropCards((k) => {
+    const it = byId.get(k);
+    return !!it && !(it.reqId && s.live && !s.live[it.reqId]);
+  });
+});
 
 export function dismiss(id: string) {
   const it = get().items.find((x) => x.id === id);
@@ -82,8 +142,9 @@ export function clearAll() {
   for (const it of get().items) dismiss(it.id);
 }
 
-/** Opened: the red dot goes. */
+/** Opened: the red dot and the cards go. */
 export function markSeen() {
+  dropCards();
   if (!get().fresh) return;
   useInbox.setState({ fresh: false });
   save();
@@ -105,6 +166,7 @@ const wanted = (kind: "permission" | "ask" | "error") => getApp().config.inbox?.
 const HANDLED_LINGER = 2000;
 
 let pendingTimer: ReturnType<typeof setTimeout> | undefined;
+let primed = false; // the first /api/pending since the page opened has come back
 function refreshPending() {
   clearTimeout(pendingTimer);
   pendingTimer = setTimeout(async () => {
@@ -123,6 +185,7 @@ function refreshPending() {
     const fresh = reqs.filter((r) => !have.has(r.reqId) && !skip.has(r.reqId) && wanted(r.kind));
     const live: Record<string, true> = Object.fromEntries(reqs.map((r) => [r.reqId, true as const]));
     useInbox.setState({ live });
+    const quiet = fresh.every((r) => seen(r.sessionId));
     // No longer pending (answered here or elsewhere, or the turn ended): nothing left to do with it, so it goes. After
     // a moment showing "已处理", so an answer clicked in the panel visibly lands and the next item doesn't jump up under
     // a second click (which could approve something unread).
@@ -147,8 +210,12 @@ function refreshPending() {
         reqId: r.reqId,
         request: r.request,
       })),
-      fresh.every((r) => seen(r.sessionId)),
+      quiet,
+      // The first fetch after the page opens finds what was already waiting before it: red dot, but no burst of
+      // notifications for things that aren't new
+      primed && !quiet,
     );
+    primed = true;
   }, 200);
 }
 

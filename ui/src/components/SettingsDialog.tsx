@@ -187,7 +187,7 @@ export function SettingsDialog({ open }: { open: boolean }) {
                 </Row>
               </Section>
               <Section title="通知">
-                <Row label="系统通知" hint="看不见的会话跑完了 / 在等你时" local>
+                <Row label="系统通知" hint="看不见的会话跑完了，或收件箱来了新消息时" local>
                   <Switch checked={dev.notifications} onCheckedChange={(v) => setPref({ notifications: v })} />
                 </Row>
               </Section>

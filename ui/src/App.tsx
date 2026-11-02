@@ -67,17 +67,24 @@ function useAttention() {
       // 手机上左右分屏只画焦点那一边，另一边看不见，不能算「看着呢」
       const visible = new Set(visibleSessions(s.layout, isPhone()));
       const away = document.visibilityState !== "visible" || !document.hasFocus();
+      // Approvals, questions and errors that go in the inbox get their system notification from there (lib/inbox.ts),
+      // with the actual command / question; these generic ones are only for kinds the user kept out of the inbox
+      const inbox = s.config.inbox ?? {};
+      // (a session waiting doesn't say on what: only skip when the inbox takes both kinds, a duplicate beats a miss)
+      const inboxWaits = inbox.permission !== false && inbox.ask !== false;
+      const inboxErrors = inbox.error !== false;
       for (const cur of Object.values(s.sessions)) {
         const old = before[cur.id];
         if (!old) continue;
         const seen = visible.has(cur.id) && !away;
         const name = cur.title || cur.cwd.split("/").pop() || cur.agent;
-        if (old.status !== "waiting" && cur.status === "waiting" && !seen) {
+        if (old.status !== "waiting" && cur.status === "waiting" && !seen && !inboxWaits) {
           systemNotify(`在等你 · ${name}`, "需要你批准或回答问题", cur.id);
         }
         if ((old.status === "running" || old.status === "waiting") && (cur.status === "idle" || cur.status === "error") && !seen) {
           markUnread(cur.id);
-          systemNotify(cur.status === "error" ? `出错了 · ${name}` : `完成 · ${name}`, cur.error ?? "", cur.id);
+          if (cur.status === "idle") systemNotify(`完成 · ${name}`, "", cur.id);
+          else if (!inboxErrors) systemNotify(`出错了 · ${name}`, cur.error ?? "", cur.id);
         }
       }
       nativeBadge(Object.values(s.sessions).filter((x) => x.status === "waiting").length);
