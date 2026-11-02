@@ -11,6 +11,7 @@ const { spawn, execFile } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 const updater = require("./updater");
+const { s, setLocale } = require("./i18n");
 
 const isMac = process.platform === "darwin";
 
@@ -44,7 +45,7 @@ function backendPath() {
 // service without waiting for it to go idle.
 function startBackend(now = false) {
   const bin = backendPath();
-  if (!fs.existsSync(bin)) return showMessage(`找不到 gerdr 后端：${bin}`);
+  if (!fs.existsSync(bin)) return showMessage(s(`找不到 gerdr 后端：${bin}`, `Gerdr backend not found: ${bin}`));
   // --app：就绪后打印一行 GERDR_READY <url>；已经有一个 gerdr 在跑（比如终端里起的）就直接连它，两边看到的是同一份会话。
   // --parent-pid：App 退出（哪怕是被强杀）时后端跟着退。
   const p = spawn(bin, ["--app", "--parent-pid", String(process.pid)], {
@@ -72,17 +73,17 @@ function startBackend(now = false) {
   p.stderr.on("data", (d) => {
     errTail = (errTail + d.toString()).slice(-16000);
   });
-  p.on("error", (e) => showMessage(`起不来后端：${e.message}`));
+  p.on("error", (e) => showMessage(s(`起不来后端：${e.message}`, `Couldn't start the backend: ${e.message}`)));
   p.on("exit", (code, signal) => {
     if (backend === p) backend = null;
     if (quitting || p.replaced) return;
     // 75 = 刚打开后台常驻，这个后端让位给后台服务（cmd/gerdr 的 exitHandover）：重起一个，它只连后台
     if (code === 75) return startBackend();
     // 「已经有一个在跑」那种情况它会正常退出（code 0），那不算出错
-    if (!origin || code !== 0 || signal) showMessage(`后端退出了（${signal ?? code}）\n\n${errTail.slice(-2000)}`);
+    if (!origin || code !== 0 || signal) showMessage(`${s(`后端退出了（${signal ?? code}）`, `The backend exited (${signal ?? code})`)}\n\n${errTail.slice(-2000)}`);
   });
   setTimeout(() => {
-    if (!origin) showMessage("后端 30 秒没就绪。");
+    if (!origin) showMessage(s("后端 30 秒没就绪。", "The backend wasn't ready after 30 seconds."));
   }, 30000);
 }
 
@@ -137,13 +138,17 @@ async function fetchBusy() {
 const isIdle = (b) => !!b && b.turns + b.waiting + b.tasks + b.terms === 0;
 
 function describeBusy(b) {
-  if (!b) return "正在跑的 agent 和终端会被打断。";
+  if (!b) return s("正在跑的 agent 和终端会被打断。", "Running agents and terminals will be cut off.");
+  const n = (k, zh, one, many) => s(`${k} ${zh}`, `${k} ${k === 1 ? one : many}`);
   const parts = [];
-  if (b.turns) parts.push(`${b.turns} 个 agent 正在跑`);
-  if (b.waiting) parts.push(`${b.waiting} 个在等你批准`);
-  if (b.tasks) parts.push(`${b.tasks} 个后台任务`);
-  if (b.terms) parts.push(`${b.terms} 个终端`);
-  return `重启会打断：${parts.join("、")}。空闲的会话不受影响，下次发话自己接上。`;
+  if (b.turns) parts.push(n(b.turns, "个 agent 正在跑", "running agent", "running agents"));
+  if (b.waiting) parts.push(n(b.waiting, "个在等你批准", "waiting for your approval", "waiting for your approval"));
+  if (b.tasks) parts.push(n(b.tasks, "个后台任务", "background task", "background tasks"));
+  if (b.terms) parts.push(n(b.terms, "个终端", "terminal", "terminals"));
+  return s(
+    `重启会打断：${parts.join("、")}。空闲的会话不受影响，下次发话自己接上。`,
+    `Restarting cuts off: ${parts.join(", ")}. Idle sessions aren't affected and pick up on your next message.`,
+  );
 }
 
 let applying = false;
@@ -163,9 +168,9 @@ async function applyUpdate(ask) {
     if (!isIdle(b)) {
       const { response } = await dialog.showMessageBox(activeWin() ?? undefined, {
         type: "question",
-        message: `更新到 ${p.version}`,
-        detail: describeBusy(b) + (p.kind === "app" ? "\n\n这次更新换的是整个 App，会退出再重新打开。" : ""),
-        buttons: ["现在更新", "等空闲时自动更新", "取消"],
+        message: s(`更新到 ${p.version}`, `Update to ${p.version}`),
+        detail: describeBusy(b) + (p.kind === "app" ? s("\n\n这次更新换的是整个 App，会退出再重新打开。", "\n\nThis update replaces the whole App: it quits and reopens.") : ""),
+        buttons: [s("现在更新", "Update now"), s("等空闲时自动更新", "Update when idle"), s("取消", "Cancel")],
         defaultId: 1,
         cancelId: 2,
       });
@@ -220,7 +225,7 @@ async function pushUpdate(only) {
   );
   if (only || !p || shown.some(Boolean) || notified.has(p.version) || !Notification.isSupported()) return;
   notified.add(p.version);
-  const n = new Notification({ title: "Gerdr 有新版本", body: `${p.version} 已下载好，点这里更新` });
+  const n = new Notification({ title: s("Gerdr 有新版本", "A new Gerdr is available"), body: s(`${p.version} 已下载好，点这里更新`, `${p.version} is downloaded; click to update`) });
   n.on("click", () => applyUpdate(true));
   n.show();
 }
@@ -253,7 +258,7 @@ function watchUpdates() {
 async function checkFromMenu() {
   if (updater.pending()) return applyUpdate(true);
   const msg = await updater.check();
-  if (!updater.pending()) dialog.showMessageBox(activeWin() ?? undefined, { message: "检查更新", detail: msg });
+  if (!updater.pending()) dialog.showMessageBox(activeWin() ?? undefined, { message: s("检查更新", "Check for updates"), detail: msg });
 }
 
 // ---- 窗口 ----
@@ -363,7 +368,7 @@ function createWindow(space) {
   });
 
   if (origin) w.loadURL(pageURL(space));
-  else showMessage("启动中…", w);
+  else showMessage(s("启动中…", "Starting…"), w);
   return w;
 }
 
@@ -495,6 +500,10 @@ ipcMain.on("gerdr", (e, m) => {
       else if (m.check) updater.check().then(() => pushUpdate(win));
       else pushUpdate(win);
       break;
+    case "locale":
+      // the language the page shows (its own per-device setting): menus and dialogs follow it, see i18n.js
+      if (setLocale(m.locale)) buildMenu();
+      break;
     case "webPid":
       // 设置里的「资源」要量界面所在那个渲染进程的内存（它不是后端起的，后端看不见）
       runInPage(`window.__GERDR_WEB_PID__ = ${win.webContents.getOSProcessId()}`, win);
@@ -552,79 +561,79 @@ function buildMenu() {
 
 function buildMacMenu() {
   const tabs = [];
-  for (let i = 1; i <= 9; i++) tabs.push(cmd(`tab ${i}`, `tab${i}`, `Cmd+${i}`));
+  for (let i = 1; i <= 9; i++) tabs.push(cmd(s(`tab ${i}`, `Tab ${i}`), `tab${i}`, `Cmd+${i}`));
   Menu.setApplicationMenu(
     Menu.buildFromTemplate([
       {
         label: "Gerdr",
         submenu: [
-          { role: "about", label: "关于 Gerdr" },
-          { label: updater.pending() ? `更新到 ${updater.pending().version}…` : "检查更新…", enabled: updater.enabled(), click: checkFromMenu },
+          { role: "about", label: s("关于 Gerdr", "About Gerdr") },
+          { label: updater.pending() ? s(`更新到 ${updater.pending().version}…`, `Update to ${updater.pending().version}…`) : s("检查更新…", "Check for Updates…"), enabled: updater.enabled(), click: checkFromMenu },
           { type: "separator" },
-          cmd("设置…", "settings", "Cmd+,"),
+          cmd(s("设置…", "Settings…"), "settings", "Cmd+,"),
           { type: "separator" },
-          { role: "hide", label: "隐藏 Gerdr" },
-          { role: "hideOthers", label: "隐藏其他" },
+          { role: "hide", label: s("隐藏 Gerdr", "Hide Gerdr") },
+          { role: "hideOthers", label: s("隐藏其他", "Hide Others") },
           { type: "separator" },
-          { role: "quit", label: "退出 Gerdr" },
+          { role: "quit", label: s("退出 Gerdr", "Quit Gerdr") },
         ],
       },
       {
-        label: "文件",
-        submenu: [{ label: "新窗口", accelerator: "Cmd+N", click: newWindow }, { type: "separator" }, cmd("新建 tab", "newTab", "Cmd+T"), cmd("新工作空间", "newWorkspace", "Cmd+Shift+N"), cmd("会话列表", "sessions", "Cmd+O"), { type: "separator" }, cmd("关闭 pane", "closePane", "Cmd+W"), cmd("重新打开刚关的 tab / pane", "reopenClosed", "Cmd+Shift+T")],
+        label: s("文件", "File"),
+        submenu: [{ label: s("新窗口", "New Window"), accelerator: "Cmd+N", click: newWindow }, { type: "separator" }, cmd(s("新建 tab", "New Tab"), "newTab", "Cmd+T"), cmd(s("新工作空间", "New Workspace"), "newWorkspace", "Cmd+Shift+N"), cmd(s("会话列表", "Sessions"), "sessions", "Cmd+O"), { type: "separator" }, cmd(s("关闭 pane", "Close Pane"), "closePane", "Cmd+W"), cmd(s("重新打开刚关的 tab / pane", "Reopen Closed Tab / Pane"), "reopenClosed", "Cmd+Shift+T")],
       },
       {
-        label: "编辑",
+        label: s("编辑", "Edit"),
         submenu: [
-          { role: "undo", label: "撤销" },
-          { role: "redo", label: "重做" },
+          { role: "undo", label: s("撤销", "Undo") },
+          { role: "redo", label: s("重做", "Redo") },
           { type: "separator" },
-          { role: "cut", label: "剪切" },
-          { role: "copy", label: "复制" },
-          { role: "paste", label: "粘贴" },
-          { role: "selectAll", label: "全选" },
+          { role: "cut", label: s("剪切", "Cut") },
+          { role: "copy", label: s("复制", "Copy") },
+          { role: "paste", label: s("粘贴", "Paste") },
+          { role: "selectAll", label: s("全选", "Select All") },
         ],
       },
       {
-        label: "显示",
+        label: s("显示", "View"),
         submenu: [
-          cmd("命令面板", "palette", "Cmd+K"),
-          cmd("显示 / 隐藏侧栏", "toggleSidebar", "Cmd+Ctrl+S"),
+          cmd(s("命令面板", "Command Palette"), "palette", "Cmd+K"),
+          cmd(s("显示 / 隐藏侧栏", "Show / Hide Sidebar"), "toggleSidebar", "Cmd+Ctrl+S"),
           // ⌘D 复制焦点那个（会话 / 终端）；空面板的分屏走 prefix 键，菜单上不挂 ⌘ 键
-          cmd("复制到右边", "duplicateRight", "Cmd+D"),
-          cmd("复制到下面", "duplicateDown", "Cmd+Shift+D"),
-          cmd("左右分屏（空面板）", "splitRight"),
-          cmd("上下分屏（空面板）", "splitDown"),
-          cmd("放大 / 还原 pane", "zoom", "Cmd+Shift+Enter"),
+          cmd(s("复制到右边", "Duplicate Right"), "duplicateRight", "Cmd+D"),
+          cmd(s("复制到下面", "Duplicate Down"), "duplicateDown", "Cmd+Shift+D"),
+          cmd(s("左右分屏（空面板）", "Split Right (Blank Pane)"), "splitRight"),
+          cmd(s("上下分屏（空面板）", "Split Down (Blank Pane)"), "splitDown"),
+          cmd(s("放大 / 还原 pane", "Zoom / Restore Pane"), "zoom", "Cmd+Shift+Enter"),
           { type: "separator" },
-          { role: "zoomIn", label: "放大", accelerator: "Cmd+=" },
-          { role: "zoomOut", label: "缩小" },
-          { role: "resetZoom", label: "实际大小" },
+          { role: "zoomIn", label: s("放大", "Zoom In"), accelerator: "Cmd+=" },
+          { role: "zoomOut", label: s("缩小", "Zoom Out") },
+          { role: "resetZoom", label: s("实际大小", "Actual Size") },
           { type: "separator" },
           {
-            label: "重新载入",
+            label: s("重新载入", "Reload"),
             accelerator: "Cmd+R",
             click: () => {
               const w = activeWin();
               if (w) origin ? w.loadURL(pageURL(wins.get(w)?.space)) : w.reload();
             },
           },
-          { label: "开发者工具", accelerator: "Cmd+Alt+I", click: () => activeWin()?.webContents.toggleDevTools() },
-          { label: "在浏览器里打开", click: () => origin && shell.openExternal(origin) },
+          { label: s("开发者工具", "Developer Tools"), accelerator: "Cmd+Alt+I", click: () => activeWin()?.webContents.toggleDevTools() },
+          { label: s("在浏览器里打开", "Open in Browser"), click: () => origin && shell.openExternal(origin) },
         ],
       },
       {
-        label: "前往",
-        submenu: [cmd("下一个 tab", "nextTab", "Cmd+Shift+]"), cmd("上一个 tab", "prevTab", "Cmd+Shift+["), ...tabs, { type: "separator" }, cmd("跳到在等你的会话", "focusAttention", "Cmd+J"), { type: "separator" }, cmd("下一个 session", "nextSpace", "Cmd+Ctrl+]"), cmd("上一个 session", "prevSpace", "Cmd+Ctrl+[")],
+        label: s("前往", "Go"),
+        submenu: [cmd(s("下一个 tab", "Next Tab"), "nextTab", "Cmd+Shift+]"), cmd(s("上一个 tab", "Previous Tab"), "prevTab", "Cmd+Shift+["), ...tabs, { type: "separator" }, cmd(s("跳到在等你的会话", "Jump to Session Waiting for You"), "focusAttention", "Cmd+J"), { type: "separator" }, cmd(s("下一个 session", "Next Session"), "nextSpace", "Cmd+Ctrl+]"), cmd(s("上一个 session", "Previous Session"), "prevSpace", "Cmd+Ctrl+[")],
       },
-      { role: "windowMenu", label: "窗口" },
+      { role: "windowMenu", label: s("窗口", "Window") },
       {
-        label: "帮助",
+        label: s("帮助", "Help"),
         submenu: [
-          cmd("快捷键", "help", "Cmd+/"),
+          cmd(s("快捷键", "Keyboard Shortcuts"), "help", "Cmd+/"),
           { type: "separator" },
           // 急救面板编进了后端、不在界面目录里：主界面改坏了也打得开（菜单项不经过页面，页面坏了也点得动）
-          { label: "急救：界面坏了时叫 agent 修", click: openRescue },
+          { label: s("急救：界面坏了时叫 agent 修", "Rescue: Have an Agent Fix a Broken UI"), click: openRescue },
         ],
       },
     ]),

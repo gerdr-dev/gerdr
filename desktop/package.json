@@ -26,6 +26,7 @@
       "main.js",
       "preload.js",
       "updater.js",
+      "i18n.js",
       "package.json"
     ],
     "extraResources": [

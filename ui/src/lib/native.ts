@@ -4,7 +4,7 @@
 
 import { toast } from "sonner";
 import { api } from "./api";
-import { t } from "./i18n";
+import { locale, t } from "./i18n";
 import { set } from "./store";
 
 type Bridge = { postMessage(m: unknown): void };
@@ -15,6 +15,10 @@ function bridge(): Bridge | undefined {
 }
 
 export const isNative = () => !!bridge();
+
+// The App's own menus and dialogs follow this page's language (desktop/i18n.js); the language is fixed for the life of
+// the page (lib/i18n.ts), so telling once on load is enough. Older shells ignore the message.
+bridge()?.postMessage({ type: "locale", locale: locale() });
 
 /**
  * Desktop App: where a picked / pasted / dropped File sits on this machine, so it is attached by its path (folders

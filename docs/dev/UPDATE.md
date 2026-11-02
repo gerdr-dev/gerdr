@@ -12,7 +12,7 @@ A release (`.github/workflows/release.yml`) publishes, next to the dmgs:
 - `update.json`: version, the **shell id** it was built against, size + sha256 of every package. The App reads it
   from `releases/latest/download/update.json` (a redirect, no API rate limit), via `net.fetch` (system proxy).
 
-Shell id = hash of `main.js preload.js updater.js package.json res/*` (`shell-id.sh`); `build.sh` writes it into the
+Shell id = hash of `main.js preload.js updater.js i18n.js package.json res/*` (`shell-id.sh`); `build.sh` writes it into the
 packaged `package.json` as `gerdrShell`. Same id → download only the backend to
 `~/Library/Application Support/Gerdr/backend/<v>/gerdr`, `current.json` names it, and `main.js` runs it instead of
 the bundle's (whichever is newer, so installing a newer App by hand wins). Different id → download the dmg, then on a

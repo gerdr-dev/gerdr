@@ -20,6 +20,7 @@ const path = require("node:path");
 const { Readable, Transform } = require("node:stream");
 const { pipeline } = require("node:stream/promises");
 const zlib = require("node:zlib");
+const { s } = require("./i18n");
 
 const REPO = "gerdr-dev/gerdr";
 // GERDR_UPDATE_FEED: try updates against a local feed (files are then resolved next to it)
@@ -186,15 +187,15 @@ function setPending(p) {
 
 /** Look for a release; download what it takes. Returns a short line for the "check for updates" menu item. */
 async function check() {
-  if (!enabled()) return "This build doesn't update itself (local build).";
-  if (state.phase !== "idle") return "Already checking.";
+  if (!enabled()) return s("这个版本不自动更新（本地构建）。", "This build doesn't update itself (local build).");
+  if (state.phase !== "idle") return s("正在检查。", "Already checking.");
   Object.assign(state, { phase: "checking", error: "" });
   emit();
   try {
     const feed = await fetchJSON(FEED);
     state.checkedAt = Date.now();
     const have = pending?.version && newer(pending.version, backend().version) ? pending.version : backend().version;
-    if (!newer(feed.version, have)) return `Up to date (${have}).`;
+    if (!newer(feed.version, have)) return s(`已经是最新版（${have}）。`, `Up to date (${have}).`);
     Object.assign(state, { phase: "downloading", progress: 0, downloading: feed.version });
     emit();
     if (feed.shell === SHELL && feed.backend?.[PLAT]) {
@@ -202,11 +203,11 @@ async function check() {
       setPending({ kind: "backend", version: feed.version });
     } else if (feed.app?.[PLAT]) {
       setPending({ kind: "app", version: feed.version, file: await fetchApp(feed) });
-    } else return `${feed.version} has no package for ${PLAT}.`;
-    return `Downloaded ${feed.version}.`;
+    } else return s(`${feed.version} 没有 ${PLAT} 的安装包。`, `${feed.version} has no package for ${PLAT}.`);
+    return s(`${feed.version} 已下载好。`, `Downloaded ${feed.version}.`);
   } catch (e) {
     state.error = String(e?.message || e);
-    return `Update check failed: ${state.error}`;
+    return s(`检查更新失败：${state.error}`, `Update check failed: ${state.error}`);
   } finally {
     Object.assign(state, { phase: "idle", progress: 0, downloading: "" });
     emit();
