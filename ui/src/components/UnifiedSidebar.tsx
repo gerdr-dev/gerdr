@@ -824,7 +824,9 @@ function Row({
           >
             <X className="size-3" />
           </button>
-          {s && <StatusDot status={dotStatus(s)} unread={unread} />}
+          {/* Always drawn (transparent when there is nothing to show, or no session at all: a file / terminal pane)
+              so the right-hand labels line up in one column across every row. */}
+          <StatusDot status={dotStatus(s)} unread={unread} />
         </div>
       </ContextMenuTrigger>
       <ContextMenuContent>
