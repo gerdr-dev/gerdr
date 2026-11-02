@@ -56,10 +56,10 @@ export function AndroidSettings() {
               <div className="text-[13px]">后台通知</div>
               <div className="text-[12px] text-muted-foreground">
                 {!n.on
-                  ? "关着：agent 等你、跑完了，只有打开 App 才看得到。"
+                  ? "关着：Agent 等你、跑完了，只有打开 App 才看得到。"
                   : !n.perm
                     ? "系统没给通知权限：点「试一下」申请；拒过的话要去系统设置里打开。"
-                    : "App 关着 / 锁屏也能收到；通知栏常驻一条 agent 状态一览。"}
+                    : "App 关着 / 锁屏也能收到；通知栏常驻一条 Agent 状态一览。"}
               </div>
             </div>
             <Switch checked={n.on} onCheckedChange={(v) => postAndroid({ t: "notify", op: "set", on: v })} />
@@ -88,7 +88,7 @@ export function AndroidSettings() {
           <div>
             <div className="text-[13px]">音量键当 ↑ / ↓</div>
             <div className="text-[12px] text-muted-foreground">
-              只在键盘弹起、下拉菜单开着、agent 在提问时这样用（翻历史、挪光标、选选项）；其他时候还是调音量
+              只在键盘弹起、下拉菜单开着、Agent 在提问时这样用（翻历史、挪光标、选选项）；其他时候还是调音量
             </div>
           </div>
           <Switch checked={vol} onCheckedChange={(v) => postAndroid({ t: "volkeys", op: "set", on: v })} />

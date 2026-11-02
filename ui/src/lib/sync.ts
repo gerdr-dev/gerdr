@@ -349,7 +349,7 @@ function handle(m: any) {
     case "stepup":
       // 远程设备请求加 passkey，要坐在电脑前的人批准（RemoteSettings）。只在本机这边提醒：远程那头批不了
       if (!location.protocol.startsWith("https")) {
-        const body = `「${m.data?.label}」请求添加 passkey，核对码 ${m.data?.code}`;
+        const body = `「${m.data?.label}」请求添加 Passkey，核对码 ${m.data?.code}`;
         const open = () => set({ dialog: { kind: "settings", tab: "remote" } });
         nativeNotify("Gerdr：要你批准", body);
         toast(body, { id: "stepup", duration: 30000, action: { label: "去批准", onClick: open } }); // a newer request replaces the old one

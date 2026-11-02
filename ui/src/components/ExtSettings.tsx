@@ -126,7 +126,7 @@ const LABEL = "text-[12px] font-normal text-muted-foreground";
 
 const TEMPLATE = (name: string) => `---
 name: ${name}
-description: 一句话说清楚什么时候该用这个 skill（Agent 靠它判断）
+description: 一句话说清楚什么时候该用这个 Skill（Agent 靠它判断）
 ---
 
 # ${name}
@@ -183,7 +183,7 @@ export function SkillSettings({ open }: { open: boolean }) {
         onCancel={() => setEdit(null)}
         onSave={async (name, content) => {
           if (edit.isNew && mine.has(name)) {
-            toast.error(`已经有一个叫 ${name} 的 skill 了`);
+            toast.error(`已经有一个叫 ${name} 的 Skill 了`);
             return;
           }
           if (await run(api.writeSkill(name, content))) setEdit(null);
@@ -280,7 +280,7 @@ export function SkillSettings({ open }: { open: boolean }) {
       ))}
       {s.skillSource === "gerdr" && (
         <div className="text-[12px] text-muted-foreground">
-          只用 Gerdr 的：Claude 插件里的 skill 关不了单个，插件会整个关掉（带的 hook、MCP 也没了）；想留哪个就加到 Gerdr。
+          只用 Gerdr 的：Claude 插件里的 Skill 关不了单个，插件会整个关掉（带的 Hook、MCP 也没了）；想留哪个就加到 Gerdr。
         </div>
       )}
     </div>
@@ -301,7 +301,7 @@ function SkillEditor({
   const valid = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(name);
   return (
     <div className="min-w-0 space-y-3">
-      <div className="text-[13px] font-medium">{edit.isNew ? "新建 skill" : `编辑「${edit.name}」`}</div>
+      <div className="text-[13px] font-medium">{edit.isNew ? "新建 Skill" : `编辑「${edit.name}」`}</div>
       <div className="space-y-3 rounded-md border p-3">
         <div className="space-y-1.5">
           <Label className={LABEL}>名字</Label>

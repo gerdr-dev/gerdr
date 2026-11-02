@@ -43,7 +43,7 @@ async function askCloseSpace(sp: Space) {
   const n = spaceWorkspaces(get().layout, sp.id).length;
   const ok = await askConfirm({
     title: `关闭项目「${sp.name}」？`,
-    description: `连同它的 ${n} 个工作空间一起关掉，里面的 agent 会停掉（会话记录留着，能再打开）。项目的工作空间布局和 Work 都留在它的目录里：以后再建一个同名的项目，就都回来了。`,
+    description: `连同它的 ${n} 个工作空间一起关掉，里面的 Agent 会停掉（会话记录留着，能再打开）。项目的工作空间布局和 Work 都留在它的目录里：以后再建一个同名的项目，就都回来了。`,
     action: "关闭",
     destructive: true,
   });
@@ -100,7 +100,7 @@ export function SpaceSwitcher() {
   const plus = (live: boolean) => (
     <button
       tabIndex={live ? undefined : -1}
-      title="新项目（每个项目有自己的工作空间、agent 和 Work，互相看不见）"
+      title="新项目（每个项目有自己的工作空间、Agent 和 Work，互相看不见）"
       className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/60 hover:text-foreground"
       style={{ WebkitAppRegion: "no-drag" } as any}
       onClick={live ? newSpaceDialog : undefined}
@@ -165,7 +165,7 @@ function SpaceMenu() {
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-52">
-        <DropdownMenuLabel className="text-[11px] font-normal text-muted-foreground">每个项目的 agent 互相看不见</DropdownMenuLabel>
+        <DropdownMenuLabel className="text-[11px] font-normal text-muted-foreground">每个项目的 Agent 互相看不见</DropdownMenuLabel>
         {spaces.map((sp) => {
           const st = spaceStatus(layout, sp, sessions, unread);
           return (

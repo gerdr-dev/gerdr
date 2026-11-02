@@ -104,7 +104,7 @@ function InboxPanel({ close }: { close: () => void }) {
           ))}
         </div>
       ) : (
-        <div className="px-3 py-8 text-center text-[12px] text-muted-foreground">没有新消息。出错、在等你回答的 agent 和电量低都会出现在这里。</div>
+        <div className="px-3 py-8 text-center text-[12px] text-muted-foreground">没有新消息。出错、在等你回答的 Agent 和电量低都会出现在这里。</div>
       )}
     </>
   );
@@ -160,7 +160,7 @@ function Item({ it, close }: { it: InboxItem; close: () => void }) {
           className={cn("min-w-0 truncate text-left font-medium", go ? "cursor-pointer hover:underline" : "cursor-default")}
           disabled={!go}
           onClick={go}
-          title={go ? "跳到这个 agent" : undefined}
+          title={go ? "跳到这个 Agent" : undefined}
         >
           {head}
         </button>

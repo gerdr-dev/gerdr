@@ -80,7 +80,7 @@ export function UpdateSetting() {
           <div>
             <div className="text-[13px]">自动更新</div>
             <div className="text-[12px] text-muted-foreground">
-              {u.auto ? "自己检查、下载，没有 agent 在跑、没开终端时换上" : "不自己检查和下载：点「检查更新」下好后，再点「现在更新」"}
+              {u.auto ? "自己检查、下载，没有 Agent 在跑、没开终端时换上" : "不自己检查和下载：点「检查更新」下好后，再点「现在更新」"}
             </div>
           </div>
           <Switch checked={u.auto} onCheckedChange={setAuto} />
@@ -140,10 +140,10 @@ function describe(u: AppUpdateStatus, service: boolean): { text: string; tone: s
   if (p?.kind === "app") return { text: `有升级：${p.version}。这次要换整个 App，更新时会退出再打开`, tone: "text-brand" };
   if (p) {
     const b = u.busy;
-    const who = service ? "后台服务" : "gerdr";
+    const who = service ? "后台服务" : "Gerdr";
     if (!b) return { text: `有升级：${p.version}`, tone: "text-brand" };
     const wait: string[] = [];
-    if (b.turns) wait.push(`${b.turns} 个 agent 跑完`);
+    if (b.turns) wait.push(`${b.turns} 个 Agent 跑完`);
     if (b.waiting) wait.push(`${b.waiting} 个请求被批准`);
     if (b.tasks) wait.push(`${b.tasks} 个后台任务结束`);
     if (b.terms) wait.push(`${b.terms} 个终端关掉`);

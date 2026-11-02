@@ -82,13 +82,13 @@ export function RemoteSettings({ open }: { open: boolean }) {
             {/* 远程那一侧不给：移除 = 把自己锁在门外（后端也拦着）。换地址 = 先移除再连 */}
             {!isRemote && !st.envLocked && (
               <ConfirmDelete
-                title="移除远程访问（换地址也是先移除、再连新的）：断开中继，配过的设备和 passkey 全部清掉"
-                label="确认移除，设备和 passkey 一起清掉"
+                title="移除远程访问（换地址也是先移除、再连新的）：断开中继，配过的设备和 Passkey 全部清掉"
+                label="确认移除，设备和 Passkey 一起清掉"
                 onConfirm={() =>
                   run(async () => {
                     const r = await api.remoteDisconnect();
                     setPair(null);
-                    setMsg(`已移除远程访问，踢掉了 ${r.revoked} 台设备${r.passkeys ? `、删掉了 ${r.passkeys} 把 passkey` : ""}。`);
+                    setMsg(`已移除远程访问，踢掉了 ${r.revoked} 台设备${r.passkeys ? `、删掉了 ${r.passkeys} 把 Passkey` : ""}。`);
                   })
                 }
               />
@@ -150,7 +150,7 @@ export function RemoteSettings({ open }: { open: boolean }) {
                     </div>
                     <div className="text-[12px] text-muted-foreground">
                       {new Date(pair.expires).toLocaleTimeString()} 前有效，用一次就废。
-                      {st.pairMinutes > 0 && <>配进来的设备只能用 {st.pairMinutes} 分钟，在那台设备上过一次 passkey 才长期有效。</>}
+                      {st.pairMinutes > 0 && <>配进来的设备只能用 {st.pairMinutes} 分钟，在那台设备上过一次 Passkey 才长期有效。</>}
                     </div>
                   </PopoverContent>
                 )}
@@ -167,12 +167,12 @@ export function RemoteSettings({ open }: { open: boolean }) {
                   setConfirmAll(false);
                   run(async () => {
                     const r = await api.remoteRevokeAll();
-                    setMsg(`踢掉了 ${r.revoked} 台设备${r.passkeys ? `，并删掉了 ${r.passkeys} 把 passkey` : ""}`);
+                    setMsg(`踢掉了 ${r.revoked} 台设备${r.passkeys ? `，并删掉了 ${r.passkeys} 把 Passkey` : ""}`);
                     if (isRemote) location.reload();
                   });
                 }}
               >
-                {confirmAll ? "再点一下：全部踢掉（含 passkey）" : "全部踢掉"}
+                {confirmAll ? "再点一下：全部踢掉（含 Passkey）" : "全部踢掉"}
               </Button>
             )}
           </div>
@@ -222,7 +222,7 @@ export function RemoteSettings({ open }: { open: boolean }) {
             </Button>
           </div>
           <div className="text-[12px] text-muted-foreground">
-            App 填 {st.url} 就能用。「批准 App 登录」只有当安卓 App 不支持 passkey 时才需要：这时 App 会显示一个 8 位码，点上面的按钮输进去批准。
+            App 填 {st.url} 就能用。「批准 App 登录」只有当安卓 App 不支持 Passkey 时才需要：这时 App 会显示一个 8 位码，点上面的按钮输进去批准。
             {st.lanErr && <span className="text-bad"> {st.lanErr}</span>}
           </div>
         </div>
@@ -246,7 +246,7 @@ export function RemoteSettings({ open }: { open: boolean }) {
                 })
               }
             >
-              加一把 passkey
+              加一把 Passkey
             </Button>
           )}
         </div>
@@ -261,8 +261,8 @@ export function RemoteSettings({ open }: { open: boolean }) {
           />
         )}
         <div className="text-[12px] text-muted-foreground">
-          有了 passkey，新设备不用回机器前拿配对码，Face ID / 指纹一下就进来；配过对的设备超过 {st.reauthHours || "—"} 小时没验证要再验一次。
-          {!pkOK && st.enabled && <> passkey 绑在 {st.host} 上，在那个地址打开 Gerdr 才能加。</>}
+          有了 Passkey，新设备不用回机器前拿配对码，Face ID / 指纹一下就进来；配过对的设备超过 {st.reauthHours || "—"} 小时没验证要再验一次。
+          {!pkOK && st.enabled && <> Passkey 绑在 {st.host} 上，在那个地址打开 Gerdr 才能加。</>}
         </div>
         <div className="divide-y rounded-md border">
           {keys.length === 0 && <div className="p-3 text-muted-foreground">还没有。</div>}

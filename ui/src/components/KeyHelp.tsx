@@ -4,7 +4,7 @@ import { ACTION_TITLES, KEY_GROUPS, formatCombo } from "@/lib/keys";
 import { closeDialog, keyFor, prefOf, useStore } from "@/lib/store";
 
 /** The 1–9 families, folded into one line each. */
-const NUMBERED: Partial<Record<string, string>> = { tab1: "跳到 tab 1–9", active1: "跳到进行中第 1–9 个", ws1: "跳到工作空间 1–9" };
+const NUMBERED: Partial<Record<string, string>> = { tab1: "跳到 Tab 1–9", active1: "跳到进行中第 1–9 个", ws1: "跳到工作空间 1–9" };
 
 // The shortcut sheet (prefix+?): the configured keys by group, plugin commands with keys, and the composer's own keys.
 export function KeyHelp({ open }: { open: boolean }) {
@@ -18,7 +18,7 @@ export function KeyHelp({ open }: { open: boolean }) {
         <DialogHeader>
           <DialogTitle>快捷键</DialogTitle>
           <DialogDescription>
-            先按前缀 <kbd className="rounded-sm border bg-muted px-1 font-mono">{formatCombo(cfg.prefix)}</kbd> 松开，再按后面那个键（和 herdr / tmux
+            先按前缀 <kbd className="rounded-sm border bg-muted px-1 font-mono">{formatCombo(cfg.prefix)}</kbd> 松开，再按后面那个键（和 Herdr / Tmux
             一样）。中文输入法开着也能用。
           </DialogDescription>
         </DialogHeader>

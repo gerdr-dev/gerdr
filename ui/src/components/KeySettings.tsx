@@ -90,7 +90,7 @@ export function KeySettings() {
       <div className="flex items-center justify-between gap-4">
         <div>
           <div className="text-[13px]">前缀键</div>
-          <div className="text-[12px] text-muted-foreground">先按它松开，再按后面那个键（和 tmux / herdr 一样）。默认 ⌃B</div>
+          <div className="text-[12px] text-muted-foreground">先按它松开，再按后面那个键（和 Tmux / Herdr 一样）。默认 ⌃B</div>
         </div>
         <div className="flex items-center gap-1">
           {rec?.target === "prefix" ? (

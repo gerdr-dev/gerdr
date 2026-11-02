@@ -34,7 +34,7 @@ export function RunButton({ cmd, session, className }: { cmd: string; session: C
   return (
     <span className={cn("inline-flex items-stretch rounded-sm border border-brand/40", className)}>
       <button
-        title={`在对话里运行：${cmd}\n目录：${session.cwd}\n输出会跟着你的下一条消息带给 agent`}
+        title={`在对话里运行：${cmd}\n目录：${session.cwd}\n输出会跟着你的下一条消息带给 Agent`}
         disabled={busy}
         className={cn(box, "gap-0.5 px-1")}
         onClick={inChat}
@@ -54,14 +54,14 @@ export function RunButton({ cmd, session, className }: { cmd: string; session: C
               <Play className="size-3.5" />
               在对话里运行
             </span>
-            <span className="pl-5 text-xs text-muted-foreground">输出带给 agent；没有输入，要交互的命令会卡住</span>
+            <span className="pl-5 text-xs text-muted-foreground">输出带给 Agent；没有输入，要交互的命令会卡住</span>
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => runInTerminal(session.id, session.cwd, cmd, "new")} className="flex-col items-start gap-0">
             <span className="flex items-center gap-1.5">
               <SquareTerminal className="size-3.5" />
               在新终端里运行
             </span>
-            <span className="pl-5 text-xs text-muted-foreground">在右边开一个终端，能交互；agent 要自己去读输出</span>
+            <span className="pl-5 text-xs text-muted-foreground">在右边开一个终端，能交互；Agent 要自己去读输出</span>
           </DropdownMenuItem>
           {near?.term && (
             <DropdownMenuItem onSelect={() => runInTerminal(session.id, session.cwd, cmd, "near")} className="flex-col items-start gap-0">

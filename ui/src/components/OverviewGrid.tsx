@@ -176,7 +176,7 @@ export function Grid({
         {ids.length === 0 && (
           <div className="flex h-full flex-col items-center justify-center gap-3 text-[13px] text-muted-foreground">
             <ClipboardCheck className="size-6" />
-            进行中是空的：等你的、在跑的、报错的会自动出现，也可以在左边右键 agent 加进来
+            进行中是空的：等你的、在跑的、报错的会自动出现，也可以在左边右键 Agent 加进来
             <PickButton />
           </div>
         )}

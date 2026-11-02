@@ -128,5 +128,6 @@ version is downloaded into the cache by itself and checked against the sha256; S
 | `volkeys` / `key` | 页 ↔ 壳 | 音量键当 ↑ / ↓（等于在焦点会话的输入框里按方向键：翻历史、提问时选选项） |
 | `arrows` | 页 → 壳 | Whether ↑ / ↓ have a use right now (soft keyboard up, a dropdown open, a question waiting in the focused session: `syncArrows`). Off = the volume keys stay volume keys. Never sent (an older page) = always mapped, the old behaviour |
 | `copyImage` | 页 → 壳 → 页 | Long-press "copy image": base64 `data` + `mime` (WebView's clipboard API can't write images); answers `ok` / `error`. The hello reply carries `copyImage: true` so the menu hides it on older Apps |
+| `keyboard` | 壳 → 页 | `hard`: a hardware keyboard is attached (`Configuration.hardKeyboardHidden`), sent after hello and on every plug in / out (`onConfigurationChanged`; the manifest's configChanges keeps the Activity alive). Menus show shortcut keys only with one (`ui/src/lib/hwKeyboard.ts`). The hello reply carries `keyboard: true`; older Apps fall back to the page's own guess |
 | `focus` | 壳 → 页 | 点通知进来：切到那个会话 |
 | `open` / `setup` / `fullscreen` | 页 → 壳 | 外部链接交给系统浏览器 / 回到填地址那屏 / 藏系统栏 |

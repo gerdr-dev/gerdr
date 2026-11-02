@@ -50,8 +50,8 @@ export function ImportHerdr({ open }: { open: boolean }) {
     <Dialog open={open} onOpenChange={(o) => !o && close()}>
       <DialogContent className="max-w-xl">
         <DialogHeader>
-          <DialogTitle>从 herdr 导入</DialogTitle>
-          <DialogDescription>按 herdr 的工作空间、tab、分屏建出来，每个 agent 接上它的会话（历史全在，接着聊）。普通终端 pane 跳过。</DialogDescription>
+          <DialogTitle>从 Herdr 导入</DialogTitle>
+          <DialogDescription>按 Herdr 的工作空间、Tab、分屏建出来，每个 Agent 接上它的会话（历史全在，接着聊）。普通终端 Pane 跳过。</DialogDescription>
         </DialogHeader>
         {/* 高度要写死：弹窗是网格 + 限高，这一行可滚动，WebKit（mac App）里它的自动最小高度按 0 算，整个列表被压成一条缝
             （Chrome 里正常，所以光在浏览器里验看不出来；用户报了两次「导入的 UI 烂了」）。 */}
@@ -59,7 +59,7 @@ export function ImportHerdr({ open }: { open: boolean }) {
           {err && <div className="text-[13px] text-bad">{err}</div>}
           {!list && !err && (
             <div className="flex items-center gap-2 text-[13px] text-muted-foreground">
-              <Loader2 className="size-3.5 animate-spin" /> 读 herdr…
+              <Loader2 className="size-3.5 animate-spin" /> 读 Herdr…
             </div>
           )}
           {list?.map((w) => {
@@ -79,7 +79,7 @@ export function ImportHerdr({ open }: { open: boolean }) {
                 <div className="min-w-0 flex-1">
                   <div className="text-[13px] font-medium">{w.label}</div>
                   <div className="text-[12px] text-muted-foreground">
-                    {c.ok} 个会话{c.existing ? `（${c.existing} 个已经在 Gerdr 里）` : ""} · {w.tabs.length} 个 tab
+                    {c.ok} 个会话{c.existing ? `（${c.existing} 个已经在 Gerdr 里）` : ""} · {w.tabs.length} 个 Tab
                     {c.skipped ? ` · 跳过 ${c.skipped} 个（${c.why}）` : ""}
                   </div>
                 </div>
@@ -88,7 +88,7 @@ export function ImportHerdr({ open }: { open: boolean }) {
           })}
         </div>
         <div className="rounded-md bg-muted/60 p-2.5 text-[12px] text-muted-foreground">
-          这些会话在 herdr 里多半还开着。接着在 Gerdr 里聊之前，先在 herdr 里退出对应的 agent —— 两边同时往一个会话里写，对话会分叉。
+          这些会话在 Herdr 里多半还开着。接着在 Gerdr 里聊之前，先在 Herdr 里退出对应的 Agent —— 两边同时往一个会话里写，对话会分叉。
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={close} disabled={busy}>
@@ -113,7 +113,7 @@ function count(w: HerdrWorkspace) {
     for (const p of t.panes) {
       if (p.skip) {
         skipped++;
-        why.add(p.agent ? "没有会话 id" : "普通终端");
+        why.add(p.agent ? "没有会话 ID" : "普通终端");
       } else {
         ok++;
         if (p.existing) existing++;

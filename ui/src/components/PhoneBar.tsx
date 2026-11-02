@@ -81,7 +81,7 @@ export function PhoneBar() {
           </Button>
           <OverviewButton />
           <InboxButton phone />
-          <Button variant="ghost" size="icon" className="size-9" aria-label="新建 tab" onClick={() => addTab()}>
+          <Button variant="ghost" size="icon" className="size-9" aria-label="新建 Tab" onClick={() => addTab()}>
             <Plus className="size-[18px]" />
           </Button>
         </div>

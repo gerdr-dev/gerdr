@@ -45,19 +45,19 @@ export function PasskeyStepUp({ onDone, onCancel }: { onDone: (label: string) =>
     <div className="space-y-2 rounded-md border p-3">
       {!req ? (
         <>
-          <div>已经有 passkey 了，再加一把之前要先证明是你本人：</div>
+          <div>已经有 Passkey 了，再加一把之前要先证明是你本人：</div>
           <div className="flex flex-wrap gap-2">
             <Button size="sm" onClick={ask}>
               到电脑上批准
             </Button>
             <Button size="sm" variant="outline" onClick={() => attempt(stepUpWithPasskey)}>
-              用已有的 passkey 验证
+              用已有的 Passkey 验证
             </Button>
             <Button size="sm" variant="ghost" onClick={onCancel}>
               算了
             </Button>
           </div>
-          <div className="text-[12px] text-muted-foreground">这台设备上还没有 passkey 的话选「到电脑上批准」。</div>
+          <div className="text-[12px] text-muted-foreground">这台设备上还没有 Passkey 的话选「到电脑上批准」。</div>
         </>
       ) : state === "pending" ? (
         <>
@@ -72,7 +72,7 @@ export function PasskeyStepUp({ onDone, onCancel }: { onDone: (label: string) =>
         <>
           <div className="text-ok">电脑上批准了。</div>
           <Button size="sm" onClick={() => attempt(registerPasskey)}>
-            现在添加 passkey
+            现在添加 Passkey
           </Button>
         </>
       ) : (
@@ -114,7 +114,7 @@ export function StepUpApprovals({ open }: { open: boolean }) {
         {reqs.map((r) => (
           <div key={r.id} className="flex items-center gap-3 px-3 py-2 max-md:flex-col max-md:items-stretch">
             <div className="min-w-0 flex-1">
-              <div className="truncate">「{r.label}」请求添加 passkey</div>
+              <div className="truncate">「{r.label}」请求添加 Passkey</div>
               <div className="text-[12px] text-muted-foreground">
                 核对码 <span className="font-mono text-[14px] tracking-[.2em] text-foreground">{r.code}</span>，和那台设备上显示的一样才批准
               </div>

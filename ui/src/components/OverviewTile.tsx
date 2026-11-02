@@ -123,10 +123,10 @@ export function Tile({
             </TileButton>
           </>
         )}
-        <TileButton title={inWork ? "去 Work 模式" : "回到它所在的 tab"} onClick={jump}>
+        <TileButton title={inWork ? "去 Work 模式" : "回到它所在的 Tab"} onClick={jump}>
           <ArrowUpRight className="size-3.5" />
         </TileButton>
-        <TileButton title="完成，移出进行中（agent 不受影响）" onClick={() => removeActive(id)}>
+        <TileButton title="完成，移出进行中（Agent 不受影响）" onClick={() => removeActive(id)}>
           <X className="size-3.5" />
         </TileButton>
       </div>

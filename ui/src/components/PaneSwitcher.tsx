@@ -177,7 +177,7 @@ function Body() {
             {/* 13px matches the list; iOS only gets 16px: a smaller input makes iOS zoom the page on focus */}
             <input
               className="h-8 w-full rounded-lg bg-muted/60 pr-2 pl-8 text-[13px] outline-none placeholder:text-muted-foreground/70 focus-visible:ring-2 focus-visible:ring-ring/40 supports-[-webkit-touch-callout:none]:text-[16px]"
-              placeholder="筛 标题 / tab / 路径"
+              placeholder="筛 标题 / Tab / 路径"
               value={q}
               autoFocus={!isCoarse()}
               onChange={(e) => setQ(e.target.value)}
@@ -205,7 +205,7 @@ function Body() {
                 close();
               }}
             >
-              新 tab
+              新 Tab
             </Button>
             <Button size="sm" variant="outline" className="h-7 text-[12px]" onClick={() => set({ switcher: false, dialog: { kind: "newWorkspace" } })}>
               新工作空间
@@ -245,13 +245,13 @@ function Body() {
       </div>
 
       <div className="min-h-0 overflow-x-hidden overflow-y-auto overscroll-contain p-1.5">
-        {rows.length === 0 && <p className="px-1 py-6 text-center text-[12px] text-muted-foreground">没有匹配的 pane</p>}
+        {rows.length === 0 && <p className="px-1 py-6 text-center text-[12px] text-muted-foreground">没有匹配的 Pane</p>}
         <div className="flex flex-col gap-0.5">
           {rows.map((r) => {
             const s = r.session;
             const chip = CHIP[rankOf(r, unread)];
             const title = r.pane.sub
-              ? `子 agent · ${r.pane.sub.title || ""}`.replace(/ · $/, "")
+              ? `子 Agent · ${r.pane.sub.title || ""}`.replace(/ · $/, "")
               : s
                 ? s.title || basename(s.cwd)
                 : r.pane.term

@@ -55,7 +55,7 @@ function resumeInTile(cur: string, sessionId: string) {
   const st = get();
   if (!isOpen(st.layout, st.config, sessionId)) {
     const here = locateSession(st.layout, cur);
-    if (!here) return void toast("这一格不在任何 pane 里（Work 对话），换不了"); // a Work conversation: no pane to switch
+    if (!here) return void toast("这一格不在任何 Pane 里（Work 对话），换不了"); // a Work conversation: no pane to switch
     setPane0(here.pane.id, { sessionId, draft: undefined });
     shutdownGone([here.pane]);
   }
@@ -76,7 +76,7 @@ export async function continueInPane(paneId: string, sessionId: string, agent: s
     resumeInPane(paneId, s.id);
     return s;
   } catch (e: any) {
-    toast.error(`换 agent 接着聊失败：${e.message ?? e}`);
+    toast.error(`换 Agent 接着聊失败：${e.message ?? e}`);
     throw e;
   }
 }
@@ -136,7 +136,7 @@ export async function closeSession(id: string) {
   if (!s) return;
   if (s.status === "running" || s.status === "waiting") {
     const ok = await askConfirm({
-      title: "agent 还在跑，关闭会话？",
+      title: "Agent 还在跑，关闭会话？",
       description: "这一轮会被中断。会话记录留着，能再打开。",
       action: "关闭",
       destructive: true,

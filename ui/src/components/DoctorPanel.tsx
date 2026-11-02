@@ -80,7 +80,7 @@ export function DoctorPanel() {
             <Stethoscope className="size-3.5" /> 诊断
           </div>
           <div className="text-[12px] text-muted-foreground">
-            agent 拿到的 PATH 和终端里是不是一样、claude / codex 能不能启动。完整诊断会实际跑一下找到的每一份程序，被 macOS
+            Agent 拿到的 PATH 和终端里是不是一样、Claude / Codex 能不能启动。完整诊断会实际跑一下找到的每一份程序，被 macOS
             拦掉的那份会再弹一次系统提示，点「完成」就行
           </div>
         </div>
@@ -122,9 +122,9 @@ export function DoctorPanel() {
           })}
           {problems.length > 0 && (
             <div className="flex items-center justify-between gap-4 rounded-md border border-dashed p-3">
-              <div className="text-[12px] text-muted-foreground">上面的按钮修不了的（删掉旧版本、要 sudo 的），交给 agent：它会先把要跑的命令给你看</div>
+              <div className="text-[12px] text-muted-foreground">上面的按钮修不了的（删掉旧版本、要 sudo 的），交给 Agent：它会先把要跑的命令给你看</div>
               <Button size="sm" className="shrink-0" disabled={!!busy} onClick={() => handOff(report)}>
-                交给 agent 修
+                交给 Agent 修
               </Button>
             </div>
           )}
@@ -231,7 +231,7 @@ function reportText(r: DoctorReport) {
     "Gerdr 的诊断（设置 → 实验室 → 诊断）发现了下面的问题，请帮我查清原因并修好。",
     "",
     "- 要用 sudo、删除或改动系统文件的命令，先把命令和理由告诉我，等我同意再执行。",
-    "- Gerdr 自己的修复（重新读取 PATH、指定用哪一份 claude / codex）在 设置 → 实验室 → 诊断 里有按钮，需要时告诉我去点。",
+    "- Gerdr 自己的修复（重新读取 PATH、指定用哪一份 Claude / Codex）在 设置 → 实验室 → 诊断 里有按钮，需要时告诉我去点。",
     "- 你这个会话也是 Gerdr 起的，PATH 可能同样缺目录：找不到命令时用绝对路径，或者在 `zsh -lic '…'` 里跑。",
     "",
   ];
@@ -259,7 +259,7 @@ async function handOff(r: DoctorReport) {
   const ok = (id?: string) => !!id && !broken.has(id) && st.agents.some((a) => a.id === id && a.available);
   const agent = [st.config.defaultAgent, "claude", "codex"].find(ok) ?? st.agents.find((a) => a.available && !broken.has(a.id))?.id;
   if (!agent) {
-    toast.error("没有能用的 agent 可以交给它");
+    toast.error("没有能用的 Agent 可以交给它");
     return;
   }
   try {

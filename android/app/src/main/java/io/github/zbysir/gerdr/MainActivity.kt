@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.app.DownloadManager
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
@@ -185,6 +186,16 @@ class MainActivity : ComponentActivity() {
         val id = intent?.getStringExtra(NoticeService.EXTRA_SESSION)?.ifEmpty { null } ?: return
         intent.removeExtra(NoticeService.EXTRA_SESSION)
         bridge?.focus(id)
+    }
+
+    /** A hardware keyboard attached and in use (a Bluetooth / USB one, a keyboard case); not the on-screen one. */
+    fun hardKeyboard(c: Configuration = resources.configuration) =
+        c.keyboard != Configuration.KEYBOARD_NOKEYS && c.hardKeyboardHidden == Configuration.HARDKEYBOARDHIDDEN_NO
+
+    // The manifest takes keyboard / keyboardHidden changes itself (no recreate), so plugging one in lands here
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        bridge?.keyboard(hardKeyboard(newConfig))
     }
 
     override fun onResume() {

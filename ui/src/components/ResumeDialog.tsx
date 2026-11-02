@@ -125,7 +125,7 @@ export function ResumeDialog() {
         </CommandGroup>
         {native === null && (
           <div className="flex items-center gap-2 px-3 py-2 text-[12px] text-muted-foreground">
-            <Loader2 className="size-3.5 animate-spin" /> 读 agent 自己的会话记录…
+            <Loader2 className="size-3.5 animate-spin" /> 读 Agent 自己的会话记录…
           </div>
         )}
       </CommandList>

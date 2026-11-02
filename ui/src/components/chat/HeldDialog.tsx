@@ -44,7 +44,7 @@ export function HeldDialog({ sessionId, holders, onClose, onDone }: { sessionId:
             <div className="space-y-2 text-[13px]">
               {known ? (
                 <p>
-                  {h?.name ? `「${h.name}」` : "另一个终端"}里的 claude（pid {h?.pid}
+                  {h?.name ? `「${h.name}」` : "另一个终端"}里的 Claude（PID {h?.pid}
                   {h?.status ? `，${h.status === "busy" ? "正在干活" : "闲着"}` : ""}）也开着它。两边同时写，对话会分叉：谁也看不见对方说过的话。
                 </p>
               ) : (
@@ -60,7 +60,7 @@ export function HeldDialog({ sessionId, holders, onClose, onDone }: { sessionId:
           </Button>
           {known ? (
             <Button variant="outline" disabled={!!busy} onClick={() => run("kill")}>
-              {busy === "kill" ? "正在关掉那边…" : "关掉那边的 claude，在这里接着聊"}
+              {busy === "kill" ? "正在关掉那边…" : "关掉那边的 Claude，在这里接着聊"}
             </Button>
           ) : (
             <Button

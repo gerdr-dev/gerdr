@@ -168,7 +168,7 @@ function paneLabel(p: PaneLeaf, s: SessionSummary | undefined): { title: string;
   if (s) return { title: s.title || basename(s.cwd), sub: basename(s.cwd) };
   if (p.term) return { title: "终端", sub: basename(p.term.cwd) };
   if (p.file) return { title: basename(p.file.path), sub: "文件" };
-  if (p.sub) return { title: p.sub.title || "子 agent", sub: "子 agent" };
+  if (p.sub) return { title: p.sub.title || "子 Agent", sub: "子 Agent" };
   return { title: "新会话", sub: p.draft?.cwd ? basename(p.draft.cwd) : "" };
 }
 
@@ -300,7 +300,7 @@ export function UnifiedSidebar({ className }: { className?: string }) {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
                     <DropdownMenuCheckboxItem checked={allProjects} onCheckedChange={(v) => setActiveAllProjects(!!v)}>
-                      显示所有项目的 agent
+                      显示所有项目的 Agent
                     </DropdownMenuCheckboxItem>
                     <div className="px-2 pb-1 text-[11px] text-muted-foreground">只改这个项目，别的项目各自设</div>
                     <DropdownMenuSeparator />
@@ -314,7 +314,7 @@ export function UnifiedSidebar({ className }: { className?: string }) {
                 </DropdownMenu>
                 <button
                   className={cn("flex h-5 items-center gap-1 rounded-sm px-1", gridOn ? "bg-brand/15 text-foreground" : "hover:bg-muted hover:text-foreground")}
-                  title={gridOn ? "关掉网格，回到 tab" : `把进行中的 agent 摆成网格一起看（最多 ${MAX_TILES} 个）`}
+                  title={gridOn ? "关掉网格，回到 Tab" : `把进行中的 Agent 摆成网格一起看（最多 ${MAX_TILES} 个）`}
                   // On a phone the grid is behind the drawer: close it
                   onClick={(e) => (e.stopPropagation(), toggleOverview(!gridOn), set({ drawer: false }))}
                 >
@@ -360,8 +360,8 @@ export function UnifiedSidebar({ className }: { className?: string }) {
           ))}
         </div>
         <div className="mt-1 flex gap-1 px-0.5">
-          <FootButton onClick={() => (toggleOverview(false), addTab())} title="在当前工作空间新开一个 tab">
-            <Plus className="size-3.5" /> 新 tab
+          <FootButton onClick={() => (toggleOverview(false), addTab())} title="在当前工作空间新开一个 Tab">
+            <Plus className="size-3.5" /> 新 Tab
           </FootButton>
           <FootButton onClick={() => (toggleOverview(false), openTerminal("tab"))} title="在当前工作空间开一个终端">
             <SquareTerminal className="size-3.5" /> 终端
@@ -513,7 +513,7 @@ function Group({
             )}
             <button
               className="hidden size-5 shrink-0 items-center justify-center rounded-sm text-muted-foreground group-hover/ws:flex hover:bg-muted hover:text-foreground"
-              title="在这个分组里新开 tab"
+              title="在这个分组里新开 Tab"
               onClick={(e) => {
                 e.stopPropagation();
                 toggleOverview(false);
@@ -526,7 +526,7 @@ function Group({
         </ContextMenuTrigger>
         <ContextMenuContent>
           <ContextMenuItem onClick={() => (toggleOverview(false), addTab({ workspaceId: ws.id, cwd: ws.cwd }))}>
-            <Plus /> 新 tab
+            <Plus /> 新 Tab
           </ContextMenuItem>
           <ContextMenuItem
             onClick={() => {
@@ -664,7 +664,7 @@ function Row({
           </span>
           <button
             className="hidden size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground group-hover:flex hover:text-foreground"
-            title={top && s ? "移出进行中" : inSplit ? "关掉这一格" : "关闭 tab"}
+            title={top && s ? "移出进行中" : inSplit ? "关掉这一格" : "关闭 Tab"}
             onClick={(e) => (e.stopPropagation(), dismiss())}
           >
             <X className="size-3" />
@@ -695,12 +695,12 @@ function Row({
         )}
         {inSplit && (
           <ContextMenuItem onClick={() => (toggleOverview(false), paneToTab(pane.id))}>
-            <Columns2 /> 拆成单独的 tab
+            <Columns2 /> 拆成单独的 Tab
           </ContextMenuItem>
         )}
         {!inSplit && (
           <ContextMenuItem onClick={() => set({ dialog: { kind: "rename", target: "tab", id: tab.id, value: tab.name ?? tabName(tab) } })}>
-            <Pencil /> 重命名 tab
+            <Pencil /> 重命名 Tab
           </ContextMenuItem>
         )}
         {s && (
@@ -710,7 +710,7 @@ function Row({
         )}
         <ContextMenuSeparator />
         <ContextMenuItem variant="destructive" onClick={close}>
-          <CircleX /> {inSplit ? "关掉这一格" : "关闭 tab"}
+          <CircleX /> {inSplit ? "关掉这一格" : "关闭 Tab"}
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

@@ -148,7 +148,7 @@ export function SettingsDialog({ open }: { open: boolean }) {
                     </SelectContent>
                   </Select>
                 </Row>
-                <Row label="默认 agent" hint="新会话先选中它">
+                <Row label="默认 Agent" hint="新会话先选中它">
                   <Select value={cfg.defaultAgent} onValueChange={(v) => setConfig({ defaultAgent: v })}>
                     <SelectTrigger className="w-36">
                       <SelectValue />
@@ -171,7 +171,7 @@ export function SettingsDialog({ open }: { open: boolean }) {
                 <Row label="打开链接前确认" hint="点对话里的外部链接先弹框，显示完整地址，可以复制或打开；关掉就直接打开">
                   <Switch checked={cfg.confirmLinks !== false} onCheckedChange={(v) => setConfig({ confirmLinks: v })} />
                 </Row>
-                <Row label="切走的 tab 留在页面里" hint="展开状态、滚动位置都保住；越多越占内存（设置 → 资源 里看）" local>
+                <Row label="切走的 Tab 留在页面里" hint="展开状态、滚动位置都保住；越多越占内存（设置 → 资源 里看）" local>
                   <Select value={String(dev.keepTabs ?? 6)} onValueChange={(v) => setPref({ keepTabs: Number(v) })}>
                     <SelectTrigger className="w-36">
                       <SelectValue />
@@ -192,10 +192,10 @@ export function SettingsDialog({ open }: { open: boolean }) {
                 </Row>
               </Section>
               <Section title="收件箱" id="settings-inbox">
-                <Row label="等你批准" hint="agent 要运行命令、改文件，在等你点允许">
+                <Row label="等你批准" hint="Agent 要运行命令、改文件，在等你点允许">
                   <Switch checked={inb.permission !== false} onCheckedChange={(v) => setConfig({ inbox: { ...inb, permission: v } })} />
                 </Row>
-                <Row label="在问你问题" hint="agent 停下来等你回答">
+                <Row label="在问你问题" hint="Agent 停下来等你回答">
                   <Switch checked={inb.ask !== false} onCheckedChange={(v) => setConfig({ inbox: { ...inb, ask: v } })} />
                 </Row>
                 <Row label="出错结束" hint="正在跑的会话因为出错停了">
@@ -234,7 +234,7 @@ export function SettingsDialog({ open }: { open: boolean }) {
                 <ServiceSetting />
               </Section>
               <Section title="导入">
-                <Row label="从 herdr 导入" hint="工作空间、tab、分屏和每个 agent 的会话">
+                <Row label="从 Herdr 导入" hint="工作空间、Tab、分屏和每个 Agent 的会话">
                   <Button size="sm" variant="outline" onClick={() => set({ dialog: { kind: "importHerdr" } })}>
                     导入…
                   </Button>
@@ -287,7 +287,7 @@ export function SettingsDialog({ open }: { open: boolean }) {
               <Row label="对话虚拟滚动" hint="只渲染屏幕附近的消息，很长的对话更省内存；往上翻时带图的消息可能会跳动" local>
                 <Switch checked={!!dev.virtualList} onCheckedChange={(v) => setPref({ virtualList: v })} />
               </Row>
-              <Row label="选中即复制" hint="和 herdr 一样：拖着选中文字，松开鼠标就复制到剪贴板；双击选词也会复制。对话和终端里都管用，输入框里不复制" local>
+              <Row label="选中即复制" hint="和 Herdr 一样：拖着选中文字，松开鼠标就复制到剪贴板；双击选词也会复制。对话和终端里都管用，输入框里不复制" local>
                 <Switch checked={!!dev.copyOnSelect} onCheckedChange={(v) => setPref({ copyOnSelect: v })} />
               </Row>
               <Row

@@ -117,7 +117,7 @@ export function onAppUpdate(u: AppUpdateStatus) {
     id: "app-update",
     duration: Infinity,
     closeButton: true,
-    description: p.kind === "app" ? "这次要换整个 App：会退出再重新打开" : auto ? "没有 agent 在跑、没开终端时会自己更新" : "自动更新关着：点了才更新",
+    description: p.kind === "app" ? "这次要换整个 App：会退出再重新打开" : auto ? "没有 Agent 在跑、没开终端时会自己更新" : "自动更新关着：点了才更新",
     action: { label: "现在更新", onClick: nativeApplyUpdate },
   });
 }

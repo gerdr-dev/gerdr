@@ -594,7 +594,7 @@ function ServiceLine({ s }: { s: AddonService }) {
         </span>
         <span className="text-muted-foreground">
           {label}
-          {s.pid ? `（pid ${s.pid}）` : ""}
+          {s.pid ? `（PID ${s.pid}）` : ""}
           {s.restarts ? ` · 重启过 ${s.restarts} 次` : ""}
         </span>
         {s.text && <span className="truncate">{s.text}</span>}

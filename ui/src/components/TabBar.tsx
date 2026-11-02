@@ -168,7 +168,7 @@ export function TabBar() {
               <Plus className="size-4" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent>新建 tab（{formatCombo(keyFor(get().config, "newTab")[0] ?? "")}）</TooltipContent>
+          <TooltipContent>新建 Tab（{formatCombo(keyFor(get().config, "newTab")[0] ?? "")}）</TooltipContent>
         </Tooltip>
       </div>
       {!sidebar && <ConnStatus />}

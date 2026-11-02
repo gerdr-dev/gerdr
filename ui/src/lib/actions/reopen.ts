@@ -84,7 +84,7 @@ function reviveTree(n: PaneNode, l: Layout): PaneNode {
 export function reopenClosed() {
   const c = closed.pop();
   if (!c) {
-    toast("没有刚关掉的 tab / pane");
+    toast("没有刚关掉的 Tab / Pane");
     return;
   }
   const l = get().layout;

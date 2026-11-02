@@ -7,6 +7,7 @@ import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover"
 import { closeFocusedPane, continueInPane, createInPane, focusPane, focusSession, openTerminal, resumeInPane } from "@/lib/actions";
 import { api, ApiError } from "@/lib/api";
 import { get, set, useStore, type AgentDef } from "@/lib/store";
+import { keyText } from "./KeyCaps";
 import { locateSession, type PaneLeaf } from "@/lib/layout";
 import { cn } from "@/lib/utils";
 import { workProjectOf } from "@/lib/work";
@@ -380,7 +381,12 @@ export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean
             开始
           </Button>
           {/* 临时要敲几条命令：这个 pane 直接变成这个目录下的终端 */}
-          <Button variant="outline" disabled={busy} title="在这个目录开终端（prefix+t 在旁边开）" onClick={() => openTerminal({ pane: pane.id, cwd: abs })}>
+          <Button
+            variant="outline"
+            disabled={busy}
+            title={keyText("splitTerminal") ? `在这个目录开终端（${keyText("splitTerminal")} 在旁边开）` : "在这个目录开终端"}
+            onClick={() => openTerminal({ pane: pane.id, cwd: abs })}
+          >
             <SquareTerminal className="size-4" />
             终端
           </Button>

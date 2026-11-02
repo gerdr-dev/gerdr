@@ -72,11 +72,11 @@ export function ResourceStats({ open }: { open: boolean }) {
           {s?.web ? (
             <Row label="WebView 进程" value={mb(s.web.rss)} sub={`pid ${s.web.pid}`} />
           ) : (
-            <Row label="WebView 进程" value="—" sub="只有 mac App 里量得到（浏览器里看浏览器自己的任务管理器）" />
+            <Row label="WebView 进程" value="—" sub="只有 Mac App 里量得到（浏览器里看浏览器自己的任务管理器）" />
           )}
           {page.heap > 0 && <Row label="JS 堆" value={mb(page.heap)} />}
           <Row label="DOM 节点" value={page.nodes.toLocaleString()} />
-          <Row label="留在页面里的 tab" value={`${kept} / ${keep}`} sub="切走之后不卸载的 tab（展开状态、滚动位置都保住）；数量在「通用」里调" />
+          <Row label="留在页面里的 Tab" value={`${kept} / ${keep}`} sub="切走之后不卸载的 Tab（展开状态、滚动位置都保住）；数量在「通用」里调" />
         </div>
       </div>
 
@@ -93,7 +93,7 @@ export function ResourceStats({ open }: { open: boolean }) {
         </div>
         <div className="divide-y rounded-md border">
           {!s?.agents?.length && (
-            <Row label="没有在跑的 agent 进程" value="" sub="Claude 会话闲置 15 分钟会收掉进程（GERDR_CLAUDE_IDLE_MINUTES），下次说话自动接回" />
+            <Row label="没有在跑的 Agent 进程" value="" sub="Claude 会话闲置 15 分钟会收掉进程（GERDR_CLAUDE_IDLE_MINUTES），下次说话自动接回" />
           )}
           {s?.agents?.map((p) => (
             <Row

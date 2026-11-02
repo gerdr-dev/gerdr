@@ -334,8 +334,8 @@ function Engines({ agents }: { agents: AgentInfo[] }) {
         <div className="text-[12px] text-muted-foreground">真正干活的那个。Agent 选哪个引擎，会话就跑在哪个上面。</div>
       </div>
       <div className="space-y-1.5">
-        {cli("claude", "Claude Code", "本机的 claude 命令，账号在它那边登录")}
-        {cli("codex", "Codex", "本机的 codex 命令，账号在它那边登录")}
+        {cli("claude", "Claude Code", "本机的 Claude 命令，账号在它那边登录")}
+        {cli("codex", "Codex", "本机的 Codex 命令，账号在它那边登录")}
       </div>
       <LLMSettings />
     </div>
@@ -667,9 +667,9 @@ function ExtPicker({
         onChange={(v) => onChange({ skills: v })}
         note={
           kind === "claude"
-            ? "项目里的 skill 这里列不出来：限定之后它们也不给。插件里的 skill 关不了单个，一个都没勾的插件整个关掉（连它的 MCP、hook）。"
+            ? "项目里的 Skill 这里列不出来：限定之后它们也不给。插件里的 Skill 关不了单个，一个都没勾的插件整个关掉（连它的 MCP、Hook）。"
             : kind === "codex"
-              ? "Codex 自带的系统 skill 不受影响。"
+              ? "Codex 自带的系统 Skill 不受影响。"
               : undefined
         }
       />
@@ -678,7 +678,7 @@ function ExtPicker({
         items={c.mcp}
         value={mcp}
         onChange={(v) => onChange({ mcp: v })}
-        note={kind === "claude" ? "限定之后只给勾上的：插件带的 MCP、claude.ai 账号里连的 connector 都不给。" : undefined}
+        note={kind === "claude" ? "限定之后只给勾上的：插件带的 MCP、claude.ai 账号里连的 Connector 都不给。" : undefined}
         allHint={kind === "native" ? `用「设置 → Agent → MCP」里 Gerdr 的 MCP 开着的那些，${c.mcp.filter((i) => i.global).length} 个。` : undefined}
       />
     </div>

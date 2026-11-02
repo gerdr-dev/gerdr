@@ -33,7 +33,7 @@ export function UIUpgradeSetting() {
         </div>
       </div>
       <Button size="sm" variant="outline" className="shrink-0 gap-1.5" onClick={openRescue}>
-        <LifeBuoy className="size-3.5" />让 agent 合并
+        <LifeBuoy className="size-3.5" />让 Agent 合并
       </Button>
     </div>
   );

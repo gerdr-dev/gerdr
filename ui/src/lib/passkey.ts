@@ -43,7 +43,7 @@ async function ask<T>(run: () => Promise<T>): Promise<T> {
     return await run();
   } catch (e) {
     if ((e as { name?: string }).name === "NotAllowedError" && performance.now() - t0 < CANCEL_MS) {
-      throw new Blocked("浏览器没让做这次验证，而且不说原因。最常见的是这台设备上没有这个站点的 passkey，或者地址栏显示「不安全」。");
+      throw new Blocked("浏览器没让做这次验证，而且不说原因。最常见的是这台设备上没有这个站点的 Passkey，或者地址栏显示「不安全」。");
     }
     throw e;
   }

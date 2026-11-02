@@ -245,7 +245,7 @@ function ChatHeader() {
             ))}
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => set({ dialog: { kind: "settings", tab: "agents" } })}>
-            <Settings /> 配置 agent（引擎、提示词、Skill、MCP、默认模型）…
+            <Settings /> 配置 Agent（引擎、提示词、Skill、MCP、默认模型）…
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

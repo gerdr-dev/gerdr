@@ -93,7 +93,7 @@ export function MemorySettings({ open }: { open: boolean }) {
         const file = edit.path.split("/").pop();
         await api.memoryWrite(idx, `${old.replace(/\n*$/, old ? "\n" : "")}- [${name}](${file})${desc ? ` — ${desc}` : ""}\n`);
       }
-      toast.success("已保存（agent 下一轮就按新的来）");
+      toast.success("已保存（Agent 下一轮就按新的来）");
       setEdit({ ...edit, saved: edit.content, isNew: false });
       load();
     } catch (e: any) {
@@ -128,7 +128,7 @@ export function MemorySettings({ open }: { open: boolean }) {
     setEdit({
       path: `${cur.dir}/${slug}.md`,
       title: "新的一条",
-      content: `---\nname: ${slug}\ndescription: 一句话说这条记的是什么（agent 靠它判断要不要读全文）\ntype: ${type}\n---\n\n要记住的事。\n`,
+      content: `---\nname: ${slug}\ndescription: 一句话说这条记的是什么（Agent 靠它判断要不要读全文）\ntype: ${type}\n---\n\n要记住的事。\n`,
       saved: "",
       isNew: true,
     });
@@ -170,7 +170,7 @@ export function MemorySettings({ open }: { open: boolean }) {
         </div>
         {edit.index && (
           <div className="text-[12px] text-muted-foreground">
-            索引：一条记忆一行（- [标题](文件名.md) — 一句话）。agent 每轮都会读到它，只靠它决定要不要去读哪条的全文。
+            索引：一条记忆一行（- [标题](文件名.md) — 一句话）。Agent 每轮都会读到它，只靠它决定要不要去读哪条的全文。
           </div>
         )}
         <textarea
@@ -194,7 +194,7 @@ export function MemorySettings({ open }: { open: boolean }) {
   return (
     <div className="space-y-3 text-[13px]">
       <div className="text-[12px] text-muted-foreground">
-        agent 跨会话记住的东西：你纠正过它的、你的偏好、项目的约定。都是它自己写的 Markdown 文件，在这里看、改、删，下一轮就按新的来。
+        Agent 跨会话记住的东西：你纠正过它的、你的偏好、项目的约定。都是它自己写的 Markdown 文件，在这里看、改、删，下一轮就按新的来。
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex rounded-md bg-muted p-0.5">
@@ -270,7 +270,7 @@ export function MemorySettings({ open }: { open: boolean }) {
                 <div className="rounded-md border border-dashed px-3 py-6 text-center text-[12px] text-muted-foreground">
                   {cur.agent === "codex"
                     ? "Codex 还没有生成记忆（它的记忆是从过去的会话里自动总结的，要在 Codex 里开了记忆功能才会有）"
-                    : "还没有记忆：agent 遇到该记的事（你纠正它、说了偏好）会自己写进来，也可以手动新建"}
+                    : "还没有记忆：Agent 遇到该记的事（你纠正它、说了偏好）会自己写进来，也可以手动新建"}
                 </div>
               ) : (
                 <div className="divide-y rounded-md border">

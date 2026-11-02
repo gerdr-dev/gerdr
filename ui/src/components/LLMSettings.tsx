@@ -205,7 +205,7 @@ function Editor({
     try {
       const r = await api.llmModels(p);
       setFetched(r.models);
-      if (!r.models.length) toast("接口没返回模型，手动填 id");
+      if (!r.models.length) toast("接口没返回模型，手动填 ID");
     } catch (e: any) {
       toast.error(`拉不到模型列表：${e.message}`);
     } finally {
@@ -314,7 +314,7 @@ function Editor({
                 </button>
               </span>
             ))}
-            {!d.models.length && <span className="text-[12px] text-muted-foreground">还没加，手动填 id 或者从接口拉</span>}
+            {!d.models.length && <span className="text-[12px] text-muted-foreground">还没加，手动填 ID 或者从接口拉</span>}
           </div>
           <div className="flex items-center gap-2">
             <Input
@@ -328,7 +328,7 @@ function Editor({
                 }
               }}
               className="h-8 font-mono text-[12px]"
-              placeholder={`模型 id，回车加上（比如 ${PROTOCOLS[d.api].model}）`}
+              placeholder={`模型 ID，回车加上（比如 ${PROTOCOLS[d.api].model}）`}
             />
             <Button size="sm" variant="outline" className="shrink-0" onClick={fetchModels} disabled={busy}>
               {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />} 从接口拉
@@ -369,7 +369,7 @@ function Editor({
           </>
         ) : (
           <>
-            协议、思考档位、上下文窗口按模型 id 猜：gpt / o 系列走 Responses，别的走 Chat Completions；DeepSeek 是纯文本模型、思考档位 关 / 高 / 最高。 猜错了在
+            协议、思考档位、上下文窗口按模型 ID 猜：gpt / o 系列走 Responses，别的走 Chat Completions；DeepSeek 是纯文本模型、思考档位 关 / 高 / 最高。 猜错了在
             config.json 的模型上写 <code className="font-mono">api</code>、<code className="font-mono">efforts</code>、<code className="font-mono">window</code>
             。
           </>

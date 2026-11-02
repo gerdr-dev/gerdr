@@ -88,9 +88,9 @@ export const ACTION_TITLES: Record<KeyAction, string> = {
   duplicateDown: "复制到下面（会话 / 终端）",
   splitTerminal: "右边开终端",
   splitTerminalDown: "下面开终端",
-  terminalTab: "新 tab 开终端",
-  closePane: "关闭 pane",
-  zoom: "放大 / 还原 pane",
+  terminalTab: "新 Tab 开终端",
+  closePane: "关闭 Pane",
+  zoom: "放大 / 还原 Pane",
   focusLeft: "焦点 ←",
   focusDown: "焦点 ↓",
   focusUp: "焦点 ↑",
@@ -99,15 +99,15 @@ export const ACTION_TITLES: Record<KeyAction, string> = {
   swapDown: "和下面交换",
   swapUp: "和上面交换",
   swapRight: "和右边交换",
-  nextPane: "下一个 pane",
-  prevPane: "上一个 pane",
-  newTab: "新建 tab",
-  nextTab: "下一个 tab",
-  prevTab: "上一个 tab",
-  lastTab: "上次的 tab（跨工作空间）",
-  closeTab: "关闭 tab",
-  reopenClosed: "重新打开刚关的 tab / pane",
-  renameTab: "重命名 tab",
+  nextPane: "下一个 Pane",
+  prevPane: "上一个 Pane",
+  newTab: "新建 Tab",
+  nextTab: "下一个 Tab",
+  prevTab: "上一个 Tab",
+  lastTab: "上次的 Tab（跨工作空间）",
+  closeTab: "关闭 Tab",
+  reopenClosed: "重新打开刚关的 Tab / Pane",
+  renameTab: "重命名 Tab",
   tab1: "tab 1",
   tab2: "tab 2",
   tab3: "tab 3",
@@ -149,7 +149,7 @@ export const ACTION_TITLES: Record<KeyAction, string> = {
   overview: "进行中网格（打开 / 退出）",
   help: "快捷键帮助",
   settings: "设置",
-  importHerdr: "从 herdr 导入（工作空间、tab、会话）",
+  importHerdr: "从 Herdr 导入（工作空间、Tab、会话）",
   palette: "命令面板",
   nextAttention: "下一个要你处理的会话",
   prevAttention: "上一个要你处理的会话",
@@ -322,7 +322,7 @@ export const KEY_GROUPS: [string, KeyAction[]][] = [
       "prevPane",
     ],
   ],
-  ["tab", ["newTab", "terminalTab", "nextTab", "prevTab", "lastTab", "tab1", "closeTab", "reopenClosed", "renameTab"]],
+  ["Tab", ["newTab", "terminalTab", "nextTab", "prevTab", "lastTab", "tab1", "closeTab", "reopenClosed", "renameTab"]],
   ["工作空间", ["newWorkspace", "workspaces", "nextWorkspace", "prevWorkspace", "ws1", "renameWorkspace", "closeWorkspace"]],
   ["项目", ["newSpace", "nextSpace", "prevSpace"]],
   ["会话", ["active1", "sessions", "nextAttention", "prevAttention", "focusAttention", "renamePane", "stop", "stash"]],
@@ -471,6 +471,24 @@ let prefixLabel = "⌃B";
 /** 前缀键在界面上怎么显示（配置变了由 App 刷新）。 */
 export function setPrefixLabel(prefix: string) {
   prefixLabel = formatCombo(prefix);
+}
+
+/**
+ * A combo as keycaps, for drawing each key on its own (KeyCaps.tsx): [["⌃", "B"], ["V"]] for prefix+v, [["⌘", "D"]] for
+ * meta+d. One inner list per key press; a prefix binding is two presses. macOS order (⌃⌥⇧⌘), words off the mac.
+ */
+export function comboCaps(s: string, prefix: string): string[][] {
+  const c = parseCombo(s);
+  if (!c) return [[s]];
+  const mac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
+  const names: Record<string, string> = { left: "←", right: "→", up: "↑", down: "↓", tab: "Tab", enter: "↵", escape: "Esc", " ": "Space", backspace: "⌫" };
+  const caps: string[] = [];
+  if (c.ctrl) caps.push(mac ? "⌃" : "Ctrl");
+  if (c.alt) caps.push(mac ? "⌥" : "Alt");
+  if (c.shift) caps.push(mac ? "⇧" : "Shift");
+  if (c.meta) caps.push(mac ? "⌘" : "Win");
+  caps.push(names[c.key] ?? c.key.toUpperCase());
+  return c.prefix ? [...comboCaps(prefix, prefix), caps] : [caps];
 }
 
 export function formatCombo(s: string): string {

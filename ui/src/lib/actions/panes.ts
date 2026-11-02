@@ -96,7 +96,7 @@ export function newAgentInOverview(): boolean {
     toast(`网格最多放 ${MAX_TILES} 个，先从进行中移出几个`);
     return true;
   }
-  const opening = toast.loading("正在开新 agent…");
+  const opening = toast.loading("正在开新 Agent…");
   api
     .createSession({ agent: s.agent, cwd: s.cwd, mode: s.modes?.currentModeId ?? s.mode })
     .then((n) => {
@@ -233,7 +233,7 @@ export function confirmCloseFocusedPane() {
     const armed = closeArmed?.paneId === p.id && Date.now() - closeArmed.at < 2000;
     if (!armed) {
       closeArmed = { paneId: p.id, at: Date.now() };
-      toast("agent 还在跑，再按一次关闭", { id: "closepane", duration: 2000 });
+      toast("Agent 还在跑，再按一次关闭", { id: "closepane", duration: 2000 });
       return;
     }
     toast.dismiss("closepane");

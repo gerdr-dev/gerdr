@@ -12,7 +12,7 @@ import { DirPicker, ensureDir } from "./NewSession";
 
 // The small forms that ask for a name: renaming a tab / workspace / conversation / session, a new session, a new workspace.
 
-const RENAME_TITLE = { tab: "重命名 tab", session: "重命名会话", space: "项目", newSpace: "新项目" };
+const RENAME_TITLE = { tab: "重命名 Tab", session: "重命名会话", space: "项目", newSpace: "新项目" };
 
 export function Rename() {
   const d = useStore((s) => s.dialog);
@@ -40,7 +40,7 @@ export function Rename() {
           <DialogTitle>{r ? RENAME_TITLE[r.target] : ""}</DialogTitle>
           {r?.target === "newSpace" && (
             <DialogDescription>
-              一个独立的项目：有自己的工作空间和 agent（Code），也有自己的 Work 页面和助手。不同项目里的 agent 互相看不见、不能互发消息。
+              一个独立的项目：有自己的工作空间和 Agent（Code），也有自己的 Work 页面和助手。不同项目里的 Agent 互相看不见、不能互发消息。
               名字就是项目的标识，建好后不能改；关掉以后再建同名的项目，它的 Work 还在。
             </DialogDescription>
           )}
@@ -101,7 +101,7 @@ export function NewWorkspace({ open, editId }: { open: boolean; editId?: string 
         <DialogHeader>
           <DialogTitle>{ws ? "编辑工作空间" : "新工作空间"}</DialogTitle>
           <DialogDescription>
-            {ws ? "改的目录只用于之后新开的 tab，已经开着的不动。" : "一个项目一个工作空间：里面新开的 tab 默认在这个目录。"}
+            {ws ? "改的目录只用于之后新开的 Tab，已经开着的不动。" : "一个项目一个工作空间：里面新开的 Tab 默认在这个目录。"}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">

@@ -72,8 +72,9 @@ class Bridge(private val act: MainActivity, web: WebView, origin: String) {
                 send(
                     JSONObject().put("t", "hello").put("platform", "android")
                         .put("version", BuildInfo.version(act)).put("webauthn", act.webAuthn).put("scan", true)
-                        .put("copyImage", true).put("update", true),
+                        .put("copyImage", true).put("update", true).put("keyboard", true),
                 )
+                keyboard(act.hardKeyboard()) // whether menus show their shortcut keys (ui lib/hwKeyboard.ts)
                 send(LanRoute.snapshot()) // 顶栏那个「直连 / 中继」标签的初值
                 pendingFocus?.let { focus(it) }
             }
@@ -133,6 +134,12 @@ class Bridge(private val act: MainActivity, web: WebView, origin: String) {
         pendingFocus = null
         send(JSONObject().put("t", "focus").put("session", session))
     }
+
+    /**
+     * Whether a hardware keyboard is attached (MainActivity.hardKeyboard): sent on hello and whenever one is plugged in
+     * or out. The page shows shortcut keys in its menus only with one (ui lib/hwKeyboard.ts); it can't tell by itself.
+     */
+    fun keyboard(hard: Boolean) = send(JSONObject().put("t", "keyboard").put("hard", hard))
 
     /** Self-update state (AppUpdate.state), on every change */
     fun update(m: JSONObject) = send(m)
