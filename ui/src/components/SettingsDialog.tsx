@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { isAndroid } from "@/lib/android";
 import { closeDialog, fontSizeOf, set, setConfig, setFontSize, setPref, useStore, type Theme } from "@/lib/store";
 import { cn } from "@/lib/utils";
+import { LoaderSelect } from "./LoaderSelect";
 import { languagePref, setLanguage, t, type LanguagePref } from "@/lib/i18n";
 import { AddonSettings } from "./AddonSettings";
 import { AgentSettings } from "./AgentSettings";
@@ -158,6 +159,13 @@ export function SettingsDialog({ open }: { open: boolean }) {
                     </SelectContent>
                   </Select>
                 </Row>
+                <LoaderSelect
+                  row={(control) => (
+                    <Row label={t("settings.loader")} hint={t("settings.loader.hint")}>
+                      {control}
+                    </Row>
+                  )}
+                />
               </Section>
               <Section title={t("settings.chat")}>
                 <Row label={t("settings.sendKey")} hint={t("settings.sendKey.hint")} local>

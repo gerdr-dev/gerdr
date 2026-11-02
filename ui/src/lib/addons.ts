@@ -34,7 +34,7 @@ type Reg<T> = { addon: string; fn: T };
  * there, for the dialogs / drawers an add-on opens from a command.
  * "loader" replaces the working indicator (the 3×3 dots before "Pondering…", ChatHost.renderLoader; props: paused,
  * className, fallback). "sprite" is a small picture (props: state, className, width, height) that gerdr draws nowhere
- * by itself: the user picks sprites for the places that take one — the working indicator (Settings → 扩展 → 素材) and
+ * by itself: the user picks sprites for the places that take one — the working indicator (Settings → General → Loading 动画) and
  * the rail's buttons (→ 分组). So an add-on that only brings pictures changes nothing until the user uses them, and
  * one picture set serves every such place; which loader / sprite draws is config.loader (components/AddonSlot.tsx).
  */

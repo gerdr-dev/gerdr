@@ -127,7 +127,7 @@ lucide icon (`<g.icons.Timer className="size-3.5" />`).
 | where | call | gets |
 |---|---|---|
 | A block of an add-on panel; the user groups blocks into buttons on the rail (Settings → 扩展 → 分组) | `g.slot("sidebar", Component, { order, id, title, icon })` | no props |
-| A sprite: a small picture the user can use as the working indicator (Settings → 扩展 → 素材), on a rail button or as an agent's icon | `g.slot("sprite", Component, { id, title })` | `{ state, width, height }` |
+| A sprite: a small picture the user can use as the working indicator (Settings → General), on a rail button or as an agent's icon | `g.slot("sprite", Component, { id, title })` | `{ state, width, height }` |
 | The app's root, always mounted, no space taken | `g.slot("overlay", Component)` | no props |
 | Every pane's title bar | `g.slot("paneTitle", Component)` | `{ pane, tab }` |
 | The working indicator (the dots before "Pondering…", a 20px row), drawn your own way; the user picks which one draws. Only a picture? Make it a sprite | `g.slot("loader", Component)` | `{ paused, className, fallback }` (`fallback`: gerdr's own dots) |

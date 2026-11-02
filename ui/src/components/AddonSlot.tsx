@@ -113,10 +113,10 @@ export function loaderPick(choice: LoaderChoice | undefined): { loader: SlotReg 
   return slots.loader[0] && { loader: slots.loader[0] };
 }
 
-/** Draws the working indicators below with this choice instead of config.loader: Settings → 扩展 → 素材's previews. */
+/** Draws the working indicators below with this choice instead of config.loader: the previews in Settings → General (LoaderSelect.tsx). */
 export const LoaderPreview = createContext<LoaderChoice | undefined>(undefined);
 
-// The working indicator (ChatHost.renderLoader): what the user picked in Settings → 扩展 → 素材 (config.loader), else
+// The working indicator (ChatHost.renderLoader): what the user picked in Settings → General → Loading 动画 (config.loader), else
 // the first "loader" add-on, else the chat's own dots. A pick whose add-on is gone, or one that throws, falls back to
 // the dots rather than to nothing, so a running turn still shows it runs.
 export function AddonLoader({ paused, className, fallback }: LoaderProps) {

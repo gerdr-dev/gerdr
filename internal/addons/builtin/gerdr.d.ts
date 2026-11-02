@@ -190,14 +190,15 @@ declare global {
      *                user — a permission, a question — so show it's waiting, not working) and className (gerdr's size
      *                and colour for that spot: text-brand running, text-warn waiting; pass it on to keep them). With
      *                no choice made it draws as soon as you're installed (the first registration does); the user can
-     *                pick another in Settings → 扩展 → 素材. One that throws falls back to the dots. fallback: gerdr's
-     *                own dots, if you want to show them sometimes. Just a picture that moves? Make it a sprite instead:
+     *                pick another in Settings → General → Loading 动画. One that throws falls back to the dots.
+     *                fallback: gerdr's own dots, if you want to show them sometimes. Just a picture that moves? Make it a sprite instead:
      *                it then also serves as a rail button's icon, and only shows where the user puts it
      *   "sprite"     a small picture — an animal, a symbol, a few tiny bars, a number — that gerdr draws nowhere by
-     *                itself: the user picks sprites for the places that take one, the working indicator (Settings →
-     *                扩展 → 素材), the rail's buttons (→ 分组) and an agent's icon (Settings → Agent). So a picture set
-     *                changes nothing when installed, and one set serves every such place. Register each picture
-     *                separately (opts.id, opts.title: "Pirate") so the user can put a different one in each place.
+     *                itself: the user picks sprites for the places that take one: the working indicator (Settings →
+     *                General → Loading 动画), the rail's buttons (Settings → 扩展 → 分组) and an agent's icon
+     *                (Settings → Agent). So a picture set changes nothing when installed, and one set serves every
+     *                such place. Register each picture separately (opts.id, opts.title: "Pirate") so the user can put
+     *                a different one in each place.
      *                Props: state — "working" / "waiting" (the indicator: running, or waiting on the user) or "idle"
      *                (a button, an agent's icon: always in sight, so keep it still) — and width × height, the box you
      *                get, to scale to: 24×16 in the indicator (not clipped, a hat may stick out), 36×28 on a button

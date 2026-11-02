@@ -19,7 +19,6 @@ import { useStore } from "@/lib/store";
 import type { AddonService, AddonSetting, AddonStore, StoreAddon } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { RailSettings } from "./RailSettings";
-import { SpriteSettings } from "./SpriteSettings";
 
 // Settings → Add-ons: what is installed (switch on / off, update, uninstall) and the stores to install from
 // (internal/addons; the API is internal/server/addonapi.go).
@@ -31,7 +30,6 @@ export function AddonSettings({ open }: { open: boolean }) {
       <TabsList>
         <TabsTrigger value="installed">已安装</TabsTrigger>
         <TabsTrigger value="rail">分组</TabsTrigger>
-        <TabsTrigger value="sprites">素材</TabsTrigger>
         <TabsTrigger value="store">商店</TabsTrigger>
       </TabsList>
       <TabsContent value="installed">
@@ -39,9 +37,6 @@ export function AddonSettings({ open }: { open: boolean }) {
       </TabsContent>
       <TabsContent value="rail">
         <RailSettings />
-      </TabsContent>
-      <TabsContent value="sprites">
-        <SpriteSettings />
       </TabsContent>
       <TabsContent value="store">
         <Stores stores={stores} />

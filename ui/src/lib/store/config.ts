@@ -59,7 +59,7 @@ export type Config = {
   llm?: LLMConfig;
   /** The rail's add-on buttons (Settings → 扩展 → 分组; lib/rail.ts). Missing = one button holding every add-on block. */
   rail?: RailConfig;
-  /** What draws the working indicator (Settings → 扩展 → 素材; components/AddonSlot.tsx AddonLoader). Missing = the first
+  /** What draws the working indicator (Settings → General → Loading 动画; components/AddonSlot.tsx AddonLoader). Missing = the first
    *  "loader" add-on, else gerdr's dots. */
   loader?: LoaderChoice;
 };

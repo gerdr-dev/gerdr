@@ -69,12 +69,9 @@ export const zh = {
   "settings.labs.keepAwake": "远程连着时不休眠",
   "settings.labs.keepAwake.hint":
     "手机等远程设备连着时电脑不睡，合上盖子也醒着（和 Amphetamine 一样），断开 15 分钟后恢复；下面的手动时段也合盖不睡。合盖要授权一次，用电池且电量 ≤ 20% 时自动放手，塞包里会发热。仅 macOS",
-  "sprites.loader": "Loading 动画",
-  "sprites.loader.hint": "对话运行时 “Pondering…” 前面那个，会话启动时也是它。可以换成插件带来的素材。",
-  "sprites.waiting": "看等你确认时的样子",
-  "sprites.dots": "Gerdr 的点点",
-  "sprites.faces": "这些素材也能当分组按钮的图标：在「分组」里点按钮的图标挑。",
-  "sprites.none": "还没有素材。装一个带素材的插件（比如 Pixel Clawd），它的图案会出现在这里和「分组」的图标里。",
+  "settings.loader": "Loading 动画",
+  "settings.loader.hint": "对话运行时 “Pondering…” 前面那个。插件可以带来别的，比如像素 Clawd",
+  "settings.loader.dots": "Gerdr 的点点",
 };
 
 export type MessageKey = keyof typeof zh;
@@ -145,10 +142,7 @@ export const en: Record<MessageKey, string> = {
   "settings.labs.keepAwake": "Stay awake while remote",
   "settings.labs.keepAwake.hint":
     "While a phone or another remote device is connected the computer doesn't sleep, even with the lid closed (like Amphetamine), until 15 minutes after it disconnects; the manual periods below keep it awake with the lid closed too. The lid needs a one-time permission; on battery at 20% or less it lets go. It gets warm in a bag. macOS only",
-  "sprites.loader": "Working indicator",
-  "sprites.loader.hint": "Shown before “Pondering…” while a turn runs, and while a session starts. Add-ons' sprites can draw it.",
-  "sprites.waiting": "Show it waiting on you",
-  "sprites.dots": "Gerdr's dots",
-  "sprites.faces": "Sprites can also be a rail button's icon: in Groups, click a button's icon to pick one.",
-  "sprites.none": "No sprites yet. Install an add-on that brings some (Pixel Clawd, say): they show up here and among the icons in Groups.",
+  "settings.loader": "Working indicator",
+  "settings.loader.hint": "Shown before “Pondering…” while a turn runs. Add-ons can bring others, like Pixel Clawd",
+  "settings.loader.dots": "Gerdr's dots",
 };

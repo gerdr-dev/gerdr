@@ -29,12 +29,13 @@ sees: `internal/addons/builtin/gerdr.d.ts`, copied into `~/.gerdr/addons` on eve
 - `g.slot("loader", C)` replaces the working indicator (PixelLoader: the dots before "Pondering…", a pane starting an
   agent). The package gets it through `ChatHost.renderLoader`, which hands the host the whole indicator with the
   default as `fallback` rather than a colour or a frame, so the next host's idea (a mascot, a spinner of its own) needs
-  no new package release. Which one draws is config `loader` (Settings → 扩展 → 素材 = SpriteSettings.tsx,
-  AddonSlot.tsx `loaderPick`): gerdr's dots, a "loader" entry, or a sprite. Unset = the first "loader" entry, else
-  the dots: an add-on whose whole point is the indicator works once installed. A pick whose add-on is gone, or one
-  that throws, falls back to the dots: a running turn must still look like it runs. The settings page previews each
-  option through the real PixelLoader with a `LoaderPreview` context overriding the choice, so the dots come from
-  the package without it exporting them.
+  no new package release. Which one draws is config `loader`, picked in Settings → General → Loading 动画
+  (LoaderSelect.tsx, AddonSlot.tsx `loaderPick`): gerdr's dots, a "loader" entry, or a sprite. A Select row among
+  the looks, shown once an add-on brings an option: it first was a gallery page of its own (扩展 → 素材), which read
+  as one more concept to learn. Unset = the first "loader" entry, else the dots: an add-on whose whole point is the
+  indicator works once installed. A pick whose add-on is gone, or one that throws, falls back to the dots: a running
+  turn must still look like it runs. The Select previews each option through the real PixelLoader with a
+  `LoaderPreview` context overriding the choice, so the dots come from the package without it exporting them.
 - `"sprite"` entries are pictures gerdr draws only where the user put them: the working indicator, rail button
   faces and agents' icons (AgentDef.icon "sprite:<key>", AgentIcon.tsx; the default icon while its add-on isn't
   loaded). Props `{ state, width, height }`: "working" / "waiting" in the indicator (24×16, unclipped), "idle" on a
