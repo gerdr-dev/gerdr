@@ -96,9 +96,9 @@ export function Rail() {
   const modeItem = (m: typeof cur, label: string, Icon: typeof Code2) => {
     const on = cur === m;
     // The mode you're in again: Code toggles its list (as an activity bar does); Work has nothing to toggle.
-    // Icon over a small label (asked for: icons alone didn't say enough), kept about the size of the rail's other
-    // buttons; the current one is tinted, not raised with a shadow, which made it look a size bigger. Short screens
-    // drop the label to save height.
+    // Icon over a small label (asked for: icons alone didn't say enough), with room between them (1px read as cramped).
+    // The current one is tinted, not raised with a shadow, which made it look a size bigger. Short screens drop the
+    // label to save height.
     const title = on && m === "agents" ? `Code · ${sidebar ? "隐藏会话列表" : "显示会话列表"}` : label;
     return tip(
       title,
@@ -106,7 +106,7 @@ export function Rail() {
         aria-label={label}
         aria-pressed={on}
         className={cn(
-          "flex min-h-9 w-10 flex-col items-center justify-center gap-px rounded-md py-1 text-[10px] leading-none",
+          "flex min-h-9 w-10 flex-col items-center justify-center gap-[5px] rounded-md py-1.5 text-[10px] leading-none",
           on ? "bg-accent font-medium text-foreground" : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
         )}
         onClick={() => {
