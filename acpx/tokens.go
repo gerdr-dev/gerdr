@@ -1,6 +1,7 @@
 package acpx
 
 import (
+	"encoding/json"
 	"sync"
 	"time"
 )
@@ -95,6 +96,18 @@ type Tokens struct {
 // TokensReport: the meta of a token report.
 func TokensReport(t Tokens) map[string]any {
 	return Meta(map[string]any{TokensKey: t})
+}
+
+// ProviderUsageKey: session_info_update._meta.gerdr.providerUsage = one model call's usage object, verbatim as the
+// provider sent it (Gerdr Agent sends one per request that had one). Tokens above are what gerdr reads out of it;
+// this is for the host, so a field gerdr doesn't know (a gateway's own usage.cost, say) still gets to it without a
+// gerdr change. What it means, and its unit, is between the host and its provider. chatlog adds up the numbers of
+// a turn's reports onto its turn_end (providerUsage).
+const ProviderUsageKey = "providerUsage"
+
+// ProviderUsageReport: the meta of a provider usage report.
+func ProviderUsageReport(raw json.RawMessage) map[string]any {
+	return Meta(map[string]any{ProviderUsageKey: raw})
 }
 
 // ProgressKey：session_info_update._meta.gerdr.progress = {"outputTokens": n}

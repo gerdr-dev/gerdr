@@ -38,6 +38,8 @@ type Event struct {
 	Error        string `json:"error,omitempty"`
 	// turn_end: what the agent reported this turn cost, USD (Claude Code only; acpx.CostKey)
 	CostUSD float64 `json:"costUsd,omitempty"`
+	// turn_end: the provider usage reports of the turn (acpx.ProviderUsageKey) added up, number by number (AddUsage)
+	ProviderUsage json.RawMessage `json:"providerUsage,omitempty"`
 
 	// permission / ask 及其 _done
 	ReqID    string          `json:"reqId,omitempty"`
@@ -224,4 +226,34 @@ func (l *File) WriteAll(events []*Event) error {
 func IsChunk(raw json.RawMessage) bool {
 	_, _, ok := chunkKey(raw)
 	return ok
+}
+
+// AddUsage adds usage object b into a: numbers add up (each of a turn's model calls used its own tokens, cost its
+// own money), nested objects the same way, anything else keeps b's value. Returns a (made when nil).
+func AddUsage(a, b map[string]any) map[string]any {
+	if a == nil {
+		a = map[string]any{}
+	}
+	for k, v := range b {
+		switch bv := v.(type) {
+		case float64:
+			av, _ := a[k].(float64)
+			a[k] = av + bv
+		case map[string]any:
+			av, _ := a[k].(map[string]any)
+			a[k] = AddUsage(av, bv)
+		default:
+			a[k] = v
+		}
+	}
+	return a
+}
+
+// usageJSON: a turn's added-up usage for its turn_end; nil when nothing was reported.
+func usageJSON(u map[string]any) json.RawMessage {
+	if len(u) == 0 {
+		return nil
+	}
+	b, _ := json.Marshal(u)
+	return b
 }

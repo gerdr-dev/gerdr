@@ -89,6 +89,35 @@ type Usage struct {
 	// don't report any). Part of Input, like CacheRead.
 	CacheWrite int `json:"cacheWrite,omitempty"`
 	Reasoning  int `json:"reasoning,omitempty"`
+	// Raw: the response's usage object verbatim, as the provider sent it (Anthropic: message_start's with
+	// message_delta's fields on top). For the host: whatever a provider adds there (a gateway's usage.cost) gets
+	// through without gerdr knowing the field.
+	Raw json.RawMessage `json:"-"`
+}
+
+// rawUsage collects a stream's usage objects: a later one's fields replace an earlier one's (they're running totals
+// for the request, or the same object sent twice).
+type rawUsage map[string]json.RawMessage
+
+func (r *rawUsage) add(raw json.RawMessage) {
+	var m map[string]json.RawMessage
+	if json.Unmarshal(raw, &m) != nil || len(m) == 0 {
+		return
+	}
+	if *r == nil {
+		*r = rawUsage{}
+	}
+	for k, v := range m {
+		(*r)[k] = v
+	}
+}
+
+func (r rawUsage) json() json.RawMessage {
+	if len(r) == 0 {
+		return nil
+	}
+	b, _ := json.Marshal(map[string]json.RawMessage(r))
+	return b
 }
 
 // Event 是流式片段。

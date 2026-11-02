@@ -138,6 +138,7 @@ func (c *anthropic) Stream(ctx context.Context, req Request, on func(Event)) (Re
 		blocks   []*block
 		calls    []ToolCall
 		usage    anthropicUsage
+		rawU     rawUsage
 		stop     string
 		thoughts int // thinking blocks seen so far: a blank line between them in the UI
 	)
@@ -176,6 +177,14 @@ func (c *anthropic) Stream(ctx context.Context, req Request, on func(Event)) (Re
 		case "message_start":
 			if ev.Message != nil {
 				usage.merge(ev.Message.Usage)
+				var raw struct {
+					Message struct {
+						Usage json.RawMessage `json:"usage"`
+					} `json:"message"`
+				}
+				if json.Unmarshal(d, &raw) == nil {
+					rawU.add(raw.Message.Usage)
+				}
 			}
 		case "content_block_start":
 			var cb struct {
@@ -240,6 +249,12 @@ func (c *anthropic) Stream(ctx context.Context, req Request, on func(Event)) (Re
 			}
 			if ev.Usage != nil {
 				usage.merge(*ev.Usage)
+				var raw struct {
+					Usage json.RawMessage `json:"usage"`
+				}
+				if json.Unmarshal(d, &raw) == nil {
+					rawU.add(raw.Usage)
+				}
 			}
 		case "error":
 			if ev.Error == nil {
@@ -295,6 +310,7 @@ func (c *anthropic) Stream(ctx context.Context, req Request, on func(Event)) (Re
 		}
 	}
 	res := Result{Message: msg, Usage: usage.toUsage()}
+	res.Usage.Raw = rawU.json()
 	if err = streamErr(ctx, err); err != nil {
 		res.Stop = "cancelled"
 		res.Message.ToolCalls = nil

@@ -61,6 +61,7 @@ func (c *responses) Stream(ctx context.Context, req Request, on func(Event)) (Re
 		calls     []ToolCall
 		callIdx   = map[string]int{} // item id → calls 的下标
 		usage     Usage
+		rawU      rawUsage
 		status    string
 		incReason string
 	)
@@ -168,6 +169,14 @@ func (c *responses) Stream(ctx context.Context, req Request, on func(Event)) (Re
 					incReason = r.IncompleteDetails.Reason
 				}
 				if u := r.Usage; u != nil {
+					var raw struct {
+						Response struct {
+							Usage json.RawMessage `json:"usage"`
+						} `json:"response"`
+					}
+					if json.Unmarshal(d, &raw) == nil {
+						rawU.add(raw.Response.Usage)
+					}
 					usage = Usage{Input: u.InputTokens, Output: u.OutputTokens}
 					if u.InputTokensDetails != nil {
 						usage.CacheRead = u.InputTokensDetails.CachedTokens
@@ -202,6 +211,7 @@ func (c *responses) Stream(ctx context.Context, req Request, on func(Event)) (Re
 			msg.ToolCalls = append(msg.ToolCalls, tc)
 		}
 	}
+	usage.Raw = rawU.json()
 	res := Result{Message: msg, Usage: usage}
 	if err = streamErr(ctx, err); err != nil {
 		res.Stop = "cancelled"

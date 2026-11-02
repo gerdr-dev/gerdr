@@ -122,10 +122,19 @@ type env struct {
 	got  []*chatlog.Event
 }
 
-func start(t *testing.T, url string) *env {
+func start(t *testing.T, url string) *env { return startWith(t, native.Provider{BaseURL: url}) }
+
+// startWith: start with this provider (id, key and the one model filled in when empty).
+func startWith(t *testing.T, p native.Provider) *env {
 	t.Helper()
 	t.Setenv("HOME", t.TempDir())
-	cfg := native.Config{Providers: []native.Provider{{ID: "f", BaseURL: url, APIKey: "k", Models: []native.Model{{ID: "m", API: "chat"}}}}}
+	if p.ID == "" {
+		p.ID, p.APIKey = "f", "k"
+	}
+	if len(p.Models) == 0 {
+		p.Models = []native.Model{{ID: "m", API: "chat"}}
+	}
+	cfg := native.Config{Providers: []native.Provider{p}}
 	ag := native.New(slog.New(slog.DiscardHandler), native.Options{Dir: t.TempDir(), Config: func() native.Config { return cfg }, NoMemory: true, NoInstructionFiles: true})
 	t.Cleanup(ag.Close)
 	toAgentR, toAgentW := io.Pipe()
@@ -266,5 +275,45 @@ func TestSessionSteerAndStop(t *testing.T) {
 	}
 	if steered == (stop.Withdrawn == 1) {
 		t.Fatalf("withdrawn %d but steer in log %v", stop.Withdrawn, steered)
+	}
+}
+
+// A provider's usage objects reach the turn_end added up, fields gerdr doesn't know included (a gateway's cost).
+func TestSessionTurnCost(t *testing.T) {
+	var mu sync.Mutex
+	n := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		i := n
+		n++
+		mu.Unlock()
+		w.Header().Set("Content-Type", "text/event-stream")
+		send := func(v string) { fmt.Fprintf(w, "data: %s\n\n", v) }
+		if i == 0 {
+			send(`{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_0","function":{"name":"read","arguments":"{\"path\":\"nope.txt\"}"}}]}}]}`)
+			send(`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`)
+			send(`{"choices":[],"usage":{"prompt_tokens":1000,"completion_tokens":20,"cost":3,"tier":"pro"}}`)
+		} else {
+			send(`{"choices":[{"delta":{"content":"done"}}]}`)
+			send(`{"choices":[{"delta":{},"finish_reason":"stop"}]}`)
+			send(`{"choices":[],"usage":{"prompt_tokens":1100,"completion_tokens":5,"cost":2}}`)
+		}
+		fmt.Fprint(w, "data: [DONE]\n\n")
+	}))
+	t.Cleanup(srv.Close)
+	e := startWith(t, native.Provider{BaseURL: srv.URL})
+	if _, err := e.s.Send(context.Background(), []acp.ContentBlock{acp.TextBlock("read it")}, "", false); err != nil {
+		t.Fatal(err)
+	}
+	e.waitIdle(t)
+	evs := e.s.Events()
+	last := evs[len(evs)-1]
+	var u struct {
+		Prompt int     `json:"prompt_tokens"`
+		Cost   float64 `json:"cost"`
+		Tier   string  `json:"tier"`
+	}
+	if last.Kind != chatlog.EvTurnEnd || json.Unmarshal(last.ProviderUsage, &u) != nil || u.Cost != 5 || u.Prompt != 2100 || u.Tier != "pro" {
+		t.Fatalf("turn_end %s (%s)", last.ProviderUsage, kinds(evs))
 	}
 }

@@ -105,6 +105,9 @@ func (s *session) addUsage(model string, u llm.Usage) {
 			Model: model, Input: u.Input, Output: u.Output, CacheRead: u.CacheRead, CacheWrite: u.CacheWrite,
 		})}})
 	}
+	if len(u.Raw) > 0 {
+		s.send(acp.SessionUpdate{SessionInfoUpdate: &acp.SessionSessionInfoUpdate{Meta: acpx.ProviderUsageReport(u.Raw)}})
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.usage.InputTokens += u.Input

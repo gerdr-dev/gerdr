@@ -105,6 +105,11 @@ func TestAnthropicStream(t *testing.T) {
 	if res.Usage.Input != 105 || res.Usage.CacheRead != 90 || res.Usage.Output != 42 {
 		t.Fatalf("usage: %+v", res.Usage)
 	}
+	// the raw usage: message_start's fields with message_delta's on top
+	var raw map[string]float64
+	if json.Unmarshal(res.Usage.Raw, &raw) != nil || raw["output_tokens"] != 42 || raw["cache_read_input_tokens"] != 90 {
+		t.Fatalf("raw usage: %s", res.Usage.Raw)
+	}
 	var blocks []map[string]any
 	_ = json.Unmarshal(m.Blocks, &blocks)
 	if len(blocks) != 3 || blocks[0]["type"] != "thinking" || blocks[0]["signature"] != "SIG" || blocks[2]["type"] != "tool_use" {

@@ -67,6 +67,7 @@ func (c *chat) Stream(ctx context.Context, req Request, on func(Event)) (Result,
 		text, thought strings.Builder
 		calls         []ToolCall
 		usage         Usage
+		rawU          rawUsage
 		finish        string
 	)
 	err = readSSE(rc, func(d []byte) error {
@@ -110,6 +111,12 @@ func (c *chat) Stream(ctx context.Context, req Request, on func(Event)) (Result,
 			return &APIError{Msg: ch.Error.Message}
 		}
 		if u := ch.Usage; u != nil {
+			var raw struct {
+				Usage json.RawMessage `json:"usage"`
+			}
+			if json.Unmarshal(d, &raw) == nil {
+				rawU.add(raw.Usage)
+			}
 			usage = Usage{Input: u.PromptTokens, Output: u.CompletionTokens, CacheRead: u.PromptCacheHit}
 			if u.PromptTokensDetails != nil && u.PromptTokensDetails.CachedTokens > 0 {
 				usage.CacheRead = u.PromptTokensDetails.CachedTokens
@@ -167,6 +174,7 @@ func (c *chat) Stream(ctx context.Context, req Request, on func(Event)) (Result,
 		}
 		msg.ToolCalls = append(msg.ToolCalls, tc)
 	}
+	usage.Raw = rawU.json()
 	res := Result{Message: msg, Usage: usage}
 	if err = streamErr(ctx, err); err != nil {
 		res.Stop = "cancelled"
