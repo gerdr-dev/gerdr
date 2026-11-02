@@ -126,7 +126,7 @@ lucide icon (`<g.icons.Timer className="size-3.5" />`).
 
 | where | call | gets |
 |---|---|---|
-| A block of an add-on panel; the user groups blocks into buttons on the rail (Settings → 扩展 → 窄条) | `g.slot("sidebar", Component, { order, id, title, icon })` | no props |
+| A block of an add-on panel; the user groups blocks into buttons on the rail (Settings → 扩展 → 分组) | `g.slot("sidebar", Component, { order, id, title, icon })` | no props |
 | A button face the user can pick for a rail button: a symbol, tiny bars, anything (36×28px box, clipped) | `g.slot("rail", Component, { id, title })` | no props |
 | The app's root, always mounted, no space taken | `g.slot("overlay", Component)` | no props |
 | Every pane's title bar | `g.slot("paneTitle", Component)` | `{ pane, tab }` |

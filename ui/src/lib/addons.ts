@@ -40,7 +40,7 @@ export type SlotName = "sidebar" | "rail" | "paneTitle" | "overlay" | "loader";
 /**
  * key: stable across reloads — "addon:id" with the id the add-on gave, else "addon:n" (its n-th entry in that slot, the
  * same on every load since setup runs the same way): the rail's groups refer to blocks and faces by it.
- * title / icon (a lucide icon name): how the block or face is listed in Settings → 扩展 → 窄条.
+ * title / icon (a lucide icon name): how the block or face is listed in Settings → 扩展 → 分组.
  */
 export type SlotReg = { addon: string; key: string; Component: React.ComponentType<any>; order: number; title?: string; icon?: string };
 export const slots: Record<SlotName, SlotReg[]> = { sidebar: [], rail: [], paneTitle: [], overlay: [], loader: [] };

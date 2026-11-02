@@ -171,7 +171,7 @@ declare global {
      * Put a component in one of gerdr's slots. It is re-rendered with gerdr; one that throws is dropped and its error
      * shown in Settings → Add-ons. Several add-ons in one slot: by order, then by add-on id.
      *   "sidebar"    a block of an add-on panel (288px wide, no props). The user groups blocks into buttons on the
-     *                rail (the strip down the window's left edge) in Settings → 扩展 → 窄条: one button can stack blocks
+     *                rail (the strip down the window's left edge) in Settings → 扩展 → 分组: one button can stack blocks
      *                of several add-ons (a "today" and two quota meters), in the user's order. Hovering or tapping a
      *                button opens its blocks beside the rail; on a phone a sheet from the drawer's bottom row. On the
      *                rail a block stays mounted while its panel is closed. Blocks are padded above and below once per
