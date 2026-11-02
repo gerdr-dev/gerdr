@@ -200,6 +200,19 @@ function goPane(paneId: string, sessionId?: string) {
   if (sessionId) markRead(sessionId);
 }
 
+/**
+ * Drop the click the browser synthesizes after a tap we already handled on `pointerup`. That click is hit-tested
+ * after pointerup, and by then the pick may have closed the drawer (tapping the row you're already on closes it at
+ * once), so it landed on whatever was under the finger behind it: an image in the chat opened the lightbox. It follows
+ * touchend within a few ms; the timeout only stops a tap that never produces a click from eating a later, real one.
+ */
+function eatNextClick() {
+  const eat = (e: MouseEvent) => (e.preventDefault(), e.stopPropagation(), off());
+  const off = () => (window.removeEventListener("click", eat, true), clearTimeout(t));
+  window.addEventListener("click", eat, true);
+  const t = setTimeout(off, 500);
+}
+
 /** `className`: the phone drawer, which sets its own width (no resize edge there). */
 export function UnifiedSidebar({ className }: { className?: string }) {
   const layout = useStore((s) => s.layout);
@@ -739,6 +752,7 @@ function Row({
             if (!d || e.timeStamp - d.t > 450 || Math.abs(e.clientX - d.x) > 10 || Math.abs(e.clientY - d.y) > 10) return;
             took.current = e.timeStamp;
             pick();
+            eatNextClick();
           }}
           onClick={(e) => e.timeStamp - took.current > 800 && pick()}
           onDoubleClick={() => !inSplit && set({ dialog: { kind: "rename", target: "tab", id: tab.id, value: tab.name ?? tabName(tab) } })}
