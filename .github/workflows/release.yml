@@ -1,30 +1,83 @@
-# 发版：推一个 v 开头的 tag（git tag v0.2.0 && git push origin v0.2.0）就在 GitHub 上打 mac 和安卓的包，挂到同名 Release 上。
-# 手动跑（Actions 页面 Run workflow）只打包、不发 Release，包在这次运行的 Artifacts 里，用来试打包有没有坏。
+# Release: push a v tag (git tag v0.2.0 && git push origin v0.2.0) to build on GitHub and attach the packages to a
+# Release of the same name. Running it by hand (Actions → Run workflow) only builds, without a Release: the packages
+# land in the run's Artifacts, to check the build isn't broken.
+#
+# Incremental: most releases only change the Go backend, so only what changed is rebuilt (job `plan` decides):
+# - dmgs: rebuilt when the shell id (desktop/shell-id.sh) differs from the latest release's update.json, or anything in
+#   desktop/ changed since the tag the latest dmgs were built for (signing, builder config aren't in the id). Otherwise
+#   only the ~10MB backends are built and the previous dmgs are copied into this release: an App on an older shell
+#   still needs a whole App, and its updater looks for it under this release's tag (desktop/updater.js releaseURL).
+# - apk: rebuilt only when android/ changed since the tag of the apk the latest release offers. Otherwise that
+#   release's android.json is reused as is (it names its own version, so the App keeps downloading from that tag)
+#   and the apk is copied over for people picking it off the release page.
+# Manual runs can force everything with the `full` input. Details: docs/dev/UPDATE.md.
 name: release
 
 on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      full:
+        description: Rebuild the dmgs and the apk even if nothing they're made of changed
+        type: boolean
+        default: false
 
 permissions:
   contents: write
 
 jobs:
-  version:
+  plan:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.v.outputs.version }}
+      prev: ${{ steps.p.outputs.prev }}
+      dmg: ${{ steps.p.outputs.dmg }}
+      apk: ${{ steps.p.outputs.apk }}
     steps:
-      # 安卓的 versionCode 按 主.次.修 算（见 android/app/build.gradle.kts），tag 必须是 v1.2.3 这样；手动跑没有 tag 时给个占位
+      # all history and tags, for the git diff against the apk's tag
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      # Android's versionCode is computed from major.minor.patch (android/app/build.gradle.kts), so the tag has to be
+      # v1.2.3; manual runs without a tag get a placeholder
       - id: v
         run: |
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then v="${GITHUB_REF_NAME#v}"; else v="0.0.0-dev"; fi
-          [[ "$v" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]] || { echo "tag 要是 v主.次.修：$GITHUB_REF_NAME"; exit 1; }
+          [[ "$v" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]] || { echo "the tag must be v<major>.<minor>.<patch>: $GITHUB_REF_NAME"; exit 1; }
           echo "version=$v" >> "$GITHUB_OUTPUT"
+      # dmg / apk = build | reuse. Anything unexpected (no previous release, a feed missing a platform) → build
+      - id: p
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FULL: ${{ inputs.full }}
+        run: |
+          dmg=build apk=build
+          prev=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName -q .tagName 2>/dev/null || true)
+          # a re-run after this tag's Release already exists would copy from itself
+          [ "$prev" = "$GITHUB_REF_NAME" ] && prev=""
+          if [ "$FULL" != true ] && [ -n "$prev" ] && gh release download "$prev" --repo "$GITHUB_REPOSITORY" -p update.json -p android.json -D prev; then
+            shell=$(./desktop/shell-id.sh)
+            echo "shell: $shell, $prev's: $(jq -r .shell prev/update.json)"
+            # the dmg's own version (it may be older than $prev, carried over before): desktop/ also holds what goes into
+            # the dmg without being part of the shell id (adhoc-sign.js, build.sh), so it must be unchanged since then
+            dv=$(jq -r '.app["darwin-arm64"].file // ""' prev/update.json | sed -nE 's/^Gerdr-(.+)-mac-arm64\.dmg$/\1/p')
+            if [ -n "$dv" ] && jq -e --arg s "$shell" '.shell == $s and .app["darwin-x64"]' prev/update.json >/dev/null &&
+              git rev-parse -q --verify "refs/tags/v$dv" >/dev/null && git diff --quiet "v$dv" HEAD -- desktop/ ':!desktop/feed.sh'; then
+              dmg=reuse
+            fi
+            echo "dmg of $prev is v$dv; rebuild: $dmg"
+            av=$(jq -r .version prev/android.json)
+            if git rev-parse -q --verify "refs/tags/v$av" >/dev/null && git diff --quiet "v$av" HEAD -- android/; then
+              apk=reuse
+            fi
+            echo "apk of $prev is v$av; rebuild: $apk"
+          fi
+          echo "prev=$prev dmg=$dmg apk=$apk"
+          { echo "prev=$prev"; echo "dmg=$dmg"; echo "apk=$apk"; } >> "$GITHUB_OUTPUT"
 
   mac:
-    needs: version
+    needs: plan
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v7
@@ -34,15 +87,20 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 22
-      # Apple 芯片、Intel 各一个 dmg（Gerdr-<版本>-mac-arm64.dmg / -mac-x64.dmg，名字 build.sh 里定好了）。没配 Apple 开发者证书：打 dmg 之前补 ad-hoc 签名（desktop/adhoc-sign.js），别人第一次打开要右键「打开」。
-      # 以后要正式签名 + 公证：在仓库 Secrets 里配 CSC_LINK / CSC_KEY_PASSWORD（和 APPLE_ID 那几个），在这一步的 env 里传进去
-      - run: ./desktop/build.sh mac ${{ needs.version.outputs.version }}
-      - run: mv desktop/dist/Gerdr-*-mac-*.dmg desktop/dist/gerdr-*-darwin-*.br .
-      # update.json: what desktop/updater.js reads (releases/latest/download/update.json). Shell unchanged since the
-      # App people have → they only download the compressed backend (~10MB) instead of the dmg
-      - run: ./desktop/feed.sh ${{ needs.version.outputs.version }} .
-      # 查 dmg 里装的那份 App 签名是不是完整的：没签全的包下载下来打开会被说「已损坏」，v0.2.0 就是这样发出去的
-      - name: 核对 dmg 里的签名
+      # One dmg each for Apple silicon and Intel (Gerdr-<version>-mac-arm64.dmg / -mac-x64.dmg, named in build.sh). No
+      # Apple developer certificate: the App gets an ad-hoc signature before the dmg is made (desktop/adhoc-sign.js),
+      # so the first open needs right-click → Open.
+      # For real signing + notarization later: put CSC_LINK / CSC_KEY_PASSWORD (and the APPLE_ID ones) in the repo's
+      # Secrets and pass them in this step's env
+      - if: needs.plan.outputs.dmg == 'build'
+        run: ./desktop/build.sh mac ${{ needs.plan.outputs.version }}
+      - if: needs.plan.outputs.dmg == 'reuse'
+        run: ./desktop/build.sh mac-backend ${{ needs.plan.outputs.version }}
+      - run: mv desktop/dist/gerdr-*-darwin-*.br . && (mv desktop/dist/Gerdr-*-mac-*.dmg . 2>/dev/null || true)
+      # Check the App inside each dmg is fully signed: a download of one that isn't opens as "damaged" (v0.2.0 shipped
+      # like that)
+      - name: Check the signature inside the dmgs
+        if: needs.plan.outputs.dmg == 'build'
         run: |
           for d in Gerdr-*-mac-*.dmg; do
             m=$(hdiutil attach -nobrowse -readonly "$d" | tail -1 | awk -F'\t' '{print $NF}')
@@ -53,46 +111,49 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: mac
+          if-no-files-found: ignore
           path: |
             Gerdr-*.dmg
             gerdr-*.br
-            update.json
 
   android:
-    needs: version
+    needs: plan
+    if: needs.plan.outputs.apk == 'build'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      # AGP 不认比 21 新的 JDK。Android SDK runner 上自带（ANDROID_HOME）
+      # AGP rejects JDKs newer than 21. The runner ships the Android SDK (ANDROID_HOME)
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 21
-      # 正式签名钥匙从 Secrets 来（base64 的 jks + 密码）。没配就直接失败：不签的包装不上，
-      # 拿别的钥匙签的包和已经装上的 App 签名对不上、升级不上去，passkey 也刷不了（config.OfficialAndroidCert）
-      - name: 签名钥匙
+      # The release signing key comes from Secrets (base64 jks + password). Missing → fail: an unsigned package won't
+      # install, and one signed with another key doesn't match the installed App, so it can't upgrade it and passkeys
+      # stop working (config.OfficialAndroidCert)
+      - name: Signing key
         env:
           KEYSTORE_B64: ${{ secrets.GERDR_APP_KEYSTORE_B64 }}
           KEY_PASS: ${{ secrets.GERDR_APP_KEY_PASS }}
         run: |
-          [ -n "$KEYSTORE_B64" ] && [ -n "$KEY_PASS" ] || { echo "仓库 Secrets 里没配 GERDR_APP_KEYSTORE_B64 / GERDR_APP_KEY_PASS"; exit 1; }
+          [ -n "$KEYSTORE_B64" ] && [ -n "$KEY_PASS" ] || { echo "GERDR_APP_KEYSTORE_B64 / GERDR_APP_KEY_PASS missing from the repo's Secrets"; exit 1; }
           echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/gerdr.jks"
           echo "GERDR_APP_KEYSTORE=$RUNNER_TEMP/gerdr.jks" >> "$GITHUB_ENV"
           echo "GERDR_APP_KEY_PASS=$KEY_PASS" >> "$GITHUB_ENV"
-      - run: cd android && ./gradlew assembleRelease -PappVersion=${{ needs.version.outputs.version }}
-      # 签出来的证书必须是官方那把：和 config.OfficialAndroidCert 对一下，Secrets 里放错钥匙在这里就拦住
-      - name: 核对签名
+      - run: cd android && ./gradlew assembleRelease -PappVersion=${{ needs.plan.outputs.version }}
+      # The certificate must be the official one: compare with config.OfficialAndroidCert, so a wrong key in Secrets
+      # stops here
+      - name: Check the signature
         run: |
           want=$(grep -oE 'OfficialAndroidCert *= *"[^"]+"' internal/config/remote.go | grep -oE '[0-9A-F:]{95}' | tr -d ':' | tr A-F a-f)
           apksigner=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
           got=$("$apksigner" verify --print-certs android/app/build/outputs/apk/release/app-release.apk | grep -m1 'SHA-256 digest' | awk '{print $NF}')
           echo "want $want"; echo "got  $got"
           [ -n "$want" ] && [ "$want" = "$got" ]
-      - run: mv android/app/build/outputs/apk/release/app-release.apk "Gerdr-${{ needs.version.outputs.version }}-android.apk"
+      - run: mv android/app/build/outputs/apk/release/app-release.apk "Gerdr-${{ needs.plan.outputs.version }}-android.apk"
       # The App's self-update feed (android/…/AppUpdate.kt reads releases/latest/download/android.json)
       - run: |
-          f="Gerdr-${{ needs.version.outputs.version }}-android.apk"
-          printf '{"version":"%s","file":"%s","size":%d,"sha256":"%s"}\n' "${{ needs.version.outputs.version }}" "$f" "$(wc -c < "$f" | tr -d ' ')" "$(sha256sum "$f" | cut -d' ' -f1)" > android.json
+          f="Gerdr-${{ needs.plan.outputs.version }}-android.apk"
+          printf '{"version":"%s","file":"%s","size":%d,"sha256":"%s"}\n' "${{ needs.plan.outputs.version }}" "$f" "$(wc -c < "$f" | tr -d ' ')" "$(sha256sum "$f" | cut -d' ' -f1)" > android.json
           cat android.json
       - uses: actions/upload-artifact@v7
         with:
@@ -101,14 +162,33 @@ jobs:
             Gerdr-*.apk
             android.json
 
+  # Runs also when the android job was skipped (apk reused); not when anything failed
   release:
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: [mac, android]
+    if: ${{ !cancelled() && !failure() && startsWith(github.ref, 'refs/tags/v') }}
+    needs: [plan, mac, android]
     runs-on: ubuntu-latest
     steps:
+      # for desktop/feed.sh and shell-id.sh
+      - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
         with:
           merge-multiple: true
+          path: out
+      - name: Carry over what wasn't rebuilt
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREV: ${{ needs.plan.outputs.prev }}
+        run: |
+          if [ "${{ needs.plan.outputs.dmg }}" = reuse ]; then
+            gh release download "$PREV" --repo "$GITHUB_REPOSITORY" -p 'Gerdr-*-mac-*.dmg' -D out
+          fi
+          if [ "${{ needs.plan.outputs.apk }}" = reuse ]; then
+            gh release download "$PREV" --repo "$GITHUB_REPOSITORY" -p 'Gerdr-*-android.apk' -p android.json -D out
+          fi
+          ls -l out
+      # update.json: what desktop/updater.js reads (releases/latest/download/update.json). Shell unchanged since the
+      # App people have → they only download the compressed backend (~10MB) instead of the dmg
+      - run: ./desktop/feed.sh ${{ needs.plan.outputs.version }} out
       - env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" Gerdr-* gerdr-* update.json android.json --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes
+        run: cd out && gh release create "$GITHUB_REF_NAME" Gerdr-* gerdr-* update.json android.json --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes

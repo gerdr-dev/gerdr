@@ -20,6 +20,25 @@ click copy the new bundle next to the old one and swap them with two renames aft
 /Applications can be stopped halfway, see Makefile `install`); anything unusual (translocated, run off a dmg,
 unwritable dir) → open the dmg instead.
 
+### Incremental releases
+
+The workflow's `plan` job only rebuilds what changed, judged from the latest release's own feeds plus git:
+
+- dmgs: rebuilt when the current shell id ≠ that `update.json`'s `shell`, or `git diff v<dmg's version> HEAD -- desktop/`
+  isn't empty (the dmg's version comes from its file name; signing and builder config sit in desktop/ outside the id).
+  Otherwise the mac job only runs `build.sh mac-backend` and the release job copies the previous dmgs in.
+  Copied, not linked: an App on an older shell builds the dmg URL from **this** feed's version
+  (`releases/download/v<new>/Gerdr-<old>-mac-arm64.dmg`), and changing that would itself change the shell id. Someone
+  installing the copied (older) dmg gets the new backend on the first check.
+- apk: rebuilt when `git diff v<android.json's version> HEAD -- android/` isn't empty. Otherwise the previous
+  `android.json` is published unchanged (`AppUpdate.kt` downloads from the tag it names) and the apk copied for the
+  release page.
+
+Comparing against the version a package was actually built at (not just the previous release) keeps a run of
+backend-only releases from missing a change. Anything unexpected (no previous release, a platform missing) → full
+build. A manual run can force a full build with the `full` input (it doesn't publish, so to publish a forced full build,
+touch a file in desktop/ or android/).
+
 **Touching any file the shell id covers makes the next release a full download for everyone.** Keep shell changes rare,
 and keep the shell ↔ page bridge tolerant: an old shell runs new backends (and their UI) for a long time.
 

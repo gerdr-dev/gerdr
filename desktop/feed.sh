@@ -13,8 +13,16 @@ backend=() app=()
 for p in darwin-arm64 darwin-x64 win32-x64; do
   [ -f "gerdr-$VERSION-$p.br" ] && backend+=("$(entry "$p" "gerdr-$VERSION-$p.br")")
 done
-[ -f "Gerdr-$VERSION-mac-arm64.dmg" ] && app+=("$(entry darwin-arm64 "Gerdr-$VERSION-mac-arm64.dmg")")
-[ -f "Gerdr-$VERSION-mac-x64.dmg" ] && app+=("$(entry darwin-x64 "Gerdr-$VERSION-mac-x64.dmg")")
-[ -f "Gerdr Setup $VERSION.exe" ] && app+=("$(entry win32-x64 "Gerdr Setup $VERSION.exe")")
+# The installers may be an older version's, carried over by a release that didn't rebuild the shell (release.yml):
+# they're matched by platform, not by $VERSION. Exactly one per platform.
+one() {
+  local m=() f
+  for f in "$@"; do [ -f "$f" ] && m+=("$f"); done
+  [ ${#m[@]} -le 1 ] || { echo "more than one installer: ${m[*]}" >&2; exit 1; }
+  [ ${#m[@]} -eq 1 ] && echo "${m[0]}" || true
+}
+f=$(one Gerdr-*-mac-arm64.dmg); [ -n "$f" ] && app+=("$(entry darwin-arm64 "$f")")
+f=$(one Gerdr-*-mac-x64.dmg); [ -n "$f" ] && app+=("$(entry darwin-x64 "$f")")
+f=$(one "Gerdr Setup "*.exe); [ -n "$f" ] && app+=("$(entry win32-x64 "$f")")
 printf '{"version":"%s","shell":"%s","backend":{%s},"app":{%s}}\n' "$VERSION" "$SHELL_ID" "$(join ${backend[@]+"${backend[@]}"})" "$(join ${app[@]+"${app[@]}"})" > update.json
 cat update.json

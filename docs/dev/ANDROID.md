@@ -29,6 +29,9 @@ android/app/src/main/java/io/github/zbysir/gerdr/
 
 发版在 GitHub 上打（`.github/workflows/release.yml`，推 `v主.次.修` 的 tag）：钥匙放在仓库 Secrets 的
 `GERDR_APP_KEYSTORE_B64`（`base64 -i gerdr.jks`）和 `GERDR_APP_KEY_PASS`，打完拿签名指纹和 `OfficialAndroidCert` 对一下，对不上就失败。
+The apk is only rebuilt when android/ changed since the version the latest `android.json` names; otherwise that
+`android.json` is republished as is, so the App stays on (and downloads from) that version (docs/dev/UPDATE.md,
+"Incremental releases"). So a change the apk needs must live under android/.
 
 ## 局域网直连：换路，不换 origin
 

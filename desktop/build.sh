@@ -3,6 +3,8 @@
 #   ./desktop/build.sh mac-dir <version>   本机架构的 Gerdr.app（不出安装包，make app / make install 用）
 #   ./desktop/build.sh mac <version>       两个 dmg：Gerdr-<版本>-mac-arm64.dmg（Apple 芯片）、-mac-x64.dmg（Intel）
 #   ./desktop/build.sh win <version>       Windows x64 安装包（nsis，在 mac 上就能交叉打）
+#   ./desktop/build.sh mac-backend <version>  only the two compressed mac backends (gerdr-<v>-darwin-<arch>.br), no
+#                                          Electron: what a release builds when the shell didn't change (release.yml)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 TARGET="${1:-mac-dir}"
@@ -16,10 +18,19 @@ SHELL_ID=$(./desktop/shell-id.sh)
 EB_META=(-c.extraMetadata.version="$VERSION" -c.extraMetadata.gerdrShell="$SHELL_ID")
 
 make -s ui
-( cd desktop && [ -d node_modules ] || npm install --no-audit --no-fund )
+[ "$TARGET" = mac-backend ] || ( cd desktop && [ -d node_modules ] || npm install --no-audit --no-fund )
 rm -rf desktop/bin && mkdir -p desktop/bin/mac desktop/bin/win
 
 case "$TARGET" in
+mac-backend)
+  # Same flags and runner as the dmg's backend, so the .br is the binary a full build would have put in the dmg
+  mkdir -p desktop/dist
+  for arch in arm64 x64; do
+    goarch=$arch && [ "$arch" = x64 ] && goarch=amd64
+    GOOS=darwin GOARCH=$goarch go build -ldflags "$LDFLAGS" -o desktop/bin/mac/gerdr ./cmd/gerdr
+    node desktop/compress.js desktop/bin/mac/gerdr "desktop/dist/gerdr-$VERSION-darwin-$arch.br"
+  done
+  ;;
 mac-dir)
   GOOS=darwin go build -ldflags "$LDFLAGS" -o desktop/bin/mac/gerdr ./cmd/gerdr
   ( cd desktop && npx electron-builder --mac dir --publish never "${EB_META[@]}" )
@@ -43,7 +54,7 @@ win)
   node desktop/compress.js desktop/bin/win/gerdr.exe "desktop/dist/gerdr-$VERSION-win32-x64.br"
   ;;
 *)
-  echo "用法：$0 mac-dir|mac|win <version>" >&2
+  echo "用法：$0 mac-dir|mac|mac-backend|win <version>" >&2
   exit 1
   ;;
 esac
