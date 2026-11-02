@@ -342,6 +342,25 @@ export function fitTiles(ids: string[], main: string | undefined, ratio: number,
   return ids.length ? [hasMain ? main! : ids[0]] : [];
 }
 
+/**
+ * /resume in a tile: `to` takes the tile `from` had and gets the focus. When `to` was a tile too they trade places;
+ * when `from` stays open (it still has a pane) it moves to the end rather than leaving the grid. `before` = the tiles
+ * before the switch: once `from`'s pane shows `to`, `from` is no longer a tile and its place is only known from then.
+ */
+export function replaceTile(before: string[], from: string, to: string) {
+  addActive([to]);
+  setOverview((o) => {
+    const a = before.indexOf(from);
+    const b = before.indexOf(to);
+    let ids = [...before];
+    if (a < 0) ids.push(to);
+    else if (b >= 0) [ids[a], ids[b]] = [to, from];
+    else ids = [...before.slice(0, a), to, ...before.slice(a + 1), from];
+    const trade = (x?: string) => (x === from ? to : x === to ? from : x);
+    return { ...o, ids, main: trade(o.main), focus: to, zoom: o.zoom ? to : undefined };
+  });
+}
+
 /** Drop tile `from` on tile `to`: they trade places (and the main slot, if either had it). */
 export function swapTiles(from: string, to: string) {
   if (from === to) return;

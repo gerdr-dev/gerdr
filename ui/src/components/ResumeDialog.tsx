@@ -5,6 +5,7 @@ import { AgentIcon } from "@/components/AgentIcon";
 import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { continueInPane, resumeInPane } from "@/lib/actions";
 import { api } from "@/lib/api";
+import { isOpen } from "@/lib/overviewState";
 import { set, useStore } from "@/lib/store";
 
 // /resume (like Claude Code): switch this pane to an earlier conversation in the same directory.
@@ -18,7 +19,7 @@ import { set, useStore } from "@/lib/store";
 // The session switched away from isn't deleted; it's still in the sessions list.
 
 type Native = { sessionId: string; cwd: string; title?: string; updatedAt?: string };
-type Entry = { key: string; agent: string; search: string; title: string; at: number; pick: () => void };
+type Entry = { key: string; agent: string; search: string; title: string; at: number; open?: boolean; pick: () => void };
 
 export function ResumeDialog() {
   const d = useStore((s) => s.dialog);
@@ -26,6 +27,8 @@ export function ResumeDialog() {
   const cur = useStore((s) => (open ? s.sessions[d.sessionId] : undefined));
   const sessions = useStore((s) => s.sessions);
   const agents = useStore((s) => s.agents);
+  const layout = useStore((s) => s.layout);
+  const config = useStore((s) => s.config);
   const [native, setNative] = useState<Native[] | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -80,6 +83,7 @@ export function ResumeDialog() {
         search: `${s.id} ${s.title ?? ""}`,
         title: s.title || "（没有标题）",
         at: s.updatedAt,
+        open: isOpen(layout, config, s.id),
         pick: () => pickMine(s.id),
       });
   for (const n of native ?? [])
@@ -112,6 +116,8 @@ export function ResumeDialog() {
             <CommandItem key={e.key} value={`${e.key} ${e.search}`} className="gap-2.5" disabled={busy} onSelect={e.pick}>
               <AgentIcon agent={e.agent} className="size-4 shrink-0" />
               <span className="min-w-0 truncate">{e.title}</span>
+              {/* Shown in a pane / Work view already: picking it brings that one over instead of opening it again */}
+              {e.open && <span className="shrink-0 rounded-sm bg-muted px-1.5 text-[11px] text-muted-foreground">已打开</span>}
               {e.agent !== cur.agent && <span className="shrink-0 text-[11px] text-muted-foreground">换 {agentName} 接着聊</span>}
               <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">{e.at ? ago(e.at) : ""}</span>
             </CommandItem>

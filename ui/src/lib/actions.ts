@@ -42,7 +42,8 @@ import {
   type Workspace,
 } from "./layout";
 import { get, markRead, overviewShown, set, setLayout, setMode, toggleSidebar, useStore } from "./store";
-import { addActive, focusTile, MAX_TILES, overviewFocus, overviewIds, overviewKey, setOverview, toggleOverview } from "./overview";
+import { addActive, focusTile, MAX_TILES, overviewFocus, overviewIds, overviewKey, replaceTile, setOverview, toggleOverview } from "./overview";
+import { isOpen } from "./overviewState";
 import { openWorkChat, workProjectOf } from "./work";
 import type { ContentBlock } from "./types";
 
@@ -1071,12 +1072,32 @@ function setPane0(paneId: string, patch: Partial<PaneLeaf>) {
 
 /** /resume：这个 pane 换成另一个会话。那个会话已经在别的 pane 里开着就直接切过去（一个会话不在两处同时显示）。 */
 export function resumeInPane(paneId: string, sessionId: string) {
+  if (paneId.startsWith("ov-")) return resumeInTile(paneId.slice(3), sessionId);
   const loc = locateSession(get().layout, sessionId);
   if (loc) return focusPane(loc.pane.id);
   const was = allLeaves(get().layout).find((x) => x.pane.id === paneId)?.pane;
   setPane0(paneId, { sessionId, draft: undefined });
   shutdownGone(was ? [was] : []); // 换下来的那个会话也不显示了
   focusPane(paneId);
+}
+
+/**
+ * /resume in an overview tile (Overview.tsx gives its chat the pane id `ov-<session>`, which is no pane in the layout:
+ * the code above found nothing to change, or jumped to a pane hidden under the grid, so nothing visible happened).
+ * The tile switches to the picked conversation. Already open somewhere: it only takes this tile's place in the grid,
+ * the panes stay as they are (the grid is a view over them). Not open: the pane underneath switches to it, as /resume
+ * there would.
+ */
+function resumeInTile(cur: string, sessionId: string) {
+  const before = overviewIds(get());
+  const st = get();
+  if (!isOpen(st.layout, st.config, sessionId)) {
+    const here = locateSession(st.layout, cur);
+    if (!here) return void toast("这一格不在任何 pane 里（Work 对话），换不了"); // a Work conversation: no pane to switch
+    setPane0(here.pane.id, { sessionId, draft: undefined });
+    shutdownGone([here.pane]);
+  }
+  replaceTile(before, cur, sessionId);
 }
 
 /**
