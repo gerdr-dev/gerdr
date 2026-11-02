@@ -95,16 +95,17 @@ export function Rail() {
 
   const modeItem = (m: typeof cur, label: string, Icon: typeof Code2) => {
     const on = cur === m;
-    // The mode you're in again: Code toggles its list (as an activity bar does); Work has nothing to toggle
-    const title = on && m === "agents" ? (sidebar ? "隐藏会话列表" : "显示会话列表") : label;
+    // The mode you're in again: Code toggles its list (as an activity bar does); Work has nothing to toggle.
+    // Icon only, the size of the rail's other buttons: icon + label made them a size bigger than everything around
+    const title = on && m === "agents" ? `Code · ${sidebar ? "隐藏会话列表" : "显示会话列表"}` : label;
     return tip(
       title,
       <button
         aria-label={label}
         aria-pressed={on}
         className={cn(
-          "flex w-10 flex-col items-center gap-0.5 rounded-lg py-1.5 text-[10px] leading-none short:py-2.5",
-          on ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
+          "flex size-9 items-center justify-center rounded-md",
+          on ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:bg-accent hover:text-foreground",
         )}
         onClick={() => {
           if (on) return m === "agents" && toggleSidebar();
@@ -113,7 +114,6 @@ export function Rail() {
         }}
       >
         <Icon className="size-4" />
-        <span className="short:hidden">{label}</span>
       </button>,
     );
   };
@@ -138,7 +138,7 @@ export function Rail() {
           )}
         </div>
         <div className="my-2 h-px w-7 shrink-0 bg-border short:my-1.5" />
-        <div className="flex shrink-0 flex-col items-center gap-1.5">
+        <div className="flex shrink-0 flex-col items-center gap-1">
           {modeItem("agents", "Code", Code2)}
           {modeItem("work", "Work", Briefcase)}
         </div>
