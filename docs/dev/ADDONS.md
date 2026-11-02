@@ -173,4 +173,6 @@ folders (one or two levels down) holding an `addon.json` are its add-ons; no ind
   (`addon_stores` is broadcast from the HTTP API only). `Manager.Describe` lists without building; build errors and
   service status come from the running gerdr's /api/addons when there is one.
 - The add-ons that used to ship inside the binary (duplicate-tab, notify-when-done, session-title) moved there.
-  Users who had them keep them through the migration; new users install them from the store.
+  Gerdr itself ships none. Old versions seeded them into `~/.gerdr/plugins` on first start; the migration drops any
+  file still byte-identical to a seeded version (`seeded` in migrate.go), so they don't reappear as installed add-ons
+  after an upgrade. Edited copies are migrated; anyone who wants the originals installs them from the store.

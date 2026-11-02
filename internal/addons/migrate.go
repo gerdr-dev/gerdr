@@ -1,6 +1,8 @@
 package addons
 
 import (
+	"crypto/sha256"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -13,6 +15,7 @@ import (
 //   - foo.ts → addons/foo/index.ts (its `/// <reference path="./gerdr.d.ts" />` pointed one level up)
 //   - _foo.ts / _foo/ (switched off by name) → addons/foo, switched off in the state file
 //   - foo/ with plugin.json → addons/foo with addon.json
+//   - a file older versions seeded there and nobody edited is dropped (see seeded)
 //
 // The old directory is left as plugins.migrated, and plugin-data / logs/plugins move to addon-data / logs/addons.
 func Migrate(root string) error {
@@ -65,6 +68,9 @@ func Migrate(root string) error {
 			if err != nil {
 				return err
 			}
+			if seeded[fmt.Sprintf("%x", sha256.Sum256(b))] {
+				continue
+			}
 			if err := os.MkdirAll(to, 0o755); err != nil {
 				return err
 			}
@@ -88,6 +94,17 @@ func Migrate(root string) error {
 	_ = os.Rename(filepath.Join(root, "plugin-data"), filepath.Join(root, "addon-data"))
 	_ = os.Rename(filepath.Join(root, "logs", "plugins"), filepath.Join(root, "logs", "addons"))
 	return nil
+}
+
+// seeded holds the sha256 of every plugin file older versions wrote into <root>/plugins on first start
+// (duplicate-tab, tab-numbering, _session-title, _notify-when-done). A file still byte-identical to one of them is
+// something gerdr put there, not something the user wrote, so it is not carried over: Gerdr ships no add-ons, and
+// these live in the store now. An edited copy differs and is migrated like any other.
+var seeded = map[string]bool{
+	"73c80ddc23ac8684d0e3ef7b15a09626b927ae67deb90afd91fb86f2bec019c7": true, // duplicate-tab.ts
+	"9a988f82fbfd978233099008c7d03a5a6316f8df688046c6caf832df4d646747": true, // _session-title.ts
+	"10c273610946bbf2d87b4aff6df9662fb8df5a8a14e4f125b1393e2dbf86ee70": true, // tab-numbering.ts
+	"e0a4e582cc465b33232a9421cb93207a28eb1057eba1aaf1053ad49427536bb1": true, // _notify-when-done.ts
 }
 
 var refRE = regexp.MustCompile(`(/// <reference path=["'])\./gerdr\.d\.ts`)

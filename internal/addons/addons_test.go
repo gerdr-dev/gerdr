@@ -74,6 +74,12 @@ func TestMigrate(t *testing.T) {
 	write(t, filepath.Join(old, "duplicate-tab.ts"), `/// <reference path="./gerdr.d.ts" />
 export default definePlugin({ setup() {} });`)
 	write(t, filepath.Join(old, "_notify.ts"), `export default definePlugin({ setup() {} });`)
+	// What an old gerdr seeded, untouched: not carried over (renamed, as a user switching it on/off would)
+	seed, err := os.ReadFile(filepath.Join("testdata", "seeded-duplicate-tab.ts"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(old, "_dup.ts"), string(seed))
 	write(t, filepath.Join(old, "band", "plugin.json"), `{"service":{"command":"true"}}`)
 	write(t, filepath.Join(root, "plugin-data", "band", "x"), "kept")
 	if err := Migrate(root); err != nil {
@@ -93,6 +99,9 @@ export default definePlugin({ setup() {} });`)
 	}
 	if a := got["notify"]; a == nil || !a.Disabled {
 		t.Fatalf("notify = %+v", a)
+	}
+	if a := got["dup"]; a != nil {
+		t.Fatalf("seeded plugin migrated: %+v", a)
 	}
 	if a := got["band"]; a == nil || !a.HasService {
 		t.Fatalf("band = %+v", a)
