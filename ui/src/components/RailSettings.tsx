@@ -45,7 +45,7 @@ export function RailSettings() {
   return (
     <div className="space-y-3">
       <p className="text-[12px] text-muted-foreground">
-        窗口最左边那条竖栏（左侧条）上，每个分组是一个按钮。鼠标移上去或点一下，按钮旁边会弹出这组插件的面板，按下面的顺序从上往下排。一个分组可以放好几个插件；按钮上显示的图标点卡片左上角来换。手机上这些按钮在侧边抽屉的底部，分组和这里一样。
+        窗口最左边那条竖栏（左侧条）上，每个分组是一个按钮。鼠标移上去或点一下，按钮旁边会弹出这组插件的面板，按下面的顺序从上往下排。一个分组可以放好几个插件。
       </p>
       {groups.map((g, i) => (
         <GroupCard key={g.group.id} g={g} index={i} groups={groups} />
