@@ -194,7 +194,10 @@ The goal is "the result of a tap shows within ~300 ms", so the picture is stream
   fixed self-signed identity (`make signing-id` once; `desktop/sign-id.sh`, used by `desktop/build.sh` for the
   backend, identifier `io.github.zbysir.gerdr.backend`, and by `adhoc-sign.js` for the App): the requirement
   becomes `identifier … and certificate leaf = H"…"` and survives rebuilds. No identity on the machine = ad-hoc as
-  before. The backends CI builds for updates (release.yml) are ad-hoc unless the same identity is given to CI.
+  before. Releases sign with the same identity: release.yml imports it from the Secrets
+  `GERDR_MAC_SIGN_P12_B64` / `GERDR_MAC_SIGN_P12_PASS` (a p12 holding only that identity) and fails without them, so
+  update-only backends and dmgs keep everyone's grants. Whoever holds that key can ship binaries that inherit those
+  grants: treat it like the Android release key. Gatekeeper treats a self-signed App like an ad-hoc one.
 - `tccutil reset ScreenCapture io.github.zbysir.gerdr` clears the App's record (e.g. after a denied prompt). tccutil
   can't address the path record ("No such bundle identifier"), and without an id it resets every app.
 - A process caches what it learned about its grants: after switching Accessibility on, `CGPreflightPostEventAccess`

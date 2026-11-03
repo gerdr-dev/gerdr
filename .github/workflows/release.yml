@@ -87,15 +87,41 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 22
+      # Gerdr's own signing identity (self-signed, desktop/sign-id.sh), from Secrets: the backend and the App are signed
+      # with it, so macOS privacy grants (the remote screen's Screen Recording / Accessibility) survive updates instead
+      # of being voided by every new cdhash. Same identity as local `make install` builds. Missing → fail: an ad-hoc
+      # build would silently void everyone's grants again. Put in a throwaway keychain on the search list, unlocked,
+      # with codesign allowed to use the key without a prompt.
+      - name: Signing identity
+        env:
+          P12_B64: ${{ secrets.GERDR_MAC_SIGN_P12_B64 }}
+          P12_PASS: ${{ secrets.GERDR_MAC_SIGN_P12_PASS }}
+        run: |
+          [ -n "$P12_B64" ] && [ -n "$P12_PASS" ] || { echo "GERDR_MAC_SIGN_P12_B64 / GERDR_MAC_SIGN_P12_PASS missing from the repo's Secrets"; exit 1; }
+          kc="$RUNNER_TEMP/gerdr-sign.keychain-db"; kp=$(openssl rand -hex 16)
+          echo "$P12_B64" | base64 -d > "$RUNNER_TEMP/sign.p12"
+          security create-keychain -p "$kp" "$kc"
+          security set-keychain-settings -lut 21600 "$kc"
+          security unlock-keychain -p "$kp" "$kc"
+          security import "$RUNNER_TEMP/sign.p12" -k "$kc" -P "$P12_PASS" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$kp" "$kc" >/dev/null
+          security list-keychains -d user -s "$kc" $(security list-keychains -d user | tr -d '"')
+          rm "$RUNNER_TEMP/sign.p12"
+          id=$(./desktop/sign-id.sh)
+          [ "$id" = "Gerdr Local Signing" ] || { echo "the identity in Secrets isn't 'Gerdr Local Signing': $id"; exit 1; }
       # One dmg each for Apple silicon and Intel (Gerdr-<version>-mac-arm64.dmg / -mac-x64.dmg, named in build.sh). No
-      # Apple developer certificate: the App gets an ad-hoc signature before the dmg is made (desktop/adhoc-sign.js),
-      # so the first open needs right-click → Open.
+      # Apple developer certificate: the App is signed with the self-signed identity above (desktop/adhoc-sign.js),
+      # which Gatekeeper treats like ad-hoc, so the first open needs right-click → Open.
       # For real signing + notarization later: put CSC_LINK / CSC_KEY_PASSWORD (and the APPLE_ID ones) in the repo's
       # Secrets and pass them in this step's env
       - if: needs.plan.outputs.dmg == 'build'
         run: ./desktop/build.sh mac ${{ needs.plan.outputs.version }}
       - if: needs.plan.outputs.dmg == 'reuse'
         run: ./desktop/build.sh mac-backend ${{ needs.plan.outputs.version }}
+      # The update-only backends must carry the identity too, or an update voids the grants
+      - name: Check the backends' signature
+        run: |
+          for b in desktop/bin/gerdr-*; do codesign -d -r- "$b" 2>&1 | tee /dev/stderr | grep -q 'certificate leaf' || exit 1; done
       - run: mv desktop/dist/gerdr-*-darwin-*.br . && (mv desktop/dist/Gerdr-*-mac-*.dmg . 2>/dev/null || true)
       # Check the App inside each dmg is fully signed: a download of one that isn't opens as "damaged" (v0.2.0 shipped
       # like that)
@@ -104,7 +130,7 @@ jobs:
         run: |
           for d in Gerdr-*-mac-*.dmg; do
             m=$(hdiutil attach -nobrowse -readonly "$d" | tail -1 | awk -F'\t' '{print $NF}')
-            codesign --verify --deep --strict "$m/Gerdr.app" && echo "$d ok"; r=$?
+            codesign --verify --deep --strict "$m/Gerdr.app" && codesign -d -r- "$m/Gerdr.app/Contents/Resources/gerdr" 2>&1 | grep -q 'certificate leaf' && echo "$d ok"; r=$?
             hdiutil detach -quiet "$m"
             [ $r -eq 0 ] || exit 1
           done
