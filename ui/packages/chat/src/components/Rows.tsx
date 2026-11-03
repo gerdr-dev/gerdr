@@ -178,6 +178,9 @@ export function buildRows(
   }
   msgs.forEach((m, mi) => {
     if (m.role === "user") {
+      // Nothing said, only `!` output went along (an empty send after a command, see Composer.shellReady): the command
+      // block above already shows what was sent, so the message gets no row (an empty one still takes the row's spacing)
+      if (!m.parts.some((p) => (p.type === "text" && p.text) || p.type === "file")) return;
       const last = rows[rows.length - 1];
       const prev = last?.kind === "user";
       if (prev) rows[rows.length - 1] = { ...last, next: true };
