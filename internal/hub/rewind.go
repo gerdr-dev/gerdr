@@ -26,6 +26,9 @@ type EscapeResult struct {
 	Withdrawn  int               `json:"withdrawn,omitempty"`  // 收回了几条还没被处理的插话
 }
 
+// rewoundKeep caps Record.Rewound: a long-lived tab rewound many times shouldn't grow its record without end.
+const rewoundKeep = 50
+
 // Escape：和 Claude Code 里按 Esc 一样 —— 打断这一轮，还没被 agent 用上的话放回输入框：
 //   - 这一轮 agent 一个字都还没回：打断，整条消息连同后面的插话撤回（对话回到发之前），原话放回去；
 //   - agent 已经在回了：最后那几条它还没处理的插话，先收回（claude 的 cancel_async_message）再打断 ——
@@ -277,6 +280,12 @@ func (s *Session) Rewind(ctx context.Context, messageID string) (RewindResult, e
 	}
 	if res.SessionId != "" && string(res.SessionId) != agentSID {
 		s.h.rekey(s, string(res.SessionId))
+		s.mu.Lock()
+		s.rec.Rewound = append(s.rec.Rewound, agentSID)
+		if n := len(s.rec.Rewound); n > rewoundKeep {
+			s.rec.Rewound = s.rec.Rewound[n-rewoundKeep:]
+		}
+		s.mu.Unlock()
 	}
 	if res.Fork != nil {
 		s.mu.Lock()

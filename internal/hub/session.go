@@ -44,6 +44,10 @@ type Record struct {
 	// Fork：回退出来、agent 还没写出记录的会话从哪儿来（acpx.RewindResponse.Fork）。接回会话时带给 agent：
 	// 它重启过的话自己记的就没了，起成一个空会话，前面的对话全丢。换 id 时清掉（rekey）；agent 那边记录有了就不再理它。
 	Fork *acpx.PendingFork `json:"fork,omitempty"`
+	// Rewound: agent session ids this session left behind by rewinding (claude forks a new session and the old one stays
+	// on disk). They are this conversation's past, not conversations of their own, so the resume list (ListImportable)
+	// must not offer them; it used to, under their first message as a title. The most recent rewoundKeep only.
+	Rewound []string `json:"rewound,omitempty"`
 	// Cleared: legacy. Indexes written before /clear split the old conversation into its own session (clear.go) list
 	// the agent session ids this tab had before each /clear here; migrateCleared turns them into sessions on load.
 	Cleared []ClearedCtx `json:"cleared,omitempty"`

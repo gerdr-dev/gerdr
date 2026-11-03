@@ -115,3 +115,12 @@ func TestHandoffLong(t *testing.T) {
 		t.Fatalf("too long: %d", n)
 	}
 }
+
+func TestHandoffTitle(t *testing.T) {
+	if got := handoffTitle(`<gerdr-handoff from="Claude Native"> The user started thi`); got != "接着 Claude Native 的对话" {
+		t.Fatalf("handoff title: %q", got)
+	}
+	if got := handoffTitle("登录页打不开"); got != "登录页打不开" {
+		t.Fatalf("plain title changed: %q", got)
+	}
+}

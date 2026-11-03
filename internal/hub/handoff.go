@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"unicode/utf8"
 
@@ -54,6 +55,20 @@ func isHandoffBlock(raw json.RawMessage) bool {
 		Text string `json:"text"`
 	}
 	return json.Unmarshal(raw, &b) == nil && b.Type == "text" && strings.HasPrefix(b.Text, handoffPrefix)
+}
+
+var handoffFrom = regexp.MustCompile(`^<gerdr-handoff from="([^"]*)">`)
+
+// handoffTitle fixes the title an agent lists for one of its sessions (ListImportable). The agent titles a session
+// after its first message, which for a handed-over conversation is the handoff block, so the resume list showed
+// "<gerdr-handoff from=…> The user started this…". The listed title is already cut short, with nothing the user wrote
+// left in it, so all there is to say is whose conversation it carries on.
+func handoffTitle(title string) string {
+	m := handoffFrom.FindStringSubmatch(strings.TrimSpace(title))
+	if m == nil {
+		return title
+	}
+	return fmt.Sprintf(i18n.S("接着 %s 的对话", "Continued from %s"), m[1])
 }
 
 // continueFrom is Create with o.ContinueFrom set: a new session for o.Agent carrying on the conversation of another

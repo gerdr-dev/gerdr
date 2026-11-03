@@ -957,16 +957,39 @@ func (h *Hub) ListImportable(ctx context.Context, agent, cwd string) ([]acp.Sess
 	if err != nil {
 		return nil, err
 	}
-	// Skip ones already in gerdr (that includes conversations a /clear split off: clear.go)
+	return h.importable(agent, res.Sessions), nil
+}
+
+// importable drops from an agent's session list the ones already in gerdr (that includes conversations a /clear split
+// off: clear.go) and the ones a rewind left behind (Record.Rewound; Fork.From is one too, for records saved before
+// Rewound existed), and fixes titles that are a handoff block.
+func (h *Hub) importable(agent string, list []acp.SessionInfo) []acp.SessionInfo {
 	h.mu.Lock()
+	defer h.mu.Unlock()
+	rewound := map[string]bool{}
+	for _, s := range h.sessions {
+		s.mu.Lock()
+		if s.rec.Agent == agent {
+			for _, id := range s.rec.Rewound {
+				rewound[id] = true
+			}
+			if s.rec.Fork != nil && s.rec.Fork.From != "" {
+				rewound[s.rec.Fork.From] = true
+			}
+		}
+		s.mu.Unlock()
+	}
 	var out []acp.SessionInfo
-	for _, si := range res.Sessions {
-		if h.byAgent[agent+":"+string(si.SessionId)] == nil {
+	for _, si := range list {
+		if h.byAgent[agent+":"+string(si.SessionId)] == nil && !rewound[string(si.SessionId)] {
+			if si.Title != nil {
+				t := handoffTitle(*si.Title)
+				si.Title = &t
+			}
 			out = append(out, si)
 		}
 	}
-	h.mu.Unlock()
-	return out, nil
+	return out
 }
 
 func normCwd(p string) (string, error) {

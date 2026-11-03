@@ -5,6 +5,10 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/coder/acp-go-sdk"
+
+	"github.com/gerdr-dev/gerdr/acpx"
 )
 
 func msg(id, text string) *Event {
@@ -142,5 +146,23 @@ func TestMigrateCleared(t *testing.T) {
 	}
 	if len(h2.sessions) != 4 || !eq(texts(h2.sessions["A"].Events()), []string{"/clear", "现在的事"}) {
 		t.Fatal("second load differs")
+	}
+}
+
+// The resume list leaves out sessions in gerdr and the agent sessions a rewind left behind.
+func TestImportableSkipsRewound(t *testing.T) {
+	h, err := New(Options{Dir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.register(newSession(h, Record{ID: "a", Agent: "claude", AgentSessionID: "live", Rewound: []string{"r1"}}))
+	h.register(newSession(h, Record{ID: "b", Agent: "claude", AgentSessionID: "live2", Fork: &acpx.PendingFork{From: "r2"}}))
+	var list []acp.SessionInfo
+	for _, id := range []string{"live", "r1", "r2", "other"} {
+		list = append(list, acp.SessionInfo{SessionId: acp.SessionId(id)})
+	}
+	out := h.importable("claude", list)
+	if len(out) != 1 || out[0].SessionId != "other" {
+		t.Fatalf("importable: %+v", out)
 	}
 }
