@@ -2,13 +2,18 @@
 // from another device (a phone through the relay), e.g. to open an app and type its password. Not a remote desktop:
 // one still frame at a time, refreshed after each action, which is all that needs.
 //
-// macOS only (screen_darwin.go). The screenshot is /usr/sbin/screencapture; the input is CoreGraphics events posted
-// from this process, called through purego (no cgo: the release builds cross-compile). Both need a privacy grant
+// macOS only (screen_darwin.go). The screenshot is CGDisplayCreateImage (screencapture as a fallback), shrunk and
+// diffed here (scale.go, diff.go); the input is CoreGraphics events posted from this process. CoreGraphics is
+// called through purego (no cgo: the release builds cross-compile). Both need a privacy grant
 // for the process that runs gerdr (Screen Recording, Accessibility). gerdr is ad-hoc signed, and TCC keys an
 // ad-hoc binary's grant by its hash, so a new backend may need granting again: Status says so, the UI shows it.
 package screen
 
-import "errors"
+import (
+	"bytes"
+	"errors"
+	"image/jpeg"
+)
 
 // Status is what the UI needs to say why it can't work yet.
 type Status struct {
@@ -56,4 +61,18 @@ func Do(in Input) error {
 
 func clamp(f float64) float64 {
 	return max(0, min(1, f))
+}
+
+// Capture is one whole JPEG of the main display, no wider than maxWidth, at quality q (the plain HTTP endpoint;
+// the viewer streams diffs instead).
+func Capture(maxWidth, q int) ([]byte, error) {
+	m, err := Grab(maxWidth)
+	if err != nil {
+		return nil, err
+	}
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, m, &jpeg.Options{Quality: max(1, min(100, q))}); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }

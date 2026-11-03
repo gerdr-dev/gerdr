@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"image/jpeg"
+	"image"
 	"image/png"
 	"os"
 	"os/exec"
@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 	"unicode/utf16"
+	"unsafe"
 
 	"github.com/ebitengine/purego"
 )
@@ -42,6 +43,24 @@ var (
 	cgPreflightPost      func() bool
 	cgRequestPost        func() bool
 	cfRelease            func(uintptr)
+	cgEventCreate        func(src uintptr) uintptr
+	cgEventGetLocation   func(ev uintptr) cgPoint
+
+	// Grabbing pixels in-process (~20 ms for a 4K screen against screencapture's ~130 ms plus a file round trip).
+	// CGDisplayCreateImage is deprecated in favour of ScreenCaptureKit (an async Objective-C API, out of reach
+	// without cgo) but still exported on macOS 26; when it goes, cgDisplayCreateImage stays nil and Grab falls
+	// back to screencapture.
+	cgDisplayCreateImage   func(display uint32) uintptr
+	cgImageGetWidth        func(uintptr) uint64
+	cgImageGetHeight       func(uintptr) uint64
+	cgImageGetBytesPerRow  func(uintptr) uint64
+	cgImageGetBitsPerPixel func(uintptr) uint64
+	cgImageGetBitsPerComp  func(uintptr) uint64
+	cgImageGetBitmapInfo   func(uintptr) uint32
+	cgImageGetDataProvider func(uintptr) uintptr
+	cgDataProviderCopyData func(uintptr) uintptr
+	cfDataGetBytePtr       func(uintptr) unsafe.Pointer
+	cfDataGetLength        func(uintptr) int64
 )
 
 func load() error {
@@ -79,6 +98,21 @@ func load() error {
 		purego.RegisterLibFunc(&cgPreflightPost, cg, "CGPreflightPostEventAccess")
 		purego.RegisterLibFunc(&cgRequestPost, cg, "CGRequestPostEventAccess")
 		purego.RegisterLibFunc(&cfRelease, cf, "CFRelease")
+		purego.RegisterLibFunc(&cgEventCreate, cg, "CGEventCreate")
+		purego.RegisterLibFunc(&cgEventGetLocation, cg, "CGEventGetLocation")
+		if _, err := purego.Dlsym(cg, "CGDisplayCreateImage"); err == nil {
+			purego.RegisterLibFunc(&cgDisplayCreateImage, cg, "CGDisplayCreateImage")
+			purego.RegisterLibFunc(&cgImageGetWidth, cg, "CGImageGetWidth")
+			purego.RegisterLibFunc(&cgImageGetHeight, cg, "CGImageGetHeight")
+			purego.RegisterLibFunc(&cgImageGetBytesPerRow, cg, "CGImageGetBytesPerRow")
+			purego.RegisterLibFunc(&cgImageGetBitsPerPixel, cg, "CGImageGetBitsPerPixel")
+			purego.RegisterLibFunc(&cgImageGetBitsPerComp, cg, "CGImageGetBitsPerComponent")
+			purego.RegisterLibFunc(&cgImageGetBitmapInfo, cg, "CGImageGetBitmapInfo")
+			purego.RegisterLibFunc(&cgImageGetDataProvider, cg, "CGImageGetDataProvider")
+			purego.RegisterLibFunc(&cgDataProviderCopyData, cg, "CGDataProviderCopyData")
+			purego.RegisterLibFunc(&cfDataGetBytePtr, cf, "CFDataGetBytePtr")
+			purego.RegisterLibFunc(&cfDataGetLength, cf, "CFDataGetLength")
+		}
 	})
 	return loadErr
 }
@@ -138,11 +172,17 @@ func RequestAccess() Status {
 	return st
 }
 
-var lastWake time.Time
+var (
+	wakeMu   sync.Mutex
+	lastWake time.Time
+)
 
 // wake declares user activity so a display that went to sleep lights up: otherwise the screenshot is black and
-// the user can't tell why. At most every 20s (it starts a process).
+// the user can't tell why. While someone watches, this also keeps it from dimming. At most every 20s (it starts
+// a process).
 func wake() {
+	wakeMu.Lock()
+	defer wakeMu.Unlock()
 	if time.Since(lastWake) < 20*time.Second {
 		return
 	}
@@ -153,20 +193,71 @@ func wake() {
 	}
 }
 
-// Capture returns the main display as a JPEG no wider than maxWidth pixels (0 = as captured) at the given JPEG
-// quality (1..100). It is always re-encoded: screencapture's own JPEG is near-lossless (MBs for a Retina screen), so
-// a display already narrower than maxWidth (a low-res external one) would otherwise go out uncompressed.
-func Capture(maxWidth, quality int) ([]byte, error) {
+// Grab captures the main display shrunk to at most maxWidth pixels wide (0 = full size).
+func Grab(maxWidth int) (*image.RGBA, error) {
 	if err := load(); err != nil {
 		return nil, err
 	}
 	if !cgPreflightCapture() {
 		return nil, errors.New("Screen Recording isn't granted to Gerdr")
 	}
-	quality = max(1, min(100, quality))
-	mu.Lock()
 	wake()
-	mu.Unlock()
+	if m, ok := grabCG(maxWidth); ok {
+		return m, nil
+	}
+	return grabScreencapture(maxWidth)
+}
+
+// CGBitmapInfo bits (CGImage.h)
+const (
+	alphaMask      = 0x1f
+	alphaLast      = 3 // kCGImageAlphaNoneSkipLast / PremultipliedLast / Last: 1, 3, 5
+	byteOrderMask  = 0x7000
+	byteOrder32Lit = 2 << 12
+)
+
+func grabCG(maxWidth int) (*image.RGBA, bool) {
+	if cgDisplayCreateImage == nil {
+		return nil, false
+	}
+	img := cgDisplayCreateImage(cgMainDisplayID())
+	if img == 0 {
+		return nil, false
+	}
+	defer cfRelease(img)
+	if cgImageGetBitsPerPixel(img) != 32 || cgImageGetBitsPerComp(img) != 8 {
+		return nil, false // HDR (16-bit / float) buffers: let screencapture convert them
+	}
+	data := cgDataProviderCopyData(cgImageGetDataProvider(img))
+	if data == 0 {
+		return nil, false
+	}
+	defer cfRelease(data)
+	w, h, stride := int(cgImageGetWidth(img)), int(cgImageGetHeight(img)), int(cgImageGetBytesPerRow(img))
+	n := int(cfDataGetLength(data))
+	if w == 0 || h == 0 || n < stride*(h-1)+w*4 {
+		return nil, false
+	}
+	// Read in place: shrink copies out what it needs before data is released
+	src := raw{pix: unsafe.Slice((*byte)(cfDataGetBytePtr(data)), n), w: w, h: h, stride: stride}
+	info := cgImageGetBitmapInfo(img)
+	alpha := info & alphaMask
+	last := alpha == 1 || alpha == 3 || alpha == 5
+	little := info&byteOrderMask == byteOrder32Lit
+	switch {
+	case little && !last: // B G R A in memory: the usual screen buffer
+		src.r, src.g, src.b = 2, 1, 0
+	case little && last: // A B G R
+		src.r, src.g, src.b = 3, 2, 1
+	case !little && !last: // A R G B
+		src.r, src.g, src.b = 1, 2, 3
+	default: // R G B A
+		src.r, src.g, src.b = 0, 1, 2
+	}
+	return shrink(src, maxWidth), true
+}
+
+func grabScreencapture(maxWidth int) (*image.RGBA, error) {
 	f, err := os.CreateTemp("", "gerdr-screen-*.png")
 	if err != nil {
 		return nil, err
@@ -174,37 +265,38 @@ func Capture(maxWidth, quality int) ([]byte, error) {
 	p := f.Name()
 	f.Close()
 	defer os.Remove(p)
-	// -x no sound, -m main display only, -C with the mouse pointer (where the last click landed). PNG: lossless,
-	// so the one lossy step is ours.
-	if out, err := exec.Command("/usr/sbin/screencapture", "-x", "-m", "-C", "-t", "png", p).CombinedOutput(); err != nil {
+	// -x no sound, -m main display only
+	if out, err := exec.Command("/usr/sbin/screencapture", "-x", "-m", "-t", "png", p).CombinedOutput(); err != nil {
 		return nil, fmt.Errorf("screencapture: %v %s", err, strings.TrimSpace(string(out)))
 	}
-	src, err := os.Open(p)
+	b, err := os.ReadFile(p)
 	if err != nil {
 		return nil, err
 	}
-	cfg, err := png.DecodeConfig(src)
-	src.Close()
+	m, err := png.Decode(bytes.NewReader(b))
 	if err != nil {
 		return nil, fmt.Errorf("screencapture wrote no image: %v", err)
 	}
-	args := []string{"-s", "format", "jpeg", "-s", "formatOptions", fmt.Sprint(quality)}
-	if maxWidth > 0 && cfg.Width > maxWidth {
-		args = append([]string{"-z", fmt.Sprint(cfg.Height * maxWidth / cfg.Width), fmt.Sprint(maxWidth)}, args...)
+	return shrink(fromImage(m), maxWidth), nil
+}
+
+// Cursor is where the pointer is, as fractions of the main display; ok is false when it is on another display.
+func Cursor() (fx, fy float64, ok bool) {
+	if load() != nil {
+		return 0, 0, false
 	}
-	out := p + ".jpg"
-	defer os.Remove(out)
-	if b, err := exec.Command("/usr/bin/sips", append(args, p, "--out", out)...).CombinedOutput(); err != nil {
-		return nil, fmt.Errorf("sips: %v %s", err, strings.TrimSpace(string(b)))
+	ev := cgEventCreate(0)
+	if ev == 0 {
+		return 0, 0, false
 	}
-	b, err := os.ReadFile(out)
-	if err != nil {
-		return nil, err
+	p := cgEventGetLocation(ev)
+	cfRelease(ev)
+	b := cgDisplayBounds(cgMainDisplayID())
+	if b.Size.W <= 0 || b.Size.H <= 0 {
+		return 0, 0, false
 	}
-	if _, err := jpeg.DecodeConfig(bytes.NewReader(b)); err != nil {
-		return nil, fmt.Errorf("sips wrote no image: %v", err)
-	}
-	return b, nil
+	fx, fy = (p.X-b.Origin.X)/b.Size.W, (p.Y-b.Origin.Y)/b.Size.H
+	return fx, fy, fx >= 0 && fx <= 1 && fy >= 0 && fy <= 1
 }
 
 func ready() error {

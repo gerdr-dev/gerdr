@@ -18,6 +18,7 @@ func TestScreenOff(t *testing.T) {
 	for _, c := range []struct{ method, path, body string }{
 		{"GET", "/api/screen/shot", ""},
 		{"POST", "/api/screen/input", `{"kind":"text","text":"x"}`},
+		{"GET", "/api/screen/stream", ""},
 	} {
 		w := httptest.NewRecorder()
 		mux.ServeHTTP(w, httptest.NewRequest(c.method, c.path, strings.NewReader(c.body)))

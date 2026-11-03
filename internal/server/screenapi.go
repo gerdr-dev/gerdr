@@ -56,6 +56,7 @@ func (s *Server) screenRoutes(mux *http.ServeMux) {
 		}
 		writeJSON(w, map[string]any{"ok": true})
 	})
+	mux.HandleFunc("GET /api/screen/stream", s.screenStream)
 	mux.HandleFunc("POST /api/screen/request-access", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, s.screenStatus(screen.RequestAccess()))
 	})

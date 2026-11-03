@@ -146,9 +146,26 @@ widen it: no directory links, no reuse across files, no extending the life.
 ## Remote screen (Labs)
 
 Settings → Labs → "Control this computer remotely" (`config.remoteScreen`, off by default): a phone sees the Mac's
-main display and clicks / types on it, for the odd "open that app and type its password" job. Not a remote desktop:
-one JPEG per request (`GET /api/screen/shot?w=&q=`), taken again every 3s and right after each action
-(`POST /api/screen/input`). Code: `internal/screen`, `internal/server/screenapi.go`, `ui/src/components/RemoteScreen.tsx`.
+main display and clicks / types on it, for the odd "open that app and type its password" job. Code: `internal/screen`,
+`internal/server/screenapi.go` + `screenstream.go`, `ui/src/components/RemoteScreen.tsx`.
+
+The goal is "the result of a tap shows within ~300 ms", so the picture is streamed, not polled:
+
+- `GET /api/screen/stream` is a WebSocket. Inputs go up on it; after each one the backend captures at +40, 150, 300,
+  600 ms… (`screenBurst`), then once a second. Each capture is diffed against what this viewer already has: the
+  picture (shrunk to the chosen width) is cut into 64 px tiles, each run of changed tiles in a tile row goes out as
+  one JPEG, the page pastes them onto a canvas. Nothing changed = nothing sent (a keepalive every 10 s). More than
+  60% changed = one whole picture. Measured locally on a 4K screen: input → frame 100–180 ms before the relay's
+  round trip, a typing / menu change ~5–20 KB against ~110 KB for the whole picture.
+- Capture is `CGDisplayCreateImage` in-process (~25–40 ms for 3840×2160, no file) instead of `screencapture`
+  (~130 ms + a PNG to decode). It is deprecated (ScreenCaptureKit replaces it, an async ObjC API out of reach without
+  cgo) but exported on macOS 26; it is looked up with `Dlsym` and `screencapture` is the fallback. The grab has no
+  pointer in it, so each frame carries the pointer position and the page draws it.
+- No permessage-deflate on this socket: JPEG doesn't compress and deflating costs CPU on the latency path.
+- Anything that animates (a video, the lock screen's aerial wallpaper, a spinner) is a changed region every second.
+  The lock screen / login window don't take synthetic events from a user process anyway.
+- `GET /api/screen/shot` (one whole JPEG) and `POST /api/screen/input` stay for scripts and as the page's fallback
+  while the socket reconnects.
 
 - **Allowed from remote devices** (that's the point). It adds no power: a paired device can already run anything in
   a terminal. Asking macOS for the grants (`POST /api/screen/request-access`) is local only in `remoteGuard`: its
@@ -158,21 +175,26 @@ one JPEG per request (`GET /api/screen/shot?w=&q=`), taken again every 3s and ri
   `touch-action: pan-x pan-y` so the browser pans with one finger but doesn't zoom the page), ⌃-wheel / trackpad
   pinch on desktop, ± buttons. The spot under the fingers stays put; a click right after a pinch is dropped.
 - Picture quality is per device (localStorage `gerdr.screenQuality`): Data saver 1280px / q45, Standard 1600 / q60,
-  Sharp 2400 / q75; zoomed to 2× or more, at least 2400px wide. screencapture writes PNG and sips always re-encodes,
-  so a display narrower than the target still gets compressed (screencapture's own JPEG is MBs).
-- Screenshot = `/usr/sbin/screencapture -x -m -C` + `sips` to shrink / encode; input = CoreGraphics events posted from the
-  gerdr process via **purego** (no cgo: release builds cross-compile with CGO off). Things that silently fail:
+  Sharp 2400 / q75; zoomed to 2× or more, at least 2400px wide (the page sends `{t:"cfg"}`, the next frame is whole).
+- Input = CoreGraphics events posted from the gerdr process via **purego** (no cgo: release builds cross-compile with CGO off). Things that silently fail:
   - JXA (`osascript -l JavaScript`) can post mouse events, but `CGEventKeyboardSetUnicodeString` through its bridge
     does nothing (the event stays "a"), so typing arbitrary text that way is impossible. That's why purego.
   - `CGEventCreateScrollWheelEvent` is variadic; Apple's arm64 ABI passes variadic args on the stack, which purego's
     plain call doesn't. Use `CGEventCreateScrollWheelEvent2` (macOS 13+).
-  - Without Screen Recording, screencapture fails ("could not create image from display") or shows only the
-    wallpaper; without Accessibility, posted events are dropped with no error. Both are checked up front
+  - Without Screen Recording, capture fails ("could not create image from display") or shows only the wallpaper; without Accessibility, posted events are dropped with no error. Both are checked up front
     (`CGPreflightScreenCaptureAccess`, `CGPreflightPostEventAccess`) so the UI can say which is missing.
-- TCC grants go to the *responsible* process: the gerdr binary when it runs as the launchd service, Gerdr.app when
-  the App started the backend. gerdr is ad-hoc signed (identifier `a.out`), and TCC keys an ad-hoc binary by its
-  hash, so **a new backend may lose both grants** and the user has to switch them on again. A Developer ID
-  signature would fix it.
+- TCC grants go to the *responsible* process. With the background service on, port 7870 is served by the launchd
+  job `gerdr --service` (the App's `gerdr --app` only attaches to it), so the grant must name **the `gerdr` binary**
+  (`/Applications/Gerdr.app/Contents/Resources/gerdr`, shown as "gerdr" with a terminal icon), not Gerdr.app;
+  without the service it is Gerdr.app. Both are ad-hoc signed, and an ad-hoc designated requirement is just the
+  cdhash, so **every reinstall / update invalidates both grants while System Settings still shows them on**.
+  Toggling the stale entry does nothing (it stays bound to the old hash): remove it with − and add the binary again
+  with + (⌘⇧G, paste the path). `tccutil reset <Service> io.github.zbysir.gerdr` only clears the App's entries.
+  A fixed signing identity would end this.
+- A process caches what it learned about its grants: after switching Accessibility on, `CGPreflightPostEventAccess`
+  stayed false in the running backend while a fresh process got true; Screen Recording likewise needs a restart.
+  So after granting, the service has to restart (`launchctl kickstart -k gui/$UID/io.github.zbysir.gerdr`, which
+  cuts every running turn: the user does it when idle).
 - Main display only; the lock screen / login window don't take synthetic events from a user process.
 
 ## 没做的

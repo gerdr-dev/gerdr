@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { ArrowDown, ArrowUp, Eye, EyeOff, Minus, Plus, RefreshCw } from "lucide-react";
+import { ArrowDown, ArrowUp, Eye, EyeOff, Minus, MousePointer2, Plus, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -10,9 +10,10 @@ import type { MessageKey } from "@/lib/messages";
 import { closeDialog } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
-// Settings → Labs → Remote screen (backend: internal/screen). Not a remote desktop: a still screenshot, taken again
-// every few seconds and right after each action. Tapping the picture clicks the same spot on the computer; the text
-// box below types into whatever has focus there (an app's password field, say).
+// Settings → Labs → Remote screen (backend: internal/screen, server/screenstream.go). A WebSocket carries the inputs
+// up and the picture down: the backend captures right after each input (60 / 150 / 300 ms… later) and then once a
+// second, and sends only the tiles that changed, which are pasted onto a canvas here. Tapping the picture clicks the
+// same spot on the computer; the text box below types into whatever has focus there (an app's password field, say).
 
 type Mode = "click" | "double" | "right";
 const MODES: { mode: Mode; label: MessageKey }[] = [
@@ -37,7 +38,6 @@ const KEYS: Key[] = [
   { label: "⌘A", key: "a", mods: ["cmd"] },
 ];
 
-const IDLE_REFRESH = 3000;
 // Zoom: 1 = the whole screen fits the box; pinch (touch), ⌃-wheel / trackpad pinch (desktop) or the ± buttons.
 const MIN_SCALE = 1;
 const MAX_SCALE = 8;
@@ -61,11 +61,32 @@ function loadQuality(): Quality {
   }
 }
 
+type Frame = {
+  seq: number;
+  w: number;
+  h: number;
+  full?: boolean;
+  ack: number;
+  cur?: [number, number];
+  rects: [number, number, number, number, number][];
+  err?: string;
+  inputErr?: string;
+};
+
+/** Reads one stream message: a 4-byte big-endian header length, the header JSON, then the rects' JPEGs back to back. */
+function parseFrame(buf: ArrayBuffer): { h: Frame; body: number } {
+  const n = new DataView(buf).getUint32(0);
+  return { h: JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 4, n))) as Frame, body: 4 + n };
+}
+
 export function RemoteScreen({ open }: { open: boolean }) {
   const [st, setSt] = useState<ScreenStatus | null>(null);
-  const [img, setImg] = useState<string | null>(null);
+  const [hasPic, setHasPic] = useState(false);
+  const [size, setSize] = useState<{ w: number; h: number } | null>(null);
+  const [cursor, setCursor] = useState<[number, number] | null>(null);
   const [shotErr, setShotErr] = useState("");
   const [loading, setLoading] = useState(false);
+  const [stats, setStats] = useState<{ ms?: number; kb: number } | null>(null);
   const [mode, setMode] = useState<Mode>("click");
   const [scale, setScaleState] = useState(1);
   const [mark, setMark] = useState<{ x: number; y: number } | null>(null);
@@ -73,29 +94,31 @@ export function RemoteScreen({ open }: { open: boolean }) {
   const [showText, setShowText] = useState(false);
   const [granting, setGranting] = useState(false);
 
-  // One screenshot in flight at a time; asking again meanwhile just takes another when it lands.
-  const busy = useRef(false);
-  const again = useRef(false);
-  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const alive = useRef(false);
-  const imgUrl = useRef<string | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+  const seqRef = useRef(0);
+  const sentAt = useRef(new Map<number, number>()); // input seq → when it was sent (performance.now)
   const scaleRef = useRef(1);
   scaleRef.current = scale;
   const [quality, setQualityState] = useState<Quality>(loadQuality);
   const qualityRef = useRef(quality);
   qualityRef.current = quality;
+  // Zoomed to 2× or more, at least Sharp's width
+  const want = () => {
+    const ql = QUALITY[qualityRef.current];
+    return { w: scaleRef.current >= 2 ? Math.max(ql.w, QUALITY.high.w) : ql.w, q: ql.q };
+  };
   // The picture's box: fitted inside the scroll area (both ways) at zoom 1, then scaled; zoomed in, the area scrolls
   const boxRef = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState({ w: 0, h: 0 });
-  const [aspect, setAspect] = useState(0); // width / height of the screenshot
   useEffect(() => {
     const el = boxRef.current;
     if (!open || !el) return;
     const ro = new ResizeObserver(() => setBox({ w: el.clientWidth, h: el.clientHeight }));
     ro.observe(el);
     return () => ro.disconnect();
-  }, [open, img]);
-  const ar = aspect || (st?.width && st.height ? st.width / st.height : 16 / 10);
+  }, [open, hasPic]);
+  const ar = size ? size.w / size.h : st?.width && st.height ? st.width / st.height : 16 / 10;
   const fitW = box.w && box.h ? Math.min(box.w, box.h * ar) : 0;
 
   // Zooming keeps one spot of the picture under one point on the page (the fingers, the cursor, the box's centre):
@@ -177,52 +200,7 @@ export function RemoteScreen({ open }: { open: boolean }) {
       el.removeEventListener("touchcancel", onEnd);
       el.removeEventListener("wheel", onWheel);
     };
-  }, [open, img !== null, zoomTo]);
-
-  const shoot = useCallback(async () => {
-    if (!alive.current) return;
-    clearTimeout(timer.current);
-    if (busy.current) {
-      again.current = true;
-      return;
-    }
-    busy.current = true;
-    setLoading(true);
-    try {
-      const ql = QUALITY[qualityRef.current];
-      // Zoomed in, a sharper picture is worth the bytes
-      const w = scaleRef.current >= 2 ? Math.max(ql.w, QUALITY.high.w) : ql.w;
-      const res = await fetch(`/api/screen/shot?w=${w}&q=${ql.q}`, { credentials: "same-origin", cache: "no-store" });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || res.statusText);
-      }
-      const url = URL.createObjectURL(await res.blob());
-      if (!alive.current) {
-        URL.revokeObjectURL(url);
-        return;
-      }
-      if (imgUrl.current) URL.revokeObjectURL(imgUrl.current);
-      imgUrl.current = url;
-      setImg(url);
-      setShotErr("");
-    } catch (e) {
-      setShotErr(e instanceof Error ? e.message : String(e));
-    } finally {
-      busy.current = false;
-      setLoading(false);
-    }
-    if (!alive.current) return;
-    if (again.current) {
-      again.current = false;
-      void shoot();
-      return;
-    }
-    timer.current = setTimeout(() => {
-      if (document.visibilityState === "visible") void shoot();
-      else timer.current = setTimeout(() => void shoot(), IDLE_REFRESH);
-    }, IDLE_REFRESH);
-  }, []);
+  }, [open, hasPic, zoomTo]);
 
   const loadStatus = useCallback(
     () =>
@@ -235,38 +213,141 @@ export function RemoteScreen({ open }: { open: boolean }) {
         .catch(() => null),
     [],
   );
-
   useEffect(() => {
     if (!open) return;
-    alive.current = true;
-    void loadStatus().then((s) => {
-      if (s?.enabled && s.screen) void shoot();
-    });
+    void loadStatus();
     return () => {
-      alive.current = false;
-      clearTimeout(timer.current);
-      if (imgUrl.current) URL.revokeObjectURL(imgUrl.current);
-      imgUrl.current = null;
-      setImg(null);
+      setHasPic(false);
+      setSize(null);
+      setCursor(null);
+      setStats(null);
+      setShotErr("");
       setMark(null);
       setText("");
       setScaleState(1);
+      sentAt.current.clear();
     };
-  }, [open, loadStatus, shoot]);
+  }, [open, loadStatus]);
 
   // Waiting on a grant: the user flips it in System Settings, nothing tells us, so ask again every few seconds
   const missing = !!st && (!st.enabled || !st.screen || !st.input);
   useEffect(() => {
     if (!open || !missing) return;
-    const iv = setInterval(
-      () =>
-        void loadStatus().then((s) => {
-          if (s?.enabled && s.screen && !imgUrl.current) void shoot();
-        }),
-      4000,
-    );
+    const iv = setInterval(() => void loadStatus(), 4000);
     return () => clearInterval(iv);
-  }, [open, missing, loadStatus, shoot]);
+  }, [open, missing, loadStatus]);
+
+  // One frame at a time, in order: the rects of a frame decode in parallel, then go onto the canvas together
+  const draw = useCallback(async (buf: ArrayBuffer) => {
+    const { h, body } = parseFrame(buf);
+    if (h.inputErr) toast.error(h.inputErr);
+    if (h.err) {
+      setShotErr(h.err);
+      return;
+    }
+    if (!h.w) return;
+    const cv = canvasRef.current;
+    if (!cv) return;
+    let off = body;
+    const bitmaps = await Promise.all(
+      h.rects.map(([, , , , len]) => {
+        const blob = new Blob([new Uint8Array(buf, off, len)], { type: "image/jpeg" });
+        off += len;
+        return createImageBitmap(blob);
+      }),
+    );
+    if (h.full || cv.width !== h.w || cv.height !== h.h) {
+      cv.width = h.w;
+      cv.height = h.h;
+      setSize({ w: h.w, h: h.h });
+    }
+    const ctx = cv.getContext("2d");
+    h.rects.forEach(([x, y], i) => {
+      ctx?.drawImage(bitmaps[i], x, y);
+      bitmaps[i].close();
+    });
+    setHasPic(true);
+    setShotErr("");
+    setLoading(false);
+    setCursor(h.cur ?? null);
+    // Round trip of the newest input this frame answers with something new on screen
+    if (h.rects.length) {
+      let at = 0;
+      for (const [seq, t0] of sentAt.current) {
+        if (seq <= h.ack) {
+          at = Math.max(at, t0);
+          sentAt.current.delete(seq);
+        }
+      }
+      setStats({ ms: at ? Math.round(performance.now() - at) : undefined, kb: Math.max(1, Math.round(buf.byteLength / 1024)) });
+    }
+  }, []);
+
+  // The stream: open while the dialog is, visible and allowed; reconnects with a backoff
+  const canStream = open && !!st?.enabled && !!st.screen;
+  useEffect(() => {
+    if (!canStream) return;
+    let alive = true;
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    let watchdog: ReturnType<typeof setInterval> | undefined;
+    let backoff = 500;
+    let queue = Promise.resolve();
+    const connect = () => {
+      if (!alive || document.visibilityState !== "visible") return;
+      const { w, q } = want();
+      const ws = new WebSocket(`${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}/api/screen/stream?w=${w}&q=${q}`);
+      ws.binaryType = "arraybuffer";
+      wsRef.current = ws;
+      let last = Date.now();
+      ws.onopen = () => {
+        backoff = 500;
+      };
+      ws.onmessage = (ev) => {
+        last = Date.now();
+        const buf = ev.data as ArrayBuffer;
+        queue = queue.then(() => draw(buf)).catch(() => {});
+      };
+      ws.onclose = () => {
+        if (wsRef.current === ws) wsRef.current = null;
+        clearInterval(watchdog);
+        if (!alive) return;
+        retry = setTimeout(connect, backoff);
+        backoff = Math.min(backoff * 2, 5000);
+      };
+      // The server sends at least every 10 s; silence past 25 s is a dead connection (the phone changed networks)
+      clearInterval(watchdog);
+      watchdog = setInterval(() => {
+        if (Date.now() - last > 25_000) ws.close();
+      }, 5000);
+    };
+    const onVis = () => {
+      if (document.visibilityState === "visible") {
+        if (!wsRef.current) connect();
+      } else wsRef.current?.close();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    connect();
+    return () => {
+      alive = false;
+      clearTimeout(retry);
+      clearInterval(watchdog);
+      document.removeEventListener("visibilitychange", onVis);
+      wsRef.current?.close();
+      wsRef.current = null;
+    };
+  }, [canStream, draw]);
+
+  const sendWS = (m: object) => {
+    const ws = wsRef.current;
+    if (ws?.readyState !== WebSocket.OPEN) return false;
+    ws.send(JSON.stringify(m));
+    return true;
+  };
+  // New size / quality: the server answers with a full frame
+  const zoomedIn = scale >= 2;
+  useEffect(() => {
+    sendWS({ t: "cfg", ...want() });
+  }, [quality, zoomedIn]);
 
   const setQuality = (q: Quality) => {
     setQualityState(q);
@@ -274,22 +355,25 @@ export function RemoteScreen({ open }: { open: boolean }) {
     try {
       localStorage.setItem(QUALITY_KEY, q);
     } catch {}
-    void shoot();
+  };
+  const refresh = () => {
+    if (sendWS({ t: "full" })) setLoading(true);
   };
 
   const send = async (i: ScreenInput) => {
+    const seq = ++seqRef.current;
+    sentAt.current.set(seq, performance.now());
+    if (sendWS({ t: "input", seq, input: i })) return;
+    // Not connected (reconnecting): the plain endpoint still works, the picture catches up on reconnect
     try {
       await api.screenInput(i);
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : String(e));
       void loadStatus();
-      return;
     }
-    // Most UIs react within a few hundred ms; a slow one (an app launching) is caught by the next idle refresh
-    setTimeout(() => void shoot(), 350);
   };
 
-  const onPicture = (e: React.MouseEvent<HTMLImageElement>, right = false) => {
+  const onPicture = (e: React.MouseEvent<HTMLCanvasElement>, right = false) => {
     if (Date.now() - pinchedAt.current < 400) return;
     const r = e.currentTarget.getBoundingClientRect();
     const x = (e.clientX - r.left) / r.width;
@@ -301,6 +385,7 @@ export function RemoteScreen({ open }: { open: boolean }) {
   };
 
   const typeIt = async (enter: boolean) => {
+    // Over the socket both go in order without waiting
     if (text) await send({ kind: "text", text });
     if (enter) await send({ kind: "key", key: "enter" });
     setText("");
@@ -310,10 +395,7 @@ export function RemoteScreen({ open }: { open: boolean }) {
     setGranting(true);
     api
       .screenRequestAccess()
-      .then((s) => {
-        setSt(s);
-        if (s.screen) void shoot();
-      })
+      .then(setSt)
       .catch((e) => toast.error(e instanceof ApiError ? e.message : String(e)))
       .finally(() => setGranting(false));
   };
@@ -393,9 +475,15 @@ export function RemoteScreen({ open }: { open: boolean }) {
                   </option>
                 ))}
               </select>
-              <Button size="icon" variant="ghost" className="size-7" title={t("remoteScreen.refresh")} onClick={() => void shoot()}>
+              <Button size="icon" variant="ghost" className="size-7" title={t("remoteScreen.refresh")} onClick={refresh}>
                 <RefreshCw className={cn("size-4", loading && "animate-spin")} />
               </Button>
+              {/* How long the last input took to show up, and that frame's size: the numbers to watch on a slow link */}
+              {stats && (
+                <span className="text-[11px] tabular-nums text-muted-foreground" title={t("remoteScreen.statsHint")}>
+                  {stats.ms !== undefined ? t("remoteScreen.stats", { ms: stats.ms, kb: stats.kb }) : t("remoteScreen.statsKb", { kb: stats.kb })}
+                </span>
+              )}
             </>
           )}
         </div>
@@ -404,32 +492,35 @@ export function RemoteScreen({ open }: { open: boolean }) {
 
         {/* The picture: fit to the width, zoomed = wider than the box, pan by scrolling */}
         <div ref={boxRef} className="relative flex min-h-0 flex-1 touch-pan-x touch-pan-y overflow-auto overscroll-contain rounded-md border bg-muted/40">
-          {img ? (
-            // m-auto centres it while it fits and lets it scroll from the top-left edge once it doesn't
-            <div ref={picRef} className="relative m-auto shrink-0" style={{ width: fitW ? fitW * scale : "100%" }}>
-              <img
-                src={img}
-                alt=""
-                draggable={false}
-                className="block h-auto w-full cursor-crosshair select-none"
-                onLoad={(e) => e.currentTarget.naturalHeight && setAspect(e.currentTarget.naturalWidth / e.currentTarget.naturalHeight)}
-                onClick={(e) => onPicture(e)}
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  onPicture(e, true);
-                }}
+          {/* The canvas stays mounted (the stream draws into it); hidden until the first frame */}
+          <div ref={picRef} className={cn("relative m-auto shrink-0", !hasPic && "hidden")} style={{ width: fitW ? fitW * scale : "100%" }}>
+            <canvas
+              ref={canvasRef}
+              className="block h-auto w-full cursor-crosshair select-none"
+              onClick={(e) => onPicture(e)}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                onPicture(e, true);
+              }}
+            />
+            {/* Screen grabs don't include the pointer: draw it where the backend says it is */}
+            {cursor && (
+              <MousePointer2
+                className="pointer-events-none absolute size-4 fill-foreground text-background drop-shadow"
+                style={{ left: `${cursor[0] * 100}%`, top: `${cursor[1] * 100}%` }}
               />
-              {mark && (
-                <div
-                  className="pointer-events-none absolute size-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-brand"
-                  style={{ left: `${mark.x * 100}%`, top: `${mark.y * 100}%` }}
-                />
-              )}
-            </div>
-          ) : (
+            )}
+            {mark && (
+              <div
+                className="pointer-events-none absolute size-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-brand"
+                style={{ left: `${mark.x * 100}%`, top: `${mark.y * 100}%` }}
+              />
+            )}
+          </div>
+          {!hasPic && (
             <div className="m-auto p-4 text-center text-[12px] text-muted-foreground">{shotErr || (ready && st?.screen ? t("remoteScreen.loading") : "")}</div>
           )}
-          {img && shotErr && <div className="absolute left-2 top-2 rounded-md bg-background/90 px-2 py-1 text-[12px] text-bad">{shotErr}</div>}
+          {hasPic && shotErr && <div className="absolute left-2 top-2 rounded-md bg-background/90 px-2 py-1 text-[12px] text-bad">{shotErr}</div>}
         </div>
 
         {ready && (
