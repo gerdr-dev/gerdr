@@ -3,6 +3,8 @@ package server
 import (
 	"net/http"
 	"time"
+
+	"github.com/gerdr-dev/gerdr/internal/i18n"
 )
 
 // 后台常驻（launchd，见 internal/service）：设置里那个开关。只在本机口上（remoteGuard 拦着）——
@@ -58,5 +60,27 @@ func (s *Server) serviceRoutes(mux *http.ServeMux) {
 			}
 		}
 		writeJSON(w, map[string]any{"ok": true})
+	})
+}
+
+// restartRoutes: not under serviceRoutes, which only exist with the launchd service around: the App's own backend
+// (background service off) can be restarted too.
+func (s *Server) restartRoutes(mux *http.ServeMux) {
+	// Settings → Versions → "Restart Gerdr": the only way to restart the backend from the UI (the App only swaps in a
+	// new one by itself when nothing is running). busy is what the restart cuts off, for the confirmation.
+	mux.HandleFunc("GET /api/restart", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, map[string]any{"can": s.Restart != nil, "busy": s.busy()})
+	})
+	mux.HandleFunc("POST /api/restart", func(w http.ResponseWriter, r *http.Request) {
+		if s.Restart == nil {
+			httpError(w, http.StatusConflict, i18n.S("这个 Gerdr 是在终端里起的，没人会把它重新拉起来：回那个终端里重启它", "This Gerdr was started in a terminal and nothing would start it again: restart it in that terminal"))
+			return
+		}
+		writeJSON(w, map[string]any{"ok": true})
+		// The answer goes out first, then the shutdown (same as handing over to the service)
+		go func() {
+			time.Sleep(300 * time.Millisecond)
+			s.Restart()
+		}()
 	})
 }

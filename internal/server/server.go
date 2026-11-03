@@ -80,6 +80,10 @@ type Server struct {
 	appUpdate   appUpdate   // the desktop App's update status, relayed by its page for other devices (appupdate.go)
 	// OnServiceInstalled：刚打开后台常驻、本进程是 App 起的后端时让位（见 cmd/gerdr 的 handover）。
 	OnServiceInstalled func()
+	// Restart: shut this process down so it starts again (POST /api/restart). Set only where something brings it
+	// back: the launchd service (KeepAlive) and the App's own backend (the shell restarts it on exitHandover).
+	// nil for a gerdr started in a terminal: nothing would start it again.
+	Restart func()
 }
 
 // cookieName：按令牌区分。cookie 不分端口 —— 同一个浏览器里开着两个 gerdr（正式的 + 调试的，都在 127.0.0.1），
@@ -192,6 +196,7 @@ func (s *Server) Handler() http.Handler {
 	if s.Service != nil {
 		s.serviceRoutes(mux)
 	}
+	s.restartRoutes(mux)
 	if s.Terms != nil {
 		s.termRoutes(mux)
 	}

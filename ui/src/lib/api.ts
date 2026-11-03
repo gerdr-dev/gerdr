@@ -368,6 +368,9 @@ export const api = {
   appUpdateOp: (op: "check" | "apply" | "auto", on?: boolean) => req<{}>("POST", "/api/app-update/op", { op, on: !!on }),
   uiStatus: () => req<UIStatus>("GET", "/api/ui/status"),
   setService: (on: boolean) => req("POST", "/api/service", { on }),
+  /** Settings → "Restart Gerdr": can = something brings it back (service / App), busy = what a restart cuts off */
+  restartInfo: () => req<{ can: boolean; busy: Busy }>("GET", "/api/restart"),
+  restart: () => req("POST", "/api/restart", {}),
   stepUpRequest: () => req<{ id: string; code: string; expires: string }>("POST", "/api/remote/stepup/request", {}),
   stepUpState: (id: string) => req<{ state: "pending" | "approved" | "expired" }>("GET", `/api/remote/stepup/request/${encodeURIComponent(id)}`),
   stepUpPending: () => req<{ requests: StepUpRequest[] }>("GET", "/api/remote/stepup/pending"),
@@ -417,6 +420,7 @@ export type UIStatus = {
   git?: { merging?: boolean; conflicts?: string[]; pending_upstream?: boolean; pending_version?: string; pending_conflicts?: string[] };
 };
 // 后台常驻（launchd）：why 非空 = 这里装不了（不是 mac、调试实例……）；self = 现在答话的就是那个后台服务。
+export type Busy = { version: string; turns: number; waiting: number; tasks: number; terms: number };
 export type ServiceStatus = { why: string; installed: boolean; pid: number; self: boolean; log: string };
 export type StepUpRequest = { id: string; deviceId: string; label: string; code: string; expires: string };
 export type DNSProvider = { name: string; label: string; help: string; fields: { env: string; label: string; secret: boolean }[] };

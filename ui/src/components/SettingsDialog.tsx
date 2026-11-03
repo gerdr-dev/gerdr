@@ -21,6 +21,7 @@ import { MemorySettings } from "./MemorySettings";
 import { RemoteSettings } from "./RemoteSettings";
 import { ResourceStats } from "./ResourceStats";
 import { ServiceSetting } from "./ServiceSetting";
+import { RestartSetting } from "./RestartSetting";
 import { UIUpgradeSetting } from "./UIUpgradeSetting";
 import { UpdateSetting } from "./UpdateSetting";
 
@@ -263,6 +264,7 @@ export function SettingsDialog({ open }: { open: boolean }) {
                 <UpdateSetting />
                 <UIUpgradeSetting />
                 <ServiceSetting />
+                <RestartSetting />
               </Section>
               <Section title={t("settings.import")}>
                 <Row label={t("settings.import.herdr")} hint={t("settings.import.herdr.hint")}>

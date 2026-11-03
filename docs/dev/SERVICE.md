@@ -21,6 +21,15 @@ Updates restart it only when idle (docs/dev/UPDATE.md).
 
 为什么不在打开时「等 App 退出再交接」：那样开关打开后看起来什么都没变，要到 ⌘Q 才生效，还得解释现在是谁在跑。
 
+## Restarting from Settings
+
+Settings → Versions → "Restart Gerdr" (`POST /api/restart`, local port only, `RestartSetting.tsx`): before it the
+UI had no way to restart the backend (the App only swaps one in by itself when idle, ⌘Q leaves the service up). The
+process shuts down like a handover and exits with `exitHandover` (75): launchd starts the service again (KeepAlive;
+within ThrottleInterval, 10s, of its last start it waits that out), the App's shell starts a new backend on 75. A
+gerdr started in a terminal has nobody to start it again, so it has no `Server.Restart` hook and the button says so.
+The UI asks `/api/busy`-style counts at the click and only confirms when something would be cut off.
+
 ## plist 里不放什么
 
 - 不放 `GERDR_TOKEN` 和 DNS 凭据：`launchctl print` 谁都能看。令牌在 `~/.gerdr/token`，DNS 凭据在 `remote.json`，起来自己读。

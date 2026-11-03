@@ -434,6 +434,13 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 		var once sync.Once
 		srv.OnServiceInstalled = func() { once.Do(func() { close(handover) }) }
 	}
+	// Settings → "Restart Gerdr": exit with exitHandover. launchd restarts the service (KeepAlive), the App's shell
+	// starts a new backend on 75 (desktop/main.js). A terminal's gerdr has nobody to start it again: no hook.
+	restart := make(chan struct{})
+	if appMode || serviceMode {
+		var once sync.Once
+		srv.Restart = func() { once.Do(func() { close(restart) }) }
+	}
 	ln, err := server.Listen(env.Host, env.Port)
 	if err != nil && env.Port != 0 {
 		// 默认口被占了（比如上一个实例还没退干净）：换一个空闲的，别起不来。
@@ -489,6 +496,9 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 	case <-handover:
 		handed = true
 		log.Info("background service installed, handing over")
+	case <-restart:
+		handed = true
+		log.Info("restart asked for in Settings")
 	}
 	log.Info("shutting down")
 	stopSvcs()
