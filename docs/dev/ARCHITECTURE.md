@@ -408,6 +408,21 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
   cross on the server (`crossSpace`, using `from` / `near`). Closed conversations belong to no session (`--all` lists them);
   reopening one puts it next to the caller, in the caller's session. This is not a security boundary: an agent has the token
   and can call the API itself. herdr's isn't one either: it's a separate socket.
+- **A conversation over the Work page** (`showSession` in the Work site's gerdr.ts, `WorkPeek` in WorkView.tsx,
+  `store.workPeek`). A page shows a session (a worker it started) in a drawer over itself: the real ChatView with its
+  own pane id, so the draft is separate and the composer takes images / files like anywhere else. Not `openChat`
+  (that makes it the project's Work agent and redirects reportTo "work") nor `openSession` (leaves Work for Code).
+  Why a drawer and not the page copying the reply: a copy showed only the last reply, as plain text, and the user
+  decides by reading back. The page puts a line and buttons above the chat (`label`, `actions`, heard back through
+  `onSessionPanel`): Gerdr gives them no meaning, so a board decides "accept / merge now / go do t16" without Gerdr
+  knowing what a task is. It closes on Esc or a click outside: a transparent layer covers the iframe while open (its
+  clicks never reach gerdr's document), and an Esc pressed inside the page comes as `gerdr:escape` from its bridge.
+  Esc used by the panel first (stopping a turn, the @ menu, a dialog) is left alone (`defaultPrevented`).
+- **Cards for tool results** (`ToolCard.tsx`, `ChatHost.renderTool`, Rows `ownTool`). A tool result carrying
+  `{ gerdrCard: { title, body, tone } }` is drawn as a card. Why: a Work tool putting a step on the user's board
+  showed as one folded "called a tool" row, so the user in that chat never saw what was asked. Tools the host draws
+  itself stay out of "ran N commands" groups (package-level and general: whatever `renderTool` takes over is meant
+  to be seen). The card is static: answering happens where the thing lives (the board), the chat only shows it.
 - **Work tools** (`work/tools.go`, `cmd/gerdr/workmcp.go`, `hub.Options.MCP`). A Work's local functions declared in
   `export const tools` are served to the same sessions that get its skills, over MCP: `gerdr work mcp --project P
   --session S` is a stdio server the hub hands the adapter as a client MCP server on new / resume / load (claude
