@@ -5,7 +5,7 @@ import { Button } from "../ui/button";
 import { cn } from "../utils";
 import { buildRows, type Row, type RowEnv } from "./Rows";
 import { toast } from "sonner";
-import { useChatHost, useChatSettings } from "../host";
+import { hostFor, SessionHost, useChatHost, useChatSettings } from "../host";
 import { t as tr } from "../i18n";
 import { useKept } from "../kept";
 import { Loader2 } from "lucide-react";
@@ -64,7 +64,7 @@ export function ChatView({
   active?: boolean;
   children?: ReactNode;
 }) {
-  const host = useChatHost();
+  const host = hostFor(session.id, useChatHost());
   const settings = useChatSettings();
   const t = host.useTranscript(session.id, sub);
   const subTask = sub ? session.tasks?.find((x) => x.toolCallId === sub) : undefined;
@@ -359,142 +359,144 @@ export function ChatView({
     [session.id, running, sub, steerRewind, host],
   );
   return (
-    <SessionContext.Provider value={session}>
-      <div
-        data-gerdr-chat=""
-        className="relative flex h-full min-h-0 flex-col"
-        onMouseUp={clickToType}
-        onClickCapture={(e) => (e.target as HTMLElement).closest("[aria-expanded]") && hold()}
-        // 文件拖到对话里任何地方都收（不只输入框）：附到输入框里。不接的话浏览器会把文件当页面打开
-        onDragEnter={(e) => {
-          if (sub || !e.dataTransfer.types.includes("Files")) return;
-          dragDepth.current++;
-          setDragging(true);
-        }}
-        onDragOver={(e) => {
-          if (!sub && e.dataTransfer.types.includes("Files")) e.preventDefault();
-        }}
-        onDragLeave={() => {
-          if (dragDepth.current > 0 && --dragDepth.current === 0) setDragging(false);
-        }}
-        onDrop={(e) => {
-          dragDepth.current = 0;
-          setDragging(false);
-          if (sub || !e.dataTransfer.files.length) return;
-          e.preventDefault();
-          // A dropped folder arrives as an empty File whose bytes can't be read: it only works by its local path
-          // (host.localPath). Without one, say so here instead of letting an upload fail with "Failed to fetch".
-          // Entries can only be read during the drop event, so this can't wait for addFiles.
-          const files: File[] = [];
-          for (const it of Array.from(e.dataTransfer.items)) {
-            if (it.kind !== "file") continue;
-            const f = it.getAsFile();
-            if (!f) continue;
-            if (it.webkitGetAsEntry?.()?.isDirectory && !host.localPath?.(f)) toast.error(tr("composer.noFolder", { name: f.name }));
-            else files.push(f);
-          }
-          if (!files.length) return;
-          composer.current?.addFiles(files);
-          composer.current?.focus();
-        }}
-      >
-        {children}
-        {dragging && (
-          <div className="pointer-events-none absolute inset-2 z-30 flex items-center justify-center rounded-xl border-2 border-dashed border-brand/60 bg-background/80 text-sm text-foreground">
-            {tr("composer.dropFiles")}
-          </div>
-        )}
-        <div className="relative min-h-0 flex-1">
-          {!loaded && <div className="py-10 text-center text-[13px] text-muted-foreground">{tr("chat.loading")}</div>}
-          {loaded && msgs.length === 0 && sub && <div className="py-16 text-center text-[13px] text-muted-foreground">{tr("chat.subagentEmpty")}</div>}
-          {loaded && msgs.length === 0 && !sub && (
-            <div className="py-16 text-center text-[13px] text-muted-foreground">
-              <div className="mb-1 text-foreground">{agentName}</div>
-              <div className="font-mono text-[12px]">{session.cwd}</div>
+    <SessionHost sessionId={session.id}>
+      <SessionContext.Provider value={session}>
+        <div
+          data-gerdr-chat=""
+          className="relative flex h-full min-h-0 flex-col"
+          onMouseUp={clickToType}
+          onClickCapture={(e) => (e.target as HTMLElement).closest("[aria-expanded]") && hold()}
+          // 文件拖到对话里任何地方都收（不只输入框）：附到输入框里。不接的话浏览器会把文件当页面打开
+          onDragEnter={(e) => {
+            if (sub || !e.dataTransfer.types.includes("Files")) return;
+            dragDepth.current++;
+            setDragging(true);
+          }}
+          onDragOver={(e) => {
+            if (!sub && e.dataTransfer.types.includes("Files")) e.preventDefault();
+          }}
+          onDragLeave={() => {
+            if (dragDepth.current > 0 && --dragDepth.current === 0) setDragging(false);
+          }}
+          onDrop={(e) => {
+            dragDepth.current = 0;
+            setDragging(false);
+            if (sub || !e.dataTransfer.files.length) return;
+            e.preventDefault();
+            // A dropped folder arrives as an empty File whose bytes can't be read: it only works by its local path
+            // (host.localPath). Without one, say so here instead of letting an upload fail with "Failed to fetch".
+            // Entries can only be read during the drop event, so this can't wait for addFiles.
+            const files: File[] = [];
+            for (const it of Array.from(e.dataTransfer.items)) {
+              if (it.kind !== "file") continue;
+              const f = it.getAsFile();
+              if (!f) continue;
+              if (it.webkitGetAsEntry?.()?.isDirectory && !host.localPath?.(f)) toast.error(tr("composer.noFolder", { name: f.name }));
+              else files.push(f);
+            }
+            if (!files.length) return;
+            composer.current?.addFiles(files);
+            composer.current?.focus();
+          }}
+        >
+          {children}
+          {dragging && (
+            <div className="pointer-events-none absolute inset-2 z-30 flex items-center justify-center rounded-xl border-2 border-dashed border-brand/60 bg-background/80 text-sm text-foreground">
+              {tr("composer.dropFiles")}
             </div>
           )}
-          {loaded && msgs.length > 0 && (
-            <ChatList
-              ref={list}
-              rows={rows}
-              env={env}
-              older={older}
-              firstIdx={firstIdx.current}
-              memKey={scrollKey}
-              all={!virtualList}
-              startTop={saved && !saved.bottom ? saved.top : undefined}
-              holding={holding}
-              scrollerRef={(el) => (scrollerEl.current = el)}
-              onScroll={(el) => {
-                if (!activeRef.current) return; // 藏着期间的滚动（WebKit 清零）不算
-                scrollMem.set(scrollKey, { top: el.scrollTop, bottom: bottomRef.current });
-                updatePinned();
-                nearTop(el);
-              }}
-              onAtBottom={(b) =>
-                // Can come from a layout pass while React renders: set state after
-                queueMicrotask(() => {
-                  if (b === bottomRef.current) return;
-                  bottomRef.current = b;
-                  setAtBottom(b);
-                })
-              }
-              onLayout={() => {
-                updatePinned();
-                const el = scrollerEl.current;
-                // Not a screenful yet (nothing to scroll, so no onScroll): keep loading older
-                if (el && activeRef.current && el.scrollHeight <= el.clientHeight + 50) nearTop(el);
-              }}
-            />
-          )}
-          {pinned !== null && rows[pinned]?.kind === "user" && (
-            <PinnedPrompt
-              msg={(rows[pinned] as Extract<Row, { kind: "user" }>).msg}
-              onClick={() => {
-                list.current?.scrollToIndex({ index: pinned, align: "start", behavior: "smooth" });
-              }}
-            />
-          )}
-          {find > 0 && <FindBar rows={rows} list={list} scroller={scrollerEl} seq={find} older={older} loadOlder={t.loadOlder} onClose={closeFind} />}
-          {!atBottom && msgs.length > 0 && (
-            <Button
-              size="icon"
-              variant="outline"
-              className={cn(
-                "absolute bottom-4 left-1/2 size-8 -translate-x-1/2 rounded-full shadow-md",
-                // dark: variants too, or the outline variant's dark:border-input wins in the dark theme.
-                unread && "border-brand text-brand hover:text-brand dark:border-brand",
-              )}
-              onClick={() => list.current?.scrollToIndex({ index: "LAST", align: "end", behavior: "smooth" })}
-              title={unread ? tr("chat.toBottomNew") : tr("chat.toBottom")}
-            >
-              <ArrowDown className="size-4" />
-            </Button>
+          <div className="relative min-h-0 flex-1">
+            {!loaded && <div className="py-10 text-center text-[13px] text-muted-foreground">{tr("chat.loading")}</div>}
+            {loaded && msgs.length === 0 && sub && <div className="py-16 text-center text-[13px] text-muted-foreground">{tr("chat.subagentEmpty")}</div>}
+            {loaded && msgs.length === 0 && !sub && (
+              <div className="py-16 text-center text-[13px] text-muted-foreground">
+                <div className="mb-1 text-foreground">{agentName}</div>
+                <div className="font-mono text-[12px]">{session.cwd}</div>
+              </div>
+            )}
+            {loaded && msgs.length > 0 && (
+              <ChatList
+                ref={list}
+                rows={rows}
+                env={env}
+                older={older}
+                firstIdx={firstIdx.current}
+                memKey={scrollKey}
+                all={!virtualList}
+                startTop={saved && !saved.bottom ? saved.top : undefined}
+                holding={holding}
+                scrollerRef={(el) => (scrollerEl.current = el)}
+                onScroll={(el) => {
+                  if (!activeRef.current) return; // 藏着期间的滚动（WebKit 清零）不算
+                  scrollMem.set(scrollKey, { top: el.scrollTop, bottom: bottomRef.current });
+                  updatePinned();
+                  nearTop(el);
+                }}
+                onAtBottom={(b) =>
+                  // Can come from a layout pass while React renders: set state after
+                  queueMicrotask(() => {
+                    if (b === bottomRef.current) return;
+                    bottomRef.current = b;
+                    setAtBottom(b);
+                  })
+                }
+                onLayout={() => {
+                  updatePinned();
+                  const el = scrollerEl.current;
+                  // Not a screenful yet (nothing to scroll, so no onScroll): keep loading older
+                  if (el && activeRef.current && el.scrollHeight <= el.clientHeight + 50) nearTop(el);
+                }}
+              />
+            )}
+            {pinned !== null && rows[pinned]?.kind === "user" && (
+              <PinnedPrompt
+                msg={(rows[pinned] as Extract<Row, { kind: "user" }>).msg}
+                onClick={() => {
+                  list.current?.scrollToIndex({ index: pinned, align: "start", behavior: "smooth" });
+                }}
+              />
+            )}
+            {find > 0 && <FindBar rows={rows} list={list} scroller={scrollerEl} seq={find} older={older} loadOlder={t.loadOlder} onClose={closeFind} />}
+            {!atBottom && msgs.length > 0 && (
+              <Button
+                size="icon"
+                variant="outline"
+                className={cn(
+                  "absolute bottom-4 left-1/2 size-8 -translate-x-1/2 rounded-full shadow-md",
+                  // dark: variants too, or the outline variant's dark:border-input wins in the dark theme.
+                  unread && "border-brand text-brand hover:text-brand dark:border-brand",
+                )}
+                onClick={() => list.current?.scrollToIndex({ index: "LAST", align: "end", behavior: "smooth" })}
+                title={unread ? tr("chat.toBottomNew") : tr("chat.toBottom")}
+              >
+                <ArrowDown className="size-4" />
+              </Button>
+            )}
+          </div>
+          {sub ? (
+            <div className="flex items-center justify-center gap-2 border-t px-3 py-2 text-[12px] text-muted-foreground">
+              {running && <Loader2 className="size-3.5 animate-spin" />}
+              {tr("chat.subagentReadOnly")}
+              {subTask && !running ? ` · ${subTask.status === "completed" ? tr("chat.subagentDone") : tr("chat.subagentEnded")}` : ""}
+            </div>
+          ) : (
+            <div className="mx-auto w-full max-w-[800px]">
+              <Composer
+                ref={composer}
+                session={session}
+                paneId={paneId}
+                running={t.running}
+                history={() => olderRef.current.all}
+                shellDone={shellDone}
+                onEmptyEnter={(mod) => {
+                  if (!mod || !t.running) return scrollToEnd();
+                  void sendQueuedNow().then((done) => done || scrollToEnd());
+                }}
+              />
+            </div>
           )}
         </div>
-        {sub ? (
-          <div className="flex items-center justify-center gap-2 border-t px-3 py-2 text-[12px] text-muted-foreground">
-            {running && <Loader2 className="size-3.5 animate-spin" />}
-            {tr("chat.subagentReadOnly")}
-            {subTask && !running ? ` · ${subTask.status === "completed" ? tr("chat.subagentDone") : tr("chat.subagentEnded")}` : ""}
-          </div>
-        ) : (
-          <div className="mx-auto w-full max-w-[800px]">
-            <Composer
-              ref={composer}
-              session={session}
-              paneId={paneId}
-              running={t.running}
-              history={() => olderRef.current.all}
-              shellDone={shellDone}
-              onEmptyEnter={(mod) => {
-                if (!mod || !t.running) return scrollToEnd();
-                void sendQueuedNow().then((done) => done || scrollToEnd());
-              }}
-            />
-          </div>
-        )}
-      </div>
-    </SessionContext.Provider>
+      </SessionContext.Provider>
+    </SessionHost>
   );
 }

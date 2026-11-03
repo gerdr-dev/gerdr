@@ -10,7 +10,7 @@ import { dropShellContext, videoLinkPath, type GMessage } from "../transcript";
 import { isCoarse, keyboardUp, usePhone } from "../device";
 import { askKey } from "../askkeys";
 import { cn } from "../utils";
-import { chatHost, useChatHost, useChatSettings } from "../host";
+import { useChatHost, useChatSettings, type ChatHost } from "../host";
 import { t as tr } from "../i18n";
 import { memoryDrafts, type DraftImage } from "../drafts";
 import { PlayBadge } from "./PlayBadge";
@@ -66,12 +66,12 @@ async function blobData(url: string) {
   });
 }
 
-function toImgs(blocks: ContentBlock[]): Img[] {
+function toImgs(blocks: ContentBlock[], h: ChatHost): Img[] {
   return blocks.flatMap((c): Img[] => {
     if (c.type === "image") return [{ data: c.data, mimeType: c.mimeType, url: `data:${c.mimeType};base64,${c.data}` }];
     if (c.type !== "resource_link") return [];
     const v = videoLinkPath(c);
-    if (v) return [{ data: "", mimeType: "video/*", url: chatHost().fileURL(v), path: v, name: c.name }];
+    if (v) return [{ data: "", mimeType: "video/*", url: h.fileURL(v), path: v, name: c.name }];
     const p = c.uri.replace(/^file:\/\//, "");
     return [{ data: "", mimeType: "application/octet-stream", url: "", path: p, name: c.name || baseName(p) }];
   });
@@ -157,7 +157,7 @@ export const Composer = forwardRef<
     setContent: (blocks0: ContentBlock[]) => {
       const blocks = dropShellContext(blocks0); // `!命令` 带过去的输出不放回来：命令卡片还在对话里，下一条照样带上
       putText(blocks.map((c) => (c.type === "text" ? (c as { text: string }).text : "")).join(""));
-      setImgs(toImgs(blocks));
+      setImgs(toImgs(blocks, host));
     },
     putBack: (blocks: ContentBlock[]) => putBack(blocks),
     ctrlC: () => ctrlC(),
@@ -553,7 +553,7 @@ export const Composer = forwardRef<
       .join("\n\n");
     const cur = drafts.getText(paneId);
     if (back) setText(cur ? `${back}\n\n${cur}` : back);
-    const images = toImgs(blocks);
+    const images = toImgs(blocks, host);
     if (images.length) setImgs((x) => [...images, ...x]);
     ta.current?.focus();
   };

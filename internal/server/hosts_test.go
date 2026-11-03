@@ -9,6 +9,8 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -16,7 +18,6 @@ import (
 	"github.com/gorilla/websocket"
 
 	"github.com/gerdr-dev/gerdr/internal/config"
-	"github.com/gerdr-dev/gerdr/internal/hub"
 	"github.com/gerdr-dev/gerdr/internal/peer"
 	"github.com/gerdr-dev/gerdr/internal/remote"
 )
@@ -30,7 +31,7 @@ func hostPair(t *testing.T) (console *Server, ch http.Handler, hostSrv *Server) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	hostSrv = &Server{Token: "host-token-host-token-host-token-xx", Remote: rm, Hub: reportHub(t)}
+	hostSrv = &Server{Dir: t.TempDir(), Token: "host-token-host-token-host-token-xx", Remote: rm, Hub: reportHub(t), Layout: config.NewStore(filepath.Join(t.TempDir(), "layout.json"), `null`)}
 	hh := hostSrv.Handler()
 	ts := httptest.NewTLSServer(RemoteHandler(hh))
 	t.Cleanup(ts.Close)
@@ -42,11 +43,8 @@ func hostPair(t *testing.T) (console *Server, ch http.Handler, hostSrv *Server) 
 		t.Fatalf("peer code: %d %s", w.Code, w.Body)
 	}
 
-	ch2, err := hub.New(hub.Options{Dir: t.TempDir()})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(ch2.Close)
+	// The console has sessions of its own too (same ids as the host's: they must not get mixed up)
+	ch2 := reportHub(t)
 	pm, err := peer.Open(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -55,7 +53,7 @@ func hostPair(t *testing.T) (console *Server, ch http.Handler, hostSrv *Server) 
 	pm.Route(func(ctx context.Context, network, _ string) (net.Conn, error) {
 		return (&net.Dialer{}).DialContext(ctx, network, addr)
 	}, &tls.Config{InsecureSkipVerify: true})
-	console = &Server{Token: "console-token-console-token-console", Hub: ch2, Peers: pm}
+	console = &Server{Token: "console-token-console-token-console", Hub: ch2, Peers: pm, Layout: config.NewStore(filepath.Join(t.TempDir(), "layout.json"), `null`)}
 	ch = console.Handler()
 	w = do(ch, "POST", "/api/hosts", strings.NewReader(`{"invite":`+mustJSON(code.URL)+`,"name":"mini"}`), hdr("Authorization", "Bearer "+console.Token), csrf)
 	if w.Code != 200 {
@@ -169,4 +167,81 @@ func TestHostWS(t *testing.T) {
 		}
 	}
 	t.Fatal("no events for the host session")
+}
+
+// A host session reporting to a console session: kept on the console (the host can't reach it), shown on the
+// summary here, the host's own same-host target cleared; the reporter can read the host session for the report.
+func TestHostReportTo(t *testing.T) {
+	console, ch, hostSrv := hostPair(t)
+	auth := hdr("Authorization", "Bearer "+console.Token)
+	w := do(ch, "POST", "/api/sessions/mini~w1/meta", strings.NewReader(`{"reportTo":"boss"}`), auth, csrf)
+	if w.Code != 200 || !strings.Contains(w.Body.String(), `"reportTo":"boss"`) {
+		t.Fatalf("meta: %d %s", w.Code, w.Body)
+	}
+	if got := console.Peers.ReportTo("mini~w1"); got != "boss" {
+		t.Fatalf("console-side target: %q", got)
+	}
+	if s, _ := hostSrv.Hub.Session("w1"); s.Summary().ReportTo != "" {
+		t.Fatalf("the host's own target should give way, got %q", s.Summary().ReportTo)
+	}
+	rp := newReporter(console)
+	sum, evs, err := rp.source("mini~w1")
+	if err != nil || sum.ID != "mini~w1" || len(evs) != 3 || lastReply(evs) == "" {
+		t.Fatalf("source: %+v %d %v", sum.ID, len(evs), err)
+	}
+	if st, ok := rp.state("mini~w2"); !ok || st == "" {
+		t.Fatalf("state of a host session: %q %v", st, ok)
+	}
+	// A console session may report to a host session too (Hub.Elsewhere)
+	if w := do(ch, "POST", "/api/sessions/w2/meta", strings.NewReader(`{"reportTo":"mini~boss"}`), auth, csrf); w.Code != 200 {
+		t.Fatalf("console → host target: %d %s", w.Code, w.Body)
+	}
+	// A target on the same host goes back to the host
+	w = do(ch, "POST", "/api/sessions/mini~w1/meta", strings.NewReader(`{"reportTo":"mini~boss"}`), auth, csrf)
+	if w.Code != 200 || console.Peers.ReportTo("mini~w1") != "" {
+		t.Fatalf("same-host target: %d %s", w.Code, w.Body)
+	}
+	if s, _ := hostSrv.Hub.Session("w1"); s.Summary().ReportTo != "boss" {
+		t.Fatalf("host target: %q", s.Summary().ReportTo)
+	}
+}
+
+// Files cross as they are: an upload lands on the host (even one that looks like JSON) and reads back through /h/.
+func TestHostFiles(t *testing.T) {
+	console, ch, _ := hostPair(t)
+	auth := hdr("Authorization", "Bearer "+console.Token)
+	content := `{"from":"x","reportTo":"y"}`
+	w := do(ch, "POST", "/api/fs/upload?host=mini&name=a.json", strings.NewReader(content), auth, csrf, hdr("Content-Type", "application/json"))
+	var up struct{ Path string }
+	if json.Unmarshal(w.Body.Bytes(), &up); w.Code != 200 || up.Path == "" {
+		t.Fatalf("upload: %d %s", w.Code, w.Body)
+	}
+	w = do(ch, "GET", "/h/mini/api/fs/raw?path="+url.QueryEscape(up.Path), nil, auth)
+	if w.Code != 200 || w.Body.String() != content {
+		t.Fatalf("raw: %d %q", w.Code, w.Body.String())
+	}
+	w = do(ch, "GET", "/api/fs/stat?host=mini&path="+url.QueryEscape(up.Path), nil, auth)
+	if w.Code != 200 || !strings.Contains(w.Body.String(), "a.json") {
+		t.Fatalf("stat: %d %s", w.Code, w.Body)
+	}
+}
+
+// `gerdr session open` on a host session opens it on this computer's screen
+func TestHostOpenHere(t *testing.T) {
+	console, ch, _ := hostPair(t)
+	sub := console.Hub.Subscribe()
+	defer console.Hub.Unsubscribe(sub)
+	if w := do(ch, "POST", "/api/sessions/mini~w2/open", strings.NewReader(`{"near":"x"}`), hdr("Authorization", "Bearer "+console.Token), csrf); w.Code != 200 {
+		t.Fatalf("open: %d %s", w.Code, w.Body)
+	}
+	for {
+		select {
+		case m := <-sub.C():
+			if b, _ := json.Marshal(m); m.T == "open" && strings.Contains(string(b), "mini~w2") {
+				return
+			}
+		case <-time.After(3 * time.Second):
+			t.Fatal("no open broadcast here")
+		}
+	}
 }

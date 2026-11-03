@@ -31,7 +31,7 @@ type Dialog =
   | { kind: "importAgent"; agent: string; cwd: string; paneId: string }
   | { kind: "resume"; sessionId: string; paneId: string }
   | { kind: "file"; stat: FileStat }
-  | { kind: "pickFile"; path: string; candidates: string[]; beside?: boolean }
+  | { kind: "pickFile"; path: string; candidates: string[]; beside?: boolean; host?: string }
   | null;
 
 type State = {

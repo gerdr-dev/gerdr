@@ -222,13 +222,14 @@ func (u *Upstream) rewrite(msg map[string]json.RawMessage) json.RawMessage {
 	}
 	switch t {
 	case "session":
-		if s := RewriteSummary(h, msg["session"]); s != nil {
+		if s := u.m.RewriteSummary(h, msg["session"]); s != nil {
 			msg["session"] = s
 			u.m.noteSession(u.host, s, "")
 		}
 	case "session_removed":
 		u.m.noteSession(u.host, nil, Join(u.host, id))
 	case "events":
+		msg["events"] = RewriteEvents(u.host, msg["events"])
 		var evs []struct {
 			Seq int64 `json:"seq"`
 		}

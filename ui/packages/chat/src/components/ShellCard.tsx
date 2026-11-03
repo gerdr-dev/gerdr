@@ -1,7 +1,7 @@
 import { CircleX, Loader2, RotateCw, Square } from "lucide-react";
 import { useLayoutEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { chatHost } from "../host";
+import { hostFor } from "../host";
 import { t } from "../i18n";
 import { useKept } from "../kept";
 import type { GData } from "../transcript";
@@ -81,11 +81,11 @@ export function ShellCard({ sessionId, data }: { sessionId: string; data: GData[
         </span>
         {status && <span className={cn("shrink-0 text-[11px]", failed ? "text-bad" : "text-muted-foreground")}>{status}</span>}
         <span className="flex-1" />
-        {!chatHost().shell ? null : data.running ? (
+        {!hostFor(sessionId).shell ? null : data.running ? (
           <button
             className="flex shrink-0 items-center gap-1 rounded-sm px-1.5 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
             disabled={busy}
-            onClick={() => act(() => chatHost().shell!.stop(sessionId, data.id))}
+            onClick={() => act(() => hostFor(sessionId).shell!.stop(sessionId, data.id))}
           >
             <Square className="size-3" />
             {t("task.stop")}
@@ -95,7 +95,7 @@ export function ShellCard({ sessionId, data }: { sessionId: string; data: GData[
             title={t("shell.rerunTitle")}
             className="flex shrink-0 items-center gap-1 rounded-sm px-1.5 text-[11px] text-muted-foreground opacity-0 group-hover/shell:opacity-100 hover:bg-muted hover:text-foreground disabled:opacity-50 [@media(hover:none)]:opacity-100"
             disabled={busy}
-            onClick={() => act(() => chatHost().shell!.run(sessionId, data.command))}
+            onClick={() => act(() => hostFor(sessionId).shell!.run(sessionId, data.command))}
           >
             <RotateCw className="size-3" />
             {t("shell.rerun")}
@@ -126,8 +126,8 @@ export function ShellCard({ sessionId, data }: { sessionId: string; data: GData[
               {open ? t("common.collapse") : t(data.running || failed ? "shell.moreBefore" : "shell.moreAfter", { n: lines.length - FOLD })}
             </button>
           )}
-          {cut && chatHost().openPath && (
-            <button className="hover:text-foreground" title={data.path} onClick={() => chatHost().openPath?.(data.path!)}>
+          {cut && hostFor(sessionId).openPath && (
+            <button className="hover:text-foreground" title={data.path} onClick={() => hostFor(sessionId).openPath?.(data.path!)}>
               {t("shell.openFull")}
             </button>
           )}

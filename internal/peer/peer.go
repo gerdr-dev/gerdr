@@ -76,9 +76,11 @@ type Manager struct {
 	// server; LAN direct (not done) would dial the host's LAN address here, keeping its name for TLS.
 	tr *http.Transport
 
-	mu    sync.Mutex
-	hosts []Host
-	state map[string]*hostState
+	mu      sync.Mutex
+	hosts   []Host
+	state   map[string]*hostState
+	reports map[string]string // host session → console-side report target (reports.go)
+	onHosts []func()          // Subscribe's resync, run when a host is added or removed
 
 	// OnChange: the list of hosts or one's online state changed (the server broadcasts "hosts").
 	OnChange func()
@@ -96,7 +98,8 @@ func Open(dir string) (*Manager, error) {
 	name = strings.TrimSuffix(name, ".local")
 	tr := http.DefaultTransport.(*http.Transport).Clone()
 	m := &Manager{dir: dir, self: name, state: map[string]*hostState{}, tr: tr,
-		http: &http.Client{Timeout: 2 * time.Minute, Transport: tr}}
+		// No overall timeout: a proxied video streams for as long as it plays. Each request carries its own context.
+		http: &http.Client{Transport: tr}}
 	b, err := os.ReadFile(m.file())
 	if err != nil && !os.IsNotExist(err) {
 		return nil, err
@@ -106,6 +109,7 @@ func Open(dir string) (*Manager, error) {
 			return nil, fmt.Errorf("peers.json: %w", err)
 		}
 	}
+	m.loadReports()
 	return m, nil
 }
 
@@ -158,6 +162,17 @@ func (m *Manager) changed() {
 	if m.OnChange != nil {
 		m.OnChange()
 	}
+}
+
+// hostsChanged: one was added or removed (not just gone on / offline)
+func (m *Manager) hostsChanged() {
+	m.mu.Lock()
+	fs := append([]func(){}, m.onHosts...)
+	m.mu.Unlock()
+	for _, f := range fs {
+		f()
+	}
+	m.changed()
 }
 
 var codeInURL = regexp.MustCompile(`[?&]peer=([A-Za-z0-9-]+)`)
@@ -243,7 +258,7 @@ func (m *Manager) Add(ctx context.Context, invite, code, name string) (Info, err
 		return Info{}, err
 	}
 	m.refresh(ctx, h)
-	m.changed()
+	m.hostsChanged()
 	for _, i := range m.Infos() {
 		if i.ID == id {
 			return i, nil
@@ -294,7 +309,7 @@ func (m *Manager) Remove(id string) bool {
 	}
 	m.mu.Unlock()
 	if ok {
-		m.changed()
+		m.hostsChanged()
 	}
 	return ok
 }
@@ -402,7 +417,7 @@ func (m *Manager) refresh(ctx context.Context, h Host) {
 	}
 	list := make([]json.RawMessage, 0, len(sessions))
 	for _, s := range sessions {
-		if r := RewriteSummary(h, s); r != nil {
+		if r := m.RewriteSummary(h, s); r != nil {
 			list = append(list, r)
 		}
 	}
@@ -439,6 +454,9 @@ func (m *Manager) Sessions(ctx context.Context, maxAge time.Duration) []json.Raw
 	}
 	return out
 }
+
+// NoteSession: a summary the console got outside the stream (a session it just started there), into the cached list.
+func (m *Manager) NoteSession(hostID string, sum json.RawMessage) { m.noteSession(hostID, sum, "") }
 
 // noteSession keeps the cached list current from the upstream ws (so the next hello needn't ask).
 func (m *Manager) noteSession(hostID string, sum json.RawMessage, removed string) {

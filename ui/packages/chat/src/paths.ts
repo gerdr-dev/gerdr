@@ -1,4 +1,4 @@
-import { chatHost } from "./host";
+import { hostFor } from "./host";
 
 /**
  * 认出对话里的**本地文件路径**，让它可点（点了原地打开，见 components/FileViewer.tsx）。
@@ -124,23 +124,26 @@ export function localHref(h: string | undefined): string | undefined {
 const BARE = /^([\w@][\w.@+-]*\.[A-Za-z]\w{0,9})(?::\d+(?::\d+)?)?$/;
 export const bareFileName = (text: string) => BARE.exec(text.trim())?.[1];
 
-// Answers per cwd + name. Misses expire: the agent may create the file a few messages later, and the
-// virtual list re-mounts old messages anyway, so a stale "no" fixes itself on the next look.
+// Answers per session + cwd + name (two computers can have the same cwd, ChatHost.forSession). Misses expire: the
+// agent may create the file a few messages later, and the virtual list re-mounts old messages anyway, so a stale "no"
+// fixes itself on the next look.
 const known = new Map<string, { ok: boolean; at: number }>();
 const MISS_TTL = 30_000;
-const waiting = new Map<string, Set<string>>(); // cwd → names queued for the next batch
+const waiting = new Map<string, { sessionId?: string; cwd: string; names: Set<string> }>(); // queued for the next batch
 const listeners = new Set<() => void>();
 let timer: ReturnType<typeof setTimeout> | undefined;
 
-const key = (name: string, cwd: string) => cwd + "\n" + name;
+const where = (cwd: string, sessionId?: string) => (sessionId ?? "") + "\0" + cwd;
+const key = (name: string, cwd: string, sessionId?: string) => where(cwd, sessionId) + "\n" + name;
 
-/** Whether `name` is known to open under `cwd`; undefined = not checked yet (one is queued). */
-export function fileExists(name: string, cwd: string): boolean | undefined {
-  const k = known.get(key(name, cwd));
+/** Whether `name` is known to open under `cwd` (of that session); undefined = not checked yet (one is queued). */
+export function fileExists(name: string, cwd: string, sessionId?: string): boolean | undefined {
+  const k = known.get(key(name, cwd, sessionId));
   if (k && (k.ok || Date.now() - k.at < MISS_TTL)) return k.ok;
-  let q = waiting.get(cwd);
-  if (!q) waiting.set(cwd, (q = new Set()));
-  q.add(name);
+  const w = where(cwd, sessionId);
+  let q = waiting.get(w);
+  if (!q) waiting.set(w, (q = { sessionId, cwd, names: new Set() }));
+  q.names.add(name);
   // A rendered conversation asks for dozens at once: gather them into one request per cwd.
   timer ??= setTimeout(flush, 50);
   return k?.ok;
@@ -156,17 +159,17 @@ async function flush() {
   const batches = [...waiting];
   waiting.clear();
   await Promise.all(
-    batches.map(async ([cwd, names]) => {
+    batches.map(async ([, { sessionId, cwd, names }]) => {
       const list = [...names];
       try {
-        const check = chatHost().fileExists;
+        const check = hostFor(sessionId).fileExists;
         if (!check) throw new Error("no fileExists"); // the host can't look: bare names stay plain text
         const { exists } = await check(list, cwd);
-        for (const n of list) known.set(key(n, cwd), { ok: !!exists[n], at: Date.now() });
+        for (const n of list) known.set(key(n, cwd, sessionId), { ok: !!exists[n], at: Date.now() });
       } catch {
         // Older server or offline: plain code for now, retried once the misses expire (not on every
         // render — the listeners below re-render, which would ask again in a tight loop).
-        for (const n of list) known.set(key(n, cwd), { ok: false, at: Date.now() });
+        for (const n of list) known.set(key(n, cwd, sessionId), { ok: false, at: Date.now() });
       }
     }),
   );

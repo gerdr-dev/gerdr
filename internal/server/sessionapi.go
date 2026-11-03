@@ -236,19 +236,50 @@ func (s *Server) sessionRoutes(mux *http.ServeMux) {
 	})
 }
 
+// createOpen：在界面上打开它。Near 是「放在哪个会话旁边」（agent 开的会话放在它自己旁边），
+// Focus 要不要把焦点切过去（agent 开的默认不切，别打断人）。界面没开着就什么都不发生。
+type createOpen struct {
+	Near  string `json:"near"`
+	Focus bool   `json:"focus"`
+	// Workspace: put it in this Code workspace of the caller's project (id, number or label; "new"), as a
+	// new tab, instead of next to Near. Placed by the server, so it works with no window open.
+	Workspace string `json:"workspace"`
+	Caller
+}
+
+// placeCreated puts a session `gerdr session new` started on screen (o non-nil): in a workspace, or next to the
+// caller. reqCwd: the directory asked for (placeSession matches workspaces by it). Also for sessions started on
+// another computer (hosts.go): the screen is this one's.
+func (s *Server) placeCreated(o *createOpen, id, reqCwd, cwd string) error {
+	if o == nil {
+		return nil
+	}
+	if o.Workspace != "" {
+		c := o.Caller
+		if c.Session == "" {
+			c.Session = o.Near
+		}
+		if self, err := s.Hub.Session(c.Session); err == nil {
+			c.SessionCwd = self.Summary().Cwd
+		}
+		space := ResolveSpace(s.Layout.Get(), c, s.workProject())
+		if err := s.placeSession(space, id, reqCwd, cwd, o.Workspace); err != nil {
+			// The conversation exists either way: say so instead of losing it
+			return fmt.Errorf(i18n.S("会话 %s 开好了，但放不进工作空间：%v", "session %s was started but couldn't go in the workspace: %v"), id, err)
+		}
+		if o.Focus {
+			s.Hub.Broadcast("open", map[string]any{"id": id, "focus": true})
+		}
+		return nil
+	}
+	s.Hub.Broadcast("open", map[string]any{"id": id, "near": o.Near, "focus": o.Focus})
+	return nil
+}
+
 func (s *Server) createSession(w http.ResponseWriter, r *http.Request) {
 	var o struct {
 		hub.CreateOptions
-		// Open：在界面上打开它。Near 是「放在哪个会话旁边」（agent 开的会话放在它自己旁边），
-		// Focus 要不要把焦点切过去（agent 开的默认不切，别打断人）。界面没开着就什么都不发生。
-		Open *struct {
-			Near  string `json:"near"`
-			Focus bool   `json:"focus"`
-			// Workspace: put it in this Code workspace of the caller's project (id, number or label; "new"), as a
-			// new tab, instead of next to Near. Placed by the server, so it works with no window open.
-			Workspace string `json:"workspace"`
-			Caller
-		} `json:"open"`
+		Open *createOpen `json:"open"`
 	}
 	if err := decode(r, &o); err != nil {
 		httpError(w, 400, err.Error())
@@ -274,25 +305,9 @@ func (s *Server) createSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	sum := sess.Summary()
-	if o.Open != nil && o.Open.Workspace != "" {
-		c := o.Open.Caller
-		if c.Session == "" {
-			c.Session = o.Open.Near
-		}
-		if self, err := s.Hub.Session(c.Session); err == nil {
-			c.SessionCwd = self.Summary().Cwd
-		}
-		space := ResolveSpace(s.Layout.Get(), c, s.workProject())
-		if err := s.placeSession(space, sum.ID, o.Cwd, sum.Cwd, o.Open.Workspace); err != nil {
-			// The conversation exists either way: say so instead of losing it
-			httpError(w, 400, fmt.Sprintf(i18n.S("会话 %s 开好了，但放不进工作空间：%v", "session %s was started but couldn't go in the workspace: %v"), sum.ID, err))
-			return
-		}
-		if o.Open.Focus {
-			s.Hub.Broadcast("open", map[string]any{"id": sum.ID, "focus": true})
-		}
-	} else if o.Open != nil {
-		s.Hub.Broadcast("open", map[string]any{"id": sum.ID, "near": o.Open.Near, "focus": o.Open.Focus})
+	if err := s.placeCreated(o.Open, sum.ID, o.Cwd, sum.Cwd); err != nil {
+		httpError(w, 400, err.Error())
+		return
 	}
 	writeJSON(w, sum)
 }
@@ -319,13 +334,12 @@ func (s *Server) meta(r *http.Request, sess *hub.Session) (any, error) {
 	if b.ReportTo != nil {
 		to := *b.ReportTo
 		if to != "" {
-			t, err := s.Hub.Session(to)
-			if err != nil {
-				return nil, err
-			}
-			to = t.ID()
-			if err := s.crossSpace(sess.ID(), to); err != nil {
-				return nil, err
+			// A session on another computer is checked by the hub (Hub.Elsewhere); one here gets its canonical id
+			if t, err := s.Hub.Session(to); err == nil {
+				to = t.ID()
+				if err := s.crossSpace(sess.ID(), to); err != nil {
+					return nil, err
+				}
 			}
 		}
 		if err := sess.SetReportTo(to); err != nil {

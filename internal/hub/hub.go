@@ -220,6 +220,10 @@ func (h *Hub) Base(agent string) string {
 }
 
 type Hub struct {
+	// Elsewhere: a session this hub doesn't hold but can report to, on another computer this one drives
+	// (docs/dev/MULTIHOST.md); ok = it exists, next = where it reports to itself (to catch loops). nil = none.
+	Elsewhere func(id string) (next string, ok bool)
+
 	opt  Options
 	log  *slog.Logger
 	cmds *cmdCache
@@ -666,7 +670,9 @@ func (h *Hub) Create(ctx context.Context, o CreateOptions) (*Session, error) {
 	}
 	if o.ReportTo != "" {
 		if _, err := h.Session(o.ReportTo); err != nil {
-			return nil, err
+			if _, ok := h.elsewhere(o.ReportTo); !ok {
+				return nil, err
+			}
 		}
 	}
 	cwd, err := normCwd(o.Cwd)

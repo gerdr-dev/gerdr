@@ -8,7 +8,8 @@ import { openPath } from "@/lib/actions";
 import { isAndroid, postAndroid } from "@/lib/android";
 import { api, fileRawURL, type FileStat } from "@/lib/api";
 import { isNative, nativeOpenURL } from "@/lib/native";
-import { set, useStore } from "@/lib/store";
+import { get, set, useStore } from "@/lib/store";
+import { HostTag } from "./HostTag";
 import { t } from "@/lib/i18n";
 
 /** 文本最多读这么多：再大的多半是日志 / 数据文件，整个塞进 DOM 手机上会卡死，给下载。 */
@@ -62,7 +63,7 @@ export function FilePicker() {
                 key={c}
                 className="truncate rounded-md px-2 py-1.5 text-left font-mono text-[12px] hover:bg-muted"
                 title={c}
-                onClick={() => openPath(c, undefined, { beside: pick.beside })}
+                onClick={() => openPath(c, undefined, { beside: pick.beside, host: pick.host })}
               >
                 <span className="text-muted-foreground">{head}</span>
                 {s.slice(head.length)}
@@ -82,7 +83,8 @@ function Body({ stat }: { stat: FileStat }) {
         <div className="min-w-0 flex-1">
           <DialogTitle className="truncate text-[14px]">{stat.name}</DialogTitle>
           <DialogDescription className="truncate font-mono text-[11px]" title={stat.path}>
-            {fmtSize(stat.size)} · {shortPath(stat.path)}
+            {fmtSize(stat.size)} · {stat.host && <HostTag session={{ host: { id: stat.host, name: stat.host } }} className="mr-1 align-middle" />}
+            {shortPath(stat.path)}
           </DialogDescription>
         </div>
         <FileActions stat={stat} />
@@ -124,7 +126,7 @@ export function FileActions({ stat, small }: { stat: FileStat; small?: boolean }
         </Button>
       )}
       <Button variant="ghost" size="icon" className={btn} title={t("fileViewer.download")} asChild>
-        <a href={fileRawURL(stat.path, true)} download={stat.name}>
+        <a href={fileRawURL(stat.path, true, stat.host)} download={stat.name}>
           <Download className={ic} />
         </a>
       </Button>
@@ -133,7 +135,7 @@ export function FileActions({ stat, small }: { stat: FileStat; small?: boolean }
 }
 
 // Versioned so a file rewritten in place isn't played from Chromium's per-URL media buffer (see ChatMedia).
-const fileURL = (stat: FileStat) => `${fileRawURL(stat.path)}&v=${stat.mtime}-${stat.size}`;
+const fileURL = (stat: FileStat) => `${fileRawURL(stat.path, false, stat.host)}&v=${stat.mtime}-${stat.size}`;
 
 /** The file itself, drawn by kind: the viewer dialog's body, and a file pane's (Panes.tsx; fill: as tall as the pane). */
 export function FileContent({ stat, fill }: { stat: FileStat; fill?: boolean }) {
@@ -260,8 +262,10 @@ function FrontMatter({ raw }: { raw: string }) {
  */
 async function openOutside(stat: FileStat) {
   try {
-    const { url } = await api.fileLink(stat.path);
-    const abs = new URL(url, location.href).href;
+    const { url } = await api.fileLink(stat.path, stat.host);
+    // Another computer's link is served at that computer's own address, not through this one (no cookie in the browser)
+    const base = stat.host ? get().hosts.find((h) => h.id === stat.host)?.url : undefined;
+    const abs = new URL(url, base ?? location.href).href;
     if (isAndroid()) postAndroid({ t: "open", url: abs });
     else nativeOpenURL(abs);
   } catch (e) {
@@ -282,7 +286,7 @@ function NoPreview({ stat, why }: { stat: FileStat; why: string }) {
     <div className="flex flex-col items-center gap-4 p-10 text-center text-[13px] text-muted-foreground">
       <div>{why}</div>
       <Button asChild>
-        <a href={fileRawURL(stat.path, true)} download={stat.name}>
+        <a href={fileRawURL(stat.path, true, stat.host)} download={stat.name}>
           <Download className="size-4" />
           {t("fileViewer.downloadSize", { size: fmtSize(stat.size) })}
         </a>

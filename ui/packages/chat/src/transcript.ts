@@ -3,7 +3,7 @@
 // 增量的：apply() 一条条吃事件，只换掉被改到的那条消息（新对象），没动的消息保持同一个引用
 // —— 流式输出时只有最后一条消息在重渲染。reset 时整份重来。
 import type { DynamicToolUIPart, UIMessage } from "ai";
-import { chatHost } from "./host";
+import { hostFor } from "./host";
 import { t } from "./i18n";
 import type { AgentTask, AskRequest, ContentBlock, HubEvent, PermissionRequest, Wake } from "./types";
 
@@ -214,8 +214,11 @@ export class Transcript {
    * 照样挂在卡片下面；子 agent 视图只要它自己的那些，工具调用提成顶层。
    */
   readonly sub?: string;
-  constructor(sub?: string) {
+  /** Whose log it is: file URLs in it come from that session's host (ChatHost.forSession). */
+  readonly sessionId?: string;
+  constructor(sub?: string, sessionId?: string) {
     this.sub = sub;
+    this.sessionId = sessionId;
   }
 
   messages: GMessage[] = [];
@@ -257,7 +260,7 @@ export class Transcript {
     for (const c of content) {
       if (c.type === "text") parts.push({ type: "text", text: c.text });
       else if (c.type === "image") parts.push({ type: "file", mediaType: c.mimeType, url: imageURL(c) });
-      else if (c.type === "resource_link") parts.push(linkPart(c));
+      else if (c.type === "resource_link") parts.push(linkPart(c, this.sessionId));
     }
     this.sending = [...this.sending, { id: messageId, role: "user", parts, metadata: { messageId, sending: true, ts: Date.now(), content } }];
   }
@@ -446,7 +449,7 @@ export class Transcript {
           if (c.type === "text" && isHandoffContext(c.text)) continue; // the earlier conversation: it's on screen above
           if (c.type === "text") parts.push({ type: "text", text: mb?.text ?? c.text });
           else if (c.type === "image") parts.push({ type: "file", mediaType: c.mimeType, url: imageURL(c) });
-          else if (c.type === "resource_link") parts.push(linkPart(c));
+          else if (c.type === "resource_link") parts.push(linkPart(c, this.sessionId));
         }
         this.messages = [...this.messages];
         this.messages.push({
@@ -819,11 +822,11 @@ export function videoLinkPath(c: ContentBlock): string | null {
 /** mediaType of a file the user attached by its local path (ChatHost.localPath): url is that path, not something to fetch. */
 export const LOCAL_FILE = "application/x-local-file";
 
-function linkPart(c: ContentBlock & { type: "resource_link" }): GPart {
+function linkPart(c: ContentBlock & { type: "resource_link" }, sessionId?: string): GPart {
   const v = videoLinkPath(c);
   const p = c.uri.replace(/^file:\/\//, "");
   return v
-    ? { type: "file", mediaType: "video/*", url: chatHost().fileURL(v), filename: c.name }
+    ? { type: "file", mediaType: "video/*", url: hostFor(sessionId).fileURL(v), filename: c.name }
     : { type: "file", mediaType: LOCAL_FILE, url: p, filename: c.name || p.replace(/\/+$/, "").split("/").pop() || p };
 }
 

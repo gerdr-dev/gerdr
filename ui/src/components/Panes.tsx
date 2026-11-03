@@ -346,13 +346,13 @@ function FilePaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; ta
     let live = true;
     setErr("");
     api
-      .fileStat(path)
+      .fileStat(path, undefined, pane.file!.host)
       .then((s) => live && setStat(s))
       .catch((e) => live && (setStat(null), setErr(e.message ?? String(e))));
     return () => {
       live = false;
     };
-  }, [path, rev]);
+  }, [path, pane.file!.host, rev]);
   const drag = usePaneDrag(pane.id, { label: basename(path) });
   return (
     <div

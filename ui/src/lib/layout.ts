@@ -17,7 +17,8 @@ export type PaneLeaf = {
   draft?: { agent?: string; cwd?: string; host?: string };
   sub?: { sessionId: string; toolCallId: string; title?: string };
   term?: { id: string; cwd: string };
-  file?: { path: string };
+  /** host: on another computer (docs/dev/MULTIHOST.md) */
+  file?: { path: string; host?: string };
 };
 export type PaneSplit = { type: "split"; id: string; dir: "row" | "col"; ratio: number; a: PaneNode; b: PaneNode };
 export type PaneNode = PaneLeaf | PaneSplit;

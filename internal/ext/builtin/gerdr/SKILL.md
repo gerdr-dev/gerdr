@@ -73,6 +73,25 @@ gerdr session new --agent codex --title reviewer \
 - `--workspace <id|number|label|new>` puts it in that Code workspace as a new tab (`gerdr workspace list`); without it,
   it opens next to you.
 
+### On another computer: `--host`
+
+The user can pair other computers with this one (Settings → Remote access). `gerdr session hosts` lists them; a
+session there shows in `list` with `"host": "<id>"`, and its id starts with `<host>~`. Everything above works on it the
+same (`send`, `wait`, `read`, `--report-to`, tags). Start one there with `--host`:
+
+```bash
+gerdr session hosts
+gerdr session new --host mini --cwd '~/work/promo' --title cover \
+  --prompt "Render the launch cover image into out/cover.png" --report-to self
+```
+
+- Its files are **that computer's**: a path in its reply doesn't exist here. To hand a file to a session on another
+  computer, attach it: `gerdr session send <session> "..." --file out/cover.png` copies it there and tells it the path.
+- `--cwd` with `--host` is absolute or `'~/…'` in quotes: unquoted, your shell turns `~` into *this* computer's home.
+  Without `--cwd`, that computer's home.
+- Only start one on another computer when the user asked for it, or the task needs that machine (its GPU, its files,
+  its accounts).
+
 ### Hand it off without waiting: reports
 
 To run several tasks at once, or a long one, don't block yourself on `--wait`: use `--report-to self` and go back to the

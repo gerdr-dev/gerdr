@@ -199,7 +199,28 @@ function useSharedDraft({ session, textarea: ta, text, images: imgs, setText, se
   };
 }
 
-const fileURL = (path: string, cwd?: string) => `/api/fs/raw?path=${encodeURIComponent(path)}&cwd=${encodeURIComponent(cwd ?? "")}`;
+const fileURL = (path: string, cwd?: string, host?: string) =>
+  `${host ? `/h/${encodeURIComponent(host)}` : ""}/api/fs/raw?path=${encodeURIComponent(path)}&cwd=${encodeURIComponent(cwd ?? "")}`;
+
+/**
+ * A session on another computer (id "<host>~<id>", docs/dev/MULTIHOST.md): its paths are that computer's files, so the
+ * chat's file functions go there (server/hosts.go proxies ?host= and /h/<host>/). A file picked here has no path there,
+ * so attachments are uploaded to it instead (no localPath), and there is no "open with the system app" for it.
+ */
+function hostSession(sessionId: string): Partial<ChatHost> | undefined {
+  const i = sessionId.indexOf("~");
+  if (i <= 0) return undefined;
+  const host = sessionId.slice(0, i);
+  return {
+    fileURL: (p, cwd) => fileURL(p, cwd, host),
+    fileStat: (p, cwd) => api.fileStat(p, cwd, host),
+    fileExists: (names, cwd) => api.fileExists(names, cwd, host),
+    openPath: (p, cwd, opts) => void openPath(p, cwd, { ...opts, host }),
+    upload: (f) => api.upload(f, host),
+    localPath: undefined,
+    openNative: undefined,
+  };
+}
 
 // /usage only means something for claude / codex (hub.Usage)
 const localCommands = (session: ChatSession) =>
@@ -267,6 +288,7 @@ export function GerdrChatProvider({ children }: { children: ReactNode }) {
       fileExists: (names, cwd) => api.fileExists(names, cwd),
       searchFiles: (id, q) => api.searchFiles(id, q).then((r) => r.files),
       openPath: (p, cwd, opts) => void openPath(p, cwd, opts),
+      forSession: hostSession,
       openNative: isNative() ? (p, cwd, reveal) => nativeOpenPath(p, cwd, reveal) : undefined,
       openSubagent,
       focusSession,

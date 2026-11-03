@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/url"
@@ -123,17 +124,20 @@ func (s *Server) hostProxy(w http.ResponseWriter, r *http.Request, host, path st
 		httpError(w, 404, peer.ErrNoHost.Error())
 		return
 	}
+	// File contents pass as they are, both ways: an uploaded or viewed .json is a file, not an API payload
+	isFile := path == "/api/fs/upload" || path == "/api/fs/raw" || strings.HasPrefix(path, "/f/")
 	var body io.Reader
 	if r.Body != nil && r.Method != http.MethodGet && r.Method != http.MethodHead {
-		b, err := io.ReadAll(io.LimitReader(r.Body, 64<<20))
-		if err != nil {
-			httpError(w, 400, err.Error())
-			return
+		if isFile {
+			body = r.Body // streamed: an attachment can be far bigger than an API body
+		} else {
+			b, err := io.ReadAll(io.LimitReader(r.Body, 64<<20))
+			if err != nil {
+				httpError(w, 400, err.Error())
+				return
+			}
+			body = bytes.NewReader(peer.RewriteBody(host, b))
 		}
-		if strings.HasPrefix(r.Header.Get("Content-Type"), "application/json") || (len(b) > 0 && b[0] == '{') {
-			b = peer.RewriteBody(host, b)
-		}
-		body = bytes.NewReader(b)
 	}
 	if len(query) > 0 {
 		path += "?" + query.Encode()
@@ -149,7 +153,7 @@ func (s *Server) hostProxy(w http.ResponseWriter, r *http.Request, host, path st
 			w.Header().Set(k, v)
 		}
 	}
-	if !strings.HasPrefix(resp.Header.Get("Content-Type"), "application/json") {
+	if isFile || !strings.HasPrefix(resp.Header.Get("Content-Type"), "application/json") {
 		w.WriteHeader(resp.StatusCode)
 		_, _ = io.Copy(w, resp.Body)
 		return
@@ -159,15 +163,27 @@ func (s *Server) hostProxy(w http.ResponseWriter, r *http.Request, host, path st
 		httpError(w, 502, err.Error())
 		return
 	}
-	b = rewriteHostJSON(h, b)
+	b = s.rewriteHostJSON(h, path, b)
 	w.Header().Del("Content-Length")
 	w.WriteHeader(resp.StatusCode)
 	_, _ = w.Write(b)
 }
 
-// rewriteHostJSON: a JSON answer from a host. A session summary (or a list of them) gets its ids prefixed; anything
-// else only its URLs.
-func rewriteHostJSON(h peer.Host, b []byte) []byte {
+// rewriteHostJSON: a JSON answer from a host. A session summary (or a list of them) gets its ids prefixed, a log
+// its senders (peer.RewriteEvents); anything else only its URLs.
+func (s *Server) rewriteHostJSON(h peer.Host, path string, b []byte) []byte {
+	if strings.HasSuffix(path, "/events") {
+		return peer.RewriteEvents(h.ID, b)
+	}
+	if strings.HasSuffix(path, "/events/older") {
+		var o map[string]json.RawMessage
+		if json.Unmarshal(b, &o) == nil && o["events"] != nil {
+			o["events"] = peer.RewriteEvents(h.ID, o["events"])
+			if nb, err := json.Marshal(o); err == nil {
+				return nb
+			}
+		}
+	}
 	isSummary := func(m map[string]json.RawMessage) bool {
 		_, a := m["agent"]
 		_, c := m["cwd"]
@@ -178,7 +194,7 @@ func rewriteHostJSON(h peer.Host, b []byte) []byte {
 	if len(t) > 0 && t[0] == '{' {
 		var m map[string]json.RawMessage
 		if json.Unmarshal(t, &m) == nil && isSummary(m) {
-			if out := peer.RewriteSummary(h, t); out != nil {
+			if out := s.Peers.RewriteSummary(h, t); out != nil {
 				return out
 			}
 		}
@@ -190,7 +206,7 @@ func rewriteHostJSON(h peer.Host, b []byte) []byte {
 			_ = json.Unmarshal(t, &raws)
 			out := make([]json.RawMessage, 0, len(raws))
 			for _, r := range raws {
-				if x := peer.RewriteSummary(h, r); x != nil {
+				if x := s.Peers.RewriteSummary(h, r); x != nil {
 					out = append(out, x)
 				}
 			}
@@ -207,13 +223,161 @@ func rewriteHostJSON(h peer.Host, b []byte) []byte {
 func (s *Server) createOnHost(w http.ResponseWriter, r *http.Request, host string, body []byte) {
 	var m map[string]any
 	_ = json.Unmarshal(body, &m)
+	var o struct {
+		Cwd      string      `json:"cwd"`
+		ReportTo string      `json:"reportTo"`
+		Open     *createOpen `json:"open"`
+	}
+	_ = json.Unmarshal(body, &o)
 	delete(m, "open")
 	delete(m, "host")
+	// A report target here or on a third computer is kept here (peer.Manager.ReportTo); one on that host goes along
+	keep := ""
+	if h, _ := peer.Split(o.ReportTo); o.ReportTo != "" && h != host {
+		if err := s.reportTarget(o.ReportTo); err != nil {
+			httpError(w, 400, err.Error())
+			return
+		}
+		keep = o.ReportTo
+		delete(m, "reportTo")
+	}
 	b, _ := json.Marshal(m)
+	resp, err := s.Peers.Do(r.Context(), host, "POST", "/api/sessions", bytes.NewReader(peer.RewriteBody(host, b)), http.Header{"Content-Type": {"application/json"}})
+	if err != nil {
+		httpError(w, 502, i18n.S("连不上那台电脑：", "Can't reach that computer: ")+err.Error())
+		return
+	}
+	defer resp.Body.Close()
+	rb, _ := io.ReadAll(io.LimitReader(resp.Body, 16<<20))
+	h, _ := s.Peers.Host(host)
+	if resp.StatusCode != 200 {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(resp.StatusCode)
+		_, _ = w.Write(rb)
+		return
+	}
+	var sum struct {
+		ID  string `json:"id"`
+		Cwd string `json:"cwd"`
+	}
+	_ = json.Unmarshal(rb, &sum)
+	id := peer.Join(host, sum.ID)
+	if keep != "" {
+		_ = s.Peers.SetReportTo(id, keep)
+	}
+	out := s.Peers.RewriteSummary(h, rb)
+	s.Peers.NoteSession(host, out)
+	// `gerdr session new --host`: it shows on this computer's screen, next to the agent that asked
+	if err := s.placeCreated(o.Open, id, o.Cwd, sum.Cwd); err != nil {
+		httpError(w, 400, err.Error())
+		return
+	}
+	writeJSON(w, json.RawMessage(out))
+}
+
+// reportTarget: to can be reported to from another computer's session (it's here, or a known host session).
+func (s *Server) reportTarget(to string) error {
+	if _, err := s.Hub.Session(to); err == nil {
+		return nil
+	}
+	if _, ok := s.Peers.Known(to); ok {
+		return nil
+	}
+	return errors.New(i18n.S("没有这个会话：", "No such session: ") + to)
+}
+
+// hostMeta: tags / report target of a host session. Tags and a target on the same host are the host's; a target
+// here or elsewhere is kept here (it can't be stored there, see peer/reports.go). Setting one clears the other.
+func (s *Server) hostMeta(w http.ResponseWriter, r *http.Request, id string) {
+	host, rest := peer.Split(id)
+	var b struct {
+		Tags     map[string]string `json:"tags"`
+		ReportTo *string           `json:"reportTo"`
+	}
+	raw, _ := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+	if err := json.Unmarshal(raw, &b); err != nil && len(raw) > 0 {
+		httpError(w, 400, err.Error())
+		return
+	}
+	fwd := map[string]any{}
+	if len(b.Tags) > 0 {
+		fwd["tags"] = b.Tags
+	}
+	if b.ReportTo != nil {
+		to := *b.ReportTo
+		if h, _ := peer.Split(to); to == "" || h == host {
+			_ = s.Peers.SetReportTo(id, "")
+			fwd["reportTo"] = to
+		} else {
+			if to == id {
+				httpError(w, 400, i18n.S("会话不能回报给自己", "a session can't report to itself"))
+				return
+			}
+			if err := s.reportTarget(to); err != nil {
+				httpError(w, 400, err.Error())
+				return
+			}
+			// A loop through this computer: the target (here) already reports back to this session
+			if t, err := s.Hub.Session(to); err == nil && t.Summary().ReportTo == id {
+				httpError(w, 400, i18n.S("回报会绕回自己（对方也在回报给这个会话）", "reports would go round in a loop (the target reports back to this session)"))
+				return
+			}
+			if err := s.Peers.SetReportTo(id, to); err != nil {
+				httpError(w, 500, err.Error())
+				return
+			}
+			fwd["reportTo"] = "" // its own (same-host) target, if any, gives way
+		}
+	}
+	method, path := "GET", "/api/sessions/"+rest
+	var body io.Reader
+	if len(fwd) > 0 {
+		fb, _ := json.Marshal(fwd)
+		method, path, body = "POST", path+"/meta", bytes.NewReader(fb) // hostProxy rewrites the ids (once)
+	}
 	r2 := r.Clone(r.Context())
-	r2.Body = io.NopCloser(bytes.NewReader(b))
+	r2.Method = method
+	r2.Body = io.NopCloser(body)
+	if body == nil {
+		r2.Body = http.NoBody
+	}
 	r2.Header.Set("Content-Type", "application/json")
-	s.hostProxy(w, r2, host, "/api/sessions", nil)
+	s.hostProxy(w, r2, host, path, nil)
+}
+
+// hostOpen / hostClose: `gerdr session open / close` on a host session is about this computer's screen (the host's
+// own UI isn't the one the person looks at); closing also stops the agent over there, like closing a pane does.
+func (s *Server) hostOpen(w http.ResponseWriter, r *http.Request, id string) {
+	var b struct {
+		Near  string `json:"near"`
+		Focus bool   `json:"focus"`
+	}
+	_ = decode(r, &b)
+	s.Hub.Broadcast("open", map[string]any{"id": id, "near": b.Near, "focus": b.Focus})
+	writeJSON(w, map[string]any{"ok": true})
+}
+
+func (s *Server) hostClose(w http.ResponseWriter, r *http.Request, id string) {
+	host, rest := peer.Split(id)
+	var b struct {
+		AfterTurn bool `json:"afterTurn"`
+	}
+	_ = decode(r, &b)
+	if b.AfterTurn {
+		// Its turn may still be running: the host closes it when that ends (Hub.CloseAfterTurn there), and its
+		// session_removed / close reaches this screen through the stream
+		r2 := r.Clone(r.Context())
+		r2.Body = io.NopCloser(strings.NewReader(`{"afterTurn":true}`))
+		r2.Header.Set("Content-Type", "application/json")
+		s.hostProxy(w, r2, host, "/api/sessions/"+rest+"/close", nil)
+		return
+	}
+	s.Hub.Broadcast("close", map[string]any{"id": id})
+	resp, err := s.Peers.Do(r.Context(), host, "POST", "/api/sessions/"+rest+"/shutdown", strings.NewReader("{}"), http.Header{"Content-Type": {"application/json"}})
+	if err == nil {
+		resp.Body.Close()
+	}
+	writeJSON(w, map[string]any{"ok": true})
 }
 
 // withHosts wraps the mux: requests for another computer are proxied, the rest fall through.
@@ -240,6 +404,23 @@ func (s *Server) withHosts(next http.Handler) http.Handler {
 			r.Body = io.NopCloser(bytes.NewReader(b))
 			next.ServeHTTP(w, r)
 			return
+		}
+		// Operations whose meaning is this computer's (its screen, reports kept here) are handled here
+		if r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/api/sessions/") {
+			seg, op, _ := strings.Cut(strings.TrimPrefix(r.URL.Path, "/api/sessions/"), "/")
+			if h, _ := peer.Split(seg); h != "" {
+				switch op {
+				case "meta":
+					s.hostMeta(w, r, seg)
+					return
+				case "open":
+					s.hostOpen(w, r, seg)
+					return
+				case "close":
+					s.hostClose(w, r, seg)
+					return
+				}
+			}
 		}
 		if host, path, q := s.hostRoute(r); host != "" {
 			s.hostProxy(w, r, host, path, q)

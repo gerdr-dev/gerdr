@@ -6,7 +6,7 @@ export { PixelLoader } from "./components/PixelLoader";
 export { Markdown } from "./components/Markdown";
 export { LightboxHost, openLightbox, lightboxOpen, type LightboxItem } from "./components/Lightbox";
 export { SessionContext, useSession } from "./components/sessionContext";
-export { ChatProvider, useChatHost, useChatSettings, chatHost } from "./host";
+export { ChatProvider, useChatHost, useChatSettings, chatHost, hostFor, SessionHost } from "./host";
 export type { ChatHost, ChatTranscript, ChatSettings, ComposerHooks, ComposerContext, TurnStatInfo, TurnStatDeco, LoaderProps } from "./host";
 export { t, setMessages, currentLocale, type Locale, type MessageKey } from "./i18n";
 export { zh, en } from "./messages";

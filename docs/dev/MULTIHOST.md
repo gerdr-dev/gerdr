@@ -73,33 +73,73 @@ accepted remotely, pairing codes are only minted on the host itself.
 
 ## Phases
 
-1. **Link + view** (this branch): `internal/peer` (store, client, upstream ws), peer pairing, merged session list,
+1. **Link + view** (done): `internal/peer` (store, client, upstream ws), peer pairing, merged session list,
    proxied session ops and ws, `/h/<host>/…` proxy, UI: host badge on tabs / rows, host picker in New Session with a
-   remote directory browser, Settings → Hosts.
-2. Agents across hosts: the built-in gerdr skill learns `--host`; `reportTo` across hosts (the console's reporter
-   subscribes to host sessions too).
-3. Files: the file viewer opens paths of a host session through the proxy; `gerdr session send --file` copies the
-   file into the target host's `~/.gerdr/inbox/<from>/` and rewrites the path in the message.
-4. Moving a conversation to another host (handoff across hosts) and artifact folders (shuttle's design:
-   docs/collab-local-agent.md in the shuttle repo, folder with an id, pull / push on demand, ETag conflicts, no live sync).
+   remote directory browser, Settings → Remote access → "Computers this one controls".
+2. **Agents across hosts** (done), see "Agents and reports across computers" below.
+3. **Files** (done), see "Files" below.
+4. Not done: moving a conversation to another host (handoff across hosts) and artifact folders (shuttle's design:
+   docs/collab-local-agent.md in the shuttle repo, folder with an id, pull / push on demand, ETag conflicts, no live
+   sync). `send --file` / `fetch` cover handing single files over meanwhile.
+
+## Agents and reports across computers
+
+`gerdr session …` on the console already sees host sessions (they are in `/api/hello`); what needed care:
+
+- `gerdr session hosts` lists the paired computers; `new --host <id>` starts one there. Its `--cwd` is resolved on that
+  computer (`~` = its home, asked with `/api/fs/dirs?host=`), never with this one's working directory. The skill says
+  to quote `'~/…'`: unquoted, the agent's shell expands it to *this* home (and an unquoted `~` makes the command need
+  approval, `sysenv.SafeGerdrCLI`).
+- `open` / `close` / `meta` on a host session are answered by the console (`hosts.go` `hostOpen` / `hostClose` /
+  `hostMeta`), not proxied: the screen a person looks at is the console's, and so is a report target that isn't on the
+  host. Closing also shuts the agent down over there (`/shutdown`), like closing a pane.
+- **Who sent it** (`from`): a message from a console session to a host session carries `from: "console~<id>"`
+  (`peer.RewriteBody`); the host stores it as is, and `peer.RewriteEvents` strips the mark when the event comes back,
+  so "from session X" still points at X here. Dropping it instead would make the host's hub take the message for a
+  person's (`Summary.ByPerson`: no `from`), and then that turn would never be reported. Senders on the host itself
+  get the host prefix the same way.
+- **Report targets**: a host session reporting to a session on the same host is the host's own (`Record.ReportTo`,
+  its reporter). One reporting to a console session, or to another host's, can't be stored there (the host can reach
+  nothing but itself), so the console keeps it in `<GERDR_DIR>/peer-reports.json` (`peer.Manager.ReportTo`), shows it
+  on the summary, and setting one clears the other. The console's reporter (`report.go`) subscribes to every host
+  (`peer.Manager.Subscribe`, one upstream per host, following Add / Remove, running with no window open), reads a
+  worker on another computer through `source` (summary + events over HTTP) and delivers to a target there through
+  `peer.Manager.Send`. A console session may report to a host session too: `Hub.Elsewhere` lets the hub accept a
+  target it doesn't hold and keep walking for loops through it.
+
+## Files
+
+- `@gerdr/chat` got one general hook, `ChatHost.forSession(sessionId)`: overrides of any host member for one
+  session. ChatView provides the merged host (`SessionHost`) to everything below it, and the package's code outside
+  React that handles a session's files uses `hostFor(sessionId)` (media URLs, path links, bare-file-name checks keyed
+  by session as well as cwd, the lightbox's "open in viewer", transcript video links). gerdr's `forSession` points a
+  host session's `fileURL` / `fileStat` / `fileExists` / `openPath` / `upload` at that computer and removes
+  `localPath` / `openNative` (a file picked here has no path there; attachments get uploaded to it). **This changed
+  the package: other apps get it with the next npm publish** (nothing for them changes unless they give `forSession`).
+- The viewer and file panes carry the host (`FileStat.host`, `PaneLeaf.file.host`, `?host=` / `/h/<host>/` URLs).
+  "Open in the system browser" uses a `/f/` link issued by that computer and opened at its own address: the console
+  can't serve a cookie-less link for another machine.
+- The proxy passes file contents through untouched in both directions (`/api/fs/upload`, `/api/fs/raw`, `/f/`):
+  an uploaded or viewed `.json` file is not an API payload to rewrite. Uploads stream; the peer client has no overall
+  timeout (a proxied video plays as long as it plays), each request carries its own context.
+- Agents: `gerdr session send <session> "…" --file <path>` (repeatable) attaches files as resource links; for a
+  session on another computer each is uploaded there first (that computer's `<GERDR_DIR>/uploads/`) and the link is
+  the path there. `gerdr session fetch <session> <path> [dest]` copies a file from the computer a session runs on to
+  here (relative to that session's directory). Folders aren't taken: pack them first.
 
 ## Not done / known gaps
 
-- **Paths and attachments in a host session still mean this computer.** `@gerdr/chat`'s file hooks (`fileURL`,
-  `fileStat`, `openPath`, `upload`) get a path and a cwd, not the session, so a path clicked in a host session's chat
-  opens (or fails to open) the console's file, and a non-image attachment is saved on the console where the host's
-  agent can't read it. Phase 3: hand the session (or its host) to those hooks, one general change to the package (one
-  npm publish), then route through `/h/<host>/api/fs/*`.
 - Terminals and the import-from-agent dialog are this computer's only: New Session hides both when another computer
   is picked.
 - A /ws connection is linked to the hosts that existed when it opened; the UI reconnects when the set changes
   (`sync.ts` `gotHosts`).
 - New Session lists this computer's agents; the host needs the same agent (claude / codex) installed.
-- Tried end to end against a real host server over TLS (`hosts_test.go`; and once by hand with a throwaway fake host
-  + a console debug instance). Not yet through a real relay and a second real machine.
-
+- Loop checks across computers only see one step through the console (a target here that reports straight back);
+  longer loops through two hosts aren't caught.
+- Tried end to end against a real host server over TLS (`hosts_test.go`; and by hand with a throwaway fake host + a
+  console debug instance: pairing, sessions, the New Session picker, the CLI's hosts / list / fetch, a path and an
+  image of a host session opening through `/h/`). Not yet through a real relay and a second real machine.
 - LAN direct between console and host (the Android App's trick, dial the LAN address with the host's name as SNI):
-  phase 1 goes through the relay address only.
+  only the relay address for now (`peer.Manager.Route` is where it would go).
 - Android background notices (`/api/app/*`) only cover the console's own sessions.
-- A host that is offline: its sessions are absent from the list (tabs showing them keep their last summary and say
-  the host is unreachable), not an error.
+- A host that is offline: its sessions are absent from the list (tabs showing them stay, waiting), not an error.

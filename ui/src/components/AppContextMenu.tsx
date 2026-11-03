@@ -126,17 +126,22 @@ const fileName = (src: string, alt?: string) => {
 function fileItems(link: HTMLElement): Item[] {
   const path = link.dataset.gerdrFile!;
   const cwd = link.dataset.gerdrCwd || undefined;
-  const items: Item[] = [{ label: tr("common.open"), icon: <FileText className={icon} />, run: () => openPath(path, cwd), hint: tr("appContextMenu.click") }];
+  // A session on another computer: its paths are that computer's files (docs/dev/MULTIHOST.md)
+  const sid = link.dataset.gerdrSession ?? "";
+  const host = sid.includes("~") ? sid.slice(0, sid.indexOf("~")) : undefined;
+  const items: Item[] = [
+    { label: tr("common.open"), icon: <FileText className={icon} />, run: () => openPath(path, cwd, { host }), hint: tr("appContextMenu.click") },
+  ];
   // A phone shows one pane at a time: "beside" would be the same dialog
   if (!isPhone())
     items.push({
       label: tr("appContextMenu.openBeside"),
       icon: <Columns2 className={icon} />,
-      run: () => openPath(path, cwd, { beside: true }),
+      run: () => openPath(path, cwd, { beside: true, host }),
       hint: IS_MAC ? tr("appContextMenu.altClickMac") : tr("appContextMenu.altClick"),
     });
   // The system app gets the path without a `:42` / `#L21` anchor, which it would read as part of the name
-  if (isNative())
+  if (isNative() && !host)
     items.push(
       { label: tr("appContextMenu.openDefaultApp"), icon: <AppWindow className={icon} />, run: () => nativeOpenPath(stripLineAnchor(path), cwd, false) },
       {

@@ -18,7 +18,8 @@ let openSeq = 0;
  * beside: in a pane next to the focused one (⌥-click) instead of the viewer dialog; a phone shows one pane at a time,
  * so there it is the dialog anyway.
  */
-export async function openPath(raw: string, cwd?: string, opts: { beside?: boolean } = {}) {
+/** host: the path is on another computer (a session running there, docs/dev/MULTIHOST.md) */
+export async function openPath(raw: string, cwd?: string, opts: { beside?: boolean; host?: string } = {}) {
   const seq = ++openSeq;
   const beside = opts.beside && !isPhone();
   (document.activeElement as HTMLElement | null)?.blur?.(); // 手机上收键盘，不然查看器只露半截
@@ -28,19 +29,19 @@ export async function openPath(raw: string, cwd?: string, opts: { beside?: boole
   let err: unknown;
   for (const p of tries) {
     try {
-      const stat = await api.fileStat(p, cwd);
+      const stat = await api.fileStat(p, cwd, opts.host);
       if (seq !== openSeq) return;
       if (stat.dir) {
         toast(t("actionsFiles.isDir", { path: stat.path }));
         return;
       }
-      if (beside) openFilePane(stat.path);
+      if (beside) openFilePane(stat.path, opts.host);
       else set({ dialog: { kind: "file", stat } });
       return;
     } catch (e) {
       // 写短了的路径对上好几个文件（服务端按后缀找的）：让人挑一个
       if (e instanceof ApiError && e.candidates?.length) {
-        if (seq === openSeq) set({ dialog: { kind: "pickFile", path: p, candidates: e.candidates, beside } });
+        if (seq === openSeq) set({ dialog: { kind: "pickFile", path: p, candidates: e.candidates, beside, host: opts.host } });
         return;
       }
       err = e;
@@ -54,15 +55,16 @@ export async function openPath(raw: string, cwd?: string, opts: { beside?: boole
  * group): ⌥-clicking down a list of paths swaps what that pane shows instead of splitting the chat ever thinner.
  * The file pane takes focus: the user asked to look at it, so that is where the highlight (and keys) should go.
  */
-function openFilePane(path: string) {
+function openFilePane(path: string, host?: string) {
+  const file = host ? { path, host } : { path };
   setLayout((l) => {
     const t = activeTab(l);
     const ls = leaves(t.root);
-    const same = ls.find((p) => p.file?.path === path);
+    const same = ls.find((p) => p.file?.path === path && p.file.host === host);
     if (same) return updateTab(l, t.id, (tab) => ({ ...tab, zoom: undefined, focus: same.id }));
     const old = ls.find((p) => p.file);
-    if (old) return updateTab(setPane(l, old.id, { file: { path } }), t.id, (tab) => ({ ...tab, zoom: undefined, focus: old.id }));
-    const fresh: PaneLeaf = { type: "pane", id: rid("p"), file: { path } };
+    if (old) return updateTab(setPane(l, old.id, { file }), t.id, (tab) => ({ ...tab, zoom: undefined, focus: old.id }));
+    const fresh: PaneLeaf = { type: "pane", id: rid("p"), file };
     return updateTab(l, t.id, (tab) => ({ ...split(tab, tab.zoom ?? tab.focus, "row", fresh), focus: fresh.id }));
   });
 }

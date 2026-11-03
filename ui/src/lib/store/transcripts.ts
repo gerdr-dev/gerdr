@@ -8,7 +8,7 @@ export const transcripts = new Map<string, Transcript>();
 export function transcript(id: string): Transcript {
   let t = transcripts.get(id);
   if (!t) {
-    t = new Transcript();
+    t = new Transcript(undefined, id);
     transcripts.set(id, t);
   }
   return t;
@@ -24,7 +24,7 @@ export function subTranscript(id: string, sub: string): Transcript {
   const k = `${id}#${sub}`;
   let t = subTranscripts.get(k);
   if (!t) {
-    t = new Transcript(sub);
+    t = new Transcript(sub, id);
     t.reset(rawEvents.get(id) ?? []);
     subTranscripts.set(k, t);
   }

@@ -105,26 +105,34 @@ func (h *Hub) checkReportTo(from, to string) error {
 	if to == from {
 		return errors.New(i18n.S("会话不能回报给自己", "a session can't report to itself"))
 	}
-	t, err := h.Session(to)
-	if err != nil {
-		return err
+	if _, err := h.Session(to); err != nil {
+		if _, ok := h.elsewhere(to); !ok {
+			return err
+		}
 	}
+	// Walk where the target's reports go, here or on another computer
 	seen := map[string]bool{from: true}
-	for cur := t; cur != nil; {
-		id := cur.ID()
+	for id := to; id != ""; {
 		if seen[id] {
 			return errors.New(i18n.S("回报会绕回自己（对方也在回报给这个会话）", "reports would go round in a loop (the target reports back to this session)"))
 		}
 		seen[id] = true
-		cur.mu.Lock()
-		next := cur.rec.ReportTo
-		cur.mu.Unlock()
-		if next == "" {
-			break
+		if cur, err := h.Session(id); err == nil {
+			cur.mu.Lock()
+			id = cur.rec.ReportTo
+			cur.mu.Unlock()
+		} else {
+			id, _ = h.elsewhere(id)
 		}
-		cur, _ = h.Session(next)
 	}
 	return nil
+}
+
+func (h *Hub) elsewhere(id string) (string, bool) {
+	if h.Elsewhere == nil {
+		return "", false
+	}
+	return h.Elsewhere(id)
 }
 
 // HasTags: every key in want is set on tags, and to that value unless the wanted value is "" (then any value does).

@@ -2,6 +2,8 @@ package server
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -41,7 +43,9 @@ type reporter struct {
 	// tests swap them for fakes.
 	state   func(id string) (string, bool)
 	deliver func(target, text, from string) error
-	delay   time.Duration
+	// source: what a report is about (summary + log). Hub-backed, or another computer's (hosts.go).
+	source func(id string) (hub.Summary, []*hub.Event, error)
+	delay  time.Duration
 	mu      sync.Mutex
 	last    map[string]string   // session → last status seen
 	queue   map[string][]report // target → reports not delivered yet
@@ -53,27 +57,74 @@ func (s *Server) RunReports(ctx context.Context) {
 	if s.Hub == nil {
 		return
 	}
-	go newReporter(s).loop(ctx)
+	rp := newReporter(s)
+	go rp.loop(ctx)
+	// Sessions on other computers that report to a session here (or on yet another one): kept on this computer
+	// (peer.Manager.ReportTo), so it is this reporter that watches them (docs/dev/MULTIHOST.md)
+	if s.Peers != nil {
+		s.Peers.Subscribe(ctx, func(b json.RawMessage) {
+			var m struct {
+				T       string       `json:"t"`
+				Session *hub.Summary `json:"session"`
+			}
+			if json.Unmarshal(b, &m) != nil || m.T != "session" || m.Session == nil {
+				return
+			}
+			sum := *m.Session
+			// Only the target kept here counts: one on its own host is reported by that host
+			sum.ReportTo = s.Peers.ReportTo(sum.ID)
+			rp.onSession(sum)
+		})
+	}
 }
 
 func newReporter(s *Server) *reporter {
 	rp := &reporter{s: s, delay: reportDelay, last: map[string]string{}, queue: map[string][]report{}, timers: map[string]*time.Timer{}}
+	// A target or a worker can be a session on another computer (docs/dev/MULTIHOST.md): those go through s.Peers
 	rp.state = func(id string) (string, bool) {
-		sess, err := s.Hub.Session(id)
-		if err != nil {
-			return "", false
+		if sess, err := s.Hub.Session(id); err == nil {
+			return sess.Summary().Status, true
 		}
-		return sess.Summary().Status, true
+		if s.Peers != nil {
+			return s.Peers.Status(id)
+		}
+		return "", false
 	}
 	rp.deliver = func(target, text, from string) error {
-		sess, err := s.Hub.Session(target)
-		if err != nil {
-			return err
-		}
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
+		sess, err := s.Hub.Session(target)
+		if err != nil {
+			if s.Peers != nil {
+				if _, ok := s.Peers.Known(target); ok {
+					return s.Peers.Send(ctx, target, text, from)
+				}
+			}
+			return err
+		}
 		_, err = sess.SendFrom(ctx, []acp.ContentBlock{acp.TextBlock(text)}, "", from, false)
 		return err
+	}
+	rp.source = func(id string) (hub.Summary, []*hub.Event, error) {
+		if sess, err := s.Hub.Session(id); err == nil {
+			return sess.Summary(), sess.Events(), nil
+		}
+		if s.Peers == nil {
+			return hub.Summary{}, nil, errors.New("no such session")
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		sb, eb, err := s.Peers.Get(ctx, id)
+		if err != nil {
+			return hub.Summary{}, nil, err
+		}
+		var sum hub.Summary
+		var evs []*hub.Event
+		if err := json.Unmarshal(sb, &sum); err != nil {
+			return hub.Summary{}, nil, err
+		}
+		_ = json.Unmarshal(eb, &evs)
+		return sum, evs, nil
 	}
 	return rp
 }
@@ -208,7 +259,7 @@ func (rp *reporter) compose(reps []report) (text, from string) {
 	n := 0
 	for _, i := range order {
 		r := reps[i]
-		sess, err := rp.s.Hub.Session(r.from)
+		sum, evs, err := rp.source(r.from)
 		if err != nil {
 			continue
 		}
@@ -216,7 +267,7 @@ func (rp *reporter) compose(reps []report) (text, from string) {
 			from = r.from
 		}
 		n++
-		writeReport(&b, sess.Summary(), r.kind, lastReply(sess.Events()))
+		writeReport(&b, sum, r.kind, lastReply(evs))
 	}
 	if n == 0 {
 		return "", ""

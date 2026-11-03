@@ -91,6 +91,13 @@ export interface ChatHost {
   openPath?(path: string, cwd?: string, opts?: { beside?: boolean }): void;
   /** Open with the system's default app / reveal in the file manager (desktop apps). */
   openNative?(path: string, cwd: string | undefined, reveal: boolean): void;
+  /**
+   * Per-session overrides, for a host whose sessions don't all live in one place (gerdr: sessions running on other
+   * computers, whose paths mean that computer's files). Whatever it returns replaces those members for everything the
+   * chat does for that session: the files above, uploads, anything else. Missing = one host for every session.
+   * Keyed by session id and computed once per id: the answer must not change for a session.
+   */
+  forSession?(sessionId: string): Partial<Omit<ChatHost, "forSession">> | undefined;
 
   // ---- navigation ----
 
@@ -242,6 +249,33 @@ export function useChatHost(): ChatHost {
 export function chatHost(): ChatHost {
   if (!current) throw new Error("@gerdr/chat: no ChatProvider rendered yet");
   return current;
+}
+
+// hostFor's answers, per base host (a new ChatProvider host starts over)
+const scoped = new WeakMap<ChatHost, Map<string, ChatHost>>();
+
+/**
+ * The host as it applies to one session (ChatHost.forSession merged in). Outside React; inside a ChatView,
+ * useChatHost() already gives this one. No id, or no forSession = chatHost().
+ */
+export function hostFor(sessionId?: string | null, base: ChatHost = chatHost()): ChatHost {
+  if (!sessionId || !base.forSession) return base;
+  let m = scoped.get(base);
+  if (!m) scoped.set(base, (m = new Map()));
+  let h = m.get(sessionId);
+  if (!h) {
+    const o = base.forSession(sessionId);
+    h = o ? { ...base, ...o } : base;
+    m.set(sessionId, h);
+  }
+  return h;
+}
+
+/** Puts hostFor(sessionId) in place for the components below (ChatView does this for its session). */
+export function SessionHost({ sessionId, children }: { sessionId?: string; children: ReactNode }) {
+  const base = useContext(Ctx) ?? current;
+  if (!base) throw new Error("@gerdr/chat: render the chat inside <ChatProvider host={…}>");
+  return <Ctx.Provider value={hostFor(sessionId, base)}>{children}</Ctx.Provider>;
 }
 
 /** chatHost() without the throw: for pieces a host may also draw outside the chat, before any ChatProvider (PixelLoader). */

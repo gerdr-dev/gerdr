@@ -141,6 +141,11 @@ type sessInfo struct {
 	Turn         *struct {
 		StartedAt int64 `json:"startedAt"`
 	} `json:"turn"`
+	// Host: the other computer it runs on (docs/dev/MULTIHOST.md); nil = this one
+	Host *struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	} `json:"host"`
 	// inUI：界面上有没有 pane 显示它。和 herdr 一样，「开着的会话」就是界面上看得见的；关掉 pane = 关掉会话
 	// （记录留着，能接着聊，只是默认不列、不算）。
 	inUI *bool
@@ -174,6 +179,9 @@ func (s sessInfo) view(self string) map[string]any {
 	}
 	if s.ReportTo != "" {
 		m["reportTo"] = s.ReportTo
+	}
+	if s.Host != nil {
+		m["host"] = s.Host.ID // runs on another computer (gerdr session hosts); its paths are that computer's
 	}
 	if s.Error != "" {
 		m["error"] = s.Error
@@ -578,7 +586,20 @@ and hand it a task, wait for it to finish, read its reply. Refer to a session by
 		},
 	})
 
-	var nAgent, nCwd, nTitle, nMode, nPrompt, nWorkspace, nReportTo string
+	cmd.AddCommand(&cobra.Command{
+		Use:   "hosts",
+		Short: i18n.S("这台电脑控制的其他电脑（new --host 填 id）：它们上面的会话在 list 里带 host", "Other computers this one controls (pass the id to new --host): their sessions show in list with a host"),
+		RunE: func(_ *cobra.Command, _ []string) error {
+			var out []map[string]any
+			if err := client().do("GET", "/api/hosts", nil, &out); err != nil {
+				return err
+			}
+			printJSON(out)
+			return nil
+		},
+	})
+
+	var nAgent, nCwd, nTitle, nMode, nPrompt, nWorkspace, nReportTo, nHost string
 	var nTags []string
 	var nWait, nFocus bool
 	var nTimeout time.Duration
@@ -589,13 +610,24 @@ and hand it a task, wait for it to finish, read its reply. Refer to a session by
 			c := client()
 			self := c.selfID()
 			cwd := nCwd
-			if cwd == "" {
-				cwd, _ = os.Getwd()
-			}
-			if abs, err := filepath.Abs(cwd); err == nil {
-				cwd = abs
+			if nHost != "" {
+				// Another computer: this one's working directory means nothing there; its home by default, ~ is its home
+				var err error
+				if cwd, err = c.hostCwd(nHost, cwd); err != nil {
+					return err
+				}
+			} else {
+				if cwd == "" {
+					cwd, _ = os.Getwd()
+				}
+				if abs, err := filepath.Abs(cwd); err == nil {
+					cwd = abs
+				}
 			}
 			body := map[string]any{"agent": nAgent, "cwd": cwd, "title": nTitle}
+			if nHost != "" {
+				body["host"] = nHost
+			}
 			if nMode != "" {
 				body["mode"] = nMode
 			}
@@ -643,7 +675,8 @@ and hand it a task, wait for it to finish, read its reply. Refer to a session by
 	newCmd.Flags().StringVar(&nWorkspace, "workspace", "", i18n.S("放进这个 Code 工作空间（id、编号或名字；new = 新建一个），作为新标签页；不给 = 开在你旁边", "put it in this Code workspace (id, number or label; new = a new one) as a new tab; omitted = next to you"))
 	newCmd.Flags().StringArrayVar(&nTags, "tag", nil, i18n.S("给它打标签 k=v（可以给多个），之后 list --tag 找回来", "tag it k=v (repeatable), to find it again with list --tag"))
 	newCmd.Flags().StringVar(&nReportTo, "report-to", "", i18n.S("它每次停下（做完、等人、出错）就发一条回报给这个会话；self = 你自己。用了它就别再 --wait", "send a report to this session each time it stops (done, waiting for a person, error); self = you. Don't --wait as well"))
-	newCmd.Flags().StringVar(&nCwd, "cwd", "", i18n.S("工作目录（默认当前目录）", "working directory (default: current directory)"))
+	newCmd.Flags().StringVar(&nCwd, "cwd", "", i18n.S("工作目录（默认当前目录；--host 时默认那台电脑的家目录，~ 也指那台的）", "working directory (default: current directory; with --host, that computer's home, and ~ is its home)"))
+	newCmd.Flags().StringVar(&nHost, "host", "", i18n.S("开在另一台电脑上（gerdr session hosts 里的 id）；它的文件在那台上", "start it on another computer (an id from gerdr session hosts); its files are on that computer"))
 	newCmd.Flags().StringVar(&nTitle, "title", "", i18n.S("会话标题（之后可以用它指代这个会话）", "session title (you can refer to the session by it later)"))
 	newCmd.Flags().StringVar(&nMode, "mode", "", i18n.S("权限模式（claude: default/acceptEdits/plan/auto/bypassPermissions；codex: ask/auto/read-only/full-access；native: default/acceptEdits/plan/bypassPermissions）。不给 = 用户在设置里给这种 agent 定的默认模式（全放开的那种不算）", "permission mode (claude: default/acceptEdits/plan/auto/bypassPermissions; codex: ask/auto/read-only/full-access; native: default/acceptEdits/plan/bypassPermissions). Omitted = the default mode the user set for this agent in Settings (fully permissive ones excepted)"))
 	newCmd.Flags().StringVar(&nPrompt, "prompt", "", i18n.S("开好之后马上发的第一句话", "first message to send once it's started"))
@@ -699,8 +732,44 @@ and hand it a task, wait for it to finish, read its reply. Refer to a session by
 		},
 	})
 
+	cmd.AddCommand(&cobra.Command{
+		Use:   i18n.S("fetch <会话> <路径> [存到哪]", "fetch <session> <path> [dest]"),
+		Short: i18n.S("把一个会话那台电脑上的文件拿到这台（相对路径按它的目录算）；默认存到当前目录，输出存下的路径", "Copy a file from the computer a session runs on to this one (relative paths are under its directory); saved in the current directory by default, prints where"),
+		Args:  cobra.RangeArgs(2, 3),
+		RunE: func(_ *cobra.Command, args []string) error {
+			c := client()
+			s, err := c.resolve(args[0])
+			if err != nil {
+				return err
+			}
+			if s.Host == nil {
+				// Same computer: nothing to copy
+				p := args[1]
+				if !filepath.IsAbs(p) {
+					p = filepath.Join(s.Cwd, p)
+				}
+				printJSON(map[string]any{"path": p})
+				return nil
+			}
+			dest := filepath.Base(args[1])
+			if len(args) == 3 {
+				dest = args[2]
+			}
+			if st, err := os.Stat(dest); err == nil && st.IsDir() {
+				dest = filepath.Join(dest, filepath.Base(args[1]))
+			}
+			p, err := c.fetch(s.Host.ID, args[1], s.Cwd, dest)
+			if err != nil {
+				return err
+			}
+			printJSON(map[string]any{"path": p, "from": s.Host.ID})
+			return nil
+		},
+	})
+
 	var sWait bool
 	var sTimeout time.Duration
+	var sFiles []string
 	sendCmd := &cobra.Command{
 		Use:   i18n.S("send <会话> <消息>", "send <session> <message>"),
 		Short: i18n.S("给一个会话发消息（它在跑就插话进去）", "Send a message to a session (interjects if it's running)"),
@@ -720,7 +789,11 @@ and hand it a task, wait for it to finish, read its reply. Refer to a session by
 				return err
 			}
 			since := lastSeq(evs)
-			if err := c.sendTo(s.ID, args[1], self); err != nil {
+			files, err := c.attach(s, sFiles)
+			if err != nil {
+				return err
+			}
+			if err := c.sendTo(s.ID, args[1], self, files...); err != nil {
 				return err
 			}
 			// 发给一个关掉的会话：顺手把它开回界面上（开在你旁边、不抢焦点），不然人看不见它在干活。
@@ -736,6 +809,7 @@ and hand it a task, wait for it to finish, read its reply. Refer to a session by
 		},
 	}
 	sendCmd.Flags().BoolVar(&sWait, "wait", false, i18n.S("等它做完，输出它这一轮的回复", "wait for it to finish and print its reply for this turn"))
+	sendCmd.Flags().StringArrayVar(&sFiles, "file", nil, i18n.S("随消息带上这个文件（可以给多个）；对方在另一台电脑上时会先拷过去，它拿到的是那台上的路径", "attach this file (repeatable); for a session on another computer it is copied there first, and it gets the path there"))
 	sendCmd.Flags().DurationVar(&sTimeout, "timeout", 30*time.Minute, i18n.S("--wait 最多等多久", "how long --wait waits at most"))
 	cmd.AddCommand(sendCmd)
 
@@ -872,12 +946,138 @@ and hand it a task, wait for it to finish, read its reply. Refer to a session by
 	return cmd
 }
 
-func (c *apiClient) sendTo(id, text, from string) error {
+// hostCwd: a working directory on another computer, absolute there. Empty = its home; ~ = its home too.
+func (c *apiClient) hostCwd(host, cwd string) (string, error) {
+	var d struct {
+		Home string `json:"home"`
+	}
+	if err := c.do("GET", "/api/fs/dirs?host="+url.QueryEscape(host), nil, &d); err != nil {
+		return "", fmt.Errorf(i18n.S("问不到那台电脑（%s）：%w", "couldn't ask that computer (%s): %w"), host, err)
+	}
+	switch {
+	case cwd == "" || cwd == "~":
+		return d.Home, nil
+	case strings.HasPrefix(cwd, "~/"):
+		return d.Home + cwd[1:], nil
+	case strings.HasPrefix(cwd, "/"):
+		return cwd, nil
+	}
+	return "", errors.New(i18n.S("--host 时 --cwd 要写绝对路径或 ~/…", "with --host, --cwd must be absolute or ~/…"))
+}
+
+func (c *apiClient) sendTo(id, text, from string, files ...map[string]string) error {
+	content := []map[string]string{{"type": "text", "text": text}}
+	content = append(content, files...)
 	return c.do("POST", "/api/sessions/"+id+"/send", map[string]any{
-		"content": []map[string]string{{"type": "text", "text": text}},
+		"content": content,
 		"id":      uuid.NewString(),
 		"from":    from,
 	}, nil)
+}
+
+// attach: files to go with a message to session s, as resource links the agent reads by path. For a session on another
+// computer each file is copied there first (POST /api/fs/upload?host=, kept in that computer's Gerdr uploads), and
+// the link is the path there: a path on this computer means nothing to it (docs/dev/MULTIHOST.md).
+func (c *apiClient) attach(s sessInfo, paths []string) ([]map[string]string, error) {
+	var out []map[string]string
+	for _, p := range paths {
+		abs, err := filepath.Abs(p)
+		if err != nil {
+			return nil, err
+		}
+		st, err := os.Stat(abs)
+		if err != nil {
+			return nil, err
+		}
+		if st.IsDir() {
+			return nil, fmt.Errorf(i18n.S("%s 是目录：--file 只收文件（目录先打个包）", "%s is a folder: --file takes files (pack the folder first)"), p)
+		}
+		there := abs
+		if s.Host != nil {
+			if there, err = c.upload(s.Host.ID, abs); err != nil {
+				return nil, fmt.Errorf(i18n.S("把 %s 传到 %s 失败：%w", "copying %s to %s failed: %w"), p, s.Host.ID, err)
+			}
+		}
+		out = append(out, map[string]string{"type": "resource_link", "uri": "file://" + there, "name": filepath.Base(abs)})
+	}
+	return out, nil
+}
+
+// fetch streams a file from another computer (through this Gerdr's /h/<host>/ proxy) into dest; returns dest, absolute.
+func (c *apiClient) fetch(host, path, cwd, dest string) (string, error) {
+	q := url.Values{"path": {path}, "cwd": {cwd}}
+	req, err := http.NewRequest("GET", c.base+"/h/"+url.PathEscape(host)+"/api/fs/raw?"+q.Encode(), nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	resp, err := (&http.Client{}).Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		var e struct {
+			Error string `json:"error"`
+		}
+		_ = json.NewDecoder(resp.Body).Decode(&e)
+		if e.Error == "" {
+			e.Error = resp.Status
+		}
+		return "", errors.New(e.Error)
+	}
+	abs, err := filepath.Abs(dest)
+	if err != nil {
+		return "", err
+	}
+	tmp := abs + ".part"
+	f, err := os.Create(tmp)
+	if err != nil {
+		return "", err
+	}
+	if _, err := io.Copy(f, resp.Body); err != nil {
+		f.Close()
+		os.Remove(tmp)
+		return "", err
+	}
+	if err := f.Close(); err != nil {
+		return "", err
+	}
+	return abs, os.Rename(tmp, abs)
+}
+
+// upload streams a file to another computer through this Gerdr; returns its path there.
+func (c *apiClient) upload(host, path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	q := url.Values{"host": {host}, "name": {filepath.Base(path)}}
+	req, err := http.NewRequest("POST", c.base+"/api/fs/upload?"+q.Encode(), f)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	req.Header.Set("X-Gerdr", "1")
+	req.Header.Set("Content-Type", "application/octet-stream")
+	resp, err := (&http.Client{}).Do(req) // no overall timeout: a big file over the relay takes what it takes
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	var out struct {
+		Path  string `json:"path"`
+		Error string `json:"error"`
+	}
+	_ = json.NewDecoder(resp.Body).Decode(&out)
+	if resp.StatusCode != 200 || out.Path == "" {
+		if out.Error == "" {
+			out.Error = resp.Status
+		}
+		return "", errors.New(out.Error)
+	}
+	return out.Path, nil
 }
 
 func fail(err error) {

@@ -237,8 +237,9 @@ export const api = {
   termKill: (id: string) => req("DELETE", `/api/terms/${encodeURIComponent(id)}`),
   send: sendWithRetry,
   /** Stores a composer attachment the agent can't take inline (a video) on the gerdr machine; returns its absolute path. */
-  upload: async (f: File) => {
-    const res = await fetch(`/api/fs/upload?name=${encodeURIComponent(f.name)}`, {
+  /** host: onto another computer, for its agent (the answer is a path there) */
+  upload: async (f: File, host?: string) => {
+    const res = await fetch(`/api/fs/upload?name=${encodeURIComponent(f.name)}${hostQ(host, "&")}`, {
       method: "POST",
       credentials: "same-origin",
       headers: { "X-Gerdr": "1" },
@@ -323,10 +324,16 @@ export const api = {
   renameHost: (id: string, name: string) => req("POST", `/api/hosts/${encodeURIComponent(id)}/rename`, { name }),
   /** On the computer to be driven: a one-off invite for another Gerdr to control this one */
   peerInvite: () => req<{ code: string; expires: string; url: string }>("POST", "/api/remote/pair-code", { peer: true }),
-  fileStat: (path: string, cwd?: string) => req<FileStat>("GET", `/api/fs/stat?path=${encodeURIComponent(path)}&cwd=${encodeURIComponent(cwd ?? "")}`),
-  /** A cookie-less /f/<token>/<name> link to one file for the system browser, valid 5 minutes (server/filelink.go). */
-  fileLink: (path: string) => req<{ url: string }>("POST", "/api/fs/link", { path }),
-  fileExists: (paths: string[], cwd?: string) => req<{ exists: Record<string, boolean> }>("POST", "/api/fs/exists", { paths, cwd: cwd ?? "" }),
+  /** host: a file on another computer (docs/dev/MULTIHOST.md); the stat comes back marked with it */
+  fileStat: (path: string, cwd?: string, host?: string) =>
+    req<FileStat>("GET", `/api/fs/stat?path=${encodeURIComponent(path)}&cwd=${encodeURIComponent(cwd ?? "")}${hostQ(host, "&")}`).then((s) =>
+      host ? { ...s, host } : s,
+    ),
+  /** A cookie-less /f/<token>/<name> link to one file for the system browser, valid 5 minutes (server/filelink.go).
+   * For another computer's file the link is on that computer's own address (its /f/ is public there too). */
+  fileLink: (path: string, host?: string) => req<{ url: string }>("POST", `/api/fs/link${hostQ(host)}`, { path }),
+  fileExists: (paths: string[], cwd?: string, host?: string) =>
+    req<{ exists: Record<string, boolean> }>("POST", `/api/fs/exists${hostQ(host)}`, { paths, cwd: cwd ?? "" }),
 
   // 远程访问（设置 →「远程访问」；passkey 的两段 ceremony 在 lib/passkey.ts）
   remoteStatus: () => req<{ status: RemoteStatus; remote: boolean }>("GET", "/api/remote/status"),
@@ -429,10 +436,15 @@ export type MCPAuth = {
   checkedAt: number;
 };
 
-export type FileStat = { path: string; name: string; dir: boolean; size: number; mtime: number; mime: string };
+/** host: the computer the file is on (set by api.fileStat for another computer's file); unset = this one */
+export type FileStat = { path: string; name: string; dir: boolean; size: number; mtime: number; mime: string; host?: string };
 
-/** 文件本身的地址（img / video 的 src 直接用）。path 已经是 fileStat 解析过的绝对路径。 */
-export const fileRawURL = (path: string, download = false) => `/api/fs/raw?path=${encodeURIComponent(path)}${download ? "&download=1" : ""}`;
+/** ?host= (or &host=) for a request meant for another computer (server/hosts.go proxies it); "" for this one. */
+const hostQ = (host?: string, sep = "?") => (host ? `${sep}host=${encodeURIComponent(host)}` : "");
+
+/** 文件本身的地址（img / video 的 src 直接用）。path 已经是 fileStat 解析过的绝对路径。host: another computer's file */
+export const fileRawURL = (path: string, download = false, host?: string) =>
+  `${host ? `/h/${encodeURIComponent(host)}` : ""}/api/fs/raw?path=${encodeURIComponent(path)}${download ? "&download=1" : ""}`;
 
 // 这个浏览器标签页的 id：布局 / 配置广播回来时认出「是我自己改的」，不重复应用。
 export const clientId = Math.random().toString(36).slice(2);

@@ -3,6 +3,7 @@ package peer
 import (
 	"bytes"
 	"encoding/json"
+	"strings"
 )
 
 // What crosses between a host and the console carries session ids and URLs that only mean something on the host.
@@ -63,8 +64,43 @@ func UnrewriteURLs(hostID string, b []byte) []byte {
 	return bytes.ReplaceAll(b, []byte(`"/h/`+hostID+`/api/blobs/`), blobURL)
 }
 
-// idKeys: top-level fields of request bodies that name a session (send's from, open's near, meta's reportTo…).
-var idKeys = []string{"from", "near", "reportTo", "continueFrom", "session"}
+// idKeys: top-level fields of request bodies that name a session (open's near, meta's reportTo…). "from" is
+// handled apart: see fromConsole.
+var idKeys = []string{"near", "reportTo", "continueFrom", "session"}
+
+// fromConsole marks a sender that isn't on the host (a console session, or another host's: the rest of the id says
+// which) in the "from" of a message sent to a host. The host stores it on the event as is; the console strips it
+// when the event comes back (RewriteEvents), so "from session X" in the chat still points at X. A sender is kept
+// rather than dropped because it is what tells the host's hub an agent wrote this, not a person (Summary.ByPerson).
+const fromConsole = "console" + Sep
+
+// RewriteEvents: a host's events as the console shows them. "from" names a session on that host (prefixed here) or,
+// marked with fromConsole, one the console sent from (unmarked). Then the URLs. Not a list = only the URLs.
+func RewriteEvents(hostID string, b []byte) []byte {
+	var evs []map[string]json.RawMessage
+	if json.Unmarshal(b, &evs) == nil {
+		changed := false
+		for _, e := range evs {
+			var from string
+			if json.Unmarshal(e["from"], &from) != nil || from == "" {
+				continue
+			}
+			if rest, ok := strings.CutPrefix(from, fromConsole); ok {
+				from = rest
+			} else {
+				from = Join(hostID, from)
+			}
+			e["from"], _ = json.Marshal(from)
+			changed = true
+		}
+		if changed {
+			if nb, err := json.Marshal(evs); err == nil {
+				b = nb
+			}
+		}
+	}
+	return RewriteURLs(hostID, b)
+}
 
 // RewriteBody: a request body on its way to a host. Ids of that host lose their prefix; ids of anything else (a
 // console session, another host) can't mean anything there and are dropped. Not an object = passed as is.
@@ -75,6 +111,13 @@ func RewriteBody(hostID string, b []byte) []byte {
 	var m map[string]any
 	if json.Unmarshal(b, &m) != nil || m == nil {
 		return b
+	}
+	if s, ok := m["from"].(string); ok && s != "" {
+		if h, id := Split(s); h == hostID {
+			m["from"] = id
+		} else {
+			m["from"] = fromConsole + s
+		}
 	}
 	for _, k := range idKeys {
 		s, ok := m[k].(string)

@@ -1,6 +1,6 @@
 import { ChevronLeft, ChevronRight, Download, FileSearch, X } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
-import { chatHost } from "../host";
+import { chatHost, hostFor } from "../host";
 import { t } from "../i18n";
 import { cn } from "../utils";
 
@@ -23,7 +23,8 @@ import { cn } from "../utils";
  * 而对话是虚拟列表，行随时会被卸载，灯箱不能挂在行里面。
  */
 
-export type LightboxItem = { url: string; alt?: string; path?: string; cwd?: string; video?: boolean };
+/** sessionId: whose file it is (ChatHost.forSession picks the right openPath) */
+export type LightboxItem = { url: string; alt?: string; path?: string; cwd?: string; video?: boolean; sessionId?: string };
 
 type State = { items: LightboxItem[]; index: number; origin?: { el: Element; index: number } } | null;
 
@@ -424,13 +425,13 @@ function Lightbox({ items, index, origin }: { items: LightboxItem[]; index: numb
       )}
       <div ref={chromeRef} style={{ opacity: 0 }}>
         <div className="absolute top-3 right-3 flex gap-2">
-          {it.path && chatHost().openPath && (
+          {it.path && hostFor(it.sessionId).openPath && (
             <button
               className={btn}
               title={t("lightbox.openInViewer")}
               onClick={() => {
                 emit(null);
-                chatHost().openPath?.(it.path!, it.cwd);
+                hostFor(it.sessionId).openPath?.(it.path!, it.cwd);
               }}
             >
               <FileSearch className="size-4" />

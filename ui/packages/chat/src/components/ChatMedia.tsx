@@ -1,6 +1,6 @@
 import { AlertCircle, ExternalLink, FileText, FolderOpen, Loader2, RotateCw } from "lucide-react";
 import { useContext, useEffect, useState } from "react";
-import { chatHost } from "../host";
+import { hostFor, useChatHost } from "../host";
 import { t } from "../i18n";
 import { cn } from "../utils";
 import { imageSize, rememberImageSize } from "./imageSize";
@@ -62,15 +62,16 @@ export function nonMediaPath(src: unknown): string | null {
   return IMAGE.test(k) || VIDEO.test(k) || AUDIO.test(k) || PDF.test(k) ? null : path;
 }
 
-const rawURL = (path: string, cwd?: string) => chatHost().fileURL(path, cwd);
+const rawURL = (path: string, cwd?: string, sid?: string) => hostFor(sid).fileURL(path, cwd);
 // No fileStat on the host: assume the file is there (a retry just tries loading it again).
-const statOf = (path: string, cwd?: string) => chatHost().fileStat?.(path, cwd) ?? Promise.resolve({ size: 1, mtime: 0 });
+const statOf = (path: string, cwd?: string, sid?: string) => hostFor(sid).fileStat?.(path, cwd) ?? Promise.resolve({ size: 1, mtime: 0 });
 const nameOf = (p: string) => bare(p).split("/").pop() || p;
 
 /** 一张图 / 一段视频或音频 / 一份 PDF */
 export function ChatMedia({ src, alt }: { src: string; alt?: string }) {
   const session = useContext(SessionContext);
   const cwd = session?.cwd;
+  const sid = session?.id;
   const path = localPath(src);
   const k = bare(path ?? src);
   const isVideo = VIDEO.test(k);
@@ -78,7 +79,7 @@ export function ChatMedia({ src, alt }: { src: string; alt?: string }) {
   // Agents often post the reply while the file is still being written (a render finishing, an encoder rewriting the
   // mp4), so the first load can hit a missing or half-written file. Retry a few times with backoff, each with a fresh
   // query param so the browser doesn't hand back the cached failure; after that, offer a manual retry.
-  const base = path ? rawURL(path, cwd) : src;
+  const base = path ? rawURL(path, cwd, sid) : src;
   const [attempt, setAttempt] = useState(0);
   const [fail, setFailState] = useState(() => mediaFail.get(base));
   const setFail = (f: Fail | undefined) => {
@@ -99,7 +100,7 @@ export function ChatMedia({ src, alt }: { src: string; alt?: string }) {
     const t = setTimeout(
       () => {
         const probe = path
-          ? statOf(path, cwd).then((st) => st.size > 0)
+          ? statOf(path, cwd, sid).then((st) => st.size > 0)
           : VIDEO.test(k) || AUDIO.test(k)
             ? Promise.resolve(true) // remote stream: nothing cheaper to ask than trying it again
             : new Promise<boolean>((ok) => {
@@ -137,7 +138,7 @@ export function ChatMedia({ src, alt }: { src: string; alt?: string }) {
     if (!streamed) return;
     let live = true;
     setVersion(null);
-    statOf(path!, cwd).then(
+    statOf(path!, cwd, sid).then(
       (st) => live && (st.size > 0 ? setVersion(`${st.mtime}-${st.size}`) : onError()),
       () => live && onError(),
     );
@@ -187,7 +188,9 @@ export function ChatMedia({ src, alt }: { src: string; alt?: string }) {
     body = (
       <button
         type="button"
-        onClick={() => (path && chatHost().openPath ? chatHost().openPath!(path, cwd) : window.open(path ? rawURL(path, cwd) : src, "_blank", "noopener"))}
+        onClick={() =>
+          path && hostFor(sid).openPath ? hostFor(sid).openPath!(path, cwd) : window.open(path ? rawURL(path, cwd, sid) : src, "_blank", "noopener")
+        }
         className="inline-flex max-w-full items-center gap-2 rounded-md border border-border/60 px-3 py-2 text-[13px] hover:bg-accent"
       >
         <FileText className="size-4 shrink-0 text-bad" />
@@ -244,6 +247,7 @@ function ChatVideo({ url, ratioKey, onError, onLoad }: { url?: string; ratioKey:
 // steps of ~250px every time the virtual list remounted it (tools/scrolltest/images.mjs).
 function ChatImage(props: { url: string; sizeKey: string; name: string; path: string | null; cwd?: string; onError: () => void; onLoad: () => void }) {
   const { url, sizeKey, name, path, cwd } = props;
+  const sessionId = useContext(SessionContext)?.id;
   const [size] = useState(() => imageSize(sizeKey));
   // Same bounds as the classes (at most 18rem tall, 24rem wide, never upscaled), as a width with no percentage in it:
   // the wrapper is w-fit, and a percentage width would be resolved against a wrapper sized from the image itself.
@@ -263,7 +267,7 @@ function ChatImage(props: { url: string; sizeKey: string; name: string; path: st
         props.onLoad();
         rememberImageSize(sizeKey, e.currentTarget);
       }}
-      onClick={(e) => openLightbox([{ url, alt: name, path: path ?? undefined, cwd }], 0, e.currentTarget)}
+      onClick={(e) => openLightbox([{ url, alt: name, path: path ?? undefined, cwd, sessionId }], 0, e.currentTarget)}
       className="max-h-72 max-w-[min(24rem,100%)] cursor-zoom-in rounded-md border border-border/60"
     />
   );
@@ -272,7 +276,7 @@ function ChatImage(props: { url: string; sizeKey: string; name: string; path: st
 /** 本机文件下面那行：文件名 + （App 里）用系统程序打开、在访达里显示 */
 function LocalActions({ path, cwd, name }: { path: string; cwd?: string; name: string }) {
   const btn = "inline-flex h-6 shrink-0 items-center gap-1 rounded-md px-1.5 hover:bg-accent hover:text-foreground";
-  const openNative = chatHost().openNative;
+  const openNative = useChatHost().openNative;
   return (
     <span className="inline-flex max-w-full items-center gap-1 text-xs text-muted-foreground">
       <span className="min-w-0 truncate" title={path}>
@@ -351,7 +355,7 @@ export function MediaGrid({ items }: { items: { src: string; alt: string }[] }) 
     <div className="my-1 flex flex-wrap gap-1.5">
       {items.map((it, i) => {
         const path = localPath(it.src);
-        const url = path ? rawURL(path, session?.cwd) : it.src;
+        const url = path ? rawURL(path, session?.cwd, session?.id) : it.src;
         return (
           <button
             key={i}
@@ -361,7 +365,13 @@ export function MediaGrid({ items }: { items: { src: string; alt: string }[] }) 
               openLightbox(
                 items.map((x) => {
                   const p = localPath(x.src);
-                  return { url: p ? rawURL(p, session?.cwd) : x.src, alt: x.alt || nameOf(p ?? x.src), path: p ?? undefined, cwd: session?.cwd };
+                  return {
+                    url: p ? rawURL(p, session?.cwd, session?.id) : x.src,
+                    alt: x.alt || nameOf(p ?? x.src),
+                    path: p ?? undefined,
+                    cwd: session?.cwd,
+                    sessionId: session?.id,
+                  };
                 }),
                 i,
                 e.currentTarget,

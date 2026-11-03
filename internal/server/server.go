@@ -94,6 +94,9 @@ func (s *Server) Handler() http.Handler {
 	if s.Work != nil {
 		s.Work.Host = workHost{s} // ctx.sessions / ctx.workspaces in local functions (workhost.go)
 	}
+	if s.Peers != nil && s.Hub != nil {
+		s.Hub.Elsewhere = s.Peers.Known // a session here may report to one on another computer (hosts.go)
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /auth", s.auth)
 	mux.HandleFunc("GET /api/hello", s.hello)

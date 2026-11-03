@@ -1,7 +1,7 @@
 import { useContext, useSyncExternalStore } from "react";
 import { defaultComponents, defaultRehypePlugins, defaultRemarkPlugins, type Components, type StreamdownProps } from "streamdown";
 import { MessageResponse } from "../ai/message";
-import { chatHost, useChatHost } from "../host";
+import { hostFor, useChatHost } from "../host";
 import { bareFileName, fileExists, localHref, onFileExists, rehypePaths } from "../paths";
 import { ChatMedia, imageGroup, localPath, MediaGrid, nonMediaPath, rehypeImageGroups } from "./ChatMedia";
 import { SessionContext } from "./sessionContext";
@@ -51,6 +51,8 @@ function A(props: any) {
  * data-gerdr-cwd let the host's right-click menu offer both, which is where people find the ⌥-click.
  */
 function PathLink({ path, cwd, children }: { path: string; cwd?: string; children: React.ReactNode }) {
+  const host = useChatHost();
+  const session = useContext(SessionContext);
   return (
     <a
       href="#"
@@ -58,9 +60,10 @@ function PathLink({ path, cwd, children }: { path: string; cwd?: string; childre
       className={pathLink}
       data-gerdr-file={path}
       data-gerdr-cwd={cwd}
+      data-gerdr-session={session?.id}
       onClick={(e) => {
         e.preventDefault();
-        chatHost().openPath?.(path, cwd, { beside: e.altKey });
+        host.openPath?.(path, cwd, { beside: e.altKey });
       }}
     >
       {children}
@@ -73,7 +76,7 @@ function PathLink({ path, cwd, children }: { path: string; cwd?: string; childre
 function Img(props: any) {
   const session = useContext(SessionContext);
   const src = String(props.src ?? "");
-  const file = chatHost().openPath ? nonMediaPath(src) : null;
+  const file = hostFor(session?.id).openPath ? nonMediaPath(src) : null;
   if (file)
     return (
       <PathLink path={file} cwd={session?.cwd}>
@@ -110,8 +113,8 @@ function InlineCode(props: any) {
   const session = useContext(SessionContext);
   const text = hastText(props.node);
   const cmd = bangCommand(text);
-  const name = session?.cwd && chatHost().openPath ? bareFileName(text) : undefined;
-  const found = useSyncExternalStore(onFileExists, () => (name && session?.cwd ? fileExists(name, session.cwd) : undefined));
+  const name = session?.cwd && hostFor(session?.id).openPath ? bareFileName(text) : undefined;
+  const found = useSyncExternalStore(onFileExists, () => (name && session?.cwd ? fileExists(name, session.cwd, session.id) : undefined));
   const code = <DefaultCode {...props} />;
   if (name && found)
     return (
@@ -119,7 +122,7 @@ function InlineCode(props: any) {
         {code}
       </PathLink>
     );
-  const actions = cmd && session ? chatHost().codeActions?.(cmd, "bang", session) : undefined;
+  const actions = cmd && session ? hostFor(session.id).codeActions?.(cmd, "bang", session) : undefined;
   if (!actions) return code;
   return (
     <>
