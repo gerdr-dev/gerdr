@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { api } from "@/lib/api";
 import { t } from "@/lib/i18n";
+import { panelsChanged } from "@/lib/panels";
 import { set, useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { IconPicker, StoredIcon } from "./IconPicker";
@@ -44,6 +45,7 @@ export function PanelIconDialog() {
     try {
       await api.setPanelIcon(ask.key, icon, color);
       set({ dialog: null });
+      panelsChanged();
     } catch (e: any) {
       setErr(e.message ?? String(e));
     }

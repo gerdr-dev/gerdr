@@ -131,6 +131,56 @@ func (s *Server) workRoutes(mux *http.ServeMux) {
 		_, _ = s.mountWork(key)
 		writeJSON(w, map[string]any{"key": key})
 	})
+	// A project's panels for the rail and Settings → Panels: its own Work (unless removed) and the rest, each with what
+	// its ui.json says (title, icon, color) and where it came from.
+	mux.HandleFunc("GET /api/work/panels", func(w http.ResponseWriter, r *http.Request) {
+		project := r.URL.Query().Get("project")
+		if project == "" {
+			project = work.DefaultProject
+		}
+		type panel struct {
+			Key    string         `json:"key"`
+			Name   string         `json:"name"`
+			Config map[string]any `json:"config"`
+			Source work.Source    `json:"source"`
+		}
+		list := []panel{}
+		add := func(key, name string) {
+			dir, err := s.Work.Dir(key)
+			if err != nil {
+				return
+			}
+			p := panel{Key: key, Name: name, Config: map[string]any{}}
+			if raw, err := os.ReadFile(filepath.Join(dir, "ui", "ui.json")); err == nil {
+				_ = json.Unmarshal(raw, &p.Config)
+			}
+			p.Source, _ = s.Work.Source(key)
+			list = append(list, p)
+		}
+		removed := s.Work.WorkRemoved(project)
+		if !removed {
+			add(project, "")
+		}
+		for _, n := range s.Work.Panels(project) {
+			add(work.PanelKey(project, n), n)
+		}
+		writeJSON(w, map[string]any{"panels": list, "ownRemoved": removed})
+	})
+	mux.HandleFunc("POST /api/work/panels/restore", func(w http.ResponseWriter, r *http.Request) {
+		var b struct {
+			Project string `json:"project"`
+		}
+		if err := decode(r, &b); err != nil {
+			httpError(w, 400, err.Error())
+			return
+		}
+		if err := s.Work.RestoreWork(b.Project); err != nil {
+			httpError(w, 400, err.Error())
+			return
+		}
+		_, _ = s.mountWork(b.Project)
+		writeJSON(w, map[string]any{"ok": true})
+	})
 	mux.HandleFunc("POST /api/work/panels", func(w http.ResponseWriter, r *http.Request) {
 		var b struct {
 			Project string `json:"project"`

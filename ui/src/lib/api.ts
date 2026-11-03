@@ -182,6 +182,13 @@ export const api = {
   newPanel: (project: string, name: string) => req<{ key: string }>("POST", "/api/work/panels", { project, name }),
   /** A panel's rail icon in its ui.json: the same kinds as an agent's (IconPicker), and a colour. */
   setPanelIcon: (key: string, icon: string, color: string) => req<{ ok: boolean }>("POST", "/api/work/panels/icon", { key, icon, color }),
+  /** A project's panels (its own Work first, unless removed), with their ui.json and where they came from. */
+  panels: (project: string) =>
+    req<{
+      panels: { key: string; name: string; config: Record<string, unknown>; source: { git: boolean; remote?: string; dirty?: boolean } }[];
+      ownRemoved: boolean;
+    }>("GET", `/api/work/panels?project=${encodeURIComponent(project)}`),
+  restoreWork: (project: string) => req<{ ok: boolean }>("POST", "/api/work/panels/restore", { project }),
   removePanel: (key: string) => req<{ trash: string }>("POST", "/api/work/panels/remove", { key }),
   updateWork: (project: string) => req<{ output: string }>("POST", "/api/work/update", { project }),
   // In the interface's language: addon.json's i18n is applied here, once, so every place that shows a name reads it

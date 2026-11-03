@@ -11,7 +11,7 @@ import type { ContentBlock } from "../types";
 import { focusPane } from "./panes";
 import { focusedLeaf, shutdownGone } from "./shared";
 import { switchSpace } from "./spaces";
-import { addTab } from "./tabs";
+import { addTab, addTabForSession } from "./tabs";
 import { t } from "../i18n";
 
 // ---- 会话 ----
@@ -118,7 +118,7 @@ export function focusSession(sessionId: string) {
   if (openInWork(sessionId)) return;
   const loc = locateSession(get().layout, sessionId);
   if (loc) focusPane(loc.pane.id);
-  else addTab({ sessionId });
+  else addTabForSession(sessionId);
   markRead(sessionId);
 }
 

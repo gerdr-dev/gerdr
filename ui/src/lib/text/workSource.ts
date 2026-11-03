@@ -27,6 +27,18 @@ export const zh = {
   "workSource.removeBody": "它的页面、函数、数据、定时任务会整个移到回收站，不会删掉。",
   "workSource.remove": "移除",
   "workSource.removed": "「{name}」已经移除",
+  "workSource.menuSettings": "面板设置…",
+  "panelSettings.tab": "面板",
+  "panelSettings.intro": "每个项目除了 Code，还可以有几个面板：每个是一整套页面、本地函数、流程和定时任务，各管各的数据和助手。在左边窄条上点它们切换。",
+  "panelSettings.own": "项目自带",
+  "panelSettings.ownRemoved": "这个项目自带的面板已经移除（在回收站里）",
+  "panelSettings.restore": "恢复（空白的）",
+  "panelSettings.none": "「{name}」还没有面板",
+  "panelSettings.from": "来自 {remote}",
+  "panelSettings.localGit": "本地 git 仓库",
+  "panelSettings.local": "本地",
+  "panelSettings.dirty": "有没提交的改动",
+  "panelSettings.update": "更新",
 };
 
 export const en: Record<keyof typeof zh, string> = {
@@ -60,4 +72,17 @@ export const en: Record<keyof typeof zh, string> = {
   "workSource.removeBody": "Its pages, functions, data and schedules move to the trash; nothing is deleted.",
   "workSource.remove": "Remove",
   "workSource.removed": "“{name}” removed",
+  "workSource.menuSettings": "Panel settings…",
+  "panelSettings.tab": "Panels",
+  "panelSettings.intro":
+    "Besides Code, a project can have panels: each a whole set of pages, local functions, workflow and schedules, with its own data and agent. Switch between them on the strip at the left.",
+  "panelSettings.own": "the project's own",
+  "panelSettings.ownRemoved": "This project's own panel was removed (it's in the trash)",
+  "panelSettings.restore": "Restore (blank)",
+  "panelSettings.none": "“{name}” has no panels yet",
+  "panelSettings.from": "From {remote}",
+  "panelSettings.localGit": "A local git repository",
+  "panelSettings.local": "Local",
+  "panelSettings.dirty": "has uncommitted changes",
+  "panelSettings.update": "Update",
 };

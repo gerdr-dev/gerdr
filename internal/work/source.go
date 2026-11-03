@@ -87,25 +87,64 @@ func (r *Runner) NewPanel(project, name string) (string, error) {
 	return r.addPanel(project, name, func(dir string) error { return os.MkdirAll(dir, 0o755) })
 }
 
-// RemovePanel moves a panel to trash/panels/<project>-<name>-<time> (a project's own Work can't be removed this way).
+// ErrWorkRemoved: the project's own Work was removed by the user; RestoreWork brings a blank one back.
+var ErrWorkRemoved = errors.New("this project's Work was removed (restore it in Settings → Panels)")
+
+// removedMark: next to a removed Work directory, so Ensure doesn't make it again the next time anything asks for it.
+func removedMark(dir string) string { return dir + ".removed" }
+
+// WorkRemoved: the project's own Work was removed.
+func (r *Runner) WorkRemoved(project string) bool {
+	dir, err := r.Dir(project)
+	if err != nil {
+		return false
+	}
+	_, err = os.Stat(removedMark(dir))
+	return err == nil
+}
+
+// RestoreWork gives the project its own Work again: a blank one (the removed one is in the trash to copy back from).
+func (r *Runner) RestoreWork(project string) error {
+	dir, err := r.Dir(project)
+	if err != nil {
+		return err
+	}
+	if err := os.Remove(removedMark(dir)); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	_, err = r.Ensure(project)
+	return err
+}
+
+// RemovePanel moves a panel to trash/panels/<project>-<name>-<time>. A project's own Work can go too: it then stays
+// away (removedMark) until RestoreWork.
 func (r *Runner) RemovePanel(key string) (string, error) {
 	project, panel := SplitKey(key)
+	label := panel
 	if panel == "" {
-		return "", errors.New("a project's own Work isn't a panel to remove")
+		label = "work"
 	}
 	dir, err := r.Dir(key)
 	if err != nil {
 		return "", err
 	}
 	if _, err := os.Stat(dir); err != nil {
-		return "", fmt.Errorf("no panel %q in %s", panel, project)
+		return "", fmt.Errorf("no panel %q in %s", label, project)
 	}
 	base := filepath.Join(r.Root, "trash", PanelsDir)
 	if err := os.MkdirAll(base, 0o755); err != nil {
 		return "", err
 	}
-	trash := filepath.Join(base, project+"-"+panel+"-"+time.Now().Format("20060102-150405"))
+	trash := filepath.Join(base, project+"-"+label+"-"+time.Now().Format("20060102-150405"))
+	if panel == "" {
+		if err := os.WriteFile(removedMark(dir), []byte(trash+"\n"), 0o644); err != nil {
+			return "", err
+		}
+	}
 	if err := os.Rename(dir, trash); err != nil {
+		if panel == "" {
+			_ = os.Remove(removedMark(dir))
+		}
 		return "", err
 	}
 	r.mu.Lock()

@@ -1,3 +1,4 @@
+import { PanelSettings } from "./PanelSettings";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -79,6 +80,7 @@ export function SettingsDialog({ open }: { open: boolean }) {
               <TabsTrigger value="general">{t("settings.tab.general")}</TabsTrigger>
               <TabsTrigger value="keys">{t("settings.tab.keys")}</TabsTrigger>
               <TabsTrigger value="agents">Agent</TabsTrigger>
+              <TabsTrigger value="panels">{t("panelSettings.tab")}</TabsTrigger>
               <TabsTrigger value="addons">{t("settings.tab.addons")}</TabsTrigger>
               <TabsTrigger value="remote">
                 {t("settings.tab.remote")}
@@ -273,6 +275,9 @@ export function SettingsDialog({ open }: { open: boolean }) {
                   </Button>
                 </Row>
               </Section>
+            </TabsContent>
+            <TabsContent value="panels" className="pt-2">
+              <PanelSettings />
             </TabsContent>
             <TabsContent value="keys" className="pt-2">
               <KeySettings />

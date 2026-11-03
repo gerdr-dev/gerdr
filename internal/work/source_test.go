@@ -90,8 +90,23 @@ func TestPanels(t *testing.T) {
 	if b, _ := os.ReadFile(filepath.Join(bd, "ui", "src", "pages", "index.tsx")); string(b) != string(bundled()["ui/src/pages/index.tsx"]) {
 		t.Error("a blank panel isn't the built-in Work")
 	}
-	if _, err := r.RemovePanel("p"); err == nil {
-		t.Error("removed a project's own Work")
+	// The project's own Work can go too, and stays away until restored
+	if _, err := r.RemovePanel("p"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.Ensure("p"); err != ErrWorkRemoved || !r.WorkRemoved("p") {
+		t.Fatalf("removed Work came back: %v", err)
+	}
+	for _, k := range r.Projects() {
+		if k == "p" {
+			t.Error("removed Work still listed")
+		}
+	}
+	if err := r.RestoreWork("p"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "ui", "package.json")); err != nil {
+		t.Error("restored Work is empty")
 	}
 	trash, err := r.RemovePanel(key)
 	if err != nil {

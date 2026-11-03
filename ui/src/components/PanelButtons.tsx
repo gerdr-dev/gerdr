@@ -1,12 +1,12 @@
-import { useEffect, useState } from "react";
-import { Plus, RefreshCw, Smile, Trash2 } from "lucide-react";
+import { useEffect } from "react";
+import { Plus, RefreshCw, SlidersHorizontal, Smile, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { api } from "@/lib/api";
 import { askConfirm } from "@/lib/confirm";
 import { currentSpace } from "@/lib/layout";
-import { usePanels, type Panel } from "@/lib/mounts";
+import { panelsChanged, usePanels, type Panel } from "@/lib/panels";
 import { set, setMode, setWorkPanel, useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { PanelIcon } from "./PanelIcon";
@@ -19,11 +19,14 @@ import { t } from "@/lib/i18n";
  */
 export function PanelButtons({ className, size = "rail" }: { className: (on: boolean) => string; size?: "rail" | "row" }) {
   const space = useStore((s) => currentSpace(s.layout));
-  const panels = usePanels(space);
+  const { panels, loaded } = usePanels(space);
   const mode = useStore((s) => s.mode);
   const chosen = useStore((s) => s.workPanels[space] ?? "");
-  // A panel removed elsewhere: fall back to the project's Work
-  const cur = panels.some((p) => p.name === chosen) ? chosen : "";
+  // The chosen one is gone (removed here or elsewhere, the project's own Work too): the first there is
+  const cur = !loaded || panels.some((p) => p.name === chosen) ? chosen : (panels[0]?.name ?? "");
+  useEffect(() => {
+    if (cur !== chosen) setWorkPanel(space, cur);
+  }, [cur, chosen, space]);
   return (
     <>
       {panels.map((p) => (
@@ -47,11 +50,7 @@ export function PanelButtons({ className, size = "rail" }: { className: (on: boo
 }
 
 function PanelButton({ p, on, className, size, space }: { p: Panel; on: boolean; className: (on: boolean) => string; size: "rail" | "row"; space: string }) {
-  const [src, setSrc] = useState<{ git: boolean; remote?: string }>();
-  const [menu, setMenu] = useState(false);
-  useEffect(() => {
-    if (menu) api.workSource(p.key).then(setSrc, () => {});
-  }, [menu, p.key]);
+  const src = p.source;
   const label = p.name ? p.title : "Work";
   const go = () => {
     setWorkPanel(space, p.name);
@@ -74,14 +73,14 @@ function PanelButton({ p, on, className, size, space }: { p: Panel; on: boolean;
       return;
     try {
       const r = await api.removePanel(p.key);
-      if (on) setWorkPanel(space, "");
+      panelsChanged();
       toast.success(t("workSource.removed", { name: label }), { description: t("workSource.oldIn", { path: r.trash }) });
     } catch (e: any) {
       toast.error(e.message);
     }
   };
   return (
-    <ContextMenu onOpenChange={setMenu}>
+    <ContextMenu>
       <Tooltip>
         <TooltipTrigger asChild>
           <ContextMenuTrigger asChild>
@@ -101,11 +100,13 @@ function PanelButton({ p, on, className, size, space }: { p: Panel; on: boolean;
             <RefreshCw /> {t("workSource.menuUpdate", { remote: src.remote.replace(/^https?:\/\/(github\.com\/)?/, "") })}
           </ContextMenuItem>
         )}
-        {p.name ? (
-          <ContextMenuItem variant="destructive" onClick={remove}>
-            <Trash2 /> {t("workSource.menuRemove")}
-          </ContextMenuItem>
-        ) : null}
+        <ContextMenuItem variant="destructive" onClick={remove}>
+          <Trash2 /> {t("workSource.menuRemove")}
+        </ContextMenuItem>
+        <ContextMenuSeparator />
+        <ContextMenuItem onClick={() => set({ dialog: { kind: "settings", tab: "panels" } })}>
+          <SlidersHorizontal /> {t("workSource.menuSettings")}
+        </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
   );

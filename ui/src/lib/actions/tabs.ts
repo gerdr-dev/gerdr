@@ -4,21 +4,25 @@ import {
   allLeaves,
   attach,
   closePane,
+  currentSpace,
   findLeaf,
   leaves,
   newTab,
+  newWorkspace,
   rid,
   sideRows,
   spaceOf,
+  spaceWorkspaces,
   updateTab,
   updateWs,
   type Side,
   type Tab,
+  type Workspace,
 } from "../layout";
 import { get, setLayout, useStore } from "../store";
 import { onlyBlank, remember } from "./reopen";
 import { createInPane } from "./sessions";
-import { inheritDraft, killTerms, removeTab, selectTabIn, shutdownGone } from "./shared";
+import { inheritDraft, inSpace, killTerms, removeTab, selectTabIn, shutdownGone } from "./shared";
 import { showCode } from "./views";
 
 // ---- tab ----
@@ -46,6 +50,37 @@ export function addTab(opts?: { workspaceId?: string; cwd?: string; agent?: stri
     );
   });
   showCode(); // a new tab is opened to be seen
+}
+
+/**
+ * A conversation with no tab yet, brought up (a notification, the inbox, the running list, a Work panel's "open in
+ * Code"): it goes in the workspace for its directory (the one whose directory is its cwd, or the closest one above
+ * it), else a new workspace for that directory, like the server places what a Work starts. Not the workspace on screen:
+ * a board's worker in another repository ended up in whatever workspace the user happened to be looking at.
+ */
+export function addTabForSession(sessionId: string) {
+  const s = get().sessions[sessionId];
+  const cwd = (s?.cwd ?? "").replace(/\/+$/, "");
+  if (!cwd) return addTab({ sessionId });
+  setLayout((l) => {
+    const space = currentSpace(l);
+    let best: Workspace | undefined;
+    for (const w of spaceWorkspaces(l, space)) {
+      const wc = (w.cwd ?? "").replace(/\/+$/, "");
+      if (wc && (cwd === wc || cwd.startsWith(wc + "/")) && wc.length > (best?.cwd?.length ?? -1)) best = w;
+    }
+    const t = newTab(undefined, sessionId);
+    if (best)
+      return selectTabIn(
+        updateWs(l, best.id, (w) => ({ ...w, tabs: [...w.tabs, t] })),
+        best.id,
+        t.id,
+      );
+    const w = { ...newWorkspace(cwd.split("/").pop() || cwd, cwd), space: inSpace(space) };
+    const fresh = { ...w, tabs: [t], activeTab: t.id };
+    return { ...l, workspaces: [...l.workspaces, fresh], active: fresh.id, lastActive: l.active };
+  });
+  showCode();
 }
 
 export function selectTab(index: number) {

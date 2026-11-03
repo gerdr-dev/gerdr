@@ -33,6 +33,7 @@ import { askSecret, secretAsks } from "@/lib/workSecrets";
 import { mountInfo } from "@/lib/mounts";
 import { PanelButtons } from "@/components/PanelButtons";
 import { panelOfKey, spaceOfKey } from "@/lib/work";
+import { panelsChanged, usePanels } from "@/lib/panels";
 import { askWorkAgent, ensureWorkSession, isEmptyChat, newWorkChat, openWorkChat, useWorkChats, useWorkProject, useWorkSession, workAgent } from "@/lib/work";
 import { t } from "@/lib/i18n";
 
@@ -575,6 +576,25 @@ function ago(iso: string) {
  * (switch to an earlier conversation), the split button on the right starts a new one — its main half with the
  * agent it names, its arrow with another (which then becomes the default for this project's next ones).
  */
+/** A project with no panel at all: add one, or bring its own Work back. */
+function NoPanels({ space, ownRemoved }: { space: string; ownRemoved: boolean }) {
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-3 bg-background p-6 text-center">
+      <div className="text-[13px] text-muted-foreground">{t("workView.noPanels")}</div>
+      <div className="flex gap-2">
+        {ownRemoved && (
+          <Button variant="outline" size="sm" onClick={() => api.restoreWork(space).then(panelsChanged, (e) => toast.error(e.message))}>
+            {t("panelSettings.restore")}
+          </Button>
+        )}
+        <Button size="sm" onClick={() => set({ dialog: { kind: "workSource", project: space, action: "install" } })}>
+          {t("workSource.add")}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 /** Whether the agent column is folded away, per Work (each panel its own), kept per browser. */
 function useChatHidden(key: string): [boolean, (v: boolean) => void] {
   const read = () => {
@@ -727,9 +747,13 @@ export function WorkView() {
   const { info } = useMount(project);
   const ownChat = info?.config?.chat === false;
   const [hidden, setHidden] = useChatHidden(project);
+  const space = spaceOfKey(project);
+  const { panels, loaded, ownRemoved } = usePanels(space);
   const [chatW, setChatW] = useChatW();
   const [side, setSide] = useState<"page" | "chat">("page");
   const showChat = useCallback(() => setSide("chat"), []);
+  // Every panel of the project removed, its own Work too: nothing to show but the way to add one
+  if (loaded && !panels.length) return <NoPanels space={space} ownRemoved={ownRemoved} />;
   if (ownChat && !phone)
     return (
       <div className="h-full bg-background">

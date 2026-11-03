@@ -257,6 +257,10 @@ func (r *Runner) Ensure(project string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	// A project's own Work the user removed stays removed (source.go RemovePanel), until RestoreWork
+	if _, err := os.Stat(removedMark(dir)); err == nil {
+		return "", ErrWorkRemoved
+	}
 	r.mu.Lock()
 	done := r.installed[dir]
 	r.mu.Unlock()

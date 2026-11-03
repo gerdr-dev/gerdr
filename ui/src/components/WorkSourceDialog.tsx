@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { switchSpace } from "@/lib/actions";
 import { api } from "@/lib/api";
 import { t } from "@/lib/i18n";
+import { panelsChanged } from "@/lib/panels";
 import { set, setMode, setWorkPanel, useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
@@ -41,6 +42,7 @@ export function WorkSourceDialog() {
     try {
       const r = install ? await api.installPanel(ask.project, url.trim(), name.trim() || undefined) : await api.newPanel(ask.project, name.trim());
       set({ dialog: null });
+      panelsChanged();
       switchSpace(ask.project);
       setWorkPanel(ask.project, r.key.split("/")[1] ?? "");
       setMode("work");

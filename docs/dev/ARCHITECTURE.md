@@ -578,6 +578,9 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
   upgraded). The frame-era bridge (`lib/gerdr.ts` postMessage) still works: the page's `window.parent` is now Gerdr's
   window, both sides post and listen there, and only the mount on screen is listened to. `/work/<project>/<file>` serves
   only its `public/` files now. `gerdr work status` reads the mount's errors.
+- A conversation brought up that has no tab (a notification, the inbox, the running list, a panel's "open in Code")
+  gets one in the workspace for its directory, else a new workspace for it (`addTabForSession`), not the workspace on
+  screen: a board's worker in another repository landed in whatever workspace the user was looking at.
 - `@gerdr/core` (`ui/src/core/index.ts`, types for Work agents in `builtin/base/ui/src/gerdr-core.d.ts`; change both):
   `SessionChat` (a whole conversation for the page to place: its own TooltipProvider / TabActive since a mounted root
   is outside Gerdr's tree; streamed while shown through `store.mountWatch`), `useSession`, `openInCode`, `askSecret`
@@ -597,7 +600,9 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
   agent's icon (`IconPicker` / `StoredIcon`, shared with Settings → Agent: a glyph, a line icon, an add-on's sprite,
   a palette colour), set from its right-click "change icon" (`/api/work/panels/icon` writes the site's own file, so it
   travels with the panel); a value it doesn't know, or a sprite whose add-on isn't loaded, draws the default. The agent column folds away per Work
-  (`gerdr.workChatHidden`) to a strip with the way back and the agent's status; the chat stays mounted. A panel's right-click updates it (`git pull --ff-only`) or removes it (to
+  (`gerdr.workChatHidden`) to a strip with the way back and the agent's status; the chat stays mounted. Settings → Panels (`PanelSettings`, `GET /api/work/panels`) has them all per project: add,
+  icon, update, remove. A project's own Work can be removed too: it goes to the trash and a `<dir>.removed` mark keeps
+  `Ensure` from making it again until it's restored (blank). A panel's right-click updates it (`git pull --ff-only`) or removes it (to
   `trash/panels/`). esbuild writes UTF-8 (`Charset`): a panel named 任务看板 has it in its module paths, and escaped
   `\uXXXX` placeholders never matched in `link`.
 - Page logic lives in local functions `<GERDR_DIR>/work/local/*.ts` (esbuild → goja, `ctx.mcp(server, tool, args)`), called by

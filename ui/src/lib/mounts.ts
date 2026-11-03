@@ -29,34 +29,6 @@ export function mountInfo(key: string): MountInfo | undefined {
   return page()?.mounts?.[mountName(key)];
 }
 
-/** One of a project's panels, for the rail. */
-export type Panel = { key: string; name: string; title: string; icon?: string; color?: string };
-
-function panelsOf(space: string): Panel[] {
-  const str = (v: unknown) => (typeof v === "string" && v ? v : undefined);
-  const own = page()?.mounts?.[space];
-  const out: Panel[] = [{ key: space, name: "", title: "Work", icon: str(own?.config?.icon), color: str(own?.config?.color) }];
-  for (const [n, m] of Object.entries(page()?.mounts ?? {})) {
-    if (!n.startsWith(space + "~")) continue;
-    const name = n.slice(space.length + 1);
-    const title = typeof m.config?.title === "string" && m.config.title !== "Work" ? m.config.title : name;
-    out.push({ key: `${space}/${name}`, name, title, icon: str(m.config?.icon), color: str(m.config?.color) });
-  }
-  return out.sort((a, b) => (a.name === "" ? -1 : b.name === "" ? 1 : a.name.localeCompare(b.name)));
-}
-
-/** A project's panels: its own Work first, then the ones installed or added (they appear as their mounts do). */
-export function usePanels(space: string): Panel[] {
-  const [list, setList] = useState(() => panelsOf(space));
-  useEffect(() => {
-    setList(panelsOf(space));
-    const f = () => setList(panelsOf(space));
-    window.addEventListener("gerdr:ui", f);
-    return () => window.removeEventListener("gerdr:ui", f);
-  }, [space]);
-  return list;
-}
-
 /** A Work's mount info, and a number that goes up whenever its root has to be rendered again. */
 export function useMount(key: string): { info: MountInfo | undefined; seq: number } {
   const name = mountName(key);
