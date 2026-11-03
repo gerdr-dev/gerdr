@@ -82,6 +82,11 @@ type State = {
   sidebarW: number;
   /** Which view fills the main area: the agent tabs, or the Work dashboard (WorkView). Per device, in localStorage. */
   mode: "agents" | "work";
+  /**
+   * The Work view has been opened in this page: from then on it stays mounted (hidden in Code mode) and its chat stays
+   * watched, so switching back keeps the Work site's state (it's an iframe: unmounting reloads it) and the chat's.
+   */
+  workKept: boolean;
   /** The all-agents overview (lib/overview.ts): covers the sidebar and the tabs while on. Per device, in localStorage. */
   overview: Overview;
   /**
@@ -146,6 +151,7 @@ export const useStore = create<State>(() => ({
   sidebar: loadSidebar(),
   sidebarW: loadSidebarW(),
   mode: loadMode(),
+  workKept: loadMode() === "work",
   overview: loadOverview(),
   localFont: loadLocalFont(),
   drawer: false,
@@ -221,7 +227,7 @@ export function markUnread(id: string) {
 }
 
 export function setMode(mode: "agents" | "work") {
-  set({ mode, drawer: false });
+  set(mode === "work" ? { mode, drawer: false, workKept: true } : { mode, drawer: false });
   try {
     localStorage.setItem("gerdr.mode", mode);
   } catch {}
@@ -260,8 +266,8 @@ export const overviewShown = () => get().overview.on && get().mode !== "work";
 /** 要订阅日志的会话：看得见的 + 留在页面里没卸载的 tab 里的（它们切回来时不用整份重推、组件不用重建）。 */
 export function watchedSessions(l: Layout, kept: string[]): string[] {
   const out = new Set(visibleSessions(l));
-  // The Work view's chat isn't in the layout; it's on screen while the Work view is.
-  if (get().mode === "work") {
+  // The Work view's chat isn't in the layout; it's watched while the Work view is mounted (shown, or kept hidden).
+  if (get().mode === "work" || get().workKept) {
     const space = currentSpace(l);
     const c = get().config;
     const work = c.workSessions?.[space] ?? (space === "default" ? c.workSession : undefined);

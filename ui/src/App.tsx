@@ -203,6 +203,7 @@ export default function App() {
   );
   const prevKept = useStore((s) => s.keptTabs);
   const mode = useStore((s) => s.mode);
+  const workKept = useStore((s) => s.workKept);
   useEffect(() => syncWatch(), [mode]);
   // The overview covers sidebar and tabs (on a phone too, one tile at a time). Once opened it stays mounted, hidden, so reopening keeps each
   // chat's scroll position, like the kept tabs below.
@@ -273,10 +274,14 @@ export default function App() {
             </div>
           )}
           <div className="relative flex min-w-0 flex-1 flex-col">
-            {/* Work mode covers the agent tabs instead of unmounting them: back in Code mode everything is where it was */}
-            {mode === "work" && (
-              <div className="absolute inset-0 z-30">
-                <WorkView />
+            {/* Work mode covers the agent tabs instead of unmounting them: back in Code mode everything is where it was.
+                The same the other way: once opened the Work view stays mounted, only hidden in Code mode — unmounting it
+                reloaded the Work site's iframe and threw away everything the user had open there (reported). */}
+            {workKept && (
+              <div className={cn("absolute inset-0 z-30", mode !== "work" && "pointer-events-none invisible")} aria-hidden={mode !== "work"}>
+                <TabActive.Provider value={mode === "work"}>
+                  <WorkView />
+                </TabActive.Provider>
               </div>
             )}
             {/* The unified sidebar lists the tabs itself; with it hidden the tab bar comes back (and its show-sidebar button) */}
