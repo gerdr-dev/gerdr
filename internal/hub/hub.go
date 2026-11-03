@@ -120,6 +120,20 @@ type Options struct {
 	// SkillDirs: extra skill folders for a session beyond its Record.SkillDirs, worked out when it starts or
 	// resumes (the server: a session in a Work directory gets that Work's skills/). nil = none.
 	SkillDirs func(rec Record) []string
+	// MCP: MCP servers a session's agent gets from gerdr (the Work tools of the project it works for: `gerdr work
+	// mcp`), worked out on every new / resume / load like SkillDirs. nil = none.
+	MCP func(rec Record) []acp.McpServer
+}
+
+// mcpFor is the MCP servers handed to the agent for a session: never nil (ACP wants a list).
+func (h *Hub) mcpFor(rec Record) []acp.McpServer {
+	if h.opt.MCP == nil {
+		return []acp.McpServer{}
+	}
+	if l := h.opt.MCP(rec); l != nil {
+		return l
+	}
+	return []acp.McpServer{}
 }
 
 // skillRoots: the extra skill folders a session's agent gets (Record.SkillDirs + Options.SkillDirs), existing ones.
@@ -701,7 +715,7 @@ func (h *Hub) Create(ctx context.Context, o CreateOptions) (*Session, error) {
 		s.rec = rec
 		// 先登记，LoadSession 重放的 update 才找得到主人。
 		h.register(s)
-		res, err := c.Conn.LoadSession(ctx, acp.LoadSessionRequest{SessionId: acp.SessionId(o.Import), Cwd: cwd, McpServers: []acp.McpServer{}, Meta: acpx.Meta(meta)})
+		res, err := c.Conn.LoadSession(ctx, acp.LoadSessionRequest{SessionId: acp.SessionId(o.Import), Cwd: cwd, McpServers: h.mcpFor(rec), Meta: acpx.Meta(meta)})
 		if err != nil {
 			h.unregister(s)
 			return nil, err
@@ -712,7 +726,7 @@ func (h *Hub) Create(ctx context.Context, o CreateOptions) (*Session, error) {
 		h.opts.set(o.Agent, res.Modes, res.ConfigOptions)
 		s.mu.Unlock()
 	} else {
-		res, err := c.Conn.NewSession(ctx, acp.NewSessionRequest{Cwd: cwd, McpServers: []acp.McpServer{}, Meta: acpx.Meta(meta)})
+		res, err := c.Conn.NewSession(ctx, acp.NewSessionRequest{Cwd: cwd, McpServers: h.mcpFor(rec), Meta: acpx.Meta(meta)})
 		if err != nil {
 			return nil, err
 		}

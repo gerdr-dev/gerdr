@@ -283,7 +283,7 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 		_ = json.Unmarshal(cfg.Get(), &c)
 		return hub.NewDefaults{Mode: c.Modes[agent], Config: c.Config[agent]}
 	}
-	h, err := hub.New(hub.Options{Dir: env.Dir, ClaudeIdle: env.ClaudeIdle, ExtraAgents: cfgAgents(), LLM: cfgLLM, Defaults: cfgDefaults, Log: log, Ext: em, SkillDirs: workSkills(env.Dir)})
+	h, err := hub.New(hub.Options{Dir: env.Dir, ClaudeIdle: env.ClaudeIdle, ExtraAgents: cfgAgents(), LLM: cfgLLM, Defaults: cfgDefaults, Log: log, Ext: em, SkillDirs: workSkills(env.Dir), MCP: workMCP(env.Dir)})
 	if err != nil {
 		return err
 	}
@@ -558,28 +558,51 @@ func runACP(which string) error {
 	return nil
 }
 
-// workSkills: a session running in a project's Work directory (its Work agent) gets that Work's skills/ folder, like
-// the sessions the Work starts (work.StartOptions → Record.SkillDirs). Only path arithmetic: no Runner state needed.
-//
-// Both sides with symlinks resolved: a session's cwd is recorded resolved (/private/tmp/…), GERDR_DIR may not be.
-func workSkills(dir string) func(hub.Record) []string {
+// workOf: the Work project a session works for, and that project's Work directory. The Work agent runs in the Work
+// directory; a session the Work started carries its skills/ folder (work.StartOptions → Record.SkillDirs). Both
+// sides with symlinks resolved: a session's cwd is recorded resolved (/private/tmp/…), GERDR_DIR may not be.
+func workOf(dir string) func(hub.Record) (string, string, bool) {
 	if real, err := filepath.EvalSymlinks(dir); err == nil {
 		dir = real
 	}
 	r := work.New(dir, nil)
+	return func(rec hub.Record) (string, string, bool) {
+		for _, p := range append([]string{rec.Cwd}, rec.SkillDirs...) {
+			if real, err := filepath.EvalSymlinks(p); err == nil {
+				p = real
+			}
+			if project, ok := r.WorkProject(p); ok {
+				if d, err := r.Dir(project); err == nil {
+					return project, d, true
+				}
+			}
+		}
+		return "", "", false
+	}
+}
+
+// workSkills: a session the Work works with gets that Work's skills/ folder.
+func workSkills(dir string) func(hub.Record) []string {
+	of := workOf(dir)
 	return func(rec hub.Record) []string {
-		cwd := rec.Cwd
-		if real, err := filepath.EvalSymlinks(cwd); err == nil {
-			cwd = real
+		if _, d, ok := of(rec); ok {
+			return []string{filepath.Join(d, work.SkillsDir)}
 		}
-		p, ok := r.WorkProject(cwd)
-		if !ok {
+		return nil
+	}
+}
+
+// workMCP: ... and its Work tools, as `gerdr work mcp` for that conversation (cmd/gerdr/workmcp.go). The binary is
+// this one, so the tools speak to the backend that started the agent.
+func workMCP(dir string) func(hub.Record) []acp.McpServer {
+	of := workOf(dir)
+	bin, _ := os.Executable()
+	return func(rec hub.Record) []acp.McpServer {
+		project, _, ok := of(rec)
+		if !ok || bin == "" {
 			return nil
 		}
-		d, err := r.Dir(p)
-		if err != nil {
-			return nil
-		}
-		return []string{filepath.Join(d, work.SkillsDir)}
+		env := []acp.EnvVariable{{Name: "GERDR_DIR", Value: dir}}
+		return []acp.McpServer{{Stdio: &acp.McpServerStdio{Name: "work", Command: bin, Args: []string{"work", "mcp", "--project", project, "--session", rec.ID}, Env: env}}}
 	}
 }

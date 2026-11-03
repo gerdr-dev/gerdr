@@ -82,11 +82,14 @@ func (rn *Run) Wait(ctx context.Context) (any, error) {
 func (rn *Run) Abort() { rn.cancel() }
 
 // Start runs a function in the background and returns at once.
-func (r *Runner) Start(project, name string, input any) *Run {
+func (r *Runner) Start(project, name string, input any) *Run { return r.StartAs(project, name, input, "") }
+
+// StartAs is Start for a call made by a conversation (a Work tool): ctx.caller.session is that session's id.
+func (r *Runner) StartAs(project, name string, input any, caller string) *Run {
 	if project == "" {
 		project = DefaultProject
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), runTimeout)
+	ctx, cancel := context.WithTimeout(context.WithValue(context.Background(), callerKey{}, caller), runTimeout)
 	rn := &Run{ID: fmt.Sprintf("r%d", time.Now().UnixNano()), Project: project, Fn: name, Started: time.Now(), cancel: cancel, wake: make(chan struct{})}
 	r.mu.Lock()
 	if r.runs == nil {

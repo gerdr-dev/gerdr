@@ -408,6 +408,13 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
   cross on the server (`crossSpace`, using `from` / `near`). Closed conversations belong to no session (`--all` lists them);
   reopening one puts it next to the caller, in the caller's session. This is not a security boundary: an agent has the token
   and can call the API itself. herdr's isn't one either: it's a separate socket.
+- **Work tools** (`work/tools.go`, `cmd/gerdr/workmcp.go`, `hub.Options.MCP`). A Work's local functions declared in
+  `export const tools` are served to the same sessions that get its skills, over MCP: `gerdr work mcp --project P
+  --session S` is a stdio server the hub hands the adapter as a client MCP server on new / resume / load (claude
+  allows client MCP tools by name, `--allowedTools mcp__work`). Each call goes to `/api/work/tools/{name}` and runs the
+  function with `ctx.caller.session` = S. Tools, not text an agent ends its reply with: it can act mid-turn, undo
+  what it did, and gets an answer; the board's old ```gerdr-task``` block could only add, once per turn, and was
+  parsed out of prose. A failing function is the tool's `isError` result, not a JSON-RPC error, so the agent reads why.
 - **A Work project's skills** (`skills/` in its Work directory; `Record.SkillDirs`, `hub.Options.SkillDirs`,
   `acpx.SkillRoots`). The user's way of working is a skill, not files the code hands to agents at chosen moments:
   which part matters is the agent's call, as with any skill, and the code staying out of it is what keeps a Work

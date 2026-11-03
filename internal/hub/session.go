@@ -484,12 +484,12 @@ func (s *Session) ensureAttached(ctx context.Context) (*agenthost.Host, error) {
 	if roots := s.h.skillRoots(rec); len(roots) > 0 {
 		meta["skillRoots"] = roots
 	}
-	res, err := c.Conn.ResumeSession(ctx, acp.ResumeSessionRequest{SessionId: acp.SessionId(rec.AgentSessionID), Cwd: rec.Cwd, McpServers: []acp.McpServer{}, Meta: acpx.Meta(meta)})
+	res, err := c.Conn.ResumeSession(ctx, acp.ResumeSessionRequest{SessionId: acp.SessionId(rec.AgentSessionID), Cwd: rec.Cwd, McpServers: s.h.mcpFor(rec), Meta: acpx.Meta(meta)})
 	if err != nil {
 		// 一句话都没说过的会话，agent 那边多半压根没落盘（claude / codex 都是第一条消息才写），
 		// 接不回来很正常：换一个新的 agent 会话顶上，人看不出区别。
 		if !s.hasUserMessages() {
-			nres, nerr := c.Conn.NewSession(ctx, acp.NewSessionRequest{Cwd: rec.Cwd, McpServers: []acp.McpServer{}, Meta: acpx.Meta(meta)})
+			nres, nerr := c.Conn.NewSession(ctx, acp.NewSessionRequest{Cwd: rec.Cwd, McpServers: s.h.mcpFor(rec), Meta: acpx.Meta(meta)})
 			if nerr == nil {
 				s.h.rekey(s, string(nres.SessionId))
 				s.mu.Lock()

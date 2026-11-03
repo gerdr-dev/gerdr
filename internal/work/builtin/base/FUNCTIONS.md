@@ -84,6 +84,30 @@ gerdr work functions                              # what can be called
 A thrown error prints its stack (file and line, counted in the bundled code: imported helper files
 come first) and exits 1. Ctrl-C stops the run. Fix it until it runs, then wire the page.
 
+## As tools for agents
+
+A local file can offer some of its functions as tools to the agents this Work works with (you, and every session
+the Work starts): they get them over MCP as `work`, can call them whenever they need, and get the result back in
+the same turn. That's how an agent reports to and changes something of yours (a task board: "I'm done", "I need the
+user to sign in", "never mind, they answered") instead of writing text you'd have to parse.
+
+```ts
+export const tools = {
+  ask_human: { description: "Ask the user to do a step only they can do…", input: { type: "object", properties: { title: { type: "string" } }, required: ["title"] } },
+};
+export async function ask_human(input: { title: string }, ctx: Ctx) {
+  const who = ctx.caller.session; // the conversation that called it: which task's worker it is
+  …
+}
+```
+
+- The key is the tool's name and runs the export of the same name; `input` is its JSON Schema. A description says
+  when to call it and what it does: it's all the agent knows about it.
+- `ctx.caller.session` is the calling conversation's id ("" for a page or `gerdr work run`). Don't trust input for
+  "who am I": look the caller up.
+- A thrown error goes back to the agent as the tool's error: say what to do instead.
+- Sessions get the tools when they start or are reopened; the list is read again each time an agent asks for it.
+
 ## On a schedule
 
 What the project does by itself goes in `schedules/<id>.json`, one file per job (the file name is its id). Gerdr's

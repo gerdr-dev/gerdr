@@ -60,6 +60,8 @@ and their habits are what they wrote down, not what the code says.
   `ctx.workspaces` to pick where), and report progress. **Read `FUNCTIONS.md` before writing one** (the
   rules, how to try and debug them), and `local/ctx.d.ts` for the ctx API. Keep pages to drawing; work a page needs again and again goes into a function, not
   into you running the same commands each time.
+- `local/*.ts` can also export `tools` (FUNCTIONS.md, "As tools for agents"): functions you and the sessions this
+  Work starts get as MCP tools (`work`), to report to and change things of the user's (a board) from inside a turn.
 - `skills/<name>/` — skills (a `SKILL.md` index with `name` / `description` front matter, its references next to it)
   that Gerdr gives you and every session this Work starts (`ctx.sessions.start`), like any skill: the agent sees the
   description and reads the rest when it's relevant. This is where the user's way of working goes. A session started

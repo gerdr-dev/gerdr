@@ -1020,6 +1020,7 @@ prints its stack and exits 1. Ctrl-C stops the run. --input-file - reads the inp
 			return nil
 		},
 	})
+	cmd.AddCommand(workMCPCmd(which))
 	sched := &cobra.Command{Use: "schedule", Short: "Run one schedule now, or pause / resume it (on this machine)"}
 	for _, op := range []string{"run", "pause", "resume"} {
 		sched.AddCommand(&cobra.Command{

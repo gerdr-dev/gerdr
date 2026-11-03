@@ -160,6 +160,8 @@ interface Ctx {
   log(...args: unknown[]): void;
   /** Waits; 60 s at most per call. */
   sleep(ms: number): Promise<void>;
+  /** Who called this function: as a Work tool (`export const tools`), the conversation's id; otherwise "". */
+  caller: { session: string };
   /** This Work project: its id, this directory, where its run logs are. */
   workspace: { project: string; dir: string; logs_dir: string };
   /** gerdr's interface language, for messages meant for the user. */

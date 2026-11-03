@@ -201,6 +201,33 @@ func (s *Server) workRoutes(mux *http.ServeMux) {
 		}
 		writeJSON(w, map[string]any{"list": list})
 	})
+	// Work tools (work/tools.go), served to agents over MCP by `gerdr work mcp`:
+	//	GET  /api/work/tools?project=                       the declared tools
+	//	POST /api/work/tools/{name}?project= {session, args} run one for that conversation (ctx.caller.session)
+	mux.HandleFunc("GET /api/work/tools", func(w http.ResponseWriter, r *http.Request) {
+		list, err := s.Work.Tools(r.URL.Query().Get("project"))
+		if err != nil {
+			httpError(w, 400, err.Error())
+			return
+		}
+		writeJSON(w, map[string]any{"list": list})
+	})
+	mux.HandleFunc("POST /api/work/tools/{name}", func(w http.ResponseWriter, r *http.Request) {
+		var b struct {
+			Session string `json:"session"`
+			Args    any    `json:"args"`
+		}
+		if err := decode(r, &b); err != nil {
+			httpError(w, 400, err.Error())
+			return
+		}
+		res, err := s.Work.CallTool(r.Context(), r.URL.Query().Get("project"), r.PathValue("name"), b.Session, b.Args)
+		if err != nil {
+			httpError(w, 500, err.Error())
+			return
+		}
+		writeJSON(w, map[string]any{"result": res})
+	})
 	mux.HandleFunc("GET /api/work/schedules", func(w http.ResponseWriter, r *http.Request) {
 		list, err := s.Work.Schedules(r.URL.Query().Get("project"))
 		if err != nil {
