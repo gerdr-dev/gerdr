@@ -76,9 +76,10 @@ function DialogContent({
           className
         )}
         // The app's long-press / right-click menu (AppContextMenu) lives outside the dialog: picking "copy image" in
-        // it must not count as clicking outside and close the dialog under it
+        // it must not count as clicking outside and close the dialog under it. Same for a toast: closing or swiping
+        // one away is about the toast, not the dialog
         onInteractOutside={(e) => {
-          if ((e.target as Element | null)?.closest?.("[data-app-context-menu]")) e.preventDefault()
+          if ((e.target as Element | null)?.closest?.("[data-app-context-menu],[data-sonner-toaster]")) e.preventDefault()
           onInteractOutside?.(e)
         }}
         style={{ ...keepLayer, ...style }}

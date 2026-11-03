@@ -67,9 +67,9 @@ function SheetContent({
             "inset-x-0 bottom-0 h-auto border-t data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom",
           className
         )}
-        // Same as DialogContent: picking an item in the app's context menu isn't a click outside
+        // Same as DialogContent: picking an item in the app's context menu, or touching a toast, isn't a click outside
         onInteractOutside={(e) => {
-          if ((e.target as Element | null)?.closest?.("[data-app-context-menu]")) e.preventDefault()
+          if ((e.target as Element | null)?.closest?.("[data-app-context-menu],[data-sonner-toaster]")) e.preventDefault()
           onInteractOutside?.(e)
         }}
         style={{ ...keepLayer, ...style }}

@@ -30,6 +30,9 @@ const Toaster = ({ ...props }: ToasterProps) => {
           "--normal-text": "var(--popover-foreground)",
           "--normal-border": "var(--border)",
           "--border-radius": "var(--radius)",
+          // A modal dialog (Radix) puts pointer-events: none on <body> while open, and the toaster lives under body:
+          // without this a toast shown over Settings could not be tapped, closed or swiped away
+          pointerEvents: "auto",
         } as React.CSSProperties
       }
       {...props}
