@@ -76,7 +76,7 @@ gerdr session new --agent codex --title reviewer \
 ### On another computer: `--host`
 
 The user can pair other computers with this one (Settings → Remote access). `gerdr session hosts` lists them; a
-session there shows in `list` with `"host": "<id>"`, and its id starts with `<host>~`. Everything above works on it the
+session there shows in `list` with `"host": "<id>"`, and its id starts with `<host>:`. Everything above works on it the
 same (`send`, `wait`, `read`, `--report-to`, tags). Start one there with `--host`:
 
 ```bash
@@ -87,8 +87,21 @@ gerdr session new --host mini --cwd '~/work/promo' --title cover \
 
 - Its files are **that computer's**: a path in its reply doesn't exist here. To hand a file to a session on another
   computer, attach it: `gerdr session send <session> "..." --file out/cover.png` copies it there and tells it the path.
+- To get a file it made: `gerdr session fetch <session> out/cover.png [dest]` (relative to its directory).
+- For a whole folder you keep working on from both sides (renders, a video project), pair it once and sync on demand:
+
+  ```bash
+  gerdr folder pull 'mini:~/work/promo/out' ./promo-out   # pairs ./promo-out with that folder, brings it here
+  gerdr folder status ./promo-out                          # what changed on each side
+  gerdr folder push ./promo-out                            # send your changes back
+  ```
+
+  Pull before you work on it and push after: nothing syncs by itself. A file both sides changed is kept twice
+  (`cover (mini).png` next to `cover.png`), never merged: tell the user and let them choose. A file deleted on one side
+  is reported, not deleted on the other. `.gerdrignore` in the folder (one pattern per line) skips render caches;
+  `node_modules`, `.git` are always skipped.
 - `--cwd` with `--host` is absolute or `'~/…'` in quotes: unquoted, your shell turns `~` into *this* computer's home.
-  Without `--cwd`, that computer's home.
+  Without `--cwd`, that computer's home. Same for `gerdr folder`'s `'host:~/…'`.
 - Only start one on another computer when the user asked for it, or the task needs that machine (its GPU, its files,
   its accounts).
 

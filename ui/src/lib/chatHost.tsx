@@ -203,12 +203,12 @@ const fileURL = (path: string, cwd?: string, host?: string) =>
   `${host ? `/h/${encodeURIComponent(host)}` : ""}/api/fs/raw?path=${encodeURIComponent(path)}&cwd=${encodeURIComponent(cwd ?? "")}`;
 
 /**
- * A session on another computer (id "<host>~<id>", docs/dev/MULTIHOST.md): its paths are that computer's files, so the
+ * A session on another computer (id "<host>:<id>", docs/dev/MULTIHOST.md): its paths are that computer's files, so the
  * chat's file functions go there (server/hosts.go proxies ?host= and /h/<host>/). A file picked here has no path there,
  * so attachments are uploaded to it instead (no localPath), and there is no "open with the system app" for it.
  */
 function hostSession(sessionId: string): Partial<ChatHost> | undefined {
-  const i = sessionId.indexOf("~");
+  const i = sessionId.indexOf(":");
   if (i <= 0) return undefined;
   const host = sessionId.slice(0, i);
   return {

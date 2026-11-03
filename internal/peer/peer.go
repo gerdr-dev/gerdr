@@ -2,7 +2,7 @@
 // Design and why: docs/dev/MULTIHOST.md.
 //
 // A host is reached on its remote port (relay or LAN direct) with a device cookie it issued for a peer code, exactly
-// like a paired phone: nothing new is opened on the host. Its sessions show up here as "<hostID>~<id>".
+// like a paired phone: nothing new is opened on the host. Its sessions show up here as "<hostID>:<id>".
 package peer
 
 import (
@@ -29,7 +29,7 @@ import (
 
 // Sep joins a host id and a session id. Gerdr's ids are UUIDs and host ids are [a-z0-9-], so it can't occur in
 // either, and it is URL-safe, so /api/sessions/{id}/… routes don't change.
-const Sep = "~"
+const Sep = ":"
 
 // Join: the id the console shows for session id on host.
 func Join(host, id string) string {
@@ -39,7 +39,7 @@ func Join(host, id string) string {
 	return host + Sep + id
 }
 
-// Split: "<host>~<id>" → host, id. A local id gives "", id.
+// Split: "<host>:<id>" → host, id. A local id gives "", id.
 func Split(id string) (host, rest string) {
 	if i := strings.Index(id, Sep); i > 0 {
 		return id[:i], id[i+len(Sep):]

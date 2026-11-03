@@ -128,7 +128,7 @@ function fileItems(link: HTMLElement): Item[] {
   const cwd = link.dataset.gerdrCwd || undefined;
   // A session on another computer: its paths are that computer's files (docs/dev/MULTIHOST.md)
   const sid = link.dataset.gerdrSession ?? "";
-  const host = sid.includes("~") ? sid.slice(0, sid.indexOf("~")) : undefined;
+  const host = sid.includes(":") ? sid.slice(0, sid.indexOf(":")) : undefined;
   const items: Item[] = [
     { label: tr("common.open"), icon: <FileText className={icon} />, run: () => openPath(path, cwd, { host }), hint: tr("appContextMenu.click") },
   ];

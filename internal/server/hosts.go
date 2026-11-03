@@ -19,7 +19,7 @@ import (
 )
 
 // Other computers this Gerdr drives (docs/dev/MULTIHOST.md). The routing sits in front of the mux: a request about
-// a host's session ("<host>~<id>") or carrying ?host= goes to that host, everything else is served here as before.
+// a host's session ("<host>:<id>") or carrying ?host= goes to that host, everything else is served here as before.
 
 func (s *Server) hostRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/hosts", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, s.hostInfos()) })
@@ -128,7 +128,7 @@ func (s *Server) hostProxy(w http.ResponseWriter, r *http.Request, host, path st
 		return
 	}
 	// File contents pass as they are, both ways: an uploaded or viewed .json is a file, not an API payload
-	isFile := path == "/api/fs/upload" || path == "/api/fs/raw" || strings.HasPrefix(path, "/f/")
+	isFile := path == "/api/fs/upload" || path == "/api/fs/raw" || path == "/api/fs/file" || strings.HasPrefix(path, "/f/")
 	var body io.Reader
 	if r.Body != nil && r.Method != http.MethodGet && r.Method != http.MethodHead {
 		if isFile {

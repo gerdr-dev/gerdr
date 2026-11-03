@@ -26,7 +26,7 @@ func (m *Manager) loadReports() {
 	}
 }
 
-// ReportTo: where host session id ("<host>~<id>") reports to, as kept on the console. "" = nothing here (it may
+// ReportTo: where host session id ("<host>:<id>") reports to, as kept on the console. "" = nothing here (it may
 // still report to a session on its own host, which that host handles).
 func (m *Manager) ReportTo(id string) string {
 	m.mu.Lock()

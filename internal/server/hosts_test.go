@@ -88,21 +88,21 @@ func TestHostSessionsAndOps(t *testing.T) {
 	for i, s := range list {
 		byID[s.ID] = i
 	}
-	i, ok := byID["mini~w1"]
+	i, ok := byID["mini:w1"]
 	if !ok {
 		t.Fatalf("host sessions not merged: %s", w.Body)
 	}
-	if s := list[i]; s.Host == nil || s.Host.ID != "mini" || s.ReportTo != "mini~boss" {
+	if s := list[i]; s.Host == nil || s.Host.ID != "mini" || s.ReportTo != "mini:boss" {
 		t.Fatalf("summary not rewritten: %+v", s)
 	}
 
-	w = do(ch, "GET", "/api/sessions/mini~w1/events", nil, auth)
+	w = do(ch, "GET", "/api/sessions/mini:w1/events", nil, auth)
 	var evs []map[string]any
 	if json.Unmarshal(w.Body.Bytes(), &evs); w.Code != 200 || len(evs) != 3 {
 		t.Fatalf("events through the console: %d %s", w.Code, w.Body)
 	}
 
-	w = do(ch, "POST", "/api/sessions/mini~w2/rename", strings.NewReader(`{"Title":"from the console"}`), auth, csrf)
+	w = do(ch, "POST", "/api/sessions/mini:w2/rename", strings.NewReader(`{"Title":"from the console"}`), auth, csrf)
 	if w.Code != 200 {
 		t.Fatalf("rename: %d %s", w.Code, w.Body)
 	}
@@ -110,12 +110,12 @@ func TestHostSessionsAndOps(t *testing.T) {
 		t.Fatalf("rename didn't reach the host: %q", s.Summary().Title)
 	}
 
-	w = do(ch, "GET", "/api/sessions/mini~w1", nil, auth)
-	if !strings.Contains(w.Body.String(), `"id":"mini~w1"`) {
+	w = do(ch, "GET", "/api/sessions/mini:w1", nil, auth)
+	if !strings.Contains(w.Body.String(), `"id":"mini:w1"`) {
 		t.Fatalf("one summary not rewritten: %s", w.Body)
 	}
 	// The proxy paths need this computer's credential like /api/ does
-	for _, p := range []string{"/h/mini/api/sessions", "/api/sessions/mini~w1", "/api/fs/dirs?host=mini"} {
+	for _, p := range []string{"/h/mini/api/sessions", "/api/sessions/mini:w1", "/api/fs/dirs?host=mini"} {
 		if w := do(ch, "GET", p, nil); w.Code != 401 {
 			t.Fatalf("%s without a token: %d", p, w.Code)
 		}
@@ -123,17 +123,17 @@ func TestHostSessionsAndOps(t *testing.T) {
 	if w := do(ch, "POST", "/h/mini/api/sessions/w1/cancel", nil, auth); w.Code != 403 {
 		t.Fatalf("a write through /h/ without the CSRF header: %d", w.Code)
 	}
-	if w := do(ch, "GET", "/h/mini/api/sessions?local=1", nil, auth); !strings.Contains(w.Body.String(), `"mini~w1"`) {
+	if w := do(ch, "GET", "/h/mini/api/sessions?local=1", nil, auth); !strings.Contains(w.Body.String(), `"mini:w1"`) {
 		t.Fatalf("/h/ proxy: %s", w.Body)
 	}
-	if w := do(ch, "GET", "/api/sessions/nope~w1", nil, auth); w.Code != 404 {
+	if w := do(ch, "GET", "/api/sessions/nope:w1", nil, auth); w.Code != 404 {
 		t.Fatalf("unknown host: %d", w.Code)
 	}
 	// Removing the host here forgets it
 	if w := do(ch, "DELETE", "/api/hosts/mini", nil, auth, csrf); w.Code != 200 {
 		t.Fatalf("remove: %d", w.Code)
 	}
-	if w := do(ch, "GET", "/api/sessions", nil, auth); strings.Contains(w.Body.String(), "mini~") {
+	if w := do(ch, "GET", "/api/sessions", nil, auth); strings.Contains(w.Body.String(), "mini:") {
 		t.Fatalf("removed host still listed: %s", w.Body)
 	}
 }
@@ -149,7 +149,7 @@ func TestHostWS(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer conn.Close()
-	_ = conn.WriteJSON(map[string]any{"t": "watch", "ids": []string{"mini~w1"}})
+	_ = conn.WriteJSON(map[string]any{"t": "watch", "ids": []string{"mini:w1"}})
 	deadline := time.Now().Add(10 * time.Second)
 	_ = conn.SetReadDeadline(deadline)
 	for time.Now().Before(deadline) {
@@ -164,7 +164,7 @@ func TestHostWS(t *testing.T) {
 		}
 		_ = json.Unmarshal(b, &batch)
 		for _, m := range batch {
-			if m.T == "events" && m.ID == "mini~w1" && len(m.Events) == 3 {
+			if m.T == "events" && m.ID == "mini:w1" && len(m.Events) == 3 {
 				return
 			}
 		}
@@ -177,31 +177,31 @@ func TestHostWS(t *testing.T) {
 func TestHostReportTo(t *testing.T) {
 	console, ch, hostSrv := hostPair(t)
 	auth := hdr("Authorization", "Bearer "+console.Token)
-	w := do(ch, "POST", "/api/sessions/mini~w1/meta", strings.NewReader(`{"reportTo":"boss"}`), auth, csrf)
+	w := do(ch, "POST", "/api/sessions/mini:w1/meta", strings.NewReader(`{"reportTo":"boss"}`), auth, csrf)
 	if w.Code != 200 || !strings.Contains(w.Body.String(), `"reportTo":"boss"`) {
 		t.Fatalf("meta: %d %s", w.Code, w.Body)
 	}
-	if got := console.Peers.ReportTo("mini~w1"); got != "boss" {
+	if got := console.Peers.ReportTo("mini:w1"); got != "boss" {
 		t.Fatalf("console-side target: %q", got)
 	}
 	if s, _ := hostSrv.Hub.Session("w1"); s.Summary().ReportTo != "" {
 		t.Fatalf("the host's own target should give way, got %q", s.Summary().ReportTo)
 	}
 	rp := newReporter(console)
-	sum, evs, err := rp.source("mini~w1")
-	if err != nil || sum.ID != "mini~w1" || len(evs) != 3 || lastReply(evs) == "" {
+	sum, evs, err := rp.source("mini:w1")
+	if err != nil || sum.ID != "mini:w1" || len(evs) != 3 || lastReply(evs) == "" {
 		t.Fatalf("source: %+v %d %v", sum.ID, len(evs), err)
 	}
-	if st, ok := rp.state("mini~w2"); !ok || st == "" {
+	if st, ok := rp.state("mini:w2"); !ok || st == "" {
 		t.Fatalf("state of a host session: %q %v", st, ok)
 	}
 	// A console session may report to a host session too (Hub.Elsewhere)
-	if w := do(ch, "POST", "/api/sessions/w2/meta", strings.NewReader(`{"reportTo":"mini~boss"}`), auth, csrf); w.Code != 200 {
+	if w := do(ch, "POST", "/api/sessions/w2/meta", strings.NewReader(`{"reportTo":"mini:boss"}`), auth, csrf); w.Code != 200 {
 		t.Fatalf("console → host target: %d %s", w.Code, w.Body)
 	}
 	// A target on the same host goes back to the host
-	w = do(ch, "POST", "/api/sessions/mini~w1/meta", strings.NewReader(`{"reportTo":"mini~boss"}`), auth, csrf)
-	if w.Code != 200 || console.Peers.ReportTo("mini~w1") != "" {
+	w = do(ch, "POST", "/api/sessions/mini:w1/meta", strings.NewReader(`{"reportTo":"mini:boss"}`), auth, csrf)
+	if w.Code != 200 || console.Peers.ReportTo("mini:w1") != "" {
 		t.Fatalf("same-host target: %d %s", w.Code, w.Body)
 	}
 	if s, _ := hostSrv.Hub.Session("w1"); s.Summary().ReportTo != "boss" {
@@ -234,13 +234,13 @@ func TestHostOpenHere(t *testing.T) {
 	console, ch, _ := hostPair(t)
 	sub := console.Hub.Subscribe()
 	defer console.Hub.Unsubscribe(sub)
-	if w := do(ch, "POST", "/api/sessions/mini~w2/open", strings.NewReader(`{"near":"x"}`), hdr("Authorization", "Bearer "+console.Token), csrf); w.Code != 200 {
+	if w := do(ch, "POST", "/api/sessions/mini:w2/open", strings.NewReader(`{"near":"x"}`), hdr("Authorization", "Bearer "+console.Token), csrf); w.Code != 200 {
 		t.Fatalf("open: %d %s", w.Code, w.Body)
 	}
 	for {
 		select {
 		case m := <-sub.C():
-			if b, _ := json.Marshal(m); m.T == "open" && strings.Contains(string(b), "mini~w2") {
+			if b, _ := json.Marshal(m); m.T == "open" && strings.Contains(string(b), "mini:w2") {
 				return
 			}
 		case <-time.After(3 * time.Second):
@@ -284,7 +284,7 @@ func TestHostMoveConversation(t *testing.T) {
 	console, ch, hostSrv := hostPair(t)
 	auth := hdr("Authorization", "Bearer "+console.Token)
 	here := t.TempDir()
-	w := do(ch, "POST", "/api/sessions", strings.NewReader(`{"continueFrom":"mini~w1","cwd":`+mustJSON(here)+`}`), auth, csrf)
+	w := do(ch, "POST", "/api/sessions", strings.NewReader(`{"continueFrom":"mini:w1","cwd":`+mustJSON(here)+`}`), auth, csrf)
 	if w.Code != 200 {
 		t.Fatalf("host → here: %d %s", w.Code, w.Body)
 	}
@@ -299,7 +299,7 @@ func TestHostMoveConversation(t *testing.T) {
 	}
 	there := t.TempDir()
 	w = do(ch, "POST", "/api/sessions", strings.NewReader(`{"continueFrom":"w1","host":"mini","cwd":`+mustJSON(there)+`}`), auth, csrf)
-	if w.Code != 200 || !strings.Contains(w.Body.String(), `"id":"mini~`) {
+	if w.Code != 200 || !strings.Contains(w.Body.String(), `"id":"mini:`) {
 		t.Fatalf("here → host: %d %s", w.Code, w.Body)
 	}
 	_ = json.Unmarshal(w.Body.Bytes(), &sum)
@@ -312,10 +312,52 @@ func TestHostMoveConversation(t *testing.T) {
 	u := hostSrv.Hub.SaveBlob(img)
 	hash := strings.TrimPrefix(u, hub.BlobURL)
 	evs := []*hub.Event{{Kind: hub.EvUser, Content: []json.RawMessage{json.RawMessage(`{"type":"image","blob":"` + u + `"}`)}}}
-	if err := console.copyBlobs(context.Background(), "mini~w1", "", evs); err != nil {
+	if err := console.copyBlobs(context.Background(), "mini:w1", "", evs); err != nil {
 		t.Fatal(err)
 	}
 	if b, err := os.ReadFile(console.Hub.BlobPath(hash)); err != nil || string(b) != "not really a png" {
 		t.Fatalf("image not copied: %v", err)
+	}
+}
+
+// Artifact folders through the console: list a folder on the host, write a file only if it's still the version we
+// had (412 with the current one when it isn't), and a new file only if it isn't there yet.
+func TestHostFolderAPI(t *testing.T) {
+	console, ch, _ := hostPair(t)
+	auth := hdr("Authorization", "Bearer "+console.Token)
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "out"), 0o755)
+	os.WriteFile(filepath.Join(dir, "out", "a.txt"), []byte("one"), 0o644)
+	os.WriteFile(filepath.Join(dir, ".gerdrignore"), []byte("*.tmp\n"), 0o644)
+	os.WriteFile(filepath.Join(dir, "x.tmp"), []byte("skip"), 0o644)
+	w := do(ch, "GET", "/api/fs/tree?host=mini&path="+url.QueryEscape(dir), nil, auth)
+	var tree struct {
+		Files []struct{ Path, Sha256 string }
+	}
+	if json.Unmarshal(w.Body.Bytes(), &tree); w.Code != 200 || len(tree.Files) != 2 || tree.Files[1].Path != "out/a.txt" {
+		t.Fatalf("tree: %d %s", w.Code, w.Body)
+	}
+	sha := tree.Files[1].Sha256
+	put := func(name, match, body string) *httptest.ResponseRecorder {
+		q := url.Values{"host": {"mini"}, "path": {filepath.Join(dir, name)}, "ifMatch": {match}}
+		return do(ch, "PUT", "/api/fs/file?"+q.Encode(), strings.NewReader(body), auth, csrf, hdr("Content-Type", "application/json"))
+	}
+	if w := put("out/a.txt", sha, "two"); w.Code != 200 {
+		t.Fatalf("put on the right base: %d %s", w.Code, w.Body)
+	}
+	if w := put("out/a.txt", sha, "three"); w.Code != http.StatusPreconditionFailed || !strings.Contains(w.Body.String(), "current") {
+		t.Fatalf("put on a stale base: %d %s", w.Code, w.Body)
+	}
+	if b, _ := os.ReadFile(filepath.Join(dir, "out", "a.txt")); string(b) != "two" {
+		t.Fatalf("content: %q", b)
+	}
+	if w := put("new/b.json", "none", `{"from":"x"}`); w.Code != 200 {
+		t.Fatalf("new file: %d %s", w.Code, w.Body)
+	}
+	if b, _ := os.ReadFile(filepath.Join(dir, "new", "b.json")); string(b) != `{"from":"x"}` {
+		t.Fatalf("a json file must pass as is: %q", b)
+	}
+	if w := put("new/b.json", "none", "again"); w.Code != http.StatusPreconditionFailed {
+		t.Fatalf("none on an existing file: %d", w.Code)
 	}
 }

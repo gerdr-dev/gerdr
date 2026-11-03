@@ -18,8 +18,8 @@ there. The console moves nothing; it is a window plus a router.
 
 ```
  UI (browser / App) ──/api, /ws──▶ console gerdr ──https + device cookie──▶ host gerdr (its remote port)
- agent on console ──gerdr session──┘        │  merges host sessions into its list as "<host>~<id>"
-                                           └─ routes ops on "<host>~…" to that host, rewrites ids both ways
+ agent on console ──gerdr session──┘        │  merges host sessions into its list as "<host>:<id>"
+                                           └─ routes ops on "<host>:…" to that host, rewrites ids both ways
 ```
 
 Why the backend and not the browser talking to each host directly:
@@ -33,9 +33,11 @@ Why the backend and not the browser talking to each host directly:
 
 ### Session ids
 
-A host session shows up on the console as `<hostID>~<id>` (`internal/peer.Join` / `Split`). Gerdr's own ids are
-UUIDs and host ids are `[a-z0-9-]`, so `~` can't occur in either; it is URL-safe, so `/api/sessions/{id}/send` routes
-unchanged. Ids inside payloads are rewritten in both directions: the summary's `id`, `reportTo`, `cleared[].id`;
+A host session shows up on the console as `<hostID>:<id>` (`internal/peer.Join` / `Split`). Gerdr's own ids are
+UUIDs and host ids are `[a-z0-9-]`, so `:` can't occur in either; it is allowed in a URL path, so
+`/api/sessions/{id}/send` routes unchanged. It was `~` at first: an unquoted `~` makes a shell command count as unsafe
+(`sysenv.SafeGerdrCLI`, it is tilde expansion), so every `gerdr session send mini~…` an agent ran waited for a person's
+click, which made agents on two computers unable to work together. `:` means nothing to a shell. Ids inside payloads are rewritten in both directions: the summary's `id`, `reportTo`, `cleared[].id`;
 events carry blob URLs (`/api/blobs/<hash>`), rewritten to `/h/<hostID>/api/blobs/<hash>` (served through the proxy).
 
 ### What crosses
@@ -78,9 +80,7 @@ accepted remotely, pairing codes are only minted on the host itself.
    remote directory browser, Settings → Remote access → "Computers this one controls".
 2. **Agents across hosts** (done), see "Agents and reports across computers" below.
 3. **Files** (done), see "Files" below.
-4. Not done: moving a conversation to another host (handoff across hosts) and artifact folders (shuttle's design:
-   docs/collab-local-agent.md in the shuttle repo, folder with an id, pull / push on demand, ETag conflicts, no live
-   sync). `send --file` / `fetch` cover handing single files over meanwhile.
+4. **Moving conversations, artifact folders, the remote screen** (done), see the three sections below.
 
 ## Agents and reports across computers
 
@@ -93,7 +93,7 @@ accepted remotely, pairing codes are only minted on the host itself.
 - `open` / `close` / `meta` on a host session are answered by the console (`hosts.go` `hostOpen` / `hostClose` /
   `hostMeta`), not proxied: the screen a person looks at is the console's, and so is a report target that isn't on the
   host. Closing also shuts the agent down over there (`/shutdown`), like closing a pane.
-- **Who sent it** (`from`): a message from a console session to a host session carries `from: "console~<id>"`
+- **Who sent it** (`from`): a message from a console session to a host session carries `from: "console:<id>"`
   (`peer.RewriteBody`); the host stores it as is, and `peer.RewriteEvents` strips the mark when the event comes back,
   so "from session X" still points at X here. Dropping it instead would make the host's hub take the message for a
   person's (`Summary.ByPerson`: no `from`), and then that turn would never be reported. Senders on the host itself
@@ -125,7 +125,47 @@ accepted remotely, pairing codes are only minted on the host itself.
 - Agents: `gerdr session send <session> "…" --file <path>` (repeatable) attaches files as resource links; for a
   session on another computer each is uploaded there first (that computer's `<GERDR_DIR>/uploads/`) and the link is
   the path there. `gerdr session fetch <session> <path> [dest]` copies a file from the computer a session runs on to
-  here (relative to that session's directory). Folders aren't taken: pack them first.
+  here (relative to that session's directory). Folders aren't taken: pack them first, or use an artifact folder.
+- **What an agent may run without asking** (`sysenv.SafeGerdrCLI`): `session send --file` is auto-approved (it only
+  reads, and sends to the user's own computer); `session fetch` and `gerdr folder` are not. Gerdr's process does the
+  writing, not the agent: auto-approved, they would let a read-only sandboxed agent (codex `read-only`) write anywhere.
+
+## Moving a conversation
+
+`POST /api/sessions` with `continueFrom` on one computer and `host` naming another (`""` = this one): pane menu →
+"Continue on another computer…" (`MoveSessionDialog.tsx`). Neither hub can read the other's log, so the console
+(`server/hostmove.go`) reads the source's record and events as its own computer has them (ids and URLs not
+rewritten), copies every image they show to the target (blobs are named by their sha256, so a copied one keeps its
+`/api/blobs/<hash>` URL), and creates the session there with `hub.CreateOptions.History`: the agent switch's handoff
+with the source given instead of looked up, so the next message carries the conversation to the agent like a switch
+does. Same agent by default (it's a move); `from` on the copied events is cleared (those senders are on the other
+computer). The source stays, and a running one is refused, as with a switch.
+
+## Artifact folders
+
+`internal/folder`, `cmd/gerdr/folder.go`, `server/folderapi.go`. The idea is shuttle's (a folder is the unit, sync on
+demand, conflicts by content version, both kept), shaped by one-way trust: there is no server in the middle, so a
+folder here is **paired** with one folder on a host, and only the console runs the commands (the host can't reach back).
+
+- `.gerdr-folder.json` in the folder here: the peer (`host`, absolute path there), each file's sha256 at the last sync
+  (the base), and which files are conflict copies. Every computer serves `GET /api/fs/tree` (files with size, mtime,
+  sha256; hashes cached by path + size + mtime) and `PUT /api/fs/file?ifMatch=` (write only if it still has the sha256
+  the caller planned on; `none` = must not exist; 412 with the current one otherwise; tmp file + rename).
+- `pull` / `push` compare the sending side with the receiving side against the base (`folder.Plan`): changed on the
+  sender only → copied; on both → the sender's version lands next to the receiver's as `name (<computer>).ext` and the
+  base stays, so it keeps being reported until a person settles it; deleted on one side → reported, never deleted on
+  the other. The copy a sync makes goes into the base and `copies`, so the next sync the other way neither brings it
+  back nor calls it deleted.
+- `.gerdrignore` (synced like any file): names or root-anchored paths (`/cache/`), globs; `.git`, `node_modules`,
+  `.DS_Store`, partial downloads always skipped. Over 20000 files is refused (forgot to ignore a cache).
+- No live sync, no history: an agent pulls before working and pushes after (the skill says so).
+
+## Remote screen of another computer
+
+Settings → Remote access → a computer → Screen opens the same dialog with `host` (`RemoteScreen.tsx`): status and
+inputs go through `?host=`, and the stream (a WebSocket) through the proxy's WebSocket pass-through (`hostWSProxy`,
+`peer.Pipe`: dialled first so a refusal is a real status; no permessage-deflate, the frames are JPEG). The switch and
+macOS's grants are that computer's: the dialog says to do them there (the prompts would show on that screen).
 
 ## Not done / known gaps
 
@@ -138,7 +178,8 @@ accepted remotely, pairing codes are only minted on the host itself.
   longer loops through two hosts aren't caught.
 - Tried end to end against a real host server over TLS (`hosts_test.go`; and by hand with a throwaway fake host + a
   console debug instance: pairing, sessions, the New Session picker, the CLI's hosts / list / fetch, a path and an
-  image of a host session opening through `/h/`). Not yet through a real relay and a second real machine.
+  image of a host session opening through `/h/`, `gerdr folder` pull / push with a conflict both ways). Not yet
+  through a real relay and a second real machine, and the screen only with the host's /ws standing in for its stream.
 - LAN direct between console and host (the Android App's trick, dial the LAN address with the host's name as SNI):
   only the relay address for now (`peer.Manager.Route` is where it would go).
 - Android background notices (`/api/app/*`) only cover the console's own sessions.

@@ -118,7 +118,7 @@ function pruneLayout() {
     const fix = (n: any): any => {
       if (n.type === "pane") {
         // A host session missing from the list usually means the host is off right now (server/hosts.go): keep it
-        if (n.sessionId && !sessions[n.sessionId] && !n.sessionId.includes("~")) {
+        if (n.sessionId && !sessions[n.sessionId] && !n.sessionId.includes(":")) {
           changed = true;
           return { ...n, sessionId: undefined };
         }

@@ -512,6 +512,12 @@ func SafeGerdrCLI(cmd string) bool {
 	switch words[1] {
 	case "session", "ui", "workspace", "tab", "pane":
 	default:
+		// Not `gerdr folder` either: like fetch below, it writes files through Gerdr's process
+		return false
+	}
+	// `session fetch` writes a file wherever it's told, and Gerdr writes it, not the agent: auto-approving it would
+	// let a read-only sandboxed agent write outside its sandbox (docs/dev/MULTIHOST.md)
+	if words[1] == "session" && len(words) > 2 && words[2] == "fetch" {
 		return false
 	}
 	for _, w := range words[2:] {
