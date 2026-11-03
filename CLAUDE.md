@@ -50,4 +50,7 @@ Claude Code / Codex 的图形界面：Go 后端（ACP 适配器 + hub + HTTP/WS�
   `internal/addons/builtin/GUIDE.md` is the guide for writing one (installed as `~/.gerdr/addons/GUIDE.md`), keep it
   in step with the API. The UI's add-on API
   must match `internal/addons/builtin/gerdr.d.ts`; the add-ons themselves live in the gerdr-dev/gerdr-addon repo.
+- Adding a Work capability (ctx, the bridge, the built-in template, a Work site): mechanism in code, a user's way of
+  working in their own prose (playbooks / schedules), never a hard-coded value or a settings switch. The rule and
+  why: "Adding to this Work" in internal/work/builtin/base/AGENTS.md — every Work agent reads it too.
 - 界面组件里不写具体颜色，用 index.css 里的 token（bg / muted / brand / ok / warn / bad…）。

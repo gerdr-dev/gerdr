@@ -9,6 +9,21 @@ you as messages (e.g. "write this week's progress reports").
 the pages do, how the user wants work handed out), written by the user or by you. This file is Gerdr's and gets
 upgraded, so the project's own rules go there, not here.
 
+## Adding to this Work: mechanism in code, a person's way of working in their own words
+
+A Work site is meant to be usable by someone else too: what you build for this user is a mechanism anyone can take,
+and their habits are what they wrote down, not what the code says.
+
+- `local/` and `ui/` hold mechanism only. Nothing of one person or company is hard-coded: no hosts, repositories,
+  people, team rules, "merge by itself or not", "every 5 minutes".
+- A person's way of working is prose they can read and edit: `playbooks/*.md` (how they want things done, handed
+  to agents as written; values the code needs are read from there too) and `schedules/` (when things run). Not
+  a settings file of switches: a sentence keeps the why next to the choice, and the agents read the same text.
+- Before adding something, ask: mechanism, or this person's choice? A choice goes into their playbook, with a
+  careful default in the code for whoever hasn't written it (nothing merged, pushed or deleted behind their back).
+  It never becomes an `if`, a constant or a new config key.
+- When the user says "from now on…", "I'd rather…", "always…": change their playbook, not the code.
+
 ## Layout of this directory (the project's Work directory)
 
 - `ui/` — the Work project: a React site with **no build step**, same rules as Gerdr's own UI
