@@ -51,6 +51,24 @@ Which project you're in is worked out from where you are, every time: the pane s
 directory, or the Gerdr terminal a command is typed in. `--project <name>` on `gerdr session|workspace|tab|pane` is only for
 running them from outside Gerdr; don't use it to reach into another project.
 
+## Your own sub-agent, or a Gerdr session?
+
+Your agent's built-in sub-agents (Claude Code's Task / Agent tool, Codex's) and `gerdr session new` both hand work off.
+Pick by what the work needs:
+
+- **Sub-agent**: a short, self-contained piece of the task you're on, where only its answer matters (search the repo,
+  read twenty files and summarise, check three things in parallel). It shares your machine, agent and permissions,
+  its answer lands in your context, it's gone afterwards, and the user can only watch it (read-only panel). Cheapest.
+- **Gerdr session**: anything the user should be able to see in its own tab, talk to, approve, or pick up later; that
+  needs another agent or role (`--agent codex`, a reviewer role), another permission mode, or another computer
+  (`--host`); or that runs long (a build, a render, an MR) while you keep talking with the user. It is a real
+  conversation: it survives your turn and can be resumed.
+- With a session, `--wait` for something short you need before you can go on; `--report-to self` for anything long
+  or several at once (you get a message each time one stops). Don't do both.
+
+When unsure and the user didn't say: a sub-agent for research inside your task, a session for work that deserves its
+own tab.
+
 ## 开一个新会话派活
 
 默认就在当前目录、开在你旁边一屏、不抢用户的焦点。没被要求就别换目录、别开一堆：
