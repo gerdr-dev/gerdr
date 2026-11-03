@@ -133,7 +133,8 @@ export function openSession(session: string) {
   window.parent.postMessage({ type: "gerdr:openSession", session }, location.origin);
 }
 
-export type SessionAction = { id: string; label: string; kind?: "primary" | "danger"; confirm?: string };
+/** jump: Gerdr scrolls the chat to the card with that ref (a Work tool's gerdrCard) instead of telling the page. */
+export type SessionAction = { id: string; label: string; kind?: "primary" | "danger"; confirm?: string; jump?: string };
 
 /**
  * Shows a conversation (e.g. a worker from ctx.sessions.start) in a panel over this page: the whole chat, and its

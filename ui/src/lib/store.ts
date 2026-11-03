@@ -305,7 +305,8 @@ export type WorkPeek = {
   id: string;
   project: string;
   label?: string;
-  actions?: { id: string; label: string; kind?: "primary" | "danger"; confirm?: string }[];
+  /** jump: instead of telling the page, scroll the chat to the card with that ref (ToolCard) and flash it. */
+  actions?: { id: string; label: string; kind?: "primary" | "danger"; confirm?: string; jump?: string }[];
 };
 
 export function watchedSessions(l: Layout, kept: string[]): string[] {

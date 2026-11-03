@@ -6,6 +6,8 @@ import { COL_EDGE, startColResize } from "@/components/SidebarChrome";
 import { focusSession } from "@/lib/actions";
 import { toggleOverview } from "@/lib/overview";
 import { ChatView } from "@/components/chat/ChatView";
+import { cardOf } from "@/components/chat/ToolCard";
+import type { GPart } from "@gerdr/chat";
 import { PixelLoader } from "@/components/chat/PixelLoader";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -175,6 +177,7 @@ function WorkFrame({ project, onShowChat }: { project: string; onShowChat?: () =
                 label: a.label,
                 kind: a.kind === "primary" || a.kind === "danger" ? a.kind : undefined,
                 confirm: typeof a.confirm === "string" ? a.confirm : undefined,
+                jump: typeof a.jump === "string" ? a.jump : undefined,
               }))
           : undefined;
         set({ workPeek: { id: m.session, project, label: typeof m.label === "string" ? m.label : undefined, actions } });
@@ -309,6 +312,8 @@ function WorkPeek() {
   const session = useStore((s) => (s.workPeek ? s.sessions[s.workPeek.id] : undefined));
   const ready = useStore((s) => s.ready);
   const [armed, setArmed] = useState("");
+  // A button with jump scrolls the chat to that card (ToolCard ref) instead of telling the page
+  const [focus, setFocus] = useState<{ match: (p: GPart) => boolean; seq: number }>();
   const project = peek?.project;
   useEffect(() => {
     syncWatch();
@@ -365,6 +370,10 @@ function WorkPeek() {
                   // A page may name what a button does in full ("决定 t21：…"): capped, the end fades (index.css truncate)
                   className={cn("h-7 max-w-[20rem] min-w-0 text-[12px]", (a.kind === "danger" || armed === a.id) && "text-bad hover:text-bad")}
                   onClick={() => {
+                    if (a.jump) {
+                      const ref = a.jump;
+                      return setFocus((f) => ({ match: (p) => cardOf(p)?.ref === ref, seq: (f?.seq ?? 0) + 1 }));
+                    }
                     // A confirm text: first click arms it (the label becomes the question), the second does it
                     if (a.confirm && armed !== a.id) return setArmed(a.id);
                     setArmed("");
@@ -379,7 +388,7 @@ function WorkPeek() {
         )}
         <div className="min-h-0 flex-1">
           {session ? (
-            <ChatView key={id} session={session} paneId={`work-peek:${id}`} focused />
+            <ChatView key={id} session={session} paneId={`work-peek:${id}`} focused focus={focus} />
           ) : (
             <div className="flex h-full items-center justify-center text-[12px] text-muted-foreground">
               {ready ? t("workView.peekGone") : <PixelLoader className="size-4" />}

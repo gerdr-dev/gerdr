@@ -9,7 +9,7 @@ import { hostFor, SessionHost, useChatHost, useChatSettings } from "../host";
 import { t as tr } from "../i18n";
 import { useKept } from "../kept";
 import { Loader2 } from "lucide-react";
-import { backgroundableTools, type GMessage, type ToolPart } from "../transcript";
+import { backgroundableTools, type GMessage, type GPart, type ToolPart } from "../transcript";
 import type { ChatSession } from "../types";
 import { Composer, type ComposerHandle } from "./Composer";
 import { SessionContext } from "./sessionContext";
@@ -56,6 +56,7 @@ export function ChatView({
   sub,
   active = true,
   children,
+  focus,
 }: {
   session: ChatSession;
   paneId: string;
@@ -63,6 +64,11 @@ export function ChatView({
   sub?: string;
   active?: boolean;
   children?: ReactNode;
+  /**
+   * Scroll to the first row whose part matches, and flash it: the host pointing the user at something in the
+   * conversation (a card it drew). A new seq scrolls again.
+   */
+  focus?: { match: (part: GPart) => boolean; seq: number };
 }) {
   const host = hostFor(session.id, useChatHost());
   const settings = useChatSettings();
@@ -187,6 +193,19 @@ export function ChatView({
     const own = host.renderTool ? (p: ToolPart) => host.renderTool!(p, { sessionId: session.id, running: false }) !== undefined : undefined;
     return [buildRows(msgs, running, openGroups, new Set(liveTaskIds.split(" ").filter(Boolean)), Date.now(), out, showThinking, own), out.wake] as const;
   }, [msgs, running, openGroups, liveTaskIds, tick, showThinking, host]);
+  // The host's focus: scroll there once the rows have it, then flash the row (data-chat-key) for a moment
+  useEffect(() => {
+    if (!focus) return;
+    const i = rows.findIndex((r) => r.kind === "part" && focus.match(r.part));
+    if (i < 0) return;
+    list.current?.scrollToIndex({ index: i, align: "start", behavior: "smooth" });
+    const key = rows[i].key;
+    const t = setTimeout(() => {
+      const el = scrollerEl.current?.querySelector<HTMLElement>(`[data-chat-key="${CSS.escape(key)}"]`);
+      el?.animate([{ boxShadow: "0 0 0 2px var(--color-brand)" }, { boxShadow: "0 0 0 2px transparent" }], { duration: 1600, easing: "ease-out" });
+    }, 350);
+    return () => clearTimeout(t);
+  }, [focus?.seq]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (wake === undefined) return;
     const t = setTimeout(() => setTick((x) => x + 1), Math.max(0, wake - Date.now()));

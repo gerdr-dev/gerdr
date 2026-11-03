@@ -109,7 +109,10 @@ export async function ask_human(input: { title: string }, ctx: Ctx) {
 - A thrown error goes back to the agent as the tool's error: say what to do instead.
 - A result the user should see in the chat too (a step put on their board): return it with
   `gerdrCard: { title, body, tone: "warn" | "info" | "ok" }` (body is Markdown). Gerdr draws that call as a card
-  instead of the folded "called a tool" row; the rest of the result still goes to the agent.
+  instead of the folded "called a tool" row; the rest of the result still goes to the agent. `ref` names it (a page's
+  showSession button with `jump: ref` scrolls the chat there). `choose: { project, fn, input, field, options, other }`
+  makes it answerable in place: the user's pick runs that local function with `{ ...input, [field]: pick }` — the
+  same call your page makes, so answering in the chat or on the page is one thing.
 - Sessions get the tools when they start or are reopened; the list is read again each time an agent asks for it.
 
 ## On a schedule

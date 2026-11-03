@@ -422,7 +422,10 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
   `{ gerdrCard: { title, body, tone } }` is drawn as a card. Why: a Work tool putting a step on the user's board
   showed as one folded "called a tool" row, so the user in that chat never saw what was asked. Tools the host draws
   itself stay out of "ran N commands" groups (package-level and general: whatever `renderTool` takes over is meant
-  to be seen). The card is static: answering happens where the thing lives (the board), the chat only shows it.
+  to be seen). A card can be answered in place (`choose`: it runs the Work function the page would, `api.workRun`
+  with the card's project), because sending the user elsewhere to answer what's in front of them was the complaint;
+  `ref` lets the drawer's `jump` buttons scroll there (ChatView `focus`, a general "scroll to the part the host
+  picks" in the package). The chat never waits on such a card: the agent's turn ended when it asked.
 - **Work tools** (`work/tools.go`, `cmd/gerdr/workmcp.go`, `hub.Options.MCP`). A Work's local functions declared in
   `export const tools` are served to the same sessions that get its skills, over MCP: `gerdr work mcp --project P
   --session S` is a stdio server the hub hands the adapter as a client MCP server on new / resume / load (claude

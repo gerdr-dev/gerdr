@@ -309,7 +309,8 @@ export const api = {
   /** Undo deleteProject: `trash` (what it returned) moves back. */
   restoreProject: (name: string, trash: string) => req("POST", `/api/projects/${encodeURIComponent(name)}/restore`, { trash }),
   work: (project: string) => req<{ dir: string }>("GET", `/api/work?project=${encodeURIComponent(project)}`),
-  workRun: <T = any>(fn: string, input?: unknown) => req<{ result: T }>("POST", "/api/work/run", { fn, input }).then((r) => r.result),
+  workRun: <T = any>(fn: string, input?: unknown, project?: string) =>
+    req<{ result: T }>("POST", "/api/work/run", { fn, input, project }).then((r) => r.result),
   /** host: browse another computer's folders (the request is proxied there, server/hosts.go) */
   dirs: (path: string, host?: string) =>
     req<{ path: string; parent: string; dirs: string[]; home: string; git: boolean }>(
