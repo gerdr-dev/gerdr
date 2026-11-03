@@ -278,6 +278,42 @@ func (s *Server) createOnHost(w http.ResponseWriter, r *http.Request, host strin
 	writeJSON(w, json.RawMessage(out))
 }
 
+// reportNext: where id reports to, wherever that is kept: here (its Record), for a host session the target kept here
+// (peer.Manager.ReportTo) or else its own one on that host (from its summary). ok: id is a session anyone knows.
+func (s *Server) reportNext(id string) (next string, ok bool) {
+	if sess, err := s.Hub.Session(id); err == nil {
+		return sess.Summary().ReportTo, true
+	}
+	if s.Peers == nil {
+		return "", false
+	}
+	if to := s.Peers.ReportTo(id); to != "" {
+		return to, true
+	}
+	return s.Peers.Known(id)
+}
+
+// reportLoop refuses from → to when the reports from to on lead back to from (any length: a ↔ b, or a → b → c → a
+// across three computers). A report starts a turn whose end is reported in turn: a loop wakes its sessions forever.
+func (s *Server) reportLoop(from, to string) error {
+	if from == to {
+		return errors.New(i18n.S("会话不能回报给自己", "a session can't report to itself"))
+	}
+	seen := map[string]bool{}
+	for cur := to; cur != "" && !seen[cur]; {
+		seen[cur] = true
+		next, ok := s.reportNext(cur)
+		if !ok {
+			return nil
+		}
+		if next == from {
+			return errors.New(i18n.S("回报会绕回自己（这条链最后又回报给这个会话）", "reports would go round in a loop (the chain comes back to this session)"))
+		}
+		cur = next
+	}
+	return nil
+}
+
 // reportTarget: to can be reported to from another computer's session (it's here, or a known host session).
 func (s *Server) reportTarget(to string) error {
 	if _, err := s.Hub.Session(to); err == nil {
@@ -308,21 +344,19 @@ func (s *Server) hostMeta(w http.ResponseWriter, r *http.Request, id string) {
 	}
 	if b.ReportTo != nil {
 		to := *b.ReportTo
+		// The whole chain from the target on, wherever each step is kept: the host only sees its own part of it
+		if to != "" {
+			if err := s.reportLoop(id, to); err != nil {
+				httpError(w, 400, err.Error())
+				return
+			}
+		}
 		if h, _ := peer.Split(to); to == "" || h == host {
 			_ = s.Peers.SetReportTo(id, "")
 			fwd["reportTo"] = to
 		} else {
-			if to == id {
-				httpError(w, 400, i18n.S("会话不能回报给自己", "a session can't report to itself"))
-				return
-			}
 			if err := s.reportTarget(to); err != nil {
 				httpError(w, 400, err.Error())
-				return
-			}
-			// A loop through this computer: the target (here) already reports back to this session
-			if t, err := s.Hub.Session(to); err == nil && t.Summary().ReportTo == id {
-				httpError(w, 400, i18n.S("回报会绕回自己（对方也在回报给这个会话）", "reports would go round in a loop (the target reports back to this session)"))
 				return
 			}
 			if err := s.Peers.SetReportTo(id, to); err != nil {

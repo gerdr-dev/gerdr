@@ -361,3 +361,41 @@ func TestHostFolderAPI(t *testing.T) {
 		t.Fatalf("none on an existing file: %d", w.Code)
 	}
 }
+
+// Report loops of any length are refused, wherever each step is kept (here, on the host, or here for a host
+// session). Both hubs start with w1 → boss and w2 → boss (reportHub).
+func TestHostReportLoops(t *testing.T) {
+	console, ch, _ := hostPair(t)
+	auth := hdr("Authorization", "Bearer "+console.Token)
+	meta := func(id, to string) *httptest.ResponseRecorder {
+		return do(ch, "POST", "/api/sessions/"+id+"/meta", strings.NewReader(`{"reportTo":`+mustJSON(to)+`}`), auth, csrf)
+	}
+	// b ↔ c across two computers: c → b is fine, then b → c closes the loop (either side may be asked last)
+	if w := meta("w2", "mini:w2"); w.Code != 200 {
+		t.Fatalf("here w2 → mini:w2: %d %s", w.Code, w.Body)
+	}
+	if w := meta("mini:w2", "w2"); w.Code != 400 || !strings.Contains(w.Body.String(), "绕回") {
+		t.Fatalf("mini:w2 → w2 should be a loop: %d %s", w.Code, w.Body)
+	}
+	if w := meta("mini:w2", "boss"); w.Code != 200 {
+		t.Fatalf("mini:w2 → boss (no loop): %d %s", w.Code, w.Body)
+	}
+	// a → b → c → a over three places: mini:w1 → boss (kept here), boss → mini:boss (here), mini:boss → mini:w1
+	// (on the host: the host alone sees no loop, mini:w1's target is kept here)
+	if w := meta("mini:w1", "boss"); w.Code != 200 {
+		t.Fatalf("mini:w1 → boss: %d %s", w.Code, w.Body)
+	}
+	if w := meta("boss", "mini:boss"); w.Code != 200 {
+		t.Fatalf("boss → mini:boss: %d %s", w.Code, w.Body)
+	}
+	if w := meta("mini:boss", "mini:w1"); w.Code != 400 || !strings.Contains(w.Body.String(), "绕回") {
+		t.Fatalf("mini:boss → mini:w1 closes a three-step loop: %d %s", w.Code, w.Body)
+	}
+	// And from the other end: a session here asked to report into a chain that comes back to it
+	if w := meta("w1", "mini:w2"); w.Code != 200 {
+		t.Fatalf("w1 → mini:w2 → boss → mini:boss (no loop): %d %s", w.Code, w.Body)
+	}
+	if w := meta("boss", "w1"); w.Code != 400 || !strings.Contains(w.Body.String(), "绕回") {
+		t.Fatalf("boss → w1 → mini:w2 → boss is a loop: %d %s", w.Code, w.Body)
+	}
+}
