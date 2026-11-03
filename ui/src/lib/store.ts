@@ -307,6 +307,11 @@ export type WorkPeek = {
   label?: string;
   /** jump: instead of telling the page, scroll the chat to the card with that ref (ToolCard) and flash it. */
   actions?: { id: string; label: string; kind?: "primary" | "danger"; confirm?: string; jump?: string }[];
+  /**
+   * Things waiting on the user, one line each below the bar (a yellow edge, the text fading at the end, a jump icon):
+   * `jump` scrolls the chat to that card, `action` tells the page instead.
+   */
+  items?: { text: string; jump?: string; action?: string }[];
 };
 
 export function watchedSessions(l: Layout, kept: string[]): string[] {

@@ -142,7 +142,10 @@ export type SessionAction = { id: string; label: string; kind?: "primary" | "dan
  * to it (`confirm`: a second click needed, the button showing that text). Calling it again for the shown conversation
  * updates them. Clicks and the panel closing come back through onSessionPanel.
  */
-export function showSession(session: string, opts: { label?: string; actions?: SessionAction[] } = {}) {
+/** A thing waiting on the user, one line under the bar: jump scrolls the chat to that card, action tells the page. */
+export type SessionItem = { text: string; jump?: string; action?: string };
+
+export function showSession(session: string, opts: { label?: string; actions?: SessionAction[]; items?: SessionItem[] } = {}) {
   window.parent.postMessage({ type: "gerdr:showSession", session, ...opts }, location.origin);
 }
 

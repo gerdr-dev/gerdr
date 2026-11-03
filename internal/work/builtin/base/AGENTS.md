@@ -38,9 +38,9 @@ and their habits are what they wrote down, not what the code says.
     `weekly.tsx` → `/weekly`, `okr/[id].tsx` → `/okr/:id`); default-export a component.
   - `ui/src/lib/gerdr.ts` — the bridge: `run(fn, input, { onProgress, onLog, signal })` calls a local
     function, `ask(text)` sends a task to you, `openSession(id)` shows a conversation a function started
-    (`ctx.sessions.start`) in Code, `showSession(id, { label, actions })` shows it in a panel over the page instead (its whole
-    chat, an input box that takes images and files, and the page's own buttons above it, heard with
-    `onSessionPanel`): open a worker's task there rather than copying its reply into the page, the user decides
+    (`ctx.sessions.start`) in Code, `showSession(id, { label, actions, items })` shows it in a panel over the page instead (its whole
+    chat, an input box that takes images and files, the page's own short line and buttons above it, heard with
+    `onSessionPanel`, and `items`: one line each for what waits on the user, jumping to its card): open a worker's task there rather than copying its reply into the page, the user decides
     by reading the whole conversation, `openSettings(tab)` opens Gerdr's settings, `secret(name, { label, note })` asks
     the user for a password / token in Gerdr's own dialog and saves it for `ctx.secrets.get` (the page never sees
     it; never ask for one in a page input or in chat). Light / dark follows Gerdr through it.

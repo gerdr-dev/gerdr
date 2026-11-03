@@ -1,4 +1,4 @@
-import { Briefcase, Check, ChevronDown, Code2, History, MessageSquarePlus, Settings, X } from "lucide-react";
+import { ArrowDownRight, Briefcase, Check, ChevronDown, Code2, History, MessageSquarePlus, Settings, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { AgentIcon, StatusDot, dotStatus } from "@/components/AgentIcon";
@@ -180,7 +180,16 @@ function WorkFrame({ project, onShowChat }: { project: string; onShowChat?: () =
                 jump: typeof a.jump === "string" ? a.jump : undefined,
               }))
           : undefined;
-        set({ workPeek: { id: m.session, project, label: typeof m.label === "string" ? m.label : undefined, actions } });
+        const items = Array.isArray(m.items)
+          ? m.items
+              .filter((x: any) => x && typeof x.text === "string")
+              .map((x: any) => ({
+                text: x.text,
+                jump: typeof x.jump === "string" ? x.jump : undefined,
+                action: typeof x.action === "string" ? x.action : undefined,
+              }))
+          : undefined;
+        set({ workPeek: { id: m.session, project, label: typeof m.label === "string" ? m.label : undefined, actions, items } });
       } else if (m.type === "gerdr:escape") {
         // An Esc the page didn't use (its bridge forwards them): closes the panel over it, like a drawer
         if (useStore.getState().workPeek?.project === project) set({ workPeek: null });
@@ -352,38 +361,58 @@ function WorkPeek() {
             <X className="size-4" />
           </Button>
         </div>
-        {(peek.label || peek.actions?.length) && (
-          <div className="flex shrink-0 flex-wrap items-center gap-2 border-b bg-muted/40 px-3 py-1.5">
-            {/* Wraps (up to 4 lines): the page puts what the user must do here, e.g. the question in full */}
-            {peek.label && (
-              <span className="line-clamp-4 min-w-0 flex-1 text-[12px] whitespace-pre-wrap text-muted-foreground" title={peek.label}>
-                {peek.label}
-              </span>
-            )}
-            <div className="ml-auto flex max-w-full flex-wrap justify-end gap-1.5">
-              {peek.actions?.map((a) => (
-                <Button
-                  key={a.id}
-                  size="sm"
-                  variant={a.kind === "primary" ? "default" : "ghost"}
-                  title={a.label}
-                  // A page may name what a button does in full ("决定 t21：…"): capped, the end fades (index.css truncate)
-                  className={cn("h-7 max-w-[20rem] min-w-0 text-[12px]", (a.kind === "danger" || armed === a.id) && "text-bad hover:text-bad")}
-                  onClick={() => {
-                    if (a.jump) {
-                      const ref = a.jump;
-                      return setFocus((f) => ({ match: (p) => cardOf(p)?.ref === ref, seq: (f?.seq ?? 0) + 1 }));
-                    }
-                    // A confirm text: first click arms it (the label becomes the question), the second does it
-                    if (a.confirm && armed !== a.id) return setArmed(a.id);
-                    setArmed("");
-                    tell({ type: "gerdr:sessionAction", action: a.id });
-                  }}
-                >
-                  <span className="min-w-0 truncate">{armed === a.id ? a.confirm : a.label}</span>
-                </Button>
-              ))}
+        {(peek.label || peek.actions?.length || peek.items?.length) && (
+          <div className="shrink-0 space-y-1 border-b bg-muted/40 px-3 py-1.5">
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Wraps (up to 4 lines): a short line about the conversation; what's waiting goes in items below */}
+              {peek.label && (
+                <span className="line-clamp-4 min-w-0 flex-1 text-[12px] whitespace-pre-wrap text-muted-foreground" title={peek.label}>
+                  {peek.label}
+                </span>
+              )}
+              <div className="ml-auto flex max-w-full flex-wrap justify-end gap-1.5">
+                {peek.actions?.map((a) => (
+                  <Button
+                    key={a.id}
+                    size="sm"
+                    variant={a.kind === "primary" ? "default" : "ghost"}
+                    title={a.label}
+                    // A page may name what a button does in full ("决定 t21：…"): capped, the end fades (index.css truncate)
+                    className={cn("h-7 max-w-[20rem] min-w-0 text-[12px]", (a.kind === "danger" || armed === a.id) && "text-bad hover:text-bad")}
+                    onClick={() => {
+                      if (a.jump) {
+                        const ref = a.jump;
+                        return setFocus((f) => ({ match: (p) => cardOf(p)?.ref === ref, seq: (f?.seq ?? 0) + 1 }));
+                      }
+                      // A confirm text: first click arms it (the label becomes the question), the second does it
+                      if (a.confirm && armed !== a.id) return setArmed(a.id);
+                      setArmed("");
+                      tell({ type: "gerdr:sessionAction", action: a.id });
+                    }}
+                  >
+                    <span className="min-w-0 truncate">{armed === a.id ? a.confirm : a.label}</span>
+                  </Button>
+                ))}
+              </div>
             </div>
+            {/* One line per thing waiting on the user: text that fades at the end, a jump icon; the whole row is the target */}
+            {peek.items?.map((it, n) => (
+              <button
+                key={n}
+                title={it.text}
+                onClick={() => {
+                  if (it.jump) {
+                    const ref = it.jump;
+                    return setFocus((f) => ({ match: (p) => cardOf(p)?.ref === ref, seq: (f?.seq ?? 0) + 1 }));
+                  }
+                  if (it.action) tell({ type: "gerdr:sessionAction", action: it.action });
+                }}
+                className="flex w-full items-center gap-2 rounded-md border-l-2 border-l-warn bg-warn/5 py-1.5 pr-1.5 pl-2 text-left text-[12px] hover:bg-warn/10"
+              >
+                <span className="min-w-0 flex-1 truncate">{it.text}</span>
+                <ArrowDownRight className="size-3.5 shrink-0 text-warn" />
+              </button>
+            ))}
           </div>
         )}
         <div className="min-h-0 flex-1">

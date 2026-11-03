@@ -414,7 +414,8 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
   (that makes it the project's Work agent and redirects reportTo "work") nor `openSession` (leaves Work for Code).
   Why a drawer and not the page copying the reply: a copy showed only the last reply, as plain text, and the user
   decides by reading back. The page puts a line and buttons above the chat (`label`, `actions`, heard back through
-  `onSessionPanel`): Gerdr gives them no meaning, so a board decides "accept / merge now / go do t16" without Gerdr
+  `onSessionPanel`; `items` are one line each for what waits on the user, with a jump icon: on a phone a run-on label
+  next to four buttons showed nothing readable): Gerdr gives them no meaning, so a board decides "accept / merge now / go do t16" without Gerdr
   knowing what a task is. It closes on Esc or a click outside: a transparent layer covers the iframe while open (its
   clicks never reach gerdr's document), and an Esc pressed inside the page comes as `gerdr:escape` from its bridge.
   Esc used by the panel first (stopping a turn, the @ menu, a dialog) is left alone (`defaultPrevented`).
