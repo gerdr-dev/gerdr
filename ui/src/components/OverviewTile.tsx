@@ -69,7 +69,7 @@ export function Tile({
 }) {
   const session = useStore((s) => s.sessions[id]);
   const unread = useStore((s) => !!s.unread[id]);
-  const where = useStore((s) => whereOf(s.layout, s.config, id));
+  const where = useStore((s) => whereOf(s.layout, s.config, id, !phone));
   const inWork = useStore((s) => !locateSession(s.layout, id)); // a Work conversation (no pane)
   const front = useWindowInFront();
   // Only while the window is in front (lib/front.ts)
@@ -113,12 +113,14 @@ export function Tile({
       >
         {onDragStart && <GripVertical className="-mx-1.5 size-3.5 shrink-0 text-muted-foreground/60" />}
         <AgentIcon agent={session.agent} className="size-4" />
-        <FadeText className="min-w-[3em] max-w-[50%] shrink font-medium">{title}</FadeText>
+        {/* A phone has no buttons to leave room for: the title takes the row, the place gets what's left (capped) */}
+        <FadeText className={cn("min-w-[3em] shrink font-medium", !phone && "max-w-[50%]")}>{title}</FadeText>
         <StatusDot status={dotStatus(session)} unread={unread} />
         {session.pending ? (
           <span className="shrink-0 whitespace-nowrap rounded-sm bg-bad/15 px-1.5 text-[11px] text-bad">{t("overviewTile.waiting")}</span>
         ) : null}
-        <FadeText className="min-w-0 flex-1 text-[11px] text-muted-foreground">{where}</FadeText>
+        <FadeText className={cn("min-w-0 text-[11px] text-muted-foreground", phone ? "max-w-[35%] shrink-0" : "flex-1")}>{where}</FadeText>
+        {phone && <div className="flex-1" />}
         {!phone && (
           <>
             <TileButton title={main ? t("overviewTile.unpin") : t("overviewTile.pinLeft")} onClick={() => toggleMain(id)}>

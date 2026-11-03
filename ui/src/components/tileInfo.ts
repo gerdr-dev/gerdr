@@ -16,10 +16,11 @@ function projectOf(l: Layout, c: WorkConf, id: string): string | undefined {
 /**
  * "tab · workspace · project" of a session's pane, or "Work · project" (the project only when there's more than one).
  * Most specific first: the tab is what tells rows apart, and a narrow row truncates the end.
+ * withProject false leaves the project out (a phone's tile title bar: too narrow, and the user asked for it gone).
  */
-export function whereOf(l: Layout, c: WorkConf, id: string): string {
+export function whereOf(l: Layout, c: WorkConf, id: string, withProject = true): string {
   const loc = locateSession(l, id);
-  const spaces = spaceList(l);
+  const spaces = withProject ? spaceList(l) : [];
   if (!loc) {
     const p = projectOf(l, c, id);
     if (!p) return "";
