@@ -560,10 +560,19 @@ func runACP(which string) error {
 
 // workSkills: a session running in a project's Work directory (its Work agent) gets that Work's skills/ folder, like
 // the sessions the Work starts (work.StartOptions → Record.SkillDirs). Only path arithmetic: no Runner state needed.
+//
+// Both sides with symlinks resolved: a session's cwd is recorded resolved (/private/tmp/…), GERDR_DIR may not be.
 func workSkills(dir string) func(hub.Record) []string {
+	if real, err := filepath.EvalSymlinks(dir); err == nil {
+		dir = real
+	}
 	r := work.New(dir, nil)
 	return func(rec hub.Record) []string {
-		p, ok := r.WorkProject(rec.Cwd)
+		cwd := rec.Cwd
+		if real, err := filepath.EvalSymlinks(cwd); err == nil {
+			cwd = real
+		}
+		p, ok := r.WorkProject(cwd)
 		if !ok {
 			return nil
 		}
