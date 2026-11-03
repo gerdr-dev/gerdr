@@ -10,6 +10,7 @@ import { lateAnswerText, type GData, type PlanEntry } from "../transcript";
 import { cn } from "../utils";
 import { useKept } from "../kept";
 import { registerAsk } from "../askkeys";
+import { useHwKeyboard } from "../device";
 
 export function PlanCard({ entries }: { entries: PlanEntry[] }) {
   if (!entries.length) return null;
@@ -125,38 +126,66 @@ export function AskCard({ sessionId, data }: { sessionId: string; data: GData["a
   const [page, setPage] = useKept(`${k}:page`, 0);
   const [cur, setCur] = useKept<Record<string, number>>(`${k}:cur`, {});
   const [busy, setBusy] = useState(false);
+  const kb = useHwKeyboard(); // the ↵ hint on submit only means something with a keyboard to press it on
   const otherRef = useRef<HTMLInputElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const back = useRef<HTMLElement | null>(null); // 进「其他」输入框之前焦点在哪（一般是输入框），↑ / Esc 回那里
   const keyRef = useRef<(e: KeyboardEvent) => boolean>(() => false);
   const pending = !data.answers && !data.cancelled;
   useEffect(() => (pending ? registerAsk(sessionId, (e) => keyRef.current(e)) : undefined), [sessionId, pending]);
-  // late: the turn was interrupted under it (Esc) — still drawn as a live card, answering sends a new message
-  if (data.answers || (data.cancelled && !data.late)) {
+  // Not answered (interrupted and moved on / skipped / replied in the chat): still show what was asked, greyed out —
+  // a bare "not answered" line loses the question, and the user may still want to read it or answer it in the chat.
+  // (late = the turn was interrupted under it and nothing was said since: falls through to the live card.)
+  if (data.cancelled && !data.answers && !data.late) {
     return (
-      <div className="my-1 space-y-0.5 px-1.5 text-[12px] text-muted-foreground">
-        {data.cancelled && !data.answers ? (
-          <div className="flex items-center gap-1.5">
-            {data.reason === "replied" ? (
-              <>
-                <CornerDownRight className="size-3.5" /> {t("ask.repliedInChat")}
-              </>
-            ) : (
-              <>
-                <X className="size-3.5" /> {data.reason === "skipped" ? t("ask.skipped") : t("ask.unanswered")}
-              </>
+      <div className="my-1.5 rounded-xl border border-dashed p-4 text-muted-foreground" aria-disabled>
+        {qs.map((q) => (
+          <div key={q.id} className="mb-3">
+            <div className="mb-1.5 flex items-center gap-1.5 text-[12px]">
+              <HelpCircle className="size-3.5" />
+              {q.header && <span>{q.header}</span>}
+            </div>
+            <div className="mb-2 text-[13px] font-medium leading-relaxed">{q.question}</div>
+            {!!q.options?.length && (
+              <div className="flex flex-col gap-1 text-[13px]">
+                {q.options.map((o, n) => (
+                  <div key={o.label} className="flex items-center gap-3 px-0.5">
+                    <span className="min-w-0 flex-1">
+                      <span className="font-medium">{o.label}</span>
+                      {o.description && <span className="ml-1.5 opacity-80">{o.description}</span>}
+                    </span>
+                    <span className="flex size-5 shrink-0 items-center justify-center rounded-md border text-[11px] tabular-nums">{n + 1}</span>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
-        ) : (
-          qs.map((q) => (
-            <div key={q.id} className="flex items-start gap-1.5">
-              <Check className="mt-0.5 size-3.5 shrink-0 text-ok" />
-              <span>
-                {q.question} → <span className="text-foreground">{(data.answers?.[q.id] ?? []).join(", ") || t("ask.empty")}</span>
-              </span>
-            </div>
-          ))
-        )}
+        ))}
+        <div className="flex items-center gap-1.5 text-[12px]">
+          {data.reason === "replied" ? (
+            <>
+              <CornerDownRight className="size-3.5" /> {t("ask.repliedInChat")}
+            </>
+          ) : (
+            <>
+              <X className="size-3.5" /> {data.reason === "skipped" ? t("ask.skipped") : t("ask.unanswered")}
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+  if (data.answers) {
+    return (
+      <div className="my-1 space-y-0.5 px-1.5 text-[12px] text-muted-foreground">
+        {qs.map((q) => (
+          <div key={q.id} className="flex items-start gap-1.5">
+            <Check className="mt-0.5 size-3.5 shrink-0 text-ok" />
+            <span>
+              {q.question} → <span className="text-foreground">{(data.answers?.[q.id] ?? []).join(", ") || t("ask.empty")}</span>
+            </span>
+          </div>
+        ))}
       </div>
     );
   }
@@ -388,9 +417,9 @@ export function AskCard({ sessionId, data }: { sessionId: string; data: GData["a
           </Button>
         )}
         {!instant && (
-          <Button size="sm" className="rounded-full pr-2 pl-4" disabled={busy} onClick={() => next()}>
+          <Button size="sm" className={cn("rounded-full", kb ? "pr-2 pl-4" : "px-4")} disabled={busy} onClick={() => next()}>
             {last ? t("ask.submit") : t("ask.next")}
-            <span className="rounded-sm border border-current/30 px-1 text-[10px] opacity-70">↵</span>
+            {kb && <span className="rounded-sm border border-current/30 px-1 text-[10px] opacity-70">↵</span>}
           </Button>
         )}
       </div>
