@@ -304,7 +304,7 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 		go asvc.Sync()
 	})
 	// 有远程连着时不让电脑睡：界面配置里的实验室开关（keepAwakeRemote），和 agents 一样存了就生效。
-	// 开着就连合盖也不睡（原来是两个开关，合成一个：要远程用电脑，合盖睡着了一样连不上）；手动时段的合盖也跟着它。
+	// Staying awake for any reason (this or a manual stretch) also covers a closed lid once authorized: internal/awake.
 	keeper := awake.New(log, env.Dir)
 	defer keeper.Close()
 	applyAwake := func() {
@@ -313,7 +313,6 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 		}
 		_ = json.Unmarshal(cfg.Get(), &c)
 		keeper.SetEnabled(c.KeepAwakeRemote)
-		keeper.SetLid(c.KeepAwakeRemote)
 	}
 	applyAwake()
 	// Which install of claude / codex to run, picked in Settings → Labs → Diagnosis when PATH finds a

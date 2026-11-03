@@ -119,8 +119,7 @@ func TestLid(t *testing.T) {
 	go k.watchBattery(10 * time.Millisecond)
 	defer k.Close()
 
-	// 开关开着，但没理由醒着：不动 pmset
-	k.SetLid(true)
+	// 没理由醒着：不动 pmset
 	if lid.Load() != 0 {
 		t.Fatal("没在醒着就开了合盖模式")
 	}

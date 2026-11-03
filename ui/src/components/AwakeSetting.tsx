@@ -39,7 +39,7 @@ function describe(st: AwakeStatus) {
   if (st.auto && st.remote > 0) why.push(t(st.remote === 1 ? "awakeSetting.why.remotesOne" : "awakeSetting.why.remotes", { n: st.remote }));
   else if (st.auto && st.graceUntil > 0) why.push(t("awakeSetting.why.grace", { time: clock(st.graceUntil) }));
   if (st.lidOn) why.push(t("awakeSetting.why.lidOn"));
-  else if (st.lid && st.lowBattery) why.push(t("awakeSetting.why.lowBattery"));
+  else if (st.lowBattery) why.push(t("awakeSetting.why.lowBattery"));
   return t("awakeSetting.awake", { why: why.join(t("awakeSetting.why.sep")) });
 }
 
@@ -69,8 +69,8 @@ export function AwakeSetting({ open }: { open: boolean }) {
       .setAwake(b)
       .then(setSt)
       .catch((e) => toast.error(e.message ?? String(e)));
-  // 开关一变（存进 config、后端读到）就刷一次：授权按钮要跟着出来
-  const lidCfg = useStore((s) => !!s.config.keepAwakeRemote);
+  // Refresh once the remote toggle changes (saved to config, read by the backend): the status line follows it
+  const autoCfg = useStore((s) => !!s.config.keepAwakeRemote);
   useEffect(() => {
     if (!open) return;
     const timer = setTimeout(
@@ -82,7 +82,7 @@ export function AwakeSetting({ open }: { open: boolean }) {
       300,
     );
     return () => clearTimeout(timer);
-  }, [lidCfg, open]);
+  }, [autoCfg, open]);
   const [authing, setAuthing] = useState(false);
   const setupLid = () => {
     setAuthing(true);
@@ -114,8 +114,9 @@ export function AwakeSetting({ open }: { open: boolean }) {
           </div>
         )}
       </div>
-      {st.lid && !st.lidReady && (
-        // 远程点会 403（密码框得弹在电脑上、有人输）：后端只在本机口放行
+      {!st.lidReady && (
+        // Offered on its own, not only after the remote toggle: a manual stretch needs it for a closed lid too.
+        // A remote click gets 403 (the password prompt opens on the computer, someone has to type it): local port only
         <div className="flex items-center gap-2 text-[12px] text-warn">
           {t("awakeSetting.lidAuth")}
           <Button size="sm" variant="outline" className="h-7 text-[12px]" disabled={authing} onClick={setupLid}>
@@ -123,7 +124,7 @@ export function AwakeSetting({ open }: { open: boolean }) {
           </Button>
         </div>
       )}
-      {st.lid && st.lidReady && st.lidErr && <div className="text-[12px] text-bad">{t("awakeSetting.lidErr", { error: st.lidErr })}</div>}
+      {st.lidReady && st.lidErr && <div className="text-[12px] text-bad">{t("awakeSetting.lidErr", { error: st.lidErr })}</div>}
       <div className="flex flex-wrap gap-1.5">
         {PRESETS.map((p) => (
           <Button key={p.label} size="sm" variant="outline" className="h-7 text-[12px]" onClick={() => put(p.b)}>

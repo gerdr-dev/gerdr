@@ -78,7 +78,7 @@ const settingsZh = {
   "settings.labs.copyOnSelect.hint": "和 Herdr 一样：拖着选中文字，松开鼠标就复制到剪贴板；双击选词也会复制。对话和终端里都管用，输入框里不复制",
   "settings.labs.keepAwake": "远程连着时不休眠",
   "settings.labs.keepAwake.hint":
-    "手机等远程设备连着时电脑不睡，合上盖子也醒着（和 Amphetamine 一样），断开 15 分钟后恢复；下面的手动时段也合盖不睡。合盖要授权一次，用电池且电量 ≤ 20% 时自动放手，塞包里会发热。仅 macOS",
+    "手机等远程设备连着时电脑不睡，合上盖子也醒着（和 Amphetamine 一样），断开 15 分钟后恢复。合盖要在下面授权一次（下面的手动时段也用它），用电池且电量 ≤ 20% 时自动放手，塞包里会发热。仅 macOS",
   "settings.loader": "Loading 动画",
   "settings.loader.hint": "对话运行时 “Pondering…” 前面那个。插件还能带来更多，比如像素 Clawd",
   "settings.loader.dots": "环绕点阵",
@@ -170,7 +170,7 @@ const settingsEn: Record<keyof typeof settingsZh, string> = {
     "Like Herdr: drag to select text and it's copied when you let go; double-click selects a word and copies it too. Works in chats and terminals, not in the input box",
   "settings.labs.keepAwake": "Stay awake while remote",
   "settings.labs.keepAwake.hint":
-    "While a phone or another remote device is connected the computer doesn't sleep, even with the lid closed (like Amphetamine), until 15 minutes after it disconnects; the manual periods below keep it awake with the lid closed too. The lid needs a one-time permission; on battery at 20% or less it lets go. It gets warm in a bag. macOS only",
+    "While a phone or another remote device is connected the computer doesn't sleep, even with the lid closed (like Amphetamine), until 15 minutes after it disconnects. The lid needs a one-time permission, given below (the manual periods below use it too); on battery at 20% or less it lets go. It gets warm in a bag. macOS only",
   "settings.loader": "Working indicator",
   "settings.loader.hint": "Shown before “Pondering…” while a turn runs. Add-ons can bring more, like Pixel Clawd",
   "settings.loader.dots": "Pixel orbit",

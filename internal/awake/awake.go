@@ -15,6 +15,10 @@
 //
 // 另有一个手动的时段（设置 → 实验室，手机上也能点）：无限期 / 多少分钟 / 直到几点，和 Amphetamine 的「开启新会话」
 // 一个意思。它不看自动那个开关 —— 人明确说了要醒着，就醒着。
+//
+// Whenever it stays awake, for either reason, it also stays awake with the lid closed (lid_darwin.go) once
+// authorized. There is no separate lid switch: it used to follow the remote toggle, so a manual stretch only
+// survived a closed lid — and the Authorize button only showed — after turning on an unrelated feature.
 package awake
 
 import (
@@ -49,7 +53,6 @@ type Keeper struct {
 	manual  time.Time   // 手动时段到几点；零值 = 没开，Forever = 无限期
 	mtimer  *time.Timer // 手动时段到点
 	stop    func()      // 非 nil = 正醒着
-	lid     bool        // 实验室开关：合盖也不睡
 	lidStop func()      // 非 nil = disablesleep 正开着
 	lidErr  string      // 上次开合盖模式失败的原因
 	lowBatt bool        // 用电池且电量 ≤ 20%：合盖模式放手
@@ -113,17 +116,6 @@ func (k *Keeper) watchBattery(every time.Duration) {
 		}
 		k.mu.Unlock()
 	}
-}
-
-// SetLid：设置 → 实验室的「合盖也不睡」。只在本来就该醒着的时候生效（远程连着 / 手动时段）。
-func (k *Keeper) SetLid(on bool) {
-	k.mu.Lock()
-	defer k.mu.Unlock()
-	if k.lid == on {
-		return
-	}
-	k.lid, k.lidErr = on, ""
-	k.sync()
 }
 
 // Retry：授权完之后再试一次合盖模式。
@@ -232,7 +224,6 @@ type Status struct {
 	GraceUntil  int64 `json:"graceUntil"`  // 远程都断了，自动的那段撑到几点
 	ManualUntil int64 `json:"manualUntil"` // 手动时段到几点
 
-	Lid        bool   `json:"lid"`        // 实验室开关：合盖也不睡
 	LidReady   bool   `json:"lidReady"`   // 授权过了（sudoers 放行了 pmset disablesleep）
 	LidOn      bool   `json:"lidOn"`      // 现在合盖也不睡
 	LidErr     string `json:"lidErr"`     // 开不起来的原因
@@ -250,7 +241,7 @@ func (k *Keeper) Status() Status {
 	k.mu.Lock()
 	defer k.mu.Unlock()
 	st := Status{Available: k.start != nil, Awake: k.stop != nil, Auto: k.enabled, Remote: k.conns,
-		Lid: k.lid, LidReady: ready, LidOn: k.lidStop != nil, LidErr: k.lidErr, LowBattery: k.lowBatt, Battery: batt}
+		LidReady: ready, LidOn: k.lidStop != nil, LidErr: k.lidErr, LowBattery: k.lowBatt, Battery: batt}
 	if k.timer != nil {
 		st.GraceUntil = k.idleAt.Add(k.grace).UnixMilli()
 	}
@@ -295,11 +286,11 @@ func (k *Keeper) sync() {
 		k.stop = nil
 		k.log.Info("awake: 放手，电脑可以睡了")
 	}
-	// 合盖模式叠在上面：本来就该醒着 + 开关开着 + 不是快没电。开失败了（没授权）记下原因，不每次都重试 —— 等 Retry / 改开关。
+	// 合盖模式叠在上面：本来就该醒着 + 不是快没电。开失败了（没授权）记下原因，不每次都重试 —— 等 Retry / 改开关。
 	if !want {
 		k.lidErr = "" // 下一段醒着时再试（期间可能去授权了）
 	}
-	wantLid := want && k.lid && k.lidOn != nil && !k.lowBatt
+	wantLid := want && k.lidOn != nil && !k.lowBatt
 	switch {
 	case wantLid && k.lidStop == nil && k.lidErr == "":
 		stop, err := k.lidOn()
