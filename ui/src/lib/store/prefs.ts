@@ -66,6 +66,16 @@ export function loadMode(): "agents" | "work" {
   }
 }
 
+/** Per project (space id): the Code / Work mode it was last in on this device (see enterSpaceMode). */
+export function loadSpaceModes(): Record<string, "agents" | "work"> {
+  try {
+    const m = JSON.parse(localStorage.getItem("gerdr.spaceMode") ?? "{}");
+    return m && typeof m === "object" ? m : {};
+  } catch {
+    return {};
+  }
+}
+
 export function loadSidebar(): boolean {
   try {
     return localStorage.getItem("gerdr.sidebar") !== "0";

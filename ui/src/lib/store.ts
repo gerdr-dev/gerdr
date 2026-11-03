@@ -9,7 +9,7 @@ import { loadOverview, overviewFocus, overviewIds, phonePages, type Overview } f
 import { isPhone } from "./phone";
 import type { AgentInfo, RemoteConn, SessionSummary } from "./types";
 import { DEFAULT_CONFIG, type Config, type SharedDraft } from "./store/config";
-import { type DevicePrefs, loadDevice, loadLocalFont, loadMode, loadSidebar, loadSidebarW, loadUnread } from "./store/prefs";
+import { type DevicePrefs, loadDevice, loadLocalFont, loadMode, loadSidebar, loadSidebarW, loadSpaceModes, loadUnread } from "./store/prefs";
 
 export * from "./store/config";
 export * from "./store/prefs";
@@ -227,10 +227,30 @@ export function markUnread(id: string) {
 }
 
 export function setMode(mode: "agents" | "work") {
-  set(mode === "work" ? { mode, drawer: false, workKept: true } : { mode, drawer: false });
+  set(modePatch(mode));
+  saveMode(currentSpace(get().layout), mode);
+}
+
+function modePatch(mode: "agents" | "work"): Partial<State> {
+  return mode === "work" ? { mode, drawer: false, workKept: true } : { mode, drawer: false };
+}
+
+function saveMode(space: string, mode: "agents" | "work") {
   try {
     localStorage.setItem("gerdr.mode", mode);
+    localStorage.setItem("gerdr.spaceMode", JSON.stringify({ ...loadSpaceModes(), [space]: mode }));
   } catch {}
+}
+
+/**
+ * The state patch for landing in `space` (setLayout, when the current project changes): each project keeps the Code / Work
+ * mode it was left in, so switching projects doesn't drag the other one's mode along. A project never seen on this device
+ * keeps whatever mode is on now.
+ */
+export function enterSpaceMode(space: string): Partial<State> {
+  const mode = loadSpaceModes()[space] ?? get().mode;
+  saveMode(space, mode);
+  return mode === get().mode ? {} : modePatch(mode);
 }
 
 export function toggleSidebar() {

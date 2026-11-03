@@ -25,7 +25,7 @@ import {
   type Tab,
   type Workspace,
 } from "../layout";
-import { get, set, setLayout } from "../store";
+import { get, set, setLayout, setMode } from "../store";
 import { addActive, focusTile, MAX_TILES, overviewFocus, overviewIds, setOverview } from "../overview";
 import { workProjectOf } from "../work";
 import { rememberPane } from "./reopen";
@@ -300,6 +300,7 @@ export function cyclePane(delta: number) {
 }
 
 export function focusPane(paneId: string) {
+  const space = currentSpace(get().layout);
   setLayout((l) => {
     for (const ws of l.workspaces)
       for (const tab of ws.tabs)
@@ -310,4 +311,6 @@ export function focusPane(paneId: string) {
         }
     return l;
   });
+  // Going to a pane in another project means seeing that pane: don't land in the Work mode that project was left in
+  if (currentSpace(get().layout) !== space && get().mode === "work") setMode("agents");
 }
