@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"sort"
 	"strconv"
@@ -24,6 +25,7 @@ func (s *Server) sessionRoutes(mux *http.ServeMux) {
 		return nil, s.Hub.Delete(r.Context(), sess.ID())
 	}))
 	mux.HandleFunc("POST /api/sessions/{id}/send", s.sessionOp(s.send))
+	mux.HandleFunc("POST /api/sessions/{id}/meta", s.sessionOp(s.meta))
 	// 输入框里的 `!命令`：gerdr 在会话目录里直接跑，不经过 agent（hub/shell.go）
 	mux.HandleFunc("POST /api/sessions/{id}/shell", s.sessionOp(func(r *http.Request, sess *hub.Session) (any, error) {
 		var b struct {
@@ -232,6 +234,10 @@ func (s *Server) createSession(w http.ResponseWriter, r *http.Request) {
 		Open *struct {
 			Near  string `json:"near"`
 			Focus bool   `json:"focus"`
+			// Workspace: put it in this Code workspace of the caller's project (id, number or label; "new"), as a
+			// new tab, instead of next to Near. Placed by the server, so it works with no window open.
+			Workspace string `json:"workspace"`
+			Caller
 		} `json:"open"`
 	}
 	if err := decode(r, &o); err != nil {
@@ -240,6 +246,16 @@ func (s *Server) createSession(w http.ResponseWriter, r *http.Request) {
 	}
 	// 带 open 的是 `gerdr session new`（agent 跑的），界面自己开会话不带
 	o.CreateOptions.FromCLI = o.Open != nil
+	if o.Agent == "" {
+		o.Agent = s.defaultAgent() // `gerdr session new` without --agent: what new sessions use in the UI
+	}
+	if o.Open != nil && o.ReportTo != "" {
+		// The new session isn't anywhere yet: it lands in the caller's project, so the target has to be reachable from there
+		if err := s.crossSpace(o.Open.Near, o.ReportTo); err != nil {
+			httpError(w, 400, err.Error())
+			return
+		}
+	}
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
 	defer cancel()
 	sess, err := s.Hub.Create(ctx, o.CreateOptions)
@@ -247,10 +263,66 @@ func (s *Server) createSession(w http.ResponseWriter, r *http.Request) {
 		httpError(w, 400, err.Error())
 		return
 	}
-	if o.Open != nil {
-		s.Hub.Broadcast("open", map[string]any{"id": sess.Summary().ID, "near": o.Open.Near, "focus": o.Open.Focus})
+	sum := sess.Summary()
+	if o.Open != nil && o.Open.Workspace != "" {
+		c := o.Open.Caller
+		if c.Session == "" {
+			c.Session = o.Open.Near
+		}
+		if self, err := s.Hub.Session(c.Session); err == nil {
+			c.SessionCwd = self.Summary().Cwd
+		}
+		space := ResolveSpace(s.Layout.Get(), c, s.workProject())
+		if err := s.placeSession(space, sum.ID, o.Cwd, sum.Cwd, o.Open.Workspace); err != nil {
+			// The conversation exists either way: say so instead of losing it
+			httpError(w, 400, fmt.Sprintf(i18n.S("会话 %s 开好了，但放不进工作空间：%v", "session %s was started but couldn't go in the workspace: %v"), sum.ID, err))
+			return
+		}
+		if o.Open.Focus {
+			s.Hub.Broadcast("open", map[string]any{"id": sum.ID, "focus": true})
+		}
+	} else if o.Open != nil {
+		s.Hub.Broadcast("open", map[string]any{"id": sum.ID, "near": o.Open.Near, "focus": o.Open.Focus})
 	}
-	writeJSON(w, sess.Summary())
+	writeJSON(w, sum)
+}
+
+// meta: `gerdr session tag` / `report-to`, ctx.sessions.tag. Tags: "" removes a key. ReportTo: "" stops reports;
+// left out (null) = unchanged.
+func (s *Server) meta(r *http.Request, sess *hub.Session) (any, error) {
+	var b struct {
+		Tags     map[string]string `json:"tags"`
+		ReportTo *string           `json:"reportTo"`
+		From     string            `json:"from"` // the agent session asking
+	}
+	if err := decode(r, &b); err != nil {
+		return nil, err
+	}
+	if err := s.crossSpace(b.From, sess.ID()); err != nil {
+		return nil, err
+	}
+	if len(b.Tags) > 0 {
+		if err := sess.SetTags(b.Tags); err != nil {
+			return nil, err
+		}
+	}
+	if b.ReportTo != nil {
+		to := *b.ReportTo
+		if to != "" {
+			t, err := s.Hub.Session(to)
+			if err != nil {
+				return nil, err
+			}
+			to = t.ID()
+			if err := s.crossSpace(sess.ID(), to); err != nil {
+				return nil, err
+			}
+		}
+		if err := sess.SetReportTo(to); err != nil {
+			return nil, err
+		}
+	}
+	return sess.Summary(), nil
 }
 
 func (s *Server) send(r *http.Request, sess *hub.Session) (any, error) {

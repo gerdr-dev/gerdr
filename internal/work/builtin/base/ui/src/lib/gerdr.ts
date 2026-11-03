@@ -11,6 +11,8 @@
 // - ask(text): hand a task to the Work agent on the right of the page (gerdr sends it as a message;
 //   it queues if the agent is busy); resolves with the conversation's id. openChat(id) shows that conversation.
 // - openSession(id): show a coding-agent conversation a local function started (ctx.sessions.start), in Code.
+// - secret(name, { label, note }): ask the user for a key (a password, a token) in gerdr's own dialog; it's saved for
+//   local functions' ctx.secrets.get and never passes through this page. secretNames() lists the saved names.
 // - The page follows gerdr's light / dark theme by itself (see the listener at the bottom).
 // - The whole frame is the site's: gerdr's controls are on its own strip left of it, nothing is drawn over this page.
 
@@ -128,6 +130,29 @@ export function openSession(session: string) {
   window.parent.postMessage({ type: "gerdr:openSession", session }, location.origin);
 }
 
+let secretSeq = 0;
+const secretAsks = new Map<number, { resolve: (saved: boolean) => void; reject: (e: Error) => void }>();
+
+/**
+ * Asks the user for a secret in gerdr's dialog and saves it as `name` (what ctx.secrets.get(name) reads). Resolves
+ * true when saved, false when they cancelled. The page never sees the value.
+ */
+export function secret(name: string, opts: { label?: string; note?: string } = {}): Promise<boolean> {
+  const id = ++secretSeq;
+  return new Promise((resolve, reject) => {
+    secretAsks.set(id, { resolve, reject });
+    window.parent.postMessage({ type: "gerdr:secret", id, name, label: opts.label, note: opts.note }, location.origin);
+  });
+}
+
+/** The names of the saved secrets (never their values). */
+export async function secretNames(): Promise<string[]> {
+  const res = await fetch("/api/work/secrets", { credentials: "same-origin", headers: { "X-Gerdr": "1" } });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || res.statusText);
+  return data.list ?? [];
+}
+
 /** Opens gerdr's settings (e.g. "mcp" to sign in to an MCP server). */
 export function openSettings(tab?: string) {
   window.parent.postMessage({ type: "gerdr:settings", tab }, location.origin);
@@ -143,6 +168,12 @@ window.addEventListener("message", (e) => {
     // leaves --gerdr-menu-bottom free for a settings row gerdr used to lay over it. gerdr now sends a fixed width and 0.
     document.documentElement.style.setProperty("--gerdr-sidebar-w", `${e.data.width}px`);
     if (typeof e.data.bottom === "number") document.documentElement.style.setProperty("--gerdr-menu-bottom", `${e.data.bottom}px`);
+  } else if (e.data?.type === "gerdr:secretDone") {
+    const p = secretAsks.get(e.data.id);
+    if (!p) return;
+    secretAsks.delete(e.data.id);
+    if (e.data.error) p.reject(new Error(e.data.error));
+    else p.resolve(!!e.data.saved);
   } else if (e.data?.type === "gerdr:asked") {
     const p = asking.get(e.data.id);
     if (!p) return;

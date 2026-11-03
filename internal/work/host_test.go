@@ -11,6 +11,9 @@ import (
 type fakeHost struct {
 	started []StartOptions
 	project string
+	closed  []string
+	tagged  map[string]string
+	listTag map[string]string
 }
 
 func (f *fakeHost) StartSession(_ context.Context, project string, o StartOptions) (map[string]any, error) {
@@ -24,8 +27,17 @@ func (f *fakeHost) Session(id string) (map[string]any, error) {
 	}
 	return map[string]any{"id": "s1", "status": "idle", "reply": "done"}, nil
 }
-func (f *fakeHost) Sessions(cwd string) []map[string]any {
+func (f *fakeHost) Sessions(cwd string, tags map[string]string) []map[string]any {
+	f.listTag = tags
 	return []map[string]any{{"id": "s1", "cwd": cwd}}
+}
+func (f *fakeHost) Close(_ context.Context, id string) error {
+	f.closed = append(f.closed, id)
+	return nil
+}
+func (f *fakeHost) Tag(id string, tags map[string]string) (map[string]any, error) {
+	f.tagged = tags
+	return map[string]any{"id": id, "tags": tags}, nil
 }
 func (f *fakeHost) Send(_ context.Context, id, text string) (map[string]any, error) {
 	return map[string]any{"id": id, "sent": text}, nil
@@ -40,7 +52,10 @@ func (f *fakeHost) RecentDirs() []map[string]any {
 func TestSessionsAndWorkspaces(t *testing.T) {
 	r, _ := newProject(t, map[string]string{"t.ts": `
 export async function go(input, ctx) {
-  const s = await ctx.sessions.start({ cwd: '~/proj', prompt: 'do it', title: 'Task 1' })
+  const s = await ctx.sessions.start({ cwd: '~/proj', prompt: 'do it', title: 'Task 1', tags: { mr: 'a!1' }, reportTo: 'work' })
+  ctx.sessions.list({ tags: { mr: '' } })
+  ctx.sessions.tag('s1', { mr: '', task: 't9' })
+  await ctx.sessions.close('s1')
   let noCwd = ''
   await ctx.sessions.start({ prompt: 'x' }).catch((e) => (noCwd = e.message))
   let rel = ''
@@ -62,6 +77,18 @@ export async function go(input, ctx) {
 	home, _ := os.UserHomeDir()
 	if len(h.started) != 1 || h.started[0].Cwd != filepath.Join(home, "proj") || h.started[0].Prompt != "do it" || h.started[0].Title != "Task 1" || h.project != "default" {
 		t.Errorf("started %+v in project %q", h.started, h.project)
+	}
+	if o := h.started[0]; o.Tags["mr"] != "a!1" || o.ReportTo != "work" {
+		t.Errorf("tags / reportTo not passed on: %+v", o)
+	}
+	if v, ok := h.listTag["mr"]; !ok || v != "" {
+		t.Errorf("list tags: %v", h.listTag)
+	}
+	if v, ok := h.tagged["mr"]; !ok || v != "" || h.tagged["task"] != "t9" {
+		t.Errorf("tag: %v", h.tagged)
+	}
+	if len(h.closed) != 1 || h.closed[0] != "s1" {
+		t.Errorf("close: %v", h.closed)
 	}
 	if !strings.Contains(m["noCwd"].(string), "cwd is required") || !strings.Contains(m["rel"].(string), "absolute path") {
 		t.Errorf("errors: %q / %q", m["noCwd"], m["rel"])

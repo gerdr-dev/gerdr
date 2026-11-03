@@ -151,6 +151,10 @@ export const zh = {
   "workView.configureAgents": "配置 Agent…",
   "workView.page": "页面",
   "workView.assistant": "助手",
+  "workView.secretTitle": "保存密钥",
+  "workView.secretDesc": "存成 {name}，只有 Work 的本地函数能用（ctx.secrets.get），页面和助手都看不到。",
+  "workView.secretSave": "保存",
+  "workView.secretBadName": "名字 {name} 不能有空格或斜杠",
 
   "sync.passkeyRequest": "「{label}」请求添加 Passkey，核对码 {code}",
   "sync.approvalNeeded": "Gerdr：要你批准",
@@ -344,6 +348,10 @@ export const en: Record<keyof typeof zh, string> = {
   "workView.configureAgents": "Configure agents…",
   "workView.page": "Page",
   "workView.assistant": "Assistant",
+  "workView.secretTitle": "Save a secret",
+  "workView.secretDesc": "Saved as {name}, for Work's local functions only (ctx.secrets.get): neither the page nor the assistant sees it.",
+  "workView.secretSave": "Save",
+  "workView.secretBadName": "The name {name} can't contain spaces or slashes",
 
   "sync.passkeyRequest": "“{label}” wants to add a passkey, code {code}",
   "sync.approvalNeeded": "Gerdr: approval needed",

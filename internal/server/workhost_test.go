@@ -64,6 +64,18 @@ func TestPlaceSession(t *testing.T) {
 	if ws, _, cwd := where(l, "N8"); ws == "w1" || ws == "" || cwd != "/r" {
 		t.Errorf(`"new" though w1 matches: in %q (cwd %q), want a new workspace`, ws, cwd)
 	}
+	// By label or number too (`gerdr session new --workspace`), counted within the project like `gerdr workspace list`
+	l, _ = place("", "N10", "/r", "empty")
+	if ws, _, _ := where(l, "N10"); ws != "w3" {
+		t.Errorf("by label: in %q, want w3", ws)
+	}
+	l, _ = place("", "N11", "/elsewhere", "1")
+	if ws, _, _ := where(l, "N11"); ws != "w1" {
+		t.Errorf("by number: in %q, want w1", ws)
+	}
+	if _, err := place("", "N12", "/r", "b"); err == nil {
+		t.Error("the label of a workspace in another project: want an error")
+	}
 	if _, err := place("", "N5", "/r", "w2"); err == nil {
 		t.Error("a workspace in another project: want an error")
 	}

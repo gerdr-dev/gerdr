@@ -30,8 +30,13 @@ type Host interface {
 	// directory; a new workspace when there's none), then sends the first message if there is one.
 	StartSession(ctx context.Context, project string, o StartOptions) (map[string]any, error)
 	Session(id string) (map[string]any, error)
-	Sessions(cwd string) []map[string]any
+	// Sessions: every conversation, most recently active first; cwd / tags narrow it (see hub.HasTags).
+	Sessions(cwd string, tags map[string]string) []map[string]any
 	Send(ctx context.Context, id, text string) (map[string]any, error)
+	// Close stops a conversation's agent and takes it off the screen; the record stays and Send opens it again.
+	Close(ctx context.Context, id string) error
+	// Tag changes a conversation's tags ("" removes a key).
+	Tag(id string, tags map[string]string) (map[string]any, error)
 	// Workspaces lists the project's Code workspaces (every project's with all) and the conversations in their panes.
 	Workspaces(project string, all bool) []map[string]any
 	// RecentDirs: directories conversations ran in and workspaces point at, most recently used first.
@@ -47,6 +52,11 @@ type StartOptions struct {
 	Mode      string `json:"mode,omitempty"`      // permission mode; "" = the agent's default (never a permissive one)
 	Workspace string `json:"workspace,omitempty"` // a workspace id from ctx.workspaces.list; "new"; "" = found by cwd
 	Focus     bool   `json:"focus,omitempty"`     // switch the open windows to it
+	// Tags: labels to find it by later (ctx.sessions.list({ tags })).
+	Tags map[string]string `json:"tags,omitempty"`
+	// ReportTo: a session told each time this one stops (done, waiting for a person, error); "work" = this project's
+	// Work agent conversation.
+	ReportTo string `json:"reportTo,omitempty"`
 }
 
 var errNoHost = errors.New("not available here: ctx.sessions / ctx.workspaces need Gerdr's server")
@@ -109,7 +119,8 @@ func (r *runner) sessionsObject() map[string]any {
 				r.throw(errNoHost)
 			}
 			var o struct {
-				Cwd string `json:"cwd"`
+				Cwd  string            `json:"cwd"`
+				Tags map[string]string `json:"tags"`
 			}
 			if err := r.opts(arg, &o); err != nil {
 				r.throw(fmt.Errorf("ctx.sessions.list: %w", err))
@@ -121,7 +132,7 @@ func (r *runner) sessionsObject() map[string]any {
 					r.throw(err)
 				}
 			}
-			return h.Sessions(cwd)
+			return h.Sessions(cwd, o.Tags)
 		},
 		// await ctx.sessions.send(id, text) → session. A running one gets it at its next pause, like a queued message.
 		"send": func(id, text string) *goja.Promise {
@@ -138,6 +149,33 @@ func (r *runner) sessionsObject() map[string]any {
 				return r.rejected(err)
 			}
 			return r.resolved(s)
+		},
+		// await ctx.sessions.close(id): stop its agent, take it off the screen; send() later opens it again
+		"close": func(id string) *goja.Promise {
+			if h == nil {
+				return r.rejected(errNoHost)
+			}
+			ctx, cancel := context.WithTimeout(r.ctx, time.Minute)
+			defer cancel()
+			if err := h.Close(ctx, id); err != nil {
+				return r.rejected(err)
+			}
+			return r.resolved(nil)
+		},
+		// ctx.sessions.tag(id, { key: "value", gone: "" }) → session
+		"tag": func(id string, arg goja.Value) map[string]any {
+			if h == nil {
+				r.throw(errNoHost)
+			}
+			var tags map[string]string
+			if err := r.opts(arg, &tags); err != nil {
+				r.throw(fmt.Errorf("ctx.sessions.tag: %w", err))
+			}
+			s, err := h.Tag(id, tags)
+			if err != nil {
+				r.throw(err)
+			}
+			return s
 		},
 	}
 }

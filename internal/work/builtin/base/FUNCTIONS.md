@@ -37,6 +37,13 @@ limits. Read it before writing a function and type the argument `ctx: Ctx` (no i
 Work directory), `sessions` (hand a task to a coding agent and follow it), `workspaces` (the Code
 side's workspaces), `dirs` (directories anywhere on disk, read-only), `progress`, `log`, `sleep`.
 
+Handing work out without waiting on it: `ctx.sessions.start({ ..., tags, reportTo: "work" })` returns at once;
+each time that worker stops (done, waiting for a person, failed) the Work agent gets a report with its reply, so
+nothing has to poll. `tags` let a later run find "the session for this task / MR" again (`list({ tags })`), and
+`close(id)` parks a worker whose part is done (a later `send` opens it again with its context). Keep tag values
+to letters, digits and `/ - _ . :`: the Work agent types them into `gerdr session` commands, where an unquoted `!`
+or `#` makes the command wait for the user's approval.
+
 Globals: `fetch(url, { method, headers, body })` (there's no `ctx.fetch`; `body` can be an object, sent
 as JSON; bodies up to 10 MB; waits 2 minutes for the headers, then gives up after 1 minute without data; for
 streams read `res.body.getReader()` as it comes; local and company-internal addresses are fine), `URL`,

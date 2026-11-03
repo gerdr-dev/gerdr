@@ -54,6 +54,11 @@ type Record struct {
 	CtxWindow int `json:"ctxWindow,omitempty"`
 	// Handoff: this session carries on another agent's conversation (handoff.go).
 	Handoff *Handoff `json:"handoff,omitempty"`
+	// Tags: key → value labels set by whoever runs the session (`gerdr session tag`, ctx.sessions.tag), e.g.
+	// mr=group/repo!12. Gerdr gives them no meaning; they let a coordinator find "the session for this MR" again.
+	Tags map[string]string `json:"tags,omitempty"`
+	// ReportTo: the session told when this one stops (turn done, waiting for a person, error); see server/report.go.
+	ReportTo string `json:"reportTo,omitempty"`
 }
 
 // ClearedCtx is one context dropped by /clear: its agent session id and what it was called at the time.
@@ -248,6 +253,8 @@ type Summary struct {
 	// Waiting：在等人处理什么，一句话（最早的那个请求；acpx.DescribeRequest）。会话列表上一眼看得出「问的是什么」，
 	// 手环这种只轮列表的不用再逐个去读日志
 	Waiting string `json:"waiting,omitempty"`
+	// WaitingSince: when the oldest of those requests came in (unix ms), so a watcher can tell "waiting for 20 minutes".
+	WaitingSince int64 `json:"waitingSince,omitempty"`
 }
 
 type ContextInfo struct {
@@ -293,7 +300,17 @@ func (s *Session) Summary() Summary {
 	if (modes == nil || len(config) == 0) && s.h.opts != nil {
 		modes, config = s.optsFallbackLocked(modes, config)
 	}
-	return Summary{Record: s.rec, Status: s.status, Error: s.lastErr, Modes: modes, Config: config, Commands: cmds, CommandsKey: s.h.cmdSets.key(cmds), CommandsCached: cached && len(cmds) > 0, Pending: len(s.pending), LastSeq: last, Tasks: s.tasks, Turn: s.turnInfoLocked(), Context: s.contextLocked(), Base: s.h.Base(s.rec.Agent), Branch: gitBranch(s.rec.Cwd), Waiting: s.waitingLocked()}
+	return Summary{Record: s.rec, Status: s.status, Error: s.lastErr, Modes: modes, Config: config, Commands: cmds, CommandsKey: s.h.cmdSets.key(cmds), CommandsCached: cached && len(cmds) > 0, Pending: len(s.pending), LastSeq: last, Tasks: s.tasks, Turn: s.turnInfoLocked(), Context: s.contextLocked(), Base: s.h.Base(s.rec.Agent), Branch: gitBranch(s.rec.Cwd), Waiting: s.waitingLocked(), WaitingSince: s.waitingSinceLocked()}
+}
+
+func (s *Session) waitingSinceLocked() int64 {
+	var at int64
+	for _, p := range s.pending {
+		if at == 0 || p.at < at {
+			at = p.at
+		}
+	}
+	return at
 }
 
 func (s *Session) ID() string { return s.rec.ID }

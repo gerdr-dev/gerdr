@@ -173,6 +173,8 @@ export const api = {
       errors?: string[];
     }>("POST", "/api/import/herdr", { workspaces }),
   hello: () => req<Hello>("GET", "/api/hello"),
+  /** A key for Work local functions' ctx.secrets.get ("" deletes it); the value is never served back. */
+  setWorkSecret: (name: string, value: string) => req("POST", "/api/work/secrets", { name, value }),
   // In the interface's language: addon.json's i18n is applied here, once, so every place that shows a name reads it
   addons: () => req<AddonBuild[]>("GET", "/api/addons").then((l) => l.map(localizeAddon)),
   addonMessage: (id: string, data: unknown) => req("POST", `/api/addons/${encodeURIComponent(id)}/message`, { data }),

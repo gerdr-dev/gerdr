@@ -95,13 +95,31 @@ interface Ctx {
       workspace?: string;
       /** Switch the open windows to it. Default false: don't pull the user away from what they're doing. */
       focus?: boolean;
+      /** Labels to find it by later (`list({ tags })`), e.g. `{ task: "t12", mr: "group/repo/34" }`. Gerdr gives them no meaning. */
+      tags?: Record<string, string>;
+      /**
+       * A session that gets a message each time this one stops (finished its turn, waiting for a person, failed), with
+       * its reply: `"work"` = this project's Work agent conversation, else a session id. Reports wait while the target
+       * is busy and go as one message, so the coordinator isn't blocked on the worker nor has to poll it.
+       */
+      reportTo?: string;
     }): Promise<Session>;
     /** With `reply`: what the agent said since the last message sent to it. null when there's no such conversation. */
     get(id: string): (Session & { reply: string }) | null;
-    /** Every conversation, most recently active first; with `cwd`, only the ones in that directory. */
-    list(opts?: { cwd?: string }): Session[];
-    /** Sends another message. A running conversation gets it when its current turn ends. */
+    /**
+     * Every conversation, most recently active first; with `cwd`, only the ones in that directory; with `tags`, only
+     * the ones carrying all of them (`""` as the value: any value).
+     */
+    list(opts?: { cwd?: string; tags?: Record<string, string> }): Session[];
+    /** Sends another message. A running conversation gets it when its current turn ends; a closed one is opened again. */
     send(id: string, text: string): Promise<Session>;
+    /**
+     * Stops its agent and takes it off the screen, like closing its tab: the conversation is kept and `send` carries on
+     * from where it was. For a worker whose task is done or parked, so it stops holding a process.
+     */
+    close(id: string): Promise<void>;
+    /** Changes its tags: a value sets that key, `""` removes it, keys not named stay. */
+    tag(id: string, tags: Record<string, string>): Session;
   };
 
   /** The Code side's workspaces (not this Work project: that's `ctx.workspace`). */
@@ -191,9 +209,18 @@ interface Session {
   /** waiting: it asks the user something (an approval, a question) — they answer in gerdr's window; `waiting` says what. */
   status: "starting" | "running" | "waiting" | "idle" | "error";
   waiting?: string;
+  /** ms: since when it's been waiting for a person (only while waiting). */
+  waitingSince?: number;
+  /** ms: when the running turn started (only while running). */
+  turnStartedAt?: number;
   error?: string;
+  /** See `sessions.start`; `{}` when it has none. */
+  tags: Record<string, string>;
+  /** The session it reports to, if any. */
+  reportTo?: string;
   /** ms */
   createdAt: number;
+  /** ms: the last thing that happened in it (a message, agent output, an approval). */
   updatedAt: number;
 }
 

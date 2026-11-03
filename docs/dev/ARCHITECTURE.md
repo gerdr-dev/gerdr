@@ -400,6 +400,24 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
   cross on the server (`crossSpace`, using `from` / `near`). Closed conversations belong to no session (`--all` lists them);
   reopening one puts it next to the caller, in the caller's session. This is not a security boundary: an agent has the token
   and can call the API itself. herdr's isn't one either: it's a separate socket.
+- **Coordinating without blocking: reports and tags** (`hub/meta.go`, `server/report.go`). The use is the dispatcher in
+  Work: it hands tasks to several workers and keeps talking with the user, instead of sitting on `--wait` (one turn per
+  worker, half-duplex) or polling. A session's `Record.ReportTo` names a session that gets a message each time this one
+  stops: idle after running / waiting (done), waiting for a person, error. Status changes, not turn ends, because
+  "waiting" is the one the coordinator most needs to pass on. The reporter subscribes to the hub (started in main, not
+  lazily like the App watcher, since nobody asks for it) and seeds itself from `List` without reporting: a change missed
+  while the subscription was cut can't be dated, and reporting every session's current state would wake every
+  coordinator. Delivery waits while the target is running, starting or **waiting** (a message to a session with a pending
+  question is taken as its answer, see `SendFrom`) and goes out 2 s after the target is free, one message for all that
+  piled up, each worker once with its latest state. So a burst of workers finishing costs the coordinator one turn. The
+  queue is memory only (a restart drops undelivered reports; the coordinator can still `session list`). `ReportTo`
+  refuses loops (A→B→A would wake each other forever); chains are fine. `Tags` are plain key → value labels Gerdr gives no
+  meaning to (`list --tag`, `ctx.sessions.list({ tags })`), the way a coordinator finds "the session for this MR" again.
+  Both are persisted in the index; `/clear`'s split-off old context doesn't inherit them (they name the task, which
+  carries on in the tab). `waitingSince` / `turn.startedAt` in the summary let a watchdog tell stuck from busy.
+  `session new --workspace` places the tab on the server (`placeSession`, by id / number / label within the caller's
+  project) instead of broadcasting `open`, so it works with no window open; without `--agent` it uses `defaultAgent`,
+  like the UI and `ctx.sessions.start` (it used to be hard-wired to claude).
 - **One window per session (App).** "Open in new window" (session bar context menu) and ⌘N open another BrowserWindow on
   `/?space=<id>` (desktop/main.js `pageURL`, through `/auth?next=`). Every window is a full client with its own view, like a
   second browser tab. The page keeps `?space=` current (App.tsx) so a reload stays put; it must not touch it before the layout
@@ -496,6 +514,11 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
   and removed when no longer shipped unless edited.
 - The right-hand agent is an ordinary session in the project's Work directory (its CLAUDE.md / AGENTS.md teach it the site),
   not in the layout; `watchedSessions` adds it while in Work mode. `gerdr work run|status` find the project from the cwd.
+  `ctx.sessions.start({ reportTo: "work" })` resolves "work" to that conversation (`config.workSessions`), so a function
+  can hand a task out and have the result come back to the Work agent.
+- Secrets from a page: `secret(name)` in the bridge posts `gerdr:secret`; Gerdr (WorkView `SecretDialog`) asks in its
+  own dialog and saves through `/api/work/secrets`. The value never passes through the page: its code is written by an
+  agent, and a value in page state is one log line away from a transcript.
   New conversations use an engine or a role from Settings → Agent (prompt, skills, MCP, default model).
 
 ## 角色和新会话默认（设置 → Agent）

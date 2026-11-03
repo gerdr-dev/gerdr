@@ -61,13 +61,42 @@ gerdr session new --agent codex --title reviewer \
   --wait --timeout 20m
 ```
 
-- `--agent` 是 `claude`、`codex` 或 `native`（Gerdr 自带的 Gerdr Agent，直接用配置里的 GPT / DeepSeek 等模型，配了才有）；
+- 不给 `--agent` 就用设置里的默认 agent；`--agent` 是 `claude`、`codex` 或 `native`（Gerdr 自带的 Gerdr Agent，直接用配置里的 GPT / DeepSeek 等模型，配了才有）；
   用户在设置里建的**角色**（比如只读代码的 `reviewer`，带自己的提示词、只开某几个 skill / MCP）和另一个账号（`claude-2`）也用它的 id。
   `gerdr session agents` 列出全部能用的、角色带着它的提示词；用户说「让审查那个看看」这种就去那里找对应的角色。用户指定了哪个就用哪个；
 - `--title` 起个短名字，之后可以 `gerdr session send reviewer …`；
 - 带 `--wait`：等它这一轮做完，输出里 `reply` 就是它的回复；不带就是派出去不等，之后再 `wait`；
 - 要它能改文件 / 跑命令而不每次问人，按用户的意思给 `--mode`（claude：`acceptEdits` / `auto` / `bypassPermissions`；codex：`auto` / `full-access`；native：`acceptEdits` / `bypassPermissions`，只读用 `plan`）。
-  不确定就别给：用用户给这种 agent 设的默认模式（没设、或者设的是全放开的那种，就是 agent 自己的默认），要做危险操作会在界面上弹审批给人。
+  不确定就别给：用用户给这种 agent 设的默认模式（没设、或者设的是全放开的那种，就是 agent 自己的默认），要做危险操作会在界面上弹审批给人；
+- `--cwd` defaults to your current directory. As the Work agent that is the Work directory, not a repository: always
+  give `--cwd` when the task is about code;
+- `--workspace <id|number|label|new>` puts it in that Code workspace as a new tab (`gerdr workspace list`); without it,
+  it opens next to you.
+
+### Hand it off without waiting: reports
+
+To run several tasks at once, or a long one, don't block yourself on `--wait`: use `--report-to self` and go back to the
+user. Each time the session stops (turn done, waiting for a person to approve / answer, failed) you get a "Gerdr report"
+message with its reply and id. While you're busy, reports are held and arrive together when your turn ends. With
+`--report-to`, don't also `--wait` (you'd get the result twice).
+
+```bash
+gerdr session new --cwd ~/code/api --title "fix login" --tag task=t12 --report-to self \
+  --prompt "Fix the login redirect bug described in ...; open an MR when done."
+gerdr session report-to "fix login" none   # stop its reports
+```
+
+### Tags: finding the session again
+
+`--tag k=v` (repeatable) labels a session. Gerdr gives tags no meaning; it keeps them and finds sessions by them:
+
+```bash
+gerdr session list --all --tag task=t12   # sessions with this tag (--all includes closed ones); --tag mr = has the key
+gerdr session tag "fix login" mr=group/api/34 task=   # k=v sets, k= removes
+```
+
+Keep tag values to letters, digits and `/ - _ . :`: an unquoted `!` or `#` makes the command count as unsafe, so it
+waits for the user's approval.
 
 ## 给已有的会话发消息
 
@@ -90,7 +119,7 @@ gerdr session read reviewer --last 20         # 读最近 20 条（用户说的 
 ## 收尾
 
 ```bash
-gerdr session close reviewer          # 用完了：从界面上收掉它的 pane
+gerdr session close reviewer          # 用完了：从界面上收掉它的 pane（进程停掉，记录和上下文留着）
 gerdr session send reviewer "/clear"  # 还要接着派活、但不想带着之前的上下文：清空（claude、codex 都认）
 ```
 

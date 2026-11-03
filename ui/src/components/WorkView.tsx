@@ -8,6 +8,9 @@ import { toggleOverview } from "@/lib/overview";
 import { ChatView } from "@/components/chat/ChatView";
 import { PixelLoader } from "@/components/chat/PixelLoader";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { api } from "@/lib/api";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -129,6 +132,7 @@ const LEGACY_SIDEBAR = { type: "gerdr:sidebar", width: 224, bottom: 0 };
 /** One project's Work site, the whole space between the rail and the chat (WorkFrames keeps one per opened project). */
 function WorkFrame({ project, onShowChat }: { project: string; onShowChat?: () => void }) {
   const ref = useRef<HTMLIFrameElement>(null);
+  const [secretAsk, setSecretAsk] = useState<SecretAsk | null>(null);
   const dark = useDark();
   const send = (m: unknown) => ref.current?.contentWindow?.postMessage(m, location.origin);
   useEffect(() => send({ type: "gerdr:theme", dark }), [dark]);
@@ -159,11 +163,81 @@ function WorkFrame({ project, onShowChat }: { project: string; onShowChat?: () =
         setMode("agents");
         focusSession(m.session);
       } else if (m.type === "gerdr:settings") set({ dialog: { kind: "settings", tab: typeof m.tab === "string" ? m.tab : undefined } });
+      else if (m.type === "gerdr:secret" && typeof m.name === "string") {
+        // Asked for by the page, typed into gerdr's own dialog: the value goes straight to secrets.json and never
+        // passes through the page (code an agent wrote) or a model
+        setSecretAsk({ id: m.id, name: m.name, label: typeof m.label === "string" ? m.label : "", note: typeof m.note === "string" ? m.note : "" });
+      }
     };
     window.addEventListener("message", f);
     return () => window.removeEventListener("message", f);
   }, [project, onShowChat]);
-  return <iframe ref={ref} src={`/work/${encodeURIComponent(project)}/`} title="Work" className="size-full border-0 bg-background" />;
+  return (
+    <>
+      <iframe ref={ref} src={`/work/${encodeURIComponent(project)}/`} title="Work" className="size-full border-0 bg-background" />
+      <SecretDialog
+        ask={secretAsk}
+        onDone={(saved, error) => {
+          if (secretAsk) send({ type: "gerdr:secretDone", id: secretAsk.id, saved, error });
+          setSecretAsk(null);
+        }}
+      />
+    </>
+  );
+}
+
+type SecretAsk = { id: unknown; name: string; label: string; note: string };
+
+/** The Work page's secret() call: one password field, saved as a ctx.secrets key. */
+function SecretDialog({ ask, onDone }: { ask: SecretAsk | null; onDone: (saved: boolean, error?: string) => void }) {
+  const [value, setValue] = useState("");
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    setValue("");
+    setErr("");
+  }, [ask]);
+  const bad = !!ask && (!ask.name || /[\s/]/.test(ask.name));
+  const save = async () => {
+    if (!ask || !value || bad) return;
+    setBusy(true);
+    try {
+      await api.setWorkSecret(ask.name, value);
+      onDone(true);
+    } catch (e: any) {
+      setErr(e.message ?? String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Dialog open={!!ask} onOpenChange={(o) => !o && onDone(false)}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>{ask?.label || t("workView.secretTitle")}</DialogTitle>
+          <DialogDescription>{t("workView.secretDesc", { name: ask?.name ?? "" })}</DialogDescription>
+        </DialogHeader>
+        {ask?.note && <div className="whitespace-pre-wrap text-[12px] text-muted-foreground">{ask.note}</div>}
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void save();
+          }}
+        >
+          <Input type="password" autoFocus autoComplete="off" value={value} onChange={(e) => setValue(e.target.value)} disabled={bad} />
+        </form>
+        {(err || bad) && <div className="text-[12px] text-bad">{bad ? t("workView.secretBadName", { name: ask?.name ?? "" }) : err}</div>}
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onDone(false)}>
+            {t("common.cancel")}
+          </Button>
+          <Button onClick={() => void save()} disabled={!value || busy || bad}>
+            {t("workView.secretSave")}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 /**

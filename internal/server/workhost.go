@@ -27,20 +27,17 @@ func (h workHost) StartSession(ctx context.Context, project string, o work.Start
 	s := h.s
 	agent := o.Agent
 	if agent == "" {
-		var c struct {
-			DefaultAgent string `json:"defaultAgent"`
-		}
-		if s.Config != nil {
-			_ = json.Unmarshal(s.Config.Get(), &c)
-		}
-		agent = c.DefaultAgent
-		if agent == "" {
-			agent = "claude"
+		agent = s.defaultAgent()
+	}
+	reportTo := o.ReportTo
+	if reportTo == "work" {
+		if reportTo = s.workSession(project); reportTo == "" {
+			return nil, errors.New(i18n.S("这个项目的 Work 助手还没有对话：先在 Work 里打开它", "this project's Work agent has no conversation yet: open it in Work first"))
 		}
 	}
 	// FromCLI: started by code an agent may have written, so a permissive default mode isn't applied on its own (the
 	// same rule as `gerdr session new`); an explicit mode still is.
-	sess, err := s.Hub.Create(ctx, hub.CreateOptions{Agent: agent, Cwd: o.Cwd, Mode: o.Mode, Title: o.Title, FromCLI: true})
+	sess, err := s.Hub.Create(ctx, hub.CreateOptions{Agent: agent, Cwd: o.Cwd, Mode: o.Mode, Title: o.Title, Tags: o.Tags, ReportTo: reportTo, FromCLI: true})
 	if err != nil {
 		return nil, err
 	}
@@ -68,16 +65,36 @@ func (h workHost) Session(id string) (map[string]any, error) {
 	return h.view(sess.Summary(), sess.Events()), nil
 }
 
-func (h workHost) Sessions(cwd string) []map[string]any {
+func (h workHost) Sessions(cwd string, tags map[string]string) []map[string]any {
 	list := h.s.Hub.List()
 	sort.SliceStable(list, func(i, j int) bool { return list[i].UpdatedAt > list[j].UpdatedAt })
 	out := []map[string]any{}
 	for _, x := range list {
-		if cwd == "" || x.Cwd == cwd {
+		if (cwd == "" || x.Cwd == cwd) && hub.HasTags(x.Tags, tags) {
 			out = append(out, h.view(x, nil))
 		}
 	}
 	return out
+}
+
+// Close is `gerdr session close`: the agent side stops, the record stays and a later Send opens it again.
+func (h workHost) Close(ctx context.Context, id string) error {
+	sess, err := h.s.Hub.Session(id)
+	if err != nil {
+		return err
+	}
+	return h.s.Hub.CloseUI(ctx, sess.ID())
+}
+
+func (h workHost) Tag(id string, tags map[string]string) (map[string]any, error) {
+	sess, err := h.s.Hub.Session(id)
+	if err != nil {
+		return nil, err
+	}
+	if err := sess.SetTags(tags); err != nil {
+		return nil, err
+	}
+	return h.view(sess.Summary(), nil), nil
 }
 
 func (h workHost) Send(ctx context.Context, id, text string) (map[string]any, error) {
@@ -172,6 +189,19 @@ func (h workHost) view(x hub.Summary, evs []*hub.Event) map[string]any {
 	if x.Error != "" {
 		v["error"] = x.Error
 	}
+	if x.WaitingSince != 0 {
+		v["waitingSince"] = x.WaitingSince
+	}
+	if x.Turn != nil {
+		v["turnStartedAt"] = x.Turn.StartedAt
+	}
+	v["tags"] = map[string]string{}
+	if len(x.Tags) > 0 {
+		v["tags"] = x.Tags
+	}
+	if x.ReportTo != "" {
+		v["reportTo"] = x.ReportTo
+	}
 	if evs != nil {
 		v["reply"] = lastReply(evs)
 	}
@@ -242,6 +272,39 @@ func spaceOr(project string) string {
 	return project
 }
 
+// defaultAgent: Settings' default agent (config.json defaultAgent), else claude.
+func (s *Server) defaultAgent() string {
+	var c struct {
+		DefaultAgent string `json:"defaultAgent"`
+	}
+	if s.Config != nil {
+		_ = json.Unmarshal(s.Config.Get(), &c)
+	}
+	if c.DefaultAgent == "" {
+		return "claude"
+	}
+	return c.DefaultAgent
+}
+
+// workSession: the project's current Work agent conversation (config.json workSessions, kept by the UI), "" if none.
+func (s *Server) workSession(project string) string {
+	var c struct {
+		WorkSessions map[string]string `json:"workSessions"`
+		WorkSession  string            `json:"workSession"` // before projects: the default project's
+	}
+	if s.Config != nil {
+		_ = json.Unmarshal(s.Config.Get(), &c)
+	}
+	sp := spaceOr(project)
+	if id := c.WorkSessions[sp]; id != "" {
+		return id
+	}
+	if sp == DefaultSpace {
+		return c.WorkSession
+	}
+	return ""
+}
+
 // placeSession puts a conversation started by a Work function into its project's Code layout, so it's in the window
 // (and kept alive, see layout.ts) whether or not a window is open now: a new tab in workspace wsID, else in the
 // workspace whose directory is cwd (or the closest one above it), else in a new workspace for cwd. wsID "new" always
@@ -265,11 +328,7 @@ func (s *Server) placeSession(project, id, cwd, real, wsID string) error {
 			continue
 		}
 		if wsID != "" {
-			if str(x, "id") == wsID {
-				w = x
-				break
-			}
-			continue
+			break // looked up below, by id, number or label
 		}
 		wc := strings.TrimSuffix(str(x, "cwd"), "/")
 		if wc == "" {
@@ -283,10 +342,13 @@ func (s *Server) placeSession(project, id, cwd, real, wsID string) error {
 			w, best = x, len(wc)
 		}
 	}
-	if w == nil {
-		if wsID != "" && wsID != "new" {
-			return fmt.Errorf("no workspace %q in project %q", wsID, space)
+	if wsID != "" && wsID != "new" {
+		var err error
+		if w, err = c.workspace(wsID); err != nil {
+			return fmt.Errorf("%w (project %q)", err, space)
 		}
+	}
+	if w == nil {
 		w, _ = c.newWorkspace(filepath.Base(cwd), cwd, space)
 	}
 	p := node{"type": "pane", "id": rid("p"), "sessionId": id}

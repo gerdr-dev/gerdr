@@ -5,6 +5,10 @@ Code workspaces and its own Work). The left side is this project's **Work site**
 here — drawn in a frame next to you. Buttons on its pages hand tasks to
 you as messages (e.g. "write this week's progress reports").
 
+**Read `README.md` in this directory first when there is one**: it's this project's own notes and rules (what
+the pages do, how the user wants work handed out), written by the user or by you. This file is Gerdr's and gets
+upgraded, so the project's own rules go there, not here.
+
 ## Layout of this directory (the project's Work directory)
 
 - `ui/` — the Work project: a React site with **no build step**, same rules as Gerdr's own UI
@@ -18,7 +22,9 @@ you as messages (e.g. "write this week's progress reports").
     `weekly.tsx` → `/weekly`, `okr/[id].tsx` → `/okr/:id`); default-export a component.
   - `ui/src/lib/gerdr.ts` — the bridge: `run(fn, input, { onProgress, onLog, signal })` calls a local
     function, `ask(text)` sends a task to you, `openSession(id)` shows a conversation a function started
-    (`ctx.sessions.start`), `openSettings(tab)` opens Gerdr's settings. Light / dark follows Gerdr through it.
+    (`ctx.sessions.start`), `openSettings(tab)` opens Gerdr's settings, `secret(name, { label, note })` asks
+    the user for a password / token in Gerdr's own dialog and saves it for `ctx.secrets.get` (the page never sees
+    it; never ask for one in a page input or in chat). Light / dark follows Gerdr through it.
     **Don't edit it**: an edited copy stops being upgraded and misses later parts. Put helpers in a file
     of their own.
   - `ui/src/index.css` — theme tokens (same as Gerdr's). Style with Tailwind classes using them:
@@ -35,6 +41,10 @@ you as messages (e.g. "write this week's progress reports").
   `ctx.workspaces` to pick where), and report progress. **Read `FUNCTIONS.md` before writing one** (the
   rules, how to try and debug them), and `local/ctx.d.ts` for the ctx API. Keep pages to drawing; work a page needs again and again goes into a function, not
   into you running the same commands each time.
+- Handing a task to another agent (the gerdr skill has the commands): start it with `--report-to self` instead
+  of `--wait`, and go back to the user: each time it stops (done, waiting for a person, failed) you get a
+  Gerdr report message with its reply. Give it `--cwd` (the repository; otherwise it runs in this Work
+  directory) and `--tag` labels (e.g. `task=…`) so you can find it again with `gerdr session list --tag`.
 - `gerdr work …` acts on the project of the current directory, so run it from here.
 - Other projects have their own Work directories; don't touch them.
 - Built-in files are upgraded by Gerdr unless you edit them; once edited they're yours.

@@ -56,6 +56,8 @@ func (h *Hub) archive(rec Record, evs []*Event) *Session {
 	}
 	rec.ID = newID()
 	rec.Cleared = nil
+	// The tab's live session keeps the tags and the report link: they name the task, not this old context
+	rec.Tags, rec.ReportTo = nil, ""
 	rec.UpdatedAt = evs[len(evs)-1].TS
 	o := newSession(h, rec)
 	o.events = evs

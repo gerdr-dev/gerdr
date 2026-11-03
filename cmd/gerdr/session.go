@@ -135,6 +135,12 @@ type sessInfo struct {
 	Tasks   []struct {
 		Status string `json:"status"`
 	} `json:"tasks"`
+	Tags         map[string]string `json:"tags"`
+	ReportTo     string            `json:"reportTo"`
+	WaitingSince int64             `json:"waitingSince"`
+	Turn         *struct {
+		StartedAt int64 `json:"startedAt"`
+	} `json:"turn"`
 	// inUI：界面上有没有 pane 显示它。和 herdr 一样，「开着的会话」就是界面上看得见的；关掉 pane = 关掉会话
 	// （记录留着，能接着聊，只是默认不列、不算）。
 	inUI *bool
@@ -156,6 +162,18 @@ func (s sessInfo) view(self string) map[string]any {
 	if s.Pending > 0 {
 		m["waiting_for_human"] = s.Pending
 		m["waiting"] = s.Waiting // 等的是什么，一句话：「回答：下一步做什么？（A / B）」「审批：Write x.txt」
+	}
+	if s.Pending > 0 && s.WaitingSince > 0 {
+		m["waitingSince"] = s.WaitingSince // unix ms: since when it's been waiting for a person
+	}
+	if s.Turn != nil {
+		m["turnStartedAt"] = s.Turn.StartedAt // unix ms: when the running turn started
+	}
+	if len(s.Tags) > 0 {
+		m["tags"] = s.Tags
+	}
+	if s.ReportTo != "" {
+		m["reportTo"] = s.ReportTo
 	}
 	if s.Error != "" {
 		m["error"] = s.Error
@@ -475,6 +493,7 @@ and hand it a task, wait for it to finish, read its reply. Refer to a session by
 	}
 
 	var listAll bool
+	var listTags []string
 	listCmd := &cobra.Command{
 		Use:   "list",
 		Short: i18n.S("列出开着的会话（界面上看得见的；self: true 是你自己），最近有动静的在前（updatedAt）。--all 连关掉的一起", "List open sessions (the ones visible in the UI; self: true is you), most recently active first (updatedAt). --all includes closed ones"),
@@ -485,10 +504,17 @@ and hand it a task, wait for it to finish, read its reply. Refer to a session by
 			if err != nil {
 				return err
 			}
+			want, err := parseTags(listTags, false)
+			if err != nil {
+				return err
+			}
 			sort.SliceStable(list, func(i, j int) bool { return list[i].Updated > list[j].Updated }) // 最近动过的在前
 			out := []map[string]any{}
 			for _, s := range list {
 				if !listAll && s.inUI != nil && !*s.inUI && s.ID != self {
+					continue
+				}
+				if !hasTags(s.Tags, want) {
 					continue
 				}
 				out = append(out, s.view(self))
@@ -498,6 +524,7 @@ and hand it a task, wait for it to finish, read its reply. Refer to a session by
 		},
 	}
 	listCmd.Flags().BoolVar(&listAll, "all", false, i18n.S("连关掉的会话一起列（closed: true）", "include closed sessions (closed: true)"))
+	listCmd.Flags().StringArrayVar(&listTags, "tag", nil, i18n.S("只列带这个标签的：k=v，或者只写 k（有这个键就算）；可以给多个，都要满足", "only sessions with this tag: k=v, or just k (any value); repeat for several, all must match"))
 	cmd.AddCommand(listCmd)
 	cmd.AddCommand(&cobra.Command{
 		Use:   "current",
@@ -551,7 +578,8 @@ and hand it a task, wait for it to finish, read its reply. Refer to a session by
 		},
 	})
 
-	var nAgent, nCwd, nTitle, nMode, nPrompt string
+	var nAgent, nCwd, nTitle, nMode, nPrompt, nWorkspace, nReportTo string
+	var nTags []string
 	var nWait, nFocus bool
 	var nTimeout time.Duration
 	newCmd := &cobra.Command{
@@ -571,7 +599,27 @@ and hand it a task, wait for it to finish, read its reply. Refer to a session by
 			if nMode != "" {
 				body["mode"] = nMode
 			}
-			body["open"] = map[string]any{"near": self, "focus": nFocus}
+			tags, err := parseTags(nTags, false)
+			if err != nil {
+				return err
+			}
+			if len(tags) > 0 {
+				body["tags"] = tags
+			}
+			if nReportTo != "" {
+				to, err := c.reportTarget(nReportTo)
+				if err != nil {
+					return err
+				}
+				body["reportTo"] = to
+			}
+			open := map[string]any{"near": self, "focus": nFocus}
+			if nWorkspace != "" {
+				who := c.caller()
+				open["workspace"] = nWorkspace
+				open["project"], open["from"], open["term"] = who.Project, who.Session, who.Term
+			}
+			body["open"] = open
 			var s sessInfo
 			if err := c.do("POST", "/api/sessions", body, &s); err != nil {
 				return err
@@ -591,7 +639,10 @@ and hand it a task, wait for it to finish, read its reply. Refer to a session by
 			return waitResult(c, s.ID, 0, nTimeout)
 		},
 	}
-	newCmd.Flags().StringVar(&nAgent, "agent", "claude", i18n.S("claude、codex、native（Gerdr Agent），或者设置里加的变体 / 外部 agent 的 id", "claude, codex, native (Gerdr Agent), or the id of a variant / external agent added in Settings"))
+	newCmd.Flags().StringVar(&nAgent, "agent", "", i18n.S("claude、codex、native（Gerdr Agent），或者设置里加的角色 / 变体的 id（gerdr session agents）。不给 = 设置里的默认 agent", "claude, codex, native (Gerdr Agent), or the id of a role / variant from Settings (gerdr session agents). Omitted = the default agent in Settings"))
+	newCmd.Flags().StringVar(&nWorkspace, "workspace", "", i18n.S("放进这个 Code 工作空间（id、编号或名字；new = 新建一个），作为新标签页；不给 = 开在你旁边", "put it in this Code workspace (id, number or label; new = a new one) as a new tab; omitted = next to you"))
+	newCmd.Flags().StringArrayVar(&nTags, "tag", nil, i18n.S("给它打标签 k=v（可以给多个），之后 list --tag 找回来", "tag it k=v (repeatable), to find it again with list --tag"))
+	newCmd.Flags().StringVar(&nReportTo, "report-to", "", i18n.S("它每次停下（做完、等人、出错）就发一条回报给这个会话；self = 你自己。用了它就别再 --wait", "send a report to this session each time it stops (done, waiting for a person, error); self = you. Don't --wait as well"))
 	newCmd.Flags().StringVar(&nCwd, "cwd", "", i18n.S("工作目录（默认当前目录）", "working directory (default: current directory)"))
 	newCmd.Flags().StringVar(&nTitle, "title", "", i18n.S("会话标题（之后可以用它指代这个会话）", "session title (you can refer to the session by it later)"))
 	newCmd.Flags().StringVar(&nMode, "mode", "", i18n.S("权限模式（claude: default/acceptEdits/plan/auto/bypassPermissions；codex: ask/auto/read-only/full-access；native: default/acceptEdits/plan/bypassPermissions）。不给 = 用户在设置里给这种 agent 定的默认模式（全放开的那种不算）", "permission mode (claude: default/acceptEdits/plan/auto/bypassPermissions; codex: ask/auto/read-only/full-access; native: default/acceptEdits/plan/bypassPermissions). Omitted = the default mode the user set for this agent in Settings (fully permissive ones excepted)"))
@@ -600,6 +651,53 @@ and hand it a task, wait for it to finish, read its reply. Refer to a session by
 	newCmd.Flags().DurationVar(&nTimeout, "timeout", 30*time.Minute, i18n.S("--wait 最多等多久", "how long --wait waits at most"))
 	newCmd.Flags().BoolVar(&nFocus, "focus", false, i18n.S("打开后把焦点切过去（默认不切，别打断人）", "switch focus to it once opened (off by default, so as not to interrupt the user)"))
 	cmd.AddCommand(newCmd)
+
+	cmd.AddCommand(&cobra.Command{
+		Use:   i18n.S("tag <会话> <k=v>...", "tag <session> <k=v>..."),
+		Short: i18n.S("改会话的标签：k=v 设置，k= 删掉；没提到的不动。输出改完的会话", "Change a session's tags: k=v sets, k= removes; others stay. Prints the session"),
+		Args:  cobra.MinimumNArgs(2),
+		RunE: func(_ *cobra.Command, args []string) error {
+			c := client()
+			s, err := c.resolve(args[0])
+			if err != nil {
+				return err
+			}
+			tags, err := parseTags(args[1:], true)
+			if err != nil {
+				return err
+			}
+			var out sessInfo
+			if err := c.do("POST", "/api/sessions/"+s.ID+"/meta", map[string]any{"tags": tags, "from": c.selfID()}, &out); err != nil {
+				return err
+			}
+			printJSON(out.view(c.selfID()))
+			return nil
+		},
+	})
+	cmd.AddCommand(&cobra.Command{
+		Use:   i18n.S("report-to <会话> <目标会话|self|none>", "report-to <session> <target|self|none>"),
+		Short: i18n.S("让一个会话每次停下（做完、等人、出错）就回报给目标会话；none = 不再回报", "Make a session report to the target each time it stops (done, waiting for a person, error); none = stop"),
+		Args:  cobra.ExactArgs(2),
+		RunE: func(_ *cobra.Command, args []string) error {
+			c := client()
+			s, err := c.resolve(args[0])
+			if err != nil {
+				return err
+			}
+			to := ""
+			if args[1] != "none" {
+				if to, err = c.reportTarget(args[1]); err != nil {
+					return err
+				}
+			}
+			var out sessInfo
+			if err := c.do("POST", "/api/sessions/"+s.ID+"/meta", map[string]any{"reportTo": to, "from": c.selfID()}, &out); err != nil {
+				return err
+			}
+			printJSON(out.view(c.selfID()))
+			return nil
+		},
+	})
 
 	var sWait bool
 	var sTimeout time.Duration
@@ -1127,4 +1225,45 @@ func answerNote(resp json.RawMessage) string {
 		return i18n.S(" → 作废（这一轮结束了）", " → void (the turn ended)")
 	}
 	return ""
+}
+
+// parseTags reads k=v arguments. A bare k (no '=') means "has this key" in a filter; in a change (removing) it's
+// rejected so a typo doesn't silently delete: removing is k=.
+func parseTags(args []string, change bool) (map[string]string, error) {
+	out := map[string]string{}
+	for _, a := range args {
+		k, v, ok := strings.Cut(a, "=")
+		if k == "" || (change && !ok) {
+			return nil, fmt.Errorf(i18n.S("标签写成 k=v（删掉写 k=）：%q", "write tags as k=v (k= to remove): %q"), a)
+		}
+		out[k] = v
+	}
+	return out, nil
+}
+
+// hasTags: every wanted key is set, to the wanted value unless that's "" (any value).
+func hasTags(tags, want map[string]string) bool {
+	for k, v := range want {
+		got, ok := tags[k]
+		if !ok || (v != "" && got != v) {
+			return false
+		}
+	}
+	return true
+}
+
+// reportTarget: a session ref for --report-to; "self" is the caller.
+func (c *apiClient) reportTarget(ref string) (string, error) {
+	if ref == "self" {
+		id := c.selfID()
+		if id == "" {
+			return "", errors.New(i18n.S("认不出当前会话：--report-to self 只能在 Gerdr 里的 agent 用", "cannot tell which session this is: --report-to self only works for an agent running in Gerdr"))
+		}
+		return id, nil
+	}
+	s, err := c.resolve(ref)
+	if err != nil {
+		return "", err
+	}
+	return s.ID, nil
 }
