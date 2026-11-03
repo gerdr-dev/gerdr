@@ -184,12 +184,17 @@ func (s *Server) fileExists(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) fileRaw(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	serveRaw(w, r, resolvePath(q.Get("path"), q.Get("cwd")), q.Get("download") == "1")
+	serveRaw(w, r, resolvePath(q.Get("path"), q.Get("cwd")), q.Get("download") == "1", false)
 }
 
 // serveRaw sends a file's bytes with headers that keep it from running as a page of ours. Shared by /api/fs/raw
 // and the cookie-less links of filelink.go.
-func serveRaw(w http.ResponseWriter, r *http.Request, p string, download bool) {
+//
+// page: send an .html file as a page instead of as text (the "open externally" links, where people want the
+// page rendered). It still can't act as us: the CSP sandbox without allow-same-origin gives it an opaque origin,
+// so its requests back here are cross-site (the SameSite=Strict cookie stays home, Origin is "null", CORS
+// hides the answers) and it can't read our storage.
+func serveRaw(w http.ResponseWriter, r *http.Request, p string, download, page bool) {
 	f, err := os.Open(p)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -206,7 +211,10 @@ func serveRaw(w http.ResponseWriter, r *http.Request, p string, download bool) {
 		return
 	}
 	t := fileMime(p)
+	asPage := page && !download && (t == "text/html" || t == "application/xhtml+xml")
 	switch {
+	case asPage:
+		t += "; charset=utf-8"
 	case t == "":
 		t = "application/octet-stream"
 	case unsafeInline(t):
@@ -220,9 +228,13 @@ func serveRaw(w http.ResponseWriter, r *http.Request, p string, download bool) {
 	// 盖掉 guard 那套页面用的头：PDF 要能放进查看器的 iframe（同源），其余一律 sandbox。
 	// PDF 不加 sandbox：Chrome 的 PDF 查看器在 sandbox 下不渲染；它自己的 JS 是隔离跑的。
 	h.Del("X-Frame-Options")
-	if t == "application/pdf" {
+	switch {
+	case t == "application/pdf":
 		h.Set("Content-Security-Policy", "frame-ancestors 'self'")
-	} else {
+	case asPage:
+		// Scripts, forms, popups and outside resources (CDN scripts / fonts) allowed; the origin stays opaque.
+		h.Set("Content-Security-Policy", "sandbox allow-scripts allow-forms allow-popups allow-modals allow-downloads; frame-ancestors 'self'")
+	default:
 		h.Set("Content-Security-Policy", "sandbox; default-src 'none'; img-src 'self' data:; media-src 'self'; style-src 'unsafe-inline'; frame-ancestors 'self'")
 	}
 	if download {

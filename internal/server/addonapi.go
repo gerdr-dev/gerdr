@@ -75,7 +75,7 @@ func (s *Server) addonRoutes(mux *http.ServeMux) {
 			httpError(w, 400, err.Error())
 			return
 		}
-		serveRaw(w, r, p, false)
+		serveRaw(w, r, p, false, false)
 	})
 
 	mux.HandleFunc("GET /api/addon-stores", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, s.Addons.Stores()) })
@@ -149,7 +149,7 @@ func (s *Server) addonRoutes(mux *http.ServeMux) {
 			httpError(w, 400, err.Error())
 			return
 		}
-		serveRaw(w, r, p, false)
+		serveRaw(w, r, p, false, false)
 	})
 }
 

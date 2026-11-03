@@ -54,3 +54,26 @@ func TestFileLinkExpiry(t *testing.T) {
 		t.Fatal("link outlived linkTTL")
 	}
 }
+
+// An .html link renders as a page, but sandboxed without allow-same-origin so it can't act as us.
+func TestFileLinkHTMLPage(t *testing.T) {
+	s, h, rh := remoteServer(t)
+	p := filepath.Join(t.TempDir(), "index.html")
+	if err := os.WriteFile(p, []byte("<p>hi</p>"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	w := do(h, "POST", "/api/fs/link", body(`{"path":"`+p+`"}`)(), csrf, hdr("Authorization", "Bearer "+s.Token))
+	var out struct{ URL string }
+	_ = json.Unmarshal(w.Body.Bytes(), &out)
+	w = do(rh, "GET", out.URL, nil)
+	if ct := w.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/html") {
+		t.Fatalf("Content-Type = %q, want text/html", ct)
+	}
+	csp := w.Header().Get("Content-Security-Policy")
+	if !strings.HasPrefix(csp, "sandbox ") || strings.Contains(csp, "allow-same-origin") {
+		t.Fatalf("CSP = %q, want a sandbox without allow-same-origin", csp)
+	}
+	if w := do(h, "GET", out.URL+"?download=1", nil); strings.HasPrefix(w.Header().Get("Content-Type"), "text/html") {
+		t.Fatal("download must not be served as a page")
+	}
+}

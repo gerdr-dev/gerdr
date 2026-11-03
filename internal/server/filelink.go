@@ -110,5 +110,5 @@ func (s *Server) fileLinkServe(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(i18n.S("链接已过期，回 Gerdr 里再点一次「在外部打开」\n", "This link has expired. Go back to Gerdr and click \"Open externally\" again\n")))
 		return
 	}
-	serveRaw(w, r, p, r.URL.Query().Get("download") == "1")
+	serveRaw(w, r, p, r.URL.Query().Get("download") == "1", true)
 }
