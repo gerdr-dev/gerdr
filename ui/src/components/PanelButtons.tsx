@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Briefcase, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { Plus, RefreshCw, Smile, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -9,6 +9,7 @@ import { currentSpace } from "@/lib/layout";
 import { usePanels, type Panel } from "@/lib/mounts";
 import { set, setMode, setWorkPanel, useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
+import { PanelIcon } from "./PanelIcon";
 import { t } from "@/lib/i18n";
 
 /**
@@ -43,11 +44,6 @@ export function PanelButtons({ className, size = "rail" }: { className: (on: boo
       </Tooltip>
     </>
   );
-}
-
-function short(name: string) {
-  const chars = [...name];
-  return /^[\x00-\x7f]/.test(name) ? chars.slice(0, 2).join("").toUpperCase() : chars[0];
 }
 
 function PanelButton({ p, on, className, size, space }: { p: Panel; on: boolean; className: (on: boolean) => string; size: "rail" | "row"; space: string }) {
@@ -90,17 +86,16 @@ function PanelButton({ p, on, className, size, space }: { p: Panel; on: boolean;
         <TooltipTrigger asChild>
           <ContextMenuTrigger asChild>
             <button aria-label={label} aria-pressed={on} className={className(on)} onClick={go}>
-              {p.name ? (
-                <span className={cn("font-semibold", size === "rail" ? "text-[11px]" : "text-[10px]")}>{short(p.title)}</span>
-              ) : (
-                <Briefcase className={size === "rail" ? "size-4" : "size-3.5"} />
-              )}
+              <PanelIcon icon={p.icon} title={p.title} own={!p.name} className={size === "rail" ? "size-4" : "size-3.5"} />
             </button>
           </ContextMenuTrigger>
         </TooltipTrigger>
         <TooltipContent side={size === "rail" ? "right" : "bottom"}>{label}</TooltipContent>
       </Tooltip>
       <ContextMenuContent>
+        <ContextMenuItem onClick={() => set({ dialog: { kind: "panelIcon", key: p.key, title: label, icon: p.icon } })}>
+          <Smile /> {t("panelIcon.menu")}
+        </ContextMenuItem>
         {src?.git && src.remote && (
           <ContextMenuItem onClick={update}>
             <RefreshCw /> {t("workSource.menuUpdate", { remote: src.remote.replace(/^https?:\/\/(github\.com\/)?/, "") })}
@@ -110,9 +105,7 @@ function PanelButton({ p, on, className, size, space }: { p: Panel; on: boolean;
           <ContextMenuItem variant="destructive" onClick={remove}>
             <Trash2 /> {t("workSource.menuRemove")}
           </ContextMenuItem>
-        ) : (
-          !src?.remote && <ContextMenuItem disabled>{t("workSource.ownWork")}</ContextMenuItem>
-        )}
+        ) : null}
       </ContextMenuContent>
     </ContextMenu>
   );

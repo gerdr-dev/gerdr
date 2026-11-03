@@ -593,7 +593,11 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
   project (`PanelButtons`, `store.workPanels` per device: which one Work mode shows), then a + that adds one
   (`WorkSourceDialog`): `git clone` of a published one (`o/r`, a GitHub URL, `file://`), or the built-in blank one.
   Adding never replaces: the first version replaced the project's Work and moved the old one to the trash, and the
-  user's own page was gone from view. A panel's right-click updates it (`git pull --ff-only`) or removes it (to
+  user's own page was gone from view. A panel's face is `icon` in its `ui.json` (a lucide name, else the text: an
+  emoji, a letter or two; `PanelIcon`), set from its right-click "change icon" (`/api/work/panels/icon` writes the
+  site's own file, so it travels with the panel); a name lucide doesn't have falls back to the default (lucide renames
+  icons between versions: kanban-square is square-kanban). The agent column folds away per Work
+  (`gerdr.workChatHidden`) to a strip with the way back and the agent's status; the chat stays mounted. A panel's right-click updates it (`git pull --ff-only`) or removes it (to
   `trash/panels/`). esbuild writes UTF-8 (`Charset`): a panel named 任务看板 has it in its module paths, and escaped
   `\uXXXX` placeholders never matched in `link`.
 - Page logic lives in local functions `<GERDR_DIR>/work/local/*.ts` (esbuild → goja, `ctx.mcp(server, tool, args)`), called by

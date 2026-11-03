@@ -30,15 +30,16 @@ export function mountInfo(key: string): MountInfo | undefined {
 }
 
 /** One of a project's panels, for the rail. */
-export type Panel = { key: string; name: string; title: string };
+export type Panel = { key: string; name: string; title: string; icon?: string };
 
 function panelsOf(space: string): Panel[] {
-  const out: Panel[] = [{ key: space, name: "", title: "Work" }];
+  const iconOf = (m?: MountInfo) => (typeof m?.config?.icon === "string" && m.config.icon ? m.config.icon : undefined);
+  const out: Panel[] = [{ key: space, name: "", title: "Work", icon: iconOf(page()?.mounts?.[space]) }];
   for (const [n, m] of Object.entries(page()?.mounts ?? {})) {
     if (!n.startsWith(space + "~")) continue;
     const name = n.slice(space.length + 1);
     const title = typeof m.config?.title === "string" && m.config.title !== "Work" ? m.config.title : name;
-    out.push({ key: `${space}/${name}`, name, title });
+    out.push({ key: `${space}/${name}`, name, title, icon: iconOf(m) });
   }
   return out.sort((a, b) => (a.name === "" ? -1 : b.name === "" ? 1 : a.name.localeCompare(b.name)));
 }

@@ -148,6 +148,46 @@ func (s *Server) workRoutes(mux *http.ServeMux) {
 		_, _ = s.mountWork(key)
 		writeJSON(w, map[string]any{"key": key})
 	})
+	// A panel's icon on the rail: "icon" in its ui/ui.json (a lucide icon name, or an emoji / a couple of letters).
+	// Written into the site's own file, so it travels with the panel when it's published.
+	mux.HandleFunc("POST /api/work/panels/icon", func(w http.ResponseWriter, r *http.Request) {
+		var b struct {
+			Key  string `json:"key"`
+			Icon string `json:"icon"`
+		}
+		if err := decode(r, &b); err != nil {
+			httpError(w, 400, err.Error())
+			return
+		}
+		if len(b.Icon) > 64 {
+			httpError(w, 400, "icon too long")
+			return
+		}
+		dir, err := s.Work.Dir(b.Key)
+		if err != nil {
+			httpError(w, 400, err.Error())
+			return
+		}
+		p := filepath.Join(dir, "ui", "ui.json")
+		cfg := map[string]any{}
+		if raw, err := os.ReadFile(p); err == nil {
+			if err := json.Unmarshal(raw, &cfg); err != nil {
+				httpError(w, 400, "ui.json is invalid: "+err.Error())
+				return
+			}
+		}
+		if b.Icon = strings.TrimSpace(b.Icon); b.Icon == "" {
+			delete(cfg, "icon")
+		} else {
+			cfg["icon"] = b.Icon
+		}
+		out, _ := json.MarshalIndent(cfg, "", "  ")
+		if err := os.WriteFile(p, append(out, '\n'), 0o644); err != nil {
+			httpError(w, 500, err.Error())
+			return
+		}
+		writeJSON(w, map[string]any{"ok": true})
+	})
 	mux.HandleFunc("POST /api/work/panels/remove", func(w http.ResponseWriter, r *http.Request) {
 		var b struct {
 			Key string `json:"key"`

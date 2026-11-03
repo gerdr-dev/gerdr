@@ -29,6 +29,7 @@ type Dialog =
   | { kind: "newWorkspace" }
   | { kind: "editWorkspace"; id: string }
   | { kind: "workSource"; project: string; action: "install" | "new" }
+  | { kind: "panelIcon"; key: string; title: string; icon?: string }
   | { kind: "importHerdr" }
   /** host: the agent's records on another computer (docs/dev/MULTIHOST.md) */
   | { kind: "importAgent"; agent: string; cwd: string; paneId: string; host?: string }

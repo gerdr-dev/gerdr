@@ -11,6 +11,11 @@ export const zh = {
   "workSource.updated": "面板更新好了",
   "workSource.menuNew": "新建空白面板…",
   "workSource.add": "添加面板",
+  "panelIcon.menu": "换图标…",
+  "panelIcon.title": "「{name}」的图标",
+  "panelIcon.desc": "选一个，或者填一个 lucide 图标名（比如 square-kanban）、一个 emoji。存在这个面板的 ui.json 里。",
+  "panelIcon.placeholder": "图标名或 emoji",
+  "panelIcon.reset": "用默认的",
   "workSource.newTitle": "新建空白面板",
   "workSource.newDesc": "从 Gerdr 自带的空白页面开始，让它右边的助手照你的想法做。和这个项目原来的面板互不影响。",
   "workSource.name": "名字",
@@ -23,7 +28,6 @@ export const zh = {
   "workSource.removeBody": "它的页面、函数、数据、定时任务会整个移到回收站，不会删掉。",
   "workSource.remove": "移除",
   "workSource.removed": "「{name}」已经移除",
-  "workSource.ownWork": "这个项目自己的面板",
 };
 
 export const en: Record<keyof typeof zh, string> = {
@@ -41,6 +45,11 @@ export const en: Record<keyof typeof zh, string> = {
   "workSource.updated": "Panel updated",
   "workSource.menuNew": "New blank panel…",
   "workSource.add": "Add a panel",
+  "panelIcon.menu": "Change icon…",
+  "panelIcon.title": "Icon of “{name}”",
+  "panelIcon.desc": "Pick one, or type a lucide icon name (e.g. square-kanban) or an emoji. Saved in the panel's ui.json.",
+  "panelIcon.placeholder": "Icon name or emoji",
+  "panelIcon.reset": "Use the default",
   "workSource.newTitle": "New blank panel",
   "workSource.newDesc": "Gerdr's own blank page; have the agent next to it build what you want. The project's other panels stay as they are.",
   "workSource.name": "Name",
@@ -53,5 +62,4 @@ export const en: Record<keyof typeof zh, string> = {
   "workSource.removeBody": "Its pages, functions, data and schedules move to the trash; nothing is deleted.",
   "workSource.remove": "Remove",
   "workSource.removed": "“{name}” removed",
-  "workSource.ownWork": "This project's own panel",
 };

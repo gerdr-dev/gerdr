@@ -1,4 +1,4 @@
-import { ArrowDownRight, Check, ChevronDown, Code2, History, MessageSquarePlus, Settings, X } from "lucide-react";
+import { ArrowDownRight, PanelRightClose, PanelRightOpen, Check, ChevronDown, Code2, History, MessageSquarePlus, Settings, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { toast } from "sonner";
@@ -575,7 +575,48 @@ function ago(iso: string) {
  * (switch to an earlier conversation), the split button on the right starts a new one — its main half with the
  * agent it names, its arrow with another (which then becomes the default for this project's next ones).
  */
-function ChatHeader() {
+/** Whether the agent column is folded away, per Work (each panel its own), kept per browser. */
+function useChatHidden(key: string): [boolean, (v: boolean) => void] {
+  const read = () => {
+    try {
+      return !!JSON.parse(localStorage.getItem("gerdr.workChatHidden") || "{}")[key];
+    } catch {
+      return false;
+    }
+  };
+  const [v, setV] = useState(read);
+  useEffect(() => setV(read()), [key]);
+  const save = (next: boolean) => {
+    setV(next);
+    try {
+      const m = JSON.parse(localStorage.getItem("gerdr.workChatHidden") || "{}");
+      if (next) m[key] = true;
+      else delete m[key];
+      localStorage.setItem("gerdr.workChatHidden", JSON.stringify(m));
+    } catch {}
+  };
+  return [v, save];
+}
+
+/** The folded agent column: open it again, and see at a glance whether the agent is working or waiting for you. */
+function ChatStrip({ onOpen }: { onOpen: () => void }) {
+  const id = useWorkSession();
+  const session = useStore((s) => (id ? s.sessions[id] : undefined));
+  return (
+    <div className="flex w-10 shrink-0 flex-col items-center gap-2 border-l py-2">
+      <Button variant="ghost" size="icon" className="size-7" title={t("workView.showChat")} aria-label={t("workView.showChat")} onClick={onOpen}>
+        <PanelRightOpen className="size-4" />
+      </Button>
+      {session && (
+        <button title={session.title || t("workView.showChat")} onClick={onOpen} className="flex size-7 items-center justify-center">
+          <StatusDot status={dotStatus(session)} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+function ChatHeader({ onHide }: { onHide?: () => void }) {
   const all = useWorkChats();
   const current = useWorkSession();
   const unread = useStore((s) => s.unread);
@@ -662,6 +703,19 @@ function ChatHeader() {
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+      {onHide && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-7 pointer-coarse:size-9"
+          title={t("workView.hideChat")}
+          aria-label={t("workView.hideChat")}
+          onClick={onHide}
+          style={noDrag}
+        >
+          <PanelRightClose className="size-3.5 pointer-coarse:size-4" />
+        </Button>
+      )}
     </div>
   );
 }
@@ -672,6 +726,7 @@ export function WorkView() {
   const project = useWorkProject();
   const { info } = useMount(project);
   const ownChat = info?.config?.chat === false;
+  const [hidden, setHidden] = useChatHidden(project);
   const [chatW, setChatW] = useChatW();
   const [side, setSide] = useState<"page" | "chat">("page");
   const showChat = useCallback(() => setSide("chat"), []);
@@ -723,10 +778,12 @@ export function WorkView() {
       <div className="min-w-0 flex-1">
         <WorkFrames />
       </div>
+      {/* Folded away: a strip with the way back and the agent's state. The chat stays mounted (its scroll, its draft). */}
+      {hidden && <ChatStrip onOpen={() => setHidden(false)} />}
       {/* max-w: a window made smaller after dragging still leaves the Work site some room */}
-      <div className="relative flex max-w-[70%] shrink-0 flex-col border-l" style={{ width: chatW }}>
+      <div className={cn("relative flex max-w-[70%] shrink-0 flex-col border-l", hidden && "hidden")} style={{ width: chatW }}>
         <ChatEdge width={chatW} onWidth={setChatW} />
-        <ChatHeader />
+        <ChatHeader onHide={() => setHidden(true)} />
         <div className="min-h-0 flex-1">
           <WorkChat />
         </div>

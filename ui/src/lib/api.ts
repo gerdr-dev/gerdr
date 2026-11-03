@@ -180,6 +180,7 @@ export const api = {
   /** A project's panels beyond its Work: install one from a repository, add a blank one, remove one (keys "<project>/<name>"). */
   installPanel: (project: string, url: string, name?: string) => req<{ key: string }>("POST", "/api/work/install", { project, url, name }),
   newPanel: (project: string, name: string) => req<{ key: string }>("POST", "/api/work/panels", { project, name }),
+  setPanelIcon: (key: string, icon: string) => req<{ ok: boolean }>("POST", "/api/work/panels/icon", { key, icon }),
   removePanel: (key: string) => req<{ trash: string }>("POST", "/api/work/panels/remove", { key }),
   updateWork: (project: string) => req<{ output: string }>("POST", "/api/work/update", { project }),
   // In the interface's language: addon.json's i18n is applied here, once, so every place that shows a name reads it
