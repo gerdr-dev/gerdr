@@ -37,7 +37,7 @@
 
 .dark {
   --background: oklch(0.165 0 0);
-  /* 正文字色 0.93：试过 0.97，太白；字发虚主要是 antialiased 的锅（见下面 .dark body），不是颜色 */
+  /* 正文字色 0.93：试过 0.97，太白；字发虚主要是 antialiased 的锅（已去掉，见下面 body），不是颜色 */
   --foreground: oklch(0.93 0 0);
   --card: oklch(0.2 0 0);
   --card-foreground: oklch(0.93 0 0);
@@ -109,6 +109,6 @@
     color: var(--color-foreground);
     font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", system-ui, sans-serif;
     font-size: 14px;
-    -webkit-font-smoothing: antialiased;
+    /* No antialiased (grayscale smoothing), same as Gerdr's own UI: on macOS it thins glyphs, so text reads lighter and blurrier. */
   }
 }
