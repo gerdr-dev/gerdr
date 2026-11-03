@@ -10,7 +10,7 @@ import (
 	"github.com/gerdr-dev/gerdr/internal/i18n"
 )
 
-// runtimeJS 是页面里的运行时（/_ui/m/@runtime.js），照 shuttle 的 localsite/runtime.go：
+// runtimeJS 是页面里的运行时（/_ui/m/@runtime.js）：
 //
 //  1. 先接上 React Refresh（injectIntoGlobalHook 必须在 react-dom 加载之前，所以 react-dom 用动态 import）；
 //  2. import 入口，把每个已加载模块导出的组件注册给 Refresh（按「路径 导出名」），再用入口的 createApp 渲染；

@@ -1,7 +1,7 @@
 // Package webui 内嵌一份界面源码（make 时从仓库的 ui/ 拷进 ui/），启动时装到 / 合进 <GERDR_DIR>/ui。
 //
 // 界面没有打包环节（internal/uisite）：装出来的就是源码，用户或 agent 直接改它，保存即生效。
-// 所以升级 gerdr 时不能闷头覆盖 —— 用 git 三方合并（gitmerge.go，照 shuttle 的模板升级）：人改过的保留，
+// 所以升级 gerdr 时不能闷头覆盖 —— 用 git 三方合并（gitmerge.go）：人改过的保留，
 // gerdr 改的合进来。机器上没有 git 时退回老办法：记下每个文件的哈希（.gerdr-ui.json），一个都没改过才换新版，
 // 改过就留着、新版放在旁边（<目录>.new）。
 package webui

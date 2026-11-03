@@ -29,7 +29,6 @@ const (
 // directory reject. Commands are found on the login shell's PATH (the App's own is bare when started from the Dock), a
 // path with a slash is relative to cwd; cwd defaults to the Work directory and can't leave it; stdin is empty unless
 // input is given (so nothing hangs waiting for it); env adds to gerdr's environment (pass ctx.secrets.get values here).
-// Same contract as Annulo's ctx.exec.
 func (r *runner) exec(name string, args goja.Value, opts goja.Value) *goja.Promise {
 	// ctx.exec('ls', { cwd }) too: an object instead of the array is the options
 	if o, ok := args.(*goja.Object); ok && o.ClassName() != "Array" && (opts == nil || goja.IsUndefined(opts)) {

@@ -51,7 +51,7 @@ streams read `res.body.getReader()` as it comes; local and company-internal addr
 `TextEncoder` / `TextDecoder`, `btoa` / `atob`, `console`, and `Number.prototype.toLocaleString` with
 thousands separators.
 
-Not here (Annulo has them, Gerdr doesn't): `ctx.db`, `ctx.oauth`, `ctx.upload`, `ctx.file`,
+Not available in Gerdr: `ctx.db`, `ctx.oauth`, `ctx.upload`, `ctx.file`,
 `ctx.folders`, `ctx.browser`, `ctx.llm`, `ctx.agent`, `ctx.user`, `ctx.chat_id`. Keep data in files
 (`ctx.fs`) or the platform it comes from.
 

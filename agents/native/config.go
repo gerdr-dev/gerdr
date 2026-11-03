@@ -171,14 +171,14 @@ func (p Provider) withDefaults(m Model) Model {
 }
 
 // adaptiveClaude: Claude models that think with thinking:{type:adaptive} + output_config.effort (4.6 and later;
-// budget_tokens is a 400 on 4.7+). Same pattern shuttle uses.
+// budget_tokens is a 400 on 4.7+).
 var adaptiveClaude = regexp.MustCompile(`claude-(opus|sonnet|haiku|fable|mythos)-(4[.-][6-9]|[5-9]|\d{2})`)
 
 // updatesClaude: the ones that take thinking.display "updates" — Opus / Sonnet 5.5 and Fable / Mythos 5+, and
 // anything later. Haiku isn't on the list.
 var updatesClaude = regexp.MustCompile(`claude-((opus|sonnet)-(5[.-][5-9]|[6-9]|\d{2})|(fable|mythos)-([5-9]|\d{2}))`)
 
-// withDefaults：按模型 id 补协议、思考档位、窗口。数值来自 pi 的 models_catalog（shuttle 在用的那份）。
+// withDefaults：按模型 id 补协议、思考档位、窗口。数值来自 pi 的 models_catalog。
 func withDefaults(m Model) Model {
 	id := strings.ToLower(m.ID)
 	if i := strings.LastIndex(id, "/"); i >= 0 {

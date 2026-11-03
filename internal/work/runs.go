@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-// A run outlives the request that started it (as in Annulo): closing or reloading the page doesn't stop it, the page can
+// A run outlives the request that started it: closing or reloading the page doesn't stop it, the page can
 // pick it up again by id, and only Abort (or the run timeout) stops it. Its events stay in memory for keepDone after it
 // ends, and in a log file (<GERDR_DIR>/logs/work/<project>/<id>.jsonl) for logKeep. The log has the phases, progress, logs
 // and the error with its stack — not the input nor the returned value (they may hold data that shouldn't sit on disk).

@@ -124,7 +124,7 @@ React（ui/，不打包）  ←WebSocket / HTTP→  hub（internal/hub）  ←AC
 
 ## Gerdr Agent（native）—— 自己写的 agent，直接调模型接口
 
-`agents/native` (a public package: other programs embed it, e.g. Annulo; the protocol, extension methods and `_meta`
+`agents/native` (a public package: other programs embed it; the protocol, extension methods and `_meta`
 conventions are in its package doc, an in-process example in `agents/native/example_test.go`, what the three engines
 support in `agents/EMBEDDING.md`): no subprocess; the loop,
 tools and transcripts all live in Gerdr. It imports none of Gerdr's internal packages: Gerdr's skills / MCP settings,
@@ -134,7 +134,7 @@ stay empty; the claude / codex adapters get Gerdr's skill / MCP settings the sam
 interfaces). `acpx`, `sysenv` and `rpcline` are public for the same reason. The model layer `native/llm`
 speaks three protocols (Chat Completions, Responses, Anthropic Messages; the protocol is picked per provider,
 `Provider.API`), each hand-written rather than through an SDK so every gateway quirk is visible and fixable in one place.
-Why not shuttle's pi: interjections, subagents and rewind are missing from or the wrong shape in pi's loop, and pi is
+Why not pi: interjections, subagents and rewind are missing from or the wrong shape in pi's loop, and pi is
 sixty thousand lines; our loop is about a hundred (`loop.go`) and every step is visible. Config is the `llm` key of
 config.json (example in the README), read fresh every turn.
 
@@ -315,7 +315,7 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
 - Refused when the source is running (the copy would miss the tail) or when the agent is the same (that's a plain
   resume).
 
-## 界面：没有打包环节（internal/uisite，照 shuttle 的 internal/localsite）
+## 界面：没有打包环节（internal/uisite）
 
 界面就是 `ui/` 这个目录的源码（默认装到 `~/.gerdr/ui`，`GERDR_UI` 指到别处）。目的是**让 agent 能直接改界面**：
 「加一个每周额度的显示」不用开发、编译、发版，agent 改完保存，用户眼前的界面就变了（内置的 gerdr-ui skill 教它怎么改）。
@@ -365,7 +365,7 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
   that server sends. Add-ons go through `g.fetch` (POST /api/addons/{id}/fetch, the backend makes the request).
 - importMap 只能内联，内联脚本靠每次请求一个 nonce 过 CSP。
 - 页面里的报错（渲染出错、点按钮抛异常）POST 回 `/api/ui/errors`，`gerdr ui status` 能看到 —— agent 改完界面靠它确认没改坏。
-- 界面目录用 **git 三方合并**升级（`internal/webui/gitmerge.go`，照 shuttle 的模板升级）：`upstream` 分支的每个提交是 Gerdr 发的一版
+- 界面目录用 **git 三方合并**升级（`internal/webui/gitmerge.go`）：`upstream` 分支的每个提交是 Gerdr 发的一版
   界面快照（临时 index + commit-tree，不碰工作目录），`main` 是正在用的、人和 agent 在上面改。新版来自两处，走同一条路：
   App 内嵌的那份（启动时 `Install`）和开发时仓库的 ui/（`gerdr ui sync ui` / `make sync-ui`，开着的窗口直接热更新）。
   合之前先把 main 上没提交的改动提交掉；**冲突时 abort、照旧用现在这份** —— 冲突标记留在源码里界面当场编译失败，整个 App 就没法用了。
@@ -400,7 +400,7 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
   cross on the server (`crossSpace`, using `from` / `near`). Closed conversations belong to no session (`--all` lists them);
   reopening one puts it next to the caller, in the caller's session. This is not a security boundary: an agent has the token
   and can call the API itself. herdr's isn't one either: it's a separate socket.
-- **Schedules** (`work/schedule.go`, run from main for every Work directory). Annulo's format on purpose
+- **Schedules** (`work/schedule.go`, run from main for every Work directory). The same format as a hosted function platform's on purpose
   (`schedules/<id>.json`: fn or prompt, every or at) so a schedule reads the same on both. State (last run, paused)
   lives in `<GERDR_DIR>/state/work-schedules/`, not the Work directory: it's this machine's, and a synced or shared Work
   directory must not carry another machine's "already ran". `next` catches a miss up once (every: last + interval;
@@ -718,7 +718,7 @@ stream-json 模式下没人看得见）—— resume、回退、追上全部失�
 ## 急救面板（server/rescueapi.go + server/rescue/ + webui/history.go）
 
 主界面就是界面目录里可以改的源码，对话面板也在里面：改坏了就没地方叫 agent 修（修东西的工具和被修的是同一个）。
-照 shuttle 的做法（它的对话面板在打包进二进制的 web/ 里，助手只改得到项目页面），留一页**改不到**的：
+留一页**改不到**的：
 
 - 一个从页面右侧拉出来的面板，和主界面并排：一边看主界面坏成什么样、修好没有，一边和 agent 说话（主界面让出右边那块，不盖住）。
   源码在 `server/rescue/src`（React），`go generate ./internal/server` 用 esbuild 连 React 一起打成 `rescue/app.js` 入库、

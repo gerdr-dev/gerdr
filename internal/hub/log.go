@@ -6,7 +6,7 @@ import (
 	"github.com/gerdr-dev/gerdr/chatlog"
 )
 
-// The event log's format and file live in the public chatlog package (Annulo records its own sessions with it);
+// The event log's format and file live in the public chatlog package (embedders record their own sessions with it);
 // these aliases keep the hub's code reading as before.
 
 type Event = chatlog.Event

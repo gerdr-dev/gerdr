@@ -5,7 +5,7 @@
 // Example). Everything gerdr-specific is injected through Options; this package imports none of gerdr's
 // internal packages.
 //
-// Why not shuttle's pi: interjections, sub-agents and rewind are missing from or the wrong shape in pi's loop;
+// Why not pi: interjections, sub-agents and rewind are missing from or the wrong shape in pi's loop;
 // this loop is about a hundred lines (loop.go) and every step is visible.
 //
 // # Protocol

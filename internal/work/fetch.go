@@ -18,7 +18,7 @@ import (
 	"github.com/dop251/goja"
 )
 
-// fetch as in browsers and Annulo's functions:
+// fetch as in browsers:
 //
 //	const res = await fetch(url, { method, headers, body })
 //	const reader = res.body.getReader(); const dec = new TextDecoder()
@@ -27,7 +27,7 @@ import (
 // or text() / json() / arrayBuffer() for the rest at once. Reads are synchronous (one at a time), each returns a settled
 // promise. Responses also carry timing { ttfb_ms, total_ms } and truncated.
 //
-// Unlike Annulo, local and private addresses are allowed: a gerdr function runs for the one user on their own machine and
+// Local and private addresses are allowed: a gerdr function runs for the one user on their own machine and
 // can ctx.exec anything anyway; internal company services are a common thing to read.
 
 // maxFetchBody: text() past it is cut and marked truncated; a streamed read past it fails

@@ -17,7 +17,7 @@ import (
 	"github.com/gerdr-dev/gerdr/internal/i18n"
 )
 
-// 按文件编译（照 shuttle 的 internal/localsite，那边又是照 folia-web 编辑器预览）：
+// 按文件编译：
 //
 //   - 每个本地文件单独编成一个 ESM，挂在 /_ui/m/<路径>?v=<版本>；第三方包 external，浏览器按 importMap 加载。
 //   - 第一步（compileFile）只看这个文件自己：esbuild 编译，本地 import 换成占位符 /@gerdr-dep/<路径>，记下依赖、

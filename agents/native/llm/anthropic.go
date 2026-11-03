@@ -113,7 +113,7 @@ func (c *anthropic) Stream(ctx context.Context, req Request, on func(Event)) (Re
 	}
 	if thinkingOff && (req.Thinking == "adaptive" || req.Thinking == "updates") {
 		// Leaving thinking out doesn't turn it off on models that think by default, and the off switch differs
-		// by model (found by shuttle): Sonnet 5.x rejects "disabled" with a 400 and takes "between_tools",
+		// by model: Sonnet 5.x rejects "disabled" with a 400 and takes "between_tools",
 		// Opus 5.5 takes only "disabled".
 		body["thinking"] = map[string]any{"type": thinkingOffType(req.Model)}
 	}

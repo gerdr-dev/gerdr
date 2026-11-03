@@ -27,7 +27,7 @@ import { cn } from "@/lib/utils";
 import { askWorkAgent, ensureWorkSession, isEmptyChat, newWorkChat, openWorkChat, useWorkChats, useWorkProject, useWorkSession, workAgent } from "@/lib/work";
 import { t } from "@/lib/i18n";
 
-// Work mode: the user's own Work project on the left, one agent on the right (Annulo's layout, ../shuttle).
+// Work mode: the user's own Work project on the left, one agent on the right.
 //
 // The left side is a whole React site of its own — <GERDR_DIR>/work/ui, served by gerdr under /work/ with
 // no build step, exactly like gerdr's UI — so its menu, pages and styling are entirely the user's (or the

@@ -14,7 +14,7 @@ import (
 // Workspace packages: a dependency written "workspace:*" in package.json is a package that lives inside the UI
 // directory (packages/<dir>/ with its own package.json naming it) and is served from source like the rest — no
 // build, hot reload, editable by the user's agent. gerdr's chat UI is one (packages/chat, @gerdr/chat): the same
-// source is built and published to npm for other apps (Annulo), while gerdr imports it by name.
+// source is built and published to npm for other apps, while gerdr imports it by name.
 //
 // `import "@gerdr/chat"` resolves to packages/chat/src/index.(ts|tsx); "@gerdr/chat/x" to packages/chat/src/x.
 // Inside a package, imports are relative; third-party ones resolve through the UI's own package.json like

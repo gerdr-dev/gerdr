@@ -19,9 +19,9 @@ import (
 	"github.com/evanw/esbuild/pkg/api"
 )
 
-// The function runtime, ported from Annulo's (../shuttle internal/localfn) so a function written for one runs on the
+// The function runtime, kept compatible with a hosted function platform's so a function written for one runs on the
 // other: same globals (fetch, URL, TextDecoder, btoa, console) and the same ctx members where gerdr has the thing behind
-// them. Left out on purpose: ctx.db (Annulo's business tables), ctx.oauth / upload / file / folders (its connections and
+// them. Left out on purpose: ctx.db (business tables), ctx.oauth / upload / file / folders (connections and an
 // asset store), ctx.browser (not ported yet), ctx.llm (batch 3).
 //
 // Every host call finishes synchronously and hands back a settled promise, so `await` works and the function's own
@@ -47,7 +47,7 @@ type MCPServer struct {
 }
 
 // File names: lower or upper case letters, digits, - and _, not starting with _ — so `_api.ts` is a shared helper that
-// other files import, not something a page can call (the same rule as Annulo's).
+// other files import, not something a page can call.
 var fileRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]*$`)
 
 // source finds local/<file>.ts (or .js).

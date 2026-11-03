@@ -2,7 +2,7 @@
 // 没有打包环节。改完保存就生效 —— 界面本身就是 agent 能改的东西（「加一个每周额度的显示」「这个弹窗换个样子」
 // 直接让 agent 改，不用另外开发、编译、发版）。
 //
-// 做法照 shuttle 的 internal/localsite：每个文件用 esbuild 单独编成 ESM（modules.go，按内容缓存），浏览器按 URL 加载；
+// 做法：每个文件用 esbuild 单独编成 ESM（modules.go，按内容缓存），浏览器按 URL 加载；
 // 文件一变只重编那一个，经 SSE 推给页面（events.go），页面里的运行时用 React Refresh 就地替换（runtime.go）。
 // 页面由 react-router 按 src/pages/ 切换（routes.go）；第三方包按 importMap 从本机的 esm.sh 代理加载（importmap.go、esm.go）；
 // 样式用 Tailwind browser 在浏览器里生成。
@@ -394,7 +394,7 @@ type update struct {
 	CSS        *string               `json:"css,omitempty"`
 }
 
-// diff 比较两次构建，决定页面怎么更新（照 shuttle localsite.diff）：
+// diff 比较两次构建，决定页面怎么更新：
 //   - 构建出错 → error；importMap / 标题变了 → reload（importMap 在页面里改不了）；
 //   - 路由变了 → 重新渲染入口；
 //   - 否则从改了的文件沿「谁 import 了它」往上找最近的 React Refresh 边界，一路都找得到就热替换这些边界，

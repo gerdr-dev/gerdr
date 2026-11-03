@@ -27,7 +27,7 @@ import (
 // the two. every is an interval (Go durations or days: 30m, 6h, 1d; at least 5m); at is times of day, local time,
 // comma separated ("09:00,16:00"); at wins when both are there. input is the fn's input ({ scheduled: true } is added).
 //
-// Ported from Annulo's (../shuttle internal/server/schedule.go) so a schedule written for one reads the same on the
+// Kept compatible with a hosted function platform's schedules so a schedule written for one reads the same on the
 // other; left out for now: jitter, due (rows of a table), count, params and the user's overrides.
 //
 // Missed runs (the computer asleep, Gerdr not running) are caught up once, not once per miss: for every, the next run

@@ -7,7 +7,7 @@ import { imageSize, rememberImageSize } from "./imageSize";
 import { openLightbox } from "./Lightbox";
 import { SessionContext } from "./sessionContext";
 
-// 对话里的图片、视频、音频、PDF（照 shuttle 的 ChatMedia）：agent 用 Markdown 图片语法引用，
+// 对话里的图片、视频、音频、PDF：agent 用 Markdown 图片语法引用，
 // `![说明](/绝对路径.png)` 或者相对会话目录的 `![](out/a.mp4)`，界面按扩展名画成图 / 播放器 / 卡片。
 // 本机文件走 /api/fs/raw（同源、带 Range —— 视频能拖进度条；响应一律 CSP sandbox，见 server/fileview.go）；
 // 网上的地址直接用。点图开灯箱（Lightbox），点 PDF 打开 gerdr 自己的文件查看器（FileViewer）；在 App 里还能用系统程序打开、在访达里显示。

@@ -10,9 +10,9 @@ isolated workers, driven by events). Reports, tags, `ctx.sessions.close` and `se
 (ARCHITECTURE.md, "Coordinating without blocking"); these three wait until the dispatcher has been used for real and
 we know which events matter.
 
-- **Triggers**: schedules went in (2026-11-03, `work/schedule.go`, Annulo's format: `schedules/<id>.json` with fn /
+- **Triggers**: schedules went in (2026-11-03, `work/schedule.go`, a hosted function platform's format: `schedules/<id>.json` with fn /
   prompt, every / at). Still open: events (a session's status change, a POST to `/api/work/<project>/hook/<name>`),
-  and Annulo's jitter / due / params / user overrides, plus a Settings page listing them. The function does the cheap deterministic filtering (fast path) and only then
+  and that platform's jitter / due / params / user overrides, plus a Settings page listing them. The function does the cheap deterministic filtering (fast path) and only then
   sends something to the Work agent or starts a worker. Long-lived streams (`lark-cli event consume`) already fit an
   add-on service; what's missing there is a supported way for a service to push into a session or a trigger.
 - **Background sessions**: `session new --background`: no pane, only in lists / the Work board until it has something.

@@ -37,7 +37,7 @@ Claude Code / Codex 的图形界面：Go 后端（ACP 适配器 + hub + HTTP/WS�
 - Tailwind runs in the browser: something drawn unstyled / at the wrong size for a frame after it mounts, or a class /
   CSS rule that silently does nothing → docs/dev/TAILWIND.md. Also there: a phone drawing one wrong frame (boxes missing,
   text on text) when an animation ends, which looks like Tailwind and is compositing.
-- `@gerdr/chat` (ui/packages/chat) also serves outside hosts (Annulo installs it from npm), and every change they need
+- `@gerdr/chat` (ui/packages/chat) also serves outside hosts (apps that install it from npm), and every change they need
   costs an npm publish that the user has to approve in a browser. So a host's new chat feature lives in the host, built
   on the existing slots, `ChatHost` hooks and `memoryDrafts`. When the package itself must change, add a general hook
   that hands the whole class of behaviour to hosts, not the one feature. Two known gaps, left open on purpose until the

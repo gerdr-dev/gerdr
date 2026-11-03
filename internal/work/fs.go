@@ -17,8 +17,8 @@ import (
 	"github.com/dop251/goja"
 )
 
-// ctx.fs: files in the project's Work directory (data a function keeps, exports, reports), the local-disk half of Annulo's
-// ctx.fs. Paths are relative to the Work directory with / separators; no absolute paths, no .., and a symlink resolving
+// ctx.fs: files in the project's Work directory (data a function keeps, exports, reports), the local-disk half of the
+// hosted platform's ctx.fs. Paths are relative to the Work directory with / separators; no absolute paths, no .., and a symlink resolving
 // outside doesn't count.
 //
 //	ctx.fs.root                          the Work directory's absolute path

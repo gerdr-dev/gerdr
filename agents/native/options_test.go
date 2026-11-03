@@ -37,7 +37,7 @@ func TestEmbedHooks(t *testing.T) {
 	e := setup(t, func(n int, msgs []any) reply {
 		switch n {
 		case 0:
-			return reply{calls: [][2]string{{"db_query", `{"sql":"select 1"}`}, {"bash", `{"command":"echo chat=$ANNULO_CHAT_ID"}`}}}
+			return reply{calls: [][2]string{{"db_query", `{"sql":"select 1"}`}, {"bash", `{"command":"echo chat=$HOST_CHAT_ID"}`}}}
 		}
 		return reply{text: "done"}
 	})
@@ -45,12 +45,12 @@ func TestEmbedHooks(t *testing.T) {
 	var gotMeta map[string]any
 	var mu sync.Mutex
 	e.ag.opt.SystemPrompt = func(sid, cwd string, meta map[string]any) string {
-		return fmt.Sprintf("You are Annulo's helper for chat %v.", meta["chat"])
+		return fmt.Sprintf("You are the host's helper for chat %v.", meta["chat"])
 	}
 	e.ag.opt.NoInstructionFiles = true
 	e.ag.opt.NoMemory = true
 	e.ag.opt.BashEnv = func(sid string, meta map[string]any) []string {
-		return []string{"ANNULO_CHAT_ID=" + fmt.Sprint(meta["chat"])}
+		return []string{"HOST_CHAT_ID=" + fmt.Sprint(meta["chat"])}
 	}
 	e.ag.opt.Tools = []Tool{{
 		Name: "db_query", Description: "Run SQL", ReadOnly: true,
@@ -71,7 +71,7 @@ func TestEmbedHooks(t *testing.T) {
 		t.Fatal(err)
 	}
 	sys := systemText(e.llm.request(0))
-	if !strings.HasPrefix(sys, "You are Annulo's helper for chat c42.") || strings.Contains(sys, "PROJECT-RULES") ||
+	if !strings.HasPrefix(sys, "You are the host's helper for chat c42.") || strings.Contains(sys, "PROJECT-RULES") ||
 		strings.Contains(sys, "# Memory") || strings.Contains(sys, "inside gerdr") {
 		t.Fatalf("system prompt:\n%s", sys)
 	}

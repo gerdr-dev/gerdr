@@ -1,5 +1,5 @@
 // Package work runs the business logic behind the Work view: local functions in local/*.ts of each
-// project's Work directory (see Runner.Dir), the same shape and runtime as Annulo's (../shuttle internal/localfn):
+// project's Work directory (see Runner.Dir), the same shape and runtime as a hosted function platform's:
 //
 //	export async function summary(input, ctx) {
 //	  const me = await ctx.mcp("okr", "get_current_user", {})

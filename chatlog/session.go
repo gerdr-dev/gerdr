@@ -21,7 +21,7 @@ import (
 // sending (a new turn, or an interjection while one runs), stop, withdraw, rewind, permission and question
 // requests, retries after network errors, background tasks, notices. It is what gerdr's hub does per session,
 // minus gerdr's own concerns (titles, the session list, reattaching after a restart, catching up with other
-// clients): an embedder (Annulo) runs an agent in-process, routes the ACP client callbacks here and pushes
+// clients): an embedder runs an agent in-process, routes the ACP client callbacks here and pushes
 // OnEvents / OnState to its UI over its own transport.
 //
 // Wiring: implement acp.Client by forwarding SessionUpdate to Update, RequestPermission to RequestPermission and

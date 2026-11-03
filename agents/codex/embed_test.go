@@ -17,17 +17,17 @@ func TestThreadConfig(t *testing.T) {
 	os.WriteFile(filepath.Join(home, "config.toml"), []byte("[mcp_servers.mine]\ncommand = \"x\"\n"), 0o644)
 	a := &Agent{log: slog.New(slog.NewTextHandler(io.Discard, nil)), opts: Options{StrictMCP: true, Network: true, NoApprovals: true,
 		SessionEnv: func(sid string, meta map[string]any) []string {
-			return []string{"ANNULO_CHAT_ID=" + meta["chat"].(string)}
+			return []string{"HOST_CHAT_ID=" + meta["chat"].(string)}
 		}}}
 	cfg, _ := a.threadConfig(context.Background(), nil, "", "/w", map[string]any{"chat": "c1"},
-		[]acp.McpServer{{Http: &acp.McpServerHttpInline{Name: "annulo", Type: "http", Url: "http://h/mcp", Headers: []acp.HttpHeader{{Name: "Authorization", Value: "Bearer t"}}}}})
+		[]acp.McpServer{{Http: &acp.McpServerHttpInline{Name: "host", Type: "http", Url: "http://h/mcp", Headers: []acp.HttpHeader{{Name: "Authorization", Value: "Bearer t"}}}}})
 	if cfg["mcp_servers.mine.enabled"] != false {
 		t.Errorf("own server not turned off: %v", cfg)
 	}
-	if m, _ := cfg["mcp_servers.annulo"].(map[string]any); m["url"] != "http://h/mcp" {
+	if m, _ := cfg["mcp_servers.host"].(map[string]any); m["url"] != "http://h/mcp" {
 		t.Errorf("client server: %v", cfg)
 	}
-	if env, _ := cfg["shell_environment_policy.set"].(map[string]string); env["ANNULO_CHAT_ID"] != "c1" {
+	if env, _ := cfg["shell_environment_policy.set"].(map[string]string); env["HOST_CHAT_ID"] != "c1" {
 		t.Errorf("env: %v", cfg)
 	}
 	ap, sb := a.modeParams(modeAuto)

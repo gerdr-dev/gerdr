@@ -14,7 +14,7 @@ import (
 	"github.com/gerdr-dev/gerdr/internal/i18n"
 )
 
-// 界面目录用 git 管（照 shuttle 的 internal/wsgit 模板升级）：
+// 界面目录用 git 管：
 //
 //   - 界面目录（默认 ~/.gerdr/ui）是一个 git 仓库，main 是正在用的那份（人和 agent 都在上面改）；
 //   - upstream 分支的每个提交是 gerdr 发的一版界面（快照），main 从它分出去、一路合并它；
