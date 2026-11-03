@@ -349,7 +349,12 @@ function WorkPeek() {
         </div>
         {(peek.label || peek.actions?.length) && (
           <div className="flex shrink-0 flex-wrap items-center gap-2 border-b bg-muted/40 px-3 py-1.5">
-            {peek.label && <span className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground">{peek.label}</span>}
+            {/* Wraps (up to 4 lines): the page puts what the user must do here, e.g. the question in full */}
+            {peek.label && (
+              <span className="line-clamp-4 min-w-0 flex-1 text-[12px] whitespace-pre-wrap text-muted-foreground" title={peek.label}>
+                {peek.label}
+              </span>
+            )}
             <div className="ml-auto flex gap-1.5">
               {peek.actions?.map((a) => (
                 <Button

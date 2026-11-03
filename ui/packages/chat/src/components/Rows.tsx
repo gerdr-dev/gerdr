@@ -38,7 +38,7 @@ export type Row =
 // 连续的工具调用 / 思考折成一组（照 Claude 桌面版）：一轮里常常是几十行 `cd … && grep …`，夹着几行「思考」，
 // 真正要读的那几段话被挤得找不到。改文件的不折（默认展开看 diff 是它的主要用途），带子 agent 的不折（有「查看对话」）。
 // 开着「显示思考」时思考不折：它要直接摊开给人看，收进组里就看不到了
-function foldable(p: GPart, kids: ToolPart[] | undefined, showThinking: boolean): boolean {
+function foldable(p: GPart, kids: ToolPart[] | undefined, showThinking: boolean, own?: (p: ToolPart) => boolean): boolean {
   if (p.type === "reasoning") return !showThinking;
   // 已经答完的审批（拒绝 / 作废；批准的根本不成行）也收进组里；还在等人点的不折，要让人看见
   if (p.type === "data-permission") return !!(p.data.answer || p.data.cancelled);
@@ -47,6 +47,8 @@ function foldable(p: GPart, kids: ToolPart[] | undefined, showThinking: boolean)
   if (p.type === "data-task") return !(p.data.task.type === "local_agent" || p.data.task.subagent || p.data.woke);
   if (p.type !== "dynamic-tool" || kids?.length) return false;
   const tp = p as ToolPart;
+  // One the host draws itself (ChatHost.renderTool: a card for the user) stays out of groups: folded, nobody sees it
+  if (own?.(tp)) return false;
   // 有操作按钮的不折，折起来就点不到了：被 auto 分类器拦下的有「允许并重试」，子 agent（Task / Agent，kind=think）有「查看对话」。
   // （「转到后台」只在正在跑时出现，那时它是组里最底下那一块，收着也露在外面）
   if (tp.state === "output-error" && tp.toolMetadata?.autoDenied?.length) return false;
@@ -158,6 +160,7 @@ export function buildRows(
   now = Date.now(),
   out: { wake?: number } = {},
   showThinking = true,
+  ownTool?: (p: ToolPart) => boolean,
 ): Row[] {
   const rows: Row[] = [];
   const young = youngTest(now, out);
@@ -217,7 +220,7 @@ export function buildRows(
     };
     for (let a = 0; a < parts.length;) {
       let b = a;
-      while (b < parts.length && foldable(parts[b].part, parts[b].kids, showThinking)) b++;
+      while (b < parts.length && foldable(parts[b].part, parts[b].kids, showThinking, ownTool)) b++;
       if (b - a < 2) {
         push(parts[a]);
         a = Math.max(b, a + 1);

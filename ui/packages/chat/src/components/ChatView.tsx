@@ -9,7 +9,7 @@ import { useChatHost, useChatSettings } from "../host";
 import { t as tr } from "../i18n";
 import { useKept } from "../kept";
 import { Loader2 } from "lucide-react";
-import { backgroundableTools, type GMessage } from "../transcript";
+import { backgroundableTools, type GMessage, type ToolPart } from "../transcript";
 import type { ChatSession } from "../types";
 import { Composer, type ComposerHandle } from "./Composer";
 import { SessionContext } from "./sessionContext";
@@ -183,8 +183,10 @@ export function ChatView({
   const [tick, setTick] = useState(0);
   const [rows, wake] = useMemo(() => {
     const out: { wake?: number } = {};
-    return [buildRows(msgs, running, openGroups, new Set(liveTaskIds.split(" ").filter(Boolean)), Date.now(), out, showThinking), out.wake] as const;
-  }, [msgs, running, openGroups, liveTaskIds, tick, showThinking]);
+    // Tools the host renders its own way don't fold into "ran N commands" groups (they're cards meant to be seen)
+    const own = host.renderTool ? (p: ToolPart) => host.renderTool!(p, { sessionId: session.id, running: false }) !== undefined : undefined;
+    return [buildRows(msgs, running, openGroups, new Set(liveTaskIds.split(" ").filter(Boolean)), Date.now(), out, showThinking, own), out.wake] as const;
+  }, [msgs, running, openGroups, liveTaskIds, tick, showThinking, host]);
   useEffect(() => {
     if (wake === undefined) return;
     const t = setTimeout(() => setTick((x) => x + 1), Math.max(0, wake - Date.now()));

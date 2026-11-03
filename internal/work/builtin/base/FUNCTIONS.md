@@ -106,6 +106,9 @@ export async function ask_human(input: { title: string }, ctx: Ctx) {
 - `ctx.caller.session` is the calling conversation's id ("" for a page or `gerdr work run`). Don't trust input for
   "who am I": look the caller up.
 - A thrown error goes back to the agent as the tool's error: say what to do instead.
+- A result the user should see in the chat too (a step put on their board): return it with
+  `gerdrCard: { title, body, tone: "warn" | "info" | "ok" }` (body is Markdown). Gerdr draws that call as a card
+  instead of the folded "called a tool" row; the rest of the result still goes to the agent.
 - Sessions get the tools when they start or are reopened; the list is read again each time an agent asks for it.
 
 ## On a schedule

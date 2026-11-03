@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { ToolCard, cardOf } from "@/components/chat/ToolCard";
 import { ChatProvider, type ChatHost, type ChatSession, type ComposerContext, type DraftImage, type DraftStore } from "@gerdr/chat";
 import { toast } from "sonner";
 import { api, type Holder } from "./api";
@@ -240,6 +241,11 @@ export function GerdrChatProvider({ children }: { children: ReactNode }) {
           const s = st.sessions[id];
           return s ? s.title || s.cwd.split("/").pop() || s.agent : undefined;
         }),
+      // A tool result carrying a card (Work tools: a step put on the user's board) is drawn as that card
+      renderTool: (part) => {
+        const card = cardOf(part);
+        return card ? <ToolCard card={card} /> : undefined;
+      },
       send: (id, content, o) => sendShown(id, content, o?.onRetry, o?.now).then(() => {}),
       stop: (id) => api.escape(id),
       withdrawLast: (id) => api.withdrawLast(id),
