@@ -225,7 +225,9 @@ func withDefaults(m Model) Model {
 		}
 	}
 	if m.Images == nil {
-		v := !deepseek // DeepSeek 是纯文本模型，发图直接 400
+		// Every model sees images unless its config says "images": false. DeepSeek used to be guessed text-only
+		// (V4 answered images with a 400), but v4.1 sees them and the guess hid images from it.
+		v := true
 		m.Images = &v
 	}
 	if m.Name == "" {
@@ -274,7 +276,7 @@ func anthropicDefaults(m Model, id string) Model {
 		}
 	}
 	if m.Images == nil {
-		v := !strings.Contains(id, "deepseek")
+		v := true // as in withDefaults: "images": false in the config for a model that can't
 		m.Images = &v
 	}
 	if m.Name == "" {
