@@ -28,8 +28,8 @@ export function ImportAgentDialog() {
     if (!open) return;
     setList(null);
     setErr("");
-    api.importable(d.agent, d.cwd).then(setList, (e) => setErr(e.message ?? String(e)));
-  }, [open, open && d.agent, open && d.cwd]);
+    api.importable(d.agent, d.cwd, d.host).then(setList, (e) => setErr(e.message ?? String(e)));
+  }, [open, open && d.agent, open && d.cwd, open && d.host]);
 
   if (!open) return null;
   const close = () => set({ dialog: null });
@@ -37,7 +37,8 @@ export function ImportAgentDialog() {
     setBusy(true);
     try {
       close();
-      await createInPane(d.paneId, { agent: d.agent, cwd: d.cwd, import: n.sessionId, title: n.title });
+      // On the computer those records are on: the import reads them there (server/hosts.go createOnHost)
+      await createInPane(d.paneId, { agent: d.agent, cwd: d.cwd, import: n.sessionId, title: n.title, host: d.host });
     } catch (e: any) {
       toast.error(e.message ?? String(e));
     } finally {

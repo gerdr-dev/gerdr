@@ -96,10 +96,13 @@ func (s *Server) hostRoute(r *http.Request) (host, path string, query url.Values
 			return "", "", nil
 		}
 		return rest[:i], rest[i:], q
-	case strings.HasPrefix(p, "/api/sessions/"), strings.HasPrefix(p, "/api/commands/"):
+	case strings.HasPrefix(p, "/api/sessions/"), strings.HasPrefix(p, "/api/commands/"), strings.HasPrefix(p, "/api/terms/"):
+		// a host's session, command list or terminal: "<host>:<id>" (terminals: termOnHost)
 		pre := "/api/sessions/"
-		if strings.HasPrefix(p, "/api/commands/") {
-			pre = "/api/commands/"
+		for _, x := range []string{"/api/commands/", "/api/terms/"} {
+			if strings.HasPrefix(p, x) {
+				pre = x
+			}
 		}
 		rest := strings.TrimPrefix(p, pre)
 		seg, tail, _ := strings.Cut(rest, "/")
@@ -175,6 +178,9 @@ func (s *Server) hostProxy(w http.ResponseWriter, r *http.Request, host, path st
 // rewriteHostJSON: a JSON answer from a host. A session summary (or a list of them) gets its ids prefixed, a log
 // its senders (peer.RewriteEvents); anything else only its URLs.
 func (s *Server) rewriteHostJSON(h peer.Host, path string, b []byte) []byte {
+	if strings.HasPrefix(path, "/api/terms") {
+		return prefixID(h.ID, b) // a terminal's info: its id as this computer calls it
+	}
 	if strings.HasSuffix(path, "/events") {
 		return peer.RewriteEvents(h.ID, b)
 	}
@@ -424,6 +430,12 @@ func (s *Server) withHosts(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
+		if r.Method == http.MethodPost && r.URL.Path == "/api/terms" {
+			if b, host := bodyHost(w, r); b != nil && host != "" {
+				s.termOnHost(w, r, host, b)
+				return
+			}
+		}
 		if r.Method == http.MethodPost && r.URL.Path == "/api/sessions" {
 			b, err := io.ReadAll(io.LimitReader(r.Body, 64<<20))
 			if err != nil {
@@ -580,4 +592,65 @@ func (s *Server) hostWSProxy(w http.ResponseWriter, r *http.Request, host, path 
 		defer s.Awake.Hold()()
 	}
 	peer.Pipe(client, up)
+}
+
+// bodyHost reads a JSON body for its "host" (and puts it back for whoever reads it next). nil = it failed (answered).
+func bodyHost(w http.ResponseWriter, r *http.Request) ([]byte, string) {
+	b, err := io.ReadAll(io.LimitReader(r.Body, 64<<20))
+	if err != nil {
+		httpError(w, 400, err.Error())
+		return nil, ""
+	}
+	r.Body = io.NopCloser(bytes.NewReader(b))
+	var x struct {
+		Host string `json:"host"`
+	}
+	_ = json.Unmarshal(b, &x)
+	return b, x.Host
+}
+
+// termOnHost: POST /api/terms with "host": a terminal on that computer (its shell runs there). Its id comes back as
+// "<host>:<id>", so input, resize, kill and its WebSocket (/api/terms/<host>:<id>/ws) route there like a session's.
+func (s *Server) termOnHost(w http.ResponseWriter, r *http.Request, host string, body []byte) {
+	var m map[string]any
+	_ = json.Unmarshal(body, &m)
+	delete(m, "host")
+	// "from" is a terminal (split from it: the shell's directory); one on another computer means nothing there
+	if f, _ := m["from"].(string); f != "" {
+		if h, id := peer.Split(f); h == host {
+			m["from"] = id
+		} else {
+			delete(m, "from")
+		}
+	}
+	b, _ := json.Marshal(m)
+	resp, err := s.Peers.Do(r.Context(), host, "POST", "/api/terms", bytes.NewReader(b), http.Header{"Content-Type": {"application/json"}})
+	if err != nil {
+		httpError(w, 502, i18n.S("连不上那台电脑：", "Can't reach that computer: ")+err.Error())
+		return
+	}
+	defer resp.Body.Close()
+	rb, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if resp.StatusCode == 200 {
+		rb = prefixID(host, rb)
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(resp.StatusCode)
+	_, _ = w.Write(rb)
+}
+
+// prefixID: a JSON object's top-level "id" as this computer calls the thing (terminal infos).
+func prefixID(host string, b []byte) []byte {
+	var m map[string]any
+	if json.Unmarshal(b, &m) != nil || m == nil {
+		return b
+	}
+	if id, _ := m["id"].(string); id != "" {
+		m["id"] = peer.Join(host, id)
+	}
+	out, err := json.Marshal(m)
+	if err != nil {
+		return b
+	}
+	return out
 }

@@ -130,6 +130,15 @@ accepted remotely, pairing codes are only minted on the host itself.
   reads, and sends to the user's own computer); `session fetch` and `gerdr folder` are not. Gerdr's process does the
   writing, not the agent: auto-approved, they would let a read-only sandboxed agent (codex `read-only`) write anywhere.
 
+## Terminals and imports on another computer
+
+- A terminal there is created through `POST /api/terms` with `host` (`termOnHost`); its id comes back as
+  `<host>:<id>`, so info, input, kill and its WebSocket (`/api/terms/<host>:<id>/ws`, the proxy's WebSocket
+  pass-through) route there like a session's. The UI picks the computer from what the terminal opens next to (a host
+  session, a host terminal) or from New Session's computer row, and a gone terminal reopens on the same one.
+- "Import Claude Code conversations" lists and imports the agent's records on that computer (`?host=`, then
+  `createOnHost` with `import`): they are only on that computer's disk.
+
 ## Moving a conversation
 
 `POST /api/sessions` with `continueFrom` on one computer and `host` naming another (`""` = this one): pane menu →
@@ -169,13 +178,13 @@ macOS's grants are that computer's: the dialog says to do them there (the prompt
 
 ## Not done / known gaps
 
-- Terminals and the import-from-agent dialog are this computer's only: New Session hides both when another computer
-  is picked.
 - A /ws connection is linked to the hosts that existed when it opened; the UI reconnects when the set changes
   (`sync.ts` `gotHosts`).
 - New Session lists this computer's agents; the host needs the same agent (claude / codex) installed.
-- Loop checks across computers only see one step through the console (a target here that reports straight back);
-  longer loops through two hosts aren't caught.
+- Report loops are refused at any length (`reportLoop`, wherever each step is kept), but only for targets set
+  through this console: an agent on a host setting a same-host target with that host's own `gerdr` is checked by the
+  host alone, which can't see the steps kept here.
+- `gerdr pane read` (an agent reading the terminal next to it) only reads this computer's terminals.
 - Tried end to end against a real host server over TLS (`hosts_test.go`; and by hand with a throwaway fake host + a
   console debug instance: pairing, sessions, the New Session picker, the CLI's hosts / list / fetch, a path and an
   image of a host session opening through `/h/`, `gerdr folder` pull / push with a conflict both ways). Not yet

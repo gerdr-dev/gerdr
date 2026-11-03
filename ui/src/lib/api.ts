@@ -230,7 +230,8 @@ export const api = {
     host?: string;
   }) => req<SessionSummary>("POST", "/api/sessions", o),
   /** input：建好就敲进去的字（对话里「在新终端里运行」） */
-  termCreate: (o: { cwd?: string; from?: string; cols?: number; rows?: number; input?: string }) => req<TermInfo>("POST", "/api/terms", o),
+  /** host: the shell runs on that computer; its id comes back as "<host>:<id>" and everything else routes by it */
+  termCreate: (o: { cwd?: string; from?: string; cols?: number; rows?: number; input?: string; host?: string }) => req<TermInfo>("POST", "/api/terms", o),
   /** 往终端里敲字（对话里「在当前终端里运行」） */
   termInput: (id: string, data: string) => req("POST", `/api/terms/${encodeURIComponent(id)}/input`, { data }),
   /** liveCwd：顺带问 shell 现在在哪个目录（mac 上要跑一次 lsof，别每次都问） */
@@ -277,10 +278,10 @@ export const api = {
   /** 序号 before 之前的再一段日志（打开会话时只推了最近一段，往上翻到顶来拉）；older = 还有更早的。 */
   olderEvents: (id: string, before: number) => req<{ events: HubEvent[]; older: boolean }>("GET", `/api/sessions/${id}/events/older?before=${before}`),
   rewind: (id: string, messageId: string) => req<{ content: ContentBlock[] }>("POST", `/api/sessions/${id}/rewind`, { messageId }),
-  importable: (agent: string, cwd: string) =>
+  importable: (agent: string, cwd: string, host?: string) =>
     req<{ sessionId: string; cwd: string; title?: string; updatedAt?: string }[]>(
       "GET",
-      `/api/importable?agent=${encodeURIComponent(agent)}&cwd=${encodeURIComponent(cwd)}`,
+      `/api/importable?agent=${encodeURIComponent(agent)}&cwd=${encodeURIComponent(cwd)}${hostQ(host, "&")}`,
     ),
   stopTask: (id: string, taskId: string) => req("POST", `/api/sessions/${id}/tasks/${encodeURIComponent(taskId)}/stop`, {}),
   backgroundTool: (id: string, toolCallId: string) =>
@@ -439,6 +440,9 @@ export type MCPAuth = {
 
 /** host: the computer the file is on (set by api.fileStat for another computer's file); unset = this one */
 export type FileStat = { path: string; name: string; dir: boolean; size: number; mtime: number; mime: string; host?: string };
+
+/** The computer an id ("<host>:<id>": a session or terminal there) belongs to; undefined = this one (docs/dev/MULTIHOST.md). */
+export const hostOfId = (id?: string) => (id && id.includes(":") ? id.slice(0, id.indexOf(":")) : undefined);
 
 /** ?host= (or &host=) for a request meant for another computer (server/hosts.go proxies it); "" for this one. */
 const hostQ = (host?: string, sep = "?") => (host ? `${sep}host=${encodeURIComponent(host)}` : "");

@@ -1,5 +1,5 @@
 import { toast } from "sonner";
-import { api } from "../api";
+import { api, hostOfId } from "../api";
 import { activeTab, activeWs, allLeaves, findLeaf, leaves, rid, setPane, split, updateTab, updateWs, type Layout, type PaneLeaf, type Tab } from "../layout";
 import { get, setLayout } from "../store";
 import { focusPane } from "./panes";
@@ -13,17 +13,21 @@ import { t } from "../i18n";
  * 先在服务端建好再放进布局：布局是几个客户端共用的，「pane 里有终端但还没建」这种中间态让别的客户端看见，
  * 它们会各自去建一个。
  */
-export async function openTerminal(where: "right" | "down" | "tab" | { pane: string; cwd?: string }) {
+/** host (with a pane): the computer the shell runs on, unset = this one (docs/dev/MULTIHOST.md). */
+export async function openTerminal(where: "right" | "down" | "tab" | { pane: string; cwd?: string; host?: string }) {
   const l = get().layout;
   const p = focusedLeaf(l);
   const here = typeof where === "object" ? where : undefined;
   // Next to a session: where its agent works now (a worktree it moved into), like a split follows a shell's cd.
   const beside = p?.sessionId ? get().sessions[p.sessionId]?.workdir : undefined;
-  const cwd = here?.cwd ?? beside ?? inheritDraft(l)?.cwd ?? get().home;
+  // Next to a session or terminal on another computer: on that computer, in its directory there
+  const host = here ? here.host : (hostOfId(p?.sessionId) ?? hostOfId(p?.term?.id));
+  const besideCwd = p?.sessionId ? (beside ?? get().sessions[p.sessionId]?.cwd) : undefined;
+  const cwd = here?.cwd ?? (host ? besideCwd : beside) ?? (host ? undefined : (inheritDraft(l)?.cwd ?? get().home));
   let info;
   try {
     // 从终端旁边开的：跟着它 shell 现在的目录（cd 过之后分屏，和 tmux 一样）
-    info = await api.termCreate({ cwd, from: !here && p?.term ? p.term.id : undefined });
+    info = await api.termCreate({ cwd, from: !here && p?.term ? p.term.id : undefined, host });
     // 后端太旧（没有终端接口）时可能回一页 HTML 而不是报错：没 id 就当失败，别把空终端写进布局
     if (!info?.id) throw new Error(t("actionsTerminal.noBackend"));
   } catch (e: any) {
@@ -95,7 +99,7 @@ export async function runInTerminal(sessionId: string, cwd: string, command: str
   }
   let info;
   try {
-    info = await api.termCreate({ cwd, input: line });
+    info = await api.termCreate({ cwd, input: line, host: hostOfId(sessionId) }); // on the computer the session runs on
     if (!info?.id) throw new Error(t("actionsTerminal.noBackend"));
   } catch (e: any) {
     toast.error(t("actionsTerminal.openFailed", { error: e.message ?? e }));
@@ -111,6 +115,7 @@ export async function runInTerminal(sessionId: string, cwd: string, command: str
 }
 
 /** 终端没了（gerdr 重启过 / shell 退了）：在同一个 pane、同一个目录重开一个。 */
-export async function reopenTerminal(paneId: string, cwd: string) {
-  return openTerminal({ pane: paneId, cwd });
+/** termId: the terminal that's gone; a new one opens on the same computer */
+export async function reopenTerminal(paneId: string, cwd: string, termId?: string) {
+  return openTerminal({ pane: paneId, cwd, host: hostOfId(termId) });
 }

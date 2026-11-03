@@ -501,7 +501,7 @@ function TermPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; ta
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-3 text-[13px] text-muted-foreground">
             {t("panes.termFailed")}
-            <Button size="sm" variant="outline" onClick={() => reopenTerminal(pane.id, cwd)}>
+            <Button size="sm" variant="outline" onClick={() => reopenTerminal(pane.id, cwd, term.id)}>
               <SquareTerminal className="size-3.5" />
               {t("panes.reopenIn", { dir: basename(cwd) })}
             </Button>

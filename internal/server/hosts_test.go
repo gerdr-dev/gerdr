@@ -23,6 +23,7 @@ import (
 	"github.com/gerdr-dev/gerdr/internal/hub"
 	"github.com/gerdr-dev/gerdr/internal/peer"
 	"github.com/gerdr-dev/gerdr/internal/remote"
+	"github.com/gerdr-dev/gerdr/internal/term"
 )
 
 // A console and a host, both real servers: the host only on its remote port (TLS, device cookies), the console
@@ -34,7 +35,9 @@ func hostPair(t *testing.T) (console *Server, ch http.Handler, hostSrv *Server) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	hostSrv = &Server{Dir: t.TempDir(), Token: "host-token-host-token-host-token-xx", Remote: rm, Hub: reportHub(t), Layout: config.NewStore(filepath.Join(t.TempDir(), "layout.json"), `null`)}
+	hostSrv = &Server{Dir: t.TempDir(), Token: "host-token-host-token-host-token-xx", Remote: rm, Hub: reportHub(t), Layout: config.NewStore(filepath.Join(t.TempDir(), "layout.json"), `null`),
+		Terms: term.New(os.Environ, slog.New(slog.NewTextHandler(io.Discard, nil)))}
+	t.Cleanup(hostSrv.Terms.Close)
 	hh := hostSrv.Handler()
 	ts := httptest.NewTLSServer(RemoteHandler(hh))
 	t.Cleanup(ts.Close)
@@ -397,5 +400,47 @@ func TestHostReportLoops(t *testing.T) {
 	}
 	if w := meta("boss", "w1"); w.Code != 400 || !strings.Contains(w.Body.String(), "绕回") {
 		t.Fatalf("boss → w1 → mini:w2 → boss is a loop: %d %s", w.Code, w.Body)
+	}
+}
+
+// A terminal on another computer: made through this one, its id comes back as "<host>:<id>", and its WebSocket
+// (input and output) goes through the proxy.
+func TestHostTerminal(t *testing.T) {
+	console, ch, hostSrv := hostPair(t)
+	auth := hdr("Authorization", "Bearer "+console.Token)
+	dir := t.TempDir()
+	w := do(ch, "POST", "/api/terms", strings.NewReader(`{"host":"mini","cwd":`+mustJSON(dir)+`}`), auth, csrf)
+	var info struct{ ID, Cwd string }
+	if json.Unmarshal(w.Body.Bytes(), &info); w.Code != 200 || !strings.HasPrefix(info.ID, "mini:") {
+		t.Fatalf("create: %d %s", w.Code, w.Body)
+	}
+	_, rest := peer.Split(info.ID)
+	if hostSrv.Terms.Get(rest) == nil {
+		t.Fatal("the shell isn't on the host")
+	}
+	if w := do(ch, "GET", "/api/terms/"+info.ID, nil, auth); w.Code != 200 || !strings.Contains(w.Body.String(), `"id":"`+info.ID+`"`) {
+		t.Fatalf("info: %d %s", w.Code, w.Body)
+	}
+	cs := httptest.NewServer(ch)
+	defer cs.Close()
+	conn, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(cs.URL, "http")+"/api/terms/"+info.ID+"/ws", http.Header{"Authorization": {"Bearer " + console.Token}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	_ = conn.WriteMessage(websocket.BinaryMessage, []byte("echo hello-from-$((40+2))\r"))
+	_ = conn.SetReadDeadline(time.Now().Add(10 * time.Second))
+	var got strings.Builder
+	for !strings.Contains(got.String(), "hello-from-42") {
+		typ, b, err := conn.ReadMessage()
+		if err != nil {
+			t.Fatalf("no output from the host's shell: %v (%q)", err, got.String())
+		}
+		if typ == websocket.BinaryMessage {
+			got.Write(b)
+		}
+	}
+	if w := do(ch, "DELETE", "/api/terms/"+info.ID, nil, auth, csrf); w.Code != 200 {
+		t.Fatalf("kill: %d %s", w.Code, w.Body)
 	}
 }

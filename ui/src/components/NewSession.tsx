@@ -435,31 +435,27 @@ export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean
             {busy ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
             {t("newSession.start")}
           </Button>
-          {/* 临时要敲几条命令：这个 pane 直接变成这个目录下的终端。Only here: terminals aren't proxied to other computers yet */}
-          {!host && (
-            <Button
-              variant="outline"
-              disabled={busy}
-              title={keyText("splitTerminal") ? t("newSession.terminalHereKey", { key: keyText("splitTerminal") }) : t("newSession.terminalHere")}
-              onClick={() => openTerminal({ pane: pane.id, cwd: abs })}
-            >
-              <SquareTerminal className="size-4" />
-              {t("newSession.terminal")}
-            </Button>
-          )}
+          {/* 临时要敲几条命令：这个 pane 直接变成这个目录下的终端 (on the computer picked above) */}
+          <Button
+            variant="outline"
+            disabled={busy || (!!host && !home)}
+            title={keyText("splitTerminal") ? t("newSession.terminalHereKey", { key: keyText("splitTerminal") }) : t("newSession.terminalHere")}
+            onClick={() => openTerminal({ pane: pane.id, cwd: abs, host: host || undefined })}
+          >
+            <SquareTerminal className="size-4" />
+            {t("newSession.terminal")}
+          </Button>
         </div>
         <div>
           <div className="mb-1.5 flex items-center gap-1.5 text-[12px] text-muted-foreground">
             <History className="size-3.5" />
             {t("newSession.continue")}
-            {!host && (
-              <button
-                className="ml-auto text-[11px] font-normal hover:text-foreground"
-                onClick={() => set({ dialog: { kind: "importAgent", agent, cwd: abs, paneId: pane.id } })}
-              >
-                {t("newSession.import", { agent: agentName })}
-              </button>
-            )}
+            <button
+              className="ml-auto text-[11px] font-normal hover:text-foreground"
+              onClick={() => set({ dialog: { kind: "importAgent", agent, cwd: abs, paneId: pane.id, host: host || undefined } })}
+            >
+              {t("newSession.import", { agent: agentName })}
+            </button>
           </div>
           {old.length === 0 && <div className="text-[12px] text-muted-foreground">{t("newSession.noOld")}</div>}
           <div className="space-y-0.5">

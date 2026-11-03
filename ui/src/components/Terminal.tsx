@@ -296,7 +296,7 @@ export function TerminalView({
           <span className="text-muted-foreground">
             {state === "gone" ? t("terminal.gone") : code < 0 ? t("terminal.killed") : t("terminal.exited", { code })}
           </span>
-          <Button size="sm" variant="outline" className="ml-auto h-7" onClick={() => reopenTerminal(paneId, cwd)}>
+          <Button size="sm" variant="outline" className="ml-auto h-7" onClick={() => reopenTerminal(paneId, cwd, termId)}>
             <RotateCcw className="size-3.5" />
             {t("panes.reopenIn", { dir: cwd.replace(/\/+$/, "").split("/").pop() || cwd })}
           </Button>

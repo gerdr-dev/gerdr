@@ -29,7 +29,8 @@ type Dialog =
   | { kind: "newWorkspace" }
   | { kind: "editWorkspace"; id: string }
   | { kind: "importHerdr" }
-  | { kind: "importAgent"; agent: string; cwd: string; paneId: string }
+  /** host: the agent's records on another computer (docs/dev/MULTIHOST.md) */
+  | { kind: "importAgent"; agent: string; cwd: string; paneId: string; host?: string }
   | { kind: "resume"; sessionId: string; paneId: string }
   /** carry a conversation on on another computer (MoveSessionDialog) */
   | { kind: "moveSession"; sessionId: string; paneId: string }
