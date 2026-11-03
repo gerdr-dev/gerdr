@@ -30,7 +30,16 @@ export type GMeta = {
 export type GData = {
   plan: { entries: PlanEntry[] };
   permission: { reqId: string; request: PermissionRequest; answer?: string; cancelled?: boolean };
-  ask: { reqId: string; request: AskRequest; answers?: Record<string, string[]>; cancelled?: boolean; reason?: "skipped" | "replied" };
+  ask: {
+    reqId: string;
+    request: AskRequest;
+    answers?: Record<string, string[]>;
+    cancelled?: boolean;
+    reason?: "skipped" | "replied";
+    /** Withdrawn because the turn was interrupted, and the user hasn't said anything since: still answerable, the answer
+     * goes out as a new message (lateAnswerText). Cleared by the next user message. */
+    late?: boolean;
+  };
   /** level：info / warn / error / clear / auto / retry（「N 秒后重试」，done = 重试成功后收起了） */
   notice: { level: string; text: string; done?: boolean; until?: number };
   /** woke：这个任务一结束 agent 就自己开了一轮（turn_start auto），卡片上标「→ agent 接着处理」 */
@@ -91,6 +100,8 @@ const ALLOWED = /^\s*<gerdr-allowed>([\s\S]*?)<\/gerdr-allowed>/;
 const ALLOWED_OLD = /^\s*我已经允许了刚才被拦下的操作，请重试。\s*$/;
 // claude 写进去的打断记号（`[Request interrupted by user]` / `…for tool use]`），也不是人打的
 const INTERRUPT = /^\s*\[Request interrupted by user[^\]]*\]\s*$/;
+// A late answer to a question withdrawn by an interrupt (lateAnswerText): drawn on that question's card, not as a bubble
+const LATE_ANSWER = /^\s*<gerdr-answer req="([^"]*)">([\s\S]*?)<\/gerdr-answer>\s*$/;
 
 /** 多行压成一行、剥掉 ANSI（这些都只占一行小字，长了也读不了）；太长截断。 */
 function squash(s: string, max = 300) {
@@ -132,6 +143,20 @@ export function machineBlock(text: string): { notice?: { level: string; text: st
     return { notice: { level: "info", text: rules.length ? t("notice.allowedRetryRules", { rules: rules.join(t("list.sep")) }) : t("notice.allowedRetry") } };
   }
   return undefined;
+}
+
+/**
+ * What answering a question after its turn was interrupted sends (the agent got "withdrawn" back then, so this is a
+ * new message). English for the agent; the tag lets the chat put the answers back on the card (LATE_ANSWER).
+ * One "A: " line per question, in order: that's what the card reads back.
+ */
+export function lateAnswerText(reqId: string, qs: { question: string }[], answers: string[][]) {
+  return [
+    `<gerdr-answer req="${reqId}">`,
+    "The user has now answered the question(s) you asked before the turn was interrupted. Continue with that answer.",
+    ...qs.flatMap((q, i) => ["Q: " + squash(q.question, 2000), "A: " + squash(answers[i]?.join(", ") || "(empty)", 2000)]),
+    "</gerdr-answer>",
+  ].join("\n");
 }
 
 /**
@@ -249,6 +274,7 @@ export class Transcript {
   private chunks = new Map<string, Loc>(); // "text:<msgId>" / "reasoning:<msgId>" → part
   private lastChunkKey = "";
   private requests = new Map<string, Loc>();
+  private lateAsks = new Set<string>(); // reqIds of data-ask parts with late set
   private shells = new Map<string, Loc>(); // `!命令` 的 id → 卡片
   private planLoc: Loc | null = null;
   private curSeq = 0;
@@ -264,6 +290,7 @@ export class Transcript {
     this.tools.clear();
     this.chunks.clear();
     this.requests.clear();
+    this.lateAsks.clear();
     this.shells.clear();
     this.planLoc = null;
     this.retryLoc = null;
@@ -385,6 +412,29 @@ export class Transcript {
         const mb = only !== undefined ? machineBlock(only) : undefined;
         // Before the notice branch: it breaks early, and a sending bubble left behind stays on screen for good
         if (e.messageId) this.dropSending(e.messageId);
+        const late = only !== undefined ? LATE_ANSWER.exec(only) : null;
+        // Anything the user says closes the late questions; a late answer also fills its own card
+        if (this.lateAsks.size) {
+          this.messages = [...this.messages];
+          for (const id of this.lateAsks) {
+            const loc = this.requests.get(id);
+            const p = loc && (this.messages[loc.msg]?.parts[loc.part] as any);
+            if (p?.type === "data-ask") this.setPart(loc!, { ...p, data: { ...p.data, late: false } });
+          }
+          this.lateAsks.clear();
+        }
+        if (late) {
+          const loc = this.requests.get(late[1]);
+          const p = loc && (this.messages[loc.msg]?.parts[loc.part] as any);
+          if (p?.type === "data-ask") {
+            const said = [...late[2].matchAll(/^A: (.*)$/gm)].map((m) => m[1]);
+            const answers: Record<string, string[]> = {};
+            (p.data.request as AskRequest).questions.forEach((q, i) => (answers[q.id] = said[i] ? [said[i]] : []));
+            this.messages = [...this.messages];
+            this.setPart(loc!, { ...p, data: { ...p.data, answers, late: false } });
+            break;
+          }
+        }
         if (mb?.notice) {
           this.messages = [...this.messages];
           this.pushPart(this.assistant(e.ts), { type: "data-notice", data: mb.notice });
@@ -545,7 +595,10 @@ export class Transcript {
         if (p.type === "data-permission") {
           this.setPart(loc, { ...p, data: { ...p.data, answer: r.optionId, cancelled: !!r.cancelled || !r.optionId } });
         } else {
-          this.setPart(loc, { ...p, data: { ...p.data, answers: r.answers, cancelled: !!r.cancelled, reason: r.reason } });
+          // No reason = the turn ended under it (interrupt / Esc): keep it answerable (late)
+          const late = !!r.cancelled && !r.answers && !r.reason;
+          if (late) this.lateAsks.add(e.reqId!);
+          this.setPart(loc, { ...p, data: { ...p.data, answers: r.answers, cancelled: !!r.cancelled, reason: r.reason, late } });
         }
         break;
       }

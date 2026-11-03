@@ -6,7 +6,7 @@ import { Button } from "../ui/button";
 import { Checkbox } from "../ui/checkbox";
 import { chatHost } from "../host";
 import { t } from "../i18n";
-import type { GData, PlanEntry } from "../transcript";
+import { lateAnswerText, type GData, type PlanEntry } from "../transcript";
 import { cn } from "../utils";
 import { useKept } from "../kept";
 import { registerAsk } from "../askkeys";
@@ -131,7 +131,8 @@ export function AskCard({ sessionId, data }: { sessionId: string; data: GData["a
   const keyRef = useRef<(e: KeyboardEvent) => boolean>(() => false);
   const pending = !data.answers && !data.cancelled;
   useEffect(() => (pending ? registerAsk(sessionId, (e) => keyRef.current(e)) : undefined), [sessionId, pending]);
-  if (data.answers || data.cancelled) {
+  // late: the turn was interrupted under it (Esc) — still drawn as a live card, answering sends a new message
+  if (data.answers || (data.cancelled && !data.late)) {
     return (
       <div className="my-1 space-y-0.5 px-1.5 text-[12px] text-muted-foreground">
         {data.cancelled && !data.answers ? (
@@ -172,6 +173,15 @@ export function AskCard({ sessionId, data }: { sessionId: string; data: GData["a
     }
     setBusy(true);
     try {
+      if (data.late) {
+        const text = lateAnswerText(
+          data.reqId,
+          qs,
+          qs.map((q) => answers[q.id]),
+        );
+        await chatHost().send(sessionId, [{ type: "text", text }]);
+        return; // the card fills in when the message comes back (transcript LATE_ANSWER)
+      }
       await chatHost().answer(sessionId, data.reqId, { answers });
     } catch (e: any) {
       toast.error(e.message);
@@ -285,6 +295,7 @@ export function AskCard({ sessionId, data }: { sessionId: string; data: GData["a
         )}
       </div>
       <div className="mb-3 text-[13px] font-medium leading-relaxed">{q.question}</div>
+      {data.late && <div className="-mt-2 mb-3 text-[12px] text-muted-foreground">{t("ask.late")}</div>}
       {/* -mx-2.5 抵掉行的 px-2.5：选项文字和问题左边对齐，选中 / 悬停的底色往外多出一点 */}
       <div className="-mx-2.5 flex flex-col gap-1.5">
         {opts.map((o, n) => {
@@ -360,19 +371,22 @@ export function AskCard({ sessionId, data }: { sessionId: string; data: GData["a
         )}
         <span className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground max-md:hidden">{qs.length > 1 ? t("ask.keysPaged") : t("ask.keys")}</span>
         <span className="flex-1 md:hidden" />
-        <Button
-          size="sm"
-          variant="ghost"
-          disabled={busy}
-          title={t("ask.skipTitle")}
-          onClick={() =>
-            chatHost()
-              .answer(sessionId, data.reqId, { cancelled: true, reason: "skipped" })
-              .catch(() => {})
-          }
-        >
-          {t("ask.skip")}
-        </Button>
+        {/* Nothing to skip once the turn is gone: just don't answer */}
+        {!data.late && (
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={busy}
+            title={t("ask.skipTitle")}
+            onClick={() =>
+              chatHost()
+                .answer(sessionId, data.reqId, { cancelled: true, reason: "skipped" })
+                .catch(() => {})
+            }
+          >
+            {t("ask.skip")}
+          </Button>
+        )}
         {!instant && (
           <Button size="sm" className="rounded-full pr-2 pl-4" disabled={busy} onClick={() => next()}>
             {last ? t("ask.submit") : t("ask.next")}
