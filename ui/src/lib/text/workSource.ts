@@ -34,6 +34,8 @@ export const zh = {
   "panelSettings.tab": "面板",
   "panelSettings.intro": "每个项目除了 Code，还可以有几个面板：每个是一整套页面、本地函数、流程和定时任务，各管各的数据和助手。在左边窄条上点它们切换。",
   "panelSettings.ownName": "默认面板",
+  "panelSettings.rename": "重命名…",
+  "panelSettings.renameTitle": "重命名面板",
   "panelSettings.ownRemoved": "这个项目的默认面板已经移除（在回收站里）",
   "panelSettings.restore": "恢复（空白的）",
   "panelSettings.none": "「{name}」还没有面板",
@@ -83,6 +85,8 @@ export const en: Record<keyof typeof zh, string> = {
   "panelSettings.intro":
     "Besides Code, a project can have panels: each a whole set of pages, local functions, workflow and schedules, with its own data and agent. Switch between them on the strip at the left.",
   "panelSettings.ownName": "Default panel",
+  "panelSettings.rename": "Rename…",
+  "panelSettings.renameTitle": "Rename the panel",
   "panelSettings.ownRemoved": "This project's default panel was removed (it's in the trash)",
   "panelSettings.restore": "Restore (blank)",
   "panelSettings.none": "“{name}” has no panels yet",

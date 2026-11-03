@@ -312,6 +312,7 @@ gerdr panel list                                   # key, name, ui.json (title, 
 gerdr panel install owner/repo [--name board]      # clone a published panel (its code runs here: confirm with the user)
 gerdr panel new <name>                             # a blank one, for its agent to build
 gerdr panel update [<panel>]                       # git pull; the user's own changes stay on top
+gerdr panel rename <panel> "任务看板"                # the name shown for it (ui.json title)
 gerdr panel icon <panel> kanban [--color blue]     # glyph / line icon key, or sprite:<key>; no icon = default
 gerdr panel rm <panel>                             # to the trash, data and all
 gerdr panel restore                                # the project's own panel back (blank) after removing it

@@ -215,24 +215,11 @@ func (s *Server) workRoutes(mux *http.ServeMux) {
 		_, _ = s.mountWork(key)
 		writeJSON(w, map[string]any{"key": key})
 	})
-	// A panel's icon on the rail: "icon" / "color" in its ui/ui.json, the same kinds as an agent's (a glyph or line
-	// icon key, "sprite:<key>" from an add-on; a palette colour).
-	// Written into the site's own file, so it travels with the panel when it's published.
-	mux.HandleFunc("POST /api/work/panels/icon", func(w http.ResponseWriter, r *http.Request) {
-		var b struct {
-			Key   string `json:"key"`
-			Icon  string `json:"icon"`
-			Color string `json:"color"`
-		}
-		if err := decode(r, &b); err != nil {
-			httpError(w, 400, err.Error())
-			return
-		}
-		if len(b.Icon) > 64 {
-			httpError(w, 400, "icon too long")
-			return
-		}
-		dir, err := s.Work.Dir(b.Key)
+	// A panel's name and its icon on the rail: "title", "icon" / "color" in its ui/ui.json (icon: the same kinds as an
+	// agent's, a glyph or line icon key or "sprite:<key>"; color: a palette key). Written into the site's own file, so
+	// they travel with the panel when it's published. The panel's directory keeps its name.
+	setUIConfig := func(w http.ResponseWriter, key string, vals map[string]string) {
+		dir, err := s.Work.Dir(key)
 		if err != nil {
 			httpError(w, 400, err.Error())
 			return
@@ -244,9 +231,12 @@ func (s *Server) workRoutes(mux *http.ServeMux) {
 				httpError(w, 400, "ui.json is invalid: "+err.Error())
 				return
 			}
+		} else if !os.IsNotExist(err) {
+			httpError(w, 500, err.Error())
+			return
 		}
-		for k, v := range map[string]string{"icon": strings.TrimSpace(b.Icon), "color": strings.TrimSpace(b.Color)} {
-			if v == "" || len(v) > 64 {
+		for k, v := range vals {
+			if v = strings.TrimSpace(v); v == "" || len(v) > 64 {
 				delete(cfg, k)
 			} else {
 				cfg[k] = v
@@ -258,6 +248,33 @@ func (s *Server) workRoutes(mux *http.ServeMux) {
 			return
 		}
 		writeJSON(w, map[string]any{"ok": true})
+	}
+	mux.HandleFunc("POST /api/work/panels/icon", func(w http.ResponseWriter, r *http.Request) {
+		var b struct {
+			Key   string `json:"key"`
+			Icon  string `json:"icon"`
+			Color string `json:"color"`
+		}
+		if err := decode(r, &b); err != nil {
+			httpError(w, 400, err.Error())
+			return
+		}
+		setUIConfig(w, b.Key, map[string]string{"icon": b.Icon, "color": b.Color})
+	})
+	mux.HandleFunc("POST /api/work/panels/title", func(w http.ResponseWriter, r *http.Request) {
+		var b struct {
+			Key   string `json:"key"`
+			Title string `json:"title"`
+		}
+		if err := decode(r, &b); err != nil {
+			httpError(w, 400, err.Error())
+			return
+		}
+		if strings.TrimSpace(b.Title) == "" {
+			httpError(w, 400, "a panel needs a name")
+			return
+		}
+		setUIConfig(w, b.Key, map[string]string{"title": b.Title})
 	})
 	mux.HandleFunc("POST /api/work/panels/remove", func(w http.ResponseWriter, r *http.Request) {
 		var b struct {

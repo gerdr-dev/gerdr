@@ -1407,6 +1407,18 @@ func panelCmd() *cobra.Command {
 			return nil
 		},
 	})
+	cmd.AddCommand(&cobra.Command{
+		Use:   "rename <panel> <title>",
+		Short: "Rename a panel: the name shown for it (its ui.json title); its directory and data stay as they are",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(_ *cobra.Command, args []string) error {
+			c, err := client()
+			if err != nil {
+				return err
+			}
+			return c.do("POST", "/api/work/panels/title", map[string]any{"key": keyOf(args[0]), "title": args[1]}, nil)
+		},
+	})
 	var color string
 	icon := &cobra.Command{
 		Use:   "icon <panel> [icon]",

@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { addSpace, addWorkspace, basename, editWorkspace, renameSpace, renameTab } from "@/lib/actions";
+import { panelsChanged } from "@/lib/panels";
 import { api } from "@/lib/api";
 import { closeDialog, useStore } from "@/lib/store";
 import { DirPicker, ensureDir } from "./NewSession";
@@ -18,6 +19,7 @@ const RENAME_TITLE = {
   session: "nameDialogs.renameSession",
   space: "nameDialogs.renameSpace",
   newSpace: "nameDialogs.newSpace",
+  panel: "panelSettings.renameTitle",
 } as const;
 
 export function Rename() {
@@ -39,6 +41,15 @@ export function Rename() {
     } else if (r.target === "space") {
       const e = renameSpace(r.id, v);
       if (e) return setErr(e);
+    } else if (r.target === "panel") {
+      // The name shown for it (its ui.json title); its directory keeps its name
+      if (!v.trim()) return;
+      try {
+        await api.renamePanel(r.id, v.trim());
+        panelsChanged();
+      } catch (e: any) {
+        return setErr(e.message ?? String(e));
+      }
     } else api.rename(r.id, v).catch((e) => toast.error(e.message));
     closeDialog();
   };

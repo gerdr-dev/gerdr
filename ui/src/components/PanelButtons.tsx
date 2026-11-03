@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Plus, RefreshCw, SlidersHorizontal, Smile, Trash2 } from "lucide-react";
+import { Pencil, Plus, RefreshCw, SlidersHorizontal, Smile, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -80,6 +80,9 @@ function PanelButton({ p, on, className, size, space }: { p: Panel; on: boolean;
       {/* Never wider than the screen, kept off its edges: on a phone the long-pressed button sits near the right edge,
           and a menu wider than the room left of it ran off the screen */}
       <ContextMenuContent collisionPadding={8} className="max-w-[calc(100vw-16px)]">
+        <ContextMenuItem onClick={() => set({ dialog: { kind: "rename", target: "panel", id: p.key, value: p.title } })}>
+          <Pencil /> {t("panelSettings.rename")}
+        </ContextMenuItem>
         <ContextMenuItem onClick={() => set({ dialog: { kind: "panelIcon", key: p.key, title: label, icon: p.icon, color: p.color } })}>
           <Smile /> {t("panelIcon.menu")}
         </ContextMenuItem>

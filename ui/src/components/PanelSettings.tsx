@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Download, RefreshCw, RotateCcw, SquarePlus, Trash2 } from "lucide-react";
+import { Download, Pencil, RefreshCw, RotateCcw, SquarePlus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -113,6 +113,14 @@ function PanelRow({ p }: { p: Panel }) {
           {p.source.dirty && ` · ${t("panelSettings.dirty")}`}
         </div>
       </div>
+      <Button
+        size="sm"
+        variant="ghost"
+        title={t("panelSettings.rename")}
+        onClick={() => set({ dialog: { kind: "rename", target: "panel", id: p.key, value: p.title } })}
+      >
+        <Pencil />
+      </Button>
       {remote && (
         <Button size="sm" variant="ghost" disabled={!!busy} onClick={() => void update()} title={p.source.remote}>
           <RefreshCw className={busy === "update" ? "animate-spin" : undefined} /> {t("panelSettings.update")}
