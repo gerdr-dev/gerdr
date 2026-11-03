@@ -39,7 +39,10 @@ func hostPair(t *testing.T) (console *Server, ch http.Handler, hostSrv *Server) 
 		Terms: term.New(os.Environ, slog.New(slog.NewTextHandler(io.Discard, nil)))}
 	t.Cleanup(hostSrv.Terms.Close)
 	hh := hostSrv.Handler()
-	ts := httptest.NewTLSServer(RemoteHandler(hh))
+	// Offers h2 like a real host (relay / Caddy) does: the console's upstream /ws must still come out as HTTP/1.1
+	ts := httptest.NewUnstartedServer(RemoteHandler(hh))
+	ts.EnableHTTP2 = true
+	ts.StartTLS()
 	t.Cleanup(ts.Close)
 
 	// The peer code is minted on the host's local port, by a person (token)

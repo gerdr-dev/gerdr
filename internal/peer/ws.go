@@ -2,6 +2,7 @@ package peer
 
 import (
 	"context"
+	"crypto/tls"
 	"net/http"
 	"strings"
 	"time"
@@ -19,8 +20,19 @@ func (m *Manager) DialWS(ctx context.Context, hostID, pathQuery string, compress
 	hdr := http.Header{}
 	hdr.Set("Cookie", h.Cookie+"="+h.Token)
 	hdr.Set("User-Agent", "Gerdr console")
+	// Our own copy of the TLS config, pinned to HTTP/1.1: the HTTP client shares m.tr, and net/http adds "h2" to
+	// m.tr.TLSClientConfig.NextProtos the first time it sends a request. Handed over as is, the WebSocket handshake
+	// then negotiates h2 and fails ("protocol h2 was given but is not supported"), so every upstream /ws dropped
+	// right after the session-list fetch that precedes it, and the UI never saw a host session's events.
+	var tc *tls.Config
+	if m.tr.TLSClientConfig != nil {
+		tc = m.tr.TLSClientConfig.Clone()
+	} else {
+		tc = &tls.Config{}
+	}
+	tc.NextProtos = []string{"http/1.1"}
 	d := websocket.Dialer{HandshakeTimeout: 10 * time.Second, EnableCompression: compress,
-		NetDialContext: m.tr.DialContext, TLSClientConfig: m.tr.TLSClientConfig}
+		NetDialContext: m.tr.DialContext, TLSClientConfig: tc}
 	dctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 	return d.DialContext(dctx, "wss://"+strings.TrimPrefix(h.URL, "https://")+pathQuery, hdr)
