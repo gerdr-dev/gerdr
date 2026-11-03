@@ -16,6 +16,7 @@ require (
 	github.com/coder/acp-go-sdk v0.13.5
 	github.com/creack/pty v1.1.24
 	github.com/dop251/goja v0.0.0-20260917113740-793a2a65c13b
+	github.com/ebitengine/purego v0.11.2
 	github.com/evanw/esbuild v0.25.12
 	github.com/go-acme/alidns-20150109/v4 v4.7.0
 	github.com/go-acme/lego/v4 v4.35.2

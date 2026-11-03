@@ -42,6 +42,15 @@ export type DoctorCheck = {
 };
 export type DoctorReport = { at: number; deep: boolean; level: DoctorLevel; checks: DoctorCheck[] };
 
+/** Settings → Labs → Remote screen (internal/screen): the switch, what macOS has granted, the main display in points. */
+export type ScreenStatus = { enabled: boolean; supported: boolean; screen: boolean; input: boolean; width: number; height: number };
+/** One action on the remote screen; x / y are fractions (0..1) of the display. */
+export type ScreenInput =
+  | { kind: "click"; x: number; y: number; button?: "left" | "right"; count?: number }
+  | { kind: "scroll"; x: number; y: number; dy: number }
+  | { kind: "text"; text: string }
+  | { kind: "key"; key: string; mods?: ("cmd" | "shift" | "opt" | "ctrl")[] };
+
 export class ApiError extends Error {
   status: number;
   /** 远程那条路上的细分原因：reason="stepup"（再加 passkey 前先验一次）、need="pair" | "passkey"（见 docs/dev/REMOTE.md） */
@@ -201,6 +210,10 @@ export const api = {
   pending: () => req<PendingReq[]>("GET", "/api/pending"),
   setAwake: (b: { minutes?: number; until?: number; forever?: boolean }) => req<AwakeStatus>("PUT", "/api/awake", b),
   setupLid: () => req<AwakeStatus>("POST", "/api/awake/lid-setup", {}),
+  screen: () => req<ScreenStatus>("GET", "/api/screen"),
+  screenInput: (i: ScreenInput) => req("POST", "/api/screen/input", i),
+  /** Local only: shows macOS's permission prompts on this computer and opens the pane still missing. */
+  screenRequestAccess: () => req<ScreenStatus>("POST", "/api/screen/request-access", {}),
   /** continueFrom: another agent's session whose conversation the new one carries on (hub/handoff.go) */
   createSession: (o: { agent: string; cwd: string; mode?: string; config?: Record<string, string>; import?: string; title?: string; continueFrom?: string }) =>
     req<SessionSummary>("POST", "/api/sessions", o),

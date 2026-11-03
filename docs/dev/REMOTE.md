@@ -143,6 +143,35 @@ there. The page first gets a link from `POST /api/fs/link` (normal auth), and th
 Whoever gets the URL in that window can read that one file, which is why the page never shows or copies it. Don't
 widen it: no directory links, no reuse across files, no extending the life.
 
+## Remote screen (Labs)
+
+Settings → Labs → "Control this computer remotely" (`config.remoteScreen`, off by default): a phone sees the Mac's
+main display and clicks / types on it, for the odd "open that app and type its password" job. Not a remote desktop:
+one JPEG per request (`GET /api/screen/shot?w=&q=`), taken again every 3s and right after each action
+(`POST /api/screen/input`). Code: `internal/screen`, `internal/server/screenapi.go`, `ui/src/components/RemoteScreen.tsx`.
+
+- **Allowed from remote devices** (that's the point). It adds no power: a paired device can already run anything in
+  a terminal. Asking macOS for the grants (`POST /api/screen/request-access`) is local only in `remoteGuard`: its
+  prompts show on the Mac's screen. The switch is read from config.json on every request, so turning it off is instant.
+- Typed text is often a password: never log `/api/screen/input` bodies.
+- Picture quality is per device (localStorage `gerdr.screenQuality`): Data saver 1280px / q45, Standard 1600 / q60,
+  Sharp 2400 / q75; zoomed to 2× or more, at least 2400px wide. screencapture writes PNG and sips always re-encodes,
+  so a display narrower than the target still gets compressed (screencapture's own JPEG is MBs).
+- Screenshot = `/usr/sbin/screencapture -x -m -C` + `sips` to shrink / encode; input = CoreGraphics events posted from the
+  gerdr process via **purego** (no cgo: release builds cross-compile with CGO off). Things that silently fail:
+  - JXA (`osascript -l JavaScript`) can post mouse events, but `CGEventKeyboardSetUnicodeString` through its bridge
+    does nothing (the event stays "a"), so typing arbitrary text that way is impossible. That's why purego.
+  - `CGEventCreateScrollWheelEvent` is variadic; Apple's arm64 ABI passes variadic args on the stack, which purego's
+    plain call doesn't. Use `CGEventCreateScrollWheelEvent2` (macOS 13+).
+  - Without Screen Recording, screencapture fails ("could not create image from display") or shows only the
+    wallpaper; without Accessibility, posted events are dropped with no error. Both are checked up front
+    (`CGPreflightScreenCaptureAccess`, `CGPreflightPostEventAccess`) so the UI can say which is missing.
+- TCC grants go to the *responsible* process: the gerdr binary when it runs as the launchd service, Gerdr.app when
+  the App started the backend. gerdr is ad-hoc signed (identifier `a.out`), and TCC keys an ad-hoc binary by its
+  hash, so **a new backend may lose both grants** and the user has to switch them on again. A Developer ID
+  signature would fix it.
+- Main display only; the lock screen / login window don't take synthetic events from a user process.
+
 ## 没做的
 
 - 端到端（真中继（dialhome）+ 真证书 + 手机）只能部署之后验：假中继的测试管协议格式，不管 Traefik 路由、CAA、证书链。

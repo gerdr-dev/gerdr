@@ -8,6 +8,7 @@ import { ImportHerdr } from "./ImportHerdr";
 import { KeyHelp } from "./KeyHelp";
 import { NewWorkspace, Rename } from "./NameDialogs";
 import { Palette } from "./Palette";
+import { RemoteScreen } from "./RemoteScreen";
 import { SessionsDialog, WorkspacesDialog } from "./Pickers";
 import { ResumeDialog } from "./ResumeDialog";
 import { SettingsDialog } from "./SettingsDialog";
@@ -25,6 +26,7 @@ export function Dialogs() {
       <Palette open={d?.kind === "palette"} />
       <KeyHelp open={d?.kind === "help"} />
       <SettingsDialog open={d?.kind === "settings"} />
+      <RemoteScreen open={d?.kind === "screen"} />
       <SessionsDialog open={d?.kind === "sessions"} />
       <WorkspacesDialog open={d?.kind === "workspaces"} />
       <Rename />

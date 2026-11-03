@@ -44,6 +44,9 @@ export type Config = {
   /** 实验室：有远程设备连着时不让电脑睡（后端起 caffeinate），断开 15 分钟后放手；开着时合上盖子也不睡
    *  （pmset disablesleep，要授权一次，手动时段也算）。后端读这个字段（cmd/gerdr 的 applyAwake）。 */
   keepAwakeRemote?: boolean;
+  /** Labs: see this computer's screen and click / type on it from another device (components/RemoteScreen.tsx,
+   *  internal/screen). Read by the backend at each request (server/screenapi.go). */
+  remoteScreen?: boolean;
   /** 实验室：选中即复制（和 herdr 的 ui.copy_on_select 一样），lib/copysel.ts。 */
   copyOnSelect?: boolean;
   /** Labs → Diagnosis: which install of claude / codex to run, when PATH finds a stale or blocked one.

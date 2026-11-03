@@ -170,6 +170,7 @@ func (s *Server) Handler() http.Handler {
 	s.memoryRoutes(mux)
 	s.importRoutes(mux)
 	s.doctorRoutes(mux)
+	s.screenRoutes(mux)
 	if s.Remote != nil {
 		s.remoteRoutes(mux)
 		s.appRoutes(mux)
