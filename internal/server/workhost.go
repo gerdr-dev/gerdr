@@ -231,6 +231,9 @@ func (h workHost) view(x hub.Summary, evs []*hub.Event) map[string]any {
 	if x.ReportTo != "" {
 		v["reportTo"] = x.ReportTo
 	}
+	if x.ByPerson {
+		v["byPerson"] = true // the last turn was a person typing in its chat: they saw the reply (hub.Summary.ByPerson)
+	}
 	if evs != nil {
 		v["reply"] = lastReply(evs)
 	}

@@ -222,6 +222,11 @@ interface Session {
   waitingSince?: number;
   /** ms: when the running turn started (only while running). */
   turnStartedAt?: number;
+  /**
+   * The last turn came from the user typing in this conversation (not from code or another agent): they've read
+   * its reply. E.g. a board shouldn't ask them to "come and look" at an answer to their own question.
+   */
+  byPerson?: boolean;
   error?: string;
   /** See `sessions.start`; `{}` when it has none. */
   tags: Record<string, string>;
