@@ -145,6 +145,12 @@ export function showSession(session: string, opts: { label?: string; actions?: S
   window.parent.postMessage({ type: "gerdr:showSession", session, ...opts }, location.origin);
 }
 
+// An Esc nothing on the page used goes to gerdr: it closes the panel showSession opened (a drawer over the page).
+// A page's own dialogs that close on Esc should preventDefault it, as React UI libraries do.
+window.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !e.defaultPrevented) window.parent.postMessage({ type: "gerdr:escape" }, location.origin);
+});
+
 /** Closes the panel showSession opened. */
 export function hideSession() {
   window.parent.postMessage({ type: "gerdr:hideSession" }, location.origin);

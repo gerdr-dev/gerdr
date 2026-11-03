@@ -178,6 +178,9 @@ function WorkFrame({ project, onShowChat }: { project: string; onShowChat?: () =
               }))
           : undefined;
         set({ workPeek: { id: m.session, project, label: typeof m.label === "string" ? m.label : undefined, actions } });
+      } else if (m.type === "gerdr:escape") {
+        // An Esc the page didn't use (its bridge forwards them): closes the panel over it, like a drawer
+        if (useStore.getState().workPeek?.project === project) set({ workPeek: null });
       } else if (m.type === "gerdr:hideSession") {
         if (useStore.getState().workPeek?.project === project) set({ workPeek: null });
       } else if (m.type === "gerdr:openSession" && typeof m.session === "string") {
@@ -317,62 +320,84 @@ function WorkPeek() {
   const tell = (m: Record<string, unknown>) => frameSend.get(peek.project)?.({ ...m, session: id });
   const close = () => set({ workPeek: null });
   return (
-    <aside className="absolute inset-y-0 right-0 z-30 flex w-[min(640px,100%)] flex-col border-l bg-background shadow-xl" aria-label={session?.title || id}>
-      <div className="flex h-10 shrink-0 items-center gap-2 border-b px-3">
-        {session && <StatusDot status={dotStatus(session)} />}
-        <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{session?.title || id}</span>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-7"
-          title={t("workView.peekInCode")}
-          onClick={() => {
-            close();
-            toggleOverview(false);
-            setMode("agents");
-            focusSession(id);
-          }}
-        >
-          <Code2 className="size-4" />
-        </Button>
-        <Button variant="ghost" size="icon" className="size-7" title={t("common.close")} onClick={close}>
-          <X className="size-4" />
-        </Button>
-      </div>
-      {(peek.label || peek.actions?.length) && (
-        <div className="flex shrink-0 flex-wrap items-center gap-2 border-b bg-muted/40 px-3 py-1.5">
-          {peek.label && <span className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground">{peek.label}</span>}
-          <div className="ml-auto flex gap-1.5">
-            {peek.actions?.map((a) => (
-              <Button
-                key={a.id}
-                size="sm"
-                variant={a.kind === "primary" ? "default" : "ghost"}
-                className={cn("h-7 text-[12px]", (a.kind === "danger" || armed === a.id) && "text-bad hover:text-bad")}
-                onClick={() => {
-                  // A confirm text: first click arms it (the label becomes the question), the second does it
-                  if (a.confirm && armed !== a.id) return setArmed(a.id);
-                  setArmed("");
-                  tell({ type: "gerdr:sessionAction", action: a.id });
-                }}
-              >
-                {armed === a.id ? a.confirm : a.label}
-              </Button>
-            ))}
-          </div>
+    <>
+      {/* A drawer: a click anywhere outside it closes it. The page is an iframe, whose clicks never reach this
+          document, so a transparent layer goes over it while the panel is open. */}
+      <div className="absolute inset-0 z-20 bg-black/20" onClick={close} aria-hidden />
+      <PeekEsc onEsc={close} />
+      <aside className="absolute inset-y-0 right-0 z-30 flex w-[min(640px,100%)] flex-col border-l bg-background shadow-xl" aria-label={session?.title || id}>
+        <div className="flex h-10 shrink-0 items-center gap-2 border-b px-3">
+          {session && <StatusDot status={dotStatus(session)} />}
+          <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{session?.title || id}</span>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-7"
+            title={t("workView.peekInCode")}
+            onClick={() => {
+              close();
+              toggleOverview(false);
+              setMode("agents");
+              focusSession(id);
+            }}
+          >
+            <Code2 className="size-4" />
+          </Button>
+          <Button variant="ghost" size="icon" className="size-7" title={t("common.close")} onClick={close}>
+            <X className="size-4" />
+          </Button>
         </div>
-      )}
-      <div className="min-h-0 flex-1">
-        {session ? (
-          <ChatView key={id} session={session} paneId={`work-peek:${id}`} focused />
-        ) : (
-          <div className="flex h-full items-center justify-center text-[12px] text-muted-foreground">
-            {ready ? t("workView.peekGone") : <PixelLoader className="size-4" />}
+        {(peek.label || peek.actions?.length) && (
+          <div className="flex shrink-0 flex-wrap items-center gap-2 border-b bg-muted/40 px-3 py-1.5">
+            {peek.label && <span className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground">{peek.label}</span>}
+            <div className="ml-auto flex gap-1.5">
+              {peek.actions?.map((a) => (
+                <Button
+                  key={a.id}
+                  size="sm"
+                  variant={a.kind === "primary" ? "default" : "ghost"}
+                  className={cn("h-7 text-[12px]", (a.kind === "danger" || armed === a.id) && "text-bad hover:text-bad")}
+                  onClick={() => {
+                    // A confirm text: first click arms it (the label becomes the question), the second does it
+                    if (a.confirm && armed !== a.id) return setArmed(a.id);
+                    setArmed("");
+                    tell({ type: "gerdr:sessionAction", action: a.id });
+                  }}
+                >
+                  {armed === a.id ? a.confirm : a.label}
+                </Button>
+              ))}
+            </div>
           </div>
         )}
-      </div>
-    </aside>
+        <div className="min-h-0 flex-1">
+          {session ? (
+            <ChatView key={id} session={session} paneId={`work-peek:${id}`} focused />
+          ) : (
+            <div className="flex h-full items-center justify-center text-[12px] text-muted-foreground">
+              {ready ? t("workView.peekGone") : <PixelLoader className="size-4" />}
+            </div>
+          )}
+        </div>
+      </aside>
+    </>
   );
+}
+
+/**
+ * Esc closes the panel, unless something in it took the key first: the composer stopping a running agent, its @ menu,
+ * a focused image, a dialog (they preventDefault / stopPropagation). Esc pressed in the page comes as gerdr:escape.
+ */
+function PeekEsc({ onEsc }: { onEsc: () => void }) {
+  useEffect(() => {
+    const f = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || e.defaultPrevented || useStore.getState().dialog) return;
+      onEsc();
+    };
+    window.addEventListener("keydown", f);
+    return () => window.removeEventListener("keydown", f);
+  }, [onEsc]);
+  return null;
 }
 
 // ---- the agent on the right ----
