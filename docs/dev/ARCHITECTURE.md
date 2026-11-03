@@ -400,6 +400,15 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
   cross on the server (`crossSpace`, using `from` / `near`). Closed conversations belong to no session (`--all` lists them);
   reopening one puts it next to the caller, in the caller's session. This is not a security boundary: an agent has the token
   and can call the API itself. herdr's isn't one either: it's a separate socket.
+- **A Work project's skills** (`skills/` in its Work directory; `Record.SkillDirs`, `hub.Options.SkillDirs`,
+  `acpx.SkillRoots`). The user's way of working is a skill, not files the code hands to agents at chosen moments:
+  which part matters is the agent's call, as with any skill, and the code staying out of it is what keeps a Work
+  site usable by someone else. The Work agent gets them by its cwd (hub.Options.SkillDirs, computed on every new /
+  resume, so an older Work conversation picks them up when reattached); sessions from `ctx.sessions.start` carry them
+  in `Record.SkillDirs`. Both reach the adapter as `_meta` `skillRoots`: claude links each `<root>/<name>` into the
+  session's `--add-dir` shell, codex adds the roots to `skills/extraRoots/set` right before the thread attaches. They
+  are given whatever the skill source or a role's skill list says (like the built-in ones): the session was started
+  to work by them. native doesn't get them yet.
 - **Schedules** (`work/schedule.go`, run from main for every Work directory). The same format as a hosted function platform's on purpose
   (`schedules/<id>.json`: fn or prompt, every or at) so a schedule reads the same on both. State (last run, paused)
   lives in `<GERDR_DIR>/state/work-schedules/`, not the Work directory: it's this machine's, and a synced or shared Work

@@ -283,7 +283,7 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 		_ = json.Unmarshal(cfg.Get(), &c)
 		return hub.NewDefaults{Mode: c.Modes[agent], Config: c.Config[agent]}
 	}
-	h, err := hub.New(hub.Options{Dir: env.Dir, ClaudeIdle: env.ClaudeIdle, ExtraAgents: cfgAgents(), LLM: cfgLLM, Defaults: cfgDefaults, Log: log, Ext: em})
+	h, err := hub.New(hub.Options{Dir: env.Dir, ClaudeIdle: env.ClaudeIdle, ExtraAgents: cfgAgents(), LLM: cfgLLM, Defaults: cfgDefaults, Log: log, Ext: em, SkillDirs: workSkills(env.Dir)})
 	if err != nil {
 		return err
 	}
@@ -556,4 +556,21 @@ func runACP(which string) error {
 	<-conn.Done()
 	a.Close()
 	return nil
+}
+
+// workSkills: a session running in a project's Work directory (its Work agent) gets that Work's skills/ folder, like
+// the sessions the Work starts (work.StartOptions → Record.SkillDirs). Only path arithmetic: no Runner state needed.
+func workSkills(dir string) func(hub.Record) []string {
+	r := work.New(dir, nil)
+	return func(rec hub.Record) []string {
+		p, ok := r.WorkProject(rec.Cwd)
+		if !ok {
+			return nil
+		}
+		d, err := r.Dir(p)
+		if err != nil {
+			return nil
+		}
+		return []string{filepath.Join(d, work.SkillsDir)}
+	}
 }

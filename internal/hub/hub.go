@@ -117,6 +117,26 @@ type Options struct {
 	LLM func() native.Config
 	// Defaults：新会话的默认模式 / 模型（config.json 的 defaultModes / defaultConfig），按 agent id，每次现取。
 	Defaults func(agent string) NewDefaults
+	// SkillDirs: extra skill folders for a session beyond its Record.SkillDirs, worked out when it starts or
+	// resumes (the server: a session in a Work directory gets that Work's skills/). nil = none.
+	SkillDirs func(rec Record) []string
+}
+
+// skillRoots: the extra skill folders a session's agent gets (Record.SkillDirs + Options.SkillDirs), existing ones.
+func (h *Hub) skillRoots(rec Record) []string {
+	dirs := append([]string(nil), rec.SkillDirs...)
+	if h.opt.SkillDirs != nil {
+		dirs = append(dirs, h.opt.SkillDirs(rec)...)
+	}
+	var out []string
+	seen := map[string]bool{}
+	for _, d := range dirs {
+		if st, err := os.Stat(d); err == nil && st.IsDir() && !seen[d] {
+			seen[d] = true
+			out = append(out, d)
+		}
+	}
+	return out
 }
 
 // NewDefaults：一种 agent（或角色）新开会话时用的模式和配置项（model / effort…，键是 agent 报的配置项 id）。
@@ -607,9 +627,10 @@ type CreateOptions struct {
 	Title  string `json:"title,omitempty"`
 	// ContinueFrom: a gerdr session of another agent whose conversation this new session carries on (handoff.go).
 	ContinueFrom string `json:"continueFrom,omitempty"`
-	// Tags / ReportTo: see Record. ReportTo must be an existing session.
-	Tags     map[string]string `json:"tags,omitempty"`
-	ReportTo string            `json:"reportTo,omitempty"`
+	// Tags / ReportTo / SkillDirs: see Record. ReportTo must be an existing session.
+	Tags      map[string]string `json:"tags,omitempty"`
+	ReportTo  string            `json:"reportTo,omitempty"`
+	SkillDirs []string          `json:"skillDirs,omitempty"`
 	// FromCLI：`gerdr session new` 开的（agent 自己跑的命令）。这时默认模式是「全放开」那种的不套：
 	// 那条命令不审批就放行（sysenv.SafeGerdrCLI 不许带 --mode 就是为这个），沙箱里的 agent 不能借用户的默认值开一个不设防的会话。
 	FromCLI bool `json:"-"`
@@ -669,8 +690,11 @@ func (h *Hub) Create(ctx context.Context, o CreateOptions) (*Session, error) {
 		meta[k] = v
 	}
 	// 新建时给的标题是人起的（`gerdr session new --title`），算手动命名、不被自动标题盖掉；导入时带进来的是原会话的标题，照旧可以被更新
-	rec := Record{ID: newID(), Agent: o.Agent, Cwd: cwd, CreatedAt: now(), UpdatedAt: now(), Title: o.Title, CustomTitle: o.Title != "" && o.Import == "", Mode: o.Mode, Config: o.Config, Tags: tags, ReportTo: o.ReportTo}
+	rec := Record{ID: newID(), Agent: o.Agent, Cwd: cwd, CreatedAt: now(), UpdatedAt: now(), Title: o.Title, CustomTitle: o.Title != "" && o.Import == "", Mode: o.Mode, Config: o.Config, Tags: tags, ReportTo: o.ReportTo, SkillDirs: o.SkillDirs}
 	s := newSession(h, rec)
+	if roots := h.skillRoots(rec); len(roots) > 0 {
+		meta["skillRoots"] = roots
+	}
 
 	if o.Import != "" {
 		rec.AgentSessionID = o.Import

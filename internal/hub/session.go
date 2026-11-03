@@ -59,6 +59,9 @@ type Record struct {
 	Tags map[string]string `json:"tags,omitempty"`
 	// ReportTo: the session told when this one stops (turn done, waiting for a person, error); see server/report.go.
 	ReportTo string `json:"reportTo,omitempty"`
+	// SkillDirs: folders of extra skills (<dir>/<name>/SKILL.md) this session gets besides the usual ones, e.g. the
+	// skills of the Work project that started it. Handed to the adapter as _meta skillRoots on new / resume.
+	SkillDirs []string `json:"skillDirs,omitempty"`
 }
 
 // ClearedCtx is one context dropped by /clear: its agent session id and what it was called at the time.
@@ -464,6 +467,9 @@ func (s *Session) ensureAttached(ctx context.Context) (*agenthost.Host, error) {
 	}
 	if rec.Fork != nil {
 		meta["fork"] = rec.Fork
+	}
+	if roots := s.h.skillRoots(rec); len(roots) > 0 {
+		meta["skillRoots"] = roots
 	}
 	res, err := c.Conn.ResumeSession(ctx, acp.ResumeSessionRequest{SessionId: acp.SessionId(rec.AgentSessionID), Cwd: rec.Cwd, McpServers: []acp.McpServer{}, Meta: acpx.Meta(meta)})
 	if err != nil {

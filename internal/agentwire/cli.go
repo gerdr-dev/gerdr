@@ -24,11 +24,11 @@ func (x claudeExt) Fingerprint() string {
 	return x.m.Fingerprint()
 }
 
-func (x claudeExt) Args(sessionID, cwd string) []string {
+func (x claudeExt) Args(sessionID, cwd string, skillRoots []string) []string {
 	if x.m == nil {
 		return nil
 	}
-	return x.m.ClaudeArgs(sessionID, cwd)
+	return x.m.ClaudeArgs(sessionID, cwd, skillRoots)
 }
 
 func (x claudeExt) MCPFingerprint(cwd string) string { return x.m.ClaudeMCPFingerprint(cwd) }
@@ -47,7 +47,7 @@ func (x codexExt) Fingerprint() string { return x.m.Fingerprint() }
 
 // Config 把 skill / MCP 设置翻成 thread/start、thread/resume 的 config 覆盖。
 // 覆盖是**合并**进用户配置的，所以「关掉 codex 自己的」只能逐个列出来关（见 ext 包注释）。
-func (x codexExt) Config(ctx context.Context, rpc *rpcline.Conn, cwd string, log *slog.Logger) map[string]any {
+func (x codexExt) Config(ctx context.Context, rpc *rpcline.Conn, cwd string, skillRoots []string, log *slog.Logger) map[string]any {
 	st := x.m.Settings()
 	cfg := x.m.CodexMCPOverrides()
 	if st.MCPSource == ext.SourceGerdr || x.m.LimitsMCP() {
@@ -71,6 +71,9 @@ func (x codexExt) Config(ctx context.Context, rpc *rpcline.Conn, cwd string, log
 	if x.m.GerdrSkillsOn(st) {
 		roots = append(roots, x.m.SkillsDir())
 	}
+	// This thread's own (a Work project's skills/): given whatever the source or the role says, like the built-in
+	// ones, since the session was started to work by them.
+	roots = append(roots, skillRoots...)
 	if err := rpc.Call(ctx, "skills/extraRoots/set", map[string]any{"extraRoots": roots}, nil); err != nil {
 		log.Warn("skills/extraRoots/set failed", "err", err)
 	}
@@ -113,13 +116,15 @@ func (x codexExt) Config(ctx context.Context, rpc *rpcline.Conn, cwd string, log
 					disable = true
 				case under(sk.Path, x.m.BuiltinDir()):
 					disable = dis[sk.Name]
+				case underAny(sk.Path, skillRoots, under):
+					disable = false
 				case under(sk.Path, x.m.SkillsDir()):
 					disable = dis[sk.Name] || !x.m.GerdrSkillsOn(st)
 				default:
 					disable = !x.m.OwnSkillsOn(st) && sk.Scope != "system"
 				}
 				// 角色限定了 skill：没挑的也关。codex 自带的（system）界面上列不出来、挑不了，不动它们。
-				if !disable && sk.Scope != "system" && !x.m.AllowSkill(sk.Name) {
+				if !disable && sk.Scope != "system" && !underAny(sk.Path, skillRoots, under) && !x.m.AllowSkill(sk.Name) {
 					disable = true
 				}
 				if disable {
@@ -130,4 +135,13 @@ func (x codexExt) Config(ctx context.Context, rpc *rpcline.Conn, cwd string, log
 		cfg["skills.config"] = off
 	}
 	return cfg
+}
+
+func underAny(p string, dirs []string, under func(p, dir string) bool) bool {
+	for _, d := range dirs {
+		if under(p, d) {
+			return true
+		}
+	}
+	return false
 }

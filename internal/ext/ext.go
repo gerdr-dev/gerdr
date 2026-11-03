@@ -423,7 +423,9 @@ func (m *Manager) Watch(onChange func()) {
 // gerdr 自己那份里开着的）。关掉的不链进来，用不着 skillOverrides。
 // --add-dir 同时会放开这个目录的文件权限，所以别直接给 GERDR_DIR —— 那里有令牌。
 // 每个会话一个壳（id）：同时起的两个 claude 别互相改对方正在读的目录。
-func (m *Manager) ClaudeAddDir(id string, includeGerdr bool) (string, error) {
+//
+// extra: this session's own skill folders (a Work project's skills/), linked whatever the source or the role says.
+func (m *Manager) ClaudeAddDir(id string, includeGerdr bool, extra ...string) (string, error) {
 	shell := filepath.Join(m.dir, "run", "claude-skills", id)
 	skills := filepath.Join(shell, ".claude", "skills")
 	_ = os.RemoveAll(skills)
@@ -442,6 +444,19 @@ func (m *Manager) ClaudeAddDir(id string, includeGerdr bool) (string, error) {
 		}
 		if err := os.Symlink(sk.Dir, filepath.Join(skills, filepath.Base(sk.Dir))); err == nil {
 			n++
+		}
+	}
+	for _, root := range extra {
+		ents, _ := os.ReadDir(root)
+		for _, e := range ents {
+			dir := filepath.Join(root, e.Name())
+			if _, err := os.Stat(filepath.Join(dir, "SKILL.md")); err != nil {
+				continue
+			}
+			// A name already linked (a gerdr skill of the same name) keeps the first: Symlink fails on an existing one
+			if err := os.Symlink(dir, filepath.Join(skills, e.Name())); err == nil {
+				n++
+			}
 		}
 	}
 	if n == 0 {

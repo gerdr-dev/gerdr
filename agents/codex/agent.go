@@ -120,7 +120,8 @@ type Ext interface {
 	Fingerprint() string
 	// Config is the thread/start | thread/resume config override for cwd. rpc reaches the app-server (for
 	// skills/list, skills/extraRoots/set…).
-	Config(ctx context.Context, rpc *rpcline.Conn, cwd string, log *slog.Logger) map[string]any
+	// skillRoots: extra skill folders for this thread (acpx.SkillRoots), set as extra roots right before it attaches.
+	Config(ctx context.Context, rpc *rpcline.Conn, cwd string, skillRoots []string, log *slog.Logger) map[string]any
 }
 
 type session struct {
@@ -290,12 +291,12 @@ func (a *Agent) resumeThread(ctx context.Context, rpc *rpcline.Conn, s *session)
 
 // extConfig 把 skill / MCP 设置翻成 thread/start、thread/resume 的 config 覆盖（Options.Ext; gerdr's is in
 // internal/agentwire）。覆盖是**合并**进用户配置的，所以「关掉 codex 自己的」只能逐个列出来关。
-func (a *Agent) extConfig(ctx context.Context, rpc *rpcline.Conn, cwd string) (map[string]any, string) {
+func (a *Agent) extConfig(ctx context.Context, rpc *rpcline.Conn, cwd string, skillRoots []string) (map[string]any, string) {
 	if a.ext == nil {
 		return nil, ""
 	}
 	fp := a.ext.Fingerprint()
-	cfg := a.ext.Config(ctx, rpc, cwd, a.log)
+	cfg := a.ext.Config(ctx, rpc, cwd, skillRoots, a.log)
 	if len(cfg) == 0 {
 		return nil, fp
 	}

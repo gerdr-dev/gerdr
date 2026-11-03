@@ -16,13 +16,13 @@ and their habits are what they wrote down, not what the code says.
 
 - `local/` and `ui/` hold mechanism only. Nothing of one person or company is hard-coded: no hosts, repositories,
   people, team rules, "merge by itself or not", "every 5 minutes".
-- A person's way of working is prose they can read and edit: `playbooks/*.md` (how they want things done, handed
-  to agents as written; values the code needs are read from there too) and `schedules/` (when things run). Not
-  a settings file of switches: a sentence keeps the why next to the choice, and the agents read the same text.
-- Before adding something, ask: mechanism, or this person's choice? A choice goes into their playbook, with a
+- A person's way of working is prose they can read and edit: a skill in `skills/` (how they want things done; the
+  agents read it as they need it, values the code needs are read from it too) and `schedules/` (when things run).
+  Not a settings file of switches: a sentence keeps the why next to the choice, and the agents read the same text.
+- Before adding something, ask: mechanism, or this person's choice? A choice goes into their skill, with a
   careful default in the code for whoever hasn't written it (nothing merged, pushed or deleted behind their back).
-  It never becomes an `if`, a constant or a new config key.
-- When the user says "from now on…", "I'd rather…", "always…": change their playbook, not the code.
+  It never becomes an `if`, a constant or a new config key, and code doesn't decide which part of it an agent reads.
+- When the user says "from now on…", "I'd rather…", "always…": change their skill, not the code.
 
 ## Layout of this directory (the project's Work directory)
 
@@ -60,6 +60,10 @@ and their habits are what they wrote down, not what the code says.
   `ctx.workspaces` to pick where), and report progress. **Read `FUNCTIONS.md` before writing one** (the
   rules, how to try and debug them), and `local/ctx.d.ts` for the ctx API. Keep pages to drawing; work a page needs again and again goes into a function, not
   into you running the same commands each time.
+- `skills/<name>/` — skills (a `SKILL.md` index with `name` / `description` front matter, its references next to it)
+  that Gerdr gives you and every session this Work starts (`ctx.sessions.start`), like any skill: the agent sees the
+  description and reads the rest when it's relevant. This is where the user's way of working goes. A session started
+  before a skill appeared gets it once it's reopened; edits to an existing one are read as they are.
 - `schedules/<id>.json` — what the project does by itself on time: a local function (`"fn"`) or a message to you
   (`"prompt"`), `"every": "5m"` or `"at": "09:00"`. Gerdr runs them with the App closed too. FUNCTIONS.md, "On a
   schedule"; `gerdr work schedules` shows how they went.

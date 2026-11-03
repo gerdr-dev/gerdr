@@ -57,7 +57,7 @@ func TestClaudeArgsScoped(t *testing.T) {
 		_ = os.WriteFile(filepath.Join(d, "SKILL.md"), []byte("---\nname: "+n+"\ndescription: d\n---\n"), 0o644)
 	}
 	m := New(t.TempDir()).Scoped(Only{Skills: []string{"keep", "gerdr"}, MCP: []string{"a"}})
-	args := m.ClaudeArgs("s1", cwd)
+	args := m.ClaudeArgs("s1", cwd, nil)
 	get := func(flag string) string {
 		for i, a := range args {
 			if a == flag && i+1 < len(args) {
@@ -91,7 +91,7 @@ func TestClaudeArgsScoped(t *testing.T) {
 		t.Fatalf("壳目录里应当只有挑中的内置 skill：%v", names)
 	}
 	// 没限定的 Manager 不带这些
-	if args := New(t.TempDir()).ClaudeArgs("s2", cwd); slices.Contains(args, "--strict-mcp-config") {
+	if args := New(t.TempDir()).ClaudeArgs("s2", cwd, nil); slices.Contains(args, "--strict-mcp-config") {
 		t.Fatalf("没限定不该 strict：%v", args)
 	}
 }
@@ -166,7 +166,7 @@ func TestScopedOverridesSource(t *testing.T) {
 	if err := g.Save(Settings{MCPSource: SourceAgent, SkillSource: SourceAgent, MCP: mcp, DisabledSkills: []string{"off"}}); err != nil {
 		t.Fatal(err)
 	}
-	servers, links, overrides := parse(role.ClaudeArgs("s1", cwd))
+	servers, links, overrides := parse(role.ClaudeArgs("s1", cwd, nil))
 	if servers["gh"] == nil || servers["own"] == nil || servers["dead"] != nil {
 		t.Fatalf("source agent: want gh + own, not the switched-off dead: %v", servers)
 	}
@@ -180,12 +180,32 @@ func TestScopedOverridesSource(t *testing.T) {
 	if err := g.Save(Settings{MCPSource: SourceGerdr, SkillSource: SourceGerdr, MCP: mcp}); err != nil {
 		t.Fatal(err)
 	}
-	servers, _, overrides = parse(role.ClaudeArgs("s2", cwd))
+	servers, _, overrides = parse(role.ClaudeArgs("s2", cwd, nil))
 	if servers["own"] == nil || overrides["mine"] == "off" {
 		t.Fatalf("source gerdr: a named own server / skill should stay: %v %v", servers, overrides)
 	}
 	// without a role the source still rules
-	if _, links, _ := parse(New(g.dir).ClaudeArgs("s3", cwd)); !slices.Contains(links, "cr") {
+	if _, links, _ := parse(New(g.dir).ClaudeArgs("s3", cwd, nil)); !slices.Contains(links, "cr") {
 		t.Fatalf("source gerdr, no role: gerdr's skills linked: %v", links)
+	}
+}
+
+// A session's own skill folders (a Work project's skills/) are linked even for a role that names its skills: the
+// session was started to work by them.
+func TestClaudeAddDirExtra(t *testing.T) {
+	m := New(t.TempDir()).Scoped(Only{Skills: []string{}})
+	root := t.TempDir()
+	_ = os.MkdirAll(filepath.Join(root, "my-workflow"), 0o755)
+	_ = os.WriteFile(filepath.Join(root, "my-workflow", "SKILL.md"), []byte("---\nname: my-workflow\ndescription: x\n---\n"), 0o644)
+	_ = os.MkdirAll(filepath.Join(root, "not-a-skill"), 0o755)
+	dir, err := m.ClaudeAddDir("s9", false, root)
+	if err != nil || dir == "" {
+		t.Fatalf("dir %q err %v", dir, err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".claude", "skills", "my-workflow", "SKILL.md")); err != nil {
+		t.Errorf("my-workflow not linked: %v", err)
+	}
+	if _, err := os.Lstat(filepath.Join(dir, ".claude", "skills", "not-a-skill")); err == nil {
+		t.Error("a folder without SKILL.md must not be linked")
 	}
 }

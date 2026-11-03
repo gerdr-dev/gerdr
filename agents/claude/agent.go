@@ -64,7 +64,8 @@ type Ext interface {
 	// Fingerprint changes when the settings do; each session restarts its process before its next turn.
 	Fingerprint() string
 	// Args are extra CLI arguments for a session's process (--mcp-config, --settings with skill overrides…).
-	Args(sessionID, cwd string) []string
+	// skillRoots: extra skill folders for this session (acpx.SkillRoots).
+	Args(sessionID, cwd string, skillRoots []string) []string
 	// MCPFingerprint fingerprints claude's own MCP configuration for cwd: a change restarts the process on /clear.
 	MCPFingerprint(cwd string) string
 }

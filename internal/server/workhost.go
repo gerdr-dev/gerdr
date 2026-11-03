@@ -38,7 +38,12 @@ func (h workHost) StartSession(ctx context.Context, project string, o work.Start
 	}
 	// FromCLI: started by code an agent may have written, so a permissive default mode isn't applied on its own (the
 	// same rule as `gerdr session new`); an explicit mode still is.
-	sess, err := s.Hub.Create(ctx, hub.CreateOptions{Agent: agent, Cwd: o.Cwd, Mode: o.Mode, Title: o.Title, Tags: o.Tags, ReportTo: reportTo, FromCLI: true})
+	// The Work's skills go with every session it starts: the worker reads the user's way of working as it needs it
+	var skills []string
+	if dir, err := s.workDir(project); err == nil {
+		skills = []string{filepath.Join(dir, work.SkillsDir)}
+	}
+	sess, err := s.Hub.Create(ctx, hub.CreateOptions{Agent: agent, Cwd: o.Cwd, Mode: o.Mode, Title: o.Title, Tags: o.Tags, ReportTo: reportTo, SkillDirs: skills, FromCLI: true})
 	if err != nil {
 		return nil, err
 	}
@@ -434,4 +439,11 @@ func withAttachments(text string, paths []string) ([]acp.ContentBlock, error) {
 		out = append(out, acp.TextBlock(text))
 	}
 	return out, nil
+}
+
+func (s *Server) workDir(project string) (string, error) {
+	if s.Work == nil {
+		return "", errors.New("no Work runner")
+	}
+	return s.Work.Dir(project)
 }

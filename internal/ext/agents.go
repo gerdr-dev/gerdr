@@ -123,7 +123,7 @@ func ClaudeMCP(cwd string) []MCPServer {
 }
 
 // ClaudeArgs：按设置给 claude 加的启动参数。cwd 用来找项目级的 skill / 插件（只用 gerdr 的时候要关掉它们）。
-func (m *Manager) ClaudeArgs(id, cwd string) []string {
+func (m *Manager) ClaudeArgs(id, cwd string, skillRoots []string) []string {
 	s := m.Settings()
 	var args []string
 	var own []MCPServer // gerdr 那份里开着的
@@ -158,7 +158,7 @@ func (m *Manager) ClaudeArgs(id, cwd string) []string {
 	}
 	settings := map[string]any{}
 	overrides := map[string]string{}
-	if dir, err := m.ClaudeAddDir(id, m.GerdrSkillsOn(s)); err == nil && dir != "" {
+	if dir, err := m.ClaudeAddDir(id, m.GerdrSkillsOn(s), skillRoots...); err == nil && dir != "" {
 		args = append(args, "--add-dir", dir)
 	}
 	// 插件里的 skill 按名字关不掉（实测），只能把插件整个关了 —— 它带的 hook / MCP 也跟着没了。

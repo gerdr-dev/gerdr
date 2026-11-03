@@ -439,3 +439,21 @@ const ShellHint = "If you need the user to run a shell command themselves (e.g.,
 
 // GUIHint：起 agent 时追加的全部说明（MediaHint + ShellHint）。
 const GUIHint = MediaHint + "\n\n" + ShellHint
+
+// SkillRoots: extra skill folders the hub gives a session (_meta gerdr.skillRoots: each holds <name>/SKILL.md), e.g.
+// the skills of the Work project that started it. The adapter adds them to what its agent loads.
+func SkillRoots(meta map[string]any) []string {
+	v, _ := GetMeta(meta, "skillRoots")
+	var out []string
+	switch l := v.(type) {
+	case []string:
+		out = l
+	case []any:
+		for _, x := range l {
+			if s, ok := x.(string); ok && s != "" {
+				out = append(out, s)
+			}
+		}
+	}
+	return out
+}

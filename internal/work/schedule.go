@@ -35,6 +35,10 @@ import (
 // running when its time comes again is skipped. The last run and the paused flag live outside the Work directory
 // (<GERDR_DIR>/state/work-schedules/<project>.json): they're this machine's, not the project's.
 
+// SkillsDir is the Work directory's folder of skills (<name>/SKILL.md + references): the user's way of working,
+// given to this project's Work agent and to every session the Work starts, which read them as they need.
+const SkillsDir = "skills"
+
 // SchedulesDir is the Work directory's folder of schedule files.
 const SchedulesDir = "schedules"
 

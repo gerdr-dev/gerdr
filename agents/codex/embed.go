@@ -13,6 +13,7 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/coder/acp-go-sdk"
 
+	"github.com/gerdr-dev/gerdr/acpx"
 	"github.com/gerdr-dev/gerdr/rpcline"
 	"github.com/gerdr-dev/gerdr/sysenv"
 )
@@ -20,7 +21,7 @@ import (
 // threadConfig is a thread's config override: Options.Ext's, then the client's MCP servers, StrictMCP and
 // SessionEnv. sid is "" for a thread being created.
 func (a *Agent) threadConfig(ctx context.Context, rpc *rpcline.Conn, sid, cwd string, meta map[string]any, servers []acp.McpServer) (map[string]any, string) {
-	cfg, fp := a.extConfig(ctx, rpc, cwd)
+	cfg, fp := a.extConfig(ctx, rpc, cwd, acpx.SkillRoots(meta))
 	set := func(k string, v any) {
 		if cfg == nil {
 			cfg = map[string]any{}

@@ -153,7 +153,7 @@ func (s *session) start(ctx context.Context) error {
 	s.mcpFP = s.a.mcpFingerprint(s.cwd)
 	if e := s.a.opts.Ext; e != nil {
 		s.extFP = e.Fingerprint()
-		o.extra = e.Args(s.id, s.cwd)
+		o.extra = e.Args(s.id, s.cwd, acpx.SkillRoots(s.meta))
 	}
 	o.extra = append(o.extra, s.clientMCPArgs()...)
 	o.extra = append(o.extra, s.a.opts.Args...)
