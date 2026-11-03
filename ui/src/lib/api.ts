@@ -212,8 +212,9 @@ export const api = {
   pending: () => req<PendingReq[]>("GET", "/api/pending"),
   setAwake: (b: { minutes?: number; until?: number; forever?: boolean }) => req<AwakeStatus>("PUT", "/api/awake", b),
   setupLid: () => req<AwakeStatus>("POST", "/api/awake/lid-setup", {}),
-  screen: () => req<ScreenStatus>("GET", "/api/screen"),
-  screenInput: (i: ScreenInput) => req("POST", "/api/screen/input", i),
+  /** host: another computer's screen, through this one (server/hosts.go) */
+  screen: (host?: string) => req<ScreenStatus>("GET", `/api/screen${hostQ(host)}`),
+  screenInput: (i: ScreenInput, host?: string) => req("POST", `/api/screen/input${hostQ(host)}`, i),
   /** Local only: shows macOS's permission prompts on this computer and opens the pane still missing. */
   screenRequestAccess: () => req<ScreenStatus>("POST", "/api/screen/request-access", {}),
   /** continueFrom: another agent's session whose conversation the new one carries on (hub/handoff.go) */

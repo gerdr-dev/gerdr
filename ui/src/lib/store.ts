@@ -19,7 +19,8 @@ export * from "./store/transcripts";
 type Dialog =
   | { kind: "palette" }
   | { kind: "help" }
-  | { kind: "screen" }
+  /** host: another computer's screen (docs/dev/MULTIHOST.md); unset = this one */
+  | { kind: "screen"; host?: string }
   | { kind: "settings"; tab?: string }
   | { kind: "sessions" }
   | { kind: "workspaces" }

@@ -245,3 +245,32 @@ func TestHostOpenHere(t *testing.T) {
 		}
 	}
 }
+
+// A WebSocket to another computer goes through as is (the remote screen's stream does this; tested with the host's
+// /ws, since the screen would capture this machine's real display).
+func TestHostWSProxy(t *testing.T) {
+	console, ch, _ := hostPair(t)
+	cs := httptest.NewServer(ch)
+	defer cs.Close()
+	base := "ws" + strings.TrimPrefix(cs.URL, "http")
+	if _, resp, err := websocket.DefaultDialer.Dial(base+"/h/mini/ws", nil); err == nil || resp == nil || resp.StatusCode != 401 {
+		t.Fatalf("no token should be a 401, got %v %v", resp, err)
+	}
+	conn, _, err := websocket.DefaultDialer.Dial(base+"/h/mini/ws", http.Header{"Authorization": {"Bearer " + console.Token}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	// Straight through: the host's own ids, not rewritten (this is the host's /ws, not the console's)
+	_ = conn.WriteJSON(map[string]any{"t": "watch", "ids": []string{"w1"}})
+	_ = conn.SetReadDeadline(time.Now().Add(10 * time.Second))
+	for {
+		_, b, err := conn.ReadMessage()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(b), `"t":"events"`) && strings.Contains(string(b), `"id":"w1"`) {
+			return
+		}
+	}
+}

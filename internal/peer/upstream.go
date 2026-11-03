@@ -3,8 +3,6 @@ package peer
 import (
 	"context"
 	"encoding/json"
-	"net/http"
-	"strings"
 	"sync"
 	"time"
 
@@ -100,15 +98,7 @@ func (u *Upstream) once(ctx context.Context) {
 	if !ok {
 		return
 	}
-	hdr := http.Header{}
-	hdr.Set("Cookie", h.Cookie+"="+h.Token)
-	hdr.Set("User-Agent", "Gerdr console")
-	d := websocket.Dialer{HandshakeTimeout: 10 * time.Second, EnableCompression: true,
-		NetDialContext: u.m.tr.DialContext, TLSClientConfig: u.m.tr.TLSClientConfig}
-	wsURL := "wss://" + strings.TrimPrefix(h.URL, "https://") + "/ws"
-	dctx, cancel := context.WithTimeout(ctx, 15*time.Second)
-	conn, resp, err := d.DialContext(dctx, wsURL, hdr)
-	cancel()
+	conn, resp, err := u.m.DialWS(ctx, u.host, "/ws", true)
 	if err != nil {
 		msg := err.Error()
 		if resp != nil && resp.StatusCode == 401 {

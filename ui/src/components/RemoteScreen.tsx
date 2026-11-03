@@ -81,6 +81,9 @@ function parseFrame(buf: ArrayBuffer): { h: Frame; body: number } {
 }
 
 export function RemoteScreen({ open }: { open: boolean }) {
+  // Another computer's screen (docs/dev/MULTIHOST.md): everything goes through this Gerdr with ?host=
+  const host = useStore((s) => (s.dialog?.kind === "screen" ? s.dialog.host : undefined));
+  const hostName = useStore((s) => (host ? (s.hosts.find((h) => h.id === host)?.name ?? host) : ""));
   const [st, setSt] = useState<ScreenStatus | null>(null);
   const [hasPic, setHasPic] = useState(false);
   const [size, setSize] = useState<{ w: number; h: number } | null>(null);
@@ -206,13 +209,13 @@ export function RemoteScreen({ open }: { open: boolean }) {
   const loadStatus = useCallback(
     () =>
       api
-        .screen()
+        .screen(host)
         .then((s) => {
           setSt(s);
           return s;
         })
         .catch(() => null),
-    [],
+    [host],
   );
   useEffect(() => {
     if (!open) return;
@@ -296,7 +299,9 @@ export function RemoteScreen({ open }: { open: boolean }) {
     const connect = () => {
       if (!alive || document.visibilityState !== "visible") return;
       const { w, q } = want();
-      const ws = new WebSocket(`${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}/api/screen/stream?w=${w}&q=${q}`);
+      const ws = new WebSocket(
+        `${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}/api/screen/stream?w=${w}&q=${q}${host ? `&host=${encodeURIComponent(host)}` : ""}`,
+      );
       ws.binaryType = "arraybuffer";
       wsRef.current = ws;
       let last = Date.now();
@@ -367,7 +372,7 @@ export function RemoteScreen({ open }: { open: boolean }) {
     if (sendWS({ t: "input", seq, input: i })) return;
     // Not connected (reconnecting): the plain endpoint still works, the picture catches up on reconnect
     try {
-      await api.screenInput(i);
+      await api.screenInput(i, host);
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : String(e));
       void loadStatus();
@@ -411,7 +416,7 @@ export function RemoteScreen({ open }: { open: boolean }) {
         aria-describedby={undefined}
       >
         <div className="flex flex-wrap items-center gap-1.5 pr-8">
-          <DialogTitle className="mr-1 text-[14px]">{t("remoteScreen.title")}</DialogTitle>
+          <DialogTitle className="mr-1 text-[14px]">{host ? t("remoteScreen.titleHost", { name: hostName }) : t("remoteScreen.title")}</DialogTitle>
           {ready && (
             <>
               <div className="flex rounded-md border p-0.5">
@@ -489,7 +494,7 @@ export function RemoteScreen({ open }: { open: boolean }) {
           )}
         </div>
 
-        {st && <Problems st={st} granting={granting} onGrant={grant} />}
+        {st && <Problems st={st} granting={granting} onGrant={host ? undefined : grant} />}
 
         {/* The picture: fit to the width, zoomed = wider than the box, pan by scrolling */}
         <div ref={boxRef} className="relative flex min-h-0 flex-1 touch-pan-x touch-pan-y overflow-auto overscroll-contain rounded-md border bg-muted/40">
@@ -582,20 +587,25 @@ export function RemoteScreen({ open }: { open: boolean }) {
   );
 }
 
-function Problems({ st, granting, onGrant }: { st: ScreenStatus; granting: boolean; onGrant: () => void }) {
-  if (!st.enabled) return <div className="text-[12px] text-warn">{t("remoteScreen.off")}</div>;
+/** onGrant: missing for another computer's screen: macOS's prompts would show on that computer, nobody here sees them */
+function Problems({ st, granting, onGrant }: { st: ScreenStatus; granting: boolean; onGrant?: () => void }) {
+  if (!st.enabled) return <div className="text-[12px] text-warn">{onGrant ? t("remoteScreen.off") : t("remoteScreen.offHost")}</div>;
   if (!st.supported) return <div className="text-[12px] text-warn">{t("remoteScreen.unsupported")}</div>;
   if (st.screen && st.input) return null;
   return (
     <div className="space-y-1 rounded-md border border-warn/40 px-2 py-1.5 text-[12px]">
       {!st.screen && <div className="text-warn">{t("remoteScreen.needScreen")}</div>}
       {!st.input && <div className="text-warn">{t("remoteScreen.needInput")}</div>}
-      <div className="flex items-center gap-2 text-muted-foreground">
-        <span className="min-w-0 flex-1">{t("remoteScreen.grantHint")}</span>
-        <Button size="sm" variant="outline" className="h-7 shrink-0 text-[12px]" disabled={granting} onClick={onGrant}>
-          {t("remoteScreen.grant")}
-        </Button>
-      </div>
+      {onGrant ? (
+        <div className="flex items-center gap-2 text-muted-foreground">
+          <span className="min-w-0 flex-1">{t("remoteScreen.grantHint")}</span>
+          <Button size="sm" variant="outline" className="h-7 shrink-0 text-[12px]" disabled={granting} onClick={onGrant}>
+            {t("remoteScreen.grant")}
+          </Button>
+        </div>
+      ) : (
+        <div className="text-muted-foreground">{t("remoteScreen.grantHost")}</div>
+      )}
     </div>
   );
 }

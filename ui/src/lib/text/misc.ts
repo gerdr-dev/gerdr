@@ -121,6 +121,10 @@ export const zh = {
 
   // RemoteScreen
   "remoteScreen.title": "远程屏幕",
+  "remoteScreen.titleHost": "{name} 的屏幕",
+  "remoteScreen.offHost": "那台电脑上「设置 → 远程访问 → 远程操作电脑」没开：要在那台上打开。",
+  "remoteScreen.grantHost": "要在那台电脑上授权（设置 → 远程访问 → 远程操作电脑），授权后那台的 Gerdr 后台要重启一次。",
+  "hostsSettings.screen": "屏幕",
   "remoteScreen.setting": "远程操作电脑",
   "remoteScreen.setting.hint":
     "在手机等别的设备上看这台电脑的屏幕，点一下、打几个字（比如打开一个软件输密码）。只传画面变化的部分，点完约零点几秒就能看到结果。要在系统设置里给 Gerdr.app「录屏与系统录音」、给 gerdr「辅助功能」两项权限。仅 macOS",
@@ -282,6 +286,11 @@ export const en: Record<keyof typeof zh, string> = {
 
   // RemoteScreen
   "remoteScreen.title": "Remote screen",
+  "remoteScreen.titleHost": "{name}'s screen",
+  "remoteScreen.offHost": "“Control this computer remotely” is off on that computer: turn it on there (Settings → Remote access).",
+  "remoteScreen.grantHost":
+    "The grants are given on that computer (Settings → Remote access → Control this computer remotely); its Gerdr background service then needs one restart.",
+  "hostsSettings.screen": "Screen",
   "remoteScreen.setting": "Control this computer remotely",
   "remoteScreen.setting.hint":
     "From a phone or another device, see this computer's screen and click or type a little (open an app and type its password, say). Only what changed on screen is sent, so a tap's result shows within a fraction of a second. In System Settings, Gerdr.app needs Screen & System Audio Recording and gerdr needs Accessibility. macOS only",

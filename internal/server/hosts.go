@@ -11,6 +11,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gorilla/websocket"
+
+	"github.com/gerdr-dev/gerdr/internal/auth"
 	"github.com/gerdr-dev/gerdr/internal/i18n"
 	"github.com/gerdr-dev/gerdr/internal/peer"
 )
@@ -423,6 +426,10 @@ func (s *Server) withHosts(next http.Handler) http.Handler {
 			}
 		}
 		if host, path, q := s.hostRoute(r); host != "" {
+			if websocket.IsWebSocketUpgrade(r) {
+				s.hostWSProxy(w, r, host, path, q)
+				return
+			}
 			s.hostProxy(w, r, host, path, q)
 			return
 		}
@@ -502,4 +509,36 @@ func (hw *hostWS) C() <-chan json.RawMessage {
 		return nil
 	}
 	return hw.out
+}
+
+// plainUpgrader: the same origin check as /ws, no permessage-deflate. What a host streams through here is the
+// remote screen's JPEG tiles, which don't compress (screenstream.go turns it off for the same reason).
+var plainUpgrader = websocket.Upgrader{ReadBufferSize: 4096, WriteBufferSize: 64 << 10, CheckOrigin: upgrader.CheckOrigin}
+
+// hostWSProxy: a WebSocket to another computer (`/api/screen/stream?host=`: driving that computer's screen from
+// here). Dialled first, so a host that refuses (screen control off there, offline) answers the browser with a real
+// status instead of an upgrade that closes at once.
+func (s *Server) hostWSProxy(w http.ResponseWriter, r *http.Request, host, path string, query url.Values) {
+	if len(query) > 0 {
+		path += "?" + query.Encode()
+	}
+	up, resp, err := s.Peers.DialWS(r.Context(), host, path, false)
+	if err != nil {
+		code := 502
+		if resp != nil && resp.StatusCode >= 400 {
+			code = resp.StatusCode
+		}
+		httpError(w, code, i18n.S("连不上那台电脑：", "Can't reach that computer: ")+err.Error())
+		return
+	}
+	client, err := plainUpgrader.Upgrade(w, r, nil)
+	if err != nil {
+		up.Close()
+		return
+	}
+	// Counts as a remote device looking (keeps this computer awake) the same way the screen itself would
+	if auth.FromRemote(r) && s.Awake != nil {
+		defer s.Awake.Hold()()
+	}
+	peer.Pipe(client, up)
 }

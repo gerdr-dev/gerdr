@@ -1,4 +1,4 @@
-import { Loader2, Server, Trash2 } from "lucide-react";
+import { Loader2, Monitor, Server, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { api } from "@/lib/api";
 import { t } from "@/lib/i18n";
-import { useStore } from "@/lib/store";
+import { set, useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
 /**
@@ -48,6 +48,11 @@ export function HostsSettings() {
             <div className="truncate font-mono text-[11px] text-muted-foreground">{h.url}</div>
             {h.error && <div className="truncate text-[11px] text-bad">{h.error}</div>}
           </div>
+          {/* Its screen, driven from here: needs "Control this computer remotely" on over there */}
+          <Button size="sm" variant="ghost" disabled={!h.online} onClick={() => set({ dialog: { kind: "screen", host: h.id } })}>
+            <Monitor className="size-3.5" />
+            {t("hostsSettings.screen")}
+          </Button>
           {/* Two clicks: its tabs stop working until it's paired again */}
           <Button
             size="sm"
