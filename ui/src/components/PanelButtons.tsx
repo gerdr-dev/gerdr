@@ -32,19 +32,22 @@ export function PanelButtons({ className, size = "rail" }: { className: (on: boo
       {panels.map((p) => (
         <PanelButton key={p.key} p={p} on={mode === "work" && p.name === cur} className={className} size={size} space={space} />
       ))}
-      {/* Add one: install it from a repository, or a blank one to build (WorkSourceDialog) */}
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button
-            aria-label={t("workSource.add")}
-            className={cn(className(false), "opacity-70 hover:opacity-100")}
-            onClick={() => set({ dialog: { kind: "workSource", project: space, action: "install" } })}
-          >
-            <Plus className={size === "rail" ? "size-3.5" : "size-3"} />
-          </button>
-        </TooltipTrigger>
-        <TooltipContent side={size === "rail" ? "right" : "bottom"}>{t("workSource.add")}</TooltipContent>
-      </Tooltip>
+      {/* Add one: install it from a repository, or a blank one to build (WorkSourceDialog). Not on a phone's row: it
+          crowds the switch there, and adding a panel is a rare thing done from Settings → Panels */}
+      {size === "rail" && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              aria-label={t("workSource.add")}
+              className={cn(className(false), "opacity-70 hover:opacity-100")}
+              onClick={() => set({ dialog: { kind: "workSource", project: space, action: "install" } })}
+            >
+              <Plus className={size === "rail" ? "size-3.5" : "size-3"} />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="right">{t("workSource.add")}</TooltipContent>
+        </Tooltip>
+      )}
     </>
   );
 }
