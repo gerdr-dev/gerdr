@@ -144,12 +144,20 @@ func (s *Server) workRoutes(mux *http.ServeMux) {
 			Project string `json:"project"`
 			Fn      string `json:"fn"`
 			Input   any    `json:"input"`
+			From    string `json:"from"` // the agent conversation running it (`gerdr work run`): ctx.caller.session
 		}
 		if err := decode(r, &b); err != nil {
 			httpError(w, 400, err.Error())
 			return
 		}
-		run := s.Work.Start(b.Project, b.Fn, b.Input)
+		// An agent running it from its repository (not a Work directory) gets the default project from its cwd; the
+		// project its conversation is in is the one it works for (a worker the lb board started: lb)
+		if b.From != "" && (b.Project == "" || b.Project == work.DefaultProject) {
+			if sp, ok := s.sessionSpace(SessionSpaces(s.Layout.Get()), b.From); ok && sp != "" {
+				b.Project = sp
+			}
+		}
+		run := s.Work.StartAs(b.Project, b.Fn, b.Input, b.From)
 		if strings.Contains(r.Header.Get("Accept"), "text/event-stream") {
 			streamRun(w, r, run)
 			return

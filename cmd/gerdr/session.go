@@ -1310,7 +1310,9 @@ prints its stack and exits 1. Ctrl-C stops the run. --input-file - reads the inp
 // workRun runs a function and follows it: progress and logs to stderr, the result to stdout, an error (with its stack)
 // to stderr and exit 1. Ctrl-C aborts the run (it would otherwise go on: runs don't belong to the request).
 func (c *apiClient) workRun(project, fn string, input any) error {
-	b, _ := json.Marshal(map[string]any{"project": project, "fn": fn, "input": input})
+	// From inside an agent: say which conversation runs it, so a Work tool's function sees ctx.caller.session even
+	// when called from the command line (an agent whose MCP tools didn't load), not only over `gerdr work mcp`
+	b, _ := json.Marshal(map[string]any{"project": project, "fn": fn, "input": input, "from": c.selfID()})
 	req, err := http.NewRequest("POST", c.base+"/api/work/run", bytes.NewReader(b))
 	if err != nil {
 		return err

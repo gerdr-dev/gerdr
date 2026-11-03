@@ -65,7 +65,12 @@ func (r *Runner) Tools(project string) ([]Tool, error) {
 		if err != nil {
 			continue
 		}
-		decl, ok := exports.Get("tools").Export().(map[string]any)
+		// Most files declare no tools: Get gives nil then, and Export on it panics (it took the whole endpoint down)
+		v := exports.Get("tools")
+		if v == nil || goja.IsUndefined(v) || goja.IsNull(v) {
+			continue
+		}
+		decl, ok := v.Export().(map[string]any)
 		if !ok {
 			continue
 		}

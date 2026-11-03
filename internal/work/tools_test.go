@@ -14,6 +14,8 @@ func TestTools(t *testing.T) {
 };
 export function ask(input: any, ctx: any) { return { what: input.what, by: ctx.caller.session } }
 export function notATool() { return 1 }`,
+		// Files without a tools export are the common case and must be skipped, not crash the listing
+		"plain.ts": `export function hello() { return 1 }`,
 	})
 	tools, err := r.Tools("")
 	if err != nil {
