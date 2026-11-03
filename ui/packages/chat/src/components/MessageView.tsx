@@ -166,6 +166,9 @@ export const MessageView = memo(function MessageView({
     const canRewind = !!onRewind && !!meta?.messageId && (!meta?.steer || steerRewind) && !meta?.sending && !running;
     // 元信息（时间、来源）在气泡下面一行小灰字（照 Astryx ChatMessageMetadata）；一摞连发的只在最后一条下面写时间
     const showMeta = !stackNext || !!meta?.from || !!meta?.steer;
+    // Nothing said, only `!` output went along (an empty send after a command, see Composer.shellReady): the command
+    // block above already shows what was sent, so draw no bubble at all
+    if (!text && !all.length) return null;
     return (
       // Sending (the server hasn't logged it yet, see Transcript.sending): half transparent. The logged copy keeps the row's
       // key (messageId), so the same element fades in; slow enough to be seen (asked for: the default 150ms read as a jump)
@@ -216,8 +219,6 @@ export const MessageView = memo(function MessageView({
               </div>
             )}
             {text}
-            {/* Nothing said, only `!` output went along (an empty send after a command, see Composer.shellReady) */}
-            {!text && !all.length && <span className="italic opacity-80">{t("msg.shellOnly")}</span>}
           </MessageContent>
         </div>
         {showMeta && (
