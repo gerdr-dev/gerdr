@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -114,7 +115,16 @@ func spawn(o spawnOpts, log *slog.Logger, onLine func(map[string]json.RawMessage
 	// 只剩 result 能当「这一轮完了」的信号 —— 而插话会把正在跑的那次生成截断、先出一个
 	// result，于是插话之后这一轮被提前判成结束（实测：插进去的话没人等，回复全丢）。
 	// 官方 SDK 起 CLI 时也带着它。
-	cmd.Env = append(sysenv.ChildEnv("CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS=1"), o.env...)
+	extraEnv := []string{"CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS=1"}
+	// A request whose connection died silently (Wi-Fi switched, laptop changed networks, a TUN proxy that keeps
+	// the dead socket looking ESTABLISHED) is only noticed by the CLI's byte watchdog, which waits 180s of no
+	// bytes by default before retrying — measured: a turn sat on "Synthesizing" ~3.5 min after a reconnect.
+	// A live stream is never that quiet (the API sends ping events while the model thinks), so 60s is safe;
+	// a false fire only costs one retry. A value the user set in their own environment wins.
+	if os.Getenv("CLAUDE_BYTE_STREAM_IDLE_TIMEOUT_MS") == "" {
+		extraEnv = append(extraEnv, "CLAUDE_BYTE_STREAM_IDLE_TIMEOUT_MS=60000")
+	}
+	cmd.Env = append(sysenv.ChildEnv(extraEnv...), o.env...)
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, err

@@ -16,10 +16,15 @@ import (
 // the UI can count down (a bare "9 秒后" would stay at 9, and a replayed log would restart the count).
 func NoticeFromInfo(g map[string]any, now int64) *Event {
 	n, _ := g["notice"].(string)
+	lv, _ := g["noticeLevel"].(string)
 	if n == "" {
+		// An empty retry notice: the retry got through, fold the retry line (the UI's running status already says
+		// the agent is working; the line used to hang on until the first output, ~30s while the model re-thinks).
+		if _, has := g["notice"]; has && lv == "retry" {
+			return &Event{Kind: EvNotice, Level: lv}
+		}
 		return nil
 	}
-	lv, _ := g["noticeLevel"].(string)
 	if lv == "" {
 		lv = "warn"
 	}

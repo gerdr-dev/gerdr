@@ -651,6 +651,15 @@ export class Transcript {
         break;
       }
       case "notice": {
+        // An empty retry notice = the retry got through (the request is streaming again): fold the retry line now.
+        // Waiting for the first output left it up ~30s while the model re-thought, under a running status anyway.
+        if (e.level === "retry" && !e.text) {
+          if (this.retryLoc) {
+            this.messages = [...this.messages];
+            this.clearRetry();
+          }
+          break;
+        }
         this.messages = [...this.messages];
         const data = { level: e.level ?? "info", text: e.text ?? "", until: e.until };
         if (data.level === "retry" && this.retryLoc) {

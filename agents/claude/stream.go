@@ -210,6 +210,9 @@ func (s *session) onSystem(ctx context.Context, m map[string]json.RawMessage, ra
 			Error       string `json:"error"`
 		}
 		_ = json.Unmarshal(raw, &r)
+		s.mu.Lock()
+		s.retrying = true
+		s.mu.Unlock()
 		why := i18n.S("连不上 API", "Can't reach the API")
 		if r.ErrorStatus != nil {
 			why = fmt.Sprintf(i18n.S("API 返回 %d", "API returned %d"), *r.ErrorStatus)
@@ -418,6 +421,20 @@ func (s *session) onStreamEvent(ctx context.Context, raw json.RawMessage, apiID 
 	}
 	// 上下文用量 = 这次请求送进去的输入（含缓存读写）。窗口大小在每轮的 result 里（modelUsage.contextWindow）。
 	if ev.Type == "message_start" {
+		s.mu.Lock()
+		reconnected := s.retrying
+		s.retrying = false
+		s.mu.Unlock()
+		if reconnected {
+			// The retry got through: an empty retry notice folds the retry line (chatlog.NoticeFromInfo). The UI used
+			// to fold it only on the first output, but the model starts the answer over (what it had thought before
+			// the drop is lost) and its thinking isn't streamed, so "retrying (1/10)" stayed up ~30s after the
+			// connection was back (measured). The running status already shows it's working.
+			s.update(ctx, acp.SessionUpdate{SessionInfoUpdate: &acp.SessionSessionInfoUpdate{Meta: acpx.Meta(map[string]any{
+				"notice":      "",
+				"noticeLevel": "retry",
+			})}})
+		}
 		if n := ev.Message.Usage.Input + ev.Message.Usage.CacheRead + ev.Message.Usage.CacheCreate; n > 0 {
 			s.mu.Lock()
 			s.ctxTokens = n

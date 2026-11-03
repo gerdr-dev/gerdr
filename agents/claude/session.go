@@ -55,6 +55,8 @@ type session struct {
 	openInputs int // 正在等人回答的审批 / 提问数（插话的优先级看它）
 	lastUsed   time.Time
 	sawState   bool // 这个进程报过 session_state_changed（老版本 CLI 没有，退回看 result）
+	// retrying: an api_retry notice is up and no response has started since. The next message_start rewrites it.
+	retrying bool
 
 	tasks                map[string]*acpx.Task // 后台任务 / 子 agent（tasks.go）
 	auto                 bool                  // CLI 自己开的一轮正在跑（没有 session/prompt 对应）

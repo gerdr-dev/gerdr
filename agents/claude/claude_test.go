@@ -11,6 +11,7 @@ import (
 
 	"github.com/coder/acp-go-sdk"
 	"github.com/gerdr-dev/gerdr/acpx"
+	"github.com/gerdr-dev/gerdr/chatlog"
 )
 
 func TestDescribeTool(t *testing.T) {
@@ -420,5 +421,40 @@ func TestAPIErrorMessageNotShownTwice(t *testing.T) {
 	s.mu.Unlock()
 	if !strings.Contains(errText, "Request not allowed") {
 		t.Fatalf("turn error lost: %q", errText)
+	}
+}
+
+// A dropped connection: the CLI reports api_retry, then the retried request starts streaming. The retry line has to
+// fold as soon as the response starts (message_start), not when the first text arrives — the model starts the
+// answer over and its thinking isn't streamed, so that took ~30s with "retrying" still up.
+func TestRetryNoticeFoldsOnReconnect(t *testing.T) {
+	a := &Agent{opts: Options{Env: []string{"CLAUDE_CONFIG_DIR=" + t.TempDir()}}, sessions: map[string]*session{}, log: slog.New(slog.DiscardHandler)}
+	s := a.newSession("11111111-2222-4333-8444-555555555555", "/p", nil)
+	var notices []map[string]any
+	s.emitHook = func(u acp.SessionUpdate) {
+		if u.SessionInfoUpdate != nil {
+			if g, ok := u.SessionInfoUpdate.Meta[acpx.MetaKey].(map[string]any); ok && g["notice"] != nil {
+				notices = append(notices, g)
+			}
+		}
+	}
+	line := func(js string) {
+		var m map[string]json.RawMessage
+		if err := json.Unmarshal([]byte(js), &m); err != nil {
+			t.Fatal(err)
+		}
+		s.onLine(nil, m, []byte(js))
+	}
+	start := `{"type":"stream_event","event":{"type":"message_start","message":{"usage":{"input_tokens":10}}}}`
+	line(start) // no retry pending: nothing to rewrite
+	line(`{"type":"system","subtype":"api_retry","attempt":1,"max_retries":10,"retry_delay_ms":600,"error_status":null,"error":"unknown"}`)
+	line(start)
+	line(start) // only once
+	if len(notices) != 2 {
+		t.Fatalf("want the retry line and one fold, got %v", notices)
+	}
+	ev := chatlog.NoticeFromInfo(notices[1], 0)
+	if ev == nil || ev.Level != "retry" || ev.Text != "" || ev.Until != 0 {
+		t.Fatalf("fold = %v -> %+v", notices[1], ev)
 	}
 }
