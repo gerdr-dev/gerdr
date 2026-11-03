@@ -606,7 +606,9 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
   a palette colour), set from its right-click "change icon" (`/api/work/panels/icon` writes the site's own file, so it
   travels with the panel); a value it doesn't know, or a sprite whose add-on isn't loaded, draws the default. The agent column folds away per Work
   (`gerdr.workChatHidden`) to a strip with the way back and the agent's status; the chat stays mounted. Settings → Panels (`PanelSettings`, `GET /api/work/panels`) has them all per project: add,
-  icon, update, remove. A project's own Work can be removed too: it goes to the trash and a `<dir>.removed` mark keeps
+  icon, update, remove; `gerdr panel …` does the same for agents (cmd/gerdr panelCmd, documented in the built-in gerdr
+  skill). A panel that isn't there is never made on demand (only a project's own is): a request still on its way from
+  the page that showed a removed panel brought it back blank. A project's own Work can be removed too: it goes to the trash and a `<dir>.removed` mark keeps
   `Ensure` from making it again until it's restored (blank). A panel's right-click updates it (`git pull --rebase --autostash`: the user's own changes, their workflow
   skill above all, stay on top of what the published panel brings; a conflict is aborted and reported) or removes it (to
   `trash/panels/`). esbuild writes UTF-8 (`Charset`): a panel named 任务看板 has it in its module paths, and escaped

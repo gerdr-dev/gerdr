@@ -261,6 +261,13 @@ func (r *Runner) Ensure(project string) (string, error) {
 	if _, err := os.Stat(removedMark(dir)); err == nil {
 		return "", ErrWorkRemoved
 	}
+	// Only a project's own Work is made on demand. A panel is added on purpose (Install / NewPanel): one that isn't
+	// there was removed, and a request still on its way for it (the page that showed it) mustn't bring it back blank.
+	if _, panel := SplitKey(project); panel != "" {
+		if _, err := os.Stat(dir); err != nil {
+			return "", fmt.Errorf("no panel %q (removed?)", panel)
+		}
+	}
 	r.mu.Lock()
 	done := r.installed[dir]
 	r.mu.Unlock()

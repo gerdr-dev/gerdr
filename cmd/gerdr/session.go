@@ -1307,6 +1307,157 @@ prints its stack and exits 1. Ctrl-C stops the run. --input-file - reads the inp
 	return cmd
 }
 
+// panelCmd: `gerdr panel`, a project's panels (its own and the ones added: work/source.go), the same as
+// Settings → Panels. The project is the current directory's (or --project); a panel is named by its name, the project's
+// own by the project's id, or any by its whole key ("<project>/<name>").
+func panelCmd() *cobra.Command {
+	var projectArg string
+	which := func() string {
+		if projectArg != "" {
+			return projectArg
+		}
+		wd, _ := os.Getwd()
+		return work.New(config.FromEnv().Dir, nil).ProjectOf(wd)
+	}
+	project := func() string { p, _ := work.SplitKey(which()); return p }
+	keyOf := func(arg string) string {
+		if strings.Contains(arg, "/") || arg == "" || arg == project() {
+			if arg == "" {
+				return project()
+			}
+			return arg
+		}
+		return work.PanelKey(project(), arg)
+	}
+	client := func() (*apiClient, error) { return newAPIClient() }
+	cmd := &cobra.Command{Use: "panel", Short: "A project's panels: list, install from git, add a blank one, update, change the icon, remove"}
+	cmd.PersistentFlags().StringVar(&projectArg, "project", "", "project id (default: the one the current directory belongs to)")
+	cmd.AddCommand(&cobra.Command{
+		Use:   "list",
+		Short: "The project's panels (JSON): key, name, ui.json (title, icon, color), where it came from",
+		Args:  cobra.NoArgs,
+		RunE: func(_ *cobra.Command, _ []string) error {
+			c, err := client()
+			if err != nil {
+				return err
+			}
+			var out map[string]any
+			if err := c.do("GET", "/api/work/panels?project="+url.QueryEscape(project()), nil, &out); err != nil {
+				return err
+			}
+			printJSON(out)
+			return nil
+		},
+	})
+	var name string
+	install := &cobra.Command{
+		Use:   "install <git url>",
+		Short: "Add a panel cloned from a git repository (owner/repo, a GitHub URL, file://…). Its code runs here: functions run commands, schedules start by themselves",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			c, err := client()
+			if err != nil {
+				return err
+			}
+			var out map[string]any
+			if err := c.do("POST", "/api/work/install", map[string]any{"project": project(), "url": args[0], "name": name}, &out); err != nil {
+				return err
+			}
+			printJSON(out)
+			return nil
+		},
+	}
+	install.Flags().StringVar(&name, "name", "", "the panel's name (default: the repository's)")
+	cmd.AddCommand(install)
+	cmd.AddCommand(&cobra.Command{
+		Use:   "new <name>",
+		Short: "Add a blank panel for its agent to build",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			c, err := client()
+			if err != nil {
+				return err
+			}
+			var out map[string]any
+			if err := c.do("POST", "/api/work/panels", map[string]any{"project": project(), "name": args[0]}, &out); err != nil {
+				return err
+			}
+			printJSON(out)
+			return nil
+		},
+	})
+	cmd.AddCommand(&cobra.Command{
+		Use:   "update [panel]",
+		Short: "Pull the panel's repository; the user's own changes are rebased on top (default: the panel of the current directory)",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			c, err := client()
+			if err != nil {
+				return err
+			}
+			key := which()
+			if len(args) == 1 {
+				key = keyOf(args[0])
+			}
+			var out map[string]any
+			if err := c.do("POST", "/api/work/update", map[string]any{"project": key}, &out); err != nil {
+				return err
+			}
+			printJSON(out)
+			return nil
+		},
+	})
+	var color string
+	icon := &cobra.Command{
+		Use:   "icon <panel> [icon]",
+		Short: "Set the panel's rail icon: a glyph or line icon key (kanban, rocket, orbit…) or sprite:<key> from an add-on; none = the default",
+		Args:  cobra.RangeArgs(1, 2),
+		RunE: func(_ *cobra.Command, args []string) error {
+			c, err := client()
+			if err != nil {
+				return err
+			}
+			ic := ""
+			if len(args) == 2 {
+				ic = args[1]
+			}
+			return c.do("POST", "/api/work/panels/icon", map[string]any{"key": keyOf(args[0]), "icon": ic, "color": color}, nil)
+		},
+	}
+	icon.Flags().StringVar(&color, "color", "", "a palette colour for a built-in icon (as in Settings → Agent)")
+	cmd.AddCommand(icon)
+	cmd.AddCommand(&cobra.Command{
+		Use:   "rm <panel>",
+		Short: "Remove a panel: it moves to the trash, data and all (the project's id removes its own panel; restore brings a blank one)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			c, err := client()
+			if err != nil {
+				return err
+			}
+			var out map[string]any
+			if err := c.do("POST", "/api/work/panels/remove", map[string]any{"key": keyOf(args[0])}, &out); err != nil {
+				return err
+			}
+			printJSON(out)
+			return nil
+		},
+	})
+	cmd.AddCommand(&cobra.Command{
+		Use:   "restore",
+		Short: "Give the project its own panel back after it was removed (a blank one)",
+		Args:  cobra.NoArgs,
+		RunE: func(_ *cobra.Command, _ []string) error {
+			c, err := client()
+			if err != nil {
+				return err
+			}
+			return c.do("POST", "/api/work/panels/restore", map[string]any{"project": project()}, nil)
+		},
+	})
+	return cmd
+}
+
 // workRun runs a function and follows it: progress and logs to stderr, the result to stdout, an error (with its stack)
 // to stderr and exit 1. Ctrl-C aborts the run (it would otherwise go on: runs don't belong to the request).
 func (c *apiClient) workRun(project, fn string, input any) error {

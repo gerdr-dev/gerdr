@@ -1,6 +1,6 @@
 ---
 name: gerdr
-description: "Coordinate other coding-agent sessions inside Gerdr (Claude Code / Codex sessions in the Gerdr GUI): list sessions, start a new agent session next to you, hand it a task, wait for it, read its reply, or message an existing session. Use when the user asks you to delegate to / start / ask / check on another agent or session in Gerdr, or to run several agents in parallel. Also for arranging Gerdr's layout: sorting tabs into workspaces, splitting panes together, renaming or reordering workspaces / tabs. Also for changing Gerdr's own settings (theme, default agent / mode / model, shortcuts, model providers) with `gerdr config`, and for setting up agents (roles) with their own prompt, skills and MCP servers (`gerdr agent`, `gerdr skill`, `gerdr mcp`). Also for add-ons (`gerdr addon`): browsing add-on stores, installing / updating / removing add-ons, switching them on or off, changing their settings. Requires GERDR_ENV=1."
+description: "Coordinate other coding-agent sessions inside Gerdr (Claude Code / Codex sessions in the Gerdr GUI): list sessions, start a new agent session next to you, hand it a task, wait for it, read its reply, or message an existing session. Use when the user asks you to delegate to / start / ask / check on another agent or session in Gerdr, or to run several agents in parallel. Also for arranging Gerdr's layout: sorting tabs into workspaces, splitting panes together, renaming or reordering workspaces / tabs. Also for changing Gerdr's own settings (theme, default agent / mode / model, shortcuts, model providers) with `gerdr config`, and for setting up agents (roles) with their own prompt, skills and MCP servers (`gerdr agent`, `gerdr skill`, `gerdr mcp`). Also for add-ons (`gerdr addon`): browsing add-on stores, installing / updating / removing add-ons, switching them on or off, changing their settings. Also for a project's panels (`gerdr panel`): listing, installing one from a git repository, adding a blank one, updating, changing its icon, removing. Requires GERDR_ENV=1."
 ---
 
 # Gerdr：和其他会话协作
@@ -300,6 +300,22 @@ gerdr addon store add owner/repo        # or an absolute folder; store rm / stor
 - Done when `gerdr addon list` shows it with the expected `enabled` and no `error`. A non-empty `error` is a broken
   addon.json or code that doesn't build; a service add-on's stderr is in its `log`.
 - Writing a new add-on: read `~/.gerdr/addons/GUIDE.md` first.
+
+## Panels
+
+Besides Code, a project has panels: each a whole app of its own (pages, local functions, skills, schedules, data, its
+agent), level with Code on the strip at the left. `gerdr panel` manages them, the same as Settings → Panels; the
+project is the current directory's (or `--project`). A panel is named by its name, the project's own by the project id.
+
+```bash
+gerdr panel list                                   # key, name, ui.json (title, icon, color), where it came from
+gerdr panel install owner/repo [--name board]      # clone a published panel (its code runs here: confirm with the user)
+gerdr panel new <name>                             # a blank one, for its agent to build
+gerdr panel update [<panel>]                       # git pull; the user's own changes stay on top
+gerdr panel icon <panel> kanban [--color blue]     # glyph / line icon key, or sprite:<key>; no icon = default
+gerdr panel rm <panel>                             # to the trash, data and all
+gerdr panel restore                                # the project's own panel back (blank) after removing it
+```
 
 ## 并行
 

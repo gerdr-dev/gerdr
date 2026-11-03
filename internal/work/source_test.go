@@ -136,4 +136,11 @@ func TestPanels(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(trash, "AGENTS.md")); err != nil {
 		t.Error("removed panel isn't in the trash")
 	}
+	// A request for it after it's gone (the page that showed it) must not make it again
+	if _, err := r.Ensure(key); err == nil {
+		t.Error("a removed panel came back")
+	}
+	if _, err := os.Stat(pd); err == nil {
+		t.Error("a removed panel's directory was made again")
+	}
 }
