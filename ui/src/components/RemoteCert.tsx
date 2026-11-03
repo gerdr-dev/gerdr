@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, type RemoteCert as Cert } from "@/lib/api";
+import { api, type HostRecord, type RemoteCert as Cert } from "@/lib/api";
 import { t } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -67,28 +67,39 @@ export function RemoteCert({ host, expires, onSaved }: { host: string; expires?:
     }
   };
 
+  // Drawn inside the address box (RemoteSettings), under the relay line: the certificate is what makes that address
+  // open in a browser, so it reads as part of it rather than a section of its own.
   return (
-    <div className="space-y-1.5">
-      <div className="flex items-center justify-between">
-        <div className="text-[13px] font-medium">{t("remoteCert.title")}</div>
+    <div className="space-y-2 border-t pt-2 text-[12px]">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 space-y-0.5">
+          <div>
+            <span className="font-medium">{t("remoteCert.title")}</span>
+            {configured && !editing && (
+              <span className="text-muted-foreground">
+                {" · "}
+                {c.tlsCert
+                  ? rich(t("remoteCert.ownCert"), { path: <span className="font-mono text-[11px]">{c.tlsCert}</span> })
+                  : t("remoteCert.autoCert", { provider: label })}
+              </span>
+            )}
+          </div>
+          {!editing && expires && <div className="text-muted-foreground">{t("remoteCert.expires", { date: new Date(expires).toLocaleDateString() })}</div>}
+        </div>
         {configured && !editing && (
-          <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
+          <Button size="sm" variant="outline" className="shrink-0" onClick={() => setEditing(true)}>
             {t("remoteCert.change")}
           </Button>
         )}
       </div>
       {!editing ? (
-        <div className="space-y-1 rounded-md border p-3">
-          <div>
-            {c.tlsCert
-              ? rich(t("remoteCert.ownCert"), { path: <span className="font-mono text-[12px]">{c.tlsCert}</span> })
-              : t("remoteCert.autoCert", { provider: label })}
-          </div>
-          {expires && <div className="text-[12px] text-muted-foreground">{t("remoteCert.expires", { date: new Date(expires).toLocaleDateString() })}</div>}
+        <>
+          {/* keyed on the provider: saving another one changes whether the button can be offered */}
+          <HostA key={c.dns} host={host} provider={label} />
           {c.dns && c.accountURI && <CAA host={host} account={c.accountURI} auto={c.caaAuto ? label : ""} />}
-        </div>
+        </>
       ) : (
-        <div className="space-y-3 rounded-md border p-3">
+        <div className="space-y-3">
           <div className="text-[12px] text-muted-foreground">{t("remoteCert.intro", { host })}</div>
           <div className="flex gap-2">
             <Button size="sm" variant={mode === "dns" ? "default" : "outline"} onClick={() => setMode("dns")}>
@@ -215,6 +226,57 @@ function CAA({ host, account, auto }: { host: string; account: string; auto: str
         )}
       </div>
       <pre className="overflow-x-auto rounded-sm bg-muted p-2 font-mono text-[11px] select-all">{rec}</pre>
+      {err && <div className="text-bad">{err}</div>}
+    </div>
+  );
+}
+
+// The host's A record: phones connect to the name and the relay forwards it here by SNI, so without it the address
+// says "connected" and the phone can't open it. Shows nothing while it points at the relay alone. The backend checks
+// through the DNS provider when it can (it also sees a Cloudflare proxy, which public DNS hides behind Cloudflare's
+// IPs) and offers the button then; otherwise it compares public DNS and the record is there to copy.
+function HostA({ host, provider }: { host: string; provider: string }) {
+  const [h, setH] = useState<HostRecord | null>(null);
+  const [added, setAdded] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  useEffect(() => {
+    api
+      .remoteCheckHost()
+      .then(setH)
+      .catch((e) => setErr(t("remoteCert.hostCheckFailed", { host, error: (e as Error).message })));
+  }, [host]);
+  const fix = async () => {
+    setBusy(true);
+    setErr("");
+    try {
+      setH(await api.remoteFixHost());
+      setAdded(true);
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (added && h) return <div className="text-ok">{t("remoteCert.hostAdded", { provider, host, ip: h.want })}</div>;
+  if (!h || !h.missing) return err ? <div className="text-bad">{err}</div> : null;
+  const current = h.current ?? [];
+  const hint = !current.length
+    ? t("remoteCert.hostNone", { host })
+    : current.includes(h.want)
+      ? t("remoteCert.hostPartial", { host })
+      : t("remoteCert.hostWrong", { host, current: current.join(", "), ip: h.want });
+  return (
+    <div className="space-y-1 text-warn">
+      <div className="flex items-center justify-between gap-3">
+        <div>{hint}</div>
+        {h.auto && (
+          <Button size="sm" variant="outline" className="shrink-0" disabled={busy} onClick={fix}>
+            {busy ? t("remoteCert.adding") : current.length ? t("remoteCert.hostFix") : t("remoteCert.addCAA")}
+          </Button>
+        )}
+      </div>
+      <pre className="overflow-x-auto rounded-sm bg-muted p-2 font-mono text-[11px] text-foreground select-all">{`${host}.  A  ${h.want}`}</pre>
       {err && <div className="text-bad">{err}</div>}
     </div>
   );

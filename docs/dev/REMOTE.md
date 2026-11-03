@@ -35,6 +35,24 @@ has its own small client there, built on the SDK lego already links. It never to
 there it reads the set and writes it back with ours appended. Only Cloudflare and DigitalOcean have a fake-API test;
 the SDK-based ones (AliDNS, DNSPod, Route 53, Huawei) were not exercised against the real APIs.
 
+### The host's A record
+
+Phones connect to the host name, so it must point at the relay VPS. The settings page checks this under the address
+(`GET /api/remote/dns/host`, local only) and, with a DNS provider configured for the certificate, writes it
+(`POST`, the same per-provider clients as CAA, `acme.SetA`). Things that look like they'd work and don't:
+
+- **A, not a CNAME to the relay's name.** A CNAME can't share its name with the CAA record, and CAA lookups follow
+  the alias: the relay's owner would decide who may issue for this name, which is what CAA is there to prevent.
+  The cost: if the relay changes IP, the record has to be fixed again (the page then says it points elsewhere).
+- **Our A record is the only one on the name.** Writing it removes the other A records there (another address would
+  send some phones elsewhere); on Cloudflare an A record with the proxy on counts as wrong (Cloudflare would end TLS,
+  the relay only routes by SNI) and gets the proxy turned off. AAAA records are left alone.
+- **IPs come from DNS-over-HTTPS, not the system resolver** (`acme.LookupA`): with a proxy in fake-IP mode (Clash,
+  Surge…) the system resolver answers 198.18.x.x, which would get written into DNS as the relay's IP.
+- **A CAA on the name switches off a wildcard A for it** (a name with any record of its own no longer matches `*.`).
+  Adding CAA through the button on a host that relied on `*.example.com` makes it stop resolving; the A check then
+  shows it missing.
+
 中继那边的 SNI 路由（Traefik 的 `HostSNI` 规则之类）也要放行 Gerdr 的名字 —— 漏了的表现是「注册成功、隧道已连上、
 手机打不开」，Gerdr 这边一个字都不报。
 

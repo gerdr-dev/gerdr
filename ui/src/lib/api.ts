@@ -133,8 +133,7 @@ export type AwakeStatus = {
   remote: number;
   graceUntil: number;
   manualUntil: number;
-  /** 合盖也不睡：开关 / 授权过没有 / 现在开着没 / 开不起来的原因 / 电量低放手了 */
-  lid: boolean;
+  /** Lid closed too: authorized yet / on right now / why it couldn't turn on / let go on low battery */
   lidReady: boolean;
   lidOn: boolean;
   lidErr: string;
@@ -376,6 +375,8 @@ export const api = {
   remoteSaveCert: (c: RemoteCertInput) => req("POST", "/api/remote/cert", c),
   remoteCheckCAA: () => req<{ missing: boolean }>("GET", "/api/remote/cert/caa"),
   remoteAddCAA: () => req<{ missing: boolean }>("POST", "/api/remote/cert/caa"),
+  remoteCheckHost: () => req<HostRecord>("GET", "/api/remote/dns/host"),
+  remoteFixHost: () => req<HostRecord>("POST", "/api/remote/dns/host"),
   /** 连上 / 移除远程访问：本机专用，当场生效不用重启 */
   remoteConnect: (relayURL: string, host: string, invite: string) => req("POST", "/api/remote/connect", { relayURL, host, invite }),
   remoteDisconnect: () => req<{ revoked: number; passkeys: number }>("POST", "/api/remote/disconnect", {}),
@@ -429,6 +430,8 @@ export type RemoteCert = {
   accountURI: string;
   caaAuto: boolean;
 };
+/** The host's A record against the relay's IP (remote.HostRecord). auto: the DNS provider can write it. */
+export type HostRecord = { want: string; current: string[] | null; missing: boolean; auto: boolean };
 export type RemoteCertInput = { dns: string; email: string; staging: boolean; env: Record<string, string>; tlsCert: string; tlsKey: string };
 /** temp：配对码进来的临时设备，expires 定死、不续期；在那台设备上过一次 passkey 就转正 */
 export type RemoteDevice = { id: string; label: string; created: string; lastSeen: string; lastIp: string; expires: string; temp?: boolean };

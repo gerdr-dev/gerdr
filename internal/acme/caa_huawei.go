@@ -15,12 +15,12 @@ import (
 	hwregion "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/dns/v2/region"
 )
 
-// huaweiCAA: Huawei Cloud DNS keeps all CAA values of a name in one record set, so "add" is read the set,
-// append, update (or create the set). The SDK takes no context; the 30s HTTP timeout stands in for it.
+// huaweiRecord: Huawei Cloud DNS keeps all values of a name and type in one record set, so "add" is read the set,
+// append (or, for only() types, replace), update (or create the set). The SDK takes no context; the 30s HTTP timeout stands in for it.
 //
 // Calls go through HcClient.Sync with the generated request defs, as lego does, instead of hwdns.DnsClient:
 // that type's hundreds of methods would all be linked in.
-func huaweiCAA(_ context.Context, host, value string, apply bool) (bool, error) {
+func huaweiRecord(_ context.Context, host string, want rec, apply bool) (bool, error) {
 	id, secret, region := credEnv("HUAWEICLOUD_ACCESS_KEY_ID"), credEnv("HUAWEICLOUD_SECRET_ACCESS_KEY"), credEnv("HUAWEICLOUD_REGION")
 	if id == "" || secret == "" || region == "" {
 		return false, errors.New(i18n.S("没找到华为云的 Access Key / Region", "no Huawei Cloud access key / region found"))
@@ -60,13 +60,13 @@ func huaweiCAA(_ context.Context, host, value string, apply bool) (bool, error) 
 	if err != nil {
 		return false, err
 	}
-	zoneID, fqdn, typ := ids[zone], host+".", "CAA"
+	zoneID, fqdn, typ := ids[zone], host+".", want.Type
 
 	rr, err := c.Sync(&hwmodel.ListRecordSetsByZoneRequest{ZoneId: zoneID, Name: &fqdn, Type: &typ}, hwdns.GenReqDefForListRecordSetsByZone())
 	if err != nil {
 		return false, fmt.Errorf(i18n.S("华为云读记录失败：%w", "Huawei Cloud: reading records: %w"), err)
 	}
-	rec := caaRecord(value)
+	rec := want.text()
 	if sets := rr.(*hwmodel.ListRecordSetsByZoneResponse).Recordsets; sets != nil {
 		for _, set := range *sets {
 			// the name filter is fuzzy
@@ -77,15 +77,21 @@ func huaweiCAA(_ context.Context, host, value string, apply bool) (bool, error) 
 			if set.Records != nil {
 				vals = *set.Records
 			}
+			var have []held
 			for _, v := range vals {
-				if sameCAA(v, value) {
-					return false, nil
-				}
+				have = append(have, held{"", v})
+			}
+			if ok, others := want.judge(have); ok && len(others) == 0 {
+				return false, nil
 			}
 			if !apply {
 				return true, nil
 			}
-			vals = append(vals, rec)
+			if want.only() {
+				vals = []string{rec}
+			} else {
+				vals = append(vals, rec)
+			}
 			_, err := c.Sync(&hwmodel.UpdateRecordSetRequest{ZoneId: zoneID, RecordsetId: *set.Id, Body: &hwmodel.UpdateRecordSetReq{
 				Name: set.Name, Description: set.Description, Type: set.Type, Ttl: set.Ttl, Records: &vals,
 			}}, hwdns.GenReqDefForUpdateRecordSet())

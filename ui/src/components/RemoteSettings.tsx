@@ -122,6 +122,7 @@ export function RemoteSettings({ open }: { open: boolean }) {
                 )}
               </div>
             )}
+            {!isRemote && <RemoteCert host={st.host ?? ""} expires={st.certExpires} onSaved={load} />}
           </div>
         </div>
       )}
@@ -136,8 +137,6 @@ export function RemoteSettings({ open }: { open: boolean }) {
       <RemoteScreenSetting />
 
       {st.enabled && !isRemote && <StepUpApprovals open={open} />}
-
-      {st.enabled && !isRemote && <RemoteCert host={st.host ?? ""} expires={st.certExpires} onSaved={load} />}
 
       <div className="space-y-1.5">
         <div className="flex items-center justify-between">

@@ -15,8 +15,8 @@ import (
 
 const doAPI = "https://api.digitalocean.com"
 
-// digitaloceanCAA: DigitalOcean takes CAA as separate flags / tag / data fields, record names relative to the domain.
-func digitaloceanCAA(ctx context.Context, api, host, value string, apply bool) (bool, error) {
+// digitaloceanRecord: DigitalOcean takes CAA as separate flags / tag / data fields, record names relative to the domain.
+func digitaloceanRecord(ctx context.Context, api, host string, want rec, apply bool) (bool, error) {
 	tok := credEnv("DO_AUTH_TOKEN")
 	if tok == "" {
 		return false, errors.New(i18n.S("没找到 DigitalOcean 的 API Token", "no DigitalOcean API token found"))
@@ -77,25 +77,42 @@ func digitaloceanCAA(ctx context.Context, api, host, value string, apply bool) (
 
 	var r struct {
 		Records []struct {
+			ID   int64  `json:"id"`
 			Tag  string `json:"tag"`
 			Data string `json:"data"`
 		} `json:"domain_records"`
 	}
-	q := url.Values{"type": {"CAA"}, "name": {host}, "per_page": {"200"}}
-	if err := call("GET", "/v2/domains/"+url.PathEscape(zone)+"/records?"+q.Encode(), nil, &r); err != nil {
+	q := url.Values{"type": {want.Type}, "name": {host}, "per_page": {"200"}}
+	base := "/v2/domains/" + url.PathEscape(zone) + "/records"
+	if err := call("GET", base+"?"+q.Encode(), nil, &r); err != nil {
 		return false, err
 	}
+	var have []held
 	for _, rec := range r.Records {
-		if rec.Tag == "issue" && sameCAA(rec.Data, value) {
-			return false, nil
+		if want.Type != "CAA" || rec.Tag == "issue" {
+			have = append(have, held{fmt.Sprint(rec.ID), rec.Data})
 		}
+	}
+	ok, others := want.judge(have)
+	if ok && len(others) == 0 {
+		return false, nil
 	}
 	if !apply {
 		return true, nil
 	}
-	rec := map[string]any{"type": "CAA", "name": rr, "flags": 0, "tag": "issue", "data": value, "ttl": 1800}
-	if err := call("POST", "/v2/domains/"+url.PathEscape(zone)+"/records", rec, nil); err != nil {
-		return false, err
+	if !ok {
+		body := map[string]any{"type": want.Type, "name": rr, "data": want.Value, "ttl": 1800}
+		if want.Type == "CAA" {
+			body["flags"], body["tag"] = 0, "issue"
+		}
+		if err := call("POST", base, body, nil); err != nil {
+			return false, err
+		}
+	}
+	for _, id := range others {
+		if err := call("DELETE", base+"/"+id, nil, nil); err != nil {
+			return false, err
+		}
 	}
 	return true, nil
 }

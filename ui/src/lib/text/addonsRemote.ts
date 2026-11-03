@@ -189,6 +189,12 @@ export const zh = {
   "remoteCert.caaHint": "建议在 DNS 上加一条 CAA，只许这台机器签 {host} 的证书（已经有一条覆盖它的 CAA 时要再加这一条，不然签不下来）：",
   "remoteCert.adding": "添加中…",
   "remoteCert.addCAA": "一键加上",
+  "remoteCert.hostNone": "{host} 在 DNS 上还没有地址，手机打不开。要一条 A 记录指向中继：",
+  "remoteCert.hostWrong": "{host} 现在指向 {current}，不是中继（{ip}），手机连不到这台机器。要改成：",
+  "remoteCert.hostPartial": "{host} 的 A 记录除了中继还有别的，或者开着 Cloudflare 代理（小黄云），手机可能连不到这台机器。只留这一条、不走代理：",
+  "remoteCert.hostFix": "改成指向中继",
+  "remoteCert.hostAdded": "已经在 {provider} 上把 {host} 指向中继（{ip}）。手机上要等 DNS 缓存过期，最多几分钟。",
+  "remoteCert.hostCheckFailed": "查不到 {host} 有没有指向中继：{error}",
 
   // AwakeSetting
   "awakeSetting.preset.m15": "15 分钟",
@@ -233,7 +239,7 @@ export const zh = {
   "remoteConnect.invite": "邀请码",
   "remoteConnect.inviteHint": "邀请码在中继的网页后台里出（一次性，30 分钟内有效），或者在 VPS 上：",
   "remoteConnect.dnsHint":
-    "DNS 上给 {host} 加一条 A 记录指向中继 VPS，中继那边的 SNI 路由也要放行这个名字 —— 漏了的表现是「已连上」但手机打不开，这里一个字都不报。",
+    "DNS 上要给 {host} 一条 A 记录指向中继 VPS（连上之后配好证书的 DNS 凭据，这里能一键加），中继那边的 SNI 路由也要放行这个名字 —— 漏了的表现是「已连上」但手机打不开。",
   "remoteConnect.connecting": "连接中…",
   "remoteConnect.connect": "连接",
 
@@ -459,6 +465,13 @@ export const en: Record<keyof typeof zh, string> = {
     "We suggest adding a CAA record to DNS so only this machine can get certificates for {host} (if a CAA record already covers it, add this one too or issuing will fail):",
   "remoteCert.adding": "Adding…",
   "remoteCert.addCAA": "Add it",
+  "remoteCert.hostNone": "{host} has no address in DNS yet, so phones can't open it. It needs an A record pointing at the relay:",
+  "remoteCert.hostWrong": "{host} points at {current}, not the relay ({ip}), so phones can't reach this computer. It should be:",
+  "remoteCert.hostPartial":
+    "{host} has A records besides the relay's, or has Cloudflare's proxy (orange cloud) on, so phones may not reach this computer. Keep just this one, not proxied:",
+  "remoteCert.hostFix": "Point it at the relay",
+  "remoteCert.hostAdded": "{host} now points at the relay ({ip}) on {provider}. Phones may need a few minutes for their DNS cache to expire.",
+  "remoteCert.hostCheckFailed": "Couldn't check whether {host} points at the relay: {error}",
 
   // AwakeSetting
   "awakeSetting.preset.m15": "15 min",
@@ -505,7 +518,7 @@ export const en: Record<keyof typeof zh, string> = {
   "remoteConnect.invite": "Invite code",
   "remoteConnect.inviteHint": "Get an invite code from the relay's web admin (single use, valid for 30 minutes), or on the VPS:",
   "remoteConnect.dnsHint":
-    "Add a DNS A record for {host} pointing to the relay VPS, and allow the name in the relay's SNI routing. If either is missing, this shows \"connected\" but your phone can't open it, and nothing here says why.",
+    "{host} needs a DNS A record pointing to the relay VPS (once connected and the certificate's DNS credentials are set, this page can add it for you), and the relay's SNI routing must allow the name. If either is missing, this shows \"connected\" but your phone can't open it.",
   "remoteConnect.connecting": "Connecting…",
   "remoteConnect.connect": "Connect",
 

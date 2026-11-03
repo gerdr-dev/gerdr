@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/gerdr-dev/gerdr/internal/i18n"
@@ -13,8 +14,8 @@ import (
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
 )
 
-// tencentCAA: DNSPod takes the record as SubDomain + "0 issue \"...\"" on the default line.
-func tencentCAA(ctx context.Context, host, value string, apply bool) (bool, error) {
+// tencentRecord: DNSPod takes the record as SubDomain + its text ("0 issue \"...\"" for CAA) on the default line.
+func tencentRecord(ctx context.Context, host string, want rec, apply bool) (bool, error) {
 	id, secret := credEnv("TENCENTCLOUD_SECRET_ID"), credEnv("TENCENTCLOUD_SECRET_KEY")
 	if id == "" || secret == "" {
 		return false, errors.New(i18n.S("没找到腾讯云的 SecretId / SecretKey", "no Tencent Cloud SecretId / SecretKey found"))
@@ -55,28 +56,43 @@ func tencentCAA(ctx context.Context, host, value string, apply bool) (bool, erro
 	}
 
 	q := dnspod.NewDescribeRecordListRequest()
-	q.Domain, q.Subdomain, q.RecordType = common.StringPtr(names[zone]), common.StringPtr(rr), common.StringPtr("CAA")
+	q.Domain, q.Subdomain, q.RecordType = common.StringPtr(names[zone]), common.StringPtr(rr), common.StringPtr(want.Type)
 	r, err := dnspod.DescribeRecordListWithContext(ctx, c, q)
 	var se *sdkerr.TencentCloudSDKError
+	var have []held
 	switch {
 	case errors.As(err, &se) && se.Code == dnspod.RESOURCENOTFOUND_NODATAOFRECORD:
 	case err != nil:
 		return false, fmt.Errorf(i18n.S("腾讯云读记录失败：%w", "Tencent Cloud: reading records: %w"), err)
 	default:
 		for _, rec := range r.Response.RecordList {
-			if sameCAA(*rec.Value, value) {
-				return false, nil
+			if rec.RecordId != nil && rec.Value != nil {
+				have = append(have, held{strconv.FormatUint(*rec.RecordId, 10), *rec.Value})
 			}
 		}
+	}
+	ok, others := want.judge(have)
+	if ok && len(others) == 0 {
+		return false, nil
 	}
 	if !apply {
 		return true, nil
 	}
-	add := dnspod.NewCreateRecordRequest()
-	add.Domain, add.SubDomain, add.RecordType = common.StringPtr(names[zone]), common.StringPtr(rr), common.StringPtr("CAA")
-	add.RecordLine, add.Value = common.StringPtr("默认"), common.StringPtr(caaRecord(value))
-	if _, err := dnspod.CreateRecordWithContext(ctx, c, add); err != nil {
-		return false, fmt.Errorf(i18n.S("腾讯云加记录失败：%w", "Tencent Cloud: adding the record: %w"), err)
+	if !ok {
+		add := dnspod.NewCreateRecordRequest()
+		add.Domain, add.SubDomain, add.RecordType = common.StringPtr(names[zone]), common.StringPtr(rr), common.StringPtr(want.Type)
+		add.RecordLine, add.Value = common.StringPtr("默认"), common.StringPtr(want.text())
+		if _, err := dnspod.CreateRecordWithContext(ctx, c, add); err != nil {
+			return false, fmt.Errorf(i18n.S("腾讯云加记录失败：%w", "Tencent Cloud: adding the record: %w"), err)
+		}
+	}
+	for _, id := range others {
+		del := dnspod.NewDeleteRecordRequest()
+		n, _ := strconv.ParseUint(id, 10, 64)
+		del.Domain, del.RecordId = common.StringPtr(names[zone]), common.Uint64Ptr(n)
+		if _, err := dnspod.DeleteRecordWithContext(ctx, c, del); err != nil {
+			return false, fmt.Errorf(i18n.S("腾讯云删旧记录失败：%w", "Tencent Cloud: removing an old record: %w"), err)
+		}
 	}
 	return true, nil
 }

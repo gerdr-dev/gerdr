@@ -11,8 +11,8 @@ import (
 	alidns "github.com/go-acme/alidns-20150109/v4/client"
 )
 
-// alidnsCAA: AliDNS takes the record as RR (relative name) + "0 issue \"...\"".
-func alidnsCAA(ctx context.Context, host, value string, apply bool) (bool, error) {
+// alidnsRecord: AliDNS takes the record as RR (relative name) + its text ("0 issue \"...\"" for CAA).
+func alidnsRecord(ctx context.Context, host string, want rec, apply bool) (bool, error) {
 	id, secret := credEnv("ALICLOUD_ACCESS_KEY"), credEnv("ALICLOUD_SECRET_KEY")
 	if id == "" || secret == "" {
 		return false, errors.New(i18n.S("没找到阿里云的 AccessKey", "no Alibaba Cloud AccessKey found"))
@@ -49,23 +49,35 @@ func alidnsCAA(ctx context.Context, host, value string, apply bool) (bool, error
 		return false, err
 	}
 
-	req := new(alidns.DescribeDomainRecordsRequest).SetDomainName(zone).SetRRKeyWord(rr).SetType("CAA").SetPageSize(500)
+	req := new(alidns.DescribeDomainRecordsRequest).SetDomainName(zone).SetRRKeyWord(rr).SetType(want.Type).SetPageSize(500)
 	r, err := alidns.DescribeDomainRecordsWithContext(ctx, c, req, rt)
 	if err != nil {
 		return false, fmt.Errorf(i18n.S("阿里云读记录失败：%w", "Alibaba Cloud: reading records: %w"), err)
 	}
+	var have []held
 	for _, rec := range r.Body.DomainRecords.Record {
 		// RRKeyWord is a fuzzy match: "gerdr" also returns "gerdr2"
-		if dara.StringValue(rec.RR) == rr && sameCAA(dara.StringValue(rec.Value), value) {
-			return false, nil
+		if dara.StringValue(rec.RR) == rr && dara.StringValue(rec.Type) == want.Type {
+			have = append(have, held{dara.StringValue(rec.RecordId), dara.StringValue(rec.Value)})
 		}
+	}
+	ok, others := want.judge(have)
+	if ok && len(others) == 0 {
+		return false, nil
 	}
 	if !apply {
 		return true, nil
 	}
-	add := new(alidns.AddDomainRecordRequest).SetDomainName(zone).SetRR(rr).SetType("CAA").SetValue(caaRecord(value))
-	if _, err := alidns.AddDomainRecordWithContext(ctx, c, add, rt); err != nil {
-		return false, fmt.Errorf(i18n.S("阿里云加记录失败：%w", "Alibaba Cloud: adding the record: %w"), err)
+	if !ok {
+		add := new(alidns.AddDomainRecordRequest).SetDomainName(zone).SetRR(rr).SetType(want.Type).SetValue(want.text())
+		if _, err := alidns.AddDomainRecordWithContext(ctx, c, add, rt); err != nil {
+			return false, fmt.Errorf(i18n.S("阿里云加记录失败：%w", "Alibaba Cloud: adding the record: %w"), err)
+		}
+	}
+	for _, id := range others {
+		if _, err := alidns.DeleteDomainRecordWithContext(ctx, c, new(alidns.DeleteDomainRecordRequest).SetRecordId(id), rt); err != nil {
+			return false, fmt.Errorf(i18n.S("阿里云删旧记录失败：%w", "Alibaba Cloud: removing an old record: %w"), err)
+		}
 	}
 	return true, nil
 }

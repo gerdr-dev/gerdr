@@ -17,29 +17,75 @@ import (
 	"github.com/gerdr-dev/gerdr/internal/i18n"
 )
 
-// CAA writes the record that pins issuance for a name to this machine's ACME account, through the same DNS
-// provider credentials the certificate is already signed with — so the settings page can offer one button
-// instead of asking the user to copy a record into their DNS console.
+// Two records on the relay host go through the same DNS provider credentials the certificate is already signed
+// with, so the settings page can offer one button instead of asking the user to copy them into a DNS console:
+//
+//   - A: the host points at the relay VPS (phones connect to the name, the relay forwards it here by SNI). An A
+//     record, not a CNAME to the relay's name: a CNAME can't sit beside the CAA below, and CAA lookups follow
+//     the alias, so the relay's owner would decide who may issue for this name — the very thing CAA is there for.
+//   - CAA: pins issuance for the name to this machine's ACME account.
 //
 // lego only knows TXT records, so each provider needs its own small client (caa_*.go), built from the same
 // SDKs lego already pulls in and reading the same credentials. A provider without a writer would only lose the
-// button (the page still shows the record to copy), but TestCAAEveryProvider asks for one.
+// buttons (the page still shows the records to copy), but TestCAAEveryProvider asks for one.
 
-// caaWriter reports whether host lacks the record; with apply it also adds it. It must leave other CAA records
-// on host alone: they may belong to another machine issuing for the same name.
-type caaWriter func(ctx context.Context, host, value string, apply bool) (missing bool, err error)
+// rec is one record to keep on the host.
+type rec struct {
+	Type  string // "A" or "CAA"
+	Value string // A: the IP; CAA: the issue value (CAAValue)
+}
 
-var caaWriters = map[string]caaWriter{
-	"cloudflare": func(ctx context.Context, host, value string, apply bool) (bool, error) {
-		return cloudflareCAA(ctx, cfAPI, host, value, apply)
+// only: ours must be the only record of its type on the name — another address would send phones elsewhere.
+// CAA is added beside the others instead: they may belong to another machine issuing for the same name.
+func (r rec) only() bool { return r.Type == "A" }
+
+// same tells whether a value read back from a provider is ours.
+func (r rec) same(got string) bool {
+	if r.Type == "CAA" {
+		return sameCAA(got, r.Value)
+	}
+	return strings.TrimSpace(got) == r.Value
+}
+
+// text is the value in the form provider APIs take.
+func (r rec) text() string {
+	if r.Type == "CAA" {
+		return caaRecord(r.Value)
+	}
+	return r.Value
+}
+
+// held is a record of the wanted type a provider already has on the name.
+type held struct{ id, value string }
+
+// judge sorts what a provider holds: ok = ours is among them; others = the ids to remove (only() types). Done when
+// ok and no others.
+func (r rec) judge(have []held) (ok bool, others []string) {
+	for _, h := range have {
+		if r.same(h.value) {
+			ok = true
+		} else if r.only() {
+			others = append(others, h.id)
+		}
+	}
+	return ok, others
+}
+
+// recordWriter reports whether host lacks the record (or, for only() types, also has others of its type); with
+// apply it puts it right. Besides the A record of an only() type, it leaves every other record alone.
+type recordWriter func(ctx context.Context, host string, r rec, apply bool) (missing bool, err error)
+
+var recordWriters = map[string]recordWriter{
+	"cloudflare": func(ctx context.Context, host string, r rec, apply bool) (bool, error) {
+		return cloudflareRecord(ctx, cfAPI, host, r, apply)
 	},
-	"alidns":       alidnsCAA,
-	"tencentcloud": tencentCAA,
-	"route53":      route53CAA,
-	"digitalocean": func(ctx context.Context, host, value string, apply bool) (bool, error) {
-		return digitaloceanCAA(ctx, doAPI, host, value, apply)
+	"alidns":       alidnsRecord,
+	"tencentcloud": tencentRecord,
+	"route53":      route53Record,
+	"digitalocean": func(ctx context.Context, host string, r rec, apply bool) (bool, error) {
+		return digitaloceanRecord(ctx, doAPI, host, r, apply)
 	},
-	"huaweicloud": huaweiCAA,
+	"huaweicloud": huaweiRecord,
 }
 
 // CAAValue is the record's value (tag "issue", flags 0).
@@ -84,21 +130,31 @@ func pickZone(host string, zones []string) (zone, rr string, err error) {
 	return zone, rr, nil
 }
 
-// CAASupported reports whether SetCAA can check and write the record for this provider.
-func CAASupported(dns string) bool { return caaWriters[dns] != nil }
+// RecordsSupported reports whether SetCAA / SetA can check and write records through this provider.
+func RecordsSupported(dns string) bool { return recordWriters[dns] != nil }
 
 // SetCAA reports whether host lacks the CAA record; with apply it adds it (missing=true then means "added now").
 func SetCAA(ctx context.Context, dns, host, accountURI string, apply bool) (missing bool, err error) {
 	if accountURI == "" {
 		return false, errors.New(i18n.S("还没签过证书，没有 ACME 账户可写进 CAA", "no certificate issued yet, so there's no ACME account to put in the CAA record"))
 	}
-	w := caaWriters[dns]
+	return setRecord(ctx, dns, host, rec{"CAA", CAAValue(accountURI)}, apply)
+}
+
+// SetA reports whether host lacks an A record pointing at ip alone; with apply it adds ours and removes the other
+// A records on the name (missing=true then means "fixed now").
+func SetA(ctx context.Context, dns, host, ip string, apply bool) (missing bool, err error) {
+	return setRecord(ctx, dns, host, rec{"A", ip}, apply)
+}
+
+func setRecord(ctx context.Context, dns, host string, r rec, apply bool) (bool, error) {
+	w := recordWriters[dns]
 	if w == nil {
-		return false, fmt.Errorf(i18n.S("%s 还不支持自动加 CAA，照上面那条手动加", "%s can't add the CAA record automatically yet; add the record above by hand"), dns)
+		return false, fmt.Errorf(i18n.S("%s 还不支持自动加 %s 记录，照上面那条手动加", "%s can't add the %s record automatically yet; add the record above by hand"), dns, r.Type)
 	}
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	return w(ctx, strings.TrimSuffix(host, "."), CAAValue(accountURI), apply)
+	return w(ctx, strings.TrimSuffix(host, "."), r, apply)
 }
 
 // credEnv reads a credential the way exportEnv does: the GERDR_-prefixed name wins over the bare one;
@@ -119,7 +175,7 @@ func credEnv(names ...string) string {
 
 const cfAPI = "https://api.cloudflare.com/client/v4"
 
-func cloudflareCAA(ctx context.Context, api, host, value string, apply bool) (bool, error) {
+func cloudflareRecord(ctx context.Context, api, host string, want rec, apply bool) (bool, error) {
 	// Same credential choices lego's cloudflare provider accepts. A separate zone token (Zone:Read) is
 	// what people use when the DNS token is scoped too tightly to list zones.
 	auth := func(r *http.Request, zone bool) error {
@@ -202,28 +258,69 @@ func cloudflareCAA(ctx context.Context, api, host, value string, apply bool) (bo
 		return false, fmt.Errorf(i18n.S("这个 Cloudflare 凭据下找不到 %s 所在的 zone（token 要能读这个 zone）", "no zone for %s under this Cloudflare token (it needs read access to the zone)"), host)
 	}
 
+	// Cloudflare takes CAA as structured data and A as content. An A record with the orange cloud on (proxied)
+	// is not ours even with the right IP: Cloudflare would terminate TLS itself, and the relay only routes by SNI.
 	type caaData struct {
 		Flags int    `json:"flags"`
 		Tag   string `json:"tag"`
 		Value string `json:"value"`
 	}
 	var recs []struct {
-		Data caaData `json:"data"`
+		ID      string  `json:"id"`
+		Content string  `json:"content"`
+		Proxied bool    `json:"proxied"`
+		Data    caaData `json:"data"`
 	}
-	if err := call("GET", "/zones/"+zoneID+"/dns_records?type=CAA&name="+url.QueryEscape(host), nil, &recs, false); err != nil {
+	if err := call("GET", "/zones/"+zoneID+"/dns_records?type="+want.Type+"&name="+url.QueryEscape(host), nil, &recs, false); err != nil {
 		return false, err
 	}
+	ok, unproxy := false, ""
+	var others []string
 	for _, r := range recs {
-		if r.Data.Tag == "issue" && sameCAA(r.Data.Value, value) {
-			return false, nil
+		switch {
+		case want.Type == "CAA":
+			if r.Data.Tag == "issue" && want.same(r.Data.Value) {
+				ok = true
+			}
+		case !want.same(r.Content):
+			others = append(others, r.ID)
+		case r.Proxied:
+			unproxy = r.ID
+		default:
+			ok = true
 		}
+	}
+	if !want.only() {
+		others = nil
+	}
+	if ok && len(others) == 0 {
+		return false, nil
 	}
 	if !apply {
 		return true, nil
 	}
-	rec := map[string]any{"type": "CAA", "name": host, "ttl": 1, "data": caaData{Flags: 0, Tag: "issue", Value: value}}
-	if err := call("POST", "/zones/"+zoneID+"/dns_records", rec, nil, false); err != nil {
-		return false, err
+	switch {
+	case ok:
+	case unproxy != "":
+		if err := call("PATCH", "/zones/"+zoneID+"/dns_records/"+unproxy, map[string]any{"proxied": false}, nil, false); err != nil {
+			return false, err
+		}
+	default:
+		body := map[string]any{"type": want.Type, "name": host, "ttl": 1}
+		if want.Type == "CAA" {
+			body["data"] = caaData{Flags: 0, Tag: "issue", Value: want.Value}
+		} else {
+			body["content"], body["proxied"] = want.Value, false
+		}
+		if err := call("POST", "/zones/"+zoneID+"/dns_records", body, nil, false); err != nil {
+			return false, err
+		}
+	}
+	// Ours goes in first, the others go after: the name never answers with nothing in between.
+	for _, id := range others {
+		if err := call("DELETE", "/zones/"+zoneID+"/dns_records/"+id, nil, nil, false); err != nil {
+			return false, err
+		}
 	}
 	return true, nil
 }

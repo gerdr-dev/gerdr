@@ -18,6 +18,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -523,7 +524,7 @@ func (s *Service) CertConfig() (CertConfig, error) {
 	}
 	c.Providers = acme.AllProviders()
 	c.AccountURI = acme.AccountURI(s.Dir)
-	c.CAAAuto = acme.CAASupported(c.DNS)
+	c.CAAAuto = acme.RecordsSupported(c.DNS)
 	return c, nil
 }
 
@@ -535,6 +536,54 @@ func (s *Service) CAA(ctx context.Context, apply bool) (missing bool, err error)
 		return false, errors.New(i18n.S("还没连上中继：先在上面「连接」", "not connected to a relay yet: use Connect above first"))
 	}
 	return acme.SetCAA(ctx, cfg.ACMEDNS, cfg.Host, acme.AccountURI(s.Dir), apply)
+}
+
+// HostRecord is whether the host points at the relay VPS: phones connect to the name, the relay forwards it here
+// by SNI, so without this "connected" shows and the phone can't open the address. An A record, not a CNAME
+// (acme/caa.go says why).
+type HostRecord struct {
+	Want    string   `json:"want"`    // the relay's IP: what the A record should hold
+	Current []string `json:"current"` // what public DNS answers for the host now (cached up to its TTL)
+	Missing bool     `json:"missing"` // the host doesn't point at the relay alone
+	// Auto: the certificate's DNS provider can write it (apply adds ours and removes other A records on the name).
+	// Then Missing comes from the provider, which also sees what DNS can't (a Cloudflare record with the proxy on).
+	Auto bool `json:"auto"`
+}
+
+// HostRecord checks the host's A record against the relay's IP; with apply it puts it right through the DNS provider.
+func (s *Service) HostRecord(ctx context.Context, apply bool) (HostRecord, error) {
+	cfg := s.Config()
+	if !cfg.Enabled() {
+		return HostRecord{}, errors.New(i18n.S("还没连上中继：先在上面「连接」", "not connected to a relay yet: use Connect above first"))
+	}
+	u, err := url.Parse(cfg.RelayURL)
+	if err != nil || u.Hostname() == "" {
+		return HostRecord{}, fmt.Errorf(i18n.S("中继地址看不懂：%s", "can't read the relay address: %s"), cfg.RelayURL)
+	}
+	relay, err := acme.LookupA(ctx, u.Hostname())
+	if err != nil {
+		return HostRecord{}, err
+	}
+	if len(relay) == 0 {
+		return HostRecord{}, fmt.Errorf(i18n.S("中继 %s 在 DNS 上没有 IPv4 地址", "the relay %s has no IPv4 address in DNS"), u.Hostname())
+	}
+	slices.Sort(relay)
+	h := HostRecord{Want: relay[0], Auto: acme.RecordsSupported(cfg.ACMEDNS)}
+	h.Current, _ = acme.LookupA(ctx, cfg.Host) // only shown; a failed lookup just shows nothing
+	if !h.Auto {
+		if apply {
+			return h, errors.New(i18n.S("证书没用 DNS 服务商签，没法自动加：照上面那条手动加", "the certificate isn't issued through a DNS provider, so this can't be added automatically: add the record above by hand"))
+		}
+		h.Missing = len(h.Current) != 1 || h.Current[0] != h.Want
+		return h, nil
+	}
+	if h.Missing, err = acme.SetA(ctx, cfg.ACMEDNS, cfg.Host, h.Want, apply); err != nil {
+		return h, err
+	}
+	if apply {
+		h.Current = []string{h.Want}
+	}
+	return h, nil
 }
 
 // CertInput 是设置页提交的。Env 里空着的项 = 沿用已经存着的那份（表单不回显密钥）。

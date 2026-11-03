@@ -13,8 +13,9 @@ import (
 	"github.com/gerdr-dev/gerdr/internal/i18n"
 )
 
-// route53CAA: Route 53 keeps all CAA values of a name in one record set, so "add" is read the set, append, UPSERT.
-func route53CAA(ctx context.Context, host, value string, apply bool) (bool, error) {
+// route53Record: Route 53 keeps all values of a name and type in one record set, so "add" is read the set, append
+// (or, for only() types, replace), UPSERT.
+func route53Record(ctx context.Context, host string, want rec, apply bool) (bool, error) {
 	var opts []func(*awsconfig.LoadOptions) error
 	if id, secret := credEnv("AWS_ACCESS_KEY_ID"), credEnv("AWS_SECRET_ACCESS_KEY"); id != "" && secret != "" {
 		opts = append(opts, awsconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(id, secret, credEnv("AWS_SESSION_TOKEN"))))
@@ -50,29 +51,41 @@ func route53CAA(ctx context.Context, host, value string, apply bool) (bool, erro
 		return false, fmt.Errorf(i18n.S("这份凭据下找不到 %s 所在的 hosted zone", "no hosted zone for %s under these credentials"), host)
 	}
 
-	set := r53.ResourceRecordSet{Name: aws.String(host + "."), Type: r53.RRTypeCaa, TTL: aws.Int64(300)}
+	typ := r53.RRType(want.Type)
+	set := r53.ResourceRecordSet{Name: aws.String(host + "."), Type: typ, TTL: aws.Int64(300)}
 	r, err := c.ListResourceRecordSets(ctx, &route53.ListResourceRecordSetsInput{
-		HostedZoneId: aws.String(zoneID), StartRecordName: aws.String(host), StartRecordType: r53.RRTypeCaa, MaxItems: aws.Int32(1),
+		HostedZoneId: aws.String(zoneID), StartRecordName: aws.String(host), StartRecordType: typ, MaxItems: aws.Int32(1),
 	})
 	if err != nil {
 		return false, fmt.Errorf(i18n.S("Route 53 读记录失败（IAM 要有 route53:ListResourceRecordSets）：%w", "Route 53: reading records (IAM needs route53:ListResourceRecordSets): %w"), err)
 	}
-	if len(r.ResourceRecordSets) > 0 && aws.ToString(r.ResourceRecordSets[0].Name) == host+"." && r.ResourceRecordSets[0].Type == r53.RRTypeCaa {
+	if len(r.ResourceRecordSets) > 0 && aws.ToString(r.ResourceRecordSets[0].Name) == host+"." && r.ResourceRecordSets[0].Type == typ {
 		set = r.ResourceRecordSets[0]
+		var have []held
 		for _, rec := range set.ResourceRecords {
-			if sameCAA(aws.ToString(rec.Value), value) {
-				return false, nil
-			}
+			have = append(have, held{"", aws.ToString(rec.Value)})
+		}
+		// An alias A record points at an AWS resource, not at the relay.
+		if ok, others := want.judge(have); ok && len(others) == 0 && set.AliasTarget == nil {
+			return false, nil
 		}
 	}
 	if !apply {
 		return true, nil
 	}
-	set.ResourceRecords = append(set.ResourceRecords, r53.ResourceRecord{Value: aws.String(caaRecord(value))})
+	ours := r53.ResourceRecord{Value: aws.String(want.text())}
+	if want.only() {
+		set.ResourceRecords, set.AliasTarget = []r53.ResourceRecord{ours}, nil
+		if set.TTL == nil {
+			set.TTL = aws.Int64(300)
+		}
+	} else {
+		set.ResourceRecords = append(set.ResourceRecords, ours)
+	}
 	_, err = c.ChangeResourceRecordSets(ctx, &route53.ChangeResourceRecordSetsInput{
 		HostedZoneId: aws.String(zoneID),
 		ChangeBatch: &r53.ChangeBatch{
-			Comment: aws.String("gerdr: pin certificate issuance to this machine's ACME account"),
+			Comment: aws.String("gerdr: remote access (" + want.Type + ")"),
 			Changes: []r53.Change{{Action: r53.ChangeActionUpsert, ResourceRecordSet: &set}},
 		},
 	})
