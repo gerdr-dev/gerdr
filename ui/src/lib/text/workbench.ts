@@ -128,6 +128,7 @@ export const zh = {
   "panes.reload": "从 Agent 记录重新载入",
   "panes.reloaded": "已从 Agent 自己的记录重新载入",
   "panes.closeSession": "关闭会话",
+  "panes.moveSession": "换到另一台电脑接着聊…",
   "panes.closePane": "关闭 Pane",
   "panes.starting": "正在开 {agent}…",
 
@@ -329,6 +330,7 @@ export const en: Record<keyof typeof zh, string> = {
   "panes.reload": "Reload from the agent's records",
   "panes.reloaded": "Reloaded from the agent's own records",
   "panes.closeSession": "Close session",
+  "panes.moveSession": "Continue on another computer…",
   "panes.closePane": "Close pane",
   "panes.starting": "Starting {agent}…",
 

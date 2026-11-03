@@ -16,6 +16,7 @@ import {
   Pencil,
   Plus,
   Rows2,
+  Server,
   SquareTerminal,
   CircleX,
   X,
@@ -523,6 +524,7 @@ function HeldSessionPane(props: { pane: PaneLeaf; tab: Tab; framed: boolean; zoo
 }
 
 function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; tab: Tab; framed: boolean; zoomed?: boolean; count?: Count }) {
+  const hasHosts = useStore((s) => s.hosts.length > 0);
   const session = useStore((s) => (pane.sessionId ? s.sessions[pane.sessionId] : undefined));
   const unread = useStore((s) => (pane.sessionId ? !!s.unread[pane.sessionId] : false));
   const starting = useStore((s) => !!s.starting[pane.id]);
@@ -679,6 +681,12 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
                     }
                   >
                     <RefreshCw /> {t("panes.reload")}
+                  </DropdownMenuItem>
+                )}
+                {hasHosts && (
+                  // Another computer this one drives (docs/dev/MULTIHOST.md): the conversation carries on over there
+                  <DropdownMenuItem onClick={() => set({ dialog: { kind: "moveSession", sessionId: session.id, paneId: pane.id } })}>
+                    <Server /> {t("panes.moveSession")}
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuItem onClick={() => closeSession(session.id)}>

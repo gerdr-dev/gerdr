@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"crypto/tls"
+	"encoding/base64"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -10,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -18,6 +20,7 @@ import (
 	"github.com/gorilla/websocket"
 
 	"github.com/gerdr-dev/gerdr/internal/config"
+	"github.com/gerdr-dev/gerdr/internal/hub"
 	"github.com/gerdr-dev/gerdr/internal/peer"
 	"github.com/gerdr-dev/gerdr/internal/remote"
 )
@@ -272,5 +275,47 @@ func TestHostWSProxy(t *testing.T) {
 		if strings.Contains(string(b), `"t":"events"`) && strings.Contains(string(b), `"id":"w1"`) {
 			return
 		}
+	}
+}
+
+// Carrying a conversation on on another computer: the log comes along (plus the move notice), both ways, and the
+// images it shows are copied to the computer it moves to.
+func TestHostMoveConversation(t *testing.T) {
+	console, ch, hostSrv := hostPair(t)
+	auth := hdr("Authorization", "Bearer "+console.Token)
+	here := t.TempDir()
+	w := do(ch, "POST", "/api/sessions", strings.NewReader(`{"continueFrom":"mini~w1","cwd":`+mustJSON(here)+`}`), auth, csrf)
+	if w.Code != 200 {
+		t.Fatalf("host → here: %d %s", w.Code, w.Body)
+	}
+	var sum struct{ ID, Agent, Title string }
+	_ = json.Unmarshal(w.Body.Bytes(), &sum)
+	moved, err := console.Hub.Session(sum.ID)
+	if err != nil || sum.Agent != "claude" {
+		t.Fatalf("new session here: %+v %v", sum, err)
+	}
+	if evs := moved.Events(); len(evs) != 4 || evs[3].Kind != hub.EvNotice || !strings.Contains(evs[3].Text, "mini") {
+		t.Fatalf("moved log: %d events", len(evs))
+	}
+	there := t.TempDir()
+	w = do(ch, "POST", "/api/sessions", strings.NewReader(`{"continueFrom":"w1","host":"mini","cwd":`+mustJSON(there)+`}`), auth, csrf)
+	if w.Code != 200 || !strings.Contains(w.Body.String(), `"id":"mini~`) {
+		t.Fatalf("here → host: %d %s", w.Code, w.Body)
+	}
+	_ = json.Unmarshal(w.Body.Bytes(), &sum)
+	_, rest := peer.Split(sum.ID)
+	if s, err := hostSrv.Hub.Session(rest); err != nil || len(s.Events()) != 4 {
+		t.Fatalf("moved there: %v", err)
+	}
+
+	img := base64.StdEncoding.EncodeToString([]byte("not really a png"))
+	u := hostSrv.Hub.SaveBlob(img)
+	hash := strings.TrimPrefix(u, hub.BlobURL)
+	evs := []*hub.Event{{Kind: hub.EvUser, Content: []json.RawMessage{json.RawMessage(`{"type":"image","blob":"` + u + `"}`)}}}
+	if err := console.copyBlobs(context.Background(), "mini~w1", "", evs); err != nil {
+		t.Fatal(err)
+	}
+	if b, err := os.ReadFile(console.Hub.BlobPath(hash)); err != nil || string(b) != "not really a png" {
+		t.Fatalf("image not copied: %v", err)
 	}
 }

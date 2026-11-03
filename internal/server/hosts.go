@@ -400,6 +400,11 @@ func (s *Server) withHosts(next http.Handler) http.Handler {
 				Host string `json:"host"`
 			}
 			_ = json.Unmarshal(b, &x)
+			// Carrying on a conversation of another computer (hostmove.go)
+			if _, _, move := moveTarget(b); move {
+				s.moveConversation(w, r, b)
+				return
+			}
 			if x.Host != "" {
 				s.createOnHost(w, r, x.Host, b)
 				return

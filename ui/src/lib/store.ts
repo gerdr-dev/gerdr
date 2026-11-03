@@ -31,6 +31,8 @@ type Dialog =
   | { kind: "importHerdr" }
   | { kind: "importAgent"; agent: string; cwd: string; paneId: string }
   | { kind: "resume"; sessionId: string; paneId: string }
+  /** carry a conversation on on another computer (MoveSessionDialog) */
+  | { kind: "moveSession"; sessionId: string; paneId: string }
   | { kind: "file"; stat: FileStat }
   | { kind: "pickFile"; path: string; candidates: string[]; beside?: boolean; host?: string }
   | null;

@@ -106,16 +106,52 @@ func (h *Hub) continueFrom(ctx context.Context, o CreateOptions) (*Session, erro
 	return s, nil
 }
 
+// History is a conversation brought from another computer (CreateOptions.History). From: where it was, for the
+// notice ("the Mac mini"). Images in Events must already be in this hub's blobs/ (the console copies them first).
+type History struct {
+	Record Record   `json:"record"`
+	Events []*Event `json:"events"`
+	From   string   `json:"from"`
+}
+
+// continueHistory is Create with o.History: like continueFrom, but the source is given, not looked up.
+func (h *Hub) continueHistory(ctx context.Context, o CreateOptions) (*Session, error) {
+	hist := o.History
+	if len(hist.Events) == 0 {
+		return nil, errors.New(i18n.S("没有对话可以接", "There's no conversation to carry on"))
+	}
+	evs := make([]*Event, 0, len(hist.Events))
+	for _, e := range hist.Events {
+		if e == nil {
+			continue
+		}
+		c := *e
+		c.From = "" // senders were sessions over there: nothing here to point at
+		evs = append(evs, &c)
+	}
+	o.History, o.ContinueFrom, o.Import, o.Title = nil, "", "", ""
+	s, err := h.Create(ctx, o)
+	if err != nil {
+		return nil, err
+	}
+	h.adoptHistoryNote(s, hist.Record, evs, fmt.Sprintf(i18n.S("从 %s 搬过来接着聊：上面是在那边的对话，下一条消息会把它一起带给 %s", "Moved here from %s: above is the conversation there; your next message will bring it along to %s"), firstNonEmpty(hist.From, "?"), h.agentName(s.rec.Agent)))
+	return s, nil
+}
+
 // adoptHistory puts src's log (evs, copies) in front of s's and marks where s's agent takes over.
 func (h *Hub) adoptHistory(s *Session, srcRec Record, evs []*Event) {
+	from, to := h.agentName(srcRec.Agent), h.agentName(s.rec.Agent)
+	h.adoptHistoryNote(s, srcRec, evs, fmt.Sprintf(i18n.S("换 %s 接着聊：上面是和 %s 的对话，下一条消息会把它一起带给 %s", "Switched to %s: above is the conversation with %s; your next message will bring it along to %s"), to, from, to))
+}
+
+func (h *Hub) adoptHistoryNote(s *Session, srcRec Record, evs []*Event, note string) {
 	all := s.rewriteLog(func() {
 		s.events = append(evs, s.events...)
 		s.rec.Title, s.rec.CustomTitle, s.rec.TitleKey, s.rec.PluginTitleFor = srcRec.Title, srcRec.CustomTitle, srcRec.TitleKey, srcRec.PluginTitleFor
 		s.rec.Handoff = &Handoff{Session: srcRec.ID, Agent: srcRec.Agent}
 	})
 	h.broadcastEvents(s.rec.ID, all, true)
-	from, to := h.agentName(srcRec.Agent), h.agentName(s.rec.Agent)
-	s.emit(&Event{Kind: EvNotice, Level: handoffLevel, Text: fmt.Sprintf(i18n.S("换 %s 接着聊：上面是和 %s 的对话，下一条消息会把它一起带给 %s", "Switched to %s: above is the conversation with %s; your next message will bring it along to %s"), to, from, to)})
+	s.emit(&Event{Kind: EvNotice, Level: handoffLevel, Text: note})
 	h.saveIndex()
 	h.broadcastSession(s)
 }

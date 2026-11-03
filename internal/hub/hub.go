@@ -651,6 +651,9 @@ type CreateOptions struct {
 	Title  string `json:"title,omitempty"`
 	// ContinueFrom: a gerdr session of another agent whose conversation this new session carries on (handoff.go).
 	ContinueFrom string `json:"continueFrom,omitempty"`
+	// History: the same, for a conversation that lives on another computer (docs/dev/MULTIHOST.md): its record and
+	// log come along, since this hub can't read them. Any agent, the same one included: it's a move, not a switch.
+	History *History `json:"history,omitempty"`
 	// Tags / ReportTo / SkillDirs: see Record. ReportTo must be an existing session.
 	Tags      map[string]string `json:"tags,omitempty"`
 	ReportTo  string            `json:"reportTo,omitempty"`
@@ -666,6 +669,9 @@ var permissive = regexp.MustCompile(`(?i)bypass|full-access|dontAsk`)
 func (h *Hub) Create(ctx context.Context, o CreateOptions) (*Session, error) {
 	if o.ContinueFrom != "" {
 		return h.continueFrom(ctx, o)
+	}
+	if o.History != nil {
+		return h.continueHistory(ctx, o)
 	}
 	if _, ok := h.agentDef(o.Agent); !ok {
 		return nil, fmt.Errorf("unknown agent %q", o.Agent)

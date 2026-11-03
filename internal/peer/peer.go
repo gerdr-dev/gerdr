@@ -499,3 +499,6 @@ func (m *Manager) Route(dial func(ctx context.Context, network, addr string) (ne
 	m.tr.DialContext = dial
 	m.tr.TLSClientConfig = tlsConfig
 }
+
+// Self: this computer's name, as hosts see it (the device label on pairing, a moved conversation's notice).
+func (m *Manager) Self() string { return m.self }
