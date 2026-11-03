@@ -8,7 +8,7 @@ import (
 	"github.com/gerdr-dev/gerdr/internal/screen"
 )
 
-// Settings → Labs → Remote screen (internal/screen): a screenshot of this computer and clicks / keys sent to it.
+// Settings → Remote access → Control this computer (internal/screen): a screenshot of this computer and clicks / keys sent to it.
 // Off unless config.remoteScreen is on. Remote devices may use it: that is the point, and a paired device can already
 // run any command in a terminal, so this adds no power it didn't have. Asking macOS for the grants is local only
 // (remoteGuard): its prompts show on this computer's screen.
@@ -18,7 +18,7 @@ func (s *Server) screenRoutes(mux *http.ServeMux) {
 	})
 	mux.HandleFunc("GET /api/screen/shot", func(w http.ResponseWriter, r *http.Request) {
 		if !s.screenOn() {
-			httpError(w, http.StatusForbidden, "remote screen is off (Settings → Labs)")
+			httpError(w, http.StatusForbidden, "remote screen is off (Settings → Remote access)")
 			return
 		}
 		maxW, _ := strconv.Atoi(r.URL.Query().Get("w"))
@@ -41,7 +41,7 @@ func (s *Server) screenRoutes(mux *http.ServeMux) {
 	})
 	mux.HandleFunc("POST /api/screen/input", func(w http.ResponseWriter, r *http.Request) {
 		if !s.screenOn() {
-			httpError(w, http.StatusForbidden, "remote screen is off (Settings → Labs)")
+			httpError(w, http.StatusForbidden, "remote screen is off (Settings → Remote access)")
 			return
 		}
 		var in screen.Input
@@ -71,7 +71,7 @@ func (s *Server) screenStatus(st screen.Status) screenStatus {
 	return screenStatus{Status: st, Enabled: s.screenOn()}
 }
 
-// screenOn reads the Labs switch from config.json at each request: switching it off takes effect at once.
+// screenOn reads the switch (Settings → Remote access) from config.json at each request: switching it off takes effect at once.
 func (s *Server) screenOn() bool {
 	var c struct {
 		RemoteScreen bool `json:"remoteScreen"`

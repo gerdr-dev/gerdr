@@ -44,7 +44,7 @@ var configKeys = map[string]configKey{
 	"copyOnSelect":    {kind: "bool", desc: "Labs: copy text as soon as it is selected (a device that picked its own in Settings keeps that; this is the value for the others)"},
 	"virtualList":     {kind: "bool", desc: "Labs: virtual scrolling for chats (a device that picked its own in Settings keeps that; this is the value for the others)"},
 	"keepAwakeRemote": {kind: "bool", desc: "Labs: keep the computer awake (lid closed too) while a remote device is connected"},
-	"remoteScreen":    {kind: "bool", desc: "Labs: see this computer's screen and click / type on it from another device (macOS)"},
+	"remoteScreen":    {kind: "bool", desc: "Remote access: see this computer's screen and click / type on it from another device (macOS)"},
 	"defaultAgent":    {kind: "string", desc: "agent id new sessions use (claude, codex, native, or an id from agents)"},
 	"defaultModes":    {kind: "object", desc: `per agent id: the mode new sessions start in, e.g. {"claude": "acceptEdits"}`},
 	"defaultConfig":   {kind: "object", desc: `per agent id: option id → value for new sessions, e.g. {"claude": {"model": "opus", "effort": "high"}}`},

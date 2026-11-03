@@ -325,16 +325,6 @@ export function SettingsDialog({ open }: { open: boolean }) {
                 <Switch checked={!!cfg.keepAwakeRemote} onCheckedChange={(v) => setConfig({ keepAwakeRemote: v })} />
               </Row>
               <AwakeSetting open={open && tabOpen === "labs"} />
-              <Row label={t("settings.labs.remoteScreen")} hint={t("settings.labs.remoteScreen.hint")}>
-                <div className="flex items-center gap-2">
-                  {cfg.remoteScreen && (
-                    <Button size="sm" variant="outline" className="h-7 text-[12px]" onClick={() => set({ dialog: { kind: "screen" } })}>
-                      {t("settings.labs.remoteScreen.open")}
-                    </Button>
-                  )}
-                  <Switch checked={!!cfg.remoteScreen} onCheckedChange={(v) => setConfig({ remoteScreen: v })} />
-                </div>
-              </Row>
               <div className="border-t pt-4">
                 <DoctorPanel />
               </div>

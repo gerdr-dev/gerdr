@@ -143,9 +143,9 @@ there. The page first gets a link from `POST /api/fs/link` (normal auth), and th
 Whoever gets the URL in that window can read that one file, which is why the page never shows or copies it. Don't
 widen it: no directory links, no reuse across files, no extending the life.
 
-## Remote screen (Labs)
+## Remote screen
 
-Settings → Labs → "Control this computer remotely" (`config.remoteScreen`, off by default): a phone sees the Mac's
+Settings → Remote access → "Control this computer remotely" (`config.remoteScreen`, off by default): a phone sees the Mac's
 main display and clicks / types on it, for the odd "open that app and type its password" job. Code: `internal/screen`,
 `internal/server/screenapi.go` + `screenstream.go`, `ui/src/components/RemoteScreen.tsx`.
 

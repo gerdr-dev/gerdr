@@ -42,7 +42,7 @@ export type DoctorCheck = {
 };
 export type DoctorReport = { at: number; deep: boolean; level: DoctorLevel; checks: DoctorCheck[] };
 
-/** Settings → Labs → Remote screen (internal/screen): the switch, what macOS has granted, the main display in points. */
+/** Settings → Remote access → Control this computer (internal/screen): the switch, what macOS has granted, the main display in points. */
 export type ScreenStatus = { enabled: boolean; supported: boolean; screen: boolean; input: boolean; width: number; height: number };
 /** One action on the remote screen; x / y are fractions (0..1) of the display. */
 export type ScreenInput =

@@ -10,7 +10,7 @@ import (
 	"github.com/gerdr-dev/gerdr/internal/config"
 )
 
-// The Labs switch gates the screenshot and the input; nothing is captured or posted while it is off.
+// The switch gates the screenshot and the input; nothing is captured or posted while it is off.
 func TestScreenOff(t *testing.T) {
 	s := &Server{Config: config.NewStore(filepath.Join(t.TempDir(), "config.json"), `{}`)}
 	mux := http.NewServeMux()

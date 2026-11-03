@@ -8,6 +8,7 @@ import { useStore } from "@/lib/store";
 import type { RemoteConn } from "@/lib/types";
 import { RemoteCert } from "@/components/RemoteCert";
 import { RemoteConnect } from "@/components/RemoteConnect";
+import { RemoteScreenSetting } from "@/components/RemoteScreen";
 import { ConfirmDelete } from "@/components/ConfirmDelete";
 import { PasskeyStepUp, StepUpApprovals } from "@/components/PasskeyStepUp";
 
@@ -125,6 +126,8 @@ export function RemoteSettings({ open }: { open: boolean }) {
       )}
 
       {st.enabled && <RemoteConns me={me} />}
+
+      <RemoteScreenSetting />
 
       {st.enabled && !isRemote && <StepUpApprovals open={open} />}
 

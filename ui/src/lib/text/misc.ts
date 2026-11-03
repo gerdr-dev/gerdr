@@ -117,8 +117,12 @@ export const zh = {
 
   // RemoteScreen
   "remoteScreen.title": "远程屏幕",
+  "remoteScreen.setting": "远程操作电脑",
+  "remoteScreen.setting.hint":
+    "在手机等别的设备上看这台电脑的屏幕，点一下、打几个字（比如打开一个软件输密码）。只传画面变化的部分，点完约零点几秒就能看到结果。要在系统设置里给 Gerdr.app「录屏与系统录音」、给 gerdr「辅助功能」两项权限。仅 macOS",
+  "remoteScreen.setting.open": "打开屏幕",
   "remoteScreen.command": "远程屏幕（看电脑屏幕、点击和打字）",
-  "remoteScreen.off": "实验室里的「远程操作电脑」没开。",
+  "remoteScreen.off": "设置 → 远程访问里的「远程操作电脑」没开。",
   "remoteScreen.unsupported": "只支持 macOS。",
   "remoteScreen.needScreen": "还没有「录屏与系统录音」权限，看不到屏幕：在系统设置里给 Gerdr.app 打开（不是 gerdr）。",
   "remoteScreen.needInput": "还没有「辅助功能」权限，点击和打字会被系统丢掉：在系统设置里给 gerdr（Gerdr.app/Contents/Resources/gerdr）打开。",
@@ -270,8 +274,12 @@ export const en: Record<keyof typeof zh, string> = {
 
   // RemoteScreen
   "remoteScreen.title": "Remote screen",
+  "remoteScreen.setting": "Control this computer remotely",
+  "remoteScreen.setting.hint":
+    "From a phone or another device, see this computer's screen and click or type a little (open an app and type its password, say). Only what changed on screen is sent, so a tap's result shows within a fraction of a second. In System Settings, Gerdr.app needs Screen & System Audio Recording and gerdr needs Accessibility. macOS only",
+  "remoteScreen.setting.open": "Open screen",
   "remoteScreen.command": "Remote screen (see the computer's screen, click and type)",
-  "remoteScreen.off": "“Control this computer remotely” is off in Labs.",
+  "remoteScreen.off": "“Control this computer remotely” is off in Settings → Remote access.",
   "remoteScreen.unsupported": "macOS only.",
   "remoteScreen.needScreen": "No Screen Recording permission yet, so it can't see the screen: switch it on for Gerdr.app (not gerdr) in System Settings.",
   "remoteScreen.needInput":

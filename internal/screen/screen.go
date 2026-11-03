@@ -1,4 +1,4 @@
-// Package screen is Settings → Labs → Remote screen: look at this computer's main display and click / type on it
+// Package screen is Settings → Remote access → Control this computer: look at this computer's main display and click / type on it
 // from another device (a phone through the relay), e.g. to open an app and type its password. Not a remote desktop:
 // one still frame at a time, refreshed after each action, which is all that needs.
 //

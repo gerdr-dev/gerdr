@@ -4,13 +4,14 @@ import { ArrowDown, ArrowUp, Eye, EyeOff, Minus, MousePointer2, Plus, RefreshCw 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { api, ApiError, type ScreenInput, type ScreenStatus } from "@/lib/api";
 import { t } from "@/lib/i18n";
 import type { MessageKey } from "@/lib/messages";
-import { closeDialog } from "@/lib/store";
+import { closeDialog, set, setConfig, useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
-// Settings → Labs → Remote screen (backend: internal/screen, server/screenstream.go). A WebSocket carries the inputs
+// Settings → Remote access → Control this computer (backend: internal/screen, server/screenstream.go). A WebSocket carries the inputs
 // up and the picture down: the backend captures right after each input (60 / 150 / 300 ms… later) and then once a
 // second, and sends only the tiles that changed, which are pasted onto a canvas here. Tapping the picture clicks the
 // same spot on the computer; the text box below types into whatever has focus there (an app's password field, say).
@@ -595,6 +596,26 @@ function Problems({ st, granting, onGrant }: { st: ScreenStatus; granting: boole
           {t("remoteScreen.grant")}
         </Button>
       </div>
+    </div>
+  );
+}
+
+/** Settings → Remote access: the switch, and the way into the screen. Stacked, not a label-beside-controls row:
+ *  on a phone the long hint next to a button and a switch was squeezed into a narrow column. */
+export function RemoteScreenSetting() {
+  const on = useStore((s) => !!s.config.remoteScreen);
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-[13px] font-medium">{t("remoteScreen.setting")}</div>
+        <Switch checked={on} onCheckedChange={(v) => setConfig({ remoteScreen: v })} />
+      </div>
+      <div className="text-[12px] text-muted-foreground">{t("remoteScreen.setting.hint")}</div>
+      {on && (
+        <Button size="sm" variant="outline" onClick={() => set({ dialog: { kind: "screen" } })}>
+          {t("remoteScreen.setting.open")}
+        </Button>
+      )}
     </div>
   );
 }

@@ -44,7 +44,7 @@ const screenIdleEvery = time.Second
 // Input never reaches the log: typed text is often a password.
 func (s *Server) screenStream(w http.ResponseWriter, r *http.Request) {
 	if !s.screenOn() {
-		httpError(w, http.StatusForbidden, "remote screen is off (Settings → Labs)")
+		httpError(w, http.StatusForbidden, "remote screen is off (Settings → Remote access)")
 		return
 	}
 	conn, err := screenUpgrader.Upgrade(w, r, nil)
@@ -145,7 +145,7 @@ func (s *Server) screenStream(w http.ResponseWriter, r *http.Request) {
 	}
 	capture := func() bool {
 		if !s.screenOn() {
-			send(screen.Message(screen.Header{Err: "remote screen is off (Settings → Labs)"}, nil))
+			send(screen.Message(screen.Header{Err: "remote screen is off (Settings → Remote access)"}, nil))
 			return false
 		}
 		m, err := screen.Grab(c.w)

@@ -78,10 +78,6 @@ const settingsZh = {
   "settings.labs.keepAwake": "远程连着时不休眠",
   "settings.labs.keepAwake.hint":
     "手机等远程设备连着时电脑不睡，合上盖子也醒着（和 Amphetamine 一样），断开 15 分钟后恢复；下面的手动时段也合盖不睡。合盖要授权一次，用电池且电量 ≤ 20% 时自动放手，塞包里会发热。仅 macOS",
-  "settings.labs.remoteScreen": "远程操作电脑",
-  "settings.labs.remoteScreen.hint":
-    "在手机等别的设备上看这台电脑的屏幕，点一下、打几个字（比如打开一个软件输密码）。一次一张截图、操作完自动刷新，不是流畅的远程桌面。要给 Gerdr「屏幕录制」和「辅助功能」两项权限。仅 macOS",
-  "settings.labs.remoteScreen.open": "打开屏幕",
   "settings.loader": "Loading 动画",
   "settings.loader.hint": "对话运行时 “Pondering…” 前面那个。插件还能带来更多，比如像素 Clawd",
   "settings.loader.dots": "环绕点阵",
@@ -173,10 +169,6 @@ const settingsEn: Record<keyof typeof settingsZh, string> = {
   "settings.labs.keepAwake": "Stay awake while remote",
   "settings.labs.keepAwake.hint":
     "While a phone or another remote device is connected the computer doesn't sleep, even with the lid closed (like Amphetamine), until 15 minutes after it disconnects; the manual periods below keep it awake with the lid closed too. The lid needs a one-time permission; on battery at 20% or less it lets go. It gets warm in a bag. macOS only",
-  "settings.labs.remoteScreen": "Control this computer remotely",
-  "settings.labs.remoteScreen.hint":
-    "From a phone or another device, see this computer's screen and click or type a little (open an app and type its password, say). One screenshot at a time, refreshed after each action; not a smooth remote desktop. Gerdr needs the Screen Recording and Accessibility permissions. macOS only",
-  "settings.labs.remoteScreen.open": "Open screen",
   "settings.loader": "Working indicator",
   "settings.loader.hint": "Shown before “Pondering…” while a turn runs. Add-ons can bring more, like Pixel Clawd",
   "settings.loader.dots": "Pixel orbit",
