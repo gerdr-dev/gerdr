@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Check, CircleHelp, ClipboardList, Loader2, Send } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Check, CircleHelp, ClipboardList, Undo2 } from "lucide-react";
 import { Markdown, type GPart, type ToolPart } from "@gerdr/chat";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
@@ -9,20 +9,24 @@ import { t } from "@/lib/i18n";
 /**
  * A tool call whose result asks to be seen: a Work tool (cmd/gerdr/workmcp.go) returns `{ gerdrCard: … }` when what
  * it did is something the user should notice in the chat, e.g. a step put on their board. The card replaces the
- * usual folded "called a tool" row.
+ * usual folded "called a tool" row, and looks like the chat's own question card (AskCard) with a yellow edge: it's
+ * something waiting on the user.
  *
  * `ref` names it, so a page can point the conversation at it (WorkPeek's jump). `choose` makes it answerable right
- * here: the user picks an option (or writes their own) and the card runs `fn` of that Work project with
- * `{ ...input, [field]: answer }`, the same call the page would make, so answering in the chat or on the board is one
- * thing. The chat doesn't wait on it: the agent's turn ended when it asked.
+ * here: the pick runs `fn` of that Work project with `{ ...input, [field]: answer }`, the same call the page would
+ * make. A pick waits UNDO_MS before it's sent, with an undo: once sent, the agent is already acting on it.
  */
 export type Card = {
   title: string;
+  /** The small line above the title ("等你决定 · t23"). */
+  kicker?: string;
   body?: string;
   tone?: "warn" | "info" | "ok";
   ref?: string;
   choose?: { project: string; fn: string; input?: Record<string, unknown>; field: string; options: string[]; other?: boolean };
 };
+
+const UNDO_MS = 6000;
 
 /** The card in a finished tool call's result, if it has one. */
 export function cardOf(part: GPart | ToolPart): Card | undefined {
@@ -42,83 +46,135 @@ export function cardOf(part: GPart | ToolPart): Card | undefined {
   return undefined;
 }
 
-// Answers given in this page, by card: a remounted card (the virtual list) still shows what was picked
-const answered = new Map<string, string>();
+// Picks by card, outside the component: the chat is a virtual list, so a card scrolled away unmounts, and its pending
+// pick must still go out (or stay undoable) when it comes back
+type Pick = { v: string; at: number; sent?: boolean; err?: string; timer?: ReturnType<typeof setTimeout> };
+const picks = new Map<string, Pick>();
+
+function send(key: string, card: Card, v: string) {
+  const ch = card.choose!;
+  const p: Pick = { v, at: Date.now() };
+  p.timer = setTimeout(() => {
+    api.workRun(ch.fn, { ...ch.input, [ch.field]: v }, ch.project).then(
+      () => picks.set(key, { ...p, sent: true }),
+      (e) => picks.set(key, { ...p, err: String(e?.message ?? e) }),
+    );
+  }, UNDO_MS);
+  picks.set(key, p);
+}
+
+/** "6 秒" left to undo, re-rendered every second while a pick waits. */
+function usePick(key: string) {
+  const [, tick] = useState(0);
+  const p = picks.get(key);
+  const waiting = !!p && !p.sent && !p.err;
+  useEffect(() => {
+    if (!waiting) return;
+    const id = setInterval(() => tick((n) => n + 1), 500);
+    return () => clearInterval(id);
+  }, [waiting]);
+  return { p, rerender: () => tick((n) => n + 1) };
+}
+
+/** "label：what it costs" → the label bold, the rest muted, like the question card's options. */
+function split(o: string): [string, string] {
+  const i = o.search(/[：:]/);
+  return i > 0 && i < 40 ? [o.slice(0, i), o.slice(i + 1).trim()] : [o, ""];
+}
 
 export function ToolCard({ card }: { card: Card }) {
   const key = card.ref ?? card.title;
-  const [picked, setPicked] = useState(answered.get(key));
+  const { p, rerender } = usePick(key);
   const [own, setOwn] = useState("");
-  const [busy, setBusy] = useState("");
-  const [err, setErr] = useState("");
   const ch = card.choose;
-  const pick = async (v: string) => {
-    if (!ch) return;
-    setBusy(v);
-    setErr("");
-    try {
-      await api.workRun(ch.fn, { ...ch.input, [ch.field]: v }, ch.project);
-      answered.set(key, v);
-      setPicked(v);
-    } catch (e: any) {
-      setErr(String(e?.message ?? e));
-    } finally {
-      setBusy("");
-    }
+  const waiting = p && !p.sent && !p.err;
+  const left = waiting ? Math.max(0, Math.ceil((p.at + UNDO_MS - Date.now()) / 1000)) : 0;
+  const choose = (v: string) => {
+    if (p && !p.err) return;
+    send(key, card, v);
+    rerender();
   };
+  const undo = () => {
+    if (p?.timer) clearTimeout(p.timer);
+    picks.delete(key);
+    rerender();
+  };
+  const open = !!ch && (!p || !!p.err);
   return (
-    <div
-      className={cn(
-        "my-1 space-y-1.5 rounded-lg border p-3",
-        picked ? "bg-card" : card.tone === "warn" ? "border-warn/50 bg-warn/5" : card.tone === "ok" ? "border-ok/40 bg-ok/5" : "bg-card",
-      )}
-    >
-      <div className={cn("flex items-center gap-1.5 text-[13px] font-medium", card.tone === "warn" && !picked && "text-warn")}>
-        {ch ? <CircleHelp className="size-3.5 shrink-0" /> : <ClipboardList className="size-3.5 shrink-0" />}
-        {card.title}
+    <div className={cn("my-1.5 rounded-xl border border-l-2 bg-card p-4 shadow-sm", p?.sent ? "border-l-ok" : "border-l-warn")}>
+      <div className="mb-1.5 flex items-center gap-1.5 text-[12px] text-muted-foreground">
+        {ch ? <CircleHelp className="size-3.5 text-warn" /> : <ClipboardList className="size-3.5 text-warn" />}
+        <span>{card.kicker ?? (ch ? t("toolCard.decide") : t("toolCard.todo"))}</span>
       </div>
+      <div className="text-[13px] leading-relaxed font-medium">{card.title}</div>
       {card.body && (
-        <div className="text-[13px]">
+        <div className="mt-1 text-[12px] text-muted-foreground">
           <Markdown>{card.body}</Markdown>
         </div>
       )}
-      {ch &&
-        (picked ? (
-          <div className="flex items-center gap-1.5 text-[13px] text-ok">
-            <Check className="size-3.5 shrink-0" />
-            {t("toolCard.picked", { v: picked })}
-          </div>
-        ) : (
-          <div className="space-y-1.5">
-            {ch.options.map((o, i) => (
+      {ch && (
+        <div className="-mx-2.5 mt-3 flex flex-col gap-1.5">
+          {ch.options.map((o, n) => {
+            const [label, desc] = split(o);
+            const on = p?.v === o;
+            return (
               <button
-                key={i}
-                disabled={!!busy}
-                onClick={() => pick(o)}
-                className="flex w-full gap-2 rounded-md border bg-background p-2 text-left text-[13px] hover:border-ring hover:bg-accent disabled:opacity-50"
+                key={n}
+                disabled={!open}
+                onClick={() => choose(o)}
+                className={cn(
+                  "flex w-full items-center gap-3 rounded-lg px-2.5 py-2.5 text-left text-[13px] transition-colors",
+                  open && "hover:bg-muted/60",
+                  on && "bg-warn/10",
+                  !open && !on && "opacity-50",
+                )}
               >
-                <span className="shrink-0 font-mono text-muted-foreground">{i + 1}</span>
-                <span className="min-w-0 flex-1 whitespace-pre-wrap">{o}</span>
-                {busy === o && <Loader2 className="size-3.5 shrink-0 animate-spin" />}
+                <span className="min-w-0 flex-1">
+                  <span className="font-medium">{label}</span>
+                  {desc && <span className="ml-1.5 text-muted-foreground">{desc}</span>}
+                </span>
+                <span
+                  className={cn(
+                    "flex size-5 shrink-0 items-center justify-center rounded-md border text-[11px] text-muted-foreground tabular-nums",
+                    on && "border-transparent bg-warn/20 text-warn",
+                  )}
+                >
+                  {on ? <Check className="size-3" /> : n + 1}
+                </span>
               </button>
-            ))}
-            {ch.other !== false && (
-              <div className="flex gap-1.5">
-                <input
-                  value={own}
-                  onChange={(e) => setOwn(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && own.trim() && !busy && pick(own.trim())}
-                  placeholder={t("toolCard.other")}
-                  className="h-8 min-w-0 flex-1 rounded-md border bg-background px-2 text-[13px] outline-none focus:ring-2 focus:ring-ring"
-                />
-                <Button size="sm" disabled={!own.trim() || !!busy} onClick={() => pick(own.trim())}>
-                  <Send className="size-3.5" />
-                </Button>
-              </div>
-            )}
-          </div>
-        ))}
-      {err && <p className="text-[12px] text-bad">{err}</p>}
+            );
+          })}
+          {ch.other !== false && open && (
+            <input
+              value={own}
+              onChange={(e) => setOwn(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+                if (e.key === "Enter" && own.trim()) choose(own.trim());
+              }}
+              placeholder={ch.options.length ? t("toolCard.other") : t("toolCard.answer")}
+              className="w-full rounded-lg border border-dashed bg-transparent px-2.5 py-2 text-[13px] outline-none placeholder:text-muted-foreground/70 focus:border-solid focus:border-ring/60"
+            />
+          )}
+          {p && !ch.options.includes(p.v) && (
+            <div className="flex items-center gap-3 rounded-lg bg-warn/10 px-2.5 py-2.5 text-[13px]">
+              <span className="min-w-0 flex-1">{p.v}</span>
+              <Check className="size-3.5 text-warn" />
+            </div>
+          )}
+        </div>
+      )}
+      {waiting && (
+        <div className="mt-3 flex items-center gap-2 text-[12px] text-muted-foreground">
+          <span className="flex-1">{t("toolCard.sending", { n: left })}</span>
+          <Button size="sm" variant="outline" className="h-7 text-[12px]" onClick={undo}>
+            <Undo2 className="size-3.5" />
+            {t("toolCard.undo")}
+          </Button>
+        </div>
+      )}
+      {p?.sent && <div className="mt-3 text-[12px] text-ok">{t("toolCard.sent")}</div>}
+      {p?.err && <div className="mt-3 text-[12px] text-bad">{p.err}</div>}
     </div>
   );
 }
