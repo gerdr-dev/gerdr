@@ -32,7 +32,8 @@ type Host interface {
 	Session(id string) (map[string]any, error)
 	// Sessions: every conversation, most recently active first; cwd / tags narrow it (see hub.HasTags).
 	Sessions(cwd string, tags map[string]string) []map[string]any
-	Send(ctx context.Context, id, text string) (map[string]any, error)
+	// Send: id "work" = the project's Work agent conversation, as for StartOptions.ReportTo.
+	Send(ctx context.Context, project, id, text string) (map[string]any, error)
 	// Close stops a conversation's agent and takes it off the screen; the record stays and Send opens it again.
 	Close(ctx context.Context, id string) error
 	// Tag changes a conversation's tags ("" removes a key).
@@ -135,6 +136,7 @@ func (r *runner) sessionsObject() map[string]any {
 			return h.Sessions(cwd, o.Tags)
 		},
 		// await ctx.sessions.send(id, text) → session. A running one gets it at its next pause, like a queued message.
+		// id "work" = this project's Work agent, so a function can hand something to it (it has no session id to use).
 		"send": func(id, text string) *goja.Promise {
 			if h == nil {
 				return r.rejected(errNoHost)
@@ -144,7 +146,7 @@ func (r *runner) sessionsObject() map[string]any {
 			}
 			ctx, cancel := context.WithTimeout(r.ctx, 2*time.Minute)
 			defer cancel()
-			s, err := h.Send(ctx, id, text)
+			s, err := h.Send(ctx, r.project, id, text)
 			if err != nil {
 				return r.rejected(err)
 			}

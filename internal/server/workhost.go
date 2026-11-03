@@ -29,11 +29,9 @@ func (h workHost) StartSession(ctx context.Context, project string, o work.Start
 	if agent == "" {
 		agent = s.defaultAgent()
 	}
-	reportTo := o.ReportTo
-	if reportTo == "work" {
-		if reportTo = s.workSession(project); reportTo == "" {
-			return nil, errors.New(i18n.S("这个项目的 Work 助手还没有对话：先在 Work 里打开它", "this project's Work agent has no conversation yet: open it in Work first"))
-		}
+	reportTo, err := h.target(project, o.ReportTo)
+	if err != nil {
+		return nil, err
 	}
 	// FromCLI: started by code an agent may have written, so a permissive default mode isn't applied on its own (the
 	// same rule as `gerdr session new`); an explicit mode still is.
@@ -97,7 +95,22 @@ func (h workHost) Tag(id string, tags map[string]string) (map[string]any, error)
 	return h.view(sess.Summary(), nil), nil
 }
 
-func (h workHost) Send(ctx context.Context, id, text string) (map[string]any, error) {
+// target resolves "work" (the project's Work agent conversation) for reportTo / send; other ids pass through.
+func (h workHost) target(project, id string) (string, error) {
+	if id != "work" {
+		return id, nil
+	}
+	if w := h.s.workSession(project); w != "" {
+		return w, nil
+	}
+	return "", errors.New(i18n.S("这个项目的 Work 助手还没有对话：先在 Work 里打开它", "this project's Work agent has no conversation yet: open it in Work first"))
+}
+
+func (h workHost) Send(ctx context.Context, project, id, text string) (map[string]any, error) {
+	id, err := h.target(project, id)
+	if err != nil {
+		return nil, err
+	}
 	sess, err := h.s.Hub.Session(id)
 	if err != nil {
 		return nil, err

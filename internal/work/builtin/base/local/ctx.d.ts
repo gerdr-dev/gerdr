@@ -111,7 +111,10 @@ interface Ctx {
      * the ones carrying all of them (`""` as the value: any value).
      */
     list(opts?: { cwd?: string; tags?: Record<string, string> }): Session[];
-    /** Sends another message. A running conversation gets it when its current turn ends; a closed one is opened again. */
+    /**
+     * Sends another message. A running conversation gets it when its current turn ends; a closed one is opened again.
+     * `"work"` = this project's Work agent conversation (e.g. to hand it something to decide).
+     */
     send(id: string, text: string): Promise<Session>;
     /**
      * Stops its agent and takes it off the screen, like closing its tab: the conversation is kept and `send` carries on

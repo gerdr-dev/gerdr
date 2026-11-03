@@ -39,7 +39,7 @@ func (f *fakeHost) Tag(id string, tags map[string]string) (map[string]any, error
 	f.tagged = tags
 	return map[string]any{"id": id, "tags": tags}, nil
 }
-func (f *fakeHost) Send(_ context.Context, id, text string) (map[string]any, error) {
+func (f *fakeHost) Send(_ context.Context, _, id, text string) (map[string]any, error) {
 	return map[string]any{"id": id, "sent": text}, nil
 }
 func (f *fakeHost) Workspaces(project string, all bool) []map[string]any {

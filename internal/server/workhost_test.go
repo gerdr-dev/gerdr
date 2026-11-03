@@ -153,3 +153,17 @@ func TestLastReply(t *testing.T) {
 }
 
 func quote(s string) string { b, _ := json.Marshal(s); return string(b) }
+
+// "work" in send / reportTo is the project's Work agent conversation: a local function has no id for it.
+func TestWorkTarget(t *testing.T) {
+	h := workHost{&Server{Config: config.NewStore(filepath.Join(t.TempDir(), "config.json"), `{"workSessions":{"p1":"w1"}}`)}}
+	if id, err := h.target("p1", "work"); err != nil || id != "w1" {
+		t.Fatalf("work in p1 = %q, %v", id, err)
+	}
+	if id, _ := h.target("p1", "abc"); id != "abc" {
+		t.Fatalf("a session id must pass through, got %q", id)
+	}
+	if _, err := h.target("p2", "work"); err == nil {
+		t.Fatal("a project without a Work conversation must be an error")
+	}
+}
