@@ -8,6 +8,7 @@ import (
 
 	"github.com/gerdr-dev/gerdr/internal/config"
 	"github.com/gerdr-dev/gerdr/internal/hub"
+	"github.com/gerdr-dev/gerdr/internal/work"
 )
 
 // A conversation a Work function starts goes into its project's layout: the workspace for its directory (or the
@@ -188,5 +189,19 @@ func TestWithAttachments(t *testing.T) {
 	}
 	if _, err := withAttachments("x", []string{filepath.Join(dir, "gone.png")}); err == nil {
 		t.Error("a missing file must be refused")
+	}
+}
+
+// A session started in the Work directory itself is a Work chat: not placed in Code (StartSession).
+func TestInWorkDir(t *testing.T) {
+	root := t.TempDir()
+	s := &Server{Work: work.New(root, nil)}
+	d, _ := s.Work.Dir("lb")
+	_ = os.MkdirAll(d, 0o755)
+	if !s.inWorkDir("lb", d) || !s.inWorkDir("lb", d+"/") {
+		t.Error("the Work dir itself must count")
+	}
+	if s.inWorkDir("lb", filepath.Join(d, "local")) || s.inWorkDir("lb", root) || s.inWorkDir("other", d) {
+		t.Error("only that project's Work dir itself counts")
 	}
 }

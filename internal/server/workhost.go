@@ -48,6 +48,11 @@ func (h workHost) StartSession(ctx context.Context, project string, o work.Start
 		return nil, err
 	}
 	id := sess.ID()
+	// A conversation in the Work directory itself is one of the Work's own chats (the Work view lists those by cwd):
+	// it goes in no Code workspace, where it would make a "work" workspace and a tab the user never asked for.
+	if s.inWorkDir(project, sess.Summary().Cwd) {
+		return h.view(sess.Summary(), nil), s.sendFirst(ctx, sess, o)
+	}
 	if err := s.placeSession(project, id, o.Cwd, sess.Summary().Cwd, o.Workspace); err != nil {
 		// The conversation exists either way; say where it couldn't go rather than lose it
 		s.Log.Warn("work: place session", "id", id, "err", err)
@@ -55,16 +60,40 @@ func (h workHost) StartSession(ctx context.Context, project string, o work.Start
 	if o.Focus {
 		s.Hub.Broadcast("open", map[string]any{"id": id, "focus": true})
 	}
-	if strings.TrimSpace(o.Prompt) != "" || len(o.Attachments) > 0 {
-		blocks, err := withAttachments(o.Prompt, o.Attachments)
-		if err != nil {
-			return nil, fmt.Errorf("opened %s but the first message didn't go: %w", id, err)
-		}
-		if _, err := sess.SendFrom(ctx, blocks, "", "", false); err != nil {
-			return nil, fmt.Errorf("opened %s but the first message didn't go: %w", id, err)
-		}
+	if err := s.sendFirst(ctx, sess, o); err != nil {
+		return nil, err
 	}
 	return h.view(sess.Summary(), nil), nil
+}
+
+// sendFirst sends a started session its first message (the prompt, with attachments), if there is one.
+func (s *Server) sendFirst(ctx context.Context, sess *hub.Session, o work.StartOptions) error {
+	if strings.TrimSpace(o.Prompt) == "" && len(o.Attachments) == 0 {
+		return nil
+	}
+	blocks, err := withAttachments(o.Prompt, o.Attachments)
+	if err == nil {
+		_, err = sess.SendFrom(ctx, blocks, "", "", false)
+	}
+	if err != nil {
+		return fmt.Errorf("opened %s but the first message didn't go: %w", sess.ID(), err)
+	}
+	return nil
+}
+
+// inWorkDir: cwd is the project's Work directory (symlinks resolved on both sides).
+func (s *Server) inWorkDir(project, cwd string) bool {
+	d, err := s.workDir(project)
+	if err != nil || cwd == "" {
+		return false
+	}
+	if r, err := filepath.EvalSymlinks(d); err == nil {
+		d = r
+	}
+	if r, err := filepath.EvalSymlinks(cwd); err == nil {
+		cwd = r
+	}
+	return filepath.Clean(cwd) == filepath.Clean(d)
 }
 
 func (h workHost) Session(id string) (map[string]any, error) {
