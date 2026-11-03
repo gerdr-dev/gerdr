@@ -23,6 +23,12 @@ rm -rf desktop/bin && mkdir -p desktop/bin/mac desktop/bin/win
 
 # Brotli at max quality takes about a minute per backend, single-threaded: run them in the background, next to the
 # other arch's build, and wait for all of them before finishing (a failed one fails the build)
+# A fixed signing identity for the backend when this machine has one (desktop/sign-id.sh): keeps macOS privacy grants
+# (Screen Recording / Accessibility for the remote screen) across rebuilds. None = the linker's ad-hoc signature, as before
+SIGN_ID=$(./desktop/sign-id.sh || true)
+export GERDR_SIGN_ID="${SIGN_ID:--}"
+sign_backend() { [ -z "$SIGN_ID" ] || codesign --force --sign "$SIGN_ID" --identifier io.github.zbysir.gerdr.backend "$1"; }
+
 pids=()
 compress() { node desktop/compress.js "$1" "$2" & pids+=($!); }
 compressed() { local p; for p in "${pids[@]}"; do wait "$p"; done; }
@@ -34,12 +40,14 @@ mac-backend)
   for arch in arm64 x64; do
     goarch=$arch && [ "$arch" = x64 ] && goarch=amd64
     GOOS=darwin GOARCH=$goarch go build -ldflags "$LDFLAGS" -o "desktop/bin/gerdr-$arch" ./cmd/gerdr
+    sign_backend "desktop/bin/gerdr-$arch"
     compress "desktop/bin/gerdr-$arch" "desktop/dist/gerdr-$VERSION-darwin-$arch.br"
   done
   compressed
   ;;
 mac-dir)
   GOOS=darwin go build -ldflags "$LDFLAGS" -o desktop/bin/mac/gerdr ./cmd/gerdr
+  sign_backend desktop/bin/mac/gerdr
   ( cd desktop && npx electron-builder --mac dir --publish never "${EB_META[@]}" )
   APP=$(ls -d desktop/dist/mac*/Gerdr.app | head -1)
   ;;
@@ -49,6 +57,7 @@ mac)
   for arch in arm64 x64; do
     goarch=$arch && [ "$arch" = x64 ] && goarch=amd64
     GOOS=darwin GOARCH=$goarch go build -ldflags "$LDFLAGS" -o desktop/bin/mac/gerdr ./cmd/gerdr
+    sign_backend desktop/bin/mac/gerdr
     ( cd desktop && npx electron-builder --mac dmg --$arch --publish never "${EB_META[@]}" \
       -c.dmg.artifactName='${productName}-${version}-mac-${arch}.${ext}' )
     # The backend alone, for updates that don't change the shell (desktop/updater.js): ~10MB (brotli, desktop/compress.js)

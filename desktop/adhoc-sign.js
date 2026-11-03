@@ -5,11 +5,14 @@
 // 原来是 build.sh 等 electron-builder 跑完再签 dist/ 里那份 App，可 dmg 那时已经打好了，装进 dmg 的仍是没签的（踩过）。
 // afterSign 在「没签名」时会被直接跳过，所以挂在 afterPack 上。
 // 配了 CSC_LINK（正式证书）就不管：electron-builder 接下来会正经签名 + 公证。
+// With a local signing identity (GERDR_SIGN_ID from build.sh, desktop/sign-id.sh) it signs with that instead of
+// ad-hoc, so macOS privacy grants given to the App survive rebuilds. The backend inside was already signed by build.sh.
 const { execFileSync } = require("node:child_process");
 const path = require("node:path");
 
 exports.default = async function (ctx) {
   if (ctx.electronPlatformName !== "darwin" || process.env.CSC_LINK) return;
   const app = path.join(ctx.appOutDir, `${ctx.packager.appInfo.productFilename}.app`);
-  execFileSync("codesign", ["--force", "--deep", "--sign", "-", app], { stdio: "inherit" });
+  const id = process.env.GERDR_SIGN_ID || "-";
+  execFileSync("codesign", ["--force", "--deep", "--sign", id, app], { stdio: "inherit" });
 };
