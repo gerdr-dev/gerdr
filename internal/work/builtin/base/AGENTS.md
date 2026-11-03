@@ -22,7 +22,8 @@ upgraded, so the project's own rules go there, not here.
     `weekly.tsx` → `/weekly`, `okr/[id].tsx` → `/okr/:id`); default-export a component.
   - `ui/src/lib/gerdr.ts` — the bridge: `run(fn, input, { onProgress, onLog, signal })` calls a local
     function, `ask(text)` sends a task to you, `openSession(id)` shows a conversation a function started
-    (`ctx.sessions.start`), `openSettings(tab)` opens Gerdr's settings, `secret(name, { label, note })` asks
+    (`ctx.sessions.start`) in Code, `showSession(id)` shows it in a panel over the page instead (its whole chat, and
+    an input box that takes images and files: use it wherever the user answers a worker), `openSettings(tab)` opens Gerdr's settings, `secret(name, { label, note })` asks
     the user for a password / token in Gerdr's own dialog and saves it for `ctx.secrets.get` (the page never sees
     it; never ask for one in a page input or in chat). Light / dark follows Gerdr through it.
     **Don't edit it**: an edited copy stops being upgraded and misses later parts. Put helpers in a file

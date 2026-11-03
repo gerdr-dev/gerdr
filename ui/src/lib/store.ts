@@ -87,6 +87,11 @@ type State = {
    * watched, so switching back keeps the Work site's state (it's an iframe: unmounting reloads it) and the chat's.
    */
   workKept: boolean;
+  /**
+   * A conversation the Work page asked to show over itself (showSession in the site's gerdr.ts), e.g. a worker it
+   * started: the real chat with the real composer (images, files), without making it the project's Work agent.
+   */
+  workPeek: string | null;
   /** The all-agents overview (lib/overview.ts): covers the sidebar and the tabs while on. Per device, in localStorage. */
   overview: Overview;
   /**
@@ -152,6 +157,7 @@ export const useStore = create<State>(() => ({
   sidebarW: loadSidebarW(),
   mode: loadMode(),
   workKept: loadMode() === "work",
+  workPeek: null,
   overview: loadOverview(),
   localFont: loadLocalFont(),
   drawer: false,
@@ -292,6 +298,8 @@ export function watchedSessions(l: Layout, kept: string[]): string[] {
     const c = get().config;
     const work = c.workSessions?.[space] ?? (space === "default" ? c.workSession : undefined);
     if (work) out.add(work);
+    const peek = get().workPeek;
+    if (peek) out.add(peek);
   }
   // The tabs under the overview stay watched (kept), so closing it doesn't reload them
   // On a phone only the shown tile and its two neighbours (the pages a swipe drags in) are mounted (OverviewPhone.tsx):

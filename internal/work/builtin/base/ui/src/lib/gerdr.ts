@@ -11,6 +11,8 @@
 // - ask(text): hand a task to the Work agent on the right of the page (gerdr sends it as a message;
 //   it queues if the agent is busy); resolves with the conversation's id. openChat(id) shows that conversation.
 // - openSession(id): show a coding-agent conversation a local function started (ctx.sessions.start), in Code.
+// - showSession(id): show such a conversation in a panel over this page instead, with gerdr's own chat and input box
+//   (images, files): for answering a worker without leaving the page.
 // - secret(name, { label, note }): ask the user for a key (a password, a token) in gerdr's own dialog; it's saved for
 //   local functions' ctx.secrets.get and never passes through this page. secretNames() lists the saved names.
 // - The page follows gerdr's light / dark theme by itself (see the listener at the bottom).
@@ -128,6 +130,11 @@ export function openChat(session: string) {
 /** Shows a coding-agent conversation a local function started (ctx.sessions.start): switches to Code, at its pane. */
 export function openSession(session: string) {
   window.parent.postMessage({ type: "gerdr:openSession", session }, location.origin);
+}
+
+/** Shows a conversation (e.g. a worker from ctx.sessions.start) in a panel over this page: the whole chat, and its input box takes images and files. */
+export function showSession(session: string) {
+  window.parent.postMessage({ type: "gerdr:showSession", session }, location.origin);
 }
 
 let secretSeq = 0;

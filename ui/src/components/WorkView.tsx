@@ -1,7 +1,7 @@
-import { Briefcase, Check, ChevronDown, Code2, History, MessageSquarePlus, Settings } from "lucide-react";
+import { Briefcase, Check, ChevronDown, Code2, History, MessageSquarePlus, Settings, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { AgentIcon, StatusDot } from "@/components/AgentIcon";
+import { AgentIcon, StatusDot, dotStatus } from "@/components/AgentIcon";
 import { COL_EDGE, startColResize } from "@/components/SidebarChrome";
 import { focusSession } from "@/lib/actions";
 import { toggleOverview } from "@/lib/overview";
@@ -157,6 +157,9 @@ function WorkFrame({ project, onShowChat }: { project: string; onShowChat?: () =
       } else if (m.type === "gerdr:openChat" && typeof m.session === "string") {
         openWorkChat(m.session);
         onShowChat?.();
+      } else if (m.type === "gerdr:showSession" && typeof m.session === "string") {
+        // Over the page, not in Code: the user answers a worker (with images / files) without leaving the board
+        set({ workPeek: m.session });
       } else if (m.type === "gerdr:openSession" && typeof m.session === "string") {
         // A conversation a local function started (ctx.sessions) lives in Code, not in this chat: go to its pane
         toggleOverview(false);
@@ -267,7 +270,58 @@ function WorkFrames({ onShowChat }: { onShowChat?: () => void }) {
           <WorkFrame project={p} onShowChat={onShowChat} />
         </div>
       ))}
+      <WorkPeek />
     </div>
+  );
+}
+
+/**
+ * The conversation the page asked to show (showSession): a panel over the right of the site with the whole chat, so
+ * answering a worker takes images and files like anywhere else. Its own pane id: the draft is separate from the one in
+ * the session's real pane.
+ */
+function WorkPeek() {
+  const id = useStore((s) => s.workPeek);
+  const session = useStore((s) => (s.workPeek ? s.sessions[s.workPeek] : undefined));
+  const ready = useStore((s) => s.ready);
+  useEffect(() => {
+    syncWatch();
+  }, [id]);
+  if (!id) return null;
+  const close = () => set({ workPeek: null });
+  return (
+    <aside className="absolute inset-y-0 right-0 z-30 flex w-[min(640px,100%)] flex-col border-l bg-background shadow-xl" aria-label={session?.title || id}>
+      <div className="flex h-10 shrink-0 items-center gap-2 border-b px-3">
+        {session && <StatusDot status={dotStatus(session)} />}
+        <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{session?.title || id}</span>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-7"
+          title={t("workView.peekInCode")}
+          onClick={() => {
+            close();
+            toggleOverview(false);
+            setMode("agents");
+            focusSession(id);
+          }}
+        >
+          <Code2 className="size-4" />
+        </Button>
+        <Button variant="ghost" size="icon" className="size-7" title={t("common.close")} onClick={close}>
+          <X className="size-4" />
+        </Button>
+      </div>
+      <div className="min-h-0 flex-1">
+        {session ? (
+          <ChatView key={id} session={session} paneId={`work-peek:${id}`} focused />
+        ) : (
+          <div className="flex h-full items-center justify-center text-[12px] text-muted-foreground">
+            {ready ? t("workView.peekGone") : <PixelLoader className="size-4" />}
+          </div>
+        )}
+      </div>
+    </aside>
   );
 }
 
