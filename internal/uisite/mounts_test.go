@@ -44,9 +44,16 @@ func TestMountSharesTheHostGraph(t *testing.T) {
 	})
 	r := New(host, t.TempDir(), nil)
 	r.Mount("lb", work)
+	r.Mount("lb~看板", work) // a panel with a non-ASCII name: its local imports must still be linked
 	b := r.ensure()
 	if b.fatal != "" {
 		t.Fatalf("host fatal: %s", b.fatal)
+	}
+	if code := b.served["@m/lb~看板/src/pages/board.tsx"].code; strings.Contains(code, depPlaceholder) || !strings.Contains(code, "/_ui/m/@m/lb~看板/src/lib/x.ts?v=") {
+		t.Errorf("non-ASCII mount not linked:\n%s", code)
+	}
+	if code := b.served["@m/lb~看板/src/lib/x.ts"].code; !strings.Contains(code, `p = "lb/看板"`) {
+		t.Errorf("a panel's __GERDR_PROJECT__ is its key:\n%s", code)
 	}
 	mi := b.mounts["lb"]
 	if mi.Error != "" || mi.Entry == "" || mi.Cards == "" {

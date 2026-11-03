@@ -1,4 +1,4 @@
-import { ArrowDownRight, Briefcase, Check, ChevronDown, Code2, History, MessageSquarePlus, Settings, X } from "lucide-react";
+import { ArrowDownRight, Check, ChevronDown, Code2, History, MessageSquarePlus, Settings, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { toast } from "sonner";
@@ -28,8 +28,11 @@ import { syncWatch } from "@/lib/sync";
 import { cn } from "@/lib/utils";
 import { openInCode } from "@/core/sessions";
 import { useDark } from "@/core/theme";
-import { registerMount, useMount } from "@/lib/mounts";
+import { mountName, registerMount, useMount } from "@/lib/mounts";
 import { askSecret, secretAsks } from "@/lib/workSecrets";
+import { mountInfo } from "@/lib/mounts";
+import { PanelButtons } from "@/components/PanelButtons";
+import { panelOfKey, spaceOfKey } from "@/lib/work";
 import { askWorkAgent, ensureWorkSession, isEmptyChat, newWorkChat, openWorkChat, useWorkChats, useWorkProject, useWorkSession, workAgent } from "@/lib/work";
 import { t } from "@/lib/i18n";
 
@@ -110,7 +113,15 @@ export function ModeSwitch() {
   return (
     <div className="flex shrink-0 gap-0.5 rounded-lg bg-muted p-0.5" style={{ WebkitAppRegion: "no-drag" } as any}>
       {item("agents", "Code", Code2)}
-      {item("work", "Work", Briefcase)}
+      <PanelButtons
+        size="row"
+        className={(on) =>
+          cn(
+            "flex h-6 w-7 items-center justify-center rounded-md",
+            on ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+          )
+        }
+      />
     </div>
   );
 }
@@ -187,7 +198,7 @@ function MountRoot({ project }: { project: string }) {
   }, [project, seq, ok]);
   const error = info?.error || failed;
   return (
-    <div className="relative size-full overflow-hidden bg-background" {...{ [MOUNT_ATTR]: project }}>
+    <div className="relative size-full overflow-hidden bg-background" {...{ [MOUNT_ATTR]: mountName(project) }}>
       <div ref={ref} className={cn("size-full", error && "hidden")} />
       {error && <MountError project={project} error={error} />}
       {!info && (
@@ -368,7 +379,7 @@ function WorkFrames({ onShowChat }: { onShowChat?: () => void }) {
   const workspaces = useStore((s) => s.layout.workspaces);
   const [kept, setKept] = useState<string[]>([]);
   const live = new Set(spaceList({ spaces, workspaces } as Layout).map((s) => s.id));
-  const list = kept.filter((p) => live.has(p));
+  const list = kept.filter((p) => live.has(spaceOfKey(p)) && (!panelOfKey(p) || mountInfo(p)));
   if (shown && !list.includes(project)) list.push(project);
   const key = list.join("\n");
   useEffect(() => {

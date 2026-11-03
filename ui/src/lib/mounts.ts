@@ -19,15 +19,48 @@ type UIUpdate = { mounts: Record<string, MountInfo>; remount: string[] };
 
 const page = () => (window as any).__GERDR_UI__ as { mounts?: Record<string, MountInfo> } | undefined;
 
-export function mountInfo(name: string): MountInfo | undefined {
-  return page()?.mounts?.[name];
+/**
+ * A Work's mount in the page: its key, with a panel's "/" as "~" (a mount name is one path segment; server mountName).
+ * Every mount function here takes the key.
+ */
+export const mountName = (key: string) => key.replace("/", "~");
+
+export function mountInfo(key: string): MountInfo | undefined {
+  return page()?.mounts?.[mountName(key)];
 }
 
-/** A mount's info, and a number that goes up whenever its root has to be rendered again. */
-export function useMount(name: string): { info: MountInfo | undefined; seq: number } {
-  const [state, setState] = useState(() => ({ info: mountInfo(name), seq: 0 }));
+/** One of a project's panels, for the rail. */
+export type Panel = { key: string; name: string; title: string };
+
+function panelsOf(space: string): Panel[] {
+  const out: Panel[] = [{ key: space, name: "", title: "Work" }];
+  for (const [n, m] of Object.entries(page()?.mounts ?? {})) {
+    if (!n.startsWith(space + "~")) continue;
+    const name = n.slice(space.length + 1);
+    const title = typeof m.config?.title === "string" && m.config.title !== "Work" ? m.config.title : name;
+    out.push({ key: `${space}/${name}`, name, title });
+  }
+  return out.sort((a, b) => (a.name === "" ? -1 : b.name === "" ? 1 : a.name.localeCompare(b.name)));
+}
+
+/** A project's panels: its own Work first, then the ones installed or added (they appear as their mounts do). */
+export function usePanels(space: string): Panel[] {
+  const [list, setList] = useState(() => panelsOf(space));
   useEffect(() => {
-    setState((s) => ({ ...s, info: mountInfo(name) }));
+    setList(panelsOf(space));
+    const f = () => setList(panelsOf(space));
+    window.addEventListener("gerdr:ui", f);
+    return () => window.removeEventListener("gerdr:ui", f);
+  }, [space]);
+  return list;
+}
+
+/** A Work's mount info, and a number that goes up whenever its root has to be rendered again. */
+export function useMount(key: string): { info: MountInfo | undefined; seq: number } {
+  const name = mountName(key);
+  const [state, setState] = useState(() => ({ info: mountInfo(key), seq: 0 }));
+  useEffect(() => {
+    setState((s) => ({ ...s, info: mountInfo(key) }));
     const f = (e: Event) => {
       const d = (e as CustomEvent<UIUpdate>).detail;
       const info = d.mounts?.[name];
@@ -40,12 +73,13 @@ export function useMount(name: string): { info: MountInfo | undefined; seq: numb
     };
     window.addEventListener("gerdr:ui", f);
     return () => window.removeEventListener("gerdr:ui", f);
-  }, [name]);
+  }, [key]);
   return state;
 }
 
 /** Its components registered with React Refresh, so editing them keeps the page's state (the runtime does the host's). */
-export async function registerMount(name: string) {
+export async function registerMount(key: string) {
+  const name = mountName(key);
   const rt = (window as any).__gerdrUIRuntime as { register(p: string, url: string): Promise<unknown>; modules(): Record<string, { url: string }> } | undefined;
   if (!rt) return;
   const prefix = `@m/${name}/`;

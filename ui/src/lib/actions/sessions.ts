@@ -2,10 +2,10 @@ import { toast } from "sonner";
 import { api } from "../api";
 import { askConfirm } from "../confirm";
 import { allLeaves, currentSpace, locateSession, setPane, spaceList, type PaneLeaf } from "../layout";
-import { get, markRead, overviewShown, set, setLayout, setMode } from "../store";
+import { get, markRead, overviewShown, set, setLayout, setMode, setWorkPanel } from "../store";
 import { focusTile, overviewIds, replaceTile, toggleOverview } from "../overview";
 import { isOpen } from "../overviewState";
-import { openWorkChat, workProjectOf } from "../work";
+import { openWorkChat, panelOfKey, spaceOfKey, workProjectOf } from "../work";
 import { currentView } from "./views";
 import type { ContentBlock } from "../types";
 import { focusPane } from "./panes";
@@ -92,11 +92,13 @@ export async function continueInPane(paneId: string, sessionId: string, agent: s
  */
 export function openInWork(sessionId: string): boolean {
   if (locateSession(get().layout, sessionId)) return false; // already in a pane (from before this check): leave it there
-  const project = workProjectOf(sessionId);
-  if (!project) return false;
+  const key = workProjectOf(sessionId);
+  if (!key) return false;
+  const project = spaceOfKey(key);
   if (currentSpace(get().layout) !== project && spaceList(get().layout).some((s) => s.id === project)) switchSpace(project);
+  setWorkPanel(project, panelOfKey(key)); // a panel's agent: that panel
   setMode("work");
-  openWorkChat(sessionId, project);
+  openWorkChat(sessionId, key);
   markRead(sessionId);
   return true;
 }

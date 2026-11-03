@@ -27,7 +27,7 @@ import {
 } from "../layout";
 import { get, set, setLayout } from "../store";
 import { addActive, focusTile, MAX_TILES, overviewFocus, overviewIds, setOverview } from "../overview";
-import { workProjectOf } from "../work";
+import { spaceOfKey, workProjectOf } from "../work";
 import { rememberPane } from "./reopen";
 import { createInPane, focusSession, openInWork } from "./sessions";
 import { basename, focusedLeaf, inSpace, inheritDraft, killTerms, removeTab, selectTabIn, shutdownGone } from "./shared";
@@ -106,7 +106,8 @@ export function newAgentInOverview(): boolean {
       setLayout((l) => {
         const loc = locateSession(l, s.id);
         // A Work conversation's tile has no pane: its project's workspace, as openSessionNear does
-        const project = loc ? undefined : workProjectOf(s.id);
+        const key = loc ? undefined : workProjectOf(s.id);
+        const project = key && spaceOfKey(key);
         const home = project ? spaceWorkspaces(l, project) : [];
         const ws = loc?.ws ?? home.find((w) => w.id === spaceList(l).find((x) => x.id === project)?.active) ?? home[0] ?? activeWs(l);
         const t = newTab(undefined, n.id);
@@ -154,7 +155,8 @@ export function openSessionNear(sessionId: string, near?: string, focus = false)
       });
     }
     // Asked by a Work agent (no pane of its own): into its project's workspace, not whichever one is on screen
-    const project = near ? workProjectOf(near) : undefined;
+    const key = near ? workProjectOf(near) : undefined;
+    const project = key && spaceOfKey(key);
     const home = project && project !== currentSpace(l) ? spaceWorkspaces(l, project) : [];
     const ws = home.find((w) => w.id === spaceList(l).find((s) => s.id === project)?.active) ?? home[0] ?? activeWs(l);
     const t = newTab(undefined, sessionId);

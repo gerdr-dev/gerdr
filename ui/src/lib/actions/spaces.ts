@@ -13,7 +13,7 @@ import {
   type Workspace,
 } from "../layout";
 import { flushLayout, get, setConfig, setLayout } from "../store";
-import { workProjectOf } from "../work";
+import { spaceOfKey, workProjectOf } from "../work";
 import { inSpace, killTerms, shutdownGone } from "./shared";
 import { t } from "../i18n";
 
@@ -191,9 +191,12 @@ export async function deleteSpace(id: string): Promise<{ trash: string; undo: ()
   const restore = snapshotSpace(id);
   const c = get().config;
   closeSpace(id);
-  for (const s of Object.keys(get().sessions)) if (workProjectOf(s) === id) api.shutdown(s).catch(() => {});
-  const drop = (m?: Record<string, string>) => (m && id in m ? Object.fromEntries(Object.entries(m).filter(([k]) => k !== id)) : m);
-  if (c.workSessions?.[id] || c.workAgents?.[id]) setConfig({ workSessions: drop(c.workSessions), workAgents: drop(c.workAgents) });
+  for (const s of Object.keys(get().sessions)) if (spaceOfKey(workProjectOf(s) ?? "") === id && workProjectOf(s)) api.shutdown(s).catch(() => {});
+  // Its panels' entries too ("<id>/<panel>")
+  const mine = (k: string) => k === id || k.startsWith(id + "/");
+  const drop = (m?: Record<string, string>) => (m && Object.keys(m).some(mine) ? Object.fromEntries(Object.entries(m).filter(([k]) => !mine(k))) : m);
+  if (Object.keys(c.workSessions ?? {}).some(mine) || Object.keys(c.workAgents ?? {}).some(mine))
+    setConfig({ workSessions: drop(c.workSessions), workAgents: drop(c.workAgents) });
   // The server refuses while its saved layout still has the project open (its next save would write the layout copy back)
   await flushLayout();
   const { trash } = await api.deleteProject(id);

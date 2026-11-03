@@ -65,7 +65,7 @@ func TestProjects(t *testing.T) {
 			t.Fatalf("ProjectOf(%s) = %s", d, got)
 		}
 	}
-	for _, bad := range []string{"../x", "a/b", ".hidden", "v1.2", " pad", "a\\b"} {
+	for _, bad := range []string{"../x", "a/b/c", "a/..", "../b", ".hidden", "v1.2", " pad", "a\\b"} {
 		if _, err := r.Dir(bad); err == nil {
 			t.Fatalf("%q accepted", bad)
 		}

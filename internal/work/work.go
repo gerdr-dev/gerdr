@@ -29,6 +29,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -82,9 +83,57 @@ func validProject(id string) bool {
 	return !strings.ContainsFunc(id, func(c rune) bool { return c == '/' || c == '\\' || c == '.' || c < 0x20 })
 }
 
-// Dir is a project's Work directory ("" = the default project).
-func (r *Runner) Dir(project string) (string, error) {
-	if project == "" || project == DefaultProject {
+// A project has panels: its Work (key: the project's id) and any number more, each a whole Work app of its own (pages,
+// local functions, skills, schedules, data) in <project dir>/panels/<name> (key: "<project>/<name>"; the default
+// project's are in <root>/panels). Everything about a Work goes by its key: functions, tools, schedules, its agent's
+// conversation. The layout (Code's workspaces, which window a session is in) goes by the project alone (SplitKey).
+const PanelsDir = "panels"
+
+// SplitKey: "lb/board" → ("lb", "board"); "lb" → ("lb", ""); "" → (DefaultProject, "").
+func SplitKey(key string) (project, panel string) {
+	project, panel, _ = strings.Cut(key, "/")
+	if project == "" {
+		project = DefaultProject
+	}
+	return project, panel
+}
+
+// PanelKey is the key of a project's panel ("" = its Work).
+func PanelKey(project, panel string) string {
+	if project == "" {
+		project = DefaultProject
+	}
+	if panel == "" {
+		return project
+	}
+	return project + "/" + panel
+}
+
+// panelsDir: where a project's extra panels live.
+func (r *Runner) panelsDir(project string) (string, error) {
+	if project == DefaultProject {
+		return filepath.Join(r.Root, PanelsDir), nil
+	}
+	if !validProject(project) {
+		return "", errBadProject(project)
+	}
+	return filepath.Join(r.Root, "projects", project, PanelsDir), nil
+}
+
+// Dir is the Work directory of a key: a project ("" = the default one) or one of its panels.
+func (r *Runner) Dir(key string) (string, error) {
+	project, panel := SplitKey(key)
+	if panel != "" {
+		if !validProject(panel) {
+			return "", fmt.Errorf("bad panel name %q", panel)
+		}
+		d, err := r.panelsDir(project)
+		if err != nil {
+			return "", err
+		}
+		return filepath.Join(d, panel), nil
+	}
+	if project == DefaultProject {
 		return filepath.Join(r.Root, "work"), nil
 	}
 	if !validProject(project) {
@@ -93,51 +142,110 @@ func (r *Runner) Dir(project string) (string, error) {
 	return filepath.Join(r.Root, "projects", project, "work"), nil
 }
 
-// Projects: every project that has a Work directory with a UI in it (the default one first).
+// Panels: a project's extra panels (not its Work), by name.
+func (r *Runner) Panels(project string) []string {
+	d, err := r.panelsDir(project)
+	if err != nil {
+		return nil
+	}
+	var out []string
+	ents, _ := os.ReadDir(d)
+	for _, e := range ents {
+		if e.IsDir() && validProject(e.Name()) {
+			out = append(out, e.Name())
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// Projects: the keys of every Work on disk with a UI (each project's Work, then its panels).
 func (r *Runner) Projects() []string {
 	var out []string
-	if fi, err := os.Stat(filepath.Join(r.Root, "work", "ui")); err == nil && fi.IsDir() {
-		out = append(out, DefaultProject)
+	has := func(key string) bool {
+		d, err := r.Dir(key)
+		if err != nil {
+			return false
+		}
+		fi, err := os.Stat(filepath.Join(d, "ui"))
+		return err == nil && fi.IsDir()
 	}
+	projects := []string{DefaultProject}
 	ents, _ := os.ReadDir(filepath.Join(r.Root, "projects"))
 	for _, e := range ents {
-		if !e.IsDir() || !validProject(e.Name()) || e.Name() == DefaultProject {
-			continue
+		if e.IsDir() && validProject(e.Name()) && e.Name() != DefaultProject {
+			projects = append(projects, e.Name())
 		}
-		if fi, err := os.Stat(filepath.Join(r.Root, "projects", e.Name(), "work", "ui")); err == nil && fi.IsDir() {
-			out = append(out, e.Name())
+	}
+	for _, p := range projects {
+		if has(p) {
+			out = append(out, p)
+		}
+		for _, n := range r.Panels(p) {
+			if k := PanelKey(p, n); has(k) {
+				out = append(out, k)
+			}
 		}
 	}
 	return out
 }
 
-// WorkProject is the project whose Work directory holds dir, false when dir is in none. That's how a Work agent (an
-// ordinary session opened in its project's Work directory, shown in no pane) is placed in its project.
+// WorkProject is the project whose Work (or one of whose panels) holds dir, false when dir is in none. That's how a
+// Work agent (an ordinary session opened in its Work directory, shown in no pane) is placed in its project.
 func (r *Runner) WorkProject(dir string) (string, bool) {
+	key, ok := r.WorkKey(dir)
+	if !ok {
+		return "", false
+	}
+	p, _ := SplitKey(key)
+	return p, true
+}
+
+// WorkKey is the Work (a project's, or a panel's) whose directory holds dir.
+func (r *Runner) WorkKey(dir string) (string, bool) {
 	if dir == "" {
 		return "", false
 	}
-	in := func(base string) bool {
+	under := func(base string) (string, bool) {
 		rel, err := filepath.Rel(base, dir)
-		return err == nil && rel != ".." && !strings.HasPrefix(rel, "../")
+		if err != nil || rel == ".." || strings.HasPrefix(rel, "../") {
+			return "", false
+		}
+		return filepath.ToSlash(rel), true
 	}
-	if in(filepath.Join(r.Root, "work")) {
+	panelOf := func(project, rest string) (string, bool) {
+		name, _, _ := strings.Cut(rest, "/")
+		if validProject(name) {
+			return PanelKey(project, name), true
+		}
+		return "", false
+	}
+	if _, ok := under(filepath.Join(r.Root, "work")); ok {
 		return DefaultProject, true
 	}
-	rel, err := filepath.Rel(filepath.Join(r.Root, "projects"), dir)
-	if err == nil && !strings.HasPrefix(rel, "..") {
-		if id, rest, _ := strings.Cut(filepath.ToSlash(rel), "/"); validProject(id) && (rest == "work" || strings.HasPrefix(rest, "work/")) {
+	if rest, ok := under(filepath.Join(r.Root, PanelsDir)); ok && rest != "." {
+		return panelOf(DefaultProject, rest)
+	}
+	if rel, ok := under(filepath.Join(r.Root, "projects")); ok {
+		id, rest, _ := strings.Cut(rel, "/")
+		if !validProject(id) {
+			return "", false
+		}
+		if rest == "work" || strings.HasPrefix(rest, "work/") {
 			return id, true
+		}
+		if strings.HasPrefix(rest, PanelsDir+"/") {
+			return panelOf(id, strings.TrimPrefix(rest, PanelsDir+"/"))
 		}
 	}
 	return "", false
 }
 
-// ProjectOf is the project whose Work directory contains dir (for `gerdr work …` run by the Work agent
-// from its cwd); the default project when it's none of them.
+// ProjectOf is the Work key whose directory contains dir (for `gerdr work …` run by a Work agent from its cwd); the
+// default project when it's none of them.
 func (r *Runner) ProjectOf(dir string) string {
-	if p, ok := r.WorkProject(dir); ok {
-		return p
+	if k, ok := r.WorkKey(dir); ok {
+		return k
 	}
 	return DefaultProject
 }

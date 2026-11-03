@@ -25,9 +25,9 @@ func TestRepoURL(t *testing.T) {
 	}
 }
 
-// Installing clones over the Work (the old one to the trash, built-in files added, the repo's own kept); a failed
-// clone leaves the old one where it was.
-func TestInstallAndReset(t *testing.T) {
+// Installing adds a panel next to the project's Work (which stays as it was), with built-in files added and the
+// repo's own kept; removing one moves it to the trash.
+func TestPanels(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("no git")
 	}
@@ -39,8 +39,7 @@ func TestInstallAndReset(t *testing.T) {
 	}
 	os.WriteFile(filepath.Join(dir, "mine.txt"), []byte("x"), 0o644)
 
-	// a repository that is a Work
-	src := t.TempDir()
+	src := filepath.Join(t.TempDir(), "task-board")
 	os.MkdirAll(filepath.Join(src, "ui", "src", "pages"), 0o755)
 	os.WriteFile(filepath.Join(src, "ui", "package.json"), []byte(`{"dependencies":{}}`), 0o644)
 	os.WriteFile(filepath.Join(src, "ui", "src", "pages", "index.tsx"), []byte(`export default function P() { return "board" }`), 0o644)
@@ -51,37 +50,54 @@ func TestInstallAndReset(t *testing.T) {
 		}
 	}
 
-	if _, err := r.Install(context.Background(), "p", "file://"+filepath.Join(t.TempDir(), "nope")); err == nil {
+	if _, err := r.Install(context.Background(), "p", "file://"+filepath.Join(t.TempDir(), "nope"), ""); err == nil {
 		t.Fatal("a bad address installed")
 	}
-	if _, err := os.Stat(filepath.Join(dir, "mine.txt")); err != nil {
-		t.Fatal("a failed install lost the old Work")
-	}
-
-	trash, err := r.Install(context.Background(), "p", "file://"+src)
+	key, err := r.Install(context.Background(), "p", "file://"+src, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if b, _ := os.ReadFile(filepath.Join(trash, "mine.txt")); string(b) != "x" {
-		t.Error("the old Work isn't in the trash")
+	if key != "p/task-board" {
+		t.Errorf("key %q", key)
 	}
-	if b, _ := os.ReadFile(filepath.Join(dir, "ui", "src", "pages", "index.tsx")); string(b) != `export default function P() { return "board" }` {
-		t.Errorf("repo's page replaced: %s", b)
+	if b, _ := os.ReadFile(filepath.Join(dir, "mine.txt")); string(b) != "x" {
+		t.Error("installing a panel touched the project's Work")
 	}
-	if b, _ := os.ReadFile(filepath.Join(dir, "AGENTS.md")); string(b) != "theirs" {
+	pd, _ := r.Dir(key)
+	if b, _ := os.ReadFile(filepath.Join(pd, "AGENTS.md")); string(b) != "theirs" {
 		t.Error("the repo's own AGENTS.md was overwritten")
 	}
-	if _, err := os.Stat(filepath.Join(dir, "local", "ctx.d.ts")); err != nil {
+	if _, err := os.Stat(filepath.Join(pd, "local", "ctx.d.ts")); err != nil {
 		t.Error("built-in files missing after install")
 	}
-	if s, _ := r.Source("p"); !s.Git || s.Remote == "" {
-		t.Errorf("source %+v", s)
+	if k2, _ := r.Install(context.Background(), "p", "file://"+src, ""); k2 != "p/task-board-2" {
+		t.Errorf("second install: %q", k2)
 	}
-
-	if _, err := r.Reset("p"); err != nil {
+	if k, ok := r.WorkKey(filepath.Join(pd, "ui", "src")); !ok || k != key {
+		t.Errorf("WorkKey %q %v", k, ok)
+	}
+	if p, ok := r.WorkProject(pd); !ok || p != "p" {
+		t.Errorf("WorkProject %q %v", p, ok)
+	}
+	if got := r.Projects(); len(got) != 3 || got[0] != "p" && got[1] != "p" {
+		t.Errorf("Projects %v", got)
+	}
+	blank, err := r.NewPanel(DefaultProject, "草稿")
+	if err != nil || blank != "default/草稿" {
+		t.Fatal(blank, err)
+	}
+	bd, _ := r.Dir(blank)
+	if b, _ := os.ReadFile(filepath.Join(bd, "ui", "src", "pages", "index.tsx")); string(b) != string(bundled()["ui/src/pages/index.tsx"]) {
+		t.Error("a blank panel isn't the built-in Work")
+	}
+	if _, err := r.RemovePanel("p"); err == nil {
+		t.Error("removed a project's own Work")
+	}
+	trash, err := r.RemovePanel(key)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if b, _ := os.ReadFile(filepath.Join(dir, "ui", "src", "pages", "index.tsx")); string(b) != string(bundled()["ui/src/pages/index.tsx"]) {
-		t.Error("reset didn't bring the blank Work back")
+	if _, err := os.Stat(filepath.Join(trash, "AGENTS.md")); err != nil {
+		t.Error("removed panel isn't in the trash")
 	}
 }

@@ -328,7 +328,10 @@ func lastReply(evs []*hub.Event) string {
 	return strings.Join(parts, "\n\n")
 }
 
+// spaceOr: the layout space of a Work key. A panel (work.SplitKey "<project>/<panel>") is in its project's space: its
+// conversations go into that project's Code workspaces.
 func spaceOr(project string) string {
+	project, _, _ = strings.Cut(project, "/")
 	if project == "" {
 		return DefaultSpace
 	}

@@ -10,9 +10,22 @@ import type { SessionSummary } from "@/lib/types";
 // Work site and local functions, and its own Work agent: an ordinary session opened in that directory.
 // The current conversation and the agent new ones use are kept per project in config (shared by devices).
 
-/** The project on screen. */
-export const workProject = () => currentSpace(getApp().layout);
-export const useWorkProject = () => useStore((s) => currentSpace(s.layout));
+// A project can have panels beyond its Work (server work.Runner: <project>/panels/<name>), each a whole Work of its own:
+// its own functions, data, schedules and agent conversation. Everything here goes by the Work's key: the project's id
+// for its own Work, "<project>/<panel>" for a panel. The layout (which project is on screen) goes by spaceOfKey.
+
+/** The project a Work key belongs to. */
+export const spaceOfKey = (key: string) => key.split("/")[0] || "default";
+/** The panel of a key ("" = the project's own Work). */
+export const panelOfKey = (key: string) => key.split("/")[1] ?? "";
+const keyOf = (space: string, panel?: string) => (panel ? `${space}/${panel}` : space);
+
+/** The Work on screen: the current project's chosen panel. */
+export const workProject = () => {
+  const sp = currentSpace(getApp().layout);
+  return keyOf(sp, getApp().workPanels[sp]);
+};
+export const useWorkProject = () => useStore((s) => keyOf(currentSpace(s.layout), s.workPanels[currentSpace(s.layout)]));
 
 const dirs: Record<string, string> = {};
 const dirP: Record<string, Promise<string>> = {};
@@ -38,8 +51,11 @@ export function workProjectOf(sessionId: string): string | undefined {
   const root = getApp().addonsDir.replace(/\/addons\/?$/, ""); // <GERDR_DIR>/addons
   if (!root || root === getApp().addonsDir) return undefined;
   if (cwd === root + "/work" || cwd.startsWith(root + "/work/")) return "default";
-  const m = cwd.slice(root.length).match(/^\/projects\/([^/]+)\/work(\/|$)/);
-  return m ? m[1] : undefined;
+  const rel = cwd.slice(root.length);
+  const dp = rel.match(/^\/panels\/([^/]+)(\/|$)/);
+  if (dp) return `default/${dp[1]}`;
+  const m = rel.match(/^\/projects\/([^/]+)\/(?:work(\/|$)|panels\/([^/]+)(\/|$))/);
+  return m ? keyOf(m[1], m[3]) : undefined;
 }
 
 /** The project's current Work conversation. The default project's used to live in config.workSession (before projects). */
@@ -47,8 +63,10 @@ export function workSessionOf(project: string): string | undefined {
   const c = getApp().config;
   return c.workSessions?.[project] ?? (project === "default" ? c.workSession : undefined);
 }
-export const useWorkSession = () =>
-  useStore((s) => s.config.workSessions?.[currentSpace(s.layout)] ?? (currentSpace(s.layout) === "default" ? s.config.workSession : undefined));
+export const useWorkSession = () => {
+  const key = useWorkProject();
+  return useStore((s) => s.config.workSessions?.[key] ?? (key === "default" ? s.config.workSession : undefined));
+};
 
 function setWorkSession(project: string, id: string) {
   setConfig({ workSessions: { ...getApp().config.workSessions, [project]: id } });

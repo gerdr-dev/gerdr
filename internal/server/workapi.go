@@ -18,21 +18,26 @@ import (
 // directory (work.Runner.Dir) holding its Work project (ui/), local functions (local/) and the Work
 // agent's CLAUDE.md. Requests name the project with ?project= / "project"; empty = the default one.
 
-// mountWork compiles the project's Work UI into gerdr's own page (uisite mounts): WorkView draws it as a second
-// React root, not a frame. Every project that has a Work is mounted at start (MountWorks) and on first use.
-func (s *Server) mountWork(project string) (string, error) {
-	if project == "" {
-		project = work.DefaultProject
+// mountWork compiles a Work's UI (a project's own, or one of its panels: work.SplitKey) into gerdr's own page
+// (uisite mounts): WorkView draws it as a second React root, not a frame. Every Work is mounted at start
+// (MountWorks) and on first use.
+func (s *Server) mountWork(key string) (string, error) {
+	if key == "" {
+		key = work.DefaultProject
 	}
-	dir, err := s.Work.Ensure(project)
+	dir, err := s.Work.Ensure(key)
 	if err != nil {
 		return "", err
 	}
 	if s.UI != nil {
-		s.UI.Mount(project, filepath.Join(dir, "ui"))
+		s.UI.Mount(mountName(key), filepath.Join(dir, "ui"))
 	}
 	return dir, nil
 }
+
+// mountName: a Work's mount in the page. A mount name is one path segment (@m/<name>/…), so a panel's "/" is "~"
+// (no project or panel name can hold either); the page maps it back (ui/src/lib/mounts.ts).
+func mountName(key string) string { return strings.Replace(key, "/", "~", 1) }
 
 // MountWorks mounts the Work UI of every project that has one, so a page loads with them all (each loads its modules
 // only when shown).
@@ -83,7 +88,10 @@ func (s *Server) workRoutes(mux *http.ServeMux) {
 			return
 		}
 		if s.UI != nil {
-			s.UI.Mount(name, "")
+			s.UI.Mount(mountName(name), "")
+			for _, p := range s.Work.Panels(name) {
+				s.UI.Mount(mountName(work.PanelKey(name, p)), "")
+			}
 		}
 		trash, err := s.Work.Remove(name)
 		if err != nil {
@@ -102,39 +110,61 @@ func (s *Server) workRoutes(mux *http.ServeMux) {
 		}
 		writeJSON(w, src)
 	})
+	// A project's panels beyond its Work (work/source.go): install one from a git repository, add a blank one, remove
+	// one (to the trash). Adding never replaces anything.
 	mux.HandleFunc("POST /api/work/install", func(w http.ResponseWriter, r *http.Request) {
 		var b struct {
 			Project string `json:"project"`
 			URL     string `json:"url"`
+			Name    string `json:"name"`
 		}
 		if err := decode(r, &b); err != nil {
 			httpError(w, 400, err.Error())
 			return
 		}
-		trash, err := s.Work.Install(r.Context(), b.Project, b.URL)
+		key, err := s.Work.Install(r.Context(), b.Project, b.URL, b.Name)
 		if err != nil {
 			httpError(w, 400, err.Error())
 			return
 		}
-		s.Log.Info("work: installed", "project", b.Project, "url", b.URL, "old", trash)
-		_, _ = s.mountWork(b.Project)
-		writeJSON(w, map[string]any{"trash": trash})
+		s.Log.Info("work: panel installed", "key", key, "url", b.URL)
+		_, _ = s.mountWork(key)
+		writeJSON(w, map[string]any{"key": key})
 	})
-	mux.HandleFunc("POST /api/work/reset", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /api/work/panels", func(w http.ResponseWriter, r *http.Request) {
 		var b struct {
 			Project string `json:"project"`
+			Name    string `json:"name"`
 		}
 		if err := decode(r, &b); err != nil {
 			httpError(w, 400, err.Error())
 			return
 		}
-		trash, err := s.Work.Reset(b.Project)
+		key, err := s.Work.NewPanel(b.Project, b.Name)
 		if err != nil {
 			httpError(w, 400, err.Error())
 			return
 		}
-		s.Log.Info("work: reset to blank", "project", b.Project, "old", trash)
-		_, _ = s.mountWork(b.Project)
+		_, _ = s.mountWork(key)
+		writeJSON(w, map[string]any{"key": key})
+	})
+	mux.HandleFunc("POST /api/work/panels/remove", func(w http.ResponseWriter, r *http.Request) {
+		var b struct {
+			Key string `json:"key"`
+		}
+		if err := decode(r, &b); err != nil {
+			httpError(w, 400, err.Error())
+			return
+		}
+		trash, err := s.Work.RemovePanel(b.Key)
+		if err != nil {
+			httpError(w, 400, err.Error())
+			return
+		}
+		if s.UI != nil {
+			s.UI.Mount(mountName(b.Key), "")
+		}
+		s.Log.Info("work: panel removed", "key", b.Key, "trash", trash)
 		writeJSON(w, map[string]any{"trash": trash})
 	})
 	mux.HandleFunc("POST /api/work/update", func(w http.ResponseWriter, r *http.Request) {
@@ -342,7 +372,7 @@ func (s *Server) workRoutes(mux *http.ServeMux) {
 			httpError(w, 400, fmt.Sprint(err))
 			return
 		}
-		fatal, runtime, _ := s.UI.MountStatus(project)
+		fatal, runtime, _ := s.UI.MountStatus(mountName(project))
 		if runtime == nil {
 			runtime = []uisite.ClientError{}
 		}

@@ -28,7 +28,7 @@ type Dialog =
   | { kind: "rename"; target: "tab" | "session" | "space" | "newSpace"; id: string; value: string }
   | { kind: "newWorkspace" }
   | { kind: "editWorkspace"; id: string }
-  | { kind: "workSource"; project: string; action: "install" | "reset" }
+  | { kind: "workSource"; project: string; action: "install" | "new" }
   | { kind: "importHerdr" }
   /** host: the agent's records on another computer (docs/dev/MULTIHOST.md) */
   | { kind: "importAgent"; agent: string; cwd: string; paneId: string; host?: string }
@@ -104,6 +104,11 @@ type State = {
    * show each: they're streamed like a pane on screen while any is mounted.
    */
   mountWatch: Record<string, number>;
+  /**
+   * Which panel Work mode shows in each project: "" its own Work, else a panel's name (a project can have several,
+   * work.Runner panels). Per device, in localStorage, like the mode.
+   */
+  workPanels: Record<string, string>;
   /** The all-agents overview (lib/overview.ts): covers the sidebar and the tabs while on. Per device, in localStorage. */
   overview: Overview;
   /**
@@ -172,6 +177,7 @@ export const useStore = create<State>(() => ({
   workKept: loadMode() === "work",
   workPeek: null,
   mountWatch: {},
+  workPanels: loadWorkPanels(),
   overview: loadOverview(),
   localFont: loadLocalFont(),
   drawer: false,
@@ -244,6 +250,24 @@ export function markUnread(id: string) {
     saveUnread(id, true, unread);
     return { unread };
   });
+}
+
+function loadWorkPanels(): Record<string, string> {
+  try {
+    return JSON.parse(localStorage.getItem("gerdr.workPanels") || "{}") ?? {};
+  } catch {
+    return {};
+  }
+}
+
+/** Show this panel of the project in Work mode ("" = its own Work). */
+export function setWorkPanel(space: string, panel: string) {
+  const workPanels = { ...get().workPanels, [space]: panel };
+  if (!panel) delete workPanels[space];
+  set({ workPanels });
+  try {
+    localStorage.setItem("gerdr.workPanels", JSON.stringify(workPanels));
+  } catch {}
 }
 
 export function setMode(mode: "agents" | "work") {
@@ -327,7 +351,9 @@ export function watchedSessions(l: Layout, kept: string[]): string[] {
   if (get().mode === "work" || get().workKept) {
     const space = currentSpace(l);
     const c = get().config;
-    const work = c.workSessions?.[space] ?? (space === "default" ? c.workSession : undefined);
+    const panel = get().workPanels[space];
+    const key = panel ? `${space}/${panel}` : space;
+    const work = c.workSessions?.[key] ?? (key === "default" ? c.workSession : undefined);
     if (work) out.add(work);
     const peek = get().workPeek;
     if (peek) out.add(peek.id);

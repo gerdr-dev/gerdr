@@ -584,11 +584,18 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
   (`lib/workSecrets.ts`, Gerdr's dialog), `registerCard` / `DefaultCard`, `toast`, `useDark`. Small on purpose: every
   Work UI written against it breaks when it changes. A page that draws its own chats says `"chat": false` in its
   `ui.json` and gets the whole width (WorkView drops the Work agent column).
-- A project's Work is a whole app, so it can be installed (`work/source.go`, the project chip's menu,
-  `WorkSourceDialog`): `git clone` of a published Work (`o/r`, a GitHub URL, `file://`), the built-in blank one, or
-  `git pull --ff-only` of the one it came from. The Work there moves to `trash/work/<project>-<time>` first, data and
-  all; a failed clone puts it back. Built-in files the repository lacks are added; its own versions count as edited.
-  The dialog says that its functions run commands here and its schedules start by themselves.
+- **Panels**: a project has its own Work and any number of panels more, each a whole Work of its own (pages,
+  functions, data, schedules, skills, its agent's conversation) in `<project dir>/panels/<name>` (the default
+  project's in `<GERDR_DIR>/panels`). Everything about a Work goes by its key: the project's id, or
+  `<project>/<panel>` (`work.SplitKey`, `Runner.Dir` / `WorkKey`); what's about the layout (Code's workspaces, which
+  project a Work agent is in) by the project part only (`spaceOr`, `WorkProject`, the UI's `spaceOfKey`). A
+  panel's mount name has "~" for the "/" (one path segment). The rail shows Code, then one button per panel of the
+  project (`PanelButtons`, `store.workPanels` per device: which one Work mode shows), then a + that adds one
+  (`WorkSourceDialog`): `git clone` of a published one (`o/r`, a GitHub URL, `file://`), or the built-in blank one.
+  Adding never replaces: the first version replaced the project's Work and moved the old one to the trash, and the
+  user's own page was gone from view. A panel's right-click updates it (`git pull --ff-only`) or removes it (to
+  `trash/panels/`). esbuild writes UTF-8 (`Charset`): a panel named 任务看板 has it in its module paths, and escaped
+  `\uXXXX` placeholders never matched in `link`.
 - Page logic lives in local functions `<GERDR_DIR>/work/local/*.ts` (esbuild → goja, `ctx.mcp(server, tool, args)`), called by
   name (`gerdr work run file.export`). Bundled files (`internal/work/builtin/base` for every project: site skeleton, blank
   home page, CLAUDE.md — the same for the default project; it used to get an OKR page on top) are upgraded unless edited,

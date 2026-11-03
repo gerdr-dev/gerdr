@@ -44,7 +44,7 @@ type compiled struct {
 const depPlaceholder = "/@gerdr-dep/"
 
 // Bump when the esbuild options below or the class extraction (classes.go) change: old cache entries are then ignored
-const compileCacheVersion = "g5"
+const compileCacheVersion = "g6"
 
 var moduleExts = []string{".tsx", ".ts", ".jsx", ".js", ".mjs", ".json"}
 
@@ -181,6 +181,9 @@ func compileSource(s site, rel string, src []byte) *compiled {
 		Metafile:      true,
 		LogLevel:      api.LogLevelSilent,
 		Define:        defines(s),
+		// UTF-8 out, not \uXXXX: local imports are placeholders matched as text in link, and a path with a non-ASCII
+		// name in it (a panel called 任务看板) would come out escaped and never be linked
+		Charset: api.CharsetUTF8,
 		Plugins: []api.Plugin{{
 			Name: "gerdr-module-imports",
 			Setup: func(b api.PluginBuild) {
@@ -274,11 +277,11 @@ func compileSource(s site, rel string, src []byte) *compiled {
 var legacyProjectRE = regexp.MustCompile(`decodeURIComponent\(\s*location\.pathname\.split\(\s*"/"\s*\)\[2\]\s*\|\|\s*"default"\s*\)`)
 
 // defines: what esbuild replaces in a site's code. A mount's code gets __GERDR_PROJECT__, its name (the project
-// whose Work UI it is): it can't read it from the address the way a site served at /work/<project>/ did.
+// whose Work UI it is, or "<project>/<panel>" for a panel): it can't read it from the address the way a site served at /work/<project>/ did.
 func defines(s site) map[string]string {
 	d := map[string]string{"process.env.NODE_ENV": `"development"`}
 	if name, ok := mountOf(s.prefix); ok {
-		b, _ := json.Marshal(name)
+		b, _ := json.Marshal(strings.Replace(name, "~", "/", 1)) // a panel's mount name is <project>~<panel> (server.mountName)
 		d["__GERDR_PROJECT__"] = string(b)
 	}
 	return d

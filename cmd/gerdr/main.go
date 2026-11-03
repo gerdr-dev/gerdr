@@ -580,9 +580,9 @@ func workOf(dir string) func(hub.Record) (string, string, bool) {
 			if real, err := filepath.EvalSymlinks(p); err == nil {
 				p = real
 			}
-			if project, ok := r.WorkProject(p); ok {
-				if d, err := r.Dir(project); err == nil {
-					return project, d, true
+			if key, ok := r.WorkKey(p); ok { // a project's Work or one of its panels: its own skills and tools
+				if d, err := r.Dir(key); err == nil {
+					return key, d, true
 				}
 			}
 		}

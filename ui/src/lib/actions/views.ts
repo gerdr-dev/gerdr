@@ -4,7 +4,7 @@
 import { currentSpace } from "../layout";
 import { overviewFocus, toggleOverview } from "../overview";
 import { get, overviewShown, setMode } from "../store";
-import { workSessionOf } from "../work";
+import { workProject, workSessionOf } from "../work";
 import { focusedLeaf } from "./shared";
 
 export type ViewName = "code" | "work" | "overview";
@@ -32,7 +32,7 @@ const code: View = {
 // WorkView.tsx's pane ids: the conversation the page shows over itself (showSession), else the Work agent's chat
 const work: View = {
   name: "work",
-  session: () => get().workPeek?.id ?? workSessionOf(currentSpace(get().layout)),
+  session: () => get().workPeek?.id ?? workSessionOf(workProject()),
   composer: () => {
     const { workPeek, layout } = get();
     return workPeek ? `work-peek:${workPeek.id}` : `work:${currentSpace(layout)}`;

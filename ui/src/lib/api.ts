@@ -178,8 +178,10 @@ export const api = {
   /** Where the project's Work came from (a git repository or not), and replacing it: work/source.go. */
   workSource: (project: string) =>
     req<{ git: boolean; remote?: string; branch?: string; dirty?: boolean }>("GET", `/api/work/source?project=${encodeURIComponent(project)}`),
-  installWork: (project: string, url: string) => req<{ trash: string }>("POST", "/api/work/install", { project, url }),
-  resetWork: (project: string) => req<{ trash: string }>("POST", "/api/work/reset", { project }),
+  /** A project's panels beyond its Work: install one from a repository, add a blank one, remove one (keys "<project>/<name>"). */
+  installPanel: (project: string, url: string, name?: string) => req<{ key: string }>("POST", "/api/work/install", { project, url, name }),
+  newPanel: (project: string, name: string) => req<{ key: string }>("POST", "/api/work/panels", { project, name }),
+  removePanel: (key: string) => req<{ trash: string }>("POST", "/api/work/panels/remove", { key }),
   updateWork: (project: string) => req<{ output: string }>("POST", "/api/work/update", { project }),
   // In the interface's language: addon.json's i18n is applied here, once, so every place that shows a name reads it
   addons: () => req<AddonBuild[]>("GET", "/api/addons").then((l) => l.map(localizeAddon)),

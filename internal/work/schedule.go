@@ -314,19 +314,11 @@ func (p *schedProject) st(id string) *scheduleState {
 	return s
 }
 
-// workProjects: the projects with a Work directory on disk (the scheduler creates none).
+// workProjects: the keys of every Work on disk, panels included (the scheduler creates none).
 func (r *Runner) workProjects() []string {
 	var out []string
-	if st, err := os.Stat(filepath.Join(r.Root, "work")); err == nil && st.IsDir() {
-		out = append(out, DefaultProject)
-	}
-	ents, _ := os.ReadDir(filepath.Join(r.Root, "projects"))
-	for _, e := range ents {
-		if e.IsDir() && validProject(e.Name()) {
-			if st, err := os.Stat(filepath.Join(r.Root, "projects", e.Name(), "work")); err == nil && st.IsDir() {
-				out = append(out, e.Name())
-			}
-		}
+	for _, k := range r.Projects() {
+		out = append(out, k)
 	}
 	return out
 }

@@ -86,5 +86,6 @@ and their habits are what they wrote down, not what the code says.
   Gerdr report message with its reply. Give it `--cwd` (the repository; otherwise it runs in this Work
   directory) and `--tag` labels (e.g. `task=…`) so you can find it again with `gerdr session list --tag`.
 - `gerdr work …` acts on the project of the current directory, so run it from here.
-- Other projects have their own Work directories; don't touch them.
+- Other projects have their own Work directories, and a project can have panels besides its Work (each a Work of
+  its own, in `panels/<name>` next to it, with its own agent): don't touch them.
 - Built-in files are upgraded by Gerdr unless you edit them; once edited they're yours.

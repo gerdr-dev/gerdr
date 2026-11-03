@@ -12,10 +12,10 @@ import (
 	"time"
 )
 
-// A project's Work is a whole app (pages, local functions, skills, schedules), so it can come from somewhere: a git
-// repository someone published (Install), or the built-in blank one (Reset). Either way the Work directory there now is
-// moved aside, whole, to trash/work/<project>-<time>, not deleted: its data/ and anything the user made stay
-// recoverable. Secrets aren't in it (secrets.json), so a Work installed over another still finds them by name.
+// A Work is a whole app (pages, local functions, skills, schedules), so a project can have more than its own: panels
+// installed from a git repository someone published (Install), or blank ones to build (NewPanel). Adding never
+// replaces anything; removing a panel moves it, data and all, to trash/panels/, never deletes it. Secrets aren't in
+// a Work (secrets.json), so a panel finds them by name like any other.
 
 // Source is where a project's Work came from, for the menu that updates it.
 type Source struct {
@@ -60,28 +60,113 @@ func repoURL(s string) (string, error) {
 	return "", fmt.Errorf("%q doesn't look like a git repository address (https://github.com/owner/repo)", s)
 }
 
-// Install replaces the project's Work with a clone of url. The old one goes to the trash (its path is returned).
-func (r *Runner) Install(ctx context.Context, project, url string) (trash string, err error) {
+// Install adds a panel to the project: a clone of url, named name (or after the repository). Its key is returned.
+func (r *Runner) Install(ctx context.Context, project, url, name string) (string, error) {
 	u, err := repoURL(url)
 	if err != nil {
 		return "", err
 	}
-	return r.replace(project, func(dir string) error {
+	if name == "" {
+		name = nameFromURL(u)
+	}
+	return r.addPanel(project, name, func(dir string) error {
 		cmd := exec.CommandContext(ctx, "git", "clone", "--", u, dir)
 		cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0") // a private repo fails instead of waiting for a password nobody sees
 		if out, err := cmd.CombinedOutput(); err != nil {
 			return fmt.Errorf("git clone %s: %s", u, strings.TrimSpace(string(out)))
 		}
 		if _, err := os.Stat(filepath.Join(dir, "ui", "package.json")); err != nil {
-			return fmt.Errorf("%s isn't a Gerdr Work: it has no ui/package.json", u)
+			return fmt.Errorf("%s isn't a Gerdr panel: it has no ui/package.json", u)
 		}
 		return nil
 	})
 }
 
-// Reset replaces the project's Work with the built-in blank one.
-func (r *Runner) Reset(project string) (trash string, err error) {
-	return r.replace(project, func(string) error { return nil })
+// NewPanel adds a blank panel (the built-in Work) to the project, for its agent to build.
+func (r *Runner) NewPanel(project, name string) (string, error) {
+	return r.addPanel(project, name, func(dir string) error { return os.MkdirAll(dir, 0o755) })
+}
+
+// RemovePanel moves a panel to trash/panels/<project>-<name>-<time> (a project's own Work can't be removed this way).
+func (r *Runner) RemovePanel(key string) (string, error) {
+	project, panel := SplitKey(key)
+	if panel == "" {
+		return "", errors.New("a project's own Work isn't a panel to remove")
+	}
+	dir, err := r.Dir(key)
+	if err != nil {
+		return "", err
+	}
+	if _, err := os.Stat(dir); err != nil {
+		return "", fmt.Errorf("no panel %q in %s", panel, project)
+	}
+	base := filepath.Join(r.Root, "trash", PanelsDir)
+	if err := os.MkdirAll(base, 0o755); err != nil {
+		return "", err
+	}
+	trash := filepath.Join(base, project+"-"+panel+"-"+time.Now().Format("20060102-150405"))
+	if err := os.Rename(dir, trash); err != nil {
+		return "", err
+	}
+	r.mu.Lock()
+	delete(r.installed, dir)
+	r.mu.Unlock()
+	return trash, nil
+}
+
+var badName = regexp.MustCompile(`[/\\.\s]+`)
+
+// nameFromURL: the repository's name ("https://github.com/o/task-board.git" → "task-board").
+func nameFromURL(u string) string {
+	u = strings.TrimSuffix(strings.TrimSuffix(u, "/"), ".git")
+	if i := strings.LastIndexAny(u, "/:"); i >= 0 {
+		u = u[i+1:]
+	}
+	u = strings.Trim(badName.ReplaceAllString(u, "-"), "-")
+	if u == "" {
+		u = "panel"
+	}
+	return u
+}
+
+// addPanel makes <panels>/<name> (another name if it's taken: name-2…) with fill, then adds the built-in files it
+// lacks (a repository's own versions of them count as edited and stay). A failed fill leaves nothing behind.
+func (r *Runner) addPanel(project, name string, fill func(dir string) error) (string, error) {
+	if project == "" {
+		project = DefaultProject
+	}
+	name = strings.TrimSpace(name)
+	if !validProject(name) {
+		return "", fmt.Errorf("bad panel name %q: no / \\ . or control characters", name)
+	}
+	key := PanelKey(project, name)
+	dir, err := r.Dir(key)
+	if err != nil {
+		return "", err
+	}
+	for i := 2; ; i++ {
+		if _, err := os.Stat(dir); os.IsNotExist(err) {
+			break
+		}
+		key = PanelKey(project, fmt.Sprintf("%s-%d", name, i))
+		if dir, err = r.Dir(key); err != nil {
+			return "", err
+		}
+	}
+	if err := os.MkdirAll(filepath.Dir(dir), 0o755); err != nil {
+		return "", err
+	}
+	if err := fill(dir); err != nil {
+		_ = os.RemoveAll(dir)
+		return "", err
+	}
+	r.mu.Lock()
+	delete(r.installed, dir)
+	r.mu.Unlock()
+	if _, err := r.Ensure(key); err != nil {
+		return key, err
+	}
+	return key, nil
 }
 
 // Update pulls the project's Work repository (fast-forward only: local edits are never merged over behind the user's back).
@@ -103,52 +188,6 @@ func (r *Runner) Update(ctx context.Context, project string) (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(string(out)), nil
-}
-
-// replace moves the Work directory to the trash, lets fill make the new one, and installs the built-in files it
-// lacks (a repository's own versions of them are kept: they count as edited). A failed fill puts the old one back.
-func (r *Runner) replace(project string, fill func(dir string) error) (string, error) {
-	dir, err := r.Dir(project)
-	if err != nil {
-		return "", err
-	}
-	if project == "" {
-		project = DefaultProject
-	}
-	var trash string
-	if _, err := os.Stat(dir); err == nil {
-		base := filepath.Join(r.Root, "trash", "work")
-		if err := os.MkdirAll(base, 0o755); err != nil {
-			return "", err
-		}
-		trash = filepath.Join(base, project+"-"+time.Now().Format("20060102-150405"))
-		for i := 2; ; i++ {
-			if _, err := os.Stat(trash); os.IsNotExist(err) {
-				break
-			}
-			trash = filepath.Join(base, fmt.Sprintf("%s-%s-%d", project, time.Now().Format("20060102-150405"), i))
-		}
-		if err := os.Rename(dir, trash); err != nil {
-			return "", err
-		}
-	}
-	r.mu.Lock()
-	delete(r.installed, dir)
-	r.mu.Unlock()
-	if err := os.MkdirAll(filepath.Dir(dir), 0o755); err != nil {
-		return "", err
-	}
-	if err := fill(dir); err != nil {
-		_ = os.RemoveAll(dir)
-		if trash != "" {
-			_ = os.Rename(trash, dir)
-		}
-		return "", err
-	}
-	if _, err := r.Ensure(project); err != nil {
-		return trash, err
-	}
-	return trash, nil
 }
 
 func git(dir string, args ...string) (string, error) {

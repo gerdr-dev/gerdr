@@ -82,7 +82,9 @@ func (rn *Run) Wait(ctx context.Context) (any, error) {
 func (rn *Run) Abort() { rn.cancel() }
 
 // Start runs a function in the background and returns at once.
-func (r *Runner) Start(project, name string, input any) *Run { return r.StartAs(project, name, input, "") }
+func (r *Runner) Start(project, name string, input any) *Run {
+	return r.StartAs(project, name, input, "")
+}
 
 // StartAs is Start for a call made by a conversation (a Work tool): ctx.caller.session is that session's id.
 func (r *Runner) StartAs(project, name string, input any, caller string) *Run {

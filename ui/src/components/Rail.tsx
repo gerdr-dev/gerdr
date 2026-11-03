@@ -1,4 +1,4 @@
-import { Briefcase, Code2, Command, Keyboard, Plus, Settings } from "lucide-react";
+import { Code2, Command, Keyboard, Plus, Settings } from "lucide-react";
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { switchSpace } from "@/lib/actions";
@@ -12,6 +12,7 @@ import { StatusDot } from "./AgentIcon";
 import { RailAddonButtons } from "./RailAddons";
 import { RouteLabel } from "./ConnStatus";
 import { InboxButton } from "./Inbox";
+import { PanelButtons } from "./PanelButtons";
 import { SpaceDropLine, startSpaceDrag } from "./SpaceDrag";
 import { newSpaceDialog, SpaceMenuItems, spaceStatus } from "./SpaceSwitcher";
 import { t } from "@/lib/i18n";
@@ -141,7 +142,14 @@ export function Rail() {
         <div className="my-2 h-px w-7 shrink-0 bg-border short:my-1.5" />
         <div className="flex shrink-0 flex-col items-center gap-0.5 rounded-lg bg-muted p-0.5">
           {modeItem("agents", "Code", Code2)}
-          {modeItem("work", "Work", Briefcase)}
+          <PanelButtons
+            className={(on) =>
+              cn(
+                "flex size-8 items-center justify-center rounded-md",
+                on ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+              )
+            }
+          />
         </div>
         <div className="min-h-2 flex-1" />
         <div className="flex shrink-0 flex-col items-center gap-1 pb-2">
