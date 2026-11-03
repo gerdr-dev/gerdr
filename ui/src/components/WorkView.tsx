@@ -245,7 +245,7 @@ function ChatHeader() {
           {chats.map((c) => (
             <DropdownMenuItem key={c.id} onClick={() => openWorkChat(c.id)}>
               <AgentIcon agent={c.agent} className="size-3.5 shrink-0" />
-              <span className={cn("min-w-0 flex-1 truncate", c.id === current && "font-medium")}>{title(c.title)}</span>
+              <span className="min-w-0 flex-1 truncate">{title(c.title)}</span>
               <span className="shrink-0 text-[11px] text-muted-foreground">{ago(new Date(c.updatedAt).toISOString())}</span>
               {/* the current one is the chat below, its status is in plain sight: the slot marks it instead */}
               {c.id === current ? <Check className="size-3.5 shrink-0 text-muted-foreground" /> : <StatusDot status={c.status} unread={!!unread[c.id]} />}

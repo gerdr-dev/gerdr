@@ -529,7 +529,7 @@ function WorkRow({ id, current, grid, num }: { id: string; current: boolean; gri
           className={cn(
             "group relative flex cursor-default items-center gap-2 rounded-md pr-2 pl-1.5 text-[12px] select-none",
             roomy ? "min-h-11" : "h-7",
-            current ? "bg-accent font-medium" : "hover:bg-accent/60",
+            current ? "bg-accent" : "hover:bg-accent/60",
             "data-[state=open]:ring-1 data-[state=open]:ring-brand/60",
           )}
           onClick={() => (grid ? (focusTile(id), markRead(id)) : focusSession(id))}
@@ -787,7 +787,7 @@ function Row({
           className={cn(
             "group relative flex cursor-default items-center gap-2 rounded-md pr-2 pl-1.5 text-[12px] select-none",
             roomy ? "min-h-11 py-1.5" : "h-7",
-            current ? "bg-accent font-medium" : visible ? "bg-accent/40" : "hover:bg-accent/60",
+            current ? "bg-accent" : visible ? "bg-accent/40" : "hover:bg-accent/60",
             "data-[state=open]:ring-1 data-[state=open]:ring-brand/60",
           )}
         >

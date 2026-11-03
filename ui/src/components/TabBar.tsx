@@ -97,7 +97,7 @@ export function TabBar() {
                   className={cn(
                     // A size container so the tab can drop its icon / close button when squeezed (see below)
                     "group/tab @container/tab relative flex h-7 w-52 min-w-[44px] shrink cursor-default items-center gap-2 rounded-md px-1.5 text-[12px] select-none @max-[8rem]/tab:gap-1",
-                    active ? "bg-accent font-medium text-foreground" : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+                    active ? "bg-accent text-foreground" : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
                     drag?.tabId === t.id && "opacity-40",
                     // Mark which tab the context menu belongs to while it's open (Radix sets data-state on the trigger)
                     "data-[state=open]:bg-accent data-[state=open]:text-foreground data-[state=open]:ring-1 data-[state=open]:ring-brand/60",
