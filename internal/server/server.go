@@ -33,6 +33,7 @@ import (
 	"github.com/gerdr-dev/gerdr/internal/ext"
 	"github.com/gerdr-dev/gerdr/internal/hub"
 	"github.com/gerdr-dev/gerdr/internal/i18n"
+	"github.com/gerdr-dev/gerdr/internal/peer"
 	"github.com/gerdr-dev/gerdr/internal/remote"
 	"github.com/gerdr-dev/gerdr/internal/service"
 	"github.com/gerdr-dev/gerdr/internal/term"
@@ -70,7 +71,9 @@ type Server struct {
 	// Awake：有远程设备连着时不让电脑睡（设置 → 实验室）。nil = 不管（测试里）。
 	Awake *awake.Keeper
 	// Doctor: Settings → Labs → Diagnosis (doctorapi.go). nil = off (tests).
-	Doctor      *doctor.Doctor
+	Doctor *doctor.Doctor
+	// Peers: other computers this Gerdr drives (hosts.go, docs/dev/MULTIHOST.md). nil = off (tests).
+	Peers       *peer.Manager
 	remoteConns remoteConns // 正在连着的远程界面（remoteconns.go）
 	appWatch    appWatch    // 安卓 App 后台通知的长轮询（appwatch.go）
 	workUIs     workUIs     // each project's Work site, started on first use (workapi.go)
@@ -120,6 +123,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/unread", s.postUnread)
 	mux.HandleFunc("POST /api/layout/op", s.layoutOp) // gerdr workspace / tab / pane (layoutapi.go)
 	s.sessionRoutes(mux)
+	s.hostRoutes(mux)
 	// 账号的用量额度（claude / codex 各一份）。?force=1：人点了刷新，绕过缓存（hub 里仍有最小间隔）
 	mux.HandleFunc("GET /api/usage", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, s.Hub.Usage(r.Context(), r.URL.Query().Get("force") == "1"))
@@ -197,7 +201,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /ws", s.ws)
 	s.uiRoutes(mux)
 	mux.Handle("/", s.ui())
-	return s.guard(gzipped(mux))
+	return s.guard(gzipped(s.withHosts(mux)))
 }
 
 // guard：令牌 + CSRF + 安全头。远程（中继）进来的请求换一套规则，见 remoteGuard。
@@ -271,7 +275,8 @@ func (s *Server) hello(w http.ResponseWriter, r *http.Request) {
 		"version":     version.Version,
 		"installedAt": installedAt(),
 		"agents":      s.Hub.Agents(),
-		"sessions":    s.Hub.List(),
+		"sessions":    s.allSessions(r.Context(), 5*time.Second),
+		"hosts":       s.hostInfos(),
 		"layout":      s.Layout.Get(),
 		"config":      s.Config.Get(),
 		"unread":      s.unreadSet(),
@@ -279,6 +284,19 @@ func (s *Server) hello(w http.ResponseWriter, r *http.Request) {
 		"addonsDir":   s.Addons.Dir(),
 		"remoteConns": s.remoteConns.list(),
 	})
+}
+
+// allSessions: this computer's sessions and every host's (hosts.go). A host's list may be up to maxAge old.
+func (s *Server) allSessions(ctx context.Context, maxAge time.Duration) []any {
+	local := s.Hub.List()
+	out := make([]any, 0, len(local))
+	for _, x := range local {
+		out = append(out, x)
+	}
+	for _, x := range s.hostSessions(ctx, maxAge) {
+		out = append(out, x)
+	}
+	return out
 }
 
 func (s *Server) putStore(st *config.Store, name string) http.HandlerFunc {

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/url"
@@ -46,6 +47,10 @@ func (s *Server) ws(w http.ResponseWriter, r *http.Request) {
 	}
 	sub := s.Hub.Subscribe()
 	defer s.Hub.Unsubscribe(sub)
+	// Other computers' sessions: one upstream per host for this connection (hosts.go)
+	hctx, hcancel := context.WithCancel(r.Context())
+	defer hcancel()
+	hw := s.openHostWS(hctx)
 	done := make(chan struct{})
 	pong := make(chan struct{}, 1)
 	// 读期限：客户端 20 秒一次应用层 ping，浏览器对协议层 ping（下面 25 秒一次）也会自动回 pong，收到哪个都续上。
@@ -77,10 +82,13 @@ func (s *Server) ws(w http.ResponseWriter, r *http.Request) {
 			}
 			switch m.T {
 			case "watch":
-				s.Hub.Watch(sub, m.IDs, m.Since)
+				ids, since := hw.watch(m.IDs, m.Since)
+				s.Hub.Watch(sub, ids, since)
 			case "draft":
 				// The composer text, mirrored to every device looking at this session (hub/draft.go)
-				s.Hub.SetDraft(m.ID, m.Draft)
+				if !hw.draft(m.ID, m.Draft) {
+					s.Hub.SetDraft(m.ID, m.Draft)
+				}
 			case "ping":
 				// 应用层心跳：浏览器读不到协议层的 ping/pong，只能靠这个判断连接是不是「假在线」。
 				select {
@@ -93,7 +101,7 @@ func (s *Server) ws(w http.ResponseWriter, r *http.Request) {
 	// 写只在这一个 goroutine 里（gorilla 不许并发写），顺带每 25 秒 ping 一次。
 	ping := time.NewTicker(25 * time.Second)
 	defer ping.Stop()
-	var batch []hub.Msg
+	var batch []any
 	flush := time.NewTimer(time.Hour)
 	flush.Stop()
 	// 写失败（多半是写期限到了还没写完：远程慢、一帧太大）记一笔：连接断了界面只会显示「离线」，原因在这儿查
@@ -121,6 +129,17 @@ func (s *Server) ws(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			// 流式片段很碎：攒 30ms 一起发，一帧一个数组。
+			batch = append(batch, m)
+			if len(batch) == 1 {
+				flush.Reset(30 * time.Millisecond)
+			}
+			if len(batch) >= 256 {
+				if !write(batch) {
+					return
+				}
+				batch = nil
+			}
+		case m := <-hw.C():
 			batch = append(batch, m)
 			if len(batch) == 1 {
 				flush.Reset(30 * time.Millisecond)

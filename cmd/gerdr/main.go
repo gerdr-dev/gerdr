@@ -35,6 +35,7 @@ import (
 	"github.com/gerdr-dev/gerdr/internal/hub"
 	"github.com/gerdr-dev/gerdr/internal/i18n"
 	"github.com/gerdr-dev/gerdr/internal/mcpauth"
+	"github.com/gerdr-dev/gerdr/internal/peer"
 	"github.com/gerdr-dev/gerdr/internal/remote"
 	"github.com/gerdr-dev/gerdr/internal/server"
 	"github.com/gerdr-dev/gerdr/internal/term"
@@ -414,6 +415,13 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 		UI: ui, ESM: esm, Remote: rm, Awake: keeper,
 		Service: svc, Terms: term.New(func() []string { return sysenv.ChildEnv() }, log)}
 	defer srv.Terms.Close()
+	// Other computers this one drives (docs/dev/MULTIHOST.md). A broken peers.json only turns that off.
+	if pm, err := peer.Open(env.Dir); err != nil {
+		log.Warn("peers", "err", err)
+	} else {
+		pm.OnChange = func() { h.Broadcast("hosts", pm.Infos()) }
+		srv.Peers = pm
+	}
 	// Diagnosis: a light check now and then, so a broken PATH shows up as a red dot by Settings
 	// instead of as "npx not found" in some agent's reply.
 	srv.Doctor = doctor.New(h.CachedUsage, func(r doctor.Report) { h.Broadcast("doctor", r) })
@@ -456,7 +464,7 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 	svcCtx, stopSvcs := context.WithCancel(context.Background())
 	srv.RunAddonServices(svcCtx)
 	wr.RunSchedules(svcCtx) // the Work directories' schedules/ (work/schedule.go)
-	srv.RunReports(svcCtx) // --report-to: tell a coordinator when the sessions it handed work to stop (server/report.go)
+	srv.RunReports(svcCtx)  // --report-to: tell a coordinator when the sessions it handed work to stop (server/report.go)
 	u := loginURL(env.Host, port, token)
 	if appMode {
 		fmt.Println("GERDR_READY " + u)

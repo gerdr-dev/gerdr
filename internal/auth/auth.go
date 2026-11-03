@@ -70,6 +70,10 @@ type Device struct {
 	// 在这台设备上过一次 passkey（MarkVerified）就转正，按 TTL 滑动。配对码只是「让新设备进门」，
 	// 要长期留下就得绑一把 passkey —— 码被拍走 / 设备丢了，最多半小时的口子。
 	Temp bool `json:"temp,omitempty"`
+	// Peer: another Gerdr (a console, docs/dev/MULTIHOST.md) that drives this computer, paired with a peer code.
+	// Never temporary and never asked for a passkey again (ReauthNeeded): a machine can't touch Face ID, and a
+	// link that drops every day is useless. Only a peer code minted here by a person makes one.
+	Peer bool `json:"peer,omitempty"`
 }
 
 func (d Device) Expired(now time.Time) bool {
@@ -89,8 +93,8 @@ type Store struct {
 
 	mu      sync.Mutex
 	devs    []*Device
-	codes   map[string]time.Time // 配对码 → 过期时刻
-	cli     []*CLIRequest        // 等批准的 App 登录（cliapprove.go）
+	codes   map[string]pairCode // 配对码 → 过期时刻 / 是不是给另一台 Gerdr 的
+	cli     []*CLIRequest       // 等批准的 App 登录（cliapprove.go）
 	dirty   bool
 	flushed time.Time
 	guard   tamperGuard
@@ -99,7 +103,7 @@ type Store struct {
 }
 
 func New(cfg Config) (*Store, error) {
-	s := &Store{cfg: cfg, codes: map[string]time.Time{}, now: time.Now}
+	s := &Store{cfg: cfg, codes: map[string]pairCode{}, now: time.Now}
 	if err := s.load(); err != nil {
 		return nil, err
 	}
@@ -166,17 +170,29 @@ func (s *Store) Flush() {
 //
 // **只能从本机口调**（server 那边把关）：配对码造出来的是一份独立的、不随创造者一起被撤销的凭据，
 // 远程设备能出码的话，手机被人拿去一次就能留下一台你踢不掉的设备（herdr-web SECURITY.md §11）。
-func (s *Store) MintCode() (string, time.Time) {
+func (s *Store) MintCode() (string, time.Time) { return s.mint(false) }
+
+// MintPeerCode: a code for another Gerdr to pair as a console (docs/dev/MULTIHOST.md). Same rule as MintCode: local
+// port only. It only redeems through RedeemPeer and a normal code never does, so the pair page (a browser) can't end
+// up holding a peer device, and a console can't be paired with a phone's code.
+func (s *Store) MintPeerCode() (string, time.Time) { return s.mint(true) }
+
+type pairCode struct {
+	exp  time.Time
+	peer bool
+}
+
+func (s *Store) mint(peer bool) (string, time.Time) {
 	code := randCode()
 	exp := s.now().Add(CodeTTL)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for c, e := range s.codes {
-		if s.now().After(e) {
+		if s.now().After(e.exp) {
 			delete(s.codes, c)
 		}
 	}
-	s.codes[code] = exp
+	s.codes[code] = pairCode{exp: exp, peer: peer}
 	return code, exp
 }
 
@@ -184,31 +200,55 @@ var ErrBadCode = errors.New(i18n.S("配对码不对或者已经过期了", "wron
 
 // Redeem 用配对码换一台设备的长期凭据。返回的令牌明文只在这一次出现，之后只有哈希。
 func (s *Store) Redeem(code, ua, ip string) (*Device, string, error) {
-	code = normalizeCode(code)
-	if code == "" {
-		return nil, "", ErrBadCode
-	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if !s.takeCodeLocked(code, false) {
+		return nil, "", ErrBadCode
+	}
+	d, token := s.newLocked(ua, ip, "")
+	if s.cfg.PairTTL > 0 {
+		d.Temp, d.Expires = true, s.now().Add(s.cfg.PairTTL)
+		s.flushLocked()
+	}
+	return d, token, nil
+}
 
+// RedeemPeer: a peer code for a console's device. name is the console's own name, shown in the device list.
+func (s *Store) RedeemPeer(code, name, ip string) (*Device, string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.takeCodeLocked(code, true) {
+		return nil, "", ErrBadCode
+	}
+	d, token := s.newLocked("", ip, "")
+	name = strings.TrimSpace(name)
+	if r := []rune(name); len(r) > 64 {
+		name = string(r[:64])
+	}
+	d.Label, d.Peer = "Gerdr · "+name, true
+	s.flushLocked()
+	return d, token, nil
+}
+
+// takeCodeLocked: is code a live code of this kind; used up if so.
+func (s *Store) takeCodeLocked(code string, peer bool) bool {
+	code = normalizeCode(code)
+	if code == "" {
+		return false
+	}
 	// 遍历比对而不是直接查 map：码只有 40 位，别把「猜对了几位」这种信息泄在时间里
 	var hit string
 	now := s.now()
-	for c, exp := range s.codes {
-		if subtle.ConstantTimeCompare([]byte(c), []byte(code)) == 1 && now.Before(exp) {
+	for c, pc := range s.codes {
+		if subtle.ConstantTimeCompare([]byte(c), []byte(code)) == 1 && now.Before(pc.exp) && pc.peer == peer {
 			hit = c
 		}
 	}
 	if hit == "" {
-		return nil, "", ErrBadCode
+		return false
 	}
 	delete(s.codes, hit) // 用一次就废
-	d, token := s.newLocked(ua, ip, "")
-	if s.cfg.PairTTL > 0 {
-		d.Temp, d.Expires = true, now.Add(s.cfg.PairTTL)
-		s.flushLocked()
-	}
-	return d, token, nil
+	return true
 }
 
 // NewDevice 不走配对码直接签一台设备。只给 passkey 登录用（新设备过了 passkey 就直接换一份凭据，

@@ -458,7 +458,7 @@ func StepUpNeeded(id *Ident, within time.Duration, registered int, now time.Time
 // registered 是注册过的 passkey 把数：一把都没有时这条完全不生效 —— 否则就把自己锁在
 // 一个过不去的门后面了。
 func ReauthNeeded(id *Ident, after time.Duration, registered int, now time.Time) bool {
-	if id == nil || after <= 0 || registered == 0 {
+	if id == nil || after <= 0 || registered == 0 || (id.Device != nil && id.Device.Peer) {
 		return false
 	}
 	v := id.VerifiedAt

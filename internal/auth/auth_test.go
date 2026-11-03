@@ -157,3 +157,24 @@ func TestPairTempDevice(t *testing.T) {
 		t.Fatal("passkey 登录的新设备不该是临时的")
 	}
 }
+
+// A peer code only makes a peer device and a normal code never does: the pair page (a browser) can't end up with a
+// device that skips the passkey check, and a console can't pair with a phone's code.
+func TestPeerCodesDontMix(t *testing.T) {
+	s, _ := New(Config{Dir: t.TempDir(), TTL: time.Hour, PairTTL: 30 * time.Minute})
+	pc, _ := s.MintPeerCode()
+	if _, _, err := s.Redeem(pc, "iPhone", ""); err == nil {
+		t.Fatal("a peer code redeemed on the pair page")
+	}
+	nc, _ := s.MintCode()
+	if _, _, err := s.RedeemPeer(nc, "mini", ""); err == nil {
+		t.Fatal("a normal code made a peer device")
+	}
+	d, tok, err := s.RedeemPeer(pc, "mini", "")
+	if err != nil || !d.Peer || d.Temp || tok == "" {
+		t.Fatalf("peer device: %+v %v", d, err)
+	}
+	if ReauthNeeded(&Ident{Device: d}, time.Nanosecond, 1, time.Now().Add(48*time.Hour)) {
+		t.Fatal("a peer device was asked for a passkey")
+	}
+}

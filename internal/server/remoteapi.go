@@ -240,6 +240,16 @@ func (s *Server) remoteRoutes(mux *http.ServeMux) {
 			httpError(w, http.StatusConflict, i18n.S("还没开远程访问：先在设置 → 远程访问里连上中继", "Remote access isn't on: connect a relay first in Settings → Remote access"))
 			return
 		}
+		var b struct {
+			Peer bool `json:"peer"` // for another Gerdr to control this one (docs/dev/MULTIHOST.md)
+		}
+		_ = decode(r, &b)
+		if b.Peer {
+			code, exp := rm.Auth.MintPeerCode()
+			// One string to paste into the console's "Add a computer": the address and the code together
+			writeJSON(w, map[string]any{"code": code, "expires": exp, "url": "https://" + rm.Config().Host + "/?peer=" + code})
+			return
+		}
 		code, exp := rm.Auth.MintCode()
 		u := rm.PairURL(code)
 		out := map[string]any{"code": code, "expires": exp, "url": u}
@@ -456,7 +466,11 @@ func (s *Server) remotePair(w http.ResponseWriter, r *http.Request) {
 		httpError(w, http.StatusConflict, i18n.S("本机不用配对", "No pairing needed on this computer"))
 		return
 	}
-	var b struct{ Code string }
+	var b struct {
+		Code string
+		Peer bool   `json:"peer"` // a console pairing with a peer code (docs/dev/MULTIHOST.md)
+		Name string `json:"name"` // the console's name, for the device list
+	}
 	if err := decode(r, &b); err != nil {
 		httpError(w, 400, err.Error())
 		return
@@ -467,6 +481,18 @@ func (s *Server) remotePair(w http.ResponseWriter, r *http.Request) {
 	}
 	defer release()
 	ip := auth.ClientIP(r)
+	if b.Peer {
+		dev, token, err := rm.Auth.RedeemPeer(b.Code, b.Name, ip)
+		if err != nil {
+			rm.Gate.Fail(ip)
+			httpError(w, http.StatusUnauthorized, err.Error())
+			return
+		}
+		rm.Gate.Reset(ip)
+		// In the body: the caller is a Gerdr backend, not a browser, and stores it in its peers.json
+		writeJSON(w, map[string]any{"ok": true, "label": dev.Label, "token": token, "cookie": auth.CookieName})
+		return
+	}
 	dev, token, err := rm.Auth.Redeem(b.Code, r.UserAgent(), ip)
 	if err != nil {
 		rm.Gate.Fail(ip)

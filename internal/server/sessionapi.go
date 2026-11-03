@@ -48,7 +48,17 @@ func (s *Server) sessionRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/sessions", func(w http.ResponseWriter, r *http.Request) {
 		list := s.Hub.List()
 		sort.SliceStable(list, func(i, j int) bool { return list[i].UpdatedAt > list[j].UpdatedAt })
-		writeJSON(w, list)
+		out := make([]any, 0, len(list))
+		for _, x := range list {
+			out = append(out, x)
+		}
+		// Other computers' sessions after this one's (hosts.go); ?local=1 for this computer's only
+		if r.URL.Query().Get("local") != "1" {
+			for _, x := range s.hostSessions(r.Context(), 2*time.Second) {
+				out = append(out, x)
+			}
+		}
+		writeJSON(w, out)
 	})
 	mux.HandleFunc("POST /api/sessions/{id}/answer", s.sessionOp(func(r *http.Request, sess *hub.Session) (any, error) {
 		var b struct {
