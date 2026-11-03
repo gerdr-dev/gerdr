@@ -6,7 +6,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { t } from "@/lib/i18n";
 import { useStore } from "@/lib/store";
 import type { RemoteConn } from "@/lib/types";
-import { HostsSettings, PeerInviteButton } from "@/components/HostsSettings";
+import { HostsSettings } from "@/components/HostsSettings";
 import { RemoteCert } from "@/components/RemoteCert";
 import { RemoteConnect } from "@/components/RemoteConnect";
 import { RemoteScreenSetting } from "@/components/RemoteScreen";
@@ -129,7 +129,9 @@ export function RemoteSettings({ open }: { open: boolean }) {
       {st.enabled && <RemoteConns me={me} />}
 
       {/* Other computers driven from here (docs/dev/MULTIHOST.md): needs no remote access on this one, only on them */}
-      <HostsSettings />
+      {/* Both directions in one place: this computer controlling others, and others controlling this one (the invite
+          is local only, like pairing codes: it hands out full control) */}
+      <HostsSettings canInvite={st.enabled && !isRemote} />
 
       <RemoteScreenSetting />
 
@@ -143,7 +145,6 @@ export function RemoteSettings({ open }: { open: boolean }) {
           <div className="flex items-center gap-2">
             {/* Pairing codes only come from the machine itself (see the note at the top). A fresh code each time the
               popover opens; closing it drops the code from the page. */}
-            {st.enabled && !isRemote && <PeerInviteButton />}
             {st.enabled && !isRemote && (
               <Popover open={!!pair} onOpenChange={(o) => (o ? run(async () => setPair(await api.remotePairCode())) : setPair(null))}>
                 {/* The trigger goes on a wrapper: asChild straight on the Button would overwrite its data-slot, and the

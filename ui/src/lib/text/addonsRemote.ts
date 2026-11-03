@@ -81,6 +81,7 @@ export const zh = {
   "hostsSettings.removeConfirm": "确认移除",
   "hostsSettings.trust": "这台电脑上的任何 agent 都读得到连接凭据，等于能在上面这些电脑上跑命令。反过来不行：那些电脑控制不了这台。",
   "hostsSettings.invite": "让另一台 Gerdr 控制这台",
+  "hostsSettings.reverse": "反过来，要让另一台电脑上的 Gerdr 控制这台：",
   "hostsSettings.inviteHow": "把这个地址贴到另一台电脑的「设置 → 远程访问 → 这台电脑控制的电脑」里：",
   "hostsSettings.copy": "复制",
   "hostsSettings.copied": "复制好了",
@@ -346,6 +347,7 @@ export const en: Record<keyof typeof zh, string> = {
   "hostsSettings.trust":
     "Any agent on this computer can read the credentials, so it can run commands on the computers above. Not the other way round: they can't control this one.",
   "hostsSettings.invite": "Let another Gerdr control this computer",
+  "hostsSettings.reverse": "The other way round, for Gerdr on another computer to control this one:",
   "hostsSettings.inviteHow": "Paste this into the other computer's Settings → Remote access → Computers this one controls:",
   "hostsSettings.copy": "Copy",
   "hostsSettings.copied": "Copied",

@@ -13,7 +13,8 @@ import { cn } from "@/lib/utils";
  * Settings → Remote access, "Computers this one controls" (docs/dev/MULTIHOST.md): paste the invite another
  * computer's Gerdr gave and its sessions show up here next to this one's. The list comes from the store ("hosts" frames).
  */
-export function HostsSettings() {
+/** canInvite: also offer the other direction here (this computer has remote access and the page is on it). */
+export function HostsSettings({ canInvite }: { canInvite?: boolean }) {
   const hosts = useStore((s) => s.hosts);
   const [invite, setInvite] = useState("");
   const [busy, setBusy] = useState(false);
@@ -86,6 +87,12 @@ export function HostsSettings() {
         </Button>
       </div>
       {hosts.length > 0 && <div className="text-[11px] text-warn">{t("hostsSettings.trust")}</div>}
+      {canInvite && (
+        <div className="flex items-center justify-between gap-3 pt-1">
+          <div className="text-[12px] text-muted-foreground">{t("hostsSettings.reverse")}</div>
+          <PeerInviteButton />
+        </div>
+      )}
     </div>
   );
 }
