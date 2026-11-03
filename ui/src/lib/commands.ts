@@ -4,6 +4,7 @@ import { runAction } from "./actions";
 import { ACTION_TITLES, DEFAULT_KEYS, isModifierOnly, matches, parseCombo, type KeyAction } from "./keys";
 import { addonCommands, runCommand } from "./addons";
 import { get, keyFor, set } from "./store";
+import { t } from "./i18n";
 
 export type CommandItem = { id: string; title: string; keys: string[]; source: "builtin" | string };
 
@@ -13,10 +14,16 @@ export function allCommands(): CommandItem[] {
     .filter((a) => !/^tab\d$/.test(a))
     .map((a) => ({ id: a, title: ACTION_TITLES[a], keys: keyFor(cfg, a), source: "builtin" }));
   for (const c of addonCommands) out.push({ id: c.id, title: c.title, keys: c.key ? [c.key] : [], source: c.addon });
+  // Labs → remote screen: only listed once switched on (no default key, it is a rare thing to open)
+  if (cfg.remoteScreen) out.push({ id: "remoteScreen", title: t("remoteScreen.command"), keys: [], source: "builtin" });
   return out;
 }
 
 export function runBuiltinCommand(id: string): boolean {
+  if (id === "remoteScreen") {
+    set({ dialog: { kind: "screen" } });
+    return true;
+  }
   if (id in DEFAULT_KEYS) {
     runAction(id as KeyAction);
     return true;

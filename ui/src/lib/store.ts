@@ -19,6 +19,7 @@ export * from "./store/transcripts";
 type Dialog =
   | { kind: "palette" }
   | { kind: "help" }
+  | { kind: "screen" }
   | { kind: "settings"; tab?: string }
   | { kind: "sessions" }
   | { kind: "workspaces" }

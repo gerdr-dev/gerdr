@@ -114,6 +114,35 @@ export const zh = {
 
   // ConfirmDelete
   "confirmDelete.confirm": "确认删除",
+
+  // RemoteScreen
+  "remoteScreen.title": "远程屏幕",
+  "remoteScreen.command": "远程屏幕（看电脑屏幕、点击和打字）",
+  "remoteScreen.off": "实验室里的「远程操作电脑」没开。",
+  "remoteScreen.unsupported": "只支持 macOS。",
+  "remoteScreen.needScreen": "Gerdr 还没有「屏幕录制」权限，看不到屏幕。",
+  "remoteScreen.needInput": "Gerdr 还没有「辅助功能」权限，点击和打字会被系统丢掉。",
+  "remoteScreen.grantHint": "要在这台电脑上点（会弹系统的授权窗口，再在系统设置里打开开关）；Gerdr 后端更新后可能要重新授权。",
+  "remoteScreen.grant": "去授权",
+  "remoteScreen.refresh": "刷新",
+  "remoteScreen.quality": "画质",
+  "remoteScreen.quality.low": "省流量",
+  "remoteScreen.quality.std": "标准",
+  "remoteScreen.quality.high": "清晰",
+  "remoteScreen.zoomIn": "放大",
+  "remoteScreen.zoomOut": "缩小",
+  "remoteScreen.mode.click": "单击",
+  "remoteScreen.mode.double": "双击",
+  "remoteScreen.mode.right": "右键",
+  "remoteScreen.scrollUp": "向上滚",
+  "remoteScreen.scrollDown": "向下滚",
+  "remoteScreen.textPlaceholder": "要输入的文字（比如密码）",
+  "remoteScreen.show": "显示文字",
+  "remoteScreen.hide": "隐藏文字",
+  "remoteScreen.type": "输入",
+  "remoteScreen.typeEnter": "输入并回车",
+  "remoteScreen.loading": "正在截屏…",
+  "remoteScreen.tapHint": "点截图就是点电脑屏幕上的同一处；先点中输入框，再在下面打字。",
 };
 
 export const en: Record<keyof typeof zh, string> = {
@@ -235,4 +264,34 @@ export const en: Record<keyof typeof zh, string> = {
 
   // ConfirmDelete
   "confirmDelete.confirm": "Confirm delete",
+
+  // RemoteScreen
+  "remoteScreen.title": "Remote screen",
+  "remoteScreen.command": "Remote screen (see the computer's screen, click and type)",
+  "remoteScreen.off": "“Control this computer remotely” is off in Labs.",
+  "remoteScreen.unsupported": "macOS only.",
+  "remoteScreen.needScreen": "Gerdr doesn't have the Screen Recording permission yet, so it can't see the screen.",
+  "remoteScreen.needInput": "Gerdr doesn't have the Accessibility permission yet; macOS drops its clicks and typing.",
+  "remoteScreen.grantHint":
+    "Click this on the computer itself (macOS shows its permission prompt, then switch it on in System Settings). A Gerdr backend update may need it granted again.",
+  "remoteScreen.grant": "Grant",
+  "remoteScreen.refresh": "Refresh",
+  "remoteScreen.quality": "Picture quality",
+  "remoteScreen.quality.low": "Data saver",
+  "remoteScreen.quality.std": "Standard",
+  "remoteScreen.quality.high": "Sharp",
+  "remoteScreen.zoomIn": "Zoom in",
+  "remoteScreen.zoomOut": "Zoom out",
+  "remoteScreen.mode.click": "Click",
+  "remoteScreen.mode.double": "Double",
+  "remoteScreen.mode.right": "Right",
+  "remoteScreen.scrollUp": "Scroll up",
+  "remoteScreen.scrollDown": "Scroll down",
+  "remoteScreen.textPlaceholder": "Text to type (a password, say)",
+  "remoteScreen.show": "Show text",
+  "remoteScreen.hide": "Hide text",
+  "remoteScreen.type": "Type",
+  "remoteScreen.typeEnter": "Type + Enter",
+  "remoteScreen.loading": "Taking a screenshot…",
+  "remoteScreen.tapHint": "Tapping the screenshot clicks the same spot on the computer; click into a field first, then type below.",
 };
