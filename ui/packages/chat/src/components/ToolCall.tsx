@@ -113,6 +113,20 @@ function OutputText({ text, keep, bare }: { text: string; keep?: string; bare?: 
   );
 }
 
+/**
+ * Whether ToolBody has anything to show. A call still streaming its input (Write before its path / content arrive) has
+ * no content and an empty input: the row opened onto nothing, so it shouldn't open at all yet.
+ */
+function hasToolBody(meta: ToolMeta, input: unknown): boolean {
+  if (meta.kind === "execute" && input && typeof input === "object" && (input as any).command) return true;
+  const shown = (meta.content ?? []).some(
+    (c) => c.type === "diff" || (c.type === "content" && (c._meta?.gerdr?.unifiedDiff || (c.content as any)?._meta?.gerdr?.unifiedDiff)) || !!textOf(c),
+  );
+  if (shown) return true;
+  if (input == null) return false;
+  return typeof input !== "object" || Object.keys(input).length > 0;
+}
+
 export function ToolBody({ meta, input, keep }: { meta: ToolMeta; input: unknown; keep?: string }) {
   const cmd: string | undefined = meta.kind === "execute" && input && typeof input === "object" ? (input as any).command : undefined;
   const isCmd = !!cmd;
@@ -225,7 +239,6 @@ function DefaultToolCall({ part, agent, running, keep: keepOpen }: { part: ToolP
   // 展开没展开记在组件外面：对话是虚拟列表，滚出屏幕会卸载，滚回来要还是原样
   const keep = session ? `${session.id}:tool:${part.toolCallId}` : undefined;
   const [open, setOpen] = useKept<boolean | undefined>(keepOpen ?? keep, undefined);
-  const isOpen = open ?? (hasDiff && expandEdits);
   const title = part.title || part.toolName;
   const inp = part.input && typeof part.input === "object" ? (part.input as Record<string, unknown>) : undefined;
   const cmd = meta.kind === "execute" && typeof inp?.command === "string" ? inp.command : undefined;
@@ -240,6 +253,10 @@ function DefaultToolCall({ part, agent, running, keep: keepOpen }: { part: ToolP
   // A subagent even once its task is gone: the adapter keeps only the latest finished tasks, and none after a restart
   const sub = isAgent || !!agent;
   const bg = task?.background || inp?.run_in_background === true;
+  // Nothing to show yet (input still streaming): the row doesn't open and has no chevron
+  const subPrompt = typeof inp?.prompt === "string" && inp.prompt.trim() ? inp.prompt : undefined;
+  const canOpen = sub && !failed ? !!subPrompt || (!busy && task?.status !== "running") : hasToolBody(meta, part.input);
+  const isOpen = canOpen && (open ?? (hasDiff && expandEdits));
   const Icon = sub ? Bot : (ICONS[meta.kind] ?? Wrench);
   // 任务的进度 / 摘要：和行里已经写着的（说明、标题、任务描述）一样就不再写一遍
   const note = task && (task.status === "running" ? task.progress : task.summary);
@@ -266,7 +283,7 @@ function DefaultToolCall({ part, agent, running, keep: keepOpen }: { part: ToolP
   const [allowed, setAllowed] = useKept<boolean>(keep && `${keep}:allowed`, false);
   const canAllow = failed && !!meta.autoDenied?.length && !!session && !!chatHost().allowRules;
   return (
-    <Collapsible open={isOpen} onOpenChange={setOpen} className="group/tool">
+    <Collapsible open={isOpen} onOpenChange={canOpen ? setOpen : undefined} className="group/tool">
       {/* 照 Astryx 的 ChatToolCalls：状态图标打头（转圈 / ✓ / ✗），然后是干了什么，尾巴上 diff 行数、耗时、展开箭头。
           -ml-1.5 抵掉 px-1.5：图标和正文左边对齐，hover 底色往外多出一点 */}
       <CollapsibleTrigger className="group/row -ml-1.5 flex w-[calc(100%+0.375rem)] min-w-0 items-center gap-2 rounded-md px-1.5 py-[3px] text-left text-[13px] text-muted-foreground hover:bg-muted/60 hover:text-foreground">
@@ -373,18 +390,18 @@ function DefaultToolCall({ part, agent, running, keep: keepOpen }: { part: ToolP
           </span>
         )}
         {/* Without hover the chevron never shows, yet it held an empty slot at the row's end: drop it there while closed */}
-        <ChevronDown
-          className={cn("size-3.5 shrink-0 opacity-0 transition group-hover/row:opacity-60", isOpen ? "rotate-180 opacity-60" : "[@media(hover:none)]:hidden")}
-        />
+        {canOpen && (
+          <ChevronDown
+            className={cn(
+              "size-3.5 shrink-0 opacity-0 transition group-hover/row:opacity-60",
+              isOpen ? "rotate-180 opacity-60" : "[@media(hover:none)]:hidden",
+            )}
+          />
+        )}
       </CollapsibleTrigger>
       <CollapsibleContent className="pl-[22px] pr-1 pt-1 pb-2">
         {sub && session && !failed ? (
-          <SubagentBody
-            sessionId={session.id}
-            toolCallId={part.toolCallId}
-            prompt={typeof inp?.prompt === "string" ? inp.prompt : undefined}
-            done={!busy && task?.status !== "running"}
-          />
+          <SubagentBody sessionId={session.id} toolCallId={part.toolCallId} prompt={subPrompt} done={!busy && task?.status !== "running"} />
         ) : (
           <ToolBody meta={meta} input={part.input} keep={keep} />
         )}
