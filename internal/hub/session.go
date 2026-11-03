@@ -115,6 +115,7 @@ type Session struct {
 	closeAfter  bool
 	tasks       []acpx.Task
 	turnStarted int64                // 这一轮几点开始的（状态行：跑了多久）
+	byPerson    bool                 // the last turn was started (or joined) by a person typing, not by code / an agent
 	turnTokens  int                  // 这一轮输出了多少 token（状态行）
 	turnCost    float64              // what the agent reported spending since the last turn_end (emit puts it on the next one)
 	turnUse     []acpx.Tokens        // the token reports since the last turn_end, one entry per model (same as turnCost)
@@ -255,6 +256,9 @@ type Summary struct {
 	Waiting string `json:"waiting,omitempty"`
 	// WaitingSince: when the oldest of those requests came in (unix ms), so a watcher can tell "waiting for 20 minutes".
 	WaitingSince int64 `json:"waitingSince,omitempty"`
+	// ByPerson: the last turn came from a person typing in it (Gerdr's UI, `gerdr session send` in a terminal), not
+	// from code or another agent. --report-to skips such turns: the person saw the answer, the coordinator needn't.
+	ByPerson bool `json:"byPerson,omitempty"`
 }
 
 type ContextInfo struct {
@@ -300,7 +304,7 @@ func (s *Session) Summary() Summary {
 	if (modes == nil || len(config) == 0) && s.h.opts != nil {
 		modes, config = s.optsFallbackLocked(modes, config)
 	}
-	return Summary{Record: s.rec, Status: s.status, Error: s.lastErr, Modes: modes, Config: config, Commands: cmds, CommandsKey: s.h.cmdSets.key(cmds), CommandsCached: cached && len(cmds) > 0, Pending: len(s.pending), LastSeq: last, Tasks: s.tasks, Turn: s.turnInfoLocked(), Context: s.contextLocked(), Base: s.h.Base(s.rec.Agent), Branch: gitBranch(s.rec.Cwd), Waiting: s.waitingLocked(), WaitingSince: s.waitingSinceLocked()}
+	return Summary{Record: s.rec, Status: s.status, Error: s.lastErr, Modes: modes, Config: config, Commands: cmds, CommandsKey: s.h.cmdSets.key(cmds), CommandsCached: cached && len(cmds) > 0, Pending: len(s.pending), LastSeq: last, Tasks: s.tasks, Turn: s.turnInfoLocked(), Context: s.contextLocked(), Base: s.h.Base(s.rec.Agent), Branch: gitBranch(s.rec.Cwd), Waiting: s.waitingLocked(), WaitingSince: s.waitingSinceLocked(), ByPerson: s.byPerson}
 }
 
 func (s *Session) waitingSinceLocked() int64 {

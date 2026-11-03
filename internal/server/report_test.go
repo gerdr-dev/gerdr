@@ -160,3 +160,41 @@ func TestReportsOnlyForReportTo(t *testing.T) {
 		t.Errorf("delivered %d reports, want none", n)
 	}
 }
+
+// A turn the person drove in the worker's own chat isn't reported: they read the answer there.
+func TestReportsSkipTurnsByPerson(t *testing.T) {
+	h := reportHub(t)
+	rp := newReporter(&Server{Hub: h})
+	rp.delay = 5 * time.Millisecond
+	var n int
+	var mu sync.Mutex
+	rp.state = func(string) (string, bool) { return hub.StIdle, true }
+	rp.deliver = func(string, string, string) error { mu.Lock(); n++; mu.Unlock(); return nil }
+	w, _ := h.Session("w1")
+	x := w.Summary()
+	if x.ReportTo == "" {
+		t.Fatal("w1 should report somewhere in reportHub")
+	}
+	x.ByPerson = true
+	x.Status = hub.StRunning
+	rp.onSession(x)
+	x.Status = hub.StIdle
+	rp.onSession(x)
+	time.Sleep(40 * time.Millisecond)
+	mu.Lock()
+	if n != 0 {
+		t.Errorf("a turn by a person was reported (%d)", n)
+	}
+	mu.Unlock()
+	x.ByPerson = false // the coordinator (or code) sends next: reported again
+	x.Status = hub.StRunning
+	rp.onSession(x)
+	x.Status = hub.StIdle
+	rp.onSession(x)
+	time.Sleep(40 * time.Millisecond)
+	mu.Lock()
+	defer mu.Unlock()
+	if n != 1 {
+		t.Errorf("delivered %d reports after a coordinator's turn, want 1", n)
+	}
+}

@@ -77,7 +77,7 @@ gerdr session new --agent codex --title reviewer \
 
 To run several tasks at once, or a long one, don't block yourself on `--wait`: use `--report-to self` and go back to the
 user. Each time the session stops (turn done, waiting for a person to approve / answer, failed) you get a "Gerdr report"
-message with its reply and id. While you're busy, reports are held and arrive together when your turn ends. With
+message with its reply and id (not for a turn the user drove by typing in that session's chat: they've seen it). While you're busy, reports are held and arrive together when your turn ends. With
 `--report-to`, don't also `--wait` (you'd get the result twice).
 
 ```bash

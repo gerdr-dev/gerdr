@@ -38,7 +38,8 @@ Work directory), `sessions` (hand a task to a coding agent and follow it), `work
 side's workspaces), `dirs` (directories anywhere on disk, read-only), `progress`, `log`, `sleep`.
 
 Handing work out without waiting on it: `ctx.sessions.start({ ..., tags, reportTo: "work" })` returns at once;
-each time that worker stops (done, waiting for a person, failed) the Work agent gets a report with its reply, so
+each time that worker stops (done, waiting for a person, failed) the Work agent gets a report with its reply (not
+after a turn the user drove in the worker's own chat), so
 nothing has to poll. `tags` let a later run find "the session for this task / MR" again (`list({ tags })`), and
 `close(id)` parks a worker whose part is done (a later `send` opens it again with its context). Keep tag values
 to letters, digits and `/ - _ . :`: the Work agent types them into `gerdr session` commands, where an unquoted `!`

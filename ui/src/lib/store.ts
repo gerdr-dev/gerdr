@@ -91,7 +91,7 @@ type State = {
    * A conversation the Work page asked to show over itself (showSession in the site's gerdr.ts), e.g. a worker it
    * started: the real chat with the real composer (images, files), without making it the project's Work agent.
    */
-  workPeek: string | null;
+  workPeek: WorkPeek | null;
   /** The all-agents overview (lib/overview.ts): covers the sidebar and the tabs while on. Per device, in localStorage. */
   overview: Overview;
   /**
@@ -290,6 +290,17 @@ export function visibleSessions(l: Layout, phone = false): string[] {
 export const overviewShown = () => get().overview.on && get().mode !== "work";
 
 /** 要订阅日志的会话：看得见的 + 留在页面里没卸载的 tab 里的（它们切回来时不用整份重推、组件不用重建）。 */
+/**
+ * What a Work page asked showSession to show: the conversation, and optionally a line about it (e.g. "t11 · needs
+ * you") and buttons; a click goes back to that project's page as gerdr:sessionAction. Gerdr gives them no meaning.
+ */
+export type WorkPeek = {
+  id: string;
+  project: string;
+  label?: string;
+  actions?: { id: string; label: string; kind?: "primary" | "danger"; confirm?: string }[];
+};
+
 export function watchedSessions(l: Layout, kept: string[]): string[] {
   const out = new Set(visibleSessions(l));
   // The Work view's chat isn't in the layout; it's watched while the Work view is mounted (shown, or kept hidden).
@@ -299,7 +310,7 @@ export function watchedSessions(l: Layout, kept: string[]): string[] {
     const work = c.workSessions?.[space] ?? (space === "default" ? c.workSession : undefined);
     if (work) out.add(work);
     const peek = get().workPeek;
-    if (peek) out.add(peek);
+    if (peek) out.add(peek.id);
   }
   // The tabs under the overview stay watched (kept), so closing it doesn't reload them
   // On a phone only the shown tile and its two neighbours (the pages a swipe drags in) are mounted (OverviewPhone.tsx):

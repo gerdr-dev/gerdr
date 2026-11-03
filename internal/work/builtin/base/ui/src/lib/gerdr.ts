@@ -11,8 +11,9 @@
 // - ask(text): hand a task to the Work agent on the right of the page (gerdr sends it as a message;
 //   it queues if the agent is busy); resolves with the conversation's id. openChat(id) shows that conversation.
 // - openSession(id): show a coding-agent conversation a local function started (ctx.sessions.start), in Code.
-// - showSession(id): show such a conversation in a panel over this page instead, with gerdr's own chat and input box
-//   (images, files): for answering a worker without leaving the page.
+// - showSession(id, { label, actions }): show such a conversation in a panel over this page instead, with gerdr's own
+//   chat and input box (images, files), plus a line and buttons of the page's (onSessionPanel hears the clicks);
+//   hideSession() closes it.
 // - secret(name, { label, note }): ask the user for a key (a password, a token) in gerdr's own dialog; it's saved for
 //   local functions' ctx.secrets.get and never passes through this page. secretNames() lists the saved names.
 // - The page follows gerdr's light / dark theme by itself (see the listener at the bottom).
@@ -132,9 +133,33 @@ export function openSession(session: string) {
   window.parent.postMessage({ type: "gerdr:openSession", session }, location.origin);
 }
 
-/** Shows a conversation (e.g. a worker from ctx.sessions.start) in a panel over this page: the whole chat, and its input box takes images and files. */
-export function showSession(session: string) {
-  window.parent.postMessage({ type: "gerdr:showSession", session }, location.origin);
+export type SessionAction = { id: string; label: string; kind?: "primary" | "danger"; confirm?: string };
+
+/**
+ * Shows a conversation (e.g. a worker from ctx.sessions.start) in a panel over this page: the whole chat, and its
+ * input box takes images and files. `label` is a line above the chat ("t11 · needs you"); `actions` are buttons next
+ * to it (`confirm`: a second click needed, the button showing that text). Calling it again for the shown conversation
+ * updates them. Clicks and the panel closing come back through onSessionPanel.
+ */
+export function showSession(session: string, opts: { label?: string; actions?: SessionAction[] } = {}) {
+  window.parent.postMessage({ type: "gerdr:showSession", session, ...opts }, location.origin);
+}
+
+/** Closes the panel showSession opened. */
+export function hideSession() {
+  window.parent.postMessage({ type: "gerdr:hideSession" }, location.origin);
+}
+
+/** What happens to the panel: a button pressed (`action` = its id), or it closed (`action` undefined). Returns an unsubscribe. */
+export function onSessionPanel(fn: (e: { session: string; action?: string }) => void) {
+  const f = (e: MessageEvent) => {
+    if (e.source !== window.parent) return;
+    const m = e.data ?? {};
+    if (m.type === "gerdr:sessionAction" && typeof m.action === "string") fn({ session: m.session, action: m.action });
+    else if (m.type === "gerdr:sessionHidden") fn({ session: m.session });
+  };
+  window.addEventListener("message", f);
+  return () => window.removeEventListener("message", f);
 }
 
 let secretSeq = 0;

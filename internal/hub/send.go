@@ -48,7 +48,11 @@ func (s *Session) SendFrom(ctx context.Context, content []acp.ContentBlock, clie
 		}
 	}
 	msgID := uuid.NewString()
-	if _, err := uuid.Parse(clientID); err == nil {
+	// Typed by a person: the UI (and `gerdr session send` from a terminal) gives every message an id and no sender;
+	// a local function's ctx.sessions.send gives neither, another agent's send names itself in from.
+	_, idErr := uuid.Parse(clientID)
+	person := from == "" && idErr == nil
+	if idErr == nil {
 		msgID = clientID
 		s.mu.Lock()
 		if s.sending[msgID] {
@@ -163,6 +167,11 @@ func (s *Session) SendFrom(ctx context.Context, content []acp.ContentBlock, clie
 				return SendResult{}, err
 			}
 			if res.Outcome == acpx.SteerInjected {
+				if person {
+					s.mu.Lock()
+					s.byPerson = true // a person joined this turn: they're watching it
+					s.mu.Unlock()
+				}
 				s.emit(&Event{Kind: EvUser, MessageID: msgID, Content: raw, Steer: true, Now: urgent, From: from})
 				s.mu.Lock()
 				early := s.steering[msgID]
@@ -204,6 +213,7 @@ func (s *Session) SendFrom(ctx context.Context, content []acp.ContentBlock, clie
 	s.lastErr = ""
 	s.turnMsg = msgID
 	s.turnStarted, s.turnTokens = now(), 0
+	s.byPerson = person
 	s.mu.Unlock()
 
 	s.emit(&Event{Kind: EvUser, MessageID: msgID, Content: raw, From: from})

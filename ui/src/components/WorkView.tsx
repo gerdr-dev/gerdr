@@ -130,11 +130,18 @@ function useDark() {
 const LEGACY_SIDEBAR = { type: "gerdr:sidebar", width: 224, bottom: 0 };
 
 /** One project's Work site, the whole space between the rail and the chat (WorkFrames keeps one per opened project). */
+// Each mounted project's page, for WorkPeek to tell it what happened to the panel it asked for
+const frameSend = new Map<string, (m: unknown) => void>();
+
 function WorkFrame({ project, onShowChat }: { project: string; onShowChat?: () => void }) {
   const ref = useRef<HTMLIFrameElement>(null);
   const [secretAsk, setSecretAsk] = useState<SecretAsk | null>(null);
   const dark = useDark();
   const send = (m: unknown) => ref.current?.contentWindow?.postMessage(m, location.origin);
+  useEffect(() => {
+    frameSend.set(project, send);
+    return () => void frameSend.delete(project);
+  }, [project]);
   useEffect(() => send({ type: "gerdr:theme", dark }), [dark]);
   useEffect(() => {
     const f = (e: MessageEvent) => {
@@ -158,8 +165,21 @@ function WorkFrame({ project, onShowChat }: { project: string; onShowChat?: () =
         openWorkChat(m.session);
         onShowChat?.();
       } else if (m.type === "gerdr:showSession" && typeof m.session === "string") {
-        // Over the page, not in Code: the user answers a worker (with images / files) without leaving the board
-        set({ workPeek: m.session });
+        // Over the page, not in Code: the user answers a worker (with images / files) without leaving the board.
+        // Asked again for the one already shown: the page updating its line / buttons (the task moved on).
+        const actions = Array.isArray(m.actions)
+          ? m.actions
+              .filter((a: any) => a && typeof a.id === "string" && typeof a.label === "string")
+              .map((a: any) => ({
+                id: a.id,
+                label: a.label,
+                kind: a.kind === "primary" || a.kind === "danger" ? a.kind : undefined,
+                confirm: typeof a.confirm === "string" ? a.confirm : undefined,
+              }))
+          : undefined;
+        set({ workPeek: { id: m.session, project, label: typeof m.label === "string" ? m.label : undefined, actions } });
+      } else if (m.type === "gerdr:hideSession") {
+        if (useStore.getState().workPeek?.project === project) set({ workPeek: null });
       } else if (m.type === "gerdr:openSession" && typeof m.session === "string") {
         // A conversation a local function started (ctx.sessions) lives in Code, not in this chat: go to its pane
         toggleOverview(false);
@@ -281,13 +301,20 @@ function WorkFrames({ onShowChat }: { onShowChat?: () => void }) {
  * the session's real pane.
  */
 function WorkPeek() {
-  const id = useStore((s) => s.workPeek);
-  const session = useStore((s) => (s.workPeek ? s.sessions[s.workPeek] : undefined));
+  const peek = useStore((s) => s.workPeek);
+  const id = peek?.id;
+  const session = useStore((s) => (s.workPeek ? s.sessions[s.workPeek.id] : undefined));
   const ready = useStore((s) => s.ready);
+  const [armed, setArmed] = useState("");
+  const project = peek?.project;
   useEffect(() => {
     syncWatch();
-  }, [id]);
-  if (!id) return null;
+    setArmed("");
+    // However it goes away (the close button, ⌘W in runAction, the page showing another one): tell the page
+    if (id && project) return () => frameSend.get(project)?.({ type: "gerdr:sessionHidden", session: id });
+  }, [id, project]);
+  if (!peek || !id) return null;
+  const tell = (m: Record<string, unknown>) => frameSend.get(peek.project)?.({ ...m, session: id });
   const close = () => set({ workPeek: null });
   return (
     <aside className="absolute inset-y-0 right-0 z-30 flex w-[min(640px,100%)] flex-col border-l bg-background shadow-xl" aria-label={session?.title || id}>
@@ -312,6 +339,29 @@ function WorkPeek() {
           <X className="size-4" />
         </Button>
       </div>
+      {(peek.label || peek.actions?.length) && (
+        <div className="flex shrink-0 flex-wrap items-center gap-2 border-b bg-muted/40 px-3 py-1.5">
+          {peek.label && <span className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground">{peek.label}</span>}
+          <div className="ml-auto flex gap-1.5">
+            {peek.actions?.map((a) => (
+              <Button
+                key={a.id}
+                size="sm"
+                variant={a.kind === "primary" ? "default" : "ghost"}
+                className={cn("h-7 text-[12px]", (a.kind === "danger" || armed === a.id) && "text-bad hover:text-bad")}
+                onClick={() => {
+                  // A confirm text: first click arms it (the label becomes the question), the second does it
+                  if (a.confirm && armed !== a.id) return setArmed(a.id);
+                  setArmed("");
+                  tell({ type: "gerdr:sessionAction", action: a.id });
+                }}
+              >
+                {armed === a.id ? a.confirm : a.label}
+              </Button>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="min-h-0 flex-1">
         {session ? (
           <ChatView key={id} session={session} paneId={`work-peek:${id}`} focused />

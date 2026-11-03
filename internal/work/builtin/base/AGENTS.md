@@ -16,14 +16,17 @@ upgraded, so the project's own rules go there, not here.
   - `ui/src/layout.tsx` — the menu on the left of the page + `<Outlet />`. The menu is plain code:
     change it however the user wants (groups, icons, badges, a top bar instead, no menu at all). The whole
     frame is the site's: Gerdr's own controls are on its strip left of the frame and nothing of Gerdr's is
-    drawn over the page, so there is nothing to line up with or leave room for. Keep a narrow-screen layout
+    drawn over the page unless the page asks (`showSession`, `secret`), so there is nothing to line up with or
+    leave room for. Keep a narrow-screen layout
     (layout.tsx switches the menu to tabs below `md`): on a phone the frame is the whole screen.
   - `ui/src/pages/*.tsx` — one file per page, routed by file name (`index.tsx` → `/`,
     `weekly.tsx` → `/weekly`, `okr/[id].tsx` → `/okr/:id`); default-export a component.
   - `ui/src/lib/gerdr.ts` — the bridge: `run(fn, input, { onProgress, onLog, signal })` calls a local
     function, `ask(text)` sends a task to you, `openSession(id)` shows a conversation a function started
-    (`ctx.sessions.start`) in Code, `showSession(id)` shows it in a panel over the page instead (its whole chat, and
-    an input box that takes images and files: use it wherever the user answers a worker), `openSettings(tab)` opens Gerdr's settings, `secret(name, { label, note })` asks
+    (`ctx.sessions.start`) in Code, `showSession(id, { label, actions })` shows it in a panel over the page instead (its whole
+    chat, an input box that takes images and files, and the page's own buttons above it, heard with
+    `onSessionPanel`): open a worker's task there rather than copying its reply into the page, the user decides
+    by reading the whole conversation, `openSettings(tab)` opens Gerdr's settings, `secret(name, { label, note })` asks
     the user for a password / token in Gerdr's own dialog and saves it for `ctx.secrets.get` (the page never sees
     it; never ask for one in a page input or in chat). Light / dark follows Gerdr through it.
     **Don't edit it**: an edited copy stops being upgraded and misses later parts. Put helpers in a file

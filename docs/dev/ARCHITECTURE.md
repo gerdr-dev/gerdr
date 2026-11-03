@@ -409,7 +409,10 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
   while the subscription was cut can't be dated, and reporting every session's current state would wake every
   coordinator. Delivery waits while the target is running, starting or **waiting** (a message to a session with a pending
   question is taken as its answer, see `SendFrom`) and goes out 2 s after the target is free, one message for all that
-  piled up, each worker once with its latest state. So a burst of workers finishing costs the coordinator one turn. The
+  piled up, each worker once with its latest state. So a burst of workers finishing costs the coordinator one turn.
+  A turn a person drove is not reported (`Summary.ByPerson`: the last message had a client id and no `from`, i.e.
+  typed in the UI or `gerdr session send` from a terminal; ctx.sessions.send has neither, agents fill `from`): the
+  person read the answer in the worker's chat, and the coordinator only echoed it back (a whole extra turn). The
   queue is memory only (a restart drops undelivered reports; the coordinator can still `session list`). `ReportTo`
   refuses loops (A→B→A would wake each other forever); chains are fine. `Tags` are plain key → value labels Gerdr gives no
   meaning to (`list --tag`, `ctx.sessions.list({ tags })`), the way a coordinator finds "the session for this MR" again.

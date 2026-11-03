@@ -21,6 +21,7 @@ import (
 //
 // Reports wait while the target is busy (running, or waiting for a person: a message then would answer its question)
 // and go as one message once it's free, so a burst of finished workers costs the coordinator one turn, not one each.
+// Turns a person drove by typing in the worker's chat aren't reported (Summary.ByPerson): they saw the answer.
 // Pending reports live in memory only: a restart in between drops them (the coordinator can still `session list`).
 
 // reportDelay gathers the reports that arrive together (several workers finishing within a second or two) into one.
@@ -138,7 +139,9 @@ func (rp *reporter) onSession(sum hub.Summary) {
 	rp.mu.Lock()
 	old := rp.last[sum.ID]
 	rp.last[sum.ID] = sum.Status
-	if kind := reportKind(old, sum.Status); kind != "" && sum.ReportTo != "" {
+	// A turn a person drove (they talked to the worker in its chat) isn't reported: they read the answer there, and
+	// the coordinator would only repeat it back to them (reported: a whole extra turn echoing a reply already seen).
+	if kind := reportKind(old, sum.Status); kind != "" && sum.ReportTo != "" && !sum.ByPerson {
 		rp.queue[sum.ReportTo] = append(rp.queue[sum.ReportTo], report{from: sum.ID, kind: kind})
 		rp.scheduleLocked(sum.ReportTo)
 	}
