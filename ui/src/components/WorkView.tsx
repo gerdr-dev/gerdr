@@ -355,13 +355,15 @@ function WorkPeek() {
                 {peek.label}
               </span>
             )}
-            <div className="ml-auto flex gap-1.5">
+            <div className="ml-auto flex max-w-full flex-wrap justify-end gap-1.5">
               {peek.actions?.map((a) => (
                 <Button
                   key={a.id}
                   size="sm"
                   variant={a.kind === "primary" ? "default" : "ghost"}
-                  className={cn("h-7 text-[12px]", (a.kind === "danger" || armed === a.id) && "text-bad hover:text-bad")}
+                  title={a.label}
+                  // A page may name what a button does in full ("决定 t21：…"): capped, the end fades (index.css truncate)
+                  className={cn("h-7 max-w-[20rem] min-w-0 text-[12px]", (a.kind === "danger" || armed === a.id) && "text-bad hover:text-bad")}
                   onClick={() => {
                     // A confirm text: first click arms it (the label becomes the question), the second does it
                     if (a.confirm && armed !== a.id) return setArmed(a.id);
@@ -369,7 +371,7 @@ function WorkPeek() {
                     tell({ type: "gerdr:sessionAction", action: a.id });
                   }}
                 >
-                  {armed === a.id ? a.confirm : a.label}
+                  <span className="min-w-0 truncate">{armed === a.id ? a.confirm : a.label}</span>
                 </Button>
               ))}
             </div>
