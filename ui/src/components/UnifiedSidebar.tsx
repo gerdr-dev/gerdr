@@ -95,6 +95,7 @@ import { BorderFlow, useSlowCatchUp } from "./BorderFlow";
 import type { SessionSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { AgentIcon, StatusDot, dotStatus } from "./AgentIcon";
+import { HostTag } from "./HostTag";
 import { Elapsed } from "./Elapsed";
 import { ListHeader, SidebarBottom, SidebarEdge, SidebarHeader } from "./SidebarChrome";
 import { WsDot } from "./WsDot";
@@ -812,6 +813,7 @@ function Row({
                 )}
               </span>
               <span className="mt-0.5 flex items-center gap-1.5 text-[11px] font-normal text-muted-foreground">
+                <HostTag session={s} />
                 <span className="min-w-0 flex-1 truncate">{where ?? sub}</span>
                 <span className="shrink-0 tabular-nums" title={s ? new Date(s.updatedAt).toLocaleString() : ""}>
                   {s?.status === "running" && s.turn ? <Elapsed since={s.turn.startedAt} /> : ago(s?.updatedAt, roomy.now)}
@@ -829,6 +831,7 @@ function Row({
                   title
                 )}
               </span>
+              <HostTag session={s} className="py-0.5 group-hover:hidden" iconOnly />
               <span className="flex max-w-[40%] shrink-0 items-center text-[11px] text-muted-foreground group-hover:hidden">
                 {s?.status === "running" && s.turn ? <Elapsed since={s.turn.startedAt} /> : <span className="truncate">{where ?? sub}</span>}
               </span>

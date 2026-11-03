@@ -13,7 +13,8 @@ export type PaneLeaf = {
   type: "pane";
   id: string;
   sessionId?: string;
-  draft?: { agent?: string; cwd?: string };
+  /** host: the computer it will run on (docs/dev/MULTIHOST.md); unset = this one */
+  draft?: { agent?: string; cwd?: string; host?: string };
   sub?: { sessionId: string; toolCallId: string; title?: string };
   term?: { id: string; cwd: string };
   file?: { path: string };

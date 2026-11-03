@@ -3,6 +3,10 @@ export const zh = {
   // NewSession
   "newSession.dirPlaceholder": "~/project，或输入名字搜用过的目录",
   "newSession.dirMissing": "这个目录还不存在，会自动创建",
+  "newSession.thisComputer": "这台电脑",
+  "hostTag.on": "在 {name} 上跑",
+  "hostTag.offline": "在 {name} 上跑，现在连不上 {error}",
+  "newSession.hostUnreachable": "连不上那台电脑：{error}",
   "newSession.engine": "引擎 {name}",
   "newSession.title": "新会话（Ctrl+D 关掉）",
   "newSession.agentSettings": "Agent 设置",
@@ -156,6 +160,10 @@ export const en: Record<keyof typeof zh, string> = {
   // NewSession
   "newSession.dirPlaceholder": "~/project, or type a name to search recent folders",
   "newSession.dirMissing": "This folder doesn't exist yet; it will be created",
+  "newSession.thisComputer": "This computer",
+  "hostTag.on": "Runs on {name}",
+  "hostTag.offline": "Runs on {name}, unreachable right now {error}",
+  "newSession.hostUnreachable": "Can't reach that computer: {error}",
   "newSession.engine": "Engine: {name}",
   "newSession.title": "New session (Ctrl+D to close)",
   "newSession.agentSettings": "Agent settings",

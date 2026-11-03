@@ -21,6 +21,8 @@ import type { AgentTask, AvailableCommand, ChatSession, ConfigOption, SessionMod
 export type SessionSummary = ChatSession & {
   id: string;
   agent: string;
+  /** Another computer this one drives (docs/dev/MULTIHOST.md): the session runs there, its id is "<host>~<id>". Unset = here. */
+  host?: { id: string; name: string };
   /** agent 实际是哪一种（变体的底子：claude / codex） */
   base?: string;
   /** The git branch checked out where the agent works (workdir, else cwd) */
@@ -65,7 +67,12 @@ export type Hello = {
   home: string;
   addonsDir: string;
   remoteConns?: RemoteConn[];
+  /** Other computers this one drives (server/hosts.go); missing from older backends. */
+  hosts?: HostInfo[];
 };
+
+/** A paired computer (internal/peer Info). online: the last request to it went through. */
+export type HostInfo = { id: string; name: string; url: string; addedAt: number; online: boolean; error?: string };
 
 /** 正在连着的远程界面（一条远程 /ws 一条；internal/server/remoteconns.go）。since 是 unix 毫秒。 */
 export type RemoteConn = { id: number; device: string; label: string; ip: string; client: string; since: number };

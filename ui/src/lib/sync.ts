@@ -24,7 +24,7 @@ import {
   watchedSessions,
 } from "./store";
 import type { DraftImg, SharedDraft } from "./store";
-import type { HubEvent, SessionSummary } from "./types";
+import type { HostInfo, HubEvent, SessionSummary } from "./types";
 import { t } from "./i18n";
 
 // The project this window was opened on (the address /<project id>; ?space= from older App shells), read before anything
@@ -86,6 +86,7 @@ async function start() {
       sessions,
       config: mergeConfig(h.config),
       remoteConns: h.remoteConns ?? [],
+      hosts: h.hosts ?? [],
     });
     unreadSync.server = !!h.unread;
     gotUnread(h.unread);
@@ -116,7 +117,8 @@ function pruneLayout() {
     let changed = false;
     const fix = (n: any): any => {
       if (n.type === "pane") {
-        if (n.sessionId && !sessions[n.sessionId]) {
+        // A host session missing from the list usually means the host is off right now (server/hosts.go): keep it
+        if (n.sessionId && !sessions[n.sessionId] && !n.sessionId.includes("~")) {
           changed = true;
           return { ...n, sessionId: undefined };
         }
@@ -280,13 +282,32 @@ async function refreshHello() {
     const sessions: Record<string, SessionSummary> = {};
     for (const s of h.sessions) sessions[s.id] = s;
     // version / installedAt too: a reconnect is usually the backend restarting onto a newly installed binary
-    set({ sessions, agents: h.agents, remoteConns: h.remoteConns ?? [], version: h.version, installedAt: h.installedAt ?? 0 });
+    set({ sessions, agents: h.agents, remoteConns: h.remoteConns ?? [], hosts: h.hosts ?? [], version: h.version, installedAt: h.installedAt ?? 0 });
     // Changed on another device meanwhile (config holds who is in 进行中 too); the backend may be a new one now
     set({ config: mergeConfig(h.config) });
     unreadSync.server = !!h.unread;
     gotUnread(h.unread);
     if (validLayout(h.layout)) applyRemoteLayout(h.layout);
   } catch {}
+}
+
+/**
+ * The computers this one drives changed (Settings → Computers). The backend links each /ws to every host when it
+ * opens (server/hosts.go), so a computer added or removed since needs a new connection; a host going on / offline doesn't.
+ */
+function gotHosts(hosts: HostInfo[]) {
+  const ids = (l: HostInfo[]) =>
+    l
+      .map((h) => h.id)
+      .sort()
+      .join(",");
+  const before = ids(get().hosts);
+  set({ hosts });
+  if (ids(hosts) !== before && ws) {
+    ws.close();
+    // Its sessions come in on the new connection; a removed one's sessions go
+    if (ids(hosts).length < before.length) refreshHello();
+  }
 }
 
 function handle(m: any) {
@@ -322,6 +343,9 @@ function handle(m: any) {
       break;
     case "remote_conns":
       if (Array.isArray(m.data)) set({ remoteConns: m.data });
+      break;
+    case "hosts":
+      if (Array.isArray(m.data)) gotHosts(m.data);
       break;
     case "doctor":
       if (m.data?.checks) set({ doctor: m.data });

@@ -57,9 +57,10 @@ The console authenticates to a host exactly like a paired phone: the host's **re
 with a device cookie. Nothing new is opened on the host, and the rules of docs/dev/REMOTE.md hold: the token is never
 accepted remotely, pairing codes are only minted on the host itself.
 
-- Pairing: on the host, Settings → Remote access → "Let another Gerdr control this computer" (or
-  `gerdr remote pair --peer`) mints a code marked *peer*. On the console, Settings → Hosts → Add: address + code.
-  The console redeems it at `POST /api/remote/pair` with `peer: true` and stores the device token.
+- Pairing: on the host, Settings → Remote access → "Let another Gerdr control this computer" mints a code marked
+  *peer* (`POST /api/remote/pair-code` with `peer: true`, local port only) and shows it as one string,
+  `https://<host>/?peer=<code>`. On the console, Settings → Remote access → "Computers this one controls": paste it.
+  The console redeems it at `POST /api/remote/pair` with `peer: true` and stores the device token it gets back.
 - A peer device is **not temporary** and is **exempt from the passkey re-check** (`reauthNeeded`): a machine can't
   touch Face ID, and a link that drops every day is useless. That is why only a peer code makes one: the code is the
   proof that a person at the host agreed, same as the local "approve App login".
@@ -83,6 +84,19 @@ accepted remotely, pairing codes are only minted on the host itself.
    docs/collab-local-agent.md in the shuttle repo, folder with an id, pull / push on demand, ETag conflicts, no live sync).
 
 ## Not done / known gaps
+
+- **Paths and attachments in a host session still mean this computer.** `@gerdr/chat`'s file hooks (`fileURL`,
+  `fileStat`, `openPath`, `upload`) get a path and a cwd, not the session, so a path clicked in a host session's chat
+  opens (or fails to open) the console's file, and a non-image attachment is saved on the console where the host's
+  agent can't read it. Phase 3: hand the session (or its host) to those hooks, one general change to the package (one
+  npm publish), then route through `/h/<host>/api/fs/*`.
+- Terminals and the import-from-agent dialog are this computer's only: New Session hides both when another computer
+  is picked.
+- A /ws connection is linked to the hosts that existed when it opened; the UI reconnects when the set changes
+  (`sync.ts` `gotHosts`).
+- New Session lists this computer's agents; the host needs the same agent (claude / codex) installed.
+- Tried end to end against a real host server over TLS (`hosts_test.go`; and once by hand with a throwaway fake host
+  + a console debug instance). Not yet through a real relay and a second real machine.
 
 - LAN direct between console and host (the Android App's trick, dial the LAN address with the host's name as SNI):
   phase 1 goes through the relay address only.

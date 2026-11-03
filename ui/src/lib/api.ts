@@ -2,7 +2,7 @@ import type { AppUpdateStatus } from "./native";
 import { localizeAddon } from "./i18n";
 import type { LLMModel, LLMProvider } from "./store";
 import type { AvailableCommand } from "@gerdr/chat/types";
-import type { ContentBlock, ExtSettings, ExtView, Hello, HubEvent, MemoryStore, AddonBuild, AddonStore, SessionSummary, TermInfo } from "./types";
+import type { ContentBlock, ExtSettings, ExtView, Hello, HostInfo, HubEvent, MemoryStore, AddonBuild, AddonStore, SessionSummary, TermInfo } from "./types";
 
 /** 正开着某个会话的别的进程（herdr / 终端里的交互式 claude） */
 export type Holder = { pid: number; name?: string; status?: string; cwd?: string };
@@ -217,8 +217,17 @@ export const api = {
   /** Local only: shows macOS's permission prompts on this computer and opens the pane still missing. */
   screenRequestAccess: () => req<ScreenStatus>("POST", "/api/screen/request-access", {}),
   /** continueFrom: another agent's session whose conversation the new one carries on (hub/handoff.go) */
-  createSession: (o: { agent: string; cwd: string; mode?: string; config?: Record<string, string>; import?: string; title?: string; continueFrom?: string }) =>
-    req<SessionSummary>("POST", "/api/sessions", o),
+  /** host: start it on that computer (server/hosts.go) */
+  createSession: (o: {
+    agent: string;
+    cwd: string;
+    mode?: string;
+    config?: Record<string, string>;
+    import?: string;
+    title?: string;
+    continueFrom?: string;
+    host?: string;
+  }) => req<SessionSummary>("POST", "/api/sessions", o),
   /** input：建好就敲进去的字（对话里「在新终端里运行」） */
   termCreate: (o: { cwd?: string; from?: string; cols?: number; rows?: number; input?: string }) => req<TermInfo>("POST", "/api/terms", o),
   /** 往终端里敲字（对话里「在当前终端里运行」） */
@@ -298,10 +307,22 @@ export const api = {
   restoreProject: (name: string, trash: string) => req("POST", `/api/projects/${encodeURIComponent(name)}/restore`, { trash }),
   work: (project: string) => req<{ dir: string }>("GET", `/api/work?project=${encodeURIComponent(project)}`),
   workRun: <T = any>(fn: string, input?: unknown) => req<{ result: T }>("POST", "/api/work/run", { fn, input }).then((r) => r.result),
-  dirs: (path: string) =>
-    req<{ path: string; parent: string; dirs: string[]; home: string; git: boolean }>("GET", `/api/fs/dirs?path=${encodeURIComponent(path)}`),
+  /** host: browse another computer's folders (the request is proxied there, server/hosts.go) */
+  dirs: (path: string, host?: string) =>
+    req<{ path: string; parent: string; dirs: string[]; home: string; git: boolean }>(
+      "GET",
+      `/api/fs/dirs?path=${encodeURIComponent(path)}${host ? `&host=${encodeURIComponent(host)}` : ""}`,
+    ),
   /** Create a folder (and its parents) for the path picker; absolute or ~ paths only. */
-  mkdir: (path: string) => req<{ path: string }>("POST", "/api/fs/mkdir", { path }),
+  mkdir: (path: string, host?: string) => req<{ path: string }>("POST", `/api/fs/mkdir${host ? `?host=${encodeURIComponent(host)}` : ""}`, { path }),
+  /** Other computers this one drives (docs/dev/MULTIHOST.md) */
+  hosts: () => req<HostInfo[]>("GET", "/api/hosts"),
+  /** invite: what the other computer gave (its "https://name/?peer=CODE") */
+  addHost: (invite: string, name?: string) => req<HostInfo>("POST", "/api/hosts", { invite, name }),
+  removeHost: (id: string) => req("DELETE", `/api/hosts/${encodeURIComponent(id)}`),
+  renameHost: (id: string, name: string) => req("POST", `/api/hosts/${encodeURIComponent(id)}/rename`, { name }),
+  /** On the computer to be driven: a one-off invite for another Gerdr to control this one */
+  peerInvite: () => req<{ code: string; expires: string; url: string }>("POST", "/api/remote/pair-code", { peer: true }),
   fileStat: (path: string, cwd?: string) => req<FileStat>("GET", `/api/fs/stat?path=${encodeURIComponent(path)}&cwd=${encodeURIComponent(cwd ?? "")}`),
   /** A cookie-less /f/<token>/<name> link to one file for the system browser, valid 5 minutes (server/filelink.go). */
   fileLink: (path: string) => req<{ url: string }>("POST", "/api/fs/link", { path }),

@@ -16,8 +16,8 @@ import { t } from "../i18n";
 
 // ---- 会话 ----
 
-export async function createInPane(paneId: string, o: { agent: string; cwd: string; mode?: string; import?: string; title?: string }) {
-  setPane0(paneId, { draft: { agent: o.agent, cwd: o.cwd } });
+export async function createInPane(paneId: string, o: { agent: string; cwd: string; mode?: string; import?: string; title?: string; host?: string }) {
+  setPane0(paneId, { draft: { agent: o.agent, cwd: o.cwd, host: o.host } });
   try {
     // 没给模式时后端按设置里的默认模式 / 模型开（hub.Create），这里不用管
     const s = await api.createSession(o);
@@ -73,7 +73,8 @@ export async function continueInPane(paneId: string, sessionId: string, agent: s
   const from = get().sessions[sessionId];
   if (!from || from.agent === agent) return resumeInPane(paneId, sessionId);
   try {
-    const s = await api.createSession({ agent, cwd: from.cwd, continueFrom: sessionId });
+    // Carried on on the computer the conversation is on (handoff across computers isn't done, docs/dev/MULTIHOST.md)
+    const s = await api.createSession({ agent, cwd: from.cwd, continueFrom: sessionId, host: from.host?.id });
     set((st) => ({ sessions: { ...st.sessions, [s.id]: s } }));
     resumeInPane(paneId, s.id);
     return s;

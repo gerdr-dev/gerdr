@@ -113,6 +113,18 @@ func TestHostSessionsAndOps(t *testing.T) {
 	if !strings.Contains(w.Body.String(), `"id":"mini~w1"`) {
 		t.Fatalf("one summary not rewritten: %s", w.Body)
 	}
+	// The proxy paths need this computer's credential like /api/ does
+	for _, p := range []string{"/h/mini/api/sessions", "/api/sessions/mini~w1", "/api/fs/dirs?host=mini"} {
+		if w := do(ch, "GET", p, nil); w.Code != 401 {
+			t.Fatalf("%s without a token: %d", p, w.Code)
+		}
+	}
+	if w := do(ch, "POST", "/h/mini/api/sessions/w1/cancel", nil, auth); w.Code != 403 {
+		t.Fatalf("a write through /h/ without the CSRF header: %d", w.Code)
+	}
+	if w := do(ch, "GET", "/h/mini/api/sessions?local=1", nil, auth); !strings.Contains(w.Body.String(), `"mini~w1"`) {
+		t.Fatalf("/h/ proxy: %s", w.Body)
+	}
 	if w := do(ch, "GET", "/api/sessions/nope~w1", nil, auth); w.Code != 404 {
 		t.Fatalf("unknown host: %d", w.Code)
 	}

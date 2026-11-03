@@ -217,7 +217,8 @@ func (s *Server) guard(next http.Handler) http.Handler {
 			return
 		}
 		p := r.URL.Path
-		if p == "/auth" || !(strings.HasPrefix(p, "/api/") || p == "/ws") {
+		// /h/<host>/… is another computer's API through this one (hosts.go): as guarded as /api/
+		if p == "/auth" || !(strings.HasPrefix(p, "/api/") || p == "/ws" || strings.HasPrefix(p, "/h/")) {
 			next.ServeHTTP(w, r)
 			return
 		}

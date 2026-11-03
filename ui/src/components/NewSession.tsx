@@ -1,4 +1,4 @@
-import { ChevronUp, Folder, FolderGit2, History, Loader2, Play, Settings2, SquareTerminal } from "lucide-react";
+import { ChevronUp, Folder, FolderGit2, History, Laptop, Loader2, Play, Server, Settings2, SquareTerminal } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -28,9 +28,9 @@ const isQuery = (v: string) => !!v && !v.startsWith("/") && !v.startsWith("~");
  * exist yet just makes it, the picker says so beforehand. A backend from before /api/fs/mkdir answers 404: carry on,
  * opening the session then fails with its own message.
  */
-export async function ensureDir(path: string) {
+export async function ensureDir(path: string, host?: string) {
   if (!path.startsWith("/")) return;
-  await api.mkdir(path).catch((e) => {
+  await api.mkdir(path, host).catch((e) => {
     if (!(e instanceof ApiError && e.status === 404)) throw e;
   });
 }
@@ -48,14 +48,20 @@ export function DirPicker({
   onChange,
   onEnter,
   autoFocus,
+  host,
+  hostHome,
 }: {
   value: string;
   onChange: (v: string) => void;
   /** Gets the chosen value: picking a row and submitting happen in the same tick, before the parent's state has it. */
   onEnter?: (v: string) => void;
   autoFocus?: boolean;
+  /** Browse another computer's folders (docs/dev/MULTIHOST.md); its home directory is hostHome. */
+  host?: string;
+  hostHome?: string;
 }) {
-  const home = useStore((s) => s.home);
+  const localHome = useStore((s) => s.home);
+  const home = host ? (hostHome ?? "") : localHome;
   const sessions = useStore((s) => s.sessions);
   const workspaces = useStore((s) => s.layout.workspaces);
   const [focused, setFocused] = useState(false);
@@ -72,16 +78,18 @@ export function DirPicker({
     const out: string[] = [];
     const add = (c?: string) => c && !seen.has(c) && (seen.add(c), out.push(c));
     Object.values(sessions)
-      .filter((s) => !workProjectOf(s.id))
+      .filter((s) => !workProjectOf(s.id) && (s.host?.id ?? "") === (host ?? ""))
       .sort((a, b) => b.updatedAt - a.updatedAt)
       .forEach((s) => add(s.cwd));
-    workspaces.forEach((w) => add(w.cwd));
+    if (!host) workspaces.forEach((w) => add(w.cwd));
     return out;
-  }, [sessions, workspaces]);
+  }, [sessions, workspaces, host]);
 
   const browse = (p: string) => {
-    api.dirs(p).then(setList, () => {});
+    api.dirs(p, host).then(setList, () => {});
   };
+  // Another computer: what was listed was the other one's
+  useEffect(() => setList(null), [host]);
   // List the folder the typed path is in (or the path itself when it ends with /)
   const abs = expand(value, home);
   const dirOf = abs.endsWith("/") ? trimSlash(abs) : abs.slice(0, abs.lastIndexOf("/")) || "/";
@@ -96,13 +104,13 @@ export function DirPicker({
     if (!value.trim() || isQuery(value)) return setState(null);
     const p = trimSlash(abs);
     const t = setTimeout(() => {
-      api.dirs(p).then(
+      api.dirs(p, host).then(
         () => setState({ path: p, kind: "ok" }),
         (e) => setState(e instanceof ApiError && e.status === 404 ? { path: p, kind: "missing" } : { path: p, kind: "bad", msg: e.message }),
       );
     }, 200);
     return () => clearTimeout(t);
-  }, [abs]);
+  }, [abs, host]);
   const status = state && state.path === trimSlash(abs) ? state : null;
 
   const rows: Row[] = useMemo(() => {
@@ -248,7 +256,23 @@ function roleHint(d?: AgentDef) {
 
 export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean }) {
   const agents = useStore((s) => s.agents);
-  const home = useStore((s) => s.home);
+  const hosts = useStore((s) => s.hosts);
+  // Which computer it starts on: "" = this one (docs/dev/MULTIHOST.md)
+  const [host, setHost] = useState(pane.draft?.host ?? "");
+  const [hostHomes, setHostHomes] = useState<Record<string, string>>({});
+  const localHome = useStore((s) => s.home);
+  const home = host ? (hostHomes[host] ?? "") : localHome;
+  useEffect(() => {
+    if (!host || hostHomes[host] !== undefined) return;
+    api.dirs("", host).then(
+      (d) => {
+        setHostHomes((m) => ({ ...m, [host]: d.home }));
+        setCwd((c) => (c === "" || c === "~" || c === tilde(localHome, localHome) ? "~" : c));
+      },
+      (e) => toast.error(t("newSession.hostUnreachable", { error: e.message ?? String(e) })),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [host]);
   const defAgent = useStore((s) => s.config.defaultAgent);
   const defs = useStore((s) => s.config.agents) ?? NO_DEFS;
   const [agent, setAgent] = useState(
@@ -277,7 +301,7 @@ export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean
   const layout = useStore((s) => s.layout);
   // Untitled = nothing said in it yet (a fresh pane, or a tab right after /clear): nothing to pick up, see ResumeDialog
   const old = Object.values(sessions)
-    .filter((s) => s.cwd === abs && !!s.title && !workProjectOf(s.id))
+    .filter((s) => s.cwd === abs && !!s.title && !workProjectOf(s.id) && (s.host?.id ?? "") === host)
     // A running session bumps updatedAt with every streamed chunk, so two running ones kept swapping places: order those by
     // when their turn started instead, which holds still for the whole turn.
     .sort((a, b) => (b.turn?.startedAt ?? b.updatedAt) - (a.turn?.startedAt ?? a.updatedAt))
@@ -301,18 +325,18 @@ export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean
   // as：双击某个 agent 卡片直接开，这时 setAgent 还没生效，得显式传进来
   // dir: a path the picker just chose, before this render's cwd has it
   const start = async (imp?: string, title?: string, as = agent, dir?: string) => {
-    if (busy) return;
+    if (busy || (host && !home)) return;
     setBusy(true);
     try {
       // 接以前的会话：标题沿用列表里那个（agent 那边改过名就是改过的名字，没改过是第一句话）
       const cwd = dir !== undefined ? expand(dir, home) : abs;
       try {
-        await ensureDir(cwd);
+        await ensureDir(cwd, host || undefined);
       } catch (e: any) {
         toast.error(e.message ?? String(e)); // createInPane reports its own failures; this one would go unseen
         throw e;
       }
-      await createInPane(pane.id, { agent: as, cwd, import: imp, title });
+      await createInPane(pane.id, { agent: as, cwd, import: imp, title, host: host || undefined });
     } catch {
       setBusy(false);
     }
@@ -351,6 +375,27 @@ export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean
             {t("newSession.agentSettings")}
           </button>
         </div>
+        {hosts.length > 0 && (
+          // Where it runs: this computer or one it drives. The agents below are this computer's list; the other one
+          // needs the same agent installed.
+          <div className="flex flex-wrap gap-1.5">
+            {[{ id: "", name: t("newSession.thisComputer"), online: true, error: undefined as string | undefined }, ...hosts].map((h) => (
+              <button
+                key={h.id || "local"}
+                title={h.error}
+                onClick={() => setHost(h.id)}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[12px] transition-colors",
+                  host === h.id ? "border-brand bg-brand/8" : "hover:bg-accent",
+                )}
+              >
+                {h.id ? <Server className="size-3.5" /> : <Laptop className="size-3.5" />}
+                {h.name}
+                {h.id && <span className={cn("size-1.5 rounded-full", h.online ? "bg-ok" : "bg-muted-foreground/40")} />}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-2">
           {agents.map((a) => (
             <button
@@ -377,33 +422,44 @@ export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean
             </button>
           ))}
         </div>
-        <DirPicker value={cwd} onChange={setCwd} onEnter={(v) => start(undefined, undefined, agent, v)} />
+        <DirPicker value={cwd} onChange={setCwd} onEnter={(v) => start(undefined, undefined, agent, v)} host={host || undefined} hostHome={home} />
         <div className="flex gap-2">
-          <Button ref={startRef} className="flex-1" disabled={busy} onClick={() => start()} onKeyDown={(e) => e.key === "Enter" && start()}>
+          {/* Another computer's home isn't known until it answered: "~/x" would land in the wrong place */}
+          <Button
+            ref={startRef}
+            className="flex-1"
+            disabled={busy || (!!host && !home)}
+            onClick={() => start()}
+            onKeyDown={(e) => e.key === "Enter" && start()}
+          >
             {busy ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
             {t("newSession.start")}
           </Button>
-          {/* 临时要敲几条命令：这个 pane 直接变成这个目录下的终端 */}
-          <Button
-            variant="outline"
-            disabled={busy}
-            title={keyText("splitTerminal") ? t("newSession.terminalHereKey", { key: keyText("splitTerminal") }) : t("newSession.terminalHere")}
-            onClick={() => openTerminal({ pane: pane.id, cwd: abs })}
-          >
-            <SquareTerminal className="size-4" />
-            {t("newSession.terminal")}
-          </Button>
+          {/* 临时要敲几条命令：这个 pane 直接变成这个目录下的终端。Only here: terminals aren't proxied to other computers yet */}
+          {!host && (
+            <Button
+              variant="outline"
+              disabled={busy}
+              title={keyText("splitTerminal") ? t("newSession.terminalHereKey", { key: keyText("splitTerminal") }) : t("newSession.terminalHere")}
+              onClick={() => openTerminal({ pane: pane.id, cwd: abs })}
+            >
+              <SquareTerminal className="size-4" />
+              {t("newSession.terminal")}
+            </Button>
+          )}
         </div>
         <div>
           <div className="mb-1.5 flex items-center gap-1.5 text-[12px] text-muted-foreground">
             <History className="size-3.5" />
             {t("newSession.continue")}
-            <button
-              className="ml-auto text-[11px] font-normal hover:text-foreground"
-              onClick={() => set({ dialog: { kind: "importAgent", agent, cwd: abs, paneId: pane.id } })}
-            >
-              {t("newSession.import", { agent: agentName })}
-            </button>
+            {!host && (
+              <button
+                className="ml-auto text-[11px] font-normal hover:text-foreground"
+                onClick={() => set({ dialog: { kind: "importAgent", agent, cwd: abs, paneId: pane.id } })}
+              >
+                {t("newSession.import", { agent: agentName })}
+              </button>
+            )}
           </div>
           {old.length === 0 && <div className="text-[12px] text-muted-foreground">{t("newSession.noOld")}</div>}
           <div className="space-y-0.5">

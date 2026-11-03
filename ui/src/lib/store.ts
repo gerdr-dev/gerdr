@@ -7,7 +7,7 @@ import { activeTab, currentSpace, defaultLayout, leaves, phoneRoot, type Layout 
 import type { AppUpdateStatus } from "./native";
 import { loadOverview, overviewFocus, overviewIds, phonePages, type Overview } from "./overviewState";
 import { isPhone } from "./phone";
-import type { AgentInfo, RemoteConn, SessionSummary } from "./types";
+import type { AgentInfo, HostInfo, RemoteConn, SessionSummary } from "./types";
 import { DEFAULT_CONFIG, type Config, type SharedDraft } from "./store/config";
 import { type DevicePrefs, loadDevice, loadLocalFont, loadMode, loadSidebar, loadSidebarW, loadSpaceModes, loadUnread } from "./store/prefs";
 
@@ -61,6 +61,8 @@ type State = {
   agents: AgentInfo[];
   /** 正在连着的远程界面：设置里「远程访问」tab 上的红点和「正在连接」列表。 */
   remoteConns: RemoteConn[];
+  /** Other computers this one drives (Settings → Computers, docs/dev/MULTIHOST.md). */
+  hosts: HostInfo[];
   /** Latest diagnosis (Labs → Diagnosis); a "bad" one puts a red dot by Settings in the sidebar. */
   doctor: DoctorReport | null;
   sessions: Record<string, SessionSummary>;
@@ -143,6 +145,7 @@ export const useStore = create<State>(() => ({
   addonsDir: "",
   agents: [],
   remoteConns: [],
+  hosts: [],
   doctor: null,
   sessions: {},
   tv: {},

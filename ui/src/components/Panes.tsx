@@ -52,6 +52,7 @@ import { cn } from "@/lib/utils";
 import { FadeText } from "./FadeText";
 import { ActionKeys, keyText } from "./KeyCaps";
 import { AgentIcon, StatusDot, dotStatus } from "./AgentIcon";
+import { HostTag } from "./HostTag";
 import { ChatView } from "./chat/ChatView";
 import { NewSession } from "./NewSession";
 import { PixelLoader } from "./chat/PixelLoader";
@@ -566,6 +567,7 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
         {/* The 60% cap leaves room for the path, which a phone hides: there it only left a gap before the ⋯ */}
         <FadeText className="min-w-[3em] max-w-[60%] shrink font-medium max-md:max-w-none">{title}</FadeText>
         <StatusDot status={dotStatus(session)} unread={unread} />
+        <HostTag session={session} />
         {session?.pending ? <span className="shrink-0 whitespace-nowrap rounded-sm bg-bad/15 px-1.5 text-[11px] text-bad">{t("panes.waiting")}</span> : null}
         <PaneCount count={count} />
         {session ? (

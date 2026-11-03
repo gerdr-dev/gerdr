@@ -5,6 +5,8 @@ Claude Code / Codex 的图形界面：Go 后端（ACP 适配器 + hub + HTTP/WS�
 里面每一条都是实测踩出来、会静默出错的。
 
 - 远程访问（中继 / 配对码 / passkey，`internal/auth` `relay` `acme` `remote`）的设计和坑在 docs/dev/REMOTE.md，动之前先读。
+- Driving other computers' Gerdr from this one (hosts: `internal/peer`, `server/hosts.go`, session ids `<host>~<id>`):
+  docs/dev/MULTIHOST.md. The `/h/<host>/…` proxy must stay behind the same guard as `/api/`.
 - 安卓 App（android/：局域网直连、App 里的 passkey、后台通知，`internal/lan`、`remote/lan.go`、`server/appapi.go` `appwatch.go`）：
   docs/dev/ANDROID.md。桥的两半（`Bridge.kt` ↔ `ui/src/lib/android.ts`）要一起改；换正式签名钥匙要改 `config.OfficialAndroidCert`。
 - Measured-and-postponed work (why, numbers, how to do it): docs/dev/TODO.md. Add to it instead of losing the investigation.
