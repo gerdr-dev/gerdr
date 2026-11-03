@@ -49,11 +49,12 @@ export function SessionChat({
   const ready = useStore((s) => s.ready);
   const focus = useMemo(() => (jump ? { match: (p: GPart) => cardOf(p)?.ref === jump.ref, seq: jump.seq } : undefined), [jump?.ref, jump?.seq]);
   // A mounted page is a React root of its own: the contexts the chat reads in Code (tooltips, "is this tab showing")
-  // aren't above it, so they're given here.
+  // aren't above it, so they're given here. Its text size is gerdr's setting (--gerdr-font, App.tsx), not whatever the
+  // page's own stylesheet gives its area (a panel's `body { font-size: 14px }` lands on it): it's gerdr's chat.
   return (
     <TooltipProvider delayDuration={400}>
       <TabActive.Provider value>
-        <div className={cn("h-full min-h-0", className)}>
+        <div className={cn("h-full min-h-0", className)} style={{ fontSize: "var(--gerdr-font, 14px)" }}>
           {session ? (
             <ChatView key={id} session={session} paneId={`mount:${id}`} focused={focused} focus={focus} />
           ) : (
