@@ -578,9 +578,14 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
   upgraded). The frame-era bridge (`lib/gerdr.ts` postMessage) still works: the page's `window.parent` is now Gerdr's
   window, both sides post and listen there, and only the mount on screen is listened to. `/work/<project>/<file>` serves
   only its `public/` files now. `gerdr work status` reads the mount's errors.
-- A conversation brought up that has no tab (a notification, the inbox, the running list, a panel's "open in Code")
-  gets one in the workspace for its directory, else a new workspace for it (`addTabForSession`), not the workspace on
-  screen: a board's worker in another repository landed in whatever workspace the user was looking at.
+- **Every conversation has an owner** (`lib/panelRoute.ts`, `server.PanelTag`). One a panel started
+  (`ctx.sessions.start`) is tagged `panel=<its Work key>`; bringing it up from anywhere (`focusSession`: a notification,
+  the inbox, the running list, the palette) switches to that panel and hands it over (`core.onShowSession`: a board
+  opens the task's drawer), or after a few seconds without a handler shows gerdr's drawer over the panel. Only the
+  conversations nobody owns open in Code, in the workspace for their directory (`addTabForSession`), not the one on
+  screen. Why: panels are peers and don't know Code exists (core has no `openInCode`); a board's worker used to land in
+  a tab of whatever Code workspace was showing. This is the step toward Code being a panel itself (built in): the
+  owner of the conversations no panel started.
 - `@gerdr/core` (`ui/src/core/index.ts`, types for Work agents in `builtin/base/ui/src/gerdr-core.d.ts`; change both):
   `SessionChat` (a whole conversation for the page to place: its own TooltipProvider / TabActive since a mounted root
   is outside Gerdr's tree; streamed while shown through `store.mountWatch`), `useSession`, `openInCode`, `askSecret`

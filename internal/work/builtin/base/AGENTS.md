@@ -39,7 +39,8 @@ and their habits are what they wrote down, not what the code says.
     (layout.tsx switches the menu to tabs below `md`): on a phone the page is the whole screen.
   - `@gerdr/core` (types: `ui/src/gerdr-core.d.ts`) — Gerdr's own pieces for the page: `<SessionChat id>` (a whole
     conversation with its input box, anywhere in the page: a worker's chat in the page's own drawer or column),
-    `useSession`, `openInCode`, `askSecret`, `registerCard`, `toast`, `useDark`. Prefer them to the frame-era
+    `useSession`, `onShowSession` (the conversations this panel started are its own: brought up from a notification or
+    the inbox they come back here, and the page shows them), `askSecret`, `registerCard`, `toast`, `useDark`. Prefer them to the frame-era
     bridge calls below for anything new.
   - `ui/ui.json` — the title, `"icon"` / `"color"` (its button on Gerdr's rail, the same choices as an agent's icon:
     a glyph or line icon like `kanban`, or `sprite:<key>` from an add-on; the user picks it from the button's right-click), and `"chat": false` when the page draws its own chats with `SessionChat` (it then gets

@@ -12,6 +12,7 @@ import { focusPane } from "./panes";
 import { focusedLeaf, shutdownGone } from "./shared";
 import { switchSpace } from "./spaces";
 import { addTab, addTabForSession } from "./tabs";
+import { ownerOf, showInPanel } from "../panelRoute";
 import { t } from "../i18n";
 
 // ---- 会话 ----
@@ -118,7 +119,12 @@ export function focusSession(sessionId: string) {
   if (openInWork(sessionId)) return;
   const loc = locateSession(get().layout, sessionId);
   if (loc) focusPane(loc.pane.id);
-  else addTabForSession(sessionId);
+  else {
+    // A panel's conversation goes to its panel (lib/panelRoute.ts); only the ones nobody owns get a tab in Code
+    const owner = ownerOf(sessionId);
+    if (owner) showInPanel(owner, sessionId);
+    else addTabForSession(sessionId);
+  }
   markRead(sessionId);
 }
 

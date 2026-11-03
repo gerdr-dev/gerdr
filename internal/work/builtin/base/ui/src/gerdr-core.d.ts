@@ -26,8 +26,14 @@ declare module "@gerdr/core" {
       }
     | undefined;
 
-  /** Go to the conversation in Code. */
-  export function openInCode(id: string): void;
+  /**
+   * Show conversations this panel owns your own way. A conversation a local function started (ctx.sessions.start) is
+   * this panel's: brought up from anywhere in gerdr (a notification, the inbox, the running list), gerdr switches to
+   * this panel and calls `fn` with its id (a board opens that task's drawer with SessionChat). Without a handler gerdr
+   * shows it in a drawer of its own over the panel. `key` is this panel's: `project` from ./lib/gerdr. Returns an
+   * unregister function (call it when the page unmounts).
+   */
+  export function onShowSession(key: string, fn: (session: string) => void): () => void;
 
   /** Whether gerdr is in dark mode (the page shares gerdr's <html>, so its `dark` class is right already). */
   export function useDark(): boolean;

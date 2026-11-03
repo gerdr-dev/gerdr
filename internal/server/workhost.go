@@ -43,7 +43,16 @@ func (h workHost) StartSession(ctx context.Context, project string, o work.Start
 	if dir, err := s.workDir(project); err == nil {
 		skills = []string{filepath.Join(dir, work.SkillsDir)}
 	}
-	sess, err := s.Hub.Create(ctx, hub.CreateOptions{Agent: agent, Cwd: o.Cwd, Mode: o.Mode, Title: o.Title, Tags: o.Tags, ReportTo: reportTo, SkillDirs: skills, FromCLI: true})
+	// Its owner: the panel that started it (PanelTag). Bringing it up from anywhere (a notification, the inbox, the
+	// running list) goes to that panel, which shows it its own way; it isn't a Code conversation.
+	tags := map[string]string{}
+	for k, v := range o.Tags {
+		tags[k] = v
+	}
+	if _, ok := tags[PanelTag]; !ok {
+		tags[PanelTag] = keyOr(project)
+	}
+	sess, err := s.Hub.Create(ctx, hub.CreateOptions{Agent: agent, Cwd: o.Cwd, Mode: o.Mode, Title: o.Title, Tags: tags, ReportTo: reportTo, SkillDirs: skills, FromCLI: true})
 	if err != nil {
 		return nil, err
 	}
@@ -326,6 +335,17 @@ func lastReply(evs []*hub.Event) string {
 	}
 	flush()
 	return strings.Join(parts, "\n\n")
+}
+
+// PanelTag is the tag naming the panel (its Work key) a conversation was started by (ctx.sessions.start).
+const PanelTag = "panel"
+
+// keyOr: a Work key, "" meaning the default project's own Work.
+func keyOr(key string) string {
+	if key == "" {
+		return DefaultSpace
+	}
+	return key
 }
 
 // spaceOr: the layout space of a Work key. A panel (work.SplitKey "<project>/<panel>") is in its project's space: its

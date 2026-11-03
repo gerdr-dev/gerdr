@@ -21,6 +21,8 @@ import type { AgentTask, AvailableCommand, ChatSession, ConfigOption, SessionMod
 export type SessionSummary = ChatSession & {
   id: string;
   agent: string;
+  /** Labels (gerdr session --tag, ctx.sessions.start tags). `panel`: the panel (Work key) that started it, its owner. */
+  tags?: Record<string, string>;
   /** Another computer this one drives (docs/dev/MULTIHOST.md): the session runs there, its id is "<host>:<id>". Unset = here. */
   host?: { id: string; name: string };
   /** agent 实际是哪一种（变体的底子：claude / codex） */
