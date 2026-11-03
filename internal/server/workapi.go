@@ -127,6 +127,8 @@ func (s *Server) workRoutes(mux *http.ServeMux) {
 	//	GET  /api/work/runs/{id}                 pick a run up again (SSE from its first event): a reloaded page
 	//	POST /api/work/runs/{id}/abort           stop it
 	//	GET  /api/work/logs?project=&fn=&id=     past runs, or one run's log
+	//	GET  /api/work/schedules?project=        schedules/ with each one's last run and next time (work/schedule.go)
+	//	POST /api/work/schedules/{id}/{run|pause|resume}?project=
 	//
 	// A run doesn't belong to the request: closing the page or the CLI doesn't stop it (abort does).
 	mux.HandleFunc("GET /api/work/functions", func(w http.ResponseWriter, r *http.Request) {
@@ -198,6 +200,34 @@ func (s *Server) workRoutes(mux *http.ServeMux) {
 			return
 		}
 		writeJSON(w, map[string]any{"list": list})
+	})
+	mux.HandleFunc("GET /api/work/schedules", func(w http.ResponseWriter, r *http.Request) {
+		list, err := s.Work.Schedules(r.URL.Query().Get("project"))
+		if err != nil {
+			httpError(w, 400, err.Error())
+			return
+		}
+		writeJSON(w, map[string]any{"list": list})
+	})
+	mux.HandleFunc("POST /api/work/schedules/{id}/{op}", func(w http.ResponseWriter, r *http.Request) {
+		project, id := r.URL.Query().Get("project"), r.PathValue("id")
+		var err error
+		switch r.PathValue("op") {
+		case "run":
+			err = s.Work.RunSchedule(project, id)
+		case "pause":
+			err = s.Work.PauseSchedule(project, id, true)
+		case "resume":
+			err = s.Work.PauseSchedule(project, id, false)
+		default:
+			httpError(w, 404, "run, pause or resume")
+			return
+		}
+		if err != nil {
+			httpError(w, 400, err.Error())
+			return
+		}
+		writeJSON(w, map[string]any{"ok": true})
 	})
 	// `gerdr work secret set <name>`: ctx.secrets.get's keys, in secrets.json under work/ (never served back, only names)
 	mux.HandleFunc("GET /api/work/secrets", func(w http.ResponseWriter, r *http.Request) {

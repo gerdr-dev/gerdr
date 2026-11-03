@@ -455,6 +455,7 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 	rm.Start(server.RemoteHandler(handler))
 	svcCtx, stopSvcs := context.WithCancel(context.Background())
 	srv.RunAddonServices(svcCtx)
+	wr.RunSchedules(svcCtx) // the Work directories' schedules/ (work/schedule.go)
 	srv.RunReports(svcCtx) // --report-to: tell a coordinator when the sessions it handed work to stop (server/report.go)
 	u := loginURL(env.Host, port, token)
 	if appMode {

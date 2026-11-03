@@ -80,6 +80,29 @@ gerdr work functions                              # what can be called
 A thrown error prints its stack (file and line, counted in the bundled code: imported helper files
 come first) and exits 1. Ctrl-C stops the run. Fix it until it runs, then wire the page.
 
+## On a schedule
+
+What the project does by itself goes in `schedules/<id>.json`, one file per job (the file name is its id). Gerdr's
+backend runs them while it's up: with the background service on, the App needn't be open, nor this page.
+
+```json
+{ "fn": "mrwatch.tick", "every": "5m", "name": "Watch my MRs" }
+{ "fn": "report.collect", "at": "09:00,16:00", "input": { "days": 1 } }
+{ "prompt": "Sum up yesterday's merged MRs for the standup", "at": "09:30", "name": "Standup notes" }
+```
+
+- `fn` runs a local function, with `input` plus `scheduled: true`; `prompt` sends the text to you (the Work agent),
+  as if the user had. One of the two. Deterministic work is a function; only what needs judgement is a prompt, and a
+  watcher is best a function that polls and filters and hands just the interesting part to an agent
+  (`ctx.sessions.send` to the worker concerned, or to you with `"work"`).
+- `every`: 30m, 6h, 1d (at least 5m); `at`: local times of day, comma separated. Missed runs (asleep, Gerdr off) are
+  caught up once; a run still going when its time comes again is skipped. A run is an ordinary run in the run logs.
+- A broken file stops the whole folder (the error is in `gerdr work schedules`): fix it rather than delete others.
+- `gerdr work schedules` lists them with the last run (result, error, run id) and the next time;
+  `gerdr work schedule run|pause|resume <id>`. Paused / last run are this machine's, not in this directory.
+- A function on a schedule keeps its own memory in `data/` (what it has already handled), so the same comment or
+  failure isn't handed over twice.
+
 ## Run logs
 
 Every run's progress, logs and error (with its stack) are kept 30 days in `ctx.workspace.logs_dir`;

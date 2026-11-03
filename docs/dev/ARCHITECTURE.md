@@ -400,6 +400,12 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
   cross on the server (`crossSpace`, using `from` / `near`). Closed conversations belong to no session (`--all` lists them);
   reopening one puts it next to the caller, in the caller's session. This is not a security boundary: an agent has the token
   and can call the API itself. herdr's isn't one either: it's a separate socket.
+- **Schedules** (`work/schedule.go`, run from main for every Work directory). Annulo's format on purpose
+  (`schedules/<id>.json`: fn or prompt, every or at) so a schedule reads the same on both. State (last run, paused)
+  lives in `<GERDR_DIR>/state/work-schedules/`, not the Work directory: it's this machine's, and a synced or shared Work
+  directory must not carry another machine's "already ran". `next` catches a miss up once (every: last + interval;
+  at: only today's latest missed time), never once per miss, so waking a laptop after a weekend doesn't fire 500 runs.
+  A broken file stops the whole project's schedules, logged once: half a set of watchers silently running is worse.
 - **Coordinating without blocking: reports and tags** (`hub/meta.go`, `server/report.go`). The use is the dispatcher in
   Work: it hands tasks to several workers and keeps talking with the user, instead of sitting on `--wait` (one turn per
   worker, half-duplex) or polling. A session's `Record.ReportTo` names a session that gets a message each time this one

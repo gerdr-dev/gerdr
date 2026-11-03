@@ -64,6 +64,7 @@ type Runner struct {
 	installed map[string]bool
 	runs      map[string]*Run
 	pruned    map[string]time.Time // log directories by when they were last pruned
+	sched_    scheduler            // schedules/ (schedule.go)
 }
 
 func New(root string, mcp CallMCP) *Runner {

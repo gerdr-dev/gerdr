@@ -1003,6 +1003,39 @@ prints its stack and exits 1. Ctrl-C stops the run. --input-file - reads the inp
 			return c.do("POST", "/api/work/runs/"+url.PathEscape(args[0])+"/abort", map[string]any{}, nil)
 		},
 	})
+	cmd.AddCommand(&cobra.Command{
+		Use:   "schedules",
+		Short: "The project's schedules (schedules/<id>.json): last run, next time, paused",
+		Args:  cobra.NoArgs,
+		RunE: func(_ *cobra.Command, _ []string) error {
+			c, err := newAPIClient()
+			if err != nil {
+				return err
+			}
+			var out map[string]any
+			if err := c.do("GET", "/api/work/schedules?project="+url.QueryEscape(which()), nil, &out); err != nil {
+				return err
+			}
+			printJSON(out["list"])
+			return nil
+		},
+	})
+	sched := &cobra.Command{Use: "schedule", Short: "Run one schedule now, or pause / resume it (on this machine)"}
+	for _, op := range []string{"run", "pause", "resume"} {
+		sched.AddCommand(&cobra.Command{
+			Use:   op + " <id>",
+			Short: map[string]string{"run": "Run it now, whatever its time", "pause": "Stop running it until resumed", "resume": "Run it on its times again"}[op],
+			Args:  cobra.ExactArgs(1),
+			RunE: func(_ *cobra.Command, args []string) error {
+				c, err := newAPIClient()
+				if err != nil {
+					return err
+				}
+				return c.do("POST", "/api/work/schedules/"+url.PathEscape(args[0])+"/"+op+"?project="+url.QueryEscape(which()), map[string]any{}, nil)
+			},
+		})
+	}
+	cmd.AddCommand(sched)
 	secret := &cobra.Command{Use: "secret", Short: "Keys for ctx.secrets.get (stored in Gerdr's secrets.json, never shown back)"}
 	secret.AddCommand(&cobra.Command{
 		Use:   "set <name>",

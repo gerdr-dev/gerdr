@@ -45,6 +45,9 @@ upgraded, so the project's own rules go there, not here.
   `ctx.workspaces` to pick where), and report progress. **Read `FUNCTIONS.md` before writing one** (the
   rules, how to try and debug them), and `local/ctx.d.ts` for the ctx API. Keep pages to drawing; work a page needs again and again goes into a function, not
   into you running the same commands each time.
+- `schedules/<id>.json` — what the project does by itself on time: a local function (`"fn"`) or a message to you
+  (`"prompt"`), `"every": "5m"` or `"at": "09:00"`. Gerdr runs them with the App closed too. FUNCTIONS.md, "On a
+  schedule"; `gerdr work schedules` shows how they went.
 - Handing a task to another agent (the gerdr skill has the commands): start it with `--report-to self` instead
   of `--wait`, and go back to the user: each time it stops (done, waiting for a person, failed) you get a
   Gerdr report message with its reply. Give it `--cwd` (the repository; otherwise it runs in this Work
