@@ -37,6 +37,10 @@ limits. Read it before writing a function and type the argument `ctx: Ctx` (no i
 Work directory), `sessions` (hand a task to a coding agent and follow it), `workspaces` (the Code
 side's workspaces), `dirs` (directories anywhere on disk, read-only), `progress`, `log`, `sleep`.
 
+Images and files the user gives a task (pasted, dropped, picked on a page): the page POSTs each to
+`/api/fs/upload?name=<file name>` (same origin, body = the file, header `X-Gerdr: 1`) and gets `{ path }`; pass the
+paths as `attachments` to `ctx.sessions.start` / `send`, and the agent gets them as from Gerdr's own input box.
+
 Handing work out without waiting on it: `ctx.sessions.start({ ..., tags, reportTo: "work" })` returns at once;
 each time that worker stops (done, waiting for a person, failed) the Work agent gets a report with its reply (not
 after a turn the user drove in the worker's own chat), so

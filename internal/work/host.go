@@ -32,8 +32,9 @@ type Host interface {
 	Session(id string) (map[string]any, error)
 	// Sessions: every conversation, most recently active first; cwd / tags narrow it (see hub.HasTags).
 	Sessions(cwd string, tags map[string]string) []map[string]any
-	// Send: id "work" = the project's Work agent conversation, as for StartOptions.ReportTo.
-	Send(ctx context.Context, project, id, text string) (map[string]any, error)
+	// Send: id "work" = the project's Work agent conversation, as for StartOptions.ReportTo. attachments as in
+	// StartOptions.
+	Send(ctx context.Context, project, id, text string, attachments []string) (map[string]any, error)
 	// Close stops a conversation's agent and takes it off the screen; the record stays and Send opens it again.
 	Close(ctx context.Context, id string) error
 	// Tag changes a conversation's tags ("" removes a key).
@@ -58,6 +59,10 @@ type StartOptions struct {
 	// ReportTo: a session told each time this one stops (done, waiting for a person, error); "work" = this project's
 	// Work agent conversation.
 	ReportTo string `json:"reportTo,omitempty"`
+	// Attachments: files on this machine sent with the first message, the way the composer sends them: an image as
+	// the image itself, anything else as a file link the agent opens with its tools. A page gets a path for a pasted
+	// / dropped / picked file from POST /api/fs/upload.
+	Attachments []string `json:"attachments,omitempty"`
 }
 
 var errNoHost = errors.New("not available here: ctx.sessions / ctx.workspaces need Gerdr's server")
@@ -137,7 +142,7 @@ func (r *runner) sessionsObject() map[string]any {
 		},
 		// await ctx.sessions.send(id, text) → session. A running one gets it at its next pause, like a queued message.
 		// id "work" = this project's Work agent, so a function can hand something to it (it has no session id to use).
-		"send": func(id, text string) *goja.Promise {
+		"send": func(id, text string, arg goja.Value) *goja.Promise {
 			if h == nil {
 				return r.rejected(errNoHost)
 			}
@@ -146,7 +151,13 @@ func (r *runner) sessionsObject() map[string]any {
 			}
 			ctx, cancel := context.WithTimeout(r.ctx, 2*time.Minute)
 			defer cancel()
-			s, err := h.Send(ctx, r.project, id, text)
+			var o struct {
+				Attachments []string `json:"attachments"`
+			}
+			if err := r.opts(arg, &o); err != nil {
+				return r.rejected(err)
+			}
+			s, err := h.Send(ctx, r.project, id, text, o.Attachments)
 			if err != nil {
 				return r.rejected(err)
 			}

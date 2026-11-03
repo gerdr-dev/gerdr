@@ -2,9 +2,12 @@ package server
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"mime"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -47,8 +50,12 @@ func (h workHost) StartSession(ctx context.Context, project string, o work.Start
 	if o.Focus {
 		s.Hub.Broadcast("open", map[string]any{"id": id, "focus": true})
 	}
-	if strings.TrimSpace(o.Prompt) != "" {
-		if _, err := sess.SendFrom(ctx, []acp.ContentBlock{acp.TextBlock(o.Prompt)}, "", "", false); err != nil {
+	if strings.TrimSpace(o.Prompt) != "" || len(o.Attachments) > 0 {
+		blocks, err := withAttachments(o.Prompt, o.Attachments)
+		if err != nil {
+			return nil, fmt.Errorf("opened %s but the first message didn't go: %w", id, err)
+		}
+		if _, err := sess.SendFrom(ctx, blocks, "", "", false); err != nil {
 			return nil, fmt.Errorf("opened %s but the first message didn't go: %w", id, err)
 		}
 	}
@@ -106,7 +113,7 @@ func (h workHost) target(project, id string) (string, error) {
 	return "", errors.New(i18n.S("这个项目的 Work 助手还没有对话：先在 Work 里打开它", "this project's Work agent has no conversation yet: open it in Work first"))
 }
 
-func (h workHost) Send(ctx context.Context, project, id, text string) (map[string]any, error) {
+func (h workHost) Send(ctx context.Context, project, id, text string, attachments []string) (map[string]any, error) {
 	id, err := h.target(project, id)
 	if err != nil {
 		return nil, err
@@ -115,7 +122,11 @@ func (h workHost) Send(ctx context.Context, project, id, text string) (map[strin
 	if err != nil {
 		return nil, err
 	}
-	if _, err := sess.SendFrom(ctx, []acp.ContentBlock{acp.TextBlock(text)}, "", "", false); err != nil {
+	blocks, err := withAttachments(text, attachments)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := sess.SendFrom(ctx, blocks, "", "", false); err != nil {
 		return nil, err
 	}
 	return h.view(sess.Summary(), nil), nil
@@ -380,4 +391,47 @@ func (s *Server) placeSession(project, id, cwd, real, wsID string) error {
 		s.Hub.Broadcast("layout", map[string]any{"data": out, "client": "gerdr-work"})
 	}
 	return nil
+}
+
+// maxInlineImage: a bigger image goes as a file link instead (the agent reads it with its tools), as from the composer.
+const maxInlineImage = 10 << 20
+
+// withAttachments is a message the way the composer builds one (packages/chat Composer.send): the attachments first,
+// an image as the image itself, anything else as a file:// link, then the text.
+func withAttachments(text string, paths []string) ([]acp.ContentBlock, error) {
+	var out []acp.ContentBlock
+	for _, p := range paths {
+		if strings.HasPrefix(p, "~/") {
+			if home, err := os.UserHomeDir(); err == nil {
+				p = filepath.Join(home, p[2:])
+			}
+		}
+		if !filepath.IsAbs(p) {
+			return nil, fmt.Errorf("attachment %q: an absolute path on this machine (POST /api/fs/upload gives one)", p)
+		}
+		st, err := os.Stat(p)
+		if err != nil || st.IsDir() {
+			return nil, fmt.Errorf("attachment %q: no such file", p)
+		}
+		mt := mime.TypeByExtension(strings.ToLower(filepath.Ext(p)))
+		if i := strings.IndexByte(mt, ';'); i >= 0 {
+			mt = mt[:i]
+		}
+		switch mt {
+		case "image/png", "image/jpeg", "image/gif", "image/webp":
+			if st.Size() <= maxInlineImage {
+				b, err := os.ReadFile(p)
+				if err != nil {
+					return nil, err
+				}
+				out = append(out, acp.ImageBlock(base64.StdEncoding.EncodeToString(b), mt))
+				continue
+			}
+		}
+		out = append(out, acp.ResourceLinkBlock(filepath.Base(p), "file://"+p))
+	}
+	if strings.TrimSpace(text) != "" {
+		out = append(out, acp.TextBlock(text))
+	}
+	return out, nil
 }

@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -165,5 +166,27 @@ func TestWorkTarget(t *testing.T) {
 	}
 	if _, err := h.target("p2", "work"); err == nil {
 		t.Fatal("a project without a Work conversation must be an error")
+	}
+}
+
+// Attachments go as the composer sends them: an image inline, anything else a file link, the text last.
+func TestWithAttachments(t *testing.T) {
+	dir := t.TempDir()
+	png := filepath.Join(dir, "shot.png")
+	log := filepath.Join(dir, "build.log")
+	_ = os.WriteFile(png, []byte("\x89PNG fake"), 0o600)
+	_ = os.WriteFile(log, []byte("error"), 0o600)
+	b, err := withAttachments("look", []string{png, log})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(b) != 3 || b[0].Image == nil || b[0].Image.MimeType != "image/png" || b[1].ResourceLink == nil || b[1].ResourceLink.Uri != "file://"+log || b[2].Text == nil {
+		t.Fatalf("blocks %+v", b)
+	}
+	if _, err := withAttachments("x", []string{"relative.png"}); err == nil {
+		t.Error("a relative path must be refused")
+	}
+	if _, err := withAttachments("x", []string{filepath.Join(dir, "gone.png")}); err == nil {
+		t.Error("a missing file must be refused")
 	}
 }

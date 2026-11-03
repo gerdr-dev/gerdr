@@ -103,6 +103,12 @@ interface Ctx {
        * is busy and go as one message, so the coordinator isn't blocked on the worker nor has to poll it.
        */
       reportTo?: string;
+      /**
+       * Files on this machine sent with the first message, as Gerdr's own input box sends them: an image as the image,
+       * anything else as a file link the agent opens with its tools. A page gets a path for a file the user pasted,
+       * dropped or picked by POSTing it to `/api/fs/upload?name=<file name>` (body = the file; returns { path }).
+       */
+      attachments?: string[];
     }): Promise<Session>;
     /** With `reply`: what the agent said since the last message sent to it. null when there's no such conversation. */
     get(id: string): (Session & { reply: string }) | null;
@@ -115,7 +121,7 @@ interface Ctx {
      * Sends another message. A running conversation gets it when its current turn ends; a closed one is opened again.
      * `"work"` = this project's Work agent conversation (e.g. to hand it something to decide).
      */
-    send(id: string, text: string): Promise<Session>;
+    send(id: string, text: string, opts?: { attachments?: string[] }): Promise<Session>;
     /**
      * Stops its agent and takes it off the screen, like closing its tab: the conversation is kept and `send` carries on
      * from where it was. For a worker whose task is done or parked, so it stops holding a process.
