@@ -188,6 +188,7 @@ export const api = {
       panels: { key: string; name: string; config: Record<string, unknown>; source: { git: boolean; remote?: string; dirty?: boolean } }[];
       ownRemoved: boolean;
     }>("GET", `/api/work/panels?project=${encodeURIComponent(project)}`),
+  unremovePanel: (key: string, trash: string) => req<{ ok: boolean }>("POST", "/api/work/panels/unremove", { key, trash }),
   restoreWork: (project: string) => req<{ ok: boolean }>("POST", "/api/work/panels/restore", { project }),
   removePanel: (key: string) => req<{ trash: string }>("POST", "/api/work/panels/remove", { key }),
   updateWork: (project: string) => req<{ output: string }>("POST", "/api/work/update", { project }),

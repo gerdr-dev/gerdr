@@ -166,6 +166,23 @@ func (s *Server) workRoutes(mux *http.ServeMux) {
 		}
 		writeJSON(w, map[string]any{"panels": list, "ownRemoved": removed})
 	})
+	// Undo a removal: the panel comes back from the trash as it was.
+	mux.HandleFunc("POST /api/work/panels/unremove", func(w http.ResponseWriter, r *http.Request) {
+		var b struct {
+			Key   string `json:"key"`
+			Trash string `json:"trash"`
+		}
+		if err := decode(r, &b); err != nil {
+			httpError(w, 400, err.Error())
+			return
+		}
+		if err := s.Work.UnremovePanel(b.Key, b.Trash); err != nil {
+			httpError(w, 409, err.Error())
+			return
+		}
+		_, _ = s.mountWork(b.Key)
+		writeJSON(w, map[string]any{"ok": true})
+	})
 	mux.HandleFunc("POST /api/work/panels/restore", func(w http.ResponseWriter, r *http.Request) {
 		var b struct {
 			Project string `json:"project"`

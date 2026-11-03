@@ -112,7 +112,8 @@ func TestPanels(t *testing.T) {
 		t.Error("a blank panel isn't the built-in Work")
 	}
 	// The project's own Work can go too, and stays away until restored
-	if _, err := r.RemovePanel("p"); err != nil {
+	ownTrash, err := r.RemovePanel("p")
+	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := r.Ensure("p"); err != ErrWorkRemoved || !r.WorkRemoved("p") {
@@ -122,6 +123,16 @@ func TestPanels(t *testing.T) {
 		if k == "p" {
 			t.Error("removed Work still listed")
 		}
+	}
+	// The own panel's undo brings back what was removed, not a blank one
+	if err := r.UnremovePanel("p", ownTrash); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(dir, "mine.txt")); string(b) != "x" || r.WorkRemoved("p") {
+		t.Error("own panel's undo didn't restore it")
+	}
+	if ownTrash, err = r.RemovePanel("p"); err != nil {
+		t.Fatal(err)
 	}
 	if err := r.RestoreWork("p"); err != nil {
 		t.Fatal(err)
@@ -135,6 +146,19 @@ func TestPanels(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(trash, "AGENTS.md")); err != nil {
 		t.Error("removed panel isn't in the trash")
+	}
+	// Undo: it comes back from the trash as it was; only from Gerdr's trash
+	if err := r.UnremovePanel(key, t.TempDir()); err == nil {
+		t.Error("restored from outside the trash")
+	}
+	if err := r.UnremovePanel(key, trash); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(pd, "AGENTS.md")); string(b) != "theirs" {
+		t.Error("undo didn't bring the panel back as it was")
+	}
+	if trash, err = r.RemovePanel(key); err != nil {
+		t.Fatal(err)
 	}
 	// A request for it after it's gone (the page that showed it) must not make it again
 	if _, err := r.Ensure(key); err == nil {

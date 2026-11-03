@@ -153,6 +153,37 @@ func (r *Runner) RemovePanel(key string) (string, error) {
 	return trash, nil
 }
 
+// UnremovePanel puts a panel RemovePanel moved to trash back where it was (the undo in the toast). trash must be
+// one of Gerdr's trash/panels directories, and the panel's place must be free (not added again meanwhile).
+func (r *Runner) UnremovePanel(key, trash string) error {
+	dir, err := r.Dir(key)
+	if err != nil {
+		return err
+	}
+	base := filepath.Join(r.Root, "trash", PanelsDir)
+	if rel, err := filepath.Rel(base, trash); err != nil || rel == "." || strings.HasPrefix(rel, "..") || strings.ContainsRune(rel, filepath.Separator) {
+		return fmt.Errorf("%s isn't a removed panel", trash)
+	}
+	if _, err := os.Stat(trash); err != nil {
+		return fmt.Errorf("%s is gone from the trash", trash)
+	}
+	if _, err := os.Stat(dir); err == nil {
+		return fmt.Errorf("there is a panel at %s again; it wasn't replaced", dir)
+	}
+	if err := os.MkdirAll(filepath.Dir(dir), 0o755); err != nil {
+		return err
+	}
+	if err := os.Rename(trash, dir); err != nil {
+		return err
+	}
+	_ = os.Remove(removedMark(dir)) // a project's own panel: no longer removed
+	r.mu.Lock()
+	delete(r.installed, dir)
+	r.mu.Unlock()
+	_, err = r.Ensure(key)
+	return err
+}
+
 var badName = regexp.MustCompile(`[/\\.\s]+`)
 
 // nameFromURL: the repository's name ("https://github.com/o/task-board.git" → "task-board").

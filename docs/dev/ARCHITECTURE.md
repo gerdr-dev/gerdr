@@ -611,7 +611,7 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
   the page that showed a removed panel brought it back blank. A project's own Work can be removed too: it goes to the trash and a `<dir>.removed` mark keeps
   `Ensure` from making it again until it's restored (blank). A panel's right-click updates it (`git pull --rebase --autostash`: the user's own changes, their workflow
   skill above all, stay on top of what the published panel brings; a conflict is aborted and reported) or removes it (to
-  `trash/panels/`). esbuild writes UTF-8 (`Charset`): a panel named 任务看板 has it in its module paths, and escaped
+  `trash/panels/`, with an undo in the toast like deleting a project: `UnremovePanel` puts it back as it was). esbuild writes UTF-8 (`Charset`): a panel named 任务看板 has it in its module paths, and escaped
   `\uXXXX` placeholders never matched in `link`.
 - Page logic lives in local functions `<GERDR_DIR>/work/local/*.ts` (esbuild → goja, `ctx.mcp(server, tool, args)`), called by
   name (`gerdr work run file.export`). Bundled files (`internal/work/builtin/base` for every project: site skeleton, blank

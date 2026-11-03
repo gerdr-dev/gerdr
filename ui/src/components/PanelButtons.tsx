@@ -4,13 +4,13 @@ import { toast } from "sonner";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { api } from "@/lib/api";
-import { askConfirm } from "@/lib/confirm";
 import { currentSpace } from "@/lib/layout";
-import { panelsChanged, usePanels, type Panel } from "@/lib/panels";
+import { usePanels, type Panel } from "@/lib/panels";
 import { set, setMode, setWorkPanel, useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { PanelIcon } from "./PanelIcon";
 import { t } from "@/lib/i18n";
+import { removePanel } from "@/lib/panelActions";
 
 /**
  * One button per panel of the project on screen, under Code: its own Work (the briefcase), then each panel installed
@@ -64,24 +64,7 @@ function PanelButton({ p, on, className, size, space }: { p: Panel; on: boolean;
       (r) => toast.success(t("workSource.updated"), { description: r.output }),
       (e) => toast.error(e.message),
     );
-  const remove = async () => {
-    if (
-      !(await askConfirm({
-        title: t("workSource.removeTitle", { name: label }),
-        description: t("workSource.removeBody"),
-        action: t("workSource.remove"),
-        destructive: true,
-      }))
-    )
-      return;
-    try {
-      const r = await api.removePanel(p.key);
-      panelsChanged();
-      toast.success(t("workSource.removed", { name: label }), { description: t("workSource.oldIn", { path: r.trash }) });
-    } catch (e: any) {
-      toast.error(e.message);
-    }
-  };
+  const remove = () => removePanel({ key: p.key, title: label });
   return (
     <ContextMenu>
       <Tooltip>
@@ -94,13 +77,15 @@ function PanelButton({ p, on, className, size, space }: { p: Panel; on: boolean;
         </TooltipTrigger>
         <TooltipContent side={size === "rail" ? "right" : "bottom"}>{label}</TooltipContent>
       </Tooltip>
-      <ContextMenuContent>
+      {/* Never wider than the screen, kept off its edges: on a phone the long-pressed button sits near the right edge,
+          and a menu wider than the room left of it ran off the screen */}
+      <ContextMenuContent collisionPadding={8} className="max-w-[calc(100vw-16px)]">
         <ContextMenuItem onClick={() => set({ dialog: { kind: "panelIcon", key: p.key, title: label, icon: p.icon, color: p.color } })}>
           <Smile /> {t("panelIcon.menu")}
         </ContextMenuItem>
         {src?.git && src.remote && (
-          <ContextMenuItem onClick={update}>
-            <RefreshCw /> {t("workSource.menuUpdate", { remote: src.remote.replace(/^https?:\/\/(github\.com\/)?/, "") })}
+          <ContextMenuItem onClick={update} title={src.remote}>
+            <RefreshCw /> {t("workSource.menuUpdate")}
           </ContextMenuItem>
         )}
         <ContextMenuItem variant="destructive" onClick={remove}>
