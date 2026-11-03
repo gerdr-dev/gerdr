@@ -16,6 +16,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { spaceList, type Layout } from "@/lib/layout";
 import { usePhone } from "@/lib/phone";
 import { set, setMode, useStore } from "@/lib/store";
 import { syncWatch } from "@/lib/sync";
@@ -125,7 +126,7 @@ function useDark() {
  */
 const LEGACY_SIDEBAR = { type: "gerdr:sidebar", width: 224, bottom: 0 };
 
-/** One project's Work site, the whole space between the rail and the chat. Keyed by project by the caller, so switching projects loads the other site. */
+/** One project's Work site, the whole space between the rail and the chat (WorkFrames keeps one per opened project). */
 function WorkFrame({ project, onShowChat }: { project: string; onShowChat?: () => void }) {
   const ref = useRef<HTMLIFrameElement>(null);
   const dark = useDark();
@@ -163,6 +164,37 @@ function WorkFrame({ project, onShowChat }: { project: string; onShowChat?: () =
     return () => window.removeEventListener("message", f);
   }, [project, onShowChat]);
   return <iframe ref={ref} src={`/work/${encodeURIComponent(project)}/`} title="Work" className="size-full border-0 bg-background" />;
+}
+
+/**
+ * Every project's Work site opened in this page, the current one shown: switching projects only hides the frame, so
+ * coming back finds the site as it was (an iframe can't be re-parented or remounted without reloading — reported: the
+ * project's Work page lost its state on every switch). A project's frame is first loaded when it's seen in Work mode
+ * (in Code mode this view is only kept mounted, nobody looks at it), and dropped when the project is closed. Appended in
+ * the order they're opened and never reordered: React moving an iframe in the DOM reloads it too.
+ */
+function WorkFrames({ onShowChat }: { onShowChat?: () => void }) {
+  const project = useWorkProject();
+  const shown = useStore((s) => s.mode === "work");
+  const spaces = useStore((s) => s.layout.spaces);
+  const workspaces = useStore((s) => s.layout.workspaces);
+  const [kept, setKept] = useState<string[]>([]);
+  const live = new Set(spaceList({ spaces, workspaces } as Layout).map((s) => s.id));
+  const list = kept.filter((p) => live.has(p));
+  if (shown && !list.includes(project)) list.push(project);
+  const key = list.join("\n");
+  useEffect(() => {
+    setKept((k) => (k.join("\n") === key ? k : key.split("\n").filter(Boolean)));
+  }, [key]);
+  return (
+    <div className="relative size-full">
+      {list.map((p) => (
+        <div key={p} className={cn("absolute inset-0", p !== project && "pointer-events-none invisible")} aria-hidden={p !== project}>
+          <WorkFrame project={p} onShowChat={onShowChat} />
+        </div>
+      ))}
+    </div>
+  );
 }
 
 // ---- the agent on the right ----
@@ -303,7 +335,6 @@ function ChatHeader() {
 
 export function WorkView() {
   const phone = usePhone();
-  const project = useWorkProject();
   const [chatW, setChatW] = useChatW();
   const [side, setSide] = useState<"page" | "chat">("page");
   const showChat = useCallback(() => setSide("chat"), []);
@@ -331,7 +362,7 @@ export function WorkView() {
         </div>
         {/* both stay mounted: switching tabs keeps the page's state and the chat's scroll */}
         <div className={cn("min-h-0 flex-1", side !== "page" && "hidden")}>
-          <WorkFrame key={project} project={project} onShowChat={showChat} />
+          <WorkFrames onShowChat={showChat} />
         </div>
         {/* The same header as on wider screens: without it a phone has no history, no new chat and no agent picker */}
         <div className={cn("flex min-h-0 flex-1 flex-col", side !== "chat" && "hidden")}>
@@ -347,7 +378,7 @@ export function WorkView() {
     // The rail (Rail.tsx) is left of this: the site gets everything up to the chat, nothing of gerdr's laid over it
     <div className="flex h-full bg-background">
       <div className="min-w-0 flex-1">
-        <WorkFrame key={project} project={project} />
+        <WorkFrames />
       </div>
       {/* max-w: a window made smaller after dragging still leaves the Work site some room */}
       <div className="relative flex max-w-[70%] shrink-0 flex-col border-l" style={{ width: chatW }}>
