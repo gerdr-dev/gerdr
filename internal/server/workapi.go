@@ -148,12 +148,14 @@ func (s *Server) workRoutes(mux *http.ServeMux) {
 		_, _ = s.mountWork(key)
 		writeJSON(w, map[string]any{"key": key})
 	})
-	// A panel's icon on the rail: "icon" in its ui/ui.json (a lucide icon name, or an emoji / a couple of letters).
+	// A panel's icon on the rail: "icon" / "color" in its ui/ui.json, the same kinds as an agent's (a glyph or line
+	// icon key, "sprite:<key>" from an add-on; a palette colour).
 	// Written into the site's own file, so it travels with the panel when it's published.
 	mux.HandleFunc("POST /api/work/panels/icon", func(w http.ResponseWriter, r *http.Request) {
 		var b struct {
-			Key  string `json:"key"`
-			Icon string `json:"icon"`
+			Key   string `json:"key"`
+			Icon  string `json:"icon"`
+			Color string `json:"color"`
 		}
 		if err := decode(r, &b); err != nil {
 			httpError(w, 400, err.Error())
@@ -176,10 +178,12 @@ func (s *Server) workRoutes(mux *http.ServeMux) {
 				return
 			}
 		}
-		if b.Icon = strings.TrimSpace(b.Icon); b.Icon == "" {
-			delete(cfg, "icon")
-		} else {
-			cfg["icon"] = b.Icon
+		for k, v := range map[string]string{"icon": strings.TrimSpace(b.Icon), "color": strings.TrimSpace(b.Color)} {
+			if v == "" || len(v) > 64 {
+				delete(cfg, k)
+			} else {
+				cfg[k] = v
+			}
 		}
 		out, _ := json.MarshalIndent(cfg, "", "  ")
 		if err := os.WriteFile(p, append(out, '\n'), 0o644); err != nil {

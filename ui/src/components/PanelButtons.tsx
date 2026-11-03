@@ -86,14 +86,14 @@ function PanelButton({ p, on, className, size, space }: { p: Panel; on: boolean;
         <TooltipTrigger asChild>
           <ContextMenuTrigger asChild>
             <button aria-label={label} aria-pressed={on} className={className(on)} onClick={go}>
-              <PanelIcon icon={p.icon} title={p.title} own={!p.name} className={size === "rail" ? "size-4" : "size-3.5"} />
+              <PanelIcon icon={p.icon} color={p.color} title={p.title} own={!p.name} className={size === "rail" ? "size-4" : "size-3.5"} />
             </button>
           </ContextMenuTrigger>
         </TooltipTrigger>
         <TooltipContent side={size === "rail" ? "right" : "bottom"}>{label}</TooltipContent>
       </Tooltip>
       <ContextMenuContent>
-        <ContextMenuItem onClick={() => set({ dialog: { kind: "panelIcon", key: p.key, title: label, icon: p.icon } })}>
+        <ContextMenuItem onClick={() => set({ dialog: { kind: "panelIcon", key: p.key, title: label, icon: p.icon, color: p.color } })}>
           <Smile /> {t("panelIcon.menu")}
         </ContextMenuItem>
         {src?.git && src.remote && (

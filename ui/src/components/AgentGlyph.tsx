@@ -1,6 +1,9 @@
 import { useId, type ReactNode } from "react";
 import {
   Activity,
+  LayoutDashboard,
+  ListChecks,
+  SquareKanban,
   Bell,
   BookOpen,
   Bot,
@@ -82,6 +85,9 @@ export const LINES: Record<string, { label: MessageKey; icon: LucideIcon }> = {
   chart: { label: "agentGlyph.line.chart", icon: ChartColumn },
   bell: { label: "agentGlyph.line.bell", icon: Bell },
   activity: { label: "agentGlyph.line.activity", icon: Activity },
+  kanban: { label: "agentGlyph.line.kanban", icon: SquareKanban },
+  checklist: { label: "agentGlyph.line.checklist", icon: ListChecks },
+  dashboard: { label: "agentGlyph.line.dashboard", icon: LayoutDashboard },
 };
 
 /** Colours a role can give its glyph: the glyphs' own gradients, ordered by hue. */

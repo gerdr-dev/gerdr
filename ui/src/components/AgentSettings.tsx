@@ -1,11 +1,9 @@
 import { Copy, Pencil, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { FitSprite } from "@/components/AddonSlot";
 import { AgentIcon, SPRITE } from "@/components/AgentIcon";
-import { slots } from "@/lib/addons";
-import { spriteTitle } from "@/lib/rail";
-import { AgentGlyph, GLYPHS, LINES, PALETTE, autoGlyph } from "@/components/AgentGlyph";
+import { AgentGlyph, autoGlyph } from "@/components/AgentGlyph";
+import { IconPicker } from "@/components/IconPicker";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -16,7 +14,6 @@ import { LLMSettings } from "@/components/LLMSettings";
 import { api } from "@/lib/api";
 import { MODE, defaultsOf, flatOptions, setDefaults, withoutDefaults } from "@/lib/defaults";
 import { t } from "@/lib/i18n";
-import type { MessageKey } from "@/lib/messages";
 import { get, setConfig, useStore, type AgentDef, type LLMProvider } from "@/lib/store";
 import type { AgentInfo, ExtView } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -407,7 +404,7 @@ function Editor({
           {!d.builtin && (
             <>
               <span className="self-start pt-1.5 text-muted-foreground">{t("agentSettings.icon")}</span>
-              <IconPicker d={d} onChange={set} />
+              <RoleIconPicker d={d} onChange={set} />
             </>
           )}
           {!d.builtin && (
@@ -585,62 +582,23 @@ function Editor({
 }
 
 /**
- * The role's icon: "默认" (the vendor logo for Claude Code / Codex, an automatic glyph otherwise), a colourful glyph, a
- * line icon or a sprite add-ons brought (g.slot("sprite"), drawn still); then a colour for whichever built-in icon
- * shows (none for the vendor logos and sprites: those draw their own).
+ * The role's icon (IconPicker): "默认" is the vendor logo for Claude Code / Codex, an automatic glyph otherwise; no
+ * colour for the vendor logos and sprites (those draw their own).
  */
-function IconPicker({ d, onChange }: { d: Draft; onChange: (p: Partial<Draft>) => void }) {
-  useStore((s) => s.addonVersion);
-  const cell = (on: boolean, title: string, onClick: () => void, body: React.ReactNode, key?: string) => (
-    <button
-      key={key}
-      type="button"
-      title={title}
-      onClick={onClick}
-      className={cn("flex size-8 items-center justify-center rounded-md border", on ? "border-brand bg-accent" : "border-transparent hover:bg-accent")}
-    >
-      {body}
-    </button>
-  );
+function RoleIconPicker({ d, onChange }: { d: Draft; onChange: (p: Partial<Draft>) => void }) {
   const vendor = d.kind === "claude" || d.kind === "codex";
-  const icons = (list: Record<string, { label: MessageKey }>) =>
-    Object.entries(list).map(([k, g]) =>
-      cell(d.icon === k, t(g.label), () => onChange({ icon: k }), <AgentGlyph name={k} color={d.color} className="size-5" />, k),
-    );
   return (
-    <div className="space-y-1">
-      <div className="flex flex-wrap gap-1">
-        {cell(
-          !d.icon,
-          vendor ? t("agentSettings.iconDefaultVendor", { name: kindName(d.kind) }) : t("agentSettings.iconDefaultAuto"),
-          () => onChange({ icon: "" }),
-          vendor ? <AgentIcon agent={d.kind} className="size-5" /> : <AgentGlyph name={autoGlyph(d.id)} color={d.color} className="size-5" />,
-        )}
-        {icons(GLYPHS)}
-      </div>
-      <div className="flex flex-wrap gap-1">{icons(LINES)}</div>
-      {slots.sprite.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {slots.sprite.map((r) =>
-            cell(d.icon === SPRITE + r.key, spriteTitle(r), () => onChange({ icon: SPRITE + r.key }), <FitSprite reg={r} className="size-6" />, r.key),
-          )}
-        </div>
-      )}
-      {hasGlyph(d) && (
-        <div className="flex flex-wrap gap-1 border-t pt-1">
-          {cell(!d.color, t("agentSettings.colorDefault"), () => onChange({ color: "" }), <AgentGlyph name={d.icon || autoGlyph(d.id)} className="size-5" />)}
-          {Object.entries(PALETTE).map(([k, c]) =>
-            cell(
-              d.color === k,
-              t(c.label),
-              () => onChange({ color: k }),
-              <span className="size-4 rounded-full" style={{ background: `linear-gradient(135deg, ${c.from}, ${c.to})` }} />,
-              k,
-            ),
-          )}
-        </div>
-      )}
-    </div>
+    <IconPicker
+      icon={d.icon}
+      color={d.color}
+      onChange={onChange}
+      colorable={hasGlyph(d)}
+      def={{
+        title: vendor ? t("agentSettings.iconDefaultVendor", { name: kindName(d.kind) }) : t("agentSettings.iconDefaultAuto"),
+        node: vendor ? <AgentIcon agent={d.kind} className="size-5" /> : <AgentGlyph name={autoGlyph(d.id)} color={d.color} className="size-5" />,
+        glyph: autoGlyph(d.id),
+      }}
+    />
   );
 }
 

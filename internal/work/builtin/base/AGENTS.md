@@ -41,8 +41,8 @@ and their habits are what they wrote down, not what the code says.
     conversation with its input box, anywhere in the page: a worker's chat in the page's own drawer or column),
     `useSession`, `openInCode`, `askSecret`, `registerCard`, `toast`, `useDark`. Prefer them to the frame-era
     bridge calls below for anything new.
-  - `ui/ui.json` — the title, `"icon"` (its button on Gerdr's rail: a lucide icon name like `square-kanban`, or an
-    emoji; the user can change it from the button's right-click), and `"chat": false` when the page draws its own chats with `SessionChat` (it then gets
+  - `ui/ui.json` — the title, `"icon"` / `"color"` (its button on Gerdr's rail, the same choices as an agent's icon:
+    a glyph or line icon like `kanban`, or `sprite:<key>` from an add-on; the user picks it from the button's right-click), and `"chat": false` when the page draws its own chats with `SessionChat` (it then gets
     the whole width; without it, you are the column on its right).
   - `ui/src/cards.tsx` (optional) — card types this Work draws in any conversation: `registerCard("task-step",
     TaskStep)`; a tool returns `{ gerdrCard: { type: "task-step", …, title, body } }` (FUNCTIONS.md). Gerdr loads it at
