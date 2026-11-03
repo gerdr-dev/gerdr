@@ -333,8 +333,12 @@ export function WorkView() {
         <div className={cn("min-h-0 flex-1", side !== "page" && "hidden")}>
           <WorkFrame key={project} project={project} onShowChat={showChat} />
         </div>
-        <div className={cn("min-h-0 flex-1", side !== "chat" && "hidden")}>
-          <WorkChat />
+        {/* The same header as on wider screens: without it a phone has no history, no new chat and no agent picker */}
+        <div className={cn("flex min-h-0 flex-1 flex-col", side !== "chat" && "hidden")}>
+          <ChatHeader />
+          <div className="min-h-0 flex-1">
+            <WorkChat />
+          </div>
         </div>
       </div>
     );
