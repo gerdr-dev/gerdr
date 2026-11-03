@@ -24,7 +24,7 @@ import (
 //
 // fn runs a local function (deterministic work: poll, filter, hand only what needs judgement to an agent with
 // ctx.sessions.send); prompt hands the text to this project's Work agent, as if the user had sent it. Exactly one of
-// the two. every is an interval (Go durations or days: 30m, 6h, 1d; at least 5m); at is times of day, local time,
+// the two. every is an interval (Go durations or days: 30s, 30m, 6h, 1d; at least 10s); at is times of day, local time,
 // comma separated ("09:00,16:00"); at wins when both are there. input is the fn's input ({ scheduled: true } is added).
 //
 // Kept compatible with a hosted function platform's schedules so a schedule written for one reads the same on the
@@ -38,7 +38,12 @@ import (
 // SchedulesDir is the Work directory's folder of schedule files.
 const SchedulesDir = "schedules"
 
-const minEvery = 5 * time.Minute
+// minEvery: seconds are allowed (a watcher the user wants tight), but not a busy loop over their CLIs and APIs.
+// Annulo's floor is 5m; Gerdr's watchers poll one person's MRs, where 10s is still cheap.
+const minEvery = 10 * time.Second
+
+// scheduleTick: how often due schedules are looked for; small enough for the shortest every to keep its time.
+const scheduleTick = 5 * time.Second
 
 var (
 	scheduleIDRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
@@ -142,7 +147,7 @@ func (s *Schedule) check() error {
 		return nil
 	}
 	if s.Every == "" {
-		return errors.New(i18n.S(`要写 every（比如 "5m"、"6h"、"1d"）或 at（比如 "09:00"）`, `needs every (e.g. "5m", "6h", "1d") or at (e.g. "09:00")`))
+		return errors.New(i18n.S(`要写 every（比如 "30s"、"5m"、"6h"、"1d"）或 at（比如 "09:00"）`, `needs every (e.g. "30s", "5m", "6h", "1d") or at (e.g. "09:00")`))
 	}
 	d, err := parseSpan(s.Every)
 	if err != nil {
@@ -191,7 +196,7 @@ func parseSpan(v string) (time.Duration, error) {
 	}
 	d, err := time.ParseDuration(v)
 	if err != nil {
-		return 0, fmt.Errorf(i18n.S("%q 不是时长（写成 30m、6h、1d）", "%q isn't a duration (write 30m, 6h, 1d)"), v)
+		return 0, fmt.Errorf(i18n.S("%q 不是时长（写成 30s、30m、6h、1d）", "%q isn't a duration (write 30s, 30m, 6h, 1d)"), v)
 	}
 	return d, nil
 }
@@ -331,7 +336,7 @@ func (r *Runner) RunSchedules(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		}
-		t := time.NewTicker(30 * time.Second)
+		t := time.NewTicker(scheduleTick)
 		defer t.Stop()
 		for {
 			r.tickSchedules(time.Now())

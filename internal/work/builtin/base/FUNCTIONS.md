@@ -99,7 +99,7 @@ backend runs them while it's up: with the background service on, the App needn't
   as if the user had. One of the two. Deterministic work is a function; only what needs judgement is a prompt, and a
   watcher is best a function that polls and filters and hands just the interesting part to an agent
   (`ctx.sessions.send` to the worker concerned, or to you with `"work"`).
-- `every`: 30m, 6h, 1d (at least 5m); `at`: local times of day, comma separated. Missed runs (asleep, Gerdr off) are
+- `every`: 30s, 30m, 6h, 1d (at least 10s); `at`: local times of day, comma separated. Missed runs (asleep, Gerdr off) are
   caught up once; a run still going when its time comes again is skipped. A run is an ordinary run in the run logs.
 - A broken file stops the whole folder (the error is in `gerdr work schedules`): fix it rather than delete others.
 - `gerdr work schedules` lists them with the last run (result, error, run id) and the next time;
