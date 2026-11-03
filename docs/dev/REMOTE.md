@@ -154,6 +154,9 @@ one JPEG per request (`GET /api/screen/shot?w=&q=`), taken again every 3s and ri
   a terminal. Asking macOS for the grants (`POST /api/screen/request-access`) is local only in `remoteGuard`: its
   prompts show on the Mac's screen. The switch is read from config.json on every request, so turning it off is instant.
 - Typed text is often a password: never log `/api/screen/input` bodies.
+- Zoom is continuous (1–8×): two-finger pinch on touch screens (handled by hand; the box has
+  `touch-action: pan-x pan-y` so the browser pans with one finger but doesn't zoom the page), ⌃-wheel / trackpad
+  pinch on desktop, ± buttons. The spot under the fingers stays put; a click right after a pinch is dropped.
 - Picture quality is per device (localStorage `gerdr.screenQuality`): Data saver 1280px / q45, Standard 1600 / q60,
   Sharp 2400 / q75; zoomed to 2× or more, at least 2400px wide. screencapture writes PNG and sips always re-encodes,
   so a display narrower than the target still gets compressed (screencapture's own JPEG is MBs).

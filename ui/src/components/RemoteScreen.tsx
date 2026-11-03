@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ArrowDown, ArrowUp, Eye, EyeOff, Minus, Plus, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -38,7 +38,10 @@ const KEYS: Key[] = [
 ];
 
 const IDLE_REFRESH = 3000;
-const ZOOMS = [1, 1.5, 2, 3];
+// Zoom: 1 = the whole screen fits the box; pinch (touch), ⌃-wheel / trackpad pinch (desktop) or the ± buttons.
+const MIN_SCALE = 1;
+const MAX_SCALE = 8;
+const clampScale = (v: number) => Math.max(MIN_SCALE, Math.min(MAX_SCALE, v));
 
 // Picture quality: width the screenshot is shrunk to, JPEG quality. Each device keeps its own (a phone on mobile
 // data wants the small one, a computer the sharp one). Zoomed to 2× or more, at least Sharp's width.
@@ -64,7 +67,7 @@ export function RemoteScreen({ open }: { open: boolean }) {
   const [shotErr, setShotErr] = useState("");
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState<Mode>("click");
-  const [zoom, setZoom] = useState(0);
+  const [scale, setScaleState] = useState(1);
   const [mark, setMark] = useState<{ x: number; y: number } | null>(null);
   const [text, setText] = useState("");
   const [showText, setShowText] = useState(false);
@@ -76,8 +79,8 @@ export function RemoteScreen({ open }: { open: boolean }) {
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const alive = useRef(false);
   const imgUrl = useRef<string | null>(null);
-  const zoomRef = useRef(0);
-  zoomRef.current = zoom;
+  const scaleRef = useRef(1);
+  scaleRef.current = scale;
   const [quality, setQualityState] = useState<Quality>(loadQuality);
   const qualityRef = useRef(quality);
   qualityRef.current = quality;
@@ -95,6 +98,87 @@ export function RemoteScreen({ open }: { open: boolean }) {
   const ar = aspect || (st?.width && st.height ? st.width / st.height : 16 / 10);
   const fitW = box.w && box.h ? Math.min(box.w, box.h * ar) : 0;
 
+  // Zooming keeps one spot of the picture under one point on the page (the fingers, the cursor, the box's centre):
+  // remember which fraction of the picture is there, re-scroll after the new size is laid out.
+  const picRef = useRef<HTMLDivElement>(null);
+  const anchor = useRef<{ fx: number; fy: number; cx: number; cy: number } | null>(null);
+  const zoomTo = useCallback((next: number, cx: number, cy: number, from?: { fx: number; fy: number }) => {
+    const pic = picRef.current;
+    if (!pic) return;
+    let f = from;
+    if (!f) {
+      const r = pic.getBoundingClientRect();
+      f = { fx: (cx - r.left) / r.width, fy: (cy - r.top) / r.height };
+    }
+    anchor.current = { ...f, cx, cy };
+    next = clampScale(next);
+    scaleRef.current = next;
+    setScaleState(next);
+  }, []);
+  useLayoutEffect(() => {
+    const a = anchor.current;
+    const el = boxRef.current;
+    const pic = picRef.current;
+    if (!a || !el || !pic) return;
+    anchor.current = null;
+    const r = pic.getBoundingClientRect();
+    el.scrollLeft += r.left + a.fx * r.width - a.cx;
+    el.scrollTop += r.top + a.fy * r.height - a.cy;
+  }, [scale]);
+  const zoomCentre = (factor: number) => {
+    const r = boxRef.current?.getBoundingClientRect();
+    if (r) zoomTo(scaleRef.current * factor, r.left + r.width / 2, r.top + r.height / 2);
+  };
+
+  // Pinch on touch screens. touch-action on the box leaves one-finger panning to the browser and takes two-finger
+  // zoom away from it (it would zoom the whole page). The click a lifted finger may send right after is ignored.
+  const pinchedAt = useRef(0);
+  useEffect(() => {
+    const el = boxRef.current;
+    if (!open || !el) return;
+    let start: { dist: number; scale: number; fx: number; fy: number } | null = null;
+    const two = (e: TouchEvent) => {
+      const [a, b] = [e.touches[0], e.touches[1]];
+      return { dist: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY), cx: (a.clientX + b.clientX) / 2, cy: (a.clientY + b.clientY) / 2 };
+    };
+    const onStart = (e: TouchEvent) => {
+      if (e.touches.length !== 2 || !picRef.current) return;
+      const p = two(e);
+      const r = picRef.current.getBoundingClientRect();
+      start = { dist: p.dist || 1, scale: scaleRef.current, fx: (p.cx - r.left) / r.width, fy: (p.cy - r.top) / r.height };
+    };
+    const onMove = (e: TouchEvent) => {
+      if (!start || e.touches.length !== 2) return;
+      e.preventDefault();
+      const p = two(e);
+      zoomTo(start.scale * (p.dist / start.dist), p.cx, p.cy, start);
+    };
+    const onEnd = (e: TouchEvent) => {
+      if (start && e.touches.length < 2) {
+        start = null;
+        pinchedAt.current = Date.now();
+      }
+    };
+    // ⌃-wheel: what a trackpad pinch arrives as in Chromium / Electron
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey) return;
+      e.preventDefault();
+      zoomTo(scaleRef.current * Math.exp(-e.deltaY * 0.01), e.clientX, e.clientY);
+    };
+    el.addEventListener("touchstart", onStart, { passive: true });
+    el.addEventListener("touchmove", onMove, { passive: false });
+    el.addEventListener("touchend", onEnd);
+    el.addEventListener("touchcancel", onEnd);
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => {
+      el.removeEventListener("touchstart", onStart);
+      el.removeEventListener("touchmove", onMove);
+      el.removeEventListener("touchend", onEnd);
+      el.removeEventListener("touchcancel", onEnd);
+      el.removeEventListener("wheel", onWheel);
+    };
+  }, [open, img !== null, zoomTo]);
+
   const shoot = useCallback(async () => {
     if (!alive.current) return;
     clearTimeout(timer.current);
@@ -107,7 +191,7 @@ export function RemoteScreen({ open }: { open: boolean }) {
     try {
       const ql = QUALITY[qualityRef.current];
       // Zoomed in, a sharper picture is worth the bytes
-      const w = ZOOMS[zoomRef.current] >= 2 ? Math.max(ql.w, QUALITY.high.w) : ql.w;
+      const w = scaleRef.current >= 2 ? Math.max(ql.w, QUALITY.high.w) : ql.w;
       const res = await fetch(`/api/screen/shot?w=${w}&q=${ql.q}`, { credentials: "same-origin", cache: "no-store" });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -166,6 +250,7 @@ export function RemoteScreen({ open }: { open: boolean }) {
       setImg(null);
       setMark(null);
       setText("");
+      setScaleState(1);
     };
   }, [open, loadStatus, shoot]);
 
@@ -205,6 +290,7 @@ export function RemoteScreen({ open }: { open: boolean }) {
   };
 
   const onPicture = (e: React.MouseEvent<HTMLImageElement>, right = false) => {
+    if (Date.now() - pinchedAt.current < 400) return;
     const r = e.currentTarget.getBoundingClientRect();
     const x = (e.clientX - r.left) / r.width;
     const y = (e.clientY - r.top) / r.height;
@@ -280,8 +366,8 @@ export function RemoteScreen({ open }: { open: boolean }) {
                 variant="ghost"
                 className="size-7"
                 title={t("remoteScreen.zoomOut")}
-                disabled={zoom === 0}
-                onClick={() => setZoom((z) => Math.max(0, z - 1))}
+                disabled={scale <= MIN_SCALE}
+                onClick={() => zoomCentre(1 / 1.5)}
               >
                 <Minus className="size-4" />
               </Button>
@@ -290,8 +376,8 @@ export function RemoteScreen({ open }: { open: boolean }) {
                 variant="ghost"
                 className="size-7"
                 title={t("remoteScreen.zoomIn")}
-                disabled={zoom === ZOOMS.length - 1}
-                onClick={() => setZoom((z) => Math.min(ZOOMS.length - 1, z + 1))}
+                disabled={scale >= MAX_SCALE}
+                onClick={() => zoomCentre(1.5)}
               >
                 <Plus className="size-4" />
               </Button>
@@ -317,10 +403,10 @@ export function RemoteScreen({ open }: { open: boolean }) {
         {st && <Problems st={st} granting={granting} onGrant={grant} />}
 
         {/* The picture: fit to the width, zoomed = wider than the box, pan by scrolling */}
-        <div ref={boxRef} className="relative flex min-h-0 flex-1 overflow-auto rounded-md border bg-muted/40">
+        <div ref={boxRef} className="relative flex min-h-0 flex-1 touch-pan-x touch-pan-y overflow-auto overscroll-contain rounded-md border bg-muted/40">
           {img ? (
             // m-auto centres it while it fits and lets it scroll from the top-left edge once it doesn't
-            <div className="relative m-auto shrink-0" style={{ width: fitW ? fitW * ZOOMS[zoom] : "100%" }}>
+            <div ref={picRef} className="relative m-auto shrink-0" style={{ width: fitW ? fitW * scale : "100%" }}>
               <img
                 src={img}
                 alt=""
