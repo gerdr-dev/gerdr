@@ -9,6 +9,9 @@ import { Field } from "@/components/RemoteCert";
 // 连上当场生效（后端 remote.Service.Connect），证书在下面「证书」那一节接着填，以前配过就沿用。
 // 邀请码一次性、30 分钟过期：后端先核主机名 / 中继地址再用它，填错了不会白白烧掉一个码。
 
+// Where to get a relay of one's own: its README covers installing it on a VPS.
+const DIALHOME_REPO = "https://github.com/zbysir/dialhome";
+
 export function RemoteConnect({ relayURL, onDone }: { relayURL?: string; onDone: () => void }) {
   const [relay, setRelay] = useState(relayURL ?? "");
   const [host, setHost] = useState("");
@@ -35,6 +38,12 @@ export function RemoteConnect({ relayURL, onDone }: { relayURL?: string; onDone:
       <div className="text-[13px] font-medium">{t("remoteConnect.title")}</div>
       <div className="space-y-3 rounded-md border p-3">
         <div className="text-[12px] text-muted-foreground">{t("remoteConnect.intro")}</div>
+        <div className="text-[12px] text-muted-foreground">
+          {t("remoteConnect.noRelay")}{" "}
+          <a className="font-mono text-brand underline-offset-2 hover:underline" href={DIALHOME_REPO} target="_blank" rel="noreferrer">
+            github.com/zbysir/dialhome
+          </a>
+        </div>
         <Field label={t("remoteConnect.relay")}>
           <Input className="font-mono text-[12px]" placeholder="https://relay.example.com" value={relay} onChange={(e) => setRelay(e.target.value)} />
         </Field>

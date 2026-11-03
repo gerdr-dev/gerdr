@@ -233,6 +233,7 @@ export const zh = {
   "remoteConnect.hostSample": "<主机名>",
   "remoteConnect.title": "连接中继",
   "remoteConnect.intro": "Gerdr 经云端中继（dialhome）对外：TLS 在这台机器上终止，中继只转密文。填中继地址、给这台机器起的域名，和在中继后台里出的邀请码。",
+  "remoteConnect.noRelay": "还没有中继？在自己的 VPS 上装一个 dialhome，步骤见：",
   "remoteConnect.relay": "中继地址",
   "remoteConnect.host": "主机名",
   "remoteConnect.hostPlaceholder": "gerdr.example.com（手机上打开的地址）",
@@ -512,6 +513,7 @@ export const en: Record<keyof typeof zh, string> = {
   "remoteConnect.title": "Connect to a relay",
   "remoteConnect.intro":
     "Gerdr is reached through a cloud relay (dialhome): TLS ends on this machine and the relay only passes along ciphertext. Enter the relay URL, the domain for this machine, and an invite code from the relay's admin page.",
+  "remoteConnect.noRelay": "No relay yet? Install dialhome on your own VPS, see:",
   "remoteConnect.relay": "Relay URL",
   "remoteConnect.host": "Hostname",
   "remoteConnect.hostPlaceholder": "gerdr.example.com (the address you open on your phone)",
