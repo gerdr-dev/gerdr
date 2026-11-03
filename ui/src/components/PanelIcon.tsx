@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { PanelsTopLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { api } from "@/lib/api";
@@ -8,22 +9,18 @@ import { set, useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { IconPicker, StoredIcon } from "./IconPicker";
 
-function short(name: string) {
-  const chars = [...name];
-  return /^[\x00-\x7f]/.test(name) ? chars.slice(0, 2).join("").toUpperCase() : chars[0];
-}
-
-/** Its default face: the first letters of its name, the same for every panel (none of them is special). */
-function PanelDefault({ title }: { title: string; className?: string }) {
-  return <span className="text-[11px] font-semibold">{short(title)}</span>;
+/** Its default face, the same for every panel without an icon of its own: a generic panel icon (a letter of its name
+ * read as a word, 「空」 for 空白面板, and two panels starting alike looked the same). */
+function PanelDefault({ className }: { className?: string }) {
+  return <PanelsTopLeft className={cn("size-4", className)} />;
 }
 
 /**
  * A panel's face on the rail: the icon in its ui.json, the same kinds an agent's can be (a glyph, a line icon, a
  * sprite from an add-on, IconPicker), with its colour; else its default.
  */
-export function PanelIcon({ icon, color, title, className }: { icon?: string; color?: string; title: string; className?: string }) {
-  return <StoredIcon icon={icon} color={color} className={cn("size-4", className)} fallback={<PanelDefault title={title} />} />;
+export function PanelIcon({ icon, color, className }: { icon?: string; color?: string; title?: string; className?: string }) {
+  return <StoredIcon icon={icon} color={color} className={cn("size-4", className)} fallback={<PanelDefault className={className} />} />;
 }
 
 /** Right-click → change icon: the agent icon picker; saved into the panel's ui.json (it travels with the panel). */
@@ -63,7 +60,7 @@ export function PanelIconDialog() {
             if (p.color !== undefined) setColor(p.color);
           }}
           colorable={!icon.startsWith("sprite:")}
-          def={{ title: t("panelIcon.default"), node: <PanelDefault title={ask?.title ?? ""} />, glyph: "tiles" }}
+          def={{ title: t("panelIcon.default"), node: <PanelDefault className="size-5" />, glyph: "tiles" }}
         />
         {err && <div className="text-[12px] text-bad">{err}</div>}
         <DialogFooter>
