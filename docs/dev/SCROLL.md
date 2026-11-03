@@ -229,6 +229,15 @@ Virtuoso 在 ResizeObserver 里量行高、改布局，所以 rAF 里看到「�
   - `keyboard.mjs --type` judged rAF frames, which run before layout and show the composer's new height before the
     list has stuck to the bottom. The `--ro` log now also watches the scroller, so it sees frames where only the chat's
     own size changed, and both modes judge painted frames.
+- **A small trackpad scroll up couldn't leave the bottom on a Mac** (user report; the scripts all passed). In Electron on
+  a Retina screen scrollTop is fractional (3114.5 at the end) and a slow trackpad scroll moves it half a pixel per
+  event. That isn't "up" by the scroll event's `> 0.5px` test and stays within `END`, so every step was stuck again and
+  put back on the end: it never got 2px away. Now a wheel / key up holds off re-sticking from scroll events for 300ms
+  (`upAt`), and a wheel down within `END` sticks again. **Headless Chrome can't show this**: it keeps scrollTop whole
+  (wheel steps and `scrollTop -= 0.5` both round). To check it, start the repo's Electron
+  (`desktop/node_modules/.bin/electron`) with a tiny main.js that adds `remote-debugging-port` and loads the debug
+  instance, `chromium.connectOverCDP` to it, and repeat "dispatch a `WheelEvent` with deltaY -1, then
+  `scrollTop -= 0.5`": the distance from the end has to grow (before the fix: 1, 1, 1, …).
 - **Virtuoso 把行高取整**（默认 `Math.round(getBoundingClientRect().height)`）：41.5 记 42、39.8 记 40，
   卸掉的行越多攒得越多，量完缩回那一下整段挪一截（卸 32 行差 10px），会话越长越明显。`itemSize` 换成不取整的。
   `rows.mjs` 报「记的和实际不一样」就是这个。

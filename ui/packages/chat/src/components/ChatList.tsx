@@ -186,6 +186,12 @@ export const ChatList = forwardRef<
   // all, so a replaced row swallowing them (above) doesn't matter.
   const touch = useRef(false);
   const settleTouch = useRef(0);
+  // Last wheel / key input upwards. A Mac trackpad starting a slow scroll moves half a pixel per event on a Retina
+  // screen: not "up" by the scroll event's 0.5px test, still within END of the end, so each step was stuck again and
+  // put back, and a small scroll up couldn't leave the bottom (user report). Shortly after an up input, landing within
+  // END doesn't stick again; a wheel down there does (see the wheel listener).
+  const upAt = useRef(-Infinity);
+  const UP_HOLD = 300; // ms
   // A smooth scroll we're animating: towards target(), recomputed each frame
   const anim = useRef<{ raf: number; target: () => number | undefined } | null>(null);
   const stopAnim = () => {
@@ -446,9 +452,24 @@ export const ChatList = forwardRef<
     if (!s) return;
     const up = () => {
       stopAnim();
+      upAt.current = performance.now();
       if (s.scrollTop > 0) setStuck(false);
     };
-    const wheel = (e: WheelEvent) => (e.deltaY < 0 ? up() : stopAnim());
+    const down = () => {
+      stopAnim();
+      upAt.current = -Infinity;
+    };
+    const wheel = (e: WheelEvent) => {
+      if (e.deltaY < 0) return up();
+      if (e.deltaY <= 0) return;
+      down();
+      // Back down to the end (the scroll is usually applied before this event): follow again. Also covers a wheel down
+      // at the end, which fires no scroll event.
+      if (!stuck.current && !touch.current && endOf(s) - s.scrollTop <= END) {
+        setStuck(true);
+        sync([]);
+      }
+    };
     const tstart = () => {
       stopAnim();
       clearTimeout(settleTouch.current);
@@ -461,7 +482,7 @@ export const ChatList = forwardRef<
     };
     const key = (e: KeyboardEvent) => {
       if (["ArrowUp", "PageUp", "Home"].includes(e.key)) up();
-      else if (["ArrowDown", "PageDown", "End", " "].includes(e.key)) stopAnim();
+      else if (["ArrowDown", "PageDown", "End", " "].includes(e.key)) down();
     };
     // The scrollbar: a press on the scroller itself, not on a row
     const press = (e: PointerEvent) => {
@@ -530,8 +551,9 @@ export const ChatList = forwardRef<
         if (touch.current) {
           if (!finger.current) waitSettle();
         }
-        // Back at the very bottom (scrolled or dragged down to it): follow again
-        else if (!stuck.current && dist <= END && !wentUp) setStuck(true);
+        // Back at the very bottom (scrolled or dragged down to it): follow again. Not right after a wheel / key up: those
+        // can move less than 0.5px a step (upAt)
+        else if (!stuck.current && dist <= END && !wentUp && performance.now() - upAt.current > UP_HOLD) setStuck(true);
         // Off the bottom while following it, not by the user: the browser clamped the scroll position in a layout where
         // the list was briefly shorter (the composer measuring itself did that). Back to the end.
         else if (stuck.current && dist > END && !anim.current && !cb.current.holding()) s.scrollTop = endOf(s);
