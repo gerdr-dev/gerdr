@@ -28,6 +28,7 @@ type Dialog =
   | { kind: "rename"; target: "tab" | "session" | "space" | "newSpace"; id: string; value: string }
   | { kind: "newWorkspace" }
   | { kind: "editWorkspace"; id: string }
+  | { kind: "workSource"; project: string; action: "install" | "reset" }
   | { kind: "importHerdr" }
   /** host: the agent's records on another computer (docs/dev/MULTIHOST.md) */
   | { kind: "importAgent"; agent: string; cwd: string; paneId: string; host?: string }
@@ -90,7 +91,7 @@ type State = {
   mode: "agents" | "work";
   /**
    * The Work view has been opened in this page: from then on it stays mounted (hidden in Code mode) and its chat stays
-   * watched, so switching back keeps the Work site's state (it's an iframe: unmounting reloads it) and the chat's.
+   * watched, so switching back keeps the Work page's state (a React root of its own: unmounting loses it) and the chat's.
    */
   workKept: boolean;
   /**
@@ -98,6 +99,11 @@ type State = {
    * started: the real chat with the real composer (images, files), without making it the project's Work agent.
    */
   workPeek: WorkPeek | null;
+  /**
+   * Conversations a mounted UI draws itself (core SessionChat in a project's Work page), with how many of its chats
+   * show each: they're streamed like a pane on screen while any is mounted.
+   */
+  mountWatch: Record<string, number>;
   /** The all-agents overview (lib/overview.ts): covers the sidebar and the tabs while on. Per device, in localStorage. */
   overview: Overview;
   /**
@@ -165,6 +171,7 @@ export const useStore = create<State>(() => ({
   mode: loadMode(),
   workKept: loadMode() === "work",
   workPeek: null,
+  mountWatch: {},
   overview: loadOverview(),
   localFont: loadLocalFont(),
   drawer: false,
@@ -325,6 +332,7 @@ export function watchedSessions(l: Layout, kept: string[]): string[] {
     const peek = get().workPeek;
     if (peek) out.add(peek.id);
   }
+  for (const id of Object.keys(get().mountWatch)) out.add(id);
   // The tabs under the overview stay watched (kept), so closing it doesn't reload them
   // On a phone only the shown tile and its two neighbours (the pages a swipe drags in) are mounted (OverviewPhone.tsx):
   // don't stream the rest

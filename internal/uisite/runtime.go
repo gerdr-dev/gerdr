@@ -70,6 +70,10 @@ async function register(path, url) {
 }
 
 let mods = S.modules, build = S.build, broken = !!S.error, root = null;
+S.mounts = S.mounts || {};
+// Mounted UIs (mounts.go) are rendered by the host's own code (a second React root): it registers their components
+// with Refresh through this, and hears about their updates through the "gerdr:ui" event.
+window.__gerdrUIRuntime = { register, modules: () => mods };
 const { createRoot } = await import("react-dom/client");
 const hooksError = (m) => /hook|Should have a queue/i.test(String(m || ""));
 async function mount(entry) {
@@ -103,6 +107,8 @@ async function apply(u) {
   build = S.build = u.build;
   dropStale(build);
   if (u.css != null) { const el = document.getElementById("__gerdr_css__"); if (el) el.textContent = u.css; }
+  S.mounts = u.mounts || {};
+  window.dispatchEvent(new CustomEvent("gerdr:ui", { detail: { mounts: S.mounts, remount: u.remount || [] } }));
   if (u.boundaries && R) {
     if (!u.boundaries.length) return;
     const seen = errors.length;

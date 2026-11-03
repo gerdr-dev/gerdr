@@ -13,6 +13,7 @@ import * as misc from "./text/misc";
 import * as nav from "./text/nav";
 import * as system from "./text/system";
 import * as workbench from "./text/workbench";
+import * as workSource from "./text/workSource";
 
 const settingsZh = {
   "settings.title": "设置",
@@ -97,6 +98,7 @@ export const zh = {
   ...addonsRemote.zh,
   ...system.zh,
   ...workbench.zh,
+  ...workSource.zh,
   ...nav.zh,
   ...misc.zh,
 };
@@ -188,6 +190,7 @@ export const en: Record<MessageKey, string> = {
   ...addonsRemote.en,
   ...system.en,
   ...workbench.en,
+  ...workSource.en,
   ...nav.en,
   ...misc.en,
 };

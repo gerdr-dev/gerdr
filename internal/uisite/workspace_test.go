@@ -27,7 +27,7 @@ func TestWorkspacePackage(t *testing.T) {
 	}
 	var c moduleCache
 	c.dir = t.TempDir()
-	g := c.buildGraph(dir, []string{"src/pages/index.tsx"})
+	g := c.buildGraph(func(string) site { return site{dir: dir, local: local, host: dir} }, []string{"src/pages/index.tsx"})
 	if len(g.errs) > 0 {
 		t.Fatal(g.errs)
 	}

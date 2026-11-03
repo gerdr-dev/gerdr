@@ -416,8 +416,9 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
   decides by reading back. The page puts a line and buttons above the chat (`label`, `actions`, heard back through
   `onSessionPanel`; `items` are one line each for what waits on the user, with a jump icon: on a phone a run-on label
   next to four buttons showed nothing readable): Gerdr gives them no meaning, so a board decides "accept / merge now / go do t16" without Gerdr
-  knowing what a task is. It closes on Esc or a click outside: a transparent layer covers the iframe while open (its
-  clicks never reach gerdr's document), and an Esc pressed inside the page comes as `gerdr:escape` from its bridge.
+  knowing what a task is. It closes on Esc or a click outside, and an Esc pressed inside the page comes as
+  `gerdr:escape` from its bridge. Kept for pages written against the bridge; a page now draws such a drawer itself with
+  `SessionChat` (lb's board does), so what it shows is the page's code, not Gerdr's.
   Esc used by the panel first (stopping a turn, the @ menu, a dialog) is left alone (`defaultPrevented`).
 - **Cards for tool results** (`ToolCard.tsx`, `ChatHost.renderTool`, Rows `ownTool`). A tool result carrying
   `{ gerdrCard: { title, body, tone } }` is drawn as a card. Why: a Work tool putting a step on the user's board
@@ -426,7 +427,10 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
   to be seen). A card can be answered in place (`choose`: it runs the Work function the page would, `api.workRun`
   with the card's project), because sending the user elsewhere to answer what's in front of them was the complaint;
   `ref` lets the drawer's `jump` buttons scroll there (ChatView `focus`, a general "scroll to the part the host
-  picks" in the package). The chat never waits on such a card: the agent's turn ended when it asked.
+  picks" in the package). The chat never waits on such a card: the agent's turn ended when it asked. A card with
+  `type` is drawn by the component a UI registered for it (`lib/cards.ts`, `registerCard` in a Work's
+  `src/cards.tsx`, loaded at start by `watchMountCards` so a worker's tab in Code draws it too), inside an error
+  boundary that falls back to the built-in card from the same title / body / choose.
 - **Work tools** (`work/tools.go`, `cmd/gerdr/workmcp.go`, `hub.Options.MCP`). A Work's local functions declared in
   `export const tools` are served to the same sessions that get its skills, over MCP: `gerdr work mcp --project P
   --session S` is a stdio server the hub hands the adapter as a client MCP server on new / resume / load (claude
@@ -553,13 +557,38 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
   sessions it starts open in its project's workspace (`openSessionNear`). Work conversations get no title at creation: a given
   title counts as the user's and would turn off automatic naming.
 - Code / Work is Gerdr's own switch, on the rail with the project switcher (see "The rail" below) so switching modes
-  doesn't move it; `store.mode` per device. Everything between the rail and the Work chat is the user's: `<work dir>/ui` is a React site with no build step, served by its own `uisite.Renderer` under
-  `/work/<project>/` (`uisite.NewAt`: module / event / public URLs and the router basename carry the prefix; `/_esm/` is shared),
-  started on first request. Menu, pages and styling are plain code in that site, not configuration.
-- It runs in a same-origin iframe (the only page allowed to be framed: `X-Frame-Options: SAMEORIGIN`, `frame-ancestors 'self'`),
-  so a broken Work page can't take Gerdr down; there's no rescue panel inside it. It calls `/api/work/run` with the same
-  cookie and talks to Gerdr by postMessage: `gerdr:ask` (send a task to the agent), `gerdr:settings`, and Gerdr pushes
-  `gerdr:theme`. `gerdr work status` shows its build / runtime errors.
+  doesn't move it; `store.mode` per device. Everything between the rail and the Work chat is the user's: `<work dir>/ui`
+  is a React site with no build step. Menu, pages and styling are plain code in that site, not configuration.
+- **Mounted, not framed** (`uisite/mounts.go`, `server.mountWork`, WorkView `MountRoot`, `lib/mounts.ts`). Each
+  project's Work UI is compiled into Gerdr's own page: its files are graph paths `@m/<project>/…` of the host Renderer,
+  served and hot-reloaded like the host's, and WorkView renders its entry (`createApp({ path, onNavigate })`, a memory
+  router: the address bar is Gerdr's) as a second React root in a `data-gerdr-mount` element. Why not the frame it used
+  to be: a frame is another document with its own React, so a page could never use Gerdr's chat, and every chat need
+  became a postMessage and Gerdr code for one board (the WorkPeek drawer grew label / actions / items / jump that way).
+  In one document there is one import map (the host's package.json wins a version conflict, so there is one React), and
+  `import … from "@gerdr/core"` resolves to the host's `src/core/` — the same module instances, one connection, one
+  store. What the frame gave is kept by hand: a mount's compile errors, missing packages and render errors stay in its
+  area (`mountInfo.Error`, its own route error counter, `MountError` with "have the Work agent fix it"), never the
+  full-page overlay; its `index.css` goes into the one Tailwind stylesheet with its plain rules inside
+  `@scope ([data-gerdr-mount="<project>"])` (`:root` / `body` become the scope root, `.dark` "the scope root in dark
+  mode"), Tailwind's own at-rules staying global; an edit hot-replaces components through the one React Refresh, and
+  when it can't, only that mount re-renders (`update.Remount`, the `gerdr:ui` event). Every project with a Work is
+  mounted at start (`MountWorks`); a mount's modules load only when it's shown. Its project is compiled in as
+  `__GERDR_PROJECT__` (and the old bridge's `location.pathname` lookup is rewritten to it: edited copies aren't
+  upgraded). The frame-era bridge (`lib/gerdr.ts` postMessage) still works: the page's `window.parent` is now Gerdr's
+  window, both sides post and listen there, and only the mount on screen is listened to. `/work/<project>/<file>` serves
+  only its `public/` files now. `gerdr work status` reads the mount's errors.
+- `@gerdr/core` (`ui/src/core/index.ts`, types for Work agents in `builtin/base/ui/src/gerdr-core.d.ts`; change both):
+  `SessionChat` (a whole conversation for the page to place: its own TooltipProvider / TabActive since a mounted root
+  is outside Gerdr's tree; streamed while shown through `store.mountWatch`), `useSession`, `openInCode`, `askSecret`
+  (`lib/workSecrets.ts`, Gerdr's dialog), `registerCard` / `DefaultCard`, `toast`, `useDark`. Small on purpose: every
+  Work UI written against it breaks when it changes. A page that draws its own chats says `"chat": false` in its
+  `ui.json` and gets the whole width (WorkView drops the Work agent column).
+- A project's Work is a whole app, so it can be installed (`work/source.go`, the project chip's menu,
+  `WorkSourceDialog`): `git clone` of a published Work (`o/r`, a GitHub URL, `file://`), the built-in blank one, or
+  `git pull --ff-only` of the one it came from. The Work there moves to `trash/work/<project>-<time>` first, data and
+  all; a failed clone puts it back. Built-in files the repository lacks are added; its own versions count as edited.
+  The dialog says that its functions run commands here and its schedules start by themselves.
 - Page logic lives in local functions `<GERDR_DIR>/work/local/*.ts` (esbuild → goja, `ctx.mcp(server, tool, args)`), called by
   name (`gerdr work run file.export`). Bundled files (`internal/work/builtin/base` for every project: site skeleton, blank
   home page, CLAUDE.md — the same for the default project; it used to get an OKR page on top) are upgraded unless edited,
@@ -682,8 +711,8 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
 On wider screens gerdr's own controls live on a 48px strip down the left edge, the same in every mode: projects (one
 chip each, a dot when another project needs you), Code / Work (one vertical capsule, icons only), the add-on panel, inbox, shortcuts, settings, and on
 Android the LAN / relay route. Code mode's list sits to its right (its header only names the project and hides the
-list; the rail's Code button, pressed again, brings it back). In Work mode the rest of the window is the Work site's
-frame and the chat; nothing of gerdr's is drawn over the frame.
+list; the rail's Code button, pressed again, brings it back). In Work mode the rest of the window is the Work page
+and the chat; nothing of gerdr's is drawn over the page.
 
 Why: gerdr used to share the left column with the Work site — its header (project switcher + mode switch) and its
 settings row were laid over the site's menu, and the site had to size its menu with `--gerdr-sidebar-w` and pad its

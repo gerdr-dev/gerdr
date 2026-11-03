@@ -2,13 +2,13 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/gerdr-dev/gerdr/internal/uisite"
 	"github.com/gerdr-dev/gerdr/internal/work"
@@ -18,40 +18,33 @@ import (
 // directory (work.Runner.Dir) holding its Work project (ui/), local functions (local/) and the Work
 // agent's CLAUDE.md. Requests name the project with ?project= / "project"; empty = the default one.
 
-type workUIs struct {
-	mu   sync.Mutex
-	m    map[string]*uisite.Renderer
-	stop map[string]chan struct{} // ends each one's Watch (a deleted project's)
-}
-
-// workUI is the project's Work site, served under /work/<project>/; started on first use and watched
-// for edits from then on.
-func (s *Server) workUI(project string) (*uisite.Renderer, error) {
+// mountWork compiles the project's Work UI into gerdr's own page (uisite mounts): WorkView draws it as a second
+// React root, not a frame. Every project that has a Work is mounted at start (MountWorks) and on first use.
+func (s *Server) mountWork(project string) (string, error) {
 	if project == "" {
 		project = work.DefaultProject
 	}
 	dir, err := s.Work.Ensure(project)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
-	s.workUIs.mu.Lock()
-	defer s.workUIs.mu.Unlock()
-	if s.workUIs.m == nil {
-		s.workUIs.m = map[string]*uisite.Renderer{}
+	if s.UI != nil {
+		s.UI.Mount(project, filepath.Join(dir, "ui"))
 	}
-	ui := s.workUIs.m[project]
-	if ui == nil {
-		ui = uisite.NewAt(filepath.Join(dir, "ui"), filepath.Join(s.Dir, "cache", "work-ui", project), "/work/"+project, s.Log)
-		ui.UseESM(s.ESM)
-		stop := make(chan struct{})
-		go ui.Watch(stop)
-		s.workUIs.m[project] = ui
-		if s.workUIs.stop == nil {
-			s.workUIs.stop = map[string]chan struct{}{}
+	return dir, nil
+}
+
+// MountWorks mounts the Work UI of every project that has one, so a page loads with them all (each loads its modules
+// only when shown).
+func (s *Server) MountWorks() {
+	if s.Work == nil || s.UI == nil {
+		return
+	}
+	for _, p := range s.Work.Projects() {
+		if _, err := s.mountWork(p); err != nil {
+			s.Log.Warn("work: mount", "project", p, "err", err)
 		}
-		s.workUIs.stop[project] = stop
 	}
-	return ui, nil
 }
 
 func (s *Server) workRoutes(mux *http.ServeMux) {
@@ -59,7 +52,7 @@ func (s *Server) workRoutes(mux *http.ServeMux) {
 		return
 	}
 	mux.HandleFunc("GET /api/work", func(w http.ResponseWriter, r *http.Request) {
-		dir, err := s.Work.Ensure(r.URL.Query().Get("project"))
+		dir, err := s.mountWork(r.URL.Query().Get("project"))
 		if err != nil {
 			httpError(w, 400, err.Error())
 			return
@@ -89,20 +82,75 @@ func (s *Server) workRoutes(mux *http.ServeMux) {
 			httpError(w, http.StatusConflict, "project is still open; close it first")
 			return
 		}
-		s.workUIs.mu.Lock()
-		if stop := s.workUIs.stop[name]; stop != nil {
-			close(stop)
-			delete(s.workUIs.stop, name)
+		if s.UI != nil {
+			s.UI.Mount(name, "")
 		}
-		delete(s.workUIs.m, name)
-		s.workUIs.mu.Unlock()
 		trash, err := s.Work.Remove(name)
 		if err != nil {
 			httpError(w, 400, err.Error())
 			return
 		}
-		_ = os.RemoveAll(filepath.Join(s.Dir, "cache", "work-ui", name)) // only a build cache
 		writeJSON(w, map[string]any{"trash": trash})
+	})
+	// Where the project's Work came from, and replacing it (work/source.go): a published Work app from a git
+	// repository, the built-in blank one, or a pull of the repository it came from. The old one goes to the trash.
+	mux.HandleFunc("GET /api/work/source", func(w http.ResponseWriter, r *http.Request) {
+		src, err := s.Work.Source(r.URL.Query().Get("project"))
+		if err != nil {
+			httpError(w, 400, err.Error())
+			return
+		}
+		writeJSON(w, src)
+	})
+	mux.HandleFunc("POST /api/work/install", func(w http.ResponseWriter, r *http.Request) {
+		var b struct {
+			Project string `json:"project"`
+			URL     string `json:"url"`
+		}
+		if err := decode(r, &b); err != nil {
+			httpError(w, 400, err.Error())
+			return
+		}
+		trash, err := s.Work.Install(r.Context(), b.Project, b.URL)
+		if err != nil {
+			httpError(w, 400, err.Error())
+			return
+		}
+		s.Log.Info("work: installed", "project", b.Project, "url", b.URL, "old", trash)
+		_, _ = s.mountWork(b.Project)
+		writeJSON(w, map[string]any{"trash": trash})
+	})
+	mux.HandleFunc("POST /api/work/reset", func(w http.ResponseWriter, r *http.Request) {
+		var b struct {
+			Project string `json:"project"`
+		}
+		if err := decode(r, &b); err != nil {
+			httpError(w, 400, err.Error())
+			return
+		}
+		trash, err := s.Work.Reset(b.Project)
+		if err != nil {
+			httpError(w, 400, err.Error())
+			return
+		}
+		s.Log.Info("work: reset to blank", "project", b.Project, "old", trash)
+		_, _ = s.mountWork(b.Project)
+		writeJSON(w, map[string]any{"trash": trash})
+	})
+	mux.HandleFunc("POST /api/work/update", func(w http.ResponseWriter, r *http.Request) {
+		var b struct {
+			Project string `json:"project"`
+		}
+		if err := decode(r, &b); err != nil {
+			httpError(w, 400, err.Error())
+			return
+		}
+		out, err := s.Work.Update(r.Context(), b.Project)
+		if err != nil {
+			httpError(w, 400, err.Error())
+			return
+		}
+		writeJSON(w, map[string]any{"output": out})
 	})
 	// Undo a delete: the directory comes back from the trash (the UI puts the project's workspaces back after).
 	mux.HandleFunc("POST /api/projects/{name}/restore", func(w http.ResponseWriter, r *http.Request) {
@@ -285,18 +333,22 @@ func (s *Server) workRoutes(mux *http.ServeMux) {
 	})
 	// `gerdr work status`: the project's Work site build error and runtime errors, like `gerdr ui status`.
 	mux.HandleFunc("GET /api/work/ui/status", func(w http.ResponseWriter, r *http.Request) {
-		ui, err := s.workUI(r.URL.Query().Get("project"))
-		if err != nil {
-			httpError(w, 400, err.Error())
+		project := r.URL.Query().Get("project")
+		if project == "" {
+			project = work.DefaultProject
+		}
+		dir, err := s.mountWork(project)
+		if err != nil || s.UI == nil {
+			httpError(w, 400, fmt.Sprint(err))
 			return
 		}
-		fatal, issues := ui.Status()
-		writeJSON(w, map[string]any{"dir": ui.Dir(), "build_error": fatal, "warnings": issues, "runtime_errors": ui.ClientErrors()})
+		fatal, runtime, _ := s.UI.MountStatus(project)
+		if runtime == nil {
+			runtime = []uisite.ClientError{}
+		}
+		writeJSON(w, map[string]any{"dir": filepath.Join(dir, "ui"), "build_error": fatal, "warnings": []any{}, "runtime_errors": runtime})
 	})
 	mux.HandleFunc("/work/", s.serveWorkUI)
-	mux.HandleFunc("/work", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/work/"+work.DefaultProject+"/", http.StatusFound)
-	})
 }
 
 // workSecretPrefix: local functions' keys in secrets.json, apart from gerdr's own (llm/*) so a function can't read those
@@ -360,49 +412,19 @@ func layoutHasSpace(raw json.RawMessage, space string) bool {
 	return false
 }
 
-// serveWorkUI serves /work/<project>/…: the project's Work site (a React site like gerdr's own ui/, no
-// build step). gerdr shows it in a same-origin frame next to the Work agent, so unlike every other page
-// it may be framed — by gerdr itself only. It calls /api/work/* with the same login cookie.
+// serveWorkUI serves /work/<project>/<file>: the files in the project's Work UI public/ (images a page links to). The
+// pages themselves are mounted into gerdr's own page (mountWork).
 func (s *Server) serveWorkUI(w http.ResponseWriter, r *http.Request) {
 	project, rest, _ := strings.Cut(strings.TrimPrefix(r.URL.Path, "/work/"), "/")
-	if rest == "" && !strings.HasSuffix(r.URL.Path, "/") {
-		http.Redirect(w, r, "/work/"+project+"/", http.StatusFound)
-		return
-	}
-	ui, err := s.workUI(project)
-	if err != nil {
+	dir, err := s.Work.Dir(project)
+	if err != nil || rest == "" {
 		http.NotFound(w, r)
 		return
 	}
-	w.Header().Set("X-Frame-Options", "SAMEORIGIN")
-	base := ui.Base()
-	p := r.URL.Path
-	switch {
-	case strings.HasPrefix(p, base+"/_ui/m/"):
-		ui.ServeModule(w, r)
-	case p == base+"/_ui/events":
-		ui.ServeEvents(w, r)
-	case p == base+"/api/ui/errors" && r.Method == http.MethodPost:
-		if !s.authed(r) {
-			httpError(w, 401, "unauthorized")
-			return
-		}
-		var b struct {
-			Build string             `json:"build"`
-			Items []uisite.ErrorItem `json:"items"`
-		}
-		if err := decode(r, &b); err != nil {
-			httpError(w, 400, err.Error())
-			return
-		}
-		ui.ReportClientErrors(b.Build, b.Items)
-		writeJSON(w, map[string]any{})
-	case ui.ServePublic(w, r):
-	case path.Ext(p) != "" && !strings.HasSuffix(p, ".html"):
+	p := filepath.Join(dir, "ui", "public", filepath.FromSlash(path.Clean("/"+rest)))
+	if fi, err := os.Stat(p); err != nil || fi.IsDir() {
 		http.NotFound(w, r)
-	default:
-		nonce := newNonce()
-		w.Header().Set("Content-Security-Policy", strings.Replace(cspWith("'nonce-"+nonce+"'"), "frame-ancestors 'none'", "frame-ancestors 'self'", 1))
-		ui.ServePage(w, r, nonce)
+		return
 	}
+	http.ServeFile(w, r, p)
 }

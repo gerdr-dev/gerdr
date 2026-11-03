@@ -93,6 +93,24 @@ func (r *Runner) Dir(project string) (string, error) {
 	return filepath.Join(r.Root, "projects", project, "work"), nil
 }
 
+// Projects: every project that has a Work directory with a UI in it (the default one first).
+func (r *Runner) Projects() []string {
+	var out []string
+	if fi, err := os.Stat(filepath.Join(r.Root, "work", "ui")); err == nil && fi.IsDir() {
+		out = append(out, DefaultProject)
+	}
+	ents, _ := os.ReadDir(filepath.Join(r.Root, "projects"))
+	for _, e := range ents {
+		if !e.IsDir() || !validProject(e.Name()) || e.Name() == DefaultProject {
+			continue
+		}
+		if fi, err := os.Stat(filepath.Join(r.Root, "projects", e.Name(), "work", "ui")); err == nil && fi.IsDir() {
+			out = append(out, e.Name())
+		}
+	}
+	return out
+}
+
 // WorkProject is the project whose Work directory holds dir, false when dir is in none. That's how a Work agent (an
 // ordinary session opened in its project's Work directory, shown in no pane) is placed in its project.
 func (r *Runner) WorkProject(dir string) (string, bool) {

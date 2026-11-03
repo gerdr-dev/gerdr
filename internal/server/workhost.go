@@ -50,7 +50,9 @@ func (h workHost) StartSession(ctx context.Context, project string, o work.Start
 	id := sess.ID()
 	// A conversation in the Work directory itself is one of the Work's own chats (the Work view lists those by cwd):
 	// it goes in no Code workspace, where it would make a "work" workspace and a tab the user never asked for.
-	if s.inWorkDir(project, sess.Summary().Cwd) {
+	// workspace "none": the page that started it is where it's followed (a board's worker, shown with the page's own
+	// SessionChat), so no tab of it appears in Code; going to it from there opens one then.
+	if s.inWorkDir(project, sess.Summary().Cwd) || o.Workspace == "none" {
 		return h.view(sess.Summary(), nil), s.sendFirst(ctx, sess, o)
 	}
 	if err := s.placeSession(project, id, o.Cwd, sess.Summary().Cwd, o.Workspace); err != nil {

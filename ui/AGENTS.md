@@ -55,7 +55,12 @@ packages/chat/     the conversation UI itself, a package (@gerdr/chat) also publ
   src/messages.ts  every text the chat shows, zh + en: add new texts here, not inline
   src/style.css    the chat's CSS (Markdown typography…); gerdr adds it after src/index.css
   Imports inside the package are relative (no @/…), and it can't import gerdr's src/: what it needs from gerdr goes through ChatHost.
+src/core/          `@gerdr/core`: what gerdr gives the UIs mounted into this page (each project's Work UI is compiled in and
+                   drawn as a second React root, not a frame): SessionChat, useSession, registerCard… Every Work UI imports
+                   it, so keep it small and stable; its types for Work agents are in gerdr's internal/work/builtin/base/ui/src/gerdr-core.d.ts
 src/lib/
+  mounts.ts        the mounted UIs (window.__GERDR_UI__.mounts, the "gerdr:ui" update event), their cards loaded at start
+  cards.ts         card types UIs register: a tool result's gerdrCard.type → its component (ToolCard falls back to the built-in)
   chatHost.tsx     gerdr's ChatHost (store, api, actions, and the composer features only gerdr has)
   api.ts           调 gerdr 后端的 HTTP 接口（所有接口都在这里有一个函数）
   i18n.ts          the interface's language (zh / en, each device its own, follows the system by default) and t();

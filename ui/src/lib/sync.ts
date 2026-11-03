@@ -67,6 +67,7 @@ export function boot() {
 
 async function start() {
   if (stopped) return;
+  import("./mounts").then((m) => m.watchMountCards()); // the Work UIs' cards, for conversations anywhere
   const w = window as any;
   if (w.__gerdrSyncStop !== stop) w.__gerdrSyncStop?.();
   w.__gerdrSyncStop = stop;

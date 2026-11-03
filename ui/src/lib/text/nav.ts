@@ -163,6 +163,9 @@ export const zh = {
   "workView.secretTitle": "保存密钥",
   "workView.secretDesc": "存成 {name}，只有 Work 的本地函数能用（ctx.secrets.get），页面和助手都看不到。",
   "workView.secretSave": "保存",
+  "workView.pageBroken": "这个 Work 页面的代码出错了，改好之后会自动恢复：",
+  "workView.askFix": "让 Work 助手来修",
+  "workView.fixPagePrompt": "Work 页面（ui/）现在打不开，报错如下，帮我修好：\n\n{error}",
   "workView.secretBadName": "名字 {name} 不能有空格或斜杠",
 
   "sync.passkeyRequest": "「{label}」请求添加 Passkey，核对码 {code}",
@@ -369,6 +372,9 @@ export const en: Record<keyof typeof zh, string> = {
   "workView.secretTitle": "Save a secret",
   "workView.secretDesc": "Saved as {name}, for Work's local functions only (ctx.secrets.get): neither the page nor the assistant sees it.",
   "workView.secretSave": "Save",
+  "workView.pageBroken": "This Work page's code has an error. It comes back once that's fixed:",
+  "workView.askFix": "Have the Work agent fix it",
+  "workView.fixPagePrompt": "The Work page (ui/) doesn't open; this is the error. Please fix it:\n\n{error}",
   "workView.secretBadName": "The name {name} can't contain spaces or slashes",
 
   "sync.passkeyRequest": "“{label}” wants to add a passkey, code {code}",

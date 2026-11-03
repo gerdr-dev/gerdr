@@ -44,7 +44,7 @@ type compiled struct {
 const depPlaceholder = "/@gerdr-dep/"
 
 // Bump when the esbuild options below or the class extraction (classes.go) change: old cache entries are then ignored
-const compileCacheVersion = "g3"
+const compileCacheVersion = "g5"
 
 var moduleExts = []string{".tsx", ".ts", ".jsx", ".js", ".mjs", ".json"}
 
@@ -54,9 +54,9 @@ type moduleCache struct {
 	mem map[string]*compiled // key：路径 + 内容的哈希
 }
 
-func (c *moduleCache) key(rel string, src []byte, local map[string]string) string {
+func (c *moduleCache) key(rel string, src []byte, s site) string {
 	h := sha256.New()
-	h.Write([]byte(compileCacheVersion + "\x00" + rel + "\x00" + localKey(local) + "\x00"))
+	h.Write([]byte(compileCacheVersion + "\x00" + rel + "\x00" + localKey(s.local) + "\x00" + s.host + "\x00"))
 	h.Write(src)
 	return hex.EncodeToString(h.Sum(nil))[:32]
 }
@@ -104,17 +104,32 @@ func (c *moduleCache) put(key string, v *compiled, disk bool) {
 	}
 }
 
-// compileFile 编译一个文件（rel 是相对项目根目录的路径，/ 分隔）。缓存命中就不跑 esbuild。
-func (c *moduleCache) compileFile(dir, rel string, local map[string]string) (*compiled, error) {
-	src, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(rel)))
+// site is one directory of sources in the module graph. The host is the UI directory itself (prefix ""); a mount is
+// another site's sources (a project's Work UI, mounts.go) compiled into the same graph, its paths prefixed with
+// "@m/<name>/", so the page has one import map, one React and one hot reload stream for both.
+type site struct {
+	dir    string
+	prefix string            // "" for the host, "@m/<name>/" for a mount
+	local  map[string]string // the host's workspace packages (workspace.go): name → directory under host
+	host   string            // the host's directory: where workspace packages and @gerdr/core resolve, from any site
+}
+
+// coreSpec is the API the host UI gives the sites mounted in it: `import { SessionChat } from "@gerdr/core"`
+// resolves to the host's src/core/index (and "@gerdr/core/x" to src/core/x), the same module instances the host uses.
+const coreSpec = "@gerdr/core"
+
+// compileFile 编译一个文件（rel 是图里的路径：主界面的文件相对它的目录，挂进来的带 @m/<名字>/ 前缀）。缓存命中就不跑 esbuild。
+func (c *moduleCache) compileFile(s site, rel string) (*compiled, error) {
+	inner := strings.TrimPrefix(rel, s.prefix)
+	src, err := os.ReadFile(filepath.Join(s.dir, filepath.FromSlash(inner)))
 	if err != nil {
 		return nil, err
 	}
-	key := c.key(rel, src, local)
+	key := c.key(rel, src, s)
 	if m := c.get(key); m != nil {
 		return m, nil
 	}
-	m := compileSource(dir, rel, src, local)
+	m := compileSource(s, inner, src)
 	c.put(key, m, true)
 	return m, nil
 }
@@ -135,7 +150,13 @@ func loaderFor(rel string) api.Loader {
 	return api.LoaderJS
 }
 
-func compileSource(dir, rel string, src []byte, local map[string]string) *compiled {
+// compileSource compiles one file of site s (rel relative to s.dir). Its local dependencies are recorded as graph
+// paths: the site's own files carry its prefix, workspace packages and @gerdr/core are the host's.
+func compileSource(s site, rel string, src []byte) *compiled {
+	dir := s.dir
+	if s.prefix != "" {
+		src = legacyProjectRE.ReplaceAll(src, []byte("__GERDR_PROJECT__"))
+	}
 	m := &compiled{Resolved: map[string]string{}}
 	var deps, lazy, bare []string
 	var mu sync.Mutex
@@ -159,29 +180,39 @@ func compileSource(dir, rel string, src []byte, local map[string]string) *compil
 		Write:         false,
 		Metafile:      true,
 		LogLevel:      api.LogLevelSilent,
-		Define: map[string]string{
-			"process.env.NODE_ENV": `"development"`,
-		},
+		Define:        defines(s),
 		Plugins: []api.Plugin{{
 			Name: "gerdr-module-imports",
 			Setup: func(b api.PluginBuild) {
 				b.OnResolve(api.OnResolveOptions{Filter: `.*`}, func(args api.OnResolveArgs) (api.OnResolveResult, error) {
 					spec := args.Path
-					if strings.HasPrefix(spec, "@/") {
-						spec = "/src/" + strings.TrimPrefix(spec, "@/")
-					} else if l := localSpec(local, spec); l != "" {
-						spec = l // a workspace package (workspace.go)
-					}
-					local := strings.HasPrefix(spec, "./") || strings.HasPrefix(spec, "../") || spec == "." || spec == ".." || strings.HasPrefix(spec, "/")
-					if !local {
-						if !strings.Contains(spec, "://") {
-							mu.Lock()
-							bare = append(bare, spec)
-							mu.Unlock()
+					var target string
+					var err error
+					switch {
+					case spec == coreSpec || strings.HasPrefix(spec, coreSpec+"/"):
+						sub := strings.TrimPrefix(strings.TrimPrefix(spec, coreSpec), "/")
+						if sub == "" {
+							sub = "index"
 						}
-						return api.OnResolveResult{Path: spec, External: true}, nil
+						target, err = resolveLocal(s.host, s.prefix+rel, "/src/core/"+sub)
+					case localSpec(s.local, spec) != "":
+						target, err = resolveLocal(s.host, s.prefix+rel, localSpec(s.local, spec)) // a workspace package (workspace.go)
+					default:
+						if strings.HasPrefix(spec, "@/") {
+							spec = "/src/" + strings.TrimPrefix(spec, "@/")
+						}
+						local := strings.HasPrefix(spec, "./") || strings.HasPrefix(spec, "../") || spec == "." || spec == ".." || strings.HasPrefix(spec, "/")
+						if !local {
+							if !strings.Contains(spec, "://") {
+								mu.Lock()
+								bare = append(bare, spec)
+								mu.Unlock()
+							}
+							return api.OnResolveResult{Path: spec, External: true}, nil
+						}
+						target, err = resolveLocal(dir, rel, spec)
+						target = s.prefix + target
 					}
-					target, err := resolveLocal(dir, rel, spec)
 					if err != nil {
 						mu.Lock()
 						resolveErrs = append(resolveErrs, err.Error())
@@ -235,6 +266,22 @@ func compileSource(dir, rel string, src []byte, local map[string]string) *compil
 	m.ExportStar = exportStarRE.Match(src)
 	m.Classes = extractClasses(src)
 	return m
+}
+
+// legacyProjectRE: how a Work site's lib/gerdr.ts used to find its project, from the address of the frame it was
+// served in (/work/<project>/). Mounted, the address is gerdr's own; copies the user edited aren't upgraded, so the
+// expression itself is replaced with the project's name.
+var legacyProjectRE = regexp.MustCompile(`decodeURIComponent\(\s*location\.pathname\.split\(\s*"/"\s*\)\[2\]\s*\|\|\s*"default"\s*\)`)
+
+// defines: what esbuild replaces in a site's code. A mount's code gets __GERDR_PROJECT__, its name (the project
+// whose Work UI it is): it can't read it from the address the way a site served at /work/<project>/ did.
+func defines(s site) map[string]string {
+	d := map[string]string{"process.env.NODE_ENV": `"development"`}
+	if name, ok := mountOf(s.prefix); ok {
+		b, _ := json.Marshal(name)
+		d["__GERDR_PROJECT__"] = string(b)
+	}
+	return d
 }
 
 func uniq(s []string) []string {
@@ -300,10 +347,9 @@ type graph struct {
 
 func moduleURL(base, rel, version string) string { return base + "/_ui/m/" + rel + "?v=" + version }
 
-// buildGraph 从 roots（页面文件）出发编译整张图，并发编译、结果按文件缓存。
-func (c *moduleCache) buildGraph(dir string, roots []string) *graph {
+// buildGraph 从 roots（页面文件）出发编译整张图，并发编译、结果按文件缓存。siteOf says which site a graph path is in.
+func (c *moduleCache) buildGraph(siteOf func(rel string) site, roots []string) *graph {
 	g := &graph{mods: map[string]*compiled{}, importers: map[string][]string{}, version: map[string]string{}}
-	local := localPackages(dir)
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, 8)
@@ -320,7 +366,7 @@ func (c *moduleCache) buildGraph(dir string, roots []string) *graph {
 		go func() {
 			defer wg.Done()
 			sem <- struct{}{}
-			m, err := c.compileFile(dir, rel, local)
+			m, err := c.compileFile(siteOf(rel), rel)
 			<-sem
 			if err != nil {
 				m = &compiled{Error: fmt.Sprintf("%s: %v", rel, err)}

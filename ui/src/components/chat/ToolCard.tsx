@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { Component, useEffect, useState, type ReactNode } from "react";
 import { Check, CircleHelp, ClipboardList, Undo2 } from "lucide-react";
 import { Markdown, type GPart, type ToolPart } from "@gerdr/chat";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
+import { useCardType } from "@/lib/cards";
 import { cn } from "@/lib/utils";
 import { t } from "@/lib/i18n";
 
@@ -17,6 +18,8 @@ import { t } from "@/lib/i18n";
  * make. A pick waits UNDO_MS before it's sent, with an undo: once sent, the agent is already acting on it.
  */
 export type Card = {
+  /** A card type a UI registered (lib/cards.ts): its component draws it; the fields below are the fallback. */
+  type?: string;
   title: string;
   /** The small line above the title ("等你决定 · t23"). */
   kicker?: string;
@@ -38,7 +41,7 @@ export function cardOf(part: GPart | ToolPart): Card | undefined {
     if (!text || !text.includes("gerdrCard")) continue;
     try {
       const v = JSON.parse(text)?.gerdrCard;
-      if (v && typeof v.title === "string") return v;
+      if (v && (typeof v.title === "string" || typeof v.type === "string")) return { title: "", ...v };
     } catch {
       // not JSON: an ordinary result
     }
@@ -82,7 +85,33 @@ function split(o: string): [string, string] {
   return i > 0 && i < 40 ? [o.slice(0, i), o.slice(i + 1).trim()] : [o, ""];
 }
 
-export function ToolCard({ card }: { card: Card }) {
+/** A registered card type draws the card; the built-in card when there's none or it throws. */
+export function ToolCard({ card, session }: { card: Card; session: string }) {
+  const Custom = useCardType(card.type);
+  const fallback = <BuiltinCard card={card} />;
+  if (!Custom) return fallback;
+  return (
+    <CardBoundary key={card.type} fallback={fallback}>
+      <Custom card={card as Card & Record<string, unknown>} session={session} />
+    </CardBoundary>
+  );
+}
+
+class CardBoundary extends Component<{ fallback: ReactNode; children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  componentDidCatch(e: unknown) {
+    console.error("[gerdr] card failed, drawing the built-in one", e);
+  }
+  render() {
+    return this.state.failed ? this.props.fallback : this.props.children;
+  }
+}
+
+/** The built-in card (title, body, answerable choices with undo). core exports it as DefaultCard, for a card type to wrap. */
+export function BuiltinCard({ card }: { card: Card }) {
   const key = card.ref ?? card.title;
   const { p, rerender } = usePick(key);
   const [own, setOwn] = useState("");

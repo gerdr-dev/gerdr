@@ -1,5 +1,5 @@
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, ChevronsUpDown, Pencil, Plus, Trash2, X } from "lucide-react";
-import { useLayoutEffect, useRef, useState } from "react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, ChevronsUpDown, Download, Eraser, Pencil, Plus, RefreshCw, Trash2, X } from "lucide-react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import {
   DropdownMenu,
@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
+import { api } from "@/lib/api";
 import { closeSpaceUndoable, deleteSpace, moveSpace, switchSpace } from "@/lib/actions";
 import { currentSpace, DEFAULT_SPACE, spaceList, spaceWorkspaces, type Layout, type Space } from "@/lib/layout";
 import { get, set, useStore } from "@/lib/store";
@@ -123,6 +124,8 @@ export function SpaceMenuItems({ sp, axis }: { sp: Space; axis: "x" | "y" }) {
           <Fwd /> {axis === "y" ? t("spaceSwitcher.moveDown") : t("spaceSwitcher.moveRight")}
         </ContextMenuItem>
       )}
+      <ContextMenuSeparator />
+      <WorkSourceItems project={sp.id} />
       {(spaces.length > 1 || sp.id !== DEFAULT_SPACE) && <ContextMenuSeparator />}
       {spaces.length > 1 && (
         <ContextMenuItem onClick={() => askCloseSpace(sp)}>
@@ -134,6 +137,34 @@ export function SpaceMenuItems({ sp, axis }: { sp: Space; axis: "x" | "y" }) {
           <Trash2 /> {t("spaceSwitcher.deleteProject")}
         </ContextMenuItem>
       )}
+    </>
+  );
+}
+
+/** The project's Work: install one from a repository, start over blank, or pull the repository it came from. */
+function WorkSourceItems({ project }: { project: string }) {
+  const [src, setSrc] = useState<{ git: boolean; remote?: string }>();
+  useEffect(() => {
+    api.workSource(project).then(setSrc, () => {});
+  }, [project]);
+  const update = () =>
+    api.updateWork(project).then(
+      (r) => toast.success(t("workSource.updated"), { description: r.output }),
+      (e) => toast.error(e.message),
+    );
+  return (
+    <>
+      {src?.git && src.remote && (
+        <ContextMenuItem onClick={update}>
+          <RefreshCw /> {t("workSource.menuUpdate", { remote: src.remote.replace(/^https?:\/\/(github\.com\/)?/, "") })}
+        </ContextMenuItem>
+      )}
+      <ContextMenuItem onClick={() => set({ dialog: { kind: "workSource", project, action: "install" } })}>
+        <Download /> {t("workSource.menuInstall")}
+      </ContextMenuItem>
+      <ContextMenuItem onClick={() => set({ dialog: { kind: "workSource", project, action: "reset" } })}>
+        <Eraser /> {t("workSource.menuReset")}
+      </ContextMenuItem>
     </>
   );
 }

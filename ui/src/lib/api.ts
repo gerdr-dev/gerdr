@@ -175,6 +175,12 @@ export const api = {
   hello: () => req<Hello>("GET", "/api/hello"),
   /** A key for Work local functions' ctx.secrets.get ("" deletes it); the value is never served back. */
   setWorkSecret: (name: string, value: string) => req("POST", "/api/work/secrets", { name, value }),
+  /** Where the project's Work came from (a git repository or not), and replacing it: work/source.go. */
+  workSource: (project: string) =>
+    req<{ git: boolean; remote?: string; branch?: string; dirty?: boolean }>("GET", `/api/work/source?project=${encodeURIComponent(project)}`),
+  installWork: (project: string, url: string) => req<{ trash: string }>("POST", "/api/work/install", { project, url }),
+  resetWork: (project: string) => req<{ trash: string }>("POST", "/api/work/reset", { project }),
+  updateWork: (project: string) => req<{ output: string }>("POST", "/api/work/update", { project }),
   // In the interface's language: addon.json's i18n is applied here, once, so every place that shows a name reads it
   addons: () => req<AddonBuild[]>("GET", "/api/addons").then((l) => l.map(localizeAddon)),
   addonMessage: (id: string, data: unknown) => req("POST", `/api/addons/${encodeURIComponent(id)}/message`, { data }),

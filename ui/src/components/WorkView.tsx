@@ -1,9 +1,9 @@
 import { ArrowDownRight, Briefcase, Check, ChevronDown, Code2, History, MessageSquarePlus, Settings, X } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { createRoot, type Root } from "react-dom/client";
 import { toast } from "sonner";
 import { AgentIcon, StatusDot, dotStatus } from "@/components/AgentIcon";
 import { COL_EDGE, startColResize } from "@/components/SidebarChrome";
-import { focusSession } from "@/lib/actions";
 import { toggleOverview } from "@/lib/overview";
 import { ChatView } from "@/components/chat/ChatView";
 import { cardOf } from "@/components/chat/ToolCard";
@@ -26,6 +26,10 @@ import { usePhone } from "@/lib/phone";
 import { set, setMode, useStore } from "@/lib/store";
 import { syncWatch } from "@/lib/sync";
 import { cn } from "@/lib/utils";
+import { openInCode } from "@/core/sessions";
+import { useDark } from "@/core/theme";
+import { registerMount, useMount } from "@/lib/mounts";
+import { askSecret, secretAsks } from "@/lib/workSecrets";
 import { askWorkAgent, ensureWorkSession, isEmptyChat, newWorkChat, openWorkChat, useWorkChats, useWorkProject, useWorkSession, workAgent } from "@/lib/work";
 import { t } from "@/lib/i18n";
 
@@ -113,16 +117,6 @@ export function ModeSwitch() {
 
 // ---- the Work project (left) ----
 
-function useDark() {
-  const [dark, setDark] = useState(() => document.documentElement.classList.contains("dark"));
-  useEffect(() => {
-    const o = new MutationObserver(() => setDark(document.documentElement.classList.contains("dark")));
-    o.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
-    return () => o.disconnect();
-  }, []);
-  return dark;
-}
-
 /**
  * What sites written for the old shared left column get on load. Their menu is `w-(--gerdr-sidebar-w)` with room left
  * at its bottom for gerdr's settings row (`--gerdr-menu-bottom`), and their lib/gerdr.ts sets both from this message.
@@ -131,35 +125,130 @@ function useDark() {
  */
 const LEGACY_SIDEBAR = { type: "gerdr:sidebar", width: 224, bottom: 0 };
 
-/** One project's Work site, the whole space between the rail and the chat (WorkFrames keeps one per opened project). */
-// Each mounted project's page, for WorkPeek to tell it what happened to the panel it asked for
+/**
+ * Messages to the page's lib/gerdr.ts. The page used to be a frame; it is now part of this document (a mounted root),
+ * where its window.parent is this window, so the bridge it was written for still works unchanged: both sides post to
+ * and listen on the same window, and tell their messages apart by type. New pages call @gerdr/core instead.
+ */
+const toPage = (m: unknown) => window.postMessage(m, location.origin);
+
+// Each mounted project's page, for WorkPeek to tell it what happened to the panel it asked for. They all listen on
+// the one window now, and the bridge's messages name the session, so this is the same for every project.
 const frameSend = new Map<string, (m: unknown) => void>();
 
-function WorkFrame({ project, onShowChat }: { project: string; onShowChat?: () => void }) {
-  const ref = useRef<HTMLIFrameElement>(null);
-  const [secretAsk, setSecretAsk] = useState<SecretAsk | null>(null);
-  const dark = useDark();
-  const send = (m: unknown) => ref.current?.contentWindow?.postMessage(m, location.origin);
+const pathKey = (project: string) => `gerdr.workPath.${project}`;
+
+/**
+ * One project's Work UI as a React root of its own inside this page (internal/uisite/mounts.go compiles it into the
+ * page's modules). Its own root, not a child of gerdr's tree: a page's render loop or crash stays in it, and it keeps
+ * its router (a memory router: the address bar is gerdr's) and the path it was on (per project, in localStorage).
+ * Rendered again only when its update couldn't be hot-replaced (useMount's seq).
+ */
+function MountRoot({ project }: { project: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const { info, seq } = useMount(project);
+  const entry = useRef(info?.entry);
+  entry.current = info?.entry;
+  const [failed, setFailed] = useState("");
+  const ok = !!info?.entry;
   useEffect(() => {
-    frameSend.set(project, send);
+    const el = ref.current;
+    const url = entry.current;
+    if (!el || !url) return;
+    let root: Root | null = null;
+    let dead = false;
+    setFailed("");
+    (async () => {
+      await registerMount(project);
+      const app = await import(/* @vite-ignore */ url);
+      if (dead) return;
+      let path = "/";
+      try {
+        path = localStorage.getItem(pathKey(project)) || "/";
+      } catch {}
+      root = createRoot(el);
+      root.render(
+        app.createApp({
+          path,
+          onNavigate: (p: string) => {
+            try {
+              localStorage.setItem(pathKey(project), p);
+            } catch {}
+          },
+        }),
+      );
+    })().catch((e) => !dead && setFailed(String(e?.stack ?? e)));
+    return () => {
+      dead = true;
+      const r = root;
+      // Not during React's own render of this tree: unmounting another root synchronously from a cleanup warns
+      if (r) setTimeout(() => r.unmount());
+    };
+  }, [project, seq, ok]);
+  const error = info?.error || failed;
+  return (
+    <div className="relative size-full overflow-hidden bg-background" {...{ [MOUNT_ATTR]: project }}>
+      <div ref={ref} className={cn("size-full", error && "hidden")} />
+      {error && <MountError project={project} error={error} />}
+      {!info && (
+        <div className="flex size-full items-center justify-center">
+          <PixelLoader className="size-4" />
+        </div>
+      )}
+    </div>
+  );
+}
+
+const MOUNT_ATTR = "data-gerdr-mount"; // uisite.MountAttr: the page's scoped CSS matches it
+
+/** The page doesn't build (or threw while starting): the error in its own area, with the agent a click away. */
+function MountError({ project, error }: { project: string; error: string }) {
+  return (
+    <div className="size-full overflow-auto p-6">
+      <div className="mb-3 text-[13px] text-muted-foreground">{t("workView.pageBroken")}</div>
+      <pre className="font-mono text-[12px] leading-relaxed whitespace-pre-wrap text-bad">{error}</pre>
+      <Button
+        size="sm"
+        variant="outline"
+        className="mt-4"
+        onClick={() =>
+          askWorkAgent(t("workView.fixPagePrompt", { error: error.slice(0, 4000) }), project).then(
+            () => toast.success(t("workView.handedOff")),
+            (e) => toast.error(e.message),
+          )
+        }
+      >
+        {t("workView.askFix")}
+      </Button>
+    </div>
+  );
+}
+
+/** One project's Work UI, the whole space between the rail and the chat (WorkFrames keeps one per opened project). */
+function WorkFrame({ project, active, onShowChat }: { project: string; active: boolean; onShowChat?: () => void }) {
+  const dark = useDark();
+  useEffect(() => {
+    frameSend.set(project, toPage);
     return () => void frameSend.delete(project);
   }, [project]);
-  useEffect(() => send({ type: "gerdr:theme", dark }), [dark]);
+  useEffect(() => toPage({ type: "gerdr:theme", dark }), [dark]);
   useEffect(() => {
+    // Every mounted page posts on this window: only the one on screen is the one the user is using
+    if (!active) return;
     const f = (e: MessageEvent) => {
-      if (e.origin !== location.origin || e.source !== ref.current?.contentWindow) return;
+      if (e.origin !== location.origin || e.source !== window) return;
       const m = e.data ?? {};
       if (m.type === "gerdr:ready") {
-        send({ type: "gerdr:theme", dark: document.documentElement.classList.contains("dark") });
-        send(LEGACY_SIDEBAR);
+        toPage({ type: "gerdr:theme", dark: document.documentElement.classList.contains("dark") });
+        toPage(LEGACY_SIDEBAR);
       } else if (m.type === "gerdr:ask" && typeof m.text === "string") {
         // With a request id the page shows its own notice: answer it with the conversation (or the error) instead of a toast
         const rid = m.id;
         askWorkAgent(m.text, project).then(
-          (session) => (rid != null ? send({ type: "gerdr:asked", id: rid, session }) : toast.success(t("workView.handedOff"))),
+          (session) => (rid != null ? toPage({ type: "gerdr:asked", id: rid, session }) : toast.success(t("workView.handedOff"))),
           (err) => {
             const error = err.message ?? String(err);
-            if (rid != null) send({ type: "gerdr:asked", id: rid, error });
+            if (rid != null) toPage({ type: "gerdr:asked", id: rid, error });
             else toast.error(error);
           },
         );
@@ -197,37 +286,26 @@ function WorkFrame({ project, onShowChat }: { project: string; onShowChat?: () =
         if (useStore.getState().workPeek?.project === project) set({ workPeek: null });
       } else if (m.type === "gerdr:openSession" && typeof m.session === "string") {
         // A conversation a local function started (ctx.sessions) lives in Code, not in this chat: go to its pane
-        toggleOverview(false);
-        setMode("agents");
-        focusSession(m.session);
+        openInCode(m.session);
       } else if (m.type === "gerdr:settings") set({ dialog: { kind: "settings", tab: typeof m.tab === "string" ? m.tab : undefined } });
       else if (m.type === "gerdr:secret" && typeof m.name === "string") {
-        // Asked for by the page, typed into gerdr's own dialog: the value goes straight to secrets.json and never
-        // passes through the page (code an agent wrote) or a model
-        setSecretAsk({ id: m.id, name: m.name, label: typeof m.label === "string" ? m.label : "", note: typeof m.note === "string" ? m.note : "" });
+        // Typed into gerdr's own dialog: the value goes straight to secrets.json and never passes through the page
+        const id = m.id;
+        askSecret(m.name, { label: typeof m.label === "string" ? m.label : "", note: typeof m.note === "string" ? m.note : "" }).then(
+          (saved) => toPage({ type: "gerdr:secretDone", id, saved }),
+          (e) => toPage({ type: "gerdr:secretDone", id, saved: false, error: e.message }),
+        );
       }
     };
     window.addEventListener("message", f);
     return () => window.removeEventListener("message", f);
-  }, [project, onShowChat]);
-  return (
-    <>
-      <iframe ref={ref} src={`/work/${encodeURIComponent(project)}/`} title="Work" className="size-full border-0 bg-background" />
-      <SecretDialog
-        ask={secretAsk}
-        onDone={(saved, error) => {
-          if (secretAsk) send({ type: "gerdr:secretDone", id: secretAsk.id, saved, error });
-          setSecretAsk(null);
-        }}
-      />
-    </>
-  );
+  }, [project, active, onShowChat]);
+  return <MountRoot project={project} />;
 }
 
-type SecretAsk = { id: unknown; name: string; label: string; note: string };
-
-/** The Work page's secret() call: one password field, saved as a ctx.secrets key. */
-function SecretDialog({ ask, onDone }: { ask: SecretAsk | null; onDone: (saved: boolean, error?: string) => void }) {
+/** The secret a page asked for (lib/workSecrets.ts): one password field, saved as a ctx.secrets key. */
+function SecretPrompt() {
+  const ask = useSyncExternalStore(secretAsks.subscribe, secretAsks.current);
   const [value, setValue] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
@@ -241,7 +319,7 @@ function SecretDialog({ ask, onDone }: { ask: SecretAsk | null; onDone: (saved: 
     setBusy(true);
     try {
       await api.setWorkSecret(ask.name, value);
-      onDone(true);
+      ask.done(true);
     } catch (e: any) {
       setErr(e.message ?? String(e));
     } finally {
@@ -249,7 +327,7 @@ function SecretDialog({ ask, onDone }: { ask: SecretAsk | null; onDone: (saved: 
     }
   };
   return (
-    <Dialog open={!!ask} onOpenChange={(o) => !o && onDone(false)}>
+    <Dialog open={!!ask} onOpenChange={(o) => !o && ask?.done(false)}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{ask?.label || t("workView.secretTitle")}</DialogTitle>
@@ -266,7 +344,7 @@ function SecretDialog({ ask, onDone }: { ask: SecretAsk | null; onDone: (saved: 
         </form>
         {(err || bad) && <div className="text-[12px] text-bad">{bad ? t("workView.secretBadName", { name: ask?.name ?? "" }) : err}</div>}
         <DialogFooter>
-          <Button variant="outline" onClick={() => onDone(false)}>
+          <Button variant="outline" onClick={() => ask?.done(false)}>
             {t("common.cancel")}
           </Button>
           <Button onClick={() => void save()} disabled={!value || busy || bad}>
@@ -279,11 +357,9 @@ function SecretDialog({ ask, onDone }: { ask: SecretAsk | null; onDone: (saved: 
 }
 
 /**
- * Every project's Work site opened in this page, the current one shown: switching projects only hides the frame, so
- * coming back finds the site as it was (an iframe can't be re-parented or remounted without reloading — reported: the
- * project's Work page lost its state on every switch). A project's frame is first loaded when it's seen in Work mode
- * (in Code mode this view is only kept mounted, nobody looks at it), and dropped when the project is closed. Appended in
- * the order they're opened and never reordered: React moving an iframe in the DOM reloads it too.
+ * Every project's Work UI opened in this page, the current one shown: switching projects only hides it, so coming back
+ * finds the page as it was. A project's UI is first rendered when it's seen in Work mode (in Code mode this view is only
+ * kept mounted, nobody looks at it), and dropped when the project is closed.
  */
 function WorkFrames({ onShowChat }: { onShowChat?: () => void }) {
   const project = useWorkProject();
@@ -302,10 +378,11 @@ function WorkFrames({ onShowChat }: { onShowChat?: () => void }) {
     <div className="relative size-full">
       {list.map((p) => (
         <div key={p} className={cn("absolute inset-0", p !== project && "pointer-events-none invisible")} aria-hidden={p !== project}>
-          <WorkFrame project={p} onShowChat={onShowChat} />
+          <WorkFrame project={p} active={p === project && shown} onShowChat={onShowChat} />
         </div>
       ))}
       <WorkPeek />
+      <SecretPrompt />
     </div>
   );
 }
@@ -335,8 +412,7 @@ function WorkPeek() {
   const close = () => set({ workPeek: null });
   return (
     <>
-      {/* A drawer: a click anywhere outside it closes it. The page is an iframe, whose clicks never reach this
-          document, so a transparent layer goes over it while the panel is open. */}
+      {/* A drawer: a click anywhere outside it closes it. */}
       <div className="absolute inset-0 z-20 bg-black/20" onClick={close} aria-hidden />
       <PeekEsc onEsc={close} />
       <aside className="absolute inset-y-0 right-0 z-30 flex w-[min(640px,100%)] flex-col border-l bg-background shadow-xl" aria-label={session?.title || id}>
@@ -350,9 +426,7 @@ function WorkPeek() {
             title={t("workView.peekInCode")}
             onClick={() => {
               close();
-              toggleOverview(false);
-              setMode("agents");
-              focusSession(id);
+              openInCode(id);
             }}
           >
             <Code2 className="size-4" />
@@ -583,9 +657,19 @@ function ChatHeader() {
 
 export function WorkView() {
   const phone = usePhone();
+  // A page that draws its own chats (ui.json "chat": false) gets the whole width; the Work agent is still one call away
+  const project = useWorkProject();
+  const { info } = useMount(project);
+  const ownChat = info?.config?.chat === false;
   const [chatW, setChatW] = useChatW();
   const [side, setSide] = useState<"page" | "chat">("page");
   const showChat = useCallback(() => setSide("chat"), []);
+  if (ownChat && !phone)
+    return (
+      <div className="h-full bg-background">
+        <WorkFrames />
+      </div>
+    );
   if (phone) {
     return (
       <div className="flex h-full flex-col bg-background">
@@ -593,7 +677,7 @@ export function WorkView() {
           <Button variant="ghost" size="icon" className="size-9" aria-label="Code" onClick={() => setMode("agents")}>
             <Code2 className="size-4" />
           </Button>
-          <div className="flex flex-1 justify-center">
+          <div className={cn("flex flex-1 justify-center", ownChat && "invisible")}>
             <div className="flex gap-0.5 rounded-lg bg-muted p-0.5">
               {(["page", "chat"] as const).map((v) => (
                 <button
@@ -609,11 +693,11 @@ export function WorkView() {
           <div className="size-9" />
         </div>
         {/* both stay mounted: switching tabs keeps the page's state and the chat's scroll */}
-        <div className={cn("min-h-0 flex-1", side !== "page" && "hidden")}>
+        <div className={cn("min-h-0 flex-1", side !== "page" && !ownChat && "hidden")}>
           <WorkFrames onShowChat={showChat} />
         </div>
         {/* The same header as on wider screens: without it a phone has no history, no new chat and no agent picker */}
-        <div className={cn("flex min-h-0 flex-1 flex-col", side !== "chat" && "hidden")}>
+        <div className={cn("flex min-h-0 flex-1 flex-col", (side !== "chat" || ownChat) && "hidden")}>
           <ChatHeader />
           <div className="min-h-0 flex-1">
             <WorkChat />

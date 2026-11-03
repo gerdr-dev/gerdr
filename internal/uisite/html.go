@@ -79,6 +79,7 @@ func (r *Renderer) ServePage(w http.ResponseWriter, req *http.Request, nonce str
 		"entry":   b.entry,
 		"modules": b.manifest,
 		"error":   b.fatal,
+		"mounts":  b.mounts,
 	})) + ";</script>\n")
 	s.WriteString(`<script type="module" src="` + r.base + `/_ui/m/@runtime.js?v=` + runtimeVersion + `"></script>` + "\n")
 	if r.base != "" {

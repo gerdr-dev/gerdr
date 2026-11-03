@@ -263,9 +263,9 @@ export function GerdrChatProvider({ children }: { children: ReactNode }) {
           return s ? s.title || s.cwd.split("/").pop() || s.agent : undefined;
         }),
       // A tool result carrying a card (Work tools: a step put on the user's board) is drawn as that card
-      renderTool: (part) => {
+      renderTool: (part, ctx) => {
         const card = cardOf(part);
-        return card ? <ToolCard card={card} /> : undefined;
+        return card ? <ToolCard card={card} session={ctx.sessionId} /> : undefined;
       },
       send: (id, content, o) => sendShown(id, content, o?.onRetry, o?.now).then(() => {}),
       stop: (id) => api.escape(id),

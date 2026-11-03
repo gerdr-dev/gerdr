@@ -13,6 +13,7 @@ import { RemoteScreen } from "./RemoteScreen";
 import { SessionsDialog, WorkspacesDialog } from "./Pickers";
 import { ResumeDialog } from "./ResumeDialog";
 import { SettingsDialog } from "./SettingsDialog";
+import { WorkSourceDialog } from "./WorkSourceDialog";
 
 // Every store.dialog overlay, mounted once (App.tsx). Each dialog lives in its own file; store.dialog.kind picks which one is open.
 export function Dialogs() {
@@ -39,6 +40,7 @@ export function Dialogs() {
       <FileViewer />
       <FilePicker />
       <ConfirmDialog />
+      <WorkSourceDialog />
     </>
   );
 }

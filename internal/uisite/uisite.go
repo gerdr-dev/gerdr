@@ -30,7 +30,7 @@ import (
 
 type Renderer struct {
 	dir     string
-	base    string // URL prefix the whole site lives under ("" = the root, gerdr's own UI; "/work" = the Work project)
+	base    string // URL prefix the whole site lives under ("" = the root). Other UIs aren't served apart any more: they're mounted (mounts.go)
 	log     *slog.Logger
 	modules *moduleCache
 	events  hub
@@ -39,6 +39,7 @@ type Renderer struct {
 	mu        sync.Mutex
 	cur, prev *build // prev 留着：还在用上一版的页面也拿得到它的模块
 	waitingOn *vendorBuild
+	mounts    map[string]string // name → UI directory compiled into this page (mounts.go)
 
 	errMu     sync.Mutex
 	clientErr []ClientError   // 页面报上来的运行时错误（只留当前这一版构建的）
@@ -126,6 +127,7 @@ type build struct {
 	inputs    map[string]bool
 	fatal     string
 	issues    []errorItem
+	mounts    map[string]mountInfo
 	// The vendor bundle for this import map is still being built: the page is a "preparing" page that reloads
 	// when it is done (html.go), instead of loading hundreds of files from esm.sh in the meantime.
 	waiting bool
@@ -163,17 +165,6 @@ func (r *Renderer) Dir() string { return r.dir }
 // UseESM bundles the third-party packages through this proxy (vendor.go) instead of mapping each to esm.sh's files.
 // Call before Watch.
 func (r *Renderer) UseESM(e *ESM) { r.esm = e }
-
-// NewAt is New for a site mounted under a URL prefix (e.g. "/work"): module, event and public URLs and
-// the router's basename all carry it. Used for the Work view's project, a second, user-owned UI that
-// gerdr shows in a frame next to the Work agent.
-func NewAt(dir, cacheDir, base string, log *slog.Logger) *Renderer {
-	r := New(dir, cacheDir, log)
-	r.base = strings.TrimRight(base, "/")
-	return r
-}
-
-func (r *Renderer) Base() string { return r.base }
 
 func shortHash(parts ...string) string {
 	h := sha256.New()
@@ -231,7 +222,7 @@ type uiConfig struct {
 }
 
 func (r *Renderer) build(files []string, sig string) *build {
-	b := &build{sig: sig, served: map[string]served{}, manifest: map[string]moduleInfo{}, inputs: map[string]bool{}, title: "Gerdr"}
+	b := &build{sig: sig, served: map[string]served{}, manifest: map[string]moduleInfo{}, inputs: map[string]bool{}, title: "Gerdr", mounts: map[string]mountInfo{}}
 	var fatal []string
 	var cfg uiConfig
 	if raw, err := os.ReadFile(filepath.Join(r.dir, "ui.json")); err == nil {
@@ -262,7 +253,13 @@ func (r *Renderer) build(files []string, sig string) *build {
 		b.issues = append(b.issues, errorItem{Level: "warn", Source: "css", Message: fmt.Sprintf(i18n.S("src/index.css 里的 %s 用不了（Tailwind browser 不支持），已经跳过", "%s in src/index.css isn't supported by Tailwind browser; skipped"), d)})
 	}
 
-	b.routes = buildRoutes(files)
+	var hostFiles []string
+	for _, f := range files {
+		if !strings.HasPrefix(f, mountPrefix) {
+			hostFiles = append(hostFiles, f)
+		}
+	}
+	b.routes = buildRoutes(hostFiles)
 	if len(b.routes) == 0 {
 		fatal = append(fatal, i18n.S("src/pages/ 下面一个页面都没有（至少要有 src/pages/index.tsx）", "No pages under src/pages/ (at least src/pages/index.tsx is needed)"))
 	}
@@ -270,17 +267,34 @@ func (r *Renderer) build(files []string, sig string) *build {
 	for _, rt := range b.routes {
 		roots = append(roots, rt.File)
 	}
-	for _, f := range files {
+	for _, f := range hostFiles {
 		if f == layoutFile {
 			b.layout = f
 			roots = append(roots, f)
 		}
 	}
-	g := r.modules.buildGraph(r.dir, roots)
+	hostRoots := append([]string{}, roots...)
+	var mounts []*mountSpec
+	for _, name := range r.mountNames() {
+		m := r.prepareMount(name, r.mounts[name], files)
+		mounts = append(mounts, m)
+		roots = append(roots, m.roots...)
+	}
+	g := r.modules.buildGraph(r.siteOf(localPackages(r.dir)), roots)
 	g.base = r.base
 	b.graph = g
 	b.css += sourceInlineCSS(g)
-	fatal = append(fatal, g.errs...)
+	for _, m := range mounts {
+		b.css += m.css
+	}
+	var compileErrs []string
+	for p, m := range g.mods {
+		if m != nil && m.Error != "" && !strings.HasPrefix(p, mountPrefix) {
+			compileErrs = append(compileErrs, m.Error)
+		}
+	}
+	sort.Strings(compileErrs)
+	fatal = append(fatal, compileErrs...)
 
 	static := map[string]bool{}
 	var walk func(string)
@@ -293,22 +307,45 @@ func (r *Renderer) build(files []string, sig string) *build {
 			walk(d)
 		}
 	}
-	for _, rt := range roots {
+	for _, rt := range hostRoots {
 		walk(rt)
 	}
 	var bare, staticBare []string
+	mountBare := map[string][]string{}
 	for p, m := range g.mods {
 		b.inputs[p] = true
 		if m.Error != "" {
 			continue
 		}
-		bare = append(bare, m.Bare...)
+		if name, ok := mountOf(p); ok {
+			mountBare[name] = append(mountBare[name], m.Bare...)
+		} else {
+			bare = append(bare, m.Bare...)
+		}
 		if static[p] {
 			staticBare = append(staticBare, m.Bare...)
 			b.preload = append(b.preload, moduleURL(r.base, p, g.version[p]))
 		}
 		b.served[p] = served{ver: g.version[p], code: g.link(p), sourcemap: m.Map}
 		b.manifest[p] = moduleInfo{URL: moduleURL(r.base, p, g.version[p]), Lazy: !static[p]}
+	}
+	// A mount's packages: the host's version when it has the package (one copy of React, of everything shared),
+	// the mount's own otherwise. One it has no version for anywhere is the mount's error, not the page's.
+	for _, m := range mounts {
+		var missing []string
+		for _, spec := range uniq(mountBare[m.name]) {
+			pkg, _ := packageName(spec)
+			if _, ok := deps[pkg]; !ok {
+				if v, ok := m.deps[pkg]; ok {
+					deps[pkg] = v
+				} else {
+					missing = append(missing, pkg)
+					continue
+				}
+			}
+			bare = append(bare, spec)
+		}
+		r.finishMount(b, m, g, uniq(missing))
 	}
 	im, missing := buildImportMap(deps, uniq(bare))
 	b.importMap = im
@@ -318,13 +355,14 @@ func (r *Renderer) build(files []string, sig string) *build {
 		r.useVendor(b, deps, append(staticBare, runtimeBare...))
 	}
 	sort.Strings(b.preload)
-	entry := entrySource(b.routes, b.layout, r.base, func(f string) string { return moduleURL(r.base, f, g.version[f]) })
+	entry := entrySource(b.routes, b.layout, r.base, func(f string) string { return moduleURL(r.base, f, g.version[f]) }, false)
 	ev := shortHash(entry)
 	b.served["@entry.js"] = served{ver: ev, code: entry}
 	b.entry = moduleURL(r.base, "@entry.js", ev)
 	b.fatal = strings.Join(fatal, "\n\n")
 	imj, _ := json.Marshal(b.importMap)
-	b.id = shortHash(ev, b.css, string(imj), b.fatal, b.title, b.favicon, fmt.Sprint(b.waiting))
+	mj, _ := json.Marshal(b.mounts)
+	b.id = shortHash(ev, b.css, string(imj), b.fatal, b.title, b.favicon, fmt.Sprint(b.waiting), string(mj))
 	return b
 }
 
@@ -392,6 +430,9 @@ type update struct {
 	Modules    map[string]moduleInfo `json:"modules,omitempty"`
 	Boundaries []string              `json:"boundaries"` // 要热替换的模块；null：换不了，重新渲染入口
 	CSS        *string               `json:"css,omitempty"`
+	Mounts     map[string]mountInfo  `json:"mounts,omitempty"`
+	// Remount: mounts whose edit couldn't be hot-replaced (it reached the mount's entry): only their root renders again
+	Remount []string `json:"remount,omitempty"`
 }
 
 // diff 比较两次构建，决定页面怎么更新：
@@ -411,7 +452,7 @@ func diff(prev, next *build) *update {
 	if !same(prev.importMap, next.importMap) || prev.title != next.title || prev.favicon != next.favicon {
 		return &update{Type: "reload", Build: next.id}
 	}
-	u := &update{Type: "update", Build: next.id, Entry: next.entry, Modules: next.manifest}
+	u := &update{Type: "update", Build: next.id, Entry: next.entry, Modules: next.manifest, Mounts: next.mounts}
 	if next.css != prev.css {
 		u.CSS = &next.css
 	}
@@ -424,6 +465,12 @@ func diff(prev, next *build) *update {
 	}
 	if next.layout != "" {
 		isRoot[next.layout] = true
+	}
+	remount := map[string]bool{}
+	for name, mi := range next.mounts {
+		if pm, ok := prev.mounts[name]; !ok || pm.Error != mi.Error || (pm.Entry == "") != (mi.Entry == "") {
+			remount[name] = true
+		}
 	}
 	var changed []string
 	for p, m := range next.graph.mods {
@@ -449,12 +496,21 @@ func diff(prev, next *build) *update {
 		}
 		importers := next.graph.importers[p]
 		if isRoot[p] || len(importers) == 0 {
+			// The top of a mount (its pages, layout, cards): render that mount again, the host stays
+			if name, ok := mountOf(p); ok {
+				remount[name] = true
+				continue
+			}
 			u.Boundaries = nil
 			return u
 		}
 		queue = append(queue, importers...)
 	}
 	sort.Strings(u.Boundaries)
+	for name := range remount {
+		u.Remount = append(u.Remount, name)
+	}
+	sort.Strings(u.Remount)
 	return u
 }
 
@@ -583,13 +639,29 @@ func (r *Renderer) scan(_ map[string]bool) (files []string, sig string) {
 			h.Write([]byte(top + "\x00" + strconv.FormatInt(info.Size(), 10) + "\x00" + strconv.FormatInt(info.ModTime().UnixNano(), 10) + "\n"))
 		}
 	}
+	type tree struct{ dir, root, prefix string }
+	var trees []tree
 	for _, root := range roots {
-		_ = filepath.WalkDir(filepath.Join(r.dir, filepath.FromSlash(root)), func(p string, d fs.DirEntry, err error) error {
+		trees = append(trees, tree{r.dir, root, ""})
+	}
+	// Mounts (mounts.go): their sources are graph paths "@m/<name>/…". Called with r.mu held.
+	for _, name := range r.mountNames() {
+		dir, prefix := r.mounts[name], mountPrefix+name+"/"
+		h.Write([]byte(prefix + "\x00" + dir + "\n"))
+		for _, top := range []string{"package.json", "ui.json"} {
+			if info, err := os.Stat(filepath.Join(dir, top)); err == nil {
+				h.Write([]byte(prefix + top + "\x00" + strconv.FormatInt(info.Size(), 10) + "\x00" + strconv.FormatInt(info.ModTime().UnixNano(), 10) + "\n"))
+			}
+		}
+		trees = append(trees, tree{dir, "src", prefix})
+	}
+	for _, tr := range trees {
+		_ = filepath.WalkDir(filepath.Join(tr.dir, filepath.FromSlash(tr.root)), func(p string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return nil
 			}
-			rel, _ := filepath.Rel(r.dir, p)
-			rel = filepath.ToSlash(rel)
+			rel, _ := filepath.Rel(tr.dir, p)
+			rel = tr.prefix + filepath.ToSlash(rel)
 			if d.IsDir() {
 				if strings.HasPrefix(d.Name(), ".") || d.Name() == "node_modules" {
 					return filepath.SkipDir

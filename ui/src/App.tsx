@@ -276,7 +276,7 @@ export default function App() {
           <div className="relative flex min-w-0 flex-1 flex-col">
             {/* Work mode covers the agent tabs instead of unmounting them: back in Code mode everything is where it was.
                 The same the other way: once opened the Work view stays mounted, only hidden in Code mode — unmounting it
-                reloaded the Work site's iframe and threw away everything the user had open there (reported). */}
+                would throw away the Work page's state, everything the user had open there (reported, back when it was a frame). */}
             {workKept && (
               <div className={cn("absolute inset-0 z-30", mode !== "work" && "pointer-events-none invisible")} aria-hidden={mode !== "work"}>
                 <TabActive.Provider value={mode === "work"}>

@@ -71,10 +71,14 @@ func buildRoutes(files []string) []route {
 // entrySource 是入口模块（/_ui/m/@entry.js）：每个页面一条 react-router 路由，页面组件收到 { params }。
 // 它不自己挂载，导出 createApp() 交给运行时（runtime.go）：运行时先接好 React Refresh 再渲染，
 // 热更新整个换掉时也是拿新入口的 createApp 重新渲染。
-func entrySource(routes []route, layout, base string, url func(file string) string) string {
+//
+// mount: the entry of a mounted UI (mounts.go): createApp({ path, onNavigate }) makes a memory router (the address bar
+// is the host page's), and its render errors count in __GERDR_MOUNT_ERRORS__ instead of the host's, so they don't
+// make the host page reload on its next hot update.
+func entrySource(routes []route, layout, base string, url func(file string) string, mount bool) string {
 	var b strings.Builder
 	b.WriteString(`import React from "react";
-import { createBrowserRouter, RouterProvider, Outlet, useParams, useRouteError } from "react-router";
+import { createBrowserRouter, createMemoryRouter, RouterProvider, Outlet, useParams, useRouteError } from "react-router";
 `)
 	for i, r := range routes {
 		fmt.Fprintf(&b, "import P%d from %q;\n", i, url(r.File))
@@ -126,8 +130,15 @@ const children = [
 	fmt.Fprintf(&b, "  { path: \"*\", Component: %s },\n", notFound)
 	b.WriteString(`];
 
-export function createApp() {
-  const router = createBrowserRouter([{ path: "/", Component: Layout, ErrorBoundary: RouteError, children: children }], BASENAME);
+export function createApp(opts) {
+  const routes = [{ path: "/", Component: Layout, ErrorBoundary: RouteError, children: children }];
+  if (MOUNT) {
+    opts = opts || {};
+    const router = createMemoryRouter(routes, { initialEntries: [opts.path || "/"] });
+    if (opts.onNavigate) router.subscribe(function (s) { opts.onNavigate(s.location.pathname + s.location.search + s.location.hash); });
+    return h(RouterProvider, { router: router });
+  }
+  const router = createBrowserRouter(routes, BASENAME);
   return h(RouterProvider, { router: router });
 }
 `)
@@ -135,7 +146,12 @@ export function createApp() {
 	if base != "" {
 		opts = fmt.Sprintf("{ basename: %q }", base)
 	}
-	return strings.Replace(b.String(), "BASENAME", opts, 1)
+	out := strings.Replace(b.String(), "BASENAME", opts, 1)
+	out = strings.Replace(out, "MOUNT", strconv.FormatBool(mount), 1)
+	if mount {
+		out = strings.ReplaceAll(out, "__GERDR_ROUTE_ERRORS__", "__GERDR_MOUNT_ERRORS__")
+	}
+	return out
 }
 
 func formatMessage(m api.Message) string {

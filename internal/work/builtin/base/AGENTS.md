@@ -2,7 +2,7 @@
 
 You are the agent on the right of Gerdr's **Work view** for one Gerdr **project** (a project has its
 Code workspaces and its own Work). The left side is this project's **Work site** — the folder `ui/`
-here — drawn in a frame next to you. Buttons on its pages hand tasks to
+here — drawn next to you as part of Gerdr's own page (not a frame). Buttons on its pages hand tasks to
 you as messages (e.g. "write this week's progress reports").
 
 **Read `README.md` in this directory first when there is one**: it's this project's own notes and rules (what
@@ -28,12 +28,24 @@ and their habits are what they wrote down, not what the code says.
 
 - `ui/` — the Work project: a React site with **no build step**, same rules as Gerdr's own UI
   (Gerdr reads the source, compiles each file with esbuild, hot-reloads on save):
+  - The site isn't a frame: Gerdr compiles it into its own page and draws it as a React root of its own, in the
+    space right of Gerdr's strip. Its router keeps its own path (the address bar is Gerdr's: link with react-router,
+    never `location.href`), its `index.css` applies to its own area only, and it shares Gerdr's React and packages
+    (Gerdr's version wins when both list a package).
   - `ui/src/layout.tsx` — the menu on the left of the page + `<Outlet />`. The menu is plain code:
     change it however the user wants (groups, icons, badges, a top bar instead, no menu at all). The whole
-    frame is the site's: Gerdr's own controls are on its strip left of the frame and nothing of Gerdr's is
-    drawn over the page unless the page asks (`showSession`, `secret`), so there is nothing to line up with or
-    leave room for. Keep a narrow-screen layout
-    (layout.tsx switches the menu to tabs below `md`): on a phone the frame is the whole screen.
+    area is the site's: nothing of Gerdr's is drawn over the page unless the page asks (`showSession`, `secret`),
+    so there is nothing to line up with or leave room for. Keep a narrow-screen layout
+    (layout.tsx switches the menu to tabs below `md`): on a phone the page is the whole screen.
+  - `@gerdr/core` (types: `ui/src/gerdr-core.d.ts`) — Gerdr's own pieces for the page: `<SessionChat id>` (a whole
+    conversation with its input box, anywhere in the page: a worker's chat in the page's own drawer or column),
+    `useSession`, `openInCode`, `askSecret`, `registerCard`, `toast`, `useDark`. Prefer them to the frame-era
+    bridge calls below for anything new.
+  - `ui/ui.json` — the title, and `"chat": false` when the page draws its own chats with `SessionChat` (it then gets
+    the whole width; without it, you are the column on its right).
+  - `ui/src/cards.tsx` (optional) — card types this Work draws in any conversation: `registerCard("task-step",
+    TaskStep)`; a tool returns `{ gerdrCard: { type: "task-step", …, title, body } }` (FUNCTIONS.md). Gerdr loads it at
+    start, so the cards are drawn in Code too; title / body are the fallback when the type isn't drawn.
   - `ui/src/pages/*.tsx` — one file per page, routed by file name (`index.tsx` → `/`,
     `weekly.tsx` → `/weekly`, `okr/[id].tsx` → `/okr/:id`); default-export a component.
   - `ui/src/lib/gerdr.ts` — the bridge: `run(fn, input, { onProgress, onLog, signal })` calls a local

@@ -76,7 +76,6 @@ type Server struct {
 	Peers       *peer.Manager
 	remoteConns remoteConns // 正在连着的远程界面（remoteconns.go）
 	appWatch    appWatch    // 安卓 App 后台通知的长轮询（appwatch.go）
-	workUIs     workUIs     // each project's Work site, started on first use (workapi.go)
 	links       fileLinks   // cookie-less links to one file, for opening it in the system browser (filelink.go)
 	appUpdate   appUpdate   // the desktop App's update status, relayed by its page for other devices (appupdate.go)
 	// OnServiceInstalled：刚打开后台常驻、本进程是 App 起的后端时让位（见 cmd/gerdr 的 handover）。

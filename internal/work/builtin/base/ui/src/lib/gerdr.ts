@@ -17,10 +17,14 @@
 // - secret(name, { label, note }): ask the user for a key (a password, a token) in gerdr's own dialog; it's saved for
 //   local functions' ctx.secrets.get and never passes through this page. secretNames() lists the saved names.
 // - The page follows gerdr's light / dark theme by itself (see the listener at the bottom).
-// - The whole frame is the site's: gerdr's controls are on its own strip left of it, nothing is drawn over this page.
+// - The page is part of gerdr's own page (a React root of its own next to gerdr's, not a frame): gerdr's controls are on
+//   its strip left of it, nothing is drawn over this page. For gerdr's chat and more, import from "@gerdr/core"
+//   (src/gerdr-core.d.ts).
 
-/** The project this Work site belongs to: it's served at /work/<project>/. */
-export const project = decodeURIComponent(location.pathname.split("/")[2] || "default");
+declare const __GERDR_PROJECT__: string | undefined;
+
+/** The project this Work site belongs to (gerdr compiles it in; a site once served at /work/<project>/ read the address). */
+export const project = typeof __GERDR_PROJECT__ === "string" ? __GERDR_PROJECT__ : decodeURIComponent(location.pathname.split("/")[2] || "default");
 
 export type RunEvent = { type: "start" | "progress" | "log" | "result" | "error"; data: any };
 
