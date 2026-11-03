@@ -183,20 +183,20 @@ The goal is "the result of a tap shows within ~300 ms", so the picture is stream
     plain call doesn't. Use `CGEventCreateScrollWheelEvent2` (macOS 13+).
   - Without Screen Recording, capture fails ("could not create image from display") or shows only the wallpaper; without Accessibility, posted events are dropped with no error. Both are checked up front
     (`CGPreflightScreenCaptureAccess`, `CGPreflightPostEventAccess`) so the UI can say which is missing.
-- TCC grants go to the *responsible* process. With the background service on, port 7870 is served by the launchd
-  job `gerdr --service` (the App's `gerdr --app` only attaches to it), so the grant must name **the `gerdr` binary**
-  (`/Applications/Gerdr.app/Contents/Resources/gerdr`, shown as "gerdr" with a terminal icon), not Gerdr.app;
-  without the service it is Gerdr.app. Both are ad-hoc signed, and an ad-hoc designated requirement is just the
-  cdhash, so **every reinstall / update invalidates both grants while System Settings still shows them on**.
-  Toggling the stale entry does nothing (it stays bound to the old hash): remove it with − and add the binary again
-  with + (⌘⇧G, paste the path). `tccutil reset <Service> io.github.zbysir.gerdr` only clears the App's entries.
-  Tried and set aside (2026-11-03, macOS 26.6): signing with a fixed self-signed identity (`make signing-id`, then
-  `GERDR_SIGN_ID="Gerdr Local Signing" make install`; desktop/sign-id.sh) makes the requirement
-  `identifier … and certificate leaf = H"…"`. Accessibility then survives rebuilds, but Screen Recording stayed
-  denied for that binary no matter what (entry removed and re-added, cert trusted for code signing, service
-  restarted; CGRequestScreenCaptureAccess returned false with no prompt). Not understood (TCC's logs and db aren't
-  readable from here). Next idea: run the backend from its own small .app bundle with a bundle id, which TCC
-  handles like any app (prompts, `tccutil reset ScreenCapture <id>`).
+- **Which entry macOS checks (read from the system TCC.db, after hours of guessing):** Screen Recording is
+  attributed to the *App bundle containing the binary*, client `io.github.zbysir.gerdr` (Gerdr.app), even for the
+  launchd service `gerdr --service`. Accessibility is checked against the binary itself, client
+  `/Applications/Gerdr.app/Contents/Resources/gerdr` (shown as "gerdr", terminal icon). Granting Screen Recording
+  to "gerdr" stores an allowed path record that is never consulted: it looks granted and capture still fails.
+  So: **Screen Recording → Gerdr.app, Accessibility → gerdr.**
+- Ad-hoc signed, both records hold a cdhash requirement, voided by every rebuild while System Settings still shows
+  them on (toggling a stale entry rebinds nothing: remove it with − and add again). So local builds sign with a
+  fixed self-signed identity (`make signing-id` once; `desktop/sign-id.sh`, used by `desktop/build.sh` for the
+  backend, identifier `io.github.zbysir.gerdr.backend`, and by `adhoc-sign.js` for the App): the requirement
+  becomes `identifier … and certificate leaf = H"…"` and survives rebuilds. No identity on the machine = ad-hoc as
+  before. The backends CI builds for updates (release.yml) are ad-hoc unless the same identity is given to CI.
+- `tccutil reset ScreenCapture io.github.zbysir.gerdr` clears the App's record (e.g. after a denied prompt). tccutil
+  can't address the path record ("No such bundle identifier"), and without an id it resets every app.
 - A process caches what it learned about its grants: after switching Accessibility on, `CGPreflightPostEventAccess`
   stayed false in the running backend while a fresh process got true; Screen Recording likewise needs a restart.
   So after granting, the service has to restart (`launchctl kickstart -k gui/$UID/io.github.zbysir.gerdr`, which
