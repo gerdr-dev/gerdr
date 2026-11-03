@@ -20,10 +20,11 @@ import (
 
 var (
 	pathMu   sync.Mutex
-	pathDone bool      // got the login shell's PATH; never ask again
-	pathLast time.Time // last attempt, to space out retries after a failure
-	pathBase string    // PATH this process started with, before any merge
-	pathErr  error     // last attempt's error, nil once it worked (for the diagnosis page)
+	pathDone bool          // got the login shell's PATH; never ask again
+	pathLast time.Time     // last attempt, to space out retries after a failure
+	pathBase string        // PATH this process started with, before any merge
+	pathErr  error         // last attempt's error, nil once it worked (for the diagnosis page)
+	pathWait time.Duration // delay of the pending background retry; 0 when none is scheduled
 )
 
 // AdoptLoginPath merges the login shell's PATH into this process's.
@@ -81,7 +82,15 @@ func adoptLocked() error {
 	pathErr = err
 	if err == nil {
 		pathDone = true
+	} else {
+		scheduleRetryLocked()
 	}
+	applyLocked(login)
+	return err
+}
+
+// applyLocked merges login (the login shell's PATH, "" when it couldn't be read) and the fallback dirs into PATH.
+func applyLocked(login string) {
 	// The login shell's order wins over the bare system PATH launchd hands us: it is what decides that
 	// ~/.version-fox/shims beats an old /usr/local/bin/codex. A real inherited PATH (started from a
 	// terminal, maybe inside a venv) keeps going first.
@@ -90,7 +99,6 @@ func adoptLocked() error {
 		merged = mergePath(login, pathBase)
 	}
 	os.Setenv("PATH", mergePath(merged, strings.Join(FallbackDirs(), ":")))
-	return err
 }
 
 // FallbackDirs: where claude / codex / brew usually live, added even when the login shell can't be read.
@@ -100,6 +108,40 @@ func FallbackDirs() []string {
 }
 
 const pathRetry = 30 * time.Second
+
+// scheduleRetryLocked retries a failed read in the background. Waiting for the next caller isn't enough: the read
+// right after login (machine still busy) times out, and nothing may call again for a long while — the diagnosis
+// page keeps showing the failure and anything that already read PATH keeps the bare one. Backs off 30s → 10min so a
+// shell that can never be read doesn't spawn one every 30s forever.
+func scheduleRetryLocked() {
+	if pathWait != 0 {
+		return
+	}
+	pathWait = pathRetry
+	var retry func()
+	retry = func() {
+		pathMu.Lock()
+		defer pathMu.Unlock()
+		if pathDone {
+			pathWait = 0
+			return
+		}
+		if time.Since(pathLast) >= pathRetry {
+			pathLast = time.Now()
+			login, err := LoginShellPath()
+			pathErr = err
+			if err == nil {
+				pathDone = true
+				pathWait = 0
+				applyLocked(login)
+				return
+			}
+		}
+		pathWait = min(pathWait*2, 10*time.Minute)
+		time.AfterFunc(pathWait, retry)
+	}
+	time.AfterFunc(pathWait, retry)
+}
 
 // LoginShellPath runs the user's login shell (-l -i, so .zprofile and .zshrc both apply) and returns its PATH.
 func LoginShellPath() (string, error) {

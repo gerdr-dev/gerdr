@@ -2,6 +2,7 @@ package codex
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 
@@ -39,6 +40,11 @@ func (a *Agent) usage(ctx context.Context) (acpx.UsageResponse, error) {
 	}
 	var res rateLimitsResp
 	if err := rpc.Call(ctx, "account/rateLimits/read", map[string]any{"excludeResetCreditDetails": true}, &res); err != nil {
+		// app-server asks chatgpt.com and never answers while it can't reach it; a bare "context deadline exceeded"
+		// told people nothing about what to fix.
+		if errors.Is(err, context.DeadlineExceeded) {
+			return acpx.UsageResponse{}, errors.New(i18n.S("codex 查额度超时：多半是连不上 chatgpt.com（看看网络 / 代理）", "codex timed out reading the quota: most likely chatgpt.com can't be reached (check the network / proxy)"))
+		}
 		return acpx.UsageResponse{}, err
 	}
 	return convertRateLimits(res), nil
