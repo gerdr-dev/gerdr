@@ -3,7 +3,7 @@ import { defaultComponents, defaultRehypePlugins, defaultRemarkPlugins, type Com
 import { MessageResponse } from "../ai/message";
 import { chatHost, useChatHost } from "../host";
 import { bareFileName, fileExists, localHref, onFileExists, rehypePaths } from "../paths";
-import { ChatMedia, imageGroup, localPath, MediaGrid, rehypeImageGroups } from "./ChatMedia";
+import { ChatMedia, imageGroup, localPath, MediaGrid, nonMediaPath, rehypeImageGroups } from "./ChatMedia";
 import { SessionContext } from "./sessionContext";
 
 /**
@@ -69,8 +69,18 @@ function PathLink({ path, cwd, children }: { path: string; cwd?: string; childre
 }
 
 // 图片语法引用的图 / 视频 / 音频 / PDF（ChatMedia）；连着几张图排成网格
+// Image syntax pointing at a local non-media file (a .tsx, a .md) becomes a file link instead of a failed image.
 function Img(props: any) {
-  return <ChatMedia src={String(props.src ?? "")} alt={props.alt} />;
+  const session = useContext(SessionContext);
+  const src = String(props.src ?? "");
+  const file = chatHost().openPath ? nonMediaPath(src) : null;
+  if (file)
+    return (
+      <PathLink path={file} cwd={session?.cwd}>
+        {props.alt || file.split("/").pop()}
+      </PathLink>
+    );
+  return <ChatMedia src={src} alt={props.alt} />;
 }
 
 function P({ node, children, ...rest }: any) {

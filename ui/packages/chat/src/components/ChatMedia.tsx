@@ -16,6 +16,7 @@ import { SessionContext } from "./sessionContext";
 const VIDEO = /\.(mp4|m4v|mov|webm)$/i;
 const AUDIO = /\.(mp3|m4a|wav|ogg|oga|opus|aac|flac)$/i;
 const PDF = /\.pdf$/i;
+const IMAGE = /\.(png|jpe?g|gif|webp|svg|avif|bmp|ico|heic|heif|tiff?)$/i;
 
 // Backoff (ms) between automatic reloads of a media file that failed to load.
 const RETRY_DELAYS = [1000, 3000, 8000];
@@ -46,6 +47,19 @@ export function localPath(src: unknown): string | null {
   if (/^[a-z][a-z0-9+.-]*:/i.test(s) || s.startsWith("//")) return null; // https:、data:、blob:……
   if (s.startsWith("/api/") || s.startsWith("/_")) return null; // 本服务自己的地址
   return s;
+}
+
+/**
+ * A local file that image syntax points at but that is not media: agents sometimes write `![board](/x/board.tsx)`
+ * for a source file, which loaded as an <img> only ever gave a "can't open" chip. Those are drawn as a file link.
+ * Only files with an extension we know isn't media count: an extensionless file may still be an image.
+ */
+export function nonMediaPath(src: unknown): string | null {
+  const path = localPath(src);
+  if (!path) return null;
+  const k = bare(path);
+  if (!/\.[a-z0-9]+$/i.test(nameOf(k))) return null;
+  return IMAGE.test(k) || VIDEO.test(k) || AUDIO.test(k) || PDF.test(k) ? null : path;
 }
 
 const rawURL = (path: string, cwd?: string) => chatHost().fileURL(path, cwd);
@@ -325,7 +339,8 @@ export function imageGroup(node: Element | undefined): { src: string; alt: strin
   if (!node || !isImageOnly(node)) return null;
   const imgs = node.children.filter((c): c is Element => c.type === "element" && c.tagName === "img");
   const list = imgs.map((i) => ({ src: String(i.properties.src ?? ""), alt: String(i.properties.alt ?? "") }));
-  if (list.length < 2 || list.some((i) => !i.src || VIDEO.test(bare(i.src)) || AUDIO.test(bare(i.src)) || PDF.test(bare(i.src)))) return null;
+  const notImage = (s: string) => !s || VIDEO.test(bare(s)) || AUDIO.test(bare(s)) || PDF.test(bare(s)) || nonMediaPath(s) !== null;
+  if (list.length < 2 || list.some((i) => notImage(i.src))) return null;
   return list;
 }
 
