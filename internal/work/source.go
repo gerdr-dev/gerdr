@@ -208,16 +208,19 @@ func (r *Runner) addPanel(project, name string, fill func(dir string) error) (st
 	return key, nil
 }
 
-// Update pulls the project's Work repository (fast-forward only: local edits are never merged over behind the user's back).
+// Update pulls the panel's repository. The user's own changes stay on top: their workflow (skills/), edits their
+// agent made, committed or not, are rebased onto what came in (--rebase --autostash), so a published panel's defaults
+// never overwrite their choices. A conflict is undone and reported, nothing is half-applied.
 func (r *Runner) Update(ctx context.Context, project string) (string, error) {
 	dir, err := r.Dir(project)
 	if err != nil {
 		return "", err
 	}
-	cmd := exec.CommandContext(ctx, "git", "-C", dir, "pull", "--ff-only")
+	cmd := exec.CommandContext(ctx, "git", "-C", dir, "-c", "user.name=Gerdr", "-c", "user.email=gerdr@localhost", "pull", "--rebase", "--autostash")
 	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
+		_ = exec.Command("git", "-C", dir, "rebase", "--abort").Run()
 		return "", fmt.Errorf("git pull: %s", strings.TrimSpace(string(out)))
 	}
 	r.mu.Lock()

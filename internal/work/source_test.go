@@ -73,6 +73,27 @@ func TestPanels(t *testing.T) {
 	if k2, _ := r.Install(context.Background(), "p", "file://"+src, ""); k2 != "p/task-board-2" {
 		t.Errorf("second install: %q", k2)
 	}
+	// The user's own change (a committed workflow edit) survives an update that brings a new commit upstream
+	git := func(dir string, args ...string) {
+		t.Helper()
+		if out, err := exec.Command("git", append([]string{"-C", dir, "-c", "user.email=a@b", "-c", "user.name=a"}, args...)...).CombinedOutput(); err != nil {
+			t.Fatal(string(out))
+		}
+	}
+	os.WriteFile(filepath.Join(pd, "mine.md"), []byte("my rule"), 0o644)
+	git(pd, "add", "mine.md")
+	git(pd, "commit", "-qm", "mine")
+	os.WriteFile(filepath.Join(src, "new.md"), []byte("upstream"), 0o644)
+	git(src, "add", "new.md")
+	git(src, "commit", "-qm", "upstream")
+	if _, err := r.Update(context.Background(), key); err != nil {
+		t.Fatal(err)
+	}
+	for f, want := range map[string]string{"mine.md": "my rule", "new.md": "upstream"} {
+		if b, _ := os.ReadFile(filepath.Join(pd, f)); string(b) != want {
+			t.Errorf("after update %s = %q", f, b)
+		}
+	}
 	if k, ok := r.WorkKey(filepath.Join(pd, "ui", "src")); !ok || k != key {
 		t.Errorf("WorkKey %q %v", k, ok)
 	}
