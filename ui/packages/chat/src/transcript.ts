@@ -52,7 +52,20 @@ export type GData = {
   quickReplies: { questions: { question: string; options: string[] }[] };
   /** 输入框里的 `!命令`（gerdr 自己跑的，hub/shell.go）。end：stopped = 人点了停止，lost = gerdr 重启时还在跑；replayed = 从 agent 记录重放出来的 */
   /** path：完整输出的文件（日志只记开头 256KB，太长时 agent 拿到的也是它，见 hub/shell.go） */
-  shell: { id: string; command: string; output: string; running: boolean; exit?: number; end?: string; error?: string; replayed?: boolean; path?: string };
+  /** startedAt / endedAt: the shell / shell_done events' times (unix ms), for the elapsed time on the card; none when replayed */
+  shell: {
+    id: string;
+    command: string;
+    output: string;
+    running: boolean;
+    exit?: number;
+    end?: string;
+    error?: string;
+    replayed?: boolean;
+    path?: string;
+    startedAt?: number;
+    endedAt?: number;
+  };
 };
 
 export type GMessage = UIMessage<GMeta, GData>;
@@ -607,7 +620,7 @@ export class Transcript {
       }
       case "shell": {
         const id = e.messageId!;
-        const part: GPart = { type: "data-shell", data: { id, command: e.text ?? "", output: "", running: true } };
+        const part: GPart = { type: "data-shell", data: { id, command: e.text ?? "", output: "", running: true, startedAt: e.ts } };
         if (this.running) {
           this.parked = [...this.parked, { id: this.uid(), role: "assistant", parts: [part], metadata: { ts: e.ts, parked: true } }];
           break;
@@ -622,7 +635,7 @@ export class Transcript {
         const edit = (p: any) =>
           e.kind === "shell_out"
             ? { ...p.data, output: p.data.output + (e.text ?? "") }
-            : { ...p.data, running: false, exit: e.exit, end: e.level, error: e.error, path: e.text || undefined };
+            : { ...p.data, running: false, exit: e.exit, end: e.level, error: e.error, path: e.text || undefined, endedAt: e.ts };
         const k = this.parked.findIndex((m) => (m.parts[0] as any).data.id === e.messageId);
         if (k >= 0) {
           const m = this.parked[k];

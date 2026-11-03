@@ -24,19 +24,10 @@ import { cn } from "../utils";
 import { DiffView } from "./DiffView";
 import { useSession } from "./sessionContext";
 import { useKept } from "../kept";
-import { elapsed } from "./TasksBar";
+import { elapsed, useTick } from "./TasksBar";
 import { chatHost, useChatHost, useChatSettings } from "../host";
 import { t } from "../i18n";
 import { toast } from "sonner";
-
-function useTick(on: boolean) {
-  const [, set] = useState(0);
-  useEffect(() => {
-    if (!on) return;
-    const t = setInterval(() => set((x) => x + 1), 1000);
-    return () => clearInterval(t);
-  }, [on]);
-}
 
 /**
  * 从 since（unix ms）起满 ms 毫秒才变 true，on 变回 false 时归零。since 用日志里的时间：重新打开会话时早就跑了很久的那条马上就是 true，

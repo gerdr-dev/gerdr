@@ -37,7 +37,7 @@ const statusText = (s: string) =>
         ? tr("task.stopped")
         : s;
 
-function useTick(on: boolean) {
+export function useTick(on: boolean) {
   const [, set] = useState(0);
   useEffect(() => {
     if (!on) return;

@@ -6,6 +6,7 @@ import { t } from "../i18n";
 import { useKept } from "../kept";
 import type { GData } from "../transcript";
 import { cn } from "../utils";
+import { elapsed, useTick } from "./TasksBar";
 
 // 去掉 ANSI 颜色 / 光标控制（输出是给终端看的，这里只画字）；\r 覆盖的进度条只留最后一版
 const plain = (s: string) =>
@@ -15,6 +16,14 @@ const plain = (s: string) =>
     .split("\n")
     .map((l) => l.slice(l.lastIndexOf("\r", l.length - 2) + 1).replace(/\r$/, ""))
     .join("\n");
+
+// How long it ran / has been running. A finished quick command (`git checkout -- f` prints nothing) otherwise left the
+// card looking the same before and after, so people couldn't tell it had run (user report): always show it once done,
+// in ms under a second since "0s" reads like it didn't run at all.
+function took(from: number, to?: number) {
+  if (to !== undefined && to - from < 1000) return `${Math.max(0, to - from)}ms`;
+  return elapsed(from, to);
+}
 
 // 收起时露几行（照 Claude Code：3 行，正好多 1 行时直接全露，不为一行折起来）
 const FOLD = 3;
@@ -35,6 +44,8 @@ export function ShellCard({ sessionId, data }: { sessionId: string; data: GData[
   const pre = useRef<HTMLPreElement>(null);
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useKept(`${sessionId}:shell:${data.id}`, false);
+  useTick(data.running && !!data.startedAt);
+  const time = data.startedAt ? took(data.startedAt, data.running ? undefined : data.endedAt) : undefined;
   const failed = !data.running && (data.end === "stopped" || data.end === "lost" || !!data.error || (data.exit ?? 0) !== 0);
   const lines = out ? out.split("\n") : [];
   const folded = !open && lines.length > FOLD + 1;
@@ -80,6 +91,7 @@ export function ShellCard({ sessionId, data }: { sessionId: string; data: GData[
           {data.command}
         </span>
         {status && <span className={cn("shrink-0 text-[11px]", failed ? "text-bad" : "text-muted-foreground")}>{status}</span>}
+        {time && (data.running || data.endedAt) && <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">{time}</span>}
         <span className="flex-1" />
         {!hostFor(sessionId).shell ? null : data.running ? (
           <button
