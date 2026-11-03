@@ -238,6 +238,14 @@ Virtuoso 在 ResizeObserver 里量行高、改布局，所以 rAF 里看到「�
   (`desktop/node_modules/.bin/electron`) with a tiny main.js that adds `remote-debugging-port` and loads the debug
   instance, `chromium.connectOverCDP` to it, and repeat "dispatch a `WheelEvent` with deltaY -1, then
   `scrollTop -= 0.5`": the distance from the end has to grow (before the fix: 1, 1, 1, …).
+- **On a phone, after opening a menu in the chat, dragging was pulled back to the end** (user's screen recording; the
+  scripts all passed). Radix's modal menu sets `pointer-events: none` on body while open, so the finger that closes it
+  lands on `<html>`, not the scroller, and the same finger then scrolls the chat. The list's `touchstart` was on the
+  scroller, so `touch` stayed false and every move was taken as a clamp and written back to the end (`sync`, ~1px each
+  frame: a juddering drag). Now `touchstart` is listened on window and counts when it hits the scroller, or `<html>` /
+  `<body>` at a point inside it. **Headless Chrome didn't reproduce it** (`menutouch.mjs` passes before and after);
+  found with a temporary trace on the phone that POSTed touch / scroll / `setStuck` / `scrollTop` writes to
+  `/api/ui/errors` (it lands in `gerdr.log` as `ui client error`), synced with `make sync-ui`.
 - **Virtuoso 把行高取整**（默认 `Math.round(getBoundingClientRect().height)`）：41.5 记 42、39.8 记 40，
   卸掉的行越多攒得越多，量完缩回那一下整段挪一截（卸 32 行差 10px），会话越长越明显。`itemSize` 换成不取整的。
   `rows.mjs` 报「记的和实际不一样」就是这个。

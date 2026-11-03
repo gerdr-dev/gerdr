@@ -470,7 +470,18 @@ export const ChatList = forwardRef<
         sync([]);
       }
     };
-    const tstart = () => {
+    // Listened on window, not the scroller: while a modal menu is open (Radix sets pointer-events: none on body) a
+    // finger landing on the chat targets <html>, the menu closes on that touch, and the same finger then scrolls the
+    // chat. The scroller never saw a touchstart, took the scroll as not the user's and put it back at the end every frame.
+    const tstart = (e: TouchEvent) => {
+      const t = e.target as Node | null;
+      const bare = t === document.documentElement || t === document.body;
+      if (!(t && s.contains(t)) && !bare) return;
+      if (bare) {
+        const p = e.touches[0];
+        const r = s.getBoundingClientRect();
+        if (!p || p.clientX < r.left || p.clientX > r.right || p.clientY < r.top || p.clientY > r.bottom) return;
+      }
       stopAnim();
       clearTimeout(settleTouch.current);
       touch.current = true;
@@ -492,7 +503,7 @@ export const ChatList = forwardRef<
     };
     const release = () => (dragging.current = false);
     s.addEventListener("wheel", wheel, { passive: true });
-    s.addEventListener("touchstart", tstart, { passive: true });
+    window.addEventListener("touchstart", tstart, { capture: true, passive: true });
     window.addEventListener("touchend", tend, { passive: true });
     window.addEventListener("touchcancel", tend, { passive: true });
     s.addEventListener("keydown", key);
@@ -501,7 +512,7 @@ export const ChatList = forwardRef<
     window.addEventListener("pointercancel", release);
     return () => {
       s.removeEventListener("wheel", wheel);
-      s.removeEventListener("touchstart", tstart);
+      window.removeEventListener("touchstart", tstart, { capture: true });
       clearTimeout(settleTouch.current);
       window.removeEventListener("touchend", tend);
       window.removeEventListener("touchcancel", tend);
