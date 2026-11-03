@@ -48,6 +48,8 @@ export const zh = {
   "addonSettings.service.exited": "后台进程退出了，稍后重启",
   "addonSettings.service.stopped": "后台进程已停止",
   "addonSettings.service.pid": "（PID {pid}）",
+  "addonSettings.open": "打开",
+  "addonSettings.linkPending": "后台进程还没给出地址",
   "addonSettings.service.restartsOne": " · 重启过 {n} 次",
   "addonSettings.service.restarts": " · 重启过 {n} 次",
 
@@ -293,6 +295,8 @@ export const en: Record<keyof typeof zh, string> = {
   "addonSettings.service.exited": "Background process exited, restarting shortly",
   "addonSettings.service.stopped": "Background process stopped",
   "addonSettings.service.pid": " (PID {pid})",
+  "addonSettings.open": "Open",
+  "addonSettings.linkPending": "The background process hasn't given the address yet",
   "addonSettings.service.restartsOne": " · restarted once",
   "addonSettings.service.restarts": " · restarted {n} times",
 

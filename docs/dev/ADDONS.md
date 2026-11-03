@@ -60,6 +60,14 @@ sees: `internal/addons/builtin/gerdr.d.ts`, copied into `~/.gerdr/addons` on eve
   Add-ons; values live in addons-state.json (`settings[id][key]`, only keys changed from the default), not in the
   browser's localStorage like `g.storage`, so every window and the phone agree. `g.settings.get` reads the latest
   `/api/addons` build each call, so a change applies without reloading the add-on (its hash doesn't include values).
+- A `link` setting has no value: it is a button opening a page (an add-on's control panel), a row of the settings
+  form like the others (it was first drawn outside the folded form, always in sight; the user wanted every setting
+  in one place). Its address is addon.json's `url`, or what the service reports in its status line's
+  `links` by key (ServiceStatus.Links), for a page on a port only the process knows (wristkit's settings page). A
+  setting rather than one URL on the service, so an add-on can have several, and a setting, rather than a field of
+  its own, because the user looks for them where the add-on's other options are. First tried (Nov 2026) as a single
+  `url` on the status line drawn as an "Open" link after the status text: one link per add-on, and lost in that line.
+  Only http(s) addresses are kept: the UI puts them in an `<a href>`. The desktop App opens them in the browser.
 - Drafts are keyed by **pane**, not session: `composerBar(session, { paneId })` passes the key, and
   `g.actions.insertText(sessionId)` writes into the focused pane showing that session.
 - The context menu only exists in the desktop and Android Apps (a browser keeps its own), so `g.contextMenu` items

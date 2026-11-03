@@ -17,6 +17,11 @@ package addons
 //	  {"type":"message","data":…}                       sent by the add-on's UI half (g.service.send)
 //	service → gerdr (stdout)
 //	  {"type":"status","text":"…"}                      one line shown under the add-on in Settings → Add-ons
+//	  {"type":"status","text":"…","links":{"panel":"http://127.0.0.1:7858"}}
+//	                                                    also the addresses of the add-on's "link" settings, by key
+//	                                                    (http/https only): pages the service serves on a port only it
+//	                                                    knows. A status line without "links" keeps the last ones;
+//	                                                    a restart clears them.
 //	  {"type":"message","data":…}                       to the add-on's UI half in every open window (g.service.on)
 //
 // stdin closing means gerdr is going away: the service should clean up (close its device) and exit. gerdr waits a few
@@ -51,12 +56,13 @@ type ServiceSpec struct {
 
 // ServiceStatus is what Settings → Add-ons and g.service.status() show.
 type ServiceStatus struct {
-	State    string `json:"state"`           // starting / running / exited (waiting to restart) / stopped
-	PID      int    `json:"pid,omitempty"`   // while running
-	Text     string `json:"text,omitempty"`  // the service's own one-liner ({"type":"status"})
-	Error    string `json:"error,omitempty"` // why it is not running: command not found, last exit + stderr tail
-	Restarts int    `json:"restarts,omitempty"`
-	Since    int64  `json:"since"` // unix ms of the last state change
+	State    string            `json:"state"`           // starting / running / exited (waiting to restart) / stopped
+	PID      int               `json:"pid,omitempty"`   // while running
+	Text     string            `json:"text,omitempty"`  // the service's own one-liner ({"type":"status"})
+	Links    map[string]string `json:"links,omitempty"` // "link" settings' addresses, by key ({"type":"status","links"})
+	Error    string            `json:"error,omitempty"` // why it is not running: command not found, last exit + stderr tail
+	Restarts int               `json:"restarts,omitempty"`
+	Since    int64             `json:"since"` // unix ms of the last state change
 }
 
 // Services runs the add-ons' services. The zero value is not usable: NewServices.
@@ -325,7 +331,7 @@ func (s *Services) runOnce(p *svcProc) error {
 	p.in = in
 	s.mu.Unlock()
 	s.setStatus(p, func(st *ServiceStatus) {
-		st.State, st.PID, st.Error, st.Text, st.Since = "running", cmd.Process.Pid, "", "", time.Now().UnixMilli()
+		st.State, st.PID, st.Error, st.Text, st.Links, st.Since = "running", cmd.Process.Pid, "", "", nil, time.Now().UnixMilli()
 	})
 	s.log.Info("addon service started", "addon", p.id, "cmd", bin, "pid", cmd.Process.Pid)
 
@@ -411,9 +417,10 @@ func (s *Services) readStdout(p *svcProc, r io.Reader) {
 	for sc.Scan() {
 		line := sc.Bytes()
 		var m struct {
-			Type string          `json:"type"`
-			Text string          `json:"text"`
-			Data json.RawMessage `json:"data"`
+			Type  string            `json:"type"`
+			Text  string            `json:"text"`
+			Links map[string]string `json:"links"`
+			Data  json.RawMessage   `json:"data"`
 		}
 		if json.Unmarshal(line, &m) != nil || m.Type == "" {
 			s.log.Info("addon service", "addon", p.id, "stdout", string(line))
@@ -421,7 +428,22 @@ func (s *Services) readStdout(p *svcProc, r io.Reader) {
 		}
 		switch m.Type {
 		case "status":
-			s.setStatus(p, func(st *ServiceStatus) { st.Text = m.Text })
+			// Only http(s): the UI opens them from a link, and a javascript: URL there would run in gerdr's page
+			var links map[string]string
+			for k, u := range m.Links {
+				if strings.HasPrefix(u, "http://") || strings.HasPrefix(u, "https://") {
+					if links == nil {
+						links = map[string]string{}
+					}
+					links[k] = u
+				}
+			}
+			s.setStatus(p, func(st *ServiceStatus) {
+				st.Text = m.Text
+				if m.Links != nil {
+					st.Links = links
+				}
+			})
 		case "message":
 			if s.OnMessage != nil {
 				data := m.Data

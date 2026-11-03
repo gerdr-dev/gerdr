@@ -9,7 +9,9 @@
 //                  {"key": "ttl", "title": "缓存时长", "type": "number", "default": 60, "min": 1, "max": 1440, "unit": "分钟"}
 //                type: number / string / text (several lines: a list, a table) / boolean / select (with "options": [{"value": 5, "label": "5 分钟"}]) /
 //                color (a "#rrggbb" string, picked from a palette or typed) / secret (a string the form masks:
-//                tokens, keys; g.settings.get returns it in the clear)
+//                tokens, keys; g.settings.get returns it in the clear) /
+//                link (no value: a button opening a page, {"key": "panel", "title": "控制面板", "type": "link",
+//                "url": "https://…", "label": "打开"}; a service can give the url at run time, see "links" below)
 //   index.ts     the UI half (or what "main" names): export default defineAddon({...}). It may import other files of
 //                the folder; images, sounds and other files it ships are reached with g.asset("icon.png").
 //
@@ -41,6 +43,9 @@
 //     {"type":"message","data":…}                        sent by the UI half, g.service.send(data)
 //   process → gerdr (stdout)
 //     {"type":"status","text":"band connected"}          shown under the add-on in Settings → Add-ons
+//     {"type":"status","text":"…","links":{"panel":"http://127.0.0.1:7858"}}   the addresses of the add-on's "link"
+//                                                         settings, by key: pages the process serves on a port only it
+//                                                         knows. A status line without "links" keeps the last ones
 //     {"type":"message","data":…}                        to g.service.on("message") in every open window
 //
 // Other stdout lines go to gerdr's log; stderr goes to ~/.gerdr/logs/addons/<id>.log.
@@ -490,6 +495,8 @@ declare global {
     pid?: number;
     /** The process's own status line ({"type":"status"}). */
     text?: string;
+    /** The "link" settings' addresses the process reported ({"type":"status","links"}), by setting key. */
+    links?: Record<string, string>;
     /** Why it isn't running: command not found, or how it last exited plus the end of its stderr. */
     error?: string;
     restarts?: number;

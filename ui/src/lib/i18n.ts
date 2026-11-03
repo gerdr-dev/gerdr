@@ -90,6 +90,7 @@ export function localizeAddon<T extends Localizable>(a: T): T {
         title: st.title || s.title,
         description: st.description || s.description,
         unit: st.unit || s.unit,
+        label: st.label || s.label,
         options: s.options?.map((o) => ({ ...o, label: st.options?.[String(o.value)] ?? o.label })),
       };
     }),

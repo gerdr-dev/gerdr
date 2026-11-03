@@ -86,15 +86,20 @@ func (m *Manager) SetEnabled(id string, on bool) error {
 
 // SettingSpec is one entry of addon.json "settings".
 type SettingSpec struct {
-	Key         string   `json:"key"`
-	Title       string   `json:"title,omitempty"`
-	Description string   `json:"description,omitempty"`
-	Type        string   `json:"type"` // number / string / boolean / select / color ("#rrggbb") / secret (a string the form masks)
-	Default     any      `json:"default,omitempty"`
-	Min         *float64 `json:"min,omitempty"`
-	Max         *float64 `json:"max,omitempty"`
-	Unit        string   `json:"unit,omitempty"` // shown after a number ("分钟")
-	Options     []struct {
+	Key         string `json:"key"`
+	Title       string `json:"title,omitempty"`
+	Description string `json:"description,omitempty"`
+	Type        string `json:"type"` // number / string / boolean / select / color ("#rrggbb") / secret (a string the form masks) / link
+	// link: not a value but a button that opens URL (a page of the add-on's: its control panel, a dashboard). When the
+	// address is only known at run time (a port the service picked), the service reports it in its status line's
+	// "links" by this setting's key, which wins over URL. Label is the button's text ("Open" when empty).
+	URL     string   `json:"url,omitempty"`
+	Label   string   `json:"label,omitempty"`
+	Default any      `json:"default,omitempty"`
+	Min     *float64 `json:"min,omitempty"`
+	Max     *float64 `json:"max,omitempty"`
+	Unit    string   `json:"unit,omitempty"` // shown after a number ("分钟")
+	Options []struct {
 		Value any    `json:"value"`
 		Label string `json:"label,omitempty"`
 	} `json:"options,omitempty"`
@@ -120,6 +125,9 @@ func (m *Manager) SetSettings(id string, values map[string]any) error {
 		s, ok := known[k]
 		if !ok {
 			return fmt.Errorf("%s has no setting %q", id, k)
+		}
+		if s.Type == "link" {
+			return fmt.Errorf("%s: %q is a link, it has no value", id, k)
 		}
 		if n, ok := v.(float64); ok && s.Type == "number" && (s.Min != nil && n < *s.Min || s.Max != nil && n > *s.Max) {
 			return fmt.Errorf("%s: %v is out of range", k, n)

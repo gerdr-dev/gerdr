@@ -100,8 +100,11 @@ export type AddonSetting = {
   key: string;
   title?: string;
   description?: string;
-  type: "number" | "string" | "text" | "boolean" | "select" | "color" | "secret";
+  type: "number" | "string" | "text" | "boolean" | "select" | "color" | "secret" | "link";
   default?: unknown;
+  /** "link": the page its button opens (the service's status "links"[key] wins); label: the button's text. */
+  url?: string;
+  label?: string;
   min?: number;
   max?: number;
   unit?: string;
@@ -127,7 +130,7 @@ export type StoreAddon = {
 export type AddonText = {
   name?: string;
   description?: string;
-  settings?: Record<string, { title?: string; description?: string; unit?: string; options?: Record<string, string> }>;
+  settings?: Record<string, { title?: string; description?: string; unit?: string; label?: string; options?: Record<string, string> }>;
 };
 /** A store (internal/addons StoreView): a GitHub repository, or a local folder while writing one. */
 export type AddonStore = { source: string; local?: boolean; default?: boolean; fetchedAt?: number; error?: string; addons: StoreAddon[] };
@@ -136,6 +139,8 @@ export type AddonService = {
   state: "starting" | "running" | "exited" | "stopped";
   pid?: number;
   text?: string;
+  /** "link" settings' addresses by key ({"type":"status","links"}): pages on a port only the service knows. */
+  links?: Record<string, string>;
   error?: string;
   restarts?: number;
   since: number;

@@ -16,6 +16,7 @@ import (
 // echoService: says it is up, then sends every stdin line back as a message's data. Exits when stdin closes and
 // leaves a marker, so the test can tell it was asked to stop rather than killed.
 const echoService = `#!/bin/sh
+echo '{"type":"status","text":"starting","links":{"panel":"http://127.0.0.1:7858","bad":"javascript:alert(1)"}}'
 echo '{"type":"status","text":"up"}'
 echo 'not json, goes to the log'
 while IFS= read -r line; do
@@ -96,7 +97,12 @@ func TestService(t *testing.T) {
 	defer s.Close()
 
 	rec.waitMsg(t, `band:{"type":"hello","addon":"band"}`) // greeting reached stdin
-	waitFor(t, "status text", func() bool { st := s.Status("band"); return st != nil && st.Text == "up" && st.State == "running" })
+	waitFor(t, "status text", func() bool {
+		st := s.Status("band")
+		// a status line without "links" keeps the last ones; a non-http address is dropped
+		return st != nil && st.Text == "up" && st.State == "running" &&
+			len(st.Links) == 1 && st.Links["panel"] == "http://127.0.0.1:7858"
+	})
 	if err := s.Send("band", []byte(`{"type":"message","data":{"n":1}}`)); err != nil {
 		t.Fatal(err)
 	}

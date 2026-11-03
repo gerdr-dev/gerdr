@@ -254,6 +254,17 @@ A `secret` is a string the form keeps masked (an eye button shows it) — for AP
 differs: it is stored like any other setting (`~/.gerdr/addons-state.json`, not the add-on folder) and
 `g.settings.get<string>("token")` returns it in the clear.
 
+A `link` has no value: it is a button that opens a page, such as your add-on's control panel, shown in the form with
+the other settings. An add-on may have several:
+
+```json
+{ "key": "panel", "title": "控制面板", "type": "link", "label": "打开", "url": "https://example.com/dashboard" }
+```
+
+When only your [service](#services) knows the address (a port it picked), leave `url` out and report it from the
+service: `{"type":"status","text":"…","links":{"panel":"http://127.0.0.1:7858"}}`. The button is disabled until there
+is an address, and while the service isn't running.
+
 ### Services
 
 UI code runs in every open window (the App, a browser, the phone) and in none while no window is open. Work that has
@@ -269,7 +280,8 @@ removed.
 
 - stdin: `{"type":"hello",…}` first, then `{"type":"sessions","sessions":[…]}` whenever an open session changes, and
   `{"type":"message","data":…}` from `g.service.send(data)`.
-- stdout: `{"type":"status","text":"…"}` (shown in Settings), `{"type":"message","data":…}` (to
+- stdout: `{"type":"status","text":"…"}` (shown in Settings; may carry `"links":{"<key>":"http://127.0.0.1:…"}`, the
+  addresses of your [link settings](#settings) when the process serves those pages itself), `{"type":"message","data":…}` (to
   `g.service.on("message")` in every window). Other lines go to Gerdr's log; stderr to `~/.gerdr/logs/addons/<id>.log`.
 - stdin closing means stop: let go of what you hold and exit within 3 seconds.
 - Keep files in `$GERDR_ADDON_DATA`, never in the add-on's folder (writing there reloads every window, and an update

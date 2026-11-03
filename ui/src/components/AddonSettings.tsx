@@ -197,13 +197,47 @@ function InstalledRow({ a, newer }: { a: AddonStatus; newer?: StoreAddon }) {
               <ChevronRight className="size-3.5 shrink-0 transition-transform group-data-[state=open]:rotate-90" /> {t("addonSettings.settings")}
             </CollapsibleTrigger>
             <CollapsibleContent className="mt-1.5 space-y-2.5 rounded-sm bg-muted/50 p-2.5">
-              {a.settings.map((s) => (
-                <SettingField key={s.key} id={a.id} spec={s} value={a.settingValues?.[s.key]} />
-              ))}
+              {a.settings.map((s) =>
+                s.type === "link" ? (
+                  <LinkSetting key={s.key} spec={s} url={(a.service?.state === "running" ? a.service.links?.[s.key] : undefined) || s.url} />
+                ) : (
+                  <SettingField key={s.key} id={a.id} spec={s} value={a.settingValues?.[s.key]} />
+                ),
+              )}
             </CollapsibleContent>
           </Collapsible>
         )}
       </div>
+    </div>
+  );
+}
+
+// A "link" setting: its title and a button opening the page. The address comes from addon.json, or from the running
+// service (a port it picked); without one yet (the service is starting or stopped) the button waits, disabled.
+function LinkSetting({ spec, url }: { spec: AddonSetting; url?: string }) {
+  const label = (
+    <>
+      <ExternalLink className="size-3.5" />
+      {spec.label || t("addonSettings.open")}
+    </>
+  );
+  return (
+    <div className="text-[12px]">
+      <div className="flex items-center gap-2">
+        <span className="min-w-0 flex-1">{spec.title || spec.key}</span>
+        {url ? (
+          <Button size="sm" variant="outline" className="h-7 text-[12px]" asChild>
+            <a href={url} target="_blank" rel="noreferrer" title={url}>
+              {label}
+            </a>
+          </Button>
+        ) : (
+          <Button size="sm" variant="outline" className="h-7 text-[12px]" disabled title={t("addonSettings.linkPending")}>
+            {label}
+          </Button>
+        )}
+      </div>
+      {spec.description && <div className="mt-0.5 text-[11px] text-muted-foreground">{spec.description}</div>}
     </div>
   );
 }
