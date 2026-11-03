@@ -108,6 +108,10 @@ func ValidAgentDefs(in []AgentDef) []AgentDef {
 func builtinAgent(id string) bool { return id == "claude" || id == "codex" || id == "native" }
 
 type Options struct {
+	// noFlusher: tests that call flush / unloadIdle themselves. The flusher calling unloadIdle at the same time as
+	// the test made two of them run at once (in production only the flusher calls it), unloading more than asked.
+	noFlusher bool
+
 	Dir         string // ~/.gerdr
 	ClaudeIdle  time.Duration
 	ExtraAgents []AgentDef
@@ -284,7 +288,9 @@ func New(opt Options) (*Hub, error) {
 			go s.adoptOrphanTurn(s.orphanSince)
 		}
 	}
-	go h.flusher()
+	if !opt.noFlusher {
+		go h.flusher()
+	}
 	return h, nil
 }
 

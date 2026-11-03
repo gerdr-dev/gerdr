@@ -31,7 +31,7 @@ func newHubWith(t *testing.T, dir string, ids ...string) *Hub {
 	}
 	b, _ := json.Marshal(recs)
 	os.WriteFile(filepath.Join(dir, "sessions", "index.json"), b, 0o600)
-	h, err := New(Options{Dir: dir})
+	h, err := New(Options{Dir: dir, noFlusher: true}) // the tests run unloadIdle themselves
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,7 +59,7 @@ func TestStartupScansWithoutLoading(t *testing.T) {
 	writeLog(t, dir, "s2", &Event{Seq: 20, TS: 1, Kind: EvUser, MessageID: "m2"}, &Event{Seq: 21, TS: 2, Kind: EvTurnEnd})
 	h := newHubWith(t, dir, "s1", "s2")
 	s1, s2 := h.sessions["s1"], h.sessions["s2"]
-	if s1.loaded || s2.loaded {
+	if isLoaded(s1) || isLoaded(s2) {
 		t.Fatal("startup loaded a log")
 	}
 	if s1.orphanSince != 15 || s2.orphanSince != 0 {
@@ -119,12 +119,14 @@ func TestUnloadIdle(t *testing.T) {
 	s1, s2 := h.sessions["s1"], h.sessions["s2"]
 	s1.Events()
 	s2.Events()
+	s2.mu.Lock()
 	s2.running = true
-	s1.lastUse = time.Now().Add(-2 * unloadAfter)
-	s2.lastUse = s1.lastUse
+	s2.mu.Unlock()
+	setLastUse(s1, time.Now().Add(-2*unloadAfter))
+	setLastUse(s2, time.Now().Add(-2*unloadAfter))
 	h.unloadIdle()
-	if s1.loaded || !s2.loaded {
-		t.Fatalf("loaded after unloadIdle: s1 %v s2 %v", s1.loaded, s2.loaded)
+	if isLoaded(s1) || !isLoaded(s2) {
+		t.Fatalf("loaded after unloadIdle: s1 %v s2 %v", isLoaded(s1), isLoaded(s2))
 	}
 	if s1.Summary().LastSeq != 2 {
 		t.Fatalf("LastSeq %d", s1.Summary().LastSeq)
@@ -132,7 +134,7 @@ func TestUnloadIdle(t *testing.T) {
 	s1.emit(&Event{Kind: EvNotice, Level: "info", Text: "hi"})
 	s1.flush(true)
 	evs, _ := readLog(s1.lf.Path)
-	if !s1.loaded || len(s1.Events()) != 3 || len(evs) != 3 {
+	if !isLoaded(s1) || len(s1.Events()) != 3 || len(evs) != 3 {
 		t.Fatalf("emit on an unloaded session: %d in memory, %d on disk", len(s1.Events()), len(evs))
 	}
 }
@@ -148,10 +150,25 @@ func TestUnloadOverBudget(t *testing.T) {
 	for i, id := range []string{"a", "b", "c"} {
 		s := h.sessions[id]
 		s.Events()
-		s.lastUse = time.Now().Add(-time.Duration(3-i) * time.Minute / 2) // a oldest, all past unloadGrace
+		setLastUse(s, time.Now().Add(-time.Duration(3-i)*time.Minute/2)) // a oldest, all past unloadGrace
 	}
 	h.unloadIdle()
-	if h.sessions["a"].loaded || h.sessions["b"].loaded || !h.sessions["c"].loaded {
-		t.Fatalf("loaded: a %v b %v c %v", h.sessions["a"].loaded, h.sessions["b"].loaded, h.sessions["c"].loaded)
+	a, b, c := isLoaded(h.sessions["a"]), isLoaded(h.sessions["b"]), isLoaded(h.sessions["c"])
+	if a || b || !c {
+		t.Fatalf("loaded: a %v b %v c %v", a, b, c)
 	}
+}
+
+// The hub's flusher (hub.go, every 2 s) runs unloadIdle on its own, reading these under s.mu: a test that touched
+// them bare raced it whenever it happened to cross a tick (go test -race, now and then).
+func setLastUse(s *Session, t time.Time) {
+	s.mu.Lock()
+	s.lastUse = t
+	s.mu.Unlock()
+}
+
+func isLoaded(s *Session) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.loaded
 }
