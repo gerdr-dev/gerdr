@@ -10,11 +10,17 @@
 # TCC only compares the leaf); it is not a Developer ID, so Gatekeeper treats the App as before.
 #   ./desktop/sign-id.sh          the identity name if it exists
 #   ./desktop/sign-id.sh --create create it first when missing (make signing-id)
-# GERDR_SIGN_ID overrides the name; GERDR_SIGN_ID=- forces ad-hoc.
+#
+# OPT-IN (GERDR_SIGN_ID="Gerdr Local Signing" make install): tried on macOS 26 as the default and Accessibility kept
+# working across rebuilds, but Screen Recording was then always denied for the cert-signed `gerdr` (removed and
+# re-added in System Settings, the cert marked trusted for code signing, the service restarted: still "could not
+# create image from display", and CGRequestScreenCaptureAccess returned false without a prompt). The ad-hoc binary
+# gets Screen Recording fine, it just has to be re-granted after each rebuild. See docs/dev/REMOTE.md.
 set -euo pipefail
-ID="${GERDR_SIGN_ID:-Gerdr Local Signing}"
+ID="${GERDR_SIGN_ID:-}"
 [ "$(uname)" = Darwin ] || exit 0
-[ "$ID" = - ] && exit 0
+[ "${1:-}" = --create ] && ID="${ID:-Gerdr Local Signing}"
+[ -z "$ID" ] || [ "$ID" = - ] && exit 0
 has() { security find-identity -p codesigning 2>/dev/null | grep -qF "\"$ID\""; }
 if ! has && [ "${1:-}" = --create ]; then
   d=$(mktemp -d)

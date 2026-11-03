@@ -190,10 +190,13 @@ The goal is "the result of a tap shows within ~300 ms", so the picture is stream
   cdhash, so **every reinstall / update invalidates both grants while System Settings still shows them on**.
   Toggling the stale entry does nothing (it stays bound to the old hash): remove it with − and add the binary again
   with + (⌘⇧G, paste the path). `tccutil reset <Service> io.github.zbysir.gerdr` only clears the App's entries.
-  Fixed for local builds: `make signing-id` puts a self-signed "Gerdr Local Signing" identity in the login keychain,
-  and `desktop/build.sh` / `adhoc-sign.js` sign the backend (identifier `io.github.zbysir.gerdr.backend`) and the App
-  with it, so the requirement becomes `identifier … and certificate leaf = H"…"` and survives rebuilds. The
-  backends CI builds for updates (release.yml) are still ad-hoc unless the same identity is given to CI.
+  Tried and set aside (2026-11-03, macOS 26.6): signing with a fixed self-signed identity (`make signing-id`, then
+  `GERDR_SIGN_ID="Gerdr Local Signing" make install`; desktop/sign-id.sh) makes the requirement
+  `identifier … and certificate leaf = H"…"`. Accessibility then survives rebuilds, but Screen Recording stayed
+  denied for that binary no matter what (entry removed and re-added, cert trusted for code signing, service
+  restarted; CGRequestScreenCaptureAccess returned false with no prompt). Not understood (TCC's logs and db aren't
+  readable from here). Next idea: run the backend from its own small .app bundle with a bundle id, which TCC
+  handles like any app (prompts, `tccutil reset ScreenCapture <id>`).
 - A process caches what it learned about its grants: after switching Accessibility on, `CGPreflightPostEventAccess`
   stayed false in the running backend while a fresh process got true; Screen Recording likewise needs a restart.
   So after granting, the service has to restart (`launchctl kickstart -k gui/$UID/io.github.zbysir.gerdr`, which
