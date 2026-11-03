@@ -54,7 +54,7 @@ export function PanelButtons({ className, size = "rail" }: { className: (on: boo
 
 function PanelButton({ p, on, className, size, space }: { p: Panel; on: boolean; className: (on: boolean) => string; size: "rail" | "row"; space: string }) {
   const src = p.source;
-  const label = p.name ? p.title : "Work";
+  const label = p.title;
   const go = () => {
     setWorkPanel(space, p.name);
     setMode("work");
@@ -71,7 +71,7 @@ function PanelButton({ p, on, className, size, space }: { p: Panel; on: boolean;
         <TooltipTrigger asChild>
           <ContextMenuTrigger asChild>
             <button aria-label={label} aria-pressed={on} className={className(on)} onClick={go}>
-              <PanelIcon icon={p.icon} color={p.color} title={p.title} own={!p.name} className={size === "rail" ? "size-4" : "size-3.5"} />
+              <PanelIcon icon={p.icon} color={p.color} title={p.title} className={size === "rail" ? "size-4" : "size-3.5"} />
             </button>
           </ContextMenuTrigger>
         </TooltipTrigger>

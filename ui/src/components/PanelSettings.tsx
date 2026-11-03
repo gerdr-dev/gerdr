@@ -53,10 +53,10 @@ export function PanelSettings() {
         {ownRemoved && (
           <div className="flex items-center gap-3 px-3 py-2.5">
             <div className="flex size-8 items-center justify-center rounded-md border border-dashed text-muted-foreground">
-              <PanelIcon title="Work" own />
+              <PanelIcon title={name} />
             </div>
             <div className="min-w-0 flex-1">
-              <div className="text-[13px] text-muted-foreground">Work</div>
+              <div className="text-[13px] text-muted-foreground">{t("panelSettings.ownName")}</div>
               <div className="text-[12px] text-muted-foreground">{t("panelSettings.ownRemoved")}</div>
             </div>
             <Button
@@ -104,13 +104,10 @@ function PanelRow({ p }: { p: Panel }) {
         className="flex size-8 shrink-0 items-center justify-center rounded-md border hover:bg-accent"
         onClick={() => set({ dialog: { kind: "panelIcon", key: p.key, title: p.title, icon: p.icon, color: p.color } })}
       >
-        <PanelIcon icon={p.icon} color={p.color} title={p.title} own={!p.name} />
+        <PanelIcon icon={p.icon} color={p.color} title={p.title} />
       </button>
       <div className="min-w-0 flex-1">
-        <div className="truncate text-[13px]">
-          {p.title}
-          {!p.name && <span className="ml-2 text-[11px] text-muted-foreground">{t("panelSettings.own")}</span>}
-        </div>
+        <div className="truncate text-[13px]">{p.title}</div>
         <div className="truncate text-[12px] text-muted-foreground">
           {remote ? t("panelSettings.from", { remote }) : p.source.git ? t("panelSettings.localGit") : t("panelSettings.local")}
           {p.source.dirty && ` · ${t("panelSettings.dirty")}`}

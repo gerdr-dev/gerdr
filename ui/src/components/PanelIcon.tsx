@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { Briefcase } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { api } from "@/lib/api";
@@ -14,9 +13,8 @@ function short(name: string) {
   return /^[\x00-\x7f]/.test(name) ? chars.slice(0, 2).join("").toUpperCase() : chars[0];
 }
 
-/** Its default face: the briefcase for a project's own Work, the first letters of its name for a panel. */
-function PanelDefault({ title, own, className }: { title: string; own: boolean; className?: string }) {
-  if (own) return <Briefcase className={cn("size-4", className)} />;
+/** Its default face: the first letters of its name, the same for every panel (none of them is special). */
+function PanelDefault({ title }: { title: string; className?: string }) {
   return <span className="text-[11px] font-semibold">{short(title)}</span>;
 }
 
@@ -24,8 +22,8 @@ function PanelDefault({ title, own, className }: { title: string; own: boolean; 
  * A panel's face on the rail: the icon in its ui.json, the same kinds an agent's can be (a glyph, a line icon, a
  * sprite from an add-on, IconPicker), with its colour; else its default.
  */
-export function PanelIcon({ icon, color, title, own, className }: { icon?: string; color?: string; title: string; own: boolean; className?: string }) {
-  return <StoredIcon icon={icon} color={color} className={cn("size-4", className)} fallback={<PanelDefault title={title} own={own} className={className} />} />;
+export function PanelIcon({ icon, color, title, className }: { icon?: string; color?: string; title: string; className?: string }) {
+  return <StoredIcon icon={icon} color={color} className={cn("size-4", className)} fallback={<PanelDefault title={title} />} />;
 }
 
 /** Right-click → change icon: the agent icon picker; saved into the panel's ui.json (it travels with the panel). */
@@ -50,7 +48,6 @@ export function PanelIconDialog() {
       setErr(e.message ?? String(e));
     }
   };
-  const own = !ask?.key.includes("/");
   return (
     <Dialog open={!!ask} onOpenChange={(o) => !o && set({ dialog: null })}>
       <DialogContent className="sm:max-w-md">
@@ -66,7 +63,7 @@ export function PanelIconDialog() {
             if (p.color !== undefined) setColor(p.color);
           }}
           colorable={!icon.startsWith("sprite:")}
-          def={{ title: t("panelIcon.default"), node: <PanelDefault title={ask?.title ?? ""} own={own} className="size-5" />, glyph: "tiles" }}
+          def={{ title: t("panelIcon.default"), node: <PanelDefault title={ask?.title ?? ""} />, glyph: "tiles" }}
         />
         {err && <div className="text-[12px] text-bad">{err}</div>}
         <DialogFooter>
