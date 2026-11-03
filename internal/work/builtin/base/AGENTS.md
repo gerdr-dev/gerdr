@@ -91,3 +91,7 @@ and their habits are what they wrote down, not what the code says.
 - Other projects have their own Work directories, and a project can have panels besides its Work (each a Work of
   its own, in `panels/<name>` next to it, with its own agent): don't touch them.
 - Built-in files are upgraded by Gerdr unless you edit them; once edited they're yours.
+- Publishing a panel for others: a git repository of this directory (data/ and output/ ignored, and Gerdr's built-in
+  files: AGENTS.md, CLAUDE.md, FUNCTIONS.md, local/ctx.d.ts, ui/src/gerdr-core.d.ts, .builtin.json), with the user's own
+  values in skills/ turned into careful defaults, and the GitHub topic `gerdr-panel` so it's listed at
+  https://github.com/topics/gerdr-panel, where Gerdr's "add a panel" points people.

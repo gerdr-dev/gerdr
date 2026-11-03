@@ -16,6 +16,9 @@ import { cn } from "@/lib/utils";
  * button of its own on the rail. Installing runs someone else's code on this computer (functions run commands,
  * schedules start by themselves), so the dialog says so before anything happens.
  */
+/** Panels published on GitHub carry this topic (README of gerdr-panel-taskboard says so too). */
+const PANEL_TOPIC = "https://github.com/topics/gerdr-panel";
+
 export function WorkSourceDialog() {
   const d = useStore((s) => s.dialog);
   const ask = d?.kind === "workSource" ? d : undefined;
@@ -88,6 +91,16 @@ export function WorkSourceDialog() {
             disabled={busy}
           />
         </form>
+        {/* Where to find one: published panels carry the GitHub topic gerdr-panel */}
+        {install && (
+          <p className="text-[12px] text-muted-foreground">
+            {t("workSource.findBefore")}
+            <a href={PANEL_TOPIC} target="_blank" rel="noreferrer" className="text-brand underline-offset-2 hover:underline">
+              github.com/topics/gerdr-panel
+            </a>
+            {t("workSource.findAfter")}
+          </p>
+        )}
         {install && <div className="rounded-md border-l-2 border-l-warn bg-warn/5 px-3 py-2 text-[12px] text-muted-foreground">{t("workSource.trust")}</div>}
         {err && <div className="text-[12px] whitespace-pre-wrap text-bad">{err}</div>}
         <DialogFooter>
