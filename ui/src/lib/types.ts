@@ -23,10 +23,13 @@ export type SessionSummary = ChatSession & {
   agent: string;
   /** agent 实际是哪一种（变体的底子：claude / codex） */
   base?: string;
-  /** cwd 所在 git 仓库的当前分支 */
+  /** The git branch checked out where the agent works (workdir, else cwd) */
   branch?: string;
   agentSessionId: string;
+  /** Where the session was started: what it is grouped by, and where a new session "like this one" starts */
   cwd: string;
+  /** Where the agent works now, when it moved itself away from cwd (Claude's EnterWorktree) */
+  workdir?: string;
   title?: string;
   customTitle?: boolean;
   createdAt: number;

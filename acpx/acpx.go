@@ -159,6 +159,13 @@ const AutoTurnKey = "autoTurn"
 // line while still running) and doesn't say which task.
 const AutoTurnWakeKey = "autoTurnWake"
 
+// WorkdirKey: session_info_update._meta.gerdr.workdir = string, the directory the agent works in now (symlinks
+// resolved). An agent can move itself mid-session — Claude's EnterWorktree / ExitWorktree — and the session's cwd
+// alone would leave the client showing and resolving paths against a directory the agent has left. Sent when it
+// changes and again when a process starts; the session's own cwd means it is back home. The session's cwd is still
+// what the client passes to session/load | resume: the agent restores its own move from there (Claude does, measured).
+const WorkdirKey = "workdir"
+
 type Wake struct {
 	Task        string `json:"task"`                  // the task's id
 	Description string `json:"description,omitempty"` // its description, if the adapter knows the task

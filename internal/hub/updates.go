@@ -158,6 +158,19 @@ func (s *Session) onGerdrInfo(g map[string]any) {
 			s.emit(ev)
 		}
 	}
+	if d, ok := g[acpx.WorkdirKey].(string); ok && d != "" {
+		s.mu.Lock()
+		if d == s.rec.Cwd {
+			d = ""
+		}
+		changed := d != s.rec.Workdir
+		s.rec.Workdir = d
+		s.mu.Unlock()
+		if changed {
+			s.h.broadcastSession(s)
+			s.h.saveIndex()
+		}
+	}
 	if v, ok := g[acpx.AutoTurnKey].(bool); ok {
 		var wake json.RawMessage
 		if w, ok := g[acpx.AutoTurnWakeKey]; ok {

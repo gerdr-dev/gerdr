@@ -17,7 +17,9 @@ export async function openTerminal(where: "right" | "down" | "tab" | { pane: str
   const l = get().layout;
   const p = focusedLeaf(l);
   const here = typeof where === "object" ? where : undefined;
-  const cwd = here?.cwd ?? inheritDraft(l)?.cwd ?? get().home;
+  // Next to a session: where its agent works now (a worktree it moved into), like a split follows a shell's cd.
+  const beside = p?.sessionId ? get().sessions[p.sessionId]?.workdir : undefined;
+  const cwd = here?.cwd ?? beside ?? inheritDraft(l)?.cwd ?? get().home;
   let info;
   try {
     // 从终端旁边开的：跟着它 shell 现在的目录（cd 过之后分屏，和 tmux 一样）

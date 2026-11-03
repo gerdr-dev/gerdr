@@ -83,6 +83,14 @@ React（ui/，不打包）  ←WebSocket / HTTP→  hub（internal/hub）  ←AC
    （接不回 + 一条用户消息都没有 → 新建一个顶上）。
 5. 会话记录的目录名是 cwd 的有损变形（非字母数字换成 `-`，长路径还会截断），**同一个目录下
    可能混着别的 cwd 的会话** —— 列「以前的会话」时以记录里的 `cwd` 字段为准。
+   **Claude moves itself with EnterWorktree / ExitWorktree** (measured, 2.1.317): its cwd changes in-process, and the
+   whole transcript file moves to the worktree's project directory (`relocated` and `worktree-state` entries; nothing is
+   left in the old one), so `findTranscript` falls back to a glob by id. `--resume` from the original cwd puts it back
+   in the worktree by itself, and init then reports the worktree as `cwd` (symlinks resolved: `/private/tmp/…`). So the
+   adapter keeps spawning in the session's cwd and only reports where it is (`acpx.WorkdirKey`, from init and the two
+   tools' structured results `worktreePath` / `restoredCwd`); the hub keeps it as `Record.Workdir`, used for the
+   branch, `!` commands, @ file search and the paths the chat resolves. Cwd stays the session's home (grouping, Work,
+   resume). Not followed: the auto-allow rules still go into the cwd's `.claude/settings.local.json`.
 6. 审批：`control_request{subtype:can_use_tool}`，回 `{behavior:"allow", updatedInput, toolUseID}`
    或 `{behavior:"deny", message}`。AskUserQuestion 也走这里：answers 塞进 `updatedInput.answers`
    （`{问题原文: 答案}`，多选用 ", " 连）。CLI 撤回请求发 `control_cancel_request`。

@@ -170,7 +170,7 @@ func (s *Session) Shell(command, clientID string) (string, error) {
 			return id, nil
 		}
 	}
-	cmd.Dir = s.rec.Cwd
+	cmd.Dir = s.rec.WorkDir()
 	if err := cmd.Start(); err != nil {
 		s.mu.Unlock()
 		if out.file != nil {

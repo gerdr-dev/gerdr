@@ -268,12 +268,15 @@ func (s *session) onSystem(ctx context.Context, m map[string]json.RawMessage, ra
 			PermissionMode string   `json:"permissionMode"`
 			SessionID      string   `json:"session_id"`
 			Skills         []string `json:"skills"`
+			Cwd            string   `json:"cwd"`
 		}
 		_ = json.Unmarshal(raw, &init)
 		s.learnSkills(ctx, init.Skills)
 		if init.SessionID != "" {
 			s.adoptID(ctx, init.SessionID)
 		}
+		// A resumed session that was in a worktree starts there, though we spawned it in s.cwd.
+		s.noteWorkdir(ctx, init.Cwd)
 		s.mu.Lock()
 		changed := init.PermissionMode != "" && init.PermissionMode != s.mode
 		if changed {
@@ -587,6 +590,9 @@ func (s *session) onToolResult(ctx context.Context, raw json.RawMessage, structu
 	s.mu.Lock()
 	st := s.tools[b.ToolUseID]
 	s.mu.Unlock()
+	if st != nil && !b.IsError {
+		s.workdirFromTool(ctx, st.name, structured)
+	}
 	if st == nil || hiddenTool(st.name) || st.name == "TodoWrite" {
 		return
 	}

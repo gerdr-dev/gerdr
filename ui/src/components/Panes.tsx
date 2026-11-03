@@ -570,8 +570,9 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
         <PaneCount count={count} />
         {session ? (
           <span className="hidden min-w-0 flex-1 items-center gap-2 overflow-hidden font-mono text-[11px] text-muted-foreground md:flex">
-            <span className="min-w-0 truncate" title={session.cwd}>
-              {session.cwd}
+            {/* Where the agent works now (it can move itself, e.g. Claude's EnterWorktree); the branch below is that place's */}
+            <span className="min-w-0 truncate" title={session.workdir ? t("panes.workdir", { cwd: session.cwd }) : session.cwd}>
+              {session.workdir ?? session.cwd}
             </span>
             {/* 分支不许被截：窄的时候宁可截路径（路径的末段在标题里多半已经看得出来） */}
             {session.branch && (

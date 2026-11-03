@@ -23,10 +23,14 @@ type session struct {
 	meta map[string]any  // session/new's _meta (Options.AppendPrompt / SessionEnv)
 	mcp  []acp.McpServer // session/new's mcpServers, passed to claude with --mcp-config
 
-	mu   sync.Mutex
-	id   string // 当前 claude 会话 id（= ACP sessionId；回退分叉后会变）
-	cwd  string
-	cmds []cliCommand // 这个会话的进程 initialize 报的命令（learnSkills 重推时用）
+	mu  sync.Mutex
+	id  string // 当前 claude 会话 id（= ACP sessionId；回退分叉后会变）
+	cwd string
+	// workdir: where claude last said it works (init's cwd, EnterWorktree / ExitWorktree), as reported to the hub
+	// (acpx.WorkdirKey). Empty until the first report, so a new process always reports once. Processes are still
+	// spawned in cwd: `--resume` puts claude back into its worktree by itself (measured, 2.1.317).
+	workdir string
+	cmds    []cliCommand // 这个会话的进程 initialize 报的命令（learnSkills 重推时用）
 
 	mode    string
 	model   string
@@ -66,12 +70,13 @@ type session struct {
 	msgDelta map[string]bool // 哪些 API 消息已经按 delta 推过正文了
 
 	emitHook  func(acp.SessionUpdate) // 重放会话记录时把 update 改道
+	replaying bool                    // inside withEmit: replaying a transcript, not claude talking now
 	lastTitle string                  // 上次报给 hub 的标题（syncTitle 去重）
 }
 
 func (s *session) withEmit(emit func(acp.SessionUpdate), fn func()) {
-	s.emitHook = emit
-	defer func() { s.emitHook = nil }()
+	s.emitHook, s.replaying = emit, true
+	defer func() { s.emitHook, s.replaying = nil, false }()
 	fn()
 }
 

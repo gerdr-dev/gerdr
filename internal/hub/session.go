@@ -62,6 +62,19 @@ type Record struct {
 	// SkillDirs: folders of extra skills (<dir>/<name>/SKILL.md) this session gets besides the usual ones, e.g. the
 	// skills of the Work project that started it. Handed to the adapter as _meta skillRoots on new / resume.
 	SkillDirs []string `json:"skillDirs,omitempty"`
+	// Workdir: where the agent works now when it has moved away from Cwd by itself (Claude's EnterWorktree), as the
+	// adapter reports it (acpx.WorkdirKey); empty when it is in Cwd. Cwd stays the session's home: what it is grouped
+	// and matched by, and where the agent is resumed (it moves itself back into the worktree). Saved so the pane
+	// header is right after a gerdr restart, before the agent's process is back.
+	Workdir string `json:"workdir,omitempty"`
+}
+
+// WorkDir is the directory the agent works in now: what paths it prints are relative to, where `!` commands run.
+func (r Record) WorkDir() string {
+	if r.Workdir != "" {
+		return r.Workdir
+	}
+	return r.Cwd
 }
 
 // ClearedCtx is one context dropped by /clear: its agent session id and what it was called at the time.
@@ -253,7 +266,7 @@ type Summary struct {
 	Turn           *TurnInfo    `json:"turn,omitempty"`    // 在跑的这一轮（没在跑是 nil）
 	Context        *ContextInfo `json:"context,omitempty"` // 上下文用量（agent 报过才有）
 	Base           string       `json:"base,omitempty"`    // agent 实际是哪一种（变体的底子；界面上按它认图标和功能）
-	Branch         string       `json:"branch,omitempty"`  // cwd 所在 git 仓库的当前分支（pane 顶部）
+	Branch         string       `json:"branch,omitempty"`  // the git branch checked out where the agent works (WorkDir; pane header)
 	// Waiting：在等人处理什么，一句话（最早的那个请求；acpx.DescribeRequest）。会话列表上一眼看得出「问的是什么」，
 	// 手环这种只轮列表的不用再逐个去读日志
 	Waiting string `json:"waiting,omitempty"`
@@ -307,7 +320,7 @@ func (s *Session) Summary() Summary {
 	if (modes == nil || len(config) == 0) && s.h.opts != nil {
 		modes, config = s.optsFallbackLocked(modes, config)
 	}
-	return Summary{Record: s.rec, Status: s.status, Error: s.lastErr, Modes: modes, Config: config, Commands: cmds, CommandsKey: s.h.cmdSets.key(cmds), CommandsCached: cached && len(cmds) > 0, Pending: len(s.pending), LastSeq: last, Tasks: s.tasks, Turn: s.turnInfoLocked(), Context: s.contextLocked(), Base: s.h.Base(s.rec.Agent), Branch: gitBranch(s.rec.Cwd), Waiting: s.waitingLocked(), WaitingSince: s.waitingSinceLocked(), ByPerson: s.byPerson}
+	return Summary{Record: s.rec, Status: s.status, Error: s.lastErr, Modes: modes, Config: config, Commands: cmds, CommandsKey: s.h.cmdSets.key(cmds), CommandsCached: cached && len(cmds) > 0, Pending: len(s.pending), LastSeq: last, Tasks: s.tasks, Turn: s.turnInfoLocked(), Context: s.contextLocked(), Base: s.h.Base(s.rec.Agent), Branch: gitBranch(s.rec.WorkDir()), Waiting: s.waitingLocked(), WaitingSince: s.waitingSinceLocked(), ByPerson: s.byPerson}
 }
 
 func (s *Session) waitingSinceLocked() int64 {

@@ -73,7 +73,7 @@ func fuzzyScore(path, q string) int {
 
 func (s *Server) searchFiles(r *http.Request, sess *hub.Session) (any, error) {
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
-	files := listFiles(sess.Summary().Cwd)
+	files := listFiles(sess.Summary().WorkDir())
 	type hit struct {
 		p string
 		s int
