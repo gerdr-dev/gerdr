@@ -190,7 +190,10 @@ The goal is "the result of a tap shows within ~300 ms", so the picture is stream
   cdhash, so **every reinstall / update invalidates both grants while System Settings still shows them on**.
   Toggling the stale entry does nothing (it stays bound to the old hash): remove it with − and add the binary again
   with + (⌘⇧G, paste the path). `tccutil reset <Service> io.github.zbysir.gerdr` only clears the App's entries.
-  A fixed signing identity would end this.
+  Fixed for local builds: `make signing-id` puts a self-signed "Gerdr Local Signing" identity in the login keychain,
+  and `desktop/build.sh` / `adhoc-sign.js` sign the backend (identifier `io.github.zbysir.gerdr.backend`) and the App
+  with it, so the requirement becomes `identifier … and certificate leaf = H"…"` and survives rebuilds. The
+  backends CI builds for updates (release.yml) are still ad-hoc unless the same identity is given to CI.
 - A process caches what it learned about its grants: after switching Accessibility on, `CGPreflightPostEventAccess`
   stayed false in the running backend while a fresh process got true; Screen Recording likewise needs a restart.
   So after granting, the service has to restart (`launchctl kickstart -k gui/$UID/io.github.zbysir.gerdr`, which
