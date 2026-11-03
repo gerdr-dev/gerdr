@@ -9,6 +9,7 @@ import { reopenClosed } from "./reopen";
 import { attentionList, focusSession, focusedSessionId, stashDraft, stepAttention, stopFocused } from "./sessions";
 import { stepSpace } from "./spaces";
 import { addTab, closeTab, lastTab, selectTab, stepTab } from "./tabs";
+import { navBack, navForward } from "./nav";
 import { openTerminal } from "./terminal";
 import { closeWorkspace, selectWorkspaceN, stepWorkspace } from "./workspaces";
 import { t } from "../i18n";
@@ -67,6 +68,10 @@ export function runAction(a: KeyAction) {
       return stepTab(-1);
     case "lastTab":
       return lastTab();
+    case "navBack":
+      return navBack();
+    case "navForward":
+      return navForward();
     case "closeTab":
       return closeTab();
     case "reopenClosed":

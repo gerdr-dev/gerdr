@@ -29,6 +29,8 @@ export type KeyAction =
   | "nextTab"
   | "prevTab"
   | "lastTab"
+  | "navBack"
+  | "navForward"
   | "closeTab"
   | "reopenClosed"
   | "renameTab"
@@ -107,6 +109,8 @@ export const ACTION_TITLES: Record<KeyAction, string> = {
   nextTab: t("keys.nextTab"),
   prevTab: t("keys.prevTab"),
   lastTab: t("keys.lastTab"),
+  navBack: t("keys.navBack"),
+  navForward: t("keys.navForward"),
   closeTab: t("keys.closeTab"),
   reopenClosed: t("keys.reopenClosed"),
   renameTab: t("keys.renameTab"),
@@ -193,6 +197,10 @@ const MAC_KEYS: Record<KeyAction, string[]> = {
   prevTab: ["prefix+p", "meta+shift+["],
   // Not on Windows / Linux: Ctrl+E is end-of-line in a terminal pane
   lastTab: ["prefix+;", "meta+e"],
+  // The mouse's side buttons do these (actions/nav.ts). No keys by default: the usual ones (⌃- / ⌘[) are taken by
+  // terminals or by prevTab / prevSpace
+  navBack: [],
+  navForward: [],
   closeTab: ["prefix+shift+x"],
   // 和浏览器一样。浏览器里这个键被浏览器自己占着（重开它的标签页），只在桌面 App 里管用；那边用命令面板
   reopenClosed: ["meta+shift+t"],
@@ -324,7 +332,7 @@ export const KEY_GROUPS: [string, KeyAction[]][] = [
       "prevPane",
     ],
   ],
-  [t("keys.group.tab"), ["newTab", "terminalTab", "nextTab", "prevTab", "lastTab", "tab1", "closeTab", "reopenClosed", "renameTab"]],
+  [t("keys.group.tab"), ["newTab", "terminalTab", "nextTab", "prevTab", "lastTab", "navBack", "navForward", "tab1", "closeTab", "reopenClosed", "renameTab"]],
   [t("keys.group.workspace"), ["newWorkspace", "workspaces", "nextWorkspace", "prevWorkspace", "ws1", "renameWorkspace", "closeWorkspace"]],
   [t("keys.group.project"), ["newSpace", "nextSpace", "prevSpace"]],
   [t("keys.group.session"), ["active1", "sessions", "nextAttention", "prevAttention", "focusAttention", "renamePane", "stop", "stash"]],

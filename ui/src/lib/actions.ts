@@ -5,6 +5,7 @@
 export { basename } from "./actions/shared";
 export * from "./actions/panes";
 export * from "./actions/tabs";
+export * from "./actions/nav";
 export * from "./actions/reopen";
 export * from "./actions/workspaces";
 export * from "./actions/spaces";
