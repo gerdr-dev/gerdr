@@ -867,6 +867,16 @@ func (h *Hub) rekey(s *Session, newAgentID string) {
 	h.mu.Lock()
 	delete(h.byAgent, s.rec.Agent+":"+s.rec.AgentSessionID)
 	s.mu.Lock()
+	// Auto-naming keys its stages by agent session id (title.go). A rewind / takeover forks the same conversation under
+	// a new id, so carry the keys over: otherwise the next message re-titles the whole conversation (user report). A
+	// /clear also comes through here; its branch in updates.go resets them, as it starts a new piece of work.
+	oldID := s.rec.AgentSessionID
+	if oldID != "" && strings.HasPrefix(s.rec.TitleKey, oldID+"#") {
+		s.rec.TitleKey = newAgentID + strings.TrimPrefix(s.rec.TitleKey, oldID)
+	}
+	if oldID != "" && s.rec.PluginTitleFor == oldID {
+		s.rec.PluginTitleFor = newAgentID
+	}
 	s.rec.AgentSessionID = newAgentID
 	s.rec.Fork = nil // 换了 id，上一个「从哪儿分叉」作废（回退会在 rekey 之后重新填）
 	s.mu.Unlock()

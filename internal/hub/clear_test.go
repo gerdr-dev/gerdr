@@ -166,3 +166,18 @@ func TestImportableSkipsRewound(t *testing.T) {
 		t.Fatalf("importable: %+v", out)
 	}
 }
+
+// A rewind forks the conversation under a new agent id: auto-naming must not take that for a new context and re-title
+// it (user report: the name changed after a rewind). Only a /clear starts naming over (updates.go).
+func TestRekeyKeepsTitleStage(t *testing.T) {
+	h, err := New(Options{Dir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := newSession(h, Record{ID: "tab", Agent: "claude", Cwd: "/w", AgentSessionID: "old", Title: "修登录页", TitleKey: "old#2", PluginTitleFor: "old"})
+	h.register(s)
+	h.rekey(s, "new")
+	if s.rec.TitleKey != "new#2" || s.rec.PluginTitleFor != "new" || s.rec.Title != "修登录页" {
+		t.Fatalf("after rekey: %+v", s.rec)
+	}
+}
