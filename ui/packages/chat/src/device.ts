@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
 /**
  * 手机这一档的上界（px，不含）= Tailwind 的 `md`（768）。改这个数要连 `max-md:` 那些 class 一起改。
@@ -73,4 +73,58 @@ export function keyboardUp() {
   if (!vv) return true;
   seen(vv);
   return vv.height < tallest - 150;
+}
+
+// Is a hardware keyboard there to press shortcuts on? Decides whether key hints are drawn (menu keycaps, the ↵ on a
+// question card's submit button): on a phone without one they're dead weight, with one (a tablet on a keyboard case)
+// they're the guide.
+//
+// A page can't ask the system, so:
+// - Not touch-first (a desktop, a laptop): yes, always.
+// - A host that knows (the Android App, from Configuration.hardKeyboardHidden): its answer, via setHwKeyboard.
+// - Any other touch device (a browser, an iPad, an older App): no, until a key arrives that only a real keyboard sends
+//   (a physical key code; soft keyboards send none, or 229 while composing), and no again once a soft keyboard shows
+//   (the viewport shrinks): the system doesn't raise one while a hardware keyboard is attached.
+
+let kbGuessed = false;
+let kbNative: boolean | undefined;
+const kbSubs = new Set<() => void>();
+const kbEmit = () => kbSubs.forEach((f) => f());
+
+export function hasHwKeyboard(): boolean {
+  if (typeof window === "undefined" || !isCoarse()) return true;
+  if (kbNative !== undefined) return kbNative;
+  return kbGuessed;
+}
+
+/** The host's own answer (true / false), overriding the guess; undefined goes back to guessing. */
+export function setHwKeyboard(v: boolean | undefined) {
+  if (v === kbNative) return;
+  kbNative = v;
+  kbEmit();
+}
+
+const setKbGuess = (v: boolean) => {
+  if (v === kbGuessed) return;
+  kbGuessed = v;
+  kbEmit();
+};
+
+/** A key only a real keyboard sends: soft keyboards leave `code` empty (or say 229 while composing). */
+const physicalKey = (e: KeyboardEvent) =>
+  !e.isComposing && e.keyCode !== 229 && !!e.code && e.code !== "Unidentified" && !/^(Audio|Volume|Media|Browser)/.test(e.code);
+
+let kbStarted = false;
+function kbStart() {
+  if (kbStarted || typeof window === "undefined") return;
+  kbStarted = true;
+  window.addEventListener("keydown", (e) => physicalKey(e) && setKbGuess(true), true);
+  window.visualViewport?.addEventListener("resize", () => keyboardUp() && setKbGuess(false));
+  // Turning a tablet changes coarse / fine on some devices, and the answer with it
+  window.matchMedia("(pointer: coarse)").addEventListener("change", kbEmit);
+}
+
+export function useHwKeyboard(): boolean {
+  kbStart();
+  return useSyncExternalStore((f) => (kbSubs.add(f), () => void kbSubs.delete(f)), hasHwKeyboard);
 }
