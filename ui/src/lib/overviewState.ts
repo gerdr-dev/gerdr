@@ -50,6 +50,8 @@ export type Overview = {
   sizes: Record<string, { rows: number[]; cols: number[][] }>;
   /** Grid shape the user picked by dropping a tile on another's edge, per tile count (overview.ts shapeOf / placeTile). */
   shapes: Record<string, { counts: number[]; cols?: boolean }>;
+  /** The phone's page order, taken when it opened (OverviewPhone.tsx, phoneOrder). Not stored: each opening sorts afresh. */
+  phone?: string[];
 };
 
 export const OVERVIEW_KEY = "gerdr.overview";
@@ -185,6 +187,30 @@ export function overviewIds(st: ActiveSrc): string[] {
   const top = activeIds(st).slice(0, MAX_TILES);
   const kept = st.overview.ids.filter((id) => top.includes(id));
   return [...kept, ...top.filter((id) => !kept.includes(id))];
+}
+
+/**
+ * The phone's tiles in its chip strip's order (OverviewPhone.tsx): the sidebar's "look at first" order, not the order
+ * they were put in; ties keep that order (sort is stable). Sorted once, when the overview opens (`frozen`): re-sorted
+ * live, reading a tile reordered the strip under the finger and a swipe landed somewhere unexpected (asked for). While
+ * it stays open the frozen order holds, those taken out just drop out and newcomers go on the end.
+ */
+export function phoneOrder(ids: string[], sessions: Record<string, SessionSummary>, unread: Record<string, true>, frozen?: string[]): string[] {
+  const live = ids.filter((id) => sessions[id]);
+  const sorted = (xs: string[]) => xs.sort((a, b) => compareSessions(sessions[a], sessions[b], unread));
+  if (!frozen) return sorted(live);
+  const kept = frozen.filter((id) => live.includes(id));
+  return [...kept, ...sorted(live.filter((id) => !kept.includes(id)))];
+}
+
+/**
+ * The phone's pages: the focused tile and the one either side of it. The neighbours are mounted off screen (and so
+ * watched) so a sideways swipe drags the real next page in, not a blank that fills in after the switch.
+ */
+export function phonePages(st: ActiveSrc): string[] {
+  const order = phoneOrder(overviewIds(st), st.sessions, st.unread, st.overview.phone);
+  const i = order.indexOf(overviewFocus(st) ?? "");
+  return i < 0 ? [] : order.slice(Math.max(0, i - 1), i + 2);
 }
 
 /** The focused tile: the stored one while it's still a tile, else the first. */

@@ -34,9 +34,9 @@ export function TileChip({ id, current, className, onClick }: { id: string; curr
       onClick={onClick}
     >
       {loading && <BorderFlow mode="gap" color="var(--brand)" />}
-      {/* An idle one has no dot: StatusDot is transparent then but would still leave a gap */}
-      {(dotStatus(s) !== "idle" || unread) && <StatusDot status={dotStatus(s)} unread={unread} />}
       <FadeText>{s.title || basename(s.cwd)}</FadeText>
+      {/* After the title (asked for). An idle one has no dot: StatusDot is transparent then but would still leave a gap */}
+      {(dotStatus(s) !== "idle" || unread) && <StatusDot status={dotStatus(s)} unread={unread} />}
     </button>
   );
 }

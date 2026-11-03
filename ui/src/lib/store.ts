@@ -5,7 +5,7 @@ import { create } from "zustand";
 import { api, clientId, type DoctorReport, type FileStat } from "./api";
 import { activeTab, currentSpace, defaultLayout, leaves, phoneRoot, type Layout } from "./layout";
 import type { AppUpdateStatus } from "./native";
-import { loadOverview, overviewFocus, overviewIds, type Overview } from "./overviewState";
+import { loadOverview, overviewFocus, overviewIds, phonePages, type Overview } from "./overviewState";
 import { isPhone } from "./phone";
 import type { AgentInfo, RemoteConn, SessionSummary } from "./types";
 import { DEFAULT_CONFIG, type Config, type SharedDraft } from "./store/config";
@@ -274,8 +274,9 @@ export function watchedSessions(l: Layout, kept: string[]): string[] {
     if (work) out.add(work);
   }
   // The tabs under the overview stay watched (kept), so closing it doesn't reload them
-  // On a phone only the shown tile is mounted (OverviewPhone.tsx): don't stream the rest
-  if (overviewShown()) for (const id of isPhone() ? visibleSessions(l) : overviewIds({ ...get(), layout: l })) out.add(id);
+  // On a phone only the shown tile and its two neighbours (the pages a swipe drags in) are mounted (OverviewPhone.tsx):
+  // don't stream the rest
+  if (overviewShown()) for (const id of isPhone() ? phonePages({ ...get(), layout: l }) : overviewIds({ ...get(), layout: l })) out.add(id);
   const want = new Set(kept);
   for (const ws of l.workspaces)
     for (const t of ws.tabs)
