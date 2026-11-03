@@ -100,6 +100,24 @@ func upgradeGit(dst string, files map[string][]byte, label string, leave bool) (
 	return merge(dst, res, leave)
 }
 
+// mergedBefore: some snapshot of version ver is on upstream and already part of HEAD (not just its tip: later syncs
+// stack on top of it).
+func mergedBefore(dst, ver string) bool {
+	if _, err := os.Stat(filepath.Join(dst, ".git")); err != nil {
+		return false
+	}
+	out, err := git(dst, nil, "log", upstream, "--fixed-strings", "--grep=界面版本: "+ver, "--format=%H")
+	if err != nil {
+		return false
+	}
+	for _, c := range strings.Fields(out) {
+		if _, err := git(dst, nil, "merge-base", "--is-ancestor", c, "HEAD"); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
 // merge 把 upstream 合进当前分支。
 func merge(dst string, res *Result, leave bool) (*Result, error) {
 	before, _ := git(dst, nil, "rev-parse", "HEAD")

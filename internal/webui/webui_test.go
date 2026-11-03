@@ -106,6 +106,38 @@ func TestSyncResumesInterruptedMerge(t *testing.T) {
 	}
 }
 
+// The backend merges its built-in UI on every start. Restarting on the same binary must not undo a `gerdr ui sync` made
+// since (happened: the service restarted and the synced fix was rolled back to the shipped copy).
+func TestRestartKeepsSync(t *testing.T) {
+	if !hasGit() {
+		t.Skip("no git")
+	}
+	shipped, dev, dst := t.TempDir(), t.TempDir(), t.TempDir()
+	w(t, shipped, "package.json", "{}")
+	w(t, shipped, "src/a.tsx", "shipped\n")
+	w(t, dev, "package.json", "{}")
+	w(t, dev, "src/a.tsx", "synced\n")
+	files, err := ReadDir(shipped)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := installFiles(dst, files); err != nil {
+		t.Fatal(err)
+	}
+	if res, err := SyncFrom(dev, dst); err != nil || res.Status != "merged" {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if msg, err := installFiles(dst, files); err != nil || msg != "" || r(t, dst, "src/a.tsx") != "synced\n" {
+		t.Fatalf("%q %v %q", msg, err, r(t, dst, "src/a.tsx"))
+	}
+	// A new shipped version still comes in
+	w(t, shipped, "src/b.tsx", "b\n")
+	files, _ = ReadDir(shipped)
+	if _, err := installFiles(dst, files); err != nil || r(t, dst, "src/b.tsx") != "b\n" {
+		t.Fatalf("%v %q", err, r(t, dst, "src/b.tsx"))
+	}
+}
+
 // 老版本（按哈希管、没改过）换成 git：直接换成新的
 func TestLegacyToGit(t *testing.T) {
 	if !hasGit() {

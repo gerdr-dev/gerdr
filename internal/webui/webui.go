@@ -83,7 +83,17 @@ func Install(dst string) (string, error) {
 	if err != nil || len(files) == 0 {
 		return "", err
 	}
+	return installFiles(dst, files)
+}
+
+func installFiles(dst string, files map[string][]byte) (string, error) {
 	if hasGit() {
+		// Every start of the backend lands here. A version merged before is done: merging it again on a restart rolled
+		// back whatever `gerdr ui sync` brought in since (the snapshot became upstream's tip again, and the merge took
+		// that as the newer change — happened: a synced fix vanished when the service restarted on the same binary).
+		if mergedBefore(dst, manifestOf(files).Version) {
+			return "", nil
+		}
 		res, err := upgradeGit(dst, files, i18n.S("随 Gerdr 发布", "shipped with Gerdr"), false)
 		if err != nil {
 			return "", err
