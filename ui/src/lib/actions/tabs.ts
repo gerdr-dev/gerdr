@@ -19,6 +19,7 @@ import { get, setLayout, useStore } from "../store";
 import { onlyBlank, remember } from "./reopen";
 import { createInPane } from "./sessions";
 import { inheritDraft, killTerms, removeTab, selectTabIn, shutdownGone } from "./shared";
+import { showCode } from "./views";
 
 // ---- tab ----
 
@@ -44,6 +45,7 @@ export function addTab(opts?: { workspaceId?: string; cwd?: string; agent?: stri
       t.id,
     );
   });
+  showCode(); // a new tab is opened to be seen
 }
 
 export function selectTab(index: number) {

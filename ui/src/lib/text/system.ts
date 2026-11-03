@@ -108,6 +108,7 @@ export const zh = {
   "keySettings.resetAll": "全部恢复默认",
   "keySettings.howToBefore": "点",
   "keySettings.howToAfter": "再按下想要的键；要用前缀就先按前缀再按键。点键帽上的 × 删掉。",
+  "keySettings.viewNote": "在 Work 和总览里，只对 Code 有意义的键（分屏、切标签…）会先切回 Code，再按一次才执行。",
   "keySettings.browserNote": " ⌘T、⌘W、⌘N、⌘1–9 这几个在浏览器里被浏览器自己占着，只在 App 里管用。",
   "keySettings.changed": "已改",
   "keySettings.alsoBound": "也绑给了「{actions}」",
@@ -340,6 +341,8 @@ export const en: Record<keyof typeof zh, string> = {
   "keySettings.resetAll": "Reset all",
   "keySettings.howToBefore": "Click",
   "keySettings.howToAfter": "then press the keys you want; to use the prefix, press it first, then the key. Click × on a key to remove it.",
+  "keySettings.viewNote":
+    "In Work and the overview, keys that only mean something in Code (splits, switching tabs…) first take you back to Code; press again to run them.",
   "keySettings.browserNote": " ⌘T, ⌘W, ⌘N and ⌘1–9 are taken by the browser itself and only work in the App.",
   "keySettings.changed": "Changed",
   "keySettings.alsoBound": "Also bound to “{actions}”",

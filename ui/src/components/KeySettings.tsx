@@ -133,6 +133,8 @@ export function KeySettings() {
         {t("keySettings.howToBefore")} <Plus className="inline size-3" /> {t("keySettings.howToAfter")}
         {!isNative() && t("keySettings.browserNote")}
       </div>
+      {/* actions/runAction.ts: each view has its own table, a key it lacks only goes back to Code */}
+      <div className="text-[12px] text-muted-foreground">{t("keySettings.viewNote")}</div>
 
       {groups.map(
         ([g, acts]) =>

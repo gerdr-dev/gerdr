@@ -30,7 +30,6 @@ import { sessionSince } from "./order";
 import { currentSpace } from "./layout";
 import { get, markRead, set, setConfig, useStore } from "./store";
 import { syncWatch } from "./sync";
-import type { KeyAction } from "./keys";
 import type { SessionSummary } from "./types";
 import { t } from "./i18n";
 
@@ -484,7 +483,7 @@ export function setGridSizes(key: string, sizes: GridSizes | undefined) {
 
 // ---- keys ----
 
-type Dir = "left" | "right" | "up" | "down";
+export type Dir = "left" | "right" | "up" | "down";
 
 /** The tile next to `from` in a direction, by where the tiles are on screen (zoomed-out positions: hidden tiles keep theirs). */
 function neighbour(from: string, dir: Dir): string | undefined {
@@ -512,84 +511,33 @@ function neighbour(from: string, dir: Dir): string | undefined {
   return best?.id;
 }
 
-/** Keys that only open something or go somewhere by themselves: they work the same with the overview up. */
-const NEUTRAL = new Set<KeyAction>([
-  "overview",
-  "help",
-  "settings",
-  "importHerdr",
-  "palette",
-  "sessions",
-  "nextAttention",
-  "prevAttention",
-  "focusAttention",
-  "toggleSidebar",
-  // ⌘1–9: focusSession picks the tile when it is one
-  "active1",
-  "active2",
-  "active3",
-  "active4",
-  "active5",
-  "active6",
-  "active7",
-  "active8",
-  "active9",
-]);
+// What the overview's keys do to the tiles (its view in actions/views.ts binds them)
 
-/**
- * A shortcut pressed while the overview is up (actions.runAction asks first). Pane keys act on the tiles: zoom, close
- * (takes the tile out, the agent keeps running), focus / swap by direction, next / previous; stop, rename and stash go
- * to the focused tile's session (actions.focusedSessionId). Anything that would change the tabs underneath (split, new
- * tab, switch workspace…) leaves the overview first, so it doesn't happen out of sight. Returns true when handled here.
- */
-export function overviewKey(a: KeyAction): boolean {
-  if (NEUTRAL.has(a) || a === "stop" || a === "renamePane" || a === "stash") return false;
-  const o = get().overview;
-  const ids = overviewIds(get());
+/** Close the focused tile: it leaves the grid (the agent keeps running), focus moves to its neighbour. */
+export function closeTile() {
   const cur = overviewFocus(get());
-  const dirOf: Partial<Record<KeyAction, Dir>> = {
-    focusLeft: "left",
-    focusRight: "right",
-    focusUp: "up",
-    focusDown: "down",
-    swapLeft: "left",
-    swapRight: "right",
-    swapUp: "up",
-    swapDown: "down",
-  };
-  switch (a) {
-    case "zoom":
-      if (cur) toggleTileZoom(cur);
-      return true;
-    case "closePane":
-      if (cur) {
-        const i = ids.indexOf(cur);
-        const next = ids[i + 1] ?? ids[i - 1];
-        removeActive(cur);
-        if (next) focusTile(next);
-      }
-      return true;
-    case "nextPane":
-    case "prevPane":
-      if (cur && ids.length > 1) focusTile(ids[(ids.indexOf(cur) + (a === "nextPane" ? 1 : -1) + ids.length) % ids.length]);
-      return true;
-    case "focusLeft":
-    case "focusRight":
-    case "focusUp":
-    case "focusDown": {
-      const n = cur && neighbour(cur, dirOf[a]!);
-      if (n) focusTile(n);
-      return true;
-    }
-    case "swapLeft":
-    case "swapRight":
-    case "swapUp":
-    case "swapDown": {
-      const n = cur && !o.zoom ? neighbour(cur, dirOf[a]!) : undefined;
-      if (n) swapTiles(cur!, n);
-      return true;
-    }
-  }
-  toggleOverview(false);
-  return false;
+  if (!cur) return;
+  const ids = overviewIds(get());
+  const i = ids.indexOf(cur);
+  const next = ids[i + 1] ?? ids[i - 1];
+  removeActive(cur);
+  if (next) focusTile(next);
+}
+
+export function stepTile(delta: 1 | -1) {
+  const cur = overviewFocus(get());
+  const ids = overviewIds(get());
+  if (cur && ids.length > 1) focusTile(ids[(ids.indexOf(cur) + delta + ids.length) % ids.length]);
+}
+
+export function focusTileDir(dir: Dir) {
+  const cur = overviewFocus(get());
+  const n = cur && neighbour(cur, dir);
+  if (n) focusTile(n);
+}
+
+export function swapTileDir(dir: Dir) {
+  const cur = overviewFocus(get());
+  const n = cur && !get().overview.zoom ? neighbour(cur, dir) : undefined;
+  if (n) swapTiles(cur!, n);
 }

@@ -3,9 +3,10 @@ import { api } from "../api";
 import { askConfirm } from "../confirm";
 import { allLeaves, currentSpace, locateSession, setPane, spaceList, type PaneLeaf } from "../layout";
 import { get, markRead, overviewShown, set, setLayout, setMode } from "../store";
-import { focusTile, overviewFocus, overviewIds, replaceTile, toggleOverview } from "../overview";
+import { focusTile, overviewIds, replaceTile, toggleOverview } from "../overview";
 import { isOpen } from "../overviewState";
 import { openWorkChat, workProjectOf } from "../work";
+import { currentView } from "./views";
 import type { ContentBlock } from "../types";
 import { focusPane } from "./panes";
 import { focusedLeaf, shutdownGone } from "./shared";
@@ -109,6 +110,8 @@ export function focusSession(sessionId: string) {
   }
   // Otherwise going to a session (notification, next-needs-you, the lists) means its pane: the overview would cover it
   if (st.overview.on) toggleOverview(false);
+  // Already the one in front (in Work: the page's conversation or the Work agent itself): stay
+  if (currentView().session() === sessionId) return markRead(sessionId);
   if (openInWork(sessionId)) return;
   const loc = locateSession(get().layout, sessionId);
   if (loc) focusPane(loc.pane.id);
@@ -118,6 +121,8 @@ export function focusSession(sessionId: string) {
 
 /** 在焦点 pane 里换成另一个会话。 */
 export function openSessionHere(sessionId: string) {
+  // "Here" is the focused pane, and in Work that's hidden: open it the way going to a session does
+  if (currentView().name === "work") return focusSession(sessionId);
   if (openInWork(sessionId)) return;
   const loc = locateSession(get().layout, sessionId);
   if (loc) return focusPane(loc.pane.id);
@@ -168,10 +173,8 @@ export function stopFocused() {
  */
 export function stashDraft() {
   const el = document.activeElement as HTMLElement | null;
-  const leaf = focusedLeaf(get().layout);
-  // The composer being typed in (also the Work view's, which isn't a pane), else the focused pane's
-  const ovFocus = overviewShown() ? overviewFocus(get()) : undefined;
-  const paneId = el?.dataset.composer ?? (ovFocus ? `ov-${ovFocus}` : leaf?.sessionId ? leaf.id : undefined);
+  // The composer being typed in, else the one on screen in this view
+  const paneId = el?.dataset.composer ?? currentView().composer();
   const box = paneId ? document.querySelector<HTMLTextAreaElement>(`textarea[data-composer="${CSS.escape(paneId)}"]`) : null;
   if (!paneId || !box) return toast(t("actionsSessions.noComposer"));
   const { drafts, draftImgs, stash } = get();
@@ -191,11 +194,8 @@ export function stashDraft() {
   });
 }
 
-export function focusedSessionId(): string | undefined {
-  // With the overview up, the focused tile is the one you're on (not the pane hidden under it)
-  if (overviewShown()) return overviewFocus(get());
-  return focusedLeaf(get().layout)?.sessionId;
-}
+/** The conversation in front of the user: the focused pane's, the focused tile's, the Work chat (views.ts). */
+export const focusedSessionId = (): string | undefined => currentView().session();
 
 /** 要你处理的会话：在等你的最优先，然后是出错的、跑完了没看的。 */
 export function attentionList(): string[] {

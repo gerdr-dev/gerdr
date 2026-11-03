@@ -132,7 +132,11 @@ src/lib/
 - **手机上的样子**：判断用 `usePhone()`（JS 里要分岔的）或 `max-md:` class（纯样式）。手机上没有 hover，
   只在悬停时露出来的按钮要加 `[@media(hover:none)]:opacity-100` 之类让它常显。
 - **改对话里某种东西的样子**：消息 `packages/chat/src/components/MessageView.tsx`，工具调用 `…/ToolCall.tsx`，审批 / 提问卡片 `…/Cards.tsx`。
-- **加快捷键**：`src/lib/keys.ts` 的 `MAC_KEYS`（Windows / Linux 上带 ⌘ 的会被去掉，要在 `PC_EXTRA` 里另给一个）+ `src/lib/actions/runAction.ts` 的 `runAction`。
+- **Adding a shortcut**: `MAC_KEYS` in `src/lib/keys.ts` (keys with ⌘ are dropped on Windows / Linux; give one in `PC_EXTRA`)
+  + an entry in `src/lib/actions/runAction.ts`. There a key is an intent and each view (Code, Work, the overview —
+  `actions/views.ts`) has its own table: `APP` for what means the same everywhere, `CODE` for the panes, `WORK` /
+  `OVERVIEW` for what those views give their own meaning to. A key the view on screen doesn't have only takes the user
+  back to Code, so nothing changes out of sight. "The focused session / composer" is `currentView().session()` / `.composer()`.
 
 后端没有的数据（比如要查 API 用量）界面拿不到：告诉用户需要后端加接口，别在前端硬凑。
 

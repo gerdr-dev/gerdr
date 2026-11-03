@@ -25,13 +25,14 @@ import {
   type Tab,
   type Workspace,
 } from "../layout";
-import { get, set, setLayout, setMode } from "../store";
+import { get, set, setLayout } from "../store";
 import { addActive, focusTile, MAX_TILES, overviewFocus, overviewIds, setOverview } from "../overview";
 import { workProjectOf } from "../work";
 import { rememberPane } from "./reopen";
 import { createInPane, focusSession, openInWork } from "./sessions";
 import { basename, focusedLeaf, inSpace, inheritDraft, killTerms, removeTab, selectTabIn, shutdownGone } from "./shared";
 import { openTerminal } from "./terminal";
+import { showCode } from "./views";
 import { t } from "../i18n";
 
 // ---- panes ----
@@ -299,8 +300,8 @@ export function cyclePane(delta: number) {
   setLayout((l) => updateTab(l, activeTab(l).id, (tab) => cycle(tab, delta)));
 }
 
+/** Focus a pane, switching to its tab / workspace / project, and show it: from Work this goes to Code (views.showCode). */
 export function focusPane(paneId: string) {
-  const space = currentSpace(get().layout);
   setLayout((l) => {
     for (const ws of l.workspaces)
       for (const tab of ws.tabs)
@@ -311,6 +312,5 @@ export function focusPane(paneId: string) {
         }
     return l;
   });
-  // Going to a pane in another project means seeing that pane: don't land in the Work mode that project was left in
-  if (currentSpace(get().layout) !== space && get().mode === "work") setMode("agents");
+  showCode();
 }
