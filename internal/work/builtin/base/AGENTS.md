@@ -51,10 +51,15 @@ and their choices are what they set or wrote down, not what the code says.
     (layout.tsx switches the menu to tabs below `md`): on a phone the page is the whole screen.
   - `@gerdr/core` (types: `ui/src/gerdr-core.d.ts`) — Gerdr's own pieces for the page: `<SessionChat id>` (a whole
     conversation with its input box, anywhere in the page: a worker's chat in the page's own drawer or column),
-    `useSession`, `onShowSession` (the conversations this panel started are its own: brought up from a notification or
+    `useSession` / `useSessions`, `usePanelChange`, `usePanelVisible`, `onShowSession` (the conversations this panel started are its own: brought up from a notification or
     the inbox they come back here, and the page shows them), `askSecret`, `registerCard`, `toast`, `useDark`, `usePhoneMenu` (on a phone, the panel's top-left button
     opens Gerdr's drawer: the rows this gives are the panel's part of it — what its header can't fit there). Prefer them to the frame-era
     bridge calls below for anything new.
+    Keeping a page current: don't poll a function on a timer. Reload what a function returned when
+    `usePanelChange(path)` moves (its files changed through a function: its buttons, agents' tool calls, triggers,
+    schedules), and follow conversations live with `useSession` / `useSessions` (reload when the ones the view depends
+    on change status). If something must be polled, poll only while `usePanelVisible()`: Gerdr keeps a panel mounted,
+    hidden, while another is shown, and `document.visibilityState` stays "visible" all the while.
   - `ui/ui.json` — the title, `"icon"` / `"color"` (its button on Gerdr's rail, the same choices as an agent's icon:
     a glyph or line icon like `kanban`, or `sprite:<key>` from an add-on; the user picks it from the button's right-click), and `"chat": false` when the page draws its own chats with `SessionChat` (it then gets
     the whole width; without it, you are the column on its right).

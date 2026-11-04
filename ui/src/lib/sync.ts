@@ -26,6 +26,7 @@ import {
 import type { DraftImg, SharedDraft } from "./store";
 import type { HostInfo, HubEvent, SessionSummary } from "./types";
 import { t } from "./i18n";
+import { panelDataChanged, panelDataResync } from "@/core/panelData";
 
 // The project this window was opened on (the address /<project id>; ?space= from older App shells), read before anything
 // renders: App.tsx rewrites the address to the project being shown, and it renders the not-yet-loaded default layout first
@@ -151,6 +152,7 @@ function connect() {
   sock.onopen = () => {
     retry = 0;
     lastHeard = Date.now();
+    const reconnect = get().everConnected;
     set({ connected: true, everConnected: true });
     watched = "";
     // Echoes of drafts sent on the old connection never come back: stop waiting for them. Then send what was typed
@@ -161,6 +163,8 @@ function connect() {
     flushDrafts();
     // 断开期间错过的会话变化：重新拉一遍（订阅的日志服务端会补上）。
     refreshHello();
+    // Panel data changes missed meanwhile can't be replayed: every panel's page refreshes once (core usePanelChange)
+    if (reconnect) panelDataResync();
   };
   sock.onmessage = (ev) => {
     lastHeard = Date.now();
@@ -368,6 +372,10 @@ function handle(m: any) {
       break;
     case "addons":
       import("./addons").then((p) => p.reloadAddons());
+      break;
+    // A panel's function changed its files: that panel's page refreshes (core usePanelChange)
+    case "panel_data":
+      panelDataChanged(m.data?.panel, m.data?.path);
       break;
     case "turn":
       import("./addons").then((p) => p.emit("turn", m.data));

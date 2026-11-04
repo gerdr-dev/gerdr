@@ -10,7 +10,7 @@
  * are internal/work/builtin/base/ui/src/gerdr-core.d.ts: change both together.
  */
 export { SessionChat } from "./SessionChat";
-export { useSession } from "./sessions";
+export { useSession, useSessions } from "./sessions";
 export { onShowSession } from "@/lib/panelRoute";
 export { useDark } from "./theme";
 export { askSecret } from "@/lib/workSecrets";
@@ -19,6 +19,7 @@ export { BuiltinCard as DefaultCard, type Card } from "@/components/chat/ToolCar
 export { toast } from "sonner";
 export { usePortalContainer } from "./portal";
 export { usePanelVisible } from "./visible";
+export { usePanelChange } from "./panelData";
 export { usePhoneMenu, type PhoneMenuItem } from "./phoneMenu";
 // The chat's Markdown, so a panel draws what agents write the way the chat does: local images / videos (![](path))
 // shown and played, paths opening in Gerdr, code blocks. Outside a conversation it uses Gerdr's chat host as is.

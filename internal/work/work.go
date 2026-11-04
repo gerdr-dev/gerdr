@@ -60,6 +60,10 @@ type Runner struct {
 	Secret     func(name string) string // ctx.secrets.get; "" = none
 	Host       Host                     // ctx.sessions / ctx.workspaces / ctx.dirs.recent (host.go); nil = not available
 	Events     EventBus                 // ctx.events (trigger.go); nil = not available
+	// Changed: a function changed a file in its panel's directory (ctx.fs write / mkdir / move / copy / trash). The
+	// server tells the panel's page (core usePanelChange), so pages refresh on a change instead of polling.
+	// key is the panel's key ("default", "lb/board"), path relative to its directory; nil = nobody listens.
+	Changed func(key, path string)
 	Inbox      Inbox                    // ctx.inbox (inbox.go); nil = not available
 	Log        *slog.Logger
 

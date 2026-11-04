@@ -44,6 +44,26 @@ declare module "@gerdr/core" {
     | undefined;
 
   /**
+   * Every conversation `match` picks (all without one), kept current like useSession: this computer's and the other
+   * computers' ("<host>:<id>"). The same array until one it picked changes or the set does, so a page re-renders only
+   * for the sessions it cares about. Watch the sessions a view depends on with this instead of polling a function
+   * that lists them: e.g. reload a board when one of its workers' `status` / `waiting` changes.
+   */
+  export function useSessions(
+    match?: (s: { id: string; status: string; tags?: Record<string, string>; [k: string]: unknown }) => boolean,
+  ): { id: string; title?: string; agent: string; cwd: string; status: string; tags?: Record<string, string>; [k: string]: unknown }[];
+
+  /**
+   * How many times this panel's files have changed through its local functions (ctx.fs write / mkdir / move / copy /
+   * trash: its own buttons, agents calling its tools, triggers, schedules) since the page loaded; it also moves once
+   * after a lost connection comes back. Put it in an effect's dependencies to reload what a function returned, instead
+   * of polling: `const v = usePanelChange("user/data"); useEffect(() => void load(), [v])`. `path` is relative to the
+   * panel's directory, a file or a folder; none = any. Files an agent edits directly (not through a function) aren't
+   * seen: keep a slow fallback poll if that happens. Code outside this panel's page (src/cards.tsx) passes `panel`.
+   */
+  export function usePanelChange(path?: string, opts?: { panel?: string }): number;
+
+  /**
    * Show conversations this panel owns your own way. A conversation a local function started (ctx.sessions.start) is
    * this panel's: brought up from anywhere in gerdr (a notification, the inbox, the running list), gerdr switches to
    * this panel and calls `fn` with its id (a board opens that task's drawer with SessionChat). Without a handler gerdr

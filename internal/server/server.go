@@ -100,6 +100,8 @@ func (s *Server) cookieName() string {
 func (s *Server) Handler() http.Handler {
 	if s.Work != nil {
 		s.Work.Host = workHost{s} // ctx.sessions / ctx.workspaces in local functions (workhost.go)
+		// A function changed its panel's files: the panel's page refreshes (core usePanelChange) instead of polling
+		s.Work.Changed = func(key, path string) { s.Hub.Broadcast("panel_data", map[string]string{"panel": key, "path": path}) }
 	}
 	if s.Peers != nil && s.Hub != nil {
 		// A session here may report to one on another computer; the hub's loop check walks on through it (hosts.go)

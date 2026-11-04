@@ -105,6 +105,18 @@ func (r *runner) abs(p string, exist bool) (string, string, error) {
 	return full, rel, nil
 }
 
+// changed tells the Runner's listener (the panel's page) that this run changed path in the panel's directory.
+func (r *runner) changed(rel string) {
+	if r.r == nil || r.r.Changed == nil {
+		return
+	}
+	key := r.project
+	if key == "" {
+		key = DefaultProject
+	}
+	r.r.Changed(key, rel)
+}
+
 func (r *runner) fsObject() map[string]any {
 	must := func(full, rel string, err error) (string, string) {
 		if err != nil {
@@ -221,17 +233,19 @@ func (r *runner) fsObject() map[string]any {
 			if err != nil {
 				r.throw(err)
 			}
+			r.changed(rel)
 			return map[string]any{"etag": etagOf(st)}
 		},
 		"mkdir": func(p string) {
-			full, _ := must(r.abs(p, false))
+			full, rel := must(r.abs(p, false))
 			if err := os.MkdirAll(full, 0o755); err != nil {
 				r.throw(err)
 			}
+			r.changed(rel)
 		},
 		"move": func(from, to string) {
-			src, _ := must(r.abs(from, true))
-			dst, _ := must(r.abs(to, false))
+			src, relFrom := must(r.abs(from, true))
+			dst, relTo := must(r.abs(to, false))
 			if _, err := os.Lstat(dst); err == nil {
 				r.throw(fmt.Errorf("%s already exists", to))
 			}
@@ -241,16 +255,19 @@ func (r *runner) fsObject() map[string]any {
 			if err := os.Rename(src, dst); err != nil {
 				r.throw(err)
 			}
+			r.changed(relFrom)
+			r.changed(relTo)
 		},
 		"copy": func(from, to string) {
 			src, _ := must(r.abs(from, true))
-			dst, _ := must(r.abs(to, false))
+			dst, relTo := must(r.abs(to, false))
 			if _, err := os.Lstat(dst); err == nil {
 				r.throw(fmt.Errorf("%s already exists", to))
 			}
 			if err := copyTree(src, dst); err != nil {
 				r.throw(err)
 			}
+			r.changed(relTo)
 		},
 		"trash": func(p string) {
 			full, rel := must(r.abs(p, true))
@@ -260,6 +277,7 @@ func (r *runner) fsObject() map[string]any {
 			if err := trash(r.dir, full); err != nil {
 				r.throw(err)
 			}
+			r.changed(rel)
 		},
 		"open": func(p string, opts map[string]any) {
 			full, _ := must(r.abs(p, true))
