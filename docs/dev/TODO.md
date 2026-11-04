@@ -17,10 +17,15 @@ Fixed: optCache decoded options.json for every session in every Summary (c683f66
 compiled on every run, ~1 run/s from pages polling (fe8b724); every Summary carried the agent's mode / option lists,
 920 KB of the 1.07 MB /api/hello (3803781).
 
-**Left**: measure again once these are in (`/api/debug/pprof/allocs` twice, 30 s apart, `go tool pprof -base`).
-What was next in line: `gerdr session …` commands read the whole /api/hello to find one session (`apiClient.list`);
-panel pages poll functions every few seconds (the Superagent panel's own code: push instead, via events); each panel
-run builds a fresh goja VM and every session's Summary for ctx.sessions.list.
+Second round, measured on the fixed build (131 MB / 30 s, down from 524): UI source scan every 250 ms → 1 s when
+quiet (31c9c2e); WebSocket messages under 4 KB no longer compressed (deflate writers, aaec506); option values map
+reused (163e358); `gerdr session` asks /api/hello?only=sessions,layout (a217328); panels got core usePanelVisible
+(d7bb0f2) and the Superagent panel polls only while on screen (its repo, c9c2d29).
+
+**Left**: the lb project's `chat-intake` panel (no repo of its own, ~/.gerdr/projects/lb/panels/chat-intake) still
+runs intake.list every 5 s whatever is on screen: its ui/src/pages/index.tsx should poll with usePanelVisible like
+Superagent's ui/src/lib/visible.ts. Each panel function run still builds a fresh goja VM (reusing one would carry
+state between runs). Measure again with the steps below.
 How to read it: `curl -H "Authorization: Bearer $(cat ~/.gerdr/token)" -o a.pb.gz
 http://127.0.0.1:7870/api/debug/pprof/allocs`, then `go tool pprof -top -cum -sample_index=alloc_space a.pb.gz`
 (`/profile?seconds=30` for CPU; server/debug.go).
