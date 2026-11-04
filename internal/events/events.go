@@ -34,6 +34,10 @@ type Event struct {
 	Kind   string `json:"kind"`
 	// Key: what it is about (group/repo!34, a chat's id), for subscribing to one thing.
 	Key string `json:"key,omitempty"`
+	// Actor: who did it, in the source's own identities (a Slack member id, a GitLab username); empty for things
+	// nobody did (a pipeline). Subscribers decide who may ask for work by it without knowing the source's data
+	// shape; one person's accounts on different sources are never mapped to each other here.
+	Actor string `json:"actor,omitempty"`
 	// Title / Text / URL: what a person or an agent reads (a session watching it gets these as its message).
 	Title string `json:"title,omitempty"`
 	Text  string `json:"text,omitempty"`
@@ -86,7 +90,7 @@ func (e *Event) check() error {
 	if !nameRe.MatchString(e.Kind) {
 		return fmt.Errorf("event kind %q: letters, digits, . _ - (no /)", e.Kind)
 	}
-	if len(e.ID) > 200 || len(e.Key) > 500 || len(e.Title) > 500 || len(e.URL) > 2000 {
+	if len(e.ID) > 200 || len(e.Key) > 500 || len(e.Actor) > 200 || len(e.Title) > 500 || len(e.URL) > 2000 {
 		return errors.New("event id / key / title / url too long")
 	}
 	if len(e.Text) > maxText {

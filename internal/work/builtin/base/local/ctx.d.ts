@@ -273,6 +273,8 @@ interface GerdrEvent {
   source: string;
   kind: string;
   key?: string;
+  /** Who did it, in the source's own identities (a Slack member id); absent when nobody did (a pipeline). */
+  actor?: string;
   title?: string;
   text?: string;
   url?: string;

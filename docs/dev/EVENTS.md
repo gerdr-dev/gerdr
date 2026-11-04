@@ -8,7 +8,7 @@ record shape, kept by Gerdr and handed to whoever subscribed. Code: `internal/ev
 ## The record
 
 ```json
-{ "id": "gitlab:note:123", "source": "gitlab", "kind": "mr.note", "key": "group/repo!34",
+{ "id": "gitlab:note:123", "source": "gitlab", "kind": "mr.note", "key": "group/repo!34", "actor": "alice",
   "title": "alice commented", "text": "…", "url": "https://…", "data": { … }, "at": 1793700000000, "depth": 0 }
 ```
 
@@ -17,6 +17,10 @@ record shape, kept by Gerdr and handed to whoever subscribed. Code: `internal/ev
   conversation is — the Slack add-on: a DM channel, or a channel thread (a mention that starts one is its root).
 - `source/kind` is what patterns match: `gitlab/mr.*`, `*/pipeline.failed`, or a kind alone. No `/` in either, so the
   pattern splits unambiguously. `key` is what it is about; key patterns' `*` crosses slashes (keys are paths).
+- `actor` is who did it, in the source's own identities (a Slack member id, a GitLab username); empty when nobody
+  did (a pipeline). It's a field, not something in `data`, so a subscriber's gate ("who may ask for work") works the
+  same for every source. Identities on different sources are never mapped to each other (dsh-superagent's rule too):
+  that one person is `U012` on Slack and `alice` on GitLab is prose the agents read when they need it.
 - `id` is the emitter's stable id for the happening. An id seen this month or last is dropped (`fresh: false`), so a
   poller re-finding the same comment every 5 minutes emits it once, and needs no memory of its own for that. The seen
   set is rebuilt from the files on start, so a restart doesn't re-emit. No id = a fresh random one, never deduplicated.

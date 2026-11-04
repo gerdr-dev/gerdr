@@ -20,13 +20,13 @@ func eventCmd() *cobra.Command {
 		Use:   "event",
 		Short: i18n.S("事件：发出、查看、订阅（MR 新评论、流水线、群消息……）", "Events: emit, list, watch (MR comments, pipelines, chat messages…)"),
 		Long: i18n.S(`事件是外面发生的事（MR 有新评论、流水线挂了、群里有人 @ 你），统一成一种记录：
-  {id, source, kind, key, title, text, url, data}
+  {id, source, kind, key, actor, title, text, url, data}
 source/kind 例如 gitlab/mr.note、ci/pipeline.failed、slack/message；key 是它说的是哪个东西（group/repo!34、频道 id）。
 
 订阅：会话用 gerdr event watch（事件来了发一条消息给它）；面板 / Work 写 triggers/*.json；插件在 addon.json 里声明。
 模式写 source/kind，可以用 *：gitlab/mr.*、*/pipeline.failed；只写 kind 就是不管来源。`,
 			`An event is something that happened outside (a new MR comment, a failed pipeline, a mention in a chat), as one record:
-  {id, source, kind, key, title, text, url, data}
+  {id, source, kind, key, actor, title, text, url, data}
 source/kind e.g. gitlab/mr.note, ci/pipeline.failed, slack/message; key is what it is about (group/repo!34, a channel id).
 
 Subscribing: a session uses gerdr event watch (each event comes as a message); a panel / Work writes triggers/*.json;
