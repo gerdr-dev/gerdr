@@ -309,8 +309,9 @@ the other settings. An add-on may have several:
 ```
 
 An `action` has no value either: a button that runs your `g.settings.onAction(key, run)` handler, so the person can
-check what they just set without leaving the form ("试听" for a voice, "测试连接" for a token). The button reads
-"停止" while `run`'s promise is pending (tapping it aborts `ctx.signal`), and a throw shows as an error toast:
+check what they just set without leaving the form ("试听" for a voice, "测试连接" for a token). The button spins
+while `run`'s promise is pending, and reads "停止" once sound played with `{ signal }` starts; tapping it aborts
+`ctx.signal`. A throw shows as an error toast:
 
 ```json
 { "key": "preview", "title": "试听", "type": "action", "label": "播放" }

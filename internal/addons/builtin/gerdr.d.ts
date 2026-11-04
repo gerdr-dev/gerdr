@@ -363,8 +363,9 @@ declare global {
       get<T = unknown>(key: string): T;
       /**
        * What an "action" setting's button runs (Settings → Add-ons): try the values the user just set — preview a
-       * voice, test a connection. The button reads "Stop" while the promise is pending and aborts ctx.signal when
-       * tapped then; a throw shows as an error toast. Sound plays from here (g.audio.play): the tap allows it.
+       * voice, test a connection. While the promise is pending the button spins, or reads "Stop" once sound you play
+       * with g.audio.play(…, { signal: ctx.signal }) starts; tapping it then aborts ctx.signal. A throw shows as an
+       * error toast. Sound plays from here: the tap allows it.
        */
       onAction(key: string, run: (ctx: { signal: AbortSignal }) => void | Promise<unknown>): Dispose;
     };
@@ -554,6 +555,8 @@ declare global {
     kind: string;
     /** What it is about (a channel, group/repo!34): what subscribers narrow by. */
     key?: string;
+    /** Who did it, in your source's own identities (a member id, a username): subscribers decide who may ask by it. */
+    actor?: string;
     title?: string;
     text?: string;
     url?: string;

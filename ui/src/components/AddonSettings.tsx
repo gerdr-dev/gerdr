@@ -1,6 +1,6 @@
 import { Markdown } from "@gerdr/chat";
 import { openLightbox } from "@/components/Lightbox";
-import { Check, ChevronRight, CircleAlert, ExternalLink, Eye, EyeOff, FolderOpen, Play, Puzzle, RefreshCw, Square, Trash2, X } from "lucide-react";
+import { Check, ChevronRight, CircleAlert, ExternalLink, Eye, EyeOff, FolderOpen, Loader2, Play, Puzzle, RefreshCw, Square, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { addonStatus, assetURL, settingActions, type AddonStatus } from "@/lib/addons";
-import { unlockAudio } from "@/lib/audio";
+import { unlockAudio, watchSignal } from "@/lib/audio";
 import { api, ApiError } from "@/lib/api";
 import { askConfirm } from "@/lib/confirm";
 import { isNative, nativeOpenPath } from "@/lib/native";
@@ -246,18 +246,24 @@ function LinkSetting({ spec, url }: { spec: AddonSetting; url?: string }) {
 }
 
 // An "action" setting: a button running the add-on's g.settings.onAction(key) handler, to try the values above without
-// leaving the form (preview a voice, test a connection). "Stop" while it runs, which aborts its signal; a throw is a
+// leaving the form (preview a voice, test a connection). A spinner while it prepares, "Stop" once its sound plays;
+// tapping either aborts its signal; a throw is a
 // toast, not an add-on error (the next try, with a fixed value, may well work). Disabled while the add-on's UI half
 // isn't loaded in this window (switched off, failed to build) or registered no handler for it.
 function ActionSetting({ id, spec }: { id: string; spec: AddonSetting }) {
   useStore((s) => s.addonVersion);
   const [ctrl, setCtrl] = useState<AbortController | null>(null);
+  // Sound on (g.audio.play given ctx.signal): until then the handler is still preparing (a voice synthesizing), which
+  // takes a few seconds and must not look like nothing happened
+  const [playing, setPlaying] = useState(false);
   const h = settingActions.find((x) => x.addon === id && x.key === spec.key);
   const click = () => {
     if (ctrl) return ctrl.abort();
     if (!h) return;
     unlockAudio(); // inside the tap: a preview's sound arrives long after it
     const c = new AbortController();
+    watchSignal(c.signal, (on) => setPlaying(on));
+    setPlaying(false);
     setCtrl(c);
     Promise.resolve()
       .then(() => h.run({ signal: c.signal }))
@@ -280,8 +286,8 @@ function ActionSetting({ id, spec }: { id: string; spec: AddonSetting }) {
           title={h ? undefined : t("addonSettings.actionUnavailable")}
           onClick={click}
         >
-          {ctrl ? <Square className="size-3 fill-current" /> : <Play className="size-3.5" />}
-          {ctrl ? t("addonSettings.actionStop") : spec.label || t("addonSettings.actionRun")}
+          {!ctrl ? <Play className="size-3.5" /> : playing ? <Square className="size-3 fill-current" /> : <Loader2 className="size-3.5 animate-spin" />}
+          {!ctrl ? spec.label || t("addonSettings.actionRun") : playing ? t("addonSettings.actionStop") : t("addonSettings.actionBusy")}
         </Button>
       </div>
       {spec.description && <div className="mt-0.5 text-[11px] text-muted-foreground">{spec.description}</div>}
