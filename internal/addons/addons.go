@@ -325,8 +325,7 @@ func (m *Manager) describe(id string, st *state) *Addon {
 			a.Name = mf.Name
 		}
 		a.Version, a.Description, a.Icon, a.HasService = mf.Version, mf.Description, mf.Icon, mf.Service != nil
-		a.Settings = mf.Settings
-		a.SettingValues = st.Settings[id]
+		a.Settings, a.SettingValues = m.resolve(mf.Settings, st.Settings[id])
 		a.I18n = mf.I18n
 	}
 	return a

@@ -60,6 +60,15 @@ sees: `internal/addons/builtin/gerdr.d.ts`, copied into `~/.gerdr/addons` on eve
   Add-ons; values live in addons-state.json (`settings[id][key]`, only keys changed from the default), not in the
   browser's localStorage like `g.storage`, so every window and the phone agree. `g.settings.get` reads the latest
   `/api/addons` build each call, so a change applies without reloading the add-on (its hash doesn't include values).
+- A select's options can be worked out at run time: `optionsFrom: {events, reply}` lists the event sources whose
+  switched-on add-ons declare a matching kind in `emits` (internal/addons/state.go `resolve`, applied in both the
+  listing and `SettingsOf`, so the form, `g.settings.get` and a service's settings line agree). `required` = no empty
+  choice: no pick, or a pick whose add-on is gone, reads as the first option, while the stored pick is kept (it comes
+  back with its add-on). For remote-answer's "which chat" (2026-11): first it went to wherever the person last sent a
+  dm, which nobody could see or set; the user wanted a dropdown of the chat add-ons, never empty. Filled by Gerdr from
+  the manifests rather than reported by the service like `links`: the form must work while the service is stopped,
+  and the service has no view of what else is installed. If an add-on ever needs options only it can know, that is
+  the next source to add (the status line, as `links` does).
 - A `link` setting has no value: it is a button opening a page (an add-on's control panel), a row of the settings
   form like the others (it was first drawn outside the folded form, always in sight; the user wanted every setting
   in one place). Its address is addon.json's `url`, or what the service reports in its status line's

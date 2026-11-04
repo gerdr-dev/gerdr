@@ -280,10 +280,12 @@ function SettingField({ id, spec, value }: { id: string; spec: AddonSetting; val
         ) : spec.type === "boolean" ? (
           <Switch checked={!!shown} onCheckedChange={(v) => save(v)} />
         ) : spec.type === "select" ? (
-          // Values can be numbers or strings: Radix wants strings, so they travel as JSON
-          <Select value={JSON.stringify(shown)} onValueChange={(v) => save(JSON.parse(v))}>
+          // Values can be numbers or strings: Radix wants strings, so they travel as JSON. Options may be worked out
+          // from what is installed (optionsFrom): none yet shows as a disabled "nothing to choose", its description
+          // says what to install
+          <Select value={shown == null ? undefined : JSON.stringify(shown)} onValueChange={(v) => save(JSON.parse(v))} disabled={!spec.options?.length}>
             <SelectTrigger size="sm" className="h-7 text-[12px] max-md:w-full">
-              <SelectValue />
+              <SelectValue placeholder={spec.options?.length ? undefined : t("addonSettings.noOptions")} />
             </SelectTrigger>
             <SelectContent>
               {(spec.options ?? []).map((o) => (

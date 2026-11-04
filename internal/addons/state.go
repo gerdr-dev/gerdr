@@ -7,7 +7,10 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"time"
+
+	"github.com/gerdr-dev/gerdr/internal/events"
 )
 
 // The state file (<root>/addons-state.json): which add-ons are switched off, which came from a store, and the stores.
@@ -99,10 +102,31 @@ type SettingSpec struct {
 	Min     *float64 `json:"min,omitempty"`
 	Max     *float64 `json:"max,omitempty"`
 	Unit    string   `json:"unit,omitempty"` // shown after a number ("分钟")
-	Options []struct {
-		Value any    `json:"value"`
-		Label string `json:"label,omitempty"`
-	} `json:"options,omitempty"`
+	// Options: a select's choices. With OptionsFrom they are worked out each time the add-ons are listed (resolve).
+	Options     []SettingOption `json:"options,omitempty"`
+	OptionsFrom *OptionsFrom    `json:"optionsFrom,omitempty"`
+	// Required: a select that is never empty. No empty choice; until one is picked, or when the one picked is gone
+	// (its add-on removed), the value is the first option — what the UI shows and the add-on reads alike.
+	Required bool `json:"required,omitempty"`
+}
+
+type SettingOption struct {
+	Value any    `json:"value"`
+	Label string `json:"label,omitempty"`
+}
+
+// OptionsFrom: where a select's choices come from at run time instead of addon.json.
+//
+//	{"events": "*/dm", "reply": true}   the event sources the switched-on add-ons declare ("emits") whose
+//	                                    source/kind matches the pattern (reply: only those that take answers);
+//	                                    value = the source ("slack"), label = the add-on's name
+//
+// Asked for (2026-11): remote-answer picks which chat to talk in from the chat add-ons installed, so Slack today and
+// Feishu tomorrow show up without either add-on knowing the other. Gerdr fills them in, not the service: the form
+// works while the service is stopped, and the service gets the resolved value like any other setting.
+type OptionsFrom struct {
+	Events string `json:"events,omitempty"`
+	Reply  bool   `json:"reply,omitempty"`
 }
 
 // SetSettings stores an add-on's settings (keys it declares only); a null value goes back to the default. The state
@@ -117,7 +141,8 @@ func (m *Manager) SetSettings(id string, values map[string]any) error {
 	}
 	known := map[string]SettingSpec{}
 	if mf != nil {
-		for _, s := range mf.Settings {
+		specs, _ := m.resolve(mf.Settings, nil)
+		for _, s := range specs {
 			known[s.Key] = s
 		}
 	}
@@ -128,6 +153,10 @@ func (m *Manager) SetSettings(id string, values map[string]any) error {
 		}
 		if s.Type == "link" {
 			return fmt.Errorf("%s: %q is a link, it has no value", id, k)
+		}
+		if s.Type == "select" && s.Required && v != nil &&
+			!slices.ContainsFunc(s.Options, func(o SettingOption) bool { return fmt.Sprint(o.Value) == fmt.Sprint(v) }) {
+			return fmt.Errorf("%s: %v is not one of %q's options", id, v, k)
 		}
 		if n, ok := v.(float64); ok && s.Type == "number" && (s.Min != nil && n < *s.Min || s.Max != nil && n > *s.Max) {
 			return fmt.Errorf("%s: %v is out of range", k, n)
@@ -172,15 +201,80 @@ func (m *Manager) SettingsOf(id string) map[string]any {
 	if !validID(id) {
 		return out
 	}
+	var specs []SettingSpec
 	if mf, err := readManifest(filepath.Join(m.dir, id)); err == nil && mf != nil {
-		for _, s := range mf.Settings {
-			if s.Type != "link" && s.Default != nil {
-				out[s.Key] = s.Default
-			}
+		specs = mf.Settings
+	}
+	specs, values := m.resolve(specs, m.readState().Settings[id])
+	for _, s := range specs {
+		if s.Type != "link" && s.Default != nil {
+			out[s.Key] = s.Default
 		}
 	}
-	for k, v := range m.readState().Settings[id] {
+	for k, v := range values {
 		out[k] = v
 	}
 	return out
+}
+
+// resolve: the settings as they apply now — dynamic options filled in (OptionsFrom), and for a required select a
+// default that is one of its options and no stored value that isn't (it falls back to that default). Specs and
+// values are copies; the manifest and the state file are left as they are, so a removed choice that comes back
+// (the add-on reinstalled) is picked again.
+func (m *Manager) resolve(specs []SettingSpec, values map[string]any) ([]SettingSpec, map[string]any) {
+	out := make([]SettingSpec, len(specs))
+	var vals map[string]any // nil stays nil: "nothing set" (the UI and the listing tell the two apart)
+	for k, v := range values {
+		if vals == nil {
+			vals = map[string]any{}
+		}
+		vals[k] = v
+	}
+	var emits []events.Source
+	for i, s := range specs {
+		if s.OptionsFrom != nil && s.OptionsFrom.Events != "" {
+			if emits == nil {
+				emits = m.Emits()
+			}
+			s.Options = m.eventOptions(emits, *s.OptionsFrom)
+		}
+		if s.Type == "select" && s.Required {
+			has := func(v any) bool {
+				return v != nil && slices.ContainsFunc(s.Options, func(o SettingOption) bool { return fmt.Sprint(o.Value) == fmt.Sprint(v) })
+			}
+			if !has(s.Default) {
+				s.Default = nil
+				if len(s.Options) > 0 {
+					s.Default = s.Options[0].Value
+				}
+			}
+			if v, ok := vals[s.Key]; ok && !has(v) {
+				delete(vals, s.Key)
+			}
+		}
+		out[i] = s
+	}
+	return out, vals
+}
+
+// eventOptions: one option per source that declares a matching event (OptionsFrom.Events).
+func (m *Manager) eventOptions(emits []events.Source, f OptionsFrom) []SettingOption {
+	opts := []SettingOption{}
+	seen := map[string]bool{}
+	for _, e := range emits {
+		src, kind, _ := strings.Cut(e.On, "/")
+		if seen[src] || (f.Reply && !e.CanReply) || !events.Match(f.Events, events.Event{Source: src, Kind: kind}) {
+			continue
+		}
+		seen[src] = true
+		label := e.Addon
+		if mf, err := readManifest(filepath.Join(m.dir, e.Addon)); err == nil && mf != nil && mf.Name != "" {
+			label = mf.Name
+		}
+		if src != e.Addon {
+			label += " (" + src + ")"
+		}
+		opts = append(opts, SettingOption{Value: src, Label: label})
+	}
+	return opts
 }

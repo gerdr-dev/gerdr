@@ -117,7 +117,11 @@ export type AddonSetting = {
   min?: number;
   max?: number;
   unit?: string;
+  /** select: its choices. With optionsFrom the backend works them out from what is installed (internal/addons resolve). */
   options?: { value: unknown; label?: string }[];
+  optionsFrom?: { events?: string; reply?: boolean };
+  /** select: never empty; the backend already falls back to the first option when nothing (valid) is picked. */
+  required?: boolean;
 };
 /** One add-on a store offers (internal/addons StoreAddon). */
 export type StoreAddon = {

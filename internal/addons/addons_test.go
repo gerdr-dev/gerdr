@@ -232,6 +232,60 @@ func TestSettings(t *testing.T) {
 	}
 }
 
+// A select whose options are the chat add-ons installed: filled in from their "emits", never empty when required,
+// and back to the first one when the picked add-on is removed.
+func TestSettingsOptionsFrom(t *testing.T) {
+	root := t.TempDir()
+	m := New(root, slog.Default())
+	write(t, filepath.Join(m.Dir(), "ask", "addon.json"), `{"settings":[{"key":"chat","type":"select","required":true,"optionsFrom":{"events":"*/dm","reply":true}}]}`)
+	write(t, filepath.Join(m.Dir(), "ask", "index.ts"), `export default defineAddon({ setup() {} });`)
+	opts := func() ([]SettingOption, any) {
+		for _, a := range m.Describe() {
+			if a.ID == "ask" {
+				return a.Settings[0].Options, m.SettingsOf("ask")["chat"]
+			}
+		}
+		t.Fatal("ask not listed")
+		return nil, nil
+	}
+	if o, v := opts(); len(o) != 0 || v != nil {
+		t.Fatalf("no chat add-on: options %v, value %v", o, v)
+	}
+	write(t, filepath.Join(m.Dir(), "slack", "addon.json"), `{"name":"Slack","emits":[{"kind":"dm","reply":"slack.send"},{"kind":"mention","reply":"slack.send"}]}`)
+	write(t, filepath.Join(m.Dir(), "feishu", "addon.json"), `{"name":"飞书","emits":[{"kind":"dm","reply":"feishu.send"}]}`)
+	write(t, filepath.Join(m.Dir(), "gitlab", "addon.json"), `{"emits":[{"kind":"dm"}]}`) // can't be answered: left out
+	o, v := opts()
+	if len(o) != 2 || v != o[0].Value {
+		t.Fatalf("options %+v, value %v", o, v)
+	}
+	labels := map[any]string{o[0].Value: o[0].Label, o[1].Value: o[1].Label}
+	if labels["slack"] != "Slack" || labels["feishu"] != "飞书" {
+		t.Fatalf("labels %v", labels)
+	}
+	if err := m.SetSettings("ask", map[string]any{"chat": "gitlab"}); err == nil {
+		t.Fatal("a value that isn't an option accepted")
+	}
+	if err := m.SetSettings("ask", map[string]any{"chat": "feishu"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, v := opts(); v != "feishu" {
+		t.Fatalf("picked feishu, got %v", v)
+	}
+	// Its add-on switched off: the first remaining option, without forgetting the pick
+	if err := m.SetEnabled("feishu", false); err != nil {
+		t.Fatal(err)
+	}
+	if _, v := opts(); v != "slack" {
+		t.Fatalf("feishu off: got %v", v)
+	}
+	if err := m.SetEnabled("feishu", true); err != nil {
+		t.Fatal(err)
+	}
+	if _, v := opts(); v != "feishu" {
+		t.Fatalf("feishu back: got %v", v)
+	}
+}
+
 // addon.json's i18n reaches both listings untouched (the UI picks the language), and README.<locale>.md files are
 // read for the store by locale, next to README.md.
 func TestI18n(t *testing.T) {

@@ -254,6 +254,20 @@ A `secret` is a string the form keeps masked (an eye button shows it) — for AP
 differs: it is stored like any other setting (`~/.gerdr/addons-state.json`, not the add-on folder) and
 `g.settings.get<string>("token")` returns it in the clear.
 
+A `select`'s choices can come from what is installed instead of being listed: `optionsFrom` with an event pattern
+offers the sources whose add-ons declare a matching event in their `emits` (`"reply": true`: only those that take
+answers). The value is the source (`"slack"`), the label the add-on's name. Gerdr works them out each time, so a chat
+add-on installed later shows up by itself:
+
+```json
+{ "key": "chat", "title": "发到哪个聊天", "type": "select", "required": true,
+  "optionsFrom": { "events": "*/dm", "reply": true } }
+```
+
+`"required": true` (any select) means there is no empty choice: until one is picked, or when the picked one is gone
+(its add-on removed), the value is the first option — `g.settings.get` and a service's settings line say the same.
+With no option at all the field is disabled and the value is missing: say in `description` what to install.
+
 A `link` has no value: it is a button that opens a page, such as your add-on's control panel, shown in the form with
 the other settings. An add-on may have several:
 

@@ -50,6 +50,7 @@ export const zh = {
   "addonSettings.service.pid": "（PID {pid}）",
   "addonSettings.open": "打开",
   "addonSettings.linkPending": "后台进程还没给出地址",
+  "addonSettings.noOptions": "没有可选的",
   "addonSettings.service.restartsOne": " · 重启过 {n} 次",
   "addonSettings.service.restarts": " · 重启过 {n} 次",
 
@@ -320,6 +321,7 @@ export const en: Record<keyof typeof zh, string> = {
   "addonSettings.service.pid": " (PID {pid})",
   "addonSettings.open": "Open",
   "addonSettings.linkPending": "The background process hasn't given the address yet",
+  "addonSettings.noOptions": "Nothing to choose",
   "addonSettings.service.restartsOne": " · restarted once",
   "addonSettings.service.restarts": " · restarted {n} times",
 
