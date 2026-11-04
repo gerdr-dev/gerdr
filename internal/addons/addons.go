@@ -112,7 +112,7 @@ type SettingText struct {
 	Title       string            `json:"title,omitempty"`
 	Description string            `json:"description,omitempty"`
 	Unit        string            `json:"unit,omitempty"`
-	Label       string            `json:"label,omitempty"` // a "link" setting's button
+	Label       string            `json:"label,omitempty"` // a "link" / "action" setting's button
 	Options     map[string]string `json:"options,omitempty"`
 }
 

@@ -109,9 +109,12 @@ export type AddonSetting = {
   key: string;
   title?: string;
   description?: string;
-  type: "number" | "string" | "text" | "boolean" | "select" | "color" | "secret" | "link";
+  type: "number" | "string" | "text" | "boolean" | "select" | "color" | "secret" | "link" | "action";
   default?: unknown;
-  /** "link": the page its button opens (the service's status "links"[key] wins); label: the button's text. */
+  /**
+   * "link": the page its button opens (the service's status "links"[key] wins). "action": a button running the add-on's
+   * g.settings.onAction(key) handler (preview, test). label: the button's text.
+   */
   url?: string;
   label?: string;
   min?: number;

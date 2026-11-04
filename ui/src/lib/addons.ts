@@ -80,6 +80,9 @@ export type MessageAction = {
   run: (msg: any, ctx: MessageCtx) => unknown;
 };
 export const messageActions: MessageAction[] = [];
+/** g.settings.onAction: what an "action" setting's button runs (Settings → Add-ons), by add-on and key. */
+export type SettingAction = { addon: string; key: string; run: (ctx: { signal: AbortSignal }) => unknown };
+export const settingActions: SettingAction[] = [];
 type TurnStatFn = (info: any) => { className?: string; title?: string; after?: React.ReactNode } | void;
 const turnStats: Reg<TurnStatFn>[] = [];
 
@@ -544,6 +547,16 @@ function makeApi(id: string, hash: string) {
         const v = a?.settingValues?.[key];
         return v !== undefined ? v : a?.settings?.find((s) => s.key === key)?.default;
       },
+      onAction: (key: string, run: SettingAction["run"]) => {
+        const r = { addon: id, key, run };
+        settingActions.push(r);
+        bump();
+        return () => {
+          const i = settingActions.indexOf(r);
+          if (i >= 0) settingActions.splice(i, 1);
+          bump();
+        };
+      },
     },
     fetch: async (url: string, init?: { method?: string; headers?: Record<string, string>; body?: unknown; binary?: boolean }) => {
       const headers = { ...init?.headers };
@@ -626,6 +639,7 @@ function unload(id: string) {
   remove(turnStats, id);
   remove(menuItems, id);
   remove(messageActions, id);
+  remove(settingActions, id);
   if (themes.some((r) => r.addon === id)) {
     remove(themes, id);
     applyThemes();

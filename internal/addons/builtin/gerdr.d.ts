@@ -14,6 +14,8 @@
 //                tokens, keys; g.settings.get returns it in the clear) /
 //                link (no value: a button opening a page, {"key": "panel", "title": "控制面板", "type": "link",
 //                "url": "https://…", "label": "打开"}; a service can give the url at run time, see "links" below)
+//                action (no value: a button running your g.settings.onAction(key) handler, to try the values above
+//                without leaving the form: {"key": "preview", "title": "试听", "type": "action", "label": "播放"})
 //   index.ts     the UI half (or what "main" names): export default defineAddon({...}). It may import other files of
 //                the folder; images, sounds and other files it ships are reached with g.asset("icon.png").
 //
@@ -359,6 +361,12 @@ declare global {
      */
     settings: {
       get<T = unknown>(key: string): T;
+      /**
+       * What an "action" setting's button runs (Settings → Add-ons): try the values the user just set — preview a
+       * voice, test a connection. The button reads "Stop" while the promise is pending and aborts ctx.signal when
+       * tapped then; a throw shows as an error toast. Sound plays from here (g.audio.play): the tap allows it.
+       */
+      onAction(key: string, run: (ctx: { signal: AbortSignal }) => void | Promise<unknown>): Dispose;
     };
 
     /** The add-on's own small storage (kept in this browser / App). */

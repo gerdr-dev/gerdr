@@ -1,6 +1,6 @@
 import { Markdown } from "@gerdr/chat";
 import { openLightbox } from "@/components/Lightbox";
-import { Check, ChevronRight, CircleAlert, ExternalLink, Eye, EyeOff, FolderOpen, Puzzle, RefreshCw, Trash2, X } from "lucide-react";
+import { Check, ChevronRight, CircleAlert, ExternalLink, Eye, EyeOff, FolderOpen, Play, Puzzle, RefreshCw, Square, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { addonStatus, assetURL, type AddonStatus } from "@/lib/addons";
+import { addonStatus, assetURL, settingActions, type AddonStatus } from "@/lib/addons";
+import { unlockAudio } from "@/lib/audio";
 import { api, ApiError } from "@/lib/api";
 import { askConfirm } from "@/lib/confirm";
 import { isNative, nativeOpenPath } from "@/lib/native";
@@ -198,7 +199,9 @@ function InstalledRow({ a, newer }: { a: AddonStatus; newer?: StoreAddon }) {
             </CollapsibleTrigger>
             <CollapsibleContent className="mt-1.5 space-y-2.5 rounded-sm bg-muted/50 p-2.5">
               {a.settings.map((s) =>
-                s.type === "link" ? (
+                s.type === "action" ? (
+                  <ActionSetting key={s.key} id={a.id} spec={s} />
+                ) : s.type === "link" ? (
                   <LinkSetting key={s.key} spec={s} url={(a.service?.state === "running" ? a.service.links?.[s.key] : undefined) || s.url} />
                 ) : (
                   <SettingField key={s.key} id={a.id} spec={s} value={a.settingValues?.[s.key]} />
@@ -236,6 +239,50 @@ function LinkSetting({ spec, url }: { spec: AddonSetting; url?: string }) {
             {label}
           </Button>
         )}
+      </div>
+      {spec.description && <div className="mt-0.5 text-[11px] text-muted-foreground">{spec.description}</div>}
+    </div>
+  );
+}
+
+// An "action" setting: a button running the add-on's g.settings.onAction(key) handler, to try the values above without
+// leaving the form (preview a voice, test a connection). "Stop" while it runs, which aborts its signal; a throw is a
+// toast, not an add-on error (the next try, with a fixed value, may well work). Disabled while the add-on's UI half
+// isn't loaded in this window (switched off, failed to build) or registered no handler for it.
+function ActionSetting({ id, spec }: { id: string; spec: AddonSetting }) {
+  useStore((s) => s.addonVersion);
+  const [ctrl, setCtrl] = useState<AbortController | null>(null);
+  const h = settingActions.find((x) => x.addon === id && x.key === spec.key);
+  const click = () => {
+    if (ctrl) return ctrl.abort();
+    if (!h) return;
+    unlockAudio(); // inside the tap: a preview's sound arrives long after it
+    const c = new AbortController();
+    setCtrl(c);
+    Promise.resolve()
+      .then(() => h.run({ signal: c.signal }))
+      .catch((e) => {
+        if (c.signal.aborted) return;
+        console.error(`[gerdr addon ${id}] ${spec.key}`, e);
+        toast.error(t("addonSettings.actionFailed", { action: spec.title || spec.key, error: e instanceof Error ? e.message : String(e) }));
+      })
+      .finally(() => setCtrl((cur) => (cur === c ? null : cur)));
+  };
+  return (
+    <div className="text-[12px]">
+      <div className="flex items-center gap-2">
+        <span className="min-w-0 flex-1">{spec.title || spec.key}</span>
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-7 text-[12px]"
+          disabled={!h && !ctrl}
+          title={h ? undefined : t("addonSettings.actionUnavailable")}
+          onClick={click}
+        >
+          {ctrl ? <Square className="size-3 fill-current" /> : <Play className="size-3.5" />}
+          {ctrl ? t("addonSettings.actionStop") : spec.label || t("addonSettings.actionRun")}
+        </Button>
       </div>
       {spec.description && <div className="mt-0.5 text-[11px] text-muted-foreground">{spec.description}</div>}
     </div>

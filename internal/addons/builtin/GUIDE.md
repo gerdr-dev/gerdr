@@ -308,6 +308,18 @@ the other settings. An add-on may have several:
 { "key": "panel", "title": "控制面板", "type": "link", "label": "打开", "url": "https://example.com/dashboard" }
 ```
 
+An `action` has no value either: a button that runs your `g.settings.onAction(key, run)` handler, so the person can
+check what they just set without leaving the form ("试听" for a voice, "测试连接" for a token). The button reads
+"停止" while `run`'s promise is pending (tapping it aborts `ctx.signal`), and a throw shows as an error toast:
+
+```json
+{ "key": "preview", "title": "试听", "type": "action", "label": "播放" }
+```
+
+```ts
+g.settings.onAction("preview", ({ signal }) => g.audio.play(speech("你好，这是试听。"), { signal }));
+```
+
 When only your [service](#services) knows the address (a port it picked), leave `url` out and report it from the
 service: `{"type":"status","text":"…","links":{"panel":"http://127.0.0.1:7858"}}`. The button is disabled until there
 is an address, and while the service isn't running.

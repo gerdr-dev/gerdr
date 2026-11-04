@@ -92,10 +92,12 @@ type SettingSpec struct {
 	Key         string `json:"key"`
 	Title       string `json:"title,omitempty"`
 	Description string `json:"description,omitempty"`
-	Type        string `json:"type"` // number / string / boolean / select / color ("#rrggbb") / secret (a string the form masks) / link
+	Type        string `json:"type"` // number / string / boolean / select / color ("#rrggbb") / secret (a string the form masks) / link / action
 	// link: not a value but a button that opens URL (a page of the add-on's: its control panel, a dashboard). When the
 	// address is only known at run time (a port the service picked), the service reports it in its status line's
 	// "links" by this setting's key, which wins over URL. Label is the button's text ("Open" when empty).
+	// action: not a value but a button running the add-on's g.settings.onAction(key) handler in the UI: "preview this
+	// voice", "test the connection", checking the values above work without leaving the form.
 	URL     string   `json:"url,omitempty"`
 	Label   string   `json:"label,omitempty"`
 	Default any      `json:"default,omitempty"`
@@ -109,6 +111,9 @@ type SettingSpec struct {
 	// (its add-on removed), the value is the first option — what the UI shows and the add-on reads alike.
 	Required bool `json:"required,omitempty"`
 }
+
+// Valueless: a "link" or an "action" is a button in the form, with nothing stored.
+func (s SettingSpec) Valueless() bool { return s.Type == "link" || s.Type == "action" }
 
 type SettingOption struct {
 	Value any    `json:"value"`
@@ -151,8 +156,8 @@ func (m *Manager) SetSettings(id string, values map[string]any) error {
 		if !ok {
 			return fmt.Errorf("%s has no setting %q", id, k)
 		}
-		if s.Type == "link" {
-			return fmt.Errorf("%s: %q is a link, it has no value", id, k)
+		if s.Valueless() {
+			return fmt.Errorf("%s: %q is a %s, it has no value", id, k, s.Type)
 		}
 		if s.Type == "select" && s.Required && v != nil &&
 			!slices.ContainsFunc(s.Options, func(o SettingOption) bool { return fmt.Sprint(o.Value) == fmt.Sprint(v) }) {
@@ -207,7 +212,7 @@ func (m *Manager) SettingsOf(id string) map[string]any {
 	}
 	specs, values := m.resolve(specs, m.readState().Settings[id])
 	for _, s := range specs {
-		if s.Type != "link" && s.Default != nil {
+		if !s.Valueless() && s.Default != nil {
 			out[s.Key] = s.Default
 		}
 	}

@@ -212,13 +212,13 @@ func TestSettings(t *testing.T) {
 	root := t.TempDir()
 	m := New(root, slog.Default())
 	d := filepath.Join(m.Dir(), "clock")
-	write(t, filepath.Join(d, "addon.json"), `{"settings":[{"key":"ttl","type":"number","default":60,"min":1,"max":1440}]}`)
+	write(t, filepath.Join(d, "addon.json"), `{"settings":[{"key":"ttl","type":"number","default":60,"min":1,"max":1440},{"key":"preview","type":"action","default":"x"}]}`)
 	write(t, filepath.Join(d, "index.ts"), `export default defineAddon({ setup() {} });`)
 	if err := m.SetSettings("clock", map[string]any{"ttl": 30.0}); err != nil {
 		t.Fatal(err)
 	}
 	a := m.List()[0]
-	if len(a.Settings) != 1 || a.SettingValues["ttl"] != 30.0 {
+	if len(a.Settings) != 2 || a.SettingValues["ttl"] != 30.0 {
 		t.Fatalf("addon = %+v", a)
 	}
 	if err := m.SetSettings("clock", map[string]any{"ttl": 0.0}); err == nil {
@@ -226,6 +226,13 @@ func TestSettings(t *testing.T) {
 	}
 	if err := m.SetSettings("clock", map[string]any{"nope": 1.0}); err == nil {
 		t.Fatal("unknown key accepted")
+	}
+	// An "action" is a button: no value to set, and its default never reaches the add-on's values
+	if err := m.SetSettings("clock", map[string]any{"preview": "y"}); err == nil {
+		t.Fatal("value for an action accepted")
+	}
+	if v, ok := m.SettingsOf("clock")["preview"]; ok {
+		t.Fatalf("action has a value: %v", v)
 	}
 	if err := m.SetSettings("clock", map[string]any{"ttl": nil}); err != nil || m.List()[0].SettingValues != nil {
 		t.Fatal("reset to default failed", err)

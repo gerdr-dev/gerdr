@@ -4,7 +4,7 @@
 // primitive here. A run:
 // - spinner while run() is pending; a second tap aborts ctx.signal (the add-on stops) and the button is free again;
 // - when the run plays sound with g.audio.play(…, { signal: ctx.signal }), the button shows "stop" while it plays;
-// - a throw is a toast naming the action.
+// - a throw is a toast naming the action (not an add-on error in Settings: the next run may well work).
 import { useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import { fail, messageActions, type MessageAction, type MessageCtx } from "./addons";
@@ -86,7 +86,9 @@ export function toggleRun(a: MessageAction, msg: Msg) {
     .then(() => a.run(msg, ctx))
     .catch((e) => {
       if (ctrl.signal.aborted) return;
-      fail(a.addon, e);
+      // A run's failure is that run's (no key yet, the service down), told once in the toast. Not fail(): that marks
+      // the add-on itself broken in Settings ("加载出错") until it reloads, long after the cause is fixed
+      console.error(`[gerdr addon ${a.addon}] ${a.title}`, e);
       toast.error(t("messageActions.failed", { action: a.title, error: e instanceof Error ? e.message : String(e) }));
     })
     .finally(() => {
