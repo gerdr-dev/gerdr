@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/gerdr-dev/gerdr/internal/addons"
+	"github.com/gerdr-dev/gerdr/internal/events"
 	"github.com/gerdr-dev/gerdr/internal/hub"
 	"github.com/gerdr-dev/gerdr/internal/version"
 )
@@ -111,6 +112,23 @@ func (s *Server) RunAddonServices(ctx context.Context) {
 	}
 	ps.OnMessage = func(id string, data json.RawMessage) {
 		s.Hub.Broadcast("addon_message", map[string]any{"id": id, "data": data})
+	}
+	ps.OnEvent = func(id string, raw json.RawMessage) {
+		if s.Events == nil {
+			return
+		}
+		var e events.Event
+		if err := json.Unmarshal(raw, &e); err != nil {
+			s.Log.Warn("addon service: bad event", "addon", id, "err", err)
+			return
+		}
+		if e.Source == "" {
+			e.Source = id
+		}
+		e.At = 0
+		if _, _, err := s.Events.Emit(e); err != nil {
+			s.Log.Warn("addon service: event refused", "addon", id, "err", err)
+		}
 	}
 	ps.Sync()
 	go func() {

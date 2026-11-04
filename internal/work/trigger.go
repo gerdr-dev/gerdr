@@ -1,0 +1,339 @@
+package work
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/dop251/goja"
+
+	ev "github.com/gerdr-dev/gerdr/internal/events"
+	"github.com/gerdr-dev/gerdr/internal/i18n"
+)
+
+// Triggers: what a project's Work (a panel) does when an event comes (docs/dev/EVENTS.md). The schedules' twin —
+// schedules/ runs on time, triggers/ on events — declared the same way, one file per trigger, the file name its id:
+//
+//	triggers/mr.json      { "on": "gitlab/mr.*", "fn": "mrwatch.onEvent", "name": "MR news to the worker" }
+//	triggers/alerts.json  { "on": "grafana/alert.firing", "key": "prod/*", "prompt": "Look into it and tell me" }
+//
+// on is an event pattern (source/kind with * globs, or a kind alone); key narrows it to what the event is about.
+// fn runs a local function with { event, trigger } (plus input); prompt hands the event and the text to the Work
+// agent. Exactly one of the two. A trigger's runs go one after another, in the order the events came.
+
+// TriggersDir is the Work directory's folder of trigger files.
+const TriggersDir = "triggers"
+
+// EventBus is the event store as ctx.events and the triggers see it (events.Store).
+type EventBus interface {
+	Emit(e ev.Event) (ev.Event, bool, error)
+	List(q ev.Query) ([]ev.Event, error)
+}
+
+// Trigger is one triggers/<id>.json.
+type Trigger struct {
+	ID     string `json:"id"`
+	On     string `json:"on"`
+	Key    string `json:"key,omitempty"`
+	Fn     string `json:"fn,omitempty"`
+	Prompt string `json:"prompt,omitempty"`
+	Name   string `json:"name,omitempty"`
+	Input  any    `json:"input,omitempty"`
+}
+
+// TriggerInfo is a trigger with how its last run went (kept while Gerdr runs), for `gerdr work triggers`.
+type TriggerInfo struct {
+	Trigger
+	Runs int          `json:"runs"` // since Gerdr started
+	Last *ScheduleRun `json:"last,omitempty"`
+}
+
+func (t *Trigger) check() error {
+	if (t.Fn == "") == (t.Prompt == "") {
+		return errors.New(i18n.S("fn 和 prompt 要有且只有一个", "exactly one of fn and prompt"))
+	}
+	if strings.TrimSpace(t.On) == "" {
+		return errors.New(i18n.S("要写 on：哪类事件（source/kind，可以用 *）", "on is required: which events (source/kind, * allowed)"))
+	}
+	return ev.CheckPattern(t.On)
+}
+
+// ParseTriggers reads a Work directory's triggers/; like schedules, a broken file stops them all, loudly.
+func ParseTriggers(dir string) ([]Trigger, error) {
+	ents, err := os.ReadDir(filepath.Join(dir, TriggersDir))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var out []Trigger
+	for _, e := range ents {
+		id, ok := strings.CutSuffix(e.Name(), ".json")
+		if e.IsDir() || !ok {
+			continue
+		}
+		rel := TriggersDir + "/" + e.Name()
+		if !scheduleIDRe.MatchString(id) {
+			return nil, fmt.Errorf(i18n.S("%s：文件名只能用字母、数字、. - _", "%s: the file name may only use letters, digits, . - _"), rel)
+		}
+		b, err := os.ReadFile(filepath.Join(dir, TriggersDir, e.Name()))
+		if err != nil {
+			return nil, err
+		}
+		var t Trigger
+		if err := json.Unmarshal(b, &t); err != nil {
+			return nil, fmt.Errorf(i18n.S("%s 格式不对：%w", "%s is malformed: %w"), rel, err)
+		}
+		t.ID, t.Prompt = id, strings.TrimSpace(t.Prompt)
+		if err := t.check(); err != nil {
+			return nil, fmt.Errorf("%s: %w", rel, err)
+		}
+		out = append(out, t)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out, nil
+}
+
+type trigProject struct {
+	sig  string
+	defs []Trigger
+	err  error
+	// per trigger: runs go one at a time, in event order (a queue drained by one goroutine)
+	queue map[string]chan ev.Event
+	runs  map[string]int
+	last  map[string]*ScheduleRun
+}
+
+type triggers struct {
+	mu       sync.Mutex
+	projects map[string]*trigProject
+}
+
+// trig is the project's triggers, re-read when the folder changed. Caller holds r.trig_.mu.
+func (r *Runner) trig(project string) *trigProject {
+	if project == "" {
+		project = DefaultProject
+	}
+	if r.trig_.projects == nil {
+		r.trig_.projects = map[string]*trigProject{}
+	}
+	p := r.trig_.projects[project]
+	if p == nil {
+		p = &trigProject{queue: map[string]chan ev.Event{}, runs: map[string]int{}, last: map[string]*ScheduleRun{}}
+		r.trig_.projects[project] = p
+	}
+	dir, err := r.Dir(project)
+	if err != nil {
+		p.defs, p.err = nil, err
+		return p
+	}
+	if sig := dirSig(filepath.Join(dir, TriggersDir)); sig != p.sig || sig == "" {
+		p.sig = sig
+		prev := p.err
+		p.defs, p.err = ParseTriggers(dir)
+		if p.err != nil && (prev == nil || prev.Error() != p.err.Error()) && r.Log != nil {
+			r.Log.Warn("work: triggers not run", "project", project, "err", p.err)
+		}
+	}
+	return p
+}
+
+// DispatchEvent hands an event to every project's matching triggers (queued: it returns at once).
+func (r *Runner) DispatchEvent(e ev.Event) {
+	if e.Depth > ev.MaxDepth {
+		if r.Log != nil {
+			r.Log.Warn("work: event too deep, not given to triggers (triggers feeding each other?)", "source", e.Source, "kind", e.Kind, "depth", e.Depth)
+		}
+		return
+	}
+	r.trig_.mu.Lock()
+	defer r.trig_.mu.Unlock()
+	for _, project := range r.workProjects() {
+		p := r.trig(project)
+		for _, t := range p.defs {
+			if !ev.Match(t.On, e) || !ev.MatchKey(t.Key, e.Key) {
+				continue
+			}
+			q := p.queue[t.ID]
+			if q == nil {
+				q = make(chan ev.Event, 256)
+				p.queue[t.ID] = q
+				go r.drainTrigger(project, t.ID, q)
+			}
+			select {
+			case q <- e:
+			default:
+				if r.Log != nil {
+					r.Log.Warn("work: trigger falling behind, dropped an event", "project", project, "trigger", t.ID, "event", e.ID)
+				}
+			}
+		}
+	}
+}
+
+// drainTrigger runs one trigger's queued events one by one, with its current definition (it may have been edited
+// since the event was queued; removed = the event is dropped).
+func (r *Runner) drainTrigger(project, id string, q chan ev.Event) {
+	for e := range q {
+		r.trig_.mu.Lock()
+		p := r.trig(project)
+		var t *Trigger
+		for i := range p.defs {
+			if p.defs[i].ID == id {
+				t = &p.defs[i]
+			}
+		}
+		var def Trigger
+		if t != nil {
+			def = *t
+		}
+		r.trig_.mu.Unlock()
+		if t == nil {
+			continue
+		}
+		run := r.runTrigger(project, def, e)
+		r.trig_.mu.Lock()
+		p.runs[id]++
+		p.last[id] = run
+		r.trig_.mu.Unlock()
+	}
+}
+
+func (r *Runner) runTrigger(project string, t Trigger, e ev.Event) *ScheduleRun {
+	start := time.Now()
+	run := &ScheduleRun{StartedAt: start}
+	var err error
+	if t.Fn != "" {
+		input := map[string]any{}
+		if m, ok := t.Input.(map[string]any); ok {
+			for k, v := range m {
+				input[k] = v
+			}
+		}
+		input["event"], input["trigger"] = eventMap(e), t.ID
+		rn := r.Start(project, t.Fn, input)
+		run.RunID = rn.ID
+		var res any
+		if res, err = rn.Wait(context.Background()); err == nil {
+			b, _ := json.Marshal(res)
+			run.Result = cut(string(b), 500)
+		}
+	} else {
+		err = r.triggerPrompt(project, t, e)
+	}
+	run.Ms, run.OK = time.Since(start).Milliseconds(), err == nil
+	if err != nil {
+		run.Error = err.Error()
+		if r.Log != nil {
+			r.Log.Warn("work: trigger failed", "project", project, "id", t.ID, "event", e.ID, "err", err)
+		}
+	}
+	return run
+}
+
+// eventMap: the event as the function sees it (data parsed, not a JSON string).
+func eventMap(e ev.Event) map[string]any {
+	b, _ := json.Marshal(e)
+	var m map[string]any
+	_ = json.Unmarshal(b, &m)
+	return m
+}
+
+func (r *Runner) triggerPrompt(project string, t Trigger, e ev.Event) error {
+	if r.Host == nil {
+		return errNoHost
+	}
+	name := t.Name
+	if name == "" {
+		name = t.ID
+	}
+	head := fmt.Sprintf(i18n.S("[触发器「%s」：%s/%s]", "[Trigger %s: %s/%s]"), name, e.Source, e.Kind)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	_, err := r.Host.Send(ctx, project, "work", e.Summary(head)+"\n\n"+t.Prompt, nil, false)
+	return err
+}
+
+// Triggers lists a project's triggers with their last run.
+func (r *Runner) Triggers(project string) ([]TriggerInfo, error) {
+	r.trig_.mu.Lock()
+	defer r.trig_.mu.Unlock()
+	p := r.trig(project)
+	if p.err != nil {
+		return nil, p.err
+	}
+	out := []TriggerInfo{}
+	for _, t := range p.defs {
+		out = append(out, TriggerInfo{Trigger: t, Runs: p.runs[t.ID], Last: p.last[t.ID]})
+	}
+	return out, nil
+}
+
+// depthOf: the depth an event emitted by this run gets — one more than the event that started it (a trigger's
+// input.event), 0 for a run nothing triggered.
+func depthOf(input any) int {
+	m, ok := input.(map[string]any)
+	if !ok {
+		return 0
+	}
+	e, ok := m["event"].(map[string]any)
+	if !ok {
+		return 0
+	}
+	d, _ := e["depth"].(float64)
+	return int(d) + 1
+}
+
+// eventsObject is ctx.events: emit what a poll found, look back at what came.
+func (r *runner) eventsObject() map[string]any {
+	bus := r.r.Events
+	return map[string]any{
+		// ctx.events.emit({ id?, source, kind, key?, title?, text?, url?, data? }) → { event, fresh }
+		"emit": func(arg any) map[string]any {
+			if bus == nil {
+				r.throw(errors.New("ctx.events: not available here (needs Gerdr's server)"))
+			}
+			b, err := json.Marshal(plain(toPlain(arg)))
+			if err != nil {
+				r.throw(err)
+			}
+			var e ev.Event
+			if err := json.Unmarshal(b, &e); err != nil {
+				r.throw(fmt.Errorf("ctx.events.emit: %w", err))
+			}
+			e.At, e.Depth = 0, r.depth
+			out, fresh, err := bus.Emit(e)
+			if err != nil {
+				r.throw(fmt.Errorf("ctx.events.emit: %w", err))
+			}
+			return map[string]any{"event": eventMap(out), "fresh": fresh}
+		},
+		// ctx.events.list({ since?, on?, key?, limit? }) → events, oldest first
+		"list": func(arg goja.Value) []map[string]any {
+			if bus == nil {
+				r.throw(errors.New("ctx.events: not available here (needs Gerdr's server)"))
+			}
+			var q ev.Query
+			if err := r.opts(arg, &q); err != nil {
+				r.throw(fmt.Errorf("ctx.events.list: %w", err))
+			}
+			l, err := bus.List(q)
+			if err != nil {
+				r.throw(err)
+			}
+			out := make([]map[string]any, 0, len(l))
+			for _, e := range l {
+				out = append(out, eventMap(e))
+			}
+			return out
+		},
+	}
+}

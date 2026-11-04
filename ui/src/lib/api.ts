@@ -162,6 +162,13 @@ export const api = {
   usage: (force?: boolean) => req<UsageInfo[]>("GET", `/api/usage${force ? "?force=1" : ""}`),
   /** The turns that ended in [since, until) (unix ms), oldest first (internal/hub/turns.go). */
   turns: (since: number, until?: number) => req<TurnRecord[]>("GET", `/api/turns?since=${since}${until ? `&until=${until}` : ""}`),
+  // Events (docs/dev/EVENTS.md): add-ons' g.events
+  events: (q: { since?: number; on?: string; key?: string; limit?: number } = {}) => {
+    const p = new URLSearchParams();
+    for (const [k, v] of Object.entries(q)) if (v != null && v !== "") p.set(k, String(v));
+    return req<{ list: unknown[] }>("GET", `/api/events?${p}`).then((r) => r.list);
+  },
+  emitEvent: (e: Record<string, unknown>) => req<{ event: unknown; fresh: boolean }>("POST", "/api/events", e),
   stats: (webpid?: number) => req<any>("GET", `/api/system/stats${webpid ? `?webpid=${webpid}` : ""}`),
   herdrScan: () => req<{ workspaces: HerdrWorkspace[] }>("GET", "/api/import/herdr"),
   herdrImport: (workspaces: string[]) =>

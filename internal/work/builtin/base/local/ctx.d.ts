@@ -171,6 +171,30 @@ interface Ctx {
     read(path: string, opts?: { max?: number }): string | null;
   };
 
+  /**
+   * Events (FUNCTIONS.md "On an event"): things that happened outside a conversation, one record for every source.
+   * A poll on a schedule emits what it found; triggers/*.json (here or in any panel), watching sessions and add-ons
+   * get it. Give a stable `id` and finding the same thing on the next poll emits nothing (`fresh: false`).
+   */
+  events: {
+    emit(e: {
+      /** Stable id of this happening ("gitlab:note:123"); one already seen is dropped. Leave out to always emit. */
+      id?: string;
+      /** Who it comes from: gitlab, ci, slack… [A-Za-z0-9._-], no "/". */
+      source: string;
+      /** What happened, dotted: mr.note, pipeline.failed, message. */
+      kind: string;
+      /** What it is about (group/repo!34, a channel id): what subscribers narrow by. */
+      key?: string;
+      title?: string;
+      text?: string;
+      url?: string;
+      data?: unknown;
+    }): { event: GerdrEvent; fresh: boolean };
+    /** Oldest first. since: unix ms (default: the last 24 hours); on: "source/kind" with * globs; limit: the newest n (100). */
+    list(q?: { since?: number; on?: string; key?: string; limit?: number }): GerdrEvent[];
+  };
+
   /** Progress the page shows while the function runs (and `gerdr work run` prints). */
   progress(p: { done?: number; total?: number; message?: string }): void;
   /** A log line, shown live and kept in the run log (like console.log). Never log keys, cookies or tokens. */
@@ -226,6 +250,21 @@ interface FileInfo {
   /** ms */
   mtime: number;
   etag: string;
+}
+
+interface GerdrEvent {
+  id: string;
+  source: string;
+  kind: string;
+  key?: string;
+  title?: string;
+  text?: string;
+  url?: string;
+  data?: any;
+  /** unix ms */
+  at: number;
+  /** How many triggers deep it was emitted; past 4 it isn't handed on (two triggers feeding each other stop). */
+  depth?: number;
 }
 
 interface AgentInfo {

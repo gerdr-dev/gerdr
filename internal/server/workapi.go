@@ -450,6 +450,14 @@ func (s *Server) workRoutes(mux *http.ServeMux) {
 		}
 		writeJSON(w, map[string]any{"list": list})
 	})
+	mux.HandleFunc("GET /api/work/triggers", func(w http.ResponseWriter, r *http.Request) {
+		list, err := s.Work.Triggers(r.URL.Query().Get("project"))
+		if err != nil {
+			httpError(w, 400, err.Error())
+			return
+		}
+		writeJSON(w, map[string]any{"list": list})
+	})
 	mux.HandleFunc("POST /api/work/schedules/{id}/{op}", func(w http.ResponseWriter, r *http.Request) {
 		project, id := r.URL.Query().Get("project"), r.PathValue("id")
 		var err error

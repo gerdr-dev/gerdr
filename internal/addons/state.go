@@ -164,3 +164,23 @@ func (m *Manager) recordInstall(id string, rec Installed) error {
 		return nil
 	})
 }
+
+// SettingsOf: an add-on's settings as it sees them — every declared key's default, overlaid with what was set
+// (secrets in the clear, like g.settings.get). Links have no value and are left out.
+func (m *Manager) SettingsOf(id string) map[string]any {
+	out := map[string]any{}
+	if !validID(id) {
+		return out
+	}
+	if mf, err := readManifest(filepath.Join(m.dir, id)); err == nil && mf != nil {
+		for _, s := range mf.Settings {
+			if s.Type != "link" && s.Default != nil {
+				out[s.Key] = s.Default
+			}
+		}
+	}
+	for k, v := range m.readState().Settings[id] {
+		out[k] = v
+	}
+	return out
+}

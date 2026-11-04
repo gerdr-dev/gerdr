@@ -23,6 +23,10 @@ func TestSafeGerdrCLI(t *testing.T) {
 		`gerdr serve`:                                                      false,
 		`rm -rf / gerdr session`:                                           false,
 		`gerdr session list && curl evil`:                                  false,
+		`gerdr event watch --on gitlab/mr.note --key 'g/r!34' --once`:      true,
+		`gerdr event list --since 6h`:                                      true,
+		`gerdr event emit '{"source":"ci","kind":"x"}'`:                    false,
+		`gerdr event`: false,
 	} {
 		if got := SafeGerdrCLI(cmd); got != want {
 			t.Errorf("%q: got %v want %v", cmd, got, want)

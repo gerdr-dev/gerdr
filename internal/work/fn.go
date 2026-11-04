@@ -152,6 +152,7 @@ type runner struct {
 	project string
 	dir     string // the project's Work directory
 	emit    func(Event)
+	depth   int          // events this run emits: one deeper than the event that triggered it (trigger.go depthOf)
 	bodies  []*fetchBody // fetch response bodies, closed at the end if still open
 }
 
@@ -161,7 +162,7 @@ func (r *Runner) runCode(ctx context.Context, project, dir, file, fn, code strin
 	// Stop / timeout: interrupt the JS (a host call blocked in fetch / exec returns too, its ctx is the same)
 	stop := context.AfterFunc(ctx, func() { vm.Interrupt("stopped") })
 	defer stop()
-	run := &runner{ctx: ctx, vm: vm, r: r, project: project, dir: dir, emit: emit}
+	run := &runner{ctx: ctx, vm: vm, r: r, project: project, dir: dir, emit: emit, depth: depthOf(input)}
 	defer run.cleanup()
 	run.installGlobals()
 	exports, err := load(vm, file, code)
@@ -372,6 +373,8 @@ func (r *runner) ctxObject() *goja.Object {
 	_ = c.Set("sessions", r.sessionsObject())
 	_ = c.Set("workspaces", r.workspacesObject())
 	_ = c.Set("dirs", r.dirsObject())
+	// Events (trigger.go, docs/dev/EVENTS.md): what a poll found goes out as events; triggers/ subscribe to them
+	_ = c.Set("events", r.eventsObject())
 	_ = c.Set("workspace", map[string]any{"project": r.project, "dir": r.dir, "logs_dir": r.r.logDir(r.project)})
 	// gerdr's interface is Chinese: messages meant for the user can follow this
 	_ = c.Set("locale", "zh")

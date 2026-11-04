@@ -30,6 +30,7 @@ import (
 	"github.com/gerdr-dev/gerdr/internal/awake"
 	"github.com/gerdr-dev/gerdr/internal/config"
 	"github.com/gerdr-dev/gerdr/internal/doctor"
+	"github.com/gerdr-dev/gerdr/internal/events"
 	"github.com/gerdr-dev/gerdr/internal/ext"
 	"github.com/gerdr-dev/gerdr/internal/hub"
 	"github.com/gerdr-dev/gerdr/internal/i18n"
@@ -57,9 +58,11 @@ type Server struct {
 	Ext      *ext.Manager
 	// Work：the Work view's local functions (internal/work). nil = off (tests).
 	Work *work.Runner
-	UI   *uisite.Renderer
-	ESM  *uisite.ESM
-	Log  *slog.Logger
+	// Events: the event store (internal/events, docs/dev/EVENTS.md); RunEvents wires its subscribers. nil = off.
+	Events *events.Store
+	UI     *uisite.Renderer
+	ESM    *uisite.ESM
+	Log    *slog.Logger
 	// OnConfig：界面上存了 config.json 之后（agents 那一节要热换）
 	OnConfig func()
 	// Remote：远程访问（设备表、passkey、中继）。nil = 这个进程不管远程（测试里）。
@@ -110,6 +113,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /auth", s.auth)
 	mux.HandleFunc("GET /api/hello", s.hello)
 	s.addonRoutes(mux)
+	s.eventRoutes(mux)
 	mux.HandleFunc("GET /api/config", func(w http.ResponseWriter, r *http.Request) { writeRaw(w, s.Config.Get()) })
 	mux.HandleFunc("PUT /api/config", s.putStore(s.Config, "config"))
 	mux.HandleFunc("GET /api/layout", func(w http.ResponseWriter, r *http.Request) { writeRaw(w, s.Layout.Get()) })

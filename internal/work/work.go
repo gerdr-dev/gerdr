@@ -59,6 +59,7 @@ type Runner struct {
 	MCPServers func() []MCPServer       // ctx.mcp.servers()
 	Secret     func(name string) string // ctx.secrets.get; "" = none
 	Host       Host                     // ctx.sessions / ctx.workspaces / ctx.dirs.recent (host.go); nil = not available
+	Events     EventBus                 // ctx.events (trigger.go); nil = not available
 	Log        *slog.Logger
 
 	mu        sync.Mutex
@@ -66,6 +67,7 @@ type Runner struct {
 	runs      map[string]*Run
 	pruned    map[string]time.Time // log directories by when they were last pruned
 	sched_    scheduler            // schedules/ (schedule.go)
+	trig_     triggers             // triggers/ (trigger.go)
 }
 
 func New(root string, mcp CallMCP) *Runner {

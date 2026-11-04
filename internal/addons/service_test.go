@@ -19,6 +19,7 @@ const echoService = `#!/bin/sh
 echo '{"type":"status","text":"starting","links":{"panel":"http://127.0.0.1:7858","bad":"javascript:alert(1)"}}'
 echo '{"type":"status","text":"up"}'
 echo 'not json, goes to the log'
+echo '{"type":"event","event":{"kind":"ping","key":"k"}}'
 while IFS= read -r line; do
   printf '{"type":"message","data":%s}\n' "$line"
   case "$line" in *crash*) exit 3;; esac
@@ -70,7 +71,7 @@ func TestService(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(pdir, "svc.sh"), []byte(echoService), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(pdir, "addon.json"), []byte(`{"service":{"command":"./svc.sh"}}`), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(pdir, "addon.json"), []byte(`{"service":{"command":"./svc.sh","events":["ci/*"]},"settings":[{"key":"token","type":"secret","default":"d0"},{"key":"open","type":"link","url":"https://x"}]}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	m := New(dir, slog.Default())
@@ -93,10 +94,32 @@ func TestService(t *testing.T) {
 		rec.statuses = append(rec.statuses, st)
 		rec.mu.Unlock()
 	}
+	var evs []string
+	s.OnEvent = func(id string, e json.RawMessage) {
+		rec.mu.Lock()
+		evs = append(evs, id+":"+string(e))
+		rec.mu.Unlock()
+	}
 	s.Sync()
 	defer s.Close()
 
 	rec.waitMsg(t, `band:{"type":"hello","addon":"band"}`) // greeting reached stdin
+	// then its settings: defaults, no link
+	rec.waitMsg(t, `band:{"settings":{"token":"d0"},"type":"settings"}`)
+	waitFor(t, "the service's event", func() bool {
+		rec.mu.Lock()
+		defer rec.mu.Unlock()
+		return len(evs) == 1 && evs[0] == `band:{"kind":"ping","key":"k"}`
+	})
+	// A changed setting reaches the running service on the next Sync (the state file is watched)
+	if err := m.SetSettings("band", map[string]any{"token": "t1"}); err != nil {
+		t.Fatal(err)
+	}
+	s.Sync()
+	rec.waitMsg(t, `"token":"t1"`)
+	// Events go only to services whose patterns pick them
+	s.SendWhere(func(p []string) bool { return len(p) == 1 && p[0] == "ci/*" }, []byte(`{"type":"event","n":"yes"}`))
+	rec.waitMsg(t, `"n":"yes"`)
 	waitFor(t, "status text", func() bool {
 		st := s.Status("band")
 		// a status line without "links" keeps the last ones; a non-http address is dropped

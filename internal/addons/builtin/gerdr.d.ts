@@ -111,6 +111,8 @@ declare global {
      * the turn's facts (cost, tokens, whether the agent started it itself) and comes once per turn per window.
      */
     on(event: "turn", fn: (turn: TurnRecord) => void): Dispose;
+    /** A new event (g.events), from any source, once per window. */
+    on(event: "event", fn: (e: GerdrEvent) => void): Dispose;
     on(event: "focusChanged", fn: (e: { pane?: PaneInfo; tab?: TabInfo; workspace?: WorkspaceInfo }) => void): Dispose;
 
     /** 弹一条提示。system: true 时用系统通知（mac App / 浏览器通知权限）。 */
@@ -265,6 +267,19 @@ declare global {
      * up. Today's: g.turns({ since: new Date().setHours(0, 0, 0, 0) }). g.on("turn") brings each new one.
      */
     turns(range: { since: number; until?: number }): Promise<TurnRecord[]>;
+
+    /**
+     * Events: things that happened outside a conversation (a review comment, a failed pipeline, a chat message), one
+     * record shape for every source (Gerdr's docs/dev/EVENTS.md). emit one your add-on found (source defaults to
+     * your add-on's id; give a stable id so finding it again doesn't emit it twice); list recent ones; g.on("event")
+     * brings each new one. Panels subscribe with triggers/*.json, sessions with `gerdr event watch`, a service with
+     * addon.json service.events (they come on its stdin as {"type":"event","event":…}; it emits by printing the same).
+     */
+    events: {
+      emit(e: EventInput): Promise<{ event: GerdrEvent; fresh: boolean }>;
+      /** Oldest first. since: unix ms (default: the last 24 hours); on: "source/kind" with * globs; limit: the newest n (default 100). */
+      list(q?: { since?: number; on?: string; key?: string; limit?: number }): Promise<GerdrEvent[]>;
+    };
 
     /** This add-on's own service (addon.json, see the top of this file). Without one, status() is undefined and send rejects. */
     service: {
@@ -455,6 +470,31 @@ declare global {
   }
 
   /** One finished turn (g.turns, g.on("turn")). */
+  /** What g.events.emit takes. */
+  interface EventInput {
+    /** Stable id for this happening ("gitlab:note:123"): one already seen is dropped. Leave out to always emit. */
+    id?: string;
+    /** Who it comes from (default: your add-on's id). [A-Za-z0-9._-], no "/". */
+    source?: string;
+    /** What happened, dotted: "message", "mr.note", "pipeline.failed". */
+    kind: string;
+    /** What it is about (a channel, group/repo!34): what subscribers narrow by. */
+    key?: string;
+    title?: string;
+    text?: string;
+    url?: string;
+    /** Anything else, for code. */
+    data?: unknown;
+  }
+  interface GerdrEvent extends EventInput {
+    id: string;
+    source: string;
+    /** unix ms */
+    at: number;
+    /** How many triggers deep it was emitted (a trigger's function emitting another event). */
+    depth?: number;
+  }
+
   interface TurnRecord {
     /** When it ended (unix ms). */
     ts: number;

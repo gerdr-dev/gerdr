@@ -372,6 +372,9 @@ function handle(m: any) {
     case "turn":
       import("./addons").then((p) => p.emit("turn", m.data));
       break;
+    case "event":
+      import("./addons").then((p) => p.emit("event", m.data));
+      break;
     case "ext":
       set((s) => ({ extVersion: s.extVersion + 1 }));
       break;

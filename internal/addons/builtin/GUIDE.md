@@ -278,14 +278,28 @@ removed.
 
 `command` is a name on the login shell's PATH, an absolute path, or `./…` relative to the folder. It talks JSON lines:
 
-- stdin: `{"type":"hello",…}` first, then `{"type":"sessions","sessions":[…]}` whenever an open session changes, and
-  `{"type":"message","data":…}` from `g.service.send(data)`.
+- stdin: `{"type":"hello",…}` first, then `{"type":"settings","settings":{…}}` (your [settings](#settings), secrets in
+  the clear — that's how a service gets its token; sent again whenever they change), `{"type":"sessions","sessions":[…]}`
+  whenever an open session changes, `{"type":"message","data":…}` from `g.service.send(data)`, and
+  `{"type":"event","event":{…}}` for each event matching a pattern in `"service": { …, "events": ["ci/*"] }`.
 - stdout: `{"type":"status","text":"…"}` (shown in Settings; may carry `"links":{"<key>":"http://127.0.0.1:…"}`, the
   addresses of your [link settings](#settings) when the process serves those pages itself), `{"type":"message","data":…}` (to
-  `g.service.on("message")` in every window). Other lines go to Gerdr's log; stderr to `~/.gerdr/logs/addons/<id>.log`.
+  `g.service.on("message")` in every window), `{"type":"event","event":{"id":"…","kind":"message","key":"…","title":"…"}}`
+  (an [event](#events): source defaults to your add-on's id). Other lines go to Gerdr's log; stderr to
+  `~/.gerdr/logs/addons/<id>.log`.
 - stdin closing means stop: let go of what you hold and exit within 3 seconds.
 - Keep files in `$GERDR_ADDON_DATA`, never in the add-on's folder (writing there reloads every window, and an update
   replaces the folder).
+
+### Events
+
+An add-on that watches something outside (a chat, a mailbox, a dashboard) turns what it sees into **events** and
+leaves what to do about them to whoever subscribed: a panel's `triggers/*.json` runs its own function, a session
+watches with `gerdr event watch`, another add-on listens with `g.on("event")`. The shape is
+`{ id, source, kind, key, title, text, url, data }`; give `id` a stable value (`slack:C123:1717000000.000100`) so
+seeing the same thing twice emits it once, `key` what subscribers narrow by (a channel), `kind` a dotted verb
+(`message`, `mention`). Emit from the service (stdout, above) when it holds a connection, or from the UI with
+`g.events.emit`. To act on events yourself (send a reply), list patterns in `service.events` and read them on stdin.
 
 ## Debugging
 

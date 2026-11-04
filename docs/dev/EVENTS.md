@@ -1,0 +1,72 @@
+# Events
+
+Things that happen outside a conversation — a review comment, a failed pipeline, a chat message, a mail — as one
+record shape, kept by Gerdr and handed to whoever subscribed. Code: `internal/events` (store, patterns, watches),
+`internal/work/trigger.go` (triggers/, ctx.events), `internal/server/eventsapi.go` (delivery, HTTP),
+`cmd/gerdr/eventcmd.go` (`gerdr event`), add-on side in `internal/addons/service.go` and `ui/src/lib/addons.ts`.
+
+## The record
+
+```json
+{ "id": "gitlab:note:123", "source": "gitlab", "kind": "mr.note", "key": "group/repo!34",
+  "title": "alice commented", "text": "…", "url": "https://…", "data": { … }, "at": 1793700000000, "depth": 0 }
+```
+
+- `source/kind` is what patterns match: `gitlab/mr.*`, `*/pipeline.failed`, or a kind alone. No `/` in either, so the
+  pattern splits unambiguously. `key` is what it is about; key patterns' `*` crosses slashes (keys are paths).
+- `id` is the emitter's stable id for the happening. An id seen this month or last is dropped (`fresh: false`), so a
+  poller re-finding the same comment every 5 minutes emits it once, and needs no memory of its own for that. The seen
+  set is rebuilt from the files on start, so a restart doesn't re-emit. No id = a fresh random one, never deduplicated.
+- Kept in `~/.gerdr/events/<yyyy-mm>.jsonl`, append-only, like turns. **Facts, not decisions** (the same rule as
+  turns in ADDONS.md): what an event means and what to do is the subscriber's.
+
+## Sources: Gerdr pulls nothing itself
+
+Decided with the user (2026-11): polling, no webhooks in the first version — a webhook needs the computer reachable
+(the relay would have to forward it), and a poll survives Gerdr being down (it catches up). Gerdr has no built-in
+GitLab / Slack / mail pollers; sources are:
+
+- a Work / panel function on a schedule that polls and `ctx.events.emit`s what it found;
+- an add-on service printing `{"type":"event","event":{…}}` (source defaults to the add-on's id) — for a connection that
+  must exist once per machine (Slack's Socket Mode), not once per panel;
+- an add-on's UI (`g.events.emit`), the CLI (`gerdr event emit`), `POST /api/events`.
+
+Chat / mail / anything with its own credentials is an add-on, not core (the user's call): Gerdr ships the bus.
+
+## Subscribers: every kind of owner can
+
+| who | how | gets |
+|---|---|---|
+| a panel / Work | `triggers/<id>.json` in its folder (`on`, `key`, `fn` or `prompt`) | `fn` runs with `{event, trigger}`; `prompt` goes to its Work agent |
+| a Code session | `gerdr event watch --on … [--key …] [--once] [--note …]` | a message per event (title, text, url, the note) |
+| an add-on's UI | `g.on("event")`, `g.events.list` | every event, in every open window |
+| an add-on's service | addon.json `service.events: ["slack/*"]` | `{"type":"event","event":…}` on stdin |
+
+- Triggers are files, like schedules: the panel owns whether it listens (the file is there) and what it does (its
+  function decides, reading its own skills / state). That's the "mechanism in code, the user's way in prose" rule —
+  no on/off switch in Gerdr. A trigger's runs are queued and run one at a time, in event order.
+- Watches are for sessions, which have no folder: kept in `~/.gerdr/state/event-watches.json` (this machine's). A
+  watch whose session is gone is dropped when an event comes for it. `--once` is taken out as it's matched, so a
+  burst delivers one.
+- `gerdr event list / watch / unwatch / watches` are auto-approved for agents (sysenv.SafeGerdrCLI); `emit` isn't:
+  it can start triggers' functions, which is `gerdr work run` by another door.
+
+## Loops
+
+A trigger's function may emit events (a poller fanning out, a reply). Each run knows the depth of the event that
+started it (`depthOf(input)`), and what it emits is one deeper. Events deeper than `events.MaxDepth` (4) are kept
+and broadcast but not delivered to triggers, watches or services, so two triggers feeding each other stop after a
+few rounds instead of spinning forever.
+
+## Add-on services get their settings
+
+A service can't call `g.settings.get` (it isn't a page), and a source needs its token. So right after the greeting a
+service gets `{"type":"settings","settings":{…}}` (defaults overlaid with what was set, secrets in the clear, links
+left out), and again whenever they change (Services.Sync runs on every change of the add-on directory or state file).
+
+## Not done yet
+
+- A page for triggers (last runs, errors) next to the schedules in a panel's settings; `gerdr work triggers` has it.
+  Trigger runs' last state is kept in memory only.
+- Webhooks in, through the relay, behind the same auth as `/api/`.
+- Pruning old month files (they're small: a busy poller is a few MB a month).

@@ -1220,6 +1220,23 @@ prints its stack and exits 1. Ctrl-C stops the run. --input-file - reads the inp
 			return nil
 		},
 	})
+	cmd.AddCommand(&cobra.Command{
+		Use:   "triggers",
+		Short: "The project's triggers (triggers/<id>.json: what runs when an event comes, docs/dev/EVENTS.md): runs and the last one since Gerdr started",
+		Args:  cobra.NoArgs,
+		RunE: func(_ *cobra.Command, _ []string) error {
+			c, err := newAPIClient()
+			if err != nil {
+				return err
+			}
+			var out map[string]any
+			if err := c.do("GET", "/api/work/triggers?project="+url.QueryEscape(which()), nil, &out); err != nil {
+				return err
+			}
+			printJSON(out["list"])
+			return nil
+		},
+	})
 	cmd.AddCommand(workMCPCmd(which))
 	sched := &cobra.Command{Use: "schedule", Short: "Run one schedule now, or pause / resume it (on this machine)"}
 	for _, op := range []string{"run", "pause", "resume"} {

@@ -525,6 +525,11 @@ function makeApi(id: string, hash: string) {
     },
     usage: (force?: boolean) => api.usage(force),
     turns: (r: { since: number; until?: number }) => api.turns(r.since, r.until),
+    // An add-on's own events go out under its id unless it names a source
+    events: {
+      emit: (e: Record<string, unknown>) => api.emitEvent({ source: id, ...e }),
+      list: (q?: { since?: number; on?: string; key?: string; limit?: number }) => api.events(q),
+    },
     storage: {
       get: (k: string) => {
         try {

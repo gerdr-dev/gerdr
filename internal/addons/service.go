@@ -52,6 +52,9 @@ type ServiceSpec struct {
 	Command string            `json:"command"`
 	Args    []string          `json:"args,omitempty"`
 	Env     map[string]string `json:"env,omitempty"`
+	// Events: event patterns (docs/dev/EVENTS.md: "source/kind" with * globs) the service gets on its stdin as
+	// {"type":"event","event":{…}}.
+	Events []string `json:"events,omitempty"`
 }
 
 // ServiceStatus is what Settings → Add-ons and g.service.status() show.
@@ -78,6 +81,8 @@ type Services struct {
 	// OnStatus / OnMessage: pushed to the UI (hub broadcasts).
 	OnStatus  func(id string, st ServiceStatus)
 	OnMessage func(id string, data json.RawMessage)
+	// OnEvent: the service emitted an event ({"type":"event","event":{…}}); its source defaults to the add-on's id.
+	OnEvent func(id string, event json.RawMessage)
 
 	syncMu sync.Mutex // one Sync at a time: an old process must be gone before its replacement starts
 	mu     sync.Mutex
@@ -92,8 +97,9 @@ type svcProc struct {
 	done    chan struct{}
 
 	// guarded by Services.mu
-	st ServiceStatus
-	in chan []byte // stdin of the current run; nil while not running
+	st       ServiceStatus
+	in       chan []byte // stdin of the current run; nil while not running
+	settings string      // the settings line last sent to the current run (sendSettings)
 }
 
 // NewServices: logs and per-add-on data go under the manager's root (gerdr's data directory).
@@ -145,6 +151,43 @@ func (s *Services) Sync() {
 	for _, p := range starting {
 		go s.run(p)
 	}
+	// Settings → Add-ons changed (the state file is watched too): running services get their new values
+	s.mu.Lock()
+	running := make([]*svcProc, 0, len(s.procs))
+	for _, p := range s.procs {
+		running = append(running, p)
+	}
+	s.mu.Unlock()
+	for _, p := range running {
+		s.sendSettings(p, false)
+	}
+}
+
+// settingsLine: {"type":"settings","settings":{…}}, what a service reads its add-on's settings from (tokens too: a
+// service can't call g.settings.get, it isn't a page).
+func (s *Services) settingsLine(id string) []byte {
+	b, _ := json.Marshal(map[string]any{"type": "settings", "settings": s.m.SettingsOf(id)})
+	return b
+}
+
+// sendSettings gives a running service its settings when they changed since the last time (always, with force).
+func (s *Services) sendSettings(p *svcProc, force bool) {
+	line := s.settingsLine(p.id)
+	s.mu.Lock()
+	in := p.in
+	same := p.settings == string(line)
+	if in != nil && (force || !same) {
+		p.settings = string(line)
+	}
+	s.mu.Unlock()
+	if in == nil || (same && !force) {
+		return
+	}
+	select {
+	case in <- line:
+	default:
+		s.log.Warn("addon service not reading stdin, dropped its settings", "addon", p.id)
+	}
 }
 
 // Close stops every service and waits for them (each gets its stdin closed and a few seconds to exit).
@@ -193,6 +236,28 @@ func (s *Services) Send(id string, line []byte) error {
 		return nil
 	default:
 		return fmt.Errorf("add-on %q: service is not reading its stdin", id)
+	}
+}
+
+// SendWhere sends a line to every running service whose addon.json service.events pick says yes to (an event, to
+// the services subscribed to it). A service that is not keeping up loses it (logged).
+func (s *Services) SendWhere(pick func(patterns []string) bool, line []byte) {
+	s.mu.Lock()
+	var ins []chan []byte
+	var ids []string
+	for id, p := range s.procs {
+		if p.in != nil && len(p.spec.Events) > 0 && pick(p.spec.Events) {
+			ins = append(ins, p.in)
+			ids = append(ids, id)
+		}
+	}
+	s.mu.Unlock()
+	for i, in := range ins {
+		select {
+		case in <- line:
+		default:
+			s.log.Warn("addon service not reading stdin, dropped an event", "addon", ids[i])
+		}
 	}
 }
 
@@ -353,6 +418,14 @@ func (s *Services) runOnce(p *svcProc) error {
 				}
 			}
 		}
+		// Its settings right after the greeting (Sync sends them again when they change)
+		line := s.settingsLine(p.id)
+		s.mu.Lock()
+		p.settings = string(line)
+		s.mu.Unlock()
+		if !write(line) {
+			return
+		}
 		for {
 			select {
 			case <-stopWriting:
@@ -421,6 +494,7 @@ func (s *Services) readStdout(p *svcProc, r io.Reader) {
 			Text  string            `json:"text"`
 			Links map[string]string `json:"links"`
 			Data  json.RawMessage   `json:"data"`
+			Event json.RawMessage   `json:"event"`
 		}
 		if json.Unmarshal(line, &m) != nil || m.Type == "" {
 			s.log.Info("addon service", "addon", p.id, "stdout", string(line))
@@ -451,6 +525,10 @@ func (s *Services) readStdout(p *svcProc, r io.Reader) {
 					data = json.RawMessage("null")
 				}
 				s.OnMessage(p.id, append(json.RawMessage(nil), data...))
+			}
+		case "event":
+			if s.OnEvent != nil && len(m.Event) > 0 {
+				s.OnEvent(p.id, append(json.RawMessage(nil), m.Event...))
 			}
 		default:
 			s.log.Info("addon service: unknown message type", "addon", p.id, "type", m.Type)

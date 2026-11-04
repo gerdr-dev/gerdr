@@ -48,6 +48,8 @@ Claude Code / Codex 的图形界面：Go 后端（ACP 适配器 + hub + HTTP/WS�
   the host draw its own block types, e.g. an element-reference card).
 - 界面怎么写（能 import 什么、样式、目录）在 ui/AGENTS.md；那份也是给用户的 agent 看的（内置的 gerdr-ui skill 让它先读）。
 - 内置 skill 在 internal/ext/builtin/，会随二进制发给每个 agent：改 `gerdr session` / `gerdr ui` 的命令行时同步改它们。
+- Events (MR comments, pipelines, chat messages… as one record; `internal/events`, `work/trigger.go`, `gerdr event`):
+  docs/dev/EVENTS.md. Sources are polls / add-ons, never built into Gerdr; panels subscribe with triggers/*.json.
 - Add-ons (`internal/addons`, `ui/src/lib/addons.ts`, Settings → Add-ons): docs/dev/ADDONS.md for how it works;
   `internal/addons/builtin/GUIDE.md` is the guide for writing one (installed as `~/.gerdr/addons/GUIDE.md`), keep it
   in step with the API. The UI's add-on API

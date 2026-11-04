@@ -511,6 +511,11 @@ func SafeGerdrCLI(cmd string) bool {
 	}
 	switch words[1] {
 	case "session", "ui", "workspace", "tab", "pane":
+	case "event":
+		// Looking and subscribing only: emit can start triggers' functions (it's `gerdr work run` by another door)
+		if len(words) < 3 || words[2] == "emit" {
+			return false
+		}
 	default:
 		// Not `gerdr folder` either: like fetch below, it writes files through Gerdr's process
 		return false

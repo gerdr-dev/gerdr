@@ -31,6 +31,7 @@ import (
 	"github.com/gerdr-dev/gerdr/internal/awake"
 	"github.com/gerdr-dev/gerdr/internal/config"
 	"github.com/gerdr-dev/gerdr/internal/doctor"
+	"github.com/gerdr-dev/gerdr/internal/events"
 	"github.com/gerdr-dev/gerdr/internal/ext"
 	"github.com/gerdr-dev/gerdr/internal/hub"
 	"github.com/gerdr-dev/gerdr/internal/i18n"
@@ -93,7 +94,7 @@ func main() {
 		Short: i18n.S("打印版本", "Print the version"),
 		Run:   func(cmd *cobra.Command, args []string) { fmt.Println(version.Version) },
 	})
-	root.AddCommand(addProjectFlag(sessionCmd()), folderCmd(), uiCmd(), workCmd(), panelCmd(), remoteCmd(), configCmd(), agentCmd(), mcpCmd(), skillCmd(), addonCmd(), addProjectFlag(workspaceCmd()), addProjectFlag(tabCmd()), addProjectFlag(paneCmd()))
+	root.AddCommand(addProjectFlag(sessionCmd()), folderCmd(), uiCmd(), workCmd(), panelCmd(), remoteCmd(), configCmd(), agentCmd(), mcpCmd(), skillCmd(), addonCmd(), eventCmd(), addProjectFlag(workspaceCmd()), addProjectFlag(tabCmd()), addProjectFlag(paneCmd()))
 	if err := root.Execute(); err != nil {
 		if errors.Is(err, errHandover) {
 			os.Exit(exitHandover)
@@ -410,7 +411,15 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 	// layout save, and once now for the projects that are open.
 	layout.OnSet = wr.SaveLayouts
 	wr.SaveLayouts(layout.Get())
-	srv := &server.Server{Dir: env.Dir, Hub: h, Token: token, Config: cfg, Secrets: secrets, Layout: layout, Unread: unread, Addons: am, AddonSvc: asvc, Ext: em, Work: wr, Log: log, OnConfig: applyAgents,
+	// Events (docs/dev/EVENTS.md): a broken store only turns events off
+	evs, err := events.Open(env.Dir)
+	if err != nil {
+		log.Warn("events", "err", err)
+		evs = nil
+	} else {
+		wr.Events = evs
+	}
+	srv := &server.Server{Dir: env.Dir, Hub: h, Events: evs, Token: token, Config: cfg, Secrets: secrets, Layout: layout, Unread: unread, Addons: am, AddonSvc: asvc, Ext: em, Work: wr, Log: log, OnConfig: applyAgents,
 		UI: ui, ESM: esm, Remote: rm, Awake: keeper,
 		Service: svc, Terms: term.New(func() []string { return sysenv.ChildEnv() }, log)}
 	defer srv.Terms.Close()
@@ -469,6 +478,7 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 	rm.Start(server.RemoteHandler(handler))
 	svcCtx, stopSvcs := context.WithCancel(context.Background())
 	srv.RunAddonServices(svcCtx)
+	srv.RunEvents()         // events to windows, watching sessions, add-on services and triggers/ (server/eventsapi.go)
 	wr.RunSchedules(svcCtx) // the Work directories' schedules/ (work/schedule.go)
 	srv.RunReports(svcCtx)  // --report-to: tell a coordinator when the sessions it handed work to stop (server/report.go)
 	go srv.MountWorks()     // every project's Work UI, compiled into the page (uisite mounts)

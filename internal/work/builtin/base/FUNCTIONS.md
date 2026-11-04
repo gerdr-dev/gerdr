@@ -140,6 +140,31 @@ backend runs them while it's up: with the background service on, the App needn't
 - A function on a schedule keeps its own memory in `data/` (what it has already handled), so the same comment or
   failure isn't handed over twice.
 
+## On an event
+
+Things that happen outside a conversation — a review comment, a failed pipeline, a chat message — are **events**:
+`{ id, source, kind, key, title, text, url, data }`. Where they come from: a function on a schedule that polls and
+`ctx.events.emit`s what it found, an add-on (a Slack listener), or `gerdr event emit`. Giving `id` a stable value
+(`gitlab:note:123`) makes finding the same thing again a no-op, so a poller needs no memory of its own for that.
+
+What this project does when one comes goes in `triggers/<id>.json`, the twin of `schedules/`:
+
+```json
+{ "on": "gitlab/mr.*", "fn": "mrwatch.onEvent", "name": "MR news to its worker" }
+{ "on": "slack/message", "key": "C0123ABC", "fn": "inbox.onSlack" }
+{ "on": "grafana/alert.firing", "prompt": "Look into this alert and tell me what you find" }
+```
+
+- `on`: `source/kind` with `*` (`gitlab/mr.*`, `*/pipeline.failed`), or a kind alone for any source; `key` narrows it
+  to one thing (`*` crosses slashes: `group/repo!*`).
+- `fn` runs a local function with `{ event, trigger }` (plus `input`); `prompt` sends you the event and the text.
+  Whether to act at all is the function's call: read your skills' settings, the board's state, then do or don't.
+  A trigger's runs go one after another, in the order the events came.
+- A function run by a trigger may emit events itself; they're one level deeper, and past 4 levels they aren't handed
+  on, so two triggers feeding each other stop.
+- `gerdr work triggers` lists them with how many runs and the last one; `gerdr event list --on 'gitlab/*'` shows what
+  came. A broken file stops the whole folder, like schedules.
+
 ## Run logs
 
 Every run's progress, logs and error (with its stack) are kept 30 days in `ctx.workspace.logs_dir`;

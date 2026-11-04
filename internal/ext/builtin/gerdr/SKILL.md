@@ -1,6 +1,6 @@
 ---
 name: gerdr
-description: "Coordinate other coding-agent sessions inside Gerdr (Claude Code / Codex sessions in the Gerdr GUI): list sessions, start a new agent session next to you, hand it a task, wait for it, read its reply, or message an existing session. Use when the user asks you to delegate to / start / ask / check on another agent or session in Gerdr, or to run several agents in parallel. Also for arranging Gerdr's layout: sorting tabs into workspaces, splitting panes together, renaming or reordering workspaces / tabs. Also for changing Gerdr's own settings (theme, default agent / mode / model, shortcuts, model providers) with `gerdr config`, and for setting up agents (roles) with their own prompt, skills and MCP servers (`gerdr agent`, `gerdr skill`, `gerdr mcp`). Also for add-ons (`gerdr addon`): browsing add-on stores, installing / updating / removing add-ons, switching them on or off, changing their settings. Also for a project's panels (`gerdr panel`): listing, installing one from a git repository, adding a blank one, updating, changing its icon, removing. Requires GERDR_ENV=1."
+description: "Coordinate other coding-agent sessions inside Gerdr (Claude Code / Codex sessions in the Gerdr GUI): list sessions, start a new agent session next to you, hand it a task, wait for it, read its reply, or message an existing session. Use when the user asks you to delegate to / start / ask / check on another agent or session in Gerdr, or to run several agents in parallel. Also for arranging Gerdr's layout: sorting tabs into workspaces, splitting panes together, renaming or reordering workspaces / tabs. Also for changing Gerdr's own settings (theme, default agent / mode / model, shortcuts, model providers) with `gerdr config`, and for setting up agents (roles) with their own prompt, skills and MCP servers (`gerdr agent`, `gerdr skill`, `gerdr mcp`). Also for add-ons (`gerdr addon`): browsing add-on stores, installing / updating / removing add-ons, switching them on or off, changing their settings. Also for a project's panels (`gerdr panel`): listing, installing one from a git repository, adding a blank one, updating, changing its icon, removing. Also for being told when something happens outside the conversation (a new MR comment, a pipeline finishing, a chat message): `gerdr event watch / list`. Requires GERDR_ENV=1."
 ---
 
 # Gerdr：和其他会话协作
@@ -317,6 +317,23 @@ gerdr panel icon <panel> kanban [--color blue]     # glyph / line icon key, or s
 gerdr panel rm <panel>                             # to the trash, data and all
 gerdr panel restore                                # the project's own panel back (blank) after removing it
 ```
+
+## Being told when something happens (events)
+
+Gerdr keeps **events** from outside the conversation — MR comments, pipelines, chat messages, whatever a panel's poller
+or an add-on reports — as `{id, source, kind, key, title, text, url}`. Instead of polling or sleeping, subscribe and end
+your turn; each matching event arrives as a message to you:
+
+```bash
+gerdr event list --since 6h                    # what has been coming in (source/kind/key to subscribe by)
+gerdr event watch --on 'gitlab/mr.note' --key 'group/repo!34' --note "fix the review comments and push"
+gerdr event watch --on 'ci/pipeline.*' --key 'group/repo' --once   # just the next one
+gerdr event watches                            # yours; gerdr event unwatch <id>
+```
+
+`--on` is `source/kind` with `*`; `--key` narrows to one thing (`*` crosses slashes). `--note` comes back with every
+event, so you remember what you meant to do. Only events someone emits arrive: if `gerdr event list` shows none of the
+kind you need, nothing polls it yet (a panel's schedule or an add-on has to).
 
 ## 并行
 
