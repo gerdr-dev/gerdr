@@ -1,4 +1,4 @@
-import { ArrowDownRight, PanelRightClose, PanelRightOpen, Check, ChevronDown, Code2, History, MessageSquarePlus, Settings, X } from "lucide-react";
+import { ArrowDownRight, PanelRightClose, PanelRightOpen, Check, ChevronDown, Code2, History, Menu, MessageSquarePlus, Settings, X } from "lucide-react";
 import { createElement, useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { toast } from "sonner";
@@ -776,8 +776,16 @@ export function WorkView() {
     return (
       <div className="flex h-full flex-col bg-background">
         <div className="flex h-11 shrink-0 items-center gap-1 border-b bg-sidebar px-1.5">
-          <Button variant="ghost" size="icon" className="size-9" aria-label="Code" onClick={() => setMode("agents")}>
-            <Code2 className="size-4" />
+          {/* The drawer, as in Code (PhoneBar): projects, the Code / panel switch, settings, and the panel's own items
+              (core/phoneMenu.ts). It used to be a Code button, which left a phone no way to anything else */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-9"
+            aria-label={t("phoneBar.sidebar")}
+            onClick={() => ((document.activeElement as HTMLElement | null)?.blur?.(), set({ drawer: true }))}
+          >
+            <Menu className="size-[18px]" />
           </Button>
           <div className={cn("flex flex-1 justify-center", ownChat && "invisible")}>
             <div className="flex gap-0.5 rounded-lg bg-muted p-0.5">

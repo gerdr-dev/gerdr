@@ -104,6 +104,27 @@ declare module "@gerdr/core" {
    */
   export function usePanelVisible(): boolean;
 
+  /** One row of this panel's part of the phone drawer (usePhoneMenu). */
+  export interface PhoneMenuItem {
+    /** Stable per item (defaults to the label). */
+    id?: string;
+    label: string;
+    /** E.g. a lucide icon element. */
+    icon?: ReactNode;
+    /** A count or short word at the row's end. */
+    badge?: string | number;
+    /** The drawer closes, then this runs. */
+    onSelect: () => void;
+  }
+
+  /**
+   * This panel's items in the phone drawer. On a phone the panel's top-left button opens Gerdr's drawer (projects, the
+   * Code / panel switch, settings); while this panel is shown, these rows take the place of Code's tab list there. Put
+   * what the panel's header can't fit on a phone: its secondary pages, logs, settings. Call it once in the page with
+   * the current list; with none (or an empty list) the drawer is as in Code.
+   */
+  export function usePhoneMenu(items: PhoneMenuItem[]): void;
+
   export function registerCard(type: string, component: ComponentType<CardProps>): () => void;
 
   /** The built-in card (title, body, choices answerable in place with undo), for a card type that only adds to it. */

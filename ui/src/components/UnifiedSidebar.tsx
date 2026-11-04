@@ -105,7 +105,9 @@ import { WsDot } from "./WsDot";
 import { TabDragLayer, startPaneDrag, startWsDrag, useDrag } from "./TabDrag";
 import { t } from "@/lib/i18n";
 import { usePanels } from "@/lib/panels";
-import { workProjectOf } from "@/lib/work";
+import { useWorkProject, workProjectOf } from "@/lib/work";
+import { usePanelPhoneMenu } from "@/core/phoneMenu";
+import { PanelPhoneMenu } from "./PhoneMenu";
 
 /*
  * The sidebar (on a phone, the drawer). One list in place of four things that each listed the same agents:
@@ -241,6 +243,10 @@ export function UnifiedSidebar({ className }: { className?: string }) {
   const [folded, setFolded] = useFolded();
   const [activeFolded, setActiveFolded] = useLocal(ACTIVE_FOLD_KEY, false);
   const roomy = !!className;
+  // A panel on screen in the phone drawer: its own items (core/phoneMenu.ts) instead of Code's tabs, when it gives any
+  const mode = useStore((s) => s.mode);
+  const workKey = useWorkProject();
+  const panelMenu = usePanelPhoneMenu(roomy && mode === "work" ? workKey : null);
   // The drawer's search: not kept, it's "what am I looking for right now" (the drawer remounts on every open)
   const [q, setQ] = useState("");
   // The "3m" column's clock: minutes are its smallest step, a tick every 15s is plenty (statuses come over the socket)
@@ -350,136 +356,142 @@ export function UnifiedSidebar({ className }: { className?: string }) {
         {/* Beside the rail the project switcher, mode switch, add-ons and settings are on the rail (Rail.tsx); the phone's
           drawer has no rail and keeps them in its own top and bottom rows */}
         {className ? <SidebarHeader /> : <ListHeader />}
-        {roomy && (
-          <div className="relative shrink-0 px-2 pt-2">
-            <Search className="pointer-events-none absolute top-1/2 left-4.5 mt-1 size-3.5 -translate-y-1/2 text-muted-foreground" />
-            {/* iOS gets 16px: a smaller input makes iOS zoom the page on focus. Not focused on open: the keyboard would cover the list */}
-            <input
-              className="h-8 w-full rounded-lg bg-muted/60 pr-2 pl-8 text-[13px] outline-none placeholder:text-muted-foreground/70 focus-visible:ring-2 focus-visible:ring-ring/40 supports-[-webkit-touch-callout:none]:text-[16px]"
-              placeholder={t("unifiedSidebar.filterPlaceholder")}
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-            />
-          </div>
-        )}
-        <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto px-1.5 pb-2">
-          {kw ? (
-            <div className="flex flex-col pt-1.5">
-              {hits.map((x) => flatRow(x))}
-              {!hits.length && <p className="px-1 py-6 text-center text-[12px] text-muted-foreground">{t("unifiedSidebar.noMatch")}</p>}
-            </div>
-          ) : (
-            <>
-              {/* data-ws-groups: the groups a dragged group title reorders among (TabDrag.tsx startWsDrag) */}
-              <div className="pt-1.5" data-ws-groups>
-                {(active.length > 0 || gridOn || allProjects || dragAgent) && (
-                  // data-active-drop: drop an agent here to put it in (TabDrag.tsx)
-                  <div data-active-drop className="mb-1 border-b pb-1.5">
-                    <div
-                      role="button"
-                      className="group/act flex h-7 w-full cursor-default items-center gap-1 rounded-md pr-1 pl-1.5 text-[11px] font-medium text-muted-foreground select-none hover:bg-accent/60 hover:text-foreground"
-                      title={t("unifiedSidebar.activeHint")}
-                      onClick={() => setActiveFolded(!activeFolded)}
-                    >
-                      {/* The margin lines the title up with the rows' titles below (row icon + gap-2 vs chevron + gap-1) */}
-                      <ChevronRight className={cn("size-3.5 shrink-0 transition-transform", roomy ? "mr-1.5" : "mr-1", !activeFolded && "rotate-90")} />
-                      <span className="flex-1 truncate text-left">
-                        {t("unifiedSidebar.active")}
-                        {allProjects && <span className="font-normal">{t("unifiedSidebar.allProjects")}</span>}
-                      </span>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
+        {panelMenu?.length ? (
+          <PanelPhoneMenu items={panelMenu} />
+        ) : (
+          <>
+            {roomy && (
+              <div className="relative shrink-0 px-2 pt-2">
+                <Search className="pointer-events-none absolute top-1/2 left-4.5 mt-1 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                {/* iOS gets 16px: a smaller input makes iOS zoom the page on focus. Not focused on open: the keyboard would cover the list */}
+                <input
+                  className="h-8 w-full rounded-lg bg-muted/60 pr-2 pl-8 text-[13px] outline-none placeholder:text-muted-foreground/70 focus-visible:ring-2 focus-visible:ring-ring/40 supports-[-webkit-touch-callout:none]:text-[16px]"
+                  placeholder={t("unifiedSidebar.filterPlaceholder")}
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                />
+              </div>
+            )}
+            <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto px-1.5 pb-2">
+              {kw ? (
+                <div className="flex flex-col pt-1.5">
+                  {hits.map((x) => flatRow(x))}
+                  {!hits.length && <p className="px-1 py-6 text-center text-[12px] text-muted-foreground">{t("unifiedSidebar.noMatch")}</p>}
+                </div>
+              ) : (
+                <>
+                  {/* data-ws-groups: the groups a dragged group title reorders among (TabDrag.tsx startWsDrag) */}
+                  <div className="pt-1.5" data-ws-groups>
+                    {(active.length > 0 || gridOn || allProjects || dragAgent) && (
+                      // data-active-drop: drop an agent here to put it in (TabDrag.tsx)
+                      <div data-active-drop className="mb-1 border-b pb-1.5">
+                        <div
+                          role="button"
+                          className="group/act flex h-7 w-full cursor-default items-center gap-1 rounded-md pr-1 pl-1.5 text-[11px] font-medium text-muted-foreground select-none hover:bg-accent/60 hover:text-foreground"
+                          title={t("unifiedSidebar.activeHint")}
+                          onClick={() => setActiveFolded(!activeFolded)}
+                        >
+                          {/* The margin lines the title up with the rows' titles below (row icon + gap-2 vs chevron + gap-1) */}
+                          <ChevronRight className={cn("size-3.5 shrink-0 transition-transform", roomy ? "mr-1.5" : "mr-1", !activeFolded && "rotate-90")} />
+                          <span className="flex-1 truncate text-left">
+                            {t("unifiedSidebar.active")}
+                            {allProjects && <span className="font-normal">{t("unifiedSidebar.allProjects")}</span>}
+                          </span>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button
+                                className="flex size-5 items-center justify-center rounded-sm hover:bg-muted hover:text-foreground"
+                                title={t("unifiedSidebar.activeSettings")}
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <Ellipsis className="size-3.5" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                              <DropdownMenuCheckboxItem checked={allProjects} onCheckedChange={(v) => setActiveAllProjects(!!v)}>
+                                {t("unifiedSidebar.showAllProjects")}
+                              </DropdownMenuCheckboxItem>
+                              <div className="px-2 pb-1 text-[11px] text-muted-foreground">{t("unifiedSidebar.perProject")}</div>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem disabled={!outN} onClick={restoreWorking}>
+                                <ListPlus /> {outN ? t("unifiedSidebar.restoreWorkingN", { n: outN }) : t("unifiedSidebar.restoreWorking")}
+                              </DropdownMenuItem>
+                              <DropdownMenuItem disabled={!doneN} onClick={clearActive}>
+                                <Eraser /> {doneN ? t("unifiedSidebar.clearDoneN", { n: doneN }) : t("unifiedSidebar.clearDone")}
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                           <button
-                            className="flex size-5 items-center justify-center rounded-sm hover:bg-muted hover:text-foreground"
-                            title={t("unifiedSidebar.activeSettings")}
-                            onClick={(e) => e.stopPropagation()}
+                            className={cn(
+                              "flex h-5 items-center gap-1 rounded-sm px-1",
+                              gridOn ? "bg-brand/15 text-foreground" : "hover:bg-muted hover:text-foreground",
+                            )}
+                            title={gridOn ? t("unifiedSidebar.gridOff") : t("unifiedSidebar.gridOn", { n: MAX_TILES })}
+                            // On a phone the grid is behind the drawer: close it
+                            onClick={(e) => (e.stopPropagation(), toggleOverview(!gridOn), set({ drawer: false }))}
                           >
-                            <Ellipsis className="size-3.5" />
+                            <LayoutGrid className={cn("size-3", gridOn && "text-brand")} />
+                            {t("unifiedSidebar.grid")}
                           </button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-                          <DropdownMenuCheckboxItem checked={allProjects} onCheckedChange={(v) => setActiveAllProjects(!!v)}>
-                            {t("unifiedSidebar.showAllProjects")}
-                          </DropdownMenuCheckboxItem>
-                          <div className="px-2 pb-1 text-[11px] text-muted-foreground">{t("unifiedSidebar.perProject")}</div>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem disabled={!outN} onClick={restoreWorking}>
-                            <ListPlus /> {outN ? t("unifiedSidebar.restoreWorkingN", { n: outN }) : t("unifiedSidebar.restoreWorking")}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem disabled={!doneN} onClick={clearActive}>
-                            <Eraser /> {doneN ? t("unifiedSidebar.clearDoneN", { n: doneN }) : t("unifiedSidebar.clearDone")}
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                      <button
-                        className={cn(
-                          "flex h-5 items-center gap-1 rounded-sm px-1",
-                          gridOn ? "bg-brand/15 text-foreground" : "hover:bg-muted hover:text-foreground",
+                        </div>
+                        {!activeFolded && (
+                          <div>
+                            {active.map((x, i) => {
+                              const num = numbers && i < 9 ? i + 1 : undefined;
+                              return x.item ? (
+                                flatRow(x.item, true, num)
+                              ) : (
+                                <WorkRow key={x.id} id={x.id} current={gridOn && x.id === gridFocusId} grid={gridOn && tiles.includes(x.id)} num={num} />
+                              );
+                            })}
+                          </div>
                         )}
-                        title={gridOn ? t("unifiedSidebar.gridOff") : t("unifiedSidebar.gridOn", { n: MAX_TILES })}
-                        // On a phone the grid is behind the drawer: close it
-                        onClick={(e) => (e.stopPropagation(), toggleOverview(!gridOn), set({ drawer: false }))}
+                        {/* Only when empty: a row appearing mid-drag would push the rows under the pointer */}
+                        {dragAgent && !active.length && !activeFolded && (
+                          <div className="py-1 pl-[26px] text-[12px] text-muted-foreground">{t("unifiedSidebar.dropToActive")}</div>
+                        )}
+                      </div>
+                    )}
+                    {list.map((ws, wi) => (
+                      <Group
+                        key={ws.id}
+                        ws={ws}
+                        index={wi}
+                        last={wi === list.length - 1}
+                        folded={folded.includes(ws.id)}
+                        onFold={() => toggleFold(ws.id)}
+                        sessions={sessions}
+                        unread={unread}
+                        current={ws.id === cur.id}
+                        rows={groups.get(ws.id) ?? []}
                       >
-                        <LayoutGrid className={cn("size-3", gridOn && "text-brand")} />
-                        {t("unifiedSidebar.grid")}
-                      </button>
-                    </div>
-                    {!activeFolded && (
-                      <div>
-                        {active.map((x, i) => {
-                          const num = numbers && i < 9 ? i + 1 : undefined;
-                          return x.item ? (
-                            flatRow(x.item, true, num)
-                          ) : (
-                            <WorkRow key={x.id} id={x.id} current={gridOn && x.id === gridFocusId} grid={gridOn && tiles.includes(x.id)} num={num} />
-                          );
-                        })}
-                      </div>
-                    )}
-                    {/* Only when empty: a row appearing mid-drag would push the rows under the pointer */}
-                    {dragAgent && !active.length && !activeFolded && (
-                      <div className="py-1 pl-[26px] text-[12px] text-muted-foreground">{t("unifiedSidebar.dropToActive")}</div>
-                    )}
-                  </div>
-                )}
-                {list.map((ws, wi) => (
-                  <Group
-                    key={ws.id}
-                    ws={ws}
-                    index={wi}
-                    last={wi === list.length - 1}
-                    folded={folded.includes(ws.id)}
-                    onFold={() => toggleFold(ws.id)}
-                    sessions={sessions}
-                    unread={unread}
-                    current={ws.id === cur.id}
-                    rows={groups.get(ws.id) ?? []}
-                  >
-                    {/* One row per pane, wherever it was dragged to (layout.sideRows): the panes of a split aren't tied together here,
+                        {/* One row per pane, wherever it was dragged to (layout.sideRows): the panes of a split aren't tied together here,
                   the ones on screen just light up. data-side-row(s): drag a row between two others to move it (TabDrag.tsx) */}
-                    {groups.get(ws.id)?.map((r) => (
-                      <div key={r.pane.id} data-side-row={r.pane.id}>
-                        <Row {...rowProps(r.ws, r.tab, r.pane, leaves(r.tab.root).length > 1)} />
-                      </div>
+                        {groups.get(ws.id)?.map((r) => (
+                          <div key={r.pane.id} data-side-row={r.pane.id}>
+                            <Row {...rowProps(r.ws, r.tab, r.pane, leaves(r.tab.root).length > 1)} />
+                          </div>
+                        ))}
+                        {!groups.get(ws.id)?.length && <div className="py-1 pl-[26px] text-[12px] text-muted-foreground">{t("unifiedSidebar.emptyGroup")}</div>}
+                      </Group>
                     ))}
-                    {!groups.get(ws.id)?.length && <div className="py-1 pl-[26px] text-[12px] text-muted-foreground">{t("unifiedSidebar.emptyGroup")}</div>}
-                  </Group>
-                ))}
-              </div>
-              <div className="mt-1 flex gap-1 px-0.5">
-                <FootButton onClick={() => (toggleOverview(false), addTab())} title={t("unifiedSidebar.newTabHint")}>
-                  <Plus className="size-3.5" /> {t("unifiedSidebar.newTab")}
-                </FootButton>
-                <FootButton onClick={() => (toggleOverview(false), openTerminal("tab"))} title={t("unifiedSidebar.terminalHint")}>
-                  <SquareTerminal className="size-3.5" /> {t("unifiedSidebar.terminal")}
-                </FootButton>
-                <FootButton onClick={() => set({ dialog: { kind: "newWorkspace" } })} title={t("unifiedSidebar.newGroupHint")}>
-                  <Plus className="size-3.5" /> {t("unifiedSidebar.newGroup")}
-                </FootButton>
-              </div>
-            </>
-          )}
-        </div>
+                  </div>
+                  <div className="mt-1 flex gap-1 px-0.5">
+                    <FootButton onClick={() => (toggleOverview(false), addTab())} title={t("unifiedSidebar.newTabHint")}>
+                      <Plus className="size-3.5" /> {t("unifiedSidebar.newTab")}
+                    </FootButton>
+                    <FootButton onClick={() => (toggleOverview(false), openTerminal("tab"))} title={t("unifiedSidebar.terminalHint")}>
+                      <SquareTerminal className="size-3.5" /> {t("unifiedSidebar.terminal")}
+                    </FootButton>
+                    <FootButton onClick={() => set({ dialog: { kind: "newWorkspace" } })} title={t("unifiedSidebar.newGroupHint")}>
+                      <Plus className="size-3.5" /> {t("unifiedSidebar.newGroup")}
+                    </FootButton>
+                  </div>
+                </>
+              )}
+            </div>
+          </>
+        )}
         {className && <SidebarBottom sidebarToggle />}
         <TabDragLayer />
       </div>

@@ -52,7 +52,8 @@ and their choices are what they set or wrote down, not what the code says.
   - `@gerdr/core` (types: `ui/src/gerdr-core.d.ts`) — Gerdr's own pieces for the page: `<SessionChat id>` (a whole
     conversation with its input box, anywhere in the page: a worker's chat in the page's own drawer or column),
     `useSession`, `onShowSession` (the conversations this panel started are its own: brought up from a notification or
-    the inbox they come back here, and the page shows them), `askSecret`, `registerCard`, `toast`, `useDark`. Prefer them to the frame-era
+    the inbox they come back here, and the page shows them), `askSecret`, `registerCard`, `toast`, `useDark`, `usePhoneMenu` (on a phone, the panel's top-left button
+    opens Gerdr's drawer: the rows this gives are the panel's part of it — what its header can't fit there). Prefer them to the frame-era
     bridge calls below for anything new.
   - `ui/ui.json` — the title, `"icon"` / `"color"` (its button on Gerdr's rail, the same choices as an agent's icon:
     a glyph or line icon like `kanban`, or `sprite:<key>` from an add-on; the user picks it from the button's right-click), and `"chat": false` when the page draws its own chats with `SessionChat` (it then gets
