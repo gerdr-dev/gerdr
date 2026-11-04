@@ -246,7 +246,8 @@ func (c *apiClient) list() ([]sessInfo, error) {
 		Sessions []sessInfo      `json:"sessions"`
 		Layout   json.RawMessage `json:"layout"`
 	}
-	if err := c.do("GET", "/api/hello", nil, &h); err != nil {
+	// Only what this needs; a Gerdr from before ?only sends everything, which decodes the same
+	if err := c.do("GET", "/api/hello?only=sessions,layout", nil, &h); err != nil {
 		return nil, err
 	}
 	spaces := server.SessionSpaces(h.Layout)
@@ -565,7 +566,7 @@ and hand it a task, wait for it to finish, read its reply. Refer to a session by
 					} `json:"agents"`
 				} `json:"config"`
 			}
-			if err := client().do("GET", "/api/hello", nil, &h); err != nil {
+			if err := client().do("GET", "/api/hello?only=agents,config", nil, &h); err != nil {
 				return err
 			}
 			out := []map[string]any{}

@@ -301,20 +301,33 @@ func installedAt() int64 {
 }
 
 func (s *Server) hello(w http.ResponseWriter, r *http.Request) {
+	// ?only=sessions,layout: just those parts. `gerdr session …` (agents run it all the time) needs the sessions and
+	// the layout only; the rest (agents with their availability checks, config, add-ons…) was built for nothing.
+	var only map[string]bool
+	if o := r.URL.Query().Get("only"); o != "" {
+		only = map[string]bool{}
+		for _, k := range strings.Split(o, ",") {
+			only[strings.TrimSpace(k)] = true
+		}
+	}
+	out := map[string]any{"version": version.Version}
+	part := func(k string, f func() any) {
+		if only == nil || only[k] {
+			out[k] = f()
+		}
+	}
 	home, _ := os.UserHomeDir()
-	writeJSON(w, map[string]any{
-		"version":     version.Version,
-		"installedAt": installedAt(),
-		"agents":      s.Hub.Agents(),
-		"sessions":    s.allSessions(r.Context(), 5*time.Second),
-		"hosts":       s.hostInfos(),
-		"layout":      s.Layout.Get(),
-		"config":      s.Config.Get(),
-		"unread":      s.unreadSet(),
-		"home":        home,
-		"addonsDir":   s.Addons.Dir(),
-		"remoteConns": s.remoteConns.list(),
-	})
+	part("installedAt", func() any { return installedAt() })
+	part("agents", func() any { return s.Hub.Agents() })
+	part("sessions", func() any { return s.allSessions(r.Context(), 5*time.Second) })
+	part("hosts", func() any { return s.hostInfos() })
+	part("layout", func() any { return s.Layout.Get() })
+	part("config", func() any { return s.Config.Get() })
+	part("unread", func() any { return s.unreadSet() })
+	part("home", func() any { return home })
+	part("addonsDir", func() any { return s.Addons.Dir() })
+	part("remoteConns", func() any { return s.remoteConns.list() })
+	writeJSON(w, out)
 }
 
 // allSessions: this computer's sessions and every host's (hosts.go). A host's list may be up to maxAge old.
