@@ -1,4 +1,4 @@
-import { ArrowUpRight, GripVertical, Maximize2, Minimize2, Pin, PinOff, X } from "lucide-react";
+import { ArrowUpRight, GripVertical, Maximize2, Minimize2, Minus, Pin, PinOff, X } from "lucide-react";
 import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { basename, focusSession } from "@/lib/actions";
@@ -49,6 +49,7 @@ export function Tile({
   target,
   onFocus,
   onZoom,
+  onMinimize,
   onDragStart,
   pin,
   phone,
@@ -61,6 +62,8 @@ export function Tile({
   target: boolean;
   onFocus: () => void;
   onZoom: () => void;
+  /** Fold it into the grid's "more" row (the grid only: a phone shows one tile at a time). */
+  onMinimize?: () => void;
   onDragStart?: (e: React.PointerEvent, label: string) => void;
   /** Tile size at the end of a zoom animation in progress: the chat is laid out at that size meanwhile (clipped). */
   pin?: { width: number; height: number };
@@ -123,6 +126,11 @@ export function Tile({
         {phone && <div className="flex-1" />}
         {!phone && (
           <>
+            {onMinimize && !zoomed && (
+              <TileButton title={t("overviewTile.minimize")} onClick={onMinimize}>
+                <Minus className="size-3.5" />
+              </TileButton>
+            )}
             <TileButton title={main ? t("overviewTile.unpin") : t("overviewTile.pinLeft")} onClick={() => toggleMain(id)}>
               {main ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
             </TileButton>

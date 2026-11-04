@@ -186,6 +186,26 @@ export function toggleTileZoom(id?: string) {
   });
 }
 
+/**
+ * Minimize a tile (asked for): it leaves the grid for the "more" row under it, and the others take its room. The focus
+ * moves to a tile still in the grid; picking it from "more" (or focusing it any other way) brings it back (OverviewGrid).
+ */
+export function minimizeTile(id: string) {
+  setOverview((o) => {
+    const ids = overviewIds({ ...get(), overview: o });
+    const mini = [...(o.mini ?? []).filter((x) => x !== id && ids.includes(x)), id];
+    const rest = ids.filter((x) => !mini.includes(x));
+    const i = ids.indexOf(id);
+    const next = o.focus === id || !o.focus ? (rest.find((x) => ids.indexOf(x) > i) ?? rest[rest.length - 1]) : o.focus;
+    return { ...o, mini, focus: next, zoom: o.zoom === id ? undefined : o.zoom };
+  });
+}
+
+/** Take a tile out of the minimized ones (it comes back into the grid). */
+export function unminimizeTile(id: string) {
+  setOverview((o) => (o.mini?.includes(id) ? { ...o, mini: o.mini.filter((x) => x !== id) } : o));
+}
+
 export function toggleMain(id: string) {
   setOverview((o) => ({ ...o, main: o.main === id ? undefined : id }));
 }

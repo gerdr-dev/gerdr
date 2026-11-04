@@ -196,6 +196,7 @@ export const zh = {
   "overviewTile.unpin": "取消固定",
   "overviewTile.pinLeft": "固定在左边",
   "overviewTile.restore": "还原",
+  "overviewTile.minimize": "最小化，收进下面的「更多」",
   "overviewTile.zoom": "放大（双击标题栏也行）",
   "overviewTile.backToTab": "回到它所在的 Tab",
   "overviewTile.done": "完成，移出进行中（Agent 不受影响）",
@@ -206,7 +207,7 @@ export const zh = {
   "overviewGrid.dropDown": "放到下面",
   "overviewGrid.empty": "进行中是空的：等你的、在跑的、报错的会自动出现，也可以在左边右键 Agent 加进来",
   "overviewGrid.seamHint": "拖动调大小，双击恢复等分",
-  "overviewGrid.moreHint": "放不下了：点一个换进来，顶替最后一格",
+  "overviewGrid.moreHint": "放不下的和最小化的：点一个放回网格（放不下时顶替最后一格）",
   "overviewGrid.moreN": "更多 {n}",
 
   "overview.addedElsewhere": "加进去了，但它不在这个项目里：在「进行中」的设置里打开「显示所有项目」才看得到",
@@ -412,6 +413,7 @@ export const en: Record<keyof typeof zh, string> = {
   "overviewTile.unpin": "Unpin",
   "overviewTile.pinLeft": "Pin to the left",
   "overviewTile.restore": "Restore",
+  "overviewTile.minimize": 'Minimize into "more" below',
   "overviewTile.zoom": "Zoom (or double-click the title bar)",
   "overviewTile.backToTab": "Back to its tab",
   "overviewTile.done": "Done, remove from Active (the agent keeps running)",
@@ -423,7 +425,7 @@ export const en: Record<keyof typeof zh, string> = {
   "overviewGrid.empty":
     "Nothing active. Agents that need you, are running or failed show up on their own; you can also right-click an agent on the left to add it",
   "overviewGrid.seamHint": "Drag to resize, double-click to even out",
-  "overviewGrid.moreHint": "Out of room: click one to swap it in for the last tile",
+  "overviewGrid.moreHint": "Out of room or minimized: click one to bring it back (in place of the last tile if there's no room)",
   "overviewGrid.moreN": "{n} more",
 
   "overview.addedElsewhere": "Added, but it's in another project: turn on “Show agents from all projects” in Active's settings to see it",

@@ -50,6 +50,8 @@ export type Overview = {
   sizes: Record<string, { rows: number[]; cols: number[][] }>;
   /** Grid shape the user picked by dropping a tile on another's edge, per tile count (overview.ts shapeOf / placeTile). */
   shapes: Record<string, { counts: number[]; cols?: boolean }>;
+  /** Tiles minimized by hand: kept off the grid, waiting in its "more" row with the ones that didn't fit (OverviewGrid). */
+  mini?: string[];
   /** The phone's page order, taken when it opened (OverviewPhone.tsx, phoneOrder). Not stored: each opening sorts afresh. */
   phone?: string[];
 };
@@ -72,6 +74,7 @@ export function loadOverview(): Overview {
       sizes: v.sizes && typeof v.sizes === "object" ? v.sizes : {},
       shapes: v.shapes && typeof v.shapes === "object" ? v.shapes : {},
       focus: typeof v.focus === "string" ? v.focus : undefined,
+      mini: strs(v.mini),
     };
   } catch {
     return d;
@@ -220,5 +223,6 @@ export function phonePages(st: ActiveSrc): string[] {
 export function overviewFocus(st: ActiveSrc): string | undefined {
   const ids = overviewIds(st);
   const o = st.overview;
-  return o.focus && ids.includes(o.focus) ? o.focus : ids[0];
+  if (o.focus && ids.includes(o.focus)) return o.focus;
+  return ids.find((id) => !o.mini?.includes(id)) ?? ids[0];
 }

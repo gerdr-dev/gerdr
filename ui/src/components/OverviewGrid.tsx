@@ -1,6 +1,19 @@
 import { ClipboardCheck } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { arrange, fitTiles, moveSeam, setGridSizes, setOverview, placeTile, swapTiles, type Box, type DropSide, type Seam } from "@/lib/overview";
+import {
+  arrange,
+  fitTiles,
+  moveSeam,
+  setGridSizes,
+  setOverview,
+  placeTile,
+  swapTiles,
+  minimizeTile,
+  unminimizeTile,
+  type Box,
+  type DropSide,
+  type Seam,
+} from "@/lib/overview";
 import { useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { BOX_TRANSITION, useLayoutAnim, useZoomAnim } from "@/lib/zoomAnim";
@@ -13,6 +26,7 @@ import type { MessageKey } from "@/lib/messages";
 const pct = (v: number) => `${v * 100}%`;
 const NO_SIZES = {};
 const NO_SHAPES = {};
+const NO_MINI: string[] = [];
 /** Height of the "more" row under the grid, holding the tiles that didn't fit. */
 const MORE_H = 30;
 
@@ -85,20 +99,28 @@ export function Grid({
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+  const mini = useStore((s) => s.overview.mini) ?? NO_MINI;
+  const asked = useStore((s) => s.overview.focus);
   const all = ids.join(",");
   // Only as many tiles as fit at a readable size (lib/overview fitTiles); the rest wait in the "more" row, which itself
-  // takes MORE_H off the grid, so fit again with that height once some don't fit
+  // takes MORE_H off the grid, so fit again with that height once some don't fit. Minimized tiles wait there too.
   const shownIds = useMemo(() => {
-    const v = fitTiles(ids, main, ratio, area.w, area.h);
-    return v.length < ids.length ? fitTiles(ids, main, ratio, area.w, area.h - MORE_H) : v;
-  }, [all, main, ratio, area.w, area.h]);
+    const open = ids.filter((id) => !mini.includes(id));
+    const v = fitTiles(open, main, ratio, area.w, area.h);
+    return v.length < ids.length ? fitTiles(open, main, ratio, area.w, area.h - MORE_H) : v;
+  }, [all, mini, main, ratio, area.w, area.h]);
   const more = ids.filter((id) => !shownIds.includes(id));
   const size = { w: area.w, h: more.length ? area.h - MORE_H : area.h };
   const key = shownIds.join(",");
   const lay = useMemo(() => arrange(shownIds, main, ratio, size.w, size.h, saved, picked), [key, main, ratio, size.w, size.h, saved, picked]);
   // Focusing a tile that's in "more" (from there, the list, the keys) brings it into the grid in place of the last one
+  // A minimized one comes back first (then, if it doesn't fit, takes the last one's place as above). Only when focused on
+  // purpose: the fallback focus (overviewFocus) can be a minimized tile when all of them are.
   useEffect(() => {
-    if (!focus || !ids.includes(focus) || shownIds.includes(focus)) return;
+    if (asked && mini.includes(asked)) unminimizeTile(asked);
+  }, [asked, mini]);
+  useEffect(() => {
+    if (!focus || !ids.includes(focus) || shownIds.includes(focus) || mini.includes(focus)) return;
     const out = [...shownIds].reverse().find((id) => id !== main) ?? shownIds[shownIds.length - 1];
     if (out) swapTiles(focus, out);
   }, [focus, key, all]);
@@ -222,6 +244,7 @@ export function Grid({
                 target={drag?.over === id && !drag.side}
                 onFocus={() => onFocus(id)}
                 onZoom={() => onZoom(id)}
+                onMinimize={() => minimizeTile(id)}
                 onDragStart={zoom ? undefined : (e, label) => dragTile(e, id, label)}
                 pin={moving ? pin : sliding ? tilePin(b) : undefined}
               />
