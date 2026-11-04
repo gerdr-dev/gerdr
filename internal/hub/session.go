@@ -62,6 +62,10 @@ type Record struct {
 	// mr=group/repo!12. Gerdr gives them no meaning; they let a coordinator find "the session for this MR" again.
 	Tags map[string]string `json:"tags,omitempty"`
 	// ReportTo: the session told when this one stops (turn done, waiting for a person, error); see server/report.go.
+	// Parent: the session that started this one (an agent running `gerdr session new`, or a panel function it called
+	// with `gerdr work run` that started it). Followed up and down, it's the chain of who handed what to whom, any
+	// number of levels deep: a task board's router → its worker → the helper that worker started → …
+	Parent   string `json:"parent,omitempty"`
 	ReportTo string `json:"reportTo,omitempty"`
 	// SkillDirs: folders of extra skills (<dir>/<name>/SKILL.md) this session gets besides the usual ones, e.g. the
 	// skills of the Work project that started it. Handed to the adapter as _meta skillRoots on new / resume.

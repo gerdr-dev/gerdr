@@ -90,6 +90,9 @@ gerdr session new --agent codex --title reviewer \
   give `--cwd` when the task is about code;
 - `--workspace <id|number|label|new>` puts it in that Code workspace as a new tab (`gerdr workspace list`); without it,
   it opens next to you.
+- Gerdr records you as the new session's `parent` (also when a panel function you ran with `gerdr work run` starts it),
+  so who handed what to whom can be followed any number of levels deep — a task board shows that tree under the task.
+  Starting a helper from your own session keeps the chain; don't hand work out through some other session.
 
 ### On another computer: `--host`
 

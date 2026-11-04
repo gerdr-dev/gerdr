@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 type fakeHost struct {
@@ -154,5 +155,27 @@ export function go(input, ctx) {
 	}
 	if !strings.Contains(m["missing"].(string), "no such file") {
 		t.Errorf("missing dir: %q", m["missing"])
+	}
+}
+
+// A session a function starts gets the calling session as its parent (a router running `gerdr work run …` starts
+// workers that point back at it), unless the function names one.
+func TestStartParentIsCaller(t *testing.T) {
+	r, _ := newProject(t, map[string]string{
+		"w.ts": `export async function go(input: any, ctx: any) {
+  await ctx.sessions.start({ cwd: "~", prompt: "a" });
+  await ctx.sessions.start({ cwd: "~", prompt: "b", parent: "other" });
+}`,
+	})
+	f := &fakeHost{}
+	r.Host = f
+	rn := r.StartAs("", "w.go", nil, "router1")
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if _, err := rn.Wait(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.started) != 2 || f.started[0].Parent != "router1" || f.started[1].Parent != "other" {
+		t.Fatalf("parents: %+v", f.started)
 	}
 }

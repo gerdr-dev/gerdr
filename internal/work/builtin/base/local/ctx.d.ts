@@ -97,6 +97,11 @@ interface Ctx {
       /** Thinking effort (`low` / `medium` / `high` / …, whatever the agent and model offer). Default: the user's default. */
       effort?: string;
       /**
+       * The session handing it the work (its `parent`). Default: the session that called this function, if any (an agent
+       * running `gerdr work run …` or calling it as a tool), so chains of who-started-whom stay unbroken.
+       */
+      parent?: string;
+      /**
        * Which Code workspace it goes in: a workspace id from `ctx.workspaces.list()`, or `"new"` for a new one named
        * after the directory. Default: the workspace whose directory is `cwd` (or the closest one above it), else a new one.
        * `"none"`: no tab in Code at all, for a conversation the page shows itself (`SessionChat` from @gerdr/core);
@@ -315,6 +320,11 @@ interface Session {
   tags: Record<string, string>;
   /** The session it reports to, if any. */
   reportTo?: string;
+  /**
+   * The session that started it (an agent's `gerdr session new`, or a function that agent ran). Follow `parent` up and
+   * look for sessions whose parent is this one to draw who handed what to whom, any number of levels deep.
+   */
+  parent?: string;
   /** ms */
   createdAt: number;
   /** ms: the last thing that happened in it (a message, agent output, an approval). */

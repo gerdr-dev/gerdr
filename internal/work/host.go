@@ -58,8 +58,11 @@ type StartOptions struct {
 	Mode   string `json:"mode,omitempty"`  // permission mode; "" = the agent's default (never a permissive one)
 	// Model / Effort: the agent's own option values (as its model / effort pickers list them); "" = the user's default
 	// for that agent. A value the agent doesn't offer is an error naming the ones it does, not silently the default.
-	Model     string `json:"model,omitempty"`
-	Effort    string `json:"effort,omitempty"`
+	Model  string `json:"model,omitempty"`
+	Effort string `json:"effort,omitempty"`
+	// Parent: the session that hands this one its work; default: the session that called this function (ctx.caller,
+	// e.g. a router running `gerdr work run tasks.dispatch`), so the chain stays unbroken across a panel.
+	Parent    string `json:"parent,omitempty"`
 	Workspace string `json:"workspace,omitempty"` // a workspace id from ctx.workspaces.list; "new"; "none" = not in Code; "" = found by cwd
 	Focus     bool   `json:"focus,omitempty"`     // switch the open windows to it
 	// Tags: labels to find it by later (ctx.sessions.list({ tags })).
@@ -108,6 +111,9 @@ func (r *runner) sessionsObject() map[string]any {
 				return r.rejected(fmt.Errorf("ctx.sessions.start: %w", err))
 			}
 			o.Cwd = cwd
+			if o.Parent == "" {
+				o.Parent = callerOf(r.ctx)
+			}
 			ctx, cancel := context.WithTimeout(r.ctx, 2*time.Minute)
 			defer cancel()
 			s, err := h.StartSession(ctx, r.project, o)
