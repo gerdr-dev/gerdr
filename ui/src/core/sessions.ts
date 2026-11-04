@@ -22,8 +22,10 @@ export function useSessions(match?: (s: SessionSummary) => boolean): SessionSumm
   return useStore((s) => {
     const next: SessionSummary[] = [];
     for (const x of Object.values(s.sessions)) if (!pick.current || pick.current(x)) next.push(x);
+    // Not taken for granted to be an array: a page hot-replaced with its hooks reordered can hand this ref another
+    // hook's old value for one render (seen: the board crashed on the update that added this call)
     const prev = last.current;
-    if (prev.length === next.length && prev.every((x, i) => x === next[i])) return prev;
+    if (Array.isArray(prev) && prev.length === next.length && prev.every((x, i) => x === next[i])) return prev;
     last.current = next;
     return next;
   });
