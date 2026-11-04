@@ -56,12 +56,12 @@ func (r *Runner) Tools(project string) ([]Tool, error) {
 		if (ext != ".ts" && ext != ".js") || !fileRE.MatchString(base) || strings.HasSuffix(base, ".d") {
 			continue
 		}
-		code, err := compile(filepath.Join(dir, "local", n))
+		prog, err := compile(filepath.Join(dir, "local", n))
 		if err != nil {
 			continue
 		}
 		vm := goja.New()
-		exports, err := load(vm, n, code)
+		exports, err := load(vm, prog)
 		if err != nil {
 			continue
 		}

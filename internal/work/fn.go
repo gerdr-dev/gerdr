@@ -81,12 +81,12 @@ func (r *Runner) List(project string) ([]Fn, error) {
 		if e.IsDir() || (ext != ".ts" && ext != ".js") || !fileRE.MatchString(base) || strings.HasSuffix(base, ".d") {
 			continue
 		}
-		code, err := compile(filepath.Join(dir, "local", e.Name()))
+		prog, err := compile(filepath.Join(dir, "local", e.Name()))
 		if err != nil {
 			continue
 		}
 		vm := goja.New()
-		exports, err := load(vm, e.Name(), code)
+		exports, err := load(vm, prog)
 		if err != nil {
 			continue
 		}
@@ -100,7 +100,8 @@ func (r *Runner) List(project string) ([]Fn, error) {
 	return out, nil
 }
 
-func compile(path string) (string, error) {
+// bundle bundles one local/ file with what it imports (esbuild). Called through compile (compile.go), which caches.
+func bundle(path string) (code string, inputs []string, err error) {
 	res := api.Build(api.BuildOptions{
 		EntryPoints: []string{path},
 		Bundle:      true, // relative imports (local/_api.ts) come along
@@ -109,6 +110,9 @@ func compile(path string) (string, error) {
 		Target:      api.ES2017, // goja runs async/await; esbuild lowers ?. ?? and friends
 		Write:       false,
 		LogLevel:    api.LogLevelSilent,
+		// The files read, so a cached result is reused only while none of them changed
+		Metafile:      true,
+		AbsWorkingDir: filepath.Dir(path),
 	})
 	if len(res.Errors) > 0 {
 		var msgs []string
@@ -119,17 +123,26 @@ func compile(path string) (string, error) {
 			}
 			msgs = append(msgs, loc+e.Text)
 		}
-		return "", errors.New("compile failed: " + strings.Join(msgs, "; "))
+		return "", nil, errors.New("compile failed: " + strings.Join(msgs, "; "))
 	}
 	if len(res.OutputFiles) == 0 {
-		return "", errors.New("esbuild produced nothing")
+		return "", nil, errors.New("esbuild produced nothing")
 	}
-	return string(res.OutputFiles[0].Contents), nil
+	var meta struct {
+		Inputs map[string]json.RawMessage `json:"inputs"`
+	}
+	_ = json.Unmarshal([]byte(res.Metafile), &meta)
+	for in := range meta.Inputs {
+		if !filepath.IsAbs(in) {
+			in = filepath.Join(filepath.Dir(path), in)
+		}
+		inputs = append(inputs, in)
+	}
+	return string(res.OutputFiles[0].Contents), inputs, nil
 }
 
-// load runs the bundled CommonJS and returns module.exports.
-// name labels the script in stacks (the bundled code: line numbers count the imports bundled in before the file).
-func load(vm *goja.Runtime, name, code string) (*goja.Object, error) {
+// load runs the bundled CommonJS (compile's program) and returns module.exports.
+func load(vm *goja.Runtime, prog *goja.Program) (*goja.Object, error) {
 	module := vm.NewObject()
 	exports := vm.NewObject()
 	_ = module.Set("exports", exports)
@@ -138,7 +151,7 @@ func load(vm *goja.Runtime, name, code string) (*goja.Object, error) {
 	_ = vm.Set("require", func(name string) goja.Value {
 		panic(vm.NewTypeError("local functions can't require(%q): import code from local/ by relative path; what they can do is on ctx", name))
 	})
-	if _, err := vm.RunScript(name, code); err != nil {
+	if _, err := vm.RunProgram(prog); err != nil {
 		return nil, jsError(err)
 	}
 	return module.Get("exports").ToObject(vm), nil
@@ -156,7 +169,7 @@ type runner struct {
 	bodies  []*fetchBody // fetch response bodies, closed at the end if still open
 }
 
-func (r *Runner) runCode(ctx context.Context, project, dir, file, fn, code string, input any, emit func(Event)) (any, error) {
+func (r *Runner) runCode(ctx context.Context, project, dir, file, fn string, prog *goja.Program, input any, emit func(Event)) (any, error) {
 	vm := goja.New()
 	vm.SetFieldNameMapper(goja.TagFieldNameMapper("json", true))
 	// Stop / timeout: interrupt the JS (a host call blocked in fetch / exec returns too, its ctx is the same)
@@ -165,7 +178,7 @@ func (r *Runner) runCode(ctx context.Context, project, dir, file, fn, code strin
 	run := &runner{ctx: ctx, vm: vm, r: r, project: project, dir: dir, emit: emit, depth: depthOf(input)}
 	defer run.cleanup()
 	run.installGlobals()
-	exports, err := load(vm, file, code)
+	exports, err := load(vm, prog)
 	if err != nil {
 		return nil, err
 	}

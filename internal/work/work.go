@@ -368,11 +368,11 @@ func (r *Runner) run(ctx context.Context, project, name string, input any, id st
 	if err != nil {
 		return nil, err
 	}
-	code, err := compile(path)
+	prog, err := compile(path)
 	if err != nil {
 		return nil, err
 	}
-	return r.runCode(ctx, project, dir, filepath.Base(path), fn, code, input, emit)
+	return r.runCode(ctx, project, dir, filepath.Base(path), fn, prog, input, emit)
 }
 
 // callMCP unwraps a tools/call result into a plain value: structuredContent if the server sent
