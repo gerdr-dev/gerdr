@@ -205,8 +205,10 @@ function closeTop(): boolean {
   // 软键盘开着：先收键盘（输入框失焦）
   const a = document.activeElement as HTMLElement | null;
   if (a && (a.tagName === "TEXTAREA" || a.tagName === "INPUT")) return (a.blur(), true);
-  // The overview (进行中) covers the main view like a page of its own, with a ← in its bar: back does what that ← does
-  if (s.overview.on) return (toggleOverview(false), true);
+  // The overview (进行中) covers the main view like a page of its own, with a ← in its bar: back does what that ← does.
+  // Only while Code is what's shown: on a panel the overview is still on behind it, and back there closed Code's
+  // overview out of sight (reported: switched to the Superagent panel, back left 进行中 in Code)
+  if (s.overview.on && s.mode !== "work") return (toggleOverview(false), true);
   return false;
 }
 
