@@ -516,16 +516,26 @@ func diff(prev, next *build) *update {
 
 // Watch 盯着界面目录：源码一变就重新构建（ensure 里把变化推给页面）。
 func (r *Renderer) Watch(stop <-chan struct{}) {
-	t := time.NewTicker(250 * time.Millisecond)
+	// Each tick walks every source file (the UI and every mounted panel UI) and stats it. At 250ms always, that was a
+	// quarter of the idle service's allocations (pprof). Fast while things are being edited, slower once they've been
+	// quiet for a minute: the first change after a quiet spell shows up to ~1s later, the rest as before.
+	const fast, slow, quietAfter = 250 * time.Millisecond, time.Second, time.Minute
+	t := time.NewTimer(fast)
 	defer t.Stop()
 	r.ensure()
 	pending := ""
+	changed := time.Now()
 	for {
 		select {
 		case <-stop:
 			return
 		case <-t.C:
 		}
+		next := fast
+		if time.Since(changed) > quietAfter {
+			next = slow
+		}
+		t.Reset(next)
 		r.mu.Lock()
 		var inputs map[string]bool
 		cur := ""
@@ -538,6 +548,8 @@ func (r *Renderer) Watch(stop <-chan struct{}) {
 			pending = ""
 			continue
 		}
+		changed = time.Now()
+		t.Reset(fast) // Go 1.23+: Reset drops a pending tick, no drain needed
 		// 等一轮没有新改动再建：agent 一次改好几个文件时别每个文件推一次
 		if sig != pending {
 			pending = sig
