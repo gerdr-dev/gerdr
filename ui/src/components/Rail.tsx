@@ -5,7 +5,6 @@ import { switchSpace } from "@/lib/actions";
 import { isAndroid } from "@/lib/android";
 import { currentSpace, spaceList, type Space } from "@/lib/layout";
 import { isCoarse } from "@/lib/phone";
-import { toggleOverview } from "@/lib/overview";
 import { set, setMode, toggleSidebar, useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { StatusDot } from "./AgentIcon";
@@ -110,8 +109,8 @@ export function Rail() {
         )}
         onClick={() => {
           if (on) return m === "agents" && toggleSidebar();
+          // Back to Code keeps the grid as it was: App.tsx only hides it while a panel shows (asked for)
           setMode(m);
-          if (m !== "work") toggleOverview(false);
         }}
       >
         <Icon className="size-4" />

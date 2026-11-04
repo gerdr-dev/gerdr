@@ -4,7 +4,6 @@ import { createRoot, type Root } from "react-dom/client";
 import { toast } from "sonner";
 import { AgentIcon, StatusDot, dotStatus } from "@/components/AgentIcon";
 import { COL_EDGE, startColResize } from "@/components/SidebarChrome";
-import { toggleOverview } from "@/lib/overview";
 import { ChatView } from "@/components/chat/ChatView";
 import { cardOf } from "@/components/chat/ToolCard";
 import type { GPart } from "@gerdr/chat";
@@ -93,10 +92,8 @@ function ChatEdge({ width, onWidth }: { width: number; onWidth: (w: number) => v
 export function ModeSwitch() {
   const mode = useStore((s) => s.mode);
   const cur = mode === "work" ? "work" : "agents";
-  const go = (m: typeof cur) => {
-    setMode(m);
-    if (m !== "work") toggleOverview(false);
-  };
+  // Back to Code keeps the grid as it was: App.tsx only hides it while a panel shows (asked for)
+  const go = (m: typeof cur) => setMode(m);
   // Icons, not words: the project name next to it needs the room (the sidebar is 224px by default)
   const item = (m: typeof cur, label: string, Icon: typeof Code2) => (
     <button
