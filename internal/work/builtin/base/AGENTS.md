@@ -9,20 +9,32 @@ you as messages (e.g. "write this week's progress reports").
 the pages do, how the user wants work handed out), written by the user or by you. This file is Gerdr's and gets
 upgraded, so the project's own rules go there, not here.
 
-## Adding to this panel: mechanism in code, a person's way of working in their own words
+## Adding to this panel: mechanism in code, a person's choices in settings and their way of working in prose
 
 A panel is meant to be usable by someone else too: what you build for this user is a mechanism anyone can take,
-and their habits are what they wrote down, not what the code says.
+and their choices are what they set or wrote down, not what the code says.
 
 - `local/` and `ui/` hold mechanism only. Nothing of one person or company is hard-coded: no hosts, repositories,
   people, team rules, "merge by itself or not", "every 5 minutes".
-- A person's way of working is prose they can read and edit: a skill in `skills/` (how they want things done; the
-  agents read it as they need it, values the code needs are read from it too) and `schedules/` (when things run).
-  Not a settings file of switches: a sentence keeps the why next to the choice, and the agents read the same text.
-- Before adding something, ask: mechanism, or this person's choice? A choice goes into their skill, with a
-  careful default in the code for whoever hasn't written it (nothing merged, pushed or deleted behind their back).
-  It never becomes an `if`, a constant or a new config key, and code doesn't decide which part of it an agent reads.
-- When the user says "from now on…", "I'd rather…", "always…": change their skill, not the code.
+- A person's choice goes where the one acting on it reads it. Ask: who follows it?
+  - **Only code follows it** (which model a session starts on, the repositories in a picker, whether a watcher
+    merges, a mode switch): a **setting**. Typed, validated, stored as this person's in `user/settings.json` (only
+    what differs from the default, so a default changed later still reaches whoever never chose), edited on a
+    settings page where each field says why one would pick each value. Don't put it in a skill as a value inside
+    a sentence: code doesn't read the sentence, so the prose around it is decoration (adding "only on Fridays"
+    next to "merge: auto" would change nothing, yet looks as if it would), and a value matched by name and
+    parsed out of text falls back silently when mistyped.
+  - **An agent judges by it** (how to deliver, how to handle a review comment, which repository a task belongs
+    in, when to ask the person): **prose** in a skill in `skills/`, in their own words. The agents read it as they
+    need it; code doesn't decide which part of it an agent reads.
+  - **Both need it** (the repository list the code offers and the router picks from, the default model an agent
+    may override): a setting, one copy, and the code writes it into the agent's message (its first message, the
+    hand-over). The agent never reads the settings file, and there is no second copy in prose to drift.
+  - **When things run**: `schedules/`.
+- Either way, the code holds a careful default for whoever hasn't chosen (nothing merged, pushed or deleted
+  behind their back). It never becomes an `if` on someone's name, a constant, or a value baked into a prompt.
+- When the user says "from now on…", "I'd rather…", "always…": change their setting or their skill (whichever
+  holds it, by the question above), not the code.
 
 ## Layout of this directory (this panel's directory)
 
@@ -92,6 +104,7 @@ and their habits are what they wrote down, not what the code says.
 - `user/` — this person's, never shared (it ignores itself: `user/.gitignore` is `*`). Everything one person's use
   produces or decides goes here, so publishing the panel can't carry anyone's tasks, ids or repository list along:
   - `user/data/` — what functions keep (tasks, what a poller already handled, caches). Not `data/`.
+  - `user/settings.json` — their settings (the values only code follows, see above); the defaults are in code.
   - `user/triggers/`, `user/schedules/`, `user/skills/` — the person's own triggers / schedules, and their edits of
     the skills: a file here replaces the shared one of the same path (`triggers/x.json`, `skills/a/references/b.md`),
     others are added. So code that turns something on for the user, or saves their edit of a skill, writes under
@@ -103,5 +116,5 @@ and their habits are what they wrote down, not what the code says.
 - Built-in files are upgraded by Gerdr unless you edit them; once edited they're yours.
 - Publishing a panel for others: a git repository of this directory (output/ ignored, and Gerdr's built-in files:
   AGENTS.md, CLAUDE.md, FUNCTIONS.md, local/ctx.d.ts, ui/src/gerdr-core.d.ts, .builtin.json; user/ ignores itself),
-  with careful defaults in skills/ (the user's own values live in user/skills/, so they stay theirs), and the GitHub topic `gerdr-panel` so it's listed at
+  with careful defaults in code and skills/ (the user's own settings and edits live in user/, so they stay theirs), and the GitHub topic `gerdr-panel` so it's listed at
   https://github.com/topics/gerdr-panel, where Gerdr's "add a panel" points people.
