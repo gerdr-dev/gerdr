@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/coder/acp-go-sdk"
@@ -72,5 +73,17 @@ func TestSummaryOptions(t *testing.T) {
 	}
 	if live.config[0].Select.CurrentValue != "b" {
 		t.Fatal("making the set cleared the session's own current value")
+	}
+	// Unchanged values: the very same map (no allocation per list); changed: a new one with the new value
+	again := live.Summary()
+	if reflect.ValueOf(again.OptValues).Pointer() != reflect.ValueOf(s3.OptValues).Pointer() {
+		t.Fatal("unchanged values built a new map")
+	}
+	live.config[0].Select.CurrentValue = "a"
+	if v := live.Summary().OptValues["model"]; v != "a" || s3.OptValues["model"] != "b" {
+		t.Fatalf("a changed value: got %v, and the old map must stay as it was: %v", v, s3.OptValues["model"])
+	}
+	if n := testing.AllocsPerRun(100, func() { idle1.Summary() }); n > 40 {
+		t.Logf("Summary allocations: %v", n)
 	}
 }

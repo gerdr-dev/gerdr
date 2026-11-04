@@ -105,10 +105,11 @@ type Session struct {
 	h  *Hub
 	lf logFile
 
-	mu     sync.Mutex
-	escMu  sync.Mutex // Escape 一次只跑一个：连按几下 Esc 的话，并发的几次会各自把同一句话还回去（输入框里叠好几遍，踩过）
-	rec    Record
-	events []*Event
+	optVals map[string]any // the dropdowns' current values last handed out in a Summary (optionsLocked)
+	mu      sync.Mutex
+	escMu   sync.Mutex // Escape 一次只跑一个：连按几下 Esc 的话，并发的几次会各自把同一句话还回去（输入框里叠好几遍，踩过）
+	rec     Record
+	events  []*Event
 	// loaded: events holds the log. False = it's only on disk (memory.go): idle sessions don't keep their history in
 	// memory, every access goes through loadLocked first.
 	loaded      bool
@@ -271,8 +272,8 @@ func (h *Hub) nextSeqLocked() int64 {
 // Summary 是侧栏 / 面板一览要的那点东西。
 type Summary struct {
 	Record
-	Status string                    `json:"status"`
-	Error  string                    `json:"error,omitempty"`
+	Status string `json:"status"`
+	Error  string `json:"error,omitempty"`
 	// The mode and option dropdowns go out as OptsKey (the lists, fetched from /api/options/<key>: optSets) plus the
 	// current values. Hosts on an older Gerdr still send modes / configOptions inline; the page takes either.
 	OptsKey   string         `json:"optsKey,omitempty"`
@@ -577,10 +578,8 @@ func (s *Session) optionsLocked() (modes []acp.SessionMode, config []acp.Session
 	if !own {
 		config = cached.Config
 	}
-	for _, c := range config {
-		if values == nil {
-			values = map[string]any{}
-		}
+	// value: an option's id and current value (a select's string or a toggle's bool); ok false for other kinds
+	value := func(c acp.SessionConfigOption) (id, str string, b, isBool, ok bool) {
 		switch {
 		case c.Select != nil:
 			cur := string(c.Select.CurrentValue)
@@ -589,11 +588,50 @@ func (s *Session) optionsLocked() (modes []acp.SessionMode, config []acp.Session
 			if r, ok := s.rec.Config[string(c.Select.Id)]; !own && ok && r != "" {
 				cur = r
 			}
-			values[string(c.Select.Id)] = cur
+			return string(c.Select.Id), cur, false, false, true
 		case c.Boolean != nil:
-			values[string(c.Boolean.Id)] = c.Boolean.CurrentValue
+			return string(c.Boolean.Id), "", c.Boolean.CurrentValue, true, true
+		}
+		return "", "", false, false, false
+	}
+	// The same map as last time while nothing changed: every session list builds every Summary, and a fresh map
+	// for each was most of what a list allocated. Handed out read-only (marshalled); a change makes a new one.
+	if same := s.optVals != nil; same {
+		n := 0
+		for _, c := range config {
+			id, str, b, isBool, ok := value(c)
+			if !ok {
+				continue
+			}
+			n++
+			old, found := s.optVals[id]
+			if isBool {
+				same = found && old == any(b) // comparing with a bool doesn't allocate
+			} else {
+				os, isStr := old.(string)
+				same = found && isStr && os == str
+			}
+			if !same {
+				break
+			}
+		}
+		if same && n == len(s.optVals) {
+			return modes, config, modeID, s.optVals
 		}
 	}
+	for _, c := range config {
+		if id, str, b, isBool, ok := value(c); ok {
+			if values == nil {
+				values = map[string]any{}
+			}
+			if isBool {
+				values[id] = b
+			} else {
+				values[id] = str
+			}
+		}
+	}
+	s.optVals = values
 	return modes, config, modeID, values
 }
 
