@@ -57,7 +57,7 @@ packages/chat/     the conversation UI itself, a package (@gerdr/chat) also publ
   Imports inside the package are relative (no @/…), and it can't import gerdr's src/: what it needs from gerdr goes through ChatHost.
 src/core/          `@gerdr/core`: what gerdr gives the UIs mounted into this page (each project's Work UI is compiled in and
                    drawn as a second React root, not a frame): SessionChat, useSession, registerCard, usePortalContainer (a panel's
-                   overlays go inside its own area, hidden with it)… Every panel imports
+                   overlays go inside its own area, hidden with it), Markdown (the chat's, media included)… Every panel imports
                    it, so keep it small and stable; its types for Work agents are in gerdr's internal/work/builtin/base/ui/src/gerdr-core.d.ts
 src/lib/
   mounts.ts        the mounted UIs (window.__GERDR_UI__.mounts, the "gerdr:ui" update event), their cards loaded at start

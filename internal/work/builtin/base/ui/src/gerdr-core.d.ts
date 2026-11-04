@@ -70,6 +70,13 @@ declare module "@gerdr/core" {
    * The type is this panel's: cards your tools make are drawn by it, another panel's cards of the same type aren't.
    */
   /**
+   * Markdown drawn the way the chat draws it: `![](/abs/path.mp4)` plays a local video, `![](/abs/shot.png)` shows an
+   * image, a local path opens in Gerdr's viewer, code blocks are highlighted. For text agents wrote (a step, a
+   * question, a summary): showing it as plain text loses what the chat shows.
+   */
+  export function Markdown(props: { children: string }): ReactNode;
+
+  /**
    * The element your overlays (sheets, dialogs, popovers, menus) should be portaled into, e.g. shadcn's
    * `<SheetPrimitive.Portal container={usePortalContainer()}>`. It's inside this panel's own area: gerdr keeps a panel
    * mounted but hidden while another panel or Code is shown, and only what's inside the panel is hidden with it — an
