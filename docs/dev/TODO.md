@@ -3,6 +3,25 @@
 Work that was looked into, measured and put off. Each entry says why it's worth doing and how, so it can be picked up
 without redoing the investigation.
 
+## The background service spends its CPU in garbage collection
+
+**Why**: found 2026-11-04 while chasing a ~2s Esc (stop and take the words back) on the user's machine. The installed
+`gerdr --service` sat at 150–210% CPU with nothing visibly running; a 3s `sample` resolved through the binary's pclntab
+(`go tool addr2line` works on the stripped release build) was almost all `runtime.scanObject*` / `tryDeferToSpanScan`,
+i.e. GC. Something allocates heavily and steadily. That slows everything on the machine, and is the likeliest cause of
+the slow Esc: the same session copied into a debug instance stopped and gave the words back in ~270ms end to end, and
+the service's own log showed that Esc under 1s server-side.
+
+**How**: macOS `sample` can't unwind goroutine stacks, so who allocates is unknown. `/api/debug/pprof/` now exists
+(server/debug.go, behind the token). On the busy machine:
+`curl -H "Authorization: Bearer $(cat ~/.gerdr/token)" -o a.pb.gz http://127.0.0.1:7870/api/debug/pprof/allocs`, then
+`go tool pprof -top -sample_index=alloc_space a.pb.gz` (and `/profile?seconds=20` for CPU). Suspects to check first:
+anything polling and re-reading whole session logs (~400MB under ~/.gerdr/sessions, the largest 21MB) or claude
+transcripts (up to 35MB).
+
+**Next slow Esc**: gerdr.log now has `escape: slow` (server steps, cumulative, over 300ms) and `ui slow what=escape`
+(the page's split: keyWait / request / paint / busy, over 500ms) for the same session and time.
+
 ## Move the quotas out of the kernel
 
 **Why**: decided 2026-11-04 against the kernel's boundary (ARCHITECTURE.md, "The kernel's boundary"): quotas are a

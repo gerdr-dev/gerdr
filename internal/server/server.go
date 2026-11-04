@@ -155,6 +155,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/pending", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, s.Hub.Pending()) })
 	mux.HandleFunc("GET /api/busy", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, s.busy()) })
 	s.appUpdateRoutes(mux)
+	debugRoutes(mux)
 	// A session's slash commands by the key in its summary (hub cmdSets). The key is a hash of the content, so the
 	// browser may keep it for good.
 	mux.HandleFunc("GET /api/commands/{key}", func(w http.ResponseWriter, r *http.Request) {

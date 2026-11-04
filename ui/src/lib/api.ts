@@ -294,6 +294,8 @@ export const api = {
   warm: (id: string) => req("POST", `/api/sessions/${id}/warm`, {}),
   withdraw: (id: string, messageId: string) => req<{ content: ContentBlock[]; withdrawn?: number }>("POST", `/api/sessions/${id}/withdraw`, { messageId }),
   withdrawLast: (id: string) => req<{ content: ContentBlock[]; withdrawn?: number }>("POST", `/api/sessions/${id}/withdraw-last`, {}),
+  /** Something the UI saw take too long, into gerdr.log (server/uiapi.go): only numbers, in ms */
+  uiSlow: (what: string, session: string, ms: Record<string, number>) => req("POST", "/api/ui/slow", { what, session, ms }),
   escape: (id: string) => req<{ content: ContentBlock[]; rolledBack?: boolean; withdrawn?: number }>("POST", `/api/sessions/${id}/escape`, {}),
   answer: (id: string, reqId: string, response: unknown) => req("POST", `/api/sessions/${id}/answer`, { reqId, response }),
   setMode: (id: string, mode: string) => req("POST", `/api/sessions/${id}/mode`, { mode }),

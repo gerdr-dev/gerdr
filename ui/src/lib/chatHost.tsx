@@ -28,6 +28,7 @@ import { locale, t } from "./i18n";
 import { UsagePanel } from "@/components/UsageMeter";
 import { HeldDialog } from "@/components/chat/HeldDialog";
 import { RunButton } from "@/components/chat/RunButton";
+import { timedEscape } from "./escTiming";
 
 /**
  * gerdr's side of the chat package (@gerdr/chat, ui/packages/chat): where its data comes from (the store, fed over
@@ -283,7 +284,7 @@ export function GerdrChatProvider({ children }: { children: ReactNode }) {
         return card ? <ToolCard card={card} session={ctx.sessionId} /> : undefined;
       },
       send: (id, content, o) => sendShown(id, content, o?.onRetry, o?.now || sendsNow(id)).then(() => {}),
-      stop: (id) => api.escape(id),
+      stop: (id) => timedEscape(id),
       withdrawLast: (id) => api.withdrawLast(id),
       withdraw: (id, msg, now) => withdrawSteer(id, msg, !!now),
       rewind: (id, msg) => api.rewind(id, msg),

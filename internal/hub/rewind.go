@@ -50,13 +50,15 @@ func (s *Session) Escape(ctx context.Context) (EscapeResult, error) {
 	tail, quiet := chatlog.StopPlan(evs)
 	untouched := quiet && !auto && turnMsg != ""
 
-	// A stop that takes seconds was reported (codex, from the phone) but didn't reproduce: log where the time goes when
-	// it's slow, so the next one shows which step it was.
+	// Stops that take seconds were reported (codex from the phone; claude, ~2s until the words came back) but didn't
+	// reproduce on a copy of the same session (~270ms). Log where the time goes when it's slow, so the next one shows
+	// which step it was. Each step is the time since the start (cumulative); 300ms because the healthy path is ~250ms.
 	t0 := time.Now()
-	var tAttach, tWithdraw, tCancel time.Duration
+	var tAttach, tWithdraw, tCancel, tStopped time.Duration
 	defer func() {
-		if d := time.Since(t0); d > time.Second {
-			s.h.log.Warn("escape: slow", "session", s.ID(), "agent", s.rec.Agent, "took", d, "attach", tAttach, "withdraw", tWithdraw, "cancel", tCancel)
+		if d := time.Since(t0); d > 300*time.Millisecond {
+			s.h.log.Warn("escape: slow", "session", s.ID(), "agent", s.rec.Agent, "took", d, "attach", tAttach, "withdraw", tWithdraw,
+				"cancel", tCancel, "stopped", tStopped, "rollback", untouched)
 		}
 	}()
 	c, err := s.ensureAttached(ctx)
@@ -88,16 +90,18 @@ func (s *Session) Escape(ctx context.Context) (EscapeResult, error) {
 		return out, err
 	}
 	tCancel = time.Since(t0)
-	// 等这一轮真停下来（回退要求没在跑）
-	for i := 0; i < 200; i++ {
+	// Wait for the turn to really stop (a rewind needs it stopped). claude settles ~15ms after the interrupt, so poll
+	// finely: at 100ms a step this alone added up to 100ms to every Esc. Still gives up after 20s.
+	for i := 0; i < 1000; i++ {
 		s.mu.Lock()
 		r := s.running
 		s.mu.Unlock()
 		if !r {
 			break
 		}
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(20 * time.Millisecond)
 	}
+	tStopped = time.Since(t0)
 
 	if untouched {
 		_, err := s.Rewind(ctx, turnMsg)

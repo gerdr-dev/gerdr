@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"net/http"
 	"path"
+	"sort"
 	"strings"
 
 	"github.com/gerdr-dev/gerdr/internal/i18n"
@@ -28,6 +29,34 @@ func (s *Server) uiRoutes(mux *http.ServeMux) {
 			return
 		}
 		s.UI.ReportClientErrors(b.Build, b.Items)
+		writeJSON(w, map[string]any{})
+	})
+	// The UI reports something it saw take too long (an Esc whose words came back late…) into gerdr.log, next to the
+	// backend's own timing of the same step: a slowness that only happens on the user's own machine (and doesn't
+	// reproduce on a copy) can then be split into server, network and a busy page. Only numbers, a dozen at most.
+	mux.HandleFunc("POST /api/ui/slow", func(w http.ResponseWriter, r *http.Request) {
+		var b struct {
+			What    string             `json:"what"`
+			Session string             `json:"session"`
+			Ms      map[string]float64 `json:"ms"`
+		}
+		if err := decode(r, &b); err != nil {
+			httpError(w, 400, err.Error())
+			return
+		}
+		args := []any{"what", oneLineCap(b.What, 40), "session", oneLineCap(b.Session, 80)}
+		keys := make([]string, 0, len(b.Ms))
+		for k := range b.Ms {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for i, k := range keys {
+			if i == 12 {
+				break
+			}
+			args = append(args, oneLineCap(k, 24), int64(b.Ms[k]))
+		}
+		s.Log.Warn("ui slow", args...)
 		writeJSON(w, map[string]any{})
 	})
 	mux.HandleFunc("DELETE /api/ui/errors", func(w http.ResponseWriter, r *http.Request) {
@@ -75,4 +104,12 @@ func newNonce() string {
 // https: same as img-src: an agent's reply can embed a video or audio file by its web address.
 func cspWith(extraScript string) string {
 	return "default-src 'self'; script-src 'self' " + extraScript + " blob: 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' blob: https:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; frame-ancestors 'none'"
+}
+
+func oneLineCap(t string, n int) string {
+	t = strings.Join(strings.Fields(t), " ")
+	if r := []rune(t); len(r) > n {
+		t = string(r[:n])
+	}
+	return t
 }
