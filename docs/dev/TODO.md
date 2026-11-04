@@ -12,12 +12,18 @@ i.e. GC. Something allocates heavily and steadily. That slows everything on the 
 the slow Esc: the same session copied into a debug instance stopped and gave the words back in ~270ms end to end, and
 the service's own log showed that Esc under 1s server-side.
 
-**How**: macOS `sample` can't unwind goroutine stacks, so who allocates is unknown. `/api/debug/pprof/` now exists
-(server/debug.go, behind the token). On the busy machine:
-`curl -H "Authorization: Bearer $(cat ~/.gerdr/token)" -o a.pb.gz http://127.0.0.1:7870/api/debug/pprof/allocs`, then
-`go tool pprof -top -sample_index=alloc_space a.pb.gz` (and `/profile?seconds=20` for CPU). Suspects to check first:
-anything polling and re-reading whole session logs (~400MB under ~/.gerdr/sessions, the largest 21MB) or claude
-transcripts (up to 35MB).
+**Done** (pprof on the running service, 2026-11-04): it allocated ~14 MB/s with a ~85 MB heap, GC every ~0.5 s.
+Fixed: optCache decoded options.json for every session in every Summary (c683f66); panel functions were bundled and
+compiled on every run, ~1 run/s from pages polling (fe8b724); every Summary carried the agent's mode / option lists,
+920 KB of the 1.07 MB /api/hello (3803781).
+
+**Left**: measure again once these are in (`/api/debug/pprof/allocs` twice, 30 s apart, `go tool pprof -base`).
+What was next in line: `gerdr session …` commands read the whole /api/hello to find one session (`apiClient.list`);
+panel pages poll functions every few seconds (the Superagent panel's own code: push instead, via events); each panel
+run builds a fresh goja VM and every session's Summary for ctx.sessions.list.
+How to read it: `curl -H "Authorization: Bearer $(cat ~/.gerdr/token)" -o a.pb.gz
+http://127.0.0.1:7870/api/debug/pprof/allocs`, then `go tool pprof -top -cum -sample_index=alloc_space a.pb.gz`
+(`/profile?seconds=30` for CPU; server/debug.go).
 
 **Next slow Esc**: gerdr.log now has `escape: slow` (server steps, cumulative, over 300ms) and `ui slow what=escape`
 (the page's split: keyWait / request / paint / busy, over 500ms) for the same session and time.
