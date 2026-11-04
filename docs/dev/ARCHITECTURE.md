@@ -49,6 +49,35 @@ React（ui/，不打包）  ←WebSocket / HTTP→  hub（internal/hub）  ←AC
   mergeTab, removeTab), so change both together. Last writer wins: a window that changed the layout less than 300 ms before (its
   PUT still pending) takes the server's version when the broadcast arrives and drops its own change, which the user then redoes.
 
+## The kernel's boundary
+
+The kernel (`internal/hub`, `internal/events`, the trigger rules, the logs) does four things and nothing else:
+**take in events, route work by rules, hand work to agents, record every step.** And it never reaches out to the
+network itself: anything that needs the internet or a third-party service lives outside it, in an add-on, the shell or
+an agent. That keeps the kernel's logic deterministic: what it decides follows from the events, the rules and the logs,
+and can be read back from them.
+
+Everything else in the backend is the **shell** (the app around the kernel), not the kernel: the UI's serving and
+compiling (`uisite`, esm.sh), the terminal (`term`), the file viewer, remote access (`auth`, `remote`, `acme`, `lan`,
+`peer`, the relay), add-on management and stores (`addons`), MCP OAuth (`mcpauth`). The shell may go online; the kernel
+doesn't depend on what it brings back. The **agents** go online too: they are the workers the kernel hands work to.
+
+Before adding to the backend, ask: which of the four is it, and does it go online? Neither → an add-on (reading a
+message aloud became `g.messageAction` + `g.audio` that way, not a TTS primitive, docs/dev/ADDONS.md).
+
+What was looked at against this (2026-11) and decided:
+
+- **Quotas move out** (`hub/usage.go`, `/api/usage`, `g.usage`): they are a reading of third-party accounts, polled for
+  display, none of the four; the kernel even starts a claude process just to ask. Plan in docs/dev/TODO.md.
+- **Session titles stay** (`hub/title.go`): naming a session is part of recording it, and it must happen with no window
+  open (sessions agents start for each other). The model call goes through an agent, and an add-on can take it over
+  (`g.sessionTitle`). The one place where a model's answer lands in kernel state; keep it the only one.
+- **`g.fetch` stays** (`server/addonfetch.go`): the page's CSP keeps add-ons from reaching out, so the backend does it
+  for them. It is a pipe: the kernel neither reads nor keeps what passes through, so none of its own decisions depend
+  on the network.
+- **The shell's network use stays** (stores, esm.sh, certificates, relay, other hosts, MCP OAuth): it is the app's, not
+  the kernel's.
+
 ## Claude（stream-json）—— 没有公开文档，照 Agent SDK 的 sdk.d.ts 和抓包写的
 
 起法：`claude --output-format stream-json --verbose --input-format stream-json
