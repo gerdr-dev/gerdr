@@ -301,6 +301,16 @@ seeing the same thing twice emits it once, `key` what subscribers narrow by (a c
 (`message`, `mention`). Emit from the service (stdout, above) when it holds a connection, or from the UI with
 `g.events.emit`. To act on events yourself (send a reply), list patterns in `service.events` and read them on stdin.
 
+Say what you emit in addon.json, so panels can offer it ("which events make a task") without knowing your add-on:
+
+```json
+"emits": [{ "kind": "dm", "title": "Slack 私信", "description": "…", "reply": "slack.send" }]
+```
+
+If someone can answer, put the address in each event: `"reply": { "kind": "slack.send", "data": { "channel": "D1",
+"threadTs": "…" } }`, and list `"*/slack.send"` in `service.events`. A panel answers with `ctx.events.reply(event, text)`
+and your service gets `{ "kind": "slack.send", "data": { "channel": "D1", "threadTs": "…", "text": "…" } }`.
+
 ## Debugging
 
 - Settings → Add-ons → Installed: compile errors, what `setup` or a hook threw, a service's status and last error.

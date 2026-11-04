@@ -122,6 +122,13 @@ func (s *Server) eventRoutes(mux *http.ServeMux) {
 		}
 		writeJSON(w, map[string]any{"event": out, "fresh": fresh})
 	})
+	// What can be subscribed to: add-ons' declared sources, then source/kinds seen in the last 30 days
+	mux.HandleFunc("GET /api/events/catalog", func(w http.ResponseWriter, r *http.Request) {
+		if !need(w) {
+			return
+		}
+		writeJSON(w, map[string]any{"list": s.Events.Catalog()})
+	})
 	mux.HandleFunc("GET /api/events/watches", func(w http.ResponseWriter, r *http.Request) {
 		if !need(w) {
 			return

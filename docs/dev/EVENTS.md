@@ -51,6 +51,18 @@ Chat / mail / anything with its own credentials is an add-on, not core (the user
 - `gerdr event list / watch / unwatch / watches` are auto-approved for agents (sysenv.SafeGerdrCLI); `emit` isn't:
   it can start triggers' functions, which is `gerdr work run` by another door.
 
+## Offering sources and answering, without naming them
+
+Many users have no Slack; others have Feishu. So a panel never lists sources in code:
+
+- An add-on declares what it emits in addon.json `emits` (`kind`, `title`, `description`, `reply`).
+  `ctx.events.catalog()` / `GET /api/events/catalog` merges the switched-on add-ons' declarations with source/kinds
+  seen in the last 30 days (a panel's own poller needs no declaration to show up), minus answers (kinds some event
+  names as its reply). The task board's "触发器" settings page is a list of that.
+- An event carries its own reply address, `reply: {kind, data}`, filled by the source. `ctx.events.reply(event, text)`
+  emits `{kind: reply.kind, data: reply.data + text}` under the panel's name, and the source, subscribed to that kind,
+  posts it. Slack and Feishu answer the same way for the panel; only the add-on knows channels and threads.
+
 ## Loops
 
 A trigger's function may emit events (a poller fanning out, a reply). Each run knows the depth of the event that

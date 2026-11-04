@@ -417,6 +417,7 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 		log.Warn("events", "err", err)
 		evs = nil
 	} else {
+		evs.Declared = am.Emits // what the add-ons say they emit, for ctx.events.catalog
 		wr.Events = evs
 	}
 	srv := &server.Server{Dir: env.Dir, Hub: h, Events: evs, Token: token, Config: cfg, Secrets: secrets, Layout: layout, Unread: unread, Addons: am, AddonSvc: asvc, Ext: em, Work: wr, Log: log, OnConfig: applyAgents,

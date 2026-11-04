@@ -35,6 +35,7 @@ const TriggersDir = "triggers"
 type EventBus interface {
 	Emit(e ev.Event) (ev.Event, bool, error)
 	List(q ev.Query) ([]ev.Event, error)
+	Catalog() []ev.Source
 }
 
 // Trigger is one triggers/<id>.json.
@@ -316,6 +317,45 @@ func (r *runner) eventsObject() map[string]any {
 			}
 			return map[string]any{"event": eventMap(out), "fresh": fresh}
 		},
+		// ctx.events.catalog() → what can be subscribed to: add-ons' declared sources, then what came lately
+		"catalog": func() []ev.Source {
+			if bus == nil {
+				r.throw(errors.New("ctx.events: not available here (needs Gerdr's server)"))
+			}
+			return bus.Catalog()
+		},
+		// ctx.events.reply(event, text, data?) → { event, fresh }: answers through the event's own reply address, so
+		// a panel answers a Slack DM and a Feishu message the same way. Throws when the event has none.
+		"reply": func(evArg any, text string, extra goja.Value) map[string]any {
+			if bus == nil {
+				r.throw(errors.New("ctx.events: not available here (needs Gerdr's server)"))
+			}
+			b, _ := json.Marshal(plain(toPlain(evArg)))
+			var src ev.Event
+			_ = json.Unmarshal(b, &src)
+			if src.Reply == nil || src.Reply.Kind == "" {
+				r.throw(fmt.Errorf("ctx.events.reply: %s/%s has no reply address", src.Source, src.Kind))
+			}
+			data := map[string]any{}
+			if len(src.Reply.Data) > 0 {
+				_ = json.Unmarshal(src.Reply.Data, &data)
+			}
+			var more map[string]any
+			if err := r.opts(extra, &more); err != nil {
+				r.throw(fmt.Errorf("ctx.events.reply: %w", err))
+			}
+			for k, v := range more {
+				data[k] = v
+			}
+			data["text"] = text
+			db, _ := json.Marshal(data)
+			// From this project, about the event answered (key kept, so a source can thread it)
+			out, fresh, err := bus.Emit(ev.Event{Source: replySource(r.project), Kind: src.Reply.Kind, Key: src.Key, Text: text, Data: db, Depth: r.depth})
+			if err != nil {
+				r.throw(fmt.Errorf("ctx.events.reply: %w", err))
+			}
+			return map[string]any{"event": eventMap(out), "fresh": fresh}
+		},
 		// ctx.events.list({ since?, on?, key?, limit? }) → events, oldest first
 		"list": func(arg goja.Value) []map[string]any {
 			if bus == nil {
@@ -336,4 +376,28 @@ func (r *runner) eventsObject() map[string]any {
 			return out
 		},
 	}
+}
+
+// replySource: the source name a project's replies go out under — its key with what a source name can't hold
+// replaced ("default/lb看板" → "default-lb-"), so the add-on delivering it can tell who answered.
+func replySource(project string) string {
+	if project == "" {
+		project = DefaultProject
+	}
+	var b strings.Builder
+	for _, c := range project {
+		if c < 128 && (c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '.' || c == '_' || c == '-') {
+			b.WriteRune(c)
+		} else {
+			b.WriteByte('-')
+		}
+	}
+	s := strings.TrimLeft(b.String(), "-._")
+	if s == "" {
+		s = "panel"
+	}
+	if len(s) > 64 {
+		s = s[:64]
+	}
+	return s
 }

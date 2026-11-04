@@ -485,6 +485,12 @@ declare global {
     url?: string;
     /** Anything else, for code. */
     data?: unknown;
+    /**
+     * Where an answer goes, when one can: the event kind your service listens for (in service.events) and what it
+     * needs besides the text. A subscriber answers with ctx.events.reply(event, text) — your service then gets
+     * {kind: reply.kind, data: {...reply.data, text}} — without knowing it's you.
+     */
+    reply?: { kind: string; data?: unknown };
   }
   interface GerdrEvent extends EventInput {
     id: string;

@@ -33,6 +33,8 @@ import (
 	"time"
 
 	"github.com/evanw/esbuild/pkg/api"
+
+	"github.com/gerdr-dev/gerdr/internal/events"
 )
 
 //go:embed builtin/*
@@ -53,9 +55,48 @@ type Manifest struct {
 	Settings []SettingSpec `json:"settings,omitempty"`
 	Main     string        `json:"main,omitempty"` // the UI half's entry; index.ts / index.tsx / index.js when empty
 	Service  *ServiceSpec  `json:"service,omitempty"`
+	// Emits: the events this add-on reports (docs/dev/EVENTS.md), so a panel can offer them to subscribe to without
+	// knowing the add-on (the task board's "which events make a task").
+	Emits []EmitSpec `json:"emits,omitempty"`
 	// I18n: the texts in other languages, by locale ("en", "zh"). The fields above are the base, shown when the
 	// interface's language has no entry; the UI picks (ui/src/lib/i18n.ts pick), the backend only passes it on.
 	I18n map[string]ManifestText `json:"i18n,omitempty"`
+}
+
+// EmitSpec is one kind of event an add-on emits.
+type EmitSpec struct {
+	Kind        string `json:"kind"`
+	Source      string `json:"source,omitempty"` // default: the add-on's id
+	Title       string `json:"title,omitempty"`
+	Description string `json:"description,omitempty"`
+	// Reply: the event kind it takes answers as (events carry Reply with it), e.g. "slack.send"
+	Reply string `json:"reply,omitempty"`
+}
+
+// Emits: what the switched-on add-ons say they emit, as event sources.
+func (m *Manager) Emits() []events.Source {
+	st := m.readState()
+	var out []events.Source
+	for _, id := range m.ids() {
+		if st.disabled(id) {
+			continue
+		}
+		mf, err := readManifest(filepath.Join(m.dir, id))
+		if err != nil || mf == nil {
+			continue
+		}
+		for _, e := range mf.Emits {
+			if e.Kind == "" {
+				continue
+			}
+			src := e.Source
+			if src == "" {
+				src = id
+			}
+			out = append(out, events.Source{On: src + "/" + e.Kind, Title: e.Title, Description: e.Description, Addon: id, CanReply: e.Reply != ""})
+		}
+	}
+	return out
 }
 
 // ManifestText is addon.json's texts in one language: any field left out keeps the base one.

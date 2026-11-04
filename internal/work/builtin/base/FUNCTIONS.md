@@ -160,6 +160,10 @@ What this project does when one comes goes in `triggers/<id>.json`, the twin of 
 - `fn` runs a local function with `{ event, trigger }` (plus `input`); `prompt` sends you the event and the text.
   Whether to act at all is the function's call: read your skills' settings, the board's state, then do or don't.
   A trigger's runs go one after another, in the order the events came.
+- Offering events to subscribe to (a settings page's "which events make a task"): `ctx.events.catalog()` — what the
+  installed add-ons emit and what came lately. Don't name sources in code: a user without the Slack add-on has no Slack.
+- Answering: `ctx.events.reply(event, text)` goes back where the event came from (a chat's thread), whatever the
+  source; an event without `reply` has nowhere to answer.
 - A function run by a trigger may emit events itself; they're one level deeper, and past 4 levels they aren't handed
   on, so two triggers feeding each other stop.
 - `gerdr work triggers` lists them with how many runs and the last one; `gerdr event list --on 'gitlab/*'` shows what

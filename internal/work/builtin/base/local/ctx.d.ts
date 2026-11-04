@@ -193,6 +193,17 @@ interface Ctx {
     }): { event: GerdrEvent; fresh: boolean };
     /** Oldest first. since: unix ms (default: the last 24 hours); on: "source/kind" with * globs; limit: the newest n (100). */
     list(q?: { since?: number; on?: string; key?: string; limit?: number }): GerdrEvent[];
+    /**
+     * What can be subscribed to, for a picker ("which events make a task?"): what the switched-on add-ons say they
+     * emit, then source/kinds seen in the last 30 days. Never list sources by name in code: whoever has no Slack
+     * add-on sees no Slack.
+     */
+    catalog(): { on: string; title?: string; description?: string; addon?: string; canReply?: boolean; /** ms, latest seen */ seen?: number }[];
+    /**
+     * Answers an event through its own reply address (`event.reply`, set by the source: a chat message's thread),
+     * the same way for every source. `data` adds fields the source understands. Throws when the event has none.
+     */
+    reply(event: GerdrEvent, text: string, data?: Record<string, unknown>): { event: GerdrEvent; fresh: boolean };
   };
 
   /** Progress the page shows while the function runs (and `gerdr work run` prints). */
@@ -261,6 +272,8 @@ interface GerdrEvent {
   text?: string;
   url?: string;
   data?: any;
+  /** Where an answer goes (ctx.events.reply uses it); absent when there's nowhere to answer. */
+  reply?: { kind: string; data?: any };
   /** unix ms */
   at: number;
   /** How many triggers deep it was emitted; past 4 it isn't handed on (two triggers feeding each other stop). */

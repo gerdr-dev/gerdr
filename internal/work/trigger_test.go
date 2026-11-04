@@ -100,3 +100,34 @@ export async function loop(input: any, ctx: any) { ctx.events.emit({ source: "lo
 		}
 	}
 }
+
+// ctx.events.reply answers through the event's own address: its reply kind and data, plus the text.
+func TestEventsReplyAndCatalog(t *testing.T) {
+	r, _ := newProject(t, map[string]string{
+		"w.ts": `export async function answer(input: any, ctx: any) {
+  const e = ctx.events.list({ on: "slack/dm" })[0];
+  ctx.events.reply(e, "got it", { extra: 1 });
+  try { ctx.events.reply({ source: "x", kind: "y" }, "no"); return "no throw" } catch (err) {}
+  return ctx.events.catalog().map((c: any) => c.on);
+}`,
+	})
+	bus, _ := ev.Open(t.TempDir())
+	bus.Declared = func() []ev.Source { return []ev.Source{{On: "slack/dm", CanReply: true}} }
+	r.Events = bus
+	bus.Emit(ev.Event{ID: "m1", Source: "slack", Kind: "dm", Key: "D1", Reply: &ev.Reply{Kind: "slack.send", Data: []byte(`{"channel":"D1","threadTs":"1.1"}`)}})
+	res, _, err := run(t, r, "w.answer", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if l, ok := res.([]any); !ok || len(l) != 1 || l[0] != "slack/dm" {
+		t.Fatalf("catalog from a function: %#v", res)
+	}
+	got, _ := bus.List(ev.Query{On: "*/slack.send"})
+	if len(got) != 1 {
+		t.Fatalf("replies: %+v", got)
+	}
+	x := got[0]
+	if x.Source != "default" || x.Key != "D1" || string(x.Data) != `{"channel":"D1","extra":1,"text":"got it","threadTs":"1.1"}` {
+		t.Errorf("reply %+v data %s", x, x.Data)
+	}
+}

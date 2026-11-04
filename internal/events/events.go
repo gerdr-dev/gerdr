@@ -40,11 +40,33 @@ type Event struct {
 	URL   string `json:"url,omitempty"`
 	// Data: the rest, for code.
 	Data json.RawMessage `json:"data,omitempty"`
+	// Reply: how to answer it, filled in by the source (a chat message: post into its thread). A subscriber answers
+	// without knowing the source by emitting {kind: Reply.Kind, data: Reply.Data + {text}} (ctx.events.reply), and
+	// the source, subscribed to that kind, delivers it. Absent: there's nowhere to answer.
+	Reply *Reply `json:"reply,omitempty"`
 	// At: unix ms, when it was emitted.
 	At int64 `json:"at"`
 	// Depth: how many triggers deep it was emitted (a trigger's function emitting another event); events past
 	// MaxDepth aren't delivered, so two triggers feeding each other stop.
 	Depth int `json:"depth,omitempty"`
+}
+
+// Reply is where an answer to an event goes.
+type Reply struct {
+	Kind string          `json:"kind"`           // the event kind the source listens for (slack.send)
+	Data json.RawMessage `json:"data,omitempty"` // what it needs besides the text (channel, thread)
+}
+
+// Source is one kind of event someone can subscribe to: what an add-on says it emits (addon.json "emits"), or a
+// source/kind seen recently. For pickers ("which events make a task?"), so nothing is hard-coded per source.
+type Source struct {
+	On          string `json:"on"` // source/kind
+	Title       string `json:"title,omitempty"`
+	Description string `json:"description,omitempty"`
+	Addon       string `json:"addon,omitempty"` // the add-on that emits it
+	CanReply    bool   `json:"canReply,omitempty"`
+	// Seen: unix ms of the latest one in the log (0 = none yet in the last 30 days)
+	Seen int64 `json:"seen,omitempty"`
 }
 
 // MaxDepth: an event emitted by a trigger run is one deeper than the event that started the run.
@@ -76,6 +98,9 @@ func (e *Event) check() error {
 	if len(e.Data) > 0 && !json.Valid(e.Data) {
 		return errors.New("event data is not JSON")
 	}
+	if e.Reply != nil && (!nameRe.MatchString(e.Reply.Kind) || len(e.Reply.Data) > 0 && !json.Valid(e.Reply.Data)) {
+		return errors.New("event reply: a kind ([A-Za-z0-9._-]) and JSON data")
+	}
 	return nil
 }
 
@@ -83,6 +108,8 @@ func (e *Event) check() error {
 type Store struct {
 	dir string
 	now func() time.Time
+	// Declared: the sources someone says they emit (the add-ons' addon.json "emits"), for Catalog. nil = none.
+	Declared func() []Source
 
 	mu        sync.Mutex
 	seen      map[string]bool // ids in this month's and last month's files
@@ -311,4 +338,50 @@ func (e Event) Summary(header string) string {
 		b.WriteString("\n\n" + e.URL)
 	}
 	return b.String()
+}
+
+// Catalog: the declared sources (add-ons' "emits") merged with every source/kind seen in the last 30 days, declared
+// ones first, each with when it was last seen.
+func (s *Store) Catalog() []Source {
+	var declared []Source
+	if s.Declared != nil {
+		declared = s.Declared()
+	}
+	seen := map[string]int64{}
+	replies := map[string]bool{} // kinds that are answers to events (Reply.Kind): not something to subscribe to
+	since := s.now().AddDate(0, 0, -30).UnixMilli()
+	files, _ := filepath.Glob(filepath.Join(s.dir, "*.jsonl"))
+	first := month(time.UnixMilli(since))
+	for _, f := range files {
+		if strings.TrimSuffix(filepath.Base(f), ".jsonl") < first {
+			continue
+		}
+		_ = readFile(f, func(e Event) bool {
+			if e.Reply != nil {
+				replies[e.Reply.Kind] = true
+			}
+			if e.At >= since {
+				on := e.Source + "/" + e.Kind
+				if e.At > seen[on] {
+					seen[on] = e.At
+				}
+			}
+			return true
+		})
+	}
+	out := []Source{}
+	known := map[string]bool{}
+	for _, d := range declared {
+		d.Seen = seen[d.On]
+		known[d.On] = true
+		out = append(out, d)
+	}
+	var rest []Source
+	for on, at := range seen {
+		if _, kind, _ := strings.Cut(on, "/"); !known[on] && !replies[kind] {
+			rest = append(rest, Source{On: on, Seen: at})
+		}
+	}
+	sort.Slice(rest, func(i, j int) bool { return rest[i].Seen > rest[j].Seen })
+	return append(out, rest...)
 }

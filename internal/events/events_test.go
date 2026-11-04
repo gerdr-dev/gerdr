@@ -90,3 +90,26 @@ func TestWatches(t *testing.T) {
 		t.Fatalf("left: %+v", s.Watches(""))
 	}
 }
+
+// The catalog lists declared sources first (with when one was last seen), then what came lately, leaving out
+// answers (a kind some event names as its Reply).
+func TestCatalog(t *testing.T) {
+	s, _ := Open(t.TempDir())
+	s.Declared = func() []Source {
+		return []Source{{On: "slack/dm", Title: "Slack DM", Addon: "slack", CanReply: true}, {On: "feishu/message"}}
+	}
+	s.Emit(Event{ID: "a", Source: "slack", Kind: "dm", Reply: &Reply{Kind: "slack.send", Data: json.RawMessage(`{"channel":"D1"}`)}})
+	s.Emit(Event{Source: "board", Kind: "slack.send"})
+	s.Emit(Event{Source: "gitlab", Kind: "mr.note"})
+	c := s.Catalog()
+	var ons []string
+	for _, x := range c {
+		ons = append(ons, x.On)
+	}
+	if len(c) != 3 || c[0].On != "slack/dm" || c[0].Seen == 0 || c[1].On != "feishu/message" || c[1].Seen != 0 || c[2].On != "gitlab/mr.note" {
+		t.Fatalf("catalog: %v %+v", ons, c)
+	}
+	if _, _, err := s.Emit(Event{Source: "x", Kind: "y", Reply: &Reply{Kind: "bad kind"}}); err == nil {
+		t.Fatal("a reply kind with a space should be refused")
+	}
+}
