@@ -175,8 +175,13 @@
 .gerdr-md [data-streamdown="table-wrapper"]:hover > div:first-child:not(:last-child) {
   opacity: 1;
 }
+/* Phones have no hover, so the buttons stay out — but faint, since they float over the header row and would
+   otherwise hide its last cell. A touch makes them solid. */
 @media (hover: none) {
   .gerdr-md [data-streamdown="table-wrapper"] > div:first-child:not(:last-child) {
+    opacity: 0.35;
+  }
+  .gerdr-md [data-streamdown="table-wrapper"] > div:first-child:not(:last-child):active {
     opacity: 1;
   }
 }
