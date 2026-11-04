@@ -238,6 +238,20 @@ func (s *Server) createOnHost(w http.ResponseWriter, r *http.Request, host strin
 		Open     *createOpen `json:"open"`
 	}
 	_ = json.Unmarshal(body, &o)
+	// Started by a panel's conversation: the panel's, there as here (adoptPanel), and not placed in Code here
+	var tags map[string]string
+	if t, ok := m["tags"].(map[string]any); ok {
+		tags = map[string]string{}
+		for k, v := range t {
+			if sv, ok := v.(string); ok {
+				tags[k] = sv
+			}
+		}
+	}
+	owner := s.adoptPanel(o.Open, &tags)
+	if owner != "" {
+		m["tags"] = tags
+	}
 	delete(m, "open")
 	delete(m, "host")
 	// A report target here or on a third computer is kept here (peer.Manager.ReportTo); one on that host goes along
@@ -276,10 +290,12 @@ func (s *Server) createOnHost(w http.ResponseWriter, r *http.Request, host strin
 	}
 	out := s.Peers.RewriteSummary(h, rb)
 	s.Peers.NoteSession(host, out)
-	// `gerdr session new --host`: it shows on this computer's screen, next to the agent that asked
-	if err := s.placeCreated(o.Open, id, o.Cwd, sum.Cwd); err != nil {
-		httpError(w, 400, err.Error())
-		return
+	// `gerdr session new --host`: it shows on this computer's screen, next to the agent that asked (a panel's: in the panel)
+	if owner == "" {
+		if err := s.placeCreated(o.Open, id, o.Cwd, sum.Cwd); err != nil {
+			httpError(w, 400, err.Error())
+			return
+		}
 	}
 	writeJSON(w, json.RawMessage(out))
 }
