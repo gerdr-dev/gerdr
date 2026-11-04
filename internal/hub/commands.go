@@ -57,12 +57,22 @@ type optCache struct {
 	mu   sync.Mutex
 	path string
 	m    map[string]json.RawMessage
+	// dec is m decoded, kept so get doesn't decode: get runs for every not-yet-attached session in every Summary, and
+	// every session list (page load, add-on bridge, panels' ctx.sessions.list, /api/busy) builds all ~400 of them.
+	// Decoding there was 1.8 GB of garbage in 9 minutes, and the service sat at 150-210% CPU in GC (measured with pprof).
+	dec map[string]agentOpts
 }
 
 func newOptCache(dir string) *optCache {
-	c := &optCache{path: filepath.Join(dir, "options.json"), m: map[string]json.RawMessage{}}
+	c := &optCache{path: filepath.Join(dir, "options.json"), m: map[string]json.RawMessage{}, dec: map[string]agentOpts{}}
 	if b, err := os.ReadFile(c.path); err == nil {
 		_ = json.Unmarshal(b, &c.m)
+	}
+	for k, b := range c.m {
+		var o agentOpts
+		if json.Unmarshal(b, &o) == nil {
+			c.dec[k] = o
+		}
 	}
 	return c
 }
@@ -88,20 +98,43 @@ func (c *optCache) set(agent string, modes *acp.SessionModeState, config []acp.S
 		return
 	}
 	c.m[agent] = b
+	// Its own copy, decoded from what was stored: modes / config are the session's own (s.modes changes later)
+	var d agentOpts
+	_ = json.Unmarshal(b, &d)
+	c.dec[agent] = d
 	all, _ := json.Marshal(c.m)
 	c.mu.Unlock()
 	_ = os.WriteFile(c.path, all, 0o600)
 }
 
-// get 返回一份**拷贝**（调用方会改 CurrentValue）。
+// get returns a copy of what callers change (CurrentModeId, each option's CurrentValue): the modes, the option list
+// and each option's Select / Boolean. The lists of choices inside are shared and must be left alone.
 func (c *optCache) get(agent string) (o agentOpts, ok bool) {
 	c.mu.Lock()
-	b := c.m[agent]
+	d, ok := c.dec[agent]
 	c.mu.Unlock()
-	if b == nil {
+	if !ok {
 		return o, false
 	}
-	return o, json.Unmarshal(b, &o) == nil
+	if d.Modes != nil {
+		m := *d.Modes
+		o.Modes = &m
+	}
+	if d.Config != nil {
+		o.Config = make([]acp.SessionConfigOption, len(d.Config))
+		for i, opt := range d.Config {
+			if opt.Select != nil {
+				x := *opt.Select
+				opt.Select = &x
+			}
+			if opt.Boolean != nil {
+				x := *opt.Boolean
+				opt.Boolean = &x
+			}
+			o.Config[i] = opt
+		}
+	}
+	return o, true
 }
 
 // cmdSets hands command lists out by content instead of inside every Summary. A list runs to ~60 KB (claude with
