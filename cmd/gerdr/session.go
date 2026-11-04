@@ -1080,7 +1080,11 @@ func (c *apiClient) upload(host, path string) (string, error) {
 	return out.Path, nil
 }
 
+// fail exits with err as JSON on stderr; a nil err is a no-op, so `fail(c.do(…))` reads as a check.
 func fail(err error) {
+	if err == nil {
+		return
+	}
 	b, _ := json.Marshal(map[string]string{"error": err.Error()})
 	fmt.Fprintln(os.Stderr, string(b))
 	os.Exit(1)
