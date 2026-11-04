@@ -191,6 +191,8 @@ interface Ctx {
       kind: string;
       /** What it is about (group/repo!34, a channel id): what subscribers narrow by. */
       key?: string;
+      /** Who did it, in the source's own identities (a GitLab username); leave out when nobody did (a pipeline). */
+      actor?: string;
       title?: string;
       text?: string;
       url?: string;
