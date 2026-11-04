@@ -9,3 +9,5 @@
 /gerdr
 /tools/scrolltest/node_modules/
 /tools/scrolltest/package-lock.json
+# Claude Code local files (per-machine settings, agent worktrees)
+/.claude/
