@@ -168,6 +168,17 @@ func (s *Server) Handler() http.Handler {
 		w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
 		_ = json.NewEncoder(w).Encode(cmds)
 	})
+	// A session's mode / option lists by the key in its summary (hub optSets): content-hashed, cacheable for good.
+	mux.HandleFunc("GET /api/options/{key}", func(w http.ResponseWriter, r *http.Request) {
+		set, ok := s.Hub.OptionSet(r.PathValue("key"))
+		if !ok {
+			httpError(w, 404, "no such option set")
+			return
+		}
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
+		_ = json.NewEncoder(w).Encode(set)
+	})
 	mux.HandleFunc("GET /api/blobs/{hash}", s.blob)
 	// A composer image, stored so the draft can reference it on the other devices instead of carrying the bytes
 	mux.HandleFunc("POST /api/blobs", func(w http.ResponseWriter, r *http.Request) {

@@ -273,8 +273,11 @@ type Summary struct {
 	Record
 	Status string                    `json:"status"`
 	Error  string                    `json:"error,omitempty"`
-	Modes  *acp.SessionModeState     `json:"modes,omitempty"`
-	Config []acp.SessionConfigOption `json:"configOptions,omitempty"`
+	// The mode and option dropdowns go out as OptsKey (the lists, fetched from /api/options/<key>: optSets) plus the
+	// current values. Hosts on an older Gerdr still send modes / configOptions inline; the page takes either.
+	OptsKey   string         `json:"optsKey,omitempty"`
+	ModeID    string         `json:"modeId,omitempty"`
+	OptValues map[string]any `json:"optValues,omitempty"`
 	// Commands goes out as CommandsKey (fetched from /api/commands/<key>, see cmdSets): the list was ~60 KB in every
 	// Summary of every session, on every page load and every streamed chunk.
 	Commands    []acp.AvailableCommand `json:"-"`
@@ -341,11 +344,8 @@ func (s *Session) Summary() Summary {
 			cmds = s.h.cmds.get(s.h.Base(s.rec.Agent)) // 新建的变体还没报过：先借原版的
 		}
 	}
-	modes, config := s.modes, s.config
-	if (modes == nil || len(config) == 0) && s.h.opts != nil {
-		modes, config = s.optsFallbackLocked(modes, config)
-	}
-	return Summary{Record: s.rec, Status: s.status, Error: s.lastErr, Modes: modes, Config: config, Commands: cmds, CommandsKey: s.h.cmdSets.key(cmds), CommandsCached: cached && len(cmds) > 0, Pending: len(s.pending), LastSeq: last, Tasks: s.tasks, Turn: s.turnInfoLocked(), Context: s.contextLocked(), Base: s.h.Base(s.rec.Agent), Branch: gitBranch(s.rec.WorkDir()), Waiting: s.waitingLocked(), WaitingSince: s.waitingSinceLocked(), WaitingKind: s.waitingKindLocked(), ByPerson: s.byPerson}
+	modes, config, modeID, values := s.optionsLocked()
+	return Summary{Record: s.rec, Status: s.status, Error: s.lastErr, OptsKey: s.h.optSets.key(modes, config), ModeID: modeID, OptValues: values, Commands: cmds, CommandsKey: s.h.cmdSets.key(cmds), CommandsCached: cached && len(cmds) > 0, Pending: len(s.pending), LastSeq: last, Tasks: s.tasks, Turn: s.turnInfoLocked(), Context: s.contextLocked(), Base: s.h.Base(s.rec.Agent), Branch: gitBranch(s.rec.WorkDir()), Waiting: s.waitingLocked(), WaitingSince: s.waitingSinceLocked(), WaitingKind: s.waitingKindLocked(), ByPerson: s.byPerson}
 }
 
 func (s *Session) waitingSinceLocked() int64 {
@@ -552,33 +552,49 @@ func (s *Session) hasUserMessages() bool {
 }
 
 // syncRecFromState 把当前模式 / 配置记进 Record（下次接回时原样带上）。
-// optsFallbackLocked：还没接上 agent 的会话，下拉框先按这类 agent 上次报的选项画（optCache），当前值用自己的记录。
-func (s *Session) optsFallbackLocked(modes *acp.SessionModeState, config []acp.SessionConfigOption) (*acp.SessionModeState, []acp.SessionConfigOption) {
-	o, ok := s.h.opts.get(s.rec.Agent)
-	if !ok {
-		o, ok = s.h.opts.get(s.h.Base(s.rec.Agent))
+// optionsLocked: the mode / option lists for this session's dropdowns and their current values. Until it is attached
+// to its agent it has none of its own: the lists are the ones this kind of agent last reported (optCache, shared, not
+// to be edited) and the current values are its own record's.
+func (s *Session) optionsLocked() (modes []acp.SessionMode, config []acp.SessionConfigOption, modeID string, values map[string]any) {
+	var cached agentOpts
+	if (s.modes == nil || len(s.config) == 0) && s.h.opts != nil {
+		var ok bool
+		if cached, ok = s.h.opts.shared(s.rec.Agent); !ok {
+			cached, _ = s.h.opts.shared(s.h.Base(s.rec.Agent))
+		}
 	}
-	if !ok {
-		return modes, config
-	}
-	if modes == nil && o.Modes != nil {
-		modes = o.Modes
+	switch {
+	case s.modes != nil:
+		modes, modeID = s.modes.AvailableModes, string(s.modes.CurrentModeId)
+	case cached.Modes != nil:
+		modes, modeID = cached.Modes.AvailableModes, string(cached.Modes.CurrentModeId)
 		if s.rec.Mode != "" {
-			modes.CurrentModeId = acp.SessionModeId(s.rec.Mode)
+			modeID = s.rec.Mode
 		}
 	}
-	if len(config) == 0 {
-		config = o.Config
-		for _, c := range config {
-			if c.Select != nil {
-				// 空值 = 没手选过、用 agent 的默认（旧版存下的「auto」就是空），别拿它盖掉缓存里那个实际值
-				if v, ok := s.rec.Config[string(c.Select.Id)]; ok && v != "" {
-					c.Select.CurrentValue = acp.SessionConfigValueId(v)
-				}
+	own := len(s.config) > 0
+	config = s.config
+	if !own {
+		config = cached.Config
+	}
+	for _, c := range config {
+		if values == nil {
+			values = map[string]any{}
+		}
+		switch {
+		case c.Select != nil:
+			cur := string(c.Select.CurrentValue)
+			// The record's value, for a session not attached yet. Empty = never picked, the agent's default (old
+			// versions stored "auto" as empty): keep the cached actual value then
+			if r, ok := s.rec.Config[string(c.Select.Id)]; !own && ok && r != "" {
+				cur = r
 			}
+			values[string(c.Select.Id)] = cur
+		case c.Boolean != nil:
+			values[string(c.Boolean.Id)] = c.Boolean.CurrentValue
 		}
 	}
-	return modes, config
+	return modes, config, modeID, values
 }
 
 func (s *Session) syncRecFromState() {

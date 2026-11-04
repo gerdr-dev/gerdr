@@ -42,8 +42,15 @@ export type SessionSummary = ChatSession & {
   config?: Record<string, string>;
   status: SessionStatus;
   error?: string;
+  /** Inline only from a host on an older Gerdr: the server now sends optsKey + modeId + optValues (useSessionOptions) */
   modes?: { availableModes: SessionMode[]; currentModeId: string };
   configOptions?: ConfigOption[];
+  /** The mode / option lists, fetched by this key from /api/options/<key> (lib/optionSets.ts) */
+  optsKey?: string;
+  /** The current mode */
+  modeId?: string;
+  /** Each option's current value, by option id */
+  optValues?: Record<string, string | boolean>;
   commands?: AvailableCommand[];
   /** The server sends the list as this key (fetched on demand from /api/commands/<key>, see useCommandSet), not inline */
   commandsKey?: string;

@@ -96,10 +96,10 @@ func (s *Server) hostRoute(r *http.Request) (host, path string, query url.Values
 			return "", "", nil
 		}
 		return rest[:i], rest[i:], q
-	case strings.HasPrefix(p, "/api/sessions/"), strings.HasPrefix(p, "/api/commands/"), strings.HasPrefix(p, "/api/terms/"):
-		// a host's session, command list or terminal: "<host>:<id>" (terminals: termOnHost)
+	case strings.HasPrefix(p, "/api/sessions/"), strings.HasPrefix(p, "/api/commands/"), strings.HasPrefix(p, "/api/options/"), strings.HasPrefix(p, "/api/terms/"):
+		// a host's session, command list, option list or terminal: "<host>:<id>" (terminals: termOnHost)
 		pre := "/api/sessions/"
-		for _, x := range []string{"/api/commands/", "/api/terms/"} {
+		for _, x := range []string{"/api/commands/", "/api/options/", "/api/terms/"} {
 			if strings.HasPrefix(p, x) {
 				pre = x
 			}

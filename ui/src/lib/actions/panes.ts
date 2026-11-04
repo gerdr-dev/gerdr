@@ -74,7 +74,7 @@ export function duplicateFocused(dir: "right" | "down") {
   set((st) => ({ starting: { ...st.starting, [fresh.id]: true } }));
   setLayout((l) => updateTab(l, activeTab(l).id, (tab) => split(tab, tab.zoom ?? tab.focus, dir === "right" ? "row" : "col", fresh)));
   // 开失败时 createInPane 已经 toast 过，pane 落回空面板，人可以自己再点开始
-  createInPane(fresh.id, { agent: s.agent, cwd: s.cwd, mode: s.modes?.currentModeId ?? s.mode })
+  createInPane(fresh.id, { agent: s.agent, cwd: s.cwd, mode: s.modeId ?? s.modes?.currentModeId ?? s.mode })
     .catch(() => {})
     .finally(() =>
       set((st) => {
@@ -100,7 +100,7 @@ export function newAgentInOverview(): boolean {
   }
   const opening = toast.loading(t("actionsPanes.openingAgent"));
   api
-    .createSession({ agent: s.agent, cwd: s.cwd, mode: s.modes?.currentModeId ?? s.mode })
+    .createSession({ agent: s.agent, cwd: s.cwd, mode: s.modeId ?? s.modes?.currentModeId ?? s.mode })
     .then((n) => {
       set((st) => ({ sessions: { ...st.sessions, [n.id]: n } }));
       setLayout((l) => {

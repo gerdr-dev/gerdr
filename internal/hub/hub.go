@@ -233,6 +233,7 @@ type Hub struct {
 	cmds *cmdCache
 	// cmdSets: command lists by content, so a Summary carries a key instead of the list (commands.go)
 	cmdSets cmdSets
+	optSets optSets // mode / option lists by content, the same way (commands.go)
 	opts    *optCache
 
 	mu       sync.Mutex

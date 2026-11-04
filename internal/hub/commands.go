@@ -137,6 +137,92 @@ func (c *optCache) get(agent string) (o agentOpts, ok bool) {
 	return o, true
 }
 
+// shared returns the cached options themselves, not a copy: for readers that change nothing (Summary). Each set
+// stores a fresh value, so what is handed out is never edited afterwards.
+func (c *optCache) shared(agent string) (agentOpts, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	d, ok := c.dec[agent]
+	return d, ok
+}
+
+// optSets hands a session's mode and option lists (the choices, not the current values) out by content, like cmdSets
+// for commands: every Summary carried both inline, ~2.6 KB for a claude session, the same for all of an agent's
+// sessions. With 468 sessions that was 920 KB of the 1.07 MB /api/hello, which the page, every `gerdr session` command
+// and the add-on bridge fetch, and a running turn's every chunk sent its Summary with them. Now a Summary carries
+// OptsKey, ModeID and OptValues, and the page fetches /api/options/<key> once and puts them back together.
+type optSets struct {
+	mu    sync.Mutex
+	byKey map[string]OptionSet
+	// last: the key of lists already hashed, by where they live. Lists are replaced, never edited in place, except
+	// for current values, which a set doesn't hold; byKey keeps the memory from being reused while remembered.
+	last map[optListsID]string
+}
+
+// OptionSet: what /api/options/<key> serves. Current values are cleared: they come with each Summary (OptValues).
+type OptionSet struct {
+	Modes  []acp.SessionMode         `json:"modes,omitempty"`
+	Config []acp.SessionConfigOption `json:"config,omitempty"`
+}
+
+type optListsID struct {
+	modes  *acp.SessionMode
+	nModes int
+	config *acp.SessionConfigOption
+	nCfg   int
+}
+
+func (o *optSets) key(modes []acp.SessionMode, config []acp.SessionConfigOption) string {
+	if len(modes) == 0 && len(config) == 0 {
+		return ""
+	}
+	id := optListsID{nModes: len(modes), nCfg: len(config)}
+	if len(modes) > 0 {
+		id.modes = &modes[0]
+	}
+	if len(config) > 0 {
+		id.config = &config[0]
+	}
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if o.byKey == nil || len(o.byKey) >= cmdSetsMax {
+		o.byKey, o.last = map[string]OptionSet{}, map[optListsID]string{}
+	}
+	if k, ok := o.last[id]; ok {
+		return k
+	}
+	set := OptionSet{Modes: modes, Config: make([]acp.SessionConfigOption, len(config))}
+	for i, opt := range config {
+		if opt.Select != nil {
+			x := *opt.Select
+			x.CurrentValue = ""
+			opt.Select = &x
+		}
+		if opt.Boolean != nil {
+			x := *opt.Boolean
+			x.CurrentValue = false
+			opt.Boolean = &x
+		}
+		set.Config[i] = opt
+	}
+	b, _ := json.Marshal(set)
+	sum := sha256.Sum256(b)
+	k := hex.EncodeToString(sum[:8])
+	if _, ok := o.byKey[k]; !ok {
+		o.byKey[k] = set
+	}
+	o.last[id] = k
+	return k
+}
+
+// OptionSet: the lists a Summary's OptsKey stands for (false if unknown: the page asks again after the next Summary).
+func (h *Hub) OptionSet(key string) (OptionSet, bool) {
+	h.optSets.mu.Lock()
+	defer h.optSets.mu.Unlock()
+	o, ok := h.optSets.byKey[key]
+	return o, ok
+}
+
 // cmdSets hands command lists out by content instead of inside every Summary. A list runs to ~60 KB (claude with
 // many skills), the same few lists are shared by every session of an agent, and a Summary goes out with the session
 // list on every page load and with every streamed chunk of a running turn: 181 sessions made /api/hello 8.7 MB

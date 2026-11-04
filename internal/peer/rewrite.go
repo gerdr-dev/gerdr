@@ -31,6 +31,10 @@ func RewriteSummary(h Host, raw json.RawMessage) json.RawMessage {
 	if s, ok := m["commandsKey"].(string); ok && s != "" {
 		m["commandsKey"] = Join(h.ID, s)
 	}
+	// So is the mode / option list (/api/options/<key>)
+	if s, ok := m["optsKey"].(string); ok && s != "" {
+		m["optsKey"] = Join(h.ID, s)
+	}
 	if cl, ok := m["cleared"].([]any); ok {
 		for _, c := range cl {
 			if cm, ok := c.(map[string]any); ok {
