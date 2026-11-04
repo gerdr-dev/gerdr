@@ -26,6 +26,8 @@ export type Card = {
   body?: string;
   tone?: "warn" | "info" | "ok";
   ref?: string;
+  /** The panel whose tool made it (its project key), stamped by Gerdr: its type is looked up in that panel's cards. */
+  panel?: string;
   choose?: { project: string; fn: string; input?: Record<string, unknown>; field: string; options: string[]; other?: boolean };
 };
 
@@ -87,7 +89,7 @@ function split(o: string): [string, string] {
 
 /** A registered card type draws the card; the built-in card when there's none or it throws. */
 export function ToolCard({ card, session }: { card: Card; session: string }) {
-  const Custom = useCardType(card.type);
+  const Custom = useCardType(card.type, card.panel);
   const fallback = <BuiltinCard card={card} />;
   if (!Custom) return fallback;
   return (

@@ -107,10 +107,30 @@ func (r *Runner) CallTool(ctx context.Context, project, name, session string, ar
 	}
 	for _, t := range tools {
 		if t.Name == name {
-			return r.StartAs(project, t.Fn, args, session).Wait(ctx)
+			res, err := r.StartAs(project, t.Fn, args, session).Wait(ctx)
+			return stampCard(res, project), err
 		}
 	}
 	return nil, fmt.Errorf("no tool %q in this panel (local/*.ts export const tools)", name)
+}
+
+// stampCard marks a tool result's card ({gerdrCard: {…}}) with the panel that made it: card types are registered per
+// panel (ui/src/lib/cards.ts), so a card is drawn by its own panel's code even when another panel — or the same panel
+// installed in another project — registered the same type. Set here, not by the panel, so it can't be wrong.
+func stampCard(res any, project string) any {
+	m, ok := res.(map[string]any)
+	if !ok {
+		return res
+	}
+	card, ok := m["gerdrCard"].(map[string]any)
+	if !ok {
+		return res
+	}
+	if project == "" {
+		project = DefaultProject
+	}
+	card["panel"] = project
+	return res
 }
 
 type callerKey struct{}

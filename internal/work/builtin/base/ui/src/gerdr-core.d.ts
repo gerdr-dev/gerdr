@@ -57,6 +57,8 @@ declare module "@gerdr/core" {
     body?: string;
     tone?: "warn" | "info" | "ok";
     ref?: string;
+    /** The panel whose tool made it (its project key, "lb" / "lb/board"): set by gerdr; your code runs for your panel's cards only. */
+    panel?: string;
     choose?: { project: string; fn: string; input?: Record<string, unknown>; field: string; options: string[]; other?: boolean };
     [k: string]: unknown;
   };
@@ -65,6 +67,7 @@ declare module "@gerdr/core" {
   /**
    * Draw cards of a type yourself, in every conversation (Code too). Call it in src/cards.tsx: gerdr loads that file at
    * start, before this page is ever shown. A card whose component isn't there or throws falls back to the built-in one.
+   * The type is this panel's: cards your tools make are drawn by it, another panel's cards of the same type aren't.
    */
   export function registerCard(type: string, component: ComponentType<CardProps>): () => void;
 

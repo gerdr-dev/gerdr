@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { loadingPanel } from "@/lib/cards";
 
 /**
  * The UIs compiled into this page (internal/uisite/mounts.go): each project's Work UI, under its project id. The
@@ -65,12 +66,18 @@ export async function registerMount(key: string) {
 }
 
 const loadedCards = new Set<string>();
+// One at a time: what a cards file registers while it's evaluated is that panel's (cards.ts loadingPanel), so two
+// panels' files must not be evaluated at once
+let cardQueue: Promise<unknown> = Promise.resolve();
 
 function loadCards(mounts: Record<string, MountInfo> | undefined) {
   for (const [name, m] of Object.entries(mounts ?? {})) {
     if (!m.cards || loadedCards.has(m.cards)) continue;
     loadedCards.add(m.cards);
-    import(/* @vite-ignore */ m.cards).catch((e) => console.error(`[gerdr] ${name}'s cards failed to load`, e));
+    const url = m.cards;
+    cardQueue = cardQueue.then(() =>
+      loadingPanel(name.replace("~", "/"), () => import(/* @vite-ignore */ url)).catch((e) => console.error(`[gerdr] ${name}'s cards failed to load`, e)),
+    );
   }
 }
 

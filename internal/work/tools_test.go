@@ -12,7 +12,7 @@ func TestTools(t *testing.T) {
   ask: { description: "ask the user", input: { type: "object", properties: { what: { type: "string" } }, required: ["what"] } },
   ghost: { description: "declared, no function" },
 };
-export function ask(input: any, ctx: any) { return { what: input.what, by: ctx.caller.session } }
+export function ask(input: any, ctx: any) { return { what: input.what, by: ctx.caller.session, gerdrCard: { type: "step", panel: "forged" } } }
 export function notATool() { return 1 }`,
 		// Files without a tools export are the common case and must be skipped, not crash the listing
 		"plain.ts": `export function hello() { return 1 }`,
@@ -33,6 +33,10 @@ export function notATool() { return 1 }`,
 	m := res.(map[string]any)
 	if m["what"] != "sign in" || m["by"] != "s123" {
 		t.Errorf("result %v", m)
+	}
+	// Its card says which panel made it (Gerdr's word, not the panel's): drawn by that panel's registered type
+	if c := m["gerdrCard"].(map[string]any); c["panel"] != DefaultProject || c["type"] != "step" {
+		t.Errorf("card not stamped with its panel: %v", c)
 	}
 	if _, err := r.CallTool(ctx, "", "ghost", "s1", nil); err == nil {
 		t.Error("a tool without its function must not run")

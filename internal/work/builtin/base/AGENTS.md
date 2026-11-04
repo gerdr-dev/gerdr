@@ -47,7 +47,9 @@ and their habits are what they wrote down, not what the code says.
     the whole width; without it, you are the column on its right).
   - `ui/src/cards.tsx` (optional) — card types this panel draws in any conversation: `registerCard("task-step",
     TaskStep)`; a tool returns `{ gerdrCard: { type: "task-step", …, title, body } }` (FUNCTIONS.md). Gerdr loads it at
-    start, so the cards are drawn in Code too; title / body are the fallback when the type isn't drawn.
+    start, so the cards are drawn in Code too; title / body are the fallback when the type isn't drawn. Types are this
+    panel's own: Gerdr marks each card with the panel whose tool made it, so another panel's (or another install of
+    this one's) "task-step" never draws yours.
   - `ui/src/pages/*.tsx` — one file per page, routed by file name (`index.tsx` → `/`,
     `weekly.tsx` → `/weekly`, `okr/[id].tsx` → `/okr/:id`); default-export a component.
   - `ui/src/lib/gerdr.ts` — the bridge: `run(fn, input, { onProgress, onLog, signal })` calls a local

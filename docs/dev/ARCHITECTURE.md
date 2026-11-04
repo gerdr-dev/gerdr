@@ -459,7 +459,13 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
   picks" in the package). The chat never waits on such a card: the agent's turn ended when it asked. A card with
   `type` is drawn by the component a UI registered for it (`lib/cards.ts`, `registerCard` in a Work's
   `src/cards.tsx`, loaded at start by `watchMountCards` so a worker's tab in Code draws it too), inside an error
-  boundary that falls back to the built-in card from the same title / body / choose.
+  boundary that falls back to the built-in card from the same title / body / choose. Types are registered per panel
+  (2026-11): every project's panels load their cards into the one page, and the same panel installed in two projects
+  registered "task-step" twice, the last one winning, so a card asked the other project's board about its task
+  ("已撤回" for a step still open). `work.stampCard` sets `gerdrCard.panel` on every tool result (Gerdr's word, not the
+  panel's); `mounts.ts` evaluates the cards files one at a time inside `loadingPanel`, so a registration is filed under
+  the panel being loaded; `useCardType(type, panel)` takes only that panel's (or a global one, registered outside any
+  cards file). Unstamped older cards take the latest registration, as before.
 - **Work tools** (`work/tools.go`, `cmd/gerdr/workmcp.go`, `hub.Options.MCP`). A Work's local functions declared in
   `export const tools` are served to the same sessions that get its skills, over MCP: `gerdr work mcp --project P
   --session S` is a stdio server the hub hands the adapter as a client MCP server on new / resume / load (claude

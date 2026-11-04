@@ -14,26 +14,59 @@ export type CardProps = {
   session: string;
 };
 
-const types = new Map<string, ComponentType<CardProps>>();
+// Registered per panel: every project's panels load their cards into this one page, and two of them may name a type
+// alike (the same panel installed in two projects, or two panels that both say "task-step"). A card says which
+// panel made it (`panel`, stamped by Gerdr on the tool result: work.stampCard), and only that panel's component draws
+// it. A registration outside any panel's cards file (a page registering at runtime) is global, the fallback.
+const scoped = new Map<string, ComponentType<CardProps>>(); // "<panel>\n<type>"
+const global = new Map<string, ComponentType<CardProps>>();
+/** For cards from before they were stamped: the latest panel registration of each type. */
+const latest = new Map<string, ComponentType<CardProps>>();
 const subs = new Set<() => void>();
 let version = 0;
-
-export function registerCard(type: string, component: ComponentType<CardProps>): () => void {
-  types.set(type, component);
+const bump = () => {
   version++;
   for (const f of subs) f();
+};
+
+// The panel whose cards file is being evaluated now (mounts.ts loads them one at a time, inside loadingPanel).
+let loading: string | undefined;
+
+/** Runs `load` (importing a panel's src/cards.tsx) with what it registers attributed to `panel` (its project key). */
+export async function loadingPanel<T>(panel: string, load: () => Promise<T>): Promise<T> {
+  loading = panel;
+  try {
+    return await load();
+  } finally {
+    loading = undefined;
+  }
+}
+
+export function registerCard(type: string, component: ComponentType<CardProps>): () => void {
+  const panel = loading;
+  const key = panel ? `${panel}\n${type}` : type;
+  const map = panel ? scoped : global;
+  map.set(key, component);
+  if (panel) latest.set(type, component);
+  bump();
   return () => {
-    if (types.get(type) !== component) return;
-    types.delete(type);
-    version++;
-    for (const f of subs) f();
+    if (map.get(key) !== component) return;
+    map.delete(key);
+    if (latest.get(type) === component) latest.delete(type);
+    bump();
   };
 }
 
 const subscribe = (f: () => void) => (subs.add(f), () => void subs.delete(f));
 
-/** The component for a card type, re-rendering when one is registered later (a Work UI's cards load after the chat). */
-export function useCardType(type: string | undefined): ComponentType<CardProps> | undefined {
+/**
+ * The component for a card, re-rendering when one is registered later (a panel's cards load after the chat): its own
+ * panel's when the card says which (never another panel's of the same name), else a global one; an unstamped card
+ * (older) takes the latest registration of its type.
+ */
+export function useCardType(type: string | undefined, panel?: string): ComponentType<CardProps> | undefined {
   useSyncExternalStore(subscribe, () => version);
-  return type ? types.get(type) : undefined;
+  if (!type) return undefined;
+  if (panel) return scoped.get(`${panel}\n${type}`) ?? global.get(type);
+  return global.get(type) ?? latest.get(type);
 }
