@@ -23,8 +23,10 @@ export const panelsChanged = () => window.dispatchEvent(new Event("gerdr:panels"
 
 const cache: Record<string, { panels: Panel[]; ownRemoved: boolean }> = {};
 
+const fromCache = (space: string) => ({ space, ...(cache[space] ?? { panels: [], ownRemoved: false }), loaded: !!cache[space] });
+
 export function usePanels(space: string): { panels: Panel[]; ownRemoved: boolean; loaded: boolean } {
-  const [state, setState] = useState(() => ({ ...(cache[space] ?? { panels: [], ownRemoved: false }), loaded: !!cache[space] }));
+  const [state, setState] = useState(() => fromCache(space));
   useEffect(() => {
     let dead = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -41,11 +43,11 @@ export function usePanels(space: string): { panels: Panel[]; ownRemoved: boolean
             source: p.source,
           }));
           cache[space] = { panels, ownRemoved: r.ownRemoved };
-          if (!dead) setState({ panels, ownRemoved: r.ownRemoved, loaded: true });
+          if (!dead) setState({ space, panels, ownRemoved: r.ownRemoved, loaded: true });
         },
         () => {},
       );
-    setState({ ...(cache[space] ?? { panels: [], ownRemoved: false }), loaded: !!cache[space] });
+    setState(fromCache(space));
     void load();
     const later = () => {
       clearTimeout(timer);
@@ -60,5 +62,8 @@ export function usePanels(space: string): { panels: Panel[]; ownRemoved: boolean
       window.removeEventListener("gerdr:panels", later);
     };
   }, [space]);
-  return state;
+  // Right after the project changes, the state still holds the previous project's panels until the effect above runs.
+  // Handing those out told PanelButtons the new project's remembered panel was gone, and it overwrote it with the first
+  // one: switching projects lost which panel each was left on.
+  return state.space === space ? state : fromCache(space);
 }
