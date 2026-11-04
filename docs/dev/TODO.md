@@ -26,6 +26,11 @@ reused (163e358); `gerdr session` asks /api/hello?only=sessions,layout (a217328)
 runs intake.list every 5 s whatever is on screen: its ui/src/pages/index.tsx should poll with usePanelVisible like
 Superagent's ui/src/lib/visible.ts. Measure again with the steps below.
 
+Panels are pushed to now (4272bd4: core usePanelChange for files their functions change, useSessions for live
+conversations; the Superagent board refreshes on those, e464d59). Not done: session state changes as events
+(source "gerdr", kind like session.status) so a panel's reconciling can run from a trigger instead of from its page
+being open; the Superagent board still reconciles inside tasks.list, run when its page sees a worker change.
+
 Function VMs are pooled now (internal/work/pool.go: globals installed once, the run's fields reset, the shared JS
 world restored from a descriptor snapshot on release, untrusted VMs dropped; pool_test.go). A run went from 4.9 MB /
 5.4 ms to 0.6 MB / 2.0 ms, nearly all of it the restore reading each of ~700 property descriptors. Cheaper is possible
