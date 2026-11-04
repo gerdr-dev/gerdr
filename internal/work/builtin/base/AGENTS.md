@@ -87,11 +87,19 @@ and their habits are what they wrote down, not what the code says.
   of `--wait`, and go back to the user: each time it stops (done, waiting for a person, failed) you get a
   Gerdr report message with its reply. Give it `--cwd` (the repository; otherwise it runs in this Work
   directory) and `--tag` labels (e.g. `task=…`) so you can find it again with `gerdr session list --tag`.
+- `user/` — this person's, never shared (it ignores itself: `user/.gitignore` is `*`). Everything one person's use
+  produces or decides goes here, so publishing the panel can't carry anyone's tasks, ids or repository list along:
+  - `user/data/` — what functions keep (tasks, what a poller already handled, caches). Not `data/`.
+  - `user/triggers/`, `user/schedules/`, `user/skills/` — the person's own triggers / schedules, and their edits of
+    the skills: a file here replaces the shared one of the same path (`triggers/x.json`, `skills/a/references/b.md`),
+    others are added. So code that turns something on for the user, or saves their edit of a skill, writes under
+    `user/`; reading a skill's file, look in `user/skills/…` first. The shared folders hold the panel's own
+    definitions and careful defaults. Sessions get the merged skills.
 - `gerdr work …` acts on the project of the current directory, so run it from here.
 - Other projects have their own Work directories, and a project can have panels besides its Work (each a Work of
   its own, in `panels/<name>` next to it, with its own agent): don't touch them.
 - Built-in files are upgraded by Gerdr unless you edit them; once edited they're yours.
-- Publishing a panel for others: a git repository of this directory (data/ and output/ ignored, and Gerdr's built-in
-  files: AGENTS.md, CLAUDE.md, FUNCTIONS.md, local/ctx.d.ts, ui/src/gerdr-core.d.ts, .builtin.json), with the user's own
-  values in skills/ turned into careful defaults, and the GitHub topic `gerdr-panel` so it's listed at
+- Publishing a panel for others: a git repository of this directory (output/ ignored, and Gerdr's built-in files:
+  AGENTS.md, CLAUDE.md, FUNCTIONS.md, local/ctx.d.ts, ui/src/gerdr-core.d.ts, .builtin.json; user/ ignores itself),
+  with careful defaults in skills/ (the user's own values live in user/skills/, so they stay theirs), and the GitHub topic `gerdr-panel` so it's listed at
   https://github.com/topics/gerdr-panel, where Gerdr's "add a panel" points people.

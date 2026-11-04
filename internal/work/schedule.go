@@ -97,38 +97,30 @@ type ScheduleInfo struct {
 // ParseSchedules reads a Work directory's schedules/; a broken file is an error naming it (none run until it's fixed:
 // half a set of watchers running silently is worse than a loud stop).
 func ParseSchedules(dir string) ([]Schedule, error) {
-	ents, err := os.ReadDir(filepath.Join(dir, SchedulesDir))
-	if errors.Is(err, os.ErrNotExist) {
-		return nil, nil
-	}
+	files, err := overlayJSON(dir, SchedulesDir)
 	if err != nil {
 		return nil, err
 	}
 	var out []Schedule
-	for _, e := range ents {
-		id, ok := strings.CutSuffix(e.Name(), ".json")
-		if e.IsDir() || !ok {
-			continue
-		}
-		rel := SchedulesDir + "/" + e.Name()
+	for _, id := range overlayIDs(files) {
+		f := files[id]
 		if !scheduleIDRe.MatchString(id) {
-			return nil, fmt.Errorf(i18n.S("%s：文件名只能用字母、数字、. - _", "%s: the file name may only use letters, digits, . - _"), rel)
+			return nil, fmt.Errorf(i18n.S("%s：文件名只能用字母、数字、. - _", "%s: the file name may only use letters, digits, . - _"), f.rel)
 		}
-		b, err := os.ReadFile(filepath.Join(dir, SchedulesDir, e.Name()))
+		b, err := os.ReadFile(f.abs)
 		if err != nil {
 			return nil, err
 		}
 		var s Schedule
 		if err := json.Unmarshal(b, &s); err != nil {
-			return nil, fmt.Errorf(i18n.S("%s 格式不对：%w", "%s is malformed: %w"), rel, err)
+			return nil, fmt.Errorf(i18n.S("%s 格式不对：%w", "%s is malformed: %w"), f.rel, err)
 		}
 		s.ID, s.Prompt = id, strings.TrimSpace(s.Prompt)
 		if err := s.check(); err != nil {
-			return nil, fmt.Errorf("%s: %w", rel, err)
+			return nil, fmt.Errorf("%s: %w", f.rel, err)
 		}
 		out = append(out, s)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return out, nil
 }
 
@@ -273,7 +265,7 @@ func (r *Runner) sched(project string) *schedProject {
 		p.defs, p.err = nil, err
 		return p
 	}
-	if sig := dirSig(filepath.Join(dir, SchedulesDir)); sig != p.sig || sig == "" {
+	if sig := overlaySig(dir, SchedulesDir); sig != p.sig || sig == "" {
 		p.sig = sig
 		prev := p.err
 		p.defs, p.err = ParseSchedules(dir)

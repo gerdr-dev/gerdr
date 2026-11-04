@@ -615,7 +615,7 @@ func workSkills(dir string) func(hub.Record) []string {
 	of := workOf(dir)
 	return func(rec hub.Record) []string {
 		if _, d, ok := of(rec); ok {
-			return []string{filepath.Join(d, work.SkillsDir)}
+			return []string{work.SkillsRoot(d)} // skills/ with this person's edits over it (user/skills)
 		}
 		return nil
 	}

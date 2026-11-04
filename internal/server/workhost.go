@@ -41,7 +41,7 @@ func (h workHost) StartSession(ctx context.Context, project string, o work.Start
 	// The Work's skills go with every session it starts: the worker reads the user's way of working as it needs it
 	var skills []string
 	if dir, err := s.workDir(project); err == nil {
-		skills = []string{filepath.Join(dir, work.SkillsDir)}
+		skills = []string{work.SkillsRoot(dir)} // skills/ with this person's edits over it (user/skills)
 	}
 	// Its owner: the panel that started it (PanelTag). Bringing it up from anywhere (a notification, the inbox, the
 	// running list) goes to that panel, which shows it its own way; it isn't a Code conversation.

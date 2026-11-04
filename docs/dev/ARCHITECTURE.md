@@ -476,6 +476,15 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
   session's `--add-dir` shell, codex adds the roots to `skills/extraRoots/set` right before the thread attaches. They
   are given whatever the skill source or a role's skill list says (like the built-in ones): the session was started
   to work by them. native doesn't get them yet.
+- **A panel's `user/` folder** (`work/user.go`). A panel is shared through git; one person's use of it isn't: their
+  data, the triggers they turned on (a Slack id in an allow list), their edits of its skills (their repository list).
+  One folder holds all of it and ignores itself (`user/.gitignore` = `*`, written on install), decided with the user
+  (2026-11) instead of an ignore rule per kind of file, which every new kind would have needed again. Triggers and
+  schedules are read from `x/` and `user/x/` by id, user's winning; skills by relative path the same way, handed to
+  sessions as `user/.skills`, a tree of symlinks rebuilt on every new / resume (links, so an edit is live; fixed in
+  place, so a session reading it meanwhile isn't disturbed), or plain `skills/` while the person changed nothing.
+  Not done: telling someone that the default of a skill file they replaced has changed since (dsh-superagent marks
+  it "Default updated" and offers both).
 - **Schedules** (`work/schedule.go`, run from main for every Work directory). The same format as a hosted function platform's on purpose
   (`schedules/<id>.json`: fn or prompt, every or at) so a schedule reads the same on both. State (last run, paused)
   lives in `<GERDR_DIR>/state/work-schedules/`, not the Work directory: it's this machine's, and a synced or shared Work

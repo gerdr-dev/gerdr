@@ -6,8 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -68,38 +66,30 @@ func (t *Trigger) check() error {
 
 // ParseTriggers reads a Work directory's triggers/; like schedules, a broken file stops them all, loudly.
 func ParseTriggers(dir string) ([]Trigger, error) {
-	ents, err := os.ReadDir(filepath.Join(dir, TriggersDir))
-	if errors.Is(err, os.ErrNotExist) {
-		return nil, nil
-	}
+	files, err := overlayJSON(dir, TriggersDir)
 	if err != nil {
 		return nil, err
 	}
 	var out []Trigger
-	for _, e := range ents {
-		id, ok := strings.CutSuffix(e.Name(), ".json")
-		if e.IsDir() || !ok {
-			continue
-		}
-		rel := TriggersDir + "/" + e.Name()
+	for _, id := range overlayIDs(files) {
+		f := files[id]
 		if !scheduleIDRe.MatchString(id) {
-			return nil, fmt.Errorf(i18n.S("%s：文件名只能用字母、数字、. - _", "%s: the file name may only use letters, digits, . - _"), rel)
+			return nil, fmt.Errorf(i18n.S("%s：文件名只能用字母、数字、. - _", "%s: the file name may only use letters, digits, . - _"), f.rel)
 		}
-		b, err := os.ReadFile(filepath.Join(dir, TriggersDir, e.Name()))
+		b, err := os.ReadFile(f.abs)
 		if err != nil {
 			return nil, err
 		}
 		var t Trigger
 		if err := json.Unmarshal(b, &t); err != nil {
-			return nil, fmt.Errorf(i18n.S("%s 格式不对：%w", "%s is malformed: %w"), rel, err)
+			return nil, fmt.Errorf(i18n.S("%s 格式不对：%w", "%s is malformed: %w"), f.rel, err)
 		}
 		t.ID, t.Prompt = id, strings.TrimSpace(t.Prompt)
 		if err := t.check(); err != nil {
-			return nil, fmt.Errorf("%s: %w", rel, err)
+			return nil, fmt.Errorf("%s: %w", f.rel, err)
 		}
 		out = append(out, t)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return out, nil
 }
 
@@ -136,7 +126,7 @@ func (r *Runner) trig(project string) *trigProject {
 		p.defs, p.err = nil, err
 		return p
 	}
-	if sig := dirSig(filepath.Join(dir, TriggersDir)); sig != p.sig || sig == "" {
+	if sig := overlaySig(dir, TriggersDir); sig != p.sig || sig == "" {
 		p.sig = sig
 		prev := p.err
 		p.defs, p.err = ParseTriggers(dir)

@@ -44,7 +44,7 @@ interface Ctx {
 
   /**
    * Files in this Work directory: data a function keeps between runs, exports, reports. Paths are relative with `/`;
-   * no absolute paths, no `..`. All synchronous. Keep data under a folder of its own (`data/`).
+   * no absolute paths, no `..`. All synchronous. Keep data in `user/data/`: `user/` is this person's and never shared (AGENTS.md).
    * For anything outside it (other repositories, the user's folders) use `ctx.dirs`.
    */
   fs: {

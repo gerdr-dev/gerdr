@@ -306,6 +306,7 @@ func (r *Runner) install(dir string) error {
 	if err := os.MkdirAll(filepath.Join(dir, "local"), 0o755); err != nil {
 		return err
 	}
+	ensureUserDir(dir)
 	marks := map[string]string{}
 	markFile := filepath.Join(dir, ".builtin.json")
 	if b, err := os.ReadFile(markFile); err == nil {

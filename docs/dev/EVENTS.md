@@ -44,7 +44,7 @@ Chat / mail / anything with its own credentials is an add-on, not core (the user
 
 | who | how | gets |
 |---|---|---|
-| a panel / Work | `triggers/<id>.json` in its folder (`on`, `key`, `fn` or `prompt`) | `fn` runs with `{event, trigger}`; `prompt` goes to its Work agent |
+| a panel / Work | `triggers/<id>.json` in its folder, or `user/triggers/` for one person's (`on`, `key`, `fn` or `prompt`) | `fn` runs with `{event, trigger}`; `prompt` goes to its Work agent |
 | a Code session | `gerdr event watch --on … [--key …] [--once] [--note …]` | a message per event (title, text, url, the note) |
 | an add-on's UI | `g.on("event")`, `g.events.list` | every event, in every open window |
 | an add-on's service | addon.json `service.events: ["slack/*"]` | `{"type":"event","event":…}` on stdin |

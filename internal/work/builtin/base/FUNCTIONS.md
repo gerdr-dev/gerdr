@@ -133,11 +133,11 @@ backend runs them while it's up: with the background service on, the App needn't
   watcher is best a function that polls and filters and hands just the interesting part to an agent
   (`ctx.sessions.send` to the worker concerned, or to you with `"work"`).
 - `every`: 30s, 30m, 6h, 1d (at least 10s); `at`: local times of day, comma separated. Missed runs (asleep, Gerdr off) are
-  caught up once; a run still going when its time comes again is skipped. A run is an ordinary run in the run logs.
+  caught up once; a run still going when its time comes again is skipped. `user/schedules/` are this person's own (AGENTS.md, `user/`). A run is an ordinary run in the run logs.
 - A broken file stops the whole folder (the error is in `gerdr work schedules`): fix it rather than delete others.
 - `gerdr work schedules` lists them with the last run (result, error, run id) and the next time;
   `gerdr work schedule run|pause|resume <id>`. Paused / last run are this machine's, not in this directory.
-- A function on a schedule keeps its own memory in `data/` (what it has already handled), so the same comment or
+- A function on a schedule keeps its own memory in `user/data/` (what it has already handled), so the same comment or
   failure isn't handed over twice.
 
 ## On an event
@@ -147,7 +147,8 @@ Things that happen outside a conversation — a review comment, a failed pipelin
 `ctx.events.emit`s what it found, an add-on (a Slack listener), or `gerdr event emit`. Giving `id` a stable value
 (`gitlab:note:123`) makes finding the same thing again a no-op, so a poller needs no memory of its own for that.
 
-What this project does when one comes goes in `triggers/<id>.json`, the twin of `schedules/`:
+What this project does when one comes goes in `triggers/<id>.json`, the twin of `schedules/` (one the user turned on
+for themselves, e.g. from a settings page: `user/triggers/<id>.json`, AGENTS.md `user/`):
 
 ```json
 { "on": "gitlab/mr.*", "fn": "mrwatch.onEvent", "name": "MR news to its worker" }
