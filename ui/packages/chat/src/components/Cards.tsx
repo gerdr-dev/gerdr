@@ -323,7 +323,7 @@ export function AskCard({ sessionId, data }: { sessionId: string; data: GData["a
           </span>
         )}
       </div>
-      <div className="mb-3 text-[13px] font-medium leading-relaxed">{q.question}</div>
+      <div className="mb-3 text-[1em] font-medium leading-relaxed">{q.question}</div>
       {data.late && <div className="-mt-2 mb-3 text-[12px] text-muted-foreground">{t("ask.late")}</div>}
       {/* -mx-2.5 抵掉行的 px-2.5：选项文字和问题左边对齐，选中 / 悬停的底色往外多出一点 */}
       <div className="-mx-2.5 flex flex-col gap-1.5">
@@ -335,7 +335,7 @@ export function AskCard({ sessionId, data }: { sessionId: string; data: GData["a
               disabled={busy}
               className={cn(
                 // 键盘停在哪一行要一眼看得出（原来和悬停一样只是淡灰底，看不清）：品牌色描边 + 浅底
-                "flex w-full items-center gap-3 rounded-lg px-2.5 py-2.5 text-left text-[13px] outline-none ring-1 ring-transparent ring-inset transition-colors hover:bg-muted/60",
+                "flex w-full items-center gap-3 rounded-lg px-2.5 py-2.5 text-left text-[1em] outline-none ring-1 ring-transparent ring-inset transition-colors hover:bg-muted/60",
                 on && "bg-muted hover:bg-muted",
                 n === c && "bg-brand/10 ring-brand/50 hover:bg-brand/10",
               )}
@@ -367,7 +367,7 @@ export function AskCard({ sessionId, data }: { sessionId: string; data: GData["a
         {q.allowOther && (
           <input
             ref={otherRef}
-            className="w-full rounded-lg border border-dashed bg-transparent px-2.5 py-2 text-[13px] outline-none placeholder:text-muted-foreground/70 focus:border-solid focus:border-ring/60"
+            className="w-full rounded-lg border border-dashed bg-transparent px-2.5 py-2 text-[1em] outline-none placeholder:text-muted-foreground/70 focus:border-solid focus:border-ring/60"
             type={q.secret ? "password" : "text"}
             placeholder={q.options?.length ? t("ask.other") : t("ask.yourAnswer")}
             value={other[q.id] ?? ""}

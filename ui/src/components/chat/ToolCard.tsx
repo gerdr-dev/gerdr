@@ -137,9 +137,9 @@ export function BuiltinCard({ card }: { card: Card }) {
         {ch ? <CircleHelp className="size-3.5 text-warn" /> : <ClipboardList className="size-3.5 text-warn" />}
         <span>{card.kicker ?? (ch ? t("toolCard.decide") : t("toolCard.todo"))}</span>
       </div>
-      <div className="text-[13px] leading-relaxed font-medium">{card.title}</div>
+      <div className="text-[1em] leading-relaxed font-medium">{card.title}</div>
       {card.body && (
-        <div className="mt-1 text-[12px] text-muted-foreground">
+        <div className="mt-1 text-[1em] text-muted-foreground">
           <Markdown>{card.body}</Markdown>
         </div>
       )}
@@ -154,7 +154,7 @@ export function BuiltinCard({ card }: { card: Card }) {
                 disabled={!open}
                 onClick={() => choose(o)}
                 className={cn(
-                  "flex w-full items-center gap-3 rounded-lg px-2.5 py-2.5 text-left text-[13px] transition-colors",
+                  "flex w-full items-center gap-3 rounded-lg px-2.5 py-2.5 text-left text-[1em] transition-colors",
                   open && "hover:bg-muted/60",
                   on && "bg-warn/10",
                   !open && !on && "opacity-50",
@@ -184,11 +184,11 @@ export function BuiltinCard({ card }: { card: Card }) {
                 if (e.key === "Enter" && own.trim()) choose(own.trim());
               }}
               placeholder={ch.options.length ? t("toolCard.other") : t("toolCard.answer")}
-              className="w-full rounded-lg border border-dashed bg-transparent px-2.5 py-2 text-[13px] outline-none placeholder:text-muted-foreground/70 focus:border-solid focus:border-ring/60"
+              className="w-full rounded-lg border border-dashed bg-transparent px-2.5 py-2 text-[1em] outline-none placeholder:text-muted-foreground/70 focus:border-solid focus:border-ring/60"
             />
           )}
           {p && !ch.options.includes(p.v) && (
-            <div className="flex items-center gap-3 rounded-lg bg-warn/10 px-2.5 py-2.5 text-[13px]">
+            <div className="flex items-center gap-3 rounded-lg bg-warn/10 px-2.5 py-2.5 text-[1em]">
               <span className="min-w-0 flex-1">{p.v}</span>
               <Check className="size-3.5 text-warn" />
             </div>
