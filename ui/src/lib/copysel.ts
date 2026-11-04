@@ -63,7 +63,8 @@ export function watchCopyOnSelect(): () => void {
       if (editable(sel.anchorNode) || editable(sel.focusNode) || editable(document.activeElement)) return;
       // 复制完把光标放回这个 pane 的输入框，接着就能粘贴 / 打字（用户要的）。清选区那一刻再聚焦：聚焦输入框会顶掉页面选区，
       // 早了双击的高亮就看不到了。不在 pane 里（设置弹窗之类）、没有输入框的 pane（子 agent）不动焦点；触屏上不聚焦（会弹键盘）
-      const pane = (sel.anchorNode instanceof Element ? sel.anchorNode : sel.anchorNode?.parentElement)?.closest("[data-pane-id]");
+      // A grid tile (Overview) is a pane too, but has no data-pane-id: that id names a real pane elsewhere (context menu)
+      const pane = (sel.anchorNode instanceof Element ? sel.anchorNode : sel.anchorNode?.parentElement)?.closest("[data-pane-id], [data-ov-tile]");
       const box = pane?.querySelector<HTMLTextAreaElement>("textarea[data-composer]");
       // 三击选段时浏览器把段尾的换行也选上了，粘进输入框会多出空行
       const text = e.detail >= 3 ? sel.toString().replace(/\s+$/, "") : sel.toString();
