@@ -69,6 +69,14 @@ declare module "@gerdr/core" {
    * start, before this page is ever shown. A card whose component isn't there or throws falls back to the built-in one.
    * The type is this panel's: cards your tools make are drawn by it, another panel's cards of the same type aren't.
    */
+  /**
+   * The element your overlays (sheets, dialogs, popovers, menus) should be portaled into, e.g. shadcn's
+   * `<SheetPrimitive.Portal container={usePortalContainer()}>`. It's inside this panel's own area: gerdr keeps a panel
+   * mounted but hidden while another panel or Code is shown, and only what's inside the panel is hidden with it — an
+   * overlay portaled to document.body stays on screen over everything else.
+   */
+  export function usePortalContainer(): HTMLElement | null;
+
   export function registerCard(type: string, component: ComponentType<CardProps>): () => void;
 
   /** The built-in card (title, body, choices answerable in place with undo), for a card type that only adds to it. */

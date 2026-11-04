@@ -1,7 +1,8 @@
 import { ArrowDownRight, PanelRightClose, PanelRightOpen, Check, ChevronDown, Code2, History, MessageSquarePlus, Settings, X } from "lucide-react";
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { createElement, useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { toast } from "sonner";
+import { PortalContext } from "@/core/portal";
 import { AgentIcon, StatusDot, dotStatus } from "@/components/AgentIcon";
 import { COL_EDGE, startColResize } from "@/components/SidebarChrome";
 import { ChatView } from "@/components/chat/ChatView";
@@ -155,6 +156,8 @@ const pathKey = (project: string) => `gerdr.workPath.${project}`;
  */
 function MountRoot({ project }: { project: string }) {
   const ref = useRef<HTMLDivElement>(null);
+  // The panel's overlays go in here (core usePortalContainer), so they're hidden with it when another panel or Code is shown
+  const portal = useRef<HTMLDivElement>(null);
   const { info, seq } = useMount(project);
   const entry = useRef(info?.entry);
   entry.current = info?.entry;
@@ -177,14 +180,18 @@ function MountRoot({ project }: { project: string }) {
       } catch {}
       root = createRoot(el);
       root.render(
-        app.createApp({
-          path,
-          onNavigate: (p: string) => {
-            try {
-              localStorage.setItem(pathKey(project), p);
-            } catch {}
-          },
-        }),
+        createElement(
+          PortalContext.Provider,
+          { value: portal.current },
+          app.createApp({
+            path,
+            onNavigate: (p: string) => {
+              try {
+                localStorage.setItem(pathKey(project), p);
+              } catch {}
+            },
+          }),
+        ),
       );
     })().catch((e) => !dead && setFailed(String(e?.stack ?? e)));
     return () => {
@@ -198,6 +205,7 @@ function MountRoot({ project }: { project: string }) {
   return (
     <div className="relative size-full overflow-hidden bg-background" {...{ [MOUNT_ATTR]: mountName(project) }}>
       <div ref={ref} className={cn("size-full", error && "hidden")} />
+      <div ref={portal} data-gerdr-portal="" />
       {error && <MountError project={project} error={error} />}
       {!info && (
         <div className="flex size-full items-center justify-center">
