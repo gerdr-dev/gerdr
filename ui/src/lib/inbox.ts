@@ -2,6 +2,7 @@ import { toast } from "sonner";
 import { create } from "zustand";
 import { api, type PendingReq } from "./api";
 import { systemNotify } from "./notify";
+import { mutedSession } from "./layout";
 import { isPhone } from "./phone";
 import { get as getApp, useStore, visibleSessions } from "./store";
 import type { SessionSummary } from "./types";
@@ -160,6 +161,8 @@ export const sessionName = (s: Pick<SessionSummary, "title" | "cwd" | "agent">) 
 
 /** On screen and the window has focus: the user already sees it, no need for the red dot (it still goes in the list). */
 function seen(id: string) {
+  // A muted group (do not disturb): it still goes in the list, but quietly, like one you're looking at
+  if (mutedSession(getApp().layout, id)) return true;
   if (document.visibilityState !== "visible" || !document.hasFocus()) return false;
   return visibleSessions(getApp().layout, isPhone()).includes(id);
 }

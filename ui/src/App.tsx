@@ -16,7 +16,7 @@ import { Rail } from "./components/Rail";
 import { tabName } from "./lib/actions";
 import { handleKeydown } from "./lib/commands";
 import { ACTION_TITLES, setPrefixLabel, toAccelerator, type KeyAction } from "./lib/keys";
-import { activeTab, currentSpace, leaves, spaceList, type Tab } from "./lib/layout";
+import { activeTab, currentSpace, leaves, mutedSession, spaceList, type Tab } from "./lib/layout";
 import { HOLD_MS, useCaughtUp } from "./lib/catchup";
 import { isPhone, usePhone, useViewportHeight } from "./lib/phone";
 import { cn } from "./lib/utils";
@@ -80,17 +80,20 @@ function useAttention() {
         const old = before[cur.id];
         if (!old) continue;
         const seen = visible.has(cur.id) && !away;
+        // Muted group (do not disturb): the row still turns unread, but no system notification
+        const quiet = seen || mutedSession(s.layout, cur.id);
         const name = cur.title || cur.cwd.split("/").pop() || cur.agent;
-        if (old.status !== "waiting" && cur.status === "waiting" && !seen && !inboxWaits) {
+        if (old.status !== "waiting" && cur.status === "waiting" && !quiet && !inboxWaits) {
           systemNotify(t("app.notifyWaiting", { name }), t("app.notifyWaitingBody"), cur.id);
         }
         if ((old.status === "running" || old.status === "waiting") && (cur.status === "idle" || cur.status === "error") && !seen) {
           markUnread(cur.id);
+          if (quiet) continue;
           if (cur.status === "idle") systemNotify(t("app.notifyDone", { name }), "", cur.id);
           else if (!inboxErrors) systemNotify(t("app.notifyError", { name }), cur.error ?? "", cur.id);
         }
       }
-      nativeBadge(Object.values(s.sessions).filter((x) => x.status === "waiting").length);
+      nativeBadge(Object.values(s.sessions).filter((x) => x.status === "waiting" && !mutedSession(s.layout, x.id)).length);
     });
   }, []);
 }

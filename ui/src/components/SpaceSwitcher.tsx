@@ -22,12 +22,12 @@ import { SpaceDropLine, startSpaceDrag } from "./SpaceDrag";
 import { tabStatus } from "./TabBar";
 import { t } from "@/lib/i18n";
 
-/** A session's overall state for the switcher: the most urgent of its workspaces' (same ranking as WsDot). */
+/** A session's overall state for the switcher: the most urgent of its workspaces' (same ranking as WsDot). Muted ones say nothing. */
 export function spaceStatus(l: Layout, sp: Space, sessions: Record<string, SessionSummary>, unread: Record<string, true>) {
   let best: { status?: string; unread: boolean } = { unread: false };
   let rank = 9;
   for (const w of spaceWorkspaces(l, sp.id))
-    for (const t of w.tabs) {
+    for (const t of w.muted ? [] : w.tabs) {
       const st = tabStatus(t, sessions, unread);
       const r = dotRank(st.status, st.unread);
       if (r < rank) {

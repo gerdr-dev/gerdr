@@ -25,8 +25,23 @@ export type PaneNode = PaneLeaf | PaneSplit;
 
 export type Tab = { id: string; name?: string; root: PaneNode; focus: string; zoom?: string };
 /** space: which session (see Space below) it belongs to; unset = the default one. */
-/** rows: the sidebar's own order for this group (pane ids), see sideRows. Only the list; the screen doesn't follow it. */
-export type Workspace = { id: string; name: string; cwd?: string; tabs: Tab[]; activeTab: string; lastTab?: string; space?: string; rows?: string[] };
+/**
+ * rows: the sidebar's own order for this group (pane ids), see sideRows. Only the list; the screen doesn't follow it.
+ * muted: do not disturb. Its agents still show their own state on their rows, but nothing goes up from them: no dot or
+ * "waiting" count on the group or the project, no joining "active" on their own, no system / inbox / Android notification,
+ * not in the dock badge or next-needs-you (mutedSession). The server reads it too (internal/server/spaces.go MutedSessions).
+ */
+export type Workspace = {
+  id: string;
+  name: string;
+  cwd?: string;
+  tabs: Tab[];
+  activeTab: string;
+  lastTab?: string;
+  space?: string;
+  rows?: string[];
+  muted?: true;
+};
 /**
  * Space = herdr's "session": an isolated set of workspaces. The UI shows one at a time (the one the active workspace is in),
  * and agents in different spaces can't see or message each other through `gerdr session …` (cmd/gerdr/session.go,
@@ -210,6 +225,11 @@ export function allLeaves(l: Layout): { ws: Workspace; tab: Tab; pane: PaneLeaf 
 /** 某个会话在布局里的位置（第一个）。 */
 export function locateSession(l: Layout, sessionId: string) {
   return allLeaves(l).find((x) => x.pane.sessionId === sessionId);
+}
+
+/** The session sits in a muted (do-not-disturb) group: its state doesn't go up anywhere (Workspace.muted). */
+export function mutedSession(l: Layout, sessionId: string): boolean {
+  return !!locateSession(l, sessionId)?.ws.muted;
 }
 
 // ---- 改树 ----

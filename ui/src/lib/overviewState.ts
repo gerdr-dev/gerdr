@@ -1,6 +1,6 @@
 // The overview's stored state and the read side of it. Kept apart from overview.ts, which needs the store: the store
 // loads this at creation, and a store <-> overview import cycle would hand it an undefined loadOverview.
-import { allLeaves, currentSpace, locateSession, spaceList, spaceOf, type Layout } from "./layout";
+import { allLeaves, currentSpace, locateSession, mutedSession, spaceList, spaceOf, type Layout } from "./layout";
 import { compareSessions, sessionRank, sessionSince } from "./order";
 import type { SessionSummary } from "./types";
 
@@ -148,11 +148,14 @@ export function joinsOnItsOwn(s: SessionSummary, st: Pick<ActiveSrc, "config" | 
   return rank <= 3 && !(d !== undefined && sessionSince(s) <= d);
 }
 
+/** Joins on its own (joinsOnItsOwn), unless it sits in a muted group (Workspace.muted): those only come in by hand. */
+const joins = (s: SessionSummary, st: ActiveSrc) => joinsOnItsOwn(s, st) && !mutedSession(st.layout, s.id);
+
 /** Open agents (any project) that joined on their own but aren't pinned yet: lib/overview.ts pins them, so they stay. */
 export function toPin(st: ActiveSrc): string[] {
   const added = new Set(activeConf(st.config).added);
   return openSessionsWithProject(st.layout, st.sessions, st.config)
-    .filter((x) => !added.has(x.s.id) && joinsOnItsOwn(x.s, st))
+    .filter((x) => !added.has(x.s.id) && joins(x.s, st))
     .map((x) => x.s.id);
 }
 
@@ -171,7 +174,7 @@ export function activeIds(st: ActiveSrc): string[] {
   const space = currentSpace(st.layout);
   const all = o.allIn.includes(space);
   const added = new Set(o.added);
-  const isActive = (s: SessionSummary) => added.has(s.id) || joinsOnItsOwn(s, st);
+  const isActive = (s: SessionSummary) => added.has(s.id) || joins(s, st);
   return openSessionsWithProject(st.layout, st.sessions, st.config)
     .filter((x) => (all || x.project === space) && isActive(x.s))
     .map((x) => x.s)

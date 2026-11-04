@@ -1,7 +1,7 @@
 import { toast } from "sonner";
 import { api } from "../api";
 import { askConfirm } from "../confirm";
-import { allLeaves, currentSpace, locateSession, setPane, spaceList, type PaneLeaf } from "../layout";
+import { allLeaves, currentSpace, locateSession, mutedSession, setPane, spaceList, type PaneLeaf } from "../layout";
 import { get, markRead, overviewShown, set, setLayout, setMode, setWorkPanel } from "../store";
 import { focusTile, overviewIds, replaceTile, toggleOverview } from "../overview";
 import { isOpen } from "../overviewState";
@@ -208,8 +208,9 @@ export const focusedSessionId = (): string | undefined => currentView().session(
 
 /** 要你处理的会话：在等你的最优先，然后是出错的、跑完了没看的。 */
 export function attentionList(): string[] {
-  const { sessions, unread } = get();
-  const all = Object.values(sessions);
+  const { sessions, unread, layout } = get();
+  // Muted groups (do not disturb) are left out: you go to them yourself
+  const all = Object.values(sessions).filter((s) => !mutedSession(layout, s.id));
   const rank = (s: (typeof all)[number]) => (s.status === "waiting" ? 0 : s.status === "error" ? 1 : unread[s.id] ? 2 : 9);
   return all
     .filter((s) => rank(s) < 9)

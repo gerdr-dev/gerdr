@@ -1,6 +1,8 @@
 import {
   ArrowDown,
   ArrowUp,
+  Bell,
+  BellOff,
   ChevronRight,
   CircleX,
   Columns2,
@@ -43,6 +45,7 @@ import {
   movePane,
   moveWorkspace,
   moveWorkspaceToSpace,
+  muteWorkspace,
   openTerminal,
   paneToTab,
   selectWorkspace,
@@ -591,7 +594,9 @@ function Group({
   const others = spaceList(layout).filter((sp) => sp.id !== spaceOf(ws));
   const label = applyWorkspaceLabel(ws, index, ws.name);
   const n = rows.length;
-  const waiting = rows.filter((r) => needsYou(r.pane.sessionId ? sessions[r.pane.sessionId] : undefined)).length;
+  // Muted (do not disturb): the rows keep their own dots, but the title says nothing about them
+  const muted = !!ws.muted;
+  const waiting = muted ? 0 : rows.filter((r) => needsYou(r.pane.sessionId ? sessions[r.pane.sessionId] : undefined)).length;
   const edit = () => set({ dialog: { kind: "editWorkspace", id: ws.id } });
   const roomy = !!useContext(Roomy);
   return (
@@ -617,6 +622,11 @@ function Group({
             <ChevronRight className={cn("size-3.5 shrink-0 text-muted-foreground transition-transform", roomy ? "mr-1.5" : "mr-1", !folded && "rotate-90")} />
             <span className={cn("min-w-0 truncate font-semibold", current ? "text-foreground" : "text-foreground/80")}>{label}</span>
             {ws.cwd && basename(ws.cwd) !== label && <span className="min-w-0 truncate text-[11px] text-muted-foreground">{basename(ws.cwd)}</span>}
+            {muted && (
+              <span title={t("unifiedSidebar.mutedHint")} className="flex shrink-0">
+                <BellOff className="size-3 text-muted-foreground" />
+              </span>
+            )}
             <span className="flex-1" />
             {folded && waiting > 0 ? (
               <span className="shrink-0 rounded-full bg-bad px-1.5 text-[10px] leading-4 font-semibold text-white">
@@ -624,7 +634,7 @@ function Group({
               </span>
             ) : (
               <span className="flex shrink-0 items-center gap-1.5 text-[11px] text-muted-foreground tabular-nums group-hover/ws:hidden">
-                {folded && <WsDot w={ws} sessions={sessions} unread={unread} hideIdle />}
+                {folded && !muted && <WsDot w={ws} sessions={sessions} unread={unread} hideIdle />}
                 {n}
               </span>
             )}
@@ -656,6 +666,17 @@ function Group({
           </ContextMenuItem>
           <ContextMenuItem onClick={edit}>
             <Pencil /> {t("unifiedSidebar.editEllipsis")}
+          </ContextMenuItem>
+          <ContextMenuItem onClick={() => muteWorkspace(ws.id, !muted)} title={t("unifiedSidebar.muteHint")}>
+            {muted ? (
+              <>
+                <Bell /> {t("unifiedSidebar.unmute")}
+              </>
+            ) : (
+              <>
+                <BellOff /> {t("unifiedSidebar.mute")}
+              </>
+            )}
           </ContextMenuItem>
           {/* Reordering on a touch screen, where the title can't be dragged (scrolling and this long-press menu own the finger) */}
           {index > 0 && (

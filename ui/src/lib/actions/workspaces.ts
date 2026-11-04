@@ -37,6 +37,11 @@ export function renameWorkspace(id: string, name: string) {
   setLayout((l) => updateWs(l, id, (w) => ({ ...w, name: name.trim() || w.name })));
 }
 
+/** Do not disturb on / off for a group (Workspace.muted). */
+export function muteWorkspace(id: string, on: boolean) {
+  setLayout((l) => updateWs(l, id, (w) => (!!w.muted === on ? w : { ...w, muted: on ? true : undefined })));
+}
+
 /** Change a workspace's directory (and name). The directory is only the default for tabs opened later; open ones keep theirs. */
 export function editWorkspace(id: string, name: string, cwd?: string) {
   setLayout((l) => updateWs(l, id, (w) => ({ ...w, name: name.trim() || w.name, cwd })));

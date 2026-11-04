@@ -20,20 +20,29 @@ const DefaultSpace = "default"
 //
 // raw is layout.json as stored, or wrapped in {"data": …} as some responses carry it.
 func SessionSpaces(raw json.RawMessage) map[string]string {
-	sessions, _ := paneSpaces(raw)
+	sessions, _, _ := paneSpaces(raw)
 	return sessions
+}
+
+// MutedSessions is the set of sessions whose pane sits in a muted (do-not-disturb) workspace: nothing about them goes up,
+// so the Android app gets no notice for them (appwatch.go). Same rule as the UI's mutedSession (ui/src/lib/layout.ts):
+// a session shown twice counts where its first pane is.
+func MutedSessions(raw json.RawMessage) map[string]bool {
+	_, _, muted := paneSpaces(raw)
+	return muted
 }
 
 // TermSpaces maps every terminal shown in a pane (its id, which the shell gets as GERDR_TERM) to the space holding it.
 func TermSpaces(raw json.RawMessage) map[string]string {
-	_, terms := paneSpaces(raw)
+	_, terms, _ := paneSpaces(raw)
 	return terms
 }
 
-func paneSpaces(raw json.RawMessage) (sessions, terms map[string]string) {
+func paneSpaces(raw json.RawMessage) (sessions, terms map[string]string, muted map[string]bool) {
 	type layout struct {
 		Workspaces []struct {
 			Space string `json:"space"`
+			Muted bool   `json:"muted"`
 			Tabs  []struct {
 				Root json.RawMessage `json:"root"`
 			} `json:"tabs"`
@@ -44,9 +53,9 @@ func paneSpaces(raw json.RawMessage) (sessions, terms map[string]string) {
 		Data layout `json:"data"`
 	}
 	_ = json.Unmarshal(raw, &l)
-	sessions, terms = map[string]string{}, map[string]string{}
-	var walk func(n json.RawMessage, space string)
-	walk = func(n json.RawMessage, space string) {
+	sessions, terms, muted = map[string]string{}, map[string]string{}, map[string]bool{}
+	var walk func(n json.RawMessage, space string, mute bool)
+	walk = func(n json.RawMessage, space string, mute bool) {
 		var x struct {
 			Type      string `json:"type"`
 			SessionID string `json:"sessionId"`
@@ -60,14 +69,17 @@ func paneSpaces(raw json.RawMessage) (sessions, terms map[string]string) {
 		if x.SessionID != "" {
 			if _, seen := sessions[x.SessionID]; !seen { // shown twice: the first pane wins, like the UI's locateSession
 				sessions[x.SessionID] = space
+				if mute {
+					muted[x.SessionID] = true
+				}
 			}
 		}
 		if x.Term != nil && x.Term.ID != "" {
 			terms[x.Term.ID] = space
 		}
 		if x.Type == "split" {
-			walk(x.A, space)
-			walk(x.B, space)
+			walk(x.A, space, mute)
+			walk(x.B, space, mute)
 		}
 	}
 	for _, w := range append(l.Data.Workspaces, l.Workspaces...) {
@@ -76,10 +88,10 @@ func paneSpaces(raw json.RawMessage) (sessions, terms map[string]string) {
 			sp = DefaultSpace
 		}
 		for _, t := range w.Tabs {
-			walk(t.Root, sp)
+			walk(t.Root, sp, w.Muted)
 		}
 	}
-	return sessions, terms
+	return sessions, terms, muted
 }
 
 // Caller is who runs a `gerdr` command, as the CLI tells it: an explicit --project, the agent's own gerdr session (and that
@@ -104,7 +116,7 @@ func ResolveSpace(raw json.RawMessage, c Caller, workProject func(string) (strin
 	if c.Project != "" {
 		return c.Project
 	}
-	sessions, terms := paneSpaces(raw)
+	sessions, terms, _ := paneSpaces(raw)
 	if c.Session != "" {
 		if sp, ok := sessions[c.Session]; ok {
 			return sp

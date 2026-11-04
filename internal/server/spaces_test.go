@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/gerdr-dev/gerdr/internal/config"
@@ -26,6 +27,18 @@ func TestSessionSpaces(t *testing.T) {
 				t.Errorf("%s: %s in %q, want %q", name, k, got[k], v)
 			}
 		}
+	}
+}
+
+func TestMutedSessions(t *testing.T) {
+	// w2 muted: its session C is muted, w1's A and B are not
+	raw := strings.Replace(spacesLayout, `"id":"w2","name":"b",`, `"id":"w2","name":"b","muted":true,`, 1)
+	got := MutedSessions(json.RawMessage(raw))
+	if len(got) != 1 || !got["C"] {
+		t.Fatalf("got %v, want only C", got)
+	}
+	if got := MutedSessions(json.RawMessage(spacesLayout)); len(got) != 0 {
+		t.Fatalf("nothing muted: got %v", got)
 	}
 }
 

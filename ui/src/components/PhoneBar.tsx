@@ -35,7 +35,7 @@ export function PhoneBar() {
   const space = currentSpace(layout);
   const waiting = new Set(
     allLeaves(layout)
-      .filter((x) => spaceOf(x.ws) === space && x.pane.sessionId && sessions[x.pane.sessionId]?.status === "waiting")
+      .filter((x) => spaceOf(x.ws) === space && !x.ws.muted && x.pane.sessionId && sessions[x.pane.sessionId]?.status === "waiting")
       .map((x) => x.pane.sessionId),
   ).size;
   const openDrawer = () => {
