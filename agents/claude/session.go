@@ -181,6 +181,9 @@ func (s *session) start(ctx context.Context) error {
 	}
 	s.sawState = false
 	s.mu.Unlock()
+	if o.resume != "" {
+		o.costBase = resumedCost(s.a.projectsDir(), o.resume, s.cwd)
+	}
 
 	var pr *proc
 	pr, err = spawn(o, s.a.log.With("session", o.sessionID+o.resume), func(m map[string]json.RawMessage, raw []byte) {

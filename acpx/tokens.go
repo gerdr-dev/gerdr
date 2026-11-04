@@ -68,7 +68,7 @@ func (m *TokenMeter) Due() bool {
 }
 
 // CostKey: session_info_update._meta.gerdr.cost = {"usd": n}, what the agent's last turn cost (Claude Code: the
-// growth of result.total_cost_usd, which is a running total per process). A fact for the turn: the hub sums the reports
+// growth of result.total_cost_usd, a running total per session that a --resume'd process carries on from). A fact for the turn: the hub sums the reports
 // that arrive during a turn onto its turn_end (costUsd), and add-ons add those up however they like (g.turns).
 const CostKey = "cost"
 

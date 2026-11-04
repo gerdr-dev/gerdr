@@ -42,8 +42,10 @@ type proc struct {
 	done    chan struct{}
 	exitErr error
 	stderr  *ringBuf
-	// The last result.total_cost_usd: Claude Code reports what this process has cost so far, so a turn's cost is the
-	// growth since the previous result (stream.go). Kept per process because a new process starts again from zero.
+	// The last result.total_cost_usd: Claude Code reports what this session has cost so far, so a turn's cost is the
+	// growth since the previous result (stream.go). Kept per process: a new one starts from zero, or, when it
+	// --resumes, from the total the CLI restores out of the transcript (spawnOpts.costBase) — counting that from zero
+	// put the session's whole history on its first turn again after every idle reap.
 	costUSD float64
 }
 
@@ -66,6 +68,7 @@ type spawnOpts struct {
 	prompt    string   // 角色追加的系统提示（Options.Prompt + AppendPrompt）
 	noHint    bool     // Options.NoGUIHint
 	env       []string // 变体配的环境变量，盖在继承来的上面
+	costBase  float64  // what the resumed session had cost already (resumedCost): the CLI's running total starts there
 }
 
 func spawn(o spawnOpts, log *slog.Logger, onLine func(map[string]json.RawMessage, []byte)) (*proc, error) {
@@ -133,7 +136,7 @@ func spawn(o spawnOpts, log *slog.Logger, onLine func(map[string]json.RawMessage
 	if err != nil {
 		return nil, err
 	}
-	p := &proc{cmd: cmd, stdin: stdin, log: log, pending: map[string]chan ctlResult{}, done: make(chan struct{}), stderr: &ringBuf{max: 8 << 10}}
+	p := &proc{cmd: cmd, stdin: stdin, log: log, pending: map[string]chan ctlResult{}, done: make(chan struct{}), stderr: &ringBuf{max: 8 << 10}, costUSD: o.costBase}
 	cmd.Stderr = p.stderr
 	log.Info("spawn claude", "args", strings.Join(args, " "), "cwd", o.cwd)
 	if err := cmd.Start(); err != nil {

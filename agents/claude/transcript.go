@@ -32,6 +32,47 @@ func projectDirFor(root, cwd string) string {
 
 var idRe = regexp.MustCompile(`^[0-9a-fA-F-]{8,64}$`)
 
+// resumedCost: what the session id had cost by the time its last process ended — the total `claude --resume id`
+// (and --fork-session from it) restores and keeps adding to, so its first result.total_cost_usd includes it. Claude
+// Code keeps it in the transcript as {"type":"cost-state","sessionId":…,"totalCostUSD":…} lines, the last one current.
+// 0 when there is none (a CLI that doesn't store it, or a process that never got to write it): count from zero.
+func resumedCost(root, id, cwd string) float64 {
+	path, err := findTranscript(root, id, cwd)
+	if err != nil {
+		return 0
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return 0
+	}
+	defer f.Close()
+	var cost float64
+	r := bufio.NewReaderSize(f, 64<<10)
+	for {
+		line, err := r.ReadSlice('\n')
+		if err == bufio.ErrBufferFull {
+			// A line longer than the buffer (pasted images, big tool results) is never a cost-state: skip the rest
+			for err == bufio.ErrBufferFull {
+				_, err = r.ReadSlice('\n')
+			}
+			continue
+		}
+		if bytes.Contains(line, []byte(`"cost-state"`)) {
+			var e struct {
+				Type         string   `json:"type"`
+				SessionID    string   `json:"sessionId"`
+				TotalCostUSD *float64 `json:"totalCostUSD"`
+			}
+			if json.Unmarshal(line, &e) == nil && e.Type == "cost-state" && e.SessionID == id && e.TotalCostUSD != nil {
+				cost = *e.TotalCostUSD
+			}
+		}
+		if err != nil {
+			return cost
+		}
+	}
+}
+
 func findTranscript(root, id, cwd string) (string, error) {
 	if !idRe.MatchString(id) {
 		return "", errors.New("invalid session id")
