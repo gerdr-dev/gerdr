@@ -7,6 +7,7 @@ import { TabActive } from "@/components/Panes";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { set, useStore } from "@/lib/store";
 import { syncWatch } from "@/lib/sync";
+import { holdSendNow } from "@/lib/chatHost";
 import { t } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
@@ -32,19 +33,24 @@ function useWatched(id: string) {
  * One conversation, the whole chat with its input box (images, files, permissions, questions, cards), for a page to
  * put wherever it wants: the same component as a pane in Code, fed by the same connection. It fills its parent's
  * height. jump: scroll to the card with that ref (a tool result's gerdrCard.ref) and flash it; bump seq to jump again.
+ * sendNow: every message sent from here goes in right away while the agent runs (the composer's "send now"), instead
+ * of waiting for its current step to end.
  */
 export function SessionChat({
   id,
   focused = false,
   jump,
   className,
+  sendNow = false,
 }: {
   id: string;
   focused?: boolean;
   jump?: { ref: string; seq: number };
   className?: string;
+  sendNow?: boolean;
 }) {
   useWatched(id);
+  useEffect(() => (sendNow ? holdSendNow(id) : undefined), [id, sendNow]);
   const session = useStore((s) => s.sessions[id]);
   const ready = useStore((s) => s.ready);
   const focus = useMemo(() => (jump ? { match: (p: GPart) => cardOf(p)?.ref === jump.ref, seq: jump.seq } : undefined), [jump?.ref, jump?.seq]);

@@ -39,11 +39,14 @@ func (f *fakeHost) Tag(id string, tags map[string]string) (map[string]any, error
 	f.tagged = tags
 	return map[string]any{"id": id, "tags": tags}, nil
 }
-func (f *fakeHost) Send(_ context.Context, _, id, text string, _ []string) (map[string]any, error) {
+func (f *fakeHost) Send(_ context.Context, _, id, text string, _ []string, _ bool) (map[string]any, error) {
 	return map[string]any{"id": id, "sent": text}, nil
 }
 func (f *fakeHost) Workspaces(project string, all bool) []map[string]any {
 	return []map[string]any{{"id": "w1", "project": project, "all": all}}
+}
+func (f *fakeHost) Agents() []map[string]any {
+	return []map[string]any{{"id": "claude", "name": "Claude Code", "available": true}, {"id": "design", "name": "设计", "base": "claude", "available": true, "prompt": "UI design"}}
 }
 func (f *fakeHost) RecentDirs() []map[string]any {
 	return []map[string]any{{"path": "/r", "source": "session"}}

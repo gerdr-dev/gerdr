@@ -34,24 +34,32 @@ type Host interface {
 	Sessions(cwd string, tags map[string]string) []map[string]any
 	// Send: id "work" = the project's Work agent conversation, as for StartOptions.ReportTo. attachments as in
 	// StartOptions.
-	Send(ctx context.Context, project, id, text string, attachments []string) (map[string]any, error)
+	// now: go in right away while it runs (hub urgent steer: a running command moves to the background), instead of
+	// at its next pause.
+	Send(ctx context.Context, project, id, text string, attachments []string, now bool) (map[string]any, error)
 	// Close stops a conversation's agent and takes it off the screen; the record stays and Send opens it again.
 	Close(ctx context.Context, id string) error
 	// Tag changes a conversation's tags ("" removes a key).
 	Tag(id string, tags map[string]string) (map[string]any, error)
 	// Workspaces lists the project's Code workspaces (every project's with all) and the conversations in their panes.
 	Workspaces(project string, all bool) []map[string]any
+	// Agents: the agents and roles a session can start with (hub.Agents: id, name, base, available, prompt, …).
+	Agents() []map[string]any
 	// RecentDirs: directories conversations ran in and workspaces point at, most recently used first.
 	RecentDirs() []map[string]any
 }
 
 // StartOptions is ctx.sessions.start's argument.
 type StartOptions struct {
-	Cwd       string `json:"cwd"`
-	Prompt    string `json:"prompt,omitempty"`
-	Agent     string `json:"agent,omitempty"`     // claude / codex / native / a variant's id; "" = the default agent
-	Title     string `json:"title,omitempty"`     // the tab's name until the agent's own title replaces it
-	Mode      string `json:"mode,omitempty"`      // permission mode; "" = the agent's default (never a permissive one)
+	Cwd    string `json:"cwd"`
+	Prompt string `json:"prompt,omitempty"`
+	Agent  string `json:"agent,omitempty"` // claude / codex / native / a variant's id; "" = the default agent
+	Title  string `json:"title,omitempty"` // the tab's name until the agent's own title replaces it
+	Mode   string `json:"mode,omitempty"`  // permission mode; "" = the agent's default (never a permissive one)
+	// Model / Effort: the agent's own option values (as its model / effort pickers list them); "" = the user's default
+	// for that agent. A value the agent doesn't offer is an error naming the ones it does, not silently the default.
+	Model     string `json:"model,omitempty"`
+	Effort    string `json:"effort,omitempty"`
 	Workspace string `json:"workspace,omitempty"` // a workspace id from ctx.workspaces.list; "new"; "none" = not in Code; "" = found by cwd
 	Focus     bool   `json:"focus,omitempty"`     // switch the open windows to it
 	// Tags: labels to find it by later (ctx.sessions.list({ tags })).
@@ -108,6 +116,13 @@ func (r *runner) sessionsObject() map[string]any {
 			}
 			return r.resolved(s)
 		},
+		// ctx.sessions.agents() → the agents / roles `start` takes, with what a role is for (its prompt)
+		"agents": func() []map[string]any {
+			if h == nil {
+				r.throw(errNoHost)
+			}
+			return h.Agents()
+		},
 		// ctx.sessions.get(id) → session or null
 		"get": func(id string) any {
 			if h == nil {
@@ -153,11 +168,12 @@ func (r *runner) sessionsObject() map[string]any {
 			defer cancel()
 			var o struct {
 				Attachments []string `json:"attachments"`
+				Now         bool     `json:"now"`
 			}
 			if err := r.opts(arg, &o); err != nil {
 				return r.rejected(err)
 			}
-			s, err := h.Send(ctx, r.project, id, text, o.Attachments)
+			s, err := h.Send(ctx, r.project, id, text, o.Attachments, o.Now)
 			if err != nil {
 				return r.rejected(err)
 			}

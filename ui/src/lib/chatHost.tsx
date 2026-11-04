@@ -199,6 +199,20 @@ function useSharedDraft({ session, textarea: ta, text, images: imgs, setText, se
   };
 }
 
+// Sessions whose every message goes in right away, interrupting what the agent is on (a panel's SessionChat with
+// sendNow: a task board wants its workers to take a new message while something runs in the background, not hold it
+// until the step ends). Counted per mount: two chats of one session may be on screen.
+const nowMounts = new Map<string, number>();
+export const sendsNow = (id: string) => (nowMounts.get(id) ?? 0) > 0;
+export function holdSendNow(id: string) {
+  nowMounts.set(id, (nowMounts.get(id) ?? 0) + 1);
+  return () => {
+    const n = (nowMounts.get(id) ?? 1) - 1;
+    if (n > 0) nowMounts.set(id, n);
+    else nowMounts.delete(id);
+  };
+}
+
 const fileURL = (path: string, cwd?: string, host?: string) =>
   `${host ? `/h/${encodeURIComponent(host)}` : ""}/api/fs/raw?path=${encodeURIComponent(path)}&cwd=${encodeURIComponent(cwd ?? "")}`;
 
@@ -267,7 +281,7 @@ export function GerdrChatProvider({ children }: { children: ReactNode }) {
         const card = cardOf(part);
         return card ? <ToolCard card={card} session={ctx.sessionId} /> : undefined;
       },
-      send: (id, content, o) => sendShown(id, content, o?.onRetry, o?.now).then(() => {}),
+      send: (id, content, o) => sendShown(id, content, o?.onRetry, o?.now || sendsNow(id)).then(() => {}),
       stop: (id) => api.escape(id),
       withdrawLast: (id) => api.withdrawLast(id),
       withdraw: (id, msg, now) => withdrawSteer(id, msg, !!now),

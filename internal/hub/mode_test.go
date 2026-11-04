@@ -37,3 +37,21 @@ func TestApplyConfigOrder(t *testing.T) {
 		t.Fatal("hasValue 不对")
 	}
 }
+
+// A model / effort named by code must be one the agent offers: the error lists what it does offer.
+func TestCheckConfig(t *testing.T) {
+	vals := acp.SessionConfigSelectOptionsUngrouped{{Value: "sonnet"}, {Value: "haiku"}}
+	opts := []acp.SessionConfigOption{{Select: &acp.SessionConfigOptionSelect{Id: "model", Options: acp.SessionConfigSelectOptions{Ungrouped: &vals}}}}
+	if err := checkConfig(nil, opts); err != nil {
+		t.Fatalf("nothing given: %v", err)
+	}
+	if err := checkConfig(map[string]string{"model": "haiku"}, opts); err != nil {
+		t.Fatalf("an offered value: %v", err)
+	}
+	if err := checkConfig(map[string]string{"model": "opus"}, opts); err == nil || !strings.Contains(err.Error(), "sonnet, haiku") {
+		t.Fatalf("an unknown model should be refused with the choices, got %v", err)
+	}
+	if err := checkConfig(map[string]string{"effort": "high"}, opts); err == nil {
+		t.Fatal("an option the agent lacks should be refused")
+	}
+}

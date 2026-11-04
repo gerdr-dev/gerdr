@@ -310,6 +310,10 @@ func (h *Hub) Agents() []map[string]any {
 	}
 	for _, a := range h.extra() {
 		m := map[string]any{"id": a.ID, "name": a.Name, "available": true, "base": a.Base}
+		// prompt: what the role is for, in the user's words — what a coordinator (a board's router) picks it by
+		if a.Prompt != "" {
+			m["prompt"] = a.Prompt
+		}
 		if a.Icon != "" {
 			m["icon"] = a.Icon
 		}
@@ -755,6 +759,14 @@ func (h *Hub) Create(ctx context.Context, o CreateOptions) (*Session, error) {
 			_, _ = c.Conn.CloseSession(ctx, acp.CloseSessionRequest{SessionId: res.SessionId})
 			return nil, err
 		}
+		// Same for a model / effort named by code (a Work function, a panel): applyConfig skips a value the agent
+		// doesn't offer, which for a stale default is right but here would quietly run the task on the wrong model.
+		if o.FromCLI {
+			if err := checkConfig(o.Config, res.ConfigOptions); err != nil {
+				_, _ = c.Conn.CloseSession(ctx, acp.CloseSessionRequest{SessionId: res.SessionId})
+				return nil, err
+			}
+		}
 		s.rec.AgentSessionID = string(res.SessionId)
 		s.attached = true
 		s.modes, s.config = res.Modes, res.ConfigOptions
@@ -819,6 +831,37 @@ func selectOption(opts []acp.SessionConfigOption, id string) (*acp.SessionConfig
 		}
 	}
 	return nil, false
+}
+
+// checkConfig: every given option is one the agent has, with a value it offers (else an error listing them).
+func checkConfig(given map[string]string, opts []acp.SessionConfigOption) error {
+	for k, v := range given {
+		sel, ok := selectOption(opts, k)
+		if !ok {
+			return fmt.Errorf(i18n.S("这个 agent 没有 %q 这一项", "this agent has no %q option"), k)
+		}
+		if !hasValue(sel, v) {
+			return fmt.Errorf(i18n.S("%s 没有 %q，可选：%s", "%s has no %q; it offers: %s"), k, v, strings.Join(optionValues(sel), ", "))
+		}
+	}
+	return nil
+}
+
+func optionValues(o *acp.SessionConfigOptionSelect) []string {
+	var out []string
+	if u := o.Options.Ungrouped; u != nil {
+		for _, x := range *u {
+			out = append(out, string(x.Value))
+		}
+	}
+	if g := o.Options.Grouped; g != nil {
+		for _, grp := range *g {
+			for _, x := range grp.Options {
+				out = append(out, string(x.Value))
+			}
+		}
+	}
+	return out
 }
 
 func hasValue(o *acp.SessionConfigOptionSelect, v string) bool {

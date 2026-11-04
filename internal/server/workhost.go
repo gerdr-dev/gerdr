@@ -52,7 +52,16 @@ func (h workHost) StartSession(ctx context.Context, project string, o work.Start
 	if _, ok := tags[PanelTag]; !ok {
 		tags[PanelTag] = keyOr(project)
 	}
-	sess, err := s.Hub.Create(ctx, hub.CreateOptions{Agent: agent, Cwd: o.Cwd, Mode: o.Mode, Title: o.Title, Tags: tags, ReportTo: reportTo, SkillDirs: skills, FromCLI: true})
+	var config map[string]string
+	for k, v := range map[string]string{"model": o.Model, "effort": o.Effort} {
+		if v != "" {
+			if config == nil {
+				config = map[string]string{}
+			}
+			config[k] = v
+		}
+	}
+	sess, err := s.Hub.Create(ctx, hub.CreateOptions{Agent: agent, Cwd: o.Cwd, Mode: o.Mode, Config: config, Title: o.Title, Tags: tags, ReportTo: reportTo, SkillDirs: skills, FromCLI: true})
 	if err != nil {
 		return nil, err
 	}
@@ -158,7 +167,7 @@ func (h workHost) target(project, id string) (string, error) {
 	return "", errors.New(i18n.S("这个项目的 Work 助手还没有对话：先在 Work 里打开它", "this project's Work agent has no conversation yet: open it in Work first"))
 }
 
-func (h workHost) Send(ctx context.Context, project, id, text string, attachments []string) (map[string]any, error) {
+func (h workHost) Send(ctx context.Context, project, id, text string, attachments []string, now bool) (map[string]any, error) {
 	id, err := h.target(project, id)
 	if err != nil {
 		return nil, err
@@ -171,7 +180,7 @@ func (h workHost) Send(ctx context.Context, project, id, text string, attachment
 	if err != nil {
 		return nil, err
 	}
-	if _, err := sess.SendFrom(ctx, blocks, "", "", false); err != nil {
+	if _, err := sess.SendFrom(ctx, blocks, "", "", now); err != nil {
 		return nil, err
 	}
 	return h.view(sess.Summary(), nil), nil
@@ -204,6 +213,8 @@ func (h workHost) Workspaces(project string, all bool) []map[string]any {
 	}
 	return out
 }
+
+func (h workHost) Agents() []map[string]any { return h.s.Hub.Agents() }
 
 func (h workHost) RecentDirs() []map[string]any {
 	last := map[string]int64{}

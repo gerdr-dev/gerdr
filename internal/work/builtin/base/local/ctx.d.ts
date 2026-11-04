@@ -90,6 +90,13 @@ interface Ctx {
       /** Permission mode (claude: default / acceptEdits / plan / auto; codex: ask / auto / read-only). Default: the user's default, unless that one approves everything. */
       mode?: string;
       /**
+       * The model, as the agent's model picker lists it (claude: `sonnet` / `haiku` / …; codex and native: their own
+       * ids). Default: the user's default for that agent. One the agent doesn't offer is an error that lists the ones it does.
+       */
+      model?: string;
+      /** Thinking effort (`low` / `medium` / `high` / …, whatever the agent and model offer). Default: the user's default. */
+      effort?: string;
+      /**
        * Which Code workspace it goes in: a workspace id from `ctx.workspaces.list()`, or `"new"` for a new one named
        * after the directory. Default: the workspace whose directory is `cwd` (or the closest one above it), else a new one.
        * `"none"`: no tab in Code at all, for a conversation the page shows itself (`SessionChat` from @gerdr/core);
@@ -113,6 +120,11 @@ interface Ctx {
        */
       attachments?: string[];
     }): Promise<Session>;
+    /**
+     * The agents and roles `start` takes as `agent`. A role (one the user set up in Settings → Agent) has a `base`
+     * (claude / codex / native) and usually a `prompt`: what it's for, in the user's words — what to pick it by.
+     */
+    agents(): AgentInfo[];
     /** With `reply`: what the agent said since the last message sent to it. null when there's no such conversation. */
     get(id: string): (Session & { reply: string }) | null;
     /**
@@ -121,10 +133,12 @@ interface Ctx {
      */
     list(opts?: { cwd?: string; tags?: Record<string, string> }): Session[];
     /**
-     * Sends another message. A running conversation gets it when its current turn ends; a closed one is opened again.
+     * Sends another message. A running conversation gets it at its next pause (between steps); a closed one is opened again.
      * `"work"` = this project's Work agent conversation (e.g. to hand it something to decide).
+     * `now`: right away, like the input box's "send now" — a running command moves to the background and the agent
+     * reads the message at once, so a worker busy with a long step still takes it.
      */
-    send(id: string, text: string, opts?: { attachments?: string[] }): Promise<Session>;
+    send(id: string, text: string, opts?: { attachments?: string[]; now?: boolean }): Promise<Session>;
     /**
      * Stops its agent and takes it off the screen, like closing its tab: the conversation is kept and `send` carries on
      * from where it was. For a worker whose task is done or parked, so it stops holding a process.
@@ -212,6 +226,18 @@ interface FileInfo {
   /** ms */
   mtime: number;
   etag: string;
+}
+
+interface AgentInfo {
+  id: string;
+  name: string;
+  /** A role's engine: claude / codex / native. Absent for those three themselves. */
+  base?: string;
+  /** Found on this machine (a CLI that isn't installed can't start). */
+  available: boolean;
+  /** A role's own instructions: what it is for. */
+  prompt?: string;
+  error?: string;
 }
 
 interface Session {

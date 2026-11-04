@@ -10,7 +10,11 @@ declare module "@gerdr/core" {
    * pane in Code. It fills its parent's height, so give the parent one (`h-full`, `flex-1 min-h-0`…).
    * jump: scroll to the card whose `ref` it is (a tool result's gerdrCard.ref) and flash it; bump seq to jump again.
    */
-  export function SessionChat(props: { id: string; focused?: boolean; jump?: { ref: string; seq: number }; className?: string }): ReactNode;
+  /**
+   * sendNow: every message sent from it goes in right away while the agent runs (the composer's "send now": a running
+   * command moves to the background and the agent reads the message at once), instead of waiting for its current step.
+   */
+  export function SessionChat(props: { id: string; focused?: boolean; jump?: { ref: string; seq: number }; className?: string; sendNow?: boolean }): ReactNode;
 
   /** A conversation's summary, kept current; undefined while unknown. */
   export function useSession(id: string | undefined):

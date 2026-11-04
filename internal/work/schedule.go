@@ -439,7 +439,7 @@ func (r *Runner) schedulePrompt(project string, s Schedule) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	_, err := r.Host.Send(ctx, project, "work", fmt.Sprintf(i18n.S("[定时任务「%s」]\n\n%s", "[Scheduled: %s]\n\n%s"), name, s.Prompt), nil)
+	_, err := r.Host.Send(ctx, project, "work", fmt.Sprintf(i18n.S("[定时任务「%s」]\n\n%s", "[Scheduled: %s]\n\n%s"), name, s.Prompt), nil, false)
 	return err
 }
 
