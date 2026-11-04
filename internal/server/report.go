@@ -310,8 +310,8 @@ func writeReport(b *strings.Builder, sum hub.Summary, kind, reply string) {
 			// A question: it asks whoever handed it the work, which is you. A message answers it (hub: a message
 			// while a question is pending is its answer), so the coordinator can, and the user isn't left with a
 			// helper's question they never see (a helper on another computer waited on one for an hour).
-			fmt.Fprintf(b, i18n.S("它在问：%s\n这是在问你（派它出去的）：你来判断。能定的直接回答它：gerdr session send %s '你的回答'（发消息就是回答它的问题）。要用户拿主意的，把问题连同你的建议交给用户（任务看板上用 ask_human），用户答了再发给它。\n",
-				"It asks: %s\nIt's asking you (who handed it the work): decide. If you can, answer it: gerdr session send %s 'your answer' (a message answers its question). If it's the user's call, put it to them with your recommendation (on a task board: ask_human), then send it their answer.\n"), sum.Waiting, sum.ID)
+			fmt.Fprintf(b, i18n.S("它在问：%s\n这是在问你（派它出去的）：你来判断。能定的直接回答它：gerdr session send %s '你的回答'（发消息就是回答它的问题）。要用户拿主意的，把问题连同你的建议交给用户（你所在的面板给了问用户的工具就用它），用户答了再发给它。\n",
+				"It asks: %s\nIt's asking you (who handed it the work): decide. If you can, answer it: gerdr session send %s 'your answer' (a message answers its question). If it's the user's call, put it to them with your recommendation (with your panel's tool for asking the user, if it gives you one), then send it their answer.\n"), sum.Waiting, sum.ID)
 		} else {
 			fmt.Fprintf(b, i18n.S("它在等：%s\n这是要人批准的一步，只有用户能处理：告诉用户去 Gerdr 界面上批，别替人决定。\n", "It's waiting on: %s\nAn approval only the user can give: tell them to look in Gerdr, don't decide for them.\n"), sum.Waiting)
 		}

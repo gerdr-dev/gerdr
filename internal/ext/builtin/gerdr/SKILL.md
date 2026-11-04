@@ -89,10 +89,10 @@ gerdr session new --agent codex --title reviewer \
 - `--cwd` defaults to your current directory. As a panel's agent that is the panel's directory, not a repository: always
   give `--cwd` when the task is about code;
 - `--workspace <id|number|label|new>` puts it in that Code workspace as a new tab (`gerdr workspace list`); without it,
-  it opens next to you — unless you are a panel's conversation (a task board's worker): then it belongs to that panel
+  it opens next to you — unless you are a panel's conversation (one a panel started): then it belongs to that panel
   too, as you do, and shows there under your task, not in Code.
 - Gerdr records you as the new session's `parent` (also when a panel function you ran with `gerdr work run` starts it),
-  so who handed what to whom can be followed any number of levels deep — a task board shows that tree under the task.
+  so who handed what to whom can be followed any number of levels deep — a panel can show that tree for its work.
   Starting a helper from your own session keeps the chain; don't hand work out through some other session.
 
 ### On another computer: `--host`
@@ -137,7 +137,7 @@ seen it). While you're busy, reports are held and arrive together when your turn
 
 A session you started that stops on a **question** is asking you, not the user: decide. Answer what you can with
 `gerdr session send <id> "…"` (a message while it's asking is its answer); what's the user's call, put to them with your
-recommendation (on a task board: `ask_human`), then send it their answer. An **approval** (a command / edit to allow) is
+recommendation (if the panel you work for gives you a tool for asking the user, use it), then send it their answer. An **approval** (a command / edit to allow) is
 the user's alone: tell them, don't work around it.
 
 ```bash
