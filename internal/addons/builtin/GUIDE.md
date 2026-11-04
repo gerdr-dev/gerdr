@@ -297,8 +297,9 @@ An add-on that watches something outside (a chat, a mailbox, a dashboard) turns 
 leaves what to do about them to whoever subscribed: a panel's `triggers/*.json` runs its own function, a session
 watches with `gerdr event watch`, another add-on listens with `g.on("event")`. The shape is
 `{ id, source, kind, key, title, text, url, data }`; give `id` a stable value (`slack:C123:1717000000.000100`) so
-seeing the same thing twice emits it once, `key` what subscribers narrow by (a channel), `kind` a dotted verb
-(`message`, `mention`). Emit from the service (stdout, above) when it holds a connection, or from the UI with
+seeing the same thing twice emits it once, `kind` a dotted verb (`message`, `mention`), and `key` what subscribers
+narrow and continue by: for a chat, the **conversation** (a DM, a thread), the same for a follow-up as for what it
+follows, so a subscriber hands it to whatever took the first message. Emit from the service (stdout, above) when it holds a connection, or from the UI with
 `g.events.emit`. To act on events yourself (send a reply), list patterns in `service.events` and read them on stdin.
 
 Say what you emit in addon.json, so panels can offer it ("which events make a task") without knowing your add-on:

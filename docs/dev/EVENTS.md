@@ -12,6 +12,9 @@ record shape, kept by Gerdr and handed to whoever subscribed. Code: `internal/ev
   "title": "alice commented", "text": "…", "url": "https://…", "data": { … }, "at": 1793700000000, "depth": 0 }
 ```
 
+- For a conversation (a chat), `key` is **the conversation**: a follow-up carries the same key as what it follows, so
+  a subscriber continues by it (the task board sends it to the same task's worker). The source decides what one
+  conversation is — the Slack add-on: a DM channel, or a channel thread (a mention that starts one is its root).
 - `source/kind` is what patterns match: `gitlab/mr.*`, `*/pipeline.failed`, or a kind alone. No `/` in either, so the
   pattern splits unambiguously. `key` is what it is about; key patterns' `*` crosses slashes (keys are paths).
 - `id` is the emitter's stable id for the happening. An id seen this month or last is dropped (`fresh: false`), so a
