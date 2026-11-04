@@ -134,7 +134,8 @@ interface Ctx {
     get(id: string): (Session & { reply: string }) | null;
     /**
      * Every conversation, most recently active first; with `cwd`, only the ones in that directory; with `tags`, only
-     * the ones carrying all of them (`""` as the value: any value).
+     * the ones carrying all of them (`""` as the value: any value). Other computers' (hosts in Gerdr's settings) come
+     * after this one's, as `<host>:<id>`, their `reportTo` / `parent` pointing back here when a session here started them.
      */
     list(opts?: { cwd?: string; tags?: Record<string, string> }): Session[];
     /**

@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/coder/acp-go-sdk"
 
@@ -129,6 +130,20 @@ func (h workHost) Sessions(cwd string, tags map[string]string) []map[string]any 
 	sort.SliceStable(list, func(i, j int) bool { return list[i].UpdatedAt > list[j].UpdatedAt })
 	out := []map[string]any{}
 	for _, x := range list {
+		if (cwd == "" || x.Cwd == cwd) && hub.HasTags(x.Tags, tags) {
+			out = append(out, h.view(x, nil))
+		}
+	}
+	// Other computers' sessions after this one's ("<host>:<id>", as `gerdr session list` shows them): a worker here
+	// hands work to a session there that reports back to it, and a panel must see that it is waiting on it. A
+	// host's list may be a few seconds old; one that doesn't answer in time is left out rather than holding the call.
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	for _, raw := range h.s.hostSessions(ctx, 5*time.Second) {
+		var x hub.Summary
+		if json.Unmarshal(raw, &x) != nil || x.ID == "" {
+			continue
+		}
 		if (cwd == "" || x.Cwd == cwd) && hub.HasTags(x.Tags, tags) {
 			out = append(out, h.view(x, nil))
 		}
