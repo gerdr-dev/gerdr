@@ -1,6 +1,6 @@
 import { toast } from "sonner";
 import { create } from "zustand";
-import { api, type PendingReq } from "./api";
+import { api, type PanelInboxItem, type PendingReq } from "./api";
 import { systemNotify } from "./notify";
 import { mutedSession } from "./layout";
 import { isPhone } from "./phone";
@@ -14,9 +14,10 @@ import { t } from "./i18n";
  * clicked (they have no "done" state). Per device (localStorage), like the unread dots: dismissing on the phone shouldn't clear the desktop's.
  */
 export type InboxItem = {
-  /** req:<reqId> | err:<session>:<at> | bat:<at> */
+  /** req:<reqId> | err:<session>:<at> | bat:<at> | pan:<panel key>:<its id> */
   id: string;
-  kind: "permission" | "ask" | "error" | "battery";
+  /** panel: what a panel says needs the user (ctx.inbox.set): on every device, gone once the panel takes it back */
+  kind: "permission" | "ask" | "error" | "battery" | "panel";
   at: number;
   sessionId?: string;
   /** Who it's about: the session's name, or the battery level */
@@ -24,6 +25,8 @@ export type InboxItem = {
   body?: string;
   reqId?: string;
   request?: any;
+  /** kind panel: whose item it is (the panel's key) */
+  panel?: string;
 };
 
 type InboxState = {
@@ -68,7 +71,13 @@ function gone(): string[] {
 
 /** What kind of item it is, as shown in the inbox and its notifications. */
 export const kindLabel = (k: InboxItem["kind"]) =>
-  ({ permission: t("inbox.label.permission"), ask: t("inbox.label.ask"), error: t("inbox.label.error"), battery: t("inbox.label.battery") })[k];
+  ({
+    permission: t("inbox.label.permission"),
+    ask: t("inbox.label.ask"),
+    error: t("inbox.label.error"),
+    battery: t("inbox.label.battery"),
+    panel: t("inbox.label.panel"),
+  })[k];
 
 /** `quiet`: the user is already looking at it (no red dot, no system notification); it still goes in the list. */
 function add(items: InboxItem[], quiet: boolean, notify = !quiet) {
@@ -102,19 +111,31 @@ function toastItem(it: InboxItem, title: string) {
   toasts.set(it.id, id);
   const body = it.body && it.body.length > BODY_MAX ? it.body.slice(0, BODY_MAX) + "…" : it.body;
   const sid = it.sessionId;
+  const open = sid || it.panel ? () => openInboxItem(it) : undefined;
   toast(title, {
     id,
     duration: Infinity,
     closeButton: true,
     description: body,
-    action: sid
+    action: open
       ? {
           label: it.kind === "ask" ? t("inbox.goAnswer") : it.kind === "error" ? t("inbox.goLook") : t("inbox.goHandle"),
-          onClick: () => import("./actions").then((a) => a.focusSession(sid)),
+          onClick: open,
         }
       : undefined,
     onDismiss: () => toasts.delete(it.id),
   });
+}
+
+/** Where an item leads: its conversation (a panel's own comes back to the panel, lib/panelRoute), else its panel. */
+export function openInboxItem(it: InboxItem) {
+  if (it.sessionId) {
+    const sid = it.sessionId;
+    return void import("./actions").then((a) => a.focusSession(sid));
+  }
+  if (!it.panel) return;
+  const [space, name = ""] = it.panel.split("/");
+  import("./store").then((st) => (st.setWorkPanel(space, name), st.setMode("work")));
 }
 
 function dropCards(keep?: (itemId: string) => boolean) {
@@ -138,9 +159,11 @@ useInbox.subscribe((s) => {
 export function dismiss(id: string) {
   const it = get().items.find((x) => x.id === id);
   useInbox.setState((s) => ({ items: s.items.filter((x) => x.id !== id) }));
-  if (it?.reqId)
+  // A request or a panel's item may still be there on the server: remembered, so the next fetch doesn't bring it back
+  const key = it?.reqId ?? (it?.kind === "panel" ? it.id : undefined);
+  if (key)
     try {
-      localStorage.setItem(GONE, JSON.stringify([it.reqId, ...gone()].slice(0, 300)));
+      localStorage.setItem(GONE, JSON.stringify([key, ...gone()].slice(0, 300)));
     } catch {}
   save();
 }
@@ -236,6 +259,38 @@ const pendingKey = (ss: Record<string, SessionSummary>) =>
     .sort()
     .join(",");
 
+// ---- panels' items ----
+
+/**
+ * The panels' list (GET /api/inbox, or the server's "inbox" message) against what the inbox holds: new ones come in
+ * (notified like a question, unless already looked at or ×'d here), ones the panel took back leave. Only after the
+ * first fetch since the page opened are new ones notified: those were there before it.
+ */
+let panelPrimed = false;
+export function syncPanelInbox(list: PanelInboxItem[]) {
+  const ids = new Map(list.map((x) => [`pan:${x.panel}:${x.id}`, x]));
+  const held = get().items;
+  const stale = held.filter((x) => x.kind === "panel" && !ids.has(x.id));
+  if (stale.length) {
+    const drop = new Set(stale.map((x) => x.id));
+    useInbox.setState((s) => ({ items: s.items.filter((x) => !drop.has(x.id)) }));
+    save();
+  }
+  const have = new Set(held.map((x) => x.id));
+  const skip = new Set(gone());
+  const fresh: InboxItem[] = [];
+  for (const [id, x] of ids)
+    if (!have.has(id) && !skip.has(id))
+      fresh.push({ id, kind: "panel", at: x.at || Date.now(), panel: x.panel, sessionId: x.session || undefined, title: x.title, body: x.body });
+  const quiet = fresh.every((x) => !!x.sessionId && seen(x.sessionId));
+  add(fresh.reverse(), quiet, panelPrimed && !quiet);
+  panelPrimed = true;
+}
+
+function refreshPanelInbox() {
+  api.inbox().then(syncPanelInbox, () => {});
+}
+
 // ---- low battery ----
 
 const BAT = "gerdr.inbox.batFired";
@@ -269,7 +324,7 @@ export function watchInbox() {
   const unsub = useStore.subscribe((s) => {
     if (s.connected !== wasConnected) {
       wasConnected = s.connected;
-      if (s.connected) refreshPending();
+      if (s.connected) (refreshPending(), refreshPanelInbox());
     }
     if (s.sessions === prev) return;
     const before = prev;
@@ -292,6 +347,7 @@ export function watchInbox() {
     );
   });
   refreshPending();
+  refreshPanelInbox();
   checkBattery();
   const timer = setInterval(checkBattery, 60_000);
   return () => {

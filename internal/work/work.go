@@ -60,6 +60,7 @@ type Runner struct {
 	Secret     func(name string) string // ctx.secrets.get; "" = none
 	Host       Host                     // ctx.sessions / ctx.workspaces / ctx.dirs.recent (host.go); nil = not available
 	Events     EventBus                 // ctx.events (trigger.go); nil = not available
+	Inbox      Inbox                    // ctx.inbox (inbox.go); nil = not available
 	Log        *slog.Logger
 
 	mu        sync.Mutex

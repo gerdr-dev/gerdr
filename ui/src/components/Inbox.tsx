@@ -1,13 +1,12 @@
-import { BatteryLow, Check, CircleAlert, HelpCircle, Inbox as InboxIcon, Settings, ShieldAlert, X } from "lucide-react";
+import { BatteryLow, Check, CircleAlert, Hand, HelpCircle, Inbox as InboxIcon, Settings, ShieldAlert, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { focusSession } from "@/lib/actions";
 import { api } from "@/lib/api";
-import { clearAll, dismiss, kindLabel, markSeen, sessionName, useInbox, type InboxItem } from "@/lib/inbox";
+import { clearAll, dismiss, kindLabel, markSeen, openInboxItem, sessionName, useInbox, type InboxItem } from "@/lib/inbox";
 import { set, useStore } from "@/lib/store";
 import type { AskQuestion, PermissionOption } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -137,23 +136,26 @@ const ICON = {
   ask: <HelpCircle className="size-3.5 text-brand" />,
   error: <CircleAlert className="size-3.5 text-bad" />,
   battery: <BatteryLow className="size-3.5 text-warn" />,
+  panel: <Hand className="size-3.5 text-warn" />,
 };
 
 function Item({ it, close }: { it: InboxItem; close: () => void }) {
   const live = useInbox((s) => (it.reqId && s.live ? !!s.live[it.reqId] : true));
-  const go = it.sessionId
-    ? () => {
-        close();
-        focusSession(it.sessionId!);
-      }
-    : undefined;
+  const go =
+    it.sessionId || it.panel
+      ? () => {
+          close();
+          openInboxItem(it);
+        }
+      : undefined;
   const req = it.request;
   // Simple enough to settle right here: an approval that isn't a plan, a single question
   const inline =
     live && it.reqId && ((it.kind === "permission" && req?.toolCall?.kind !== "switch_mode") || (it.kind === "ask" && req?.questions?.length === 1));
   // The session's current name (it may have been renamed since), falling back to the one saved with the item
   const name = useStore((s) => (it.sessionId && s.sessions[it.sessionId] ? sessionName(s.sessions[it.sessionId]) : undefined));
-  const head = it.sessionId ? (name ?? it.title) : kindLabel(it.kind);
+  // A panel's item says what it is itself ("t3 问你：…"); the conversation's name would only repeat the task
+  const head = it.kind === "panel" ? it.title : it.sessionId ? (name ?? it.title) : kindLabel(it.kind);
   // A single question shows itself in the inline answer; battery's level is its title
   const text = it.kind === "battery" ? it.title : inline && it.kind === "ask" ? undefined : it.body;
   return (

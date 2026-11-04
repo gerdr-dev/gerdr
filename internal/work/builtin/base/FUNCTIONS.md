@@ -35,7 +35,12 @@ export async function open(input: { repo?: string }, ctx: Ctx) {
 limits. Read it before writing a function and type the argument `ctx: Ctx` (no import needed). In short:
 `exec` (command-line tools), `mcp` (MCP tools), `fetchAll`, `html`, `secrets`, `fs` (files in this
 panel directory), `sessions` (hand a task to a coding agent and follow it), `workspaces` (the Code
-side's workspaces), `dirs` (directories anywhere on disk, read-only), `progress`, `log`, `sleep`.
+side's workspaces), `dirs` (directories anywhere on disk, read-only), `inbox`, `progress`, `log`, `sleep`.
+
+What on this panel needs the user goes to Gerdr's inbox with `ctx.inbox.set([{ id, title, body?, session? }])`: on
+every device, and as a notification on the phone App. Pass the whole current list each time (from wherever the panel
+works out what waits on the user, e.g. after each change and on a schedule): an item left out is done and leaves the
+inbox, the same `id` again is the same item. `session` makes the item open that conversation.
 
 Images and files the user gives a task (pasted, dropped, picked on a page): the page POSTs each to
 `/api/fs/upload?name=<file name>` (same origin, body = the file, header `X-Gerdr: 1`) and gets `{ path }`; pass the

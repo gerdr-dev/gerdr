@@ -375,6 +375,9 @@ function handle(m: any) {
     case "event":
       import("./addons").then((p) => p.emit("event", m.data));
       break;
+    case "inbox":
+      import("./inbox").then((p) => p.syncPanelInbox(m.data ?? []));
+      break;
     case "ext":
       set((s) => ({ extVersion: s.extVersion + 1 }));
       break;

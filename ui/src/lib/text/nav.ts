@@ -125,7 +125,7 @@ export const zh = {
   "inbox.titleN": "收件箱（{n}）",
   "inbox.clearAll": "全部清除",
   "inbox.settings": "收件箱设置",
-  "inbox.empty": "没有新消息。出错、在等你回答的 Agent 和电量低都会出现在这里。",
+  "inbox.empty": "没有新消息。出错、在等你回答的 Agent、面板上等你处理的事和电量低都会出现在这里。",
   "inbox.jumpToAgent": "跳到这个 Agent",
   "inbox.handled": "已处理",
   "inbox.goAnswer": "去回答",
@@ -139,6 +139,7 @@ export const zh = {
   "inbox.label.ask": "在问你",
   "inbox.label.error": "出错了",
   "inbox.label.battery": "电量低",
+  "inbox.label.panel": "等你",
   "inbox.batteryTitle": "电量 {n}%",
   "inbox.batteryBody": "运行 Gerdr 的电脑在用电池，快没电了",
 
@@ -344,7 +345,7 @@ export const en: Record<keyof typeof zh, string> = {
   "inbox.titleN": "Inbox ({n})",
   "inbox.clearAll": "Clear all",
   "inbox.settings": "Inbox settings",
-  "inbox.empty": "No new messages. Agents that fail or are waiting for your answer, and low battery, show up here.",
+  "inbox.empty": "No new messages. Agents that fail or are waiting for your answer, things a panel needs you for, and low battery show up here.",
   "inbox.jumpToAgent": "Go to this agent",
   "inbox.handled": "Handled",
   "inbox.goAnswer": "Answer",
@@ -358,6 +359,7 @@ export const en: Record<keyof typeof zh, string> = {
   "inbox.label.ask": "Has a question",
   "inbox.label.error": "Failed",
   "inbox.label.battery": "Low battery",
+  "inbox.label.panel": "Needs you",
   "inbox.batteryTitle": "Battery {n}%",
   "inbox.batteryBody": "The computer running Gerdr is on battery and almost out",
 

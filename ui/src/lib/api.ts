@@ -143,6 +143,9 @@ export type AwakeStatus = {
 };
 
 /** One approval / question waiting on someone (hub.PendingReq). */
+/** A panel's inbox item (internal/work/inbox.go InboxItem). */
+export type PanelInboxItem = { panel: string; id: string; title: string; body?: string; session?: string; at: number };
+
 export type PendingReq = {
   sessionId: string;
   title?: string;
@@ -239,6 +242,8 @@ export const api = {
   battery: () => req<AwakeStatus["battery"]>("GET", "/api/battery"),
   /** Every approval / question waiting on someone, across all sessions, oldest first (hub.PendingReq). */
   pending: () => req<PendingReq[]>("GET", "/api/pending"),
+  /** What panels say needs the user (ctx.inbox.set; server/inbox.go). */
+  inbox: () => req<PanelInboxItem[]>("GET", "/api/inbox"),
   setAwake: (b: { minutes?: number; until?: number; forever?: boolean }) => req<AwakeStatus>("PUT", "/api/awake", b),
   setupLid: () => req<AwakeStatus>("POST", "/api/awake/lid-setup", {}),
   /** host: another computer's screen, through this one (server/hosts.go) */

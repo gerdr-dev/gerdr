@@ -411,6 +411,8 @@ func (r *runner) ctxObject() *goja.Object {
 	_ = c.Set("dirs", r.dirsObject())
 	// Events (trigger.go, docs/dev/EVENTS.md): what a poll found goes out as events; triggers/ subscribe to them
 	_ = c.Set("events", r.eventsObject())
+	// What on this panel needs the user, in Gerdr's inbox and the phone's notifications (inbox.go)
+	_ = c.Set("inbox", r.inboxObject())
 	_ = c.Set("workspace", map[string]any{"project": r.project, "dir": r.dir, "logs_dir": r.r.logDir(r.project)})
 	// gerdr's interface is Chinese: messages meant for the user can follow this
 	_ = c.Set("locale", "zh")

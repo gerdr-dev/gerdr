@@ -222,6 +222,15 @@ interface Ctx {
   sleep(ms: number): Promise<void>;
   /** Who called this function: as a panel tool (`export const tools`), the conversation's id; otherwise "". */
   caller: { session: string };
+  /**
+   * What on this panel needs the user, in Gerdr's inbox (every device) and the phone's notifications: a task asking
+   * something, a step only they can do. `set` takes the whole current list each time; an item no longer in it is done
+   * and leaves the inbox. Same `id` = same item (notified once). `session`: the conversation it's about, opened from the
+   * item (back in this panel when the panel started it). At most 50.
+   */
+  inbox: {
+    set(items: { id: string; title: string; body?: string; session?: string }[]): void;
+  };
   /** This panel: its id, this directory, where its run logs are. */
   workspace: { project: string; dir: string; logs_dir: string };
   /** gerdr's interface language, for messages meant for the user. */
