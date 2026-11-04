@@ -229,6 +229,14 @@ declare global {
      *                icon in a list (clipped). Fitting the box is yours: shrink, or draw a simpler version when it's
      *                small. The box carries gerdr's colour for the spot (currentColor: text-brand / text-warn in the
      *                indicator); else use the theme tokens so it reads in light and dark. Don't make it interactive
+     *   "settings"   your add-on's settings, laid out by you (Settings → Add-ons → 设置), instead of the generated
+     *                form that lists every addon.json setting in order: show a provider's fields only once it is
+     *                picked, group them, add a line of help. Keep declaring them in addon.json (storage, defaults,
+     *                secrets, translations, your service's settings stay gerdr's) and draw each with <Field name="…" />,
+     *                the generated form's own row (title, input, description, reset), so add-ons look alike; around
+     *                them draw what you like. values: every setting's value (the default until changed), re-rendered
+     *                on change; set(key, value) / set({…}) saves (null: back to the default). One per add-on. While
+     *                your add-on is off or this throws, gerdr shows the generated form instead
      */
     slot(name: "loader", component: Component<{ paused: boolean; className?: string; fallback?: any }>, opts?: { order?: number }): Dispose;
     slot(name: "panel", component: Component<{}>, opts?: PanelOpts): Dispose;
@@ -237,6 +245,7 @@ declare global {
     slot(name: "sprite", component: Component<SpriteProps>, opts?: { order?: number; id?: string; title?: string }): Dispose;
     slot(name: "overlay", component: Component<{}>, opts?: { order?: number }): Dispose;
     slot(name: "paneTitle", component: Component<{ pane: PaneInfo; tab: TabInfo }>, opts?: { order?: number }): Dispose;
+    slot(name: "settings", component: Component<SettingsSlotProps>): Dispose;
 
     /**
      * Decorate the line under each finished turn ("18:36 · 用时 59s · 4.1k tokens"): a class for the time (color it:
@@ -361,6 +370,9 @@ declare global {
      */
     settings: {
       get<T = unknown>(key: string): T;
+      /** Save a setting (or several: set({ a: 1, b: 2 })) as the form would; null goes back to the default. */
+      set(key: string, value: unknown): Promise<void>;
+      set(values: Record<string, unknown>): Promise<void>;
       /**
        * What an "action" setting's button runs (Settings → Add-ons): try the values the user just set — preview a
        * voice, test a connection. While the promise is pending the button spins, or reads "Stop" once sound you play
@@ -401,6 +413,10 @@ declare global {
     interface ElementChildrenAttribute {
       children: {};
     }
+    /** What every element takes besides its own props: key, when drawing a list. */
+    interface IntrinsicAttributes {
+      key?: string | number;
+    }
   }
 
   /** g.slot("panel") options; title / icon / open describe your rail button, the first block that sets one wins. */
@@ -415,6 +431,17 @@ declare global {
     tallIcon?: boolean;
     /** Open the panel on hover (default) or on click. */
     open?: "hover" | "click";
+  }
+
+  /** g.slot("settings"): your own layout of the settings declared in addon.json. */
+  interface SettingsSlotProps {
+    /** One declared setting, drawn as the generated form draws it: <Field name="apiKey" />. */
+    Field: Component<{ name: string }>;
+    /** Every declared setting's current value (its default until changed). */
+    values: Record<string, unknown>;
+    /** Save one setting, or several at once; null goes back to the default. */
+    set(key: string, value: unknown): Promise<void>;
+    set(values: Record<string, unknown>): Promise<void>;
   }
 
   /** g.slot("sprite"): where it's drawn now, and the box it gets there. */

@@ -134,6 +134,7 @@ lucide icon (`<g.icons.Timer className="size-3.5" />`).
 | The composer's bottom bar | `g.composerAction({ id, title, icon, run })` | `run(ctx)`: `ctx.text`, `ctx.insert()`, `ctx.setText()` |
 | Right-click menu (desktop and Android App) | `g.contextMenu({ id, title, when, run })` | `{ selection, sessionId }` |
 | The line under each finished turn | `g.turnStat(fn)` | `fn(info)` returns `{ className, title, after }` |
+| Your add-on's settings, laid out your way (Settings → Add-ons → 设置) | `g.slot("settings", Component)` | `{ Field, values, set }`: see [Your own settings layout](#your-own-settings-layout) |
 | A button on each message (read aloud, translate…) | `g.messageAction({ id, title, icon, when, run })` | `run(msg, ctx)`: see [Buttons on a message](#buttons-on-a-message) |
 
 ```tsx
@@ -279,7 +280,8 @@ every device:
 ```
 
 Read with `g.settings.get<number>("ttlMinutes")` (the default until changed), at the moment you need it rather than
-once in `setup`: a change applies at once, without reloading the add-on.
+once in `setup`: a change applies at once, without reloading the add-on. `g.settings.set(key, value)` saves one from code, as the form
+would.
 
 A `text` is a string of several lines, edited in a box under its title (a list, a table you parse yourself).
 
@@ -320,6 +322,36 @@ while `run`'s promise is pending, and reads "停止" once sound played with `{ s
 ```ts
 g.settings.onAction("preview", ({ signal }) => g.audio.play(speech("你好，这是试听。"), { signal }));
 ```
+
+#### Your own settings layout
+
+The generated form lists every setting in order. When that stops fitting — a provider picker where each provider has
+its own key and options, so only the picked one's fields should show — draw the form yourself with the `"settings"`
+slot. Keep declaring every setting in `addon.json` (gerdr still stores them, applies defaults, masks secrets, hands
+them to your service, translates their titles); your component only decides which show, in what order, with what
+around them. Draw each with `Field`, the generated form's own row, so every add-on's settings look alike:
+
+```tsx
+g.slot("settings", ({ Field, values }) => (
+  <div className="space-y-2.5">
+    <Field name="provider" />
+    {values.provider === "azure" ? (
+      <>
+        <Field name="azureKey" />
+        <Field name="azureRegion" />
+      </>
+    ) : (
+      <Field name="apiKey" />
+    )}
+    <Field name="preview" />
+  </div>
+));
+```
+
+`values` holds every setting's current value (the default until changed) and the component re-renders when one
+changes; `set(key, value)` (or `g.settings.set`) saves one for a control of your own (null: back to the default).
+While the add-on is switched off, or if your component throws, the generated form shows instead, so the settings stay
+reachable. The component lives in the UI half, so it needs a `.tsx` entry (or `g.React.createElement`).
 
 When only your [service](#services) knows the address (a port it picked), leave `url` out and report it from the
 service: `{"type":"status","text":"…","links":{"panel":"http://127.0.0.1:7858"}}`. The button is disabled until there

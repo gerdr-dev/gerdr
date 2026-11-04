@@ -56,6 +56,7 @@ export const zh = {
   "addonSettings.actionFailed": "{action}失败：{error}",
   "addonSettings.actionUnavailable": "这个扩展没在这个窗口里加载（关着，或者加载出错）",
   "addonSettings.noOptions": "没有可选的",
+  "addonSettings.noField": "addon.json 里没有设置项 {key}",
   "addonSettings.service.restartsOne": " · 重启过 {n} 次",
   "addonSettings.service.restarts": " · 重启过 {n} 次",
 
@@ -332,6 +333,7 @@ export const en: Record<keyof typeof zh, string> = {
   "addonSettings.actionFailed": "{action} failed: {error}",
   "addonSettings.actionUnavailable": "This add-on isn't loaded in this window (switched off, or it failed to load)",
   "addonSettings.noOptions": "Nothing to choose",
+  "addonSettings.noField": "No setting {key} in addon.json",
   "addonSettings.service.restartsOne": " · restarted once",
   "addonSettings.service.restarts": " · restarted {n} times",
 

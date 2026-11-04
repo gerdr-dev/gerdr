@@ -1,7 +1,7 @@
 import { Markdown } from "@gerdr/chat";
 import { openLightbox } from "@/components/Lightbox";
 import { Check, ChevronRight, CircleAlert, ExternalLink, Eye, EyeOff, FolderOpen, Loader2, Play, Puzzle, RefreshCw, Square, Trash2, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -11,7 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { addonStatus, assetURL, settingActions, type AddonStatus } from "@/lib/addons";
+import { addonStatus, assetURL, settingActions, slots, type AddonStatus } from "@/lib/addons";
+import { AddonGuard } from "@/components/AddonSlot";
 import { unlockAudio, watchSignal } from "@/lib/audio";
 import { api, ApiError } from "@/lib/api";
 import { askConfirm } from "@/lib/confirm";
@@ -197,22 +198,64 @@ function InstalledRow({ a, newer }: { a: AddonStatus; newer?: StoreAddon }) {
             <CollapsibleTrigger className="group flex items-center gap-1.5 text-[12px] text-muted-foreground hover:text-foreground">
               <ChevronRight className="size-3.5 shrink-0 transition-transform group-data-[state=open]:rotate-90" /> {t("addonSettings.settings")}
             </CollapsibleTrigger>
-            <CollapsibleContent className="mt-1.5 space-y-2.5 rounded-sm bg-muted/50 p-2.5">
-              {a.settings.map((s) =>
-                s.type === "action" ? (
-                  <ActionSetting key={s.key} id={a.id} spec={s} />
-                ) : s.type === "link" ? (
-                  <LinkSetting key={s.key} spec={s} url={(a.service?.state === "running" ? a.service.links?.[s.key] : undefined) || s.url} />
-                ) : (
-                  <SettingField key={s.key} id={a.id} spec={s} value={a.settingValues?.[s.key]} />
-                ),
-              )}
+            <CollapsibleContent className="mt-1.5 rounded-sm bg-muted/50 p-2.5">
+              <SettingsForm a={a} />
             </CollapsibleContent>
           </Collapsible>
         )}
       </div>
     </div>
   );
+}
+
+// The generated form: every entry of addon.json "settings" in order.
+function GeneratedForm({ a }: { a: AddonStatus }) {
+  return (
+    <div className="space-y-2.5">
+      {a.settings!.map((s) => (
+        <SettingEntry key={s.key} a={a} spec={s} />
+      ))}
+    </div>
+  );
+}
+
+// An add-on that registered a "settings" slot (and is loaded in this window) lays its settings out itself: which show
+// when (a provider's fields only once it is picked), grouped how. It still declares them in addon.json, so storage,
+// defaults, secrets, a service's settings line and translations stay gerdr's, and draws each with <Field name> — the
+// same row as the generated form, so add-ons don't each invent their own inputs. Switched off or broken: the generated
+// form, so the settings stay reachable.
+function SettingsForm({ a }: { a: AddonStatus }) {
+  const reg = slots.settings.find((r) => r.addon === a.id);
+  const fallback = <GeneratedForm a={a} />;
+  if (!reg || a.disabled) return fallback;
+  const C = reg.Component;
+  const values = Object.fromEntries(a.settings!.map((s) => [s.key, a.settingValues?.[s.key] !== undefined ? a.settingValues[s.key] : s.default]));
+  const save = (key: string | Record<string, unknown>, value?: unknown) =>
+    api.setAddonSettings(a.id, typeof key === "string" ? { [key]: value } : key).catch((e) => toast.error((e as Error).message));
+  return (
+    <AddonForm.Provider value={a}>
+      <AddonGuard addon={a.id} fallback={fallback}>
+        <C Field={Field} values={values} set={save} />
+      </AddonGuard>
+    </AddonForm.Provider>
+  );
+}
+
+const AddonForm = createContext<AddonStatus | undefined>(undefined);
+
+// <Field name="apiKey" /> in an add-on's own settings layout: one declared setting, drawn as the generated form draws it.
+// Module-level (the add-on gets the same component every render) so a field being typed in isn't remounted.
+function Field({ name }: { name: string }) {
+  const a = useContext(AddonForm);
+  const spec = a?.settings?.find((s) => s.key === name);
+  if (!a || !spec) return <div className="text-[12px] text-bad">{t("addonSettings.noField", { key: name })}</div>;
+  return <SettingEntry a={a} spec={spec} />;
+}
+
+function SettingEntry({ a, spec }: { a: AddonStatus; spec: AddonSetting }) {
+  if (spec.type === "action") return <ActionSetting id={a.id} spec={spec} />;
+  if (spec.type === "link") return <LinkSetting spec={spec} url={(a.service?.state === "running" ? a.service.links?.[spec.key] : undefined) || spec.url} />;
+  return <SettingField id={a.id} spec={spec} value={a.settingValues?.[spec.key]} />;
 }
 
 // A "link" setting: its title and a button opening the page. The address comes from addon.json, or from the running

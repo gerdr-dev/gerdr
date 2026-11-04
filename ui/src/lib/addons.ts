@@ -38,8 +38,10 @@ type Reg<T> = { addon: string; fn: T };
  * by itself: the user picks sprites for the places that take one — the working indicator (Settings → General → Loading
  * 动画) and an agent's icon. So an add-on that only brings pictures changes nothing until the user uses them, and one
  * picture set serves every such place; which loader / sprite draws is config.loader (components/AddonSlot.tsx).
+ * "settings" is the add-on's own layout of its addon.json settings (Settings → Add-ons → 设置, components/AddonSettings.tsx;
+ * props: Field, values, set), drawn instead of the generated form; one per add-on, the first registered wins.
  */
-export type SlotName = "panel" | "sprite" | "paneTitle" | "overlay" | "loader";
+export type SlotName = "panel" | "sprite" | "paneTitle" | "overlay" | "loader" | "settings";
 /**
  * key: stable across reloads — "addon:id" with the id the add-on gave, else "addon:n" (its n-th entry in that slot, the
  * same on every load since setup runs the same way): config.loader and agents' icons refer to entries by it.
@@ -57,7 +59,7 @@ export type SlotReg = {
   /** A panel's icon component wants a button two cells tall on the rail (a 32×72 box instead of 32×20). */
   tallIcon?: boolean;
 };
-export const slots: Record<SlotName, SlotReg[]> = { panel: [], sprite: [], paneTitle: [], overlay: [], loader: [] };
+export const slots: Record<SlotName, SlotReg[]> = { panel: [], sprite: [], paneTitle: [], overlay: [], loader: [], settings: [] };
 export type ComposerAction = { addon: string; id: string; title: string; icon?: React.ReactNode; run: (ctx: ComposerCtx) => void | Promise<void> };
 export type ComposerCtx = { sessionId: string; text: string; insert(text: string): void; setText(text: string): void };
 export const composerActions: ComposerAction[] = [];
@@ -546,6 +548,10 @@ function makeApi(id: string, hash: string) {
         const a = latestBuild.get(id);
         const v = a?.settingValues?.[key];
         return v !== undefined ? v : a?.settings?.find((s) => s.key === key)?.default;
+      },
+      // Saved like a change in the form (stored by gerdr, every window and device); null goes back to the default
+      set: async (key: string | Record<string, unknown>, value?: unknown) => {
+        await api.setAddonSettings(id, typeof key === "string" ? { [key]: value } : key);
       },
       onAction: (key: string, run: SettingAction["run"]) => {
         const r = { addon: id, key, run };
