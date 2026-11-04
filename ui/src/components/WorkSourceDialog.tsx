@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
  * button of its own on the rail. Installing runs someone else's code on this computer (functions run commands,
  * schedules start by themselves), so the dialog says so before anything happens.
  */
-/** Panels published on GitHub carry this topic (README of gerdr-panel-taskboard says so too). */
+/** Panels published on GitHub carry this topic (README of gerdr-panel-superagent says so too). */
 const PANEL_TOPIC = "https://github.com/topics/gerdr-panel";
 
 export function WorkSourceDialog() {
