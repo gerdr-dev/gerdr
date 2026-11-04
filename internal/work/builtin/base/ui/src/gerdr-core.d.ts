@@ -16,9 +16,18 @@ declare module "@gerdr/core" {
    */
   /**
    * sub: show one of its subagents' conversation instead (the toolCallId of ctx.sessions' tasks), read-only, with a way
-   * back; "查看对话" on a subagent's card in this chat opens it here too.
+   * back; "查看对话" on a subagent's card in this chat opens it here too. onSub: the page decides instead — 查看对话 and the
+   * way back call it (null = the main conversation), and `sub` is what shows.
    */
-  export function SessionChat(props: { id: string; focused?: boolean; jump?: { ref: string; seq: number }; className?: string; sendNow?: boolean; sub?: string }): ReactNode;
+  export function SessionChat(props: {
+    id: string;
+    focused?: boolean;
+    jump?: { ref: string; seq: number };
+    className?: string;
+    sendNow?: boolean;
+    sub?: string;
+    onSub?: (toolCallId: string | null, title?: string) => void;
+  }): ReactNode;
 
   /** A conversation's summary, kept current; undefined while unknown. */
   export function useSession(id: string | undefined):

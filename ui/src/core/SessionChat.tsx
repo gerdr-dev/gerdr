@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Bot } from "lucide-react";
 import type { GPart } from "@gerdr/chat";
 import { ChatView } from "@/components/chat/ChatView";
@@ -41,6 +41,8 @@ function useWatched(id: string) {
  * of waiting for its current step to end.
  * sub: show one of its subagents' conversation instead (the toolCallId of the call that started it, as in
  * ctx.sessions' tasks), read-only, with a way back to the main one. "查看对话" on a subagent's card opens it here too.
+ * onSub: the page decides what shows (a board switches through its own list of conversations): "查看对话" and the way
+ * back call it (null = the main conversation) instead of switching here; `sub` then is what shows.
  */
 export function SessionChat({
   id,
@@ -49,6 +51,7 @@ export function SessionChat({
   className,
   sendNow = false,
   sub,
+  onSub,
 }: {
   id: string;
   focused?: boolean;
@@ -56,12 +59,15 @@ export function SessionChat({
   className?: string;
   sendNow?: boolean;
   sub?: string;
+  onSub?: (toolCallId: string | null, title?: string) => void;
 }) {
   useWatched(id);
   // The subagent shown instead of the main conversation: the page's choice (sub), or "查看对话" on a card here
   const [shownSub, setShownSub] = useState<{ id: string; title?: string } | null>(sub ? { id: sub } : null);
   useEffect(() => setShownSub(sub ? { id: sub } : null), [sub]);
-  useEffect(() => takeSubagents(id, (tc, title) => setShownSub({ id: tc, title })), [id]);
+  const pick = useRef(onSub);
+  pick.current = onSub;
+  useEffect(() => takeSubagents(id, (tc, title) => (pick.current ? pick.current(tc, title) : setShownSub({ id: tc, title }))), [id]);
   useEffect(() => (sendNow ? holdSendNow(id) : undefined), [id, sendNow]);
   const session = useStore((s) => s.sessions[id]);
   const ready = useStore((s) => s.ready);
@@ -74,7 +80,7 @@ export function SessionChat({
       <TabActive.Provider value>
         <div className={cn("h-full min-h-0", className)} style={{ fontSize: "var(--gerdr-font, 14px)" }}>
           {session && shownSub ? (
-            <SubagentChat session={session} sub={shownSub} onBack={() => setShownSub(null)} />
+            <SubagentChat session={session} sub={shownSub} onBack={() => (onSub ? onSub(null) : setShownSub(null))} />
           ) : session ? (
             <ChatView key={id} session={session} paneId={`mount:${id}`} focused={focused} focus={focus} />
           ) : (
