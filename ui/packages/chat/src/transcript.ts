@@ -90,6 +90,8 @@ export type ToolMeta = {
   autoDenied?: string[];
   /** A context compaction's sizes (acpx.CompactKey): how full the context was before it, what it shrank to. */
   compact?: { preTokens?: number; postTokens?: number; contextWindow?: number };
+  /** It's a subagent's card: it made tool calls of its own (kept out of the main conversation, transcript subTool). */
+  hasSub?: boolean;
 };
 
 export type ToolPart = DynamicToolUIPart & { toolMetadata?: ToolMeta & Record<string, any> };
@@ -287,6 +289,7 @@ export class Transcript {
   lastSeq = 0;
 
   private tools = new Map<string, Loc>();
+  private subTools = new Set<string>(); // subagents' own tool calls, kept out of the main conversation
   private chunks = new Map<string, Loc>(); // "text:<msgId>" / "reasoning:<msgId>" → part
   private lastChunkKey = "";
   private requests = new Map<string, Loc>();
@@ -695,6 +698,13 @@ export class Transcript {
       }
     } else if (tag) {
       return;
+    } else if (u.sessionUpdate === "tool_call" && u._meta?.gerdr?.parentToolCallId) {
+      // A subagent's own tool call: never in the main conversation (its sub view has it, "查看对话"). Hidden by
+      // the parts' parent once only within one message: a subagent running on while the main agent wrote new messages
+      // had its later calls show up in the main conversation as if the main agent made them (reported on t3)
+      return this.subTool(u);
+    } else if (u.sessionUpdate === "tool_call_update" && this.subTools.has(u.toolCallId)) {
+      return;
     }
     // agent 有新输出了：重试成功，收起「N 秒后重试」
     if (this.retryLoc && ["agent_message_chunk", "agent_thought_chunk", "tool_call", "tool_call_update"].includes(u.sessionUpdate)) this.clearRetry();
@@ -799,6 +809,16 @@ export class Transcript {
       toolMetadata: meta as any,
     } as ToolPart;
     this.tools.set(id, this.pushPart(i, part as GPart));
+  }
+
+  /** A subagent's tool call left out of the main conversation; its card is marked as having some (a subagent). */
+  private subTool(u: any) {
+    this.subTools.add(u.toolCallId);
+    const loc = this.tools.get(u._meta.gerdr.parentToolCallId);
+    if (!loc) return;
+    const p = this.messages[loc.msg].parts[loc.part] as ToolPart;
+    if (p.toolMetadata?.hasSub) return;
+    this.setPart(loc, { ...p, toolMetadata: { ...(p.toolMetadata as ToolMeta), hasSub: true } } as ToolPart);
   }
 
   private toolUpdate(u: any, ts: number): void {

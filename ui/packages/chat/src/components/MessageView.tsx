@@ -479,7 +479,15 @@ export function renderPart(p: GPart, i: number, ctx: PartCtx): ReactNode {
       if (tp.toolCallId.startsWith(COMPACT_PREFIX))
         return <CompactNotice key={tp.toolCallId} part={tp} running={ctx.running} keep={ctx.keep || `${ctx.sessionId}:compact:${tp.toolCallId}`} />;
       // A subagent's own tool calls aren't drawn under its card (they buried the main conversation); "查看对话" opens them.
-      return <ToolCall key={tp.toolCallId} part={tp} running={ctx.running} keep={ctx.keep || undefined} agent={ctx.children.has(tp.toolCallId)} />;
+      return (
+        <ToolCall
+          key={tp.toolCallId}
+          part={tp}
+          running={ctx.running}
+          keep={ctx.keep || undefined}
+          agent={ctx.children.has(tp.toolCallId) || !!tp.toolMetadata?.hasSub}
+        />
+      );
     }
     case "data-plan":
       return <PlanCard key={i} entries={p.data.entries} />;

@@ -72,6 +72,7 @@ function foldable(p: GPart, kids: ToolPart[] | undefined, showThinking: boolean,
   if (p.type === "data-task") return !(p.data.task.type === "local_agent" || p.data.task.subagent || p.data.woke);
   if (p.type !== "dynamic-tool" || kids?.length) return false;
   const tp = p as ToolPart;
+  if (tp.toolMetadata?.hasSub) return false; // a subagent's card: it has 查看对话
   // One the host draws itself (ChatHost.renderTool: a card for the user) stays out of groups: folded, nobody sees it
   if (own?.(tp)) return false;
   // 有操作按钮的不折，折起来就点不到了：被 auto 分类器拦下的有「允许并重试」，子 agent（Task / Agent，kind=think）有「查看对话」。
