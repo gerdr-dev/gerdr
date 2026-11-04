@@ -32,6 +32,9 @@ var upgrader = websocket.Upgrader{
 
 // ws：推会话列表 / 日志 / 布局 / 配置的变化。客户端发两种消息：{t:"watch", ids:[…], since:{id:seq}}、{t:"ping"}（回 {t:"pong"}）。
 // Plus {t:"draft", id, draft:{text, sel, imgs, from}}: the unsent composer content, mirrored to the other devices (hub/draft.go).
+// wsCompressMin: messages smaller than this go out uncompressed (see write below).
+const wsCompressMin = 4 << 10
+
 func (s *Server) ws(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -112,6 +115,10 @@ func (s *Server) ws(w http.ResponseWriter, r *http.Request) {
 		}
 		start := time.Now()
 		_ = conn.SetWriteDeadline(start.Add(30 * time.Second))
+		// Compress only what's worth it: each compressed message takes a deflate writer of several hundred KB (from a
+		// pool the GC keeps emptying), and most messages are a streamed chunk of a few hundred bytes that deflate
+		// hardly shrinks. That was 13% of the service's allocations (pprof). Big frames (a log, a session list) still go compressed.
+		conn.EnableWriteCompression(len(b) >= wsCompressMin)
 		if err := conn.WriteMessage(websocket.TextMessage, b); err != nil {
 			if s.Log != nil {
 				s.Log.Info("ws write failed", "remote", auth.FromRemote(r), "bytes", len(b), "took", time.Since(start).Round(time.Millisecond), "err", err)

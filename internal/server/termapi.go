@@ -123,6 +123,7 @@ func (s *Server) termWS(w http.ResponseWriter, r *http.Request) {
 
 	write := func(typ int, b []byte) bool {
 		_ = conn.SetWriteDeadline(time.Now().Add(15 * time.Second))
+		conn.EnableWriteCompression(len(b) >= wsCompressMin) // terminal output is mostly small chunks: see ws.go
 		return conn.WriteMessage(typ, b) == nil
 	}
 	writeJSONMsg := func(v any) bool {
