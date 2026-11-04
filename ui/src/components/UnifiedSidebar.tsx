@@ -104,6 +104,8 @@ import { ListHeader, SidebarBottom, SidebarEdge, SidebarHeader } from "./Sidebar
 import { WsDot } from "./WsDot";
 import { TabDragLayer, startPaneDrag, startWsDrag, useDrag } from "./TabDrag";
 import { t } from "@/lib/i18n";
+import { usePanels } from "@/lib/panels";
+import { workProjectOf } from "@/lib/work";
 
 /*
  * The sidebar (on a phone, the drawer). One list in place of four things that each listed the same agents:
@@ -518,10 +520,14 @@ function IconSlot({ n, children }: { n?: number; children: React.ReactNode }) {
 function WorkRow({ id, current, grid, num }: { id: string; current: boolean; grid: boolean; num?: number }) {
   const s = useStore((st) => st.sessions[id]);
   const unread = useStore((st) => !!st.unread[id]);
-  const project = useStore((st) => {
-    const p = Object.entries(workChats(st.config, st.layout)).find(([, x]) => x === id)?.[0];
-    return spaceList(st.layout).find((sp) => sp.id === p)?.name ?? p;
-  });
+  // A panel's agent conversation: named after its panel (by its directory, lib/work), then the project
+  const key = useStore(
+    (st) => (st.sessions[id] ? workProjectOf(id) : undefined) ?? Object.entries(workChats(st.config, st.layout)).find(([, x]) => x === id)?.[0],
+  );
+  const space = key?.split("/")[0] ?? "";
+  const { panels } = usePanels(space);
+  const panel = panels.find((p) => p.key === key)?.title ?? t("nav.panel");
+  const project = useStore((st) => spaceList(st.layout).find((sp) => sp.id === space)?.name ?? space);
   const roomy = !!useContext(Roomy);
   if (!s) return null;
   return (
@@ -544,7 +550,10 @@ function WorkRow({ id, current, grid, num }: { id: string; current: boolean; gri
             <AgentIcon agent={s.agent} className="size-3.5 shrink-0" />
           </IconSlot>
           <span className="min-w-0 flex-1 truncate">{s.title || basename(s.cwd)}</span>
-          <span className="max-w-[40%] shrink-0 truncate text-[11px] text-muted-foreground group-hover:hidden">Work{project ? ` · ${project}` : ""}</span>
+          <span className="max-w-[40%] shrink-0 truncate text-[11px] text-muted-foreground group-hover:hidden">
+            {panel}
+            {project ? ` · ${project}` : ""}
+          </span>
           <button
             className="hidden size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground group-hover:flex hover:text-foreground"
             title={t("nav.removeActive")}

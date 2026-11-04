@@ -18,6 +18,15 @@ export type Panel = {
 
 const str = (v: unknown) => (typeof v === "string" && v ? v : undefined);
 
+/**
+ * A panel's name as already fetched (by any usePanels of its project), for labels outside React: undefined until
+ * then. key: "project" (its own panel) or "project/name".
+ */
+export function panelTitle(key: string): string | undefined {
+  const space = key.split("/")[0];
+  return cache[space]?.panels.find((p) => p.key === key)?.title;
+}
+
 /** Tell every usePanels to fetch again (after adding, removing, restoring, a new icon). */
 export const panelsChanged = () => window.dispatchEvent(new Event("gerdr:panels"));
 
