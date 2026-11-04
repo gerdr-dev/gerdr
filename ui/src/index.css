@@ -183,6 +183,26 @@
   #root {
     height: var(--vvh, 100%);
   }
+  /* The stretch of a message an add-on's action is on (ctx.highlight: the paragraph being read aloud), lib/readingHighlight.ts.
+     A highlight pseudo-element takes only colors, so no padding / radius: a tint of the brand behind the words. */
+  ::highlight(gerdr-reading) {
+    background-color: color-mix(in oklab, var(--brand) 22%, transparent);
+  }
+  /* A paragraph just clicked to jump to, until it sounds (synthesis takes a second or two): the brand tint breathing,
+     so the click shows at once and reads as "on its way", steady once it sounds. A highlight can't be animated itself:
+     its tint comes from --reading-wait, animated on the message's elements only while they wait ([data-reading-wait],
+     lib/readingHighlight.ts), so nothing else restyles every frame. Gray was a second color for one thing; an
+     underline too loud. */
+  ::highlight(gerdr-reading-pending) {
+    background-color: color-mix(in oklab, var(--brand) var(--reading-wait, 18%), transparent);
+  }
+  [data-reading-wait] {
+    animation: reading-breathe 0.9s ease-in-out infinite alternate;
+  }
+  /* While reading aloud, a click on a paragraph jumps there (ctx.onPick, lib/readingHighlight.ts) */
+  [data-reading-pick] {
+    cursor: pointer;
+  }
   body {
     @apply bg-background text-foreground;
     font-size: var(--gerdr-font, 14px);
@@ -232,6 +252,21 @@
    where the segment's head is (0-100 round the border); --bf-grow takes it from nothing to its full --len as it starts
    (asked for: it lengthens in rather than popping up), the head leading. Both are registered so they animate.
    Reduced motion: nothing moves; the `line` kind leaves a still outline, the `gap` kind just its border. */
+/* The waiting paragraph's tint (::highlight(gerdr-reading-pending)): registered so it animates as a percentage */
+@property --reading-wait {
+  syntax: "<percentage>";
+  inherits: true;
+  initial-value: 18%;
+}
+@keyframes reading-breathe {
+  from {
+    --reading-wait: 6%;
+  }
+  to {
+    --reading-wait: 26%;
+  }
+}
+
 @property --bf-p {
   syntax: "<number>";
   inherits: true;

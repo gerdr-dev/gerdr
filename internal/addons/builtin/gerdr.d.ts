@@ -281,6 +281,13 @@ declare global {
      * and frees the button; a throw is shown as an error. When run() plays sound with g.audio.play(…, { signal:
      * ctx.signal }) the button shows "stop" while it plays. when(msg): which messages get it (default: any with text).
      * icon: a lucide name ("Languages") or an element.
+     * ctx.highlight(text) marks that stretch of the message on screen (the paragraph being read, the sentence being
+     * translated); one mark at a time, the next replaces it, null clears it, and it goes when run() ends. Give it the
+     * words of msg.text / msg.final.text (matched on letters and digits only, so Markdown marks and punctuation don't
+     * matter); a stretch not on screen as words (a code block, read as "(code)") marks nothing.
+     * ctx.onPick(stretches, pick) makes those stretches of the message clickable until run() ends (the paragraphs being
+     * read; the pointer turns to a hand over the message): a click on one calls pick(index), to jump there. A click on
+     * a link, or a drag selecting text, isn't a pick. null: no longer clickable.
      *   g.messageAction({ id: "read", title: "朗读", icon: "Volume2",
      *     run: (msg, ctx) => g.audio.play(speak(msg.text), { signal: ctx.signal }) });
      */
@@ -290,7 +297,15 @@ declare global {
       icon?: string | any;
       order?: number;
       when?(msg: MessageInfo): boolean;
-      run(msg: MessageInfo, ctx: { signal: AbortSignal; locale: "zh" | "en" }): void | Promise<unknown>;
+      run(
+        msg: MessageInfo,
+        ctx: {
+          signal: AbortSignal;
+          locale: "zh" | "en";
+          highlight(text: string | null): void;
+          onPick(stretches: string[] | null, pick: (index: number) => void): void;
+        },
+      ): void | Promise<unknown>;
     }): Dispose;
 
     /**
@@ -300,9 +315,13 @@ declare global {
      * gaps. Resolves true when it played to the end, false when stopped (signal, stop(), another play()); rejects when a
      * clip can't be played. Browsers only play sound started by a tap: from a message action's run() it works (Gerdr
      * prepares the player during the tap); started by nothing the user did, it may be refused.
+     * opts.onClip(index): called as each clip starts sounding (0, 1, 2…), to follow along — highlight what is being said.
      */
     audio: {
-      play(clips: AudioClip | AsyncIterable<AudioClip> | Iterable<AudioClip>, opts?: { signal?: AbortSignal }): Promise<boolean>;
+      play(
+        clips: AudioClip | AsyncIterable<AudioClip> | Iterable<AudioClip>,
+        opts?: { signal?: AbortSignal; onClip?(index: number): void },
+      ): Promise<boolean>;
       stop(): void;
     };
 
@@ -530,6 +549,11 @@ declare global {
     readonly markdown: string;
     /** In plain words: the Markdown marks gone, code blocks as "(code)", links as their label. What to read aloud. */
     readonly text: string;
+    /**
+     * A reply's answer: its last stretch of text, after its last tool call, without what it said along the way ("let
+     * me check…"). Same two forms as above. A person's message is all final.
+     */
+    readonly final: { readonly markdown: string; readonly text: string };
   }
 
   /** A clip for g.audio.play: bytes or a Blob of audio (mp3, wav, ogg…), or a URL to it (https:, blob:). */

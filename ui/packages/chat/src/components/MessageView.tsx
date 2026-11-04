@@ -161,7 +161,9 @@ export const MessageView = memo(function MessageView({
     const text = msg.parts.map((p) => (p.type === "text" ? p.text : "")).join("");
     // The host's buttons (ChatHost.messageActions) sit with rewind, floating left of the bubble
     // (only for a message that says something: an image alone has nothing to act on as text)
-    const actions = text.trim() ? host.messageActions?.({ sessionId, role: "user", id: msg.metadata?.messageId ?? msg.id, text: () => text }) : null;
+    const actions = text.trim()
+      ? host.messageActions?.({ sessionId, role: "user", id: msg.metadata?.messageId ?? msg.id, text: () => text, blocks: () => [text] })
+      : null;
     const all = msg.parts.filter((p) => p.type === "file");
     // Images and videos as thumbnails (one lightbox pages through them); files sent by their local path as chips
     const files = all.filter((p: any) => p.mediaType !== LOCAL_FILE);
@@ -220,7 +222,7 @@ export const MessageView = memo(function MessageView({
                 ))}
               </div>
             )}
-            {text}
+            <span data-message={msg.metadata?.messageId ?? msg.id}>{text}</span>
           </MessageContent>
         </div>
         {showMeta && (
@@ -294,8 +296,10 @@ export type PartCtx = {
   keep?: string;
   /** This part is the latest finished turn's metadata line (buildRows) */
   latest?: boolean;
-  /** On a turn's metadata line: the turn's text, for ChatHost.messageActions (buildRows) */
-  turnText?: () => string;
+  /** On a turn's metadata line: the turn's stretches of text, for ChatHost.messageActions (buildRows) */
+  turnBlocks?: () => string[];
+  /** The finished turn this part belongs to, as MessageInfo.id (buildRows) */
+  turnId?: string;
 };
 
 /** 思考过程：展开没展开记在组件外面（虚拟列表滚出去会卸载）。 */
@@ -426,19 +430,19 @@ function TurnStat({
   id,
   data,
   latest,
-  text,
+  blocks,
 }: {
   sessionId: string;
   id: string;
   data: { ms: number; tokens: number; ts?: number };
   latest: boolean;
-  text?: () => string;
+  blocks?: () => string[];
 }) {
   const host = useChatHost();
   const deco = host.useTurnStat?.({ sessionId, ts: data.ts, ms: data.ms, tokens: data.tokens, latest });
   // The host's buttons on the reply (ChatHost.messageActions), at the end of its line: a turn that said nothing (only ran
   // tools) gets none
-  const actions = text && host.messageActions ? host.messageActions({ sessionId, role: "assistant", id, text }) : null;
+  const actions = blocks && host.messageActions ? host.messageActions({ sessionId, role: "assistant", id, text: () => blocks().join("\n\n"), blocks }) : null;
   const rest = [t("msg.took", { time: fmtElapsed(data.ms) }), data.tokens > 0 && `${fmtTokens(data.tokens)} tokens`].filter(Boolean);
   return (
     <div className="flex h-5 items-center gap-1 text-[12px] text-muted-foreground tabular-nums">
@@ -461,7 +465,8 @@ export function renderPart(p: GPart, i: number, ctx: PartCtx): ReactNode {
       // claude 的 /usage：终端排版的纯文本，当 Markdown 画会挤成一坨（UsageCard.tsx）
       if (USAGE.test(p.text)) return <UsageCard key={i} text={p.text} />;
       return (
-        <div key={i} className="gerdr-md">
+        // data-message: the host finds a message's text on screen by it (MessageInfo)
+        <div key={i} className="gerdr-md" data-message={ctx.turnId}>
           <Markdown>{p.text}</Markdown>
         </div>
       );
@@ -485,7 +490,7 @@ export function renderPart(p: GPart, i: number, ctx: PartCtx): ReactNode {
     case "data-quickReplies":
       return <QuickReplies key={i} data={p.data} onPick={ctx.onQuickReply} enabled={ctx.quickEnabled} />;
     case "data-turnStat":
-      return <TurnStat key={i} sessionId={ctx.sessionId} id={`${ctx.msgId}:${i}`} data={p.data} latest={!!ctx.latest} text={ctx.turnText} />;
+      return <TurnStat key={i} sessionId={ctx.sessionId} id={`${ctx.msgId}:${i}`} data={p.data} latest={!!ctx.latest} blocks={ctx.turnBlocks} />;
     case "data-task":
       return <TaskDoneCard key={i} sessionId={ctx.sessionId} t={p.data.task} woke={p.data.woke} command={p.data.command} />;
     case "data-wake":

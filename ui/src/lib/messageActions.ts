@@ -4,12 +4,15 @@
 // primitive here. A run:
 // - spinner while run() is pending; a second tap aborts ctx.signal (the add-on stops) and the button is free again;
 // - when the run plays sound with g.audio.play(…, { signal: ctx.signal }), the button shows "stop" while it plays;
-// - a throw is a toast naming the action (not an add-on error in Settings: the next run may well work).
+// - a throw is a toast naming the action (not an add-on error in Settings: the next run may well work);
+// - ctx.highlight(text) marks that stretch of the message on screen (lib/readingHighlight.ts) until the run ends, and
+//   ctx.onPick(stretches, pick) makes those stretches clickable meanwhile (jump reading to the paragraph clicked).
 import { useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import { fail, messageActions, type MessageAction, type MessageCtx } from "./addons";
 import { unlockAudio, watchSignal } from "./audio";
 import { locale, t } from "./i18n";
+import { endHighlight, highlightMessage, pickableMessage } from "./readingHighlight";
 
 /** What a run's button shows: working (spinner) or playing sound (stop). */
 export type RunPhase = "busy" | "playing";
@@ -19,13 +22,25 @@ const subs = new Set<() => void>();
 const changed = () => subs.forEach((f) => f());
 const subscribe = (f: () => void) => (subs.add(f), () => void subs.delete(f));
 
-/** The message a run is about: what an add-on's run() / when() get as `msg`. */
-export type Msg = { sessionId: string; role: "user" | "assistant"; id: string; readonly markdown: string; readonly text: string };
+/**
+ * The message a run is about: what an add-on's run() / when() get as `msg`. final: a reply's answer, its last stretch of
+ * text (after its last tool call), without what it said along the way; a user's message is all final.
+ */
+export type Msg = {
+  sessionId: string;
+  role: "user" | "assistant";
+  id: string;
+  readonly markdown: string;
+  readonly text: string;
+  readonly final: { readonly markdown: string; readonly text: string };
+};
 
 /** A Msg whose markdown / text are worked out on first read: when() runs for every message on every render. */
-export function lazyMsg(m: { sessionId: string; role: "user" | "assistant"; id: string; text(): string }): Msg {
+export function lazyMsg(m: { sessionId: string; role: "user" | "assistant"; id: string; text(): string; blocks(): string[] }): Msg {
   let md: string | undefined;
   let plain: string | undefined;
+  let finalMd: string | undefined;
+  let finalPlain: string | undefined;
   return {
     sessionId: m.sessionId,
     role: m.role,
@@ -35,6 +50,14 @@ export function lazyMsg(m: { sessionId: string; role: "user" | "assistant"; id: 
     },
     get text() {
       return (plain ??= plainText(this.markdown));
+    },
+    final: {
+      get markdown() {
+        return (finalMd ??= m.blocks().at(-1) ?? "");
+      },
+      get text() {
+        return (finalPlain ??= plainText(this.markdown));
+      },
     },
   };
 }
@@ -81,7 +104,13 @@ export function toggleRun(a: MessageAction, msg: Msg) {
     changed();
   });
   changed();
-  const ctx: MessageCtx = { signal: ctrl.signal, locale: locale() };
+  const ctx: MessageCtx = {
+    signal: ctrl.signal,
+    locale: locale(),
+    // Owned by this run: when it ends its mark goes, and only its own (a newer run may have marked since)
+    highlight: (text) => !ctrl.signal.aborted && highlightMessage(msg.id, text, run),
+    onPick: (stretches, pick) => !ctrl.signal.aborted && pickableMessage(msg.id, stretches, pick, run),
+  };
   Promise.resolve()
     .then(() => a.run(msg, ctx))
     .catch((e) => {
@@ -92,6 +121,7 @@ export function toggleRun(a: MessageAction, msg: Msg) {
       toast.error(t("messageActions.failed", { action: a.title, error: e instanceof Error ? e.message : String(e) }));
     })
     .finally(() => {
+      endHighlight(run);
       if (runs.get(key) !== run) return;
       runs.delete(key);
       changed();

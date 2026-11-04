@@ -67,7 +67,12 @@ export type MenuItem = { addon: string; id: string; title: string; when?: (ctx: 
 export type MenuCtx = { selection: string; sessionId?: string };
 export const menuItems: MenuItem[] = [];
 /** What a message action's run() gets besides the message: stop when signal aborts (a second tap). */
-export type MessageCtx = { signal: AbortSignal; locale: "zh" | "en" };
+export type MessageCtx = {
+  signal: AbortSignal;
+  locale: "zh" | "en";
+  highlight(text: string | null): void;
+  onPick(stretches: string[] | null, pick: (index: number) => void): void;
+};
 /**
  * A button on each message (g.messageAction, lib/messageActions.ts). icon: a lucide name ("Volume2") or an element.
  * when: which messages get it (default: all that have text).
@@ -529,7 +534,7 @@ function makeApi(id: string, hash: string) {
       };
     },
     audio: {
-      play: (clips: Clips, o?: { signal?: AbortSignal }) => playAudio(clips, o),
+      play: (clips: Clips, o?: { signal?: AbortSignal; onClip?: (index: number) => void }) => playAudio(clips, o),
       stop: () => stopAudio(),
     },
     theme: (spec: ThemeFn) => {

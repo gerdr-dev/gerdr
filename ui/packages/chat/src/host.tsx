@@ -198,9 +198,13 @@ export type ComposerHooks = {
 /**
  * A message for ChatHost.messageActions. id: stable for the message (a reply's is per turn: one assistant message can
  * hold several turns). text(): what it says as written (Markdown for a reply; tool calls and thinking left out), worked
- * out when called, since joining a long reply on every render isn't free.
+ * out when called, since joining a long reply on every render isn't free. blocks(): the same text as the stretches
+ * between tool calls and thinking, in order, so the host can take just the answer (the last one) and skip what was
+ * said along the way; a user's message is one block. On screen, the elements drawing a message's text carry
+ * data-message="<id>" (a reply's: every text part of that turn), so the host can find and mark it (read aloud: the
+ * paragraph being read).
  */
-export type MessageInfo = { sessionId: string; role: "user" | "assistant"; id: string; text(): string };
+export type MessageInfo = { sessionId: string; role: "user" | "assistant"; id: string; text(): string; blocks(): string[] };
 export type TurnStatInfo = { sessionId: string; ts?: number; ms: number; tokens: number; latest: boolean };
 export type TurnStatDeco = { timeClassName?: string; title?: string; after?: ReactNode };
 /**

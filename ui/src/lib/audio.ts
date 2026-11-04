@@ -69,7 +69,7 @@ const isClip = (a: unknown): a is Clip => typeof a === "string" || a instanceof 
  * Play a clip, or clips in order. Resolves true when it played to the end, false when stopped: by signal, by another
  * play(), or by stopAudio(). A clip that can't be played, or an iterable that throws, rejects.
  */
-export async function playAudio(clips: Clips, opts?: { signal?: AbortSignal }): Promise<boolean> {
+export async function playAudio(clips: Clips, opts?: { signal?: AbortSignal; onClip?: (index: number) => void }): Promise<boolean> {
   stopAudio();
   const c = new AbortController();
   current = c;
@@ -81,8 +81,17 @@ export async function playAudio(clips: Clips, opts?: { signal?: AbortSignal }): 
   outer?.addEventListener("abort", stop, { once: true });
   const tell = outer && watchers.get(outer);
   try {
-    if (isClip(clips)) await playOne(clips, c, tell);
-    else await playAll(clips, c, tell);
+    // onClip: told when each clip starts sounding, so an add-on can follow along (mark the paragraph being read)
+    const started = (i: number) => {
+      tell?.(true);
+      try {
+        opts?.onClip?.(i);
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    if (isClip(clips)) await playOne(clips, c, () => started(0));
+    else await playAll(clips, c, started);
     return !c.signal.aborted;
   } finally {
     outer?.removeEventListener("abort", stop);
@@ -91,17 +100,20 @@ export async function playAudio(clips: Clips, opts?: { signal?: AbortSignal }): 
   }
 }
 
-async function playAll(r: AsyncIterable<Clip> | Iterable<Clip>, c: AbortController, tell?: (on: boolean) => void) {
+async function playAll(r: AsyncIterable<Clip> | Iterable<Clip>, c: AbortController, started: (index: number) => void) {
   const it = Symbol.asyncIterator in r ? r[Symbol.asyncIterator]() : (r as Iterable<Clip>)[Symbol.iterator]();
   try {
     let next = Promise.resolve(it.next());
-    for (;;) {
+    for (let i = 0; ; i++) {
+      // Stopped while the last clip played: the next one asked for ahead may have failed because of that very stop
+      // (an add-on cancelling its synthesis), so don't wait on it, let alone throw what it threw
+      if (c.signal.aborted) break;
       const { value, done } = await next;
       if (done || c.signal.aborted) break;
       // Ask for the next while this one plays, so a generator synthesizes ahead
       next = Promise.resolve(it.next());
       next.catch(() => {}); // seen at the next await
-      await playOne(value, c, tell);
+      await playOne(value, c, () => started(i));
     }
   } finally {
     // Let a generator clean up (cancel its pending request) when stopped halfway
@@ -109,7 +121,7 @@ async function playAll(r: AsyncIterable<Clip> | Iterable<Clip>, c: AbortControll
   }
 }
 
-function playOne(a: Clip, c: AbortController, tell?: (on: boolean) => void): Promise<void> {
+function playOne(a: Clip, c: AbortController, started: () => void): Promise<void> {
   if (c.signal.aborted) return Promise.resolve();
   const own = typeof a !== "string";
   const url = own ? URL.createObjectURL(a instanceof Blob ? a : new Blob([a as BlobPart])) : a;
@@ -128,7 +140,7 @@ function playOne(a: Clip, c: AbortController, tell?: (on: boolean) => void): Pro
     c.signal.addEventListener("abort", done, { once: true });
     audio.src = url;
     audio.play().then(
-      () => tell?.(true),
+      () => started(),
       (e) => {
         done();
         no(e);

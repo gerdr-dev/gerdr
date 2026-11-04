@@ -30,12 +30,35 @@ export type Row =
       peek?: string;
       /** The latest finished turn's metadata line (data-turnStat): the host may mark it (prompt-cache age, ChatHost.turnStat) */
       latest?: boolean;
-      /** On a turn's metadata line: the text the turn said (ChatHost.messageActions); absent when it said nothing */
-      turnText?: () => string;
+      /** On a turn's metadata line: what the turn said, as its stretches of text (ChatHost.messageActions); absent when it said nothing */
+      turnBlocks?: () => string[];
+      /** The MessageInfo id of the finished turn this part belongs to (its text is marked with it: data-message) */
+      turnId?: string;
     }
   /** idle: a blank stand-in of the same height, held under a user message nothing has answered yet (see buildRows) */
   | { key: string; kind: "working"; empty: boolean; first: boolean; idle?: boolean }
   | { key: string; kind: "group"; first: boolean; open: boolean; summary: string; failed: number; busy: boolean; tight?: boolean };
+
+/**
+ * A turn's text as the stretches between its tool calls and thinking, in order: what it said along the way, then (the
+ * last one) its answer. Text parts with nothing but bookkeeping between them (a step boundary, a status line) are one
+ * stretch.
+ */
+function textBlocks(parts: GPart[]): string[] {
+  const out: string[] = [];
+  let cur: string[] = [];
+  const flush = () => {
+    if (cur.length) out.push(cur.join("\n\n"));
+    cur = [];
+  };
+  for (const p of parts) {
+    if (p.type === "text") {
+      if (p.text.trim()) cur.push(p.text.trim());
+    } else if (p.type === "reasoning" || p.type === "dynamic-tool" || p.type.startsWith("tool-") || p.type === "data-shell") flush();
+  }
+  flush();
+  return out;
+}
 
 // 连续的工具调用 / 思考折成一组（照 Claude 桌面版）：一轮里常常是几十行 `cd … && grep …`，夹着几行「思考」，
 // 真正要读的那几段话被挤得找不到。改文件的不折（默认展开看 diff 是它的主要用途），带子 agent 的不折（有「查看对话」）。
@@ -198,12 +221,19 @@ export function buildRows(
     const parts: Extract<Row, { kind: "part" }>[] = [];
     // Where the current turn's text starts: one assistant message can hold several turns, each ending in a data-turnStat
     let turnFrom = 0;
+    // Each part's turn, by the index of the data-turnStat that ends it (a turn still running has none yet)
+    const turnOf: (string | undefined)[] = [];
+    let end: string | undefined;
+    for (let i = m.parts.length - 1; i >= 0; i--) {
+      if (m.parts[i].type === "data-turnStat") end = `${m.id}:${i}`;
+      turnOf[i] = end;
+    }
     m.parts.forEach((p, i) => {
-      let turnText: (() => string) | undefined;
+      let turnBlocks: (() => string[]) | undefined;
       if (p.type === "data-turnStat") {
-        // Joined only when asked (a button press): rows are rebuilt on every streamed chunk
-        const said = m.parts.slice(turnFrom, i).filter((x): x is Extract<GPart, { type: "text" }> => x.type === "text" && !!x.text.trim());
-        if (said.length) turnText = () => said.map((x) => x.text.trim()).join("\n\n");
+        // Worked out only when asked (a button press): rows are rebuilt on every streamed chunk
+        const turn = m.parts.slice(turnFrom, i);
+        if (turn.some((x) => x.type === "text" && x.text.trim())) turnBlocks = () => textBlocks(turn);
         turnFrom = i + 1;
       }
       if (!partVisible(p, children)) return;
@@ -222,7 +252,8 @@ export function buildRows(
         streaming: live && running && i === lastPart,
         live,
         latest: p.type === "data-turnStat" && `${m.id}:${i}` === latestStat,
-        turnText,
+        turnBlocks,
+        turnId: turnOf[i],
       });
     });
     let first = true;
@@ -372,7 +403,8 @@ export const RowView = memo(
             quickEnabled: row.live,
             keep: row.peek && `${env.sessionId}:peek:${row.peek}`,
             latest: row.latest,
-            turnText: row.turnText,
+            turnBlocks: row.turnBlocks,
+            turnId: row.turnId,
           })}
         </div>
       </Frame>

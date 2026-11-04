@@ -203,7 +203,9 @@ Rules that keep it looking like Gerdr:
 
 `g.messageAction({ id, title, icon, when, run })` puts a button on each message: beside the person's bubble, at the
 end of a reply's time line. What it does is yours: read it aloud, translate it, send it somewhere. `run(msg, ctx)`
-gets `msg.markdown` (as written), `msg.text` (plain words: what to read aloud), `msg.role`, `msg.sessionId`. Gerdr
+gets `msg.markdown` (as written), `msg.text` (plain words: what to read aloud), `msg.final` (the same two for a
+reply's answer only: its last stretch of text, after its last tool call, without what it said along the way),
+`msg.role`, `msg.sessionId`. Gerdr
 shows a spinner while `run`'s promise is pending; a second tap aborts `ctx.signal`, so stop your request then. With
 several actions installed they sit behind a "⋯" on each message.
 
@@ -227,6 +229,20 @@ g.messageAction({
   run: (msg, ctx) => g.audio.play(speech(msg.text), { signal: ctx.signal }),
 });
 ```
+
+To show where the reading is, mark it: `ctx.highlight(text)` marks that stretch of the message on screen until the
+next call or the end of `run` (matched on letters and digits, so give it the words of `msg.text`), and
+`g.audio.play(…, { onClip })` says when each clip starts:
+
+```ts
+run: (msg, ctx) => {
+  const paras = msg.final.text.split("\n").filter((p) => p.trim());
+  return g.audio.play(speechOf(paras), { signal: ctx.signal, onClip: (i) => ctx.highlight(paras[i]) });
+},
+```
+
+`ctx.onPick(paras, (i) => …)` makes those stretches clickable while `run` lasts, so a tap on a paragraph can jump the
+reading there (start a new `g.audio.play` from it: it ends the one playing).
 
 `g.fetch` gives up after 30s: cut long text into pieces, as above. A sound not started by a tap (a turn ending) may be
 refused by the browser; from `run` it always plays.
