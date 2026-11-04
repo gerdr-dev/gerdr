@@ -262,6 +262,39 @@ declare global {
      */
     contextMenu(item: { id: string; title: string; when?(ctx: MenuContext): boolean; run(ctx: MenuContext): void | Promise<void> }): Dispose;
 
+    /**
+     * A button on each message: beside a user's bubble (on hover; always on a phone) and at the end of a reply's
+     * "18:36 · 用时 59s" line. Read it aloud, translate it, send it somewhere: what run() does is yours. One action shows
+     * as its icon; with several (yours and other add-ons') they sit behind a "⋯".
+     * Gerdr runs it: a spinner while run()'s promise is pending; a second tap aborts ctx.signal (stop what you're doing)
+     * and frees the button; a throw is shown as an error. When run() plays sound with g.audio.play(…, { signal:
+     * ctx.signal }) the button shows "stop" while it plays. when(msg): which messages get it (default: any with text).
+     * icon: a lucide name ("Languages") or an element.
+     *   g.messageAction({ id: "read", title: "朗读", icon: "Volume2",
+     *     run: (msg, ctx) => g.audio.play(speak(msg.text), { signal: ctx.signal }) });
+     */
+    messageAction(action: {
+      id: string;
+      title: string;
+      icon?: string | any;
+      order?: number;
+      when?(msg: MessageInfo): boolean;
+      run(msg: MessageInfo, ctx: { signal: AbortSignal; locale: "zh" | "en" }): void | Promise<unknown>;
+    }): Dispose;
+
+    /**
+     * Gerdr's one sound player, shared by every add-on: a new play() ends the one before (that one resolves false), so
+     * sounds never overlap. Give it a clip, or clips in order — an (async) iterable, e.g. an async generator yielding a
+     * clip per sentence: the next is asked for as soon as one starts playing, so a long text starts at once and has no
+     * gaps. Resolves true when it played to the end, false when stopped (signal, stop(), another play()); rejects when a
+     * clip can't be played. Browsers only play sound started by a tap: from a message action's run() it works (Gerdr
+     * prepares the player during the tap); started by nothing the user did, it may be refused.
+     */
+    audio: {
+      play(clips: AudioClip | AsyncIterable<AudioClip> | Iterable<AudioClip>, opts?: { signal?: AbortSignal }): Promise<boolean>;
+      stop(): void;
+    };
+
     // ---- data ----
 
     /**
@@ -269,8 +302,9 @@ declare global {
      * an add-on is cross-origin). Text in, text out: a body that isn't a string is sent as JSON (Content-Type set
      * unless you set it). Like fetch(), an error status resolves (check ok); it rejects only when the server can't be
      * reached, the URL isn't http(s), or 30s pass. Responses over 10 MB are refused.
+     * binary: true for an answer that isn't text (audio, images): read it with bytes() / blob(); text is then "".
      */
-    fetch(url: string, init?: { method?: string; headers?: Record<string, string>; body?: unknown }): Promise<FetchResult>;
+    fetch(url: string, init?: { method?: string; headers?: Record<string, string>; body?: unknown; binary?: boolean }): Promise<FetchResult>;
     /** The accounts' quotas (Claude Code, Codex): what the composer's /usage shows. force: skip the cache. */
     usage(force?: boolean): Promise<UsageInfo[]>;
     /**
@@ -449,6 +483,22 @@ declare global {
     sessionId?: string;
   }
 
+  /** A message, as g.messageAction's when() / run() get it. */
+  interface MessageInfo {
+    sessionId: string;
+    /** The person's message or the agent's reply (a reply is one turn's text: tool calls and thinking left out). */
+    role: "user" | "assistant";
+    /** Stable for the message. */
+    id: string;
+    /** As written (Markdown for a reply). */
+    readonly markdown: string;
+    /** In plain words: the Markdown marks gone, code blocks as "(code)", links as their label. What to read aloud. */
+    readonly text: string;
+  }
+
+  /** A clip for g.audio.play: bytes or a Blob of audio (mp3, wav, ogg…), or a URL to it (https:, blob:). */
+  type AudioClip = Blob | ArrayBuffer | ArrayBufferView | string;
+
   interface FetchResult {
     ok: boolean;
     status: number;
@@ -458,6 +508,10 @@ declare global {
     text: string;
     /** JSON.parse(text); throws when it isn't JSON. */
     json<T = any>(): T;
+    /** The body as bytes (fetch with binary: true for anything that isn't text). */
+    bytes(): Uint8Array;
+    /** The body as a Blob typed by its Content-Type: an audio answer goes straight to g.audio.play. */
+    blob(): Blob;
   }
 
   interface UsageLimit {

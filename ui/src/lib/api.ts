@@ -204,8 +204,12 @@ export const api = {
   addons: () => req<AddonBuild[]>("GET", "/api/addons").then((l) => l.map(localizeAddon)),
   addonMessage: (id: string, data: unknown) => req("POST", `/api/addons/${encodeURIComponent(id)}/message`, { data }),
   /** g.fetch: the backend makes the request, so the target needs no CORS (internal/server/addonfetch.go) */
-  addonFetch: (id: string, b: { url: string; method?: string; headers?: Record<string, string>; body?: string }) =>
-    req<{ status: number; statusText: string; headers: Record<string, string>; body: string }>("POST", `/api/addons/${encodeURIComponent(id)}/fetch`, b),
+  addonFetch: (id: string, b: { url: string; method?: string; headers?: Record<string, string>; body?: string; binary?: boolean }) =>
+    req<{ status: number; statusText: string; headers: Record<string, string>; body: string; base64?: boolean }>(
+      "POST",
+      `/api/addons/${encodeURIComponent(id)}/fetch`,
+      b,
+    ),
   setAddonEnabled: (id: string, enabled: boolean) => req("PUT", `/api/addons/${encodeURIComponent(id)}/enabled`, { enabled }),
   /** null = back to the default */
   setAddonSettings: (id: string, values: Record<string, unknown>) => req("PUT", `/api/addons/${encodeURIComponent(id)}/settings`, { values }),

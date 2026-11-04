@@ -134,6 +134,7 @@ lucide icon (`<g.icons.Timer className="size-3.5" />`).
 | The composer's bottom bar | `g.composerAction({ id, title, icon, run })` | `run(ctx)`: `ctx.text`, `ctx.insert()`, `ctx.setText()` |
 | Right-click menu (desktop and Android App) | `g.contextMenu({ id, title, when, run })` | `{ selection, sessionId }` |
 | The line under each finished turn | `g.turnStat(fn)` | `fn(info)` returns `{ className, title, after }` |
+| A button on each message (read aloud, translate…) | `g.messageAction({ id, title, icon, when, run })` | `run(msg, ctx)`: see [Buttons on a message](#buttons-on-a-message) |
 
 ```tsx
 export default defineAddon({
@@ -197,6 +198,38 @@ Rules that keep it looking like Gerdr:
 - `g.turnStat`'s `fn` runs on every render of the line and every 30s: keep it cheap. `info.latest` marks the newest
   turn, `info.now` is the time to compare against.
 
+### Buttons on a message
+
+`g.messageAction({ id, title, icon, when, run })` puts a button on each message: beside the person's bubble, at the
+end of a reply's time line. What it does is yours: read it aloud, translate it, send it somewhere. `run(msg, ctx)`
+gets `msg.markdown` (as written), `msg.text` (plain words: what to read aloud), `msg.role`, `msg.sessionId`. Gerdr
+shows a spinner while `run`'s promise is pending; a second tap aborts `ctx.signal`, so stop your request then. With
+several actions installed they sit behind a "⋯" on each message.
+
+Sound goes through `g.audio.play(clips, { signal })`: one player for every add-on, so a new sound ends the last one.
+Pass `ctx.signal` and the button shows a stop square while it plays. `clips` is one clip (Blob / bytes / URL) or an
+async generator of clips: Gerdr asks for the next as soon as one starts playing, so a long text starts at once.
+
+```ts
+// Read aloud with a cloud TTS that answers with audio (binary: true, or the bytes get mangled into text)
+async function* speech(text: string) {
+  for (const piece of text.split(/(?<=[。！？.!?])\s*/).filter(Boolean)) {
+    const r = await g.fetch("https://api.example.com/tts", { method: "POST", body: { text: piece }, binary: true });
+    if (!r.ok) throw new Error(`TTS ${r.status}`);
+    yield r.blob();
+  }
+}
+g.messageAction({
+  id: "read",
+  title: "朗读",
+  icon: "Volume2",
+  run: (msg, ctx) => g.audio.play(speech(msg.text), { signal: ctx.signal }),
+});
+```
+
+`g.fetch` gives up after 30s: cut long text into pieces, as above. A sound not started by a tap (a turn ending) may be
+refused by the browser; from `run` it always plays.
+
 ### Recolor
 
 `g.theme({ light, dark })` overrides the theme's tokens themselves (the ones above, plus `background`, `foreground`,
@@ -223,7 +256,7 @@ the light / dark switch and outlives the add-on.
 | `g.turns({ since, until? })` | Every turn that ended in the range (unix ms), oldest first: session, agent, stop reason, whether the agent started it itself, duration, tokens, cost (USD; only Claude Code reports money). Gerdr keeps no daily totals: add them up yourself. |
 | `g.settings.get(key)` | This add-on's [settings](#settings). |
 | `g.storage.get/set` | Small private storage, kept in this browser / App (not shared between devices). A cache: store `{ at: Date.now(), data }` and refetch when it's older than you like. |
-| `g.fetch(url, init)` | An HTTP request made by Gerdr's backend, so the API needs no CORS. The only way out: the page's own `fetch` is limited to Gerdr itself (CSP `connect-src 'self'`), CORS or not. Resolves `{ ok, status, headers, text, json() }`; a non-string `body` goes as JSON. |
+| `g.fetch(url, init)` | An HTTP request made by Gerdr's backend, so the API needs no CORS. The only way out: the page's own `fetch` is limited to Gerdr itself (CSP `connect-src 'self'`), CORS or not. Resolves `{ ok, status, headers, text, json(), bytes(), blob() }`; a non-string `body` goes as JSON. `binary: true` for an answer that isn't text (audio, images). |
 | `g.asset(path)` | A URL for a file of the add-on's folder: `<img src={g.asset("logo.png")} />`, `new Audio(g.asset("done.wav"))`. |
 
 ### Settings

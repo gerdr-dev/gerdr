@@ -105,6 +105,28 @@ sees: `internal/addons/builtin/gerdr.d.ts`, copied into `~/.gerdr/addons` on eve
   usually can't change the API anyway. It grants nothing new — add-ons are trusted code that can already run a service — and it sits behind the
   same auth as every /api call. Bodies are text both ways; an error status is data (like fetch()), only a transport
   failure is a 502. 30s timeout, 10 MB cap, no cookie jar.
+- `g.messageAction` + `g.audio` (2026-11, asked for: tap a message, hear it read aloud). First built as `g.tts`, a
+  voice registry: the add-on turned text into audio and Gerdr did the button and the playing. Replaced before release:
+  the next wishes (translate a message, summarize it) would each have needed a primitive of their own. Split instead by
+  **place** and **capability**: the place is "a button on a message" (`g.messageAction`; Gerdr owns where it sits and
+  how a run goes: spinner, second tap aborts `ctx.signal`, errors), capabilities are added one by one (`g.audio`
+  now; showing a result under the message, for translation, when that is wanted — it needs thought: the list is
+  virtual, so a result must outlive its row). Rule used: a registry ("add-on registers, Gerdr calls") only when Gerdr
+  itself needs the capability, like `g.sessionTitle`; nothing in Gerdr speaks on its own. Several TTS add-ons are then
+  just several actions, behind one "⋯" per message (components/chat/MessageActions.tsx), with a running one pulled
+  out so its stop stays one tap away.
+- The button reaches the chat through `ChatHost.messageActions`, a general "the host's buttons on a message" hook, so
+  the chat package knows nothing about add-ons or sound. Where: beside a user's bubble (with rewind) and at the end of a
+  reply's turn line (a reply is several rows of the virtual list; its text is the turn's text parts, joined only when
+  read). Long-press was the first idea; on Android a long press is the system's text selection, and taking it over (or
+  adding to the selection bar natively) was turned down for a visible button.
+- `g.audio` (lib/audio.ts) is one `<audio>` element for everything: one sound at a time, and the autoplay rules handled
+  once — a message action's tap plays a silent clip on it, since Android's WebView refuses sound not started by a
+  gesture and an add-on's audio arrives long after it. Clips may come as an iterable; the next is pulled when one starts
+  playing, so a generator synthesizes ahead. A play() given a run's `ctx.signal` tells that run's button that sound is
+  on (stop square instead of spinner): linked by the signal, so `g.audio` needs no notion of messages.
+- `g.fetch(…, { binary: true })` answers base64 (`bytes()` / `blob()`): many TTS APIs answer with audio, which a JSON
+  string can't carry.
 - `g.usage()` is /api/usage (the quotas). `g.turns()` is /api/turns (internal/hub/turns.go): one record per finished
   turn — session, agent, stop reason, auto, duration, tokens, cost — appended to `~/.gerdr/turns/<yyyy-mm>.jsonl`
   and broadcast as "turn" (`g.on("turn")`). Gerdr keeps **facts, not tallies**: what counts as a task done, which day

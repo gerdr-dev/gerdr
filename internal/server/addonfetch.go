@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -20,7 +21,9 @@ import (
 //
 //	POST /api/addons/{id}/fetch   {"url","method","headers","body"} → {"status","statusText","headers","body"}
 //
-// The body travels as text both ways (JSON / text APIs, which is what add-ons call); a non-2xx answer is still a
+// The body travels as text both ways (JSON / text APIs, which is what most add-ons call), unless the request says
+// "binary": then the answer's body is base64 with "base64": true — audio from a text-to-speech API (g.tts), an image —
+// since bytes that aren't UTF-8 don't survive a JSON string. A non-2xx answer is still a
 // 200 here with its status inside, like fetch(), so the add-on can read the error body. A failure to reach the server
 // at all is a 502 with the reason.
 
@@ -29,6 +32,7 @@ type addonFetchReq struct {
 	Method  string            `json:"method"`
 	Headers map[string]string `json:"headers"`
 	Body    *string           `json:"body"`
+	Binary  bool              `json:"binary"`
 }
 
 type addonFetchResp struct {
@@ -36,6 +40,7 @@ type addonFetchResp struct {
 	StatusText string            `json:"statusText"`
 	Headers    map[string]string `json:"headers"`
 	Body       string            `json:"body"`
+	Base64     bool              `json:"base64,omitempty"`
 }
 
 const (
@@ -93,6 +98,9 @@ func doAddonFetch(ctx context.Context, b addonFetchReq) (*addonFetchResp, error)
 		StatusText: strings.TrimSpace(strings.TrimPrefix(res.Status, fmt.Sprint(res.StatusCode))),
 		Headers:    map[string]string{},
 		Body:       string(data),
+	}
+	if b.Binary {
+		out.Body, out.Base64 = base64.StdEncoding.EncodeToString(data), true
 	}
 	for k := range res.Header {
 		out.Headers[strings.ToLower(k)] = res.Header.Get(k)

@@ -156,8 +156,12 @@ export const MessageView = memo(function MessageView({
   stackPrev,
   stackNext,
 }: Props) {
+  const host = useChatHost();
   if (msg.role === "user") {
     const text = msg.parts.map((p) => (p.type === "text" ? p.text : "")).join("");
+    // The host's buttons (ChatHost.messageActions) sit with rewind, floating left of the bubble
+    // (only for a message that says something: an image alone has nothing to act on as text)
+    const actions = text.trim() ? host.messageActions?.({ sessionId, role: "user", id: msg.metadata?.messageId ?? msg.id, text: () => text }) : null;
     const all = msg.parts.filter((p) => p.type === "file");
     // Images and videos as thumbnails (one lightbox pages through them); files sent by their local path as chips
     const files = all.filter((p: any) => p.mediaType !== LOCAL_FILE);
@@ -172,10 +176,11 @@ export const MessageView = memo(function MessageView({
       <Message from="user" className={cn("group/user gap-1 transition-opacity duration-500 ease-out", meta?.sending && "opacity-50")}>
         {/* 回退按钮悬停时浮在气泡左边，不占高度 */}
         <div className="relative ml-auto flex min-w-0 max-w-[max(80%,280px)] justify-end">
-          {canRewind && (
-            // 气泡开着时按钮一直显示（鼠标挪去点气泡，hover 没了也别消失）
+          {(canRewind || actions != null) && (
+            // Shown while the rewind popover is open too (the mouse moving to it leaves the hover)
             <div className="absolute right-full bottom-1 mr-1 flex gap-0.5 opacity-0 transition-opacity group-hover/user:opacity-100 has-[[data-state=open]]:opacity-100 [@media(hover:none)]:opacity-100">
-              <RewindButton onConfirm={() => onRewind?.(msg)} />
+              {actions}
+              {canRewind && <RewindButton onConfirm={() => onRewind?.(msg)} />}
             </div>
           )}
           <MessageContent
@@ -289,6 +294,8 @@ export type PartCtx = {
   keep?: string;
   /** This part is the latest finished turn's metadata line (buildRows) */
   latest?: boolean;
+  /** On a turn's metadata line: the turn's text, for ChatHost.messageActions (buildRows) */
+  turnText?: () => string;
 };
 
 /** 思考过程：展开没展开记在组件外面（虚拟列表滚出去会卸载）。 */
@@ -414,9 +421,24 @@ function CompactNotice({ part, running, keep }: { part: ToolPart; running: boole
 // A turn's metadata line: end time · took · output tokens (after Astryx ChatMessageMetadata's "9:46 AM · Claude Opus").
 // h-5 like the running turn's StatusLine it replaces, so the swap doesn't jump. The host may restyle the time and add
 // something after it (ChatHost.turnStat: gerdr hands that to add-ons, e.g. coloring by prompt-cache age).
-function TurnStat({ sessionId, data, latest }: { sessionId: string; data: { ms: number; tokens: number; ts?: number }; latest: boolean }) {
+function TurnStat({
+  sessionId,
+  id,
+  data,
+  latest,
+  text,
+}: {
+  sessionId: string;
+  id: string;
+  data: { ms: number; tokens: number; ts?: number };
+  latest: boolean;
+  text?: () => string;
+}) {
   const host = useChatHost();
   const deco = host.useTurnStat?.({ sessionId, ts: data.ts, ms: data.ms, tokens: data.tokens, latest });
+  // The host's buttons on the reply (ChatHost.messageActions), at the end of its line: a turn that said nothing (only ran
+  // tools) gets none
+  const actions = text && host.messageActions ? host.messageActions({ sessionId, role: "assistant", id, text }) : null;
   const rest = [t("msg.took", { time: fmtElapsed(data.ms) }), data.tokens > 0 && `${fmtTokens(data.tokens)} tokens`].filter(Boolean);
   return (
     <div className="flex h-5 items-center gap-1 text-[12px] text-muted-foreground tabular-nums">
@@ -427,6 +449,7 @@ function TurnStat({ sessionId, data, latest }: { sessionId: string; data: { ms: 
       ) : null}
       {deco?.after}
       <span>{(data.ts ? ["", ...rest] : rest).join(" · ")}</span>
+      {actions != null && <span className="ml-1 flex items-center gap-0.5">{actions}</span>}
     </div>
   );
 }
@@ -462,7 +485,7 @@ export function renderPart(p: GPart, i: number, ctx: PartCtx): ReactNode {
     case "data-quickReplies":
       return <QuickReplies key={i} data={p.data} onPick={ctx.onQuickReply} enabled={ctx.quickEnabled} />;
     case "data-turnStat":
-      return <TurnStat key={i} sessionId={ctx.sessionId} data={p.data} latest={!!ctx.latest} />;
+      return <TurnStat key={i} sessionId={ctx.sessionId} id={`${ctx.msgId}:${i}`} data={p.data} latest={!!ctx.latest} text={ctx.turnText} />;
     case "data-task":
       return <TaskDoneCard key={i} sessionId={ctx.sessionId} t={p.data.task} woke={p.data.woke} command={p.data.command} />;
     case "data-wake":

@@ -239,6 +239,11 @@ export const zh = {
   "native.updateManual": "自动更新关着：点了才更新",
 
   "addons.noSlot": "没有这个插槽：{slot}",
+  "messageActions.stop": "停止：{action}",
+  "messageActions.more": "更多操作",
+  "messageActions.failed": "{action} 失败：{error}",
+  "messageActions.code": "（代码）",
+  "audio.bad": "放不了扩展给的音频",
   "addons.slotTaken": "插槽 {slot} 里已经有 id 为 {id} 的组件了",
   "addons.failed": "扩展 {addon} 出错：{error}",
   "addons.noSetup": "扩展要 export default defineAddon({ setup(g) { … } })",
@@ -496,6 +501,11 @@ export const en: Record<keyof typeof zh, string> = {
   "native.updateManual": "Automatic updates are off: installs when you click",
 
   "addons.noSlot": "No such slot: {slot}",
+  "messageActions.stop": "Stop: {action}",
+  "messageActions.more": "More actions",
+  "messageActions.failed": "{action} failed: {error}",
+  "messageActions.code": "(code)",
+  "audio.bad": "Can't play the audio the add-on returned",
   "addons.slotTaken": "Slot {slot} already has a component with id {id}",
   "addons.failed": "Add-on {addon} failed: {error}",
   "addons.noSetup": "An add-on must export default defineAddon({ setup(g) { … } })",

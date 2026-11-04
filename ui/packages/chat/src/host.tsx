@@ -137,6 +137,13 @@ export interface ChatHost {
    * colour or a frame, so a host can put any animation there (gerdr hands it to an add-on).
    */
   renderLoader?(props: LoaderProps): ReactNode;
+  /**
+   * The host's own buttons on a message: beside a user message's bubble (with rewind: on hover, always on a touch
+   * screen) and at the end of a finished reply's metadata line. Called while the message renders; what it returns may
+   * use hooks (draw a component). Handed over as a whole rather than as one feature, so the next thing a host wants to
+   * do with a message (read it aloud, translate it, send it elsewhere) needs no package release. Gerdr: reading aloud.
+   */
+  messageActions?(msg: MessageInfo): ReactNode;
 
   // ---- settings ----
 
@@ -188,6 +195,12 @@ export type ComposerHooks = {
   useDefaults?(agent: string): { values: Record<string, string>; set(id: string, value: string): void; setAll(values: Record<string, string>): void };
 };
 
+/**
+ * A message for ChatHost.messageActions. id: stable for the message (a reply's is per turn: one assistant message can
+ * hold several turns). text(): what it says as written (Markdown for a reply; tool calls and thinking left out), worked
+ * out when called, since joining a long reply on every render isn't free.
+ */
+export type MessageInfo = { sessionId: string; role: "user" | "assistant"; id: string; text(): string };
 export type TurnStatInfo = { sessionId: string; ts?: number; ms: number; tokens: number; latest: boolean };
 export type TurnStatDeco = { timeClassName?: string; title?: string; after?: ReactNode };
 /**

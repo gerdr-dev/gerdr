@@ -12,6 +12,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { api } from "./api";
+import { playAudio, stopAudio, type Clips } from "./audio";
 import { cn } from "./utils";
 import { locale, t } from "./i18n";
 import { activeTab, activeWs, leaves, type Layout, type PaneLeaf, type Tab, type Workspace } from "./layout";
@@ -63,6 +64,22 @@ export const composerActions: ComposerAction[] = [];
 export type MenuItem = { addon: string; id: string; title: string; when?: (ctx: MenuCtx) => boolean; run: (ctx: MenuCtx) => void | Promise<void> };
 export type MenuCtx = { selection: string; sessionId?: string };
 export const menuItems: MenuItem[] = [];
+/** What a message action's run() gets besides the message: stop when signal aborts (a second tap). */
+export type MessageCtx = { signal: AbortSignal; locale: "zh" | "en" };
+/**
+ * A button on each message (g.messageAction, lib/messageActions.ts). icon: a lucide name ("Volume2") or an element.
+ * when: which messages get it (default: all that have text).
+ */
+export type MessageAction = {
+  addon: string;
+  id: string;
+  title: string;
+  icon?: string | React.ReactNode;
+  order: number;
+  when?: (msg: any) => boolean;
+  run: (msg: any, ctx: MessageCtx) => unknown;
+};
+export const messageActions: MessageAction[] = [];
 type TurnStatFn = (info: any) => { className?: string; title?: string; after?: React.ReactNode } | void;
 const turnStats: Reg<TurnStatFn>[] = [];
 
@@ -487,6 +504,29 @@ function makeApi(id: string, hash: string) {
       };
     },
     turnStat: (fn: TurnStatFn) => own(turnStats, fn),
+    messageAction: (m: {
+      id: string;
+      title: string;
+      icon?: MessageAction["icon"];
+      order?: number;
+      when?: MessageAction["when"];
+      run: MessageAction["run"];
+    }) => {
+      if (!m?.id || typeof m.run !== "function") throw new Error("g.messageAction: id and run(msg, ctx) are required");
+      const r: MessageAction = { addon: id, id: m.id, title: m.title || m.id, icon: m.icon, order: m.order ?? 0, when: m.when, run: m.run };
+      messageActions.push(r);
+      messageActions.sort((x, y) => x.order - y.order || x.addon.localeCompare(y.addon));
+      bump();
+      return () => {
+        const i = messageActions.indexOf(r);
+        if (i >= 0) messageActions.splice(i, 1);
+        bump();
+      };
+    },
+    audio: {
+      play: (clips: Clips, o?: { signal?: AbortSignal }) => playAudio(clips, o),
+      stop: () => stopAudio(),
+    },
     theme: (spec: ThemeFn) => {
       const r = { addon: id, fn: spec };
       themes.push(r);
@@ -505,7 +545,7 @@ function makeApi(id: string, hash: string) {
         return v !== undefined ? v : a?.settings?.find((s) => s.key === key)?.default;
       },
     },
-    fetch: async (url: string, init?: { method?: string; headers?: Record<string, string>; body?: unknown }) => {
+    fetch: async (url: string, init?: { method?: string; headers?: Record<string, string>; body?: unknown; binary?: boolean }) => {
       const headers = { ...init?.headers };
       let body: string | undefined;
       if (typeof init?.body === "string") body = init.body;
@@ -513,14 +553,19 @@ function makeApi(id: string, hash: string) {
         body = JSON.stringify(init.body);
         if (!Object.keys(headers).some((k) => k.toLowerCase() === "content-type")) headers["Content-Type"] = "application/json";
       }
-      const r = await api.addonFetch(id, { url, method: init?.method, headers, body });
+      const r = await api.addonFetch(id, { url, method: init?.method, headers, body, binary: init?.binary });
+      // binary: the backend sent the body as base64 (audio, images: bytes that don't survive being text)
+      const bytes = () => (r.base64 ? Uint8Array.from(atob(r.body), (c) => c.charCodeAt(0)) : new TextEncoder().encode(r.body));
+      const text = r.base64 ? "" : r.body;
       return {
         ok: r.status >= 200 && r.status < 300,
         status: r.status,
         statusText: r.statusText,
         headers: r.headers,
-        text: r.body,
-        json: () => JSON.parse(r.body),
+        text,
+        json: () => JSON.parse(text),
+        bytes,
+        blob: () => new Blob([bytes()], { type: r.headers["content-type"] ?? "" }),
       };
     },
     usage: (force?: boolean) => api.usage(force),
@@ -580,6 +625,7 @@ function unload(id: string) {
   remove(composerActions, id);
   remove(turnStats, id);
   remove(menuItems, id);
+  remove(messageActions, id);
   if (themes.some((r) => r.addon === id)) {
     remove(themes, id);
     applyThemes();

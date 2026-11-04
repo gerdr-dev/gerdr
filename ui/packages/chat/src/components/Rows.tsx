@@ -30,6 +30,8 @@ export type Row =
       peek?: string;
       /** The latest finished turn's metadata line (data-turnStat): the host may mark it (prompt-cache age, ChatHost.turnStat) */
       latest?: boolean;
+      /** On a turn's metadata line: the text the turn said (ChatHost.messageActions); absent when it said nothing */
+      turnText?: () => string;
     }
   /** idle: a blank stand-in of the same height, held under a user message nothing has answered yet (see buildRows) */
   | { key: string; kind: "working"; empty: boolean; first: boolean; idle?: boolean }
@@ -194,7 +196,16 @@ export function buildRows(
     const children = childTools(m);
     const lastPart = m.parts.length - 1;
     const parts: Extract<Row, { kind: "part" }>[] = [];
+    // Where the current turn's text starts: one assistant message can hold several turns, each ending in a data-turnStat
+    let turnFrom = 0;
     m.parts.forEach((p, i) => {
+      let turnText: (() => string) | undefined;
+      if (p.type === "data-turnStat") {
+        // Joined only when asked (a button press): rows are rebuilt on every streamed chunk
+        const said = m.parts.slice(turnFrom, i).filter((x): x is Extract<GPart, { type: "text" }> => x.type === "text" && !!x.text.trim());
+        if (said.length) turnText = () => said.map((x) => x.text.trim()).join("\n\n");
+        turnFrom = i + 1;
+      }
       if (!partVisible(p, children)) return;
       if (redundantTaskDone(p, parts[parts.length - 1]?.part)) return;
       const tp = p.type === "dynamic-tool" ? (p as ToolPart) : undefined;
@@ -211,6 +222,7 @@ export function buildRows(
         streaming: live && running && i === lastPart,
         live,
         latest: p.type === "data-turnStat" && `${m.id}:${i}` === latestStat,
+        turnText,
       });
     });
     let first = true;
@@ -360,6 +372,7 @@ export const RowView = memo(
             quickEnabled: row.live,
             keep: row.peek && `${env.sessionId}:peek:${row.peek}`,
             latest: row.latest,
+            turnText: row.turnText,
           })}
         </div>
       </Frame>

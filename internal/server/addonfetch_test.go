@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/base64"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -43,5 +44,24 @@ func TestAddonFetch(t *testing.T) {
 		if _, err := doAddonFetch(context.Background(), addonFetchReq{URL: u}); err == nil {
 			t.Errorf("%q: want an error", u)
 		}
+	}
+}
+
+// "binary": bytes that aren't UTF-8 (audio from a TTS API) come back base64, unchanged
+func TestAddonFetchBinary(t *testing.T) {
+	audio := []byte{0xff, 0xfb, 0x90, 0x00, 0x80, 0xc3}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "audio/mpeg")
+		_, _ = w.Write(audio)
+	}))
+	defer srv.Close()
+
+	res, err := doAddonFetch(context.Background(), addonFetchReq{URL: srv.URL, Binary: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := base64.StdEncoding.DecodeString(res.Body)
+	if err != nil || !res.Base64 || string(got) != string(audio) || res.Headers["content-type"] != "audio/mpeg" {
+		t.Fatalf("unexpected %+v (%v)", res, err)
 	}
 }
