@@ -61,8 +61,8 @@ export const zh = {
   "nameDialogs.renameSession": "重命名会话",
   "nameDialogs.renameSpace": "重命名项目",
   "nameDialogs.newSpace": "新项目",
-  "nameDialogs.newSpaceHint1": "一个独立的项目：有自己的工作空间和 Agent（Code），也有自己的 Work 页面和助手。不同项目里的 Agent 互相看不见、不能互发消息。",
-  "nameDialogs.newSpaceHint2": "这个名字也是项目的地址和目录名：以后改名只改显示的名字。关掉（不是删除）以后再建同名的项目，它的 Work 还在。",
+  "nameDialogs.newSpaceHint1": "一个独立的项目：有自己的工作空间和 Agent（Code），也有自己的面板和面板里的助手。不同项目里的 Agent 互相看不见、不能互发消息。",
+  "nameDialogs.newSpaceHint2": "这个名字也是项目的地址和目录名：以后改名只改显示的名字。关掉（不是删除）以后再建同名的项目，它的面板还在。",
   "nameDialogs.renameSpaceHint": "只改显示的名字；项目的地址和目录还叫「{id}」。",
   "nameDialogs.tabPlaceholder": "留空 = 用目录名",
   "nameDialogs.name": "名字",
@@ -228,9 +228,9 @@ export const en: Record<keyof typeof zh, string> = {
   "nameDialogs.renameSpace": "Rename project",
   "nameDialogs.newSpace": "New project",
   "nameDialogs.newSpaceHint1":
-    "A separate project, with its own workspaces and agents (Code) and its own Work page and assistant. Agents in different projects can't see or message each other.",
+    "A separate project, with its own workspaces and agents (Code) and its own panels with their assistants. Agents in different projects can't see or message each other.",
   "nameDialogs.newSpaceHint2":
-    "The name is also the project's address and folder name; renaming later only changes the display name. If you close it (rather than delete it) and create a project with the same name, its Work is still there.",
+    "The name is also the project's address and folder name; renaming later only changes the display name. If you close it (rather than delete it) and create a project with the same name, its panels are still there.",
   "nameDialogs.renameSpaceHint": 'Only the display name changes; the project\'s address and folder stay "{id}".',
   "nameDialogs.tabPlaceholder": "Leave empty to use the folder name",
   "nameDialogs.name": "Name",

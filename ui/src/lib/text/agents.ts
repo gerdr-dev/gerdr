@@ -168,7 +168,7 @@ export const zh = {
   "extSettings.templateDescription": "一句话说清楚什么时候该用这个 Skill（Agent 靠它判断）",
   "extSettings.templateBody": "在这里写给 Agent 的说明。",
   "extSettings.skillHelp":
-    "来源决定 Claude Code、Codex 和 Native 的会话用哪些（Native 没有自己的目录，「Agent 自己的」用 Claude Code 那些）。内置的不管来源都会给。Work 右边的助手按它用的引擎算，和 Code 里一样。改完从每个会话的下一轮起生效。",
+    "来源决定 Claude Code、Codex 和 Native 的会话用哪些（Native 没有自己的目录，「Agent 自己的」用 Claude Code 那些）。内置的不管来源都会给。面板右边的助手按它用的引擎算，和 Code 里一样。改完从每个会话的下一轮起生效。",
   "extSettings.skillExists": "已经有一个叫 {name} 的 Skill 了",
   "extSettings.group.builtin": "内置",
   "extSettings.group.builtinHint": "不管来源都会给：在多个会话之间协作、按你说的改这个界面",
@@ -202,7 +202,7 @@ export const zh = {
   "extSettings.claudeAuthTitle": "Claude Code 里授权过，Gerdr 直接用它的登录；那边失效了这里会变成「未登录」",
   "extSettings.checking": "检查中…",
   "extSettings.mcpHelp1":
-    "来源决定 Claude Code 和 Codex 的会话用哪些，Native 引擎只用 Gerdr 组的。Work 右边的助手按它用的引擎算，和 Code 里一样。改完从每个会话的下一轮起生效。",
+    "来源决定 Claude Code 和 Codex 的会话用哪些，Native 引擎只用 Gerdr 组的。面板右边的助手按它用的引擎算，和 Code 里一样。改完从每个会话的下一轮起生效。",
   "extSettings.mcpHelp2":
     "这里只列本机配置文件里的（Gerdr 的、~/.claude.json、.mcp.json、~/.codex/config.toml）。claude.ai / ChatGPT 账号里连接的应用（Notion、Figma、GitHub…）和 Codex 插件自带的不在这里，去各自的账号设置里管。",
   "extSettings.group.gerdrMcpHint": "Native 引擎用；来源选了含 Gerdr 时 Claude Code / Codex 也用",
@@ -286,7 +286,7 @@ export const en: Record<keyof typeof zh, string> = {
   "agentGlyph.line.globe": "Web",
   "agentGlyph.line.chat": "Chat",
   "agentGlyph.line.cap": "Learning",
-  "agentGlyph.line.briefcase": "Work",
+  "agentGlyph.line.briefcase": "Briefcase",
   "agentGlyph.line.compass": "Explore",
   "agentGlyph.line.rocket": "Launch",
   "agentGlyph.line.zap": "Lightning",
@@ -438,7 +438,7 @@ export const en: Record<keyof typeof zh, string> = {
   "extSettings.templateDescription": "One sentence on when to use this skill (the agent decides by it)",
   "extSettings.templateBody": "Write the instructions for the agent here.",
   "extSettings.skillHelp":
-    "The source decides which skills Claude Code, Codex and Native sessions get (Native has no folder of its own, so “Agent's own” means Claude Code's). Built-in skills are always given. The assistant on the right in Work counts as whatever engine it runs on, same as in Code. Changes apply from each session's next turn.",
+    "The source decides which skills Claude Code, Codex and Native sessions get (Native has no folder of its own, so “Agent's own” means Claude Code's). Built-in skills are always given. The assistant on the right of a panel counts as whatever engine it runs on, same as in Code. Changes apply from each session's next turn.",
   "extSettings.skillExists": "There's already a skill named {name}",
   "extSettings.group.builtin": "Built-in",
   "extSettings.group.builtinHint": "Always given, whatever the source: working across sessions, changing this interface on request",
@@ -473,7 +473,7 @@ export const en: Record<keyof typeof zh, string> = {
   "extSettings.claudeAuthTitle": "Authorized in Claude Code, and Gerdr uses that sign-in. If it expires there, this turns to “Not signed in”.",
   "extSettings.checking": "Checking…",
   "extSettings.mcpHelp1":
-    "The source decides which servers Claude Code and Codex sessions get; the Native engine only uses Gerdr's. The assistant on the right in Work counts as whatever engine it runs on, same as in Code. Changes apply from each session's next turn.",
+    "The source decides which servers Claude Code and Codex sessions get; the Native engine only uses Gerdr's. The assistant on the right of a panel counts as whatever engine it runs on, same as in Code. Changes apply from each session's next turn.",
   "extSettings.mcpHelp2":
     "Only servers from config files on this machine are listed (Gerdr's, ~/.claude.json, .mcp.json, ~/.codex/config.toml). Apps connected in your claude.ai / ChatGPT account (Notion, Figma, GitHub…) and ones bundled with Codex plugins aren't here; manage them in those accounts' settings.",
   "extSettings.group.gerdrMcpHint": "Used by the Native engine, and by Claude Code / Codex when the source includes Gerdr",

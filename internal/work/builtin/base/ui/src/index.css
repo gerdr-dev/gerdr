@@ -1,4 +1,4 @@
-/* Theme: the same tokens as gerdr's own UI, so the Work pages look like part of gerdr in light and dark. */
+/* Theme: the same tokens as gerdr's own UI, so the panel's pages look like part of gerdr in light and dark. */
 @custom-variant dark (&:is(.dark *));
 
 /* 灰阶纯灰（不带色相），强调色只有一个 —— 和终端里那些彩色输出放一起不脏。 */

@@ -1,4 +1,4 @@
-// The bridge between this Work project and gerdr around it.
+// The bridge between this panel and gerdr around it.
 //
 // Don't edit this file: gerdr upgrades it, and an edited copy is left alone from then on, so it misses what later
 // versions add (an old one doesn't follow the sidebar's width: the menu stops lining up and can't be resized). Put your
@@ -8,7 +8,7 @@
 //   access (commands, APIs, MCP) live there, not in the page: the page only draws. The run streams its progress and
 //   console output while it goes; it doesn't stop when the page closes (signal / abort() stop it).
 // - functions(): what can be called.
-// - ask(text): hand a task to the Work agent on the right of the page (gerdr sends it as a message;
+// - ask(text): hand a task to the panel's agent on the right of the page (gerdr sends it as a message;
 //   it queues if the agent is busy); resolves with the conversation's id. openChat(id) shows that conversation.
 // - openSession(id): show a coding-agent conversation a local function started (ctx.sessions.start), in Code.
 // - showSession(id, { label, actions }): show such a conversation in a panel over this page instead, with gerdr's own
@@ -23,7 +23,7 @@
 
 declare const __GERDR_PROJECT__: string | undefined;
 
-/** The project this Work site belongs to (gerdr compiles it in; a site once served at /work/<project>/ read the address). */
+/** The panel this site is (gerdr compiles it in; a site once served at /work/<project>/ read the address). */
 export const project = typeof __GERDR_PROJECT__ === "string" ? __GERDR_PROJECT__ : decodeURIComponent(location.pathname.split("/")[2] || "default");
 
 export type RunEvent = { type: "start" | "progress" | "log" | "result" | "error"; data: any };
@@ -118,7 +118,7 @@ async function follow<T>(body: ReadableStream<Uint8Array>, id: string | undefine
 let askSeq = 0;
 const asking = new Map<number, { resolve: (session: string) => void; reject: (e: Error) => void }>();
 
-/** Hands a task to the Work agent on the right (queued if it's busy); resolves with that conversation's id once sent. */
+/** Hands a task to the panel's agent on the right (queued if it's busy); resolves with that conversation's id once sent. */
 export function ask(text: string): Promise<string> {
   const id = ++askSeq;
   return new Promise((resolve, reject) => {
@@ -127,7 +127,7 @@ export function ask(text: string): Promise<string> {
   });
 }
 
-/** Shows a Work agent conversation (e.g. the one ask() resolved with) on the right; on a phone switches to its tab. */
+/** Shows a panel agent conversation (e.g. the one ask() resolved with) on the right; on a phone switches to its tab. */
 export function openChat(session: string) {
   window.parent.postMessage({ type: "gerdr:openChat", session }, location.origin);
 }
@@ -137,7 +137,7 @@ export function openSession(session: string) {
   window.parent.postMessage({ type: "gerdr:openSession", session }, location.origin);
 }
 
-/** jump: Gerdr scrolls the chat to the card with that ref (a Work tool's gerdrCard) instead of telling the page. */
+/** jump: Gerdr scrolls the chat to the card with that ref (a panel tool's gerdrCard) instead of telling the page. */
 export type SessionAction = { id: string; label: string; kind?: "primary" | "danger"; confirm?: string; jump?: string };
 
 /**

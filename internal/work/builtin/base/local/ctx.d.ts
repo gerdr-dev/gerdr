@@ -43,12 +43,12 @@ interface Ctx {
   };
 
   /**
-   * Files in this Work directory: data a function keeps between runs, exports, reports. Paths are relative with `/`;
+   * Files in this panel's directory: data a function keeps between runs, exports, reports. Paths are relative with `/`;
    * no absolute paths, no `..`. All synchronous. Keep data in `user/data/`: `user/` is this person's and never shared (AGENTS.md).
    * For anything outside it (other repositories, the user's folders) use `ctx.dirs`.
    */
   fs: {
-    /** This Work directory's absolute path. */
+    /** This panel directory's absolute path. */
     root: string;
     /** All levels down, skipping `.` entries and node_modules, 5000 at most; a missing dir is []. */
     list(dir?: string): FileInfo[];
@@ -114,7 +114,7 @@ interface Ctx {
       tags?: Record<string, string>;
       /**
        * A session that gets a message each time this one stops (finished its turn, waiting for a person, failed), with
-       * its reply: `"work"` = this project's Work agent conversation, else a session id. Reports wait while the target
+       * its reply: `"work"` = this panel's agent conversation, else a session id. Reports wait while the target
        * is busy and go as one message, so the coordinator isn't blocked on the worker nor has to poll it.
        */
       reportTo?: string;
@@ -139,7 +139,7 @@ interface Ctx {
     list(opts?: { cwd?: string; tags?: Record<string, string> }): Session[];
     /**
      * Sends another message. A running conversation gets it at its next pause (between steps); a closed one is opened again.
-     * `"work"` = this project's Work agent conversation (e.g. to hand it something to decide).
+     * `"work"` = this panel's agent conversation (e.g. to hand it something to decide).
      * `now`: right away, like the input box's "send now" — a running command moves to the background and the agent
      * reads the message at once, so a worker busy with a long step still takes it.
      */
@@ -153,7 +153,7 @@ interface Ctx {
     tag(id: string, tags: Record<string, string>): Session;
   };
 
-  /** The Code side's workspaces (not this Work project: that's `ctx.workspace`). */
+  /** The Code side's workspaces (not this panel: that's `ctx.workspace`). */
   workspaces: {
     /** This project's workspaces in their order; `all`: every project's. */
     list(opts?: { all?: boolean }): Workspace[];
@@ -219,16 +219,16 @@ interface Ctx {
   log(...args: unknown[]): void;
   /** Waits; 60 s at most per call. */
   sleep(ms: number): Promise<void>;
-  /** Who called this function: as a Work tool (`export const tools`), the conversation's id; otherwise "". */
+  /** Who called this function: as a panel tool (`export const tools`), the conversation's id; otherwise "". */
   caller: { session: string };
-  /** This Work project: its id, this directory, where its run logs are. */
+  /** This panel: its id, this directory, where its run logs are. */
   workspace: { project: string; dir: string; logs_dir: string };
   /** gerdr's interface language, for messages meant for the user. */
   locale: "zh";
 }
 
 interface ExecOptions {
-  /** Relative to this Work directory and can't leave it: for another repository pass its path as an argument (`git -C ~/dev/x`). */
+  /** Relative to this panel's directory and can't leave it: for another repository pass its path as an argument (`git -C ~/dev/x`). */
   cwd?: string;
   /** stdin. */
   input?: string;

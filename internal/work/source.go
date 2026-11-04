@@ -88,7 +88,7 @@ func (r *Runner) NewPanel(project, name string) (string, error) {
 }
 
 // ErrWorkRemoved: the project's own Work was removed by the user; RestoreWork brings a blank one back.
-var ErrWorkRemoved = errors.New("this project's Work was removed (restore it in Settings → Panels)")
+var ErrWorkRemoved = errors.New("this project's own panel was removed (restore it in Settings → Panels)")
 
 // removedMark: next to a removed Work directory, so Ensure doesn't make it again the next time anything asks for it.
 func removedMark(dir string) string { return dir + ".removed" }

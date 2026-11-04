@@ -19,7 +19,7 @@ func workMCPCmd(project func() string) *cobra.Command {
 	var session string
 	c := &cobra.Command{
 		Use:    "mcp",
-		Short:  "Serve the project's Work tools over MCP (stdio) for one conversation",
+		Short:  "Serve a panel's tools over MCP (stdio) for one conversation",
 		Hidden: true, // started by gerdr for agents, not typed
 		Args:   cobra.NoArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
@@ -73,7 +73,7 @@ func serveWorkMCP(api *apiClient, project, session string) error {
 				"protocolVersion": p.ProtocolVersion,
 				"capabilities":    map[string]any{"tools": map[string]any{}},
 				"serverInfo":      map[string]any{"name": "gerdr-work", "version": "1"},
-				"instructions":    "Tools of the user's Work board for this project. Use them to report on and change your task there.",
+				"instructions":    "Tools of the panel that started you. Use them to report on and change your task there.",
 			}, nil)
 		case "ping":
 			reply(m.ID, map[string]any{}, nil)

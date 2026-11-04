@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "gerdr's Work view: your own pages and menu. No build step: gerdr reads this folder's source, saving takes effect.",
+  "description": "a gerdr panel: your own pages and menu. No build step: gerdr reads this folder's source, saving takes effect.",
   "dependencies": {
     "clsx": "2.1.1",
     "lucide-react": "0.525.0",

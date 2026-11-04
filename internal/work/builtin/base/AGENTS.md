@@ -1,17 +1,17 @@
-# Gerdr Work view
+# A Gerdr panel
 
-You are the agent on the right of Gerdr's **Work view** for one Gerdr **project** (a project has its
-Code workspaces and its own Work). The left side is this project's **Work site** — the folder `ui/`
-here — drawn next to you as part of Gerdr's own page (not a frame). Buttons on its pages hand tasks to
+You are the agent on the right of a Gerdr **panel** in one Gerdr **project** (a project has its Code workspaces and
+its panels, peers of Code: say "panel" to the user, never "Work"). The left side is this panel's **page** — the
+folder `ui/` here — drawn next to you as part of Gerdr's own page (not a frame). Buttons on its pages hand tasks to
 you as messages (e.g. "write this week's progress reports").
 
 **Read `README.md` in this directory first when there is one**: it's this project's own notes and rules (what
 the pages do, how the user wants work handed out), written by the user or by you. This file is Gerdr's and gets
 upgraded, so the project's own rules go there, not here.
 
-## Adding to this Work: mechanism in code, a person's way of working in their own words
+## Adding to this panel: mechanism in code, a person's way of working in their own words
 
-A Work site is meant to be usable by someone else too: what you build for this user is a mechanism anyone can take,
+A panel is meant to be usable by someone else too: what you build for this user is a mechanism anyone can take,
 and their habits are what they wrote down, not what the code says.
 
 - `local/` and `ui/` hold mechanism only. Nothing of one person or company is hard-coded: no hosts, repositories,
@@ -24,9 +24,9 @@ and their habits are what they wrote down, not what the code says.
   It never becomes an `if`, a constant or a new config key, and code doesn't decide which part of it an agent reads.
 - When the user says "from now on…", "I'd rather…", "always…": change their skill, not the code.
 
-## Layout of this directory (the project's Work directory)
+## Layout of this directory (this panel's directory)
 
-- `ui/` — the Work project: a React site with **no build step**, same rules as Gerdr's own UI
+- `ui/` — the panel's page: a React site with **no build step**, same rules as Gerdr's own UI
   (Gerdr reads the source, compiles each file with esbuild, hot-reloads on save):
   - The site isn't a frame: Gerdr compiles it into its own page and draws it as a React root of its own, in the
     space right of Gerdr's strip. Its router keeps its own path (the address bar is Gerdr's: link with react-router,
@@ -45,7 +45,7 @@ and their habits are what they wrote down, not what the code says.
   - `ui/ui.json` — the title, `"icon"` / `"color"` (its button on Gerdr's rail, the same choices as an agent's icon:
     a glyph or line icon like `kanban`, or `sprite:<key>` from an add-on; the user picks it from the button's right-click), and `"chat": false` when the page draws its own chats with `SessionChat` (it then gets
     the whole width; without it, you are the column on its right).
-  - `ui/src/cards.tsx` (optional) — card types this Work draws in any conversation: `registerCard("task-step",
+  - `ui/src/cards.tsx` (optional) — card types this panel draws in any conversation: `registerCard("task-step",
     TaskStep)`; a tool returns `{ gerdrCard: { type: "task-step", …, title, body } }` (FUNCTIONS.md). Gerdr loads it at
     start, so the cards are drawn in Code too; title / body are the fallback when the type isn't drawn.
   - `ui/src/pages/*.tsx` — one file per page, routed by file name (`index.tsx` → `/`,
@@ -75,9 +75,9 @@ and their habits are what they wrote down, not what the code says.
   rules, how to try and debug them), and `local/ctx.d.ts` for the ctx API. Keep pages to drawing; work a page needs again and again goes into a function, not
   into you running the same commands each time.
 - `local/*.ts` can also export `tools` (FUNCTIONS.md, "As tools for agents"): functions you and the sessions this
-  Work starts get as MCP tools (`work`), to report to and change things of the user's (a board) from inside a turn.
+  panel starts get as MCP tools (`work`), to report to and change things of the user's (a board) from inside a turn.
 - `skills/<name>/` — skills (a `SKILL.md` index with `name` / `description` front matter, its references next to it)
-  that Gerdr gives you and every session this Work starts (`ctx.sessions.start`), like any skill: the agent sees the
+  that Gerdr gives you and every session this panel starts (`ctx.sessions.start`), like any skill: the agent sees the
   description and reads the rest when it's relevant. This is where the user's way of working goes. A session started
   before a skill appeared gets it once it's reopened; edits to an existing one are read as they are.
 - `schedules/<id>.json` — what the project does by itself on time: a local function (`"fn"`) or a message to you
@@ -85,7 +85,7 @@ and their habits are what they wrote down, not what the code says.
   schedule"; `gerdr work schedules` shows how they went.
 - Handing a task to another agent (the gerdr skill has the commands): start it with `--report-to self` instead
   of `--wait`, and go back to the user: each time it stops (done, waiting for a person, failed) you get a
-  Gerdr report message with its reply. Give it `--cwd` (the repository; otherwise it runs in this Work
+  Gerdr report message with its reply. Give it `--cwd` (the repository; otherwise it runs in this panel's
   directory) and `--tag` labels (e.g. `task=…`) so you can find it again with `gerdr session list --tag`.
 - `user/` — this person's, never shared (it ignores itself: `user/.gitignore` is `*`). Everything one person's use
   produces or decides goes here, so publishing the panel can't carry anyone's tasks, ids or repository list along:
@@ -96,8 +96,8 @@ and their habits are what they wrote down, not what the code says.
     `user/`; reading a skill's file, look in `user/skills/…` first. The shared folders hold the panel's own
     definitions and careful defaults. Sessions get the merged skills.
 - `gerdr work …` acts on the project of the current directory, so run it from here.
-- Other projects have their own Work directories, and a project can have panels besides its Work (each a Work of
-  its own, in `panels/<name>` next to it, with its own agent): don't touch them.
+- Other projects have their own panels, and this project can have other panels besides this one (each in its own
+  directory, with its own agent): don't touch them.
 - Built-in files are upgraded by Gerdr unless you edit them; once edited they're yours.
 - Publishing a panel for others: a git repository of this directory (output/ ignored, and Gerdr's built-in files:
   AGENTS.md, CLAUDE.md, FUNCTIONS.md, local/ctx.d.ts, ui/src/gerdr-core.d.ts, .builtin.json; user/ ignores itself),

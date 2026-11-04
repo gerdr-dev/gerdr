@@ -59,7 +59,7 @@ func entryOf(rel string, st fs.FileInfo) map[string]any {
 func cleanRel(p string) (string, error) {
 	p = strings.ReplaceAll(p, "\\", "/")
 	if strings.HasPrefix(p, "/") || filepath.IsAbs(p) {
-		return "", fmt.Errorf("%s: paths are relative to the Work directory", p)
+		return "", fmt.Errorf("%s: paths are relative to the panel's directory", p)
 	}
 	c := path.Clean("/" + p)[1:]
 	for _, seg := range strings.Split(p, "/") {
@@ -86,7 +86,7 @@ func (r *runner) abs(p string, exist bool) (string, string, error) {
 		real, err := filepath.EvalSymlinks(check)
 		if err == nil {
 			if real != realRoot && !strings.HasPrefix(real, realRoot+string(filepath.Separator)) {
-				return "", "", fmt.Errorf("%s is outside the Work directory", p)
+				return "", "", fmt.Errorf("%s is outside the panel's directory", p)
 			}
 			break
 		}
@@ -255,7 +255,7 @@ func (r *runner) fsObject() map[string]any {
 		"trash": func(p string) {
 			full, rel := must(r.abs(p, true))
 			if rel == "" {
-				r.throw(errors.New("can't trash the whole Work directory"))
+				r.throw(errors.New("can't trash the whole panel directory"))
 			}
 			if err := trash(r.dir, full); err != nil {
 				r.throw(err)

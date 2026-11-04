@@ -1093,7 +1093,7 @@ func fail(err error) {
 // gerdr work …: for the Work agent (see internal/work/builtin/CLAUDE.md). The project is the one whose
 // Work directory the current directory is in (that's where the Work agent runs), or --project.
 func workCmd() *cobra.Command {
-	cmd := &cobra.Command{Use: "work", Short: "The Work view: local functions and the Work site of a project"}
+	cmd := &cobra.Command{Use: "work", Short: "A panel's local functions, schedules, triggers and page"}
 	var project string
 	cmd.PersistentFlags().StringVar(&project, "project", "", "project id (default: the one the current directory belongs to)")
 	which := func() string {
@@ -1311,7 +1311,7 @@ prints its stack and exits 1. Ctrl-C stops the run. --input-file - reads the inp
 	cmd.AddCommand(secret)
 	cmd.AddCommand(&cobra.Command{
 		Use:   "status",
-		Short: "The project's Work site (ui/): build error and runtime errors from the open page",
+		Short: "The panel's page (ui/): build error and runtime errors from the open page",
 		RunE: func(_ *cobra.Command, _ []string) error {
 			c, err := newAPIClient()
 			if err != nil {

@@ -1,4 +1,4 @@
-// What `import … from "@gerdr/core"` gives this Work UI: gerdr's own components and state. This page isn't a frame:
+// What `import … from "@gerdr/core"` gives this panel's page: gerdr's own components and state. This page isn't a frame:
 // gerdr compiles it into its own page and draws it as a React root of its own, so these are the very components gerdr
 // draws, on the same connection. Gerdr upgrades this file; don't edit it.
 

@@ -164,7 +164,7 @@ func (h workHost) target(project, id string) (string, error) {
 	if w := h.s.workSession(project); w != "" {
 		return w, nil
 	}
-	return "", errors.New(i18n.S("这个项目的 Work 助手还没有对话：先在 Work 里打开它", "this project's Work agent has no conversation yet: open it in Work first"))
+	return "", errors.New(i18n.S("这个面板的助手还没有对话：先打开这个面板", "this panel's agent has no conversation yet: open the panel first"))
 }
 
 func (h workHost) Send(ctx context.Context, project, id, text string, attachments []string, now bool) (map[string]any, error) {
@@ -514,7 +514,7 @@ func withAttachments(text string, paths []string) ([]acp.ContentBlock, error) {
 
 func (s *Server) workDir(project string) (string, error) {
 	if s.Work == nil {
-		return "", errors.New("no Work runner")
+		return "", errors.New("no panel runner")
 	}
 	return s.Work.Dir(project)
 }

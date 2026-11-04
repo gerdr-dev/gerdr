@@ -66,14 +66,14 @@ export const zh = {
 
   "spaceSwitcher.closeTitle": "关闭项目「{name}」？",
   "spaceSwitcher.closeDesc":
-    "连同它的 {n} 个工作空间一起关掉，里面的 Agent 会停掉（会话记录留着，能再打开）。项目的工作空间布局和 Work 都留在它的目录里：以后再建一个叫「{id}」的项目，就都回来了。",
+    "连同它的 {n} 个工作空间一起关掉，里面的 Agent 会停掉（会话记录留着，能再打开）。项目的工作空间布局和面板都留在它的目录里：以后再建一个叫「{id}」的项目，就都回来了。",
   "spaceSwitcher.closed": "已关闭项目「{name}」",
   "spaceSwitcher.undo": "撤销",
   "spaceSwitcher.reopened": "已重新打开项目「{name}」",
   "spaceSwitcher.restoreFailed": "恢复失败：{error}",
   "spaceSwitcher.deleteTitle": "删除项目「{name}」？",
   "spaceSwitcher.deleteDesc":
-    "关掉它的 {n} 个工作空间，里面的 Agent 会停掉（会话记录留着）；它的 Work 页面、本地函数和保存的布局移到 Gerdr 目录下的 trash/projects/ 里，不会真的删掉，要找回可以从那儿拿。以后再建同名的项目是全新的。",
+    "关掉它的 {n} 个工作空间，里面的 Agent 会停掉（会话记录留着）；它的面板（页面、本地函数）和保存的布局移到 Gerdr 目录下的 trash/projects/ 里，不会真的删掉，要找回可以从那儿拿。以后再建同名的项目是全新的。",
   "spaceSwitcher.deleted": "已删除项目「{name}」",
   "spaceSwitcher.movedTo": "文件移到了 {path}",
   "spaceSwitcher.restored": "已恢复项目「{name}」",
@@ -85,7 +85,7 @@ export const zh = {
   "spaceSwitcher.moveRight": "右移",
   "spaceSwitcher.closeProject": "关闭项目",
   "spaceSwitcher.deleteProject": "删除项目…",
-  "spaceSwitcher.newProjectHint": "新项目（每个项目有自己的工作空间、Agent 和 Work，互相看不见）",
+  "spaceSwitcher.newProjectHint": "新项目（每个项目有自己的工作空间、Agent 和面板，互相看不见）",
   "spaceSwitcher.isolated": "每个项目的 Agent 互相看不见",
   "spaceSwitcher.openNamedInNewWindow": "在新窗口打开「{name}」",
   "spaceSwitcher.renameNamed": "重命名「{name}」…",
@@ -93,7 +93,7 @@ export const zh = {
   "spaceSwitcher.deleteNamed": "删除「{name}」…",
 
   "rail.showSessionList": "显示会话列表",
-  "rail.newProjectHint": "新项目（每个项目有自己的工作空间、Agent 和 Work，互相看不见；右键项目可重命名、删除，拖动排序）",
+  "rail.newProjectHint": "新项目（每个项目有自己的工作空间、Agent 和面板，互相看不见；右键项目可重命名、删除，拖动排序）",
   "rail.settingsDoctorBad": "设置（诊断发现了问题：设置 → 实验室 → 诊断）",
 
   "sidebarChrome.doctorBad": "诊断发现了问题：设置 → 实验室 → 诊断",
@@ -166,14 +166,14 @@ export const zh = {
   "toolCard.sent": "已提交，它会照这个接着做",
   "workView.peekGone": "找不到这个会话",
   "workView.secretTitle": "保存密钥",
-  "workView.secretDesc": "存成 {name}，只有 Work 的本地函数能用（ctx.secrets.get），页面和助手都看不到。",
+  "workView.secretDesc": "存成 {name}，只有面板的本地函数能用（ctx.secrets.get），页面和助手都看不到。",
   "workView.secretSave": "保存",
-  "workView.pageBroken": "这个 Work 页面的代码出错了，改好之后会自动恢复：",
-  "workView.askFix": "让 Work 助手来修",
+  "workView.pageBroken": "这个面板页面的代码出错了，改好之后会自动恢复：",
+  "workView.askFix": "让面板助手来修",
   "workView.hideChat": "收起助手",
   "workView.noPanels": "这个项目现在没有面板。",
   "workView.showChat": "展开助手",
-  "workView.fixPagePrompt": "Work 页面（ui/）现在打不开，报错如下，帮我修好：\n\n{error}",
+  "workView.fixPagePrompt": "面板页面（ui/）现在打不开，报错如下，帮我修好：\n\n{error}",
   "workView.secretBadName": "名字 {name} 不能有空格或斜杠",
 
   "sync.passkeyRequest": "「{label}」请求添加 Passkey，核对码 {code}",
@@ -283,14 +283,14 @@ export const en: Record<keyof typeof zh, string> = {
 
   "spaceSwitcher.closeTitle": "Close project “{name}”?",
   "spaceSwitcher.closeDesc":
-    "Its {n} workspaces close with it and their agents stop (session history is kept and can be reopened). The project's workspace layout and Work stay in its folder: create a project named “{id}” again and it all comes back.",
+    "Its {n} workspaces close with it and their agents stop (session history is kept and can be reopened). The project's workspace layout and panels stay in its folder: create a project named “{id}” again and it all comes back.",
   "spaceSwitcher.closed": "Closed project “{name}”",
   "spaceSwitcher.undo": "Undo",
   "spaceSwitcher.reopened": "Reopened project “{name}”",
   "spaceSwitcher.restoreFailed": "Couldn't restore: {error}",
   "spaceSwitcher.deleteTitle": "Delete project “{name}”?",
   "spaceSwitcher.deleteDesc":
-    "Its {n} workspaces close and their agents stop (session history is kept). Its Work pages, local functions and saved layout move to trash/projects/ in the Gerdr folder rather than being deleted, so you can get them back from there. A new project with the same name later starts fresh.",
+    "Its {n} workspaces close and their agents stop (session history is kept). Its panels (pages, local functions) and saved layout move to trash/projects/ in the Gerdr folder rather than being deleted, so you can get them back from there. A new project with the same name later starts fresh.",
   "spaceSwitcher.deleted": "Deleted project “{name}”",
   "spaceSwitcher.movedTo": "Files moved to {path}",
   "spaceSwitcher.restored": "Restored project “{name}”",
@@ -302,7 +302,7 @@ export const en: Record<keyof typeof zh, string> = {
   "spaceSwitcher.moveRight": "Move right",
   "spaceSwitcher.closeProject": "Close project",
   "spaceSwitcher.deleteProject": "Delete project…",
-  "spaceSwitcher.newProjectHint": "New project (each project has its own workspaces, agents and Work, invisible to the others)",
+  "spaceSwitcher.newProjectHint": "New project (each project has its own workspaces, agents and panels, invisible to the others)",
   "spaceSwitcher.isolated": "Projects can't see each other's agents",
   "spaceSwitcher.openNamedInNewWindow": "Open “{name}” in new window",
   "spaceSwitcher.renameNamed": "Rename “{name}”…",
@@ -311,7 +311,7 @@ export const en: Record<keyof typeof zh, string> = {
 
   "rail.showSessionList": "Show session list",
   "rail.newProjectHint":
-    "New project (each project has its own workspaces, agents and Work, invisible to the others; right-click a project to rename or delete it, drag to reorder)",
+    "New project (each project has its own workspaces, agents and panels, invisible to the others; right-click a project to rename or delete it, drag to reorder)",
   "rail.settingsDoctorBad": "Settings (diagnostics found a problem: Settings → Labs → Diagnostics)",
 
   "sidebarChrome.doctorBad": "Diagnostics found a problem: Settings → Labs → Diagnostics",
@@ -384,14 +384,14 @@ export const en: Record<keyof typeof zh, string> = {
   "toolCard.sent": "Sent: it carries on with this",
   "workView.peekGone": "This conversation isn't there",
   "workView.secretTitle": "Save a secret",
-  "workView.secretDesc": "Saved as {name}, for Work's local functions only (ctx.secrets.get): neither the page nor the assistant sees it.",
+  "workView.secretDesc": "Saved as {name}, for the panel's local functions only (ctx.secrets.get): neither the page nor the assistant sees it.",
   "workView.secretSave": "Save",
-  "workView.pageBroken": "This Work page's code has an error. It comes back once that's fixed:",
-  "workView.askFix": "Have the Work agent fix it",
+  "workView.pageBroken": "This panel page's code has an error. It comes back once that's fixed:",
+  "workView.askFix": "Have the panel's agent fix it",
   "workView.hideChat": "Hide the agent",
   "workView.noPanels": "This project has no panels now.",
   "workView.showChat": "Show the agent",
-  "workView.fixPagePrompt": "The Work page (ui/) doesn't open; this is the error. Please fix it:\n\n{error}",
+  "workView.fixPagePrompt": "The panel page (ui/) doesn't open; this is the error. Please fix it:\n\n{error}",
   "workView.secretBadName": "The name {name} can't contain spaces or slashes",
 
   "sync.passkeyRequest": "“{label}” wants to add a passkey, code {code}",

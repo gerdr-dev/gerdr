@@ -43,11 +43,11 @@ gerdr session list      # 全部；"self": true 是你自己
 `gerdr session open <会话>` 把它开回界面上（开在你旁边，不抢焦点）；给它 `send` 也会自动开回来。
 
 The user splits Gerdr into isolated **projects** (like herdr's `--session`): each has its own workspaces (Code) and its own
-Work view with a Work agent. You only see, and can only reach, the conversations and workspaces of the project you're in:
+panels, each with its agent (call them panels; there is no "Work" any more). You only see, and can only reach, the conversations and workspaces of the project you're in:
 `list` leaves the others out, and naming one of them fails with "no such session". That is deliberate. Don't try to get
 around it, and don't ask the user to move things across for you unless they brought it up.
 
-Which project you're in is worked out from where you are, every time: the pane showing you, or for the Work agent its Work
+Which project you're in is worked out from where you are, every time: the pane showing you, or for a panel's agent its panel's
 directory, or the Gerdr terminal a command is typed in. `--project <name>` on `gerdr session|workspace|tab|pane` is only for
 running them from outside Gerdr; don't use it to reach into another project.
 
@@ -86,7 +86,7 @@ gerdr session new --agent codex --title reviewer \
 - 带 `--wait`：等它这一轮做完，输出里 `reply` 就是它的回复；不带就是派出去不等，之后再 `wait`；
 - 要它能改文件 / 跑命令而不每次问人，按用户的意思给 `--mode`（claude：`acceptEdits` / `auto` / `bypassPermissions`；codex：`auto` / `full-access`；native：`acceptEdits` / `bypassPermissions`，只读用 `plan`）。
   不确定就别给：用用户给这种 agent 设的默认模式（没设、或者设的是全放开的那种，就是 agent 自己的默认），要做危险操作会在界面上弹审批给人；
-- `--cwd` defaults to your current directory. As the Work agent that is the Work directory, not a repository: always
+- `--cwd` defaults to your current directory. As a panel's agent that is the panel's directory, not a repository: always
   give `--cwd` when the task is about code;
 - `--workspace <id|number|label|new>` puts it in that Code workspace as a new tab (`gerdr workspace list`); without it,
   it opens next to you.

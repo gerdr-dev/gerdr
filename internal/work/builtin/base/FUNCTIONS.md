@@ -34,7 +34,7 @@ export async function open(input: { repo?: string }, ctx: Ctx) {
 **`ctx` is described in `local/ctx.d.ts`**: every member with its arguments, what it returns and its
 limits. Read it before writing a function and type the argument `ctx: Ctx` (no import needed). In short:
 `exec` (command-line tools), `mcp` (MCP tools), `fetchAll`, `html`, `secrets`, `fs` (files in this
-Work directory), `sessions` (hand a task to a coding agent and follow it), `workspaces` (the Code
+panel directory), `sessions` (hand a task to a coding agent and follow it), `workspaces` (the Code
 side's workspaces), `dirs` (directories anywhere on disk, read-only), `progress`, `log`, `sleep`.
 
 Images and files the user gives a task (pasted, dropped, picked on a page): the page POSTs each to
@@ -42,11 +42,11 @@ Images and files the user gives a task (pasted, dropped, picked on a page): the 
 paths as `attachments` to `ctx.sessions.start` / `send`, and the agent gets them as from Gerdr's own input box.
 
 Handing work out without waiting on it: `ctx.sessions.start({ ..., tags, reportTo: "work" })` returns at once;
-each time that worker stops (done, waiting for a person, failed) the Work agent gets a report with its reply (not
+each time that worker stops (done, waiting for a person, failed) the panel's agent gets a report with its reply (not
 after a turn the user drove in the worker's own chat), so
 nothing has to poll. `tags` let a later run find "the session for this task / MR" again (`list({ tags })`), and
 `close(id)` parks a worker whose part is done (a later `send` opens it again with its context). Keep tag values
-to letters, digits and `/ - _ . :`: the Work agent types them into `gerdr session` commands, where an unquoted `!`
+to letters, digits and `/ - _ . :`: the panel's agent types them into `gerdr session` commands, where an unquoted `!`
 or `#` makes the command wait for the user's approval.
 
 Globals: `fetch(url, { method, headers, body })` (there's no `ctx.fetch`; `body` can be an object, sent
@@ -86,8 +86,8 @@ come first) and exits 1. Ctrl-C stops the run. Fix it until it runs, then wire t
 
 ## As tools for agents
 
-A local file can offer some of its functions as tools to the agents this Work works with (you, and every session
-the Work starts): they get them over MCP as `work`, can call them whenever they need, and get the result back in
+A local file can offer some of its functions as tools to the agents this panel works with (you, and every session
+the panel starts): they get them over MCP as `work`, can call them whenever they need, and get the result back in
 the same turn. That's how an agent reports to and changes something of yours (a task board: "I'm done", "I need the
 user to sign in", "never mind, they answered") instead of writing text you'd have to parse.
 
@@ -128,7 +128,7 @@ backend runs them while it's up: with the background service on, the App needn't
 { "prompt": "Sum up yesterday's merged MRs for the standup", "at": "09:30", "name": "Standup notes" }
 ```
 
-- `fn` runs a local function, with `input` plus `scheduled: true`; `prompt` sends the text to you (the Work agent),
+- `fn` runs a local function, with `input` plus `scheduled: true`; `prompt` sends the text to you (the panel's agent),
   as if the user had. One of the two. Deterministic work is a function; only what needs judgement is a prompt, and a
   watcher is best a function that polls and filters and hands just the interesting part to an agent
   (`ctx.sessions.send` to the worker concerned, or to you with `"work"`).

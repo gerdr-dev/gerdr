@@ -110,7 +110,7 @@ func (r *Runner) CallTool(ctx context.Context, project, name, session string, ar
 			return r.StartAs(project, t.Fn, args, session).Wait(ctx)
 		}
 	}
-	return nil, fmt.Errorf("no tool %q in this Work (local/*.ts export const tools)", name)
+	return nil, fmt.Errorf("no tool %q in this panel (local/*.ts export const tools)", name)
 }
 
 type callerKey struct{}

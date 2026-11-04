@@ -63,7 +63,7 @@ func (r *runner) exec(name string, args goja.Value, opts goja.Value) *goja.Promi
 			d = filepath.Clean(cwd)
 		}
 		if rel, err := filepath.Rel(r.dir, d); err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-			return r.rejected(fmt.Errorf("ctx.exec's cwd must be inside the Work directory (relative to it): %s — for another repo pass its path as an argument (git -C <dir>, glab -R <repo>)", cwd))
+			return r.rejected(fmt.Errorf("ctx.exec's cwd must be inside the panel's directory (relative to it): %s — for another repo pass its path as an argument (git -C <dir>, glab -R <repo>)", cwd))
 		}
 		if st, err := os.Stat(d); err != nil || !st.IsDir() {
 			return r.rejected(fmt.Errorf("ctx.exec's cwd isn't a directory: %s", cwd))
