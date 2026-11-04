@@ -325,6 +325,11 @@ interface Session {
   error?: string;
   /** See `sessions.start`; `{}` when it has none. */
   tags: Record<string, string>;
+  /**
+   * What it started that runs on its own: subagents (type local_agent; toolCallId names its conversation — a page
+   * shows it with SessionChat's `sub`) and background commands. The agent keeps only the latest finished ones.
+   */
+  tasks?: SessionTask[];
   /** The session it reports to, if any. */
   reportTo?: string;
   /**
@@ -336,6 +341,26 @@ interface Session {
   createdAt: number;
   /** ms: the last thing that happened in it (a message, agent output, an approval). */
   updatedAt: number;
+}
+
+interface SessionTask {
+  id: string;
+  /** local_agent (a subagent), local_bash (a background command), … as the agent reports it. */
+  type: string;
+  description: string;
+  /** The subagent's kind (Explore, general-purpose…). */
+  subagent?: string;
+  /** The tool call that started it: a subagent's conversation is that call's. */
+  toolCallId?: string;
+  /** Started by a subagent (its toolCallId), not by the agent itself. */
+  parent?: string;
+  background: boolean;
+  /** running | completed | failed | killed … */
+  status: string;
+  progress?: string;
+  /** ms */
+  startedAt: number;
+  endedAt?: number;
 }
 
 interface Workspace {

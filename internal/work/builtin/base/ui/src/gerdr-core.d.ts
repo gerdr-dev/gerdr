@@ -14,7 +14,11 @@ declare module "@gerdr/core" {
    * sendNow: every message sent from it goes in right away while the agent runs (the composer's "send now": a running
    * command moves to the background and the agent reads the message at once), instead of waiting for its current step.
    */
-  export function SessionChat(props: { id: string; focused?: boolean; jump?: { ref: string; seq: number }; className?: string; sendNow?: boolean }): ReactNode;
+  /**
+   * sub: show one of its subagents' conversation instead (the toolCallId of ctx.sessions' tasks), read-only, with a way
+   * back; "查看对话" on a subagent's card in this chat opens it here too.
+   */
+  export function SessionChat(props: { id: string; focused?: boolean; jump?: { ref: string; seq: number }; className?: string; sendNow?: boolean; sub?: string }): ReactNode;
 
   /** A conversation's summary, kept current; undefined while unknown. */
   export function useSession(id: string | undefined):

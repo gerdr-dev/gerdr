@@ -34,6 +34,7 @@ import { basename, focusedLeaf, inSpace, inheritDraft, killTerms, removeTab, sel
 import { openTerminal } from "./terminal";
 import { showCode } from "./views";
 import { t } from "../i18n";
+import { subagentOpener } from "../subagents";
 
 // ---- panes ----
 
@@ -201,6 +202,9 @@ export function addImportedWorkspaces(list: { label: string; tabs: { label: stri
 
 /** 在旁边开一个子 agent 的只读面板；已经开着就切过去。 */
 export function openSubagent(sessionId: string, toolCallId: string, title?: string) {
+  // A panel is shown and its chat of this session is on it: open there, not in a Code tab out of sight (lib/subagents)
+  const mounted = get().mode === "work" ? subagentOpener(sessionId) : undefined;
+  if (mounted) return mounted(toolCallId, title);
   const hit = allLeaves(get().layout).find((x) => x.pane.sub?.sessionId === sessionId && x.pane.sub.toolCallId === toolCallId);
   if (hit) return focusPane(hit.pane.id);
   setLayout((l) => {
