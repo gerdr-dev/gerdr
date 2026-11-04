@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -192,18 +193,58 @@ func TestLocalStore(t *testing.T) {
 
 func TestNormalizeSource(t *testing.T) {
 	for in, want := range map[string]string{
-		"gerdr-dev/gerdr-addon":                    "gerdr-dev/gerdr-addon",
-		"https://github.com/gerdr-dev/gerdr-addon": "gerdr-dev/gerdr-addon",
-		"github.com/a/b.git":                       "a/b",
-		"a/b#v1.2":                                 "a/b#v1.2",
+		"gerdr-dev/gerdr-addon":                     "gerdr-dev/gerdr-addon",
+		"https://github.com/gerdr-dev/gerdr-addon":  "gerdr-dev/gerdr-addon",
+		"github.com/a/b.git":                        "a/b",
+		"a/b#v1.2":                                  "a/b#v1.2",
+		"https://git.example.com/me/addons/":        "https://git.example.com/me/addons",
+		"https://git.example.com/me/addons.git#dev": "https://git.example.com/me/addons.git#dev",
+		"git@git.example.com:me/addons.git":         "git@git.example.com:me/addons.git",
+		"https://github.com/a/b.git":                "a/b",
 	} {
 		if got, err := NormalizeSource(in); err != nil || got != want {
 			t.Errorf("%q → %q, %v", in, got, err)
 		}
 	}
-	for _, bad := range []string{"", "a", "a/b/c", "/no/such/dir"} {
+	for _, bad := range []string{"", "a", "a/b/c", "/no/such/dir", "https://host-only.example.com", "ftp://x.com/a/b"} {
 		if _, err := NormalizeSource(bad); err == nil {
 			t.Errorf("%q accepted", bad)
+		}
+	}
+}
+
+// A git store is a shallow clone of the asked branch, without its .git.
+func TestGitFetch(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("no git")
+	}
+	repo := t.TempDir()
+	write(t, filepath.Join(repo, "hello", "addon.json"), `{"name":"Hello"}`)
+	git := func(args ...string) {
+		cmd := exec.Command("git", append([]string{"-C", repo, "-c", "user.name=t", "-c", "user.email=t@t"}, args...)...)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %s", args, out)
+		}
+	}
+	git("init", "-q", "-b", "main")
+	git("add", ".")
+	git("commit", "-qm", "one")
+	git("checkout", "-qb", "dev")
+	write(t, filepath.Join(repo, "bye", "addon.json"), `{"name":"Bye"}`)
+	git("add", ".")
+	git("commit", "-qm", "two")
+	git("checkout", "-q", "main")
+
+	for ref, want := range map[string]int{"": 1, "#dev": 2} {
+		dst := filepath.Join(t.TempDir(), "repo")
+		if err := gitFetch(context.Background(), repo+ref, dst); err != nil {
+			t.Fatal(err)
+		}
+		if got := len(scanStore(dst)); got != want {
+			t.Errorf("%q: %d add-ons, want %d", ref, got, want)
+		}
+		if _, err := os.Stat(filepath.Join(dst, ".git")); err == nil {
+			t.Errorf("%q: .git kept", ref)
 		}
 	}
 }

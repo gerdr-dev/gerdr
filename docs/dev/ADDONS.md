@@ -206,7 +206,8 @@ sees: `internal/addons/builtin/gerdr.d.ts`, copied into `~/.gerdr/addons` on eve
 
 ## Stores
 
-A store is a GitHub repository (`owner/repo`, optionally `#ref`) or, for writing one, an absolute folder path. Its
+A store is a GitHub repository (`owner/repo`, optionally `#ref`), another git repository (its URL: `https://…`,
+`ssh://…` or `git@host:path`, optionally `#branch`), or, for writing one, an absolute folder path. Its
 folders (one or two levels down) holding an `addon.json` are its add-ons; no index file to keep in sync.
 
 - Refresh = download `https://codeload.github.com/<owner>/<repo>/tar.gz/<ref|HEAD>` and unpack into the cache
@@ -214,7 +215,12 @@ folders (one or two levels down) holding an `addon.json` are its add-ons; no ind
   codeload has no API rate limit, and one request gets every icon and README, so browsing is offline. Only a store
   never downloaded is fetched by itself (an empty default store would look broken); after that only the refresh
   button. A failed refresh keeps the last download and shows why.
-- Private repositories don't work yet (no credentials are sent).
+- Another git host (and a private GitHub repository, given as `git@github.com:owner/repo.git`) is a shallow
+  `git clone` with the computer's git instead, its `.git` dropped so the cache is a snapshot like the tarball's. That
+  is how private repositories work: whatever lets `git clone` reach one in a terminal (a credential helper, an SSH
+  key) works here, and nothing is stored in Gerdr. `GIT_TERMINAL_PROMPT=0` and SSH `BatchMode`: a password prompt
+  would wait forever in a process nobody sees, so it fails with git's message instead. codeload stays the way for
+  public GitHub stores: it needs neither git nor credentials.
 - Install copies the folder from the cache to `<addons>/.install-*` (dot names are skipped by the scanner), then
   swaps it in, so no window ever loads half an add-on. The install record keeps `hashDir` of what was copied:
   - an update is offered when the store's hash differs from that (not the version string: a store may forget to bump it);

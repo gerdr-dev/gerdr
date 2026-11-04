@@ -1,13 +1,13 @@
 package addons
 
-// Stores: where add-ons are installed from. A store is a GitHub repository (or, for writing one, a local folder) whose
-// folders holding an addon.json are add-ons:
+// Stores: where add-ons are installed from. A store is a GitHub repository, any other git repository (a self-hosted
+// GitLab / Gitea, a private repo), or, for writing one, a local folder, whose folders holding an addon.json are add-ons:
 //
 //	<repo>/duplicate-tab/addon.json, index.ts …
 //	<repo>/addons/band/addon.json …          (one level deeper works too)
 //
 // No index file to keep in sync: refreshing downloads the repository's tarball (one request to codeload, which has no
-// API rate limit) and unpacks it into the cache, so browsing the store, its icons and READMEs, works offline and costs
+// API rate limit; another git host gets a shallow `git clone` instead) and unpacks it into the cache, so browsing the store, its icons and READMEs, works offline and costs
 // nothing until the next manual refresh. Installing copies a folder from that cache into ~/.gerdr/addons.
 //
 // Borrowed from Claude Code's plugin marketplaces (owner/repo as the address, a folder per plugin), without their
@@ -26,6 +26,7 @@ import (
 	"io/fs"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -67,7 +68,13 @@ type StoreView struct {
 
 var ghRE = regexp.MustCompile(`^([A-Za-z0-9][A-Za-z0-9-]*)/([A-Za-z0-9._-]+?)(?:\.git)?(?:#([A-Za-z0-9._/-]+))?$`)
 
-// NormalizeSource: "owner/repo", "owner/repo#ref", a github.com URL, or an absolute (or ~) folder path.
+// gitURLRE: a git repository on another host, cloned with the computer's git (and its credentials, so a private one
+// works when `git clone` does in a terminal): https:// / http:// / ssh:// URLs and scp-style git@host:path, with an
+// optional #ref (branch or tag).
+var gitURLRE = regexp.MustCompile(`^(?:(?:https?|ssh)://[^\s#/]+/[^\s#]+|[A-Za-z0-9._-]+@[A-Za-z0-9.-]+:[^\s#]+)(?:#([A-Za-z0-9._/-]+))?$`)
+
+// NormalizeSource: "owner/repo", "owner/repo#ref", a github.com URL, another git host's URL, or an absolute (or ~)
+// folder path.
 func NormalizeSource(s string) (string, error) {
 	s = strings.TrimSpace(s)
 	if strings.HasPrefix(s, "~/") {
@@ -85,9 +92,17 @@ func NormalizeSource(s string) (string, error) {
 		s = strings.TrimPrefix(s, p)
 	}
 	s = strings.TrimSuffix(s, "/")
+	// GitHub stays owner/repo (its tarball needs no git and no credentials); anything else with a scheme is a git URL
+	if !ghRE.MatchString(s) && gitURLRE.MatchString(s) {
+		ref := ""
+		if i := strings.Index(s, "#"); i >= 0 {
+			s, ref = s[:i], s[i:]
+		}
+		return strings.TrimSuffix(s, "/") + ref, nil
+	}
 	g := ghRE.FindStringSubmatch(s)
 	if g == nil {
-		return "", fmt.Errorf("%q: give a GitHub repository as owner/repo", s)
+		return "", fmt.Errorf("%q: give a GitHub repository as owner/repo, or a git repository's URL", s)
 	}
 	s = g[1] + "/" + g[2]
 	if g[3] != "" {
@@ -97,6 +112,9 @@ func NormalizeSource(s string) (string, error) {
 }
 
 func isLocal(source string) bool { return filepath.IsAbs(source) }
+
+// isGit: a store on a git host other than GitHub, fetched with git clone.
+func isGit(source string) bool { return !isLocal(source) && !ghRE.MatchString(source) }
 
 func storeKey(source string) string {
 	h := sha256.Sum256([]byte(source))
@@ -270,6 +288,41 @@ const (
 var storeClient = &http.Client{Timeout: 2 * time.Minute}
 
 func (m *Manager) download(ctx context.Context, source string) error {
+	cache := m.storeCache(source)
+	if err := os.MkdirAll(cache, 0o755); err != nil {
+		return err
+	}
+	tmp, err := os.MkdirTemp(cache, ".dl-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(tmp)
+	if isGit(source) {
+		err = gitFetch(ctx, source, tmp)
+	} else {
+		err = githubFetch(ctx, source, tmp)
+	}
+	if err != nil {
+		return err
+	}
+	old := filepath.Join(cache, "repo.old")
+	_ = os.RemoveAll(old)
+	dst := filepath.Join(cache, "repo")
+	if _, err := os.Stat(dst); err == nil {
+		if err := os.Rename(dst, old); err != nil {
+			return err
+		}
+	}
+	if err := os.Rename(tmp, dst); err != nil {
+		_ = os.Rename(old, dst)
+		return err
+	}
+	_ = os.RemoveAll(old)
+	return nil
+}
+
+// githubFetch unpacks a GitHub repository's tarball into dst.
+func githubFetch(ctx context.Context, source, dst string) error {
 	g := ghRE.FindStringSubmatch(source)
 	if g == nil {
 		return fmt.Errorf("bad store %q", source)
@@ -289,37 +342,36 @@ func (m *Manager) download(ctx context.Context, source string) error {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == 404 {
-		return fmt.Errorf("%s/%s not found (a private repository can't be used as a store yet)", g[1], g[2])
+		// codeload only serves public repositories; a private one goes through git, with the computer's credentials
+		return fmt.Errorf("%s/%s not found (a private repository: add it as git@github.com:%s/%s.git, so it is cloned with git)", g[1], g[2], g[1], g[2])
 	}
 	if resp.StatusCode != 200 {
 		return fmt.Errorf("download %s: %s", url, resp.Status)
 	}
-	cache := m.storeCache(source)
-	if err := os.MkdirAll(cache, 0o755); err != nil {
-		return err
+	return untar(resp.Body, dst)
+}
+
+// gitFetch: a shallow clone of a git store into dst, its .git dropped (the cache is a snapshot like a tarball's, and a
+// stray .git would make the store's folders look like work in progress). The computer's git does it, so whatever
+// lets `git clone` reach a private repository in a terminal (a credential helper, an SSH key) works here too; a
+// prompt for a password would wait forever with nobody to answer it, so it fails instead.
+func gitFetch(ctx context.Context, source, dst string) error {
+	url, ref, _ := strings.Cut(source, "#")
+	args := []string{"clone", "--depth", "1", "--quiet"}
+	if ref != "" {
+		args = append(args, "--branch", ref)
 	}
-	tmp, err := os.MkdirTemp(cache, ".dl-")
-	if err != nil {
-		return err
-	}
-	defer os.RemoveAll(tmp)
-	if err := untar(resp.Body, tmp); err != nil {
-		return err
-	}
-	old := filepath.Join(cache, "repo.old")
-	_ = os.RemoveAll(old)
-	dst := filepath.Join(cache, "repo")
-	if _, err := os.Stat(dst); err == nil {
-		if err := os.Rename(dst, old); err != nil {
-			return err
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "git", append(args, "--", url, dst)...)
+	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "GIT_SSH_COMMAND=ssh -o BatchMode=yes")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		if errors.Is(err, exec.ErrNotFound) {
+			return fmt.Errorf("git isn't installed: a store outside GitHub is cloned with git")
 		}
+		return fmt.Errorf("git clone %s: %s", url, strings.TrimSpace(string(out)))
 	}
-	if err := os.Rename(tmp, dst); err != nil {
-		_ = os.Rename(old, dst)
-		return err
-	}
-	_ = os.RemoveAll(old)
-	return nil
+	return os.RemoveAll(filepath.Join(dst, ".git"))
 }
 
 // untar unpacks a GitHub tarball into dst, dropping its top folder (<repo>-<sha>/). Regular files and folders only:

@@ -285,12 +285,12 @@ func addonCmd() *cobra.Command {
 		Long: `Manage add-ons (Settings → Add-ons); open windows follow within a second.
 
 An add-on is a folder in <GERDR_DIR>/addons (UI code and / or a background service) that changes Gerdr itself:
-a sidebar panel, a line under each turn, commands and keys. Stores are GitHub repositories (owner/repo) or local
-folders; the default store is ` + addons.DefaultStore + `.
+a sidebar panel, a line under each turn, commands and keys. Stores are GitHub repositories (owner/repo), other git
+repositories (a URL, cloned with this computer's git and its credentials) or local folders; the default store is ` + addons.DefaultStore + `.
 
   gerdr addon store                    # what the stores offer (never-downloaded stores are fetched first)
   gerdr addon store refresh            # download the stores again
-  gerdr addon store add owner/repo     # or an absolute folder path
+  gerdr addon store add owner/repo     # or a git URL (https://git.example.com/me/addons), or a folder
   gerdr addon info cache-clock         # details and README
   gerdr addon install cache-clock      # also updates an installed one
   gerdr addon list                     # installed, with "update" when the store has a newer copy
@@ -606,7 +606,7 @@ func storeCmd() *cobra.Command {
 		},
 	}
 	cmd.AddCommand(&cobra.Command{
-		Use:   "add <owner/repo[#ref] | github URL | /abs/folder>",
+		Use:   "add <owner/repo[#ref] | git URL[#ref] | /abs/folder>",
 		Short: "Add a store and download it",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, a []string) error {

@@ -438,9 +438,10 @@ and your service gets `{ "kind": "slack.send", "data": { "channel": "D1", "threa
 
 ## Publishing
 
-A store is a GitHub repository whose folders (one or two levels down) holding an `addon.json` are add-ons; there is no
-index to maintain. People add it in Settings → Add-ons → Store as `owner/repo` and install with a click; the store is
-downloaded again only when they press refresh.
+A store is a git repository whose folders (one or two levels down) holding an `addon.json` are add-ons; there is no
+index to maintain. People add it in Settings → Add-ons → Store as `owner/repo` (GitHub) or by its URL (any other git
+host: `https://git.example.com/me/addons`; a private one works when `git clone` does in their terminal) and install
+with a click; the store is downloaded again only when they press refresh.
 
 Before you push an add-on:
 
