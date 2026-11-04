@@ -99,7 +99,7 @@ func main() {
 		if errors.Is(err, errHandover) {
 			os.Exit(exitHandover)
 		}
-		if len(os.Args) > 1 && slices.Contains([]string{"session", "ui", "work", "workspace", "tab", "pane", "config", "agent", "mcp", "skill", "addon", "event"}, os.Args[1]) {
+		if len(os.Args) > 1 && slices.Contains([]string{"session", "ui", "work", "workspace", "tab", "pane", "config", "agent", "mcp", "skill", "addon", "event", "panel"}, os.Args[1]) {
 			fail(err) // for agents: errors are JSON too
 		}
 		fmt.Fprintln(os.Stderr, "gerdr:", err)
