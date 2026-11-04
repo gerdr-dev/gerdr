@@ -11,10 +11,14 @@ package addons
 // Protocol: newline-delimited JSON over stdin / stdout, one object per line with a "type".
 //
 //	gerdr → service (stdin)
-//	  {"type":"hello","version":"…","addon":"<id>"}     first line of every start
+//	  {"type":"hello","version":"…","addon":"<id>","lang":"zh"}   first line of every start; lang: the computer's
+//	                                                    language (zh / en), what Gerdr's texts it passes on are in
 //	  {"type":"sessions","sessions":[…]}                the open sessions; right after hello, then whenever one of
 //	                                                    the fields changes (not on every token: see server/addonsvc.go)
 //	  {"type":"message","data":…}                       sent by the add-on's UI half (g.service.send)
+//	  {"type":"pending","pending":[…]}                  only with "pending": true — what agents wait on a person for
+//	                                                    (approvals, questions); after the greeting, then on change
+//	  {"type":"answered","reqId":"…","error":"…"}       how an "answer" went (no error = it was taken)
 //	service → gerdr (stdout)
 //	  {"type":"status","text":"…"}                      one line shown under the add-on in Settings → Add-ons
 //	  {"type":"status","text":"…","links":{"panel":"http://127.0.0.1:7858"}}
@@ -23,6 +27,9 @@ package addons
 //	                                                    knows. A status line without "links" keeps the last ones;
 //	                                                    a restart clears them.
 //	  {"type":"message","data":…}                       to the add-on's UI half in every open window (g.service.on)
+//	  {"type":"answer","session":"…","reqId":"…","optionId":"…"}          approve / reject, as the person would
+//	  {"type":"answer","session":"…","reqId":"…","answers":{"<q id>":["…"]}}   answer a question ("skip":true = don't)
+//	                                                    only with "pending": true (server/addonsvc.go checks the rest)
 //
 // stdin closing means gerdr is going away: the service should clean up (close its device) and exit. gerdr waits a few
 // seconds for that before it kills the process group. stderr goes to <dir>/logs/addons/<id>.log.
@@ -55,6 +62,10 @@ type ServiceSpec struct {
 	// Events: event patterns (docs/dev/EVENTS.md: "source/kind" with * globs) the service gets on its stdin as
 	// {"type":"event","event":{…}}.
 	Events []string `json:"events,omitempty"`
+	// Pending: the service sees what agents wait on a person for and may answer it (approve a command, answer a
+	// question) — the person's own power, handed over when they install an add-on that asks for it. Off unless the
+	// add-on says so: an add-on that only drives a device has no business approving commands.
+	Pending bool `json:"pending,omitempty"`
 }
 
 // ServiceStatus is what Settings → Add-ons and g.service.status() show.
@@ -83,6 +94,10 @@ type Services struct {
 	OnMessage func(id string, data json.RawMessage)
 	// OnEvent: the service emitted an event ({"type":"event","event":{…}}); its source defaults to the add-on's id.
 	OnEvent func(id string, event json.RawMessage)
+	// PendingLine: the current {"type":"pending",…} line, given to a "pending" service after its greeting.
+	PendingLine func() []byte
+	// OnAnswer: a "pending" service answered one ({"type":"answer",…}, the whole line); the error goes back to it.
+	OnAnswer func(id string, line json.RawMessage) error
 
 	syncMu sync.Mutex // one Sync at a time: an old process must be gone before its replacement starts
 	mu     sync.Mutex
@@ -261,6 +276,27 @@ func (s *Services) SendWhere(pick func(patterns []string) bool, line []byte) {
 	}
 }
 
+// SendPending sends a line to every running service that asked for "pending" (the pending line, on change).
+func (s *Services) SendPending(line []byte) {
+	s.mu.Lock()
+	var ins []chan []byte
+	var ids []string
+	for id, p := range s.procs {
+		if p.in != nil && p.spec.Pending {
+			ins = append(ins, p.in)
+			ids = append(ids, id)
+		}
+	}
+	s.mu.Unlock()
+	for i, in := range ins {
+		select {
+		case in <- line:
+		default:
+			s.log.Warn("addon service not reading stdin, dropped the pending list", "addon", ids[i])
+		}
+	}
+}
+
 // Broadcast sends a line to every running service. A service that is not keeping up loses it (logged).
 func (s *Services) Broadcast(line []byte) {
 	s.mu.Lock()
@@ -426,6 +462,11 @@ func (s *Services) runOnce(p *svcProc) error {
 		if !write(line) {
 			return
 		}
+		if p.spec.Pending && s.PendingLine != nil {
+			if !write(s.PendingLine()) {
+				return
+			}
+		}
 		for {
 			select {
 			case <-stopWriting:
@@ -495,6 +536,7 @@ func (s *Services) readStdout(p *svcProc, r io.Reader) {
 			Links map[string]string `json:"links"`
 			Data  json.RawMessage   `json:"data"`
 			Event json.RawMessage   `json:"event"`
+			ReqID string            `json:"reqId"`
 		}
 		if json.Unmarshal(line, &m) != nil || m.Type == "" {
 			s.log.Info("addon service", "addon", p.id, "stdout", string(line))
@@ -529,6 +571,26 @@ func (s *Services) readStdout(p *svcProc, r io.Reader) {
 		case "event":
 			if s.OnEvent != nil && len(m.Event) > 0 {
 				s.OnEvent(p.id, append(json.RawMessage(nil), m.Event...))
+			}
+		case "answer":
+			err := fmt.Errorf("add-on %q may not answer: its addon.json service has no \"pending\": true", p.id)
+			if p.spec.Pending && s.OnAnswer != nil {
+				err = s.OnAnswer(p.id, append(json.RawMessage(nil), line...))
+			}
+			reply := map[string]any{"type": "answered", "reqId": m.ReqID}
+			if err != nil {
+				reply["error"] = err.Error()
+				s.log.Info("addon service: answer refused", "addon", p.id, "err", err)
+			}
+			b, _ := json.Marshal(reply)
+			s.mu.Lock()
+			in := p.in
+			s.mu.Unlock()
+			if in != nil {
+				select {
+				case in <- b:
+				default:
+				}
 			}
 		default:
 			s.log.Info("addon service: unknown message type", "addon", p.id, "type", m.Type)

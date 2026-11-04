@@ -117,6 +117,24 @@ sees: `internal/addons/builtin/gerdr.d.ts`, copied into `~/.gerdr/addons` on eve
 - The sidebar's quota meter used to be built in (UsageMeter); it is the `usage-meter` add-on now, and "today" (tasks
   done, cost) is the `today` add-on. Without them the sidebar has neither — install from the store.
 
+## Answering for the person (services with "pending": true)
+
+- Asked for (2026-11): get what agents wait on to a chat (Feishu, Slack), answer it there, and have the agent go on.
+  Two halves, kept apart so neither knows the other: a chat add-on (slack) brings messages in as events and posts
+  replies (`reply` addresses, docs/dev/EVENTS.md); `remote-answer` (gerdr-addon repo) holds the requests and talks to
+  whichever chat the person last wrote from. A Feishu add-on that emits `dm` events with a `reply` works with it unchanged.
+- Gerdr's part is `internal/server/addonpending.go`: the pending list (hub.Pending, the ACP request taken apart into
+  tool / options / questions, so an add-on needn't know ACP) sent to services whose addon.json says `"pending": true`,
+  and `{"type":"answer"}` checked against the request (an option id it offered; every question answered, only its
+  labels unless allowOther) before `Session.Answer` — the same response shapes the UI's cards send.
+- Why opt-in, and why not elsewhere: answering approves commands. On the event bus, anything that can emit (any panel
+  function, `gerdr event emit`) could approve; in `gerdr session`, an agent could approve its own requests (that CLI
+  deliberately says "let the user handle it in the UI"). An add-on gets it because the person installed one that
+  asks for it, the same trust as running its service at all.
+- First thought was a UI hook that vetoes notifications ("quiet") for do-not-disturb; dropped for this, which hands
+  the whole "where do requests go and who answers" to add-ons. Do-not-disturb stays built in (Workspace.muted) and
+  shows up here as `muted` on each entry.
+
 ## Languages
 
 - addon.json's `i18n` ({locale: {name, description, settings: {key: {title, description, unit, options}}}}) is passed

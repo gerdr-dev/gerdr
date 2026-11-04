@@ -37,16 +37,26 @@
 // gerdr in JSON lines over stdin / stdout:
 //
 //   gerdr → process (stdin)
-//     {"type":"hello","version":"…","addon":"band"}      first line of every start
+//     {"type":"hello","version":"…","addon":"band","lang":"zh"}   first line of every start; lang (zh / en) is the
+//                                                         computer's language, the one Gerdr's own texts are in
 //     {"type":"sessions","sessions":[ServiceSession…]}   the sessions open in the UI: once after hello, then only when
 //                                                         a field changes (a turn streaming tokens is not a change)
 //     {"type":"message","data":…}                        sent by the UI half, g.service.send(data)
+//     {"type":"pending","pending":[ServicePending…]}     only with "service": {…, "pending": true}: what agents wait
+//                                                         on a person for (approvals, questions); after the greeting,
+//                                                         then whenever it changes. Answered elsewhere = gone from it
+//     {"type":"answered","reqId":"…","error":"…"}        how an "answer" went (no error: taken, the agent goes on)
 //   process → gerdr (stdout)
 //     {"type":"status","text":"band connected"}          shown under the add-on in Settings → Add-ons
 //     {"type":"status","text":"…","links":{"panel":"http://127.0.0.1:7858"}}   the addresses of the add-on's "link"
 //                                                         settings, by key: pages the process serves on a port only it
 //                                                         knows. A status line without "links" keeps the last ones
 //     {"type":"message","data":…}                        to g.service.on("message") in every open window
+//     {"type":"answer","session":"…","reqId":"…","optionId":"…"}               approve / reject (an option's id)
+//     {"type":"answer","session":"…","reqId":"…","answers":{"<question id>":["label"]}}   answer the questions
+//     {"type":"answer","session":"…","reqId":"…","skip":true}                  don't answer a question
+//                                                         only with "pending": true — that's the person's power to
+//                                                         approve commands, given when they install the add-on
 //
 // Other stdout lines go to gerdr's log; stderr goes to ~/.gerdr/logs/addons/<id>.log.
 // stdin closing means gerdr is stopping it (quitting, add-on removed): clean up (let go of the device) and exit.
@@ -562,6 +572,41 @@ declare global {
     error?: string;
     /** When status last changed (unix ms): sort by it to put what just happened first. Doesn't move while a turn runs. */
     since: number;
+  }
+
+  /** One entry of the "pending" line ("service": {"pending": true}): a request waiting on a person. */
+  interface ServicePending {
+    session: string;
+    /** The session's name. */
+    title: string;
+    agent: string;
+    cwd: string;
+    /** Answer with this. */
+    reqId: string;
+    kind: "permission" | "ask";
+    /** One line, in the computer's language ("审批：Bash: rm -rf build", "回答：Which database? (pg / mysql)"). */
+    summary: string;
+    /** When it was asked (unix ms). */
+    at: number;
+    /** In a do-not-disturb group: Gerdr doesn't notify about it, and an add-on that notifies shouldn't either. */
+    muted?: boolean;
+    /** permission: what the agent wants to do. input is the tool's arguments as the agent gave them (a command, a path). */
+    tool?: { title: string; kind?: string; input?: unknown };
+    /** permission: the choices; answer with one's id. kind: allow_once / allow_always / reject_once / reject_always. */
+    options?: { id: string; name: string; kind: string }[];
+    /**
+     * ask: the questions; answer every one by id, with option labels (several only where multiSelect), or your own
+     * text where allowOther. secret: the answer is something like a password.
+     */
+    questions?: {
+      id: string;
+      header?: string;
+      question: string;
+      options?: { label: string; description?: string }[];
+      multiSelect?: boolean;
+      allowOther?: boolean;
+      secret?: boolean;
+    }[];
   }
 
   interface SessionTitleContext {

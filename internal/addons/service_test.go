@@ -187,3 +187,60 @@ func TestServiceCommandNotFound(t *testing.T) {
 		return st != nil && st.State == "exited" && strings.Contains(st.Error, "not found")
 	})
 }
+
+// answerService answers a request at once, then echoes stdin back like echoService (so the test sees "answered").
+const answerService = `#!/bin/sh
+echo '{"type":"answer","session":"S","reqId":"R1","optionId":"allow"}'
+while IFS= read -r line; do
+  printf '{"type":"message","data":%s}\n' "$line"
+done
+`
+
+// Only a service whose addon.json asks for "pending" gets the pending list and may answer; the others are told no.
+func TestServicePending(t *testing.T) {
+	dir := t.TempDir()
+	for id, spec := range map[string]string{"asker": `"pending":true`, "plain": `"events":["x/*"]`} {
+		pdir := filepath.Join(dir, "addons", id)
+		_ = os.MkdirAll(pdir, 0o755)
+		if err := os.WriteFile(filepath.Join(pdir, "svc.sh"), []byte(answerService), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(pdir, "addon.json"), []byte(`{"service":{"command":"./svc.sh",`+spec+`}}`), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	m := New(dir, slog.Default())
+	rec := &recorder{}
+	var answered []string
+	s := NewServices(m, slog.Default())
+	s.PendingLine = func() []byte { return []byte(`{"type":"pending","pending":["first"]}`) }
+	s.OnAnswer = func(id string, line json.RawMessage) error {
+		rec.mu.Lock()
+		answered = append(answered, id+":"+string(line))
+		rec.mu.Unlock()
+		return nil
+	}
+	s.OnMessage = func(id string, data json.RawMessage) {
+		rec.mu.Lock()
+		rec.msgs = append(rec.msgs, id+":"+string(data))
+		rec.mu.Unlock()
+	}
+	s.Sync()
+	defer s.Close()
+
+	rec.waitMsg(t, `asker:{"type":"pending","pending":["first"]}`) // after its greeting
+	rec.waitMsg(t, `asker:{"reqId":"R1","type":"answered"}`)       // taken: no error
+	rec.waitMsg(t, `plain:{"error":"add-on \"plain\" may not answer`)
+	s.SendPending([]byte(`{"type":"pending","pending":["second"]}`))
+	rec.waitMsg(t, `asker:{"type":"pending","pending":["second"]}`)
+	rec.mu.Lock()
+	defer rec.mu.Unlock()
+	if len(answered) != 1 || !strings.HasPrefix(answered[0], `asker:{"type":"answer"`) {
+		t.Fatalf("answers given = %q", answered)
+	}
+	for _, m := range rec.msgs {
+		if strings.HasPrefix(m, "plain:") && strings.Contains(m, `"pending"`) {
+			t.Fatalf("plain got the pending list: %s", m)
+		}
+	}
+}

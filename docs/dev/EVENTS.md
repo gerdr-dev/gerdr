@@ -66,6 +66,10 @@ Many users have no Slack; others have Feishu. So a panel never lists sources in 
   emits `{kind: reply.kind, data: reply.data + text}` under the panel's name, and the source, subscribed to that kind,
   posts it. Slack and Feishu answer the same way for the panel; only the add-on knows channels and threads.
 
+An agent's approvals and questions can be answered from a chat the same way, without the chat knowing: the
+`remote-answer` add-on gets them from Gerdr (a service with `"pending": true`, docs/dev/ADDONS.md), posts through the
+reply address of the person's last `dm`, and reads the answer from that conversation's next `dm` events.
+
 ## Loops
 
 A trigger's function may emit events (a poller fanning out, a reply). Each run knows the depth of the event that

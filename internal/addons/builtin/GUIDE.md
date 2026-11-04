@@ -278,7 +278,7 @@ removed.
 
 `command` is a name on the login shell's PATH, an absolute path, or `./…` relative to the folder. It talks JSON lines:
 
-- stdin: `{"type":"hello",…}` first, then `{"type":"settings","settings":{…}}` (your [settings](#settings), secrets in
+- stdin: `{"type":"hello",…,"lang":"zh"}` first (`lang`: the computer's language, zh / en — what Gerdr's own texts it hands you are in), then `{"type":"settings","settings":{…}}` (your [settings](#settings), secrets in
   the clear — that's how a service gets its token; sent again whenever they change), `{"type":"sessions","sessions":[…]}`
   whenever an open session changes, `{"type":"message","data":…}` from `g.service.send(data)`, and
   `{"type":"event","event":{…}}` for each event matching a pattern in `"service": { …, "events": ["ci/*"] }`.
@@ -288,6 +288,30 @@ removed.
   (an [event](#events): source defaults to your add-on's id). Other lines go to Gerdr's log; stderr to
   `~/.gerdr/logs/addons/<id>.log`.
 - stdin closing means stop: let go of what you hold and exit within 3 seconds.
+
+#### Answering for the person
+
+With `"service": { …, "pending": true }` a service also gets `{"type":"pending","pending":[…]}` (right after its
+settings, then on every change): each approval or question an agent waits on, taken apart (`ServicePending` in
+gerdr.d.ts: the tool and its input, the options with their ids, the questions). It may answer one, as the person
+would, and the agent goes on:
+
+```
+{"type":"answer","session":"…","reqId":"…","optionId":"allow"}               approve / reject
+{"type":"answer","session":"…","reqId":"…","answers":{"db":["pg"]}}          questions, by id
+{"type":"answer","session":"…","reqId":"…","skip":true}                      leave a question unanswered
+```
+
+Gerdr checks it against the request and replies `{"type":"answered","reqId":"…"}`, with `"error"` when it was refused
+(already handled elsewhere, not one of the options). Answered anywhere else, a request just leaves the next list.
+Without `"pending": true` an answer is refused: approving commands is the person's power, and they hand it over by
+installing an add-on that says it wants it — so say so in your README. Entries with `muted: true` sit in a
+do-not-disturb group; Gerdr doesn't notify about them, and neither should you.
+
+The usual use is answering from a chat without knowing which chat: post with the reply address of the person's last
+direct message (any source's `dm` event carries `reply`, see [Events](#events)) and read their answer from the
+events of that same conversation (same `source` and `key`). The `remote-answer` add-on does this; Slack's or Feishu's
+add-on only has to bring messages in and post replies.
 - Keep files in `$GERDR_ADDON_DATA`, never in the add-on's folder (writing there reloads every window, and an update
   replaces the folder).
 

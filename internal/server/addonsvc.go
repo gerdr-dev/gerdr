@@ -9,6 +9,7 @@ import (
 	"github.com/gerdr-dev/gerdr/internal/addons"
 	"github.com/gerdr-dev/gerdr/internal/events"
 	"github.com/gerdr-dev/gerdr/internal/hub"
+	"github.com/gerdr-dev/gerdr/internal/i18n"
 	"github.com/gerdr-dev/gerdr/internal/version"
 )
 
@@ -36,9 +37,10 @@ type svcSession struct {
 type addonBridge struct {
 	s *Server
 
-	mu    sync.Mutex
-	since map[string]svcSince
-	last  []byte // the last sessions line broadcast
+	mu          sync.Mutex
+	since       map[string]svcSince
+	last        []byte // the last sessions line broadcast
+	lastPending []byte // the last pending line sent ("pending" services only)
 }
 
 type svcSince struct {
@@ -104,7 +106,9 @@ func (s *Server) RunAddonServices(ctx context.Context) {
 	ps := s.AddonSvc
 	b := &addonBridge{s: s, since: map[string]svcSince{}}
 	ps.Greeting = func(id string) [][]byte {
-		hello, _ := json.Marshal(map[string]any{"type": "hello", "version": version.Version, "addon": id})
+		// lang: the computer's language (i18n), the one Gerdr's own texts a service passes on are in (a request's
+		// summary, an agent's option names), so what the service writes itself can match them
+		hello, _ := json.Marshal(map[string]any{"type": "hello", "version": version.Version, "addon": id, "lang": string(i18n.Current())})
 		return [][]byte{hello, b.line()}
 	}
 	ps.OnStatus = func(id string, st addons.ServiceStatus) {
@@ -130,6 +134,8 @@ func (s *Server) RunAddonServices(ctx context.Context) {
 			s.Log.Warn("addon service: event refused", "addon", id, "err", err)
 		}
 	}
+	ps.PendingLine = s.pendingLine
+	ps.OnAnswer = s.answerFromAddon
 	ps.Sync()
 	go func() {
 		for ctx.Err() == nil {
@@ -137,6 +143,10 @@ func (s *Server) RunAddonServices(ctx context.Context) {
 			pumpSessions(ctx, sub, func() {
 				if l, ok := b.changed(); ok {
 					ps.Broadcast(l)
+				}
+				if l := s.pendingLine(); string(l) != string(b.lastPending) {
+					b.lastPending = l
+					ps.SendPending(l)
 				}
 			})
 			s.Hub.Unsubscribe(sub)
