@@ -84,6 +84,13 @@ declare module "@gerdr/core" {
    */
   export function usePortalContainer(): HTMLElement | null;
 
+  /**
+   * Whether this panel is on screen: it's the panel shown and the window isn't hidden. Gerdr keeps a panel mounted
+   * while another panel or Code is shown, and this page lives inside gerdr's own, so `document.visibilityState` stays
+   * "visible" all the while the app is open. Poll only while this is true, and refresh when it turns true again.
+   */
+  export function usePanelVisible(): boolean;
+
   export function registerCard(type: string, component: ComponentType<CardProps>): () => void;
 
   /** The built-in card (title, body, choices answerable in place with undo), for a card type that only adds to it. */

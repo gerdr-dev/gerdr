@@ -3,6 +3,7 @@ import { createElement, useCallback, useEffect, useRef, useState, useSyncExterna
 import { createRoot, type Root } from "react-dom/client";
 import { toast } from "sonner";
 import { PortalContext } from "@/core/portal";
+import { PanelKeyContext, setPanelShown } from "@/core/visible";
 import { AgentIcon, StatusDot, dotStatus } from "@/components/AgentIcon";
 import { COL_EDGE, startColResize } from "@/components/SidebarChrome";
 import { ChatView } from "@/components/chat/ChatView";
@@ -181,16 +182,20 @@ function MountRoot({ project }: { project: string }) {
       root = createRoot(el);
       root.render(
         createElement(
-          PortalContext.Provider,
-          { value: portal.current },
-          app.createApp({
-            path,
-            onNavigate: (p: string) => {
-              try {
-                localStorage.setItem(pathKey(project), p);
-              } catch {}
-            },
-          }),
+          PanelKeyContext.Provider,
+          { value: project },
+          createElement(
+            PortalContext.Provider,
+            { value: portal.current },
+            app.createApp({
+              path,
+              onNavigate: (p: string) => {
+                try {
+                  localStorage.setItem(pathKey(project), p);
+                } catch {}
+              },
+            }),
+          ),
         ),
       );
     })().catch((e) => !dead && setFailed(String(e?.stack ?? e)));
@@ -249,6 +254,8 @@ function WorkFrame({ project, active, onShowChat }: { project: string; active: b
     return () => void frameSend.delete(project);
   }, [project]);
   useEffect(() => toPage({ type: "gerdr:theme", dark }), [dark]);
+  // core usePanelVisible: the page knows when it's off screen (and can stop polling)
+  useEffect(() => setPanelShown(project, active), [project, active]);
   useEffect(() => {
     // Every mounted page posts on this window: only the one on screen is the one the user is using
     if (!active) return;
