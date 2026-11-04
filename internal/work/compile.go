@@ -25,7 +25,10 @@ func compile(path string) (*goja.Program, error) {
 	if err != nil {
 		return nil, err
 	}
-	prog, err := goja.Compile(filepath.Base(path), code, false)
+	// Wrapped in a function, as Node does: the bundle's top-level `var`s and functions stay the module's own instead
+	// of becoming (undeletable) globals of the VM, which is reused for other runs (pool.go). Same line numbers: the
+	// wrapper opens on the first line.
+	prog, err := goja.Compile(filepath.Base(path), "(function (module, exports, require) {"+code+"\n})", false)
 	if err != nil {
 		return nil, jsError(err)
 	}

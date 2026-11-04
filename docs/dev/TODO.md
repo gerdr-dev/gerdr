@@ -24,8 +24,13 @@ reused (163e358); `gerdr session` asks /api/hello?only=sessions,layout (a217328)
 
 **Left**: the lb project's `chat-intake` panel (no repo of its own, ~/.gerdr/projects/lb/panels/chat-intake) still
 runs intake.list every 5 s whatever is on screen: its ui/src/pages/index.tsx should poll with usePanelVisible like
-Superagent's ui/src/lib/visible.ts. Each panel function run still builds a fresh goja VM (reusing one would carry
-state between runs). Measure again with the steps below.
+Superagent's ui/src/lib/visible.ts. Measure again with the steps below.
+
+Function VMs are pooled now (internal/work/pool.go: globals installed once, the run's fields reset, the shared JS
+world restored from a descriptor snapshot on release, untrusted VMs dropped; pool_test.go). A run went from 4.9 MB /
+5.4 ms to 0.6 MB / 2.0 ms, nearly all of it the restore reading each of ~700 property descriptors. Cheaper is possible
+(compare values only and hook defineProperty / freeze / seal to learn of attribute changes), but a Proxy over a
+builtin reaches its [[DefineOwnProperty]] past any hook, so it was left at the full compare.
 How to read it: `curl -H "Authorization: Bearer $(cat ~/.gerdr/token)" -o a.pb.gz
 http://127.0.0.1:7870/api/debug/pprof/allocs`, then `go tool pprof -top -cum -sample_index=alloc_space a.pb.gz`
 (`/profile?seconds=30` for CPU; server/debug.go).

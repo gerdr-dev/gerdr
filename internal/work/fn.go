@@ -141,17 +141,24 @@ func bundle(path string) (code string, inputs []string, err error) {
 	return string(res.OutputFiles[0].Contents), inputs, nil
 }
 
-// load runs the bundled CommonJS (compile's program) and returns module.exports.
+// load runs the bundled CommonJS (compile's program: a function of module, exports, require) and returns
+// module.exports. Each call is a fresh module: its top-level state starts over every run, even in a reused VM.
 func load(vm *goja.Runtime, prog *goja.Program) (*goja.Object, error) {
+	wrapper, err := vm.RunProgram(prog)
+	if err != nil {
+		return nil, jsError(err)
+	}
+	fn, ok := goja.AssertFunction(wrapper)
+	if !ok {
+		return nil, errors.New("compiled module isn't a function")
+	}
 	module := vm.NewObject()
 	exports := vm.NewObject()
 	_ = module.Set("exports", exports)
-	_ = vm.Set("module", module)
-	_ = vm.Set("exports", exports)
-	_ = vm.Set("require", func(name string) goja.Value {
+	require := vm.ToValue(func(name string) goja.Value {
 		panic(vm.NewTypeError("local functions can't require(%q): import code from local/ by relative path; what they can do is on ctx", name))
 	})
-	if _, err := vm.RunProgram(prog); err != nil {
+	if _, err := fn(goja.Undefined(), module, exports, require); err != nil {
 		return nil, jsError(err)
 	}
 	return module.Get("exports").ToObject(vm), nil
@@ -170,14 +177,30 @@ type runner struct {
 }
 
 func (r *Runner) runCode(ctx context.Context, project, dir, file, fn string, prog *goja.Program, input any, emit func(Event)) (any, error) {
-	vm := goja.New()
-	vm.SetFieldNameMapper(goja.TagFieldNameMapper("json", true))
+	p, err := takeVM() // pool.go: a VM with the globals installed, reused across runs
+	if err != nil {
+		return nil, err
+	}
+	vm, run := p.vm, p.run
+	// Pooled again only if the run ended normally: not interrupted, not crashed (a panic skips clean = true)
+	clean := false
+	defer func() { p.release(clean) }()
 	// Stop / timeout: interrupt the JS (a host call blocked in fetch / exec returns too, its ctx is the same)
 	stop := context.AfterFunc(ctx, func() { vm.Interrupt("stopped") })
-	defer stop()
-	run := &runner{ctx: ctx, vm: vm, r: r, project: project, dir: dir, emit: emit, depth: depthOf(input)}
-	defer run.cleanup()
-	run.installGlobals()
+	defer func() {
+		if !stop() {
+			clean = false // the interrupt fired (or is firing): this VM may still carry it
+		}
+	}()
+	run.begin(ctx, r, project, dir, emit, depthOf(input))
+	res, err := run.call(file, fn, prog, input)
+	clean = true
+	return res, err
+}
+
+// call loads the module and calls its export fn with (input, ctx), waiting for a returned promise.
+func (run *runner) call(file, fn string, prog *goja.Program, input any) (any, error) {
+	vm := run.vm
 	exports, err := load(vm, prog)
 	if err != nil {
 		return nil, err
