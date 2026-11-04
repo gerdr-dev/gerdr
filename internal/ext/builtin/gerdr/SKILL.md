@@ -131,8 +131,14 @@ gerdr session new --host mini --cwd '~/work/promo' --title cover \
 
 To run several tasks at once, or a long one, don't block yourself on `--wait`: use `--report-to self` and go back to the
 user. Each time the session stops (turn done, waiting for a person to approve / answer, failed) you get a "Gerdr report"
-message with its reply and id (not for a turn the user drove by typing in that session's chat: they've seen it). While you're busy, reports are held and arrive together when your turn ends. With
-`--report-to`, don't also `--wait` (you'd get the result twice).
+message with its reply and id (not when a turn the user drove by typing in that session's chat simply ends: they've
+seen it). While you're busy, reports are held and arrive together when your turn ends. With `--report-to`, don't also
+`--wait` (you'd get the result twice).
+
+A session you started that stops on a **question** is asking you, not the user: decide. Answer what you can with
+`gerdr session send <id> "…"` (a message while it's asking is its answer); what's the user's call, put to them with your
+recommendation (on a task board: `ask_human`), then send it their answer. An **approval** (a command / edit to allow) is
+the user's alone: tell them, don't work around it.
 
 ```bash
 gerdr session new --cwd ~/code/api --title "fix login" --tag task=t12 --report-to self \

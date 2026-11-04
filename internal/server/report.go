@@ -190,9 +190,11 @@ func (rp *reporter) onSession(sum hub.Summary) {
 	rp.mu.Lock()
 	old := rp.last[sum.ID]
 	rp.last[sum.ID] = sum.Status
-	// A turn a person drove (they talked to the worker in its chat) isn't reported: they read the answer there, and
-	// the coordinator would only repeat it back to them (reported: a whole extra turn echoing a reply already seen).
-	if kind := reportKind(old, sum.Status); kind != "" && sum.ReportTo != "" && !sum.ByPerson {
+	// A turn a person drove (they talked to the worker in its chat) isn't reported when it simply ends: they read the
+	// answer there, and the coordinator would only repeat it (a whole extra turn echoing a reply already seen). But
+	// one that stops on a question or an error is: the person said a word and left (the user's habit), and a helper
+	// stuck on a question nobody sees blocks the work that waits on it.
+	if kind := reportKind(old, sum.Status); kind != "" && sum.ReportTo != "" && (!sum.ByPerson || kind != "done") {
 		rp.queue[sum.ReportTo] = append(rp.queue[sum.ReportTo], report{from: sum.ID, kind: kind})
 		rp.scheduleLocked(sum.ReportTo)
 	}
@@ -304,7 +306,15 @@ func writeReport(b *strings.Builder, sum hub.Summary, kind, reply string) {
 	}
 	switch kind {
 	case "waiting":
-		fmt.Fprintf(b, i18n.S("它在等：%s\n只有人能处理这一步：告诉用户去 Gerdr 界面上看，别替人决定。\n", "It's waiting on: %s\nOnly a person can handle this: tell the user to look in Gerdr, don't decide for them.\n"), sum.Waiting)
+		if sum.WaitingKind == "ask" {
+			// A question: it asks whoever handed it the work, which is you. A message answers it (hub: a message
+			// while a question is pending is its answer), so the coordinator can, and the user isn't left with a
+			// helper's question they never see (a helper on another computer waited on one for an hour).
+			fmt.Fprintf(b, i18n.S("它在问：%s\n这是在问你（派它出去的）：你来判断。能定的直接回答它：gerdr session send %s '你的回答'（发消息就是回答它的问题）。要用户拿主意的，把问题连同你的建议交给用户（任务看板上用 ask_human），用户答了再发给它。\n",
+				"It asks: %s\nIt's asking you (who handed it the work): decide. If you can, answer it: gerdr session send %s 'your answer' (a message answers its question). If it's the user's call, put it to them with your recommendation (on a task board: ask_human), then send it their answer.\n"), sum.Waiting, sum.ID)
+		} else {
+			fmt.Fprintf(b, i18n.S("它在等：%s\n这是要人批准的一步，只有用户能处理：告诉用户去 Gerdr 界面上批，别替人决定。\n", "It's waiting on: %s\nAn approval only the user can give: tell them to look in Gerdr, don't decide for them.\n"), sum.Waiting)
+		}
 	case "error":
 		if sum.Error != "" {
 			fmt.Fprintf(b, i18n.S("错误：%s\n", "Error: %s\n"), sum.Error)

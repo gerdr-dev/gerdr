@@ -180,6 +180,20 @@ func (s *Session) waitingLocked() string {
 	return w
 }
 
+// waitingKindLocked: the oldest pending request's kind (permission | ask), "" when nothing is pending.
+func (s *Session) waitingKindLocked() string {
+	var first *pending
+	for _, p := range s.pending {
+		if first == nil || p.at < first.at {
+			first = p
+		}
+	}
+	if first == nil {
+		return ""
+	}
+	return first.kind
+}
+
 // PendingReq：一个在等人处理的审批 / 提问（GET /api/pending）。
 type PendingReq struct {
 	SessionID string          `json:"sessionId"`
@@ -280,6 +294,9 @@ type Summary struct {
 	Waiting string `json:"waiting,omitempty"`
 	// WaitingSince: when the oldest of those requests came in (unix ms), so a watcher can tell "waiting for 20 minutes".
 	WaitingSince int64 `json:"waitingSince,omitempty"`
+	// WaitingKind: what the oldest of them is — "permission" (a command / edit to approve: only a person may) or "ask"
+	// (a question: whoever handed it the work can answer, by sending a message, which answers it).
+	WaitingKind string `json:"waitingKind,omitempty"`
 	// ByPerson: the last turn came from a person typing in it (Gerdr's UI, `gerdr session send` in a terminal), not
 	// from code or another agent. --report-to skips such turns: the person saw the answer, the coordinator needn't.
 	ByPerson bool `json:"byPerson,omitempty"`
@@ -328,7 +345,7 @@ func (s *Session) Summary() Summary {
 	if (modes == nil || len(config) == 0) && s.h.opts != nil {
 		modes, config = s.optsFallbackLocked(modes, config)
 	}
-	return Summary{Record: s.rec, Status: s.status, Error: s.lastErr, Modes: modes, Config: config, Commands: cmds, CommandsKey: s.h.cmdSets.key(cmds), CommandsCached: cached && len(cmds) > 0, Pending: len(s.pending), LastSeq: last, Tasks: s.tasks, Turn: s.turnInfoLocked(), Context: s.contextLocked(), Base: s.h.Base(s.rec.Agent), Branch: gitBranch(s.rec.WorkDir()), Waiting: s.waitingLocked(), WaitingSince: s.waitingSinceLocked(), ByPerson: s.byPerson}
+	return Summary{Record: s.rec, Status: s.status, Error: s.lastErr, Modes: modes, Config: config, Commands: cmds, CommandsKey: s.h.cmdSets.key(cmds), CommandsCached: cached && len(cmds) > 0, Pending: len(s.pending), LastSeq: last, Tasks: s.tasks, Turn: s.turnInfoLocked(), Context: s.contextLocked(), Base: s.h.Base(s.rec.Agent), Branch: gitBranch(s.rec.WorkDir()), Waiting: s.waitingLocked(), WaitingSince: s.waitingSinceLocked(), WaitingKind: s.waitingKindLocked(), ByPerson: s.byPerson}
 }
 
 func (s *Session) waitingSinceLocked() int64 {

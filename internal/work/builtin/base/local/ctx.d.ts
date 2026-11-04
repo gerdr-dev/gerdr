@@ -313,6 +313,8 @@ interface Session {
   waiting?: string;
   /** ms: since when it's been waiting for a person (only while waiting). */
   waitingSince?: number;
+  /** What it waits on: "permission" (an approval only a person may give) or "ask" (a question: a message answers it). */
+  waitingKind?: "permission" | "ask";
   /** ms: when the running turn started (only while running). */
   turnStartedAt?: number;
   /**

@@ -287,6 +287,9 @@ func (h workHost) view(x hub.Summary, evs []*hub.Event) map[string]any {
 	if x.WaitingSince != 0 {
 		v["waitingSince"] = x.WaitingSince
 	}
+	if x.WaitingKind != "" {
+		v["waitingKind"] = x.WaitingKind
+	}
 	if x.Turn != nil {
 		v["turnStartedAt"] = x.Turn.StartedAt
 	}

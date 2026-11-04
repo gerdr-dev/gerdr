@@ -198,3 +198,40 @@ func TestReportsSkipTurnsByPerson(t *testing.T) {
 		t.Errorf("delivered %d reports after a coordinator's turn, want 1", n)
 	}
 }
+
+// A turn the person drove that stops on a question still reaches the coordinator: they said a word and left, and the
+// question is the coordinator's to answer (a message answers it). An approval is reported as the user's to give.
+func TestReportsQuestionsEvenByPerson(t *testing.T) {
+	h := reportHub(t)
+	rp := newReporter(&Server{Hub: h})
+	rp.delay = 5 * time.Millisecond
+	var texts []string
+	var mu sync.Mutex
+	rp.state = func(string) (string, bool) { return hub.StIdle, true }
+	rp.deliver = func(_ string, text, _ string) error { mu.Lock(); texts = append(texts, text); mu.Unlock(); return nil }
+	w, _ := h.Session("w1")
+	x := w.Summary()
+	// The report is written from the session as it is then: this one's state, as set below
+	rp.source = func(string) (hub.Summary, []*hub.Event, error) { return x, nil, nil }
+	x.ByPerson = true
+	x.Status = hub.StRunning
+	rp.onSession(x)
+	x.Status, x.WaitingKind, x.Waiting = hub.StWaiting, "ask", "回答：选哪个？（A / B）"
+	rp.onSession(x)
+	time.Sleep(40 * time.Millisecond)
+	mu.Lock()
+	if len(texts) != 1 || !strings.Contains(texts[0], "gerdr session send w1") || !strings.Contains(texts[0], "选哪个") {
+		t.Fatalf("question not handed to the coordinator: %q", texts)
+	}
+	mu.Unlock()
+	x.Status, x.WaitingKind, x.Waiting = hub.StRunning, "", ""
+	rp.onSession(x)
+	x.Status, x.WaitingKind, x.Waiting = hub.StWaiting, "permission", "审批：rm -rf x"
+	rp.onSession(x)
+	time.Sleep(40 * time.Millisecond)
+	mu.Lock()
+	defer mu.Unlock()
+	if len(texts) != 2 || !strings.Contains(texts[1], "只有用户能处理") || strings.Contains(texts[1], "gerdr session send") {
+		t.Fatalf("approval: %q", texts)
+	}
+}
