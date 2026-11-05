@@ -88,15 +88,16 @@ func StartInProc(ctx context.Context, agent InProcAgent, handler Handler, log *s
 	return h, nil
 }
 
-// StartProcess 起一个外部 ACP agent（stdio）。
-func StartProcess(ctx context.Context, argv []string, cwd string, handler Handler, log *slog.Logger) (*Host, error) {
+// StartProcess starts an external ACP agent over stdio. env (K=V) goes on top of the child environment: it is how
+// Settings → Agents points one at another account or config (e.g. OPENCODE_CONFIG, PI_CODING_AGENT_DIR, an API key).
+func StartProcess(ctx context.Context, argv []string, env []string, cwd string, handler Handler, log *slog.Logger) (*Host, error) {
 	if len(argv) == 0 {
 		return nil, errors.New("empty command")
 	}
 	sysenv.AdoptLoginPath()
 	cmd := exec.Command(argv[0], argv[1:]...)
 	cmd.Dir = cwd
-	cmd.Env = sysenv.ChildEnv()
+	cmd.Env = sysenv.ChildEnv(env...)
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, err

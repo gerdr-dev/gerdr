@@ -244,7 +244,7 @@ gerdr remote join https://relay.example.com gerdr.example.com <邀请码> \
 订阅账号用一个单独的 `CLAUDE_CONFIG_DIR=~/.claude-2`（然后在终端里 `CLAUDE_CONFIG_DIR=~/.claude-2 claude` 进去 `/login` 一次），
 API key 就写 `ANTHROPIC_API_KEY=…`。还能换可执行文件、追加命令行参数。新建会话时它和原版并排出现在 agent 里，
 每个是单独的进程和会话记录目录。Codex 同理（`CODEX_HOME` / `OPENAI_API_KEY`）。
-外部 ACP agent（Gemini CLI 等）也在这一页加（`gemini --experimental-acp`）。改了立即生效，不用重启。
+外部 ACP agent 也在这一页加：Gemini CLI（`gemini --experimental-acp`）、OpenCode（`opencode acp`）、[pi](https://github.com/badlogic/pi-mono)（`pi-acp`），需要的话可以给它单独的环境变量。改了立即生效，不用重启。
 存在 `config.json` 的 `agents` 里：
 `{"id": "claude-2", "name": "Claude 2", "base": "claude", "env": {"CLAUDE_CONFIG_DIR": "~/.claude-2"}, "bin": "", "args": []}`。
 

@@ -63,14 +63,16 @@ const agentsHelp = `Each element of agents is one agent (role) offered when star
   id         unique, [a-z0-9-]; not claude / codex / native (those are the built-in ones)
   name       shown in the UI
   base       the engine: claude (Claude Code) | codex (Codex) | native (Gerdr Agent, calls the model API itself)
-  command    instead of base: an external ACP agent's command line, e.g. ["gemini", "--experimental-acp"]
+  command    instead of base: an external ACP agent's command line, e.g. ["gemini", "--experimental-acp"],
+             ["opencode", "acp"], ["pi-acp"] (pi: npm i -g @mariozechner/pi-coding-agent pi-acp)
   prompt     extra system prompt appended for this agent
   skills     only these skills, by name. Omit = whatever the global Skill settings give; [] = none.
              Skills that come with the repository being worked on are given anyway (no list can name them).
   mcp        only these MCP servers, by name. Omit = whatever the global MCP settings give; [] = none.
   providers  native only: which llm.providers ids it may use (gerdr config get llm.providers); omit = all
-  bin, args, env   claude / codex only: another executable, extra arguments, environment variables
-                   (e.g. {"CLAUDE_CONFIG_DIR": "~/.claude-work"} for a second account)
+  bin, args  claude / codex only: another executable, extra arguments
+  env        claude / codex / command: environment variables (e.g. {"CLAUDE_CONFIG_DIR": "~/.claude-work"} for a
+             second account, {"OPENCODE_CONFIG": "~/oc-work.json"} for another opencode config)
 
 skills / mcp may name any switched-on skill / MCP server: built-in, gerdr's own (gerdr skill add, gerdr mcp add)
 or the engine's own (Claude Code's / Codex's), whatever the global source says. Switched-off ones are never given.

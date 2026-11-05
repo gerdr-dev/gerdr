@@ -238,8 +238,8 @@ Settings → Agents → *Add a Claude*: give it a name (say "Claude 2") and an e
 use its own `CLAUDE_CONFIG_DIR=~/.claude-2` (then `CLAUDE_CONFIG_DIR=~/.claude-2 claude` in a terminal and `/login`
 once); for an API key set `ANTHROPIC_API_KEY=…`. You can also swap the executable or append arguments. It shows up
 next to the original when starting a session, with its own process and transcript directory. Codex works the same
-way (`CODEX_HOME` / `OPENAI_API_KEY`). External ACP agents (e.g. `gemini --experimental-acp`) are added on the same
-page. Changes apply immediately. Stored under `agents` in `config.json`:
+way (`CODEX_HOME` / `OPENAI_API_KEY`). External ACP agents (e.g. `gemini --experimental-acp`, `opencode acp`, or `pi-acp` for
+[pi](https://github.com/badlogic/pi-mono)) are added on the same page, with their own environment variables if needed. Changes apply immediately. Stored under `agents` in `config.json`:
 `{"id": "claude-2", "name": "Claude 2", "base": "claude", "env": {"CLAUDE_CONFIG_DIR": "~/.claude-2"}, "bin": "", "args": []}`.
 
 ### Gerdr Agent (GPT, DeepSeek… straight from the API)

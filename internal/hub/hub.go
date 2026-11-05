@@ -47,7 +47,7 @@ type AgentDef struct {
 	Base    string            `json:"base,omitempty"`    // claude / codex / native：变体
 	Bin     string            `json:"bin,omitempty"`     // 变体：换一个可执行文件（空 = 和原版一样找）
 	Args    []string          `json:"args,omitempty"`    // 变体：追加的命令行参数
-	Env     map[string]string `json:"env,omitempty"`     // 变体：环境变量
+	Env     map[string]string `json:"env,omitempty"`     // variants and external agents: environment variables
 	Prompt  string            `json:"prompt,omitempty"`  // 变体：追加的系统提示
 	// Providers：引擎是 native 时只用这几个模型服务商（config.json llm.providers 的 id）；空 = 全部。
 	Providers []string `json:"providers,omitempty"`
@@ -475,7 +475,7 @@ func (h *Hub) startHost(ctx context.Context, agent string) (*agenthost.Host, err
 		return agenthost.StartInProc(sctx, native.New(log, agentwire.NativeOptions(filepath.Join(h.opt.Dir, "native"), em, func() native.Config { return h.llm().Only(def.Providers) }, def.Prompt)), handler, log)
 	}
 	home, _ := os.UserHomeDir()
-	return agenthost.StartProcess(sctx, def.Command, home, handler, log)
+	return agenthost.StartProcess(sctx, def.Command, def.envList(), home, handler, log)
 }
 
 // Close 关掉所有 agent。
