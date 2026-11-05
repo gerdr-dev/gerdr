@@ -26,6 +26,7 @@ export function StoredIcon({
   fallback,
   className,
   state,
+  clip,
 }: {
   icon?: string;
   color?: string;
@@ -33,12 +34,14 @@ export function StoredIcon({
   className?: string;
   /** A sprite's state: "idle" (default, still) or "working" / "waiting" (moving, if the sprite animates). */
   state?: "idle" | "working" | "waiting";
+  /** A sprite kept inside its box (default): lists must not be pushed around. */
+  clip?: boolean;
 }) {
   useStore((s) => s.addonVersion);
   if (!icon || !knownIcon(icon)) return <>{fallback}</>;
   if (icon.startsWith(SPRITE)) {
     const sprite = slots.sprite.find((r) => r.key === icon.slice(SPRITE.length));
-    return sprite ? <FitSprite reg={sprite} className={className} state={state} /> : <>{fallback}</>;
+    return sprite ? <FitSprite reg={sprite} className={className} state={state} clip={clip} /> : <>{fallback}</>;
   }
   return <AgentGlyph name={icon} color={color} className={className} />;
 }
@@ -52,15 +55,18 @@ export function AddonIcon({
   className,
   fallback,
   state,
+  clip = false,
 }: {
   icon?: string;
   className?: string;
   fallback?: ReactNode;
   state?: "idle" | "working" | "waiting";
+  /** Off by default: a moving sprite is drawn to stick out a little (a hat over the top), as in the loader. */
+  clip?: boolean;
 }) {
   const L = !knownIcon(icon) ? lucideIcon(icon) : undefined;
   if (L) return <L className={className} />;
-  return <StoredIcon icon={icon} className={className} fallback={fallback ?? null} state={state} />;
+  return <StoredIcon icon={icon} className={className} fallback={fallback ?? null} state={state} clip={clip} />;
 }
 
 /**
