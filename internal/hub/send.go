@@ -170,6 +170,7 @@ func (s *Session) SendFrom(ctx context.Context, content []acp.ContentBlock, clie
 				if person {
 					s.mu.Lock()
 					s.byPerson = true // a person joined this turn: they're watching it
+					s.personSaid = PersonSaid{Text: contentText(raw), At: now()}
 					s.mu.Unlock()
 				}
 				s.emit(&Event{Kind: EvUser, MessageID: msgID, Content: raw, Steer: true, Now: urgent, From: from})
@@ -214,6 +215,9 @@ func (s *Session) SendFrom(ctx context.Context, content []acp.ContentBlock, clie
 	s.turnMsg = msgID
 	s.turnStarted, s.turnTokens = now(), 0
 	s.byPerson = person
+	if person {
+		s.personSaid = PersonSaid{Text: contentText(raw), At: now()}
+	}
 	s.mu.Unlock()
 
 	s.emit(&Event{Kind: EvUser, MessageID: msgID, Content: raw, From: from})

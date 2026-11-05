@@ -306,6 +306,9 @@ func (h workHost) view(x hub.Summary, evs []*hub.Event) map[string]any {
 	if x.ByPerson {
 		v["byPerson"] = true // the last turn was a person typing in its chat: they saw the reply (hub.Summary.ByPerson)
 	}
+	if x.PersonSaid.At != 0 {
+		v["personSaid"] = map[string]any{"text": x.PersonSaid.Text, "at": x.PersonSaid.At} // hub.Summary.PersonSaid
+	}
 	// What it started that runs on its own (subagents, background commands): a board shows a worker waiting on them as
 	// waiting, not stopped, and opens a subagent's conversation (SessionChat sub)
 	if len(x.Tasks) > 0 {

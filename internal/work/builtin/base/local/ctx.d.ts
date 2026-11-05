@@ -332,6 +332,11 @@ interface Session {
    */
   byPerson?: boolean;
   /**
+   * The last message a person typed in this conversation, and when (ms). For following a session from outside its
+   * chat: a board can show what the user told its worker there. Gone after Gerdr restarts until they type again.
+   */
+  personSaid?: { text: string; at: number };
+  /**
    * How its last turn ended (sessions.get only, like reply): "end_turn" (normally), "cancelled" (someone pressed stop
    * or closed it; Gerdr restarting mid-turn too, with an error in reply), "error", "max_tokens"… Unset while a turn
    * runs or before the first one. A user's stop is theirs: e.g. don't remind a worker that was stopped to report.
