@@ -39,7 +39,13 @@ func commandName(content []acp.ContentBlock) string {
 	if len(content) == 0 || content[0].Text == nil {
 		return ""
 	}
-	t := strings.TrimSpace(content[0].Text.Text)
+	return commandIn(content[0].Text.Text)
+}
+
+// commandIn: the slash command a text starts with ("" = none). "/clear" is one; "/Users/me/x.md look at this" is a
+// path someone pasted, not a command (the first word holds another "/").
+func commandIn(text string) string {
+	t := strings.TrimSpace(text)
 	if !strings.HasPrefix(t, "/") {
 		return ""
 	}

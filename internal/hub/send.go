@@ -342,7 +342,7 @@ func (s *Session) touchTitle(content []acp.ContentBlock) {
 		return
 	}
 	for _, b := range content {
-		if b.Text != nil && strings.TrimSpace(b.Text.Text) != "" && !strings.HasPrefix(strings.TrimSpace(b.Text.Text), "/") && !strings.HasPrefix(b.Text.Text, shellPrefix) && !strings.HasPrefix(b.Text.Text, handoffPrefix) {
+		if b.Text != nil && strings.TrimSpace(b.Text.Text) != "" && commandIn(b.Text.Text) == "" && !strings.HasPrefix(b.Text.Text, shellPrefix) && !strings.HasPrefix(b.Text.Text, handoffPrefix) {
 			t := strings.Join(strings.Fields(b.Text.Text), " ")
 			if utf8.RuneCountInString(t) > 60 {
 				t = string([]rune(t)[:60]) + "…"

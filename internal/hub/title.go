@@ -45,7 +45,7 @@ func (s *Session) Prompts() []string {
 		case e.Kind == EvNotice && e.Level == "clear":
 			out = out[:0]
 		case e.Kind == EvUser:
-			if t := strings.TrimSpace(contentText(e.Content)); t != "" && !strings.HasPrefix(t, "/") {
+			if t := strings.TrimSpace(contentText(e.Content)); t != "" && commandIn(t) == "" {
 				out = append(out, t)
 			}
 		}
@@ -173,10 +173,12 @@ func buildTitlePrompt(prompts []string) string {
 	return b.String()
 }
 
-// cleanTitle：去掉引号和句末标点；多行、太长的当作没起出来（模型没照做，多半是回答了里面的话）。
+// cleanTitle strips quotes and a final full stop. Multi-line or too long means the model answered the messages instead
+// of naming them; a single character is a glitch (haiku once named a session "Ε", Greek Epsilon, which no rerun of the
+// same prompt reproduced). Either way it counts as no title, and the session keeps the one it had.
 func cleanTitle(t string) string {
 	t = strings.Trim(strings.TrimSpace(t), "\"'「」“”。.")
-	if t == "" || strings.Contains(t, "\n") || utf8.RuneCountInString(t) > 40 {
+	if n := utf8.RuneCountInString(t); n < 2 || n > 40 || strings.Contains(t, "\n") {
 		return ""
 	}
 	return t

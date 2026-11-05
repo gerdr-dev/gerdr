@@ -17,9 +17,10 @@ func TestPromptsSinceClear(t *testing.T) {
 		userEv("修一下登录页"), userEv("再看看注册"), userEv("/clear"),
 		{Kind: EvNotice, Level: "clear"},
 		userEv("/model haiku"), userEv("给侧栏加个搜索框"), userEv("  "),
+		userEv("/Users/me/docs/TEAM.md 你看这个文件"), // a pasted path is what they said, not a command
 	}}
 	got := s.Prompts()
-	if len(got) != 1 || got[0] != "给侧栏加个搜索框" {
+	if len(got) != 2 || got[0] != "给侧栏加个搜索框" || got[1] != "/Users/me/docs/TEAM.md 你看这个文件" {
 		t.Fatalf("prompts = %q", got)
 	}
 }
@@ -41,6 +42,8 @@ func TestCleanTitle(t *testing.T) {
 		"「修登录页」。":               "修登录页",
 		"ok\n我来帮你":              "",
 		strings.Repeat("长", 41): "",
+		"Ε":                     "",
+		"「E」":                   "",
 	} {
 		if got := cleanTitle(in); got != want {
 			t.Errorf("cleanTitle(%q) = %q, want %q", in, got, want)

@@ -48,7 +48,7 @@ func (a *Agent) suggestTitle(ctx context.Context, s *session) (string, error) {
 	for _, e := range s.entries {
 		// ID != "": a message the person sent (compact summaries and injected notes have none)
 		if e.T == "msg" && e.Msg != nil && e.Msg.Role == "user" && e.ID != "" {
-			if t := strings.TrimSpace(userText(*e.Msg)); t != "" && !strings.HasPrefix(t, "/") {
+			if t := strings.TrimSpace(userText(*e.Msg)); t != "" && !isCommand(t) {
 				said = append(said, t)
 			}
 		}
@@ -126,4 +126,11 @@ func cleanTitle(t string) string {
 		return ""
 	}
 	return t
+}
+
+// isCommand: the text starts with a slash command ("/compact"), not a pasted path ("/Users/me/x.md look at this"),
+// which is what the person is asking about and has to count when naming the session.
+func isCommand(t string) bool {
+	name, _ := slash([]acp.ContentBlock{acp.TextBlock(t)})
+	return name != ""
 }
