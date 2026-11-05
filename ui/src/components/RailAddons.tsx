@@ -57,7 +57,7 @@ export function RailAddonButtons() {
           <AddonButton key={e.b.addon} b={e.b} />
         ) : (
           <AddonGuard key={e.r.key} addon={e.r.addon} fallback={null}>
-            <e.r.Component place="rail" className={RAIL_BTN} />
+            <e.r.Component width={RAIL_WIDTH} className={BTN_LOOK} />
           </AddonGuard>
         ),
       )}
@@ -65,9 +65,14 @@ export function RailAddonButtons() {
   );
 }
 
-/** Gerdr's own look for a rail button, handed to "railButton" entries as className so they can match it. */
-const RAIL_BTN = "flex size-9 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground";
-const PHONE_BTN = "inline-flex h-7 min-w-7 items-center justify-center rounded-md px-1 text-muted-foreground hover:bg-accent hover:text-foreground";
+/**
+ * What a "railButton" entry gets: the one fixed side of its place — the rail is a column (width fixed, as tall as it
+ * likes), the phone drawer's bottom row a row (height fixed, as wide as it likes) — and Gerdr's button colours and
+ * hover, without a size, so the add-on sizes and draws itself.
+ */
+const RAIL_WIDTH = 36;
+const PHONE_HEIGHT = 28;
+const BTN_LOOK = "rounded-md text-muted-foreground hover:bg-accent hover:text-foreground";
 
 /** Panel buttons and railButton entries in one order: by the entry's order (a panel button: its smallest block's). */
 function railEntries(): ({ b: RailButton; order: number; addon: string } | { r: SlotReg; order: number; addon: string })[] {
@@ -161,7 +166,7 @@ export function PhoneAddonButtons() {
         if (!("b" in e))
           return (
             <AddonGuard key={e.r.key} addon={e.r.addon} fallback={null}>
-              <e.r.Component place="phone" className={PHONE_BTN} />
+              <e.r.Component height={PHONE_HEIGHT} className={BTN_LOOK} />
             </AddonGuard>
           );
         const b = e.b;

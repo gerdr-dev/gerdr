@@ -100,7 +100,9 @@ sees: `internal/addons/builtin/gerdr.d.ts`, copied into `~/.gerdr/addons` on eve
   copied in. That also does what groups couldn't (rows lined up across sources, an icon drawn from all of the data:
   three quota rings) and leaves no settings page to keep. `config.rail` from then is ignored.
 - `"railButton"` (Nov 2026): the whole rail button is the add-on's, Gerdr only gives the place (RailAddons.tsx
-  `railEntries`, in slot order among the panel buttons) and its own button classes as `className`. Asked for by a
+  `railEntries`, in slot order among the panel buttons), the one fixed side of that place (`width` 36 on the rail, a
+  column; `height` 28 on the phone's row) and its button colours as `className`. A size rather than "rail" / "phone":
+  the add-on decides how to draw from the room it has, not from which device it is on. Asked for by a
   lid-awake switch: a "panel" button can only open a panel, and showing on / off inside the 32×20 icon box drew a pill
   instead of the button's own square. The alternative, an `active` option on panel buttons, was turned down: every
   next kind of button (a menu, a hover popup of its own, a long press) would need one more option, while handing the

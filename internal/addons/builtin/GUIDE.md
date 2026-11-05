@@ -127,7 +127,7 @@ lucide icon (`<g.icons.Timer className="size-3.5" />`).
 | where | call | gets |
 |---|---|---|
 | A block of your panel, opened from your add-on's own button on the rail | `g.slot("panel", Component, { order, id, title, icon, tallIcon, open })` | no props |
-| A whole button of your own on the rail: its look, state, click, hover, popup are all yours (a switch, a menu) | `g.slot("railButton", Component, { order, id })` | `{ place, className }`: see below |
+| A whole button of your own on the rail: its look, state, click, hover, popup are all yours (a switch, a menu) | `g.slot("railButton", Component, { order, id })` | `{ width, height, className }`: see below |
 | A sprite: a small picture the user can use as the working indicator (Settings → General) or as an agent's icon | `g.slot("sprite", Component, { id, title })` | `{ state, width, height }` |
 | The app's root, always mounted, no space taken | `g.slot("overlay", Component)` | no props |
 | Every pane's title bar | `g.slot("paneTitle", Component)` | `{ pane, tab }` |
@@ -193,10 +193,12 @@ Rules that keep it looking like Gerdr:
   code into your add-on (add-ons are small) and tell the user to turn the originals off. Gerdr has no grouping on
   purpose: one add-on can line the rows up and draw one icon from all of the data, a grouping setting couldn't.
 - `"railButton"` is for buttons that aren't "open my panel": a switch with its own on / off look, a menu, a popup of
-  your own. Gerdr draws nothing around it and handles no click; put the `className` it hands you on your `<button>`
-  (Gerdr's size, colours and hover for that place: `place` is `"rail"`, a 36px column, or `"phone"`, a 28px row) and add
-  your state on top, for example `g.ui.cn(className, on && "bg-accent text-foreground")`. A popup is a `g.ui.Popover`
-  you open yourself, on click or on hover.
+  your own. Gerdr draws nothing around it and handles no click. It gets the one fixed side of its place: `width` on
+  the rail (a column, 36: the height is yours, a square button is `height = width`), `height` in the phone drawer's
+  bottom row (a row, 28: the width is yours); the other is undefined. `className` is Gerdr's button colours and hover
+  without a size; add yours and your state, for example
+  `<button style={{ width: width ?? height, height: height ?? width }} className={g.ui.cn(className, on && "bg-accent")}>`.
+  A popup is a `g.ui.Popover` you open yourself, on click or on hover.
 - A sprite (`g.slot("sprite")`) gets its box as `width` × `height`: 24×16 in the working indicator (`state`
   "working" / "waiting") and as small as 14×14 as an agent's icon (`state` "idle": keep it
   still, those are always in sight). Draw it to fit — at 14px a simpler version may read better — text 10px or more, red (`bg-bad` / `text-bad`) only for a warning. One picture per registration (`id`,
