@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { basename, newAgentInOverview } from "@/lib/actions";
 import { currentSpace, spaceList } from "@/lib/layout";
 import { compareSessions } from "@/lib/order";
-import { activeAllProjects, activeIds, addActive, focusTile } from "@/lib/overview";
+import { activeAllProjects, activeIds, addActive, focusTile, placeTilesAfter } from "@/lib/overview";
 import { openSessionsWithProject } from "@/lib/overviewState";
 import { useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -61,7 +61,7 @@ export function AddMenu({ focus }: { focus?: string }) {
       ) : (
         button(() => setPick(true))
       )}
-      <PickActive open={pick} onClose={() => setPick(false)} />
+      <PickActive open={pick} onClose={() => setPick(false)} after={s?.id} />
     </>
   );
 }
@@ -70,7 +70,7 @@ export function AddMenu({ focus }: { focus?: string }) {
  * Tick open agents that aren't in "active" yet and put them in at once. Lists the same scope "active" shows (this
  * project, or all with allIn): one from elsewhere would be added but never appear.
  */
-function PickActive({ open, onClose }: { open: boolean; onClose: () => void }) {
+function PickActive({ open, onClose, after }: { open: boolean; onClose: () => void; after?: string }) {
   const layout = useStore((s) => s.layout);
   const sessions = useStore((s) => s.sessions);
   const unread = useStore((s) => s.unread);
@@ -90,6 +90,8 @@ function PickActive({ open, onClose }: { open: boolean; onClose: () => void }) {
   const toggle = (id: string) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
   const confirm = () => {
     addActive(picked);
+    // From a tile's + menu: they go right after that tile, not on the end of the strip
+    if (after) placeTilesAfter(picked, after);
     // The first one ticked is the one shown (a phone shows one tile at a time)
     focusTile(picked[0]);
     onClose();

@@ -26,7 +26,7 @@ import {
   type Workspace,
 } from "../layout";
 import { get, set, setLayout } from "../store";
-import { addActive, focusTile, MAX_TILES, overviewFocus, overviewIds, setOverview } from "../overview";
+import { addActive, focusTile, MAX_TILES, overviewFocus, overviewIds, placeTilesAfter } from "../overview";
 import { spaceOfKey, workProjectOf } from "../work";
 import { rememberPane } from "./reopen";
 import { createInPane, focusSession, openInWork } from "./sessions";
@@ -119,11 +119,7 @@ export function newAgentInOverview(): boolean {
       });
       // Started from the grid: it's in "active" by hand (a blank conversation wouldn't join on its own)
       addActive([n.id]);
-      setOverview((x) => {
-        const ids = x.ids.filter((id) => id !== n.id);
-        ids.splice(ids.indexOf(s.id) + 1, 0, n.id);
-        return { ...x, ids };
-      });
+      placeTilesAfter([n.id], s.id);
       focusTile(n.id);
       toast.dismiss(opening);
     })

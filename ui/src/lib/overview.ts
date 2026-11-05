@@ -102,6 +102,21 @@ export function addActive(ids: string[]) {
 }
 
 /**
+ * Put tiles just added right after `after` (the tile they were added from), in both the grid's kept order and the
+ * phone's frozen strip; otherwise they'd go on the end, far from where the user was (asked for).
+ */
+export function placeTilesAfter(ids: string[], after: string) {
+  const put = (order: string[]) => {
+    const rest = order.filter((id) => !ids.includes(id));
+    const i = rest.indexOf(after);
+    if (i < 0) return order;
+    rest.splice(i + 1, 0, ...ids);
+    return rest;
+  };
+  setOverview((o) => ({ ...o, ids: put(o.ids), phone: o.phone && put(o.phone) }));
+}
+
+/**
  * Take an agent out of "active" (it keeps running): unpinned, and out until it starts or ends a turn. Unseen output counts as seen, else "finished unseen" would put it straight back.
  */
 export function removeActive(id: string) {
