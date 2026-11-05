@@ -105,6 +105,13 @@ declare module "@gerdr/core" {
    */
   export function onShowSession(key: string, fn: (session: string) => void): () => void;
 
+  /**
+   * Open a file on this computer (an absolute or `~/` path) in gerdr's viewer, the way a path clicked in the chat opens:
+   * images, videos, PDFs, Markdown, code. Use it for links to local files (what an agent produced): a `file://` link
+   * opens nothing from gerdr's page, and nothing at all on a phone. `cwd` resolves a relative path.
+   */
+  export function openPath(path: string, cwd?: string): Promise<void>;
+
   /** Whether gerdr is in dark mode (the page shares gerdr's <html>, so its `dark` class is right already). */
   export function useDark(): boolean;
 
