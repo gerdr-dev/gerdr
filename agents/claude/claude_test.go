@@ -22,6 +22,12 @@ func TestDescribeTool(t *testing.T) {
 	if ti := describeTool("Bash", map[string]any{"command": "go test ./..."}, ""); ti.title != "go test ./..." || ti.kind != acp.ToolKindExecute {
 		t.Fatalf("bash: %+v", ti)
 	}
+	// Input still streaming: just the name, not "Write Write"
+	for _, n := range []string{"Write", "Read", "Edit", "Skill"} {
+		if ti := describeTool(n, nil, "/p"); ti.title != n {
+			t.Fatalf("%s while streaming: title %q", n, ti.title)
+		}
+	}
 	if ti := describeTool("mcp__github__create_issue", nil, ""); ti.title != "github · create_issue" {
 		t.Fatalf("mcp: %+v", ti)
 	}

@@ -140,8 +140,10 @@ func describeTool(name string, in map[string]any, cwd string) toolInfo {
 			}
 		}
 	}
+	// No argument yet (input still streaming, so "Write " has no path): show just the tool's name. Prefixing the name to
+	// the verb instead drew "Write Write" / "Read Read" until the path arrived.
 	if ti.title == "" || strings.HasSuffix(ti.title, " ") {
-		ti.title = strings.TrimSpace(name + " " + strings.TrimSpace(ti.title))
+		ti.title = name
 	}
 	return ti
 }
