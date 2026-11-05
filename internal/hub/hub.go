@@ -127,6 +127,9 @@ type Options struct {
 	// MCP: MCP servers a session's agent gets from gerdr (the tools of the panel it works for: `gerdr panel
 	// mcp`), worked out on every new / resume / load like SkillDirs. nil = none.
 	MCP func(rec Record) []acp.McpServer
+	// Project: the project a session is in, handed to the adapter as _meta project (agentwire.ProjectKey) on every
+	// new / resume / load, for the project's skill / MCP limit (ext.Manager.ForProject). nil = Record.Project.
+	Project func(rec Record) string
 }
 
 // mcpFor is the MCP servers handed to the agent for a session: never nil (ACP wants a list).
@@ -138,6 +141,21 @@ func (h *Hub) mcpFor(rec Record) []acp.McpServer {
 		return l
 	}
 	return []acp.McpServer{}
+}
+
+// extMeta adds what decides a session's skills / MCP to the _meta of a new / resume / load: its extra skill
+// folders and its project.
+func (h *Hub) extMeta(rec Record, meta map[string]any) {
+	if roots := h.skillRoots(rec); len(roots) > 0 {
+		meta["skillRoots"] = roots
+	}
+	p := rec.Project
+	if h.opt.Project != nil {
+		p = h.opt.Project(rec)
+	}
+	if p != "" {
+		meta["project"] = p
+	}
 }
 
 // skillRoots: the extra skill folders a session's agent gets (Record.SkillDirs + Options.SkillDirs), existing ones.
@@ -663,6 +681,8 @@ type CreateOptions struct {
 	Tags      map[string]string `json:"tags,omitempty"`
 	ReportTo  string            `json:"reportTo,omitempty"`
 	SkillDirs []string          `json:"skillDirs,omitempty"`
+	// Project: see Record.Project. A session carried on from another (ContinueFrom) stays in that one's project.
+	Project string `json:"project,omitempty"`
 	// Parent: see Record.Parent.
 	Parent string `json:"parent,omitempty"`
 	// FromCLI：`gerdr session new` 开的（agent 自己跑的命令）。这时默认模式是「全放开」那种的不套：
@@ -729,11 +749,9 @@ func (h *Hub) Create(ctx context.Context, o CreateOptions) (*Session, error) {
 		meta[k] = v
 	}
 	// 新建时给的标题是人起的（`gerdr session new --title`），算手动命名、不被自动标题盖掉；导入时带进来的是原会话的标题，照旧可以被更新
-	rec := Record{ID: newID(), Agent: o.Agent, Cwd: cwd, CreatedAt: now(), UpdatedAt: now(), Title: o.Title, CustomTitle: o.Title != "" && o.Import == "", Mode: o.Mode, Config: o.Config, Tags: tags, ReportTo: o.ReportTo, SkillDirs: o.SkillDirs, Parent: o.Parent}
+	rec := Record{ID: newID(), Agent: o.Agent, Cwd: cwd, CreatedAt: now(), UpdatedAt: now(), Title: o.Title, CustomTitle: o.Title != "" && o.Import == "", Mode: o.Mode, Config: o.Config, Tags: tags, ReportTo: o.ReportTo, SkillDirs: o.SkillDirs, Parent: o.Parent, Project: o.Project}
 	s := newSession(h, rec)
-	if roots := h.skillRoots(rec); len(roots) > 0 {
-		meta["skillRoots"] = roots
-	}
+	h.extMeta(rec, meta)
 
 	if o.Import != "" {
 		rec.AgentSessionID = o.Import

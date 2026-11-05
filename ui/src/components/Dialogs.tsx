@@ -15,6 +15,7 @@ import { ResumeDialog } from "./ResumeDialog";
 import { SettingsDialog } from "./SettingsDialog";
 import { WorkSourceDialog } from "./WorkSourceDialog";
 import { PanelIconDialog } from "./PanelIcon";
+import { ProjectExtDialog } from "./ProjectExtDialog";
 
 // Every store.dialog overlay, mounted once (App.tsx). Each dialog lives in its own file; store.dialog.kind picks which one is open.
 export function Dialogs() {
@@ -43,6 +44,7 @@ export function Dialogs() {
       <ConfirmDialog />
       <WorkSourceDialog />
       <PanelIconDialog />
+      <ProjectExtDialog />
     </>
   );
 }

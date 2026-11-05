@@ -29,13 +29,13 @@ type Options struct {
 	NoMemory bool
 
 	// Skills lists the skills offered to the model (name, description, where SKILL.md is), and as /<name>
-	// commands. nil = none.
-	Skills func(cwd string) []Skill
+	// commands. meta is the session's _meta from the client (session/new, the last resume / load). nil = none.
+	Skills func(cwd string, meta map[string]any) []Skill
 	// Tools are extra tools implemented in Go, offered next to the built-in ones (sub-agents get them too).
 	Tools []Tool
 	// MCP lists the MCP servers a session connects to, besides the ones the client passes in session/new's
-	// mcpServers. nil = only those.
-	MCP func(cwd string) []MCPServer
+	// mcpServers. meta as for Skills. nil = only those.
+	MCP func(cwd string, meta map[string]any) []MCPServer
 	// MCPAuth supplies OAuth tokens for remote MCP servers that have no Authorization header. nil = no sign-in:
 	// a server answering 401 is reported as not connected.
 	MCPAuth MCPAuth
@@ -167,9 +167,9 @@ func mergeEnv(base, extra []string) []string {
 	return out
 }
 
-func (a *Agent) skills(cwd string) []Skill {
+func (a *Agent) skills(s *session, cwd string) []Skill {
 	if a.opt.Skills == nil {
 		return nil
 	}
-	return a.opt.Skills(cwd)
+	return a.opt.Skills(cwd, s.clientMetaMap())
 }

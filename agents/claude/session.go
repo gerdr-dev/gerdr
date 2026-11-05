@@ -106,7 +106,10 @@ type toolState struct {
 func (s *session) ensure(ctx context.Context) error {
 	fp := ""
 	if s.a.opts.Ext != nil {
-		fp = s.a.opts.Ext.Fingerprint()
+		s.mu.Lock()
+		meta := s.meta
+		s.mu.Unlock()
+		fp = s.a.opts.Ext.Fingerprint(meta)
 	}
 	for {
 		s.mu.Lock()
@@ -159,8 +162,8 @@ func (s *session) start(ctx context.Context) error {
 	}
 	s.mcpFP = s.a.mcpFingerprint(s.cwd)
 	if e := s.a.opts.Ext; e != nil {
-		s.extFP = e.Fingerprint()
-		o.extra = e.Args(s.id, s.cwd, acpx.SkillRoots(s.meta))
+		s.extFP = e.Fingerprint(s.meta)
+		o.extra = e.Args(s.id, s.cwd, s.meta)
 	}
 	o.extra = append(o.extra, s.clientMCPArgs()...)
 	o.extra = append(o.extra, s.a.opts.Args...)

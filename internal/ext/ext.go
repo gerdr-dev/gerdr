@@ -87,6 +87,8 @@ type Manager struct {
 	*core
 	// only：角色（设置 → Agent 里配的）只给它挑的那几个；nil = 不限，全照全局设置。见 Scoped。
 	only *Only
+	// off: names the session's project switched off (ForProject), taken out of whatever the rest gives. nil = none.
+	off *Only
 }
 
 // core 是同一个 GERDR_DIR 下所有 Manager（全局的 + 各角色 Scoped 出来的）共用的：同一把锁、内置 skill 只装一次
@@ -95,6 +97,9 @@ type core struct {
 	dir         string
 	mu          sync.Mutex
 	builtinOnce sync.Once
+	// projectOff: what a project switches off (config.json projects.<id>.disabledSkills / disabledMcp), looked up
+	// on every use so a change applies before the session's next turn. nil = projects switch nothing off. See ForProject.
+	projectOff func(project string) Only
 }
 
 func New(dir string) *Manager { return &Manager{core: &core{dir: dir}} }
@@ -113,20 +118,59 @@ func (m *Manager) Scoped(o Only) *Manager {
 	if m == nil || (o.Skills == nil && o.MCP == nil) {
 		return m
 	}
-	return &Manager{core: m.core, only: &o}
+	return &Manager{core: m.core, only: &o, off: m.off}
+}
+
+// SetProjectOff installs where a project's switched-off skills / MCP servers come from (main: config.json projects).
+// Set once at start-up, before any agent starts.
+func (m *Manager) SetProjectOff(f func(project string) Only) { m.core.projectOff = f }
+
+// ForProject is m (the global settings or a role's) without what the project switched off. A list of what to drop,
+// not of what to give: a project only needs to lose what doesn't belong there (the company's tools in a personal
+// project), and a whitelist also dropped what nobody could pick, the skills inside the repository being worked on and
+// whatever got installed later. One agent then serves every project, instead of one role per project (all of them
+// offered everywhere, easy to pick the wrong one). "" or a project switching nothing off returns m. m may be nil.
+func (m *Manager) ForProject(project string) *Manager {
+	if m == nil || project == "" || m.core.projectOff == nil {
+		return m
+	}
+	o := m.core.projectOff(project)
+	if len(o.Skills) == 0 && len(o.MCP) == 0 {
+		return m
+	}
+	return &Manager{core: m.core, only: m.only, off: &o}
+}
+
+// DropsSkills / DropsMCP: the session's project switched some off. m may be nil.
+func (m *Manager) DropsSkills() bool { return m != nil && m.off != nil && len(m.off.Skills) > 0 }
+func (m *Manager) DropsMCP() bool    { return m != nil && m.off != nil && len(m.off.MCP) > 0 }
+
+// OffSkills / OffMCP: the names the project switched off (nil when none).
+func (m *Manager) OffSkills() []string {
+	if !m.DropsSkills() {
+		return nil
+	}
+	return m.off.Skills
+}
+
+func (m *Manager) OffMCP() []string {
+	if !m.DropsMCP() {
+		return nil
+	}
+	return m.off.MCP
 }
 
 // LimitsSkills / LimitsMCP：这个角色有没有限定。m 可以是 nil。
 func (m *Manager) LimitsSkills() bool { return m != nil && m.only != nil && m.only.Skills != nil }
 func (m *Manager) LimitsMCP() bool    { return m != nil && m.only != nil && m.only.MCP != nil }
 
-// AllowSkill / AllowMCP：角色限定里有没有这个名字；没限定的一律 true。
+// AllowSkill / AllowMCP: on the role's list (true without one) and not switched off by the project.
 func (m *Manager) AllowSkill(name string) bool {
-	return !m.LimitsSkills() || contains(m.only.Skills, name)
+	return (!m.LimitsSkills() || contains(m.only.Skills, name)) && !contains(m.OffSkills(), name)
 }
 
 func (m *Manager) AllowMCP(name string) bool {
-	return !m.LimitsMCP() || contains(m.only.MCP, name)
+	return (!m.LimitsMCP() || contains(m.only.MCP, name)) && !contains(m.OffMCP(), name)
 }
 
 // GerdrSkillsOn / OwnSkillsOn / GerdrMCPOn / OwnMCPOn: does this agent get gerdr's pool / the engine's own
@@ -145,7 +189,7 @@ func (m *Manager) OwnMCPOn(s Settings) bool   { return m.LimitsMCP() || s.MCPSou
 
 // FilterSkills / FilterMCP：按角色限定筛（没限定原样返回）。
 func (m *Manager) FilterSkills(in []Skill) []Skill {
-	if !m.LimitsSkills() {
+	if !m.LimitsSkills() && !m.DropsSkills() {
 		return in
 	}
 	var out []Skill
@@ -158,7 +202,7 @@ func (m *Manager) FilterSkills(in []Skill) []Skill {
 }
 
 func (m *Manager) FilterMCP(in []MCPServer) []MCPServer {
-	if !m.LimitsMCP() {
+	if !m.LimitsMCP() && !m.DropsMCP() {
 		return in
 	}
 	var out []MCPServer
@@ -261,6 +305,9 @@ func (m *Manager) Fingerprint() string {
 	}
 	if m.only != nil {
 		_ = json.NewEncoder(h).Encode(m.only)
+	}
+	if m.off != nil {
+		_ = json.NewEncoder(h).Encode(m.off)
 	}
 	return hex.EncodeToString(h.Sum(nil))[:16]
 }

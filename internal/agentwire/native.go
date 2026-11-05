@@ -23,10 +23,10 @@ const SessionEnvKey = "GERDR_NATIVE_SESSION_ID"
 func NativeOptions(dir string, em *ext.Manager, cfg func() native.Config, prompt string) native.Options {
 	return native.Options{
 		Dir: dir, Config: cfg, Prompt: prompt,
-		Skills: func(cwd string) []native.Skill { return skillsFor(em, cwd) },
-		MCP: func(cwd string) []native.MCPServer {
+		Skills: func(cwd string, meta map[string]any) []native.Skill { return skillsFor(forSession(em, meta), cwd) },
+		MCP: func(cwd string, meta map[string]any) []native.MCPServer {
 			var out []native.MCPServer
-			for _, s := range resolveMCP(em) {
+			for _, s := range resolveMCP(forSession(em, meta)) {
 				out = append(out, MCPServer(s))
 			}
 			return out

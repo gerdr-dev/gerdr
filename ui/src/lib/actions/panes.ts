@@ -101,7 +101,7 @@ export function newAgentInOverview(): boolean {
   }
   const opening = toast.loading(t("actionsPanes.openingAgent"));
   api
-    .createSession({ agent: s.agent, cwd: s.cwd, mode: s.modeId ?? s.modes?.currentModeId ?? s.mode })
+    .createSession({ agent: s.agent, cwd: s.cwd, mode: s.modeId ?? s.modes?.currentModeId ?? s.mode, project: currentSpace(get().layout) })
     .then((n) => {
       set((st) => ({ sessions: { ...st.sessions, [n.id]: n } }));
       setLayout((l) => {

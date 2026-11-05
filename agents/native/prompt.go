@@ -50,7 +50,7 @@ func (a *Agent) systemPrompt(s *session, cwd string, model resolved) string {
 			fmt.Fprintf(&b, "\n# Instructions from %s\n\n%s\n", f.path, strings.TrimSpace(f.content))
 		}
 	}
-	if skills := a.skills(cwd); len(skills) > 0 {
+	if skills := a.skills(s, cwd); len(skills) > 0 {
 		b.WriteString("\n# Skills\nSkills are packaged instructions for specific tasks. When a task matches a skill's description, read its SKILL.md with the read tool first and follow it (paths inside are relative to the skill's directory). The user may also invoke one as /<name>.\n")
 		for _, sk := range skills {
 			fmt.Fprintf(&b, "- %s: %s (%s)\n", sk.Name, oneLine(sk.Description, 300), filepath.Join(sk.Dir, "SKILL.md"))

@@ -306,6 +306,17 @@ func (s *Server) createSession(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if o.Open != nil && o.Project == "" {
+		// It lands in the caller's project (placeCreated), so that project's skills / MCP apply from the start
+		c := o.Open.Caller
+		if c.Session == "" {
+			c.Session = o.Open.Near
+		}
+		if self, err := s.Hub.Session(c.Session); err == nil {
+			c.SessionCwd = self.Summary().Cwd
+		}
+		o.Project = ResolveSpace(s.Layout.Get(), c, s.workProject())
+	}
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
 	defer cancel()
 	sess, err := s.Hub.Create(ctx, o.CreateOptions)

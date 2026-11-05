@@ -82,6 +82,10 @@ type Agent struct {
 	modelsAt time.Time // when models was fetched; see modelsTTL
 	ext      Ext
 	opts     Options
+	// attachMu: one thread attaches at a time, from its config (Ext.Config sets skills/extraRoots, which is the
+	// whole app-server's setting) to thread/start | thread/resume. Two at once (different projects or panels)
+	// could otherwise start one with the other's skill folders.
+	attachMu sync.Mutex
 }
 
 // Options：「另一个 codex」（设置里配的变体）用的。Bin 换可执行文件，Args 追加在 app-server 后面，
@@ -117,12 +121,13 @@ type Options struct {
 
 // Ext is where skills and MCP servers come from besides codex's own configuration (gerdr's settings).
 type Ext interface {
-	// Fingerprint changes when the settings do; a thread is re-attached with the new config before its next turn.
-	Fingerprint() string
+	// Fingerprint changes when the settings for a thread (its _meta: the project it's in, acpx.SkillRoots) do; the
+	// thread is re-attached with the new config before its next turn.
+	Fingerprint(meta map[string]any) string
 	// Config is the thread/start | thread/resume config override for cwd. rpc reaches the app-server (for
-	// skills/list, skills/extraRoots/set…).
-	// skillRoots: extra skill folders for this thread (acpx.SkillRoots), set as extra roots right before it attaches.
-	Config(ctx context.Context, rpc *rpcline.Conn, cwd string, skillRoots []string, log *slog.Logger) map[string]any
+	// skills/list, skills/extraRoots/set…). meta: the thread's _meta (extra skill folders: acpx.SkillRoots, set as
+	// extra roots right before it attaches).
+	Config(ctx context.Context, rpc *rpcline.Conn, cwd string, meta map[string]any, log *slog.Logger) map[string]any
 }
 
 type session struct {
@@ -277,11 +282,14 @@ func (a *Agent) resumeThread(ctx context.Context, rpc *rpcline.Conn, s *session)
 	if s.cwd != "" {
 		p["cwd"] = s.cwd
 	}
+	a.attachMu.Lock()
 	cfg, fp := a.threadConfig(ctx, rpc, s.id, s.cwd, meta, servers)
 	if cfg != nil {
 		p["config"] = cfg
 	}
-	if err := rpc.Call(ctx, "thread/resume", p, nil); err != nil {
+	err := rpc.Call(ctx, "thread/resume", p, nil)
+	a.attachMu.Unlock()
+	if err != nil {
 		return err
 	}
 	s.mu.Lock()
@@ -292,12 +300,12 @@ func (a *Agent) resumeThread(ctx context.Context, rpc *rpcline.Conn, s *session)
 
 // extConfig 把 skill / MCP 设置翻成 thread/start、thread/resume 的 config 覆盖（Options.Ext; gerdr's is in
 // internal/agentwire）。覆盖是**合并**进用户配置的，所以「关掉 codex 自己的」只能逐个列出来关。
-func (a *Agent) extConfig(ctx context.Context, rpc *rpcline.Conn, cwd string, skillRoots []string) (map[string]any, string) {
+func (a *Agent) extConfig(ctx context.Context, rpc *rpcline.Conn, cwd string, meta map[string]any) (map[string]any, string) {
 	if a.ext == nil {
 		return nil, ""
 	}
-	fp := a.ext.Fingerprint()
-	cfg := a.ext.Config(ctx, rpc, cwd, skillRoots, a.log)
+	fp := a.ext.Fingerprint(meta)
+	cfg := a.ext.Config(ctx, rpc, cwd, meta, a.log)
 	if len(cfg) == 0 {
 		return nil, fp
 	}
@@ -311,7 +319,11 @@ func (a *Agent) refreshExt(ctx context.Context, rpc *rpcline.Conn, s *session) {
 		return
 	}
 	s.mu.Lock()
-	stale := s.extFP != a.ext.Fingerprint()
+	meta := s.meta
+	s.mu.Unlock()
+	fp := a.ext.Fingerprint(meta)
+	s.mu.Lock()
+	stale := s.extFP != fp
 	s.mu.Unlock()
 	if !stale {
 		return
@@ -431,17 +443,20 @@ func (a *Agent) NewSession(ctx context.Context, p acp.NewSessionRequest) (acp.Ne
 	mode := modeFromMeta(p.Meta, modeAuto)
 	ap, sb := a.modeParams(mode)
 	params := map[string]any{"cwd": p.Cwd, "approvalPolicy": ap, "sandbox": sandboxMode(sb), "developerInstructions": a.instructions("", p.Cwd, p.Meta)}
-	cfg, fp := a.threadConfig(ctx, rpc, "", p.Cwd, p.Meta, p.McpServers)
-	if cfg != nil {
-		params["config"] = cfg
-	}
 	if v, ok := acpx.GetMeta(p.Meta, "model"); ok {
 		if m, ok := v.(string); ok && m != "" {
 			params["model"] = m
 		}
 	}
+	a.attachMu.Lock()
+	cfg, fp := a.threadConfig(ctx, rpc, "", p.Cwd, p.Meta, p.McpServers)
+	if cfg != nil {
+		params["config"] = cfg
+	}
 	var res threadStartResp
-	if err := rpc.Call(ctx, "thread/start", params, &res); err != nil {
+	err = rpc.Call(ctx, "thread/start", params, &res)
+	a.attachMu.Unlock()
+	if err != nil {
 		return acp.NewSessionResponse{}, err
 	}
 	s := &session{id: res.Thread.ID, cwd: p.Cwd, mode: mode, model: res.Model, items: map[string]*itemState{}, extFP: fp, roll: newRollTail(res.Thread.ID, false), meta: p.Meta, mcp: p.McpServers}
@@ -493,12 +508,15 @@ func (a *Agent) attach(ctx context.Context, id, cwd string, meta map[string]any,
 	if cwd != "" {
 		params["cwd"] = cwd
 	}
+	a.attachMu.Lock()
 	cfg, fp := a.threadConfig(ctx, rpc, id, cwd, meta, servers)
 	if cfg != nil {
 		params["config"] = cfg
 	}
 	var res threadStartResp
-	if err := rpc.Call(ctx, "thread/resume", params, &res); err != nil {
+	err = rpc.Call(ctx, "thread/resume", params, &res)
+	a.attachMu.Unlock()
+	if err != nil {
 		return nil, err
 	}
 	s := &session{id: id, cwd: res.Thread.Cwd, mode: mode, model: res.Model, items: map[string]*itemState{}, extFP: fp, roll: newRollTail(id, true), meta: meta, mcp: servers}
@@ -757,15 +775,18 @@ func (a *Agent) clear(ctx context.Context, rpc *rpcline.Conn, s *session) (acp.P
 	s.mu.Unlock()
 	ap, sb := a.modeParams(mode)
 	params := map[string]any{"cwd": cwd, "approvalPolicy": ap, "sandbox": sandboxMode(sb), "developerInstructions": a.instructions("", cwd, meta)}
+	if model != "" {
+		params["model"] = model
+	}
+	a.attachMu.Lock()
 	cfg, fp := a.threadConfig(ctx, rpc, "", cwd, meta, servers)
 	if cfg != nil {
 		params["config"] = cfg
 	}
-	if model != "" {
-		params["model"] = model
-	}
 	var res threadStartResp
-	if err := rpc.Call(ctx, "thread/start", params, &res); err != nil {
+	err := rpc.Call(ctx, "thread/start", params, &res)
+	a.attachMu.Unlock()
+	if err != nil {
 		return acp.PromptResponse{}, err
 	}
 	a.send(ctx, old, acp.SessionUpdate{SessionInfoUpdate: &acp.SessionSessionInfoUpdate{Meta: acpx.Meta(map[string]any{"sessionId": res.Thread.ID, "cleared": true})}})

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/gerdr-dev/gerdr/acpx"
 	"github.com/gerdr-dev/gerdr/agents/claude"
 	"github.com/gerdr-dev/gerdr/agents/codex"
 	"github.com/gerdr-dev/gerdr/internal/ext"
@@ -17,18 +18,29 @@ func ClaudeExt(m *ext.Manager) claude.Ext { return claudeExt{m} }
 
 type claudeExt struct{ m *ext.Manager }
 
-func (x claudeExt) Fingerprint() string {
+// ProjectKey is the _meta key the hub puts a session's project in (hub.Options.Project): the project's skill / MCP
+// limit applies on top of the agent's (ext.Manager.ForProject).
+const ProjectKey = "project"
+
+// forSession is m narrowed to the session's project.
+func forSession(m *ext.Manager, meta map[string]any) *ext.Manager {
+	p, _ := acpx.GetMeta(meta, ProjectKey)
+	s, _ := p.(string)
+	return m.ForProject(s)
+}
+
+func (x claudeExt) Fingerprint(meta map[string]any) string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Fingerprint()
+	return forSession(x.m, meta).Fingerprint()
 }
 
-func (x claudeExt) Args(sessionID, cwd string, skillRoots []string) []string {
+func (x claudeExt) Args(sessionID, cwd string, meta map[string]any) []string {
 	if x.m == nil {
 		return nil
 	}
-	return x.m.ClaudeArgs(sessionID, cwd, skillRoots)
+	return forSession(x.m, meta).ClaudeArgs(sessionID, cwd, acpx.SkillRoots(meta))
 }
 
 func (x claudeExt) MCPFingerprint(cwd string) string { return x.m.ClaudeMCPFingerprint(cwd) }
@@ -43,11 +55,13 @@ func CodexExt(m *ext.Manager) codex.Ext {
 
 type codexExt struct{ m *ext.Manager }
 
-func (x codexExt) Fingerprint() string { return x.m.Fingerprint() }
+func (x codexExt) Fingerprint(meta map[string]any) string { return forSession(x.m, meta).Fingerprint() }
 
 // Config 把 skill / MCP 设置翻成 thread/start、thread/resume 的 config 覆盖。
 // 覆盖是**合并**进用户配置的，所以「关掉 codex 自己的」只能逐个列出来关（见 ext 包注释）。
-func (x codexExt) Config(ctx context.Context, rpc *rpcline.Conn, cwd string, skillRoots []string, log *slog.Logger) map[string]any {
+func (x codexExt) Config(ctx context.Context, rpc *rpcline.Conn, cwd string, meta map[string]any, log *slog.Logger) map[string]any {
+	x.m = forSession(x.m, meta)
+	skillRoots := acpx.SkillRoots(meta)
 	st := x.m.Settings()
 	cfg := x.m.CodexMCPOverrides()
 	if st.MCPSource == ext.SourceGerdr || x.m.LimitsMCP() {
@@ -64,6 +78,13 @@ func (x codexExt) Config(ctx context.Context, rpc *rpcline.Conn, cwd string, ski
 			}
 		}
 	}
+	// What the project switched off (ext.ForProject) of codex's own: gerdr's are already left out of CodexMCPOverrides.
+	// Only servers that exist: setting enabled on an unknown name would make a server entry with no command.
+	for _, v := range ext.CodexMCP() {
+		if x.m.DropsMCP() && !x.m.AllowMCP(v.Name) {
+			cfg["mcp_servers."+v.Name+".enabled"] = false
+		}
+	}
 	// gerdr 的 skill 目录是整个 app-server 的设置：每次接 thread 前按当前设置摆一遍。
 	// 内置 skill（多会话协作、改界面）不管来源选什么都给；gerdr 自己那份要选了才给。
 	x.m.Builtin() // 确保已经装到磁盘上
@@ -77,7 +98,7 @@ func (x codexExt) Config(ctx context.Context, rpc *rpcline.Conn, cwd string, ski
 	if err := rpc.Call(ctx, "skills/extraRoots/set", map[string]any{"extraRoots": roots}, nil); err != nil {
 		log.Warn("skills/extraRoots/set failed", "err", err)
 	}
-	if st.SkillSource != ext.SourceAgent || len(st.DisabledSkills) > 0 || x.m.LimitsSkills() {
+	if st.SkillSource != ext.SourceAgent || len(st.DisabledSkills) > 0 || x.m.LimitsSkills() || x.m.DropsSkills() {
 		var res struct {
 			Data []struct {
 				Skills []struct {

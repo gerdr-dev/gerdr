@@ -223,6 +223,12 @@ export function allLeaves(l: Layout): { ws: Workspace; tab: Tab; pane: PaneLeaf 
 }
 
 /** 某个会话在布局里的位置（第一个）。 */
+/** The project (space) of the workspace holding a pane; the current one when the pane isn't found. */
+export function paneSpace(l: Layout, paneId: string): string {
+  const hit = allLeaves(l).find((x) => x.pane.id === paneId);
+  return hit ? spaceOf(hit.ws) : currentSpace(l);
+}
+
 export function locateSession(l: Layout, sessionId: string) {
   return allLeaves(l).find((x) => x.pane.sessionId === sessionId);
 }

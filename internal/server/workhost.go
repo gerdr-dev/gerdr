@@ -62,7 +62,7 @@ func (h workHost) StartSession(ctx context.Context, project string, o work.Start
 			config[k] = v
 		}
 	}
-	sess, err := s.Hub.Create(ctx, hub.CreateOptions{Agent: agent, Cwd: o.Cwd, Mode: o.Mode, Config: config, Parent: o.Parent, Title: o.Title, Tags: tags, ReportTo: reportTo, SkillDirs: skills, FromCLI: true})
+	sess, err := s.Hub.Create(ctx, hub.CreateOptions{Agent: agent, Cwd: o.Cwd, Mode: o.Mode, Config: config, Parent: o.Parent, Title: o.Title, Tags: tags, ReportTo: reportTo, SkillDirs: skills, Project: spaceOr(project), FromCLI: true})
 	if err != nil {
 		return nil, err
 	}

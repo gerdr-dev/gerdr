@@ -53,6 +53,9 @@ export type Config = {
    *  Read by the backend (cmd/gerdr's applyBins). */
   agentBins?: Record<string, string>;
   agents?: AgentDef[];
+  /** Per project (layout space id): skills / MCP servers its sessions don't get (ProjectExtDialog). Read by the backend
+   *  (cmd/gerdr: ext.Manager.ForProject), whatever the agent's own settings. */
+  projects?: Record<string, ProjectConf>;
   /** 输入框里 pin 住的 / 命令（命令名，不带 /）：附图按钮旁边多一个 / 按钮，点开就是这些。存 config 是让手机和电脑共用一份。 */
   pinnedCommands?: string[];
   /** Inbox: put an item in when the gerdr machine runs on battery at or below `percent`. Missing = on at 20%. */
@@ -80,6 +83,9 @@ export type LLMModel = { id: string; name?: string; api?: "chat" | "responses"; 
 /** api: the provider's protocol. Unset = OpenAI-compatible (each model picks Chat Completions / Responses); "anthropic" = Anthropic Messages. */
 export type LLMProvider = { id: string; name?: string; api?: "anthropic"; baseUrl: string; apiKey?: string; apiKeyEnv?: string; models: LLMModel[] };
 export type LLMConfig = { providers?: LLMProvider[]; defaultModel?: string };
+
+/** What a project switches off, by name. */
+export type ProjectConf = { disabledSkills?: string[]; disabledMcp?: string[] };
 
 /** config.json 里的 agents：agent = 一个引擎（base = claude / codex / native，或者外部 ACP agent 的 command）+ 自己的配置。
  *  prompt 是追加的系统提示；skills / mcp 是只给的那几个（按名字），不写 = 照全局设置，空数组 = 一个都不给（后端 hub.AgentDef）。 */

@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, ChevronsUpDown, Download, Pencil, Plus, SquarePlus, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Blocks, Check, ChevronsUpDown, Download, Pencil, Plus, SquarePlus, Trash2, X } from "lucide-react";
 import { useLayoutEffect, useRef, useState } from "react";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import {
@@ -98,6 +98,7 @@ export async function askDeleteSpace(sp: Space) {
 
 export const newSpaceDialog = () => set({ dialog: { kind: "rename", target: "newSpace", id: "", value: "" } });
 export const renameSpaceDialog = (sp: Space) => set({ dialog: { kind: "rename", target: "space", id: sp.id, value: sp.name } });
+export const projectExtDialog = (sp: Space) => set({ dialog: { kind: "projectExt", project: sp.id, name: sp.name } });
 
 /**
  * A project chip's right-click (long-press) menu, the same on the rail and in the sidebar header. Moving is also here for
@@ -112,6 +113,9 @@ export function SpaceMenuItems({ sp, axis }: { sp: Space; axis: "x" | "y" }) {
       {isNative() && <ContextMenuItem onClick={() => nativeNewWindow(sp.id)}>{t("nav.openInNewWindow")}</ContextMenuItem>}
       <ContextMenuItem onClick={() => renameSpaceDialog(sp)}>
         <Pencil /> {t("spaceSwitcher.renameEllipsis")}
+      </ContextMenuItem>
+      <ContextMenuItem onClick={() => projectExtDialog(sp)}>
+        <Blocks /> {t("spaceSwitcher.extEllipsis")}
       </ContextMenuItem>
       {i > 0 && (
         <ContextMenuItem onClick={() => moveSpace(sp.id, i - 1)}>
@@ -285,6 +289,9 @@ function SpaceMenu() {
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => renameSpaceDialog(cur)}>
           <Pencil className="size-3.5" /> {t("spaceSwitcher.renameNamed", { name: cur.name })}
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => projectExtDialog(cur)}>
+          <Blocks className="size-3.5" /> {t("spaceSwitcher.extNamed", { name: cur.name })}
         </DropdownMenuItem>
         {spaces.length > 1 && (
           <DropdownMenuItem onClick={() => askCloseSpace(cur)}>

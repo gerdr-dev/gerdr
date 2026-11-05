@@ -6,7 +6,8 @@ import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, C
 import { continueInPane, resumeInPane } from "@/lib/actions";
 import { api } from "@/lib/api";
 import { isOpen } from "@/lib/overviewState";
-import { set, useStore } from "@/lib/store";
+import { paneSpace } from "@/lib/layout";
+import { get, set, useStore } from "@/lib/store";
 import { t } from "@/lib/i18n";
 
 // /resume (like Claude Code): switch this pane to an earlier conversation in the same directory.
@@ -47,7 +48,7 @@ export function ResumeDialog() {
   const pickNative = async (n: Native) => {
     setBusy(true);
     try {
-      const s = await api.createSession({ agent: cur.agent, cwd: cur.cwd, import: n.sessionId, title: n.title });
+      const s = await api.createSession({ agent: cur.agent, cwd: cur.cwd, import: n.sessionId, title: n.title, project: paneSpace(get().layout, paneId) });
       close();
       resumeInPane(paneId, s.id);
     } catch (e: any) {

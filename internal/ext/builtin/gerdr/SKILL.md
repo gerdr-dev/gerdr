@@ -287,6 +287,19 @@ used). An agent's `skills` / `mcp` list gets exactly those names whatever the gl
 MCP tokens (headers, env) are secrets like API keys: put in only what the user hands you; `list` / `show` print them as
 `<hidden>`, and `create` fills a `<hidden>` back from the pool entry of the same name.
 
+### Per project instead of per agent
+
+When the difference is between projects (one project needs company skills / MCP servers, another doesn't), switch
+them off in the project, not with a new agent: a role is offered in every project, so a role per project means picking
+the right one each time. `projects.<id>.disabledSkills` / `.disabledMcp` take names out of every session in that
+project, whatever agent runs it; everything else is given as usual. The user's way is the project's right-click
+menu → Skills & MCP. `gerdr config keys projects` has the rest.
+
+```bash
+gerdr config set projects.default.disabledSkills '["lb-cli", "deva"]'
+gerdr config set projects.default.disabledMcp '["okr"]'
+```
+
 ## Add-ons (Settings → Add-ons)
 
 Add-ons change Gerdr itself: an add-on panel by the left rail (quota meter, today's stats), a line under each turn (cache clock),

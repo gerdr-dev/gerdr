@@ -152,7 +152,7 @@ export function snapshotSpace(id: string): () => void {
   const wasHere = currentSpace(l0) === id;
   const active = wasHere ? l0.active : space?.active;
   const c = get().config;
-  const kept = { session: c.workSessions?.[id], agent: c.workAgents?.[id] };
+  const kept = { session: c.workSessions?.[id], agent: c.workAgents?.[id], ext: c.projects?.[id] };
   return () => {
     const l1 = get().layout;
     const listed = spaceList(l1).find((s) => s.id.toLowerCase() === id.toLowerCase());
@@ -170,6 +170,7 @@ export function snapshotSpace(id: string): () => void {
     const now = get().config;
     if (kept.session) setConfig({ workSessions: { ...now.workSessions, [id]: kept.session } });
     if (kept.agent) setConfig({ workAgents: { ...now.workAgents, [id]: kept.agent } });
+    if (kept.ext && !get().config.projects?.[id]) setConfig({ projects: { ...get().config.projects, [id]: kept.ext } });
   };
 }
 
@@ -197,6 +198,11 @@ export async function deleteSpace(id: string): Promise<{ trash: string; undo: ()
   const drop = (m?: Record<string, string>) => (m && Object.keys(m).some(mine) ? Object.fromEntries(Object.entries(m).filter(([k]) => !mine(k))) : m);
   if (Object.keys(c.workSessions ?? {}).some(mine) || Object.keys(c.workAgents ?? {}).some(mine))
     setConfig({ workSessions: drop(c.workSessions), workAgents: drop(c.workAgents) });
+  // Its skill / MCP limit too: a project created later under the same name starts without one (undo brings it back)
+  if (c.projects?.[id]) {
+    const { [id]: _, ...rest } = c.projects;
+    setConfig({ projects: rest });
+  }
   // The server refuses while its saved layout still has the project open (its next save would write the layout copy back)
   await flushLayout();
   const { trash } = await api.deleteProject(id);

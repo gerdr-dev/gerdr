@@ -702,6 +702,29 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
   - native：`skillsFor` / `resolveMCP` 里筛；提示词接在系统提示词最后。基于 native 的角色和原版共用会话目录和记忆。
     还能只用某几家模型服务商（`providers`，`native.Config.Only`）：两个 agent 都用 native 引擎、各走一家。界面上叫「引擎」
     （Claude Code / Codex / Native，Native 的服务商在 config.json 的 llm）和「agent」（引擎 + 提示词 / skill / MCP / 默认值 / 服务商），用户定的说法。
+- **What a project switches off** (config.json `projects.<id>.disabledSkills` / `disabledMcp`, the project menu's
+  Skills & MCP, `ProjectExtDialog.tsx`): names taken out of every session in the project, whatever its agent.
+  Projects that work differently were first handled with a role each, but roles are global: every project offered
+  both, and picking the wrong one was easy. A list of what to drop, not what to give (decided with the user,
+  2026-11): a whitelist like a role's also dropped what nobody could tick, the skills inside the repository being
+  worked on (the picker can't list them: a project isn't one directory) and anything installed later.
+  How each engine drops a name (`ext.Manager.ForProject`, `OffSkills` / `OffMCP`, `AllowSkill` / `AllowMCP` say no):
+  - claude: skills `skillOverrides: off`; a plugin's skill can't go alone, the plugin goes off once all its skills are
+    named. MCP `deniedMcpServers: [{serverName}]` in `--settings`: by name, the claude.ai connectors too, without
+    `--strict-mcp-config`, so nothing else is lost (tested, claude 2.1.318). Gerdr's pool / built-ins: not linked.
+  - codex: `mcp_servers.<name>.enabled = false` for its own servers that exist; skills in `skills.config`.
+  - native: `skillsFor` / `resolveMCP`.
+  Unlike a role this is per session, not per adapter instance, so it travels in `_meta` `project`
+  (`hub.extMeta` on every new / resume / load; `agentwire.ProjectKey`), and the adapters' `Ext` methods take the
+  session's `_meta`. The list is looked up live from config.json (`ext.SetProjectOff`), and it's part of
+  `Fingerprint(meta)`, so a change restarts claude's process / re-attaches codex's thread before the next turn,
+  the same path a settings change takes. Which project: the pane showing the session (`server.SessionSpaces`), else
+  `Record.Project` (set at create: the UI passes its pane's space, `gerdr session new` the caller's, a panel its own:
+  the session isn't in any pane yet when the agent starts), else its panel's, else default (`cmd/gerdr`
+  `sessionProject`). The project in `_meta` is fixed once the session attaches: moving a tab to another project
+  takes effect when the session is next resumed.
+  - codex: `skills/extraRoots/set` is app-server-wide, and now threads of different projects want different roots, so
+    `Agent.attachMu` holds from `threadConfig` to `thread/start|resume` (it was already racy with panel skill roots).
 - **新会话默认**：config.json `defaultModes[agent]` / `defaultConfig[agent][配置项 id]`（内置的和角色一样按 id；Gerdr Agent 的默认模型就是
   `llm.defaultModel`，不另存）。**在后端套**（`hub.Create`，`Options.Defaults` 每次现取）：界面和 `gerdr session new` 开出来的一样。
   三家在 session/new 里能接的配置项不一样（claude 接 model / effort，codex、native 只接 model），所以新建之后对着 agent 报回来的当前值

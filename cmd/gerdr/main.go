@@ -285,7 +285,19 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 		_ = json.Unmarshal(cfg.Get(), &c)
 		return hub.NewDefaults{Mode: c.Modes[agent], Config: c.Config[agent]}
 	}
-	h, err := hub.New(hub.Options{Dir: env.Dir, ClaudeIdle: env.ClaudeIdle, ExtraAgents: cfgAgents(), LLM: cfgLLM, Defaults: cfgDefaults, Log: log, Ext: em, SkillDirs: workSkills(env.Dir), MCP: workMCP(env.Dir)})
+	// config.json projects.<id>.disabledSkills / disabledMcp: what a project's sessions don't get, whatever their agent
+	em.SetProjectOff(func(project string) ext.Only {
+		var c struct {
+			Projects map[string]struct {
+				Skills []string `json:"disabledSkills"`
+				MCP    []string `json:"disabledMcp"`
+			} `json:"projects"`
+		}
+		_ = json.Unmarshal(cfg.Get(), &c)
+		p := c.Projects[project]
+		return ext.Only{Skills: p.Skills, MCP: p.MCP}
+	})
+	h, err := hub.New(hub.Options{Dir: env.Dir, ClaudeIdle: env.ClaudeIdle, ExtraAgents: cfgAgents(), LLM: cfgLLM, Defaults: cfgDefaults, Log: log, Ext: em, SkillDirs: workSkills(env.Dir), MCP: workMCP(env.Dir), Project: sessionProject(env.Dir, layout)})
 	if err != nil {
 		return err
 	}
@@ -618,6 +630,26 @@ func workOf(dir string) func(hub.Record) (string, string, bool) {
 			}
 		}
 		return "", "", false
+	}
+}
+
+// sessionProject: the project whose skills / MCP a session gets. The pane showing it decides (workspaces move between
+// projects); one shown nowhere yet (just created, or closed) is in the project it was started in, else its panel's,
+// else the default project, which is where the UI puts what belongs nowhere.
+func sessionProject(dir string, layout *config.Store) func(hub.Record) string {
+	of := workOf(dir)
+	return func(rec hub.Record) string {
+		if sp, ok := server.SessionSpaces(layout.Get())[rec.ID]; ok {
+			return sp
+		}
+		if rec.Project != "" {
+			return rec.Project
+		}
+		if key, _, ok := of(rec); ok {
+			p, _ := work.SplitKey(key)
+			return p
+		}
+		return server.DefaultSpace
 	}
 }
 

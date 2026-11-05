@@ -89,7 +89,7 @@ func mcpKey(s MCPServer) string {
 func (s *session) mcpServers(cwd string) []MCPServer {
 	var all []MCPServer
 	if s.a.opt.MCP != nil {
-		all = append(all, s.a.opt.MCP(cwd)...)
+		all = append(all, s.a.opt.MCP(cwd, s.clientMetaMap())...)
 	}
 	s.mu.Lock()
 	all = append(all, s.clientMCP...)

@@ -141,6 +141,15 @@ export const zh = {
   "agentSettings.extLoading": "读 Skill / MCP 列表…",
   "agentSettings.noteClaudeSkill": "项目里的 Skill 这里列不出来：限定之后它们也不给。插件里的 Skill 关不了单个，一个都没勾的插件整个关掉（连它的 MCP、Hook）。",
   "agentSettings.noteCodexSkill": "Codex 自带的系统 Skill 不受影响。",
+  // ProjectExtDialog
+  "projectExt.title": "「{name}」的 Skill 和 MCP",
+  "projectExt.desc": "取消勾选的，这个项目里的会话就不给，不管用的是哪个 Agent；其余照常。改了之后，每个会话下一轮开始前生效。",
+  "projectExt.offCount": "关掉 {n} 个",
+  "projectExt.addPlaceholder": "列表里没有的名字，回车关掉",
+  "projectExt.noteSkill":
+    "Claude Code 和 Codex 的都在这里，两边同名的算一个。仓库里自带的 Skill 不受影响，除非把名字加进来。插件里的 Skill 关不了单个：一个插件的全关掉，整个插件才关（连它的 MCP、Hook）。",
+  "projectExt.noteMcp": "claude.ai 账号里连的 Connector 不在列表里，可以在下面填名字关掉，比如 claude.ai Notion。",
+  "projectExt.removeName": "不再关掉",
   "agentSettings.noteClaudeMcp": "限定之后只给勾上的：插件带的 MCP、claude.ai 账号里连的 Connector 都不给。",
   "agentSettings.allHintNative": "用「设置 → Agent → MCP」里 Gerdr 的 MCP 开着的那些，{n} 个。",
   "agentSettings.pickAll": "全部",
@@ -411,6 +420,15 @@ export const en: Record<keyof typeof zh, string> = {
   "agentSettings.noteClaudeSkill":
     "Project skills can't be listed here, and once limited they aren't given either. Plugin skills can't be turned off one by one: a plugin with none checked is turned off whole (its MCP and hooks too).",
   "agentSettings.noteCodexSkill": "Codex's own system skills aren't affected.",
+  "projectExt.title": "Skills & MCP of “{name}”",
+  "projectExt.desc":
+    "Unchecked ones aren't given to sessions in this project, whichever agent runs them; the rest are as usual. A change applies before each session's next turn.",
+  "projectExt.offCount": "{n} off",
+  "projectExt.addPlaceholder": "A name not listed, Enter to switch it off",
+  "projectExt.noteSkill":
+    "Claude Code's and Codex's are both here; the same name on both sides counts once. Skills that come with a repository aren't affected unless you add their name. A plugin's skill can't be switched off alone: the plugin goes off (with its MCP and hooks) once all of its skills are.",
+  "projectExt.noteMcp": "Connectors from your claude.ai account aren't listed: type the name below to switch one off, e.g. claude.ai Notion.",
+  "projectExt.removeName": "Switch back on",
   "agentSettings.noteClaudeMcp": "Once limited, only the checked ones are given: no plugin MCP servers, no connectors from your claude.ai account.",
   "agentSettings.allHintNative": "Gerdr's MCP servers that are on in Settings → Agent → MCP ({n}).",
   "agentSettings.pickAll": "All",

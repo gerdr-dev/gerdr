@@ -1,7 +1,7 @@
 import { toast } from "sonner";
 import { api } from "../api";
 import { askConfirm } from "../confirm";
-import { allLeaves, currentSpace, locateSession, mutedSession, setPane, spaceList, type PaneLeaf } from "../layout";
+import { allLeaves, currentSpace, locateSession, mutedSession, paneSpace, setPane, spaceList, type PaneLeaf } from "../layout";
 import { get, markRead, overviewShown, set, setLayout, setMode, setWorkPanel } from "../store";
 import { focusTile, overviewIds, replaceTile, toggleOverview } from "../overview";
 import { isOpen } from "../overviewState";
@@ -21,7 +21,8 @@ export async function createInPane(paneId: string, o: { agent: string; cwd: stri
   setPane0(paneId, { draft: { agent: o.agent, cwd: o.cwd, host: o.host } });
   try {
     // 没给模式时后端按设置里的默认模式 / 模型开（hub.Create），这里不用管
-    const s = await api.createSession(o);
+    // On another computer its projects aren't ours: no project
+    const s = await api.createSession({ ...o, project: o.host ? undefined : paneSpace(get().layout, paneId) });
     set((st) => ({ sessions: { ...st.sessions, [s.id]: s } }));
     setLayout((l) => setPane(l, paneId, { sessionId: s.id, draft: undefined }));
     return s;

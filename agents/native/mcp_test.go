@@ -64,7 +64,7 @@ func mcpScript(tool string) func(n int, msgs []any) reply {
 // useMCP gives the test agent these MCP servers (Options.MCP).
 func useMCP(t *testing.T, e *env, servers ...MCPServer) {
 	t.Helper()
-	e.ag.opt.MCP = func(string) []MCPServer { return servers }
+	e.ag.opt.MCP = func(string, map[string]any) []MCPServer { return servers }
 }
 
 func TestMCPStdio(t *testing.T) {

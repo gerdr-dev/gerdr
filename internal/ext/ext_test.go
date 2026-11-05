@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -207,5 +208,40 @@ func TestClaudeAddDirExtra(t *testing.T) {
 	}
 	if _, err := os.Lstat(filepath.Join(dir, ".claude", "skills", "not-a-skill")); err == nil {
 		t.Error("a folder without SKILL.md must not be linked")
+	}
+}
+
+// A project switches names off on top of the global settings and a role's list, and only in that project.
+func TestForProject(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	g := New(t.TempDir())
+	g.SetProjectOff(func(p string) Only {
+		if p == "default" {
+			return Only{Skills: []string{"lb-cli"}, MCP: []string{"okr", "claude.ai Longbridge"}}
+		}
+		return Only{}
+	})
+	if g.ForProject("lb") != g || g.ForProject("") != g {
+		t.Fatal("a project switching nothing off must change nothing")
+	}
+	d := g.ForProject("default")
+	if d.AllowSkill("lb-cli") || !d.AllowSkill("anything-else") || d.AllowMCP("okr") || !d.AllowMCP("github") {
+		t.Fatalf("default: %+v", d.off)
+	}
+	if d.LimitsSkills() || d.LimitsMCP() {
+		t.Fatal("switching off isn't a whitelist: the source settings still decide the rest")
+	}
+	role := g.Scoped(Only{Skills: []string{"gerdr", "lb-cli"}}).ForProject("default")
+	if !role.AllowSkill("gerdr") || role.AllowSkill("lb-cli") || role.AllowSkill("review") {
+		t.Fatalf("role in default: %+v %+v", role.only, role.off)
+	}
+	if g.Fingerprint() == d.Fingerprint() {
+		t.Fatal("switching off must change the fingerprint, so sessions pick it up")
+	}
+	// Claude: by name, no --strict-mcp-config (that would drop the claude.ai connectors too)
+	args := strings.Join(d.ClaudeArgs("x", t.TempDir(), nil), " ")
+	if !strings.Contains(args, `"deniedMcpServers":[{"serverName":"okr"},{"serverName":"claude.ai Longbridge"}]`) ||
+		!strings.Contains(args, `"lb-cli":"off"`) || strings.Contains(args, "--strict-mcp-config") {
+		t.Fatalf("claude args: %s", args)
 	}
 }

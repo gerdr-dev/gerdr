@@ -50,6 +50,7 @@ var configKeys = map[string]configKey{
 	"defaultConfig":   {kind: "object", desc: `per agent id: option id → value for new sessions, e.g. {"claude": {"model": "opus", "effort": "high"}}`},
 	"pinnedCommands":  {kind: "array", desc: "slash commands (no /) pinned beside the input box"},
 	"agents":          {kind: "array", desc: "agents (roles) from Settings → Agent: {id, name, base: claude|codex|native, prompt, skills, mcp, providers, env…}; address one as agents.<id>; `gerdr config keys agents` for every field", more: agentsHelp},
+	"projects":        {kind: "object", desc: "per project id (default, or the id of a project you made): skills / MCP servers its sessions don't get, {\"default\": {\"disabledSkills\": [...], \"disabledMcp\": [...]}}; `gerdr config keys projects` for more", more: projectsHelp},
 	"agentBins":       {kind: "object", desc: "which claude / codex executable to run: {\"claude\": \"/path/to/claude\"}"},
 	"llm":             {kind: "object", desc: "Gerdr Agent's model providers: {providers: [{id, name, api (omit = OpenAI-compatible, \"anthropic\" = Anthropic Messages), baseUrl, apiKey, apiKeyEnv, models: [{id, window, compactAt, efforts, maxOutput, images, thinking}]}], defaultModel: \"provider/model\"}; a model needs only its id, the rest is guessed from it: window = context window in tokens, compactAt = token count at which the context is auto-compacted (default 90% of window); apiKey is stored in secrets.json and reads back as <hidden>"},
 	"workSessions":    {kind: "object", desc: "managed by the UI: each panel's agent conversation"},
@@ -84,6 +85,25 @@ New sessions' defaults are stored per agent id, outside agents:
   gerdr config set agents.reviewer.mcp '["github"]'
   gerdr config set defaultModes.reviewer plan
   gerdr config unset agents.reviewer`
+
+// projectsHelp mirrors ext.Manager.ForProject and the project's Skills & MCP dialog (ui/src/components/ProjectExtDialog.tsx).
+const projectsHelp = `projects.<id> holds settings of one project (the id is the project's, e.g. default, lb):
+
+  disabledSkills   skills this project's sessions don't get, by name
+  disabledMcp      MCP servers this project's sessions don't get, by name (Claude Code: claude.ai connectors too,
+                   e.g. "claude.ai Notion")
+
+Everything else is given as usual (the global settings, the agent's own list). Use it when projects work differently:
+one Codex / Claude agent then serves every project, instead of one agent (role) per project. Names: ` + "`gerdr skill list`" + ` /
+` + "`gerdr mcp list`" + `. A Claude Code plugin's skill can't be switched off alone: the plugin goes off (with its MCP and
+hooks) once all of its skills are listed.
+
+A session is in the project whose workspace shows it (else the one it was started in). A change applies before each
+session's next turn (Claude Code restarts its process, Codex re-attaches the thread).
+
+  gerdr config set projects.default.disabledSkills '["lb-cli", "deva"]'
+  gerdr config set projects.default.disabledMcp '["okr", "foxden"]'
+  gerdr config unset projects.default.disabledMcp`
 
 func configCmd() *cobra.Command {
 	cmd := &cobra.Command{

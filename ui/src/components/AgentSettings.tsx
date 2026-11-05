@@ -603,7 +603,7 @@ function RoleIconPicker({ d, onChange }: { d: Draft; onChange: (p: Partial<Draft
 }
 
 /** global: given with "全部" (the global source includes it); every Cand can be picked. */
-type Cand = { name: string; from: string; description?: string; global: boolean };
+export type Cand = { name: string; from: string; description?: string; global: boolean };
 
 /**
  * What an agent on this engine can pick (`skills` / `mcp`) and what it gets with "全部" (global settings).
@@ -611,7 +611,7 @@ type Cand = { name: string; from: string; description?: string; global: boolean 
  * pool and the engine's own; switched-off ones aren't (off is a global kill switch). Gerdr Agent's own skills are
  * Claude Code's; for MCP it only ever uses gerdr's.
  */
-function candidates(v: ExtView, kind: "claude" | "codex" | "native") {
+export function candidates(v: ExtView, kind: ExtKind) {
   const s = v.settings;
   const own = kind === "codex" ? "Codex" : "Claude Code";
   const skills: Cand[] = [];
@@ -624,14 +624,20 @@ function candidates(v: ExtView, kind: "claude" | "codex" | "native") {
   };
   for (const sk of v.builtin) if (sk.enabled) add(skills, { name: sk.name, from: t("agentSettings.fromBuiltin"), description: sk.description, global: true });
   for (const sk of v.skills) if (sk.enabled) add(skills, { name: sk.name, from: "Gerdr", description: sk.description, global: s.skillSource !== "agent" });
-  for (const sk of kind === "codex" ? v.agent.codexSkills : v.agent.claudeSkills)
-    add(skills, { name: sk.name, from: own, description: sk.description, global: s.skillSource !== "gerdr" });
+  // A project's list covers every engine: both engines' own are offered
+  const engines = kind === "project" ? (["Claude Code", "Codex"] as const) : ([own] as const);
+  for (const e of engines)
+    for (const sk of e === "Codex" ? v.agent.codexSkills : v.agent.claudeSkills)
+      add(skills, { name: sk.name, from: e, description: sk.description, global: s.skillSource !== "gerdr" });
   for (const m of s.mcp) if (m.enabled) add(mcp, { name: m.name, from: "Gerdr", global: kind === "native" || s.mcpSource !== "agent" });
   if (kind !== "native")
-    for (const m of kind === "codex" ? v.agent.codexMCP : v.agent.claudeMCP)
-      if (m.enabled) add(mcp, { name: m.name, from: own, global: s.mcpSource !== "gerdr" });
+    for (const e of engines)
+      for (const m of e === "Codex" ? v.agent.codexMCP : v.agent.claudeMCP) if (m.enabled) add(mcp, { name: m.name, from: e, global: s.mcpSource !== "gerdr" });
   return { skills, mcp };
 }
+
+/** An agent's engine, or "project": what a project switches off, which applies to every engine (ProjectExtDialog). */
+type ExtKind = "claude" | "codex" | "native" | "project";
 
 function ExtPicker({
   kind,

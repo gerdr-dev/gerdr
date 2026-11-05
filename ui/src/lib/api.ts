@@ -262,6 +262,8 @@ export const api = {
     title?: string;
     continueFrom?: string;
     host?: string;
+    /** the project (layout space) it's started in: its skills / MCP apply from the first turn (projectOf in lib/layout.ts) */
+    project?: string;
   }) => req<SessionSummary>("POST", "/api/sessions", o),
   /** input：建好就敲进去的字（对话里「在新终端里运行」） */
   /** host: the shell runs on that computer; its id comes back as "<host>:<id>" and everything else routes by it */

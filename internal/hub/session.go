@@ -70,6 +70,9 @@ type Record struct {
 	// SkillDirs: folders of extra skills (<dir>/<name>/SKILL.md) this session gets besides the usual ones, e.g. the
 	// skills of the Work project that started it. Handed to the adapter as _meta skillRoots on new / resume.
 	SkillDirs []string `json:"skillDirs,omitempty"`
+	// Project: the Gerdr project (a "space" in the layout) the session was started in, so the project's skill / MCP
+	// limit applies from its first turn, before any pane shows it. Where it's shown later wins (Options.Project).
+	Project string `json:"project,omitempty"`
 	// Workdir: where the agent works now when it has moved away from Cwd by itself (Claude's EnterWorktree), as the
 	// adapter reports it (acpx.WorkdirKey); empty when it is in Cwd. Cwd stays the session's home: what it is grouped
 	// and matched by, and where the agent is resumed (it moves itself back into the worktree). Saved so the pane
@@ -517,9 +520,7 @@ func (s *Session) ensureAttached(ctx context.Context) (*agenthost.Host, error) {
 	if rec.Fork != nil {
 		meta["fork"] = rec.Fork
 	}
-	if roots := s.h.skillRoots(rec); len(roots) > 0 {
-		meta["skillRoots"] = roots
-	}
+	s.h.extMeta(rec, meta)
 	res, err := c.Conn.ResumeSession(ctx, acp.ResumeSessionRequest{SessionId: acp.SessionId(rec.AgentSessionID), Cwd: rec.Cwd, McpServers: s.h.mcpFor(rec), Meta: acpx.Meta(meta)})
 	if err != nil {
 		// 一句话都没说过的会话，agent 那边多半压根没落盘（claude / codex 都是第一条消息才写），

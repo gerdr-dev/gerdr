@@ -151,7 +151,7 @@ func (m *Manager) ClaudeArgs(id, cwd string, skillRoots []string) []string {
 		}
 		args = append(args, "--mcp-config", claudeMCPConfig(m.FilterMCP(list)), "--strict-mcp-config")
 	case s.MCPSource.UsesGerdr():
-		args = append(args, "--mcp-config", claudeMCPConfig(own))
+		args = append(args, "--mcp-config", claudeMCPConfig(m.FilterMCP(own)))
 		if s.MCPSource == SourceGerdr {
 			args = append(args, "--strict-mcp-config")
 		}
@@ -201,6 +201,38 @@ func (m *Manager) ClaudeArgs(id, cwd string, skillRoots []string) []string {
 		for _, p := range ClaudePlugins(cwd) {
 			plugins[p.ID] = false
 		}
+	}
+
+	// What the project switched off (ForProject): by name, so the repository's own skills and the claude.ai
+	// connectors stay unless named. skillOverrides works for any skill but a plugin's: such a plugin goes off whole
+	// only when every skill of it is named (its MCP / hooks go with it). deniedMcpServers takes any server, the
+	// claude.ai connectors included, without --strict-mcp-config (tested, claude 2.1.318).
+	if m.DropsSkills() {
+		pluginSkills := map[string][]string{}
+		for _, sk := range ClaudeSkills(cwd) {
+			if pl, ok := strings.CutPrefix(sk.Origin, "claude-plugin:"); ok {
+				pluginSkills[pl] = append(pluginSkills[pl], sk.Name)
+			}
+		}
+		for _, n := range m.OffSkills() {
+			overrides[n] = "off"
+		}
+		for pl, names := range pluginSkills {
+			all := true
+			for _, n := range names {
+				all = all && contains(m.OffSkills(), n)
+			}
+			if all {
+				plugins[pl] = false
+			}
+		}
+	}
+	if m.DropsMCP() {
+		var denied []map[string]string
+		for _, n := range m.OffMCP() {
+			denied = append(denied, map[string]string{"serverName": n})
+		}
+		settings["deniedMcpServers"] = denied
 	}
 
 	if len(plugins) > 0 {

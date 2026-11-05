@@ -426,7 +426,7 @@ func (a *Agent) announceCommands(s *session) {
 			cmds = append(cmds, c)
 		}
 	}
-	for _, sk := range a.skills(s.cwd()) {
+	for _, sk := range a.skills(s, s.cwd()) {
 		cmds = append(cmds, acp.AvailableCommand{Name: sk.Name, Description: oneLine(sk.Description, 200), Meta: map[string]any{"skill": true}})
 	}
 	s.send(acp.SessionUpdate{AvailableCommandsUpdate: &acp.SessionAvailableCommandsUpdate{AvailableCommands: cmds}})
@@ -506,7 +506,7 @@ func (a *Agent) Prompt(ctx context.Context, p acp.PromptRequest) (acp.PromptResp
 			}
 			blocks = append([]acp.ContentBlock{acp.TextBlock(text)}, blocks[1:]...)
 		} else if name != "" {
-			if sk := findSkill(a.skills(s.cwd()), name); sk != nil {
+			if sk := findSkill(a.skills(s, s.cwd()), name); sk != nil {
 				text := fmt.Sprintf("The user invoked the skill %q. Read %s with the read tool and follow it.", sk.Name, filepath.Join(sk.Dir, "SKILL.md"))
 				if args != "" {
 					text += "\n\nArguments: " + args

@@ -61,11 +61,12 @@ type Options struct {
 
 // Ext is where skills and MCP servers come from besides claude's own configuration (gerdr's settings).
 type Ext interface {
-	// Fingerprint changes when the settings do; each session restarts its process before its next turn.
-	Fingerprint() string
+	// Fingerprint changes when the settings for a session (its _meta: the project it's in, acpx.SkillRoots) do;
+	// the session restarts its process before its next turn.
+	Fingerprint(meta map[string]any) string
 	// Args are extra CLI arguments for a session's process (--mcp-config, --settings with skill overrides…).
-	// skillRoots: extra skill folders for this session (acpx.SkillRoots).
-	Args(sessionID, cwd string, skillRoots []string) []string
+	// meta: the session's _meta (extra skill folders: acpx.SkillRoots).
+	Args(sessionID, cwd string, meta map[string]any) []string
 	// MCPFingerprint fingerprints claude's own MCP configuration for cwd: a change restarts the process on /clear.
 	MCPFingerprint(cwd string) string
 }
