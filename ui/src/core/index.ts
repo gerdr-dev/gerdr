@@ -10,6 +10,7 @@
  * are internal/work/builtin/base/ui/src/gerdr-core.d.ts: change both together.
  */
 export { SessionChat } from "./SessionChat";
+export { FeedChat, type FeedEntry } from "./FeedChat";
 export { useSession, useSessions } from "./sessions";
 export { onShowSession } from "@/lib/panelRoute";
 export { useDark } from "./theme";
@@ -24,3 +25,5 @@ export { usePhoneMenu, type PhoneMenuItem } from "./phoneMenu";
 // The chat's Markdown, so a panel draws what agents write the way the chat does: local images / videos (![](path))
 // shown and played, paths opening in Gerdr, code blocks. Outside a conversation it uses Gerdr's chat host as is.
 export { Markdown } from "@gerdr/chat";
+// The chat's "working" dots, for a page's own row saying something runs (a FeedChat's last line)
+export { PixelLoader } from "@gerdr/chat";

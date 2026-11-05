@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { feedOf, isFeed, subscribeFeed, type FeedFile } from "./feedChat";
 import { ToolCard, cardOf } from "@/components/chat/ToolCard";
 import { ChatProvider, type ChatHost, type ChatSession, type ComposerContext, type DraftImage, type DraftStore } from "@gerdr/chat";
 import { toast } from "sonner";
@@ -224,6 +225,7 @@ const fileURL = (path: string, cwd?: string, host?: string) =>
  * so attachments are uploaded to it instead (no localPath), and there is no "open with the system app" for it.
  */
 function hostSession(sessionId: string): Partial<ChatHost> | undefined {
+  if (isFeed(sessionId)) return feedHost;
   const i = sessionId.indexOf(":");
   if (i <= 0) return undefined;
   const host = sessionId.slice(0, i);
@@ -236,6 +238,67 @@ function hostSession(sessionId: string): Partial<ChatHost> | undefined {
     localPath: undefined,
     openNative: undefined,
   };
+}
+
+/**
+ * A page's FeedChat (core/FeedChat.tsx): not a session, so everything that talks to one is off (stop, rewind, options,
+ * `!` commands, slash commands, shared drafts, add-on slots) and the rest comes from the page (lib/feedChat.ts).
+ */
+const feedHost: Partial<ChatHost> = {
+  useTranscript: (id) => {
+    const c = useSyncExternalStore(
+      (f) => subscribeFeed(id, f),
+      () => feedOf(id),
+    );
+    return { all: c?.messages ?? [], running: false, loaded: !!c };
+  },
+  // Pasted images come as bytes: the page gets files by path, like everything else it sends on
+  send: async (id, content) => {
+    const c = feedOf(id);
+    if (!c) throw new Error("gone");
+    const files: FeedFile[] = [];
+    let text = "";
+    for (const b of content) {
+      if (b.type === "text") text += b.text;
+      else if (b.type === "resource_link") files.push({ path: b.uri.replace(/^file:\/\//, ""), name: b.name });
+      else if (b.type === "image") {
+        const bytes = Uint8Array.from(atob(b.data), (ch) => ch.charCodeAt(0));
+        const ext = b.mimeType.split("/")[1] ?? "png";
+        const { path } = await api.upload(new File([bytes], `image-${Date.now()}.${ext}`, { type: b.mimeType }));
+        files.push({ path, mime: b.mimeType });
+      }
+    }
+    await c.send({ text: text.trim(), files });
+  },
+  stop: async () => ({ content: [] }),
+  withdrawLast: undefined,
+  withdraw: undefined,
+  rewind: undefined,
+  warm: undefined,
+  shell: undefined,
+  setMode: undefined,
+  setConfig: undefined,
+  backgroundTool: undefined,
+  stopTask: undefined,
+  openSubagent: undefined,
+  codeActions: undefined,
+  composerOverlay: undefined,
+  useTurnStat: undefined,
+  messageActions: undefined,
+  renderTool: (part, ctx) => feedOf(ctx.sessionId)?.render(part),
+  searchFiles: async (id, q) => (feedOf(id)?.mentions ?? []).filter((n) => n.toLowerCase().includes(q.toLowerCase())),
+  composerBar: (session, { paneId }) => <FeedHint id={session.id} paneId={paneId} />,
+  placeholder: (session) => feedOf(session.id)?.placeholder,
+  composer: { drafts },
+};
+
+function FeedHint({ id, paneId }: { id: string; paneId: string }) {
+  const text = drafts.useText(paneId);
+  const c = useSyncExternalStore(
+    (f) => subscribeFeed(id, f),
+    () => feedOf(id),
+  );
+  return <>{c?.hint?.(text)}</>;
 }
 
 // /usage only means something for claude / codex (hub.Usage)

@@ -128,6 +128,8 @@ export interface ChatHost {
   useTurnStat?(info: TurnStatInfo): TurnStatDeco | undefined;
   /** ctx.paneId: the composer's key in ChatHost drafts, to write into this composer from the bar. */
   composerBar?(session: ChatSession, ctx: { paneId: string }): ReactNode;
+  /** The composer's empty-box text, for a "session" whose box isn't talking to an agent; undefined keeps the default. */
+  placeholder?(session: ChatSession, running: boolean): string | undefined;
   composerOverlay?(session: ChatSession): ReactNode;
   /** Composer hooks for host-only features (gerdr: shared drafts, /resume, "session open elsewhere"…). */
   composer?: ComposerHooks;

@@ -1096,7 +1096,10 @@ export const Composer = forwardRef<
               addFiles(files);
             }
           }}
-          placeholder={shellReady ? tr("composer.sendShell") : running ? tr("composer.busy") : host.shell ? tr("composer.idleShell") : tr("composer.idle")}
+          placeholder={
+            host.placeholder?.(session, running) ??
+            (shellReady ? tr("composer.sendShell") : running ? tr("composer.busy") : host.shell ? tr("composer.idleShell") : tr("composer.idle"))
+          }
           className="block max-h-[40vh] min-h-[44px] w-full resize-none bg-transparent px-4 pt-3 pb-1 text-[1em] max-md:text-[length:max(1em,15px)] max-md:supports-[-webkit-touch-callout:none]:text-[16px] leading-relaxed outline-none placeholder:text-muted-foreground/70"
         />
         {shellMode && (

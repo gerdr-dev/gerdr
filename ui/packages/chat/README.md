@@ -67,7 +67,7 @@ A runnable version with a fake agent is in `example/` (`node build.mjs` in the p
   buttons without `rewind`, no "stop task" without `stopTask`, no `!` command mode without `shell`, no video upload
   without `upload`…). With `localPath` (a desktop shell that knows a `File`'s path) any file or folder can be attached
   by picking, pasting or dropping it: the agent gets its path as a `resource_link`, nothing is read or uploaded.
-- Slots: `composerTop`, `composerBar`, `composerOverlay`; `renderTool`, `codeBlocks`, `codeActions`, `onLink`.
+- Slots: `composerTop`, `composerBar`, `composerOverlay`, `placeholder`; `renderTool`, `codeBlocks`, `codeActions`, `onLink`.
   Composer hooks (`host.composer`): a draft store, `localCommands`, `onSendError`, `onExit`, `useDefaults`, `useExtras`.
 
 ## Text

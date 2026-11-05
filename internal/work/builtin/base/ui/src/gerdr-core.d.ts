@@ -29,6 +29,39 @@ declare module "@gerdr/core" {
     onSub?: (toolCallId: string | null, title?: string) => void;
   }): ReactNode;
 
+  /** A file sent with a FeedChat message, or shown in one of the user's entries. */
+  export type FeedFile = { path: string; name?: string; mime?: string };
+  /** One thing in a FeedChat, oldest first. user: drawn as the user's own message (text, images, files); else render draws it. */
+  export type FeedEntry = { key: string; at: number; user?: { text: string; files?: FeedFile[] } };
+
+  /**
+   * A conversation that isn't one session — a page's own list of what happened (a task's feed across several agents) —
+   * drawn by the chat itself: the same scrolling, ↓ to the newest, Enter in an empty box going to the bottom, images
+   * opening in the lightbox, and its input box (images, files; @ offers `mentions`). Fills its parent's height.
+   * The user's entries are the chat's user messages; every other entry is drawn by `render`, one full-width row each
+   * (keep `entries` the same array until it changes: a new one redraws the list). onSend gets the text and files
+   * (pasted images are saved first, so each is a path); throw to keep the text in the box. hint: a line under the text,
+   * given what's typed (who it will go to). jump: scroll to the entry with that key and flash it; bump seq to jump
+   * again. children: drawn over the list (a floating pill). id: the scroll position and draft are kept per id.
+   * Each entry's row carries `data-feed="<key>"`. For a "working…" last row, render PixelLoader.
+   */
+  export function FeedChat<E extends FeedEntry>(props: {
+    id: string;
+    entries: E[];
+    render: (entry: E) => ReactNode;
+    onSend: (msg: { text: string; files: FeedFile[] }) => Promise<void>;
+    mentions?: string[];
+    hint?: (text: string) => ReactNode;
+    /** The empty input box's text (who it writes to), instead of the chat's own. */
+    placeholder?: string;
+    jump?: { key: string; seq: number };
+    className?: string;
+    children?: ReactNode;
+  }): ReactNode;
+
+  /** The chat's running indicator (the dots by "working…"). */
+  export function PixelLoader(props: { className?: string }): ReactNode;
+
   /** A conversation's summary, kept current; undefined while unknown. */
   export function useSession(id: string | undefined):
     | {
