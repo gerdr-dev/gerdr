@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { addonStatus, assetURL, settingActions, slots, type AddonStatus } from "@/lib/addons";
 import { AddonGuard } from "@/components/AddonSlot";
+import { AddonIcon as StoredAddonIcon, IconPicker } from "@/components/IconPicker";
 import { unlockAudio, watchSignal } from "@/lib/audio";
 import { api, ApiError } from "@/lib/api";
 import { askConfirm } from "@/lib/confirm";
@@ -393,6 +394,8 @@ function SettingField({ id, spec, value }: { id: string; spec: AddonSetting; val
           </Select>
         ) : spec.type === "color" ? (
           <ColorField value={String(shown ?? "")} onSave={save} />
+        ) : spec.type === "icon" ? (
+          <IconField value={String(shown ?? "")} def={String(spec.default ?? "")} onSave={save} />
         ) : (
           <span className="flex items-center gap-1">
             <Input
@@ -439,6 +442,35 @@ function SettingField({ id, spec, value }: { id: string; spec: AddonSetting; val
         </div>
       )}
     </div>
+  );
+}
+
+// An "icon" setting: a button showing the icon, opening the agent icon picker (glyphs, line icons, the sprites add-ons
+// brought). The default cell is addon.json's default, usually a lucide name ("Coffee"); picking it saves null, so a
+// later default change in the add-on still reaches people who never chose.
+function IconField({ value, def, onSave }: { value: string; def: string; onSave: (v: string | null) => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button size="icon-sm" variant="outline" aria-label={value}>
+          <StoredAddonIcon icon={value} className="size-4" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-72 p-2">
+        <IconPicker
+          icon={value === def ? "" : value}
+          color=""
+          colorable={false}
+          def={{ title: t("addonSettings.iconDefault"), node: <StoredAddonIcon icon={def} className="size-5" /> }}
+          onChange={(p) => {
+            if (p.icon === undefined) return;
+            onSave(p.icon === "" ? null : p.icon);
+            setOpen(false);
+          }}
+        />
+      </PopoverContent>
+    </Popover>
   );
 }
 

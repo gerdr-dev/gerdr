@@ -127,6 +127,7 @@ lucide icon (`<g.icons.Timer className="size-3.5" />`).
 | where | call | gets |
 |---|---|---|
 | A block of your panel, opened from your add-on's own button on the rail | `g.slot("panel", Component, { order, id, title, icon, tallIcon, open })` | no props |
+| A whole button of your own on the rail: its look, state, click, hover, popup are all yours (a switch, a menu) | `g.slot("railButton", Component, { order, id })` | `{ place, className }`: see below |
 | A sprite: a small picture the user can use as the working indicator (Settings → General) or as an agent's icon | `g.slot("sprite", Component, { id, title })` | `{ state, width, height }` |
 | The app's root, always mounted, no space taken | `g.slot("overlay", Component)` | no props |
 | Every pane's title bar | `g.slot("paneTitle", Component)` | `{ pane, tab }` |
@@ -191,6 +192,11 @@ Rules that keep it looking like Gerdr:
 - Want other add-ons' blocks behind the same button as yours (today's numbers next to two quota meters)? Copy their
   code into your add-on (add-ons are small) and tell the user to turn the originals off. Gerdr has no grouping on
   purpose: one add-on can line the rows up and draw one icon from all of the data, a grouping setting couldn't.
+- `"railButton"` is for buttons that aren't "open my panel": a switch with its own on / off look, a menu, a popup of
+  your own. Gerdr draws nothing around it and handles no click; put the `className` it hands you on your `<button>`
+  (Gerdr's size, colours and hover for that place: `place` is `"rail"`, a 36px column, or `"phone"`, a 28px row) and add
+  your state on top, for example `g.ui.cn(className, on && "bg-accent text-foreground")`. A popup is a `g.ui.Popover`
+  you open yourself, on click or on hover.
 - A sprite (`g.slot("sprite")`) gets its box as `width` × `height`: 24×16 in the working indicator (`state`
   "working" / "waiting") and as small as 14×14 as an agent's icon (`state` "idle": keep it
   still, those are always in sight). Draw it to fit — at 14px a simpler version may read better — text 10px or more, red (`bg-bad` / `text-bad`) only for a warning. One picture per registration (`id`,
@@ -318,6 +324,15 @@ add-on installed later shows up by itself:
 `"required": true` (any select) means there is no empty choice: until one is picked, or when the picked one is gone
 (its add-on removed), the value is the first option — `g.settings.get` and a service's settings line say the same.
 With no option at all the field is disabled and the value is missing: say in `description` what to install.
+
+An `icon` is a string picked from the same icons as an agent's: Gerdr's glyphs and line icons, and the sprites other
+add-ons brought (`"sprite:<key>"`), so a picture pack installed later shows up by itself. Its `default` is usually a
+lucide name (`"Coffee"`). Draw the value with `<g.ui.Icon icon={g.settings.get("on")} className="size-4" />`, which
+handles every kind; `state="working"` makes a sprite move (its own animation; the default `"idle"` is still):
+
+```json
+{ "key": "on", "title": "开着时的图标", "type": "icon", "default": "Coffee" }
+```
 
 A `link` has no value: it is a button that opens a page, such as your add-on's control panel, shown in the form with
 the other settings. An add-on may have several:

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { slots } from "@/lib/addons";
 import { spriteTitle } from "@/lib/rail";
+import { lucideIcon } from "@/lib/rail";
 import { useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { t } from "@/lib/i18n";
@@ -19,14 +20,47 @@ import { SPRITE } from "./AgentIcon";
 export const knownIcon = (icon?: string) => !!icon && (!!GLYPHS[icon] || !!LINES[icon] || icon.startsWith(SPRITE));
 
 /** Draws a stored icon; `fallback` while it's "" or unknown, or its sprite's add-on isn't loaded (disabled, removed, not yet). */
-export function StoredIcon({ icon, color, fallback, className }: { icon?: string; color?: string; fallback: ReactNode; className?: string }) {
+export function StoredIcon({
+  icon,
+  color,
+  fallback,
+  className,
+  state,
+}: {
+  icon?: string;
+  color?: string;
+  fallback: ReactNode;
+  className?: string;
+  /** A sprite's state: "idle" (default, still) or "working" / "waiting" (moving, if the sprite animates). */
+  state?: "idle" | "working" | "waiting";
+}) {
   useStore((s) => s.addonVersion);
   if (!icon || !knownIcon(icon)) return <>{fallback}</>;
   if (icon.startsWith(SPRITE)) {
     const sprite = slots.sprite.find((r) => r.key === icon.slice(SPRITE.length));
-    return sprite ? <FitSprite reg={sprite} className={className} /> : <>{fallback}</>;
+    return sprite ? <FitSprite reg={sprite} className={className} state={state} /> : <>{fallback}</>;
   }
   return <AgentGlyph name={icon} color={color} className={className} />;
+}
+
+/**
+ * An add-on's icon (an "icon" setting's value, g.ui.Icon): a stored icon as above, else a lucide icon by name ("Coffee",
+ * an add-on's default), else `fallback`. Built-in glyphs draw in their own colours.
+ */
+export function AddonIcon({
+  icon,
+  className,
+  fallback,
+  state,
+}: {
+  icon?: string;
+  className?: string;
+  fallback?: ReactNode;
+  state?: "idle" | "working" | "waiting";
+}) {
+  const L = !knownIcon(icon) ? lucideIcon(icon) : undefined;
+  if (L) return <L className={className} />;
+  return <StoredIcon icon={icon} className={className} fallback={fallback ?? null} state={state} />;
 }
 
 /**

@@ -99,6 +99,12 @@ sees: `internal/addons/builtin/gerdr.d.ts`, copied into `~/.gerdr/addons` on eve
   add-on: add-ons are small source code an agent writes, so "these three together" is one add-on with their code
   copied in. That also does what groups couldn't (rows lined up across sources, an icon drawn from all of the data:
   three quota rings) and leaves no settings page to keep. `config.rail` from then is ignored.
+- `"railButton"` (Nov 2026): the whole rail button is the add-on's, Gerdr only gives the place (RailAddons.tsx
+  `railEntries`, in slot order among the panel buttons) and its own button classes as `className`. Asked for by a
+  lid-awake switch: a "panel" button can only open a panel, and showing on / off inside the 32×20 icon box drew a pill
+  instead of the button's own square. The alternative, an `active` option on panel buttons, was turned down: every
+  next kind of button (a menu, a hover popup of its own, a long press) would need one more option, while handing the
+  button over covers them all. "panel" stays for blocks-in-a-panel, the common case, and for the add-ons using it.
 - `g.fetch` is POST /api/addons/{id}/fetch (internal/server/addonfetch.go): the backend makes the request. A plain
   fetch() to a third-party API can't work: the page's CSP is `connect-src 'self'`, which blocks it even when the API
   sends CORS headers (the SubHub add-on shipped a CORS fallback that never ran for that reason), and add-on authors

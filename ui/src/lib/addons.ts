@@ -14,6 +14,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { api } from "./api";
 import { playAudio, stopAudio, type Clips } from "./audio";
 import { cn } from "./utils";
+import { AddonIcon } from "@/components/IconPicker";
 import { locale, t } from "./i18n";
 import { activeTab, activeWs, leaves, type Layout, type PaneLeaf, type Tab, type Workspace } from "./layout";
 import { get, set, useStore, visibleSessions } from "./store";
@@ -41,7 +42,7 @@ type Reg<T> = { addon: string; fn: T };
  * "settings" is the add-on's own layout of its addon.json settings (Settings → Add-ons → 设置, components/AddonSettings.tsx;
  * props: Field, values, set), drawn instead of the generated form; one per add-on, the first registered wins.
  */
-export type SlotName = "panel" | "sprite" | "paneTitle" | "overlay" | "loader" | "settings";
+export type SlotName = "panel" | "railButton" | "sprite" | "paneTitle" | "overlay" | "loader" | "settings";
 /**
  * key: stable across reloads — "addon:id" with the id the add-on gave, else "addon:n" (its n-th entry in that slot, the
  * same on every load since setup runs the same way): config.loader and agents' icons refer to entries by it.
@@ -59,7 +60,7 @@ export type SlotReg = {
   /** A panel's icon component wants a button two cells tall on the rail (a 32×72 box instead of 32×20). */
   tallIcon?: boolean;
 };
-export const slots: Record<SlotName, SlotReg[]> = { panel: [], sprite: [], paneTitle: [], overlay: [], loader: [], settings: [] };
+export const slots: Record<SlotName, SlotReg[]> = { panel: [], railButton: [], sprite: [], paneTitle: [], overlay: [], loader: [], settings: [] };
 export type ComposerAction = { addon: string; id: string; title: string; icon?: React.ReactNode; run: (ctx: ComposerCtx) => void | Promise<void> };
 export type ComposerCtx = { sessionId: string; text: string; insert(text: string): void; setText(text: string): void };
 export const composerActions: ComposerAction[] = [];
@@ -468,6 +469,7 @@ function makeApi(id: string, hash: string) {
       SheetDescription,
       SheetFooter,
       SheetClose,
+      Icon: AddonIcon,
       cn,
     },
     icons,

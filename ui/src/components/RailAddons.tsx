@@ -3,7 +3,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { assetURL } from "@/lib/addons";
+import { assetURL, slots, type SlotReg } from "@/lib/addons";
 import { addonMeta, lucideIcon, railButtons, type RailButton } from "@/lib/rail";
 import { useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -41,16 +41,39 @@ const ICON_SMALL = { width: 28, height: 16 };
 const TALL = { width: 32, height: 72 };
 const TALL_SMALL = { width: 24, height: 24 };
 
-/** The rail's add-on buttons, one per add-on with a "panel" block. */
+/**
+ * The rail's add-on buttons: one per add-on with a "panel" block (Gerdr draws the button and opens the blocks), and
+ * every "railButton" entry, which is the whole button drawn by its add-on — its look, its state, what a click or a
+ * hover does, any popup. Gerdr only gives it its place in the column, in slot order among the others. Asked for
+ * (Nov 2026) by a lid-awake switch: the "panel" button can only open a panel, and the add-on's icon box (32×20) is
+ * too small to show the button's own on / off state, so its "on" background read as a pill.
+ */
 export function RailAddonButtons() {
   useStore((s) => s.addonVersion);
   return (
     <>
-      {railButtons().map((b) => (
-        <AddonButton key={b.addon} b={b} />
-      ))}
+      {railEntries().map((e) =>
+        "b" in e ? (
+          <AddonButton key={e.b.addon} b={e.b} />
+        ) : (
+          <AddonGuard key={e.r.key} addon={e.r.addon} fallback={null}>
+            <e.r.Component place="rail" className={RAIL_BTN} />
+          </AddonGuard>
+        ),
+      )}
     </>
   );
+}
+
+/** Gerdr's own look for a rail button, handed to "railButton" entries as className so they can match it. */
+const RAIL_BTN = "flex size-9 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground";
+const PHONE_BTN = "inline-flex h-7 min-w-7 items-center justify-center rounded-md px-1 text-muted-foreground hover:bg-accent hover:text-foreground";
+
+/** Panel buttons and railButton entries in one order: by the entry's order (a panel button: its smallest block's). */
+function railEntries(): ({ b: RailButton; order: number; addon: string } | { r: SlotReg; order: number; addon: string })[] {
+  const panel = railButtons().map((b) => ({ b, order: Math.min(...b.blocks.map((x) => x.order)), addon: b.addon }));
+  const own = slots.railButton.map((r) => ({ r, order: r.order, addon: r.addon }));
+  return [...panel, ...own].sort((x, y) => x.order - y.order || x.addon.localeCompare(y.addon));
 }
 
 /**
@@ -134,22 +157,31 @@ export function PhoneAddonButtons() {
   useStore((s) => s.addonVersion);
   return (
     <>
-      {railButtons().map((b) => (
-        <Sheet key={b.addon}>
-          <SheetTrigger asChild>
-            <Button variant="ghost" className="h-7 min-w-7 px-1 text-muted-foreground" aria-label={b.title}>
-              <ButtonIcon b={b} small />
-            </Button>
-          </SheetTrigger>
-          {/* No auto-focus: it put a focus ring on the close button of a sheet opened by a tap */}
-          <SheetContent side="bottom" className="gap-0 rounded-t-xl pb-[max(0.5rem,env(safe-area-inset-bottom))]" onOpenAutoFocus={(e) => e.preventDefault()}>
-            <SheetTitle className="px-4 pt-4 pb-1 text-[13px]">{b.title}</SheetTitle>
-            <div className="py-1">
-              <AddonParts regs={b.blocks} />
-            </div>
-          </SheetContent>
-        </Sheet>
-      ))}
+      {railEntries().map((e) => {
+        if (!("b" in e))
+          return (
+            <AddonGuard key={e.r.key} addon={e.r.addon} fallback={null}>
+              <e.r.Component place="phone" className={PHONE_BTN} />
+            </AddonGuard>
+          );
+        const b = e.b;
+        return (
+          <Sheet key={b.addon}>
+            <SheetTrigger asChild>
+              <Button variant="ghost" className="h-7 min-w-7 px-1 text-muted-foreground" aria-label={b.title}>
+                <ButtonIcon b={b} small />
+              </Button>
+            </SheetTrigger>
+            {/* No auto-focus: it put a focus ring on the close button of a sheet opened by a tap */}
+            <SheetContent side="bottom" className="gap-0 rounded-t-xl pb-[max(0.5rem,env(safe-area-inset-bottom))]" onOpenAutoFocus={(e) => e.preventDefault()}>
+              <SheetTitle className="px-4 pt-4 pb-1 text-[13px]">{b.title}</SheetTitle>
+              <div className="py-1">
+                <AddonParts regs={b.blocks} />
+              </div>
+            </SheetContent>
+          </Sheet>
+        );
+      })}
     </>
   );
 }

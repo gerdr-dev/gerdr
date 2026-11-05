@@ -73,7 +73,7 @@ export function SpriteView({
  * A sprite filling a box sized by classes ("size-4"), not numbers: the box is measured, then the sprite is told it.
  * For places that take a sprite in place of an icon (an agent's icon, components/AgentIcon.tsx), drawn still.
  */
-export function FitSprite({ reg, className }: { reg: SlotReg; className?: string }) {
+export function FitSprite({ reg, className, state = "idle" }: { reg: SlotReg; className?: string; state?: "idle" | "working" | "waiting" }) {
   const ref = useRef<HTMLSpanElement>(null);
   const [box, setBox] = useState<{ width: number; height: number }>();
   useLayoutEffect(() => {
@@ -91,7 +91,7 @@ export function FitSprite({ reg, className }: { reg: SlotReg; className?: string
   }, []);
   return (
     <span ref={ref} aria-hidden className={cn("inline-flex shrink-0 items-center justify-center overflow-hidden", className)}>
-      {box && box.width > 0 && <SpriteView reg={reg} state="idle" clip {...box} />}
+      {box && box.width > 0 && <SpriteView reg={reg} state={state} clip {...box} />}
     </span>
   );
 }

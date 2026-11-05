@@ -116,7 +116,7 @@ export type AddonSetting = {
   key: string;
   title?: string;
   description?: string;
-  type: "number" | "string" | "text" | "boolean" | "select" | "color" | "secret" | "link" | "action";
+  type: "number" | "string" | "text" | "boolean" | "select" | "color" | "secret" | "link" | "action" | "icon";
   default?: unknown;
   /**
    * "link": the page its button opens (the service's status "links"[key] wins). "action": a button running the add-on's
