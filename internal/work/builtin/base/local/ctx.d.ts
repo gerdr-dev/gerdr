@@ -331,6 +331,12 @@ interface Session {
    * its reply. E.g. a board shouldn't ask them to "come and look" at an answer to their own question.
    */
   byPerson?: boolean;
+  /**
+   * How its last turn ended (sessions.get only, like reply): "end_turn" (normally), "cancelled" (someone pressed stop
+   * or closed it; Gerdr restarting mid-turn too, with an error in reply), "error", "max_tokens"… Unset while a turn
+   * runs or before the first one. A user's stop is theirs: e.g. don't remind a worker that was stopped to report.
+   */
+  stopReason?: string;
   error?: string;
   /** See `sessions.start`; `{}` when it has none. */
   tags: Record<string, string>;

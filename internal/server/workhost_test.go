@@ -152,6 +152,13 @@ func TestLastReply(t *testing.T) {
 	if got := lastReply(evs); got != want {
 		t.Errorf("lastReply = %q, want %q", got, want)
 	}
+	if got := lastStop(evs); got != "max_tokens" {
+		t.Errorf("lastStop = %q, want max_tokens", got)
+	}
+	// A message sent since the last turn ended: that ending no longer says how things stand
+	if got := lastStop(append(evs, &hub.Event{Kind: hub.EvUser})); got != "" {
+		t.Errorf("lastStop after a new message = %q, want none", got)
+	}
 }
 
 func quote(s string) string { b, _ := json.Marshal(s); return string(b) }

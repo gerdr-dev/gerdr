@@ -326,8 +326,26 @@ func (h workHost) view(x hub.Summary, evs []*hub.Event) map[string]any {
 	}
 	if evs != nil {
 		v["reply"] = lastReply(evs)
+		if r := lastStop(evs); r != "" {
+			v["stopReason"] = r
+		}
 	}
 	return v
+}
+
+// lastStop: how the last turn ended (end_turn, cancelled, error, max_tokens…). A board tells "the user pressed stop"
+// (cancelled) from "it stopped without saying what's next": the first is no reason to remind the worker — a reminder
+// would start it again against the user's stop.
+func lastStop(evs []*hub.Event) string {
+	for i := len(evs) - 1; i >= 0; i-- {
+		if evs[i].Kind == hub.EvUser {
+			return ""
+		}
+		if evs[i].Kind == hub.EvTurnEnd {
+			return evs[i].StopReason
+		}
+	}
+	return ""
 }
 
 // lastReply: the agent's text after the last user message, plus how a turn ended when it didn't end normally — the
