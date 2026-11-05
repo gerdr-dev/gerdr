@@ -154,3 +154,45 @@ func TestLid(t *testing.T) {
 		t.Fatal("不醒着了合盖模式还开着")
 	}
 }
+
+// A restart (a new build picked up once idle) closes every remote /ws, and a locked phone does not come back.
+// The next process has to keep the grace the old one promised, or the Mac sleeps minutes after the restart.
+func TestResumeAcrossRestart(t *testing.T) {
+	dir := t.TempDir()
+	old, _ := fake(time.Hour)
+	old.dir = dir
+	old.SetEnabled(true)
+	old.Hold()
+	old.SetManual(Forever)
+	old.Close() // still connected when it shuts down
+
+	k, running := fake(time.Hour)
+	k.dir = dir
+	k.resume()
+	k.SetEnabled(true)
+	st := k.Status()
+	if !k.Awake() || running.Load() != 1 {
+		t.Fatal("the new process should keep the promised grace")
+	}
+	if until := time.UnixMilli(st.GraceUntil); time.Until(until) < 59*time.Minute {
+		t.Fatalf("grace should start at the restart, got %v left", time.Until(until))
+	}
+	if st.ManualUntil != -1 {
+		t.Fatal("the manual stretch was lost")
+	}
+	k.SetManual(time.Time{})
+	k.SetEnabled(false)
+	if k.Awake() {
+		t.Fatal("turning the toggle off should still let go")
+	}
+
+	// Nothing promised: no file, nothing carried.
+	k.Close()
+	n, _ := fake(time.Hour)
+	n.dir = dir
+	n.resume()
+	n.SetEnabled(true)
+	if n.Awake() {
+		t.Fatal("nothing was promised, the new process should not stay awake")
+	}
+}

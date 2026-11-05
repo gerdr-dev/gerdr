@@ -22,9 +22,11 @@
 package awake
 
 import (
+	"encoding/json"
 	"log/slog"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"sync"
@@ -37,6 +39,7 @@ const Grace = 15 * time.Minute
 type Keeper struct {
 	log   *slog.Logger
 	grace time.Duration
+	dir   string // where Close leaves the resume file; "" = don't carry state across restarts
 	// start 起一个让系统别睡的进程，返回停掉它的函数；测试里换成假的。nil = 这个平台做不到。
 	start func() (stop func(), err error)
 	// lidOn 打开「合盖也不睡」，返回关掉它的函数；lidReady 是不是已经授权过；batt 读电量和电源。测试里换成假的。
@@ -76,7 +79,7 @@ var Forever = time.Unix(1<<62, 0)
 
 // New：dir 是 gerdr 的数据目录（放合盖模式的标记文件）。
 func New(log *slog.Logger, dir string) *Keeper {
-	k := &Keeper{log: log, grace: Grace, done: make(chan struct{})}
+	k := &Keeper{log: log, grace: Grace, dir: dir, done: make(chan struct{})}
 	if runtime.GOOS == "darwin" {
 		if p, err := exec.LookPath("caffeinate"); err == nil {
 			k.start = func() (func(), error) { return caffeinate(p) }
@@ -86,7 +89,78 @@ func New(log *slog.Logger, dir string) *Keeper {
 		k.lidReady, k.batt = lidReady, battery
 		go k.watchBattery(time.Minute)
 	}
+	k.resume()
 	return k
+}
+
+// The backend restarts on its own (a new build is picked up once nothing is running, docs/dev/UPDATE.md), and
+// that restart closes every remote /ws. A phone that is locked does not reconnect, so a new process that
+// started from "no remote, no grace" let the Mac idle-sleep minutes later, well inside the 15 minutes promised
+// after the last disconnect. So Close writes down what it was promising and the next process keeps the promise.
+// Only Close writes it: after a crash there is no file and the stretch is simply lost, which errs toward sleeping.
+type resumeState struct {
+	RemoteUntil int64 `json:"remoteUntil,omitempty"` // unix ms: end of the remote grace stretch
+	ManualUntil int64 `json:"manualUntil,omitempty"` // unix ms, -1 = forever
+}
+
+func (k *Keeper) resumeFile() string { return filepath.Join(k.dir, "awake-resume.json") }
+
+// resume picks up the stretches the previous process left (see resumeState). Runs before SetEnabled: the
+// remote stretch only keeps the Mac awake if the toggle is still on, which sync checks.
+func (k *Keeper) resume() {
+	if k.dir == "" {
+		return
+	}
+	b, err := os.ReadFile(k.resumeFile())
+	if err != nil {
+		return
+	}
+	_ = os.Remove(k.resumeFile())
+	var st resumeState
+	if json.Unmarshal(b, &st) != nil {
+		return
+	}
+	k.mu.Lock()
+	if until := time.UnixMilli(st.RemoteUntil); st.RemoteUntil > 0 && until.After(time.Now()) {
+		k.startGrace(time.Until(until))
+		k.idleAt = until.Add(-k.grace)
+		k.log.Info("awake: carrying the remote grace over from before the restart", "until", until.Format(time.TimeOnly))
+	}
+	k.mu.Unlock()
+	switch {
+	case st.ManualUntil == -1:
+		k.SetManual(Forever)
+	case st.ManualUntil > 0:
+		k.SetManual(time.UnixMilli(st.ManualUntil)) // already past = no-op
+	}
+}
+
+// saveResume: called by Close, under the lock, before it lets go.
+func (k *Keeper) saveResume() {
+	if k.dir == "" {
+		return
+	}
+	var st resumeState
+	if k.enabled {
+		switch {
+		case k.conns > 0: // still connected: they lose the connection now, so the grace starts now
+			st.RemoteUntil = time.Now().Add(k.grace).UnixMilli()
+		case k.timer != nil:
+			st.RemoteUntil = k.idleAt.Add(k.grace).UnixMilli()
+		}
+	}
+	switch {
+	case k.manual == Forever:
+		st.ManualUntil = -1
+	case !k.manual.IsZero():
+		st.ManualUntil = k.manual.UnixMilli()
+	}
+	if st == (resumeState{}) {
+		return
+	}
+	if b, err := json.Marshal(st); err == nil {
+		_ = os.WriteFile(k.resumeFile(), b, 0o600)
+	}
 }
 
 // watchBattery：合盖模式开着（或因为没电放手了）时每 every 看一眼电量。合着盖子在包里耗光电比睡着糟得多。
@@ -163,22 +237,28 @@ func (k *Keeper) Hold() (release func()) {
 			defer k.mu.Unlock()
 			k.conns--
 			if k.conns == 0 {
-				var t *time.Timer
-				t = time.AfterFunc(k.grace, func() {
-					// 先拿锁再读 t：t 是 AfterFunc 返回之后（持锁）才赋上的
-					k.mu.Lock()
-					defer k.mu.Unlock()
-					// 只认当前这一轮 —— 到点的回调可能正等着锁，这期间有人连上又断开、换了新的一轮，
-					// 旧回调不能把新的宽限期提前结束掉。
-					if k.timer == t {
-						k.timer = nil
-						k.sync()
-					}
-				})
-				k.timer, k.idleAt = t, time.Now()
+				k.startGrace(k.grace)
+				k.idleAt = time.Now()
 			}
 		})
 	}
+}
+
+// startGrace starts the countdown after the last remote went away. Under the lock.
+func (k *Keeper) startGrace(d time.Duration) {
+	var t *time.Timer
+	t = time.AfterFunc(d, func() {
+		// Take the lock before reading t: t is assigned (under the lock) only after AfterFunc returns.
+		k.mu.Lock()
+		defer k.mu.Unlock()
+		// Only the current round counts: while this callback waited for the lock someone may have connected
+		// and left again, and an old callback must not end the new grace early.
+		if k.timer == t {
+			k.timer = nil
+			k.sync()
+		}
+	})
+	k.timer = t
 }
 
 // SetManual：手动时段到 until 为止（Forever = 无限期，零值 = 结束手动时段）。
@@ -265,6 +345,7 @@ func (k *Keeper) Close() {
 			close(k.done)
 		}
 	}
+	k.saveResume()
 	k.enabled, k.manual = false, time.Time{}
 	k.sync()
 }
