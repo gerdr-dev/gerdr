@@ -266,6 +266,8 @@ export const api = {
   /** input：建好就敲进去的字（对话里「在新终端里运行」） */
   /** host: the shell runs on that computer; its id comes back as "<host>:<id>" and everything else routes by it */
   termCreate: (o: { cwd?: string; from?: string; cols?: number; rows?: number; input?: string; host?: string }) => req<TermInfo>("POST", "/api/terms", o),
+  /** All live and recently exited terminal processes, used to identify what is holding an update open. */
+  terms: () => req<TermInfo[]>("GET", "/api/terms"),
   /** 往终端里敲字（对话里「在当前终端里运行」） */
   termInput: (id: string, data: string) => req("POST", `/api/terms/${encodeURIComponent(id)}/input`, { data }),
   /** liveCwd：顺带问 shell 现在在哪个目录（mac 上要跑一次 lsof，别每次都问） */

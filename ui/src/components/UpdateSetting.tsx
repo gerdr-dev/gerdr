@@ -1,14 +1,19 @@
-import { Loader2 } from "lucide-react";
+import { Info, Loader2, SquareTerminal } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { Switch } from "@/components/ui/switch";
 import { isNative, nativeApplyUpdate, nativeAskUpdate, nativeSetAutoUpdate, type AppUpdateStatus } from "@/lib/native";
 import { set, useStore } from "@/lib/store";
 import { locale, t } from "@/lib/i18n";
 import type { MessageKey } from "@/lib/messages";
+import { allLeaves, type Layout } from "@/lib/layout";
+import { focusPane } from "@/lib/actions";
+import { AgentIcon } from "@/components/AgentIcon";
+import type { SessionSummary, TermInfo } from "@/lib/types";
 
 // Settings → 通用 →「版本」: which gerdr is running and where the App's self-update is (desktop/updater.js, pushed
 // by desktop/main.js updateStatus): downloading, waiting for agents to finish, upgrading. A downloaded backend
@@ -53,6 +58,16 @@ export function UpdateSetting() {
   const shown = (u && u.app !== running ? `Gerdr ${running} · App ${u.app}` : `Gerdr ${running}`) + when;
   const { text, tone } = u ? describe(u, service) : { text: "", tone: "" };
   const p = u?.pending;
+  const layout = useStore((s) => s.layout);
+  const sessions = useStore((s) => s.sessions);
+  const [terms, setTerms] = useState<TermInfo[]>([]);
+  useEffect(() => {
+    if (!p || !u?.busy?.terms) return void setTerms([]);
+    api
+      .terms()
+      .then(setTerms)
+      .catch(() => {});
+  }, [p?.version, u?.busy?.terms]);
   const native = isNative();
   const checking = useChecking(u);
   const ask = () => {
@@ -69,7 +84,14 @@ export function UpdateSetting() {
         <div className="min-w-0">
           <div className="text-[13px]">{t("updateSetting.version")}</div>
           <div className="text-[12px] text-muted-foreground">{shown}</div>
-          {text && <div className={cn("text-[12px]", tone || "text-muted-foreground")}>{text}</div>}
+          {text && (
+            <div className={cn("flex items-start gap-1 text-[12px]", tone || "text-muted-foreground")}>
+              <span>{text}</span>
+              {p && u?.busy && u.busy.turns + u.busy.waiting + u.busy.tasks + u.busy.terms > 0 && (
+                <UpdateBlockers layout={layout} sessions={sessions} terms={terms} />
+              )}
+            </div>
+          )}
           {!u && !native && <div className="text-[12px] text-muted-foreground">{t("updateSetting.remoteHint")}</div>}
         </div>
         {u?.enabled &&
@@ -97,6 +119,75 @@ export function UpdateSetting() {
     </>
   );
 }
+
+/** The update status only has counts; the shared layout gives those counts useful, clickable identities. */
+function UpdateBlockers({ layout, sessions, terms }: { layout: Layout; sessions: Record<string, SessionSummary>; terms: TermInfo[] }) {
+  const [open, setOpen] = useState(false);
+  const leaves = allLeaves(layout);
+  const panels = leaves
+    .map(({ ws, tab, pane }) => {
+      const session = pane.sessionId ? sessions[pane.sessionId] : undefined;
+      if (!session || (session.status !== "running" && session.status !== "waiting")) return null;
+      return {
+        pane,
+        icon: <AgentIcon agent={session.agent} className="size-3.5" />,
+        title: session.title || t("updateSetting.detailUntitled"),
+        detail: session.status === "running" ? t("updateSetting.detailRunning") : t("updateSetting.detailWaiting"),
+        place: placeName(ws.name, tab.name),
+      };
+    })
+    .filter((panel): panel is NonNullable<typeof panel> => !!panel);
+  const terminalPanels = terms
+    .filter((term) => !term.exited)
+    .map((term) => {
+      const located = leaves.find(({ pane }) => pane.term?.id === term.id);
+      return {
+        pane: located?.pane,
+        icon: <SquareTerminal className="size-3.5" />,
+        title: t("updateSetting.detailTerminal"),
+        detail: term.cwd,
+        place: located ? placeName(located.ws.name, located.tab.name) : t("updateSetting.detailNotShown"),
+      };
+    });
+  const blockers = [...panels, ...terminalPanels];
+
+  if (!blockers.length) return null;
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button className="mt-0.5 shrink-0 text-current/70 hover:text-current" aria-label={t("updateSetting.detail")}>
+          <Info className="size-3.5" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-80 p-2">
+        <div className="px-2 py-1 text-[12px] font-medium">{t("updateSetting.detailTitle")}</div>
+        <div className="max-h-64 space-y-0.5 overflow-y-auto">
+          {blockers.map((panel, index) => (
+            <button
+              key={panel.pane?.id ?? `term-${index}`}
+              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[12px] hover:bg-accent disabled:cursor-default disabled:hover:bg-transparent"
+              disabled={!panel.pane}
+              onClick={() => {
+                setOpen(false);
+                if (panel.pane) focusPane(panel.pane.id);
+              }}
+            >
+              <span className="shrink-0 text-muted-foreground">{panel.icon}</span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate">{panel.title}</span>
+                <span className="block truncate text-[11px] text-muted-foreground">
+                  {panel.detail} · {panel.place}
+                </span>
+              </span>
+            </button>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+const placeName = (workspace: string, tab?: string) => (tab ? `${workspace} / ${tab}` : workspace);
 
 /** Off the App: the backend hands it to the App's page, whose next status report shows what happened. */
 function relay(op: "check" | "apply" | "auto", on?: boolean) {
