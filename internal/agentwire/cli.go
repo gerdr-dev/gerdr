@@ -145,7 +145,12 @@ func (x codexExt) Config(ctx context.Context, rpc *rpcline.Conn, cwd string, met
 					disable = !x.m.OwnSkillsOn(st) && sk.Scope != "system"
 				}
 				// 角色限定了 skill：没挑的也关。codex 自带的（system）界面上列不出来、挑不了，不动它们。
-				if !disable && sk.Scope != "system" && !underAny(sk.Path, skillRoots, under) && !x.m.AllowSkill(sk.Name) {
+				// The repository's own ("repo") aren't on any role's list either: only the project switches them off.
+				allow := x.m.AllowSkill(sk.Name)
+				if sk.Scope == "repo" {
+					allow = x.m.AllowRepoSkill(sk.Name)
+				}
+				if !disable && sk.Scope != "system" && !underAny(sk.Path, skillRoots, under) && !allow {
 					disable = true
 				}
 				if disable {

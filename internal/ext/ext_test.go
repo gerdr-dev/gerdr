@@ -245,3 +245,37 @@ func TestForProject(t *testing.T) {
 		t.Fatalf("claude args: %s", args)
 	}
 }
+
+// A role's list leaves the repository's own skills alone (no picker can name them); the project can still drop one.
+func TestRepoSkillsOutsideRoleList(t *testing.T) {
+	h := t.TempDir()
+	t.Setenv("HOME", h)
+	cwd := t.TempDir()
+	for _, sk := range []struct{ root, name string }{{h, "global"}, {cwd, "deploy-check"}, {cwd, "old-check"}} {
+		d := filepath.Join(sk.root, ".claude", "skills", sk.name)
+		_ = os.MkdirAll(d, 0o755)
+		_ = os.WriteFile(filepath.Join(d, "SKILL.md"), []byte("---\nname: "+sk.name+"\ndescription: d\n---\n"), 0o644)
+	}
+	g := New(t.TempDir())
+	g.SetProjectOff(func(string) Only { return Only{Skills: []string{"old-check"}} })
+	m := g.Scoped(Only{Skills: []string{"gerdr"}}).ForProject("p")
+	var st struct {
+		SkillOverrides map[string]string `json:"skillOverrides"`
+	}
+	args := m.ClaudeArgs("s", cwd, nil)
+	for i, a := range args {
+		if a == "--settings" {
+			_ = json.Unmarshal([]byte(args[i+1]), &st)
+		}
+	}
+	if st.SkillOverrides["global"] != "off" || st.SkillOverrides["deploy-check"] != "" || st.SkillOverrides["old-check"] != "off" {
+		t.Fatalf("skillOverrides: %v", st.SkillOverrides)
+	}
+	var names []string
+	for _, s := range m.FilterSkills(ClaudeSkills(cwd)) {
+		names = append(names, s.Name)
+	}
+	if !slices.Equal(names, []string{"deploy-check"}) {
+		t.Fatalf("FilterSkills (native): %v", names)
+	}
+}

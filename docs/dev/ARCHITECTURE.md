@@ -695,6 +695,10 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
   nothing, and giving one role a skill meant switching the source for every session. Switched-off entries are still
   never given: off is the global kill switch. The source now only decides for roles without a list. The UI's picker
   (`candidates()` in AgentSettings.tsx) offers every switched-on entry and marks which ones "全部" gives.
+  - A repository's own skills (Claude's `.claude/skills` in the working directory or above, origin `claude-project`;
+    Codex's `repo` scope) are given whatever the list says (`AllowRepoSkill`): the picker lists no repository, so a
+    role with a list used to lose all of them with no way to tick one back. Only a project switching the name off
+    drops one.
   - claude：skill 壳目录只链挑中的；claude 自己的 skill 没挑的走 `skillOverrides: off`；插件的 skill 关不了单个，**一个都没挑的插件整个关**
     （它的 MCP / hook 一起没）。MCP 按名字关不掉：把挑中的（Gerdr 的 + ~/.claude.json / .mcp.json 里的）全写进 `--mcp-config` 再 `--strict-mcp-config`，
     代价是插件的 MCP 和 claude.ai 的 connector 也没了。提示词和 MediaHint 拼成**一个** `--append-system-prompt`（给两个后一个盖前一个）。

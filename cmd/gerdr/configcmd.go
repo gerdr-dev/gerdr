@@ -66,6 +66,7 @@ const agentsHelp = `Each element of agents is one agent (role) offered when star
   command    instead of base: an external ACP agent's command line, e.g. ["gemini", "--experimental-acp"]
   prompt     extra system prompt appended for this agent
   skills     only these skills, by name. Omit = whatever the global Skill settings give; [] = none.
+             Skills that come with the repository being worked on are given anyway (no list can name them).
   mcp        only these MCP servers, by name. Omit = whatever the global MCP settings give; [] = none.
   providers  native only: which llm.providers ids it may use (gerdr config get llm.providers); omit = all
   bin, args, env   claude / codex only: another executable, extra arguments, environment variables

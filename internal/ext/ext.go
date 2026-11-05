@@ -74,9 +74,12 @@ type Skill struct {
 	Description string `json:"description"`
 	Dir         string `json:"dir"`
 	Enabled     bool   `json:"enabled"`
-	// Origin：gerdr / claude（用户级）/ claude-project / claude-plugin:<id> / codex
+	// Origin：gerdr / claude（用户级）/ claude-project (OriginRepo) / claude-plugin:<id> / codex
 	Origin string `json:"origin"`
 }
+
+// OriginRepo is a Claude skill found in the working directory or a parent of it (<dir>/.claude/skills), not in ~.
+const OriginRepo = "claude-project"
 
 var nameRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$`)
 
@@ -187,14 +190,20 @@ func (m *Manager) OwnSkillsOn(s Settings) bool {
 func (m *Manager) GerdrMCPOn(s Settings) bool { return m.LimitsMCP() || s.MCPSource.UsesGerdr() }
 func (m *Manager) OwnMCPOn(s Settings) bool   { return m.LimitsMCP() || s.MCPSource != SourceGerdr }
 
-// FilterSkills / FilterMCP：按角色限定筛（没限定原样返回）。
+// AllowRepoSkill: for a skill that comes with the repository being worked on (Claude's .claude/skills in it, Codex's
+// "repo" scope). A role's list doesn't apply: it picks among the skills installed for everything, and couldn't name
+// these (the picker lists no repository), so a role with a list used to lose every repository skill. Only the
+// project switching the name off drops one.
+func (m *Manager) AllowRepoSkill(name string) bool { return !contains(m.OffSkills(), name) }
+
+// FilterSkills / FilterMCP: what the role's list and the project leave (a repository's skill: AllowRepoSkill).
 func (m *Manager) FilterSkills(in []Skill) []Skill {
 	if !m.LimitsSkills() && !m.DropsSkills() {
 		return in
 	}
 	var out []Skill
 	for _, s := range in {
-		if m.AllowSkill(s.Name) {
+		if s.Origin == OriginRepo && m.AllowRepoSkill(s.Name) || s.Origin != OriginRepo && m.AllowSkill(s.Name) {
 			out = append(out, s)
 		}
 	}

@@ -282,7 +282,8 @@ new-session defaults. Skills and MCP servers live in one shared pool; an agent l
 Changing one later: `gerdr config set agents.<id>.<field> …` (`skills` / `mcp` take the whole list), new pool entries with
 `gerdr skill add` / `gerdr mcp add`, removal with `gerdr agent rm <id>` (`--prune` also deletes the pool entries only it
 used). An agent's `skills` / `mcp` list gets exactly those names whatever the global source; leaving the field out means
-"what the global settings give"; `[]` means none.
+"what the global settings give"; `[]` means none. Skills that come with the repository being worked on are given
+either way.
 
 MCP tokens (headers, env) are secrets like API keys: put in only what the user hands you; `list` / `show` print them as
 `<hidden>`, and `create` fills a `<hidden>` back from the pool entry of the same name.

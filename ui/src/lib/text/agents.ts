@@ -139,7 +139,7 @@ export const zh = {
   "agentSettings.fromGone": "已不在",
   "agentSettings.extLoadFailed": "读 Skill / MCP 列表失败：{error}",
   "agentSettings.extLoading": "读 Skill / MCP 列表…",
-  "agentSettings.noteClaudeSkill": "项目里的 Skill 这里列不出来：限定之后它们也不给。插件里的 Skill 关不了单个，一个都没勾的插件整个关掉（连它的 MCP、Hook）。",
+  "agentSettings.noteClaudeSkill": "仓库里自带的 Skill 不受这里影响，照常给。插件里的 Skill 关不了单个，一个都没勾的插件整个关掉（连它的 MCP、Hook）。",
   "agentSettings.noteCodexSkill": "Codex 自带的系统 Skill 不受影响。",
   // ProjectExtDialog
   "projectExt.title": "「{name}」的 Skill 和 MCP",
@@ -418,7 +418,7 @@ export const en: Record<keyof typeof zh, string> = {
   "agentSettings.extLoadFailed": "Couldn't load skills / MCP: {error}",
   "agentSettings.extLoading": "Loading skills / MCP…",
   "agentSettings.noteClaudeSkill":
-    "Project skills can't be listed here, and once limited they aren't given either. Plugin skills can't be turned off one by one: a plugin with none checked is turned off whole (its MCP and hooks too).",
+    "Skills that come with a repository aren't affected by this and are given as usual. Plugin skills can't be turned off one by one: a plugin with none checked is turned off whole (its MCP and hooks too).",
   "agentSettings.noteCodexSkill": "Codex's own system skills aren't affected.",
   "projectExt.title": "Skills & MCP of “{name}”",
   "projectExt.desc":

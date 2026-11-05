@@ -26,7 +26,7 @@ func ClaudeSkills(cwd string) []Skill {
 	if cwd != "" {
 		for d := cwd; ; d = filepath.Dir(d) {
 			if d != home() {
-				out = append(out, scanSkills(filepath.Join(d, ".claude", "skills"), "claude-project")...)
+				out = append(out, scanSkills(filepath.Join(d, ".claude", "skills"), OriginRepo)...)
 			}
 			if p := filepath.Dir(d); p == d {
 				break
@@ -178,7 +178,8 @@ func (m *Manager) ClaudeArgs(id, cwd string, skillRoots []string) []string {
 				}
 				continue
 			}
-			if !m.AllowSkill(sk.Name) {
+			// The repository's own stay (AllowRepoSkill); the project switching one off is handled below
+			if sk.Origin != OriginRepo && !m.AllowSkill(sk.Name) {
 				overrides[sk.Name] = "off"
 			}
 		}
