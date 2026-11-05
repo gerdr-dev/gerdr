@@ -511,6 +511,9 @@ export function ChatView({
                   if (!mod || !t.running) return scrollToEnd();
                   void sendQueuedNow().then((done) => done || scrollToEnd());
                 }}
+                queuedAhead={() =>
+                  latest.current.msgs.some((m) => m.metadata?.queued && !m.metadata.held) ? () => void latest.current.sendQueuedNow() : undefined
+                }
               />
             </div>
           )}

@@ -101,10 +101,16 @@ export const Composer = forwardRef<
     onSent?: () => void;
     /** Enter with nothing typed. mod: Ctrl/⌘ was held (ChatView: send the queued interjections now) */
     onEmptyEnter?: (mod: boolean) => void;
+    /**
+     * Send now with earlier interjections still unread: queue this one behind them and return the function that gets
+     * them all read (ChatView.sendQueuedNow). A plain urgent send would jump the queue: Claude Code reads a "now"
+     * message ahead of the "next" ones already waiting, and those only one step later.
+     */
+    queuedAhead?: () => (() => void) | undefined;
     /** The chat ends on a finished `!` command: sending with an empty box hands its output to the agent. */
     shellDone?: boolean;
   }
->(function Composer({ session, paneId, running, history, onSent, onEmptyEnter, shellDone }, ref) {
+>(function Composer({ session, paneId, running, history, onSent, onEmptyEnter, queuedAhead, shellDone }, ref) {
   const host = useChatHost();
   const hooks = host.composer ?? {};
   const drafts = hooks.drafts ?? memoryDrafts;
@@ -505,10 +511,13 @@ export const Composer = forwardRef<
     setImgs([]);
     hist.current.idx = -1;
     const tid = `send-${session.id}`;
+    const flush = now ? queuedAhead?.() : undefined;
+    if (flush) now = false;
     try {
       await host.send(session.id, content, { now, onRetry: (n) => toast.loading(tr("composer.resending", { n }), { id: tid }) });
       toast.dismiss(tid);
       sentAt.current = Date.now();
+      flush?.();
       if (escPending.current) {
         escPending.current = false;
         escape();
