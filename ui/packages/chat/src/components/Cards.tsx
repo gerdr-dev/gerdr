@@ -10,6 +10,7 @@ import { lateAnswerText, type GData, type PlanEntry } from "../transcript";
 import { cn } from "../utils";
 import { useKept } from "../kept";
 import { registerAsk } from "../askkeys";
+import { ChoiceCard, ChoiceKicker, ChoiceList, ChoiceOther, ChoiceRow, ChoiceTitle } from "./Choice";
 import { useHwKeyboard } from "../device";
 
 export function PlanCard({ entries }: { entries: PlanEntry[] }) {
@@ -113,7 +114,7 @@ export function PermissionCard({ sessionId, data }: { sessionId: string; data: G
 
 /**
  * agent 问人的问题（AskUserQuestion）。版式照 beUI 的 Questionnaire：一次一题（多题时「问题 1 / 3」翻页）、
- * 选项是不带框的平铺行（粗体标题 + 灰色说明，右边编号，选中变 ✓）、右下角「跳过 / 继续 ↵」。
+ * 选项是不带框的平铺行（标题 + 灰色说明，右边编号，选中变 ✓；长相在 Choice.tsx，和工具卡片共用）、右下角「跳过 / 继续 ↵」。
  * 选到一半的状态用 useKept：对话是虚拟列表，滚出屏幕会卸载，滚回来要还在。
  * 键盘照 Claude Code 终端：↑↓ 挪高亮、数字直选、回车选高亮那个、空格勾多选、←→ 翻题；挪到「其他」那一行就进输入框写。
  * 这些键从输入框转过来（输入框空着时，见 lib/askkeys），点过卡片、焦点在卡片上时也认。
@@ -145,13 +146,13 @@ export function AskCard({ sessionId, data }: { sessionId: string; data: GData["a
               <HelpCircle className="size-3.5" />
               {q.header && <span>{q.header}</span>}
             </div>
-            <div className="mb-2 text-[13px] font-medium leading-relaxed">{q.question}</div>
+            <div className="mb-2 text-[13px] leading-relaxed">{q.question}</div>
             {!!q.options?.length && (
               <div className="flex flex-col gap-1 text-[13px]">
                 {q.options.map((o, n) => (
                   <div key={o.label} className="flex items-center gap-3 px-0.5">
                     <span className="min-w-0 flex-1">
-                      <span className="font-medium">{o.label}</span>
+                      <span>{o.label}</span>
                       {o.description && <span className="ml-1.5 opacity-80">{o.description}</span>}
                     </span>
                     <span className="flex size-5 shrink-0 items-center justify-center rounded-md border text-[11px] tabular-nums">{n + 1}</span>
@@ -302,8 +303,8 @@ export function AskCard({ sessionId, data }: { sessionId: string; data: GData["a
     return false;
   };
   return (
-    <div
-      className="my-1.5 rounded-xl border bg-card p-4 shadow-sm outline-none"
+    <ChoiceCard
+      className="outline-none"
       data-attention
       ref={cardRef}
       tabIndex={-1}
@@ -313,8 +314,7 @@ export function AskCard({ sessionId, data }: { sessionId: string; data: GData["a
       }}
     >
       {/* 不写「需要你回答」：卡片本身就说明了。只剩题号（多题时）和题目的小标签 */}
-      <div className="mb-1.5 flex items-center gap-1.5 text-[12px] text-muted-foreground">
-        <HelpCircle className="size-3.5 text-brand" />
+      <ChoiceKicker icon={<HelpCircle className="size-3.5 text-brand" />}>
         {qs.length > 1 && <span>{t("ask.progress", { i: i + 1, n: qs.length })}</span>}
         {q.header && (
           <span>
@@ -322,52 +322,34 @@ export function AskCard({ sessionId, data }: { sessionId: string; data: GData["a
             {q.header}
           </span>
         )}
-      </div>
-      <div className="mb-3 text-[1em] font-medium leading-relaxed">{q.question}</div>
+      </ChoiceKicker>
+      <ChoiceTitle className="mb-3">{q.question}</ChoiceTitle>
       {data.late && <div className="-mt-2 mb-3 text-[12px] text-muted-foreground">{t("ask.late")}</div>}
-      {/* -mx-2.5 抵掉行的 px-2.5：选项文字和问题左边对齐，选中 / 悬停的底色往外多出一点 */}
-      <div className="-mx-2.5 flex flex-col gap-1.5">
+      <ChoiceList>
         {opts.map((o, n) => {
           const on = picked.includes(o.label);
           return (
-            <button
+            <ChoiceRow
               key={o.label}
+              label={o.label}
+              desc={o.description}
+              n={n}
+              on={on}
+              focused={n === c}
               disabled={busy}
-              className={cn(
-                // 键盘停在哪一行要一眼看得出（原来和悬停一样只是淡灰底，看不清）：品牌色描边 + 浅底
-                "flex w-full items-center gap-3 rounded-lg px-2.5 py-2.5 text-left text-[1em] outline-none ring-1 ring-transparent ring-inset transition-colors hover:bg-muted/60",
-                on && "bg-muted hover:bg-muted",
-                n === c && "bg-brand/10 ring-brand/50 hover:bg-brand/10",
-              )}
+              lead={q.multiSelect && <Checkbox checked={on} className="pointer-events-none" />}
+              badge={!q.multiSelect}
               onMouseEnter={() => c !== n && setCur({ ...cur, [q.id]: n })}
               onClick={() => {
                 setCur({ ...cur, [q.id]: n });
                 pick(o.label);
               }}
-            >
-              {q.multiSelect && <Checkbox checked={on} className="pointer-events-none" />}
-              <span className="min-w-0 flex-1">
-                <span className="font-medium">{o.label}</span>
-                {o.description && <span className="ml-1.5 text-muted-foreground">{o.description}</span>}
-              </span>
-              {!q.multiSelect && (
-                <span
-                  className={cn(
-                    "flex size-5 shrink-0 items-center justify-center rounded-md border text-[11px] text-muted-foreground tabular-nums",
-                    n === c && "border-brand/60 text-brand",
-                    on && "border-transparent bg-foreground/10 text-foreground",
-                  )}
-                >
-                  {on ? <Check className="size-3" /> : n + 1}
-                </span>
-              )}
-            </button>
+            />
           );
         })}
         {q.allowOther && (
-          <input
+          <ChoiceOther
             ref={otherRef}
-            className="w-full rounded-lg border border-dashed bg-transparent px-2.5 py-2 text-[1em] outline-none placeholder:text-muted-foreground/70 focus:border-solid focus:border-ring/60"
             type={q.secret ? "password" : "text"}
             placeholder={q.options?.length ? t("ask.other") : t("ask.yourAnswer")}
             value={other[q.id] ?? ""}
@@ -391,7 +373,7 @@ export function AskCard({ sessionId, data }: { sessionId: string; data: GData["a
             }}
           />
         )}
-      </div>
+      </ChoiceList>
       <div className="mt-3 flex items-center gap-2">
         {i > 0 && (
           <Button size="sm" variant="ghost" disabled={busy} onClick={() => setPage(i - 1)}>
@@ -423,7 +405,7 @@ export function AskCard({ sessionId, data }: { sessionId: string; data: GData["a
           </Button>
         )}
       </div>
-    </div>
+    </ChoiceCard>
   );
 }
 

@@ -1,6 +1,6 @@
 import { Component, useEffect, useState, type ReactNode } from "react";
 import { Check, CircleHelp, ClipboardList, Undo2 } from "lucide-react";
-import { Markdown, type GPart, type ToolPart } from "@gerdr/chat";
+import { ChoiceCard, ChoiceKicker, ChoiceList, ChoiceOther, ChoiceRow, ChoiceTitle, Markdown, type GPart, type ToolPart } from "@gerdr/chat";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import { useCardType } from "@/lib/cards";
@@ -83,7 +83,7 @@ function usePick(key: string) {
   return { p, rerender: () => tick((n) => n + 1) };
 }
 
-/** "label：what it costs" → the label bold, the rest muted, like the question card's options. */
+/** "label：what it costs" → the label, then the rest muted, like the question card's options. */
 function split(o: string): [string, string] {
   const i = o.search(/[：:]/);
   return i > 0 && i < 40 ? [o.slice(0, i), o.slice(i + 1).trim()] : [o, ""];
@@ -151,51 +151,37 @@ export function BuiltinCard({ card }: { card: Card }) {
   };
   const open = !!ch && (!p || !!p.err);
   return (
-    <div className={cn("my-1.5 rounded-xl border border-l-2 bg-card p-4 shadow-sm", p?.sent ? "border-l-ok" : "border-l-warn")}>
-      <div className="mb-1.5 flex items-center gap-1.5 text-[12px] text-muted-foreground">
-        {ch ? <CircleHelp className="size-3.5 text-warn" /> : <ClipboardList className="size-3.5 text-warn" />}
+    <ChoiceCard className={cn("border-l-2", p?.sent ? "border-l-ok" : "border-l-warn")}>
+      <ChoiceKicker icon={ch ? <CircleHelp className="size-3.5 text-warn" /> : <ClipboardList className="size-3.5 text-warn" />}>
         <span>{card.kicker ?? (ch ? t("toolCard.decide") : t("toolCard.todo"))}</span>
-      </div>
-      <div className="text-[1em] leading-relaxed font-medium">{card.title}</div>
+      </ChoiceKicker>
+      <ChoiceTitle>{card.title}</ChoiceTitle>
       {card.body && (
         <div className="mt-1 text-[1em] text-muted-foreground">
           <Markdown>{card.body}</Markdown>
         </div>
       )}
       {ch && (
-        <div className="-mx-2.5 mt-3 flex flex-col gap-1.5">
+        <ChoiceList className="mt-3">
           {ch.options.map((o, n) => {
             const [label, desc] = split(o);
             const on = multi ? (p ? p.v.split("\n").includes(o) : ticked.includes(o)) : p?.v === o;
             return (
-              <button
+              <ChoiceRow
                 key={n}
+                label={label}
+                desc={desc}
+                n={n}
+                on={on}
+                tone="warn"
+                dim={!open && !on}
                 disabled={!open}
                 onClick={() => (multi ? tick(o) : choose(o))}
-                className={cn(
-                  "flex w-full items-center gap-3 rounded-lg px-2.5 py-2.5 text-left text-[1em] transition-colors",
-                  open && "hover:bg-muted/60",
-                  on && "bg-warn/10",
-                  !open && !on && "opacity-50",
-                )}
-              >
-                <span className="min-w-0 flex-1">
-                  <span className="font-medium">{label}</span>
-                  {desc && <span className="ml-1.5 text-muted-foreground">{desc}</span>}
-                </span>
-                <span
-                  className={cn(
-                    "flex size-5 shrink-0 items-center justify-center rounded-md border text-[11px] text-muted-foreground tabular-nums",
-                    on && "border-transparent bg-warn/20 text-warn",
-                  )}
-                >
-                  {on ? <Check className="size-3" /> : n + 1}
-                </span>
-              </button>
+              />
             );
           })}
           {ch.other !== false && open && (
-            <input
+            <ChoiceOther
               value={own}
               onChange={(e) => setOwn(e.target.value)}
               onKeyDown={(e) => {
@@ -203,7 +189,6 @@ export function BuiltinCard({ card }: { card: Card }) {
                 if (e.key === "Enter" && own.trim()) multi ? submit() : choose(own.trim());
               }}
               placeholder={ch.options.length ? t("toolCard.other") : t("toolCard.answer")}
-              className="w-full rounded-lg border border-dashed bg-transparent px-2.5 py-2 text-[1em] outline-none placeholder:text-muted-foreground/70 focus:border-solid focus:border-ring/60"
             />
           )}
           {multi && open && (
@@ -218,7 +203,7 @@ export function BuiltinCard({ card }: { card: Card }) {
               <Check className="size-3.5 text-warn" />
             </div>
           )}
-        </div>
+        </ChoiceList>
       )}
       {waiting && (
         <div className="mt-3 flex items-center gap-2 text-[12px] text-muted-foreground">
@@ -231,6 +216,6 @@ export function BuiltinCard({ card }: { card: Card }) {
       )}
       {p?.sent && <div className="mt-3 text-[12px] text-ok">{t("toolCard.sent")}</div>}
       {p?.err && <div className="mt-3 text-[12px] text-bad">{p.err}</div>}
-    </div>
+    </ChoiceCard>
   );
 }
