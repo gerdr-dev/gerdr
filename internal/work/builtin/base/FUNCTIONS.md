@@ -117,7 +117,8 @@ export async function ask_human(input: { title: string }, ctx: Ctx) {
   instead of the folded "called a tool" row; the rest of the result still goes to the agent. `ref` names it (a page's
   showSession button with `jump: ref` scrolls the chat there). `choose: { project, fn, input, field, options, other }`
   makes it answerable in place: the user's pick runs that local function with `{ ...input, [field]: pick }` — the
-  same call your page makes, so answering in the chat or on the page is one thing. `type: "<name>"` has the card drawn
+  same call your page makes, so answering in the chat or on the page is one thing. `multi: true` lets the user tick
+  several options and submit them together; the pick is then the ticked ones (and anything written), one per line. `type: "<name>"` has the card drawn
   by the component the page registered for that name in `ui/src/cards.tsx` (`registerCard` from `@gerdr/core`), with
   every other field of the card as its data; keep `title` / `body` filled in, they're drawn when the type isn't.
 - Sessions get the tools when they start or are reopened; the list is read again each time an agent asks for it.

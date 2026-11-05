@@ -92,7 +92,7 @@ declare module "@gerdr/core" {
     ref?: string;
     /** The panel whose tool made it (its project key, "lb" / "lb/board"): set by gerdr; your code runs for your panel's cards only. */
     panel?: string;
-    choose?: { project: string; fn: string; input?: Record<string, unknown>; field: string; options: string[]; other?: boolean };
+    choose?: { project: string; fn: string; input?: Record<string, unknown>; field: string; options: string[]; other?: boolean; multi?: boolean };
     [k: string]: unknown;
   };
   export type CardProps = { card: Card; session: string };

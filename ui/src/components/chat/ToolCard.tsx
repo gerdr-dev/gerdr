@@ -16,6 +16,8 @@ import { t } from "@/lib/i18n";
  * `ref` names it, so a page can point the conversation at it (WorkPeek's jump). `choose` makes it answerable right
  * here: the pick runs `fn` of that Work project with `{ ...input, [field]: answer }`, the same call the page would
  * make. A pick waits UNDO_MS before it's sent, with an undo: once sent, the agent is already acting on it.
+ * `multi`: options are ticked rather than sent on click, and a submit button sends the ticked ones (and anything
+ * written under "other"), one per line.
  */
 export type Card = {
   /** A card type a UI registered (lib/cards.ts): its component draws it; the fields below are the fallback. */
@@ -28,7 +30,7 @@ export type Card = {
   ref?: string;
   /** The panel whose tool made it (its project key), stamped by Gerdr: its type is looked up in that panel's cards. */
   panel?: string;
-  choose?: { project: string; fn: string; input?: Record<string, unknown>; field: string; options: string[]; other?: boolean };
+  choose?: { project: string; fn: string; input?: Record<string, unknown>; field: string; options: string[]; other?: boolean; multi?: boolean };
 };
 
 const UNDO_MS = 6000;
@@ -120,11 +122,28 @@ export function BuiltinCard({ card }: { card: Card }) {
   const ch = card.choose;
   const waiting = p && !p.sent && !p.err;
   const left = waiting ? Math.max(0, Math.ceil((p.at + UNDO_MS - Date.now()) / 1000)) : 0;
+  const [ticked, setTicked] = useState<string[]>([]);
+  const multi = !!ch?.multi;
   const choose = (v: string) => {
     if (p && !p.err) return;
     send(key, card, v);
     rerender();
   };
+  // A multiple choice: a click ticks; the submit button sends the ticked ones (in the options' order) plus what's written
+  const tick = (o: string) => setTicked((x) => (x.includes(o) ? x.filter((y) => y !== o) : [...x, o]));
+  const picked = [...(ch?.options.filter((o) => ticked.includes(o)) ?? []), ...(own.trim() ? [own.trim()] : [])];
+  const submit = () => picked.length && choose(picked.join("\n"));
+  // What was sent beyond the options (written under "other"), shown under them
+  const extra =
+    p &&
+    (multi
+      ? p.v
+          .split("\n")
+          .filter((x) => !ch?.options.includes(x))
+          .join("\n")
+      : ch?.options.includes(p.v)
+        ? ""
+        : p.v);
   const undo = () => {
     if (p?.timer) clearTimeout(p.timer);
     picks.delete(key);
@@ -147,12 +166,12 @@ export function BuiltinCard({ card }: { card: Card }) {
         <div className="-mx-2.5 mt-3 flex flex-col gap-1.5">
           {ch.options.map((o, n) => {
             const [label, desc] = split(o);
-            const on = p?.v === o;
+            const on = multi ? (p ? p.v.split("\n").includes(o) : ticked.includes(o)) : p?.v === o;
             return (
               <button
                 key={n}
                 disabled={!open}
-                onClick={() => choose(o)}
+                onClick={() => (multi ? tick(o) : choose(o))}
                 className={cn(
                   "flex w-full items-center gap-3 rounded-lg px-2.5 py-2.5 text-left text-[1em] transition-colors",
                   open && "hover:bg-muted/60",
@@ -181,15 +200,21 @@ export function BuiltinCard({ card }: { card: Card }) {
               onChange={(e) => setOwn(e.target.value)}
               onKeyDown={(e) => {
                 if (e.nativeEvent.isComposing || e.keyCode === 229) return;
-                if (e.key === "Enter" && own.trim()) choose(own.trim());
+                if (e.key === "Enter" && own.trim()) multi ? submit() : choose(own.trim());
               }}
               placeholder={ch.options.length ? t("toolCard.other") : t("toolCard.answer")}
               className="w-full rounded-lg border border-dashed bg-transparent px-2.5 py-2 text-[1em] outline-none placeholder:text-muted-foreground/70 focus:border-solid focus:border-ring/60"
             />
           )}
-          {p && !ch.options.includes(p.v) && (
+          {multi && open && (
+            <Button size="sm" className="self-end" disabled={!picked.length} onClick={submit}>
+              <Check className="size-3.5" />
+              {t("toolCard.submit", { n: picked.length })}
+            </Button>
+          )}
+          {extra && (
             <div className="flex items-center gap-3 rounded-lg bg-warn/10 px-2.5 py-2.5 text-[1em]">
-              <span className="min-w-0 flex-1">{p.v}</span>
+              <span className="min-w-0 flex-1">{extra}</span>
               <Check className="size-3.5 text-warn" />
             </div>
           )}
