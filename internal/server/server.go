@@ -155,7 +155,7 @@ func (s *Server) Handler() http.Handler {
 		until, _ := strconv.ParseInt(r.URL.Query().Get("until"), 10, 64)
 		writeJSON(w, s.Hub.Turns(since, until))
 	})
-	mux.HandleFunc("GET /api/pending", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, s.Hub.Pending()) })
+	mux.HandleFunc("GET /api/pending", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, s.pending(r)) })
 	mux.HandleFunc("GET /api/inbox", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, s.InboxItems()) })
 	mux.HandleFunc("GET /api/busy", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, s.busy()) })
 	s.appUpdateRoutes(mux)

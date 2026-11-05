@@ -502,3 +502,62 @@ func (m *Manager) Route(dial func(ctx context.Context, network, addr string) (ne
 
 // Self: this computer's name, as hosts see it (the device label on pairing, a moved conversation's notice).
 func (m *Manager) Self() string { return m.self }
+
+// Pending: the approvals and questions waiting on someone on every reachable host (their GET /api/pending), each
+// with its session id as this console calls it ("<host>:<id>"), so the console's inbox can show and answer them
+// (the answer goes through the usual /api/sessions/<host>:<id>/answer proxy). Asked in parallel, a few seconds at
+// most; a host that doesn't answer gives nothing. local=1 keeps a host that drives other computers itself to its own.
+func (m *Manager) Pending(ctx context.Context) []json.RawMessage {
+	hosts := m.Hosts()
+	lists := make([][]json.RawMessage, len(hosts))
+	var wg sync.WaitGroup
+	for i, h := range hosts {
+		m.mu.Lock()
+		st := m.state[h.ID]
+		down := st != nil && !st.online && st.err != ""
+		m.mu.Unlock()
+		if down {
+			continue // known unreachable: the session list's refresh brings it back
+		}
+		wg.Add(1)
+		go func(i int, h Host) {
+			defer wg.Done()
+			ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+			defer cancel()
+			req, err := h.Request(ctx, "GET", "/api/pending?local=1", nil)
+			if err != nil {
+				return
+			}
+			resp, err := m.http.Do(req)
+			if err != nil {
+				return
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != 200 {
+				return
+			}
+			var reqs []map[string]json.RawMessage
+			if json.NewDecoder(io.LimitReader(resp.Body, 16<<20)).Decode(&reqs) != nil {
+				return
+			}
+			for _, r := range reqs {
+				var sid string
+				if json.Unmarshal(r["sessionId"], &sid) != nil || sid == "" {
+					continue
+				}
+				r["sessionId"], _ = json.Marshal(Join(h.ID, sid))
+				b, err := json.Marshal(r)
+				if err != nil {
+					continue
+				}
+				lists[i] = append(lists[i], RewriteURLs(h.ID, b))
+			}
+		}(i, h)
+	}
+	wg.Wait()
+	var out []json.RawMessage
+	for _, l := range lists {
+		out = append(out, l...)
+	}
+	return out
+}

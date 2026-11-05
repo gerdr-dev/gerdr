@@ -12,6 +12,8 @@
 export { SessionChat } from "./SessionChat";
 export { FeedChat, type FeedEntry } from "./FeedChat";
 export { useSession, useSessions } from "./sessions";
+// A conversation's waiting approval / question, answered in place (the inbox's buttons), here or on another computer
+export { usePending, PendingActions } from "./pending";
 export { onShowSession } from "@/lib/panelRoute";
 export { useDark } from "./theme";
 export { askSecret } from "@/lib/workSecrets";

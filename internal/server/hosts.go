@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sort"
 	"strings"
 	"time"
 
@@ -671,6 +672,38 @@ func prefixID(host string, b []byte) []byte {
 	out, err := json.Marshal(m)
 	if err != nil {
 		return b
+	}
+	return out
+}
+
+// pending: GET /api/pending — this computer's approvals / questions, and (unless local=1) the hosts' too, ids as this
+// console calls them, oldest first. Without the hosts' a helper an agent started on another computer could wait for an
+// approval nobody here was ever shown (the inbox, a panel's board).
+func (s *Server) pending(r *http.Request) any {
+	local := s.Hub.Pending()
+	if s.Peers == nil || r.URL.Query().Get("local") == "1" || len(s.Peers.Hosts()) == 0 {
+		return local
+	}
+	type item struct {
+		at  int64
+		raw json.RawMessage
+	}
+	var all []item
+	for _, p := range local {
+		b, _ := json.Marshal(p)
+		all = append(all, item{p.At, b})
+	}
+	for _, b := range s.Peers.Pending(r.Context()) {
+		var x struct {
+			At int64 `json:"at"`
+		}
+		_ = json.Unmarshal(b, &x)
+		all = append(all, item{x.At, b})
+	}
+	sort.SliceStable(all, func(i, j int) bool { return all[i].at < all[j].at })
+	out := make([]json.RawMessage, len(all))
+	for i, x := range all {
+		out[i] = x.raw
 	}
 	return out
 }

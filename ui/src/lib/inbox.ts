@@ -36,6 +36,8 @@ type InboxState = {
   /** reqIds still waiting (last /api/pending): the others are answered, their item shows that and drops its buttons
    *  until it's removed. null = not fetched yet (don't call everything answered meanwhile). */
   live: Record<string, true> | null;
+  /** The last /api/pending as is (every session's, this computer's and the hosts'): what core usePending reads. */
+  reqs: PendingReq[];
 };
 
 const KEY = "gerdr.inbox";
@@ -49,7 +51,7 @@ function load(): Pick<InboxState, "items" | "fresh"> {
   return { items: [], fresh: false };
 }
 
-export const useInbox = create<InboxState>(() => ({ ...load(), live: null }));
+export const useInbox = create<InboxState>(() => ({ ...load(), live: null, reqs: [] }));
 const get = useInbox.getState;
 
 function save() {
@@ -216,7 +218,7 @@ function refreshPending() {
     const skip = new Set(gone());
     const fresh = reqs.filter((r) => !have.has(r.reqId) && !skip.has(r.reqId) && wanted(r.kind));
     const live: Record<string, true> = Object.fromEntries(reqs.map((r) => [r.reqId, true as const]));
-    useInbox.setState({ live });
+    useInbox.setState({ live, reqs });
     const quiet = fresh.every((r) => seen(r.sessionId));
     // No longer pending (answered here or elsewhere, or the turn ended): nothing left to do with it, so it goes. After
     // a moment showing "已处理", so an answer clicked in the panel visibly lands and the next item doesn't jump up under

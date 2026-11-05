@@ -216,7 +216,7 @@ async function answer(it: InboxItem, resp: unknown) {
   }
 }
 
-function Permission({ it }: { it: InboxItem }) {
+export function Permission({ it }: { it: InboxItem }) {
   const [busy, setBusy] = useState(false);
   const opts: PermissionOption[] = it.request.options ?? [];
   return (
@@ -241,7 +241,7 @@ function Permission({ it }: { it: InboxItem }) {
 }
 
 /** One question answered in place: a single choice sends on click; multiple choice / a typed answer has a send button. */
-function Ask({ it, q }: { it: InboxItem; q: AskQuestion }) {
+export function Ask({ it, q }: { it: InboxItem; q: AskQuestion }) {
   const [sel, setSel] = useState<string[]>([]);
   const [other, setOther] = useState("");
   const [busy, setBusy] = useState(false);

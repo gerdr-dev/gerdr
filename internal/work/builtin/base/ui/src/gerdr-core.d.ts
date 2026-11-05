@@ -87,6 +87,20 @@ declare module "@gerdr/core" {
   ): { id: string; title?: string; agent: string; cwd: string; status: string; tags?: Record<string, string>; [k: string]: unknown }[];
 
   /**
+   * What a conversation waits on someone for right now (approvals, questions), oldest first: this computer's and the
+   * other computers' ("<host>:<id>"), the same list as gerdr's inbox. `inline`: PendingActions can settle it in place
+   * (an approval that isn't a plan, a single question); otherwise send the user to the conversation. Older gerdr
+   * versions don't have it: on a page that may run there, import the module as a namespace and check it's there.
+   */
+  export function usePending(id: string | undefined): { reqId: string; kind: "permission" | "ask"; summary: string; at: number; inline: boolean }[];
+
+  /**
+   * The inbox's own buttons for a conversation's oldest waiting request (allow once / always / deny…, or a single
+   * question's choices), so a page settles it where the user sees it. Draws nothing when nothing inline waits.
+   */
+  export function PendingActions(props: { id: string; className?: string }): ReactNode;
+
+  /**
    * How many times this panel's files have changed through its local functions (ctx.fs write / mkdir / move / copy /
    * trash: its own buttons, agents calling its tools, triggers, schedules) since the page loaded; it also moves once
    * after a lost connection comes back. Put it in an effect's dependencies to reload what a function returned, instead
