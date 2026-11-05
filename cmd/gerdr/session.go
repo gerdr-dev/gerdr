@@ -1592,7 +1592,7 @@ func uiCmd() *cobra.Command {
 				return err
 			}
 			printJSON(map[string]any{"to": env.UI, "result": res})
-			return nil
+			return conflictErr(res)
 		},
 	}
 	merge := &cobra.Command{
@@ -1605,7 +1605,7 @@ func uiCmd() *cobra.Command {
 				return err
 			}
 			printJSON(map[string]any{"dir": env.UI, "result": res})
-			return nil
+			return conflictErr(res)
 		},
 	}
 	cmd.AddCommand(merge)
@@ -1627,6 +1627,18 @@ func uiCmd() *cobra.Command {
 		},
 	})
 	return cmd
+}
+
+// conflictErr makes a merge that stopped on conflicts exit non-zero. The result JSON alone said "conflict" while the
+// exit code said success, and agents (and `make sync-ui`) took it as synced, leaving the running UI on the old version.
+func conflictErr(res *webui.Result) error {
+	if res != nil && res.Status == "conflict" {
+		if res.Note != "" {
+			return errors.New(res.Note)
+		}
+		return errors.New(i18n.S("有冲突，留在文件里：解决后 git add -A && git commit", "Conflicts are left in the files: resolve them, then git add -A && git commit"))
+	}
+	return nil
 }
 
 // answerNote：人怎么处理的（session read 里「已处理」那条的后半句）。
