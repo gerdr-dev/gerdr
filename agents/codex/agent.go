@@ -79,6 +79,7 @@ type Agent struct {
 	cmd      *exec.Cmd
 	sessions map[string]*session
 	models   []modelInfo
+	modelsAt time.Time // when models was fetched; see modelsTTL
 	ext      Ext
 	opts     Options
 }
@@ -689,6 +690,10 @@ func (a *Agent) configOptions(ctx context.Context, s *session) []acp.SessionConf
 				cur, curModel = m.Model, &models[i]
 			}
 		}
+	} else if curModel == nil {
+		// The thread runs a model the list doesn't offer (set in config.toml, or the list is behind): show it
+		// anyway, or the picker marks some other model as current.
+		opts = append(acp.SessionConfigSelectOptionsUngrouped{{Value: acp.SessionConfigValueId(cur), Name: cur}}, opts...)
 	}
 	out := []acp.SessionConfigOption{{Select: &acp.SessionConfigOptionSelect{
 		Id: "model", Name: "Model", Type: "select", Category: acp.Ptr(acp.SessionConfigOptionCategoryModel),
@@ -710,17 +715,21 @@ func (a *Agent) configOptions(ctx context.Context, s *session) []acp.SessionConf
 	return out
 }
 
+// modelsTTL: how long a model/list answer is reused. The app-server lives as long as gerdr (days), and the account's
+// model list changes under it (new models roll out, codex refreshes its own models_cache.json); caching the first
+// answer forever left the picker stuck on whatever was offered at startup while the CLI already had the new models.
+const modelsTTL = 5 * time.Minute
+
 func (a *Agent) listModels(ctx context.Context) []modelInfo {
 	a.mu.Lock()
-	if a.models != nil {
-		m := a.models
-		a.mu.Unlock()
-		return m
-	}
+	cached, fresh := a.models, a.models != nil && time.Since(a.modelsAt) < modelsTTL
 	a.mu.Unlock()
+	if fresh {
+		return cached
+	}
 	rpc, err := a.client(ctx)
 	if err != nil {
-		return nil
+		return cached
 	}
 	var res struct {
 		Data []modelInfo `json:"data"`
@@ -729,10 +738,10 @@ func (a *Agent) listModels(ctx context.Context) []modelInfo {
 	defer cancel()
 	if err := rpc.Call(cctx, "model/list", map[string]any{"limit": 100}, &res); err != nil {
 		a.log.Warn("model/list failed", "err", err)
-		return nil
+		return cached // a stale list beats an empty picker
 	}
 	a.mu.Lock()
-	a.models = res.Data
+	a.models, a.modelsAt = res.Data, time.Now()
 	a.mu.Unlock()
 	return res.Data
 }
