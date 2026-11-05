@@ -1,4 +1,4 @@
-import { Info, Loader2, SquareTerminal } from "lucide-react";
+import { Info, Loader2, SquareTerminal, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
@@ -85,10 +85,10 @@ export function UpdateSetting() {
           <div className="text-[13px]">{t("updateSetting.version")}</div>
           <div className="text-[12px] text-muted-foreground">{shown}</div>
           {text && (
-            <div className={cn("flex items-start gap-1 text-[12px]", tone || "text-muted-foreground")}>
-              <span>{text}</span>
+            <div className={cn("text-[12px]", tone || "text-muted-foreground")}>
+              {text}
               {p && u?.busy && u.busy.turns + u.busy.waiting + u.busy.tasks + u.busy.terms > 0 && (
-                <UpdateBlockers layout={layout} sessions={sessions} terms={terms} />
+                <UpdateBlockers layout={layout} sessions={sessions} terms={terms} onKilled={(id) => setTerms((ts) => ts.filter((x) => x.id !== id))} />
               )}
             </div>
           )}
@@ -121,19 +121,37 @@ export function UpdateSetting() {
 }
 
 /** The update status only has counts; the shared layout gives those counts useful, clickable identities. */
-function UpdateBlockers({ layout, sessions, terms }: { layout: Layout; sessions: Record<string, SessionSummary>; terms: TermInfo[] }) {
+function UpdateBlockers({
+  layout,
+  sessions,
+  terms,
+  onKilled,
+}: {
+  layout: Layout;
+  sessions: Record<string, SessionSummary>;
+  terms: TermInfo[];
+  onKilled: (id: string) => void;
+}) {
   const [open, setOpen] = useState(false);
   const leaves = allLeaves(layout);
-  const panels = leaves
-    .map(({ ws, tab, pane }) => {
-      const session = pane.sessionId ? sessions[pane.sessionId] : undefined;
-      if (!session || (session.status !== "running" && session.status !== "waiting")) return null;
+  // One row per agent, whatever it blocks with (its turn, a question, background tasks it started), found
+  // through the session list rather than the layout so an agent whose tab was closed still shows up.
+  const panels = Object.values(sessions)
+    .map((session) => {
+      const tasks = (session.tasks ?? []).filter((task) => task.status === "running").length;
+      const parts: string[] = [];
+      if (session.status === "running") parts.push(t("updateSetting.detailRunning"));
+      if (session.status === "waiting") parts.push(t("updateSetting.detailWaiting"));
+      if (tasks) parts.push(plural("updateSetting.detailTasks", tasks));
+      if (!parts.length) return null;
+      const located = leaves.find(({ pane }) => pane.sessionId === session.id);
       return {
-        pane,
+        pane: located?.pane,
+        termId: undefined as string | undefined,
         icon: <AgentIcon agent={session.agent} className="size-3.5" />,
         title: session.title || t("updateSetting.detailUntitled"),
-        detail: session.status === "running" ? t("updateSetting.detailRunning") : t("updateSetting.detailWaiting"),
-        place: placeName(ws.name, tab.name),
+        detail: parts.join(" · "),
+        place: located ? placeName(located.ws.name, located.tab.name) : t("updateSetting.detailNotShown"),
       };
     })
     .filter((panel): panel is NonNullable<typeof panel> => !!panel);
@@ -143,6 +161,8 @@ function UpdateBlockers({ layout, sessions, terms }: { layout: Layout; sessions:
       const located = leaves.find(({ pane }) => pane.term?.id === term.id);
       return {
         pane: located?.pane,
+        // A terminal no pane shows (its tab was closed without it) can't be reached to exit it, so it is closed here.
+        termId: located ? undefined : term.id,
         icon: <SquareTerminal className="size-3.5" />,
         title: t("updateSetting.detailTerminal"),
         detail: term.cwd,
@@ -155,7 +175,7 @@ function UpdateBlockers({ layout, sessions, terms }: { layout: Layout; sessions:
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <button className="mt-0.5 shrink-0 text-current/70 hover:text-current" aria-label={t("updateSetting.detail")}>
+        <button className="ml-1 inline-flex align-[-2px] text-current/70 hover:text-current" aria-label={t("updateSetting.detail")}>
           <Info className="size-3.5" />
         </button>
       </PopoverTrigger>
@@ -163,23 +183,40 @@ function UpdateBlockers({ layout, sessions, terms }: { layout: Layout; sessions:
         <div className="px-2 py-1 text-[12px] font-medium">{t("updateSetting.detailTitle")}</div>
         <div className="max-h-64 space-y-0.5 overflow-y-auto">
           {blockers.map((panel, index) => (
-            <button
-              key={panel.pane?.id ?? `term-${index}`}
-              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[12px] hover:bg-accent disabled:cursor-default disabled:hover:bg-transparent"
-              disabled={!panel.pane}
-              onClick={() => {
-                setOpen(false);
-                if (panel.pane) focusPane(panel.pane.id);
-              }}
-            >
-              <span className="shrink-0 text-muted-foreground">{panel.icon}</span>
-              <span className="min-w-0 flex-1">
-                <span className="block truncate">{panel.title}</span>
-                <span className="block truncate text-[11px] text-muted-foreground">
-                  {panel.detail} · {panel.place}
+            <div key={panel.pane?.id ?? panel.termId ?? `blocker-${index}`} className="flex items-center gap-1">
+              <button
+                className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left text-[12px] hover:bg-accent disabled:cursor-default disabled:hover:bg-transparent"
+                disabled={!panel.pane}
+                onClick={() => {
+                  setOpen(false);
+                  if (panel.pane) focusPane(panel.pane.id);
+                }}
+              >
+                <span className="shrink-0 text-muted-foreground">{panel.icon}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate">{panel.title}</span>
+                  <span className="block truncate text-[11px] text-muted-foreground">
+                    {panel.detail} · {panel.place}
+                  </span>
                 </span>
-              </span>
-            </button>
+              </button>
+              {panel.termId && (
+                <button
+                  className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+                  aria-label={t("updateSetting.detailClose")}
+                  title={t("updateSetting.detailClose")}
+                  onClick={() => {
+                    const id = panel.termId!;
+                    api
+                      .termKill(id)
+                      .then(() => onKilled(id))
+                      .catch((e) => toast.error(String(e?.message ?? e)));
+                  }}
+                >
+                  <X className="size-3.5" />
+                </button>
+              )}
+            </div>
           ))}
         </div>
       </PopoverContent>
