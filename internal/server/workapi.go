@@ -350,7 +350,7 @@ func (s *Server) workRoutes(mux *http.ServeMux) {
 			Project string `json:"project"`
 			Fn      string `json:"fn"`
 			Input   any    `json:"input"`
-			From    string `json:"from"` // the agent conversation running it (`gerdr work run`): ctx.caller.session
+			From    string `json:"from"` // the agent conversation running it (`gerdr panel run`): ctx.caller.session
 		}
 		if err := decode(r, &b); err != nil {
 			httpError(w, 400, err.Error())
@@ -361,6 +361,13 @@ func (s *Server) workRoutes(mux *http.ServeMux) {
 		if b.From != "" && (b.Project == "" || b.Project == work.DefaultProject) {
 			if sp, ok := s.sessionSpace(SessionSpaces(s.Layout.Get()), b.From); ok && sp != "" {
 				b.Project = sp
+			}
+		}
+		// A panel's conversation (a board's worker in its repository) works for that panel, not its project's own
+		// Work: `gerdr panel run tasks.add` from it is the board's. An explicit other project still wins
+		if b.From != "" {
+			if sess, err := s.Hub.Session(b.From); err == nil {
+				b.Project = callerPanel(sess.Summary().Tags[PanelTag], b.Project)
 			}
 		}
 		run := s.Work.StartAs(b.Project, b.Fn, b.Input, b.From)
@@ -415,7 +422,7 @@ func (s *Server) workRoutes(mux *http.ServeMux) {
 		}
 		writeJSON(w, map[string]any{"list": list})
 	})
-	// Work tools (work/tools.go), served to agents over MCP by `gerdr work mcp`:
+	// Work tools (work/tools.go), served to agents over MCP by `gerdr panel mcp`:
 	//	GET  /api/work/tools?project=                       the declared tools
 	//	POST /api/work/tools/{name}?project= {session, args} run one for that conversation (ctx.caller.session)
 	mux.HandleFunc("GET /api/work/tools", func(w http.ResponseWriter, r *http.Request) {
@@ -478,7 +485,7 @@ func (s *Server) workRoutes(mux *http.ServeMux) {
 		}
 		writeJSON(w, map[string]any{"ok": true})
 	})
-	// `gerdr work secret set <name>`: ctx.secrets.get's keys, in secrets.json under work/ (never served back, only names)
+	// `gerdr panel secret set <name>`: ctx.secrets.get's keys, in secrets.json under work/ (never served back, only names)
 	mux.HandleFunc("GET /api/work/secrets", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"list": s.Secrets.Names(workSecretPrefix)})
 	})
@@ -497,7 +504,7 @@ func (s *Server) workRoutes(mux *http.ServeMux) {
 		}
 		writeJSON(w, map[string]any{"ok": true})
 	})
-	// `gerdr work status`: the project's Work site build error and runtime errors, like `gerdr ui status`.
+	// `gerdr panel status`: the project's Work site build error and runtime errors, like `gerdr ui status`.
 	mux.HandleFunc("GET /api/work/ui/status", func(w http.ResponseWriter, r *http.Request) {
 		project := r.URL.Query().Get("project")
 		if project == "" {
@@ -593,4 +600,17 @@ func (s *Server) serveWorkUI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.ServeFile(w, r, p)
+}
+
+// callerPanel: where `gerdr panel run` from a panel's conversation (its tag panel) runs. The CLI sends the project of
+// its directory, which for a worker in a repository is the default project or the panel's own project, never the
+// panel: those mean "mine", the panel. Another project, named on purpose (--project), stays.
+func callerPanel(panel, project string) string {
+	if panel == "" {
+		return project
+	}
+	if proj, _ := work.SplitKey(panel); project == "" || project == work.DefaultProject || project == proj {
+		return panel
+	}
+	return project
 }

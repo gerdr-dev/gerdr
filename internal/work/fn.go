@@ -355,7 +355,7 @@ func (r *runner) ctxObject() *goja.Object {
 	_ = c.Set("caller", caller)
 
 	secrets := r.vm.NewObject()
-	// ctx.secrets.get(name): a key the user stored with `gerdr work secret set <name>` (secrets.json, never in config or
+	// ctx.secrets.get(name): a key the user stored with `gerdr panel secret set <name>` (secrets.json, never in config or
 	// transcripts); null when there's none. Pass it to commands through ctx.exec's env.
 	_ = secrets.Set("get", func(name string) any {
 		if r.r.Secret != nil {

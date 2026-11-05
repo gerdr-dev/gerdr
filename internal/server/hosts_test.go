@@ -448,34 +448,37 @@ func TestHostTerminal(t *testing.T) {
 	}
 }
 
-// A session started by a panel's conversation (a worker's `gerdr session new`) belongs to that panel too, here or on
-// a host: it carries the panel's tag and isn't placed in Code.
-func TestPanelAdoptsSessionsItsConversationsStart(t *testing.T) {
+// A panel's conversation (a board's worker) can't `gerdr session new` here: the panel starts the agents it runs itself
+// (panelCaller). On another computer, which a panel can't reach, a helper reporting back to it is allowed, and it is
+// the panel's. Any other conversation still can.
+func TestPanelConversationSessionNew(t *testing.T) {
 	console, ch, hostSrv := hostPair(t)
 	auth := hdr("Authorization", "Bearer "+console.Token)
 	if w := do(ch, "POST", "/api/sessions/w2/meta", strings.NewReader(`{"tags":{"panel":"default/board"}}`), auth, csrf); w.Code != 200 {
 		t.Fatalf("tag: %d %s", w.Code, w.Body)
 	}
 	here := t.TempDir()
-	w := do(ch, "POST", "/api/sessions", strings.NewReader(`{"cwd":`+mustJSON(here)+`,"open":{"near":"w2"}}`), auth, csrf)
+	for _, body := range []string{
+		`{"cwd":` + mustJSON(here) + `,"open":{"near":"w2"}}`,
+		`{"cwd":` + mustJSON(here) + `,"reportTo":"w2","open":{"near":"w2"}}`,
+		`{"cwd":` + mustJSON(here) + `,"open":{"near":"w2","workspace":"new"}}`,
+		`{"host":"mini","cwd":` + mustJSON(here) + `,"open":{"near":"w2"}}`,
+	} {
+		if w := do(ch, "POST", "/api/sessions", strings.NewReader(body), auth, csrf); w.Code != 400 || !strings.Contains(w.Body.String(), "default/board") {
+			t.Fatalf("%s: %d %s", body, w.Code, w.Body)
+		}
+	}
+	w := do(ch, "POST", "/api/sessions", strings.NewReader(`{"host":"mini","cwd":`+mustJSON(here)+`,"reportTo":"w2","open":{"near":"w2"}}`), auth, csrf)
 	var sum struct {
-		ID   string            `json:"id"`
-		Tags map[string]string `json:"tags"`
+		ID string `json:"id"`
 	}
-	if json.Unmarshal(w.Body.Bytes(), &sum); w.Code != 200 || sum.Tags["panel"] != "default/board" {
-		t.Fatalf("local: %d %s", w.Code, w.Body)
-	}
-	w = do(ch, "POST", "/api/sessions", strings.NewReader(`{"host":"mini","cwd":`+mustJSON(here)+`,"open":{"near":"w2"}}`), auth, csrf)
 	if json.Unmarshal(w.Body.Bytes(), &sum); w.Code != 200 || !strings.HasPrefix(sum.ID, "mini:") {
-		t.Fatalf("host: %d %s", w.Code, w.Body)
+		t.Fatalf("helper on a host: %d %s", w.Code, w.Body)
 	}
 	if s, err := hostSrv.Hub.Session(strings.TrimPrefix(sum.ID, "mini:")); err != nil || s.Summary().Tags["panel"] != "default/board" {
-		t.Fatalf("host session not the panel's: %v %v", err, s)
+		t.Fatalf("host helper not the panel's: %v %v", err, s)
 	}
-	// Not a panel's caller, or a workspace asked for: as before, no tag
-	w = do(ch, "POST", "/api/sessions", strings.NewReader(`{"cwd":`+mustJSON(here)+`,"open":{"near":"w1"}}`), auth, csrf)
-	sum.Tags = nil
-	if json.Unmarshal(w.Body.Bytes(), &sum); w.Code != 200 || sum.Tags["panel"] != "" {
+	if w := do(ch, "POST", "/api/sessions", strings.NewReader(`{"cwd":`+mustJSON(here)+`,"open":{"near":"w1"}}`), auth, csrf); w.Code != 200 {
 		t.Fatalf("plain caller: %d %s", w.Code, w.Body)
 	}
 }

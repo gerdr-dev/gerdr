@@ -10,7 +10,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// gerdr work mcp: a project's Work tools (internal/work/tools.go) as an MCP server on stdio, for one conversation.
+// gerdr panel mcp: a project's Work tools (internal/work/tools.go) as an MCP server on stdio, for one conversation.
 // The hub hands it to the project's Work agent and to the sessions the Work starts (hub.Options.MCP); every call
 // goes to the backend's /api/work/tools with --session, which the local function sees as ctx.caller.session. Only
 // what agents use: initialize, tools/list, tools/call (and ping). The list is read on each tools/list, so tools a

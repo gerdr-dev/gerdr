@@ -89,9 +89,12 @@ gerdr session new --agent codex --title reviewer \
 - `--cwd` defaults to your current directory. As a panel's agent that is the panel's directory, not a repository: always
   give `--cwd` when the task is about code;
 - `--workspace <id|number|label|new>` puts it in that Code workspace as a new tab (`gerdr workspace list`); without it,
-  it opens next to you — unless you are a panel's conversation (one a panel started): then it belongs to that panel
-  too, as you do, and shows there under your task, not in Code.
-- Gerdr records you as the new session's `parent` (also when a panel function you ran with `gerdr work run` starts it),
+  it opens next to you.
+- A panel's conversation (one a panel started, e.g. a board's worker) can't use `gerdr session new`: it is refused,
+  because the panel looks after the agents it runs (what they're told, the model, how they report, where they show).
+  Start another agent the panel's way, as its instructions say. The one exception is a helper on another computer,
+  which a panel can't start: `gerdr session new --host <id> --report-to self` (it reports back to you; you follow it).
+- Gerdr records you as the new session's `parent` (also when a panel function you ran with `gerdr panel run` starts it),
   so who handed what to whom can be followed any number of levels deep — a panel can show that tree for its work.
   Starting a helper from your own session keeps the chain; don't hand work out through some other session.
 

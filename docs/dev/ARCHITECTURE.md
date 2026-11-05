@@ -467,7 +467,7 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
   the panel being loaded; `useCardType(type, panel)` takes only that panel's (or a global one, registered outside any
   cards file). Unstamped older cards take the latest registration, as before.
 - **Work tools** (`work/tools.go`, `cmd/gerdr/workmcp.go`, `hub.Options.MCP`). A Work's local functions declared in
-  `export const tools` are served to the same sessions that get its skills, over MCP: `gerdr work mcp --project P
+  `export const tools` are served to the same sessions that get its skills, over MCP: `gerdr panel mcp --project P
   --session S` is a stdio server the hub hands the adapter as a client MCP server on new / resume / load (claude
   allows client MCP tools by name, `--allowedTools mcp__work`). Each call goes to `/api/work/tools/{name}` and runs the
   function with `ctx.caller.session` = S. Tools, not text an agent ends its reply with: it can act mid-turn, undo
@@ -518,6 +518,14 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
   `session new --workspace` places the tab on the server (`placeSession`, by id / number / label within the caller's
   project) instead of broadcasting `open`, so it works with no window open; without `--agent` it uses `defaultAgent`,
   like the UI and `ctx.sessions.start` (it used to be hard-wired to claude).
+  A panel's conversation (tagged `panel`: a board's worker) gets a 400 from `session new` (`panelCaller`), except
+  `--host` with `--report-to` itself: a helper on another computer, which a panel's `ctx.sessions.start` can't reach.
+  That one gets the panel's tag and isn't placed in Code; the caller follows it, the panel shows it as the caller's wait. The panel looks after the agents it runs (their brief, model, reporting, where they show); one
+  started past it had none of that: a worker that handed its work on with `session new` left a conversation on no
+  board, closed with the old task. Such conversations start agents through the panel's own functions
+  (`ctx.sessions.start`, which still records them as `parent`). Before, `session new` from one was quietly adopted
+  into the panel (`adoptPanel`: its tag, not placed in Code). `gerdr panel run` from one runs on its panel, not the
+  project of its directory (`callerPanel`): a worker sits in a repository, which belongs to the default project.
 - **One window per session (App).** "Open in new window" (session bar context menu) and ⌘N open another BrowserWindow on
   `/?space=<id>` (desktop/main.js `pageURL`, through `/auth?next=`). Every window is a full client with its own view, like a
   second browser tab. The page keeps `?space=` current (App.tsx) so a reload stays put; it must not touch it before the layout
@@ -621,7 +629,7 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
   `__GERDR_PROJECT__` (and the old bridge's `location.pathname` lookup is rewritten to it: edited copies aren't
   upgraded). The frame-era bridge (`lib/gerdr.ts` postMessage) still works: the page's `window.parent` is now Gerdr's
   window, both sides post and listen there, and only the mount on screen is listened to. `/work/<project>/<file>` serves
-  only its `public/` files now. `gerdr work status` reads the mount's errors.
+  only its `public/` files now. `gerdr panel status` reads the mount's errors.
 - **Every conversation has an owner** (`lib/panelRoute.ts`, `server.PanelTag`). One a panel started
   (`ctx.sessions.start`) is tagged `panel=<its Work key>`; bringing it up from anywhere (`focusSession`: a notification,
   the inbox, the running list, the palette) switches to that panel and hands it over (`core.onShowSession`: a board
@@ -658,11 +666,11 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
   `trash/panels/`, with an undo in the toast like deleting a project: `UnremovePanel` puts it back as it was). esbuild writes UTF-8 (`Charset`): a panel named 任务看板 has it in its module paths, and escaped
   `\uXXXX` placeholders never matched in `link`.
 - Page logic lives in local functions `<GERDR_DIR>/work/local/*.ts` (esbuild → goja, `ctx.mcp(server, tool, args)`), called by
-  name (`gerdr work run file.export`). Bundled files (`internal/work/builtin/base` for every project: site skeleton, blank
+  name (`gerdr panel run file.export`). Bundled files (`internal/work/builtin/base` for every project: site skeleton, blank
   home page, CLAUDE.md — the same for the default project; it used to get an OKR page on top) are upgraded unless edited,
   and removed when no longer shipped unless edited.
 - The right-hand agent is an ordinary session in the project's Work directory (its CLAUDE.md / AGENTS.md teach it the site),
-  not in the layout; `watchedSessions` adds it while in Work mode. `gerdr work run|status` find the project from the cwd.
+  not in the layout; `watchedSessions` adds it while in Work mode. `gerdr panel run|status` find the project from the cwd.
   `ctx.sessions.start({ reportTo: "work" })` resolves "work" to that conversation (`config.workSessions`), so a function
   can hand a task out and have the result come back to the Work agent.
 - Secrets from a page: `secret(name)` in the bridge posts `gerdr:secret`; Gerdr (WorkView `SecretDialog`) asks in its

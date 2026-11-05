@@ -75,7 +75,7 @@ type ScheduleRun struct {
 	OK        bool      `json:"ok"`
 	Error     string    `json:"error,omitempty"`
 	Result    string    `json:"result,omitempty"` // the fn's return value as JSON, cut to 500 characters
-	RunID     string    `json:"runId,omitempty"`  // fn: the run's id (gerdr work logs --id)
+	RunID     string    `json:"runId,omitempty"`  // fn: the run's id (gerdr panel logs --id)
 }
 
 type scheduleState struct {
@@ -84,7 +84,7 @@ type scheduleState struct {
 	Fails  int          `json:"fails,omitempty"` // failures in a row
 }
 
-// ScheduleInfo is a schedule with how it's doing, for `gerdr work schedules` and pages.
+// ScheduleInfo is a schedule with how it's doing, for `gerdr panel schedules` and pages.
 type ScheduleInfo struct {
 	Schedule
 	Paused  bool         `json:"paused,omitempty"`

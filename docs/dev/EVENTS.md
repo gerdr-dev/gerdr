@@ -56,7 +56,7 @@ Chat / mail / anything with its own credentials is an add-on, not core (the user
   watch whose session is gone is dropped when an event comes for it. `--once` is taken out as it's matched, so a
   burst delivers one.
 - `gerdr event list / watch / unwatch / watches` are auto-approved for agents (sysenv.SafeGerdrCLI); `emit` isn't:
-  it can start triggers' functions, which is `gerdr work run` by another door.
+  it can start triggers' functions, which is `gerdr panel run` by another door.
 
 ## Offering sources and answering, without naming them
 
@@ -89,7 +89,7 @@ left out), and again whenever they change (Services.Sync runs on every change of
 
 ## Not done yet
 
-- A page for triggers (last runs, errors) next to the schedules in a panel's settings; `gerdr work triggers` has it.
+- A page for triggers (last runs, errors) next to the schedules in a panel's settings; `gerdr panel triggers` has it.
   Trigger runs' last state is kept in memory only.
 - Webhooks in, through the relay, behind the same auth as `/api/`.
 - Pruning old month files (they're small: a busy poller is a few MB a month).

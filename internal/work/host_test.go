@@ -158,7 +158,7 @@ export function go(input, ctx) {
 	}
 }
 
-// A session a function starts gets the calling session as its parent (a router running `gerdr work run …` starts
+// A session a function starts gets the calling session as its parent (a router running `gerdr panel run …` starts
 // workers that point back at it), unless the function names one.
 func TestStartParentIsCaller(t *testing.T) {
 	r, _ := newProject(t, map[string]string{

@@ -205,3 +205,20 @@ func TestInWorkDir(t *testing.T) {
 		t.Error("only that project's Work dir itself counts")
 	}
 }
+
+// `gerdr panel run` from a board's worker (in its own repository) runs on that board, not the project's own Work.
+func TestCallerPanel(t *testing.T) {
+	for _, c := range []struct{ panel, project, want string }{
+		{"", "default", "default"},
+		{"", "lb", "lb"},
+		{"default/lb看板", "default", "default/lb看板"},
+		{"default/lb看板", "", "default/lb看板"},
+		{"lb/board", "lb", "lb/board"},
+		{"lb/board", "default", "lb/board"},
+		{"lb/board", "other", "other"},
+	} {
+		if got := callerPanel(c.panel, c.project); got != c.want {
+			t.Errorf("callerPanel(%q, %q) = %q, want %q", c.panel, c.project, got, c.want)
+		}
+	}
+}

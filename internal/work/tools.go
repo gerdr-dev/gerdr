@@ -11,7 +11,7 @@ import (
 	"github.com/dop251/goja"
 )
 
-// Work tools: local functions a Work project offers the agents it works with as MCP tools (`gerdr work mcp`, given
+// Work tools: local functions a Work project offers the agents it works with as MCP tools (`gerdr panel mcp`, given
 // to the project's Work agent and every session the Work starts, like its skills). A local file declares them next
 // to the functions:
 //

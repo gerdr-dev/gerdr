@@ -63,7 +63,7 @@ type Record struct {
 	Tags map[string]string `json:"tags,omitempty"`
 	// ReportTo: the session told when this one stops (turn done, waiting for a person, error); see server/report.go.
 	// Parent: the session that started this one (an agent running `gerdr session new`, or a panel function it called
-	// with `gerdr work run` that started it). Followed up and down, it's the chain of who handed what to whom, any
+	// with `gerdr panel run` that started it). Followed up and down, it's the chain of who handed what to whom, any
 	// number of levels deep: a task board's router → its worker → the helper that worker started → …
 	Parent   string `json:"parent,omitempty"`
 	ReportTo string `json:"reportTo,omitempty"`

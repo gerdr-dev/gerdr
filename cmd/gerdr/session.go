@@ -1091,24 +1091,32 @@ func fail(err error) {
 	os.Exit(1)
 }
 
-// gerdr work …: for the Work agent (see internal/work/builtin/CLAUDE.md). The project is the one whose
-// Work directory the current directory is in (that's where the Work agent runs), or --project.
+// workCmd: `gerdr work …`, the old name of what is now under `gerdr panel` (run, functions, logs, schedules…), kept
+// hidden so agents and panels still using it keep working. There is no "work" concept any more, only panels.
 func workCmd() *cobra.Command {
-	cmd := &cobra.Command{Use: "work", Short: "A panel's local functions, schedules, triggers and page"}
+	cmd := &cobra.Command{Use: "work", Short: "Old name of gerdr panel run / functions / logs / schedules / triggers / secret / status", Hidden: true}
 	var project string
 	cmd.PersistentFlags().StringVar(&project, "project", "", "project id (default: the one the current directory belongs to)")
-	which := func() string {
+	cmd.AddCommand(panelFnCmds(func() string {
 		if project != "" {
 			return project
 		}
 		wd, _ := os.Getwd()
 		return work.New(config.FromEnv().Dir, nil).ProjectOf(wd)
-	}
+	})...)
+	return cmd
+}
+
+// panelFnCmds: what runs inside a panel, under `gerdr panel` — its local functions (run, functions, logs, abort), its
+// MCP tools, schedules, triggers, secrets and page status. which: the panel / project acted on (--project, else the
+// one whose directory the current directory is in, which is where a panel's agent runs).
+func panelFnCmds(which func() string) []*cobra.Command {
+	cmd := &cobra.Command{}
 	var input string
 	run := &cobra.Command{
 		Use:   "run <file.export> [input JSON]",
 		Short: "Run a local function the way a page does: progress and logs on stderr, the result (JSON) on stdout",
-		Long: `Run a local function the way a page does, e.g. gerdr work run okr.summary '{"quarter":"2026Q4"}'.
+		Long: `Run a local function the way a page does, e.g. gerdr panel run okr.summary '{"quarter":"2026Q4"}'.
 Progress and console output go to stderr as they happen, the returned value to stdout as JSON; a thrown error
 prints its stack and exits 1. Ctrl-C stops the run. --input-file - reads the input from stdin.`,
 		Args: cobra.RangeArgs(1, 2),
@@ -1198,7 +1206,7 @@ prints its stack and exits 1. Ctrl-C stops the run. --input-file - reads the inp
 	cmd.AddCommand(logs)
 	cmd.AddCommand(&cobra.Command{
 		Use:   "abort <run id>",
-		Short: "Stop a running function (the id is in the run's start event, X-Gerdr-Run, or gerdr work logs)",
+		Short: "Stop a running function (the id is in the run's start event, X-Gerdr-Run, or gerdr panel logs)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			c, err := newAPIClient()
@@ -1275,7 +1283,7 @@ prints its stack and exits 1. Ctrl-C stops the run. --input-file - reads the inp
 			}
 			v := strings.TrimRight(string(b), "\r\n")
 			if v == "" {
-				return errors.New("no value on stdin (to delete it: gerdr work secret rm)")
+				return errors.New("no value on stdin (to delete it: gerdr panel secret rm)")
 			}
 			return c.do("POST", "/api/work/secrets", map[string]any{"name": args[0], "value": v}, nil)
 		},
@@ -1326,7 +1334,7 @@ prints its stack and exits 1. Ctrl-C stops the run. --input-file - reads the inp
 			return nil
 		},
 	})
-	return cmd
+	return cmd.Commands()
 }
 
 // panelCmd: `gerdr panel`, a project's panels (its own and the ones added: work/source.go), the same as
@@ -1352,8 +1360,9 @@ func panelCmd() *cobra.Command {
 		return work.PanelKey(project(), arg)
 	}
 	client := func() (*apiClient, error) { return newAPIClient() }
-	cmd := &cobra.Command{Use: "panel", Short: "A project's panels: list, install from git, add a blank one, update, change the icon, remove"}
-	cmd.PersistentFlags().StringVar(&projectArg, "project", "", "project id (default: the one the current directory belongs to)")
+	cmd := &cobra.Command{Use: "panel", Short: "A project's panels: list, install from git, add a blank one, update, change the icon, remove; and run what's in one (run, functions, logs, schedules, triggers, secret, status)"}
+	cmd.PersistentFlags().StringVar(&projectArg, "project", "", "project id, or a panel's key (<project>/<name>) for run / functions / logs …  (default: the one the current directory belongs to)")
+	cmd.AddCommand(panelFnCmds(which)...)
 	cmd.AddCommand(&cobra.Command{
 		Use:   "list",
 		Short: "The project's panels (JSON): key, name, ui.json (title, icon, color), where it came from",
@@ -1496,7 +1505,7 @@ func panelCmd() *cobra.Command {
 // to stderr and exit 1. Ctrl-C aborts the run (it would otherwise go on: runs don't belong to the request).
 func (c *apiClient) workRun(project, fn string, input any) error {
 	// From inside an agent: say which conversation runs it, so a Work tool's function sees ctx.caller.session even
-	// when called from the command line (an agent whose MCP tools didn't load), not only over `gerdr work mcp`
+	// when called from the command line (an agent whose MCP tools didn't load), not only over `gerdr panel mcp`
 	b, _ := json.Marshal(map[string]any{"project": project, "fn": fn, "input": input, "from": c.selfID()})
 	req, err := http.NewRequest("POST", c.base+"/api/work/run", bytes.NewReader(b))
 	if err != nil {
@@ -1565,7 +1574,7 @@ func (c *apiClient) workRun(project, fn string, input any) error {
 	if err := sc.Err(); err != nil {
 		return err
 	}
-	return errors.New("the connection closed before the run ended (it may still be running: gerdr work logs)")
+	return errors.New("the connection closed before the run ended (it may still be running: gerdr panel logs)")
 }
 
 // gerdr ui …：给改界面的 agent 用（内置的 gerdr-ui skill）。

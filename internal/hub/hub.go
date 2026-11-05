@@ -124,7 +124,7 @@ type Options struct {
 	// SkillDirs: extra skill folders for a session beyond its Record.SkillDirs, worked out when it starts or
 	// resumes (the server: a session in a Work directory gets that Work's skills/). nil = none.
 	SkillDirs func(rec Record) []string
-	// MCP: MCP servers a session's agent gets from gerdr (the Work tools of the project it works for: `gerdr work
+	// MCP: MCP servers a session's agent gets from gerdr (the tools of the panel it works for: `gerdr panel
 	// mcp`), worked out on every new / resume / load like SkillDirs. nil = none.
 	MCP func(rec Record) []acp.McpServer
 }

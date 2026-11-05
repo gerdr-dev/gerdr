@@ -61,7 +61,7 @@ type StartOptions struct {
 	Model  string `json:"model,omitempty"`
 	Effort string `json:"effort,omitempty"`
 	// Parent: the session that hands this one its work; default: the session that called this function (ctx.caller,
-	// e.g. a router running `gerdr work run tasks.dispatch`), so the chain stays unbroken across a panel.
+	// e.g. a router running `gerdr panel run tasks.dispatch`), so the chain stays unbroken across a panel.
 	Parent    string `json:"parent,omitempty"`
 	Workspace string `json:"workspace,omitempty"` // a workspace id from ctx.workspaces.list; "new"; "none" = not in Code; "" = found by cwd
 	Focus     bool   `json:"focus,omitempty"`     // switch the open windows to it

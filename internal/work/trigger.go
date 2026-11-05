@@ -47,7 +47,7 @@ type Trigger struct {
 	Input  any    `json:"input,omitempty"`
 }
 
-// TriggerInfo is a trigger with how its last run went (kept while Gerdr runs), for `gerdr work triggers`.
+// TriggerInfo is a trigger with how its last run went (kept while Gerdr runs), for `gerdr panel triggers`.
 type TriggerInfo struct {
 	Trigger
 	Runs int          `json:"runs"` // since Gerdr started

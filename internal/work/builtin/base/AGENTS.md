@@ -85,7 +85,7 @@ and their choices are what they set or wrote down, not what the code says.
     `text-bad`, `bg-brand`. No hard-coded colors; both themes must look right.
   - `ui/package.json` — third-party packages, **exact versions**; only listed packages can be
     imported (loaded from esm.sh through Gerdr, no install). Don't import CSS files.
-  - Check for build / runtime errors after editing: `gerdr work status`.
+  - Check for build / runtime errors after editing: `gerdr panel status`.
 - `local/*.ts` — **local functions**: data access and deterministic logic the pages need, run by
   Gerdr without a model (a button press takes seconds, costs no tokens, gives the same result every
   time) and called from pages with `run()`. They can run the user's command-line tools (`ctx.exec`:
@@ -102,7 +102,7 @@ and their choices are what they set or wrote down, not what the code says.
   before a skill appeared gets it once it's reopened; edits to an existing one are read as they are.
 - `schedules/<id>.json` — what the project does by itself on time: a local function (`"fn"`) or a message to you
   (`"prompt"`), `"every": "5m"` or `"at": "09:00"`. Gerdr runs them with the App closed too. FUNCTIONS.md, "On a
-  schedule"; `gerdr work schedules` shows how they went.
+  schedule"; `gerdr panel schedules` shows how they went.
 - Handing a task to another agent (the gerdr skill has the commands): start it with `--report-to self` instead
   of `--wait`, and go back to the user: each time it stops (done, waiting for a person, failed) you get a
   Gerdr report message with its reply. Give it `--cwd` (the repository; otherwise it runs in this panel's
@@ -116,7 +116,7 @@ and their choices are what they set or wrote down, not what the code says.
     others are added. So code that turns something on for the user, or saves their edit of a skill, writes under
     `user/`; reading a skill's file, look in `user/skills/…` first. The shared folders hold the panel's own
     definitions and careful defaults. Sessions get the merged skills.
-- `gerdr work …` acts on the project of the current directory, so run it from here.
+- `gerdr panel run …` acts on the project of the current directory, so run it from here.
 - Other projects have their own panels, and this project can have other panels besides this one (each in its own
   directory, with its own agent): don't touch them.
 - Built-in files are upgraded by Gerdr unless you edit them; once edited they're yours.

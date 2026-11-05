@@ -70,7 +70,7 @@ func (r *Renderer) Mount(name, dir string) {
 	r.ensure()
 }
 
-// MountStatus is a mount's build error and the runtime errors its area reported (`gerdr work status`).
+// MountStatus is a mount's build error and the runtime errors its area reported (`gerdr panel status`).
 func (r *Renderer) MountStatus(name string) (fatal string, runtime []ClientError, ok bool) {
 	b := r.ensure()
 	mi, ok := b.mounts[name]

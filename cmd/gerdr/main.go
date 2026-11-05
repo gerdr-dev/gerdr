@@ -622,7 +622,7 @@ func workSkills(dir string) func(hub.Record) []string {
 	}
 }
 
-// workMCP: ... and its Work tools, as `gerdr work mcp` for that conversation (cmd/gerdr/workmcp.go). The binary is
+// workMCP: ... and its Work tools, as `gerdr panel mcp` for that conversation (cmd/gerdr/workmcp.go). The binary is
 // this one, so the tools speak to the backend that started the agent.
 func workMCP(dir string) func(hub.Record) []acp.McpServer {
 	of := workOf(dir)
@@ -633,6 +633,6 @@ func workMCP(dir string) func(hub.Record) []acp.McpServer {
 			return nil
 		}
 		env := []acp.EnvVariable{{Name: "GERDR_DIR", Value: dir}}
-		return []acp.McpServer{{Stdio: &acp.McpServerStdio{Name: "work", Command: bin, Args: []string{"work", "mcp", "--project", project, "--session", rec.ID}, Env: env}}}
+		return []acp.McpServer{{Stdio: &acp.McpServerStdio{Name: "work", Command: bin, Args: []string{"panel", "mcp", "--project", project, "--session", rec.ID}, Env: env}}}
 	}
 }

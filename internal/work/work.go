@@ -64,8 +64,8 @@ type Runner struct {
 	// server tells the panel's page (core usePanelChange), so pages refresh on a change instead of polling.
 	// key is the panel's key ("default", "lb/board"), path relative to its directory; nil = nobody listens.
 	Changed func(key, path string)
-	Inbox      Inbox                    // ctx.inbox (inbox.go); nil = not available
-	Log        *slog.Logger
+	Inbox   Inbox // ctx.inbox (inbox.go); nil = not available
+	Log     *slog.Logger
 
 	mu        sync.Mutex
 	installed map[string]bool
@@ -248,7 +248,7 @@ func (r *Runner) WorkKey(dir string) (string, bool) {
 	return "", false
 }
 
-// ProjectOf is the Work key whose directory contains dir (for `gerdr work …` run by a Work agent from its cwd); the
+// ProjectOf is the Work key whose directory contains dir (for `gerdr panel run …` run by a Work agent from its cwd); the
 // default project when it's none of them.
 func (r *Runner) ProjectOf(dir string) string {
 	if k, ok := r.WorkKey(dir); ok {

@@ -36,7 +36,7 @@ interface Ctx {
 
   secrets: {
     /**
-     * A key the user stored with `gerdr work secret set NAME`; null when there's none (throw an error saying which
+     * A key the user stored with `gerdr panel secret set NAME`; null when there's none (throw an error saying which
      * command to run). Pass it to commands through `exec`'s `env`, never as an argument; never log it.
      */
     get(name: string): string | null;
@@ -98,7 +98,7 @@ interface Ctx {
       effort?: string;
       /**
        * The session handing it the work (its `parent`). Default: the session that called this function, if any (an agent
-       * running `gerdr work run …` or calling it as a tool), so chains of who-started-whom stay unbroken.
+       * running `gerdr panel run …` or calling it as a tool), so chains of who-started-whom stay unbroken.
        */
       parent?: string;
       /**
@@ -214,7 +214,7 @@ interface Ctx {
     reply(event: GerdrEvent, text: string, data?: Record<string, unknown>): { event: GerdrEvent; fresh: boolean };
   };
 
-  /** Progress the page shows while the function runs (and `gerdr work run` prints). */
+  /** Progress the page shows while the function runs (and `gerdr panel run` prints). */
   progress(p: { done?: number; total?: number; message?: string }): void;
   /** A log line, shown live and kept in the run log (like console.log). Never log keys, cookies or tokens. */
   log(...args: unknown[]): void;

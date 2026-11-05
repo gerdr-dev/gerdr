@@ -81,9 +81,9 @@ progress for anything that can take more than a second or two, and a way to stop
 ## Try it before handing it over
 
 ```
-gerdr work run mrs.open '{"repo":"group/app"}'     # progress and logs on stderr, the result on stdout
-gerdr work run mrs.open --input-file input.json   # or - for stdin
-gerdr work functions                              # what can be called
+gerdr panel run mrs.open '{"repo":"group/app"}'     # progress and logs on stderr, the result on stdout
+gerdr panel run mrs.open --input-file input.json   # or - for stdin
+gerdr panel functions                              # what can be called
 ```
 
 A thrown error prints its stack (file and line, counted in the bundled code: imported helper files
@@ -108,7 +108,7 @@ export async function ask_human(input: { title: string }, ctx: Ctx) {
 
 - The key is the tool's name and runs the export of the same name; `input` is its JSON Schema. A description says
   when to call it and what it does: it's all the agent knows about it.
-- `ctx.caller.session` is the calling conversation's id: over MCP, or `gerdr work run` run by an agent (which then
+- `ctx.caller.session` is the calling conversation's id: over MCP, or `gerdr panel run` run by an agent (which then
   runs in that conversation's project, wherever its cwd is); "" for a page or a person's terminal. Don't trust input for
   "who am I": look the caller up.
 - A thrown error goes back to the agent as the tool's error: say what to do instead.
@@ -139,9 +139,9 @@ backend runs them while it's up: with the background service on, the App needn't
   (`ctx.sessions.send` to the worker concerned, or to you with `"work"`).
 - `every`: 30s, 30m, 6h, 1d (at least 10s); `at`: local times of day, comma separated. Missed runs (asleep, Gerdr off) are
   caught up once; a run still going when its time comes again is skipped. `user/schedules/` are this person's own (AGENTS.md, `user/`). A run is an ordinary run in the run logs.
-- A broken file stops the whole folder (the error is in `gerdr work schedules`): fix it rather than delete others.
-- `gerdr work schedules` lists them with the last run (result, error, run id) and the next time;
-  `gerdr work schedule run|pause|resume <id>`. Paused / last run are this machine's, not in this directory.
+- A broken file stops the whole folder (the error is in `gerdr panel schedules`): fix it rather than delete others.
+- `gerdr panel schedules` lists them with the last run (result, error, run id) and the next time;
+  `gerdr panel schedule run|pause|resume <id>`. Paused / last run are this machine's, not in this directory.
 - A function on a schedule keeps its own memory in `user/data/` (what it has already handled), so the same comment or
   failure isn't handed over twice.
 
@@ -172,7 +172,7 @@ for themselves, e.g. from a settings page: `user/triggers/<id>.json`, AGENTS.md 
   source; an event without `reply` has nowhere to answer.
 - A function run by a trigger may emit events itself; they're one level deeper, and past 4 levels they aren't handed
   on, so two triggers feeding each other stop.
-- `gerdr work triggers` lists them with how many runs and the last one; `gerdr event list --on 'gitlab/*'` shows what
+- `gerdr panel triggers` lists them with how many runs and the last one; `gerdr event list --on 'gitlab/*'` shows what
   came. A broken file stops the whole folder, like schedules.
 
 ## Run logs
@@ -180,7 +180,7 @@ for themselves, e.g. from a settings page: `user/triggers/<id>.json`, AGENTS.md 
 Every run's progress, logs and error (with its stack) are kept 30 days in `ctx.workspace.logs_dir`;
 the input, the returned value and keys aren't.
 
-- `gerdr work logs --fn mrs.open -n 5`: the latest runs (id, status, time, error message).
-- `gerdr work logs --id <run id>`: one run's full log.
-- `gerdr work abort <run id>`: stop a run still going.
+- `gerdr panel logs --fn mrs.open -n 5`: the latest runs (id, status, time, error message).
+- `gerdr panel logs --id <run id>`: one run's full log.
+- `gerdr panel abort <run id>`: stop a run still going.
 - When something timed out, don't just do it again: check first (read-only) whether it went through.
