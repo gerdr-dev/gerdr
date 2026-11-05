@@ -121,6 +121,12 @@ export async function ask_human(input: { title: string }, ctx: Ctx) {
   by the component the page registered for that name in `ui/src/cards.tsx` (`registerCard` from `@gerdr/core`), with
   every other field of the card as its data; keep `title` / `body` filled in, they're drawn when the type isn't.
 - Sessions get the tools when they start or are reopened; the list is read again each time an agent asks for it.
+- `export function instructions(input, ctx)` in the same file: what you tell each of your conversations about itself
+  (which task it works on, where its rules are), as text; "" for none. It goes with the tools as the MCP server's
+  instructions, which stay in the agent's system prompt: a brief in its first message is gone after `/clear`, this
+  isn't. Run for that conversation (`ctx.caller.session`) when its agent starts.
+- A conversation is yours when you started it (`ctx.sessions.start`) or it carries your `panel` tag: it gets your
+  tools and skills the next time its agent starts.
 
 ## On a schedule
 

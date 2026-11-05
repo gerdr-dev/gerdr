@@ -425,6 +425,7 @@ func (s *Server) workRoutes(mux *http.ServeMux) {
 	// Work tools (work/tools.go), served to agents over MCP by `gerdr panel mcp`:
 	//	GET  /api/work/tools?project=                       the declared tools
 	//	POST /api/work/tools/{name}?project= {session, args} run one for that conversation (ctx.caller.session)
+	//	GET  /api/work/tools/instructions?project=&session= what the panel tells that conversation (Runner.Instructions)
 	mux.HandleFunc("GET /api/work/tools", func(w http.ResponseWriter, r *http.Request) {
 		list, err := s.Work.Tools(r.URL.Query().Get("project"))
 		if err != nil {
@@ -432,6 +433,15 @@ func (s *Server) workRoutes(mux *http.ServeMux) {
 			return
 		}
 		writeJSON(w, map[string]any{"list": list})
+	})
+	mux.HandleFunc("GET /api/work/tools/instructions", func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		text, err := s.Work.Instructions(r.Context(), q.Get("project"), q.Get("session"))
+		if err != nil {
+			httpError(w, 400, err.Error())
+			return
+		}
+		writeJSON(w, map[string]any{"text": text})
 	})
 	mux.HandleFunc("POST /api/work/tools/{name}", func(w http.ResponseWriter, r *http.Request) {
 		var b struct {

@@ -69,11 +69,21 @@ func serveWorkMCP(api *apiClient, project, session string) error {
 			if p.ProtocolVersion == "" {
 				p.ProtocolVersion = "2024-11-05"
 			}
+			// The panel's own words for this conversation (which task it works on, where its rules are) go with the
+			// tools: instructions stay in the agent's system prompt, so /clear doesn't lose them. Best effort: a
+			// panel with none, or one that fails, still serves its tools
+			intro := "Tools of the panel that started you. Use them to report on and change your task there."
+			var ins struct {
+				Text string `json:"text"`
+			}
+			if api.do("GET", "/api/work/tools/instructions"+q+"&session="+url.QueryEscape(session), nil, &ins) == nil && ins.Text != "" {
+				intro += "\n\n" + ins.Text
+			}
 			reply(m.ID, map[string]any{
 				"protocolVersion": p.ProtocolVersion,
 				"capabilities":    map[string]any{"tools": map[string]any{}},
 				"serverInfo":      map[string]any{"name": "gerdr-work", "version": "1"},
-				"instructions":    "Tools of the panel that started you. Use them to report on and change your task there.",
+				"instructions":    intro,
 			}, nil)
 		case "ping":
 			reply(m.ID, map[string]any{}, nil)

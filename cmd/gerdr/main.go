@@ -597,6 +597,16 @@ func workOf(dir string) func(hub.Record) (string, string, bool) {
 	}
 	r := work.New(dir, nil)
 	return func(rec hub.Record) (string, string, bool) {
+		// The panel it belongs to (its tag, set when a panel started it or took it on: a session started past the
+		// panel and then put on its board): that panel's skills and tools, whatever its directory. Only a panel that's
+		// here: the tag can name one on another computer (a helper started there for a worker here)
+		if key := rec.Tags["panel"]; key != "" {
+			if d, err := r.Dir(key); err == nil {
+				if st, err := os.Stat(d); err == nil && st.IsDir() {
+					return key, d, true
+				}
+			}
+		}
 		for _, p := range append([]string{rec.Cwd}, rec.SkillDirs...) {
 			if real, err := filepath.EvalSymlinks(p); err == nil {
 				p = real

@@ -47,3 +47,25 @@ export function notATool() { return 1 }`,
 		t.Errorf("plain run: %v %v", res, err)
 	}
 }
+
+// What a panel tells one conversation (MCP instructions, kept past /clear): run for that conversation; none is "".
+func TestInstructions(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	r, _ := newProject(t, map[string]string{
+		"board.ts": `export const tools = { ask: { description: "ask" } };
+export function ask() { return 1 }
+export function instructions(input: any, ctx: any) { return "  you work on the task of " + ctx.caller.session + "\n" }`,
+	})
+	if got, err := r.Instructions(ctx, "", "s9"); err != nil || got != "you work on the task of s9" {
+		t.Fatalf("instructions %q %v", got, err)
+	}
+	r, _ = newProject(t, map[string]string{"board.ts": `export const tools = {}; export function instructions() { return "x" }`, "other.ts": `export function instructions() { return "not next to tools" }`})
+	if got, _ := r.Instructions(ctx, "", "s9"); got != "x" {
+		t.Errorf("only the tools file's: %q", got)
+	}
+	r, _ = newProject(t, map[string]string{"board.ts": `export const tools = {}`})
+	if got, err := r.Instructions(ctx, "", "s9"); err != nil || got != "" {
+		t.Errorf("none: %q %v", got, err)
+	}
+}

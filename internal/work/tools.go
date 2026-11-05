@@ -99,6 +99,59 @@ func (r *Runner) Tools(project string) ([]Tool, error) {
 	return out, nil
 }
 
+// Instructions is what the panel tells one of its conversations about itself, next to its tools: the text of
+// `export function instructions(input, ctx)` in the file that declares them, run for that conversation
+// (ctx.caller.session; "" when the panel has none). `gerdr panel mcp` gives it as the MCP server's instructions,
+// which the agent keeps in its system prompt: unlike a brief in the first message, it survives /clear and
+// compaction. A board says there which task the conversation works on (a worker that had /clear didn't know it was
+// one, 2026-11-05).
+func (r *Runner) Instructions(ctx context.Context, project, session string) (string, error) {
+	dir, err := r.Ensure(project)
+	if err != nil {
+		return "", err
+	}
+	ents, err := os.ReadDir(filepath.Join(dir, "local"))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", nil
+		}
+		return "", err
+	}
+	names := []string{}
+	for _, e := range ents {
+		names = append(names, e.Name())
+	}
+	sort.Strings(names)
+	for _, n := range names {
+		ext := filepath.Ext(n)
+		base := strings.TrimSuffix(n, ext)
+		if (ext != ".ts" && ext != ".js") || !fileRE.MatchString(base) || strings.HasSuffix(base, ".d") {
+			continue
+		}
+		prog, err := compile(filepath.Join(dir, "local", n))
+		if err != nil {
+			continue
+		}
+		exports, err := load(goja.New(), prog)
+		if err != nil {
+			continue
+		}
+		if v := exports.Get("tools"); v == nil || goja.IsUndefined(v) || goja.IsNull(v) {
+			continue
+		}
+		if _, ok := goja.AssertFunction(exports.Get("instructions")); !ok {
+			continue
+		}
+		res, err := r.StartAs(project, base+".instructions", nil, session).Wait(ctx)
+		if err != nil {
+			return "", err
+		}
+		text, _ := res.(string)
+		return strings.TrimSpace(text), nil
+	}
+	return "", nil
+}
+
 // CallTool runs a declared tool for the conversation that called it (ctx.caller.session).
 func (r *Runner) CallTool(ctx context.Context, project, name, session string, args any) (any, error) {
 	tools, err := r.Tools(project)

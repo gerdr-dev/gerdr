@@ -526,6 +526,10 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
   (`ctx.sessions.start`, which still records them as `parent`). Before, `session new` from one was quietly adopted
   into the panel (`adoptPanel`: its tag, not placed in Code). `gerdr panel run` from one runs on its panel, not the
   project of its directory (`callerPanel`): a worker sits in a repository, which belongs to the default project.
+  Which panel a session is (its skills and `panel mcp` tools, `workOf` in cmd/gerdr/main.go) follows its `panel` tag
+  first, then its cwd / skill dirs: one put on a board after it was started (no panel skill dir) gets them too. The MCP
+  server's `instructions` carry the panel's text for that conversation (`export function instructions` next to
+  `tools`, `Runner.Instructions`): the system prompt keeps it past `/clear`, which drops the brief in the first message.
 - **One window per session (App).** "Open in new window" (session bar context menu) and ⌘N open another BrowserWindow on
   `/?space=<id>` (desktop/main.js `pageURL`, through `/auth?next=`). Every window is a full client with its own view, like a
   second browser tab. The page keeps `?space=` current (App.tsx) so a reload stays put; it must not touch it before the layout
