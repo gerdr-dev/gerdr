@@ -134,6 +134,13 @@ type build struct {
 	// Everything the first render loads statically, for <link rel="modulepreload"> (html.go): the browser fetches it
 	// all at once instead of discovering it one import level at a time.
 	preload []string
+	// For production React (prod.go): what its import map is built from, the UI's own preloads without the vendor
+	// files, and the result once built.
+	deps       map[string]string
+	bare       []string
+	staticBare []string
+	ownPreload []string
+	prod       *prodPage
 }
 
 type moduleInfo struct {
@@ -347,8 +354,12 @@ func (r *Renderer) build(files []string, sig string) *build {
 		}
 		r.finishMount(b, m, g, uniq(missing))
 	}
-	im, missing := buildImportMap(deps, uniq(bare))
+	bare = uniq(bare)
+	im, missing := buildImportMap(deps, bare, false)
 	b.importMap = im
+	b.deps, b.bare, b.staticBare = deps, bare, append(append([]string(nil), staticBare...), runtimeBare...)
+	b.ownPreload = append([]string(nil), b.preload...)
+	b.served[jsxShim] = served{ver: shortHash(jsxShimJS), code: jsxShimJS}
 	if len(missing) > 0 {
 		fatal = append(fatal, i18n.S("代码里用到了这些包，但 package.json 的 dependencies 里没写版本：", "These packages are used in code but have no version in package.json dependencies: ")+strings.Join(missing, ", "))
 	} else if r.esm != nil {
@@ -375,7 +386,7 @@ func (r *Renderer) useVendor(b *build, deps map[string]string, staticBare []stri
 			entries[spec] = u
 		}
 	}
-	vb := r.esm.vendor(entries, deps)
+	vb := r.esm.vendor(entries, deps, false)
 	select {
 	case <-vb.done:
 		if vb.err != nil {

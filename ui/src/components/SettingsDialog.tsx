@@ -328,16 +328,20 @@ export function SettingsDialog({ open }: { open: boolean }) {
               <Row label={t("settings.labs.copyOnSelect")} hint={t("settings.labs.copyOnSelect.hint")} local>
                 <Switch checked={!!dev.copyOnSelect} onCheckedChange={(v) => setPref({ copyOnSelect: v })} />
               </Row>
-              <Row label={t("settings.labs.keepAwake")} hint={t("settings.labs.keepAwake.hint")}>
-                <Switch checked={!!cfg.keepAwakeRemote} onCheckedChange={(v) => setConfig({ keepAwakeRemote: v })} />
-              </Row>
-              <AwakeSetting open={open && tabOpen === "labs"} />
+              <ProdReactRow />
               <div className="border-t pt-4">
                 <DoctorPanel />
               </div>
             </TabsContent>
-            <TabsContent value="remote" className="pt-2">
+            <TabsContent value="remote" className="space-y-4 pt-2">
               <RemoteSettings open={open && tabOpen === "remote"} />
+              {/* Staying awake is for being reached from elsewhere: it sits with remote access (asked for; was in Labs) */}
+              <div className="space-y-4 border-t pt-4">
+                <Row label={t("settings.labs.keepAwake")} hint={t("settings.labs.keepAwake.hint")}>
+                  <Switch checked={!!cfg.keepAwakeRemote} onCheckedChange={(v) => setConfig({ keepAwakeRemote: v })} />
+                </Row>
+                <AwakeSetting open={open && tabOpen === "remote"} />
+              </div>
             </TabsContent>
           </div>
         </Tabs>
@@ -365,6 +369,28 @@ function Section({ id, title, hint, local, children }: { id?: string; title: str
 function LocalTag({ className }: { className?: string }) {
   return (
     <span className={cn("rounded-sm border px-1 py-px text-[10px] font-normal leading-none text-muted-foreground", className)}>{t("settings.localTag")}</span>
+  );
+}
+
+/**
+ * Production React on this device (internal/uisite/prod.go): a cookie the backend reads when it serves the page, so
+ * the switch is a reload. The page says which React it got (window.__GERDR_UI__.react).
+ */
+function ProdReactRow() {
+  const asked = /(?:^|;\s*)gerdr_react=production(?:;|$)/.test(document.cookie);
+  const got = (window as { __GERDR_UI__?: { react?: string } }).__GERDR_UI__?.react;
+  const set = (on: boolean) => {
+    document.cookie = on ? "gerdr_react=production; path=/; max-age=315360000; samesite=lax" : "gerdr_react=; path=/; max-age=0; samesite=lax";
+    location.reload();
+  };
+  const note = asked && (got === "preparing" || got === "unavailable") ? t(`settings.labs.prodReact.${got}`) : "";
+  return (
+    <div className="space-y-1">
+      <Row label={t("settings.labs.prodReact")} hint={t("settings.labs.prodReact.hint")} local>
+        <Switch checked={asked} onCheckedChange={set} />
+      </Row>
+      {note && <div className="text-[12px] text-warn">{note}</div>}
+    </div>
   );
 }
 

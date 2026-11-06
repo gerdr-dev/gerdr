@@ -52,7 +52,8 @@ function overlay(text) {
 }
 
 let R = null;
-try {
+// Production React (prod.go) has no Refresh: updates re-render the page from its entry
+if (S.react !== "production") try {
   const m = await import("react-refresh/runtime");
   R = m.default || m;
   R.injectIntoGlobalHook(window);

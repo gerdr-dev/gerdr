@@ -364,6 +364,15 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
   URL 指向本机的 `/_esm/` 代理（转 esm.sh，结果落盘，离线也能开）。全页面只能有一份 React：react / react-dom 用 `?dev`
   （React Refresh 要开发版），**别的包一律 `external=react,react-dom`，react-dom 自己也 `external=react`** ——
   不然 esm.sh 按 peer 范围给 react-dom 挑一个 react，和我们的不是同一个模块，hooks 当场报错。
+- **Production React, per device** (`prod.go`, Settings → Labs, cookie `gerdr_react=production`): only the page's
+  import map differs. Every package switches to esm.sh's production build (no `dev` in the query) in a vendor bundle
+  of its own, `react/jsx-dev-runtime` points at a served shim (`@jsx-dev-prod.js`, jsxDEV → jsx / jsxs) since the
+  UI's own modules are still compiled once with JSXDev, and React Refresh is left out (no production build): the
+  runtime re-renders the page from its entry on an edit, so component state is lost but the store isn't. Build ids
+  stay the development build's, so hot updates, reloads and error reports are unchanged. Measured on the overview at
+  phone width, CPU 4× slowed, 546 sessions: a pushed session summary cost 35 ms of main thread on development
+  React, 9.5 ms on production. The first page asking for it waits up to 20 s for that bundle, then gets the
+  development build and `__GERDR_UI__.react = "preparing"`.
 - **Vendor bundle** (`vendor.go`): the import map doesn't point at esm.sh's files directly but at a bundle the
   backend builds from them with esbuild (sources still fetched through `/_esm/` and its disk cache; no npm), one
   entry chunk per specifier plus shared chunks, under `/_esm/~vendor/<key>/`. esm.sh splits packages very finely

@@ -18,6 +18,10 @@ git -C <界面目录> add -A && git -C <界面目录> commit -qm "改界面之�
 gerdr ui status
 ```
 
+A device with Settings → Labs → Production React on runs React's production build: an edit re-renders the whole page
+instead of swapping in place, and React's errors there are only a number with no file. If you need readable errors
+or in-place updates, ask the user to turn it off on that device.
+
 That only shows the errors of the version on screen now. Errors from earlier, e.g. ones the user dismissed or rolled back
 in the rescue panel, are in `~/.gerdr/logs/gerdr.log`: `grep -E 'ui client error|ui build failed|ui restored|ui errors dismissed'`.
 

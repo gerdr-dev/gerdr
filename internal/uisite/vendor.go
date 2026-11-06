@@ -80,8 +80,9 @@ func vendorKey(entries map[string]string) string {
 
 // vendor returns the bundle for these entries (specifier → /_esm/ URL): ready if built before (in this run or on
 // disk), else building in the background. A failed build is retried after a minute (esm.sh may have been down).
-// deps (package.json) resolves the bare imports esm.sh leaves in its output (react and react-dom subpaths).
-func (e *ESM) vendor(entries, deps map[string]string) *vendorBuild {
+// deps (package.json) resolves the bare imports esm.sh leaves in its output (react and react-dom subpaths), to the
+// production builds when prod (prod.go). The key needs no prod of its own: the entries' URLs already differ.
+func (e *ESM) vendor(entries, deps map[string]string, prod bool) *vendorBuild {
 	key := vendorKey(entries)
 	e.vendors.mu.Lock()
 	defer e.vendors.mu.Unlock()
@@ -109,7 +110,7 @@ func (e *ESM) vendor(entries, deps map[string]string) *vendorBuild {
 	go func() {
 		start := time.Now()
 		var m *vendorManifest
-		if m, vb.err = e.buildVendor(key, entries, deps); vb.err == nil {
+		if m, vb.err = e.buildVendor(key, entries, deps, prod); vb.err == nil {
 			vb.imports, vb.closure = m.urls(key)
 		}
 		vb.at = time.Now()
@@ -175,7 +176,7 @@ func (e *ESM) loadVendor(key string) (*vendorManifest, error) {
 
 var vendorNameRE = regexp.MustCompile(`[^A-Za-z0-9]+`)
 
-func (e *ESM) buildVendor(key string, entries, deps map[string]string) (*vendorManifest, error) {
+func (e *ESM) buildVendor(key string, entries, deps map[string]string, prod bool) (*vendorManifest, error) {
 	var eps []api.EntryPoint
 	byURL := map[string][]string{}
 	for spec, u := range entries {
@@ -201,7 +202,7 @@ func (e *ESM) buildVendor(key string, entries, deps map[string]string) (*vendorM
 		Metafile:            true,
 		Write:               false,
 		LogLevel:            api.LogLevelSilent,
-		Plugins:             []api.Plugin{e.vendorPlugin(entries, deps)},
+		Plugins:             []api.Plugin{e.vendorPlugin(entries, deps, prod)},
 	})
 	if len(res.Errors) > 0 {
 		var msgs []string
@@ -266,7 +267,7 @@ func (e *ESM) buildVendor(key string, entries, deps map[string]string) (*vendorM
 }
 
 // vendorPlugin feeds esbuild from the esm.sh proxy. Module paths are the /_esm/ URLs themselves (namespace "esm").
-func (e *ESM) vendorPlugin(entries, deps map[string]string) api.Plugin {
+func (e *ESM) vendorPlugin(entries, deps map[string]string, prod bool) api.Plugin {
 	return api.Plugin{Name: "esm", Setup: func(b api.PluginBuild) {
 		b.OnResolve(api.OnResolveOptions{Filter: ".*"}, func(a api.OnResolveArgs) (api.OnResolveResult, error) {
 			var u string
@@ -282,7 +283,7 @@ func (e *ESM) vendorPlugin(entries, deps map[string]string) api.Plugin {
 				// Bare: what esm.sh leaves external (react, react-dom and their subpaths). Same mapping as the import map.
 				u = entries[a.Path]
 				if pkg, sub := packageName(a.Path); u == "" && deps[pkg] != "" {
-					u = esmURL(pkg, deps[pkg], sub)
+					u = esmURL(pkg, deps[pkg], sub, prod)
 				}
 				if u == "" {
 					return api.OnResolveResult{}, fmt.Errorf("can't resolve %q (imported by %s)", a.Path, a.Importer)

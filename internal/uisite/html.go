@@ -5,6 +5,7 @@ import (
 	"html"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gerdr-dev/gerdr/internal/i18n"
 )
@@ -63,11 +64,19 @@ func (r *Renderer) ServePage(w http.ResponseWriter, req *http.Request, nonce str
 		r.servePreparing(w, b, n)
 		return
 	}
+	im, preload, react := b.importMap, b.preload, "development"
+	if wantsProd(req) {
+		if p, st := r.prodFor(b, 20*time.Second); p != nil {
+			im, preload, react = p.importMap, p.preload, "production"
+		} else {
+			react = st
+		}
+	}
 	s.WriteString("<script" + n + ">" + strings.Replace(errorsScript, "%s", string(mustJSON(issues)), 1) + "</script>\n")
 	s.WriteString(`<style type="text/tailwindcss" id="__gerdr_css__">` + escapeStyle(b.css) + "</style>\n")
-	s.WriteString(`<script type="importmap"` + n + `>` + string(mustJSON(map[string]any{"imports": b.importMap})) + "</script>\n")
+	s.WriteString(`<script type="importmap"` + n + `>` + string(mustJSON(map[string]any{"imports": im})) + "</script>\n")
 	// After the import map: a modulepreload starts module loading, and an import map that comes later is ignored.
-	for _, u := range append([]string{b.entry}, b.preload...) {
+	for _, u := range append([]string{b.entry}, preload...) {
 		s.WriteString(`<link rel="modulepreload" href="` + html.EscapeString(u) + `">` + "\n")
 	}
 	s.WriteString(`<script type="module" src="/_esm/` + tailwindBrowser + `"></script>` + "\n")
@@ -80,6 +89,9 @@ func (r *Renderer) ServePage(w http.ResponseWriter, req *http.Request, nonce str
 		"modules": b.manifest,
 		"error":   b.fatal,
 		"mounts":  b.mounts,
+		// Which React this page runs on (prod.go): "development", "production", or, when production was asked for,
+		// "preparing" (its packages are still being bundled) / "unavailable"
+		"react": react,
 	})) + ";</script>\n")
 	s.WriteString(`<script type="module" src="` + r.base + `/_ui/m/@runtime.js?v=` + runtimeVersion + `"></script>` + "\n")
 	if r.base != "" {

@@ -81,35 +81,53 @@ func packageName(spec string) (pkg, sub string) {
 	return
 }
 
-func esmQuery(pkg string) string {
+// esmQuery: esm.sh's options for a package. prod drops "dev": esm.sh then serves every package's production build
+// (React without its checks and warnings), for the pages that ask for production React (prod.go).
+func esmQuery(pkg string, prod bool) string {
+	var q string
 	switch pkg {
 	case "react", "react-refresh":
-		return "dev"
 	case "react-dom":
-		return "dev&external=react"
+		q = "external=react"
+	default:
+		q = "external=react,react-dom"
 	}
-	return "dev&external=react,react-dom"
+	if prod {
+		return q
+	}
+	if q == "" {
+		return "dev"
+	}
+	return "dev&" + q
 }
 
-func esmURL(pkg, ver, sub string) string {
-	return "/_esm/" + pkg + "@" + ver + sub + "?" + esmQuery(pkg)
+func esmURL(pkg, ver, sub string, prod bool) string {
+	u := "/_esm/" + pkg + "@" + ver + sub
+	if q := esmQuery(pkg, prod); q != "" {
+		u += "?" + q
+	}
+	return u
 }
 
 // runtimeBare: what the page runtime (runtime.go) and the generated entry (routes.go) import, whatever the UI's code does.
 var runtimeBare = []string{"react", "react/jsx-runtime", "react/jsx-dev-runtime", "react-dom", "react-dom/client", "react-refresh/runtime", "react-router"}
 
 // buildImportMap：bare 是代码里用到的第三方 specifier。缺版本的（package.json 里没写）报出来。
-func buildImportMap(deps map[string]string, bare []string) (map[string]string, []string) {
+// prod: the production builds (prod.go). React Refresh is left out there: production React has no hooks for it.
+func buildImportMap(deps map[string]string, bare []string, prod bool) (map[string]string, []string) {
 	im := map[string]string{}
 	var missing []string
 	add := func(spec string) {
 		pkg, sub := packageName(spec)
+		if prod && pkg == "react-refresh" {
+			return
+		}
 		ver, ok := deps[pkg]
 		if !ok {
 			missing = append(missing, pkg)
 			return
 		}
-		im[spec] = esmURL(pkg, ver, sub)
+		im[spec] = esmURL(pkg, ver, sub, prod)
 	}
 	// React 那几个总是要有：运行时用、JSX 编译出来的代码用、第三方包 external 掉的也指望它们。
 	for _, s := range runtimeBare {
@@ -121,7 +139,11 @@ func buildImportMap(deps map[string]string, bare []string) (map[string]string, [
 	// 第三方包里 external 掉的 react 子路径（react/compiler-runtime 之类）：前缀映射兜底。
 	for _, pkg := range []string{"react", "react-dom"} {
 		if ver, ok := deps[pkg]; ok {
-			im[pkg+"/"] = "/_esm/" + pkg + "@" + ver + "&" + esmQuery(pkg) + "/"
+			q := ""
+			if x := esmQuery(pkg, prod); x != "" {
+				q = "&" + x
+			}
+			im[pkg+"/"] = "/_esm/" + pkg + "@" + ver + q + "/"
 		}
 	}
 	sort.Strings(missing)

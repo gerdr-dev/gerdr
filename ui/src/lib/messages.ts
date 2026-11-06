@@ -76,6 +76,10 @@ const settingsZh = {
   "settings.labs.virtualList.hint": "只渲染屏幕附近的消息，很长的对话更省内存；往上翻时带图的消息可能会跳动",
   "settings.labs.copyOnSelect": "选中即复制",
   "settings.labs.copyOnSelect.hint": "和 Herdr 一样：拖着选中文字，松开鼠标就复制到剪贴板；双击选词也会复制。对话和终端里都管用，输入框里不复制",
+  "settings.labs.prodReact": "生产版 React（更流畅）",
+  "settings.labs.prodReact.hint": "手机上明显更流畅。代价：改界面后整页重新渲染（滚动位置、打开的菜单会丢）；界面报错看不到出错的文件，让 agent 修界面前先关掉",
+  "settings.labs.prodReact.preparing": "正在准备生产版的包，准备好后再刷新一次就生效",
+  "settings.labs.prodReact.unavailable": "这台电脑上用不了（第三方包没有打成 vendor 包，或者界面编译出错）",
   "settings.labs.keepAwake": "远程连着时不休眠",
   "settings.labs.keepAwake.hint":
     "手机等远程设备连着时电脑不睡，合上盖子也醒着（和 Amphetamine 一样），断开 15 分钟后恢复。合盖要在下面授权一次（下面的手动时段也用它），用电池且电量 ≤ 20% 时自动放手，塞包里会发热。仅 macOS",
@@ -168,6 +172,11 @@ const settingsEn: Record<keyof typeof settingsZh, string> = {
   "settings.labs.copyOnSelect": "Copy on select",
   "settings.labs.copyOnSelect.hint":
     "Like Herdr: drag to select text and it's copied when you let go; double-click selects a word and copies it too. Works in chats and terminals, not in the input box",
+  "settings.labs.prodReact": "Production React (smoother)",
+  "settings.labs.prodReact.hint":
+    "Clearly smoother on a phone. The cost: a UI edit re-renders the whole page (scroll positions and open menus are lost), and UI errors don't say which file. Turn it off before having an agent fix the UI",
+  "settings.labs.prodReact.preparing": "Preparing the production packages; reload once more when they're ready",
+  "settings.labs.prodReact.unavailable": "Not available on this computer (packages aren't bundled, or the UI doesn't compile)",
   "settings.labs.keepAwake": "Stay awake while remote",
   "settings.labs.keepAwake.hint":
     "While a phone or another remote device is connected the computer doesn't sleep, even with the lid closed (like Amphetamine), until 15 minutes after it disconnects. The lid needs a one-time permission, given below (the manual periods below use it too); on battery at 20% or less it lets go. It gets warm in a bag. macOS only",
