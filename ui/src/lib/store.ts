@@ -1,6 +1,7 @@
 // The app's state (zustand) and the small actions on it. The rest lives in store/, one file per area so agents editing
 // different parts don't collide: config.ts (the Config type, defaults), prefs.ts (per-device settings), layoutSync.ts
 // (layout write-back), transcripts.ts (session logs). They are re-exported here, so importers keep using "./store".
+import { useRef } from "react";
 import { create } from "zustand";
 import { api, clientId, type DoctorReport, type FileStat } from "./api";
 import { activeTab, currentSpace, defaultLayout, leaves, phoneRoot, type Layout } from "./layout";
@@ -196,6 +197,20 @@ export const useStore = create<State>(() => ({
 }));
 
 export const get = useStore.getState;
+
+/**
+ * useStore for something that is only drawn while `live` (a dialog that stays mounted while closed): when not live it
+ * keeps returning what it last had, so store changes don't re-render it. The session pickers built a row for every
+ * session (500+) on each summary pushed while a turn streams, closed and drawing nothing: ~40% of a phone's main
+ * thread on the overview, which made swiping and scrolling stutter. Holding the last value, not dropping it, keeps
+ * the list as it was through the dialog's closing fade.
+ */
+export function useStoreWhile<T>(live: boolean, pick: (s: State) => T): T {
+  const last = useRef<{ v: T } | null>(null);
+  const v = useStore((s) => (live || !last.current ? pick(s) : last.current.v));
+  last.current = { v };
+  return v;
+}
 
 /** 给 streamdown 的 linkSafety：在组件里调（订阅了 config，切开关后已渲染的消息也跟着变）。 */
 export const useLinkSafety = () => ({ enabled: useStore((s) => s.config.confirmLinks !== false) });

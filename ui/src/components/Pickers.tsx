@@ -1,7 +1,7 @@
 import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { basename, focusSession, openSessionHere, selectWorkspace, tabName } from "@/lib/actions";
 import { currentSpace, locateSession, spaceList, spaceOf, spaceWorkspaces } from "@/lib/layout";
-import { closeDialog, useStore } from "@/lib/store";
+import { closeDialog, useStore, useStoreWhile } from "@/lib/store";
 import type { SessionSummary } from "@/lib/types";
 import { AgentIcon, StatusDot, dotStatus } from "./AgentIcon";
 import { ago } from "./NewSession";
@@ -12,9 +12,10 @@ import { t } from "@/lib/i18n";
 // 会话列表（prefix+g）：和命令面板一个样子。「开着的」= 界面上有 pane 显示它；关掉 pane 就是关掉会话（和 herdr 一样），
 // 在「关掉的」里，点一下在当前位置接着聊（历史都在）。
 export function SessionsDialog({ open }: { open: boolean }) {
-  const sessions = useStore((s) => s.sessions);
-  const layout = useStore((s) => s.layout);
-  const unread = useStore((s) => s.unread);
+  // Mounted all the time (Dialogs.tsx): only follow the store while open
+  const sessions = useStoreWhile(open, (s) => s.sessions);
+  const layout = useStoreWhile(open, (s) => s.layout);
+  const unread = useStoreWhile(open, (s) => s.unread);
   const all = Object.values(sessions).sort((a, b) => b.updatedAt - a.updatedAt);
   const isOpen = (id: string) => !!locateSession(layout, id);
   // Open in another (herdr-style) session: listed apart with that session's name; picking one switches over to it

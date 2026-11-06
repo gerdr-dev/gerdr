@@ -3,15 +3,16 @@ import { basename, focusSession } from "@/lib/actions";
 import { allCommands, runCommand } from "@/lib/commands";
 import { formatCombo } from "@/lib/keys";
 import { locateSession } from "@/lib/layout";
-import { closeDialog, useStore } from "@/lib/store";
+import { closeDialog, useStore, useStoreWhile } from "@/lib/store";
 import { AgentIcon, StatusDot, dotStatus } from "./AgentIcon";
 import { t } from "@/lib/i18n";
 
 // The command palette (prefix+: / ⌘K): commands, then the conversations open in a pane.
 export function Palette({ open }: { open: boolean }) {
   useStore((s) => s.addonVersion);
-  const sessions = useStore((s) => s.sessions);
-  const layout = useStore((s) => s.layout);
+  // Mounted all the time (Dialogs.tsx): only follow sessions / layout while open
+  const sessions = useStoreWhile(open, (s) => s.sessions);
+  const layout = useStoreWhile(open, (s) => s.layout);
   const cmds = open ? allCommands() : [];
   return (
     <CommandDialog open={open} onOpenChange={(o) => !o && closeDialog()} title={t("palette.title")} description={t("palette.description")}>

@@ -1,5 +1,5 @@
 import { Check, ListPlus, Plus } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -8,7 +8,7 @@ import { currentSpace, spaceList } from "@/lib/layout";
 import { compareSessions } from "@/lib/order";
 import { activeAllProjects, activeIds, addActive, focusTile, placeTilesAfter } from "@/lib/overview";
 import { openSessionsWithProject } from "@/lib/overviewState";
-import { useStore } from "@/lib/store";
+import { useStore, useStoreWhile } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { AgentIcon, StatusDot, dotStatus } from "./AgentIcon";
 import { whereOf } from "./tileInfo";
@@ -71,22 +71,26 @@ export function AddMenu({ focus }: { focus?: string }) {
  * project, or all with allIn): one from elsewhere would be added but never appear.
  */
 function PickActive({ open, onClose, after }: { open: boolean; onClose: () => void; after?: string }) {
-  const layout = useStore((s) => s.layout);
-  const sessions = useStore((s) => s.sessions);
-  const unread = useStore((s) => s.unread);
-  const config = useStore((s) => s.config);
-  const overview = useStore((s) => s.overview);
+  // Every tile's + menu has one of these, closed nearly always: follow the store only while open
+  const layout = useStoreWhile(open, (s) => s.layout);
+  const sessions = useStoreWhile(open, (s) => s.sessions);
+  const unread = useStoreWhile(open, (s) => s.unread);
+  const config = useStoreWhile(open, (s) => s.config);
+  const overview = useStoreWhile(open, (s) => s.overview);
   const [picked, setPicked] = useState<string[]>([]);
   useEffect(() => {
     if (open) setPicked([]);
   }, [open]);
   const space = currentSpace(layout);
   const all = activeAllProjects({ config, layout });
-  const inActive = new Set(activeIds({ overview, layout, sessions, config, unread }));
-  const list = openSessionsWithProject(layout, sessions, config)
-    .filter((x) => (all || x.project === space) && !inActive.has(x.s.id))
-    .map((x) => x.s)
-    .sort((a, b) => compareSessions(a, b, unread));
+  // Memoized on the frozen store values above: the parent re-renders on every push of its tile's session
+  const list = useMemo(() => {
+    const inActive = new Set(activeIds({ overview, layout, sessions, config, unread }));
+    return openSessionsWithProject(layout, sessions, config)
+      .filter((x) => (all || x.project === space) && !inActive.has(x.s.id))
+      .map((x) => x.s)
+      .sort((a, b) => compareSessions(a, b, unread));
+  }, [overview, layout, sessions, config, unread, all, space]);
   const toggle = (id: string) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
   const confirm = () => {
     addActive(picked);
@@ -96,6 +100,35 @@ function PickActive({ open, onClose, after }: { open: boolean; onClose: () => vo
     focusTile(picked[0]);
     onClose();
   };
+  const rows = useMemo(
+    () =>
+      list.map((s) => {
+        const on = picked.includes(s.id);
+        return (
+          <button
+            key={s.id}
+            className={cn("flex h-11 w-full items-center gap-2.5 rounded-md px-2 text-left text-[13px]", on ? "bg-brand/10" : "hover:bg-accent/60")}
+            onClick={() => toggle(s.id)}
+          >
+            <span
+              className={cn(
+                "flex size-4 shrink-0 items-center justify-center rounded-sm border",
+                on ? "border-brand bg-brand text-white" : "border-muted-foreground/50",
+              )}
+            >
+              {on && <Check className="size-3" />}
+            </span>
+            <AgentIcon agent={s.agent} className="size-4 shrink-0" />
+            <span className="min-w-0 flex-1">
+              <span className="block truncate">{s.title || basename(s.cwd)}</span>
+              <span className="block truncate text-[11px] text-muted-foreground">{whereOf(layout, config, s.id)}</span>
+            </span>
+            <StatusDot status={dotStatus(s)} unread={!!unread[s.id]} />
+          </button>
+        );
+      }),
+    [list, picked, layout, config, unread],
+  );
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="gap-3 p-4" onOpenAutoFocus={(e) => e.preventDefault()}>
@@ -104,33 +137,7 @@ function PickActive({ open, onClose, after }: { open: boolean; onClose: () => vo
           <DialogDescription className="text-[12px]">{t("overviewPick.desc")}</DialogDescription>
         </DialogHeader>
         {list.length ? (
-          <div className="-mx-1 max-h-[55vh] overflow-y-auto">
-            {list.map((s) => {
-              const on = picked.includes(s.id);
-              return (
-                <button
-                  key={s.id}
-                  className={cn("flex h-11 w-full items-center gap-2.5 rounded-md px-2 text-left text-[13px]", on ? "bg-brand/10" : "hover:bg-accent/60")}
-                  onClick={() => toggle(s.id)}
-                >
-                  <span
-                    className={cn(
-                      "flex size-4 shrink-0 items-center justify-center rounded-sm border",
-                      on ? "border-brand bg-brand text-white" : "border-muted-foreground/50",
-                    )}
-                  >
-                    {on && <Check className="size-3" />}
-                  </span>
-                  <AgentIcon agent={s.agent} className="size-4 shrink-0" />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate">{s.title || basename(s.cwd)}</span>
-                    <span className="block truncate text-[11px] text-muted-foreground">{whereOf(layout, config, s.id)}</span>
-                  </span>
-                  <StatusDot status={dotStatus(s)} unread={!!unread[s.id]} />
-                </button>
-              );
-            })}
-          </div>
+          <div className="-mx-1 max-h-[55vh] overflow-y-auto">{rows}</div>
         ) : (
           <div className="py-6 text-center text-[13px] text-muted-foreground">{all ? t("overviewPick.allIn") : t("overviewPick.allInProject")}</div>
         )}
