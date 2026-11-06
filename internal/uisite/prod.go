@@ -96,3 +96,10 @@ func (r *Renderer) prodFor(b *build, wait time.Duration) (*prodPage, string) {
 	r.mu.Unlock()
 	return p, ""
 }
+
+// PrepareProd builds the production packages ahead of the switch (Settings → Labs waits on this with its own
+// "switching" state, then reloads): the reload itself then has nothing left to wait for. "" = ready.
+func (r *Renderer) PrepareProd(wait time.Duration) string {
+	_, st := r.prodFor(r.ensure(), wait)
+	return st
+}

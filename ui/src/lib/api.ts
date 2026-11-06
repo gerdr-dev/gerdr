@@ -400,6 +400,8 @@ export const api = {
   /** A button in Settings → 版本 pressed off the App: the App's page carries it to the shell. */
   appUpdateOp: (op: "check" | "apply" | "auto", on?: boolean) => req<{}>("POST", "/api/app-update/op", { op, on: !!on }),
   uiStatus: () => req<UIStatus>("GET", "/api/ui/status"),
+  /** Settings → Labs → Production React: build its packages before reloading onto them; state "" = ready */
+  prepareProdReact: () => req<{ ready: boolean; state: string }>("POST", "/api/ui/prod-react"),
   setService: (on: boolean) => req("POST", "/api/service", { on }),
   /** Settings → "Restart Gerdr": can = something brings it back (service / App), busy = what a restart cuts off */
   restartInfo: () => req<{ can: boolean; busy: Busy }>("GET", "/api/restart"),

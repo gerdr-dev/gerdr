@@ -78,7 +78,8 @@ const settingsZh = {
   "settings.labs.copyOnSelect.hint": "和 Herdr 一样：拖着选中文字，松开鼠标就复制到剪贴板；双击选词也会复制。对话和终端里都管用，输入框里不复制",
   "settings.labs.prodReact": "生产版 React（更流畅）",
   "settings.labs.prodReact.hint": "手机上明显更流畅。代价：改界面后整页重新渲染（滚动位置、打开的菜单会丢）；界面报错看不到出错的文件，让 agent 修界面前先关掉",
-  "settings.labs.prodReact.preparing": "正在准备生产版的包，准备好后再刷新一次就生效",
+  "settings.labs.prodReact.switching": "切换中…",
+  "settings.labs.prodReact.preparing": "生产版的包还没准备好（第一次要下载），过一会儿再打开",
   "settings.labs.prodReact.unavailable": "这台电脑上用不了（第三方包没有打成 vendor 包，或者界面编译出错）",
   "settings.labs.keepAwake": "远程连着时不休眠",
   "settings.labs.keepAwake.hint":
@@ -175,7 +176,8 @@ const settingsEn: Record<keyof typeof settingsZh, string> = {
   "settings.labs.prodReact": "Production React (smoother)",
   "settings.labs.prodReact.hint":
     "Clearly smoother on a phone. The cost: a UI edit re-renders the whole page (scroll positions and open menus are lost), and UI errors don't say which file. Turn it off before having an agent fix the UI",
-  "settings.labs.prodReact.preparing": "Preparing the production packages; reload once more when they're ready",
+  "settings.labs.prodReact.switching": "Switching…",
+  "settings.labs.prodReact.preparing": "The production packages aren't ready yet (the first time downloads them); try again in a moment",
   "settings.labs.prodReact.unavailable": "Not available on this computer (packages aren't bundled, or the UI doesn't compile)",
   "settings.labs.keepAwake": "Stay awake while remote",
   "settings.labs.keepAwake.hint":

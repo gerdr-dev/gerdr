@@ -1,4 +1,5 @@
 import { PanelSettings } from "./PanelSettings";
+import { Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -7,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { isAndroid } from "@/lib/android";
+import { api } from "@/lib/api";
 import { closeDialog, fontSizeOf, set, setConfig, setFontSize, setPref, useStore, type Theme } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { LoaderSelect } from "./LoaderSelect";
@@ -379,17 +381,39 @@ function LocalTag({ className }: { className?: string }) {
 function ProdReactRow() {
   const asked = /(?:^|;\s*)gerdr_react=production(?:;|$)/.test(document.cookie);
   const got = (window as { __GERDR_UI__?: { react?: string } }).__GERDR_UI__?.react;
-  const set = (on: boolean) => {
+  // Switching takes seconds (packages built the first time, then the whole page reloads): the switch says so from
+  // the tap until the page goes, instead of sitting still (reported)
+  const [busy, setBusy] = useState<boolean | null>(null);
+  const [failed, setFailed] = useState<"preparing" | "unavailable" | "">("");
+  const toggle = async (on: boolean) => {
+    setBusy(on);
+    setFailed("");
+    if (on) {
+      const r = await api.prepareProdReact().catch(() => ({ ready: false, state: "unavailable" }));
+      if (!r.ready) {
+        setBusy(null);
+        setFailed(r.state === "preparing" ? "preparing" : "unavailable");
+        return;
+      }
+    }
     document.cookie = on ? "gerdr_react=production; path=/; max-age=315360000; samesite=lax" : "gerdr_react=; path=/; max-age=0; samesite=lax";
     location.reload();
   };
-  const note = asked && (got === "preparing" || got === "unavailable") ? t(`settings.labs.prodReact.${got}`) : "";
+  const state: "preparing" | "unavailable" | "" = failed || (asked && (got === "preparing" || got === "unavailable") ? got : "");
   return (
     <div className="space-y-1">
       <Row label={t("settings.labs.prodReact")} hint={t("settings.labs.prodReact.hint")} local>
-        <Switch checked={asked} onCheckedChange={set} />
+        <div className="flex shrink-0 items-center gap-2">
+          {busy !== null && (
+            <span className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
+              <Loader2 className="size-3.5 animate-spin" />
+              {t("settings.labs.prodReact.switching")}
+            </span>
+          )}
+          <Switch checked={busy ?? asked} disabled={busy !== null} onCheckedChange={toggle} />
+        </div>
       </Row>
-      {note && <div className="text-[12px] text-warn">{note}</div>}
+      {state && <div className="text-[12px] text-warn">{t(`settings.labs.prodReact.${state}`)}</div>}
     </div>
   );
 }
