@@ -25,7 +25,7 @@ var modes = []acp.SessionMode{
 	{Id: modeDefault, Name: "Ask", Description: acp.Ptr(i18n.S("改文件、跑命令前都问你（只读的命令不问）", "Asks before editing files or running commands (read-only commands don't ask)"))},
 	{Id: modeAcceptEdits, Name: "Accept edits", Description: acp.Ptr(i18n.S("工作目录里的文件直接改；跑命令前问你", "Edits files in the working directory freely; asks before running commands"))},
 	{Id: modeReadOnly, Name: "Read only", Description: acp.Ptr(i18n.S("只看不改：不改文件，只跑只读的命令", "Looks but doesn't touch: no file edits, only read-only commands"))},
-	{Id: modeBypass, Name: "Full access", Description: acp.Ptr(i18n.S("什么都不问", "Never asks"))},
+	{Id: modeBypass, Name: "Full access", Description: acp.Ptr(i18n.S("什么都不问（读密钥、凭据文件除外）", "Never asks (except to read keys and credentials)"))},
 }
 
 func validMode(m string) bool {
@@ -49,6 +49,13 @@ const (
 // decide 按模式和已放行的规则判断一次工具调用。rule 是「以后不再问」时要记下的规则（空 = 不给这个选项）。
 // safe: commands the embedder lets through in every mode (Options.SafeCommand; nil = none).
 func decide(mode string, t *tool, args map[string]any, cwd string, mem memoryDirs, allowed func(string) bool, safe func(string) bool) (v verdict, rule string) {
+	// Credentials: asked about in every mode, with no "don't ask again" (secrets.go)
+	if touchesSecret(t, args, cwd) {
+		if mode == modeReadOnly {
+			return deny, ""
+		}
+		return ask, ""
+	}
 	if t.readOnly {
 		return allow, ""
 	}
