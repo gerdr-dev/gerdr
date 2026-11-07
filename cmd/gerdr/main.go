@@ -494,6 +494,7 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 	srv.RunAddonServices(svcCtx)
 	srv.RunEvents()         // events to windows, watching sessions, add-on services and triggers/ (server/eventsapi.go)
 	wr.RunSchedules(svcCtx) // the Work directories' schedules/ (work/schedule.go)
+	wr.RunStreams(svcCtx)   // the Work directories' streams/: long connections held for panels (work/stream.go)
 	srv.RunReports(svcCtx)  // --report-to: tell a coordinator when the sessions it handed work to stop (server/report.go)
 	go srv.MountWorks()     // every project's Work UI, compiled into the page (uisite mounts)
 	u := loginURL(env.Host, port, token)

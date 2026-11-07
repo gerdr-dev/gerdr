@@ -1234,6 +1234,23 @@ prints its stack and exits 1. Ctrl-C stops the run. --input-file - reads the inp
 		},
 	})
 	cmd.AddCommand(&cobra.Command{
+		Use:   "streams",
+		Short: "The project's streams (streams/<id>.json: long connections Gerdr keeps open for it): connected or not, messages, runs",
+		Args:  cobra.NoArgs,
+		RunE: func(_ *cobra.Command, _ []string) error {
+			c, err := newAPIClient()
+			if err != nil {
+				return err
+			}
+			var out map[string]any
+			if err := c.do("GET", "/api/work/streams?project="+url.QueryEscape(which()), nil, &out); err != nil {
+				return err
+			}
+			printJSON(out["list"])
+			return nil
+		},
+	})
+	cmd.AddCommand(&cobra.Command{
 		Use:   "triggers",
 		Short: "The project's triggers (triggers/<id>.json: what runs when an event comes, docs/dev/EVENTS.md): runs and the last one since Gerdr started",
 		Args:  cobra.NoArgs,

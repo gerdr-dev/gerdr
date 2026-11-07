@@ -73,6 +73,7 @@ type Runner struct {
 	pruned    map[string]time.Time // log directories by when they were last pruned
 	sched_    scheduler            // schedules/ (schedule.go)
 	trig_     triggers             // triggers/ (trigger.go)
+	strm      streamer             // streams/ (stream.go)
 }
 
 func New(root string, mcp CallMCP) *Runner {

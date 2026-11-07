@@ -506,6 +506,14 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
   directory must not carry another machine's "already ran". `next` catches a miss up once (every: last + interval;
   at: only today's latest missed time), never once per miss, so waking a laptop after a weekend doesn't fire 500 runs.
   A broken file stops the whole project's schedules, logged once: half a set of watchers silently running is worse.
+- **Streams** (`work/stream.go`, 2026-11-06). A panel's functions run and end, so a panel could only poll; a service
+  that pushes "changed" (the team server's WebSocket) needs a process that stays up, and that is the backend, the same
+  reason Code's own view is live. `streams/<id>.json` names two functions: `connect` returns `{url, headers}` (or null:
+  not now, asked again in 30 s), called before every dial so a new token is used; `on` runs for what comes, one run
+  at a time, a burst collapsing into one more run with the latest (so `on` is a catch-up, not a per-message handler).
+  Redialled with backoff to a minute; silence past 2 min (no message, no ping) counts as dead. Nothing is queued while
+  down: the panel keeps a schedule as the backstop. Gerdr knows nothing of what flows over it, so no add-on and no
+  team code here. `gerdr panel streams` shows state, error, messages, runs.
 - **Coordinating without blocking: reports and tags** (`hub/meta.go`, `server/report.go`). The use is the dispatcher in
   Work: it hands tasks to several workers and keeps talking with the user, instead of sitting on `--wait` (one turn per
   worker, half-duplex) or polling. A session's `Record.ReportTo` names a session that gets a message each time this one

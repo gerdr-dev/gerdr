@@ -182,6 +182,23 @@ for themselves, e.g. from a settings page: `user/triggers/<id>.json`, AGENTS.md 
 - `gerdr panel triggers` lists them with how many runs and the last one; `gerdr event list --on 'gitlab/*'` shows what
   came. A broken file stops the whole folder, like schedules.
 
+## On a live connection
+
+A service that says the moment something changes (a WebSocket), instead of being polled: declare it in
+`streams/<id>.json`, and Gerdr's backend keeps the connection open for this panel (your functions only run and end).
+
+```json
+{ "connect": "team.stream", "on": "team.tick", "name": "Team server" }
+```
+
+- `connect` is a local function returning `{ url: "wss://…", headers?: { … } }`, or `null` for not now (not signed in
+  yet: asked again every 30 s). It's called before every connect and reconnect, so a new token or address is picked up.
+- `on` runs with `{ message, stream }` for what comes (`message`: the JSON value, or the text). Messages that come while
+  it runs collapse into one more run with the latest, so make it a catch-up ("fetch what changed since what I have"),
+  not a handler of each message. Nothing is queued while the connection is down: keep a schedule as the backstop.
+- A dropped connection is dialled again, with backoff up to a minute. `gerdr panel streams` shows each one's state,
+  error, messages and runs. `user/streams/` are this person's own, like schedules.
+
 ## Run logs
 
 Every run's progress, logs and error (with its stack) are kept 30 days in `ctx.workspace.logs_dir`;

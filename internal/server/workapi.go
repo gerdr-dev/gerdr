@@ -467,6 +467,14 @@ func (s *Server) workRoutes(mux *http.ServeMux) {
 		}
 		writeJSON(w, map[string]any{"list": list})
 	})
+	mux.HandleFunc("GET /api/work/streams", func(w http.ResponseWriter, r *http.Request) {
+		list, err := s.Work.Streams(r.URL.Query().Get("project"))
+		if err != nil {
+			httpError(w, 400, err.Error())
+			return
+		}
+		writeJSON(w, map[string]any{"list": list})
+	})
 	mux.HandleFunc("GET /api/work/triggers", func(w http.ResponseWriter, r *http.Request) {
 		list, err := s.Work.Triggers(r.URL.Query().Get("project"))
 		if err != nil {

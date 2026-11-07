@@ -30,7 +30,7 @@ and their choices are what they set or wrote down, not what the code says.
   - **Both need it** (the repository list the code offers and the router picks from, the default model an agent
     may override): a setting, one copy, and the code writes it into the agent's message (its first message, the
     hand-over). The agent never reads the settings file, and there is no second copy in prose to drift.
-  - **When things run**: `schedules/`.
+  - **When things run**: `schedules/`, `triggers/`, `streams/`.
 - Either way, the code holds a careful default for whoever hasn't chosen (nothing merged, pushed or deleted
   behind their back). It never becomes an `if` on someone's name, a constant, or a value baked into a prompt.
 - When the user says "from now on…", "I'd rather…", "always…": change their setting or their skill (whichever
@@ -104,6 +104,8 @@ and their choices are what they set or wrote down, not what the code says.
 - `schedules/<id>.json` — what the project does by itself on time: a local function (`"fn"`) or a message to you
   (`"prompt"`), `"every": "5m"` or `"at": "09:00"`. Gerdr runs them with the App closed too. FUNCTIONS.md, "On a
   schedule"; `gerdr panel schedules` shows how they went.
+- `streams/<id>.json` — a live connection (a WebSocket) Gerdr keeps open for this panel: `connect` says where, `on`
+  runs for what comes. FUNCTIONS.md, "On a live connection"; `gerdr panel streams` shows its state.
 - Handing a task to another agent (the gerdr skill has the commands): start it with `--report-to self` instead
   of `--wait`, and go back to the user: each time it stops (done, waiting for a person, failed) you get a
   Gerdr report message with its reply. Give it `--cwd` (the repository; otherwise it runs in this panel's
