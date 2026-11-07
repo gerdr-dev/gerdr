@@ -11,11 +11,19 @@ function ContextMenu({
   return <ContextMenuPrimitive.Root data-slot="context-menu" {...props} />
 }
 
+// On a phone this menu opens on long press, and so does the system's own text selection / callout: the two fought and
+// a long press sometimes selected the label instead of opening the menu (reported). Anything with a long-press menu
+// gives up both (also PhoneBar / DrawerButton, which handle contextmenu themselves).
 function ContextMenuTrigger({
+  className,
   ...props
 }: React.ComponentProps<typeof ContextMenuPrimitive.Trigger>) {
   return (
-    <ContextMenuPrimitive.Trigger data-slot="context-menu-trigger" {...props} />
+    <ContextMenuPrimitive.Trigger
+      data-slot="context-menu-trigger"
+      className={cn("select-none [-webkit-touch-callout:none]", className)}
+      {...props}
+    />
   )
 }
 

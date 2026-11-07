@@ -145,7 +145,7 @@ export const zh = {
   "projectExt.title": "「{name}」的 Skill 和 MCP",
   "projectExt.desc": "取消勾选的，这个项目里的会话就不给，不管用的是哪个 Agent；其余照常。改了之后，每个会话下一轮开始前生效。",
   "projectExt.offCount": "关掉 {n} 个",
-  "projectExt.addPlaceholder": "列表里没有的名字，回车关掉",
+  "projectExt.addPlaceholder": "列表里没有的，输入名字添加即可关闭",
   "projectExt.noteSkill":
     "Claude Code 和 Codex 的都在这里，两边同名的算一个。仓库里自带的 Skill 不受影响，除非把名字加进来。插件里的 Skill 关不了单个：一个插件的全关掉，整个插件才关（连它的 MCP、Hook）。",
   "projectExt.noteMcp": "claude.ai 账号里连的 Connector 不在列表里，可以在下面填名字关掉，比如 claude.ai Notion。",
@@ -424,7 +424,7 @@ export const en: Record<keyof typeof zh, string> = {
   "projectExt.desc":
     "Unchecked ones aren't given to sessions in this project, whichever agent runs them; the rest are as usual. A change applies before each session's next turn.",
   "projectExt.offCount": "{n} off",
-  "projectExt.addPlaceholder": "A name not listed, Enter to switch it off",
+  "projectExt.addPlaceholder": "Not listed? Type its name and add it to switch it off",
   "projectExt.noteSkill":
     "Claude Code's and Codex's are both here; the same name on both sides counts once. Skills that come with a repository aren't affected unless you add their name. A plugin's skill can't be switched off alone: the plugin goes off (with its MCP and hooks) once all of its skills are.",
   "projectExt.noteMcp": "Connectors from your claude.ai account aren't listed: type the name below to switch one off, e.g. claude.ai Notion.",

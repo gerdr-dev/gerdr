@@ -49,7 +49,8 @@ export function ProjectExtDialog() {
   const c = view ? candidates(view, "project") : null;
   return (
     <Dialog open={!!ask} onOpenChange={(o) => !o && set({ dialog: null })}>
-      <DialogContent className="sm:max-w-2xl">
+      {/* Taller than a phone's screen with both lists: scroll inside instead of losing the title and buttons */}
+      <DialogContent className="max-h-[calc(100%-2rem)] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{t("projectExt.title", { name: ask?.name ?? "" })}</DialogTitle>
           <DialogDescription>{t("projectExt.desc")}</DialogDescription>
@@ -57,7 +58,7 @@ export function ProjectExtDialog() {
         {!c ? (
           <div className="text-[12px] text-muted-foreground">{t("agentSettings.extLoading")}</div>
         ) : (
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <OffList label="Skill" items={c.skills} off={skillsOff} onChange={setSkillsOff} note={t("projectExt.noteSkill")} />
             <OffList label="MCP" items={c.mcp} off={mcpOff} onChange={setMcpOff} note={t("projectExt.noteMcp")} />
           </div>
