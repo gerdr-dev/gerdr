@@ -19,6 +19,9 @@ import { cn } from "@/lib/utils";
 /** Panels published on GitHub carry this topic (README of gerdr-panel-superagent says so too). */
 const PANEL_TOPIC = "https://github.com/topics/gerdr-panel";
 
+/** Panels we made and stand behind, offered above the topic link so a first install is one tap, not a search. */
+const RECOMMENDED = [{ name: "Superagent", url: "https://github.com/gerdr-dev/gerdr-panel-superagent", desc: "workSource.recSuperagent" }] as const;
+
 export function WorkSourceDialog() {
   const d = useStore((s) => s.dialog);
   const ask = d?.kind === "workSource" ? d : undefined;
@@ -82,15 +85,47 @@ export function WorkSourceDialog() {
             void go();
           }}
         >
-          {install && <Input autoFocus placeholder="https://github.com/owner/repo" value={url} onChange={(e) => setUrl(e.target.value)} disabled={busy} />}
+          {install && (
+            <Input
+              autoFocus
+              className="text-[13px]"
+              placeholder="https://github.com/owner/repo"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              disabled={busy}
+            />
+          )}
           <Input
             autoFocus={!install}
+            className="text-[13px]"
             placeholder={install ? t("workSource.nameOptional") : t("workSource.namePlaceholder")}
             value={name}
             onChange={(e) => setName(e.target.value)}
             disabled={busy}
           />
         </form>
+        {/* Picking one only fills the form: installing still goes through the button, under the trust note */}
+        {install && (
+          <div className="space-y-1.5">
+            <div className="text-[12px] text-muted-foreground">{t("workSource.recommended")}</div>
+            {RECOMMENDED.map((r) => (
+              <button
+                key={r.url}
+                type="button"
+                disabled={busy}
+                onClick={() => (setUrl(r.url), setName(""), setErr(""))}
+                className={cn(
+                  "w-full rounded-md border px-3 py-2 text-left transition-colors hover:bg-muted/60",
+                  url.trim() === r.url ? "border-brand bg-brand/5" : "border-border",
+                )}
+              >
+                <div className="text-[13px] font-medium">{r.name}</div>
+                <div className="mt-0.5 text-[12px] text-muted-foreground">{t(r.desc)}</div>
+                <div className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground/70">{r.url.replace("https://", "")}</div>
+              </button>
+            ))}
+          </div>
+        )}
         {/* Where to find one: published panels carry the GitHub topic gerdr-panel */}
         {install && (
           <p className="text-[12px] text-muted-foreground">

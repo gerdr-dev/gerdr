@@ -1,5 +1,6 @@
 export const zh = {
   "workSource.installTitle": "从 GitHub 安装面板",
+  "workSource.installShort": "安装面板",
   "workSource.installDesc": "粘贴一个仓库地址：别人做好的一整套面板（页面、本地函数、流程、定时任务）会作为新的一个面板加进这个项目，原来的不动。",
   "workSource.trust": "装进来的代码会在这台电脑上运行：本地函数能跑命令，定时任务装好就会按时执行。只装你信任的来源。",
   "workSource.install": "安装",
@@ -11,7 +12,10 @@ export const zh = {
   "workSource.updated": "面板更新好了",
   "workSource.menuNew": "新建空白面板…",
   "workSource.add": "添加面板",
-  "workSource.findBefore": "去哪找：别人发布的面板在 GitHub 上都带 gerdr-panel 标签，看 ",
+  "workSource.findBefore": "更多面板：别人发布的面板在 GitHub 上都带 gerdr-panel 标签，看 ",
+  "workSource.recommended": "推荐",
+  "workSource.recSuperagent":
+    "替你接活、派活的 agent，加一块跟进它们的看板：看板上的任务、Slack / 飞书来的消息，它判断派给哪个仓库的 agent，结果回到消息来的地方。",
   "workSource.findAfter": "。自己做的面板发布时也打上这个标签，别人就能找到。",
   "panelIcon.menu": "换图标…",
   "panelIcon.title": "「{name}」的图标",
@@ -48,6 +52,7 @@ export const zh = {
 
 export const en: Record<keyof typeof zh, string> = {
   "workSource.installTitle": "Install a panel from GitHub",
+  "workSource.installShort": "Install a panel",
   "workSource.installDesc":
     "Paste a repository address: a whole panel someone made (pages, local functions, workflow, schedules) is added to this project as another panel; the others stay as they are.",
   "workSource.trust":
@@ -61,7 +66,10 @@ export const en: Record<keyof typeof zh, string> = {
   "workSource.updated": "Panel updated",
   "workSource.menuNew": "New blank panel…",
   "workSource.add": "Add a panel",
-  "workSource.findBefore": "Where to find one: published panels carry the gerdr-panel topic on GitHub, see ",
+  "workSource.findBefore": "More panels: published ones carry the gerdr-panel topic on GitHub, see ",
+  "workSource.recommended": "Recommended",
+  "workSource.recSuperagent":
+    "An agent that takes work in and hands it out, plus a board to follow it: tasks on the board and messages from Slack / Lark, it decides which repository's agent gets each, and results go back where they came from.",
   "workSource.findAfter": ". Give yours the same topic when you publish it, so others find it.",
   "panelIcon.menu": "Change icon…",
   "panelIcon.title": "Icon of “{name}”",
