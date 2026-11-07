@@ -1,11 +1,13 @@
 import { useState } from "react";
-import { Download, Pencil, RefreshCw, RotateCcw, SquarePlus, Trash2 } from "lucide-react";
+import { Download, Ellipsis, Pencil, RefreshCw, RotateCcw, SquarePlus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "@/lib/api";
 import { currentSpace, spaceList } from "@/lib/layout";
 import { panelsChanged, usePanels, type Panel } from "@/lib/panels";
+import { usePhone } from "@/lib/phone";
 import { set, useStore } from "@/lib/store";
 import { t } from "@/lib/i18n";
 import { removePanel } from "@/lib/panelActions";
@@ -25,25 +27,23 @@ export function PanelSettings() {
   return (
     <div className="space-y-4">
       <p className="text-[12px] text-muted-foreground">{t("panelSettings.intro")}</p>
+      {/* The projects as a row of tabs, not a dropdown (asked for): which one is shown, and the others, at a glance. It
+          scrolls sideways when they don't fit */}
+      <Tabs value={project} onValueChange={setProject}>
+        <TabsList className="max-w-full justify-start overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {spaces.map((s) => (
+            <TabsTrigger key={s.id} value={s.id} className="flex-none">
+              {s.name}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
       <div className="flex flex-wrap items-center gap-2">
-        <Select value={project} onValueChange={setProject}>
-          <SelectTrigger className="h-8 w-48">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {spaces.map((s) => (
-              <SelectItem key={s.id} value={s.id}>
-                {s.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <div className="flex-1" />
         <Button size="sm" variant="outline" onClick={() => set({ dialog: { kind: "workSource", project, action: "new" } })}>
           <SquarePlus /> {t("workSource.newTitle")}
         </Button>
         <Button size="sm" onClick={() => set({ dialog: { kind: "workSource", project, action: "install" } })}>
-          <Download /> {t("workSource.installTitle")}
+          <Download /> {t("workSource.installShort")}
         </Button>
       </div>
       <div className="divide-y rounded-lg border">
@@ -51,17 +51,19 @@ export function PanelSettings() {
           <PanelRow key={p.key} p={p} />
         ))}
         {ownRemoved && (
-          <div className="flex items-center gap-3 px-3 py-2.5">
+          // The button goes under the text on a phone (it left the text a column four characters wide)
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2.5">
             <div className="flex size-8 items-center justify-center rounded-md border border-dashed text-muted-foreground">
               <PanelIcon title={name} />
             </div>
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 flex-1 basis-40">
               <div className="text-[13px] text-muted-foreground">{t("panelSettings.ownName")}</div>
               <div className="text-[12px] text-muted-foreground">{t("panelSettings.ownRemoved")}</div>
             </div>
             <Button
               size="sm"
               variant="outline"
+              className="max-md:ml-11"
               onClick={() =>
                 api.restoreWork(project).then(
                   () => panelsChanged(),
@@ -82,6 +84,7 @@ export function PanelSettings() {
 }
 
 function PanelRow({ p }: { p: Panel }) {
+  const phone = usePhone();
   const [busy, setBusy] = useState("");
   const remote = p.source.remote?.replace(/^https?:\/\/(github\.com\/)?/, "");
   const update = async () => {
@@ -113,22 +116,48 @@ function PanelRow({ p }: { p: Panel }) {
           {p.source.dirty && ` · ${t("panelSettings.dirty")}`}
         </div>
       </div>
-      <Button
-        size="sm"
-        variant="ghost"
-        title={t("panelSettings.rename")}
-        onClick={() => set({ dialog: { kind: "rename", target: "panel", id: p.key, value: p.title } })}
-      >
-        <Pencil />
-      </Button>
-      {remote && (
-        <Button size="sm" variant="ghost" disabled={!!busy} onClick={() => void update()} title={p.source.remote}>
-          <RefreshCw className={busy === "update" ? "animate-spin" : undefined} /> {t("panelSettings.update")}
-        </Button>
+      {phone ? (
+        // A phone's row is too narrow for three buttons: they left the name and source a few characters (reported)
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button size="icon-sm" variant="ghost" className="shrink-0" aria-label={t("common.more")}>
+              {busy ? <RefreshCw className="animate-spin" /> : <Ellipsis />}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => set({ dialog: { kind: "rename", target: "panel", id: p.key, value: p.title } })}>
+              <Pencil /> {t("panelSettings.rename")}
+            </DropdownMenuItem>
+            {remote && (
+              <DropdownMenuItem disabled={!!busy} onClick={() => void update()}>
+                <RefreshCw /> {t("panelSettings.update")}
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuItem variant="destructive" onClick={() => void remove()}>
+              <Trash2 /> {t("workSource.remove")}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ) : (
+        <>
+          <Button
+            size="sm"
+            variant="ghost"
+            title={t("panelSettings.rename")}
+            onClick={() => set({ dialog: { kind: "rename", target: "panel", id: p.key, value: p.title } })}
+          >
+            <Pencil />
+          </Button>
+          {remote && (
+            <Button size="sm" variant="ghost" disabled={!!busy} onClick={() => void update()} title={p.source.remote}>
+              <RefreshCw className={busy === "update" ? "animate-spin" : undefined} /> {t("panelSettings.update")}
+            </Button>
+          )}
+          <Button size="sm" variant="ghost" className="text-bad hover:text-bad" onClick={() => void remove()}>
+            <Trash2 /> {t("workSource.remove")}
+          </Button>
+        </>
       )}
-      <Button size="sm" variant="ghost" className="text-bad hover:text-bad" onClick={() => void remove()}>
-        <Trash2 /> {t("workSource.remove")}
-      </Button>
     </div>
   );
 }

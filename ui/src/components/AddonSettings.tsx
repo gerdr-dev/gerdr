@@ -160,6 +160,11 @@ function InstalledRow({ a, newer }: { a: AddonStatus; newer?: StoreAddon }) {
     });
     if (ok) await run(() => api.uninstallAddon(a.id));
   };
+  const update = (className: string) => (
+    <Button size="sm" variant="outline" className={className} disabled={busy} onClick={() => run(() => install(a.source!.store, newer!))}>
+      {newer!.version && newer!.version !== a.version ? t("addonSettings.updateTo", { version: newer!.version }) : t("common.update")}
+    </Button>
+  );
   return (
     // Same shape as a store row (StoreRow): the controls sit on the name's line, the rest goes under it, full width on a phone
     <div className={rowGrid}>
@@ -174,11 +179,7 @@ function InstalledRow({ a, newer }: { a: AddonStatus; newer?: StoreAddon }) {
         {a.modified && <Tag className="text-warn">{t("addonSettings.tag.modified")}</Tag>}
       </div>
       <div className="flex min-h-9 shrink-0 items-center gap-1.5 md:-my-1 md:min-h-0">
-        {newer && (
-          <Button size="sm" variant="outline" disabled={busy} onClick={() => run(() => install(a.source!.store, newer))}>
-            {newer.version && newer.version !== a.version ? t("addonSettings.updateTo", { version: newer.version }) : t("common.update")}
-          </Button>
-        )}
+        {newer && update("max-md:hidden")}
         <Button size="icon-sm" variant="ghost" disabled={busy} title={t("common.uninstall")} onClick={uninstall}>
           <Trash2 className="size-3.5" />
         </Button>
@@ -186,6 +187,9 @@ function InstalledRow({ a, newer }: { a: AddonStatus; newer?: StoreAddon }) {
       </div>
       <div className={rowBody}>
         {a.description && <div className="mt-1 text-[12px] text-muted-foreground">{a.description}</div>}
+        {/* On a phone the update button goes under the description: on the name's line it left the name a column two
+            words wide (reported) */}
+        {newer && update("mt-2 md:hidden")}
         {/* No "loaded" / "off" line: the switch already says that. Only a failure gets a line (its text is below) */}
         {a.error && !a.disabled && (
           <div className="mt-1 flex items-center gap-1.5 text-[12px] text-bad">
@@ -764,16 +768,18 @@ function ServiceLine({ s }: { s: AddonService }) {
   const label = t(`addonSettings.service.${s.state}`);
   return (
     <div className="mt-1.5 space-y-1 text-[12px]">
-      <div className="flex items-center gap-1.5">
+      {/* On a phone the add-on's own status goes on a line of its own, whole: sharing one, "running (PID n)" broke over
+          three lines and the status was cut off (reported) */}
+      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
         <span className="flex size-3.5 shrink-0 items-center justify-center">
           <span className={cn("size-1.5 rounded-full", s.state === "running" ? "bg-ok" : s.state === "exited" ? "bg-bad" : "bg-warn")} />
         </span>
-        <span className="text-muted-foreground">
+        <span className="whitespace-nowrap text-muted-foreground">
           {label}
           {s.pid ? t("addonSettings.service.pid", { pid: s.pid }) : ""}
           {s.restarts ? t(s.restarts === 1 ? "addonSettings.service.restartsOne" : "addonSettings.service.restarts", { n: s.restarts }) : ""}
         </span>
-        {s.text && <span className="truncate">{s.text}</span>}
+        {s.text && <span className="min-w-0 max-md:basis-full max-md:pl-5 max-md:break-words md:flex-1 md:truncate">{s.text}</span>}
       </div>
       {s.error && <pre className="whitespace-pre-wrap rounded-sm bg-bad/10 p-2 font-mono text-[11px] text-bad">{s.error}</pre>}
     </div>
