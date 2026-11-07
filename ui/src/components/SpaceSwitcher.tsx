@@ -9,10 +9,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "sonner";
 import { closeSpaceUndoable, deleteSpace, moveSpace, switchSpace } from "@/lib/actions";
 import { currentSpace, DEFAULT_SPACE, spaceList, spaceWorkspaces, type Layout, type Space } from "@/lib/layout";
 import { get, set, useStore } from "@/lib/store";
+import { usePhone } from "@/lib/phone";
+import { ProjectViews } from "./DrawerButton";
 import type { SessionSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { StatusDot, dotRank } from "./AgentIcon";
@@ -167,6 +170,7 @@ export function SpaceSwitcher() {
   const layout = useStore((s) => s.layout);
   const sessions = useStore((s) => s.sessions);
   const unread = useStore((s) => s.unread);
+  const phone = usePhone();
   const spaces = spaceList(layout);
   const here = currentSpace(layout);
   const box = useRef<HTMLDivElement>(null);
@@ -197,7 +201,8 @@ export function SpaceSwitcher() {
           "data-[state=open]:ring-1 data-[state=open]:ring-brand/60",
         )}
         style={{ WebkitAppRegion: "no-drag" } as any}
-        onClick={live ? () => switchSpace(sp.id) : undefined}
+        // On a phone the tap opens the project's Code / panels picker (ProjectPicker) instead of switching on its own
+        onClick={live && !phone ? () => switchSpace(sp.id) : undefined}
         onPointerDown={live ? (e) => startSpaceDrag(e, sp.id, "x") : undefined}
       >
         <span className="min-w-0 truncate">{sp.name}</span>
@@ -226,7 +231,7 @@ export function SpaceSwitcher() {
         <div data-space-list="header" className="relative -ml-1 flex min-w-0 items-center gap-0.5">
           {spaces.map((sp) => (
             <ContextMenu key={sp.id}>
-              <ContextMenuTrigger asChild>{chip(sp, true)}</ContextMenuTrigger>
+              <ContextMenuTrigger asChild>{phone ? <ProjectPicker sp={sp}>{chip(sp, true)}</ProjectPicker> : chip(sp, true)}</ContextMenuTrigger>
               <ContextMenuContent>
                 <SpaceMenuItems sp={sp} axis="x" />
               </ContextMenuContent>
@@ -239,6 +244,25 @@ export function SpaceSwitcher() {
         <SpaceMenu />
       )}
     </div>
+  );
+}
+
+/**
+ * The phone's project chip: a tap opens a bubble with the project's Code and its panels, and picking one goes straight
+ * there (project and view in one tap; asked for). The phone's ☰ has every project's on a long-press (DrawerButton).
+ */
+function ProjectPicker({ sp, children, ...rest }: { sp: Space; children: React.ReactElement }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      {/* rest: the context menu trigger's props (long-press menu, ref), passed on to the chip */}
+      <PopoverTrigger asChild {...rest}>
+        {children}
+      </PopoverTrigger>
+      <PopoverContent align="start" collisionPadding={8} className="w-44 p-1">
+        {open && <ProjectViews sp={sp} done={() => setOpen(false)} />}
+      </PopoverContent>
+    </Popover>
   );
 }
 

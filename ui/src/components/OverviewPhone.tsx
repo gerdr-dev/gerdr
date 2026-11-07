@@ -1,14 +1,14 @@
-import { ClipboardCheck, Menu } from "lucide-react";
+import { ClipboardCheck } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
 import { focusTile, setOverview } from "@/lib/overview";
 import { phoneOrder } from "@/lib/overviewState";
 import { useCaughtUp } from "@/lib/catchup";
-import { set, useStore } from "@/lib/store";
+import { useStore } from "@/lib/store";
 import { syncWatch } from "@/lib/sync";
 import { GAP, useSwipePager } from "@/lib/swipePager";
 import { TabActive } from "./Panes";
 import { AddMenu, PickButton } from "./OverviewPick";
+import { DrawerButton } from "./DrawerButton";
 import { Tile, TileChip } from "./OverviewTile";
 import { t } from "@/lib/i18n";
 
@@ -121,11 +121,6 @@ export function PhoneOverview({ ids, focus, shown }: { ids: string[]; focus?: st
     if (shown) syncWatch();
   }, [pagesKey, shown]);
 
-  const openDrawer = () => {
-    // Drop the keyboard first: with it up, the first tap in the drawer would only close the keyboard (as PhoneBar)
-    (document.activeElement as HTMLElement | null)?.blur?.();
-    set({ drawer: true });
-  };
   return (
     <TabActive.Provider value={shown}>
       <div className="flex h-full flex-col bg-background">
@@ -134,9 +129,7 @@ export function PhoneOverview({ ids, focus, shown }: { ids: string[]; focus?: st
         <div className="flex h-11 shrink-0 items-center gap-1 border-b bg-sidebar px-1.5 select-none [-webkit-touch-callout:none]">
           {/* ☰ like the main view's (asked for), same size and spot as PhoneBar's: the drawer is the way out too (its rows
           leave the overview) */}
-          <Button variant="ghost" size="icon" className="size-9 shrink-0" aria-label={t("phoneBar.sidebar")} onClick={openDrawer}>
-            <Menu className="size-[18px]" />
-          </Button>
+          <DrawerButton />
           {/* Both scrollbar hiders: Android's WebView ignores scrollbar-width and drew a bar under the chips */}
           {/* relative: the chips' offsetLeft is then measured in the strip's own scrolled coordinates (inView, the box) */}
           <div ref={chips} className="relative flex min-w-0 flex-1 gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">

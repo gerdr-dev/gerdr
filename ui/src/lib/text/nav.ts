@@ -102,7 +102,7 @@ export const zh = {
   "sidebarChrome.hasProblem": "有问题",
   "sidebarChrome.hideSidebar": "隐藏侧栏",
 
-  "phoneBar.sidebar": "侧栏",
+  "phoneBar.sidebar": "侧栏（长按：切项目 / 面板）",
   "phoneBar.newTab": "新建 Tab",
   "phoneBar.gridFull": "网格最多放 {n} 个，先从进行中移出几个",
   "phoneBar.active": "进行中（长按：把当前面板加进去）",
@@ -325,7 +325,7 @@ export const en: Record<keyof typeof zh, string> = {
   "sidebarChrome.hasProblem": "Problem",
   "sidebarChrome.hideSidebar": "Hide sidebar",
 
-  "phoneBar.sidebar": "Sidebar",
+  "phoneBar.sidebar": "Sidebar (long-press: switch project / panel)",
   "phoneBar.newTab": "New tab",
   "phoneBar.gridFull": "The grid holds up to {n}. Remove some from Active first",
   "phoneBar.active": "Active (long-press: add the current pane)",

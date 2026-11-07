@@ -1,4 +1,4 @@
-import { ClipboardCheck, Menu, Plus } from "lucide-react";
+import { ClipboardCheck, Plus } from "lucide-react";
 import { useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { addTab, focusedSessionId, tabName } from "@/lib/actions";
@@ -10,6 +10,7 @@ import { FadeText } from "./FadeText";
 import { StatusDot } from "./AgentIcon";
 import { toast } from "sonner";
 import { InboxButton } from "./Inbox";
+import { DrawerButton } from "./DrawerButton";
 import { tabStatus } from "./TabBar";
 import { t } from "@/lib/i18n";
 
@@ -45,14 +46,13 @@ export function PhoneBar() {
   };
   return (
     <div className="flex h-11 shrink-0 items-center gap-1 border-b bg-sidebar px-1.5">
-      <Button variant="ghost" size="icon" className="relative size-9" aria-label={t("phoneBar.sidebar")} onClick={openDrawer}>
-        <Menu className="size-[18px]" />
+      <DrawerButton>
         {waiting > 0 && (
           <span className="absolute top-1 right-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-bad px-0.5 text-[9px] leading-none font-semibold text-white tabular-nums">
             {waiting}
           </span>
         )}
-      </Button>
+      </DrawerButton>
       {/* Lined up with the pane title bar below (Panes.tsx: pl-4, 16px icon, gap-2): both icons are centred at 24px and both
           titles start at 40px — 6px padding + 36px button + 4px gap − 6px pulled back (asked for) */}
       <button className="-ml-1.5 flex h-9 min-w-0 flex-1 items-center gap-1.5 rounded-md pr-1.5 pl-0 text-left" onClick={openDrawer}>
