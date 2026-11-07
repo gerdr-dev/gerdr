@@ -61,7 +61,9 @@ export function WorkSourceDialog() {
   };
   return (
     <Dialog open={!!ask} onOpenChange={(o) => !o && close()}>
-      <DialogContent className="sm:max-w-lg">
+      {/* One column that may shrink: the recommended panel's address (one line, fading) otherwise widened the grid past
+          a phone's screen, and everything sat off centre with no right margin (reported) */}
+      <DialogContent className="grid-cols-[minmax(0,1fr)] sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{t("workSource.add")}</DialogTitle>
           <DialogDescription>{install ? t("workSource.installDesc") : t("workSource.newDesc")}</DialogDescription>
