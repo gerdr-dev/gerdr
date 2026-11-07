@@ -74,7 +74,7 @@ type Skill struct {
 	Description string `json:"description"`
 	Dir         string `json:"dir"`
 	Enabled     bool   `json:"enabled"`
-	// Origin：gerdr / claude（用户级）/ claude-project (OriginRepo) / claude-plugin:<id> / codex
+	// Origin: gerdr / claude (user level) / claude-project (OriginRepo) / claude-plugin:<id> / claude.ai (OriginClaudeAI) / codex
 	Origin string `json:"origin"`
 }
 

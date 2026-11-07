@@ -279,3 +279,26 @@ func TestRepoSkillsOutsideRoleList(t *testing.T) {
 		t.Fatalf("FilterSkills (native): %v", names)
 	}
 }
+
+// Skills synced from the claude.ai account are listed under the name Claude Code gives them, so a project can switch
+// them off; the same skill in two accounts' folders is listed once.
+func TestClaudeSyncedSkills(t *testing.T) {
+	h := t.TempDir()
+	t.Setenv("HOME", h)
+	for _, acct := range []string{"a_1", "b_2"} {
+		d := filepath.Join(h, ".claude", "skills", "synced", acct, "docx")
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(d, "SKILL.md"), []byte("---\nname: docx\ndescription: Word\n---\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var got []string
+	for _, s := range ClaudeSkills("") {
+		got = append(got, s.Name+"|"+s.Origin)
+	}
+	if len(got) != 1 || got[0] != "anthropic-skills:docx|"+OriginClaudeAI {
+		t.Fatalf("got %v", got)
+	}
+}

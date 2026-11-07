@@ -40,6 +40,30 @@ func ClaudeSkills(cwd string) []Skill {
 			out = append(out, sk)
 		}
 	}
+	return append(out, claudeSyncedSkills()...)
+}
+
+// OriginClaudeAI: a skill Claude Code synced down from the claude.ai account (docx, pptx, pdf…).
+const OriginClaudeAI = "claude.ai"
+
+// claudeSyncedSkills: the skills under ~/.claude/skills/synced/<account>/. Claude Code names every one of them
+// "anthropic-skills:<name>" (a fixed prefix in its code, 2.1.318), and skillOverrides takes that name to switch one
+// off (tested; the bare name works too). Without this they were listed nowhere, so a project couldn't switch them off
+// and a role limited to some skills, or the gerdr-only source, still got them all.
+func claudeSyncedSkills() []Skill {
+	root := filepath.Join(home(), ".claude", "skills", "synced")
+	ents, _ := os.ReadDir(root)
+	seen := map[string]bool{}
+	var out []Skill
+	for _, e := range ents {
+		for _, sk := range scanSkills(filepath.Join(root, e.Name()), OriginClaudeAI) {
+			sk.Name = "anthropic-skills:" + sk.Name
+			if !seen[sk.Name] {
+				seen[sk.Name] = true
+				out = append(out, sk)
+			}
+		}
+	}
 	return out
 }
 
