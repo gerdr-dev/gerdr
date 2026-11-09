@@ -444,7 +444,7 @@ func (m *Manager) AddSkillDir(name, src string, replace bool) error {
 	return copyDir(src, dst)
 }
 
-// Signature changes whenever ext.json or gerdr's skills folder does (a skill added, removed or edited), so the
+// Signature changes whenever ext.json, gerdr's skills folder or a project's does (a skill added, removed or edited), so the
 // backend can tell open Settings pages to reload after `gerdr skill` / `gerdr mcp` or a hand edit.
 func (m *Manager) Signature() string {
 	h := sha256.New()
@@ -456,6 +456,7 @@ func (m *Manager) Signature() string {
 			fmt.Fprintln(h, e.Name(), st.Size(), st.ModTime().UnixNano())
 		}
 	}
+	fmt.Fprintln(h, m.projectsSignature())
 	return hex.EncodeToString(h.Sum(nil))[:16]
 }
 
@@ -480,7 +481,8 @@ func (m *Manager) Watch(onChange func()) {
 // --add-dir 同时会放开这个目录的文件权限，所以别直接给 GERDR_DIR —— 那里有令牌。
 // 每个会话一个壳（id）：同时起的两个 claude 别互相改对方正在读的目录。
 //
-// extra: this session's own skill folders (a Work project's skills/), linked whatever the source or the role says.
+// extra: this session's own skill folders (its panel's skills/, its project's), linked whatever the source or the
+// role says, and first.
 func (m *Manager) ClaudeAddDir(id string, includeGerdr bool, extra ...string) (string, error) {
 	shell := filepath.Join(m.dir, "run", "claude-skills", id)
 	skills := filepath.Join(shell, ".claude", "skills")
@@ -494,14 +496,6 @@ func (m *Manager) ClaudeAddDir(id string, includeGerdr bool, extra ...string) (s
 	}
 	list = m.FilterSkills(list)
 	n := 0
-	for _, sk := range list {
-		if !sk.Enabled {
-			continue
-		}
-		if err := os.Symlink(sk.Dir, filepath.Join(skills, filepath.Base(sk.Dir))); err == nil {
-			n++
-		}
-	}
 	for _, root := range extra {
 		ents, _ := os.ReadDir(root)
 		for _, e := range ents {
@@ -509,10 +503,19 @@ func (m *Manager) ClaudeAddDir(id string, includeGerdr bool, extra ...string) (s
 			if _, err := os.Stat(filepath.Join(dir, "SKILL.md")); err != nil {
 				continue
 			}
-			// A name already linked (a gerdr skill of the same name) keeps the first: Symlink fails on an existing one
+			// The session's own folders go first, so their skill wins over a same-named one of gerdr's (Symlink fails
+			// on an existing name): the closer one is the one meant, as a repository's skill wins over a user one
 			if err := os.Symlink(dir, filepath.Join(skills, e.Name())); err == nil {
 				n++
 			}
+		}
+	}
+	for _, sk := range list {
+		if !sk.Enabled {
+			continue
+		}
+		if err := os.Symlink(sk.Dir, filepath.Join(skills, filepath.Base(sk.Dir))); err == nil {
+			n++
 		}
 	}
 	if n == 0 {

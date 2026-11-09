@@ -65,6 +65,11 @@ func (a *Agent) systemPrompt(s *session, cwd string, model resolved) string {
 	if a.role != "" {
 		b.WriteString("\n" + a.role + "\n")
 	}
+	if f := a.opt.AppendPrompt; f != nil {
+		if p := strings.TrimSpace(f(s.currentID(), cwd, s.clientMetaMap())); p != "" {
+			b.WriteString("\n" + p + "\n")
+		}
+	}
 	return b.String()
 }
 

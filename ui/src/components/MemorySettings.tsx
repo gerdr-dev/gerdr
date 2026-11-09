@@ -1,4 +1,4 @@
-import { ArrowLeft, Copy, FileText, Loader2, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { ArrowLeft, Copy, FileText, FolderKanban, Loader2, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { AgentIcon } from "@/components/AgentIcon";
@@ -19,6 +19,7 @@ const stop = (e: React.KeyboardEvent) => e.stopPropagation();
 
 const AGENTS: { id: MemoryStore["agent"] | "all"; name: string }[] = [
   { id: "all", name: "" }, // shown as t("memorySettings.all")
+  { id: "project", name: "" }, // shown as t("memorySettings.projects"): each Gerdr project's shared memory
   { id: "native", name: "Gerdr Agent" },
   { id: "claude", name: "Claude Code" },
   { id: "codex", name: "Codex" },
@@ -43,7 +44,8 @@ function ago(ms: number) {
 // 编辑中的那一个：一条记忆，或者某个目录的 MEMORY.md
 type Editing = { path: string; title: string; content: string; saved: string; isNew?: boolean; index?: boolean };
 
-export function MemorySettings({ open }: { open: boolean }) {
+/** project: show only that Gerdr project's shared memory (the project dialog's Memory tab), no picker. */
+export function MemorySettings({ open, project }: { open: boolean; project?: string }) {
   const [stores, setStores] = useState<MemoryStore[] | null>(null);
   const [agent, setAgent] = useState<(typeof AGENTS)[number]["id"]>("all");
   const [q, setQ] = useState("");
@@ -63,10 +65,10 @@ export function MemorySettings({ open }: { open: boolean }) {
   const shown = useMemo(() => {
     const k = q.trim().toLowerCase();
     return (stores ?? [])
-      .filter((s) => agent === "all" || s.agent === agent)
+      .filter((s) => (project ? s.agent === "project" && s.project === project : agent === "all" || s.agent === agent))
       .map((s) => (k ? { ...s, entries: s.entries.filter((e) => [e.name, e.description, e.file].some((x) => x?.toLowerCase().includes(k))) } : s))
       .filter((s) => !k || s.entries.length > 0 || s.label.toLowerCase().includes(k));
-  }, [stores, agent, q]);
+  }, [stores, agent, q, project]);
   const cur = shown.find((s) => s.id === sel) ?? shown[0];
 
   const openFile = async (path: string, title: string, index?: boolean) => {
@@ -199,8 +201,8 @@ export function MemorySettings({ open }: { open: boolean }) {
 
   return (
     <div className="space-y-3 text-[13px]">
-      <div className="text-[12px] text-muted-foreground">{t("memorySettings.intro")}</div>
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="text-[12px] text-muted-foreground">{project ? t("memorySettings.projectIntro") : t("memorySettings.intro")}</div>
+      <div className={cn("flex flex-wrap items-center gap-2", project && "hidden")}>
         <div className="flex rounded-md bg-muted p-0.5">
           {AGENTS.map((a) => (
             <button
@@ -211,7 +213,7 @@ export function MemorySettings({ open }: { open: boolean }) {
                 setSel(null);
               }}
             >
-              {a.id === "all" ? t("memorySettings.all") : a.name}
+              {a.id === "all" ? t("memorySettings.all") : a.id === "project" ? t("memorySettings.projects") : a.name}
             </button>
           ))}
         </div>
@@ -230,9 +232,9 @@ export function MemorySettings({ open }: { open: boolean }) {
       {shown.length === 0 ? (
         <div className="py-6 text-center text-muted-foreground">{q ? t("memorySettings.noResults") : t("memorySettings.empty")}</div>
       ) : (
-        <div className="grid gap-3 md:grid-cols-[220px_1fr]">
+        <div className={cn("grid gap-3", !project && "md:grid-cols-[220px_1fr]")}>
           {/* 左边：记忆目录（手机上横着滑） */}
-          <div className="flex gap-1 overflow-x-auto md:max-h-[52vh] md:flex-col md:overflow-x-hidden md:overflow-y-auto">
+          <div className={cn("flex gap-1 overflow-x-auto md:max-h-[52vh] md:flex-col md:overflow-x-hidden md:overflow-y-auto", project && "hidden")}>
             {shown.map((s) => (
               <button
                 key={s.id}
@@ -243,8 +245,14 @@ export function MemorySettings({ open }: { open: boolean }) {
                 title={s.dir}
                 onClick={() => setSel(s.id)}
               >
-                <AgentIcon agent={s.agent} className="size-3.5 shrink-0" />
-                <span className="min-w-0 flex-1 truncate">{s.scope === "global" ? s.label : shortPath(s.label)}</span>
+                {s.agent === "project" ? (
+                  <FolderKanban className="size-3.5 shrink-0 text-muted-foreground" />
+                ) : (
+                  <AgentIcon agent={s.agent} className="size-3.5 shrink-0" />
+                )}
+                <span className="min-w-0 flex-1 truncate">
+                  {s.agent === "project" ? t("memorySettings.projectLabel", { name: s.label }) : s.scope === "global" ? s.label : shortPath(s.label)}
+                </span>
                 <span className="shrink-0 text-[11px] text-muted-foreground tabular-nums">{s.entries.length}</span>
               </button>
             ))}
@@ -255,7 +263,7 @@ export function MemorySettings({ open }: { open: boolean }) {
             <div className="min-w-0 space-y-2">
               <div className="flex items-center gap-2">
                 <div className="min-w-0 flex-1">
-                  <div className="truncate font-medium">{cur.label}</div>
+                  <div className="truncate font-medium">{cur.agent === "project" ? t("memorySettings.projectLabel", { name: cur.label }) : cur.label}</div>
                   <button
                     className="flex max-w-full items-center gap-1 truncate font-mono text-[11px] text-muted-foreground hover:text-foreground"
                     title={t("memorySettings.copyPath")}
@@ -278,7 +286,11 @@ export function MemorySettings({ open }: { open: boolean }) {
               </div>
               {cur.entries.length === 0 ? (
                 <div className="rounded-md border border-dashed px-3 py-6 text-center text-[12px] text-muted-foreground">
-                  {cur.agent === "codex" ? t("memorySettings.codexEmpty") : t("memorySettings.emptyHint")}
+                  {cur.agent === "codex"
+                    ? t("memorySettings.codexEmpty")
+                    : cur.agent === "project"
+                      ? t("memorySettings.projectEmpty")
+                      : t("memorySettings.emptyHint")}
                 </div>
               ) : (
                 <div className="divide-y rounded-md border">

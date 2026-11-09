@@ -36,8 +36,10 @@ type Entry struct {
 
 type Store struct {
 	ID    string `json:"id"`    // 记忆目录的路径（唯一）
-	Agent string `json:"agent"` // native | claude | codex
-	Scope string `json:"scope"` // global | project
+	Agent string `json:"agent"` // native | claude | codex | project (a Gerdr project's shared memory)
+	// Project: the Gerdr project's id, for agent "project".
+	Project string `json:"project,omitempty"`
+	Scope   string `json:"scope"` // global | project
 	// Label：给人看的。项目的是项目路径（从目录名认不回来时就是目录名）
 	Label   string  `json:"label"`
 	Dir     string  `json:"dir"`
@@ -51,14 +53,17 @@ type Roots struct {
 	Native string // <GERDR_DIR>/native/memory
 	Claude string // ~/.claude/projects
 	Codex  string // ~/.codex/memories
+	// Projects: <GERDR_DIR>/projects, each Gerdr project's shared memory in <id>/memory (agentwire.ProjectPrompt).
+	Projects string
 }
 
 func DefaultRoots(gerdrDir string) Roots {
 	home, _ := os.UserHomeDir()
 	return Roots{
-		Native: filepath.Join(gerdrDir, "native", "memory"),
-		Claude: filepath.Join(home, ".claude", "projects"),
-		Codex:  filepath.Join(home, ".codex", "memories"),
+		Native:   filepath.Join(gerdrDir, "native", "memory"),
+		Claude:   filepath.Join(home, ".claude", "projects"),
+		Codex:    filepath.Join(home, ".codex", "memories"),
+		Projects: filepath.Join(gerdrDir, "projects"),
 	}
 }
 
@@ -144,6 +149,36 @@ func List(r Roots, cwds []string, nativeSlug func(cwd string) string) []Store {
 		}
 		return a.ModTime > b.ModTime
 	})
+	return out
+}
+
+// ListProjects lists the Gerdr projects' shared memories (agent "project"): every project in names (id → name),
+// even one with nothing saved yet, so there's a place to start one, plus any other project directory that has a
+// memory. By name.
+func ListProjects(r Roots, names map[string]string) []Store {
+	if r.Projects == "" {
+		return nil
+	}
+	ids := map[string]bool{}
+	for id := range names {
+		ids[id] = true
+	}
+	ents, _ := os.ReadDir(r.Projects)
+	for _, e := range ents {
+		if st, err := os.Stat(filepath.Join(r.Projects, e.Name(), "memory")); err == nil && st.IsDir() {
+			ids[e.Name()] = true
+		}
+	}
+	var out []Store
+	for id := range ids {
+		label := names[id]
+		if label == "" {
+			label = id
+		}
+		dir := filepath.Join(r.Projects, id, "memory")
+		out = append(out, scan(Store{ID: dir, Agent: "project", Scope: "project", Project: id, Label: label, Dir: dir}))
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Label < out[j].Label })
 	return out
 }
 
@@ -262,12 +297,14 @@ func resolve(p string) string {
 	}
 }
 
+var resolveFn = resolve
+
 func inRoots(r Roots, p string, resolve bool) bool {
 	norm := func(root string) string {
 		if resolve {
-			if rr, err := filepath.EvalSymlinks(root); err == nil {
-				return rr
-			}
+			// The deepest existing ancestor, like the path: a root that doesn't exist yet (no project has a
+			// memory) must still compare equal through /var → /private/var
+			return resolveFn(root)
 		}
 		return filepath.Clean(root)
 	}
@@ -283,6 +320,13 @@ func inRoots(r Roots, p string, resolve bool) bool {
 	}
 	if _, ok := rel(r.Codex); ok {
 		return true
+	}
+	// A Gerdr project's directory also holds its panels and layout: only <id>/memory/ counts
+	if x, ok := rel(r.Projects); ok {
+		parts := strings.Split(filepath.ToSlash(x), "/")
+		if len(parts) >= 3 && parts[1] == "memory" {
+			return true
+		}
 	}
 	// Claude 只认 <项目>/memory/ 下面的：~/.claude/projects 里还有会话记录（.jsonl）等别的东西
 	if x, ok := rel(r.Claude); ok {

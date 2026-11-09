@@ -171,3 +171,26 @@ func (s *Server) workProject() func(string) (string, bool) {
 	}
 	return s.Work.WorkProject
 }
+
+// SpaceNames maps every project (space) in the layout to the name it's shown by; the default project is always in it
+// (ui/src/lib/layout.ts adds it when the layout lists none).
+func SpaceNames(raw json.RawMessage) map[string]string {
+	type sp struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	}
+	var l struct {
+		Spaces []sp `json:"spaces"`
+		Data   struct {
+			Spaces []sp `json:"spaces"`
+		} `json:"data"`
+	}
+	_ = json.Unmarshal(raw, &l)
+	out := map[string]string{DefaultSpace: DefaultSpace}
+	for _, s := range append(l.Data.Spaces, l.Spaces...) {
+		if s.ID != "" {
+			out[s.ID] = s.Name
+		}
+	}
+	return out
+}

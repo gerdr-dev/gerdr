@@ -33,7 +33,7 @@ func (x claudeExt) Fingerprint(meta map[string]any) string {
 	if x.m == nil {
 		return ""
 	}
-	return forSession(x.m, meta).Fingerprint()
+	return forSession(x.m, meta).Fingerprint() + ext.RootsFingerprint(acpx.SkillRoots(meta))
 }
 
 func (x claudeExt) Args(sessionID, cwd string, meta map[string]any) []string {
@@ -55,7 +55,9 @@ func CodexExt(m *ext.Manager) codex.Ext {
 
 type codexExt struct{ m *ext.Manager }
 
-func (x codexExt) Fingerprint(meta map[string]any) string { return forSession(x.m, meta).Fingerprint() }
+func (x codexExt) Fingerprint(meta map[string]any) string {
+	return forSession(x.m, meta).Fingerprint() + ext.RootsFingerprint(acpx.SkillRoots(meta))
+}
 
 // Config 把 skill / MCP 设置翻成 thread/start、thread/resume 的 config 覆盖。
 // 覆盖是**合并**进用户配置的，所以「关掉 codex 自己的」只能逐个列出来关（见 ext 包注释）。
@@ -88,13 +90,12 @@ func (x codexExt) Config(ctx context.Context, rpc *rpcline.Conn, cwd string, met
 	// gerdr 的 skill 目录是整个 app-server 的设置：每次接 thread 前按当前设置摆一遍。
 	// 内置 skill（多会话协作、改界面）不管来源选什么都给；gerdr 自己那份要选了才给。
 	x.m.Builtin() // 确保已经装到磁盘上
-	roots := []string{x.m.BuiltinDir()}
+	// This thread's own (its panel's skills/, its project's): given whatever the source or the role says, like the
+	// built-in ones, since the session was started to work by them. First, as claude links them first.
+	roots := append(append([]string(nil), skillRoots...), x.m.BuiltinDir())
 	if x.m.GerdrSkillsOn(st) {
 		roots = append(roots, x.m.SkillsDir())
 	}
-	// This thread's own (a Work project's skills/): given whatever the source or the role says, like the built-in
-	// ones, since the session was started to work by them.
-	roots = append(roots, skillRoots...)
 	if err := rpc.Call(ctx, "skills/extraRoots/set", map[string]any{"extraRoots": roots}, nil); err != nil {
 		log.Warn("skills/extraRoots/set failed", "err", err)
 	}

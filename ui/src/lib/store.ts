@@ -32,7 +32,7 @@ type Dialog =
   | { kind: "workSource"; project: string; action: "install" | "new" }
   | { kind: "panelIcon"; key: string; title: string; icon?: string; color?: string }
   /** a project's skills / MCP (ProjectExtDialog); project = its space id */
-  | { kind: "projectExt"; project: string; name: string }
+  | { kind: "projectExt"; project: string; name: string; tab?: "skills" | "memory" | "off" }
   | { kind: "importHerdr" }
   /** host: the agent's records on another computer (docs/dev/MULTIHOST.md) */
   | { kind: "importAgent"; agent: string; cwd: string; paneId: string; host?: string }

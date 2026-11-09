@@ -8,6 +8,8 @@ package agentwire
 import (
 	"context"
 
+	"github.com/gerdr-dev/gerdr/acpx"
+
 	"github.com/gerdr-dev/gerdr/agents/native"
 	"github.com/gerdr-dev/gerdr/internal/config"
 	"github.com/gerdr-dev/gerdr/internal/ext"
@@ -22,8 +24,10 @@ const SessionEnvKey = "GERDR_NATIVE_SESSION_ID"
 // stand-alone `gerdr acp native`).
 func NativeOptions(dir string, em *ext.Manager, cfg func() native.Config, prompt string) native.Options {
 	return native.Options{
-		Dir: dir, Config: cfg, Prompt: prompt,
-		Skills: func(cwd string, meta map[string]any) []native.Skill { return skillsFor(forSession(em, meta), cwd) },
+		Dir: dir, Config: cfg, Prompt: prompt, AppendPrompt: ProjectPrompt(em),
+		Skills: func(cwd string, meta map[string]any) []native.Skill {
+			return skillsFor(forSession(em, meta), cwd, acpx.SkillRoots(meta))
+		},
 		MCP: func(cwd string, meta map[string]any) []native.MCPServer {
 			var out []native.MCPServer
 			for _, s := range resolveMCP(forSession(em, meta)) {
@@ -95,8 +99,14 @@ func resolveMCP(m *ext.Manager) []ext.MCPServer {
 // skillsFor：给这个 agent 的 skill —— 内置的（gerdr、gerdr-ui）总是给；「agent 自己的」当成 Claude Code 的那份
 // （用户级、项目级：这个 agent 没有自己的 skill 目录，用户的 skill 基本都在 ~/.claude/skills 里）；
 // 设置里的来源（只用 agent 的 / 两者 / 只用 gerdr 的）照常生效。同名的先到先得。
-func skillsFor(m *ext.Manager, cwd string) []native.Skill {
+func skillsFor(m *ext.Manager, cwd string, roots []string) []native.Skill {
 	var all []ext.Skill
+	// The session's own skill folders (its project's, a panel's) first: given whatever the source or a role says, as
+	// for claude / codex, and a name here wins over the same name elsewhere.
+	var own []ext.Skill
+	for _, r := range roots {
+		own = append(own, ext.ScanSkills(r, ext.OriginProject)...)
+	}
 	var st ext.Settings // zero source = agent, for m == nil
 	if m != nil {
 		all = append(all, m.Builtin()...)
@@ -118,7 +128,17 @@ func skillsFor(m *ext.Manager, cwd string) []native.Skill {
 		kept = append(kept, s)
 	}
 	var out []native.Skill
-	for _, s := range m.FilterSkills(kept) { // 角色限定了 skill 的话只留挑中的（m 是 nil 也行）
+	ownNames := map[string]bool{}
+	for _, s := range own {
+		if !ownNames[s.Name] && m.AllowRepoSkill(s.Name) { // only the project switching the name off drops one
+			ownNames[s.Name] = true
+			out = append(out, native.Skill{Name: s.Name, Description: s.Description, Dir: s.Dir})
+		}
+	}
+	for _, s := range m.FilterSkills(kept) {
+		if ownNames[s.Name] {
+			continue
+		} // 角色限定了 skill 的话只留挑中的（m 是 nil 也行）
 		out = append(out, native.Skill{Name: s.Name, Description: s.Description, Dir: s.Dir})
 	}
 	return out

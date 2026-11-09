@@ -16,6 +16,9 @@ type Options struct {
 	Config func() Config
 	// Prompt is appended to the end of the system prompt (a role's extra instructions in gerdr).
 	Prompt string
+	// AppendPrompt adds per-session text after Prompt (gerdr: the session's project memory). Called before every
+	// model call; meta as in SystemPrompt. nil = none.
+	AppendPrompt func(sessionID, cwd string, meta map[string]any) string
 
 	// SystemPrompt replaces the built-in base prompt (and gerdr's GUI hint) when set. Called before every model
 	// call; meta is the `_meta` the client sent with session/new (or the last session/resume / session/load).

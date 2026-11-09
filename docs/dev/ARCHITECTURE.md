@@ -490,7 +490,7 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
   in `Record.SkillDirs`. Both reach the adapter as `_meta` `skillRoots`: claude links each `<root>/<name>` into the
   session's `--add-dir` shell, codex adds the roots to `skills/extraRoots/set` right before the thread attaches. They
   are given whatever the skill source or a role's skill list says (like the built-in ones): the session was started
-  to work by them. native doesn't get them yet.
+  to work by them. native gets them too (`skillsFor`), first, like the others.
 - **A panel's `user/` folder** (`work/user.go`). A panel is shared through git; one person's use of it isn't: their
   data, the triggers they turned on (a Slack id in an allow list), their edits of its skills (their repository list).
   One folder holds all of it and ignores itself (`user/.gitignore` = `*`, written on install), decided with the user
@@ -746,6 +746,27 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
   takes effect when the session is next resumed.
   - codex: `skills/extraRoots/set` is app-server-wide, and now threads of different projects want different roots, so
     `Agent.attachMu` holds from `threadConfig` to `thread/start|resume` (it was already racy with panel skill roots).
+- **A project's own skills and memory** (`<GERDR_DIR>/projects/<id>/skills` and `/memory`, `internal/ext/project.go`,
+  `agentwire/project.go`; the project menu's dialog, tabs Skills / Memory, `ProjectSkills.tsx`, `MemorySettings`
+  with `project`). Decided with the user (2026-11): on this computer, not in a repository; per Gerdr project, because
+  a project spans several repositories and that layer was missing (repositories have .claude/skills and CLAUDE.md,
+  the agents' memories are per directory). Kept in the project's directory so they go to the trash with it.
+  - Skills ride the panel-skill path: `cmd/gerdr` `sessionSkills` adds the project's folder to `hub.Options.SkillDirs`
+    → `_meta skillRoots`. The session's own roots now go **first** everywhere (claude `ClaudeAddDir` links them before
+    gerdr's pool, codex `extraRoots` lists them first, native `skillsFor` puts them first), so a project's or panel's
+    skill wins over a same-named gerdr one. Native now gets skill roots too. `ext.RootsFingerprint` (the skill names
+    in the roots) is part of claude / codex's session fingerprint: a skill added or removed restarts claude's process
+    / re-attaches codex's thread before the next turn; an edit doesn't need to (links / files read live).
+  - Memory is the same format as Claude Code's auto memory (one .md per fact, MEMORY.md index). The index goes into
+    the system prompt through `AppendPrompt` (claude `--append-system-prompt`, codex developerInstructions, native
+    every model call), with where it lives and what belongs there; entries are read on demand. Read when the agent
+    starts: an index change doesn't restart a running session (a cold prompt cache for little). Native asks
+    approval for writes there (its approval-free memory writes only cover its own memory dirs).
+  - Settings → Memory lists every project's memory (agent `project`, `memstore.ListProjects`, names from the
+    layout's `spaces`), even empty ones, so there's a place to start. `memstore.Allowed` takes only
+    `projects/<id>/memory/**`: the project directory also holds panels and the layout.
+  - Verified end to end (2026-11-09, dev instance): claude and codex sessions in the project named the project skill
+    and quoted the memory index; native not run live (no LLM configured there).
 - **新会话默认**：config.json `defaultModes[agent]` / `defaultConfig[agent][配置项 id]`（内置的和角色一样按 id；Gerdr Agent 的默认模型就是
   `llm.defaultModel`，不另存）。**在后端套**（`hub.Create`，`Options.Defaults` 每次现取）：界面和 `gerdr session new` 开出来的一样。
   三家在 session/new 里能接的配置项不一样（claude 接 model / effort，codex、native 只接 model），所以新建之后对着 agent 报回来的当前值

@@ -283,7 +283,7 @@ export function SkillSettings({ open }: { open: boolean }) {
   );
 }
 
-function SkillEditor({
+export function SkillEditor({
   edit,
   onCancel,
   onSave,

@@ -467,9 +467,9 @@ func (h *Hub) startHost(ctx context.Context, agent string) (*agenthost.Host, err
 	em := h.opt.Ext.Scoped(def.only())
 	switch base {
 	case "claude":
-		return agenthost.StartInProc(sctx, claude.New(log, claude.Options{IdleTimeout: h.opt.ClaudeIdle, Ext: agentwire.ClaudeExt(em), Bin: def.Bin, Args: def.Args, Env: def.envList(), Prompt: def.Prompt}), handler, log)
+		return agenthost.StartInProc(sctx, claude.New(log, claude.Options{IdleTimeout: h.opt.ClaudeIdle, Ext: agentwire.ClaudeExt(em), Bin: def.Bin, Args: def.Args, Env: def.envList(), Prompt: def.Prompt, AppendPrompt: agentwire.ProjectPrompt(em)}), handler, log)
 	case "codex":
-		return agenthost.StartInProc(sctx, codex.NewWith(log, agentwire.CodexExt(em), codex.Options{Bin: def.Bin, Args: def.Args, Env: def.envList(), Prompt: def.Prompt}), handler, log)
+		return agenthost.StartInProc(sctx, codex.NewWith(log, agentwire.CodexExt(em), codex.Options{Bin: def.Bin, Args: def.Args, Env: def.envList(), Prompt: def.Prompt, AppendPrompt: agentwire.ProjectPrompt(em)}), handler, log)
 	case "native":
 		// 基于 Gerdr Agent 的角色和原版共用会话目录（id 是 uuid，撞不了）和记忆：记忆是人的偏好、项目的约定，不分角色
 		return agenthost.StartInProc(sctx, native.New(log, agentwire.NativeOptions(filepath.Join(h.opt.Dir, "native"), em, func() native.Config { return h.llm().Only(def.Providers) }, def.Prompt)), handler, log)

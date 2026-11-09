@@ -297,7 +297,7 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 		p := c.Projects[project]
 		return ext.Only{Skills: p.Skills, MCP: p.MCP}
 	})
-	h, err := hub.New(hub.Options{Dir: env.Dir, ClaudeIdle: env.ClaudeIdle, ExtraAgents: cfgAgents(), LLM: cfgLLM, Defaults: cfgDefaults, Log: log, Ext: em, SkillDirs: workSkills(env.Dir), MCP: workMCP(env.Dir), Project: sessionProject(env.Dir, layout)})
+	h, err := hub.New(hub.Options{Dir: env.Dir, ClaudeIdle: env.ClaudeIdle, ExtraAgents: cfgAgents(), LLM: cfgLLM, Defaults: cfgDefaults, Log: log, Ext: em, SkillDirs: sessionSkills(env.Dir, layout, em), MCP: workMCP(env.Dir), Project: sessionProject(env.Dir, layout)})
 	if err != nil {
 		return err
 	}
@@ -662,6 +662,19 @@ func workSkills(dir string) func(hub.Record) []string {
 			return []string{work.SkillsRoot(d)} // skills/ with this person's edits over it (user/skills)
 		}
 		return nil
+	}
+}
+
+// sessionSkills: a session's own skill folders, its panel's (workSkills) and its project's (ext.ProjectSkillsDir).
+// The panel's come first: claude links the first of two same-named skills.
+func sessionSkills(dir string, layout *config.Store, em *ext.Manager) func(hub.Record) []string {
+	work, project := workSkills(dir), sessionProject(dir, layout)
+	return func(rec hub.Record) []string {
+		out := work(rec)
+		if d, err := em.ProjectSkillsDir(project(rec)); err == nil {
+			out = append(out, d)
+		}
+		return out
 	}
 }
 

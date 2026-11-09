@@ -142,7 +142,17 @@ export const zh = {
   "agentSettings.noteClaudeSkill": "仓库里自带的 Skill 不受这里影响，照常给。插件里的 Skill 关不了单个，一个都没勾的插件整个关掉（连它的 MCP、Hook）。",
   "agentSettings.noteCodexSkill": "Codex 自带的系统 Skill 不受影响。",
   // ProjectExtDialog
-  "projectExt.title": "「{name}」的 Skill 和 MCP",
+  "projectExt.title": "项目「{name}」",
+  "projectExt.intro": "只给这个项目里的会话用，不管用的是哪个 Agent。都存在这台电脑上，不进仓库。",
+  "projectExt.tabSkills": "Skill",
+  "projectExt.tabMemory": "记忆",
+  "projectExt.tabOff": "关掉的 Skill / MCP",
+  "projectSkills.intro":
+    "这个项目自己的 Skill：只有这个项目的会话能用，和 Gerdr 的 Skill 同名时用这里的。新加或删掉的，正在跑的会话下一轮生效；改内容立即生效。",
+  "projectSkills.empty": "还没有。把这个项目的做事方法（怎么发布、去哪查日志）写成 Skill，Agent 遇到相关的事会自己去读。",
+  "projectSkills.loadFailed": "读取项目 Skill 失败：{error}",
+  "projectSkills.deleteTitle": "删除 Skill「{name}」？",
+  "projectSkills.deleteDescription": "整个目录（包括里面的脚本和参考文件）都会删掉。",
   "projectExt.desc": "取消勾选的，这个项目里的会话就不给，不管用的是哪个 Agent；其余照常。改了之后，每个会话下一轮开始前生效。",
   "projectExt.offCount": "关掉 {n} 个",
   "projectExt.addPlaceholder": "列表里没有的，输入名字添加即可关闭",
@@ -244,6 +254,11 @@ export const zh = {
 
   // MemorySettings
   "memorySettings.all": "全部",
+  "memorySettings.projects": "项目",
+  "memorySettings.projectLabel": "项目「{name}」",
+  "memorySettings.projectIntro":
+    "这个项目里所有会话共用的记忆，不管用的是哪个 Agent、在哪个仓库：每个会话开始时会拿到下面的索引，需要时再读具体的条目。Agent 会把跨仓库都成立的事（团队的做法、东西在哪、定过的事）记到这里，你也可以自己写。",
+  "memorySettings.projectEmpty": "还没有。Agent 遇到整个项目都适用的事会记到这里，也可以手动新建。",
   "memorySettings.type.user": "偏好",
   "memorySettings.type.feedback": "纠正",
   "memorySettings.type.project": "项目",
@@ -420,7 +435,17 @@ export const en: Record<keyof typeof zh, string> = {
   "agentSettings.noteClaudeSkill":
     "Skills that come with a repository aren't affected by this and are given as usual. Plugin skills can't be turned off one by one: a plugin with none checked is turned off whole (its MCP and hooks too).",
   "agentSettings.noteCodexSkill": "Codex's own system skills aren't affected.",
-  "projectExt.title": "Skills & MCP of “{name}”",
+  "projectExt.title": "Project “{name}”",
+  "projectExt.intro": "Given only to this project's sessions, whatever agent runs them. Kept on this computer, not in any repository.",
+  "projectExt.tabSkills": "Skills",
+  "projectExt.tabMemory": "Memory",
+  "projectExt.tabOff": "Switched-off skills / MCP",
+  "projectSkills.intro":
+    "This project's own skills: only its sessions get them, and they win over a Gerdr skill of the same name. A skill added or removed reaches running sessions before their next turn; an edit applies at once.",
+  "projectSkills.empty": "None yet. Write how this project works (how it deploys, where its logs are) as a skill; agents read it when it's relevant.",
+  "projectSkills.loadFailed": "Couldn't load the project's skills: {error}",
+  "projectSkills.deleteTitle": "Delete skill “{name}”?",
+  "projectSkills.deleteDescription": "The whole folder goes, scripts and reference files included.",
   "projectExt.desc":
     "Unchecked ones aren't given to sessions in this project, whichever agent runs them; the rest are as usual. A change applies before each session's next turn.",
   "projectExt.offCount": "{n} off",
@@ -523,6 +548,11 @@ export const en: Record<keyof typeof zh, string> = {
   "extSettings.env": "Environment, one per line (KEY=VALUE)",
 
   "memorySettings.all": "All",
+  "memorySettings.projects": "Projects",
+  "memorySettings.projectLabel": "Project “{name}”",
+  "memorySettings.projectIntro":
+    "Memory shared by every session of this project, whatever agent and repository: each session starts with the index below and reads entries as it needs them. Agents save here what holds across the project's repositories (how the team works, where things are, decisions made); you can write entries too.",
+  "memorySettings.projectEmpty": "Nothing yet. Agents save what holds for the whole project here; you can also add an entry by hand.",
   "memorySettings.type.user": "Preference",
   "memorySettings.type.feedback": "Correction",
   "memorySettings.type.project": "Project",

@@ -7,7 +7,7 @@ import (
 	"github.com/gerdr-dev/gerdr/internal/memstore"
 )
 
-// 设置 →「记忆」：三家 agent 的长期记忆（Gerdr Agent、Claude Code、Codex），看、改、删。
+// 设置 →「记忆」：三家 agent 的长期记忆（Gerdr Agent、Claude Code、Codex）and each Gerdr project's shared memory，看、改、删。
 // 只认它们记忆目录里的 .md（memstore.Allowed）。
 func (s *Server) memoryRoutes(mux *http.ServeMux) {
 	roots := func() memstore.Roots { return memstore.DefaultRoots(s.Dir) }
@@ -16,7 +16,10 @@ func (s *Server) memoryRoutes(mux *http.ServeMux) {
 		for _, x := range s.Hub.List() {
 			cwds = append(cwds, x.Cwd)
 		}
-		writeJSON(w, map[string]any{"stores": memstore.List(roots(), cwds, native.ProjectMemorySlug)})
+		// The Gerdr projects' shared memories first: they're the ones a person keeps up by hand
+		stores := memstore.ListProjects(roots(), SpaceNames(s.Layout.Get()))
+		stores = append(stores, memstore.List(roots(), cwds, native.ProjectMemorySlug)...)
+		writeJSON(w, map[string]any{"stores": stores})
 	})
 	mux.HandleFunc("GET /api/memory/file", func(w http.ResponseWriter, r *http.Request) {
 		c, err := memstore.Read(roots(), r.URL.Query().Get("path"))

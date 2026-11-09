@@ -2,7 +2,20 @@ import type { AppUpdateStatus } from "./native";
 import { localizeAddon } from "./i18n";
 import type { LLMModel, LLMProvider } from "./store";
 import type { AvailableCommand, ConfigOption, SessionMode } from "@gerdr/chat/types";
-import type { ContentBlock, ExtSettings, ExtView, Hello, HostInfo, HubEvent, MemoryStore, AddonBuild, AddonStore, SessionSummary, TermInfo } from "./types";
+import type {
+  ContentBlock,
+  ExtSettings,
+  ExtSkill,
+  ExtView,
+  Hello,
+  HostInfo,
+  HubEvent,
+  MemoryStore,
+  AddonBuild,
+  AddonStore,
+  SessionSummary,
+  TermInfo,
+} from "./types";
 
 /** 正开着某个会话的别的进程（herdr / 终端里的交互式 claude） */
 export type Holder = { pid: number; name?: string; status?: string; cwd?: string };
@@ -333,6 +346,14 @@ export const api = {
   writeSkill: (name: string, content: string) => req<ExtView>("PUT", `/api/ext/skills/${encodeURIComponent(name)}`, { content }),
   deleteSkill: (name: string) => req<ExtView>("DELETE", `/api/ext/skills/${encodeURIComponent(name)}`),
   importSkill: (dir: string) => req<ExtView>("POST", "/api/ext/skills/import", { dir }),
+  // A Gerdr project's own skills (<GERDR_DIR>/projects/<id>/skills): only that project's sessions get them
+  projectSkills: (project: string) => req<{ skills: ExtSkill[] }>("GET", `/api/projects/${encodeURIComponent(project)}/skills`),
+  readProjectSkill: (project: string, name: string) =>
+    req<{ content: string }>("GET", `/api/projects/${encodeURIComponent(project)}/skills/${encodeURIComponent(name)}`),
+  writeProjectSkill: (project: string, name: string, content: string) =>
+    req<{ skills: ExtSkill[] }>("PUT", `/api/projects/${encodeURIComponent(project)}/skills/${encodeURIComponent(name)}`, { content }),
+  deleteProjectSkill: (project: string, name: string) =>
+    req<{ skills: ExtSkill[] }>("DELETE", `/api/projects/${encodeURIComponent(project)}/skills/${encodeURIComponent(name)}`),
   // MCP OAuth (Settings → MCP): sign-in state of every remote server; refresh = probe them all now
   mcpAuth: (refresh?: boolean) => req<MCPAuth[]>("GET", `/api/mcp/auth${refresh ? "?refresh=1" : ""}`),
   mcpAuthStart: (name: string, url: string) => req<{ url: string }>("POST", `/api/mcp/auth/${encodeURIComponent(name)}/start`, { url }),

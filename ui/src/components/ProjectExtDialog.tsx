@@ -5,13 +5,19 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { candidates, type Cand } from "./AgentSettings";
+import { MemorySettings } from "./MemorySettings";
+import { ProjectSkills } from "./ProjectSkills";
 import { api } from "@/lib/api";
 import { t } from "@/lib/i18n";
 import { get, set, setConfig, useStore, type ProjectConf } from "@/lib/store";
 import type { ExtView } from "@/lib/types";
 
 /**
+ * A project's own skills and memory, and what it switches off. Skills and memory (<GERDR_DIR>/projects/<id>/…) save on
+ * their own, like Settings → Skills / Memory; the switched-off lists save with the footer's button.
+ *
  * What a project switches off (config.json projects.<id>.disabledSkills / disabledMcp): those names aren't given to its
  * sessions, whatever agent runs them; the rest is as usual. One agent then works the way each project needs, instead
  * of one role per project offered in every project. Applied by the backend before each session's next turn
@@ -23,13 +29,15 @@ export function ProjectExtDialog() {
   const [skillsOff, setSkillsOff] = useState<string[]>([]);
   const [mcpOff, setMcpOff] = useState<string[]>([]);
   const [view, setView] = useState<ExtView | null>(null);
+  const [tab, setTab] = useState("skills");
   const version = useStore((s) => s.extVersion);
   useEffect(() => {
     if (!ask) return;
     const cur = get().config.projects?.[ask.project];
     setSkillsOff(cur?.disabledSkills ?? []);
     setMcpOff(cur?.disabledMcp ?? []);
-  }, [ask?.project]);
+    setTab(ask.tab ?? "skills");
+  }, [ask?.project, ask?.tab]);
   useEffect(() => {
     if (!ask) return;
     api
@@ -50,25 +58,41 @@ export function ProjectExtDialog() {
   return (
     <Dialog open={!!ask} onOpenChange={(o) => !o && set({ dialog: null })}>
       {/* Taller than a phone's screen with both lists: scroll inside instead of losing the title and buttons */}
-      <DialogContent className="max-h-[calc(100%-2rem)] overflow-y-auto sm:max-w-2xl">
+      <DialogContent className="max-h-[calc(100%-2rem)] overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>{t("projectExt.title", { name: ask?.name ?? "" })}</DialogTitle>
-          <DialogDescription>{t("projectExt.desc")}</DialogDescription>
+          <DialogDescription>{t("projectExt.intro")}</DialogDescription>
         </DialogHeader>
-        {!c ? (
-          <div className="text-[12px] text-muted-foreground">{t("agentSettings.extLoading")}</div>
-        ) : (
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            <OffList label="Skill" items={c.skills} off={skillsOff} onChange={setSkillsOff} note={t("projectExt.noteSkill")} />
-            <OffList label="MCP" items={c.mcp} off={mcpOff} onChange={setMcpOff} note={t("projectExt.noteMcp")} />
-          </div>
-        )}
-        <DialogFooter>
-          <Button variant="outline" onClick={() => set({ dialog: null })}>
-            {t("common.cancel")}
-          </Button>
-          <Button onClick={save}>{t("common.save")}</Button>
-        </DialogFooter>
+        <Tabs value={tab} onValueChange={setTab} className="min-w-0">
+          <TabsList>
+            <TabsTrigger value="skills">{t("projectExt.tabSkills")}</TabsTrigger>
+            <TabsTrigger value="memory">{t("projectExt.tabMemory")}</TabsTrigger>
+            <TabsTrigger value="off">{t("projectExt.tabOff")}</TabsTrigger>
+          </TabsList>
+          <TabsContent value="skills" className="pt-2">
+            {ask && <ProjectSkills project={ask.project} open={tab === "skills"} />}
+          </TabsContent>
+          <TabsContent value="memory" className="pt-2">
+            {ask && <MemorySettings project={ask.project} open={tab === "memory"} />}
+          </TabsContent>
+          <TabsContent value="off" className="space-y-3 pt-2">
+            <div className="text-[12px] text-muted-foreground">{t("projectExt.desc")}</div>
+            {!c ? (
+              <div className="text-[12px] text-muted-foreground">{t("agentSettings.extLoading")}</div>
+            ) : (
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <OffList label="Skill" items={c.skills} off={skillsOff} onChange={setSkillsOff} note={t("projectExt.noteSkill")} />
+                <OffList label="MCP" items={c.mcp} off={mcpOff} onChange={setMcpOff} note={t("projectExt.noteMcp")} />
+              </div>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => set({ dialog: null })}>
+                {t("common.cancel")}
+              </Button>
+              <Button onClick={save}>{t("common.save")}</Button>
+            </DialogFooter>
+          </TabsContent>
+        </Tabs>
       </DialogContent>
     </Dialog>
   );

@@ -214,8 +214,10 @@ export type TermInfo = { id: string; cwd: string; shell: string; pid: number; ex
 export type MemoryEntry = { file: string; path: string; name?: string; description?: string; type?: string; size: number; modTime: number };
 export type MemoryStore = {
   id: string;
-  agent: "native" | "claude" | "codex";
+  // project: a Gerdr project's shared memory (<GERDR_DIR>/projects/<id>/memory), given to all its sessions
+  agent: "native" | "claude" | "codex" | "project";
   scope: "global" | "project";
+  project?: string;
   label: string;
   dir: string;
   index: boolean;

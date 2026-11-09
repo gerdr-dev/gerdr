@@ -68,6 +68,47 @@ func (s *Server) extRoutes(mux *http.ServeMux) {
 		}
 		writeJSON(w, s.extView())
 	})
+	// A Gerdr project's own skills (<GERDR_DIR>/projects/<id>/skills, ext.ProjectSkillsDir): the project dialog's
+	// Skills tab. Only sessions of that project get them.
+	projectSkills := func(w http.ResponseWriter, project string) {
+		if !ext.ValidProject(project) {
+			httpError(w, 400, i18n.S("项目名不合法", "Invalid project"))
+			return
+		}
+		writeJSON(w, map[string]any{"skills": nz(s.Ext.ProjectSkills(project))})
+	}
+	mux.HandleFunc("GET /api/projects/{project}/skills", func(w http.ResponseWriter, r *http.Request) {
+		projectSkills(w, r.PathValue("project"))
+	})
+	mux.HandleFunc("GET /api/projects/{project}/skills/{name}", func(w http.ResponseWriter, r *http.Request) {
+		c, err := s.Ext.ReadProjectSkill(r.PathValue("project"), r.PathValue("name"))
+		if err != nil {
+			httpError(w, 404, err.Error())
+			return
+		}
+		writeJSON(w, map[string]string{"content": c})
+	})
+	mux.HandleFunc("PUT /api/projects/{project}/skills/{name}", func(w http.ResponseWriter, r *http.Request) {
+		var b struct {
+			Content string `json:"content"`
+		}
+		if err := decode(r, &b); err != nil {
+			httpError(w, 400, err.Error())
+			return
+		}
+		if err := s.Ext.WriteProjectSkill(r.PathValue("project"), r.PathValue("name"), b.Content); err != nil {
+			httpError(w, 400, err.Error())
+			return
+		}
+		projectSkills(w, r.PathValue("project"))
+	})
+	mux.HandleFunc("DELETE /api/projects/{project}/skills/{name}", func(w http.ResponseWriter, r *http.Request) {
+		if err := s.Ext.DeleteProjectSkill(r.PathValue("project"), r.PathValue("name")); err != nil {
+			httpError(w, 400, err.Error())
+			return
+		}
+		projectSkills(w, r.PathValue("project"))
+	})
 	// 导入：只认 agent 那边列得出来的目录（按 dir 精确匹配），不接受任意路径。
 	mux.HandleFunc("POST /api/ext/skills/import", func(w http.ResponseWriter, r *http.Request) {
 		var b struct {
