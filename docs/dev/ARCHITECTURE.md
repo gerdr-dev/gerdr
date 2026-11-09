@@ -772,6 +772,17 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
 - 子 agent：claude 的子 agent 工具调用带 `parent_tool_use_id`；它的话打上 `_meta.gerdr.subagent` 推出来（主对话不显示，只读面板显示）。
   前台子 agent 最后那句话只在 Agent 工具的结果里，而且被 CLI 包了一层「[Subagent hand-back] … The report follows:」+ agentId + usage，要剥掉（`subReport`）。
   codex 的子 agent 是另一个 thread：主 thread 上有 `subAgentActivity` item，子 thread 的通知照样推到同一条连接上，适配器把它挂到主会话下。
+- **A codex sub-agent the main agent didn't `wait` for finishes silently** (0.166, measured): the main thread gets a
+  `subAgentActivity completed` item and no turn, so an agent that ended its turn never hears back. Codex's
+  `wake_on_agent_messages` (under development) makes it start a turn on the main thread then. The adapter turns it on
+  per thread (`features.wake_on_agent_messages` in thread/start | resume config) only when `experimentalFeature/list`
+  has it and `multi_agent` is on; `experimentalFeature/enablement/set` answers `{}` and ignores it, and a process-wide
+  `-c` would also change threads that aren't ours. That turn has no session/prompt: the adapter keeps its id (so
+  steering and cancel reach it) and reports it as `autoTurn`, woken by the sub-agent (`agents/codex/wake.go`). The
+  agent is told in developerInstructions only then; the gerdr skill sends it to `--report-to self` otherwise.
+- A sub-agent waiting on a long command polls: the model picks `yield_time_ms` 30000, so each 30 s is a model call
+  re-reading its context (5 minutes measured ~280k input tokens, 94% cached). Asked to, it waits inside one code-mode
+  cell with a JavaScript loop and `yield_time_ms` 300000; the wake hint and the skill say so.
 
 ## 从 herdr 导入（internal/herdrimport + server/importapi.go）
 

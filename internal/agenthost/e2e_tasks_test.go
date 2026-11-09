@@ -15,6 +15,7 @@ import (
 
 // TestE2ETasks：子 agent 的话带 subagent 标记推出来（不混进主对话）、任务列表里有它；
 // claude 还测后台命令：任务列表里有、跑完之后 CLI 自己开一轮（autoTurn true → false）。
+// codex: a sub-agent it didn't wait for wakes it the same way (agents/codex/wake.go).
 func TestE2ETasks(t *testing.T) {
 	which := os.Getenv("GERDR_E2E")
 	if which == "" {
@@ -62,7 +63,18 @@ func TestE2ETasks(t *testing.T) {
 		// codex 主 agent 可能自己复述，不算错；只记一笔。
 		t.Logf("main text mentions SUBMARK")
 	}
-	if which != "claude" {
+	if which == "codex" {
+		// A sub-agent it didn't wait for wakes it when it finishes (wake_on_agent_messages, agents/codex/wake.go):
+		// codex starts a turn by itself, which the adapter reports as autoTurn true → false.
+		prompt = "Spawn one sub-agent whose task is: run `sleep 20 && echo WAKEMARK` and reply with exactly the output. " +
+			"Do NOT wait for it and do not call wait: reply STARTED right after spawning and end your turn. " +
+			"When it finishes, tell me what it said."
+		if _, err := h.Conn.Prompt(ctx, acp.PromptRequest{SessionId: ns.SessionId, MessageId: acp.Ptr(uuid.NewString()), Prompt: []acp.ContentBlock{acp.TextBlock(prompt)}}); err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("second turn: %q", r.reset())
+	}
+	if which != "claude" && which != "codex" {
 		return
 	}
 	// 后台命令：等它跑完、CLI 自己开的那一轮结束。
@@ -81,6 +93,12 @@ func TestE2ETasks(t *testing.T) {
 	defer r.mu.Unlock()
 	if len(r.autos) < 2 || !r.autos[0] || r.autos[len(r.autos)-1] {
 		t.Fatalf("auto turn not seen: %v", r.autos)
+	}
+	if which == "codex" {
+		if got := r.text.String(); !strings.Contains(got, "WAKEMARK") {
+			t.Errorf("auto turn text missing WAKEMARK: %q", got)
+		}
+		return
 	}
 	var bash bool
 	for _, x := range r.tasks {

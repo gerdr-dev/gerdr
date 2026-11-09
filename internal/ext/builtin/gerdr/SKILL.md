@@ -63,8 +63,8 @@ Pick by what the work needs:
   needs another agent or role (`--agent codex`, a reviewer role), another permission mode, or another computer
   (`--host`); or that runs long (a build, a render, an MR) while you keep talking with the user. It is a real
   conversation: it survives your turn and can be resumed.
-- With a session, `--wait` for something short you need before you can go on; `--report-to self` for anything long
-  or several at once (you get a message each time one stops). Don't do both.
+- With a session, `--wait` for something short you need before you can go on. For anything long or several at once,
+  don't block: wait for it in the background, or have it report back ("Hand it off without waiting" below).
 
 When unsure and the user didn't say: a sub-agent for research inside your task, a session for work that deserves its
 own tab.
@@ -130,24 +130,45 @@ gerdr session new --host mini --cwd '~/work/promo' --title cover \
 - Only start one on another computer when the user asked for it, or the task needs that machine (its GPU, its files,
   its accounts).
 
-### Hand it off without waiting: reports
+### Hand it off without waiting
 
-To run several tasks at once, or a long one, don't block yourself on `--wait`: use `--report-to self` and go back to the
-user. Each time the session stops (turn done, waiting for a person to approve / answer, failed) you get a "Gerdr report"
-message with its reply and id (not when a turn the user drove by typing in that session's chat simply ends: they've
-seen it). While you're busy, reports are held and arrive together when your turn ends. With `--report-to`, don't also
-`--wait` (you'd get the result twice).
+To run a long task, or several at once, don't block yourself (and the user) on `--wait`. Start it without `--wait`,
+go back to the user, and get told when it stops (turn done, waiting for a person to approve / answer, failed). Two
+ways, by what you can do:
 
-A session you started that stops on a **question** is asking you, not the user: decide. Answer what you can with
-`gerdr session send <id> "…"` (a message while it's asking is its answer); what's the user's call, put to them with your
-recommendation (if the panel you work for gives you a tool for asking the user, use it), then send it their answer. An **approval** (a command / edit to allow) is
-the user's alone: tell them, don't work around it.
+**Wait in the background** if you can run a command in the background and be woken when it ends:
+
+- Claude Code, Gerdr Agent: your shell's `run_in_background`;
+- Codex, when your instructions say sub-agents you don't wait for wake you: a sub-agent whose only task is to run the
+  command and reply with its output (waiting inside one exec cell, `yield_time_ms` 300000, not a model call every
+  30 seconds). Don't `wait` for that sub-agent.
+
+```bash
+gerdr session new --cwd ~/code/api --title "fix login" --tag task=t12 --prompt "Fix the login redirect bug ..."
+gerdr session wait "fix login" --timeout 60m     # this one in the background, then end your turn
+```
+
+Same after `gerdr session send <id> "…"` to a session that already exists. The wait is yours: it shows among your
+background tasks, and when it returns you're woken with its output. Look at `session.status` (`waiting`: stuck on a
+person) and `timed_out` (still working: wait again, or `gerdr session read` it). Prefer this when you can: the wait is
+something you hold and can see, not a message that may never come. Don't also give it `--report-to`.
+
+**Otherwise, reports** (`--report-to self`): each time the session stops you get a "Gerdr report" message with its
+reply and id (not when a turn the user drove by typing in that session's chat simply ends: they've seen it). While
+you're busy, reports are held and arrive together when your turn ends; a report not delivered yet is lost if Gerdr
+restarts, so check with `gerdr session list` if one seems overdue. With `--report-to`, don't also `--wait` (you'd get
+the result twice).
 
 ```bash
 gerdr session new --cwd ~/code/api --title "fix login" --tag task=t12 --report-to self \
   --prompt "Fix the login redirect bug described in ...; open an MR when done."
 gerdr session report-to "fix login" none   # stop its reports
 ```
+
+A session you started that stops on a **question** is asking you, not the user: decide. Answer what you can with
+`gerdr session send <id> "…"` (a message while it's asking is its answer); what's the user's call, put to them with your
+recommendation (if the panel you work for gives you a tool for asking the user, use it), then send it their answer. An **approval** (a command / edit to allow) is
+the user's alone: tell them, don't work around it.
 
 ### Tags: finding the session again
 
@@ -364,7 +385,7 @@ kind you need, nothing polls it yet (a panel's schedule or an add-on has to).
 
 ## 并行
 
-要几个 agent 同时干，就开几个会话、都不带 `--wait`，然后挨个 `wait`。别开超过用户要的数量，
+要几个 agent 同时干，就开几个会话、都不带 `--wait`，然后按上面「Hand it off without waiting」等它们（能在后台等就每个一个后台 `wait`，否则 `--report-to self`）。别开超过用户要的数量，
 每个会话都是一个真的 agent 进程，会花钱、占内存。
 
 ## 规矩

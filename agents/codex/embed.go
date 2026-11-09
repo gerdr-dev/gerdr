@@ -60,6 +60,9 @@ func (a *Agent) threadConfig(ctx context.Context, rpc *rpcline.Conn, sid, cwd st
 			a.log.Warn("codex has no legacy SSE MCP transport; skipping", "server", x.Sse.Name)
 		}
 	}
+	if a.wake.Load() {
+		set("features."+wakeFeature, true)
+	}
 	if a.opts.StrictMCP {
 		for _, name := range ownMCPNames() {
 			if !mine[name] {

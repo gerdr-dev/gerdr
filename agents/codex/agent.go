@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gerdr-dev/gerdr/internal/i18n"
@@ -86,6 +87,8 @@ type Agent struct {
 	// whole app-server's setting) to thread/start | thread/resume. Two at once (different projects or panels)
 	// could otherwise start one with the other's skill folders.
 	attachMu sync.Mutex
+	// wake: this codex can wake the main agent when a sub-agent finishes, turned on for our threads (wake.go)
+	wake atomic.Bool
 }
 
 // Options：「另一个 codex」（设置里配的变体）用的。Bin 换可执行文件，Args 追加在 app-server 后面，
@@ -149,8 +152,12 @@ type session struct {
 	meta     map[string]any  // session/new's _meta (Options.AppendPrompt / SessionEnv)
 	mcp      []acp.McpServer // session/new's mcpServers
 
-	tasks  map[string]*acpx.Task // 子 agent（subagents.go），key 是子 thread id
-	tok    acpx.TokenMeter       // 这一轮输出了多少 token（状态行）；按请求分，req 是当前这次请求的编号
+	tasks map[string]*acpx.Task // 子 agent（subagents.go），key 是子 thread id
+	// auto: the running turn is one codex started by itself (a sub-agent woke it, wake.go), not a session/prompt.
+	// woke: the sub-agent that finished last, told to the hub when the turn it wakes starts.
+	auto   bool
+	woke   *acpx.Wake
+	tok    acpx.TokenMeter // 这一轮输出了多少 token（状态行）；按请求分，req 是当前这次请求的编号
 	req    int
 	sub    *subInfo // 非空 = 这是某个子 agent 的伪会话，update 改挂到主会话下（subagents.go）
 	items  map[string]*itemState
@@ -190,6 +197,9 @@ func (a *Agent) instructions(sid, cwd string, meta map[string]any) string {
 	}
 	if p := strings.TrimSpace(a.opts.Prompt); p != "" {
 		parts = append(parts, p)
+	}
+	if a.wake.Load() {
+		parts = append(parts, wakeHint)
 	}
 	if f := a.opts.AppendPrompt; f != nil {
 		if p := strings.TrimSpace(f(sid, cwd, meta)); p != "" {
@@ -254,6 +264,7 @@ func (a *Agent) client(ctx context.Context) (*rpcline.Conn, error) {
 		return nil, fmt.Errorf("codex initialize: %w", err)
 	}
 	_ = rpc.Notify("initialized", nil)
+	a.wake.Store(a.detectWake(ctx, rpc))
 	a.rpc, a.cmd = rpc, cmd
 	// app-server 重启过的话，已知的会话要 resume 回来，不然下一轮发过去它不认识这个 thread。
 	for _, s := range a.sessions {
@@ -270,7 +281,14 @@ func (a *Agent) onExit() {
 	}
 	a.mu.Unlock()
 	for _, s := range ss {
+		s.mu.Lock()
+		auto := s.auto
+		s.auto = false
+		s.mu.Unlock()
 		s.finish(turnResult{status: "failed", err: &turnError{Message: i18n.S("codex app-server 进程退出了", "the codex app-server process exited")}})
+		if auto {
+			a.autoEnd(context.Background(), s)
+		}
 	}
 }
 

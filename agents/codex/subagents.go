@@ -63,6 +63,8 @@ func (a *Agent) subAgentActivity(ctx context.Context, s *session, raw json.RawMe
 		if t.Status == "running" {
 			t.Status = map[string]string{"completed": "completed", "interrupted": "killed"}[it.Kind]
 			t.EndedAt = time.Now().UnixMilli()
+			// What a turn codex starts right after this would be woken by (wake.go)
+			s.woke = &acpx.Wake{Task: it.AgentThreadID, Description: it.AgentPath, Status: t.Status}
 		}
 	}
 	status, summary := t.Status, ""

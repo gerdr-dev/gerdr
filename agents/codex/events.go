@@ -61,10 +61,21 @@ func (a *Agent) HandleNotification(method string, params json.RawMessage) {
 		_ = json.Unmarshal(params, &p)
 		s.tok.Reset()
 		s.mu.Lock()
+		var auto bool
+		var woke *acpx.Wake
 		if s.turnDone != nil {
 			s.turnID = p.Turn.ID
+			s.woke = nil // a finish before this turn isn't what wakes a later one
+		} else if s.turnID == "" {
+			// No session/prompt is waiting for it: codex started it (a sub-agent finished, wake.go). Keeping its id
+			// lets steering and cancel reach it like any turn.
+			s.turnID, s.auto, auto = p.Turn.ID, true, true
+			woke, s.woke = s.woke, nil
 		}
 		s.mu.Unlock()
+		if auto {
+			a.autoStart(ctx, s, woke)
+		}
 	case "turn/completed":
 		var p struct {
 			Turn turn `json:"turn"`
@@ -72,10 +83,17 @@ func (a *Agent) HandleNotification(method string, params json.RawMessage) {
 		_ = json.Unmarshal(params, &p)
 		s.mu.Lock()
 		mine := s.turnID == "" || s.turnID == p.Turn.ID
+		auto := mine && s.auto
+		if auto {
+			s.auto = false
+		}
 		s.items = map[string]*itemState{}
 		s.mu.Unlock()
 		if mine {
 			s.finish(turnResult{id: p.Turn.ID, status: p.Turn.Status, err: p.Turn.Error})
+		}
+		if auto {
+			a.autoEnd(ctx, s)
 		}
 	case "error":
 		var p struct {
