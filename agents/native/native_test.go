@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -981,5 +982,35 @@ func TestNotedResetsOnCompact(t *testing.T) {
 	}
 	if noted(append(es, entry{T: "compact"}, entry{T: "msg"})) {
 		t.Fatal("a compaction should start a new cycle")
+	}
+}
+
+// A command that leaves something running (`server &`) returns once it exits, not when what it started lets go of
+// the output; and commands get a plain-output environment.
+func TestBashLeftRunning(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("sh syntax")
+	}
+	old := childWait
+	childWait = 200 * time.Millisecond
+	t.Cleanup(func() { childWait = old })
+	e := setup(t, func(n int, msgs []any) reply {
+		if n == 0 {
+			return reply{calls: [][2]string{{"bash", `{"command":"sleep 3 & echo started $NO_COLOR $GIT_PAGER"}`}}}
+		}
+		return reply{text: "ok"}
+	})
+	sid := e.newSession(modeBypass)
+	start := time.Now()
+	if _, err := e.prompt(sid, uuid.NewString(), "go"); err != nil {
+		t.Fatal(err)
+	}
+	if d := time.Since(start); d > 2*time.Second {
+		t.Fatalf("waited %s for the process left running", d)
+	}
+	b, _ := json.Marshal(e.llm.request(1)["messages"])
+	s := string(b)
+	if !strings.Contains(s, "started 1 cat") || !strings.Contains(s, "still running") || strings.Contains(s, "exit code") {
+		t.Fatalf("tool result: %s", s)
 	}
 }

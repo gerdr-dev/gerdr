@@ -1,6 +1,7 @@
 package native
 
 import (
+	"cmp"
 	"encoding/base64"
 	"os"
 	"os/exec"
@@ -18,9 +19,9 @@ import (
 // shellCmd is the program and arguments that run command.
 func shellCmd(command string) (string, []string) {
 	sh := shell()
-	if sh == powershell {
+	if isPowerShell(sh) {
 		// -EncodedCommand so no quoting in the command can be mangled on the way in
-		return sh, []string{"-NoProfile", "-NonInteractive", "-EncodedCommand", encodePS(psUTF8 + command)}
+		return sh, []string{"-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", encodePS(psUTF8 + command)}
 	}
 	return sh, []string{"-c", command}
 }
@@ -35,14 +36,14 @@ func encodePS(command string) string {
 	return base64.StdEncoding.EncodeToString(b)
 }
 
-const powershell = "powershell.exe"
+// psUTF8 makes PowerShell write UTF-8 to our pipe (Console.OutputEncoding: a Chinese Windows console defaults to GBK,
+// which garbles non-ASCII paths and output) and to programs it pipes into ($OutputEncoding). Without a BOM, and on
+// the command's own first line so the line numbers in PowerShell's errors stay right. Windows PowerShell 5.1 needs
+// it; PowerShell 7 already writes UTF-8 to a pipe.
+const psUTF8 = "try { [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); $OutputEncoding = [Console]::OutputEncoding } catch {}; "
 
-// psUTF8 makes PowerShell write UTF-8 to the pipe (pi's UTF8_OUTPUT_PREFIX): a Chinese Windows console defaults to
-// GBK, which garbles non-ASCII paths and output.
-const psUTF8 = "try { [Console]::OutputEncoding=[System.Text.Encoding]::UTF8 } catch {}\n"
-
-// shell is the shell's path (powershell = PowerShell). Looked up on every call: Git installed while the app is
-// running is used from the next command on.
+// shell is the shell's path. Looked up on every call: Git or PowerShell 7 installed while the app is running is
+// used from the next command on.
 func shell() string {
 	if runtime.GOOS != "windows" {
 		if s := os.Getenv("SHELL"); s != "" {
@@ -57,22 +58,63 @@ func shell() string {
 	if b := gitBash(); b != "" {
 		return b
 	}
-	return powershell
+	return powerShell()
+}
+
+func isPowerShell(sh string) bool {
+	switch exeName(sh) {
+	case "pwsh.exe", "powershell.exe", "pwsh", "powershell":
+		return true
+	}
+	return false
+}
+
+// exeName is a program path's lower-case file name, split at \ and / alike.
+func exeName(p string) string { return strings.ToLower(p[strings.LastIndexAny(p, `\/`)+1:]) }
+
+// powerShell is PowerShell 7 when it is installed, else Windows PowerShell 5.1, which every Windows has. 7 runs
+// `a && b` (5.1 rejects the syntax, and models write it all the time) and writes UTF-8. Order as DeepSeek Harness's
+// resolvePwshPath: the default install, PATH (a Store install is there), then 5.1.
+func powerShell() string {
+	cands := []string{filepath.Join(cmp.Or(os.Getenv("ProgramFiles"), `C:\Program Files`), "PowerShell", "7", "pwsh.exe")}
+	for _, d := range filepath.SplitList(os.Getenv("PATH")) {
+		if d = strings.Trim(strings.TrimSpace(d), `"`); d != "" {
+			cands = append(cands, filepath.Join(d, "pwsh.exe"))
+		}
+	}
+	for _, c := range cands {
+		// Lstat: the Store's pwsh.exe is an app execution alias whose target Stat may not read (access denied).
+		// CreateProcess runs the alias fine.
+		if st, err := os.Lstat(c); err == nil && !st.IsDir() {
+			return c
+		}
+	}
+	if p := filepath.Join(cmp.Or(os.Getenv("SystemRoot"), `C:\Windows`), "System32", "WindowsPowerShell", "v1.0", "powershell.exe"); isFile(p) {
+		return p
+	}
+	return "powershell.exe"
 }
 
 // shellName is how the prompt names the shell.
 func shellName() string {
-	switch s := shell(); s {
-	case powershell:
-		return "Windows PowerShell (this computer has no bash: write PowerShell, not bash; Git for Windows would add bash)"
-	default:
-		return s
+	sh := shell()
+	if !isPowerShell(sh) {
+		return sh
 	}
+	name := "PowerShell 7"
+	if exeName(sh) == "powershell.exe" {
+		name = "Windows PowerShell 5.1 (no `&&` / `||`: use `a; if ($?) { b }`)"
+	}
+	return name + " (this computer has no bash: write PowerShell, not bash; Git for Windows would add bash)"
 }
 
 // gitBash is Git for Windows' bash.exe: next to the git on PATH, else in the default install places. Not
 // System32\bash.exe (that is WSL, a different machine with different paths).
 func gitBash() string {
+	// the variable Claude Code reads for a bash somewhere else
+	if b := os.Getenv("CLAUDE_CODE_GIT_BASH_PATH"); b != "" && isFile(b) {
+		return b
+	}
 	if g, err := exec.LookPath("git"); err == nil {
 		// <root>\cmd\git.exe or <root>\mingw64\bin\git.exe
 		d := filepath.Dir(g)
@@ -88,6 +130,11 @@ func gitBash() string {
 			continue
 		}
 		if b := filepath.Join(root, "Git", "bin", "bash.exe"); isFile(b) {
+			return b
+		}
+	}
+	if h := os.Getenv("USERPROFILE"); h != "" { // scoop install git
+		if b := filepath.Join(h, "scoop", "apps", "git", "current", "bin", "bash.exe"); isFile(b) {
 			return b
 		}
 	}

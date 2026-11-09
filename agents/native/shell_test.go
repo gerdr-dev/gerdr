@@ -57,3 +57,18 @@ func TestGoGrep(t *testing.T) {
 		t.Fatal("bad pattern should error")
 	}
 }
+
+func TestPowerShellPreamble(t *testing.T) {
+	for _, sh := range []string{`C:\Program Files\PowerShell\7\pwsh.exe`, `C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe`, "powershell.exe"} {
+		if !isPowerShell(sh) {
+			t.Fatalf("%s is PowerShell", sh)
+		}
+	}
+	if isPowerShell(`C:\Program Files\Git\bin\bash.exe`) {
+		t.Fatal("bash is not PowerShell")
+	}
+	// on the command's first line, so PowerShell's error line numbers match the model's command
+	if strings.Contains(psUTF8, "\n") {
+		t.Fatal("preamble spans lines")
+	}
+}

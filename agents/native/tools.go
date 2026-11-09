@@ -382,10 +382,15 @@ var bashTool = &tool{
 // proc 是一个跑着的命令。
 type proc struct {
 	cmd   *exec.Cmd
+	tree  *procTree
 	buf   *lockedBuf
 	done  chan error
 	start time.Time
 }
+
+// childWait: how long a command's exit waits for processes it left running to let go of its output. Without it
+// `npm run dev &` held the call until its timeout, which then killed the server it had started. A var for tests.
+var childWait = 2 * time.Second
 
 func startProc(c *call, command string) (*proc, error) {
 	name, argv := shellCmd(command)
@@ -395,8 +400,9 @@ func startProc(c *call, command string) (*proc, error) {
 	if f := c.r.s.a.opt.BashEnv; f != nil {
 		extra = f(c.r.s.currentID(), c.r.s.clientMetaMap())
 	}
-	cmd.Env = c.r.s.a.childEnv(extra...)
+	cmd.Env = c.r.s.a.childEnv(append(plainOutputEnv(), extra...)...)
 	cmd.Stdin = nil
+	cmd.WaitDelay = childWait
 	setProcGroup(cmd)
 	p := &proc{cmd: cmd, buf: &lockedBuf{}, done: make(chan error, 1), start: time.Now()}
 	cmd.Stdout = p.buf
@@ -404,24 +410,44 @@ func startProc(c *call, command string) (*proc, error) {
 	if err := cmd.Start(); err != nil {
 		return nil, err
 	}
-	go func() { p.done <- cmd.Wait() }()
+	tree, err := startedTree(cmd)
+	if err != nil {
+		_ = cmd.Wait()
+		return nil, err
+	}
+	p.tree = tree
+	go func() {
+		err := cmd.Wait()
+		tree.close()
+		p.done <- err
+	}()
 	return p, nil
+}
+
+// plainOutputEnv keeps colour codes and pagers out of what the model reads (the set Codex and DeepSeek Harness
+// use). Over the inherited environment (a PAGER=less there would hang git log); BashEnv's variables still win.
+func plainOutputEnv() []string {
+	env := []string{"NO_COLOR=1", "PAGER=cat", "GIT_PAGER=cat"}
+	if !isPowerShell(shell()) {
+		env = append(env, "TERM=dumb")
+	}
+	return env
 }
 
 // kill：整个进程组一起杀（sh -c 起的子进程 —— npm、go test 起的一串 —— 不跟着死的话会一直挂着），等它退出。
 func (p *proc) kill() error {
-	killProcGroup(p.cmd.Process, false)
+	p.tree.kill(false)
 	select {
 	case err := <-p.done:
 		return err
 	case <-time.After(2 * time.Second):
-		killProcGroup(p.cmd.Process, true)
+		p.tree.kill(true)
 		return <-p.done
 	}
 }
 
 func exitCode(err error) int {
-	if err == nil {
+	if err == nil || errors.Is(err, exec.ErrWaitDelay) { // exited 0, something it started still holds the output
 		return 0
 	}
 	var ee *exec.ExitError
@@ -430,6 +456,10 @@ func exitCode(err error) int {
 	}
 	return -1
 }
+
+// leftRunning: the command exited 0, but a process it started still had its output open after childWait. (After a
+// non-zero exit Wait reports only the exit code, so that case goes unmentioned.)
+func leftRunning(err error) bool { return errors.Is(err, exec.ErrWaitDelay) }
 
 // urgentGrace: how long a foreground command may still run after an urgent steer before it is moved to the
 // background. A var so tests can shorten it.
@@ -525,6 +555,9 @@ loop:
 		text += "\n[command " + killed + "]"
 	case code != 0:
 		text += fmt.Sprintf("\n[exit code %d]", code)
+	}
+	if killed == "" && leftRunning(werr) {
+		text += "\n[something the command started is still running; its output from here on is not captured. For servers and watchers use run_in_background]"
 	}
 	if d := time.Since(p.start); d > 10*time.Second {
 		text += fmt.Sprintf("\n[took %s]", d.Round(time.Second))
