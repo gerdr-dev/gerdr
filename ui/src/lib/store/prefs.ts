@@ -33,7 +33,7 @@ export function setFontSize(n: number) {
  * never picked one uses the shared config's value (where they all lived before, so old choices still apply), which is
  * also what `gerdr config set` changes.
  */
-export const DEVICE_KEYS = ["theme", "sendKey", "notifications", "keepTabs", "virtualList", "copyOnSelect"] as const;
+export const DEVICE_KEYS = ["theme", "sendKey", "notifications", "keepTabs", "virtualList", "readFromTop", "copyOnSelect"] as const;
 export type DeviceKey = (typeof DEVICE_KEYS)[number];
 export type DevicePrefs = Partial<Pick<Config, DeviceKey>>;
 

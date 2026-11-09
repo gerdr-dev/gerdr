@@ -43,6 +43,7 @@ var configKeys = map[string]configKey{
 	"confirmLinks":    {kind: "bool", desc: "ask before opening an external link from a chat (default on)"},
 	"copyOnSelect":    {kind: "bool", desc: "Labs: copy text as soon as it is selected (a device that picked its own in Settings keeps that; this is the value for the others)"},
 	"virtualList":     {kind: "bool", desc: "Labs: virtual scrolling for chats (a device that picked its own in Settings keeps that; this is the value for the others)"},
+	"readFromTop":     {kind: "bool", desc: "Labs: stop following the bottom at the start of a reply text taller than the screen (a device that picked its own in Settings keeps that; this is the value for the others)"},
 	"keepAwakeRemote": {kind: "bool", desc: "Labs: keep the computer awake (lid closed too) while a remote device is connected"},
 	"remoteScreen":    {kind: "bool", desc: "Remote access: see this computer's screen and click / type on it from another device (macOS)"},
 	"defaultAgent":    {kind: "string", desc: "agent id new sessions use (claude, codex, native, or an id from agents)"},

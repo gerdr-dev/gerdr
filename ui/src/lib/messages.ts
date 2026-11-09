@@ -74,6 +74,8 @@ const settingsZh = {
   "settings.labs.intro": "还在试的功能，默认关着。",
   "settings.labs.virtualList": "对话虚拟滚动",
   "settings.labs.virtualList.hint": "只渲染屏幕附近的消息，很长的对话更省内存；往上翻时带图的消息可能会跳动",
+  "settings.labs.readFromTop": "长段落停在开头",
+  "settings.labs.readFromTop.hint": "跟着输出往下滚时，一段文字长到超出屏幕，就停在这段的开头让你从头读，不再往下滚；后面的新输出点 ↓ 按钮去看",
   "settings.labs.copyOnSelect": "选中即复制",
   "settings.labs.copyOnSelect.hint": "和 Herdr 一样：拖着选中文字，松开鼠标就复制到剪贴板；双击选词也会复制。对话和终端里都管用，输入框里不复制",
   "settings.labs.prodReact": "生产版 React（更流畅）",
@@ -170,6 +172,9 @@ const settingsEn: Record<keyof typeof settingsZh, string> = {
   "settings.labs.intro": "Features still being tried, off by default.",
   "settings.labs.virtualList": "Virtual scrolling in chats",
   "settings.labs.virtualList.hint": "Only messages near the screen are drawn, so long chats use less memory; messages with images may jump as you scroll up",
+  "settings.labs.readFromTop": "Stop at the start of long text",
+  "settings.labs.readFromTop.hint":
+    "While the chat follows new output, a stretch of text that grows taller than the screen stops it at that text's start, so you read it from the top instead of chasing it; press ↓ for what comes after",
   "settings.labs.copyOnSelect": "Copy on select",
   "settings.labs.copyOnSelect.hint":
     "Like Herdr: drag to select text and it's copied when you let go; double-click selects a word and copies it too. Works in chats and terminals, not in the input box",

@@ -411,6 +411,9 @@ export function SettingsDialog({ open }: { open: boolean }) {
                 <Row label={t("settings.labs.virtualList")} hint={t("settings.labs.virtualList.hint")} local>
                   <Switch checked={!!dev.virtualList} onCheckedChange={(v) => setPref({ virtualList: v })} />
                 </Row>
+                <Row label={t("settings.labs.readFromTop")} hint={t("settings.labs.readFromTop.hint")} local>
+                  <Switch checked={!!dev.readFromTop} onCheckedChange={(v) => setPref({ readFromTop: v })} />
+                </Row>
                 <Row label={t("settings.labs.copyOnSelect")} hint={t("settings.labs.copyOnSelect.hint")} local>
                   <Switch checked={!!dev.copyOnSelect} onCheckedChange={(v) => setPref({ copyOnSelect: v })} />
                 </Row>

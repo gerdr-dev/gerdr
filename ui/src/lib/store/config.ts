@@ -41,6 +41,9 @@ export type Config = {
   confirmLinks?: boolean;
   /** 实验室：对话用虚拟滚动（只渲染屏幕附近的行）。默认关 —— 往上翻时行卸载再挂载，带图的行高度先 0 后撑开，界面一跳一跳（用户报的）。 */
   virtualList?: boolean;
+  /** Labs: following the bottom stops at the start of a reply text that grows taller than the screen, so it can be read
+   *  from its start (ChatList's readCap). Off by default. */
+  readFromTop?: boolean;
   /** 实验室：有远程设备连着时不让电脑睡（后端起 caffeinate），断开 15 分钟后放手；开着时合上盖子也不睡
    *  （pmset disablesleep，要授权一次，手动时段也算）。后端读这个字段（cmd/gerdr 的 applyAwake）。 */
   keepAwakeRemote?: boolean;
@@ -121,6 +124,7 @@ export const DEFAULT_CONFIG: Config = {
   expandEdits: true,
   showThinking: true,
   virtualList: false,
+  readFromTop: false,
   keepAwakeRemote: false,
   copyOnSelect: false,
 };

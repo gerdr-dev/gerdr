@@ -35,6 +35,7 @@ const SETTLE = 150; // ms without a scroll after the finger lifts that end a tou
 const EST = 60; // a row never measured
 const OVERSCAN = 800; // px mounted above and below the screen
 const HEAD = 32; // the "load older" line
+const READ_GAP = 40; // readFromTop: where a long text's start stays, from the screen's top (clear of the pinned prompt)
 // A chat has been shown in this page: Tailwind has written the CSS its rows use (see the open effect below)
 let stylesWarm = false;
 // Row sizes measured by earlier mounts of a list (memKey), at the scroller width w. A tab not kept mounted remounts its
@@ -56,6 +57,8 @@ export const ChatList = forwardRef<
     firstIdx: number;
     /** Render every row (the virtual-list switch off). */
     all: boolean;
+    /** Following the bottom stops at the start of a text being written that grows taller than the screen (readCap). */
+    readFromTop?: boolean;
     /** Keeps measured row sizes across remounts under this key (one list at a time per key). */
     memKey?: string;
     /** Where to open: a remembered scrollTop, else the bottom. */
@@ -68,7 +71,7 @@ export const ChatList = forwardRef<
     /** Rows changed height or the list changed size (the pinned prompt follows). */
     onLayout: () => void;
   }
->(function ChatList({ rows, env, older, firstIdx, all, memKey, startTop, holding, scrollerRef, onScroll, onAtBottom, onLayout }, ref) {
+>(function ChatList({ rows, env, older, firstIdx, all, readFromTop, memKey, startTop, holding, scrollerRef, onScroll, onAtBottom, onLayout }, ref) {
   const el = useRef<HTMLDivElement | null>(null);
   const box = useRef<HTMLDivElement | null>(null);
   const phone = typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches;
@@ -200,6 +203,33 @@ export const ChatList = forwardRef<
     anim.current = null;
   };
   const endOf = (s: HTMLElement) => s.scrollHeight - s.clientHeight;
+  const readRef = useRef(readFromTop);
+  readRef.current = readFromTop;
+
+  /**
+   * readFromTop (Labs): following the bottom while a long text is written runs its start off the screen, and the reader
+   * has to scroll up after it every few lines (which is what stops following today). Instead, where following would
+   * take the start of the text being written above READ_GAP, stop there and leave the bottom: from then on the anchor
+   * in sync keeps the screen still while that text grows and whatever comes after it is added below.
+   * - Only the last row, only text being streamed: its start is what the reader is reading from. Short rows coming one
+   *   after another still scroll by as before; only one row taller than the screen holds.
+   * - Never moves on to the next text by itself: the reader may be halfway down this one, and following on would push
+   *   the rest of it away (the case with several stretches of text in one turn). New output shows on the ↓ button.
+   * - Only while that start is still on screen (at or below READ_GAP): back at the bottom by the reader's choice (↓,
+   *   scrolling down) the same text is past that point and following carries on; the next long text holds again.
+   * Not during a touch, an animated scroll or the opening measure pass: those own scrollTop then.
+   */
+  const readCap = (lay: Layout, s: HTMLElement): number | undefined => {
+    if (!readRef.current || touch.current || anim.current || measuring.current || !ready.current) return;
+    const rs = rowsRef.current;
+    let i = rs.length - 1;
+    while (i >= 0 && rs[i].kind === "working") i--;
+    const r = rs[i];
+    if (!r || r.kind !== "part" || !r.streaming || r.part.type !== "text") return;
+    const cap = lay.tops[i] - READ_GAP;
+    if (cap < s.scrollTop - 0.5 || endOf(s) <= cap + 0.5) return;
+    return cap;
+  };
 
   /**
    * Measure, lay out, place rows, place scrollTop. `measure`: rows whose size may have changed (all mounted ones if
@@ -250,7 +280,11 @@ export const ChatList = forwardRef<
       if (n.style.transform !== t) n.style.transform = t;
     }
     // Where scrollTop belongs
-    if (stuck.current && !cb.current.holding()) {
+    const cap = stuck.current && !cb.current.holding() ? readCap(lay, s) : undefined;
+    if (cap !== undefined) {
+      if (Math.abs(cap - s.scrollTop) > 0.5) s.scrollTop = cap;
+      setStuck(false);
+    } else if (stuck.current && !cb.current.holding()) {
       // A touch pulling up within END keeps its offset from the end instead of being put back: a slow drag moves ~1px
       // per scroll event, and snapping each one back meant it never got past END and couldn't leave the bottom.
       // Getting stuck again is up to the touch ending (endTouch).

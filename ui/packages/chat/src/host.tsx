@@ -171,6 +171,8 @@ export type ChatSettings = {
   showThinking?: boolean;
   /** Virtualize the message list (only render rows near the viewport). */
   virtualList?: boolean;
+  /** While following the bottom, stop at the start of a reply text that grows taller than the screen (read it from its start). */
+  readFromTop?: boolean;
   /** Expand edit diffs by default. */
   expandEdits?: boolean;
   /** Ask before opening links. */

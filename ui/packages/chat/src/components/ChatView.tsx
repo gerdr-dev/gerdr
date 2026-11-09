@@ -442,6 +442,7 @@ export function ChatView({
                 firstIdx={firstIdx.current}
                 memKey={scrollKey}
                 all={!virtualList}
+                readFromTop={!!settings.readFromTop}
                 startTop={saved && !saved.bottom ? saved.top : undefined}
                 holding={holding}
                 scrollerRef={(el) => (scrollerEl.current = el)}
