@@ -906,7 +906,9 @@ export function backgroundableTools(messages: GMessage[], tasks: AgentTask[]): T
     for (const p of m.parts) {
       if (p.type !== "dynamic-tool") continue;
       const tp = p as ToolPart;
-      if (tp.state !== "input-streaming" && tp.state !== "input-available") continue;
+      // Only calls that are executing: "pending" (input-streaming) is the model still writing the call's input, or it
+      // waiting for approval. There is nothing to move aside yet and the CLI answers backgrounded: false (measured).
+      if (tp.state !== "input-available") continue;
       const meta = tp.toolMetadata;
       if (meta?.parent) continue; // a subagent's own call: its turn, its call
       const task = tasks.find((t) => t.toolCallId === tp.toolCallId);

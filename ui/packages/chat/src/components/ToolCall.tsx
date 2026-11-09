@@ -264,6 +264,7 @@ function DefaultToolCall({ part, agent, running, keep: keepOpen }: { part: ToolP
   const canBackground =
     slow &&
     busy &&
+    part.state === "input-available" && // executing; pending is the input still being written (backgroundableTools)
     !!chatHost().backgroundTool &&
     !meta.parent &&
     ["claude", "native"].includes(session?.base ?? session?.agent ?? "") &&
