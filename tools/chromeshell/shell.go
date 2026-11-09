@@ -18,9 +18,10 @@ import (
 // shell: what desktop/main.js does, over CDP. Every page of our origin gets the bridge; messages from it are
 // handled here. Windows are --app windows of the engine, the browser copy that is Gerdr to macOS (engine_darwin.go).
 type shell struct {
-	c      *cdp
-	entry  string // the backend's login link (GERDR_READY), or the test page
-	origin string
+	c            *cdp
+	entry        string // the pages' login link (http://gerdr/auth?token=…, main.go pageHost), or the test page
+	origin       string // the pages' origin (http://gerdr)
+	backendEntry string // the backend's own login link (http://127.0.0.1:7870/auth?token=…): for the shell's own requests
 
 	engine   string // the browser executable, to open windows (launch)
 	profile  string
@@ -158,6 +159,10 @@ func (s *shell) attach(session, target, typ, u, opener string, waiting bool) {
 		}
 		return
 	}
+	if strings.Contains(u, storagePage) { // migrateStorage's page: its own business
+		run()
+		return
+	}
 	if opener != "" && !s.ours(u) {
 		run()
 		go s.popup(target)
@@ -173,7 +178,7 @@ func (s *shell) attach(session, target, typ, u, opener string, waiting bool) {
 		{"Runtime.addBinding", map[string]any{"name": "__gerdrPost"}},
 		{"Page.enable", nil},
 		{"Inspector.enable", nil},
-		{"Page.addScriptToEvaluateOnNewDocument", map[string]any{"source": bridgeJS}},
+		{"Page.addScriptToEvaluateOnNewDocument", map[string]any{"source": seedJS + bridgeJS}},
 	} {
 		if _, err := s.c.call(session, step.method, step.params); err != nil {
 			log.Printf("attach %s: %v", step.method, err)

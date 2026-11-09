@@ -81,6 +81,12 @@ locale are ignored (the menu bar is the browser's). Also: outside links → defa
 
 ## Things found the hard way
 
+- **Pages at `http://gerdr/`, not `127.0.0.1:7870`** (main.go `pageHost`): Chrome shows a web notification's origin
+  under its title and nothing removes it. `--host-resolver-rules=MAP gerdr 127.0.0.1:<port>` sends the name to the
+  backend, `--unsafely-treat-insecure-origin-as-secure=http://gerdr` keeps it a secure origin (notifications, clipboard),
+  both only in our profile. The backend's checks hold (WebSocket: Origin == Host). localStorage is per origin, so the
+  UI's per-device settings are carried over once from the old origin (storage.go). The shell's own requests and "Open
+  in Browser" use the real address.
 - **The Dock shows the engine's folder name**, not its CFBundleName: the clone is `<browser> <version>/<name>.app`.
 - **Chrome's icon is in Assets.car** (`CFBundleIconName: AppIcon`), which macOS prefers to the `.icns`: replacing
   `app.icns` alone left Chrome's icon. The clone drops `CFBundleIconName`, and is re-registered with LaunchServices

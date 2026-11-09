@@ -347,7 +347,8 @@ func (s *shell) menuAction(name string) {
 			_, _ = s.c.call(w.session, "Page.navigate", map[string]any{"url": pageURL(s.entry, space)})
 		}
 	case "openInBrowser":
-		openExternal(s.entry)
+		// the backend's own address: the user's browser doesn't know the pages' host (main.go pageHost)
+		openExternal(s.backendEntry)
 	case "rescue":
 		// The rescue panel is in the backend, not the UI directory: it opens even when the UI is broken. Pulled out
 		// in place if the page has it, else /rescue through the login link (it shows the UI with the panel open).

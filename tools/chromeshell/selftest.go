@@ -138,6 +138,8 @@ func (s *shell) selftestGerdr(profile string) {
 	check("UI rendered", `document.getElementById("root")?.children.length > 0`)
 	check("UI hooks", `Object.keys(window.gerdr || {}).join(",")`)
 	check("page path", `location.pathname`)
+	check("page origin (what a notification shows)", `location.origin + " secure=" + isSecureContext + " notifications=" + Notification.permission`)
+	check("settings in localStorage", `Object.keys(localStorage).length`)
 
 	// Settings → Resources asks for the page's pid (lib/native.ts nativeWebPid).
 	_, _ = s.c.eval(w.session, `window.gerdrNative.postMessage({ type: "webPid" })`)

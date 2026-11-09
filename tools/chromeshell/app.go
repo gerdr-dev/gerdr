@@ -32,15 +32,15 @@ func (s *shell) setBackend(be *backend) {
 	s.be = be
 	s.beMu.Unlock()
 	// A second GERDR_READY: the gerdr it attached to went away and it took over (appAttach). Same address: the
-	// page's WebSocket just reconnects. Another one: load the windows there.
+	// page's WebSocket just reconnects. Another port: the browser's mapping of the pages' host (main.go pageHost) is
+	// fixed at its start, so the windows would keep reaching the old one until Gerdr is opened again.
 	go func() {
 		for u := range be.ready {
-			if originOf(u) != s.origin {
-				log.Printf("backend moved to %s: reloading the windows", originOf(u))
-				s.setEntry(u)
-				s.forWins(func(w *win) {
-					_, _ = s.c.call(w.session, "Page.navigate", map[string]any{"url": pageURL(s.entry, w.space)})
-				})
+			if s.backendEntry != "" && originOf(u) != originOf(s.backendEntry) {
+				log.Printf("backend moved to %s: the windows follow once Gerdr is opened again", originOf(u))
+			}
+			if s.backendEntry != "" {
+				s.backendEntry = u
 			}
 		}
 	}()
@@ -123,11 +123,11 @@ func (s *shell) stopBackend() {
 
 // fetchBusy: what a restart would cut off, from the gerdr the windows show. nil = couldn't ask.
 func (s *shell) fetchBusy() *selfupdate.Busy {
-	u, err := url.Parse(s.entry)
+	u, err := url.Parse(s.backendEntry)
 	if err != nil {
 		return nil
 	}
-	req, _ := http.NewRequest("GET", s.origin+"/api/busy", nil)
+	req, _ := http.NewRequest("GET", originOf(s.backendEntry)+"/api/busy", nil)
 	if tok := u.Query().Get("token"); tok != "" {
 		req.Header.Set("Authorization", "Bearer "+tok)
 	}

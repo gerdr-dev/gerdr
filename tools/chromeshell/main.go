@@ -16,6 +16,7 @@ import (
 	"flag"
 	"log"
 	"net"
+	"net/url"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -169,12 +170,7 @@ func main() {
 		}
 	}
 
-	chrome, proc, c, sh, err := launchBrowser(exe, *profile, inject)
-	if err != nil {
-		fatal(err.Error())
-	}
-	log.Printf("browser up (%v)", since())
-
+	var err error
 	if *test {
 		entry = serveTestPage()
 	} else if be != nil {
@@ -182,8 +178,22 @@ func main() {
 			fatal(err.Error())
 		}
 	}
-	log.Printf("page: %s (%v)", originOf(entry), since())
-	sh.setEntry(entry)
+	// The pages live at http://gerdr/, which the browser maps to the backend's address (pageHost): a notification
+	// says where it comes from, and "gerdr" reads better there than 127.0.0.1:7870.
+	pageEntry, extra := entry, []string(nil)
+	if !*test {
+		pageEntry, extra = mapToPageHost(entry)
+	}
+	chrome, proc, c, sh, err := launchBrowser(exe, *profile, inject, extra)
+	if err != nil {
+		fatal(err.Error())
+	}
+	log.Printf("browser up; page: %s (%v)", originOf(pageEntry), since())
+	sh.setEntry(pageEntry)
+	sh.backendEntry = entry
+	if !*test {
+		migrateStorage(c, *profile, originOf(entry), sh.origin)
+	}
 
 	if _, err := c.call("", "Browser.grantPermissions", map[string]any{"origin": sh.origin, "permissions": []string{"notifications"}}); err != nil {
 		log.Printf("grant notifications: %v", err)
@@ -251,7 +261,7 @@ func main() {
 
 // launchBrowser starts the browser on our profile with a CDP pipe, no window yet (launch() opens --app ones once we
 // know the page's address), and the shell attached to every page before it runs.
-func launchBrowser(exe, profile string, env []string) (<-chan struct{}, *os.Process, *cdp, *shell, error) {
+func launchBrowser(exe, profile string, env, extra []string) (<-chan struct{}, *os.Process, *cdp, *shell, error) {
 	args := []string{
 		"--user-data-dir=" + profile,
 		"--remote-debugging-pipe",
@@ -264,6 +274,7 @@ func launchBrowser(exe, profile string, env []string) (<-chan struct{}, *os.Proc
 		// gave it the system's (app.getLocale). Same detection the backend uses for its own texts.
 		"--accept-lang=" + acceptLang(),
 	}
+	args = append(args, extra...)
 	setPrefs(profile)
 	cmd := exec.Command(exe, args...)
 	cmd.Env = append(os.Environ(), env...)
@@ -337,6 +348,27 @@ func fileExists(p string) bool {
 }
 
 // noBrowser: no Chrome-family browser on this computer. The prompt offers Chrome's download page; then quit.
+// pageHost: the host the pages are at in our browser, instead of 127.0.0.1:<port>. Chrome shows a web notification's
+// origin under its title and nothing removes it; this makes it read "gerdr". The browser maps the name to the
+// backend's address (--host-resolver-rules), and counts it as a secure origin (notifications, clipboard: a bare name
+// isn't one, 127.0.0.1 and *.localhost are), only in our own profile. The backend doesn't mind: what it checks is
+// Origin == Host (WebSocket), which holds, and where a request came in (local or remote), not the name.
+const pageHost = "gerdr"
+
+// mapToPageHost: the backend's login link as the page's (http://gerdr/auth?token=…), and the browser flags for it.
+func mapToPageHost(entry string) (string, []string) {
+	u, err := url.Parse(entry)
+	if err != nil || u.Host == "" {
+		return entry, nil
+	}
+	real := u.Host
+	u.Host = pageHost
+	return u.String(), []string{
+		"--host-resolver-rules=MAP " + pageHost + " " + real,
+		"--unsafely-treat-insecure-origin-as-secure=http://" + pageHost,
+	}
+}
+
 func noBrowser() {
 	msg := i18n.S(appName+" 需要电脑上装有 Chrome（或 Edge、Brave）：它用这个浏览器的内核来显示界面，自己不带一份。\n\n装好 Chrome 后重新打开 "+appName+"。",
 		appName+" needs Chrome (or Edge, Brave) on this computer: it shows its interface with that browser's engine instead of carrying one of its own.\n\nInstall Chrome, then open "+appName+" again.")
