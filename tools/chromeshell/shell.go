@@ -149,6 +149,7 @@ func (s *shell) attach(session, target, typ, u, opener string, waiting bool) {
 		// or ⌘N / ⌘T from Chrome's own menu when ours isn't there. Not ours to show: bring up a Gerdr window instead,
 		// the one there is (a Dock click opened a second window before), or a new one if none.
 		run()
+		log.Printf("the browser opened its new-tab page: closing it, a Gerdr window instead")
 		_, _ = s.c.call("", "Target.closeTarget", map[string]any{"targetId": target})
 		s.mu.Lock()
 		again := time.Since(s.newTabAt) < 2*time.Second

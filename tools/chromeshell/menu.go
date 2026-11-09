@@ -342,6 +342,8 @@ func (s *shell) menuAction(name string) {
 		s.launch(space)
 	case "checkUpdate":
 		go s.checkFromMenu()
+	case "reopen": // a click on the Dock icon (menu/gerdrmenu.m ourReopen)
+		s.focusAny()
 	case "reload":
 		if w != nil {
 			_, _ = s.c.call(w.session, "Page.navigate", map[string]any{"url": pageURL(s.entry, space)})

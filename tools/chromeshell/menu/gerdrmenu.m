@@ -288,6 +288,25 @@ static NSMenu *ourDockMenu(id self, SEL _cmd, NSApplication *app) {
   return dockMenu;
 }
 
+// A click on the Dock icon is a "reopen": the delegate's applicationShouldHandleReopen:hasVisibleWindows:, where Chrome
+// opens a new-tab window when it has no browser window (our --app windows don't count). The shell closed that window
+// and brought ours up, but it showed for a moment: a box flashing on every click. Ours tells the shell instead (it
+// brings a Gerdr window up, or opens one) and has AppKit do nothing more.
+static BOOL ourReopen(id self, SEL _cmd, NSApplication *app, BOOL visible) {
+  sendLine(@"action reopen");
+  return NO;
+}
+
+static void takeReopen(void) {
+  Class c = [NSApp.delegate class];
+  if (!c) return;
+  SEL sel = @selector(applicationShouldHandleReopen:hasVisibleWindows:);
+  Method m = class_getInstanceMethod(c, sel);
+  if (m) method_setImplementation(m, (IMP)ourReopen);
+  else class_addMethod(c, sel, (IMP)ourReopen, "c@:@c");
+  dbg(@"reopen taken from %@", NSStringFromClass(c));
+}
+
 static void takeDockMenu(void) {
   Class c = [NSApp.delegate class];
   if (!c) return;
@@ -314,6 +333,7 @@ __attribute__((constructor)) static void start(void) {
                                                 usingBlock:^(NSNotification *n) {
                                                   dbg(@"did finish launching");
                                                   takeDockMenu();
+                                                  takeReopen();
                                                   connectShell(path);
                                                   // Chrome may set its menu again later (a locale or profile change):
                                                   // put ours back.
