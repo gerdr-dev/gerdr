@@ -81,6 +81,8 @@ func (s *Server) ui() http.Handler {
 			s.UI.ServeModule(w, r)
 		case p == "/_ui/events":
 			s.UI.ServeEvents(w, r)
+		case p == "/manifest.webmanifest":
+			s.UI.ServeManifest(w, r)
 		case strings.HasPrefix(p, "/_esm/"):
 			s.ESM.ServeHTTP(w, r)
 		case s.UI.ServePublic(w, r):

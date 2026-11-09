@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 	"unicode/utf8"
 
@@ -145,8 +144,9 @@ func (s *Session) Shell(command, clientID string) (string, error) {
 	// 没有 stdin：要人交互输入的命令（密码、y/n）会卡住，人点停止；浏览器登录这类（gcloud auth login）照样能用。
 	cmd := exec.Command(userShell(), "-l", "-c", command)
 	cmd.Env = sysenv.ChildEnv()
-	// 自己一个进程组：停止时连它起的一串子进程一起杀（npm、go test 起的那些不跟着死的话会一直挂着）
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	// Its own process group: stopping it kills everything it started too (what npm / go test leave running would
+	// otherwise hang around). shell_unix.go / shell_windows.go.
+	ownGroup(cmd)
 	out := &shellOut{}
 	path := filepath.Join(s.shellDir(), id+".log")
 	if os.MkdirAll(filepath.Dir(path), 0o700) == nil {
@@ -253,12 +253,12 @@ func (s *Session) StopShell(id string) error {
 
 func (r *shellRun) kill() {
 	pid := r.cmd.Process.Pid
-	_ = syscall.Kill(-pid, syscall.SIGTERM)
+	killGroup(pid, false)
 	go func() {
 		select {
 		case <-r.exited:
 		case <-time.After(2 * time.Second):
-			_ = syscall.Kill(-pid, syscall.SIGKILL)
+			killGroup(pid, true)
 		}
 	}()
 }

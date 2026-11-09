@@ -3,7 +3,9 @@ package uisite
 import (
 	"encoding/json"
 	"html"
+	"mime"
 	"net/http"
+	"path"
 	"strings"
 	"time"
 
@@ -50,9 +52,7 @@ func (r *Renderer) ServePage(w http.ResponseWriter, req *http.Request, nonce str
 	var s strings.Builder
 	s.WriteString("<!DOCTYPE html>\n<html lang=\"" + i18n.S("zh-CN", "en") + "\" style=\"color-scheme: light dark\">\n<head>\n<meta charset=\"UTF-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no\" />\n")
 	s.WriteString("<title>" + html.EscapeString(b.title) + "</title>\n")
-	if b.favicon != "" {
-		s.WriteString(`<link rel="icon" href="` + html.EscapeString(b.favicon) + `" />` + "\n")
-	}
+	s.WriteString(r.headLinks(b))
 	issues := b.issues
 	if b.fatal != "" {
 		issues = append([]errorItem{{Level: "error", Source: "build", Message: firstLine(b.fatal), Detail: b.fatal}}, issues...)
@@ -117,7 +117,7 @@ func (r *Renderer) ServePage(w http.ResponseWriter, req *http.Request, nonce str
 func (r *Renderer) servePreparing(w http.ResponseWriter, b *build, n string) {
 	var s strings.Builder
 	s.WriteString("<!DOCTYPE html>\n<html lang=\"" + i18n.S("zh-CN", "en") + "\" style=\"color-scheme: light dark\">\n<head>\n<meta charset=\"UTF-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no\" />\n")
-	s.WriteString("<title>" + html.EscapeString(b.title) + "</title>\n</head>\n<body>\n")
+	s.WriteString("<title>" + html.EscapeString(b.title) + "</title>\n" + r.headLinks(b) + "</head>\n<body>\n")
 	s.WriteString(loadingHTML(i18n.S("正在准备界面用到的包（新装或加了包之后只这一次）…", "Preparing the packages the UI uses (only after an install or a new package)…")))
 	s.WriteString("<script" + n + ">var B=" + string(mustJSON(b.id)) + ";var es=new EventSource(" + string(mustJSON(r.base+"/_ui/events")) +
 		");es.onmessage=function(e){try{if(JSON.parse(e.data).build!==B)location.reload()}catch(_){}};" +
@@ -133,4 +133,36 @@ func escapeStyle(css string) string { return strings.ReplaceAll(css, "</", "<\\/
 func mustJSON(v any) []byte {
 	b, _ := json.Marshal(v)
 	return b
+}
+
+// headLinks: the icon and the web app manifest, on every page (an install can start while the UI is still preparing).
+func (r *Renderer) headLinks(b *build) string {
+	s := `<link rel="manifest" href="` + html.EscapeString(r.base) + `/manifest.webmanifest" />` + "\n"
+	if b.favicon != "" {
+		s = `<link rel="icon" href="` + html.EscapeString(b.favicon) + `" />` + "\n" + s
+	}
+	return s
+}
+
+// ServeManifest: the web app manifest, from the same title / favicon as the page (ui.json). It is what lets a browser
+// install Gerdr as an app: a phone's "add to home screen", and the desktop shell that runs the page in the user's own
+// Chrome as an installed web app (its own window, Dock icon and name; tools/chromeshell). id and scope are fixed so an
+// installed app stays the same app when the title or icon change.
+func (r *Renderer) ServeManifest(w http.ResponseWriter, req *http.Request) {
+	b := r.ensure()
+	base := r.base + "/"
+	m := map[string]any{
+		"id": base, "start_url": base, "scope": base, "display": "standalone",
+		"name": b.title, "short_name": b.title,
+	}
+	if b.favicon != "" {
+		icon := map[string]string{"src": b.favicon, "sizes": "any"}
+		if t := mime.TypeByExtension(path.Ext(b.favicon)); t != "" {
+			icon["type"] = t
+		}
+		m["icons"] = []map[string]string{icon}
+	}
+	w.Header().Set("Content-Type", "application/manifest+json")
+	w.Header().Set("Cache-Control", "no-cache")
+	_ = json.NewEncoder(w).Encode(m)
 }
