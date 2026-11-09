@@ -34,7 +34,7 @@ code does, not what was seen.
   second launch starts none.
 - The bridge (`bridge.js`, the `window.gerdrNative` of desktop/preload.js, on `window.lightron`): open (default
   browser), openPath (open / show in Explorer), notify (web Notification, shown by WebView2 as a Windows notification;
-  click → window + session), update. Lightron: outside links → default browser, the window title follows the page's.
+  click → window + session; allowed without asking, as the clipboard: Lightron 0.4.2), update. Lightron: outside links → default browser, the window title follows the page's.
 - Right-click: WebView2's menu only in editable fields and on selected text (same rule as macOS; Lightron).
 - High DPI, the window's icon from the PNG in the exe: Lightron.
 - The exe's own icon (Explorer) and its manifest (per-monitor v2 DPI, common controls v6): `rsrc_windows_amd64.syso`,
@@ -52,8 +52,6 @@ code does, not what was seen.
 - Browser shortcuts (F5, Ctrl+P, Ctrl+F…): go-webview2 doesn't expose `AreBrowserAcceleratorKeysEnabled`; the page's
   own handlers can still `preventDefault` them.
 - Code signing (SmartScreen will warn).
-- Notifications ask once: WebView2 asks for the permission (Lightron doesn't grant it on Windows yet, as it does on
-  macOS); the bridge asks before the first one.
 - Whole-package updates (a new installer, `installApp`) never ran before 0.2.26: PowerShell started with
   `DETACHED_PROCESS` exits without running its script (found in Lightron's `update.Install`).
 
