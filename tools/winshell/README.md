@@ -1,8 +1,10 @@
 # winshell: Gerdr exp for Windows
 
 The Windows counterpart of `tools/chromeshell` (macOS): the UI in **WebView2** (the system's Chromium, Edge's) inside a
-window of our own, around the Go backend. No Chromium shipped, and none of the macOS machinery: WebView2 embeds in our
-window, so the taskbar icon, name and notifications are ours without cloning, renaming or injecting.
+window of our own, around the Go backend, through [Lightron](https://github.com/zbysir/lightron) (the window, its icon
+and title, DPI, the bridge, links to the default browser, the right-click rule, one instance). No Chromium shipped, and
+none of the macOS machinery: WebView2 embeds in our window, so the taskbar icon, name and notifications are ours
+without cloning, renaming or injecting.
 
 ```sh
 tools/winshell/package.sh   # on macOS → tools/winshell/dist/Gerdr-exp-<version>-windows-x64-setup.exe (~13MB)
@@ -26,14 +28,13 @@ MIT, pure Go, its loader embedded; `jchv/go-winloader`, ISC) only build for Wind
   `windows` job builds it) → `%LOCALAPPDATA%\Gerdr exp\backend\<v>\gerdr.exe`, checked and unpacked. Windows has no
   background service, so applying it restarts our backend: only when `/api/busy` is all zero, or the person says "now"
   (a Yes / No / Cancel box: now / when idle / cancel). Settings → 版本 drives it (no menu bar on Windows).
-- One instance (a unix socket in the data dir): a second launch brings the window up.
-- The bridge (`bridge.js`, the `window.gerdrNative` of desktop/preload.js): open (default browser), openPath (open /
-  show in Explorer), notify (web Notification, shown by WebView2 as a Windows notification; click → window + session),
-  update ("doesn't update itself"); outside links → default browser; the window title follows the page's.
-- Right-click: WebView2's menu only in editable fields and on selected text (same rule as macOS). That needs
-  `Debug: true` in go-webview2, which also turns on F12 (developer tools), as the Electron build has.
-- High DPI: per-monitor v2 at start (SetProcessDpiAwarenessContext). Window icon: the PNG in the exe, made into icons
-  at runtime (CreateIconFromResourceEx).
+- One instance (Lightron): a second launch brings the window up. The backend is started by `Options.URLFunc`, so a
+  second launch starts none.
+- The bridge (`bridge.js`, the `window.gerdrNative` of desktop/preload.js, on `window.lightron`): open (default
+  browser), openPath (open / show in Explorer), notify (web Notification, shown by WebView2 as a Windows notification;
+  click → window + session), update. Lightron: outside links → default browser, the window title follows the page's.
+- Right-click: WebView2's menu only in editable fields and on selected text (same rule as macOS; Lightron).
+- High DPI, the window's icon from the PNG in the exe: Lightron.
 - The exe's own icon (Explorer) and its manifest (per-monitor v2 DPI, common controls v6): `rsrc_windows_amd64.syso`,
   which go build links in by itself. Checked in, made once with go-winres; again when the icon changes:
   `cd tools/winshell && go run github.com/tc-hib/go-winres@v0.3.3 simply --icon ../../desktop/res/icon.png

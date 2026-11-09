@@ -26,7 +26,6 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/huaweicloud/huaweicloud-sdk-go-v3 v0.1.192
-	github.com/jchv/go-webview2 v0.0.0-20260205173254-56598839c808
 	github.com/miekg/dns v1.1.72
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 	github.com/spf13/cobra v1.10.2
@@ -37,7 +36,13 @@ require (
 	golang.org/x/sys v0.49.0
 )
 
-require github.com/hashicorp/yamux v0.1.2 // indirect
+require (
+	github.com/hashicorp/yamux v0.1.2 // indirect
+	github.com/jchv/go-webview2 v0.0.0-20260205173254-56598839c808 // indirect
+	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646 // indirect
+	github.com/tc-hib/winres v0.3.1 // indirect
+	golang.org/x/image v0.12.0 // indirect
+)
 
 require (
 	github.com/JohannesKaufmann/dom v0.3.1 // indirect
@@ -78,6 +83,7 @@ require (
 	github.com/tinylib/msgp v1.6.4 // indirect
 	github.com/tjfoc/gmsm v1.4.1 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
+	github.com/zbysir/lightron v0.1.1-0.20261109092410-3cfdf64a0f28
 	go.mongodb.org/mongo-driver v1.17.9 // indirect
 	golang.org/x/crypto v0.58.0 // indirect
 	golang.org/x/mod v0.41.0 // indirect

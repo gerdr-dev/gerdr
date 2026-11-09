@@ -1,7 +1,7 @@
 # Gerdr
 
-Claude Code / Codex 的图形界面：Go 后端（ACP 适配器 + hub + HTTP/WS）+ 界面源码（ui/，**没有打包环节**）+ 桌面 App 外壳（macOS: tools/chromeshell, on the user's own Chrome; Windows: tools/winshell, WebView2 —
-their READMEs say how and why; the Electron shell in desktop/ is retired, docs/dev/WHY-ELECTRON.md）。
+Claude Code / Codex 的图形界面：Go 后端（ACP 适配器 + hub + HTTP/WS）+ 界面源码（ui/，**没有打包环节**）+ 桌面 App 外壳（macOS: tools/chromeshell, on the user's own Chrome; Windows: tools/winshell, WebView2; both on
+github.com/zbysir/lightron, where browser-side changes go as general hooks — their READMEs say how and why; the Electron shell in desktop/ is retired, docs/dev/WHY-ELECTRON.md）。
 使用说明见 README.md，设计理由和协议的坑见 docs/dev/ARCHITECTURE.md —— **改适配器 / hub / uisite 之前先读它**，
 里面每一条都是实测踩出来、会静默出错的。
 
@@ -13,7 +13,7 @@ their READMEs say how and why; the Electron shell in desktop/ is retired, docs/d
 - Measured-and-postponed work (why, numbers, how to do it): docs/dev/TODO.md. Add to it instead of losing the investigation.
 - Desktop App self-update (backend-only ~10MB vs whole App, applied only when idle; `internal/selfupdate`,
   `tools/shell-id.sh`, `desktop/feed.sh`): docs/dev/UPDATE.md. Changing shell files (tools/chromeshell,
-  tools/winshell, internal/selfupdate) forces a full download for everyone.
+  tools/winshell, internal/selfupdate) or the Lightron version in go.mod forces a full download for everyone.
 - 后台常驻（launchd，`internal/service`、`cmd/gerdr/attach.go`）和 App 怎么分工、怎么跟着 App 升级：docs/dev/SERVICE.md。
 - 对话列表闪、跳、切回来不在底（虚拟列表 `chat/ChatView.tsx`、会变高矮的 Markdown / 代码块 / 图片）：别猜，
   按 docs/dev/SCROLL.md 用 `tools/scrolltest/` 的脚本逐帧复现，改完再跑一遍。

@@ -145,3 +145,14 @@ annotations; sources need `include: ["web_search_call.action.sources"]`). Chat C
   next to `web_fetch` in `decide` (agents/native/permission.go), e.g. one `search` rule for "don't ask again".
 - Probe A once per provider and cache the answer, so a gateway without the server tool doesn't cost a failed call
   every search.
+
+## The backend's token on the App's command line (macOS)
+
+The macOS App opens its first window with `--app=http://gerdr/auth?token=…` (Lightron's `URL` mode: the browser takes
+the window's address from the command line), and any process on the Mac can read a command line (`ps`). The `--app`
+process is short-lived (it hands the URL to the running browser and exits), but the token in it is the backend's
+long-lived one. Before Lightron it was the same. Fix in the backend, not the shell: a one-time login code
+(`/auth?code=…`, valid for one use within a minute) that the shell asks for over the backend's stdout / a local call,
+so what is on the command line is spent by the time anyone could use it. Lightron's own `Handler` mode doesn't have
+the problem (it sets the cookie over the DevTools pipe).
+

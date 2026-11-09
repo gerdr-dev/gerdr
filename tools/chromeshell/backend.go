@@ -2,14 +2,10 @@ package main
 
 import (
 	"bufio"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log"
-	"net"
-	"net/http"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -20,8 +16,6 @@ import (
 	"sync/atomic"
 	"syscall"
 	"time"
-
-	"github.com/gerdr-dev/gerdr/internal/config"
 )
 
 // backend runs `gerdr --app` the way desktop/main.js does: it prints `GERDR_READY <url>` once serving (the url is a
@@ -109,69 +103,11 @@ func (b *backend) stop() {
 	}
 }
 
-// pageURL: the page, optionally on one project. The ready url is the login link (/auth?token=…): the page goes in its
-// `next`, never appended to the path (that made a wrong token once, "bad token"; desktop/main.js pageURL).
-func pageURL(entry, space string) string {
-	u, err := url.Parse(entry)
-	if err != nil {
-		return entry
-	}
-	page := "/"
-	if space != "" {
-		page = "/" + url.PathEscape(space)
-	}
-	if u.Path == "/auth" {
-		q := u.Query()
-		q.Set("next", page)
-		u.RawQuery = q.Encode()
-	} else {
-		u.Path, u.RawQuery = page, ""
-	}
-	return u.String()
-}
-
 func tail(s string, n int) string {
 	if len(s) > n {
 		return s[len(s)-n:]
 	}
 	return s
-}
-
-// runningGerdr: the login link of a gerdr already serving this data dir (server.json, alive, answering), the way
-// `gerdr` itself finds one (cmd/gerdr running). The shell then is only a window on it: it starts no backend of its
-// own, so it can't trigger appAttach's "different binary → restart the service when idle".
-func runningGerdr(env config.Env) (string, bool) {
-	b, err := os.ReadFile(filepath.Join(env.Dir, "server.json"))
-	if err != nil {
-		return "", false
-	}
-	var si struct {
-		PID  int    `json:"pid"`
-		Port int    `json:"port"`
-		Host string `json:"host"`
-	}
-	if json.Unmarshal(b, &si) != nil || si.Port == 0 {
-		return "", false
-	}
-	if p, err := os.FindProcess(si.PID); err != nil || p.Signal(syscall.Signal(0)) != nil {
-		return "", false
-	}
-	host := si.Host
-	if host == "" || host == "0.0.0.0" || host == "::" {
-		host = "127.0.0.1"
-	}
-	addr := net.JoinHostPort(host, strconv.Itoa(si.Port))
-	c := http.Client{Timeout: 2 * time.Second}
-	resp, err := c.Get("http://" + addr + "/api/hello")
-	if err != nil {
-		return "", false
-	}
-	resp.Body.Close()
-	tok := env.Token
-	if tok == "" {
-		tok, _ = config.LoadToken(env.Dir)
-	}
-	return "http://" + addr + "/auth?token=" + url.QueryEscape(tok), true
 }
 
 // installedBackend: the gerdr the background service runs (its plist), else the one in Gerdr.app. Started with --app

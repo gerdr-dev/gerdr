@@ -20,7 +20,7 @@ import (
 )
 
 // The shell's side of updating and of keeping the backend up: desktop/main.js's startBackend / restartBackend /
-// fetchBusy / watchUpdates / applyUpdate / pushUpdate, over our backend.go and updater.go.
+// fetchBusy / watchUpdates / applyUpdate / pushUpdate, over backend.go and internal/selfupdate.
 
 type upgradeMark struct {
 	version string
@@ -220,7 +220,7 @@ func (s *shell) applyUpdate(ask bool) {
 		}
 		log.Printf("update: installing the %s App", p.Version)
 		if installApp(p.File) {
-			s.quitForUpdate <- struct{}{}
+			s.app.Quit()
 		}
 		return
 	}
@@ -284,12 +284,16 @@ func (s *shell) pushUpdate() {
 	s.upMu.Unlock()
 	st := s.up.Status(b, s.upgradingNow(s.up.Pending()))
 	raw, _ := json.Marshal(st)
-	s.forWins(func(w *win) {
-		_, _ = s.c.eval(w.session, "window.gerdr && window.gerdr.appUpdate && window.gerdr.appUpdate("+string(raw)+")")
-	})
-	if s.menu != nil {
-		s.menu.update(nil, "")
+	s.mu.Lock()
+	a := s.app
+	s.mu.Unlock()
+	if a == nil {
+		return
 	}
+	for _, w := range a.Windows() {
+		_ = w.Eval("window.gerdr && window.gerdr.appUpdate && window.gerdr.appUpdate(" + string(raw) + ")")
+	}
+	s.refreshMenu()
 }
 
 // updateMessage: the page's "update" message: asking for the status (it just loaded), "check now", "update now",
@@ -329,18 +333,6 @@ func (s *shell) checkFromMenu() {
 display dialog (item 2 of argv) with title (item 1 of argv) buttons {"OK"} default button 1
 end run`
 		_ = exec.Command("osascript", "-e", script, i18n.S("检查更新", "Check for Updates"), msg).Run()
-	}
-}
-
-func (s *shell) forWins(f func(w *win)) {
-	s.mu.Lock()
-	ws := make([]*win, 0, len(s.wins))
-	for _, w := range s.wins {
-		ws = append(ws, w)
-	}
-	s.mu.Unlock()
-	for _, w := range ws {
-		f(w)
 	}
 }
 

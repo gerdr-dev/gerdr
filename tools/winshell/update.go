@@ -189,12 +189,13 @@ func (s *shell) restart(swap bool) {
 	if err != nil {
 		fail(err.Error())
 	}
-	s.entry = u
-	s.w.Dispatch(func() { s.w.Navigate(u) })
+	s.setEntry(u)
+	b, _ := json.Marshal(u)
+	s.eval("location.replace(" + string(b) + ")")
 }
 
 func (s *shell) fetchBusy() *selfupdate.Busy {
-	pu, err := url.Parse(s.entry)
+	pu, err := url.Parse(s.getEntry())
 	if err != nil {
 		return nil
 	}
@@ -317,9 +318,7 @@ func (s *shell) pushUpdate() {
 	b := s.u.lastBusy
 	s.u.mu.Unlock()
 	raw, _ := json.Marshal(s.u.up.Status(b, s.upgradingNow(s.u.up.Pending())))
-	s.w.Dispatch(func() {
-		s.w.Eval("window.gerdr && window.gerdr.appUpdate && window.gerdr.appUpdate(" + string(raw) + ")")
-	})
+	s.eval("window.gerdr && window.gerdr.appUpdate && window.gerdr.appUpdate(" + string(raw) + ")")
 }
 
 // updateMessage: the page's "update": status asked for, "check now", "update now", the automatic updates switch.

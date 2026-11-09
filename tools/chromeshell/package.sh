@@ -1,5 +1,6 @@
 #!/bin/sh
-# Builds the chromeshell App (default "Gerdr exp", to try next to the real Gerdr), one package per arch.
+# Builds the macOS App (default "Gerdr exp", to try next to the real Gerdr; the release passes NAME=Gerdr), one
+# package per arch.
 #
 #   tools/chromeshell/package.sh            # → dist/<arch>/Gerdr exp.app, dist/Gerdr-exp-mac-<arch>.dmg / .zip,
 #                                           #   for arm64 and amd64
@@ -13,7 +14,7 @@
 #
 # The bundle holds the shell and the backend (used only when no Gerdr is running: otherwise the shell is a window on
 # that one, main.go). LSUIElement keeps the shell itself out of the Dock: the Dock icon is the engine's, the browser
-# copy that carries this icon and name (engine_darwin.go).
+# copy that carries this icon and name (Lightron's macengine).
 set -e
 cd "$(dirname "$0")/../.."
 NAME=${NAME:-Gerdr exp}
@@ -44,8 +45,7 @@ iconutil -c icns "$SET" -o "$ICNS/icon.icns"
 
 for arch in $ARCHS; do
   case $arch in
-    arm64) carch=arm64 ;;
-    amd64) carch=x86_64 ;;
+    arm64 | amd64) ;;
     *) echo "ARCH: arm64 and/or amd64" >&2; exit 1 ;;
   esac
   APP="$OUT/$arch/$NAME.app"
@@ -66,14 +66,11 @@ for arch in $ARCHS; do
   # The shell.
   CGO_ENABLED=0 GOOS=darwin GOARCH=$arch go build -trimpath -ldflags '-s -w' -o "$APP/Contents/MacOS/gerdr-exp" ./tools/chromeshell
 
-  # Gerdr's menu bar, loaded into the engine (menu.go): the arch of the browser, so both on Apple silicon (an Intel
-  # Chrome there runs as x86_64 under Rosetta; 0.2MB). Signed on its own first: it is code inside Resources.
-  if [ "$arch" = arm64 ]; then larchs="-arch arm64 -arch x86_64"; else larchs="-arch $carch"; fi
-  # shellcheck disable=SC2086
-  clang -dynamiclib -fobjc-arc -framework Cocoa -O2 $larchs -o "$APP/Contents/Resources/gerdrmenu.dylib" tools/chromeshell/menu/gerdrmenu.m
-  codesign --force --sign - "$APP/Contents/Resources/gerdrmenu.dylib"
+  # The menu library loaded into the engine comes with Lightron (embedded in the shell, universal).
 
+  # icon.icns: the bundle's own (Finder); icon.png: what the shell gives Lightron for the engine (Dock, ⌘Tab).
   cp "$ICNS/icon.icns" "$APP/Contents/Resources/icon.icns"
+  cp desktop/res/icon.png "$APP/Contents/Resources/icon.png"
   cat >"$APP/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
