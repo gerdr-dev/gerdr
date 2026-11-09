@@ -195,8 +195,16 @@ func main() {
 		migrateStorage(c, *profile, originOf(entry), sh.origin)
 	}
 
-	if _, err := c.call("", "Browser.grantPermissions", map[string]any{"origin": sh.origin, "permissions": []string{"notifications"}}); err != nil {
-		log.Printf("grant notifications: %v", err)
+	// Allowed without asking: notifications, and the clipboard (copy buttons, paste). One by one with setPermission:
+	// Browser.grantPermissions grants the ones listed and *denies all others*, which turned every copy button into
+	// "NotAllowedError: Write permission denied" and the microphone into denied. The rest keep Chrome's default
+	// (it asks).
+	for _, p := range []string{"notifications", "clipboard-read", "clipboard-write"} {
+		if _, err := c.call("", "Browser.setPermission", map[string]any{
+			"origin": sh.origin, "permission": map[string]any{"name": p, "allowWithoutSanitization": p == "clipboard-write"}, "setting": "granted",
+		}); err != nil {
+			log.Printf("permission %s: %v", p, err)
+		}
 	}
 	// An earlier Gerdr exp installed the page as a web app (its windows had Chrome's "⋮" and translate buttons in the
 	// title bar, which no setting removes): uninstall it, Chrome removes its app shim from ~/Applications with it.

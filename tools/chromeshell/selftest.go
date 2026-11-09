@@ -142,6 +142,18 @@ func (s *shell) selftestGerdr(profile string) {
 	check("settings in localStorage", `Object.keys(localStorage).length`)
 	// Above the page: the title bar only (~28px), or also a bar Chrome adds (a flags warning: ~40px more)
 	check("height above the page", `outerHeight - innerHeight`)
+	// Copy in a conversation (navigator.clipboard.writeText): granted, not denied by the shell's permission setup
+	check("permissions", `Promise.all(["clipboard-write", "clipboard-read", "notifications", "microphone"].map((n) => navigator.permissions.query({ name: n }).then((p) => n + "=" + p.state, () => n + "=?"))).then((a) => a.join(" "))`)
+	// A background window's document isn't focused (and writeText refuses that): have Chrome treat it as focused
+	_, _ = s.c.call(w.session, "Emulation.setFocusEmulationEnabled", map[string]any{"enabled": true})
+	saved, _ := exec.Command("pbpaste").Output()
+	check("copy", `navigator.clipboard.writeText("gerdr self-test copy").then(() => "ok", (e) => String(e))`)
+	got, _ := exec.Command("pbpaste").Output()
+	log.Printf("· the system clipboard got it: %v", string(got) == "gerdr self-test copy")
+	restore := exec.Command("pbcopy")
+	restore.Stdin = strings.NewReader(string(saved))
+	_ = restore.Run()
+	_, _ = s.c.call(w.session, "Emulation.setFocusEmulationEnabled", map[string]any{"enabled": false})
 
 	// Settings → Resources asks for the page's pid (lib/native.ts nativeWebPid).
 	_, _ = s.c.eval(w.session, `window.gerdrNative.postMessage({ type: "webPid" })`)
