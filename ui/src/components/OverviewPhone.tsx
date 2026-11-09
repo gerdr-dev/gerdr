@@ -1,5 +1,5 @@
 import { ClipboardCheck } from "lucide-react";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { focusTile, setOverview } from "@/lib/overview";
 import { phoneOrder } from "@/lib/overviewState";
 import { useCaughtUp } from "@/lib/catchup";
@@ -107,7 +107,8 @@ export function PhoneOverview({ ids, focus, shown }: { ids: string[]; focus?: st
   const pages = cur < 0 ? [] : ([-1, 0, 1] as const).map((at) => ({ at, id: sorted[cur + at] })).filter((p) => p.id);
   // A page turned to brings a new neighbour, and mounting a chat is the heaviest thing here: done in the middle of the
   // slide it stuttered (reported). So while swipes run, only pages already mounted are drawn, the new ones are blank
-  // until the track comes to rest (pager `onRest`); a run of quick swipes flies over blanks rather than stuttering.
+  // until the track comes to rest (pager `onRest`). A page drawn before shows the picture it had when it went (Snapshot)
+  // instead of a blank: a run of quick swipes used to flash the empty background (reported).
   const [awake, setAwake] = useState(tile);
   const mounted = useRef(new Set<string>());
   const live = (id: string) => awake === tile || mounted.current.has(id);
@@ -153,8 +154,12 @@ export function PhoneOverview({ ids, focus, shown }: { ids: string[]; focus?: st
                   style={at ? { transform: `translateX(calc(${at * 100}% + ${at * GAP}px))` } : undefined}
                   inert={at !== 0}
                 >
-                  {live(id) && (
-                    <Tile id={id} focused={shown && at === 0} main={false} zoomed={false} target={false} phone onFocus={() => {}} onZoom={() => {}} />
+                  {live(id) ? (
+                    <Snap id={id}>
+                      <Tile id={id} focused={shown && at === 0} main={false} zoomed={false} target={false} phone onFocus={() => {}} onZoom={() => {}} />
+                    </Snap>
+                  ) : (
+                    <Snapshot id={id} />
                   )}
                 </div>
               ))}
@@ -170,6 +175,60 @@ export function PhoneOverview({ ids, focus, shown }: { ids: string[]; focus?: st
       </div>
     </TabActive.Provider>
   );
+}
+
+// The last picture of each page taken down (Snap), most recent last: shown in its place until the page is mounted again
+const snaps = new Map<string, { el: HTMLElement; scroll: number[] }>();
+const SNAPS = 12;
+// Attributes the rest of the UI finds live chats by (document-wide queries: the composer, messages, the scroller) or
+// that would make a copy act (autoplay, autofocus): a snapshot is only a picture
+const LIVE_ATTRS = ["id", "role", "autofocus", "autoplay", "data-composer", "data-message", "data-chat-scroller", "data-chat-list", "data-ov-tile"];
+
+/**
+ * Wraps a mounted page and copies its DOM as it is taken down. Cloning is plain DOM work (a few ms for the rows a
+ * virtual list keeps), far cheaper than mounting the chat again, which is why pages are left blank mid-swipe at all.
+ * The copy keeps the chat scrolled where it was (scrollTop isn't part of a clone).
+ */
+function Snap({ id, children }: { id: string; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    // Runs before React detaches the DOM (deletion runs a component's layout cleanups before removing its nodes)
+    return () => {
+      if (!el?.isConnected) return;
+      const scroll = [...el.querySelectorAll<HTMLElement>("[data-chat-scroller]")].map((s) => s.scrollTop);
+      const copy = el.cloneNode(true) as HTMLElement;
+      copy.querySelectorAll("iframe, canvas").forEach((n) => n.remove());
+      copy.querySelectorAll("[data-chat-scroller]").forEach((n) => n.setAttribute("data-snap-scroller", ""));
+      for (const a of LIVE_ATTRS) copy.querySelectorAll(`[${a}]`).forEach((n) => n.removeAttribute(a));
+      snaps.delete(id);
+      snaps.set(id, { el: copy, scroll });
+      if (snaps.size > SNAPS) snaps.delete(snaps.keys().next().value!);
+    };
+  }, [id]);
+  return (
+    <div ref={ref} className="h-full">
+      {children}
+    </div>
+  );
+}
+
+/** A page's last picture (Snap), inert, until the page is mounted again; empty if it was never drawn. */
+function Snapshot({ id }: { id: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const box = ref.current;
+    const snap = snaps.get(id);
+    if (!box || !snap) return;
+    // A copy can be shown once at a time (a node has one parent); the same page is never on two pages of the track
+    const copy = snap.el;
+    box.replaceChildren(copy);
+    copy.querySelectorAll<HTMLElement>("[data-snap-scroller]").forEach((s, i) => {
+      s.scrollTop = snap.scroll[i] ?? 0;
+    });
+    return () => copy.remove();
+  }, [id]);
+  return <div ref={ref} aria-hidden inert className="pointer-events-none h-full" />;
 }
 
 /** Where the strip `strip` has to scroll, from `from`, to show `chip` whole: the least move (none if it already shows). */
