@@ -273,6 +273,13 @@ func launchBrowser(exe, profile string, env, extra []string) (<-chan struct{}, *
 		// A new profile says en-US whatever the system's language; the UI follows navigator.languages, and Electron
 		// gave it the system's (app.getLocale). Same detection the backend uses for its own texts.
 		"--accept-lang=" + acceptLang(),
+		// Chrome warns about some flags in a bar over the page ("unsupported command-line flag: … stability and
+		// security will suffer"): --host-resolver-rules and --unsafely-treat-insecure-origin-as-secure (pageHost) are
+		// on its list. --test-type is what turns that bar off (it's for test harnesses, which pass such flags).
+		"--test-type",
+	}
+	if os.Getenv("CHROMESHELL_NO_TEST_TYPE") != "" { // debug: see the bar --test-type keeps away
+		args = args[:len(args)-1]
 	}
 	args = append(args, extra...)
 	setPrefs(profile)

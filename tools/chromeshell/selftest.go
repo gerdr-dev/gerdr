@@ -140,6 +140,8 @@ func (s *shell) selftestGerdr(profile string) {
 	check("page path", `location.pathname`)
 	check("page origin (what a notification shows)", `location.origin + " secure=" + isSecureContext + " notifications=" + Notification.permission`)
 	check("settings in localStorage", `Object.keys(localStorage).length`)
+	// Above the page: the title bar only (~28px), or also a bar Chrome adds (a flags warning: ~40px more)
+	check("height above the page", `outerHeight - innerHeight`)
 
 	// Settings → Resources asks for the page's pid (lib/native.ts nativeWebPid).
 	_, _ = s.c.eval(w.session, `window.gerdrNative.postMessage({ type: "webPid" })`)

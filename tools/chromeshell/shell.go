@@ -416,7 +416,13 @@ func (s *shell) launch(space string) {
 	s.mu.Lock()
 	s.launched = time.Now()
 	s.mu.Unlock()
-	cmd := exec.Command(s.engine, "--user-data-dir="+s.profile, "--app="+pageURL(s.entry, space))
+	// --test-type here too: the bars Chrome adds to a new window (main.go launchBrowser) are decided on the command
+	// line that asked for the window, this one, not the browser's own.
+	args := []string{"--user-data-dir=" + s.profile, "--app=" + pageURL(s.entry, space)}
+	if os.Getenv("CHROMESHELL_NO_TEST_TYPE") == "" {
+		args = append(args, "--test-type")
+	}
+	cmd := exec.Command(s.engine, args...)
 	if err := cmd.Start(); err != nil {
 		log.Printf("launch: %v", err)
 		return
