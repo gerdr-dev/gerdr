@@ -16,7 +16,9 @@ MIT, pure Go, its loader embedded; `jchv/go-winloader`, ISC) only build for Wind
 (no admin), with Start menu and desktop shortcuts, an entry in Installed apps, and starts it. Data:
 `%LOCALAPPDATA%\Gerdr exp\` (WebView2 profile, `log.txt`); sessions stay in `~\.gerdr` (uninstalling keeps both).
 
-**Not run on Windows yet**: built and packaged on macOS only. Everything below is what the code does, not what was seen.
+**Gerdr's shell is not run on Windows yet**: built and packaged on macOS only; what is under it (Lightron's WebView2
+window, its bridge, `Window.Call`, the installer) is, by Lightron's Windows end-to-end test in CI. Below is what the
+code does, not what was seen.
 
 ## What it does
 
@@ -49,8 +51,11 @@ MIT, pure Go, its loader embedded; `jchv/go-winloader`, ISC) only build for Wind
 - More than one window, a taskbar badge (ITaskbarList3 overlay), remembering the window's size and place.
 - Browser shortcuts (F5, Ctrl+P, Ctrl+F…): go-webview2 doesn't expose `AreBrowserAcceleratorKeysEnabled`; the page's
   own handlers can still `preventDefault` them.
-- Code signing (SmartScreen will warn). Updating the shell itself (a new GerdrExp.exe / installer): only the backend
-  updates.
+- Code signing (SmartScreen will warn).
+- Notifications ask once: WebView2 asks for the permission (Lightron doesn't grant it on Windows yet, as it does on
+  macOS); the bridge asks before the first one.
+- Whole-package updates (a new installer, `installApp`) never ran before 0.2.26: PowerShell started with
+  `DETACHED_PROCESS` exits without running its script (found in Lightron's `update.Install`).
 
 ## Things found the hard way
 

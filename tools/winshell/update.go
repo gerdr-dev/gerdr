@@ -348,7 +348,9 @@ func (s *shell) installApp(file string) {
 	script := fmt.Sprintf("Wait-Process -Id %d -ErrorAction SilentlyContinue; Start-Process -FilePath %s -ArgumentList '/S'",
 		os.Getpid(), quote(file))
 	cmd := exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", script)
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x08000000 | 0x00000008 /* CREATE_NO_WINDOW | DETACHED_PROCESS */}
+	// CREATE_NO_WINDOW only: with DETACHED_PROCESS (no console at all) PowerShell exits at once without running the
+	// script, so the installer never ran (found and fixed in Lightron's update.Install, 0.4.0). It outlives us either way.
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x08000000 /* CREATE_NO_WINDOW */}
 	if err := cmd.Start(); err != nil {
 		log.Printf("update: %v; opening the installer instead", err)
 		_ = shellExecute(file)
