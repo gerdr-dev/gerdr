@@ -252,7 +252,8 @@ export class Transcript {
   /**
    * `!` commands run while a turn is going (one message each, holding its data-shell card). Put into messages they
    * landed wherever the agent happened to be, splitting its reply in two around the card (user report). Like queued
-   * interjections they hang at the bottom instead and land at the end of the turn. Replaying the log does the same.
+   * interjections they hang at the bottom instead and land at the end of the turn, or right before the next user
+   * message (which is when the agent gets them). Replaying the log does the same.
    */
   parked: GMessage[] = [];
   private allCache: { m: GMessage[]; p: GMessage[]; q: GMessage[]; s: GMessage[]; all: GMessage[] } | null = null;
@@ -459,6 +460,9 @@ export class Transcript {
           this.pushPart(this.assistant(e.ts), { type: "data-notice", data: mb.notice });
           break;
         }
+        // `!` cards parked above it ran before this message (and usually go to the agent with it): they land first,
+        // or they'd hang at the bottom under everything the agent does after reading them, until the turn ends.
+        this.landParked();
         const parts: GPart[] = [];
         for (const c of e.content ?? []) {
           if (c.type === "text" && isShellContext(c.text)) continue; // `!命令` 带过去的输出：上面已经有那张命令卡片了
