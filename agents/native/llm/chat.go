@@ -57,7 +57,7 @@ func (c *chat) Stream(ctx context.Context, req Request, on func(Event)) (Result,
 		}
 	}
 
-	rc, err := post(ctx, c.ep, "/chat/completions", body)
+	rc, err := post(ctx, c.ep, "/chat/completions", req.CacheKey, body)
 	if err != nil {
 		return Result{Stop: "cancelled"}, err
 	}

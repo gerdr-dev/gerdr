@@ -118,6 +118,9 @@ func (c *anthropic) Stream(ctx context.Context, req Request, on func(Event)) (Re
 		body["thinking"] = map[string]any{"type": thinkingOffType(req.Model)}
 	}
 
+	if req.CacheKey != "" {
+		hdr.Set("X-Session-Id", req.CacheKey) // 见 post
+	}
 	rc, err := postURL(ctx, AnthropicURL(c.ep.BaseURL, "/messages"), hdr, c.ep.Headers, body)
 	if err != nil {
 		return Result{Stop: "cancelled"}, err

@@ -48,7 +48,7 @@ func (c *responses) Stream(ctx context.Context, req Request, on func(Event)) (Re
 		body["prompt_cache_key"] = req.CacheKey
 	}
 
-	rc, err := post(ctx, c.ep, "/responses", body)
+	rc, err := post(ctx, c.ep, "/responses", req.CacheKey, body)
 	if err != nil {
 		return Result{Stop: "cancelled"}, err
 	}

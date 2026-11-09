@@ -68,10 +68,14 @@ var httpClient = &http.Client{Transport: &http.Transport{
 }}
 
 // post 发请求，拿到 200 的响应体（SSE）。网络错误、429、5xx 在拿到响应之前重试。
-func post(ctx context.Context, ep Endpoint, path string, body any) (io.ReadCloser, error) {
+// session 是会话 id（Request.CacheKey），放进 x-session-id 头：服务商据此把同一段对话的请求串起来。
+func post(ctx context.Context, ep Endpoint, path, session string, body any) (io.ReadCloser, error) {
 	h := http.Header{}
 	if ep.APIKey != "" {
 		h.Set("Authorization", "Bearer "+ep.APIKey)
+	}
+	if session != "" {
+		h.Set("X-Session-Id", session)
 	}
 	return postURL(ctx, strings.TrimRight(ep.BaseURL, "/")+path, h, ep.Headers, body)
 }
