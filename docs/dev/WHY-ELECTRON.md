@@ -1,5 +1,9 @@
 # 为什么桌面 App 用 Electron
 
+> **Superseded (0.2.21)**: the Electron App was ~120MB a download. The macOS shell is now `tools/chromeshell` (the user's
+> own Chrome, renamed into a Gerdr App, ~18MB) and Windows' `tools/winshell` (WebView2), same Chromium engine as
+> before; see their READMEs for how and why. The reasoning below is still why it's Chromium and not WKWebView.
+
 **结论：桌面外壳是 Electron（`desktop/`），自带 Chromium。** 不用系统 WebView（原来的 mac 外壳就是
 WKWebView）、不用 Tauri / Wails、不用 mygo，也不用 nsh。
 

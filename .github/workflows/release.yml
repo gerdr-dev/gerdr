@@ -57,13 +57,14 @@ jobs:
           # a re-run after this tag's Release already exists would copy from itself
           [ "$prev" = "$GITHUB_REF_NAME" ] && prev=""
           if [ "$FULL" != true ] && [ -n "$prev" ] && gh release download "$prev" --repo "$GITHUB_REPOSITORY" -p update.json -p android.json -D prev; then
-            shell=$(./desktop/shell-id.sh)
+            shell=$(./tools/shell-id.sh)
             echo "shell: $shell, $prev's: $(jq -r .shell prev/update.json)"
-            # the dmg's own version (it may be older than $prev, carried over before): desktop/ also holds what goes into
-            # the dmg without being part of the shell id (adhoc-sign.js, build.sh), so it must be unchanged since then
+            # the dmg's own version (it may be older than $prev, carried over before): what goes into the dmg without being
+            # part of the shell id (the Info.plist package.sh writes, the signing setup) must be unchanged since then too
             dv=$(jq -r '.app["darwin-arm64"].file // ""' prev/update.json | sed -nE 's/^Gerdr-(.+)-mac-arm64\.dmg$/\1/p')
             if [ -n "$dv" ] && jq -e --arg s "$shell" '.shell == $s and .app["darwin-x64"]' prev/update.json >/dev/null &&
-              git rev-parse -q --verify "refs/tags/v$dv" >/dev/null && git diff --quiet "v$dv" HEAD -- desktop/ ':!desktop/feed.sh'; then
+              git rev-parse -q --verify "refs/tags/v$dv" >/dev/null &&
+              git diff --quiet "v$dv" HEAD -- tools/chromeshell tools/shell-id.sh internal/selfupdate desktop/res desktop/sign-id.sh; then
               dmg=reuse
             fi
             echo "dmg of $prev is v$dv; rebuild: $dmg"
@@ -109,20 +110,20 @@ jobs:
           rm "$RUNNER_TEMP/sign.p12"
           id=$(./desktop/sign-id.sh)
           [ "$id" = "Gerdr Local Signing" ] || { echo "the identity in Secrets isn't 'Gerdr Local Signing': $id"; exit 1; }
-      # One dmg each for Apple silicon and Intel (Gerdr-<version>-mac-arm64.dmg / -mac-x64.dmg, named in build.sh). No
-      # Apple developer certificate: the App is signed with the self-signed identity above (desktop/adhoc-sign.js),
-      # which Gatekeeper treats like ad-hoc, so the first open needs right-click → Open.
-      # For real signing + notarization later: put CSC_LINK / CSC_KEY_PASSWORD (and the APPLE_ID ones) in the repo's
-      # Secrets and pass them in this step's env
+      # The update-only backends (gerdr-<v>-darwin-<arch>.br, signed with the identity above), every release.
+      - run: ./desktop/build.sh mac-backend ${{ needs.plan.outputs.version }}
+      # One dmg each for Apple silicon and Intel (Gerdr-<version>-mac-arm64.dmg / -mac-x64.dmg): the desktop shell on
+      # the user's own Chrome (tools/chromeshell, ~18MB; the Electron App in desktop/ is retired). Its backend is
+      # signed with the identity above; the rest ad hoc, which Gatekeeper treats like no signature: the first open of
+      # a downloaded dmg needs right-click → Open (an update installs without that). An Electron App still out there
+      # sees another shell id in update.json and installs this dmg on its next update.
       - if: needs.plan.outputs.dmg == 'build'
-        run: ./desktop/build.sh mac ${{ needs.plan.outputs.version }}
-      - if: needs.plan.outputs.dmg == 'reuse'
-        run: ./desktop/build.sh mac-backend ${{ needs.plan.outputs.version }}
+        run: VERSION=${{ needs.plan.outputs.version }} NAME=Gerdr ID=io.github.zbysir.gerdr tools/chromeshell/package.sh
       # The update-only backends must carry the identity too, or an update voids the grants
       - name: Check the backends' signature
         run: |
           for b in desktop/bin/gerdr-*; do codesign -d -r- "$b" 2>&1 | tee /dev/stderr | grep -q 'certificate leaf' || exit 1; done
-      - run: mv desktop/dist/gerdr-*-darwin-*.br . && (mv desktop/dist/Gerdr-*-mac-*.dmg . 2>/dev/null || true)
+      - run: mv desktop/dist/gerdr-*-darwin-*.br . && (mv tools/chromeshell/dist/Gerdr-*-mac-*.dmg . 2>/dev/null || true)
       # Check the App inside each dmg is fully signed: a download of one that isn't opens as "damaged" (v0.2.0 shipped
       # like that)
       - name: Check the signature inside the dmgs
@@ -141,6 +142,33 @@ jobs:
           path: |
             Gerdr-*.dmg
             gerdr-*.br
+
+  # Windows, built on Linux (pure Go, NSIS): the desktop shell's installer (tools/winshell, WebView2;
+  # Gerdr-<v>-windows-x64-setup.exe, update.json app["win32-x64"]) and the backend alone, compressed like the mac
+  # ones (desktop/compress.js; update.json backend["win32-x64"]). Always built: a couple of minutes.
+  windows:
+    needs: plan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq nsis zip
+      - run: |
+          v="${{ needs.plan.outputs.version }}"
+          NAME=Gerdr VERSION="$v" tools/winshell/package.sh
+          node desktop/compress.js tools/winshell/dist/stage/gerdr.exe "gerdr-$v-win32-x64.br"
+          mv tools/winshell/dist/Gerdr-*-windows-x64-setup.exe .
+      - uses: actions/upload-artifact@v7
+        with:
+          name: windows
+          path: |
+            gerdr-*-win32-x64.br
+            Gerdr-*-windows-x64-setup.exe
 
   android:
     needs: plan
@@ -191,7 +219,7 @@ jobs:
   # Runs also when the android job was skipped (apk reused); not when anything failed
   release:
     if: ${{ !cancelled() && !failure() && startsWith(github.ref, 'refs/tags/v') }}
-    needs: [plan, mac, android]
+    needs: [plan, mac, android, windows]
     runs-on: ubuntu-latest
     steps:
       # for desktop/feed.sh and shell-id.sh

@@ -1,5 +1,11 @@
 # Desktop App updates
 
+> Since 0.2.21 the shells are `tools/chromeshell` (macOS) and `tools/winshell` (Windows), sharing
+> `internal/selfupdate`, a Go port of the updater below (same feed, same rules: backend-only when the shell id matches,
+> applied when idle; the whole package on a click otherwise). The shell id is `tools/shell-id.sh`; `desktop/feed.sh`
+> writes it. Electron Apps still out there see a different id and install the new shell's dmg on their next update.
+> The rest of this page describes the Electron shell, the design the port follows.
+
 Code: `desktop/updater.js` (download, pick the backend, install a whole App), `desktop/main.js` (when to apply),
 `desktop/shell-id.sh` + `desktop/feed.sh` (what a release publishes), `cmd/gerdr/attach.go` (the background service).
 
