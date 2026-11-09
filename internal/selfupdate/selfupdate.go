@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -286,17 +287,55 @@ func (u *Updater) failed(err error) string {
 	return i18n.S("检查更新失败：", "Update check failed: ") + err.Error()
 }
 
-func getJSON(url string, v any) error {
-	c := http.Client{Timeout: 30 * time.Second}
-	resp, err := c.Get(url)
-	if err != nil {
+// retryDelays: the waits between tries of a request (getJSON, download). GitHub's release downloads time out now and
+// then (504s for minutes, "a surge in anonymous users"): one failed try used to end the check until the next one,
+// hours later. A test sets them short.
+var retryDelays = []time.Duration{2 * time.Second, 5 * time.Second, 10 * time.Second, 20 * time.Second}
+
+// final: an error that another try won't change (a 4xx: the file isn't there).
+type final struct{ error }
+
+// retry runs try until it succeeds, fails with a final error, or the tries run out.
+func retry(try func() error) error {
+	err := try()
+	for _, d := range retryDelays {
+		var f final
+		if err == nil || errors.As(err, &f) {
+			break
+		}
+		log.Printf("update: %v; again in %v", err, d)
+		time.Sleep(d)
+		err = try()
+	}
+	var f final
+	if errors.As(err, &f) {
+		return f.error
+	}
+	return err
+}
+
+// statusErr: a response that isn't 200, final unless the server's side (5xx) or rate limited (429).
+func statusErr(what string, resp *http.Response) error {
+	err := fmt.Errorf("%s: %s", what, resp.Status)
+	if resp.StatusCode >= 500 || resp.StatusCode == http.StatusTooManyRequests {
 		return err
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("%s: %s", url, resp.Status)
-	}
-	return json.NewDecoder(resp.Body).Decode(v)
+	return final{err}
+}
+
+func getJSON(url string, v any) error {
+	return retry(func() error {
+		c := http.Client{Timeout: 30 * time.Second}
+		resp, err := c.Get(url)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != 200 {
+			return statusErr(url, resp)
+		}
+		return json.NewDecoder(resp.Body).Decode(v)
+	})
 }
 
 func (u *Updater) releaseURL(version, file string) string {
@@ -309,13 +348,17 @@ func (u *Updater) releaseURL(version, file string) string {
 // download streams url into dest, checking size and sha256 (the feed and the file come from the same release: this
 // catches truncation, not forgery). Progress goes to Settings.
 func (u *Updater) download(url, dest string, a asset) error {
+	return retry(func() error { return u.downloadOnce(url, dest, a) })
+}
+
+func (u *Updater) downloadOnce(url, dest string, a asset) error {
 	resp, err := http.Get(url)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
-		return fmt.Errorf("%s: %s", a.File, resp.Status)
+		return statusErr(a.File, resp)
 	}
 	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
 		return err

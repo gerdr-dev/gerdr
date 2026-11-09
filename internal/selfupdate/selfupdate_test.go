@@ -12,9 +12,16 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/andybalholm/brotli"
 )
+
+// Retries wait milliseconds here, not GitHub-sized seconds (a corrupted download is tried again too: truncation).
+func TestMain(m *testing.M) {
+	retryDelays = []time.Duration{time.Millisecond, time.Millisecond, time.Millisecond}
+	os.Exit(m.Run())
+}
 
 func TestNewer(t *testing.T) {
 	for _, c := range []struct {
@@ -198,5 +205,61 @@ func TestOtherShellDownloadsTheApp(t *testing.T) {
 	u.Check()
 	if hits != 1 {
 		t.Fatalf("package downloaded %d times", hits)
+	}
+}
+
+// GitHub answering 504 for a while: the check keeps trying, and goes through once the server does.
+func TestRetriesServerErrors(t *testing.T) {
+	dir := t.TempDir()
+	bundled := filepath.Join(dir, "bundle", "gerdr")
+	fakeGerdr(t, bundled, "0.2.20")
+	pkg := []byte("a whole new App")
+	sum := sha256.Sum256(pkg)
+	file := "Gerdr-0.2.21-mac-arm64.dmg"
+	feed, _ := json.Marshal(map[string]any{
+		"version": "0.2.21", "shell": "new-shell",
+		"app": map[string]any{PlatKey(): map[string]any{"file": file, "size": len(pkg), "sha256": hex.EncodeToString(sum[:])}},
+	})
+	feedTries, fileTries := 0, 0
+	mux := http.NewServeMux()
+	mux.HandleFunc("/update.json", func(rw http.ResponseWriter, r *http.Request) {
+		if feedTries++; feedTries < 2 {
+			http.Error(rw, "gateway", http.StatusGatewayTimeout)
+			return
+		}
+		_, _ = rw.Write(feed)
+	})
+	mux.HandleFunc("/"+file, func(rw http.ResponseWriter, r *http.Request) {
+		if fileTries++; fileTries < 3 {
+			http.Error(rw, "gateway", http.StatusGatewayTimeout)
+			return
+		}
+		_, _ = rw.Write(pkg)
+	})
+	mux.HandleFunc("/missing.json", func(rw http.ResponseWriter, r *http.Request) { http.NotFound(rw, r) })
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	t.Setenv("GERDR_UPDATE_FEED", srv.URL+"/update.json")
+
+	u := New(filepath.Join(dir, "data"), bundled, "0.2.20", "old-shell", true)
+	if msg := u.Check(); !strings.Contains(msg, "0.2.21") || u.Pending() == nil {
+		t.Fatalf("check through 504s: %q, pending %+v", msg, u.Pending())
+	}
+	if feedTries != 2 || fileTries != 3 {
+		t.Fatalf("tries: feed %d (want 2), file %d (want 3)", feedTries, fileTries)
+	}
+	// A 404 isn't tried again.
+	n := 0
+	err := retry(func() error {
+		n++
+		resp, err := http.Get(srv.URL + "/missing.json")
+		if err != nil {
+			return err
+		}
+		resp.Body.Close()
+		return statusErr("missing.json", resp)
+	})
+	if err == nil || n != 1 {
+		t.Fatalf("404: err %v after %d tries, want an error after 1", err, n)
 	}
 }
