@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
@@ -62,7 +63,39 @@ func (s *shell) startBackend() (string, error) {
 	}
 	s.backendEntry = entry
 	s.setBackend(be)
-	return entry, nil
+	return windowLink(entry), nil
+}
+
+// windowLink: the link the windows open at, with a one-time code instead of the token (/auth?code=…). It goes on the
+// command line that opens a window (Lightron's --app), which any process on the Mac can read: a code is spent by the
+// time anyone could use it, the token would be a key to the backend for good. Later windows open at the same link and
+// get in with the cookie the first one got (internal/server/logincode.go). A gerdr too old to give codes (the
+// background service not updated yet): the token, as before.
+func windowLink(entry string) string {
+	u, err := url.Parse(entry)
+	if err != nil {
+		return entry
+	}
+	req, _ := http.NewRequest("POST", originOf(entry)+"/api/auth/code", nil)
+	req.Header.Set("Authorization", "Bearer "+u.Query().Get("token"))
+	req.Header.Set("X-Gerdr", "1")
+	c := http.Client{Timeout: 5 * time.Second}
+	resp, err := c.Do(req)
+	if err != nil {
+		log.Printf("login code: %v; the window opens with the token", err)
+		return entry
+	}
+	defer resp.Body.Close()
+	var out struct{ Code string }
+	if resp.StatusCode != 200 || json.NewDecoder(resp.Body).Decode(&out) != nil || out.Code == "" {
+		log.Printf("login code: %s; the window opens with the token", resp.Status)
+		return entry
+	}
+	q := u.Query()
+	q.Del("token")
+	q.Set("code", out.Code)
+	u.RawQuery = q.Encode()
+	return u.String()
 }
 
 // pageEntry: the backend's login link at the pages' host (http://gerdr/auth?token=…), going to page.

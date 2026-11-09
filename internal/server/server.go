@@ -47,6 +47,7 @@ type Server struct {
 	Dir     string // 数据目录（~/.gerdr）
 	Hub     *hub.Hub
 	Token   string
+	codes   loginCodes // one-time /auth codes (logincode.go)
 	Config  *config.Store
 	Secrets *config.Secrets // API keys moved out of config.json (config/secrets.go)
 	Layout  *config.Store
@@ -114,6 +115,7 @@ func (s *Server) Handler() http.Handler {
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /auth", s.auth)
+	mux.HandleFunc("POST /api/auth/code", s.authCode)
 	mux.HandleFunc("GET /api/hello", s.hello)
 	s.addonRoutes(mux)
 	s.eventRoutes(mux)
@@ -278,22 +280,6 @@ func (s *Server) authed(r *http.Request) bool {
 		tok = strings.TrimPrefix(a, "Bearer ")
 	}
 	return tok != "" && subtle.ConstantTimeCompare([]byte(tok), []byte(s.Token)) == 1
-}
-
-// auth：/auth?token=…&next=/ —— 换一个 HttpOnly cookie，然后跳走（令牌不留在地址栏里）。
-func (s *Server) auth(w http.ResponseWriter, r *http.Request) {
-	tok := r.URL.Query().Get("token")
-	if subtle.ConstantTimeCompare([]byte(tok), []byte(s.Token)) != 1 {
-		time.Sleep(500 * time.Millisecond)
-		httpError(w, http.StatusUnauthorized, "bad token")
-		return
-	}
-	http.SetCookie(w, &http.Cookie{Name: s.cookieName(), Value: s.Token, Path: "/", HttpOnly: true, SameSite: http.SameSiteStrictMode, MaxAge: 400 * 24 * 3600})
-	next := r.URL.Query().Get("next")
-	if next == "" || !strings.HasPrefix(next, "/") || strings.HasPrefix(next, "//") {
-		next = "/"
-	}
-	http.Redirect(w, r, next, http.StatusFound)
 }
 
 // installedAt: when the running binary was installed (unix ms), 0 if unknown. Settings shows it next to the version.

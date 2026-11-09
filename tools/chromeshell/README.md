@@ -59,6 +59,7 @@ deletes the old engine (main.go moveLayout).
 - A second `GERDR_READY` on another port (the gerdr it attached to went away and it took over elsewhere): the
   browser's mapping of `gerdr` is fixed at its start, so the windows follow only once Gerdr is opened again. Rare: the
   port is fixed (7870).
-- The login link with the backend's token is on the command line that opens the first window (`--app=<url>`), which
-  other processes can read. The same as before Lightron; Lightron's `Handler` mode avoids it (the cookie goes over the
-  pipe), `URL` mode can't know a page's credentials. A fix belongs in the backend (a one-time code instead of the token).
+- **No token on a command line**: the first window opens with `--app=<link>`, which any process on the Mac can read
+  (`ps`). The link carries a one-time code (`/auth?code=…`, POST /api/auth/code, internal/server/logincode.go: one use,
+  within a minute), not the backend's token; later windows open at the same link and get in with the cookie. A
+  background service too old to give codes: the token, as before (gerdr.go windowLink).

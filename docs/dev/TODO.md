@@ -146,13 +146,11 @@ annotations; sources need `include: ["web_search_call.action.sources"]`). Chat C
 - Probe A once per provider and cache the answer, so a gateway without the server tool doesn't cost a failed call
   every search.
 
-## The backend's token on the App's command line (macOS)
+## Windows: the UI's settings when port 7870 is taken
 
-The macOS App opens its first window with `--app=http://gerdr/auth?token=…` (Lightron's `URL` mode: the browser takes
-the window's address from the command line), and any process on the Mac can read a command line (`ps`). The `--app`
-process is short-lived (it hands the URL to the running browser and exits), but the token in it is the backend's
-long-lived one. Before Lightron it was the same. Fix in the backend, not the shell: a one-time login code
-(`/auth?code=…`, valid for one use within a minute) that the shell asks for over the backend's stdout / a local call,
-so what is on the command line is spent by the time anyone could use it. Lightron's own `Handler` mode doesn't have
-the problem (it sets the cookie over the DevTools pipe).
-
+When 7870 is in use by another program, the backend serves on a free port instead (cmd/gerdr: "port busy, picking
+another"). On macOS nothing changes for the UI: the pages are at `http://gerdr/` whatever the port (Lightron maps the
+name). On Windows the page's origin is `127.0.0.1:<port>`, and localStorage is per origin: on such a start the UI's
+per-device settings (language, sizes, labs switches) look reset, and come back once it is on 7870 again. Fix: the same
+fixed name on Windows, e.g. the shell answering `http://gerdr/` itself through WebView2's `WebResourceRequested` and
+passing requests on to the backend (go-webview2 doesn't expose that event yet), WebSocket included.
