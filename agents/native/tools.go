@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -277,6 +278,9 @@ var writeTool = &tool{
 		p := c.abs(str(args, "path"))
 		content := str(args, "content")
 		old := c.readOld(p)
+		if old != nil {
+			content = likeOld(*old, content) // keep the file's BOM and CRLF (lineend.go)
+		}
 		if err := c.writeFile(p, []byte(content)); err != nil {
 			return errResult("%v", err)
 		}
@@ -311,13 +315,19 @@ var editTool = &tool{
 			return errResult("%v", err)
 		}
 		src := string(b)
+		// match on LF text without the BOM, then put both back (lineend.go)
+		bom, body := splitBOM(src)
+		crlf := isCRLF(body)
+		if crlf {
+			body, oldS, newS = toLF(body), toLF(oldS), toLF(newS)
+		}
 		if oldS == "" {
 			return errResult("old_string is empty; use write to create a file")
 		}
 		if oldS == newS {
 			return errResult("old_string and new_string are the same")
 		}
-		n := strings.Count(src, oldS)
+		n := strings.Count(body, oldS)
 		if n == 0 {
 			// 模型常把 read 输出里的行号 / tab 带进来，或者缩进差一点：说清楚，让它重读
 			return errResult("old_string not found in %s. It must match exactly, including indentation; do not include the line-number prefix from read output. Read the file again and retry.", p)
@@ -327,10 +337,11 @@ var editTool = &tool{
 		}
 		var out string
 		if boolean(args, "replace_all") {
-			out = strings.ReplaceAll(src, oldS, newS)
+			out = strings.ReplaceAll(body, oldS, newS)
 		} else {
-			out = strings.Replace(src, oldS, newS, 1)
+			out = strings.Replace(body, oldS, newS, 1)
 		}
+		out = restore(bom, out, crlf)
 		if err := c.writeFile(p, []byte(out)); err != nil {
 			return errResult("%v", err)
 		}
@@ -709,7 +720,7 @@ var globTool = &tool{
 				if d.IsDir() && (d.Name() == ".git" || d.Name() == "node_modules") {
 					return filepath.SkipDir
 				}
-				if r, _ := filepath.Rel(dir, p); !d.IsDir() && globMatch(pat, r) {
+				if r, _ := filepath.Rel(dir, p); !d.IsDir() && globMatch(pat, filepath.ToSlash(r)) {
 					files = append(files, p)
 				}
 				return nil
@@ -738,9 +749,13 @@ var globTool = &tool{
 }
 
 // globMatch：没有 rg 时的简陋版本，** 匹配任意层目录。
+// globMatch matches a "/"-separated relative path (callers pass filepath.ToSlash) against a glob: no "/" in the
+// pattern matches the base name; "**" spans directories. path.Match, not filepath.Match: on Windows the latter
+// takes "\\" as the separator, so "*" would run across "/".
 func globMatch(pat, p string) bool {
+	pat = filepath.ToSlash(pat)
 	if !strings.Contains(pat, "/") {
-		ok, _ := filepath.Match(pat, filepath.Base(p))
+		ok, _ := path.Match(pat, path.Base(p))
 		return ok
 	}
 	if strings.Contains(pat, "**") {
@@ -752,13 +767,13 @@ func globMatch(pat, p string) bool {
 		rest := strings.TrimPrefix(p, pre)
 		parts := strings.Split(rest, "/")
 		for i := range parts {
-			if ok, _ := filepath.Match(suf, strings.Join(parts[i:], "/")); ok {
+			if ok, _ := path.Match(suf, strings.Join(parts[i:], "/")); ok {
 				return true
 			}
 		}
 		return false
 	}
-	ok, _ := filepath.Match(pat, p)
+	ok, _ := path.Match(pat, p)
 	return ok
 }
 

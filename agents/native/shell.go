@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"unicode/utf16"
 )
 
@@ -19,7 +20,7 @@ func shellCmd(command string) (string, []string) {
 	sh := shell()
 	if sh == powershell {
 		// -EncodedCommand so no quoting in the command can be mangled on the way in
-		return sh, []string{"-NoProfile", "-NonInteractive", "-EncodedCommand", encodePS(command)}
+		return sh, []string{"-NoProfile", "-NonInteractive", "-EncodedCommand", encodePS(psUTF8 + command)}
 	}
 	return sh, []string{"-c", command}
 }
@@ -35,6 +36,10 @@ func encodePS(command string) string {
 }
 
 const powershell = "powershell.exe"
+
+// psUTF8 makes PowerShell write UTF-8 to the pipe (pi's UTF8_OUTPUT_PREFIX): a Chinese Windows console defaults to
+// GBK, which garbles non-ASCII paths and output.
+const psUTF8 = "try { [Console]::OutputEncoding=[System.Text.Encoding]::UTF8 } catch {}\n"
 
 // shell is the shell's path (powershell = PowerShell). Looked up on every call: Git installed while the app is
 // running is used from the next command on.
@@ -78,15 +83,29 @@ func gitBash() string {
 			d = filepath.Dir(d)
 		}
 	}
-	for _, root := range []string{os.Getenv("ProgramFiles"), os.Getenv("ProgramW6432"), filepath.Join(os.Getenv("LOCALAPPDATA"), "Programs")} {
-		if root == "" {
+	for _, root := range []string{os.Getenv("ProgramFiles"), os.Getenv("ProgramW6432"), os.Getenv("ProgramFiles(x86)"), filepath.Join(os.Getenv("LOCALAPPDATA"), "Programs")} {
+		if root == "" || root == "Programs" {
 			continue
 		}
 		if b := filepath.Join(root, "Git", "bin", "bash.exe"); isFile(b) {
 			return b
 		}
 	}
+	// some other bash on PATH (MSYS2, Cygwin), but not WSL's launcher in System32
+	if b, err := exec.LookPath("bash.exe"); err == nil && !isWSLBash(b) {
+		return b
+	}
 	return ""
+}
+
+// isWSLBash: C:\Windows\System32\bash.exe (or the WoW64 Sysnative path) runs WSL, a different machine.
+func isWSLBash(p string) bool {
+	p = strings.ToLower(filepath.Clean(p))
+	win := strings.ToLower(os.Getenv("SystemRoot")) // C:\Windows
+	if win == "" {
+		win = `c:\windows`
+	}
+	return p == filepath.Join(win, "system32", "bash.exe") || p == filepath.Join(win, "sysnative", "bash.exe")
 }
 
 func isFile(p string) bool {
