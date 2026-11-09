@@ -11,3 +11,9 @@
 /tools/scrolltest/package-lock.json
 # Claude Code local files (per-machine settings, agent worktrees)
 /.claude/
+
+# tools/chromeshell/package.sh output
+tools/chromeshell/dist/
+
+# tools/winshell/package.sh output
+tools/winshell/dist/
