@@ -500,7 +500,7 @@ export function renderPart(p: GPart, i: number, ctx: PartCtx): ReactNode {
     case "data-turnStat":
       return <TurnStat key={i} sessionId={ctx.sessionId} id={`${ctx.msgId}:${i}`} data={p.data} latest={!!ctx.latest} blocks={ctx.turnBlocks} />;
     case "data-task":
-      return <TaskDoneCard key={i} sessionId={ctx.sessionId} t={p.data.task} woke={p.data.woke} command={p.data.command} />;
+      return <TaskDoneCard key={i} sessionId={ctx.sessionId} t={p.data.task} command={p.data.command} />;
     case "data-wake":
       return <WakeRow key={i} w={p.data.wake} keep={ctx.keep || `${ctx.sessionId}:wake:${ctx.msgId}:${i}`} />;
     case "data-shell":

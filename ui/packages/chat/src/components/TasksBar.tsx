@@ -113,7 +113,7 @@ function boilerplate(t: AgentTask) {
  * 后台任务跑完了：时间线上标一下它是这时候结束的。画成和工具调用（ToolCall）一样的一行 ——
  * 状态图标打头、行尾耗时，对齐也一样（-ml-1.5 px-1.5），不再是一张带框的卡片夹在一串工具行中间。
  */
-export function TaskDoneCard({ sessionId, t, woke, command }: { sessionId: string; t: AgentTask; woke?: boolean; command?: string }) {
+export function TaskDoneCard({ sessionId, t, command }: { sessionId: string; t: AgentTask; command?: string }) {
   const Icon = taskIcon(t);
   const ok = t.status === "completed";
   const isAgent = t.type === "local_agent" || !!t.subagent;
@@ -136,8 +136,6 @@ export function TaskDoneCard({ sessionId, t, woke, command }: { sessionId: strin
         {ok && tr("task.doneDot")}
         {elapsed(t.startedAt, t.endedAt)}
       </span>
-      {/* 它一结束 agent 就自己接着干了：交代下面这段话是怎么来的（transcript 的 turn_start auto） */}
-      {woke && <span className="shrink-0 text-[11px]">{tr("task.woke")}</span>}
       <span className="flex-1" />
       {isAgent && t.toolCallId && chatHost().openSubagent && (
         <button

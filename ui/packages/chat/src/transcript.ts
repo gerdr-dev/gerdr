@@ -42,7 +42,7 @@ export type GData = {
   };
   /** level：info / warn / error / clear / auto / retry（「N 秒后重试」，done = 重试成功后收起了） */
   notice: { level: string; text: string; done?: boolean; until?: number };
-  /** woke：这个任务一结束 agent 就自己开了一轮（turn_start auto），卡片上标「→ agent 接着处理」 */
+  /** woke: the agent started a turn by itself right after this task ended (turn_start auto); keeps the row out of tool-call groups */
   /** command: the command of the tool call that started it, so the card can tell whether its description is that command (monospace) or prose */
   task: { task: AgentTask; woke?: boolean; command?: string };
   /** An auto turn woken by a task that has no "finished" row right above it: a Monitor's new output, or a task that ended earlier */
