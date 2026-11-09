@@ -52,15 +52,22 @@ for arch in $ARCHS; do
   rm -rf "$APP"
   mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 
-  # The backend, as desktop/build.sh builds it (UI snapshot inside).
-  GOOS=darwin GOARCH=$arch go build -ldflags "-s -w -X github.com/gerdr-dev/gerdr/internal/version.Version=$VERSION" -o "$APP/Contents/Resources/gerdr" ./cmd/gerdr
-  # Signed like desktop/build.sh signs it: the fixed "Gerdr Local Signing" identity (desktop/sign-id.sh) and the same
-  # identifier, so macOS privacy grants (Screen Recording / Accessibility, the remote screen) given to the backend
-  # survive rebuilds and updates. Ad hoc changes with every build and voids them. No identity here: ad hoc.
-  if [ -n "$SIGN_ID" ]; then
-    codesign --force --sign "$SIGN_ID" --identifier io.github.zbysir.gerdr.backend "$APP/Contents/Resources/gerdr"
+  # The backend, as desktop/build.sh builds it (UI snapshot inside). BACKEND_DIR: the ones `desktop/build.sh
+  # mac-backend` already built and signed (gerdr-arm64 / gerdr-x64), as the release does: the dmg then carries the
+  # very binary of the update-only .br, and the job doesn't compile the backend twice (~1 min per arch).
+  farch=$([ "$arch" = amd64 ] && echo x64 || echo arm64)
+  if [ -n "${BACKEND_DIR:-}" ]; then
+    cp "$BACKEND_DIR/gerdr-$farch" "$APP/Contents/Resources/gerdr" # signed already, the way below
   else
-    codesign --force --sign - "$APP/Contents/Resources/gerdr"
+    GOOS=darwin GOARCH=$arch go build -ldflags "-s -w -X github.com/gerdr-dev/gerdr/internal/version.Version=$VERSION" -o "$APP/Contents/Resources/gerdr" ./cmd/gerdr
+    # Signed like desktop/build.sh signs it: the fixed "Gerdr Local Signing" identity (desktop/sign-id.sh) and the
+    # same identifier, so macOS privacy grants (Screen Recording / Accessibility, the remote screen) given to the
+    # backend survive rebuilds and updates. Ad hoc changes with every build and voids them. No identity here: ad hoc.
+    if [ -n "$SIGN_ID" ]; then
+      codesign --force --sign "$SIGN_ID" --identifier io.github.zbysir.gerdr.backend "$APP/Contents/Resources/gerdr"
+    else
+      codesign --force --sign - "$APP/Contents/Resources/gerdr"
+    fi
   fi
 
   # The shell.
@@ -96,7 +103,6 @@ EOF
 
   # <name>-<version>-mac-arm64 / -mac-x64: the names desktop/feed.sh and the updaters look for. In the dmg: the App
   # at its root (the updaters copy the first .app there) and a shortcut to /Applications to drag it onto.
-  farch=$([ "$arch" = amd64 ] && echo x64 || echo arm64)
   DMG="$OUT/$SLUG-$VERSION-mac-$farch.dmg"
   rm -f "$OUT/$SLUG-$VERSION-mac-$farch.zip" "$DMG"
   ditto -c -k --keepParent "$APP" "$OUT/$SLUG-$VERSION-mac-$farch.zip"

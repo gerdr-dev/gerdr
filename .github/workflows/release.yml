@@ -118,7 +118,8 @@ jobs:
       # a downloaded dmg needs right-click → Open (an update installs without that). An Electron App still out there
       # sees another shell id in update.json and installs this dmg on its next update.
       - if: needs.plan.outputs.dmg == 'build'
-        run: VERSION=${{ needs.plan.outputs.version }} NAME=Gerdr ID=io.github.zbysir.gerdr tools/chromeshell/package.sh
+        # BACKEND_DIR: the backends the step above built and signed, not compiled again
+        run: BACKEND_DIR=desktop/bin VERSION=${{ needs.plan.outputs.version }} NAME=Gerdr ID=io.github.zbysir.gerdr tools/chromeshell/package.sh
       # The update-only backends must carry the identity too, or an update voids the grants
       - name: Check the backends' signature
         run: |

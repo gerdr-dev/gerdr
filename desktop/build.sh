@@ -21,7 +21,7 @@ make -s ui
 [ "$TARGET" = mac-backend ] || ( cd desktop && [ -d node_modules ] || npm install --no-audit --no-fund )
 rm -rf desktop/bin && mkdir -p desktop/bin/mac desktop/bin/win
 
-# Brotli at max quality takes about a minute per backend, single-threaded: run them in the background, next to the
+# Brotli (desktop/compress.js) takes ~40s per backend, single-threaded: run them in the background, next to the
 # other arch's build, and wait for all of them before finishing (a failed one fails the build)
 # A fixed signing identity for the backend when this machine has one (desktop/sign-id.sh): keeps macOS privacy grants
 # (Screen Recording / Accessibility for the remote screen) across rebuilds. None = the linker's ad-hoc signature, as before
