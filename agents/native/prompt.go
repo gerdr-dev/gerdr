@@ -82,7 +82,7 @@ func envSection(cwd string, model resolved) string {
 	} else {
 		b.WriteString("- Not a git repository\n")
 	}
-	fmt.Fprintf(&b, "- Platform: %s/%s, shell: %s\n", runtime.GOOS, runtime.GOARCH, shell())
+	fmt.Fprintf(&b, "- Platform: %s/%s, shell: %s\n", runtime.GOOS, runtime.GOARCH, shellName())
 	fmt.Fprintf(&b, "- Today's date: %s\n", time.Now().Format("2006-01-02"))
 	// 不写的话问「你是什么模型」它只能猜（用户问过）
 	if model.ID != "" {

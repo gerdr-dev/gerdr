@@ -368,13 +368,6 @@ var bashTool = &tool{
 	run: runBash,
 }
 
-func shell() string {
-	if s := os.Getenv("SHELL"); s != "" {
-		return s
-	}
-	return "/bin/sh"
-}
-
 // proc 是一个跑着的命令。
 type proc struct {
 	cmd   *exec.Cmd
@@ -384,7 +377,8 @@ type proc struct {
 }
 
 func startProc(c *call, command string) (*proc, error) {
-	cmd := exec.Command(shell(), "-c", command)
+	name, argv := shellCmd(command)
+	cmd := exec.Command(name, argv...)
 	cmd.Dir = c.cwd()
 	var extra []string
 	if f := c.r.s.a.opt.BashEnv; f != nil {
@@ -578,7 +572,7 @@ func headTail(s string, n int) string {
 	return h + fmt.Sprintf("\n\n… [%d characters omitted] …\n\n", len(s)-len(h)-len(t)) + t
 }
 
-// ---- grep / glob（ripgrep，没有就退回 grep / find）----
+// ---- grep / glob（ripgrep，没有就退回 grep，再没有就用 Go 自己搜 / 走目录）----
 
 var grepTool = &tool{
 	name: "grep",
@@ -629,8 +623,8 @@ var grepTool = &tool{
 				argv = append(argv, "--glob", g)
 			}
 			argv = append(argv, "-e", pat, dir)
-		} else {
-			argv = []string{"grep", "-rE", "--exclude-dir=.git", "--exclude-dir=node_modules"}
+		} else if g, gerr := exec.LookPath("grep"); gerr == nil {
+			argv = []string{g, "-rE", "--exclude-dir=.git", "--exclude-dir=node_modules"}
 			switch str(args, "output_mode") {
 			case "content":
 				argv = append(argv, "-n")
@@ -646,6 +640,20 @@ var grepTool = &tool{
 				argv = append(argv, "--include="+g)
 			}
 			argv = append(argv, "-e", pat, dir)
+		} else {
+			// neither rg nor grep (Windows without Git)
+			mode := str(args, "output_mode")
+			if mode != "content" && mode != "count" {
+				mode = "files"
+			}
+			out, err := goGrep(pat, dir, str(args, "glob"), mode, boolean(args, "ignore_case"))
+			if err != nil {
+				return errResult("%v", err)
+			}
+			if strings.TrimSpace(out) == "" {
+				return result{text: "No matches."}
+			}
+			return result{text: headTail(relLines(out, c.cwd()), outMax)}
 		}
 		out, code, err := runCapture(c.ctx, c.cwd(), argv)
 		if err != nil {
