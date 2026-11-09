@@ -153,7 +153,7 @@ export function DirPicker({
     onChange(tilde(r.path, home) + (r.path === "/" ? "" : "/"));
     if (r.kind !== "recent") browse(r.path);
   };
-  // A click only fills it in (so it can still be checked or changed); Enter / double-click also submit
+  // A click or Enter only fills it in (so it can still be checked or changed); double-click also submits
   const take = (r: Row, submit: boolean) => {
     const v = tilde(r.path, home);
     onChange(v);
@@ -194,7 +194,9 @@ export function DirPicker({
                   }
                 } else if (e.key === "Enter") {
                   e.preventDefault();
-                  if (open && hi >= 0 && rows[hi]) return take(rows[hi], true);
+                  // With the list open, Enter only picks: the highlighted row fills the input, no row just closes the list.
+                  // Submitting is the next Enter, once you can see what's in the box (it used to create straight away).
+                  if (open) return hi >= 0 && rows[hi] ? take(rows[hi], false) : setFocused(false);
                   if (isQuery(value)) return; // a name with no match isn't a path
                   setFocused(false);
                   onEnter?.(value);
@@ -239,8 +241,10 @@ export function DirPicker({
           </div>
         </PopoverContent>
       </Popover>
-      {status?.kind === "missing" && <div className="truncate text-[12px] text-warn">{t("newSession.dirMissing")}</div>}
-      {status?.kind === "bad" && <div className="truncate text-[12px] text-bad">{status.msg}</div>}
+      {/* The line is always there, empty or not: the check re-runs as you type, and a line coming and going made the dialog jump */}
+      <div className={cn("h-[18px] truncate text-[12px] leading-[18px]", status?.kind === "bad" ? "text-bad" : "text-warn")}>
+        {status?.kind === "missing" ? t("newSession.dirMissing") : status?.kind === "bad" ? status.msg : null}
+      </div>
     </div>
   );
 }
