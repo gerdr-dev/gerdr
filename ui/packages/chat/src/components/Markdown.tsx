@@ -175,12 +175,20 @@ function CodeBlock(props: any) {
 // react-markdown 默认会把 file:// 这类地址清掉；本机路径原样留给 ChatMedia（它只拿来拼 /api/fs/raw 的参数）
 const urlTransform = (url: string) => (localPath(url) !== null || /^https?:|^mailto:|^#/i.test(url) ? url : "");
 
+// Windows paths in a link / image destination (`](C:\a\.b\x.png)`, `](<C:\a b\x.png>)`, `](file:///C:/x.png)`), fixed in the
+// text before it is parsed: a backslash is markdown's escape (`\.` becomes `.`, the path breaks), and the drive letter reads
+// as a protocol (`c:`), which rehype-harden blocks outright: written /C:/… with forward slashes it passes as a path
+// (localPath drops the leading /).
+const winDest = /\]\((<?)(?:file:\/\/\/?)?\/?([a-zA-Z]:[\\/][^)>\n]*)(>?)\)/g;
+export const fixWindowsPaths = (md: string) =>
+  md.includes(":\\") || md.includes(":/") ? md.replace(winDest, (_m, a: string, p: string, b: string) => `](${a}/${p.replace(/\\/g, "/")}${b})`) : md;
+
 const components: Components = { a: A, img: Img, p: P, inlineCode: InlineCode, code: CodeBlock };
 
 export function Markdown({ children }: { children: string }) {
   return (
     <MessageResponse remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins} components={components} urlTransform={urlTransform}>
-      {children}
+      {fixWindowsPaths(children)}
     </MessageResponse>
   );
 }
