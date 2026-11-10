@@ -30,7 +30,8 @@ func waitCmd() *cobra.Command {
 条件是一个 JavaScript 表达式：状态的每个字段都是变量（$ 是整个状态），值为真就叫醒。字符串要加引号。
 列表可以过滤：notes.some(n => n.author != me && n.resolvable && !n.resolved && n.id > 1233511)
 只能读状态，碰不到文件和网络，每次判断最多 50ms。
-计数类的写成「比现在多」：reviews > <现在的个数>，不然处理完再等会马上又被叫醒。`,
+计数类的写成「比现在多」：reviews > <现在的个数>，不然处理完再等会马上又被叫醒。
+等待属于这段对话：会话关掉、删掉或 /clear 之后就取消了（Gerdr 重启不影响）。`,
 			`Wait until a thing's state meets a condition; then the session (default: you) gets a message, and the wait is over.
 Add-ons report what things are like now (gerdr wait sources lists them and their fields); Gerdr checks the
 condition against that: one that holds already wakes at once, so waiting late misses nothing. To wait for what comes
@@ -43,6 +44,7 @@ A condition is one JavaScript expression: each of the state's fields is a variab
 you when the value is true. Strings need quotes. Lists can be filtered:
 notes.some(n => n.author != me && n.resolvable && !n.resolved && n.id > 1233511)
 It reads only the state (no files, no network), 50ms per check.
+A wait belongs to this conversation: closing, deleting or /clear-ing the session drops it (a Gerdr restart doesn't).
 Write counts as "more than now": reviews > <the count now>, or waiting again after handling them wakes at once.`),
 		Args: cobra.ExactArgs(2),
 		Run: func(cmd *cobra.Command, args []string) {

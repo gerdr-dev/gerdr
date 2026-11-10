@@ -82,6 +82,19 @@ func (s *Server) wireWaits(ctx context.Context) {
 		}
 	}
 	s.AddonSvc.OnState = s.stateFromAddon
+	// A session closed, deleted or cleared takes its waits with it: nobody sees it any more, and a conversation the
+	// person put away (or wiped with /clear) woken later by a message is a surprise — the way Claude Code's background
+	// tasks end with their session. Panels' waits are their trigger files, not a session's.
+	prevEnded := s.Hub.Ended
+	s.Hub.Ended = func(id, why string) {
+		if prevEnded != nil {
+			prevEnded(id, why)
+		}
+		if n := len(s.Waits.List(id)); n > 0 {
+			s.Waits.DropSession(id)
+			s.Log.Info("waits dropped with their session", "session", id, "why", why, "waits", n)
+		}
+	}
 	s.Waits.OnChange(s.waitsChanged)
 	go func() {
 		t := time.NewTicker(2 * time.Second)

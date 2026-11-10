@@ -123,6 +123,11 @@ the add-on.
   holding or its file changes (usually its function trashes it or rewrites it). The wake message carries the state's
   values; the waiter states its next expectation from them. Counts are written as "more than now" (`reviews > 3`):
   `reviews > 0` again right after handling them would wake at once.
+- **A session's waits live as long as its conversation** (`hub.Ended`): closing it (no pane shows it any more —
+  the UI's shutdown — or `gerdr session close`), deleting it, or `/clear` (the tab goes on with a new, empty
+  conversation) drops them. First they outlived all three, and woke a conversation nobody could see any more, or a
+  cleared one with no idea what it had waited for; the user's comparison was Claude Code, whose background tasks end
+  with their session. A Gerdr restart keeps them (nobody ended anything). Panels' waits are trigger files, untouched.
 - **A source may also report unasked** (`{"type":"state"}` without an id, naming the key) when it learns of a change
   by itself (a webhook, a socket); Gerdr checks the waits the same way. Not needed by polling sources.
 - **Conditions are one JavaScript expression** over the state (`waits.Cond`, goja): each field is a variable, `$`

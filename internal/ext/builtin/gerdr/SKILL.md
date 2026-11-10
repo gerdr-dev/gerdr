@@ -430,6 +430,7 @@ gerdr wait state gitlab 'gitlab.example.com/group/repo!34'   # the latest state,
   next expectation built from them. Write counts as "more than now" (`reviews > 3` when there are 3) — `reviews > 0`
   again right after handling them would wake you at once. Ending your turn after `gerdr wait` is right: the message
   wakes you.
+- A wait belongs to this conversation: closing it, deleting it or `/clear` drops it (a Gerdr restart doesn't).
 - After opening an MR: wait on it straight away, in the same turn. Needs the GitLab add-on (`gerdr addon install
   gitlab`) and `glab auth login --hostname <host>`; the output says if the add-on can't take the key and why.
 

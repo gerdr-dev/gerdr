@@ -153,6 +153,14 @@ func TestWaits(t *testing.T) {
 			t.Error("a broken wait was kept")
 		}
 	}
+	// A session closed (no pane shows it any more) takes its waits with it
+	_, _ = wt.Add(waits.Wait{Source: "gitlab", Key: "h/a!1", Until: "reviews > 100", Session: "w2"})
+	if err := s.Hub.Shutdown(context.Background(), "w2"); err != nil {
+		t.Fatal(err)
+	}
+	if l := wt.List("w2"); len(l) != 0 {
+		t.Errorf("a closed session's waits kept: %+v", l)
+	}
 	// A list in the state shows as its length in the wake message, not dumped
 	if l := fieldsLine(map[string]any{"notes": []any{map[string]any{"id": 1.0}, map[string]any{"id": 2.0}}, "reviews": 2.0}); l != "notes=[2 项] reviews=2" {
 		t.Errorf("fieldsLine %q", l)

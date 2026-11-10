@@ -74,6 +74,8 @@ func (s *Session) onUpdate(u acp.SessionUpdate) {
 				if c, _ := g["cleared"].(bool); c {
 					if prev.AgentSessionID != "" && prev.AgentSessionID != id {
 						s.h.splitOffCleared(s, prev)
+						// What the cleared conversation waited for isn't the new, empty one's business
+						go s.h.ended(s.ID(), "cleared")
 					}
 					s.mu.Lock()
 					// The title belongs to what was cleared away, renamed or not (a /rename names that piece of work, not

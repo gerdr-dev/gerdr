@@ -245,6 +245,11 @@ type Hub struct {
 	// Elsewhere: a session this hub doesn't hold but can report to, on another computer this one drives
 	// (docs/dev/MULTIHOST.md); ok = it exists, next = where it reports to itself (to catch loops). nil = none.
 	Elsewhere func(id string) (next string, ok bool)
+	// Ended: a session's conversation ended for the person — closed (no pane shows it any more, or `gerdr session
+	// close`), deleted, or cleared (/clear: the tab goes on with a new, empty conversation). What was tied to that
+	// conversation goes with it, like Claude Code's background tasks when its session closes (the waits:
+	// server/waitsapi.go). why: "closed" / "deleted" / "cleared". nil = nobody cares. Called outside the hub's locks.
+	Ended func(id, why string)
 
 	opt  Options
 	log  *slog.Logger
@@ -988,7 +993,14 @@ func (h *Hub) Shutdown(ctx context.Context, id string) error {
 	s.attachMu.Unlock()
 	s.setStatus() // close 把等人处理的请求清掉了
 	h.broadcastSession(s)
+	h.ended(id, "closed")
 	return nil
+}
+
+func (h *Hub) ended(id, why string) {
+	if h.Ended != nil {
+		h.Ended(id, why)
+	}
 }
 
 // CloseUI 是 `gerdr session close`：广播给开着的界面把显示它的 pane 收掉（布局归界面管），agent 那边这里直接关
@@ -1030,6 +1042,7 @@ func (h *Hub) Delete(ctx context.Context, id string) error {
 	_ = os.Remove(s.handoffFile()) // the transcript handed to the agent (handoff.go)
 	h.saveIndex()
 	h.broadcast(Msg{T: "session_removed", ID: id})
+	h.ended(id, "deleted")
 	return nil
 }
 
