@@ -5,6 +5,7 @@ import { ModeSwitch } from "@/components/WorkView";
 import { currentSpace, spaceList } from "@/lib/layout";
 import { get, set, setSidebarW, SIDEBAR_W, toggleSidebar, useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
+import { updateWaitsForClick } from "@/lib/native";
 import { PhoneAddonButtons } from "./RailAddons";
 import { isAndroid } from "@/lib/android";
 import { usePhone } from "@/lib/phone";
@@ -71,6 +72,7 @@ export function SidebarHeader({ className, style }: { className?: string; style?
 export function SidebarFooter({ sidebarToggle }: { sidebarToggle?: boolean }) {
   const connected = useStore((s) => s.connected);
   const doctorBad = useStore((s) => s.doctor?.level === "bad");
+  const updateWaits = useStore((s) => updateWaitsForClick(s.appUpdate));
   const phone = usePhone();
   return (
     <div className="flex h-10 shrink-0 items-center gap-1 border-t bg-sidebar px-1.5">
@@ -85,6 +87,11 @@ export function SidebarFooter({ sidebarToggle }: { sidebarToggle?: boolean }) {
         {doctorBad && (
           <span className="ml-auto flex items-center gap-1 text-[11px] text-bad" title={t("sidebarChrome.doctorBad")}>
             <span className="size-1.5 rounded-full bg-bad" /> {t("sidebarChrome.hasProblem")}
+          </span>
+        )}
+        {!doctorBad && updateWaits && (
+          <span className="ml-auto flex items-center gap-1 text-[11px] text-brand">
+            <span className="size-1.5 rounded-full bg-brand" /> {t("sidebarChrome.hasUpdate")}
           </span>
         )}
       </Button>

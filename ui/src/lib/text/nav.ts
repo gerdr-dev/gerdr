@@ -97,9 +97,11 @@ export const zh = {
   "rail.showSessionList": "显示会话列表",
   "rail.newProjectHint": "新项目（每个项目有自己的工作空间、Agent 和面板，互相看不见；右键项目可重命名、删除，拖动排序）",
   "rail.settingsDoctorBad": "设置（诊断发现了问题：设置 → 实验室 → 诊断）",
+  "rail.settingsUpdate": "设置（有更新等你点：设置 → 通用 → 版本与后台）",
 
   "sidebarChrome.doctorBad": "诊断发现了问题：设置 → 实验室 → 诊断",
   "sidebarChrome.hasProblem": "有问题",
+  "sidebarChrome.hasUpdate": "有更新",
   "sidebarChrome.hideSidebar": "隐藏侧栏",
 
   "phoneBar.sidebar": "侧栏（长按：切项目 / 面板）",
@@ -320,9 +322,11 @@ export const en: Record<keyof typeof zh, string> = {
   "rail.newProjectHint":
     "New project (each project has its own workspaces, agents and panels, invisible to the others; right-click a project to rename or delete it, drag to reorder)",
   "rail.settingsDoctorBad": "Settings (diagnostics found a problem: Settings → Labs → Diagnostics)",
+  "rail.settingsUpdate": "Settings (an update is waiting for you: Settings → General → Version and background)",
 
   "sidebarChrome.doctorBad": "Diagnostics found a problem: Settings → Labs → Diagnostics",
   "sidebarChrome.hasProblem": "Problem",
+  "sidebarChrome.hasUpdate": "Update",
   "sidebarChrome.hideSidebar": "Hide sidebar",
 
   "phoneBar.sidebar": "Sidebar (long-press: switch project / panel)",

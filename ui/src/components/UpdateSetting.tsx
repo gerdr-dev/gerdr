@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { Switch } from "@/components/ui/switch";
-import { isNative, nativeApplyUpdate, nativeAskUpdate, nativeSetAutoUpdate, type AppUpdateStatus } from "@/lib/native";
+import { isNative, nativeApplyUpdate, nativeAskUpdate, nativeSetAutoUpdate, restartEffect, type AppUpdateStatus } from "@/lib/native";
 import { set, useStore } from "@/lib/store";
 import { locale, t } from "@/lib/i18n";
 import type { MessageKey } from "@/lib/messages";
@@ -24,7 +24,7 @@ import type { SessionSummary, TermInfo } from "@/lib/types";
 export function UpdateSetting() {
   const version = useStore((s) => s.version);
   const u = useStore((s) => s.appUpdate);
-  const [service, setService] = useState(false);
+  const [service, setService] = useState<boolean | null>(null); // the background service; null = not known (yet)
 
   useEffect(() => {
     if (!isNative()) {
@@ -97,7 +97,7 @@ export function UpdateSetting() {
         {u?.enabled &&
           (p ? (
             <Button size="sm" disabled={u.phase === "applying"} onClick={apply}>
-              {t("systemUpdate.updateNow")}
+              {p.kind === "app" ? t("native.restartToUpdate") : t("systemUpdate.updateNow")}
             </Button>
           ) : (
             <Button size="sm" variant="outline" disabled={u.phase !== "idle" || checking.on} onClick={ask}>
@@ -268,12 +268,12 @@ function useChecking(u: AppUpdateStatus | null) {
   };
 }
 
-function describe(u: AppUpdateStatus, service: boolean): { text: string; tone: string } {
+function describe(u: AppUpdateStatus, service: boolean | null): { text: string; tone: string } {
   const p = u.pending;
   if (u.phase === "applying" && p) return { text: t("updateSetting.applying", { version: p.version }), tone: "text-brand" };
   if (u.phase === "downloading") return { text: t("systemUpdate.downloading", { name: u.downloading, progress: u.progress }), tone: "" };
   if (u.phase === "checking") return { text: t("systemUpdate.checking"), tone: "" };
-  if (p?.kind === "app") return { text: t("updateSetting.pendingApp", { version: p.version }), tone: "text-brand" };
+  if (p?.kind === "app") return { text: t("updateSetting.pendingApp", { version: p.version, effect: restartEffect(u, service) }), tone: "text-brand" };
   if (p) {
     const b = u.busy;
     const who = service ? t("updateSetting.whoService") : t("updateSetting.whoApp");

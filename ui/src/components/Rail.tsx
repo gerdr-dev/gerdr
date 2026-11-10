@@ -7,6 +7,7 @@ import { currentSpace, spaceList, type Space } from "@/lib/layout";
 import { isCoarse } from "@/lib/phone";
 import { set, setMode, toggleSidebar, useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
+import { updateWaitsForClick } from "@/lib/native";
 import { StatusDot } from "./AgentIcon";
 import { RailAddonButtons } from "./RailAddons";
 import { RouteLabel } from "./ConnStatus";
@@ -47,6 +48,7 @@ export function Rail() {
   const mode = useStore((s) => s.mode);
   const sidebar = useStore((s) => s.sidebar);
   const doctorBad = useStore((s) => s.doctor?.level === "bad");
+  const updateWaits = useStore((s) => updateWaitsForClick(s.appUpdate)); // an update closed with "Later"
   const connected = useStore((s) => s.connected);
   const spaces = spaceList(layout);
   const here = currentSpace(layout);
@@ -169,14 +171,14 @@ export function Rail() {
                 </button>,
               )}
           {tip(
-            doctorBad ? t("rail.settingsDoctorBad") : t("nav.settings"),
+            doctorBad ? t("rail.settingsDoctorBad") : updateWaits ? t("rail.settingsUpdate") : t("nav.settings"),
             <button
               aria-label={t("nav.settings")}
               className={cn(railBtn, "relative")}
               onClick={() => set({ dialog: { kind: "settings", tab: doctorBad ? "labs" : undefined } })}
             >
               <Settings className="size-4" />
-              {doctorBad && <span className="absolute top-1.5 right-1.5 size-1.5 rounded-full bg-bad" />}
+              {(doctorBad || updateWaits) && <span className={cn("absolute top-1.5 right-1.5 size-1.5 rounded-full", doctorBad ? "bg-bad" : "bg-brand")} />}
             </button>,
           )}
           {/* Which way the Android app reaches gerdr (details in Settings → General → Android app) */}

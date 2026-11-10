@@ -115,8 +115,19 @@ export function nativeApplyUpdate() {
 }
 
 /**
- * Keep the status for Settings, and toast a downloaded update once per version — unless nothing is running and automatic
- * updates are on, then the shell applies it by itself in a few seconds anyway (a whole-App update always waits for a click).
+ * An update that waits for the person to click: a whole new App (the shell has to restart), or any update with automatic
+ * updates off. The settings button carries a dot while one waits, so a toast closed with "Later" isn't the only trace.
+ */
+export function updateWaitsForClick(u: AppUpdateStatus | null): boolean {
+  const p = u?.pending;
+  return !!p && u!.phase !== "applying" && (p.kind === "app" || u!.auto === false);
+}
+
+/**
+ * Keep the status for Settings, and toast an update once per version only when it needs a click. One that goes in by
+ * itself (the backend, automatic updates on) says nothing until it is in ("updated to", noteUpdated); while it waits
+ * for agents to finish, Settings → General → Version says on what. The text says what the click does to the person —
+ * windows closing, agents cut off or not — not how the update is made: "the whole App" meant nothing to people.
  */
 let toasted = "";
 export function onAppUpdate(u: AppUpdateStatus) {
@@ -124,19 +135,42 @@ export function onAppUpdate(u: AppUpdateStatus) {
   relayUpdate(u);
   noteUpdated(u.running);
   const p = u.pending;
-  if (!p || u.phase === "applying") return void toast.dismiss("app-update");
-  const b = u.busy;
-  const idle = !!b && b.turns + b.waiting + b.tasks + b.terms === 0;
-  const auto = u.auto !== false;
-  if (toasted === p.version || (p.kind === "backend" && idle && auto)) return;
+  if (!updateWaitsForClick(u)) return void toast.dismiss("app-update");
+  if (!p || toasted === p.version) return;
   toasted = p.version;
-  toast(t("native.updateReady", { version: p.version }), {
-    id: "app-update",
-    duration: Infinity,
-    closeButton: true,
-    description: p.kind === "app" ? t("native.updateApp") : auto ? t("native.updateAuto") : t("native.updateManual"),
-    action: { label: t("systemUpdate.updateNow"), onClick: nativeApplyUpdate },
+  void serviceOn().then((service) => {
+    const app = p.kind === "app";
+    toast(app ? t("native.updateRestart", { version: p.version }) : t("native.updateReady", { version: p.version }), {
+      id: "app-update",
+      duration: Infinity,
+      closeButton: true,
+      description: app ? restartEffect(u, service) : t("native.updateReadyDesc"),
+      action: { label: app ? t("native.restartToUpdate") : t("native.update"), onClick: nativeApplyUpdate },
+      cancel: { label: t("native.later"), onClick: () => {} },
+    });
   });
+}
+
+/**
+ * What restarting the App does. With the background service on, agents run in the service and carry on while the
+ * shell is swapped (docs/dev/SERVICE.md); without it, quitting the App ends them. null = didn't find out: say only
+ * what is sure.
+ */
+export function restartEffect(u: AppUpdateStatus, service: boolean | null): string {
+  const b = u.busy;
+  const busy = !!b && b.turns + b.waiting + b.tasks + b.terms > 0;
+  if (service) return t("native.restartKeepsAgents");
+  if (service === false && busy) return t("native.restartCutsAgents");
+  return t("native.restartWindows");
+}
+
+let service: Promise<boolean | null> | null = null;
+function serviceOn(): Promise<boolean | null> {
+  service ??= api
+    .service()
+    .then((s) => s.installed)
+    .catch(() => null);
+  return service;
 }
 
 /**
