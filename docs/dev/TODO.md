@@ -146,20 +146,10 @@ annotations; sources need `include: ["web_search_call.action.sources"]`). Chat C
 - Probe A once per provider and cache the answer, so a gateway without the server tool doesn't cost a failed call
   every search.
 
-## Windows: the UI's settings when port 7870 is taken
-
-When 7870 is in use by another program, the backend serves on a free port instead (cmd/gerdr: "port busy, picking
-another"). On macOS nothing changes for the UI: the pages are at `http://gerdr/` whatever the port (Lightron maps the
-name). On Windows the page's origin is `127.0.0.1:<port>`, and localStorage is per origin: on such a start the UI's
-per-device settings (language, sizes, labs switches) look reset, and come back once it is on 7870 again. Fix: the same
-fixed name on Windows, e.g. the shell answering `http://gerdr/` itself through WebView2's `WebResourceRequested` and
-passing requests on to the backend (go-webview2 doesn't expose that event yet), WebSocket included.
-
 ## The UI's per-device settings in the backend, not only in localStorage
 
 The UI keeps its per-device settings (language, sizes, labs switches…; ui/src/lib/store/prefs.ts) in the page's
-localStorage, which is per origin and per browser profile. So they don't follow a change of either: the Windows App on
-another port (above), a reinstalled browser profile, the same Gerdr opened in a normal browser or another App
+localStorage, which is per origin and per browser profile. So they don't follow a change of either: a reinstalled browser profile, the same Gerdr opened in a normal browser or another App
 (moving from the Electron App to the Chrome shell lost them once). Worth doing: keep them in the backend as well, keyed by a
 device id the page keeps in localStorage (and the App could pass in), with localStorage as the fast, offline copy the
 page reads first and the backend's as what a fresh origin / profile starts from. To decide first: which settings are

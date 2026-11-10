@@ -62,11 +62,16 @@ func main() {
 		Name: appName,
 		ID:   "io.github.zbysir.gerdr",
 		Icon: iconPNG,
+		// The pages are at http://gerdr/ (Lightron maps it to the backend's address), as on macOS: the notification's
+		// origin line reads "gerdr", and the UI's per-device settings (localStorage, kept by origin) survive a port
+		// that changed between starts. Since 0.2.27; before, they were under 127.0.0.1:<port> and start over once.
+		Host: pageHost,
 		// Started only once this is the one instance (a second launch just brings the first one's window up).
 		URLFunc: func() (string, error) {
 			u, err := s.runBackend()
 			if err == nil {
 				s.setEntry(u)
+				s.mapped = hostOf(u)
 				log.Printf("page: %s", origin(u))
 			}
 			return u, err
@@ -94,16 +99,38 @@ func main() {
 }
 
 type shell struct {
-	mu    sync.Mutex
-	app   *lightron.App
-	entry string
-	u     *updates // the backend and its updates (update.go)
+	mu     sync.Mutex
+	app    *lightron.App
+	entry  string
+	mapped string   // the backend's host:port that pageHost maps to (fixed when WebView2 starts)
+	u      *updates // the backend and its updates (update.go)
 }
 
 func (s *shell) setEntry(u string) {
 	s.mu.Lock()
 	s.entry = u
 	s.mu.Unlock()
+}
+
+const pageHost = "gerdr"
+
+// pageLink: JS that takes the window to a backend address, at pageHost when the window is there and the browser
+// maps pageHost to that address (fixed when WebView2 starts). Otherwise the real address: WebView2 didn't take the
+// mapping (Lightron then shows the pages there), or the backend came back on another port (rare: the port is fixed;
+// the page has no bridge there and starts with no settings until Gerdr is opened again).
+func (s *shell) pageLink(u string) string {
+	b, _ := json.Marshal(u)
+	m, _ := json.Marshal(s.mapped)
+	h, _ := json.Marshal(pageHost)
+	return "(() => { const u = new URL(" + string(b) + "); if (location.host === " + string(h) + " && u.host === " +
+		string(m) + ") u.host = " + string(h) + "; location.replace(u.href); })()"
+}
+
+func hostOf(u string) string {
+	if pu, err := url.Parse(u); err == nil {
+		return pu.Host
+	}
+	return ""
 }
 
 func (s *shell) getEntry() string {

@@ -190,8 +190,7 @@ func (s *shell) restart(swap bool) {
 		fail(err.Error())
 	}
 	s.setEntry(u)
-	b, _ := json.Marshal(u)
-	s.eval("location.replace(" + string(b) + ")")
+	s.eval(s.pageLink(u))
 }
 
 func (s *shell) fetchBusy() *selfupdate.Busy {

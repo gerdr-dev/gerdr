@@ -35,6 +35,12 @@ code does, not what was seen.
 - The bridge (`bridge.js`, the `window.gerdrNative` of desktop/preload.js, on `window.lightron`): open (default
   browser), openPath (open / show in Explorer), notify (web Notification, shown by WebView2 as a Windows notification;
   click → window + session; allowed without asking, as the clipboard: Lightron 0.4.2), update. Lightron: outside links → default browser, the window title follows the page's.
+- **The pages are at `http://gerdr/`** (`Options.Host`, Lightron 0.4.4), as on macOS: WebView2 writes the origin on
+  every notification, and keeps the UI's per-device settings (localStorage) by origin, so a backend on another port
+  than 7870 no longer starts them over. Before 0.2.27 they were under `127.0.0.1:7870`: that update starts them over
+  once. Where WebView2 ignores the switches that make the name (seen on GitHub's runners), Lightron leaves the pages at
+  the real address. A backend restarted on another port is shown at its real address until Gerdr is opened again
+  (main.go pageLink).
 - Right-click: WebView2's menu only in editable fields and on selected text (same rule as macOS; Lightron).
 - High DPI, the window's icon from the PNG in the exe: Lightron.
 - The exe's own icon (Explorer) and its manifest (per-monitor v2 DPI, common controls v6): `rsrc_windows_amd64.syso`,
