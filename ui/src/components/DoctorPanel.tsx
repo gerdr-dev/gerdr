@@ -16,6 +16,9 @@ import { t } from "@/lib/i18n";
  *
  * The backend runs a light check every few minutes (no binaries executed) and pushes it over the socket;
  * the sidebar shows a red dot by Settings when it's "bad".
+ *
+ * Only problems (warn / bad) are listed by default: a dozen green rows buried the one that mattered. The rest open
+ * with "Show".
  */
 
 const dot: Record<DoctorLevel, string> = { ok: "bg-ok", info: "bg-muted-foreground/40", warn: "bg-warn", bad: "bg-bad" };
@@ -31,6 +34,7 @@ export function DoctorPanel() {
   const report = useStore((s) => s.doctor);
   const pinned = useStore((s) => s.config.agentBins);
   const [busy, setBusy] = useState<string | null>(null);
+  const [showOk, setShowOk] = useState(false);
 
   const run = async (deep: boolean) => {
     setBusy("run");
@@ -71,7 +75,9 @@ export function DoctorPanel() {
     }
   };
 
-  const problems = report?.checks.filter((c) => c.level === "warn" || c.level === "bad") ?? [];
+  const isProblem = (c: DoctorCheck) => c.level === "warn" || c.level === "bad";
+  const problems = report?.checks.filter(isProblem) ?? [];
+  const okCount = (report?.checks.length ?? 0) - problems.length;
 
   return (
     <div className="space-y-3">
@@ -102,7 +108,7 @@ export function DoctorPanel() {
             )}
           </div>
           {groups.map((g) => {
-            const list = report.checks.filter((c) => c.group === g.id);
+            const list = report.checks.filter((c) => c.group === g.id && (showOk || isProblem(c)));
             if (!list.length) return null;
             return (
               <div key={g.id} className="min-w-0 space-y-1">
@@ -123,6 +129,15 @@ export function DoctorPanel() {
               </div>
             );
           })}
+          {okCount > 0 && (
+            <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
+              {!showOk && <span className={cn("size-1.5 shrink-0 rounded-full", dot.ok)} />}
+              {!showOk && <span>{t(problems.length ? "doctorPanel.moreOk" : "doctorPanel.allOk", { n: okCount })}</span>}
+              <Button size="sm" variant="ghost" className="h-6 px-2 text-[11px]" onClick={() => setShowOk(!showOk)}>
+                {showOk ? t("doctorPanel.hideOk") : t("doctorPanel.showOk")}
+              </Button>
+            </div>
+          )}
           {problems.length > 0 && (
             <div className="flex items-center justify-between gap-4 rounded-md border border-dashed p-3">
               <div className="text-[12px] text-muted-foreground">{t("doctorPanel.handOffHint")}</div>
