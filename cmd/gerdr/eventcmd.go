@@ -90,11 +90,20 @@ alone matches any source.`),
 	}
 
 	var wOn, wKey, wSession, wNote string
-	var wOnce bool
+	var wOnce, wAnyway bool
 	watch := &cobra.Command{
 		Use:   "watch",
 		Short: i18n.S("订阅：匹配的事件来了就发一条消息给这个会话（默认你自己）", "watch: each matching event is sent to this session as a message (default: you)"),
-		Args:  cobra.NoArgs,
+		Long: i18n.S(`订阅：匹配的事件来了就发一条消息给这个会话（默认你自己）。
+事件是发生的那一下（私信、@ 你），没订阅的时候来的收不到。等一个东西变成某种状态（MR 有新意见、流水线挂了、
+合并了），用 gerdr wait：它按现在的状态判断，晚一点等也不会错过。
+没有任何事件源会发这类事件时直接报错，不会默默等；确定有别的来源就加 --anyway。`,
+			`Watch: each matching event is sent to this session as a message (default: you).
+An event is the moment something happens (a DM, a mention); what came before the watch doesn't arrive. To wait for
+a thing to be in some state (an MR got comments, its pipeline failed, it merged) use gerdr wait: it checks the state
+as it is, so waiting late misses nothing.
+When nothing emits such events at all it fails instead of waiting forever; --anyway if you know something will.`),
+		Args: cobra.NoArgs,
 		Run: func(cmd *cobra.Command, args []string) {
 			c, err := newAPIClient()
 			fail(err)
@@ -104,7 +113,7 @@ alone matches any source.`),
 			target, err := c.reportTarget(wSession)
 			fail(err)
 			var out map[string]any
-			fail(c.do("POST", "/api/events/watches", map[string]any{"on": wOn, "key": wKey, "session": target, "once": wOnce, "note": wNote}, &out))
+			fail(c.do("POST", "/api/events/watches", map[string]any{"on": wOn, "key": wKey, "session": target, "once": wOnce, "note": wNote, "anyway": wAnyway}, &out))
 			printJSON(out)
 		},
 	}
@@ -112,6 +121,7 @@ alone matches any source.`),
 	watch.Flags().StringVar(&wKey, "key", "", i18n.S("只要说这个东西的（group/repo!34，可以用 *）", "only events about this (group/repo!34, * allowed)"))
 	watch.Flags().StringVar(&wSession, "session", "self", i18n.S("发给哪个会话（id / 标题；self = 你自己）", "which session gets them (id / title; self = you)"))
 	watch.Flags().BoolVar(&wOnce, "once", false, i18n.S("只要第一条，之后自动取消", "only the first one, then it's removed"))
+	watch.Flags().BoolVar(&wAnyway, "anyway", false, i18n.S("没有事件源声明会发也照样订阅", "watch even though no source declares such events"))
 	watch.Flags().StringVar(&wNote, "note", "", i18n.S("订阅是为了做什么：每条事件都会带上这句，提醒你收到后干嘛", "what it's for: sent along with each event, to remind you what to do"))
 
 	unwatch := &cobra.Command{

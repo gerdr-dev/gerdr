@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/coder/acp-go-sdk"
@@ -67,6 +68,16 @@ func (s *Server) deliverWatches(e events.Event) {
 			s.Log.Warn("event watch: send failed", "session", w.Session, "watch", w.ID, "err", err)
 		}
 	}
+}
+
+// emitsSomewhere: does anything declare or lately emit events on could match?
+func (s *Server) emitsSomewhere(on string) bool {
+	for _, src := range s.Events.Catalog() {
+		if events.Overlap(on, src.On) {
+			return true
+		}
+	}
+	return false
 }
 
 // watchText: the message a watching session gets — the event, why it watched, how to stop.
@@ -135,11 +146,16 @@ func (s *Server) eventRoutes(mux *http.ServeMux) {
 		}
 		writeJSON(w, map[string]any{"list": s.Events.Watches(r.URL.Query().Get("session"))})
 	})
+	// { on, key?, session, once?, note?, anyway? } → the watch. Refused when nothing declares or lately emitted
+	// events on could match (unless anyway): a watch nothing will ever fire is worse than an error.
 	mux.HandleFunc("POST /api/events/watches", func(w http.ResponseWriter, r *http.Request) {
 		if !need(w) {
 			return
 		}
-		var x events.Watch
+		var x struct {
+			events.Watch
+			Anyway bool `json:"anyway"`
+		}
 		if err := decode(r, &x); err != nil {
 			httpError(w, 400, err.Error())
 			return
@@ -148,7 +164,27 @@ func (s *Server) eventRoutes(mux *http.ServeMux) {
 			httpError(w, 404, err.Error())
 			return
 		}
-		out, err := s.Events.AddWatch(x)
+		if err := events.CheckPattern(x.On); err != nil {
+			httpError(w, 400, err.Error())
+			return
+		}
+		if !x.Anyway && !s.emitsSomewhere(x.On) {
+			msg := fmt.Sprintf(i18n.S("没有事件源会发 %s 这类事件：开着的插件里没有声明会发它的，最近 30 天也没出现过。装一个会发它的插件（gerdr addon），或者确定有别的来源（比如面板自己的轮询）就加 --anyway",
+				"Nothing emits %s: no switched-on add-on declares it and none came in the last 30 days. Install an add-on that emits it (gerdr addon), or if you know something else will (a panel's own poll), add --anyway"), x.On)
+			// A source that reports states instead (GitLab): say how to wait on it
+			if src, _, _ := strings.Cut(x.On, "/"); s.Addons != nil {
+				for _, st := range s.Addons.States() {
+					if st.Source == src {
+						msg += fmt.Sprintf(i18n.S("。%s 报告的是状态、不发事件：用 gerdr wait %s <key> --until '<条件>'（gerdr wait sources 看有哪些字段）",
+							". %s reports states, not events: use gerdr wait %s <key> --until '<condition>' (gerdr wait sources lists the fields)"), src, src)
+						break
+					}
+				}
+			}
+			httpError(w, 400, msg)
+			return
+		}
+		out, err := s.Events.AddWatch(x.Watch)
 		if err != nil {
 			httpError(w, 400, err.Error())
 			return

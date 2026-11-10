@@ -113,3 +113,22 @@ func TestCatalog(t *testing.T) {
 		t.Fatal("a reply kind with a space should be refused")
 	}
 }
+
+func TestOverlap(t *testing.T) {
+	for _, c := range []struct {
+		a, b string
+		want bool
+	}{
+		{"gitlab/*", "gitlab/*", true},
+		{"gitlab/mr.review", "gitlab/*", true},
+		{"*/pipeline.failed", "gitlab/*", true},
+		{"mr.merged", "gitlab/*", true},
+		{"*", "gitlab/*", true},
+		{"slack/*", "gitlab/*", false},
+		{"gitlab/mr.*", "gitlab/pipeline.*", false},
+	} {
+		if got := Overlap(c.a, c.b); got != c.want {
+			t.Errorf("Overlap(%q, %q) = %v", c.a, c.b, got)
+		}
+	}
+}

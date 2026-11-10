@@ -40,6 +40,7 @@ import (
 	"github.com/gerdr-dev/gerdr/internal/term"
 	"github.com/gerdr-dev/gerdr/internal/uisite"
 	"github.com/gerdr-dev/gerdr/internal/version"
+	"github.com/gerdr-dev/gerdr/internal/waits"
 	"github.com/gerdr-dev/gerdr/internal/work"
 )
 
@@ -61,9 +62,15 @@ type Server struct {
 	Work *work.Runner
 	// Events: the event store (internal/events, docs/dev/EVENTS.md); RunEvents wires its subscribers. nil = off.
 	Events *events.Store
-	UI     *uisite.Renderer
-	ESM    *uisite.ESM
-	Log    *slog.Logger
+	// Waits: waiting for a state (internal/waits, waitsapi.go); nil = off
+	Waits *waits.Store
+	// stateSig wakes a wait request waiting for the first answer about its thing; poll asks the sources (waitsapi.go)
+	stateSig signal
+	poll     *poller
+	wakeFn   func(waits.Wait, waits.State) // tests: instead of messaging the session
+	UI       *uisite.Renderer
+	ESM      *uisite.ESM
+	Log      *slog.Logger
 	// OnConfig：界面上存了 config.json 之后（agents 那一节要热换）
 	OnConfig func()
 	// Remote：远程访问（设备表、passkey、中继）。nil = 这个进程不管远程（测试里）。
@@ -102,7 +109,13 @@ func (s *Server) Handler() http.Handler {
 	if s.Work != nil {
 		s.Work.Host = workHost{s} // ctx.sessions / ctx.workspaces in local functions (workhost.go)
 		// A function changed its panel's files: the panel's page refreshes (core usePanelChange) instead of polling
-		s.Work.Changed = func(key, path string) { s.Hub.Broadcast("panel_data", map[string]string{"panel": key, "path": path}) }
+		s.Work.Changed = func(key, path string) {
+			s.Hub.Broadcast("panel_data", map[string]string{"panel": key, "path": path})
+			// Its triggers may wait for states: sources get the new list now, and one already true runs (waitsapi.go)
+			if work.TriggersPath(path) {
+				go s.waitsChanged()
+			}
+		}
 	}
 	if s.Peers != nil && s.Hub != nil {
 		// A session here may report to one on another computer; the hub's loop check walks on through it (hosts.go)
@@ -119,6 +132,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/hello", s.hello)
 	s.addonRoutes(mux)
 	s.eventRoutes(mux)
+	s.waitRoutes(mux)
 	mux.HandleFunc("GET /api/config", func(w http.ResponseWriter, r *http.Request) { writeRaw(w, s.Config.Get()) })
 	mux.HandleFunc("PUT /api/config", s.putStore(s.Config, "config"))
 	mux.HandleFunc("GET /api/layout", func(w http.ResponseWriter, r *http.Request) { writeRaw(w, s.Layout.Get()) })

@@ -214,6 +214,16 @@ interface Ctx {
     reply(event: GerdrEvent, text: string, data?: Record<string, unknown>): { event: GerdrEvent; fresh: boolean };
   };
 
+  /**
+   * What a source last said one thing is like (an add-on with "states": the GitLab one reports MRs), or null when
+   * nobody waits on it yet (add-ons only look at what is waited on). To wait until a condition on it holds, write a
+   * trigger with `source`, `key` and `until` (FUNCTIONS.md, "Waiting for a state"); read this first to write the
+   * condition from the values now (`reviews > 3` when there are 3).
+   */
+  states: {
+    get(source: string, key: string): { state: Record<string, unknown>; detail?: string; url?: string; /** unix ms */ at: number } | null;
+  };
+
   /** Progress the page shows while the function runs (and `gerdr panel run` prints). */
   progress(p: { done?: number; total?: number; message?: string }): void;
   /** A log line, shown live and kept in the run log (like console.log). Never log keys, cookies or tokens. */

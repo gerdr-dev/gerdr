@@ -411,6 +411,18 @@ func (r *runner) ctxObject() *goja.Object {
 	_ = c.Set("dirs", r.dirsObject())
 	// Events (trigger.go, docs/dev/EVENTS.md): what a poll found goes out as events; triggers/ subscribe to them
 	_ = c.Set("events", r.eventsObject())
+	// ctx.states.get(source, key) → { state, detail, url, at } | null: what a source last said one thing is like
+	// (docs/dev/EVENTS.md, "Waiting for a state"); to wait on it, write a trigger with until
+	_ = c.Set("states", map[string]any{"get": func(source, key string) any {
+		if r.r.States == nil {
+			r.throw(errors.New("ctx.states: not available here (needs Gerdr's server)"))
+		}
+		st, ok := r.r.States(source, key)
+		if !ok {
+			return nil
+		}
+		return map[string]any{"state": st.State, "detail": st.Detail, "url": st.URL, "at": st.At}
+	}})
 	// What on this panel needs the user, in Gerdr's inbox and the phone's notifications (inbox.go)
 	_ = c.Set("inbox", r.inboxObject())
 	_ = c.Set("workspace", map[string]any{"project": r.project, "dir": r.dir, "logs_dir": r.r.logDir(r.project)})

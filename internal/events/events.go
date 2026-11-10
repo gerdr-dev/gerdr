@@ -325,6 +325,26 @@ func glob(pattern, s string) bool {
 	return strings.HasSuffix(s, parts[len(parts)-1])
 }
 
+// Overlap: can some event match both patterns? Per side, one glob has to cover the other; a kind alone is any
+// source. Patterns with a * on both sides that only overlap partly ("mr.*" and "*.merged") count as not overlapping.
+func Overlap(a, b string) bool {
+	as, ak := splitPattern(a)
+	bs, bk := splitPattern(b)
+	return (glob(as, bs) || glob(bs, as)) && (glob(ak, bk) || glob(bk, ak))
+}
+
+func splitPattern(p string) (src, kind string) {
+	p = strings.TrimSpace(p)
+	if p == "" || p == "*" {
+		return "*", "*"
+	}
+	src, kind, ok := strings.Cut(p, "/")
+	if !ok {
+		return "*", src
+	}
+	return src, kind
+}
+
 // Summary: the event as a message to an agent — a header line, then the text and the link.
 func (e Event) Summary(header string) string {
 	var b strings.Builder

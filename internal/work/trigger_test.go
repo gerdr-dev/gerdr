@@ -131,3 +131,78 @@ func TestEventsReplyAndCatalog(t *testing.T) {
 		t.Errorf("reply %+v data %s", x, x.Data)
 	}
 }
+
+// A trigger waiting for a state runs once when its condition holds (at once if it already does), not again while
+// it keeps holding; again after it stopped holding, or after the file changed.
+func TestStateTriggers(t *testing.T) {
+	r, dir := newProject(t, map[string]string{"w.ts": `export async function on(input: any, ctx: any) {
+  ctx.fs.write("data/last.json", JSON.stringify(input));
+  return input.state.reviews;
+}`})
+	writeTrigger(t, dir, "mr", `{"source":"gitlab","key":"h/g/r!1","until":"reviews > 0 || state != 'opened'","fn":"w.on"}`)
+	writeTrigger(t, dir, "quiet", `{"source":"gitlab","key":"h/g/r!1","until":"reviews > 0","fn":"w.on","off":true}`)
+	writeTrigger(t, dir, "ev", `{"on":"gitlab/*","fn":"w.on"}`)
+	if w := r.StateWaits(); len(w) != 1 || w[0].ID != "mr" || w[0].Until == "" {
+		t.Fatalf("waits %+v", w)
+	}
+	runs := func() int {
+		l, _ := r.Triggers("")
+		for _, x := range l {
+			if x.ID == "mr" {
+				return x.Runs
+			}
+		}
+		return -1
+	}
+	waitRuns := func(n int) {
+		t.Helper()
+		for i := 0; i < 200 && runs() != n; i++ {
+			time.Sleep(20 * time.Millisecond)
+		}
+		if runs() != n {
+			t.Fatalf("runs %d, want %d", runs(), n)
+		}
+	}
+	st := func(reviews float64) StateNow {
+		return StateNow{State: map[string]any{"state": "opened", "reviews": reviews}, Detail: "d", At: time.Now().UnixMilli()}
+	}
+	r.DispatchState("gitlab", "h/g/r!1", st(0))
+	time.Sleep(100 * time.Millisecond)
+	waitRuns(0)
+	r.DispatchState("gitlab", "h/g/r!1", st(1))
+	waitRuns(1)
+	r.DispatchState("gitlab", "h/g/r!1", st(2)) // still holds: spent
+	time.Sleep(100 * time.Millisecond)
+	waitRuns(1)
+	b, _ := os.ReadFile(filepath.Join(dir, "data", "last.json"))
+	if !strings.Contains(string(b), `"reviews":1`) || !strings.Contains(string(b), `"until":"reviews > 0 || state != 'opened'"`) {
+		t.Errorf("input %s", b)
+	}
+	r.DispatchState("gitlab", "h/g/r!1", st(0))
+	r.DispatchState("gitlab", "h/g/r!1", st(3)) // held, stopped, holds again
+	waitRuns(2)
+	// A new definition (the waiter's next expectation) on a state already true: runs at once
+	writeTrigger(t, dir, "mr", `{"source":"gitlab","key":"h/g/r!1","until":"reviews > 1","fn":"w.on"}`)
+	future := time.Now().Add(2 * time.Second)
+	_ = os.Chtimes(filepath.Join(dir, "triggers", "mr.json"), future, future)
+	r.DispatchState("gitlab", "h/g/r!1", st(3))
+	waitRuns(3)
+	if errs := r.DispatchState("gitlab", "h/g/r!1", StateNow{State: map[string]any{"x": 1.0}}); len(errs) != 1 {
+		t.Errorf("a condition on fields the state lacks: %v", errs)
+	}
+	// Badly written ones are refused with the folder, like any broken trigger
+	if err := (&Trigger{Source: "gitlab", Key: "h/*", Until: "a", Fn: "w.on"}).check(); err == nil {
+		t.Error("a key pattern was taken")
+	}
+	if err := (&Trigger{Source: "gitlab", Key: "h/1", Until: "a ==", Fn: "w.on"}).check(); err == nil {
+		t.Error("a broken until was taken")
+	}
+	for _, c := range []struct {
+		rel  string
+		want bool
+	}{{"triggers/a.json", true}, {"user/triggers/b.json", true}, {"user/triggers", true}, {"data/x.json", false}, {"triggersx/a", false}} {
+		if TriggersPath(c.rel) != c.want {
+			t.Errorf("TriggersPath(%q) != %v", c.rel, c.want)
+		}
+	}
+}

@@ -44,7 +44,8 @@ Chat / mail / anything with its own credentials is an add-on, not core (the user
 
 | who | how | gets |
 |---|---|---|
-| a panel / Work | `triggers/<id>.json` in its folder, or `user/triggers/` for one person's (`on`, `key`, `fn` or `prompt`) | `fn` runs with `{event, trigger}`; `prompt` goes to its Work agent |
+| a panel / Work | `triggers/<id>.json` in its folder, or `user/triggers/` for one person's (`on`, `key`, `fn` or `prompt`, `off`) | `fn` runs with `{event, trigger}`; `prompt` goes to its Work agent |
+| (a state, not events) | `gerdr wait <source> <key> --until …`; a trigger with `source`, `key`, `until` | woken once when the condition holds (next section) |
 | a Code session | `gerdr event watch --on … [--key …] [--once] [--note …]` | a message per event (title, text, url, the note) |
 | an add-on's UI | `g.on("event")`, `g.events.list` | every event, in every open window |
 | an add-on's service | addon.json `service.events: ["slack/*"]` | `{"type":"event","event":…}` on stdin |
@@ -57,6 +58,100 @@ Chat / mail / anything with its own credentials is an add-on, not core (the user
   burst delivers one.
 - `gerdr event list / watch / unwatch / watches` are auto-approved for agents (sysenv.SafeGerdrCLI); `emit` isn't:
   it can start triggers' functions, which is `gerdr panel run` by another door.
+
+## Waiting for a state
+
+Events are for things that **happen**: a DM, a mention. Things that **are** in a state — an MR open or merged, its
+pipeline failed, N review comments — are waited on instead: a waiter says the condition, a source reports the
+state, Gerdr checks one against the other. Code: `internal/waits` (conditions, latest states, sessions' waits),
+`internal/server/waitsapi.go`, triggers with `until` in `internal/work/trigger.go`, `cmd/gerdr/waitcmd.go`.
+
+### Why not events (2026-11-10)
+
+It started with a Code session's `gerdr event watch --on 'gitlab/*' --key 'craft/portai!4075'`, taken and never
+fired: the only GitLab poller was the superagent panel's `mrwatch`, polling its own tasks' MRs. The first fix let
+subscriptions tell sources what to poll. Then the user asked what happens when an agent opens an MR, forgets to
+watch, and is reminded five minutes later: the comment made meanwhile was said once, to nobody, and is gone. Every
+fix for that is a patch on the event — dedup, replay from the log, a "first look" that re-tells history, `final` to
+end watches — because an event is said once, can't be repeated and can't be asked again. The user's call: let the
+waiter state what it expects, and wake it when the actual state differs. A condition checked against the state as
+it is gives the same answer every time it is checked, so it can't be missed: a wait written late on something
+already true wakes at once. The expectation is always the waiter's own.
+
+### The three parts
+
+| part | knows | does |
+|---|---|---|
+| **waiter** — a session (`gerdr wait`), a panel (a trigger with `until`) | which thing (source + key) and the condition | waits; is woken once with the state |
+| **Gerdr** | every wait; the latest state of each thing waited on; when to ask next | asks the source about each thing waited on; checks every wait whenever an answer comes in or a wait is added |
+| **source** — an add-on whose addon.json has `"states"` | how to look at things outside (glab, a token) | answers "what is this thing like now?", or why it can't |
+
+A source is a function from a key to a state: it keeps no list of keys, no timer, no conditions, no memory of what
+it said (caches aside). It never sees who waits — no sessions, panels or projects. A waiter never names an add-on,
+only the source and the key. Gerdr holds no knowledge of either side: no GitLab in Gerdr, no "which MRs matter" in
+the add-on.
+
+### The flow
+
+```
+ waiter                              Gerdr                                         source (add-on service)
+ ──────                              ─────                                         ───────────────────────
+ gerdr wait gitlab K --until C ───▶ wait saved (state/waits.json)
+ ctx.fs.write user/triggers/x.json ▶ trigger with until (Work.Changed)
+                                     │ the poller: every thing waited on, asked at once
+                                     │ when new, then every poll interval
+                                     ├── {"type":"get","id":"r7","key":K} ───────────────▶ looks at K
+                                     │◀─ {"type":"state","id":"r7","state":{…},"detail"} ─┤
+                                     │   or {"type":"error","id":"r7","reason","retry"} ──┤
+                                     │ keep it (state/source-states.json); for every wait on K: does C hold?
+ session: a message ◀────────────────┤  yes → a session's wait is woken and gone;
+ panel: its fn runs ◀────────────────┘        a panel's trigger runs once (spent until C stops holding / the file changes)
+```
+
+- **Asking is Gerdr's** (`poller` in waitsapi.go): one record per thing waited on — when it was last asked, the
+  answer (a state, or an error and whether it passes by itself), when to ask next. A new wait (a session's, or a
+  panel's trigger file written with `ctx.fs` — `Work.Changed` — or changed any other way: every 2s the waited-on set
+  is recomputed, cheap) is asked about at once; then every `states[].poll` seconds (default 60, at least 10). An
+  error with `retry: true` (the network) is asked again in 20s, one without (not logged in, no such MR) every
+  interval, shown with the wait meanwhile. At most 4 asks at once. A thing waited on again within 10 minutes of the
+  last wait keeps its last answer for display and is asked at once.
+- **Checked when**: whenever an answer comes in, and when a wait is added — a session's at once against the last
+  known state, then again when the first answer comes (the request waits up to 10s, so `gerdr wait` says straight
+  away whether it already held, or what the state is, or why the source can't look); a panel's when its trigger file
+  is written, and on every answer.
+- **Woken once.** A session's wait is removed when woken; a panel's trigger is spent until its condition stops
+  holding or its file changes (usually its function trashes it or rewrites it). The wake message carries the state's
+  values; the waiter states its next expectation from them. Counts are written as "more than now" (`reviews > 3`):
+  `reviews > 0` again right after handling them would wake at once.
+- **A source may also report unasked** (`{"type":"state"}` without an id, naming the key) when it learns of a change
+  by itself (a webhook, a socket); Gerdr checks the waits the same way. Not needed by polling sources.
+- **Conditions are one JavaScript expression** over the state (`waits.Cond`, goja): each field is a variable, `$`
+  the whole state. Evaluated by Gerdr, so every source gets them for free and only reports data, lists included
+  (the GitLab add-on reports `notes`, so `notes.some(n => n.author != me && !n.resolved && n.path == 'a.go')` works
+  without a field for it). For a day it was a little language of Gerdr's own (`field op value`, `||`, `&&`); the
+  user asked for JS when filtering lists came up — every filter would otherwise have needed its own field. Sandbox:
+  a bare goja runtime (no require, files or network), the expression wrapped so it can't be statements, 50ms per
+  check (`vm.Interrupt`). A misspelt field is a ReferenceError: refused when the wait is made if the state is known
+  (or as soon as the first one comes in), shown with the wait otherwise — never a silent "false".
+- **Polling sees moments.** A pipeline that failed and was retried green between two looks is seen as green. A
+  waiter that cares writes `pipeline_id != <now>` ("a new pipeline"); that is polling's limit, not the model's.
+- **Keys carry what the source needs.** GitLab keys are `<host>/<project path>!<iid>`, as in the MR's address: one
+  add-on serves every GitLab with glab's own logins, two GitLabs' `group/repo!34` never mix, and projects never reach
+  the source (the user has projects on different GitLabs and only some want MR news: that is just who waits on what).
+
+### Rejected on the way
+
+- **The add-on maps Gerdr projects to GitLab hosts.** A project is Gerdr's concept; the host is in the key instead.
+- **Events for MRs, with subscriptions telling the poller what to poll** (`service.subscriptions`, a
+  `ctx.events.follow` call, triggers as subscriptions, `final`): built, then replaced — late or missed subscribers
+  lose what was said, see above.
+- **The add-on picks its own scope** ("every MR I created"): it would be its guess, not what anyone asked for.
+- **Watching adds the repository to an add-on setting**: a lossy channel with two writers.
+- **The source polls by itself, told the keys waited on** (`{"type":"subscriptions"}` with the whole list, answered
+  with `{"type":"serving"}`): a leftover of the event design, replaced the same day by Gerdr asking — the source then
+  needed a list, a timer, first-look and retry logic of its own, and Gerdr a list to diff and resend; with `get` the
+  source is a function and when-to-ask lives in one place.
+- **Standing waits that wake on every match**: they need the same baselines and turn back into "push every change".
 
 ## Offering sources and answering, without naming them
 

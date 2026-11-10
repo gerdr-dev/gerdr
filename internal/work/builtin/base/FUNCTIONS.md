@@ -175,12 +175,37 @@ for themselves, e.g. from a settings page: `user/triggers/<id>.json`, AGENTS.md 
   A trigger's runs go one after another, in the order the events came.
 - Offering events to subscribe to (a settings page's "which events make a task"): `ctx.events.catalog()` — what the
   installed add-ons emit and what came lately. Don't name sources in code: a user without the Slack add-on has no Slack.
+- `"off": true` keeps a trigger file but stops it. Switching off one the panel ships is a copy in `user/triggers/`
+  with `"off": true`.
 - Answering: `ctx.events.reply(event, text)` goes back where the event came from (a chat's thread), whatever the
   source; an event without `reply` has nowhere to answer.
 - A function run by a trigger may emit events itself; they're one level deeper, and past 4 levels they aren't handed
   on, so two triggers feeding each other stop.
 - `gerdr panel triggers` lists them with how many runs and the last one; `gerdr event list --on 'gitlab/*'` shows what
   came. A broken file stops the whole folder, like schedules.
+
+## Waiting for a state
+
+Some things are in a state rather than sending events: an MR is open or merged, its pipeline running or failed, it
+has some review comments. An add-on with `"states"` reports them (the GitLab one: MRs). Wait on one with a trigger
+that has `source`, `key` and `until` instead of `on`:
+
+```json
+user/triggers/mr-34.json
+{ "source": "gitlab", "key": "gitlab.example.com/group/repo!34",
+  "until": "state != 'opened' || pipeline == 'failed' || reviews > 3", "fn": "waits.onState" }
+```
+
+- `fn` runs with `{ state, detail, url, source, key, until, trigger }` once the condition holds for the latest
+  state — at once if it already does, so a wait written late misses nothing. It runs once; it runs again only after
+  the condition stopped holding, or the file changed. Usually the function handles it and trashes the file, or
+  rewrites it with the next expectation.
+- `until` is one JavaScript expression over the state: each field is a variable (`$` is the whole state), strings in
+  quotes; lists filter like any JS (`notes.some(n => n.author != me && !n.resolved)`). It reads only the state, 50ms
+  per check. Write counts as "more than now": read `ctx.states.get(source, key)` and use `reviews > <now>`.
+- Writing the file with `ctx.fs` makes Gerdr ask the add-on about it at once (it is asked only about what is waited on); trashing it stops that.
+  `gerdr panel triggers` shows each one's state now, whether it holds, and whether the add-on took the key.
+- `gerdr wait sources` lists what can be waited on, how keys look and what each field means.
 
 ## On a live connection
 

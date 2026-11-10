@@ -27,6 +27,10 @@ func TestSafeGerdrCLI(t *testing.T) {
 		`gerdr event list --since 6h`:                                      true,
 		`gerdr event emit '{"source":"ci","kind":"x"}'`:                    false,
 		`gerdr event`: false,
+		`gerdr wait gitlab 'h.example.com/g/r!34' --until "state != 'opened' || reviews > 2" --note "fix"`:  true,
+		`gerdr wait gitlab 'h.example.com/g/r!34' --until 'notes.some(n => n.author != me && !n.resolved)'`: true,
+		`gerdr wait gitlab 'h.example.com/g/r!34' --until "$(cat x)"`:                                       false,
+		`gerdr wait list`: true,
 	} {
 		if got := SafeGerdrCLI(cmd); got != want {
 			t.Errorf("%q: got %v want %v", cmd, got, want)

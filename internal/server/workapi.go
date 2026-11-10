@@ -456,7 +456,8 @@ func (s *Server) workRoutes(mux *http.ServeMux) {
 			httpError(w, 400, err.Error())
 			return
 		}
-		writeJSON(w, map[string]any{"list": list})
+		// Triggers waiting for a state come with what the sources reporting it say (waitsapi.go)
+		writeJSON(w, map[string]any{"list": s.viewTriggers(list)})
 	})
 	mux.HandleFunc("POST /api/work/schedules/{id}/{op}", func(w http.ResponseWriter, r *http.Request) {
 		project, id := r.URL.Query().Get("project"), r.PathValue("id")

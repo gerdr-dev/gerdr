@@ -58,6 +58,9 @@ type Manifest struct {
 	// Emits: the events this add-on reports (docs/dev/EVENTS.md), so a panel can offer them to subscribe to without
 	// knowing the add-on (the task board's "which events make a task").
 	Emits []EmitSpec `json:"emits,omitempty"`
+	// States: the things this add-on's service reports the state of (docs/dev/EVENTS.md, "Waiting for a state"), so
+	// sessions and panels can wait until a condition on them holds. Its service gets the keys waited on.
+	States []StateSpec `json:"states,omitempty"`
 	// I18n: the texts in other languages, by locale ("en", "zh"). The fields above are the base, shown when the
 	// interface's language has no entry; the UI picks (ui/src/lib/i18n.ts pick), the backend only passes it on.
 	I18n map[string]ManifestText `json:"i18n,omitempty"`
@@ -71,6 +74,48 @@ type EmitSpec struct {
 	Description string `json:"description,omitempty"`
 	// Reply: the event kind it takes answers as (events carry Reply with it), e.g. "slack.send"
 	Reply string `json:"reply,omitempty"`
+}
+
+// StateSpec is one kind of thing an add-on reports the state of.
+type StateSpec struct {
+	Source      string `json:"source,omitempty"` // default: the add-on's id
+	Title       string `json:"title,omitempty"`
+	Description string `json:"description,omitempty"`
+	// Key: how a key names one thing, for whoever writes a wait ("<host>/<project path>!<iid>, as in the MR's address")
+	Key string `json:"key,omitempty"`
+	// Fields: the state's fields and what each means (shown to whoever writes a condition)
+	Fields map[string]string `json:"fields,omitempty"`
+	// Poll: how often Gerdr asks for the state of each thing waited on, in seconds (default 60, at least 10); a new
+	// wait is asked about at once
+	Poll int `json:"poll,omitempty"`
+}
+
+// StateSource is a StateSpec of a switched-on add-on, with its id.
+type StateSource struct {
+	StateSpec
+	Addon string `json:"addon"`
+}
+
+// States: what the switched-on add-ons say they report the state of.
+func (m *Manager) States() []StateSource {
+	st := m.readState()
+	var out []StateSource
+	for _, id := range m.ids() {
+		if st.disabled(id) {
+			continue
+		}
+		mf, err := readManifest(filepath.Join(m.dir, id))
+		if err != nil || mf == nil {
+			continue
+		}
+		for _, x := range mf.States {
+			if x.Source == "" {
+				x.Source = id
+			}
+			out = append(out, StateSource{StateSpec: x, Addon: id})
+		}
+	}
+	return out
 }
 
 // Emits: what the switched-on add-ons say they emit, as event sources.
@@ -414,6 +459,8 @@ func (m *Manager) Watch(onChange func()) {
 type serviceEntry struct {
 	dir  string
 	spec ServiceSpec
+	// states: the sources it reports the state of (addon.json states): it gets the keys waited on
+	states []string
 }
 
 // services: the enabled add-ons whose addon.json declares a service (a broken addon.json declares none; List says why).
@@ -426,7 +473,15 @@ func (m *Manager) services() map[string]serviceEntry {
 		}
 		dir := filepath.Join(m.dir, id)
 		if mf, err := readManifest(dir); err == nil && mf != nil && mf.Service != nil {
-			out[id] = serviceEntry{dir: dir, spec: *mf.Service}
+			e := serviceEntry{dir: dir, spec: *mf.Service}
+			for _, x := range mf.States {
+				src := x.Source
+				if src == "" {
+					src = id
+				}
+				e.states = append(e.states, src)
+			}
+			out[id] = e
 		}
 	}
 	return out

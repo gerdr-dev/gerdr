@@ -42,6 +42,7 @@ import (
 	"github.com/gerdr-dev/gerdr/internal/term"
 	"github.com/gerdr-dev/gerdr/internal/uisite"
 	"github.com/gerdr-dev/gerdr/internal/version"
+	"github.com/gerdr-dev/gerdr/internal/waits"
 	"github.com/gerdr-dev/gerdr/internal/webui"
 	"github.com/gerdr-dev/gerdr/internal/work"
 	"github.com/gerdr-dev/gerdr/sysenv"
@@ -94,7 +95,7 @@ func main() {
 		Short: i18n.S("打印版本", "Print the version"),
 		Run:   func(cmd *cobra.Command, args []string) { fmt.Println(version.Version) },
 	})
-	root.AddCommand(addProjectFlag(sessionCmd()), folderCmd(), uiCmd(), workCmd(), panelCmd(), remoteCmd(), configCmd(), agentCmd(), mcpCmd(), skillCmd(), addonCmd(), eventCmd(), addProjectFlag(workspaceCmd()), addProjectFlag(tabCmd()), addProjectFlag(paneCmd()))
+	root.AddCommand(addProjectFlag(sessionCmd()), folderCmd(), uiCmd(), workCmd(), panelCmd(), remoteCmd(), configCmd(), agentCmd(), mcpCmd(), skillCmd(), addonCmd(), eventCmd(), waitCmd(), addProjectFlag(workspaceCmd()), addProjectFlag(tabCmd()), addProjectFlag(paneCmd()))
 	if err := root.Execute(); err != nil {
 		if errors.Is(err, errHandover) {
 			os.Exit(exitHandover)
@@ -432,7 +433,13 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 		evs.Declared = am.Emits // what the add-ons say they emit, for ctx.events.catalog
 		wr.Events = evs
 	}
-	srv := &server.Server{Dir: env.Dir, Hub: h, Events: evs, Token: token, Config: cfg, Secrets: secrets, Layout: layout, Unread: unread, Addons: am, AddonSvc: asvc, Ext: em, Work: wr, Log: log, OnConfig: applyAgents,
+	// Waiting for a state (docs/dev/EVENTS.md): a broken file only turns waits off
+	wts, err := waits.Open(env.Dir)
+	if err != nil {
+		log.Warn("waits", "err", err)
+		wts = nil
+	}
+	srv := &server.Server{Dir: env.Dir, Hub: h, Events: evs, Waits: wts, Token: token, Config: cfg, Secrets: secrets, Layout: layout, Unread: unread, Addons: am, AddonSvc: asvc, Ext: em, Work: wr, Log: log, OnConfig: applyAgents,
 		UI: ui, ESM: esm, Remote: rm, Awake: keeper,
 		Service: svc, Terms: term.New(func() []string { return sysenv.ChildEnv() }, log)}
 	defer srv.Terms.Close()

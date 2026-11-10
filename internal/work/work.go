@@ -60,6 +60,8 @@ type Runner struct {
 	Secret     func(name string) string // ctx.secrets.get; "" = none
 	Host       Host                     // ctx.sessions / ctx.workspaces / ctx.dirs.recent (host.go); nil = not available
 	Events     EventBus                 // ctx.events (trigger.go); nil = not available
+	// States: a source's latest state of one thing (ctx.states.get, triggers waiting for a state); nil = not available
+	States func(source, key string) (StateNow, bool)
 	// Changed: a function changed a file in its panel's directory (ctx.fs write / mkdir / move / copy / trash). The
 	// server tells the panel's page (core usePanelChange), so pages refresh on a change instead of polling.
 	// key is the panel's key ("default", "lb/board"), path relative to its directory; nil = nobody listens.

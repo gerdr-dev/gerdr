@@ -1,6 +1,6 @@
 ---
 name: gerdr
-description: "Coordinate other coding-agent sessions inside Gerdr (Claude Code / Codex sessions in the Gerdr GUI): list sessions, start a new agent session next to you, hand it a task, wait for it, read its reply, or message an existing session. Use when the user asks you to delegate to / start / ask / check on another agent or session in Gerdr, or to run several agents in parallel. Also for arranging Gerdr's layout: sorting tabs into workspaces, splitting panes together, renaming or reordering workspaces / tabs. Also for changing Gerdr's own settings (theme, default agent / mode / model, shortcuts, model providers) with `gerdr config`, and for setting up agents (roles) with their own prompt, skills and MCP servers (`gerdr agent`, `gerdr skill`, `gerdr mcp`). Also for a Gerdr project's own skills and memory (given only to that project's sessions): adding / editing / removing a skill for one project (`gerdr skill --project`), keeping the project's shared memory. Also for add-ons (`gerdr addon`): browsing add-on stores, installing / updating / removing add-ons, switching them on or off, changing their settings. Also for a project's panels (`gerdr panel`): listing, installing one from a git repository, adding a blank one, updating, changing its icon, removing. Also for being told when something happens outside the conversation (a new MR comment, a pipeline finishing, a chat message): `gerdr event watch / list`. Requires GERDR_ENV=1."
+description: "Coordinate other coding-agent sessions inside Gerdr (Claude Code / Codex sessions in the Gerdr GUI): list sessions, start a new agent session next to you, hand it a task, wait for it, read its reply, or message an existing session. Use when the user asks you to delegate to / start / ask / check on another agent or session in Gerdr, or to run several agents in parallel. Also for arranging Gerdr's layout: sorting tabs into workspaces, splitting panes together, renaming or reordering workspaces / tabs. Also for changing Gerdr's own settings (theme, default agent / mode / model, shortcuts, model providers) with `gerdr config`, and for setting up agents (roles) with their own prompt, skills and MCP servers (`gerdr agent`, `gerdr skill`, `gerdr mcp`). Also for a Gerdr project's own skills and memory (given only to that project's sessions): adding / editing / removing a skill for one project (`gerdr skill --project`), keeping the project's shared memory. Also for add-ons (`gerdr addon`): browsing add-on stores, installing / updating / removing add-ons, switching them on or off, changing their settings. Also for a project's panels (`gerdr panel`): listing, installing one from a git repository, adding a blank one, updating, changing its icon, removing. Also for being told when something happens outside the conversation (a chat message: `gerdr event watch / list`) or waiting until something outside is in some state (an MR got review comments, its pipeline failed, it merged: `gerdr wait`). Requires GERDR_ENV=1."
 ---
 
 # Gerdr：和其他会话协作
@@ -404,8 +404,34 @@ gerdr event watches                            # yours; gerdr event unwatch <id>
 ```
 
 `--on` is `source/kind` with `*`; `--key` narrows to one thing (`*` crosses slashes). `--note` comes back with every
-event, so you remember what you meant to do. Only events someone emits arrive: if `gerdr event list` shows none of the
-kind you need, nothing polls it yet (a panel's schedule or an add-on has to).
+event, so you remember what you meant to do. Only events someone emits arrive, and only from the moment you watch:
+an event is said once. When nothing at all emits that kind, `watch` fails instead of waiting forever.
+
+## Waiting for a state (an MR, a pipeline): `gerdr wait`
+
+For things that **are** in some state — an MR (open / merged, its pipeline, its review comments), whatever an add-on
+reports — don't watch events: wait until a condition on the state holds. It is checked against the state as it is,
+so waiting late (you forgot, the user reminds you five minutes later) still wakes at once with what is there.
+
+```bash
+gerdr wait sources                              # what can be waited on, how keys look, the fields
+gerdr wait gitlab 'gitlab.example.com/group/repo!34' \
+  --until "state != 'opened' || pipeline == 'failed' || reviews > 0 || need_rebase" \
+  --note "handle review comments and failed pipelines; clean up once merged"
+gerdr wait list                                 # yours, with the state now; gerdr wait rm <id>
+gerdr wait state gitlab 'gitlab.example.com/group/repo!34'   # the latest state, to write the next condition from
+```
+
+- The key is as the add-on names the thing; a GitLab MR is the host, the project path and `!iid`, as in its address.
+- `--until` is one JavaScript expression over the state: each field is a variable (`$` is the whole state), strings
+  in quotes. Lists filter like any JS: `notes.some(n => n.author != me && n.resolvable && !n.resolved)` (an
+  unresolved comment by someone else). It reads only the state, 50ms per check; a misspelt field is refused.
+- Woken once, then the wait is over. The message has the state's values now: to keep going, wait again with your
+  next expectation built from them. Write counts as "more than now" (`reviews > 3` when there are 3) — `reviews > 0`
+  again right after handling them would wake you at once. Ending your turn after `gerdr wait` is right: the message
+  wakes you.
+- After opening an MR: wait on it straight away, in the same turn. Needs the GitLab add-on (`gerdr addon install
+  gitlab`) and `glab auth login --hostname <host>`; the output says if the add-on can't take the key and why.
 
 ## 并行
 

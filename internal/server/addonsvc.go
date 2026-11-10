@@ -136,6 +136,7 @@ func (s *Server) RunAddonServices(ctx context.Context) {
 	}
 	ps.PendingLine = s.pendingLine
 	ps.OnAnswer = s.answerFromAddon
+	s.wireWaits(ctx) // waitsapi.go: add-ons with states get the keys waited on and report their states
 	ps.Sync()
 	go func() {
 		for ctx.Err() == nil {

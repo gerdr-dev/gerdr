@@ -56,8 +56,9 @@ github.com/zbysir/lightron, where browser-side changes go as general hooks — t
   including its `description`, which decides when the skill is read), and the CLI help. A feature only in the UI
   gets missed: project skills shipped UI-only, and an agent asked to write one for a project said Gerdr had no
   per-project skills and put it in the global pool. Check this before calling a feature done.
-- Events (MR comments, pipelines, chat messages… as one record; `internal/events`, `work/trigger.go`, `gerdr event`):
-  docs/dev/EVENTS.md. Sources are polls / add-ons, never built into Gerdr; panels subscribe with triggers/*.json.
+- Events (chat messages, mentions… as one record; `internal/events`, `work/trigger.go`, `gerdr event`) and waiting
+  for a state (an MR's reviews / pipeline / merge: `internal/waits`, `server/waitsapi.go`, `gerdr wait`, triggers with
+  `until`): docs/dev/EVENTS.md. Sources are polls / add-ons, never built into Gerdr; panels subscribe with triggers/*.json.
 - Add-ons (`internal/addons`, `ui/src/lib/addons.ts`, Settings → Add-ons): docs/dev/ADDONS.md for how it works;
   `internal/addons/builtin/GUIDE.md` is the guide for writing one (installed as `~/.gerdr/addons/GUIDE.md`), keep it
   in step with the API. The UI's add-on API

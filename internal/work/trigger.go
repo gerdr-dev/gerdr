@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -14,6 +15,7 @@ import (
 
 	ev "github.com/gerdr-dev/gerdr/internal/events"
 	"github.com/gerdr-dev/gerdr/internal/i18n"
+	"github.com/gerdr-dev/gerdr/internal/waits"
 )
 
 // Triggers: what a project's Work (a panel) does when an event comes (docs/dev/EVENTS.md). The schedules' twin —
@@ -25,6 +27,15 @@ import (
 // on is an event pattern (source/kind with * globs, or a kind alone); key narrows it to what the event is about.
 // fn runs a local function with { event, trigger } (plus input); prompt hands the event and the text to the Work
 // agent. Exactly one of the two. A trigger's runs go one after another, in the order the events came.
+//
+// Or it waits for a state (docs/dev/EVENTS.md, "Waiting for a state") instead of events:
+//
+//	user/triggers/mr-34.json  { "source": "gitlab", "key": "gitlab.example.com/g/r!34",
+//	                            "until": "state != 'opened' || reviews > 2", "fn": "waits.onState" }
+//
+// fn runs once with { state, detail, url, source, key, until, trigger } when the condition holds for the source's
+// latest state — at once if it already does. Then it is spent: it runs again only after the condition stopped
+// holding, or the file changed (the usual next step: the function trashes it, or rewrites it with a new until).
 
 // TriggersDir is the Work directory's folder of trigger files.
 const TriggersDir = "triggers"
@@ -45,6 +56,12 @@ type Trigger struct {
 	Prompt string `json:"prompt,omitempty"`
 	Name   string `json:"name,omitempty"`
 	Input  any    `json:"input,omitempty"`
+	// Off: kept but not listening — no events, and no subscription for sources that only produce what is
+	// subscribed to. How a person switches off one a panel ships: a copy in user/triggers/ with "off": true.
+	Off bool `json:"off,omitempty"`
+	// Source + Until: a wait for a state instead of events (Key names the one thing, no *)
+	Source string `json:"source,omitempty"`
+	Until  string `json:"until,omitempty"`
 }
 
 // TriggerInfo is a trigger with how its last run went (kept while Gerdr runs), for `gerdr panel triggers`.
@@ -57,6 +74,15 @@ type TriggerInfo struct {
 func (t *Trigger) check() error {
 	if (t.Fn == "") == (t.Prompt == "") {
 		return errors.New(i18n.S("fn 和 prompt 要有且只有一个", "exactly one of fn and prompt"))
+	}
+	if t.Until != "" || t.Source != "" {
+		if err := waits.CheckKey(t.Source, t.Key); err != nil {
+			return fmt.Errorf(i18n.S("等状态的触发器要写 source 和 key（一个东西）：%w", "a trigger waiting for a state needs source and key (one thing): %w"), err)
+		}
+		if _, err := waits.Parse(t.Until); err != nil {
+			return fmt.Errorf("until: %w", err)
+		}
+		return nil
 	}
 	if strings.TrimSpace(t.On) == "" {
 		return errors.New(i18n.S("要写 on：哪类事件（source/kind，可以用 *）", "on is required: which events (source/kind, * allowed)"))
@@ -101,6 +127,9 @@ type trigProject struct {
 	queue map[string]chan ev.Event
 	runs  map[string]int
 	last  map[string]*ScheduleRun
+	// spent: until-triggers that ran for their condition holding, by id → the definition they ran as; cleared when
+	// the condition stops holding or the definition changes (in memory: a restart may run one again once)
+	spent map[string]string
 }
 
 type triggers struct {
@@ -118,7 +147,7 @@ func (r *Runner) trig(project string) *trigProject {
 	}
 	p := r.trig_.projects[project]
 	if p == nil {
-		p = &trigProject{queue: map[string]chan ev.Event{}, runs: map[string]int{}, last: map[string]*ScheduleRun{}}
+		p = &trigProject{queue: map[string]chan ev.Event{}, runs: map[string]int{}, last: map[string]*ScheduleRun{}, spent: map[string]string{}}
 		r.trig_.projects[project] = p
 	}
 	dir, err := r.Dir(project)
@@ -150,7 +179,7 @@ func (r *Runner) DispatchEvent(e ev.Event) {
 	for _, project := range r.workProjects() {
 		p := r.trig(project)
 		for _, t := range p.defs {
-			if !ev.Match(t.On, e) || !ev.MatchKey(t.Key, e.Key) {
+			if t.Off || t.Until != "" || !ev.Match(t.On, e) || !ev.MatchKey(t.Key, e.Key) {
 				continue
 			}
 			q := p.queue[t.ID]
@@ -210,6 +239,18 @@ func (r *Runner) runTrigger(project string, t Trigger, e ev.Event) *ScheduleRun 
 			}
 		}
 		input["event"], input["trigger"] = eventMap(e), t.ID
+		if t.Until != "" {
+			// A state, not an event: what it is like now, as the source said (stateRun)
+			var d struct {
+				State  map[string]any `json:"state"`
+				Detail string         `json:"detail"`
+				URL    string         `json:"url"`
+			}
+			_ = json.Unmarshal(e.Data, &d)
+			delete(input, "event")
+			input["state"], input["detail"], input["url"] = d.State, d.Detail, d.URL
+			input["source"], input["key"], input["until"] = t.Source, t.Key, t.Until
+		}
 		rn := r.Start(project, t.Fn, input)
 		run.RunID = rn.ID
 		var res any
@@ -266,6 +307,105 @@ func (r *Runner) Triggers(project string) ([]TriggerInfo, error) {
 		out = append(out, TriggerInfo{Trigger: t, Runs: p.runs[t.ID], Last: p.last[t.ID]})
 	}
 	return out, nil
+}
+
+// TriggerWait is a trigger waiting for a state (until), as the sources reporting it see the keys waited on.
+type TriggerWait struct {
+	Panel  string `json:"panel"` // the Work key (default/lb看板)
+	ID     string `json:"id"`
+	Source string `json:"source"`
+	Key    string `json:"key"`
+	Until  string `json:"until"`
+}
+
+// StateWaits: every panel's triggers waiting for a state that are on. Cheap to call often: each folder is re-read
+// only when it changed (overlaySig).
+func (r *Runner) StateWaits() []TriggerWait {
+	r.trig_.mu.Lock()
+	defer r.trig_.mu.Unlock()
+	var out []TriggerWait
+	for _, project := range r.workProjects() {
+		for _, t := range r.trig(project).defs {
+			if !t.Off && t.Until != "" {
+				out = append(out, TriggerWait{Panel: project, ID: t.ID, Source: t.Source, Key: t.Key, Until: t.Until})
+			}
+		}
+	}
+	return out
+}
+
+// StateNow is a source's latest state of one thing, as DispatchState gets it.
+type StateNow struct {
+	State  map[string]any `json:"state"`
+	Detail string         `json:"detail,omitempty"`
+	URL    string         `json:"url,omitempty"`
+	At     int64          `json:"at"`
+}
+
+// DispatchState runs the triggers waiting on this thing whose condition holds for its state now, each once
+// (spent until the condition stops holding or its file changes). Call it whenever a source reports a state, and
+// after trigger files changed (a new wait on something already true runs at once). Returns the errors of
+// conditions that can't be evaluated, by panel/id.
+func (r *Runner) DispatchState(source, key string, st StateNow) map[string]error {
+	r.trig_.mu.Lock()
+	defer r.trig_.mu.Unlock()
+	var errs map[string]error
+	data, _ := json.Marshal(st)
+	for _, project := range r.workProjects() {
+		p := r.trig(project)
+		for _, t := range p.defs {
+			if t.Off || t.Until == "" || t.Source != source || t.Key != key {
+				continue
+			}
+			c, err := waits.Parse(t.Until)
+			var hit bool
+			if err == nil {
+				hit, err = c.Eval(st.State)
+			}
+			if err != nil {
+				if errs == nil {
+					errs = map[string]error{}
+				}
+				errs[project+"/"+t.ID] = err
+			}
+			def, _ := json.Marshal(t)
+			if !hit {
+				delete(p.spent, t.ID)
+				continue
+			}
+			if p.spent[t.ID] == string(def) {
+				continue
+			}
+			p.spent[t.ID] = string(def)
+			q := p.queue[t.ID]
+			if q == nil {
+				q = make(chan ev.Event, 256)
+				p.queue[t.ID] = q
+				go r.drainTrigger(project, t.ID, q)
+			}
+			e := ev.Event{ID: fmt.Sprintf("state:%s:%s:%d", source, key, st.At), Source: source, Kind: "state", Key: key, Text: st.Detail, URL: st.URL, Data: data, At: st.At}
+			select {
+			case q <- e:
+			default:
+				if r.Log != nil {
+					r.Log.Warn("work: trigger falling behind, dropped a state", "project", project, "trigger", t.ID)
+				}
+			}
+		}
+	}
+	return errs
+}
+
+// TriggersPath: is rel (a path in a panel's folder) one of its trigger files' folders? A function writing there
+// may have added or removed a wait for a state.
+func TriggersPath(rel string) bool {
+	rel = filepath.ToSlash(rel)
+	for _, d := range []string{TriggersDir, UserDir + "/" + TriggersDir} {
+		if rel == d || strings.HasPrefix(rel, d+"/") {
+			return true
+		}
+	}
+	return false
 }
 
 // depthOf: the depth an event emitted by this run gets — one more than the event that started it (a trigger's

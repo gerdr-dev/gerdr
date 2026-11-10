@@ -244,3 +244,44 @@ func TestServicePending(t *testing.T) {
 		}
 	}
 }
+
+// getService answers each get: a state for h/a!1, an error for anything else (with the request's id).
+const getService = `#!/bin/sh
+while IFS= read -r line; do
+  id=$(printf '%s' "$line" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
+  case "$line" in
+    *'"key":"h/a!1"'*) echo '{"type":"state","id":"'"$id"'","key":"h/a!1","state":{"state":"opened"}}';;
+    *'"type":"get"'*) echo '{"type":"error","id":"'"$id"'","reason":"no such MR","retry":false}';;
+  esac
+done
+`
+
+// Get asks a service of an add-on with states and returns its answer; Reporters lists it for its source only.
+func TestServiceGet(t *testing.T) {
+	dir := t.TempDir()
+	pdir := filepath.Join(dir, "addons", "gl")
+	_ = os.MkdirAll(pdir, 0o755)
+	_ = os.WriteFile(filepath.Join(pdir, "svc.sh"), []byte(getService), 0o755)
+	_ = os.WriteFile(filepath.Join(pdir, "addon.json"), []byte(`{"service":{"command":"./svc.sh"},"states":[{"source":"gitlab","fields":{"state":"opened / merged"}}]}`), 0o644)
+	s := NewServices(New(dir, slog.Default()), slog.Default())
+	s.Sync()
+	defer s.Close()
+	waitFor(t, "running", func() bool { st := s.Status("gl"); return st != nil && st.State == "running" })
+	r, err := s.Get("gl", "gitlab", "h/a!1", 5*time.Second)
+	if err != nil || !strings.Contains(string(r), `"state":{"state":"opened"}`) {
+		t.Fatalf("get: %s %v", r, err)
+	}
+	r, err = s.Get("gl", "gitlab", "h/b!2", 5*time.Second)
+	if err != nil || !strings.Contains(string(r), `"type":"error"`) {
+		t.Fatalf("get error: %s %v", r, err)
+	}
+	if _, err := s.Get("nope", "gitlab", "x", time.Second); err == nil {
+		t.Fatal("get from no service")
+	}
+	if rs := s.Reporters("gitlab"); len(rs) != 1 || !rs[0].Running {
+		t.Fatalf("reporters %+v", rs)
+	}
+	if rs := s.Reporters("jira"); len(rs) != 0 {
+		t.Fatalf("reporters of another source %+v", rs)
+	}
+}

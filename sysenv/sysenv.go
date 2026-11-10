@@ -516,6 +516,11 @@ func SafeGerdrCLI(cmd string) bool {
 		if len(words) < 3 || words[2] == "emit" {
 			return false
 		}
+	case "wait":
+		// Waiting for a state, listing, removing one's own waits: nothing it does runs anything
+		if len(words) < 3 {
+			return false
+		}
 	default:
 		// Not `gerdr folder` either: like fetch below, it writes files through Gerdr's process
 		return false

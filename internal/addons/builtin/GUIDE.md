@@ -461,6 +461,54 @@ If someone can answer, put the address in each event: `"reply": { "kind": "slack
 "threadTs": "…" } }`, and list `"*/slack.send"` in `service.events`. A panel answers with `ctx.events.reply(event, text)`
 and your service gets `{ "kind": "slack.send", "data": { "channel": "D1", "threadTs": "…", "text": "…" } }`.
 
+#### Reporting states
+
+Some things outside are in a state rather than happening: an MR is open or merged, its pipeline failed, it has N
+review comments. Don't emit events for those — whoever subscribes late, or misses one, never hears it. Report the
+state, and let sessions and panels wait until a condition on it holds (`gerdr wait`, a trigger with `until`); Gerdr
+checks the conditions, against the state as it is, so nobody can miss anything.
+
+Declare what you report in addon.json, with the fields conditions may use:
+
+```json
+"states": [{
+  "source": "gitlab", "title": "GitLab MR",
+  "key": "<host>/<project path>!<iid>, as in the MR's address",
+  "fields": { "state": "opened / merged / closed", "pipeline": "none / running / success / failed / …", "reviews": "comments by others" }
+}]
+```
+
+Gerdr then asks your service about each thing someone waits on — at once when the wait is new, then every `poll`
+seconds (in the declaration, default 60):
+
+```
+{"type":"get","id":"r7","source":"gitlab","key":"gitlab.example.com/group/repo!34"}
+```
+
+Answer each with what it is like now, carrying the same `id`:
+
+```
+{"type":"state","id":"r7","state":{"state":"opened","pipeline":"failed","reviews":2},
+ "detail":"what the woken one should read: the latest comments, the failed job's log","url":"https://…"}
+```
+
+or, when you can't, why — `retry: true` when it may pass by itself (the network: asked again in 20s), `false` when a
+person has to act (not logged in, no such thing: shown to whoever waits, at once):
+
+```
+{"type":"error","id":"r7","reason":"glab is not logged in to gitlab.example.com","retry":false}
+```
+
+That's all a source does: no list of keys, no timer, no conditions; keep caches if they save work. If you learn of a
+change by yourself (a webhook), you may also send `{"type":"state","key":"…","state":{…}}` without an id.
+
+Conditions are JavaScript expressions over your fields (each field a variable), evaluated by Gerdr, so report data,
+not verdicts: counts for the common cases (`reviews`), and the lists behind them for filtering (the GitLab add-on's
+`notes`, so `notes.some(n => n.author != me && !n.resolved)` needs no field of its own). Keep a state under 64 KB:
+cut long texts, keep the newest of long lists. Keep the fields' meaning stable. Put what you
+need to find the thing in the key itself (the GitLab add-on's keys start with the host), not in a setting: then one
+add-on serves every GitLab and never needs to know who waits.
+
 ## Debugging
 
 - Settings → Add-ons → Installed: compile errors, what `setup` or a hook threw, a service's status and last error.

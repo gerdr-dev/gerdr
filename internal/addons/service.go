@@ -19,6 +19,9 @@ package addons
 //	  {"type":"pending","pending":[…]}                  only with "pending": true — what agents wait on a person for
 //	                                                    (approvals, questions); after the greeting, then on change
 //	  {"type":"answered","reqId":"…","error":"…"}       how an "answer" went (no error = it was taken)
+//	  {"type":"get","id":"…","source":"gitlab","key":"…"}  only for an add-on with "states": what is this thing like
+//	                                                    now? Gerdr asks for each key someone waits on, at once and
+//	                                                    then every poll interval (addon.json states[].poll)
 //	service → gerdr (stdout)
 //	  {"type":"status","text":"…"}                      one line shown under the add-on in Settings → Add-ons
 //	  {"type":"status","text":"…","links":{"panel":"http://127.0.0.1:7858"}}
@@ -30,6 +33,12 @@ package addons
 //	  {"type":"answer","session":"…","reqId":"…","optionId":"…"}          approve / reject, as the person would
 //	  {"type":"answer","session":"…","reqId":"…","answers":{"<q id>":["…"]}}   answer a question ("skip":true = don't)
 //	                                                    only with "pending": true (server/addonsvc.go checks the rest)
+//	  {"type":"state","id":"…","key":"…","state":{…},"detail":"…","url":"…"}
+//	                                                    the answer to a get (or, without an id, a state it noticed by
+//	                                                    itself: source one of its "states", default the add-on's id)
+//	  {"type":"error","id":"…","reason":"…","retry":false}
+//	                                                    a get it can't answer: retry false = a person has to act
+//	                                                    (not logged in, no such thing), true = try again soon
 //
 // stdin closing means gerdr is going away: the service should clean up (close its device) and exit. gerdr waits a few
 // seconds for that before it kills the process group. stderr goes to <dir>/logs/addons/<id>.log.
@@ -98,6 +107,8 @@ type Services struct {
 	PendingLine func() []byte
 	// OnAnswer: a "pending" service answered one ({"type":"answer",…}, the whole line); the error goes back to it.
 	OnAnswer func(id string, line json.RawMessage) error
+	// OnState: a service reported a state by itself ({"type":"state"} without an id, the whole line).
+	OnState func(id string, line json.RawMessage)
 
 	syncMu sync.Mutex // one Sync at a time: an old process must be gone before its replacement starts
 	mu     sync.Mutex
@@ -108,6 +119,7 @@ type Services struct {
 type svcProc struct {
 	id, dir string
 	spec    ServiceSpec
+	states  []string // the sources it reports the state of (addon.json states)
 	stop    chan struct{}
 	done    chan struct{}
 
@@ -115,6 +127,8 @@ type svcProc struct {
 	st       ServiceStatus
 	in       chan []byte // stdin of the current run; nil while not running
 	settings string      // the settings line last sent to the current run (sendSettings)
+	// asks: gets waiting for their answer, by request id (Get); answered with nil when the run ends
+	asks map[string]chan json.RawMessage
 }
 
 // NewServices: logs and per-add-on data go under the manager's root (gerdr's data directory).
@@ -137,7 +151,7 @@ func (s *Services) Sync() {
 	var stopping []*svcProc
 	for id, p := range s.procs {
 		w, ok := want[id]
-		if !ok || !reflect.DeepEqual(w.spec, p.spec) || w.dir != p.dir {
+		if !ok || !reflect.DeepEqual(w.spec, p.spec) || w.dir != p.dir || !reflect.DeepEqual(w.states, p.states) {
 			stopping = append(stopping, p)
 			delete(s.procs, id)
 		}
@@ -147,7 +161,7 @@ func (s *Services) Sync() {
 		if _, ok := s.procs[id]; ok {
 			continue
 		}
-		p := &svcProc{id: id, dir: w.dir, spec: w.spec, stop: make(chan struct{}), done: make(chan struct{}),
+		p := &svcProc{id: id, dir: w.dir, spec: w.spec, states: w.states, stop: make(chan struct{}), done: make(chan struct{}),
 			st: ServiceStatus{State: "starting", Since: time.Now().UnixMilli()}}
 		s.procs[id] = p
 		starting = append(starting, p)
@@ -274,6 +288,78 @@ func (s *Services) SendWhere(pick func(patterns []string) bool, line []byte) {
 			s.log.Warn("addon service not reading stdin, dropped an event", "addon", ids[i])
 		}
 	}
+}
+
+// contains: is x in l?
+func contains(l []string, x string) bool {
+	for _, y := range l {
+		if y == x {
+			return true
+		}
+	}
+	return false
+}
+
+// Get asks an add-on's service what one thing is like now ({"type":"get"}) and waits for its "state" or "error"
+// line (the whole line is returned). An error: the service isn't running, not reading, gone before it answered,
+// or slower than timeout.
+func (s *Services) Get(id, source, key string, timeout time.Duration) (json.RawMessage, error) {
+	reqID := fmt.Sprintf("g%d", time.Now().UnixNano())
+	line, _ := json.Marshal(map[string]any{"type": "get", "id": reqID, "source": source, "key": key})
+	ch := make(chan json.RawMessage, 1)
+	s.mu.Lock()
+	p := s.procs[id]
+	if p == nil || p.in == nil {
+		s.mu.Unlock()
+		return nil, fmt.Errorf("add-on %q: service is not running", id)
+	}
+	if p.asks == nil {
+		p.asks = map[string]chan json.RawMessage{}
+	}
+	p.asks[reqID] = ch
+	in := p.in
+	s.mu.Unlock()
+	defer func() {
+		s.mu.Lock()
+		delete(p.asks, reqID)
+		s.mu.Unlock()
+	}()
+	select {
+	case in <- line:
+	default:
+		return nil, fmt.Errorf("add-on %q: service is not reading its stdin", id)
+	}
+	select {
+	case r := <-ch:
+		if r == nil {
+			return nil, fmt.Errorf("add-on %q: service stopped before it answered", id)
+		}
+		return r, nil
+	case <-time.After(timeout):
+		return nil, fmt.Errorf("add-on %q: no answer in %s", id, timeout)
+	}
+}
+
+// Reporter is an add-on whose service reports the state of a source.
+type Reporter struct {
+	ID      string   `json:"id"`
+	Sources []string `json:"sources"`
+	Running bool     `json:"running"`
+	State   string   `json:"state"` // ServiceStatus.State: starting / running / exited / …
+}
+
+// Reporters: the add-ons (switched on, with a service) that report the state of source.
+func (s *Services) Reporters(source string) []Reporter {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []Reporter
+	for id, p := range s.procs {
+		if !contains(p.states, source) {
+			continue
+		}
+		out = append(out, Reporter{ID: id, Sources: p.states, Running: p.in != nil, State: p.st.State})
+	}
+	return out
 }
 
 // SendPending sends a line to every running service that asked for "pending" (the pending line, on change).
@@ -510,6 +596,13 @@ func (s *Services) runOnce(p *svcProc) error {
 	}
 	s.mu.Lock()
 	p.in = nil
+	for k, ch := range p.asks {
+		select {
+		case ch <- nil:
+		default:
+		}
+		delete(p.asks, k)
+	}
 	s.mu.Unlock()
 	select {
 	case <-stopWriting:
@@ -537,6 +630,7 @@ func (s *Services) readStdout(p *svcProc, r io.Reader) {
 			Data  json.RawMessage   `json:"data"`
 			Event json.RawMessage   `json:"event"`
 			ReqID string            `json:"reqId"`
+			ID    string            `json:"id"`
 		}
 		if json.Unmarshal(line, &m) != nil || m.Type == "" {
 			s.log.Info("addon service", "addon", p.id, "stdout", string(line))
@@ -571,6 +665,21 @@ func (s *Services) readStdout(p *svcProc, r io.Reader) {
 		case "event":
 			if s.OnEvent != nil && len(m.Event) > 0 {
 				s.OnEvent(p.id, append(json.RawMessage(nil), m.Event...))
+			}
+		case "state", "error":
+			// The answer to a get goes to whoever asked; a state without one was noticed by the service itself
+			if m.ID != "" {
+				s.mu.Lock()
+				ch := p.asks[m.ID]
+				s.mu.Unlock()
+				if ch != nil {
+					select {
+					case ch <- append(json.RawMessage(nil), line...):
+					default:
+					}
+				}
+			} else if m.Type == "state" && s.OnState != nil {
+				s.OnState(p.id, append(json.RawMessage(nil), line...))
 			}
 		case "answer":
 			err := fmt.Errorf("add-on %q may not answer: its addon.json service has no \"pending\": true", p.id)
