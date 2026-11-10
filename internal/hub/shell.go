@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -18,6 +20,7 @@ import (
 	"github.com/coder/acp-go-sdk"
 	"github.com/google/uuid"
 
+	"github.com/gerdr-dev/gerdr/agents/native"
 	"github.com/gerdr-dev/gerdr/chatlog"
 
 	"github.com/gerdr-dev/gerdr/sysenv"
@@ -122,11 +125,21 @@ func (s *Session) shellDir() string {
 	return filepath.Join(filepath.Dir(s.lf.Path), s.rec.ID+".shell")
 }
 
-func userShell() string {
-	if s := os.Getenv("SHELL"); s != "" {
-		return s
+// shellCommand is the command line that runs command. Unix: the user's login shell (-l: PATH is in the profile, and
+// gerdr started by launchd has a bare environment, same as the terminal pane). Windows has no $SHELL to speak of (or
+// one pointing at cmd.exe, which takes /c, not -l -c): the native agent's choice, Git Bash else PowerShell, so `!` and
+// the agents' commands run in the same shell.
+func shellCommand(command string, out io.Writer) (*exec.Cmd, func()) {
+	if runtime.GOOS == "windows" {
+		return native.ShellCommand(command, out)
 	}
-	return "/bin/zsh"
+	sh := os.Getenv("SHELL")
+	if sh == "" {
+		sh = "/bin/zsh"
+	}
+	cmd := exec.Command(sh, "-l", "-c", command)
+	cmd.Stdout, cmd.Stderr = out, out
+	return cmd, func() {}
 }
 
 // Shell 在会话目录里跑一条命令，马上返回这次运行的 id；输出和结束都进日志。
@@ -140,13 +153,6 @@ func (s *Session) Shell(command, clientID string) (string, error) {
 	if _, err := uuid.Parse(clientID); err == nil {
 		id = clientID
 	}
-	// 登录 shell（-l）：PATH 在 profile 里，launchd 起的 gerdr 自己的环境很干（和终端 pane 一样）。
-	// 没有 stdin：要人交互输入的命令（密码、y/n）会卡住，人点停止；浏览器登录这类（gcloud auth login）照样能用。
-	cmd := exec.Command(userShell(), "-l", "-c", command)
-	cmd.Env = sysenv.ChildEnv()
-	// Its own process group: stopping it kills everything it started too (what npm / go test leave running would
-	// otherwise hang around). shell_unix.go / shell_windows.go.
-	ownGroup(cmd)
 	out := &shellOut{}
 	path := filepath.Join(s.shellDir(), id+".log")
 	if os.MkdirAll(filepath.Dir(path), 0o700) == nil {
@@ -154,7 +160,13 @@ func (s *Session) Shell(command, clientID string) (string, error) {
 			out.file = f
 		}
 	}
-	cmd.Stdout, cmd.Stderr = out, out
+	// No stdin: a command that asks for input (a password, y/n) hangs until the person stops it; browser logins
+	// (gcloud auth login) still work.
+	cmd, flush := shellCommand(command, out)
+	cmd.Env = sysenv.ChildEnv()
+	// Its own process group: stopping it kills everything it started too (what npm / go test leave running would
+	// otherwise hang around). shell_unix.go / shell_windows.go.
+	ownGroup(cmd)
 	// 命令自己退了、它丢到后台的进程还拿着输出管道时（`dev-server &`），Wait 会一直等那个管道 —— 最多再等 2 秒就不管了
 	cmd.WaitDelay = 2 * time.Second
 
@@ -190,6 +202,7 @@ func (s *Session) Shell(command, clientID string) (string, error) {
 	done := make(chan error, 1)
 	go func() {
 		err := cmd.Wait()
+		flush()
 		close(run.exited)
 		done <- err
 	}()

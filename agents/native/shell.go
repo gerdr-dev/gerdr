@@ -3,6 +3,7 @@ package native
 import (
 	"cmp"
 	"encoding/base64"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,6 +16,22 @@ import (
 // Claude Code finds it), and when it isn't installed fall back to PowerShell rather than fail every command — before
 // this, a Windows machine without Git got `exec: "/bin/sh": executable file not found` on every call, and the agent
 // spent twenty turns writing shims.
+
+// ShellCommand is a command line run the way the bash tool runs it — same shell on every system, so on Windows Git
+// Bash, else PowerShell with UTF-8 output — for a host that runs commands of its own (gerdr's `!command`). Its stdout
+// and stderr go to out, PowerShell's CLIXML stderr decoded to text; call done once Wait has returned, it writes what
+// the decoder still held back.
+func ShellCommand(command string, out io.Writer) (cmd *exec.Cmd, done func()) {
+	name, argv := shellCmd(command)
+	cmd = exec.Command(name, argv...)
+	cmd.Stdout, cmd.Stderr = out, out
+	done = func() {}
+	if isPowerShell(name) {
+		w := &clixmlWriter{w: out}
+		cmd.Stderr, done = w, w.flush
+	}
+	return cmd, done
+}
 
 // shellCmd is the program and arguments that run command.
 func shellCmd(command string) (string, []string) {
