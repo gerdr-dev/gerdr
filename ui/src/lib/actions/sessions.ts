@@ -4,7 +4,6 @@ import { askConfirm } from "../confirm";
 import { allLeaves, currentSpace, locateSession, mutedSession, paneSpace, setPane, spaceList, type PaneLeaf } from "../layout";
 import { get, markRead, overviewShown, set, setLayout, setMode, setWorkPanel } from "../store";
 import { focusTile, overviewIds, replaceTile, toggleOverview } from "../overview";
-import { isOpen } from "../overviewState";
 import { openWorkChat, panelOfKey, spaceOfKey, workProjectOf } from "../work";
 import { currentView } from "./views";
 import type { ContentBlock } from "../types";
@@ -57,9 +56,9 @@ export function resumeInPane(paneId: string, sessionId: string) {
 function resumeInTile(cur: string, sessionId: string) {
   const before = overviewIds(get());
   const st = get();
-  if (!isOpen(st.layout, st.config, sessionId)) {
+  if (!locateSession(st.layout, sessionId)) {
     const here = locateSession(st.layout, cur);
-    if (!here) return void toast(t("actionsSessions.notInPane")); // a Work conversation: no pane to switch
+    if (!here) return; // a tile is always some pane's session (overviewState.openSessionsWithProject)
     setPane0(here.pane.id, { sessionId, draft: undefined });
     shutdownGone([here.pane]);
   }
