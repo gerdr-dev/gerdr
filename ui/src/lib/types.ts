@@ -18,6 +18,26 @@ export type AgentInfo = {
 export * from "@gerdr/chat/types";
 import type { AgentTask, AvailableCommand, ChatSession, ConfigOption, SessionMode, SessionStatus } from "@gerdr/chat/types";
 
+/** A session's wait for a state (`gerdr wait`; GET /api/waits), with how it stands. */
+export type WaitView = {
+  id: string;
+  source: string;
+  key: string;
+  until: string;
+  session: string;
+  note?: string;
+  created: number;
+  /** How asking the source goes: serving / waiting / retrying / refused / stopped */
+  reporter?: { addon?: string; state: string; reason?: string; checked?: number };
+  now?: Record<string, unknown>;
+  at?: number;
+  holds?: boolean;
+  /** The condition can't be evaluated on the state */
+  error?: string;
+  /** It can't wake as it is (no source, refused, broken condition) */
+  warning?: string;
+};
+
 export type SessionSummary = ChatSession & {
   id: string;
   agent: string;

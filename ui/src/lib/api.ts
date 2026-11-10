@@ -10,6 +10,7 @@ import type {
   Hello,
   HostInfo,
   HubEvent,
+  WaitView,
   MemoryStore,
   AddonBuild,
   AddonStore,
@@ -337,6 +338,9 @@ export const api = {
       `/api/importable?agent=${encodeURIComponent(agent)}&cwd=${encodeURIComponent(cwd)}${hostQ(host, "&")}`,
     ),
   stopTask: (id: string, taskId: string) => req("POST", `/api/sessions/${id}/tasks/${encodeURIComponent(taskId)}/stop`, {}),
+  // What sessions wait for (`gerdr wait`, internal/waits): every one with how it stands; drop one
+  waits: () => req<{ list: WaitView[] }>("GET", "/api/waits"),
+  deleteWait: (id: string) => req("DELETE", `/api/waits/${encodeURIComponent(id)}`),
   backgroundTool: (id: string, toolCallId: string) =>
     req<{ backgrounded: boolean }>("POST", `/api/sessions/${id}/tools/${encodeURIComponent(toolCallId)}/background`, {}),
   allowRules: (id: string, rules: string[]) => req("POST", `/api/sessions/${id}/allow-rules`, { rules }),

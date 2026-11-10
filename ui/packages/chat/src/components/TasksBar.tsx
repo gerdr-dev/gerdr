@@ -5,14 +5,16 @@ import { Button } from "../ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../ui/collapsible";
 import { useKept } from "../kept";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
-import { chatHost } from "../host";
+import { chatHost, useChatHost, type HostTask, type HostTaskGroup } from "../host";
 import { t as tr } from "../i18n";
 import type { AgentTask, ChatSession, Wake } from "../types";
 import { isCommandText } from "../transcript";
 import { cn } from "../utils";
 
 // 后台任务：输入框底栏里一个标签。有在跑的就显示「n 个后台任务」，点开是列表（停止 / 看结果）。
-// 和 Claude Code 自己的任务列表是同一份东西（CLI 报的 task_*）。
+// 和 Claude Code 自己的任务列表是同一份东西（CLI 报的 task_*）。The host's own things going on for the session
+// (ChatHost.useTaskGroups — gerdr: what it waits for) sit in the same chip and list, each group under its heading:
+// one place to see what is still going on, whoever keeps it.
 
 export function taskIcon(t: AgentTask) {
   if (t.type === "local_bash") return SquareTerminal;
@@ -57,15 +59,23 @@ const SHOW_AFTER = 2000;
 export function TasksChip({ session, short }: { session: ChatSession; short?: boolean }) {
   const all = session.tasks ?? [];
   const running = all.filter((t) => t.status === "running");
+  const host = useChatHost();
+  // Called on every render when the host has it (a host doesn't change under a mounted chat)
+  const groups = (host.useTaskGroups?.(session.id) ?? []).filter((g) => g.items.length > 0);
   const [open, setOpen] = useState(false);
-  useTick(running.length > 0);
+  useTick(running.length > 0 || groups.length > 0);
   const now = Date.now();
-  const visible = running.some((t) => now - t.startedAt >= SHOW_AFTER);
+  const tasksShown = running.some((t) => now - t.startedAt >= SHOW_AFTER);
+  const visible = tasksShown || groups.length > 0;
   useEffect(() => {
     if (!visible) setOpen(false);
   }, [visible]);
   if (!visible) return null;
   const top = running.filter((t) => !t.parent || !running.some((x) => x.toolCallId === t.parent));
+  const total = (tasksShown ? running.length : 0) + groups.reduce((n, g) => n + g.items.length, 0);
+  const label = [...(tasksShown ? [tr("task.count", { n: running.length })] : []), ...groups.map((g) => g.label(g.items.length))].join(" · ");
+  // The chip's icon: the tasks' own, or the only group's when there are no tasks
+  const ChipIcon = !tasksShown && groups.length === 1 ? groups[0].icon : Activity;
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -74,32 +84,90 @@ export function TasksChip({ session, short }: { session: ChatSession; short?: bo
             "flex h-7 shrink-0 items-center gap-1 rounded-md px-1.5 text-[12px] text-muted-foreground hover:bg-muted hover:text-foreground",
             open && "bg-muted text-foreground",
           )}
-          title={tr("task.count", { n: running.length })}
+          title={label}
         >
           {/* 不转圈：对话里那条工具调用和状态行已经在转了 */}
-          <Activity className="size-3.5" />
-          <span className="tabular-nums">{short ? running.length : tr("task.count", { n: running.length })}</span>
+          <ChipIcon className="size-3.5" />
+          <span className="tabular-nums">{short ? total : label}</span>
         </button>
       </PopoverTrigger>
-      <PopoverContent side="top" align="end" className="w-[min(28rem,90vw)] p-0 text-[12px]">
-        <div className="border-b px-3 py-2 text-muted-foreground">{tr("task.running", { n: running.length })}</div>
-        <div className="max-h-72 divide-y overflow-auto">
-          {/* 子 agent 起的任务挂在它下面（缩进），别看着像主 agent 自己在跑 */}
-          {top.map((t) => (
-            <div key={t.id}>
-              <TaskRow sessionId={session.id} t={t} />
-              {running
-                .filter((c) => c.parent && c.parent === t.toolCallId)
-                .map((c) => (
-                  <div key={c.id} className="ml-5 border-l-2">
-                    <TaskRow sessionId={session.id} t={c} />
-                  </div>
-                ))}
+      {/* One line between the sections, none under a heading or between rows: the list is short, lines made it a grid */}
+      <PopoverContent side="top" align="end" className="max-h-[min(28rem,70vh)] w-[min(28rem,90vw)] divide-y overflow-auto p-0 py-1 text-[12px]">
+        {groups.map((g) => (
+          <HostGroup key={g.id} g={g} />
+        ))}
+        {tasksShown && (
+          <div className="py-1">
+            <div className="px-3 pt-1 pb-0.5 text-[11px] text-muted-foreground">{tr("task.running", { n: running.length })}</div>
+            <div className="max-h-72 overflow-auto">
+              {/* 子 agent 起的任务挂在它下面（缩进），别看着像主 agent 自己在跑 */}
+              {top.map((t) => (
+                <div key={t.id}>
+                  <TaskRow sessionId={session.id} t={t} />
+                  {running
+                    .filter((c) => c.parent && c.parent === t.toolCallId)
+                    .map((c) => (
+                      <div key={c.id} className="ml-5 border-l-2">
+                        <TaskRow sessionId={session.id} t={c} />
+                      </div>
+                    ))}
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          </div>
+        )}
       </PopoverContent>
     </Popover>
+  );
+}
+
+/** One of the host's groups in the tasks list: its heading, then its items (ChatHost.useTaskGroups). */
+function HostGroup({ g }: { g: HostTaskGroup }) {
+  return (
+    <div className="py-1">
+      {/* A heading like the tasks' own ("1 个后台任务在跑"): no icon, the rows have theirs */}
+      <div className="px-3 pt-1 pb-0.5 text-[11px] text-muted-foreground">{g.label(g.items.length)}</div>
+      {g.items.map((t) => (
+        <HostTaskRow key={t.id} t={t} Icon={g.icon} />
+      ))}
+    </div>
+  );
+}
+
+function HostTaskRow({ t, Icon }: { t: HostTask; Icon: HostTaskGroup["icon"] }) {
+  const [stopping, setStopping] = useState(false);
+  return (
+    <div className="flex items-start gap-2 px-3 py-1.5">
+      <Icon className="mt-0.5 size-3.5 shrink-0 text-foreground" />
+      <div className="min-w-0 flex-1">
+        <div className="truncate">{t.title}</div>
+        <div className={cn("text-[11px] break-words text-muted-foreground", t.problem && "text-bad")}>
+          {t.detail ? `${t.detail} · ` : ""}
+          {elapsed(t.startedAt)}
+        </div>
+      </div>
+      {t.stop && (
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-6 shrink-0 px-2 text-[11px]"
+          disabled={stopping}
+          onClick={async () => {
+            setStopping(true);
+            try {
+              await t.stop?.();
+            } catch (e: any) {
+              toast.error(e.message);
+            } finally {
+              setStopping(false);
+            }
+          }}
+        >
+          <Square className="size-3" />
+          {t.stopLabel || tr("task.stop")}
+        </Button>
+      )}
+    </div>
   );
 }
 

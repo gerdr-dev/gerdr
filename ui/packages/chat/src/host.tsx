@@ -1,4 +1,4 @@
-import { createContext, useContext, type ReactNode, type RefObject } from "react";
+import { createContext, useContext, type ComponentType, type ReactNode, type RefObject } from "react";
 import type { DraftImage, DraftStore } from "./drafts";
 import { LightboxHost } from "./components/Lightbox";
 import { TooltipProvider } from "./ui/tooltip";
@@ -55,6 +55,13 @@ export interface ChatHost {
    */
   stopTask?(sessionId: string, taskId: string): Promise<void>;
   backgroundTool?(sessionId: string, toolCallId: string): Promise<boolean>;
+  /**
+   * The host's own things going on for a session, shown with its background tasks: in the same chip under the
+   * composer and the same list, each group under its own heading (gerdr: what the session waits for — `gerdr wait`).
+   * A React hook (it reads the host's state), called while the chip renders. Not the agent's tasks: those are
+   * session.tasks. A general slot, so the next kind of thing (a timer, a scheduled send) needs no package change.
+   */
+  useTaskGroups?(sessionId: string): HostTaskGroup[];
   /** Allow what an auto-mode classifier blocked (claude), then the chat asks the agent to retry. */
   allowRules?(sessionId: string, rules: string[]): Promise<void>;
   /** Mode / config option pickers under the composer. */
@@ -208,6 +215,28 @@ export type ComposerHooks = {
  * data-message="<id>" (a reply's: every text part of that turn), so the host can find and mark it (read aloud: the
  * paragraph being read).
  */
+/** A group of the host's things in the tasks chip (ChatHost.useTaskGroups). */
+export type HostTaskGroup = {
+  id: string;
+  /** Its heading and its part of the chip's text, for n items ("2 waiting") */
+  label(n: number): string;
+  icon: ComponentType<{ className?: string }>;
+  items: HostTask[];
+};
+
+/** One of them: a line, a second line, since when (unix ms), and a way to stop it (none: no button). */
+export type HostTask = {
+  id: string;
+  title: string;
+  detail?: string;
+  /** The second line is a problem (drawn in the "bad" colour): it can't go on as it is */
+  problem?: boolean;
+  startedAt: number;
+  stop?(): Promise<void>;
+  /** The stop button's text (default: the tasks' "stop") */
+  stopLabel?: string;
+};
+
 export type MessageInfo = { sessionId: string; role: "user" | "assistant"; id: string; text(): string; blocks(): string[] };
 export type TurnStatInfo = { sessionId: string; ts?: number; ms: number; tokens: number; latest: boolean };
 export type TurnStatDeco = { timeClassName?: string; title?: string; after?: ReactNode };

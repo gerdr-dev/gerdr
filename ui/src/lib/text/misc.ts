@@ -165,6 +165,9 @@ export const zh = {
   "remoteScreen.typeEnter": "输入并回车",
   "remoteScreen.loading": "正在截屏…",
   "remoteScreen.tapHint": "点截图就是点电脑屏幕上的同一处；先点中输入框，再在下面打字。",
+  // waits.ts: what a session waits for, in the background tasks chip
+  "waits.count": "{n} 个在等",
+  "waits.until": "等到：{until}",
 };
 
 export const en: Record<keyof typeof zh, string> = {
@@ -341,4 +344,6 @@ export const en: Record<keyof typeof zh, string> = {
   "remoteScreen.typeEnter": "Type + Enter",
   "remoteScreen.loading": "Taking a screenshot…",
   "remoteScreen.tapHint": "Tapping the screenshot clicks the same spot on the computer; click into a field first, then type below.",
+  "waits.count": "{n} waiting",
+  "waits.until": "until: {until}",
 };

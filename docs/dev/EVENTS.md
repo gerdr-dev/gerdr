@@ -128,6 +128,13 @@ the add-on.
   conversation) drops them. First they outlived all three, and woke a conversation nobody could see any more, or a
   cleared one with no idea what it had waited for; the user's comparison was Claude Code, whose background tasks end
   with their session. A Gerdr restart keeps them (nobody ended anything). Panels' waits are trigger files, untouched.
+- **Shown with the session's background tasks**: the chip under the composer counts them too ("1 个后台任务 · 1 个在
+  等"), and its list has a "waiting" group above the tasks, each with what it waits on, the condition (or why it
+  can't wake, in red) and a stop button (`ui/src/lib/waits.ts`, refreshed on the hub's "waits" broadcast). Asked for
+  because a session waiting on an MR looked idle: nobody could tell what it waited for. The chat package only got a
+  general slot for it (`ChatHost.useTaskGroups`: the host's own things in that chip), not "waits": the next kind of
+  thing needs no package release. Claude Code's background tasks were weighed instead — they show natively, but count
+  as busy, which keeps Gerdr from updating itself for as long as a wait lasts.
 - **A source may also report unasked** (`{"type":"state"}` without an id, naming the key) when it learns of a change
   by itself (a webhook, a socket); Gerdr checks the waits the same way. Not needed by polling sources.
 - **Conditions are one JavaScript expression** over the state (`waits.Cond`, goja): each field is a variable, `$`

@@ -385,6 +385,9 @@ function handle(m: any) {
     case "event":
       import("./addons").then((p) => p.emit("event", m.data));
       break;
+    case "waits":
+      import("./waits").then((p) => p.refreshWaits());
+      break;
     case "inbox":
       import("./inbox").then((p) => p.syncPanelInbox(m.data ?? []));
       break;

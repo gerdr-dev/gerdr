@@ -1,3 +1,4 @@
+import { useWaitGroups } from "./waits";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { feedOf, isFeed, subscribeFeed, type FeedFile } from "./feedChat";
 import { ToolCard, cardOf } from "@/components/chat/ToolCard";
@@ -280,6 +281,7 @@ const feedHost: Partial<ChatHost> = {
   setConfig: undefined,
   backgroundTool: undefined,
   stopTask: undefined,
+  useTaskGroups: undefined,
   openSubagent: undefined,
   codeActions: undefined,
   composerOverlay: undefined,
@@ -353,6 +355,8 @@ export function GerdrChatProvider({ children }: { children: ReactNode }) {
       rewind: (id, msg) => api.rewind(id, msg),
       answer: (id, req, resp) => api.answer(id, req, resp).then(() => {}),
       stopTask: (id, task) => api.stopTask(id, task).then(() => {}),
+      // What the session waits for (gerdr wait), with its background tasks (lib/waits.ts)
+      useTaskGroups: useWaitGroups,
       backgroundTool: (id, tc) => api.backgroundTool(id, tc).then((r: any) => !!r?.backgrounded),
       allowRules: (id, rules) => api.allowRules(id, rules).then(() => {}),
       setMode: (id, mode) => api.setMode(id, mode).then(() => {}),

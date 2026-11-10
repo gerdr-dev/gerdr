@@ -96,6 +96,8 @@ func (s *Server) wireWaits(ctx context.Context) {
 		}
 	}
 	s.Waits.OnChange(s.waitsChanged)
+	// The UI shows each session's waits with its background tasks: told when they, or what is known about them, change
+	s.Waits.OnChange(func() { s.Hub.Broadcast("waits", nil) })
 	go func() {
 		t := time.NewTicker(2 * time.Second)
 		defer t.Stop()
@@ -249,6 +251,7 @@ func (s *Server) pollOne(source, key string) {
 	}
 	p.mu.Unlock()
 	s.stateSig.Fire()
+	s.Hub.Broadcast("waits", nil)
 }
 
 // polled: what the poller last heard about a thing.
