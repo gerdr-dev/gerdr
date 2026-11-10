@@ -40,7 +40,6 @@ import {
   closeTab,
   closeWorkspace,
   focusPane,
-  focusSession,
   mergeTab,
   movePane,
   moveWorkspace,
@@ -81,7 +80,6 @@ import {
   toggleOverview,
   useActiveIds,
   useOverviewIds,
-  workChats,
 } from "@/lib/overview";
 import {
   DropdownMenu,
@@ -104,8 +102,7 @@ import { ListHeader, SidebarBottom, SidebarEdge, SidebarHeader } from "./Sidebar
 import { WsDot } from "./WsDot";
 import { TabDragLayer, startPaneDrag, startWsDrag, useDrag } from "./TabDrag";
 import { t } from "@/lib/i18n";
-import { usePanels } from "@/lib/panels";
-import { useWorkProject, workProjectOf } from "@/lib/work";
+import { useWorkProject } from "@/lib/work";
 import { usePanelPhoneMenu } from "@/core/phoneMenu";
 import { PanelPhoneMenu } from "./PhoneMenu";
 
@@ -277,12 +274,12 @@ export function UnifiedSidebar({ className }: { className?: string }) {
 
   const spaces = spaceList(layout);
   const here = currentSpace(layout);
-  // "active" can reach other projects (allProjects) and Work conversations (no pane): find each one's place
-  const active = activeIds.map((id) => {
+  // "active" can reach other projects (allProjects): find each one's place
+  const active = activeIds.flatMap((id) => {
     const loc = locateSession(layout, id);
-    if (!loc) return { id };
+    if (!loc) return [];
     const item: Item = { ws: loc.ws, tab: loc.tab, pane: loc.pane, split: leaves(loc.tab.root).length > 1, s: sessions[id] };
-    return { id, item };
+    return [item];
   });
   const wsLabel = (ws: Workspace) => {
     const i = list.indexOf(ws);
@@ -434,18 +431,7 @@ export function UnifiedSidebar({ className }: { className?: string }) {
                             {t("unifiedSidebar.grid")}
                           </button>
                         </div>
-                        {!activeFolded && (
-                          <div>
-                            {active.map((x, i) => {
-                              const num = numbers && i < 9 ? i + 1 : undefined;
-                              return x.item ? (
-                                flatRow(x.item, true, num)
-                              ) : (
-                                <WorkRow key={x.id} id={x.id} current={gridOn && x.id === gridFocusId} grid={gridOn && tiles.includes(x.id)} num={num} />
-                              );
-                            })}
-                          </div>
-                        )}
+                        {!activeFolded && <div>{active.map((item, i) => flatRow(item, true, numbers && i < 9 ? i + 1 : undefined))}</div>}
                         {/* Only when empty: a row appearing mid-drag would push the rows under the pointer */}
                         {dragAgent && !active.length && !activeFolded && (
                           <div className="py-1 pl-[26px] text-[12px] text-muted-foreground">{t("unifiedSidebar.dropToActive")}</div>
@@ -525,66 +511,6 @@ function IconSlot({ n, children }: { n?: number; children: React.ReactNode }) {
         </span>
       )}
     </span>
-  );
-}
-
-/** A Work conversation in "active": no pane, so no group or tab; going to it opens Work mode (actions.focusSession). */
-function WorkRow({ id, current, grid, num }: { id: string; current: boolean; grid: boolean; num?: number }) {
-  const s = useStore((st) => st.sessions[id]);
-  const unread = useStore((st) => !!st.unread[id]);
-  // A panel's agent conversation: named after its panel (by its directory, lib/work), then the project
-  const key = useStore(
-    (st) => (st.sessions[id] ? workProjectOf(id) : undefined) ?? Object.entries(workChats(st.config, st.layout)).find(([, x]) => x === id)?.[0],
-  );
-  const space = key?.split("/")[0] ?? "";
-  const { panels } = usePanels(space);
-  const panel = panels.find((p) => p.key === key)?.title ?? t("nav.panel");
-  const project = useStore((st) => spaceList(st.layout).find((sp) => sp.id === space)?.name ?? space);
-  const roomy = !!useContext(Roomy);
-  if (!s) return null;
-  return (
-    <ContextMenu>
-      <ContextMenuTrigger asChild>
-        <div
-          role="button"
-          data-row-current={current || undefined}
-          className={cn(
-            "group relative flex cursor-default items-center gap-2 rounded-md pr-2 pl-1.5 text-[12px] select-none",
-            roomy ? "min-h-11" : "h-7",
-            current ? "bg-accent" : "hover:bg-accent/60",
-            "data-[state=open]:ring-1 data-[state=open]:ring-brand/60",
-          )}
-          onClick={() => (grid ? (focusTile(id), markRead(id)) : focusSession(id))}
-          onMouseDown={(e) => e.button === 1 && e.preventDefault()}
-          onAuxClick={(e) => e.button === 1 && (e.preventDefault(), removeActive(id))}
-        >
-          <IconSlot n={num}>
-            <AgentIcon agent={s.agent} className="size-3.5 shrink-0" />
-          </IconSlot>
-          <span className="min-w-0 flex-1 truncate">{s.title || basename(s.cwd)}</span>
-          <span className="max-w-[40%] shrink-0 truncate text-[11px] text-muted-foreground group-hover:hidden">
-            {panel}
-            {project ? ` · ${project}` : ""}
-          </span>
-          <button
-            className="hidden size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground group-hover:flex hover:text-foreground"
-            title={t("nav.removeActive")}
-            onClick={(e) => (e.stopPropagation(), removeActive(id))}
-          >
-            <X className="size-3" />
-          </button>
-          <StatusDot status={dotStatus(s)} unread={unread} />
-        </div>
-      </ContextMenuTrigger>
-      <ContextMenuContent>
-        <ContextMenuItem onClick={() => focusSession(id)}>
-          <ChevronRight /> {t("nav.goToWork")}
-        </ContextMenuItem>
-        <ContextMenuItem onClick={() => removeActive(id)}>
-          <PinOff /> {t("nav.removeActive")}
-        </ContextMenuItem>
-      </ContextMenuContent>
-    </ContextMenu>
   );
 }
 

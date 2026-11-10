@@ -5,8 +5,7 @@ import { AgentIcon } from "@/components/AgentIcon";
 import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { continueInPane, resumeInPane } from "@/lib/actions";
 import { api } from "@/lib/api";
-import { isOpen } from "@/lib/overviewState";
-import { paneSpace } from "@/lib/layout";
+import { locateSession, paneSpace } from "@/lib/layout";
 import { get, set, useStore } from "@/lib/store";
 import { t } from "@/lib/i18n";
 
@@ -30,7 +29,6 @@ export function ResumeDialog() {
   const sessions = useStore((s) => s.sessions);
   const agents = useStore((s) => s.agents);
   const layout = useStore((s) => s.layout);
-  const config = useStore((s) => s.config);
   const [native, setNative] = useState<Native[] | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -85,7 +83,7 @@ export function ResumeDialog() {
         search: `${s.id} ${s.title ?? ""}`,
         title: s.title || t("resumeDialog.untitled"),
         at: s.updatedAt,
-        open: isOpen(layout, config, s.id),
+        open: !!locateSession(layout, s.id),
         pick: () => pickMine(s.id),
       });
   for (const n of native ?? [])

@@ -1,6 +1,6 @@
 // The overview's stored state and the read side of it. Kept apart from overview.ts, which needs the store: the store
 // loads this at creation, and a store <-> overview import cycle would hand it an undefined loadOverview.
-import { allLeaves, currentSpace, locateSession, mutedSession, spaceList, spaceOf, type Layout } from "./layout";
+import { allLeaves, currentSpace, mutedSession, spaceOf, type Layout } from "./layout";
 import { compareSessions, sessionRank, sessionSince } from "./order";
 import type { SessionSummary } from "./types";
 
@@ -96,38 +96,20 @@ export function loadLegacyActive(): ActiveConf | null {
   }
 }
 
-/** The part of the config saying which conversation each project's Work view shows (store Config; not imported, see above). */
-export type WorkConf = { workSessions?: Record<string, string>; workSession?: string };
-
-/**
- * Each project's current Work agent conversation (project → session id), for the projects that still exist. They sit in
- * no pane (Work mode shows them on its own right side), but they're open agents all the same (asked for: in the overview too).
- */
-export function workChats(c: WorkConf, l: Layout): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const sp of spaceList(l)) {
-    const id = c.workSessions?.[sp.id] ?? (sp.id === "default" ? c.workSession : undefined);
-    if (id) out[sp.id] = id;
-  }
-  return out;
-}
-
-/** Open = some pane shows it, or it's a project's current Work conversation. */
-export function isOpen(l: Layout, c: WorkConf, id: string): boolean {
-  return !!locateSession(l, id) || Object.values(workChats(c, l)).includes(id);
-}
-
 /** What "active" is computed from: the store's state (a subset, so callers can pass a layout about to be set). */
 export type ActiveSrc = {
   overview: Overview;
   layout: Layout;
   sessions: Record<string, SessionSummary>;
-  config: WorkConf & { active?: ActiveConf };
+  config: { active?: ActiveConf };
   unread: Record<string, true>;
 };
 
-/** Open agents (some pane shows them, or a project's Work conversation) with their project, panes first, each once. */
-export function openSessionsWithProject(l: Layout, sessions: Record<string, SessionSummary>, c: WorkConf): { s: SessionSummary; project: string }[] {
+/**
+ * Open agents (some pane shows them) with their project, each once. A panel's agent conversation is no pane's, so it's
+ * never here: Code and panels are apart, the panel's agent has its own place (the panel's right side, its rail dot).
+ */
+export function openSessionsWithProject(l: Layout, sessions: Record<string, SessionSummary>): { s: SessionSummary; project: string }[] {
   const seen = new Set<string>();
   const out: { s: SessionSummary; project: string }[] = [];
   const add = (id: string | undefined, project: string) => {
@@ -135,7 +117,6 @@ export function openSessionsWithProject(l: Layout, sessions: Record<string, Sess
     if (s && !seen.has(s.id)) (seen.add(s.id), out.push({ s, project }));
   };
   for (const { ws, pane } of allLeaves(l)) add(pane.sessionId, spaceOf(ws));
-  for (const [project, id] of Object.entries(workChats(c, l))) add(id, project);
   return out;
 }
 
@@ -157,7 +138,7 @@ const joins = (s: SessionSummary, st: ActiveSrc) => joinsOnItsOwn(s, st) && !mut
 /** Open agents (any project) that joined on their own but aren't pinned yet: lib/overview.ts pins them, so they stay. */
 export function toPin(st: ActiveSrc): string[] {
   const added = new Set(activeConf(st.config).added);
-  return openSessionsWithProject(st.layout, st.sessions, st.config)
+  return openSessionsWithProject(st.layout, st.sessions)
     .filter((x) => !added.has(x.s.id) && joins(x.s, st))
     .map((x) => x.s.id);
 }
@@ -178,7 +159,7 @@ export function activeIds(st: ActiveSrc): string[] {
   const all = o.allIn.includes(space);
   const added = new Set(o.added);
   const isActive = (s: SessionSummary) => added.has(s.id) || joins(s, st);
-  return openSessionsWithProject(st.layout, st.sessions, st.config)
+  return openSessionsWithProject(st.layout, st.sessions)
     .filter((x) => (all || x.project === space) && isActive(x.s))
     .map((x) => x.s)
     .sort((a, b) => compareSessions(a, b, st.unread))

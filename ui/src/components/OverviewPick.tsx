@@ -86,7 +86,7 @@ function PickActive({ open, onClose, after }: { open: boolean; onClose: () => vo
   // Memoized on the frozen store values above: the parent re-renders on every push of its tile's session
   const list = useMemo(() => {
     const inActive = new Set(activeIds({ overview, layout, sessions, config, unread }));
-    return openSessionsWithProject(layout, sessions, config)
+    return openSessionsWithProject(layout, sessions)
       .filter((x) => (all || x.project === space) && !inActive.has(x.s.id))
       .map((x) => x.s)
       .sort((a, b) => compareSessions(a, b, unread));
@@ -121,7 +121,7 @@ function PickActive({ open, onClose, after }: { open: boolean; onClose: () => vo
             <AgentIcon agent={s.agent} className="size-4 shrink-0" />
             <span className="min-w-0 flex-1">
               <span className="block truncate">{s.title || basename(s.cwd)}</span>
-              <span className="block truncate text-[11px] text-muted-foreground">{whereOf(layout, config, s.id)}</span>
+              <span className="block truncate text-[11px] text-muted-foreground">{whereOf(layout, s.id)}</span>
             </span>
             <StatusDot status={dotStatus(s)} unread={!!unread[s.id]} />
           </button>

@@ -8,7 +8,6 @@
 // (localStorage, like the sidebar / mode). The tiles are "active" (in progress,
 // overviewState.activeIds): agents join on their status (need you, run) and then stay until taken out, others are put in by hand; only
 // open sessions count, so the overview never keeps an agent alive that the layout let go of.
-// Each project's current Work conversation counts as open too (overviewState.workChats): it has no pane, Work mode shows it.
 import { toast } from "sonner";
 import { allLeaves, type Layout } from "./layout";
 import {
@@ -21,10 +20,8 @@ import {
   overviewFocus,
   overviewIds,
   toPin,
-  workChats,
   type ActiveConf,
   type Overview,
-  type WorkConf,
 } from "./overviewState";
 import { sessionSince } from "./order";
 import { currentSpace } from "./layout";
@@ -33,7 +30,7 @@ import { syncWatch } from "./sync";
 import type { SessionSummary } from "./types";
 import { t } from "./i18n";
 
-export { activeIds, MAX_TILES, overviewFocus, overviewIds, workChats, type Overview };
+export { activeIds, MAX_TILES, overviewFocus, overviewIds, type Overview };
 
 export function setOverview(fn: (o: Overview) => Overview) {
   const next = fn(get().overview);
@@ -59,8 +56,8 @@ function setActive(fn: (a: ActiveConf) => ActiveConf) {
   syncWatch();
 }
 
-/** Open agents = sessions some pane shows, in any project, then each project's Work conversation. */
-export function openSessions(l: Layout, sessions: Record<string, SessionSummary>, c: WorkConf): SessionSummary[] {
+/** Open agents = sessions some pane shows, in any project. */
+export function openSessions(l: Layout, sessions: Record<string, SessionSummary>): SessionSummary[] {
   const seen = new Set<string>();
   const out: SessionSummary[] = [];
   const add = (id?: string) => {
@@ -68,7 +65,6 @@ export function openSessions(l: Layout, sessions: Record<string, SessionSummary>
     if (s && !seen.has(s.id)) (seen.add(s.id), out.push(s));
   };
   for (const { pane } of allLeaves(l)) add(pane.sessionId);
-  for (const id of Object.values(workChats(c, l))) add(id);
   return out;
 }
 
@@ -148,7 +144,7 @@ export function workingOutIds(st = get()): string[] {
   const all = activeAllProjects(st);
   const space = currentSpace(st.layout);
   const shown = new Set(activeIds(st));
-  return openSessionsWithProject(st.layout, st.sessions, st.config)
+  return openSessionsWithProject(st.layout, st.sessions)
     .filter((x) => (all || x.project === space) && working(x.s) && !shown.has(x.s.id))
     .map((x) => x.s.id);
 }
