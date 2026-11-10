@@ -138,6 +138,25 @@ func TestWaits(t *testing.T) {
 	if tv := s.viewTriggers(tl); len(tv) != 1 || tv[0].waitStatus == nil || tv[0].waitStatus.Reporter.State != "serving" {
 		t.Fatalf("trigger view %+v", tv)
 	}
+	// A wait whose condition can't be evaluated on the state (made before the state was known) is dropped, and its
+	// session told why
+	bw, _ := wt.Add(waits.Wait{Source: "gitlab", Key: "h/a!1", Until: "reveiws > 0", Session: "w1"})
+	s.stateChanged("gitlab", "h/a!1")
+	waitUntil(t, "the broken wait's session told", func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		last := woken[len(woken)-1]
+		return strings.Contains(last, "broken:") && strings.Contains(last, "reveiws")
+	})
+	for _, x := range wt.List("") {
+		if x.ID == bw.ID {
+			t.Error("a broken wait was kept")
+		}
+	}
+	// A list in the state shows as its length in the wake message, not dumped
+	if l := fieldsLine(map[string]any{"notes": []any{map[string]any{"id": 1.0}, map[string]any{"id": 2.0}}, "reviews": 2.0}); l != "notes=[2 项] reviews=2" {
+		t.Errorf("fieldsLine %q", l)
+	}
 	// A state of a source this add-on doesn't declare is dropped
 	if _, ok := wt.StateOf("jira", "X-1"); ok {
 		t.Error("an undeclared source's state was kept")

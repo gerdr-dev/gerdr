@@ -131,8 +131,13 @@ the add-on.
   without a field for it). For a day it was a little language of Gerdr's own (`field op value`, `||`, `&&`); the
   user asked for JS when filtering lists came up — every filter would otherwise have needed its own field. Sandbox:
   a bare goja runtime (no require, files or network), the expression wrapped so it can't be statements, 50ms per
-  check (`vm.Interrupt`). A misspelt field is a ReferenceError: refused when the wait is made if the state is known
-  (or as soon as the first one comes in), shown with the wait otherwise — never a silent "false".
+  check (`vm.Interrupt`). A misspelt field is a ReferenceError, never a silent "false": refused when the wait is
+  made if the state is known, or when the first one comes in while its request is open (up to 10s); after that, the
+  wait is dropped when a state comes in and its session gets a message saying why, with the fields to use (a wait that
+  can't ever wake must not sit there). Only what is evaluated can fail: a misspelt field in a branch that isn't
+  reached (`state != 'opened' || reveiws > 0` while merged), or a misspelt property of a list item
+  (`notes.some(n => n.athor …)`, undefined in JS), isn't caught. The fields and what they mean are the add-on's
+  declaration (addon.json `states[].fields`), listed by `gerdr wait sources`.
 - **Polling sees moments.** A pipeline that failed and was retried green between two looks is seen as green. A
   waiter that cares writes `pipeline_id != <now>` ("a new pipeline"); that is polling's limit, not the model's.
 - **Keys carry what the source needs.** GitLab keys are `<host>/<project path>!<iid>`, as in the MR's address: one

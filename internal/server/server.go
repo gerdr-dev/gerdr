@@ -21,6 +21,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/coder/acp-go-sdk"
@@ -67,6 +68,11 @@ type Server struct {
 	// stateSig wakes a wait request waiting for the first answer about its thing; poll asks the sources (waitsapi.go)
 	stateSig signal
 	poll     *poller
+	// posting_: waits whose request is still open; broken: those of them dropped meanwhile for a condition that
+	// can't be evaluated, and why (waitsapi.go posting)
+	brokenMu sync.Mutex
+	posting_ map[string]bool
+	broken   map[string]error
 	wakeFn   func(waits.Wait, waits.State) // tests: instead of messaging the session
 	UI       *uisite.Renderer
 	ESM      *uisite.ESM

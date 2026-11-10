@@ -191,7 +191,10 @@ func (s *Store) Forget(keep func(source, key string) bool) {
 }
 
 // Add records a session's wait (its condition must parse).
-func (s *Store) Add(w Wait) (Wait, error) {
+func (s *Store) Add(w Wait) (Wait, error) { return s.AddWith(w, nil) }
+
+// AddWith is Add, calling before(id) once the wait has its id and before anyone can see it.
+func (s *Store) AddWith(w Wait, before func(id string)) (Wait, error) {
 	if w.Session == "" {
 		return w, errors.New("wait: which session")
 	}
@@ -203,6 +206,9 @@ func (s *Store) Add(w Wait) (Wait, error) {
 	}
 	w.ID = "u-" + randID()
 	w.Created = time.Now().UnixMilli()
+	if before != nil {
+		before(w.ID)
+	}
 	s.mu.Lock()
 	s.waits = append(s.waits, w)
 	err := writeJSON(s.waitsPath, s.waits)

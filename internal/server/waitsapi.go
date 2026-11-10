@@ -323,7 +323,28 @@ func (s *Server) putState(addon, source, key string, state map[string]any, detai
 // stateChanged checks every wait on this thing against its latest state: sessions' due ones are woken (and gone),
 // panels' triggers run.
 func (s *Server) stateChanged(source, key string) {
-	due, st, _ := s.Waits.Due(source, key)
+	due, st, errs := s.Waits.Due(source, key)
+	// A condition that can't be evaluated on the state (a misspelt field) would never wake: the wait is dropped and
+	// its session told why — unless its own request is still open, which answers with the error instead (POST).
+	if len(errs) > 0 {
+		for _, w := range s.Waits.List("") {
+			err, ok := errs[w.ID]
+			if !ok {
+				continue
+			}
+			// Removed and recorded under one lock: an open request settling (posting) sees both or neither
+			s.brokenMu.Lock()
+			_, _ = s.Waits.Remove(w.ID)
+			open := s.posting_[w.ID]
+			if open {
+				s.broken[w.ID] = err
+			}
+			s.brokenMu.Unlock()
+			if !open {
+				go s.tellBroken(w, err)
+			}
+		}
+	}
 	for _, w := range due {
 		if s.wakeFn != nil {
 			s.wakeFn(w, st)
@@ -336,6 +357,42 @@ func (s *Server) stateChanged(source, key string) {
 			s.Work.DispatchState(source, key, work.StateNow{State: st.State, Detail: st.Detail, URL: st.URL, At: st.At})
 		}
 	}
+}
+
+// posting marks a wait whose request is still open (true) or settles it (false): returns why it was dropped for a
+// condition that can't be evaluated meanwhile, if it was. After settling, stateChanged tells the session instead.
+func (s *Server) posting(id string, open bool) error {
+	s.brokenMu.Lock()
+	defer s.brokenMu.Unlock()
+	if s.broken == nil {
+		s.broken, s.posting_ = map[string]error{}, map[string]bool{}
+	}
+	if open {
+		s.posting_[id] = true
+		return nil
+	}
+	err := s.broken[id]
+	delete(s.broken, id)
+	delete(s.posting_, id)
+	return err
+}
+
+// tellBroken tells a session its wait was dropped, and why.
+func (s *Server) tellBroken(w waits.Wait, err error) {
+	if s.wakeFn != nil {
+		s.wakeFn(w, waits.State{Detail: "broken: " + err.Error()})
+		return
+	}
+	sess, e := s.Hub.Session(w.Session)
+	if e != nil {
+		return
+	}
+	text := fmt.Sprintf(i18n.S("[等待取消了 %s %s] 条件在它的状态上算不出来，等不到：%s\n\n条件：%s\n\n改好条件再等一次：gerdr wait sources 看有哪些字段，gerdr wait state %s '%s' 看现在的值。",
+		"[Wait dropped %s %s] the condition can't be evaluated on its state, so it would never wake: %s\n\nCondition: %s\n\nFix it and wait again: gerdr wait sources lists the fields, gerdr wait state %s '%s' shows the values now."),
+		w.Source, w.Key, s.condHelp(w.Source, err), w.Until, w.Source, w.Key)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	_, _ = sess.SendFrom(ctx, []acp.ContentBlock{acp.TextBlock(text)}, "", "", false)
 }
 
 // checkPanelWaits runs the panels' waits whose thing has a known state already (a trigger just written on
@@ -386,6 +443,11 @@ func fieldsLine(st map[string]any) string {
 			v = strconv.FormatFloat(x, 'f', -1, 64)
 		case nil:
 			v = "null"
+		case []any:
+			// A list (an MR's notes) is for conditions to filter, not to read here: its length
+			v = fmt.Sprintf(i18n.S("[%d 项]", "[%d items]"), len(x))
+		case map[string]any:
+			v = "{…}"
 		}
 		parts = append(parts, fmt.Sprintf("%s=%v", k, v))
 	}
@@ -584,7 +646,8 @@ func (s *Server) waitRoutes(mux *http.ServeMux) {
 			httpError(w, 400, fmt.Sprintf(i18n.S("没有开着的插件报告 %s 的状态（gerdr wait sources 看有哪些；装插件用 gerdr addon）", "No switched-on add-on reports %s (gerdr wait sources lists what can be waited on; gerdr addon installs one)"), x.Source))
 			return
 		}
-		out, err := s.Waits.Add(x)
+		// Marked before it exists, so a broken condition found meanwhile is this request's to answer
+		out, err := s.Waits.AddWith(x, func(id string) { s.posting(id, true) })
 		if err != nil {
 			httpError(w, 400, err.Error())
 			return
@@ -626,11 +689,17 @@ func (s *Server) waitRoutes(mux *http.ServeMux) {
 		if st, ok := s.Waits.StateOf(out.Source, out.Key); ok && !gone() {
 			if _, err := c.Eval(st.State); err != nil {
 				_, _ = s.Waits.Remove(out.ID)
+				s.posting(out.ID, false)
 				httpError(w, 400, s.condHelp(out.Source, err))
 				return
 			}
 		}
-		writeJSON(w, map[string]any{"wait": out, "woken": gone(), "status": s.statusOf(out.Source, out.Key, out.Until)})
+		woken := gone()
+		if err := s.posting(out.ID, false); err != nil {
+			httpError(w, 400, s.condHelp(out.Source, err))
+			return
+		}
+		writeJSON(w, map[string]any{"wait": out, "woken": woken, "status": s.statusOf(out.Source, out.Key, out.Until)})
 	})
 	mux.HandleFunc("DELETE /api/waits/{id}", func(w http.ResponseWriter, r *http.Request) {
 		if !need(w) {
