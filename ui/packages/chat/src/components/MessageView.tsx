@@ -329,6 +329,9 @@ export function partVisible(p: GPart, children: Map<string, ToolPart[]>): boolea
   // 批准了的审批不单独成行：工具那一行的 ✓ 已经说明放行了，再多一行「✓ 允许」只会把一串工具调用切碎。
   // 拒绝 / 作废的留着（那是这一轮为什么拐弯的原因）。
   if (p.type === "data-permission" && permAllowed(p.data)) return false;
+  // A retry notice folded once the retry got through (transcript.clearRetry) draws nothing, but a row still takes the
+  // row's spacing: it left an empty gap between two tool calls
+  if (p.type === "data-notice" && (p.data as any).done) return false;
   return true;
   if (p.type === "dynamic-tool") {
     const tp = p as ToolPart;
