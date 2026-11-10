@@ -379,13 +379,20 @@ func skillEngines(m *ext.Manager, st ext.Settings) map[string][]string {
 }
 
 func skillCmd() *cobra.Command {
+	var project string
 	cmd := &cobra.Command{
 		Use:   "skill",
 		Short: "Manage gerdr's own skills (Settings → Agent → Skill)",
 		Long: `Manage gerdr's own skills (Settings → Agent → Skill); open windows update within seconds.
 
 A skill is a folder with a SKILL.md (front matter with name and description, then the instructions), stored
-under <GERDR_DIR>/skills/<name>. An agent (gerdr config keys agents) can list skills by name: any switched-on one
+under <GERDR_DIR>/skills/<name>.
+
+With --project <id>, list / add / rm work on that Gerdr project's own skills instead
+(<GERDR_DIR>/projects/<id>/skills/<name>): given only to the project's sessions, whatever agent and source, and
+winning over a gerdr skill of the same name. Running sessions pick an added / removed one up before their next turn.
+Your own project's id is in your system prompt ("Project memory (Gerdr project …)"); the user's way is the project's
+right-click menu → Skills & memory. An agent (gerdr config keys agents) can list skills by name: any switched-on one
 (built-in, gerdr's, or its engine's own), whatever the source. An agent without a list gets what the source gives
 ("default" in ` + "`gerdr skill list`" + `).
 
@@ -393,16 +400,26 @@ under <GERDR_DIR>/skills/<name>. An agent (gerdr config keys agents) can list sk
 
   gerdr skill list
   gerdr skill add code-review --file ./SKILL.md     # or --dir ./code-review (with its scripts), or SKILL.md on stdin
+  gerdr skill add deploy --project lb --file ./SKILL.md   # only the "lb" project's sessions get it
+  gerdr skill list --project lb
   gerdr skill import pdf                            # copy one of Claude Code's / Codex's own skills
   gerdr skill disable gerdr-ui                      # built-in ones can be switched off too
   gerdr skill source both`,
 	}
 	cmd.AddCommand(&cobra.Command{
 		Use:   "list",
-		Short: "Print the skills (built-in, gerdr's, Claude Code's, Codex's), the source, and what each engine gets by default",
+		Short: "Print the skills (built-in, gerdr's, Claude Code's, Codex's), the source, and what each engine gets by default; with --project, that project's own skills",
 		Args:  cobra.NoArgs,
-		Run: func(_ *cobra.Command, _ []string) {
+		RunE: func(_ *cobra.Command, _ []string) error {
 			m := openExt()
+			if project != "" {
+				dir, err := m.ProjectSkillsDir(project)
+				if err != nil {
+					return err
+				}
+				printJSON(map[string]any{"project": project, "dir": dir, "skills": viewSkills(m.ProjectSkills(project))})
+				return nil
+			}
 			st := m.Settings()
 			printJSON(map[string]any{
 				"source":  st.SkillSource,
@@ -412,6 +429,7 @@ under <GERDR_DIR>/skills/<name>. An agent (gerdr config keys agents) can list sk
 				"codex":   viewSkills(ext.CodexSkills()),
 				"default": skillEngines(m, st),
 			})
+			return nil
 		},
 	})
 
@@ -435,6 +453,12 @@ under <GERDR_DIR>/skills/<name>. An agent (gerdr config keys agents) can list sk
 				if err := checkSkillMD(string(b)); err != nil {
 					return err
 				}
+				if project != "" {
+					if err := m.AddProjectSkillDir(project, name, dir, replace); err != nil {
+						return err
+					}
+					return printProjectSkill(m, project, name)
+				}
 				if err := m.AddSkillDir(name, dir, replace); err != nil {
 					return err
 				}
@@ -451,6 +475,15 @@ under <GERDR_DIR>/skills/<name>. An agent (gerdr config keys agents) can list sk
 				}
 				if err := checkSkillMD(string(b)); err != nil {
 					return err
+				}
+				if project != "" {
+					if _, err := m.ReadProjectSkill(project, name); err == nil && !replace {
+						return fmt.Errorf("project %s already has a skill named %s (--replace to overwrite it)", project, name)
+					}
+					if err := m.WriteProjectSkill(project, name, string(b)); err != nil {
+						return err
+					}
+					return printProjectSkill(m, project, name)
 				}
 				if _, err := m.ReadSkill(name); err == nil && !replace {
 					return fmt.Errorf("gerdr already has a skill named %s (--replace to overwrite it)", name)
@@ -498,10 +531,20 @@ under <GERDR_DIR>/skills/<name>. An agent (gerdr config keys agents) can list sk
 
 	cmd.AddCommand(&cobra.Command{
 		Use:   "rm <name>",
-		Short: "Delete one of gerdr's skills (its whole folder)",
+		Short: "Delete one of gerdr's skills, or with --project one of that project's (its whole folder)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, a []string) error {
 			m := openExt()
+			if project != "" {
+				if _, err := m.ReadProjectSkill(project, a[0]); err != nil {
+					return fmt.Errorf("project %s has no skill named %q (gerdr skill list --project %s)", project, a[0], project)
+				}
+				if err := m.DeleteProjectSkill(project, a[0]); err != nil {
+					return err
+				}
+				printJSON(map[string]any{"ok": true, "project": project, "removed": a[0]})
+				return nil
+			}
 			if _, err := m.ReadSkill(a[0]); err != nil {
 				return fmt.Errorf("gerdr has no skill named %q (built-in ones can only be disabled)", a[0])
 			}
@@ -543,7 +586,18 @@ under <GERDR_DIR>/skills/<name>. An agent (gerdr config keys agents) can list sk
 		})
 	}
 	cmd.AddCommand(sourceCmd("skills", func(st *ext.Settings) *ext.Source { return &st.SkillSource }))
+	for _, c := range cmd.Commands() {
+		if n := c.Name(); n == "list" || n == "add" || n == "rm" {
+			c.Flags().StringVar(&project, "project", "", "a Gerdr project's id: work on that project's own skills")
+		}
+	}
 	return cmd
+}
+
+func printProjectSkill(m *ext.Manager, project, name string) error {
+	dir, _ := m.ProjectSkillsDir(project)
+	printJSON(map[string]any{"ok": true, "project": project, "name": name, "dir": filepath.Join(dir, name)})
+	return nil
 }
 
 // checkSkillMD: an engine only offers a skill whose front matter has a description (that's what it reads to

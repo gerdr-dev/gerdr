@@ -1,6 +1,6 @@
 ---
 name: gerdr
-description: "Coordinate other coding-agent sessions inside Gerdr (Claude Code / Codex sessions in the Gerdr GUI): list sessions, start a new agent session next to you, hand it a task, wait for it, read its reply, or message an existing session. Use when the user asks you to delegate to / start / ask / check on another agent or session in Gerdr, or to run several agents in parallel. Also for arranging Gerdr's layout: sorting tabs into workspaces, splitting panes together, renaming or reordering workspaces / tabs. Also for changing Gerdr's own settings (theme, default agent / mode / model, shortcuts, model providers) with `gerdr config`, and for setting up agents (roles) with their own prompt, skills and MCP servers (`gerdr agent`, `gerdr skill`, `gerdr mcp`). Also for add-ons (`gerdr addon`): browsing add-on stores, installing / updating / removing add-ons, switching them on or off, changing their settings. Also for a project's panels (`gerdr panel`): listing, installing one from a git repository, adding a blank one, updating, changing its icon, removing. Also for being told when something happens outside the conversation (a new MR comment, a pipeline finishing, a chat message): `gerdr event watch / list`. Requires GERDR_ENV=1."
+description: "Coordinate other coding-agent sessions inside Gerdr (Claude Code / Codex sessions in the Gerdr GUI): list sessions, start a new agent session next to you, hand it a task, wait for it, read its reply, or message an existing session. Use when the user asks you to delegate to / start / ask / check on another agent or session in Gerdr, or to run several agents in parallel. Also for arranging Gerdr's layout: sorting tabs into workspaces, splitting panes together, renaming or reordering workspaces / tabs. Also for changing Gerdr's own settings (theme, default agent / mode / model, shortcuts, model providers) with `gerdr config`, and for setting up agents (roles) with their own prompt, skills and MCP servers (`gerdr agent`, `gerdr skill`, `gerdr mcp`). Also for a Gerdr project's own skills and memory (given only to that project's sessions): adding / editing / removing a skill for one project (`gerdr skill --project`), keeping the project's shared memory. Also for add-ons (`gerdr addon`): browsing add-on stores, installing / updating / removing add-ons, switching them on or off, changing their settings. Also for a project's panels (`gerdr panel`): listing, installing one from a git repository, adding a blank one, updating, changing its icon, removing. Also for being told when something happens outside the conversation (a new MR comment, a pipeline finishing, a chat message): `gerdr event watch / list`. Requires GERDR_ENV=1."
 ---
 
 # Gerdr：和其他会话协作
@@ -309,13 +309,34 @@ either way.
 MCP tokens (headers, env) are secrets like API keys: put in only what the user hands you; `list` / `show` print them as
 `<hidden>`, and `create` fills a `<hidden>` back from the pool entry of the same name.
 
+### A project's own skills and memory
+
+A Gerdr project (the user's lb, default…) spans several repositories and has its own skills and memory, kept on this
+computer and given only to that project's sessions, whatever agent runs them. Your own project's id and its memory
+folder are in your system prompt ("Project memory (Gerdr project …)"). The user edits both in the project's
+right-click menu → Skills & memory.
+
+- **Skills**: when a skill is meant for one project (its deploy routine, its team's tools), put it there, not in
+  gerdr's pool or `~/.claude/skills`: no source to switch, no other project to hide it from. A same-named gerdr skill
+  loses to it. Sessions already running get an added / removed one before their next turn.
+
+  ```bash
+  gerdr skill list --project lb
+  gerdr skill add deploy --project lb --file ./SKILL.md     # or --dir ./deploy (with scripts); --replace to update
+  gerdr skill rm deploy --project lb
+  ```
+
+- **Memory**: `<GERDR_DIR>/projects/<id>/memory/`, one .md per fact plus the `MEMORY.md` index, the format of Claude
+  Code's auto memory. Every session of the project starts with the index. Edit the files directly; keep the index in
+  step.
+
 ### Per project instead of per agent
 
 When the difference is between projects (one project needs company skills / MCP servers, another doesn't), switch
 them off in the project, not with a new agent: a role is offered in every project, so a role per project means picking
 the right one each time. `projects.<id>.disabledSkills` / `.disabledMcp` take names out of every session in that
 project, whatever agent runs it; everything else is given as usual. The user's way is the project's right-click
-menu → Skills & MCP. `gerdr config keys projects` has the rest.
+menu → Skills & memory → Switched-off. `gerdr config keys projects` has the rest.
 
 ```bash
 gerdr config set projects.default.disabledSkills '["lb-cli", "deva"]'

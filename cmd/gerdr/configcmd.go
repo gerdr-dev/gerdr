@@ -90,7 +90,7 @@ New sessions' defaults are stored per agent id, outside agents:
   gerdr config set defaultModes.reviewer plan
   gerdr config unset agents.reviewer`
 
-// projectsHelp mirrors ext.Manager.ForProject and the project's Skills & MCP dialog (ui/src/components/ProjectExtDialog.tsx).
+// projectsHelp mirrors ext.Manager.ForProject and the project's dialog, Switched-off tab (ui/src/components/ProjectExtDialog.tsx).
 const projectsHelp = `projects.<id> holds settings of one project (the id is the project's, e.g. default, lb):
 
   disabledSkills   skills this project's sessions don't get, by name
@@ -101,6 +101,9 @@ Everything else is given as usual (the global settings, the agent's own list). U
 one Codex / Claude agent then serves every project, instead of one agent (role) per project. Names: ` + "`gerdr skill list`" + ` /
 ` + "`gerdr mcp list`" + `. A Claude Code plugin's skill can't be switched off alone: the plugin goes off (with its MCP and
 hooks) once all of its skills are listed.
+
+The project's own skills aren't settings: ` + "`gerdr skill add <name> --project <id>`" + ` (folders in
+<GERDR_DIR>/projects/<id>/skills); its memory is files in <GERDR_DIR>/projects/<id>/memory.
 
 A session is in the project whose workspace shows it (else the one it was started in). A change applies before each
 session's next turn (Claude Code restarts its process, Codex re-attaches the thread).

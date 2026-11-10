@@ -141,3 +141,13 @@ func RootsFingerprint(roots []string) string {
 
 // ScanSkills lists the skills in root (<root>/<name>/SKILL.md), each marked with origin.
 func ScanSkills(root, origin string) []Skill { return scanSkills(root, origin) }
+
+// AddProjectSkillDir copies a whole skill folder into a project's skills as name (the CLI's `skill add --dir
+// --project`; any local path, as for AddSkillDir).
+func (m *Manager) AddProjectSkillDir(project, name, src string, replace bool) error {
+	p, err := m.projectSkillPath(project, name)
+	if err != nil {
+		return err
+	}
+	return addSkillDir(filepath.Dir(filepath.Dir(p)), name, src, replace)
+}

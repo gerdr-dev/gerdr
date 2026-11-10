@@ -50,6 +50,12 @@ github.com/zbysir/lightron, where browser-side changes go as general hooks — t
   the host draw its own block types, e.g. an element-reference card).
 - 界面怎么写（能 import 什么、样式、目录）在 ui/AGENTS.md；那份也是给用户的 agent 看的（内置的 gerdr-ui skill 让它先读）。
 - 内置 skill 在 internal/ext/builtin/，会随二进制发给每个 agent：改 `gerdr session` / `gerdr ui` 的命令行时同步改它们。
+- **Every new feature is also for agents.** Agents run inside Gerdr and the user asks them to set things up, so whatever
+  a person can do in the UI an agent must be able to do too, and know that it can: a CLI command or flag (`gerdr …`,
+  works with only files when it can), the built-in skill text that tells agents about it (internal/ext/builtin/,
+  including its `description`, which decides when the skill is read), and the CLI help. A feature only in the UI
+  gets missed: project skills shipped UI-only, and an agent asked to write one for a project said Gerdr had no
+  per-project skills and put it in the global pool. Check this before calling a feature done.
 - Events (MR comments, pipelines, chat messages… as one record; `internal/events`, `work/trigger.go`, `gerdr event`):
   docs/dev/EVENTS.md. Sources are polls / add-ons, never built into Gerdr; panels subscribe with triggers/*.json.
 - Add-ons (`internal/addons`, `ui/src/lib/addons.ts`, Settings → Add-ons): docs/dev/ADDONS.md for how it works;

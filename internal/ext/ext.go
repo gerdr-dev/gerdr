@@ -429,13 +429,17 @@ func (m *Manager) AddSkillDir(name, src string, replace bool) error {
 	if _, err := m.skillPath(name); err != nil {
 		return err
 	}
+	return addSkillDir(m.SkillsDir(), name, src, replace)
+}
+
+func addSkillDir(root, name, src string, replace bool) error {
 	if _, err := os.Stat(filepath.Join(src, "SKILL.md")); err != nil {
 		return fmt.Errorf("%s has no SKILL.md", src)
 	}
-	dst := filepath.Join(m.SkillsDir(), name)
+	dst := filepath.Join(root, name)
 	if _, err := os.Stat(dst); err == nil {
 		if !replace {
-			return fmt.Errorf("gerdr already has a skill named %s (--replace to overwrite it)", name)
+			return fmt.Errorf("there is already a skill named %s (--replace to overwrite it)", name)
 		}
 		if err := os.RemoveAll(dst); err != nil {
 			return err
