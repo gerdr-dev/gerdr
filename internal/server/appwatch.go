@@ -156,7 +156,7 @@ func (s *Server) onSession(sum hub.Summary) {
 		case (old.status == hub.StRunning || old.status == hub.StWaiting) && (sum.Status == hub.StIdle || sum.Status == hub.StError):
 			if sum.Status == hub.StError {
 				n = &appNotice{Status: "error", Text: sum.Error}
-			} else {
+			} else if !sum.Quiet { // a turn that was only a /clear: nothing to read
 				n = &appNotice{Status: "done"}
 			}
 		}

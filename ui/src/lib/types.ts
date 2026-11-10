@@ -57,6 +57,8 @@ export type SessionSummary = ChatSession & {
   /** commands 是借的缓存（这个会话的 agent 进程还没起，用这个 agent 上次报的；可能是旧版写的） */
   commandsCached?: boolean;
   pending: number;
+  /** The last turn ended with nothing to read (only a /clear): not announced as done (hub Summary.Quiet) */
+  quiet?: boolean;
   lastSeq: number;
   tasks?: AgentTask[];
   turn?: { startedAt: number; outputTokens: number }; // 在跑的这一轮

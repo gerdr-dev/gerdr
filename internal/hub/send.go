@@ -214,6 +214,7 @@ func (s *Session) SendFrom(ctx context.Context, content []acp.ContentBlock, clie
 	s.lastErr = ""
 	s.turnMsg = msgID
 	s.turnStarted, s.turnTokens = now(), 0
+	s.quiet = false
 	s.byPerson = person
 	if person {
 		s.personSaid = PersonSaid{Text: contentText(raw), At: now()}
@@ -279,6 +280,7 @@ func (s *Session) runTurn(c *agenthost.Host, agentSID, msgID string, content []a
 	}
 	s.running = false
 	s.turnMsg = ""
+	s.quiet = err == nil && clearOnly(s.events)
 	go s.markSynced(10 * time.Second) // 这一轮是我们写的：记下文件现在多大（claude 在一轮之后还会补写标题之类，等一会儿再量）
 	if err != nil {
 		s.lastErr = ev.Error
@@ -294,6 +296,7 @@ func (s *Session) runTurn(c *agenthost.Host, agentSID, msgID string, content []a
 	if next {
 		s.running, s.auto = true, true
 		s.turnStarted, s.turnTokens = now(), 0
+		s.quiet = false
 	}
 	// A slash command held back while this turn ran goes next (deferred.go); after the agent's own turn if one follows
 	var held *deferredMsg
@@ -315,6 +318,29 @@ func (s *Session) runTurn(c *agenthost.Host, agentSID, msgID string, content []a
 	if held != nil {
 		go s.sendDeferred(held)
 	}
+}
+
+// clearOnly: the turn at the end of evs did nothing but /clear — the clear notice, and not a word from the agent.
+// Such a turn ends with nothing to read, so it isn't announced as done (Summary.Quiet).
+func clearOnly(evs []*Event) bool {
+	cleared := false
+	for i := len(evs) - 1; i >= 0; i-- {
+		e := evs[i]
+		switch {
+		case e.Kind == EvTurnStart:
+			return cleared
+		case e.Kind == EvNotice && e.Level == "clear":
+			cleared = true
+		case e.Kind == EvUpdate:
+			var u struct {
+				SessionUpdate string `json:"sessionUpdate"`
+			}
+			if json.Unmarshal(e.Update, &u) == nil && u.SessionUpdate == "agent_message_chunk" {
+				return false
+			}
+		}
+	}
+	return false
 }
 
 func errText(err error) string {

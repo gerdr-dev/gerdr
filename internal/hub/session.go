@@ -145,6 +145,7 @@ type Session struct {
 	turnStarted int64                // 这一轮几点开始的（状态行：跑了多久）
 	byPerson    bool                 // the last turn was started (or joined) by a person typing, not by code / an agent
 	personSaid  PersonSaid           // the last message a person typed in it (in memory only)
+	quiet       bool                 // the last turn was only a /clear (Summary.Quiet)
 	turnTokens  int                  // 这一轮输出了多少 token（状态行）
 	turnCost    float64              // what the agent reported spending since the last turn_end (emit puts it on the next one)
 	turnUse     []acpx.Tokens        // the token reports since the last turn_end, one entry per model (same as turnCost)
@@ -312,6 +313,9 @@ type Summary struct {
 	// (the Superagent's activity feed) shows what the user told it there, which it would otherwise never see. Kept in
 	// memory only: after a restart it is empty until they type again.
 	PersonSaid PersonSaid `json:"personSaid,omitzero"`
+	// Quiet: the last turn ended with nothing to read (it was only a /clear: clearOnly). Watchers don't announce it
+	// as done — a "Done" notification for a /clear the person just typed is noise.
+	Quiet bool `json:"quiet,omitempty"`
 }
 
 type PersonSaid struct {
@@ -359,7 +363,7 @@ func (s *Session) Summary() Summary {
 		}
 	}
 	modes, config, modeID, values := s.optionsLocked()
-	return Summary{Record: s.rec, Status: s.status, Error: s.lastErr, OptsKey: s.h.optSets.key(modes, config), ModeID: modeID, OptValues: values, Commands: cmds, CommandsKey: s.h.cmdSets.key(cmds), CommandsCached: cached && len(cmds) > 0, Pending: len(s.pending), LastSeq: last, Tasks: s.tasks, Turn: s.turnInfoLocked(), Context: s.contextLocked(), Base: s.h.Base(s.rec.Agent), Branch: gitBranch(s.rec.WorkDir()), Waiting: s.waitingLocked(), WaitingSince: s.waitingSinceLocked(), WaitingKind: s.waitingKindLocked(), ByPerson: s.byPerson, PersonSaid: s.personSaid}
+	return Summary{Record: s.rec, Status: s.status, Error: s.lastErr, OptsKey: s.h.optSets.key(modes, config), ModeID: modeID, OptValues: values, Commands: cmds, CommandsKey: s.h.cmdSets.key(cmds), CommandsCached: cached && len(cmds) > 0, Pending: len(s.pending), LastSeq: last, Tasks: s.tasks, Turn: s.turnInfoLocked(), Context: s.contextLocked(), Base: s.h.Base(s.rec.Agent), Branch: gitBranch(s.rec.WorkDir()), Waiting: s.waitingLocked(), WaitingSince: s.waitingSinceLocked(), WaitingKind: s.waitingKindLocked(), ByPerson: s.byPerson, PersonSaid: s.personSaid, Quiet: s.quiet}
 }
 
 func (s *Session) waitingSinceLocked() int64 {

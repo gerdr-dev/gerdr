@@ -86,7 +86,9 @@ function useAttention() {
         if (old.status !== "waiting" && cur.status === "waiting" && !quiet && !inboxWaits) {
           systemNotify(t("app.notifyWaiting", { name }), t("app.notifyWaitingBody"), cur.id);
         }
-        if ((old.status === "running" || old.status === "waiting") && (cur.status === "idle" || cur.status === "error") && !seen) {
+        // quiet: the turn was only a /clear the person just typed — nothing new to read, no unread mark, no notification
+        const ended = (old.status === "running" || old.status === "waiting") && (cur.status === "idle" || cur.status === "error");
+        if (ended && !seen && !(cur.status === "idle" && cur.quiet)) {
           markUnread(cur.id);
           if (quiet) continue;
           if (cur.status === "idle") systemNotify(t("app.notifyDone", { name }), "", cur.id);

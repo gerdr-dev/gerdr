@@ -189,6 +189,7 @@ func (s *Session) onGerdrInfo(g map[string]any) {
 		if start {
 			s.running, s.auto, s.lastErr = true, true, ""
 			s.turnStarted, s.turnTokens = now(), 0
+			s.quiet = false
 		}
 		var held *deferredMsg
 		if end {

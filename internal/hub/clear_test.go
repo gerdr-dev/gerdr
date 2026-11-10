@@ -22,6 +22,22 @@ func clearTurn(id string) []*Event {
 	return []*Event{msg(id, "/clear"), {Kind: EvTurnStart, MessageID: id}, {Kind: EvNotice, Level: "clear"}, {Kind: EvTurnEnd}}
 }
 
+// A turn that was only /clear isn't announced as done; one where the agent also said something (a /clear steered into
+// a running turn), or a plain turn, is.
+func TestClearOnly(t *testing.T) {
+	ct := clearTurn("c")
+	if !clearOnly(ct[:3]) { // runTurn checks before writing the turn's end
+		t.Fatal("a /clear turn should be quiet")
+	}
+	said := &Event{Kind: EvUpdate, Update: json.RawMessage(`{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"hi"}}`)}
+	if clearOnly([]*Event{msg("m", "x"), {Kind: EvTurnStart}, said, {Kind: EvNotice, Level: "clear"}}) {
+		t.Fatal("a turn the agent spoke in isn't quiet")
+	}
+	if clearOnly(append(ct, msg("m", "x"), &Event{Kind: EvTurnStart}, said)) {
+		t.Fatal("only the last turn counts")
+	}
+}
+
 func texts(evs []*Event) []string {
 	var out []string
 	for _, e := range evs {
