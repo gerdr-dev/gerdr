@@ -1,4 +1,4 @@
-import { Copy, Download, ExternalLink } from "lucide-react";
+import { AppWindow, Copy, Download, ExternalLink, FolderOpen } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { MessageResponse } from "@/components/ai-elements/message";
@@ -7,7 +7,8 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { openPath } from "@/lib/actions";
 import { isAndroid, postAndroid } from "@/lib/android";
 import { api, fileRawURL, type FileStat } from "@/lib/api";
-import { isNative, nativeOpenURL } from "@/lib/native";
+import { IS_MAC } from "@/lib/keys";
+import { isNative, nativeOpenPath, nativeOpenURL } from "@/lib/native";
 import { get, set, useStore } from "@/lib/store";
 import { HostTag } from "./HostTag";
 import { t } from "@/lib/i18n";
@@ -96,12 +97,30 @@ function Body({ stat }: { stat: FileStat }) {
   );
 }
 
-/** Copy path / open outside / download: the viewer dialog's header, and a file pane's title bar (Panes.tsx). */
+/**
+ * In the desktop App, a file on this computer can go to its own program or be shown in Finder / Explorer, the same
+ * two actions the image / video cards in chat have (ChatMedia's LocalActions). Not another computer's file: the App
+ * opens paths on this one.
+ */
+const canOpenLocally = (stat: FileStat) => isNative() && !stat.host;
+const revealLabel = () => (IS_MAC ? t("fileViewer.revealFinder") : t("fileViewer.revealFolder"));
+
+/** Copy path / open with app / show in folder / open outside / download: the viewer dialog's header, and a file pane's title bar (Panes.tsx). */
 export function FileActions({ stat, small }: { stat: FileStat; small?: boolean }) {
   const btn = small ? "size-6" : "size-8";
   const ic = small ? "size-3.5" : "size-4";
   return (
     <>
+      {canOpenLocally(stat) && (
+        <>
+          <Button variant="ghost" size="icon" className={btn} title={t("fileViewer.openWithApp")} onClick={() => nativeOpenPath(stat.path, undefined, false)}>
+            <AppWindow className={ic} />
+          </Button>
+          <Button variant="ghost" size="icon" className={btn} title={revealLabel()} onClick={() => nativeOpenPath(stat.path, undefined, true)}>
+            <FolderOpen className={ic} />
+          </Button>
+        </>
+      )}
       <Button
         variant="ghost"
         size="icon"
@@ -285,12 +304,26 @@ function NoPreview({ stat, why }: { stat: FileStat; why: string }) {
   return (
     <div className="flex flex-col items-center gap-4 p-10 text-center text-[13px] text-muted-foreground">
       <div>{why}</div>
-      <Button asChild>
-        <a href={fileRawURL(stat.path, true, stat.host)} download={stat.name}>
-          <Download className="size-4" />
-          {t("fileViewer.downloadSize", { size: fmtSize(stat.size) })}
-        </a>
-      </Button>
+      <div className="flex flex-wrap justify-center gap-2">
+        {canOpenLocally(stat) && (
+          <>
+            <Button onClick={() => nativeOpenPath(stat.path, undefined, false)}>
+              <AppWindow className="size-4" />
+              {t("fileViewer.openWithApp")}
+            </Button>
+            <Button variant="outline" onClick={() => nativeOpenPath(stat.path, undefined, true)}>
+              <FolderOpen className="size-4" />
+              {revealLabel()}
+            </Button>
+          </>
+        )}
+        <Button variant={canOpenLocally(stat) ? "outline" : "default"} asChild>
+          <a href={fileRawURL(stat.path, true, stat.host)} download={stat.name}>
+            <Download className="size-4" />
+            {t("fileViewer.downloadSize", { size: fmtSize(stat.size) })}
+          </a>
+        </Button>
+      </div>
     </div>
   );
 }
