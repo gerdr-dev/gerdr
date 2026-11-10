@@ -20,11 +20,13 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/gerdr-dev/gerdr/agents/native"
 	"github.com/gerdr-dev/gerdr/internal/hub"
 	"github.com/gerdr-dev/gerdr/internal/i18n"
 	"github.com/gerdr-dev/gerdr/sysenv"
@@ -148,6 +150,9 @@ func (d *Doctor) Run(ctx context.Context, deep bool) Report {
 	checks = append(checks, agentCheck(ctx, "codex", "Codex", sysenv.FindCodex, dirs, deep))
 	for _, t := range tools {
 		checks = append(checks, toolCheck(t, cur, login, loginErr == nil))
+	}
+	if runtime.GOOS == "windows" {
+		checks = append(checks, shellCheck(native.Shell()))
 	}
 	if d.usage != nil {
 		checks = append(checks, usageChecks(d.usage())...)
@@ -289,6 +294,20 @@ func toolCheck(name, cur, login string, loginOK bool) Check {
 			c.Level = Info
 			c.Detail = i18n.S("终端里用的是另一份：", "The terminal uses a different copy: ") + inLogin
 		}
+	}
+	return c
+}
+
+// shellCheck (Windows): which shell agents' commands and `!` run in. Without Git for Windows it is PowerShell, which
+// models write bash for all the time (`&&`, grep, $(...)) and whose 5.1 drops or mangles output (CLIXML, a table
+// lost to `exit`); nothing else tells the person that installing Git fixes all of it.
+func shellCheck(sh string) Check {
+	c := Check{ID: "tool:shell", Group: "tool", Title: "Shell", Level: OK, Summary: sh}
+	if native.IsPowerShell(sh) {
+		c.Level = Warn
+		c.Summary = i18n.S("没有 bash，命令用 PowerShell 跑：", "No bash, commands run in PowerShell: ") + sh
+		c.Detail = i18n.S("模型习惯写 bash 命令，在 PowerShell 里常常报错。装 Git for Windows（https://git-scm.com/download/win）后，agent 和 ! 命令会自动改用 Git Bash，不用重启。",
+			"Models write bash out of habit, which often fails in PowerShell. Install Git for Windows (https://git-scm.com/download/win) and agents and ! commands switch to Git Bash by themselves, no restart needed.")
 	}
 	return c
 }

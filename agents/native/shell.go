@@ -60,6 +60,12 @@ func encodePS(command string) string {
 // CLIXML (clixml.go), and nobody reads a progress bar in the output anyway.
 const psPreamble = "$ProgressPreference = 'SilentlyContinue'; try { [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); $OutputEncoding = [Console]::OutputEncoding } catch {}; "
 
+// Shell is the path of the shell commands run in (the bash tool, ShellCommand), as chosen right now.
+func Shell() string { return shell() }
+
+// IsPowerShell: sh is PowerShell (on Windows, what Shell falls back to when there is no bash).
+func IsPowerShell(sh string) bool { return isPowerShell(sh) }
+
 // shell is the shell's path. Looked up on every call: Git or PowerShell 7 installed while the app is running is
 // used from the next command on.
 func shell() string {

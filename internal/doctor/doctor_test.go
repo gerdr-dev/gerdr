@@ -127,3 +127,12 @@ func TestAgentFixes(t *testing.T) {
 		t.Errorf("blocked copy lying around: %+v", c)
 	}
 }
+
+func TestShellCheck(t *testing.T) {
+	if c := shellCheck(`C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe`); c.Level != Warn || !strings.Contains(c.Detail, "Git for Windows") {
+		t.Fatalf("PowerShell should warn and point at Git for Windows: %+v", c)
+	}
+	if c := shellCheck(`C:\Program Files\Git\bin\bash.exe`); c.Level != OK {
+		t.Fatalf("Git Bash is fine: %+v", c)
+	}
+}
