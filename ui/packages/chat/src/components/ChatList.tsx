@@ -279,6 +279,10 @@ export const ChatList = forwardRef<
       const t = `translateY(${lay.tops[i]}px)`;
       if (n.style.transform !== t) n.style.transform = t;
     }
+    // A click expanded something at the bottom (holding) and the chat grew below the screen: that leaves the bottom.
+    // Staying stuck only postponed following it: the button didn't show, and once the hold ran out (500ms) the next
+    // sync snapped to the end, a jump about a second after the click (user report).
+    if (stuck.current && cb.current.holding() && endOf(s) - s.scrollTop > END) setStuck(false);
     // Where scrollTop belongs
     const cap = stuck.current && !cb.current.holding() ? readCap(lay, s) : undefined;
     if (cap !== undefined) {
@@ -302,6 +306,19 @@ export const ChatList = forwardRef<
         break;
       }
     }
+    // The layout changed and put us at the end, not the user's scrolling (a row collapsed after an expand left the
+    // bottom, and the browser clamped scrollTop to the new end): follow again. onScroll can't tell, it sees the clamp as
+    // a move up; the button stayed up at the very bottom.
+    if (
+      moved &&
+      !stuck.current &&
+      !touch.current &&
+      !dragging.current &&
+      !anim.current &&
+      performance.now() - upAt.current > UP_HOLD &&
+      endOf(s) - s.scrollTop <= END
+    )
+      setStuck(true);
     lastTop.current = s.scrollTop;
     lastEnd.current = endOf(s);
     const [f, t] = want(lay, s.scrollTop, s.clientHeight);
