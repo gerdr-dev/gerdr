@@ -1,8 +1,9 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from "react";
+import { useContext, useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from "react";
 import { ChatView, type ChatSession, type GMessage, type GPart, type ToolPart } from "@gerdr/chat";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { FEED_PREFIX, setFeed, type FeedFile } from "@/lib/feedChat";
 import { cn } from "@/lib/utils";
+import { PanelKeyContext } from "./visible";
 
 const LOCAL_FILE = "application/x-local-file"; // the chat's chip for a file sent by its path (transcript.ts)
 const IMAGE = /\.(png|jpe?g|gif|webp|avif|bmp|svg)$/i;
@@ -45,8 +46,12 @@ export function FeedChat<E extends FeedEntry>({
   className?: string;
   children?: ReactNode;
 }) {
+  // Which panel it is in, from the panel's own React tree: the feed's store is keyed by it, so two panels using the
+  // same id (two installs of one panel, both mounted) keep apart. __GERDR_PROJECT__ is replaced only in a panel's own
+  // code, so read here, in gerdr's, it was one value for every panel and the second install's feed showed in the first.
+  const panel = useContext(PanelKeyContext);
   // No ":" (a session on another computer) and no "/" past the prefix: the id is the chat's, not a path
-  const sid = FEED_PREFIX + `${(window as any).__GERDR_PROJECT__ ?? ""}.${id}`.replace(/[:/]/g, "_");
+  const sid = FEED_PREFIX + `${panel ?? ""}.${id}`.replace(/[:/]/g, "_");
   const messages = useMemo(() => entries.map(toMessage), [entries]);
   const byKey = useMemo(() => new Map(entries.map((e) => [e.key, e])), [entries]);
   const latest = useRef({ byKey, render, onSend, hint });
