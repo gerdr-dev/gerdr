@@ -237,6 +237,7 @@ func (u *Updater) Check() string {
 	u.mu.Lock()
 	u.checkedAt = time.Now().UnixMilli()
 	have := u.Backend().Version
+	u.dropStaleApp(have)
 	waiting := u.pending != nil && !Newer(feed.Version, u.pending.Version)
 	pv := ""
 	if u.pending != nil {
@@ -464,11 +465,11 @@ func (u *Updater) fetchBackend(version string, a asset) error {
 func (u *Updater) NoteRunning(running string) {
 	want := u.Backend().Version
 	u.mu.Lock()
+	changed := u.dropStaleApp(want)
 	if u.pending != nil && u.pending.Kind == "app" { // a whole new App waits for a click; the backend can't settle it
 		u.mu.Unlock()
 		return
 	}
-	changed := false
 	if Newer(want, running) {
 		if u.pending == nil || u.pending.Version != want {
 			u.pending, changed = &Pending{Kind: "backend", Version: want}, true
@@ -480,6 +481,36 @@ func (u *Updater) NoteRunning(running string) {
 	if changed {
 		u.emit()
 	}
+}
+
+// dropStaleApp (u.mu held): forget a downloaded whole App that is no longer newer than what we run. The pending App
+// lives in the shell's memory, and the bundle can be swapped under that shell (make install, an App installed by
+// hand): a 0.2.26 App downloaded the evening before, clicked after `make install` put 0.2.26-13 in, replaced that
+// local build with the older release. want: Backend().Version.
+func (u *Updater) dropStaleApp(want string) bool {
+	if u.pending == nil || u.pending.Kind != "app" || Newer(u.pending.Version, want) {
+		return false
+	}
+	log.Printf("update: dropping the downloaded %s App, already running %s", u.pending.Version, want)
+	if u.pending.File != "" {
+		_ = os.Remove(u.pending.File)
+	}
+	u.pending = nil
+	return true
+}
+
+// AppStillNewer: whether the pending whole-App update is still worth installing, checked again right before the
+// install (the bundle may have changed since the last poll).
+func (u *Updater) AppStillNewer() bool {
+	want := u.Backend().Version
+	u.mu.Lock()
+	dropped := u.dropStaleApp(want)
+	ok := u.pending != nil && u.pending.Kind == "app"
+	u.mu.Unlock()
+	if dropped {
+		u.emit()
+	}
+	return ok
 }
 
 // auto: Settings → 版本's automatic updates (on by default), kept by the shell (it decides before any page is up).

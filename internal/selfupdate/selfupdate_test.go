@@ -206,6 +206,38 @@ func TestOtherShellDownloadsTheApp(t *testing.T) {
 	if hits != 1 {
 		t.Fatalf("package downloaded %d times", hits)
 	}
+
+	// `make install` puts a local build ahead of that release under the running shell: the downloaded App is stale,
+	// and clicking update must not put the older release back.
+	time.Sleep(10 * time.Millisecond) // a new mtime, so the bundle's version is asked again
+	fakeGerdr(t, bundled, "0.2.21-13-gabcdef0")
+	if u.AppStillNewer() {
+		t.Fatalf("a 0.2.21 App still wanted over a 0.2.21-13 build: %+v", u.Pending())
+	}
+	if p := u.Pending(); p != nil {
+		t.Fatalf("pending after the bundle got ahead: %+v", p)
+	}
+	if msg := u.Check(); !strings.Contains(msg, "0.2.21-13") {
+		t.Fatalf("check over a newer local build: %q, want up to date", msg)
+	}
+}
+
+// The same through the 15s poll: NoteRunning drops a stale App update too.
+func TestNoteRunningDropsAStaleApp(t *testing.T) {
+	dir := t.TempDir()
+	bundled := filepath.Join(dir, "bundle", "gerdr")
+	fakeGerdr(t, bundled, "0.2.26-13-gabcdef0")
+	u := New(filepath.Join(dir, "data"), bundled, "0.2.26-13-gabcdef0", "old-shell", true)
+	u.pending = &Pending{Kind: "app", Version: "0.2.26"}
+	u.NoteRunning("0.2.26-13-gabcdef0")
+	if p := u.Pending(); p != nil {
+		t.Fatalf("pending: %+v, want the stale 0.2.26 App dropped", p)
+	}
+	u.pending = &Pending{Kind: "app", Version: "0.2.27"}
+	u.NoteRunning("0.2.26-13-gabcdef0")
+	if p := u.Pending(); p == nil || p.Version != "0.2.27" {
+		t.Fatalf("pending: %+v, want the newer 0.2.27 App kept", p)
+	}
 }
 
 // GitHub answering 504 for a while: the check keeps trying, and goes through once the server does.

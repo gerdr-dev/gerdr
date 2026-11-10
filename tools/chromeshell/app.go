@@ -215,7 +215,7 @@ func (s *shell) applyUpdate(ask bool) {
 	}
 	if p.Kind == "app" {
 		// A new shell: swapped in after we quit (desktop/updater.js installApp). Only on a click: it closes the windows.
-		if !ask {
+		if !ask || !s.up.AppStillNewer() {
 			return
 		}
 		log.Printf("update: installing the %s App", p.Version)

@@ -273,7 +273,7 @@ func (s *shell) applyUpdate(ask bool) {
 	}
 	if p.Kind == "app" {
 		// A new shell: its installer, after we quit. Only on a click: it closes the window.
-		if ask {
+		if ask && s.u.up.AppStillNewer() {
 			s.installApp(p.File)
 		}
 		return
