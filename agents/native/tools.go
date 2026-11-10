@@ -407,6 +407,11 @@ func startProc(c *call, command string) (*proc, error) {
 	p := &proc{cmd: cmd, buf: &lockedBuf{}, done: make(chan error, 1), start: time.Now()}
 	cmd.Stdout = p.buf
 	cmd.Stderr = p.buf
+	var clixml *clixmlWriter
+	if isPowerShell(name) {
+		clixml = &clixmlWriter{w: p.buf}
+		cmd.Stderr = clixml
+	}
 	if err := cmd.Start(); err != nil {
 		return nil, err
 	}
@@ -419,6 +424,9 @@ func startProc(c *call, command string) (*proc, error) {
 	go func() {
 		err := cmd.Wait()
 		tree.close()
+		if clixml != nil {
+			clixml.flush()
+		}
 		p.done <- err
 	}()
 	return p, nil

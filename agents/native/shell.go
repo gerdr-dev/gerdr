@@ -21,7 +21,7 @@ func shellCmd(command string) (string, []string) {
 	sh := shell()
 	if isPowerShell(sh) {
 		// -EncodedCommand so no quoting in the command can be mangled on the way in
-		return sh, []string{"-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", encodePS(psUTF8 + command)}
+		return sh, []string{"-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", encodePS(psPreamble + command)}
 	}
 	return sh, []string{"-c", command}
 }
@@ -36,11 +36,12 @@ func encodePS(command string) string {
 	return base64.StdEncoding.EncodeToString(b)
 }
 
-// psUTF8 makes PowerShell write UTF-8 to our pipe (Console.OutputEncoding: a Chinese Windows console defaults to GBK,
+// psPreamble makes PowerShell write UTF-8 to our pipe (Console.OutputEncoding: a Chinese Windows console defaults to GBK,
 // which garbles non-ASCII paths and output) and to programs it pipes into ($OutputEncoding). Without a BOM, and on
 // the command's own first line so the line numbers in PowerShell's errors stay right. Windows PowerShell 5.1 needs
-// it; PowerShell 7 already writes UTF-8 to a pipe.
-const psUTF8 = "try { [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); $OutputEncoding = [Console]::OutputEncoding } catch {}; "
+// it; PowerShell 7 already writes UTF-8 to a pipe. Progress off: 5.1 writes progress records to a piped stderr as
+// CLIXML (clixml.go), and nobody reads a progress bar in the output anyway.
+const psPreamble = "$ProgressPreference = 'SilentlyContinue'; try { [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); $OutputEncoding = [Console]::OutputEncoding } catch {}; "
 
 // shell is the shell's path. Looked up on every call: Git or PowerShell 7 installed while the app is running is
 // used from the next command on.
@@ -51,8 +52,10 @@ func shell() string {
 		}
 		return "/bin/sh"
 	}
-	// $SHELL on Windows is only of use when it is a real Windows path (a Git Bash session sets /usr/bin/bash)
-	if s := os.Getenv("SHELL"); s != "" && isFile(s) {
+	// $SHELL on Windows is only of use when it is a real Windows path (a Git Bash session sets /usr/bin/bash) to a
+	// shell we know how to call: SHELL=C:\Windows\System32\cmd.exe got `cmd.exe -c <command>`, which cmd ignores
+	// (it takes /c), so every command failed.
+	if s := os.Getenv("SHELL"); s != "" && winShellOK(s) && isFile(s) {
 		return s
 	}
 	if b := gitBash(); b != "" {
@@ -64,6 +67,18 @@ func shell() string {
 func isPowerShell(sh string) bool {
 	switch exeName(sh) {
 	case "pwsh.exe", "powershell.exe", "pwsh", "powershell":
+		return true
+	}
+	return false
+}
+
+// winShellOK: a shell from $SHELL that shellCmd can call on Windows — PowerShell, or a POSIX shell that takes -c.
+func winShellOK(sh string) bool {
+	if isPowerShell(sh) {
+		return true
+	}
+	switch strings.TrimSuffix(exeName(sh), ".exe") {
+	case "bash", "sh", "zsh", "dash", "ksh", "mksh", "ash":
 		return true
 	}
 	return false
