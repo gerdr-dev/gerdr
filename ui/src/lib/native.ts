@@ -147,6 +147,10 @@ export function onAppUpdate(u: AppUpdateStatus) {
       description: app ? restartEffect(u, service) : t("native.updateReadyDesc"),
       action: { label: app ? t("native.restartToUpdate") : t("native.update"), onClick: nativeApplyUpdate },
       cancel: { label: t("native.later"), onClick: () => {} },
+      // Two buttons beside the text squeezed it into a narrow column: the text takes the row, the buttons wrap under
+      // it, right-aligned by sonner's margin-left: auto, kept on "Later" only so the two stay together. Sonner's own
+      // gap, flex and margins are unlayered CSS, which beats Tailwind's layered utilities: hence the `!`.
+      classNames: { toast: "flex-wrap gap-y-3!", content: "basis-full!", actionButton: "ml-0!" },
     });
   });
 }
