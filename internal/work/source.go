@@ -247,6 +247,7 @@ func (r *Runner) Update(ctx context.Context, project string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	liftUIPrefs(dir) // a rename older Gerdr wrote into ui/ui.json would be stashed, and lost on a conflict
 	cmd := exec.CommandContext(ctx, "git", "-C", dir, "-c", "user.name=Gerdr", "-c", "user.email=gerdr@localhost", "pull", "--rebase", "--autostash")
 	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
 	out, err := cmd.CombinedOutput()

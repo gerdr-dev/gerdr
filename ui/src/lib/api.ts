@@ -206,7 +206,7 @@ export const api = {
   /** A panel's rail icon in its ui.json: the same kinds as an agent's (IconPicker), and a colour. */
   renamePanel: (key: string, title: string) => req<{ ok: boolean }>("POST", "/api/work/panels/title", { key, title }),
   setPanelIcon: (key: string, icon: string, color: string) => req<{ ok: boolean }>("POST", "/api/work/panels/icon", { key, icon, color }),
-  /** A project's panels (its own Work first, unless removed), with their ui.json and where they came from. */
+  /** A project's panels (its own Work first, unless removed), with their ui.json (the user's rename / icon over it) and where they came from. */
   panels: (project: string) =>
     req<{
       panels: { key: string; name: string; config: Record<string, unknown>; source: { git: boolean; remote?: string; dirty?: boolean } }[];

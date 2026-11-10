@@ -1382,7 +1382,7 @@ func panelCmd() *cobra.Command {
 	cmd.AddCommand(panelFnCmds(which)...)
 	cmd.AddCommand(&cobra.Command{
 		Use:   "list",
-		Short: "The project's panels (JSON): key, name, ui.json (title, icon, color), where it came from",
+		Short: "The project's panels (JSON): key, name, config (its ui.json with this person's title / icon / color over it), where it came from",
 		Args:  cobra.NoArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
 			c, err := client()
@@ -1457,7 +1457,7 @@ func panelCmd() *cobra.Command {
 	})
 	cmd.AddCommand(&cobra.Command{
 		Use:   "rename <panel> <title>",
-		Short: "Rename a panel: the name shown for it (its ui.json title); its directory and data stay as they are",
+		Short: "Rename a panel for this person (kept in its user/ui.json, not shared); its directory, data and ui.json stay as they are",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(_ *cobra.Command, args []string) error {
 			c, err := client()
@@ -1470,7 +1470,7 @@ func panelCmd() *cobra.Command {
 	var color string
 	icon := &cobra.Command{
 		Use:   "icon <panel> [icon]",
-		Short: "Set the panel's rail icon: a glyph or line icon key (kanban, rocket, orbit…) or sprite:<key> from an add-on; none = the default",
+		Short: "Set the panel's rail icon for this person (its user/ui.json): a glyph or line icon key (kanban, rocket, orbit…) or sprite:<key> from an add-on; none = the default",
 		Args:  cobra.RangeArgs(1, 2),
 		RunE: func(_ *cobra.Command, args []string) error {
 			c, err := client()

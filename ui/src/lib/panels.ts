@@ -45,7 +45,7 @@ export function usePanels(space: string): { panels: Panel[]; ownRemoved: boolean
           const panels = r.panels.map((p) => ({
             key: p.key,
             name: p.name,
-            // Its own name (ui.json title); a panel without one goes by its directory's name
+            // Its name (ui.json title, or the user's rename in user/ui.json); a panel without one goes by its directory's name
             title: str(p.config.title) ?? (p.name || space),
             icon: str(p.config.icon),
             color: str(p.config.color),

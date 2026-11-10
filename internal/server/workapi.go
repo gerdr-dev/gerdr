@@ -132,7 +132,7 @@ func (s *Server) workRoutes(mux *http.ServeMux) {
 		writeJSON(w, map[string]any{"key": key})
 	})
 	// A project's panels for the rail and Settings → Panels: its own Work (unless removed) and the rest, each with what
-	// its ui.json says (title, icon, color) and where it came from.
+	// its ui.json says (title, icon, color; the user's own choice over it) and where it came from.
 	mux.HandleFunc("GET /api/work/panels", func(w http.ResponseWriter, r *http.Request) {
 		project := r.URL.Query().Get("project")
 		if project == "" {
@@ -146,14 +146,12 @@ func (s *Server) workRoutes(mux *http.ServeMux) {
 		}
 		list := []panel{}
 		add := func(key, name string) {
-			dir, err := s.Work.Dir(key)
-			if err != nil {
+			if _, err := s.Work.Dir(key); err != nil {
 				return
 			}
-			p := panel{Key: key, Name: name, Config: map[string]any{}}
-			if raw, err := os.ReadFile(filepath.Join(dir, "ui", "ui.json")); err == nil {
-				_ = json.Unmarshal(raw, &p.Config)
-			}
+			p := panel{Key: key, Name: name}
+			// Its ui.json with this person's rename / icon over it (work/uiprefs.go)
+			p.Config, _ = s.Work.UIConfig(key)
 			p.Source, _ = s.Work.Source(key)
 			list = append(list, p)
 		}
@@ -215,36 +213,13 @@ func (s *Server) workRoutes(mux *http.ServeMux) {
 		_, _ = s.mountWork(key)
 		writeJSON(w, map[string]any{"key": key})
 	})
-	// A panel's name and its icon on the rail: "title", "icon" / "color" in its ui/ui.json (icon: the same kinds as an
-	// agent's, a glyph or line icon key or "sprite:<key>"; color: a palette key). Written into the site's own file, so
-	// they travel with the panel when it's published. The panel's directory keeps its name.
+	// A panel's name and its icon on the rail: "title", "icon" / "color" (icon: the same kinds as an agent's, a glyph or
+	// line icon key or "sprite:<key>"; color: a palette key). This person's choice, so it goes in the panel's user/ui.json
+	// over its ui/ui.json (work/uiprefs.go): an installed panel's own files stay as published and updates never touch
+	// it. A panel's author names it for everyone in ui/ui.json. The panel's directory keeps its name.
 	setUIConfig := func(w http.ResponseWriter, key string, vals map[string]string) {
-		dir, err := s.Work.Dir(key)
-		if err != nil {
+		if err := s.Work.SetUIPrefs(key, vals); err != nil {
 			httpError(w, 400, err.Error())
-			return
-		}
-		p := filepath.Join(dir, "ui", "ui.json")
-		cfg := map[string]any{}
-		if raw, err := os.ReadFile(p); err == nil {
-			if err := json.Unmarshal(raw, &cfg); err != nil {
-				httpError(w, 400, "ui.json is invalid: "+err.Error())
-				return
-			}
-		} else if !os.IsNotExist(err) {
-			httpError(w, 500, err.Error())
-			return
-		}
-		for k, v := range vals {
-			if v = strings.TrimSpace(v); v == "" || len(v) > 64 {
-				delete(cfg, k)
-			} else {
-				cfg[k] = v
-			}
-		}
-		out, _ := json.MarshalIndent(cfg, "", "  ")
-		if err := os.WriteFile(p, append(out, '\n'), 0o644); err != nil {
-			httpError(w, 500, err.Error())
 			return
 		}
 		writeJSON(w, map[string]any{"ok": true})

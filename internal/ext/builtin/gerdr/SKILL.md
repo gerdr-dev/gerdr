@@ -377,15 +377,18 @@ agent), level with Code on the strip at the left. `gerdr panel` manages them, th
 project is the current directory's (or `--project`). A panel is named by its name, the project's own by the project id.
 
 ```bash
-gerdr panel list                                   # key, name, ui.json (title, icon, color), where it came from
+gerdr panel list                                   # key, name, config (title, icon, color), where it came from
 gerdr panel install owner/repo [--name board]      # clone a published panel (its code runs here: confirm with the user)
 gerdr panel new <name>                             # a blank one, for its agent to build
 gerdr panel update [<panel>]                       # git pull; the user's own changes stay on top
-gerdr panel rename <panel> "任务看板"                # the name shown for it (ui.json title)
+gerdr panel rename <panel> "任务看板"                # the name shown for it, for this person
 gerdr panel icon <panel> kanban [--color blue]     # glyph / line icon key, or sprite:<key>; no icon = default
 gerdr panel rm <panel>                             # to the trash, data and all
 gerdr panel restore                                # the project's own panel back (blank) after removing it
 ```
+
+rename / icon are the user's own choice: kept in the panel's `user/ui.json` over its `ui/ui.json`, never shared, and
+an update leaves them alone. A panel's name for everyone who installs it (its author's) is `title` in `ui/ui.json`.
 
 ## Being told when something happens (events)
 

@@ -62,8 +62,11 @@ and their choices are what they set or wrote down, not what the code says.
     on change status). If something must be polled, poll only while `usePanelVisible()`: Gerdr keeps a panel mounted,
     hidden, while another is shown, and `document.visibilityState` stays "visible" all the while.
   - `ui/ui.json` — the title, `"icon"` / `"color"` (its button on Gerdr's rail, the same choices as an agent's icon:
-    a glyph or line icon like `kanban`, or `sprite:<key>` from an add-on; the user picks it from the button's right-click), and `"chat": false` when the page draws its own chats with `SessionChat` (it then gets
-    the whole width; without it, you are the column on its right).
+    a glyph or line icon like `kanban`, or `sprite:<key>` from an add-on), and `"chat": false` when the page draws its
+    own chats with `SessionChat` (it then gets the whole width; without it, you are the column on its right). These are
+    the panel's own, for everyone who installs it. What the user picks from the button's right-click (or `gerdr panel
+    rename` / `icon`) is kept in `user/ui.json` and wins over them, for this user only: to change the name they see
+    after they picked one, change it there.
   - `ui/src/cards.tsx` (optional) — card types this panel draws in any conversation: `registerCard("task-step",
     TaskStep)`; a tool returns `{ gerdrCard: { type: "task-step", …, title, body } }` (FUNCTIONS.md). Gerdr loads it at
     start, so the cards are drawn in Code too; title / body are the fallback when the type isn't drawn. Types are this

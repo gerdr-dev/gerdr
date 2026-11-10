@@ -313,6 +313,7 @@ func (r *Runner) install(dir string) error {
 		return err
 	}
 	ensureUserDir(dir)
+	liftUIPrefs(dir)
 	marks := map[string]string{}
 	markFile := filepath.Join(dir, ".builtin.json")
 	if b, err := os.ReadFile(markFile); err == nil {
