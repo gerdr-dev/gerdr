@@ -251,6 +251,8 @@ export const zh = {
   "native.updateApp": "这次要换整个 App：会退出再重新打开",
   "native.updateAuto": "没有 Agent 在跑、没开终端时会自己更新",
   "native.updateManual": "自动更新关着：点了才更新",
+  "native.updated": "Gerdr 已更新到 {version}",
+  "native.updatedFrom": "之前是 {version}",
 
   "addons.noSlot": "没有这个插槽：{slot}",
   "messageActions.stop": "停止：{action}",
@@ -527,6 +529,8 @@ export const en: Record<keyof typeof zh, string> = {
   "native.updateApp": "This one replaces the whole App: it will quit and reopen",
   "native.updateAuto": "Installs by itself when no agent is running and no terminal is open",
   "native.updateManual": "Automatic updates are off: installs when you click",
+  "native.updated": "Gerdr updated to {version}",
+  "native.updatedFrom": "Was {version}",
 
   "addons.noSlot": "No such slot: {slot}",
   "messageActions.stop": "Stop: {action}",

@@ -122,6 +122,7 @@ let toasted = "";
 export function onAppUpdate(u: AppUpdateStatus) {
   set({ appUpdate: u });
   relayUpdate(u);
+  noteUpdated(u.running);
   const p = u.pending;
   if (!p || u.phase === "applying") return void toast.dismiss("app-update");
   const b = u.busy;
@@ -136,6 +137,44 @@ export function onAppUpdate(u: AppUpdateStatus) {
     description: p.kind === "app" ? t("native.updateApp") : auto ? t("native.updateAuto") : t("native.updateManual"),
     action: { label: t("systemUpdate.updateNow"), onClick: nativeApplyUpdate },
   });
+}
+
+/**
+ * Say so once the backend answering is newer than the one this App saw last. An automatic update applies itself while
+ * nobody is looking (the shell restarts the backend once idle) and used to leave no trace. Kept in localStorage: the
+ * restart may reload the page, and a whole-App update relaunches it. A `make install` counts too, which is wanted.
+ * Each window compares with what it saw itself first: the shell pushes the status to every window and they share
+ * localStorage, so going by storage alone only the first window to hear of it said anything (often a hidden one).
+ */
+const LAST_RUNNING = "gerdr.lastRunning";
+let seenRunning: string | null = null;
+function noteUpdated(running: string) {
+  if (!parseVer(running)) return; // not reported yet, or a 0.1.0-dev build
+  const last = seenRunning ?? localStorage.getItem(LAST_RUNNING);
+  seenRunning = running;
+  if (last === running) return;
+  localStorage.setItem(LAST_RUNNING, running);
+  if (!last || !newer(running, last)) return; // first run: nothing to compare with
+  toast.success(t("native.updated", { version: running }), {
+    id: "app-updated",
+    duration: 10_000,
+    closeButton: true,
+    description: t("native.updatedFrom", { version: last }),
+  });
+}
+
+/** x.y.z or a local build's x.y.z-N-gabc[-dirty] as [x, y, z, N], like internal/selfupdate ParseVer. */
+function parseVer(v: string): number[] | null {
+  const m = /^v?(\d+)\.(\d+)\.(\d+)(?:-(\d+)-g[0-9a-f]+)?(?:-dirty)?$/.exec(v.trim());
+  return m ? [1, 2, 3, 4].map((i) => Number(m[i] ?? 0)) : null;
+}
+
+function newer(a: string, b: string): boolean {
+  const x = parseVer(a);
+  const y = parseVer(b);
+  if (!x || !y) return false;
+  const i = x.findIndex((n, k) => n !== y[k]);
+  return i >= 0 && x[i] > y[i];
 }
 
 /**
