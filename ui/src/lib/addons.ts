@@ -703,12 +703,39 @@ export function reloadAddons(): Promise<void> {
   return loading;
 }
 
+// The list failing to come (a phone on a relay that just dropped) used to leave the page without any add-on until it
+// was reopened: add-ons load once at boot and then only on an "addons" broadcast. So a failure retries, backing off,
+// and a WebSocket reconnect retries too (reloadIfFailed) — the network is back then.
+let failed = false;
+let retryTimer: ReturnType<typeof setTimeout> | null = null;
+let retryDelay = 2000;
+
+/** On a WebSocket reconnect: load add-ons again if the last attempt never got the list. */
+export function reloadIfFailed() {
+  if (failed) void reloadAddons();
+}
+
 async function doReload() {
   let builds: AddonBuild[];
   try {
     builds = await api.addons();
-  } catch {
+  } catch (e) {
+    console.warn("[gerdr addons] list failed, retrying", e);
+    failed = true;
+    if (!retryTimer) {
+      retryTimer = setTimeout(() => {
+        retryTimer = null;
+        void reloadAddons();
+      }, retryDelay);
+      retryDelay = Math.min(retryDelay * 2, 60000);
+    }
     return;
+  }
+  failed = false;
+  retryDelay = 2000;
+  if (retryTimer) {
+    clearTimeout(retryTimer);
+    retryTimer = null;
   }
   const seen = new Set<string>();
   const status: AddonStatus[] = [];

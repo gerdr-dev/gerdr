@@ -165,6 +165,8 @@ function connect() {
     refreshHello();
     // Panel data changes missed meanwhile can't be replayed: every panel's page refreshes once (core usePanelChange)
     if (reconnect) panelDataResync();
+    // Add-ons whose list failed to load while the network was down (lib/addons.ts)
+    if (reconnect) import("./addons").then((p) => p.reloadIfFailed());
   };
   sock.onmessage = (ev) => {
     lastHeard = Date.now();
