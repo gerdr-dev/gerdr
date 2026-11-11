@@ -326,29 +326,34 @@ export function ChatView({
   // Send now (a queued row's button, Ctrl/⌘+↵ in an empty composer): get the queued interjections read now by moving
   // the running command / subagent to the background, as Claude Code's own "now" does. They wait for the next gap and
   // that makes one: all of them go in, in the order sent (Claude Code checked by hand; native drains its whole queue).
-  // The person asked for "now", so the edge cases are ours, not a toast: nothing to move aside (it is writing or
-  // thinking) means the step's end reads them anyway; a command Claude Code won't move yet (its first second or two)
-  // is tried again until it moves, finishes, or the queue is read. One loop per session, however often it's clicked.
+  // The person asked for "now", so the edge cases are ours, not a toast. Nothing to move aside (it is writing or
+  // thinking): keep watching, the next command it starts is moved. A command Claude Code won't move yet (measured:
+  // refused for its first ~9s): tried again. Until the queue is read, the turn ends or 2 minutes pass; meanwhile the
+  // queued rows say "cutting in" (every click shows at once). One loop per session, however often it's clicked.
   // False: nothing queued that this helps (held slash commands wait for the turn's end whatever happens).
   const nowLoop = useRef(false);
+  const [cuttingIn, setCuttingIn] = useState(false);
   const sendQueuedNow = async (): Promise<boolean> => {
     const pending = () => latest.current.msgs.some((m) => m.metadata?.queued && !m.metadata.held);
     if (!pending()) return false;
     if (nowLoop.current) return true;
     nowLoop.current = true;
+    setCuttingIn(true);
     try {
       const deadline = Date.now() + 120_000;
+      let moved = false;
       while (latest.current.running && pending() && Date.now() < deadline) {
         const s = latest.current.session;
         const base = s.base ?? s.agent;
-        const tools = host.backgroundTool && ["claude", "native"].includes(base) ? backgroundableTools(latest.current.msgs, s.tasks ?? []) : [];
-        if (!tools.length) break;
-        const moved = await Promise.all(tools.map((p) => host.backgroundTool!(s.id, p.toolCallId).catch(() => false)));
-        if (moved.some(Boolean)) break;
-        await new Promise((r) => setTimeout(r, 1500));
+        const tools: ToolPart[] =
+          !moved && host.backgroundTool && ["claude", "native"].includes(base) ? backgroundableTools(latest.current.msgs, s.tasks ?? []) : [];
+        if (tools.length) moved = (await Promise.all(tools.map((p) => host.backgroundTool!(s.id, p.toolCallId).catch(() => false)))).some(Boolean);
+        // Moved: only waiting for the gap it makes to read the queue, so the rows stay "cutting in" until it does
+        await new Promise((r) => setTimeout(r, moved ? 300 : 1500));
       }
     } finally {
       nowLoop.current = false;
+      setCuttingIn(false);
     }
     return true;
   };
@@ -375,6 +380,7 @@ export function ChatView({
         ? undefined
         : // Not awaited: it may keep retrying in the background, and the row's buttons (withdraw) stay usable meanwhile
           () => void latest.current.sendQueuedNow(),
+      cuttingIn,
       onQuickReply: (s) => host.send(latest.current.sessionId, [{ type: "text", text: s }]).catch((e) => toast.error(e.message)),
       onToggleGroup: (key) => {
         const { openGroups: g, setOpenGroups: set } = latest.current;
@@ -382,7 +388,7 @@ export function ChatView({
         set({ ...g, [key]: !g[key] });
       },
     }),
-    [session.id, running, sub, steerRewind, host],
+    [session.id, running, sub, steerRewind, host, cuttingIn],
   );
   return (
     <SessionHost sessionId={session.id}>

@@ -39,6 +39,7 @@ type Props = {
   onWithdraw?: (messageId: string, now: boolean) => Promise<void> | void;
   /** Get every queued interjection read now: moves the running command aside (ChatView.sendQueuedNow) */
   onSendQueuedNow?: () => Promise<void> | void;
+  cuttingIn?: boolean;
   onQuickReply: (s: string) => void;
   stackPrev?: boolean; // 用户消息：上 / 下紧挨着也是用户消息（叠成一摞）
   stackNext?: boolean;
@@ -86,17 +87,21 @@ function LocalFileChip({ path, name }: { path: string; name: string }) {
 /** A queued interjection's status and its Withdraw / Send now buttons. */
 function QueuedSteer({
   messageId,
-  now,
+  now: urgent,
+  cuttingIn,
   held,
   onWithdraw,
   onSendQueuedNow,
 }: {
   messageId?: string;
   now: boolean;
+  /** Send now is working on it (ChatView): shown like an urgent steer, but withdrawn as the queued message it still is */
+  cuttingIn: boolean;
   held: boolean;
   onWithdraw?: Props["onWithdraw"];
   onSendQueuedNow?: Props["onSendQueuedNow"];
 }) {
+  const now = urgent || (cuttingIn && !held);
   // One request at a time: the round trip can take a moment on a long session, the buttons stayed live, and a second
   // click found the message already taken back and reported "it has already read this" (user report).
   const [busy, setBusy] = useState(false);
@@ -152,6 +157,7 @@ export const MessageView = memo(function MessageView({
   steerRewind,
   onWithdraw,
   onSendQueuedNow,
+  cuttingIn,
   onQuickReply,
   stackPrev,
   stackNext,
@@ -231,7 +237,14 @@ export const MessageView = memo(function MessageView({
             {meta?.steer &&
               (meta.queued ? (
                 // 排在 agent 的队列里、还没被读到（claude 要等手上这个工具调用结束）
-                <QueuedSteer messageId={meta.messageId} now={!!meta.now} held={!!meta.held} onWithdraw={onWithdraw} onSendQueuedNow={onSendQueuedNow} />
+                <QueuedSteer
+                  messageId={meta.messageId}
+                  now={!!meta.now}
+                  cuttingIn={!!cuttingIn}
+                  held={!!meta.held}
+                  onWithdraw={onWithdraw}
+                  onSendQueuedNow={onSendQueuedNow}
+                />
               ) : (
                 <span className="flex items-center gap-1">
                   <CornerDownRight className="size-3 shrink-0" />

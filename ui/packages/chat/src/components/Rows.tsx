@@ -325,6 +325,8 @@ export type RowEnv = {
   steerRewind?: boolean;
   onWithdraw?: (messageId: string, now: boolean) => Promise<void> | void;
   onSendQueuedNow?: () => Promise<void> | void;
+  /** Send now was asked for and is still working on it: every queued row shows "cutting in" instead of "queued" */
+  cuttingIn?: boolean;
   onQuickReply: (s: string) => void;
   onToggleGroup?: (key: string) => void;
 };
@@ -372,6 +374,7 @@ export const RowView = memo(
             steerRewind={env.steerRewind}
             onWithdraw={env.onWithdraw}
             onSendQueuedNow={env.onSendQueuedNow}
+            cuttingIn={env.cuttingIn}
             onQuickReply={env.onQuickReply}
             stackPrev={row.prev}
             stackNext={row.next}
