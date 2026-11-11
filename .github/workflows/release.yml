@@ -149,7 +149,10 @@ jobs:
   # ones (desktop/compress.js; update.json backend["win32-x64"]). Always built: a couple of minutes.
   windows:
     needs: plan
-    runs-on: ubuntu-latest
+    # On macOS, not Linux: the installer needs makensis, and Linux runners get it from Ubuntu's archive, which they at
+    # times can't reach for hours (apt hangs, then fails; v0.2.30 never got a Release). Homebrew's bottles come from
+    # GitHub's own ghcr.io. The packages don't depend on the build machine (Go cross-compiles them).
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
@@ -158,14 +161,10 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 22
-      # The runner's apt goes through a mirror list naming azure.archive.ubuntu.com, which at times doesn't resolve while
-      # everything else does; apt then retries for many minutes and the job looks hung. Use the main archive directly,
-      # and give up quickly instead of hanging.
-      - timeout-minutes: 5
-        run: |
-          sudo sed -i 's#mirror+file:/etc/apt/apt-mirrors.txt#http://archive.ubuntu.com/ubuntu/#' /etc/apt/sources.list.d/*.sources /etc/apt/sources.list 2>/dev/null || true
-          opts="-o Acquire::Retries=3 -o Acquire::http::Timeout=20"
-          sudo apt-get $opts update -qq && sudo apt-get $opts install -y -qq nsis zip
+      - run: brew install makensis
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+          HOMEBREW_NO_INSTALL_CLEANUP: "1"
       - run: |
           v="${{ needs.plan.outputs.version }}"
           NAME=Gerdr VERSION="$v" tools/winshell/package.sh
