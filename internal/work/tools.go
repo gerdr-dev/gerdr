@@ -160,11 +160,82 @@ func (r *Runner) CallTool(ctx context.Context, project, name, session string, ar
 	}
 	for _, t := range tools {
 		if t.Name == name {
+			if err := checkArgs(t.Input, args); err != nil {
+				return nil, err
+			}
 			res, err := r.StartAs(project, t.Fn, args, session).Wait(ctx)
 			return stampCard(res, project), err
 		}
 	}
 	return nil, fmt.Errorf("no tool %q in this panel (local/*.ts export const tools)", name)
+}
+
+// checkArgs holds a call to the top level of its tool's declared schema: required fields there, string fields
+// within their enum. Neither Gerdr's MCP server nor the agent checks it, and a panel function reading a field that
+// isn't there gets undefined and carries on: a worker that called task_update with status: "review" instead of
+// state: "review" had its result taken as "still working", and the user never saw it was waiting on them
+// (2026-11-11). The error names what's wrong and the fields it doesn't know, so the agent calls again correctly.
+func checkArgs(schema map[string]any, args any) error {
+	m, _ := args.(map[string]any)
+	props, _ := schema["properties"].(map[string]any)
+	var problems []string
+	for _, k := range toStrings(schema["required"]) {
+		if v, ok := m[k]; !ok || v == nil {
+			problems = append(problems, fmt.Sprintf("%q is required", k))
+		}
+	}
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	var unknown []string
+	for _, k := range keys {
+		p, ok := props[k].(map[string]any)
+		if !ok {
+			if props != nil {
+				unknown = append(unknown, k)
+			}
+			continue
+		}
+		enum := toStrings(p["enum"])
+		if s, isStr := m[k].(string); isStr && len(enum) > 0 && !contains(enum, s) {
+			problems = append(problems, fmt.Sprintf("%q must be one of %s, not %q", k, strings.Join(enum, " / "), s))
+		}
+	}
+	if len(problems) == 0 {
+		// Extra fields alone are let through: harmless unless they stand in for one the tool needs
+		return nil
+	}
+	msg := "invalid input: " + strings.Join(problems, "; ")
+	if len(unknown) > 0 {
+		msg += fmt.Sprintf(" (this tool has no %s)", strings.Join(unknown, ", "))
+	}
+	return fmt.Errorf("%s", msg)
+}
+
+func toStrings(v any) []string {
+	var out []string
+	switch x := v.(type) {
+	case []string:
+		return x
+	case []any:
+		for _, e := range x {
+			if s, ok := e.(string); ok {
+				out = append(out, s)
+			}
+		}
+	}
+	return out
+}
+
+func contains(list []string, s string) bool {
+	for _, x := range list {
+		if x == s {
+			return true
+		}
+	}
+	return false
 }
 
 // stampCard marks a tool result's card ({gerdrCard: {…}}) with the panel that made it: card types are registered per

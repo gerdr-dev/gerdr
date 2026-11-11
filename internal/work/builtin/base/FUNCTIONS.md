@@ -108,6 +108,9 @@ export async function ask_human(input: { title: string }, ctx: Ctx) {
 
 - The key is the tool's name and runs the export of the same name; `input` is its JSON Schema. A description says
   when to call it and what it does: it's all the agent knows about it.
+- Gerdr holds each call to the schema's top level before your function runs: a `required` field missing or a string
+  outside its `enum` is an error the agent sees and corrects (naming fields it passed that you don't declare). So mark
+  what you need as required: a field the agent named differently would otherwise reach you as undefined.
 - `ctx.caller.session` is the calling conversation's id: over MCP, or `gerdr panel run` run by an agent (which then
   runs in that conversation's project, wherever its cwd is); "" for a page or a person's terminal. Don't trust input for
   "who am I": look the caller up.

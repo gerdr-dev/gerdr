@@ -2,6 +2,7 @@ package work
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 )
@@ -9,7 +10,7 @@ import (
 func TestTools(t *testing.T) {
 	r, _ := newProject(t, map[string]string{
 		"board.ts": `export const tools = {
-  ask: { description: "ask the user", input: { type: "object", properties: { what: { type: "string" } }, required: ["what"] } },
+  ask: { description: "ask the user", input: { type: "object", properties: { what: { type: "string" }, how: { type: "string", enum: ["soft", "plain"] } }, required: ["what"] } },
   ghost: { description: "declared, no function" },
 };
 export function ask(input: any, ctx: any) { return { what: input.what, by: ctx.caller.session, gerdrCard: { type: "step", panel: "forged" } } }
@@ -37,6 +38,16 @@ export function notATool() { return 1 }`,
 	// Its card says which panel made it (Gerdr's word, not the panel's): drawn by that panel's registered type
 	if c := m["gerdrCard"].(map[string]any); c["panel"] != DefaultProject || c["type"] != "step" {
 		t.Errorf("card not stamped with its panel: %v", c)
+	}
+	// Held to its schema: a required field under another name is an error naming both, not undefined in the function
+	if _, err := r.CallTool(ctx, "", "ask", "s1", map[string]any{"title": "sign in"}); err == nil || !strings.Contains(err.Error(), `"what" is required`) || !strings.Contains(err.Error(), "has no title") {
+		t.Errorf("missing required field: %v", err)
+	}
+	if _, err := r.CallTool(ctx, "", "ask", "s1", map[string]any{"what": "x", "how": "loud"}); err == nil || !strings.Contains(err.Error(), "one of soft / plain") {
+		t.Errorf("value outside its enum: %v", err)
+	}
+	if _, err := r.CallTool(ctx, "", "ask", "s1", map[string]any{"what": "x", "how": "soft", "extra": 1}); err != nil {
+		t.Errorf("an extra field alone must pass: %v", err)
 	}
 	if _, err := r.CallTool(ctx, "", "ghost", "s1", nil); err == nil {
 		t.Error("a tool without its function must not run")
