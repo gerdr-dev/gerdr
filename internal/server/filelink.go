@@ -107,9 +107,9 @@ func (s *Server) fileLinkIssue(w http.ResponseWriter, r *http.Request) {
 }
 
 // loopbackOrigin: the address a request from this machine actually reached ("http://127.0.0.1:7870"), "" for any
-// other. The desktop Apps show the pages at http://gerdr/, a name only their own browser maps to the backend, so a
-// link built from the page's location is dead in the system browser it is handed to. That browser runs on this
-// same machine, so the loopback address the request came in on always reaches us.
+// other. The desktop Apps show the pages at http://gerdr/, a name only their own browser maps to the backend, so any
+// address of ours built from the request's Host (a file link, an OAuth redirect) is dead in the system browser it is
+// handed to. That browser runs on this same machine, so the loopback address the request came in on always reaches us.
 func loopbackOrigin(r *http.Request) string {
 	if auth.FromRemote(r) {
 		return ""

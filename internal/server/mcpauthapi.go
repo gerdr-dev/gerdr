@@ -110,11 +110,17 @@ func (s *Server) mcpAuthRoutes(mux *http.ServeMux) {
 			httpError(w, 404, "no such remote MCP server")
 			return
 		}
-		scheme := "http"
-		if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
-			scheme = "https"
+		// From this machine, the address the request really reached: the desktop Apps' page host (http://gerdr/) is
+		// known only to their own browser, and authorization servers refuse a plain-http redirect that isn't loopback.
+		origin := loopbackOrigin(r)
+		if origin == "" {
+			scheme := "http"
+			if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
+				scheme = "https"
+			}
+			origin = scheme + "://" + r.Host
 		}
-		u, err := st.Begin(r.Context(), m.Name, m.URL, scheme+"://"+r.Host+"/mcp-oauth/callback")
+		u, err := st.Begin(r.Context(), m.Name, m.URL, origin+"/mcp-oauth/callback")
 		if err != nil {
 			httpError(w, 502, err.Error())
 			return
