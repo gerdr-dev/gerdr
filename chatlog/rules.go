@@ -57,7 +57,9 @@ func TasksFromInfo(g map[string]any) ([]acpx.Task, bool) {
 
 // FinishedTasks: a task event for each task in next that has just ended (was running in prev, or first seen
 // already ended). The tasks bar only shows running ones; this leaves a line in the conversation. Tasks started by a
-// sub-agent (Parent set) are left to its own panel.
+// sub-agent (Parent set) are left to its own panel. A foreground tool call that Claude tracks as a task (a slow Bash
+// command, offered for moving to the background) is left out too: its own tool call row already shows the result,
+// and the card drew it a second time labelled "background".
 func FinishedTasks(prev, next []acpx.Task) []*Event {
 	was := map[string]string{}
 	for _, t := range prev {
@@ -65,7 +67,7 @@ func FinishedTasks(prev, next []acpx.Task) []*Event {
 	}
 	var out []*Event
 	for _, t := range next {
-		if t.Status == "running" || t.Parent != "" {
+		if t.Status == "running" || t.Parent != "" || (!t.Background && t.ToolCallID != "") {
 			continue
 		}
 		if st, seen := was[t.ID]; seen && st != "running" {

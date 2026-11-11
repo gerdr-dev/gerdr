@@ -662,14 +662,27 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
                   <Pencil /> {t("panes.renameSession")}
                   <ActionKeys action="renamePane" />
                 </DropdownMenuItem>
+                {/* Gerdr's own id is the one name for a session, for people and for `gerdr session`. The agent's own
+                    session id changes on /clear and is only good for carrying on in a terminal, so it is only handed out
+                    inside that command. */}
                 <DropdownMenuItem
                   onClick={() => {
-                    navigator.clipboard.writeText(session.agentSessionId);
-                    toast(t("panes.agentIdCopied"));
+                    navigator.clipboard.writeText(session.id);
+                    toast(t("panes.idCopied"));
                   }}
                 >
-                  <Copy /> {t("panes.copyAgentId")}
+                  <Copy /> {t("panes.copyId")}
                 </DropdownMenuItem>
+                {["claude", "codex"].includes(session.base ?? session.agent) && session.agentSessionId && (
+                  <DropdownMenuItem
+                    onClick={() => {
+                      navigator.clipboard.writeText(resumeCommand(session.base ?? session.agent, session.cwd, session.agentSessionId));
+                      toast(t("panes.resumeCopied"));
+                    }}
+                  >
+                    <SquareTerminal /> {t("panes.copyResume")}
+                  </DropdownMenuItem>
+                )}
                 {["claude", "codex"].includes(session.base ?? session.agent) && (
                   // 在别处（herdr / 终端）接着聊过的会话，打开时会自动追上；这里是手动的那一下
                   <DropdownMenuItem
@@ -716,4 +729,12 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
       </PaneBody>
     </div>
   );
+}
+
+/** The shell command that carries this conversation on in a terminal, in its own directory (Gerdr catches up on it
+ * when the session is opened again). */
+function resumeCommand(agent: string, cwd: string, agentSessionId: string): string {
+  const q = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
+  const resume = agent === "codex" ? `codex resume ${agentSessionId}` : `claude --resume ${agentSessionId}`;
+  return cwd ? `cd ${q(cwd)} && ${resume}` : resume;
 }

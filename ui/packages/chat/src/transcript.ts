@@ -485,6 +485,9 @@ export class Transcript {
       case "task": {
         // 后台任务 / 子 agent 结束了：在对话里留一张小卡片（任务栏只放在跑的）。
         if (!e.task) break;
+        // A foreground tool call tracked as a task (logs from before chatlog.FinishedTasks left these out): its own
+        // tool call row already shows it.
+        if (!e.task.background && e.task.toolCallId && this.tools.has(e.task.toolCallId)) break;
         this.messages = [...this.messages];
         const i = this.assistant(e.ts);
         this.pushPart(i, { type: "data-task", data: { task: e.task, command: this.commandOf(e.task.toolCallId) } });
