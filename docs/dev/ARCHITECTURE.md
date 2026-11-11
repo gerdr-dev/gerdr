@@ -206,6 +206,10 @@ config.json (example in the README), read fresh every turn.
    Once per cycle, never a running countdown: telling a model how little is left makes it wrap up early, which is
    why Claude Code's default reminder doesn't report the real window either. The notice is a user message with no
    ID (replay and titles skip it), marked `contextNote` so the cycle knows it had one.
+   Automatic compaction never fails the turn (compact.go): a failed or empty summary is retried once on a cut-down
+   copy (big tool results, images, reasoning left out), then the oldest messages are dropped locally (`compact`
+   entry with `keep`). Failing the turn made clients say "continue", and the next turn resent the same oversized
+   summary request: seen 2026-11-10, 70+ times in a row on a 524k-window model, never compacted.
 9. 指令文件：`~/.claude/CLAUDE.md`、`~/.codex/AGENTS.md`、git 根到 cwd 每层的 AGENTS.md / CLAUDE.md 都拼进系统提示词；
    skill 列表（内置 + Claude Code 的 + Gerdr 的，按设置的来源）只给名字、描述、路径，模型自己去读。
 10. bash 的环境里有 `GERDR_NATIVE_SESSION_ID`，`gerdr session current` 拿它认自己。

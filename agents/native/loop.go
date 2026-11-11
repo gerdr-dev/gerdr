@@ -195,7 +195,7 @@ func (r *run) callModel(ctx context.Context) (llm.Result, bool, error) {
 	if res.Usage.Input > 0 {
 		r.input = res.Usage.Input
 		if r.sub == nil {
-			r.s.setLastInput(res.Usage.Input)
+			r.s.setLastInput(res.Usage.Input, histChars(req.System, req.Messages))
 			r.s.send(acp.SessionUpdate{SessionInfoUpdate: &acp.SessionSessionInfoUpdate{Meta: acpx.ContextProgress(res.Usage.Input, r.model.Window)}})
 		}
 	}

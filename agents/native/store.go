@@ -32,6 +32,9 @@ type entry struct {
 	UI *toolUI `json:"ui,omitempty"`
 	// Summary：compact 的摘要，之后的上下文从它开始。
 	Summary string `json:"summary,omitempty"`
+	// Keep: on a compact entry, how many of the context's last messages before it stay after the summary. Set when
+	// the summary request failed and the oldest messages were dropped locally instead (compact.go); 0 = none.
+	Keep int `json:"keep,omitempty"`
 	// Steer: a user message that came in mid-turn (_session/steering). Stored as typed (replay, rewind and the
 	// session title read it); buildContext wraps it for the model, see steerPrefix.
 	Steer bool `json:"steer,omitempty"`
@@ -190,25 +193,25 @@ func lastMeta(es []entry) sessionMeta {
 }
 
 // buildContext：发给模型的消息 —— 从最后一条 compact 开始（摘要当成一条 user 消息），之后的 msg 照搬。
+// A compact entry with Keep also keeps that many of the messages right before it (after the summary).
 func buildContext(es []entry) []llm.Message {
-	start, summary := 0, ""
-	for i, e := range es {
-		if e.T == "compact" {
-			start, summary = i+1, e.Summary
-		}
-	}
 	var out []llm.Message
-	if summary != "" {
-		out = append(out, llm.Message{Role: "user", Content: []llm.Part{llm.TextPart(summaryPrefix + summary)}})
-	}
-	for _, e := range es[start:] {
-		if e.T == "msg" && e.Msg != nil {
+	summary := ""
+	for _, e := range es {
+		switch {
+		case e.T == "compact":
+			keep := min(max(e.Keep, 0), len(out))
+			out, summary = append([]llm.Message(nil), out[len(out)-keep:]...), e.Summary
+		case e.T == "msg" && e.Msg != nil:
 			m := *e.Msg
 			if e.Steer {
 				m.Content = append(append([]llm.Part{llm.TextPart(steerPrefix)}, m.Content...), llm.TextPart(steerSuffix))
 			}
 			out = append(out, m)
 		}
+	}
+	if summary != "" {
+		out = append([]llm.Message{{Role: "user", Content: []llm.Part{llm.TextPart(summaryPrefix + summary)}}}, out...)
 	}
 	return out
 }

@@ -65,6 +65,9 @@ type Model struct {
 	// Claude Code does. It used to be capped at 200k to keep 1M-window requests cheap, but the composer shows
 	// usage against the whole window, so the percentage never got past 20% and compaction looked broken.
 	// Set it lower per model when long requests get too slow or expensive.
+	// 90% leaves the summary request itself close to the limit; rather than a lower default, compact.go
+	// estimates that request and sends a cut-down copy when it wouldn't leave room for the summary, and falls
+	// back to dropping the oldest messages when summarizing fails.
 	CompactAt int   `json:"compactAt,omitempty"`
 	Images    *bool `json:"images,omitempty"` // 能不能看图
 	// MaxOutput: max_tokens per request. 0 = don't send it (OpenAI protocols) / 32000 (Anthropic, where it is

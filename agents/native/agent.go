@@ -486,7 +486,7 @@ func (a *Agent) Prompt(ctx context.Context, p acp.PromptRequest) (acp.PromptResp
 	if name == "compact" {
 		// 这条消息本身也记进历史（回退按它找），压缩完它就在摘要之前了
 		s.addMsg(llmUser(a.toParts(blocks, s)), msgID, nil)
-		if err := r.compact(tctx, args); err != nil {
+		if err := r.compact(tctx, args, false); err != nil {
 			if tctx.Err() != nil {
 				return acp.PromptResponse{StopReason: acp.StopReasonCancelled, Usage: s.turnUsage()}, nil
 			}

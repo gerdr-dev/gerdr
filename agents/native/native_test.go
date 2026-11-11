@@ -32,10 +32,15 @@ type fakeLLM struct {
 }
 
 // reply：一次回复。text 正文；calls 工具调用（name → args JSON）；delay 每片之间等多久（测打断）。
+// input: the prompt_tokens to report (0 = 100); status: answer with this HTTP error instead; empty: a 200 whose
+// stream holds nothing (no content, no finish_reason, no usage), as a broken upstream sent.
 type reply struct {
-	text  string
-	calls [][2]string
-	delay time.Duration
+	text   string
+	calls  [][2]string
+	delay  time.Duration
+	input  int
+	status int
+	empty  bool
 }
 
 func (f *fakeLLM) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -48,8 +53,17 @@ func (f *fakeLLM) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	f.mu.Unlock()
 	msgs, _ := body["messages"].([]any)
 	rep := f.script(n, msgs)
+	if rep.status != 0 {
+		http.Error(w, `{"error":{"message":"upstream exploded"}}`, rep.status)
+		return
+	}
 	w.Header().Set("Content-Type", "text/event-stream")
 	fl := w.(http.Flusher)
+	if rep.empty {
+		fmt.Fprint(w, "data: [DONE]\n\n")
+		fl.Flush()
+		return
+	}
 	chunk := func(v any) {
 		bb, _ := json.Marshal(v)
 		fmt.Fprintf(w, "data: %s\n\n", bb)
@@ -78,7 +92,11 @@ func (f *fakeLLM) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		finish = "tool_calls"
 	}
 	chunk(map[string]any{"choices": []any{map[string]any{"delta": map[string]any{}, "finish_reason": finish}}})
-	chunk(map[string]any{"choices": []any{}, "usage": map[string]any{"prompt_tokens": 100, "completion_tokens": 10}})
+	input := rep.input
+	if input == 0 {
+		input = 100
+	}
+	chunk(map[string]any{"choices": []any{}, "usage": map[string]any{"prompt_tokens": input, "completion_tokens": 10}})
 	fmt.Fprint(w, "data: [DONE]\n\n")
 	fl.Flush()
 }

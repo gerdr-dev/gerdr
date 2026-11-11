@@ -37,6 +37,9 @@ type session struct {
 	turnDone     chan struct{}
 	queue        []queued
 	lastInput    int // 最近一次请求的输入 token，判断要不要压缩
+	// charScale: tokens per character of the last request (its input tokens / the characters sent), to estimate
+	// a request's size before sending it (compact.go). Not reset by a compaction: it describes the text, not its size.
+	charScale float64
 	// An urgent (Now) steer is waiting: urgent is closed when one comes in, so a foreground command can move itself
 	// to the background (runBash) and the rest of a tool batch is skipped (runTools). Reset once the queue is read.
 	urgent   chan struct{}
@@ -220,9 +223,13 @@ func (s *session) setStreamCancel(c context.CancelFunc) {
 	s.mu.Unlock()
 }
 
-func (s *session) setLastInput(n int) {
+// setLastInput records the last request's input tokens and how many characters it sent (system + messages).
+func (s *session) setLastInput(n, chars int) {
 	s.mu.Lock()
 	s.lastInput = n
+	if n > 0 && chars > 0 {
+		s.charScale = float64(n) / float64(chars)
+	}
 	s.mu.Unlock()
 }
 
@@ -486,26 +493,6 @@ func init() {
 	builtinTools = []*tool{readTool, writeTool, editTool, bashTool, grepTool, globTool, todoTool, askTool, taskTool, bashOutputTool, stopTaskTool, webFetchTool}
 }
 
-// ---- 压缩 ----
-
-const compactPrompt = `Summarize the conversation so far so that work can continue from the summary alone (the earlier messages will be dropped). Include:
-1. The user's requests and intent, in order, quoting important instructions verbatim.
-2. Key technical context: files read or changed (with paths), important code, commands run and their results, errors and how they were fixed.
-3. Decisions made and constraints learned.
-4. What was being worked on right before this summary, and the next step — exactly where to pick up.
-Be thorough but concise. Reply with the summary only.`
-
-// maybeCompact：上一次请求的输入超过阈值就先压缩再接着跑。
-func (r *run) maybeCompact(ctx context.Context) error {
-	r.s.mu.Lock()
-	n := r.s.lastInput
-	r.s.mu.Unlock()
-	if n == 0 || n < r.model.compactAt() {
-		return nil
-	}
-	return r.compact(ctx, "")
-}
-
 // ---- Context-full notice ----
 //
 // Compaction drops the conversation for a summary, and whatever the summary misses (an exact error, a finding
@@ -558,57 +545,6 @@ func noted(es []entry) bool {
 		}
 	}
 	return false
-}
-
-// compact 让模型把目前的对话总结成一段，之后的上下文从摘要开始（store.go 的 buildContext）。
-// 界面上是一张「压缩上下文」的卡片。
-func (r *run) compact(ctx context.Context, extra string) error {
-	id := acpx.CompactIDPrefix + uuid.NewString()
-	r.out(acp.StartToolCall(acp.ToolCallId(id), "Compacting context", acp.WithStartKind(acp.ToolKindThink), acp.WithStartStatus(acp.ToolCallStatusInProgress)))
-	msgs := r.history()
-	if len(msgs) == 0 {
-		r.out(acp.UpdateToolCall(acp.ToolCallId(id), acp.WithUpdateStatus(acp.ToolCallStatusCompleted)))
-		return nil
-	}
-	instr := compactPrompt
-	if extra != "" {
-		instr += "\n\nAdditional instructions from the user: " + extra
-	}
-	msgs = append(msgs, llm.Message{Role: "user", Content: []llm.Part{llm.TextPart(instr)}})
-	m := r.model
-	if sm := r.s.a.config().SmallModel; sm != "" {
-		if x, ok := r.s.a.config().find(sm); ok && x.Key == sm {
-			m = x
-		}
-	}
-	res, err := m.client().Stream(ctx, llm.Request{Model: m.ID, System: r.system, Messages: msgs, Thinking: m.Thinking, Effort: lowestEffort(m), CacheKey: r.s.currentID()}, func(llm.Event) {})
-	r.s.addUsage(m.Key, res.Usage)
-	if err != nil || strings.TrimSpace(res.Message.Text) == "" {
-		r.out(acp.UpdateToolCall(acp.ToolCallId(id), acp.WithUpdateStatus(acp.ToolCallStatusFailed)))
-		if err == nil {
-			err = fmt.Errorf("compaction returned an empty summary")
-		}
-		return fmt.Errorf("compact context: %w", err)
-	}
-	e := entry{T: "compact", At: time.Now().UnixMilli(), Summary: res.Message.Text}
-	r.s.mu.Lock()
-	r.s.entries = append(r.s.entries, e)
-	pre := r.s.lastInput // the last request's input: how full the context was before this
-	r.s.lastInput = 0
-	sid := r.s.id
-	r.s.mu.Unlock()
-	_ = r.s.a.st.append(sid, e)
-	u := acp.UpdateToolCall(acp.ToolCallId(id), acp.WithUpdateStatus(acp.ToolCallStatusCompleted),
-		acp.WithUpdateContent([]acp.ToolCallContent{acp.ToolContent(acp.TextBlock(res.Message.Text))}))
-	u.ToolCallUpdate.Meta = acpx.CompactMeta(pre, res.Usage.Output, r.model.Window)
-	r.out(u)
-	// Tell the composer the context shrank: after a /compact no request follows to report it, and the old
-	// percentage stayed up as if nothing happened. The summary's size is a lower bound (the system prompt and
-	// tools come on top); the next request reports the exact figure.
-	if res.Usage.Output > 0 && r.sub == nil {
-		r.s.send(acp.SessionUpdate{SessionInfoUpdate: &acp.SessionSessionInfoUpdate{Meta: acpx.ContextProgress(res.Usage.Output, r.model.Window)}})
-	}
-	return nil
 }
 
 // lowestEffort：杂活用最低的思考档（DeepSeek 的 off 也行：总结不需要想）。
