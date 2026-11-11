@@ -193,9 +193,11 @@ export type ComposerHooks = {
   drafts?: DraftStore;
   /**
    * Called inside every composer (a hook): host features that need the composer's state (gerdr: drafts shared across
-   * devices). onSelect is called when the caret moves.
+   * devices). onSelect is called when the caret moves. ready: the host has something to send even with the box empty
+   * (Annulo: an element attached from the page that carries its own instruction); send is enabled and goes out with no
+   * blocks of the composer's own, host.send adds what it has.
    */
-  useExtras?(ctx: ComposerContext): { onSelect?(): void } | void;
+  useExtras?(ctx: ComposerContext): { onSelect?(): void; ready?: boolean } | void;
   /** Slash commands the host runs itself instead of sending them (gerdr: /resume, /usage). Return true from run to clear the composer. */
   localCommands?(session: ChatSession): { name: string; description: string; run(paneId: string): void }[];
   /** A send failed; return true if the host deals with it (gerdr: "open elsewhere" → its dialog, then retry). */

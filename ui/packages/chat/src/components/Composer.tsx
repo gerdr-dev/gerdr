@@ -481,7 +481,7 @@ export const Composer = forwardRef<
     const to = alias && ALIASES[alias[1]];
     if (to && !(session.commands ?? []).some((c) => c.name === alias[1]) && (session.commands ?? []).some((c) => c.name === to)) t = `/${to}${alias[2]}`;
     // Empty box after a finished `!` command: send nothing of our own, the hub puts the output in front (hub/shell.go)
-    if (!t && !imgs.length && !shellReady) return;
+    if (!t && !imgs.length && !shellReady && !extras?.ready) return;
     if (imgs.some((im) => (isVideo(im) || isFile(im)) && !im.path)) {
       toast(tr(isVideo(imgs.find((im) => !im.path)!) ? "composer.videoUploading" : "composer.fileUploading"));
       return;
@@ -884,7 +884,7 @@ export const Composer = forwardRef<
   };
   const enterSend = (mod = false) => {
     // Nothing to send: Enter jumps the chat to the bottom instead, so you don't have to reach for the ↓ button
-    if (!text.trim() && !imgs.length && !shellReady) return onEmptyEnter?.(mod);
+    if (!text.trim() && !imgs.length && !shellReady && !extras?.ready) return onEmptyEnter?.(mod);
     // 在跑时 Ctrl/⌘+回车 = 立即插话（照 Claude Code CLI）。发送键设成 ⌘+回车时这个组合就是普通发送，立即只能点按钮
     if (!busy) send(running && sendKey === "enter" && mod);
   };
@@ -913,7 +913,7 @@ export const Composer = forwardRef<
   // 新会话的默认值（宿主有才有「设为默认」）：设完下拉里马上显示「已是默认」
   const defaults = hooks.useDefaults?.(session.agent);
   const defs = defaults?.values ?? {};
-  const hasText = text.trim().length > 0 || imgs.length > 0 || shellReady;
+  const hasText = text.trim().length > 0 || imgs.length > 0 || shellReady || !!extras?.ready;
   const optsKey = [modes?.currentModeId, ...opts.map((o) => o.currentValue)].join("|");
   const modeGroup: OptGroup | undefined =
     modes?.availableModes.length && host.setMode
