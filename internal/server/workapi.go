@@ -361,7 +361,7 @@ func (s *Server) workRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/work/runs/{id}", func(w http.ResponseWriter, r *http.Request) {
 		run := s.Work.Get(r.PathValue("id"))
 		if run == nil {
-			httpError(w, 404, "no such run (it ended more than 10 minutes ago: see /api/work/logs)")
+			httpError(w, 404, "no such run (it ended a while ago: see /api/work/logs)")
 			return
 		}
 		streamRun(w, r, run)
@@ -547,6 +547,7 @@ func streamRun(w http.ResponseWriter, r *http.Request, run *work.Run) {
 			flusher.Flush()
 		}
 		if done {
+			run.Received()
 			return
 		}
 		select {

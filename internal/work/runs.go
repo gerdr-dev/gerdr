@@ -16,14 +16,18 @@ import (
 
 // A run outlives the request that started it: closing or reloading the page doesn't stop it, the page can
 // pick it up again by id, and only Abort (or the run timeout) stops it. Its events stay in memory for keepDone after it
-// ends, and in a log file (<GERDR_DIR>/logs/work/<project>/<id>.jsonl) for logKeep. The log has the phases, progress, logs
+// ends — keepReceived once its end has reached someone waiting for it (Received) — and in a log file (<GERDR_DIR>/logs/work/<project>/<id>.jsonl) for logKeep. The log has the phases, progress, logs
 // and the error with its stack — not the input nor the returned value (they may hold data that shouldn't sit on disk).
 
 const (
 	runTimeout = 60 * time.Minute // a function can download, convert, wait on a slow API: give it time, Abort is there
 	keepDone   = 10 * time.Minute
-	logKeep    = 30 * 24 * time.Hour
-	logMax     = 4 << 20 // progress / log lines past this size aren't written
+	// keepReceived: how long a run whose end was delivered (a page's stream, Wait) stays. Holding every result for
+	// keepDone added up: a page refreshing a board once a second kept ~1800 results (whole boards, logs) alive, a few
+	// hundred MB of live heap (2026-11-11). Nobody picks a delivered run up again; the margin is for a racing reader.
+	keepReceived = 30 * time.Second
+	logKeep      = 30 * 24 * time.Hour
+	logMax       = 4 << 20 // progress / log lines past this size aren't written
 )
 
 // Run is one run of a function.
@@ -34,10 +38,27 @@ type Run struct {
 	Started time.Time `json:"started"`
 	cancel  context.CancelFunc
 
-	mu     sync.Mutex
-	events []Event // progress / log, then one result or error
-	done   bool
-	wake   chan struct{} // closed and replaced on every event
+	mu       sync.Mutex
+	events   []Event // progress / log, then one result or error
+	done     bool
+	wake     chan struct{}             // closed and replaced on every event
+	received bool                      // its end reached a reader (Received)
+	forget   func(after time.Duration) // drops it from the Runner after a while (nil for a Run made by hand)
+}
+
+// Received tells the run its end has reached whoever was waiting for it: it is dropped after keepReceived instead of
+// keepDone. Only once it has ended, and only the first time.
+func (rn *Run) Received() {
+	rn.mu.Lock()
+	first := rn.done && !rn.received
+	if first {
+		rn.received = true
+	}
+	forget := rn.forget
+	rn.mu.Unlock()
+	if first && forget != nil {
+		forget(keepReceived)
+	}
 }
 
 func (rn *Run) push(e Event, final bool) {
@@ -63,6 +84,7 @@ func (rn *Run) Wait(ctx context.Context) (any, error) {
 		evs, done, wake := rn.Since(n)
 		n += len(evs)
 		if done {
+			rn.Received()
 			last := evs[len(evs)-1]
 			d, _ := last.Data.(map[string]any)
 			if last.Type == "error" {
@@ -93,6 +115,15 @@ func (r *Runner) StartAs(project, name string, input any, caller string) *Run {
 	}
 	ctx, cancel := context.WithTimeout(context.WithValue(context.Background(), callerKey{}, caller), runTimeout)
 	rn := &Run{ID: fmt.Sprintf("r%d", time.Now().UnixNano()), Project: project, Fn: name, Started: time.Now(), cancel: cancel, wake: make(chan struct{})}
+	rn.forget = func(after time.Duration) {
+		time.AfterFunc(after, func() {
+			r.mu.Lock()
+			if r.runs[rn.ID] == rn {
+				delete(r.runs, rn.ID)
+			}
+			r.mu.Unlock()
+		})
+	}
 	r.mu.Lock()
 	if r.runs == nil {
 		r.runs = map[string]*Run{}
@@ -116,11 +147,7 @@ func (r *Runner) StartAs(project, name string, input any, caller string) *Run {
 		} else {
 			rn.push(Event{Type: "result", Data: map[string]any{"value": res, "ms": ms}}, true)
 		}
-		time.AfterFunc(keepDone, func() {
-			r.mu.Lock()
-			delete(r.runs, rn.ID)
-			r.mu.Unlock()
-		})
+		rn.forget(keepDone)
 	}()
 	return rn
 }
