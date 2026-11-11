@@ -125,6 +125,92 @@ func (h workHost) Session(id string) (map[string]any, error) {
 	return h.view(sess.Summary(), sess.Events()), nil
 }
 
+func (h workHost) Conversation(id string, last int) ([]map[string]any, error) {
+	sess, err := h.s.Hub.Session(id)
+	if err != nil {
+		return nil, err
+	}
+	return conversation(sess.Events(), last), nil
+}
+
+// conversation: the user's messages and the agent's text, in order (ctx.sessions.read). Text either side of a tool call
+// is one message in separate paragraphs, as the chat shows it; subagents' text isn't the agent's.
+func conversation(evs []*hub.Event, last int) []map[string]any {
+	out := []map[string]any{}
+	var cur *strings.Builder
+	var at int64
+	gap := false
+	flush := func() {
+		if cur != nil {
+			if t := strings.TrimSpace(cur.String()); t != "" {
+				out = append(out, map[string]any{"role": "agent", "text": t, "at": at})
+			}
+		}
+		cur, gap = nil, false
+	}
+	for _, e := range evs {
+		switch e.Kind {
+		case hub.EvUser:
+			flush()
+			var parts []string
+			for _, raw := range e.Content {
+				var b struct {
+					Type string `json:"type"`
+					Text string `json:"text"`
+				}
+				if json.Unmarshal(raw, &b) == nil && b.Type == "text" && strings.TrimSpace(b.Text) != "" {
+					parts = append(parts, b.Text)
+				}
+			}
+			if len(parts) > 0 {
+				m := map[string]any{"role": "user", "text": strings.Join(parts, "\n"), "at": e.TS}
+				if e.From != "" {
+					m["from"] = e.From
+				}
+				out = append(out, m)
+			}
+		case hub.EvUpdate:
+			var u struct {
+				Kind    string `json:"sessionUpdate"`
+				Content struct {
+					Text string `json:"text"`
+				} `json:"content"`
+				Meta map[string]any `json:"_meta"`
+			}
+			if json.Unmarshal(e.Update, &u) != nil {
+				continue
+			}
+			if g, ok := u.Meta["gerdr"].(map[string]any); ok {
+				if _, sub := g["subagent"]; sub {
+					continue
+				}
+				if _, child := g["parentToolCallId"]; child {
+					continue
+				}
+			}
+			switch u.Kind {
+			case "agent_message_chunk":
+				if cur == nil {
+					cur, at = &strings.Builder{}, e.TS
+				} else if gap {
+					cur.WriteString("\n\n")
+				}
+				gap = false
+				cur.WriteString(u.Content.Text)
+			case "tool_call":
+				gap = cur != nil
+			}
+		case hub.EvTurnEnd:
+			flush()
+		}
+	}
+	flush()
+	if last > 0 && len(out) > last {
+		out = out[len(out)-last:]
+	}
+	return out
+}
+
 func (h workHost) Sessions(cwd string, tags map[string]string) []map[string]any {
 	list := h.s.Hub.List()
 	sort.SliceStable(list, func(i, j int) bool { return list[i].UpdatedAt > list[j].UpdatedAt })

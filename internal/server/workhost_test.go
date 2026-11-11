@@ -161,6 +161,36 @@ func TestLastReply(t *testing.T) {
 	}
 }
 
+// What a panel reads of a conversation (ctx.sessions.read): the person's words and the agent's, tool calls splitting
+// the agent's text into paragraphs, subagents left out, the last N kept.
+func TestConversation(t *testing.T) {
+	up := func(kind, text string, meta string) *hub.Event {
+		u := `{"sessionUpdate":"` + kind + `","content":{"type":"text","text":` + quote(text) + `}` + meta + `}`
+		return &hub.Event{Kind: hub.EvUpdate, Update: json.RawMessage(u), TS: 20}
+	}
+	user := func(text string, ts int64) *hub.Event {
+		return &hub.Event{Kind: hub.EvUser, TS: ts, Content: []json.RawMessage{json.RawMessage(`{"type":"text","text":` + quote(text) + `}`)}}
+	}
+	evs := []*hub.Event{
+		user("fix the login", 10),
+		up("agent_message_chunk", "Looking", ""),
+		up("agent_message_chunk", " at it.", ""),
+		up("tool_call", "", ""),
+		up("agent_message_chunk", "from a subagent", `,"_meta":{"gerdr":{"subagent":{}}}`),
+		up("agent_message_chunk", "Fixed.", ""),
+		{Kind: hub.EvTurnEnd, StopReason: "end_turn"},
+		user("thanks", 30),
+	}
+	got := conversation(evs, 0)
+	if len(got) != 3 || got[0]["role"] != "user" || got[0]["text"] != "fix the login" || got[0]["at"] != int64(10) ||
+		got[1]["role"] != "agent" || got[1]["text"] != "Looking at it.\n\nFixed." || got[2]["text"] != "thanks" {
+		t.Fatalf("conversation = %v", got)
+	}
+	if last := conversation(evs, 2); len(last) != 2 || last[0]["role"] != "agent" {
+		t.Errorf("last 2 = %v", last)
+	}
+}
+
 func quote(s string) string { b, _ := json.Marshal(s); return string(b) }
 
 // "work" in send / reportTo is the project's Work agent conversation: a local function has no id for it.

@@ -49,6 +49,10 @@ func (f *fakeHost) Workspaces(project string, all bool) []map[string]any {
 func (f *fakeHost) Agents() []map[string]any {
 	return []map[string]any{{"id": "claude", "name": "Claude Code", "available": true}, {"id": "design", "name": "设计", "base": "claude", "available": true, "prompt": "UI design"}}
 }
+func (f *fakeHost) Conversation(id string, last int) ([]map[string]any, error) {
+	return []map[string]any{{"role": "user", "text": "hi " + id, "at": 1}}, nil
+}
+
 func (f *fakeHost) RecentDirs() []map[string]any {
 	return []map[string]any{{"path": "/r", "source": "session"}}
 }

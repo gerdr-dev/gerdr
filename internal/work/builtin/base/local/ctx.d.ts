@@ -133,6 +133,13 @@ interface Ctx {
     /** With `reply`: what the agent said since the last message sent to it. null when there's no such conversation. */
     get(id: string): (Session & { reply: string }) | null;
     /**
+     * What was said in a conversation on this computer, oldest first: the person's messages and the agent's text (no
+     * tool calls, no subagents), the last `last` of them (default all). `from`: the session that sent a message, when an
+     * agent did. null when there's no such conversation. For showing a conversation where Gerdr's chat can't, e.g. to
+     * people on other computers through the panel's own server.
+     */
+    read(id: string, opts?: { last?: number }): { role: "user" | "agent"; text: string; at: number; from?: string }[] | null;
+    /**
      * Every conversation, most recently active first; with `cwd`, only the ones in that directory; with `tags`, only
      * the ones carrying all of them (`""` as the value: any value). Other computers' (hosts in Gerdr's settings) come
      * after this one's, as `<host>:<id>`, their `reportTo` / `parent` pointing back here when a session here started them.

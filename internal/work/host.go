@@ -30,6 +30,9 @@ type Host interface {
 	// directory; a new workspace when there's none), then sends the first message if there is one.
 	StartSession(ctx context.Context, project string, o StartOptions) (map[string]any, error)
 	Session(id string) (map[string]any, error)
+	// Conversation: what was said in it, oldest first — the user's messages and the agent's text, no tool calls —
+	// the last `last` of them (0 = all). Each { role: user | agent, text, at, from? }.
+	Conversation(id string, last int) ([]map[string]any, error)
 	// Sessions: every conversation, most recently active first; cwd / tags narrow it (see hub.HasTags).
 	Sessions(cwd string, tags map[string]string) []map[string]any
 	// Send: id "work" = the project's Work agent conversation, as for StartOptions.ReportTo. attachments as in
@@ -139,6 +142,25 @@ func (r *runner) sessionsObject() map[string]any {
 				return nil
 			}
 			return s
+		},
+		// ctx.sessions.read(id, { last? }) → [{ role, text, at, from? }] or null: what was said in it, no tool calls. A
+		// panel shows a conversation where Gerdr's chat can't (another computer's, synced through the panel's own
+		// server), which `reply` (the last turn only) isn't enough for.
+		"read": func(id string, arg goja.Value) any {
+			if h == nil {
+				r.throw(errNoHost)
+			}
+			var o struct {
+				Last int `json:"last"`
+			}
+			if err := r.opts(arg, &o); err != nil {
+				r.throw(fmt.Errorf("ctx.sessions.read: %w", err))
+			}
+			c, err := h.Conversation(id, o.Last)
+			if err != nil {
+				return nil
+			}
+			return c
 		},
 		// ctx.sessions.list({ cwd? }) → sessions, most recently active first
 		"list": func(arg goja.Value) []map[string]any {
