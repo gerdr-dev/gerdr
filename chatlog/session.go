@@ -49,9 +49,6 @@ type Session struct {
 	steering map[string]string // interjections being sent → early queue state (see Send)
 	retry    chan struct{}     // closed by Stop while a retry waits
 	closed   bool
-
-	// turnUsage: the provider usage reports of the running turn added up (acpx.ProviderUsageKey), for its turn_end
-	turnUsage map[string]any
 }
 
 // Agent is the part of the ACP client-side connection Session uses (*acp.ClientSideConnection has it).
@@ -432,7 +429,6 @@ func (s *Session) Send(ctx context.Context, content []acp.ContentBlock, messageI
 	s.running, s.auto, s.turnMsg = true, false, messageID
 	s.st.Error = ""
 	s.st.TurnStarted, s.st.TurnTokens = now(), 0
-	s.turnUsage = nil
 	s.mu.Unlock()
 	s.emit(&Event{Kind: EvUser, MessageID: messageID, Content: raw})
 	s.emit(&Event{Kind: EvTurnStart, MessageID: messageID})
@@ -458,7 +454,6 @@ func (s *Session) runTurn(msgID string, content []acp.ContentBlock) {
 	s.mu.Lock()
 	ev.DurationMs, ev.OutputTokens = now()-s.st.TurnStarted, s.st.TurnTokens
 	ev.ContextTokens, ev.ContextWindow = s.st.ContextTokens, s.st.ContextWindow
-	ev.ProviderUsage = usageJSON(s.turnUsage)
 	if err != nil {
 		ev.Error, ev.StopReason = errText(err), "error"
 		s.st.Error = ev.Error
@@ -800,9 +795,10 @@ func (s *Session) onInfo(g map[string]any) {
 		changed = true
 	}
 	if u, ok := g[acpx.ProviderUsageKey].(map[string]any); ok {
-		s.mu.Lock()
-		s.turnUsage = AddUsage(s.turnUsage, u)
-		s.mu.Unlock()
+		if raw := usageJSON(u); raw != nil {
+			agent, _ := g[acpx.ProviderUsageAgentKey].(string)
+			s.emit(&Event{Kind: EvUsage, ProviderUsage: raw, Agent: agent})
+		}
 	}
 	if ev := NoticeFromInfo(g, now()); ev != nil {
 		s.emit(ev)
@@ -865,15 +861,12 @@ func (s *Session) onInfo(g map[string]any) {
 			s.running, s.auto = true, true
 			s.st.Error = ""
 			s.st.TurnStarted, s.st.TurnTokens = now(), 0
-			s.turnUsage = nil
 		}
 		var dur int64
 		var tok, ctxT, ctxW int
-		var usage json.RawMessage
 		if end {
 			dur, tok = now()-s.st.TurnStarted, s.st.TurnTokens
 			ctxT, ctxW = s.st.ContextTokens, s.st.ContextWindow
-			usage = usageJSON(s.turnUsage)
 			s.running, s.auto = false, false
 			for id, p := range s.pending {
 				close(p.ch)
@@ -885,7 +878,7 @@ func (s *Session) onInfo(g map[string]any) {
 			s.emit(&Event{Kind: EvTurnStart, Auto: true, Wake: wake})
 		}
 		if end {
-			s.emit(&Event{Kind: EvTurnEnd, StopReason: string(acp.StopReasonEndTurn), Auto: true, DurationMs: dur, OutputTokens: tok, ProviderUsage: usage, ContextTokens: ctxT, ContextWindow: ctxW})
+			s.emit(&Event{Kind: EvTurnEnd, StopReason: string(acp.StopReasonEndTurn), Auto: true, DurationMs: dur, OutputTokens: tok, ContextTokens: ctxT, ContextWindow: ctxW})
 			s.flush(true)
 		}
 		changed = changed || start || end

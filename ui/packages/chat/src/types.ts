@@ -58,6 +58,8 @@ export type HubEvent = {
     | "ask_done"
     | "notice"
     | "task"
+    /** one model call's provider usage (providerUsage), agent = who made it (absent = main agent) */
+    | "usage"
     | "steer_state"
     | "shell"
     | "shell_out"
@@ -88,6 +90,10 @@ export type HubEvent = {
   text?: string;
   until?: number; // notice retry: when the retry fires (unix ms)
   exit?: number; // shell_done：退出码
+  /** usage: one model call's usage object as the provider sent it; turn_end in old logs: the turn's added up */
+  providerUsage?: Record<string, unknown>;
+  /** usage: who made the call — absent = the main agent, else the sub-agent's tool call id */
+  agent?: string;
 };
 
 export type PermissionOption = { optionId: string; name: string; kind: "allow_once" | "allow_always" | "reject_once" | "reject_always" };

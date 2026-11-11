@@ -103,15 +103,16 @@ func (s *session) clientMetaMap() map[string]any {
 }
 
 // addUsage adds one model call's usage to the turn's total and reports it to the client per model (acpx.TokensKey:
-// the hub keeps it on the turn record, add-ons price it). model is the key of the model that served the call.
-func (s *session) addUsage(model string, u llm.Usage) {
+// the hub keeps it on the turn record, add-ons price it). model is the key of the model that served the call; agent
+// is who made it ("" = the main agent, else the sub-agent's tool call id), carried on the provider usage report.
+func (s *session) addUsage(model, agent string, u llm.Usage) {
 	if u.Input > 0 || u.Output > 0 {
 		s.send(acp.SessionUpdate{SessionInfoUpdate: &acp.SessionSessionInfoUpdate{Meta: acpx.TokensReport(acpx.Tokens{
 			Model: model, Input: u.Input, Output: u.Output, CacheRead: u.CacheRead, CacheWrite: u.CacheWrite,
 		})}})
 	}
 	if len(u.Raw) > 0 {
-		s.send(acp.SessionUpdate{SessionInfoUpdate: &acp.SessionSessionInfoUpdate{Meta: acpx.ProviderUsageReport(u.Raw)}})
+		s.send(acp.SessionUpdate{SessionInfoUpdate: &acp.SessionSessionInfoUpdate{Meta: acpx.ProviderUsageReport(u.Raw, agent)}})
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()

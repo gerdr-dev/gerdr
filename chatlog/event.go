@@ -40,8 +40,12 @@ type Event struct {
 	Error        string `json:"error,omitempty"`
 	// turn_end: what the agent reported this turn cost, USD (Claude Code only; acpx.CostKey)
 	CostUSD float64 `json:"costUsd,omitempty"`
-	// turn_end: the provider usage reports of the turn (acpx.ProviderUsageKey) added up, number by number (AddUsage)
+	// usage: one model call's provider usage report (acpx.ProviderUsageKey), logged the moment it comes in; Agent is
+	// who made the call ("" = the main agent, else the sub-agent's tool call id). A turn's usage is its usage events
+	// added up, the conversation's all of them. turn_end: logs from before usage events carry the turn's reports added
+	// up here instead.
 	ProviderUsage json.RawMessage `json:"providerUsage,omitempty"`
+	Agent         string          `json:"agent,omitempty"`
 	// turn_end: how full the context was at the end of the turn (State.ContextTokens / ContextWindow). Kept in the log so
 	// a session opened again (the app restarted) shows it before its next request reports it.
 	ContextTokens int `json:"ctxTokens,omitempty"`
@@ -77,6 +81,7 @@ const (
 	EvNotice         = "notice"
 	EvSteerState     = "steer_state" // 插话在 agent 队列里的进度（MessageID + Text：queued / started）
 	EvTask           = "task"        // 一个后台任务 / 子 agent 结束了：留一条记录在对话里（任务栏只放在跑的）
+	EvUsage          = "usage"       // 一次模型调用的用量（ProviderUsage + Agent），调完就记
 
 	// gerdr only: a `!command` the user ran from the composer.
 	EvShell     = "shell"      // MessageID = 这次运行的 id，Text = 命令

@@ -99,15 +99,25 @@ func TokensReport(t Tokens) map[string]any {
 }
 
 // ProviderUsageKey: session_info_update._meta.gerdr.providerUsage = one model call's usage object, verbatim as the
-// provider sent it (Gerdr Agent sends one per request that had one). Tokens above are what gerdr reads out of it;
-// this is for the host, so a field gerdr doesn't know (a gateway's own usage.cost, say) still gets to it without a
-// gerdr change. What it means, and its unit, is between the host and its provider. chatlog adds up the numbers of
-// a turn's reports onto its turn_end (providerUsage).
-const ProviderUsageKey = "providerUsage"
+// provider sent it (Gerdr Agent sends one per request that had one, the moment it finishes). Tokens above are what
+// gerdr reads out of it; this is for the host, so a field gerdr doesn't know (a gateway's own usage.cost, say) still
+// gets to it without a gerdr change. What it means, and its unit, is between the host and its provider. chatlog logs
+// each report as a usage event.
+//
+// ProviderUsageAgentKey names the agent that made the call: "" (absent) = the main agent, otherwise the sub-agent's
+// tool call id.
+const (
+	ProviderUsageKey      = "providerUsage"
+	ProviderUsageAgentKey = "providerUsageAgent"
+)
 
-// ProviderUsageReport: the meta of a provider usage report.
-func ProviderUsageReport(raw json.RawMessage) map[string]any {
-	return Meta(map[string]any{ProviderUsageKey: raw})
+// ProviderUsageReport: the meta of a provider usage report; agent as in ProviderUsageAgentKey.
+func ProviderUsageReport(raw json.RawMessage, agent string) map[string]any {
+	m := map[string]any{ProviderUsageKey: raw}
+	if agent != "" {
+		m[ProviderUsageAgentKey] = agent
+	}
+	return Meta(m)
 }
 
 // ProgressKey：session_info_update._meta.gerdr.progress = {"outputTokens": n}

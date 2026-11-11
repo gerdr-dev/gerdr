@@ -108,7 +108,7 @@ func (r *run) compact(ctx context.Context, extra string, auto bool) error {
 	try := func(hist []llm.Message) bool {
 		req := append(append([]llm.Message(nil), hist...), llm.Message{Role: "user", Content: []llm.Part{llm.TextPart(instr)}})
 		res, err := m.client().Stream(ctx, llm.Request{Model: m.ID, System: r.system, Messages: req, Thinking: m.Thinking, Effort: lowestEffort(m), CacheKey: r.cacheKey()}, func(llm.Event) {})
-		r.s.addUsage(m.Key, res.Usage)
+		r.s.addUsage(m.Key, r.agentID(), res.Usage)
 		if err == nil && strings.TrimSpace(res.Message.Text) == "" {
 			err = errEmptySummary
 		}

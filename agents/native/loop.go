@@ -60,6 +60,14 @@ func (r *run) cacheKey() string {
 	return r.s.currentID()
 }
 
+// agentID: who this run is, for the usage reports: "" = the main agent, else the sub-agent's tool call id.
+func (r *run) agentID() string {
+	if r.sub != nil {
+		return r.sub.toolCall
+	}
+	return ""
+}
+
 func (r *run) out(u acp.SessionUpdate) {
 	if r.sub != nil {
 		r.sub.out(r, u)
@@ -196,7 +204,7 @@ func (r *run) callModel(ctx context.Context) (llm.Result, bool, error) {
 			}
 		}
 	})
-	r.s.addUsage(r.model.Key, res.Usage)
+	r.s.addUsage(r.model.Key, r.agentID(), res.Usage)
 	if res.Usage.Output > 0 && r.tok != nil {
 		r.tok.Exact(key, res.Usage.Output)
 		r.s.send(acp.SessionUpdate{SessionInfoUpdate: &acp.SessionSessionInfoUpdate{Meta: acpx.Progress(r.tok.Total())}})

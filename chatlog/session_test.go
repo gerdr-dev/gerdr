@@ -278,7 +278,8 @@ func TestSessionSteerAndStop(t *testing.T) {
 	}
 }
 
-// A provider's usage objects reach the turn_end added up, fields gerdr doesn't know included (a gateway's cost).
+// Each model call's provider usage object is logged as a usage event when it comes in, fields gerdr doesn't know
+// included (a gateway's cost); the turn's usage is those added up.
 func TestSessionTurnCost(t *testing.T) {
 	var mu sync.Mutex
 	n := 0
@@ -307,14 +308,27 @@ func TestSessionTurnCost(t *testing.T) {
 	}
 	e.waitIdle(t)
 	evs := e.s.Events()
-	last := evs[len(evs)-1]
-	var u struct {
-		Prompt int     `json:"prompt_tokens"`
-		Cost   float64 `json:"cost"`
-		Tier   string  `json:"tier"`
+	var cost float64
+	var prompt, calls int
+	tier := ""
+	for _, ev := range evs {
+		var u struct {
+			Prompt int     `json:"prompt_tokens"`
+			Cost   float64 `json:"cost"`
+			Tier   string  `json:"tier"`
+		}
+		if ev.Kind != chatlog.EvUsage || ev.Agent != "" || json.Unmarshal(ev.ProviderUsage, &u) != nil {
+			continue
+		}
+		calls++
+		cost += u.Cost
+		prompt += u.Prompt
+		if u.Tier != "" {
+			tier = u.Tier
+		}
 	}
-	if last.Kind != chatlog.EvTurnEnd || json.Unmarshal(last.ProviderUsage, &u) != nil || u.Cost != 5 || u.Prompt != 2100 || u.Tier != "pro" {
-		t.Fatalf("turn_end %s (%s)", last.ProviderUsage, kinds(evs))
+	if calls != 2 || cost != 5 || prompt != 2100 || tier != "pro" {
+		t.Fatalf("usage events: %d calls, cost %v, prompt %d, tier %q (%s)", calls, cost, prompt, tier, kinds(evs))
 	}
 }
 
@@ -350,5 +364,52 @@ func TestSessionContextKeptAcrossReopen(t *testing.T) {
 				t.Fatalf("context = %d / %d, want %d / %d", st.ContextTokens, st.ContextWindow, c.tokens, c.wind)
 			}
 		})
+	}
+}
+
+// A sub-agent's calls are logged with its tool call id, the main agent's with none.
+func TestSessionSubagentUsageEvents(t *testing.T) {
+	var mu sync.Mutex
+	n := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		i := n
+		n++
+		mu.Unlock()
+		w.Header().Set("Content-Type", "text/event-stream")
+		send := func(v string) { fmt.Fprintf(w, "data: %s\n\n", v) }
+		switch i {
+		case 0: // main: start a foreground sub-agent
+			send(`{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_sub","function":{"name":"task","arguments":"{\"description\":\"look\",\"prompt\":\"say hi\"}"}}]}}]}`)
+			send(`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`)
+			send(`{"choices":[],"usage":{"prompt_tokens":100,"completion_tokens":5,"cost":3}}`)
+		case 1: // the sub-agent
+			send(`{"choices":[{"delta":{"content":"hi"}}]}`)
+			send(`{"choices":[{"delta":{},"finish_reason":"stop"}]}`)
+			send(`{"choices":[],"usage":{"prompt_tokens":50,"completion_tokens":2,"cost":4}}`)
+		default: // main: done
+			send(`{"choices":[{"delta":{"content":"done"}}]}`)
+			send(`{"choices":[{"delta":{},"finish_reason":"stop"}]}`)
+			send(`{"choices":[],"usage":{"prompt_tokens":120,"completion_tokens":3,"cost":2}}`)
+		}
+		fmt.Fprint(w, "data: [DONE]\n\n")
+	}))
+	t.Cleanup(srv.Close)
+	e := startWith(t, native.Provider{BaseURL: srv.URL})
+	if _, err := e.s.Send(context.Background(), []acp.ContentBlock{acp.TextBlock("go")}, "", false); err != nil {
+		t.Fatal(err)
+	}
+	e.waitIdle(t)
+	byAgent := map[string]float64{}
+	for _, ev := range e.s.Events() {
+		var u struct {
+			Cost float64 `json:"cost"`
+		}
+		if ev.Kind == chatlog.EvUsage && json.Unmarshal(ev.ProviderUsage, &u) == nil {
+			byAgent[ev.Agent] += u.Cost
+		}
+	}
+	if len(byAgent) != 2 || byAgent[""] != 5 || byAgent["call_sub"] != 4 {
+		t.Fatalf("usage by agent %v, want main 5 and call_sub 4 (%s)", byAgent, kinds(e.s.Events()))
 	}
 }
