@@ -403,8 +403,10 @@ export const api = {
       host ? { ...s, host } : s,
     ),
   /** A cookie-less /f/<token>/<name> link to one file for the system browser, valid 5 minutes (server/filelink.go).
-   * For another computer's file the link is on that computer's own address (its /f/ is public there too). */
-  fileLink: (path: string, host?: string) => req<{ url: string }>("POST", `/api/fs/link${hostQ(host)}`, { path }),
+   * For another computer's file the link is on that computer's own address (its /f/ is public there too).
+   * origin: the loopback address the request reached, when it came from this machine (the App's http://gerdr/ is
+   * unknown to the system browser). */
+  fileLink: (path: string, host?: string) => req<{ url: string; origin?: string }>("POST", `/api/fs/link${hostQ(host)}`, { path }),
   fileExists: (paths: string[], cwd?: string, host?: string) =>
     req<{ exists: Record<string, boolean> }>("POST", `/api/fs/exists${hostQ(host)}`, { paths, cwd: cwd ?? "" }),
 

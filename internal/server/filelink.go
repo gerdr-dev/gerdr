@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gerdr-dev/gerdr/internal/auth"
 	"github.com/gerdr-dev/gerdr/internal/i18n"
 )
 
@@ -97,7 +99,30 @@ func (s *Server) fileLinkIssue(w http.ResponseWriter, r *http.Request) {
 		httpError(w, http.StatusTooManyRequests, i18n.S("链接太多了，过几分钟再试", "Too many links; try again in a few minutes"))
 		return
 	}
-	writeJSON(w, map[string]string{"url": "/f/" + tok + "/" + url.PathEscape(filepath.Base(p))})
+	out := map[string]string{"url": "/f/" + tok + "/" + url.PathEscape(filepath.Base(p))}
+	if o := loopbackOrigin(r); o != "" {
+		out["origin"] = o
+	}
+	writeJSON(w, out)
+}
+
+// loopbackOrigin: the address a request from this machine actually reached ("http://127.0.0.1:7870"), "" for any
+// other. The desktop Apps show the pages at http://gerdr/, a name only their own browser maps to the backend, so a
+// link built from the page's location is dead in the system browser it is handed to. That browser runs on this
+// same machine, so the loopback address the request came in on always reaches us.
+func loopbackOrigin(r *http.Request) string {
+	if auth.FromRemote(r) {
+		return ""
+	}
+	a, ok := r.Context().Value(http.LocalAddrContextKey).(net.Addr)
+	if !ok {
+		return ""
+	}
+	tcp, ok := a.(*net.TCPAddr)
+	if !ok || !tcp.IP.IsLoopback() {
+		return ""
+	}
+	return "http://" + tcp.String()
 }
 
 // fileLinkServe: GET /f/<token>/<name>. Public on both doors (guard lets non-/api paths through locally,

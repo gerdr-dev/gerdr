@@ -281,9 +281,10 @@ function FrontMatter({ raw }: { raw: string }) {
  */
 async function openOutside(stat: FileStat) {
   try {
-    const { url } = await api.fileLink(stat.path, stat.host);
-    // Another computer's link is served at that computer's own address, not through this one (no cookie in the browser)
-    const base = stat.host ? get().hosts.find((h) => h.id === stat.host)?.url : undefined;
+    const { url, origin } = await api.fileLink(stat.path, stat.host);
+    // Another computer's link is served at that computer's own address, not through this one (no cookie in the browser).
+    // This one's: the real address the backend gave, since the App's page host (http://gerdr/) is its browser's alone.
+    const base = stat.host ? get().hosts.find((h) => h.id === stat.host)?.url : origin;
     const abs = new URL(url, base ?? location.href).href;
     if (isAndroid()) postAndroid({ t: "open", url: abs });
     else nativeOpenURL(abs);

@@ -1,7 +1,10 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
+	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -75,5 +78,36 @@ func TestFileLinkHTMLPage(t *testing.T) {
 	}
 	if w := do(h, "GET", out.URL+"?download=1", nil); strings.HasPrefix(w.Header().Get("Content-Type"), "text/html") {
 		t.Fatal("download must not be served as a page")
+	}
+}
+
+// The App's pages are at http://gerdr/, which the system browser can't reach: a link issued from this machine
+// comes with the loopback address the request actually arrived on; one from the remote door never does.
+func TestFileLinkLoopbackOrigin(t *testing.T) {
+	s, h, rh := remoteServer(t)
+	p := filepath.Join(t.TempDir(), "a.md")
+	if err := os.WriteFile(p, []byte("# a"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	at := func(ip string) reqOpt {
+		return func(r *http.Request) {
+			r2 := r.WithContext(context.WithValue(r.Context(), http.LocalAddrContextKey, &net.TCPAddr{IP: net.ParseIP(ip), Port: 7870}))
+			*r = *r2
+		}
+	}
+	origin := func(h http.Handler, opts ...reqOpt) string {
+		w := do(h, "POST", "/api/fs/link", body(`{"path":"`+p+`"}`)(), append([]reqOpt{csrf, hdr("Authorization", "Bearer "+s.Token)}, opts...)...)
+		var out struct{ Origin string }
+		_ = json.Unmarshal(w.Body.Bytes(), &out)
+		return out.Origin
+	}
+	if o := origin(h, at("127.0.0.1")); o != "http://127.0.0.1:7870" {
+		t.Fatalf("loopback origin: %q", o)
+	}
+	if o := origin(h, at("192.168.1.5")); o != "" {
+		t.Fatalf("a LAN address must not be handed out: %q", o)
+	}
+	if o := origin(rh, at("127.0.0.1"), hdr("Origin", "https://"+testHost)); o != "" {
+		t.Fatalf("the remote door must not get one: %q", o)
 	}
 }
