@@ -11,7 +11,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -94,23 +93,55 @@ func (a *Agent) projectsDir() string {
 	return filepath.Join(d, "projects")
 }
 
-// loginHint：「Not logged in · Please run /login」在 gerdr 里没法照做（这里不是终端，/login 要交互）。
-// 给出能在终端里照抄的那条命令 —— 带着这个实例的 CLAUDE_CONFIG_DIR，不然登进去的是原版那个账号。
-// 注意设了 CLAUDE_CONFIG_DIR 之后，哪怕指的就是 ~/.claude，登录态也是另一份（钥匙串里按目录分开存），一样要登一次。
-func (a *Agent) loginHint(msg string) string {
-	if !strings.Contains(msg, "Not logged in") && !strings.Contains(msg, "/login") {
-		return msg
-	}
-	cmd := "claude"
-	if a.opts.Bin != "" {
-		cmd = a.opts.Bin
-	}
-	for _, kv := range a.opts.Env {
-		if strings.HasPrefix(kv, "CLAUDE_CONFIG_DIR=") {
-			cmd = kv + " " + cmd
+// authFailed: claude's own words for "the credentials don't work": never logged in ("Not logged in · Please run
+// /login"), or a login that died ("Failed to authenticate: OAuth session expired and could not be refreshed", an
+// API 401 authentication_error). Signing in again fixes all of them, and none can be done from gerdr's chat: /login
+// needs claude's interactive screen.
+func authFailed(msg string) bool {
+	for _, k := range []string{"Not logged in", "/login", "Failed to authenticate", "OAuth session expired", "OAuth token has expired", "authentication_error"} {
+		if strings.Contains(msg, k) {
+			return true
 		}
 	}
-	return msg + fmt.Sprintf(i18n.S("\n\n在终端里跑 `%s`，进去之后输入 /login 登录，完了 /exit，再回来重试。", "\n\nRun `%s` in a terminal, type /login to sign in, then /exit and come back to try again."), cmd)
+	return false
+}
+
+// loginCommand: the command that signs this instance in, to run in a terminal. It carries the instance's
+// CLAUDE_CONFIG_DIR, otherwise it signs in the plain ~/.claude account. Once CLAUDE_CONFIG_DIR is set, even pointing
+// at ~/.claude, the login is a separate one (the keychain keys it by directory) and needs its own sign-in.
+// `claude auth login` opens the browser and exits once signed in, unlike `claude` + /login + /exit.
+// A running claude process picks the new credentials up by itself (seen: "continue" after a login from another
+// terminal went through), so nothing gets restarted.
+func (a *Agent) loginCommand() string {
+	cmd := "claude"
+	if a.opts.Bin != "" {
+		cmd = shellQuote(a.opts.Bin)
+	}
+	for _, kv := range a.opts.Env {
+		if dir, ok := strings.CutPrefix(kv, "CLAUDE_CONFIG_DIR="); ok {
+			cmd = "CLAUDE_CONFIG_DIR=" + shellQuote(dir) + " " + cmd
+		}
+	}
+	return cmd + " auth login"
+}
+
+func shellQuote(s string) string {
+	if s != "" && strings.IndexFunc(s, func(r rune) bool {
+		return !(r == '/' || r == '.' || r == '-' || r == '_' || r == '~' || r == ':' || r == '+' || r == '=' ||
+			r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9')
+	}) < 0 {
+		return s
+	}
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+// loginError: the error text for a failed sign-in. Only what went wrong: how to sign in is the page's "Sign in" button
+// (and `gerdr session login` for agents), both driven by the login command that goes with the error. claude's own
+// "· Please run /login" is dropped: /login needs claude's interactive screen, which Gerdr doesn't have, and a text
+// saying "run X in a terminal" next to a "Sign in" button read as two contradicting instructions.
+func loginError(msg string) string {
+	msg = strings.TrimSpace(strings.ReplaceAll(msg, "· Please run /login", ""))
+	return strings.TrimSpace(strings.TrimSuffix(msg, "Please run /login"))
 }
 
 // defaultEffort：claude 不带 --effort 起来时用哪一档 —— settings 里的 effortLevel，后读的盖前面的：

@@ -200,6 +200,20 @@ gerdr session read reviewer --last 20         # 读最近 20 条（用户说的 
 
 `wait` 返回时看 `session.status`：`waiting` 就是卡在等人，照实告诉用户；`timed_out: true` 是还没做完。
 
+### Its agent's login expired
+
+A session whose last turn failed because its agent isn't signed in any more shows `status: error` and a `login` field
+(the command that signs in). Sign it in again from Gerdr, no terminal needed:
+
+```bash
+gerdr session login reviewer              # starts it: a browser opens on the Gerdr computer; prints {state, url}
+gerdr session login reviewer --code XXXX  # the person isn't at that computer: they open url, sign in, give you the code
+gerdr session login reviewer --status     # done / failed / still running
+```
+
+Signing in needs the person (they authorize in the browser): tell them, don't wait silently. Once `state` is `done`,
+resend what failed.
+
 ## 收尾
 
 ```bash

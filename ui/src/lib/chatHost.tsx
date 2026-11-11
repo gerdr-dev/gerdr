@@ -30,6 +30,7 @@ import { locale, t } from "./i18n";
 import { UsagePanel } from "@/components/UsageMeter";
 import { HeldDialog } from "@/components/chat/HeldDialog";
 import { RunButton } from "@/components/chat/RunButton";
+import { LoginChip } from "@/components/chat/LoginChip";
 import { timedEscape } from "./escTiming";
 
 /**
@@ -378,6 +379,7 @@ export function GerdrChatProvider({ children }: { children: ReactNode }) {
       refocus: refocusAfterDialog,
       codeActions: (code, lang, session) => (lang === "bang" ? <RunButton cmd={code} session={session} /> : null),
       composerOverlay: (session) => <Overlay session={session} />,
+      composerTop: (session) => <LoginChip sessionId={session.id} />,
       useTurnStat: useAddonTurnStat,
       composerBar: (session, { paneId }) => <AddonComposerActions sessionId={session.id} paneId={paneId} />,
       renderLoader: (p) => <AddonLoader {...p} />,

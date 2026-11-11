@@ -128,6 +128,7 @@ type Session struct {
 	deferred    []*deferredMsg    // slash commands sent mid-turn, waiting for the turn to end (deferred.go)
 	lastCatch   time.Time         // 正在从 agent 记录重新载入（CatchUp / Reload），别重入
 	lastErr     string
+	lastLogin   string // lastErr is a failed sign-in: the command that signs the agent in again (acpx.LoginCommandKey)
 	modes       *acp.SessionModeState
 	config      []acp.SessionConfigOption
 	commands    []acp.AvailableCommand
@@ -279,6 +280,9 @@ type Summary struct {
 	Record
 	Status string `json:"status"`
 	Error  string `json:"error,omitempty"`
+	// Login: Error is the agent's sign-in failing (expired, never logged in); the shell command that signs it in
+	// again, which the page offers to run in a terminal.
+	Login string `json:"login,omitempty"`
 	// The mode and option dropdowns go out as OptsKey (the lists, fetched from /api/options/<key>: optSets) plus the
 	// current values. Hosts on an older Gerdr still send modes / configOptions inline; the page takes either.
 	OptsKey   string         `json:"optsKey,omitempty"`
@@ -363,7 +367,7 @@ func (s *Session) Summary() Summary {
 		}
 	}
 	modes, config, modeID, values := s.optionsLocked()
-	return Summary{Record: s.rec, Status: s.status, Error: s.lastErr, OptsKey: s.h.optSets.key(modes, config), ModeID: modeID, OptValues: values, Commands: cmds, CommandsKey: s.h.cmdSets.key(cmds), CommandsCached: cached && len(cmds) > 0, Pending: len(s.pending), LastSeq: last, Tasks: s.tasks, Turn: s.turnInfoLocked(), Context: s.contextLocked(), Base: s.h.Base(s.rec.Agent), Branch: gitBranch(s.rec.WorkDir()), Waiting: s.waitingLocked(), WaitingSince: s.waitingSinceLocked(), WaitingKind: s.waitingKindLocked(), ByPerson: s.byPerson, PersonSaid: s.personSaid, Quiet: s.quiet}
+	return Summary{Record: s.rec, Status: s.status, Error: s.lastErr, Login: s.loginLocked(), OptsKey: s.h.optSets.key(modes, config), ModeID: modeID, OptValues: values, Commands: cmds, CommandsKey: s.h.cmdSets.key(cmds), CommandsCached: cached && len(cmds) > 0, Pending: len(s.pending), LastSeq: last, Tasks: s.tasks, Turn: s.turnInfoLocked(), Context: s.contextLocked(), Base: s.h.Base(s.rec.Agent), Branch: gitBranch(s.rec.WorkDir()), Waiting: s.waitingLocked(), WaitingSince: s.waitingSinceLocked(), WaitingKind: s.waitingKindLocked(), ByPerson: s.byPerson, PersonSaid: s.personSaid, Quiet: s.quiet}
 }
 
 func (s *Session) waitingSinceLocked() int64 {
@@ -788,4 +792,13 @@ func (s *Session) Takeover(ctx context.Context, action string) error {
 		s.emit(&Event{Kind: EvNotice, Level: "info", Text: i18n.S("另起了一份接着聊：从这里往下只在 Gerdr 里，别处那个会话不受影响", "Forked into a new copy: from here on it lives only in Gerdr; the session elsewhere is unaffected")})
 	}
 	return nil
+}
+
+// loginLocked: the sign-in command for the last error, while that error stands (the places that clear lastErr
+// don't each clear lastLogin).
+func (s *Session) loginLocked() string {
+	if s.lastErr == "" {
+		return ""
+	}
+	return s.lastLogin
 }

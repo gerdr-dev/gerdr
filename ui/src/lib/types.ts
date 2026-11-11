@@ -62,6 +62,8 @@ export type SessionSummary = ChatSession & {
   config?: Record<string, string>;
   status: SessionStatus;
   error?: string;
+  /** error is the agent's sign-in failing: the shell command that signs it in again (hub Summary.Login) */
+  login?: string;
   /** Inline only from a host on an older Gerdr: the server now sends optsKey + modeId + optValues (useSessionOptions) */
   modes?: { availableModes: SessionMode[]; currentModeId: string };
   configOptions?: ConfigOption[];

@@ -152,6 +152,27 @@ func (s *Server) sessionRoutes(mux *http.ServeMux) {
 		}
 		return map[string]any{}, sess.AllowRules(r.Context(), b.Rules)
 	}))
+	// Signing the session's agent in again after its login expired (hub/login.go): start (or join the running one),
+	// how it stands, the code the sign-in page showed, give up.
+	mux.HandleFunc("POST /api/sessions/{id}/login", s.sessionOp(func(r *http.Request, sess *hub.Session) (any, error) {
+		return sess.StartLogin()
+	}))
+	mux.HandleFunc("GET /api/sessions/{id}/login", s.sessionOp(func(r *http.Request, sess *hub.Session) (any, error) {
+		return sess.LoginState(), nil
+	}))
+	mux.HandleFunc("POST /api/sessions/{id}/login/code", s.sessionOp(func(r *http.Request, sess *hub.Session) (any, error) {
+		var b struct {
+			Code string `json:"code"`
+		}
+		if err := decode(r, &b); err != nil {
+			return nil, err
+		}
+		return map[string]any{}, sess.LoginCode(b.Code)
+	}))
+	mux.HandleFunc("POST /api/sessions/{id}/login/cancel", s.sessionOp(func(r *http.Request, sess *hub.Session) (any, error) {
+		sess.CancelLogin()
+		return map[string]any{}, nil
+	}))
 	mux.HandleFunc("POST /api/sessions/{id}/escape", s.sessionOp(func(r *http.Request, sess *hub.Session) (any, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()

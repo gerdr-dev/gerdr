@@ -551,10 +551,9 @@ export function renderPart(p: GPart, i: number, ctx: PartCtx): ReactNode {
       );
     case "data-turnEnd":
       return (
-        <div
-          key={i}
-          className={cn("flex items-start justify-center gap-1.5 px-6 py-1 text-center text-[12px]", p.data.error ? "text-bad" : "text-muted-foreground")}
-        >
+        // Like a notice: the block is centered, the text left-aligned. Centered text put each wrapped line in the
+        // middle on its own, and the icon floated far left of a short first line (a multi-line sign-in error).
+        <div key={i} className={cn("flex items-start justify-center gap-1.5 px-6 py-1 text-[12px]", p.data.error ? "text-bad" : "text-muted-foreground")}>
           <CircleAlert className="mt-0.5 size-3.5 shrink-0" />
           <span className="min-w-0 whitespace-pre-wrap break-words">
             {p.data.error || (STOP_TEXT[p.data.stopReason] ? t(STOP_TEXT[p.data.stopReason]) : p.data.stopReason)}

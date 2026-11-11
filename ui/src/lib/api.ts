@@ -343,6 +343,11 @@ export const api = {
   deleteWait: (id: string) => req("DELETE", `/api/waits/${encodeURIComponent(id)}`),
   backgroundTool: (id: string, toolCallId: string) =>
     req<{ backgrounded: boolean }>("POST", `/api/sessions/${id}/tools/${encodeURIComponent(toolCallId)}/background`, {}),
+  // Signing the session's agent in again after its login expired (hub/login.go)
+  loginStart: (id: string) => req<LoginState>("POST", `/api/sessions/${id}/login`, {}),
+  loginState: (id: string) => req<LoginState>("GET", `/api/sessions/${id}/login`),
+  loginCode: (id: string, code: string) => req("POST", `/api/sessions/${id}/login/code`, { code }),
+  loginCancel: (id: string) => req("POST", `/api/sessions/${id}/login/cancel`, {}),
   allowRules: (id: string, rules: string[]) => req("POST", `/api/sessions/${id}/allow-rules`, { rules }),
   ext: () => req<ExtView>("GET", "/api/ext"),
   putExt: (settings: ExtSettings) => req<ExtView>("PUT", "/api/ext/settings", settings),
@@ -519,6 +524,9 @@ export type MCPAuth = {
 export type FileStat = { path: string; name: string; dir: boolean; size: number; mtime: number; mime: string; host?: string };
 
 /** The computer an id ("<host>:<id>": a session or terminal there) belongs to; undefined = this one (docs/dev/MULTIHOST.md). */
+/** A sign-in started from the page (agents/claude/login.go LoginState); state "" = none started */
+export type LoginState = { state: "" | "running" | "done" | "failed"; url?: string; error?: string; output?: string };
+
 export const hostOfId = (id?: string) => (id && id.includes(":") ? id.slice(0, id.indexOf(":")) : undefined);
 
 /** ?host= (or &host=) for a request meant for another computer (server/hosts.go proxies it); "" for this one. */

@@ -9,6 +9,7 @@ package acpx
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -463,4 +464,26 @@ func SkillRoots(meta map[string]any) []string {
 		}
 	}
 	return out
+}
+
+// LoginCommandKey: a prompt that failed because the agent isn't (or no longer) signed in comes back as ACP's
+// auth_required error (code -32000) with data {"message": what went wrong, "loginCommand": the shell command that
+// signs in again}. The hub hands the command to the page (Summary.Login), which offers to run it in a terminal:
+// signing in is interactive (a browser, maybe a pasted code), the chat can't do it.
+const LoginCommandKey = "loginCommand"
+
+// AuthRequired: the error a Prompt returns when the agent has to be signed in again (LoginCommandKey).
+func AuthRequired(msg, loginCommand string) *acp.RequestError {
+	return acp.NewAuthRequired(map[string]any{"message": msg, LoginCommandKey: loginCommand})
+}
+
+// LoginCommandOf: the sign-in command carried by an AuthRequired error, "" for any other error.
+func LoginCommandOf(err error) string {
+	var re *acp.RequestError
+	if !errors.As(err, &re) || re.Code != -32000 {
+		return ""
+	}
+	m, _ := re.Data.(map[string]any)
+	cmd, _ := m[LoginCommandKey].(string)
+	return cmd
 }

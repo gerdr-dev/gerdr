@@ -281,6 +281,9 @@ type Hub struct {
 	usage     *usageCache // 用量额度的缓存（usage.go）
 
 	turns *turnLog // one line per finished turn (turns.go); nil without a data directory
+
+	loginMu sync.Mutex
+	logins  map[string]*claude.LoginRun // agent id → its latest sign-in from the page (login.go)
 }
 
 func New(opt Options) (*Hub, error) {

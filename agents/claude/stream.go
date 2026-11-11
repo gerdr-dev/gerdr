@@ -129,9 +129,12 @@ func (s *session) onLine(pr *proc, m map[string]json.RawMessage, raw []byte) {
 				if msg == "" {
 					msg = r.Subtype
 				}
-				t.errText = s.a.loginHint(msg)
+				t.errText, t.login = msg, ""
+				if authFailed(msg) {
+					t.errText, t.login = loginError(msg), s.a.loginCommand()
+				}
 			} else {
-				t.errText = ""
+				t.errText, t.login = "", ""
 			}
 		}
 		s.msgDelta = nil

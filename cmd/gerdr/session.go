@@ -131,6 +131,7 @@ type sessInfo struct {
 	Pending int    `json:"pending"`
 	Waiting string `json:"waiting"`
 	Error   string `json:"error,omitempty"`
+	Login   string `json:"login,omitempty"` // Error is the agent's login failing: `gerdr session login` signs it in
 	Updated int64  `json:"updatedAt"`
 	Tasks   []struct {
 		Status string `json:"status"`
@@ -185,6 +186,9 @@ func (s sessInfo) view(self string) map[string]any {
 	}
 	if s.Error != "" {
 		m["error"] = s.Error
+	}
+	if s.Login != "" {
+		m["login"] = s.Login
 	}
 	running := 0
 	for _, t := range s.Tasks {
@@ -944,6 +948,53 @@ and hand it a task, wait for it to finish, read its reply. Refer to a session by
 			return nil
 		},
 	})
+
+	var loginCode string
+	var loginStatus, loginCancel bool
+	login := &cobra.Command{
+		Use:   i18n.S("login <会话>", "login <session>"),
+		Short: i18n.S("会话的 agent 登录过期了（会话的 login 字段有值）：在后台重新登录", "The session's agent lost its login (the session has a login field): sign it in again in the background"),
+		Long: i18n.S(`在 Gerdr 那台电脑上跑这个 agent 自己的登录（claude auth login），打印 {state, url}。
+那台电脑的浏览器会打开，人在里面授权完就登好了；人不在那台电脑前时，把 url 给人，
+人登录后页面会给一串授权码，用 --code 交回来。登好之后，因为登录失败而出错的会话恢复正常，人重发一次就行。
+已经有一个在跑就接着用那一个。`, `Runs the agent's own sign-in (claude auth login) on the Gerdr computer and prints {state, url}.
+A browser opens on that computer; once the person authorizes there, it's done. When they aren't at that computer,
+give them the url: after signing in, the page shows a code, which goes back with --code. Once signed in, sessions that
+failed on the login are back to normal and the person resends. Joins the sign-in already running, if any.`),
+		Args: cobra.ExactArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			c := client()
+			s, err := c.resolve(args[0])
+			if err != nil {
+				return err
+			}
+			base := "/api/sessions/" + s.ID + "/login"
+			switch {
+			case loginCancel:
+				err = c.do("POST", base+"/cancel", map[string]any{}, nil)
+			case loginCode != "":
+				err = c.do("POST", base+"/code", map[string]any{"code": loginCode}, nil)
+			}
+			if err != nil {
+				return err
+			}
+			var st map[string]any
+			if loginStatus || loginCancel || loginCode != "" {
+				err = c.do("GET", base, nil, &st)
+			} else {
+				err = c.do("POST", base, map[string]any{}, &st)
+			}
+			if err != nil {
+				return err
+			}
+			printJSON(st)
+			return nil
+		},
+	}
+	login.Flags().StringVar(&loginCode, "code", "", i18n.S("登录页给的授权码", "the code the sign-in page showed"))
+	login.Flags().BoolVar(&loginStatus, "status", false, i18n.S("只看进展，不开始", "only show how it stands, don't start one"))
+	login.Flags().BoolVar(&loginCancel, "cancel", false, i18n.S("放弃正在跑的登录", "give up the running sign-in"))
+	cmd.AddCommand(login)
 	return cmd
 }
 

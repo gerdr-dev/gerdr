@@ -283,7 +283,7 @@ func (s *Session) runTurn(c *agenthost.Host, agentSID, msgID string, content []a
 	s.quiet = err == nil && clearOnly(s.events)
 	go s.markSynced(10 * time.Second) // 这一轮是我们写的：记下文件现在多大（claude 在一轮之后还会补写标题之类，等一会儿再量）
 	if err != nil {
-		s.lastErr = ev.Error
+		s.lastErr, s.lastLogin = ev.Error, acpx.LoginCommandOf(err)
 	}
 	next := s.autoNext && err == nil
 	wake := s.autoWake

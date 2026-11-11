@@ -88,12 +88,14 @@ type turnState struct {
 	sawRunning bool
 	cancelled  bool
 	errText    string
+	login      string // errText is a failed sign-in: the command that signs in again
 	stop       acp.StopReason
 }
 
 type turnResult struct {
-	stop acp.StopReason
-	err  error
+	stop  acp.StopReason
+	err   error
+	login string
 }
 
 type toolState struct {
@@ -444,6 +446,9 @@ func (s *session) prompt(ctx context.Context, blocks []acp.ContentBlock, msgID s
 	s.mu.Lock()
 	s.lastUsed = time.Now()
 	s.mu.Unlock()
+	if r.login != "" {
+		return acp.PromptResponse{}, acpx.AuthRequired(r.err.Error(), r.login)
+	}
 	if r.err != nil {
 		return acp.PromptResponse{}, acp.NewInternalError(map[string]any{"message": r.err.Error()})
 	}
@@ -532,7 +537,7 @@ func (s *session) finishTurn(stop acp.StopReason) {
 		stop = acp.StopReasonCancelled
 	}
 	if t.errText != "" && stop != acp.StopReasonCancelled {
-		t.done <- turnResult{err: errors.New(t.errText)}
+		t.done <- turnResult{err: errors.New(t.errText), login: t.login}
 		return
 	}
 	t.done <- turnResult{stop: stop}
