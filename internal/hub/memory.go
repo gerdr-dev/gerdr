@@ -23,7 +23,8 @@ import (
 //   - A session's events are loaded on first use and dropped again once it has been idle a while (unloadIdle), or
 //     sooner, oldest first, when the loaded ones add up to more than loadedBudget. Startup only scans each log for
 //     what recoverAfterRestart needs (scanLog) instead of loading it.
-//   - main sets a soft memory limit (GOMEMLIMIT) so the GC doesn't let garbage grow to twice the live heap.
+//   - main sets GOGC=50 so the GC lets garbage grow to 1.5x the live heap, not twice (a tight GOMEMLIMIT did this
+//     before, and made the GC run nonstop once the live heap reached it: cmd/gerdr/main.go).
 
 const (
 	// unloadAfter: a session nobody touched for this long drops its events (re-reading a slim log is a few ms).

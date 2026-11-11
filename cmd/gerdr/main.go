@@ -176,11 +176,21 @@ func running(env config.Env) (serverInfo, string, bool) {
 	return si, loginURL(si.Host, si.Port, tok), true
 }
 
-// memLimit: the backend's soft memory limit unless GOMEMLIMIT says otherwise. Its live heap stays well under it
-// (internal/hub/memory.go); without a limit the GC lets garbage grow to twice the live heap before collecting.
-const memLimit = 128 << 20
+// gcPercent / memLimit: how much garbage the backend lets pile up, unless GOGC / GOMEMLIMIT say otherwise.
+// Go's default (GOGC=100) lets the heap grow to twice the live heap before collecting; 50 keeps it at 1.5x.
+// The memory limit is only a backstop. It used to be 128 MB with GOGC left at 100, assuming the live heap stays well
+// under it (internal/hub/memory.go), but panels running every minute pushed the live heap to 120-150 MB (2026-11):
+// a live heap at or over a soft limit makes the GC run back to back — measured ~50 cycles a second, 73% of the
+// process's CPU, ~2 cores busy with nothing happening. A limit far above the live heap never does that.
+const (
+	gcPercent = 50
+	memLimit  = 1 << 30
+)
 
 func runServe(open, appMode, serviceMode bool, parentPID int) error {
+	if os.Getenv("GOGC") == "" {
+		debug.SetGCPercent(gcPercent)
+	}
 	if os.Getenv("GOMEMLIMIT") == "" {
 		debug.SetMemoryLimit(memLimit)
 	}
