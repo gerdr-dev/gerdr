@@ -326,28 +326,36 @@ export function ChatView({
   // Send now (a queued row's button, Ctrl/⌘+↵ in an empty composer): get the queued interjections read now by moving
   // the running command / subagent to the background, as Claude Code's own "now" does. They wait for the next gap and
   // that makes one: all of them go in, in the order sent (Claude Code checked by hand; native drains its whole queue).
+  // The person asked for "now", so the edge cases are ours, not a toast: nothing to move aside (it is writing or
+  // thinking) means the step's end reads them anyway; a command Claude Code won't move yet (its first second or two)
+  // is tried again until it moves, finishes, or the queue is read. One loop per session, however often it's clicked.
   // False: nothing queued that this helps (held slash commands wait for the turn's end whatever happens).
+  const nowLoop = useRef(false);
   const sendQueuedNow = async (): Promise<boolean> => {
-    const all = latest.current.msgs;
-    if (!all.some((m) => m.metadata?.queued && !m.metadata.held)) return false;
-    const base = session.base ?? session.agent;
-    const tools = host.backgroundTool && ["claude", "native"].includes(base) ? backgroundableTools(all, session.tasks ?? []) : [];
-    if (!tools.length) {
-      // Nothing to move aside: it is writing or thinking, and reads them when that step ends
-      toast(tr("chat.queuedAfterStep"));
-      return true;
+    const pending = () => latest.current.msgs.some((m) => m.metadata?.queued && !m.metadata.held);
+    if (!pending()) return false;
+    if (nowLoop.current) return true;
+    nowLoop.current = true;
+    try {
+      const deadline = Date.now() + 120_000;
+      while (latest.current.running && pending() && Date.now() < deadline) {
+        const s = latest.current.session;
+        const base = s.base ?? s.agent;
+        const tools = host.backgroundTool && ["claude", "native"].includes(base) ? backgroundableTools(latest.current.msgs, s.tasks ?? []) : [];
+        if (!tools.length) break;
+        const moved = await Promise.all(tools.map((p) => host.backgroundTool!(s.id, p.toolCallId).catch(() => false)));
+        if (moved.some(Boolean)) break;
+        await new Promise((r) => setTimeout(r, 1500));
+      }
+    } finally {
+      nowLoop.current = false;
     }
-    const move = () => Promise.all(tools.map((p) => host.backgroundTool!(session.id, p.toolCallId).catch(() => false)));
-    if ((await move()).some(Boolean)) return true;
-    // Claude Code can't move a command aside in its first second or two: try once more after that
-    await new Promise((r) => setTimeout(r, 2000));
-    if (!(await move()).some(Boolean)) toast(tr("chat.queuedCantMove"));
     return true;
   };
   const scrollToEnd = () => list.current?.scrollToIndex({ index: "LAST", align: "end", behavior: "smooth" });
   // 行是 memo 的，回调要稳定（不然每次都重渲染），但又要拿到最新的 —— 放在 ref 里转一手
-  const latest = useRef({ doRewind, sessionId: session.id, openGroups, setOpenGroups, msgs, sendQueuedNow });
-  latest.current = { doRewind, sessionId: session.id, openGroups, setOpenGroups, msgs, sendQueuedNow };
+  const latest = useRef({ doRewind, sessionId: session.id, session, running, openGroups, setOpenGroups, msgs, sendQueuedNow });
+  latest.current = { doRewind, sessionId: session.id, session, running, openGroups, setOpenGroups, msgs, sendQueuedNow };
   // Agents that rewind to a steer on its own (they advertise steering.rewind); codex can't, its revert cuts whole turns.
   const steerRewind = ["claude", "native"].includes(session.base ?? session.agent);
   const env = useMemo<RowEnv>(
@@ -365,9 +373,8 @@ export function ChatView({
             },
       onSendQueuedNow: sub
         ? undefined
-        : async () => {
-            await latest.current.sendQueuedNow();
-          },
+        : // Not awaited: it may keep retrying in the background, and the row's buttons (withdraw) stay usable meanwhile
+          () => void latest.current.sendQueuedNow(),
       onQuickReply: (s) => host.send(latest.current.sessionId, [{ type: "text", text: s }]).catch((e) => toast.error(e.message)),
       onToggleGroup: (key) => {
         const { openGroups: g, setOpenGroups: set } = latest.current;
