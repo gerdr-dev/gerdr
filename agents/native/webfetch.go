@@ -27,7 +27,7 @@ var webFetchTool = &tool{
 	params: obj(map[string]any{
 		"url":        prop("string", "The URL to fetch"),
 		"start":      prop("integer", "Character offset to start from (for long pages, default 0)"),
-		"max_length": prop("integer", "Maximum characters to return (default 20000)"),
+		"max_length": prop("integer", "Maximum characters to return (default 20000, at most 30000)"),
 	}, "url"),
 	show: func(args map[string]any, cwd string) (string, acp.ToolKind, []acp.ToolCallLocation) {
 		return "Fetch " + oneLine(str(args, "url"), 160), acp.ToolKindFetch, nil
@@ -70,6 +70,7 @@ var webFetchTool = &tool{
 		if maxLen <= 0 {
 			maxLen = 20000
 		}
+		maxLen = min(maxLen, outMax) // the model may ask for a whole page; past this, it pages with start
 		r := []rune(text)
 		total := len(r)
 		if start >= total && total > 0 {

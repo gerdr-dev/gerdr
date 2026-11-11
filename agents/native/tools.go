@@ -36,6 +36,9 @@ type tool struct {
 	readOnly bool
 	// hidden：不在界面上画成工具调用（todo_write 变成计划清单，不需要再来一行）。
 	hidden bool
+	// pages: the tool bounds its own output and tells the model how to read further (read's offset/limit), so the
+	// loop's resultMax backstop must not cut the middle out of it.
+	pages bool
 	// show：调用在界面上的标题、种类、涉及的文件。
 	show func(args map[string]any, cwd string) (string, acp.ToolKind, []acp.ToolCallLocation)
 	run  func(c *call, args map[string]any) result
@@ -142,12 +145,18 @@ const (
 	readMaxLine  = 2000      // 一行最多多少字符（minified 的 js 一行几百 KB）
 	readMaxBytes = 256 << 10 // 一次最多给模型多少
 	outMax       = 30_000    // 命令输出 / 搜索结果最多给模型多少字符（头尾各留一半）
+	// resultMax is the backstop on any tool result (run.finish), for tools with no limit of their own (a subagent's
+	// report) and ones added later. It sits above outMax so results already cut to outMax plus a header line pass
+	// through untouched. A tool result stays in every later request's history, so one huge result costs on every turn.
+	resultMax = 40_000
+	globMax   = 100 // same as Claude Code: paths run ~100 chars, so this also keeps the result near 10K characters
 )
 
 var imageExt = map[string]string{".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp"}
 
 var readTool = &tool{
-	name: "read",
+	name:  "read",
+	pages: true,
 	desc: "Read a file from the local filesystem. Returns the content with line numbers (`<n>\\t<line>`), at most 2000 lines per call — use offset/limit to page through long files. " +
 		"Images (png/jpg/gif/webp) are returned as images when the model supports it. PDFs are returned as their text, page by page (on macOS). " +
 		"Use this instead of `cat`/`head`/`tail` in bash. " +
@@ -715,7 +724,7 @@ var grepTool = &tool{
 
 var globTool = &tool{
 	name: "glob",
-	desc: "Find files by name with a glob pattern (e.g. \"**/*.go\", \"src/**/*.test.ts\"). Respects .gitignore. Returns paths sorted by modification time (newest first), at most 500.",
+	desc: "Find files by name with a glob pattern (e.g. \"**/*.go\", \"src/**/*.test.ts\"). A pattern without \"/\" matches only directly in the search directory (\"*\" lists one level, \"*.go\" does not descend); use \"**/\" to search subdirectories. Respects .gitignore. Returns paths sorted by modification time (newest first), at most 100.",
 	params: obj(map[string]any{
 		"pattern": prop("string", "Glob pattern"),
 		"path":    prop("string", "Directory to search in (default: working directory)"),
@@ -732,7 +741,7 @@ var globTool = &tool{
 		pat := str(args, "pattern")
 		var files []string
 		if rg, err := exec.LookPath("rg"); err == nil {
-			out, code, err := runCapture(c.ctx, dir, []string{rg, "--files", "--color=never", "--glob", pat})
+			out, code, err := runCapture(c.ctx, dir, []string{rg, "--files", "--color=never", "--glob", rgGlob(pat)})
 			if err != nil {
 				return errResult("%v", err)
 			}
@@ -769,9 +778,9 @@ var globTool = &tool{
 		}
 		sort.SliceStable(files, func(i, j int) bool { return mt[files[i]] > mt[files[j]] })
 		more := ""
-		if len(files) > 500 {
-			more = fmt.Sprintf("\n[%d more files not shown; narrow the pattern]", len(files)-500)
-			files = files[:500]
+		if len(files) > globMax {
+			more = fmt.Sprintf("\n[%d more files not shown; narrow the pattern or the path]", len(files)-globMax)
+			files = files[:globMax]
 		}
 		for i, f := range files {
 			files[i] = rel(f, c.cwd())
@@ -780,21 +789,31 @@ var globTool = &tool{
 	},
 }
 
-// globMatch：没有 rg 时的简陋版本，** 匹配任意层目录。
-// globMatch matches a "/"-separated relative path (callers pass filepath.ToSlash) against a glob: no "/" in the
-// pattern matches the base name; "**" spans directories. path.Match, not filepath.Match: on Windows the latter
+// rgGlob turns a glob into ripgrep's --glob, which follows gitignore rules: a pattern with no "/" matches the base
+// name at any depth, so "*" listed the whole tree (a model asking for the top level got 446 deep paths, 40K
+// characters). A leading "/" anchors it to the search directory, which is what a glob means everywhere else.
+func rgGlob(pat string) string {
+	pat = filepath.ToSlash(pat)
+	if strings.HasPrefix(pat, "!") || strings.HasPrefix(pat, "/") || strings.Contains(strings.TrimSuffix(pat, "/"), "/") {
+		return pat
+	}
+	return "/" + pat
+}
+
+// globMatch is the fallback when rg is missing. It matches a "/"-separated relative path (callers pass
+// filepath.ToSlash) against a glob: "*" stays within one directory, a pattern with no "/" matches only the top level
+// (same as rgGlob), and "**" spans directories. path.Match, not filepath.Match: on Windows the latter
 // takes "\\" as the separator, so "*" would run across "/".
 func globMatch(pat, p string) bool {
-	pat = filepath.ToSlash(pat)
-	if !strings.Contains(pat, "/") {
-		ok, _ := path.Match(pat, path.Base(p))
-		return ok
-	}
+	pat = strings.TrimPrefix(filepath.ToSlash(pat), "/")
 	if strings.Contains(pat, "**") {
 		pre, suf, _ := strings.Cut(pat, "**")
 		suf = strings.TrimPrefix(suf, "/")
 		if !strings.HasPrefix(p, pre) {
 			return false
+		}
+		if suf == "" {
+			return true // "**" or "dir/**": everything below
 		}
 		rest := strings.TrimPrefix(p, pre)
 		parts := strings.Split(rest, "/")

@@ -57,13 +57,33 @@ func TestGlobMatchSlashes(t *testing.T) {
 		pat, p string
 		ok     bool
 	}{
-		{"*.ts", "src/a/b.ts", true},
+		{"*.ts", "src/a/b.ts", false}, // no "/" = top level only, like a shell glob
+		{"*.ts", "b.ts", true},
+		{"/*.ts", "b.ts", true},
+		{"**/*.ts", "src/a/b.ts", true},
+		{"**/*.ts", "b.ts", true},
+		{"src/**", "src/a/b.ts", true},
 		{"src/**/*.ts", "src/a/b.ts", true},
 		{"src/*.ts", "src/a/b.ts", false}, // "*" must not cross "/"
 		{`src\**\*.ts`, "src/a/b.ts", false},
 	} {
 		if got := globMatch(c.pat, c.p); got != c.ok {
 			t.Errorf("globMatch(%q, %q) = %v, want %v", c.pat, c.p, got, c.ok)
+		}
+	}
+}
+
+func TestRgGlobAnchorsBareNames(t *testing.T) {
+	for pat, want := range map[string]string{
+		"*":        "/*",
+		"*.go":     "/*.go",
+		"**/*.go":  "**/*.go",
+		"src/*.ts": "src/*.ts",
+		"/x":       "/x",
+		"!*.md":    "!*.md",
+	} {
+		if got := rgGlob(pat); got != want {
+			t.Errorf("rgGlob(%q) = %q, want %q", pat, got, want)
 		}
 	}
 }

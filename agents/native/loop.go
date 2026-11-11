@@ -363,7 +363,11 @@ func (r *run) finish(p *pending) {
 	if p.t == nil || !p.t.hidden {
 		r.out(acp.UpdateToolCall(acp.ToolCallId(p.tc.ID), acp.WithUpdateStatus(st), acp.WithUpdateContent(disp)))
 	}
-	content := []llm.Part{llm.TextPart(p.res.text)}
+	text := p.res.text
+	if p.t == nil || !p.t.pages {
+		text = headTail(text, resultMax)
+	}
+	content := []llm.Part{llm.TextPart(text)}
 	content = append(content, p.res.images...)
 	r.add(llm.Message{Role: "tool", CallID: p.tc.ID, Content: content, IsError: p.res.err}, "", p.ui)
 }
