@@ -42,6 +42,10 @@ type Event struct {
 	CostUSD float64 `json:"costUsd,omitempty"`
 	// turn_end: the provider usage reports of the turn (acpx.ProviderUsageKey) added up, number by number (AddUsage)
 	ProviderUsage json.RawMessage `json:"providerUsage,omitempty"`
+	// turn_end: how full the context was at the end of the turn (State.ContextTokens / ContextWindow). Kept in the log so
+	// a session opened again (the app restarted) shows it before its next request reports it.
+	ContextTokens int `json:"ctxTokens,omitempty"`
+	ContextWindow int `json:"ctxWindow,omitempty"`
 
 	// permission / ask 及其 _done
 	ReqID    string          `json:"reqId,omitempty"`

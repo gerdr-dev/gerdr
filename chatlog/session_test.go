@@ -317,3 +317,38 @@ func TestSessionTurnCost(t *testing.T) {
 		t.Fatalf("turn_end %s (%s)", last.ProviderUsage, kinds(evs))
 	}
 }
+
+// A session opened again (the app restarted) shows how full the context was at the end of the last turn, not nothing
+// until its next request; a /clear after that turn leaves it empty.
+func TestSessionContextKeptAcrossReopen(t *testing.T) {
+	for _, c := range []struct {
+		name         string
+		log          string
+		tokens, wind int
+	}{
+		{"last turn", `{"seq":1,"kind":"turn_start"}
+{"seq":2,"kind":"turn_end","ctxTokens":1000,"ctxWindow":200000}
+{"seq":3,"kind":"turn_start"}
+{"seq":4,"kind":"turn_end","stopReason":"error","error":"401","ctxTokens":469000,"ctxWindow":524000}
+`, 469000, 524000},
+		{"cleared since", `{"seq":1,"kind":"turn_end","ctxTokens":1000,"ctxWindow":200000}
+{"seq":2,"kind":"notice","level":"clear"}
+`, 0, 0},
+		{"old log", `{"seq":1,"kind":"turn_end"}
+`, 0, 0},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			p := filepath.Join(t.TempDir(), "log.jsonl")
+			if err := os.WriteFile(p, []byte(c.log), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			s, err := chatlog.New(nil, "sid", chatlog.Options{File: p})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if st := s.State(); st.ContextTokens != c.tokens || st.ContextWindow != c.wind {
+				t.Fatalf("context = %d / %d, want %d / %d", st.ContextTokens, st.ContextWindow, c.tokens, c.wind)
+			}
+		})
+	}
+}

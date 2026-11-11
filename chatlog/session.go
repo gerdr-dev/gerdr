@@ -146,6 +146,7 @@ func New(agent Agent, sessionID string, o Options) (*Session, error) {
 		for _, e := range evs {
 			s.seq = max(s.seq, e.Seq)
 		}
+		s.st.ContextTokens, s.st.ContextWindow = lastContext(evs)
 		// A turn left open by a crash: close it, or the UI shows it running forever.
 		if open := openTurn(evs); open {
 			s.emit(&Event{Kind: EvTurnEnd, StopReason: "cancelled", Error: "interrupted"})
@@ -153,6 +154,20 @@ func New(agent Agent, sessionID string, o Options) (*Session, error) {
 		}
 	}
 	return s, nil
+}
+
+// lastContext: the context usage the last turn ended with, unless the context was cleared after it.
+func lastContext(evs []*Event) (tokens, window int) {
+	for i := len(evs) - 1; i >= 0; i-- {
+		e := evs[i]
+		if e.Kind == EvNotice && e.Level == "clear" {
+			return 0, 0
+		}
+		if e.Kind == EvTurnEnd && e.ContextTokens > 0 && e.ContextWindow > 0 {
+			return e.ContextTokens, e.ContextWindow
+		}
+	}
+	return 0, 0
 }
 
 func openTurn(evs []*Event) bool {
@@ -442,6 +457,7 @@ func (s *Session) runTurn(msgID string, content []acp.ContentBlock) {
 	ev := &Event{Kind: EvTurnEnd, MessageID: msgID}
 	s.mu.Lock()
 	ev.DurationMs, ev.OutputTokens = now()-s.st.TurnStarted, s.st.TurnTokens
+	ev.ContextTokens, ev.ContextWindow = s.st.ContextTokens, s.st.ContextWindow
 	ev.ProviderUsage = usageJSON(s.turnUsage)
 	if err != nil {
 		ev.Error, ev.StopReason = errText(err), "error"
@@ -852,10 +868,11 @@ func (s *Session) onInfo(g map[string]any) {
 			s.turnUsage = nil
 		}
 		var dur int64
-		var tok int
+		var tok, ctxT, ctxW int
 		var usage json.RawMessage
 		if end {
 			dur, tok = now()-s.st.TurnStarted, s.st.TurnTokens
+			ctxT, ctxW = s.st.ContextTokens, s.st.ContextWindow
 			usage = usageJSON(s.turnUsage)
 			s.running, s.auto = false, false
 			for id, p := range s.pending {
@@ -868,7 +885,7 @@ func (s *Session) onInfo(g map[string]any) {
 			s.emit(&Event{Kind: EvTurnStart, Auto: true, Wake: wake})
 		}
 		if end {
-			s.emit(&Event{Kind: EvTurnEnd, StopReason: string(acp.StopReasonEndTurn), Auto: true, DurationMs: dur, OutputTokens: tok, ProviderUsage: usage})
+			s.emit(&Event{Kind: EvTurnEnd, StopReason: string(acp.StopReasonEndTurn), Auto: true, DurationMs: dur, OutputTokens: tok, ProviderUsage: usage, ContextTokens: ctxT, ContextWindow: ctxW})
 			s.flush(true)
 		}
 		changed = changed || start || end
