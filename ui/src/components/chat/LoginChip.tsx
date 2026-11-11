@@ -22,10 +22,12 @@ export function LoginChip({ sessionId }: { sessionId: string }) {
   if (!login || cwd === undefined) return null;
   return (
     <>
-      <div className="mb-2 flex items-center gap-2 rounded-lg border border-warn/40 bg-warn/10 px-3 py-1.5 text-[12px]">
+      <div className="mb-2 flex items-center gap-3 rounded-xl border border-warn/40 bg-warn/10 py-1.5 pr-1.5 pl-3.5 text-[12px]">
         <span className="min-w-0 flex-1 text-warn">{t("loginChip.text")}</span>
+        {/* Same 6px from the bar's edge on every side (pr-1.5 = py-1.5), and a fill instead of an outline: a bordered
+            button inside a bordered bar read as a box squeezed into a box */}
         <button
-          className="inline-flex shrink-0 items-center gap-1 rounded-md border border-brand/40 px-2 py-0.5 text-brand hover:bg-brand/10"
+          className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-lg bg-brand/15 px-3 font-medium text-brand hover:bg-brand/25"
           onClick={() => setOpen(true)}
         >
           <LogIn className="size-3.5" />
