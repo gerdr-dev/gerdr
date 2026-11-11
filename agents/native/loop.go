@@ -51,6 +51,15 @@ type run struct {
 	input int // 最近一次请求的输入 token（上下文多大）
 }
 
+// cacheKey 是这条对话线的前缀缓存键（同时作 x-session-id 发给服务商）。子 agent 的历史和主会话完全不同，
+// 共用主会话的键会让几条线挤在同一个缓存路由上互相冲掉，服务商那边的会话也会混在一起，所以各用各的。
+func (r *run) cacheKey() string {
+	if r.sub != nil {
+		return r.s.currentID() + "/" + r.sub.toolCall
+	}
+	return r.s.currentID()
+}
+
 func (r *run) out(u acp.SessionUpdate) {
 	if r.sub != nil {
 		r.sub.out(r, u)
@@ -171,7 +180,7 @@ func (r *run) callModel(ctx context.Context) (llm.Result, bool, error) {
 	r.reqN++
 	req := llm.Request{
 		Model: r.model.ID, System: r.system, Messages: r.history(), Tools: toolDefs(r.tools),
-		Effort: r.effortValue(), Thinking: r.model.Thinking, CacheKey: r.s.currentID(), MaxTokens: r.model.MaxOutput,
+		Effort: r.effortValue(), Thinking: r.model.Thinking, CacheKey: r.cacheKey(), MaxTokens: r.model.MaxOutput,
 	}
 	res, err := r.model.client().Stream(sctx, req, func(e llm.Event) {
 		switch e.Kind {
