@@ -55,3 +55,20 @@ func TestCheckConfig(t *testing.T) {
 		t.Fatal("an option the agent lacks should be refused")
 	}
 }
+
+// optionChoices gives coordinators the picker's names next to the ids: "fable" alone doesn't say which version it is.
+func TestOptionChoices(t *testing.T) {
+	desc := "For your toughest challenges"
+	vals := acp.SessionConfigSelectOptionsUngrouped{{Value: "fable", Name: "Fable 5.2", Description: &desc}, {Value: "haiku", Name: "Haiku 5.5"}}
+	opts := []acp.SessionConfigOption{{Select: &acp.SessionConfigOptionSelect{Id: "model", Options: acp.SessionConfigSelectOptions{Ungrouped: &vals}}}}
+	got := optionChoices(opts, "model")
+	if len(got) != 2 || got[0]["id"] != "fable" || got[0]["name"] != "Fable 5.2" || got[0]["description"] != desc {
+		t.Fatalf("got %v", got)
+	}
+	if _, ok := got[1]["description"]; ok {
+		t.Fatalf("no description should mean no key, got %v", got[1])
+	}
+	if optionChoices(opts, "effort") != nil {
+		t.Fatal("an option the agent lacks should give nil")
+	}
+}

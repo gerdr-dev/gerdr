@@ -91,7 +91,7 @@ interface Ctx {
       mode?: string;
       /**
        * The model, as the agent's model picker lists it (claude: `sonnet` / `haiku` / …; codex and native: their own
-       * ids). Default: the user's default for that agent. One the agent doesn't offer is an error that lists the ones it does.
+       * ids; `agents()` lists them with their names and versions). Default: the user's default for that agent. One the agent doesn't offer is an error that lists the ones it does.
        */
       model?: string;
       /** Thinking effort (`low` / `medium` / `high` / …, whatever the agent and model offer). Default: the user's default. */
@@ -325,7 +325,21 @@ interface AgentInfo {
   available: boolean;
   /** A role's own instructions: what it is for. */
   prompt?: string;
+  /**
+   * What `sessions.start` takes as `model`, with the name the model picker shows: `{ id: "fable", name: "Fable 5.2" }`.
+   * The id is often an alias, the name says which version it is now. Absent until this kind of agent has run once here.
+   */
+  models?: AgentChoice[];
+  /** What `sessions.start` takes as `effort` (low / medium / high …); absent like `models`. */
+  efforts?: AgentChoice[];
   error?: string;
+}
+
+interface AgentChoice {
+  id: string;
+  name: string;
+  /** The picker's hint; the agent's default one says so here (claude: "默认 · …"). */
+  description?: string;
 }
 
 interface Session {

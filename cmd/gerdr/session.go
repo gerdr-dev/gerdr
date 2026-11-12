@@ -559,7 +559,7 @@ and hand it a task, wait for it to finish, read its reply. Refer to a session by
 
 	cmd.AddCommand(&cobra.Command{
 		Use:   "agents",
-		Short: i18n.S("能开哪些 agent（new --agent 填 id）：内置的 + 用户在设置里建的角色，角色带它的提示词（看它是干什么的）", "Agents you can start (pass the id to new --agent): built-in ones + roles the user made in Settings, each role with its prompt (so you can see what it's for)"),
+		Short: i18n.S("能开哪些 agent（new --agent 填 id）：内置的 + 用户在设置里建的角色，角色带它的提示词（看它是干什么的），还有可选的模型和思考强度（new --model / --effort 填 id，name 是界面上显示的名字和版本）", "Agents you can start (pass the id to new --agent): built-in ones + roles the user made in Settings, each role with its prompt (so you can see what it's for), and the models and efforts it offers (pass the id to new --model / --effort; name is what the picker shows, with the version)"),
 		RunE: func(_ *cobra.Command, _ []string) error {
 			var h struct {
 				Agents []map[string]any `json:"agents"`
@@ -578,6 +578,13 @@ and hand it a task, wait for it to finish, read its reply. Refer to a session by
 				v := map[string]any{"id": a["id"], "name": a["name"], "available": a["available"]}
 				if b, _ := a["base"].(string); b != "" {
 					v["base"] = b
+				}
+				// What new --model / --effort take, with the names the picker shows ("fable" = "Fable 5.2"):
+				// known once this kind of agent has run here
+				for _, k := range []string{"models", "efforts"} {
+					if x, ok := a[k]; ok {
+						v[k] = x
+					}
 				}
 				for _, d := range h.Config.Agents {
 					if d.ID == a["id"] && d.Prompt != "" {
@@ -604,7 +611,7 @@ and hand it a task, wait for it to finish, read its reply. Refer to a session by
 		},
 	})
 
-	var nAgent, nCwd, nTitle, nMode, nPrompt, nWorkspace, nReportTo, nHost string
+	var nAgent, nCwd, nTitle, nMode, nModel, nEffort, nPrompt, nWorkspace, nReportTo, nHost string
 	var nTags []string
 	var nWait, nFocus bool
 	var nTimeout time.Duration
@@ -635,6 +642,18 @@ and hand it a task, wait for it to finish, read its reply. Refer to a session by
 			}
 			if nMode != "" {
 				body["mode"] = nMode
+			}
+			// A model / effort the agent doesn't offer is refused with the ones it does (hub checkConfig), not quietly
+			// replaced by the default
+			config := map[string]string{}
+			if nModel != "" {
+				config["model"] = nModel
+			}
+			if nEffort != "" {
+				config["effort"] = nEffort
+			}
+			if len(config) > 0 {
+				body["config"] = config
 			}
 			tags, err := parseTags(nTags, false)
 			if err != nil {
@@ -684,6 +703,8 @@ and hand it a task, wait for it to finish, read its reply. Refer to a session by
 	newCmd.Flags().StringVar(&nHost, "host", "", i18n.S("开在另一台电脑上（gerdr session hosts 里的 id）；它的文件在那台上", "start it on another computer (an id from gerdr session hosts); its files are on that computer"))
 	newCmd.Flags().StringVar(&nTitle, "title", "", i18n.S("会话标题（之后可以用它指代这个会话）", "session title (you can refer to the session by it later)"))
 	newCmd.Flags().StringVar(&nMode, "mode", "", i18n.S("权限模式（claude: default/acceptEdits/plan/auto/bypassPermissions；codex: ask/auto/read-only/full-access；native: default/acceptEdits/plan/bypassPermissions）。不给 = 用户在设置里给这种 agent 定的默认模式（全放开的那种不算）", "permission mode (claude: default/acceptEdits/plan/auto/bypassPermissions; codex: ask/auto/read-only/full-access; native: default/acceptEdits/plan/bypassPermissions). Omitted = the default mode the user set for this agent in Settings (fully permissive ones excepted)"))
+	newCmd.Flags().StringVar(&nModel, "model", "", i18n.S("模型：gerdr session agents 里这个 agent 的 models 的 id（比如 claude 的 fable，name 写着它是哪个版本）。不给 = 设置里这种 agent 的默认模型；它没有的会报错并列出有的", "model: an id from this agent's models in gerdr session agents (e.g. claude's fable; its name says which version). Omitted = the default model set for this agent; one it doesn't offer is an error listing the ones it does"))
+	newCmd.Flags().StringVar(&nEffort, "effort", "", i18n.S("思考强度：gerdr session agents 里的 efforts 的 id（low / medium / high …）。不给 = 默认", "thinking effort: an id from efforts in gerdr session agents (low / medium / high …). Omitted = the default"))
 	newCmd.Flags().StringVar(&nPrompt, "prompt", "", i18n.S("开好之后马上发的第一句话", "first message to send once it's started"))
 	newCmd.Flags().BoolVar(&nWait, "wait", false, i18n.S("和 --prompt 一起用：等它做完，输出它的回复", "with --prompt: wait for it to finish and print its reply"))
 	newCmd.Flags().DurationVar(&nTimeout, "timeout", 30*time.Minute, i18n.S("--wait 最多等多久", "how long --wait waits at most"))

@@ -376,6 +376,46 @@ func (h *Hub) Agents() []map[string]any {
 		}
 		if ok {
 			m["options"] = o
+			// models / efforts: the values `start` takes as model / effort, with the names people see in the picker.
+			// A coordinator (a panel's router, an agent running `gerdr session agents`) picks from these; without
+			// them it only knew aliases like "fable" and couldn't tell which version they meant.
+			if c := optionChoices(o.Config, "model"); len(c) > 0 {
+				m["models"] = c
+			}
+			if c := optionChoices(o.Config, "effort"); len(c) > 0 {
+				m["efforts"] = c
+			}
+		}
+	}
+	return out
+}
+
+// optionChoices lists a select option's values as {id, name, description?}; nil when the agent has no such option.
+func optionChoices(opts []acp.SessionConfigOption, id string) []map[string]any {
+	sel, ok := selectOption(opts, id)
+	if !ok {
+		return nil
+	}
+	var out []map[string]any
+	for _, x := range selectValues(sel) {
+		c := map[string]any{"id": string(x.Value), "name": x.Name}
+		if x.Description != nil && *x.Description != "" {
+			c["description"] = *x.Description
+		}
+		out = append(out, c)
+	}
+	return out
+}
+
+// selectValues: every value a select option offers, grouped or not.
+func selectValues(o *acp.SessionConfigOptionSelect) []acp.SessionConfigSelectOption {
+	var out []acp.SessionConfigSelectOption
+	if u := o.Options.Ungrouped; u != nil {
+		out = append(out, *u...)
+	}
+	if g := o.Options.Grouped; g != nil {
+		for _, grp := range *g {
+			out = append(out, grp.Options...)
 		}
 	}
 	return out
@@ -878,36 +918,16 @@ func checkConfig(given map[string]string, opts []acp.SessionConfigOption) error 
 
 func optionValues(o *acp.SessionConfigOptionSelect) []string {
 	var out []string
-	if u := o.Options.Ungrouped; u != nil {
-		for _, x := range *u {
-			out = append(out, string(x.Value))
-		}
-	}
-	if g := o.Options.Grouped; g != nil {
-		for _, grp := range *g {
-			for _, x := range grp.Options {
-				out = append(out, string(x.Value))
-			}
-		}
+	for _, x := range selectValues(o) {
+		out = append(out, string(x.Value))
 	}
 	return out
 }
 
 func hasValue(o *acp.SessionConfigOptionSelect, v string) bool {
-	if u := o.Options.Ungrouped; u != nil {
-		for _, x := range *u {
-			if string(x.Value) == v {
-				return true
-			}
-		}
-	}
-	if g := o.Options.Grouped; g != nil {
-		for _, grp := range *g {
-			for _, x := range grp.Options {
-				if string(x.Value) == v {
-					return true
-				}
-			}
+	for _, x := range selectValues(o) {
+		if string(x.Value) == v {
+			return true
 		}
 	}
 	return false
