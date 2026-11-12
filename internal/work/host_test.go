@@ -2,6 +2,7 @@ package work
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,11 +11,12 @@ import (
 )
 
 type fakeHost struct {
-	started []StartOptions
-	project string
-	closed  []string
-	tagged  map[string]string
-	listTag map[string]string
+	started  []StartOptions
+	project  string
+	closed   []string
+	tagged   map[string]string
+	listTag  map[string]string
+	answered []string
 }
 
 func (f *fakeHost) StartSession(_ context.Context, project string, o StartOptions) (map[string]any, error) {
@@ -60,6 +62,14 @@ func (f *fakeHost) ArtifactsRename(panel, key, name string) (string, error) { re
 func (f *fakeHost) ArtifactsItems(dir string) ([]map[string]any, error)     { return nil, nil }
 func (f *fakeHost) SessionsChanged(ctx context.Context, ids []string, timeout time.Duration) ([]string, error) {
 	return nil, nil
+}
+
+func (f *fakeHost) Pending(panel, id string) ([]map[string]any, error) {
+	return []map[string]any{{"session": id, "reqId": "r1", "kind": "permission", "panel": panel}}, nil
+}
+func (f *fakeHost) Answer(panel, id, reqID string, answer json.RawMessage) error {
+	f.answered = append(f.answered, panel+" "+id+" "+reqID+" "+string(answer))
+	return nil
 }
 
 func (f *fakeHost) ArtifactsRecord(dir string, item map[string]any) (map[string]any, error) {
@@ -194,5 +204,38 @@ func TestStartParentIsCaller(t *testing.T) {
 	}
 	if len(f.started) != 2 || f.started[0].Parent != "router1" || f.started[1].Parent != "other" {
 		t.Fatalf("parents: %+v", f.started)
+	}
+}
+
+// A panel answers what its conversations wait on for a person (its page, a stream), but never for a call an agent made:
+// an agent must not approve its own requests.
+func TestAnswerNotFromAgents(t *testing.T) {
+	r, _ := newProject(t, map[string]string{
+		"a.ts": `export async function go(input: any, ctx: any) {
+  const p = ctx.sessions.pending("s1");
+  ctx.sessions.answer("s1", p[0].reqId, { optionId: "allow" });
+  return p;
+}`,
+	})
+	f := &fakeHost{}
+	r.Host = f
+	res, _, err := run(t, r, "a.go", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p := res.([]any)[0].(map[string]any); p["panel"] != "default" {
+		t.Errorf("pending for panel %v", p["panel"])
+	}
+	if len(f.answered) != 1 || f.answered[0] != `default s1 r1 {"optionId":"allow"}` {
+		t.Fatalf("answered: %v", f.answered)
+	}
+	rn := r.StartAs("", "a.go", nil, "worker1")
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if _, err := rn.Wait(ctx); err == nil || !strings.Contains(err.Error(), "an agent can't answer") {
+		t.Fatalf("an agent's call answered: %v", err)
+	}
+	if len(f.answered) != 1 {
+		t.Fatalf("answered by an agent: %v", f.answered)
 	}
 }

@@ -46,6 +46,12 @@ type Host interface {
 	// streams, a tool call) or its status — and returns those that moved; none when timeout passes first. Pushed by the
 	// hub, the way the chat follows a conversation: a panel follows conversations without polling them.
 	SessionsChanged(ctx context.Context, ids []string, timeout time.Duration) ([]string, error)
+	// Pending: what a conversation the panel started waits on a person for (approvals, questions), oldest first, in
+	// the shape add-on services get (server/addonpending.go). Answer gives one an answer as the chat's card would:
+	// {optionId} for an approval, {answers} / {skip} for a question. Both only for a conversation that panel started
+	// (its PanelTag), and Answer never for a call an agent made (the runner checks): an agent must not approve its own.
+	Pending(panel, id string) ([]map[string]any, error)
+	Answer(panel, id, reqID string, answer json.RawMessage) error
 	// Workspaces lists the project's Code workspaces (every project's with all) and the conversations in their panes.
 	Workspaces(project string, all bool) []map[string]any
 	// Agents: the agents and roles a session can start with (hub.Agents: id, name, base, available, prompt, …).
@@ -162,6 +168,36 @@ func (r *runner) sessionsObject() map[string]any {
 				return r.rejected(err)
 			}
 			return r.resolved(s)
+		},
+		// ctx.sessions.pending(id) → what a conversation this panel started waits on a person for, oldest first
+		"pending": func(id string) []map[string]any {
+			if h == nil {
+				r.throw(errNoHost)
+			}
+			out, err := h.Pending(r.project, id)
+			if err != nil {
+				r.throw(err)
+			}
+			return out
+		},
+		// ctx.sessions.answer(id, reqId, { optionId } | { answers } | { skip }) answers one of them for a person. Not
+		// for a call an agent made (a tool, `gerdr panel run` from a conversation): an agent must not approve its own
+		// requests, nor another's — only the page, a schedule, a stream or a trigger, acting on a person's word.
+		"answer": func(id, reqID string, arg goja.Value) {
+			if h == nil {
+				r.throw(errNoHost)
+			}
+			if c := callerOf(r.ctx); c != "" {
+				r.throw(fmt.Errorf("ctx.sessions.answer: called by conversation %s — an agent can't answer approvals; only a person can (the page, or what a person sent through a stream)", c))
+			}
+			var a map[string]any
+			if err := r.opts(arg, &a); err != nil {
+				r.throw(fmt.Errorf("ctx.sessions.answer: %w", err))
+			}
+			b, _ := json.Marshal(a)
+			if err := h.Answer(r.project, id, reqID, b); err != nil {
+				r.throw(err)
+			}
 		},
 		// ctx.sessions.agents() → the agents / roles `start` takes, with what a role is for (its prompt)
 		"agents": func() []map[string]any {

@@ -8,6 +8,10 @@ package server
 // Not on the event bus itself: whoever can emit an event (any panel function, `gerdr event emit`) could then approve
 // commands. Not in `gerdr session` either: an agent must not approve its own (or another agent's) requests. An add-on
 // gets it because the person installed one that asks for it.
+//
+// A panel gets the same for the conversations it started (ctx.sessions.pending / answer, workhost.go): the team panel
+// shows a teammate's agent waiting on an approval and passes the click back. Refused for a call an agent made (a panel
+// tool, `gerdr panel run` from a conversation), so an agent can't reach approvals through a panel either.
 
 import (
 	"encoding/json"

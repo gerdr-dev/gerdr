@@ -2,6 +2,26 @@
 // This file is the reference (gerdr installs and updates it; don't edit it). It declares globals, so no import is needed.
 // Every async call finishes before the next line runs (there's no event loop): `await` works as usual.
 
+/** What a conversation waits on a person for (`ctx.sessions.pending`). */
+interface PendingRequest {
+  session: string;
+  reqId: string;
+  kind: "permission" | "ask";
+  /** One line, e.g. "审批：Bash rm -rf build", in the computer's language. */
+  summary: string;
+  /** ms */
+  at: number;
+  title: string;
+  agent: string;
+  cwd: string;
+  /** permission: what it wants to do (input: the tool's arguments as the agent gave them: a command, a path…). */
+  tool?: { title: string; kind?: string; input?: unknown };
+  /** permission: the choices; answer with one's id. kind: allow_once / allow_always / reject_once / reject_always. */
+  options?: { id: string; name: string; kind: string }[];
+  /** ask: the questions. */
+  questions?: { id: string; question: string; header?: string; options?: { label: string; description?: string }[]; multiSelect?: boolean; allowOther?: boolean }[];
+}
+
 interface Ctx {
   /**
    * Runs a command-line tool. A non-zero exit isn't an error: look at `code`. Only a missing command, a timeout or a bad
@@ -160,6 +180,21 @@ interface Ctx {
      * instead of polling `get` / `read`. Rejects when none of them exists.
      */
     changed(ids: string[], opts?: { timeout?: number }): Promise<string[]>;
+    /**
+     * What a conversation this panel started waits on a person for (its status is `waiting`), oldest first: an
+     * approval (`kind: "permission"`: the `tool` it wants to run and the `options` to answer with) or a question
+     * (`kind: "ask"`: `questions`, answered by id with option labels). For showing it somewhere the chat isn't — a
+     * teammate's screen, a phone — and taking the person's answer back with `answer`. Throws for a conversation
+     * another panel or a person started.
+     */
+    pending(id: string): PendingRequest[];
+    /**
+     * Answers one of `pending(id)` for a person, as the chat's card would: `{ optionId }` (one of the request's
+     * options) for an approval, `{ answers: { [questionId]: string[] } }` or `{ skip: true }` for a question. Throws
+     * when called by an agent (a tool, or `gerdr panel run` from a conversation): an agent must never approve its
+     * own requests or another's. Answer only on a person's word: a click on the page, what they sent through a stream.
+     */
+    answer(id: string, reqId: string, answer: { optionId: string } | { answers: Record<string, string[]> } | { skip: true }): void;
     /** With `reply`: what the agent said since the last message sent to it. null when there's no such conversation. */
     get(id: string): (Session & { reply: string }) | null;
     /**

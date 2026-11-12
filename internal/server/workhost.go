@@ -10,6 +10,7 @@ import (
 	"mime"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -264,6 +265,60 @@ func (h workHost) Tag(id string, tags map[string]string) (map[string]any, error)
 		return nil, err
 	}
 	return h.view(sess.Summary(), nil), nil
+}
+
+// ownSession: a conversation the panel started (its PanelTag), for what only its own panel may do with it.
+func (h workHost) ownSession(panel, id string) (*hub.Session, error) {
+	sess, err := h.s.Hub.Session(id)
+	if err != nil {
+		return nil, err
+	}
+	if sess.Summary().Tags[PanelTag] != keyOr(panel) {
+		return nil, fmt.Errorf(i18n.S("会话 %s 不是这个面板开的", "conversation %s wasn't started by this panel"), id)
+	}
+	return sess, nil
+}
+
+// Pending: ctx.sessions.pending, in the add-on services' shape (addonpending.go): the tool and options of an approval,
+// the questions of an ask.
+func (h workHost) Pending(panel, id string) ([]map[string]any, error) {
+	sess, err := h.ownSession(panel, id)
+	if err != nil {
+		return nil, err
+	}
+	out := []map[string]any{}
+	for _, r := range sess.Pending() {
+		var m map[string]any
+		b, _ := json.Marshal(toSvcPending(r, false))
+		_ = json.Unmarshal(b, &m)
+		delete(m, "muted")
+		out = append(out, m)
+	}
+	return out, nil
+}
+
+// Answer: ctx.sessions.answer, checked against the request as an add-on's answer is (answerResponse). The runner has
+// already refused a call made by an agent.
+func (h workHost) Answer(panel, id, reqID string, answer json.RawMessage) error {
+	sess, err := h.ownSession(panel, id)
+	if err != nil {
+		return err
+	}
+	var a svcAnswer
+	if err := json.Unmarshal(answer, &a); err != nil {
+		return err
+	}
+	pending := sess.Pending()
+	i := slices.IndexFunc(pending, func(r hub.PendingReq) bool { return r.ReqID == reqID })
+	if i < 0 {
+		return errors.New(i18n.S("这个请求已经处理过了，或者过期了", "This request was already handled, or has expired"))
+	}
+	b, err := answerResponse(pending[i], a)
+	if err != nil {
+		return err
+	}
+	h.s.Log.Info("request answered by panel", "panel", keyOr(panel), "session", id, "kind", pending[i].Kind)
+	return sess.Answer(reqID, b)
 }
 
 // target resolves "work" (the project's Work agent conversation) for reportTo / send; other ids pass through.
