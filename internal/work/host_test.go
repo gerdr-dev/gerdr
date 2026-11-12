@@ -58,6 +58,10 @@ func (f *fakeHost) ArtifactsFolder(panel, key, name, under string) (map[string]a
 }
 func (f *fakeHost) ArtifactsRename(panel, key, name string) (string, error) { return "", nil }
 func (f *fakeHost) ArtifactsItems(dir string) ([]map[string]any, error)     { return nil, nil }
+func (f *fakeHost) SessionsChanged(ctx context.Context, ids []string, timeout time.Duration) ([]string, error) {
+	return nil, nil
+}
+
 func (f *fakeHost) ArtifactsRecord(dir string, item map[string]any) (map[string]any, error) {
 	return item, nil
 }

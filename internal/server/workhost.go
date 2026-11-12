@@ -735,3 +735,68 @@ func (s *Server) workDir(project string) (string, error) {
 	}
 	return s.Work.Dir(project)
 }
+
+// SessionsChanged: ctx.sessions.changed. Follows the conversations as the chat does (a hub subscription watching
+// their logs): a new event past what they had, or a different status, is a move.
+func (h workHost) SessionsChanged(ctx context.Context, ids []string, timeout time.Duration) ([]string, error) {
+	type mark struct {
+		seq    int64
+		status string
+	}
+	before := map[string]mark{}
+	since := map[string]int64{}
+	for _, id := range ids {
+		s, err := h.s.Hub.Session(id)
+		if err != nil {
+			continue
+		}
+		sum := s.Summary()
+		before[id] = mark{sum.LastSeq, sum.Status}
+		since[id] = sum.LastSeq
+	}
+	if len(before) == 0 {
+		return nil, fmt.Errorf("没有这些会话")
+	}
+	sub := h.s.Hub.Subscribe()
+	defer h.s.Hub.Unsubscribe(sub)
+	watch := make([]string, 0, len(before))
+	for id := range before {
+		watch = append(watch, id)
+	}
+	h.s.Hub.Watch(sub, watch, since)
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return []string{}, nil
+		case <-timer.C:
+			return []string{}, nil
+		case m, ok := <-sub.C():
+			if !ok {
+				return []string{}, nil
+			}
+			b, watched := before[m.ID]
+			if !watched {
+				continue
+			}
+			moved := false
+			switch m.T {
+			case "events":
+				// The first frame repeats what it had (a reset after a restart): only events past it count
+				for _, e := range m.Events {
+					if e.Seq > b.seq {
+						moved = true
+					}
+				}
+			case "session":
+				moved = m.Session != nil && (m.Session.Status != b.status || m.Session.LastSeq > b.seq)
+			case "session_removed":
+				moved = true
+			}
+			if moved {
+				return []string{m.ID}, nil
+			}
+		}
+	}
+}

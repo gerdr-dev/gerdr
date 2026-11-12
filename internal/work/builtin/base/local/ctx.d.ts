@@ -153,6 +153,13 @@ interface Ctx {
      * (claude / codex / native) and usually a `prompt`: what it's for, in the user's words — what to pick it by.
      */
     agents(): AgentInfo[];
+    /**
+     * Waits until one of these conversations moves — something new in it (a message, the agent's text as it streams, a
+     * tool call) or its status — and resolves with the ids that moved; [] when `timeout` (ms, default 30 s, at most
+     * 60 s) passes first. Pushed by gerdr as the chat follows a conversation: follow conversations with it in a loop
+     * instead of polling `get` / `read`. Rejects when none of them exists.
+     */
+    changed(ids: string[], opts?: { timeout?: number }): Promise<string[]>;
     /** With `reply`: what the agent said since the last message sent to it. null when there's no such conversation. */
     get(id: string): (Session & { reply: string }) | null;
     /**

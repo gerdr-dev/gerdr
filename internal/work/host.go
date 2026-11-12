@@ -42,6 +42,10 @@ type Host interface {
 	Close(ctx context.Context, id string) error
 	// Tag changes a conversation's tags ("" removes a key).
 	Tag(id string, tags map[string]string) (map[string]any, error)
+	// SessionsChanged waits until one of ids moves — something new in its log (a message, the agent's text as it
+	// streams, a tool call) or its status — and returns those that moved; none when timeout passes first. Pushed by the
+	// hub, the way the chat follows a conversation: a panel follows conversations without polling them.
+	SessionsChanged(ctx context.Context, ids []string, timeout time.Duration) ([]string, error)
 	// Workspaces lists the project's Code workspaces (every project's with all) and the conversations in their panes.
 	Workspaces(project string, all bool) []map[string]any
 	// Agents: the agents and roles a session can start with (hub.Agents: id, name, base, available, prompt, …).
@@ -176,6 +180,31 @@ func (r *runner) sessionsObject() map[string]any {
 				return nil
 			}
 			return s
+		},
+		// ctx.sessions.changed(ids, { timeout? }) → the ids that moved (a new event in the log, or the status), or []
+		// after timeout (ms, 60 s at most, default 30 s). Instead of polling get / read: the hub pushes it.
+		"changed": func(ids []string, arg goja.Value) *goja.Promise {
+			if h == nil {
+				r.throw(errNoHost)
+			}
+			var o struct {
+				Timeout int64 `json:"timeout"`
+			}
+			if err := r.opts(arg, &o); err != nil {
+				r.throw(fmt.Errorf("ctx.sessions.changed: %w", err))
+			}
+			d := time.Duration(o.Timeout) * time.Millisecond
+			if d <= 0 {
+				d = 30 * time.Second
+			}
+			if d > time.Minute {
+				d = time.Minute
+			}
+			moved, err := h.SessionsChanged(r.ctx, ids, d)
+			if err != nil {
+				return r.rejected(err)
+			}
+			return r.resolved(moved)
 		},
 		// ctx.sessions.read(id, { last? }) → [{ role, text, at, from? }] or null: what was said in it, no tool calls. A
 		// panel shows a conversation where Gerdr's chat can't (another computer's, synced through the panel's own
