@@ -453,6 +453,9 @@ const CODE_KEYS: Record<string, [string, string]> = {
 
 /** 一个按键事件对应的键名（字母一律小写，shift 另记）。 */
 export function eventKey(e: KeyboardEvent): { key: string; sym: string } {
+  // Not every "keydown" is a real KeyboardEvent: Chrome's autofill / Android's native <select> picker dispatch a plain
+  // Event("keydown") with no key or code, and reading them threw on every such pick.
+  if (typeof e.code !== "string" || typeof e.key !== "string") return { key: "", sym: "" };
   if (e.code.startsWith("Key")) {
     const k = e.code.slice(3).toLowerCase();
     return { key: k, sym: k };

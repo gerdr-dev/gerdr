@@ -82,6 +82,8 @@ export function captureKeys(f: (e: KeyboardEvent) => void) {
 }
 
 export function handleKeydown(e: KeyboardEvent): boolean {
+  // A synthetic keydown (autofill, a native picker) carries no key: nothing to match, and capture() can't record it.
+  if (typeof e.key !== "string" || !e.key) return false;
   if (isModifierOnly(e)) return false;
   if (capture && !e.isComposing) {
     e.preventDefault();
