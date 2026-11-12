@@ -40,10 +40,13 @@ func (s *Session) SendFrom(ctx context.Context, content []acp.ContentBlock, clie
 	return s.SendWith(ctx, content, SendOpts{ClientID: clientID, From: from, Urgent: urgent})
 }
 
-// SendOpts: SendFrom's arguments, plus Fold (Event.Fold: the chat shows the message folded to that line).
+// SendOpts: SendFrom's arguments, plus Fold (Event.Fold: the chat shows the message folded to that line) and Show.
+// A message no person typed (code's, another agent's) folds to its first line unless it gives its own Fold or Show:
+// the user's rule, "everything that isn't me typing or the AI answering should be condensed and set apart". Show is
+// for what the person should read whole (a worker's answer passed on, their own words relayed).
 type SendOpts struct {
 	ClientID, From, Fold string
-	Urgent               bool
+	Urgent, Show         bool
 }
 
 // SendWith is SendFrom with every option.
@@ -64,6 +67,12 @@ func (s *Session) SendWith(ctx context.Context, content []acp.ContentBlock, o Se
 	// a local function's ctx.sessions.send gives neither, another agent's send names itself in from.
 	_, idErr := uuid.Parse(clientID)
 	person := from == "" && idErr == nil
+	if !person && fold == "" && !o.Show {
+		fold = firstLine(content, 80)
+	}
+	if o.Show {
+		fold = ""
+	}
 	if idErr == nil {
 		msgID = clientID
 		s.mu.Lock()
@@ -444,4 +453,22 @@ func (s *Session) Cancel(ctx context.Context) error {
 		return err
 	}
 	return c.Conn.Cancel(ctx, acp.CancelNotification{SessionId: acp.SessionId(sid)})
+}
+
+// firstLine: the message's first non-empty line of text, cut to n runes: what a message no person typed folds to.
+func firstLine(content []acp.ContentBlock, n int) string {
+	for _, b := range content {
+		if b.Text == nil || strings.HasPrefix(b.Text.Text, shellPrefix) || strings.HasPrefix(b.Text.Text, handoffPrefix) {
+			continue
+		}
+		for _, l := range strings.Split(b.Text.Text, "\n") {
+			if l = strings.TrimSpace(l); l != "" {
+				if r := []rune(l); len(r) > n {
+					return string(r[:n]) + "…"
+				}
+				return l
+			}
+		}
+	}
+	return ""
 }

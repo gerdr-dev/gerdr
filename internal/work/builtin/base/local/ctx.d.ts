@@ -138,8 +138,9 @@ interface Ctx {
        * must restart (another agent or model) while the person keeps reading one conversation. It must not be running.
        */
       continueFrom?: string;
-      /** The first message (prompt) shown folded to this line, as `send`'s `fold`. */
+      /** The first message (prompt): as `send`'s `fold` / `show`. */
       fold?: string;
+      show?: boolean;
     }): Promise<Session>;
     /**
      * The agents and roles `start` takes as `agent`. A role (one the user set up in Settings → Agent) has a `base`
@@ -168,9 +169,11 @@ interface Ctx {
      * reads the message at once, so a worker busy with a long step still takes it.
      * `fold`: the chat shows the message folded to this one line, a click opens all of it; the agent gets the whole
      * text either way. For inputs code hands an agent that the person reading its chat skips (a message to triage, a
-     * check's findings); never for what they should read. Gerdr doesn't decide what folds: the sender does.
+     * check's findings). Without `fold`, a message from code folds to its first line anyway (only what a person types
+     * shows whole, besides the agent's own replies); `show: true` shows it whole, for what the person should read (a
+     * worker's answer passed on, their own words relayed).
      */
-    send(id: string, text: string, opts?: { attachments?: string[]; now?: boolean; fold?: string }): Promise<Session>;
+    send(id: string, text: string, opts?: { attachments?: string[]; now?: boolean; fold?: string; show?: boolean }): Promise<Session>;
     /**
      * Stops its agent and takes it off the screen, like closing its tab: the conversation is kept and `send` carries on
      * from where it was. For a worker whose task is done or parked, so it stops holding a process.

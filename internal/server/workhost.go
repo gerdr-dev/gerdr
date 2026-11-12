@@ -102,7 +102,7 @@ func (s *Server) sendFirst(ctx context.Context, sess *hub.Session, o work.StartO
 	}
 	blocks, err := withAttachments(o.Prompt, o.Attachments)
 	if err == nil {
-		_, err = sess.SendWith(ctx, blocks, hub.SendOpts{Fold: o.Fold})
+		_, err = sess.SendWith(ctx, blocks, hub.SendOpts{Fold: o.Fold, Show: o.Show})
 	}
 	if err != nil {
 		return fmt.Errorf("opened %s but the first message didn't go: %w", sess.ID(), err)
@@ -289,7 +289,7 @@ func (h workHost) Send(ctx context.Context, project, id, text string, o work.Sen
 	if err != nil {
 		return nil, err
 	}
-	if _, err := sess.SendWith(ctx, blocks, hub.SendOpts{Urgent: o.Now, Fold: o.Fold}); err != nil {
+	if _, err := sess.SendWith(ctx, blocks, hub.SendOpts{Urgent: o.Now, Fold: o.Fold, Show: o.Show}); err != nil {
 		return nil, err
 	}
 	return h.view(sess.Summary(), nil), nil

@@ -61,6 +61,9 @@ type SendOptions struct {
 	// text block's _meta.gerdr.fold). For inputs code hands an agent that the person reads past; the agent gets the
 	// whole message either way.
 	Fold string `json:"fold,omitempty"`
+	// Show: shown whole. A message from code otherwise folds to its first line (no Fold given): for what the person
+	// should read (a worker's answer passed on, their own words relayed).
+	Show bool `json:"show,omitempty"`
 }
 
 // StartOptions is ctx.sessions.start's argument.
@@ -94,8 +97,9 @@ type StartOptions struct {
 	// ContinueFrom: a conversation (of this panel's) this new one carries on: its chat is copied above and the first
 	// message brings it along to the agent (hub handoff.go), so the person reads one conversation across the switch.
 	ContinueFrom string `json:"continueFrom,omitempty"`
-	// Fold: the first message (prompt) drawn folded to this line, as SendOptions.Fold.
+	// Fold / Show: the first message (prompt), as SendOptions'.
 	Fold string `json:"fold,omitempty"`
+	Show bool   `json:"show,omitempty"`
 }
 
 var errNoHost = errors.New("not available here: ctx.sessions / ctx.workspaces need Gerdr's server")

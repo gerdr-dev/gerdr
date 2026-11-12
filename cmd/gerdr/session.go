@@ -837,7 +837,7 @@ and hand it a task, wait for it to finish, read its reply. Refer to a session by
 	}
 	sendCmd.Flags().BoolVar(&sWait, "wait", false, i18n.S("等它做完，输出它这一轮的回复", "wait for it to finish and print its reply for this turn"))
 	sendCmd.Flags().StringArrayVar(&sFiles, "file", nil, i18n.S("随消息带上这个文件（可以给多个）；对方在另一台电脑上时会先拷过去，它拿到的是那台上的路径", "attach this file (repeatable); for a session on another computer it is copied there first, and it gets the path there"))
-	sendCmd.Flags().StringVar(&sFold, "fold", "", i18n.S("在对方的聊天里把这条消息折成这一行（点开看全文），给人读的时候能略过的输入用；对方收到的还是全文", "draw this message folded to this one line in its chat (a click shows all of it), for input a person reading the chat can skip; the agent still gets the whole message"))
+	sendCmd.Flags().StringVar(&sFold, "fold", "", i18n.S("在对方的聊天里这条消息折成的那一行（点开看全文）；不给就用第一行。对方收到的总是全文", "the one line this message folds to in its chat (a click shows all of it); default its first line. The agent always gets the whole message"))
 	sendCmd.Flags().DurationVar(&sTimeout, "timeout", 30*time.Minute, i18n.S("--wait 最多等多久", "how long --wait waits at most"))
 	cmd.AddCommand(sendCmd)
 

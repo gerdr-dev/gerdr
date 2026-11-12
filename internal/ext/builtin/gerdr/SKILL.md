@@ -195,9 +195,8 @@ gerdr session send reviewer "Also check the tests." --wait
 
 它正在跑的话，消息会插进它当前这一轮（不打断）。对方界面上会标出「来自会话 X」，它知道是你发的。
 
-A long input the person reading that chat can skip (a log, a list it needs to judge from) can go with
-`--fold "one line"`: their chat shows that line, a click opens the rest; the agent still gets all of it. Leave it off
-for anything they should read.
+In that session's chat your message shows folded to its first line (a click opens the rest; only what a person
+types shows whole); `--fold "one line"` gives the line yourself. The agent always gets all of it.
 
 **别给用户自己正在对话的会话发消息**，除非用户明确要你这么做。
 
