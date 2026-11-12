@@ -428,7 +428,9 @@ export class Transcript {
     }
     switch (e.kind) {
       case "user": {
-        const only = e.content?.length === 1 && e.content[0].type === "text" ? e.content[0].text : undefined;
+        // `!` output / handoff blocks ride in front of whatever is sent next, "allow and retry" included: look past them
+        const own = (e.content ?? []).filter((c) => !(c.type === "text" && (isShellContext(c.text) || isHandoffContext(c.text))));
+        const only = own.length === 1 && own[0].type === "text" ? own[0].text : undefined;
         const mb = only !== undefined ? machineBlock(only) : undefined;
         // Before the notice branch: it breaks early, and a sending bubble left behind stays on screen for good
         if (e.messageId) this.dropSending(e.messageId);
@@ -457,6 +459,8 @@ export class Transcript {
         }
         if (mb?.notice) {
           this.messages = [...this.messages];
+          // It carried `!` output: those parked cards ran before it, same as for a bubble below
+          if (own.length < (e.content?.length ?? 0)) this.landParked();
           this.pushPart(this.assistant(e.ts), { type: "data-notice", data: mb.notice });
           break;
         }
