@@ -47,6 +47,8 @@ export function localPath(src: unknown): string | null {
   else if (/^[a-z][a-z0-9+.-]*:/i.test(s) && !/^[a-z]:[\\/]/i.test(s)) return null; // https:、data:、blob:……（C:\ 是 Windows 的盘符）
   // /C:/x（file:///C:/x 去掉 file://，或 Markdown 里改写过的，见 Markdown.tsx 的 fixWindowsPaths）：Windows 路径
   if (/^\/[a-z]:[\\/]/i.test(s)) return s.slice(1);
+  // /~/x: a path from the home folder, rewritten so the sanitizer lets it through (Markdown.tsx fixWindowsPaths)
+  if (/^\/~[\\/]/.test(s)) return s.slice(1);
   if (/^[a-z]:[\\/]/i.test(s)) return s;
   if (s.startsWith("//")) return null;
   if (s.startsWith("/api/") || s.startsWith("/_")) return null; // 本服务自己的地址

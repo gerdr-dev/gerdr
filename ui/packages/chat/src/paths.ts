@@ -107,7 +107,8 @@ export function localHref(h: string | undefined): string | undefined {
   if (!h || h.startsWith("//")) return;
   if (!/^(file:\/\/|~\/|\.{1,2}\/|\/)/.test(h)) return;
   // micromark 把链接目标百分号编码了（中文文件名 → %E6…），原样去 stat 一定找不到
-  const raw = h.startsWith("file://") ? h.slice("file://".length) : h;
+  // /~/…: a path from home, rewritten so the sanitizer lets it through (Markdown.tsx fixWindowsPaths)
+  const raw = h.startsWith("file://") ? h.slice("file://".length) : /^\/~[\\/]/.test(h) ? h.slice(1) : h;
   try {
     return decodeURIComponent(raw);
   } catch {

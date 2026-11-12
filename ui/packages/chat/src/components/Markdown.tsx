@@ -180,8 +180,14 @@ const urlTransform = (url: string) => (localPath(url) !== null || /^https?:|^mai
 // as a protocol (`c:`), which rehype-harden blocks outright: written /C:/… with forward slashes it passes as a path
 // (localPath drops the leading /).
 const winDest = /\]\((<?)(?:file:\/\/\/?)?\/?([a-zA-Z]:[\\/][^)>\n]*)(>?)\)/g;
-export const fixWindowsPaths = (md: string) =>
-  md.includes(":\\") || md.includes(":/") ? md.replace(winDest, (_m, a: string, p: string, b: string) => `](${a}/${p.replace(/\\/g, "/")}${b})`) : md;
+// A path from the home folder (`](~/Gerdr/x.png)`): rehype-harden reads ~/… as a relative address and blocks an image
+// there, so it goes in as /~/… (localPath drops the leading /, the server expands ~). Written from home is how a path
+// is the same on every computer (a Mac's /Users/x, a Windows C:\Users\x): what agents write for shared folders.
+const homeDest = /\]\((<?)~\//g;
+export const fixWindowsPaths = (md: string) => {
+  if (md.includes("](~/") || md.includes("](<~/")) md = md.replace(homeDest, (_m, a: string) => `](${a}/~/`);
+  return md.includes(":\\") || md.includes(":/") ? md.replace(winDest, (_m, a: string, p: string, b: string) => `](${a}/${p.replace(/\\/g, "/")}${b})`) : md;
+};
 
 const components: Components = { a: A, img: Img, p: P, inlineCode: InlineCode, code: CodeBlock };
 
