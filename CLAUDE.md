@@ -42,7 +42,7 @@ github.com/zbysir/lightron, where browser-side changes go as general hooks — t
   CSS rule that silently does nothing → docs/dev/TAILWIND.md. Also there: a phone drawing one wrong frame (boxes missing,
   text on text) when an animation ends, which looks like Tailwind and is compositing.
 - `@gerdr/chat` (ui/packages/chat) also serves outside hosts (apps that install it from npm), and every change they need
-  costs an npm publish that the user has to approve in a browser. So a host's new chat feature lives in the host, built
+  costs a release (a `chat-v<version>` tag, published by CI: docs/dev/CHAT-RELEASE.md) and every host's upgrade. So a host's new chat feature lives in the host, built
   on the existing slots, `ChatHost` hooks and `memoryDrafts`. When the package itself must change, add a general hook
   that hands the whole class of behaviour to hosts, not the one feature. Two known gaps, left open on purpose until the
   next host need hits one: attachments (the Composer only knows images / videos and `localPath`; a hook would let the

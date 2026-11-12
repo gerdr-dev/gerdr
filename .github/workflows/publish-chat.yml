@@ -1,0 +1,40 @@
+# Publishes @gerdr/chat (ui/packages/chat) to npm when a tag chat-v<version> is pushed. docs/dev/CHAT-RELEASE.md.
+#
+# Through npm's trusted publishing (OIDC): npm trusts this repository's workflow by name (set once on npmjs.com, the
+# package's Settings → Trusted Publisher), so there's no token to keep and no 2FA prompt per release. A publish from a
+# laptop needed a security-key tap every time, and tokens that skip 2FA are being phased out by npm.
+name: publish @gerdr/chat
+
+on:
+  push:
+    tags: ["chat-v*"]
+
+permissions:
+  contents: read
+  id-token: write # the OIDC token npm checks, and the provenance attestation
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ui/packages/chat
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      # Trusted publishing needs npm 11.5.1 or newer
+      - run: npm install -g npm@latest
+      # The tag says which version is meant; package.json must say the same, or the wrong one would go out
+      - name: Tag matches package.json
+        run: |
+          want="${GITHUB_REF_NAME#chat-v}"
+          have="$(node -p 'require("./package.json").version')"
+          if [ "$want" != "$have" ]; then echo "tag $GITHUB_REF_NAME but package.json says $have"; exit 1; fi
+      # Only this package's own dependencies (esbuild, tailwind, tsc for the build): not the ui/ workspace, whose
+      # pnpm settings are for working on Gerdr
+      - run: npm install --no-package-lock --no-audit --no-fund
+      # prepublishOnly builds dist/ (node build.mjs)
+      - run: npm publish --provenance --access public
