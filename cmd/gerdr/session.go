@@ -684,7 +684,7 @@ and hand it a task, wait for it to finish, read its reply. Refer to a session by
 				printJSON(s.view(self))
 				return nil
 			}
-			if err := c.sendTo(s.ID, nPrompt, self); err != nil {
+			if err := c.sendTo(s.ID, nPrompt, self, ""); err != nil {
 				return err
 			}
 			if !nWait {
@@ -796,6 +796,7 @@ and hand it a task, wait for it to finish, read its reply. Refer to a session by
 	var sWait bool
 	var sTimeout time.Duration
 	var sFiles []string
+	var sFold string
 	sendCmd := &cobra.Command{
 		Use:   i18n.S("send <会话> <消息>", "send <session> <message>"),
 		Short: i18n.S("给一个会话发消息（它在跑就插话进去）", "Send a message to a session (interjects if it's running)"),
@@ -819,7 +820,7 @@ and hand it a task, wait for it to finish, read its reply. Refer to a session by
 			if err != nil {
 				return err
 			}
-			if err := c.sendTo(s.ID, args[1], self, files...); err != nil {
+			if err := c.sendTo(s.ID, args[1], self, sFold, files...); err != nil {
 				return err
 			}
 			// 发给一个关掉的会话：顺手把它开回界面上（开在你旁边、不抢焦点），不然人看不见它在干活。
@@ -836,6 +837,7 @@ and hand it a task, wait for it to finish, read its reply. Refer to a session by
 	}
 	sendCmd.Flags().BoolVar(&sWait, "wait", false, i18n.S("等它做完，输出它这一轮的回复", "wait for it to finish and print its reply for this turn"))
 	sendCmd.Flags().StringArrayVar(&sFiles, "file", nil, i18n.S("随消息带上这个文件（可以给多个）；对方在另一台电脑上时会先拷过去，它拿到的是那台上的路径", "attach this file (repeatable); for a session on another computer it is copied there first, and it gets the path there"))
+	sendCmd.Flags().StringVar(&sFold, "fold", "", i18n.S("在对方的聊天里把这条消息折成这一行（点开看全文），给人读的时候能略过的输入用；对方收到的还是全文", "draw this message folded to this one line in its chat (a click shows all of it), for input a person reading the chat can skip; the agent still gets the whole message"))
 	sendCmd.Flags().DurationVar(&sTimeout, "timeout", 30*time.Minute, i18n.S("--wait 最多等多久", "how long --wait waits at most"))
 	cmd.AddCommand(sendCmd)
 
@@ -1038,13 +1040,16 @@ func (c *apiClient) hostCwd(host, cwd string) (string, error) {
 	return "", errors.New(i18n.S("--host 时 --cwd 要写绝对路径或 ~/…", "with --host, --cwd must be absolute or ~/…"))
 }
 
-func (c *apiClient) sendTo(id, text, from string, files ...map[string]string) error {
+// sendTo sends text (and files) to session id. fold: a one-line summary the chat draws the message folded to
+// (chatlog.Event.Fold); "" = shown whole.
+func (c *apiClient) sendTo(id, text, from, fold string, files ...map[string]string) error {
 	content := []map[string]string{{"type": "text", "text": text}}
 	content = append(content, files...)
 	return c.do("POST", "/api/sessions/"+id+"/send", map[string]any{
 		"content": content,
 		"id":      uuid.NewString(),
 		"from":    from,
+		"fold":    strings.TrimSpace(fold),
 	}, nil)
 }
 

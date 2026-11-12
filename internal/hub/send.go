@@ -37,6 +37,18 @@ func (s *Session) Send(ctx context.Context, content []acp.ContentBlock, clientID
 // SendFrom：from 是发送方的会话 id（另一个 agent 经 `gerdr session send` 发来的），记在日志里给界面标出来。
 // urgent：在跑时立即插话（截断当前这次生成），见 acpx.SteerRequest.Now；不在跑时没区别。
 func (s *Session) SendFrom(ctx context.Context, content []acp.ContentBlock, clientID, from string, urgent bool) (SendResult, error) {
+	return s.SendWith(ctx, content, SendOpts{ClientID: clientID, From: from, Urgent: urgent})
+}
+
+// SendOpts: SendFrom's arguments, plus Fold (Event.Fold: the chat shows the message folded to that line).
+type SendOpts struct {
+	ClientID, From, Fold string
+	Urgent               bool
+}
+
+// SendWith is SendFrom with every option.
+func (s *Session) SendWith(ctx context.Context, content []acp.ContentBlock, o SendOpts) (SendResult, error) {
+	clientID, from, urgent, fold := o.ClientID, o.From, o.Urgent, strings.TrimSpace(o.Fold)
 	// Nothing typed is still a message when `!` output is waiting to go along (shell.go): sending it on its own is how
 	// the user hands the agent a command's result without having to say something
 	if len(content) == 0 {
@@ -108,7 +120,7 @@ func (s *Session) SendFrom(ctx context.Context, content []acp.ContentBlock, clie
 			j, _ := json.Marshal(b)
 			raw = append(raw, j)
 		}
-		if s.deferCommand(msgID, from, content, raw) {
+		if s.deferCommand(msgID, from, fold, content, raw) {
 			return SendResult{MessageID: msgID, Steered: true}, nil
 		}
 		s.mu.Lock()
@@ -173,7 +185,7 @@ func (s *Session) SendFrom(ctx context.Context, content []acp.ContentBlock, clie
 					s.personSaid = PersonSaid{Text: contentText(raw), At: now()}
 					s.mu.Unlock()
 				}
-				s.emit(&Event{Kind: EvUser, MessageID: msgID, Content: raw, Steer: true, Now: urgent, From: from})
+				s.emit(&Event{Kind: EvUser, MessageID: msgID, Content: raw, Steer: true, Now: urgent, From: from, Fold: fold})
 				s.mu.Lock()
 				early := s.steering[msgID]
 				delete(s.steering, msgID)
@@ -188,7 +200,7 @@ func (s *Session) SendFrom(ctx context.Context, content []acp.ContentBlock, clie
 			if res.Outcome == acpx.SteerHold {
 				// This turn can't take a steer (Codex's compact turn): hold it like a mid-turn command and send it
 				// once the turn ends. It used to come back as an error and the message was gone (user report).
-				if s.deferCommand(msgID, from, content, raw) {
+				if s.deferCommand(msgID, from, fold, content, raw) {
 					return SendResult{MessageID: msgID, Steered: true}, nil
 				}
 				break // the turn ended meanwhile: send it as a new one
@@ -221,7 +233,7 @@ func (s *Session) SendFrom(ctx context.Context, content []acp.ContentBlock, clie
 	}
 	s.mu.Unlock()
 
-	s.emit(&Event{Kind: EvUser, MessageID: msgID, Content: raw, From: from})
+	s.emit(&Event{Kind: EvUser, MessageID: msgID, Content: raw, From: from, Fold: fold})
 	s.emit(&Event{Kind: EvTurnStart, MessageID: msgID})
 	s.touchTitle(content)
 	s.setStatus()

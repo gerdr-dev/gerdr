@@ -102,7 +102,7 @@ func (s *Server) sendFirst(ctx context.Context, sess *hub.Session, o work.StartO
 	}
 	blocks, err := withAttachments(o.Prompt, o.Attachments)
 	if err == nil {
-		_, err = sess.SendFrom(ctx, blocks, "", "", false)
+		_, err = sess.SendWith(ctx, blocks, hub.SendOpts{Fold: o.Fold})
 	}
 	if err != nil {
 		return fmt.Errorf("opened %s but the first message didn't go: %w", sess.ID(), err)
@@ -276,7 +276,7 @@ func (h workHost) target(project, id string) (string, error) {
 	return "", errors.New(i18n.S("这个面板的助手还没有对话：先打开这个面板", "this panel's agent has no conversation yet: open the panel first"))
 }
 
-func (h workHost) Send(ctx context.Context, project, id, text string, attachments []string, now bool) (map[string]any, error) {
+func (h workHost) Send(ctx context.Context, project, id, text string, o work.SendOptions) (map[string]any, error) {
 	id, err := h.target(project, id)
 	if err != nil {
 		return nil, err
@@ -285,11 +285,11 @@ func (h workHost) Send(ctx context.Context, project, id, text string, attachment
 	if err != nil {
 		return nil, err
 	}
-	blocks, err := withAttachments(text, attachments)
+	blocks, err := withAttachments(text, o.Attachments)
 	if err != nil {
 		return nil, err
 	}
-	if _, err := sess.SendFrom(ctx, blocks, "", "", now); err != nil {
+	if _, err := sess.SendWith(ctx, blocks, hub.SendOpts{Urgent: o.Now, Fold: o.Fold}); err != nil {
 		return nil, err
 	}
 	return h.view(sess.Summary(), nil), nil

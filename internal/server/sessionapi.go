@@ -427,6 +427,7 @@ func (s *Server) send(r *http.Request, sess *hub.Session) (any, error) {
 		ID      string             `json:"id"`   // client 生成的 UUID：重发同一条时去重
 		From    string             `json:"from"` // 别的会话经 gerdr session send 发来的：发送方会话 id
 		Now     bool               `json:"now"`  // 在跑时立即插话（截断当前这次生成），默认排到下一个空档
+		Fold    string             `json:"fold"` // the chat draws it folded to this line (chatlog.Event.Fold)
 	}
 	if err := decode(r, &b); err != nil {
 		return nil, err
@@ -437,7 +438,7 @@ func (s *Server) send(r *http.Request, sess *hub.Session) (any, error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	return sess.SendFrom(ctx, b.Content, b.ID, b.From, b.Now)
+	return sess.SendWith(ctx, b.Content, hub.SendOpts{ClientID: b.ID, From: b.From, Urgent: b.Now, Fold: b.Fold})
 }
 
 func (s *Server) sessionOp(fn func(*http.Request, *hub.Session) (any, error)) http.HandlerFunc {

@@ -46,6 +46,32 @@ type Props = {
 };
 
 /** 这条消息是别的会话里的 agent 发来的（gerdr session send）：标出来源，点一下跳过去。 */
+/**
+ * A message its sender asked to fold (GMeta.fold): one muted line with the sender's summary, opened in place to the
+ * whole bubble. For inputs code hands an agent (a message to triage, a check's findings), which the person reading
+ * the chat needs to know came in, rarely to read in full.
+ */
+function FoldedUser({ summary, from, ts, children }: { summary: string; from?: string; ts?: number; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="flex min-w-0 flex-col gap-1">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        title={open ? t("msg.foldClose") : t("msg.foldOpen")}
+        className="ml-auto flex max-w-[max(80%,280px)] min-w-0 items-center gap-1.5 rounded-md px-2 py-1 text-[12px] text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+      >
+        <ChevronDown className={cn("size-3.5 shrink-0 transition-transform", !open && "-rotate-90")} />
+        <span className="min-w-0 truncate">{summary}</span>
+        {from && <FromLabel id={from} />}
+        {ts ? <span className="shrink-0 tabular-nums">{fmtTime(ts)}</span> : null}
+      </button>
+      {open && children}
+    </div>
+  );
+}
+
 function FromLabel({ id }: { id: string }) {
   const host = useChatHost();
   const name = host.useSessionTitle?.(id) ?? id.slice(0, 8);
@@ -178,7 +204,7 @@ export const MessageView = memo(function MessageView({
     const canRewind = !!onRewind && !!meta?.messageId && (!meta?.steer || steerRewind) && !meta?.sending && !running;
     // 元信息（时间、来源）在气泡下面一行小灰字（照 Astryx ChatMessageMetadata）；一摞连发的只在最后一条下面写时间
     const showMeta = !stackNext || !!meta?.from || !!meta?.steer;
-    return (
+    const bubble = (
       // Sending (the server hasn't logged it yet, see Transcript.sending): half transparent. The logged copy keeps the row's
       // key (messageId), so the same element fades in; slow enough to be seen (asked for: the default 150ms read as a jump)
       <Message from="user" className={cn("group/user gap-1 transition-opacity duration-500 ease-out", meta?.sending && "opacity-50")}>
@@ -256,6 +282,13 @@ export const MessageView = memo(function MessageView({
           </div>
         )}
       </Message>
+    );
+    return meta?.fold ? (
+      <FoldedUser summary={meta.fold} from={meta.from} ts={meta.ts}>
+        {bubble}
+      </FoldedUser>
+    ) : (
+      bubble
     );
   }
 

@@ -28,9 +28,9 @@ import (
 // to wait for); it goes in as a steer and the agent runs it there.
 
 type deferredMsg struct {
-	id, from string
-	content  []acp.ContentBlock
-	logged   chan struct{} // closed once its queued user event is in the log (dispatch removes that event)
+	id, from, fold string
+	content        []acp.ContentBlock
+	logged         chan struct{} // closed once its queued user event is in the log (dispatch removes that event)
 }
 
 // commandName: the slash command the message starts with ("" = none). Same reading as the agents': the first block
@@ -89,8 +89,8 @@ func (s *Session) agentCommand(content []acp.ContentBlock) (ok, midTurn bool) {
 }
 
 // deferCommand holds the command until the running turn ends. False: the turn ended meanwhile, send it normally.
-func (s *Session) deferCommand(msgID, from string, content []acp.ContentBlock, raw []json.RawMessage) bool {
-	d := &deferredMsg{id: msgID, from: from, content: content, logged: make(chan struct{})}
+func (s *Session) deferCommand(msgID, from, fold string, content []acp.ContentBlock, raw []json.RawMessage) bool {
+	d := &deferredMsg{id: msgID, from: from, fold: fold, content: content, logged: make(chan struct{})}
 	s.mu.Lock()
 	if !s.running || s.shut {
 		s.mu.Unlock()
@@ -98,7 +98,7 @@ func (s *Session) deferCommand(msgID, from string, content []acp.ContentBlock, r
 	}
 	s.deferred = append(s.deferred, d)
 	s.mu.Unlock()
-	s.emit(&Event{Kind: EvUser, MessageID: msgID, Content: raw, Steer: true, Held: true, From: from})
+	s.emit(&Event{Kind: EvUser, MessageID: msgID, Content: raw, Steer: true, Held: true, From: from, Fold: fold})
 	s.emit(&Event{Kind: EvSteerState, MessageID: msgID, Text: "queued"})
 	close(d.logged)
 	return true
@@ -154,7 +154,7 @@ func (s *Session) sendDeferred(d *deferredMsg) {
 	s.dropUserEvents(map[string]bool{d.id: true}, &out)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	if _, err := s.SendFrom(ctx, d.content, d.id, d.from, false); err != nil {
+	if _, err := s.SendWith(ctx, d.content, SendOpts{ClientID: d.id, From: d.from, Fold: d.fold}); err != nil {
 		s.h.log.Warn("deferred command", "session", s.ID(), "err", err)
 		s.emit(&Event{Kind: EvNotice, Level: "error", Text: i18n.S("排着的消息没发出去：", "A queued message wasn't sent: ") + oneLine(errText(err), 200)})
 		// Nothing started, so no turn end will send the ones behind it

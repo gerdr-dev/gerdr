@@ -78,6 +78,8 @@ export type HubEvent = {
   held?: boolean;
   auto?: boolean;
   from?: string;
+  /** user: the sender's one-line summary (chatlog.Event.Fold): drawn folded to it */
+  fold?: string;
   durationMs?: number;
   outputTokens?: number;
   update?: any;

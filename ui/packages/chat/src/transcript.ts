@@ -23,6 +23,12 @@ export type GMeta = {
   /** A `!` command card run while the turn was going, parked at the bottom until the turn ends (see Transcript.parked) */
   parked?: boolean;
   from?: string; // 别的会话发来的：发送方会话 id
+  /**
+   * The sender's one-line summary (the user event's fold): the message is drawn as that line and opens to
+   * the whole of it. Code that sends an agent its inputs (a panel's routing, a check) says what can fold; the chat
+   * doesn't guess from length or sender: a long message from code can be the very thing to read.
+   */
+  fold?: string;
   ts: number;
   content?: ContentBlock[];
 };
@@ -480,7 +486,7 @@ export class Transcript {
           id: e.messageId ?? this.uid(),
           role: "user",
           parts,
-          metadata: { messageId: e.messageId, steer: e.steer, now: e.now, held: e.held, from: e.from, ts: e.ts, content: e.content },
+          metadata: { messageId: e.messageId, steer: e.steer, now: e.now, held: e.held, from: e.from, fold: e.fold || undefined, ts: e.ts, content: e.content },
         });
         this.chunks.clear();
         this.lastChunkKey = "";

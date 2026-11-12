@@ -25,6 +25,9 @@ type Event struct {
 	// sooner, so the UI offers no "Send now" on it.
 	Held bool   `json:"held,omitempty"`
 	From string `json:"from,omitempty"` // 别的会话（agent）经 gerdr session send 发来的：发送方的会话 id
+	// Fold: the sender's one-line summary; the chat draws the message folded to it (GMeta.fold in @gerdr/chat).
+	// Display only: the agent gets the whole message.
+	Fold string `json:"fold,omitempty"`
 
 	// update：原样的 ACP SessionUpdate
 	Update json.RawMessage `json:"update,omitempty"`

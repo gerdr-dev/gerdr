@@ -37,9 +37,7 @@ type Host interface {
 	Sessions(cwd string, tags map[string]string) []map[string]any
 	// Send: id "work" = the project's Work agent conversation, as for StartOptions.ReportTo. attachments as in
 	// StartOptions.
-	// now: go in right away while it runs (hub urgent steer: a running command moves to the background), instead of
-	// at its next pause.
-	Send(ctx context.Context, project, id, text string, attachments []string, now bool) (map[string]any, error)
+	Send(ctx context.Context, project, id, text string, o SendOptions) (map[string]any, error)
 	// Close stops a conversation's agent and takes it off the screen; the record stays and Send opens it again.
 	Close(ctx context.Context, id string) error
 	// Tag changes a conversation's tags ("" removes a key).
@@ -50,6 +48,19 @@ type Host interface {
 	Agents() []map[string]any
 	// RecentDirs: directories conversations ran in and workspaces point at, most recently used first.
 	RecentDirs() []map[string]any
+}
+
+// SendOptions is ctx.sessions.send's third argument.
+type SendOptions struct {
+	// Attachments: as in StartOptions.
+	Attachments []string `json:"attachments,omitempty"`
+	// Now: go in right away while it runs (hub urgent steer: a running command moves to the background), instead of
+	// at its next pause.
+	Now bool `json:"now,omitempty"`
+	// Fold: a one-line summary the chat shows instead of the message, opened to the whole of it on a click (the
+	// text block's _meta.gerdr.fold). For inputs code hands an agent that the person reads past; the agent gets the
+	// whole message either way.
+	Fold string `json:"fold,omitempty"`
 }
 
 // StartOptions is ctx.sessions.start's argument.
@@ -83,6 +94,8 @@ type StartOptions struct {
 	// ContinueFrom: a conversation (of this panel's) this new one carries on: its chat is copied above and the first
 	// message brings it along to the agent (hub handoff.go), so the person reads one conversation across the switch.
 	ContinueFrom string `json:"continueFrom,omitempty"`
+	// Fold: the first message (prompt) drawn folded to this line, as SendOptions.Fold.
+	Fold string `json:"fold,omitempty"`
 }
 
 var errNoHost = errors.New("not available here: ctx.sessions / ctx.workspaces need Gerdr's server")
@@ -200,14 +213,11 @@ func (r *runner) sessionsObject() map[string]any {
 			}
 			ctx, cancel := context.WithTimeout(r.ctx, 2*time.Minute)
 			defer cancel()
-			var o struct {
-				Attachments []string `json:"attachments"`
-				Now         bool     `json:"now"`
-			}
+			var o SendOptions
 			if err := r.opts(arg, &o); err != nil {
 				return r.rejected(err)
 			}
-			s, err := h.Send(ctx, r.project, id, text, o.Attachments, o.Now)
+			s, err := h.Send(ctx, r.project, id, text, o)
 			if err != nil {
 				return r.rejected(err)
 			}
