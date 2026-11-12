@@ -10,6 +10,7 @@ import {
   Eraser,
   ListPlus,
   FileText,
+  FolderOpen,
   LayoutGrid,
   MailCheck,
   Pencil,
@@ -175,6 +176,7 @@ const needsYou = (s: SessionSummary | undefined) => !!s && (s.status === "waitin
 function paneLabel(p: PaneLeaf, s: SessionSummary | undefined): { title: string; sub: string } {
   if (s) return { title: s.title || basename(s.cwd), sub: basename(s.cwd) };
   if (p.term) return { title: t("unifiedSidebar.terminal"), sub: basename(p.term.cwd) };
+  if (p.file?.folder) return { title: p.file.session ? t("folder.open") : basename(p.file.path), sub: basename(p.file.path) };
   if (p.file) return { title: basename(p.file.path), sub: t("unifiedSidebar.file") };
   if (p.sub) return { title: p.sub.title || t("unifiedSidebar.subagent"), sub: t("unifiedSidebar.subagent") };
   return { title: t("unifiedSidebar.newSession"), sub: p.draft?.cwd ? basename(p.draft.cwd) : "" };
@@ -710,7 +712,7 @@ function Row({
     if (inSplit) movePane(pane.id, { tabId: activeTabId, side: "right" });
     else mergeTab(tab.id, activeTabId, undefined, "right");
   };
-  const Icon = pane.term ? SquareTerminal : pane.file ? FileText : pane.sub ? Columns2 : SquareDashed;
+  const Icon = pane.term ? SquareTerminal : pane.file?.folder ? FolderOpen : pane.file ? FileText : pane.sub ? Columns2 : SquareDashed;
   // Picked and still loading after a moment (the drawer stays open till then, App.tsx): say so on the row itself
   const loading = useSlowCatchUp(current ? s?.id : undefined);
   const roomy = useContext(Roomy);

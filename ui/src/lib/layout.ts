@@ -8,6 +8,8 @@ import { t } from "./i18n";
  * 终端没了的时候拿它重开一个。
  * file: a file opened beside the chat (⌥-click on a path, or its right-click menu), read-only like the file viewer.
  * path is absolute (resolved when it was opened), so the pane doesn't depend on which session's directory it came from.
+ * folder: the path is an artifacts folder (components/folder/, docs/dev/ARTIFACTS.md), drawn as a tree with records;
+ * session: whose folder it is (it may not exist yet, and its records are looked up by the session).
  */
 export type PaneLeaf = {
   type: "pane";
@@ -18,7 +20,7 @@ export type PaneLeaf = {
   sub?: { sessionId: string; toolCallId: string; title?: string };
   term?: { id: string; cwd: string };
   /** host: on another computer (docs/dev/MULTIHOST.md) */
-  file?: { path: string; host?: string };
+  file?: { path: string; host?: string; folder?: boolean; session?: string };
 };
 export type PaneSplit = { type: "split"; id: string; dir: "row" | "col"; ratio: number; a: PaneNode; b: PaneNode };
 export type PaneNode = PaneLeaf | PaneSplit;

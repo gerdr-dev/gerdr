@@ -303,6 +303,38 @@ export const api = {
     if (!res.ok) throw new ApiError(res.status, data?.error || res.statusText, data);
     return data as { path: string };
   },
+  // ---- Artifacts folders (docs/dev/ARTIFACTS.md, server/artifactsapi.go). host: the folder is on another computer ----
+  /** Where a session's artifacts go (it may not exist yet) and its records; or a folder given by path. */
+  artifacts: (by: { session: string } | { dir: string }, host?: string) =>
+    req<ArtifactsInfo>(
+      "GET",
+      `/api/artifacts?${"session" in by ? `session=${encodeURIComponent(by.session)}` : `dir=${encodeURIComponent(by.dir)}`}${hostQ(host, "&")}`,
+    ),
+  recordArtifact: (by: { session: string } | { dir: string }, item: Partial<ArtifactItem>, host?: string) =>
+    req<{ dir: string; item: ArtifactItem }>("POST", `/api/artifacts${hostQ(host)}`, { ...by, ...item }),
+  /** One level of a directory, Gerdr's own files left out */
+  fsList: (path: string, host?: string) => req<{ path: string; entries: FsEntry[] }>("GET", `/api/fs/list?path=${encodeURIComponent(path)}${hostQ(host, "&")}`),
+  fsMkdir: (path: string, host?: string) => req<{ path: string }>("POST", `/api/fs/mkdir${hostQ(host)}`, { path }),
+  fsMove: (from: string, to: string, host?: string) => req<{ path: string }>("POST", `/api/fs/move${hostQ(host)}`, { from, to }),
+  fsTrash: (path: string, host?: string) => req("POST", `/api/fs/trash${hostQ(host)}`, { path }),
+  /** The version of a file an editor read (sha256), to save it back only if nobody changed it since */
+  fileHash: (path: string, host?: string) =>
+    req<FileStat & { sha256?: string }>("GET", `/api/fs/stat?path=${encodeURIComponent(path)}&hash=1${hostQ(host, "&")}`),
+  /**
+   * Writes a file. ifMatch: the sha256 it was read at ("none": it must not exist yet, "*": overwrite). A 412 means
+   * it changed meanwhile (ApiError status 412); the answer is its new sha256.
+   */
+  fsPut: async (path: string, body: BodyInit, ifMatch: string, host?: string) => {
+    const res = await fetch(`/api/fs/file?path=${encodeURIComponent(path)}&ifMatch=${encodeURIComponent(ifMatch)}${hostQ(host, "&")}`, {
+      method: "PUT",
+      credentials: "same-origin",
+      headers: { "X-Gerdr": "1" },
+      body,
+    });
+    const data = await res.json().catch(() => undefined);
+    if (!res.ok) throw new ApiError(res.status, data?.error || res.statusText, data);
+    return data as { path: string; sha256: string };
+  },
   /** Stores a pasted image (base64) on the gerdr machine so other devices' composers can show it; returns /api/blobs/<sha256>. */
   saveBlob: (data: string) => req<{ url: string }>("POST", "/api/blobs", { data }),
   /** 输入框里的 `!命令`：gerdr 在会话目录里直接跑，不经过 agent；输出进对话、跟着下一条消息带给 agent */
@@ -524,6 +556,23 @@ export type MCPAuth = {
 
 /** host: the computer the file is on (set by api.fileStat for another computer's file); unset = this one */
 export type FileStat = { path: string; name: string; dir: boolean; size: number; mtime: number; mime: string; host?: string };
+
+/** One record of an artifacts folder (internal/artifacts Item). Never deleted: superseded ones are greyed. */
+export type ArtifactItem = {
+  id: string;
+  kind: "link" | "path" | "text" | "file";
+  label?: string;
+  url?: string;
+  /** path: absolute; file: relative to the folder */
+  path?: string;
+  text?: string;
+  at: number;
+  session?: string;
+  supersedes?: string;
+  superseded?: boolean;
+};
+export type ArtifactsInfo = { dir: string; exists: boolean; id?: string; items: ArtifactItem[]; root: string };
+export type FsEntry = { name: string; dir: boolean; size: number; mtime: number; mime?: string };
 
 /** The computer an id ("<host>:<id>": a session or terminal there) belongs to; undefined = this one (docs/dev/MULTIHOST.md). */
 /** A sign-in started from the page (agents/claude/login.go LoginState); state "" = none started */

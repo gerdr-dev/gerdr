@@ -103,6 +103,9 @@ func (h *Hub) continueFrom(ctx context.Context, o CreateOptions) (*Session, erro
 	if o.Project == "" {
 		o.Project = srcRec.Project
 	}
+	if o.ArtifactsDir == "" {
+		o.ArtifactsDir = srcRec.ArtifactsDir // a panel's task folder stays the task's
+	}
 	o.ContinueFrom, o.Import, o.Title = "", "", "" // a given title would count as the user's (CustomTitle)
 	s, err := h.Create(ctx, o)
 	if err != nil {

@@ -1,0 +1,120 @@
+/* The Markdown editor of the artifacts folder (components/folder/MdEditor.tsx): tiptap writes plain h1 / table / …
+   elements, which the chat's .gerdr-md rules (keyed on streamdown's data attributes) don't reach. A document, not a
+   chat reply: headings are a step larger than the chat's. */
+.gerdr-editor .ProseMirror {
+  line-height: 1.7;
+  overflow-wrap: break-word;
+  outline: none;
+  min-height: 50vh;
+}
+.gerdr-editor .ProseMirror > * + * {
+  margin-top: 0.85em;
+}
+.gerdr-editor .ProseMirror :is(h1, h2, h3, h4) {
+  font-weight: 600;
+  line-height: 1.35;
+}
+.gerdr-editor .ProseMirror > :is(h1, h2, h3, h4):not(:first-child) {
+  margin-top: 1.4em;
+}
+.gerdr-editor .ProseMirror > :is(h1, h2, h3, h4) + * {
+  margin-top: 0.5em;
+}
+.gerdr-editor .ProseMirror h1 {
+  font-size: 1.6em;
+}
+.gerdr-editor .ProseMirror h2 {
+  font-size: 1.3em;
+}
+.gerdr-editor .ProseMirror h3 {
+  font-size: 1.1em;
+}
+.gerdr-editor .ProseMirror :is(ul, ol) {
+  padding-left: 1.4em;
+}
+.gerdr-editor .ProseMirror ul {
+  list-style: disc;
+}
+.gerdr-editor .ProseMirror ol {
+  list-style: decimal;
+}
+.gerdr-editor .ProseMirror li::marker {
+  color: var(--muted-foreground);
+}
+.gerdr-editor .ProseMirror li > p {
+  margin: 0;
+}
+.gerdr-editor .ProseMirror ul[data-type="taskList"] {
+  list-style: none;
+  padding-left: 0.2em;
+}
+.gerdr-editor .ProseMirror ul[data-type="taskList"] li {
+  display: flex;
+  gap: 0.5em;
+  align-items: flex-start;
+}
+.gerdr-editor .ProseMirror ul[data-type="taskList"] li > label {
+  margin-top: 0.15em;
+}
+.gerdr-editor .ProseMirror ul[data-type="taskList"] li[data-checked="true"] > div {
+  color: var(--muted-foreground);
+  text-decoration: line-through;
+}
+.gerdr-editor .ProseMirror a {
+  color: var(--brand);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.gerdr-editor .ProseMirror code {
+  font-size: 0.86em;
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  background: var(--muted);
+}
+.gerdr-editor .ProseMirror pre {
+  padding: 0.7em 0.9em;
+  border-radius: var(--radius);
+  background: color-mix(in oklch, var(--muted) 60%, transparent);
+  font-size: 0.86em;
+  line-height: 1.5;
+  overflow-x: auto;
+}
+.gerdr-editor .ProseMirror pre code {
+  padding: 0;
+  background: transparent;
+  font-size: 1em;
+}
+.gerdr-editor .ProseMirror blockquote {
+  border-left: 3px solid var(--border);
+  padding-left: 0.9em;
+  color: var(--muted-foreground);
+}
+.gerdr-editor .ProseMirror hr {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin-block: 1.4em;
+}
+.gerdr-editor .ProseMirror table {
+  border-collapse: collapse;
+  font-size: 0.93em;
+}
+.gerdr-editor .ProseMirror :is(th, td) {
+  border: 1px solid var(--border);
+  padding: 0.3em 0.7em;
+  text-align: left;
+  vertical-align: top;
+}
+.gerdr-editor .ProseMirror :is(th, td) > p {
+  margin: 0;
+}
+.gerdr-editor .ProseMirror th {
+  font-weight: 600;
+  background: var(--muted);
+}
+.gerdr-editor .ProseMirror img {
+  max-width: 100%;
+  border-radius: var(--radius);
+}
+.gerdr-editor .ProseMirror img.ProseMirror-selectednode {
+  outline: 2px solid var(--brand);
+}

@@ -31,6 +31,10 @@ func TestSafeGerdrCLI(t *testing.T) {
 		`gerdr wait gitlab 'h.example.com/g/r!34' --until 'notes.some(n => n.author != me && !n.resolved)'`: true,
 		`gerdr wait gitlab 'h.example.com/g/r!34' --until "$(cat x)"`:                                       false,
 		`gerdr wait list`: true,
+		`gerdr artifacts link https://g.example.com/g/r/-/merge_requests/3 --label MR`: true,
+		`gerdr artifacts`:                           true,
+		`gerdr artifacts text "x" --dir /etc`:       false,
+		`gerdr artifacts pin a.png --session=other`: false,
 	} {
 		if got := SafeGerdrCLI(cmd); got != want {
 			t.Errorf("%q: got %v want %v", cmd, got, want)

@@ -866,6 +866,14 @@ func (a *Agent) Prompt(ctx context.Context, p acp.PromptRequest) (acp.PromptResp
 		}
 	} else {
 		ap, sb := a.modeParams(mode)
+		// The artifacts folder is outside the repository: without it among the writable roots the sandbox refuses
+		// the images / reports the prompt tells the agent to put there (docs/dev/ARTIFACTS.md)
+		s.mu.Lock()
+		meta := s.meta
+		s.mu.Unlock()
+		if d := acpx.ArtifactsDir(meta); d != "" && sb["type"] == "workspaceWrite" {
+			sb["writableRoots"] = []string{d}
+		}
 		params := map[string]any{
 			"threadId":       s.id,
 			"input":          toInputs(p.Prompt),

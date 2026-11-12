@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"github.com/gerdr-dev/gerdr/internal/folder"
 	"io"
 	"mime"
 	"net/http"
@@ -135,7 +136,14 @@ func (s *Server) fileStat(w http.ResponseWriter, r *http.Request) {
 	if !st.IsDir() {
 		m = fileMime(p)
 	}
-	writeJSON(w, map[string]any{"path": p, "name": filepath.Base(p), "dir": st.IsDir(), "size": st.Size(), "mtime": st.ModTime().UnixMilli(), "mime": m})
+	out := map[string]any{"path": p, "name": filepath.Base(p), "dir": st.IsDir(), "size": st.Size(), "mtime": st.ModTime().UnixMilli(), "mime": m}
+	// hash=1: the version an editor read, to save with PUT /api/fs/file?ifMatch= (the folder view's Markdown editor)
+	if q.Get("hash") == "1" && !st.IsDir() {
+		if h, err := folder.Hash(p, st); err == nil {
+			out["sha256"] = h
+		}
+	}
+	writeJSON(w, out)
 }
 
 // fileExists answers, for a batch of names, which ones open in the session directory (as is, or by the

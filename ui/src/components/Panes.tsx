@@ -5,6 +5,7 @@ import {
   CopyPlus,
   ExternalLink,
   FileText,
+  FolderOpen,
   GitBranch,
   ListPlus,
   ListX,
@@ -26,6 +27,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { api, type FileStat } from "@/lib/api";
 import { FileActions, FileContent } from "./FileViewer";
+import { Folder } from "./folder/Folder";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import {
   basename,
@@ -34,6 +36,7 @@ import {
   duplicateFocused,
   focusPane,
   focusSession,
+  openArtifacts,
   openTerminal,
   paneToTab,
   reopenTerminal,
@@ -242,6 +245,7 @@ function usePaneDrag(paneId: string, ghost: TabGhost) {
 function PaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; tab: Tab; framed: boolean; zoomed?: boolean; count?: Count }) {
   if (pane.sub) return <SubPaneView pane={pane} tab={tab} framed={framed} zoomed={zoomed} count={count} />;
   if (pane.term) return <TermPaneView pane={pane} tab={tab} framed={framed} zoomed={zoomed} count={count} />;
+  if (pane.file?.folder) return <FolderPaneView pane={pane} tab={tab} framed={framed} zoomed={zoomed} count={count} />;
   if (pane.file) return <FilePaneView pane={pane} tab={tab} framed={framed} zoomed={zoomed} count={count} />;
   return <HeldSessionPane pane={pane} tab={tab} framed={framed} zoomed={zoomed} count={count} />;
 }
@@ -393,6 +397,43 @@ function FilePaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; ta
             <div className="py-16 text-center text-[13px] text-muted-foreground">{err || t("panes.reading")}</div>
           )}
         </div>
+      </PaneBody>
+    </div>
+  );
+}
+
+/** An artifacts folder beside the chat (components/folder/, docs/dev/ARTIFACTS.md): title bar + the folder view. */
+function FolderPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; tab: Tab; framed: boolean; zoomed?: boolean; count?: Count }) {
+  const f = pane.file!;
+  const focused = useContext(TabActive) && tab.focus === pane.id;
+  const many = framed || zoomed;
+  const headH = usePaneHeadHeight(framed);
+  const drag = usePaneDrag(pane.id, { label: basename(f.path) });
+  return (
+    <div
+      data-pane-id={pane.id}
+      className={cn(
+        "flex h-full min-h-0 flex-col",
+        framed && "overflow-hidden rounded-md border",
+        framed && (focused ? "border-brand" : "border-border"),
+        drag.dragging && "opacity-40",
+      )}
+      onMouseDown={() => !focused && focusPane(pane.id)}
+    >
+      <div
+        onPointerDown={drag.onPointerDown}
+        className={cn("flex shrink-0 items-center gap-2 border-b px-3 text-[12px] max-md:pl-4", headH, !focused && many && "opacity-70")}
+      >
+        <FolderOpen className="size-4 shrink-0 text-brand" />
+        <FadeText className="min-w-[3em] max-w-[60%] shrink font-medium max-md:max-w-none">{f.session ? t("folder.open") : basename(f.path)}</FadeText>
+        <PaneCount count={count} />
+        <div className="flex-1" />
+        <Button variant="ghost" size="icon" className="size-6 shrink-0" title={t("common.close")} onClick={() => (focusPane(pane.id), closeFocusedPane())}>
+          <X className="size-3.5" />
+        </Button>
+      </div>
+      <PaneBody>
+        <Folder by={f.session ? { session: f.session } : { dir: f.path }} host={f.host} />
       </PaneBody>
     </div>
   );
@@ -590,6 +631,11 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
         {/* 路径那段手机上藏了，没它撑开的话 ⋯ 会紧跟在标题后面；和终端 pane 一样补一个手机上的占位 */}
         <div className={cn("flex-1", session && "md:hidden")} />
         <AddonSlot name="paneTitle" props={{ pane: paneSnapshot(pane), tab: tabSnapshot(tab) }} />
+        {session && (
+          <Button variant="ghost" size="icon" className="size-6 shrink-0" title={t("folder.openHint")} onClick={() => openArtifacts(session.id)}>
+            <FolderOpen className="size-3.5" />
+          </Button>
+        )}
         {zoomed && (
           <Button
             variant="ghost"

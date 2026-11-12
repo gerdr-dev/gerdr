@@ -123,6 +123,17 @@ export function handleKeydown(e: KeyboardEvent): boolean {
     setPrefix(true);
     return true;
   }
+  // An element that handles some keys itself says so (data-own-keys="meta+s ctrl+s": the artifacts folder's Markdown
+  // editor saves on ⌘S, which is otherwise "stash"): while focus is inside it, those keys are left to it
+  const own = (e.target as Element | null)?.closest?.("[data-own-keys]")?.getAttribute("data-own-keys");
+  if (
+    own &&
+    own.split(/\s+/).some((c) => {
+      const k = parseCombo(c);
+      return !!k && matches(k, e);
+    })
+  )
+    return false;
   for (const b of bindings()) {
     if (b.combo && !b.combo.prefix && matches(b.combo, e)) {
       e.preventDefault();

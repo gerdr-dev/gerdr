@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/gerdr-dev/gerdr/internal/artifacts"
 	"log/slog"
 	"net"
 	"net/http"
@@ -16,6 +17,7 @@ import (
 	"runtime/debug"
 	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -95,7 +97,7 @@ func main() {
 		Short: i18n.S("打印版本", "Print the version"),
 		Run:   func(cmd *cobra.Command, args []string) { fmt.Println(version.Version) },
 	})
-	root.AddCommand(addProjectFlag(sessionCmd()), folderCmd(), uiCmd(), workCmd(), panelCmd(), remoteCmd(), configCmd(), agentCmd(), mcpCmd(), skillCmd(), addonCmd(), eventCmd(), waitCmd(), addProjectFlag(workspaceCmd()), addProjectFlag(tabCmd()), addProjectFlag(paneCmd()))
+	root.AddCommand(addProjectFlag(sessionCmd()), folderCmd(), artifactsCmd(), uiCmd(), workCmd(), panelCmd(), remoteCmd(), configCmd(), agentCmd(), mcpCmd(), skillCmd(), addonCmd(), eventCmd(), waitCmd(), addProjectFlag(workspaceCmd()), addProjectFlag(tabCmd()), addProjectFlag(paneCmd()))
 	if err := root.Execute(); err != nil {
 		if errors.Is(err, errHandover) {
 			os.Exit(exitHandover)
@@ -308,7 +310,23 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 		p := c.Projects[project]
 		return ext.Only{Skills: p.Skills, MCP: p.MCP}
 	})
-	h, err := hub.New(hub.Options{Dir: env.Dir, ClaudeIdle: env.ClaudeIdle, ExtraAgents: cfgAgents(), LLM: cfgLLM, Defaults: cfgDefaults, Log: log, Ext: em, SkillDirs: sessionSkills(env.Dir, layout, em), MCP: workMCP(env.Dir), Project: sessionProject(env.Dir, layout)})
+	// Artifacts folders (docs/dev/ARTIFACTS.md): under config.json artifactsRoot, ~/Gerdr by default
+	arts := artifacts.New(func() string {
+		var c struct {
+			Root string `json:"artifactsRoot"`
+		}
+		_ = json.Unmarshal(cfg.Get(), &c)
+		if c.Root == "" {
+			return artifacts.DefaultRoot()
+		}
+		if home, _ := os.UserHomeDir(); c.Root == "~" || strings.HasPrefix(c.Root, "~/") {
+			return filepath.Join(home, strings.TrimPrefix(c.Root, "~"))
+		}
+		return c.Root
+	})
+	artsOf := server.SessionArtifacts(arts, layout, sessionProject(env.Dir, layout))
+	h, err := hub.New(hub.Options{Dir: env.Dir, ClaudeIdle: env.ClaudeIdle, ExtraAgents: cfgAgents(), LLM: cfgLLM, Defaults: cfgDefaults, Log: log, Ext: em, SkillDirs: sessionSkills(env.Dir, layout, em), MCP: workMCP(env.Dir), Project: sessionProject(env.Dir, layout),
+		Artifacts: func(rec hub.Record) string { d, _, _ := artsOf(rec); return d }})
 	if err != nil {
 		return err
 	}
@@ -449,7 +467,7 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 		log.Warn("waits", "err", err)
 		wts = nil
 	}
-	srv := &server.Server{Dir: env.Dir, Hub: h, Events: evs, Waits: wts, Token: token, Config: cfg, Secrets: secrets, Layout: layout, Unread: unread, Addons: am, AddonSvc: asvc, Ext: em, Work: wr, Log: log, OnConfig: applyAgents,
+	srv := &server.Server{Dir: env.Dir, Hub: h, Artifacts: arts, ArtifactsOf: artsOf, Events: evs, Waits: wts, Token: token, Config: cfg, Secrets: secrets, Layout: layout, Unread: unread, Addons: am, AddonSvc: asvc, Ext: em, Work: wr, Log: log, OnConfig: applyAgents,
 		UI: ui, ESM: esm, Remote: rm, Awake: keeper,
 		Service: svc, Terms: term.New(func() []string { return sysenv.ChildEnv() }, log)}
 	defer srv.Terms.Close()

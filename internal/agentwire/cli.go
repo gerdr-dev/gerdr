@@ -3,6 +3,7 @@ package agentwire
 import (
 	"context"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -40,7 +41,15 @@ func (x claudeExt) Args(sessionID, cwd string, meta map[string]any) []string {
 	if x.m == nil {
 		return nil
 	}
-	return forSession(x.m, meta).ClaudeArgs(sessionID, cwd, acpx.SkillRoots(meta))
+	args := forSession(x.m, meta).ClaudeArgs(sessionID, cwd, acpx.SkillRoots(meta))
+	// The artifacts folder is outside the repository: --add-dir lets claude write there without asking each time.
+	// Only once it exists (claude refuses a missing --add-dir); the first write asks, the next process doesn't.
+	if d := acpx.ArtifactsDir(meta); d != "" {
+		if st, err := os.Stat(d); err == nil && st.IsDir() {
+			args = append(args, "--add-dir", d)
+		}
+	}
+	return args
 }
 
 func (x claudeExt) MCPFingerprint(cwd string) string { return x.m.ClaudeMCPFingerprint(cwd) }

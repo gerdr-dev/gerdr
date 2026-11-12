@@ -4,6 +4,7 @@
 
 /* tw-animate-css, what shadcn's animate-in / fade-in / slide-in-from-* classes need (see the file for why it is copied in) */
 @import "./animate.css";
+@import "./folder.css";
 
 /* Compile dialog frame classes up front. Tailwind browser only generates a class once it appears in the DOM, so a
    dialog mounting with a width nobody used yet (sm:max-w-3xl) renders its first frame at the fallback

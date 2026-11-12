@@ -11,6 +11,7 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
+	"github.com/gerdr-dev/gerdr/internal/artifacts"
 	"io"
 	"log/slog"
 	"mime"
@@ -61,6 +62,9 @@ type Server struct {
 	Ext      *ext.Manager
 	// Work：the Work view's local functions (internal/work). nil = off (tests).
 	Work *work.Runner
+	// Artifacts: folders work leaves behind (internal/artifacts, artifactsapi.go); ArtifactsOf: a session's. nil = off.
+	Artifacts   *artifacts.Store
+	ArtifactsOf ArtifactsPlace
 	// Events: the event store (internal/events, docs/dev/EVENTS.md); RunEvents wires its subscribers. nil = off.
 	Events *events.Store
 	// Waits: waiting for a state (internal/waits, waitsapi.go); nil = off
@@ -166,6 +170,9 @@ func (s *Server) Handler() http.Handler {
 	s.sessionRoutes(mux)
 	s.hostRoutes(mux)
 	s.folderRoutes(mux)
+	if s.Artifacts != nil {
+		s.artifactsRoutes(mux)
+	}
 	// 账号的用量额度（claude / codex 各一份）。?force=1：人点了刷新，绕过缓存（hub 里仍有最小间隔）
 	mux.HandleFunc("GET /api/usage", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, s.Hub.Usage(r.Context(), r.URL.Query().Get("force") == "1"))

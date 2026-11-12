@@ -68,3 +68,33 @@ function openFilePane(path: string, host?: string) {
     return updateTab(l, t.id, (tab) => ({ ...split(tab, tab.zoom ?? tab.focus, "row", fresh), focus: fresh.id }));
   });
 }
+
+/**
+ * Show an artifacts folder beside the focused pane (docs/dev/ARTIFACTS.md). A tab that already shows one reuses that
+ * pane, like files. by.session: that session's folder (it may not exist yet: the pane says so and offers to create it).
+ */
+export async function openFolderPane(by: { dir: string; session?: string }, host?: string) {
+  const file = { path: by.dir, folder: true, ...(by.session ? { session: by.session } : {}), ...(host ? { host } : {}) };
+  setLayout((l) => {
+    const t = activeTab(l);
+    const ls = leaves(t.root);
+    const same = ls.find((p) => p.file?.folder && p.file.path === by.dir && p.file.host === host);
+    if (same) return updateTab(l, t.id, (tab) => ({ ...tab, zoom: undefined, focus: same.id }));
+    const old = ls.find((p) => p.file?.folder);
+    if (old) return updateTab(setPane(l, old.id, { file }), t.id, (tab) => ({ ...tab, zoom: undefined, focus: old.id }));
+    const fresh: PaneLeaf = { type: "pane", id: rid("p"), file };
+    return updateTab(l, t.id, (tab) => ({ ...split(tab, tab.zoom ?? tab.focus, "row", fresh), focus: fresh.id }));
+  });
+}
+
+/** A session's artifacts folder, beside it. id may be "<host>:<id>" (a session on another computer). */
+export async function openArtifacts(sessionId: string) {
+  const host = sessionId.includes(":") ? sessionId.slice(0, sessionId.indexOf(":")) : undefined;
+  const id = host ? sessionId.slice(host.length + 1) : sessionId;
+  try {
+    const info = await api.artifacts({ session: id }, host);
+    await openFolderPane({ dir: info.dir, session: id }, host);
+  } catch (e) {
+    toast.error((e as Error).message);
+  }
+}

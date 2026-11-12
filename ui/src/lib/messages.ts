@@ -14,6 +14,7 @@ import * as nav from "./text/nav";
 import * as system from "./text/system";
 import * as workbench from "./text/workbench";
 import * as workSource from "./text/workSource";
+import * as folder from "./text/folder";
 
 const settingsZh = {
   "settings.title": "设置",
@@ -108,6 +109,7 @@ export const zh = {
   ...workSource.zh,
   ...nav.zh,
   ...misc.zh,
+  ...folder.zh,
 };
 
 export type MessageKey = keyof typeof zh;
@@ -209,4 +211,5 @@ export const en: Record<MessageKey, string> = {
   ...workSource.en,
   ...nav.en,
   ...misc.en,
+  ...folder.en,
 };

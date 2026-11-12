@@ -130,6 +130,9 @@ type Options struct {
 	// Project: the project a session is in, handed to the adapter as _meta project (agentwire.ProjectKey) on every
 	// new / resume / load, for the project's skill / MCP limit (ext.Manager.ForProject). nil = Record.Project.
 	Project func(rec Record) string
+	// Artifacts: the folder a session's artifacts go in (docs/dev/ARTIFACTS.md), handed to the adapter as _meta
+	// artifactsDir on every new / resume / load; it may not exist yet. nil = Record.ArtifactsDir.
+	Artifacts func(rec Record) string
 }
 
 // mcpFor is the MCP servers handed to the agent for a session: never nil (ACP wants a list).
@@ -158,6 +161,13 @@ func (h *Hub) extMeta(rec Record, meta map[string]any) {
 	}
 	if rec.SystemFile != "" {
 		meta["systemFile"] = rec.SystemFile
+	}
+	a := rec.ArtifactsDir
+	if h.opt.Artifacts != nil {
+		a = h.opt.Artifacts(rec)
+	}
+	if a != "" {
+		meta["artifactsDir"] = a
 	}
 }
 
@@ -736,6 +746,8 @@ type CreateOptions struct {
 	SystemFile string `json:"systemFile,omitempty"`
 	// Project: see Record.Project. A session carried on from another (ContinueFrom) stays in that one's project.
 	Project string `json:"project,omitempty"`
+	// ArtifactsDir: see Record.ArtifactsDir.
+	ArtifactsDir string `json:"artifactsDir,omitempty"`
 	// Parent: see Record.Parent.
 	Parent string `json:"parent,omitempty"`
 	// FromCLI：`gerdr session new` 开的（agent 自己跑的命令）。这时默认模式是「全放开」那种的不套：
@@ -802,7 +814,7 @@ func (h *Hub) Create(ctx context.Context, o CreateOptions) (*Session, error) {
 		meta[k] = v
 	}
 	// 新建时给的标题是人起的（`gerdr session new --title`），算手动命名、不被自动标题盖掉；导入时带进来的是原会话的标题，照旧可以被更新
-	rec := Record{ID: newID(), Agent: o.Agent, Cwd: cwd, CreatedAt: now(), UpdatedAt: now(), Title: o.Title, CustomTitle: o.Title != "" && o.Import == "", Mode: o.Mode, Config: o.Config, Tags: tags, ReportTo: o.ReportTo, SkillDirs: o.SkillDirs, SystemFile: o.SystemFile, Parent: o.Parent, Project: o.Project}
+	rec := Record{ID: newID(), Agent: o.Agent, Cwd: cwd, CreatedAt: now(), UpdatedAt: now(), Title: o.Title, CustomTitle: o.Title != "" && o.Import == "", Mode: o.Mode, Config: o.Config, Tags: tags, ReportTo: o.ReportTo, SkillDirs: o.SkillDirs, SystemFile: o.SystemFile, Parent: o.Parent, Project: o.Project, ArtifactsDir: o.ArtifactsDir}
 	s := newSession(h, rec)
 	h.extMeta(rec, meta)
 

@@ -27,3 +27,16 @@ func TestProjectPrompt(t *testing.T) {
 		t.Fatalf("index missing: %q", got)
 	}
 }
+
+func TestSessionPromptArtifacts(t *testing.T) {
+	p := SessionPrompt(nil)
+	if got := p("s", "/repo", map[string]any{}); strings.Contains(got, "Artifacts folder") {
+		t.Fatal("no artifacts dir, but the section is there")
+	}
+	got := p("s", "/repo", map[string]any{acpx.MetaKey: map[string]any{acpx.ArtifactsKey: "/Users/me/Gerdr/my/weave"}})
+	for _, want := range []string{"/Users/me/Gerdr/my/weave", "committed as usual", "gerdr artifacts link"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q in:\n%s", want, got)
+		}
+	}
+}

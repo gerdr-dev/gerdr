@@ -1,6 +1,6 @@
 ---
 name: gerdr
-description: "Coordinate other coding-agent sessions inside Gerdr (Claude Code / Codex sessions in the Gerdr GUI): list sessions, start a new agent session next to you, hand it a task, wait for it, read its reply, or message an existing session. Use when the user asks you to delegate to / start / ask / check on another agent or session in Gerdr, or to run several agents in parallel. Also for arranging Gerdr's layout: sorting tabs into workspaces, splitting panes together, renaming or reordering workspaces / tabs. Also for changing Gerdr's own settings (theme, default agent / mode / model, shortcuts, model providers) with `gerdr config`, and for setting up agents (roles) with their own prompt, skills and MCP servers (`gerdr agent`, `gerdr skill`, `gerdr mcp`). Also for a Gerdr project's own skills and memory (given only to that project's sessions): adding / editing / removing a skill for one project (`gerdr skill --project`), keeping the project's shared memory. Also for add-ons (`gerdr addon`): browsing add-on stores, installing / updating / removing add-ons, switching them on or off, changing their settings. Also for a project's panels (`gerdr panel`): listing, installing one from a git repository, adding a blank one, updating, changing its icon, removing. Also for being told when something happens outside the conversation (a chat message: `gerdr event watch / list`) or waiting until something outside is in some state (an MR got review comments, its pipeline failed, it merged: `gerdr wait`). Requires GERDR_ENV=1."
+description: "Coordinate other coding-agent sessions inside Gerdr (Claude Code / Codex sessions in the Gerdr GUI): list sessions, start a new agent session next to you, hand it a task, wait for it, read its reply, or message an existing session. Use when the user asks you to delegate to / start / ask / check on another agent or session in Gerdr, or to run several agents in parallel. Also for arranging Gerdr's layout: sorting tabs into workspaces, splitting panes together, renaming or reordering workspaces / tabs. Also for changing Gerdr's own settings (theme, default agent / mode / model, shortcuts, model providers) with `gerdr config`, and for setting up agents (roles) with their own prompt, skills and MCP servers (`gerdr agent`, `gerdr skill`, `gerdr mcp`). Also for a Gerdr project's own skills and memory (given only to that project's sessions): adding / editing / removing a skill for one project (`gerdr skill --project`), keeping the project's shared memory. Also for add-ons (`gerdr addon`): browsing add-on stores, installing / updating / removing add-ons, switching them on or off, changing their settings. Also for a project's panels (`gerdr panel`): listing, installing one from a git repository, adding a blank one, updating, changing its icon, removing. Also for being told when something happens outside the conversation (a chat message: `gerdr event watch / list`) or waiting until something outside is in some state (an MR got review comments, its pipeline failed, it merged: `gerdr wait`). Also for artifacts (`gerdr artifacts`): where output that isn't committed goes (generated images / videos, reports, drafts, copy to publish), and recording a PR / MR, a folder made outside the repository or a short result so the person finds it later. Requires GERDR_ENV=1."
 ---
 
 # Gerdr：和其他会话协作
@@ -456,6 +456,29 @@ gerdr wait state gitlab 'gitlab.example.com/group/repo!34'   # the latest state,
 - A wait belongs to this conversation: closing it, deleting it or `/clear` drops it (a Gerdr restart doesn't).
 - After opening an MR: wait on it straight away, in the same turn. Needs the GitLab add-on (`gerdr addon install
   gitlab`) and `glab auth login --hostname <host>`; the output says if the add-on can't take the key and why.
+
+## Artifacts: output that isn't committed (`gerdr artifacts`)
+
+Your system prompt names this conversation's artifacts folder (by default `~/Gerdr/<project>/<repo>/`, shared by every
+session of the repository; a panel's task may have its own). What the person needs to see or keep but the repository
+shouldn't hold — generated images and videos, screenshots, reports, drafts, exported data, copy to publish — goes
+there, a subfolder per piece of work. Code, and docs that belong with the code, are committed as usual instead. Most
+coding work has no artifacts: don't create the folder without a reason. The person browses it in Gerdr (Files, beside
+the chat) and edits its Markdown there, so read a file again before changing it.
+
+```bash
+gerdr artifacts                                   # the folder (created the first time something goes in)
+gerdr artifacts ls                                # its records and top-level files; --json for ids
+gerdr artifacts link https://gitlab.example.com/g/r/-/merge_requests/34 --label MR
+gerdr artifacts path ~/dev/new-demo --label "the demo project"
+gerdr artifacts text "test account: demo / demo123" --label account
+gerdr artifacts pin "首页配图/final.png"            # the main file among many
+gerdr artifacts link <new url> --supersedes <id>  # replaces an outdated record; `retire <id>` just marks it
+```
+
+- Records are kept, never deleted: an outdated one is replaced (`--supersedes`) and drawn greyed.
+- Longer text than a line or two goes in a `.md` file in the folder (then `pin` it), not in a text record.
+- Scratch files go in the folder's `草稿/` (or `drafts/`): `.gerdrignore` keeps them out of syncing.
 
 ## 并行
 

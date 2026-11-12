@@ -41,6 +41,16 @@ const SystemFileKey = "systemFile"
 // systemFileMax caps what a system file puts into every prompt.
 const systemFileMax = 200 << 10
 
+// artifactsText tells the agent where things go that the person needs but the repository shouldn't hold
+// (docs/dev/ARTIFACTS.md). The "only when" and "commit as usual" halves matter as much as the path: most coding work
+// has no artifacts, and a doc that belongs with the code must not end up here instead of in the commit.
+func artifactsText(dir string) string {
+	return fmt.Sprintf(`# Artifacts folder
+
+What this conversation produces that should NOT be committed but the person needs to see or keep (generated images or videos, screenshots, reports, drafts, exported data, copy to publish) goes in %s, in a subfolder per piece of work (e.g. "homepage images/"). Create it only when there is such output; most coding work has none. Code, and docs that belong with the code, go in the repository and are committed as usual, never here. The person browses this folder in Gerdr and may edit its Markdown there, so read a file again before changing it. Scratch files go in its 草稿/ (drafts/) subfolder.
+Record what the person will look for later but that isn't a file here: a PR / MR you opened (`+"`gerdr artifacts link <url> --label PR`"+`), something you created outside the repository (`+"`gerdr artifacts path <path> --label …`"+`), a short result such as a test account (`+"`gerdr artifacts text \"…\" --label …`"+`); pin the main file among many with `+"`gerdr artifacts pin <file>`"+`.`, dir)
+}
+
 // SessionPrompt is everything gerdr appends to a session's system prompt: the project's memory, then the text of the
 // session's system file if it has one (a panel's instructions for the agent it runs: kept out of the chat, and
 // changed by rewriting the file — the next process / thread / call reads the new text).
@@ -50,6 +60,9 @@ func SessionPrompt(em *ext.Manager) func(sessionID, cwd string, meta map[string]
 		parts := []string{}
 		if p := strings.TrimSpace(project(id, cwd, meta)); p != "" {
 			parts = append(parts, p)
+		}
+		if d := acpx.ArtifactsDir(meta); d != "" {
+			parts = append(parts, artifactsText(d))
 		}
 		if t := systemFileText(meta); t != "" {
 			parts = append(parts, t)

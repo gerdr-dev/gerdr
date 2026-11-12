@@ -521,6 +521,14 @@ func SafeGerdrCLI(cmd string) bool {
 		if len(words) < 3 {
 			return false
 		}
+	case "artifacts":
+		// Records into the session's own artifacts folder (a writable root of its sandbox anyway). Not with --dir /
+		// --session: Gerdr would write a .gerdr/ into any directory named there
+		for _, w := range words[2:] {
+			if w == "--dir" || strings.HasPrefix(w, "--dir=") || w == "--session" || strings.HasPrefix(w, "--session=") {
+				return false
+			}
+		}
 	default:
 		// Not `gerdr folder` either: like fetch below, it writes files through Gerdr's process
 		return false

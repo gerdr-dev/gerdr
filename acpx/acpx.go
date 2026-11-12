@@ -448,6 +448,16 @@ const ShellHint = "If you need the user to run a shell command themselves (e.g.,
 // GUIHint：起 agent 时追加的全部说明（MediaHint + ShellHint）。
 const GUIHint = MediaHint + "\n\n" + ShellHint
 
+// ArtifactsKey is the _meta key of a session's artifacts folder (hub Options.Artifacts, docs/dev/ARTIFACTS.md).
+const ArtifactsKey = "artifactsDir"
+
+// ArtifactsDir is the session's artifacts folder from its _meta, "" when it has none. It may not exist yet.
+func ArtifactsDir(meta map[string]any) string {
+	v, _ := GetMeta(meta, ArtifactsKey)
+	d, _ := v.(string)
+	return d
+}
+
 // SkillRoots: extra skill folders the hub gives a session (_meta gerdr.skillRoots: each holds <name>/SKILL.md), e.g.
 // the skills of the Work project that started it. The adapter adds them to what its agent loads.
 func SkillRoots(meta map[string]any) []string {

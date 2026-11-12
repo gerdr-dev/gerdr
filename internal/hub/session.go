@@ -77,6 +77,9 @@ type Record struct {
 	// Project: the Gerdr project (a "space" in the layout) the session was started in, so the project's skill / MCP
 	// limit applies from its first turn, before any pane shows it. Where it's shown later wins (Options.Project).
 	Project string `json:"project,omitempty"`
+	// ArtifactsDir: the folder this session's artifacts go in, when whoever started it chose one (a panel's task:
+	// docs/dev/ARTIFACTS.md). Empty = its repository's folder (Options.Artifacts).
+	ArtifactsDir string `json:"artifactsDir,omitempty"`
 	// Workdir: where the agent works now when it has moved away from Cwd by itself (Claude's EnterWorktree), as the
 	// adapter reports it (acpx.WorkdirKey); empty when it is in Cwd. Cwd stays the session's home: what it is grouped
 	// and matched by, and where the agent is resumed (it moves itself back into the worktree). Saved so the pane
@@ -385,6 +388,13 @@ func (s *Session) waitingSinceLocked() int64 {
 }
 
 func (s *Session) ID() string { return s.rec.ID }
+
+// Record is a copy of the session's record as it is now.
+func (s *Session) Record() Record {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.rec
+}
 
 // Events 返回整份日志的拷贝。
 func (s *Session) Events() []*Event {
