@@ -227,6 +227,11 @@ interface Ctx {
       text?: string;
       url?: string;
       data?: unknown;
+      /**
+       * Where an answer goes, for a panel that is itself a source (a team's task panel): subscribers answer with
+       * `ctx.events.reply`, which emits `{ kind, data: data + their fields + text }` for a trigger of yours to take.
+       */
+      reply?: { kind: string; data?: unknown };
     }): { event: GerdrEvent; fresh: boolean };
     /** Oldest first. since: unix ms (default: the last 24 hours); on: "source/kind" with * globs; limit: the newest n (100). */
     list(q?: { since?: number; on?: string; key?: string; limit?: number }): GerdrEvent[];
