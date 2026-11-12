@@ -77,6 +77,12 @@ type StartOptions struct {
 	// the image itself, anything else as a file link the agent opens with its tools. A page gets a path for a pasted
 	// / dropped / picked file from POST /api/fs/upload.
 	Attachments []string `json:"attachments,omitempty"`
+	// SystemFile: a file whose text goes into the agent's system prompt, re-read whenever the agent starts again
+	// (hub Record.SystemFile): instructions that stay out of the chat and change without a new session.
+	SystemFile string `json:"systemFile,omitempty"`
+	// ContinueFrom: a conversation (of this panel's) this new one carries on: its chat is copied above and the first
+	// message brings it along to the agent (hub handoff.go), so the person reads one conversation across the switch.
+	ContinueFrom string `json:"continueFrom,omitempty"`
 }
 
 var errNoHost = errors.New("not available here: ctx.sessions / ctx.workspaces need Gerdr's server")

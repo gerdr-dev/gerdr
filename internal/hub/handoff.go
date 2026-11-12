@@ -91,7 +91,10 @@ func (h *Hub) continueFrom(ctx context.Context, o CreateOptions) (*Session, erro
 	if running {
 		return nil, errors.New(i18n.S("这个会话还在跑：先停下这一轮，再换 agent 接着聊", "This session is still running: stop the current turn before switching agents"))
 	}
-	if srcRec.Agent == o.Agent {
+	// The same agent only from code (a panel replacing a broken or reconfigured conversation): a person would just
+	// open the old one
+	same := srcRec.Agent == o.Agent
+	if same && !o.FromCLI {
 		return nil, errors.New(i18n.S("同一个 agent 直接打开这个会话就行，不用换", "It's the same agent: just open this session, no need to switch"))
 	}
 	if o.Cwd == "" {
@@ -105,7 +108,11 @@ func (h *Hub) continueFrom(ctx context.Context, o CreateOptions) (*Session, erro
 	if err != nil {
 		return nil, err
 	}
-	h.adoptHistory(s, srcRec, evs)
+	if same {
+		h.adoptHistoryNote(s, srcRec, evs, i18n.S("换了一个新会话接着聊：上面是之前的对话，下一条消息会把它一起带过去", "Continued in a new session: above is the earlier conversation; the next message brings it along"))
+	} else {
+		h.adoptHistory(s, srcRec, evs)
+	}
 	return s, nil
 }
 

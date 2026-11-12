@@ -35,6 +35,46 @@ func ProjectPrompt(em *ext.Manager) func(sessionID, cwd string, meta map[string]
 	}
 }
 
+// SystemFileKey is the _meta key of a session's system file (hub Record.SystemFile).
+const SystemFileKey = "systemFile"
+
+// systemFileMax caps what a system file puts into every prompt.
+const systemFileMax = 200 << 10
+
+// SessionPrompt is everything gerdr appends to a session's system prompt: the project's memory, then the text of the
+// session's system file if it has one (a panel's instructions for the agent it runs: kept out of the chat, and
+// changed by rewriting the file — the next process / thread / call reads the new text).
+func SessionPrompt(em *ext.Manager) func(sessionID, cwd string, meta map[string]any) string {
+	project := ProjectPrompt(em)
+	return func(id, cwd string, meta map[string]any) string {
+		parts := []string{}
+		if p := strings.TrimSpace(project(id, cwd, meta)); p != "" {
+			parts = append(parts, p)
+		}
+		if t := systemFileText(meta); t != "" {
+			parts = append(parts, t)
+		}
+		return strings.Join(parts, "\n\n")
+	}
+}
+
+func systemFileText(meta map[string]any) string {
+	v, _ := acpx.GetMeta(meta, SystemFileKey)
+	path, _ := v.(string)
+	if path == "" {
+		return ""
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	t := strings.TrimSpace(string(b))
+	if len(t) > systemFileMax {
+		t = t[:systemFileMax] + "\n… (truncated)"
+	}
+	return t
+}
+
 func projectMemoryText(project, dir string) string {
 	idx, _ := os.ReadFile(filepath.Join(dir, "MEMORY.md"))
 	index := strings.TrimSpace(string(idx))

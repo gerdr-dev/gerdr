@@ -70,6 +70,10 @@ type Record struct {
 	// SkillDirs: folders of extra skills (<dir>/<name>/SKILL.md) this session gets besides the usual ones, e.g. the
 	// skills of the Work project that started it. Handed to the adapter as _meta skillRoots on new / resume.
 	SkillDirs []string `json:"skillDirs,omitempty"`
+	// SystemFile: a file whose text is added to the agent's system prompt, read each time its process (claude) /
+	// thread (codex) / model call (native) starts, so whoever writes it changes the instructions without a message
+	// in the chat or a new session. Handed to the adapter as _meta systemFile on new / resume / load.
+	SystemFile string `json:"systemFile,omitempty"`
 	// Project: the Gerdr project (a "space" in the layout) the session was started in, so the project's skill / MCP
 	// limit applies from its first turn, before any pane shows it. Where it's shown later wins (Options.Project).
 	Project string `json:"project,omitempty"`

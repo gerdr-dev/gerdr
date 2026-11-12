@@ -24,7 +24,7 @@ const SessionEnvKey = "GERDR_NATIVE_SESSION_ID"
 // stand-alone `gerdr acp native`).
 func NativeOptions(dir string, em *ext.Manager, cfg func() native.Config, prompt string) native.Options {
 	return native.Options{
-		Dir: dir, Config: cfg, Prompt: prompt, AppendPrompt: ProjectPrompt(em),
+		Dir: dir, Config: cfg, Prompt: prompt, AppendPrompt: SessionPrompt(em),
 		Skills: func(cwd string, meta map[string]any) []native.Skill {
 			return skillsFor(forSession(em, meta), cwd, acpx.SkillRoots(meta))
 		},

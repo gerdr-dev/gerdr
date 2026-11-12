@@ -124,6 +124,20 @@ interface Ctx {
        * dropped or picked by POSTing it to `/api/fs/upload?name=<file name>` (body = the file; returns { path }).
        */
       attachments?: string[];
+      /**
+       * A file whose text is added to the agent's system prompt (absolute, e.g. under `ctx.workspace.dir`). Read again
+       * whenever the agent starts again (claude restarts an idle process within ~15 minutes, codex each thread resume,
+       * native every call), so rewriting the file changes its instructions without a message in the chat or a new
+       * conversation. For a long-lived conversation the person reads (an assistant, a secretary): the rules stay out of
+       * the chat.
+       */
+      systemFile?: string;
+      /**
+       * A conversation this new one carries on (any agent, the same one too): its chat is copied above a notice, and
+       * the first message brings it along to the agent, hidden in the chat. For replacing a conversation that broke or
+       * must restart (another agent or model) while the person keeps reading one conversation. It must not be running.
+       */
+      continueFrom?: string;
     }): Promise<Session>;
     /**
      * The agents and roles `start` takes as `agent`. A role (one the user set up in Settings → Agent) has a `base`
@@ -357,6 +371,11 @@ interface Session {
   waitingKind?: "permission" | "ask";
   /** ms: when the running turn started (only while running). */
   turnStartedAt?: number;
+  /**
+   * How full its context is, as the composer shows it (tokens in it now, the window's size). Absent until the agent
+   * has reported it. Sending `/compact` (claude, codex, native) shrinks it.
+   */
+  context?: { tokens: number; window: number };
   /**
    * The last turn came from the user typing in this conversation (not from code or another agent): they've read
    * its reply. E.g. a board shouldn't ask them to "come and look" at an answer to their own question.

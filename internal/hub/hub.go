@@ -143,8 +143,8 @@ func (h *Hub) mcpFor(rec Record) []acp.McpServer {
 	return []acp.McpServer{}
 }
 
-// extMeta adds what decides a session's skills / MCP to the _meta of a new / resume / load: its extra skill
-// folders and its project.
+// extMeta adds what decides a session's skills / MCP / extra instructions to the _meta of a new / resume / load:
+// its extra skill folders, its project and its system file.
 func (h *Hub) extMeta(rec Record, meta map[string]any) {
 	if roots := h.skillRoots(rec); len(roots) > 0 {
 		meta["skillRoots"] = roots
@@ -155,6 +155,9 @@ func (h *Hub) extMeta(rec Record, meta map[string]any) {
 	}
 	if p != "" {
 		meta["project"] = p
+	}
+	if rec.SystemFile != "" {
+		meta["systemFile"] = rec.SystemFile
 	}
 }
 
@@ -515,9 +518,9 @@ func (h *Hub) startHost(ctx context.Context, agent string) (*agenthost.Host, err
 	em := h.opt.Ext.Scoped(def.only())
 	switch base {
 	case "claude":
-		return agenthost.StartInProc(sctx, claude.New(log, claude.Options{IdleTimeout: h.opt.ClaudeIdle, Ext: agentwire.ClaudeExt(em), Bin: def.Bin, Args: def.Args, Env: def.envList(), Prompt: def.Prompt, AppendPrompt: agentwire.ProjectPrompt(em)}), handler, log)
+		return agenthost.StartInProc(sctx, claude.New(log, claude.Options{IdleTimeout: h.opt.ClaudeIdle, Ext: agentwire.ClaudeExt(em), Bin: def.Bin, Args: def.Args, Env: def.envList(), Prompt: def.Prompt, AppendPrompt: agentwire.SessionPrompt(em)}), handler, log)
 	case "codex":
-		return agenthost.StartInProc(sctx, codex.NewWith(log, agentwire.CodexExt(em), codex.Options{Bin: def.Bin, Args: def.Args, Env: def.envList(), Prompt: def.Prompt, AppendPrompt: agentwire.ProjectPrompt(em)}), handler, log)
+		return agenthost.StartInProc(sctx, codex.NewWith(log, agentwire.CodexExt(em), codex.Options{Bin: def.Bin, Args: def.Args, Env: def.envList(), Prompt: def.Prompt, AppendPrompt: agentwire.SessionPrompt(em)}), handler, log)
 	case "native":
 		// 基于 Gerdr Agent 的角色和原版共用会话目录（id 是 uuid，撞不了）和记忆：记忆是人的偏好、项目的约定，不分角色
 		return agenthost.StartInProc(sctx, native.New(log, agentwire.NativeOptions(filepath.Join(h.opt.Dir, "native"), em, func() native.Config { return h.llm().Only(def.Providers) }, def.Prompt)), handler, log)
@@ -729,6 +732,8 @@ type CreateOptions struct {
 	Tags      map[string]string `json:"tags,omitempty"`
 	ReportTo  string            `json:"reportTo,omitempty"`
 	SkillDirs []string          `json:"skillDirs,omitempty"`
+	// SystemFile: see Record.
+	SystemFile string `json:"systemFile,omitempty"`
 	// Project: see Record.Project. A session carried on from another (ContinueFrom) stays in that one's project.
 	Project string `json:"project,omitempty"`
 	// Parent: see Record.Parent.
@@ -797,7 +802,7 @@ func (h *Hub) Create(ctx context.Context, o CreateOptions) (*Session, error) {
 		meta[k] = v
 	}
 	// 新建时给的标题是人起的（`gerdr session new --title`），算手动命名、不被自动标题盖掉；导入时带进来的是原会话的标题，照旧可以被更新
-	rec := Record{ID: newID(), Agent: o.Agent, Cwd: cwd, CreatedAt: now(), UpdatedAt: now(), Title: o.Title, CustomTitle: o.Title != "" && o.Import == "", Mode: o.Mode, Config: o.Config, Tags: tags, ReportTo: o.ReportTo, SkillDirs: o.SkillDirs, Parent: o.Parent, Project: o.Project}
+	rec := Record{ID: newID(), Agent: o.Agent, Cwd: cwd, CreatedAt: now(), UpdatedAt: now(), Title: o.Title, CustomTitle: o.Title != "" && o.Import == "", Mode: o.Mode, Config: o.Config, Tags: tags, ReportTo: o.ReportTo, SkillDirs: o.SkillDirs, SystemFile: o.SystemFile, Parent: o.Parent, Project: o.Project}
 	s := newSession(h, rec)
 	h.extMeta(rec, meta)
 

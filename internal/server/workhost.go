@@ -62,7 +62,7 @@ func (h workHost) StartSession(ctx context.Context, project string, o work.Start
 			config[k] = v
 		}
 	}
-	sess, err := s.Hub.Create(ctx, hub.CreateOptions{Agent: agent, Cwd: o.Cwd, Mode: o.Mode, Config: config, Parent: o.Parent, Title: o.Title, Tags: tags, ReportTo: reportTo, SkillDirs: skills, Project: spaceOr(project), FromCLI: true})
+	sess, err := s.Hub.Create(ctx, hub.CreateOptions{Agent: agent, Cwd: o.Cwd, Mode: o.Mode, Config: config, Parent: o.Parent, Title: o.Title, Tags: tags, ReportTo: reportTo, SkillDirs: skills, SystemFile: o.SystemFile, ContinueFrom: o.ContinueFrom, Project: spaceOr(project), FromCLI: true})
 	if err != nil {
 		return nil, err
 	}
@@ -378,6 +378,9 @@ func (h workHost) view(x hub.Summary, evs []*hub.Event) map[string]any {
 	}
 	if x.Turn != nil {
 		v["turnStartedAt"] = x.Turn.StartedAt
+	}
+	if x.Context != nil {
+		v["context"] = map[string]any{"tokens": x.Context.Tokens, "window": x.Context.Window} // as the composer shows it
 	}
 	v["tags"] = map[string]string{}
 	if len(x.Tags) > 0 {
