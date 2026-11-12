@@ -30,5 +30,6 @@ export { Markdown } from "@gerdr/chat";
 // Open a file on this computer in Gerdr's viewer, as a path clicked in the chat does: works from a phone or another
 // browser too, where a file:// link opens nothing. For links a panel draws to what agents produced.
 export { openPath } from "@/lib/actions/files";
+export { ArtifactsFolder } from "./ArtifactsFolder";
 // The chat's "working" dots, for a page's own row saying something runs (a FeedChat's last line)
 export { PixelLoader } from "@gerdr/chat";

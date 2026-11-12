@@ -35,7 +35,9 @@ export async function open(input: { repo?: string }, ctx: Ctx) {
 limits. Read it before writing a function and type the argument `ctx: Ctx` (no import needed). In short:
 `exec` (command-line tools), `mcp` (MCP tools), `fetchAll`, `html`, `secrets`, `fs` (files in this
 panel directory), `sessions` (hand a task to a coding agent and follow it), `workspaces` (the Code
-side's workspaces), `dirs` (directories anywhere on disk, read-only), `inbox`, `progress`, `log`, `sleep`.
+side's workspaces), `dirs` (directories anywhere on disk, read-only), `artifacts` (a folder per task under
+`~/Gerdr/` for what its work leaves that isn't committed, shown with `ArtifactsFolder` from @gerdr/core), `inbox`,
+`progress`, `log`, `sleep`.
 
 What on this panel needs the user goes to Gerdr's inbox with `ctx.inbox.set([{ id, title, body?, session? }])`: on
 every device, and as a notification on the phone App. Pass the whole current list each time (from wherever the panel
@@ -61,7 +63,7 @@ streams read `res.body.getReader()` as it comes; local and company-internal addr
 thousands separators.
 
 Not available in Gerdr: `ctx.db`, `ctx.oauth`, `ctx.upload`, `ctx.file`,
-`ctx.folders`, `ctx.browser`, `ctx.llm`, `ctx.agent`, `ctx.user`, `ctx.chat_id`. Keep data in files
+`ctx.folders` (use `ctx.artifacts`), `ctx.browser`, `ctx.llm`, `ctx.agent`, `ctx.user`, `ctx.chat_id`. Keep data in files
 (`ctx.fs`) or the platform it comes from.
 
 ## Calling it from a page

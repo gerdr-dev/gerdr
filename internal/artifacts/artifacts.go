@@ -176,6 +176,54 @@ func (s *Store) ForRepo(projectID, projectName, cwd string) (string, Owner) {
 	return s.free(base, o), o
 }
 
+// ForOwner is the folder of something a panel owns (a task: Owner{Panel, Task}), named name under the project's
+// directory's under/ ("任务/<title>"). It may not exist yet; once it does, it is found by id, wherever it went.
+func (s *Store) ForOwner(projectID, projectName string, o Owner, under, name string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	ix := s.loadIndex()
+	if p, ok := s.known(&ix, o); ok {
+		return p
+	}
+	base := s.projectDir(ix, projectID, projectName)
+	for _, seg := range strings.Split(filepath.ToSlash(under), "/") {
+		if seg = strings.TrimSpace(seg); seg != "" && seg != "." && seg != ".." {
+			base = filepath.Join(base, safeName(seg))
+		}
+	}
+	return s.free(filepath.Join(base, safeName(name)), o)
+}
+
+// Rename gives an owner's existing folder a new name in the same place (its title changed), keeping its id. Only
+// when the new name is free; otherwise it stays as it is. Returns where it is now.
+func (s *Store) Rename(o Owner, name string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	ix := s.loadIndex()
+	p, ok := s.known(&ix, o)
+	if !ok {
+		return "", nil
+	}
+	if _, err := os.Stat(p); err != nil {
+		return p, nil // not created yet: ForOwner names it when it is
+	}
+	to := filepath.Join(filepath.Dir(p), safeName(name))
+	if to == p {
+		return p, nil
+	}
+	if _, err := os.Lstat(to); err == nil {
+		return p, nil
+	}
+	if err := os.Rename(p, to); err != nil {
+		return p, err
+	}
+	if f, err := Read(to); err == nil {
+		ix.Folders[f.ID] = s.rel(to)
+		_ = s.saveIndex(ix)
+	}
+	return to, nil
+}
+
 // known: where the owner's folder is, when it has one (repairing the index when it moved).
 func (s *Store) known(ix *index, o Owner) (string, bool) {
 	id, ok := ix.Owners[o.key()]
@@ -207,7 +255,7 @@ func (s *Store) free(base string, o Owner) string {
 			p = fmt.Sprintf("%s %d", base, i)
 		}
 		f, err := Read(p)
-		if err != nil || f.Owner.key() == o.key() {
+		if err != nil || f.Owner.key() == o.key() || f.Owner.key() == "" { // no owner yet: it is claimed (Ensure)
 			return p
 		}
 	}
@@ -283,6 +331,13 @@ func (s *Store) Ensure(p string, o Owner, projectID string) (Folder, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if f, err := Read(p); err == nil {
+		if f.Owner.key() == "" && o.key() != "" { // made before its owner was known (a record came first): claimed now
+			f.Owner = o
+			b, _ := json.MarshalIndent(f, "", "  ")
+			if err := writeAtomic(filepath.Join(p, Meta, "folder.json"), b); err != nil {
+				return f, err
+			}
+		}
 		return f, s.register(f, projectID)
 	}
 	if err := os.MkdirAll(filepath.Join(p, Meta), 0o755); err != nil {

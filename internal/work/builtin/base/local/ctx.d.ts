@@ -138,6 +138,12 @@ interface Ctx {
        * must restart (another agent or model) while the person keeps reading one conversation. It must not be running.
        */
       continueFrom?: string;
+      /**
+       * Where the agent puts what it makes that isn't committed (images, reports, drafts, copy): a folder from
+       * `ctx.artifacts.folder` for the task it works on. Its prompt names it and its sandbox may write there. Default:
+       * its repository's artifacts folder (`~/Gerdr/<project>/<repo>/`), shared by every conversation in that repository.
+       */
+      artifactsDir?: string;
       /** The first message (prompt): as `send`'s `fold` / `show`. */
       fold?: string;
       show?: boolean;
@@ -184,6 +190,31 @@ interface Ctx {
   };
 
   /** The Code side's workspaces (not this panel: that's `ctx.workspace`). */
+  /**
+   * Artifacts: a folder per thing your panel tracks (a task) for what its work leaves that isn't committed —
+   * generated images and videos, reports, drafts, copy to publish — plus records of what isn't a file here (a PR, a
+   * folder made elsewhere, a short text). Folders live under `~/Gerdr/<project>/` where people find them in Finder;
+   * they are created the first time something goes in. Show one on a page with `ArtifactsFolder` from @gerdr/core;
+   * give it to the worker with `ctx.sessions.start({ artifactsDir })`. Conventions inside (which files, which
+   * subfolders) are prose in your skills, not code.
+   */
+  artifacts: {
+    /**
+     * The folder of the thing `key` (e.g. a task id), named `name` (its title) under `under` (e.g. "任务" / "Tasks") in
+     * the project's artifacts directory. Stable: once it exists it is found by id, even after the person renamed or
+     * moved it in Finder. `exists` false until something is put there.
+     */
+    folder(opts: { key: string; name?: string; under?: string }): { path: string; exists: boolean; id?: string };
+    /** The thing was renamed: its folder follows when it exists and the new name is free. → where it is now ("" = none yet). */
+    rename(key: string, name: string): string;
+    /** The folder's records, oldest first; `superseded` ones were replaced by a later one. [] when it doesn't exist. */
+    items(path: string): ArtifactItem[];
+    /** Adds a record (creating the folder). `file`: a path inside the folder, pinned. Records are never deleted. */
+    record(
+      path: string,
+      item: { kind: "link" | "path" | "text" | "file" | "retire"; label?: string; url?: string; path?: string; text?: string; supersedes?: string },
+    ): ArtifactItem;
+  };
   workspaces: {
     /** This project's workspaces in their order; `all`: every project's. */
     list(opts?: { all?: boolean }): Workspace[];
@@ -455,4 +486,20 @@ interface Workspace {
   project: string;
   /** The conversations in its panes. */
   sessions: Session[];
+}
+
+/** One record of an artifacts folder. */
+interface ArtifactItem {
+  id: string;
+  kind: "link" | "path" | "text" | "file";
+  label?: string;
+  url?: string;
+  /** path: absolute; file: relative to the folder */
+  path?: string;
+  text?: string;
+  at: number;
+  /** the conversation that recorded it */
+  session?: string;
+  supersedes?: string;
+  superseded?: boolean;
 }

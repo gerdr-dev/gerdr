@@ -48,6 +48,14 @@ type Host interface {
 	Agents() []map[string]any
 	// RecentDirs: directories conversations ran in and workspaces point at, most recently used first.
 	RecentDirs() []map[string]any
+	// Artifacts (docs/dev/ARTIFACTS.md). ArtifactsFolder: the panel's folder for one of its things (key), named name
+	// under under/ in its project's artifacts directory: {path, exists, id?}; it may not exist yet.
+	ArtifactsFolder(panel, key, name, under string) (map[string]any, error)
+	// ArtifactsRename: that folder takes a new name (its thing was renamed), when it exists and the name is free.
+	ArtifactsRename(panel, key, name string) (string, error)
+	// ArtifactsItems: a folder's records ([] when it doesn't exist). ArtifactsRecord adds one (creating the folder).
+	ArtifactsItems(dir string) ([]map[string]any, error)
+	ArtifactsRecord(dir string, item map[string]any) (map[string]any, error)
 }
 
 // SendOptions is ctx.sessions.send's third argument.
@@ -91,6 +99,9 @@ type StartOptions struct {
 	// the image itself, anything else as a file link the agent opens with its tools. A page gets a path for a pasted
 	// / dropped / picked file from POST /api/fs/upload.
 	Attachments []string `json:"attachments,omitempty"`
+	// ArtifactsDir: the folder the agent puts what it makes that isn't committed (a task's folder from
+	// ctx.artifacts.folder); default: its repository's (docs/dev/ARTIFACTS.md).
+	ArtifactsDir string `json:"artifactsDir,omitempty"`
 	// SystemFile: a file whose text goes into the agent's system prompt, re-read whenever the agent starts again
 	// (hub Record.SystemFile): instructions that stay out of the chat and change without a new session.
 	SystemFile string `json:"systemFile,omitempty"`
@@ -253,6 +264,87 @@ func (r *runner) sessionsObject() map[string]any {
 				r.throw(err)
 			}
 			return s
+		},
+	}
+}
+
+// artifactsObject is ctx.artifacts: folders for what a panel's work leaves behind (docs/dev/ARTIFACTS.md).
+func (r *runner) artifactsObject() map[string]any {
+	h := r.r.Host
+	need := func() {
+		if h == nil {
+			r.throw(errNoHost)
+		}
+	}
+	abs := func(p string) string {
+		d, err := expandPath(p)
+		if err != nil || !filepath.IsAbs(d) {
+			r.throw(fmt.Errorf("ctx.artifacts: need an absolute path: %q", p))
+		}
+		return d
+	}
+	return map[string]any{
+		// ctx.artifacts.folder({ key, name, under? }) → { path, exists, id? }
+		"folder": func(arg goja.Value) map[string]any {
+			need()
+			var o struct {
+				Key   string `json:"key"`
+				Name  string `json:"name"`
+				Under string `json:"under"`
+			}
+			if err := r.opts(arg, &o); err != nil {
+				r.throw(fmt.Errorf("ctx.artifacts.folder: %w", err))
+			}
+			if o.Key == "" {
+				r.throw(errors.New("ctx.artifacts.folder: key is required"))
+			}
+			if o.Name == "" {
+				o.Name = o.Key
+			}
+			out, err := h.ArtifactsFolder(r.project, o.Key, o.Name, o.Under)
+			if err != nil {
+				r.throw(err)
+			}
+			return out
+		},
+		// ctx.artifacts.rename(key, name) → path ("" when it has no folder)
+		"rename": func(key, name string) string {
+			need()
+			p, err := h.ArtifactsRename(r.project, key, name)
+			if err != nil {
+				r.throw(err)
+			}
+			return p
+		},
+		// ctx.artifacts.items(path) → records
+		"items": func(p string) []map[string]any {
+			need()
+			out, err := h.ArtifactsItems(abs(p))
+			if err != nil {
+				r.throw(err)
+			}
+			return out
+		},
+		// ctx.artifacts.record(path, { kind, label?, url?, path?, text?, supersedes? }) → the record
+		"record": func(p string, arg goja.Value) map[string]any {
+			need()
+			var it map[string]any
+			if err := r.opts(arg, &it); err != nil {
+				r.throw(fmt.Errorf("ctx.artifacts.record: %w", err))
+			}
+			if it == nil {
+				it = map[string]any{}
+			}
+			if _, ok := it["session"]; !ok {
+				if c := callerOf(r.ctx); c != "" {
+					it["session"] = c
+				}
+			}
+			out, err := h.ArtifactsRecord(abs(p), it)
+			if err != nil {
+				r.throw(err)
+			}
+			return out
 		},
 	}
 }

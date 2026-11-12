@@ -53,6 +53,15 @@ func (f *fakeHost) Conversation(id string, last int) ([]map[string]any, error) {
 	return []map[string]any{{"role": "user", "text": "hi " + id, "at": 1}}, nil
 }
 
+func (f *fakeHost) ArtifactsFolder(panel, key, name, under string) (map[string]any, error) {
+	return map[string]any{"path": "/a/" + under + "/" + name, "exists": false}, nil
+}
+func (f *fakeHost) ArtifactsRename(panel, key, name string) (string, error) { return "", nil }
+func (f *fakeHost) ArtifactsItems(dir string) ([]map[string]any, error)     { return nil, nil }
+func (f *fakeHost) ArtifactsRecord(dir string, item map[string]any) (map[string]any, error) {
+	return item, nil
+}
+
 func (f *fakeHost) RecentDirs() []map[string]any {
 	return []map[string]any{{"path": "/r", "source": "session"}}
 }

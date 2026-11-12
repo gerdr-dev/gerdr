@@ -123,3 +123,45 @@ func TestListHidesOwnFiles(t *testing.T) {
 		t.Fatalf("%+v", es)
 	}
 }
+
+func TestForOwnerAndRename(t *testing.T) {
+	root := t.TempDir()
+	s := New(func() string { return root })
+	o := Owner{Panel: "default/board", Task: "t1"}
+	p := s.ForOwner("default", "my", o, "任务", "写一篇: 文章")
+	if p != filepath.Join(root, "my", "任务", "写一篇  文章") {
+		t.Fatalf("path: %s", p)
+	}
+	if got, _ := s.Rename(o, "x"); got != "" {
+		t.Fatal("renaming a folder never registered")
+	}
+	if _, err := s.Ensure(p, o, "default"); err != nil {
+		t.Fatal(err)
+	}
+	to, err := s.Rename(o, "新标题")
+	if err != nil || to != filepath.Join(root, "my", "任务", "新标题") {
+		t.Fatalf("rename: %s %v", to, err)
+	}
+	if again := s.ForOwner("default", "my", o, "任务", "whatever"); again != to {
+		t.Fatalf("after rename: %s", again)
+	}
+}
+
+func TestRecordFirstThenClaimed(t *testing.T) {
+	root := t.TempDir()
+	s := New(func() string { return root })
+	o := Owner{Panel: "default/board", Task: "t2"}
+	p := s.ForOwner("default", "my", o, "任务", "a")
+	if _, err := s.Ensure(p, Owner{}, ""); err != nil { // a record before the panel looked
+		t.Fatal(err)
+	}
+	if again := s.ForOwner("default", "my", o, "任务", "a"); again != p {
+		t.Fatalf("an ownerless folder wasn't claimed: %s", again)
+	}
+	if _, err := s.Ensure(p, o, "default"); err != nil {
+		t.Fatal(err)
+	}
+	if f, _ := Read(p); f.Owner != o {
+		t.Fatalf("owner: %+v", f.Owner)
+	}
+}

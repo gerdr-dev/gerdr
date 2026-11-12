@@ -408,6 +408,7 @@ func (r *runner) ctxObject() *goja.Object {
 	// Handing work to agents (host.go). ctx.workspace (singular, below) is this Work project; ctx.workspaces are Code's.
 	_ = c.Set("sessions", r.sessionsObject())
 	_ = c.Set("workspaces", r.workspacesObject())
+	_ = c.Set("artifacts", r.artifactsObject())
 	_ = c.Set("dirs", r.dirsObject())
 	// Events (trigger.go, docs/dev/EVENTS.md): what a poll found goes out as events; triggers/ subscribe to them
 	_ = c.Set("events", r.eventsObject())

@@ -125,6 +125,13 @@ declare module "@gerdr/core" {
    * opens nothing from gerdr's page, and nothing at all on a phone. `cwd` resolves a relative path.
    */
   export function openPath(path: string, cwd?: string): Promise<void>;
+  /**
+   * An artifacts folder (ctx.artifacts.folder's path): its records (links, paths, text, pinned files), then its files
+   * as a tree with a preview; Markdown is edited in place, other files previewed. Drop files in to add them. It fills
+   * its box (give it a height) and re-reads the folder every few seconds while shown, so a worker's new files appear.
+   * A folder that doesn't exist yet shows as empty with its path.
+   */
+  export function ArtifactsFolder(props: { dir: string }): ReactNode;
 
   /** Whether gerdr is in dark mode (the page shares gerdr's <html>, so its `dark` class is right already). */
   export function useDark(): boolean;

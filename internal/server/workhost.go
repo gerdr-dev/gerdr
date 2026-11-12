@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/gerdr-dev/gerdr/internal/artifacts"
 	"mime"
 	"os"
 	"path/filepath"
@@ -62,7 +63,7 @@ func (h workHost) StartSession(ctx context.Context, project string, o work.Start
 			config[k] = v
 		}
 	}
-	sess, err := s.Hub.Create(ctx, hub.CreateOptions{Agent: agent, Cwd: o.Cwd, Mode: o.Mode, Config: config, Parent: o.Parent, Title: o.Title, Tags: tags, ReportTo: reportTo, SkillDirs: skills, SystemFile: o.SystemFile, ContinueFrom: o.ContinueFrom, Project: spaceOr(project), FromCLI: true})
+	sess, err := s.Hub.Create(ctx, hub.CreateOptions{Agent: agent, Cwd: o.Cwd, Mode: o.Mode, Config: config, Parent: o.Parent, Title: o.Title, Tags: tags, ReportTo: reportTo, SkillDirs: skills, SystemFile: o.SystemFile, ContinueFrom: o.ContinueFrom, Project: spaceOr(project), ArtifactsDir: o.ArtifactsDir, FromCLI: true})
 	if err != nil {
 		return nil, err
 	}
@@ -324,6 +325,68 @@ func (h workHost) Workspaces(project string, all bool) []map[string]any {
 }
 
 func (h workHost) Agents() []map[string]any { return h.s.Hub.Agents() }
+
+func (h workHost) ArtifactsFolder(panel, key, name, under string) (map[string]any, error) {
+	st := h.s.Artifacts
+	if st == nil {
+		return nil, errors.New("artifacts are off")
+	}
+	k := keyOr(panel)
+	project, _ := work.SplitKey(k)
+	p := st.ForOwner(project, SpaceName(h.s.Layout.Get(), project), artifacts.Owner{Panel: k, Task: key}, under, name)
+	out := map[string]any{"path": p, "exists": false}
+	// There already (the worker made it, or a record came first): it gets its identity and owner now
+	if fi, err := os.Stat(p); err == nil && fi.IsDir() {
+		if f, err := st.Ensure(p, artifacts.Owner{Panel: k, Task: key}, project); err == nil {
+			out["exists"], out["id"] = true, f.ID
+		}
+	}
+	return out, nil
+}
+
+func (h workHost) ArtifactsRename(panel, key, name string) (string, error) {
+	if h.s.Artifacts == nil {
+		return "", errors.New("artifacts are off")
+	}
+	return h.s.Artifacts.Rename(artifacts.Owner{Panel: keyOr(panel), Task: key}, name)
+}
+
+func (h workHost) ArtifactsItems(dir string) ([]map[string]any, error) {
+	items, err := artifacts.Items(dir)
+	if err != nil {
+		return nil, err
+	}
+	return toMaps(items), nil
+}
+
+func (h workHost) ArtifactsRecord(dir string, item map[string]any) (map[string]any, error) {
+	if h.s.Artifacts == nil {
+		return nil, errors.New("artifacts are off")
+	}
+	var it artifacts.Item
+	b, _ := json.Marshal(item)
+	if err := json.Unmarshal(b, &it); err != nil {
+		return nil, err
+	}
+	if err := it.Validate(); err != nil {
+		return nil, err
+	}
+	if _, err := h.s.Artifacts.Ensure(dir, artifacts.Owner{}, ""); err != nil {
+		return nil, err
+	}
+	saved, err := artifacts.Record(dir, it)
+	if err != nil {
+		return nil, err
+	}
+	return toMaps([]artifacts.Item{saved})[0], nil
+}
+
+func toMaps[T any](v []T) []map[string]any {
+	out := make([]map[string]any, 0, len(v))
+	b, _ := json.Marshal(v)
+	_ = json.Unmarshal(b, &out)
+	return out
+}
 
 func (h workHost) RecentDirs() []map[string]any {
 	last := map[string]int64{}

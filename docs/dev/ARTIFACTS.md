@@ -1,7 +1,7 @@
 # Artifacts: folders and records a piece of work leaves behind
 
-Status: agreed 2026-11-12. Built: the core and the Code side ("Order" 1–2, see "As built"). Not yet: panels
-(`ctx.folders`, `@gerdr/core`'s `<Folder>`), Superagent, team.
+Status: agreed 2026-11-12. Built: the core, the Code side and panels ("Order" 1–3, see "As built"); the
+Superagent panel uses them (its DESIGN.md "任务文件夹"). Not yet: team.
 
 ## Why
 
@@ -163,6 +163,9 @@ is in `tasks/work-on-content.md`, not in code.
   elements can claim keys from the global shortcuts with `data-own-keys` (`lib/commands.ts`). Editor styles:
   `src/folder.css`. tiptap is loaded only when a .md is opened, and imported only through `@tiptap/react` + extension
   packages (never `@tiptap/core` directly: a second copy from another esm.sh URL breaks it).
+- Panels: `ctx.artifacts` (`folder({ key, name, under })` → path by owner `{panel, task}`, `rename`, `items`,
+  `record`; `work/host.go`, `server/workhost.go`), `ctx.sessions.start({ artifactsDir })`, `ArtifactsFolder` from
+  `@gerdr/core`. A folder recorded into before its owner looked (no owner yet) is claimed by it, not given a `name 2`.
 - Checked in a debug instance with playwright: records, tree, preview, rich editing (a save changes only the edited
   line: front matter, compact tables, `snake_case` kept), the "changed meanwhile" bar.
 
