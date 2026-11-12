@@ -986,7 +986,12 @@ stream-json 模式下没人看得见）—— resume、回退、追上全部失�
 - **前缀键**：全局的前缀状态机（lib/commands.ts）在 capture 阶段先拿到键，所以 ctrl+b 照样是 Gerdr 的；按两下前缀
   发 `gerdr:prefix-literal`，终端把 ^B 交给 shell（终端里跑着 tmux 时要用）。
 - xterm 的 CSS 不能 import，原样搬进了 index.css 末尾；配色从主题变量取，oklch 画到 canvas 上读回 rgb（xterm 只认 rgb / hex）。
-- Windows 上还没做（要走 ConPTY），建终端直接报错。
+- Windows runs terminals on ConPTY (internal/term/pty_windows.go; Windows 10 1809+). The shell is the one the native
+  agent's bash tool uses (`native.Shell()`: Git Bash, else PowerShell), started with `-l -i` and `CHERE_INVOKING=1`
+  (Git Bash's profile cd's to $HOME without it). STARTF_USESTDHANDLES with no handles, or a Gerdr whose stdout is
+  redirected (the background service) hands that to the shell and the pane stays blank. No process group: the shell
+  runs in a job object (KILL_ON_JOB_CLOSE), and closing the pane terminates the job. Splits don't follow `cd` there
+  (no cheap way to read another process's cwd).
 
 ## 远程访问（internal/auth、relay、acme、remote + server/remoteapi.go）
 

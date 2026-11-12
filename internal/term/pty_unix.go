@@ -4,12 +4,22 @@ package term
 
 import (
 	"errors"
+	"os"
 	"os/exec"
 	"syscall"
 	"time"
 
 	"github.com/creack/pty"
 )
+
+type ptySys struct{}
+
+func defaultShell() string {
+	if s := os.Getenv("SHELL"); s != "" {
+		return s
+	}
+	return "/bin/zsh"
+}
 
 func (t *Term) start(env []string, cols, rows uint16) error {
 	// -l：登录 shell，读 profile（PATH、别名都在那儿；从 launchd 起的 gerdr 自己的环境很干）。
@@ -22,7 +32,7 @@ func (t *Term) start(env []string, cols, rows uint16) error {
 	if err != nil {
 		return err
 	}
-	t.tty = f
+	t.in, t.out = f, f
 	t.pid = cmd.Process.Pid
 	go t.pump()
 	go func() {
@@ -43,15 +53,15 @@ func (t *Term) Resize(cols, rows uint16) error {
 	if cols == 0 || rows == 0 {
 		return nil
 	}
-	return pty.Setsize(t.tty, &pty.Winsize{Cols: cols, Rows: rows})
+	return pty.Setsize(t.out, &pty.Winsize{Cols: cols, Rows: rows})
 }
 
 // width: the PTY's current columns (0 = unknown), for Text to wrap lines where the screen did.
 func (t *Term) width() int {
-	if t.tty == nil {
+	if t.out == nil {
 		return 0
 	}
-	_, cols, err := pty.Getsize(t.tty)
+	_, cols, err := pty.Getsize(t.out)
 	if err != nil {
 		return 0
 	}

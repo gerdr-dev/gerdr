@@ -81,10 +81,7 @@ func (m *Manager) Create(o CreateOptions) (*Term, error) {
 	if o.Cols == 0 || o.Rows == 0 {
 		o.Cols, o.Rows = 80, 24
 	}
-	shell := os.Getenv("SHELL")
-	if shell == "" {
-		shell = "/bin/zsh"
-	}
+	shell := defaultShell()
 	env := m.env()
 	// launchd 起的 gerdr 没有 LANG：zsh 会把中文当成一串转义，行编辑也按字节算宽度。
 	if !hasEnv(env, "LANG") && !hasEnv(env, "LC_ALL") && !hasEnv(env, "LC_CTYPE") {
@@ -170,7 +167,10 @@ type Term struct {
 	shell   string
 	created time.Time
 	pid     int
-	tty     *os.File
+	// in / out: the terminal's two ends as seen from here. A Unix PTY is one file for both; a Windows ConPTY is two
+	// pipes.
+	in, out *os.File
+	sys     ptySys
 
 	mu     sync.Mutex
 	ring   []byte
@@ -227,7 +227,7 @@ func (t *Term) Attach() (backlog []byte, c <-chan []byte, detach func()) {
 }
 
 func (t *Term) Write(p []byte) error {
-	_, err := t.tty.Write(p)
+	_, err := t.in.Write(p)
 	return err
 }
 
@@ -235,7 +235,7 @@ func (t *Term) Write(p []byte) error {
 func (t *Term) pump() {
 	buf := make([]byte, 32<<10)
 	for {
-		n, err := t.tty.Read(buf)
+		n, err := t.out.Read(buf)
 		if n > 0 {
 			chunk := append([]byte(nil), buf[:n]...)
 			t.mu.Lock()
