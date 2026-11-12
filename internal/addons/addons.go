@@ -461,6 +461,10 @@ type serviceEntry struct {
 	spec ServiceSpec
 	// states: the sources it reports the state of (addon.json states): it gets the keys waited on
 	states []string
+	// installed: when it was last installed from a store (0: never). An update swaps the folder but usually keeps
+	// addon.json's service block and the path the same, so without this the old process kept running the old code
+	// out of the renamed-away folder until Gerdr restarted.
+	installed int64
 }
 
 // services: the enabled add-ons whose addon.json declares a service (a broken addon.json declares none; List says why).
@@ -473,7 +477,7 @@ func (m *Manager) services() map[string]serviceEntry {
 		}
 		dir := filepath.Join(m.dir, id)
 		if mf, err := readManifest(dir); err == nil && mf != nil && mf.Service != nil {
-			e := serviceEntry{dir: dir, spec: *mf.Service}
+			e := serviceEntry{dir: dir, spec: *mf.Service, installed: st.Installed[id].At}
 			for _, x := range mf.States {
 				src := x.Source
 				if src == "" {

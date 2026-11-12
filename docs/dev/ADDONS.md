@@ -234,6 +234,10 @@ folders (one or two levels down) holding an `addon.json` are its add-ons; no ind
   - an update is offered when the store's hash differs from that (not the version string: a store may forget to bump it);
   - installing over a folder that has no record (someone made it) or whose hash changed (edited after installing)
     is a 409 `conflict`, and the UI asks before sending `force`.
+  - its time (`At`) is part of what `Services.Sync` compares, so an install restarts the add-on's service. The folder
+    keeps its path and usually its addon.json service block, so before that an update left the old process running
+    the old code out of the deleted `.old-<id>` folder until Gerdr itself restarted; switching it off and on didn't
+    help either when both landed inside one watcher tick. Editing a service's files by hand still doesn't restart it.
 - Uninstall deletes the folder, keeps `addon-data/<id>`.
 - The default store is `gerdr-dev/gerdr-addon`; removing it sticks (the state file stores `stores: []`).
 - An add-on in a store should have `screenshots` in addon.json (shown as thumbnails in the store list) and a

@@ -117,11 +117,12 @@ type Services struct {
 }
 
 type svcProc struct {
-	id, dir string
-	spec    ServiceSpec
-	states  []string // the sources it reports the state of (addon.json states)
-	stop    chan struct{}
-	done    chan struct{}
+	id, dir   string
+	spec      ServiceSpec
+	states    []string // the sources it reports the state of (addon.json states)
+	installed int64    // serviceEntry.installed when it started
+	stop      chan struct{}
+	done      chan struct{}
 
 	// guarded by Services.mu
 	st       ServiceStatus
@@ -151,7 +152,7 @@ func (s *Services) Sync() {
 	var stopping []*svcProc
 	for id, p := range s.procs {
 		w, ok := want[id]
-		if !ok || !reflect.DeepEqual(w.spec, p.spec) || w.dir != p.dir || !reflect.DeepEqual(w.states, p.states) {
+		if !ok || !reflect.DeepEqual(w.spec, p.spec) || w.dir != p.dir || !reflect.DeepEqual(w.states, p.states) || w.installed != p.installed {
 			stopping = append(stopping, p)
 			delete(s.procs, id)
 		}
@@ -161,7 +162,7 @@ func (s *Services) Sync() {
 		if _, ok := s.procs[id]; ok {
 			continue
 		}
-		p := &svcProc{id: id, dir: w.dir, spec: w.spec, states: w.states, stop: make(chan struct{}), done: make(chan struct{}),
+		p := &svcProc{id: id, dir: w.dir, spec: w.spec, states: w.states, installed: w.installed, stop: make(chan struct{}), done: make(chan struct{}),
 			st: ServiceStatus{State: "starting", Since: time.Now().UnixMilli()}}
 		s.procs[id] = p
 		starting = append(starting, p)
@@ -170,7 +171,7 @@ func (s *Services) Sync() {
 	for _, p := range stopping {
 		close(p.stop)
 	}
-	// A changed addon.json: the old process has to be gone before the new one opens the same device.
+	// A changed addon.json or a new install: the old process has to be gone before the new one opens the same device.
 	for _, p := range stopping {
 		<-p.done
 		if _, ok := want[p.id]; !ok {

@@ -141,6 +141,21 @@ func TestService(t *testing.T) {
 	}
 	rec.waitMsg(t, `"again"`)
 
+	// Installed again (an update: same folder, same service block): the new code runs, not the old process
+	pid := s.Status("band").PID
+	if err := m.recordInstall("band", Installed{Store: "s", Hash: "h2"}); err != nil {
+		t.Fatal(err)
+	}
+	s.Sync()
+	waitFor(t, "restart after install", func() bool {
+		st := s.Status("band")
+		return st != nil && st.State == "running" && st.PID != 0 && st.PID != pid
+	})
+	s.Sync() // nothing changed since: left running
+	if st := s.Status("band"); st.PID == pid || st.State != "running" {
+		t.Fatalf("status after a second Sync = %+v", st)
+	}
+
 	// Switched off: stopped politely — stdin closed, the script exits on its own
 	if err := m.SetEnabled("band", false); err != nil {
 		t.Fatal(err)
