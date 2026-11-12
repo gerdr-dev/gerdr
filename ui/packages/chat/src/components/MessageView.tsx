@@ -461,15 +461,17 @@ function TurnStat({
   const actions = blocks && host.messageActions ? host.messageActions({ sessionId, role: "assistant", id, text: () => blocks().join("\n\n"), blocks }) : null;
   const rest = [t("msg.took", { time: fmtElapsed(data.ms) }), data.tokens > 0 && `${fmtTokens(data.tokens)} tokens`].filter(Boolean);
   return (
-    <div className="flex h-5 items-center gap-1 text-[12px] text-muted-foreground tabular-nums">
+    // One line on a phone too: nowrap so no piece (the date, the host's badge) breaks inside itself, and the took /
+    // tokens text is the one that gives way (truncates) when the width runs out; the buttons never shrink.
+    <div className="flex h-5 min-w-0 items-center gap-1 text-[12px] whitespace-nowrap text-muted-foreground tabular-nums">
       {data.ts ? (
-        <span className={deco?.timeClassName} title={deco?.title}>
+        <span className={cn("shrink-0", deco?.timeClassName)} title={deco?.title}>
           {fmtTime(data.ts)}
         </span>
       ) : null}
       {deco?.after}
-      <span>{(data.ts ? ["", ...rest] : rest).join(" · ")}</span>
-      {actions != null && <span className="ml-1 flex items-center gap-0.5">{actions}</span>}
+      <span className="min-w-0 truncate">{(data.ts ? ["", ...rest] : rest).join(" · ")}</span>
+      {actions != null && <span className="ml-1 flex shrink-0 items-center gap-0.5">{actions}</span>}
     </div>
   );
 }
