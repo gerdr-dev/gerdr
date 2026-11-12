@@ -252,7 +252,7 @@ func (s *Store) free(base string, o Owner) string {
 	for i := 1; ; i++ {
 		p := base
 		if i > 1 {
-			p = fmt.Sprintf("%s %d", base, i)
+			p = fmt.Sprintf("%s_%d", base, i)
 		}
 		f, err := Read(p)
 		if err != nil || f.Owner.key() == o.key() || f.Owner.key() == "" { // no owner yet: it is claimed (Ensure)
@@ -276,7 +276,7 @@ func (s *Store) projectDir(ix index, id, name string) string {
 	}
 	d := base
 	for i := 2; taken[d]; i++ {
-		d = fmt.Sprintf("%s %d", base, i)
+		d = fmt.Sprintf("%s_%d", base, i)
 	}
 	return filepath.Join(s.Root(), d)
 }
@@ -574,14 +574,16 @@ func (s *Store) Trash(p string) error {
 
 // ---- helpers ----
 
-var unsafeChars = regexp.MustCompile(`[/\\:*?"<>|\x00-\x1f]+`)
+// Whitespace goes too: a path with spaces has to be quoted in every shell command an agent or a person types, and
+// unquoted it silently becomes several arguments.
+var unsafeChars = regexp.MustCompile(`[/\\:*?"<>|\x00-\x1f\s]+`)
 
-// safeName makes a name usable as one path segment on every system.
+// safeName makes a name usable as one path segment on every system, without spaces: runs of unsafe characters and
+// whitespace become one "_".
 func safeName(s string) string {
-	s = strings.TrimSpace(unsafeChars.ReplaceAllString(s, " "))
-	s = strings.Trim(s, ". ")
+	s = strings.Trim(unsafeChars.ReplaceAllString(s, "_"), "._")
 	if r := []rune(s); len(r) > 80 {
-		s = strings.TrimSpace(string(r[:80]))
+		s = strings.TrimRight(string(r[:80]), "._")
 	}
 	if s == "" {
 		s = "untitled"

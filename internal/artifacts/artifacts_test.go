@@ -70,7 +70,7 @@ func TestSameNameOtherRepo(t *testing.T) {
 		t.Fatal(err)
 	}
 	pb, _ := s.ForRepo("p", "p", b)
-	if pb != pa+" 2" {
+	if pb != pa+"_2" {
 		t.Fatalf("second repo named app: %s", pb)
 	}
 }
@@ -129,7 +129,7 @@ func TestForOwnerAndRename(t *testing.T) {
 	s := New(func() string { return root })
 	o := Owner{Panel: "default/board", Task: "t1"}
 	p := s.ForOwner("default", "my", o, "任务", "写一篇: 文章")
-	if p != filepath.Join(root, "my", "任务", "写一篇  文章") {
+	if p != filepath.Join(root, "my", "任务", "写一篇_文章") {
 		t.Fatalf("path: %s", p)
 	}
 	if got, _ := s.Rename(o, "x"); got != "" {
@@ -163,5 +163,19 @@ func TestRecordFirstThenClaimed(t *testing.T) {
 	}
 	if f, _ := Read(p); f.Owner != o {
 		t.Fatalf("owner: %+v", f.Owner)
+	}
+}
+
+func TestSafeNameNoSpaces(t *testing.T) {
+	for in, want := range map[string]string{
+		"随便做个 html 并截图": "随便做个_html_并截图",
+		"  a \t b  ":    "a_b",
+		"x: y/z":        "x_y_z",
+		". hidden .":    "hidden",
+		"   ":           "untitled",
+	} {
+		if got := safeName(in); got != want {
+			t.Errorf("safeName(%q) = %q, want %q", in, got, want)
+		}
 	}
 }

@@ -149,7 +149,7 @@ is in `tasks/work-on-content.md`, not in code.
 ## As built (2026-11-12)
 
 - `internal/artifacts`: the root (config.json `artifactsRoot`, default `~/Gerdr`), `ForRepo` (git common dir → folder,
-  `name 2` when another repository of the same name has it), `Ensure` (identity, `.gerdrignore`, index), records
+  `name_2` when another repository of the same name has it), `Ensure` (identity, `.gerdrignore`, index), records
   (`Record` / `Items`), `List`, `Trash`. A directory an agent made by itself is adopted the first time it is looked at.
 - Sessions: `hub.Record.ArtifactsDir` (explicit, kept across agent switches) else `server.SessionArtifacts` (its repo's
   folder in its project, named after the project's display name). Handed to the adapter as `_meta gerdr.artifactsDir`:
@@ -165,7 +165,7 @@ is in `tasks/work-on-content.md`, not in code.
   packages (never `@tiptap/core` directly: a second copy from another esm.sh URL breaks it).
 - Panels: `ctx.artifacts` (`folder({ key, name, under })` → path by owner `{panel, task}`, `rename`, `items`,
   `record`; `work/host.go`, `server/workhost.go`), `ctx.sessions.start({ artifactsDir })`, `ArtifactsFolder` from
-  `@gerdr/core`. A folder recorded into before its owner looked (no owner yet) is claimed by it, not given a `name 2`.
+  `@gerdr/core`. A folder recorded into before its owner looked (no owner yet) is claimed by it, not given a `name_2`. Folder names have no spaces (runs of whitespace and characters unsafe in a path become one `_`): a path with spaces has to be quoted in every command.
 - Checked in a debug instance with playwright: records, tree, preview, rich editing (a save changes only the edited
   line: front matter, compact tables, `snake_case` kept), the "changed meanwhile" bar.
 
