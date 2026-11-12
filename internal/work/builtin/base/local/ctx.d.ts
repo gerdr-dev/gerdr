@@ -129,7 +129,7 @@ interface Ctx {
        * whenever the agent starts again (claude restarts an idle process within ~15 minutes, codex each thread resume,
        * native every call), so rewriting the file changes its instructions without a message in the chat or a new
        * conversation. For a long-lived conversation the person reads (an assistant, a secretary): the rules stay out of
-       * the chat.
+       * the chat. The started session has `systemFile` set when this Gerdr took it (an older one ignores the option).
        */
       systemFile?: string;
       /**

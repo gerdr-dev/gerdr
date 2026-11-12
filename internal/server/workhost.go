@@ -67,12 +67,20 @@ func (h workHost) StartSession(ctx context.Context, project string, o work.Start
 		return nil, err
 	}
 	id := sess.ID()
+	view := func() map[string]any {
+		v := h.view(sess.Summary(), nil)
+		// Said back so a panel can tell this Gerdr took it (an older one ignores the option and the agent never gets the text)
+		if o.SystemFile != "" {
+			v["systemFile"] = o.SystemFile
+		}
+		return v
+	}
 	// A conversation in the Work directory itself is one of the Work's own chats (the Work view lists those by cwd):
 	// it goes in no Code workspace, where it would make a "work" workspace and a tab the user never asked for.
 	// workspace "none": the page that started it is where it's followed (a board's worker, shown with the page's own
 	// SessionChat), so no tab of it appears in Code; going to it from there opens one then.
 	if s.inWorkDir(project, sess.Summary().Cwd) || o.Workspace == "none" {
-		return h.view(sess.Summary(), nil), s.sendFirst(ctx, sess, o)
+		return view(), s.sendFirst(ctx, sess, o)
 	}
 	if err := s.placeSession(project, id, o.Cwd, sess.Summary().Cwd, o.Workspace); err != nil {
 		// The conversation exists either way; say where it couldn't go rather than lose it
@@ -84,7 +92,7 @@ func (h workHost) StartSession(ctx context.Context, project string, o work.Start
 	if err := s.sendFirst(ctx, sess, o); err != nil {
 		return nil, err
 	}
-	return h.view(sess.Summary(), nil), nil
+	return view(), nil
 }
 
 // sendFirst sends a started session its first message (the prompt, with attachments), if there is one.
