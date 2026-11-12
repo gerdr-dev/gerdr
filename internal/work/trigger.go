@@ -290,7 +290,7 @@ func (r *Runner) triggerPrompt(project string, t Trigger, e ev.Event) error {
 	head := fmt.Sprintf(i18n.S("[触发器「%s」：%s/%s]", "[Trigger %s: %s/%s]"), name, e.Source, e.Kind)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	_, err := r.Host.Send(ctx, project, "work", e.Summary(head)+"\n\n"+t.Prompt, SendOptions{})
+	_, err := r.Host.Send(ctx, project, "work", e.Summary(head)+"\n\n"+t.Prompt, SendOptions{Fold: head})
 	return err
 }
 
