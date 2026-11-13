@@ -383,7 +383,9 @@ func (r *runner) ctxObject() jsValue {
 			return map[string]any{"state": st.State, "detail": st.Detail, "url": st.URL, "at": st.At}
 		}},
 		// What on this panel needs the user, in Gerdr's inbox and the phone's notifications (inbox.go)
-		"inbox":     r.inboxObject(),
+		"inbox": r.inboxObject(),
+		// A dot / number on this panel's rail button: something new, nothing asked (badge.go)
+		"badge":     r.badgeObject(),
 		"workspace": map[string]any{"project": r.project, "dir": r.dir, "logs_dir": r.r.logDir(r.project)},
 		// gerdr's interface is Chinese: messages meant for the user can follow this
 		"locale": "zh",

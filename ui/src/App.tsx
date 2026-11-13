@@ -26,6 +26,7 @@ import { initAndroid, syncAndroidTheme } from "./lib/android";
 import { CliApprove } from "./components/CliApprove";
 import { systemNotify } from "./lib/notify";
 import { watchInbox } from "./lib/inbox";
+import { watchBadges } from "./lib/badges";
 import { watchCopyOnSelect } from "./lib/copysel";
 import { watchNavButtons } from "./lib/actions/nav";
 import { reloadAddons, setTabNameFn } from "./lib/addons";
@@ -121,6 +122,7 @@ export default function App() {
     window.addEventListener("keydown", onKey, true);
     const unwatchCopy = watchCopyOnSelect(); // 实验室「选中即复制」，没开时什么都不做
     const unwatchInbox = watchInbox(); // errors, questions / approvals, low battery → the inbox
+    const unwatchBadges = watchBadges(); // panels' dots / numbers on their rail buttons
     const unwatchNav = watchNavButtons(); // the mouse's back / forward buttons → where focus was before
     if (isNative()) document.documentElement.classList.add("native");
     // mac App 的菜单和通知点击走这两个入口。
@@ -134,6 +136,7 @@ export default function App() {
       window.removeEventListener("keydown", onKey, true);
       unwatchCopy();
       unwatchInbox();
+      unwatchBadges();
       unwatchNav();
     };
   }, []);

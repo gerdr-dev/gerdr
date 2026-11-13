@@ -471,7 +471,8 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 		UI: ui, ESM: esm, Remote: rm, Awake: keeper,
 		Service: svc, Terms: term.New(func() []string { return sysenv.ChildEnv() }, log)}
 	defer srv.Terms.Close()
-	wr.Inbox = srv // ctx.inbox (server/inbox.go)
+	wr.Inbox = srv  // ctx.inbox (server/inbox.go)
+	wr.Badges = srv // ctx.badge (server/badge.go)
 	// Other computers this one drives (docs/dev/MULTIHOST.md). A broken peers.json only turns that off.
 	if pm, err := peer.Open(env.Dir); err != nil {
 		log.Warn("peers", "err", err)

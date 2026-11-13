@@ -37,12 +37,17 @@ limits. Read it before writing a function and type the argument `ctx: Ctx` (no i
 panel directory), `sessions` (hand a task to a coding agent and follow it), `workspaces` (the Code
 side's workspaces), `dirs` (directories anywhere on disk, read-only), `artifacts` (a folder per task under
 `~/Gerdr/` for what its work leaves that isn't committed, shown with `ArtifactsFolder` from @gerdr/core), `inbox`,
-`progress`, `log`, `sleep`.
+`badge`, `progress`, `log`, `sleep`.
 
 What on this panel needs the user goes to Gerdr's inbox with `ctx.inbox.set([{ id, title, body?, session? }])`: on
 every device, and as a notification on the phone App. Pass the whole current list each time (from wherever the panel
 works out what waits on the user, e.g. after each change and on a schedule): an item left out is done and leaves the
 inbox, the same `id` again is the same item. `session` makes the item open that conversation.
+
+Something new on the panel that asks nothing of the user (the board changed, new messages) is a badge on its rail
+button instead: `ctx.badge.set(n)` for a number, `ctx.badge.set(true)` for a dot, `ctx.badge.add()` for one more,
+`ctx.badge.clear()`. It notifies nobody and goes once the user opens the panel; don't use it for what waits on the
+user (that's the inbox). From the command line: `gerdr panel badge <panel> 3|dot|clear`.
 
 Images and files the user gives a task (pasted, dropped, picked on a page): the page POSTs each to
 `/api/fs/upload?name=<file name>` (same origin, body = the file, header `X-Gerdr: 1`) and gets `{ path }`; pass the

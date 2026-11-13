@@ -411,6 +411,10 @@ export const api = {
   /** Undo deleteProject: `trash` (what it returned) moves back. */
   restoreProject: (name: string, trash: string) => req("POST", `/api/projects/${encodeURIComponent(name)}/restore`, { trash }),
   work: (project: string) => req<{ dir: string }>("GET", `/api/work?project=${encodeURIComponent(project)}`),
+  /** Panels' badges on their rail buttons by panel key: >0 a number, 0 a dot (server/badge.go). */
+  badges: () => req<Record<string, number>>("GET", "/api/work/badges"),
+  /** n: >0 a number, 0 a dot, <0 none. */
+  setBadge: (key: string, n: number) => req("POST", "/api/work/badge", { key, n }),
   workRun: <T = any>(fn: string, input?: unknown, project?: string) =>
     req<{ result: T }>("POST", "/api/work/run", { fn, input, project }).then((r) => r.result),
   /** host: browse another computer's folders (the request is proxied there, server/hosts.go) */

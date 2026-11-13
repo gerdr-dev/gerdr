@@ -20,6 +20,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -1477,7 +1478,7 @@ func panelCmd() *cobra.Command {
 		return work.PanelKey(project(), arg)
 	}
 	client := func() (*apiClient, error) { return newAPIClient() }
-	cmd := &cobra.Command{Use: "panel", Short: "A project's panels: list, install from git, add a blank one, update, change the icon, remove; and run what's in one (run, functions, logs, schedules, triggers, secret, status)"}
+	cmd := &cobra.Command{Use: "panel", Short: "A project's panels: list, install from git, add a blank one, update, change the icon, put a dot / number on its button, remove; and run what's in one (run, functions, logs, schedules, triggers, secret, status)"}
 	cmd.PersistentFlags().StringVar(&projectArg, "project", "", "project id, or a panel's key (<project>/<name>) for run / functions / logs …  (default: the one the current directory belongs to)")
 	cmd.AddCommand(panelFnCmds(which)...)
 	cmd.AddCommand(&cobra.Command{
@@ -1586,6 +1587,41 @@ func panelCmd() *cobra.Command {
 	}
 	icon.Flags().StringVar(&color, "color", "", "a palette colour for a built-in icon (as in Settings → Agent)")
 	cmd.AddCommand(icon)
+	var badgeAdd bool
+	badge := &cobra.Command{
+		Use:   "badge <panel> <n|dot|clear>",
+		Short: "Put a red dot or a number on a panel's rail button (something new there; no inbox item, no notification). It goes when the user opens the panel. A function does the same with ctx.badge",
+		Long: `Put a red dot or a number on a panel's rail button: something new there (a board changed, new messages).
+Only a mark: nothing goes to the inbox, nobody is notified. It goes when the user opens the panel, or with clear.
+
+  gerdr panel badge board 3          a number
+  gerdr panel badge board dot        a plain dot
+  gerdr panel badge board 1 --add    one more on top of what it shows (a dot counts as 0)
+  gerdr panel badge board clear      none`,
+		Args: cobra.ExactArgs(2),
+		RunE: func(_ *cobra.Command, args []string) error {
+			c, err := client()
+			if err != nil {
+				return err
+			}
+			n := 0
+			switch v := strings.ToLower(args[1]); v {
+			case "dot", "true":
+			case "clear", "none", "0":
+				if badgeAdd {
+					return errors.New("--add takes a number")
+				}
+				n = -1
+			default:
+				if n, err = strconv.Atoi(v); err != nil || n < 0 {
+					return fmt.Errorf("%q: want a number, dot or clear", args[1])
+				}
+			}
+			return c.do("POST", "/api/work/badge", map[string]any{"key": keyOf(args[0]), "n": n, "add": badgeAdd}, nil)
+		},
+	}
+	badge.Flags().BoolVar(&badgeAdd, "add", false, "add the number to what the badge shows instead of replacing it")
+	cmd.AddCommand(badge)
 	cmd.AddCommand(&cobra.Command{
 		Use:   "rm <panel>",
 		Short: "Remove a panel: it moves to the trash, data and all (the project's id removes its own panel; restore brings a blank one)",

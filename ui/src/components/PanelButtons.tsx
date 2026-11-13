@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { PanelIcon } from "./PanelIcon";
 import { t } from "@/lib/i18n";
 import { removePanel } from "@/lib/panelActions";
+import { useBadges } from "@/lib/badges";
 
 /**
  * One button per panel of the project on screen, under Code: its own Work (the briefcase), then each panel installed
@@ -65,17 +66,19 @@ function PanelButton({ p, on, className, size, space }: { p: Panel; on: boolean;
       (e) => toast.error(e.message),
     );
   const remove = () => removePanel({ key: p.key, title: label });
+  const badge = useBadges((s) => s.byPanel[p.key]);
   return (
     <ContextMenu>
       <Tooltip>
         <TooltipTrigger asChild>
           <ContextMenuTrigger asChild>
-            <button aria-label={label} aria-pressed={on} className={className(on)} onClick={go}>
+            <button aria-label={label} aria-pressed={on} className={cn(className(on), "relative")} onClick={go}>
               <PanelIcon icon={p.icon} color={p.color} title={p.title} className={size === "rail" ? "size-4" : "size-3.5"} />
+              <PanelBadge panel={p.key} />
             </button>
           </ContextMenuTrigger>
         </TooltipTrigger>
-        <TooltipContent side={size === "rail" ? "right" : "bottom"}>{label}</TooltipContent>
+        <TooltipContent side={size === "rail" ? "right" : "bottom"}>{badge ? t("panelBadge.tooltipN", { name: label, n: badge }) : label}</TooltipContent>
       </Tooltip>
       {/* Never wider than the screen, kept off its edges: on a phone the long-pressed button sits near the right edge,
           and a menu wider than the room left of it ran off the screen */}
@@ -100,5 +103,20 @@ function PanelButton({ p, on, className, size, space }: { p: Panel; on: boolean;
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
+  );
+}
+
+/**
+ * The panel's badge (ctx.badge, `gerdr panel badge`; lib/badges.ts): a dot like the inbox's, or its number in a small
+ * pill over the icon's corner. Goes once the user looks at the panel (WorkView useClearBadge).
+ */
+function PanelBadge({ panel }: { panel: string }) {
+  const n = useBadges((s) => s.byPanel[panel]);
+  if (n === undefined) return null;
+  if (n <= 0) return <span className="pointer-events-none absolute top-1 right-1 size-1.5 rounded-full bg-bad" />;
+  return (
+    <span className="pointer-events-none absolute -top-0.5 -right-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-bad px-1 text-[9px] leading-none font-semibold text-white tabular-nums">
+      {n > 99 ? "99+" : n}
+    </span>
   );
 }

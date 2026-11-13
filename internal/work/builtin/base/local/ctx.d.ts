@@ -351,6 +351,18 @@ interface Ctx {
   inbox: {
     set(items: { id: string; title: string; body?: string; session?: string }[]): void;
   };
+  /**
+   * A red dot or a number on this panel's button in the rail: something new here (a board changed, new messages).
+   * Only a mark: nothing in the inbox, no notification (for what needs the user, use `inbox`). It stays until the user
+   * opens the panel, or until cleared. Every window shows the same; also `gerdr panel badge` from the command line.
+   */
+  badge: {
+    /** A number (> 0; shown as 99+ past 99), `true` for a plain dot, `null` / `false` / 0 for none. */
+    set(value: number | boolean | null): void;
+    /** n more (default 1) on top of what it shows, e.g. one per change seen; a dot counts as 0. */
+    add(n?: number): void;
+    clear(): void;
+  };
   /** This panel: its id, this directory, where its run logs are. */
   workspace: { project: string; dir: string; logs_dir: string };
   /** gerdr's interface language, for messages meant for the user. */

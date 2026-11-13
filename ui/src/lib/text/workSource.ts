@@ -17,6 +17,7 @@ export const zh = {
   "workSource.recSuperagent":
     "替你接活、派活的 agent，加一块跟进它们的看板：看板上的任务、Slack / 飞书来的消息，它判断派给哪个仓库的 agent，结果回到消息来的地方。",
   "workSource.findAfter": "。自己做的面板发布时也打上这个标签，别人就能找到。",
+  "panelBadge.tooltipN": "{name} · {n} 条新动态",
   "panelIcon.menu": "换图标…",
   "panelIcon.title": "「{name}」的图标",
   "panelIcon.desc": "和 agent 头像一样：内置图标、线条图标，或者资源插件带来的图片。存在这个面板的 ui.json 里，跟着面板走。",
@@ -71,6 +72,7 @@ export const en: Record<keyof typeof zh, string> = {
   "workSource.recSuperagent":
     "An agent that takes work in and hands it out, plus a board to follow it: tasks on the board and messages from Slack / Lark, it decides which repository's agent gets each, and results go back where they came from.",
   "workSource.findAfter": ". Give yours the same topic when you publish it, so others find it.",
+  "panelBadge.tooltipN": "{name} · {n} new",
   "panelIcon.menu": "Change icon…",
   "panelIcon.title": "Icon of “{name}”",
   "panelIcon.desc": "Like an agent's: a built-in glyph, a line icon, or a picture an add-on brought. Saved in the panel's ui.json, so it travels with it.",

@@ -388,6 +388,9 @@ function handle(m: any) {
     case "waits":
       import("./waits").then((p) => p.refreshWaits());
       break;
+    case "badges":
+      import("./badges").then((p) => p.setBadges(m.data));
+      break;
     case "inbox":
       import("./inbox").then((p) => p.syncPanelInbox(m.data ?? []));
       break;

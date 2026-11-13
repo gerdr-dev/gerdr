@@ -5,6 +5,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { toast } from "sonner";
 import { PortalContext } from "@/core/portal";
 import { PanelKeyContext, setPanelShown } from "@/core/visible";
+import { useClearBadge } from "@/lib/badges";
 import { AgentIcon, StatusDot, dotStatus } from "@/components/AgentIcon";
 import { COL_EDGE, startColResize } from "@/components/SidebarChrome";
 import { ChatView } from "@/components/chat/ChatView";
@@ -257,6 +258,7 @@ function WorkFrame({ project, active, onShowChat }: { project: string; active: b
   useEffect(() => toPage({ type: "gerdr:theme", dark }), [dark]);
   // core usePanelVisible: the page knows when it's off screen (and can stop polling)
   useEffect(() => setPanelShown(project, active), [project, active]);
+  useClearBadge(project, active); // the user is looking at it: its rail badge has done its job
   useEffect(() => {
     // Every mounted page posts on this window: only the one on screen is the one the user is using
     if (!active) return;
