@@ -41,6 +41,18 @@ export function nativeNotify(title: string, body: string, sessionId?: string, sp
   return false;
 }
 
+/**
+ * App 里: bring up the window showing `space` and go to the conversation there, as a notification click does (the
+ * macOS shell's __noteClick, tools/chromeshell noteClick; with no such window it goes to this one). false = not
+ * handled (a browser, or the Windows shell with its one window): the caller goes to it here.
+ */
+export function nativeFocusSession(sessionId: string, space: string) {
+  const w = window as any;
+  if (w.gerdrNative?.shell !== "chrome") return false;
+  w.gerdrNative.postMessage({ type: "__noteClick", sessionId, space });
+  return true;
+}
+
 export function nativeBadge(count: number) {
   bridge()?.postMessage({ type: "badge", count });
 }

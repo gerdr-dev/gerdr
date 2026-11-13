@@ -3,7 +3,7 @@ import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from "@/component
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { switchSpace } from "@/lib/actions";
 import { isAndroid } from "@/lib/android";
-import { currentSpace, spaceList, type Space } from "@/lib/layout";
+import { currentSpace, spaceInitials, spaceList, type Space } from "@/lib/layout";
 import { isCoarse } from "@/lib/phone";
 import { set, setMode, toggleSidebar, useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -25,14 +25,6 @@ import { t } from "@/lib/i18n";
  * and which broke whenever one didn't). Code mode's list sits to the rail's right. The phone has no rail: its drawer
  * (UnifiedSidebar with its own header and bottom row) and top bar carry the same things.
  */
-
-/** A project's short label for its chip: the initials of its first two words, a short name as is, else its first letter. */
-function initials(name: string) {
-  const words = name.split(/[\s\-_./]+/).filter(Boolean);
-  if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
-  if ([...name].length <= 2) return name;
-  return [...name][0].toUpperCase();
-}
 
 const tip = (label: React.ReactNode, el: React.ReactElement) => (
   <Tooltip>
@@ -79,7 +71,7 @@ export function Rail() {
                 onPointerDown={(e) => startSpaceDrag(e, sp.id, "y")}
               >
                 {on && <span className="absolute top-2 -left-1.5 h-5 w-1 rounded-r bg-foreground" />}
-                <span className="max-w-full truncate px-0.5">{initials(sp.name)}</span>
+                <span className="max-w-full truncate px-0.5">{spaceInitials(sp.name)}</span>
                 {st && <StatusDot status={st.status} unread={st.unread} className="absolute -top-0.5 -right-0.5 ring-2 ring-sidebar" />}
               </button>
             </ContextMenuTrigger>

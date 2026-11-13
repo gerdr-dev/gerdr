@@ -154,6 +154,14 @@ export function spaceList(l: Layout): Space[] {
   return out;
 }
 
+/** A project's short label for its chip (the rail, inbox cards): the initials of its first two words, a short name as is, else its first letter. */
+export function spaceInitials(name: string) {
+  const words = name.split(/[\s\-_./]+/).filter(Boolean);
+  if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
+  if ([...name].length <= 2) return name;
+  return [...name][0].toUpperCase();
+}
+
 /** The space being shown: the one the active workspace is in. */
 export const currentSpace = (l: Layout) => spaceOf(activeWs(l));
 

@@ -1,8 +1,10 @@
+import { createElement } from "react";
 import { toast } from "sonner";
 import { create } from "zustand";
 import { api, type PanelInboxItem, type PendingReq } from "./api";
 import { systemNotify } from "./notify";
-import { mutedSession } from "./layout";
+import { currentSpace, locateSession, mutedSession, spaceInitials, spaceList, spaceOf } from "./layout";
+import { nativeFocusSession } from "./native";
 import { isPhone } from "./phone";
 import { get as getApp, useStore, visibleSessions } from "./store";
 import type { SessionSummary } from "./types";
@@ -113,12 +115,28 @@ function toastItem(it: InboxItem, title: string) {
   toasts.set(it.id, id);
   const body = it.body && it.body.length > BODY_MAX ? it.body.slice(0, BODY_MAX) + "…" : it.body;
   const sid = it.sessionId;
-  const open = sid || it.panel ? () => openInboxItem(it) : undefined;
+  const open = sid || it.panel ? () => openFromCard(it) : undefined;
+  // Several projects (often one window each): the project's chip, as on the rail, says whose it is before reading it
+  const l = getApp().layout;
+  const space = itemSpace(it);
+  const sp = space && spaceList(l).length > 1 ? spaceList(l).find((x) => x.id === space) : undefined;
   toast(title, {
     id,
     duration: Infinity,
     closeButton: true,
     description: body,
+    icon: sp
+      ? createElement(
+          "span",
+          {
+            title: sp.name,
+            className: "flex size-7 items-center justify-center rounded-md border bg-background text-[11px] font-semibold text-muted-foreground",
+          },
+          createElement("span", { className: "max-w-full truncate px-0.5" }, spaceInitials(sp.name)),
+        )
+      : undefined,
+    // Sonner's icon box is a 16px square centred on the row (unlayered CSS, hence `!`): room for the chip, at the top
+    classNames: sp ? { icon: "size-auto! self-start! mr-1.5!" } : undefined,
     action: open
       ? {
           label: it.kind === "ask" ? t("inbox.goAnswer") : it.kind === "error" ? t("inbox.goLook") : t("inbox.goHandle"),
@@ -127,6 +145,27 @@ function toastItem(it: InboxItem, title: string) {
       : undefined,
     onDismiss: () => toasts.delete(it.id),
   });
+}
+
+/** The project (space) an item belongs to: its conversation's, else its panel's (a panel key is "<space>/<name>"). */
+function itemSpace(it: InboxItem): string | undefined {
+  if (it.sessionId) {
+    const loc = locateSession(getApp().layout, it.sessionId);
+    if (loc) return spaceOf(loc.ws);
+  }
+  // A panel's own conversation has no tab: it's the owning panel's (lib/panelRoute ownerOf; not imported, it pulls in actions)
+  const panel = it.panel ?? (it.sessionId ? getApp().sessions[it.sessionId]?.tags?.panel : undefined);
+  return panel?.split("/")[0] || undefined;
+}
+
+/**
+ * A card clicked: another project's conversation goes to the window showing that project, if there is one, instead
+ * of turning this window to it (every window shows the cards; the person picked this window for its own project).
+ */
+function openFromCard(it: InboxItem) {
+  const space = itemSpace(it);
+  if (it.sessionId && space && space !== currentSpace(getApp().layout) && nativeFocusSession(it.sessionId, space)) return;
+  openInboxItem(it);
 }
 
 /** Where an item leads: its conversation (a panel's own comes back to the panel, lib/panelRoute), else its panel. */
