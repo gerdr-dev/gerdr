@@ -78,7 +78,7 @@ func buildRoutes(files []string) []route {
 func entrySource(routes []route, layout, base string, url func(file string) string, mount bool) string {
 	var b strings.Builder
 	b.WriteString(`import React from "react";
-import { createBrowserRouter, createMemoryRouter, RouterProvider, Outlet, useParams, useRouteError } from "react-router";
+import { createBrowserRouter, createMemoryRouter, RouterProvider, Outlet, Navigate, useLocation, useParams, useRouteError } from "react-router";
 `)
 	for i, r := range routes {
 		fmt.Fprintf(&b, "import P%d from %q;\n", i, url(r.File))
@@ -108,8 +108,12 @@ function RouteError() {
     h("p", { style: { marginTop: 16, opacity: 0.6, fontFamily: "system-ui" } }, ` + strconv.Quote(i18n.S("界面代码出错了。改好之后会自动刷新。", "The UI code has an error. The page reloads once it's fixed.")) + `),
     h("a", { href: "/rescue", onClick: function (ev) { if (window.__gerdrRescue) { ev.preventDefault(); window.__gerdrRescue.open(); } }, style: { fontFamily: "system-ui", fontSize: 14, color: "#7aa2f7" } }, ` + strconv.Quote(i18n.S("打开急救面板，叫 agent 来修 →", "Open the rescue panel and have an agent fix it →")) + `));
 }
+// A mounted panel reopens on the path it was last on (WorkView keeps it): one it no longer has goes to its home page
+// instead of a 404 the person can't leave. Its own path is shown otherwise (window.location is the host page's).
 function NotFound() {
-  return h("div", { style: { padding: 24, font: "14px system-ui", opacity: 0.6 } }, "404 · " + location.pathname);
+  const loc = useLocation();
+  if (MOUNT) return h(Navigate, { to: "/", replace: true });
+  return h("div", { style: { padding: 24, font: "14px system-ui", opacity: 0.6 } }, "404 · " + loc.pathname);
 }
 function page(C) {
   return function Page() { return h(C, { params: useParams() }); };
@@ -147,7 +151,7 @@ export function createApp(opts) {
 		opts = fmt.Sprintf("{ basename: %q }", base)
 	}
 	out := strings.Replace(b.String(), "BASENAME", opts, 1)
-	out = strings.Replace(out, "MOUNT", strconv.FormatBool(mount), 1)
+	out = strings.ReplaceAll(out, "MOUNT", strconv.FormatBool(mount))
 	if mount {
 		out = strings.ReplaceAll(out, "__GERDR_ROUTE_ERRORS__", "__GERDR_MOUNT_ERRORS__")
 	}
