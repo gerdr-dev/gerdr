@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Copy, ExternalLink, Loader2, LogIn, SquareTerminal } from "lucide-react";
+import { Check, Copy, ExternalLink, Loader2, LogIn, SquareTerminal } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,7 @@ import { api, type LoginState } from "@/lib/api";
 import { runInTerminal } from "@/lib/actions";
 import { useStore } from "@/lib/store";
 import { t } from "@/lib/i18n";
+import { useCopied } from "@/lib/useCopied";
 
 // Above the composer (ChatHost.composerTop) while the last turn failed because the agent isn't signed in any more
 // (hub Summary.Login). "Sign in" runs the agent's own login in the background (hub/login.go): its browser opens on the
@@ -40,6 +41,7 @@ export function LoginChip({ sessionId }: { sessionId: string }) {
 }
 
 function LoginDialog({ sessionId, cwd, command, onClose }: { sessionId: string; cwd: string; command: string; onClose: () => void }) {
+  const [copied, copy] = useCopied();
   const [st, setSt] = useState<LoginState | null>(null);
   const [startErr, setStartErr] = useState("");
   const [code, setCode] = useState("");
@@ -137,9 +139,9 @@ function LoginDialog({ sessionId, cwd, command, onClose }: { sessionId: string; 
                       {t("loginDialog.openLink")}
                     </a>
                   </Button>
-                  <Button size="sm" variant="ghost" onClick={() => navigator.clipboard.writeText(st.url!).then(() => toast.success(t("common.copied")))}>
-                    <Copy className="size-3.5" />
-                    {t("loginDialog.copyLink")}
+                  <Button size="sm" variant="ghost" onClick={() => copy(st.url!)}>
+                    {copied ? <Check className="size-3.5 text-ok" /> : <Copy className="size-3.5" />}
+                    {copied ? t("common.copied") : t("loginDialog.copyLink")}
                   </Button>
                 </div>
               </div>

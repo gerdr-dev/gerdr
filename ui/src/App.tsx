@@ -322,8 +322,9 @@ export default function App() {
         <AddonSlot name="overlay" />
         <AppContextMenu />
         <CliApprove />
-        {/* 手机上底部是输入框和软键盘，toast 放顶上 */}
-        <Toaster position={phone ? "top-center" : "bottom-right"} />
+        {/* Top centre everywhere: every pane's composer is at the bottom (and the phone's keyboard), so a bottom-corner toast
+            covered the rightmost pane's input box (user report). The top is pane title bars, fine to cover for a moment. */}
+        <Toaster position="top-center" />
         {/* A lost connection: a toast everywhere now; the bottom row that showed it on wider screens became the rail */}
         <ConnToast />
       </TooltipProvider>

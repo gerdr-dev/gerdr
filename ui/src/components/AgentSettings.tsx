@@ -1,4 +1,4 @@
-import { Copy, Pencil, Plus } from "lucide-react";
+import { Check, Copy, Pencil, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { AgentIcon, SPRITE } from "@/components/AgentIcon";
@@ -17,6 +17,7 @@ import { t } from "@/lib/i18n";
 import { get, setConfig, useStore, type AgentDef, type LLMProvider } from "@/lib/store";
 import type { AgentInfo, ExtView } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { useCopied } from "@/lib/useCopied";
 
 // 设置 →「Agent」。两个概念（用户定的）：
 //   - 引擎：真正干活的那个 —— Claude Code、Codex、Native（gerdr 自己直接调模型接口，用下面配的模型服务商，可以有好几家）；
@@ -834,19 +835,14 @@ function DefaultsEditor({
 }
 
 function LoginHint({ cmd, then }: { cmd: string; then?: string }) {
+  const [copied, copy] = useCopied();
   return (
     <div className="space-y-1">
       <div>{then ? t("agentSettings.runThisThen", { then }) : t("agentSettings.runThis")}</div>
       <div className="flex items-start gap-1.5">
         <code className="min-w-0 flex-1 rounded-sm bg-card px-2 py-1 font-mono break-all text-foreground">{cmd}</code>
-        <Button
-          size="icon"
-          variant="ghost"
-          className="size-7 shrink-0"
-          title={t("common.copy")}
-          onClick={() => navigator.clipboard.writeText(cmd).then(() => toast.success(t("common.copied")))}
-        >
-          <Copy className="size-3.5" />
+        <Button size="icon" variant="ghost" className="size-7 shrink-0" title={t("common.copy")} onClick={() => copy(cmd)}>
+          {copied ? <Check className="size-3.5 text-ok" /> : <Copy className="size-3.5" />}
         </Button>
       </div>
     </div>

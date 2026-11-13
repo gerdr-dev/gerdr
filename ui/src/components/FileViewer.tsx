@@ -1,4 +1,4 @@
-import { AppWindow, Copy, Download, ExternalLink, FolderOpen } from "lucide-react";
+import { AppWindow, Check, Copy, Download, ExternalLink, FolderOpen } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { MessageResponse } from "@/components/ai-elements/message";
@@ -12,6 +12,7 @@ import { isNative, nativeOpenPath, nativeOpenURL } from "@/lib/native";
 import { get, set, useStore } from "@/lib/store";
 import { HostTag } from "./HostTag";
 import { t } from "@/lib/i18n";
+import { useCopied } from "@/lib/useCopied";
 
 /** 文本最多读这么多：再大的多半是日志 / 数据文件，整个塞进 DOM 手机上会卡死，给下载。 */
 const TEXT_MAX = 2 << 20;
@@ -107,6 +108,7 @@ const revealLabel = () => (IS_MAC ? t("fileViewer.revealFinder") : t("fileViewer
 
 /** Copy path / open with app / show in folder / open outside / download: the viewer dialog's header, and a file pane's title bar (Panes.tsx). */
 export function FileActions({ stat, small }: { stat: FileStat; small?: boolean }) {
+  const [copied, copy] = useCopied();
   const btn = small ? "size-6" : "size-8";
   const ic = small ? "size-3.5" : "size-4";
   return (
@@ -121,17 +123,8 @@ export function FileActions({ stat, small }: { stat: FileStat; small?: boolean }
           </Button>
         </>
       )}
-      <Button
-        variant="ghost"
-        size="icon"
-        className={btn}
-        title={t("fileViewer.copyPath")}
-        onClick={() => {
-          navigator.clipboard.writeText(stat.path);
-          toast(t("fileViewer.pathCopied"));
-        }}
-      >
-        <Copy className={ic} />
+      <Button variant="ghost" size="icon" className={btn} title={t("fileViewer.copyPath")} onClick={() => copy(stat.path)}>
+        {copied ? <Check className={`${ic} text-ok`} /> : <Copy className={ic} />}
       </Button>
       {isNative() || isAndroid() ? (
         <Button variant="ghost" size="icon" className={btn} title={t("fileViewer.openInBrowser")} onClick={() => openOutside(stat)}>

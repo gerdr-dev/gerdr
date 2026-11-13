@@ -1,4 +1,4 @@
-import { Loader2, Monitor, Server, Trash2 } from "lucide-react";
+import { Check, Loader2, Monitor, Server, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,7 @@ import { api } from "@/lib/api";
 import { t } from "@/lib/i18n";
 import { set, useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
+import { useCopied } from "@/lib/useCopied";
 
 /**
  * Settings → Remote access, "Computers this one controls" (docs/dev/MULTIHOST.md): paste the invite another
@@ -102,6 +103,7 @@ export function HostsSettings({ canInvite }: { canInvite?: boolean }) {
  * like pairing codes (server/remoteapi.go): whoever holds a peer device can run anything here.
  */
 export function PeerInviteButton() {
+  const [copied, copy] = useCopied();
   const [inv, setInv] = useState<{ url: string; expires: string } | null>(null);
   return (
     <Popover
@@ -127,8 +129,9 @@ export function PeerInviteButton() {
           <div>{t("hostsSettings.inviteHow")}</div>
           <div className="rounded-md border bg-muted/40 p-2 font-mono text-[12px] break-all select-all">{inv.url}</div>
           <div className="flex items-center gap-2">
-            <Button size="sm" onClick={() => navigator.clipboard.writeText(inv.url).then(() => toast.success(t("hostsSettings.copied")))}>
-              {t("hostsSettings.copy")}
+            <Button size="sm" onClick={() => copy(inv.url)}>
+              {copied && <Check className="size-3.5" />}
+              {copied ? t("hostsSettings.copied") : t("hostsSettings.copy")}
             </Button>
             <span className="text-[12px] text-muted-foreground">{t("hostsSettings.inviteValid", { time: new Date(inv.expires).toLocaleTimeString() })}</span>
           </div>

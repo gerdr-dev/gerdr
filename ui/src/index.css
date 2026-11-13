@@ -248,6 +248,39 @@
   }
 }
 
+/* lib/copysel.ts: the "Copied" bubble by the mouse after copy-on-select. Plain CSS, not Tailwind classes: it is made
+   with createElement and has to look right on its first frame. pointer-events none so it never catches a click. */
+.copy-bubble {
+  position: fixed;
+  z-index: 100;
+  pointer-events: none;
+  user-select: none;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  line-height: 18px;
+  background: var(--popover);
+  color: var(--popover-foreground);
+  border: 1px solid var(--border);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.15);
+  animation: copy-bubble-in 120ms ease-out;
+  transition: opacity 200ms;
+}
+.copy-bubble-out {
+  opacity: 0;
+}
+@keyframes copy-bubble-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .copy-bubble {
+    animation: none;
+  }
+}
+
 /* BorderFlow (components/BorderFlow.tsx): the loading mark of a picked control, a solid segment running round its border
    (or a gap in it). Rect sizes are CSS because SVG attributes can't do calc; --bf-w is the stroke width. --bf-p is
    where the segment's head is (0-100 round the border); --bf-grow takes it from nothing to its full --len as it starts

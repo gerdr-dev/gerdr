@@ -1,4 +1,4 @@
-import { ArrowLeft, Copy, FileText, FolderKanban, Loader2, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { ArrowLeft, Check, Copy, FileText, FolderKanban, Loader2, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { AgentIcon } from "@/components/AgentIcon";
@@ -10,6 +10,7 @@ import { t } from "@/lib/i18n";
 import type { MessageKey } from "@/lib/messages";
 import type { MemoryEntry, MemoryStore } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { useCopied } from "@/lib/useCopied";
 
 // 设置 →「记忆」：三家 agent 跨会话记住的东西（Gerdr Agent 的、Claude Code 的自动记忆、Codex 从会话里总结的）。
 // 记忆都是 agent 自己写的 Markdown 文件，这里给人看、改、删；改完 agent 下一轮读到的就是新的。
@@ -46,6 +47,7 @@ type Editing = { path: string; title: string; content: string; saved: string; is
 
 /** project: show only that Gerdr project's shared memory (the project dialog's Memory tab), no picker. */
 export function MemorySettings({ open, project }: { open: boolean; project?: string }) {
+  const [pathCopied, copyPath] = useCopied();
   const [stores, setStores] = useState<MemoryStore[] | null>(null);
   const [agent, setAgent] = useState<(typeof AGENTS)[number]["id"]>("all");
   const [q, setQ] = useState("");
@@ -267,10 +269,10 @@ export function MemorySettings({ open, project }: { open: boolean; project?: str
                   <button
                     className="flex max-w-full items-center gap-1 truncate font-mono text-[11px] text-muted-foreground hover:text-foreground"
                     title={t("memorySettings.copyPath")}
-                    onClick={() => navigator.clipboard.writeText(cur.dir).then(() => toast.success(t("memorySettings.pathCopied")))}
+                    onClick={() => copyPath(cur.dir)}
                   >
                     <span className="truncate">{cur.dir}</span>
-                    <Copy className="size-3 shrink-0" />
+                    {pathCopied ? <Check className="size-3 shrink-0 text-ok" /> : <Copy className="size-3 shrink-0" />}
                   </button>
                 </div>
                 {cur.agent !== "codex" && (

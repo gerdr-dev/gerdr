@@ -193,7 +193,8 @@ export function TerminalView({
       if (!copyOnSelectOn()) return;
       const my = ++upSeq;
       setTimeout(() => {
-        if (my === upSeq && !disposed && term.hasSelection()) copySelected(term.getSelection(), e.detail >= 2, () => term.clearSelection());
+        if (my === upSeq && !disposed && term.hasSelection())
+          copySelected(term.getSelection(), e.detail >= 2, () => term.clearSelection(), { x: e.clientX, y: e.clientY });
       });
     };
     el.addEventListener("mousedown", onDown, true);

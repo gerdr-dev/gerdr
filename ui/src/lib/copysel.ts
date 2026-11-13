@@ -1,17 +1,18 @@
 // 实验室：选中即复制（config.copyOnSelect）。照 herdr 的 ui.copy_on_select 做，用过 herdr 的人手感一样：
 //   - 拖着选，松开鼠标就复制，选区马上清掉（清掉 = 告诉你「已经拿走了」，也免得下一次点击被当成在选区上拖）；
 //   - 双击选词 / 三击选行，复制后高亮留 500ms 再清，让人看清复制的是哪一段；
-//   - 底部提示「已复制」2 秒；
+//   - a small "Copied" bubble next to where the mouse let go, for ~1s. Not a toast: toasts sit in a window corner, and
+//     the bottom-right one covered the composer of the rightmost pane every time (user report). The bubble is where the
+//     person is already looking and covers nothing they need;
 //   - 复制完光标回到这个 pane 的输入框（终端本来就在终端里）。
 // 对话等普通页面看 DOM 选区（document 上的 mouseup）；终端是 xterm 自己画的选区，不进 DOM，Terminal.tsx 里单独接。
 // 输入框 / 可编辑区域里的选区不管：在那里选字是为了改、为了删，复制走了还清掉选区就没法改了。
-import { toast } from "sonner";
 import { isCoarse } from "./phone";
 import { get, prefOf } from "./store";
 import { t } from "./i18n";
 
 const HIGHLIGHT_MS = 500; // herdr 的 PANE_COPY_HIGHLIGHT_DURATION
-const TOAST_MS = 2000; // herdr 的 COPY_FEEDBACK_DURATION
+const BUBBLE_MS = 1000;
 
 export const copyOnSelectOn = () => !!prefOf(get(), "copyOnSelect");
 
@@ -20,14 +21,38 @@ export const copyOnSelectOn = () => !!prefOf(get(), "copyOnSelect");
 // 打不了字、输入法也起不来；用户报的）
 let pendingClear: ReturnType<typeof setTimeout> | undefined;
 
-/** 复制并提示；clear 是清掉选区的办法，多击时晚一点再清。 */
-export function copySelected(text: string, multiClick: boolean, clear: () => void) {
+let bubble: HTMLDivElement | undefined;
+let bubbleTimer: ReturnType<typeof setTimeout> | undefined;
+
+/** Shows the "Copied" bubble just above-right of (x, y), kept inside the window. Plain DOM with its own CSS class
+ *  (.copy-bubble in index.css), so it is styled on its first frame (browser Tailwind may not have seen a new class yet). */
+function showBubble(x: number, y: number) {
+  bubble?.remove();
+  clearTimeout(bubbleTimer);
+  const el = document.createElement("div");
+  el.className = "copy-bubble";
+  el.setAttribute("role", "status");
+  el.textContent = t("common.copied");
+  document.body.appendChild(el);
+  const { width, height } = el.getBoundingClientRect();
+  el.style.left = `${Math.max(4, Math.min(x + 8, window.innerWidth - width - 4))}px`;
+  el.style.top = `${Math.max(4, y - height - 8)}px`;
+  bubble = el;
+  bubbleTimer = setTimeout(() => {
+    el.classList.add("copy-bubble-out");
+    setTimeout(() => el.remove(), 200);
+    if (bubble === el) bubble = undefined;
+  }, BUBBLE_MS);
+}
+
+/** 复制并提示；clear 是清掉选区的办法，多击时晚一点再清。at: where the mouse let go (the bubble goes there). */
+export function copySelected(text: string, multiClick: boolean, clear: () => void, at: { x: number; y: number }) {
   // Empty or whitespace-only: don't touch the clipboard or toast. Double-clicking blank space selects an invisible
   // newline / run of spaces (in the DOM and in xterm alike), which would otherwise report "copied" for nothing.
   if (!text.trim()) return;
   clearTimeout(pendingClear);
   const done = () => {
-    toast(t("common.copied"), { id: "copy-on-select", duration: TOAST_MS });
+    showBubble(at.x, at.y);
     clearTimeout(pendingClear);
     if (multiClick) pendingClear = setTimeout(clear, HIGHLIGHT_MS);
     else clear();
@@ -71,12 +96,17 @@ export function watchCopyOnSelect(): () => void {
       const box = pane?.querySelector<HTMLTextAreaElement>("textarea[data-composer]");
       // 三击选段时浏览器把段尾的换行也选上了，粘进输入框会多出空行
       const text = e.detail >= 3 ? sel.toString().replace(/\s+$/, "") : sel.toString();
-      copySelected(text, e.detail >= 2, () => {
-        // 焦点已经在输入框里（用户等不及自己点进去了）时别清：这时的页面选区就是输入框的光标
-        if (editable(document.activeElement)) return;
-        sel.removeAllRanges();
-        if (box?.isConnected && !isCoarse() && !document.querySelector("[role=dialog]")) box.focus();
-      });
+      copySelected(
+        text,
+        e.detail >= 2,
+        () => {
+          // 焦点已经在输入框里（用户等不及自己点进去了）时别清：这时的页面选区就是输入框的光标
+          if (editable(document.activeElement)) return;
+          sel.removeAllRanges();
+          if (box?.isConnected && !isCoarse() && !document.querySelector("[role=dialog]")) box.focus();
+        },
+        { x: e.clientX, y: e.clientY },
+      );
     });
   };
   document.addEventListener("mouseup", onUp);
