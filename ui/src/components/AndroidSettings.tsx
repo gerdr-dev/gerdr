@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { androidCan, isAndroid, onAndroid, postAndroid, type AndroidUpdate } from "@/lib/android";
+import { androidCan, isAndroid, isIOSApp, onAndroid, postAndroid, useLanRoute, type AndroidUpdate } from "@/lib/android";
 import { cn } from "@/lib/utils";
 import { locale, t } from "@/lib/i18n";
 
@@ -18,6 +18,7 @@ export function AndroidSettings() {
   const route = useRoute();
 
   useEffect(() => {
+    if (!isAndroid()) return;
     const off1 = onAndroid("notify", (m) => setN({ on: !!m.on, perm: !!m.perm, battery: !!m.battery }));
     const off2 = onAndroid("volkeys", (m) => setVol(!!m.on));
     const off3 = onAndroid("update", (m) => setUp(m as unknown as AndroidUpdate));
@@ -31,6 +32,7 @@ export function AndroidSettings() {
     };
   }, []);
 
+  if (isIOSApp()) return <IOSSettings />;
   if (!isAndroid()) return null;
   const live = n?.on && n.perm;
   return (
@@ -138,6 +140,28 @@ function UpdateRow({ u }: { u: AndroidUpdate }) {
           {t("systemUpdate.check")}
         </Button>
       )}
+    </div>
+  );
+}
+
+/** The iOS App's shell (ios/): the server and, on iOS 17+, which way it reaches it. No notifications or update yet. */
+function IOSSettings() {
+  const route = useRoute();
+  const lan = useLanRoute();
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <div>
+        <div className="text-[13px]">{t("androidSettings.iosTitle")}</div>
+        {lan && (
+          <div className="text-[12px] text-muted-foreground">
+            <span className={cn("mr-1.5 inline-block size-2 rounded-full align-middle", route.via === "lan" ? "bg-ok" : "bg-brand")} />
+            {route.detail}
+          </div>
+        )}
+      </div>
+      <Button size="sm" variant="outline" onClick={() => postAndroid({ t: "setup" })}>
+        {t("androidSettings.switchServer")}
+      </Button>
     </div>
   );
 }

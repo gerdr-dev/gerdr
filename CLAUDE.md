@@ -10,6 +10,9 @@ github.com/zbysir/lightron, where browser-side changes go as general hooks — t
   docs/dev/MULTIHOST.md. The `/h/<host>/…` proxy must stay behind the same guard as `/api/`.
 - 安卓 App（android/：局域网直连、App 里的 passkey、后台通知，`internal/lan`、`remote/lan.go`、`server/appapi.go` `appwatch.go`）：
   docs/dev/ANDROID.md。桥的两半（`Bridge.kt` ↔ `ui/src/lib/android.ts`）要一起改；换正式签名钥匙要改 `config.OfficialAndroidCert`。
+- iOS App (ios/: a WKWebView shell, passkey through Safari via the device flow, LAN routing on iOS 17+, `make ios` / `make ios-typecheck`):
+  docs/dev/IOS.md. It speaks Android's bridge format (`window.gerdrIOS`, `WebViewController.swift`), so a bridge
+  message change touches `Bridge.kt`, `WebViewController.swift` and `ui/src/lib/android.ts` together.
 - Artifacts (folders under `~/Gerdr` and the records a piece of work leaves: files, links, paths, text; session
   `artifactsDir`, `gerdr artifacts`, the `<Folder>` component): docs/dev/ARTIFACTS.md.
 - Measured-and-postponed work (why, numbers, how to do it): docs/dev/TODO.md. Add to it instead of losing the investigation.

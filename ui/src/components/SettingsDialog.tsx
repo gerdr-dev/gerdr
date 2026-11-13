@@ -7,7 +7,7 @@ import { lightboxOpen } from "@/components/Lightbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { isAndroid } from "@/lib/android";
+import { isApp } from "@/lib/android";
 import { api } from "@/lib/api";
 import { usePhone } from "@/lib/phone";
 import { GAP, useSwipePager } from "@/lib/swipePager";
@@ -341,8 +341,8 @@ export function SettingsDialog({ open }: { open: boolean }) {
                     </div>
                   </Row>
                 </Section>
-                {/* Only in the Android App (its shell keeps these): notifications in the background, volume keys, server */}
-                {isAndroid() && (
+                {/* Only in a phone App (its shell keeps these): Android's background notifications, volume keys, server; iOS's server */}
+                {isApp() && (
                   <Section title={t("settings.thisPhone")} local>
                     <AndroidSettings />
                   </Section>

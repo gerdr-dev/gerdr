@@ -1,0 +1,6 @@
+// Copy to Local.xcconfig (ignored by git) and fill in.
+// Team ID: Xcode → Settings → Accounts → your Apple ID → the team's ID (10 characters),
+// or leave it empty and pick the team in Xcode's Signing & Capabilities tab once.
+DEVELOPMENT_TEAM = ABCDE12345
+// A free personal team needs a bundle id nobody else registered; make it yours.
+GERDR_BUNDLE_ID = io.github.yourname.gerdr

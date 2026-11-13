@@ -7,7 +7,7 @@ import { get, set, setSidebarW, SIDEBAR_W, toggleSidebar, useStore } from "@/lib
 import { cn } from "@/lib/utils";
 import { updateWaitsForClick } from "@/lib/native";
 import { PhoneAddonButtons } from "./RailAddons";
-import { isAndroid } from "@/lib/android";
+import { useLanRoute } from "@/lib/android";
 import { usePhone } from "@/lib/phone";
 import { InboxButton } from "./Inbox";
 import { ConnStatus, RouteLabel } from "./ConnStatus";
@@ -71,6 +71,7 @@ export function SidebarHeader({ className, style }: { className?: string; style?
 /** The bottom row of the phone drawer: settings, connection / route status, the command palette. */
 export function SidebarFooter({ sidebarToggle }: { sidebarToggle?: boolean }) {
   const connected = useStore((s) => s.connected);
+  const lanRoute = useLanRoute();
   const doctorBad = useStore((s) => s.doctor?.level === "bad");
   const updateWaits = useStore((s) => updateWaitsForClick(s.appUpdate));
   const phone = usePhone();
@@ -99,7 +100,7 @@ export function SidebarFooter({ sidebarToggle }: { sidebarToggle?: boolean }) {
           the app takes (details in Settings → General → Android app) */}
       <div className="flex min-w-0 flex-1 items-center justify-end gap-2 overflow-hidden">
         <ConnStatus />
-        {connected && isAndroid() && <RouteLabel />}
+        {connected && lanRoute && <RouteLabel />}
       </div>
       <PhoneAddonButtons />
       {/* On a phone the inbox is in the top bar (PhoneBar); this row is in the drawer there */}

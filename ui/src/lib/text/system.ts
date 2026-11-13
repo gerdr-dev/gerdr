@@ -49,6 +49,7 @@ export const zh = {
   "updateSetting.daysAgo": "{n} 天前",
 
   "androidSettings.title": "安卓 App",
+  "androidSettings.iosTitle": "iOS App",
   "androidSettings.switchServer": "换服务器",
   "androidSettings.notify": "后台通知",
   "androidSettings.notifyOff": "关着：Agent 等你、跑完了，只有打开 App 才看得到。",
@@ -318,6 +319,7 @@ export const en: Record<keyof typeof zh, string> = {
   "updateSetting.daysAgo": "{n} d ago",
 
   "androidSettings.title": "Android App",
+  "androidSettings.iosTitle": "iOS App",
   "androidSettings.switchServer": "Switch server",
   "androidSettings.notify": "Background notifications",
   "androidSettings.notifyOff": "Off: you'll only see that an agent is waiting or done when you open the App.",

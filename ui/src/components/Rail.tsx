@@ -2,7 +2,7 @@ import { Code2, Command, Keyboard, Plus, Settings } from "lucide-react";
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { switchSpace } from "@/lib/actions";
-import { isAndroid } from "@/lib/android";
+import { useLanRoute } from "@/lib/android";
 import { currentSpace, spaceInitials, spaceList, type Space } from "@/lib/layout";
 import { isCoarse } from "@/lib/phone";
 import { set, setMode, toggleSidebar, useStore } from "@/lib/store";
@@ -44,6 +44,7 @@ export function Rail() {
   const doctorBad = useStore((s) => s.doctor?.level === "bad");
   const updateWaits = useStore((s) => updateWaitsForClick(s.appUpdate)); // an update closed with "Later"
   const connected = useStore((s) => s.connected);
+  const lanRoute = useLanRoute();
   const spaces = spaceList(layout);
   const here = currentSpace(layout);
   const cur = mode === "work" ? "work" : "agents";
@@ -175,8 +176,8 @@ export function Rail() {
               {(doctorBad || updateWaits) && <span className={cn("absolute top-1.5 right-1.5 size-1.5 rounded-full", doctorBad ? "bg-bad" : "bg-brand")} />}
             </button>,
           )}
-          {/* Which way the Android app reaches gerdr (details in Settings → General → Android app) */}
-          {connected && isAndroid() && (
+          {/* Which way the phone App reaches gerdr (details in Settings → General → this phone) */}
+          {connected && lanRoute && (
             <div className="pt-1 [&>span]:flex-col [&>span]:gap-0.5 [&>span]:text-[10px]">
               <RouteLabel />
             </div>

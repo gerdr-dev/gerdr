@@ -116,6 +116,9 @@ version is downloaded into the cache by itself and checked against the sha256; S
 
 ## 桥
 
+The iOS App (ios/, docs/dev/IOS.md) speaks the same format as `window.gerdrIOS` and answers a subset of the table
+below (hello, theme, open, setup, login, copyImage, lan, route); keep the two shells in step when a message changes.
+
 页面 ↔ 壳 是 JSON 字符串、按 `t` 分派；JS 对象 `gerdrAndroid`，壳用 `addWebMessageListener` **只对服务器那个 origin 注入**
 （不用 `addJavascriptInterface`：页面里渲染着 agent 的输出）。两边对不上是完全静默的。
 

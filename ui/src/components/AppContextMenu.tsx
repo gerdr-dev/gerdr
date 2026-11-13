@@ -16,7 +16,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "re
 import { toast } from "sonner";
 import { openPath } from "@/lib/actions";
 import { fail as addonFail, menuItems } from "@/lib/addons";
-import { androidCan, androidCopyImage, isAndroid } from "@/lib/android";
+import { androidCan, androidCopyImage, isAndroid, isApp } from "@/lib/android";
 import { leaves } from "@/lib/layout";
 import { get } from "@/lib/store";
 import { IS_MAC } from "@/lib/keys";
@@ -91,7 +91,7 @@ async function copyText(text: string) {
 // image without CORS taints the canvas and fails, which the toast says.
 async function copyImage(img: HTMLImageElement) {
   try {
-    if (isAndroid()) {
+    if (isApp() && androidCan("copyImage")) {
       // The phone's clipboard takes the file as it is (jpg, gif…); no need to redraw it as PNG
       const r = await fetch(img.currentSrc || img.src, { credentials: "same-origin" });
       if (!r.ok) throw new Error(tr("appContextMenu.imageReadFailed", { status: r.status }));

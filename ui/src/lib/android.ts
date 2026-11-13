@@ -8,6 +8,7 @@
 // 壳用 addWebMessageListener 注入 gerdrAndroid，**只对它连的那台服务器的 origin 注入** —— 所以「有这个对象」
 // 就是「我在 App 里，而且是 App 认的那台」。对象在页面脚本跑之前就在了，模块顶层读一次就够。
 
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { t } from "./i18n";
 import { hasAsk, watchAsks } from "@gerdr/chat/askkeys";
@@ -21,12 +22,23 @@ export type AndroidMsg = { t: string; [k: string]: unknown };
 
 type Port = { postMessage(data: string): void; onmessage: ((e: { data: string }) => void) | null };
 
-const port = (globalThis as unknown as { gerdrAndroid?: Port }).gerdrAndroid;
+// The iOS App (ios/, WebViewController.swift) injects `gerdrIOS` with the same shape and message format, only on
+// its server's origin too. It answers a subset (hello, theme, open, setup, login, copyImage, focus); the rest is
+// Android's alone (back and volume keys, LAN routing, notifications, self-update), so those stay behind isAndroid().
+const g0 = globalThis as unknown as { gerdrAndroid?: Port; gerdrIOS?: Port };
+const port = g0.gerdrAndroid ?? g0.gerdrIOS;
 const subs = new Map<string, Set<(m: AndroidMsg) => void>>();
 /** 每一类消息最近的那一条：后挂上的组件（设置是点开才挂的）也拿得到，不用等壳再发一次 */
 const last = new Map<string, AndroidMsg>();
 
-export const isAndroid = () => !!port;
+/** In the Android App. Android-only shell features (keys, LAN, notifications, update) check this. */
+export const isAndroid = () => !!g0.gerdrAndroid;
+
+/** In the iOS App (docs/dev/IOS.md). */
+export const isIOSApp = () => !g0.gerdrAndroid && !!g0.gerdrIOS;
+
+/** In either phone App: a shell that takes `open`, `setup`, `copyImage`… */
+export const isApp = () => !!port;
 
 export function postAndroid(m: AndroidMsg) {
   port?.postMessage(JSON.stringify(m));
@@ -58,6 +70,16 @@ if (port) {
     last.set(m.t, m);
     subs.get(m.t)?.forEach((f) => f(m));
   };
+}
+
+/**
+ * Does this App route over the LAN (the "LAN / relay" label, Settings' route line)? Android always; iOS when its
+ * hello reply says `lan` (iOS 17+, an https address). A hook because that reply lands after the first render.
+ */
+export function useLanRoute(): boolean {
+  const [on, setOn] = useState(() => isAndroid() || androidCan("lan"));
+  useEffect(() => (isIOSApp() ? onAndroid("hello", (m) => setOn(m.lan === true)) : undefined), []);
+  return on;
 }
 
 /** Does the shell say (in its hello reply) that it can do this? An older App doesn't know newer messages. */
@@ -101,6 +123,23 @@ export function initAndroid() {
   // 就多一份 —— 按一下音量键跳两格、返回键回两次。挂在 globalThis 上，模块重新执行了也找得到上一次的
   const g = globalThis as unknown as { __gerdrAndroidOff?: () => void };
   g.__gerdrAndroidOff?.();
+  if (isIOSApp()) {
+    // iOS: hello, the colour around the safe area, a notification tap (once the shell has them). No back / volume
+    // keys, no LAN routing, and WebKit doesn't stretch the page like Android's WebView (gateStretch)
+    document.documentElement.classList.add("ios-app");
+    postAndroid({ t: "hello" });
+    syncAndroidTheme();
+    // LAN candidates as on Android (the shell ignores them where it can't route: before iOS 17, a debug address)
+    sendLan();
+    const onVis = () => document.visibilityState === "visible" && sendLan();
+    document.addEventListener("visibilitychange", onVis);
+    const off = onAndroid("focus", (m) => typeof m.session === "string" && focusSession(m.session), false);
+    g.__gerdrAndroidOff = () => {
+      document.removeEventListener("visibilitychange", onVis);
+      off();
+    };
+    return;
+  }
   document.documentElement.classList.add("android");
   postAndroid({ t: "hello" });
   syncAndroidTheme();

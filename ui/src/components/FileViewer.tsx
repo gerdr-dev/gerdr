@@ -5,7 +5,7 @@ import { MessageResponse } from "@/components/ai-elements/message";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { openPath } from "@/lib/actions";
-import { isAndroid, postAndroid } from "@/lib/android";
+import { isApp, postAndroid } from "@/lib/android";
 import { api, fileRawURL, type FileStat } from "@/lib/api";
 import { IS_MAC } from "@/lib/keys";
 import { isNative, nativeOpenPath, nativeOpenURL } from "@/lib/native";
@@ -126,7 +126,7 @@ export function FileActions({ stat, small }: { stat: FileStat; small?: boolean }
       <Button variant="ghost" size="icon" className={btn} title={t("fileViewer.copyPath")} onClick={() => copy(stat.path)}>
         {copied ? <Check className={`${ic} text-ok`} /> : <Copy className={ic} />}
       </Button>
-      {isNative() || isAndroid() ? (
+      {isNative() || isApp() ? (
         <Button variant="ghost" size="icon" className={btn} title={t("fileViewer.openInBrowser")} onClick={() => openOutside(stat)}>
           <ExternalLink className={ic} />
         </Button>
@@ -279,7 +279,7 @@ async function openOutside(stat: FileStat) {
     // This one's: the real address the backend gave, since the App's page host (http://gerdr/) is its browser's alone.
     const base = stat.host ? get().hosts.find((h) => h.id === stat.host)?.url : origin;
     const abs = new URL(url, base ?? location.href).href;
-    if (isAndroid()) postAndroid({ t: "open", url: abs });
+    if (isApp()) postAndroid({ t: "open", url: abs });
     else nativeOpenURL(abs);
   } catch (e) {
     toast.error((e as Error).message);

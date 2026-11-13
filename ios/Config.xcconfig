@@ -1,0 +1,5 @@
+// Shared build settings. Your own signing goes in Local.xcconfig (not in git): copy Local.xcconfig.example.
+// A free Apple ID's personal team can't take a bundle id another team already registered, so it is a setting too.
+GERDR_BUNDLE_ID = io.github.zbysir.gerdr
+DEVELOPMENT_TEAM =
+#include? "Local.xcconfig"

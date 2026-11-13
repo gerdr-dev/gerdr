@@ -104,7 +104,9 @@
   // 壳只对这台服务器的 origin 注入 gerdrAndroid。App 的 WebView 能自己刷 passkey 时（hello 回信里 webauthn=true），
   // 下面那套网页的 passkey 照常用；刷不了时（WebView 太旧、手机上没有凭据提供方）点按钮交给壳：它开浏览器批准
   // （device flow，internal/auth/cliapprove.go），批准完写好 cookie，回 login{state:"done"}，这边进去。
-  var droid = window.gerdrAndroid, nativeLogin = false;
+  // The iOS App (ios/) injects gerdrIOS with the same shape and messages; it always says webauthn=false
+  // (its WKWebView can't use the passkey without an Associated Domains entitlement, docs/dev/IOS.md).
+  var droid = window.gerdrAndroid || window.gerdrIOS, nativeLogin = false;
   if (droid) {
     droid.onmessage = function (e) {
       var m; try { m = JSON.parse(e.data); } catch (x) { return; }

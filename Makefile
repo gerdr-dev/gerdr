@@ -5,7 +5,7 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo 0.1.
 LDFLAGS := -s -w -X github.com/gerdr-dev/gerdr/internal/version.Version=$(VERSION)
 UISNAP := internal/webui/ui
 
-.PHONY: all ui rescue sync-ui build test typecheck fmt test-e2e app dmg win icon install clean dev
+.PHONY: all ui rescue sync-ui build test typecheck fmt test-e2e app dmg win icon install clean dev ios ios-project ios-typecheck
 
 all: build
 
@@ -73,6 +73,20 @@ apk:
 apk-debug:
 	cd android && JAVA_HOME=$(ANDROID_JAVA) ./gradlew assembleDebug
 	@ls -l android/app/build/outputs/apk/debug/app-debug.apk
+
+# iOS App (ios/, design in docs/dev/IOS.md). ios-project writes ios/Gerdr.xcodeproj from ios/project.yml (needs
+# `brew install xcodegen`); ios opens it in Xcode, where you pick your iPhone and press Run. ios-typecheck checks the
+# Swift without Xcode, against the Mac Catalyst UIKit / WebKit that ship with the Command Line Tools.
+IOS_SDK = $(shell xcrun --sdk macosx --show-sdk-path)
+ios-project:
+	cd ios && xcodegen generate
+
+ios: ios-project
+	open ios/Gerdr.xcodeproj
+
+ios-typecheck:
+	swiftc -typecheck -swift-version 5 -target arm64-apple-ios16.4-macabi -sdk $(IOS_SDK) \
+		-F $(IOS_SDK)/System/iOSSupport/System/Library/Frameworks -I $(IOS_SDK)/System/iOSSupport/usr/lib/swift ios/Gerdr/*.swift
 
 # 从 ui/public/icon.svg 重新生成 App 图标（desktop/res/icon.png 入库，打包时不需要 rsvg-convert —— Windows 包在任何机器上都能打）。
 # 照 macOS 图标的网格：1024 的画布里图形占中间 824，四周各留 100，不然在 Dock 里比别的图标大一圈。要 brew install librsvg。
