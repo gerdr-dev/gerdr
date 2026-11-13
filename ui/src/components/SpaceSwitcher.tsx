@@ -23,12 +23,23 @@ import { askConfirm } from "@/lib/confirm";
 import { isNative, nativeNewWindow } from "@/lib/native";
 import { SpaceDropLine, startSpaceDrag } from "./SpaceDrag";
 import { tabStatus } from "./TabBar";
+import { useBadges } from "@/lib/badges";
 import { t } from "@/lib/i18n";
 
 /** A session's overall state for the switcher: the most urgent of its workspaces' (same ranking as WsDot). Muted ones say nothing. */
-export function spaceStatus(l: Layout, sp: Space, sessions: Record<string, SessionSummary>, unread: Record<string, true>) {
+/**
+ * A project's dot: the most pressing of everything in it that has a mark — its tabs' conversations (waiting, error,
+ * running, unread) and its panels' badges (ctx.badge: "something new", counted as unread). Each mark goes when its
+ * thing is seen in a window in front (a focused pane, the panel on screen: lib/front.ts) and is shared by every window
+ * and device, so the dot in another window goes with the last of them.
+ */
+export function spaceStatus(l: Layout, sp: Space, sessions: Record<string, SessionSummary>, unread: Record<string, true>, badges: Record<string, number>) {
   let best: { status?: string; unread: boolean } = { unread: false };
   let rank = 9;
+  if (Object.keys(badges).some((k) => k === sp.id || k.startsWith(sp.id + "/"))) {
+    rank = dotRank(undefined, true);
+    best = { unread: true };
+  }
   for (const w of spaceWorkspaces(l, sp.id))
     for (const t of w.muted ? [] : w.tabs) {
       const st = tabStatus(t, sessions, unread);
@@ -170,6 +181,7 @@ export function SpaceSwitcher() {
   const layout = useStore((s) => s.layout);
   const sessions = useStore((s) => s.sessions);
   const unread = useStore((s) => s.unread);
+  const badges = useBadges((s) => s.byPanel);
   const phone = usePhone();
   const spaces = spaceList(layout);
   const here = currentSpace(layout);
@@ -188,7 +200,7 @@ export function SpaceSwitcher() {
     return () => ro.disconnect();
   }, [names]);
   const chip = (sp: Space, live: boolean) => {
-    const st = sp.id === here ? undefined : spaceStatus(layout, sp, sessions, unread);
+    const st = sp.id === here ? undefined : spaceStatus(layout, sp, sessions, unread, badges);
     return (
       <button
         key={sp.id}
@@ -271,12 +283,13 @@ function SpaceMenu() {
   const layout = useStore((s) => s.layout);
   const sessions = useStore((s) => s.sessions);
   const unread = useStore((s) => s.unread);
+  const badges = useBadges((s) => s.byPanel);
   const spaces = spaceList(layout);
   const here = currentSpace(layout);
   const cur = spaces.find((s) => s.id === here)!;
   const elsewhere = spaces
     .filter((s) => s.id !== here)
-    .map((s) => spaceStatus(layout, s, sessions, unread))
+    .map((s) => spaceStatus(layout, s, sessions, unread, badges))
     .filter((x) => x)
     .sort((a, b) => +(b!.status === "waiting") - +(a!.status === "waiting"))[0];
   return (
@@ -294,7 +307,7 @@ function SpaceMenu() {
       <DropdownMenuContent align="start" className="w-52">
         <DropdownMenuLabel className="text-[11px] font-normal text-muted-foreground">{t("spaceSwitcher.isolated")}</DropdownMenuLabel>
         {spaces.map((sp) => {
-          const st = spaceStatus(layout, sp, sessions, unread);
+          const st = spaceStatus(layout, sp, sessions, unread, badges);
           return (
             <DropdownMenuItem key={sp.id} onClick={() => switchSpace(sp.id)}>
               <Check className={cn("size-3.5", sp.id !== here && "invisible")} />

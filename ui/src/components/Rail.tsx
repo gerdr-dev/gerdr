@@ -13,6 +13,7 @@ import { RailAddonButtons } from "./RailAddons";
 import { RouteLabel } from "./ConnStatus";
 import { InboxButton } from "./Inbox";
 import { PanelButtons } from "./PanelButtons";
+import { useBadges } from "@/lib/badges";
 import { SpaceDropLine, startSpaceDrag } from "./SpaceDrag";
 import { newSpaceDialog, SpaceMenuItems, spaceStatus } from "./SpaceSwitcher";
 import { t } from "@/lib/i18n";
@@ -37,6 +38,7 @@ export function Rail() {
   const layout = useStore((s) => s.layout);
   const sessions = useStore((s) => s.sessions);
   const unread = useStore((s) => s.unread);
+  const badges = useBadges((s) => s.byPanel);
   const mode = useStore((s) => s.mode);
   const sidebar = useStore((s) => s.sidebar);
   const doctorBad = useStore((s) => s.doctor?.level === "bad");
@@ -50,7 +52,7 @@ export function Rail() {
   const project = (sp: Space) => {
     const on = sp.id === here;
     // Another project's agents are out of every list on screen: its dot is the only thing that tells you it needs you
-    const st = on ? undefined : spaceStatus(layout, sp, sessions, unread);
+    const st = on ? undefined : spaceStatus(layout, sp, sessions, unread, badges);
     return (
       // Tooltip outside, ContextMenuTrigger right on the button: a trigger with asChild hands its handlers to its child,
       // and a <Tooltip> (not an element) dropped them, so right-click opened nothing.
