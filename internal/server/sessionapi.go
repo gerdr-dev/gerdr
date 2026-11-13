@@ -88,6 +88,7 @@ func (s *Server) sessionRoutes(mux *http.ServeMux) {
 		var b struct {
 			Title string
 			Auto  bool // 插件起的：不算人改的名，人改过名时不生效（hub/title.go）
+			Fixed bool // the session's name for good, kept through /clear (hub Record.TitleFixed)
 		}
 		if err := decode(r, &b); err != nil {
 			return nil, err
@@ -95,7 +96,7 @@ func (s *Server) sessionRoutes(mux *http.ServeMux) {
 		if b.Auto {
 			sess.SetAutoTitle(b.Title)
 		} else {
-			sess.Rename(b.Title)
+			sess.Rename(b.Title, b.Fixed)
 		}
 		return nil, nil
 	}))

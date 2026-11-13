@@ -106,7 +106,14 @@ func (h *Hub) continueFrom(ctx context.Context, o CreateOptions) (*Session, erro
 	if o.ArtifactsDir == "" {
 		o.ArtifactsDir = srcRec.ArtifactsDir // a panel's task folder stays the task's
 	}
-	o.ContinueFrom, o.Import, o.Title = "", "", "" // a given title would count as the user's (CustomTitle)
+	// The conversation's title comes along (adoptHistoryNote), unless one is given: then that is the session's fixed
+	// name (Record.TitleFixed), as when started fresh. A panel restarting its conversation names it again each time,
+	// and dropping that let an auto title from an earlier piece of work ride along from one restart to the next.
+	given := o.Title
+	o.ContinueFrom, o.Import, o.Title = "", "", ""
+	if given != "" {
+		srcRec.Title, srcRec.CustomTitle, srcRec.TitleFixed, srcRec.TitleKey, srcRec.PluginTitleFor = given, true, true, "", ""
+	}
 	s, err := h.Create(ctx, o)
 	if err != nil {
 		return nil, err
@@ -160,7 +167,7 @@ func (h *Hub) adoptHistory(s *Session, srcRec Record, evs []*Event) {
 func (h *Hub) adoptHistoryNote(s *Session, srcRec Record, evs []*Event, note string) {
 	all := s.rewriteLog(func() {
 		s.events = append(evs, s.events...)
-		s.rec.Title, s.rec.CustomTitle, s.rec.TitleKey, s.rec.PluginTitleFor = srcRec.Title, srcRec.CustomTitle, srcRec.TitleKey, srcRec.PluginTitleFor
+		s.rec.Title, s.rec.CustomTitle, s.rec.TitleFixed, s.rec.TitleKey, s.rec.PluginTitleFor = srcRec.Title, srcRec.CustomTitle, srcRec.TitleFixed, srcRec.TitleKey, srcRec.PluginTitleFor
 		s.rec.Handoff = &Handoff{Session: srcRec.ID, Agent: srcRec.Agent}
 	})
 	h.broadcastEvents(s.rec.ID, all, true)

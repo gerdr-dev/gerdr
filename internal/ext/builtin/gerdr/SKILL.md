@@ -87,7 +87,8 @@ gerdr session new --agent codex --title reviewer \
   (`Fable 5.2`), so check there when the user asks for a specific version instead of guessing. Not given = the user's
   default for that agent; an id it doesn't offer is refused with the list. `models` is missing for an agent that
   hasn't run on this computer yet;
-- `--title` 起个短名字，之后可以 `gerdr session send reviewer …`；
+- `--title` 起个短名字，之后可以 `gerdr session send reviewer …`；这个名字固定：不会被自动起的标题换掉，/clear 之后也还在。
+  已经开着的会话改名用 `gerdr session rename <会话> <标题>`（加 `--fixed` 一样固定；标题给 `""` 交回自动起名）；
 - 带 `--wait`：等它这一轮做完，输出里 `reply` 就是它的回复；不带就是派出去不等，之后再 `wait`；
 - 要它能改文件 / 跑命令而不每次问人，按用户的意思给 `--mode`（claude：`acceptEdits` / `auto` / `bypassPermissions`；codex：`auto` / `full-access`；native：`acceptEdits` / `bypassPermissions`，只读用 `plan`）。
   不确定就别给：用用户给这种 agent 设的默认模式（没设、或者设的是全放开的那种，就是 agent 自己的默认），要做危险操作会在界面上弹审批给人；

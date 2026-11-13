@@ -29,6 +29,11 @@ type Record struct {
 	Cwd            string `json:"cwd"`
 	Title          string `json:"title,omitempty"`
 	CustomTitle    bool   `json:"customTitle,omitempty"`
+	// TitleFixed: the title was given when the session was started (a panel's "Superagent 秘书", `gerdr session new
+	// --title`): it names the session, not the work of one context, so a /clear and carrying it on in a new session
+	// (continueFrom) keep it, and auto-naming never runs. Without it, a panel's long-lived conversation lost its name
+	// at the first /clear and got one from whatever it was asked next, which then followed it through every restart.
+	TitleFixed bool `json:"titleFixed,omitempty"`
 	// 自动标题的状态（title.go）。TitleStale: legacy — /clear used to keep the old title until the next message
 	// replaced it; it now clears the title outright, but records saved before that may still carry the flag.
 	// TitleKey：默认逻辑在哪段上下文的哪一档起过名了；PluginTitleFor：插件在哪段上下文里起过名（这段里默认逻辑让开）。
@@ -734,10 +739,14 @@ func (s *Session) SetConfig(ctx context.Context, id, value string) error {
 	return nil
 }
 
-func (s *Session) Rename(title string) {
+// Rename: a person's (or an agent's, `gerdr session rename`) name for the session. fixed = its name for good, as one
+// given at start (Record.TitleFixed): kept through /clear. Otherwise a fixed name stays fixed under the new title.
+// An empty title hands naming back to auto-naming.
+func (s *Session) Rename(title string, fixed bool) {
 	s.mu.Lock()
 	s.rec.Title = strings.TrimSpace(title)
 	s.rec.CustomTitle = s.rec.Title != ""
+	s.rec.TitleFixed = (s.rec.TitleFixed || fixed) && s.rec.CustomTitle
 	s.mu.Unlock()
 	s.h.saveIndex()
 	s.h.broadcastSession(s)

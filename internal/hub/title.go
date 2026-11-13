@@ -14,6 +14,8 @@ import (
 
 // 会话标题（pane 顶上、侧栏）怎么来，按优先级：
 //
+//  0. Given when the session was started (TitleFixed: a panel's, `gerdr session new --title`): the session's name.
+//     Kept through /clear and carrying on (continueFrom); only a person renaming it changes it.
 //  1. Set by a person: renamed in gerdr, or claude's /rename (CustomTitle). Nothing else touches it until the next
 //     /clear, which drops it like any other title: it named the work that was cleared away.
 //  2. 插件起的（界面插件 g.sessionTitle，经 SetAutoTitle）：这一段上下文里默认逻辑让开（PluginTitleFor）。

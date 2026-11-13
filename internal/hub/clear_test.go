@@ -197,3 +197,41 @@ func TestRekeyKeepsTitleStage(t *testing.T) {
 		t.Fatalf("after rekey: %+v", s.rec)
 	}
 }
+
+// A /clear drops a person's title (it named the cleared work) but keeps one given when the session was started: that
+// is the session's name. A panel's long-lived conversation used to lose it and get named after its next request.
+func TestClearKeepsFixedTitle(t *testing.T) {
+	h, err := New(Options{Dir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		fixed bool
+		want  string
+	}{{false, ""}, {true, "Superagent 秘书"}} {
+		s := newSession(h, Record{ID: "s-" + c.want, Agent: "claude", Cwd: "/w", AgentSessionID: "old-" + c.want, Title: "PortAI 计费", TitleKey: "k"})
+		h.register(s)
+		s.Rename("Superagent 秘书", c.fixed) // gerdr session rename [--fixed]
+		s.onUpdate(acp.SessionUpdate{SessionInfoUpdate: &acp.SessionSessionInfoUpdate{Meta: acpx.Meta(map[string]any{"sessionId": "new-" + c.want, "cleared": true})}})
+		if s.rec.Title != c.want || s.rec.CustomTitle != c.fixed {
+			t.Fatalf("fixed=%v: %+v", c.fixed, s.rec)
+		}
+	}
+}
+
+// Renaming a fixed name keeps it fixed; renaming to "" hands naming back to auto titles.
+func TestRenameFixed(t *testing.T) {
+	h, err := New(Options{Dir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := newSession(h, Record{ID: "s", Title: "a", CustomTitle: true, TitleFixed: true})
+	s.Rename("b", false)
+	if !s.rec.TitleFixed || !s.rec.CustomTitle {
+		t.Fatalf("renamed: %+v", s.rec)
+	}
+	s.Rename("", false)
+	if s.rec.TitleFixed || s.rec.CustomTitle {
+		t.Fatalf("cleared: %+v", s.rec)
+	}
+}

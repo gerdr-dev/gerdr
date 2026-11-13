@@ -81,7 +81,9 @@ func (s *Session) onUpdate(u acp.SessionUpdate) {
 					// The title belongs to what was cleared away, renamed or not (a /rename names that piece of work, not
 					// the tab): drop it right away rather than leave the old name on an empty context until the next
 					// message (two entries with the same name in the session list). Auto-naming starts over (title.go).
-					s.rec.Title, s.rec.TitleStale, s.rec.CustomTitle = "", false, false
+					if !s.rec.TitleFixed { // a name given at start is the session's, not the cleared work's
+						s.rec.Title, s.rec.TitleStale, s.rec.CustomTitle = "", false, false
+					}
 					s.rec.TitleKey, s.rec.PluginTitleFor = "", "" // rekey carried them over; a clear starts naming afresh
 					// The usage was the cleared context's: hide it until the next request reports the new one (the
 					// window stays, it is the model's), instead of showing the old percentage over an empty conversation.

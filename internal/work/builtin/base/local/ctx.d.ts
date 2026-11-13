@@ -105,7 +105,10 @@ interface Ctx {
       prompt?: string;
       /** `claude`, `codex`, `native`, or a variant's id from settings. Default: the user's default agent. */
       agent?: string;
-      /** The tab's name until the agent names the conversation itself. */
+      /**
+       * The conversation's fixed name: no auto title, kept through /clear and when carried on (`continueFrom`). Without
+       * one it is named after what it is asked, and a long-lived conversation gets named after its first request.
+       */
       title?: string;
       /** Permission mode (claude: default / acceptEdits / plan / auto; codex: ask / auto / read-only). Default: the user's default, unless that one approves everything. */
       mode?: string;

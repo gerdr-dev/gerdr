@@ -733,6 +733,29 @@ and hand it a task, wait for it to finish, read its reply. Refer to a session by
 			return nil
 		},
 	})
+	var rFixed bool
+	renameCmd := &cobra.Command{
+		Use:   i18n.S("rename <会话> <标题>", "rename <session> <title>"),
+		Short: i18n.S("给会话改名（和界面上改名一样，之后不再自动起名；/clear 会把它清掉，--fixed 不会）；标题给 \"\" = 交回自动起名。输出改完的会话", "Rename a session (as renaming it in the UI: no more auto titles; a /clear drops it, unless --fixed); title \"\" = back to auto titles. Prints the session"),
+		Args:  cobra.ExactArgs(2),
+		RunE: func(_ *cobra.Command, args []string) error {
+			c := client()
+			s, err := c.resolve(args[0])
+			if err != nil {
+				return err
+			}
+			if err := c.do("POST", "/api/sessions/"+s.ID+"/rename", map[string]any{"title": args[1], "fixed": rFixed}, nil); err != nil {
+				return err
+			}
+			if s, err = c.resolve(s.ID); err != nil {
+				return err
+			}
+			printJSON(s.view(c.selfID()))
+			return nil
+		},
+	}
+	renameCmd.Flags().BoolVar(&rFixed, "fixed", false, i18n.S("固定的名字：/clear 之后还在，和 new --title 给的一样（比如一直开着、管很多事的会话）", "a fixed name: kept through /clear, like one given with new --title (e.g. a long-lived conversation that handles many things)"))
+	cmd.AddCommand(renameCmd)
 	cmd.AddCommand(&cobra.Command{
 		Use:   i18n.S("report-to <会话> <目标会话|self|none>", "report-to <session> <target|self|none>"),
 		Short: i18n.S("让一个会话每次停下（做完、等人、出错）就回报给目标会话；none = 不再回报", "Make a session report to the target each time it stops (done, waiting for a person, error); none = stop"),
