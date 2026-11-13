@@ -173,6 +173,36 @@ export const ChatList = forwardRef<
     return [a, Math.max(to, Math.min(a + 1, n))];
   };
 
+  // Rows a text selection starts and ends in (keys), kept mounted with everything between them however far the chat
+  // scrolls. Unmounting the row a selection starts in moves its start onto the list itself (a DOM range's boundary
+  // falls back to the removed node's parent): on a phone, dragging a handle after scrolling a few screens then selected
+  // from the page header on (a phone recording; select.mjs). The rows between are kept too so the copy has their text.
+  // Only ends inside rows count: a selection reaching outside the list keeps just its end in here.
+  const held = useRef<[string, string] | null>(null);
+  useEffect(() => {
+    const rowKey = (n: Node | null) => {
+      const e = n instanceof Element ? n : n?.parentElement;
+      const r = e?.closest<HTMLElement>("[data-chat-key]");
+      return r && box.current?.contains(r) ? r.dataset.chatKey! : undefined;
+    };
+    const onSel = () => {
+      const sel = document.getSelection();
+      let next: [string, string] | null = null;
+      if (sel && sel.rangeCount && !sel.isCollapsed) {
+        const r = sel.getRangeAt(0);
+        const a = rowKey(r.startContainer);
+        const b = rowKey(r.endContainer);
+        if (a || b) next = [a ?? b!, b ?? a!];
+      }
+      const cur = held.current;
+      if (cur === next || (cur && next && cur[0] === next[0] && cur[1] === next[1])) return;
+      held.current = next;
+      render();
+    };
+    document.addEventListener("selectionchange", onSel);
+    return () => document.removeEventListener("selectionchange", onSel);
+  }, []);
+
   const dragging = useRef(false); // the scrollbar
   // A finger is down. The touchend can be lost when the row under the finger is replaced (a tool call's "peek" row
   // turning into its group: events go to the detached node and never bubble up); the next touchstart resets it.
@@ -582,10 +612,19 @@ export const ChatList = forwardRef<
   const s0 = el.current;
   const [from, to] = want(lay, s0 ? s0.scrollTop : lastTop.current, s0 ? s0.clientHeight : 2000);
   range.current = [from, to];
+  // The selection's rows (held): by key, as older rows put in front shift every index
+  let hf = -1;
+  let ht = -2;
+  if (held.current) {
+    const a = lay.keys.indexOf(held.current[0]);
+    const b = lay.keys.indexOf(held.current[1]);
+    if (a >= 0 || b >= 0) {
+      hf = Math.min(a < 0 ? b : a, b < 0 ? a : b);
+      ht = Math.max(a, b);
+    }
+  }
   const idx: number[] = [];
-  for (let i = 0; i < from; i++) if (!sizes.current.has(rows[i].key)) idx.push(i);
-  for (let i = from; i < to; i++) idx.push(i);
-  for (let i = to; i < rows.length; i++) if (!sizes.current.has(rows[i].key)) idx.push(i);
+  for (let i = 0; i < rows.length; i++) if ((i >= from && i < to) || (i >= hf && i <= ht) || !sizes.current.has(rows[i].key)) idx.push(i);
   extra.current = lay.missing;
   const items = [];
   for (const i of idx) {
