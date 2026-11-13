@@ -112,7 +112,9 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
     }
 
     /// Only this domain goes through the proxy (matchDomains). allowFailover: if the proxy is gone (the App was
-    /// suspended and its socket with it), WebKit connects directly, which is the relay path anyway.
+    /// suspended and its socket with it), WebKit connects directly, which is the relay path anyway. It also covers the
+    /// iOS Simulator, where any proxyConfigurations fails with NSURLErrorBadURL (-1000, EINVAL) before connecting
+    /// (measured: same code works in a macOS process on the same Mac), so LAN routing only shows on a real device.
     @available(iOS 17.0, *)
     private func setProxy(_ port: Int) {
         guard let r = route, let p = NWEndpoint.Port(rawValue: UInt16(clamping: port)), port > 0 else { return }
@@ -120,6 +122,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         pc.matchDomains = [r.host]
         pc.allowFailover = true
         web.configuration.websiteDataStore.proxyConfigurations = [pc]
+        NSLog("LanRoute: WebKit proxy 127.0.0.1:%d for %@", port, r.host)
     }
 
     /// Tunnels open and close in bursts (a page load is a dozen): tell the page at most every 150 ms.

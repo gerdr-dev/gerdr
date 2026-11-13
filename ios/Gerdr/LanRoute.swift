@@ -296,6 +296,7 @@ final class LanRoute {
         }
         let h = target[..<i].trimmingCharacters(in: ["[", "]"]).lowercased()
         guard h == host, p == port else { return reply(c, "403 Forbidden") }
+        NSLog("LanRoute: CONNECT %@:%d, LAN route %@", h, Int(p), lan.map { "\($0.host):\($0.port)" } ?? "none")
         let direct = Target(host: h, port: p, lan: false)
         let targets = lan.map { [Target(host: $0.host, port: $0.port, lan: true), direct] } ?? [direct]
         dial(targets, 0) { [weak self] up, isLan in

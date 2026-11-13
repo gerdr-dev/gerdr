@@ -38,6 +38,21 @@ Needs Xcode (the Command Line Tools alone can't build for iOS) and `brew install
 that ship inside the Command Line Tools' macOS SDK. It catches API and type mistakes, not iOS-only availability or
 runtime behaviour; build in Xcode before trusting a change.
 
+### Simulator, from the command line
+
+What was used to test it (an Intel Mac on macOS 15; any Mac with Xcode works the same):
+
+- Xcode: the newest one the macOS allows (xcodereleases.com lists `requires`; macOS 15 stops at 26.3). Xcode 26
+  comes as an "Apple silicon" and a "Universal" download with the same version and build: an Intel Mac needs
+  Universal (the other gives "Bad CPU type in executable"); `xcodes install` picks whichever comes first in its list.
+- Xcode 26 builds nothing for iOS, not even with `-sdk iphonesimulator`, until the platform is installed:
+  `xcodebuild -downloadPlatform iOS` (~10 GB, no Apple ID).
+- `cd ios && xcodegen generate`, then `xcrun simctl create … ; xcodebuild -scheme Gerdr -destination id=<udid>
+  CODE_SIGNING_ALLOWED=NO build`, `simctl install / launch`, `simctl io <udid> screenshot`. The address can be set
+  without typing: `simctl spawn <udid> defaults write io.github.zbysir.gerdr origin https://…` (a `/?pair=CODE` link
+  works there too). Logs: `simctl spawn <udid> log show --predicate 'eventMessage CONTAINS "LanRoute"'`.
+- The downloaded iOS 26.3 Simulator runtime has no PingFang (only Hiragino): native screens still draw Chinese, but
+  WebKit draws it as boxes. A Simulator quirk; a phone has the font.
 ## The bridge
 
 Same message format as Android (JSON strings dispatched on `t`, table in docs/dev/ANDROID.md "桥"), so the page has
@@ -113,6 +128,12 @@ relay before candidates; LAN after the probe (curl verified the domain's certifi
 refused; candidates with the wrong certificate (the router, port 7870) rejected; an idle relay TLS session cut 0.1 s
 after the probe passed; a second launch probing the cached candidate before the first request. What that can't cover
 is WebKit itself honouring the proxy configuration (WebSocket included); check the label on a device.
+
+**The iOS Simulator can't show it.** There, any `proxyConfigurations` fails before connecting with NSURLErrorBadURL
+(-1000, stream error 22 = EINVAL), in WebKit and in a plain URLSession alike, with every variant tried (`127.0.0.1` as a
+name or `.ipv4(.loopback)`, with or without `matchDomains`); the proxy never sees a CONNECT. The same code in a macOS
+process works on both the Apple Silicon and the Intel Mac (macOS 26 and 15). With `allowFailover` the App just goes
+through the relay there; the probe itself does run in the Simulator (the log shows `LanRoute: LAN … → …`).
 
 ## Other shell duties
 
