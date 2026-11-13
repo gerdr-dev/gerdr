@@ -516,7 +516,7 @@ function WorkPeek() {
             ))}
           </div>
         )}
-        <div className="min-h-0 flex-1">
+        <div className="min-h-0 flex-1" data-composer-scope>
           {session ? (
             <ChatView key={id} session={session} paneId={`work-peek:${id}`} focused focus={focus} />
           ) : (
@@ -804,7 +804,7 @@ export function WorkView() {
         {/* The same header as on wider screens: without it a phone has no history, no new chat and no agent picker */}
         <div className={cn("flex min-h-0 flex-1 flex-col", (side !== "chat" || ownChat) && "hidden")}>
           <ChatHeader />
-          <div className="min-h-0 flex-1">
+          <div className="min-h-0 flex-1" data-composer-scope>
             <WorkChat />
           </div>
         </div>
@@ -823,7 +823,7 @@ export function WorkView() {
       <div className={cn("relative flex max-w-[70%] shrink-0 flex-col border-l", hidden && "hidden")} style={{ width: chatW }}>
         <ChatEdge width={chatW} onWidth={setChatW} />
         <ChatHeader onHide={() => setHidden(true)} />
-        <div className="min-h-0 flex-1">
+        <div className="min-h-0 flex-1" data-composer-scope>
           <WorkChat />
         </div>
       </div>
