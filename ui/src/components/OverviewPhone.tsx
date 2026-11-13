@@ -3,7 +3,7 @@ import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "re
 import { focusTile, setOverview } from "@/lib/overview";
 import { phoneOrder } from "@/lib/overviewState";
 import { useCaughtUp } from "@/lib/catchup";
-import { useStore } from "@/lib/store";
+import { get, useStore } from "@/lib/store";
 import { syncWatch } from "@/lib/sync";
 import { GAP, useSwipePager } from "@/lib/swipePager";
 import { TabActive } from "./Panes";
@@ -22,16 +22,18 @@ import { t } from "@/lib/i18n";
  */
 export function PhoneOverview({ ids, focus, shown }: { ids: string[]; focus?: string; shown: boolean }) {
   const chips = useRef<HTMLDivElement>(null);
-  const sessions = useStore((s) => s.sessions);
-  const unread = useStore((s) => s.unread);
   const frozen = useStore((s) => s.overview.phone);
   // Chips in the Code sidebar's agent-list order (asked for: what needs you first), sorted once on opening and then
-  // held (phoneOrder): a swipe has to land where the strip said it would
-  const sorted = phoneOrder(ids, sessions, unread, frozen);
+  // held (phoneOrder): a swipe has to land where the strip said it would.
+  // Followed as the order itself (a string), not the sessions map: every summary pushed while agents run used to
+  // re-render the whole overview mid-swipe, and the tiles and chips already follow their own sessions.
+  const sorted = useStore((s) => phoneOrder(ids, s.sessions, s.unread, frozen).join(","))
+    .split(",")
+    .filter(Boolean);
   // Take the order on opening, drop it on leaving (the next opening sorts afresh). A layout effect: the first frame
   // already sorts the same way, so nothing moves when the frozen order arrives.
   useLayoutEffect(() => {
-    if (shown && !frozen) setOverview((o) => ({ ...o, phone: phoneOrder(ids, sessions, unread) }));
+    if (shown && !frozen) setOverview((o) => ({ ...o, phone: phoneOrder(ids, get().sessions, get().unread) }));
     else if (!shown && frozen) setOverview((o) => ({ ...o, phone: undefined }));
   }, [shown, frozen]);
   // The one switched to from a chip or the list may not be loaded or caught up: keep the current tile up until it is
@@ -124,7 +126,8 @@ export function PhoneOverview({ ids, focus, shown }: { ids: string[]; focus?: st
 
   return (
     <TabActive.Provider value={shown}>
-      <div className="flex h-full flex-col bg-background">
+      {/* data-phone-overview: found by measuring tools (the perf probe tells swipes here from scrolls in a chat) */}
+      <div data-phone-overview className="flex h-full flex-col bg-background">
         {/* No text selection: a long-press on PhoneBar's overview button opens this with the finger still down on this
         bar, and Android then turned that long-press into selecting a chip's title */}
         <div className="flex h-11 shrink-0 items-center gap-1 border-b bg-sidebar px-1.5 select-none [-webkit-touch-callout:none]">
@@ -145,7 +148,10 @@ export function PhoneOverview({ ids, focus, shown }: { ids: string[]; focus?: st
         {/* The gap between two pages while one is dragged shows this background */}
         <div ref={body} className="relative min-h-0 flex-1 overflow-hidden bg-sidebar">
           {tile ? (
-            <div ref={track} className="absolute inset-0">
+            // Its own compositor layer: without one every frame of a drag repainted and re-rastered the pages it moves
+            // (measured: paint 35 → 12ms, raster 30 → 13ms, GPU tasks 140 → 50ms per drag), on a 120Hz phone the
+            // difference between keeping up and not
+            <div ref={track} className="absolute inset-0 will-change-transform">
               {/* Keyed by session: after a swipe the page dragged in becomes the middle one without remounting */}
               {pages.map(({ at, id }) => (
                 <div

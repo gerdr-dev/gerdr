@@ -119,7 +119,11 @@ export function useSwipePager(
       clearTimeout(timer.current);
       // The tile didn't switch after all (taken out meanwhile…): back to where it was
       timer.current = window.setTimeout(() => turning.current && ((turning.current = null), settle(0, 200)), 900);
-      goTo.current(id);
+      // Switch after the slide has started, not in this touchend: the switch re-renders the overview, synchronously
+      // inside a touch handler (~70ms on a phone, measured at CPU x4), and the slide only started once it was done, a
+      // hitch on every release. Started first, the slide runs on the compositor while the main thread renders.
+      const t = turning.current;
+      requestAnimationFrame(() => setTimeout(() => turning.current === t && goTo.current(id)));
     };
     const start = (e: TouchEvent) => {
       g = null;

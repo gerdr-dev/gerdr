@@ -541,7 +541,7 @@ function SwipePages({
   return (
     // Phone: the pages lie side by side and a sideways swipe turns them, like the overview; each page scrolls itself
     <div ref={body} className={cn(className, phone ? "relative overflow-hidden bg-muted" : "overflow-auto px-6 pb-6")}>
-      <div ref={track} className={phone ? "absolute inset-0" : undefined}>
+      <div ref={track} className={phone ? "absolute inset-0 will-change-transform" : undefined}>
         {children}
       </div>
     </div>
