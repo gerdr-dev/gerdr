@@ -7,19 +7,17 @@ import (
 	htmltomarkdown "github.com/JohannesKaufmann/html-to-markdown/v2"
 	"github.com/PuerkitoBio/goquery"
 	"github.com/andybalholm/cascadia"
-	"github.com/dop251/goja"
 	"golang.org/x/net/html"
 )
 
 // html: ctx.html(text) parses HTML. .find(css) → [{ tag, text, attrs }] (text with whitespace collapsed), .text() the
 // visible text of body (no script / style / noscript / svg), .markdown() the page as Markdown.
-func (r *runner) html(text string) *goja.Object {
+func (r *runner) html(text string) jsValue {
 	doc, err := goquery.NewDocumentFromReader(strings.NewReader(text))
 	if err != nil {
 		r.throw(err)
 	}
-	o := r.vm.NewObject()
-	_ = o.Set("find", func(sel string) []any {
+	return r.obj(map[string]any{"find": func(sel string) []any {
 		// goquery silently matches nothing on a bad selector: say so instead
 		if _, err := cascadia.ParseGroup(sel); err != nil {
 			r.throw(fmt.Errorf("invalid selector %q: %v", sel, err))
@@ -37,16 +35,16 @@ func (r *runner) html(text string) *goja.Object {
 			out = append(out, map[string]any{"tag": tag, "text": visibleText(s), "attrs": attrs})
 		})
 		return out
+	},
+		"text": func() string { return visibleText(doc.Find("body")) },
+		"markdown": func() string {
+			md, err := htmltomarkdown.ConvertString(text)
+			if err != nil {
+				r.throw(fmt.Errorf("converting to Markdown failed: %w", err))
+			}
+			return strings.TrimSpace(md)
+		},
 	})
-	_ = o.Set("text", func() string { return visibleText(doc.Find("body")) })
-	_ = o.Set("markdown", func() string {
-		md, err := htmltomarkdown.ConvertString(text)
-		if err != nil {
-			r.throw(fmt.Errorf("converting to Markdown failed: %w", err))
-		}
-		return strings.TrimSpace(md)
-	})
-	return o
 }
 
 // visibleText is an element's text, skipping script / style / noscript / svg / template, pieces joined by a space

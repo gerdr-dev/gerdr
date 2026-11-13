@@ -137,13 +137,13 @@ the add-on.
   as busy, which keeps Gerdr from updating itself for as long as a wait lasts.
 - **A source may also report unasked** (`{"type":"state"}` without an id, naming the key) when it learns of a change
   by itself (a webhook, a socket); Gerdr checks the waits the same way. Not needed by polling sources.
-- **Conditions are one JavaScript expression** over the state (`waits.Cond`, goja): each field is a variable, `$`
+- **Conditions are one JavaScript expression** over the state (`waits.Cond`, moejs): each field is a variable, `$`
   the whole state. Evaluated by Gerdr, so every source gets them for free and only reports data, lists included
   (the GitLab add-on reports `notes`, so `notes.some(n => n.author != me && !n.resolved && n.path == 'a.go')` works
   without a field for it). For a day it was a little language of Gerdr's own (`field op value`, `||`, `&&`); the
   user asked for JS when filtering lists came up — every filter would otherwise have needed its own field. Sandbox:
-  a bare goja runtime (no require, files or network), the expression wrapped so it can't be statements, 50ms per
-  check (`vm.Interrupt`). A misspelt field is a ReferenceError, never a silent "false": refused when the wait is
+  a bare moejs runtime (no require, files, network or eval), the expression wrapped so it can't be statements, 50ms per
+  check (`Runtime.Interrupt`, which also stops a backtracking regular expression). A misspelt field is a ReferenceError, never a silent "false": refused when the wait is
   made if the state is known, or when the first one comes in while its request is open (up to 10s); after that, the
   wait is dropped when a state comes in and its session gets a message saying why, with the fields to use (a wait that
   can't ever wake must not sit there). Only what is evaluated can fail: a misspelt field in a branch that isn't

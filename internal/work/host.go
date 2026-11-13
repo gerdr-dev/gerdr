@@ -12,8 +12,6 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
-
-	"github.com/dop251/goja"
 )
 
 // ctx.sessions / ctx.workspaces / ctx.dirs: what a Work page needs to hand work to agents — pick a directory (the ones
@@ -126,11 +124,11 @@ type StartOptions struct {
 var errNoHost = errors.New("not available here: ctx.sessions / ctx.workspaces need Gerdr's server")
 
 // opts reads an options object (or nothing) into v through JSON, the way the server would see it.
-func (r *runner) opts(arg goja.Value, v any) error {
-	if arg == nil || goja.IsUndefined(arg) || goja.IsNull(arg) {
+func (r *runner) opts(arg jsValue, v any) error {
+	if arg.IsNullish() {
 		return nil
 	}
-	m, ok := plain(toPlain(arg.Export())).(map[string]any)
+	m, ok := plain(toPlain(r.toGo(arg))).(map[string]any)
 	if !ok {
 		return errors.New("expected an options object")
 	}
@@ -142,7 +140,7 @@ func (r *runner) sessionsObject() map[string]any {
 	h := r.r.Host
 	return map[string]any{
 		// await ctx.sessions.start({ cwd, prompt?, agent?, title?, mode?, workspace?, focus? }) → session
-		"start": func(arg goja.Value) *goja.Promise {
+		"start": func(arg jsValue) *promise {
 			if h == nil {
 				return r.rejected(errNoHost)
 			}
@@ -183,7 +181,7 @@ func (r *runner) sessionsObject() map[string]any {
 		// ctx.sessions.answer(id, reqId, { optionId } | { answers } | { skip }) answers one of them for a person. Not
 		// for a call an agent made (a tool, `gerdr panel run` from a conversation): an agent must not approve its own
 		// requests, nor another's — only the page, a schedule, a stream or a trigger, acting on a person's word.
-		"answer": func(id, reqID string, arg goja.Value) {
+		"answer": func(id, reqID string, arg jsValue) {
 			if h == nil {
 				r.throw(errNoHost)
 			}
@@ -219,7 +217,7 @@ func (r *runner) sessionsObject() map[string]any {
 		},
 		// ctx.sessions.changed(ids, { timeout? }) → the ids that moved (a new event in the log, or the status), or []
 		// after timeout (ms, 60 s at most, default 30 s). Instead of polling get / read: the hub pushes it.
-		"changed": func(ids []string, arg goja.Value) *goja.Promise {
+		"changed": func(ids []string, arg jsValue) *promise {
 			if h == nil {
 				r.throw(errNoHost)
 			}
@@ -245,7 +243,7 @@ func (r *runner) sessionsObject() map[string]any {
 		// ctx.sessions.read(id, { last? }) → [{ role, text, at, from? }] or null: what was said in it, no tool calls. A
 		// panel shows a conversation where Gerdr's chat can't (another computer's, synced through the panel's own
 		// server), which `reply` (the last turn only) isn't enough for.
-		"read": func(id string, arg goja.Value) any {
+		"read": func(id string, arg jsValue) any {
 			if h == nil {
 				r.throw(errNoHost)
 			}
@@ -262,7 +260,7 @@ func (r *runner) sessionsObject() map[string]any {
 			return c
 		},
 		// ctx.sessions.list({ cwd? }) → sessions, most recently active first
-		"list": func(arg goja.Value) []map[string]any {
+		"list": func(arg jsValue) []map[string]any {
 			if h == nil {
 				r.throw(errNoHost)
 			}
@@ -284,7 +282,7 @@ func (r *runner) sessionsObject() map[string]any {
 		},
 		// await ctx.sessions.send(id, text) → session. A running one gets it at its next pause, like a queued message.
 		// id "work" = this project's Work agent, so a function can hand something to it (it has no session id to use).
-		"send": func(id, text string, arg goja.Value) *goja.Promise {
+		"send": func(id, text string, arg jsValue) *promise {
 			if h == nil {
 				return r.rejected(errNoHost)
 			}
@@ -304,7 +302,7 @@ func (r *runner) sessionsObject() map[string]any {
 			return r.resolved(s)
 		},
 		// await ctx.sessions.close(id): stop its agent, take it off the screen; send() later opens it again
-		"close": func(id string) *goja.Promise {
+		"close": func(id string) *promise {
 			if h == nil {
 				return r.rejected(errNoHost)
 			}
@@ -316,7 +314,7 @@ func (r *runner) sessionsObject() map[string]any {
 			return r.resolved(nil)
 		},
 		// ctx.sessions.tag(id, { key: "value", gone: "" }) → session
-		"tag": func(id string, arg goja.Value) map[string]any {
+		"tag": func(id string, arg jsValue) map[string]any {
 			if h == nil {
 				r.throw(errNoHost)
 			}
@@ -350,7 +348,7 @@ func (r *runner) artifactsObject() map[string]any {
 	}
 	return map[string]any{
 		// ctx.artifacts.folder({ key, name, under? }) → { path, exists, id? }
-		"folder": func(arg goja.Value) map[string]any {
+		"folder": func(arg jsValue) map[string]any {
 			need()
 			var o struct {
 				Key   string `json:"key"`
@@ -391,7 +389,7 @@ func (r *runner) artifactsObject() map[string]any {
 			return out
 		},
 		// ctx.artifacts.record(path, { kind, label?, url?, path?, text?, supersedes? }) → the record
-		"record": func(p string, arg goja.Value) map[string]any {
+		"record": func(p string, arg jsValue) map[string]any {
 			need()
 			var it map[string]any
 			if err := r.opts(arg, &it); err != nil {
@@ -417,7 +415,7 @@ func (r *runner) artifactsObject() map[string]any {
 func (r *runner) workspacesObject() map[string]any {
 	return map[string]any{
 		// ctx.workspaces.list({ all? }) → this project's Code workspaces (every project's with all)
-		"list": func(arg goja.Value) []map[string]any {
+		"list": func(arg jsValue) []map[string]any {
 			if r.r.Host == nil {
 				r.throw(errNoHost)
 			}
@@ -481,7 +479,7 @@ func (r *runner) dirsObject() map[string]any {
 			return map[string]any{"path": full, "dir": st.IsDir(), "git": st.IsDir() && gerr == nil}
 		},
 		// ctx.dirs.read(path, { max? }) → the text, cut at max bytes (default 64 KB, at most 1 MB); null when missing
-		"read": func(p string, arg goja.Value) any {
+		"read": func(p string, arg jsValue) any {
 			full, err := expandPath(p)
 			if err != nil {
 				r.throw(err)

@@ -6,15 +6,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dop251/goja"
+	"github.com/MoeForge/moejs"
 )
 
-// compile bundles a local/ file (esbuild) and compiles it for goja, reusing the last result for that file while
+// compile bundles a local/ file (esbuild) and compiles it for moejs, reusing the last result for that file while
 // none of the files it was built from changed (size and modification time of each). Panels' pages poll functions
 // (tasks.list, a log…) every few seconds: bundling and compiling on every call was ~1 run a second, a third of the
-// service's allocations, and the GC that came with them kept it busy. A goja Program isn't tied to a runtime, so
-// each run's own VM can run the shared one.
-func compile(path string) (*goja.Program, error) {
+// service's allocations, and the GC that came with them kept it busy. A moejs Script isn't tied to a runtime, so
+// each run's own runtime can run the shared one.
+func compile(path string) (*moejs.Script, error) {
 	compiled.mu.Lock()
 	c := compiled.m[path]
 	compiled.mu.Unlock()
@@ -25,12 +25,12 @@ func compile(path string) (*goja.Program, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Wrapped in a function, as Node does: the bundle's top-level `var`s and functions stay the module's own instead
-	// of becoming (undeletable) globals of the VM, which is reused for other runs (pool.go). Same line numbers: the
-	// wrapper opens on the first line.
-	prog, err := goja.Compile(filepath.Base(path), "(function (module, exports, require) {"+code+"\n})", false)
+	// Wrapped in a function, as Node does, with module.exports for the bundle's CommonJS. Strict, as the ES module
+	// it was written as: assigning to a frozen builtin (moejs shares them between runtimes) throws instead of doing
+	// nothing. Same line numbers: the wrapper opens on the first line.
+	prog, err := moejs.CompileScript(filepath.Base(path), "(function (module, exports, require) {'use strict';"+code+"\n})")
 	if err != nil {
-		return nil, jsError(err)
+		return nil, err
 	}
 	c = &compiledFile{prog: prog, stamps: map[string]stamp{}}
 	for _, in := range append(inputs, path) {
@@ -51,7 +51,7 @@ var compiled = struct {
 }{m: map[string]*compiledFile{}}
 
 type compiledFile struct {
-	prog   *goja.Program
+	prog   *moejs.Script
 	stamps map[string]stamp
 }
 

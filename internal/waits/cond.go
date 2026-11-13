@@ -17,7 +17,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dop251/goja"
+	"github.com/MoeForge/moejs"
+	"github.com/MoeForge/moejs/engine"
 )
 
 // Cond is a condition: one JavaScript expression over a state. Each of the state's fields is a variable, and `$`
@@ -28,11 +29,11 @@ import (
 //
 // JavaScript rather than a little language of Gerdr's own (it was one for a day): filtering a list — "an unresolved
 // comment by someone else on this file" — needs a real expression, and agents write JS without being taught it.
-// The expression sees nothing but the state: no require, no files, no network (a bare goja runtime), and it gets
+// The expression sees nothing but the state: no require, no files, no network (a bare moejs runtime), and it gets
 // 50ms per check.
 type Cond struct {
 	src  string
-	prog *goja.Program
+	prog *moejs.Script
 }
 
 // Timeout is how long one check may take.
@@ -50,7 +51,7 @@ func Parse(src string) (*Cond, error) {
 		return nil, errors.New("condition over 4000 characters")
 	}
 	// An expression, not statements: wrapped so `a; b` or a return can't sneak in
-	prog, err := goja.Compile("until", "(function(){ return (\n"+src+"\n); })()", true)
+	prog, err := moejs.CompileScript("until", "'use strict';(function(){ return (\n"+src+"\n); })()")
 	if err != nil {
 		return nil, fmt.Errorf("condition: %v", cleanErr(err))
 	}
@@ -62,29 +63,37 @@ func (c *Cond) String() string { return c.src }
 // Eval: does the condition hold for this state (its value, as JavaScript reads it as true)? A field the state
 // doesn't have is an error (a ReferenceError), not false: a typo must not mean "never".
 func (c *Cond) Eval(st map[string]any) (hit bool, err error) {
-	vm := goja.New()
+	rt := moejs.NewRuntime(moejs.Options{DisableDynamicCode: true})
 	for k, v := range st {
 		if identRe.MatchString(k) {
-			_ = vm.Set(k, v)
+			if err := rt.SetGlobal(k, v); err != nil {
+				return false, fmt.Errorf("condition: field %s: %v", k, err)
+			}
 		}
 	}
-	_ = vm.Set("$", st)
-	t := time.AfterFunc(Timeout, func() { vm.Interrupt("took over 50ms") })
+	if err := rt.SetGlobal("$", st); err != nil {
+		return false, fmt.Errorf("condition: %v", err)
+	}
+	t := time.AfterFunc(Timeout, func() { rt.Interrupt("took over 50ms") })
 	defer t.Stop()
-	defer func() {
-		if r := recover(); r != nil {
-			hit, err = false, fmt.Errorf("condition: %v", r)
-		}
-	}()
-	v, err := vm.RunProgram(c.prog)
+	v, err := rt.RunScript(c.prog)
 	if err != nil {
 		return false, fmt.Errorf("condition: %v", cleanErr(err))
 	}
-	return v.ToBoolean(), nil
+	return engine.ToBoolean(v), nil
 }
 
-// cleanErr: goja's message without the wrapper's line noise ("at until:2:3(4)").
+// cleanErr: the message alone — a thrown error's, without the stack moejs appends (whose lines point into the
+// wrapper), or the interrupt's reason.
 func cleanErr(err error) string {
+	var ex *moejs.Exception
+	var ie *moejs.InterruptedError
+	switch {
+	case errors.As(err, &ie):
+		return fmt.Sprint(ie.Value)
+	case errors.As(err, &ex) && ex.Name() != "":
+		return ex.Name() + ": " + ex.Message()
+	}
 	msg := err.Error()
 	if i := strings.Index(msg, " at "); i > 0 {
 		msg = msg[:i]

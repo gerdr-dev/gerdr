@@ -11,7 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dop251/goja"
+	"github.com/MoeForge/moejs"
+	"github.com/MoeForge/moejs/engine"
 
 	"github.com/gerdr-dev/gerdr/sysenv"
 )
@@ -29,14 +30,14 @@ const (
 // directory reject. Commands are found on the login shell's PATH (the App's own is bare when started from the Dock), a
 // path with a slash is relative to cwd; cwd defaults to the Work directory and can't leave it; stdin is empty unless
 // input is given (so nothing hangs waiting for it); env adds to gerdr's environment (pass ctx.secrets.get values here).
-func (r *runner) exec(name string, args goja.Value, opts goja.Value) *goja.Promise {
+func (r *runner) exec(name string, args, opts jsValue) *promise {
 	// ctx.exec('ls', { cwd }) too: an object instead of the array is the options
-	if o, ok := args.(*goja.Object); ok && o.ClassName() != "Array" && (opts == nil || goja.IsUndefined(opts)) {
-		args, opts = nil, args
+	if args.IsObject() && !engine.IsArray(args) && opts.IsUndefined() {
+		args, opts = moejs.Undefined(), args
 	}
 	var argv []string
-	if args != nil && !goja.IsUndefined(args) && !goja.IsNull(args) {
-		list, ok := args.Export().([]any)
+	if !args.IsNullish() {
+		list, ok := r.toGo(args).([]any)
 		if !ok {
 			return r.rejected(errors.New("ctx.exec's second argument is the argument array: ctx.exec('cmd', ['arg1', 'arg2'], { … })"))
 		}
@@ -44,12 +45,12 @@ func (r *runner) exec(name string, args goja.Value, opts goja.Value) *goja.Promi
 			if a == nil {
 				return r.rejected(errors.New("ctx.exec's arguments contain null / undefined"))
 			}
-			argv = append(argv, r.vm.ToValue(a).String())
+			argv = append(argv, jsString(a))
 		}
 	}
 	var o map[string]any
-	if opts != nil && !goja.IsUndefined(opts) && !goja.IsNull(opts) {
-		m, ok := toPlain(opts.Export()).(map[string]any)
+	if !opts.IsNullish() {
+		m, ok := toPlain(r.toGo(opts)).(map[string]any)
 		if !ok {
 			return r.rejected(errors.New("ctx.exec's third argument must be an object: { cwd, input, timeout, env }"))
 		}
@@ -93,7 +94,7 @@ func (r *runner) exec(name string, args goja.Value, opts goja.Value) *goja.Promi
 	if m, ok := o["env"].(map[string]any); ok {
 		for k, v := range m {
 			if v != nil {
-				env = append(env, k+"="+r.vm.ToValue(v).String())
+				env = append(env, k+"="+jsString(v))
 			}
 		}
 	}
@@ -106,7 +107,7 @@ func (r *runner) exec(name string, args goja.Value, opts goja.Value) *goja.Promi
 	cmd.Dir = dir
 	cmd.Env = sysenv.ChildEnv(env...)
 	if in, ok := o["input"]; ok && in != nil {
-		cmd.Stdin = strings.NewReader(r.vm.ToValue(in).String())
+		cmd.Stdin = strings.NewReader(jsString(in))
 	}
 	stdout, stderr := &capBuffer{max: execMaxOutput}, &capBuffer{max: execMaxOutput}
 	cmd.Stdout, cmd.Stderr = stdout, stderr

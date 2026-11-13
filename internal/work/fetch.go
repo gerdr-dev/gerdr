@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -13,9 +12,9 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	"unicode/utf8"
 
-	"github.com/dop251/goja"
+	"github.com/MoeForge/moejs"
+	"github.com/MoeForge/moejs/engine"
 )
 
 // fetch as in browsers:
@@ -194,7 +193,7 @@ func (b *idleBody) Close() error {
 	return nil
 }
 
-func (r *runner) fetch(u string, init map[string]any) *goja.Promise {
+func (r *runner) fetch(u string, init map[string]any) *promise {
 	start := time.Now()
 	resp, err := doStream(r.ctx, r.request(u, init))
 	if err != nil {
@@ -205,7 +204,7 @@ func (r *runner) fetch(u string, init map[string]any) *goja.Promise {
 
 // fetchAll: await ctx.fetchAll([url or { url, method, headers, body }, …]) runs them 4 at a time and returns the
 // responses in order; a failed one is { ok: false, status: 0, url, error } and doesn't fail the rest.
-func (r *runner) fetchAll(items []any) *goja.Promise {
+func (r *runner) fetchAll(items []any) *promise {
 	reqs := make([]fetchRequest, len(items))
 	for i, it := range items {
 		switch v := it.(type) {
@@ -235,7 +234,7 @@ func (r *runner) fetchAll(items []any) *goja.Promise {
 		}()
 	}
 	wg.Wait()
-	// goja objects can only be made on the goroutine running the JS
+	// JS objects are made on the goroutine running the JS, after the requests
 	arr := make([]any, len(out))
 	for i, o := range out {
 		if o.err != nil {
@@ -321,127 +320,79 @@ func (b *fetchBody) all() []byte {
 	return data
 }
 
-func (r *runner) response(resp *fetchResponse, start time.Time) *goja.Object {
+func (r *runner) response(resp *fetchResponse, start time.Time) jsValue {
 	b := newFetchBody(resp, start)
 	r.bodies = append(r.bodies, b)
-	vm := r.vm
-	o := vm.NewObject()
-	timing := vm.NewObject()
-	_ = timing.Set("ttfb_ms", resp.TTFBMs)
-	_ = timing.DefineAccessorProperty("total_ms", vm.ToValue(func() int64 {
+	reader := r.obj(map[string]any{
+		"read": func() *promise {
+			c, err := b.chunk()
+			if err != nil {
+				return r.rejected(fmt.Errorf("reading the response from %s failed: %w", resp.URL, err))
+			}
+			if c == nil {
+				return r.resolved(map[string]any{"done": true, "value": moejs.Undefined()})
+			}
+			return r.resolved(map[string]any{"done": false, "value": r.uint8Array(c)})
+		},
+		"cancel":      func() *promise { b.finish(); return r.resolved(moejs.Undefined()) },
+		"releaseLock": func() {},
+	})
+	timing := r.obj(map[string]any{"ttfb_ms": resp.TTFBMs})
+	r.defineGetter(timing, "total_ms", func() int64 {
 		if !b.done {
 			return time.Since(b.start).Milliseconds()
 		}
 		return b.totalMs
-	}), nil, goja.FLAG_FALSE, goja.FLAG_TRUE)
-	_ = o.Set("timing", timing)
-	_ = o.DefineAccessorProperty("truncated", vm.ToValue(func() bool { return b.truncated }), nil, goja.FLAG_FALSE, goja.FLAG_TRUE)
-	_ = o.Set("status", resp.Status)
-	_ = o.Set("statusText", resp.StatusText)
-	_ = o.Set("ok", resp.Status >= 200 && resp.Status < 300)
-	_ = o.Set("url", resp.URL)
-	headers := vm.NewObject()
-	_ = headers.Set("get", func(name string) any {
-		for k, v := range resp.Headers {
-			if strings.EqualFold(k, name) {
-				return v
+	})
+	o := r.obj(map[string]any{
+		"timing":     timing,
+		"status":     resp.Status,
+		"statusText": resp.StatusText,
+		"ok":         resp.Status >= 200 && resp.Status < 300,
+		"url":        resp.URL,
+		"headers": map[string]any{
+			"get": func(name string) any {
+				for k, v := range resp.Headers {
+					if strings.EqualFold(k, name) {
+						return v
+					}
+				}
+				return nil
+			},
+			"forEach": func(fn jsFunc) {
+				for k, v := range resp.Headers {
+					if _, err := fn(moejs.String(v), moejs.String(k)); err != nil {
+						r.throw(err)
+					}
+				}
+			},
+		},
+		"body": map[string]any{"getReader": func() jsValue { return reader }},
+		"text": func() *promise { return r.resolved(string(b.all())) },
+		"json": func() *promise {
+			data := b.all()
+			v, err := r.rt.ParseJSON(data)
+			if err != nil {
+				return r.rejected(fmt.Errorf("the response isn't JSON (%d): %.200s", resp.Status, data))
 			}
-		}
-		return nil
+			return r.resolved(v)
+		},
+		"arrayBuffer": func() *promise {
+			ab, err := r.rt.Realm().NewArrayBuffer(b.all())
+			if err != nil {
+				return r.rejected(err)
+			}
+			return r.resolved(engine.ObjectValue(ab))
+		},
 	})
-	_ = headers.Set("forEach", func(fn goja.Callable) {
-		for k, v := range resp.Headers {
-			_, _ = fn(goja.Undefined(), vm.ToValue(v), vm.ToValue(k))
-		}
-	})
-	_ = o.Set("headers", headers)
-
-	reader := vm.NewObject()
-	_ = reader.Set("read", func() *goja.Promise {
-		c, err := b.chunk()
-		if err != nil {
-			return r.rejected(fmt.Errorf("reading the response from %s failed: %w", resp.URL, err))
-		}
-		if c == nil {
-			return r.resolved(map[string]any{"done": true, "value": goja.Undefined()})
-		}
-		return r.resolved(map[string]any{"done": false, "value": r.uint8Array(c)})
-	})
-	_ = reader.Set("cancel", func() *goja.Promise { b.finish(); return r.resolved(goja.Undefined()) })
-	_ = reader.Set("releaseLock", func() {})
-	body := vm.NewObject()
-	_ = body.Set("getReader", func() *goja.Object { return reader })
-	_ = o.Set("body", body)
-
-	_ = o.Set("text", func() *goja.Promise { return r.resolved(string(b.all())) })
-	_ = o.Set("json", func() *goja.Promise {
-		data := b.all()
-		var v any
-		if err := json.Unmarshal(data, &v); err != nil {
-			return r.rejected(fmt.Errorf("the response isn't JSON (%d): %.200s", resp.Status, data))
-		}
-		return r.resolved(v)
-	})
-	_ = o.Set("arrayBuffer", func() *goja.Promise { return r.resolved(vm.NewArrayBuffer(b.all())) })
+	r.defineGetter(o, "truncated", func() bool { return b.truncated })
 	return o
 }
 
-func (r *runner) uint8Array(data []byte) goja.Value {
-	ab := r.vm.NewArrayBuffer(append([]byte(nil), data...))
-	if ctor, ok := goja.AssertConstructor(r.vm.Get("Uint8Array")); ok {
-		if v, err := ctor(nil, r.vm.ToValue(ab)); err == nil {
-			return v
-		}
+func (r *runner) uint8Array(data []byte) jsValue {
+	a, err := r.rt.Realm().NewUint8Array(append([]byte(nil), data...), nil)
+	if err != nil {
+		r.throw(err)
 	}
-	return r.vm.ToValue(ab)
-}
-
-// bytesOf turns a Uint8Array / ArrayBuffer / string into bytes
-func (r *runner) bytesOf(v goja.Value) []byte {
-	if v == nil || goja.IsUndefined(v) || goja.IsNull(v) {
-		return nil
-	}
-	switch x := v.Export().(type) {
-	case goja.ArrayBuffer:
-		return x.Bytes()
-	case string:
-		return []byte(x)
-	}
-	var data []byte
-	if err := r.vm.ExportTo(v, &data); err != nil {
-		r.throw(errors.New("expected a Uint8Array or ArrayBuffer: " + err.Error()))
-	}
-	return data
-}
-
-// installText adds TextDecoder / TextEncoder (UTF-8 only). decode(x, { stream: true }) keeps a character split across
-// chunks for the next call, so streamed Chinese doesn't come out garbled.
-func (r *runner) installText() {
-	_ = r.vm.Set("TextDecoder", func(call goja.ConstructorCall) *goja.Object {
-		var pending []byte
-		d := call.This
-		_ = d.Set("encoding", "utf-8")
-		_ = d.Set("decode", func(v goja.Value, opts map[string]any) string {
-			data := append(pending, r.bytesOf(v)...)
-			pending = nil
-			if stream, _ := opts["stream"].(bool); stream {
-				for i := 1; i <= 3 && i <= len(data); i++ {
-					if c := data[len(data)-i]; c&0xC0 != 0x80 { // the character's first byte
-						if !utf8.FullRune(data[len(data)-i:]) {
-							pending = append([]byte(nil), data[len(data)-i:]...)
-							data = data[:len(data)-i]
-						}
-						break
-					}
-				}
-			}
-			return strings.ToValidUTF8(string(data), "�")
-		})
-		return nil
-	})
-	_ = r.vm.Set("TextEncoder", func(call goja.ConstructorCall) *goja.Object {
-		_ = call.This.Set("encoding", "utf-8")
-		_ = call.This.Set("encode", func(s string) goja.Value { return r.uint8Array([]byte(s)) })
-		return nil
-	})
+	return engine.ObjectValue(a)
 }

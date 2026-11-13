@@ -2,7 +2,6 @@ package work
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,7 +14,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dop251/goja"
+	"github.com/MoeForge/moejs"
+	"github.com/MoeForge/moejs/engine"
 	"github.com/evanw/esbuild/pkg/api"
 )
 
@@ -26,6 +26,10 @@ import (
 //
 // Every host call finishes synchronously and hands back a settled promise, so `await` works and the function's own
 // promise has settled by the time it returns: there is no event loop (no setTimeout; ctx.sleep waits).
+//
+// The engine is moejs (pure Go; it replaced goja on 2026-11-13: 5× faster runs, a third of the allocations, regular
+// expressions that match Node's and stop on an interrupt). Each run gets a new runtime, which costs microseconds: its
+// builtins are frozen and shared by every runtime, so nothing a run does to them (or to its globals) reaches the next.
 
 // Event is what a run reports while it goes: progress (ctx.progress) and log (console.*, ctx.log).
 type Event struct {
@@ -85,13 +89,12 @@ func (r *Runner) List(project string) ([]Fn, error) {
 		if err != nil {
 			continue
 		}
-		vm := goja.New()
-		exports, err := load(vm, prog)
+		ex, err := exportsOf(prog)
 		if err != nil {
 			continue
 		}
-		for _, k := range exports.Keys() {
-			if _, ok := goja.AssertFunction(exports.Get(k)); ok {
+		for k, v := range ex {
+			if isFunc(v) {
 				out = append(out, Fn{Name: base + "." + k, File: "local/" + e.Name()})
 			}
 		}
@@ -107,7 +110,7 @@ func bundle(path string) (code string, inputs []string, err error) {
 		Bundle:      true, // relative imports (local/_api.ts) come along
 		Format:      api.FormatCommonJS,
 		Platform:    api.PlatformNeutral,
-		Target:      api.ES2017, // goja runs async/await; esbuild lowers ?. ?? and friends
+		Target:      api.ES2024, // what moejs runs; esbuild lowers anything newer
 		Write:       false,
 		LogLevel:    api.LogLevelSilent,
 		// The files read, so a cached result is reused only while none of them changed
@@ -141,89 +144,105 @@ func bundle(path string) (code string, inputs []string, err error) {
 	return string(res.OutputFiles[0].Contents), inputs, nil
 }
 
-// load runs the bundled CommonJS (compile's program: a function of module, exports, require) and returns
-// module.exports. Each call is a fresh module: its top-level state starts over every run, even in a reused VM.
-func load(vm *goja.Runtime, prog *goja.Program) (*goja.Object, error) {
-	wrapper, err := vm.RunProgram(prog)
+// load runs the bundled CommonJS (compile's script: a function of module, exports, require) in rt and returns
+// module.exports. Each call is a fresh module: its top-level state starts over every run.
+func load(rt *moejs.Runtime, prog *moejs.Script) (jsValue, error) {
+	wrapper, err := rt.RunScript(prog)
 	if err != nil {
-		return nil, jsError(err)
+		return moejs.Undefined(), jsError(rt, err)
 	}
-	fn, ok := goja.AssertFunction(wrapper)
-	if !ok {
-		return nil, errors.New("compiled module isn't a function")
+	module, err := rt.ParseJSONString(`{"exports":{}}`)
+	if err != nil {
+		return moejs.Undefined(), err
 	}
-	module := vm.NewObject()
-	exports := vm.NewObject()
-	_ = module.Set("exports", exports)
-	require := vm.ToValue(func(name string) goja.Value {
-		panic(vm.NewTypeError("local functions can't require(%q): import code from local/ by relative path; what they can do is on ctx", name))
-	})
-	if _, err := fn(goja.Undefined(), module, exports, require); err != nil {
-		return nil, jsError(err)
+	exports, _ := rt.Get(module, "exports")
+	require, _ := rt.FromGo(moejs.NativeFunc(func(realm *moejs.Realm, _ jsValue, args []jsValue) (jsValue, error) {
+		name, _ := realm.ToString(moejs.Arg(args, 0))
+		return moejs.Undefined(), realm.Throw(engine.ObjectValue(realm.NewError(engine.KindTypeError,
+			"local functions can't require(%q): import code from local/ by relative path; what they can do is on ctx", name.GoString())))
+	}))
+	if _, err := rt.CallFunction(wrapper, moejs.Undefined(), module, exports, require); err != nil {
+		return moejs.Undefined(), jsError(rt, err)
 	}
-	return module.Get("exports").ToObject(vm), nil
+	return rt.Get(module, "exports")
 }
 
-// runner is one run of one function.
+// exportsOf loads prog in a bare runtime and returns its exports (functions as *moejs.Object): what List / Tools see.
+func exportsOf(prog *moejs.Script) (map[string]any, error) {
+	rt := moejs.NewRuntime(moejs.Options{})
+	ex, err := load(rt, prog)
+	if err != nil {
+		return nil, err
+	}
+	g, err := rt.ToGo(ex)
+	if err != nil {
+		return nil, err
+	}
+	m, _ := g.(map[string]any)
+	return m, nil
+}
+
+// isFunc: an exported value (from exportsOf) is a function.
+func isFunc(v any) bool {
+	o, ok := v.(*moejs.Object)
+	return ok && engine.IsCallable(engine.ObjectValue(o))
+}
+
+// runner is one run of one function, in a runtime of its own.
 type runner struct {
 	ctx     context.Context
-	vm      *goja.Runtime
+	rt      *moejs.Runtime
 	r       *Runner
 	project string
 	dir     string // the project's Work directory
 	emit    func(Event)
 	depth   int          // events this run emits: one deeper than the event that triggered it (trigger.go depthOf)
 	bodies  []*fetchBody // fetch response bodies, closed at the end if still open
+	getter  *jsValue     // defineGetter's helper, made on first use
 }
 
-func (r *Runner) runCode(ctx context.Context, project, dir, file, fn string, prog *goja.Program, input any, emit func(Event)) (any, error) {
-	p, err := takeVM() // pool.go: a VM with the globals installed, reused across runs
-	if err != nil {
+func (r *Runner) runCode(ctx context.Context, project, dir, file, fn string, prog *moejs.Script, input any, emit func(Event)) (any, error) {
+	run := &runner{ctx: ctx, rt: moejs.NewRuntime(moejs.Options{}), r: r, project: project, dir: dir, emit: emit, depth: depthOf(input)}
+	defer run.cleanup()
+	if err := run.installGlobals(); err != nil {
 		return nil, err
 	}
-	vm, run := p.vm, p.run
-	// Pooled again only if the run ended normally: not interrupted, not crashed (a panic skips clean = true)
-	clean := false
-	defer func() { p.release(clean) }()
 	// Stop / timeout: interrupt the JS (a host call blocked in fetch / exec returns too, its ctx is the same)
-	stop := context.AfterFunc(ctx, func() { vm.Interrupt("stopped") })
-	defer func() {
-		if !stop() {
-			clean = false // the interrupt fired (or is firing): this VM may still carry it
-		}
-	}()
-	run.begin(ctx, r, project, dir, emit, depthOf(input))
-	res, err := run.call(file, fn, prog, input)
-	clean = true
-	return res, err
+	stop := context.AfterFunc(ctx, func() { run.rt.Interrupt("stopped") })
+	defer stop()
+	return run.call(file, fn, prog, input)
 }
 
 // call loads the module and calls its export fn with (input, ctx), waiting for a returned promise.
-func (run *runner) call(file, fn string, prog *goja.Program, input any) (any, error) {
-	vm := run.vm
-	exports, err := load(vm, prog)
+func (run *runner) call(file, fn string, prog *moejs.Script, input any) (any, error) {
+	rt := run.rt
+	exports, err := load(rt, prog)
 	if err != nil {
 		return nil, err
 	}
-	f, ok := goja.AssertFunction(exports.Get(fn))
-	if !ok {
+	f, err := rt.Get(exports, fn)
+	if err != nil || !engine.IsCallable(f) {
 		return nil, fmt.Errorf("%s doesn't export a function named %s", file, fn)
 	}
-	res, err := f(goja.Undefined(), vm.ToValue(input), run.ctxObject())
+	in, err := rt.FromGo(input)
 	if err != nil {
-		return nil, jsError(err)
+		return nil, err
 	}
-	if p, ok := res.Export().(*goja.Promise); ok {
-		switch p.State() {
-		case goja.PromiseStateFulfilled:
-			res = p.Result()
-		case goja.PromiseStateRejected:
-			return nil, jsError(nil, p.Result())
+	res, err := rt.CallFunction(f, moejs.Undefined(), in, run.ctxObject())
+	if err != nil {
+		return nil, jsError(rt, err)
+	}
+	if st, v, ok := moejs.PromiseResult(res); ok {
+		switch st {
+		case moejs.PromiseFulfilled:
+			res = v
+		case moejs.PromiseRejected:
+			return nil, jsError(rt, rt.Realm().Throw(v))
 		default:
 			return nil, errors.New("the function's promise never settled (there's no setTimeout here: to wait, await ctx.sleep(ms))")
 		}
 	}
-	return plain(toPlain(res.Export())), nil
+	return plain(toPlain(run.toGo(res))), nil
 }
 
 func (r *runner) cleanup() {
@@ -232,29 +251,16 @@ func (r *runner) cleanup() {
 	}
 }
 
-func (r *runner) throw(err error) { panic(r.vm.NewGoError(err)) }
-
-// rejected is a failed promise. Host calls that return a promise fail this way rather than throwing synchronously,
-// so ctx.mcp(…).catch(…) catches it, as it would an async function's.
-func (r *runner) rejected(err error) *goja.Promise {
-	p, _, reject := r.vm.NewPromise()
-	_ = reject(r.vm.NewGoError(err))
-	return p
-}
-
-func (r *runner) resolved(v any) *goja.Promise {
-	p, resolve, _ := r.vm.NewPromise()
-	_ = resolve(v)
-	return p
-}
-
-func (r *runner) log(level string) func(args ...goja.Value) {
-	return func(args ...goja.Value) {
+func (r *runner) log(level string) func(args ...jsValue) {
+	return func(args ...jsValue) {
+		realm := r.rt.Realm()
 		parts := make([]string, len(args))
 		for i, a := range args {
-			if o, ok := a.(*goja.Object); ok && o.ClassName() != "Error" {
-				b, _ := json.Marshal(toPlain(o.Export()))
+			if a.IsObject() && a.AsObject().ClassName() != "Error" && !engine.IsCallable(a) {
+				b, _ := json.Marshal(toPlain(r.toGo(a)))
 				parts[i] = string(b)
+			} else if s, err := realm.ToString(a); err == nil {
+				parts[i] = s.GoString()
 			} else {
 				parts[i] = a.String()
 			}
@@ -263,16 +269,18 @@ func (r *runner) log(level string) func(args ...goja.Value) {
 	}
 }
 
-func (r *runner) installGlobals() {
-	console := r.vm.NewObject()
-	_ = console.Set("log", r.log("info"))
-	_ = console.Set("info", r.log("info"))
-	_ = console.Set("warn", r.log("warn"))
-	_ = console.Set("error", r.log("error"))
-	_ = r.vm.Set("console", console)
-	_ = r.vm.Set("fetch", r.fetch)
-	r.installText()
-	_ = r.vm.Set("__parseURL", func(raw, base string) map[string]any {
+// installGlobals: console, fetch and URL. TextEncoder / TextDecoder (with { stream: true }), atob / btoa and Intl
+// (toLocaleString with separators) are moejs's own.
+func (r *runner) installGlobals() error {
+	rt := r.rt
+	console := r.obj(map[string]any{"log": r.log("info"), "info": r.log("info"), "warn": r.log("warn"), "error": r.log("error")})
+	if err := rt.SetGlobal("console", console); err != nil {
+		return err
+	}
+	if err := rt.SetGlobal("fetch", r.fn(r.fetch)); err != nil {
+		return err
+	}
+	if err := rt.SetGlobal("__parseURL", r.fn(func(raw, base string) map[string]any {
 		u, err := url.Parse(raw)
 		if err == nil && base != "" {
 			var b *url.URL
@@ -281,7 +289,7 @@ func (r *runner) installGlobals() {
 			}
 		}
 		if err != nil || u.Scheme == "" || u.Host == "" {
-			panic(r.vm.NewTypeError("Invalid URL: %s", raw))
+			r.throw(r.typeError("Invalid URL: %s", raw))
 		}
 		// As in browsers: an http(s) URL with no path has the path /
 		if u.Path == "" && u.Opaque == "" && (u.Scheme == "http" || u.Scheme == "https") {
@@ -300,21 +308,14 @@ func (r *runner) installGlobals() {
 		}
 		return map[string]any{"href": u.String(), "protocol": u.Scheme + ":", "host": strings.ToLower(u.Host), "hostname": strings.ToLower(u.Hostname()), "port": u.Port(),
 			"pathname": u.EscapedPath(), "search": search, "hash": hash, "origin": u.Scheme + "://" + u.Host, "query": q}
-	})
-	_ = r.vm.Set("btoa", func(s string) string { return base64.StdEncoding.EncodeToString([]byte(s)) })
-	_ = r.vm.Set("atob", func(s string) string {
-		b, err := base64.StdEncoding.DecodeString(s)
-		if err != nil {
-			panic(r.vm.NewTypeError("atob: %v", err))
-		}
-		return string(b)
-	})
-	if _, err := r.vm.RunString(urlPolyfill); err != nil {
-		panic(err)
+	})); err != nil {
+		return err
 	}
+	_, err := rt.RunScript(urlPolyfill)
+	return err
 }
 
-const urlPolyfill = `
+var urlPolyfill = mustScript("url.js", `
 class URL {
   constructor(u, base) {
     const p = __parseURL(String(u), base === undefined ? '' : String(base))
@@ -327,71 +328,101 @@ class URL {
   toJSON() { return this.href }
 }
 globalThis.URL = URL
-// goja's Number.prototype.toLocaleString takes its first argument as a radix (toLocaleString('en-US') throws): replace it
-// with en-US thousands separators, honouring minimumFractionDigits / maximumFractionDigits (at most 3 decimals by default)
-Object.defineProperty(Number.prototype, 'toLocaleString', {
-  configurable: true, writable: true,
-  value: function (locales, opts) {
-    const n = Number(this)
-    if (!isFinite(n)) return String(n)
-    const o = opts && typeof opts === 'object' ? opts : {}
-    const min = Math.min(20, Math.max(0, Math.floor(Number(o.minimumFractionDigits) || 0)))
-    const max = Math.min(20, Math.max(min, o.maximumFractionDigits === undefined ? 3 : Math.floor(Number(o.maximumFractionDigits) || 0)))
-    let [int, frac = ''] = Math.abs(n).toFixed(max).split('.')
-    frac = frac.replace(/0+$/, '')
-    while (frac.length < min) frac += '0'
-    const zero = /^0*$/.test(int) && /^0*$/.test(frac)
-    return (n < 0 && !zero ? '-' : '') + int.replace(/\B(?=(\d{3})+(?!\d))/g, ',') + (frac ? '.' + frac : '')
-  },
-})
-`
+`)
 
-func (r *runner) ctxObject() *goja.Object {
-	c := r.vm.NewObject()
-
-	// ctx.caller.session: the conversation that called this function as a Work tool (tools.go); "" otherwise
-	caller := r.vm.NewObject()
-	_ = caller.Set("session", callerOf(r.ctx))
-	_ = c.Set("caller", caller)
-
-	secrets := r.vm.NewObject()
-	// ctx.secrets.get(name): a key the user stored with `gerdr panel secret set <name>` (secrets.json, never in config or
-	// transcripts); null when there's none. Pass it to commands through ctx.exec's env.
-	_ = secrets.Set("get", func(name string) any {
-		if r.r.Secret != nil {
-			if v := r.r.Secret(name); v != "" {
-				return v
+func (r *runner) ctxObject() jsValue {
+	// ctx.mcp(server, tool, args) is a function with a member (servers), so it's built as an object of its own
+	mcp, err := r.rt.FromGo(r.fn(r.mcp))
+	if err == nil {
+		err = r.mcpServers(mcp)
+	}
+	if err != nil {
+		r.throw(err)
+	}
+	return r.obj(map[string]any{
+		// ctx.caller.session: the conversation that called this function as a Work tool (tools.go); "" otherwise
+		"caller": map[string]any{"session": callerOf(r.ctx)},
+		// ctx.secrets.get(name): a key the user stored with `gerdr panel secret set <name>` (secrets.json, never in
+		// config or transcripts); null when there's none. Pass it to commands through ctx.exec's env.
+		"secrets": map[string]any{"get": func(name string) any {
+			if r.r.Secret != nil {
+				if v := r.r.Secret(name); v != "" {
+					return v
+				}
 			}
-		}
-		return nil
-	})
-	_ = c.Set("secrets", secrets)
-
-	_ = c.Set("fetch", func() {
-		r.throw(errors.New("there's no ctx.fetch: use the global fetch(url, init)"))
-	})
-	_ = c.Set("fetchAll", r.fetchAll)
-	_ = c.Set("html", r.html)
-
-	// await ctx.mcp(server, tool, args): structuredContent, else the text parsed as JSON, else the text; a tool error rejects.
-	// ctx.mcp.servers(): [{ name, status, source }] — what's configured, so a page can hide what isn't there
-	mcpFn := r.vm.ToValue(func(server, tool string, args goja.Value) *goja.Promise {
-		var a map[string]any
-		if args != nil && !goja.IsUndefined(args) && !goja.IsNull(args) {
-			// Through JSON, as the server will see them (numbers as float64, not goja's int64)
-			m, ok := plain(toPlain(args.Export())).(map[string]any)
+			return nil
+		}},
+		"fetch": func() {
+			r.throw(errors.New("there's no ctx.fetch: use the global fetch(url, init)"))
+		},
+		"fetchAll": r.fetchAll,
+		"html":     r.html,
+		// await ctx.mcp(server, tool, args): structuredContent, else the text parsed as JSON, else the text; a tool
+		// error rejects. ctx.mcp.servers(): [{ name, status, source }] — what's configured, so a page can hide what isn't there
+		"mcp": mcp,
+		// await ctx.exec(cmd, [args…], { cwd, input, timeout, env }) → { code, stdout, stderr, truncated } (exec.go)
+		"exec": r.exec,
+		"fs":   r.fsObject(),
+		// Handing work to agents (host.go). ctx.workspace (singular, below) is this Work project; ctx.workspaces are Code's.
+		"sessions":   r.sessionsObject(),
+		"workspaces": r.workspacesObject(),
+		"artifacts":  r.artifactsObject(),
+		"dirs":       r.dirsObject(),
+		// Events (trigger.go, docs/dev/EVENTS.md): what a poll found goes out as events; triggers/ subscribe to them
+		"events": r.eventsObject(),
+		// ctx.states.get(source, key) → { state, detail, url, at } | null: what a source last said one thing is like
+		// (docs/dev/EVENTS.md, "Waiting for a state"); to wait on it, write a trigger with until
+		"states": map[string]any{"get": func(source, key string) any {
+			if r.r.States == nil {
+				r.throw(errors.New("ctx.states: not available here (needs Gerdr's server)"))
+			}
+			st, ok := r.r.States(source, key)
 			if !ok {
-				return r.rejected(errors.New("ctx.mcp's third argument must be an object: ctx.mcp('server', 'tool', { … })"))
+				return nil
 			}
-			a = m
+			return map[string]any{"state": st.State, "detail": st.Detail, "url": st.URL, "at": st.At}
+		}},
+		// What on this panel needs the user, in Gerdr's inbox and the phone's notifications (inbox.go)
+		"inbox":     r.inboxObject(),
+		"workspace": map[string]any{"project": r.project, "dir": r.dir, "logs_dir": r.r.logDir(r.project)},
+		// gerdr's interface is Chinese: messages meant for the user can follow this
+		"locale": "zh",
+		"progress": func(v jsValue) {
+			r.emit(Event{Type: "progress", Data: toPlain(r.toGo(v))})
+		},
+		"log": r.log("info"),
+		"sleep": func(ms int64) *promise {
+			select {
+			case <-time.After(time.Duration(min(max(ms, 0), 60_000)) * time.Millisecond):
+			case <-r.ctx.Done():
+				r.throw(r.ctx.Err())
+			}
+			return r.resolved(moejs.Undefined())
+		},
+	})
+}
+
+// mcp is ctx.mcp(server, tool, args).
+func (r *runner) mcp(server, tool string, args jsValue) *promise {
+	var a map[string]any
+	if !args.IsNullish() {
+		// Through JSON, as the server will see them (numbers as float64, not int64)
+		m, ok := plain(toPlain(r.toGo(args))).(map[string]any)
+		if !ok {
+			return r.rejected(errors.New("ctx.mcp's third argument must be an object: ctx.mcp('server', 'tool', { … })"))
 		}
-		v, err := r.r.callMCP(r.ctx, server, tool, a)
-		if err != nil {
-			return r.rejected(err)
-		}
-		return r.resolved(v)
-	}).(*goja.Object)
-	_ = mcpFn.Set("servers", func() []map[string]any {
+		a = m
+	}
+	v, err := r.r.callMCP(r.ctx, server, tool, a)
+	if err != nil {
+		return r.rejected(err)
+	}
+	return r.resolved(v)
+}
+
+// mcpServers sets ctx.mcp.servers on the ctx.mcp function.
+func (r *runner) mcpServers(mcp jsValue) error {
+	servers, err := r.rt.FromGo(r.fn(func() []map[string]any {
 		out := []map[string]any{}
 		if r.r.MCPServers != nil {
 			for _, s := range r.r.MCPServers() {
@@ -399,49 +430,13 @@ func (r *runner) ctxObject() *goja.Object {
 			}
 		}
 		return out
-	})
-	_ = c.Set("mcp", mcpFn)
-
-	// await ctx.exec(cmd, [args…], { cwd, input, timeout, env }) → { code, stdout, stderr, truncated } (exec.go)
-	_ = c.Set("exec", r.exec)
-	_ = c.Set("fs", r.fsObject())
-	// Handing work to agents (host.go). ctx.workspace (singular, below) is this Work project; ctx.workspaces are Code's.
-	_ = c.Set("sessions", r.sessionsObject())
-	_ = c.Set("workspaces", r.workspacesObject())
-	_ = c.Set("artifacts", r.artifactsObject())
-	_ = c.Set("dirs", r.dirsObject())
-	// Events (trigger.go, docs/dev/EVENTS.md): what a poll found goes out as events; triggers/ subscribe to them
-	_ = c.Set("events", r.eventsObject())
-	// ctx.states.get(source, key) → { state, detail, url, at } | null: what a source last said one thing is like
-	// (docs/dev/EVENTS.md, "Waiting for a state"); to wait on it, write a trigger with until
-	_ = c.Set("states", map[string]any{"get": func(source, key string) any {
-		if r.r.States == nil {
-			r.throw(errors.New("ctx.states: not available here (needs Gerdr's server)"))
-		}
-		st, ok := r.r.States(source, key)
-		if !ok {
-			return nil
-		}
-		return map[string]any{"state": st.State, "detail": st.Detail, "url": st.URL, "at": st.At}
-	}})
-	// What on this panel needs the user, in Gerdr's inbox and the phone's notifications (inbox.go)
-	_ = c.Set("inbox", r.inboxObject())
-	_ = c.Set("workspace", map[string]any{"project": r.project, "dir": r.dir, "logs_dir": r.r.logDir(r.project)})
-	// gerdr's interface is Chinese: messages meant for the user can follow this
-	_ = c.Set("locale", "zh")
-	_ = c.Set("progress", func(v goja.Value) {
-		r.emit(Event{Type: "progress", Data: toPlain(v.Export())})
-	})
-	_ = c.Set("log", r.log("info"))
-	_ = c.Set("sleep", func(ms int64) *goja.Promise {
-		select {
-		case <-time.After(time.Duration(min(max(ms, 0), 60_000)) * time.Millisecond):
-		case <-r.ctx.Done():
-			r.throw(r.ctx.Err())
-		}
-		return r.resolved(goja.Undefined())
-	})
-	return c
+	}))
+	if err != nil {
+		return err
+	}
+	realm := r.rt.Realm()
+	_, err = mcp.AsObject().Set(realm, engine.StringKey(realm.InternGoString("servers")), servers, mcp)
+	return err
 }
 
 func intOf(v any, def int) int {
@@ -465,53 +460,39 @@ type Error struct {
 func (e *Error) Error() string { return e.Message }
 
 // jsError turns a JS exception into an error with the message and the stack apart.
-func jsError(err error, vals ...goja.Value) error {
-	var v goja.Value
+func jsError(rt *moejs.Runtime, err error) error {
+	var ex *moejs.Exception
+	var ie *moejs.InterruptedError
 	switch {
-	case len(vals) > 0:
-		v = vals[0]
-	default:
-		var ex *goja.Exception
-		var ie *goja.InterruptedError
-		switch {
-		case errors.As(err, &ex):
-			v = ex.Value()
-			if v == nil {
-				return errors.New(ex.String())
-			}
-		case errors.As(err, &ie):
-			return fmt.Errorf("%v", ie.Value())
-		default:
-			return err
-		}
+	case errors.As(err, &ie):
+		return fmt.Errorf("%v", ie.Value)
+	case !errors.As(err, &ex):
+		return err
 	}
-	if o, ok := v.(*goja.Object); ok {
-		e := &Error{}
-		if m := o.Get("message"); m != nil && !goja.IsUndefined(m) {
-			e.Message = m.String()
-		}
-		if st := o.Get("stack"); st != nil && !goja.IsUndefined(st) {
-			e.Stack = st.String()
-		}
+	v := ex.Value
+	if v.IsObject() {
+		e := &Error{Message: ex.Message(), Stack: rt.StackTrace(ex)}
 		if e.Message == "" {
-			e.Message = v.String()
+			if s, err := rt.Realm().ToString(v); err == nil {
+				e.Message = s.GoString()
+			}
 		}
 		e.Message = cleanMessage(e.Message)
 		return e
 	}
-	if v != nil {
-		return errors.New(cleanMessage(v.String()))
+	if s, err := rt.Realm().ToString(v); err == nil {
+		return errors.New(cleanMessage(s.GoString()))
 	}
-	return err
+	return errors.New(cleanMessage(ex.Error()))
 }
 
-// What a Go error thrown into JS carries when turned into a string (String(e), `${e}`): a "GoError: " prefix and the Go
-// call site. Scripts often wrap and rethrow it; the page should only see the sentence.
+// What a Go error thrown into JS used to carry under goja (a "GoError: " prefix and the Go call site); kept for
+// messages a script built from one and stored.
 var goErrorNoise = regexp.MustCompile(`(?:GoError: )|(?:\s+at [\w./()*-]+ \(native\))`)
 
 func cleanMessage(m string) string { return strings.TrimSpace(goErrorNoise.ReplaceAllString(m, "")) }
 
-// toPlain turns what goja exports into JSON-able values (functions and promises become null).
+// toPlain turns what ToGo gives into JSON-able values (functions, promises and other engine objects become null).
 func toPlain(v any) any {
 	switch x := v.(type) {
 	case map[string]any:
@@ -526,7 +507,7 @@ func toPlain(v any) any {
 			out[i] = toPlain(vv)
 		}
 		return out
-	case *goja.Promise:
+	case *moejs.Object:
 		return nil
 	default:
 		if x != nil && reflect.TypeOf(x).Kind() == reflect.Func {

@@ -690,7 +690,7 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
   skill above all, stay on top of what the published panel brings; a conflict is aborted and reported) or removes it (to
   `trash/panels/`, with an undo in the toast like deleting a project: `UnremovePanel` puts it back as it was). esbuild writes UTF-8 (`Charset`): a panel named 任务看板 has it in its module paths, and escaped
   `\uXXXX` placeholders never matched in `link`.
-- Page logic lives in local functions `<GERDR_DIR>/work/local/*.ts` (esbuild → goja, `ctx.mcp(server, tool, args)`), called by
+- Page logic lives in local functions `<GERDR_DIR>/work/local/*.ts` (esbuild → moejs, `ctx.mcp(server, tool, args)`; a new runtime per run, its builtins frozen and shared — `internal/work/fn.go`), called by
   name (`gerdr panel run file.export`). Bundled files (`internal/work/builtin/base` for every project: site skeleton, blank
   home page, CLAUDE.md — the same for the default project; it used to get an OKR page on top) are upgraded unless edited,
   and removed when no longer shipped unless edited.

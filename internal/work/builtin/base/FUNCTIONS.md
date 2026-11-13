@@ -59,8 +59,10 @@ or `#` makes the command wait for the user's approval.
 Globals: `fetch(url, { method, headers, body })` (there's no `ctx.fetch`; `body` can be an object, sent
 as JSON; bodies up to 10 MB; waits 2 minutes for the headers, then gives up after 1 minute without data; for
 streams read `res.body.getReader()` as it comes; local and company-internal addresses are fine), `URL`,
-`TextEncoder` / `TextDecoder`, `btoa` / `atob`, `console`, and `Number.prototype.toLocaleString` with
-thousands separators.
+`TextEncoder` / `TextDecoder`, `btoa` / `atob` (binary strings, as in browsers), `console`, and `Intl`
+(`toLocaleString` with thousands separators, `Intl.DateTimeFormat`…). Modern JavaScript and regular expressions
+behave as in Node (lookbehind, `\p{…}`, the `v` / `d` flags). Builtins (`Array.prototype`, `JSON`, `Math`…) are
+frozen: a function can't patch them, and assigning to one throws a TypeError.
 
 Not available in Gerdr: `ctx.db`, `ctx.oauth`, `ctx.upload`, `ctx.file`,
 `ctx.folders` (use `ctx.artifacts`), `ctx.browser`, `ctx.llm`, `ctx.agent`, `ctx.user`, `ctx.chat_id`. Keep data in files

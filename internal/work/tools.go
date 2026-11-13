@@ -7,8 +7,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-
-	"github.com/dop251/goja"
 )
 
 // Work tools: local functions a Work project offers the agents it works with as MCP tools (`gerdr panel mcp`, given
@@ -60,17 +58,12 @@ func (r *Runner) Tools(project string) ([]Tool, error) {
 		if err != nil {
 			continue
 		}
-		vm := goja.New()
-		exports, err := load(vm, prog)
+		ex, err := exportsOf(prog)
 		if err != nil {
 			continue
 		}
-		// Most files declare no tools: Get gives nil then, and Export on it panics (it took the whole endpoint down)
-		v := exports.Get("tools")
-		if v == nil || goja.IsUndefined(v) || goja.IsNull(v) {
-			continue
-		}
-		decl, ok := v.Export().(map[string]any)
+		// Most files declare no tools
+		decl, ok := toPlain(ex["tools"]).(map[string]any)
 		if !ok {
 			continue
 		}
@@ -83,7 +76,7 @@ func (r *Runner) Tools(project string) ([]Tool, error) {
 			if seen[k] {
 				continue
 			}
-			if _, ok := goja.AssertFunction(exports.Get(k)); !ok {
+			if !isFunc(ex[k]) {
 				continue // declared without its function: nothing to run
 			}
 			d, _ := decl[k].(map[string]any)
@@ -132,14 +125,11 @@ func (r *Runner) Instructions(ctx context.Context, project, session string) (str
 		if err != nil {
 			continue
 		}
-		exports, err := load(goja.New(), prog)
+		ex, err := exportsOf(prog)
 		if err != nil {
 			continue
 		}
-		if v := exports.Get("tools"); v == nil || goja.IsUndefined(v) || goja.IsNull(v) {
-			continue
-		}
-		if _, ok := goja.AssertFunction(exports.Get("instructions")); !ok {
+		if ex["tools"] == nil || !isFunc(ex["instructions"]) {
 			continue
 		}
 		res, err := r.StartAs(project, base+".instructions", nil, session).Wait(ctx)

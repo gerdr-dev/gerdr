@@ -11,8 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dop251/goja"
-
 	ev "github.com/gerdr-dev/gerdr/internal/events"
 	"github.com/gerdr-dev/gerdr/internal/i18n"
 	"github.com/gerdr-dev/gerdr/internal/waits"
@@ -456,7 +454,7 @@ func (r *runner) eventsObject() map[string]any {
 		},
 		// ctx.events.reply(event, text, data?) → { event, fresh }: answers through the event's own reply address, so
 		// a panel answers a Slack DM and a Feishu message the same way. Throws when the event has none.
-		"reply": func(evArg any, text string, extra goja.Value) map[string]any {
+		"reply": func(evArg any, text string, extra jsValue) map[string]any {
 			if bus == nil {
 				r.throw(errors.New("ctx.events: not available here (needs Gerdr's server)"))
 			}
@@ -487,7 +485,7 @@ func (r *runner) eventsObject() map[string]any {
 			return map[string]any{"event": eventMap(out), "fresh": fresh}
 		},
 		// ctx.events.list({ since?, on?, key?, limit? }) → events, oldest first
-		"list": func(arg goja.Value) []map[string]any {
+		"list": func(arg jsValue) []map[string]any {
 			if bus == nil {
 				r.throw(errors.New("ctx.events: not available here (needs Gerdr's server)"))
 			}

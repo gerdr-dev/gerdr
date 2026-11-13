@@ -9,7 +9,7 @@
 //
 // Called by name ("okr.summary" = export summary of local/okr.ts) from the Work page, without a
 // model in the loop: deterministic logic the page needs every time it opens shouldn't cost an agent
-// turn. esbuild bundles the TS to CommonJS and goja (pure-Go JS) runs it, so no node is needed.
+// turn. esbuild bundles the TS to CommonJS and moejs (pure-Go JS, fn.go) runs it, so no node is needed.
 //
 // What a function can do is what ctx and the globals offer (fn.go): run commands (ctx.exec), fetch, call MCP tools
 // (gerdr's own list, then Claude Code's and Codex's, signed in through internal/mcpauth), read and write the Work
@@ -425,7 +425,7 @@ func (r *Runner) callMCP(ctx context.Context, server, tool string, args map[stri
 	return text, nil
 }
 
-// plain round-trips through JSON so goja-exported values (int64 vs float64, nested maps) serialize cleanly.
+// plain round-trips through JSON so values from JS (int64 vs float64, nested maps) serialize cleanly.
 func plain(v any) any {
 	b, err := json.Marshal(v)
 	if err != nil {

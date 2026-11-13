@@ -13,8 +13,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/dop251/goja"
 )
 
 // ctx.fs: files in the project's Work directory (data a function keeps, exports, reports), the local-disk half of the
@@ -128,11 +126,7 @@ func (r *runner) fsObject() map[string]any {
 		"root":    r.dir,
 		"kind":    "disk",
 		"canOpen": runtime.GOOS == "darwin" || runtime.GOOS == "linux" || runtime.GOOS == "windows",
-		"list": func(dir goja.Value) []map[string]any {
-			rel := ""
-			if dir != nil && !goja.IsUndefined(dir) && !goja.IsNull(dir) {
-				rel = dir.String()
-			}
+		"list": func(rel string) []map[string]any {
 			full, base, err := r.abs(rel, true)
 			out := []map[string]any{}
 			if err != nil {
