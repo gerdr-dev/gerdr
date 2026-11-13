@@ -76,13 +76,13 @@ Then grab Gerdr from [releases](https://github.com/gerdr-dev/gerdr/releases/late
 - **Windows** — not in releases yet; build the installer with `make win` (unsigned: on SmartScreen click
   More info → Run anyway).
 
-From source (Go 1.24+, Node 20+, pnpm; the desktop app also needs `cd desktop && npm install`):
+From source (Go 1.24+, Node 20+, pnpm):
 
 ```bash
 make build        # → bin/gerdr (CLI + an embedded copy of the UI source)
-make app          # → build/Gerdr.app (this machine's arch)
-make dmg          # → desktop/dist/Gerdr-<version>-mac-{arm64,x64}.dmg
-make win          # → desktop/dist/gerdr Setup <version>.exe (builds on a Mac too)
+make app          # → tools/chromeshell/dist/<arch>/Gerdr.app + dmg (this machine's arch)
+make dmg          # → tools/chromeshell/dist/Gerdr-<version>-mac-{arm64,amd64}.dmg
+make win          # → tools/winshell/dist/Gerdr-<version>-windows-x64-setup.exe (builds on a Mac too)
 make apk          # → Android app (needs the Android SDK and JDK 17–21)
 make install      # puts Gerdr.app in /Applications, links the CLI to ~/.local/bin/gerdr
 ```
@@ -144,7 +144,7 @@ the agents themselves.**
 
 | | herdr | Gerdr |
 |---|---|---|
-| what it is | terminal multiplexer for agents (Rust TUI) | graphical client for agents (Go server + web UI, Electron shell) |
+| what it is | terminal multiplexer for agents (Rust TUI) | graphical client for agents (Go server + web UI, a desktop shell on the user's own Chrome) |
 | runs in | the terminal you already use, over SSH | desktop app, any browser, Android app |
 | images and files | not in a terminal; open them elsewhere | images, videos and PDFs inline in the chat; click a path to open the file |
 | supported agents | anything that runs in a terminal (Claude Code, Codex, Cursor, OpenCode…) | Claude Code, Codex, any ACP agent, the built-in Gerdr Agent |
@@ -156,7 +156,7 @@ the agents themselves.**
 | agents driving each other | `herdr agent …` CLI + socket API | `gerdr session …` CLI + built-in skill |
 | remote | saved SSH machines in one window | relay with end-to-end TLS, pairing codes, passkeys; LAN direct on Android |
 | customizing | plugins | TS add-ons with a store, plus the whole UI is editable source with hot reload |
-| footprint | one binary, no Electron | one Go binary; the desktop app adds Electron |
+| footprint | one binary, no Electron | one Go binary; the desktop app adds a ~18MB shell (it uses the Chrome you have) |
 
 **Pick herdr** if you live in the terminal, work over SSH, or use agents Gerdr has no adapter for.
 **Pick Gerdr** if you want approvals and rewinds as UI, want to check on agents from your phone, or want to

@@ -73,13 +73,13 @@ npm i -g @openai/codex                           # Codex，然后 codex login
 
 上面这些都在 [releases](https://github.com/gerdr-dev/gerdr/releases/latest)。
 
-**从源码**（Go 1.24+、Node 20+、pnpm；打桌面 App 还要 `cd desktop && npm install`）：
+**从源码**（Go 1.24+、Node 20+、pnpm）：
 
 ```bash
 make build        # → bin/gerdr（命令行 + 内嵌一份界面源码）
-make app          # → build/Gerdr.app（本机架构）
-make dmg          # → desktop/dist/Gerdr-<版本>-mac-{arm64,x64}.dmg（Apple 芯片 / Intel 各一个）
-make win          # → desktop/dist/gerdr Setup <版本>.exe（Windows 安装包，在 mac 上就能打）
+make app          # → tools/chromeshell/dist/<架构>/Gerdr.app + dmg（本机架构）
+make dmg          # → tools/chromeshell/dist/Gerdr-<版本>-mac-{arm64,amd64}.dmg（Apple 芯片 / Intel 各一个）
+make win          # → tools/winshell/dist/Gerdr-<版本>-windows-x64-setup.exe（Windows 安装包，在 mac 上就能打）
 make apk          # → 安卓 App（要 Android SDK 和 JDK 17–21）
 make install      # 把 Gerdr.app 放进 /Applications，命令行链到 ~/.local/bin/gerdr
 ```

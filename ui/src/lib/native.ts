@@ -1,6 +1,6 @@
 // 和桌面 App 外壳之间的桥。浏览器里跑时这些都退化成网页自己的实现。
-// 外壳现在是 Electron（desktop/preload.js 挂的 gerdrNative）；老的 mac 外壳是 WKWebView（messageHandlers.gerdr），
-// 两边消息形状一样，都认。
+// The shells (tools/chromeshell, tools/winshell) put window.gerdrNative there (their bridge.js); the WKWebView shell
+// before them used messageHandlers.gerdr, same messages, still accepted.
 
 import { toast } from "sonner";
 import { api } from "./api";
@@ -16,7 +16,7 @@ function bridge(): Bridge | undefined {
 
 export const isNative = () => !!bridge();
 
-// The App's own menus and dialogs follow this page's language (desktop/i18n.js); the language is fixed for the life of
+// The App's own menus and dialogs follow this page's language (the shell's locale message); the language is fixed for the life of
 // the page (lib/i18n.ts), so telling once on load is enough. Older shells ignore the message.
 bridge()?.postMessage({ type: "locale", locale: locale() });
 

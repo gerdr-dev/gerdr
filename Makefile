@@ -1,4 +1,5 @@
-# gerdr：一个 Go 二进制 + 一个桌面 App 外壳（Electron，desktop/）。界面是 ui/ 下的源码，没有打包环节（internal/uisite）：
+# gerdr: one Go binary + the desktop App shells (macOS tools/chromeshell, Windows tools/winshell, both on Lightron).
+# 界面是 ui/ 下的源码，没有打包环节（internal/uisite）：
 # 编二进制时把 ui/ 原样拷进去内嵌，第一次启动装到 ~/.gerdr/ui，之后谁改那份源码界面就跟着变。
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo 0.1.0-dev)
 LDFLAGS := -s -w -X github.com/gerdr-dev/gerdr/internal/version.Version=$(VERSION)
@@ -45,16 +46,19 @@ test-e2e:
 	GERDR_E2E=codex go test ./internal/agenthost/ -run E2E -v -count=1
 	GERDR_E2E=claude go test ./internal/agenthost/ -run E2E -v -count=1
 
-# 桌面 App（desktop/build.sh）：app = 本机架构的 build/Gerdr.app；dmg = mac 通用安装包；win = Windows 安装包。
-# 外壳为什么是 Electron：docs/dev/WHY-ELECTRON.md
+# Desktop App, as the release builds it (NAME=Gerdr, the real App's id): app = this Mac's arch in
+# tools/chromeshell/dist/<arch>/Gerdr.app (+ dmg); dmg = both arches; win = the Windows installer (tools/winshell).
+# The Electron shell (desktop/, until 0.2.21) is gone: docs/dev/WHY-ELECTRON.md for the history.
+HOST_ARCH := $(shell uname -m | sed 's/x86_64/amd64/')
+MAC_APP := NAME=Gerdr ID=io.github.zbysir.gerdr VERSION=$(VERSION) tools/chromeshell/package.sh
 app:
-	./desktop/build.sh mac-dir $(VERSION)
+	ARCH=$(HOST_ARCH) $(MAC_APP)
 
 dmg:
-	./desktop/build.sh mac $(VERSION)
+	$(MAC_APP)
 
 win:
-	./desktop/build.sh win $(VERSION)
+	NAME=Gerdr VERSION=$(VERSION) tools/winshell/package.sh
 
 # 安卓 App（android/，设计见 docs/dev/ANDROID.md）。要 Android SDK（sdk.dir 写在 android/local.properties）和 JDK 17–21
 # （AGP 不认更新的 JDK）。apk = 正式包，用 ~/.android-release/gerdr.jks 签（它的指纹写死在 config.OfficialAndroidCert：
@@ -83,17 +87,16 @@ clean:
 	rm -rf bin build $(UISNAP)
 	mkdir -p $(UISNAP) && touch $(UISNAP)/.gitkeep
 
-# 先在同一块盘上复制好、再整个 mv 进去：直接 cp -R 进 /Applications，macOS 的「App 管理」保护可能拦到一半
-# （大量 Operation not permitted），留下一个缺 Info.plist、打不开的半截 App（踩过）；mv 只是改名，不改包里的东西。
 # Creates the local code signing identity (desktop/sign-id.sh) builds sign with, so macOS privacy grants (the remote
 # screen's Screen Recording / Accessibility) survive rebuilds. Once per machine.
 signing-id:
 	./desktop/sign-id.sh --create
 
-install: app
-	rm -rf build/stage && mkdir -p build/stage && cp -R build/Gerdr.app build/stage/
-	rm -rf /Applications/Gerdr.app
-	mv build/stage/Gerdr.app /Applications/Gerdr.app
+# Puts this Mac's build in /Applications (package.sh install: the App already there goes to the Trash; it copies next
+# to the target and renames into place, since App Management can stop a copy into /Applications halfway). Builds the
+# working tree as it is, uncommitted changes included. Never restart Gerdr after it (CLAUDE.md).
+install:
+	ARCH=$(HOST_ARCH) $(MAC_APP) install
 	mkdir -p $(HOME)/.local/bin
 	ln -sf /Applications/Gerdr.app/Contents/Resources/gerdr $(HOME)/.local/bin/gerdr
-	@echo "装好了：/Applications/Gerdr.app，命令行 ~/.local/bin/gerdr"
+	@echo "installed: /Applications/Gerdr.app, CLI ~/.local/bin/gerdr"

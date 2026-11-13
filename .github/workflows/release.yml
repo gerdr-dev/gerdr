@@ -3,7 +3,7 @@
 # land in the run's Artifacts, to check the build isn't broken.
 #
 # Incremental: most releases only change the Go backend, so only what changed is rebuilt (job `plan` decides):
-# - dmgs: rebuilt when the shell id (desktop/shell-id.sh) differs from the latest release's update.json, or anything in
+# - dmgs: rebuilt when the shell id (tools/shell-id.sh) differs from the latest release's update.json, or anything in
 #   desktop/ changed since the tag the latest dmgs were built for (signing, builder config aren't in the id). Otherwise
 #   only the ~10MB backends are built and the previous dmgs are copied into this release: an App on an older shell
 #   still needs a whole App, and its updater looks for it under this release's tag (desktop/updater.js releaseURL).

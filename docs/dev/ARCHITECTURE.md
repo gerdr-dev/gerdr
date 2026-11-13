@@ -997,10 +997,13 @@ stream-json 模式下没人看得见）—— resume、回退、追上全部失�
 
 经云端中继对外，配对码 + passkey；本机令牌在远程不认。设计和坑在 [REMOTE.md](REMOTE.md)，动这块之前先读它。
 
-## 桌面 App（desktop/，Electron）
+## Desktop App (tools/chromeshell, tools/winshell)
 
-`desktop/main.js`：Electron 外壳，自带 Chromium（mac / Windows 同一个内核）。为什么不是系统 WebView / mygo / nsh、
-外壳的几条坑（退出、Windows 上的父进程、菜单、签名、通用包）都在 [WHY-ELECTRON.md](WHY-ELECTRON.md)。
-起内嵌的 `gerdr --app --parent-pid`，读 stdout 里的 `GERDR_READY <url>`；已经有 Gerdr 在跑（同一个数据目录有锁）
-就直接连它。从 Finder 起的 App 的 PATH 只有系统目录，所以后端开机会问一次登录 shell 的 PATH
-（`sysenv.AdoptLoginPath`），不然找不到 claude / codex。打包：`make app`（本机）/ `make dmg` / `make win`。
+macOS: `tools/chromeshell`, the user's own Chrome renamed into a Gerdr App by Lightron; Windows: `tools/winshell`
+(WebView2). Both Chromium, so what works in Chrome works in the App; their READMEs say how and why. The Electron shell
+(`desktop/`, until 0.2.21) is gone; [WHY-ELECTRON.md](WHY-ELECTRON.md) keeps why it was Chromium and the traps any
+shell meets (quitting, the parent process on Windows, menus, signing). The shell starts the bundled
+`gerdr --app --parent-pid`, reads `GERDR_READY <url>` from its stdout, and attaches to a Gerdr already running (the
+data dir is locked). An App started from Finder has only the system dirs on its PATH, so the backend asks the login
+shell for its PATH once at start (`sysenv.AdoptLoginPath`), or it wouldn't find claude / codex. Building: `make app`
+(this Mac) / `make dmg` / `make win`; `make install` puts this Mac's build in /Applications.

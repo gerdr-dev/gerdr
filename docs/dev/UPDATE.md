@@ -4,10 +4,12 @@
 > `internal/selfupdate`, a Go port of the updater below (same feed, same rules: backend-only when the shell id matches,
 > applied when idle; the whole package on a click otherwise). The shell id is `tools/shell-id.sh` (the shells' files and
 > the Lightron version in go.mod, so a Lightron upgrade is a whole-package update); `desktop/feed.sh` writes it. Electron Apps still out there see a different id and install the new shell's dmg on their next update.
-> The rest of this page describes the Electron shell, the design the port follows.
+> The rest of this page describes the Electron shell, the design the port follows; its files (`desktop/updater.js`,
+> `desktop/main.js`, `desktop/shell-id.sh`) were deleted after 0.2.34 and are in git history.
 
-Code: `desktop/updater.js` (download, pick the backend, install a whole App), `desktop/main.js` (when to apply),
-`desktop/shell-id.sh` + `desktop/feed.sh` (what a release publishes), `cmd/gerdr/attach.go` (the background service).
+Code: `internal/selfupdate` (download, pick the backend, install a whole App), `tools/chromeshell/app.go` and
+`tools/winshell/update.go` (when to apply), `tools/shell-id.sh` + `desktop/feed.sh` (what a release publishes),
+`cmd/gerdr/attach.go` (the background service).
 
 ## Two sizes
 
