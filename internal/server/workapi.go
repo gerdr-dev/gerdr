@@ -155,14 +155,27 @@ func (s *Server) workRoutes(mux *http.ServeMux) {
 			p.Source, _ = s.Work.Source(key)
 			list = append(list, p)
 		}
-		removed := s.Work.WorkRemoved(project)
-		if !removed {
-			add(project, "")
-		}
-		for _, n := range s.Work.Panels(project) {
+		// In the person's order (work/order.go): its own first and the rest by name until they drag one
+		for _, n := range s.Work.PanelNames(project) {
 			add(work.PanelKey(project, n), n)
 		}
-		writeJSON(w, map[string]any{"panels": list, "ownRemoved": removed})
+		writeJSON(w, map[string]any{"panels": list, "ownRemoved": s.Work.WorkRemoved(project)})
+	})
+	// Move a panel on the rail: to its 0-based place among its project's panels (dragging its button, `gerdr panel move`).
+	mux.HandleFunc("POST /api/work/panels/move", func(w http.ResponseWriter, r *http.Request) {
+		var b struct {
+			Key string `json:"key"`
+			To  int    `json:"to"`
+		}
+		if err := decode(r, &b); err != nil {
+			httpError(w, 400, err.Error())
+			return
+		}
+		if err := s.Work.MovePanel(b.Key, b.To); err != nil {
+			httpError(w, 400, err.Error())
+			return
+		}
+		writeJSON(w, map[string]any{"ok": true})
 	})
 	// Undo a removal: the panel comes back from the trash as it was.
 	mux.HandleFunc("POST /api/work/panels/unremove", func(w http.ResponseWriter, r *http.Request) {

@@ -1478,7 +1478,7 @@ func panelCmd() *cobra.Command {
 		return work.PanelKey(project(), arg)
 	}
 	client := func() (*apiClient, error) { return newAPIClient() }
-	cmd := &cobra.Command{Use: "panel", Short: "A project's panels: list, install from git, add a blank one, update, change the icon, put a dot / number on its button, remove; and run what's in one (run, functions, logs, schedules, triggers, secret, status)"}
+	cmd := &cobra.Command{Use: "panel", Short: "A project's panels: list, install from git, add a blank one, update, change the icon, reorder, put a dot / number on its button, remove; and run what's in one (run, functions, logs, schedules, triggers, secret, status)"}
 	cmd.PersistentFlags().StringVar(&projectArg, "project", "", "project id, or a panel's key (<project>/<name>) for run / functions / logs …  (default: the one the current directory belongs to)")
 	cmd.AddCommand(panelFnCmds(which)...)
 	cmd.AddCommand(&cobra.Command{
@@ -1566,6 +1566,22 @@ func panelCmd() *cobra.Command {
 				return err
 			}
 			return c.do("POST", "/api/work/panels/title", map[string]any{"key": keyOf(args[0]), "title": args[1]}, nil)
+		},
+	})
+	cmd.AddCommand(&cobra.Command{
+		Use:   "move <panel> <position>",
+		Short: "Move a panel's button on the rail, for this person: position 1 is the top (as dragging the button does); `gerdr panel list` shows the order",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(_ *cobra.Command, args []string) error {
+			n, err := strconv.Atoi(args[1])
+			if err != nil || n < 1 {
+				return fmt.Errorf("position: a number from 1, got %q", args[1])
+			}
+			c, err := client()
+			if err != nil {
+				return err
+			}
+			return c.do("POST", "/api/work/panels/move", map[string]any{"key": keyOf(args[0]), "to": n - 1}, nil)
 		},
 	})
 	var color string

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { api } from "@/lib/api";
 
 /**
@@ -32,6 +33,23 @@ export const panelsChanged = () => window.dispatchEvent(new Event("gerdr:panels"
 
 const cache: Record<string, { panels: Panel[]; ownRemoved: boolean }> = {};
 
+/**
+ * Put a panel at place `to` (0-based) among its project's panels: dragging its button on the rail, or its menu's move up /
+ * down. Shown at once (every usePanels of the project reads the cache again), then saved (work/order.go) and fetched.
+ */
+export function movePanel(space: string, key: string, to: number) {
+  const c = cache[space];
+  if (c) {
+    const panels = c.panels.filter((p) => p.key !== key);
+    const p = c.panels.find((p) => p.key === key);
+    if (!p) return;
+    panels.splice(Math.max(0, Math.min(to, panels.length)), 0, p);
+    cache[space] = { ...c, panels };
+    window.dispatchEvent(new CustomEvent("gerdr:panels-cache", { detail: space }));
+  }
+  api.movePanel(key, to).then(panelsChanged, (e) => (panelsChanged(), toast.error(e.message)));
+}
+
 const fromCache = (space: string) => ({ space, ...(cache[space] ?? { panels: [], ownRemoved: false }), loaded: !!cache[space] });
 
 export function usePanels(space: string): { panels: Panel[]; ownRemoved: boolean; loaded: boolean } {
@@ -62,13 +80,16 @@ export function usePanels(space: string): { panels: Panel[]; ownRemoved: boolean
       clearTimeout(timer);
       timer = setTimeout(load, 300);
     };
+    const local = (e: Event) => (e as CustomEvent).detail === space && !dead && setState(fromCache(space));
     window.addEventListener("gerdr:ui", later);
     window.addEventListener("gerdr:panels", later);
+    window.addEventListener("gerdr:panels-cache", local);
     return () => {
       dead = true;
       clearTimeout(timer);
       window.removeEventListener("gerdr:ui", later);
       window.removeEventListener("gerdr:panels", later);
+      window.removeEventListener("gerdr:panels-cache", local);
     };
   }, [space]);
   // Right after the project changes, the state still holds the previous project's panels until the effect above runs.

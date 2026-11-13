@@ -1,23 +1,28 @@
 import { useEffect } from "react";
-import { Pencil, Plus, RefreshCw, SlidersHorizontal, Smile, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Pencil, Plus, RefreshCw, SlidersHorizontal, Smile, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { api } from "@/lib/api";
 import { currentSpace } from "@/lib/layout";
-import { usePanels, type Panel } from "@/lib/panels";
+import { movePanel, usePanels, type Panel } from "@/lib/panels";
 import { set, setMode, setWorkPanel, useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { PanelIcon } from "./PanelIcon";
 import { t } from "@/lib/i18n";
 import { removePanel } from "@/lib/panelActions";
 import { useBadges } from "@/lib/badges";
+import { SpaceDropLine, startSpaceDrag } from "./SpaceDrag";
 
 /**
  * One button per panel of the project on screen, under Code: its own Work (the briefcase), then each panel installed
  * or added (its first letters, its name in the tooltip). Right-click: update it from the repository it came from,
  * remove it (to the trash). The rail stacks them (axis y); the phone drawer's header lays them in a row.
+ * Dragged along the list they reorder, like the projects above them (SpaceDrag.tsx); the menu has move up / down for a
+ * touch screen. The parent is the list: `data-space-list={panelList(size)}` and `relative`.
  */
+export const panelList = (size: "rail" | "row") => `panels-${size}`;
+
 export function PanelButtons({ className, size = "rail" }: { className: (on: boolean) => string; size?: "rail" | "row" }) {
   const space = useStore((s) => currentSpace(s.layout));
   const { panels, loaded } = usePanels(space);
@@ -30,9 +35,10 @@ export function PanelButtons({ className, size = "rail" }: { className: (on: boo
   }, [cur, chosen, space]);
   return (
     <>
-      {panels.map((p) => (
-        <PanelButton key={p.key} p={p} on={mode === "work" && p.name === cur} className={className} size={size} space={space} />
+      {panels.map((p, i) => (
+        <PanelButton key={p.key} p={p} i={i} n={panels.length} on={mode === "work" && p.name === cur} className={className} size={size} space={space} />
       ))}
+      <SpaceDropLine list={panelList(size)} axis={size === "rail" ? "y" : "x"} />
       {/* Add one: install it from a repository, or a blank one to build (WorkSourceDialog). Not on a phone's row: it
           crowds the switch there, and adding a panel is a rare thing done from Settings → Panels */}
       {size === "rail" && (
@@ -53,7 +59,25 @@ export function PanelButtons({ className, size = "rail" }: { className: (on: boo
   );
 }
 
-function PanelButton({ p, on, className, size, space }: { p: Panel; on: boolean; className: (on: boolean) => string; size: "rail" | "row"; space: string }) {
+function PanelButton({
+  p,
+  i,
+  n,
+  on,
+  className,
+  size,
+  space,
+}: {
+  p: Panel;
+  i: number;
+  n: number;
+  on: boolean;
+  className: (on: boolean) => string;
+  size: "rail" | "row";
+  space: string;
+}) {
+  const axis = size === "rail" ? "y" : "x";
+  const [Back, Fwd] = axis === "y" ? [ArrowUp, ArrowDown] : [ArrowLeft, ArrowRight];
   const src = p.source;
   const label = p.title;
   const go = () => {
@@ -72,7 +96,14 @@ function PanelButton({ p, on, className, size, space }: { p: Panel; on: boolean;
       <Tooltip>
         <TooltipTrigger asChild>
           <ContextMenuTrigger asChild>
-            <button aria-label={label} aria-pressed={on} className={cn(className(on), "relative")} onClick={go}>
+            <button
+              data-space-id={p.key}
+              aria-label={label}
+              aria-pressed={on}
+              className={cn(className(on), "relative")}
+              onClick={go}
+              onPointerDown={(e) => startSpaceDrag(e, p.key, axis, (key, to) => movePanel(space, key, to))}
+            >
               <PanelIcon icon={p.icon} color={p.color} title={p.title} className={size === "rail" ? "size-4" : "size-3.5"} />
               <PanelBadge panel={p.key} />
             </button>
@@ -92,6 +123,16 @@ function PanelButton({ p, on, className, size, space }: { p: Panel; on: boolean;
         {src?.git && src.remote && (
           <ContextMenuItem onClick={update} title={src.remote}>
             <RefreshCw /> {t("workSource.menuUpdate")}
+          </ContextMenuItem>
+        )}
+        {i > 0 && (
+          <ContextMenuItem onClick={() => movePanel(space, p.key, i - 1)}>
+            <Back /> {axis === "y" ? t("spaceSwitcher.moveUp") : t("spaceSwitcher.moveLeft")}
+          </ContextMenuItem>
+        )}
+        {i < n - 1 && (
+          <ContextMenuItem onClick={() => movePanel(space, p.key, i + 1)}>
+            <Fwd /> {axis === "y" ? t("spaceSwitcher.moveDown") : t("spaceSwitcher.moveRight")}
           </ContextMenuItem>
         )}
         <ContextMenuItem variant="destructive" onClick={remove}>

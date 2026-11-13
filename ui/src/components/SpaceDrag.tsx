@@ -8,7 +8,8 @@ import { moveSpace } from "@/lib/actions";
  * only: on a touch screen the finger scrolls the rail and a long press opens the menu, which has 上移 / 下移 instead.
  *
  * The list is the closest [data-space-list] (position: relative, the line is drawn in it); its chips are its
- * [data-space-id] elements, in order.
+ * [data-space-id] elements, in order. The rail's panel buttons are dragged the same way (`onDrop` moves a panel instead
+ * of a project).
  */
 
 type State = { list: string; id: string; to: number; line: number } | null;
@@ -23,7 +24,7 @@ const subscribe = (f: () => void) => (subs.add(f), () => void subs.delete(f));
 /** The drag going on in list `list` (its data-space-list value), null when none. */
 export const useSpaceDrag = (list: string) => useSyncExternalStore(subscribe, () => (cur?.list === list ? cur : null));
 
-export function startSpaceDrag(e: React.PointerEvent<HTMLElement>, id: string, axis: "x" | "y") {
+export function startSpaceDrag(e: React.PointerEvent<HTMLElement>, id: string, axis: "x" | "y", onDrop: (id: string, to: number) => void = moveSpace) {
   if (e.button !== 0 || e.pointerType === "touch") return;
   const el = e.currentTarget;
   const list = el.closest<HTMLElement>("[data-space-list]");
@@ -69,7 +70,7 @@ export function startSpaceDrag(e: React.PointerEvent<HTMLElement>, id: string, a
       const eat = (ev: MouseEvent) => (ev.stopPropagation(), ev.preventDefault());
       window.addEventListener("click", eat, { capture: true, once: true });
       setTimeout(() => window.removeEventListener("click", eat, true), 0);
-      if (drop && cur) moveSpace(id, cur.to);
+      if (drop && cur) onDrop(id, cur.to);
     }
     setState(null);
   };

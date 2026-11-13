@@ -34,7 +34,7 @@ import { useDark } from "@/core/theme";
 import { mountName, registerMount, useMount } from "@/lib/mounts";
 import { askSecret, secretAsks } from "@/lib/workSecrets";
 import { mountInfo } from "@/lib/mounts";
-import { PanelButtons } from "@/components/PanelButtons";
+import { PanelButtons, panelList } from "@/components/PanelButtons";
 import { panelOfKey, spaceOfKey } from "@/lib/work";
 import { panelsChanged, usePanels } from "@/lib/panels";
 import { askWorkAgent, ensureWorkSession, isEmptyChat, newWorkChat, openWorkChat, useWorkChats, useWorkProject, useWorkSession, workAgent } from "@/lib/work";
@@ -113,7 +113,7 @@ export function ModeSwitch() {
     </button>
   );
   return (
-    <div className="flex shrink-0 gap-0.5 rounded-lg bg-muted p-0.5" style={{ WebkitAppRegion: "no-drag" } as any}>
+    <div data-space-list={panelList("row")} className="relative flex shrink-0 gap-0.5 rounded-lg bg-muted p-0.5" style={{ WebkitAppRegion: "no-drag" } as any}>
       {item("agents", "Code", Code2)}
       <PanelButtons
         size="row"

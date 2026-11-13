@@ -213,6 +213,8 @@ export const api = {
       panels: { key: string; name: string; config: Record<string, unknown>; source: { git: boolean; remote?: string; dirty?: boolean } }[];
       ownRemoved: boolean;
     }>("GET", `/api/work/panels?project=${encodeURIComponent(project)}`),
+  /** Put a panel at its 0-based place on the rail (the person's order, work/order.go). */
+  movePanel: (key: string, to: number) => req<{ ok: boolean }>("POST", "/api/work/panels/move", { key, to }),
   unremovePanel: (key: string, trash: string) => req<{ ok: boolean }>("POST", "/api/work/panels/unremove", { key, trash }),
   restoreWork: (project: string) => req<{ ok: boolean }>("POST", "/api/work/panels/restore", { project }),
   removePanel: (key: string) => req<{ trash: string }>("POST", "/api/work/panels/remove", { key }),

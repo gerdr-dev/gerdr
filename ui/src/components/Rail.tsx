@@ -12,7 +12,7 @@ import { StatusDot } from "./AgentIcon";
 import { RailAddonButtons } from "./RailAddons";
 import { RouteLabel } from "./ConnStatus";
 import { InboxButton } from "./Inbox";
-import { PanelButtons } from "./PanelButtons";
+import { PanelButtons, panelList } from "./PanelButtons";
 import { useBadges } from "@/lib/badges";
 import { SpaceDropLine, startSpaceDrag } from "./SpaceDrag";
 import { newSpaceDialog, SpaceMenuItems, spaceStatus } from "./SpaceSwitcher";
@@ -136,7 +136,7 @@ export function Rail() {
           )}
         </div>
         <div className="my-2 h-px w-7 shrink-0 bg-border short:my-1.5" />
-        <div className="flex shrink-0 flex-col items-center gap-0.5 rounded-lg bg-muted p-0.5">
+        <div data-space-list={panelList("rail")} className="relative flex shrink-0 flex-col items-center gap-0.5 rounded-lg bg-muted p-0.5">
           {modeItem("agents", "Code", Code2)}
           <PanelButtons
             className={(on) =>
