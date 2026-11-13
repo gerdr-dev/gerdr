@@ -90,6 +90,34 @@ func findTranscript(root, id, cwd string) (string, error) {
 	return "", acp.NewInvalidParams(map[string]any{"sessionId": id, "error": "transcript not found"})
 }
 
+// adoptTranscript: a session moved to another folder (`gerdr session cwd`, after the project folder was moved or
+// renamed) still has its transcript under the old folder's project dir, and `claude --resume <id>` only looks in the
+// current folder's ("No conversation found"). Move it, with its <id>/ folder (subagent transcripts, large tool
+// results), to where claude will look. Nothing to do when it is already there or there is none yet.
+func adoptTranscript(root, id, cwd string) error {
+	path, err := findTranscript(root, id, cwd)
+	if err != nil || cwd == "" {
+		return nil
+	}
+	dir := projectDirFor(root, cwd)
+	if filepath.Dir(path) == dir {
+		return nil
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	if err := os.Rename(path, filepath.Join(dir, id+".jsonl")); err != nil {
+		return err
+	}
+	side := filepath.Join(filepath.Dir(path), id)
+	if st, err := os.Stat(side); err == nil && st.IsDir() {
+		if _, err := os.Stat(filepath.Join(dir, id)); errors.Is(err, os.ErrNotExist) {
+			_ = os.Rename(side, filepath.Join(dir, id))
+		}
+	}
+	return nil
+}
+
 type entry struct {
 	Type        string          `json:"type"`
 	UUID        string          `json:"uuid"`

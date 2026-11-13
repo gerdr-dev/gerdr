@@ -170,6 +170,13 @@ func (s *session) start(ctx context.Context) error {
 	o.extra = append(o.extra, s.clientMCPArgs()...)
 	o.extra = append(o.extra, s.a.opts.Args...)
 	fresh, from, at := s.pendingLocked()
+	for _, id := range []string{from, s.id} {
+		if id != "" && !fresh {
+			if err := adoptTranscript(s.a.projectsDir(), id, s.cwd); err != nil {
+				s.a.log.Warn("moving transcript to the session's folder failed", "session", id, "err", err)
+			}
+		}
+	}
 	switch {
 	case from != "":
 		o.resume, o.resumeAt, o.fork, o.sessionID = from, at, true, s.id

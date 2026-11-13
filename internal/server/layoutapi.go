@@ -29,6 +29,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/gerdr-dev/gerdr/internal/hub"
 	"github.com/gerdr-dev/gerdr/internal/term"
 )
 
@@ -112,6 +113,20 @@ func (c *layoutCall) run(method string, p LayoutParams) (any, error) {
 			return nil, errors.New("give the new label")
 		}
 		w["name"] = strings.TrimSpace(p.Label)
+		c.changed = true
+		return node{"workspace": c.wsView(w, c.wsNumber(w))}, nil
+	case "workspace.cwd":
+		// The folder new tabs in it start in (after the project folder moved). Its conversations keep theirs:
+		// `gerdr session cwd` moves each.
+		w, err := c.workspace(p.ID)
+		if err != nil {
+			return nil, err
+		}
+		dir, err := hub.NormDir(p.Cwd)
+		if err != nil {
+			return nil, err
+		}
+		w["cwd"] = dir
 		c.changed = true
 		return node{"workspace": c.wsView(w, c.wsNumber(w))}, nil
 	case "workspace.move":

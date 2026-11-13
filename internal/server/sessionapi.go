@@ -100,6 +100,14 @@ func (s *Server) sessionRoutes(mux *http.ServeMux) {
 		}
 		return nil, nil
 	}))
+	// Point the session at another folder (its project folder moved or was renamed): hub Session.SetCwd
+	mux.HandleFunc("POST /api/sessions/{id}/cwd", s.sessionOp(func(r *http.Request, sess *hub.Session) (any, error) {
+		var b struct{ Cwd string }
+		if err := decode(r, &b); err != nil {
+			return nil, err
+		}
+		return sess.Summary(), sess.SetCwd(r.Context(), b.Cwd)
+	}))
 	// 起标题用的材料（插件 g.sessionTitle）：当前标题、这段上下文（最后一次 /clear 之后）用户说过的话
 	mux.HandleFunc("GET /api/sessions/{id}/title", s.sessionOp(func(r *http.Request, sess *hub.Session) (any, error) {
 		return sess.TitleState(), nil

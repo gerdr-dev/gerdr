@@ -755,6 +755,30 @@ and hand it a task, wait for it to finish, read its reply. Refer to a session by
 			return nil
 		},
 	}
+	cmd.AddCommand(&cobra.Command{
+		Use:   i18n.S("cwd <会话> <目录>", "cwd <session> <folder>"),
+		Short: i18n.S("把会话换到另一个目录接着聊（项目目录搬家 / 改名之后用；对话、Claude 的会话记录跟着走）。在跑的会话不行。输出改完的会话", "Move a session to another folder and carry on there (after its project folder was moved or renamed; the conversation and Claude's transcript come along). Not while it is running. Prints the session"),
+		Args:  cobra.ExactArgs(2),
+		RunE: func(_ *cobra.Command, args []string) error {
+			c := client()
+			s, err := c.resolve(args[0])
+			if err != nil {
+				return err
+			}
+			dir, err := filepath.Abs(expandHome(args[1]))
+			if err != nil {
+				return err
+			}
+			if err := c.do("POST", "/api/sessions/"+s.ID+"/cwd", map[string]any{"cwd": dir}, nil); err != nil {
+				return err
+			}
+			if s, err = c.resolve(s.ID); err != nil {
+				return err
+			}
+			printJSON(s.view(c.selfID()))
+			return nil
+		},
+	})
 	renameCmd.Flags().BoolVar(&rFixed, "fixed", false, i18n.S("固定的名字：/clear 之后还在，和 new --title 给的一样（比如一直开着、管很多事的会话）", "a fixed name: kept through /clear, like one given with new --title (e.g. a long-lived conversation that handles many things)"))
 	cmd.AddCommand(renameCmd)
 	cmd.AddCommand(&cobra.Command{

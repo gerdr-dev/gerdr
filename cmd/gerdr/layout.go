@@ -6,6 +6,7 @@ package main
 
 import (
 	"fmt"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 
@@ -74,6 +75,18 @@ func workspaceCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(2),
 		RunE: func(_ *cobra.Command, a []string) error {
 			return layoutCall("workspace.rename", server.LayoutParams{ID: a[0], Label: a[1]})
+		},
+	})
+	cmd.AddCommand(&cobra.Command{
+		Use:   "cwd <workspace> <folder>",
+		Short: "Change the folder a workspace's new tabs start in (after its project folder moved; its conversations: gerdr session cwd)",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(_ *cobra.Command, a []string) error {
+			dir, err := filepath.Abs(expandHome(a[1]))
+			if err != nil {
+				return err
+			}
+			return layoutCall("workspace.cwd", server.LayoutParams{ID: a[0], Cwd: dir})
 		},
 	})
 	var mp server.LayoutParams
