@@ -253,6 +253,7 @@ func (s *Server) Handler() http.Handler {
 	s.restartRoutes(mux)
 	if s.Terms != nil {
 		s.termRoutes(mux)
+		s.execRoutes(mux)
 	}
 	if s.UI != nil {
 		s.rescueRoutes(mux)

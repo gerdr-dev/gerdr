@@ -482,3 +482,70 @@ func TestPanelConversationSessionNew(t *testing.T) {
 		t.Fatalf("plain caller: %d %s", w.Code, w.Body)
 	}
 }
+
+// `gerdr exec --host`: a command run on the host through this one, its output and exit code back; a timeout stops it.
+// `gerdr pane read / send` on a terminal pane showing a host's terminal reach that terminal.
+func TestHostExecAndTerminalPane(t *testing.T) {
+	console, ch, hostSrv := hostPair(t)
+	auth := hdr("Authorization", "Bearer "+console.Token)
+	dir := t.TempDir()
+	exec := func(body string) (int, hub.ExecResult, string) {
+		w := do(ch, "POST", "/api/exec?host=mini", strings.NewReader(body), auth, csrf)
+		var r hub.ExecResult
+		_ = json.Unmarshal(w.Body.Bytes(), &r)
+		return w.Code, r, w.Body.String()
+	}
+	code, r, raw := exec(`{"command":"echo out-$((40+2)); echo err >&2; echo /api/blobs/x; exit 3","cwd":` + mustJSON(dir) + `}`)
+	if code != 200 || r.Code != 3 || !strings.Contains(r.Output, "out-42") || !strings.Contains(r.Output, "err") || r.Cwd != dir {
+		t.Fatalf("exec: %d %s", code, raw)
+	}
+	if !strings.Contains(r.Output, "\n/api/blobs/x") {
+		t.Fatalf("a command's output must pass untouched, not as a URL to rewrite: %q", r.Output)
+	}
+	start := time.Now()
+	code, r, raw = exec(`{"command":"sleep 30","timeout":300}`)
+	if code != 200 || !r.TimedOut || time.Since(start) > 10*time.Second {
+		t.Fatalf("timeout: %d %s after %s", code, raw, time.Since(start))
+	}
+	if code, _, raw = exec(`{"command":"true","cwd":"/no/such/dir"}`); code != 400 {
+		t.Fatalf("missing directory: %d %s", code, raw)
+	}
+	if w := do(ch, "POST", "/api/exec?host=nope", strings.NewReader(`{"command":"true"}`), auth, csrf); w.Code != 404 {
+		t.Fatalf("unknown host: %d %s", w.Code, w.Body)
+	}
+
+	// A terminal pane in this computer's layout showing the host's terminal
+	w := do(ch, "POST", "/api/terms", strings.NewReader(`{"host":"mini","cwd":`+mustJSON(dir)+`}`), auth, csrf)
+	var info struct{ ID string }
+	if json.Unmarshal(w.Body.Bytes(), &info); w.Code != 200 {
+		t.Fatalf("create: %d %s", w.Code, w.Body)
+	}
+	layout := `{"version":1,"active":"w1","spaces":[{"id":"default","name":"default"}],"workspaces":[{"id":"w1","name":"a","activeTab":"t1",` +
+		`"tabs":[{"id":"t1","focus":"p1","root":{"type":"pane","id":"p1","term":{"id":"` + info.ID + `","cwd":"/r"}}}]}]}`
+	if err := console.Layout.Set(json.RawMessage(layout)); err != nil {
+		t.Fatal(err)
+	}
+	op := func(method, params string) (int, string) {
+		w := do(ch, "POST", "/api/layout/op", strings.NewReader(`{"method":"`+method+`","project":"default","params":`+params+`}`), auth, csrf)
+		return w.Code, w.Body.String()
+	}
+	if c, b := op("pane.send", `{"id":"p1","text":"echo typed-$((6*7))"}`); c != 200 {
+		t.Fatalf("send: %d %s", c, b)
+	}
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		c, b := op("pane.read", `{"id":"p1","lines":-1}`)
+		if c == 200 && strings.Contains(b, "typed-42") && strings.Contains(b, `"host":"mini"`) {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("read: %d %s", c, b)
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	_, rest := peer.Split(info.ID)
+	_ = hostSrv.Terms.Kill(rest)
+	if c, b := op("pane.read", `{"id":"p1"}`); c != 404 {
+		t.Fatalf("a gone terminal: %d %s", c, b)
+	}
+}

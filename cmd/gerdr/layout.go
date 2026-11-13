@@ -226,6 +226,24 @@ func paneCmd() *cobra.Command {
 	}
 	read.Flags().IntVar(&rp.Lines, "lines", 100, "how many of the last lines (0 = all that's kept)")
 	cmd.AddCommand(read)
+	var tp server.LayoutParams
+	send := &cobra.Command{
+		Use:   "send [pane] <text>",
+		Short: "Type into a terminal pane and press Enter (default: the terminal next to you in your tab); works on another computer's terminal too",
+		Long: "Types the text into the terminal as if the user did, then Enter (--no-enter: not). Nothing waits for the command:\n" +
+			"follow with `gerdr pane read` to see what it printed. For a one-off command on another computer, gerdr exec gives\n" +
+			"its output and exit code directly; this is for what lives in a terminal the user watches (a dev server, a REPL, tail -f).",
+		Args: cobra.RangeArgs(1, 2),
+		RunE: func(_ *cobra.Command, a []string) error {
+			tp.ID, tp.Text = "", a[len(a)-1]
+			if len(a) == 2 {
+				tp.ID = a[0]
+			}
+			return layoutCall("pane.send", tp)
+		},
+	}
+	send.Flags().BoolVar(&tp.NoEnter, "no-enter", false, "don't press Enter after the text (e.g. to answer a prompt key by key)")
+	cmd.AddCommand(send)
 	var yp server.LayoutParams
 	layout := &cobra.Command{
 		Use:   "layout [pane]",

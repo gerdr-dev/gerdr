@@ -1,6 +1,6 @@
 ---
 name: gerdr
-description: "Coordinate other coding-agent sessions inside Gerdr (Claude Code / Codex sessions in the Gerdr GUI): list sessions, start a new agent session next to you, hand it a task, wait for it, read its reply, or message an existing session. Use when the user asks you to delegate to / start / ask / check on another agent or session in Gerdr, or to run several agents in parallel. Also for arranging Gerdr's layout: sorting tabs into workspaces, splitting panes together, renaming or reordering workspaces / tabs, pointing sessions and workspaces at a project folder that was moved or renamed. Also for changing Gerdr's own settings (theme, default agent / mode / model, shortcuts, model providers) with `gerdr config`, and for setting up agents (roles) with their own prompt, skills and MCP servers (`gerdr agent`, `gerdr skill`, `gerdr mcp`). Also for a Gerdr project's own skills and memory (given only to that project's sessions): adding / editing / removing a skill for one project (`gerdr skill --project`), keeping the project's shared memory. Also for add-ons (`gerdr addon`): browsing add-on stores, installing / updating / removing add-ons, switching them on or off, changing their settings. Also for a project's panels (`gerdr panel`): listing, installing one from a git repository, adding a blank one, updating, changing its icon, reordering them, putting a red dot / number on its button, removing. Also for being told when something happens outside the conversation (a chat message: `gerdr event watch / list`) or waiting until something outside is in some state (an MR got review comments, its pipeline failed, it merged: `gerdr wait`). Also for artifacts (`gerdr artifacts`) in a task a panel (board) started: where its output that isn't committed goes (generated images / videos, reports, drafts, copy to publish), and recording a PR / MR, a folder made outside the repository or a short result so the person finds it later. Requires GERDR_ENV=1."
+description: "Coordinate other coding-agent sessions inside Gerdr (Claude Code / Codex sessions in the Gerdr GUI): list sessions, start a new agent session next to you, hand it a task, wait for it, read its reply, or message an existing session. Use when the user asks you to delegate to / start / ask / check on another agent or session in Gerdr, or to run several agents in parallel. Also for running commands on another computer paired with this one (`gerdr exec --host`), and typing into / reading a terminal pane (`gerdr pane send / read`). Also for arranging Gerdr's layout: sorting tabs into workspaces, splitting panes together, renaming or reordering workspaces / tabs, pointing sessions and workspaces at a project folder that was moved or renamed. Also for changing Gerdr's own settings (theme, default agent / mode / model, shortcuts, model providers) with `gerdr config`, and for setting up agents (roles) with their own prompt, skills and MCP servers (`gerdr agent`, `gerdr skill`, `gerdr mcp`). Also for a Gerdr project's own skills and memory (given only to that project's sessions): adding / editing / removing a skill for one project (`gerdr skill --project`), keeping the project's shared memory. Also for add-ons (`gerdr addon`): browsing add-on stores, installing / updating / removing add-ons, switching them on or off, changing their settings. Also for a project's panels (`gerdr panel`): listing, installing one from a git repository, adding a blank one, updating, changing its icon, reordering them, putting a red dot / number on its button, removing. Also for being told when something happens outside the conversation (a chat message: `gerdr event watch / list`) or waiting until something outside is in some state (an MR got review comments, its pipeline failed, it merged: `gerdr wait`). Also for artifacts (`gerdr artifacts`) in a task a panel (board) started: where its output that isn't committed goes (generated images / videos, reports, drafts, copy to publish), and recording a PR / MR, a folder made outside the repository or a short result so the person finds it later. Requires GERDR_ENV=1."
 ---
 
 # Gerdr：和其他会话协作
@@ -109,8 +109,36 @@ gerdr session new --agent codex --title reviewer \
 
 ### On another computer: `--host`
 
-The user can pair other computers with this one (Settings → Remote access). `gerdr session hosts` lists them; a
-session there shows in `list` with `"host": "<id>"`, and its id starts with `<host>:`. Everything above works on it the
+The user can pair other computers with this one (Settings → Remote access). `gerdr session hosts` lists them.
+
+**To run a command there, run it yourself with `gerdr exec`** — don't start or ask an agent there for it (a turn per
+command, slow, and it may refuse or guess). Its output comes back here and the exit code is passed on:
+
+```bash
+gerdr session hosts
+gerdr exec --host mini -- uname -a
+gerdr exec --host mini --cwd '~/work/app' -- 'git status --short && npm test'    # one quoted string for && | ; >
+cat fix.diff | gerdr exec --host mini --cwd '~/work/app' --stdin -- git apply      # --stdin: this side's stdin
+```
+
+- It runs in that computer's login shell (its PATH), stdout and stderr together; `--timeout` (default 2m, at most 1h)
+  or Ctrl-C stops it and what it started. No interactive input: a command that asks for a password / y/n hangs until
+  the timeout; give it its answer up front (`-y`, `--stdin`).
+- Something that keeps running (a dev server, `tail -f`, a REPL) goes in a terminal the user can watch. When the user
+  has one open on that computer (`gerdr pane list`: kind terminal), type into it and read it back; both work the same
+  on this computer's terminals:
+
+  ```bash
+  gerdr pane send <pane> 'npm run dev'      # types it and presses Enter (--no-enter: not); returns at once
+  gerdr pane read <pane> --lines 50         # what it shows now: read again until the output you wait for is there
+  ```
+
+  Don't put a long-running command in `exec` with `&` to dodge this: nobody sees it, and nothing stops it later.
+- `gerdr exec` and `gerdr pane send` run whatever you give them on someone's computer, so they ask for approval like
+  any command; don't chain them to get around that.
+
+**To hand a whole task to an agent there** (it needs that machine's files, GPU or accounts for many steps of its own):
+a session there shows in `list` with `"host": "<id>"`, and its id starts with `<host>:`. Everything above works on it the
 same (`send`, `wait`, `read`, `--report-to`, tags). Start one there with `--host`:
 
 ```bash
@@ -252,6 +280,7 @@ gerdr pane list [--workspace <ws>]       # pane_id, kind (agent / terminal / sub
 gerdr pane current                       # your own pane
 gerdr pane layout [<pane>] [--tab <tab>] # each pane's rect in its tab
 gerdr pane read [<pane>] [--lines 100]   # a terminal pane's recent output as plain text; no pane = the terminal in your tab
+gerdr pane send [<pane>] <text>          # type into a terminal pane + Enter (asks for approval: it runs things)
 ```
 
 A workspace is named by its id, number or label; a tab by its id or label; a pane by its id or by the conversation it shows

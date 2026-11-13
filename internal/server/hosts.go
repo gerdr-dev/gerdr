@@ -132,7 +132,8 @@ func (s *Server) hostProxy(w http.ResponseWriter, r *http.Request, host, path st
 		return
 	}
 	// File contents pass as they are, both ways: an uploaded or viewed .json is a file, not an API payload
-	isFile := path == "/api/fs/upload" || path == "/api/fs/raw" || path == "/api/fs/file" || strings.HasPrefix(path, "/f/")
+	// So does a command's output (/api/exec): text that happens to hold "/api/blobs/…" is not a URL to rewrite
+	isFile := path == "/api/fs/upload" || path == "/api/fs/raw" || path == "/api/fs/file" || strings.HasPrefix(path, "/f/") || path == "/api/exec"
 	var body io.Reader
 	if r.Body != nil && r.Method != http.MethodGet && r.Method != http.MethodHead {
 		if isFile {

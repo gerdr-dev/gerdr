@@ -139,6 +139,24 @@ accepted remotely, pairing codes are only minted on the host itself.
 - "Import Claude Code conversations" lists and imports the agent's records on that computer (`?host=`, then
   `createOnHost` with `import`): they are only on that computer's disk.
 
+## Running commands there (`gerdr exec`, `gerdr pane send / read`)
+
+Before this an agent on the console had no CLI door to a host's shell: it started (or messaged) an agent there and
+waited a turn per command, or found the `!command` route of a host session and wrote into that conversation's log.
+
+- `POST /api/exec` (`internal/server/execapi.go`, `hub.RunCommand`) runs one command line, same shell as `!command`
+  (login shell, own process group, no stdin unless given), and answers with the output (first and last 512 KB),
+  exit code, `timedOut`. The request context is the command's: Ctrl-C on the CLI closes the connection, the proxied
+  request is cancelled, the host kills the group. The CLI reaches a host's through the `?host=` route; the proxy
+  passes the answer untouched like a file (`isFile`), so output that happens to contain `/api/blobs/…` isn't
+  rewritten as a URL. It is local-or-paired only like every `/api/` route, and gives a paired console nothing new:
+  it could already open a terminal there and type.
+- `gerdr pane read / send` on a terminal pane whose term id is `<host>:<id>` asks that host
+  (`GET /api/terms/{id}/text`, `POST /api/terms/{id}/input`), with a 15s limit because the layout lock is held meanwhile.
+- `exec` and `pane send` are not in `sysenv.SafeGerdrCLI`: they run anything, so they ask like any shell command.
+- No `gerdr term new`: a terminal an agent opens and no pane shows is a process nobody sees or stops. Long-running
+  things go in a terminal the user opened (and can watch); one-offs go through `exec`.
+
 ## Moving a conversation
 
 `POST /api/sessions` with `continueFrom` on one computer and `host` naming another (`""` = this one): pane menu →

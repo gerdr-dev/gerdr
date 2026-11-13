@@ -601,7 +601,7 @@ and hand it a task, wait for it to finish, read its reply. Refer to a session by
 
 	cmd.AddCommand(&cobra.Command{
 		Use:   "hosts",
-		Short: i18n.S("这台电脑控制的其他电脑（new --host 填 id）：它们上面的会话在 list 里带 host", "Other computers this one controls (pass the id to new --host): their sessions show in list with a host"),
+		Short: i18n.S("这台电脑控制的其他电脑（new --host 或 gerdr exec --host 填 id）：它们上面的会话在 list 里带 host", "Other computers this one controls (pass the id to new --host, or to gerdr exec --host to run a command there): their sessions show in list with a host"),
 		RunE: func(_ *cobra.Command, _ []string) error {
 			var out []map[string]any
 			if err := client().do("GET", "/api/hosts", nil, &out); err != nil {

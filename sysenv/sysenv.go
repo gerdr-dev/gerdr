@@ -538,6 +538,11 @@ func SafeGerdrCLI(cmd string) bool {
 	if words[1] == "session" && len(words) > 2 && words[2] == "fetch" {
 		return false
 	}
+	// `pane send` types into a terminal, which runs whatever it's given (on another computer too): a command like any
+	// other. Same for `gerdr exec`, which isn't in the list above
+	if words[1] == "pane" && len(words) > 2 && words[2] == "send" {
+		return false
+	}
 	for _, w := range words[2:] {
 		if w == "--mode" || strings.HasPrefix(w, "--mode=") {
 			return false

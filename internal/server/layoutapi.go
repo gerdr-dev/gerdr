@@ -30,7 +30,6 @@ import (
 	"sync"
 
 	"github.com/gerdr-dev/gerdr/internal/hub"
-	"github.com/gerdr-dev/gerdr/internal/term"
 )
 
 // LayoutSession is what the layout calls need to know about a conversation shown in a pane.
@@ -53,6 +52,8 @@ type LayoutParams struct {
 	Cwd          string  `json:"cwd,omitempty"`
 	Position     int     `json:"position,omitempty"` // 1-based place among its siblings; 0 = last
 	Lines        int     `json:"lines,omitempty"`    // pane.read: how many of the last lines
+	Text         string  `json:"text,omitempty"`     // pane.send: what to type
+	NoEnter      bool    `json:"no_enter,omitempty"` // pane.send: don't press Enter after it
 }
 
 type node = map[string]any
@@ -264,7 +265,7 @@ func (c *layoutCall) run(method string, p LayoutParams) (any, error) {
 			return nil, err
 		}
 		return c.layoutView(w, t), nil
-	case "pane.read":
+	case "pane.read", "pane.send":
 		// Only finds the terminal; the server reads its output (Server.layoutOp), this file knows no terminals.
 		w, t, pn, err := c.readTarget(p.ID)
 		if err != nil {
@@ -1141,22 +1142,14 @@ func (s *Server) layoutOp(w http.ResponseWriter, r *http.Request) {
 		httpError(w, 400, err.Error())
 		return
 	}
-	if b.Method == "pane.read" {
-		pv := asNode(asNode(res)["pane"])
-		tm := s.Terms.Get(str(pv, "term_id"))
-		if tm == nil {
-			httpError(w, 404, term.ErrNotFound.Error())
+	if b.Method == "pane.read" || b.Method == "pane.send" {
+		// The layout found the terminal; reading / typing is the terminal's (this computer's, or a host's: execapi.go)
+		out, err := s.paneTerm(r.Context(), b.Method, asNode(asNode(res)["pane"]), b.Params)
+		if err != nil {
+			httpError(w, 404, err.Error())
 			return
 		}
-		lines := b.Params.Lines
-		if lines == 0 {
-			lines = 100
-		}
-		cwd := tm.LiveCwd()
-		if cwd == "" {
-			cwd = tm.Info().Cwd
-		}
-		writeJSON(w, node{"pane_id": pv["pane_id"], "cwd": cwd, "exited": tm.Info().Exited, "text": tm.Text(lines)})
+		writeJSON(w, out)
 		return
 	}
 	if out != nil {

@@ -97,12 +97,12 @@ func main() {
 		Short: i18n.S("打印版本", "Print the version"),
 		Run:   func(cmd *cobra.Command, args []string) { fmt.Println(version.Version) },
 	})
-	root.AddCommand(addProjectFlag(sessionCmd()), folderCmd(), artifactsCmd(), uiCmd(), workCmd(), panelCmd(), remoteCmd(), configCmd(), agentCmd(), mcpCmd(), skillCmd(), addonCmd(), eventCmd(), waitCmd(), addProjectFlag(workspaceCmd()), addProjectFlag(tabCmd()), addProjectFlag(paneCmd()))
+	root.AddCommand(addProjectFlag(sessionCmd()), folderCmd(), execCmd(), artifactsCmd(), uiCmd(), workCmd(), panelCmd(), remoteCmd(), configCmd(), agentCmd(), mcpCmd(), skillCmd(), addonCmd(), eventCmd(), waitCmd(), addProjectFlag(workspaceCmd()), addProjectFlag(tabCmd()), addProjectFlag(paneCmd()))
 	if err := root.Execute(); err != nil {
 		if errors.Is(err, errHandover) {
 			os.Exit(exitHandover)
 		}
-		if len(os.Args) > 1 && slices.Contains([]string{"session", "ui", "work", "workspace", "tab", "pane", "config", "agent", "mcp", "skill", "addon", "event", "panel"}, os.Args[1]) {
+		if len(os.Args) > 1 && slices.Contains([]string{"session", "exec", "ui", "work", "workspace", "tab", "pane", "config", "agent", "mcp", "skill", "addon", "event", "panel"}, os.Args[1]) {
 			fail(err) // for agents: errors are JSON too
 		}
 		fmt.Fprintln(os.Stderr, "gerdr:", err)
