@@ -451,6 +451,10 @@ narrow and continue by: for a chat, the **conversation** (a DM, a thread), the s
 follows, so a subscriber hands it to whatever took the first message. Emit from the service (stdout, above) when it holds a connection, or from the UI with
 `g.events.emit`. To act on events yourself (send a reply), list patterns in `service.events` and read them on stdin.
 
+A chat message's event should carry the few messages before it in its conversation, the person's own included, as
+`data.context: [{who, me, text, at}]` (oldest first; `me`: the person this Gerdr is for): only others' messages are
+events, and a reply means little without what it answers (docs/dev/EVENTS.md).
+
 Say what you emit in addon.json, so panels can offer it ("which events make a task") without knowing your add-on:
 
 ```json

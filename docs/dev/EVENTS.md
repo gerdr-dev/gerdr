@@ -181,6 +181,10 @@ Many users have no Slack; others have Feishu. So a panel never lists sources in 
 - An event carries its own reply address, `reply: {kind, data}`, filled by the source. `ctx.events.reply(event, text)`
   emits `{kind: reply.kind, data: reply.data + text}` under the panel's name, and the source, subscribed to that kind,
   posts it. Slack and Feishu answer the same way for the panel; only the add-on knows channels and threads.
+- A chat message carries what was said just before it in the same conversation, the person's own words included, as
+  `data.context: [{who, me, text, at}]` (oldest first, a handful; `me`: the person this Gerdr is for). Only others'
+  messages are events, and a reply alone ("新版没用，我看看老版本的") means nothing without the question it answers;
+  a subscriber shows it to whoever judges the message. slack-me does (2026-11-13).
 
 An agent's approvals and questions can be answered from a chat the same way, without the chat knowing: the
 `remote-answer` add-on gets them from Gerdr (a service with `"pending": true`, docs/dev/ADDONS.md), posts through the
