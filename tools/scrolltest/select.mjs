@@ -61,13 +61,20 @@ console.log(`selected "${start.text}" in row ${start.row}`);
 for (let i = 0; i < a.screens * 2; i++) await drag(a.up ? 350 : -350);
 await page.waitForTimeout(400);
 
-const res = await page.evaluate((pick) => {
+const res = await page.evaluate(async (pick) => {
   const sel = getSelection();
   const n = new Function("return " + pick)()("[data-chat-scroller]");
   const startOk = window.__selStart.isConnected && sel.anchorNode === window.__selStart;
   const anchor = sel.anchorNode ? (sel.anchorNode.nodeType === 3 ? "#text " + sel.anchorNode.data.slice(0, 20) : sel.anchorNode.nodeName + "." + (sel.anchorNode.className || "")) : null;
   if (!n) return { startOk, anchor, err: "no text on screen after scrolling" };
   sel.extend(n, Math.min(5, n.data.length));
+  // What Android Chrome does on the next handle move: both ends placed again from screen points, the other handle's
+  // point clipped above / below the chat, landing on the header (or whatever is drawn there)
+  const out = [...document.querySelectorAll("body *")].find(
+    (e) => !document.querySelector("[data-chat-scroller]").contains(e) && e.childNodes.length === 1 && e.firstChild.nodeType === 3 && e.textContent.trim().length > 2,
+  )?.firstChild;
+  if (out) sel.setBaseAndExtent(out, 0, n, Math.min(6, n.data.length));
+  await new Promise((r) => setTimeout(r, 50)); // the list's selectionchange puts the anchor back
   const rows = [...document.querySelectorAll("[data-item-index]")].map((e) => +e.dataset.itemIndex);
   return { startOk, anchor, text: sel.toString(), rows: [Math.min(...rows), Math.max(...rows), rows.length], header: sel.containsNode(document.querySelector("header") ?? document.body.firstElementChild, true) };
 }, pick.toString());

@@ -175,8 +175,7 @@ export const ChatList = forwardRef<
 
   // Rows a text selection starts and ends in (keys), kept mounted with everything between them however far the chat
   // scrolls. Unmounting the row a selection starts in moves its start onto the list itself (a DOM range's boundary
-  // falls back to the removed node's parent): on a phone, dragging a handle after scrolling a few screens then selected
-  // from the page header on (a phone recording; select.mjs). The rows between are kept too so the copy has their text.
+  // falls back to the removed node's parent), and the rows between would be missing from the copy (select.mjs).
   // Only ends inside rows count: a selection reaching outside the list keeps just its end in here.
   const held = useRef<[string, string] | null>(null);
   useEffect(() => {
@@ -185,8 +184,36 @@ export const ChatList = forwardRef<
       const r = e?.closest<HTMLElement>("[data-chat-key]");
       return r && box.current?.contains(r) ? r.dataset.chatKey! : undefined;
     };
+    // The last selection with both ends in rows, for putting back the end Android's handle drag throws out (below)
+    let last: { an: Node; ao: number; fn: Node; fo: number } | null = null;
+    const y = (n: Node, o: number) => {
+      const r = document.createRange();
+      r.setStart(n, o);
+      const b = r.getClientRects()[0] ?? (n instanceof Element ? n : n.parentElement)?.getBoundingClientRect();
+      return b ? b.top : 0;
+    };
     const onSel = () => {
       const sel = document.getSelection();
+      // Android Chrome re-places BOTH ends while a selection handle is dragged: the dragged one under the finger, the
+      // other at the screen point of its own handle. After scrolling, that other handle sits above (or below) the
+      // chat's visible area, clipped, and the point lands on whatever is drawn there: the page header. The selection
+      // then ran from the session title in the header down to the finger (a phone trace: the anchor went from a row
+      // to the title text on the first drag after a scroll, the row still mounted). So an anchor that leaves the rows
+      // while the focus is in them is put back where the end that isn't being dragged was. Only the anchor: a mouse
+      // drag never moves it, so dragging a selection out of the chat with a mouse is left as it is.
+      if (sel && sel.rangeCount && !sel.isCollapsed && last && sel.anchorNode && sel.focusNode) {
+        if (!rowKey(sel.anchorNode) && rowKey(sel.focusNode) && last.an.isConnected && last.fn.isConnected) {
+          const fy = y(sel.focusNode, sel.focusOffset);
+          // The dragged end is the one of the last selection nearer the finger now; keep the other
+          const keepAnchor = Math.abs(y(last.fn, last.fo) - fy) <= Math.abs(y(last.an, last.ao) - fy);
+          const [kn, ko] = keepAnchor ? [last.an, last.ao] : [last.fn, last.fo];
+          sel.setBaseAndExtent(kn, ko, sel.focusNode, sel.focusOffset);
+          return; // its own selectionchange follows
+        }
+      }
+      if (!sel || !sel.rangeCount || sel.isCollapsed) last = null;
+      else if (sel.anchorNode && sel.focusNode && rowKey(sel.anchorNode) && rowKey(sel.focusNode))
+        last = { an: sel.anchorNode, ao: sel.anchorOffset, fn: sel.focusNode, fo: sel.focusOffset };
       let next: [string, string] | null = null;
       if (sel && sel.rangeCount && !sel.isCollapsed) {
         const r = sel.getRangeAt(0);
