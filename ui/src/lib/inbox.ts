@@ -9,6 +9,7 @@ import { isPhone } from "./phone";
 import { get as getApp, useStore, visibleSessions } from "./store";
 import type { SessionSummary } from "./types";
 import { t } from "./i18n";
+import { cn } from "./utils";
 
 /**
  * The inbox: things that need the user. Approvals / questions (from GET /api/pending) leave by themselves once they're
@@ -125,18 +126,18 @@ function toastItem(it: InboxItem, title: string) {
     duration: Infinity,
     closeButton: true,
     description: body,
-    icon: sp
-      ? createElement(
-          "span",
-          {
-            title: sp.name,
-            className: "flex size-7 items-center justify-center rounded-md border bg-background text-[11px] font-semibold text-muted-foreground",
-          },
-          createElement("span", { className: "max-w-full truncate px-0.5" }, spaceInitials(sp.name)),
-        )
-      : undefined,
-    // Sonner's icon box is a 16px square centred on the row (unlayered CSS, hence `!`): room for the chip, at the top
-    classNames: sp ? { icon: "size-auto! self-start! mr-1.5!" } : undefined,
+    // Below the text, left of the button: the project's chip as on the rail, and its name. Beside the text (sonner's
+    // icon slot) it and the button squeezed the text into a narrow column.
+    icon: sp ? createElement(SpaceChip, { id: sp.id, name: sp.name }) : undefined,
+    // The text takes the first row; the chip and the button wrap under it, the button right-aligned by sonner's
+    // margin-left: auto (as the update card, native.ts onAppUpdate). Sonner's sizes and margins are unlayered CSS,
+    // which beats Tailwind's layered utilities: hence the `!`.
+    classNames: {
+      toast: "flex-wrap gap-y-3!",
+      content: "basis-full!",
+      icon: "order-1 size-auto! max-w-[60%] m-0!",
+      actionButton: "order-2",
+    },
     action: open
       ? {
           label: it.kind === "ask" ? t("inbox.goAnswer") : it.kind === "error" ? t("inbox.goLook") : t("inbox.goHandle"),
@@ -145,6 +146,30 @@ function toastItem(it: InboxItem, title: string) {
       : undefined,
     onDismiss: () => toasts.delete(it.id),
   });
+}
+
+/**
+ * The card's project: its chip as on the rail and its name. This window's own project is lit like the rail's current
+ * chip (the card is about what's on screen here); another project's is plain but not dimmed, since that's the one to
+ * notice. Live: it follows when the window switches project while the card is up.
+ */
+function SpaceChip({ id, name }: { id: string; name: string }) {
+  const here = useStore((s) => currentSpace(s.layout)) === id;
+  return createElement(
+    "span",
+    { className: "flex min-w-0 items-center gap-1.5 text-[12px] text-foreground" },
+    createElement(
+      "span",
+      {
+        className: cn(
+          "flex size-5 shrink-0 items-center justify-center rounded border text-[10px] font-semibold",
+          here ? "border-foreground bg-foreground text-background" : "border-foreground/40 bg-background text-foreground",
+        ),
+      },
+      spaceInitials(name),
+    ),
+    createElement("span", { className: "truncate" }, name),
+  );
 }
 
 /** The project (space) an item belongs to: its conversation's, else its panel's (a panel key is "<space>/<name>"). */
@@ -196,6 +221,19 @@ useInbox.subscribe((s) => {
     return !!it && !(it.reqId && s.live && !s.live[it.reqId]);
   });
 });
+
+/**
+ * Its conversation came on screen (opened by hand, not through the card): the card has done its job, it goes. The
+ * item stays in the inbox until answered, like one that came in while being looked at.
+ */
+function dropSeenCards() {
+  if (!toasts.size) return;
+  const byId = new Map(get().items.map((x) => [x.id, x]));
+  dropCards((k) => {
+    const sid = byId.get(k)?.sessionId;
+    return !sid || !seen(sid);
+  });
+}
 
 export function dismiss(id: string) {
   const it = get().items.find((x) => x.id === id);
@@ -362,7 +400,12 @@ export function watchInbox() {
   let prev = getApp().sessions;
   let key = pendingKey(prev);
   let wasConnected = getApp().connected;
+  let shownLayout = getApp().layout;
   const unsub = useStore.subscribe((s) => {
+    if (s.layout !== shownLayout) {
+      shownLayout = s.layout;
+      dropSeenCards();
+    }
     if (s.connected !== wasConnected) {
       wasConnected = s.connected;
       if (s.connected) (refreshPending(), refreshPanelInbox());
@@ -391,8 +434,11 @@ export function watchInbox() {
   refreshPanelInbox();
   checkBattery();
   const timer = setInterval(checkBattery, 60_000);
+  // Coming back to a window already showing the conversation counts as opening it too
+  window.addEventListener("focus", dropSeenCards);
   return () => {
     unsub();
     clearInterval(timer);
+    window.removeEventListener("focus", dropSeenCards);
   };
 }
