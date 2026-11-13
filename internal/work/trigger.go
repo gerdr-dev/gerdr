@@ -128,6 +128,9 @@ type trigProject struct {
 	// spent: until-triggers that ran for their condition holding, by id → the definition they ran as; cleared when
 	// the condition stops holding or the definition changes (in memory: a restart may run one again once)
 	spent map[string]string
+	// held: triggers with a conversation change queued and not started yet (DispatchSession): more changes meanwhile
+	// fold into that one run instead of queueing a run each
+	held map[string]bool
 }
 
 type triggers struct {
@@ -145,7 +148,7 @@ func (r *Runner) trig(project string) *trigProject {
 	}
 	p := r.trig_.projects[project]
 	if p == nil {
-		p = &trigProject{queue: map[string]chan ev.Event{}, runs: map[string]int{}, last: map[string]*ScheduleRun{}, spent: map[string]string{}}
+		p = &trigProject{queue: map[string]chan ev.Event{}, runs: map[string]int{}, last: map[string]*ScheduleRun{}, spent: map[string]string{}, held: map[string]bool{}}
 		r.trig_.projects[project] = p
 	}
 	dir, err := r.Dir(project)
@@ -197,12 +200,52 @@ func (r *Runner) DispatchEvent(e ev.Event) {
 	}
 }
 
+// SessionSource is the source of the events about a panel's own conversations (DispatchSession).
+const SessionSource = "gerdr"
+
+// IsSessionEvent: one of DispatchSession's.
+func IsSessionEvent(e ev.Event) bool {
+	return e.Source == SessionSource && strings.HasPrefix(e.Kind, "session.")
+}
+
+// DispatchSession: one of panel's conversations (one it started, or one working for one of those) changed status.
+// Its triggers on "gerdr/session.*" (kind session.<status>: running, idle, waiting, error…; key the session's id) run,
+// so a board follows its workers the moment they stop, ask or fail instead of polling every minute. Only that
+// panel's triggers, and not through the event store: these are Gerdr's own, many, and of no use to anyone else.
+// Folded like a stream's messages: while a run is queued and not started, further changes add nothing, so a burst is
+// one run and a change after a run started is one more after it. The event says what moved; the function reads the
+// state as it is now.
+func (r *Runner) DispatchSession(panel string, e ev.Event) {
+	r.trig_.mu.Lock()
+	defer r.trig_.mu.Unlock()
+	p := r.trig(panel)
+	for _, t := range p.defs {
+		if t.Off || t.Until != "" || !ev.Match(t.On, e) || !ev.MatchKey(t.Key, e.Key) || p.held[t.ID] {
+			continue
+		}
+		q := p.queue[t.ID]
+		if q == nil {
+			q = make(chan ev.Event, 256)
+			p.queue[t.ID] = q
+			go r.drainTrigger(panel, t.ID, q)
+		}
+		select {
+		case q <- e:
+			p.held[t.ID] = true
+		default:
+		}
+	}
+}
+
 // drainTrigger runs one trigger's queued events one by one, with its current definition (it may have been edited
 // since the event was queued; removed = the event is dropped).
 func (r *Runner) drainTrigger(project, id string, q chan ev.Event) {
 	for e := range q {
 		r.trig_.mu.Lock()
 		p := r.trig(project)
+		if IsSessionEvent(e) {
+			delete(p.held, id) // starting now: a change from here on is one more run after this one
+		}
 		var t *Trigger
 		for i := range p.defs {
 			if p.defs[i].ID == id {

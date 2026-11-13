@@ -119,6 +119,9 @@ func (s *Server) cookieName() string {
 func (s *Server) Handler() http.Handler {
 	if s.Work != nil {
 		s.Work.Host = workHost{s} // ctx.sessions / ctx.workspaces in local functions (workhost.go)
+		if s.Hub != nil {
+			go s.watchPanelSessions() // their conversations' status → their "gerdr/session.*" triggers (panelsessions.go)
+		}
 		// A function changed its panel's files: the panel's page refreshes (core usePanelChange) instead of polling
 		s.Work.Changed = func(key, path string) {
 			s.Hub.Broadcast("panel_data", map[string]string{"panel": key, "path": path})

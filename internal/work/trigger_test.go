@@ -1,6 +1,7 @@
 package work
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -204,5 +205,50 @@ func TestStateTriggers(t *testing.T) {
 		if TriggersPath(c.rel) != c.want {
 			t.Errorf("TriggersPath(%q) != %v", c.rel, c.want)
 		}
+	}
+}
+
+// A panel's conversation changing status reaches its "gerdr/session.*" triggers; a burst while one run is queued or
+// running folds into one more run, not a run per change.
+func TestDispatchSessionFolds(t *testing.T) {
+	r, dir := newProject(t, map[string]string{
+		"w.ts": `export async function on(input: any, ctx: any) {
+  await ctx.sleep(300);
+  return input.event.kind;
+}`,
+	})
+	writeTrigger(t, dir, "s", `{"on":"gerdr/session.*","fn":"w.on"}`)
+	writeTrigger(t, dir, "other", `{"on":"gitlab/*","fn":"w.on"}`)
+	for i, st := range []string{"running", "waiting", "running", "idle", "running", "idle"} {
+		r.DispatchSession("", ev.Event{ID: fmt.Sprint(i), Source: SessionSource, Kind: "session." + st, Key: "s1"})
+		time.Sleep(20 * time.Millisecond)
+	}
+	var s, other TriggerInfo
+	for i := 0; i < 100; i++ {
+		l, _ := r.Triggers("")
+		for _, x := range l {
+			if x.ID == "s" {
+				s = x
+			} else {
+				other = x
+			}
+		}
+		if s.Runs >= 2 {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	time.Sleep(500 * time.Millisecond)
+	l, _ := r.Triggers("")
+	for _, x := range l {
+		if x.ID == "s" {
+			s = x
+		}
+	}
+	if s.Runs != 2 || s.Last == nil || !s.Last.OK {
+		t.Fatalf("want 2 runs (one, then the rest folded), got %d %+v", s.Runs, s.Last)
+	}
+	if other.Runs != 0 {
+		t.Fatal("gitlab/* ran for a session change")
 	}
 }

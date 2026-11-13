@@ -196,6 +196,20 @@ for themselves, e.g. from a settings page: `user/triggers/<id>.json`, AGENTS.md 
 - `gerdr panel triggers` lists them with how many runs and the last one; `gerdr event list --on 'gitlab/*'` shows what
   came. A broken file stops the whole folder, like schedules.
 
+Your own conversations changing status are events too, for this panel only: `gerdr/session.<status>` (`running`,
+`idle`, `waiting`, `error`…), key the session's id, `data` `{ id, status, prev, title, waiting }`. "Yours" is one this
+panel started (`ctx.sessions.start`) or one working for one of those (its `reportTo`). Follow your workers with it
+instead of a schedule polling every minute:
+
+```json
+{ "on": "gerdr/session.*", "fn": "board.sync", "name": "Follow the workers" }
+```
+
+They're folded: changes that come while a run is still queued add nothing, and one after a run started is one more
+run after it, so a burst is one or two runs. Treat the event as "something moved" and read the state as it is now
+(`ctx.sessions.get` / `list`). They don't go through the event store (`gerdr event list` doesn't show them). Keep a
+slow schedule as a backstop: nothing is replayed for changes while Gerdr was down.
+
 ## Waiting for a state
 
 Some things are in a state rather than sending events: an MR is open or merged, its pipeline running or failed, it
