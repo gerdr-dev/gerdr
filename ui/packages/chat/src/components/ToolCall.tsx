@@ -244,6 +244,8 @@ function DefaultToolCall({ part, agent, running, keep: keepOpen }: { part: ToolP
   // A subagent even once its task is gone: the adapter keeps only the latest finished tasks, and none after a restart
   const sub = isAgent || !!agent;
   const bg = task?.background || inp?.run_in_background === true;
+  // A subagent sent to the background is still first a subagent: tag it as one (same as TaskDoneCard), not "Background"
+  const bgTag = sub ? t("task.subagent") : t("task.background");
   // Nothing to show yet (input still streaming): the row doesn't open and has no chevron
   const subPrompt = typeof inp?.prompt === "string" && inp.prompt.trim() ? inp.prompt : undefined;
   const canOpen = sub && !failed ? !!subPrompt || (!busy && task?.status !== "running") : hasToolBody(meta, part.input);
@@ -306,14 +308,14 @@ function DefaultToolCall({ part, agent, running, keep: keepOpen }: { part: ToolP
             {stat.del > 0 && <span className="text-bad">-{stat.del}</span>}
           </span>
         )}
-        {!task && bg && <span className="shrink-0 rounded-sm bg-muted px-1 text-[11px]">{t("task.background")}</span>}
+        {!task && bg && <span className="shrink-0 rounded-sm bg-muted px-1 text-[11px]">{bgTag}</span>}
         {/* A background call's own time is only how long it took to launch, not how long it ran */}
         {live && <span className="shrink-0 text-[11px] tabular-nums opacity-70">{elapsed(meta.startedAt!)}</span>}
         {!live && !task && took && !bg && <span className="shrink-0 text-[11px] tabular-nums opacity-70">{took}</span>}
         {task && (
           <>
             {/* Claude only sets is_backgrounded for ctrl+b; a Bash call with run_in_background is a background command too */}
-            {bg && <span className="shrink-0 rounded-sm bg-muted px-1 text-[11px]">{t("task.background")}</span>}
+            {bg && <span className="shrink-0 rounded-sm bg-muted px-1 text-[11px]">{bgTag}</span>}
             {/* 进度文字可以截断，耗时不能（截成「3.」看不懂）。跑完后 CLI 自动写的「Background command "…" completed」
                 不显示：就是把标题和状态又说一遍 */}
             {/* shrink-[100]: when the row is short of room (a phone) the progress text gives way first, so the title stays
