@@ -41,12 +41,13 @@ GitLab / Slack / mail pollers; sources are:
 Chat / mail / anything with its own credentials is an add-on, not core (the user's call): Gerdr ships the bus.
 
 One exception, Gerdr's own state rather than an outside source: a panel's conversations changing status
-(`gerdr/session.<status>`, key the session id; server/panelsessions.go → work.Runner.DispatchSession). The Superagent
+(`gerdr/session.<status>`, or `gerdr/session.renamed` when only its title changed, key the session id; server/panelsessions.go → work.Runner.DispatchSession). The Superagent
 learned that a worker stopped or asked only from a schedule polling every minute when no page was open, so its inbox
 items came up to a minute late; the hub already broadcasts the change. They go only to the panel the conversation
 works for (its PanelTag, or that of the one it reports to, up to 4 hops) and skip the event store: many, and of no
 use to anyone else. Folded per trigger (one queued run absorbs later changes until it starts), since a board's sync
-reads everything anyway.
+reads everything anyway. Renamed is there for a card that follows its worker's auto title: the title lands seconds
+after the message, mid-turn, and the next status change could be a whole turn later.
 
 ## Subscribers: every kind of owner can
 

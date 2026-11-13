@@ -197,7 +197,8 @@ for themselves, e.g. from a settings page: `user/triggers/<id>.json`, AGENTS.md 
   came. A broken file stops the whole folder, like schedules.
 
 Your own conversations changing status are events too, for this panel only: `gerdr/session.<status>` (`running`,
-`idle`, `waiting`, `error`…), key the session's id, `data` `{ id, status, prev, title, waiting }`. "Yours" is one this
+`idle`, `waiting`, `error`…), key the session's id, `data` `{ id, status, prev, title, prevTitle, waiting }`; one renamed
+(Gerdr's auto title, a person renaming it) with its status unchanged is `gerdr/session.renamed`. "Yours" is one this
 panel started (`ctx.sessions.start`) or one working for one of those (its `reportTo`). Follow your workers with it
 instead of a schedule polling every minute:
 
