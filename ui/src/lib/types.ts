@@ -49,6 +49,8 @@ export type SessionSummary = ChatSession & {
   base?: string;
   /** The git branch checked out where the agent works (workdir, else cwd) */
   branch?: string;
+  /** The artifacts folder a panel gave the task this session works on (ctx.sessions.start artifactsDir); none for Code's own. */
+  artifactsDir?: string;
   agentSessionId: string;
   /** Where the session was started: what it is grouped by, and where a new session "like this one" starts */
   cwd: string;

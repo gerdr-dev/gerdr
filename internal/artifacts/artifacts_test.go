@@ -2,35 +2,23 @@ package artifacts
 
 import (
 	"os"
-	"os/exec"
 	"path/filepath"
 	"testing"
 )
 
-func gitInit(t *testing.T, dir string) {
-	t.Helper()
-	if err := exec.Command("git", "init", "-q", dir).Run(); err != nil {
-		t.Skip("git not available")
-	}
-}
-
-func TestForRepoSharedAcrossSubdirsAndLazy(t *testing.T) {
+func TestOwnerFolderLazyAndFoundByID(t *testing.T) {
 	root := t.TempDir()
 	s := New(func() string { return root })
-	repo := filepath.Join(t.TempDir(), "weave")
-	gitInit(t, repo)
-	sub := filepath.Join(repo, "src")
-	_ = os.MkdirAll(sub, 0o755)
+	o := Owner{Panel: "default/board", Task: "t1"}
 
-	p1, o1 := s.ForRepo("default", "my", repo)
-	p2, _ := s.ForRepo("default", "my", sub)
-	if p1 != p2 || p1 != filepath.Join(root, "my", "weave") {
-		t.Fatalf("got %s and %s", p1, p2)
+	p1 := s.ForOwner("default", "my", o, "任务", "首页配图")
+	if p1 != filepath.Join(root, "my", "任务", "首页配图") {
+		t.Fatalf("got %s", p1)
 	}
 	if _, err := os.Stat(p1); !os.IsNotExist(err) {
 		t.Fatal("folder must not exist before something is put there")
 	}
-	f, err := s.Ensure(p1, o1, "default")
+	f, err := s.Ensure(p1, o, "default")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,11 +27,11 @@ func TestForRepoSharedAcrossSubdirsAndLazy(t *testing.T) {
 	}
 
 	// Renamed in Finder: found again by id.
-	moved := filepath.Join(root, "my", "weave images")
+	moved := filepath.Join(root, "my", "任务", "配图_v2")
 	if err := os.Rename(p1, moved); err != nil {
 		t.Fatal(err)
 	}
-	if p, _ := s.ForRepo("default", "my", repo); p != moved {
+	if p := s.ForOwner("default", "my", o, "任务", "首页配图"); p != moved {
 		t.Fatalf("after the move: %s, want %s", p, moved)
 	}
 	if g, _ := Read(moved); g.ID != f.ID {
@@ -51,27 +39,21 @@ func TestForRepoSharedAcrossSubdirsAndLazy(t *testing.T) {
 	}
 
 	// The project keeps its folder name when the project is renamed.
-	other := filepath.Join(t.TempDir(), "knot")
-	gitInit(t, other)
-	if p, _ := s.ForRepo("default", "renamed", other); p != filepath.Join(root, "my", "knot") {
+	if p := s.ForOwner("default", "renamed", Owner{Panel: "default/board", Task: "t2"}, "任务", "x"); p != filepath.Join(root, "my", "任务", "x") {
 		t.Fatalf("project folder: %s", p)
 	}
 }
 
-func TestSameNameOtherRepo(t *testing.T) {
+func TestSameNameOtherOwner(t *testing.T) {
 	root := t.TempDir()
 	s := New(func() string { return root })
-	a := filepath.Join(t.TempDir(), "app")
-	b := filepath.Join(t.TempDir(), "app")
-	gitInit(t, a)
-	gitInit(t, b)
-	pa, oa := s.ForRepo("p", "p", a)
+	oa, ob := Owner{Panel: "p/board", Task: "t1"}, Owner{Panel: "p/board", Task: "t2"}
+	pa := s.ForOwner("p", "p", oa, "任务", "app")
 	if _, err := s.Ensure(pa, oa, "p"); err != nil {
 		t.Fatal(err)
 	}
-	pb, _ := s.ForRepo("p", "p", b)
-	if pb != pa+"_2" {
-		t.Fatalf("second repo named app: %s", pb)
+	if pb := s.ForOwner("p", "p", ob, "任务", "app"); pb != pa+"_2" {
+		t.Fatalf("second task named app: %s", pb)
 	}
 }
 

@@ -631,7 +631,8 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
         {/* 路径那段手机上藏了，没它撑开的话 ⋯ 会紧跟在标题后面；和终端 pane 一样补一个手机上的占位 */}
         <div className={cn("flex-1", session && "md:hidden")} />
         <AddonSlot name="paneTitle" props={{ pane: paneSnapshot(pane), tab: tabSnapshot(tab) }} />
-        {session && (
+        {/* Only a panel's task has an artifacts folder; Code's own sessions have none (docs/dev/ARTIFACTS.md) */}
+        {session?.artifactsDir && (
           <Button variant="ghost" size="icon" className="size-6 shrink-0" title={t("folder.openHint")} onClick={() => openArtifacts(session.id)}>
             <FolderOpen className="size-3.5" />
           </Button>

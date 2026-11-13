@@ -324,7 +324,7 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 		}
 		return c.Root
 	})
-	artsOf := server.SessionArtifacts(arts, layout, sessionProject(env.Dir, layout))
+	artsOf := server.SessionArtifacts(sessionProject(env.Dir, layout))
 	h, err := hub.New(hub.Options{Dir: env.Dir, ClaudeIdle: env.ClaudeIdle, ExtraAgents: cfgAgents(), LLM: cfgLLM, Defaults: cfgDefaults, Log: log, Ext: em, SkillDirs: sessionSkills(env.Dir, layout, em), MCP: workMCP(env.Dir), Project: sessionProject(env.Dir, layout),
 		Artifacts: func(rec hub.Record) string { d, _, _ := artsOf(rec); return d }})
 	if err != nil {

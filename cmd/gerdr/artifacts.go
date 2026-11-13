@@ -25,10 +25,10 @@ func artifactsCmd() *cobra.Command {
 		Short: i18n.S("产物：这个会话不进仓库、但人要看的东西放哪（打印文件夹），和要记下的链接 / 路径 / 文字",
 			"Artifacts: where this conversation's output that isn't committed goes (prints the folder), and the links / paths / text to record"),
 		Long: i18n.S(`不进仓库、但人要看或要留的东西（生成的图和视频、报告、草稿、导出的数据、要发布的文案）放进产物文件夹；代码和跟代码走的文档照常提交，不放这里。
-文件夹第一次放东西时才建：默认是 ~/Gerdr/<项目>/<仓库>/，同一个仓库的所有会话共用。人在 Gerdr 里浏览、改其中的 Markdown。
+只有面板（看板）开的任务对话才有产物文件夹（每个任务一个，系统提示里写着路径）；普通的 Code 对话没有。文件夹第一次放东西时才建，人在面板里浏览、改其中的 Markdown。
 不是文件的产物记一条：开的 PR / MR（link）、在仓库外建的东西（path）、一句要留下的结果（text）、置顶一个主要文件（pin）。记录只加不删，过时的用 --supersedes 换掉。`,
 			`What the person needs to see or keep but the repository shouldn't hold (generated images and videos, reports, drafts, exported data, copy to publish) goes in the artifacts folder; code and the docs that belong with it are committed as usual, not put here.
-The folder is created the first time something goes in: by default ~/Gerdr/<project>/<repo>/, shared by every session of that repository. The person browses it in Gerdr and edits its Markdown there.
+Only task conversations a panel (a board) started have an artifacts folder (one per task, named in the system prompt); a plain Code conversation has none. The folder is created the first time something goes in; the person browses it on the panel and edits its Markdown there.
 What isn't a file gets a record: a PR / MR you opened (link), something created outside the repository (path), a short result worth keeping (text), the main file among many (pin). Records are never deleted; replace an outdated one with --supersedes.`),
 		Args: cobra.NoArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {

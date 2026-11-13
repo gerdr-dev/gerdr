@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/gerdr-dev/gerdr/internal/artifacts"
-	"github.com/gerdr-dev/gerdr/internal/config"
 	"github.com/gerdr-dev/gerdr/internal/hub"
 	"github.com/gerdr-dev/gerdr/internal/i18n"
 )
@@ -29,23 +28,12 @@ import (
 // (hub.Options.Artifacts) and for this API.
 type ArtifactsPlace func(rec hub.Record) (dir string, owner artifacts.Owner, project string)
 
-// SessionArtifacts: the session's own ArtifactsDir (a panel's task chose it), else its repository's folder in its
-// project, named after the project's name in the layout.
-func SessionArtifacts(st *artifacts.Store, layout *config.Store, project func(hub.Record) string) ArtifactsPlace {
+// SessionArtifacts: the folder whoever started the session gave it (a panel's task: ctx.sessions.start artifactsDir),
+// "" for none. Code sessions have none: an artifacts folder is a board's way of keeping a task's things together, and
+// Code stays as it was (2026-11-13, the user: "code模式下不要有任何我们新加的文件夹产物的逻辑").
+func SessionArtifacts(project func(hub.Record) string) ArtifactsPlace {
 	return func(rec hub.Record) (string, artifacts.Owner, string) {
-		p := project(rec)
-		if rec.ArtifactsDir != "" {
-			return rec.ArtifactsDir, artifacts.Owner{}, p
-		}
-		cwd := rec.Cwd
-		if rec.Workdir != "" {
-			cwd = rec.Workdir
-		}
-		if cwd == "" {
-			return "", artifacts.Owner{}, p
-		}
-		dir, o := st.ForRepo(p, SpaceName(layout.Get(), p), cwd)
-		return dir, o, p
+		return rec.ArtifactsDir, artifacts.Owner{}, project(rec)
 	}
 }
 
@@ -97,7 +85,7 @@ func (s *Server) artifactsTarget(session, dir string) (artifactsTarget, error) {
 	}
 	d, o, p := s.ArtifactsOf(sess.Record())
 	if d == "" {
-		return artifactsTarget{}, errors.New(i18n.S("这个会话没有目录，没有产物文件夹", "This session has no directory, so no artifacts folder"))
+		return artifactsTarget{}, errors.New(i18n.S("这个会话没有产物文件夹：只有面板（看板）开的任务对话才有", "This session has no artifacts folder: only task conversations a panel (board) started have one"))
 	}
 	return artifactsTarget{dir: d, owner: o, project: p, session: session}, nil
 }

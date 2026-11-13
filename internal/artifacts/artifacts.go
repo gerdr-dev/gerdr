@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -80,7 +79,6 @@ type index struct {
 type Store struct {
 	root func() string
 	mu   sync.Mutex
-	repo sync.Map // dir → [2]string{key, name}
 }
 
 // New: root is read on every call (a setting the person may change).
@@ -138,42 +136,6 @@ func (s *Store) rel(p string) string {
 		return r
 	}
 	return p
-}
-
-// RepoOf is the repository a directory is in: its git common dir (shared by every worktree) and a name for its
-// folder (the main checkout's directory name). Outside git: the directory itself and its name.
-func (s *Store) RepoOf(dir string) (key, name string) {
-	if v, ok := s.repo.Load(dir); ok {
-		r := v.([2]string)
-		return r[0], r[1]
-	}
-	key, name = dir, filepath.Base(dir)
-	out, err := exec.Command("git", "-C", dir, "rev-parse", "--path-format=absolute", "--git-common-dir").Output()
-	if c := strings.TrimSpace(string(out)); err == nil && c != "" {
-		key = filepath.Clean(c)
-		if filepath.Base(key) == ".git" {
-			name = filepath.Base(filepath.Dir(key))
-		} else { // a bare repository: weave.git
-			name = strings.TrimSuffix(filepath.Base(key), ".git")
-		}
-	}
-	s.repo.Store(dir, [2]string{key, name})
-	return key, name
-}
-
-// ForRepo is the folder of the repository cwd is in, for a session of the given project (its id and the name it
-// shows). It may not exist yet. A folder the person moved or renamed is found again by its id.
-func (s *Store) ForRepo(projectID, projectName, cwd string) (string, Owner) {
-	key, name := s.RepoOf(cwd)
-	o := Owner{Repo: key}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	ix := s.loadIndex()
-	if p, ok := s.known(&ix, o); ok {
-		return p, o
-	}
-	base := filepath.Join(s.projectDir(ix, projectID, projectName), safeName(name))
-	return s.free(base, o), o
 }
 
 // ForOwner is the folder of something a panel owns (a task: Owner{Panel, Task}), named name under the project's

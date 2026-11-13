@@ -1,7 +1,15 @@
 # Artifacts: folders and records a piece of work leaves behind
 
-Status: agreed 2026-11-12. Built: the core, the Code side and panels ("Order" 1–3, see "As built"); the
-Superagent panel uses them (its DESIGN.md "任务文件夹"). Not yet: team.
+Status: agreed 2026-11-12. Built: the core and panels (see "As built"); the Superagent panel uses them (its DESIGN.md
+"任务文件夹"). **Code has none since 2026-11-13** (below): an artifacts folder is a board's capability, for its tasks.
+
+## Code keeps none (2026-11-13)
+
+Built first for Code too (one folder per repository, `~/Gerdr/<project>/<repo>/`, named in every session's prompt,
+a folder button on every session pane). The user: "我希望code模式下不要有任何我们新加的文件夹产物的逻辑，我希望他保持原样。
+文件夹产物应该是看板……的一个能力。" So a session has an artifacts folder only when whoever started it gave one
+(`ctx.sessions.start({ artifactsDir })`: a panel's task); no prompt section, no pane button, and `gerdr artifacts`
+says there is none otherwise. `Store.ForRepo` went with it; the parts below about Code are history.
 
 ## Why
 
@@ -151,14 +159,14 @@ is in `tasks/work-on-content.md`, not in code.
 - `internal/artifacts`: the root (config.json `artifactsRoot`, default `~/Gerdr`), `ForRepo` (git common dir → folder,
   `name_2` when another repository of the same name has it), `Ensure` (identity, `.gerdrignore`, index), records
   (`Record` / `Items`), `List`, `Trash`. A directory an agent made by itself is adopted the first time it is looked at.
-- Sessions: `hub.Record.ArtifactsDir` (explicit, kept across agent switches) else `server.SessionArtifacts` (its repo's
-  folder in its project, named after the project's display name). Handed to the adapter as `_meta gerdr.artifactsDir`:
+- Sessions: `hub.Record.ArtifactsDir` (explicit, kept across agent switches; `server.SessionArtifacts` gives only that:
+  Code sessions have none). Handed to the adapter as `_meta gerdr.artifactsDir`:
   `agentwire.SessionPrompt` adds the "Artifacts folder" section; claude gets `--add-dir` once the folder exists (it
   refuses a missing one, so the very first write may ask); codex gets it as a `writableRoots` of workspace-write.
 - API: `server/artifactsapi.go`; `/api/fs/stat?hash=1` gives the sha256 an editor saves against (`PUT /api/fs/file?ifMatch=`).
 - CLI `gerdr artifacts` (`cmd/gerdr/artifacts.go`); auto-approved for agents (`sysenv.SafeGerdrCLI`) unless it names
   `--dir` / `--session` (Gerdr would write a `.gerdr/` wherever told). The built-in gerdr skill documents it.
-- UI: `components/folder/` (`Folder`, `Records`, `MdEditor`); the folder button in a session pane's title bar opens it
+- UI: `components/folder/` (`Folder`, `Records`, `MdEditor`); the folder button in a session pane's title bar (only a session with an `artifactsDir`) opens it
   as a pane beside (a `file` pane with `folder: true`, `actions/files.ts` `openArtifacts`). ⌘S saves inside the editor:
   elements can claim keys from the global shortcuts with `data-own-keys` (`lib/commands.ts`). Editor styles:
   `src/folder.css`. tiptap is loaded only when a .md is opened, and imported only through `@tiptap/react` + extension
