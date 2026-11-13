@@ -267,6 +267,13 @@ type Hub struct {
 	opt  Options
 	log  *slog.Logger
 	cmds *cmdCache
+
+	// The last summary broadcast per session, as JSON (subs.go sameAsSent). Many callers broadcast "something may
+	// have changed", and about one push in eight (measured while agents ran) was identical to the one before. Each
+	// costs every client a store update: on a phone with hundreds of sessions ~10ms of main thread, frames dropped.
+	sentMu sync.Mutex
+	sent   map[string][]byte
+
 	// cmdSets: command lists by content, so a Summary carries a key instead of the list (commands.go)
 	cmdSets cmdSets
 	optSets optSets // mode / option lists by content, the same way (commands.go)
@@ -1081,6 +1088,7 @@ func (h *Hub) Delete(ctx context.Context, id string) error {
 	_ = os.RemoveAll(s.shellDir()) // `!命令` 的完整输出（shell.go）
 	_ = os.Remove(s.handoffFile()) // the transcript handed to the agent (handoff.go)
 	h.saveIndex()
+	h.forgetSent(id)
 	h.broadcast(Msg{T: "session_removed", ID: id})
 	h.ended(id, "deleted")
 	return nil

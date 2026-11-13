@@ -1,6 +1,6 @@
 import { ArrowUp, File as FileIcon, ImagePlus, Loader2, Paperclip, Square, X, CornerDownRight, Zap, Pin, PinOff } from "lucide-react";
 import { flushSync } from "react-dom";
-import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { forwardRef, memo, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "../ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../ui/dropdown-menu";
@@ -90,7 +90,7 @@ const keepInView = (el: HTMLElement | null) => {
   el?.scrollIntoView({ block: "nearest" });
 };
 
-export const Composer = forwardRef<
+const ComposerImpl = forwardRef<
   ComposerHandle,
   {
     session: ChatSession;
@@ -1243,6 +1243,12 @@ export const Composer = forwardRef<
     </div>
   );
 });
+
+/**
+ * Memo'd: ChatView re-renders on every streamed chunk, and the Composer (with its option menus) needs none of them.
+ * ChatView hands it stable callbacks for this; a host rendering it should too.
+ */
+export const Composer = memo(ComposerImpl);
 
 /** 上下文用了多少（照 Claude Code 的「Context left until auto-compact」）：过半才显眼，快满变色。 */
 function ContextMeter({ c, short }: { c: { tokens: number; window: number }; short?: boolean }) {

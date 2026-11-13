@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { ArrowDown, CornerDownRight } from "lucide-react";
 import { Button } from "../ui/button";
@@ -361,6 +361,17 @@ export function ChatView({
   // 行是 memo 的，回调要稳定（不然每次都重渲染），但又要拿到最新的 —— 放在 ref 里转一手
   const latest = useRef({ doRewind, sessionId: session.id, session, running, openGroups, setOpenGroups, msgs, sendQueuedNow });
   latest.current = { doRewind, sessionId: session.id, session, running, openGroups, setOpenGroups, msgs, sendQueuedNow };
+  // The Composer is memo'd and these are its callbacks: stable, reading the latest through refs. Fresh closures on
+  // every render made it (and its option menus) re-render on each streamed chunk, a third of a phone's JS meanwhile.
+  const composerHistory = useCallback(() => olderRef.current.all, []);
+  const onEmptyEnter = useCallback((mod: boolean) => {
+    if (!mod || !latest.current.running) return scrollToEnd();
+    void latest.current.sendQueuedNow().then((done) => done || scrollToEnd());
+  }, []);
+  const queuedAhead = useCallback(
+    () => (latest.current.msgs.some((m) => m.metadata?.queued && !m.metadata.held) ? () => void latest.current.sendQueuedNow() : undefined),
+    [],
+  );
   // Agents that rewind to a steer on its own (they advertise steering.rewind); codex can't, its revert cuts whole turns.
   const steerRewind = ["claude", "native"].includes(session.base ?? session.agent);
   const env = useMemo<RowEnv>(
@@ -519,15 +530,10 @@ export function ChatView({
                 session={session}
                 paneId={paneId}
                 running={t.running}
-                history={() => olderRef.current.all}
+                history={composerHistory}
                 shellDone={shellDone}
-                onEmptyEnter={(mod) => {
-                  if (!mod || !t.running) return scrollToEnd();
-                  void sendQueuedNow().then((done) => done || scrollToEnd());
-                }}
-                queuedAhead={() =>
-                  latest.current.msgs.some((m) => m.metadata?.queued && !m.metadata.held) ? () => void latest.current.sendQueuedNow() : undefined
-                }
+                onEmptyEnter={onEmptyEnter}
+                queuedAhead={queuedAhead}
               />
             </div>
           )}

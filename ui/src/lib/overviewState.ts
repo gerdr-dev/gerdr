@@ -1,6 +1,6 @@
 // The overview's stored state and the read side of it. Kept apart from overview.ts, which needs the store: the store
 // loads this at creation, and a store <-> overview import cycle would hand it an undefined loadOverview.
-import { allLeaves, currentSpace, mutedSession, spaceOf, type Layout } from "./layout";
+import { allLeaves, currentSpace, spaceOf, type Layout } from "./layout";
 import { compareSessions, sessionRank, sessionSince } from "./order";
 import type { SessionSummary } from "./types";
 
@@ -109,14 +109,16 @@ export type ActiveSrc = {
  * Open agents (some pane shows them) with their project, each once. A panel's agent conversation is no pane's, so it's
  * never here: Code and panels are apart, the panel's agent has its own place (the panel's right side, its rail dot).
  */
-export function openSessionsWithProject(l: Layout, sessions: Record<string, SessionSummary>): { s: SessionSummary; project: string }[] {
+export function openSessionsWithProject(
+  l: Layout,
+  sessions: Record<string, SessionSummary>,
+): { s: SessionSummary; project: string; /** mutedSession(l, s.id), found on the same walk */ muted: boolean }[] {
   const seen = new Set<string>();
-  const out: { s: SessionSummary; project: string }[] = [];
-  const add = (id: string | undefined, project: string) => {
-    const s = id ? sessions[id] : undefined;
-    if (s && !seen.has(s.id)) (seen.add(s.id), out.push({ s, project }));
-  };
-  for (const { ws, pane } of allLeaves(l)) add(pane.sessionId, spaceOf(ws));
+  const out: { s: SessionSummary; project: string; muted: boolean }[] = [];
+  for (const { ws, pane } of allLeaves(l)) {
+    const s = pane.sessionId ? sessions[pane.sessionId] : undefined;
+    if (s && !seen.has(s.id)) (seen.add(s.id), out.push({ s, project: spaceOf(ws), muted: !!ws.muted }));
+  }
   return out;
 }
 
@@ -125,21 +127,27 @@ export function openSessionsWithProject(l: Layout, sessions: Record<string, Sess
  * (it rejoins when it starts or ends a turn). Unseen has to honour the dismissal too: unread is per device while
  * "active" is shared, so another device that hasn't seen it would otherwise pin back what you just took out.
  */
-export function joinsOnItsOwn(s: SessionSummary, st: Pick<ActiveSrc, "config" | "unread">): boolean {
+export function joinsOnItsOwn(s: SessionSummary, st: Pick<ActiveSrc, "config" | "unread">, conf = activeConf(st.config)): boolean {
   const rank = sessionRank(s, st.unread);
   if (rank < 2) return true;
-  const d = activeConf(st.config).dismissed[s.id];
+  const d = conf.dismissed[s.id];
   return rank <= 3 && !(d !== undefined && sessionSince(s) <= d);
 }
 
-/** Joins on its own (joinsOnItsOwn), unless it sits in a muted group (Workspace.muted): those only come in by hand. */
-const joins = (s: SessionSummary, st: ActiveSrc) => joinsOnItsOwn(s, st) && !mutedSession(st.layout, s.id);
+/**
+ * Joins on its own (joinsOnItsOwn), unless it sits in a muted group (Workspace.muted): those only come in by hand.
+ * Takes the parsed conf and the walk's muted flag rather than looking them up per session: activeIds runs on every
+ * pushed summary, in several components, and the per-session activeConf + mutedSession (a walk of every pane) made it
+ * quadratic, the biggest JS cost of a push on a phone.
+ */
+const joins = (x: { s: SessionSummary; muted: boolean }, st: ActiveSrc, conf: ActiveConf) => !x.muted && joinsOnItsOwn(x.s, st, conf);
 
 /** Open agents (any project) that joined on their own but aren't pinned yet: lib/overview.ts pins them, so they stay. */
 export function toPin(st: ActiveSrc): string[] {
-  const added = new Set(activeConf(st.config).added);
+  const conf = activeConf(st.config);
+  const added = new Set(conf.added);
   return openSessionsWithProject(st.layout, st.sessions)
-    .filter((x) => !added.has(x.s.id) && joins(x.s, st))
+    .filter((x) => !added.has(x.s.id) && joins(x, st, conf))
     .map((x) => x.s.id);
 }
 
@@ -158,9 +166,8 @@ export function activeIds(st: ActiveSrc): string[] {
   const space = currentSpace(st.layout);
   const all = o.allIn.includes(space);
   const added = new Set(o.added);
-  const isActive = (s: SessionSummary) => added.has(s.id) || joins(s, st);
   return openSessionsWithProject(st.layout, st.sessions)
-    .filter((x) => (all || x.project === space) && isActive(x.s))
+    .filter((x) => (all || x.project === space) && (added.has(x.s.id) || joins(x, st, o)))
     .map((x) => x.s)
     .sort((a, b) => compareSessions(a, b, st.unread))
     .map((s) => s.id);

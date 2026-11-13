@@ -79,7 +79,9 @@ function useAttention() {
       const inboxErrors = inbox.error !== false;
       for (const cur of Object.values(s.sessions)) {
         const old = before[cur.id];
-        if (!old) continue;
+        // A push replaces one summary and keeps the others' objects: skip the unchanged ones before anything costly
+        // (mutedSession walks every pane; per session on every push it was most of a phone's JS for a pushed summary).
+        if (!old || old === cur) continue;
         const seen = visible.has(cur.id) && !away;
         // Muted group (do not disturb): the row still turns unread, but no system notification
         const quiet = seen || mutedSession(s.layout, cur.id);

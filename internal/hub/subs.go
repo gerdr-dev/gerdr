@@ -1,7 +1,9 @@
 package hub
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"sync"
 	"time"
 )
@@ -166,7 +168,35 @@ func (h *Hub) broadcast(m Msg) {
 
 func (h *Hub) broadcastSession(s *Session) {
 	sum := s.Summary()
+	if h.sameAsSent(sum) {
+		return
+	}
 	h.broadcast(Msg{T: "session", ID: sum.ID, Session: &sum})
+}
+
+// sameAsSent reports whether sum is what was last broadcast for its session, and records it if not.
+func (h *Hub) sameAsSent(sum Summary) bool {
+	b, err := json.Marshal(sum)
+	if err != nil {
+		return false
+	}
+	h.sentMu.Lock()
+	defer h.sentMu.Unlock()
+	if h.sent == nil {
+		h.sent = map[string][]byte{}
+	}
+	if bytes.Equal(h.sent[sum.ID], b) {
+		return true
+	}
+	h.sent[sum.ID] = b
+	return false
+}
+
+// forgetSent drops a removed session's last summary, so one coming back under the same id is pushed again.
+func (h *Hub) forgetSent(id string) {
+	h.sentMu.Lock()
+	delete(h.sent, id)
+	h.sentMu.Unlock()
 }
 
 func (h *Hub) broadcastEvents(id string, evs []*Event, reset bool) {
