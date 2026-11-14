@@ -77,7 +77,7 @@
 
   <div id="ak" hidden>
     <button id="akBtn" class="primary wide">用 Face ID 验证</button>
-    <div class="hint">这台手机登记过密钥：刷一下脸就好，不用开浏览器。</div>
+    <div class="hint" id="akHint">这台手机登记过密钥：刷一下脸就好，不用开浏览器。</div>
   </div>
 
   <div id="pk" hidden>
@@ -126,7 +126,9 @@
   if (droid) {
     droid.onmessage = function (e) {
       var m; try { m = JSON.parse(e.data); } catch (x) { return; }
-      if (m.t === "hello") { nativeLogin = !m.webauthn; $("scan").hidden = !m.scan; $("safariBox").hidden = m.platform !== "ios"; akShell = !!m.appKey; maybeAppKey(); }
+      if (m.t === "hello") { nativeLogin = !m.webauthn; $("scan").hidden = !m.scan; $("safariBox").hidden = m.platform !== "ios"; akShell = !!m.appKey;
+        if (m.platform === "android") { $("akBtn").textContent = "用指纹验证"; $("akHint").textContent = "这台手机登记过密钥：验一下指纹 / 人脸就好，不用开浏览器。"; }
+        maybeAppKey(); }
       if (m.t === "appkey") {
         busy = false; $("akBtn").disabled = false;
         if (m.state === "done") enter();

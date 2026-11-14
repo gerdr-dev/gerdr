@@ -94,6 +94,17 @@ one more route, same origin, same certificate and credentials. On by default; `"
 不用 passkey —— 本机口凭令牌本来就能出配对码，批准给的能力一样）。App 轮询领到设备凭据、写进 WebView 的 cookie。
 两条别破：码**手输**，不从 URL 带进批准页（防钓鱼）；发起要求至少注册过一把 passkey（不然远程没人批得了，直接说用配对码）。
 
+## App key: re-verify with a fingerprint, where passkeys don't work
+
+Phones whose WebView can't do passkeys (hello `webauthn: false`) sign in and re-verify through the browser device
+flow, every `reauthHours`. Like the iOS App (docs/dev/IOS.md "App key", same server endpoints and rules,
+`internal/auth/appkey.go`), they now keep a P-256 key in the Android Keystore (StrongBox when there is one), made and
+registered silently right after a browser approval (`MainActivity.enrollAppKey`), each signature behind a strong
+biometric through the platform `BiometricPrompt` (not androidx's: MainActivity is a ComponentActivity), voided when a
+new fingerprint is enrolled. hello says `appKey` (strong biometric set up, Android 10+, and passkeys not available in
+the WebView); the pairing page's "verify with Face ID" then sends `appkey`, the shell answers `appkey {state}`.
+Phones that do passkeys in the WebView don't use it: they re-verify with a passkey in place already.
+
 ## 后台通知
 
 App 关着 / 锁屏时，一个前台服务（`NoticeService`）挂在两个长轮询上，**不经过任何第三方**（国内机型多半没有 Google 服务，FCM 收不到还不报错）：
@@ -148,6 +159,7 @@ below (hello, theme, open, setup, login, copyImage, lan, route); keep the two sh
 | `lan` | 页 → 壳 | 局域网直连的候选 `origins` |
 | `route` | 壳 → 页 | 开着的连接各走哪条路（顶栏的点：绿 = 直连、蓝 = 中继） |
 | `login` | 页 → 壳 → 页 | passkey 退路：`reauth`；回 `state`（done / error / cancel）+ `msg` |
+| `appkey` | 页 → 壳 → 页 | Re-verify with the App key (fingerprint; "App key" above); answers `state` (done / error / cancel) + `msg`. Offered only when hello says `appKey` and whoami says the device has one |
 | `notify` | 页 ↔ 壳 | 后台通知的开关 / 权限 / 电池优化 / 试一下 |
 | `volkeys` / `key` | 页 ↔ 壳 | 音量键当 ↑ / ↓（等于在焦点会话的输入框里按方向键：翻历史、提问时选选项） |
 | `arrows` | 页 → 壳 | Whether ↑ / ↓ have a use right now (soft keyboard up, a dropdown open, a question waiting in the focused session: `syncArrows`). Off = the volume keys stay volume keys. Never sent (an older page) = always mapped, the old behaviour |

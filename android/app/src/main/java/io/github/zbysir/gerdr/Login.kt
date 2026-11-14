@@ -57,6 +57,29 @@ class Login(private val origin: String, private val ua: String) {
         }
     }
 
+    // ---- App key (AppKey.kt, server appkey.go): every call carries the device cookie; blocking like the rest ----
+
+    /** Register this device's App key; only right after a presence proof (an approval), which is when it's called. */
+    fun registerAppKey(pub: ByteArray, cookie: String) {
+        val (status, b) = post("/api/remote/appkey/register", JSONObject().put("pub", b64(pub)), cookie)
+        if (status != 200) throw Failure(b.optString("error").ifEmpty { "HTTP $status" })
+    }
+
+    class Challenge(val nonce: String, val host: String, val deviceId: String)
+
+    fun appKeyChallenge(cookie: String): Challenge {
+        val (status, b) = post("/api/remote/appkey/challenge", JSONObject(), cookie)
+        if (status != 200 || b.optString("nonce").isEmpty()) throw Failure(b.optString("error").ifEmpty { "HTTP $status" })
+        return Challenge(b.getString("nonce"), b.getString("host"), b.getString("deviceId"))
+    }
+
+    fun verifyAppKey(nonce: String, sig: ByteArray, cookie: String) {
+        val (status, b) = post("/api/remote/appkey/verify", JSONObject().put("nonce", nonce).put("sig", b64(sig)), cookie)
+        if (status != 200) throw Failure(b.optString("error").ifEmpty { "HTTP $status" })
+    }
+
+    private fun b64(b: ByteArray) = android.util.Base64.encodeToString(b, android.util.Base64.NO_WRAP)
+
     private fun post(path: String, body: JSONObject, cookie: String?): Pair<Int, JSONObject> {
         val c = URL(origin + path).openConnection() as HttpURLConnection
         try {

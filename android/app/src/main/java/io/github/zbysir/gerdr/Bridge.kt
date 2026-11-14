@@ -72,7 +72,10 @@ class Bridge(private val act: MainActivity, web: WebView, origin: String) {
                 send(
                     JSONObject().put("t", "hello").put("platform", "android")
                         .put("version", BuildInfo.version(act)).put("webauthn", act.webAuthn).put("scan", true)
-                        .put("copyImage", true).put("update", true).put("keyboard", true),
+                        .put("copyImage", true).put("update", true).put("keyboard", true)
+                        // appKey: re-verify with a fingerprint (AppKey.kt), only where passkeys don't work in the
+                        // WebView; the pairing page offers it when the server says this device registered one
+                        .put("appKey", !act.webAuthn && AppKey.available(act)),
                 )
                 keyboard(act.hardKeyboard()) // whether menus show their shortcut keys (ui lib/hwKeyboard.ts)
                 send(LanRoute.snapshot()) // 顶栏那个「直连 / 中继」标签的初值
@@ -105,6 +108,7 @@ class Bridge(private val act: MainActivity, web: WebView, origin: String) {
             // Pair page's scan button; the answer comes back as `scan` (scanResult)
             "scan" -> act.scanPair()
             "login" -> act.startLogin(m.optBoolean("reauth"))
+            "appkey" -> act.verifyWithAppKey()
             "loginCancel" -> act.cancelLogin()
             // 局域网直连口的候选（`https://192.168.x.x:7878`），换路由壳做，不换 origin（LanRoute）
             "lan" -> {
@@ -154,6 +158,13 @@ class Bridge(private val act: MainActivity, web: WebView, origin: String) {
     fun notifyState(m: JSONObject) = send(m)
 
     /** 登录流程的进展：`done` / `error`（带 `msg`）/ `cancel` */
+    /** Answer to the pairing page's "verify with fingerprint" (MainActivity.verifyWithAppKey): done / cancel / error */
+    fun appKeyState(state: String, msg: String? = null) {
+        val m = JSONObject().put("t", "appkey").put("state", state)
+        if (msg != null) m.put("msg", msg)
+        send(m)
+    }
+
     fun loginState(state: String, msg: String? = null) {
         val m = JSONObject().put("t", "login").put("state", state)
         if (msg != null) m.put("msg", msg)

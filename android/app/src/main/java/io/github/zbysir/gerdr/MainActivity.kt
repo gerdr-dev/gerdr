@@ -9,6 +9,7 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.net.Uri
+import android.util.Log
 import android.net.http.SslError
 import android.os.Build
 import android.os.Bundle
@@ -734,7 +735,11 @@ class MainActivity : ComponentActivity() {
 
     private fun approved(run: LoginRun, o: String, token: String?) {
         if (run.cancelled) return
-        if (token == null) return endLogin(run, "done", null) // 重验：凭据没换，服务端已经续上了
+        if (token == null) { // 重验：凭据没换，服务端已经续上了
+            cookieToken(o)?.let { enrollAppKey(o, it) }
+            return endLogin(run, "done", null)
+        }
+        enrollAppKey(o, token)
         // 新设备：令牌就是设备凭据本身，和配对出来的那份 cookie 认的是同一张表。
         // 属性照抄服务端的 IssueCookie（HttpOnly + SameSite=Strict + https 时 Secure），
         // 寿命给满 400 天 —— 实际有效期服务端说了算，whoami 每次还会重新下发一遍
@@ -746,6 +751,68 @@ class MainActivity : ComponentActivity() {
             NoticeService.start(this) // 有凭据了，后台通知可以接上了
             askNotifyOnce()
         }
+    }
+
+    // ---- App key (AppKey.kt): a fingerprint instead of the browser next time ----
+
+    /**
+     * Right after an approval (the presence proof the server wants within minutes): make this device's key and
+     * register it, in the background and silently. Making a key needs no fingerprint; using it does. Only where the
+     * WebView can't do passkeys (those phones re-verify with a passkey in place). Failing only means the browser
+     * again next time, so it's logged, not shown.
+     */
+    private fun enrollAppKey(o: String, cookie: String) {
+        if (webAuthn || !AppKey.available(this)) return
+        val ua = webUA
+        Thread {
+            try {
+                Login(o, ua).registerAppKey(AppKey.create(o), cookie)
+            } catch (e: Exception) {
+                AppKey.delete(o)
+                Log.i("AppKey", "not registered: $e")
+            }
+        }.start()
+    }
+
+    /** The pairing page's "verify with fingerprint": challenge → BiometricPrompt → signature → the server renews this device. */
+    fun verifyWithAppKey() {
+        val o = origin ?: return
+        val cookie = cookieToken(o)
+        fun reply(state: String, msg: String?) {
+            main.post { bridge?.appKeyState(state, msg) }
+        }
+        if (cookie == null || !AppKey.exists(o)) return reply("error", "这台手机上没有登记过的密钥，用浏览器批准一次")
+        val api = Login(o, webUA)
+        Thread {
+            val c = try {
+                api.appKeyChallenge(cookie)
+            } catch (e: Login.Failure) {
+                return@Thread reply("error", e.message)
+            }
+            // The host signed is the server's; it must be the one this App was pointed at
+            if (!c.host.equals(Uri.parse(o).host, ignoreCase = true)) return@Thread reply("error", "服务器报的地址和 App 里的不一致")
+            main.post {
+                AppKey.sign(this, o, c.host, c.deviceId, c.nonce) { r ->
+                    when (r) {
+                        is AppKey.Result.Signed -> Thread {
+                            try {
+                                api.verifyAppKey(c.nonce, r.der, cookie)
+                                reply("done", null)
+                            } catch (e: Login.Failure) {
+                                reply("error", e.message)
+                            }
+                        }.start()
+                        is AppKey.Result.Cancelled -> reply("cancel", null)
+                        is AppKey.Result.Failed -> {
+                            Log.i("AppKey", "sign failed: ${r.msg}")
+                            // Voided (a new fingerprint enrolled): the browser approval makes a new key
+                            if (r.voided) AppKey.delete(o)
+                            reply("error", "指纹验证没成（密钥可能已失效），用浏览器批准一次")
+                        }
+                    }
+                }
+            }
+        }.start()
     }
 
     /** 收尾：摘掉浮层、关掉批准页、告诉页面结果。done 之后页面自己翻进去（Pairing 的 onDone） */
