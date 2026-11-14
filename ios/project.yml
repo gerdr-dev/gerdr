@@ -51,6 +51,8 @@ targets:
           - UIInterfaceOrientationLandscapeRight
         # The page's <input type=file> offers "Take Photo / Video"; without these iOS kills the App on that tap
         NSCameraUsageDescription: Take a photo or video to attach to a conversation.
+        # Re-verifying this device with its App key (AppKey.swift); without it Face ID kills the App on first use
+        NSFaceIDUsageDescription: Verify that it's you before Gerdr lets this phone back in.
         NSMicrophoneUsageDescription: Record audio for a video or voice input in a conversation.
         # http://localhost / LAN IPs only while debugging against `make dev`; the real address is always https
         NSAppTransportSecurity:

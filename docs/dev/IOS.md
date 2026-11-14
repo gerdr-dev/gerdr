@@ -108,6 +108,31 @@ neither covering a custom domain on its own: `webcredentials:*.<relay domain>` f
 passkeys under a fixed project domain as RP ID (each Gerdr also accepting that RP ID for credentials it registered).
 So: one path for every domain, the browser device flow.
 
+## App key: re-verify with Face ID, not the browser
+
+Devices re-verify every `reauthHours` (24 by default), and on iOS that meant the browser flow every day. Instead
+the App keeps its own key per server (`AppKey.swift`, server `internal/auth/appkey.go`, `server/appkey.go`):
+
+- **Enroll**: right after a browser approval succeeds (new device or re-verification), the App makes a P-256 key in
+  the Secure Enclave (`.privateKeyUsage` + `.biometryCurrentSet`: every signature needs Face ID / Touch ID, a new
+  face or finger voids it) and registers the public half: `POST /api/remote/appkey/register`. Silent: making the key
+  needs no Face ID. The enclave's blob goes in the Keychain, this device only.
+- **Re-verify**: the pairing page in re-verify mode, when hello says `appKey` (enclave + biometrics) and whoami says
+  this device has one, shows "verify with Face ID" and tries it once by itself; the page sends `appkey`, the shell
+  does `challenge` → Face ID → `verify` and answers `appkey {state}`; done → the page goes in. Failure (key voided,
+  cancelled) leaves the browser approval below.
+- **Why it isn't weaker**: the server only accepts a key from a device whose presence proof is minutes old (a
+  passkey, an approval, a pairing) and never from a temporary pairing-code device, so a stolen cookie can't plant
+  its own key and skip re-verification. The signature covers `gerdr-appkey-v1\n<host>\n<device id>\n<nonce>`: the
+  nonce is single-use (2 min), bound to the device, and the host stops a look-alike server from reusing what it
+  collects; the App also refuses a challenge whose host isn't the one it was pointed at. Wrong signatures count
+  against the remote rate limit. It renews `VerifiedAt` only: `PasskeyAt` (needed to add another passkey) stays a
+  real passkey, a temporary device stays temporary.
+- `challenge` / `verify` are public paths (a device due for re-verification reaches nothing else; the cookie still
+  identifies it). Revoking the device drops its key.
+- Android could use the same endpoints (Android Keystore / StrongBox + BiometricPrompt); not done, since its App
+  can already use passkeys in place.
+
 ## LAN routing: same origin, another route (iOS 17+)
 
 Android's design unchanged (docs/dev/ANDROID.md "局域网直连", the three rules in LanRoute.swift's comment); only the

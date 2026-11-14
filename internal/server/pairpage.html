@@ -75,6 +75,11 @@
   <p id="lead">在跑 Gerdr 的那台机器上打开「设置 → 远程访问 → 配对新设备」，或者执行 <code>gerdr remote pair</code>，
     用这台设备的相机扫那个二维码，或者把 8 位码抄到下面。一台设备配一次，之后直接进。</p>
 
+  <div id="ak" hidden>
+    <button id="akBtn" class="primary wide">用 Face ID 验证</button>
+    <div class="hint">这台手机登记过密钥：刷一下脸就好，不用开浏览器。</div>
+  </div>
+
   <div id="pk" hidden>
     <button id="pkBtn" class="primary wide">用 passkey 登录</button>
     <div class="hint" id="pkHint">不用回机器前 —— 这是 passkey 的主要好处。</div>
@@ -108,10 +113,25 @@
   // The iOS App (ios/) injects gerdrIOS with the same shape and messages; it always says webauthn=false
   // (its WKWebView can't use the passkey without an Associated Domains entitlement, docs/dev/IOS.md).
   var droid = window.gerdrAndroid || window.gerdrIOS, nativeLogin = false;
+  // App key (server appkey.go, ios/Gerdr/AppKey.swift): when re-verifying, an App whose phone can do it (hello appKey)
+  // and a device the server says registered a key (whoami appKey) get "verify with Face ID", tried once by itself.
+  // The hello reply and whoami land in either order: decide when both are in
+  var akShell = null, akDevice = null, akTried = false;
+  function maybeAppKey() {
+    if (akShell === null || akDevice === null) return;
+    var on = akShell && akDevice;
+    $("ak").hidden = !on;
+    if (on && !akTried) { akTried = true; $("akBtn").click(); }
+  }
   if (droid) {
     droid.onmessage = function (e) {
       var m; try { m = JSON.parse(e.data); } catch (x) { return; }
-      if (m.t === "hello") { nativeLogin = !m.webauthn; $("scan").hidden = !m.scan; $("safariBox").hidden = m.platform !== "ios"; }
+      if (m.t === "hello") { nativeLogin = !m.webauthn; $("scan").hidden = !m.scan; $("safariBox").hidden = m.platform !== "ios"; akShell = !!m.appKey; maybeAppKey(); }
+      if (m.t === "appkey") {
+        busy = false; $("akBtn").disabled = false;
+        if (m.state === "done") enter();
+        else if (m.state === "error") { err(m.msg || "没验证成"); $("ak").hidden = true; } // the passkey / browser path stays below
+      }
       if (m.t === "login") {
         busy = false; $("pkBtn").disabled = false;
         if (m.state === "done") enter();
@@ -235,6 +255,13 @@
     }
   };
 
+  $("akBtn").onclick = function () {
+    if (busy || !droid) return;
+    busy = true; err("");
+    $("akBtn").disabled = true;
+    droid.postMessage(JSON.stringify({ t: "appkey" }));
+  };
+
   /* ---------------- 进页面先问一次「我是谁」 ---------------- */
 
   if (new URLSearchParams(location.search).get("e") === "code") err("配对码不对或者已经过期了：回机器上再出一个。");
@@ -243,6 +270,7 @@
     // 配对码进来的设备只是临时的（auth.Device.Temp）：先说清楚，免得半小时后莫名其妙掉线
     if (who.pairMinutes > 0) $("temp").textContent = "配对码进来的设备只能用 " + who.pairMinutes + " 分钟；要一直用，进去后在「设置 → 远程访问」里加一把 passkey。";
     var reauth = who.need === "passkey";
+    akDevice = reauth && !!who.appKey && !!droid;
     if (reauth) {
       $("title").textContent = "需要再验证一次";
       $("lead").textContent = "这台设备配过对，只是太久没做过生物验证了。";
@@ -259,6 +287,7 @@
     } else {
       $("code").focus();
     }
+    maybeAppKey();
   }).catch(function (e) { err(e.message); });
 })();
 </script>

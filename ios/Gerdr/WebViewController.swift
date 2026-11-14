@@ -1,4 +1,5 @@
 import SafariServices
+import LocalAuthentication
 import Network
 import UIKit
 import UniformTypeIdentifiers
@@ -168,7 +169,10 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
             // webauthn false: the pairing page hands its passkey button to us (startLogin). copyImage: the
             // page's long-press "copy image" goes through the shell (UIPasteboard)
             // lan: this App routes over the LAN, so the page sends candidates and draws the LAN / relay label
-            post(["t": "hello", "platform": "ios", "version": appVersion, "webauthn": false, "scan": false, "copyImage": true, "lan": route != nil])
+            // appKey: this phone can re-verify with Face ID (Secure Enclave + biometrics set up); the pairing page
+            // offers it when the server says this device registered one
+            post(["t": "hello", "platform": "ios", "version": appVersion, "webauthn": false, "scan": false, "copyImage": true,
+                  "lan": route != nil, "appKey": AppKey.available])
             route?.announce() // a new document: its label starts from the current state
         case "theme":
             applyTheme(m["bg"] as? String ?? "", light: m["light"] as? Bool ?? true)
@@ -178,6 +182,8 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
             root?.showSetup(nil)
         case "login":
             startLogin(reauth: m["reauth"] as? Bool ?? false)
+        case "appkey":
+            verifyWithAppKey()
         case "lan":
             route?.setCandidates(m["origins"] as? [String] ?? [])
         case "copyImage":
@@ -451,7 +457,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         guard login == nil else { return }
         let run = LoginRun(reauth: reauth)
         login = run
-        let api = Login(origin: origin, ua: ua.isEmpty ? "Mozilla/5.0 (iPhone) GerdrApp/\(appVersion)" : ua)
+        let api = Login(origin: origin, ua: loginUA)
         run.task = Task { [weak self] in
             do {
                 var cookie: String?
@@ -503,7 +509,10 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
 
     private func approved(_ run: LoginRun, token: String?) async {
         guard !run.cancelled else { return }
-        guard let token else { return endLogin(run, "done", nil) } // re-verified: same credential, renewed on the server
+        guard let token else { // re-verified: same credential, renewed on the server
+            if let c = await cookieToken() { await enrollAppKey(cookie: c) }
+            return endLogin(run, "done", nil)
+        }
         // A new device: the token is the device credential itself, the same table a pairing's cookie is in.
         // Attributes as the server's IssueCookie (host-only, HttpOnly, SameSite=Strict, Secure on https); 400 days,
         // the server decides the real lifetime and whoami sends it again anyway
@@ -523,8 +532,62 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
             return endLogin(run, "error", L("写不进登录凭据", "Couldn't store the credential"))
         }
         await store.setCookie(cookie)
+        await enrollAppKey(cookie: token)
         endLogin(run, "done", nil)
     }
+
+    // MARK: - App key (AppKey.swift): Face ID instead of the browser next time
+
+    /// Right after an approval (the presence proof the server wants within minutes): make this device's key and
+    /// register it, silently. Making a key needs no Face ID; using it does. Failing here only means the browser
+    /// again next time, so it's logged, not shown.
+    private func enrollAppKey(cookie: String) async {
+        guard AppKey.available else { return }
+        do {
+            let pub = try AppKey.create(origin: origin)
+            try await Login(origin: origin, ua: loginUA).registerAppKey(pub: pub, cookie: cookie)
+        } catch {
+            AppKey.delete(origin: origin)
+            NSLog("AppKey: not registered: %@", "\(error)")
+        }
+    }
+
+    /// The pairing page's "verify with Face ID": challenge → Face ID → signature → the server renews this device.
+    /// Answers `appkey` {state: done | cancel | error, msg}; on error the page offers the browser approval.
+    private func verifyWithAppKey() {
+        Task { [weak self] in
+            guard let self else { return }
+            let reply = { (state: String, msg: String?) in
+                var m: [String: Any] = ["t": "appkey", "state": state]
+                if let msg { m["msg"] = msg }
+                self.post(m)
+            }
+            guard AppKey.exists(origin: self.origin), let cookie = await self.cookieToken() else {
+                return reply("error", L("这台手机上没有登记过的密钥，用浏览器批准一次", "No key on this phone yet; approve in the browser once"))
+            }
+            let api = Login(origin: self.origin, ua: self.loginUA)
+            do {
+                let c = try await api.appKeyChallenge(cookie: cookie)
+                // The host signed is the server's; it must be the one this App was pointed at
+                guard c.host.lowercased() == self.server.host?.lowercased() else {
+                    return reply("error", L("服务器报的地址和 App 里的不一致", "The server's address doesn't match the App's"))
+                }
+                let sig = try AppKey.sign(origin: self.origin, host: c.host, deviceID: c.deviceID, nonce: c.nonce)
+                try await api.verifyAppKey(nonce: c.nonce, sig: sig, cookie: cookie)
+                reply("done", nil)
+            } catch let e as LAError where e.code == .userCancel || e.code == .appCancel || e.code == .systemCancel {
+                reply("cancel", nil)
+            } catch let e as Login.Failure {
+                reply("error", e.message)
+            } catch {
+                // Most likely the key was voided (a new face / finger enrolled): the browser approval makes a new one
+                AppKey.delete(origin: self.origin)
+                reply("error", L("Face ID 验证没成（密钥可能已失效），用浏览器批准一次", "Face ID verification failed (the key may be void); approve in the browser once"))
+            }
+        }
+    }
+
+    private var loginUA: String { ua.isEmpty ? "Mozilla/5.0 (iPhone) GerdrApp/\(appVersion)" : ua }
 
     private func cookieToken() async -> String? {
         let host = server.host ?? ""

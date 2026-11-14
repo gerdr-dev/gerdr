@@ -16,6 +16,7 @@ import (
 //	GET  /.well-known/assetlinks.json   认 App 的签名证书 → App 的 WebView 里能用这个域名的 passkey
 //	GET  /api/remote/lan                 局域网直连的候选地址（页面拿去递给 App 的壳）
 //	POST /api/remote/cli/*               passkey 的退路：在浏览器里批准（device flow，auth/cliapprove.go）
+//	POST /api/remote/appkey/*            re-verify with the phone's Face ID instead of the browser (appkey.go)
 //	GET  /api/app/notices | agents       后台通知的长轮询（appwatch.go）
 
 func (s *Server) appRoutes(mux *http.ServeMux) {
@@ -24,6 +25,7 @@ func (s *Server) appRoutes(mux *http.ServeMux) {
 		writeJSON(w, map[string]any{"origins": s.Remote.LanOrigins()})
 	})
 	mux.HandleFunc("POST /api/remote/cli/{op}", s.apiCLI)
+	mux.HandleFunc("POST /api/remote/appkey/{op}", s.apiAppKey)
 	mux.HandleFunc("GET /api/app/notices", s.appNotices)
 	mux.HandleFunc("GET /api/app/agents", s.appAgents)
 }

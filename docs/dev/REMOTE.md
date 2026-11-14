@@ -263,3 +263,5 @@ The goal is "the result of a tap shows within ~300 ms", so the picture is stream
 - 端到端（真中继（dialhome）+ 真证书 + 手机）只能部署之后验：假中继的测试管协议格式，不管 Traefik 路由、CAA、证书链。
 - CT 日志巡检、审计日志、令牌轮换。
 - 安卓 App（局域网直连、App 里刷 passkey、device flow 退路、后台通知）见 [ANDROID.md](ANDROID.md)。
+- iOS App (passkeys through the browser for any domain; re-verifying with a Secure Enclave App key and Face ID, a
+  third presence proof next to passkeys and approvals: `internal/auth/appkey.go`) in [IOS.md](IOS.md).

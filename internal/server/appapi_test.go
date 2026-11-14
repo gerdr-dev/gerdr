@@ -1,6 +1,11 @@
 package server
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -19,7 +24,7 @@ import (
 )
 
 // 带一把（假的）passkey 的远程服务端：device flow 在一把都没有时直接拒。
-func remoteServerWithPasskey(t *testing.T) (*Server, http.Handler, http.Handler) {
+func remoteServerWithPasskey(t *testing.T, edit ...func(*config.Remote)) (*Server, http.Handler, http.Handler) {
 	t.Helper()
 	dir := t.TempDir()
 	rd := config.RemoteDir(dir)
@@ -29,6 +34,9 @@ func remoteServerWithPasskey(t *testing.T) (*Server, http.Handler, http.Handler)
 	}
 	cfg := config.Remote{RelayURL: "https://relay.example.com", Host: testHost, DeviceTTL: 24 * time.Hour, ReauthAfter: 24 * time.Hour,
 		AndroidCerts: []string{config.OfficialAndroidCert}}
+	for _, f := range edit {
+		f(&cfg)
+	}
 	rm, err := remote.Open(dir, cfg, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatal(err)
@@ -213,5 +221,68 @@ func TestLastAgentText(t *testing.T) {
 	}
 	if got := lastAgentText(evs); got != "改好了，测试都过了。" {
 		t.Fatalf("得到 %q", got)
+	}
+}
+
+// App key through the remote guard: register on a fresh device, whoami says so, challenge + a good signature renew
+// it (challenge / verify are public: a device due for re-verification reaches nothing else), a bad one is refused,
+// a temporary (pairing-code) device can't register.
+func TestAppKeyRemote(t *testing.T) {
+	s, _, rh := remoteServerWithPasskey(t, func(c *config.Remote) { c.PairTTL = 30 * time.Minute })
+	_, tok := s.Remote.Auth.NewDevice("iPhone GerdrApp/1", "203.0.113.9", "") // as right after an approval
+	dev := cookie(&http.Cookie{Name: auth.CookieName, Value: tok})
+
+	k, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pub, _ := k.PublicKey.Bytes()
+	reg := `{"pub":"` + base64.StdEncoding.EncodeToString(pub) + `"}`
+	if w := do(rh, "POST", "/api/remote/appkey/register", strings.NewReader(reg), dev, csrf); w.Code != 200 {
+		t.Fatalf("register: %d %s", w.Code, w.Body)
+	}
+	if w := do(rh, "GET", "/api/remote/whoami", nil, dev); !strings.Contains(w.Body.String(), `"appKey":true`) {
+		t.Fatalf("whoami should say the device has an App key: %s", w.Body)
+	}
+
+	challenge := func() (nonce, host, devID string) {
+		w := do(rh, "POST", "/api/remote/appkey/challenge", strings.NewReader("{}"), dev, csrf)
+		var c struct{ Nonce, Host, DeviceID string }
+		if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &c) != nil || c.Nonce == "" || c.Host != testHost {
+			t.Fatalf("challenge: %d %s", w.Code, w.Body)
+		}
+		return c.Nonce, c.Host, c.DeviceID
+	}
+	sign := func(key *ecdsa.PrivateKey, host, devID, nonce string) string {
+		h := sha256.Sum256(auth.AppKeyPayload(host, devID, nonce))
+		sig, _ := ecdsa.SignASN1(rand.Reader, key, h[:])
+		return base64.StdEncoding.EncodeToString(sig)
+	}
+	n, h, devID := challenge()
+	other, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	bad := `{"nonce":"` + n + `","sig":"` + sign(other, h, devID, n) + `"}`
+	if w := do(rh, "POST", "/api/remote/appkey/verify", strings.NewReader(bad), dev, csrf); w.Code != 403 {
+		t.Fatalf("another key's signature should be refused: %d %s", w.Code, w.Body)
+	}
+	n, h, devID = challenge()
+	good := `{"nonce":"` + n + `","sig":"` + sign(k, h, devID, n) + `"}`
+	if w := do(rh, "POST", "/api/remote/appkey/verify", strings.NewReader(good), dev, csrf); w.Code != 200 {
+		t.Fatalf("good signature: %d %s", w.Code, w.Body)
+	}
+	if w := do(rh, "POST", "/api/remote/appkey/verify", strings.NewReader(good), dev, csrf); w.Code != 403 {
+		t.Fatalf("a replayed signature should be refused: %d %s", w.Code, w.Body)
+	}
+	if w := do(rh, "POST", "/api/remote/appkey/challenge", strings.NewReader("{}"), csrf); w.Code != 401 {
+		t.Fatalf("no cookie, no challenge: %d", w.Code)
+	}
+
+	code, _ := s.Remote.Auth.MintCode()
+	_, ttok, err := s.Remote.Auth.Redeem(code, "iPhone", "203.0.113.9")
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := do(rh, "POST", "/api/remote/appkey/register", strings.NewReader(reg), cookie(&http.Cookie{Name: auth.CookieName, Value: ttok}), csrf)
+	if w.Code != 403 || !strings.Contains(w.Body.String(), `"reason":"temp"`) {
+		t.Fatalf("a temporary device should not register: %d %s", w.Code, w.Body)
 	}
 }

@@ -75,6 +75,31 @@ struct Login {
         }
     }
 
+    // MARK: App key (AppKey.swift, server appkey.go): every call carries the device cookie
+
+    /// Register this device's App key; only right after a presence proof (an approval), which is when it's called.
+    func registerAppKey(pub: Data, cookie: String) async throws {
+        let (status, b) = try await post("/api/remote/appkey/register", ["pub": pub.base64EncodedString()], cookie: cookie)
+        guard status == 200 else { throw Failure(message: (b["error"] as? String) ?? "HTTP \(status)") }
+    }
+
+    struct Challenge {
+        let nonce, host, deviceID: String
+    }
+
+    func appKeyChallenge(cookie: String) async throws -> Challenge {
+        let (status, b) = try await post("/api/remote/appkey/challenge", [:], cookie: cookie)
+        guard status == 200, let n = b["nonce"] as? String, let h = b["host"] as? String, let d = b["deviceId"] as? String else {
+            throw Failure(message: (b["error"] as? String) ?? "HTTP \(status)")
+        }
+        return Challenge(nonce: n, host: h, deviceID: d)
+    }
+
+    func verifyAppKey(nonce: String, sig: Data, cookie: String) async throws {
+        let (status, b) = try await post("/api/remote/appkey/verify", ["nonce": nonce, "sig": sig.base64EncodedString()], cookie: cookie)
+        guard status == 200 else { throw Failure(message: (b["error"] as? String) ?? "HTTP \(status)") }
+    }
+
     private func post(_ path: String, _ body: [String: Any], cookie: String?) async throws -> (Int, [String: Any]) {
         guard let url = URL(string: origin + path) else { throw Failure(message: "bad address \(origin)") }
         var r = URLRequest(url: url, timeoutInterval: 15)

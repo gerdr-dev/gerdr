@@ -74,6 +74,8 @@ type Device struct {
 	// Never temporary and never asked for a passkey again (ReauthNeeded): a machine can't touch Face ID, and a
 	// link that drops every day is useless. Only a peer code minted here by a person makes one.
 	Peer bool `json:"peer,omitempty"`
+	// AppKey: the phone App's hardware-bound key for re-verifying with Face ID (appkey.go). Gone with the device.
+	AppKey *AppKey `json:"appKey,omitempty"`
 }
 
 func (d Device) Expired(now time.Time) bool {
@@ -95,6 +97,7 @@ type Store struct {
 	devs    []*Device
 	codes   map[string]pairCode // 配对码 → 过期时刻 / 是不是给另一台 Gerdr 的
 	cli     []*CLIRequest       // 等批准的 App 登录（cliapprove.go）
+	appChal []appChallenge      // outstanding App key challenges (appkey.go)
 	dirty   bool
 	flushed time.Time
 	guard   tamperGuard

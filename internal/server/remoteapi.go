@@ -43,7 +43,10 @@ func remotePublic(r *http.Request) bool {
 	case "/api/remote/whoami", "/api/remote/pair",
 		"/api/remote/passkey/login/begin", "/api/remote/passkey/login/finish",
 		// 安卓 App：系统来取 assetlinks 时不带凭据；device flow 的发起和轮询是在拿凭据之前（appapi.go）
-		"/.well-known/assetlinks.json", "/api/remote/cli/start", "/api/remote/cli/poll":
+		"/.well-known/assetlinks.json", "/api/remote/cli/start", "/api/remote/cli/poll",
+		// App key (appkey.go): re-verifying is exactly when a device can reach nothing else; the cookie still
+		// identifies it, and the signature is what lets it back in
+		"/api/remote/appkey/challenge", "/api/remote/appkey/verify":
 		return true
 	}
 	// A file link for the system browser (filelink.go): the token in the path is the credential
@@ -472,6 +475,8 @@ func (s *Server) remoteWhoami(w http.ResponseWriter, r *http.Request) {
 	out["authed"] = id != nil && !s.reauthNeeded(id)
 	if id != nil {
 		out["label"], out["deviceId"] = id.Label, id.Device.ID
+		// The App can re-verify this device with Face ID (appkey.go): the pairing page offers that before the browser
+		out["appKey"] = id.Device.AppKey != nil
 		if s.reauthNeeded(id) {
 			out["need"] = "passkey"
 		}
@@ -537,7 +542,7 @@ func (s *Server) passkeyOK(r *http.Request) bool {
 }
 
 // stepUpWindow：再注册一把 passkey 之前，那次生物验证的新鲜度要求。
-const stepUpWindow = 5 * time.Minute
+const stepUpWindow = auth.StepUpWindow
 
 func (s *Server) reauthNeeded(id *auth.Ident) bool {
 	return auth.ReauthNeeded(id, s.Remote.Config().ReauthAfter, s.Remote.Passkeys.Count(), time.Now())
