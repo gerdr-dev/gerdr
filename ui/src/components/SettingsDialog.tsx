@@ -80,7 +80,14 @@ export function SettingsDialog({ open }: { open: boolean }) {
     const clear = (el: HTMLElement) => (el.style.background = el.style.boxShadow = el.style.borderColor = el.style.color = el.style.transition = "");
     const m = moving.current;
     if (x === null) {
-      for (const el of m?.styled ?? []) clear(el);
+      // The tab's own selected look back in the same frame the box goes, not faded in: its classes have transition-all,
+      // and fading from the transparent we set showed no highlight at all for a moment, then the tab's (user report:
+      // "active, inactive, active again"). The transition comes back once that frame is drawn.
+      const styled = [...(m?.styled ?? [])];
+      for (const el of styled) (clear(el), (el.style.transition = "none"));
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => !moving.current && styled.forEach((el) => el.style.transition === "none" && (el.style.transition = ""))),
+      );
       moving.current = null;
       box.style.display = "";
       return;
