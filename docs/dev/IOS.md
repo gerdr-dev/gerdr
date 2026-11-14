@@ -22,6 +22,9 @@ UI side: ui/src/lib/android.ts (isIOSApp / isApp), components/AndroidSettings.ts
          internal/server/pairpage.html (`droid` also takes gerdrIOS)
 ```
 
+The web UI inside the shell is WebKit, like Safari: what it does differently there (slides run frame by frame, the tile
+switches after the slide, style recalc costs) and how to measure on an iPhone is in docs/dev/WEBKIT.md.
+
 ## Building and installing
 
 Needs Xcode (the Command Line Tools alone can't build for iOS) and `brew install xcodegen`.

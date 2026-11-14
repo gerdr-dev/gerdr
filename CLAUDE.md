@@ -22,6 +22,8 @@ github.com/zbysir/lightron, where browser-side changes go as general hooks — t
   `tools/shell-id.sh`, `desktop/feed.sh`): docs/dev/UPDATE.md. Changing shell files (tools/chromeshell,
   tools/winshell, internal/selfupdate) or the Lightron version in go.mod forces a full download for everyone.
 - 后台常驻（launchd，`internal/service`、`cmd/gerdr/attach.go`）和 App 怎么分工、怎么跟着 App 升级：docs/dev/SERVICE.md。
+- iOS Safari / the iOS App / anything WebKit stutters where Android doesn't (the pager's WebKit branch, style recalc
+  costs, measuring on an iPhone through a paired computer): docs/dev/WEBKIT.md.
 - 对话列表闪、跳、切回来不在底（虚拟列表 `chat/ChatView.tsx`、会变高矮的 Markdown / 代码块 / 图片）：别猜，
   按 docs/dev/SCROLL.md 用 `tools/scrolltest/` 的脚本逐帧复现，改完再跑一遍。
 - 改完跑 `make test`（Go 测试）；动了界面先 `make fmt` 再跑 `make typecheck`（要先 `cd ui && pnpm install`；它也查格式）。
