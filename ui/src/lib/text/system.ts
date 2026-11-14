@@ -48,8 +48,8 @@ export const zh = {
   "updateSetting.hoursAgo": "{n} 小时前",
   "updateSetting.daysAgo": "{n} 天前",
 
-  "androidSettings.title": "安卓 App",
-  "androidSettings.iosTitle": "iOS App",
+  "androidSettings.title": "连接",
+  "androidSettings.iosTitle": "连接",
   "androidSettings.openBrowser": "在浏览器中打开",
   "androidSettings.switchServer": "换服务器",
   "androidSettings.notify": "后台通知",
@@ -319,8 +319,8 @@ export const en: Record<keyof typeof zh, string> = {
   "updateSetting.hoursAgo": "{n} h ago",
   "updateSetting.daysAgo": "{n} d ago",
 
-  "androidSettings.title": "Android App",
-  "androidSettings.iosTitle": "iOS App",
+  "androidSettings.title": "Connection",
+  "androidSettings.iosTitle": "Connection",
   "androidSettings.openBrowser": "Open in browser",
   "androidSettings.switchServer": "Switch server",
   "androidSettings.notify": "Background notifications",
