@@ -108,10 +108,22 @@ export function RemoteSettings({ open }: { open: boolean }) {
               </a>
             </div>
             <div className="text-[12px] text-muted-foreground">
-              {t("remoteSettings.relayLine", { relay: st.relayURL ?? "", state: st.state || "—" })}
+              {st.relayURL && t("remoteSettings.relayLine", { relay: st.relayURL, state: st.state || "—" })}
+              {!st.relayURL && !st.forwardPort && (st.state || "—")}
               {st.certExpires && isRemote && t("remoteSettings.certExpires", { date: new Date(st.certExpires).toLocaleDateString() })}
             </div>
+            {!!st.forwardPort && (
+              <div className="text-[12px] text-muted-foreground">
+                {t("remoteSettings.forwardLine", {
+                  port: st.forwardPort,
+                  last: st.forwardLast
+                    ? t("remoteSettings.forwardLast", { time: new Date(st.forwardLast).toLocaleString() })
+                    : t("remoteSettings.forwardNever"),
+                })}
+              </div>
+            )}
             {st.err && <div className="text-[12px] text-bad">{st.err}</div>}
+            {st.forwardErr && <div className="text-[12px] text-bad">{st.forwardErr}</div>}
             {st.locked && (
               <div className="flex items-center gap-2 text-[12px] text-warn">
                 {t("remoteSettings.locked")}
@@ -122,7 +134,7 @@ export function RemoteSettings({ open }: { open: boolean }) {
                 )}
               </div>
             )}
-            {!isRemote && <RemoteCert host={st.host ?? ""} expires={st.certExpires} onSaved={load} />}
+            {!isRemote && <RemoteCert host={st.host ?? ""} relay={!!st.relayURL} expires={st.certExpires} onSaved={load} />}
           </div>
         </div>
       )}

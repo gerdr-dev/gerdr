@@ -75,6 +75,9 @@ export const zh = {
   "remoteSettings.revokedAll": "踢掉了 {devices}",
   "remoteSettings.revokedAllWithKeys": "踢掉了 {devices}，并删掉了 {passkeys}",
   "remoteSettings.relayLine": "中继 {relay} · {state}",
+  "remoteSettings.forwardLine": "转发口 127.0.0.1:{port} · {last}",
+  "remoteSettings.forwardNever": "还没有请求进来过",
+  "remoteSettings.forwardLast": "上次有请求 {time}",
   "remoteSettings.certExpires": " · 证书 {date} 到期",
   "remoteSettings.locked": "有人猜配对码猜错太多次，已暂停接受新设备。",
   "remoteSettings.unlock": "解开",
@@ -239,7 +242,7 @@ export const zh = {
 
   // RemoteConnect
   "remoteConnect.hostSample": "<主机名>",
-  "remoteConnect.title": "连接中继",
+  "remoteConnect.title": "开远程访问",
   "remoteConnect.intro": "Gerdr 经云端中继（dialhome）对外：TLS 在这台机器上终止，中继只转密文。填中继地址、给这台机器起的域名，和在中继后台里出的邀请码。",
   "remoteConnect.noRelay": "还没有中继？在自己的 VPS 上装一个 dialhome，步骤见：",
   "remoteConnect.relay": "中继地址",
@@ -251,6 +254,14 @@ export const zh = {
     "DNS 上要给 {host} 一条 A 记录指向中继 VPS（连上之后配好证书的 DNS 凭据，这里能一键加），中继那边的 SNI 路由也要放行这个名字 —— 漏了的表现是「已连上」但手机打不开。",
   "remoteConnect.connecting": "连接中…",
   "remoteConnect.connect": "连接",
+  "remoteConnect.modeRelay": "云端中继（dialhome）",
+  "remoteConnect.modeForward": "自己的转发（frp 等）",
+  "remoteConnect.forwardIntro":
+    "用你自己的 frp（或别的能原样转 TLS 的隧道）对外：frps 按域名把连接原样转到这台机器的转发口，TLS 在这里终止，frps 只看得到密文。",
+  "remoteConnect.forwardPort": "转发口（只在 127.0.0.1 上听）",
+  "remoteConnect.frpcHint":
+    "frpc.toml 里加这条代理（frps 那边要 vhostHTTPSPort = 443）。PROXY protocol 那行不能少：不带它的连接会被断开，不然所有请求都像是从 127.0.0.1 来的，按 IP 的限速就废了。",
+  "remoteConnect.forwardDns": "DNS 上给 {host} 一条 A 记录指向 frps 那台机器。证书在连接之后下面的「证书」那一节配。",
 
   // PasskeyStepUp
   "passkeyStepUp.intro": "已经有 Passkey 了，再加一把之前要先证明是你本人：",
@@ -355,6 +366,9 @@ export const en: Record<keyof typeof zh, string> = {
   "remoteSettings.revokedAll": "Signed out {devices}",
   "remoteSettings.revokedAllWithKeys": "Signed out {devices} and deleted {passkeys}",
   "remoteSettings.relayLine": "Relay {relay} · {state}",
+  "remoteSettings.forwardLine": "Forward port 127.0.0.1:{port} · {last}",
+  "remoteSettings.forwardNever": "no request through it yet",
+  "remoteSettings.forwardLast": "last request {time}",
   "remoteSettings.certExpires": " · certificate expires {date}",
   "remoteSettings.locked": "Too many wrong pairing codes. New devices are paused.",
   "remoteSettings.unlock": "Unlock",
@@ -526,7 +540,7 @@ export const en: Record<keyof typeof zh, string> = {
 
   // RemoteConnect
   "remoteConnect.hostSample": "<hostname>",
-  "remoteConnect.title": "Connect to a relay",
+  "remoteConnect.title": "Turn on remote access",
   "remoteConnect.intro":
     "Gerdr is reached through a cloud relay (dialhome): TLS ends on this machine and the relay only passes along ciphertext. Enter the relay URL, the domain for this machine, and an invite code from the relay's admin page.",
   "remoteConnect.noRelay": "No relay yet? Install dialhome on your own VPS, see:",
@@ -539,6 +553,15 @@ export const en: Record<keyof typeof zh, string> = {
     "{host} needs a DNS A record pointing to the relay VPS (once connected and the certificate's DNS credentials are set, this page can add it for you), and the relay's SNI routing must allow the name. If either is missing, this shows \"connected\" but your phone can't open it.",
   "remoteConnect.connecting": "Connecting…",
   "remoteConnect.connect": "Connect",
+  "remoteConnect.modeRelay": "Cloud relay (dialhome)",
+  "remoteConnect.modeForward": "Your own tunnel (frp etc.)",
+  "remoteConnect.forwardIntro":
+    "Reach this machine through your own frp (or any tunnel that passes TLS through): frps hands connections for the domain to this machine's forward port untouched; TLS ends here and frps only sees ciphertext.",
+  "remoteConnect.forwardPort": "Forward port (listens on 127.0.0.1 only)",
+  "remoteConnect.frpcHint":
+    "Add this proxy to frpc.toml (frps needs vhostHTTPSPort = 443). Keep the PROXY protocol line: connections without it are dropped, or every request would look like 127.0.0.1 and per-IP rate limits would be useless.",
+  "remoteConnect.forwardDns":
+    "{host} needs a DNS A record pointing at the frps machine. Set up the certificate in the Certificate section below once connected.",
 
   // PasskeyStepUp
   "passkeyStepUp.intro": "You already have a passkey. Before adding another, prove it's you:",

@@ -11,7 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 // 只在本机口上出现：远程改不了（后端也拦着，见 remoteGuard）。
 
 // expires: when the certificate in use runs out (shown here; the address line only shows it on the remote side).
-export function RemoteCert({ host, expires, onSaved }: { host: string; expires?: string; onSaved: () => void }) {
+// relay: the host goes through the dialhome relay, so its A record can be checked against the relay's IP. With a
+// tunnel of one's own (frp) Gerdr doesn't know where it should point.
+export function RemoteCert({ host, relay, expires, onSaved }: { host: string; relay: boolean; expires?: string; onSaved: () => void }) {
   const [c, setC] = useState<Cert | null>(null);
   const [editing, setEditing] = useState(false);
   const [mode, setMode] = useState<"dns" | "files">("dns");
@@ -95,7 +97,7 @@ export function RemoteCert({ host, expires, onSaved }: { host: string; expires?:
       {!editing ? (
         <>
           {/* keyed on the provider: saving another one changes whether the button can be offered */}
-          <HostA key={c.dns} host={host} provider={label} />
+          {relay && <HostA key={c.dns} host={host} provider={label} />}
           {c.dns && c.accountURI && <CAA host={host} account={c.accountURI} auto={c.caaAuto ? label : ""} />}
         </>
       ) : (

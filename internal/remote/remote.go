@@ -53,6 +53,11 @@ type Service struct {
 	err    string       // 起不来的原因（证书签不下来、没 join 过……）
 	lanHS  *http.Server // 局域网直连口（lan.go）
 	lanErr string       // 直连口起不来的原因（端口被占……）；不影响中继那条路
+	// The forward port for a tunnel of one's own (forward.go): its server, what's wrong with it, the last request
+	// that came through it.
+	fwdHS   *http.Server
+	fwdErr  string
+	fwdLast time.Time
 }
 
 // Open 准备设备表、passkey 和限速。没开远程也照样打开：设置里要能看设备、踢设备，
@@ -189,6 +194,16 @@ func (s *Service) run() {
 		}
 		// 直连口在中继之前起：中继连不上（VPS 挂了）时人在家里照样能用
 		s.startLan(ctx, cfg, cf, h)
+		s.startForward(ctx, cfg, cf, h)
+		if cfg.RelayURL == "" {
+			// A tunnel of one's own only (forward.go): nothing more to start
+			s.mu.Lock()
+			if ctx.Err() == nil {
+				s.certs, s.err = cf, ""
+			}
+			s.mu.Unlock()
+			return
+		}
 		tn, err := relay.Start(relay.HostConfig{
 			URL: cfg.RelayURL, Host: cfg.Host, Dir: s.relayDir(),
 			Log: func(f string, a ...any) { s.log.Info("remote: " + fmt.Sprintf(f, a...)) },
@@ -222,11 +237,15 @@ func (s *Service) run() {
 // stop 收掉当前这一轮：隧道、https、续期。
 func (s *Service) stop() {
 	s.mu.Lock()
-	tn, hs, lhs, cancel := s.tunnel, s.hs, s.lanHS, s.cancel
+	tn, hs, lhs, fhs, cancel := s.tunnel, s.hs, s.lanHS, s.fwdHS, s.cancel
 	s.tunnel, s.hs, s.certs, s.cancel, s.lanHS, s.lanErr = nil, nil, nil, nil, nil, ""
+	s.fwdHS, s.fwdErr, s.fwdLast = nil, "", time.Time{}
 	s.mu.Unlock()
 	if lhs != nil {
 		_ = lhs.Close()
+	}
+	if fhs != nil {
+		_ = fhs.Close()
 	}
 	if cancel != nil {
 		cancel()
@@ -297,6 +316,11 @@ type Status struct {
 	LanPort    int      `json:"lanPort,omitempty"`
 	LanErr     string   `json:"lanErr,omitempty"`
 	LanOrigins []string `json:"lanOrigins,omitempty"`
+	// The forward port (a tunnel of one's own, forward.go): where it listens (0 = off / not up), what's wrong
+	// (no PROXY header, port taken), when a request last came through it.
+	ForwardPort int        `json:"forwardPort,omitempty"`
+	ForwardErr  string     `json:"forwardErr,omitempty"`
+	ForwardLast *time.Time `json:"forwardLast,omitempty"`
 }
 
 func (s *Service) Status() Status {
@@ -310,8 +334,18 @@ func (s *Service) Status() Status {
 		st.LanPort = cfg.LanPort
 		st.LanOrigins = lan.Origins(cfg.LanPort, cfg.LanTailnet)
 	}
+	if s.fwdHS != nil {
+		st.ForwardPort = cfg.ForwardPort
+		if !s.fwdLast.IsZero() {
+			t := s.fwdLast
+			st.ForwardLast = &t
+		}
+	}
+	st.ForwardErr = s.fwdErr
 	if s.tunnel != nil {
 		st.State = s.tunnel.State()
+	} else if s.fwdHS != nil && cfg.RelayURL == "" {
+		st.State = fmt.Sprintf(i18n.S("转发口在听 127.0.0.1:%d", "Forward port listening on 127.0.0.1:%d"), cfg.ForwardPort)
 	} else if st.Enabled && st.Err == "" {
 		st.State = i18n.S("正在准备证书", "Preparing certificate")
 	}
@@ -442,6 +476,40 @@ func (s *Service) Connect(ctx context.Context, relayURL, host, invite string) er
 	return s.Reload()
 }
 
+// ConnectForward is Connect for a tunnel of one's own (frp and the like, forward.go): no relay and no invite code,
+// only the host name and the local port the tunnel's client forwards to. Writes remote.json and brings the path up.
+// A relay address left in the file from before is dropped: the two ways in are picked one at a time here.
+func (s *Service) ConnectForward(host string, port int) error {
+	if envLocked() {
+		return errEnvLocked
+	}
+	if cur := s.Config(); cur.Enabled() {
+		return fmt.Errorf(i18n.S("已经连着 %s 了：先移除再连", "already connected to %s: remove it first"), cur.Host)
+	}
+	host, err := relay.CleanHost(host)
+	if err != nil {
+		return err
+	}
+	if port == 0 {
+		port = config.DefaultForwardPort
+	}
+	if port < 1024 || port > 65535 {
+		return fmt.Errorf(i18n.S("转发口 %d 不行：用 1024–65535 之间的端口", "forward port %d won't do: pick one between 1024 and 65535"), port)
+	}
+	f, err := config.ReadRemoteFile(s.dataDir())
+	if err != nil {
+		return err
+	}
+	if f.Host != host {
+		s.Passkeys.DeleteAll() // bound to the old name, see Connect
+	}
+	f.RelayURL, f.Host, f.ForwardPort = "", host, port
+	if err := config.WriteRemoteFile(s.dataDir(), f); err != nil {
+		return err
+	}
+	return s.Reload()
+}
+
 // Disconnect 是设置里的「移除」：收掉隧道，主机名从 remote.json 里去掉，设备和 passkey 全部清掉。
 // 中继地址和证书来源留着，下次连接不用重填（ACME 的证书按域名分文件，换名字会另签一张）。
 //
@@ -456,7 +524,7 @@ func (s *Service) Disconnect() (devs, keys int, err error) {
 	if err != nil {
 		return 0, 0, err
 	}
-	f.Host = ""
+	f.Host, f.ForwardPort = "", 0
 	if err := config.WriteRemoteFile(s.dataDir(), f); err != nil {
 		return 0, 0, err
 	}
@@ -555,6 +623,9 @@ func (s *Service) HostRecord(ctx context.Context, apply bool) (HostRecord, error
 	cfg := s.Config()
 	if !cfg.Enabled() {
 		return HostRecord{}, errors.New(i18n.S("还没连上中继：先在上面「连接」", "not connected to a relay yet: use Connect above first"))
+	}
+	if cfg.RelayURL == "" {
+		return HostRecord{}, errors.New(i18n.S("没走中继：域名的 A 记录指向你自己的转发服务器（frps 那台）", "no relay in use: point the host's A record at your own tunnel server (where frps runs)"))
 	}
 	u, err := url.Parse(cfg.RelayURL)
 	if err != nil || u.Hostname() == "" {

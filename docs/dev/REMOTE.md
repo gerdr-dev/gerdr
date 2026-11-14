@@ -56,6 +56,37 @@ Phones connect to the host name, so it must point at the relay VPS. The settings
 中继那边的 SNI 路由（Traefik 的 `HostSNI` 规则之类）也要放行 Gerdr 的名字 —— 漏了的表现是「注册成功、隧道已连上、
 手机打不开」，Gerdr 这边一个字都不报。
 
+## Your own tunnel (frp) instead of the relay
+
+`gerdr remote forward <host>` or Settings → Remote access → "Your own tunnel": no relay, no invite code. Gerdr opens a
+**forward port** on `127.0.0.1:<forwardPort>` (default 7879, remote.json `forwardPort`, `GERDR_FORWARD_PORT`) and
+frpc forwards the domain's connections to it. `config.Remote.Enabled()` is host + (relay or forward port).
+Code: `internal/remote/forward.go`.
+
+```
+ phone ──TLS──▶ frps (VPS, vhostHTTPSPort = 443) ──by SNI, untouched──▶ frpc ──PROXY v2 + TLS──▶ 127.0.0.1:7879
+                                                                                  TLS ends here → RemoteHandler
+```
+
+- **Same certificate, handler and "remote" stamp as the relay path.** frps must pass TLS through: `type = "https"`
+  (routes by SNI) or `"tcp"`, **never the https2http plugin** (frps would hold the plaintext and the cookies). Same
+  CAA advice as for the relay: whoever holds the name's IP can otherwise get a certificate for it.
+- **frps must answer on 443.** `sameHost` only accepts the bare name or `:443`, and passkeys are bound to
+  `https://<host>`; a `:8443` in the URL fails both.
+- **A separate port, not the LAN port.** frpc dials from loopback, which the LAN port's local-network gate lets
+  through (so it would never alert on being exposed). 127.0.0.1 only: frpc runs on this machine.
+- **The PROXY protocol header is required** (`transport.proxyProtocolVersion = "v2"` in frpc). Without it every
+  request comes from 127.0.0.1: the per-IP limits on pairing codes / passkeys count the whole internet as one
+  client and the device list shows no addresses. A connection without it is dropped; http.Server only logs that as a
+  TLS handshake error, so `fwdLog` picks it out of the log and `Status.ForwardErr` tells the person what to add.
+  Cleared by the next request that gets through (`ForwardLast`).
+- A local process can send any PROXY header it likes. It gains nothing: it still needs a device credential, and
+  anything local already has the token for the local port.
+- The settings page's A-record check is relay-only (Gerdr doesn't know frps's IP): `HostRecord` refuses without a
+  relay and the page hides it. Connecting the forward way drops a relay address left in remote.json; removing
+  clears `forwardPort` too, so the two ways in don't both come back on the next connect.
+- The Android / iOS Apps need nothing: they only know the domain, and still switch to the LAN / tailnet at home.
+
 ## 两条路两套凭据（和 herdr-web 最大的不同）
 
 herdr-web 只有一套设备凭据；Gerdr 本来就有一把令牌（`~/.gerdr/token`），mac App、`gerdr session`、agent 自己都靠它，

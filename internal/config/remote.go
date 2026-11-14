@@ -40,6 +40,11 @@ type Remote struct {
 	// from anywhere. GERDR_LAN_TAILNET=0 or remote.json `"lanTailnet": false` turns it off; on by default, since
 	// it opens nothing new to the internet (lan.ViaTailnet) and every request still needs a device credential.
 	LanTailnet bool
+	// ForwardPort: the forward port, for a tunnel of one's own (frp and the like) instead of the relay. It listens
+	// on 127.0.0.1 only, wants a PROXY protocol header on every connection (the real client IP, which rate limits
+	// key on) and then serves exactly what the relay path serves: same certificate, same rules. GERDR_FORWARD_PORT
+	// or remote.json `forwardPort`, 0 = off. docs/dev/REMOTE.md "Your own tunnel (frp)".
+	ForwardPort int
 	// PairTTL：配对码换来的设备只活这么久、不续期（过一次 passkey 就转正），GERDR_PAIR_TTL_MINUTES，默认 30，0 = 和别的设备一样。
 	PairTTL time.Duration
 	// AndroidCerts：认哪些安卓 App 的签名证书（SHA-256 指纹，冒号分隔的十六进制）—— 它们能在 App 的 WebView 里
@@ -50,6 +55,9 @@ type Remote struct {
 
 // DefaultLanPort：7870 是本机口、7871 是 make dev 的调试实例。
 const DefaultLanPort = 7878
+
+// DefaultForwardPort: what the settings page and `gerdr remote forward` suggest for frpc's localPort.
+const DefaultForwardPort = 7879
 
 // AndroidPackage / OfficialAndroidCert：官方安卓 App（android/）的包名和 release 签名证书指纹。
 // **换签名钥匙要同步改这里**，不然新包在 App 里刷不了 passkey（只能退回浏览器批准那条）。
@@ -73,6 +81,7 @@ type RemoteFile struct {
 	ReauthHours   *int              `json:"reauthHours,omitempty"`
 	LanPort       *int              `json:"lanPort,omitempty"`
 	LanTailnet    *bool             `json:"lanTailnet,omitempty"`
+	ForwardPort   int               `json:"forwardPort,omitempty"`
 	PairMinutes   *int              `json:"pairTTLMinutes,omitempty"`
 	AndroidCerts  []string          `json:"androidCerts,omitempty"`
 	Env           map[string]string `json:"env,omitempty"`
@@ -157,6 +166,9 @@ func LoadRemote(dir string) (Remote, error) {
 	if p := num("GERDR_LAN_PORT", f.LanPort, DefaultLanPort); p > 0 && p < 65536 {
 		r.LanPort = p
 	}
+	if p := num("GERDR_FORWARD_PORT", &f.ForwardPort, 0); p > 0 && p < 65536 {
+		r.ForwardPort = p
+	}
 	r.LanTailnet = f.LanTailnet == nil || *f.LanTailnet
 	if v := os.Getenv("GERDR_LAN_TAILNET"); v != "" {
 		r.LanTailnet = truthy(v)
@@ -174,8 +186,8 @@ func LoadRemote(dir string) (Remote, error) {
 	return r, nil
 }
 
-// Enabled：配了中继才算开了远程访问。
-func (r Remote) Enabled() bool { return r.RelayURL != "" && r.Host != "" }
+// Enabled: remote access is on with a host name and a way in: the relay, or a tunnel of one's own (ForwardPort).
+func (r Remote) Enabled() bool { return r.Host != "" && (r.RelayURL != "" || r.ForwardPort > 0) }
 
 // TLSProblem：开了远程却没给证书来源。**远程那条路的 TLS 必须在本进程终止**（中继只转密文），
 // 而且得是浏览器认的真证书 —— 自签的话手机上每次都是警告页，passkey 也按不动。

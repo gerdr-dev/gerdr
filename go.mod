@@ -27,6 +27,7 @@ require (
 	github.com/gorilla/websocket v1.5.3
 	github.com/huaweicloud/huaweicloud-sdk-go-v3 v0.1.192
 	github.com/miekg/dns v1.1.72
+	github.com/pires/go-proxyproto v0.16.0
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 	github.com/spf13/cobra v1.10.2
 	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common v1.3.83

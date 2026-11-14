@@ -45,10 +45,23 @@ func remoteCmd() *cobra.Command {
 			}
 			st := out.Status
 			if !st.Enabled {
-				fmt.Println(i18n.S("  没开远程访问。开法：设置 → 远程访问里填中继地址、主机名和邀请码；或者 gerdr remote join <中继地址> <主机名> <邀请码>", "  Remote access is off. To turn it on, enter the relay URL, host name and invite code in Settings → Remote access, or run gerdr remote join <relay-url> <host> <invite-code>"))
+				fmt.Println(i18n.S("  没开远程访问。开法：设置 → 远程访问；或者 gerdr remote join <中继地址> <主机名> <邀请码>（云端中继），或者 gerdr remote forward <主机名>（自己的 frp）", "  Remote access is off. Turn it on in Settings → Remote access, or run gerdr remote join <relay-url> <host> <invite-code> (cloud relay) or gerdr remote forward <host> (your own frp)"))
 				return nil
 			}
-			fmt.Printf(i18n.S("  地址：%s\n  中继：%s\n", "  Address: %s\n  Relay:   %s\n"), st.URL, st.RelayURL)
+			fmt.Printf(i18n.S("  地址：%s\n", "  Address: %s\n"), st.URL)
+			if st.RelayURL != "" {
+				fmt.Printf(i18n.S("  中继：%s\n", "  Relay:   %s\n"), st.RelayURL)
+			}
+			if st.ForwardPort > 0 {
+				last := i18n.S("还没有请求进来过", "no request through it yet")
+				if st.ForwardLast != nil {
+					last = i18n.S("上次有请求：", "last request: ") + st.ForwardLast.Format("2006-01-02 15:04:05")
+				}
+				fmt.Printf(i18n.S("  转发口：127.0.0.1:%d（%s）\n", "  Forward: 127.0.0.1:%d (%s)\n"), st.ForwardPort, last)
+			}
+			if st.ForwardErr != "" {
+				fmt.Printf("  ⚠️  %s\n", st.ForwardErr)
+			}
 			if st.State != "" {
 				fmt.Printf(i18n.S("  状态：%s\n", "  State:   %s\n"), st.State)
 			}
@@ -68,6 +81,7 @@ func remoteCmd() *cobra.Command {
 		},
 	})
 	cmd.AddCommand(joinCmd())
+	cmd.AddCommand(forwardCmd())
 	cmd.AddCommand(&cobra.Command{
 		Use:   "pair",
 		Short: i18n.S("出一个配对码（5 分钟、一次性）和二维码：新设备扫一下就进来了", "Show a one-time pairing code (valid 5 minutes) and QR code: scan it on the new device to get in"),
@@ -268,10 +282,64 @@ func offlineRemote() (*remote.Service, error) {
 //
 // **先核配置、再用邀请码**：邀请码一次性、30 分钟过期，用掉了才发现配置不对就得回 VPS 再出一个。
 // 证书来源（--dns / --cert）可以不给：注册完到设置 → 远程访问 → 证书里填，不用重启。
+// certOpts: the certificate flags join and forward share (--dns / --env / --email / --staging or --cert / --key).
+type certOpts struct {
+	dns, email, cert, key string
+	tokens                []string
+	staging               bool
+}
+
+func (o *certOpts) bind(c *cobra.Command) {
+	c.Flags().StringVar(&o.dns, "dns", "", i18n.S("DNS 服务商（走 DNS-01 自己签证书）：", "DNS provider (issue the certificate yourself via DNS-01): ")+strings.Join(acme.Providers(), " / "))
+	c.Flags().StringArrayVar(&o.tokens, "env", nil, i18n.S("DNS 服务商的凭据，名字=值（比如 CLOUDFLARE_DNS_API_TOKEN=…），可以给多个", "DNS provider credential as NAME=value (e.g. CLOUDFLARE_DNS_API_TOKEN=…), repeatable"))
+	c.Flags().StringVar(&o.email, "email", "", i18n.S("ACME 账号邮箱（可空；给了能收到到期提醒）", "ACME account email (optional; enables expiry reminders)"))
+	c.Flags().BoolVar(&o.staging, "staging", false, i18n.S("用 Let's Encrypt 的测试环境（调试用：正式环境同一个域名一周只给 5 张）", "use Let's Encrypt staging (for debugging: production allows only 5 certificates per domain per week)"))
+	c.Flags().StringVar(&o.cert, "cert", "", i18n.S("不自己签：证书文件（fullchain）", "bring your own: certificate file (fullchain)"))
+	c.Flags().StringVar(&o.key, "key", "", i18n.S("不自己签：私钥文件", "bring your own: private key file"))
+}
+
+// apply writes the flags into f and checks the provider name (before an invite code gets spent).
+func (o *certOpts) apply(f *config.RemoteFile) error {
+	if o.dns != "" {
+		f.ACMEDNS, f.TLSCert, f.TLSKey = o.dns, "", ""
+	}
+	if o.cert != "" || o.key != "" {
+		f.TLSCert, f.TLSKey, f.ACMEDNS = o.cert, o.key, ""
+	}
+	if o.email != "" {
+		f.ACMEEmail = o.email
+	}
+	if o.staging {
+		f.ACMEStaging = true
+	}
+	for _, kv := range o.tokens {
+		k, v, ok := strings.Cut(kv, "=")
+		if !ok || k == "" {
+			return fmt.Errorf(i18n.S("--env 要写成 名字=值（给的是 %q）", "--env must be NAME=value (got %q)"), kv)
+		}
+		if f.Env == nil {
+			f.Env = map[string]string{}
+		}
+		f.Env[strings.TrimPrefix(k, "GERDR_")] = v
+	}
+	if f.ACMEDNS != "" && acme.EnvHint(f.ACMEDNS) == "" {
+		return fmt.Errorf(i18n.S("不认识的 DNS 服务商 %q，编译进来的有：%s", "unknown DNS provider %q; built-in ones: %s"), f.ACMEDNS, strings.Join(acme.Providers(), " / "))
+	}
+	return nil
+}
+
+// reloadRunning asks a running Gerdr to read remote.json again; says which way it went.
+func reloadRunning() string {
+	if c, err := newAPIClient(); err == nil {
+		if err := c.do("POST", "/api/remote/reload", nil, nil); err == nil {
+			return i18n.S("正在跑的 Gerdr 已经换上了", "the running Gerdr has picked it up")
+		}
+	}
+	return i18n.S("重启 Gerdr 之后生效（mac App 退出再开）", "it takes effect after Gerdr restarts (quit and reopen the mac App)")
+}
+
 func joinCmd() *cobra.Command {
-	var dns, email, cert, key string
-	var tokens []string
-	var staging bool
+	var o certOpts
 	c := &cobra.Command{
 		Use:   i18n.S("join <中继地址> <主机名> <邀请码>", "join <relay-url> <host> <invite-code>"),
 		Short: i18n.S("用邀请码把这台机器注册到云端中继（dialhome）上（邀请码在中继的网页后台里出，或者 VPS 上 dialhome invite <主机名>）", "Register this machine with a cloud relay (dialhome) using an invite code (get one from the relay's web admin, or run dialhome invite <host> on the VPS)"),
@@ -304,32 +372,9 @@ func joinCmd() *cobra.Command {
 				return err
 			}
 			f.RelayURL, f.Host = relayURL, host
-			if dns != "" {
-				f.ACMEDNS, f.TLSCert, f.TLSKey = dns, "", ""
-			}
-			if cert != "" || key != "" {
-				f.TLSCert, f.TLSKey, f.ACMEDNS = cert, key, ""
-			}
-			if email != "" {
-				f.ACMEEmail = email
-			}
-			if staging {
-				f.ACMEStaging = true
-			}
-			for _, kv := range tokens {
-				k, v, ok := strings.Cut(kv, "=")
-				if !ok || k == "" {
-					return fmt.Errorf(i18n.S("--env 要写成 名字=值（给的是 %q）", "--env must be NAME=value (got %q)"), kv)
-				}
-				if f.Env == nil {
-					f.Env = map[string]string{}
-				}
-				f.Env[strings.TrimPrefix(k, "GERDR_")] = v
-			}
 			// 证书来源可以不在这儿给（之后在设置 → 远程访问 → 证书里填）；给了就先核一下名字，邀请码还没用掉
-			r := config.Remote{ACMEDNS: f.ACMEDNS}
-			if r.ACMEDNS != "" && acme.EnvHint(r.ACMEDNS) == "" {
-				return fmt.Errorf(i18n.S("不认识的 DNS 服务商 %q，编译进来的有：%s", "unknown DNS provider %q; built-in ones: %s"), r.ACMEDNS, strings.Join(acme.Providers(), " / "))
+			if err := o.apply(&f); err != nil {
+				return err
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
@@ -340,25 +385,100 @@ func joinCmd() *cobra.Command {
 				return fmt.Errorf(i18n.S("注册好了，但配置没写进去：%w", "registered, but writing the config failed: %w"), err)
 			}
 			// gerdr 在跑就让它当场重读，不用重启
-			applied := i18n.S("重启 Gerdr 之后生效（mac App 退出再开）", "it takes effect after Gerdr restarts (quit and reopen the mac App)")
-			if c, err := newAPIClient(); err == nil {
-				if err := c.do("POST", "/api/remote/reload", nil, nil); err == nil {
-					applied = i18n.S("正在跑的 Gerdr 已经换上了", "the running Gerdr has picked it up")
-				}
-			}
+			applied := reloadRunning()
 			fmt.Printf(i18n.S("\n  ✓ 注册好了：%s → %s\n  配置写在 %s/remote.json，%s。\n", "\n  ✓ Registered: %s → %s\n  Config written to %s/remote.json; %s.\n"),
 				host, relayURL, config.RemoteDir(env.Dir), applied)
 			printRelayDNS(env.Dir, host)
 			return nil
 		},
 	}
-	c.Flags().StringVar(&dns, "dns", "", i18n.S("DNS 服务商（走 DNS-01 自己签证书）：", "DNS provider (issue the certificate yourself via DNS-01): ")+strings.Join(acme.Providers(), " / "))
-	c.Flags().StringArrayVar(&tokens, "env", nil, i18n.S("DNS 服务商的凭据，名字=值（比如 CLOUDFLARE_DNS_API_TOKEN=…），可以给多个", "DNS provider credential as NAME=value (e.g. CLOUDFLARE_DNS_API_TOKEN=…), repeatable"))
-	c.Flags().StringVar(&email, "email", "", i18n.S("ACME 账号邮箱（可空；给了能收到到期提醒）", "ACME account email (optional; enables expiry reminders)"))
-	c.Flags().BoolVar(&staging, "staging", false, i18n.S("用 Let's Encrypt 的测试环境（调试用：正式环境同一个域名一周只给 5 张）", "use Let's Encrypt staging (for debugging: production allows only 5 certificates per domain per week)"))
-	c.Flags().StringVar(&cert, "cert", "", i18n.S("不自己签：证书文件（fullchain）", "bring your own: certificate file (fullchain)"))
-	c.Flags().StringVar(&key, "key", "", i18n.S("不自己签：私钥文件", "bring your own: private key file"))
+	o.bind(c)
 	return c
+}
+
+// forwardCmd: remote access through a tunnel of one's own (frp and the like) instead of the relay.
+// internal/remote/forward.go and docs/dev/REMOTE.md "Your own tunnel (frp)" say how it works and why.
+func forwardCmd() *cobra.Command {
+	var o certOpts
+	var port int
+	c := &cobra.Command{
+		Use: i18n.S("forward <主机名>", "forward <host>"),
+		Short: i18n.S("不用中继，走自己的转发（frp 这类）：手机打开 https://<主机名>，frps 原样转到这台机器",
+			"Use a tunnel of your own (frp and the like) instead of the relay: phones open https://<host>, frps passes it through to this machine"),
+		Long: i18n.S("把配置写进 <数据目录>/remote/remote.json（去掉中继地址）；Gerdr 在跑就当场生效。\n"+
+			"Gerdr 在 127.0.0.1:<端口> 上开一个转发口，TLS 在这台机器上终止（和中继那条路同一张证书、同一套规则）。\n"+
+			"frpc 要原样转 TLS（type = \"https\" 或 \"tcp\"，别用 https2http 插件），而且必须带 PROXY protocol 头\n"+
+			"（transport.proxyProtocolVersion = \"v2\"）：不带的连接会被断开 —— 不然所有请求都像是从 127.0.0.1 来的，按 IP 的限速就废了。\n"+
+			"frps 要在 443 上对外（vhostHTTPSPort = 443），域名的 A 记录指向 frps 那台。证书参数和 join 一样。\n\n"+
+			"  gerdr remote forward gerdr.example.com --dns cloudflare --env CLOUDFLARE_DNS_API_TOKEN=…",
+			"Writes the config to <data-dir>/remote/remote.json (dropping any relay address); takes effect at once if Gerdr is running.\n"+
+				"Gerdr opens a forward port on 127.0.0.1:<port>; TLS ends on this machine (same certificate and rules as the relay path).\n"+
+				"frpc must pass TLS through (type = \"https\" or \"tcp\", not the https2http plugin) and must send a PROXY protocol header\n"+
+				"(transport.proxyProtocolVersion = \"v2\"): connections without it are dropped, or every request would look like 127.0.0.1 and per-IP rate limits would be useless.\n"+
+				"frps must face the internet on 443 (vhostHTTPSPort = 443), and the host's A record points at the frps machine. Certificate flags are the same as join.\n\n"+
+				"  gerdr remote forward gerdr.example.com --dns cloudflare --env CLOUDFLARE_DNS_API_TOKEN=…"),
+		Args: cobra.ExactArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			env := config.FromEnv()
+			host, err := relay.CleanHost(args[0])
+			if err != nil {
+				return err
+			}
+			if port < 1024 || port > 65535 {
+				return fmt.Errorf(i18n.S("--port %d 不行：用 1024–65535 之间的端口", "--port %d won't do: pick one between 1024 and 65535"), port)
+			}
+			f, err := config.ReadRemoteFile(env.Dir)
+			if err != nil {
+				return err
+			}
+			if f.Host != "" && f.Host != host {
+				return fmt.Errorf(i18n.S("已经连着 %s 了：先在设置 → 远程访问里移除（设备和 passkey 绑在那个名字上）", "already set up for %s: remove it in Settings → Remote access first (devices and passkeys are bound to that name)"), f.Host)
+			}
+			f.RelayURL, f.Host, f.ForwardPort = "", host, port
+			if err := o.apply(&f); err != nil {
+				return err
+			}
+			if err := config.WriteRemoteFile(env.Dir, f); err != nil {
+				return err
+			}
+			fmt.Printf(i18n.S("\n  ✓ 配好了：https://%s → 127.0.0.1:%d\n  配置写在 %s/remote.json，%s。\n", "\n  ✓ Set up: https://%s → 127.0.0.1:%d\n  Config written to %s/remote.json; %s.\n"),
+				host, port, config.RemoteDir(env.Dir), reloadRunning())
+			fmt.Printf(i18n.S("\n  frpc 里加这条代理（frps 要有 vhostHTTPSPort = 443）：\n\n%s\n", "\n  Add this proxy to frpc (frps needs vhostHTTPSPort = 443):\n\n%s\n"), indent(remote.FrpcSnippet(host, port), "    "))
+			printForwardDNS(env.Dir, host)
+			return nil
+		},
+	}
+	c.Flags().IntVar(&port, "port", config.DefaultForwardPort, i18n.S("转发口（frpc 的 localPort），只在 127.0.0.1 上听", "forward port (frpc's localPort), listening on 127.0.0.1 only"))
+	o.bind(c)
+	return c
+}
+
+func indent(s, pre string) string {
+	return pre + strings.ReplaceAll(strings.TrimRight(s, "\n"), "\n", "\n"+pre) + "\n"
+}
+
+func printForwardDNS(dir, host string) {
+	acct := remote.AccountURI(dir)
+	if acct == "" {
+		acct = i18n.S("<这台机器的 ACME 账户：Gerdr 签下第一张证书之后 gerdr remote status 里有>", "<this machine's ACME account: shown in gerdr remote status once Gerdr issues its first certificate>")
+	}
+	fmt.Printf(i18n.S(`
+  DNS 上加两条（一次性）：
+
+       %s     A    <frps 那台机器的 IP>
+       CAA  0 issue "letsencrypt.org; accounturi=%s; validationmethods=dns-01"
+
+     CAA 挡的是「frps 那台占着这个 IP 去自己签一张你的证书」—— 能签证书就能做中间人（docs/dev/REMOTE.md）。
+
+`, `
+  Add two DNS records (one time):
+
+       %s     A    <IP of the frps machine>
+       CAA  0 issue "letsencrypt.org; accounturi=%s; validationmethods=dns-01"
+
+     CAA stops "the frps machine, holding this IP, issuing a certificate for you itself" — whoever can get a certificate can play man-in-the-middle (docs/dev/REMOTE.md).
+
+`), host, acct)
 }
 
 func printRelayDNS(dir, host string) {

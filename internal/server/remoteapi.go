@@ -309,14 +309,23 @@ func (s *Server) remoteRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/remote/dns/host", hostRecord(true))
 	// 连接 / 移除 / 重读配置：都只在本机（remoteGuard 拦了远程那一侧），改完当场生效、不用重启。
 	mux.HandleFunc("POST /api/remote/connect", func(w http.ResponseWriter, r *http.Request) {
-		var in struct{ RelayURL, Host, Invite string }
+		var in struct {
+			RelayURL, Host, Invite string
+			// Forward: a tunnel of one's own (frp) to this local port instead of the relay
+			Forward     bool
+			ForwardPort int
+		}
 		if err := decode(r, &in); err != nil {
 			httpError(w, http.StatusBadRequest, err.Error())
 			return
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 		defer cancel()
-		if err := s.Remote.Connect(ctx, in.RelayURL, in.Host, in.Invite); err != nil {
+		connect := func() error { return s.Remote.Connect(ctx, in.RelayURL, in.Host, in.Invite) }
+		if in.Forward {
+			connect = func() error { return s.Remote.ConnectForward(in.Host, in.ForwardPort) }
+		}
+		if err := connect(); err != nil {
 			httpError(w, http.StatusBadRequest, err.Error())
 			return
 		}
