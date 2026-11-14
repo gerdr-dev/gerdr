@@ -104,8 +104,12 @@ object LanRoute {
     private const val RETRY_MS = 20_000L
     private val timer = java.util.concurrent.Executors.newSingleThreadScheduledExecutor()
 
-    /** 局域网那条路上的 socket 绑到 Wi-Fi（没 Wi-Fi 就不绑，照默认网络走） */
-    internal fun bindLan(s: Socket) {
+    /**
+     * 局域网那条路上的 socket 绑到 Wi-Fi（没 Wi-Fi 就不绑，照默认网络走）。
+     * A tailnet address is left on the default network: that is the VPN, and binding to Wi-Fi would go around it.
+     */
+    internal fun bindLan(s: Socket, host: String) {
+        if (Server.isTailnet(host)) return
         val w = wifi ?: return
         try { w.bindSocket(s) } catch (e: Exception) { Log.i(TAG, "绑 Wi-Fi 失败: $e") }
     }
@@ -272,7 +276,7 @@ object LanRoute {
      */
     private fun probe(host: String, addr: InetSocketAddress): Boolean = try {
         Socket().use { raw ->
-            bindLan(raw)
+            bindLan(raw, addr.hostString)
             raw.connect(InetSocketAddress(addr.hostString, addr.port), PROBE_MS)
             raw.soTimeout = PROBE_MS
             val s = (SSLSocketFactory.getDefault() as SSLSocketFactory)
@@ -397,7 +401,7 @@ private class LocalProxy(private val route: (String, Int) -> List<Target>) {
         for (t in targets) {
             val s = Socket()
             try {
-                if (t.lan) LanRoute.bindLan(s) // 和探测同一个网络，见 LanRoute.wifi
+                if (t.lan) LanRoute.bindLan(s, t.addr.hostString) // 和探测同一个网络，见 LanRoute.wifi
                 s.connect(t.addr, t.timeout)
                 return s to t.lan
             } catch (_: Exception) {

@@ -308,7 +308,7 @@ func (s *Service) Status() Status {
 	st.LanErr = s.lanErr
 	if s.lanHS != nil {
 		st.LanPort = cfg.LanPort
-		st.LanOrigins = lan.Origins(cfg.LanPort)
+		st.LanOrigins = lan.Origins(cfg.LanPort, cfg.LanTailnet)
 	}
 	if s.tunnel != nil {
 		st.State = s.tunnel.State()

@@ -46,7 +46,7 @@ WebView ──CONNECT gerdr.example.com:443──▶ App 内的代理（127.0.0.
   WebView 按域名验证书，Host 还是那个域名，所以 remoteGuard 的 Host 白名单、设备 cookie、passkey 全部原样适用，
   **不因为在局域网里就放宽任何东西**。
 - 对端必须在本地网络里（`lan.PeerIsLocal`），否则 403：绑通配地址只是拓扑假设，端口转发 / UPnP / 全局 IPv6 都能让公网连上来。
-  CGNAT（Tailscale 那段）不算本地。
+  CGNAT（Tailscale 那段）本身不算本地，见下面「Over a tailnet」。
 - 默认端口 7878（`GERDR_LAN_PORT` 或 remote.json 的 `lanPort`，0 = 不开）。起不来只记在 `Status.LanErr`，App 探不通就留在中继上。
   第一次起来时 macOS 防火墙可能问「是否允许传入连接」—— 要允许，不然手机探不通，而且没有任何报错。
 - 候选地址每次现报（`GET /api/remote/lan`，页面拿去发给壳）：局域网 IP 会变，配死一个地址的表现是「某天开始不直连了」。
@@ -54,6 +54,22 @@ WebView ──CONNECT gerdr.example.com:443──▶ App 内的代理（127.0.0.
 - 壳那边的三条（`LanRoute.kt` 的注释里有细节）：只在**完整 TLS 握手 + 验域名**通过之后才往局域网拨；网络一变先作废再重探；
   探通的那一刻把走中继的连接全部掐掉（不然 /ws 那条长连接一直挂在中继上）。小米这类「双网」机型要把 socket 绑到 Wi-Fi 上。
 - 浏览器不走这条。
+
+### Over a tailnet (Tailscale)
+
+With Tailscale on both the Mac and the phone, the same LAN port serves the phone from anywhere, without the relay:
+one more route, same origin, same certificate and credentials. On by default; `"lanTailnet": false` in remote.json or
+`GERDR_LAN_TAILNET=0` turns it off.
+
+- **Candidates**: `lan.Origins` also reports the Mac's tailnet address (100.64/10 on a tunnel interface: utunN,
+  tailscale0, "Tailscale"), after the LAN ones. At home the LAN one wins; elsewhere only the tailnet one answers.
+- **The gate** (`lan.ViaTailnet`): a 100.64/10 peer gets in only when it reached one of **our own tailnet addresses**
+  (the connection's local address, `http.LocalAddrContextKey`). Trusting 100.64/10 peers as such would let in anyone
+  sharing a carrier's CGNAT range; they arrive on the en / cellular address, if at all, and stay out.
+- **The shells must not pin tailnet addresses to Wi-Fi** (`Server.isTailnet` in both): a socket bound to the Wi-Fi
+  network (Android `bindSocket`, iOS `requiredInterfaceType`) goes around the VPN and never reaches 100.x. Android
+  Apps older than this change still use it on cellular (no Wi-Fi to bind to), not on Wi-Fi; older iOS Apps never.
+- macOS may ask once whether to allow incoming connections, same as for the LAN.
 
 ## passkey：在 App 里自己刷
 

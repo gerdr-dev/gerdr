@@ -167,6 +167,7 @@ final class LanRoute {
     /// A TLS handshake with the domain as SNI (the LAN port picks the real certificate by it) and the chain checked
     /// **for that domain name** (SecPolicyCreateSSL with the host): any valid certificate for another name fails.
     /// Pinned to Wi-Fi: a LAN address is never reachable over cellular, and that's where "Wi-Fi Assist" may send it.
+    /// Not a tailnet address: that one goes through the VPN's interface, which a Wi-Fi pin would skip.
     private func probe(_ c: Cand, done: @escaping (Bool) -> Void) {
         let tls = NWProtocolTLS.Options()
         let so = tls.securityProtocolOptions
@@ -181,7 +182,7 @@ final class LanRoute {
         let tcp = NWProtocolTCP.Options()
         tcp.connectionTimeout = 2
         let p = NWParameters(tls: tls, tcp: tcp)
-        p.requiredInterfaceType = .wifi
+        if !Server.isTailnet(c.host) { p.requiredInterfaceType = .wifi }
         guard let port = NWEndpoint.Port(rawValue: c.port) else { return done(false) }
         let conn = NWConnection(host: NWEndpoint.Host(c.host), port: port, using: p)
         var finished = false
@@ -322,7 +323,7 @@ final class LanRoute {
         let tcp = NWProtocolTCP.Options()
         tcp.connectionTimeout = t.lan ? 1 : 10
         let p = NWParameters(tls: nil, tcp: tcp)
-        if t.lan { p.requiredInterfaceType = .wifi } // same network as the probe
+        if t.lan && !Server.isTailnet(t.host) { p.requiredInterfaceType = .wifi } // same network as the probe
         guard let port = NWEndpoint.Port(rawValue: t.port) else { return dial(ts, i + 1, done: done) }
         let up = NWConnection(host: NWEndpoint.Host(t.host), port: port, using: p)
         var finished = false

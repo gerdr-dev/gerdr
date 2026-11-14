@@ -111,7 +111,8 @@ plumbing differs:
   are untouched. `allowFailover`: if the proxy is gone, WebKit connects directly, i.e. the relay.
 - Probe: `NWConnection` with TLS, SNI = the domain, and a verify block evaluating the chain with
   `SecPolicyCreateSSL(true, domain)`, so a valid certificate for another name fails. LAN probes and dials are pinned
-  to Wi-Fi (`requiredInterfaceType`), Android's dual-network lesson.
+  to Wi-Fi (`requiredInterfaceType`), Android's dual-network lesson; tailnet addresses (100.64/10) are not, the VPN
+  is its own interface (ANDROID.md "Over a tailnet").
 - Before the first load the proxy probes last time's candidates (cached per host in UserDefaults, ≤1.5 s), so the
   page and the terminal's WebSocket start on the LAN at home. The page reports fresh candidates after hello and when
   it becomes visible; `NWPathMonitor` changes and coming to the foreground re-probe (drop first); relaying on Wi-Fi

@@ -43,6 +43,13 @@ enum Server {
         let p = host.split(separator: ".").compactMap { Int($0) }
         guard p.count == 4 else { return false }
         return p[0] == 10 || (p[0] == 172 && (16...31).contains(p[1])) || (p[0] == 192 && p[1] == 168)
-            || (p[0] == 100 && (64...127).contains(p[1])) // CGNAT (Tailscale and the like)
+            || isTailnet(host)
+    }
+
+    /// A tailnet address (Tailscale's 100.64/10): the Mac's LAN port also answers there, through the phone's VPN
+    /// from anywhere. LanRoute must not pin these to Wi-Fi: the VPN is its own interface, and Wi-Fi goes around it.
+    static func isTailnet(_ host: String) -> Bool {
+        let p = host.split(separator: ".").compactMap { Int($0) }
+        return p.count == 4 && p[0] == 100 && (64...127).contains(p[1])
     }
 }

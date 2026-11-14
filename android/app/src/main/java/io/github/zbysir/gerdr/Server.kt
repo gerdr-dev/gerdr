@@ -56,6 +56,15 @@ object Server {
         return p[0] == 10 ||
             (p[0] == 172 && p[1] in 16..31) ||
             (p[0] == 192 && p[1] == 168) ||
-            (p[0] == 100 && p[1] in 64..127) // CGNAT（Tailscale 这类）
+            isTailnet(host)
+    }
+
+    /**
+     * A tailnet address (Tailscale's 100.64/10): the Mac's LAN port also answers there, reached through the phone's
+     * VPN from anywhere. LanRoute must not pin these to Wi-Fi: a socket bound to the Wi-Fi network skips the VPN.
+     */
+    fun isTailnet(host: String?): Boolean {
+        val p = host?.split('.')?.mapNotNull { it.toIntOrNull() } ?: return false
+        return p.size == 4 && p[0] == 100 && p[1] in 64..127
     }
 }

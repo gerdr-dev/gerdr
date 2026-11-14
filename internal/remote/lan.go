@@ -28,6 +28,9 @@ import (
 //   - 浏览器不走这条（没法不换 origin 地换路；换 origin 的坑见 herdr-web RELAY.md §4.4）。
 //
 // 起不来（端口被占）只记在 Status.LanErr 里，App 探不通会安静地留在中继上。
+//
+// The same port also serves a phone on this machine's tailnet (Tailscale) from anywhere, unless LanTailnet is off:
+// same certificate, same rules, the tailnet only replaces the relay as the way in.
 
 func (s *Service) startLan(ctx context.Context, cfg config.Remote, cf *certFile, h http.Handler) {
 	if cfg.LanPort <= 0 {
@@ -42,7 +45,7 @@ func (s *Service) startLan(ctx context.Context, cfg config.Remote, cf *certFile,
 		s.log.Warn("remote: lan port", "err", err)
 		return
 	}
-	hs := &http.Server{Handler: lanOnly(h, s.alert), ReadHeaderTimeout: 10 * time.Second}
+	hs := &http.Server{Handler: lanOnly(h, cfg.LanTailnet, s.alert), ReadHeaderTimeout: 10 * time.Second}
 	s.mu.Lock()
 	if ctx.Err() != nil {
 		s.mu.Unlock()
@@ -65,19 +68,24 @@ func (s *Service) startLan(ctx context.Context, cfg config.Remote, cf *certFile,
 // 每次现算：局域网 IP 会变（DHCP、换 Wi-Fi），配死一个地址的表现是「某天开始不直连了，而且没有任何报错」。
 func (s *Service) LanOrigins() []string {
 	s.mu.Lock()
-	on, port := s.lanHS != nil, s.cfg.LanPort
+	on, port, tailnet := s.lanHS != nil, s.cfg.LanPort, s.cfg.LanTailnet
 	s.mu.Unlock()
 	if !on {
 		return nil
 	}
-	return lan.Origins(port)
+	return lan.Origins(port, tailnet)
 }
 
 // lanOnly：对端不在本地网络里就 403。第一次撞上时吼一声 —— 那说明这个口被暴露到公网了。
-func lanOnly(next http.Handler, alert func(string)) http.Handler {
+// With tailnet on, a tailnet peer that reached our tailnet address counts as local too (lan.ViaTailnet).
+func lanOnly(next http.Handler, tailnet bool, alert func(string)) http.Handler {
 	var once sync.Once
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !lan.PeerIsLocal(r.RemoteAddr) {
+		local := ""
+		if a, ok := r.Context().Value(http.LocalAddrContextKey).(net.Addr); ok {
+			local = a.String()
+		}
+		if !lan.PeerIsLocal(r.RemoteAddr) && !(tailnet && lan.ViaTailnet(r.RemoteAddr, local)) {
 			once.Do(func() {
 				alert(fmt.Sprintf(i18n.S("局域网直连口收到了来自 %s 的连接 —— 不是本地地址，已拒绝。这个口大概被暴露到公网了（端口转发 / UPnP / 全局 IPv6）",
 					"The LAN port got a connection from %s, which isn't a local address, and refused it. The port is probably exposed to the internet (port forwarding / UPnP / global IPv6)."), r.RemoteAddr))

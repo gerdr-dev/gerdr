@@ -7,10 +7,11 @@ import (
 )
 
 // 直连口只服务本地网络：公网地址连上来（端口转发 / 全局 IPv6）一个字节都不给。
+// A 100.64/10 peer without a tailnet address on our side (no LocalAddr here) stays out too.
 func TestLanOnly(t *testing.T) {
 	alerts := 0
-	h := lanOnly(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(204) }), func(string) { alerts++ })
-	for addr, want := range map[string]int{"192.168.1.20:5555": 204, "[fe80::1]:1": 204, "203.0.113.9:1": 403, "[2001:db8::1]:1": 403} {
+	h := lanOnly(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(204) }), true, func(string) { alerts++ })
+	for addr, want := range map[string]int{"192.168.1.20:5555": 204, "[fe80::1]:1": 204, "203.0.113.9:1": 403, "[2001:db8::1]:1": 403, "100.88.1.1:1": 403} {
 		r := httptest.NewRequest("GET", "/", nil)
 		r.RemoteAddr = addr
 		w := httptest.NewRecorder()
