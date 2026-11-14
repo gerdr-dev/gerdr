@@ -300,7 +300,7 @@ takes effect after restarting Gerdr (the macOS app reads it too). Then:
 - **passkey** — in Gerdr on the phone, Settings → Remote access → add a passkey. Paired devices re-verify after 24
   hours without one.
 - **revoke** — *Kick* in Settings, or `gerdr remote devices` / `gerdr remote revoke <id|all>` (`all` clears passkeys
-  too).
+  too). Milder: `gerdr remote reverify <id>` keeps the device but makes it re-verify on its next request.
 - `gerdr remote status` shows the relay connection and certificate expiry.
 
 Everything can also come from the environment (overrides `remote.json`): `GERDR_RELAY_URL`, `GERDR_RELAY_HOST`,

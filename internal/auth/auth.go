@@ -384,6 +384,23 @@ func (s *Store) CheckTampered(alert func(string)) {
 	s.guard.check(i18n.S("设备凭据文件", "the device credentials file"), alert)
 }
 
+// RequireReverify makes a device prove presence again on its next request (a passkey, an approval, or its App key's
+// Face ID), without revoking it: for a device that looks wrong but shouldn't have to pair again. It only drops
+// VerifiedAt; PasskeyAt, the credential and the App key stay. Has an effect only where re-verification applies at
+// all (ReauthNeeded: a passkey registered, not a peer). Returns the device's label.
+func (s *Store) RequireReverify(id string) (string, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, d := range s.devs {
+		if d.ID == id {
+			d.VerifiedAt = time.Unix(1, 0) // not zero: zero means "before this existed" and falls back to Created
+			s.flushLocked()
+			return d.Label, true
+		}
+	}
+	return "", false
+}
+
 // MarkVerified 记一次刚做过的生物验证（passkey 断言成功）。
 //
 // 调用点只有 passkey 的 login/finish 和 register/finish 两处 —— 也就是说 PasskeyAt

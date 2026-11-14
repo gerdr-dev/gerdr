@@ -232,6 +232,7 @@ gerdr remote join https://relay.example.com gerdr.example.com <邀请码> \
 - **配对**：设置 →「远程访问」→ 出一个配对码（或 `gerdr remote pair`），手机扫码就进来了。码 5 分钟、用一次就废。
 - **passkey**：在手机上打开的 Gerdr 里，设置 →「远程访问」→ 加一把 passkey。配过对的设备 24 小时没验证要再刷一次。
 - **踢设备**：设置里点「踢掉」，或 `gerdr remote devices` / `gerdr remote revoke <id|all>`（all 连 passkey 一起清）。
+  轻一点的：`gerdr remote reverify <id>` 不踢掉设备，只让它下次访问时重新验证。
 - `gerdr remote status` 看中继连没连上、证书什么时候到期。
 
 也能全用环境变量配（盖过 remote.json）：`GERDR_RELAY_URL`、`GERDR_RELAY_HOST`、`GERDR_ACME_DNS`、`GERDR_<DNS 凭据>`

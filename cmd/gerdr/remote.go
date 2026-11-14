@@ -159,6 +159,43 @@ func remoteCmd() *cobra.Command {
 			return nil
 		},
 	})
+	cmd.AddCommand(&cobra.Command{
+		Use:   i18n.S("reverify <设备 id>", "reverify <device-id>"),
+		Short: i18n.S("让一台设备下次访问时重新验证（passkey / 浏览器批准 / App 的 Face ID），不踢掉它", "Make a device re-verify on its next request (passkey / browser approval / the App's Face ID) without revoking it"),
+		Long: i18n.S("让一台设备下次访问时重新验证，不踢掉它：凭据、passkey、App 密钥都留着，只是要再证明一次是本人。\n"+
+			"只在注册过 passkey 时有用（没有 passkey 就没有「重新验证」这回事）。设备 id 见 gerdr remote devices。",
+			"Make a device re-verify on its next request without revoking it: its credential, passkeys and App key stay, it\n"+
+				"just has to prove it's you again. Only matters once a passkey is registered (otherwise there's no re-verification).\n"+
+				"Device ids: gerdr remote devices."),
+		Args: cobra.ExactArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			id := args[0]
+			var out struct {
+				Label    string
+				Passkeys int
+			}
+			if c, err := newAPIClient(); err == nil {
+				if err := c.do("POST", "/api/remote/devices/"+url.PathEscape(id)+"/reverify", nil, &out); err != nil {
+					return err
+				}
+			} else {
+				s, err := offlineRemote()
+				if err != nil {
+					return err
+				}
+				label, ok := s.Auth.RequireReverify(id)
+				if !ok {
+					return fmt.Errorf(i18n.S("没有这台设备：%s", "no such device: %s"), id)
+				}
+				out.Label, out.Passkeys = label, s.Passkeys.Count()
+			}
+			fmt.Printf(i18n.S("  %s 下次访问时要重新验证\n", "  %s will re-verify on its next request\n"), out.Label)
+			if out.Passkeys == 0 {
+				fmt.Println(i18n.S("  （还没注册 passkey，所以眼下不会要求它验证）", "  (no passkey registered yet, so it won't be asked for now)"))
+			}
+			return nil
+		},
+	})
 	pk := &cobra.Command{
 		Use:   "passkeys",
 		Short: i18n.S("列出注册过的 passkey", "List registered passkeys"),

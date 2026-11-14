@@ -120,3 +120,33 @@ func TestAppKey(t *testing.T) {
 		t.Fatalf("revoked device still has a key: %v", err)
 	}
 }
+
+// RequireReverify: due for re-verification at once (with a passkey registered), credential and App key kept, and
+// the App key brings it back.
+func TestRequireReverify(t *testing.T) {
+	now := time.Now()
+	s := newStore(t, Config{TTL: 90 * 24 * time.Hour})
+	s.now = func() time.Time { return now }
+	k, pub := appKeyPair(t)
+	d, tok := s.NewDevice("iPhone GerdrApp/1", "1.2.3.4", "")
+	if err := s.SetAppKey(d.ID, pub); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := s.RequireReverify("nope"); ok {
+		t.Fatal("unknown device")
+	}
+	if _, ok := s.RequireReverify(d.ID); !ok {
+		t.Fatal("known device")
+	}
+	id := s.Authenticate(withCookie(tok))
+	if id == nil || !ReauthNeeded(id, 24*time.Hour, 1, now) {
+		t.Fatalf("should be due for re-verification and still signed in: %+v", id)
+	}
+	n, _ := s.AppKeyChallenge(d.ID)
+	if err := s.VerifyAppKey(d.ID, n, appSign(t, k, "h", d.ID, n), "h"); err != nil {
+		t.Fatal(err)
+	}
+	if ReauthNeeded(s.Authenticate(withCookie(tok)), 24*time.Hour, 1, now) {
+		t.Fatal("the App key should have renewed it")
+	}
+}

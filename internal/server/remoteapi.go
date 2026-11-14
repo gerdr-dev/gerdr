@@ -392,6 +392,16 @@ func (s *Server) remoteRoutes(mux *http.ServeMux) {
 		}
 		writeJSON(w, map[string]any{"revoked": 1, "label": label})
 	})
+	// Make a device re-verify on its next request without kicking it (auth.RequireReverify). Allowed from remote
+	// like revoke, which it is a milder form of.
+	mux.HandleFunc("POST /api/remote/devices/{id}/reverify", func(w http.ResponseWriter, r *http.Request) {
+		label, ok := s.Remote.Auth.RequireReverify(r.PathValue("id"))
+		if !ok {
+			httpError(w, 404, i18n.S("没有这台设备", "No such device"))
+			return
+		}
+		writeJSON(w, map[string]any{"label": label, "passkeys": s.Remote.Passkeys.Count()})
+	})
 	mux.HandleFunc("GET /api/remote/passkeys", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"passkeys": s.Remote.Passkeys.List(), "available": s.passkeyOK(r), "url": s.Remote.URL()})
 	})
