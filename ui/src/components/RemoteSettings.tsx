@@ -205,6 +205,7 @@ export function RemoteSettings({ open }: { open: boolean }) {
                   {d.label}
                   {d.id === me && <span className="ml-2 text-[11px] text-brand">{t("remoteSettings.thisDevice")}</span>}
                   {/* 配对码进来的临时设备：到点就掉，在那台设备上过一次 passkey 才转正（auth.Device.Temp） */}
+                  {d.appKey && <span className="ml-2 text-[11px] text-muted-foreground">{t("remoteSettings.appKey")}</span>}
                   {d.temp && (
                     <span className="ml-2 text-[11px] text-warn">
                       {t("remoteSettings.temp", { time: new Date(d.expires).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) })}
@@ -215,6 +216,24 @@ export function RemoteSettings({ open }: { open: boolean }) {
                   {t("remoteSettings.deviceMeta", { seen: when(d.lastSeen), ip: d.lastIp, created: when(d.created) })}
                 </div>
               </div>
+              {/* Re-verify without kicking it (gerdr remote reverify): only where re-verification exists at all — a
+                  passkey registered, not another Gerdr, not a temporary device that dies on its own anyway */}
+              {keys.length > 0 && !d.peer && !d.temp && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  title={t("remoteSettings.reverifyHint")}
+                  onClick={() =>
+                    run(async () => {
+                      const r = await api.remoteReverify(d.id);
+                      if (d.id === me) location.reload();
+                      else setMsg(t("remoteSettings.reverified", { label: r.label }));
+                    })
+                  }
+                >
+                  {t("remoteSettings.reverify")}
+                </Button>
+              )}
               <Button
                 size="sm"
                 variant="ghost"

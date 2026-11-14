@@ -107,6 +107,10 @@ export const zh = {
   "remoteSettings.temp": "临时 · {time} 到期",
   "remoteSettings.deviceMeta": "最后 {seen} · {ip} · 配于 {created}",
   "remoteSettings.revoke": "踢掉",
+  "remoteSettings.reverify": "要求重新验证",
+  "remoteSettings.reverifyHint": "不踢掉它，只让它下次访问时再证明一次是本人（passkey、浏览器批准，或 App 的 Face ID / 指纹）",
+  "remoteSettings.reverified": "{label} 下次访问时要重新验证",
+  "remoteSettings.appKey": "Face ID / 指纹",
   "remoteSettings.android": "安卓 App",
   "remoteSettings.approveApp": "批准 App 登录",
   "remoteSettings.androidHint":
@@ -402,6 +406,11 @@ export const en: Record<keyof typeof zh, string> = {
   "remoteSettings.temp": "Temporary · expires {time}",
   "remoteSettings.deviceMeta": "Last seen {seen} · {ip} · paired {created}",
   "remoteSettings.revoke": "Sign out",
+  "remoteSettings.reverify": "Ask to re-verify",
+  "remoteSettings.reverifyHint":
+    "Keeps it signed in, but on its next request it has to prove it's you again (a passkey, a browser approval, or the App's Face ID / fingerprint)",
+  "remoteSettings.reverified": "{label} will re-verify on its next request",
+  "remoteSettings.appKey": "Face ID / fingerprint",
   "remoteSettings.android": "Android app",
   "remoteSettings.approveApp": "Approve app sign-in",
   "remoteSettings.androidHint":

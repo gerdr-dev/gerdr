@@ -470,6 +470,7 @@ export const api = {
   remotePairCode: () => req<{ code: string; expires: string; url: string; qr?: string }>("POST", "/api/remote/pair-code", {}),
   remoteDevices: () => req<{ devices: RemoteDevice[]; me: string }>("GET", "/api/remote/devices"),
   remoteRevoke: (id: string) => req<{ revoked: number; label: string }>("DELETE", `/api/remote/devices/${encodeURIComponent(id)}`),
+  remoteReverify: (id: string) => req<{ label: string; passkeys: number }>("POST", `/api/remote/devices/${encodeURIComponent(id)}/reverify`),
   /** 全部踢掉：设备 + passkey 一起（只清设备的话，留着的 passkey 能立刻换回一份新凭据） */
   remoteRevokeAll: () => req<{ revoked: number; passkeys: number }>("DELETE", "/api/remote/devices"),
   remotePasskeys: () => req<{ passkeys: PasskeyInfo[]; available: boolean; url: string }>("GET", "/api/remote/passkeys"),
@@ -564,7 +565,19 @@ export type RemoteCert = {
 export type HostRecord = { want: string; current: string[] | null; missing: boolean; auto: boolean };
 export type RemoteCertInput = { dns: string; email: string; staging: boolean; env: Record<string, string>; tlsCert: string; tlsKey: string };
 /** temp：配对码进来的临时设备，expires 定死、不续期；在那台设备上过一次 passkey 就转正 */
-export type RemoteDevice = { id: string; label: string; created: string; lastSeen: string; lastIp: string; expires: string; temp?: boolean };
+export type RemoteDevice = {
+  id: string;
+  label: string;
+  created: string;
+  lastSeen: string;
+  lastIp: string;
+  expires: string;
+  temp?: boolean;
+  /** Another Gerdr driving this one: never asked to re-verify */
+  peer?: boolean;
+  /** The phone App's key for re-verifying with Face ID / a fingerprint (server auth/appkey.go) */
+  appKey?: { added: string } | null;
+};
 export type PasskeyInfo = { id: string; label: string; created: string; lastUsed: string };
 
 export type MCPAuth = {
