@@ -50,7 +50,7 @@ type Entry struct {
 
 // Options for Walk. The zero value is an artifact folder's walk: built-in ignores plus .gerdrignore.
 type Options struct {
-	All     bool     // every file (`gerdr cp`): no built-in ignores, no .gerdrignore; only half-written copies skipped
+	All     bool     // every file (`gerdr host cp`): no built-in ignores, no .gerdrignore; only half-written copies skipped
 	Exclude []string // more patterns, .gerdrignore syntax
 }
 

@@ -138,7 +138,7 @@ func (c *apiClient) openFolder(args []string, pull bool) (*syncFolder, error) {
 		f.m = &folder.Manifest{Peer: *peer, Files: map[string]string{}, Copies: map[string]bool{}}
 	}
 	if f.m == nil && pull {
-		return nil, errors.New(i18n.S("要给 <电脑>:<路径>（gerdr session hosts 里的 id）", "Give <host>:<path> (an id from gerdr session hosts)"))
+		return nil, errors.New(i18n.S("要给 <电脑>:<路径>（gerdr host list 里的 id）", "Give <host>:<path> (an id from gerdr host list)"))
 	}
 	return f, nil
 }

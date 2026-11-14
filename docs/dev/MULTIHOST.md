@@ -86,7 +86,7 @@ accepted remotely, pairing codes are only minted on the host itself.
 
 `gerdr session …` on the console already sees host sessions (they are in `/api/hello`); what needed care:
 
-- `gerdr session hosts` lists the paired computers; `new --host <id>` starts one there. Its `--cwd` is resolved on that
+- `gerdr host list` lists the paired computers; `new --host <id>` starts one there. Its `--cwd` is resolved on that
   computer (`~` = its home, asked with `/api/fs/dirs?host=`), never with this one's working directory. The skill says
   to quote `'~/…'`: unquoted, the agent's shell expands it to *this* home (and an unquoted `~` makes the command need
   approval, `sysenv.SafeGerdrCLI`).
@@ -139,7 +139,7 @@ accepted remotely, pairing codes are only minted on the host itself.
 - "Import Claude Code conversations" lists and imports the agent's records on that computer (`?host=`, then
   `createOnHost` with `import`): they are only on that computer's disk.
 
-## Running commands there (`gerdr exec`, `gerdr pane send / read`)
+## Running commands there (`gerdr host exec`, `gerdr pane send / read`)
 
 Before this an agent on the console had no CLI door to a host's shell: it started (or messaged) an agent there and
 waited a turn per command, or found the `!command` route of a host session and wrote into that conversation's log.
@@ -163,9 +163,9 @@ waited a turn per command, or found the `!command` route of a host session and w
 - No `gerdr term new`: a terminal an agent opens and no pane shows is a process nobody sees or stops. Long-running
   things go in a terminal the user opened (and can watch); one-offs go through `exec`.
 
-## Copying files there and back (`gerdr cp`)
+## Copying files there and back (`gerdr host cp`)
 
-`cmd/gerdr/cp.go`. scp's shape: `gerdr cp <src>... <host>:<path>` or `gerdr cp <host>:<path>... <dest>`, files and
+`cmd/gerdr/cp.go`. scp's shape: `gerdr host cp <src>... <host>:<path>` or `gerdr host cp <host>:<path>... <dest>`, files and
 folders, before it an agent piped one file at a time through `exec --stdin` or borrowed a conversation
 (`session send --file` wakes the agent there and leaves the file in its uploads; `session fetch` needs a session).
 

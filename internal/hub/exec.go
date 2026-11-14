@@ -19,7 +19,7 @@ import (
 	"github.com/gerdr-dev/gerdr/sysenv"
 )
 
-// RunCommand runs one command line on this computer and hands back what it printed: `gerdr exec --host`, so an agent on
+// RunCommand runs one command line on this computer and hands back what it printed: `gerdr host exec`, so an agent on
 // another computer can run a command here without asking an agent here to run it for it (a turn, tokens, a
 // minute per command). Same shell as `!command` (shellCommand: the login shell, so PATH is the profile's), its own
 // process group (stopping it stops what it started), no stdin unless given. Nothing is logged in any conversation:

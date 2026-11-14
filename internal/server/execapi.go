@@ -19,7 +19,7 @@ import (
 )
 
 // POST /api/exec: run one command line on this computer and answer with its output and exit code (hub.RunCommand).
-// The console reaches a host's through the ?host= route (`gerdr exec --host`): an agent here runs commands there
+// The console reaches a host's through the ?host= route (`gerdr host exec`): an agent here runs commands there
 // directly instead of asking an agent there to. It gives a paired console nothing it didn't have: it can already open
 // a terminal there (termOnHost) and type into it. The request's context is the command's: the caller going away
 // (Ctrl-C on the CLI, the console's request cancelled) stops it.
@@ -27,7 +27,7 @@ func (s *Server) execRoutes(mux *http.ServeMux) {
 	//
 	// Two shapes. JSON {command, cwd, stdin, timeout}: stdin as a JSON string, so text only. Raw: the body is the
 	// command's stdin as bytes, streamed (no size limit), and the rest goes in the query (command, cwd, timeout ms,
-	// stdin=1). `gerdr exec --stdin` sends raw: a JSON string turned a binary's invalid UTF-8 into U+FFFD and blew a
+	// stdin=1). `gerdr host exec --stdin` sends raw: a JSON string turned a binary's invalid UTF-8 into U+FFFD and blew a
 	// 45 MB file past the 64 MB body limit in \u0000 escapes; the CLI also cut stdin at 32 MB without a word.
 	mux.HandleFunc("POST /api/exec", func(w http.ResponseWriter, r *http.Request) {
 		var b struct {

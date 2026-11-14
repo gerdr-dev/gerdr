@@ -516,6 +516,11 @@ func SafeGerdrCLI(cmd string) bool {
 		if len(words) < 3 || words[2] == "emit" {
 			return false
 		}
+	case "host":
+		// Only listing the computers: `host exec` runs anything there, `host cp` writes anywhere on either side
+		if len(words) != 3 || words[2] != "list" {
+			return false
+		}
 	case "wait":
 		// Waiting for a state, listing, removing one's own waits: nothing it does runs anything
 		if len(words) < 3 {
@@ -539,7 +544,7 @@ func SafeGerdrCLI(cmd string) bool {
 		return false
 	}
 	// `pane send` types into a terminal, which runs whatever it's given (on another computer too): a command like any
-	// other. Same for `gerdr exec`, which isn't in the list above
+	// other. Same for `gerdr host exec` / `host cp`, refused above
 	if words[1] == "pane" && len(words) > 2 && words[2] == "send" {
 		return false
 	}

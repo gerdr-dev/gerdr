@@ -25,8 +25,8 @@ import (
 	"github.com/gerdr-dev/gerdr/internal/i18n"
 )
 
-// cpCmd: `gerdr cp` copies files and folders between this computer and one it drives, like scp. Before it an agent
-// piped one file at a time through `gerdr exec --stdin -- 'cat > …'` (its own quoting, no folders, no check that
+// hostCpCmd: `gerdr host cp` copies files and folders between this computer and one it drives, like scp. Before it an agent
+// piped one file at a time through `gerdr host exec --stdin -- 'cat > …'` (its own quoting, no folders, no check that
 // 45 MB arrived whole) or borrowed a conversation (`session send --file`, which wakes the agent there up).
 //
 // Nothing new on the other side: the routes artifact folders use (docs/dev/MULTIHOST.md "Artifact folders"):
@@ -34,14 +34,14 @@ import (
 // PUT /api/fs/file to write (tmp file + rename, answers the sha256 of what it received), /api/fs/raw to read. Every
 // file is checked by sha256 against the sending side, so a cut or mangled transfer is an error, never a quiet success.
 // Not auto-approved (sysenv.SafeGerdrCLI): it writes wherever it is told, on either computer.
-func cpCmd() *cobra.Command {
+func hostCpCmd() *cobra.Command {
 	var excludes []string
 	var jobs int
 	cmd := &cobra.Command{
 		Use:   i18n.S("cp <源>... <目标>", "cp <source>... <dest>"),
 		Short: i18n.S("在这台和它控制的另一台电脑之间拷文件 / 目录（<电脑>:<路径> 是那边的），每个文件都核对 sha256", "Copy files / folders between this computer and one it controls (<host>:<path> is over there); every file checked by sha256"),
 		Long: i18n.S(
-			"像 scp：一边是这台的路径，一边是 <电脑>:<路径>（电脑是 gerdr session hosts 的 id；路径是那边的绝对路径、'~/…'，\n"+
+			"像 scp：一边是这台的路径，一边是 <电脑>:<路径>（电脑是 gerdr host list 的 id；路径是那边的绝对路径、'~/…'，\n"+
 				"或相对那边家目录的路径）。目录整个拷，不用 -r；隐藏文件、.git 都拷，不要的用 --exclude（.gerdrignore 的写法）。\n"+
 				"目标怎么算（重复跑同一条命令结果一样）：\n"+
 				"  - 目标以 / 结尾、是 . / ~ ，或源有好几个：放进这个目录，用原来的名字。\n"+
@@ -50,7 +50,7 @@ func cpCmd() *cobra.Command {
 				"已经一样的文件（sha256 相同）跳过，所以断了重跑只补没传完的。可执行位跟着走。\n"+
 				"每个文件到了以后核对 sha256，对不上重传一次，还不对就报错、退出码 1。目标那边从不删文件。\n"+
 				"结束打一段 JSON（copied / skipped / failed / bytes）；终端里会显示进度。",
-			"Like scp: one side is a path here, the other <host>:<path> (host: an id from gerdr session hosts; path: absolute\n"+
+			"Like scp: one side is a path here, the other <host>:<path> (host: an id from gerdr host list; path: absolute\n"+
 				"on that computer, '~/…', or relative to its home). Folders are copied whole, no -r; hidden files and .git\n"+
 				"included, leave things out with --exclude (.gerdrignore syntax).\n"+
 				"Where things land (running the same command again gives the same result):\n"+
@@ -62,12 +62,12 @@ func cpCmd() *cobra.Command {
 				"executable bit goes along. Every file's sha256 is checked on arrival; a mismatch is sent once more, then an\n"+
 				"error (exit code 1). Nothing is ever deleted on the receiving side.\n"+
 				"Prints JSON at the end (copied / skipped / failed / bytes); progress shows in a terminal."),
-		Example: "  gerdr session hosts\n" +
-			"  gerdr cp ./build/app mini:'~/bin/'            # → ~/bin/app on mini\n" +
-			"  gerdr cp ./dist mini:'~/www/site'             # the folder dist becomes ~/www/site\n" +
-			"  gerdr cp ./src ./go.mod mini:'~/work/app/' --exclude node_modules\n" +
-			"  gerdr cp mini:'~/logs/today.log' .\n" +
-			"  gerdr cp mini:/var/data/run-42 ./results/     # → ./results/run-42",
+		Example: "  gerdr host list\n" +
+			"  gerdr host cp ./build/app mini:'~/bin/'            # → ~/bin/app on mini\n" +
+			"  gerdr host cp ./dist mini:'~/www/site'             # the folder dist becomes ~/www/site\n" +
+			"  gerdr host cp ./src ./go.mod mini:'~/work/app/' --exclude node_modules\n" +
+			"  gerdr host cp mini:'~/logs/today.log' .\n" +
+			"  gerdr host cp mini:/var/data/run-42 ./results/     # → ./results/run-42",
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			c, err := newAPIClient()
@@ -232,7 +232,7 @@ func (c *apiClient) copy(args []string, excludes []string, jobs int) error {
 				return err
 			}
 			if !all {
-				fmt.Fprintf(os.Stderr, i18n.S("[gerdr cp：%s 上的 Gerdr 太旧，.git、node_modules 和 .gerdrignore 里的没拷：让它升级]\n", "[gerdr cp: the Gerdr on %s is old, so .git, node_modules and what .gerdrignore names were left out: update it]\n"), s.host)
+				fmt.Fprintf(os.Stderr, i18n.S("[gerdr host cp：%s 上的 Gerdr 太旧，.git、node_modules 和 .gerdrignore 里的没拷：让它升级]\n", "[gerdr host cp: the Gerdr on %s is old, so .git, node_modules and what .gerdrignore names were left out: update it]\n"), s.host)
 			}
 			for _, e := range files {
 				local := filepath.Join(target, filepath.FromSlash(e.Path))
@@ -389,7 +389,7 @@ func (t *cpRun) run(plan []cpJob, skipped, jobs int) error {
 	wg.Wait()
 	stop()
 	if t.modeLost.Load() {
-		fmt.Fprintf(os.Stderr, i18n.S("[gerdr cp：%s 上的 Gerdr 太旧，可执行位没带过去：让它升级，或者 gerdr exec 去 chmod +x]\n", "[gerdr cp: the Gerdr on %s is old and dropped the executable bit: update it, or chmod +x with gerdr exec]\n"), t.host)
+		fmt.Fprintf(os.Stderr, i18n.S("[gerdr host cp：%s 上的 Gerdr 太旧，可执行位没带过去：让它升级，或者 gerdr host exec 去 chmod +x]\n", "[gerdr host cp: the Gerdr on %s is old and dropped the executable bit: update it, or chmod +x with gerdr host exec]\n"), t.host)
 	}
 	out := map[string]any{"to": t.to, "copied": len(copied), "skipped": skipped, "bytes": t.done.Load(), "verified": "sha256", "ms": time.Since(start).Milliseconds()}
 	if len(copied) <= 50 {
@@ -498,7 +498,7 @@ func (t *cpRun) progress(n int) (stop func()) {
 	start := time.Now()
 	line := func() string {
 		d, secs := t.done.Load(), time.Since(start).Seconds()
-		return fmt.Sprintf("gerdr cp: %s / %s, %d / %d files, %s/s", mb(d), mb(t.total.Load()), t.files.Load(), n, mb(int64(float64(d)/max(secs, 0.001))))
+		return fmt.Sprintf("gerdr host cp: %s / %s, %d / %d files, %s/s", mb(d), mb(t.total.Load()), t.files.Load(), n, mb(int64(float64(d)/max(secs, 0.001))))
 	}
 	go func() {
 		defer wg.Done()

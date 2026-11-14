@@ -370,7 +370,7 @@ func TestHostFolderAPI(t *testing.T) {
 		t.Fatalf("none on an existing file: %d", w.Code)
 	}
 
-	// What `gerdr cp` uses: every file (all=1, ignores off but exclude=), modes, and a write that keeps the mode
+	// What `gerdr host cp` uses: every file (all=1, ignores off but exclude=), modes, and a write that keeps the mode
 	os.MkdirAll(filepath.Join(dir, ".git"), 0o755)
 	os.WriteFile(filepath.Join(dir, ".git", "HEAD"), []byte("ref"), 0o644)
 	os.WriteFile(filepath.Join(dir, "run.sh"), []byte("#!/bin/sh"), 0o755)
@@ -513,7 +513,7 @@ func TestPanelConversationSessionNew(t *testing.T) {
 	}
 }
 
-// `gerdr exec --host`: a command run on the host through this one, its output and exit code back; a timeout stops it.
+// `gerdr host exec`: a command run on the host through this one, its output and exit code back; a timeout stops it.
 // `gerdr pane read / send` on a terminal pane showing a host's terminal reach that terminal.
 func TestHostExecAndTerminalPane(t *testing.T) {
 	console, ch, hostSrv := hostPair(t)

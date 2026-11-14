@@ -21,7 +21,7 @@ import (
 //	GET /api/fs/tree?path=          every file under path (ignores applied), with size, mtime, sha256 and mode
 //	PUT /api/fs/file?path=&ifMatch= write one file, only if it still is the version the caller last saw
 //
-// `gerdr cp` uses the same two: tree with all=1 (every file, as cp would; exclude= repeatable, .gerdrignore syntax),
+// `gerdr host cp` uses the same two: tree with all=1 (every file, as cp would; exclude= repeatable, .gerdrignore syntax),
 // file with ifMatch=* and mode= (permission bits, octal), checking the sha256 it answers against what it sent.
 //
 // Nothing an agent or a terminal here couldn't do already: same guard as the rest of /api/fs.
