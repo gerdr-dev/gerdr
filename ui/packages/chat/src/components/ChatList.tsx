@@ -33,6 +33,7 @@ export type ListHandle = {
 const END = 2; // px from the end that still count as the bottom
 const SETTLE = 150; // ms without a scroll after the finger lifts that end a touch (its fling has stopped)
 const EST = 60; // a row never measured
+const BATCH = 6; // rows never measured mounted per idle step to be measured (scheduleBatch)
 const OVERSCAN = 800; // px mounted above and below the screen
 const HEAD = 32; // the "load older" line
 const READ_GAP = 40; // readFromTop: where a long text's start stays, from the screen's top (clear of the pinned prompt)
@@ -101,7 +102,11 @@ export const ChatList = forwardRef<
   // (2s at most). Rows never measured (older messages put in front) are mounted along with the range for one commit,
   // measured and dropped (`missing`): mounting the whole chat again for them was a phone's worst frame
   // (touchscroll.mjs --cpu=4 counts it as a remount).
-  const measuring = useRef(!warm.current);
+  // A cold open (no cached sizes) mounts only the rows near where it opens and measures the rest in batches when idle
+  // (BATCH, scheduleBatch): mounting every loaded row at once to measure it was one long task, 350ms+ at CPU x4 for a
+  // phone overview page coming in, the swipe stuck meanwhile. Only a cold open that must land mid-chat (startTop: a pixel
+  // offset means nothing without the sizes above it) still measures everything first.
+  const measuring = useRef(!warm.current && startTop !== undefined);
   const settle = useRef(0);
   const settleMax = useRef(0);
   const [, render] = useReducer((x: number) => x + 1, 0);
@@ -121,6 +126,21 @@ export const ChatList = forwardRef<
     if (inEffect) render();
     else flushSync(render);
   };
+  const batchTimer = useRef(0);
+  const scheduleBatch = () => {
+    if (batchTimer.current) return;
+    const run = () => {
+      batchTimer.current = 0;
+      // Mounting rows mid-gesture costs its frames: after it
+      if (touch.current || dragging.current || anim.current) return void (batchTimer.current = window.setTimeout(run, 200));
+      render();
+    };
+    batchTimer.current = window.setTimeout(() => {
+      if (typeof requestIdleCallback === "function") requestIdleCallback(run, { timeout: 500 });
+      else run();
+    }, 16);
+  };
+  useEffect(() => () => clearTimeout(batchTimer.current), []);
   const changed = () => {
     if (!measuring.current) return;
     clearTimeout(settle.current);
@@ -152,7 +172,7 @@ export const ChatList = forwardRef<
   // opens: guess the screen's height until there is one.
   const lastTop = useRef(0);
   const lastEnd = useRef(0); // endOf(scroller) when sync last placed it
-  if (warm.current && !el.current && lastTop.current === 0)
+  if ((warm.current || !measuring.current) && !el.current && lastTop.current === 0)
     lastTop.current = startTop ?? Math.max(0, layout(rows).total - (typeof window !== "undefined" ? window.innerHeight : 800));
 
   const want = (lay: Layout, top: number, height: number): [number, number] => {
@@ -384,10 +404,12 @@ export const ChatList = forwardRef<
     lastTop.current = s.scrollTop;
     lastEnd.current = endOf(s);
     const [f, t] = want(lay, s.scrollTop, s.clientHeight);
-    if (f !== range.current[0] || t !== range.current[1] || lay.missing !== extra.current) {
+    if (f !== range.current[0] || t !== range.current[1]) {
       if (inEffect) render();
       else flushSync(render);
     }
+    // Rows never measured: the next batch when idle (and the last one dropped once all are known)
+    if (lay.missing > 0 || extra.current > 0) scheduleBatch();
     if (moved) cb.current.onLayout();
   };
 
@@ -436,7 +458,7 @@ export const ChatList = forwardRef<
     if (mem.current && s.clientWidth) mem.current.w = s.clientWidth;
     if (startTop !== undefined) s.scrollTop = startTop;
     else s.scrollTop = endOf(s);
-    if (warm.current) sync(undefined, true);
+    if (warm.current || startTop === undefined) sync(undefined, true);
     else measureAll(true);
     let r2 = 0;
     const r1 = requestAnimationFrame(() => {
@@ -655,9 +677,16 @@ export const ChatList = forwardRef<
       ht = Math.max(a, b);
     }
   }
+  // Rows never measured outside the range: BATCH of them per render, the nearest first (above before below: scrolling
+  // up is where they come into view), mounted beside the range to be measured and dropped
+  const batch = new Set<number>();
+  if (lay.missing > 0)
+    for (let d = 1; batch.size < BATCH && (from - d >= 0 || to - 1 + d < rows.length); d++) {
+      for (const i of [from - d, to - 1 + d]) if (i >= 0 && i < rows.length && batch.size < BATCH && !sizes.current.has(rows[i].key)) batch.add(i);
+    }
   const idx: number[] = [];
-  for (let i = 0; i < rows.length; i++) if ((i >= from && i < to) || (i >= hf && i <= ht) || !sizes.current.has(rows[i].key)) idx.push(i);
-  extra.current = lay.missing;
+  for (let i = 0; i < rows.length; i++) if ((i >= from && i < to) || (i >= hf && i <= ht) || batch.has(i)) idx.push(i);
+  extra.current = batch.size;
   const items = [];
   for (const i of idx) {
     const r = rows[i];
