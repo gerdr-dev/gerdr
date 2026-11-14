@@ -98,8 +98,15 @@ for arch in $ARCHS; do
 </plist>
 EOF
 
-  # Apple silicon won't run an unsigned bundle; ad hoc is enough on the machine that built it.
-  codesign --force --sign - "$APP"
+  # Apple silicon won't run an unsigned bundle; ad hoc is enough on the machine that built it. With the local identity,
+  # sign the bundle with it too: macOS charges file access by anything the App starts (the backend, its agents) to the
+  # App, so Files & Folders / Network Volumes / Full Disk Access grants are keyed by the bundle's signature. Ad hoc,
+  # that is its cdhash, and every rebuild asks again for each folder.
+  if [ -n "$SIGN_ID" ]; then
+    codesign --force --sign "$SIGN_ID" "$APP"
+  else
+    codesign --force --sign - "$APP"
+  fi
 
   # <name>-<version>-mac-arm64 / -mac-x64: the names desktop/feed.sh and the updaters look for. In the dmg: the App
   # at its root (the updaters copy the first .app there) and a shortcut to /Applications to drag it onto.
