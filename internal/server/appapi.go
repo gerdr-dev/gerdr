@@ -14,14 +14,12 @@ import (
 // 安卓 App（android/）要的那几个口。设计见 docs/dev/ANDROID.md：
 //
 //	GET  /.well-known/assetlinks.json   认 App 的签名证书 → App 的 WebView 里能用这个域名的 passkey
-//	GET  /.well-known/apple-app-site-association   the same for the iOS App (TeamID.bundle id)
 //	GET  /api/remote/lan                 局域网直连的候选地址（页面拿去递给 App 的壳）
 //	POST /api/remote/cli/*               passkey 的退路：在浏览器里批准（device flow，auth/cliapprove.go）
 //	GET  /api/app/notices | agents       后台通知的长轮询（appwatch.go）
 
 func (s *Server) appRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /.well-known/assetlinks.json", s.assetLinks)
-	mux.HandleFunc("GET /.well-known/apple-app-site-association", s.appleAppSite)
 	mux.HandleFunc("GET /api/remote/lan", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"origins": s.Remote.LanOrigins()})
 	})
@@ -57,23 +55,6 @@ func (s *Server) assetLinks(w http.ResponseWriter, r *http.Request) {
 		Relation: []string{"delegate_permission/common.get_login_creds"},
 		Target:   target{Namespace: "android_app", PackageName: config.AndroidPackage, Certs: cfg.AndroidCerts},
 	}}
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "max-age=3600")
-	_ = json.NewEncoder(w).Encode(out)
-}
-
-// appleAppSite: the iOS counterpart of assetLinks. WKWebView runs WebAuthn for a domain only when the App's signature
-// lists it in Associated Domains (webcredentials:<domain>) and the domain's apple-app-site-association lists the App
-// back ("<TeamID>.<bundle id>"). Apple's CDN fetches this file from the public address (or the phone itself, with
-// `?mode=developer` in the entitlement and Developer Mode on), never with credentials, so it's public like
-// assetlinks. Nothing configured (config.Remote.IOSApps) = 404: then the App uses the browser device flow.
-// Must be served as is at this path: no redirect, application/json (docs/dev/IOS.md "Passkey").
-func (s *Server) appleAppSite(w http.ResponseWriter, r *http.Request) {
-	if s.Remote == nil || !s.Remote.Config().Enabled() || len(s.Remote.Config().IOSApps) == 0 {
-		http.NotFound(w, r)
-		return
-	}
-	out := map[string]any{"webcredentials": map[string]any{"apps": s.Remote.Config().IOSApps}}
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "max-age=3600")
 	_ = json.NewEncoder(w).Encode(out)

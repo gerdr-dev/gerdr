@@ -4,9 +4,3 @@
 DEVELOPMENT_TEAM = ABCDE12345
 // A free personal team needs a bundle id nobody else registered; make it yours.
 GERDR_BUNDLE_ID = io.github.yourname.gerdr
-
-// Passkeys inside the App instead of through Safari. Needs a paid Apple Developer team (a free personal team can't
-// sign Associated Domains, and the build fails with these lines in). Your Gerdr's remote-access domain, and on the
-// Gerdr side remote.json "iosApps": ["<your team ID>.<GERDR_BUNDLE_ID>"]. docs/dev/IOS.md "Passkey".
-// GERDR_PASSKEY_DOMAIN = gerdr.example.com
-// CODE_SIGN_ENTITLEMENTS = Gerdr/Passkey.entitlements

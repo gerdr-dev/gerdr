@@ -165,12 +165,10 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
             helloed = true
             hideLoading()
             web.evaluateJavaScript("navigator.userAgent") { [weak self] v, _ in self?.ua = v as? String ?? "" }
-            // webauthn: true only when this build is entitled to the server's domain (passkeyDomain, a paid team's
-            // build); then the page's own navigator.credentials works and Face ID comes up in place. false: the
-            // pairing page hands its passkey button to us (startLogin, the browser device flow). copyImage: the
+            // webauthn false: the pairing page hands its passkey button to us (startLogin). copyImage: the
             // page's long-press "copy image" goes through the shell (UIPasteboard)
             // lan: this App routes over the LAN, so the page sends candidates and draws the LAN / relay label
-            post(["t": "hello", "platform": "ios", "version": appVersion, "webauthn": !passkeyDomain.isEmpty && passkeyDomain == server.host?.lowercased(), "scan": false, "copyImage": true, "lan": route != nil])
+            post(["t": "hello", "platform": "ios", "version": appVersion, "webauthn": false, "scan": false, "copyImage": true, "lan": route != nil])
             route?.announce() // a new document: its label starts from the current state
         case "theme":
             applyTheme(m["bg"] as? String ?? "", light: m["light"] as? Bool ?? true)

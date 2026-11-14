@@ -2,6 +2,4 @@
 // A free Apple ID's personal team can't take a bundle id another team already registered, so it is a setting too.
 GERDR_BUNDLE_ID = io.github.zbysir.gerdr
 DEVELOPMENT_TEAM =
-// Passkeys inside the App (paid team only, see Local.xcconfig.example). Empty = the browser device flow.
-GERDR_PASSKEY_DOMAIN =
 #include? "Local.xcconfig"

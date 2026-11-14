@@ -54,10 +54,6 @@ type Remote struct {
 	// 用这个域名的 passkey（assetlinks.json + android:apk-key-hash origin）。官方那把（OfficialAndroidCert）总在；
 	// 自己编的 debug 包要用 passkey 时加上 debug 钥匙的指纹：GERDR_ANDROID_CERTS（逗号分隔）或 remote.json 的 androidCerts。
 	AndroidCerts []string
-	// IOSApps: iOS App builds allowed to use this domain's passkeys inside their WKWebView, as "<TeamID>.<bundle id>"
-	// (served in apple-app-site-association's webcredentials). There's no official iOS build: each person signs their
-	// own with a paid team (docs/dev/IOS.md "Passkey"). GERDR_IOS_APPS (comma-separated) or remote.json iosApps.
-	IOSApps []string
 }
 
 // DefaultLanPort：7870 是本机口、7871 是 make dev 的调试实例。
@@ -89,7 +85,6 @@ type RemoteFile struct {
 	URLPort       int               `json:"urlPort,omitempty"`
 	PairMinutes   *int              `json:"pairTTLMinutes,omitempty"`
 	AndroidCerts  []string          `json:"androidCerts,omitempty"`
-	IOSApps       []string          `json:"iosApps,omitempty"`
 	Env           map[string]string `json:"env,omitempty"`
 }
 
@@ -188,15 +183,6 @@ func LoadRemote(dir string) (Remote, error) {
 	for _, c := range extra {
 		if c = strings.ToUpper(strings.TrimSpace(c)); c != "" && c != OfficialAndroidCert {
 			r.AndroidCerts = append(r.AndroidCerts, c)
-		}
-	}
-	ios := f.IOSApps
-	if v := os.Getenv("GERDR_IOS_APPS"); v != "" {
-		ios = strings.Split(v, ",")
-	}
-	for _, a := range ios {
-		if a = strings.TrimSpace(a); a != "" {
-			r.IOSApps = append(r.IOSApps, a)
 		}
 	}
 	return r, nil
