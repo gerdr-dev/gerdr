@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Only used when Local.xcconfig sets CODE_SIGN_ENTITLEMENTS to this file (needs a paid team: a free personal team
+  can't sign Associated Domains). Lets the WKWebView use passkeys for GERDR_PASSKEY_DOMAIN; the server answers with
+  apple-app-site-association listing "<TeamID>.<bundle id>" (remote.json iosApps). ?mode=developer: a development
+  build on a phone with Developer Mode fetches that file from the domain directly instead of Apple's CDN cache.
+  docs/dev/IOS.md "Passkey".
+-->
+<plist version="1.0">
+<dict>
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>webcredentials:$(GERDR_PASSKEY_DOMAIN)</string>
+		<string>webcredentials:$(GERDR_PASSKEY_DOMAIN)?mode=developer</string>
+	</array>
+</dict>
+</plist>

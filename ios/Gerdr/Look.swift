@@ -8,6 +8,10 @@ func L(_ zh: String, _ en: String) -> String {
 /// The App's version (CFBundleShortVersionString), sent in the hello reply and the user agent.
 let appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
 
+/// The domain this build carries an Associated Domains webcredentials entitlement for (Local.xcconfig
+/// GERDR_PASSKEY_DOMAIN → Info.plist), lowercased; "" = none. Only for that host can the WKWebView use passkeys.
+let passkeyDomain = (Bundle.main.object(forInfoDictionaryKey: "GerdrPasskeyDomain") as? String ?? "").lowercased()
+
 /// Colors of the native screens (setup, loading, login overlay): the same values as ui/src/index.css's tokens and
 /// pairpage.html, light and dark, like android/app/src/main/res/values(-night)/colors.xml. Change them together.
 enum Look {

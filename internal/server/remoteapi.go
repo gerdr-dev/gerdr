@@ -43,7 +43,9 @@ func remotePublic(r *http.Request) bool {
 	case "/api/remote/whoami", "/api/remote/pair",
 		"/api/remote/passkey/login/begin", "/api/remote/passkey/login/finish",
 		// 安卓 App：系统来取 assetlinks 时不带凭据；device flow 的发起和轮询是在拿凭据之前（appapi.go）
-		"/.well-known/assetlinks.json", "/api/remote/cli/start", "/api/remote/cli/poll":
+		"/.well-known/assetlinks.json", "/api/remote/cli/start", "/api/remote/cli/poll",
+		// iOS App: Apple's CDN (or the phone, in developer mode) fetches it with no credentials
+		"/.well-known/apple-app-site-association":
 		return true
 	}
 	// A file link for the system browser (filelink.go): the token in the path is the credential

@@ -29,6 +29,8 @@ targets:
       path: Gerdr/Info.plist
       properties:
         CFBundleDisplayName: Gerdr
+        # The domain this build may use passkeys for (Passkey.entitlements); empty = none, use the browser flow
+        GerdrPasskeyDomain: $(GERDR_PASSKEY_DOMAIN)
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSRequiresIPhoneOS: true

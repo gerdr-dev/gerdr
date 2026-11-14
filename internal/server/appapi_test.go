@@ -19,7 +19,7 @@ import (
 )
 
 // 带一把（假的）passkey 的远程服务端：device flow 在一把都没有时直接拒。
-func remoteServerWithPasskey(t *testing.T) (*Server, http.Handler, http.Handler) {
+func remoteServerWithPasskey(t *testing.T, edit ...func(*config.Remote)) (*Server, http.Handler, http.Handler) {
 	t.Helper()
 	dir := t.TempDir()
 	rd := config.RemoteDir(dir)
@@ -29,6 +29,9 @@ func remoteServerWithPasskey(t *testing.T) (*Server, http.Handler, http.Handler)
 	}
 	cfg := config.Remote{RelayURL: "https://relay.example.com", Host: testHost, DeviceTTL: 24 * time.Hour, ReauthAfter: 24 * time.Hour,
 		AndroidCerts: []string{config.OfficialAndroidCert}}
+	for _, f := range edit {
+		f(&cfg)
+	}
 	rm, err := remote.Open(dir, cfg, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatal(err)
@@ -62,6 +65,26 @@ func TestAssetLinks(t *testing.T) {
 	if tg.PackageName != config.AndroidPackage || len(tg.Certs) != 1 || tg.Certs[0] != config.OfficialAndroidCert ||
 		out[0].Relation[0] != "delegate_permission/common.get_login_creds" {
 		t.Fatalf("内容不对：%s", w.Body)
+	}
+}
+
+// apple-app-site-association: public, lists the configured iOS Apps; 404 when none is configured.
+func TestAppleAppSite(t *testing.T) {
+	_, _, rh := remoteServerWithPasskey(t)
+	if w := do(rh, "GET", "/.well-known/apple-app-site-association", nil); w.Code != 404 {
+		t.Fatalf("no iOS App configured should be 404: %d %s", w.Code, w.Body)
+	}
+	_, _, rh = remoteServerWithPasskey(t, func(c *config.Remote) { c.IOSApps = []string{"ABCDE12345.io.github.someone.gerdr"} })
+	w := do(rh, "GET", "/.well-known/apple-app-site-association", nil)
+	if w.Code != 200 || !strings.HasPrefix(w.Header().Get("Content-Type"), "application/json") {
+		t.Fatalf("should be served without credentials as JSON: %d %q %s", w.Code, w.Header().Get("Content-Type"), w.Body)
+	}
+	var out struct {
+		Webcredentials struct{ Apps []string }
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil || len(out.Webcredentials.Apps) != 1 ||
+		out.Webcredentials.Apps[0] != "ABCDE12345.io.github.someone.gerdr" {
+		t.Fatalf("content wrong: %v %s", err, w.Body)
 	}
 }
 

@@ -68,24 +68,43 @@ means Android only (keys, LAN, notifications, update); `isApp()` is either App, 
 - Messages iOS answers: `hello` (reply: `platform: "ios"`, `webauthn: false`, `scan: false`, `copyImage: true`,
   `lan` = it routes over the LAN), `theme`, `open`, `setup`, `login`, `copyImage`, `lan`; it sends `route`. Everything else is ignored, as Android ignores what it doesn't know.
 
-## Passkey: through Safari, not in the WKWebView
+## Passkey: in the App with a paid team, through Safari otherwise
 
 WKWebView can only run WebAuthn for a domain listed in the App's **Associated Domains** entitlement
-(`webcredentials:<domain>`, confirmed by the domain's `apple-app-site-association`). Two problems:
+(`webcredentials:<domain>`), confirmed by the domain's `apple-app-site-association` listing the App back. Two limits:
 
-- A free Apple ID's personal team can't have that entitlement at all.
+- A free Apple ID's personal team can't sign that entitlement at all (the build fails with it in).
 - It is baked into the signed App: a general App can't list every user's own domain. (Android has no such
   limit: assetlinks.json is checked against the signing certificate, and Gerdr serves it for its own domain.)
+  Fine here, since everyone signs their own build.
 
-So the shell always says `webauthn: false`, and the pairing page's passkey button hands the job to it, through the
-device flow Android already uses as its fallback (`internal/auth/cliapprove.go`, `server/appapi.go`, no server
-change): the App starts a request, shows the code (already copied), and opens `/?cli` in an
-**SFSafariViewController** as a half-height sheet so the code stays readable above it. That is real Safari, so the
-domain's passkeys (iCloud Keychain etc.) work there: sign in there if needed, paste the code, approve with the
-passkey. A sign-in with a passkey a moment before counts as the approval's step-up, so it's one Face ID if Safari
-wasn't signed in yet. The App polls, gets the device token and writes it as the `gerdr_dev` cookie into the
-WKWebView's cookie store (host-only, HttpOnly, SameSite=Strict, Secure, as the server's IssueCookie), then tells the
-page `login{state:"done"}` and the page goes in.
+### In the App (paid team)
+
+Face ID comes up in place, no browser. Three pieces, all opt-in:
+
+- **App**: Local.xcconfig sets `GERDR_PASSKEY_DOMAIN = <your remote domain>` and `CODE_SIGN_ENTITLEMENTS =
+  Gerdr/Passkey.entitlements` (two webcredentials entries: the domain, and the same with `?mode=developer`, so a
+  development build on a phone with Developer Mode fetches the file from the domain directly rather than waiting for
+  Apple's CDN). The domain also lands in Info.plist (`GerdrPasskeyDomain`); hello says `webauthn: true` only when it
+  equals the server's host, so a build pointed at another server falls back to the device flow by itself.
+- **Gerdr**: remote.json `"iosApps": ["<TeamID>.<bundle id>"]` (or `GERDR_IOS_APPS`, comma-separated) makes it
+  serve `/.well-known/apple-app-site-association` (`server.appleAppSite`, public like assetlinks; 404 when empty).
+  Restart Gerdr after editing remote.json.
+- Nothing else on the server: unlike Android, the WebAuthn origin stays `https://<domain>`, already in RPOrigins.
+
+With `webauthn: true` the pairing page and Settings use the page's own `navigator.credentials`, as in a browser:
+sign-in, re-verification, adding a passkey, step-up all work in the App.
+
+### Through Safari (free team, or no iosApps)
+
+The shell says `webauthn: false`, and the pairing page's passkey button hands the job to it, through the
+device flow Android uses as its fallback (`internal/auth/cliapprove.go`, `server/appapi.go`): the App starts a
+request, shows the code (already copied), and opens `/?cli` in an **SFSafariViewController** as a half-height sheet
+so the code stays readable above it. That is real Safari, so the domain's passkeys (iCloud Keychain etc.) work
+there: sign in there if needed, paste the code, approve with the passkey. A sign-in with a passkey a moment before
+counts as the approval's step-up, so it's one Face ID if Safari wasn't signed in yet. The App polls, gets the device
+token and writes it as the `gerdr_dev` cookie into the WKWebView's cookie store (host-only, HttpOnly,
+SameSite=Strict, Secure, as the server's IssueCookie), then tells the page `login{state:"done"}` and the page goes in.
 
 - SFSafariViewController has its own cookie jar (not Safari's since iOS 11), kept across launches: the first time
   you'll sign in there with the passkey; it then stays signed in like any browser device.
@@ -93,11 +112,8 @@ page `login{state:"done"}` and the page goes in.
   longer accepted (and the server was reachable), it falls back to a new device, like Android.
 - The rules in Login.swift's comment (code typed by hand, never in the URL; Cookie header, not Bearer; `X-Gerdr`)
   are the same as Android's.
-
-Settings → Remote access → passkeys (adding one, step-up) runs in the page and will fail inside the iOS App for the
-same reason; do it in Safari. With a paid developer account the in-App path could be added later: an
-`apple-app-site-association` route next to `assetLinks` listing `<TeamID>.<bundle id>` from remote.json, the
-entitlement for one's own domain in Local.xcconfig, and hello saying `webauthn: true` for that build.
+- Settings → Remote access → passkeys (adding one, step-up) runs in the page and fails in this mode; do it in Safari.
+- Without passkeys, a pairing code alone gives a device that lasts `pairTTLMinutes` (default 30) and is not renewed.
 
 ## LAN routing: same origin, another route (iOS 17+)
 
