@@ -95,9 +95,18 @@ page `login{state:"done"}` and the page goes in.
   are the same as Android's.
 
 Settings → Remote access → passkeys (adding one, step-up) runs in the page and will fail inside the iOS App for the
-same reason; do it in Safari. With a paid developer account the in-App path could be added later: an
-`apple-app-site-association` route next to `assetLinks` listing `<TeamID>.<bundle id>` from remote.json, the
-entitlement for one's own domain in Local.xcconfig, and hello saying `webauthn: true` for that build.
+same reason; do it in Safari.
+
+**Why not passkeys inside the App, even with a paid team** (built, measured, reverted in c7c9825): the
+entitlement is part of the signature, so an App given to other people can only list domains known when it was
+built (several, or `*.<domain>` for subdomains, but nothing added later), and Gerdr users bring their own custom
+domains. Android differs because Digital Asset Links is checked one way (the domain's assetlinks names the App's
+certificate; the App declares nothing), while iOS checks both ways (the domain's apple-app-site-association names
+the App *and* the App's signature names the domain). A personal team can't sign the entitlement at all ("Personal
+development teams ... do not support the Associated Domains capability"). The two ways it could still come back,
+neither covering a custom domain on its own: `webcredentials:*.<relay domain>` for relay-issued names, or App-only
+passkeys under a fixed project domain as RP ID (each Gerdr also accepting that RP ID for credentials it registered).
+So: one path for every domain, the browser device flow.
 
 ## LAN routing: same origin, another route (iOS 17+)
 
