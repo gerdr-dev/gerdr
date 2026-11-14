@@ -132,6 +132,10 @@ the App keeps its own key per server (`AppKey.swift`, server `internal/auth/appk
   identifies it). Revoking the device drops its key.
 - Android could use the same endpoints (Android Keystore / StrongBox + BiometricPrompt); not done, since its App
   can already use passkeys in place.
+- **Trying it** without waiting a day: `gerdr remote reverify <device id>` (ids: `gerdr remote devices`) makes the
+  device due at once. The first time the App has no key yet, so re-verify through the browser (that enrolls one), then
+  reverify again and reopen the App: Face ID comes up by itself. Verified on an iPhone X / iOS 16.7: the device got its
+  key at the approval, and Face ID renewed `verifiedAt` with `passkeyAt` untouched.
 
 ## LAN routing: same origin, another route (iOS 17+)
 
