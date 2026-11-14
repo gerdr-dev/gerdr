@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { isApp } from "@/lib/android";
 import { api } from "@/lib/api";
 import { usePhone } from "@/lib/phone";
-import { GAP, useSwipePager } from "@/lib/swipePager";
+import { GAP, pageX, useSwipePager } from "@/lib/swipePager";
 import { closeDialog, fontSizeOf, set, setConfig, setFontSize, setPref, useStore, type Theme } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { LoaderSelect } from "./LoaderSelect";
@@ -534,6 +534,7 @@ function SwipePages({
     body,
     track,
     phone ? cur : undefined,
+    at,
     (step) => PAGES[at + step],
     (x) => progress(x, (body.current?.clientWidth ?? 1) + GAP),
     go,
@@ -563,15 +564,11 @@ function Page({ value, className, children }: { value: string; className?: strin
         {children}
       </TabsContent>
     );
-  const at = PAGES.indexOf(value) - PAGES.indexOf(cur);
+  const i = PAGES.indexOf(value);
+  const at = i - PAGES.indexOf(cur);
   if (Math.abs(at) > 1) return null;
   return (
-    <div
-      role="tabpanel"
-      className="absolute inset-0 overflow-auto bg-background px-4 pb-6"
-      style={at ? { transform: `translateX(calc(${at * 100}% + ${at * GAP}px))` } : undefined}
-      inert={at !== 0}
-    >
+    <div role="tabpanel" className="absolute inset-0 overflow-auto bg-background px-4 pb-6" style={{ transform: pageX(i) }} inert={at !== 0}>
       <div className={className}>{children}</div>
     </div>
   );

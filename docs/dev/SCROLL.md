@@ -250,6 +250,28 @@ Virtuoso 在 ResizeObserver 里量行高、改布局，所以 rAF 里看到「�
   `<body>` at a point inside it. **Headless Chrome didn't reproduce it** (`menutouch.mjs` passes before and after);
   found with a temporary trace on the phone that POSTed touch / scroll / `setStuck` / `scrollTop` writes to
   `/api/ui/errors` (it lands in `gerdr.log` as `ui client error`), synced with `make sync-ui`.
+- **Phone overview: swiping between tiles stuttered, jumped back after letting go, and stuck halfway** (user screen
+  recordings, measured frame by frame: the 8px gap between two pages located in every frame of the recording). Each
+  had its own cause; headless Chrome at CPU x4 with the user's sessions (a debug instance) reproduced all but one:
+  - Letting go: the page jumped forward, stood, jumped back to where the finger let go and slid again (236px each way).
+    The pager centred its pages on the shown tile and, once the tile switched mid-slide, moved the track by a page width
+    read back from the running transition (`getComputedStyle`). With the main thread busy rendering that read lagged the
+    compositor, so the track was put back to the start. Pages now sit at fixed places by index (`pageX` in
+    lib/swipePager.ts) and the slide simply heads for the next page's place: nothing is re-centred or read back.
+  - A second finger joining a drag dropped the gesture with the track mid-way: it is released first now.
+  - The slide coming to rest was one 300–400ms task: the new neighbour only got watched then, its whole log arrived
+    and was taken in (parse, rows, measure). The phone watches two pages either side (`phonePages`), and the pages two
+    steps away mount ahead when idle (OverviewPhone `far`), so a turn mounts and loads nothing.
+  - A cold open (no cached row sizes) mounted every loaded row at once to measure it. It mounts the rows near where it
+    opens and measures the rest when idle, `BATCH` at a time and never during a touch (ChatList `scheduleBatch`): the
+    anchor row absorbs the new sizes, as after a width change (`fling.mjs --to-top`, `touchscroll.mjs --fling`: 0
+    jumps). A cold open that must land mid-chat (`startTop`) still measures everything first.
+  - Tried and dropped: pages as a native `scroll-snap` scroller (the compositor moves them whatever the main thread
+    does). Quick swipes in a row stuck while it re-centred after `scrollend`, and the user found the system's snap
+    animation less pleasant than ours.
+  - The user felt one direction stutter and not the other, finger held; headless Chrome showed no difference, and the
+    phone's frames (perf probe) were even in both directions once the fixes above were in. Measure on the phone: the
+    perf-probe add-on's gesture records (`sx` signed travel, `heldSlow` / `heldFrames` while the finger is down).
 - **Virtuoso 把行高取整**（默认 `Math.round(getBoundingClientRect().height)`）：41.5 记 42、39.8 记 40，
   卸掉的行越多攒得越多，量完缩回那一下整段挪一截（卸 32 行差 10px），会话越长越明显。`itemSize` 换成不取整的。
   `rows.mjs` 报「记的和实际不一样」就是这个。

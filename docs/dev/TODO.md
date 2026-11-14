@@ -155,32 +155,3 @@ device id the page keeps in localStorage (and the App could pass in), with local
 page reads first and the backend's as what a fresh origin / profile starts from. To decide first: which settings are
 really per device (window sizes, zoom) and which are per person (language, labs switches: one copy for all devices
 would do), and what a remote device (phone, another computer through the relay) gets.
-
-## Phone overview: mounting the next page after a swipe is one long task
-
-**Why**: measured 2026-11-13 (phone viewport, CPU x4, production React, the user's 749 sessions copied into a debug
-instance). After each page turn the new neighbour's chat mounts when the track comes to rest (`OverviewPhone.tsx`
-`setAwake`, on purpose: mounting mid-slide stuttered). That is one 100–150ms task (React render, ChatList's first
-`sync` / measureAll, Composer's ResizeObserver). A finger landing for the next swipe in that window isn't followed
-until it ends: the "doesn't keep up" you feel on quick swipes in a row. Everything else in a drag is small: the pager's
-per-frame `tick` (track offset + chip strip) is ~0.25ms a frame.
-
-**Tried**: `startTransition(() => setAwake(tile))`, so React renders it in slices: worse, a 460–600ms task and a long
-paint (the mount wasn't sliced). Reverted.
-
-**How**: make the mount cheaper (the chat's first layout pass, the Composer's measuring) or split it (mount the
-page's frame first, the chat's rows a frame later), or wait for the finger (mount only once no touch has started for
-~300ms, cancelling if one does; pages never drawn would stay blank longer, check with `tools/scrolltest/swipe.mjs`).
-Measure with a slow-drag script that records touchmove → frame lag and Long Animation Frames during the drags
-(touchmove timestamps against the next rAF, CDP `Input.dispatchTouchEvent`, 30 moves 16ms apart).
-
-Watch out when measuring: in headless Chrome any running CSS animation (the running StatusDot's `animate-pulse`)
-adds a frame to the touchmove → rAF lag (frames go vsync-locked instead of on demand); it isn't a real cost on a phone,
-where a drag produces a frame every vsync anyway.
-
-Beyond that, a drag moved by JS can't hold 120fps by design: every frame needs a main-thread frame (setting the track's
-transform, the chip strip's `progress`), ~1.7ms each on a desktop at full speed after the compositor layer
-(659c1ae), several times that on a phone, against 8.3ms a frame. Pages as a native horizontal scroller with
-`scroll-snap` would move on the compositor whatever the main thread does; the chip strip would follow from scroll
-events. That means rewriting `lib/swipePager.ts` (overview and Settings share it): catching a slide mid-way, quick
-swipes in a row, re-centring after a turn, when the next page mounts.

@@ -378,8 +378,8 @@ export function watchedSessions(l: Layout, kept: string[]): string[] {
   }
   for (const id of Object.keys(get().mountWatch)) out.add(id);
   // The tabs under the overview stay watched (kept), so closing it doesn't reload them
-  // On a phone only the shown tile and its two neighbours (the pages a swipe drags in) are mounted (OverviewPhone.tsx):
-  // don't stream the rest
+  // On a phone only the shown tile and the two pages either side of it are mounted (OverviewPhone.tsx): don't stream
+  // the rest
   if (overviewShown()) for (const id of isPhone() ? phonePages({ ...get(), layout: l }) : overviewIds({ ...get(), layout: l })) out.add(id);
   const want = new Set(kept);
   for (const ws of l.workspaces)

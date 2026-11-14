@@ -5,7 +5,7 @@ import { phoneOrder } from "@/lib/overviewState";
 import { useCaughtUp } from "@/lib/catchup";
 import { get, useStore } from "@/lib/store";
 import { syncWatch } from "@/lib/sync";
-import { GAP, useSwipePager } from "@/lib/swipePager";
+import { GAP, pageX, useSwipePager } from "@/lib/swipePager";
 import { TabActive } from "./Panes";
 import { AddMenu, PickButton } from "./OverviewPick";
 import { DrawerButton } from "./DrawerButton";
@@ -16,9 +16,10 @@ import { t } from "@/lib/i18n";
  * The overview on a phone: no room for a grid, so one tile at a time. The top bar is the tile switcher, one chip per
  * tile tinted with its status (waiting / running / unseen readable at a glance, asked for); the list of agents is the
  * sidebar drawer (UnifiedSidebar), whose 进行中 rows pick the tile here. The tiles are pages side by side: a sideways
- * swipe drags the next one in under the finger (asked for: like turning a page, not a cut). Only the shown tile and
- * its two neighbours are mounted (a phone can't afford a dozen live chats; store.watchedSessions streams the same
- * three); the rest keep their transcripts cached.
+ * swipe drags the next one in under the finger (asked for: like turning a page, not a cut). Only the shown tile, its
+ * two neighbours and, once the phone is idle, the two pages beyond them are mounted (a phone can't afford a dozen live
+ * chats; store.watchedSessions streams the same five, lib/overviewState phonePages); the rest keep their transcripts
+ * cached.
  */
 export function PhoneOverview({ ids, focus, shown }: { ids: string[]; focus?: string; shown: boolean }) {
   const chips = useRef<HTMLDivElement>(null);
@@ -93,7 +94,7 @@ export function PhoneOverview({ ids, focus, shown }: { ids: string[]; focus?: st
       mv.styled.add(el);
     }
   };
-  const pager = useSwipePager(body, track, tile, (step) => sorted[cur + step], progress, focusTile);
+  const pager = useSwipePager(body, track, tile, cur, (step) => sorted[cur + step], progress, focusTile);
 
   // Keep the current chip in view (on opening, switching from the list, a removal, a reorder). Scrolls the strip itself after layout:
   // scrollIntoView also moves ancestors, and run before the chips were laid out it left the current one off screen.
@@ -106,18 +107,46 @@ export function PhoneOverview({ ids, focus, shown }: { ids: string[]; focus?: st
   }, [focus, idsKey, shown]);
 
   // The pages either side of the drawn tile, in the strip's order (finger left → the next chip)
-  const pages = cur < 0 ? [] : ([-1, 0, 1] as const).map((at) => ({ at, id: sorted[cur + at] })).filter((p) => p.id);
+  // Two steps away too: mounted ahead of need, when the phone is idle (below), so the page a turn brings next to the
+  // tile is already there and nothing mounts as the slide comes to rest, when the finger lands for the next swipe
+  const pages = cur < 0 ? [] : ([-2, -1, 0, 1, 2] as const).map((at) => ({ at, id: sorted[cur + at] })).filter((p) => p.id);
   // A page turned to brings a new neighbour, and mounting a chat is the heaviest thing here: done in the middle of the
   // slide it stuttered (reported). So while swipes run, only pages already mounted are drawn, the new ones are blank
   // until the track comes to rest (pager `onRest`). A page drawn before shows the picture it had when it went (Snapshot)
   // instead of a blank: a run of quick swipes used to flash the empty background (reported).
   const [awake, setAwake] = useState(tile);
+  // The tile whose far pages (two steps away) may mount: set once the phone is idle after a turn
+  const [far, setFar] = useState<string | undefined>(undefined);
   const mounted = useRef(new Set<string>());
-  const live = (id: string) => awake === tile || mounted.current.has(id);
+  const live = (id: string, at: number) => (Math.abs(at) <= 1 ? awake === tile : far === tile) || mounted.current.has(id);
   useEffect(() => {
-    mounted.current = new Set(pages.map((p) => p.id).filter(live));
+    mounted.current = new Set(pages.filter((p) => live(p.id, p.at)).map((p) => p.id));
   });
   useEffect(() => pager.onRest(() => setAwake(tile)), [tile]);
+  // Far pages: mount one (~115ms at CPU x4, a phone's 100–220ms "stuck" when it fell on a swipe) only when no finger has
+  // been down for a moment and the browser is idle; a touch meanwhile puts it off again
+  useEffect(() => {
+    if (!shown || far === tile || awake !== tile) return;
+    let idle = 0;
+    let timer = 0;
+    let lastTouch = 0;
+    const touch = () => ((lastTouch = performance.now()), schedule());
+    const schedule = () => {
+      clearTimeout(timer);
+      if (idle) cancelIdle(idle);
+      idle = 0;
+      timer = window.setTimeout(() => {
+        idle = onIdle(() => (performance.now() - lastTouch < FAR_QUIET ? schedule() : setFar(tile)));
+      }, FAR_QUIET);
+    };
+    window.addEventListener("touchstart", touch, { capture: true, passive: true });
+    schedule();
+    return () => {
+      window.removeEventListener("touchstart", touch, true);
+      clearTimeout(timer);
+      if (idle) cancelIdle(idle);
+    };
+  }, [tile, awake, far, shown]);
   // A neighbour can change without the layout changing (a status reorders the chips): stream the new one
   const pagesKey = pages.map((p) => p.id).join(",");
   useEffect(() => {
@@ -154,13 +183,8 @@ export function PhoneOverview({ ids, focus, shown }: { ids: string[]; focus?: st
             <div ref={track} className="absolute inset-0 will-change-transform">
               {/* Keyed by session: after a swipe the page dragged in becomes the middle one without remounting */}
               {pages.map(({ at, id }) => (
-                <div
-                  key={id}
-                  className="absolute inset-0 bg-background"
-                  style={at ? { transform: `translateX(calc(${at * 100}% + ${at * GAP}px))` } : undefined}
-                  inert={at !== 0}
-                >
-                  {live(id) ? (
+                <div key={id} className="absolute inset-0 bg-background" style={{ transform: pageX(cur + at) }} inert={at !== 0}>
+                  {live(id, at) ? (
                     <Snap id={id}>
                       <Tile id={id} focused={shown && at === 0} main={false} zoomed={false} target={false} phone onFocus={() => {}} onZoom={() => {}} />
                     </Snap>
@@ -182,6 +206,10 @@ export function PhoneOverview({ ids, focus, shown }: { ids: string[]; focus?: st
     </TabActive.Provider>
   );
 }
+
+const FAR_QUIET = 400; // ms with no finger down before the far pages mount
+const onIdle = (f: () => void) => (typeof requestIdleCallback === "function" ? requestIdleCallback(f, { timeout: 2000 }) : window.setTimeout(f, 50));
+const cancelIdle = (h: number) => (typeof cancelIdleCallback === "function" ? cancelIdleCallback(h) : clearTimeout(h));
 
 // The last picture of each page taken down (Snap), most recent last: shown in its place until the page is mounted again
 const snaps = new Map<string, { el: HTMLElement; scroll: number[] }>();

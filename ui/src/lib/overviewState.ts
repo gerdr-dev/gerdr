@@ -162,6 +162,19 @@ export function toPin(st: ActiveSrc): string[] {
  * project's when that project is in config.active.allIn (each project chooses on its own).
  */
 export function activeIds(st: ActiveSrc): string[] {
+  // The last answer, kept while its inputs are the same objects: selectors call this on every store change (each
+  // streamed event, not only the changes it depends on), several per change, and each run walks every pane and sorts.
+  // Measured on a phone-overview page turn: ~50ms of it per turn at CPU x4. Callers don't mutate the array.
+  const c = activeCache;
+  if (c && c.layout === st.layout && c.sessions === st.sessions && c.config === st.config && c.unread === st.unread) return c.ids;
+  const ids = computeActiveIds(st);
+  activeCache = { layout: st.layout, sessions: st.sessions, config: st.config, unread: st.unread, ids };
+  return ids;
+}
+
+let activeCache: { layout: Layout; sessions: ActiveSrc["sessions"]; config: ActiveSrc["config"]; unread: ActiveSrc["unread"]; ids: string[] } | null = null;
+
+function computeActiveIds(st: ActiveSrc): string[] {
   const o = activeConf(st.config);
   const space = currentSpace(st.layout);
   const all = o.allIn.includes(space);
@@ -198,13 +211,16 @@ export function phoneOrder(ids: string[], sessions: Record<string, SessionSummar
 }
 
 /**
- * The phone's pages: the focused tile and the one either side of it. The neighbours are mounted off screen (and so
- * watched) so a sideways swipe drags the real next page in, not a blank that fills in after the switch.
+ * The phone's pages: the focused tile and two either side of it. They are mounted off screen (and so watched) so a
+ * sideways swipe drags the real next page in, not a blank that fills in after the switch. Two steps, not one: a page
+ * watched only once a turn made it a neighbour got its whole log pushed right then, and taking it in was the biggest
+ * task of a turn (~400ms at CPU x4, as the slide came to rest), and the far pages mounted ahead (OverviewPhone.tsx)
+ * had nothing to show.
  */
 export function phonePages(st: ActiveSrc): string[] {
   const order = phoneOrder(overviewIds(st), st.sessions, st.unread, st.overview.phone);
   const i = order.indexOf(overviewFocus(st) ?? "");
-  return i < 0 ? [] : order.slice(Math.max(0, i - 1), i + 2);
+  return i < 0 ? [] : order.slice(Math.max(0, i - 2), i + 3);
 }
 
 /** The focused tile: the stored one while it's still a tile, else the first. */
