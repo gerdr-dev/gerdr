@@ -83,7 +83,7 @@ export function useLanRoute(): boolean {
 }
 
 /**
- * This Gerdr in the system browser (Safari on iOS): the iOS App can't use passkeys itself (an App's signature can't
+ * This Gerdr in the person's default browser (the shell hands the URL to the system): the iOS App can't use passkeys itself (an App's signature can't
  * list every user's domain, docs/dev/IOS.md "Passkey"), so adding one, or signing in with one, happens there.
  * The browser has its own cookies: it starts on the pairing page.
  */

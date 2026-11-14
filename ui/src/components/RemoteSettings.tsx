@@ -252,7 +252,7 @@ export function RemoteSettings({ open }: { open: boolean }) {
           <div className="text-[13px] font-medium">passkey</div>
           {pkOK && !stepUp && isIOSApp() && (
             <Button size="sm" variant="outline" onClick={openInBrowser}>
-              {t("remoteSettings.addPasskeySafari")}
+              {t("remoteSettings.addPasskeyBrowser")}
             </Button>
           )}
           {pkOK && !stepUp && !isIOSApp() && (
