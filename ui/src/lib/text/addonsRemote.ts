@@ -255,6 +255,7 @@ export const zh = {
   "remoteConnect.modeDirect": "直接访问（Tailscale / frp 等）",
   "remoteConnect.directIntro":
     "不走中继：Gerdr 在 {port} 端口上用这个域名的证书对外，配对码 / Passkey 的规则和中继一样。手机怎么连到这台 Mac 由你自己的网络负责。",
+  "remoteConnect.directGuide": "怎么配？",
   "remoteConnect.urlPort": "地址里的端口",
   "remoteConnect.urlPortHint":
     "Tailscale：A 记录指向这台 Mac 的 Tailscale 地址{ip}，端口留空，手机打开 https://{host}:{port}。frp / 路由器端口转发：A 记录指向那台公网机器，对外是 443 就填 443，地址就是 https://{host}。",
@@ -552,6 +553,7 @@ export const en: Record<keyof typeof zh, string> = {
   "remoteConnect.modeDirect": "Direct access (Tailscale / frp etc.)",
   "remoteConnect.directIntro":
     "No relay: Gerdr serves port {port} with this domain's certificate, under the same pairing-code / passkey rules as the relay. How phones reach this Mac is up to your own network.",
+  "remoteConnect.directGuide": "How to set it up",
   "remoteConnect.urlPort": "Port in the address",
   "remoteConnect.urlPortHint":
     "Tailscale: point the A record at this Mac's Tailscale address{ip}, leave the port empty, phones open https://{host}:{port}. frp / a router's port forward: point the A record at that public machine; facing the internet on 443, enter 443 and the address is https://{host}.",

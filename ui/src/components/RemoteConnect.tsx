@@ -13,6 +13,8 @@ import { Field } from "@/components/RemoteCert";
 
 // Where to get a relay of one's own: its README covers installing it on a VPS.
 const DIALHOME_REPO = "https://github.com/zbysir/dialhome";
+// Step-by-step direct access (Tailscale / frp) on the website; the README has the same in its remote access section
+const DIRECT_GUIDE = "https://gerdr.dev/docs#remote-direct";
 
 export function RemoteConnect({
   relayURL,
@@ -65,7 +67,12 @@ export function RemoteConnect({
         </div>
         {mode === "direct" ? (
           <>
-            <div className="text-[12px] text-muted-foreground">{t("remoteConnect.directIntro", { port: lp })}</div>
+            <div className="text-[12px] text-muted-foreground">
+              {t("remoteConnect.directIntro", { port: lp })}{" "}
+              <a className="text-brand underline-offset-2 hover:underline" href={DIRECT_GUIDE} target="_blank" rel="noreferrer">
+                {t("remoteConnect.directGuide")}
+              </a>
+            </div>
             <Field label={t("remoteConnect.host")}>
               <Input
                 className="font-mono text-[12px]"
