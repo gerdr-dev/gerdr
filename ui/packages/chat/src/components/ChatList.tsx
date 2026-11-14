@@ -351,7 +351,12 @@ export const ChatList = forwardRef<
       // Getting stuck again is up to the touch ending (endTouch).
       const off = touch.current ? Math.min(END, Math.max(0, lastEnd.current - top)) : 0;
       const to = endOf(s) - off;
-      if (!anim.current && Math.abs(to - s.scrollTop) > 0.5) s.scrollTop = to;
+      // Past the end during a touch is iOS rubber-banding (a finger pushing up at the bottom, or a fling landing on
+      // the end): scrollTop reads beyond endOf while the bounce runs. Writing the end back cut the bounce off each
+      // scroll event, so the chat jumped back and forth under the finger (iPhone screen recording). The bounce comes
+      // back to the end by itself.
+      const bouncing = touch.current && s.scrollTop > endOf(s);
+      if (!anim.current && !bouncing && Math.abs(to - s.scrollTop) > 0.5) s.scrollTop = to;
     } else if (a >= 0) {
       // By key. If that row is gone, the next one still there: the rows of a message cut off at the top get new keys
       // once the rest of it comes in with older messages (fling.mjs --to-top: the whole screen swapped on the first load)
