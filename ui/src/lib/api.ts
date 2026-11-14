@@ -86,6 +86,17 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Called when a request comes back 401 with `need` (remote path: the device cookie is gone, or it's due for
+ * re-verification with a passkey). The WebSocket stays open through that, so without this the page went on showing
+ * "not paired" toasts and never offered the passkey; sync.ts turns it into authError → reload → the pair page.
+ * Not for /h/<host>/… : that 401 is another computer's, and reloading here would change nothing.
+ */
+let authLost: (() => void) | undefined;
+export function onAuthLost(f: () => void) {
+  authLost = f;
+}
+
 async function req<T>(method: string, path: string, body?: unknown): Promise<T> {
   const res = await fetch(path, {
     method,
@@ -101,7 +112,10 @@ async function req<T>(method: string, path: string, body?: unknown): Promise<T> 
   } catch {
     data = text;
   }
-  if (!res.ok) throw new ApiError(res.status, (data && data.error) || res.statusText, typeof data === "object" ? data : undefined);
+  if (!res.ok) {
+    if (res.status === 401 && data?.need && !path.startsWith("/h/")) authLost?.();
+    throw new ApiError(res.status, (data && data.error) || res.statusText, typeof data === "object" ? data : undefined);
+  }
   return data as T;
 }
 

@@ -1,7 +1,7 @@
 // 和服务端保持同步：开机拉一次 /api/hello，之后靠 WebSocket 推。断了自己重连（重连后
 // 重新拉 hello、重新订阅）。订阅时带上手里每个会话日志的最后序号，服务端接得上就只补后面的，
 // 接不上（重启过、日志被改写过）整份重推 —— 对账在服务端（hub.eventsAfter），这边照单全收。
-import { api, ApiError, clientId } from "./api";
+import { api, ApiError, clientId, onAuthLost } from "./api";
 import { toast } from "sonner";
 import { validLayout, withView } from "./layout";
 import { isNative, nativeNotify, runRelayedUpdateOp } from "./native";
@@ -39,6 +39,10 @@ const draftOutbox = new Map<string, SharedDraft>(); // session id → draft wait
 const draftsInFlight = new Map<string, number>(); // session id → writes sent, echo not back yet
 let draftTimer: ReturnType<typeof setTimeout> | null = null;
 let stopped = false;
+
+// A request mid-session found the credential gone / due for re-verification: same as the reconnect check below
+// (App.tsx reloads into the pair page on the remote path)
+onAuthLost(() => set({ authError: true }));
 
 // 热更新改到非组件模块时，运行时按新 URL 把整棵模块树重新 import、重新挂 App（uisite/runtime.go），
 // 于是这个文件会有一份新实例再 boot 一次。旧实例的 WebSocket 没人关、心跳还在 ping，服务端的读超时永远不到，

@@ -107,7 +107,11 @@ func (s *Server) remoteGuard(w http.ResponseWriter, r *http.Request, next http.H
 	if need != "" {
 		if strings.HasPrefix(p, "/api/") || p == "/ws" || strings.HasPrefix(p, "/_") || (path0Ext(p) && !strings.HasSuffix(p, ".html")) {
 			// need 让前端区分「没配对」和「配过但要重新验一次」：一个要配对码，一个只要点一下 Face ID
-			writeJSONStatus(w, http.StatusUnauthorized, map[string]any{"error": i18n.S("这台设备还没配对", "This device isn't paired yet"), "need": need})
+			msg := i18n.S("这台设备还没配对", "This device isn't paired yet")
+			if need == "passkey" {
+				msg = i18n.S("这台设备要重新验证一次", "This device needs to be verified again")
+			}
+			writeJSONStatus(w, http.StatusUnauthorized, map[string]any{"error": msg, "need": need})
 			return
 		}
 		s.servePairPage(w, r)
