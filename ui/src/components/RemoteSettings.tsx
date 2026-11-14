@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, type PasskeyInfo, type RemoteDevice, type RemoteStatus } from "@/lib/api";
 import { isCancel, isStepUp, passkeySupported, registerPasskey } from "@/lib/passkey";
+import { isIOSApp, openInBrowser } from "@/lib/android";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { t } from "@/lib/i18n";
@@ -249,7 +250,12 @@ export function RemoteSettings({ open }: { open: boolean }) {
       <div className="space-y-1.5">
         <div className="flex items-center justify-between">
           <div className="text-[13px] font-medium">passkey</div>
-          {pkOK && !stepUp && (
+          {pkOK && !stepUp && isIOSApp() && (
+            <Button size="sm" variant="outline" onClick={openInBrowser}>
+              {t("remoteSettings.addPasskeySafari")}
+            </Button>
+          )}
+          {pkOK && !stepUp && !isIOSApp() && (
             <Button
               size="sm"
               variant="outline"
@@ -280,6 +286,7 @@ export function RemoteSettings({ open }: { open: boolean }) {
         )}
         <div className="text-[12px] text-muted-foreground">
           {t("remoteSettings.passkeyHint", { hours: st.reauthHours || "—" })}
+          {isIOSApp() && t("remoteSettings.passkeyIOS")}
           {!pkOK && st.enabled && t("remoteSettings.passkeyHost", { host: st.host ?? "" })}
         </div>
         <div className="divide-y rounded-md border">

@@ -174,8 +174,16 @@
 /* 全局样式必须放在 layer 里：未分层的样式会压过所有 layer（包括 Tailwind 的工具类），
    一条 `* { ... }` 就能让某个工具类「看着在元素上却不生效」。 */
 @layer base {
+  /* Two rules, not one `@apply border-border outline-ring/50`: an opacity modifier makes Tailwind nest an
+     `@supports (color: color-mix(…))` block in the rule, and Safari 16.5–16.x (the first CSS nesting) drops the
+     plain declarations of a rule that also holds a nested block. Measured on iOS 16.7: border-color vanished and
+     every border drew in the text colour. A rule whose only plain declaration is the fallback of the nested one
+     (every `x/50` utility) loses just that fallback, which is harmless. */
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border;
+  }
+  * {
+    @apply outline-ring/50;
   }
   /* --vvh：可视区域的高度（lib/phone.ts 的 useViewportHeight 写的）。iOS 弹软键盘时只缩可视区域、不缩布局视口，
      用 100% 的话输入框会被键盘盖住。 */

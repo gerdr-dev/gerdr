@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { androidCan, isAndroid, isIOSApp, onAndroid, postAndroid, useLanRoute, type AndroidUpdate } from "@/lib/android";
+import { androidCan, isAndroid, isIOSApp, onAndroid, openInBrowser, postAndroid, useLanRoute, type AndroidUpdate } from "@/lib/android";
 import { cn } from "@/lib/utils";
 import { locale, t } from "@/lib/i18n";
 
@@ -159,9 +159,14 @@ function IOSSettings() {
           </div>
         )}
       </div>
-      <Button size="sm" variant="outline" onClick={() => postAndroid({ t: "setup" })}>
-        {t("androidSettings.switchServer")}
-      </Button>
+      <div className="flex shrink-0 gap-2">
+        <Button size="sm" variant="outline" onClick={openInBrowser}>
+          {t("androidSettings.openSafari")}
+        </Button>
+        <Button size="sm" variant="outline" onClick={() => postAndroid({ t: "setup" })}>
+          {t("androidSettings.switchServer")}
+        </Button>
+      </div>
     </div>
   );
 }

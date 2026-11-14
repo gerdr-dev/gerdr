@@ -113,6 +113,9 @@ export const zh = {
     "App 填 {url} 就能用。「批准 App 登录」只有当安卓 App 不支持 Passkey 时才需要：这时 App 会显示一个 8 位码，点上面的按钮输进去批准。",
   "remoteSettings.added": "加好了：{label}",
   "remoteSettings.addPasskey": "加一把 Passkey",
+  "remoteSettings.addPasskeySafari": "去 Safari 里加",
+  "remoteSettings.passkeyIOS":
+    " iOS App 里加不了 passkey（App 签名的限制）：点「去 Safari 里加」，在 Safari 里用配对码登录这台 Gerdr，再在这里加；之后 App 的配对页就能用它在浏览器里批准登录。",
   "remoteSettings.passkeyHint": "有了 Passkey，新设备不用回机器前拿配对码，Face ID / 指纹一下就进来；配过对的设备超过 {hours} 小时没验证要再验一次。",
   "remoteSettings.passkeyHost": " Passkey 绑在 {host} 上，在那个地址打开 Gerdr 才能加。",
   "remoteSettings.passkeyMeta": "添加于 {created} · 最后用 {used}",
@@ -405,6 +408,9 @@ export const en: Record<keyof typeof zh, string> = {
     "Enter {url} in the app to use it. Approve app sign-in is only needed when the Android app can't use passkeys: the app then shows an 8-digit code; click the button above and enter it to approve.",
   "remoteSettings.added": "Added: {label}",
   "remoteSettings.addPasskey": "Add a passkey",
+  "remoteSettings.addPasskeySafari": "Add in Safari",
+  "remoteSettings.passkeyIOS":
+    " The iOS App can't add a passkey itself (a limit of App signing): tap “Add in Safari”, sign in to this Gerdr there with a pairing code and add it here; the App's pairing page can then use it to approve sign-ins in the browser.",
   "remoteSettings.passkeyHint":
     "With a passkey, a new device gets in with Face ID or a fingerprint, no pairing code from this machine needed. Paired devices must verify again after {hours} hours without verifying.",
   "remoteSettings.passkeyHost": " Passkeys are tied to {host}; open Gerdr at that address to add one.",

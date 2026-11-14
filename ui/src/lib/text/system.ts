@@ -50,6 +50,7 @@ export const zh = {
 
   "androidSettings.title": "安卓 App",
   "androidSettings.iosTitle": "iOS App",
+  "androidSettings.openSafari": "在 Safari 中打开",
   "androidSettings.switchServer": "换服务器",
   "androidSettings.notify": "后台通知",
   "androidSettings.notifyOff": "关着：Agent 等你、跑完了，只有打开 App 才看得到。",
@@ -320,6 +321,7 @@ export const en: Record<keyof typeof zh, string> = {
 
   "androidSettings.title": "Android App",
   "androidSettings.iosTitle": "iOS App",
+  "androidSettings.openSafari": "Open in Safari",
   "androidSettings.switchServer": "Switch server",
   "androidSettings.notify": "Background notifications",
   "androidSettings.notifyOff": "Off: you'll only see that an agent is waiting or done when you open the App.",

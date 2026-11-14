@@ -82,6 +82,15 @@ export function useLanRoute(): boolean {
   return on;
 }
 
+/**
+ * This Gerdr in the system browser (Safari on iOS): the iOS App can't use passkeys itself (an App's signature can't
+ * list every user's domain, docs/dev/IOS.md "Passkey"), so adding one, or signing in with one, happens there.
+ * The browser has its own cookies: it starts on the pairing page.
+ */
+export function openInBrowser() {
+  postAndroid({ t: "open", url: location.origin + "/" });
+}
+
 /** Does the shell say (in its hello reply) that it can do this? An older App doesn't know newer messages. */
 export const androidCan = (feature: string) => last.get("hello")?.[feature] === true;
 

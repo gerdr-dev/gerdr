@@ -88,7 +88,8 @@
   <div class="err" id="err"></div>
 
   <div class="foot">配对码 5 分钟过期、用一次就废，截图和二维码被拍走都没有长期风险。<span id="temp"></span></div>
-  <div class="foot" id="app" hidden><a href="#" id="setup">换一台服务器</a></div>
+  <div class="foot" id="app" hidden><a href="#" id="setup">换一台服务器</a><span id="safariBox" hidden> · <a href="#" id="safari">在 Safari 中打开</a>
+    <div class="hint" style="margin:6px 0 0">iOS App 里加不了 passkey：在 Safari 里用配对码登录、到「设置 → 远程访问」加一把，之后这里就能用 passkey 批准登录。</div></span></div>
 </div>
 <script nonce="{{NONCE}}">
 (function () {
@@ -110,7 +111,7 @@
   if (droid) {
     droid.onmessage = function (e) {
       var m; try { m = JSON.parse(e.data); } catch (x) { return; }
-      if (m.t === "hello") { nativeLogin = !m.webauthn; $("scan").hidden = !m.scan; }
+      if (m.t === "hello") { nativeLogin = !m.webauthn; $("scan").hidden = !m.scan; $("safariBox").hidden = m.platform !== "ios"; }
       if (m.t === "login") {
         busy = false; $("pkBtn").disabled = false;
         if (m.state === "done") enter();
@@ -127,6 +128,9 @@
     // Older app builds ignore an unknown message, so the button only shows up once the shell said hello
     $("scan").onclick = function () { err(""); droid.postMessage(JSON.stringify({ t: "scan" })); };
     $("setup").onclick = function (e) { e.preventDefault(); droid.postMessage(JSON.stringify({ t: "setup" })); };
+    // iOS: passkeys only work in Safari (the App's signature can't list everyone's domain, docs/dev/IOS.md); Safari
+    // has its own cookies, so it opens on this page too and the person pairs there before adding one
+    $("safari").onclick = function (e) { e.preventDefault(); droid.postMessage(JSON.stringify({ t: "open", url: location.origin + "/" })); };
   }
 
   async function api(method, path, body) {
