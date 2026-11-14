@@ -24,6 +24,11 @@ import (
 // a terminal there (termOnHost) and type into it. The request's context is the command's: the caller going away
 // (Ctrl-C on the CLI, the console's request cancelled) stops it.
 func (s *Server) execRoutes(mux *http.ServeMux) {
+	//
+	// Two shapes. JSON {command, cwd, stdin, timeout}: stdin as a JSON string, so text only. Raw: the body is the
+	// command's stdin as bytes, streamed (no size limit), and the rest goes in the query (command, cwd, timeout ms,
+	// stdin=1). `gerdr exec --stdin` sends raw: a JSON string turned a binary's invalid UTF-8 into U+FFFD and blew a
+	// 45 MB file past the 64 MB body limit in \u0000 escapes; the CLI also cut stdin at 32 MB without a word.
 	mux.HandleFunc("POST /api/exec", func(w http.ResponseWriter, r *http.Request) {
 		var b struct {
 			Command string `json:"command"`
@@ -31,11 +36,21 @@ func (s *Server) execRoutes(mux *http.ServeMux) {
 			Stdin   string `json:"stdin"`
 			Timeout int64  `json:"timeout"` // ms
 		}
-		if err := decode(r, &b); err != nil {
-			httpError(w, 400, err.Error())
-			return
+		var stdin io.Reader
+		if q := r.URL.Query(); q.Get("stdin") == "1" {
+			b.Command, b.Cwd = q.Get("command"), q.Get("cwd")
+			b.Timeout, _ = strconv.ParseInt(q.Get("timeout"), 10, 64)
+			stdin = r.Body
+		} else {
+			if err := decode(r, &b); err != nil {
+				httpError(w, 400, err.Error())
+				return
+			}
+			if b.Stdin != "" {
+				stdin = strings.NewReader(b.Stdin)
+			}
 		}
-		res, err := hub.RunCommand(r.Context(), b.Command, b.Cwd, b.Stdin, time.Duration(b.Timeout)*time.Millisecond)
+		res, err := hub.RunCommand(r.Context(), b.Command, b.Cwd, stdin, time.Duration(b.Timeout)*time.Millisecond)
 		if err != nil {
 			httpError(w, 400, err.Error())
 			return

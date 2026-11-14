@@ -153,9 +153,37 @@ waited a turn per command, or found the `!command` route of a host session and w
   it could already open a terminal there and type.
 - `gerdr pane read / send` on a terminal pane whose term id is `<host>:<id>` asks that host
   (`GET /api/terms/{id}/text`, `POST /api/terms/{id}/input`), with a 15s limit because the layout lock is held meanwhile.
+- `--stdin` is the raw request body (`POST /api/exec?stdin=1&command=…&cwd=…&timeout=…`), streamed, any size, and the
+  answer says how many bytes arrived and their sha256 (`ExecResult.Stdin`, all of the body, also what the command
+  didn't read); the CLI compares and exits 75 on a mismatch. It was a JSON string: invalid UTF-8 in a binary became
+  U+FFFD, a NUL six bytes of `\u0000`, so a 45 MB Mach-O blew past the 64 MB body limit and failed mid-escape after a
+  48 s upload; and the CLI cut stdin at 32 MB without a word, the command exiting 0 on the first part. JSON stdin
+  (text) still works for other callers.
 - `exec` and `pane send` are not in `sysenv.SafeGerdrCLI`: they run anything, so they ask like any shell command.
 - No `gerdr term new`: a terminal an agent opens and no pane shows is a process nobody sees or stops. Long-running
   things go in a terminal the user opened (and can watch); one-offs go through `exec`.
+
+## Copying files there and back (`gerdr cp`)
+
+`cmd/gerdr/cp.go`. scp's shape: `gerdr cp <src>... <host>:<path>` or `gerdr cp <host>:<path>... <dest>`, files and
+folders, before it an agent piped one file at a time through `exec --stdin` or borrowed a conversation
+(`session send --file` wakes the agent there and leaves the file in its uploads; `session fetch` needs a session).
+
+- No new routes: the artifact folders' (`GET /api/fs/tree`, `PUT /api/fs/file`) plus `/api/fs/stat?hash=1` and
+  `/api/fs/raw`, all through `?host=`. Two parameters were added: `tree?all=1` (every file, no built-in ignores or
+  `.gerdrignore`, only `*.part` / `.gerdr-tmp-*` / the folder manifest skipped; `exclude=` repeatable; the answer echoes
+  `all` so the CLI can tell an older Gerdr filtered it) and `file?mode=` (octal permission bits, so a copied program
+  stays runnable; echoed back). Tree and stat entries carry `mode`.
+- Checked: a push hashes what it reads and compares with the sha256 `PUT /api/fs/file` computed over what it received;
+  a pull hashes what it writes against the sha256 from tree / stat. A mismatch is retried once, then reported in
+  `failed` (exit 1). A pull writes `<name>.part` and renames.
+- Where things land is chosen so re-running the same command gives the same result (an interrupted copy is resumed by
+  running it again; files whose sha256 already matches are skipped): a destination ending in `/` (or `.`, `~`, several
+  sources) means *into*; a file onto an existing folder goes into it; a folder source **is** the destination, never
+  nested under it as `cp -r` does the second time.
+- Never deletes on the receiving side; not two-way (that's `gerdr folder`). Not auto-approved (it writes anywhere).
+- Against an older Gerdr there: works, but the executable bit is dropped and a pulled folder misses `.git` /
+  `node_modules` / ignored files; the CLI says so on stderr.
 
 ## Moving a conversation
 

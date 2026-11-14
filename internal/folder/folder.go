@@ -36,19 +36,37 @@ const MaxFiles = 20000
 // Always skipped, whatever .gerdrignore says.
 var builtinIgnore = []string{".git/", "node_modules/", ".DS_Store", ManifestName, "*.part", ".gerdr-tmp-*"}
 
+// junk: what even a plain copy (Options.All) skips: half-written files of a copy in progress, and the pairing of an
+// artifact folder (a copy of a folder isn't paired with anything).
+var junk = []string{ManifestName, "*.part", ".gerdr-tmp-*"}
+
 type Entry struct {
 	Path  string `json:"path"` // relative, with /
 	Size  int64  `json:"size"`
 	Mtime int64  `json:"mtime"` // unix ms
 	Sha   string `json:"sha256"`
+	Mode  uint32 `json:"mode,omitempty"` // permission bits (0755…), so a copied program stays runnable
+}
+
+// Options for Walk. The zero value is an artifact folder's walk: built-in ignores plus .gerdrignore.
+type Options struct {
+	All     bool     // every file (`gerdr cp`): no built-in ignores, no .gerdrignore; only half-written copies skipped
+	Exclude []string // more patterns, .gerdrignore syntax
 }
 
 var ErrTooMany = errors.New("too many files (over 20000): add the big folders to .gerdrignore")
 
 // Walk lists the files under root (sorted), hashed. Hashes are cached by path + size + mtime, so a second look at a
 // big folder of videos doesn't read them all again.
-func Walk(root string) ([]Entry, error) {
-	ign := loadIgnore(root)
+func Walk(root string) ([]Entry, error) { return WalkWith(root, Options{}) }
+
+// WalkWith is Walk with Options.
+func WalkWith(root string, o Options) ([]Entry, error) {
+	ign := append(ignore{}, junk...)
+	if !o.All {
+		ign = loadIgnore(root)
+	}
+	ign = append(ign, o.Exclude...)
 	var out []Entry
 	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -81,7 +99,7 @@ func Walk(root string) ([]Entry, error) {
 		if err != nil {
 			return nil
 		}
-		out = append(out, Entry{Path: rel, Size: info.Size(), Mtime: info.ModTime().UnixMilli(), Sha: sha})
+		out = append(out, Entry{Path: rel, Size: info.Size(), Mtime: info.ModTime().UnixMilli(), Sha: sha, Mode: uint32(info.Mode().Perm())})
 		return nil
 	})
 	sort.Slice(out, func(i, j int) bool { return out[i].Path < out[j].Path })

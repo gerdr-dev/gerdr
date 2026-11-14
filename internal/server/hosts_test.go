@@ -1,9 +1,12 @@
 package server
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"crypto/tls"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -366,6 +369,33 @@ func TestHostFolderAPI(t *testing.T) {
 	if w := put("new/b.json", "none", "again"); w.Code != http.StatusPreconditionFailed {
 		t.Fatalf("none on an existing file: %d", w.Code)
 	}
+
+	// What `gerdr cp` uses: every file (all=1, ignores off but exclude=), modes, and a write that keeps the mode
+	os.MkdirAll(filepath.Join(dir, ".git"), 0o755)
+	os.WriteFile(filepath.Join(dir, ".git", "HEAD"), []byte("ref"), 0o644)
+	os.WriteFile(filepath.Join(dir, "run.sh"), []byte("#!/bin/sh"), 0o755)
+	w = do(ch, "GET", "/api/fs/tree?host=mini&all=1&exclude=new&path="+url.QueryEscape(dir), nil, auth)
+	var all struct {
+		All   bool
+		Files []struct {
+			Path string
+			Mode uint32
+		}
+	}
+	got := map[string]uint32{}
+	if json.Unmarshal(w.Body.Bytes(), &all); w.Code == 200 {
+		for _, f := range all.Files {
+			got[f.Path] = f.Mode
+		}
+	}
+	if !all.All || got[".git/HEAD"] != 0o644 || got["run.sh"] != 0o755 || got["x.tmp"] == 0 || got[".gerdrignore"] == 0 || got["new/b.json"] != 0 {
+		t.Fatalf("tree all=1: %d %s", w.Code, w.Body)
+	}
+	q := url.Values{"host": {"mini"}, "path": {filepath.Join(dir, "bin", "tool")}, "ifMatch": {"*"}, "mode": {"755"}}
+	w = do(ch, "PUT", "/api/fs/file?"+q.Encode(), strings.NewReader("\x00\xff"), auth, csrf, hdr("Content-Type", "application/octet-stream"))
+	if st, err := os.Stat(filepath.Join(dir, "bin", "tool")); w.Code != 200 || err != nil || st.Mode().Perm() != 0o755 || !strings.Contains(w.Body.String(), `"mode":493`) {
+		t.Fatalf("put with mode: %d %s", w.Code, w.Body)
+	}
 }
 
 // Report loops of any length are refused, wherever each step is kept (here, on the host, or here for a host
@@ -509,6 +539,16 @@ func TestHostExecAndTerminalPane(t *testing.T) {
 	}
 	if code, _, raw = exec(`{"command":"true","cwd":"/no/such/dir"}`); code != 400 {
 		t.Fatalf("missing directory: %d %s", code, raw)
+	}
+	// Raw stdin through the proxy: bytes (NUL, invalid UTF-8) and size (past the old 32 MB cut) arrive unchanged
+	bin := bytes.Repeat([]byte{0x00, 0xff, 0xc3, 0x28, '"', '\\', 'u', 0x80}, 5<<20)
+	q := url.Values{"host": {"mini"}, "stdin": {"1"}, "command": {"cat > in.bin"}, "cwd": {dir}}
+	w0 := do(ch, "POST", "/api/exec?"+q.Encode(), bytes.NewReader(bin), auth, csrf, hdr("Content-Type", "application/octet-stream"))
+	_ = json.Unmarshal(w0.Body.Bytes(), &r)
+	sum := sha256.Sum256(bin)
+	if got, _ := os.ReadFile(filepath.Join(dir, "in.bin")); w0.Code != 200 || r.Code != 0 || !bytes.Equal(got, bin) ||
+		r.Stdin == nil || r.Stdin.Bytes != int64(len(bin)) || r.Stdin.Sha256 != hex.EncodeToString(sum[:]) {
+		t.Fatalf("raw stdin: %d %+v, wrote %d of %d bytes", w0.Code, r.Stdin, len(got), len(bin))
 	}
 	if w := do(ch, "POST", "/api/exec?host=nope", strings.NewReader(`{"command":"true"}`), auth, csrf); w.Code != 404 {
 		t.Fatalf("unknown host: %d %s", w.Code, w.Body)

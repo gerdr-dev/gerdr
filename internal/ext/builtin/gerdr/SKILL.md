@@ -1,6 +1,6 @@
 ---
 name: gerdr
-description: "Coordinate other coding-agent sessions inside Gerdr (Claude Code / Codex sessions in the Gerdr GUI): list sessions, start a new agent session next to you, hand it a task, wait for it, read its reply, or message an existing session. Use when the user asks you to delegate to / start / ask / check on another agent or session in Gerdr, or to run several agents in parallel. Also for running commands on another computer paired with this one (`gerdr exec --host`), and typing into / reading a terminal pane (`gerdr pane send / read`). Also for arranging Gerdr's layout: sorting tabs into workspaces, splitting panes together, renaming or reordering workspaces / tabs, pointing sessions and workspaces at a project folder that was moved or renamed. Also for changing Gerdr's own settings (theme, default agent / mode / model, shortcuts, model providers) with `gerdr config`, and for setting up agents (roles) with their own prompt, skills and MCP servers (`gerdr agent`, `gerdr skill`, `gerdr mcp`). Also for a Gerdr project's own skills and memory (given only to that project's sessions): adding / editing / removing a skill for one project (`gerdr skill --project`), keeping the project's shared memory. Also for add-ons (`gerdr addon`): browsing add-on stores, installing / updating / removing add-ons, switching them on or off, changing their settings. Also for a project's panels (`gerdr panel`): listing, installing one from a git repository, adding a blank one, updating, changing its icon, reordering them, putting a red dot / number on its button, removing. Also for being told when something happens outside the conversation (a chat message: `gerdr event watch / list`) or waiting until something outside is in some state (an MR got review comments, its pipeline failed, it merged: `gerdr wait`). Also for artifacts (`gerdr artifacts`) in a task a panel (board) started: where its output that isn't committed goes (generated images / videos, reports, drafts, copy to publish), and recording a PR / MR, a folder made outside the repository or a short result so the person finds it later. Requires GERDR_ENV=1."
+description: "Coordinate other coding-agent sessions inside Gerdr (Claude Code / Codex sessions in the Gerdr GUI): list sessions, start a new agent session next to you, hand it a task, wait for it, read its reply, or message an existing session. Use when the user asks you to delegate to / start / ask / check on another agent or session in Gerdr, or to run several agents in parallel. Also for running commands on another computer paired with this one (`gerdr exec --host`) and copying files / folders to or from it (`gerdr cp`), and typing into / reading a terminal pane (`gerdr pane send / read`). Also for arranging Gerdr's layout: sorting tabs into workspaces, splitting panes together, renaming or reordering workspaces / tabs, pointing sessions and workspaces at a project folder that was moved or renamed. Also for changing Gerdr's own settings (theme, default agent / mode / model, shortcuts, model providers) with `gerdr config`, and for setting up agents (roles) with their own prompt, skills and MCP servers (`gerdr agent`, `gerdr skill`, `gerdr mcp`). Also for a Gerdr project's own skills and memory (given only to that project's sessions): adding / editing / removing a skill for one project (`gerdr skill --project`), keeping the project's shared memory. Also for add-ons (`gerdr addon`): browsing add-on stores, installing / updating / removing add-ons, switching them on or off, changing their settings. Also for a project's panels (`gerdr panel`): listing, installing one from a git repository, adding a blank one, updating, changing its icon, reordering them, putting a red dot / number on its button, removing. Also for being told when something happens outside the conversation (a chat message: `gerdr event watch / list`) or waiting until something outside is in some state (an MR got review comments, its pipeline failed, it merged: `gerdr wait`). Also for artifacts (`gerdr artifacts`) in a task a panel (board) started: where its output that isn't committed goes (generated images / videos, reports, drafts, copy to publish), and recording a PR / MR, a folder made outside the repository or a short result so the person finds it later. Requires GERDR_ENV=1."
 ---
 
 # Gerdr：和其他会话协作
@@ -121,9 +121,25 @@ gerdr exec --host mini --cwd '~/work/app' -- 'git status --short && npm test'   
 cat fix.diff | gerdr exec --host mini --cwd '~/work/app' --stdin -- git apply      # --stdin: this side's stdin
 ```
 
+**To copy files or folders there or back, use `gerdr cp`** (like scp; not `cat | exec --stdin`, not a session):
+
+```bash
+gerdr cp ./build/app mini:'~/bin/'              # → ~/bin/app there (trailing /: into that folder)
+gerdr cp ./dist mini:'~/www/site'               # a folder: ~/www/site becomes the copy (merged into if there)
+gerdr cp ./src ./go.mod mini:'~/work/app/' --exclude node_modules
+gerdr cp mini:'~/work/promo/out/cover.png' .    # back here
+gerdr cp mini:'~/logs' ./from-mini/             # → ./from-mini/logs
+```
+
+- Every file is checked by sha256 on arrival (a mismatch is retried, then exit code 1 with `failed` in the JSON),
+  files already the same are skipped (re-run after a break), the executable bit goes along, hidden files and `.git`
+  are copied (`--exclude` what you don't want). Nothing is deleted on the receiving side. Any size; progress on stderr.
+- A folder source never lands one level deeper: `gerdr cp ./dist mini:'~/www/site'` twice gives the same result.
+
 - It runs in that computer's login shell (its PATH), stdout and stderr together; `--timeout` (default 2m, at most 1h)
   or Ctrl-C stops it and what it started. No interactive input: a command that asks for a password / y/n hangs until
-  the timeout; give it its answer up front (`-y`, `--stdin`).
+  the timeout; give it its answer up front (`-y`, `--stdin`). `--stdin` sends raw bytes of any size and checks they
+  all arrived (exit code 75 if not).
 - Something that keeps running (a dev server, `tail -f`, a REPL) goes in a terminal the user can watch. When the user
   has one open on that computer (`gerdr pane list`: kind terminal), type into it and read it back; both work the same
   on this computer's terminals:
@@ -149,7 +165,8 @@ gerdr session new --host mini --cwd '~/work/promo' --title cover \
 
 - Its files are **that computer's**: a path in its reply doesn't exist here. To hand a file to a session on another
   computer, attach it: `gerdr session send <session> "..." --file out/cover.png` copies it there and tells it the path.
-- To get a file it made: `gerdr session fetch <session> out/cover.png [dest]` (relative to its directory).
+- To get a file it made: `gerdr session fetch <session> out/cover.png [dest]` (relative to its directory), or
+  `gerdr cp mini:<absolute path> .` — files and folders, no session needed.
 - For a whole folder you keep working on from both sides (renders, a video project), pair it once and sync on demand:
 
   ```bash
@@ -163,7 +180,7 @@ gerdr session new --host mini --cwd '~/work/promo' --title cover \
   is reported, not deleted on the other. `.gerdrignore` in the folder (one pattern per line) skips render caches;
   `node_modules`, `.git` are always skipped.
 - `--cwd` with `--host` is absolute or `'~/…'` in quotes: unquoted, your shell turns `~` into *this* computer's home.
-  Without `--cwd`, that computer's home. Same for `gerdr folder`'s `'host:~/…'`.
+  Without `--cwd`, that computer's home. Same for `gerdr folder`'s and `gerdr cp`'s `host:'~/…'`.
 - Only start one on another computer when the user asked for it, or the task needs that machine (its GPU, its files,
   its accounts).
 

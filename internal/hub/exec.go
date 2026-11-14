@@ -3,8 +3,12 @@ package hub
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"hash"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -34,6 +38,14 @@ type ExecResult struct {
 	Truncated bool   `json:"truncated,omitempty"` // the middle was dropped: Output is its first and last execKeep bytes
 	Cwd       string `json:"cwd"`
 	Ms        int64  `json:"ms"`
+	// Stdin: what arrived of the stdin the caller sent (all of it, also the part the command didn't read), so the
+	// caller can tell a cut-off or mangled upload from a command that failed. Absent when none was given.
+	Stdin *StdinInfo `json:"stdin,omitempty"`
+}
+
+type StdinInfo struct {
+	Bytes  int64  `json:"bytes"`
+	Sha256 string `json:"sha256"`
 }
 
 // ExecDir is the directory a command runs in: "" or "~" = home, "~/x" under home, else as given (must exist).
@@ -54,7 +66,9 @@ func ExecDir(dir string) (string, error) {
 	return dir, nil
 }
 
-func RunCommand(ctx context.Context, command, dir, stdin string, timeout time.Duration) (ExecResult, error) {
+// RunCommand: stdin nil = none; else it is fed to the command as raw bytes and read to its end even when the command
+// stops reading early (ExecResult.Stdin counts and hashes all of it).
+func RunCommand(ctx context.Context, command, dir string, stdin io.Reader, timeout time.Duration) (ExecResult, error) {
 	command = strings.TrimSpace(command)
 	if command == "" {
 		return ExecResult{}, errors.New(i18n.S("命令是空的", "The command is empty"))
@@ -71,8 +85,13 @@ func RunCommand(ctx context.Context, command, dir, stdin string, timeout time.Du
 	cmd, flush := shellCommand(command, out)
 	cmd.Env = sysenv.ChildEnv()
 	cmd.Dir = cwd
-	if stdin != "" {
-		cmd.Stdin = strings.NewReader(stdin)
+	var pipe io.WriteCloser
+	if stdin != nil {
+		// Our own copy rather than cmd.Stdin = stdin: exec's copier can still be blocked in a Read after Wait gives up
+		// (WaitDelay), and the rest of the body has to be read (and hashed) by one goroutine only
+		if pipe, err = cmd.StdinPipe(); err != nil {
+			return ExecResult{}, err
+		}
 	}
 	ownGroup(cmd)
 	// Something it left running in the background (`server &`) keeps the output pipe open: stop waiting for it 2s
@@ -81,6 +100,19 @@ func RunCommand(ctx context.Context, command, dir, stdin string, timeout time.Du
 	start := time.Now()
 	if err := cmd.Start(); err != nil {
 		return ExecResult{}, err
+	}
+	var fed chan StdinInfo
+	if pipe != nil {
+		fed = make(chan StdinInfo, 1)
+		go func() {
+			h := &hashCount{h: sha256.New()}
+			_, _ = io.Copy(pipe, io.TeeReader(stdin, h)) // counted as read, also a chunk the pipe refused
+			pipe.Close()
+			// The command closed its stdin (exited, or doesn't want more): still take the rest in, so the count and
+			// hash say what was sent, not what was read
+			_, _ = io.Copy(h, stdin)
+			fed <- StdinInfo{Bytes: h.n, Sha256: hex.EncodeToString(h.h.Sum(nil))}
+		}()
 	}
 	exited := make(chan error, 1)
 	go func() { exited <- cmd.Wait() }()
@@ -97,6 +129,13 @@ func RunCommand(ctx context.Context, command, dir, stdin string, timeout time.Du
 		werr = stopGroup(cmd.Process.Pid, exited)
 	}
 	flush()
+	if fed != nil && !res.TimedOut && ctx.Err() == nil {
+		select {
+		case in := <-fed:
+			res.Stdin = &in
+		case <-ctx.Done(): // the caller gave up while sending
+		}
+	}
 	res.Ms = time.Since(start).Milliseconds()
 	res.Code = cmd.ProcessState.ExitCode()
 	res.Output, res.Truncated = out.text()
@@ -105,6 +144,16 @@ func RunCommand(ctx context.Context, command, dir, stdin string, timeout time.Du
 		res.Output += "\n[" + werr.Error() + "]"
 	}
 	return res, nil
+}
+
+type hashCount struct {
+	h hash.Hash
+	n int64
+}
+
+func (c *hashCount) Write(p []byte) (int, error) {
+	c.n += int64(len(p))
+	return c.h.Write(p)
 }
 
 // stopGroup: SIGTERM the command's group, SIGKILL after 2s, and wait for it.
