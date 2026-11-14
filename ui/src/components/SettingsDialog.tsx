@@ -86,12 +86,14 @@ export function SettingsDialog({ open }: { open: boolean }) {
       return;
     }
     const cur = PAGES.indexOf(tabOpen);
-    const a = tabs[cur];
-    if (!a) return;
+    if (!tabs[cur]) return;
     const mv = m ?? (moving.current = { s0: strip.scrollLeft, styled: new Set() });
-    const p = Math.max(-1, Math.min(1, -x / width));
-    const b = tabs[cur + (p > 0 ? 1 : -1)];
-    const k = b ? Math.abs(p) : 0;
+    // Where the track is, in tabs (quick swipes run ahead of the page shown): between tab `ai` and the next by `k`
+    const pos = Math.max(0, Math.min(tabs.length - 1, cur - x / width));
+    const ai = Math.floor(pos);
+    const a = tabs[ai];
+    const b = ai + 1 < tabs.length && pos > ai ? tabs[ai + 1] : undefined;
+    const k = b ? pos - ai : 0;
     const to = b ?? a;
     const mix = (u: number, v: number) => u + (v - u) * k;
     Object.assign(box.style, {
@@ -108,8 +110,11 @@ export function SettingsDialog({ open }: { open: boolean }) {
           ? el.offsetLeft + el.offsetWidth - strip.clientWidth
           : mv.s0;
     strip.scrollLeft = mix(view(a), view(to));
-    for (const el of mv.styled) if (el !== a && el !== b) (clear(el), mv.styled.delete(el));
+    // The current tab too, when the track has run past it (quick swipes): its own selected look would be a second box
+    const c = tabs[cur];
+    for (const el of mv.styled) if (el !== a && el !== b && el !== c) (clear(el), mv.styled.delete(el));
     for (const [el, v] of [
+      [c, 0],
       [a, 1 - k],
       [b, k],
     ] as const) {
@@ -553,7 +558,7 @@ function SwipePages({
 const PageCtx = createContext<string | null>(null);
 
 /**
- * One top-level page. Wider screens: a tab panel. A phone: the shown page and its two neighbours are mounted side by
+ * One top-level page. Wider screens: a tab panel. A phone: the shown page and two either side are mounted side by
  * side, each its own scroll, so a swipe drags the next one in under the finger; the rest aren't mounted.
  */
 function Page({ value, className, children }: { value: string; className?: string; children: React.ReactNode }) {
@@ -566,7 +571,9 @@ function Page({ value, className, children }: { value: string; className?: strin
     );
   const i = PAGES.indexOf(value);
   const at = i - PAGES.indexOf(cur);
-  if (Math.abs(at) > 1) return null;
+  // Two either side, not one: quick swipes in a row run ahead of the page shown (it switches where they stop), and a
+  // page two steps on was blank until then
+  if (Math.abs(at) > 2) return null;
   return (
     <div role="tabpanel" className="absolute inset-0 overflow-auto bg-background px-4 pb-6" style={{ transform: pageX(i) }} inert={at !== 0}>
       <div className={className}>{children}</div>

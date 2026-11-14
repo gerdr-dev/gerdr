@@ -64,13 +64,15 @@ export function PhoneOverview({ ids, focus, shown }: { ids: string[]; focus?: st
       return;
     }
     const kids = strip.children as HTMLCollectionOf<HTMLElement>;
-    const a = kids[cur];
-    if (!a) return;
+    if (!kids[cur]) return;
     const mv = m ?? (moving.current = { s0: strip.scrollLeft, styled: new Set() });
-    const p = Math.max(-1, Math.min(1, -x / ((body.current?.clientWidth ?? 1) + GAP)));
-    const step = p > 0 ? 1 : -1;
-    const b = sorted[cur + step] ? kids[cur + step] : undefined;
-    const k = b ? Math.abs(p) : 0;
+    // Where the track is, in chips: any number of pages from the current one (quick swipes in a row run ahead of the
+    // tile, which switches only where they stop), between chip `ai` and the next by `k`
+    const pos = Math.max(0, Math.min(sorted.length - 1, cur - x / ((body.current?.clientWidth ?? 1) + GAP)));
+    const ai = Math.floor(pos);
+    const a = kids[ai];
+    const b = ai + 1 < sorted.length && pos > ai ? kids[ai + 1] : undefined;
+    const k = b ? pos - ai : 0;
     const to = b ?? a;
     const mix = (u: number, v: number) => u + (v - u) * k;
     Object.assign(ind.style, {
@@ -83,8 +85,11 @@ export function PhoneOverview({ ids, focus, shown }: { ids: string[]; focus?: st
     strip.scrollLeft = mix(inView(strip, a, mv.s0), inView(strip, to, mv.s0));
     // The box stands in for the chips' own border meanwhile; the text brightens on the chip coming in as it dims on
     // the current one (selected = foreground, the rest muted)
-    for (const el of mv.styled) if (el !== a && el !== b) ((el.style.color = el.style.borderColor = ""), mv.styled.delete(el));
+    // The current chip too, when the track has run past it (quick swipes): its own border would be a second box
+    const c = kids[cur];
+    for (const el of mv.styled) if (el !== a && el !== b && el !== c) ((el.style.color = el.style.borderColor = ""), mv.styled.delete(el));
     for (const [el, v] of [
+      [c, 0],
       [a, 1 - k],
       [b, k],
     ] as const) {
