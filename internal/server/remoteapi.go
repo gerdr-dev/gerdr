@@ -63,10 +63,11 @@ func (s *Server) remoteGuard(w http.ResponseWriter, r *http.Request, next http.H
 		return
 	}
 	// Host 白名单：DNS rebinding 的防线。隧道那头只该有一个名字（中继按 SNI 转过来的就是它）。
-	if !sameHost(r.Host, cfg.Host) {
+	// A direct address may carry a port (config.Remote.PublicHost): that exact host:port is fine too
+	if !sameHost(r.Host, cfg.Host) && !strings.EqualFold(r.Host, cfg.PublicHost()) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(http.StatusMisdirectedRequest)
-		_, _ = w.Write([]byte(i18n.S("Host 不对：这里只服务 ", "Wrong host: this only serves ") + cfg.Host + "\n"))
+		_, _ = w.Write([]byte(i18n.S("Host 不对：这里只服务 ", "Wrong host: this only serves ") + cfg.PublicHost() + "\n"))
 		return
 	}
 	// 写接口一律要自定义头（跨站页面发不出来：要 CORS 预检，而我们不答），外加 Origin 同源。
@@ -247,7 +248,7 @@ func (s *Server) remoteRoutes(mux *http.ServeMux) {
 		if b.Peer {
 			code, exp := rm.Auth.MintPeerCode()
 			// One string to paste into the console's "Add a computer": the address and the code together
-			writeJSON(w, map[string]any{"code": code, "expires": exp, "url": "https://" + rm.Config().Host + "/?peer=" + code})
+			writeJSON(w, map[string]any{"code": code, "expires": exp, "url": rm.URL() + "/?peer=" + code})
 			return
 		}
 		code, exp := rm.Auth.MintCode()
@@ -311,9 +312,9 @@ func (s *Server) remoteRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/remote/connect", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			RelayURL, Host, Invite string
-			// Forward: a tunnel of one's own (frp) to this local port instead of the relay
-			Forward     bool
-			ForwardPort int
+			// Direct: direct access on the LAN port instead of the relay; URLPort is the port in the address
+			Direct  bool
+			URLPort int
 		}
 		if err := decode(r, &in); err != nil {
 			httpError(w, http.StatusBadRequest, err.Error())
@@ -322,8 +323,8 @@ func (s *Server) remoteRoutes(mux *http.ServeMux) {
 		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 		defer cancel()
 		connect := func() error { return s.Remote.Connect(ctx, in.RelayURL, in.Host, in.Invite) }
-		if in.Forward {
-			connect = func() error { return s.Remote.ConnectForward(in.Host, in.ForwardPort) }
+		if in.Direct {
+			connect = func() error { return s.Remote.ConnectDirect(in.Host, in.URLPort) }
 		}
 		if err := connect(); err != nil {
 			httpError(w, http.StatusBadRequest, err.Error())

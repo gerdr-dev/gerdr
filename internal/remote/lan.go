@@ -10,6 +10,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pires/go-proxyproto"
+
 	"github.com/gerdr-dev/gerdr/internal/config"
 	"github.com/gerdr-dev/gerdr/internal/i18n"
 	"github.com/gerdr-dev/gerdr/internal/lan"
@@ -31,6 +33,15 @@ import (
 //
 // The same port also serves a phone on this machine's tailnet (Tailscale) from anywhere, unless LanTailnet is off:
 // same certificate, same rules, the tailnet only replaces the relay as the way in.
+//
+// In direct access (config.Remote.Direct) this port is the way in, with no relay beside it, and serves any peer:
+// how phones get here (Tailscale, frp, a port forward) is the person's network. The gate goes; the device cookie,
+// passkeys and the Host whitelist are what the relay path relies on too, and they stay.
+//
+// A connection from this machine itself (a tunnel client like frpc) may open with a PROXY protocol header, which
+// then gives the client's real address: the per-IP rate limits on pairing codes and passkeys key on it, and
+// without it everything through frp is one client, 127.0.0.1. Optional, and only believed from loopback: anyone
+// else could write any address into it.
 
 func (s *Service) startLan(ctx context.Context, cfg config.Remote, cf *certFile, h http.Handler) {
 	if cfg.LanPort <= 0 {
@@ -45,7 +56,11 @@ func (s *Service) startLan(ctx context.Context, cfg config.Remote, cf *certFile,
 		s.log.Warn("remote: lan port", "err", err)
 		return
 	}
-	hs := &http.Server{Handler: lanOnly(h, cfg.LanTailnet, s.alert), ReadHeaderTimeout: 10 * time.Second}
+	handler := h
+	if !cfg.DirectOn() {
+		handler = lanOnly(h, cfg.LanTailnet, s.alert)
+	}
+	hs := &http.Server{Handler: handler, ReadHeaderTimeout: 10 * time.Second}
 	s.mu.Lock()
 	if ctx.Err() != nil {
 		s.mu.Unlock()
@@ -54,7 +69,8 @@ func (s *Service) startLan(ctx context.Context, cfg config.Remote, cf *certFile,
 	}
 	s.lanHS, s.lanErr = hs, ""
 	s.mu.Unlock()
-	tl := tls.NewListener(ln, &tls.Config{GetCertificate: cf.get, MinVersion: tls.VersionTLS12, NextProtos: []string{"h2", "http/1.1"}})
+	pl := &proxyproto.Listener{Listener: ln, ConnPolicy: proxyFromLoopback, ReadHeaderTimeout: 10 * time.Second}
+	tl := tls.NewListener(pl, &tls.Config{GetCertificate: cf.get, MinVersion: tls.VersionTLS12, NextProtos: []string{"h2", "http/1.1"}})
 	go func() {
 		if err := hs.Serve(tl); err != nil && !errors.Is(err, http.ErrServerClosed) && ctx.Err() == nil {
 			s.mu.Lock()
@@ -74,6 +90,14 @@ func (s *Service) LanOrigins() []string {
 		return nil
 	}
 	return lan.Origins(port, tailnet)
+}
+
+// proxyFromLoopback: read a PROXY header if a local process (frpc) sends one, never from anyone else.
+func proxyFromLoopback(o proxyproto.ConnPolicyOptions) (proxyproto.Policy, error) {
+	if a, ok := o.Upstream.(*net.TCPAddr); ok && a.IP.IsLoopback() {
+		return proxyproto.USE, nil
+	}
+	return proxyproto.SKIP, nil
 }
 
 // lanOnly：对端不在本地网络里就 403。第一次撞上时吼一声 —— 那说明这个口被暴露到公网了。

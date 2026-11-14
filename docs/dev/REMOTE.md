@@ -56,36 +56,39 @@ Phones connect to the host name, so it must point at the relay VPS. The settings
 中继那边的 SNI 路由（Traefik 的 `HostSNI` 规则之类）也要放行 Gerdr 的名字 —— 漏了的表现是「注册成功、隧道已连上、
 手机打不开」，Gerdr 这边一个字都不报。
 
-## Your own tunnel (frp) instead of the relay
+## Direct access instead of the relay
 
-`gerdr remote forward <host>` or Settings → Remote access → "Your own tunnel": no relay, no invite code. Gerdr opens a
-**forward port** on `127.0.0.1:<forwardPort>` (default 7879, remote.json `forwardPort`, `GERDR_FORWARD_PORT`) and
-frpc forwards the domain's connections to it. `config.Remote.Enabled()` is host + (relay or forward port).
-Code: `internal/remote/forward.go`.
+`gerdr remote direct <host> [--url-port N]` or Settings → Remote access → "Direct access": no relay, no invite
+code. The LAN port (`lanPort`, default 7878) becomes the way in and serves **any** peer, with the same certificate,
+handler and "remote" stamp as the relay path. How phones get to it is the person's own network, and Gerdr doesn't
+model it: Tailscale, frp, a router's port forward all look the same from here. `config.Remote.Direct`, `URLPort`;
+`Enabled()` is host + (relay or direct).
 
-```
- phone ──TLS──▶ frps (VPS, vhostHTTPSPort = 443) ──by SNI, untouched──▶ frpc ──PROXY v2 + TLS──▶ 127.0.0.1:7879
-                                                                                  TLS ends here → RemoteHandler
-```
-
-- **Same certificate, handler and "remote" stamp as the relay path.** frps must pass TLS through: `type = "https"`
-  (routes by SNI) or `"tcp"`, **never the https2http plugin** (frps would hold the plaintext and the cookies). Same
-  CAA advice as for the relay: whoever holds the name's IP can otherwise get a certificate for it.
-- **frps must answer on 443.** `sameHost` only accepts the bare name or `:443`, and passkeys are bound to
-  `https://<host>`; a `:8443` in the URL fails both.
-- **A separate port, not the LAN port.** frpc dials from loopback, which the LAN port's local-network gate lets
-  through (so it would never alert on being exposed). 127.0.0.1 only: frpc runs on this machine.
-- **The PROXY protocol header is required** (`transport.proxyProtocolVersion = "v2"` in frpc). Without it every
-  request comes from 127.0.0.1: the per-IP limits on pairing codes / passkeys count the whole internet as one
-  client and the device list shows no addresses. A connection without it is dropped; http.Server only logs that as a
-  TLS handshake error, so `fwdLog` picks it out of the log and `Status.ForwardErr` tells the person what to add.
-  Cleared by the next request that gets through (`ForwardLast`).
-- A local process can send any PROXY header it likes. It gains nothing: it still needs a device credential, and
-  anything local already has the token for the local port.
-- The settings page's A-record check is relay-only (Gerdr doesn't know frps's IP): `HostRecord` refuses without a
-  relay and the page hides it. Connecting the forward way drops a relay address left in remote.json; removing
-  clears `forwardPort` too, so the two ways in don't both come back on the next connect.
-- The Android / iOS Apps need nothing: they only know the domain, and still switch to the LAN / tailnet at home.
+- **Why no gate**: the relay path is open to the whole internet too; what keeps people out is the device cookie,
+  passkeys and the Host whitelist, and those apply here unchanged. The LAN port's "local network only" check is
+  for the LAN shortcut beside the relay (an exposed port there is a mistake worth an alert); in direct access
+  exposing it is the point. An earlier version special-cased each network instead (a 127.0.0.1 port just for frp
+  that required a PROXY header, a Tailscale-only mode); that was Gerdr modelling the person's network, and dropped.
+- **The certificate is still needed** (passkeys need a secure context, the device cookie is Secure, frp crosses
+  the internet). DNS-01 doesn't need this Mac reachable, so it works on a tailnet too.
+- **The port in the address** (`URLPort`, `PublicHost`): empty = the LAN port, so with Tailscale phones open
+  `https://<host>:7878` and the A record holds this Mac's 100.x address. Not 443 there because macOS only lets an
+  unprivileged process bind ports below 1024 on the wildcard address, and something else (OrbStack…) often holds
+  `*:443`. With frp / a port forward facing the internet on 443, `--url-port 443` drops the port. The Host
+  whitelist accepts that exact host:port, and the passkey origins include it (the RPID is the bare name; ports
+  don't matter to it). Android's in-App passkeys fetch `assetlinks.json` from 443 only, so with a port in the
+  address the App falls back to the browser approval (device flow). The browser needs no proxy for that: the name
+  resolves to the tailnet address and Tailscale is a system VPN. With Tailscale off at home, the App still gets in
+  over the LAN (LanRoute) but the browser can't, so the approval page doesn't open; approving the code on the Mac
+  (Settings → Remote access → approve App sign-in) still works.
+- **PROXY protocol, optional, loopback only** (`proxyFromLoopback` in lan.go): frpc dials from 127.0.0.1, so
+  without a header everyone through frp is one client to the per-IP limits on pairing codes and passkeys. A
+  header is read when a local process sends one (frpc `transport.proxyProtocolVersion = "v2"`), never from
+  another address (anyone could write any IP into it). frps must pass TLS through: `type = "https"` or `"tcp"`,
+  never the https2http plugin (frps would hold the plaintext and the cookies).
+- The A-record check on the settings page is relay-only: in direct access Gerdr doesn't know where the name should
+  point. The connect form shows this Mac's Tailscale address as a hint.
+- Connecting directly drops a relay address left in remote.json; removing clears `direct` / `urlPort`.
 
 ## 两条路两套凭据（和 herdr-web 最大的不同）
 

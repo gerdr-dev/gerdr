@@ -70,6 +70,8 @@ one more route, same origin, same certificate and credentials. On by default; `"
   network (Android `bindSocket`, iOS `requiredInterfaceType`) goes around the VPN and never reaches 100.x. Android
   Apps older than this change still use it on cellular (no Wi-Fi to bind to), not on Wi-Fi; older iOS Apps never.
 - macOS may ask once whether to allow incoming connections, same as for the LAN.
+- In direct access (docs/dev/REMOTE.md "Direct access") the LAN port is the way in and has no gate at all; the
+  tailnet route above is what's left of Tailscale support beside the relay.
 
 ## passkey：在 App 里自己刷
 

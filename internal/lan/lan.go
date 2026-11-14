@@ -147,6 +147,17 @@ func PeerIsLocal(remoteAddr string) bool {
 	return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast()
 }
 
+// TailnetAddrs: this machine's Tailscale addresses right now (empty without Tailscale running).
+func TailnetAddrs() []string {
+	var out []string
+	for _, a := range current() {
+		if a.Tailnet {
+			out = append(out, a.Address)
+		}
+	}
+	return out
+}
+
 // ViaTailnet: a peer in 100.64/10 that reached this machine on one of its own tailnet addresses (localAddr, the
 // listener side of the connection: http.LocalAddrContextKey). Only devices on the tailnet can reach that address;
 // someone sharing a carrier's CGNAT range with us arrives on the en / cellular address, if at all, and stays out.

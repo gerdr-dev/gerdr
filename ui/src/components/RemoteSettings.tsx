@@ -76,7 +76,7 @@ export function RemoteSettings({ open }: { open: boolean }) {
         st.envLocked ? (
           <div className="text-[12px] text-muted-foreground">{t("remoteSettings.envLocked")}</div>
         ) : (
-          !isRemote && <RemoteConnect relayURL={st.relayURL} onDone={load} />
+          !isRemote && <RemoteConnect relayURL={st.relayURL} tailnet={st.tailnetAddrs} lanPort={st.directPort} onDone={load} />
         )
       ) : (
         <div className="space-y-1.5">
@@ -109,21 +109,10 @@ export function RemoteSettings({ open }: { open: boolean }) {
             </div>
             <div className="text-[12px] text-muted-foreground">
               {st.relayURL && t("remoteSettings.relayLine", { relay: st.relayURL, state: st.state || "—" })}
-              {!st.relayURL && !st.forwardPort && (st.state || "—")}
+              {!st.relayURL && (st.state || "—")}
               {st.certExpires && isRemote && t("remoteSettings.certExpires", { date: new Date(st.certExpires).toLocaleDateString() })}
             </div>
-            {!!st.forwardPort && (
-              <div className="text-[12px] text-muted-foreground">
-                {t("remoteSettings.forwardLine", {
-                  port: st.forwardPort,
-                  last: st.forwardLast
-                    ? t("remoteSettings.forwardLast", { time: new Date(st.forwardLast).toLocaleString() })
-                    : t("remoteSettings.forwardNever"),
-                })}
-              </div>
-            )}
             {st.err && <div className="text-[12px] text-bad">{st.err}</div>}
-            {st.forwardErr && <div className="text-[12px] text-bad">{st.forwardErr}</div>}
             {st.locked && (
               <div className="flex items-center gap-2 text-[12px] text-warn">
                 {t("remoteSettings.locked")}

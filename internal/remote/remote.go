@@ -53,11 +53,6 @@ type Service struct {
 	err    string       // 起不来的原因（证书签不下来、没 join 过……）
 	lanHS  *http.Server // 局域网直连口（lan.go）
 	lanErr string       // 直连口起不来的原因（端口被占……）；不影响中继那条路
-	// The forward port for a tunnel of one's own (forward.go): its server, what's wrong with it, the last request
-	// that came through it.
-	fwdHS   *http.Server
-	fwdErr  string
-	fwdLast time.Time
 }
 
 // Open 准备设备表、passkey 和限速。没开远程也照样打开：设置里要能看设备、踢设备，
@@ -86,6 +81,9 @@ func relyingParty(cfg config.Remote) (rpid string, origins []string) {
 		return "", nil
 	}
 	origins = []string{"https://" + cfg.Host}
+	if cfg.PublicHost() != cfg.Host {
+		origins = append(origins, "https://"+cfg.PublicHost()) // a direct address with a port
+	}
 	// Passkeys inside the Android app's WebView carry the signing cert hash as origin (docs/dev/ANDROID.md "passkey")
 	for _, fp := range cfg.AndroidCerts {
 		origins = append(origins, auth.AndroidOrigins(fp)...)
@@ -118,7 +116,7 @@ func urlOf(cfg config.Remote) string {
 	if !cfg.Enabled() {
 		return ""
 	}
-	return "https://" + cfg.Host
+	return "https://" + cfg.PublicHost()
 }
 
 // PairURL：扫码进来的链接。码在 query 里，服务端换成 cookie 之后 302 洗掉。
@@ -194,9 +192,8 @@ func (s *Service) run() {
 		}
 		// 直连口在中继之前起：中继连不上（VPS 挂了）时人在家里照样能用
 		s.startLan(ctx, cfg, cf, h)
-		s.startForward(ctx, cfg, cf, h)
 		if cfg.RelayURL == "" {
-			// A tunnel of one's own only (forward.go): nothing more to start
+			// Direct access: the LAN port is the way in, nothing more to start
 			s.mu.Lock()
 			if ctx.Err() == nil {
 				s.certs, s.err = cf, ""
@@ -237,15 +234,11 @@ func (s *Service) run() {
 // stop 收掉当前这一轮：隧道、https、续期。
 func (s *Service) stop() {
 	s.mu.Lock()
-	tn, hs, lhs, fhs, cancel := s.tunnel, s.hs, s.lanHS, s.fwdHS, s.cancel
+	tn, hs, lhs, cancel := s.tunnel, s.hs, s.lanHS, s.cancel
 	s.tunnel, s.hs, s.certs, s.cancel, s.lanHS, s.lanErr = nil, nil, nil, nil, nil, ""
-	s.fwdHS, s.fwdErr, s.fwdLast = nil, "", time.Time{}
 	s.mu.Unlock()
 	if lhs != nil {
 		_ = lhs.Close()
-	}
-	if fhs != nil {
-		_ = fhs.Close()
 	}
 	if cancel != nil {
 		cancel()
@@ -316,11 +309,12 @@ type Status struct {
 	LanPort    int      `json:"lanPort,omitempty"`
 	LanErr     string   `json:"lanErr,omitempty"`
 	LanOrigins []string `json:"lanOrigins,omitempty"`
-	// The forward port (a tunnel of one's own, forward.go): where it listens (0 = off / not up), what's wrong
-	// (no PROXY header, port taken), when a request last came through it.
-	ForwardPort int        `json:"forwardPort,omitempty"`
-	ForwardErr  string     `json:"forwardErr,omitempty"`
-	ForwardLast *time.Time `json:"forwardLast,omitempty"`
+	// Direct: direct access is the way in (the LAN port, open to any peer). TailnetAddrs: this Mac's Tailscale
+	// addresses, a hint for the A record in direct access (shown whether or not remote access is on).
+	// DirectPort: the LAN port as configured (up or not), the default port of a direct address.
+	Direct       bool     `json:"direct,omitempty"`
+	TailnetAddrs []string `json:"tailnetAddrs,omitempty"`
+	DirectPort   int      `json:"directPort,omitempty"`
 }
 
 func (s *Service) Status() Status {
@@ -334,18 +328,11 @@ func (s *Service) Status() Status {
 		st.LanPort = cfg.LanPort
 		st.LanOrigins = lan.Origins(cfg.LanPort, cfg.LanTailnet)
 	}
-	if s.fwdHS != nil {
-		st.ForwardPort = cfg.ForwardPort
-		if !s.fwdLast.IsZero() {
-			t := s.fwdLast
-			st.ForwardLast = &t
-		}
-	}
-	st.ForwardErr = s.fwdErr
+	st.Direct, st.TailnetAddrs, st.DirectPort = cfg.DirectOn(), lan.TailnetAddrs(), cfg.LanPort
 	if s.tunnel != nil {
 		st.State = s.tunnel.State()
-	} else if s.fwdHS != nil && cfg.RelayURL == "" {
-		st.State = fmt.Sprintf(i18n.S("转发口在听 127.0.0.1:%d", "Forward port listening on 127.0.0.1:%d"), cfg.ForwardPort)
+	} else if s.lanHS != nil && cfg.DirectOn() {
+		st.State = fmt.Sprintf(i18n.S("直接访问：在 %d 端口上听", "Direct access: listening on port %d"), cfg.LanPort)
 	} else if st.Enabled && st.Err == "" {
 		st.State = i18n.S("正在准备证书", "Preparing certificate")
 	}
@@ -476,25 +463,26 @@ func (s *Service) Connect(ctx context.Context, relayURL, host, invite string) er
 	return s.Reload()
 }
 
-// ConnectForward is Connect for a tunnel of one's own (frp and the like, forward.go): no relay and no invite code,
-// only the host name and the local port the tunnel's client forwards to. Writes remote.json and brings the path up.
-// A relay address left in the file from before is dropped: the two ways in are picked one at a time here.
-func (s *Service) ConnectForward(host string, port int) error {
+// ConnectDirect is Connect for direct access (config.Remote.Direct): no relay, no invite code. The LAN port becomes
+// the way in, open to any peer; urlPort is the port in the address phones open (0 = the LAN port, 443 = none).
+// A relay address left in the file from before is dropped: the ways in are picked one at a time here.
+func (s *Service) ConnectDirect(host string, urlPort int) error {
 	if envLocked() {
 		return errEnvLocked
 	}
-	if cur := s.Config(); cur.Enabled() {
+	cur := s.Config()
+	if cur.Enabled() {
 		return fmt.Errorf(i18n.S("已经连着 %s 了：先移除再连", "already connected to %s: remove it first"), cur.Host)
+	}
+	if cur.LanPort <= 0 {
+		return errors.New(i18n.S("局域网直连口关着（lanPort = 0）：直接访问走的就是它，先把它开起来", "the LAN port is off (lanPort = 0), and direct access goes through it: turn it on first"))
+	}
+	if urlPort < 0 || urlPort > 65535 {
+		return fmt.Errorf(i18n.S("端口 %d 不对", "port %d is out of range"), urlPort)
 	}
 	host, err := relay.CleanHost(host)
 	if err != nil {
 		return err
-	}
-	if port == 0 {
-		port = config.DefaultForwardPort
-	}
-	if port < 1024 || port > 65535 {
-		return fmt.Errorf(i18n.S("转发口 %d 不行：用 1024–65535 之间的端口", "forward port %d won't do: pick one between 1024 and 65535"), port)
 	}
 	f, err := config.ReadRemoteFile(s.dataDir())
 	if err != nil {
@@ -503,7 +491,7 @@ func (s *Service) ConnectForward(host string, port int) error {
 	if f.Host != host {
 		s.Passkeys.DeleteAll() // bound to the old name, see Connect
 	}
-	f.RelayURL, f.Host, f.ForwardPort = "", host, port
+	f.RelayURL, f.Host, f.Direct, f.URLPort = "", host, true, urlPort
 	if err := config.WriteRemoteFile(s.dataDir(), f); err != nil {
 		return err
 	}
@@ -524,7 +512,7 @@ func (s *Service) Disconnect() (devs, keys int, err error) {
 	if err != nil {
 		return 0, 0, err
 	}
-	f.Host, f.ForwardPort = "", 0
+	f.Host, f.Direct, f.URLPort = "", false, 0
 	if err := config.WriteRemoteFile(s.dataDir(), f); err != nil {
 		return 0, 0, err
 	}

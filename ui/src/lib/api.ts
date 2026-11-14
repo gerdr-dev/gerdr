@@ -488,8 +488,8 @@ export const api = {
   remoteFixHost: () => req<HostRecord>("POST", "/api/remote/dns/host"),
   /** 连上 / 移除远程访问：本机专用，当场生效不用重启 */
   remoteConnect: (relayURL: string, host: string, invite: string) => req("POST", "/api/remote/connect", { relayURL, host, invite }),
-  /** A tunnel of one's own (frp) to 127.0.0.1:forwardPort instead of the relay (internal/remote/forward.go) */
-  remoteConnectForward: (host: string, forwardPort: number) => req("POST", "/api/remote/connect", { forward: true, host, forwardPort }),
+  /** Direct access instead of the relay (config.Remote.Direct): urlPort is the port in the address, 0 = the LAN port */
+  remoteConnectDirect: (host: string, urlPort: number) => req("POST", "/api/remote/connect", { direct: true, host, urlPort }),
   remoteDisconnect: () => req<{ revoked: number; passkeys: number }>("POST", "/api/remote/disconnect", {}),
   remoteLogout: () => req("POST", "/api/remote/logout", {}),
   // 批准安卓 App 的登录（passkey 的退路，device flow：App 显示码，这边手输）
@@ -520,10 +520,10 @@ export type RemoteStatus = {
   lanPort?: number;
   lanErr?: string;
   lanOrigins?: string[];
-  /** The forward port for a tunnel of one's own (frp): where it listens, what's wrong (no PROXY header…), the last request through it */
-  forwardPort?: number;
-  forwardErr?: string;
-  forwardLast?: string;
+  /** Direct access is the way in; this Mac's Tailscale addresses (an A-record hint); the LAN port as configured */
+  direct?: boolean;
+  tailnetAddrs?: string[];
+  directPort?: number;
 };
 /** The UI directory's state (webui.Status): a newer gerdr UI the upgrade skipped over a conflict with local edits. */
 export type UIStatus = {

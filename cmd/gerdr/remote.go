@@ -18,6 +18,7 @@ import (
 	"github.com/gerdr-dev/gerdr/internal/auth"
 	"github.com/gerdr-dev/gerdr/internal/config"
 	"github.com/gerdr-dev/gerdr/internal/i18n"
+	"github.com/gerdr-dev/gerdr/internal/lan"
 	"github.com/gerdr-dev/gerdr/internal/qr"
 	"github.com/gerdr-dev/gerdr/internal/remote"
 )
@@ -45,22 +46,15 @@ func remoteCmd() *cobra.Command {
 			}
 			st := out.Status
 			if !st.Enabled {
-				fmt.Println(i18n.S("  没开远程访问。开法：设置 → 远程访问；或者 gerdr remote join <中继地址> <主机名> <邀请码>（云端中继），或者 gerdr remote forward <主机名>（自己的 frp）", "  Remote access is off. Turn it on in Settings → Remote access, or run gerdr remote join <relay-url> <host> <invite-code> (cloud relay) or gerdr remote forward <host> (your own frp)"))
+				fmt.Println(i18n.S("  没开远程访问。开法：设置 → 远程访问；或者 gerdr remote join <中继地址> <主机名> <邀请码>（云端中继），或者 gerdr remote direct <主机名>（直接访问：Tailscale / frp / 端口转发）", "  Remote access is off. Turn it on in Settings → Remote access, or run gerdr remote join <relay-url> <host> <invite-code> (cloud relay) or gerdr remote direct <host> (direct access: Tailscale / frp / a port forward)"))
 				return nil
 			}
 			fmt.Printf(i18n.S("  地址：%s\n", "  Address: %s\n"), st.URL)
 			if st.RelayURL != "" {
 				fmt.Printf(i18n.S("  中继：%s\n", "  Relay:   %s\n"), st.RelayURL)
 			}
-			if st.ForwardPort > 0 {
-				last := i18n.S("还没有请求进来过", "no request through it yet")
-				if st.ForwardLast != nil {
-					last = i18n.S("上次有请求：", "last request: ") + st.ForwardLast.Format("2006-01-02 15:04:05")
-				}
-				fmt.Printf(i18n.S("  转发口：127.0.0.1:%d（%s）\n", "  Forward: 127.0.0.1:%d (%s)\n"), st.ForwardPort, last)
-			}
-			if st.ForwardErr != "" {
-				fmt.Printf("  ⚠️  %s\n", st.ForwardErr)
+			if len(st.TailnetAddrs) > 0 {
+				fmt.Printf(i18n.S("  这台 Mac 的 Tailscale 地址：%s\n", "  This Mac's Tailscale address: %s\n"), strings.Join(st.TailnetAddrs, ", "))
 			}
 			if st.State != "" {
 				fmt.Printf(i18n.S("  状态：%s\n", "  State:   %s\n"), st.State)
@@ -81,7 +75,7 @@ func remoteCmd() *cobra.Command {
 		},
 	})
 	cmd.AddCommand(joinCmd())
-	cmd.AddCommand(forwardCmd())
+	cmd.AddCommand(directCmd())
 	cmd.AddCommand(&cobra.Command{
 		Use:   "pair",
 		Short: i18n.S("出一个配对码（5 分钟、一次性）和二维码：新设备扫一下就进来了", "Show a one-time pairing code (valid 5 minutes) and QR code: scan it on the new device to get in"),
@@ -396,27 +390,33 @@ func joinCmd() *cobra.Command {
 	return c
 }
 
-// forwardCmd: remote access through a tunnel of one's own (frp and the like) instead of the relay.
-// internal/remote/forward.go and docs/dev/REMOTE.md "Your own tunnel (frp)" say how it works and why.
-func forwardCmd() *cobra.Command {
+// directCmd: direct access instead of the relay (config.Remote.Direct, docs/dev/REMOTE.md "Direct access"). Gerdr only
+// serves the LAN port with the domain's certificate; how phones get there is the person's own network.
+func directCmd() *cobra.Command {
 	var o certOpts
-	var port int
+	var urlPort int
 	c := &cobra.Command{
-		Use: i18n.S("forward <主机名>", "forward <host>"),
-		Short: i18n.S("不用中继，走自己的转发（frp 这类）：手机打开 https://<主机名>，frps 原样转到这台机器",
-			"Use a tunnel of your own (frp and the like) instead of the relay: phones open https://<host>, frps passes it through to this machine"),
+		Use: i18n.S("direct <主机名>", "direct <host>"),
+		Short: i18n.S("直接访问，不走中继：Gerdr 在局域网直连口上对外，手机怎么连过来（Tailscale / frp / 端口转发）是你自己的网络",
+			"Direct access, no relay: Gerdr serves on the LAN port, and how phones get there (Tailscale / frp / a port forward) is your own network"),
 		Long: i18n.S("把配置写进 <数据目录>/remote/remote.json（去掉中继地址）；Gerdr 在跑就当场生效。\n"+
-			"Gerdr 在 127.0.0.1:<端口> 上开一个转发口，TLS 在这台机器上终止（和中继那条路同一张证书、同一套规则）。\n"+
-			"frpc 要原样转 TLS（type = \"https\" 或 \"tcp\"，别用 https2http 插件），而且必须带 PROXY protocol 头\n"+
-			"（transport.proxyProtocolVersion = \"v2\"）：不带的连接会被断开 —— 不然所有请求都像是从 127.0.0.1 来的，按 IP 的限速就废了。\n"+
-			"frps 要在 443 上对外（vhostHTTPSPort = 443），域名的 A 记录指向 frps 那台。证书参数和 join 一样。\n\n"+
-			"  gerdr remote forward gerdr.example.com --dns cloudflare --env CLOUDFLARE_DNS_API_TOKEN=…",
+			"Gerdr 在局域网直连口（默认 7878，remote.json 的 lanPort）上用这个域名的证书对外，规则和中继那条路一样（配对码 / passkey）。\n"+
+			"证书照样走 DNS-01，不需要公网连得到这台 Mac；参数和 join 一样。\n\n"+
+			"手机打开的地址：\n"+
+			"  Tailscale：A 记录指向这台 Mac 的 Tailscale 地址，地址是 https://<主机名>:7878（--url-port 不用给）\n"+
+			"  frp / 路由器端口转发，对外是 443：A 记录指向那台公网机器，--url-port 443，地址就是 https://<主机名>\n"+
+			"frp 用 type = \"https\" 或 \"tcp\" 原样转到 127.0.0.1:7878（别用 https2http 插件）；\n"+
+			"加上 transport.proxyProtocolVersion = \"v2\" 的话，Gerdr 能看到真实来源 IP（按 IP 的限速才分得开人）。\n\n"+
+			"  gerdr remote direct gerdr.example.com --dns cloudflare --env CLOUDFLARE_DNS_API_TOKEN=…",
 			"Writes the config to <data-dir>/remote/remote.json (dropping any relay address); takes effect at once if Gerdr is running.\n"+
-				"Gerdr opens a forward port on 127.0.0.1:<port>; TLS ends on this machine (same certificate and rules as the relay path).\n"+
-				"frpc must pass TLS through (type = \"https\" or \"tcp\", not the https2http plugin) and must send a PROXY protocol header\n"+
-				"(transport.proxyProtocolVersion = \"v2\"): connections without it are dropped, or every request would look like 127.0.0.1 and per-IP rate limits would be useless.\n"+
-				"frps must face the internet on 443 (vhostHTTPSPort = 443), and the host's A record points at the frps machine. Certificate flags are the same as join.\n\n"+
-				"  gerdr remote forward gerdr.example.com --dns cloudflare --env CLOUDFLARE_DNS_API_TOKEN=…"),
+				"Gerdr serves the LAN port (default 7878, lanPort in remote.json) with this domain's certificate, under the same rules as the relay path (pairing codes / passkeys).\n"+
+				"The certificate still comes through DNS-01, so this Mac needn't be reachable from the internet; flags are the same as join.\n\n"+
+				"The address phones open:\n"+
+				"  Tailscale: the A record points at this Mac's Tailscale address, the address is https://<host>:7878 (no --url-port)\n"+
+				"  frp / a router's port forward facing the internet on 443: the A record points at that public machine, --url-port 443, the address is https://<host>\n"+
+				"frp: type = \"https\" or \"tcp\" passed through to 127.0.0.1:7878 (not the https2http plugin);\n"+
+				"with transport.proxyProtocolVersion = \"v2\" Gerdr sees the real client IP (so per-IP rate limits tell people apart).\n\n"+
+				"  gerdr remote direct gerdr.example.com --dns cloudflare --env CLOUDFLARE_DNS_API_TOKEN=…"),
 		Args: cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			env := config.FromEnv()
@@ -424,8 +424,8 @@ func forwardCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if port < 1024 || port > 65535 {
-				return fmt.Errorf(i18n.S("--port %d 不行：用 1024–65535 之间的端口", "--port %d won't do: pick one between 1024 and 65535"), port)
+			if urlPort < 0 || urlPort > 65535 {
+				return fmt.Errorf(i18n.S("--url-port %d 不对", "--url-port %d is out of range"), urlPort)
 			}
 			f, err := config.ReadRemoteFile(env.Dir)
 			if err != nil {
@@ -434,51 +434,29 @@ func forwardCmd() *cobra.Command {
 			if f.Host != "" && f.Host != host {
 				return fmt.Errorf(i18n.S("已经连着 %s 了：先在设置 → 远程访问里移除（设备和 passkey 绑在那个名字上）", "already set up for %s: remove it in Settings → Remote access first (devices and passkeys are bound to that name)"), f.Host)
 			}
-			f.RelayURL, f.Host, f.ForwardPort = "", host, port
+			if f.LanPort != nil && *f.LanPort <= 0 {
+				return errors.New(i18n.S("remote.json 里 lanPort 是 0：直接访问走的就是局域网直连口，先把它开起来", "lanPort is 0 in remote.json, and direct access goes through the LAN port: turn it on first"))
+			}
+			f.RelayURL, f.Host, f.Direct, f.URLPort = "", host, true, urlPort
 			if err := o.apply(&f); err != nil {
 				return err
 			}
 			if err := config.WriteRemoteFile(env.Dir, f); err != nil {
 				return err
 			}
-			fmt.Printf(i18n.S("\n  ✓ 配好了：https://%s → 127.0.0.1:%d\n  配置写在 %s/remote.json，%s。\n", "\n  ✓ Set up: https://%s → 127.0.0.1:%d\n  Config written to %s/remote.json; %s.\n"),
-				host, port, config.RemoteDir(env.Dir), reloadRunning())
-			fmt.Printf(i18n.S("\n  frpc 里加这条代理（frps 要有 vhostHTTPSPort = 443）：\n\n%s\n", "\n  Add this proxy to frpc (frps needs vhostHTTPSPort = 443):\n\n%s\n"), indent(remote.FrpcSnippet(host, port), "    "))
-			printForwardDNS(env.Dir, host)
+			r, _ := config.LoadRemote(env.Dir)
+			fmt.Printf(i18n.S("\n  ✓ 配好了：https://%s（直接访问，Gerdr 在 %d 端口上听）\n  配置写在 %s/remote.json，%s。\n", "\n  ✓ Set up: https://%s (direct access, Gerdr listens on port %d)\n  Config written to %s/remote.json; %s.\n"),
+				r.PublicHost(), r.LanPort, config.RemoteDir(env.Dir), reloadRunning())
+			if ts := lan.TailnetAddrs(); len(ts) > 0 {
+				fmt.Printf(i18n.S("  这台 Mac 的 Tailscale 地址：%s（用 Tailscale 的话 A 记录指向它）\n", "  This Mac's Tailscale address: %s (with Tailscale, point the A record at it)\n"), strings.Join(ts, " / "))
+			}
+			fmt.Println()
 			return nil
 		},
 	}
-	c.Flags().IntVar(&port, "port", config.DefaultForwardPort, i18n.S("转发口（frpc 的 localPort），只在 127.0.0.1 上听", "forward port (frpc's localPort), listening on 127.0.0.1 only"))
+	c.Flags().IntVar(&urlPort, "url-port", 0, i18n.S("手机打开的地址里的端口：不给 = 局域网直连口（Tailscale）；443 = 不带端口（frp / 端口转发对外是 443）", "port in the address phones open: none = the LAN port (Tailscale); 443 = no port (frp / a port forward facing the internet on 443)"))
 	o.bind(c)
 	return c
-}
-
-func indent(s, pre string) string {
-	return pre + strings.ReplaceAll(strings.TrimRight(s, "\n"), "\n", "\n"+pre) + "\n"
-}
-
-func printForwardDNS(dir, host string) {
-	acct := remote.AccountURI(dir)
-	if acct == "" {
-		acct = i18n.S("<这台机器的 ACME 账户：Gerdr 签下第一张证书之后 gerdr remote status 里有>", "<this machine's ACME account: shown in gerdr remote status once Gerdr issues its first certificate>")
-	}
-	fmt.Printf(i18n.S(`
-  DNS 上加两条（一次性）：
-
-       %s     A    <frps 那台机器的 IP>
-       CAA  0 issue "letsencrypt.org; accounturi=%s; validationmethods=dns-01"
-
-     CAA 挡的是「frps 那台占着这个 IP 去自己签一张你的证书」—— 能签证书就能做中间人（docs/dev/REMOTE.md）。
-
-`, `
-  Add two DNS records (one time):
-
-       %s     A    <IP of the frps machine>
-       CAA  0 issue "letsencrypt.org; accounturi=%s; validationmethods=dns-01"
-
-     CAA stops "the frps machine, holding this IP, issuing a certificate for you itself" — whoever can get a certificate can play man-in-the-middle (docs/dev/REMOTE.md).
-
-`), host, acct)
 }
 
 func printRelayDNS(dir, host string) {
