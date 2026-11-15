@@ -120,7 +120,7 @@ export const zh = {
   "connStatus.toastReconnecting": "正在重连 Gerdr…",
   "connStatus.toastUnreachable": "连不上 Gerdr，{n} 秒后重试",
   "connStatus.toastConnecting": "正在连接 Gerdr…",
-  "connStatus.lan": "局域网",
+  "connStatus.lan": "直连",
   "connStatus.relay": "中继",
 
   "inbox.title": "收件箱",
@@ -343,7 +343,7 @@ export const en: Record<keyof typeof zh, string> = {
   "connStatus.toastReconnecting": "Reconnecting to Gerdr…",
   "connStatus.toastUnreachable": "Can't reach Gerdr, retrying in {n}s",
   "connStatus.toastConnecting": "Connecting to Gerdr…",
-  "connStatus.lan": "LAN",
+  "connStatus.lan": "Direct",
   "connStatus.relay": "Relay",
 
   "inbox.title": "Inbox",
