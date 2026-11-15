@@ -516,6 +516,33 @@ export function placeTile(from: string, to: string, side: DropSide, shown: strin
   });
 }
 
+/**
+ * A chip dragged out of the grid's "more" row and dropped on tile `over` (OverviewGrid.tsx dragMore). Same choice as
+ * dragging one tile onto another: in the middle (`side` unset) it replaces `over`, which goes to "more"; near an edge it
+ * goes on that side of `over`, and when the grid has no room for one more (`room`) its last tile (not the main one, not
+ * `over`) makes way. `shown` = the tiles in the grid now, w×h its size.
+ */
+export function dropFromMore(id: string, over: string, side: DropSide | undefined, shown: string[], room: boolean, w: number, h: number) {
+  const o = get().overview;
+  unminimizeTile(id);
+  const out = [...shown].reverse().find((x) => x !== o.main && x !== over);
+  if (side && over !== o.main && (room || out)) {
+    let vis = shown;
+    if (!room) {
+      // To the end of the order: the grid shows the first ones that fit, so it drops out to "more"
+      vis = shown.filter((x) => x !== out);
+      setOverview((x) => {
+        const ids = overviewIds({ ...get(), overview: x }).filter((y) => y !== out);
+        return { ...x, ids: [...ids, out!] };
+      });
+    }
+    return placeTile(id, over, side, vis, w, h);
+  }
+  swapTiles(id, over);
+  // With room in the grid (`id` was only minimized) the swap alone would keep `over` there too: replacing sends it out
+  if (room) minimizeTile(over);
+}
+
 export function setGridSizes(key: string, sizes: GridSizes | undefined) {
   setOverview((o) => {
     const all = { ...o.sizes };

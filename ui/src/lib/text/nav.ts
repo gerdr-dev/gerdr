@@ -213,7 +213,7 @@ export const zh = {
   "overviewGrid.dropDown": "放到下面",
   "overviewGrid.empty": "进行中是空的：等你的、在跑的、报错的会自动出现，也可以在左边右键 Agent 加进来",
   "overviewGrid.seamHint": "拖动调大小，双击恢复等分",
-  "overviewGrid.moreHint": "放不下的和最小化的：拖到某一格上换掉它；点一下放回网格（放不下时顶替最后一格）",
+  "overviewGrid.moreHint": "放不下的和最小化的：拖到某一格中间换掉它，拖到边上放在它旁边；点一下放回网格（放不下时顶替最后一格）",
   "overviewGrid.moreN": "更多 {n}",
 
   "overview.addedElsewhere": "加进去了，但它不在这个项目里：在「进行中」的设置里打开「显示所有项目」才看得到",
@@ -438,7 +438,7 @@ export const en: Record<keyof typeof zh, string> = {
     "Nothing active. Agents that need you, are running or failed show up on their own; you can also right-click an agent on the left to add it",
   "overviewGrid.seamHint": "Drag to resize, double-click to even out",
   "overviewGrid.moreHint":
-    "Out of room or minimized: drag one onto a tile to take its place; click one to bring it back (in place of the last tile if there's no room)",
+    "Out of room or minimized: drag one onto the middle of a tile to replace it, onto its edge to put it beside it; click one to bring it back (in place of the last tile if there's no room)",
   "overviewGrid.moreN": "{n} more",
 
   "overview.addedElsewhere": "Added, but it's in another project: turn on “Show agents from all projects” in Active's settings to see it",

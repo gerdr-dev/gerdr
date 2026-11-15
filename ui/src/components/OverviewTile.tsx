@@ -1,5 +1,5 @@
 import { ArrowUpRight, GripVertical, Maximize2, Minimize2, Minus, Pin, PinOff, X } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { basename, focusSession } from "@/lib/actions";
 import { removeActive, toggleMain, toggleOverview } from "@/lib/overview";
@@ -96,8 +96,22 @@ export function Tile({
     toggleOverview(false);
     focusSession(id);
   };
+  const frame = useRef<HTMLDivElement>(null);
+  const bar = useRef<HTMLDivElement>(null);
+  // The chat's size inside a tile of size `pin`: minus the frame's border and the title bar, both measured (a pin only
+  // comes once the tile is mounted). Hard-coded, the title bar was taken as 33px while h-8 is 32 with its border, and the
+  // chat came up 1px short for every zoom / slide and jumped back after: the whole tile seemed to shake.
+  const chatPin =
+    pin &&
+    (() => {
+      const f = frame.current;
+      const bw = f ? f.offsetWidth - f.clientWidth : 2;
+      const bh = f ? f.offsetHeight - f.clientHeight : 2;
+      return { width: pin.width - bw, height: pin.height - bh - (bar.current?.offsetHeight ?? 32) };
+    })();
   return (
     <div
+      ref={frame}
       className={cn(
         "flex h-full min-h-0 flex-col overflow-clip bg-background",
         !phone && "rounded-md border",
@@ -107,6 +121,7 @@ export function Tile({
       onMouseDown={() => !focused && onFocus()}
     >
       <div
+        ref={bar}
         className={cn(
           // max-md:pl-4 like a pane's title bar (Panes.tsx): on a phone the two show in the same spot, so the icons line up
           "flex h-8 shrink-0 items-center gap-2 border-b px-3 text-[12px] max-md:pl-4",
@@ -158,8 +173,7 @@ export function Tile({
       </div>
       <div className="min-h-0 flex-1 overflow-clip">
         {/* Own pane id: the composer's draft here is separate from the one in the session's real pane */}
-        {/* Minus the 1px frame on each side and the 32px + 1px title bar */}
-        <div className="h-full w-full" style={pin && { width: pin.width - 2, height: pin.height - 35 }}>
+        <div className="h-full w-full" style={chatPin}>
           <ChatView key={id} session={session} paneId={`ov-${id}`} focused={focused} />
         </div>
       </div>

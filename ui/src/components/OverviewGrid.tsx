@@ -8,6 +8,7 @@ import {
   setGridSizes,
   setOverview,
   placeTile,
+  dropFromMore,
   swapTiles,
   minimizeTile,
   unminimizeTile,
@@ -28,6 +29,7 @@ const pct = (v: number) => `${v * 100}%`;
 const NO_SIZES = {};
 const NO_SHAPES = {};
 const NO_MINI: string[] = [];
+const NO_RESIZED = new Set<string>();
 /** Height of the "more" row under the grid, holding the tiles that didn't fit. */
 const MORE_H = 30;
 
@@ -131,12 +133,33 @@ export function Grid({
   // chat is pinned to the full size while moving (Tile `pin`), so the chat re-lays out once, not every frame; the frame and
   // title bar follow the box, keeping the buttons in the corner and all four borders in view.
   const anim = useZoomAnim(zoom, false);
-  const pin = anim && box.current ? { width: box.current.clientWidth - 8, height: box.current.clientHeight - 8 } : undefined;
+  // Tile's own size (its 3px padding off the slot; Tile takes its frame and title bar off). It used to take 8 off, 2px less
+  // than the chat really gets, so every pinned chat shrank 2px for the animation and jumped back after it.
+  const pin = anim && box.current ? { width: box.current.clientWidth - 6, height: box.current.clientHeight - 6 } : undefined;
   // Re-arranging (pin, swap, add / remove a tile) slides every tile to its new box the same way; seam drags and window
   // resizes follow the pointer / window and don't animate. Each chat is laid out at its final size meanwhile (tilePin).
   const moved = useLayoutAnim(`${key}|${main ?? ""}|${lay.key}`);
   // Not before the grid has been measured: a chat laid out in a 0-wide box wraps everything (the composer stayed huge)
-  const tilePin = (b: Box) => (size.w ? { width: b.w * size.w - 8, height: b.h * size.h - 8 } : undefined);
+  const tilePin = (b: Box) => (size.w ? { width: b.w * size.w - 6, height: b.h * size.h - 6 } : undefined);
+  // Only tiles whose box changes size are pinned while sliding. One that keeps its size (a swap between same-size slots,
+  // a tile coming in from "more" in the place of another) needs nothing, and pinning it anyway is a chance to re-lay its
+  // chat out twice at slightly different sizes: that was every tile flashing on a swap.
+  const [seenLay, setSeenLay] = useState(lay);
+  const [resized, setResized] = useState<Set<string>>(NO_RESIZED);
+  if (seenLay !== lay) {
+    setSeenLay(lay);
+    const near = (a: number, c: number) => Math.abs(a - c) < 1e-6;
+    setResized(
+      new Set(
+        [...lay.boxes]
+          .filter(([id, b]) => {
+            const o = seenLay.boxes.get(id);
+            return o && !(near(o.w, b.w) && near(o.h, b.h));
+          })
+          .map(([id]) => id),
+      ),
+    );
+  }
 
   const dragMain = (e: React.PointerEvent) => {
     const rect = box.current!.getBoundingClientRect();
@@ -159,29 +182,31 @@ export function Grid({
 
   // Drag a tile by its title bar onto another one: near one of its edges it goes on that side, in the middle the two trade
   // places. Starts after a few px, so a click still focuses. The main tile only swaps (it has its own column).
+  // Which tile the pointer is over and, near one of its edges, which side: the drop target of both drags below.
+  const dropAt = (ev: PointerEvent, id: string): Pick<TileDrag, "over" | "side"> => {
+    const el = document.elementFromPoint(ev.clientX, ev.clientY)?.closest<HTMLElement>("[data-ov-tile]");
+    const over = el?.dataset.ovTile;
+    if (!el || !over || over === id) return {};
+    if (main && (over === main || id === main) && shownIds.length > 1) return { over };
+    const r = el.getBoundingClientRect();
+    const fx = (ev.clientX - r.left) / r.width;
+    const fy = (ev.clientY - r.top) / r.height;
+    const [side, d] = (
+      [
+        ["left", fx],
+        ["right", 1 - fx],
+        ["up", fy],
+        ["down", 1 - fy],
+      ] as [DropSide, number][]
+    ).sort((a, b) => a[1] - b[1])[0];
+    return d < EDGE ? { over, side } : { over };
+  };
   const dragTile = (e: React.PointerEvent, id: string, label: string) => {
     if (e.button !== 0 || (e.target as HTMLElement).closest("button")) return;
     const sx = e.clientX;
     const sy = e.clientY;
     let on = false;
-    const overAt = (ev: PointerEvent): Pick<TileDrag, "over" | "side"> => {
-      const el = document.elementFromPoint(ev.clientX, ev.clientY)?.closest<HTMLElement>("[data-ov-tile]");
-      const over = el?.dataset.ovTile;
-      if (!el || !over || over === id) return {};
-      if (main && (over === main || id === main) && shownIds.length > 1) return { over };
-      const r = el.getBoundingClientRect();
-      const fx = (ev.clientX - r.left) / r.width;
-      const fy = (ev.clientY - r.top) / r.height;
-      const [side, d] = (
-        [
-          ["left", fx],
-          ["right", 1 - fx],
-          ["up", fy],
-          ["down", 1 - fy],
-        ] as [DropSide, number][]
-      ).sort((a, b) => a[1] - b[1])[0];
-      return d < EDGE ? { over, side } : { over };
-    };
+    const overAt = (ev: PointerEvent) => dropAt(ev, id);
     track(
       e,
       "grabbing",
@@ -200,9 +225,11 @@ export function Grid({
     onFocus(id);
   };
 
-  // Drag a chip out of "more" onto a tile: it takes that tile's place, which goes to "more" (only a swap: placing it
-  // beside one would make the grid one tile bigger than allowed). A plain click still takes the last tile's place
+  // Drag a chip out of "more" onto a tile, with the same choice as dragging a tile: in the middle it replaces that tile,
+  // near an edge it goes on that side (lib/overview dropFromMore). A plain click still takes the last tile's place
   // (the focus effect above). The click that follows a drag's pointerup is swallowed, or it would swap a second time.
+  // On a touch screen the chips are touch-pan-x, not touch-none (DRAG_TOUCH): the row still scrolls sideways, and a drag
+  // that starts upwards (towards the grid, the only way a chip goes) isn't taken over as a pan, so it reaches track.
   const dragged = useRef(false);
   const dragMore = (e: React.PointerEvent, id: string, label: string) => {
     if (e.button !== 0) return;
@@ -210,20 +237,22 @@ export function Grid({
     const sy = e.clientY;
     let on = false;
     dragged.current = false;
-    const overAt = (ev: PointerEvent) => document.elementFromPoint(ev.clientX, ev.clientY)?.closest<HTMLElement>("[data-ov-tile]")?.dataset.ovTile;
+    const overAt = (ev: PointerEvent) => dropAt(ev, id);
     track(
       e,
       "grabbing",
       (ev) => {
         if (!on && Math.hypot(ev.clientX - sx, ev.clientY - sy) < 5) return;
         on = dragged.current = true;
-        setDrag({ id, label, x: ev.clientX, y: ev.clientY, over: overAt(ev) });
+        setDrag({ id, label, x: ev.clientX, y: ev.clientY, ...overAt(ev) });
       },
       (ev) => {
-        const over = on ? overAt(ev) : undefined;
+        const { over, side } = on ? overAt(ev) : {};
         setDrag(undefined);
         if (!over) return;
-        swapTiles(id, over);
+        // Room for one more: fitting the grid with it added keeps them all
+        const room = fitTiles([...shownIds, id], main, ratio, size.w, size.h, max).length > shownIds.length;
+        dropFromMore(id, over, side, shownIds, room, size.w, size.h);
         onFocus(id);
       },
     );
@@ -281,7 +310,7 @@ export function Grid({
                 onZoom={() => onZoom(id)}
                 onMinimize={() => minimizeTile(id)}
                 onDragStart={zoom ? undefined : (e, label) => dragTile(e, id, label)}
-                pin={moving ? pin : sliding ? tilePin(b) : undefined}
+                pin={moving ? pin : sliding && resized.has(id) ? tilePin(b) : undefined}
               />
             </div>
           );
@@ -342,7 +371,7 @@ export function Grid({
               key={id}
               id={id}
               current={false}
-              className="h-6 max-w-40 cursor-grab"
+              className="h-6 max-w-40 cursor-grab touch-pan-x"
               onClick={() => clickMore(id)}
               onPointerDown={(e) => dragMore(e, id, e.currentTarget.textContent ?? "")}
             />
