@@ -326,7 +326,7 @@ func (s *Service) Status() Status {
 	st.LanErr = s.lanErr
 	if s.lanHS != nil {
 		st.LanPort = cfg.LanPort
-		st.LanOrigins = lan.Origins(cfg.LanPort, cfg.LanTailnet)
+		st.LanOrigins = lan.Origins(cfg.LanPort, cfg.LanTailnet, cfg.LanIPv6)
 	}
 	st.Direct, st.TailnetAddrs, st.DirectPort = cfg.DirectOn(), lan.TailnetAddrs(), cfg.LanPort
 	if s.tunnel != nil {

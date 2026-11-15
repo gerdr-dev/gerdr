@@ -67,4 +67,17 @@ object Server {
         val p = host?.split('.')?.mapNotNull { it.toIntOrNull() } ?: return false
         return p.size == 4 && p[0] == 100 && p[1] in 64..127
     }
+
+    /**
+     * A global IPv6 address (2000::/3): the Mac's LAN port also answers there from anywhere with IPv6, when its
+     * router lets inbound IPv6 through. Like a tailnet address, LanRoute leaves it on the default network: out of
+     * the house that is cellular, and pinning to some café's Wi-Fi (often IPv4 only) would make it unreachable.
+     * Not in isLocalHost: that one is also the navigation lock, and a public address isn't a local page.
+     */
+    fun isGlobalV6(host: String?): Boolean {
+        val h = host?.trim('[', ']') ?: return false
+        if (!h.contains(':') || !h.all { it.isLetterOrDigit() || it == ':' || it == '.' }) return false
+        val a = try { java.net.InetAddress.getByName(h) } catch (_: Exception) { return false }
+        return a is java.net.Inet6Address && (a.address[0].toInt() and 0xE0) == 0x20
+    }
 }

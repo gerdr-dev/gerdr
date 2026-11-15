@@ -41,6 +41,11 @@ type Remote struct {
 	// from anywhere. GERDR_LAN_TAILNET=0 or remote.json `"lanTailnet": false` turns it off; on by default, since
 	// it opens nothing new to the internet (lan.ViaTailnet) and every request still needs a device credential.
 	LanTailnet bool
+	// LanIPv6: the LAN port also serves phones over IPv6 from anywhere, on this machine's global IPv6 addresses
+	// (home broadband has no NAT there; the router may still drop inbound, then the App's probe fails and it stays
+	// on the relay). GERDR_LAN_IPV6=0 or remote.json `"lanIPv6": false` turns it off. On by default: what it opens
+	// is reachable through the relay already, with the same device credential, passkeys and Host whitelist.
+	LanIPv6 bool
 	// Direct: direct access instead of the relay. The LAN port is the way in and serves any peer, with the same
 	// certificate and rules as the relay path; how phones reach it (Tailscale, frp, a router's port forward) is the
 	// person's own network, Gerdr doesn't know or care. remote.json `direct`. docs/dev/REMOTE.md "Direct access".
@@ -81,6 +86,7 @@ type RemoteFile struct {
 	ReauthHours   *int              `json:"reauthHours,omitempty"`
 	LanPort       *int              `json:"lanPort,omitempty"`
 	LanTailnet    *bool             `json:"lanTailnet,omitempty"`
+	LanIPv6       *bool             `json:"lanIPv6,omitempty"`
 	Direct        bool              `json:"direct,omitempty"`
 	URLPort       int               `json:"urlPort,omitempty"`
 	PairMinutes   *int              `json:"pairTTLMinutes,omitempty"`
@@ -174,6 +180,10 @@ func LoadRemote(dir string) (Remote, error) {
 	r.LanTailnet = f.LanTailnet == nil || *f.LanTailnet
 	if v := os.Getenv("GERDR_LAN_TAILNET"); v != "" {
 		r.LanTailnet = truthy(v)
+	}
+	r.LanIPv6 = f.LanIPv6 == nil || *f.LanIPv6
+	if v := os.Getenv("GERDR_LAN_IPV6"); v != "" {
+		r.LanIPv6 = truthy(v)
 	}
 	r.AndroidCerts = []string{OfficialAndroidCert}
 	extra := f.AndroidCerts

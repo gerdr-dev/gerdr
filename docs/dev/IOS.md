@@ -153,7 +153,8 @@ plumbing differs:
 - Probe: `NWConnection` with TLS, SNI = the domain, and a verify block evaluating the chain with
   `SecPolicyCreateSSL(true, domain)`, so a valid certificate for another name fails. LAN probes and dials are pinned
   to Wi-Fi (`requiredInterfaceType`), Android's dual-network lesson; tailnet addresses (100.64/10) are not, the VPN
-  is its own interface (ANDROID.md "Over a tailnet").
+  is its own interface (ANDROID.md "Over a tailnet"); nor are global IPv6 ones, reached over cellular (ANDROID.md
+  "Over IPv6"). Candidates are probed in parallel, first one through wins.
 - Before the first load the proxy probes last time's candidates (cached per host in UserDefaults, ≤1.5 s), so the
   page and the terminal's WebSocket start on the LAN at home. The page reports fresh candidates after hello and when
   it becomes visible; `NWPathMonitor` changes and coming to the foreground re-probe (drop first); relaying on Wi-Fi

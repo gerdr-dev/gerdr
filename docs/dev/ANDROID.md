@@ -46,7 +46,7 @@ WebView ──CONNECT gerdr.example.com:443──▶ App 内的代理（127.0.0.
   WebView 按域名验证书，Host 还是那个域名，所以 remoteGuard 的 Host 白名单、设备 cookie、passkey 全部原样适用，
   **不因为在局域网里就放宽任何东西**。
 - 对端必须在本地网络里（`lan.PeerIsLocal`），否则 403：绑通配地址只是拓扑假设，端口转发 / UPnP / 全局 IPv6 都能让公网连上来。
-  CGNAT（Tailscale 那段）本身不算本地，见下面「Over a tailnet」。
+  CGNAT（Tailscale 那段）本身不算本地，见下面「Over a tailnet」；global IPv6 gets in only on our own address, see "Over IPv6".
 - 默认端口 7878（`GERDR_LAN_PORT` 或 remote.json 的 `lanPort`，0 = 不开）。起不来只记在 `Status.LanErr`，App 探不通就留在中继上。
   第一次起来时 macOS 防火墙可能问「是否允许传入连接」—— 要允许，不然手机探不通，而且没有任何报错。
 - 候选地址每次现报（`GET /api/remote/lan`，页面拿去发给壳）：局域网 IP 会变，配死一个地址的表现是「某天开始不直连了」。
@@ -72,6 +72,32 @@ one more route, same origin, same certificate and credentials. On by default; `"
 - macOS may ask once whether to allow incoming connections, same as for the LAN.
 - In direct access (docs/dev/REMOTE.md "Direct access") the LAN port is the way in and has no gate at all; the
   tailnet route above is what's left of Tailscale support beside the relay.
+
+### Over IPv6
+
+Home broadband in China (and many other places) gives the Mac global IPv6 addresses with no NAT, and phones on
+cellular usually have IPv6 too. When the router lets inbound IPv6 through, the same LAN port serves the phone from
+anywhere, without the relay and without Tailscale. On by default; `"lanIPv6": false` in remote.json or
+`GERDR_LAN_IPV6=0` turns it off. Measured on 2026-11-15: a China Telecom ONT passed inbound IPv6 to :7878 as is,
+and a phone on 5G reached it.
+
+- **Candidates**: `lan.Origins` reports every global unicast IPv6 address on a real NIC, last (`https://[240e:…]:7878`).
+  Go can't tell macOS's temporary (privacy) addresses from the stable ones, so they come along; they keep accepting
+  connections until they expire, and candidates are reported fresh each time. The /64 prefix changes when the line
+  redials; same answer.
+- **The gate** (`lan.ViaIPv6`): an IPv6 peer gets in when it reached one of **our own global IPv6 addresses** (the
+  connection's local address). That address is on the internet, so this is as open as the relay path, and guarded
+  the same way: device cookie, passkeys, Host whitelist. The local-address check keeps it to that: IPv4 through a
+  port forward and ULA / bridge addresses stay behind the 403 and its alert.
+- **Not pinned to Wi-Fi** (`Server.isGlobalV6` in both shells), same as tailnet: out of the house it is reached over
+  cellular, and a café's Wi-Fi is often IPv4 only. Not in `isLocalHost` either: that is also the navigation lock.
+  Apps from before this drop IPv6 candidates (they only took local addresses) and stay on the relay.
+- **The router may drop inbound IPv6** (many ONTs have an "IPv6 firewall" on by default): then the probe fails and
+  the App stays on the relay, nothing to report. Test from a phone on cellular: open `https://[<address>]:7878/` in
+  a browser; a certificate warning or this port's own 403 page means it got through, a timeout means the router.
+- **Probes run in parallel** (`probeAll` / `probeFirst`), first one through wins. One by one, every candidate that
+  can't answer (the LAN address out of the house, IPv6 behind a firewall) cost 1.5 s before the next, and the first
+  probe runs before the page loads.
 
 ## passkey：在 App 里自己刷
 

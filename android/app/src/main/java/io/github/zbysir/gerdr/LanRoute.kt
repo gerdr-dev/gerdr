@@ -107,9 +107,10 @@ object LanRoute {
     /**
      * 局域网那条路上的 socket 绑到 Wi-Fi（没 Wi-Fi 就不绑，照默认网络走）。
      * A tailnet address is left on the default network: that is the VPN, and binding to Wi-Fi would go around it.
+     * So is a global IPv6 one: it is reached from anywhere, out of the house over cellular.
      */
     internal fun bindLan(s: Socket, host: String) {
-        if (Server.isTailnet(host)) return
+        if (Server.isTailnet(host) || Server.isGlobalV6(host)) return
         val w = wifi ?: return
         try { w.bindSocket(s) } catch (e: Exception) { Log.i(TAG, "绑 Wi-Fi 失败: $e") }
     }
@@ -148,7 +149,7 @@ object LanRoute {
             else io.execute {
                 candidates = cached
                 val g = gen
-                val hit = cached.firstOrNull { probe(h, it) }
+                val hit = probeAll(h, cached)
                 if (g == gen) {
                     lan = hit
                     if (hit != null) proxy?.closeRelay()
@@ -187,8 +188,8 @@ object LanRoute {
 
     private fun parse(o: String): InetSocketAddress? {
         val u = Uri.parse(o)
-        val h = u.host ?: return null
-        if (u.scheme != "https" || u.port <= 0 || !Server.isLocalHost(h)) return null
+        val h = u.host?.trim('[', ']') ?: return null
+        if (u.scheme != "https" || u.port <= 0 || !(Server.isLocalHost(h) || Server.isGlobalV6(h))) return null
         return InetSocketAddress.createUnresolved(h, u.port)
     }
 
@@ -213,7 +214,7 @@ object LanRoute {
         onChange?.invoke()
         if (cs.isEmpty()) return
         io.execute {
-            val hit = cs.firstOrNull { probe(h, it) }
+            val hit = probeAll(h, cs)
             if (g == gen) {
                 lan = hit
                 if (hit != null) proxy?.closeRelay()
@@ -267,6 +268,23 @@ object LanRoute {
         } catch (e: Exception) {
             Log.w(TAG, "盯不了 Wi-Fi: $e")
         }
+    }
+
+    /**
+     * Probe every candidate at once and take the first that passes. One by one, each candidate that can't answer
+     * (the LAN address out of the house, IPv6 behind a router that drops it) cost a full timeout before the next
+     * was tried, and before the page loads that is time spent staring at nothing. Whichever answers is a direct
+     * route, so the fastest is as good a pick as any.
+     */
+    private fun probeAll(host: String, cs: List<InetSocketAddress>): InetSocketAddress? {
+        if (cs.isEmpty()) return null
+        val done = java.util.concurrent.ExecutorCompletionService<InetSocketAddress?>(io)
+        cs.forEach { c -> done.submit { if (probe(host, c)) c else null } }
+        repeat(cs.size) {
+            val r = try { done.take().get() } catch (_: Exception) { null }
+            if (r != null) return r
+        }
+        return null
     }
 
     /**

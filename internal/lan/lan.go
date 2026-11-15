@@ -4,7 +4,8 @@
 // 服务端把当前地址报给安卓 App，App 拿它探能不能直连；直连口只服务本地网络里的对端。
 //
 // A tailnet (Tailscale) counts as a second local network when the connection comes in on this machine's own
-// tailnet address: see Tailnet and ViaTailnet.
+// tailnet address: see Tailnet and ViaTailnet. So does the IPv6 internet when the connection comes in on one of this
+// machine's own global IPv6 addresses: see IPv6 and ViaIPv6.
 package lan
 
 import (
@@ -25,7 +26,10 @@ type Addr struct {
 	// Tailnet: this machine's address on a Tailscale-style overlay (100.64/10 on a tunnel interface). Virtual too,
 	// but a phone on the same tailnet does reach it, from anywhere.
 	Tailnet bool
-	score   int
+	// IPv6: a global unicast IPv6 address on a real NIC. Home broadband hands these out with no NAT, so when the
+	// router doesn't firewall inbound IPv6 a phone on cellular reaches this machine directly (Origins with ipv6).
+	IPv6  bool
+	score int
 }
 
 // Addresses 机器上虚拟网卡一大堆（OrbStack / VPN / bridge），挑出手机真能连上的那个，排在最前面。
@@ -43,22 +47,34 @@ func Addresses() []Addr {
 		if err != nil {
 			continue
 		}
+		virtual := false
+		for _, bad := range []string{"bridge", "utun", "vmnet", "llw", "awdl", "anpi", "ap", "docker", "veth", "tap", "tun"} {
+			if strings.HasPrefix(ifc.Name, bad) {
+				virtual = true
+				break
+			}
+		}
 		for _, a := range addrs {
 			ipn, ok := a.(*net.IPNet)
-			if !ok || ipn.IP.To4() == nil {
+			if !ok {
+				continue
+			}
+			if ipn.IP.To4() == nil {
+				// Only global addresses on real NICs: link-local needs a zone and ULA (fd00::/8) is what VMs and
+				// container bridges use. Temporary (privacy) addresses come along too, since Go can't tell them
+				// apart; they accept connections until they expire and candidates are reported fresh every time.
+				if !virtual && ipn.IP.IsGlobalUnicast() && !ipn.IP.IsPrivate() {
+					out = append(out, Addr{Name: ifc.Name, Address: ipn.IP.String(), IPv6: true, score: -100})
+				}
 				continue
 			}
 			ip := ipn.IP.To4().String()
-			n := Addr{Name: ifc.Name, Address: ip}
+			n := Addr{Name: ifc.Name, Address: ip, Virtual: virtual}
 			if strings.HasPrefix(ifc.Name, "en") {
 				n.score += 10 // 无线 / 有线
 			}
-			for _, bad := range []string{"bridge", "utun", "vmnet", "llw", "awdl", "anpi", "ap", "docker", "veth", "tap", "tun"} {
-				if strings.HasPrefix(ifc.Name, bad) {
-					n.score -= 10
-					n.Virtual = true
-					break
-				}
+			if virtual {
+				n.score -= 10
 			}
 			n.Tailnet = isCGNAT(ipn.IP) && isTunnel(ifc.Name)
 			if strings.HasPrefix(ip, "198.18.") || strings.HasPrefix(ip, "198.19.") {
@@ -115,17 +131,24 @@ func current() []Addr {
 // 「同一个 Wi-Fi 下别绕公网」。
 //
 // With tailnet on, this machine's tailnet addresses go after the LAN ones (the sort puts real NICs first): at home
-// the App takes whichever answers first, out of the house only the tailnet one can.
-func Origins(port int, tailnet bool) []string {
+// the App takes whichever answers first, out of the house only the tailnet one can. With ipv6 on, the global IPv6
+// addresses come last (the sort puts them there): reachable from anywhere with IPv6 unless the router drops
+// inbound IPv6, which the App finds out by probing, and the LAN one is still the shorter way at home.
+func Origins(port int, tailnet, ipv6 bool) []string {
 	if port <= 0 {
 		return nil
 	}
 	var out []string
 	for _, a := range current() {
-		if (a.Virtual || !IsPrivate(a.Address)) && !(tailnet && a.Tailnet) {
+		switch {
+		case a.IPv6:
+			if !ipv6 {
+				continue
+			}
+		case (a.Virtual || !IsPrivate(a.Address)) && !(tailnet && a.Tailnet):
 			continue
 		}
-		out = append(out, fmt.Sprintf("https://%s:%d", a.Address, port))
+		out = append(out, "https://"+net.JoinHostPort(a.Address, fmt.Sprint(port)))
 	}
 	return out
 }
@@ -168,6 +191,23 @@ func ViaTailnet(remoteAddr, localAddr string) bool {
 	}
 	for _, a := range current() {
 		if a.Tailnet && net.ParseIP(a.Address).Equal(local) {
+			return true
+		}
+	}
+	return false
+}
+
+// ViaIPv6: an IPv6 peer that reached this machine on one of its own global IPv6 addresses. That address is on the
+// internet, so this lets in anyone with IPv6 whose packets the router passes, the same reach as the relay; what
+// keeps strangers out is the same as there, the device cookie, passkeys and the Host whitelist. The check on our
+// side of the connection keeps it to the addresses we report (not ULA / bridge ones, not IPv4 via a port forward).
+func ViaIPv6(remoteAddr, localAddr string) bool {
+	peer, local := parseHost(remoteAddr), parseHost(localAddr)
+	if peer == nil || local == nil || peer.To4() != nil || local.To4() != nil || !peer.IsGlobalUnicast() {
+		return false
+	}
+	for _, a := range current() {
+		if a.IPv6 && net.ParseIP(a.Address).Equal(local) {
 			return true
 		}
 	}

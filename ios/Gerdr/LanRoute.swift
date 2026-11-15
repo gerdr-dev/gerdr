@@ -157,17 +157,35 @@ final class LanRoute {
         }
     }
 
-    private func probeFirst(_ cs: [Cand], _ i: Int = 0, done: @escaping (Cand?) -> Void) {
-        guard i < cs.count else { return done(nil) }
-        probe(cs[i]) { ok in
-            if ok { done(cs[i]) } else { self.probeFirst(cs, i + 1, done: done) }
+    /// Probe every candidate at once and take the first that passes (results arrive on q). One by one, each that
+    /// can't answer (the LAN address out of the house, IPv6 behind a router that drops it) cost a full timeout
+    /// before the next was tried, and before the page loads that is time spent staring at nothing.
+    private func probeFirst(_ cs: [Cand], done: @escaping (Cand?) -> Void) {
+        guard !cs.isEmpty else { return done(nil) }
+        var left = cs.count
+        var settled = false
+        for c in cs {
+            probe(c) { ok in
+                left -= 1
+                if settled { return }
+                if ok || left == 0 {
+                    settled = true
+                    done(ok ? c : nil)
+                }
+            }
         }
+    }
+
+    /// LAN addresses are pinned to Wi-Fi; a tailnet address goes through the VPN's interface and a global IPv6 one
+    /// is reached from anywhere (cellular, out of the house), so a Wi-Fi pin would only cut them off.
+    private static func pinWifi(_ host: String) -> Bool {
+        !Server.isTailnet(host) && !Server.isGlobalV6(host)
     }
 
     /// A TLS handshake with the domain as SNI (the LAN port picks the real certificate by it) and the chain checked
     /// **for that domain name** (SecPolicyCreateSSL with the host): any valid certificate for another name fails.
     /// Pinned to Wi-Fi: a LAN address is never reachable over cellular, and that's where "Wi-Fi Assist" may send it.
-    /// Not a tailnet address: that one goes through the VPN's interface, which a Wi-Fi pin would skip.
+    /// Not a tailnet or global IPv6 address (pinWifi).
     private func probe(_ c: Cand, done: @escaping (Bool) -> Void) {
         let tls = NWProtocolTLS.Options()
         let so = tls.securityProtocolOptions
@@ -182,7 +200,7 @@ final class LanRoute {
         let tcp = NWProtocolTCP.Options()
         tcp.connectionTimeout = 2
         let p = NWParameters(tls: tls, tcp: tcp)
-        if !Server.isTailnet(c.host) { p.requiredInterfaceType = .wifi }
+        if Self.pinWifi(c.host) { p.requiredInterfaceType = .wifi }
         guard let port = NWEndpoint.Port(rawValue: c.port) else { return done(false) }
         let conn = NWConnection(host: NWEndpoint.Host(c.host), port: port, using: p)
         var finished = false
@@ -323,7 +341,7 @@ final class LanRoute {
         let tcp = NWProtocolTCP.Options()
         tcp.connectionTimeout = t.lan ? 1 : 10
         let p = NWParameters(tls: nil, tcp: tcp)
-        if t.lan && !Server.isTailnet(t.host) { p.requiredInterfaceType = .wifi } // same network as the probe
+        if t.lan && Self.pinWifi(t.host) { p.requiredInterfaceType = .wifi } // same network as the probe
         guard let port = NWEndpoint.Port(rawValue: t.port) else { return dial(ts, i + 1, done: done) }
         let up = NWConnection(host: NWEndpoint.Host(t.host), port: port, using: p)
         var finished = false
@@ -403,8 +421,10 @@ final class LanRoute {
 
     /// Only `https://<LAN address>:<port>`: the page's list is a hint, never a reason to dial a public address.
     private static func parse(_ o: String) -> Cand? {
-        guard let u = URL(string: o), u.scheme == "https", let h = u.host, let p = u.port, p > 0, p <= 65535,
-              Server.isLocalHost(h) else { return nil }
+        guard let u = URL(string: o), u.scheme == "https", let raw = u.host, let p = u.port, p > 0, p <= 65535
+        else { return nil }
+        let h = raw.trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
+        guard Server.isLocalHost(h) || Server.isGlobalV6(h) else { return nil }
         return Cand(host: h, port: UInt16(p))
     }
 

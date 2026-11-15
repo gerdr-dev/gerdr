@@ -56,6 +56,10 @@ func remoteCmd() *cobra.Command {
 			if len(st.TailnetAddrs) > 0 {
 				fmt.Printf(i18n.S("  这台 Mac 的 Tailscale 地址：%s\n", "  This Mac's Tailscale address: %s\n"), strings.Join(st.TailnetAddrs, ", "))
 			}
+			if len(st.LanOrigins) > 0 && !st.Direct {
+				// What the phone Apps probe to skip the relay: LAN, tailnet, then global IPv6 (remote.json lanTailnet / lanIPv6)
+				fmt.Printf(i18n.S("  App 直连候选：%s\n", "  App direct routes: %s\n"), strings.Join(st.LanOrigins, ", "))
+			}
 			if st.State != "" {
 				fmt.Printf(i18n.S("  状态：%s\n", "  State:   %s\n"), st.State)
 			}

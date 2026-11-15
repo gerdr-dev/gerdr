@@ -1,4 +1,5 @@
 import Foundation
+import Network
 
 /// Which Gerdr the App connects to: its remote-access address (Settings → Remote access, `https://…`). The App
 /// carries nobody's domain (everyone connects to their own computer), so the first launch asks for it.
@@ -51,5 +52,14 @@ enum Server {
     static func isTailnet(_ host: String) -> Bool {
         let p = host.split(separator: ".").compactMap { Int($0) }
         return p.count == 4 && p[0] == 100 && (64...127).contains(p[1])
+    }
+
+    /// A global IPv6 address (2000::/3): the Mac's LAN port also answers there from anywhere with IPv6, when its
+    /// router lets inbound IPv6 through. Like a tailnet address, LanRoute doesn't pin it to Wi-Fi: out of the house
+    /// it is reached over cellular. Not in isLocalHost, which is also the navigation lock.
+    static func isGlobalV6(_ host: String) -> Bool {
+        let h = host.trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
+        guard h.contains(":"), let a = IPv6Address(h) else { return false }
+        return a.rawValue[0] & 0xE0 == 0x20
     }
 }

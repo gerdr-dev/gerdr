@@ -27,7 +27,7 @@ func TestPeerIsLocal(t *testing.T) {
 }
 
 func TestOriginsOff(t *testing.T) {
-	if o := Origins(0, true); o != nil {
+	if o := Origins(0, true, true); o != nil {
 		t.Fatalf("port 0 应该没有候选, got %v", o)
 	}
 }
@@ -64,10 +64,42 @@ func TestViaTailnet(t *testing.T) {
 			t.Errorf("ViaTailnet(%q, %q) = %v, want %v", c.peer, c.local, got, c.want)
 		}
 	}
-	if o := Origins(7878, true); len(o) != 1 || o[0] != "https://100.101.2.3:7878" {
+	if o := Origins(7878, true, false); len(o) != 1 || o[0] != "https://100.101.2.3:7878" {
 		t.Errorf("Origins with tailnet = %v", o)
 	}
-	if o := Origins(7878, false); len(o) != 0 {
+	if o := Origins(7878, false, false); len(o) != 0 {
 		t.Errorf("Origins without tailnet = %v", o)
+	}
+}
+
+func TestViaIPv6(t *testing.T) {
+	mu.Lock()
+	cached, at = []Addr{
+		{Name: "en0", Address: "192.168.1.5", score: 12},
+		{Name: "en0", Address: "240e:39d:5a:6ee0::9fd", IPv6: true, score: -100},
+	}, time.Now()
+	mu.Unlock()
+	defer func() { mu.Lock(); cached = nil; mu.Unlock() }()
+
+	for _, c := range []struct {
+		peer, local string
+		want        bool
+	}{
+		{"[2409:8a00::1]:5000", "[240e:39d:5a:6ee0::9fd]:7878", true},
+		{"[2409:8a00::1]:5000", "[240e:39d:5a:6ee0::1]:7878", false}, // not one of ours
+		{"[2409:8a00::1]:5000", "[fd07::1]:7878", false},             // came in on a ULA / bridge address
+		{"[::ffff:8.8.8.8]:1", "[::ffff:192.168.1.5]:7878", false},   // IPv4 through a port forward
+		{"[fe80::1]:1", "[240e:39d:5a:6ee0::9fd]:7878", false},       // link-local isn't global (PeerIsLocal has it)
+		{"[2409:8a00::1]:5000", "", false},
+	} {
+		if got := ViaIPv6(c.peer, c.local); got != c.want {
+			t.Errorf("ViaIPv6(%q, %q) = %v, want %v", c.peer, c.local, got, c.want)
+		}
+	}
+	if o := Origins(7878, false, true); len(o) != 2 || o[0] != "https://192.168.1.5:7878" || o[1] != "https://[240e:39d:5a:6ee0::9fd]:7878" {
+		t.Errorf("Origins with ipv6 = %v", o)
+	}
+	if o := Origins(7878, false, false); len(o) != 1 {
+		t.Errorf("Origins without ipv6 = %v", o)
 	}
 }

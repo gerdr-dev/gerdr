@@ -32,7 +32,8 @@ import (
 // 起不来（端口被占）只记在 Status.LanErr 里，App 探不通会安静地留在中继上。
 //
 // The same port also serves a phone on this machine's tailnet (Tailscale) from anywhere, unless LanTailnet is off:
-// same certificate, same rules, the tailnet only replaces the relay as the way in.
+// same certificate, same rules, the tailnet only replaces the relay as the way in. Likewise over IPv6 on this
+// machine's global addresses, unless LanIPv6 is off (lan.ViaIPv6, docs/dev/ANDROID.md "Over IPv6").
 //
 // In direct access (config.Remote.Direct) this port is the way in, with no relay beside it, and serves any peer:
 // how phones get here (Tailscale, frp, a port forward) is the person's network. The gate goes; the device cookie,
@@ -58,7 +59,7 @@ func (s *Service) startLan(ctx context.Context, cfg config.Remote, cf *certFile,
 	}
 	handler := h
 	if !cfg.DirectOn() {
-		handler = lanOnly(h, cfg.LanTailnet, s.alert)
+		handler = lanOnly(h, cfg.LanTailnet, cfg.LanIPv6, s.alert)
 	}
 	hs := &http.Server{Handler: handler, ReadHeaderTimeout: 10 * time.Second}
 	s.mu.Lock()
@@ -84,12 +85,12 @@ func (s *Service) startLan(ctx context.Context, cfg config.Remote, cf *certFile,
 // 每次现算：局域网 IP 会变（DHCP、换 Wi-Fi），配死一个地址的表现是「某天开始不直连了，而且没有任何报错」。
 func (s *Service) LanOrigins() []string {
 	s.mu.Lock()
-	on, port, tailnet := s.lanHS != nil, s.cfg.LanPort, s.cfg.LanTailnet
+	on, port, tailnet, ipv6 := s.lanHS != nil, s.cfg.LanPort, s.cfg.LanTailnet, s.cfg.LanIPv6
 	s.mu.Unlock()
 	if !on {
 		return nil
 	}
-	return lan.Origins(port, tailnet)
+	return lan.Origins(port, tailnet, ipv6)
 }
 
 // proxyFromLoopback: read a PROXY header if a local process (frpc) sends one, never from anyone else.
@@ -101,15 +102,16 @@ func proxyFromLoopback(o proxyproto.ConnPolicyOptions) (proxyproto.Policy, error
 }
 
 // lanOnly：对端不在本地网络里就 403。第一次撞上时吼一声 —— 那说明这个口被暴露到公网了。
-// With tailnet on, a tailnet peer that reached our tailnet address counts as local too (lan.ViaTailnet).
-func lanOnly(next http.Handler, tailnet bool, alert func(string)) http.Handler {
+// With tailnet on, a tailnet peer that reached our tailnet address counts as local too (lan.ViaTailnet); with ipv6
+// on, so does an IPv6 peer that reached one of our global IPv6 addresses (lan.ViaIPv6).
+func lanOnly(next http.Handler, tailnet, ipv6 bool, alert func(string)) http.Handler {
 	var once sync.Once
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		local := ""
 		if a, ok := r.Context().Value(http.LocalAddrContextKey).(net.Addr); ok {
 			local = a.String()
 		}
-		if !lan.PeerIsLocal(r.RemoteAddr) && !(tailnet && lan.ViaTailnet(r.RemoteAddr, local)) {
+		if !lan.PeerIsLocal(r.RemoteAddr) && !(tailnet && lan.ViaTailnet(r.RemoteAddr, local)) && !(ipv6 && lan.ViaIPv6(r.RemoteAddr, local)) {
 			once.Do(func() {
 				alert(fmt.Sprintf(i18n.S("局域网直连口收到了来自 %s 的连接 —— 不是本地地址，已拒绝。这个口大概被暴露到公网了（端口转发 / UPnP / 全局 IPv6）",
 					"The LAN port got a connection from %s, which isn't a local address, and refused it. The port is probably exposed to the internet (port forwarding / UPnP / global IPv6)."), r.RemoteAddr))
