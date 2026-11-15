@@ -379,14 +379,27 @@ export function arrange(
 }
 
 /**
- * The tiles that fit in a w×h grid without any going under MIN_TILE_W × MIN_TILE_H (equal split), in `ids` order; the
- * rest wait behind "more" (OverviewGrid.tsx). On a desktop all 12 fit; a landscape phone takes two (asked for: four
- * stacked 80px strips were unusable). The main tile is always among them. Unmeasured (0×0): all of them.
+ * How many tiles the grid lays out at most, however big the window (the rest of the MAX_TILES wait in "more"): the
+ * per-device setting gridTiles, 4 to 8. Past that each chat is too small to follow.
  */
-export function fitTiles(ids: string[], main: string | undefined, ratio: number, w: number, h: number): string[] {
-  if (!w || !h) return ids;
+export const GRID_TILES = [4, 5, 6, 7, 8];
+export function gridMax(n: number | undefined) {
+  return Math.min(8, Math.max(4, Math.round(n ?? 4)));
+}
+
+/**
+ * The tiles that fit in a w×h grid without any going under MIN_TILE_W × MIN_TILE_H (equal split), at most `max`,
+ * in `ids` order; the rest wait behind "more" (OverviewGrid.tsx). A landscape phone takes two (asked for: four stacked
+ * 80px strips were unusable). The main tile is always among them. Unmeasured (0×0): the first `max`.
+ */
+export function fitTiles(ids: string[], main: string | undefined, ratio: number, w: number, h: number, max: number): string[] {
   const hasMain = !!main && ids.includes(main);
-  for (let k = ids.length; k > 1; k--) {
+  const top = Math.min(ids.length, max);
+  if (!w || !h) {
+    const rest = ids.filter((id) => id !== main).slice(0, hasMain ? top - 1 : top);
+    return ids.filter((id) => id === main || rest.includes(id));
+  }
+  for (let k = top; k > 1; k--) {
     const rest = ids.filter((id) => id !== main).slice(0, hasMain ? k - 1 : k);
     const vis = ids.filter((id) => id === main || rest.includes(id));
     const { boxes } = arrange(vis, main, ratio, w, h, {});

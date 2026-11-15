@@ -14,7 +14,19 @@ import { DRAG_TOUCH, statusTint, whereOf } from "./tileInfo";
 import { t } from "@/lib/i18n";
 
 /** A tile as a small chip tinted with its status: the phone's tile switcher, and the tiles that didn't fit in the grid. */
-export function TileChip({ id, current, className, onClick }: { id: string; current: boolean; className?: string; onClick: () => void }) {
+export function TileChip({
+  id,
+  current,
+  className,
+  onClick,
+  onPointerDown,
+}: {
+  id: string;
+  current: boolean;
+  className?: string;
+  onClick: () => void;
+  onPointerDown?: (e: React.PointerEvent) => void;
+}) {
   const s = useStore((st) => st.sessions[id]);
   const unread = useStore((st) => !!st.unread[id]);
   // Picked and its tile still loading after a moment (PhoneOverview keeps the old tile up meanwhile): the current chip
@@ -31,6 +43,7 @@ export function TileChip({ id, current, className, onClick }: { id: string; curr
         className,
       )}
       onClick={onClick}
+      onPointerDown={onPointerDown}
     >
       {loading && <BorderFlow mode="gap" color="var(--brand)" />}
       <FadeText>{s.title || basename(s.cwd)}</FadeText>

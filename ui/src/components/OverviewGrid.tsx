@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   arrange,
   fitTiles,
+  gridMax,
   moveSeam,
   setGridSizes,
   setOverview,
@@ -14,7 +15,7 @@ import {
   type DropSide,
   type Seam,
 } from "@/lib/overview";
-import { useStore } from "@/lib/store";
+import { prefOf, useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { BOX_TRANSITION, useLayoutAnim, useZoomAnim } from "@/lib/zoomAnim";
 import { PickButton } from "./OverviewPick";
@@ -101,14 +102,15 @@ export function Grid({
   }, []);
   const mini = useStore((s) => s.overview.mini) ?? NO_MINI;
   const asked = useStore((s) => s.overview.focus);
+  const max = useStore((s) => gridMax(prefOf(s, "gridTiles")));
   const all = ids.join(",");
   // Only as many tiles as fit at a readable size (lib/overview fitTiles); the rest wait in the "more" row, which itself
   // takes MORE_H off the grid, so fit again with that height once some don't fit. Minimized tiles wait there too.
   const shownIds = useMemo(() => {
     const open = ids.filter((id) => !mini.includes(id));
-    const v = fitTiles(open, main, ratio, area.w, area.h);
-    return v.length < ids.length ? fitTiles(open, main, ratio, area.w, area.h - MORE_H) : v;
-  }, [all, mini, main, ratio, area.w, area.h]);
+    const v = fitTiles(open, main, ratio, area.w, area.h, max);
+    return v.length < ids.length ? fitTiles(open, main, ratio, area.w, area.h - MORE_H, max) : v;
+  }, [all, mini, main, ratio, area.w, area.h, max]);
   const more = ids.filter((id) => !shownIds.includes(id));
   const size = { w: area.w, h: more.length ? area.h - MORE_H : area.h };
   const key = shownIds.join(",");
@@ -196,6 +198,39 @@ export function Grid({
       },
     );
     onFocus(id);
+  };
+
+  // Drag a chip out of "more" onto a tile: it takes that tile's place, which goes to "more" (only a swap: placing it
+  // beside one would make the grid one tile bigger than allowed). A plain click still takes the last tile's place
+  // (the focus effect above). The click that follows a drag's pointerup is swallowed, or it would swap a second time.
+  const dragged = useRef(false);
+  const dragMore = (e: React.PointerEvent, id: string, label: string) => {
+    if (e.button !== 0) return;
+    const sx = e.clientX;
+    const sy = e.clientY;
+    let on = false;
+    dragged.current = false;
+    const overAt = (ev: PointerEvent) => document.elementFromPoint(ev.clientX, ev.clientY)?.closest<HTMLElement>("[data-ov-tile]")?.dataset.ovTile;
+    track(
+      e,
+      "grabbing",
+      (ev) => {
+        if (!on && Math.hypot(ev.clientX - sx, ev.clientY - sy) < 5) return;
+        on = dragged.current = true;
+        setDrag({ id, label, x: ev.clientX, y: ev.clientY, over: overAt(ev) });
+      },
+      (ev) => {
+        const over = on ? overAt(ev) : undefined;
+        setDrag(undefined);
+        if (!over) return;
+        swapTiles(id, over);
+        onFocus(id);
+      },
+    );
+  };
+  const clickMore = (id: string) => {
+    if (dragged.current) dragged.current = false;
+    else onFocus(id);
   };
 
   // 3px around + 3px per tile: 6px to the edges and between tiles, the same inset as the sidebar header and split panes
@@ -303,7 +338,14 @@ export function Grid({
             {t("overviewGrid.moreN", { n: more.length })}
           </span>
           {more.map((id) => (
-            <TileChip key={id} id={id} current={false} className="h-6 max-w-40" onClick={() => onFocus(id)} />
+            <TileChip
+              key={id}
+              id={id}
+              current={false}
+              className="h-6 max-w-40 cursor-grab"
+              onClick={() => clickMore(id)}
+              onPointerDown={(e) => dragMore(e, id, e.currentTarget.textContent ?? "")}
+            />
           ))}
         </div>
       )}

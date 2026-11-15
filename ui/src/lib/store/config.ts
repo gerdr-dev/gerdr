@@ -32,6 +32,8 @@ export type Config = {
   /** Per project: which agent (engine or role from Settings → Agent) new Work conversations use; missing = workAgent, then defaultAgent. */
   workAgents?: Record<string, string>;
   workAgent?: string;
+  /** The overview grid lays out at most this many tiles (4–8); the rest wait in its "more" row (lib/overview gridMax). */
+  gridTiles?: number;
   keepTabs: number; // 切走之后还留在页面里的 tab 数（展开状态、滚动位置都保住）；1 = 不留
   /** 改文件 / 新建文件的工具调用默认展开 diff。关掉后只剩一行（文件名、+/- 行数），点开再看。 */
   expandEdits?: boolean;
@@ -121,6 +123,7 @@ export const DEFAULT_CONFIG: Config = {
   notifications: true,
   sendKey: "enter",
   keepTabs: 6,
+  gridTiles: 4,
   expandEdits: true,
   showThinking: true,
   virtualList: false,

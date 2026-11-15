@@ -38,6 +38,7 @@ var configKeys = map[string]configKey{
 	"keys":            {kind: "object", desc: `shortcut overrides: action → list of key combos, e.g. {"splitRight": ["prefix %"]}`},
 	"notifications":   {kind: "bool", desc: "system notifications when a turn finishes or needs you (a device that picked its own in Settings keeps that; this is the value for the others)"},
 	"keepTabs":        {kind: "number", desc: "how many tabs stay mounted after you switch away (keeps scroll and expanded state); 1 = none (a device that picked its own in Settings keeps that; this is the value for the others)"},
+	"gridTiles":       {kind: "number", desc: "how many agents the overview grid lays out at most, 4 to 8; the rest wait in its \"more\" row (a device that picked its own in Settings keeps that; this is the value for the others)"},
 	"expandEdits":     {kind: "bool", desc: "show file edits' diffs expanded by default"},
 	"showThinking":    {kind: "bool", desc: "show thinking on its own line, expanded (default on)"},
 	"confirmLinks":    {kind: "bool", desc: "ask before opening an external link from a chat (default on)"},

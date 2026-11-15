@@ -1,4 +1,5 @@
 import { PanelSettings } from "./PanelSettings";
+import { GRID_TILES, gridMax } from "@/lib/overview";
 import { Loader2 } from "lucide-react";
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -312,6 +313,22 @@ export function SettingsDialog({ open }: { open: boolean }) {
                         {[1, 3, 6, 10, 20].map((n) => (
                           <SelectItem key={n} value={String(n)}>
                             {n === 1 ? t("settings.keepTabs.none") : t("settings.keepTabs.recent", { n })}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Row>
+                </Section>
+                <Section title={t("settings.grid")}>
+                  <Row label={t("settings.gridTiles")} hint={t("settings.gridTiles.hint")} local>
+                    <Select value={String(gridMax(dev.gridTiles))} onValueChange={(v) => setPref({ gridTiles: Number(v) })}>
+                      <SelectTrigger className="w-36">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {GRID_TILES.map((n) => (
+                          <SelectItem key={n} value={String(n)}>
+                            {t("settings.gridTiles.n", { n })}
                           </SelectItem>
                         ))}
                       </SelectContent>
