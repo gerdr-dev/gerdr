@@ -786,6 +786,12 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
   停任务是 control `stop_task`，把前台的命令 / 子 agent 转后台是 `background_tasks {tool_use_id}`（= claude 里的 ctrl+b）。
 - **后台任务跑完后 CLI 会自己开一轮**（running → idle，前面没有 user 消息）。没有 session/prompt 对应，适配器用
   session_info_update 的 `_meta.gerdr.autoTurn` 告诉 hub；它可能比上一轮 Prompt 的响应先到，hub 用 `autoNext` 接上，不然那一轮在界面上是「闲着」。
+- **A background sub-agent keeps the turn open; a background Bash doesn't** (measured, 2.1.323). The CLI's own schema
+  says idle "fires after heldBackResult flushes and the bg-agent do-while exits": while a background Agent runs, the
+  CLI holds the result and stays running even after the model has finished talking, so Gerdr keeps spinning and later
+  messages go in as steers. A background Bash goes idle at once and wakes an auto turn later. Left as is on purpose
+  (it's claude's behaviour); ending the turn ourselves on `end_turn` + only background agents running would mean
+  mapping the prompts sent meanwhile onto the CLI's still-open run and doing without the held-back `result`.
 - **What woke an auto turn isn't in stream-json** (measured, 2.1.x). A Monitor wakes the agent on every new output line while
   it still runs, and the stream shows nothing but `session_state_changed running`: no task_notification, no user message.
   The CLI writes the `<task-notification>` (task id, the Monitor's `<event>` or the task's `<status>`) into the transcript as
