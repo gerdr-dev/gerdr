@@ -1,5 +1,5 @@
 import { PanelLeft, Plus, SquareTerminal, X } from "lucide-react";
-import { useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -46,6 +46,44 @@ export function TabBar() {
   const flush = sidebar;
   // The tabs are prefix+1–9 (⌘1–9 went to "active", lib/modHeld.ts): number them once the prefix is pressed
   const numbers = prefixActive;
+  // Tabs shrink like Chrome's but stop at a width that still shows a name (~6 characters); past that the row scrolls
+  // sideways (finger, trackpad, or the mouse wheel turned sideways). Shrinking to 44px left an iPad with the sidebar
+  // closed a row of 16 one-character stubs (asked for). An edge with tabs beyond it fades out to say so.
+  const [cut, setCut] = useState({ l: false, r: false });
+  const measure = () => {
+    const b = barRef.current;
+    if (!b) return;
+    const l = b.scrollLeft > 1;
+    const r = b.scrollLeft + b.clientWidth < b.scrollWidth - 1;
+    setCut((c) => (c.l === l && c.r === r ? c : { l, r }));
+  };
+  useLayoutEffect(() => {
+    const b = barRef.current!;
+    const ro = new ResizeObserver(measure);
+    ro.observe(b);
+    return () => ro.disconnect();
+  }, []);
+  useLayoutEffect(measure, [ws.tabs.length]);
+  // The current tab scrolled into view when it changes (a key, the list, a new tab): only the bar scrolls, nothing above it
+  // and clear of the edge's fade. Two frames late: on mount the tabs' Tailwind classes land a frame after them
+  // (docs/dev/TAILWIND.md), and measured before that the tab ended up half under the fade.
+  useEffect(() => {
+    let f = requestAnimationFrame(() => {
+      f = requestAnimationFrame(() => {
+        const b = barRef.current;
+        const el = b?.querySelector<HTMLElement>(`[data-tab-id="${CSS.escape(ws.activeTab ?? "")}"]`);
+        if (!b || !el) return;
+        const m = 24; // the fade's width (1.5rem)
+        const left = el.offsetLeft; // the bar is `relative`: measured from its start, whatever it's scrolled to
+        if (left - m < b.scrollLeft) b.scrollTo({ left: left - m, behavior: "smooth" });
+        else if (left + el.offsetWidth + m > b.scrollLeft + b.clientWidth) b.scrollTo({ left: left + el.offsetWidth + m - b.clientWidth, behavior: "smooth" });
+      });
+    });
+    return () => cancelAnimationFrame(f);
+  }, [ws.activeTab, ws.tabs.length]);
+  const fade =
+    (cut.l || cut.r) &&
+    `linear-gradient(to right, ${cut.l ? "transparent, black 1.5rem" : "black"}, ${cut.r ? "black calc(100% - 1.5rem), transparent" : "black"})`;
   return (
     // 胶囊式标签：当前的是一块亮一点的圆角底（bg-accent），别的不画底、悬停时浮起一块淡的。
     // 原来是 Chrome 那种（当前标签和下面内容同色、连成一片），可深色下栏底和内容底色只差一点（0.14 / 0.165），
@@ -61,8 +99,14 @@ export function TabBar() {
       <div
         ref={barRef}
         data-tab-bar
-        className={cn("flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden", flush ? "pr-2" : "px-2")}
-        style={{ WebkitAppRegion: "no-drag" } as any}
+        className={cn("relative flex min-w-0 items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden", flush ? "pr-2" : "px-2")}
+        style={{ WebkitAppRegion: "no-drag", ...(fade ? { maskImage: fade, WebkitMaskImage: fade } : {}) } as any}
+        onScroll={measure}
+        // A plain mouse wheel only scrolls up / down: turn it sideways here, where there's nothing else to scroll
+        onWheel={(e) => {
+          if (e.deltaX || !e.deltaY) return;
+          e.currentTarget.scrollLeft += e.deltaY;
+        }}
       >
         {ws.tabs.map((t, i) => {
           const active = t.id === ws.activeTab;
@@ -96,7 +140,7 @@ export function TabBar() {
                   }}
                   className={cn(
                     // A size container so the tab can drop its icon / close button when squeezed (see below)
-                    "group/tab @container/tab relative flex h-7 w-52 min-w-[44px] shrink cursor-default items-center gap-2 rounded-md px-1.5 text-[12px] select-none @max-[8rem]/tab:gap-1",
+                    "group/tab @container/tab relative flex h-7 w-52 min-w-[6.5rem] shrink cursor-default items-center gap-2 rounded-md px-1.5 text-[12px] select-none @max-[8rem]/tab:gap-1",
                     active ? "bg-accent text-foreground" : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
                     drag?.tabId === t.id && "opacity-40",
                     // Mark which tab the context menu belongs to while it's open (Radix sets data-state on the trigger)
@@ -162,15 +206,18 @@ export function TabBar() {
             </ContextMenu>
           );
         })}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon" className="size-7 shrink-0" onClick={() => addTab()}>
-              <Plus className="size-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>{tr("tabBar.newTab", { key: formatCombo(keyFor(get().config, "newTab")[0] ?? "") })}</TooltipContent>
-        </Tooltip>
       </div>
+      {/* Outside the scrolling row: right after the last tab, and still in view once the tabs scroll */}
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button variant="ghost" size="icon" className="size-7 shrink-0" onClick={() => addTab()} style={{ WebkitAppRegion: "no-drag" } as any}>
+            <Plus className="size-4" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>{tr("tabBar.newTab", { key: formatCombo(keyFor(get().config, "newTab")[0] ?? "") })}</TooltipContent>
+      </Tooltip>
+      {/* The rest of the bar: empty, a window drag area on the desktop */}
+      <div className="flex-1" />
       {prefixActive && (
         <div className="shrink-0 rounded-md bg-brand px-2 py-0.5 font-mono text-[11px] text-white" style={{ WebkitAppRegion: "no-drag" } as any}>
           {formatCombo(prefix).replace(/\s.*/, "")} …
