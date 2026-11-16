@@ -23,7 +23,7 @@ import {
   type SharedDraft,
 } from "./store";
 import { pushDraft, sameDraft } from "./sync";
-import { AddonComposerActions, AddonLoader } from "@/components/AddonSlot";
+import { AddonComposerActions, AddonComposerOverlay, AddonLoader } from "@/components/AddonSlot";
 import { useAddonTurnStat } from "./addons";
 import { MessageActions } from "@/components/chat/MessageActions";
 import { locale, t } from "./i18n";
@@ -382,6 +382,8 @@ export function GerdrChatProvider({ children }: { children: ReactNode }) {
       composerTop: (session) => <LoginChip sessionId={session.id} />,
       useTurnStat: useAddonTurnStat,
       composerBar: (session, { paneId }) => <AddonComposerActions sessionId={session.id} paneId={paneId} />,
+      composerStart: (session, { paneId }) => <AddonComposerActions sessionId={session.id} paneId={paneId} start />,
+      composerInputOverlay: (session, { paneId, focus }) => <AddonComposerOverlay sessionId={session.id} paneId={paneId} focus={focus} />,
       renderLoader: (p) => <AddonLoader {...p} />,
       // Add-ons' buttons on a message (g.messageAction, lib/messageActions.ts)
       messageActions: (m) => <MessageActions info={m} />,

@@ -3,6 +3,12 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- The microphone for voice input in the page (getUserMedia, MainActivity onPermissionRequest) -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- WebView's audio capture also needs this, or getUserMedia fails with "Could not start audio source" -->
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <!-- navigator.vibrate in the page: WebView ignores it without this (a press that starts talking buzzes) -->
+    <uses-permission android:name="android.permission.VIBRATE" />
     <!-- App key (AppKey.kt): BiometricManager.canAuthenticate and BiometricPrompt throw SecurityException without it.
          Missing until 0.2.41, unnoticed while only phones without WebView passkeys asked; then every launch crashed. -->
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />

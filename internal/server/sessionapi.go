@@ -134,6 +134,18 @@ func (s *Server) sessionRoutes(mux *http.ServeMux) {
 		}
 		return sess.Rewind(r.Context(), b.MessageID)
 	}))
+	// The agent's reply to the last user message as text (tool calls and subagents left out): text is all of it,
+	// final its last stretch (what it said once the work was done). For readers that don't draw the transcript: an
+	// add-on reading a reply aloud (g.sessions.reply), the same as `gerdr session wait` prints.
+	mux.HandleFunc("GET /api/sessions/{id}/reply", s.sessionOp(func(r *http.Request, sess *hub.Session) (any, error) {
+		evs := sess.Events()
+		parts := replyParts(evs)
+		out := map[string]any{"text": strings.Join(parts, "\n\n"), "final": "", "stopReason": lastStop(evs)}
+		if len(parts) > 0 {
+			out["final"] = parts[len(parts)-1]
+		}
+		return out, nil
+	}))
 	mux.HandleFunc("GET /api/sessions/{id}/events", s.sessionOp(func(r *http.Request, sess *hub.Session) (any, error) {
 		return sess.Events(), nil
 	}))

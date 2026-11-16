@@ -95,6 +95,15 @@ func (c Config) Only(ids []string) Config {
 	return out
 }
 
+// ModelKeys lists the configured models as "provider/model", in config order (an add-on's model picker, g.llm).
+func (c Config) ModelKeys() []string {
+	var out []string
+	for _, m := range c.models() {
+		out = append(out, m.Key)
+	}
+	return out
+}
+
 // KeyEnvs lists the environment variables the providers take their keys from.
 func (c Config) KeyEnvs() []string {
 	var out []string

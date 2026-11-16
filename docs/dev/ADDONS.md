@@ -174,6 +174,26 @@ sees: `internal/addons/builtin/gerdr.d.ts`, copied into `~/.gerdr/addons` on eve
   the whole "where do requests go and who answers" to add-ons. Do-not-disturb stays built in (Workspace.muted) and
   shows up here as `muted` on each entry.
 
+- The UI half can do the same (2026-11, for a voice-call add-on: the agent's question read out, the spoken answer
+  passed back): addon.json's top-level `"pending": true` opens `GET /api/addons/{id}/pending` and
+  `POST /api/addons/{id}/answer`, `g.sessions.pending / answer`, with the same list and the same checks
+  (`answerFromAddon`). Not a security boundary — a UI half runs in the page and could post to
+  `/api/sessions/{id}/answer` like the cards do — but it keeps what an add-on does to what it declared on install, and
+  gives it the taken-apart request and the checks instead of ACP shapes. `g.sessions.reply` (`GET
+  /api/sessions/{id}/reply`, `replyParts` in workhost.go) is the agent's last reply as text with its last stretch
+  apart, what `gerdr session wait` prints: a reader that speaks a reply needs it without drawing the transcript.
+- `g.socket` (internal/server/addonsocket.go, 2026-11): a WebSocket to a third-party service through the backend,
+  for streaming speech-to-text (the voice add-on shows words as they are said). Same reasons as `g.fetch` (CSP
+  `connect-src 'self'`; a browser WebSocket can't set the auth header). Two steps so a key never goes in a URL: a POST
+  leaves the request under a one-time 30s token, the page opens a WebSocket on it, the backend dials first (a refusal
+  comes back as that status) and then copies frames both ways with `peer.Pipe`.
+- `g.llm` (internal/server/addonllm.go, 2026-11): one call to a model from config.json `llm` through
+  `native.Complete`, so an add-on uses the person's providers and the keys stay in the backend. Asked for by the voice
+  add-on, whose speech-to-text misheard words a phrase list can't fix ("对不起" for "对不齐" while talking about
+  layout) and a fast text model with the conversation as context can. Thinking off by default: these are quick jobs.
+- `g.fetch` takes bytes as a body too (`bodyBase64` on the hop to the backend): a speech-to-text API takes the
+  recording itself.
+
 ## Languages
 
 - addon.json's `i18n` ({locale: {name, description, settings: {key: {title, description, unit, options}}}}) is passed

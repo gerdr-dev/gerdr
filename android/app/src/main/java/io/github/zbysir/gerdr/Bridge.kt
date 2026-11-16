@@ -2,6 +2,7 @@ package io.github.zbysir.gerdr
 
 import android.os.Handler
 import android.os.Looper
+import android.view.HapticFeedbackConstants
 import android.webkit.WebView
 import androidx.webkit.JavaScriptReplyProxy
 import androidx.webkit.WebViewCompat
@@ -121,6 +122,9 @@ class Bridge(private val act: MainActivity, web: WebView, origin: String) {
             }
             // A video / audio in the page started or stopped playing (android.ts syncMedia)
             "media" -> mediaPlaying = m.optBoolean("playing")
+            // A press the page acts on (hold to talk) felt like the system's own long press: navigator.vibrate is
+            // a buzz of a set length, which a phone's linear motor barely shows at 10ms and doesn't feel native
+            "haptic" -> act.window.decorView.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
             "arrows" -> arrows = m.optBoolean("on")
             "volkeys" -> {
                 if (m.optString("op") == "set") act.setVolumeKeys(m.optBoolean("on"))

@@ -194,6 +194,9 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
             route?.setCandidates(m["origins"] as? [String] ?? [])
         case "copyImage":
             copyImage(m["data"] as? String ?? "", mime: m["mime"] as? String ?? "image/png")
+        case "haptic":
+            // A press the page acts on (hold to talk), felt like a native one (android.ts haptic)
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         default:
             break // Android-only messages (lan, volkeys, notify…) and anything newer than this App
         }

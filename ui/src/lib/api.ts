@@ -237,7 +237,7 @@ export const api = {
   addons: () => req<AddonBuild[]>("GET", "/api/addons").then((l) => l.map(localizeAddon)),
   addonMessage: (id: string, data: unknown) => req("POST", `/api/addons/${encodeURIComponent(id)}/message`, { data }),
   /** g.fetch: the backend makes the request, so the target needs no CORS (internal/server/addonfetch.go) */
-  addonFetch: (id: string, b: { url: string; method?: string; headers?: Record<string, string>; body?: string; binary?: boolean }) =>
+  addonFetch: (id: string, b: { url: string; method?: string; headers?: Record<string, string>; body?: string; bodyBase64?: boolean; binary?: boolean }) =>
     req<{ status: number; statusText: string; headers: Record<string, string>; body: string; base64?: boolean }>(
       "POST",
       `/api/addons/${encodeURIComponent(id)}/fetch`,
@@ -370,6 +370,18 @@ export const api = {
   uiSlow: (what: string, session: string, ms: Record<string, number>) => req("POST", "/api/ui/slow", { what, session, ms }),
   escape: (id: string) => req<{ content: ContentBlock[]; rolledBack?: boolean; withdrawn?: number }>("POST", `/api/sessions/${id}/escape`, {}),
   answer: (id: string, reqId: string, response: unknown) => req("POST", `/api/sessions/${id}/answer`, { reqId, response }),
+  /** The agent's reply to the last user message as text; final: its last stretch (internal/server/sessionapi.go) */
+  sessionReply: (id: string) => req<{ text: string; final: string; stopReason: string }>("GET", `/api/sessions/${id}/reply`),
+  /** g.sessions.pending / answer: only for an add-on whose addon.json says "pending": true (internal/server/addonpending.go) */
+  addonPending: (id: string, session?: string) =>
+    req<unknown[]>("GET", `/api/addons/${encodeURIComponent(id)}/pending${session ? `?session=${encodeURIComponent(session)}` : ""}`),
+  addonAnswer: (id: string, a: unknown) => req("POST", `/api/addons/${encodeURIComponent(id)}/answer`, a),
+  /** g.llm: one call to a model configured in Gerdr, made by the backend (internal/server/addonllm.go) */
+  addonLLM: (id: string, b: unknown) => req<{ text: string; ms: number }>("POST", `/api/addons/${encodeURIComponent(id)}/llm`, b),
+  addonLLMModels: (id: string) => req<string[]>("GET", `/api/addons/${encodeURIComponent(id)}/llm/models`),
+  /** g.socket's first step: the backend keeps the request (headers stay out of URLs) and hands back a one-time token */
+  addonSocket: (id: string, b: { url: string; headers?: Record<string, string>; protocols?: string[] }) =>
+    req<{ token: string }>("POST", `/api/addons/${encodeURIComponent(id)}/socket`, b),
   setMode: (id: string, mode: string) => req("POST", `/api/sessions/${id}/mode`, { mode }),
   setConfig: (id: string, cid: string, value: string) => req("POST", `/api/sessions/${id}/config`, { id: cid, value }),
   /** auto：插件起的名（不算人改的，人改过名时不生效）。 */

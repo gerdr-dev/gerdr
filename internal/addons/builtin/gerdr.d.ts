@@ -266,6 +266,12 @@ declare global {
     slot(name: "overlay", component: Component<{}>, opts?: { order?: number }): Dispose;
     slot(name: "paneTitle", component: Component<{ pane: PaneInfo; tab: TabInfo }>, opts?: { order?: number }): Dispose;
     slot(name: "settings", component: Component<SettingsSlotProps>): Dispose;
+    /**
+     * Drawn over the composer's text field, in a relative box its size: position what you draw absolutely and leave
+     * the rest of the field alone (a "hold to talk" spot in the middle of an empty field; its sides keep the system's
+     * long-press paste menu). focus() puts the caret in the field, for a tap on your spot that should type after all.
+     */
+    slot(name: "composerInput", component: Component<{ ctx: ComposerContext; focus(): void }>): Dispose;
 
     /**
      * Decorate the line under each finished turn ("18:36 · 用时 59s · 4.1k tokens"): a class for the time (color it:
@@ -285,7 +291,18 @@ declare global {
     theme(spec: ThemeSpec | (() => ThemeSpec | void)): Dispose;
 
     /** A button in the composer's bottom bar (next to the model menu). icon: an element, e.g. <g.icons.Zap />. */
-    composerAction(action: { id: string; title: string; icon?: any; run(ctx: ComposerContext): void | Promise<void> }): Dispose;
+    // render(ctx): draw the button's content yourself, knowing which composer it is in (instead of icon). For a button
+    // that does more than click: hold to talk, where a phone's long press is followed by no click, so run never comes.
+    composerAction(action: {
+      id: string;
+      title: string;
+      icon?: any;
+      render?(ctx: ComposerContext): any;
+      // place "start": pinned at the start of the bar, right after the attach button, outside the row that scrolls and
+      // folds when a phone's bar is tight — for a button hit often without looking, which must not move.
+      place?: "start";
+      run(ctx: ComposerContext): void | Promise<void>;
+    }): Dispose;
 
     /**
      * An item in the right-click menu (the desktop App and the Android App; a browser keeps its own menu). Shown when
@@ -343,6 +360,12 @@ declare global {
         opts?: { signal?: AbortSignal; onClip?(index: number): void },
       ): Promise<boolean>;
       stop(): void;
+      /**
+       * Call inside a tap (a button's onClick) when sound will come later without one: a reply read aloud when a turn
+       * ends. Browsers, and Android's WebView for every element it hasn't played yet, only play sound a tap started;
+       * a message action's tap and a setting's action unlock already.
+       */
+      unlock(): void;
     };
 
     // ---- data ----
@@ -353,8 +376,67 @@ declare global {
      * unless you set it). Like fetch(), an error status resolves (check ok); it rejects only when the server can't be
      * reached, the URL isn't http(s), or 30s pass. Responses over 10 MB are refused.
      * binary: true for an answer that isn't text (audio, images): read it with bytes() / blob(); text is then "".
+     * A body that is a Blob / ArrayBuffer / Uint8Array is sent as those bytes (recorded audio to a speech-to-text API).
      */
-    fetch(url: string, init?: { method?: string; headers?: Record<string, string>; body?: unknown; binary?: boolean }): Promise<FetchResult>;
+    fetch(
+      url: string,
+      init?: { method?: string; headers?: Record<string, string>; body?: string | Blob | ArrayBuffer | ArrayBufferView | object; binary?: boolean },
+    ): Promise<FetchResult>;
+    /**
+     * A WebSocket to a third-party service, opened by gerdr's backend (the page's own can't reach it: CSP, and a
+     * browser WebSocket can't send headers, which such APIs authenticate with). headers go with the handshake (a key);
+     * messages pass both ways as they are, text as text, binary as binary. Resolves an opening WebSocket: set
+     * binaryType, wait for "open", send, close as usual. A refusal (wrong key) shows as an error / close event.
+     * For streaming APIs: speech-to-text that returns words as they are said, realtime models.
+     */
+    socket(url: string, init?: { headers?: Record<string, string>; protocols?: string[] }): Promise<WebSocket>;
+    /**
+     * A short haptic tick, felt like the system's own long-press feedback (Android / iOS App); navigator.vibrate in a
+     * browser that has it, nothing elsewhere. For a press your add-on acts on: hold to talk starting.
+     */
+    haptic(): void;
+    /**
+     * Models configured in Gerdr (Settings → Models), called by the backend so keys stay there: use the person's own
+     * providers instead of asking for another key. One call, no tools, no history; thinking off unless effort says
+     * otherwise, since these are quick jobs (fixing a transcript, a summary, a title).
+     */
+    llm: {
+      /** model: "provider/model" from models(); empty = the default model. prompt is one user message; or messages. */
+      complete(o: {
+        model?: string;
+        system?: string;
+        prompt?: string;
+        messages?: { role: "user" | "assistant"; content: string }[];
+        maxTokens?: number;
+        effort?: string;
+      }): Promise<string>;
+      /** The configured models as "provider/model". */
+      models(): Promise<string[]>;
+    };
+    /** Conversations: what an agent said, and what it waits on you for. */
+    sessions: {
+      /**
+       * The agent's reply to the last message sent to it, as text (tool calls, thinking and subagents left out). text:
+       * all of it, its stretches between tool calls joined by blank lines; final: the last stretch, what it said once
+       * the work was done (or how the turn ended when it didn't end normally). Read it on g.on("turnEnd").
+       */
+      reply(sessionId: string): Promise<{ text: string; final: string; stopReason: string }>;
+      /**
+       * What agents wait on you for (every session, or one): an approval (kind "permission": tool, options) or
+       * questions (kind "ask"). Only for an add-on whose addon.json says "pending": true — it is the person's power
+       * to approve commands, so declare it only when the person answers through your add-on (reading a question out
+       * on a call and passing their spoken answer back); otherwise this rejects. g.on("needsInput") says when to look.
+       */
+      pending(sessionId?: string): Promise<ServicePending[]>;
+      /**
+       * Answer one of pending(): an option's id for an approval; for questions, every question's id → option labels
+       * (own text where allowOther), or skip: true. Checked against the request, rejects when it doesn't fit or was
+       * already answered. "pending": true only, as above.
+       */
+      answer(
+        a: { session: string; reqId: string } & ({ optionId: string } | { answers: Record<string, string[]> } | { skip: true }),
+      ): Promise<void>;
+    };
     /** The accounts' quotas (Claude Code, Codex): what the composer's /usage shows. force: skip the cache. */
     usage(force?: boolean): Promise<UsageInfo[]>;
     /**

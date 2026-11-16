@@ -55,6 +55,11 @@ type Manifest struct {
 	Settings []SettingSpec `json:"settings,omitempty"`
 	Main     string        `json:"main,omitempty"` // the UI half's entry; index.ts / index.tsx / index.js when empty
 	Service  *ServiceSpec  `json:"service,omitempty"`
+	// Pending: the UI half reads what agents wait on a person for and answers it (g.sessions.pending / answer) — the
+	// person's power to approve commands, handed over when they install an add-on that asks for it, like a service's
+	// "pending". For an add-on the person answers through (a phone call: the question read out, the spoken answer
+	// passed back), not one that decides on its own.
+	Pending bool `json:"pending,omitempty"`
 	// Emits: the events this add-on reports (docs/dev/EVENTS.md), so a panel can offer them to subscribe to without
 	// knowing the add-on (the task board's "which events make a task").
 	Emits []EmitSpec `json:"emits,omitempty"`
@@ -207,6 +212,8 @@ type Addon struct {
 	Description string `json:"description,omitempty"`
 	Icon        string `json:"icon,omitempty"`
 	HasService  bool   `json:"hasService,omitempty"`
+	// Pending: it may answer what agents wait on (Manifest.Pending, or its service's "pending")
+	Pending bool `json:"pending,omitempty"`
 	// Settings the add-on declares, and what was set (only keys that were changed from the default)
 	Settings      []SettingSpec  `json:"settings,omitempty"`
 	SettingValues map[string]any `json:"settingValues,omitempty"`
@@ -370,6 +377,7 @@ func (m *Manager) describe(id string, st *state) *Addon {
 			a.Name = mf.Name
 		}
 		a.Version, a.Description, a.Icon, a.HasService = mf.Version, mf.Description, mf.Icon, mf.Service != nil
+		a.Pending = mf.Pending || (mf.Service != nil && mf.Service.Pending)
 		a.Settings, a.SettingValues = m.resolve(mf.Settings, st.Settings[id])
 		a.I18n = mf.I18n
 	}

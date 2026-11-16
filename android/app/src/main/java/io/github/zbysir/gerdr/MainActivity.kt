@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.app.DownloadManager
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Color
@@ -43,6 +44,7 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.addCallback
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.browser.customtabs.CustomTabColorSchemeParams
 import androidx.browser.customtabs.CustomTabsIntent
 import android.graphics.Typeface
@@ -632,8 +634,32 @@ class MainActivity : ComponentActivity() {
          */
         override fun getDefaultVideoPoster(): Bitmap = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
 
-        // 相机 / 麦克风暂时不给（语音投稿走的是输入法，不是 getUserMedia）
-        override fun onPermissionRequest(request: PermissionRequest) = request.deny()
+        /**
+         * The microphone, for Gerdr's own page only (voice input in an add-on: getUserMedia). The camera stays
+         * refused. A file the viewer shows (a user's HTML in a sandboxed frame, `/_f/…`) is served from the same
+         * host, so the origin alone can't tell it apart; such a frame has no `allow="microphone"` and Chromium
+         * refuses it before asking us. Android's own RECORD_AUDIO permission is asked for the first time a page
+         * wants the mic, then the page's request is granted or refused with the answer.
+         */
+        override fun onPermissionRequest(request: PermissionRequest) {
+            val page = web?.url?.let { Uri.parse(it) }
+            val sameHost = page != null && request.origin.host == page.host && request.origin.port == page.port
+            if (!sameHost || !request.resources.contentEquals(arrayOf(PermissionRequest.RESOURCE_AUDIO_CAPTURE))) {
+                return request.deny()
+            }
+            if (ContextCompat.checkSelfPermission(this@MainActivity, android.Manifest.permission.RECORD_AUDIO) ==
+                PackageManager.PERMISSION_GRANTED
+            ) {
+                return request.grant(request.resources)
+            }
+            micRequest?.deny()
+            micRequest = request
+            askMic.launch(android.Manifest.permission.RECORD_AUDIO)
+        }
+
+        override fun onPermissionRequestCanceled(request: PermissionRequest) {
+            if (micRequest == request) micRequest = null
+        }
 
         /**
          * A <video>'s fullscreen button. WebView doesn't do element fullscreen on its own: it hands us the
@@ -1075,6 +1101,14 @@ class MainActivity : ComponentActivity() {
     private fun dp(v: Int) = look.dp(v)
 
     // ---- 后台通知（NoticeService）----
+
+    /** The page's mic request waiting on Android's RECORD_AUDIO dialog (onPermissionRequest). */
+    private var micRequest: PermissionRequest? = null
+    private val askMic = registerForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+        val r = micRequest ?: return@registerForActivityResult
+        micRequest = null
+        if (ok) r.grant(r.resources) else r.deny()
+    }
 
     private val askNotify = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
         bridge?.notifyState(notifyState())

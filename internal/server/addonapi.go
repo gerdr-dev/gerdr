@@ -31,6 +31,12 @@ func (s *Server) addonRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/addons", s.addonList)
 	mux.HandleFunc("POST /api/addons/{id}/message", s.addonMessage)
 	mux.HandleFunc("POST /api/addons/{id}/fetch", s.addonFetch)
+	mux.HandleFunc("GET /api/addons/{id}/pending", s.addonPending)
+	mux.HandleFunc("POST /api/addons/{id}/socket", s.addonSocketOpen)
+	mux.HandleFunc("POST /api/addons/{id}/llm", s.addonLLM)
+	mux.HandleFunc("GET /api/addons/{id}/llm/models", s.addonLLMModels)
+	mux.HandleFunc("GET /api/addons/{id}/socket/{token}", s.addonSocketConnect)
+	mux.HandleFunc("POST /api/addons/{id}/answer", s.addonAnswer)
 	mux.HandleFunc("PUT /api/addons/{id}/enabled", func(w http.ResponseWriter, r *http.Request) {
 		var b struct {
 			Enabled bool `json:"enabled"`

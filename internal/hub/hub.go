@@ -476,6 +476,9 @@ func selectValues(o *acp.SessionConfigOptionSelect) []acp.SessionConfigSelectOpt
 	return out
 }
 
+// LLM is the configured models (config.json llm, keys filled in): for one-off calls outside a session (g.llm).
+func (h *Hub) LLM() native.Config { return h.llm() }
+
 func (h *Hub) llm() native.Config {
 	if h.opt.LLM == nil {
 		return native.Config{}

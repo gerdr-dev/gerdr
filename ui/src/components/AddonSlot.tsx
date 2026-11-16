@@ -178,11 +178,9 @@ export class AddonGuard extends Component<{ addon: string; children: ReactNode; 
   }
 }
 
-// The composer's bottom bar: one small button per g.composerAction.
-export function AddonComposerActions({ sessionId, paneId }: { sessionId: string; paneId: string }) {
-  useStore((s) => s.addonVersion);
-  if (!composerActions.length) return null;
-  const ctx = {
+// The ctx a composer's add-ons get: this composer's draft (drafts are kept per pane), its session.
+function composerCtx(sessionId: string, paneId: string) {
+  return {
     sessionId,
     get text() {
       return get().drafts[paneId] ?? "";
@@ -191,9 +189,18 @@ export function AddonComposerActions({ sessionId, paneId }: { sessionId: string;
     setText: (t: string) => set((s) => ({ drafts: { ...s.drafts, [paneId]: t } })),
     insert: (t: string) => set((s) => ({ drafts: { ...s.drafts, [paneId]: (s.drafts[paneId] ?? "") + t } })),
   };
+}
+
+// The composer's bottom bar: one small button per g.composerAction. start: the ones pinned at the bar's start
+// (place "start", ChatHost.composerStart), else the rest, in the row that scrolls.
+export function AddonComposerActions({ sessionId, paneId, start }: { sessionId: string; paneId: string; start?: boolean }) {
+  useStore((s) => s.addonVersion);
+  const list = composerActions.filter((a) => (a.place === "start") === !!start);
+  if (!list.length) return null;
+  const ctx = composerCtx(sessionId, paneId);
   return (
     <>
-      {composerActions.map((a) => (
+      {list.map((a) => (
         // title, not a Tooltip: Radix's opens on focus too and stays over whatever the button opened (a popover)
         <Button
           key={a.addon + a.id}
@@ -203,8 +210,26 @@ export function AddonComposerActions({ sessionId, paneId }: { sessionId: string;
           className="h-7 shrink-0 gap-1 px-1.5 text-[12px] text-muted-foreground"
           onClick={() => Promise.resolve(a.run(ctx)).catch((e) => fail(a.addon, e))}
         >
-          {a.icon ?? a.title}
+          {a.render ? a.render(ctx) : (a.icon ?? a.title)}
         </Button>
+      ))}
+    </>
+  );
+}
+
+// Over the composer's text field (g.slot("composerInput"), ChatHost.composerInputOverlay): each add-on's component,
+// absolutely positioned by itself, with this composer's ctx and focus() to put the caret in the field.
+export function AddonComposerOverlay({ sessionId, paneId, focus }: { sessionId: string; paneId: string; focus: () => void }) {
+  useStore((s) => s.addonVersion);
+  const list = slots.composerInput;
+  if (!list.length) return null;
+  const ctx = composerCtx(sessionId, paneId);
+  return (
+    <>
+      {list.map(({ key, addon, Component: C }) => (
+        <AddonGuard key={key} addon={addon}>
+          <C ctx={ctx} focus={focus} />
+        </AddonGuard>
       ))}
     </>
   );

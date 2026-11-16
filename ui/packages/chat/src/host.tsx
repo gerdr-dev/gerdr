@@ -135,6 +135,19 @@ export interface ChatHost {
   useTurnStat?(info: TurnStatInfo): TurnStatDeco | undefined;
   /** ctx.paneId: the composer's key in ChatHost drafts, to write into this composer from the bar. */
   composerBar?(session: ChatSession, ctx: { paneId: string }): ReactNode;
+  /**
+   * Pinned at the start of the composer's bottom bar, right after the attach button, outside the row that scrolls and
+   * folds when the bar is tight: what goes here never moves, whatever comes and goes on the right (a task chip, the
+   * context meter). For a button hit often without looking (gerdr: the voice add-on's hold-to-talk mic).
+   */
+  composerStart?(session: ChatSession, ctx: { paneId: string }): ReactNode;
+  /**
+   * Drawn over the composer's text field, inside a relative box the size of the field: absolutely position what you
+   * add, and leave the rest of the field to the person (gerdr: a "hold to talk" spot in the middle of an empty field,
+   * whose sides keep the system's own long-press menu). focus() puts the caret in the field (a tap on your spot that
+   * should type after all).
+   */
+  composerInputOverlay?(session: ChatSession, ctx: { paneId: string; focus(): void }): ReactNode;
   /** The composer's empty-box text, for a "session" whose box isn't talking to an agent; undefined keeps the default. */
   placeholder?(session: ChatSession, running: boolean): string | undefined;
   composerOverlay?(session: ChatSession): ReactNode;

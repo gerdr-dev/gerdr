@@ -582,6 +582,12 @@ func lastStop(evs []*hub.Event) string {
 // lastReply: the agent's text after the last user message, plus how a turn ended when it didn't end normally — the
 // same as `gerdr session wait` prints (cmd/gerdr/session.go replySince). Subagents' text isn't the agent's answer.
 func lastReply(evs []*hub.Event) string {
+	return strings.Join(replyParts(evs), "\n\n")
+}
+
+// replyParts: lastReply's paragraphs, one per stretch of text between tool calls. The last is what the agent said
+// once its work was done (or how the turn ended), what a reader that wants only the conclusion takes.
+func replyParts(evs []*hub.Event) []string {
 	from := 0
 	for i, e := range evs {
 		if e.Kind == hub.EvUser {
@@ -633,7 +639,7 @@ func lastReply(evs []*hub.Event) string {
 		}
 	}
 	flush()
-	return strings.Join(parts, "\n\n")
+	return parts
 }
 
 // PanelTag is the tag naming the panel (its Work key) a conversation was started by (ctx.sessions.start).

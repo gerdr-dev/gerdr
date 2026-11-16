@@ -195,6 +195,18 @@ const ComposerImpl = forwardRef<
   // nothing afterwards (reported). On touch screens a tap on them mustn't bring the soft keyboard up when it is down
   // (reported): don't focus the box, and if it still has focus with the keyboard hidden (Android keeps it focused when
   // the keyboard's own hide button or a swipe closes it, and the next tap reopens the keyboard), let go of it.
+  // Put the caret in the box and bring the soft keyboard up, for a tap on something drawn over it
+  // (ChatHost.composerInputOverlay). Android keeps the box focused after its keyboard is put away, and focusing a
+  // focused box shows nothing: let go of it first
+  const focusBox = () => {
+    const el = ta.current;
+    if (!el) return;
+    if (document.activeElement === el) el.blur();
+    el.focus();
+    el.setSelectionRange(el.value.length, el.value.length);
+  };
+  // The "/" menu was opened with the soft keyboard up: keep it up (the box keeps focus while the menu is open)
+  const keepKeyboard = useRef(false);
   const keepFocus = (e: React.MouseEvent) => {
     e.preventDefault();
     if (!isCoarse()) ta.current?.focus();
@@ -936,6 +948,40 @@ const ComposerImpl = forwardRef<
   }));
 
   sendRef.current = send;
+  const input = (
+    <textarea
+      ref={ta}
+      data-composer={paneId}
+      data-session={session.id}
+      rows={1}
+      enterKeyHint={sendKey === "enter" ? "send" : "enter"}
+      value={text}
+      onChange={(e) => {
+        // 中文输入法下按 / 出来的是「、」（有的是全角「／」）：空输入框打的第一个字是它，就当 / —— 不然想调命令得先切英文
+        // ！ 同理：中文输入法下打出来的是全角的，当 ! 用（`!命令`）
+        const v = text === "" && /^[、／]$/.test(e.target.value) ? "/" : text === "" && e.target.value === "！" ? "!" : e.target.value;
+        setText(v);
+        setCaret(e.target.selectionStart ?? e.target.value.length);
+      }}
+      onSelect={(e) => {
+        setCaret(e.currentTarget.selectionStart ?? 0);
+        extras?.onSelect?.();
+      }}
+      onKeyDown={onKeyDown}
+      onPaste={(e) => {
+        const files = Array.from(e.clipboardData.files);
+        if (files.length && (anyFile || files.some((f) => f.type.startsWith("image/") || f.type.startsWith("video/")))) {
+          e.preventDefault();
+          addFiles(files);
+        }
+      }}
+      placeholder={
+        host.placeholder?.(session, running) ??
+        (shellReady ? tr("composer.sendShell") : running ? tr("composer.busy") : host.shell ? tr("composer.idleShell") : tr("composer.idle"))
+      }
+      className="block max-h-[40vh] min-h-[44px] w-full resize-none bg-transparent px-4 pt-3 pb-1 text-[1em] max-md:text-[length:max(1em,15px)] max-md:supports-[-webkit-touch-callout:none]:text-[16px] leading-relaxed outline-none placeholder:text-muted-foreground/70"
+    />
+  );
   return (
     <div ref={root} className="relative px-3 pb-3">
       {host.composerOverlay?.(session)}
@@ -1070,38 +1116,15 @@ const ComposerImpl = forwardRef<
             ))}
           </div>
         )}
-        <textarea
-          ref={ta}
-          data-composer={paneId}
-          data-session={session.id}
-          rows={1}
-          enterKeyHint={sendKey === "enter" ? "send" : "enter"}
-          value={text}
-          onChange={(e) => {
-            // 中文输入法下按 / 出来的是「、」（有的是全角「／」）：空输入框打的第一个字是它，就当 / —— 不然想调命令得先切英文
-            // ！ 同理：中文输入法下打出来的是全角的，当 ! 用（`!命令`）
-            const v = text === "" && /^[、／]$/.test(e.target.value) ? "/" : text === "" && e.target.value === "！" ? "!" : e.target.value;
-            setText(v);
-            setCaret(e.target.selectionStart ?? e.target.value.length);
-          }}
-          onSelect={(e) => {
-            setCaret(e.currentTarget.selectionStart ?? 0);
-            extras?.onSelect?.();
-          }}
-          onKeyDown={onKeyDown}
-          onPaste={(e) => {
-            const files = Array.from(e.clipboardData.files);
-            if (files.length && (anyFile || files.some((f) => f.type.startsWith("image/") || f.type.startsWith("video/")))) {
-              e.preventDefault();
-              addFiles(files);
-            }
-          }}
-          placeholder={
-            host.placeholder?.(session, running) ??
-            (shellReady ? tr("composer.sendShell") : running ? tr("composer.busy") : host.shell ? tr("composer.idleShell") : tr("composer.idle"))
-          }
-          className="block max-h-[40vh] min-h-[44px] w-full resize-none bg-transparent px-4 pt-3 pb-1 text-[1em] max-md:text-[length:max(1em,15px)] max-md:supports-[-webkit-touch-callout:none]:text-[16px] leading-relaxed outline-none placeholder:text-muted-foreground/70"
-        />
+        {host.composerInputOverlay ? (
+          // relative: the host's overlay is positioned over the text field (gerdr: a "hold to talk" spot in its middle)
+          <div className="relative">
+            {input}
+            {host.composerInputOverlay(session, { paneId, focus: focusBox })}
+          </div>
+        ) : (
+          input
+        )}
         {shellMode && (
           // 照 Claude Code 的「! for bash mode」：说清这一句不发给 agent、在哪个目录跑、输出去哪
           <div className="truncate px-4 pb-1 text-[12px] text-warn" title={session.cwd}>
@@ -1109,41 +1132,59 @@ const ComposerImpl = forwardRef<
           </div>
         )}
         <div className="flex items-center gap-1 px-2.5 pb-2.5">
+          {/* Attach, then the host's start (gerdr: the voice add-on's hold-to-talk mic), pinned outside the row that
+              scrolls and folds: buttons hit without looking must not move when the right side changes (a task chip,
+              the context meter). No wrapper for the start: an empty one adds no gap */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <label className="flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground">
+                {anyFile ? <Paperclip className="size-4" /> : <ImagePlus className="size-4" />}
+                <input
+                  type="file"
+                  accept={host.localPath ? undefined : host.upload ? "image/*,video/*" : "image/*"}
+                  multiple
+                  className="hidden"
+                  onChange={(e) => {
+                    if (!e.target.files?.length) return;
+                    addFiles(e.target.files);
+                    e.target.value = ""; // 同一个文件删掉后还能再选
+                    // 触屏上选完图直接弹键盘：附了图基本都要配一句话，省得再点一下输入框。
+                    // 要在 change 回调里同步聚焦 —— 选图还算这次点击，晚了（等读完图）浏览器不给弹键盘
+                    if (isCoarse()) ta.current?.focus();
+                  }}
+                />
+              </label>
+            </TooltipTrigger>
+            <TooltipContent>{host.localPath ? tr("composer.attachFile") : host.upload ? tr("composer.attach") : tr("composer.attachImage")}</TooltipContent>
+          </Tooltip>
+          {host.composerStart?.(session, { paneId })}
           {/* 附图和几个下拉放一组：放不下时这一组横着滑，而不是每个都被挤成「A…」「Opus …」（用户报的）；
               手机上模式 / 模型 / 思考强度收成一个图标（OptionsMenu），平时几乎不改，不值得常驻。上下文 / 发送这些固定在右边不动 */}
           <div
             ref={optsRow}
             className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>*]:shrink-0"
           >
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <label className="flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground">
-                  {anyFile ? <Paperclip className="size-4" /> : <ImagePlus className="size-4" />}
-                  <input
-                    type="file"
-                    accept={host.localPath ? undefined : host.upload ? "image/*,video/*" : "image/*"}
-                    multiple
-                    className="hidden"
-                    onChange={(e) => {
-                      if (!e.target.files?.length) return;
-                      addFiles(e.target.files);
-                      e.target.value = ""; // 同一个文件删掉后还能再选
-                      // 触屏上选完图直接弹键盘：附了图基本都要配一句话，省得再点一下输入框。
-                      // 要在 change 回调里同步聚焦 —— 选图还算这次点击，晚了（等读完图）浏览器不给弹键盘
-                      if (isCoarse()) ta.current?.focus();
-                    }}
-                  />
-                </label>
-              </TooltipTrigger>
-              <TooltipContent>{host.localPath ? tr("composer.attachFile") : host.upload ? tr("composer.attach") : tr("composer.attachImage")}</TooltipContent>
-            </Tooltip>
             {pinnedCmds.length > 0 && (
-              <DropdownMenu>
-                <DropdownMenuTrigger className="flex size-7 shrink-0 items-center justify-center rounded-md font-mono text-[14px] text-muted-foreground outline-none hover:bg-muted hover:text-foreground data-[state=open]:bg-muted">
+              // With the soft keyboard up, the menu mustn't put it away (asked for: tap / while typing, keep typing):
+              // the trigger doesn't take focus, and the focus the menu takes on opening goes straight back to the box.
+              // Non-modal, so the box may hold focus while it's open, and focus going there doesn't dismiss it
+              <DropdownMenu modal={false}>
+                <DropdownMenuTrigger
+                  onPointerDown={() => (keepKeyboard.current = isCoarse() && document.activeElement === ta.current && keyboardUp())}
+                  onMouseDown={(e) => keepKeyboard.current && e.preventDefault()}
+                  className="flex size-7 shrink-0 items-center justify-center rounded-md font-mono text-[14px] text-muted-foreground outline-none hover:bg-muted hover:text-foreground data-[state=open]:bg-muted"
+                >
                   /
                 </DropdownMenuTrigger>
                 {/* 关掉时不把焦点还给触发器：pickPinned 要把焦点放进输入框（手机上好直接弹键盘接着写参数） */}
-                <DropdownMenuContent side="top" align="start" className="max-h-80 w-72 overflow-auto" onCloseAutoFocus={(e) => e.preventDefault()}>
+                <DropdownMenuContent
+                  side="top"
+                  align="start"
+                  className="max-h-80 w-72 overflow-auto"
+                  onCloseAutoFocus={(e) => e.preventDefault()}
+                  onFocusCapture={() => keepKeyboard.current && ta.current?.focus({ preventScroll: true })}
+                  onFocusOutside={(e) => keepKeyboard.current && e.target === ta.current && e.preventDefault()}
+                >
                   {pinnedCmds.map((c) => (
                     <DropdownMenuItem key={c.name} onClick={() => pickPinned(c)} className="items-baseline gap-2">
                       <span className="shrink-0 font-mono text-[13px]">/{c.name}</span>

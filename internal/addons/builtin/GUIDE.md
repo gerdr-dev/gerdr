@@ -54,6 +54,7 @@ All fields optional; a store only lists folders that have one.
 | `main` | The UI half's entry, when it isn't `index.*`. |
 | `settings` | A form in Settings → Add-ons; see [Settings](#settings). |
 | `service` | A process the backend keeps running; see [Services](#services). |
+| `pending` | `true`: the UI half may read and answer what agents wait on the person for (`g.sessions.pending` / `answer`); see [Answering for the person](#answering-for-the-person). |
 | `i18n` | The texts above in other languages; see [Languages](#languages). |
 
 ## Languages
@@ -122,7 +123,8 @@ shows a toast or a system notification.
 
 Name the file `.tsx` and write JSX. Hooks come from `g.React` (the React that mounts your components: never import
 your own). `g.ui` has Gerdr's building blocks (`Button`, `Popover`, `Tooltip`, `Switch`, `cn`), `g.icons` every
-lucide icon (`<g.icons.Timer className="size-3.5" />`).
+lucide icon (`<g.icons.Timer className="size-3.5" />`). On a phone, a sideways swipe turns the overview's pages; an element whose
+own gesture is sideways (a slider, swipe to send) puts `data-no-swipe` on itself and the pager leaves it alone.
 
 | where | call | gets |
 |---|---|---|
@@ -281,7 +283,10 @@ the light / dark switch and outlives the add-on.
 | `g.turns({ since, until? })` | Every turn that ended in the range (unix ms), oldest first: session, agent, stop reason, whether the agent started it itself, duration, tokens, cost (USD; only Claude Code reports money). Gerdr keeps no daily totals: add them up yourself. |
 | `g.settings.get(key)` | This add-on's [settings](#settings). |
 | `g.storage.get/set` | Small private storage, kept in this browser / App (not shared between devices). A cache: store `{ at: Date.now(), data }` and refetch when it's older than you like. |
-| `g.fetch(url, init)` | An HTTP request made by Gerdr's backend, so the API needs no CORS. The only way out: the page's own `fetch` is limited to Gerdr itself (CSP `connect-src 'self'`), CORS or not. Resolves `{ ok, status, headers, text, json(), bytes(), blob() }`; a non-string `body` goes as JSON. `binary: true` for an answer that isn't text (audio, images). |
+| `g.fetch(url, init)` | An HTTP request made by Gerdr's backend, so the API needs no CORS. The only way out: the page's own `fetch` is limited to Gerdr itself (CSP `connect-src 'self'`), CORS or not. Resolves `{ ok, status, headers, text, json(), bytes(), blob() }`; a non-string `body` goes as JSON, a `Blob` / `ArrayBuffer` / `Uint8Array` as those bytes (recorded audio to a speech-to-text API). `binary: true` for an answer that isn't text (audio, images). |
+| `g.socket(url, { headers })` | A WebSocket (`ws(s)://`) opened by Gerdr's backend with your headers (a key), for streaming APIs: speech-to-text returning words as they're said, realtime models. Resolves a normal `WebSocket`; messages pass as they are. |
+| `g.llm.complete({ model?, system?, prompt })` | One call to a model the person configured in Gerdr (Settings → Models), made by the backend: no key of your own, no tools, thinking off. `g.llm.models()` lists them as `provider/model`. For quick jobs: fixing a transcript, a summary, a title. |
+| `g.sessions.reply(id)` | What the agent answered to the last message sent to it, as text: `text` all of it, `final` its last stretch (what it said once the work was done). Read it on `g.on("turnEnd")`: speak it, forward it. |
 | `g.asset(path)` | A URL for a file of the add-on's folder: `<img src={g.asset("logo.png")} />`, `new Audio(g.asset("done.wav"))`. |
 
 ### Settings
@@ -432,6 +437,12 @@ Gerdr checks it against the request and replies `{"type":"answered","reqId":"…
 Without `"pending": true` an answer is refused: approving commands is the person's power, and they hand it over by
 installing an add-on that says it wants it — so say so in your README. Entries with `muted: true` sit in a
 do-not-disturb group; Gerdr doesn't notify about them, and neither should you.
+
+The UI half gets the same with a top-level `"pending": true` in addon.json: `g.sessions.pending(sessionId?)` lists
+the requests (same shape), `g.sessions.answer({ session, reqId, optionId | answers | skip })` answers one and rejects
+when it doesn't fit. Look on `g.on("needsInput")`. For an add-on the person answers through — a voice call reads the
+question out and passes the spoken answer back — not one that decides by itself: confirm before answering, since an
+answer can't be taken back.
 
 The usual use is answering from a chat without knowing which chat: post with the reply address of the person's last
 direct message (any source's `dm` event carries `reply`, see [Events](#events)) and read their answer from the

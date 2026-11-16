@@ -12,7 +12,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { api } from "./api";
-import { playAudio, stopAudio, type Clips } from "./audio";
+import { playAudio, stopAudio, unlockAudio, type Clips } from "./audio";
+import { haptic } from "./android";
 import { cn } from "./utils";
 import { AddonIcon } from "@/components/IconPicker";
 import { locale, t } from "./i18n";
@@ -42,7 +43,7 @@ type Reg<T> = { addon: string; fn: T };
  * "settings" is the add-on's own layout of its addon.json settings (Settings → Add-ons → 设置, components/AddonSettings.tsx;
  * props: Field, values, set), drawn instead of the generated form; one per add-on, the first registered wins.
  */
-export type SlotName = "panel" | "railButton" | "sprite" | "paneTitle" | "overlay" | "loader" | "settings";
+export type SlotName = "panel" | "railButton" | "sprite" | "paneTitle" | "overlay" | "loader" | "settings" | "composerInput";
 /**
  * key: stable across reloads — "addon:id" with the id the add-on gave, else "addon:n" (its n-th entry in that slot, the
  * same on every load since setup runs the same way): config.loader and agents' icons refer to entries by it.
@@ -60,8 +61,28 @@ export type SlotReg = {
   /** A panel's icon component wants a button two cells tall on the rail (a 32×72 box instead of 32×20). */
   tallIcon?: boolean;
 };
-export const slots: Record<SlotName, SlotReg[]> = { panel: [], railButton: [], sprite: [], paneTitle: [], overlay: [], loader: [], settings: [] };
-export type ComposerAction = { addon: string; id: string; title: string; icon?: React.ReactNode; run: (ctx: ComposerCtx) => void | Promise<void> };
+export const slots: Record<SlotName, SlotReg[]> = {
+  panel: [],
+  railButton: [],
+  sprite: [],
+  paneTitle: [],
+  overlay: [],
+  loader: [],
+  settings: [],
+  composerInput: [],
+};
+export type ComposerAction = {
+  addon: string;
+  id: string;
+  title: string;
+  icon?: React.ReactNode;
+  // render: the button's content drawn with its composer's ctx, for buttons that act on more than a click (hold to
+  // talk: a long press on a phone is followed by no click, so run never says which composer)
+  render?: (ctx: ComposerCtx) => React.ReactNode;
+  // place "start": pinned at the bar's start, outside the row that scrolls and folds (ChatHost.composerStart)
+  place?: "start";
+  run: (ctx: ComposerCtx) => void | Promise<void>;
+};
 export type ComposerCtx = { sessionId: string; text: string; insert(text: string): void; setText(text: string): void };
 export const composerActions: ComposerAction[] = [];
 export type MenuItem = { addon: string; id: string; title: string; when?: (ctx: MenuCtx) => boolean; run: (ctx: MenuCtx) => void | Promise<void> };
@@ -538,6 +559,7 @@ function makeApi(id: string, hash: string) {
     audio: {
       play: (clips: Clips, o?: { signal?: AbortSignal; onClip?: (index: number) => void }) => playAudio(clips, o),
       stop: () => stopAudio(),
+      unlock: () => unlockAudio(),
     },
     theme: (spec: ThemeFn) => {
       const r = { addon: id, fn: spec };
@@ -574,12 +596,20 @@ function makeApi(id: string, hash: string) {
     fetch: async (url: string, init?: { method?: string; headers?: Record<string, string>; body?: unknown; binary?: boolean }) => {
       const headers = { ...init?.headers };
       let body: string | undefined;
-      if (typeof init?.body === "string") body = init.body;
-      else if (init?.body !== undefined) {
-        body = JSON.stringify(init.body);
+      let bodyBase64 = false;
+      const raw = init?.body;
+      if (typeof raw === "string") body = raw;
+      else if (raw instanceof Blob || raw instanceof ArrayBuffer || ArrayBuffer.isView(raw)) {
+        // Bytes (recorded audio for a speech-to-text API): the hop to the backend is JSON, so they go as base64
+        const buf =
+          raw instanceof Blob ? await raw.arrayBuffer() : raw instanceof ArrayBuffer ? raw : raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength);
+        body = toBase64(new Uint8Array(buf as ArrayBuffer));
+        bodyBase64 = true;
+      } else if (raw !== undefined) {
+        body = JSON.stringify(raw);
         if (!Object.keys(headers).some((k) => k.toLowerCase() === "content-type")) headers["Content-Type"] = "application/json";
       }
-      const r = await api.addonFetch(id, { url, method: init?.method, headers, body, binary: init?.binary });
+      const r = await api.addonFetch(id, { url, method: init?.method, headers, body, bodyBase64, binary: init?.binary });
       // binary: the backend sent the body as base64 (audio, images: bytes that don't survive being text)
       const bytes = () => (r.base64 ? Uint8Array.from(atob(r.body), (c) => c.charCodeAt(0)) : new TextEncoder().encode(r.body));
       const text = r.base64 ? "" : r.body;
@@ -593,6 +623,35 @@ function makeApi(id: string, hash: string) {
         bytes,
         blob: () => new Blob([bytes()], { type: r.headers["content-type"] ?? "" }),
       };
+    },
+    // A WebSocket the backend opens for the add-on (internal/server/addonsocket.go): a plain WebSocket to our own
+    // /api, which the backend joins to the service's
+    socket: async (url: string, init?: { headers?: Record<string, string>; protocols?: string[] }) => {
+      const { token } = await api.addonSocket(id, { url, headers: init?.headers, protocols: init?.protocols });
+      const proto = location.protocol === "https:" ? "wss:" : "ws:";
+      return new WebSocket(`${proto}//${location.host}/api/addons/${encodeURIComponent(id)}/socket/${token}`);
+    },
+    haptic: () => haptic(),
+    llm: {
+      complete: async (o: {
+        model?: string;
+        system?: string;
+        prompt?: string;
+        messages?: { role: "user" | "assistant"; content: string }[];
+        maxTokens?: number;
+        effort?: string;
+      }) => {
+        const messages = o.messages ?? [{ role: "user", content: o.prompt ?? "" }];
+        return (await api.addonLLM(id, { model: o.model, system: o.system, messages, maxTokens: o.maxTokens, effort: o.effort })).text;
+      },
+      models: () => api.addonLLMModels(id),
+    },
+    sessions: {
+      reply: (sid: string) => api.sessionReply(sid),
+      pending: (sid?: string) => api.addonPending(id, sid),
+      answer: async (a: unknown) => {
+        await api.addonAnswer(id, a);
+      },
     },
     usage: (force?: boolean) => api.usage(force),
     turns: (r: { since: number; until?: number }) => api.turns(r.since, r.until),
@@ -782,4 +841,11 @@ async function doReload() {
   // Settings may have changed without any add-on reloading (values aren't in the hash): re-read function themes
   if (themes.length) applyThemes();
   bump();
+}
+
+/** Bytes as base64, in chunks: String.fromCharCode(...bytes) on a whole recording overflows the call stack. */
+function toBase64(bytes: Uint8Array): string {
+  let s = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(s);
 }

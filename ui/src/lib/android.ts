@@ -88,6 +88,16 @@ export function useLanRoute(): boolean {
  * list every user's domain, docs/dev/IOS.md "Passkey"), so adding one, or signing in with one, happens there.
  * The browser has its own cookies: it starts on the pairing page.
  */
+/**
+ * A short haptic tick, like the system's long-press feedback: through the App (Bridge.kt performHapticFeedback,
+ * WebViewController.swift UIImpactFeedbackGenerator), else navigator.vibrate where the browser has it. An App older
+ * than the "haptic" message ignores it.
+ */
+export function haptic() {
+  if (port) postAndroid({ t: "haptic" });
+  else navigator.vibrate?.(30);
+}
+
 export function openInBrowser(url = location.origin + "/") {
   postAndroid({ t: "open", url });
 }

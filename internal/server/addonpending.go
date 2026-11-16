@@ -17,6 +17,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
 	"path/filepath"
 	"slices"
 
@@ -200,4 +202,52 @@ func checkAnswers(qs []acpx.AskQuestion, answers map[string][]string) error {
 		}
 	}
 	return nil
+}
+
+// pendingAddon: the add-on named in the path when it may see and answer requests (addon.json "pending"), else an
+// error written to w and nil. A UI half's code runs in the page and could reach /api/sessions itself; the check is
+// so that what an add-on does matches what it said when the person installed it, and the backend's checks of an
+// answer (answerResponse) apply to it as to a service.
+func (s *Server) pendingAddon(w http.ResponseWriter, r *http.Request) *string {
+	id := r.PathValue("id")
+	a := s.addonByID(id)
+	if a == nil {
+		httpError(w, 404, "no such add-on: "+id)
+		return nil
+	}
+	if !a.Pending || a.Disabled {
+		httpError(w, 403, i18n.S("这个 add-on 没在 addon.json 里声明 \"pending\": true", `this add-on doesn't declare "pending": true in addon.json`))
+		return nil
+	}
+	return &id
+}
+
+// GET /api/addons/{id}/pending[?session=…]: what agents wait on, as a "pending" service sees it.
+func (s *Server) addonPending(w http.ResponseWriter, r *http.Request) {
+	if s.pendingAddon(w, r) == nil {
+		return
+	}
+	out := s.pendingList()
+	if sid := r.URL.Query().Get("session"); sid != "" {
+		out = slices.DeleteFunc(out, func(p svcPending) bool { return p.Session != sid })
+	}
+	writeJSON(w, out)
+}
+
+// POST /api/addons/{id}/answer {session, reqId, optionId | answers | skip}: the same answer a service prints.
+func (s *Server) addonAnswer(w http.ResponseWriter, r *http.Request) {
+	id := s.pendingAddon(w, r)
+	if id == nil {
+		return
+	}
+	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+	if err != nil {
+		httpError(w, 400, err.Error())
+		return
+	}
+	if err := s.answerFromAddon(*id, body); err != nil {
+		httpError(w, 400, err.Error())
+		return
+	}
+	writeJSON(w, map[string]any{"ok": true})
 }

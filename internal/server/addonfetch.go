@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"errors"
@@ -10,6 +11,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/gerdr-dev/gerdr/internal/addons"
 )
 
 // g.fetch: an add-on's HTTP request, made by the backend instead of the page.
@@ -33,6 +36,8 @@ type addonFetchReq struct {
 	Headers map[string]string `json:"headers"`
 	Body    *string           `json:"body"`
 	Binary  bool              `json:"binary"`
+	// BodyBase64: body is base64 of bytes to send as they are (recorded audio to a speech-to-text API)
+	BodyBase64 bool `json:"bodyBase64"`
 }
 
 type addonFetchResp struct {
@@ -71,7 +76,13 @@ func doAddonFetch(ctx context.Context, b addonFetchReq) (*addonFetchResp, error)
 		method = http.MethodGet
 	}
 	var body io.Reader
-	if b.Body != nil {
+	if b.Body != nil && b.BodyBase64 {
+		data, err := base64.StdEncoding.DecodeString(*b.Body)
+		if err != nil {
+			return nil, fmt.Errorf("body is not base64: %w", err)
+		}
+		body = bytes.NewReader(data)
+	} else if b.Body != nil {
 		body = strings.NewReader(*b.Body)
 	}
 	req, err := http.NewRequestWithContext(ctx, method, u.String(), body)
@@ -108,16 +119,19 @@ func doAddonFetch(ctx context.Context, b addonFetchReq) (*addonFetchResp, error)
 	return out, nil
 }
 
-func (s *Server) addonFetch(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	found := false
+// addonByID: the add-on, or nil.
+func (s *Server) addonByID(id string) *addons.Addon {
 	for _, a := range s.Addons.List() {
 		if a.ID == id {
-			found = true
-			break
+			return a
 		}
 	}
-	if !found {
+	return nil
+}
+
+func (s *Server) addonFetch(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if s.addonByID(id) == nil {
 		httpError(w, 404, "no such add-on: "+id)
 		return
 	}
