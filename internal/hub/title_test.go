@@ -44,6 +44,10 @@ func TestCleanTitle(t *testing.T) {
 		strings.Repeat("长", 41): "",
 		"Ε":                     "",
 		"「E」":                   "",
+		"Title: 实时语音对话模型选型":     "实时语音对话模型选型",
+		"**标题：** 修登录页":          "修登录页",
+		"title:Fix login":       "Fix login",
+		"Titles of tabs":        "Titles of tabs",
 	} {
 		if got := cleanTitle(in); got != want {
 			t.Errorf("cleanTitle(%q) = %q, want %q", in, got, want)
