@@ -2,7 +2,7 @@
 // ChatList mounts when idle, scheduleBatch). Pinned to the bottom with no new output, no row on screen may move and
 // none may be drawn over another, in any painted frame, and the content's height may barely change (the scrollbar
 // thumb jumps with it: measuring the rows off screen in batches, each estimated at 60px, made it jump ~25 times).
-//   node settle.mjs [--tab=3] [--x=1640] [--y=500] [--width=1864] [--height=1050] [--watch=6000] [--cpu=1] [--reload] [--up=150]
+//   node settle.mjs [--tab=3] [--x=1640] [--y=500] [--width=1864] [--height=1050] [--watch=6000] [--cpu=1] [--reload] [--up=150] [--nudge]
 // --tab: the tab to switch to (its chat opens cold: not kept yet); --x/--y: a point inside the chat to watch (split
 // panes); --reload: open the page on that tab instead of switching to it.
 import { analyze, args, launch, open, report, startFrameLog, stopFrameLog, useStore } from "./lib.mjs";
@@ -79,6 +79,27 @@ if (a.up !== undefined) {
 }
 await page.waitForTimeout(a.watch);
 console.log("older-segment state changes [ms, state]:", JSON.stringify(await page.evaluate(() => window.__olderLog)));
+let nudged = null;
+// --nudge: a row above the screen grows by half a pixel (as a row measured off screen does): the text at the bottom
+// must not move at all (the content's whole-pixel total, ChatList's layout)
+if (a.nudge) {
+  nudged = await page.evaluate(async ([x, y]) => {
+    const sc = document.elementFromPoint(x, y)?.closest("[data-chat-scroller]");
+    const box = sc.getBoundingClientRect();
+    const above = [...sc.querySelectorAll("[data-item-index]:not([data-measure-only])")].filter((r) => r.getBoundingClientRect().bottom < box.top);
+    const out = [];
+    for (const r of above.slice(-3)) {
+      const shot = () => [...sc.querySelectorAll("[data-item-index]")].filter((e) => { const b = e.getBoundingClientRect(); return b.bottom > box.top && b.top < box.bottom; }).map((e) => e.getBoundingClientRect().top);
+      const before = shot();
+      r.firstElementChild.style.paddingBottom = (parseFloat(r.firstElementChild.style.paddingBottom || "0") + 0.5) + "px";
+      await new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(ok)));
+      const after = shot();
+      out.push(Math.max(...after.map((t, i) => Math.abs(t - before[i]))));
+    }
+    return out.map((d) => +d.toFixed(2));
+  }, [a.x, a.y]);
+  console.log("half-pixel growth above the screen, 3 times: rows on screen moved by", JSON.stringify(nudged));
+}
 const { frames } = await stopFrameLog(page);
 const ro = await page.evaluate(() => window.__roFrames);
 
@@ -124,4 +145,4 @@ if (at.length) console.log(`height changes at the bottom (the scrollbar jumping)
 const last = frames[frames.length - 1];
 if (last) console.log(`end: ${last.sh - last.ch - last.st}px from the bottom, ${last.mounted} rows mounted`);
 await browser.close();
-process.exit(r2.bad || over.length || hs > (a.maxHeightChanges ?? 5) ? 1 : 0);
+process.exit(r2.bad || over.length || hs > (a.maxHeightChanges ?? 5) || (nudged && nudged.some((d) => d > 0.1)) ? 1 : 0);

@@ -192,7 +192,16 @@ export const ChatList = forwardRef<
       sz.push(h);
       y += h;
     }
-    return { keys, tops, sizes: sz, total: y + foot, missing };
+    // A whole-pixel total, the fraction put above the first row (in the "load older" line's room): rows measure to
+    // fractions (57.5px), scrollTop at the bottom is whole (the end of a whole-pixel scrollHeight), so the rows'
+    // distance from the end moved by the total's fraction whenever the total changed. Every such change moved the text
+    // at the bottom by up to a pixel, some rows a device pixel and some not (each row is positioned on its own): the
+    // shaking while the rows off screen were measured, then once when their sizes came in (scroll probe in the user's
+    // page: -0.49px on every row at that moment).
+    const end = y + foot;
+    const pad = Math.ceil(end - 1e-6) - end;
+    if (pad > 1e-6) for (let i = 0; i < tops.length; i++) tops[i] += pad;
+    return { keys, tops, sizes: sz, total: end + Math.max(0, pad), missing };
   };
   // What's in the DOM now (positions written by the last sync)
   const shown = useRef<Layout>({ keys: [], tops: [], sizes: [], total: 0, missing: 0 });
