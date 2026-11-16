@@ -191,7 +191,8 @@ export const zh = {
   "sync.goApprove": "去批准",
 
   "overviewPick.pickSome": "挑几个",
-  "overviewPick.addAgent": "加 Agent",
+  "overviewPick.more": "更多",
+  "overviewPick.resort": "按重要度重新排序",
   "overviewPick.newLike": "新开一个 · {dir}",
   "overviewPick.addExisting": "加入 Agent",
   "overviewPick.title": "加入进行中",
@@ -419,7 +420,8 @@ export const en: Record<keyof typeof zh, string> = {
   "sync.goApprove": "Review",
 
   "overviewPick.pickSome": "Pick some",
-  "overviewPick.addAgent": "Add agent",
+  "overviewPick.more": "More",
+  "overviewPick.resort": "Re-sort by importance",
   "overviewPick.newLike": "New one · {dir}",
   "overviewPick.addExisting": "Add agents",
   "overviewPick.title": "Add to Active",

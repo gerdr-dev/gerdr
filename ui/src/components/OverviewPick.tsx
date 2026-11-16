@@ -1,4 +1,4 @@
-import { Check, ListPlus, Plus } from "lucide-react";
+import { ArrowDownWideNarrow, Check, ListPlus, MoreHorizontal, Plus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -31,36 +31,37 @@ export function PickButton() {
 }
 
 /**
- * The phone bar's +. It used to start an agent like the shown tile's on a single tap (easy to hit by accident, and no
- * way to add one already open) and, with no tile, open the drawer (where nothing can be added, see PickButton). Now:
- * with a tile, a menu of the two (a new one like it, Cmd+D in the grid; or pick open ones); without, the picker.
+ * The phone bar's ⋯ menu. The + used to start an agent like the shown tile's on a single tap (easy to hit by accident,
+ * and no way to add one already open). Now a menu: a new one like the shown tile's (Cmd+D in the grid; only with a
+ * tile), pick open ones, and re-sort the strip by "look at first" (its order is frozen on opening, phoneOrder, so one
+ * finished or waiting since stays where it was until asked for).
  */
-export function AddMenu({ focus }: { focus?: string }) {
+export function PhoneMenu({ focus, onResort }: { focus?: string; onResort: () => void }) {
   const s = useStore((st) => (focus ? st.sessions[focus] : undefined));
   const [pick, setPick] = useState(false);
-  const button = (onClick?: () => void) => (
-    <Button variant="ghost" size="icon" className="size-9 shrink-0" aria-label={t("overviewPick.addAgent")} onClick={onClick}>
-      <Plus className="size-[18px]" />
-    </Button>
-  );
   return (
     <>
-      {s ? (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>{button()}</DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="max-w-72">
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon" className="size-9 shrink-0" aria-label={t("overviewPick.more")}>
+            <MoreHorizontal className="size-[18px]" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="max-w-72">
+          {s && (
             <DropdownMenuItem onClick={() => newAgentInOverview()}>
               <AgentIcon agent={s.agent} className="size-4" />
               <span className="min-w-0 truncate">{t("overviewPick.newLike", { dir: basename(s.cwd) })}</span>
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setPick(true)}>
-              <ListPlus /> {t("overviewPick.addExisting")}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      ) : (
-        button(() => setPick(true))
-      )}
+          )}
+          <DropdownMenuItem onClick={() => setPick(true)}>
+            <ListPlus /> {t("overviewPick.addExisting")}
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={onResort}>
+            <ArrowDownWideNarrow /> {t("overviewPick.resort")}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
       <PickActive open={pick} onClose={() => setPick(false)} after={s?.id} />
     </>
   );

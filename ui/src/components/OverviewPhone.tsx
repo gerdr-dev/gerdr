@@ -7,7 +7,7 @@ import { get, useStore } from "@/lib/store";
 import { syncWatch } from "@/lib/sync";
 import { GAP, pageX, useSwipePager } from "@/lib/swipePager";
 import { TabActive } from "./Panes";
-import { AddMenu, PickButton } from "./OverviewPick";
+import { PhoneMenu, PickButton } from "./OverviewPick";
 import { DrawerButton } from "./DrawerButton";
 import { Tile, TileChip } from "./OverviewTile";
 import { t } from "@/lib/i18n";
@@ -183,7 +183,7 @@ export function PhoneOverview({ ids, focus, shown }: { ids: string[]; focus?: st
             {/* The selection box while a page is dragged (progress above); last, so the chips keep their indexes */}
             <div ref={box} aria-hidden className="pointer-events-none absolute hidden rounded-md border border-brand" />
           </div>
-          <AddMenu focus={tile} />
+          <PhoneMenu focus={tile} onResort={() => setOverview((o) => ({ ...o, phone: phoneOrder(ids, get().sessions, get().unread) }))} />
         </div>
         {/* The gap between two pages while one is dragged shows this background */}
         <div ref={body} className="relative min-h-0 flex-1 overflow-hidden bg-sidebar">
