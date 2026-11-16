@@ -58,7 +58,7 @@ export function PhoneOverview({ ids, focus, shown }: { ids: string[]; focus?: st
     if (!strip || !ind) return;
     const m = moving.current;
     if (x === null) {
-      for (const el of m?.styled ?? []) el.style.color = el.style.borderColor = "";
+      for (const el of m?.styled ?? []) unstyle(el);
       moving.current = null;
       ind.style.display = "";
       return;
@@ -87,8 +87,12 @@ export function PhoneOverview({ ids, focus, shown }: { ids: string[]; focus?: st
     // the current one (selected = foreground, the rest muted)
     // The current chip too, when the track has run past it (quick swipes): its own border would be a second box
     const c = kids[cur];
-    for (const el of mv.styled) if (el !== a && el !== b && el !== c) ((el.style.color = el.style.borderColor = ""), mv.styled.delete(el));
+    // And the picked chip, which is not the current one while its tile loads (lib/catchup holds the old one): its
+    // border and its loading mark (BorderFlow) would be a second box elsewhere in the strip (user report)
+    const f = strip.querySelector<HTMLElement>("[data-current]") ?? undefined;
+    for (const el of mv.styled) if (el !== a && el !== b && el !== c && el !== f) (unstyle(el), mv.styled.delete(el));
     for (const [el, v] of [
+      [f, 0],
       [c, 0],
       [a, 1 - k],
       [b, k],
@@ -96,6 +100,8 @@ export function PhoneOverview({ ids, focus, shown }: { ids: string[]; focus?: st
       if (!el) continue;
       el.style.borderColor = "transparent";
       el.style.color = shade(v);
+      const flow = el.querySelector<SVGElement>(":scope > .border-flow");
+      if (flow) flow.style.display = "none";
       mv.styled.add(el);
     }
   };
@@ -276,6 +282,13 @@ function inView(strip: HTMLElement, chip: HTMLElement, from: number) {
   if (left < from) return left;
   if (left + chip.offsetWidth > from + strip.clientWidth) return left + chip.offsetWidth - strip.clientWidth;
   return from;
+}
+
+/** Hand a chip its own look back after `progress` styled it (border, text, loading mark). */
+function unstyle(el: HTMLElement) {
+  el.style.color = el.style.borderColor = "";
+  const flow = el.querySelector<SVGElement>(":scope > .border-flow");
+  if (flow) flow.style.display = "";
 }
 
 /** A chip's text colour `k` of the way from unselected (0, muted) to selected (1, foreground). */

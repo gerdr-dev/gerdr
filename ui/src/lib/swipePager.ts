@@ -141,7 +141,18 @@ export function useSwipePager(
     if (!gl) return;
     const id = next(0);
     if (!id) return;
-    const run = () => goal.current === gl && gl.i !== idx.current && goTo.current(id);
+    const run = () => {
+      if (goal.current !== gl) return;
+      // Picked even when it is the page drawn now: a switch onward may still be held (lib/catchup keeps the old tile up
+      // while the new one loads), and swiping back before it lands has to take the pick back too. Skipping it left the
+      // selection on the loading chip while the page shown and the strip's box sat on the old one (user report: two boxes)
+      goTo.current(id);
+      if (gl.i !== idx.current) return;
+      // Back on the page drawn: no tile switch will come to end the turn (layout effect below), so rest once the slide does
+      goal.current = null;
+      clearTimeout(timer.current);
+      timer.current = window.setTimeout(rest, Math.max(0, gl.end - performance.now()) + 20);
+    };
     clearTimeout(switchT.current);
     if (WEBKIT) switchT.current = window.setTimeout(run, ms + 30);
     else requestAnimationFrame(() => setTimeout(run));
