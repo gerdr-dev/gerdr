@@ -536,12 +536,14 @@ func (s *Store) Trash(p string) error {
 
 // ---- helpers ----
 
-// Whitespace goes too: a path with spaces has to be quoted in every shell command an agent or a person types, and
-// unquoted it silently becomes several arguments.
-var unsafeChars = regexp.MustCompile(`[/\\:*?"<>|\x00-\x1f\s]+`)
+// Only letters, digits, "-", "." and "_" stay; everything else (whitespace, punctuation, symbols, full-width ones
+// like ？ and ，) goes. A path with spaces has to be quoted in every shell command and unquoted silently becomes
+// several arguments; punctuation in the middle of a path cuts the link the chat draws for it short (a title
+// "这个 子产品是什么逻辑？" made a folder whose path the chat linked only up to the ？).
+var unsafeChars = regexp.MustCompile(`[^\p{L}\p{M}\p{N}._-]+`)
 
-// safeName makes a name usable as one path segment on every system, without spaces: runs of unsafe characters and
-// whitespace become one "_".
+// safeName makes a name usable as one path segment on every system, with only letters, digits and "-._": every run
+// of anything else becomes one "_".
 func safeName(s string) string {
 	s = strings.Trim(unsafeChars.ReplaceAllString(s, "_"), "._")
 	if r := []rune(s); len(r) > 80 {

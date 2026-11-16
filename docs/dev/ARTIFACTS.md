@@ -173,7 +173,7 @@ is in `tasks/work-on-content.md`, not in code.
   packages (never `@tiptap/core` directly: a second copy from another esm.sh URL breaks it).
 - Panels: `ctx.artifacts` (`folder({ key, name, under })` → path by owner `{panel, task}`, `rename`, `items`,
   `record`; `work/host.go`, `server/workhost.go`), `ctx.sessions.start({ artifactsDir })`, `ArtifactsFolder` from
-  `@gerdr/core`. A folder recorded into before its owner looked (no owner yet) is claimed by it, not given a `name_2`. Folder names have no spaces (runs of whitespace and characters unsafe in a path become one `_`): a path with spaces has to be quoted in every command.
+  `@gerdr/core`. A folder recorded into before its owner looked (no owner yet) is claimed by it, not given a `name_2`. Folder names keep only letters, digits and `-._` (every run of anything else, whitespace and punctuation like `？` `，` included, becomes one `_`, trimmed at the ends): a path with spaces has to be quoted in every command, and punctuation inside a path cuts the link the chat draws for it short.
 - Checked in a debug instance with playwright: records, tree, preview, rich editing (a save changes only the edited
   line: front matter, compact tables, `snake_case` kept), the "changed meanwhile" bar.
 

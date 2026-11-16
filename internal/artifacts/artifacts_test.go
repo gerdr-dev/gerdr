@@ -150,11 +150,14 @@ func TestRecordFirstThenClaimed(t *testing.T) {
 
 func TestSafeNameNoSpaces(t *testing.T) {
 	for in, want := range map[string]string{
-		"随便做个 html 并截图": "随便做个_html_并截图",
-		"  a \t b  ":    "a_b",
-		"x: y/z":        "x_y_z",
-		". hidden .":    "hidden",
-		"   ":           "untitled",
+		"随便做个 html 并截图":        "随便做个_html_并截图",
+		"  a \t b  ":           "a_b",
+		"x: y/z":               "x_y_z",
+		". hidden .":           "hidden",
+		"   ":                  "untitled",
+		"这个 子产品是什么逻辑？":         "这个_子产品是什么逻辑",
+		"币种错：UOB 是 USD，显示 HKD": "币种错_UOB_是_USD_显示_HKD",
+		"https://a.b-c.com/x…": "https_a.b-c.com_x",
 	} {
 		if got := safeName(in); got != want {
 			t.Errorf("safeName(%q) = %q, want %q", in, got, want)
