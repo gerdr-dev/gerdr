@@ -191,8 +191,11 @@ Left:
   their content on first open (`ui/packages/chat/src/ui/opened.ts`: the chat package's Tooltip and DropdownMenu; the
   rewind button's popover mounts on its first click, anchored by virtualRef): component renders in the 1.5s after a
   first visit 3423 -> 2842; first-visit time 5-30% lower per tab in an alternating A/B, within the noise on some (the
-  machine had other agents running). Ideas, not tried: cache parsed Markdown per part across mounts (also helps the
-  virtual list's remounts); first paint with only the rows covering the screen, the overscan a frame later.
+  machine had other agents running). Markdown per message is cheap (`mdbench.mjs`, M3, production React: a typical
+  880-char reply ~2ms, a 25-row table ~3ms, our plugins +0.3-0.7ms): its share is the number and length of the rows
+  mounted before the first paint (a real reply often holds a table and a code block). Ideas, not tried: first paint
+  with only the rows covering the screen, the overscan a frame later; cache parsed Markdown per part across mounts
+  (helps remounts: the virtual list, a tab past keepTabs; not a first visit, which must parse once anyway).
   Ruled out: Tailwind rewriting an identical sheet (it does, up to three times per first visit, but skipping identical
   writes made no difference outside the noise in an alternating A/B: the rewrites mostly land after the first paint);
   mounting likely tabs ahead of time when idle (35-80ms first visits, turned down: don't mount tabs nobody opened).
