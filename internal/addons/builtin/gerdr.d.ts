@@ -396,6 +396,13 @@ declare global {
      */
     haptic(): void;
     /**
+     * Run your own g.messageAction on a conversation's latest reply on screen, as a tap on its button would: the
+     * button shows it running, ctx.highlight / onPick work on the message (reading aloud marks the paragraph). Calling
+     * it while that run goes on stops it. Resolves true when the run ends; false at once when that reply isn't on
+     * screen (another pane, scrolled away) or your action's when() leaves it out: do it some other way then.
+     */
+    runMessageAction(actionId: string, sessionId: string): Promise<boolean>;
+    /**
      * Models configured in Gerdr (Settings → Models), called by the backend so keys stay there: use the person's own
      * providers instead of asking for another key. One call, no tools, no history; thinking off unless effort says
      * otherwise, since these are quick jobs (fixing a transcript, a summary, a title).

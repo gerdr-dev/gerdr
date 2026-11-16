@@ -632,6 +632,9 @@ function makeApi(id: string, hash: string) {
       return new WebSocket(`${proto}//${location.host}/api/addons/${encodeURIComponent(id)}/socket/${token}`);
     },
     haptic: () => haptic(),
+    // Its own message action on a conversation's latest reply on screen, as a tap would (lib/messageActions.ts)
+    // (imported late: messageActions.ts imports this module)
+    runMessageAction: async (actionId: string, sessionId: string) => (await import("./messageActions")).runOnLatestReply(id, actionId, sessionId),
     llm: {
       complete: async (o: {
         model?: string;

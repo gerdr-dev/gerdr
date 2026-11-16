@@ -7,7 +7,7 @@
 // - a throw is a toast naming the action (not an add-on error in Settings: the next run may well work);
 // - ctx.highlight(text) marks that stretch of the message on screen (lib/readingHighlight.ts) until the run ends, and
 //   ctx.onPick(stretches, pick) makes those stretches clickable meanwhile (jump reading to the paragraph clicked).
-import { useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import { fail, messageActions, type MessageAction, type MessageCtx } from "./addons";
 import { unlockAudio, watchSignal } from "./audio";
@@ -64,6 +64,40 @@ export function lazyMsg(m: { sessionId: string; role: "user" | "assistant"; id: 
 
 export const runKey = (msg: { sessionId: string; id: string }, a: MessageAction) => `${msg.sessionId}:${msg.id}:${a.addon}:${a.id}`;
 
+// The messages drawn now (their action buttons mounted), so an add-on can run its own action on one without the tap:
+// 🎧 "read the latest reply" in the voice add-on, which then marks the paragraph being read like the message's own
+// speaker does. Only what's on screen: a reply scrolled out of the virtual list has no rows to mark anyway.
+const shown = new Map<string, Msg>();
+
+/** Keep a drawn message findable while its buttons are mounted (MessageActions). */
+export function useShown(msg: Msg) {
+  const key = `${msg.sessionId}:${msg.id}`;
+  useEffect(() => {
+    shown.set(key, msg);
+    return () => void shown.delete(key);
+  }, [key, msg]);
+}
+
+/**
+ * Run an add-on's own message action on a conversation's latest reply on screen, as a tap would (a second call
+ * stops it). The latest is the reply drawn lowest on the page ([data-message] rows). Resolves true once the run ends;
+ * false at once when there's none on screen, or no such action for it (when() said no).
+ */
+export async function runOnLatestReply(addon: string, actionId: string, sessionId: string): Promise<boolean> {
+  let best: { msg: Msg; el: Element } | null = null;
+  for (const msg of shown.values()) {
+    if (msg.sessionId !== sessionId || msg.role !== "assistant") continue;
+    const els = document.querySelectorAll(`[data-message="${CSS.escape(msg.id)}"]`);
+    const el = els[els.length - 1];
+    if (el && (!best || best.el.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING)) best = { msg, el };
+  }
+  if (!best) return false;
+  const a = actionsFor(best.msg).find((x) => x.addon === addon && x.id === actionId);
+  if (!a) return false;
+  await toggleRun(a, best.msg);
+  return true;
+}
+
 export function useRunPhase(key: string): RunPhase | undefined {
   return useSyncExternalStore(subscribe, () => runs.get(key)?.phase);
 }
@@ -85,14 +119,18 @@ export function actionsFor(msg: Msg): MessageAction[] {
   });
 }
 
-/** A tap on an action: start it, or stop it when it runs. Call from the tap itself (audio unlocks inside it). */
-export function toggleRun(a: MessageAction, msg: Msg) {
+/**
+ * A tap on an action: start it, or stop it when it runs. Call from the tap itself (audio unlocks inside it). Resolves
+ * when the run it started ends (finished, failed or stopped); at once when it stopped one.
+ */
+export function toggleRun(a: MessageAction, msg: Msg): Promise<void> {
   const key = runKey(msg, a);
   const on = runs.get(key);
   if (on) {
     on.ctrl.abort();
     runs.delete(key);
-    return changed();
+    changed();
+    return Promise.resolve();
   }
   unlockAudio();
   const ctrl = new AbortController();
@@ -111,7 +149,7 @@ export function toggleRun(a: MessageAction, msg: Msg) {
     highlight: (text) => !ctrl.signal.aborted && highlightMessage(msg.id, text, run),
     onPick: (stretches, pick) => !ctrl.signal.aborted && pickableMessage(msg.id, stretches, pick, run),
   };
-  Promise.resolve()
+  return Promise.resolve()
     .then(() => a.run(msg, ctx))
     .catch((e) => {
       if (ctrl.signal.aborted) return;
@@ -125,7 +163,8 @@ export function toggleRun(a: MessageAction, msg: Msg) {
       if (runs.get(key) !== run) return;
       runs.delete(key);
       changed();
-    });
+    })
+    .then(() => {});
 }
 
 /**

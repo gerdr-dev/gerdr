@@ -4,7 +4,7 @@ import type { MessageInfo } from "@gerdr/chat";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { MessageAction } from "@/lib/addons";
 import { t } from "@/lib/i18n";
-import { actionsFor, lazyMsg, runKey, toggleRun, useAnyRun, useRunPhase, type Msg } from "@/lib/messageActions";
+import { actionsFor, lazyMsg, runKey, toggleRun, useAnyRun, useRunPhase, useShown, type Msg } from "@/lib/messageActions";
 import { lucideIcon } from "@/lib/rail";
 import { useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -19,6 +19,7 @@ export function MessageActions({ info }: { info: MessageInfo }) {
   // info is a new object on each render; the message it describes isn't (a user's message, a finished turn)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const msg = useMemo(() => lazyMsg(info), [info.sessionId, info.id]);
+  useShown(msg); // findable while drawn: an add-on may run its action on it (runOnLatestReply)
   const prefix = `${info.sessionId}:${info.id}:`;
   useAnyRun(prefix); // re-render when one of ours starts / ends, to pull it out of the ⋯
   const list = actionsFor(msg);
