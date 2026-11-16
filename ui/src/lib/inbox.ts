@@ -147,14 +147,18 @@ function toastItem(it: InboxItem, title: string) {
     // Below the text, left of the button: the project's chip as on the rail, and its name. Beside the text (sonner's
     // icon slot) it and the button squeezed the text into a narrow column.
     icon: sp ? createElement(SpaceChip, { id: sp.id, name: sp.name }) : undefined,
-    // The text takes the first row; the chip and the button wrap under it, the button right-aligned by sonner's
-    // margin-left: auto (as the update card, native.ts onAppUpdate). Sonner's sizes and margins are unlayered CSS,
-    // which beats Tailwind's layered utilities: hence the `!`.
+    // The text takes the first row; the chip and the button go under it, the button right-aligned by sonner's
+    // margin-left: auto (as the update card, native.ts onAppUpdate). A grid, not a wrapping flex row: the card is as
+    // wide as its text (up to the toaster's --width, centred), and a wrapping flex row's natural width adds the chip
+    // and the button to the text's, so a short question left a wide empty band on the right (user report). In the
+    // grid the text spans both columns, so the width is max(text, chip + button). Under 600px sonner makes every toast
+    // full width; this keeps out of its way there. Sonner's sizes and margins are unlayered CSS, which beats
+    // Tailwind's layered utilities: hence the `!`.
     classNames: {
-      toast: "flex-wrap gap-y-3!",
-      content: "basis-full!",
-      icon: "order-1 size-auto! max-w-[60%] m-0!",
-      actionButton: "order-2",
+      toast: "grid! grid-cols-[1fr_auto] gap-y-3! min-[601px]:w-fit! min-[601px]:min-w-80 max-w-(--width) inset-x-0 mx-auto",
+      content: "col-span-2",
+      icon: "order-1 size-auto! max-w-full m-0!",
+      actionButton: "order-2 col-start-2",
     },
     action: open
       ? {

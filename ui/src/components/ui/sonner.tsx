@@ -30,6 +30,9 @@ const Toaster = ({ ...props }: ToasterProps) => {
           "--normal-text": "var(--popover-foreground)",
           "--normal-border": "var(--border)",
           "--border-radius": "var(--radius)",
+          // Sonner's 356px wraps an inbox card's question (a few lines of Chinese) into a narrow column that is hard
+          // to read (user report). Under 600px sonner goes full width by itself, so this only touches wider screens.
+          "--width": "480px",
           // A modal dialog (Radix) puts pointer-events: none on <body> while open, and the toaster lives under body:
           // without this a toast shown over Settings could not be tapped, closed or swiped away
           pointerEvents: "auto",

@@ -349,8 +349,10 @@ export default function App() {
         <AppContextMenu />
         <CliApprove />
         {/* Top centre everywhere: every pane's composer is at the bottom (and the phone's keyboard), so a bottom-corner toast
-            covered the rightmost pane's input box (user report). The top is pane title bars, fine to cover for a moment. */}
-        <Toaster position="top-center" />
+            covered the rightmost pane's input box (user report). The top is pane title bars, fine to cover for a moment.
+            40px from the top, the tab bar's bottom border (h-10, TabBar.tsx): the card hangs right under the bar instead
+            of floating half over the bar and half over the chat (user's pick, after trying 24 / 34 / 44). */}
+        <Toaster position="top-center" offset={{ top: 40 }} />
         {/* A lost connection: a toast everywhere now; the bottom row that showed it on wider screens became the rail */}
         <ConnToast />
       </TooltipProvider>
