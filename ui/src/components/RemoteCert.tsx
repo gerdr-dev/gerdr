@@ -36,7 +36,7 @@ export function RemoteCert({ host, relay, expires, onSaved }: { host: string; re
       setKey(r.tlsKey);
       setEnv({});
       // 还没配证书来源就直接展开表单
-      if (!r.dns && !r.tlsCert) setEditing(true);
+      if (!r.dns && !r.tlsCert && !r.tailscale) setEditing(true);
     } catch (e) {
       setErr((e as Error).message);
     }
@@ -47,7 +47,7 @@ export function RemoteCert({ host, relay, expires, onSaved }: { host: string; re
 
   if (!c) return err ? <div className="text-[12px] text-bad">{err}</div> : null;
   const p = c.providers.find((x) => x.name === dns);
-  const configured = !!(c.dns || c.tlsCert);
+  const configured = !!(c.dns || c.tlsCert || c.tailscale);
   const label = c.providers.find((x) => x.name === c.dns)?.label ?? c.dns;
 
   const save = async () => {
@@ -80,15 +80,18 @@ export function RemoteCert({ host, relay, expires, onSaved }: { host: string; re
             {configured && !editing && (
               <span className="text-muted-foreground">
                 {" · "}
-                {c.tlsCert
-                  ? rich(t("remoteCert.ownCert"), { path: <span className="font-mono text-[11px]">{c.tlsCert}</span> })
-                  : t("remoteCert.autoCert", { provider: label })}
+                {c.tailscale
+                  ? t("remoteCert.tailscaleCert")
+                  : c.tlsCert
+                    ? rich(t("remoteCert.ownCert"), { path: <span className="font-mono text-[11px]">{c.tlsCert}</span> })
+                    : t("remoteCert.autoCert", { provider: label })}
               </span>
             )}
           </div>
           {!editing && expires && <div className="text-muted-foreground">{t("remoteCert.expires", { date: new Date(expires).toLocaleDateString() })}</div>}
         </div>
-        {configured && !editing && (
+        {/* A tailnet name only gets Tailscale's certificate: moving to a domain of one's own is Remove, then Connect */}
+        {configured && !editing && !c.tailscale && (
           <Button size="sm" variant="outline" className="shrink-0" onClick={() => setEditing(true)}>
             {t("remoteCert.change")}
           </Button>

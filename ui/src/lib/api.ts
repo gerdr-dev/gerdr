@@ -505,6 +505,10 @@ export const api = {
   remoteConnect: (relayURL: string, host: string, invite: string) => req("POST", "/api/remote/connect", { relayURL, host, invite }),
   /** Direct access instead of the relay (config.Remote.Direct): urlPort is the port in the address, 0 = the LAN port */
   remoteConnectDirect: (host: string, urlPort: number) => req("POST", "/api/remote/connect", { direct: true, host, urlPort }),
+  /** This machine's tailnet name, or why Tailscale can't be used (not installed / signed out / HTTPS certificates off) */
+  remoteTailscale: () => req<{ name?: string; problem?: string }>("GET", "/api/remote/tailscale"),
+  /** Direct access on the tailnet name with Tailscale's certificate: no domain, no DNS */
+  remoteConnectTailscale: () => req("POST", "/api/remote/connect", { tailscale: true }),
   remoteDisconnect: () => req<{ revoked: number; passkeys: number }>("POST", "/api/remote/disconnect", {}),
   remoteLogout: () => req("POST", "/api/remote/logout", {}),
   // 批准安卓 App 的登录（passkey 的退路，device flow：App 显示码，这边手输）
@@ -560,6 +564,8 @@ export type RemoteCert = {
   providers: DNSProvider[];
   accountURI: string;
   caaAuto: boolean;
+  /** the certificate comes from `tailscale cert` (the host is this machine's tailnet name) */
+  tailscale: boolean;
 };
 /** The host's A record against the relay's IP (remote.HostRecord). auto: the DNS provider can write it. */
 export type HostRecord = { want: string; current: string[] | null; missing: boolean; auto: boolean };

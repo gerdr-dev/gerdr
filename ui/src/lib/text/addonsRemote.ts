@@ -181,6 +181,7 @@ export const zh = {
   // RemoteCert
   "remoteCert.title": "证书",
   "remoteCert.change": "修改",
+  "remoteCert.tailscaleCert": "Tailscale 给的证书，它自己续期。换成自己的域名：先移除，再连接。",
   "remoteCert.ownCert": "用自己给的证书：{path}",
   "remoteCert.autoCert": "Gerdr 经 {provider} 的 DNS 自己去 Let's Encrypt 签，到期前自动续。",
   "remoteCert.expires": "现在这张 {date} 到期。",
@@ -260,6 +261,14 @@ export const zh = {
   "remoteConnect.connect": "连接",
   "remoteConnect.modeRelay": "云端中继（dialhome）",
   "remoteConnect.modeDirect": "直接访问（Tailscale / frp 等）",
+  "remoteConnect.modeTailscale": "Tailscale（不用域名）",
+  "remoteConnect.tailscaleIntro":
+    "用这台电脑在 tailnet 里的名字当地址，证书找 Tailscale 要：不用买域名、不用填 DNS 凭据、不用中继。手机装上 Tailscale、登同一个账号就能打开。",
+  "remoteConnect.tailscaleAddress": "手机上打开：",
+  "remoteConnect.tailscaleChecking": "正在看 Tailscale…",
+  "remoteConnect.tailscaleRecheck": "再看一次",
+  "remoteConnect.tailscaleIssuing": "正在找 Tailscale 要证书…",
+  "remoteConnect.tailscaleNote": "第一次要证书要几十秒。这个名字会出现在公开的证书透明日志里（Tailscale 的 HTTPS 证书都这样）。",
   "remoteConnect.directIntro":
     "不走中继：Gerdr 在 {port} 端口上用这个域名的证书对外，配对码 / Passkey 的规则和中继一样。手机怎么连到这台 Mac 由你自己的网络负责。",
   "remoteConnect.directGuide": "怎么配？",
@@ -483,6 +492,7 @@ export const en: Record<keyof typeof zh, string> = {
   // RemoteCert
   "remoteCert.title": "Certificate",
   "remoteCert.change": "Change",
+  "remoteCert.tailscaleCert": "From Tailscale, which renews it. To use a domain of your own: remove, then connect again.",
   "remoteCert.ownCert": "Using your own certificate: {path}",
   "remoteCert.autoCert": "Gerdr gets it from Let's Encrypt through {provider} DNS and renews it before it expires.",
   "remoteCert.expires": "The current one expires {date}.",
@@ -566,6 +576,15 @@ export const en: Record<keyof typeof zh, string> = {
   "remoteConnect.connect": "Connect",
   "remoteConnect.modeRelay": "Cloud relay (dialhome)",
   "remoteConnect.modeDirect": "Direct access (Tailscale / frp etc.)",
+  "remoteConnect.modeTailscale": "Tailscale (no domain)",
+  "remoteConnect.tailscaleIntro":
+    "Uses this computer's tailnet name as the address, with its certificate from Tailscale: no domain, no DNS credentials, no relay. Phones open it with Tailscale signed in to the same account.",
+  "remoteConnect.tailscaleAddress": "Open on your phone:",
+  "remoteConnect.tailscaleChecking": "Checking Tailscale…",
+  "remoteConnect.tailscaleRecheck": "Check again",
+  "remoteConnect.tailscaleIssuing": "Getting the certificate from Tailscale…",
+  "remoteConnect.tailscaleNote":
+    "The first certificate takes tens of seconds. The name shows up in public Certificate Transparency logs (true of every Tailscale HTTPS certificate).",
   "remoteConnect.directIntro":
     "No relay: Gerdr serves port {port} with this domain's certificate, under the same pairing-code / passkey rules as the relay. How phones reach this Mac is up to your own network.",
   "remoteConnect.directGuide": "How to set it up",

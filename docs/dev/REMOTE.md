@@ -90,6 +90,35 @@ model it: Tailscale, frp, a router's port forward all look the same from here. `
   point. The connect form shows this Mac's Tailscale address as a hint.
 - Connecting directly drops a relay address left in remote.json; removing clears `direct` / `urlPort`.
 
+## Tailscale: direct access without a domain
+
+`gerdr remote direct --tailscale`, or "Tailscale (no domain)" first in the connect form when this machine has a
+ready tailnet (`GET /api/remote/tailscale`). The fallback for people who don't want to buy a domain and hand over
+DNS credentials: the host is this machine's tailnet name (`<machine>.<tailnet>.ts.net`, MagicDNS resolves it to
+the 100.x address on the phone) and the certificate comes from tailscaled (`remote.json` `tailscale: true`,
+`internal/tailscale`). The rest is direct access unchanged: the LAN port, `https://<name>:7878`.
+
+- **The CLI, not tailscale.com's LocalAPI client**: the CLI already finds the daemon on each platform (the Mac
+  GUI app's LocalAPI sits behind a port + token), and the module is a big dependency for two calls. Looked up on
+  the login PATH, then `/Applications/Tailscale.app/Contents/MacOS/Tailscale` (the GUI binary is the CLI when given
+  arguments), Homebrew, Program Files.
+- **`--cert-file - --key-file -`**: the Mac App Store build's CLI is sandboxed and writes files into its container,
+  not where it's told. Both on stdout come out as the chain then the key; `tailscale.split` separates them.
+- **Renewal is tailscaled's**: it caches the cert and renews it; we ask again every 12 h and rewrite the files only
+  when the bytes changed (the TLS side reloads on mtime; key first, cert last).
+- **Trust**: Tailscale (its DNS for the ACME challenge) could get a certificate for the name, which the CAA rule
+  above prevents for a domain of one's own. Acceptable for the fallback: the traffic already rides Tailscale's
+  coordination. No CAA / A-record checks are shown for it.
+- HTTPS certificates are off per tailnet by default; `Detect` reports that (empty `CertDomains`) with the admin
+  page link, and only the tailnet admin can turn it on. The name goes into public CT logs.
+- Android's in-App passkeys need 443 (`assetlinks.json`), so the App uses the browser approval here, as for any
+  direct address with a port.
+- Remove (`Disconnect`) clears `tailscale` along with the host: the source only fits that name. Switching the
+  certificate to a DNS provider or files clears it too; `SaveCert` with `tailscale` refuses a host that isn't the
+  tailnet name.
+- Not verified end to end on a real tailnet yet (no Tailscale on the dev Mac): the stdout format and the status
+  fields are from tailscale's cmd/tailscale/cli/cert.go and `status --json`.
+
 ## 两条路两套凭据（和 herdr-web 最大的不同）
 
 herdr-web 只有一套设备凭据；Gerdr 本来就有一把令牌（`~/.gerdr/token`），mac App、`gerdr session`、agent 自己都靠它，

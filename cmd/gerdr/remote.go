@@ -21,6 +21,7 @@ import (
 	"github.com/gerdr-dev/gerdr/internal/lan"
 	"github.com/gerdr-dev/gerdr/internal/qr"
 	"github.com/gerdr-dev/gerdr/internal/remote"
+	"github.com/gerdr-dev/gerdr/internal/tailscale"
 )
 
 // remoteCmd：远程访问（云端中继 + 配对码 + passkey）。设计见 docs/dev/REMOTE.md。
@@ -336,10 +337,10 @@ func (o *certOpts) bind(c *cobra.Command) {
 // apply writes the flags into f and checks the provider name (before an invite code gets spent).
 func (o *certOpts) apply(f *config.RemoteFile) error {
 	if o.dns != "" {
-		f.ACMEDNS, f.TLSCert, f.TLSKey = o.dns, "", ""
+		f.ACMEDNS, f.TLSCert, f.TLSKey, f.Tailscale = o.dns, "", "", false
 	}
 	if o.cert != "" || o.key != "" {
-		f.TLSCert, f.TLSKey, f.ACMEDNS = o.cert, o.key, ""
+		f.TLSCert, f.TLSKey, f.ACMEDNS, f.Tailscale = o.cert, o.key, "", false
 	}
 	if o.email != "" {
 		f.ACMEEmail = o.email
@@ -436,11 +437,15 @@ func joinCmd() *cobra.Command {
 func directCmd() *cobra.Command {
 	var o certOpts
 	var urlPort int
+	var ts bool
 	c := &cobra.Command{
-		Use: i18n.S("direct <主机名>", "direct <host>"),
+		Use: i18n.S("direct <主机名> | direct --tailscale", "direct <host> | direct --tailscale"),
 		Short: i18n.S("直接访问，不走中继：Gerdr 在局域网直连口上对外，手机怎么连过来（Tailscale / frp / 端口转发）是你自己的网络",
 			"Direct access, no relay: Gerdr serves on the LAN port, and how phones get there (Tailscale / frp / a port forward) is your own network"),
 		Long: i18n.S("把配置写进 <数据目录>/remote/remote.json（去掉中继地址）；Gerdr 在跑就当场生效。\n"+
+			"没有域名？--tailscale 用这台机器在 tailnet 里的名字（<机器名>.<tailnet>.ts.net），证书找 Tailscale 要：\n"+
+			"不用 DNS 服务商、不用 A 记录。手机要装 Tailscale、登同一个 tailnet；tailnet 要打开 HTTPS Certificates\n"+
+			"（login.tailscale.com/admin/dns）。这个名字会出现在公开的证书日志里。\n\n"+
 			"Gerdr 在局域网直连口（默认 7878，remote.json 的 lanPort）上用这个域名的证书对外，规则和中继那条路一样（配对码 / passkey）。\n"+
 			"证书照样走 DNS-01，不需要公网连得到这台 Mac；参数和 join 一样。\n\n"+
 			"手机打开的地址：\n"+
@@ -450,6 +455,9 @@ func directCmd() *cobra.Command {
 			"加上 transport.proxyProtocolVersion = \"v2\" 的话，Gerdr 能看到真实来源 IP（按 IP 的限速才分得开人）。\n\n"+
 			"  gerdr remote direct gerdr.example.com --dns cloudflare --env CLOUDFLARE_DNS_API_TOKEN=…",
 			"Writes the config to <data-dir>/remote/remote.json (dropping any relay address); takes effect at once if Gerdr is running.\n"+
+				"No domain? --tailscale uses this machine's tailnet name (<machine>.<tailnet>.ts.net) and gets its certificate from\n"+
+				"Tailscale: no DNS provider, no A record. Phones need Tailscale on the same tailnet; the tailnet needs HTTPS\n"+
+				"Certificates turned on (login.tailscale.com/admin/dns). The name ends up in public certificate logs.\n\n"+
 				"Gerdr serves the LAN port (default 7878, lanPort in remote.json) with this domain's certificate, under the same rules as the relay path (pairing codes / passkeys).\n"+
 				"The certificate still comes through DNS-01, so this Mac needn't be reachable from the internet; flags are the same as join.\n\n"+
 				"The address phones open:\n"+
@@ -457,11 +465,30 @@ func directCmd() *cobra.Command {
 				"  frp / a router's port forward facing the internet on 443: the A record points at that public machine, --url-port 443, the address is https://<host>\n"+
 				"frp: type = \"https\" or \"tcp\" passed through to 127.0.0.1:7878 (not the https2http plugin);\n"+
 				"with transport.proxyProtocolVersion = \"v2\" Gerdr sees the real client IP (so per-IP rate limits tell people apart).\n\n"+
-				"  gerdr remote direct gerdr.example.com --dns cloudflare --env CLOUDFLARE_DNS_API_TOKEN=…"),
-		Args: cobra.ExactArgs(1),
+				"  gerdr remote direct gerdr.example.com --dns cloudflare --env CLOUDFLARE_DNS_API_TOKEN=…\n"+
+				"  gerdr remote direct --tailscale"),
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			env := config.FromEnv()
-			host, err := relay.CleanHost(args[0])
+			var raw string
+			switch {
+			case ts && len(args) > 0:
+				return errors.New(i18n.S("--tailscale 不要主机名：用的是这台机器在 tailnet 里的名字", "--tailscale takes no host: it uses this machine's tailnet name"))
+			case ts:
+				in := tailscale.Detect(context.Background())
+				if in.Problem != "" {
+					return errors.New(in.Problem)
+				}
+				raw = in.Name
+				if o.dns != "" || o.cert != "" || o.key != "" {
+					return errors.New(i18n.S("--tailscale 的证书来自 Tailscale，不要再给 --dns / --cert", "with --tailscale the certificate comes from Tailscale: drop --dns / --cert"))
+				}
+			case len(args) == 0:
+				return errors.New(i18n.S("给一个主机名，或者用 --tailscale", "give a host name, or use --tailscale"))
+			default:
+				raw = args[0]
+			}
+			host, err := relay.CleanHost(raw)
 			if err != nil {
 				return err
 			}
@@ -479,6 +506,9 @@ func directCmd() *cobra.Command {
 				return errors.New(i18n.S("remote.json 里 lanPort 是 0：直接访问走的就是局域网直连口，先把它开起来", "lanPort is 0 in remote.json, and direct access goes through the LAN port: turn it on first"))
 			}
 			f.RelayURL, f.Host, f.Direct, f.URLPort = "", host, true, urlPort
+			if ts {
+				f.ACMEDNS, f.TLSCert, f.TLSKey, f.Env, f.Tailscale = "", "", "", nil, true
+			}
 			if err := o.apply(&f); err != nil {
 				return err
 			}
@@ -488,13 +518,16 @@ func directCmd() *cobra.Command {
 			r, _ := config.LoadRemote(env.Dir)
 			fmt.Printf(i18n.S("\n  ✓ 配好了：https://%s（直接访问，Gerdr 在 %d 端口上听）\n  配置写在 %s/remote.json，%s。\n", "\n  ✓ Set up: https://%s (direct access, Gerdr listens on port %d)\n  Config written to %s/remote.json; %s.\n"),
 				r.PublicHost(), r.LanPort, config.RemoteDir(env.Dir), reloadRunning())
-			if ts := lan.TailnetAddrs(); len(ts) > 0 {
+			if ts {
+				fmt.Println(i18n.S("  证书找 Tailscale 要（第一次要几十秒）；手机装上 Tailscale、登同一个 tailnet 就能打开。", "  The certificate comes from Tailscale (the first one takes tens of seconds); phones open it with Tailscale on the same tailnet."))
+			} else if ts := lan.TailnetAddrs(); len(ts) > 0 {
 				fmt.Printf(i18n.S("  这台 Mac 的 Tailscale 地址：%s（用 Tailscale 的话 A 记录指向它）\n", "  This Mac's Tailscale address: %s (with Tailscale, point the A record at it)\n"), strings.Join(ts, " / "))
 			}
 			fmt.Println()
 			return nil
 		},
 	}
+	c.Flags().BoolVar(&ts, "tailscale", false, i18n.S("不用自己的域名：用这台机器在 tailnet 里的名字，证书找 Tailscale 要", "no domain of your own: use this machine's tailnet name, with its certificate from Tailscale"))
 	c.Flags().IntVar(&urlPort, "url-port", 0, i18n.S("手机打开的地址里的端口：不给 = 局域网直连口（Tailscale）；443 = 不带端口（frp / 端口转发对外是 443）", "port in the address phones open: none = the LAN port (Tailscale); 443 = no port (frp / a port forward facing the internet on 443)"))
 	o.bind(c)
 	return c

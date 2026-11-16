@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { t } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
@@ -29,7 +29,26 @@ export function RemoteConnect({
   lanPort?: number;
   onDone: () => void;
 }) {
-  const [mode, setMode] = useState<"relay" | "direct">("relay");
+  const [mode, setMode] = useState<"tailscale" | "relay" | "direct">("relay");
+  // Tailscale on this machine: its tailnet name, or why it can't be used. Offered first when it's ready, since it
+  // needs no domain, DNS credentials or relay (remote.Service.ConnectTailscale).
+  const [ts, setTs] = useState<{ name?: string; problem?: string } | null>(null);
+  const [checking, setChecking] = useState(false);
+  const detect = async (first: boolean) => {
+    setChecking(true);
+    try {
+      const r = await api.remoteTailscale();
+      setTs(r);
+      if (first && r.name && !r.problem) setMode("tailscale");
+    } catch (e) {
+      setTs({ problem: (e as Error).message });
+    } finally {
+      setChecking(false);
+    }
+  };
+  useEffect(() => {
+    detect(true);
+  }, []);
   const [urlPort, setUrlPort] = useState("");
   const lp = lanPort || 7878;
   const [relay, setRelay] = useState(relayURL ?? "");
@@ -43,7 +62,8 @@ export function RemoteConnect({
     setErr("");
     setBusy(true);
     try {
-      if (mode === "direct") await api.remoteConnectDirect(host.trim(), Number(urlPort) || 0);
+      if (mode === "tailscale") await api.remoteConnectTailscale();
+      else if (mode === "direct") await api.remoteConnectDirect(host.trim(), Number(urlPort) || 0);
       else await api.remoteConnect(relay.trim(), host.trim(), invite.trim());
       onDone();
     } catch (e) {
@@ -57,7 +77,10 @@ export function RemoteConnect({
     <div className="space-y-1.5">
       <div className="text-[13px] font-medium">{t("remoteConnect.title")}</div>
       <div className="space-y-3 rounded-md border p-3">
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant={mode === "tailscale" ? "default" : "outline"} onClick={() => setMode("tailscale")}>
+            {t("remoteConnect.modeTailscale")}
+          </Button>
           <Button size="sm" variant={mode === "relay" ? "default" : "outline"} onClick={() => setMode("relay")}>
             {t("remoteConnect.modeRelay")}
           </Button>
@@ -65,7 +88,27 @@ export function RemoteConnect({
             {t("remoteConnect.modeDirect")}
           </Button>
         </div>
-        {mode === "direct" ? (
+        {mode === "tailscale" ? (
+          <>
+            <div className="text-[12px] text-muted-foreground">{t("remoteConnect.tailscaleIntro")}</div>
+            {ts?.name && !ts.problem && (
+              <div className="text-[12px]">
+                {t("remoteConnect.tailscaleAddress")} <span className="font-mono text-brand">{`https://${ts.name}:${lp}`}</span>
+              </div>
+            )}
+            {(!ts || ts.problem) && (
+              <div className="flex items-start justify-between gap-3 text-[12px]">
+                <div className={ts ? "text-warn" : "text-muted-foreground"}>{ts ? ts.problem : t("remoteConnect.tailscaleChecking")}</div>
+                {ts && (
+                  <Button size="sm" variant="outline" className="shrink-0" disabled={checking} onClick={() => detect(false)}>
+                    {checking ? t("remoteConnect.tailscaleChecking") : t("remoteConnect.tailscaleRecheck")}
+                  </Button>
+                )}
+              </div>
+            )}
+            <div className="text-[12px] text-muted-foreground">{t("remoteConnect.tailscaleNote")}</div>
+          </>
+        ) : mode === "direct" ? (
           <>
             <div className="text-[12px] text-muted-foreground">
               {t("remoteConnect.directIntro", { port: lp })}{" "}
@@ -128,8 +171,12 @@ export function RemoteConnect({
           </>
         )}
         {err && <div className="text-[12px] text-bad">{err}</div>}
-        <Button size="sm" disabled={busy || !host.trim() || (mode === "relay" && (!relay.trim() || !invite.trim()))} onClick={connect}>
-          {busy ? t("remoteConnect.connecting") : t("remoteConnect.connect")}
+        <Button
+          size="sm"
+          disabled={busy || (mode === "tailscale" ? !ts?.name || !!ts.problem : !host.trim() || (mode === "relay" && (!relay.trim() || !invite.trim())))}
+          onClick={connect}
+        >
+          {busy ? (mode === "tailscale" ? t("remoteConnect.tailscaleIssuing") : t("remoteConnect.connecting")) : t("remoteConnect.connect")}
         </Button>
       </div>
     </div>

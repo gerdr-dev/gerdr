@@ -314,7 +314,18 @@ No relay: Gerdr serves its LAN port (7878) with your domain's certificate, under
 rules. How the phone reaches this Mac is your own network; Gerdr doesn't care which one. A certificate is still
 needed (passkeys only work over HTTPS); DNS-01 gets one without this Mac being reachable from the internet.
 
-**With Tailscale** (nothing open to the internet at all):
+**With Tailscale and no domain** (the least to set up):
+
+1. Install Tailscale on the Mac and the phone, sign both into the same tailnet. In the Tailscale admin console's
+   [DNS page](https://login.tailscale.com/admin/dns), turn on *HTTPS Certificates* (MagicDNS too, it's on by default).
+2. Settings → Remote access → *Tailscale (no domain)* → Connect (or `gerdr remote direct --tailscale`). Gerdr uses
+   this Mac's tailnet name and gets its certificate from Tailscale, which renews it.
+3. On the phone, with Tailscale on, open `https://<machine>.<tailnet>.ts.net:7878` and pair as usual.
+
+The name appears in public Certificate Transparency logs, as every Tailscale HTTPS name does. To move to a domain of
+your own later, remove remote access and connect again (passkeys are bound to the name).
+
+**With Tailscale and your own domain** (nothing open to the internet at all):
 
 1. Install Tailscale on the Mac and the phone, sign both into the same tailnet.
 2. Settings → Remote access → *Direct access*: enter the domain, leave *Port in the address* empty, connect. Then

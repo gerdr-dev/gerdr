@@ -26,3 +26,21 @@ func TestRemoteWaysIn(t *testing.T) {
 		}
 	}
 }
+
+// remote.json `tailscale: true` is a certificate source of its own: no DNS provider or files needed.
+func TestRemoteTailscaleCert(t *testing.T) {
+	dir := t.TempDir()
+	if err := WriteRemoteFile(dir, RemoteFile{Host: "mac.tail1.ts.net", Direct: true, Tailscale: true}); err != nil {
+		t.Fatal(err)
+	}
+	r, err := LoadRemote(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !r.Tailscale || !r.Enabled() || r.TLSProblem() != "" {
+		t.Fatalf("tailscale source: %+v, problem %q", r, r.TLSProblem())
+	}
+	if (Remote{Host: "mac.tail1.ts.net", Direct: true, LanPort: 7878}).TLSProblem() == "" {
+		t.Fatal("without any source there should be a problem")
+	}
+}

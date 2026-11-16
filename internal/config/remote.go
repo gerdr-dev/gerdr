@@ -30,6 +30,9 @@ type Remote struct {
 	ACMEStaging bool   // GERDR_ACME_STAGING=1：用 Let's Encrypt 的测试环境（调试时一定要开，正式环境一周 5 张）
 	TLSCert     string // GERDR_TLS_CERT
 	TLSKey      string // GERDR_TLS_KEY
+	// Tailscale: the certificate comes from the Tailscale client on this machine (`tailscale cert`), for its tailnet
+	// name (Host is that name). The no-domain way in, with direct access. remote.json `tailscale`.
+	Tailscale bool
 	// DeviceTTL：设备凭据的滑动过期，GERDR_DEVICE_TTL_DAYS，默认 90，0 = 永不过期。
 	DeviceTTL time.Duration
 	// ReauthAfter：注册过 passkey 之后多久要再验一次，GERDR_REAUTH_HOURS，默认 24，0 = 不要求。
@@ -82,6 +85,7 @@ type RemoteFile struct {
 	ACMEStaging   bool              `json:"acmeStaging,omitempty"`
 	TLSCert       string            `json:"tlsCert,omitempty"`
 	TLSKey        string            `json:"tlsKey,omitempty"`
+	Tailscale     bool              `json:"tailscale,omitempty"`
 	DeviceTTLDays *int              `json:"deviceTTLDays,omitempty"`
 	ReauthHours   *int              `json:"reauthHours,omitempty"`
 	LanPort       *int              `json:"lanPort,omitempty"`
@@ -173,7 +177,7 @@ func LoadRemote(dir string) (Remote, error) {
 	if p := num("GERDR_LAN_PORT", f.LanPort, DefaultLanPort); p > 0 && p < 65536 {
 		r.LanPort = p
 	}
-	r.Direct = f.Direct
+	r.Direct, r.Tailscale = f.Direct, f.Tailscale
 	if f.URLPort > 0 && f.URLPort < 65536 {
 		r.URLPort = f.URLPort
 	}
@@ -223,7 +227,7 @@ func (r Remote) PublicHost() string {
 // TLSProblem：开了远程却没给证书来源。**远程那条路的 TLS 必须在本进程终止**（中继只转密文），
 // 而且得是浏览器认的真证书 —— 自签的话手机上每次都是警告页，passkey 也按不动。
 func (r Remote) TLSProblem() string {
-	if r.ACMEDNS == "" && (r.TLSCert == "" || r.TLSKey == "") {
+	if !r.Tailscale && r.ACMEDNS == "" && (r.TLSCert == "" || r.TLSKey == "") {
 		return fmt.Sprintf(i18n.S("还差一张 %s 的证书：到「设置 → 远程访问 → 证书」选这个域名的 DNS 服务商（Cloudflare / 阿里云 / 腾讯云…）、"+
 			"填它的 API 凭据，Gerdr 会自己去 Let's Encrypt 签；已经有证书的话在同一处指定证书和私钥两个文件",
 			"A certificate for %s is still needed: in Settings → Remote access → Certificate, pick the domain's DNS provider (Cloudflare, Alibaba Cloud, Tencent Cloud…) "+

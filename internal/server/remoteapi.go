@@ -17,6 +17,7 @@ import (
 	"github.com/gerdr-dev/gerdr/internal/auth"
 	"github.com/gerdr-dev/gerdr/internal/i18n"
 	"github.com/gerdr-dev/gerdr/internal/remote"
+	"github.com/gerdr-dev/gerdr/internal/tailscale"
 )
 
 // 远程访问那条路（云端中继进来的请求）。设计见 docs/dev/REMOTE.md，要点三条：
@@ -83,7 +84,7 @@ func (s *Server) remoteGuard(w http.ResponseWriter, r *http.Request, next http.H
 	p := r.URL.Path
 	// 本机专用的口：令牌换 cookie、出配对码、解熔断。远程连 404 都不给区分。
 	// 证书配置里有 DNS 服务商的密钥，也只在本机改；连接 / 移除远程访问同理（远程移除 = 把自己锁在门外）。
-	if p == "/auth" || p == "/api/auth/code" || p == "/api/remote/pair-code" || p == "/api/remote/unlock" || p == "/api/remote/cert" || p == "/api/remote/cert/caa" || p == "/api/remote/dns/host" ||
+	if p == "/auth" || p == "/api/auth/code" || p == "/api/remote/pair-code" || p == "/api/remote/unlock" || p == "/api/remote/cert" || p == "/api/remote/cert/caa" || p == "/api/remote/dns/host" || p == "/api/remote/tailscale" ||
 		p == "/api/remote/connect" || p == "/api/remote/disconnect" || p == "/api/remote/reload" || p == "/api/service" || p == "/api/restart" || p == "/api/awake/lid-setup" || p == "/api/screen/request-access" ||
 		p == "/api/remote/stepup/pending" || strings.HasPrefix(p, "/api/remote/stepup/approve/") {
 		httpError(w, http.StatusForbidden, i18n.S("这个操作只能在跑 Gerdr 的那台机器上做", "This can only be done on the computer running Gerdr"))
@@ -315,6 +316,11 @@ func (s *Server) remoteRoutes(mux *http.ServeMux) {
 	}
 	mux.HandleFunc("GET /api/remote/dns/host", hostRecord(false))
 	mux.HandleFunc("POST /api/remote/dns/host", hostRecord(true))
+	// Whether this machine can use Tailscale for remote access (its tailnet name, or why not): the connect form
+	// offers it first when it can. Local only like connect itself.
+	mux.HandleFunc("GET /api/remote/tailscale", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, tailscale.Detect(r.Context()))
+	})
 	// 连接 / 移除 / 重读配置：都只在本机（remoteGuard 拦了远程那一侧），改完当场生效、不用重启。
 	mux.HandleFunc("POST /api/remote/connect", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
@@ -322,6 +328,8 @@ func (s *Server) remoteRoutes(mux *http.ServeMux) {
 			// Direct: direct access on the LAN port instead of the relay; URLPort is the port in the address
 			Direct  bool
 			URLPort int
+			// Tailscale: direct access on this machine's tailnet name with Tailscale's certificate (Host is ignored)
+			Tailscale bool
 		}
 		if err := decode(r, &in); err != nil {
 			httpError(w, http.StatusBadRequest, err.Error())
@@ -332,6 +340,9 @@ func (s *Server) remoteRoutes(mux *http.ServeMux) {
 		connect := func() error { return s.Remote.Connect(ctx, in.RelayURL, in.Host, in.Invite) }
 		if in.Direct {
 			connect = func() error { return s.Remote.ConnectDirect(in.Host, in.URLPort) }
+		}
+		if in.Tailscale {
+			connect = func() error { _, err := s.Remote.ConnectTailscale(ctx); return err }
 		}
 		if err := connect(); err != nil {
 			httpError(w, http.StatusBadRequest, err.Error())

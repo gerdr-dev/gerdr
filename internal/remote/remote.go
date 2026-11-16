@@ -30,6 +30,7 @@ import (
 	"github.com/gerdr-dev/gerdr/internal/config"
 	"github.com/gerdr-dev/gerdr/internal/i18n"
 	"github.com/gerdr-dev/gerdr/internal/lan"
+	"github.com/gerdr-dev/gerdr/internal/tailscale"
 )
 
 type Service struct {
@@ -139,10 +140,11 @@ func (s *Service) Start(h http.Handler) {
 
 // SetCert：设置页改了证书来源。只换证书那几项（中继地址、主机名不动 —— 它们是 join 时定的，
 // passkey 的 RPID 也绑在主机名上），然后把远程那条路整条重来一遍，不用重启 gerdr。
-func (s *Service) SetCert(dns, email string, staging bool, certFile, keyFile string) {
+func (s *Service) SetCert(dns, email string, staging bool, certFile, keyFile string, ts bool) {
 	s.stop()
 	s.mu.Lock()
 	s.cfg.ACMEDNS, s.cfg.ACMEEmail, s.cfg.ACMEStaging, s.cfg.TLSCert, s.cfg.TLSKey = dns, email, staging, certFile, keyFile
+	s.cfg.Tailscale = ts
 	s.err = ""
 	s.mu.Unlock()
 	s.run()
@@ -163,7 +165,16 @@ func (s *Service) run() {
 	}
 	go func() {
 		certFile, keyFile := cfg.TLSCert, cfg.TLSKey
-		if cfg.ACMEDNS != "" {
+		if cfg.Tailscale {
+			certFile, keyFile = s.tailscaleFiles(cfg.Host)
+			if _, err := tailscale.Cert(ctx, cfg.Host, certFile, keyFile); err != nil {
+				if ctx.Err() == nil {
+					s.setErr(acme.IssueFailed + i18n.S("：", ": ") + err.Error())
+				}
+				return
+			}
+			go s.tailscaleRenewLoop(ctx, cfg.Host)
+		} else if cfg.ACMEDNS != "" {
 			am := acme.NewManager(acme.Config{
 				Dir: s.Dir, Domains: []string{cfg.Host}, Email: cfg.ACMEEmail,
 				DNS: cfg.ACMEDNS, Staging: cfg.ACMEStaging,
@@ -269,6 +280,32 @@ func (s *Service) renewLoop(ctx context.Context, am *acme.Manager) {
 			s.alert(i18n.S("证书续期失败（先看 DNS 凭据还在不在）：", "Certificate renewal failed (check the DNS credentials are still valid first): ") + a.Err)
 		} else if a.Renewed {
 			s.log.Info("remote: certificate renewed")
+		}
+	}
+}
+
+// tailscaleFiles: where the certificate tailscaled hands over is kept for the TLS side (cert reload goes by mtime).
+func (s *Service) tailscaleFiles(host string) (certFile, keyFile string) {
+	base := filepath.Join(s.Dir, "tailscale", host)
+	return base + ".crt", base + ".key"
+}
+
+// tailscaleRenewLoop asks tailscaled again twice a day: it renews the certificate itself and hands back the new
+// one, which Cert writes only when it changed.
+func (s *Service) tailscaleRenewLoop(ctx context.Context, host string) {
+	t := time.NewTicker(12 * time.Hour)
+	defer t.Stop()
+	certFile, keyFile := s.tailscaleFiles(host)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+		if changed, err := tailscale.Cert(ctx, host, certFile, keyFile); err != nil && ctx.Err() == nil {
+			s.alert(i18n.S("从 Tailscale 续证书失败（Tailscale 还开着、登录着吗）：", "Renewing the certificate from Tailscale failed (is Tailscale still running and signed in?): ") + err.Error())
+		} else if changed {
+			s.log.Info("remote: certificate renewed by tailscale")
 		}
 	}
 }
@@ -467,6 +504,21 @@ func (s *Service) Connect(ctx context.Context, relayURL, host, invite string) er
 // the way in, open to any peer; urlPort is the port in the address phones open (0 = the LAN port, 443 = none).
 // A relay address left in the file from before is dropped: the ways in are picked one at a time here.
 func (s *Service) ConnectDirect(host string, urlPort int) error {
+	return s.connectDirect(host, urlPort, false)
+}
+
+// ConnectTailscale is direct access with nothing to set up: the host is this machine's tailnet name and its
+// certificate comes from the Tailscale client (`tailscale cert`), so no domain, DNS credentials or A record.
+// Phones on the same tailnet open https://<name>:<LAN port>. docs/dev/REMOTE.md "Tailscale".
+func (s *Service) ConnectTailscale(ctx context.Context) (string, error) {
+	in := tailscale.Detect(ctx)
+	if in.Problem != "" {
+		return "", errors.New(in.Problem)
+	}
+	return in.Name, s.connectDirect(in.Name, 0, true)
+}
+
+func (s *Service) connectDirect(host string, urlPort int, ts bool) error {
 	if envLocked() {
 		return errEnvLocked
 	}
@@ -492,6 +544,9 @@ func (s *Service) ConnectDirect(host string, urlPort int) error {
 		s.Passkeys.DeleteAll() // bound to the old name, see Connect
 	}
 	f.RelayURL, f.Host, f.Direct, f.URLPort = "", host, true, urlPort
+	if ts {
+		f.Tailscale = true
+	}
 	if err := config.WriteRemoteFile(s.dataDir(), f); err != nil {
 		return err
 	}
@@ -512,7 +567,8 @@ func (s *Service) Disconnect() (devs, keys int, err error) {
 	if err != nil {
 		return 0, 0, err
 	}
-	f.Host, f.Direct, f.URLPort = "", false, 0
+	// The Tailscale certificate source goes too: it only fits the tailnet name being removed
+	f.Host, f.Direct, f.URLPort, f.Tailscale = "", false, 0, false
 	if err := config.WriteRemoteFile(s.dataDir(), f); err != nil {
 		return 0, 0, err
 	}
@@ -558,6 +614,8 @@ type CertConfig struct {
 	AccountURI string `json:"accountURI"`
 	// CAAAuto: the provider can write the CAA record itself (AddCAA), so the page offers a button.
 	CAAAuto bool `json:"caaAuto"`
+	// Tailscale: the certificate comes from `tailscale cert` (the host is this machine's tailnet name).
+	Tailscale bool `json:"tailscale"`
 }
 
 func (s *Service) dataDir() string { return filepath.Dir(s.Dir) }
@@ -568,7 +626,7 @@ func (s *Service) CertConfig() (CertConfig, error) {
 		return CertConfig{}, err
 	}
 	s.mu.Lock()
-	c := CertConfig{DNS: s.cfg.ACMEDNS, Email: s.cfg.ACMEEmail, Staging: s.cfg.ACMEStaging, TLSCert: s.cfg.TLSCert, TLSKey: s.cfg.TLSKey}
+	c := CertConfig{DNS: s.cfg.ACMEDNS, Email: s.cfg.ACMEEmail, Staging: s.cfg.ACMEStaging, TLSCert: s.cfg.TLSCert, TLSKey: s.cfg.TLSKey, Tailscale: s.cfg.Tailscale}
 	s.mu.Unlock()
 	c.Set = []string{}
 	if p := acme.FindProvider(c.DNS); p != nil {
@@ -653,6 +711,8 @@ type CertInput struct {
 	Env     map[string]string `json:"env"`
 	TLSCert string            `json:"tlsCert"`
 	TLSKey  string            `json:"tlsKey"`
+	// Tailscale: get it from `tailscale cert`; only for a host that is this machine's tailnet name.
+	Tailscale bool `json:"tailscale"`
 }
 
 // SaveCert 写进 remote.json、补进进程环境，然后把远程那条路重来一遍。
@@ -671,6 +731,15 @@ func (s *Service) SaveCert(in CertInput) error {
 	}
 	in.DNS = strings.TrimSpace(in.DNS)
 	switch {
+	case in.Tailscale:
+		ti := tailscale.Detect(context.Background())
+		if ti.Problem != "" {
+			return errors.New(ti.Problem)
+		}
+		if host := s.Config().Host; ti.Name != host {
+			return fmt.Errorf(i18n.S("Tailscale 只给这台机器在 tailnet 里的名字（%s）签证书，这里的域名是 %s：先移除，再用 Tailscale 连接", "Tailscale only issues certificates for this machine's tailnet name (%s), and the host here is %s: remove it, then connect with Tailscale"), ti.Name, host)
+		}
+		f.ACMEDNS, f.TLSCert, f.TLSKey, f.Env, f.Tailscale = "", "", "", nil, true
 	case in.DNS != "":
 		p := acme.FindProvider(in.DNS)
 		if p == nil {
@@ -691,12 +760,12 @@ func (s *Service) SaveCert(in CertInput) error {
 				delete(f.Env, k)
 			}
 		}
-		f.ACMEDNS, f.TLSCert, f.TLSKey = in.DNS, "", ""
+		f.ACMEDNS, f.TLSCert, f.TLSKey, f.Tailscale = in.DNS, "", "", false
 	case in.TLSCert != "" && in.TLSKey != "":
 		if _, err := loadCert(in.TLSCert, in.TLSKey); err != nil {
 			return fmt.Errorf(i18n.S("证书文件读不了：%w", "can't read the certificate files: %w"), err)
 		}
-		f.ACMEDNS, f.TLSCert, f.TLSKey, f.Env = "", in.TLSCert, in.TLSKey, nil
+		f.ACMEDNS, f.TLSCert, f.TLSKey, f.Env, f.Tailscale = "", in.TLSCert, in.TLSKey, nil, false
 	default:
 		return errors.New(i18n.S("选一家 DNS 服务商，或者给证书和私钥两个文件", "pick a DNS provider, or give both a certificate and a private key file"))
 	}
@@ -708,6 +777,6 @@ func (s *Service) SaveCert(in CertInput) error {
 	for k, v := range f.Env {
 		_ = os.Setenv("GERDR_"+k, v)
 	}
-	s.SetCert(f.ACMEDNS, f.ACMEEmail, f.ACMEStaging, f.TLSCert, f.TLSKey)
+	s.SetCert(f.ACMEDNS, f.ACMEEmail, f.ACMEStaging, f.TLSCert, f.TLSKey, f.Tailscale)
 	return nil
 }
