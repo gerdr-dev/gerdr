@@ -42,8 +42,8 @@ function PinnedPrompt({ msg, onClick }: { msg: GMessage; onClick: () => void }) 
 
 // How far below the top a row jumped to (a host's card, a prompt, a find match) is put: the pinned prompt above is
 // always up once the chat is scrolled off the top and covered the row's first line (a task's question card, user
-// report 2026-11-16). One line of the bar (~29px) and a little room.
-const PIN_ROOM = 36;
+// report 2026-11-16). About one line of the bar (36 left too big a gap, 2026-11-16).
+const PIN_ROOM = 28;
 
 // 每个 pane 的滚动位置（在不在底部、滚到哪）：列表被卸载再挂回来（tab 被挤出保留数、虚拟列表重建）时照它恢复。
 const scrollMem = new Map<string, { top: number; bottom: boolean }>();
