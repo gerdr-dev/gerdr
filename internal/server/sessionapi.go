@@ -394,12 +394,13 @@ func errPanelSessionNew(panel string) error {
 		panel)
 }
 
-// meta: `gerdr session tag` / `report-to`, ctx.sessions.tag. Tags: "" removes a key. ReportTo: "" stops reports;
-// left out (null) = unchanged.
+// meta: `gerdr session tag` / `report-to` / `mute`, ctx.sessions.tag. Tags: "" removes a key. ReportTo: "" stops
+// reports; ReportTo / Muted left out (null) = unchanged.
 func (s *Server) meta(r *http.Request, sess *hub.Session) (any, error) {
 	var b struct {
 		Tags     map[string]string `json:"tags"`
 		ReportTo *string           `json:"reportTo"`
+		Muted    *bool             `json:"muted"` // do not disturb (hub Record.Muted); left out = unchanged
 		From     string            `json:"from"` // the agent session asking
 	}
 	if err := decode(r, &b); err != nil {
@@ -412,6 +413,9 @@ func (s *Server) meta(r *http.Request, sess *hub.Session) (any, error) {
 		if err := sess.SetTags(b.Tags); err != nil {
 			return nil, err
 		}
+	}
+	if b.Muted != nil {
+		sess.SetMuted(*b.Muted)
 	}
 	if b.ReportTo != nil {
 		to := *b.ReportTo

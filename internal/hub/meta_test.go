@@ -83,3 +83,26 @@ func TestReportToRefusesLoops(t *testing.T) {
 		t.Errorf("no loop any more: %v", err)
 	}
 }
+
+// Do not disturb is kept on the record: it shows in the summary and survives a restart.
+func TestSetMuted(t *testing.T) {
+	dir := hubDir(t)
+	h := newHubWith(t, dir, "s1")
+	s, _ := h.Session("s1")
+	s.SetMuted(true)
+	if !s.Muted() || !s.Summary().Muted {
+		t.Fatal("muted: want on")
+	}
+	h2, err := New(Options{Dir: dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s2, _ := h2.Session("s1")
+	if !s2.Muted() {
+		t.Error("after a restart: want still muted")
+	}
+	s2.SetMuted(false)
+	if s2.Summary().Muted {
+		t.Error("--off: want not muted")
+	}
+}

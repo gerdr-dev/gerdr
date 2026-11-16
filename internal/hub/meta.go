@@ -84,6 +84,22 @@ func (s *Session) SetTags(change map[string]string) error {
 	return nil
 }
 
+// Muted: do not disturb is on for this conversation (Record.Muted).
+func (s *Session) Muted() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.rec.Muted
+}
+
+// SetMuted turns do-not-disturb for this conversation on or off (Record.Muted).
+func (s *Session) SetMuted(on bool) {
+	s.mu.Lock()
+	s.rec.Muted = on
+	s.mu.Unlock()
+	s.h.saveIndex()
+	s.h.broadcastSession(s)
+}
+
 // SetReportTo points this session's reports at another session ("" stops them).
 func (s *Session) SetReportTo(to string) error {
 	if to != "" {

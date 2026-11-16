@@ -139,6 +139,7 @@ type sessInfo struct {
 	} `json:"tasks"`
 	Tags         map[string]string `json:"tags"`
 	ReportTo     string            `json:"reportTo"`
+	Muted        bool              `json:"muted"`
 	WaitingSince int64             `json:"waitingSince"`
 	Turn         *struct {
 		StartedAt int64 `json:"startedAt"`
@@ -181,6 +182,9 @@ func (s sessInfo) view(self string) map[string]any {
 	}
 	if s.ReportTo != "" {
 		m["reportTo"] = s.ReportTo
+	}
+	if s.Muted {
+		m["muted"] = true // do not disturb: nothing about it notifies the person (gerdr session mute)
 	}
 	if s.Host != nil {
 		m["host"] = s.Host.ID // runs on another computer (gerdr host list); its paths are that computer's
@@ -792,6 +796,28 @@ and hand it a task, wait for it to finish, read its reply. Refer to a session by
 			return nil
 		},
 	})
+
+	var mOff bool
+	muteCmd := &cobra.Command{
+		Use:   i18n.S("mute <会话>", "mute <session>"),
+		Short: i18n.S("这个会话免打扰：它跑完、等人、出错都不发通知（界面、手机），只标未读；--off 取消。输出改完的会话", "Do not disturb for one session: no notifications when it finishes, waits or fails (UI, phone), it only turns unread; --off undoes it. Prints the session"),
+		Args:  cobra.ExactArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			c := client()
+			s, err := c.resolve(args[0])
+			if err != nil {
+				return err
+			}
+			var out sessInfo
+			if err := c.do("POST", "/api/sessions/"+s.ID+"/meta", map[string]any{"muted": !mOff, "from": c.selfID()}, &out); err != nil {
+				return err
+			}
+			printJSON(out.view(c.selfID()))
+			return nil
+		},
+	}
+	muteCmd.Flags().BoolVar(&mOff, "off", false, i18n.S("取消免打扰", "turn do not disturb off"))
+	cmd.AddCommand(muteCmd)
 
 	cmd.AddCommand(&cobra.Command{
 		Use:   i18n.S("fetch <会话> <路径> [存到哪]", "fetch <session> <path> [dest]"),

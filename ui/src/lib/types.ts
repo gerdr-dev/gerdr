@@ -83,6 +83,8 @@ export type SessionSummary = ChatSession & {
   pending: number;
   /** The last turn ended with nothing to read (only a /clear): not announced as done (hub Summary.Quiet) */
   quiet?: boolean;
+  /** Do not disturb for this one conversation (hub Record.Muted): no notifications about it, it still turns unread */
+  muted?: boolean;
   lastSeq: number;
   tasks?: AgentTask[];
   turn?: { startedAt: number; outputTokens: number }; // 在跑的这一轮

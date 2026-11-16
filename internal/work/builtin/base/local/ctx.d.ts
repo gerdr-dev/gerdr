@@ -156,6 +156,12 @@ interface Ctx {
        */
       systemFile?: string;
       /**
+       * Do not disturb from the start: its turns ending, its questions and inbox items about it notify nobody (system
+       * notifications, the phone App); it still turns unread. For a conversation the person reads when they choose to
+       * (an always-on secretary), not one whose stops they must hear about. Change it later with `mute`.
+       */
+      muted?: boolean;
+      /**
        * A conversation this new one carries on (any agent, the same one too): its chat is copied above a notice, and
        * the first message brings it along to the agent, hidden in the chat. For replacing a conversation that broke or
        * must restart (another agent or model) while the person keeps reading one conversation. It must not be running.
@@ -232,6 +238,8 @@ interface Ctx {
     close(id: string): Promise<void>;
     /** Changes its tags: a value sets that key, `""` removes it, keys not named stay. */
     tag(id: string, tags: Record<string, string>): Session;
+    /** Do not disturb for that conversation (see start's `muted`); `false` turns it off again. */
+    mute(id: string, on?: boolean): Session;
   };
 
   /** The Code side's workspaces (not this panel: that's `ctx.workspace`). */
@@ -503,6 +511,8 @@ interface Session {
   tasks?: SessionTask[];
   /** The session it reports to, if any. */
   reportTo?: string;
+  /** Do not disturb is on for it (sessions.start's `muted`, sessions.mute). */
+  muted?: boolean;
   /**
    * The session that started it (an agent's `gerdr session new`, or a function that agent ran). Follow `parent` up and
    * look for sessions whose parent is this one to draw who handed what to whom, any number of levels deep.

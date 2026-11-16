@@ -40,6 +40,8 @@ type Host interface {
 	Close(ctx context.Context, id string) error
 	// Tag changes a conversation's tags ("" removes a key).
 	Tag(id string, tags map[string]string) (map[string]any, error)
+	// Mute turns do not disturb on or off for a conversation: nothing about it notifies the person (hub Record.Muted).
+	Mute(id string, on bool) (map[string]any, error)
 	// SessionsChanged waits until one of ids moves — something new in its log (a message, the agent's text as it
 	// streams, a tool call) or its status — and returns those that moved; none when timeout passes first. Pushed by the
 	// hub, the way the chat follows a conversation: a panel follows conversations without polling them.
@@ -116,6 +118,10 @@ type StartOptions struct {
 	// ContinueFrom: a conversation (of this panel's) this new one carries on: its chat is copied above and the first
 	// message brings it along to the agent (hub handoff.go), so the person reads one conversation across the switch.
 	ContinueFrom string `json:"continueFrom,omitempty"`
+	// Muted: do not disturb from the start (hub Record.Muted): its turns ending, its questions and panel items about
+	// it notify nobody; it still turns unread. For a conversation the person reads when they choose to (an always-on
+	// secretary), not one whose stops they must hear about.
+	Muted bool `json:"muted,omitempty"`
 	// Fold / Show: the first message (prompt), as SendOptions'.
 	Fold string `json:"fold,omitempty"`
 	Show bool   `json:"show,omitempty"`
@@ -312,6 +318,21 @@ func (r *runner) sessionsObject() map[string]any {
 				return r.rejected(err)
 			}
 			return r.resolved(nil)
+		},
+		// ctx.sessions.mute(id, on = true) → session: do not disturb for that conversation, or off again with false
+		"mute": func(id string, on any) map[string]any {
+			if h == nil {
+				r.throw(errNoHost)
+			}
+			v := true // left out: on
+			if b, ok := on.(bool); ok {
+				v = b
+			}
+			s, err := h.Mute(id, v)
+			if err != nil {
+				r.throw(err)
+			}
+			return s
 		},
 		// ctx.sessions.tag(id, { key: "value", gone: "" }) → session
 		"tag": func(id string, arg jsValue) map[string]any {

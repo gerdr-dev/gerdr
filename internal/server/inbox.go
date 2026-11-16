@@ -124,12 +124,12 @@ func (s *Server) SetInbox(panel string, items []work.InboxItem) error {
 }
 
 // noticePanelItem: a new panel item as a "waiting" notice for the phone App, like a session that turned to waiting.
-// Not when the conversation it's about is in a muted (do-not-disturb) group.
+// Not when the conversation it's about is on do not disturb (its own, or its group's).
 func (s *Server) noticePanelItem(it work.InboxItem) {
 	if s.Hub == nil {
 		return // no sessions to watch, no App to tell (tests)
 	}
-	if it.Session != "" && s.Layout != nil && MutedSessions(s.Layout.Get())[it.Session] {
+	if s.quietSession(it.Session, nil) {
 		return
 	}
 	w := s.watch()

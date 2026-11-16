@@ -789,6 +789,8 @@ type CreateOptions struct {
 	ArtifactsDir string `json:"artifactsDir,omitempty"`
 	// Parent: see Record.Parent.
 	Parent string `json:"parent,omitempty"`
+	// Muted: see Record.Muted.
+	Muted bool `json:"muted,omitempty"`
 	// FromCLI：`gerdr session new` 开的（agent 自己跑的命令）。这时默认模式是「全放开」那种的不套：
 	// 那条命令不审批就放行（sysenv.SafeGerdrCLI 不许带 --mode 就是为这个），沙箱里的 agent 不能借用户的默认值开一个不设防的会话。
 	FromCLI bool `json:"-"`
@@ -853,7 +855,7 @@ func (h *Hub) Create(ctx context.Context, o CreateOptions) (*Session, error) {
 		meta[k] = v
 	}
 	// 新建时给的标题是人起的（`gerdr session new --title`），算手动命名、不被自动标题盖掉；导入时带进来的是原会话的标题，照旧可以被更新
-	rec := Record{ID: newID(), Agent: o.Agent, Cwd: cwd, CreatedAt: now(), UpdatedAt: now(), Title: o.Title, CustomTitle: o.Title != "" && o.Import == "", TitleFixed: o.Title != "" && o.Import == "", Mode: o.Mode, Config: o.Config, Tags: tags, ReportTo: o.ReportTo, SkillDirs: o.SkillDirs, SystemFile: o.SystemFile, Parent: o.Parent, Project: o.Project, ArtifactsDir: o.ArtifactsDir}
+	rec := Record{ID: newID(), Agent: o.Agent, Cwd: cwd, CreatedAt: now(), UpdatedAt: now(), Title: o.Title, CustomTitle: o.Title != "" && o.Import == "", TitleFixed: o.Title != "" && o.Import == "", Mode: o.Mode, Config: o.Config, Tags: tags, ReportTo: o.ReportTo, SkillDirs: o.SkillDirs, SystemFile: o.SystemFile, Parent: o.Parent, Project: o.Project, ArtifactsDir: o.ArtifactsDir, Muted: o.Muted}
 	s := newSession(h, rec)
 	h.extMeta(rec, meta)
 

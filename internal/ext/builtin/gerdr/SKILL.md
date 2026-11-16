@@ -249,6 +249,16 @@ gerdr session tag "fix login" mr=group/api/34 task=   # k=v sets, k= removes
 Keep tag values to letters, digits and `/ - _ . :`: an unquoted `!` or `#` makes the command count as unsafe, so it
 waits for the user's approval.
 
+### Do not disturb for one session
+
+```bash
+gerdr session mute "nightly sweep"         # no notifications when it finishes, waits or fails; it still turns unread
+gerdr session mute "nightly sweep" --off
+```
+
+For a session the user reads when they choose to, or when they say they don't want to hear about it. A whole group
+of tabs is muted from the UI (the workspace's do not disturb); this is one session, wherever it is.
+
 ## 给已有的会话发消息
 
 ```bash

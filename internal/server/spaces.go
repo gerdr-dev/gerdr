@@ -24,6 +24,23 @@ func SessionSpaces(raw json.RawMessage) map[string]string {
 	return sessions
 }
 
+// quietSession: nothing about this session should notify the person — its own do-not-disturb (hub Record.Muted) or
+// its pane in a muted workspace. muted is MutedSessions of the layout, when the caller already has it for many.
+func (s *Server) quietSession(id string, muted map[string]bool) bool {
+	if id == "" {
+		return false
+	}
+	if s.Hub != nil {
+		if sess, err := s.Hub.Session(id); err == nil && sess.Muted() {
+			return true
+		}
+	}
+	if muted == nil && s.Layout != nil {
+		muted = MutedSessions(s.Layout.Get())
+	}
+	return muted[id]
+}
+
 // MutedSessions is the set of sessions whose pane sits in a muted (do-not-disturb) workspace: nothing about them goes up,
 // so the Android app gets no notice for them (appwatch.go). Same rule as the UI's mutedSession (ui/src/lib/layout.ts):
 // a session shown twice counts where its first pane is.

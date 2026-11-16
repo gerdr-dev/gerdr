@@ -291,8 +291,8 @@ export const sessionName = (s: Pick<SessionSummary, "title" | "cwd" | "agent">) 
 
 /** On screen and the window has focus: the user already sees it, no need for the red dot (it still goes in the list). */
 function seen(id: string) {
-  // A muted group (do not disturb): it still goes in the list, but quietly, like one you're looking at
-  if (mutedSession(getApp().layout, id)) return true;
+  // Do not disturb (the conversation's own, or its group's): it still goes in the list, but quietly, like one you're looking at
+  if (getApp().sessions[id]?.muted || mutedSession(getApp().layout, id)) return true;
   if (document.visibilityState !== "visible" || !document.hasFocus()) return false;
   return visibleSessions(getApp().layout, isPhone()).includes(id);
 }

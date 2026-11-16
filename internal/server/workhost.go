@@ -64,7 +64,7 @@ func (h workHost) StartSession(ctx context.Context, project string, o work.Start
 			config[k] = v
 		}
 	}
-	sess, err := s.Hub.Create(ctx, hub.CreateOptions{Agent: agent, Cwd: o.Cwd, Mode: o.Mode, Config: config, Parent: o.Parent, Title: o.Title, Tags: tags, ReportTo: reportTo, SkillDirs: skills, SystemFile: o.SystemFile, ContinueFrom: o.ContinueFrom, Project: spaceOr(project), ArtifactsDir: o.ArtifactsDir, FromCLI: true})
+	sess, err := s.Hub.Create(ctx, hub.CreateOptions{Agent: agent, Cwd: o.Cwd, Mode: o.Mode, Config: config, Parent: o.Parent, Title: o.Title, Tags: tags, ReportTo: reportTo, SkillDirs: skills, SystemFile: o.SystemFile, ContinueFrom: o.ContinueFrom, Project: spaceOr(project), ArtifactsDir: o.ArtifactsDir, Muted: o.Muted, FromCLI: true})
 	if err != nil {
 		return nil, err
 	}
@@ -264,6 +264,16 @@ func (h workHost) Tag(id string, tags map[string]string) (map[string]any, error)
 	if err := sess.SetTags(tags); err != nil {
 		return nil, err
 	}
+	return h.view(sess.Summary(), nil), nil
+}
+
+// Mute turns do not disturb on or off for a conversation (hub Record.Muted): ctx.sessions.mute.
+func (h workHost) Mute(id string, on bool) (map[string]any, error) {
+	sess, err := h.s.Hub.Session(id)
+	if err != nil {
+		return nil, err
+	}
+	sess.SetMuted(on)
 	return h.view(sess.Summary(), nil), nil
 }
 
@@ -514,6 +524,9 @@ func (h workHost) view(x hub.Summary, evs []*hub.Event) map[string]any {
 	}
 	if x.ReportTo != "" {
 		v["reportTo"] = x.ReportTo
+	}
+	if x.Muted {
+		v["muted"] = true
 	}
 	if x.Parent != "" {
 		v["parent"] = x.Parent

@@ -100,8 +100,8 @@ function useAttention() {
         // (mutedSession walks every pane; per session on every push it was most of a phone's JS for a pushed summary).
         if (!old || old === cur) continue;
         const seen = visible.has(cur.id) && !away;
-        // Muted group (do not disturb): the row still turns unread, but no system notification
-        const quiet = seen || mutedSession(s.layout, cur.id);
+        // Do not disturb (its own, or its group's): the row still turns unread, but no system notification
+        const quiet = seen || !!cur.muted || mutedSession(s.layout, cur.id);
         const name = cur.title || cur.cwd.split("/").pop() || cur.agent;
         if (old.status !== "waiting" && cur.status === "waiting" && !quiet && !inboxWaits) {
           systemNotify(t("app.notifyWaiting", { name }), t("app.notifyWaitingBody"), cur.id);
@@ -115,7 +115,7 @@ function useAttention() {
           else if (!inboxErrors) systemNotify(t("app.notifyError", { name }), cur.error ?? "", cur.id);
         }
       }
-      nativeBadge(Object.values(s.sessions).filter((x) => x.status === "waiting" && !mutedSession(s.layout, x.id)).length);
+      nativeBadge(Object.values(s.sessions).filter((x) => x.status === "waiting" && !x.muted && !mutedSession(s.layout, x.id)).length);
     });
   }, []);
 }

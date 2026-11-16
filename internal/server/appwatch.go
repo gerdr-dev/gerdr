@@ -161,8 +161,8 @@ func (s *Server) onSession(sum hub.Summary) {
 			}
 		}
 	}
-	if n != nil && s.Layout != nil && MutedSessions(s.Layout.Get())[sum.ID] {
-		n = nil // in a muted (do-not-disturb) group: the agents list still shows it, but no notice
+	if n != nil && (sum.Muted || s.Layout != nil && MutedSessions(s.Layout.Get())[sum.ID]) {
+		n = nil // do not disturb (its own, or its group's): the agents list still shows it, but no notice
 	}
 	if n != nil {
 		w.seq++

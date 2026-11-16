@@ -90,6 +90,12 @@ type Record struct {
 	// and matched by, and where the agent is resumed (it moves itself back into the worktree). Saved so the pane
 	// header is right after a gerdr restart, before the agent's process is back.
 	Workdir string `json:"workdir,omitempty"`
+	// Muted: do not disturb for this one conversation — nothing about it notifies the person (the UI's system
+	// notifications, the phone App's notices, panel inbox items about it); it still turns unread. The per-session twin
+	// of a muted workspace, for a conversation that isn't in one (a panel's always-on secretary: "workspace": "none")
+	// or one the person wants quiet in a busy group. Set with `gerdr session mute`, ctx.sessions.start({ muted }) /
+	// ctx.sessions.mute.
+	Muted bool `json:"muted,omitempty"`
 }
 
 // WorkDir is the directory the agent works in now: what paths it prints are relative to, where `!` commands run.
