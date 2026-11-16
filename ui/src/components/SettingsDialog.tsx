@@ -1,7 +1,7 @@
 import { PanelSettings } from "./PanelSettings";
 import { GRID_TILES, gridMax } from "@/lib/overview";
 import { Loader2 } from "lucide-react";
-import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { lightboxOpen } from "@/components/Lightbox";
@@ -133,14 +133,22 @@ export function SettingsDialog({ open }: { open: boolean }) {
       mv.styled.add(el);
     }
   };
+  // The row as state too: Radix's portal mounts the dialog's content a commit after `open` turns true, so an effect keyed on
+  // `open` alone ran before the row existed and a dialog opened on a later tab (e.g. Remote) left it half off screen
+  // until a swipe scrolled it (user report)
+  const [stripEl, setStripEl] = useState<HTMLDivElement | null>(null);
+  const stripRef = useCallback((el: HTMLDivElement | null) => {
+    tabStrip.current = el;
+    setStripEl(el);
+  }, []);
   useLayoutEffect(() => {
-    const strip = tabStrip.current;
+    const strip = stripEl;
     const tab = strip?.querySelector<HTMLElement>('[role="tab"][data-state="active"]');
     // Not while a drag / slide runs: tabProgress scrolls the row then
     if (!strip || !tab || moving.current) return;
     if (tab.offsetLeft < strip.scrollLeft) strip.scrollLeft = tab.offsetLeft;
     else if (tab.offsetLeft + tab.offsetWidth > strip.scrollLeft + strip.clientWidth) strip.scrollLeft = tab.offsetLeft + tab.offsetWidth - strip.clientWidth;
-  }, [tabOpen, open]);
+  }, [tabOpen, stripEl]);
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && closeDialog()}>
@@ -163,7 +171,7 @@ export function SettingsDialog({ open }: { open: boolean }) {
               {/* The tabs don't fit one row on a phone: swipe sideways, no wrapping. overflow-x-auto makes y auto too, and Android's
                 WebView ignores scrollbar-width, so it drew both scrollbars (a bar under the tabs, a white corner square) */}
               <TabsList
-                ref={tabStrip}
+                ref={stripRef}
                 className="relative mt-2 max-w-full justify-start overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden max-md:mt-1 max-md:h-8 max-md:[&>button]:text-[13px]"
               >
                 {/* The selection while a page is dragged (tabProgress); first, so the tabs draw over it */}
