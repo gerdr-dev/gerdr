@@ -40,6 +40,11 @@ function PinnedPrompt({ msg, onClick }: { msg: GMessage; onClick: () => void }) 
   );
 }
 
+// How far below the top a row jumped to (a host's card, a prompt, a find match) is put: the pinned prompt above is
+// always up once the chat is scrolled off the top and covered the row's first line (a task's question card, user
+// report 2026-11-16). One line of the bar (~29px) and a little room.
+const PIN_ROOM = 36;
+
 // 每个 pane 的滚动位置（在不在底部、滚到哪）：列表被卸载再挂回来（tab 被挤出保留数、虚拟列表重建）时照它恢复。
 const scrollMem = new Map<string, { top: number; bottom: boolean }>();
 
@@ -198,7 +203,7 @@ export function ChatView({
     if (!focus) return;
     const i = rows.findIndex((r) => r.kind === "part" && focus.match(r.part));
     if (i < 0) return;
-    list.current?.scrollToIndex({ index: i, align: "start", behavior: "smooth" });
+    list.current?.scrollToIndex({ index: i, align: "start", behavior: "smooth", offset: PIN_ROOM });
     const key = rows[i].key;
     const t = setTimeout(() => {
       const el = scrollerEl.current?.querySelector<HTMLElement>(`[data-chat-key="${CSS.escape(key)}"]`);
@@ -496,7 +501,7 @@ export function ChatView({
               <PinnedPrompt
                 msg={(rows[pinned] as Extract<Row, { kind: "user" }>).msg}
                 onClick={() => {
-                  list.current?.scrollToIndex({ index: pinned, align: "start", behavior: "smooth" });
+                  list.current?.scrollToIndex({ index: pinned, align: "start", behavior: "smooth", offset: PIN_ROOM });
                 }}
               />
             )}

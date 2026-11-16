@@ -25,7 +25,8 @@ import { RowView, type Row, type RowEnv } from "./Rows";
  *   frame, so a layout change during the animation neither cuts it short nor sends it to a stale place.
  */
 export type ListHandle = {
-  scrollToIndex(o: { index: number | "LAST"; align?: "start" | "end"; behavior?: "smooth" | "auto" }): void;
+  /** offset: with align start, stop this far below the top (what's drawn over it there, e.g. the pinned prompt). */
+  scrollToIndex(o: { index: number | "LAST"; align?: "start" | "end"; behavior?: "smooth" | "auto"; offset?: number }): void;
   /** Put scrollTop at top, leaving the bottom (find in the chat: a match inside a row taller than the screen). */
   scrollTo(top: number): void;
 };
@@ -607,7 +608,7 @@ export const ChatList = forwardRef<
     a.raf = requestAnimationFrame(step);
   };
   useImperativeHandle(ref, () => ({
-    scrollToIndex: ({ index, align, behavior }) => {
+    scrollToIndex: ({ index, align, behavior, offset = 0 }) => {
       const s = el.current;
       if (!s) return;
       clearTimeout(settleTouch.current);
@@ -628,7 +629,7 @@ export const ChatList = forwardRef<
         const lay = shown.current;
         const i = lay.keys.indexOf(key);
         if (i < 0) return undefined;
-        return align === "end" ? lay.tops[i] + lay.sizes[i] - viewH(s) : lay.tops[i];
+        return align === "end" ? lay.tops[i] + lay.sizes[i] - viewH(s) : Math.max(0, lay.tops[i] - offset);
       };
       if (behavior === "smooth") animate(target);
       else {
