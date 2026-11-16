@@ -34,21 +34,18 @@ const tip = (label: React.ReactNode, el: React.ReactElement) => (
   </Tooltip>
 );
 
-export function Rail() {
+/**
+ * The project chips. Their own component because only they need the whole layout (another project's status dot): the
+ * layout changes on every tab switch, and the rest of the rail (panel buttons, each with its menu and tooltip) re-rendered
+ * with it (tools/scrolltest/tabrenders.mjs).
+ */
+function RailProjects() {
   const layout = useStore((s) => s.layout);
   const sessions = useStore((s) => s.sessions);
   const unread = useStore((s) => s.unread);
   const badges = useBadges((s) => s.byPanel);
-  const mode = useStore((s) => s.mode);
-  const sidebar = useStore((s) => s.sidebar);
-  const doctorBad = useStore((s) => s.doctor?.level === "bad");
-  const updateWaits = useStore((s) => updateWaitsForClick(s.appUpdate)); // an update closed with "Later"
-  const connected = useStore((s) => s.connected);
-  const lanRoute = useLanRoute();
   const spaces = spaceList(layout);
   const here = currentSpace(layout);
-  const cur = mode === "work" ? "work" : "agents";
-  const coarse = isCoarse();
 
   const project = (sp: Space) => {
     const on = sp.id === here;
@@ -88,6 +85,19 @@ export function Rail() {
     );
   };
 
+  return <>{spaces.map(project)}</>;
+}
+
+export function Rail() {
+  const mode = useStore((s) => s.mode);
+  const sidebar = useStore((s) => s.sidebar);
+  const doctorBad = useStore((s) => s.doctor?.level === "bad");
+  const updateWaits = useStore((s) => updateWaitsForClick(s.appUpdate)); // an update closed with "Later"
+  const connected = useStore((s) => s.connected);
+  const lanRoute = useLanRoute();
+  const cur = mode === "work" ? "work" : "agents";
+  const coarse = isCoarse();
+
   const modeItem = (m: typeof cur, label: string, Icon: typeof Code2) => {
     const on = cur === m;
     // The mode you're in again: Code toggles its list (as an activity bar does); Work has nothing to toggle.
@@ -122,7 +132,7 @@ export function Rail() {
     <div className="h-full w-12 shrink-0 overflow-y-auto border-r bg-sidebar [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       <div className="flex min-h-full flex-col items-center">
         <div data-space-list="rail" className="relative flex w-full flex-col items-center gap-2 pt-2.5 pb-1 short:gap-1.5 short:pt-2">
-          {spaces.map(project)}
+          <RailProjects />
           <SpaceDropLine list="rail" axis="y" />
           {tip(
             t("rail.newProjectHint"),
@@ -138,14 +148,7 @@ export function Rail() {
         <div className="my-2 h-px w-7 shrink-0 bg-border short:my-1.5" />
         <div data-space-list={panelList("rail")} className="relative flex shrink-0 flex-col items-center gap-0.5 rounded-lg bg-muted p-0.5">
           {modeItem("agents", "Code", Code2)}
-          <PanelButtons
-            className={(on) =>
-              cn(
-                "flex size-8 items-center justify-center rounded-md",
-                on ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
-              )
-            }
-          />
+          <PanelButtons className={panelBtn} />
         </div>
         <div className="min-h-2 flex-1" />
         <div className="flex shrink-0 flex-col items-center gap-1 pb-2">
@@ -188,4 +191,6 @@ export function Rail() {
   );
 }
 
+const panelBtn = (on: boolean) =>
+  cn("flex size-8 items-center justify-center rounded-md", on ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground");
 const railBtn = "flex size-9 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground";

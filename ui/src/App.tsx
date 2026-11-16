@@ -1,18 +1,18 @@
 import { KeyRound } from "lucide-react";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ConnToast } from "./components/ConnStatus";
-import { PhoneBar } from "./components/PhoneBar";
-import { TabBar } from "./components/TabBar";
-import { Dialogs } from "./components/Dialogs";
+import { PhoneBar as PhoneBarView } from "./components/PhoneBar";
+import { TabBar as TabBarView } from "./components/TabBar";
+import { Dialogs as DialogsView } from "./components/Dialogs";
 import { GerdrChatProvider } from "./lib/chatHost";
-import { AppContextMenu } from "./components/AppContextMenu";
-import { TabActive, TabView } from "./components/Panes";
-import { WorkView } from "./components/WorkView";
-import { OverviewView } from "./components/Overview";
-import { UnifiedSidebar } from "./components/UnifiedSidebar";
-import { Rail } from "./components/Rail";
+import { AppContextMenu as AppContextMenuView } from "./components/AppContextMenu";
+import { TabActive, TabView as TabViewFn } from "./components/Panes";
+import { WorkView as WorkViewFn } from "./components/WorkView";
+import { OverviewView as OverviewViewFn } from "./components/Overview";
+import { UnifiedSidebar as UnifiedSidebarView } from "./components/UnifiedSidebar";
+import { Rail as RailView } from "./components/Rail";
 import { tabName } from "./lib/actions";
 import { handleKeydown } from "./lib/commands";
 import { ACTION_TITLES, setPrefixLabel, toAccelerator, type KeyAction } from "./lib/keys";
@@ -23,20 +23,37 @@ import { cn } from "./lib/utils";
 import { syncWatch } from "./lib/sync";
 import { isNative, nativeAskUpdate, nativeBadge, nativeMenuKeys, nativeSpace, onAppUpdate } from "./lib/native";
 import { initAndroid, syncAndroidTheme } from "./lib/android";
-import { CliApprove } from "./components/CliApprove";
+import { CliApprove as CliApproveView } from "./components/CliApprove";
 import { systemNotify } from "./lib/notify";
 import { watchInbox } from "./lib/inbox";
 import { watchBadges } from "./lib/badges";
 import { watchCopyOnSelect } from "./lib/copysel";
 import { watchNavButtons } from "./lib/actions/nav";
 import { reloadAddons, setTabNameFn } from "./lib/addons";
-import { AddonSlot } from "./components/AddonSlot";
+import { AddonSlot as AddonSlotView } from "./components/AddonSlot";
 import { focusedSession, fontSizeOf, get, keyFor, prefOf, markUnread, set, useStore, visibleSessions } from "./lib/store";
 import { boot } from "./lib/sync";
 import type { SessionSummary } from "./lib/types";
 import { t } from "./lib/i18n";
 
 setTabNameFn(tabName);
+
+// App subscribes to the layout, so every tab switch re-renders it. Unmemoised, that re-rendered everything below too:
+// the rail, every closed dialog, and every kept tab down to its composer and tooltips, 2221 component renders per switch
+// (tools/scrolltest/tabrenders.mjs; switching took 330-450ms with the CPU 4x slower, tabswitch.mjs). Each of these reads
+// what it needs from the store itself and takes no props or stable ones, so memo lets them render only when that changes.
+const Rail = memo(RailView);
+const UnifiedSidebar = memo(UnifiedSidebarView);
+const TabBar = memo(TabBarView);
+const PhoneBar = memo(PhoneBarView);
+const Dialogs = memo(DialogsView);
+const AppContextMenu = memo(AppContextMenuView);
+const CliApprove = memo(CliApproveView);
+const AddonSlot = memo(AddonSlotView);
+const WorkView = memo(WorkViewFn);
+const OverviewView = memo(OverviewViewFn);
+// A tab's object only changes when that tab does (selectTabIn keeps the others), so kept tabs left alone stay put
+const TabView = memo(TabViewFn);
 
 function useTheme() {
   const theme = useStore((s) => prefOf(s, "theme"));

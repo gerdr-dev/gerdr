@@ -23,7 +23,7 @@ import {
   SquareSplitHorizontal,
   X,
 } from "lucide-react";
-import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { createContext, memo, useContext, useEffect, useRef, useState } from "react";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -90,7 +90,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { markRead, set, useStore } from "@/lib/store";
+import { get, markRead, set, useStore } from "@/lib/store";
 import { whenCaughtUp } from "@/lib/catchup";
 import { frozenOrder, useModFrozen, useModShown } from "@/lib/modHeld";
 import { BorderFlow, useSlowCatchUp } from "./BorderFlow";
@@ -340,11 +340,10 @@ export function UnifiedSidebar({ className }: { className?: string }) {
       inSplit,
       unread: !!(s && unread[s.id]),
       inActive: !!(s && activeIds.includes(s.id)),
-      onActive: (on: boolean) => s && (on ? addActive([s.id]) : removeActive(s.id)),
       // In a split, the focused pane is the current one; its neighbours get a lighter tint (they're on screen too)
       current: here && (!inSplit || tab.focus === pane.id),
       visible: here && inSplit,
-      activeTabId: cur.activeTab,
+      inActiveTab: tab.id === cur.activeTab,
     };
   };
 
@@ -664,19 +663,21 @@ function Group({
   );
 }
 
-function Row({
+// Memoised, and every prop is either stable or changes only for the rows it concerns: switching tabs re-renders the
+// sidebar (it shows which row is current), and every row with its menu re-rendered with it (tools/scrolltest/tabrenders.mjs).
+// So no callbacks made per render and no "which tab is active" handed to every row: it's read when the menu acts.
+const Row = memo(function Row({
   tab,
   pane,
   s,
   inSplit,
   unread,
   inActive,
-  onActive,
   top,
   onPick,
   current,
   visible,
-  activeTabId,
+  inActiveTab,
   where,
   num,
 }: {
@@ -686,14 +687,14 @@ function Row({
   inSplit: boolean;
   unread: boolean;
   inActive: boolean;
-  onActive: (on: boolean) => void;
   /** A row of the "active" section: its ✕ and middle click take it off the section instead of closing the tab. */
   top?: boolean;
   /** Replaces going to the pane (the grid picks a tile). */
   onPick?: () => void;
   current: boolean;
   visible: boolean;
-  activeTabId: string;
+  /** This row's tab is the one on screen. */
+  inActiveTab: boolean;
   /** Shown instead of the directory (rows of "active", out of their group). */
   where?: string;
   /** Its ⌘1–9 number, while ⌘ is held (rows of "active"). */
@@ -703,11 +704,13 @@ function Row({
   // An unnamed tab is named after its first agent: only a renamed tab adds something worth showing
   const tabLabel = !inSplit && tab.name && tab.name !== title ? tab.name : undefined;
   const close = () => (inSplit ? closePaneById(pane.id) : closeTab(tab.id));
+  const onActive = (on: boolean) => s && (on ? addActive([s.id]) : removeActive(s.id));
   const dismiss = top && s ? () => onActive(false) : close;
   // Already in the tab on screen (alone or in its split): nothing to put beside it
-  const canBeside = tab.id !== activeTabId;
+  const canBeside = !inActiveTab;
   const openBeside = () => {
     // Into the tab on screen, on its right: a lone tab moves over whole, a pane of a split moves on its own
+    const activeTabId = activeWs(get().layout).activeTab;
     toggleOverview(false);
     if (inSplit) movePane(pane.id, { tabId: activeTabId, side: "right" });
     else mergeTab(tab.id, activeTabId, undefined, "right");
@@ -862,4 +865,4 @@ function Row({
       </ContextMenuContent>
     </ContextMenu>
   );
-}
+});
