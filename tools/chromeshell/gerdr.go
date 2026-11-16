@@ -52,6 +52,11 @@ func (s *shell) setApp(a *lightron.App) {
 
 // startBackend: Options.URLFunc. The backend's login link, as the page's first address.
 func (s *shell) startBackend() (string, error) {
+	// Placed only here, once this is the one instance: a second launch must not replace the file the first one's
+	// backend runs from (selfupdate Place).
+	if c := s.up.Backend(); s.up.Enabled() && !c.Bundled {
+		s.bin = s.up.Place(c)
+	}
 	log.Printf("starting backend %s", s.bin)
 	be, err := startBackend(s.bin, nil)
 	if err != nil {

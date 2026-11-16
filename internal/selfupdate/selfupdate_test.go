@@ -295,3 +295,62 @@ func TestRetriesServerErrors(t *testing.T) {
 		t.Fatalf("404: err %v after %d tries, want an error after 1", err, n)
 	}
 }
+
+// On macOS every downloaded backend runs from the same path (privacy grants are keyed by it), moved there only when
+// it is started; a later download goes to its own directory first and replaces the fixed file only when placed.
+func TestDownloadsRunFromOneFixedPath(t *testing.T) {
+	old := fixedPath
+	fixedPath = true
+	t.Cleanup(func() { fixedPath = old })
+	dir := t.TempDir()
+	bundled := filepath.Join(dir, "bundle", "gerdr")
+	fakeGerdr(t, bundled, "0.2.20")
+	data := filepath.Join(dir, "data")
+	fixed := filepath.Join(data, "backend", "gerdr")
+
+	update := func(u *Updater, v string) Choice {
+		t.Helper()
+		srv := feedServer(t, v, []byte("#!/bin/sh\necho "+v+"\n"), false)
+		t.Setenv("GERDR_UPDATE_FEED", srv.URL+"/update.json") // releaseURL reads it on every download
+		u.feed = srv.URL + "/update.json"                     // New read it once
+		if msg := u.Check(); !strings.Contains(msg, v) {
+			t.Fatalf("check: %q", msg)
+		}
+		return u.Backend()
+	}
+
+	u := New(data, bundled, "0.2.20", "", true)
+	c := update(u, "0.2.21")
+	if c.Path == fixed || c.Version != "0.2.21" {
+		t.Fatalf("downloaded, not started yet: %+v, want its download directory", c)
+	}
+	if p := u.Place(c); p != fixed {
+		t.Fatalf("placed at %q, want %q", p, fixed)
+	}
+	if c := u.Backend(); c.Path != fixed || c.Version != "0.2.21" {
+		t.Fatalf("after placing: %+v", c)
+	}
+	if u.Place(u.Backend()) != fixed {
+		t.Fatal("placing again should be a no-op")
+	}
+
+	// The next release: downloaded beside it, the fixed file untouched (a running attacher would notice) until placed.
+	c = update(u, "0.2.22")
+	if c.Path == fixed || c.Version != "0.2.22" {
+		t.Fatalf("second download: %+v", c)
+	}
+	if got, _ := os.ReadFile(fixed); !strings.Contains(string(got), "0.2.21") {
+		t.Fatalf("fixed file replaced before placing: %q", got)
+	}
+	if p := u.Place(c); p != fixed {
+		t.Fatalf("placed at %q", p)
+	}
+	if c := u.Backend(); c.Path != fixed || c.Version != "0.2.22" {
+		t.Fatalf("after the second update: %+v", c)
+	}
+	// A newer App installed by hand still wins over the fixed file.
+	fakeGerdr(t, bundled, "0.2.30")
+	if c := u.Backend(); !c.Bundled || c.Version != "0.2.30" {
+		t.Fatalf("newer bundle: %+v", c)
+	}
+}

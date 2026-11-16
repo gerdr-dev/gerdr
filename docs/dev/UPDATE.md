@@ -82,12 +82,28 @@ A backend restart kills running turns, pending permission requests, background t
 Local builds follow the same rule: `make install` swaps the bundle under the running App, and `appAttach` re-reads
 its own binary's buildID every round, so it notices and restarts the service once idle. Staleness is decided by
 `Build` (file mtime + size), not the compiled-in version, which stays the old one in a process whose file was replaced.
-That only covers a backend running from the bundle. When the App runs a downloaded one (`backend/<v>/gerdr`), the
+That only covers a backend running from the bundle. When the App runs a downloaded one (`backend/gerdr`), the
 bundle swap doesn't touch that file, so the shell has to notice: `updater.backend()` takes the bundle's version from
 the binary on disk (`gerdr version`, re-run when its mtime + size change), not `app.getVersion()`, which is frozen at
 App start. A newer bundle then wins over the download, `noteRunning` marks it pending, and the 15s poll restarts the
 backend once idle (whose `appAttach` then moves the service over). Before this, the service stayed on the download
 until the App was reopened.
+
+## macOS: a downloaded backend runs from one fixed path
+
+The shell downloads into `<data>/backend/<v>/gerdr` (`current.json` names it), but on macOS starts it from
+`<data>/backend/gerdr`: `selfupdate.Place` renames it there right before starting it (`startBackend`,
+`startNewBackend`). Why: privacy grants (Downloads folder, controlling Finder, Accessibility) for a binary outside any
+.app are keyed by its path (plus its signature's requirement, kept stable by desktop/sign-id.sh). With the version in
+the path, every backend-only update was a new program to macOS and the person was asked again for everything.
+
+- Moved only when started, never at download: an attacher running from the fixed file re-reads it every round
+  (appAttach) and would restart the service once idle, even with automatic updates off.
+- A rename, not a copy into the file: the service may be running the old one (it keeps its inode), and macOS kills a
+  process whose signed binary is modified in place.
+- Which version sits there is asked from the file (`gerdr version`, cached by mtime + size), no marker file to fall
+  out of step. The service's plist then names the fixed path, so later updates are a plain restart, not a move.
+- Windows keeps running from the download directory: no such grants, and a running exe can't be replaced.
 
 Not done: keeping turns alive across a restart. That needs agent processes and PTYs owned by a small long-lived holder
 (like a tmux server / containerd-shim) that Gerdr reconnects to, plus replaying in-flight protocol state.

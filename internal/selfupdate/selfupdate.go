@@ -27,7 +27,7 @@ import (
 // Package selfupdate keeps a desktop shell's backend up to date (tools/chromeshell on macOS, tools/winshell on
 // Windows). Ported from desktop/updater.js (docs/dev/UPDATE.md): the backend-only half. A release publishes the
 // brotli-compressed backend alone (~10MB) next to the Electron dmgs; it is downloaded into <data>/backend/<version>/
-// and run instead of the bundle's (never written into the bundle: its signature, and App Management). Restarting the
+// (on macOS moved to <data>/backend/gerdr when it starts: fixedPath) and run instead of the bundle's (never written into the bundle: its signature, and App Management). Restarting the
 // backend is how it takes effect: our `gerdr --app` attacher, started on the new binary, moves the background service
 // over (cmd/gerdr appAttach), and is only restarted when /api/busy says nothing would be cut off, or the person said
 // "now".
@@ -131,6 +131,7 @@ type Updater struct {
 	pending     *Pending
 
 	seenKey, seenVersion string // the bundle's backend version, by its file's mtime + size
+	fixedKey, fixedVer   string // the same for the fixed-path backend (fixedPath)
 }
 
 // New: data is where downloads and the automatic-updates switch go; bundled the backend shipped with the shell;
@@ -146,25 +147,38 @@ func New(data, bundled, appVersion, shellID string, packaged bool) *Updater {
 
 func (u *Updater) root() string { return filepath.Join(u.data, "backend") }
 
-// bundledVersion asks the bundle's binary (`gerdr version`), again only when the file changed: a bundle swapped under
-// the running shell (make install, an App installed by hand) has to win over an older download.
-func (u *Updater) bundledVersion() string {
-	st, err := os.Stat(u.bundled)
+// fixedPath: on macOS a downloaded backend runs from one path that never changes, <data>/backend/gerdr, not from
+// its download directory <data>/backend/<version>/gerdr. Privacy grants (Downloads folder, controlling Finder,
+// Accessibility…) for a binary outside any .app are keyed by its path: with the version in the path, every update was
+// a new program to macOS and the person was asked again. The fixed signing identity (desktop/sign-id.sh) keeps the
+// grant valid across the file's replacements; the path is the other half. Windows has no such grants and can't replace
+// a running exe, so it keeps running from the download directory.
+var fixedPath = runtime.GOOS == "darwin"
+
+func (u *Updater) fixed() string { return filepath.Join(u.root(), exeName()) }
+
+// versionOf asks a backend binary for its version (`gerdr version`), again only when the file changed (mtime + size,
+// cached in *key / *ver). The file is the truth: a bundle swapped under the running shell (make install, an App
+// installed by hand) has to win over an older download, and the fixed-path backend is whatever was last moved there.
+func versionOf(path string, key, ver *string) string {
+	st, err := os.Stat(path)
 	if err != nil {
-		return u.seenVersion
+		return *ver
 	}
-	key := fmt.Sprintf("%d:%d", st.ModTime().UnixNano(), st.Size())
-	if key != u.seenKey {
-		cmd := exec.Command(u.bundled, "version")
+	k := fmt.Sprintf("%d:%d", st.ModTime().UnixNano(), st.Size())
+	if k != *key {
+		cmd := exec.Command(path, "version")
 		hideConsole(cmd)
 		out, err := cmd.Output()
 		v := strings.TrimPrefix(strings.TrimSpace(string(out)), "v")
 		if err == nil && ParseVer(v) != nil {
-			u.seenKey, u.seenVersion = key, v
+			*key, *ver = k, v
 		}
 	}
-	return u.seenVersion
+	return *ver
 }
+
+func (u *Updater) bundledVersion() string { return versionOf(u.bundled, &u.seenKey, &u.seenVersion) }
 
 type Choice struct {
 	Path, Version string
@@ -184,11 +198,31 @@ func (u *Updater) Backend() Choice {
 	if !Newer(cur.Version, b.Version) {
 		return b
 	}
+	if fixedPath && fileExists(u.fixed()) && versionOf(u.fixed(), &u.fixedKey, &u.fixedVer) == cur.Version {
+		return Choice{Path: u.fixed(), Version: cur.Version}
+	}
 	p := filepath.Join(u.root(), cur.Version, exeName())
 	if fileExists(p) {
 		return Choice{Path: p, Version: cur.Version}
 	}
 	return b
+}
+
+// Place: the path to start for c (from Backend), moving a downloaded backend to the fixed path first (fixedPath).
+// Called only right before starting it: replacing the fixed file is what makes an attacher still running from it
+// (cmd/gerdr appAttach re-reads its own binary every round) restart the service, and that must wait until the update
+// is being applied. A rename, not a write into the file: the service may be running the old one, which keeps its
+// inode, and macOS kills a process whose signed binary is modified in place. Failing, it runs from the download.
+func (u *Updater) Place(c Choice) string {
+	if !fixedPath || c.Bundled || c.Path == u.fixed() {
+		return c.Path
+	}
+	if err := os.Rename(c.Path, u.fixed()); err != nil {
+		log.Printf("update: move %s to %s: %v", c.Path, u.fixed(), err)
+		return c.Path
+	}
+	_ = os.Remove(filepath.Dir(c.Path)) // now empty
+	return u.fixed()
 }
 
 // cleanup: drop downloaded backends other than the one in use. (Windows can't delete a running exe: that one stays

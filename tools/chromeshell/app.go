@@ -91,7 +91,7 @@ func (s *shell) superviseBackend() {
 func (s *shell) startNewBackend(now bool) {
 	bin := s.bin
 	if s.up != nil && s.up.Enabled() {
-		bin = s.up.Backend().Path
+		bin = s.up.Place(s.up.Backend())
 	}
 	var env []string
 	if now {
