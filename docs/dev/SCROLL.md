@@ -51,6 +51,7 @@ on another tab, and the scripts after them find no chat.
 | At the bottom, expanding a folded row: no jump-to-bottom button, then a snap to the end ~1s later | `expand.mjs [--tab=1]` | Clicks the lowest collapsed toggle on screen while at the bottom: from the first sample on the chat must be off the bottom with the button showing, and stay put for 2s; collapsing it again must land on the end with the button gone. Expanding leaves the bottom (`holding` in `sync`); staying stuck only postponed the snap to the next sync after the 500ms hold. A layout change that puts the chat at the end sticks it again (`sync`): the clamp reads as a move up, so `onScroll` never did |
 | Phone: select text, scroll a few screens, drag a handle: the selection jumps to a strange range (from the page header on) | `select.mjs [--screens=4] [--up]` | Selects text on screen, drags the chat on by touch, extends the selection there, then does what Android Chrome does on a handle move: places the other end again from its handle's screen point, which after scrolling is clipped and lands on the header. The selection must still start in the row it was made in. Two causes, both in ChatList.tsx: `held` keeps the selection's rows mounted (an unmounted row moves that end onto the list); the selectionchange handler puts an anchor that left the rows back (the header case, measured with a trace on the phone) |
 | Switching tabs is slow (not a scroll problem, same tooling) | `gen.mjs` then `tabswitch.mjs [--dev] [--cpu=4] [--keep=6]`, `tabrenders.mjs [--first] [--owners=Tooltip] [--why=SessionPaneView]`, `tabprofile.mjs [--first]`, `tabfirst.mjs`, `tabrows.mjs`, `mdbench.mjs` | `gen.mjs` writes synthetic sessions (images, videos, long text) as tabs; `tabswitch` times each switch to the first painted frame with long-animation-frame attribution; `tabrenders` counts React renders per switch (+ = mounted), where a component re-renders from and why (props / context / state); `tabprofile` writes a CPU profile; `tabfirst` profiles only the switch → painted window of first visits and sums busy time by what it was doing; `tabrows` shows the rows a first visit mounts, commit by commit, and how many end up on screen (a cold open paints only the screen's rows, the overscan two frames later); `mdbench` times one message's Markdown step by step. Findings and what is left: docs/dev/todo/tab-switches.md |
+| Pinned to the bottom after opening, the text shakes and the scrollbar jumps while the rows off screen are measured | `settle.mjs [--reload] [--up=150] [--x= --y=]` | Opens a chat cold (switch, or `--reload` with every older segment loaded first, as a page reload with the transcript cached) and watches it for a few seconds: no row on screen may move by more than 0.2px, none may be drawn over another, the content's height may barely change. `--up`: scroll up while the measuring still runs. `--x/--y` picks the chat in a split (a 432px column at x=1640 by default, like a panel's chat column) |
 | 某一行自己变高矮 | `rows.mjs [--tab=1]` | 行挂上后高度变没变（DOM 没变也会变）、Virtuoso 记的高度和实际对不对 |
 
 用户说「就在这儿闪」：拿那个会话，`fling.mjs --from="那段话"`，先翻到那儿再甩。闪不闪跟内容关系很大，别拿别的会话代替。
@@ -95,6 +96,17 @@ Virtuoso 在 ResizeObserver 里量行高、改布局，所以 rAF 里看到「�
 它本来会补的被补两遍。
 
 ## 踩过的坑（都是逐帧量出来的）
+
+- **Shaking at the bottom while the rows off screen are measured** (`settle.mjs --reload`, from a scroll probe add-on in
+  the user's page: a panel's chat column, 435px, 192 rows from the cached transcript). After a cold open ChatList
+  measures the rows it never mounted in idle batches of 6. Each batch changed the content's height (rows estimated at
+  60px, really hundreds): ~25 changes in a second, 11.9k -> 15.5k px. The rows on screen held still to the pixel, but
+  not below it: every change put scrollTop back at the end, rounded to a device pixel, and the text moved 0.2-0.96px up
+  or down each time, which reads as shaking; the scrollbar thumb jumped with every change too. A probe with a 1px
+  threshold saw nothing. Now rows measured off screen while stuck at the bottom keep their size pending (`pending` in
+  ChatList.tsx): the layout uses them only once every row is measured or the chat leaves the bottom, so the height
+  changes once; meanwhile they're hidden while mounted (they sit at the estimate, drawn at their real size). Estimates
+  are the mean of measured rows of the same kind, not 60px.
 
 - **代码块的 `content-visibility: auto`**（streamdown 写的行内样式，占位 200px）：屏幕外的块浏览器不排版、按 200px 算，
   滚近了才排成真实高度。虚拟列表提前挂上的行被量成占位高度 → 往上翻一闪一闪。同一行 899 → 753px，DOM 一个字节没变。

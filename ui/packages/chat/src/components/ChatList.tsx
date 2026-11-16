@@ -48,6 +48,10 @@ const SIZE_MEM_MAX = 40;
 
 type Layout = { keys: string[]; tops: number[]; sizes: number[]; total: number; missing: number };
 
+// What kind of row, for estimating one never measured (layout): a user message, a group header, a reply's text, a
+// tool call… differ by an order of magnitude
+const kindOf = (r: Row) => (r.kind === "part" ? `part:${r.part.type}` : r.kind);
+
 export const ChatList = forwardRef<
   ListHandle,
   {
@@ -80,6 +84,12 @@ export const ChatList = forwardRef<
   // Sizes from an earlier mount: used if the width is still the same (checked on opening)
   const mem = useRef(memKey ? sizeMem.get(memKey) : undefined);
   const sizes = useRef(mem.current?.sizes ?? new Map<string, number>());
+  // Rows measured off screen while the chat sits at the bottom (the idle batches after a cold open), whose sizes the layout
+  // doesn't use yet: they're above the screen, so their real sizes change nothing on it, only the content's height, and
+  // applying each batch as it came made the scrollbar thumb jump ~25 times in the second after opening (a panel's chat
+  // column, user report; settle.mjs --reload). Applied all at once when every row is measured or the chat leaves the
+  // bottom (sync); until then they count at the estimate, which they also don't feed (layout).
+  const pending = useRef(new Set<string>());
   if (memKey && !mem.current) {
     mem.current = { w: 0, sizes: sizes.current };
     sizeMem.set(memKey, mem.current);
@@ -153,10 +163,30 @@ export const ChatList = forwardRef<
     const sz: number[] = [];
     let y = HEAD;
     let missing = 0;
+    // A row never measured is estimated at the mean of the measured rows of its kind (all measured rows' mean while its
+    // kind has none, EST before any). A flat 60px was far off for replies hundreds of px tall: once the rows off screen
+    // were measured in batches after a cold open, the content's height grew by a third in ~25 steps, and the scrollbar
+    // thumb jumped with each while the chat sat still at the bottom (a panel's chat column, user report; settle.mjs --reload).
+    const sum = new Map<string, [number, number]>();
+    let all = 0;
+    let n = 0;
     for (const r of rs) {
-      const known = sizes.current.get(r.key);
-      if (known === undefined) missing++;
-      const h = known ?? EST;
+      const h = pending.current.has(r.key) ? undefined : sizes.current.get(r.key);
+      if (h === undefined) continue;
+      const k = kindOf(r);
+      const e = sum.get(k) ?? [0, 0];
+      sum.set(k, [e[0] + h, e[1] + 1]);
+      all += h;
+      n++;
+    }
+    const est = (r: Row) => {
+      const e = sum.get(kindOf(r));
+      return e ? e[0] / e[1] : n ? all / n : EST;
+    };
+    for (const r of rs) {
+      if (!sizes.current.has(r.key)) missing++;
+      const known = pending.current.has(r.key) ? undefined : sizes.current.get(r.key);
+      const h = known ?? est(r);
       keys.push(r.key);
       tops.push(y);
       sz.push(h);
@@ -351,13 +381,24 @@ export const ChatList = forwardRef<
         break;
       }
     let grew = false;
+    const [r0, r1] = range.current;
     for (const n of measure ?? b.querySelectorAll("[data-chat-key]")) {
       const k = (n as HTMLElement).dataset.chatKey!;
       if (!n.isConnected) continue;
+      const i = +(n as HTMLElement).dataset.index!;
+      const inRange = i >= r0 && i < r1;
+      // A pending row that came into the range: its real size from now on (the anchor below absorbs the difference)
+      if (inRange && pending.current.delete(k)) grew = true;
       const h = n.getBoundingClientRect().height;
       const old = sizes.current.get(k);
       if (old !== undefined && Math.abs(old - h) < 0.5) continue;
+      if (old === undefined && !inRange && stuck.current && !all) pending.current.add(k);
       sizes.current.set(k, h);
+      grew = true;
+    }
+    // Every row measured, or the chat left the bottom: the pending sizes in, one change of the content's height
+    if (pending.current.size && (!stuck.current || rowsRef.current.every((r) => sizes.current.has(r.key)))) {
+      pending.current.clear();
       grew = true;
     }
     if (grew) changed();
@@ -475,6 +516,7 @@ export const ChatList = forwardRef<
     if (mem.current?.w && s.clientWidth && Math.abs(mem.current.w - s.clientWidth) > 1) {
       // Another width since: those sizes are someone else's
       sizes.current.clear();
+      pending.current.clear();
       warm.current = false;
     }
     if (mem.current && s.clientWidth) mem.current.w = s.clientWidth;
@@ -713,8 +755,19 @@ export const ChatList = forwardRef<
   const items = [];
   for (const i of idx) {
     const r = rows[i];
+    // A row mounted only to be measured (the batch): never seen. It sits at an estimated position and, with its size
+    // pending (above), stays there while drawn at its real size, over its neighbours above the screen
+    const only = batch.has(i) && !(i >= hf && i <= ht);
     items.push(
-      <div key={r.key} data-chat-key={r.key} data-index={i} data-item-index={firstIdx + i} className="absolute inset-x-0 top-0">
+      <div
+        key={r.key}
+        data-chat-key={r.key}
+        data-index={i}
+        data-item-index={firstIdx + i}
+        data-measure-only={only || undefined}
+        className="absolute inset-x-0 top-0"
+        style={only ? { visibility: "hidden" } : undefined}
+      >
         <RowView row={r} env={env} />
       </div>,
     );
