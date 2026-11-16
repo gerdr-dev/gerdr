@@ -78,7 +78,8 @@ export function SessionChat({
   return (
     <TooltipProvider delayDuration={400}>
       <TabActive.Provider value>
-        <div className={cn("h-full min-h-0", className)} style={{ fontSize: "var(--gerdr-font, 14px)" }}>
+        {/* data-composer-scope: copy-on-select puts the cursor back in this chat's composer (lib/copysel.ts) */}
+        <div className={cn("h-full min-h-0", className)} style={{ fontSize: "var(--gerdr-font, 14px)" }} data-composer-scope>
           {session && shownSub ? (
             <SubagentChat session={session} sub={shownSub} onBack={() => (onSub ? onSub(null) : setShownSub(null))} />
           ) : session ? (

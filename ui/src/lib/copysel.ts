@@ -10,12 +10,6 @@
 import { isCoarse } from "./phone";
 import { get, prefOf } from "./store";
 import { t } from "./i18n";
-import { api } from "./api";
-
-// TEMP diagnostics (copy-on-select not focusing the composer in a second window): remove once found.
-const dbgDesc = (el: Element | null) => (el ? `${el.tagName.toLowerCase()}${el.id ? "#" + el.id : ""}.${String(el.className).slice(0, 30)}` : "-");
-const dbg = (why: string, ms: Record<string, number> = {}) =>
-  void api.uiSlow("copysel", why.slice(0, 80), { ...ms, focused: +document.hasFocus() }).catch(() => {});
 
 const HIGHLIGHT_MS = 500; // herdr 的 PANE_COPY_HIGHLIGHT_DURATION
 const BUBBLE_MS = 1000;
@@ -91,10 +85,7 @@ export function watchCopyOnSelect(): () => void {
       const sel = window.getSelection();
       if (!sel || sel.isCollapsed || !sel.rangeCount) return;
       // 输入框里的选区不进 getSelection 的节点，看焦点（点对话里的字时焦点会离开输入框）
-      if (editable(sel.anchorNode) || editable(sel.focusNode) || editable(document.activeElement)) {
-        dbg(`skip editable ae=${dbgDesc(document.activeElement)}`);
-        return;
-      }
+      if (editable(sel.anchorNode) || editable(sel.focusNode) || editable(document.activeElement)) return;
       // 复制完把光标放回这个 pane 的输入框，接着就能粘贴 / 打字（用户要的）。清选区那一刻再聚焦：聚焦输入框会顶掉页面选区，
       // 早了双击的高亮就看不到了。不在 pane 里（设置弹窗之类）、没有输入框的 pane（子 agent）不动焦点；触屏上不聚焦（会弹键盘）
       // A grid tile (Overview) is a pane too, but has no data-pane-id: that id names a real pane elsewhere (context menu).
@@ -110,19 +101,12 @@ export function watchCopyOnSelect(): () => void {
         e.detail >= 2,
         () => {
           // 焦点已经在输入框里（用户等不及自己点进去了）时别清：这时的页面选区就是输入框的光标
-          if (editable(document.activeElement)) {
-            dbg(`clear: already editable ae=${dbgDesc(document.activeElement)}`);
-            return;
-          }
+          if (editable(document.activeElement)) return;
           sel.removeAllRanges();
-          const dlg = document.querySelector("[role=dialog]");
+          // A dialog covering the chat keeps the focus where it is; one the chat sits in (a panel's drawer, a
+          // non-modal Sheet around core's SessionChat) doesn't count.
+          const dlg = [...document.querySelectorAll("[role=dialog]")].find((d) => !box || !d.contains(box)) ?? null;
           if (box?.isConnected && !isCoarse() && !dlg) box.focus();
-          dbg(`pane=${dbgDesc(pane ?? null)} dlg=${dbgDesc(dlg)} ae=${dbgDesc(document.activeElement)}`, {
-            box: +!!box,
-            conn: +!!box?.isConnected,
-            coarse: +isCoarse(),
-            ok: +(document.activeElement === box),
-          });
         },
         { x: e.clientX, y: e.clientY },
       );
