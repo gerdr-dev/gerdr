@@ -22,7 +22,7 @@ node tabs.mjs                                # 然后跑场景，见下表
 The scripts still find the old react-virtuoso list too (`[data-virtuoso-scroller], [data-chat-scroller]`), for
 checking out an older commit. If the debug build doesn't compile (someone else's work in
 progress), start the installed binary instead: `GERDR_UI=$PWD/ui GERDR_DIR=~/.gerdr-dev GERDR_PORT=7871 gerdr`.
-With one session open the sidebar shows no numbered tab labels; `tab(page, 1)` then leaves things as they are.
+Beside the unified sidebar there are no numbered tab labels (the tab bar is hidden); `tab(page, n)` then switches with the `selectTab` action (Ctrl+<n>) instead of a click.
 Run `panes.mjs` / `tabs.mjs` / `open.mjs` last or `setup.mjs` again after them: they leave the debug layout split or
 on another tab, and the scripts after them find no chat.
 
@@ -50,6 +50,7 @@ on another tab, and the scripts after them find no chat.
 | A broken image / video makes the chat jump | `media.mjs [--src=/tmp/x.png] [--tab=1]` | Appends a message with missing media, parks it mid-screen, watches through every automatic retry, then scrolls it out and back in. Run it after touching `chat/ChatMedia.tsx` |
 | At the bottom, expanding a folded row: no jump-to-bottom button, then a snap to the end ~1s later | `expand.mjs [--tab=1]` | Clicks the lowest collapsed toggle on screen while at the bottom: from the first sample on the chat must be off the bottom with the button showing, and stay put for 2s; collapsing it again must land on the end with the button gone. Expanding leaves the bottom (`holding` in `sync`); staying stuck only postponed the snap to the next sync after the 500ms hold. A layout change that puts the chat at the end sticks it again (`sync`): the clamp reads as a move up, so `onScroll` never did |
 | Phone: select text, scroll a few screens, drag a handle: the selection jumps to a strange range (from the page header on) | `select.mjs [--screens=4] [--up]` | Selects text on screen, drags the chat on by touch, extends the selection there, then does what Android Chrome does on a handle move: places the other end again from its handle's screen point, which after scrolling is clipped and lands on the header. The selection must still start in the row it was made in. Two causes, both in ChatList.tsx: `held` keeps the selection's rows mounted (an unmounted row moves that end onto the list); the selectionchange handler puts an anchor that left the rows back (the header case, measured with a trace on the phone) |
+| Switching tabs is slow (not a scroll problem, same tooling) | `gen.mjs` then `tabswitch.mjs [--dev] [--cpu=4] [--keep=6]`, `tabrenders.mjs [--first] [--owners=Tooltip] [--why=SessionPaneView]`, `tabprofile.mjs [--first]`, `tabfirst.mjs` | `gen.mjs` writes synthetic sessions (images, videos, long text) as tabs; `tabswitch` times each switch to the first painted frame with long-animation-frame attribution; `tabrenders` counts React renders per switch (+ = mounted), where a component re-renders from and why (props / context / state); `tabprofile` writes a CPU profile. Findings and what is left: TODO.md "Tab switches: production React by default, and the first visit" |
 | 某一行自己变高矮 | `rows.mjs [--tab=1]` | 行挂上后高度变没变（DOM 没变也会变）、Virtuoso 记的高度和实际对不对 |
 
 用户说「就在这儿闪」：拿那个会话，`fling.mjs --from="那段话"`，先翻到那儿再甩。闪不闪跟内容关系很大，别拿别的会话代替。

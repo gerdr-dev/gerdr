@@ -71,8 +71,19 @@ export async function tab(page, n) {
   const tabs = page.locator("text=/^\\d+\\.\\S+/");
   const names = await tabs.allInnerTexts();
   const i = names.findIndex((t) => /^\d+\.\S+/.test(t) && t.startsWith(`${n}.`));
-  // The sidebar no longer numbers its sessions: with no numbered labels, tab 1 is the one setup.mjs left open.
-  if (i < 0 && !names.length && n === 1) return "";
+  // The unified sidebar shows no numbered tab labels (the tab bar is hidden beside it): switch with the same action as
+  // Ctrl+<n> instead (actions/tabs.ts selectTab, loaded from the exact URL the page uses so it's the page's own copy)
+  if (i < 0 && !names.length) {
+    return page.evaluate(async (n) => {
+      const u = performance.getEntriesByType("resource").map((e) => e.name).find((x) => /\/src\/lib\/actions\/tabs\.ts/.test(x));
+      const tabs = await import(u);
+      const s = window.__store?.get() ?? (await import(performance.getEntriesByType("resource").map((e) => e.name).find((x) => /\/src\/lib\/store\.ts/.test(x)))).get();
+      const ws = s.layout.workspaces.find((w) => w.id === s.layout.active) ?? s.layout.workspaces[0];
+      if (!ws.tabs[n - 1]) throw new Error(`no tab ${n} (there are ${ws.tabs.length})`);
+      tabs.selectTab(n - 1);
+      return `${n}.${ws.tabs[n - 1].id}`;
+    }, n);
+  }
   if (i < 0) throw new Error(`没有第 ${n} 个 tab（有：${names.join(" ")}）`);
   await tabs.nth(i).click();
   return names[i];

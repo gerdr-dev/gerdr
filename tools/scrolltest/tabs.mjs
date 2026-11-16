@@ -11,7 +11,8 @@ await open(page);
 await useStore(page);
 await setConfig(page, { keepTabs: a.keep });
 // Prefix match only: a tab label can carry a status mark after the name ("2.gerdr ‖"), see tab() in lib.mjs.
-const n = (await page.locator("text=/^\\d+\\.\\S+/").allInnerTexts()).length;
+// Numbered labels in the tab bar; beside the unified sidebar there are none, count the layout's tabs then
+const n = (await page.locator("text=/^\\d+\\.\\S+/").allInnerTexts()).length || (await page.evaluate(() => window.__store.get().layout.workspaces[0].tabs.length));
 if (n < 2) throw new Error("要 ≥ 2 个 tab（setup.mjs 给两个会话）");
 let bad = 0;
 for (let r = 0; r < a.rounds; r++) {
