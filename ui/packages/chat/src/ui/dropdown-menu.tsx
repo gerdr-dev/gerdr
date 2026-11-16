@@ -2,11 +2,23 @@ import * as React from "react"
 import { cn } from "../utils"
 import { CheckIcon, ChevronRightIcon, CircleIcon } from "lucide-react"
 import { DropdownMenu as DropdownMenuPrimitive } from "radix-ui"
+import { useOpened } from "./opened"
+
+// Its content mounts on the first open (./opened.ts)
+const MenuOpened = React.createContext(true)
 
 function DropdownMenu({
+  open,
+  defaultOpen,
+  onOpenChange,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Root>) {
-  return <DropdownMenuPrimitive.Root data-slot="dropdown-menu" {...props} />
+  const o = useOpened(open, defaultOpen, onOpenChange)
+  return (
+    <MenuOpened.Provider value={o.opened}>
+      <DropdownMenuPrimitive.Root data-slot="dropdown-menu" open={open} defaultOpen={defaultOpen} onOpenChange={o.onOpenChange} {...props} />
+    </MenuOpened.Provider>
+  )
 }
 
 function DropdownMenuPortal({
@@ -33,6 +45,7 @@ function DropdownMenuContent({
   sideOffset = 4,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Content>) {
+  if (!React.useContext(MenuOpened)) return null
   return (
     <DropdownMenuPrimitive.Portal>
       <DropdownMenuPrimitive.Content

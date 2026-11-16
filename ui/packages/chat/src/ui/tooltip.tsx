@@ -3,6 +3,10 @@
 import * as React from "react"
 import { cn } from "../utils"
 import { Tooltip as TooltipPrimitive } from "radix-ui"
+import { useOpened } from "./opened"
+
+// Its content mounts on the first open (./opened.ts)
+const TooltipOpened = React.createContext(true)
 
 function TooltipProvider({
   delayDuration = 0,
@@ -18,9 +22,17 @@ function TooltipProvider({
 }
 
 function Tooltip({
+  open,
+  defaultOpen,
+  onOpenChange,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Root>) {
-  return <TooltipPrimitive.Root data-slot="tooltip" {...props} />
+  const o = useOpened(open, defaultOpen, onOpenChange)
+  return (
+    <TooltipOpened.Provider value={o.opened}>
+      <TooltipPrimitive.Root data-slot="tooltip" open={open} defaultOpen={defaultOpen} onOpenChange={o.onOpenChange} {...props} />
+    </TooltipOpened.Provider>
+  )
 }
 
 function TooltipTrigger({
@@ -48,6 +60,7 @@ function TooltipContent({
   children,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Content>) {
+  if (!React.useContext(TooltipOpened)) return null
   return (
     <TooltipPrimitive.Portal>
       <TooltipPrimitive.Content

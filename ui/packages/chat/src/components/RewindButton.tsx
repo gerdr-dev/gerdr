@@ -11,8 +11,14 @@ import { t } from "../i18n";
 // 只回退对话，不动文件（以前的文件快照坑太多，删了）。原话放回输入框，改不改、发不发人自己定 ——
 // 以前另有一个「改这句重发」，两个做的事一样（回退都会放回原话），合成了这一个。
 
+// The popover mounts on the first open and then stays (its close animation needs it): every user message has this
+// button, and a closed Radix popover still mounts its root, popper, portal and presence. That was ~10 components per
+// message on a chat's first mount, for a button few messages ever use (tools/scrolltest/tabrenders.mjs --first).
+// The button itself never remounts: the popover is anchored to it through virtualRef, so focus and the "click again
+// to confirm" stay on the same element.
 export function RewindButton({ onConfirm }: { onConfirm: () => void }) {
   const [open, setOpen] = useState(false);
+  const [used, setUsed] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
 
   const confirm = () => {
@@ -22,40 +28,49 @@ export function RewindButton({ onConfirm }: { onConfirm: () => void }) {
   const label = t("rewind.label");
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverAnchor asChild>
-        <button
-          ref={btnRef}
-          data-state={open ? "open" : "closed"}
-          title={open ? t("rewind.clickAgain") : label}
-          className={cn(
-            "rounded-sm p-1 text-muted-foreground hover:bg-muted hover:text-foreground",
-            open && "bg-brand/15 text-brand hover:bg-brand/20 hover:text-brand",
-          )}
-          onClick={() => (open ? confirm() : setOpen(true))}
-        >
-          <RotateCcw className="size-3.5" />
-        </button>
-      </PopoverAnchor>
-      <PopoverContent
-        side="top"
-        align="end"
-        className="w-72 space-y-2 p-3 text-[12px]"
-        // 不抢走「再点一次」：只有点自己这个按钮不算点到外面。
-        // 别按 [data-state="open"] 判断：外层元素也会命中，点别的消息的按钮时这个气泡关不掉。
-        onInteractOutside={(e) => {
-          if (btnRef.current?.contains(e.target as Node)) e.preventDefault();
+    <>
+      <button
+        ref={btnRef}
+        data-state={open ? "open" : "closed"}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        title={open ? t("rewind.clickAgain") : label}
+        className={cn(
+          "rounded-sm p-1 text-muted-foreground hover:bg-muted hover:text-foreground",
+          open && "bg-brand/15 text-brand hover:bg-brand/20 hover:text-brand",
+        )}
+        onClick={() => {
+          if (open) return confirm();
+          setUsed(true);
+          setOpen(true);
         }}
       >
-        <div className="text-[13px] font-medium">{t("rewind.question")}</div>
-        <div className="text-muted-foreground">{t("rewind.explain")}</div>
-        <div className="flex items-center justify-between gap-2 pt-1">
-          <span className="text-[11px] text-muted-foreground">{t("rewind.hint")}</span>
-          <Button size="sm" className="h-7" autoFocus onClick={confirm}>
-            {t("rewind.confirm")}
-          </Button>
-        </div>
-      </PopoverContent>
-    </Popover>
+        <RotateCcw className="size-3.5" />
+      </button>
+      {used && (
+        <Popover open={open} onOpenChange={setOpen}>
+          <PopoverAnchor virtualRef={btnRef} />
+          <PopoverContent
+            side="top"
+            align="end"
+            className="w-72 space-y-2 p-3 text-[12px]"
+            // 不抢走「再点一次」：只有点自己这个按钮不算点到外面。
+            // 别按 [data-state="open"] 判断：外层元素也会命中，点别的消息的按钮时这个气泡关不掉。
+            onInteractOutside={(e) => {
+              if (btnRef.current?.contains(e.target as Node)) e.preventDefault();
+            }}
+          >
+            <div className="text-[13px] font-medium">{t("rewind.question")}</div>
+            <div className="text-muted-foreground">{t("rewind.explain")}</div>
+            <div className="flex items-center justify-between gap-2 pt-1">
+              <span className="text-[11px] text-muted-foreground">{t("rewind.hint")}</span>
+              <Button size="sm" className="h-7" autoFocus onClick={confirm}>
+                {t("rewind.confirm")}
+              </Button>
+            </div>
+          </PopoverContent>
+        </Popover>
+      )}
+    </>
   );
 }
