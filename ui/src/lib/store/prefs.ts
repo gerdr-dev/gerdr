@@ -58,8 +58,16 @@ export function setPref(patch: DevicePrefs) {
   } catch {}
 }
 
+/**
+ * The mode this window starts in: its own project's (the address /<project id>), then the last one used anywhere.
+ * Windows share localStorage, so "gerdr.mode" is whichever window switched last: after a backend upgrade reloaded every
+ * window at once, a window left in Code came back in another window's Work view (user report).
+ */
 export function loadMode(): "agents" | "work" {
   try {
+    const space = decodeURIComponent(location.pathname.split("/")[1] ?? "") || new URLSearchParams(location.search).get("space");
+    const own = space ? loadSpaceModes()[space] : undefined;
+    if (own === "work" || own === "agents") return own;
     return localStorage.getItem("gerdr.mode") === "work" ? "work" : "agents";
   } catch {
     return "agents";

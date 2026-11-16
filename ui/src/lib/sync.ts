@@ -3,12 +3,13 @@
 // 接不上（重启过、日志被改写过）整份重推 —— 对账在服务端（hub.eventsAfter），这边照单全收。
 import { api, ApiError, clientId, onAuthLost } from "./api";
 import { toast } from "sonner";
-import { validLayout, withView } from "./layout";
+import { currentSpace, validLayout, withView } from "./layout";
 import { isNative, nativeNotify, runRelayedUpdateOp } from "./native";
 import { emitSessionChange } from "./addons";
 import {
   applyEvents,
   applyRemoteLayout,
+  enterSpaceMode,
   get,
   gotUnread,
   loadView,
@@ -97,8 +98,11 @@ async function start() {
     unreadSync.server = !!h.unread;
     gotUnread(h.unread);
     // 打开页面：服务端那份布局 + 这个端上次自己看的位置（不然一刷新就跳到别的端最后看的地方）
-    if (validLayout(h.layout)) set({ layout: withView(h.layout, loadView()) });
-    else setLayout((l) => l); // 第一次：把默认布局存下去
+    // …and the mode that project was left in on this device, not the last mode of any window (they share localStorage)
+    if (validLayout(h.layout)) {
+      const l = withView(h.layout, loadView());
+      set({ layout: l, ...enterSpaceMode(currentSpace(l)) });
+    } else setLayout((l) => l); // 第一次：把默认布局存下去
     pruneLayout();
     if (wantSpace) import("./actions").then((a) => a.switchSpace(wantSpace));
     connect();
