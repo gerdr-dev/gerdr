@@ -447,6 +447,7 @@ func (s *Server) remoteRoutes(mux *http.ServeMux) {
 		// passkey 一起清：只清设备的话，任何一把还留着的 passkey 都能立刻换回一份新凭据
 		// （passkey 登录那条口按设计不要求认证）—— 见 auth.RevokeEverything。
 		n, keys := auth.RevokeEverything(s.Remote.Auth, s.Remote.Passkeys)
+		s.kickDevice("") // their open pages too, not only their next request
 		if auth.FromRemote(r) {
 			s.Remote.Auth.ClearCookie(w) // 包括自己
 		}
@@ -458,6 +459,7 @@ func (s *Server) remoteRoutes(mux *http.ServeMux) {
 			httpError(w, 404, i18n.S("没有这台设备", "No such device"))
 			return
 		}
+		s.kickDevice(r.PathValue("id"))
 		if s.myDevice(r) == r.PathValue("id") {
 			s.Remote.Auth.ClearCookie(w)
 		}
@@ -471,7 +473,15 @@ func (s *Server) remoteRoutes(mux *http.ServeMux) {
 			httpError(w, 404, i18n.S("没有这台设备", "No such device"))
 			return
 		}
-		writeJSON(w, map[string]any{"label": label, "passkeys": s.Remote.Passkeys.Count()})
+		s.kickDevice(r.PathValue("id")) // so the prompt comes now, not at its next request
+		// appKey: the device can re-verify with its own Face ID / fingerprint key even with no passkey registered
+		appKey := false
+		for _, d := range s.Remote.Auth.Devices() {
+			if d.ID == r.PathValue("id") {
+				appKey = d.AppKey != nil
+			}
+		}
+		writeJSON(w, map[string]any{"label": label, "passkeys": s.Remote.Passkeys.Count(), "appKey": appKey})
 	})
 	mux.HandleFunc("GET /api/remote/passkeys", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"passkeys": s.Remote.Passkeys.List(), "available": s.passkeyOK(r), "url": s.Remote.URL()})

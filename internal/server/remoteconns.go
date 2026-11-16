@@ -24,9 +24,10 @@ type RemoteConn struct {
 }
 
 type remoteConns struct {
-	mu   sync.Mutex
-	next int64
-	m    map[int64]RemoteConn
+	mu    sync.Mutex
+	next  int64
+	m     map[int64]RemoteConn
+	kicks map[int64]func() // closes that /ws (kickDevice)
 }
 
 func (rc *remoteConns) list() []RemoteConn {
@@ -41,7 +42,8 @@ func (rc *remoteConns) list() []RemoteConn {
 }
 
 // trackRemote 登记一条远程 /ws，返回断开时调的函数。连上、断开都广播一次（界面上的红点和列表跟着变）。
-func (s *Server) trackRemote(r *http.Request) func() {
+// kick closes the connection: revoking a device or asking it to re-verify cuts its open UI at once (kickDevice).
+func (s *Server) trackRemote(r *http.Request, kick ...func()) func() {
 	c := RemoteConn{IP: auth.ClientIP(r), Client: uaBrief(r.UserAgent()), Since: time.Now().UnixMilli()}
 	if s.Remote != nil {
 		if id := s.Remote.Auth.Authenticate(r); id != nil {
@@ -56,17 +58,43 @@ func (s *Server) trackRemote(r *http.Request) func() {
 	rc.next++
 	c.ID = rc.next
 	rc.m[c.ID] = c
+	if len(kick) > 0 {
+		if rc.kicks == nil {
+			rc.kicks = map[int64]func(){}
+		}
+		rc.kicks[c.ID] = kick[0]
+	}
 	rc.mu.Unlock()
 	s.broadcastRemoteConns()
 	return func() {
 		rc.mu.Lock()
 		delete(rc.m, c.ID)
+		delete(rc.kicks, c.ID)
 		rc.mu.Unlock()
 		// The break before a due re-verification starts now, not at the last HTTP request (auth.ReauthNeeded)
 		if c.Device != "" && s.Remote != nil {
 			s.Remote.Auth.Touch(c.Device)
 		}
 		s.broadcastRemoteConns()
+	}
+}
+
+// kickDevice closes the open remote UIs of a device ("" = every device). A /ws is authenticated once, when it
+// opens, and then streams every session it watches: without this a revoked device kept receiving them for as long
+// as its page stayed open, and one asked to re-verify saw no prompt until its next HTTP request. The page reconnects
+// at once and the guard then sends it to pairing / re-verification.
+func (s *Server) kickDevice(device string) {
+	rc := &s.remoteConns
+	var kicks []func()
+	rc.mu.Lock()
+	for id, c := range rc.m {
+		if k := rc.kicks[id]; k != nil && (device == "" || c.Device == device) {
+			kicks = append(kicks, k)
+		}
+	}
+	rc.mu.Unlock()
+	for _, k := range kicks {
+		k()
 	}
 }
 

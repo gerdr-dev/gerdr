@@ -48,6 +48,26 @@ func TestRemoteConns(t *testing.T) {
 	}
 }
 
+// Revoking a device or asking it to re-verify closes its open remote UI right away (kickDevice), not only its next request.
+func TestKickDeviceConns(t *testing.T) {
+	s, _, rh := remoteServer(t)
+	_, tok := s.Remote.Auth.NewDevice("iPhone GerdrApp/1", "", "")
+	dev := &http.Cookie{Name: auth.CookieName, Value: tok}
+	ws := httptest.NewRequest("GET", "https://"+testHost+"/ws", nil)
+	ws.AddCookie(dev)
+	kicked := 0
+	release := s.trackRemote(auth.MarkRemote(ws), func() { kicked++ })
+	defer release()
+	id := s.remoteConns.list()[0].Device
+	if w := do(rh, "POST", "/api/remote/devices/"+id+"/reverify", body("{}")(), cookie(dev), csrf); w.Code != 200 || kicked != 1 {
+		t.Fatalf("reverify should close its open UI: %d %s, kicked %d", w.Code, w.Body, kicked)
+	}
+	s.kickDevice("someone-else")
+	if kicked != 1 {
+		t.Fatal("another device's kick must not touch it")
+	}
+}
+
 func TestUABrief(t *testing.T) {
 	for ua, want := range map[string]string{
 		"Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36 EdgA/130.0":                    "Android · Edge",

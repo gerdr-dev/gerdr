@@ -178,6 +178,7 @@ func remoteCmd() *cobra.Command {
 			var out struct {
 				Label    string
 				Passkeys int
+				AppKey   bool
 			}
 			if c, err := newAPIClient(); err == nil {
 				if err := c.do("POST", "/api/remote/devices/"+url.PathEscape(id)+"/reverify", nil, &out); err != nil {
@@ -193,10 +194,15 @@ func remoteCmd() *cobra.Command {
 					return fmt.Errorf(i18n.S("没有这台设备：%s", "no such device: %s"), id)
 				}
 				out.Label, out.Passkeys = label, s.Passkeys.Count()
+				for _, d := range s.Auth.Devices() {
+					if d.ID == id {
+						out.AppKey = d.AppKey != nil
+					}
+				}
 			}
 			fmt.Printf(i18n.S("  %s 下次访问时要重新验证\n", "  %s will re-verify on its next request\n"), out.Label)
-			if out.Passkeys == 0 {
-				fmt.Println(i18n.S("  （还没注册 passkey，所以眼下不会要求它验证）", "  (no passkey registered yet, so it won't be asked for now)"))
+			if out.Passkeys == 0 && !out.AppKey {
+				fmt.Println(i18n.S("  （还没注册 passkey，这台设备也没有 App 密钥，所以眼下不会要求它验证）", "  (no passkey registered and the device has no App key, so it won't be asked for now)"))
 			}
 			return nil
 		},

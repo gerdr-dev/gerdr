@@ -34,6 +34,8 @@ export function RemoteSettings({ open }: { open: boolean }) {
   const [msg, setMsg] = useState("");
   const [confirmAll, setConfirmAll] = useState(false);
   const [stepUp, setStepUp] = useState(false);
+  // Devices just asked to re-verify: the button itself says so (the message at the top is often scrolled away)
+  const [asked, setAsked] = useState<Record<string, boolean>>({});
 
   const load = useCallback(async () => {
     try {
@@ -217,21 +219,28 @@ export function RemoteSettings({ open }: { open: boolean }) {
                 </div>
               </div>
               {/* Re-verify without kicking it (gerdr remote reverify): only where re-verification exists at all — a
-                  passkey registered, not another Gerdr, not a temporary device that dies on its own anyway */}
-              {keys.length > 0 && !d.peer && !d.temp && (
+                  passkey registered or the device's own App key, not another Gerdr, not a temporary device that dies on its own anyway */}
+              {(keys.length > 0 || d.appKey) && !d.peer && !d.temp && (
                 <Button
                   size="sm"
                   variant="ghost"
                   title={t("remoteSettings.reverifyHint")}
+                  disabled={asked[d.id]}
                   onClick={() =>
                     run(async () => {
-                      const r = await api.remoteReverify(d.id);
-                      if (d.id === me) location.reload();
-                      else setMsg(t("remoteSettings.reverified", { label: r.label }));
+                      setAsked((a) => ({ ...a, [d.id]: true }));
+                      try {
+                        const r = await api.remoteReverify(d.id);
+                        if (d.id === me) location.reload();
+                        else setMsg(t("remoteSettings.reverified", { label: r.label }));
+                      } catch (e) {
+                        setAsked((a) => ({ ...a, [d.id]: false }));
+                        throw e;
+                      }
                     })
                   }
                 >
-                  {t("remoteSettings.reverify")}
+                  {asked[d.id] ? t("remoteSettings.reverifyAsked") : t("remoteSettings.reverify")}
                 </Button>
               )}
               <Button

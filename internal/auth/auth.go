@@ -414,7 +414,7 @@ func (s *Store) CheckTampered(alert func(string)) {
 // RequireReverify makes a device prove presence again on its next request (a passkey, an approval, or its App key's
 // Face ID), without revoking it: for a device that looks wrong but shouldn't have to pair again. It only drops
 // VerifiedAt; PasskeyAt, the credential and the App key stay. Has an effect only where re-verification applies at
-// all (ReauthNeeded: a passkey registered, not a peer). Returns the device's label.
+// all (ReauthNeeded: a passkey registered or the device's own App key, not a peer). Returns the device's label.
 func (s *Store) RequireReverify(id string) (string, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

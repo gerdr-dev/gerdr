@@ -42,8 +42,9 @@ func (s *Server) ws(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.Close()
 	// 远程界面开着就一直有这条 /ws（走到这儿已经过了 remoteGuard，是配过对的设备）：按它算「有远程连着」
-	if auth.FromRemote(r) {
-		defer s.trackRemote(r)()
+	remote := auth.FromRemote(r)
+	if remote {
+		defer s.trackRemote(r, func() { _ = conn.Close() })()
 		if s.Awake != nil {
 			defer s.Awake.Hold()()
 		}
@@ -169,6 +170,14 @@ func (s *Server) ws(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		case <-ping.C:
+			// A remote /ws is checked again on every ping, not only when it opened: the device may have been revoked
+			// from another place (the CLI, an offline edit), expired, or hit the hard re-verification limit while the
+			// page stayed open. Closing it makes the page reconnect into the guard (pairing / re-verification).
+			if remote && s.Remote != nil {
+				if id := s.Remote.Auth.Authenticate(r); id == nil || s.reauthNeeded(id) {
+					return
+				}
+			}
 			_ = conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 			if conn.WriteMessage(websocket.PingMessage, nil) != nil {
 				return
