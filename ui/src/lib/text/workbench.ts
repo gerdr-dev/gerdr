@@ -82,6 +82,7 @@ export const zh = {
   "palette.empty": "没有匹配的",
   "palette.commands": "命令",
   "palette.sessions": "会话",
+  "palette.panel": "当前面板",
 
   // TabBar
   "tabBar.duplicateAfter": "复制到后面",
@@ -288,6 +289,7 @@ export const en: Record<keyof typeof zh, string> = {
   "palette.empty": "No matches",
   "palette.commands": "Commands",
   "palette.sessions": "Sessions",
+  "palette.panel": "This panel",
 
   "tabBar.duplicateAfter": "Duplicate after",
   "tabBar.duplicateBefore": "Duplicate before",

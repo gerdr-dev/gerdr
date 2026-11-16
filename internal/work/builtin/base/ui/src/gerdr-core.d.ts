@@ -206,6 +206,33 @@ declare module "@gerdr/core" {
    */
   export function usePhoneMenu(items: PhoneMenuItem[]): void;
 
+  /** One row of this panel's part of the command palette (useSearchItems). */
+  export interface SearchItem {
+    /** Stable per item (defaults to the label). Searched too, so a short id like "t144" finds its row. */
+    id?: string;
+    label: string;
+    /** A short word at the row's end, kept whole (a status): keep it short, the label gives way to it. Searched too. */
+    detail?: string;
+    /** detail's theme colour, as the panel colours the same status (default: muted). */
+    tone?: "brand" | "ok" | "warn" | "bad";
+    /** detail as a filled pill in its tone: a status that wants attention, like a board's 等你 badge. */
+    pill?: boolean;
+    /** More words to match that aren't shown (a summary, tags). */
+    keywords?: string;
+    /** E.g. a lucide icon element. */
+    icon?: ReactNode;
+    /** The palette closes, then this runs (open the thing in the page). */
+    onSelect: () => void;
+  }
+
+  /**
+   * This panel's rows in Gerdr's command palette (⌘K). While this panel is shown, ⌘K lists them first, under the
+   * panel's name (or heading), above commands and conversations, and filters them by what's typed. Give what someone
+   * would look for in the panel (a board's tasks, a site's pages). Call it once in the page with the current list;
+   * the list can be long (hundreds of rows), only the matching ones are drawn.
+   */
+  export function useSearchItems(items: SearchItem[], opts?: { heading?: string }): void;
+
   export function registerCard(type: string, component: ComponentType<CardProps>): () => void;
 
   /** The built-in card (title, body, choices answerable in place with undo), for a card type that only adds to it. */
