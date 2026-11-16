@@ -102,6 +102,12 @@ the 100.x address on the phone) and the certificate comes from tailscaled (`remo
   GUI app's LocalAPI sits behind a port + token), and the module is a big dependency for two calls. Looked up on
   the login PATH, then `/Applications/Tailscale.app/Contents/MacOS/Tailscale` (the GUI binary is the CLI when given
   arguments), Homebrew, Program Files.
+- **Every CLI is tried, with tailscaled's socket**: a CLI-only install (tailscaled run by hand, often
+  `--socket=…` / userspace networking) is invisible to a CLI looking at the default socket, which says "failed to
+  connect to local tailscaled" though it runs. So `--socket` is read off the running tailscaled (`ps`), each
+  `tailscale` on the login PATH and the usual install paths is tried, and the first that answers is kept. Failing
+  that, the CLI path / socket can be set by hand (connect form, `--tailscale-bin` / `--tailscale-socket`,
+  remote.json `tailscaleBin` / `tailscaleSocket`, `GERDR_TAILSCALE_BIN` / `_SOCKET`); errors keep the CLI's words.
 - **`--cert-file - --key-file -`**: the Mac App Store build's CLI is sandboxed and writes files into its container,
   not where it's told. Both on stdout come out as the chain then the key; `tailscale.split` separates them.
 - **Renewal is tailscaled's**: it caches the cert and renews it; we ask again every 12 h and rewrite the files only

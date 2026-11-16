@@ -438,6 +438,7 @@ func directCmd() *cobra.Command {
 	var o certOpts
 	var urlPort int
 	var ts bool
+	var tsBin, tsSocket string
 	c := &cobra.Command{
 		Use: i18n.S("direct <主机名> | direct --tailscale", "direct <host> | direct --tailscale"),
 		Short: i18n.S("直接访问，不走中继：Gerdr 在局域网直连口上对外，手机怎么连过来（Tailscale / frp / 端口转发）是你自己的网络",
@@ -475,6 +476,11 @@ func directCmd() *cobra.Command {
 			case ts && len(args) > 0:
 				return errors.New(i18n.S("--tailscale 不要主机名：用的是这台机器在 tailnet 里的名字", "--tailscale takes no host: it uses this machine's tailnet name"))
 			case ts:
+				if tsBin != "" || tsSocket != "" {
+					tailscale.SetManual(tsBin, tsSocket)
+				} else if f, err := config.ReadRemoteFile(env.Dir); err == nil {
+					tailscale.SetManual(f.TailscaleBin, f.TailscaleSock)
+				}
 				in := tailscale.Detect(context.Background())
 				if in.Problem != "" {
 					return errors.New(in.Problem)
@@ -508,6 +514,9 @@ func directCmd() *cobra.Command {
 			f.RelayURL, f.Host, f.Direct, f.URLPort = "", host, true, urlPort
 			if ts {
 				f.ACMEDNS, f.TLSCert, f.TLSKey, f.Env, f.Tailscale = "", "", "", nil, true
+				if tsBin != "" || tsSocket != "" {
+					f.TailscaleBin, f.TailscaleSock = tsBin, tsSocket
+				}
 			}
 			if err := o.apply(&f); err != nil {
 				return err
@@ -528,6 +537,8 @@ func directCmd() *cobra.Command {
 		},
 	}
 	c.Flags().BoolVar(&ts, "tailscale", false, i18n.S("不用自己的域名：用这台机器在 tailnet 里的名字，证书找 Tailscale 要", "no domain of your own: use this machine's tailnet name, with its certificate from Tailscale"))
+	c.Flags().StringVar(&tsBin, "tailscale-bin", "", i18n.S("和 --tailscale 一起：tailscale 命令的路径（找不到时手动给）", "with --tailscale: path of the tailscale command (when it isn't found)"))
+	c.Flags().StringVar(&tsSocket, "tailscale-socket", "", i18n.S("和 --tailscale 一起：tailscaled 的 socket（它是用 --socket 起的时候）", "with --tailscale: tailscaled's socket (when it was started with --socket)"))
 	c.Flags().IntVar(&urlPort, "url-port", 0, i18n.S("手机打开的地址里的端口：不给 = 局域网直连口（Tailscale）；443 = 不带端口（frp / 端口转发对外是 443）", "port in the address phones open: none = the LAN port (Tailscale); 443 = no port (frp / a port forward facing the internet on 443)"))
 	o.bind(c)
 	return c

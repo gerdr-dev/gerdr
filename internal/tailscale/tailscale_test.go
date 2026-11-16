@@ -60,3 +60,17 @@ func TestExplain(t *testing.T) {
 		t.Fatal(e)
 	}
 }
+
+// A tailscaled started with its own socket: the CLI needs the same --socket to find it.
+func TestSocketFromPS(t *testing.T) {
+	for ps, want := range map[string]string{
+		"/usr/sbin/sshd\n/opt/homebrew/bin/tailscaled --state=/x/ts.state --socket=/tmp/ts.sock --tun=userspace-networking\n": "/tmp/ts.sock",
+		"sudo tailscaled -socket /var/run/ts.sock\ntailscaled -socket /var/run/ts.sock\n":                                     "/var/run/ts.sock",
+		"/usr/local/bin/tailscaled\n":     "",
+		"vim tailscaled --socket=/nope\n": "",
+	} {
+		if got := socketFromPS(ps); got != want {
+			t.Errorf("%q: got %q, want %q", ps, got, want)
+		}
+	}
+}

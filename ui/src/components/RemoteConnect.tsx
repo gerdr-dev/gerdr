@@ -34,12 +34,21 @@ export function RemoteConnect({
   // needs no domain, DNS credentials or relay (remote.Service.ConnectTailscale).
   const [ts, setTs] = useState<{ name?: string; problem?: string } | null>(null);
   const [checking, setChecking] = useState(false);
-  const detect = async (first: boolean) => {
+  // Set by hand when finding Tailscale fails (a tailscaled started with its own --socket, a CLI somewhere unusual)
+  const [manual, setManual] = useState(false);
+  const [tsBin, setTsBin] = useState("");
+  const [tsSocket, setTsSocket] = useState("");
+  const detect = async (first: boolean, save = false) => {
     setChecking(true);
     try {
-      const r = await api.remoteTailscale();
-      setTs(r);
-      if (first && r.name && !r.problem) setMode("tailscale");
+      const r = save ? await api.remoteSetTailscale(tsBin, tsSocket) : await api.remoteTailscale();
+      setTs(r.info);
+      if (first) {
+        setTsBin(r.bin);
+        setTsSocket(r.socket);
+        if (r.bin || r.socket) setManual(true);
+        if (r.info.name && !r.info.problem) setMode("tailscale");
+      }
     } catch (e) {
       setTs({ problem: (e as Error).message });
     } finally {
@@ -98,13 +107,45 @@ export function RemoteConnect({
             )}
             {(!ts || ts.problem) && (
               <div className="flex items-start justify-between gap-3 text-[12px]">
-                <div className={ts ? "text-warn" : "text-muted-foreground"}>{ts ? ts.problem : t("remoteConnect.tailscaleChecking")}</div>
+                <div className={ts ? "whitespace-pre-wrap text-warn" : "text-muted-foreground"}>{ts ? ts.problem : t("remoteConnect.tailscaleChecking")}</div>
                 {ts && (
                   <Button size="sm" variant="outline" className="shrink-0" disabled={checking} onClick={() => detect(false)}>
                     {checking ? t("remoteConnect.tailscaleChecking") : t("remoteConnect.tailscaleRecheck")}
                   </Button>
                 )}
               </div>
+            )}
+            {manual ? (
+              <>
+                <Field label={t("remoteConnect.tailscaleBin")}>
+                  <Input
+                    className="font-mono text-[12px]"
+                    placeholder={t("remoteConnect.tailscaleAuto")}
+                    spellCheck={false}
+                    value={tsBin}
+                    onChange={(e) => setTsBin(e.target.value)}
+                  />
+                </Field>
+                <Field label={t("remoteConnect.tailscaleSocket")}>
+                  <Input
+                    className="font-mono text-[12px]"
+                    placeholder={t("remoteConnect.tailscaleAuto")}
+                    spellCheck={false}
+                    value={tsSocket}
+                    onChange={(e) => setTsSocket(e.target.value)}
+                  />
+                </Field>
+                <div className="flex items-center justify-between gap-3 text-[12px] text-muted-foreground">
+                  <div>{t("remoteConnect.tailscaleManualHint")}</div>
+                  <Button size="sm" variant="outline" className="shrink-0" disabled={checking} onClick={() => detect(false, true)}>
+                    {checking ? t("remoteConnect.tailscaleChecking") : t("remoteConnect.tailscaleSave")}
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <button type="button" className="self-start text-[12px] text-brand underline-offset-2 hover:underline" onClick={() => setManual(true)}>
+                {t("remoteConnect.tailscaleManual")}
+              </button>
             )}
             <div className="text-[12px] text-muted-foreground">{t("remoteConnect.tailscaleNote")}</div>
           </>

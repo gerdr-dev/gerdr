@@ -69,6 +69,7 @@ func Open(dataDir string, cfg config.Remote, log *slog.Logger) (*Service, error)
 	if err != nil {
 		return nil, err
 	}
+	tailscale.SetManual(cfg.TailscaleBin, cfg.TailscaleSocket)
 	g := auth.NewGate()
 	s := &Service{cfg: cfg, Dir: dir, Auth: store, Passkeys: pk, Gate: g, Approvals: auth.NewApprovals(), log: log}
 	g.Alert = s.alert
@@ -518,6 +519,34 @@ func (s *Service) ConnectTailscale(ctx context.Context) (string, error) {
 	return in.Name, s.connectDirect(in.Name, 0, true)
 }
 
+// TailscaleManual is what's set by hand for finding Tailscale (empty = found automatically).
+func (s *Service) TailscaleManual() (bin, socket string) {
+	cfg := s.Config()
+	return cfg.TailscaleBin, cfg.TailscaleSocket
+}
+
+// SetTailscaleManual saves the tailscale CLI path and tailscaled socket set by hand (empty = find them) and uses
+// them from now on; remote access running on Tailscale is restarted so its certificate is fetched the new way.
+func (s *Service) SetTailscaleManual(bin, socket string) error {
+	bin, socket = strings.TrimSpace(bin), strings.TrimSpace(socket)
+	f, err := config.ReadRemoteFile(s.dataDir())
+	if err != nil {
+		return err
+	}
+	f.TailscaleBin, f.TailscaleSock = bin, socket
+	if err := config.WriteRemoteFile(s.dataDir(), f); err != nil {
+		return err
+	}
+	if s.Config().Tailscale {
+		return s.Reload()
+	}
+	s.mu.Lock()
+	s.cfg.TailscaleBin, s.cfg.TailscaleSocket = bin, socket
+	s.mu.Unlock()
+	tailscale.SetManual(bin, socket)
+	return nil
+}
+
 func (s *Service) connectDirect(host string, urlPort int, ts bool) error {
 	if envLocked() {
 		return errEnvLocked
@@ -584,6 +613,7 @@ func (s *Service) Reload() error {
 		return err
 	}
 	s.stop()
+	tailscale.SetManual(cfg.TailscaleBin, cfg.TailscaleSocket)
 	rpid, origins := relyingParty(cfg)
 	perr := s.Passkeys.SetRP(rpid, origins)
 	s.mu.Lock()

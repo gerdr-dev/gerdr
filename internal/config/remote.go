@@ -33,6 +33,9 @@ type Remote struct {
 	// Tailscale: the certificate comes from the Tailscale client on this machine (`tailscale cert`), for its tailnet
 	// name (Host is that name). The no-domain way in, with direct access. remote.json `tailscale`.
 	Tailscale bool
+	// TailscaleBin / TailscaleSocket: the tailscale CLI and tailscaled's socket, set by hand when finding them fails
+	// (a tailscaled started with its own --socket). Empty = find them. Describe this machine, so Remove keeps them.
+	TailscaleBin, TailscaleSocket string
 	// DeviceTTL：设备凭据的滑动过期，GERDR_DEVICE_TTL_DAYS，默认 90，0 = 永不过期。
 	DeviceTTL time.Duration
 	// ReauthAfter：注册过 passkey 之后多久要再验一次，GERDR_REAUTH_HOURS，默认 24，0 = 不要求。
@@ -86,6 +89,8 @@ type RemoteFile struct {
 	TLSCert       string            `json:"tlsCert,omitempty"`
 	TLSKey        string            `json:"tlsKey,omitempty"`
 	Tailscale     bool              `json:"tailscale,omitempty"`
+	TailscaleBin  string            `json:"tailscaleBin,omitempty"`
+	TailscaleSock string            `json:"tailscaleSocket,omitempty"`
 	DeviceTTLDays *int              `json:"deviceTTLDays,omitempty"`
 	ReauthHours   *int              `json:"reauthHours,omitempty"`
 	LanPort       *int              `json:"lanPort,omitempty"`
@@ -178,6 +183,7 @@ func LoadRemote(dir string) (Remote, error) {
 		r.LanPort = p
 	}
 	r.Direct, r.Tailscale = f.Direct, f.Tailscale
+	r.TailscaleBin, r.TailscaleSocket = f.TailscaleBin, f.TailscaleSock
 	if f.URLPort > 0 && f.URLPort < 65536 {
 		r.URLPort = f.URLPort
 	}

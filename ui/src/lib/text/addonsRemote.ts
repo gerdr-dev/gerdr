@@ -268,6 +268,13 @@ export const zh = {
   "remoteConnect.tailscaleChecking": "正在看 Tailscale…",
   "remoteConnect.tailscaleRecheck": "再看一次",
   "remoteConnect.tailscaleIssuing": "正在找 Tailscale 要证书…",
+  "remoteConnect.tailscaleManual": "找不到？手动指定 tailscale 命令 / socket",
+  "remoteConnect.tailscaleBin": "tailscale 命令",
+  "remoteConnect.tailscaleSocket": "tailscaled socket",
+  "remoteConnect.tailscaleAuto": "留空 = 自动找",
+  "remoteConnect.tailscaleSave": "保存并重试",
+  "remoteConnect.tailscaleManualHint":
+    "命令行版 Tailscale 用 --socket 起 tailscaled 时，填同一个 socket 路径（终端里能用的 tailscale --socket=… 那个）。也可以不用 Tailscale 给的证书：「直接访问」里填 ts.net 名字，证书用 tailscale cert 生成的两个文件。",
   "remoteConnect.tailscaleNote": "第一次要证书要几十秒。这个名字会出现在公开的证书透明日志里（Tailscale 的 HTTPS 证书都这样）。",
   "remoteConnect.directIntro":
     "不走中继：Gerdr 在 {port} 端口上用这个域名的证书对外，配对码 / Passkey 的规则和中继一样。手机怎么连到这台 Mac 由你自己的网络负责。",
@@ -583,6 +590,13 @@ export const en: Record<keyof typeof zh, string> = {
   "remoteConnect.tailscaleChecking": "Checking Tailscale…",
   "remoteConnect.tailscaleRecheck": "Check again",
   "remoteConnect.tailscaleIssuing": "Getting the certificate from Tailscale…",
+  "remoteConnect.tailscaleManual": "Not found? Set the tailscale command / socket by hand",
+  "remoteConnect.tailscaleBin": "tailscale command",
+  "remoteConnect.tailscaleSocket": "tailscaled socket",
+  "remoteConnect.tailscaleAuto": "empty = find it",
+  "remoteConnect.tailscaleSave": "Save and retry",
+  "remoteConnect.tailscaleManualHint":
+    "If tailscaled runs with --socket (the CLI-only setup), enter that socket path (the one tailscale --socket=… works with in a terminal). Or skip Tailscale's certificate: in Direct access, enter the ts.net name and use the two files tailscale cert makes.",
   "remoteConnect.tailscaleNote":
     "The first certificate takes tens of seconds. The name shows up in public Certificate Transparency logs (true of every Tailscale HTTPS certificate).",
   "remoteConnect.directIntro":

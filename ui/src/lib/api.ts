@@ -506,7 +506,9 @@ export const api = {
   /** Direct access instead of the relay (config.Remote.Direct): urlPort is the port in the address, 0 = the LAN port */
   remoteConnectDirect: (host: string, urlPort: number) => req("POST", "/api/remote/connect", { direct: true, host, urlPort }),
   /** This machine's tailnet name, or why Tailscale can't be used (not installed / signed out / HTTPS certificates off) */
-  remoteTailscale: () => req<{ name?: string; problem?: string }>("GET", "/api/remote/tailscale"),
+  remoteTailscale: () => req<TailscaleState>("GET", "/api/remote/tailscale"),
+  /** The tailscale CLI path / tailscaled socket set by hand (empty = find them); answers like remoteTailscale */
+  remoteSetTailscale: (bin: string, socket: string) => req<TailscaleState>("POST", "/api/remote/tailscale", { bin, socket }),
   /** Direct access on the tailnet name with Tailscale's certificate: no domain, no DNS */
   remoteConnectTailscale: () => req("POST", "/api/remote/connect", { tailscale: true }),
   remoteDisconnect: () => req<{ revoked: number; passkeys: number }>("POST", "/api/remote/disconnect", {}),
@@ -554,6 +556,8 @@ export type Busy = { version: string; turns: number; waiting: number; tasks: num
 export type ServiceStatus = { why: string; installed: boolean; pid: number; self: boolean; log: string };
 export type StepUpRequest = { id: string; deviceId: string; label: string; code: string; expires: string };
 export type DNSProvider = { name: string; label: string; help: string; fields: { env: string; label: string; secret: boolean }[] };
+/** Tailscale on this machine (tailscale.Detect) plus what's set by hand for finding it */
+export type TailscaleState = { info: { name?: string; problem?: string }; bin: string; socket: string };
 export type RemoteCert = {
   dns: string;
   email: string;

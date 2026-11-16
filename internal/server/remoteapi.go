@@ -318,8 +318,23 @@ func (s *Server) remoteRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/remote/dns/host", hostRecord(true))
 	// Whether this machine can use Tailscale for remote access (its tailnet name, or why not): the connect form
 	// offers it first when it can. Local only like connect itself.
-	mux.HandleFunc("GET /api/remote/tailscale", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, tailscale.Detect(r.Context()))
+	tsInfo := func(w http.ResponseWriter, r *http.Request) {
+		bin, socket := s.Remote.TailscaleManual()
+		writeJSON(w, map[string]any{"info": tailscale.Detect(r.Context()), "bin": bin, "socket": socket})
+	}
+	mux.HandleFunc("GET /api/remote/tailscale", tsInfo)
+	// The CLI path / tailscaled socket set by hand (empty = find them), then the same answer as GET
+	mux.HandleFunc("POST /api/remote/tailscale", func(w http.ResponseWriter, r *http.Request) {
+		var in struct{ Bin, Socket string }
+		if err := decode(r, &in); err != nil {
+			httpError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		if err := s.Remote.SetTailscaleManual(in.Bin, in.Socket); err != nil {
+			httpError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		tsInfo(w, r)
 	})
 	// 连接 / 移除 / 重读配置：都只在本机（remoteGuard 拦了远程那一侧），改完当场生效、不用重启。
 	mux.HandleFunc("POST /api/remote/connect", func(w http.ResponseWriter, r *http.Request) {

@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gerdr-dev/gerdr/internal/i18n"
@@ -39,34 +40,155 @@ type Info struct {
 	Problem string `json:"problem,omitempty"`
 }
 
-// bin finds the CLI: PATH (a login shell's, the App starts with launchd's), then where the installers put it.
-func bin() (string, error) {
-	if p, err := sysenv.FindBin("tailscale"); err == nil {
-		return p, nil
+// Manual overrides (Settings → Remote access → Tailscale → set by hand, remote.json `tailscaleBin` /
+// `tailscaleSocket`; GERDR_TAILSCALE_BIN / GERDR_TAILSCALE_SOCKET win over them). Needed when tailscaled was started
+// by hand with its own --socket, or the CLI lives somewhere unusual: the CLI then can't find the daemon by itself.
+var (
+	mu                      sync.Mutex
+	manualBin, manualSocket string
+	picked                  string // the binary that answered last time: Cert uses the same one
+)
+
+// SetManual sets the by-hand CLI path and socket (empty = find it).
+func SetManual(bin, socket string) {
+	mu.Lock()
+	defer mu.Unlock()
+	manualBin, manualSocket, picked = strings.TrimSpace(bin), strings.TrimSpace(socket), ""
+}
+
+func overrides() (bin, socket string) {
+	mu.Lock()
+	bin, socket = manualBin, manualSocket
+	mu.Unlock()
+	if v := os.Getenv("GERDR_TAILSCALE_BIN"); v != "" {
+		bin = v
 	}
-	var cands []string
+	if v := os.Getenv("GERDR_TAILSCALE_SOCKET"); v != "" {
+		socket = v
+	}
+	return
+}
+
+// bins lists every CLI worth trying, in order: the manual one alone if set; otherwise each `tailscale` on the login
+// shell's PATH (a Homebrew CLI can sit before the one that talks to the running daemon), then where installers put it.
+func bins() []string {
+	if b, _ := overrides(); b != "" {
+		return []string{b}
+	}
+	var out []string
+	seen := map[string]bool{}
+	add := func(p string) {
+		if p == "" || seen[p] {
+			return
+		}
+		if st, err := os.Stat(p); err == nil && !st.IsDir() {
+			seen[p] = true
+			out = append(out, p)
+		}
+	}
+	name := "tailscale"
+	if runtime.GOOS == "windows" {
+		name = "tailscale.exe"
+	}
+	sysenv.AdoptLoginPath()
+	for _, dir := range filepath.SplitList(os.Getenv("PATH")) {
+		add(filepath.Join(dir, name))
+	}
 	switch runtime.GOOS {
 	case "darwin":
 		// The GUI app's own binary is the CLI when given arguments (both the App Store and the standalone build)
-		cands = []string{"/Applications/Tailscale.app/Contents/MacOS/Tailscale", "/usr/local/bin/tailscale", "/opt/homebrew/bin/tailscale"}
+		add("/Applications/Tailscale.app/Contents/MacOS/Tailscale")
+		add("/opt/homebrew/bin/tailscale")
+		add("/usr/local/bin/tailscale")
 	case "windows":
-		cands = []string{filepath.Join(os.Getenv("ProgramFiles"), "Tailscale", "tailscale.exe")}
+		add(filepath.Join(os.Getenv("ProgramFiles"), "Tailscale", "tailscale.exe"))
 	default:
-		cands = []string{"/usr/bin/tailscale", "/usr/local/bin/tailscale"}
+		add("/usr/bin/tailscale")
+		add("/usr/local/bin/tailscale")
 	}
-	for _, p := range cands {
-		if st, err := os.Stat(p); err == nil && !st.IsDir() {
-			return p, nil
-		}
-	}
-	return "", errors.New(i18n.S("这台电脑上没找到 Tailscale：先装上并登录（tailscale.com/download）", "Tailscale isn't installed on this computer: install it and sign in first (tailscale.com/download)"))
+	return out
 }
 
-func run(ctx context.Context, args ...string) ([]byte, error) {
-	b, err := bin()
-	if err != nil {
-		return nil, err
+// daemonSocket reads --socket off a running tailscaled (`tailscaled --socket=/x` or `-socket /x`): a daemon started
+// with its own socket is invisible to a CLI looking in the default place.
+func daemonSocket() string {
+	if runtime.GOOS == "windows" {
+		return ""
 	}
+	out, err := exec.Command("ps", "-axww", "-o", "args=").Output()
+	if err != nil {
+		return ""
+	}
+	return socketFromPS(string(out))
+}
+
+func socketFromPS(ps string) string {
+	for _, line := range strings.Split(ps, "\n") {
+		f := strings.Fields(line)
+		if len(f) == 0 || filepath.Base(f[0]) != "tailscaled" {
+			continue
+		}
+		for i, a := range f[1:] {
+			a = strings.TrimLeft(a, "-")
+			if v, ok := strings.CutPrefix(a, "socket="); ok {
+				return v
+			}
+			if a == "socket" && i+2 < len(f) {
+				return f[i+2]
+			}
+		}
+	}
+	return ""
+}
+
+// run tries the CLIs in turn and keeps the first that works. With none working, the error names each one and
+// what it said, so a setup we don't know about can still be read off the page.
+func run(ctx context.Context, args ...string) ([]byte, error) {
+	cands := bins()
+	if len(cands) == 0 {
+		return nil, errors.New(i18n.S("这台电脑上没找到 tailscale 命令：先装上并登录（tailscale.com/download）；装在别处的话在下面手动填它的路径",
+			"no tailscale command found on this computer: install it and sign in (tailscale.com/download); if it's somewhere else, enter its path by hand below"))
+	}
+	_, socket := overrides()
+	if socket == "" {
+		socket = daemonSocket()
+	}
+	mu.Lock()
+	if picked != "" {
+		cands = append([]string{picked}, cands...)
+	}
+	mu.Unlock()
+	var errs []string
+	tried := map[string]bool{}
+	var first error
+	for _, b := range cands {
+		if tried[b] {
+			continue
+		}
+		tried[b] = true
+		argv := args
+		if socket != "" {
+			argv = append([]string{"--socket=" + socket}, args...)
+		}
+		out, err := runOne(ctx, b, argv)
+		if err == nil {
+			mu.Lock()
+			picked = b
+			mu.Unlock()
+			return out, nil
+		}
+		if first == nil {
+			first = err
+		}
+		errs = append(errs, b+": "+err.Error())
+	}
+	if len(errs) == 1 {
+		return nil, first
+	}
+	return nil, fmt.Errorf("%w\n%s", first, strings.Join(errs, "\n"))
+}
+
+func runOne(ctx context.Context, b string, args []string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, b, args...)
 	hideConsole(cmd)
 	var stdout, stderr bytes.Buffer
@@ -91,7 +213,9 @@ func explain(msg string) error {
 		// Linux: only root or the operator may ask tailscaled for a certificate
 		return fmt.Errorf(i18n.S("Tailscale 不让这个用户拿证书：跑一次 sudo tailscale set --operator=$USER（%s）", "Tailscale won't give this user a certificate: run sudo tailscale set --operator=$USER once (%s)"), msg)
 	case strings.Contains(low, "failed to connect to local tailscale") || strings.Contains(low, "is tailscale running"):
-		return errors.New(i18n.S("Tailscale 没在运行：打开它并登录", "Tailscale isn't running: open it and sign in"))
+		// Also what a daemon started with its own --socket looks like from here: keep the CLI's words
+		return fmt.Errorf(i18n.S("连不上 tailscaled：它没在运行，或者是用 --socket 指定了别的位置（那就在下面手动填 socket 路径）。原话：%s",
+			"can't reach tailscaled: it isn't running, or it was started with its own --socket (then enter the socket path by hand below). It said: %s"), msg)
 	}
 	return errors.New("tailscale: " + msg)
 }
