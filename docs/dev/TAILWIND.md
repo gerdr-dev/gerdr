@@ -5,6 +5,9 @@ The UI has no build step, so its styles come from Tailwind's browser build (`@ta
 watches the DOM, and writes the CSS for each class once it first shows up on the page. Two consequences, both silent:
 CSS a frame late, and CSS that never works at all. Every item below was measured, not guessed.
 
+Compiling it in the backend instead (Tailwind's own compiler in moejs) was tried and measured: it works, and is
+postponed. Findings in TAILWIND-SERVER.md, the plan in todo/tailwind-server.md.
+
 ## A class's CSS arrives a frame late
 
 The browser build generates a class only after it appears in the DOM, and its style sheet rewrite lands after the

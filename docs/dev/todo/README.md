@@ -12,3 +12,4 @@ both once the work is done.
 - [The UI's per-device settings in the backend, not only in localStorage](device-settings-backend.md)
 - [Tab switches: what's left](tab-switches.md)
 - [Developer ID signing for the Mac App, TestFlight for iOS (needs the paid Apple account)](apple-signing-ci.md)
+- [Compile the UI's Tailwind in the backend, not the browser](tailwind-server.md)
