@@ -259,7 +259,7 @@ func (s *shell) applyUpdate(ask bool) {
 	s.u.mu.Unlock()
 	if ask {
 		if b := s.fetchBusy(); !b.Idle() {
-			switch askUpdate(p.Version, b) {
+			switch askUpdate(p.Version, b, p.Kind != "app") {
 			case "later":
 				s.u.mu.Lock()
 				s.u.idleOK = p.Version
@@ -291,19 +291,25 @@ func (s *shell) applyUpdate(ask bool) {
 	s.pushUpdate()
 }
 
-// askUpdate: Yes = now, No = when idle, Cancel.
-func askUpdate(v string, b *selfupdate.Busy) string {
+// askUpdate: Yes = now, No = when idle, Cancel. later: offer "when idle", for a backend update only: a new App goes in
+// only on a click (the poll's applyUpdate(false) skips it), so "when idle" on one did nothing. Then it is OK = now, Cancel.
+func askUpdate(v string, b *selfupdate.Busy, later bool) string {
 	what := "正在跑的 agent 和终端会被打断。\nRunning agents and terminals will be cut off."
 	if b != nil {
 		what = fmt.Sprintf("重启会打断 / Restarting cuts off: %d agent, %d 等批准 / waiting, %d 后台任务 / tasks, %d 终端 / terminals.",
 			b.Turns, b.Waiting, b.Tasks, b.Terms)
 	}
 	text := fmt.Sprintf("更新到 %s / Update to %s\n\n%s\n\n是 = 现在更新 / Yes = update now\n否 = 等空闲时自动更新 / No = update when idle", v, v, what)
+	buttons := uintptr(0x3) // MB_YESNOCANCEL
+	if !later {
+		text = fmt.Sprintf("更新到 %s / Update to %s\n\n%s\n\n确定 = 现在更新 / OK = update now", v, v, what)
+		buttons = 0x1 // MB_OKCANCEL
+	}
 	t, _ := windows.UTF16PtrFromString(text)
 	c, _ := windows.UTF16PtrFromString(appName)
-	r, _, _ := procMessageBox.Call(0, uintptr(unsafe.Pointer(t)), uintptr(unsafe.Pointer(c)), 0x3 /* MB_YESNOCANCEL */ |0x20 /* MB_ICONQUESTION */)
+	r, _, _ := procMessageBox.Call(0, uintptr(unsafe.Pointer(t)), uintptr(unsafe.Pointer(c)), buttons|0x20 /* MB_ICONQUESTION */)
 	switch r {
-	case 6: // IDYES
+	case 1, 6: // IDOK, IDYES
 		return "now"
 	case 7: // IDNO
 		return "later"

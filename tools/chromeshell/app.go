@@ -199,9 +199,13 @@ func (s *shell) applyUpdate(ask bool) {
 		return
 	}
 	s.upMu.Unlock()
-	if ask {
+	// A new App with the background service on cuts nothing off: the agents run in the service, which carries on while
+	// the windows close and reopen, and appAttach moves it to the new backend once idle (docs/dev/UPDATE.md). The page
+	// already said so on the button that got us here; asking again here said the opposite.
+	app := p.Kind == "app"
+	if ask && !(app && serviceInstalled()) {
 		if b := s.fetchBusy(); !b.Idle() {
-			switch askUpdate(p.Version, b) {
+			switch askUpdate(p.Version, b, !app) {
 			case "later":
 				s.upMu.Lock()
 				s.idleOK = p.Version
@@ -213,7 +217,7 @@ func (s *shell) applyUpdate(ask bool) {
 			}
 		}
 	}
-	if p.Kind == "app" {
+	if app {
 		// A new shell: swapped in after we quit (desktop/updater.js installApp). Only on a click: it closes the windows.
 		if !ask || !s.up.AppStillNewer() {
 			return
@@ -237,8 +241,9 @@ func (s *shell) applyUpdate(ask bool) {
 	s.pushUpdate()
 }
 
-// askUpdate: a dialog like desktop/main.js's. "now", "later" (when idle) or "" (cancelled).
-func askUpdate(version string, b *selfupdate.Busy) string {
+// askUpdate: a dialog like desktop/main.js's. "now", "later" (when idle) or "" (cancelled). later: offer "when idle";
+// only a backend update has it, a new App waits for a click (pollBusy applies backends only), so "when idle" did nothing.
+func askUpdate(version string, b *selfupdate.Busy, later bool) string {
 	detail := i18n.S("正在跑的 agent 和终端会被打断。", "Running agents and terminals will be cut off.")
 	if b != nil {
 		var parts []string
@@ -254,24 +259,39 @@ func askUpdate(version string, b *selfupdate.Busy) string {
 		detail = i18n.S("重启会打断：", "Restarting cuts off: ") + strings.Join(parts, i18n.S("、", ", ")) +
 			i18n.S("。空闲的会话不受影响，下次发话自己接上。", ". Idle sessions aren't affected and pick up on your next message.")
 	}
-	now, later, cancel := i18n.S("现在更新", "Update now"), i18n.S("等空闲时自动更新", "Update when idle"), i18n.S("取消", "Cancel")
+	now, idle, cancel := i18n.S("现在更新", "Update now"), i18n.S("等空闲时自动更新", "Update when idle"), i18n.S("取消", "Cancel")
 	title := fmt.Sprintf(i18n.S("更新到 %s", "Update to %s"), version)
-	// argv, never spliced into the script
+	// argv, never spliced into the script; buttons left to right: cancel, [when idle,] now
 	script := `on run argv
 display dialog (item 2 of argv) with title (item 1 of argv) buttons {(item 5 of argv), (item 4 of argv), (item 3 of argv)} default button 2 cancel button 1
 return button returned of result
 end run`
-	out, err := exec.Command("osascript", "-e", script, title, detail, now, later, cancel).Output()
+	args := []string{"-e", script, title, detail, now, idle, cancel}
+	if !later {
+		script = `on run argv
+display dialog (item 2 of argv) with title (item 1 of argv) buttons {(item 4 of argv), (item 3 of argv)} default button 2 cancel button 1
+return button returned of result
+end run`
+		args = []string{"-e", script, title, detail, now, cancel}
+	}
+	out, err := exec.Command("osascript", args...).Output()
 	if err != nil {
 		return ""
 	}
 	switch strings.TrimSpace(string(out)) {
 	case now:
 		return "now"
-	case later:
+	case idle:
 		return "later"
 	}
 	return ""
+}
+
+// serviceInstalled: the background service is on (its plist, like installedBackend and service.Manager.Installed).
+func serviceInstalled() bool {
+	home, _ := os.UserHomeDir()
+	_, err := os.Stat(filepath.Join(home, "Library/LaunchAgents/io.github.zbysir.gerdr.plist"))
+	return err == nil
 }
 
 // pushUpdate tells every page (window.gerdr.appUpdate, ui/src/lib/native.ts onAppUpdate) and the menu.

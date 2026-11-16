@@ -65,7 +65,11 @@ A backend restart kills running turns, pending permission requests, background t
 - The shell polls it every minute. Backend update waiting + all zero → restart the backend by itself. Otherwise the
   page shows a toast (`window.gerdr.appUpdate`, an older UI without the hook gets a system notification); "update now"
   with something running asks first, offering "when idle".
-- A whole-App update always waits for a click (it closes the windows).
+- A whole-App update always waits for a click (it closes the windows). With the background service on, that click
+  doesn't ask again: nothing is cut off (agents run in the service, appAttach moves it over once idle), and the toast /
+  Settings already said so; a second dialog warning that agents "will be cut off" contradicted them. Without the
+  service (and always on Windows, which has none) it asks "now / cancel" only: "when idle" never applied an App
+  update, since the poll applies backends only.
 - Settings → 版本 has an "automatic updates" switch (on by default; `update-prefs.json` in userData, kept by the
   shell since it decides before any page is up). Off: no checks on the 4-hour timer, and a downloaded backend waits
   for "update now" (or "when idle" picked in that dialog). Catching the service up with a hand-installed App isn't
