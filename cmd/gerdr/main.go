@@ -396,6 +396,8 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 	}
 	esm := uisite.NewESM(env.ESMCDN, filepath.Join(env.Dir, "cache", "esm"))
 	ui := uisite.New(env.UI, filepath.Join(env.Dir, "cache", "ui"), log)
+	// Left by the old framed Work UI (gone since 87c0130); nothing reads or writes it anymore.
+	_ = os.RemoveAll(filepath.Join(env.Dir, "cache", "work-ui"))
 	ui.UseESM(esm)
 	stopUI := make(chan struct{})
 	defer close(stopUI)

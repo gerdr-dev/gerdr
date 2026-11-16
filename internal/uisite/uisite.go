@@ -526,6 +526,22 @@ func diff(prev, next *build) *update {
 }
 
 // Watch 盯着界面目录：源码一变就重新构建（ensure 里把变化推给页面）。
+// pruneCache drops stale compile-cache entries (modules.go) at start and then daily: the service runs for weeks.
+func (r *Renderer) pruneCache(stop <-chan struct{}) {
+	t := time.NewTicker(24 * time.Hour)
+	defer t.Stop()
+	for {
+		if n, size := r.modules.prune(time.Now()); n > 0 {
+			r.log.Info("ui compile cache pruned", "files", n, "bytes", size)
+		}
+		select {
+		case <-stop:
+			return
+		case <-t.C:
+		}
+	}
+}
+
 func (r *Renderer) Watch(stop <-chan struct{}) {
 	// Each tick walks every source file (the UI and every mounted panel UI) and stats it. At 250ms always, that was a
 	// quarter of the idle service's allocations (pprof). Fast while things are being edited, slower once they've been
@@ -534,6 +550,7 @@ func (r *Renderer) Watch(stop <-chan struct{}) {
 	t := time.NewTimer(fast)
 	defer t.Stop()
 	r.ensure()
+	go r.pruneCache(stop)
 	// Production React is the default (prod.go) and pages don't wait for its packages: have them ready (from the disk
 	// cache after the first time; downloaded and bundled the first time)
 	if r.esm != nil {

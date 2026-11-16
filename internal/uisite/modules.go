@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/evanw/esbuild/pkg/api"
 	"github.com/gerdr-dev/gerdr/internal/i18n"
@@ -22,7 +23,7 @@ import (
 //   - 每个本地文件单独编成一个 ESM，挂在 /_ui/m/<路径>?v=<版本>；第三方包 external，浏览器按 importMap 加载。
 //   - 第一步（compileFile）只看这个文件自己：esbuild 编译，本地 import 换成占位符 /@gerdr-dep/<路径>，记下依赖、
 //     导出名、用到的第三方包（importMap 按它生成，见 importmap.go）。
-//     结果按「路径 + 内容」缓存在内存和 ~/.gerdr/ui-cache/modules/ 下，改一个文件只重编这一个。
+//     结果按「路径 + 内容」缓存在内存和 ~/.gerdr/cache/ui/modules/ 下，改一个文件只重编这一个（没人读的旧条目定期清掉，见 prune）。
 //   - `@/x` 是 `src/x`（和 tsconfig 的 paths 一致）。
 //   - 第二步（link）把占位符换成依赖的 URL。版本号是「自己的内容 + 依赖的版本」的哈希，依赖变了往上一路变，
 //     没变的子树 URL 不变（浏览器按 URL 缓存模块，热更新时 import 新 URL 就拿到新代码）。循环 import 的一组文件共用一个版本。
@@ -68,10 +69,12 @@ func (c *moduleCache) get(key string) *compiled {
 	if m != nil {
 		return m
 	}
-	b, err := os.ReadFile(filepath.Join(c.dir, key[:2], key+".json"))
+	p := filepath.Join(c.dir, key[:2], key+".json")
+	b, err := os.ReadFile(p)
 	if err != nil {
 		return nil
 	}
+	touchCacheFile(p, time.Now())
 	var v compiled
 	if json.Unmarshal(b, &v) != nil {
 		return nil
@@ -102,6 +105,49 @@ func (c *moduleCache) put(key string, v *compiled, disk bool) {
 			}
 		}
 	}
+}
+
+// The disk cache is keyed by a file's content, so every edit leaves the old entry behind and nothing reads it again:
+// on a machine whose UI is edited a lot it grew ~14MB a day (268MB in 19 days, 2026-11). An entry read from disk gets
+// its mtime bumped (at most once a day, so reads stay reads), and prune drops what nobody read for moduleCacheMaxAge.
+// Dropping one costs recompiling that file once with esbuild (milliseconds). Entries served from memory aren't
+// touched, so a service up for weeks can see a live entry pruned on disk; it still has it in memory, and after a
+// restart recompiles it once.
+//
+// The esm cache (esm.go) is deliberately not pruned: its files go out with `immutable`, so browsers stop asking and
+// the server can't tell a module in use from a dead one; deleting one in use breaks the UI offline once the browser's
+// own cache drops it. It only grows when a package is added or bumped.
+const (
+	moduleCacheMaxAge  = 14 * 24 * time.Hour
+	moduleCacheTouchAt = 24 * time.Hour // re-stamp a read entry once it's older than this
+)
+
+func touchCacheFile(p string, now time.Time) {
+	if fi, err := os.Stat(p); err == nil && now.Sub(fi.ModTime()) > moduleCacheTouchAt {
+		_ = os.Chtimes(p, now, now)
+	}
+}
+
+// prune removes entries unread for moduleCacheMaxAge, and temp files a crash left mid-write.
+func (c *moduleCache) prune(now time.Time) (removed int, freed int64) {
+	_ = filepath.WalkDir(c.dir, func(p string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+		fi, err := d.Info()
+		if err != nil {
+			return nil
+		}
+		age := now.Sub(fi.ModTime())
+		if age > moduleCacheMaxAge || (strings.HasSuffix(p, ".tmp") && age > time.Hour) {
+			if os.Remove(p) == nil {
+				removed++
+				freed += fi.Size()
+			}
+		}
+		return nil
+	})
+	return removed, freed
 }
 
 // site is one directory of sources in the module graph. The host is the UI directory itself (prefix ""); a mount is
