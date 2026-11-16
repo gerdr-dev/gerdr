@@ -2,8 +2,8 @@ import { ClipboardCheck, Plus } from "lucide-react";
 import { useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { addTab, focusedSessionId, tabName } from "@/lib/actions";
-import { activeWs, allLeaves, currentSpace, leaves, spaceOf, spaceWorkspaces } from "@/lib/layout";
-import { applyTabLabel, applyWorkspaceLabel } from "@/lib/addons";
+import { activeWs, allLeaves, currentSpace, spaceOf } from "@/lib/layout";
+import { applyTabLabel } from "@/lib/addons";
 import { set, useStore } from "@/lib/store";
 import { MAX_TILES, showInOverview, toggleOverview } from "@/lib/overview";
 import { FadeText } from "./FadeText";
@@ -28,7 +28,6 @@ export function PhoneBar() {
   const unread = useStore((s) => s.unread);
   useStore((s) => s.addonVersion);
   const ws = activeWs(layout);
-  const wi = spaceWorkspaces(layout).indexOf(ws);
   const ti = ws.tabs.findIndex((t) => t.id === ws.activeTab);
   const tab = ws.tabs[ti] ?? ws.tabs[0];
   const st = tabStatus(tab, sessions, unread);
@@ -53,20 +52,20 @@ export function PhoneBar() {
           </span>
         )}
       </DrawerButton>
-      {/* Lined up with the pane title bar below (Panes.tsx: pl-4, 16px icon, gap-2): both icons are centred at 24px and both
-          titles start at 40px — 6px padding + 36px button + 4px gap − 6px pulled back (asked for) */}
       <button className="-ml-1.5 flex h-9 min-w-0 flex-1 items-center gap-1.5 rounded-md pr-1.5 pl-0 text-left" onClick={openDrawer}>
         <FadeText className="min-w-0 text-[13px] font-medium">{applyTabLabel(tab, ti, ws, tabName(tab))}</FadeText>
-        {/* Not drawn with a single pane: the pane title bar's dot below is the same session. With several it sums up the tab */}
-        {leaves(tab.root).length > 1 && <StatusDot status={st.status} unread={st.unread} />}
-        {/* The workspace never gives way to a long tab name (asked for): it is the one place on a phone that says which one you're in */}
-        <FadeText className="max-w-[40%] shrink-0 text-[11px] text-muted-foreground">{applyWorkspaceLabel(ws, wi, ws.name)}</FadeText>
+        {/* With a single pane its title bar shows the path instead of the title and dot (Panes.tsx PhonePath), so the dot
+            is this session's; with several it sums up the tab */}
+        <StatusDot status={st.status} unread={st.unread} />
       </button>
-      <OverviewButton />
-      <InboxButton phone />
-      <Button variant="ghost" size="icon" className="size-9" aria-label={t("phoneBar.newTab")} onClick={() => addTab()}>
-        <Plus className="size-[18px]" />
-      </Button>
+      {/* Square 36px buttons with no gap between them (narrower boxes were tried and felt cramped) */}
+      <div className="flex shrink-0 items-center">
+        <OverviewButton />
+        <InboxButton phone />
+        <Button variant="ghost" size="icon" className="size-9" aria-label={t("phoneBar.newTab")} onClick={() => addTab()}>
+          <Plus className="size-[18px]" />
+        </Button>
+      </div>
     </div>
   );
 }

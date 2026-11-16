@@ -288,6 +288,9 @@ export function UnifiedSidebar({ className }: { className?: string }) {
     const label = i >= 0 ? applyWorkspaceLabel(ws, i, ws.name) : ws.name;
     return spaceOf(ws) === here ? label : `${spaces.find((sp) => sp.id === spaceOf(ws))?.name ?? spaceOf(ws)} · ${label}`;
   };
+  // 进行中 names each row's workspace, but when they all come from one (the usual case) that word is the same on every
+  // row and says nothing (asked for): leave it out then
+  const activeOneWs = new Set(active.map((x) => x.ws.id)).size <= 1;
   const gridFocusId = gridFocus && tiles.includes(gridFocus) ? gridFocus : tiles[0];
   // Searching swaps the sections for one flat list of this project's panes that match
   const kw = q.trim().toLowerCase();
@@ -319,7 +322,7 @@ export function UnifiedSidebar({ className }: { className?: string }) {
       <Row
         key={x.pane.id}
         {...p}
-        where={wsLabel(x.ws)}
+        where={top && activeOneWs ? "" : wsLabel(x.ws)}
         top={top}
         num={num}
         // In the grid, a row of "active" picks its tile instead of leaving the grid
@@ -344,6 +347,7 @@ export function UnifiedSidebar({ className }: { className?: string }) {
       current: here && (!inSplit || tab.focus === pane.id),
       visible: here && inSplit,
       inActiveTab: tab.id === cur.activeTab,
+      groupDir: ws.cwd ? basename(ws.cwd) : undefined,
     };
   };
 
@@ -680,6 +684,7 @@ const Row = memo(function Row({
   inActiveTab,
   where,
   num,
+  groupDir,
 }: {
   tab: Tab;
   pane: PaneLeaf;
@@ -699,8 +704,12 @@ const Row = memo(function Row({
   where?: string;
   /** Its ⌘1–9 number, while ⌘ is held (rows of "active"). */
   num?: number;
+  /** The folder of the row's workspace: its group's header already says it, so a row there in the same folder doesn't. */
+  groupDir?: string;
 }) {
-  const { title, sub } = paneLabel(pane, s);
+  const label = paneLabel(pane, s);
+  const { title } = label;
+  const sub = label.sub === groupDir ? "" : label.sub;
   // An unnamed tab is named after its first agent: only a renamed tab adds something worth showing
   const tabLabel = !inSplit && tab.name && tab.name !== title ? tab.name : undefined;
   const close = () => (inSplit ? closePaneById(pane.id) : closeTab(tab.id));

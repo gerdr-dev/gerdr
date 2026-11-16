@@ -283,6 +283,25 @@ function PaneCount({ count }: { count?: Count }) {
   );
 }
 
+/** The phone's single-pane title bar: the agent's directory, cut from the front when it doesn't fit (its last segments
+ * are the ones that say where), and its branch, which gives way only past half the bar. */
+function PhonePath({ path, branch, home }: { path: string; branch?: string; home: string }) {
+  const shown = home && (path === home || path.startsWith(home + "/")) ? "~" + path.slice(home.length) : path;
+  return (
+    <>
+      <FadeText start className="min-w-0 shrink font-mono text-[11px] text-muted-foreground" title={path}>
+        {shown}
+      </FadeText>
+      {branch && (
+        <span className="flex max-w-[45%] min-w-0 shrink-0 items-center gap-1 font-mono text-[11px] text-muted-foreground">
+          <GitBranch className="size-3 shrink-0" />
+          <span className="truncate">{branch}</span>
+        </span>
+      )}
+    </>
+  );
+}
+
 /** 子 agent 的只读面板：标题栏 + 只读的对话。 */
 function SubPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; tab: Tab; framed: boolean; zoomed?: boolean; count?: Count }) {
   const sub = pane.sub!;
@@ -571,6 +590,10 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
   const starting = useStore((s) => !!s.starting[pane.id]);
   const inTodo = useStore((s) => !!pane.sessionId && activeIds(s).includes(pane.sessionId));
   const agents = useStore((s) => s.agents);
+  const home = useStore((s) => s.home);
+  // The tab's only pane on a phone: the top bar (PhoneBar) already says its title and status, so this bar says where
+  // the agent works instead (asked for: one title per screen, the path the desktop bar has had all along)
+  const alone = usePhone() && leaves(tab.root).length === 1;
   useStore((s) => s.addonVersion);
   const focused = useContext(TabActive) && tab.focus === pane.id;
   const many = framed || zoomed;
@@ -602,14 +625,20 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
         onPointerDown={drag.onPointerDown}
         className={cn("flex shrink-0 items-center gap-2 border-b px-3 text-[12px] max-md:pl-4", headH, !focused && many && "opacity-70")}
       >
-        {session || (starting && pane.draft?.agent) ? (
-          <AgentIcon agent={session?.agent ?? pane.draft!.agent!} className="size-4" />
+        {alone && session ? (
+          <PhonePath path={session.workdir ?? session.cwd} branch={session.branch} home={home} />
         ) : (
-          <PanelTopOpen className="size-3.5 text-muted-foreground" />
+          <>
+            {session || (starting && pane.draft?.agent) ? (
+              <AgentIcon agent={session?.agent ?? pane.draft!.agent!} className="size-4" />
+            ) : (
+              <PanelTopOpen className="size-3.5 text-muted-foreground" />
+            )}
+            {/* The 60% cap leaves room for the path, which a phone hides: there it only left a gap before the ⋯ */}
+            <FadeText className="min-w-[3em] max-w-[60%] shrink font-medium max-md:max-w-none">{title}</FadeText>
+            <StatusDot status={dotStatus(session)} unread={unread} />
+          </>
         )}
-        {/* The 60% cap leaves room for the path, which a phone hides: there it only left a gap before the ⋯ */}
-        <FadeText className="min-w-[3em] max-w-[60%] shrink font-medium max-md:max-w-none">{title}</FadeText>
-        <StatusDot status={dotStatus(session)} unread={unread} />
         <HostTag session={session} />
         {session?.pending ? <span className="shrink-0 whitespace-nowrap rounded-sm bg-bad/15 px-1.5 text-[11px] text-bad">{t("panes.waiting")}</span> : null}
         <PaneCount count={count} />
