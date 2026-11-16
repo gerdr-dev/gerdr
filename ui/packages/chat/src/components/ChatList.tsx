@@ -51,6 +51,7 @@ type Layout = { keys: string[]; tops: number[]; sizes: number[]; total: number; 
 
 // What kind of row, for estimating one never measured (layout): a user message, a group header, a reply's text, a
 // tool call… differ by an order of magnitude
+const KIND_MIN = 5; // measured rows of a kind before its own median estimates it (layout)
 const kindOf = (r: Row) => (r.kind === "part" ? `part:${r.part.type}` : r.kind);
 
 export const ChatList = forwardRef<
@@ -103,6 +104,7 @@ export const ChatList = forwardRef<
   cb.current = { holding, onScroll, onAtBottom, onLayout };
 
   const stuck = useRef(startTop === undefined);
+  const topPad = useRef(0); // the whole-pixel total's fraction, above the first row (layout)
   const setStuck = (b: boolean) => {
     if (stuck.current === b) return;
     stuck.current = b;
@@ -183,8 +185,10 @@ export const ChatList = forwardRef<
       every.push(h);
     }
     const median = (l: number[]) => (l.sort((x, y) => x - y), l[l.length >> 1]);
+    // A kind's own median only from enough of its rows: two long user messages on screen made every user message above
+    // them 2.8k px (real median ~470), 97k px too tall in all; fewer than KIND_MIN fall back to all measured rows
     const kindEst = new Map<string, number>();
-    for (const [k, l] of byKind) kindEst.set(k, median(l));
+    for (const [k, l] of byKind) if (l.length >= KIND_MIN) kindEst.set(k, median(l));
     const anyEst = every.length ? median(every) : EST;
     const est = (r: Row) => kindEst.get(kindOf(r)) ?? anyEst;
     for (const r of rs) {
@@ -202,10 +206,15 @@ export const ChatList = forwardRef<
     // at the bottom by up to a pixel, some rows a device pixel and some not (each row is positioned on its own): the
     // shaking while the rows off screen were measured, then once when their sizes came in (scroll probe in the user's
     // page: -0.49px on every row at that moment).
+    // Only while stuck to the bottom, though: reading mid-chat, the rows on screen are kept in place by the top row's
+    // position, and a pad changing with every chunk of a reply streaming in below moved them all by a fraction (0.3px
+    // a chunk, midstream.mjs; under half a pixel the anchor in sync doesn't correct). Off the bottom the pad stays as
+    // it was and the end's fraction goes below the last row.
     const end = y + foot;
-    const pad = Math.ceil(end - 1e-6) - end;
+    if (stuck.current) topPad.current = Math.max(0, Math.ceil(end - 1e-6) - end);
+    const pad = topPad.current;
     if (pad > 1e-6) for (let i = 0; i < tops.length; i++) tops[i] += pad;
-    return { keys, tops, sizes: sz, total: end + Math.max(0, pad), missing };
+    return { keys, tops, sizes: sz, total: Math.ceil(end + pad - 1e-6), missing };
   };
   // What's in the DOM now (positions written by the last sync)
   const shown = useRef<Layout>({ keys: [], tops: [], sizes: [], total: 0, missing: 0 });
