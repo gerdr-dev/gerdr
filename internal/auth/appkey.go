@@ -20,15 +20,16 @@ import (
 // signature. The server keeps the public half on the Device:
 //
 //	register   right after the device proved presence (VerifiedAt within StepUpWindow: a passkey, an approval, a
-//	           pairing); never for a Temp device. A stolen cookie alone has no fresh VerifiedAt, so it can't plant
-//	           its own key and then skip re-verification forever.
+//	           pairing). A stolen cookie alone has no fresh VerifiedAt, so it can't plant its own key and then skip
+//	           re-verification forever. A Temp device (pairing code) that registers one becomes permanent, as a
+//	           passkey would make it: the iOS App can't add a passkey, so without this a phone paired in the App
+//	           dropped out after PairTTL with no way to stay.
 //	challenge  a single-use nonce, for a device that has a key (its cookie identifies it, also when re-verification
 //	           is due)
 //	verify     an ECDSA signature over AppKeyPayload(host, device, nonce) → VerifiedAt = now, as a passkey would.
 //	           The host is in what's signed: a signature a look-alike server collects is no good at the real one.
 //
-// It renews VerifiedAt only. PasskeyAt stays a real passkey (adding one more needs that), and a Temp device stays
-// temporary.
+// verify renews VerifiedAt only; PasskeyAt stays what a passkey, an approval or a pairing code wrote.
 
 // StepUpWindow: how recent the presence proof must be to register an App key (and what the server's own step-up
 // window is, server.stepUpWindow).
@@ -44,7 +45,6 @@ var (
 	ErrAppKeyNone    = errors.New(i18n.S("这台设备没有登记 App 密钥", "This device has no App key"))
 	ErrAppKeyBad     = errors.New(i18n.S("App 密钥验证没通过", "The App key check failed"))
 	ErrAppKeyStale   = errors.New(i18n.S("先用 passkey 或浏览器批准验证一次，再登记 App 密钥", "Verify with a passkey or a browser approval first, then register the App key"))
-	ErrAppKeyTemp    = errors.New(i18n.S("配对码进来的临时设备不能登记 App 密钥", "A temporary device (paired with a code) can't register an App key"))
 	ErrAppKeyInvalid = errors.New(i18n.S("App 密钥的格式不对（要 P-256 公钥）", "Bad App key (expected a P-256 public key)"))
 )
 
@@ -76,7 +76,7 @@ func parseAppKey(pub []byte) (*ecdsa.PublicKey, error) {
 }
 
 // SetAppKey registers (or replaces) the App key of a device. The caller passes the device as just authenticated;
-// the rules (fresh presence, not temporary) are checked here against the stored device.
+// the rule (fresh presence) is checked here against the stored device; a temporary device becomes permanent.
 func (s *Store) SetAppKey(deviceID string, pub []byte) error {
 	if _, err := parseAppKey(pub); err != nil {
 		return err
@@ -91,12 +91,16 @@ func (s *Store) SetAppKey(deviceID string, pub []byte) error {
 		switch {
 		case d.Expired(now):
 			return ErrAppKeyStale
-		case d.Temp:
-			return ErrAppKeyTemp
 		case d.VerifiedAt.IsZero() || now.Sub(d.VerifiedAt) > StepUpWindow:
 			return ErrAppKeyStale
 		}
 		d.AppKey = &AppKey{Pub: append([]byte(nil), pub...), Added: now}
+		if d.Temp { // a hardware key behind Face ID / a fingerprint binds the device like a passkey (MarkVerified)
+			d.Temp, d.Expires = false, time.Time{}
+			if s.cfg.TTL > 0 {
+				d.Expires = now.Add(s.cfg.TTL)
+			}
+		}
 		s.flushLocked()
 		return nil
 	}

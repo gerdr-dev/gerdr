@@ -69,7 +69,7 @@ means Android only (keys, LAN, notifications, update); `isApp()` is either App, 
 - Shell → page is `evaluateJavaScript("gerdrIOS.onmessage({data: <JSON string>})")`, only after the page's hello
   and only while the web view is on the server's origin (reset on every commit).
 - Messages iOS answers: `hello` (reply: `platform: "ios"`, `webauthn: false`, `scan: false`, `copyImage: true`,
-  `lan` = it routes over the LAN), `theme`, `open`, `setup`, `login`, `copyImage`, `lan`; it sends `route`. Everything else is ignored, as Android ignores what it doesn't know.
+  `lan` = it routes over the LAN), `theme`, `open`, `setup`, `login`, `appkey`, `enroll`, `copyImage`, `lan`; it sends `route`. Everything else is ignored, as Android ignores what it doesn't know.
 
 ## Passkey: through Safari, not in the WKWebView
 
@@ -97,8 +97,9 @@ page `login{state:"done"}` and the page goes in.
 - The rules in Login.swift's comment (code typed by hand, never in the URL; Cookie header, not Bearer; `X-Gerdr`)
   are the same as Android's.
 
-Settings → Remote access → passkeys (adding one, step-up) runs in the page and will fail inside the iOS App for the
-same reason; do it in Safari.
+Settings → Remote access → passkeys (adding one, step-up) can't run inside the iOS App for the same reason. "Add in
+browser" there mints a one-time handoff link (docs/dev/REMOTE.md, `auth/handoff.go`) and opens it in Safari, which
+lands signed in as a new device, as fresh as the App, on that settings page: no second pairing.
 
 **Why not passkeys inside the App, even with a paid team** (built, measured, reverted in c7c9825): the
 entitlement is part of the signature, so an App given to other people can only list domains known when it was
@@ -116,7 +117,8 @@ So: one path for every domain, the browser device flow.
 Devices re-verify every `reauthHours` (24 by default), and on iOS that meant the browser flow every day. Instead
 the App keeps its own key per server (`AppKey.swift`, server `internal/auth/appkey.go`, `server/appkey.go`):
 
-- **Enroll**: right after a browser approval succeeds (new device or re-verification), the App makes a P-256 key in
+- **Enroll**: right after a browser approval succeeds (new device or re-verification), or when the page sends
+  `enroll` after a pairing code (whoami `appKeyFresh`: within the step-up window), the App makes a P-256 key in
   the Secure Enclave (`.privateKeyUsage` + `.biometryCurrentSet`: every signature needs Face ID / Touch ID, a new
   face or finger voids it) and registers the public half: `POST /api/remote/appkey/register`. Silent: making the key
   needs no Face ID. The enclave's blob goes in the Keychain, this device only.
@@ -125,12 +127,12 @@ the App keeps its own key per server (`AppKey.swift`, server `internal/auth/appk
   does `challenge` → Face ID → `verify` and answers `appkey {state}`; done → the page goes in. Failure (key voided,
   cancelled) leaves the browser approval below.
 - **Why it isn't weaker**: the server only accepts a key from a device whose presence proof is minutes old (a
-  passkey, an approval, a pairing) and never from a temporary pairing-code device, so a stolen cookie can't plant
+  passkey, an approval, a pairing; registering one makes a temporary pairing-code device permanent), so a stolen cookie can't plant
   its own key and skip re-verification. The signature covers `gerdr-appkey-v1\n<host>\n<device id>\n<nonce>`: the
   nonce is single-use (2 min), bound to the device, and the host stops a look-alike server from reusing what it
   collects; the App also refuses a challenge whose host isn't the one it was pointed at. Wrong signatures count
   against the remote rate limit. It renews `VerifiedAt` only: `PasskeyAt` (needed to add another passkey) stays a
-  real passkey, a temporary device stays temporary.
+  real passkey (or what an approval / a pairing code wrote).
 - `challenge` / `verify` are public paths (a device due for re-verification reaches nothing else; the cookie still
   identifies it). Revoking the device drops its key.
 - Android could use the same endpoints (Android Keystore / StrongBox + BiometricPrompt); not done, since its App

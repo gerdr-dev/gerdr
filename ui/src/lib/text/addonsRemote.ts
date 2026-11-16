@@ -119,8 +119,9 @@ export const zh = {
   "remoteSettings.addPasskey": "加一把 Passkey",
   "remoteSettings.addPasskeyBrowser": "去浏览器里加",
   "remoteSettings.passkeyIOS":
-    " iOS App 里加不了 passkey（App 签名的限制）：点「去浏览器里加」，在浏览器里用配对码登录这台 Gerdr，再在这里加；之后 App 的配对页就能用它在浏览器里批准登录。",
-  "remoteSettings.passkeyHint": "有了 Passkey，新设备不用回机器前拿配对码，Face ID / 指纹一下就进来；配过对的设备超过 {hours} 小时没验证要再验一次。",
+    " iOS App 里加不了 passkey（App 签名的限制）：点「去浏览器里加」，Safari 会直接以这台设备登录（不用再配对），在那里加。App 自己重新验证用 Face ID，不需要 passkey。",
+  "remoteSettings.passkeyHint":
+    "有了 Passkey，新设备不用回机器前拿配对码，Face ID / 指纹一下就进来。配过对的设备超过 {hours} 小时没验证，下次停用一会儿再打开时验证一次（正在用不打断，最多拖到 {max} 小时）。",
   "remoteSettings.passkeyHost": " Passkey 绑在 {host} 上，在那个地址打开 Gerdr 才能加。",
   "remoteSettings.passkeyMeta": "添加于 {created} · 最后用 {used}",
   "remoteSettings.delete": "删掉",
@@ -435,9 +436,9 @@ export const en: Record<keyof typeof zh, string> = {
   "remoteSettings.addPasskey": "Add a passkey",
   "remoteSettings.addPasskeyBrowser": "Add in browser",
   "remoteSettings.passkeyIOS":
-    " The iOS App can't add a passkey itself (a limit of App signing): tap “Add in browser”, sign in to this Gerdr there with a pairing code and add it here; the App's pairing page can then use it to approve sign-ins in the browser.",
+    " The iOS App can't add a passkey itself (a limit of App signing): tap “Add in browser” and Safari opens signed in as this device (no second pairing); add it there. The App re-verifies with Face ID and doesn't need one.",
   "remoteSettings.passkeyHint":
-    "With a passkey, a new device gets in with Face ID or a fingerprint, no pairing code from this machine needed. Paired devices must verify again after {hours} hours without verifying.",
+    "With a passkey, a new device gets in with Face ID or a fingerprint, no pairing code from this machine needed. After {hours} hours without verifying, a paired device verifies again when it's next opened after a break (never mid-use, at most {max} hours).",
   "remoteSettings.passkeyHost": " Passkeys are tied to {host}; open Gerdr at that address to add one.",
   "remoteSettings.passkeyMeta": "Added {created} · last used {used}",
   "remoteSettings.delete": "Delete",

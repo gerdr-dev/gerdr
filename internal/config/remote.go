@@ -59,7 +59,7 @@ type Remote struct {
 	// URLPort: the port in the address phones open, in direct access. 0 = the LAN port (Tailscale: phones reach
 	// this Mac's port as is); 443 = none (frp / a port forward facing the internet on 443). remote.json `urlPort`.
 	URLPort int
-	// PairTTL：配对码换来的设备只活这么久、不续期（过一次 passkey 就转正），GERDR_PAIR_TTL_MINUTES，默认 30，0 = 和别的设备一样。
+	// PairTTL：配对码换来的设备只活这么久、不续期（绑上 passkey 或 App 密钥就转正），GERDR_PAIR_TTL_MINUTES，默认 30，0 = 和别的设备一样。
 	PairTTL time.Duration
 	// AndroidCerts：认哪些安卓 App 的签名证书（SHA-256 指纹，冒号分隔的十六进制）—— 它们能在 App 的 WebView 里
 	// 用这个域名的 passkey（assetlinks.json + android:apk-key-hash origin）。官方那把（OfficialAndroidCert）总在；

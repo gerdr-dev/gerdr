@@ -62,8 +62,24 @@ func (s *Server) trackRemote(r *http.Request) func() {
 		rc.mu.Lock()
 		delete(rc.m, c.ID)
 		rc.mu.Unlock()
+		// The break before a due re-verification starts now, not at the last HTTP request (auth.ReauthNeeded)
+		if c.Device != "" && s.Remote != nil {
+			s.Remote.Auth.Touch(c.Device)
+		}
 		s.broadcastRemoteConns()
 	}
+}
+
+// has: a remote UI of this device is open right now.
+func (rc *remoteConns) has(device string) bool {
+	rc.mu.Lock()
+	defer rc.mu.Unlock()
+	for _, c := range rc.m {
+		if c.Device == device {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Server) broadcastRemoteConns() {

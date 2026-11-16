@@ -57,10 +57,11 @@ type Device struct {
 	Expires  time.Time `json:"expires"` // 零值 = 永不过期
 	// PasskeyAt 是上一次**真的过了一把 passkey** 的时刻。
 	//
-	// ⚠️ 为什么不能复用 VerifiedAt：**配对本身就会把 VerifiedAt 设成当下**（配对码本身就是一次
-	// 「你在机器前」的证明）。于是「再注册一把 passkey 要求新鲜认证」如果按 VerifiedAt 判，刚拿
-	// 配对码进来的人**天然就是新鲜的** —— 那道门对他等于不存在，而他恰恰是这道门唯一要拦的人。
-	// 两个时刻必须分开记：一个回答「这份凭据怎么来的」，一个回答「人刚刚用生物因子证明过自己」。
+	// Written by a passkey assertion, a local approval (GrantStepUp) and, since 2026-11-16, a pairing code
+	// (Redeem): a code is minted by the person at the computer, so a device that just used one may add a passkey
+	// right away instead of asking that computer a second time (user decision). The device is still temporary
+	// (Temp) until it binds a passkey or an App key; the cost is that a photographed code used within minutes
+	// can bind one and stay. Kept apart from VerifiedAt because the App key renews VerifiedAt without a passkey.
 	PasskeyAt time.Time `json:"passkeyAt"`
 	// VerifiedAt 是上一次「人证明了自己在场」的时刻：配对成功，或者过了一次 passkey。
 	// 注册过 passkey 之后，服务端会要求这个时间足够新，否则要求重新验一次 ——
@@ -93,14 +94,15 @@ type Config struct {
 type Store struct {
 	cfg Config
 
-	mu      sync.Mutex
-	devs    []*Device
-	codes   map[string]pairCode // 配对码 → 过期时刻 / 是不是给另一台 Gerdr 的
-	cli     []*CLIRequest       // 等批准的 App 登录（cliapprove.go）
-	appChal []appChallenge      // outstanding App key challenges (appkey.go)
-	dirty   bool
-	flushed time.Time
-	guard   tamperGuard
+	mu       sync.Mutex
+	devs     []*Device
+	codes    map[string]pairCode // 配对码 → 过期时刻 / 是不是给另一台 Gerdr 的
+	cli      []*CLIRequest       // 等批准的 App 登录（cliapprove.go）
+	appChal  []appChallenge      // outstanding App key challenges (appkey.go)
+	handoffs []handoff           // one-time links into another browser (handoff.go)
+	dirty    bool
+	flushed  time.Time
+	guard    tamperGuard
 
 	now func() time.Time // 测试用
 }
@@ -209,6 +211,7 @@ func (s *Store) Redeem(code, ua, ip string) (*Device, string, error) {
 		return nil, "", ErrBadCode
 	}
 	d, token := s.newLocked(ua, ip, "")
+	d.PasskeyAt = d.VerifiedAt // the code is the person at the computer: adding a passkey next needs no approval
 	if s.cfg.PairTTL > 0 {
 		d.Temp, d.Expires = true, s.now().Add(s.cfg.PairTTL)
 		s.flushLocked()
@@ -324,6 +327,9 @@ type Ident struct {
 	// 判断放在 server 那边做，因为「有没有注册过 passkey」是它才知道的事。
 	VerifiedAt time.Time
 	PasskeyAt  time.Time
+	// Active: the device is in use right now (its previous request was under ReauthIdle ago; the server also
+	// counts an open /ws). A due re-verification waits for a break while it is (ReauthNeeded).
+	Active bool
 }
 
 // Authenticate 只认设备 cookie。**没有 Bearer、没有「本机免认证」**：这个函数只服务中继那条路，
@@ -333,14 +339,34 @@ func (s *Store) Authenticate(r *http.Request) *Ident {
 	if err != nil || c.Value == "" {
 		return nil
 	}
-	d := s.lookup(c.Value, ClientIP(r))
+	d, prev := s.lookupSeen(c.Value, ClientIP(r))
 	if d == nil {
 		return nil
 	}
-	return &Ident{Label: d.Label, Device: d, VerifiedAt: d.VerifiedAt, PasskeyAt: d.PasskeyAt}
+	return &Ident{Label: d.Label, Device: d, VerifiedAt: d.VerifiedAt, PasskeyAt: d.PasskeyAt,
+		Active: !prev.IsZero() && s.now().Sub(prev) < ReauthIdle}
+}
+
+// Touch marks a device as just used: the remote UI's /ws closing (the page goes away or the phone sleeps), so a
+// break is counted from then, not from its last HTTP request, which may be long before while it sat open.
+func (s *Store) Touch(id string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, d := range s.devs {
+		if d.ID == id {
+			d.LastSeen = s.now()
+			s.dirty = true
+		}
+	}
 }
 
 func (s *Store) lookup(token, ip string) *Device {
+	d, _ := s.lookupSeen(token, ip)
+	return d
+}
+
+// lookupSeen also returns when the device was seen before this request (zero for an unknown token).
+func (s *Store) lookupSeen(token, ip string) (*Device, time.Time) {
 	h := hashToken(token)
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -348,8 +374,9 @@ func (s *Store) lookup(token, ip string) *Device {
 	for _, d := range s.devs {
 		if subtle.ConstantTimeCompare([]byte(d.Hash), []byte(h)) == 1 {
 			if d.Expired(now) {
-				return nil
+				return nil, time.Time{}
 			}
+			prev := d.LastSeen
 			d.LastSeen = now
 			if ip != "" {
 				d.LastIP = ip
@@ -362,10 +389,10 @@ func (s *Store) lookup(token, ip string) *Device {
 				s.flushLocked()
 			}
 			c := *d
-			return &c
+			return &c, prev
 		}
 	}
-	return nil
+	return nil, time.Time{}
 }
 
 // ClientIP 就是对端地址，**不看 X-Forwarded-For**：前面没有任何可信的反代，XFF 只可能是客户端
@@ -401,11 +428,9 @@ func (s *Store) RequireReverify(id string) (string, bool) {
 	return "", false
 }
 
-// MarkVerified 记一次刚做过的生物验证（passkey 断言成功）。
-//
-// 调用点只有 passkey 的 login/finish 和 register/finish 两处 —— 也就是说 PasskeyAt
-// 这个时刻只可能由一次真的 passkey 断言（或者本机亲手批准，GrantStepUp）写出来，配对那条路碰不到它。
-// StepUpNeeded 靠的就是这一点。
+// MarkVerified records a passkey assertion just made (login/finish and register/finish). PasskeyAt is otherwise
+// written only by a local approval (GrantStepUp) and a pairing code (Redeem): never by a cookie alone, which is
+// what StepUpNeeded relies on.
 func (s *Store) MarkVerified(id string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

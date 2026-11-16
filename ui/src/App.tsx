@@ -136,6 +136,13 @@ export default function App() {
     boot().then(() => {
       reloadAddons();
       initAndroid();
+      // ?settings=remote: a handoff from the phone App landed here to add a passkey (server enterHandoff)
+      const q = new URLSearchParams(location.search);
+      if (q.get("settings") === "remote") {
+        q.delete("settings");
+        history.replaceState(null, "", location.pathname + (q.size ? `?${q}` : "") + location.hash);
+        set({ dialog: { kind: "settings", tab: "remote" } });
+      }
     });
     const onKey = (e: KeyboardEvent) => handleKeydown(e);
     window.addEventListener("keydown", onKey, true);

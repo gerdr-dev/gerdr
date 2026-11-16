@@ -465,7 +465,17 @@ export const api = {
   // 远程访问（设置 →「远程访问」；passkey 的两段 ceremony 在 lib/passkey.ts）
   remoteStatus: () => req<{ status: RemoteStatus; remote: boolean }>("GET", "/api/remote/status"),
   remoteWhoami: () =>
-    req<{ remote: boolean; authed: boolean; need?: string; deviceId?: string; passkeys: number; passkeyAvailable: boolean }>("GET", "/api/remote/whoami"),
+    req<{
+      remote: boolean;
+      authed: boolean;
+      need?: string;
+      deviceId?: string;
+      passkeys: number;
+      passkeyAvailable: boolean;
+      /** the device has an App key / may register one right now (just paired) */
+      appKey?: boolean;
+      appKeyFresh?: boolean;
+    }>("GET", "/api/remote/whoami"),
   /** 出配对码：只有本机口能调（远程那一侧服务端直接 403） */
   remotePairCode: () => req<{ code: string; expires: string; url: string; qr?: string }>("POST", "/api/remote/pair-code", {}),
   remoteDevices: () => req<{ devices: RemoteDevice[]; me: string }>("GET", "/api/remote/devices"),
@@ -511,6 +521,8 @@ export const api = {
   remoteSetTailscale: (bin: string, socket: string) => req<TailscaleState>("POST", "/api/remote/tailscale", { bin, socket }),
   /** Direct access on the tailnet name with Tailscale's certificate: no domain, no DNS */
   remoteConnectTailscale: () => req("POST", "/api/remote/connect", { tailscale: true }),
+  /** A one-time link (2 min) that signs the phone's browser in as this device: no second pairing there */
+  remoteHandoff: () => req<{ url: string }>("POST", "/api/remote/handoff", {}),
   remoteDisconnect: () => req<{ revoked: number; passkeys: number }>("POST", "/api/remote/disconnect", {}),
   remoteLogout: () => req("POST", "/api/remote/logout", {}),
   // 批准安卓 App 的登录（passkey 的退路，device flow：App 显示码，这边手输）

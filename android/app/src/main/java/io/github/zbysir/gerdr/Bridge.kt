@@ -73,9 +73,10 @@ class Bridge(private val act: MainActivity, web: WebView, origin: String) {
                     JSONObject().put("t", "hello").put("platform", "android")
                         .put("version", BuildInfo.version(act)).put("webauthn", act.webAuthn).put("scan", true)
                         .put("copyImage", true).put("update", true).put("keyboard", true)
-                        // appKey: re-verify with a fingerprint (AppKey.kt), only where passkeys don't work in the
-                        // WebView; the pairing page offers it when the server says this device registered one
-                        .put("appKey", !act.webAuthn && AppKey.available(act)),
+                        // appKey: keep and re-verify this device with a fingerprint (AppKey.kt), also where the
+                        // WebView can do passkeys: a phone paired with a code stays without having to add a passkey,
+                        // the same flow as iOS. The pairing page offers it when the server says this device has one
+                        .put("appKey", AppKey.available(act)),
                 )
                 keyboard(act.hardKeyboard()) // whether menus show their shortcut keys (ui lib/hwKeyboard.ts)
                 send(LanRoute.snapshot()) // 顶栏那个「直连 / 中继」标签的初值
@@ -109,6 +110,9 @@ class Bridge(private val act: MainActivity, web: WebView, origin: String) {
             "scan" -> act.scanPair()
             "login" -> act.startLogin(m.optBoolean("reauth"))
             "appkey" -> act.verifyWithAppKey()
+            // The page says the device just proved presence (a pairing code) and has no App key yet: make one now,
+            // so re-verifying is a fingerprint instead of the browser (the server checks it's fresh)
+            "enroll" -> act.enrollNow()
             "loginCancel" -> act.cancelLogin()
             // 局域网直连口的候选（`https://192.168.x.x:7878`），换路由壳做，不换 origin（LanRoute）
             "lan" -> {

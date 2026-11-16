@@ -184,6 +184,12 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
             startLogin(reauth: m["reauth"] as? Bool ?? false)
         case "appkey":
             verifyWithAppKey()
+        case "enroll":
+            // The page says the device just proved presence (a pairing code) and has no App key yet: make one now,
+            // so re-verifying is Face ID instead of Safari (the server checks it's fresh)
+            Task { [weak self] in
+                if let self, let c = await self.cookieToken() { await self.enrollAppKey(cookie: c) }
+            }
         case "lan":
             route?.setCandidates(m["origins"] as? [String] ?? [])
         case "copyImage":

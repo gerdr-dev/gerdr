@@ -113,9 +113,8 @@ func TestCLIFlow(t *testing.T) {
 		t.Fatalf("没认证不能批，得到 %d", w.Code)
 	}
 
-	// 远程一台配过对、但最近没刷过 passkey 的设备：要 stepup
-	code, _ := s.Remote.Auth.MintCode()
-	_, tok, _ := s.Remote.Auth.Redeem(code, "iPhone · Safari", "")
+	// A remote device with no recent passkey (nor a fresh pairing code): step-up
+	_, tok := s.Remote.Auth.NewDevice("iPhone · Safari", "", "")
 	c := cookie(&http.Cookie{Name: auth.CookieName, Value: tok})
 	if w := do(rh, "POST", "/api/remote/cli/peek", body(`{"code":"`+st.Code+`"}`)(), c, csrf); w.Code != 200 || !strings.Contains(w.Body.String(), "Android · App") {
 		t.Fatalf("peek 该看到发起方：%d %s", w.Code, w.Body)
@@ -282,7 +281,41 @@ func TestAppKeyRemote(t *testing.T) {
 		t.Fatal(err)
 	}
 	w := do(rh, "POST", "/api/remote/appkey/register", strings.NewReader(reg), cookie(&http.Cookie{Name: auth.CookieName, Value: ttok}), csrf)
-	if w.Code != 403 || !strings.Contains(w.Body.String(), `"reason":"temp"`) {
-		t.Fatalf("a temporary device should not register: %d %s", w.Code, w.Body)
+	// Right after a pairing code: the App registers its key and the temporary device becomes permanent
+	if w.Code != 200 {
+		t.Fatalf("a freshly paired device should register: %d %s", w.Code, w.Body)
+	}
+	for _, d := range s.Remote.Auth.Devices() {
+		if d.Label == "iPhone" && d.Temp {
+			t.Fatal("the App key should make it permanent")
+		}
+	}
+}
+
+// The iOS App's "add in browser": a one-time link signs Safari in as a device of its own, then opens the settings.
+func TestHandoffLink(t *testing.T) {
+	s, _, rh := remoteServerWithPasskey(t)
+	code, _ := s.Remote.Auth.MintCode()
+	_, tok, _ := s.Remote.Auth.Redeem(code, "iPhone GerdrApp/1", "")
+	app := cookie(&http.Cookie{Name: auth.CookieName, Value: tok})
+	w := do(rh, "POST", "/api/remote/handoff", body("{}")(), app, csrf)
+	var out struct{ URL string }
+	_ = json.Unmarshal(w.Body.Bytes(), &out)
+	if w.Code != 200 || !strings.HasPrefix(out.URL, "https://"+testHost+"/?handoff=") {
+		t.Fatalf("mint: %d %s", w.Code, w.Body)
+	}
+	if w := do(rh, "POST", "/api/remote/handoff", body("{}")(), csrf); w.Code != 401 {
+		t.Fatalf("without a device it must not mint, got %d", w.Code)
+	}
+	path := strings.TrimPrefix(out.URL, "https://"+testHost)
+	w = do(rh, "GET", path, nil)
+	if w.Code != 302 || w.Header().Get("Location") != "/?settings=remote" || !strings.Contains(w.Header().Get("Set-Cookie"), auth.CookieName+"=") {
+		t.Fatalf("redeem: %d %v", w.Code, w.Header())
+	}
+	if w := do(rh, "GET", path, nil); w.Header().Get("Location") != "/?e=handoff" {
+		t.Fatalf("a used link must not sign in again: %v", w.Header())
+	}
+	if n := len(s.Remote.Auth.Devices()); n != 2 {
+		t.Fatalf("want the App and Safari, got %d devices", n)
 	}
 }

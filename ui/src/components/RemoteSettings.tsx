@@ -270,7 +270,8 @@ export function RemoteSettings({ open }: { open: boolean }) {
         <div className="flex items-center justify-between">
           <div className="text-[13px] font-medium">passkey</div>
           {pkOK && !stepUp && isIOSApp() && (
-            <Button size="sm" variant="outline" onClick={openInBrowser}>
+            // Safari has its own cookies: a one-time link signs it in as this device, so it doesn't land on pairing
+            <Button size="sm" variant="outline" onClick={() => run(async () => openInBrowser((await api.remoteHandoff()).url))}>
               {t("remoteSettings.addPasskeyBrowser")}
             </Button>
           )}
@@ -304,7 +305,7 @@ export function RemoteSettings({ open }: { open: boolean }) {
           />
         )}
         <div className="text-[12px] text-muted-foreground">
-          {t("remoteSettings.passkeyHint", { hours: st.reauthHours || "—" })}
+          {t("remoteSettings.passkeyHint", { hours: st.reauthHours || "—", max: st.reauthHours ? st.reauthHours * 2 : "—" })}
           {isIOSApp() && t("remoteSettings.passkeyIOS")}
           {!pkOK && st.enabled && t("remoteSettings.passkeyHost", { host: st.host ?? "" })}
         </div>

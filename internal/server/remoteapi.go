@@ -94,6 +94,10 @@ func (s *Server) remoteGuard(w http.ResponseWriter, r *http.Request, next http.H
 		s.enterPair(w, r)
 		return
 	}
+	if r.Method == http.MethodGet && r.URL.Query().Get("handoff") != "" && !strings.HasPrefix(p, "/api/") {
+		s.enterHandoff(w, r)
+		return
+	}
 	if remotePublic(r) {
 		next.ServeHTTP(w, r)
 		return
@@ -175,6 +179,31 @@ func (s *Server) enterPair(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, (&url.URL{Path: "/", RawQuery: q.Encode()}).String(), http.StatusFound)
 }
 
+// enterHandoff: another browser on the phone opening a link the App minted (auth/handoff.go). The token becomes a
+// device cookie for this browser, then the URL is washed and Settings → Remote access opens (where the person was
+// going: adding a passkey). A browser already signed in keeps its own device and the link is left unused.
+func (s *Server) enterHandoff(w http.ResponseWriter, r *http.Request) {
+	rm := s.Remote
+	q := url.Values{"settings": {"remote"}}
+	if rm.Auth.Authenticate(r) == nil {
+		release, ok := s.gateCheck(w, r)
+		if !ok {
+			return
+		}
+		defer release()
+		ip := auth.ClientIP(r)
+		if _, token, err := rm.Auth.RedeemHandoff(r.URL.Query().Get("handoff"), r.UserAgent(), ip); err != nil {
+			rm.Gate.Fail(ip)
+			q = url.Values{"e": {"handoff"}}
+		} else {
+			rm.Gate.Reset(ip)
+			rm.Auth.IssueCookie(w, token)
+		}
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	http.Redirect(w, r, (&url.URL{Path: "/", RawQuery: q.Encode()}).String(), http.StatusFound)
+}
+
 // gateCheck 在每次猜凭据之前过一下闸：熔断 / 封锁中直接 429；同一个 IP 已经有一次在验、或者全局在验的满了，
 // 也 429（并发请求绕过退避的那个洞，见 auth.Gate.Enter）；否则先睡一会儿（拖慢在线猜解）。
 // 放行时返回 release，验完（成功失败都一样）要调。
@@ -241,6 +270,22 @@ func (s *Server) remoteRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/remote/status", func(w http.ResponseWriter, r *http.Request) {
 		st := s.Remote.Status()
 		writeJSON(w, map[string]any{"status": st, "remote": auth.FromRemote(r)})
+	})
+	// A one-time link that signs another browser on this phone in as this device (auth/handoff.go): the iOS App
+	// opens Safari with it to add a passkey there. Remote side only, for a signed-in device (the guard checked).
+	mux.HandleFunc("POST /api/remote/handoff", func(w http.ResponseWriter, r *http.Request) {
+		rm := s.Remote
+		id := rm.Auth.Authenticate(r)
+		if !auth.FromRemote(r) || id == nil {
+			httpError(w, http.StatusConflict, i18n.S("只有远程打开的设备能用", "Only a device opened remotely can use this"))
+			return
+		}
+		tok, err := rm.Auth.MintHandoff(id.Device.ID)
+		if err != nil {
+			httpError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		writeJSON(w, map[string]any{"url": rm.URL() + "/?handoff=" + tok})
 	})
 	// 出配对码：本机专用（remoteGuard 在远程那一侧已经拦了）。
 	mux.HandleFunc("POST /api/remote/pair-code", func(w http.ResponseWriter, r *http.Request) {
@@ -517,6 +562,10 @@ func (s *Server) remoteWhoami(w http.ResponseWriter, r *http.Request) {
 		out["label"], out["deviceId"] = id.Label, id.Device.ID
 		// The App can re-verify this device with Face ID (appkey.go): the pairing page offers that before the browser
 		out["appKey"] = id.Device.AppKey != nil
+		// The App may register its key right now (fresh presence: auth.SetAppKey's rule; a temporary device then
+		// becomes permanent), so
+		// the page asks the shell to (`enroll`) after a pairing instead of waiting for a browser approval
+		out["appKeyFresh"] = !id.Device.Peer && time.Since(id.VerifiedAt) < auth.StepUpWindow
 		if s.reauthNeeded(id) {
 			out["need"] = "passkey"
 		}
@@ -585,6 +634,11 @@ func (s *Server) passkeyOK(r *http.Request) bool {
 const stepUpWindow = auth.StepUpWindow
 
 func (s *Server) reauthNeeded(id *auth.Ident) bool {
+	if id != nil && !id.Active && id.Device != nil && s.remoteConns.has(id.Device.ID) {
+		c := *id
+		c.Active = true // its UI is open somewhere right now: in use, though its last request may be a while ago
+		id = &c
+	}
 	return auth.ReauthNeeded(id, s.Remote.Config().ReauthAfter, s.Remote.Passkeys.Count(), time.Now())
 }
 

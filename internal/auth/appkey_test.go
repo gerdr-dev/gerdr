@@ -32,7 +32,7 @@ func appSign(t *testing.T, k *ecdsa.PrivateKey, host, dev, nonce string) []byte 
 	return sig
 }
 
-// Register only right after a presence proof, never for a temporary device; a signature over the right payload
+// Register only right after a presence proof (which makes a temporary device permanent); a signature over the right payload
 // renews VerifiedAt, one for another host or a spent / expired nonce doesn't.
 func TestAppKey(t *testing.T) {
 	now := time.Now()
@@ -104,14 +104,19 @@ func TestAppKey(t *testing.T) {
 		t.Fatalf("another device's nonce passed: %v", err)
 	}
 
-	// A device that came in with a pairing code stays out (it would turn a code into a long-lived device)
+	// A device that came in with a pairing code is temporary; registering its App key right away keeps it
 	code, _ := s.MintCode()
 	tmp, _, err := s.Redeem(code, "iPhone", "1.2.3.4")
-	if err != nil {
-		t.Fatal(err)
+	if err != nil || !tmp.Temp {
+		t.Fatalf("a pairing code should give a temporary device: %v", err)
 	}
-	if err := s.SetAppKey(tmp.ID, pub); err != ErrAppKeyTemp {
-		t.Fatalf("temporary device registered a key: %v", err)
+	if err := s.SetAppKey(tmp.ID, pub); err != nil {
+		t.Fatalf("fresh temporary device: %v", err)
+	}
+	for _, x := range s.Devices() {
+		if x.ID == tmp.ID && (x.Temp || !x.Expires.Equal(now.Add(90*24*time.Hour))) {
+			t.Fatalf("an App key should make it permanent: %+v", x)
+		}
 	}
 
 	// Revoking the device drops its key with it

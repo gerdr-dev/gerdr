@@ -757,12 +757,12 @@ class MainActivity : ComponentActivity() {
 
     /**
      * Right after an approval (the presence proof the server wants within minutes): make this device's key and
-     * register it, in the background and silently. Making a key needs no fingerprint; using it does. Only where the
-     * WebView can't do passkeys (those phones re-verify with a passkey in place). Failing only means the browser
-     * again next time, so it's logged, not shown.
+     * register it, in the background and silently. Making a key needs no fingerprint; using it does. Also where the
+     * WebView can do passkeys: the App then needs none (same flow as iOS). Failing only means a passkey or the
+     * browser next time, so it's logged, not shown.
      */
     private fun enrollAppKey(o: String, cookie: String) {
-        if (webAuthn || !AppKey.available(this)) return
+        if (!AppKey.available(this)) return
         val ua = webUA
         Thread {
             try {
@@ -775,6 +775,11 @@ class MainActivity : ComponentActivity() {
     }
 
     /** The pairing page's "verify with fingerprint": challenge → BiometricPrompt → signature → the server renews this device. */
+    fun enrollNow() {
+        val o = origin ?: return
+        cookieToken(o)?.let { enrollAppKey(o, it) }
+    }
+
     fun verifyWithAppKey() {
         val o = origin ?: return
         val cookie = cookieToken(o)

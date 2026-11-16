@@ -457,16 +457,37 @@ func StepUpNeeded(id *Ident, within time.Duration, registered int, now time.Time
 //
 // registered 是注册过的 passkey 把数：一把都没有时这条完全不生效 —— 否则就把自己锁在
 // 一个过不去的门后面了。
+//
+// A device with the phone App's key (Face ID / a fingerprint) re-verifies even with no passkey registered: it has its
+// own factor to do it with.
+//
+// `after` is soft: once it has passed, a device in use (id.Active) carries on, and is asked at its next break
+// (back after ReauthIdle without a request or an open UI), so it isn't cut off in the middle of work at the same
+// hour every day. 2×after is the hard limit, asked even mid-use.
 func ReauthNeeded(id *Ident, after time.Duration, registered int, now time.Time) bool {
-	if id == nil || after <= 0 || registered == 0 || (id.Device != nil && id.Device.Peer) {
+	if id == nil || after <= 0 || (id.Device != nil && id.Device.Peer) {
+		return false
+	}
+	if registered == 0 && (id.Device == nil || id.Device.AppKey == nil) {
 		return false
 	}
 	v := id.VerifiedAt
 	if v.IsZero() && id.Device != nil {
 		v = id.Device.Created // 这个功能之前配的对，拿配对时间当基准
 	}
-	return now.Sub(v) > after
+	since := now.Sub(v)
+	switch {
+	case since <= after:
+		return false
+	case since > 2*after:
+		return true
+	}
+	return !id.Active
 }
+
+// ReauthIdle: how long without a request (or an open remote UI) counts as a break, where a due re-verification is
+// asked instead of mid-use.
+const ReauthIdle = 30 * time.Minute
 
 // AndroidOrigins: when the Android app's WebView does WebAuthn, the clientDataJSON origin is not the page's
 // https://… but `android:apk-key-hash:<SHA-256 of the signing cert>`, filled in by the system Credential Manager

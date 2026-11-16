@@ -88,8 +88,6 @@ func (s *Server) apiAppKey(w http.ResponseWriter, r *http.Request) {
 
 func appKeyReason(err error) string {
 	switch {
-	case errors.Is(err, auth.ErrAppKeyTemp):
-		return "temp"
 	case errors.Is(err, auth.ErrAppKeyStale):
 		return "stale"
 	}

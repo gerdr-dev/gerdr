@@ -19,8 +19,9 @@ import java.security.interfaces.ECPublicKey
 import java.security.spec.ECGenParameterSpec
 
 /**
- * This device's App key: re-verify with a fingerprint / face instead of the browser, on phones whose WebView can't do
- * passkeys (MainActivity.webAuthn false: they sign in through the browser device flow, Login.kt). Server:
+ * This device's App key: keep the device and re-verify with a fingerprint / face, with or without passkeys in the
+ * WebView. Registered right after a pairing code or a browser approval, so the App never needs a passkey (passkeys
+ * stay optional, for signing in elsewhere). Server:
  * internal/auth/appkey.go (the rules and why); the iOS twin is ios/Gerdr/AppKey.swift; docs/dev/ANDROID.md "App key".
  *
  * A P-256 key in the Android Keystore (StrongBox when the phone has one): the private half never leaves it, every

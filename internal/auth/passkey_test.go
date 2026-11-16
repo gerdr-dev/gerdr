@@ -129,6 +129,58 @@ func TestReauthNeeded(t *testing.T) {
 	}
 }
 
+// 24 hours is soft: a device in use carries on until its next break; 48 is hard. A device with an App key
+// re-verifies even when no passkey is registered.
+func TestReauthSoftDeadline(t *testing.T) {
+	now := time.Now()
+	dev := &Device{ID: "d1"}
+	at := func(ago time.Duration, active bool) *Ident {
+		return &Ident{Device: dev, VerifiedAt: now.Add(-ago), Active: active}
+	}
+	day := 24 * time.Hour
+	for _, c := range []struct {
+		name string
+		id   *Ident
+		want bool
+	}{
+		{"past 24h but in use: carry on", at(25*time.Hour, true), false},
+		{"past 24h, back from a break: verify", at(25*time.Hour, false), true},
+		{"past 48h, even in use: verify", at(49*time.Hour, true), true},
+	} {
+		if got := ReauthNeeded(c.id, day, 1, now); got != c.want {
+			t.Errorf("%s: got %v", c.name, got)
+		}
+	}
+	if ReauthNeeded(at(25*time.Hour, false), day, 0, now) {
+		t.Error("no passkey and no App key: nothing to verify with")
+	}
+	withKey := &Ident{Device: &Device{ID: "d2", AppKey: &AppKey{}}, VerifiedAt: now.Add(-25 * time.Hour)}
+	if !ReauthNeeded(withKey, day, 0, now) {
+		t.Error("an App key re-verifies even with no passkey registered")
+	}
+}
+
+// Active comes from the gap since the device's previous request (or Touch, when its UI closed).
+func TestAuthenticateActive(t *testing.T) {
+	now := time.Now()
+	s := newStore(t, Config{})
+	s.now = func() time.Time { return now }
+	d, tok := s.NewDevice("iPhone", "", "")
+	if !s.Authenticate(withCookie(tok)).Active {
+		t.Fatal("right after it was made it is in use")
+	}
+	now = now.Add(ReauthIdle + time.Minute)
+	if s.Authenticate(withCookie(tok)).Active {
+		t.Fatal("back after a break: not active")
+	}
+	now = now.Add(ReauthIdle + time.Minute)
+	s.Touch(d.ID)
+	now = now.Add(time.Minute)
+	if !s.Authenticate(withCookie(tok)).Active {
+		t.Fatal("its UI closed a minute ago: still in use")
+	}
+}
+
 // 注册和登录的口在「没有域名」时都要拒得干净，别 panic
 func TestPasskeyLoginNeedsRegistered(t *testing.T) {
 	p := newPasskeys(t, "localhost")
@@ -210,8 +262,8 @@ func TestStepUpNeeded(t *testing.T) {
 	}
 }
 
-// MarkVerified 是 PasskeyAt 的**唯一**写入点（调用点只有 passkey 的 login/finish 和
-// register/finish）。这条钉住那个性质：配对不写它，过一次 passkey 才写。
+// PasskeyAt is written by a passkey (MarkVerified) and, since pairing codes are trusted on their own, by Redeem:
+// the person at the computer minted the code, so the new device may add a passkey right away.
 func TestMarkVerifiedWritesPasskeyAt(t *testing.T) {
 	s := newStore(t, Config{})
 	code, _ := s.MintCode()
@@ -219,8 +271,8 @@ func TestMarkVerifiedWritesPasskeyAt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Redeem: %v", err)
 	}
-	if !dev.PasskeyAt.IsZero() {
-		t.Fatal("配对不该写 PasskeyAt —— 写了的话 step-up 对刚进来的人就失效了")
+	if dev.PasskeyAt.IsZero() {
+		t.Fatal("a pairing code should leave a device that may add a passkey now")
 	}
 	if dev.VerifiedAt.IsZero() {
 		t.Fatal("配对该写 VerifiedAt（配对码本身就是一次「人在机器前」的证明）")

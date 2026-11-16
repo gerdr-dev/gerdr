@@ -157,10 +157,29 @@ npm 包的代理 —— 都不该对没配过对的人开放。
 `bypassPermissions` 模式下的 agent，能挡住的只有「别让它悄悄地做」。
 
 **配对码进来的设备只是临时的**（`auth.Device.Temp`）：从配对那一刻起 30 分钟到期（`GERDR_PAIR_TTL_MINUTES` /
-remote.json 的 `pairTTLMinutes`，0 = 和别的设备一样），用了也不续期；在那台设备上过一次 passkey（登录或注册一把，
-`MarkVerified`）才转正、按设备 TTL 滑动。配对码只负责「让新设备进门」，长期凭据要绑在 passkey 上 —— 码被拍走、
-临时借来的设备忘了退，口子最多半小时。passkey 登录和「批准 App 登录」签出来的设备不是临时的（那两条当场过了 passkey 或本机批准）。
-改之前配的设备不受影响。
+remote.json 的 `pairTTLMinutes`，0 = 和别的设备一样），用了也不续期。It becomes permanent when it binds a factor:
+a passkey (`MarkVerified`) or the phone App's key behind Face ID / a fingerprint (`SetAppKey`). Devices from a passkey
+sign-in or an App sign-in approval are never temporary.
+
+**The pairing itself is the step-up** (since 2026-11-16, the user's call): the code is minted by the person at the
+computer, so `Redeem` writes `PasskeyAt` as well as `VerifiedAt`, and for `StepUpWindow` (5 min) the new device may
+add a passkey or register an App key without asking the computer again. Before, a phone that had just paired was
+sent back to the computer to approve its own passkey, and the iOS App (no passkeys in the App, and temporary
+devices couldn't register an App key) dropped out after 30 minutes with no way to stay. The cost: a photographed
+code used within those minutes can bind a factor and stay, until the device is kicked. Past the window, step-up is
+as before (an existing passkey or a local approval): a stolen cookie still can't add a passkey.
+
+After a pairing the page asks the phone App's shell to `enroll` its App key (Face ID / fingerprint) while the
+pairing is fresh (`whoami.appKeyFresh`), so re-verifying never needs the browser. The iOS App's "add in browser"
+mints a handoff link (`auth/handoff.go`, `POST /api/remote/handoff`, `/?handoff=`): single use, 2 minutes, it
+signs Safari in as a new device exactly as fresh as the App, and opens Settings → Remote access there.
+
+**Re-verification waits for a break** (`auth.ReauthNeeded`). `reauthHours` (24) is soft: once it has passed, a
+device in use carries on, and is asked when it comes back after a break (`ReauthIdle`, 30 min with no request and
+no open remote UI; the /ws closing counts as the last use, `Store.Touch`). Twice that (48 h) is hard, asked even
+mid-use. Before, the deadline fell at the same hour each day, in the middle of work (user report). A device with an
+App key re-verifies (with Face ID / a fingerprint) even when no passkey is registered; one with neither factor
+still isn't asked, since it would have nothing to do it with.
 
 ## 远程起不来不拦启动
 

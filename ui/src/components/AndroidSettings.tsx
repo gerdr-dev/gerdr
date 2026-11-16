@@ -160,7 +160,7 @@ function IOSSettings() {
         )}
       </div>
       <div className="flex shrink-0 gap-2">
-        <Button size="sm" variant="outline" onClick={openInBrowser}>
+        <Button size="sm" variant="outline" onClick={() => openInBrowser()}>
           {t("androidSettings.openBrowser")}
         </Button>
         <Button size="sm" variant="outline" onClick={() => postAndroid({ t: "setup" })}>

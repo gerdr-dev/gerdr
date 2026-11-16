@@ -11,8 +11,11 @@ func TestApprovalGrantsStepUp(t *testing.T) {
 	code, _ := s.MintCode()
 	dev, token, _ := s.Redeem(code, "Android · Edge", "")
 	id := s.Authenticate(withCookie(token))
-	if !StepUpNeeded(id, 5*time.Minute, 1, time.Now()) {
-		t.Fatal("刚配对的设备在已有 passkey 时该要 step-up")
+	if StepUpNeeded(id, 5*time.Minute, 1, time.Now()) {
+		t.Fatal("a device that just used a pairing code may add a passkey without approval")
+	}
+	if !StepUpNeeded(id, 5*time.Minute, 1, time.Now().Add(10*time.Minute)) {
+		t.Fatal("past the window, with a passkey registered, it needs step-up again")
 	}
 	a := NewApprovals()
 	r := a.Request(dev.ID, dev.Label)

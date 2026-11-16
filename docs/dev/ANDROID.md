@@ -120,16 +120,19 @@ and a phone on 5G reached it.
 不用 passkey —— 本机口凭令牌本来就能出配对码，批准给的能力一样）。App 轮询领到设备凭据、写进 WebView 的 cookie。
 两条别破：码**手输**，不从 URL 带进批准页（防钓鱼）；发起要求至少注册过一把 passkey（不然远程没人批得了，直接说用配对码）。
 
-## App key: re-verify with a fingerprint, where passkeys don't work
+## App key: keep the device and re-verify with a fingerprint
 
-Phones whose WebView can't do passkeys (hello `webauthn: false`) sign in and re-verify through the browser device
-flow, every `reauthHours`. Like the iOS App (docs/dev/IOS.md "App key", same server endpoints and rules,
-`internal/auth/appkey.go`), they now keep a P-256 key in the Android Keystore (StrongBox when there is one), made and
-registered silently right after a browser approval (`MainActivity.enrollAppKey`), each signature behind a strong
-biometric through the platform `BiometricPrompt` (not androidx's: MainActivity is a ComponentActivity), voided when a
-new fingerprint is enrolled. hello says `appKey` (strong biometric set up, Android 10+, and passkeys not available in
-the WebView); the pairing page's "verify with Face ID" then sends `appkey`, the shell answers `appkey {state}`.
-Phones that do passkeys in the WebView don't use it: they re-verify with a passkey in place already.
+Like the iOS App (docs/dev/IOS.md "App key", same server endpoints and rules, `internal/auth/appkey.go`), the App
+keeps a P-256 key in the Android Keystore (StrongBox when there is one), made and registered silently right after a
+pairing code (the page sends `enroll`) or a browser approval (`MainActivity.enrollAppKey`), each signature behind a
+strong biometric through the platform `BiometricPrompt` (not androidx's: MainActivity is a ComponentActivity),
+voided when a new fingerprint is enrolled. hello says `appKey` (strong biometric set up, Android 10+); the pairing
+page's "verify with Face ID" then sends `appkey`, the shell answers `appkey {state}`.
+
+Since 2026-11-16 this is used whether or not the WebView can do passkeys. Before, phones with passkeys in the
+WebView (most of them) skipped it, so a phone paired with a code was temporary until the person remembered to add a
+passkey within 30 minutes; now pairing in the App keeps the device by itself on both platforms, and passkeys are
+optional (for signing in from browsers / other devices without a code).
 
 ## 后台通知
 
@@ -185,6 +188,7 @@ below (hello, theme, open, setup, login, copyImage, lan, route); keep the two sh
 | `lan` | 页 → 壳 | 局域网直连的候选 `origins` |
 | `route` | 壳 → 页 | 开着的连接各走哪条路（顶栏的点：绿 = 直连、蓝 = 中继） |
 | `login` | 页 → 壳 → 页 | passkey 退路：`reauth`；回 `state`（done / error / cancel）+ `msg` |
+| `enroll` | 页 → 壳 | Make and register the App key now: sent after a pairing code while whoami says `appKeyFresh`, so re-verifying is a fingerprint rather than the browser. The server refuses it outside that window |
 | `appkey` | 页 → 壳 → 页 | Re-verify with the App key (fingerprint; "App key" above); answers `state` (done / error / cancel) + `msg`. Offered only when hello says `appKey` and whoami says the device has one |
 | `notify` | 页 ↔ 壳 | 后台通知的开关 / 权限 / 电池优化 / 试一下 |
 | `volkeys` / `key` | 页 ↔ 壳 | 音量键当 ↑ / ↓（等于在焦点会话的输入框里按方向键：翻历史、提问时选选项） |

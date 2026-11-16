@@ -11,6 +11,7 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { t } from "./i18n";
+import { api } from "./api";
 import { hasAsk, watchAsks } from "@gerdr/chat/askkeys";
 import { lightboxOpen } from "@/components/Lightbox";
 import { focusSession } from "./actions";
@@ -87,8 +88,8 @@ export function useLanRoute(): boolean {
  * list every user's domain, docs/dev/IOS.md "Passkey"), so adding one, or signing in with one, happens there.
  * The browser has its own cookies: it starts on the pairing page.
  */
-export function openInBrowser() {
-  postAndroid({ t: "open", url: location.origin + "/" });
+export function openInBrowser(url = location.origin + "/") {
+  postAndroid({ t: "open", url });
 }
 
 /** Does the shell say (in its hello reply) that it can do this? An older App doesn't know newer messages. */
@@ -123,6 +124,21 @@ export async function androidCopyImage(blob: Blob) {
 }
 
 /**
+ * Right after a pairing code (or anything that just proved presence), ask the shell to make its App key, so
+ * re-verifying later is Face ID / a fingerprint instead of a trip to the browser. Before, the shells only enrolled
+ * after a browser approval, which a device paired with a code never went through. The server says whether the
+ * device may register now (whoami appKeyFresh); an older shell ignores the message.
+ */
+async function enrollAfterPairing() {
+  for (let i = 0; i < 30 && !last.get("hello"); i++) await new Promise((r) => setTimeout(r, 100));
+  if (!androidCan("appKey")) return;
+  try {
+    const w = await api.remoteWhoami();
+    if (w.remote && w.authed && !w.appKey && w.appKeyFresh) postAndroid({ t: "enroll" });
+  } catch {}
+}
+
+/**
  * 页面起来之后接上壳：hello（壳收到它才有往回发的通道）、局域网候选、返回键、通知点开、音量键。
  * App.tsx 在 boot 之后调一次。
  */
@@ -137,6 +153,7 @@ export function initAndroid() {
     // keys, no LAN routing, and WebKit doesn't stretch the page like Android's WebView (gateStretch)
     document.documentElement.classList.add("ios-app");
     postAndroid({ t: "hello" });
+    enrollAfterPairing();
     syncAndroidTheme();
     // LAN candidates as on Android (the shell ignores them where it can't route: before iOS 17, a debug address)
     sendLan();
@@ -151,6 +168,7 @@ export function initAndroid() {
   }
   document.documentElement.classList.add("android");
   postAndroid({ t: "hello" });
+  enrollAfterPairing();
   syncAndroidTheme();
   sendLan();
   // 局域网 IP 会变（换 Wi-Fi、DHCP）：回到前台时再报一次，壳会拿新候选重探
