@@ -367,6 +367,20 @@ export class Transcript {
     this.retryLoc = fix(this.retryLoc);
   }
 
+  /** Takes a tool call's card off the conversation (one that never ran, see turn_end); positions after it move up. */
+  private dropTool(id: string) {
+    const at = this.tools.get(id);
+    if (!at) return;
+    this.tools.delete(id);
+    const m = this.touch(at.msg);
+    m.parts.splice(at.part, 1);
+    const fix = (l: Loc | null) => (l && l.msg === at.msg && l.part > at.part ? { msg: l.msg, part: l.part - 1 } : l);
+    for (const map of [this.tools, this.chunks, this.requests, this.shells]) for (const [k, l] of map) map.set(k, fix(l)!);
+    this.planLoc = fix(this.planLoc);
+    this.retryLoc = fix(this.retryLoc);
+    if (!m.parts.length) this.removeMessage(at.msg);
+  }
+
   /** 改第 i 条消息：换成一个新对象（React 靠引用判断要不要重画）。 */
   private touch(i: number): GMessage {
     const m = this.messages[i];
@@ -575,6 +589,14 @@ export class Transcript {
           this.pushPart(i, { type: "data-turnStat", data: { ms: e.durationMs, tokens: e.outputTokens ?? 0, ts: e.ts } });
         }
         // 这一轮里还在「进行中」的工具调用，到这里就不会再有结果了。
+        // One whose input never came was never run: the model's response was cut off while writing it and the agent
+        // dropped it (the claude adapter says so at the next request, `discarded`; this catches a turn that ended
+        // there, and logs from before). Taken off, as the agent itself keeps none of it.
+        for (const id of [...this.tools.keys()]) {
+          const loc = this.tools.get(id)!; // read again: dropping one moves the ones after it
+          const p = this.messages[loc.msg]?.parts[loc.part] as ToolPart | undefined;
+          if (p?.state === "input-streaming" && p.input == null) this.dropTool(id);
+        }
         for (const [, loc] of this.tools) {
           const p = this.messages[loc.msg]?.parts[loc.part] as ToolPart | undefined;
           if (p && (p.state === "input-available" || p.state === "input-streaming")) {
@@ -789,7 +811,8 @@ export class Transcript {
         this.lastChunkKey = "";
         break;
       case "tool_call_update":
-        this.toolUpdate(u, ts);
+        if (u._meta?.gerdr?.discarded) this.dropTool(u.toolCallId);
+        else this.toolUpdate(u, ts);
         break;
       case "plan": {
         const i = this.assistant(ts);

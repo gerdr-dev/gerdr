@@ -102,6 +102,9 @@ type toolState struct {
 	name   string
 	parent string
 	input  map[string]any
+	// shown from the stream (content_block_start) and its input not in yet: if the next API request starts first, the
+	// CLI threw that response away (cut off mid-stream, it asks the model to go on) and the call never runs.
+	streamOnly bool
 }
 
 // ensure 保证进程在跑（必要时起一个，并做 initialize 握手）。

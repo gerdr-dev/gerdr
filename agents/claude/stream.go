@@ -427,7 +427,23 @@ func (s *session) onStreamEvent(ctx context.Context, raw json.RawMessage, apiID 
 		s.mu.Lock()
 		reconnected := s.retrying
 		s.retrying = false
+		// A tool call shown from the previous response's stream whose input never came: that response was cut off
+		// mid-stream and the CLI dropped it (it keeps none of it in its own transcript and asks the model to go on).
+		// The call never runs and nothing more about it will come, so it is taken off the conversation, as the CLI
+		// does; left alone it stayed a bare "Run command" with nothing to open (measured).
+		var dropped []string
+		for id, st := range s.tools {
+			if st.streamOnly {
+				dropped = append(dropped, id)
+				delete(s.tools, id)
+			}
+		}
 		s.mu.Unlock()
+		for _, id := range dropped {
+			u := acp.UpdateToolCall(acp.ToolCallId(id))
+			u.ToolCallUpdate.Meta = acpx.Meta(map[string]any{"discarded": true})
+			s.update(ctx, u)
+		}
 		if reconnected {
 			// The retry got through: an empty retry notice folds the retry line (chatlog.NoticeFromInfo). The UI used
 			// to fold it only on the first output, but the model starts the answer over (what it had thought before
@@ -464,7 +480,7 @@ func (s *session) onStreamEvent(ctx context.Context, raw json.RawMessage, apiID 
 			s.mu.Lock()
 			_, seen := s.tools[ev.ContentBlock.ID]
 			if !seen {
-				s.tools[ev.ContentBlock.ID] = &toolState{name: ev.ContentBlock.Name}
+				s.tools[ev.ContentBlock.ID] = &toolState{name: ev.ContentBlock.Name, streamOnly: !hiddenTool(ev.ContentBlock.Name)}
 			}
 			s.mu.Unlock()
 			if !seen && !hiddenTool(ev.ContentBlock.Name) {
@@ -557,7 +573,7 @@ func (s *session) onAssistantBlock(ctx context.Context, apiID, parent string, ra
 			st = &toolState{name: b.Name}
 			s.tools[b.ID] = st
 		}
-		st.input, st.parent = b.Input, parent
+		st.input, st.parent, st.streamOnly = b.Input, parent, false
 		cwd := s.cwd
 		s.mu.Unlock()
 		if b.Name == "TodoWrite" {

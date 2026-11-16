@@ -464,3 +464,40 @@ func TestRetryNoticeFoldsOnReconnect(t *testing.T) {
 		t.Fatalf("fold = %v -> %+v", notices[1], ev)
 	}
 }
+
+// A response cut off mid-stream while writing a Bash call (measured, claude 2.1.323): the call was shown from
+// content_block_start, the CLI dropped the response without an assistant line for it and asked the model to go on,
+// so the next request starts. That call is taken off (discarded); one whose input came stays.
+func TestCutOffToolCallDiscarded(t *testing.T) {
+	a := &Agent{opts: Options{Env: []string{"CLAUDE_CONFIG_DIR=" + t.TempDir()}}, sessions: map[string]*session{}, log: slog.New(slog.DiscardHandler)}
+	s := a.newSession("11111111-2222-4333-8444-555555555555", "/p", nil)
+	var got []acp.SessionUpdate
+	s.emitHook = func(u acp.SessionUpdate) { got = append(got, u) }
+	line := func(js string) {
+		var m map[string]json.RawMessage
+		if err := json.Unmarshal([]byte(js), &m); err != nil {
+			t.Fatal(err)
+		}
+		s.onLine(nil, m, []byte(js))
+	}
+	start := func(id string) {
+		line(`{"type":"stream_event","parent_tool_use_id":null,"event":{"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"` + id + `","name":"Bash","input":{}}}}`)
+	}
+	line(`{"type":"stream_event","parent_tool_use_id":null,"event":{"type":"message_start","message":{}}}`)
+	start("toolu_ok")
+	line(`{"type":"assistant","parent_tool_use_id":null,"message":{"id":"m1","content":[{"type":"tool_use","id":"toolu_ok","name":"Bash","input":{"command":"ls"}}]}}`)
+	line(`{"type":"stream_event","parent_tool_use_id":null,"event":{"type":"message_start","message":{}}}`)
+	start("toolu_cut")
+	line(`{"type":"stream_event","parent_tool_use_id":null,"event":{"type":"message_start","message":{}}}`)
+	var discarded []string
+	for _, u := range got {
+		if u.ToolCallUpdate != nil {
+			if v, _ := acpx.GetMeta(u.ToolCallUpdate.Meta, "discarded"); v == true {
+				discarded = append(discarded, string(u.ToolCallUpdate.ToolCallId))
+			}
+		}
+	}
+	if !slices.Equal(discarded, []string{"toolu_cut"}) {
+		t.Fatalf("discarded %v", discarded)
+	}
+}
