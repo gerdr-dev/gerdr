@@ -16,6 +16,7 @@ import {
   mergeConfig,
   onLayoutChange,
   removeSession,
+  restartingNow,
   set,
   setConnProbe,
   setLayout,
@@ -161,7 +162,8 @@ function connect() {
     retry = 0;
     lastHeard = Date.now();
     const reconnect = get().everConnected;
-    set({ connected: true, everConnected: true });
+    const restarted = get().restarting;
+    set({ connected: true, everConnected: true, restarting: null });
     watched = "";
     // Echoes of drafts sent on the old connection never come back: stop waiting for them. Then send what was typed
     // while offline, after the watch, so the server's (older) draft pushed on watch arrives while ours is in flight
@@ -170,7 +172,12 @@ function connect() {
     syncWatch();
     flushDrafts();
     // 断开期间错过的会话变化：重新拉一遍（订阅的日志服务端会补上）。
-    refreshHello();
+    // Back from an update: "updated to <version>", in every window and device (the App's windows also hear it from
+    // the shell; noteUpdated says it once)
+    refreshHello().then(() => {
+      const v = get().version;
+      if (restarted?.reason === "update") import("./native").then((n) => n.noteUpdated(v, restarted.version));
+    });
     // Panel data changes missed meanwhile can't be replayed: every panel's page refreshes once (core usePanelChange)
     if (reconnect) panelDataResync();
     // Add-ons whose list failed to load while the network was down (lib/addons.ts)
@@ -197,7 +204,9 @@ function connect() {
 
 function scheduleReconnect(now = false) {
   if (stopped || reconnectTimer || ws) return;
-  const delay = now ? 0 : Math.min(8000, 300 * 2 ** retry++);
+  // A restart we were told about takes a few seconds: try every half second instead of backing off, so the new
+  // backend is picked up as soon as it answers
+  const delay = now ? 0 : restartingNow(get()) ? 500 : Math.min(8000, 300 * 2 ** retry++);
   set({ connRetrying: true, conn: delay ? { state: "waiting", at: Date.now() + delay } : { state: "connecting" } });
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null;
@@ -398,6 +407,10 @@ function handle(m: any) {
       break;
     case "badges":
       import("./badges").then((p) => p.setBadges(m.data));
+      break;
+    // The backend is about to restart on purpose (server/serviceapi.go announceRestart)
+    case "restarting":
+      set({ restarting: { reason: m.data?.reason === "update" ? "update" : "restart", version: m.data?.version ?? "", at: Date.now() } });
       break;
     case "inbox":
       import("./inbox").then((p) => p.syncPanelInbox(m.data ?? []));

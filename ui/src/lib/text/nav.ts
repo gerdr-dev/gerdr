@@ -120,6 +120,11 @@ export const zh = {
   "connStatus.toastReconnecting": "正在重连 Gerdr…",
   "connStatus.toastUnreachable": "连不上 Gerdr，{n} 秒后重试",
   "connStatus.toastConnecting": "正在连接 Gerdr…",
+  "connStatus.restartingUpdate": "正在重启以完成更新…",
+  "connStatus.restarting": "正在重启 Gerdr…",
+  "connStatus.restartingUpdateShort": "重启更新中…",
+  "connStatus.restartingShort": "重启中…",
+  "connStatus.restartingHint": "Gerdr 后台正在重启，起来后自动接上",
   "connStatus.lan": "直连",
   "connStatus.relay": "中继",
 
@@ -343,6 +348,11 @@ export const en: Record<keyof typeof zh, string> = {
   "connStatus.toastReconnecting": "Reconnecting to Gerdr…",
   "connStatus.toastUnreachable": "Can't reach Gerdr, retrying in {n}s",
   "connStatus.toastConnecting": "Connecting to Gerdr…",
+  "connStatus.restartingUpdate": "Restarting to finish the update…",
+  "connStatus.restarting": "Restarting Gerdr…",
+  "connStatus.restartingUpdateShort": "Updating…",
+  "connStatus.restartingShort": "Restarting…",
+  "connStatus.restartingHint": "Gerdr's backend is restarting; this reconnects by itself once it is up",
   "connStatus.lan": "Direct",
   "connStatus.relay": "Relay",
 

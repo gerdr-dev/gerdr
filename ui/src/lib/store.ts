@@ -59,6 +59,12 @@ type State = {
   everConnected: boolean;
   /** Some connection attempt has failed or dropped since the page loaded: we're past the first try. */
   connRetrying: boolean;
+  /**
+   * The backend said it is about to restart on purpose ("restarting": an update the App applies, or Settings →
+   * Restart), with the version going away. Until the connection is back the status says so instead of "connection
+   * lost"; see restartingNow.
+   */
+  restarting: { reason: "update" | "restart"; version: string; at: number } | null;
   keptTabs: string[]; // 现在挂在页面里的 tab（当前那个排第一），App 维护
   version: string;
   /** When the running backend was installed (unix ms; 0 = unknown): the version string alone doesn't say how old it is. */
@@ -156,6 +162,7 @@ export const useStore = create<State>(() => ({
   conn: { state: "connecting" },
   everConnected: false,
   connRetrying: false,
+  restarting: null,
   keptTabs: [],
   version: "",
   installedAt: 0,
@@ -215,6 +222,12 @@ export function useStoreWhile<T>(live: boolean, pick: (s: State) => T): T {
 /** 给 streamdown 的 linkSafety：在组件里调（订阅了 config，切开关后已渲染的消息也跟着变）。 */
 export const useLinkSafety = () => ({ enabled: useStore((s) => s.config.confirmLinks !== false) });
 export const set = useStore.setState;
+
+/**
+ * A restart the backend announced, still within the time one takes: past a minute it didn't come back as planned and
+ * the status goes back to the plain "connection lost" with its retry countdown.
+ */
+export const restartingNow = (s: Pick<State, "restarting">) => (s.restarting && Date.now() - s.restarting.at < 60_000 ? s.restarting : null);
 
 /** Close whatever store.dialog overlay is open (the dialogs rendered by components/Dialogs.tsx). */
 export const closeDialog = () => set({ dialog: null });

@@ -1,10 +1,12 @@
 package server
 
 import (
+	"encoding/json"
 	"net/http"
 	"time"
 
 	"github.com/gerdr-dev/gerdr/internal/i18n"
+	"github.com/gerdr-dev/gerdr/internal/version"
 )
 
 // 后台常驻（launchd，见 internal/service）：设置里那个开关。只在本机口上（remoteGuard 拦着）——
@@ -71,11 +73,25 @@ func (s *Server) restartRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/restart", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"can": s.Restart != nil, "busy": s.busy()})
 	})
+	// The App's watcher (cmd/gerdr/attach.go) is about to restart this backend for an update: windows say "restarting
+	// to update" instead of "connection lost, retrying in N s", which read as the network being down.
+	mux.HandleFunc("POST /api/restarting", func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Reason string `json:"reason"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		if body.Reason != "update" {
+			body.Reason = "restart"
+		}
+		s.announceRestart(body.Reason)
+		writeJSON(w, map[string]any{"ok": true})
+	})
 	mux.HandleFunc("POST /api/restart", func(w http.ResponseWriter, r *http.Request) {
 		if s.Restart == nil {
 			httpError(w, http.StatusConflict, i18n.S("这个 Gerdr 是在终端里起的，没人会把它重新拉起来：回那个终端里重启它", "This Gerdr was started in a terminal and nothing would start it again: restart it in that terminal"))
 			return
 		}
+		s.announceRestart("restart")
 		writeJSON(w, map[string]any{"ok": true})
 		// The answer goes out first, then the shutdown (same as handing over to the service)
 		go func() {
@@ -83,4 +99,15 @@ func (s *Server) restartRoutes(mux *http.ServeMux) {
 			s.Restart()
 		}()
 	})
+}
+
+// announceRestart tells every window this backend is about to go down on purpose (reason "update" or "restart"),
+// with the version going away so a window outside the App can say "updated to" once the new one answers. Waits a
+// moment so /ws (which batches for 30ms) has sent it before the process is stopped.
+func (s *Server) announceRestart(reason string) {
+	if s.Hub == nil {
+		return
+	}
+	s.Hub.Broadcast("restarting", map[string]string{"reason": reason, "version": version.Version})
+	time.Sleep(150 * time.Millisecond)
 }

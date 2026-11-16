@@ -48,4 +48,7 @@ func TestRestartAPI(t *testing.T) {
 			t.Fatalf("remote %s /api/restart must be refused, got %d", m, w.Code)
 		}
 	}
+	if w := do(rh, "POST", "/api/restarting", strings.NewReader(`{"reason":"update"}`), csrf, hdr("Origin", "https://"+testHost)); w.Code != 403 {
+		t.Fatalf("remote POST /api/restarting must be refused, got %d", w.Code)
+	}
 }

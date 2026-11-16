@@ -1,6 +1,6 @@
 import { Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useStore } from "@/lib/store";
+import { restartingNow, useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { reconnectNow } from "@/lib/sync";
 import { toast } from "sonner";
@@ -30,6 +30,14 @@ export function ConnStatus() {
   }, [connected, conn]);
   const ever = useStore((s) => s.everConnected);
   const retrying = useStore((s) => s.connRetrying);
+  const restarting = useStore(restartingNow);
+  if (!connected && restarting)
+    return (
+      <span className="flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground" title={t("connStatus.restartingHint")}>
+        <Loader2 className="size-3 animate-spin" />
+        {restarting.reason === "update" ? t("connStatus.restartingUpdateShort") : t("connStatus.restartingShort")}
+      </span>
+    );
   // The first attempt after opening: the page shows its own loading state, a "reconnecting" here would be wrong and redundant
   if (connected || !shown || (!ever && !retrying)) return null;
   const left = conn.state === "waiting" ? conn.at - Date.now() : 0;
@@ -80,17 +88,23 @@ export function ConnToast() {
   });
   const ever = useStore((s) => s.everConnected);
   const retrying = useStore((s) => s.connRetrying);
+  // An announced restart (an update going in): said at once and as such, not as a lost connection with a countdown
+  const restarting = useStore(restartingNow);
   // Same as ConnStatus: nothing during the first attempt after opening (the page is showing it's loading)
-  const on = shown && !connected && (ever || retrying);
-  const left = conn.state === "waiting" ? Math.ceil((conn.at - Date.now()) / 1000) : 0;
+  const on = !connected && (!!restarting || (shown && (ever || retrying)));
+  const left = restarting ? 0 : conn.state === "waiting" ? Math.ceil((conn.at - Date.now()) / 1000) : 0;
   // A wait under a second would flash a "1 s" countdown between attempts: show it as still connecting
-  const text = ever
-    ? left > 1
-      ? t("connStatus.toastLost", { n: left })
-      : t("connStatus.toastReconnecting")
-    : left > 1
-      ? t("connStatus.toastUnreachable", { n: left })
-      : t("connStatus.toastConnecting");
+  const text = restarting
+    ? restarting.reason === "update"
+      ? t("connStatus.restartingUpdate")
+      : t("connStatus.restarting")
+    : ever
+      ? left > 1
+        ? t("connStatus.toastLost", { n: left })
+        : t("connStatus.toastReconnecting")
+      : left > 1
+        ? t("connStatus.toastUnreachable", { n: left })
+        : t("connStatus.toastConnecting");
   useEffect(() => {
     if (!on) return;
     toast.loading(text, {

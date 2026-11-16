@@ -78,6 +78,9 @@ func appAttach(env config.Env, parentPID int, svc *service.Manager) *os.File {
 				checked = time.Now()
 				idle = now || serviceIdle()
 			}
+			if idle {
+				announceRestart()
+			}
 			switch {
 			case idle && moved:
 				// Rewrites the plist to our binary; bootout + bootstrap restarts it.
@@ -99,6 +102,17 @@ func appAttach(env config.Env, parentPID int, svc *service.Manager) *os.File {
 		case <-time.After(time.Second):
 		}
 	}
+}
+
+// announceRestart: tell the running gerdr it is about to be restarted for an update, so its windows say so instead
+// of "connection lost". A gerdr from before /api/restarting answers 404: its windows show "reconnecting" as before.
+func announceRestart() {
+	c, err := newAPIClient()
+	if err != nil {
+		return
+	}
+	c.http.Timeout = 3 * time.Second
+	_ = c.do("POST", "/api/restarting", map[string]string{"reason": "update"}, nil)
 }
 
 // serviceIdle: nothing a restart of the running gerdr would cut off (server Busy). A gerdr from before /api/busy

@@ -198,9 +198,11 @@ function serviceOn(): Promise<boolean | null> {
  */
 const LAST_RUNNING = "gerdr.lastRunning";
 let seenRunning: string | null = null;
-function noteUpdated(running: string) {
+/** from: the version before, when the caller knows it (sync.ts, back from an announced update restart). */
+export function noteUpdated(running: string, from?: string) {
   if (!parseVer(running)) return; // not reported yet, or a 0.1.0-dev build
-  const last = seenRunning ?? localStorage.getItem(LAST_RUNNING);
+  if (from && seenRunning === running) return; // the shell's status already told this window
+  const last = (from && parseVer(from) ? from : null) ?? seenRunning ?? localStorage.getItem(LAST_RUNNING);
   seenRunning = running;
   if (last === running) return;
   localStorage.setItem(LAST_RUNNING, running);
