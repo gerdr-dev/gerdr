@@ -15,7 +15,7 @@ github.com/zbysir/lightron, where browser-side changes go as general hooks — t
   message change touches `Bridge.kt`, `WebViewController.swift` and `ui/src/lib/android.ts` together.
 - Artifacts (folders under `~/Gerdr` and the records a piece of work leaves: files, links, paths, text; session
   `artifactsDir`, `gerdr artifacts`, the `<Folder>` component): docs/dev/ARTIFACTS.md.
-- Measured-and-postponed work (why, numbers, how to do it): docs/dev/TODO.md. Add to it instead of losing the investigation.
+- Measured-and-postponed work (why, numbers, how to do it): docs/dev/todo/, one file each, listed in its README.md. Add one instead of losing the investigation.
 - Styling the desktop window's title bar (colour, UI up to the top edge like Notion): measured, prototyped and
   shelved; why and how in docs/dev/TITLEBAR.md. Read it before trying again.
 - Desktop App self-update (backend-only ~10MB vs whole App, applied only when idle; `internal/selfupdate`,

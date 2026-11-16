@@ -68,7 +68,7 @@ message aloud became `g.messageAction` + `g.audio` that way, not a TTS primitive
 What was looked at against this (2026-11) and decided:
 
 - **Quotas move out** (`hub/usage.go`, `/api/usage`, `g.usage`): they are a reading of third-party accounts, polled for
-  display, none of the four; the kernel even starts a claude process just to ask. Plan in docs/dev/TODO.md.
+  display, none of the four; the kernel even starts a claude process just to ask. Plan in docs/dev/todo/quotas-out-of-kernel.md.
 - **Session titles stay** (`hub/title.go`): naming a session is part of recording it, and it must happen with no window
   open (sessions agents start for each other). The model call goes through an agent, and an add-on can take it over
   (`g.sessionTitle`). The one place where a model's answer lands in kernel state; keep it the only one.
