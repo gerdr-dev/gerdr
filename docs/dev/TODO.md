@@ -193,9 +193,12 @@ Left:
   first visit 3423 -> 2842; first-visit time 5-30% lower per tab in an alternating A/B, within the noise on some (the
   machine had other agents running). Markdown per message is cheap (`mdbench.mjs`, M3, production React: a typical
   880-char reply ~2ms, a 25-row table ~3ms, our plugins +0.3-0.7ms): its share is the number and length of the rows
-  mounted before the first paint (a real reply often holds a table and a code block). Ideas, not tried: first paint
-  with only the rows covering the screen, the overscan a frame later; cache parsed Markdown per part across mounts
-  (helps remounts: the virtual list, a tab past keepTabs; not a first visit, which must parse once anyway).
+  mounted before the first paint (a real reply often holds a table and a code block). Done: a cold open at the
+  bottom paints only the rows covering the screen and adds the 800px overscan above two frames later (`cold` in
+  ChatList.tsx): 11-12 rows mounted for the 2 on screen before (`tabrows.mjs`); first visits at 4x 468 -> 314ms
+  (images), 462 -> 366 (videos), 535 -> 380 (a 21MB session), 797 -> 419 (long text), alternating A/B. Idea left:
+  cache parsed Markdown per part across mounts (helps remounts: the virtual list, a tab past keepTabs; not a first
+  visit, which must parse once anyway).
   Ruled out: Tailwind rewriting an identical sheet (it does, up to three times per first visit, but skipping identical
   writes made no difference outside the noise in an alternating A/B: the rewrites mostly land after the first paint);
   mounting likely tabs ahead of time when idle (35-80ms first visits, turned down: don't mount tabs nobody opened).

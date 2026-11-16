@@ -175,9 +175,26 @@ export const ChatList = forwardRef<
   if ((warm.current || !measuring.current) && !el.current && lastTop.current === 0)
     lastTop.current = startTop ?? Math.max(0, layout(rows).total - (typeof window !== "undefined" ? window.innerHeight : 800));
 
+  // A cold open at the bottom (no sizes known, no position to keep) first mounts only the rows covering the screen, from
+  // the bottom up, and adds the overscan above a frame later. Mounting the overscan at once mounted 11-12 rows for the
+  // 2 on screen (a reply is often 900px+, the 800px above held several), and the 60px estimate per unknown row made the
+  // first commit mount even more (16, cut to 12 once measured): the bulk of a tab's first visit (tabswitch.mjs).
+  // Unknown rows count as a third of the screen here: closer to a reply than EST, so the first pass rarely overshoots,
+  // and a pass that falls short mounts the next rows in the same frame, before paint (sync, from the ResizeObserver).
+  const cold = useRef(!warm.current && startTop === undefined && !all);
+  const coldRaf = useRef(0);
+  useEffect(() => () => cancelAnimationFrame(coldRaf.current), []);
+  const coldFrom = (lay: Layout, height: number) => {
+    const h = Math.min(height, typeof window !== "undefined" ? window.innerHeight : height);
+    let a = lay.keys.length;
+    for (let y = 0; a > 0 && y < h;) y += sizes.current.get(lay.keys[--a]) ?? Math.max(EST, h / 3);
+    return a;
+  };
+
   const want = (lay: Layout, top: number, height: number): [number, number] => {
     const n = lay.keys.length;
     if (all || measuring.current) return [0, n];
+    if (cold.current) return [coldFrom(lay, height), n];
     const lo = top - OVERSCAN;
     const hi = top + height + OVERSCAN;
     // first row ending below lo
@@ -407,6 +424,11 @@ export const ChatList = forwardRef<
     if (f !== range.current[0] || t !== range.current[1]) {
       if (inEffect) render();
       else flushSync(render);
+    } else if (cold.current && lay.keys.slice(f, t).every((k) => sizes.current.has(k))) {
+      // The screen is covered by measured rows: the overscan after this frame is painted. Two frames: when this runs
+      // from a commit outside a frame (the catch-up's message), one rAF still lands before that frame's paint
+      cold.current = false;
+      coldRaf.current = requestAnimationFrame(() => (coldRaf.current = requestAnimationFrame(() => render())));
     }
     // Rows never measured: the next batch when idle (and the last one dropped once all are known)
     if (lay.missing > 0 || extra.current > 0) scheduleBatch();
@@ -680,7 +702,8 @@ export const ChatList = forwardRef<
   // Rows never measured outside the range: BATCH of them per render, the nearest first (above before below: scrolling
   // up is where they come into view), mounted beside the range to be measured and dropped
   const batch = new Set<number>();
-  if (lay.missing > 0)
+  // Not during a cold open's first paint: that's what it keeps small
+  if (lay.missing > 0 && !cold.current)
     for (let d = 1; batch.size < BATCH && (from - d >= 0 || to - 1 + d < rows.length); d++) {
       for (const i of [from - d, to - 1 + d]) if (i >= 0 && i < rows.length && batch.size < BATCH && !sizes.current.has(rows[i].key)) batch.add(i);
     }
