@@ -2,7 +2,7 @@
 // ChatList mounts when idle, scheduleBatch). Pinned to the bottom with no new output, no row on screen may move and
 // none may be drawn over another, in any painted frame, and the content's height may barely change (the scrollbar
 // thumb jumps with it: measuring the rows off screen in batches, each estimated at 60px, made it jump ~25 times).
-//   node settle.mjs [--tab=3] [--x=1640] [--y=500] [--width=1864] [--height=1050] [--watch=6000] [--cpu=1] [--reload] [--up=150] [--nudge]
+//   node settle.mjs [--tab=3] [--x=1640] [--y=500] [--width=1864] [--height=1050] [--watch=6000] [--cpu=1] [--reload] [--up=150] [--nudge [--frac]]
 // --tab: the tab to switch to (its chat opens cold: not kept yet); --x/--y: a point inside the chat to watch (split
 // panes); --reload: open the page on that tab instead of switching to it.
 import { analyze, args, launch, open, report, startFrameLog, stopFrameLog, useStore } from "./lib.mjs";
@@ -80,25 +80,36 @@ if (a.up !== undefined) {
 await page.waitForTimeout(a.watch);
 console.log("older-segment state changes [ms, state]:", JSON.stringify(await page.evaluate(() => window.__olderLog)));
 let nudged = null;
+// Frames before the nudges: the height changes those make on purpose don't count
+const nudgeAt = await page.evaluate(() => performance.now());
 // --nudge: a row above the screen grows by half a pixel (as a row measured off screen does): the text at the bottom
 // must not move at all (the content's whole-pixel total, ChatList's layout)
 if (a.nudge) {
-  nudged = await page.evaluate(async ([x, y]) => {
+  nudged = await page.evaluate(async ([x, y, frac]) => {
     const sc = document.elementFromPoint(x, y)?.closest("[data-chat-scroller]");
+    // --frac: the chat box a fraction of a pixel tall (a panel's task drawer was 792.5px): the end is fractional then
+    if (frac) {
+      sc.style.height = sc.clientHeight - 0.5 + "px";
+      await new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(ok)));
+    }
     const box = sc.getBoundingClientRect();
     const above = [...sc.querySelectorAll("[data-item-index]:not([data-measure-only])")].filter((r) => r.getBoundingClientRect().bottom < box.top);
     const out = [];
-    for (const r of above.slice(-3)) {
-      const shot = () => [...sc.querySelectorAll("[data-item-index]")].filter((e) => { const b = e.getBoundingClientRect(); return b.bottom > box.top && b.top < box.bottom; }).map((e) => e.getBoundingClientRect().top);
+    // Grow by half a pixel, then back (a shrink: the browser clamps scrollTop to the real end then), three times
+    const r = above[above.length - 1];
+    const shot = () => [...sc.querySelectorAll("[data-item-index]")].filter((e) => { const b = e.getBoundingClientRect(); return b.bottom > box.top && b.top < box.bottom; }).map((e) => e.getBoundingClientRect().top);
+    for (const pad of [0.5, 0, 0.5, 0, 0.5, 0]) {
       const before = shot();
-      r.firstElementChild.style.paddingBottom = (parseFloat(r.firstElementChild.style.paddingBottom || "0") + 0.5) + "px";
+      r.firstElementChild.style.paddingBottom = pad + "px";
       await new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(ok)));
       const after = shot();
       out.push(Math.max(...after.map((t, i) => Math.abs(t - before[i]))));
+      window.__ends = (window.__ends || []).concat([[sc.scrollTop, sc.scrollHeight - parseFloat(getComputedStyle(sc).height)]]);
     }
     return out.map((d) => +d.toFixed(2));
-  }, [a.x, a.y]);
-  console.log("half-pixel growth above the screen, 3 times: rows on screen moved by", JSON.stringify(nudged));
+  }, [a.x, a.y, !!a.frac]);
+  console.log("half a pixel more, then less, above the screen, 3 times: rows on screen moved by", JSON.stringify(nudged));
+  console.log("  [scrollTop, real end] after each:", JSON.stringify(await page.evaluate(() => window.__ends)));
 }
 const { frames } = await stopFrameLog(page);
 const ro = await page.evaluate(() => window.__roFrames);
@@ -138,7 +149,7 @@ const over = frames.filter((f) => f.overlap > 1);
 for (const l of [...r2.lines]) console.log(l.replace(/t=(\d+)/, (_, t) => `t=+${t - t0}ms`));
 console.log(`frames ${frames.length} (painted samples ${ro.length}); frames with rows on screen moving: rAF ${r1.bad}, painted ${r2.bad}; frames with rows drawn over each other: ${over.length}${over.length ? ` (up to ${Math.max(...over.map((f) => f.overlap))}px)` : ""}`);
 // The content's height changing while pinned to the bottom: the rows on screen stay, the scrollbar thumb jumps
-const at = frames.filter((f) => f.sh - f.ch - f.st <= 2);
+const at = frames.filter((f) => f.sh - f.ch - f.st <= 2 && (!a.nudge || f.t < nudgeAt));
 let hs = 0, hsum = 0;
 for (let i = 1; i < at.length; i++) if (at[i].sc === at[i - 1].sc && at[i].sh !== at[i - 1].sh) (hs++, (hsum += Math.abs(at[i].sh - at[i - 1].sh)));
 if (at.length) console.log(`height changes at the bottom (the scrollbar jumping): ${hs}, ${hsum}px in all, ${at[0].sh} → ${at[at.length - 1].sh}`);

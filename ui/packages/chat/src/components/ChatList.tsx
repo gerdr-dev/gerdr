@@ -163,26 +163,29 @@ export const ChatList = forwardRef<
     const sz: number[] = [];
     let y = HEAD;
     let missing = 0;
-    // A row never measured is estimated at the mean of the measured rows of its kind (all measured rows' mean while its
-    // kind has none, EST before any). A flat 60px was far off for replies hundreds of px tall: once the rows off screen
+    // A row never measured is estimated from the measured rows of its kind (all measured rows while its kind has none,
+    // EST before any). A flat 60px was far off for replies hundreds of px tall: once the rows off screen
     // were measured in batches after a cold open, the content's height grew by a third in ~25 steps, and the scrollbar
     // thumb jumped with each while the chat sat still at the bottom (a panel's chat column, user report; settle.mjs --reload).
-    const sum = new Map<string, [number, number]>();
-    let all = 0;
-    let n = 0;
+    // The median, not the mean: the rows measured first are the ones on screen, often one long reply (1700px in a
+    // task drawer), and their mean overestimated every row above it: 4.7k px too tall, then one big drop of the
+    // content's height (the scrollbar) once they were measured.
+    const byKind = new Map<string, number[]>();
+    const every: number[] = [];
     for (const r of rs) {
       const h = pending.current.has(r.key) ? undefined : sizes.current.get(r.key);
       if (h === undefined) continue;
       const k = kindOf(r);
-      const e = sum.get(k) ?? [0, 0];
-      sum.set(k, [e[0] + h, e[1] + 1]);
-      all += h;
-      n++;
+      const l = byKind.get(k);
+      if (l) l.push(h);
+      else byKind.set(k, [h]);
+      every.push(h);
     }
-    const est = (r: Row) => {
-      const e = sum.get(kindOf(r));
-      return e ? e[0] / e[1] : n ? all / n : EST;
-    };
+    const median = (l: number[]) => (l.sort((x, y) => x - y), l[l.length >> 1]);
+    const kindEst = new Map<string, number>();
+    for (const [k, l] of byKind) kindEst.set(k, median(l));
+    const anyEst = every.length ? median(every) : EST;
+    const est = (r: Row) => kindEst.get(kindOf(r)) ?? anyEst;
     for (const r of rs) {
       if (!sizes.current.has(r.key)) missing++;
       const known = pending.current.has(r.key) ? undefined : sizes.current.get(r.key);
@@ -335,7 +338,12 @@ export const ChatList = forwardRef<
     cancelAnimationFrame(anim.current.raf);
     anim.current = null;
   };
-  const endOf = (s: HTMLElement) => s.scrollHeight - s.clientHeight;
+  // The end: scrollTop at the bottom. From the scroller's own height as laid out, fractions kept: clientHeight rounds
+  // it, so in a box 792.5px tall (a panel's task drawer) the end was put 0.5px short; the browser then clamped to the
+  // real end whenever the content's height changed, and back: the text moved a device pixel up and down (scroll probe
+  // in the user's page). getComputedStyle, not getBoundingClientRect: the overview scales its tiles.
+  const viewH = (s: HTMLElement) => parseFloat(getComputedStyle(s).height) || s.clientHeight;
+  const endOf = (s: HTMLElement) => s.scrollHeight - viewH(s);
   const readRef = useRef(readFromTop);
   readRef.current = readFromTop;
 
@@ -620,7 +628,7 @@ export const ChatList = forwardRef<
         const lay = shown.current;
         const i = lay.keys.indexOf(key);
         if (i < 0) return undefined;
-        return align === "end" ? lay.tops[i] + lay.sizes[i] - s.clientHeight : lay.tops[i];
+        return align === "end" ? lay.tops[i] + lay.sizes[i] - viewH(s) : lay.tops[i];
       };
       if (behavior === "smooth") animate(target);
       else {
