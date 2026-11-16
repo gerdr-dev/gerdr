@@ -309,6 +309,9 @@ export function SettingsDialog({ open }: { open: boolean }) {
                   <Row label={t("settings.showThinking")} hint={t("settings.showThinking.hint")}>
                     <Switch checked={cfg.showThinking !== false} onCheckedChange={(v) => setConfig({ showThinking: v })} />
                   </Row>
+                  <Row label={t("settings.autoSendShell")} hint={t("settings.autoSendShell.hint")}>
+                    <Switch checked={cfg.autoSendShell !== false} onCheckedChange={(v) => setConfig({ autoSendShell: v })} />
+                  </Row>
                   <Row label={t("settings.confirmLinks")} hint={t("settings.confirmLinks.hint")}>
                     <Switch checked={cfg.confirmLinks !== false} onCheckedChange={(v) => setConfig({ confirmLinks: v })} />
                   </Row>

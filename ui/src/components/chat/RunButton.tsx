@@ -2,6 +2,7 @@ import { ChevronDown, Play, SquareTerminal, Terminal } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import { useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { basename, runInTerminal, terminalNear } from "@/lib/actions";
 import type { PaneLeaf } from "@/lib/layout";
@@ -24,7 +25,7 @@ export function RunButton({ cmd, session, className }: { cmd: string; session: C
   const inChat = async () => {
     setBusy(true);
     try {
-      await api.shell(session.id, cmd);
+      await api.shell(session.id, cmd, useStore.getState().config.autoSendShell !== false);
     } catch (e: any) {
       toast.error(e.message ?? String(e));
     } finally {

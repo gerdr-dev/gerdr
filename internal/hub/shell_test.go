@@ -33,7 +33,7 @@ func TestShellPending(t *testing.T) {
 	}
 	dir := t.TempDir()
 	s := newSession(h, Record{ID: "s1", Cwd: dir})
-	id, err := s.Shell("pwd; echo 中文; exit 3", "")
+	id, err := s.Shell("pwd; echo 中文; exit 3", "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +81,7 @@ func TestShellSkipsCommand(t *testing.T) {
 	}
 	s := newSession(h, Record{ID: "s1", Cwd: t.TempDir()})
 	s.commands = []acp.AvailableCommand{{Name: "compact"}}
-	id, err := s.Shell("echo hi", "")
+	id, err := s.Shell("echo hi", "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,7 +120,7 @@ func TestShellEmptySend(t *testing.T) {
 	if _, err := s.Send(t.Context(), nil, ""); err == nil || err.Error() != "empty message" {
 		t.Fatalf("empty send with nothing pending: %v", err)
 	}
-	id, err := s.Shell("echo hi", "")
+	id, err := s.Shell("echo hi", "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -139,7 +139,7 @@ func TestShellStop(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := newSession(h, Record{ID: "s1", Cwd: t.TempDir()})
-	id, err := s.Shell("echo start; sleep 30", "")
+	id, err := s.Shell("echo start; sleep 30", "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -178,7 +178,7 @@ func TestShellLongOutput(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := newSession(h, Record{ID: "s1", Cwd: t.TempDir()})
-	id, err := s.Shell("seq 1 20000", "")
+	id, err := s.Shell("seq 1 20000", "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -218,4 +218,44 @@ func TestShellLongOutput(t *testing.T) {
 // 界面（transcript.ts 的 SHELL_CTX）按这个形状认
 func isShellContextShape(t string) bool {
 	return strings.HasPrefix(t, "<bash-input>") && strings.Contains(t, "</bash-input>\n<bash-stdout>") && strings.HasSuffix(t, "</bash-stderr>\n")
+}
+
+// send: a finished command hands its output to the agent by itself (a turn starts with just the output); a stopped
+// one doesn't.
+func TestShellAutoSend(t *testing.T) {
+	t.Setenv("SHELL", "/bin/sh")
+	s, f := startFake(t, false)
+	close(f.release)
+	stop, err := s.Shell("sleep 30", "", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(100 * time.Millisecond)
+	_ = s.StopShell(stop)
+	waitShellDone(t, s, stop)
+	id, err := s.Shell("echo hi", "", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitShellDone(t, s, id)
+	waitPrompt(t, f)
+	var users [][]json.RawMessage
+	for _, e := range s.Events() {
+		if e.Kind == EvUser {
+			users = append(users, e.Content)
+		}
+	}
+	if len(users) != 1 {
+		t.Fatalf("want one message sent, got %d", len(users))
+	}
+	// Both commands' output goes along (the stopped one is pending too, it just didn't start a turn of its own)
+	if len(users[0]) != 2 || !isShellBlock(users[0][0]) || !strings.Contains(string(users[0][1]), "echo hi") {
+		t.Fatalf("sent %s", users[0])
+	}
+	s.mu.Lock()
+	p := s.pendingShellLocked()
+	s.mu.Unlock()
+	if len(p) != 0 {
+		t.Fatalf("output still pending after the auto send: %d", len(p))
+	}
 }

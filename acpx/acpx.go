@@ -433,7 +433,7 @@ const MediaHint = "You are running inside Gerdr, a GUI for coding agents. Its ch
 	"Absolute file paths in your reply are clickable and open the file in a viewer (Markdown rendered, code, text…), " +
 	"so when the user asks about a file or wants to read one (a doc, a plan, a report you wrote), include its absolute path."
 
-// ShellHint：告诉 agent 可以让人在输入框里敲 `! 命令`（gerdr 在会话目录里直接跑，输出跟着人的下一条消息带给它，见 hub/shell.go）。
+// ShellHint：告诉 agent 可以让人在输入框里敲 `! 命令`（gerdr 在会话目录里直接跑，输出跑完就发给它 —— or with the next message when the autoSendShell setting is off; hub/shell.go）。
 // Claude Code 自己只在交互式终端里给这句，stream-json 下没有，agent 只会说「去终端里跑」。
 // 写成 `!` 开头的行内代码（或每行都以 `! ` 开头的代码块），界面在旁边画「运行」按钮，点一下就跑（chat/Markdown.tsx）；
 // 只给一句，照 Claude Code 那句的写法：试过五句、八句的长版，用户嫌啰嗦。括号里那半句不能省：只有一句时 agent 把

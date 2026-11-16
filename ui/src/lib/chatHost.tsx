@@ -363,7 +363,7 @@ export function GerdrChatProvider({ children }: { children: ReactNode }) {
       setMode: (id, mode) => api.setMode(id, mode).then(() => {}),
       setConfig: (id, cid, v) => api.setConfig(id, cid, v).then(() => {}),
       warm: (id) => api.warm(id).then(() => {}),
-      shell: { run: (id, cmd) => api.shell(id, cmd), stop: (id, run) => api.stopShell(id, run) },
+      shell: { run: (id, cmd) => api.shell(id, cmd, get().config.autoSendShell !== false), stop: (id, run) => api.stopShell(id, run) },
       fileURL,
       upload: (f) => api.upload(f),
       // Desktop App: attach files and folders by their path on this machine (the backend runs here too)

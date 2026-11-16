@@ -93,7 +93,7 @@ export const zh = {
   "runButton.run": "运行",
   "runButton.elsewhere": "换个地方运行",
   "runButton.inChat": "在对话里运行",
-  "runButton.inChatHint": "输出带给 Agent；没有输入，要交互的命令会卡住",
+  "runButton.inChatHint": "跑完输出发给 Agent；没有输入，要交互的命令会卡住",
   "runButton.newTerminal": "在新终端里运行",
   "runButton.newTerminalHint": "在右边开一个终端，能交互；Agent 要自己去读输出",
   "runButton.nearTerminal": "在当前终端里运行",

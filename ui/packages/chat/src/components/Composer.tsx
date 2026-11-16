@@ -452,8 +452,8 @@ const ComposerImpl = forwardRef<
   // `!命令`（照 Claude Code 的 bash 模式）：gerdr 在会话目录里直接跑，不发给 agent、不起一轮；输出进对话，
   // 跟着下一条消息带给 agent（hub/shell.go）。带图时不算（图没法给命令），照常当话发
   const shellMode = !!host.shell && !imgs.length && text.startsWith("!");
-  // Claude Code keeps `!` output out of the conversation until the next message; here an empty send right after one
-  // sends just that, for when the result is what the agent should look at
+  // With gerdr's autoSendShell off (or a stopped command), `!` output waits for the next message; an empty send right
+  // after one sends just that, for when the result is what the agent should look at
   const shellReady = !!shellDone && !text.trim() && !imgs.length;
   const runShell = async (cmd: string) => {
     if (!cmd) return;

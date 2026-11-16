@@ -30,12 +30,13 @@ func (s *Server) sessionRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/sessions/{id}/shell", s.sessionOp(func(r *http.Request, sess *hub.Session) (any, error) {
 		var b struct {
 			Command string `json:"command"`
-			ID      string `json:"id"` // client 生成的 UUID：重发同一条时不跑两遍
+			ID      string `json:"id"`   // client 生成的 UUID：重发同一条时不跑两遍
+			Send    bool   `json:"send"` // hand the output to the agent once it finishes (hub Session.Shell)
 		}
 		if err := decode(r, &b); err != nil {
 			return nil, err
 		}
-		id, err := sess.Shell(b.Command, b.ID)
+		id, err := sess.Shell(b.Command, b.ID, b.Send)
 		return map[string]any{"id": id}, err
 	}))
 	mux.HandleFunc("POST /api/sessions/{id}/shell/{run}/stop", s.sessionOp(func(r *http.Request, sess *hub.Session) (any, error) {

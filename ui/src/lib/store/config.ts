@@ -41,6 +41,9 @@ export type Config = {
   showThinking?: boolean;
   /** 点对话里的外部链接先弹确认框（streamdown 的 linkSafety，它默认开着）。关掉就直接打开。没写 = 开（老行为）。 */
   confirmLinks?: boolean;
+  /** A `!` command run in the chat (typed, or a reply's Run button) hands its output to the agent as soon as it
+   *  finishes, starting a turn (hub Session.Shell's send). Off: the output waits for the next message. Missing = on. */
+  autoSendShell?: boolean;
   /** 实验室：对话用虚拟滚动（只渲染屏幕附近的行）。默认关 —— 往上翻时行卸载再挂载，带图的行高度先 0 后撑开，界面一跳一跳（用户报的）。 */
   virtualList?: boolean;
   /** Labs: following the bottom stops at the start of a reply text that grows taller than the screen, so it can be read

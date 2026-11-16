@@ -48,6 +48,8 @@ const settingsZh = {
   "settings.expandEdits.hint": "新建 / 编辑文件的那一行默认展开改动；关掉只留一行（文件名和 +/- 行数），点开再看",
   "settings.showThinking": "显示思考",
   "settings.showThinking.hint": "Agent 的思考过程单独成行、直接展开。Claude 模型建议打开。",
+  "settings.autoSendShell": "命令跑完自动发给 Agent",
+  "settings.autoSendShell.hint": "对话里跑的 `!` 命令（输入框里敲的、回复里点「运行」的）一结束就把输出发给 Agent；关掉就等你下一条消息再带过去",
   "settings.confirmLinks": "打开链接前确认",
   "settings.confirmLinks.hint": "点对话里的外部链接先弹框，显示完整地址，可以复制或打开；关掉就直接打开",
   "settings.keepTabs": "切走的 Tab 留在页面里",
@@ -152,6 +154,9 @@ const settingsEn: Record<keyof typeof settingsZh, string> = {
   "settings.expandEdits.hint": "Creating or editing a file shows its changes; when off it's one line (file name and +/- counts), click to open",
   "settings.showThinking": "Show thinking",
   "settings.showThinking.hint": "The agent's thinking gets rows of its own, expanded. Recommended for Claude models.",
+  "settings.autoSendShell": "Send command output to the agent",
+  "settings.autoSendShell.hint":
+    "A `!` command run in the chat (typed, or a reply's Run button) sends its output to the agent as soon as it finishes; when off it goes with your next message",
   "settings.confirmLinks": "Confirm before opening links",
   "settings.confirmLinks.hint": "An external link in the chat first shows its full address, to copy or open; when off it opens right away",
   "settings.keepTabs": "Keep tabs you leave in the page",

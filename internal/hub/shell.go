@@ -2,6 +2,7 @@ package hub
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -144,7 +145,12 @@ func shellCommand(command string, out io.Writer) (*exec.Cmd, func()) {
 
 // Shell 在会话目录里跑一条命令，马上返回这次运行的 id；输出和结束都进日志。
 // clientID 和 Send 的一样：client 自己生成的 UUID，网络不好重发同一条时不会跑两遍。
-func (s *Session) Shell(command, clientID string) (string, error) {
+// send: once it finishes, hand the output to the agent right away (an empty Send, which carries the pending output),
+// instead of waiting for the person's next message. The UI's "send `!` output to the agent" setting, on by default:
+// a command the agent asked the person to run is one it is waiting on, and having to send an empty message after it
+// was a step people missed (user report). Done here, not in the UI, so it still happens when the page is closed
+// before a long command ends. Not after the person stopped it: that one they didn't want finished.
+func (s *Session) Shell(command, clientID string, send bool) (string, error) {
 	command = strings.TrimSpace(command)
 	if command == "" {
 		return "", errors.New(i18n.S("命令是空的", "The command is empty"))
@@ -245,8 +251,26 @@ func (s *Session) Shell(command, clientID string) (string, error) {
 		}
 		s.emit(ev)
 		s.flush(true)
+		if send && ev.Level != "stopped" {
+			s.sendShellOutput(id)
+		}
 	}()
 	return id, nil
+}
+
+// sendShellOutput: the empty Send behind Shell's send. Nothing to do when the output already went along with a message
+// sent meanwhile (or with another command's send); a failure (agent can't start, session held elsewhere) leaves the
+// output pending, and the composer's empty send still hands it over.
+func (s *Session) sendShellOutput(run string) {
+	s.mu.Lock()
+	n := len(s.pendingShellLocked())
+	s.mu.Unlock()
+	if n == 0 {
+		return
+	}
+	if _, err := s.Send(context.Background(), nil, uuid.NewString()); err != nil {
+		s.h.log.Warn("send shell output", "session", s.rec.ID, "run", run, "err", err)
+	}
 }
 
 // StopShell：停掉一条还在跑的命令（SIGTERM 给整个进程组，2 秒没退再 SIGKILL）。已经跑完的不算错。

@@ -307,6 +307,11 @@ stream-json / app-server 都没有这个口（Claude Code 的 `!` 是 TUI 输入
   （Claude Code 自己记 `!` 的格式），一条命令一块。「还没带的」= 最后一条用户消息之后跑完的，从日志推，不另存：撤回 / 回退掉那条消息，命令自动算回没带。
   日志里的用户消息记的是带上之后的原样 —— agent 记录里就是这样，CatchUp 比对、重新载入才对得上；块末尾的换行不能省（claude 记录里几块文字直接拼，hub 按换行拼）。
   界面、标题、撤回放回输入框都认 `<bash-input>` 开头跳过这几块；重新载入后没有 shell 事件，靠解析这几块画回卡片。
+- Sending it right away (setting `autoSendShell`, on by default; the UI passes `send` to `POST …/shell`): once the
+  command finishes, the hub does the empty send itself (`Session.sendShellOutput`), so the output starts a turn (or
+  steers into the running one) instead of waiting. A command the agent asked for is one it is waiting on, and people
+  missed the empty send after it (user report). Done in the hub, not the UI, so a page closed during a long command
+  still sends. A stopped command doesn't send (its output still goes with the next message). Off = the old behaviour.
 - agent 不知道有这个功能：Claude Code 只在交互式终端里告诉模型「让用户敲 `! <command>`」，stream-json 下没有。`acpx.ShellHint` 补上，
   并要它写成 `!` 开头的行内代码（或每行都以 `! ` 开头的代码块），界面在旁边画「运行」（chat/Markdown.tsx）。
   认命令要求 `!` 后面有空格、再接像命令开头的字（字母、数字、路径…）：正文里说起这个功能写的「`!命令`」「`! <command>`」、

@@ -42,6 +42,7 @@ var configKeys = map[string]configKey{
 	"expandEdits":     {kind: "bool", desc: "show file edits' diffs expanded by default"},
 	"showThinking":    {kind: "bool", desc: "show thinking on its own line, expanded (default on)"},
 	"confirmLinks":    {kind: "bool", desc: "ask before opening an external link from a chat (default on)"},
+	"autoSendShell":   {kind: "bool", desc: "a `!` command run in a chat sends its output to the agent as soon as it finishes, starting a turn (default on); off = it goes with the next message"},
 	"copyOnSelect":    {kind: "bool", desc: "Labs: copy text as soon as it is selected (a device that picked its own in Settings keeps that; this is the value for the others)"},
 	"virtualList":     {kind: "bool", desc: "Labs: virtual scrolling for chats (a device that picked its own in Settings keeps that; this is the value for the others)"},
 	"readFromTop":     {kind: "bool", desc: "Labs: stop following the bottom at the start of a reply text taller than the screen (a device that picked its own in Settings keeps that; this is the value for the others)"},
