@@ -2,7 +2,7 @@
 
 Claude Code / Codex 的图形界面：Go 后端（ACP 适配器 + hub + HTTP/WS）+ 界面源码（ui/，**没有打包环节**）+ 桌面 App 外壳（macOS: tools/chromeshell, on the user's own Chrome; Windows: tools/winshell, WebView2; both on
 github.com/zbysir/lightron, where browser-side changes go as general hooks — their READMEs say how and why; the Electron shell (desktop/) is gone: `make app` / `make install` build the Lightron shells; history in docs/dev/WHY-ELECTRON.md）。
-使用说明见 README.md，设计理由和协议的坑见 docs/dev/ARCHITECTURE.md —— **改适配器 / hub / uisite 之前先读它**，
+使用说明见 README.md 和 docs/guide/（README 只放简介和安装，细节按主题分在 guide 里，中英各一份），设计理由和协议的坑见 docs/dev/ARCHITECTURE.md —— **改适配器 / hub / uisite 之前先读它**，
 里面每一条都是实测踩出来、会静默出错的。
 
 - 远程访问（中继 / 配对码 / passkey，`internal/auth` `relay` `acme` `remote`）的设计和坑在 docs/dev/REMOTE.md，动之前先读。
