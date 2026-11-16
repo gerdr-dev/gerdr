@@ -288,9 +288,6 @@ export function UnifiedSidebar({ className }: { className?: string }) {
     const label = i >= 0 ? applyWorkspaceLabel(ws, i, ws.name) : ws.name;
     return spaceOf(ws) === here ? label : `${spaces.find((sp) => sp.id === spaceOf(ws))?.name ?? spaceOf(ws)} · ${label}`;
   };
-  // 进行中 names each row's workspace, but when they all come from one (the usual case) that word is the same on every
-  // row and says nothing (asked for): leave it out then
-  const activeOneWs = new Set(active.map((x) => x.ws.id)).size <= 1;
   const gridFocusId = gridFocus && tiles.includes(gridFocus) ? gridFocus : tiles[0];
   // Searching swaps the sections for one flat list of this project's panes that match
   const kw = q.trim().toLowerCase();
@@ -322,7 +319,7 @@ export function UnifiedSidebar({ className }: { className?: string }) {
       <Row
         key={x.pane.id}
         {...p}
-        where={top && activeOneWs ? "" : wsLabel(x.ws)}
+        where={wsLabel(x.ws)}
         top={top}
         num={num}
         // In the grid, a row of "active" picks its tile instead of leaving the grid
@@ -728,6 +725,13 @@ const Row = memo(function Row({
   // Picked and still loading after a moment (the drawer stays open till then, App.tsx): say so on the row itself
   const loading = useSlowCatchUp(current ? s?.id : undefined);
   const roomy = useContext(Roomy);
+  const place = where ?? sub;
+  const oneLine = !!roomy && !place && !s?.host;
+  const time = roomy && (
+    <span className="shrink-0 text-[11px] font-normal text-muted-foreground tabular-nums" title={s ? new Date(s.updatedAt).toLocaleString() : ""}>
+      {s?.status === "running" && s.turn ? <Elapsed since={s.turn.startedAt} /> : ago(s?.updatedAt, roomy.now)}
+    </span>
+  );
   const pick = () => {
     if (onPick) return onPick();
     goPane(pane.id, s?.id);
@@ -783,9 +787,18 @@ const Row = memo(function Row({
             )}
           </IconSlot>
           {roomy ? (
-            // Two lines: what it is, then where it is and how long ago it last moved (running: for how long)
-            <span className="min-w-0 flex-1 leading-tight">
-              <span className={cn("block truncate", pane.term && "font-mono text-[11.5px]", !s && !pane.term && "text-muted-foreground")}>
+            // Two lines: what it is, then where it is and how long ago it last moved (running: for how long). With nothing
+            // to say where (its group's header already does), one line: a second line holding only the
+            // time left the title and time on different lines with the icon between them (reported)
+            <span className={cn("min-w-0 flex-1 leading-tight", oneLine && "flex items-center gap-1.5")}>
+              <span
+                className={cn(
+                  "block truncate",
+                  oneLine && "min-w-0 flex-1",
+                  pane.term && "font-mono text-[11.5px]",
+                  !s && !pane.term && "text-muted-foreground",
+                )}
+              >
                 {tabLabel ? (
                   <>
                     {tabLabel} <span className="text-muted-foreground">· {title}</span>
@@ -794,13 +807,15 @@ const Row = memo(function Row({
                   title
                 )}
               </span>
-              <span className="mt-0.5 flex items-center gap-1.5 text-[11px] font-normal text-muted-foreground">
-                <HostTag session={s} />
-                <span className="min-w-0 flex-1 truncate">{where ?? sub}</span>
-                <span className="shrink-0 tabular-nums" title={s ? new Date(s.updatedAt).toLocaleString() : ""}>
-                  {s?.status === "running" && s.turn ? <Elapsed since={s.turn.startedAt} /> : ago(s?.updatedAt, roomy.now)}
+              {oneLine ? (
+                time
+              ) : (
+                <span className="mt-0.5 flex items-center gap-1.5 text-[11px] font-normal text-muted-foreground">
+                  <HostTag session={s} />
+                  <span className="min-w-0 flex-1 truncate">{place}</span>
+                  {time}
                 </span>
-              </span>
+              )}
             </span>
           ) : (
             <>

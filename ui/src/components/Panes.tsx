@@ -19,6 +19,7 @@ import {
   Rows2,
   Server,
   SquareTerminal,
+  ChevronDown,
   CircleX,
   X,
 } from "lucide-react";
@@ -285,16 +286,20 @@ function PaneCount({ count }: { count?: Count }) {
 
 /** The phone's single-pane title bar: the agent's directory, cut from the front when it doesn't fit (its last segments
  * are the ones that say where), and its branch, which gives way only past half the bar. */
-function PhonePath({ path, branch, home }: { path: string; branch?: string; home: string }) {
+function PhonePath({ path, branch, home, agent }: { path: string; branch?: string; home: string; agent: string }) {
   const shown = home && (path === home || path.startsWith(home + "/")) ? "~" + path.slice(home.length) : path;
   return (
     <>
-      <FadeText start className="min-w-0 shrink font-mono text-[11px] text-muted-foreground" title={path}>
+      {/* The agent icon stays: under ☰, so the path lines up with the top bar's title as the pane title used to.
+          Plain 12px text in the body text colour, not the desktop's small grey mono: alone in the bar that read like a
+          footnote (asked for) */}
+      <AgentIcon agent={agent} className="size-4" />
+      <FadeText start className="min-w-0 shrink text-foreground" title={path}>
         {shown}
       </FadeText>
       {branch && (
-        <span className="flex max-w-[45%] min-w-0 shrink-0 items-center gap-1 font-mono text-[11px] text-muted-foreground">
-          <GitBranch className="size-3 shrink-0" />
+        <span className="flex max-w-[45%] min-w-0 shrink-0 items-center gap-1 text-foreground">
+          <GitBranch className="size-3.5 shrink-0" />
           <span className="truncate">{branch}</span>
         </span>
       )}
@@ -594,6 +599,7 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
   // The tab's only pane on a phone: the top bar (PhoneBar) already says its title and status, so this bar says where
   // the agent works instead (asked for: one title per screen, the path the desktop bar has had all along)
   const alone = usePhone() && leaves(tab.root).length === 1;
+  const [more, setMore] = useState(false);
   useStore((s) => s.addonVersion);
   const focused = useContext(TabActive) && tab.focus === pane.id;
   const many = framed || zoomed;
@@ -626,7 +632,7 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
         className={cn("flex shrink-0 items-center gap-2 border-b px-3 text-[12px] max-md:pl-4", headH, !focused && many && "opacity-70")}
       >
         {alone && session ? (
-          <PhonePath path={session.workdir ?? session.cwd} branch={session.branch} home={home} />
+          <PhonePath path={session.workdir ?? session.cwd} branch={session.branch} home={home} agent={session.agent} />
         ) : (
           <>
             {session || (starting && pane.draft?.agent) ? (
@@ -677,7 +683,7 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
             <Minimize2 className="size-3.5" />
           </Button>
         )}
-        <DropdownMenu>
+        <DropdownMenu onOpenChange={(o) => !o && setMore(false)}>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="size-6">
               <MoreHorizontal className="size-3.5" />
@@ -749,34 +755,48 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
                 >
                   <Copy /> {t("panes.copyId")}
                 </DropdownMenuItem>
-                {["claude", "codex"].includes(session.base ?? session.agent) && session.agentSessionId && (
-                  <DropdownMenuItem
-                    onClick={() => {
-                      navigator.clipboard.writeText(resumeCommand(session.base ?? session.agent, session.cwd, session.agentSessionId));
-                      toast(t("panes.resumeCopied"));
-                    }}
-                  >
-                    <SquareTerminal /> {t("panes.copyResume")}
-                  </DropdownMenuItem>
-                )}
-                {["claude", "codex"].includes(session.base ?? session.agent) && (
-                  // 在别处（herdr / 终端）接着聊过的会话，打开时会自动追上；这里是手动的那一下
-                  <DropdownMenuItem
-                    onClick={() =>
-                      api
-                        .reload(session.id)
-                        .then(() => toast.success(t("panes.reloaded")))
-                        .catch((e) => toast.error(e.message))
-                    }
-                  >
-                    <RefreshCw /> {t("panes.reload")}
-                  </DropdownMenuItem>
-                )}
-                {hasHosts && (
-                  // Another computer this one drives (docs/dev/MULTIHOST.md): the conversation carries on over there
-                  <DropdownMenuItem onClick={() => set({ dialog: { kind: "moveSession", sessionId: session.id, paneId: pane.id } })}>
-                    <Server /> {t("panes.moveSession")}
-                  </DropdownMenuItem>
+                {/* Rarely needed: folded under 更多 so the menu stays short (asked for), not dropped — this is their only way in.
+                    Unfolded in place rather than a submenu: on a phone a submenu has no room on either side and was cut off */}
+                {(["claude", "codex"].includes(session.base ?? session.agent) || hasHosts) && (
+                  <>
+                    <DropdownMenuItem onSelect={(e) => (e.preventDefault(), setMore((v) => !v))}>
+                      <MoreHorizontal /> {t("common.more")}
+                      <ChevronDown className={cn("ml-auto transition-transform", more && "rotate-180")} />
+                    </DropdownMenuItem>
+                    {more && (
+                      <div className="ml-3 border-l pl-1">
+                        {["claude", "codex"].includes(session.base ?? session.agent) && session.agentSessionId && (
+                          <DropdownMenuItem
+                            onClick={() => {
+                              navigator.clipboard.writeText(resumeCommand(session.base ?? session.agent, session.cwd, session.agentSessionId));
+                              toast(t("panes.resumeCopied"));
+                            }}
+                          >
+                            <SquareTerminal /> {t("panes.copyResume")}
+                          </DropdownMenuItem>
+                        )}
+                        {["claude", "codex"].includes(session.base ?? session.agent) && (
+                          // 在别处（herdr / 终端）接着聊过的会话，打开时会自动追上；这里是手动的那一下
+                          <DropdownMenuItem
+                            onClick={() =>
+                              api
+                                .reload(session.id)
+                                .then(() => toast.success(t("panes.reloaded")))
+                                .catch((e) => toast.error(e.message))
+                            }
+                          >
+                            <RefreshCw /> {t("panes.reload")}
+                          </DropdownMenuItem>
+                        )}
+                        {hasHosts && (
+                          // Another computer this one drives (docs/dev/MULTIHOST.md): the conversation carries on over there
+                          <DropdownMenuItem onClick={() => set({ dialog: { kind: "moveSession", sessionId: session.id, paneId: pane.id } })}>
+                            <Server /> {t("panes.moveSession")}
+                          </DropdownMenuItem>
+                        )}
+                      </div>
+                    )}
+                  </>
                 )}
                 <DropdownMenuItem onClick={() => closeSession(session.id)}>
                   <CircleX /> {t("panes.closeSession")}
