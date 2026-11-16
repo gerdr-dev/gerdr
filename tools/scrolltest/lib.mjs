@@ -129,7 +129,8 @@ function installFrameLogger() {
         n++;
         minIdx = Math.min(minIdx, +it.dataset.itemIndex);
         const r = it.getBoundingClientRect();
-        boxes.push([+it.dataset.itemIndex, r.top, r.bottom]);
+        // Rows mounted only to be measured are hidden (ChatList's batch): they may sit over others, unseen
+        if (!it.hasAttribute("data-measure-only")) boxes.push([+it.dataset.itemIndex, r.top, r.bottom]);
         if (r.bottom > top0 && r.top < bot0) rows[it.dataset.itemIndex] = [+(r.top - top0).toFixed(1), +r.height.toFixed(1)];
       }
       // Rows drawn over each other: one starts above the bottom of the one before it (a stale height in a list that
