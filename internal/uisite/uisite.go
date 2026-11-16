@@ -534,6 +534,11 @@ func (r *Renderer) Watch(stop <-chan struct{}) {
 	t := time.NewTimer(fast)
 	defer t.Stop()
 	r.ensure()
+	// Production React is the default (prod.go) and pages don't wait for its packages: have them ready (from the disk
+	// cache after the first time; downloaded and bundled the first time)
+	if r.esm != nil {
+		go r.PrepareProd(10 * time.Minute)
+	}
 	pending := ""
 	changed := time.Now()
 	for {

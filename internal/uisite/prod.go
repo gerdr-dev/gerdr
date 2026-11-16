@@ -5,8 +5,8 @@ import (
 	"time"
 )
 
-// Production React, per device (Settings → Labs, a cookie). The development build of React the UI normally runs on
-// does a lot of checking on every render: on a phone's main thread a session summary pushed while a turn streams cost
+// Production React, the default; development React per device (Settings → Labs, a cookie). The development build of
+// React does a lot of checking on every render: on a phone's main thread a session summary pushed while a turn streams cost
 // tens of milliseconds, a good part of it React's dev-only work (jsxDEV, prop validation, console.createTask for
 // owner stacks), and swiping / scrolling the overview stuttered.
 //
@@ -18,7 +18,12 @@ import (
 // (component state such as scroll positions and open menus is lost; the store keeps sessions, drafts, the layout).
 // Build ids are the development build's: errors these pages report, hot updates and reloads all work unchanged.
 
-const prodCookie = "gerdr_react" // value "production"
+// Which React a device asked for: "development" (Settings → Labs, for debugging the UI: component stacks name files,
+// React Refresh keeps state over an edit), "production" (asked for explicitly: waits for its packages), or no cookie:
+// production when its packages are ready, without waiting. Production became the default after a tab switch measured
+// 4-5x slower on development React (73-82ms vs 37-52ms with the CPU 4x slowed, after the re-render fixes;
+// tools/scrolltest/tabswitch.mjs), and every other render pays the same.
+const prodCookie = "gerdr_react"
 
 // jsxShim: what "react/jsx-dev-runtime" points at on a production page.
 const jsxShim = "@jsx-dev-prod.js"
@@ -35,9 +40,13 @@ type prodPage struct {
 	preload   []string
 }
 
-func wantsProd(req *http.Request) bool {
+// reactChoice: "development", "production", or "" (nothing asked: production if ready).
+func reactChoice(req *http.Request) string {
 	c, err := req.Cookie(prodCookie)
-	return err == nil && c.Value == "production"
+	if err != nil || (c.Value != "development" && c.Value != "production") {
+		return ""
+	}
+	return c.Value
 }
 
 // prodFor: b's import map and preload list for production React, built once per build. While its vendor bundle is
@@ -65,10 +74,19 @@ func (r *Renderer) prodFor(b *build, wait time.Duration) (*prodPage, string) {
 		}
 	}
 	vb := r.esm.vendor(entries, b.deps, true)
-	select {
-	case <-vb.done:
-	case <-time.After(wait):
-		return nil, "preparing"
+	if wait <= 0 {
+		// Not waiting: look only (time.After(0) would race a closed done and lose half the time)
+		select {
+		case <-vb.done:
+		default:
+			return nil, "preparing"
+		}
+	} else {
+		select {
+		case <-vb.done:
+		case <-time.After(wait):
+			return nil, "preparing"
+		}
 	}
 	if vb.err != nil {
 		return nil, "unavailable"

@@ -1,9 +1,24 @@
 package uisite
 
 import (
+	"net/http/httptest"
 	"strings"
 	"testing"
 )
+
+// Production React is the default: no cookie (or a stray value) means production without waiting; only
+// "development" opts out, and "production" (the old opt-in) is the explicit, waiting kind.
+func TestReactChoice(t *testing.T) {
+	for cookie, want := range map[string]string{"": "", "gerdr_react=": "", "gerdr_react=x": "", "gerdr_react=development": "development", "gerdr_react=production": "production"} {
+		req := httptest.NewRequest("GET", "/", nil)
+		if cookie != "" {
+			req.Header.Set("Cookie", cookie)
+		}
+		if got := reactChoice(req); got != want {
+			t.Errorf("cookie %q: %q, want %q", cookie, got, want)
+		}
+	}
+}
 
 // Production React's import map: no "dev" anywhere, still one React (every other package external=react,react-dom),
 // and no React Refresh (it has no production build; the runtime falls back to re-rendering the page).

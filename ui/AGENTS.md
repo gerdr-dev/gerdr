@@ -1,7 +1,7 @@
 # Gerdr 的界面
 
 这个目录就是 Gerdr 的整个界面，**没有打包环节**：Gerdr 直接读这里的源码，每个文件用 esbuild 单独编译后发给浏览器，
-保存即生效（React Refresh 热替换，页面状态尽量保住）。不用 `npm install`、不用 build、不用重启 Gerdr。
+保存即生效：默认的生产版 React 下整页重新渲染（store 里的数据保留）；在 设置 → 实验 关掉「生产版 React」后是 React Refresh 热替换，页面状态尽量保住，报错的组件栈也带文件名。不用 `npm install`、不用 build、不用重启 Gerdr。
 
 界面目录是 git 仓库：`upstream` 分支是 Gerdr 发的版本，`main` 是正在用的；Gerdr 升级时把新版提交到 `upstream` 再合进 `main`
 （三方合并，你的改动保留）。只在 `main` 上改、别动 `upstream`。改之前先存个档，改坏了能回去：
