@@ -38,14 +38,21 @@ object AppKey {
     private fun keyStore() = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
 
     /** A strong biometric is set up. Android 9 has no way to ask, so the feature starts at 10. */
-    fun available(ctx: Context): Boolean {
-        val bm = ctx.getSystemService(BiometricManager::class.java) ?: return false
-        return when {
-            Build.VERSION.SDK_INT >= 30 ->
-                bm.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG) == BiometricManager.BIOMETRIC_SUCCESS
-            Build.VERSION.SDK_INT == 29 -> @Suppress("DEPRECATION") (bm.canAuthenticate() == BiometricManager.BIOMETRIC_SUCCESS)
-            else -> false
+    /** Asked on every page load (hello): anything thrown here means "not available", never a crash. */
+    fun available(ctx: Context): Boolean = try {
+        if (Build.VERSION.SDK_INT < 29) {
+            false
+        } else {
+            val bm = ctx.getSystemService(BiometricManager::class.java)
+            when {
+                bm == null -> false
+                Build.VERSION.SDK_INT >= 30 ->
+                    bm.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG) == BiometricManager.BIOMETRIC_SUCCESS
+                else -> @Suppress("DEPRECATION") (bm.canAuthenticate() == BiometricManager.BIOMETRIC_SUCCESS)
+            }
         }
+    } catch (_: Throwable) {
+        false
     }
 
     fun exists(origin: String): Boolean = try { keyStore().containsAlias(alias(origin)) } catch (_: Exception) { false }
