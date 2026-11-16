@@ -57,6 +57,10 @@ type AgentDef struct {
 	// Icon: a built-in glyph picked in Settings → Agent (ui/src/components/AgentGlyph.tsx); only the UI reads it.
 	Icon  string `json:"icon,omitempty"`
 	Color string `json:"color,omitempty"` // a palette key recolouring the icon; same file
+	// Hidden: built-in ones only (claude / codex / native). Taken out of the agent lists (Settings → Agent, the
+	// new-session picker, `gerdr session agents`) — "deleted" for the person. The engine itself stays: sessions
+	// already on it carry on, roles built on it keep working, and it comes back when this is cleared.
+	Hidden bool `json:"hidden,omitempty"`
 }
 
 // only：这个角色对 skill / MCP 的限定。
@@ -81,14 +85,32 @@ func (d AgentDef) envList() []string {
 	return out
 }
 
-// ValidAgentDefs 挑出 config.json 里能用的那些（id 不能和内置的撞、得是变体或外部命令之一），补上缺的名字。
+// builtinNames: the built-in agents' names when config.json doesn't rename them.
+var builtinNames = map[string]string{"claude": "Claude Code", "codex": "Codex", "native": "Gerdr Agent"}
+
+// ValidAgentDefs picks the usable entries of config.json's agents (a variant or an external command, ids unique) and
+// fills in missing names. An entry with a built-in id (claude / codex / native) edits that built-in agent: its own
+// name, icon, prompt, skills / MCP, launch settings, or Hidden. Its engine is always itself.
 func ValidAgentDefs(in []AgentDef) []AgentDef {
 	var out []AgentDef
-	seen := map[string]bool{"claude": true, "codex": true, "native": true}
+	seen := map[string]bool{}
 	for _, a := range in {
 		if a.ID == "" || seen[a.ID] {
 			continue
 		}
+		if builtinAgent(a.ID) {
+			if (a.Base != "" && a.Base != a.ID) || len(a.Command) > 0 {
+				continue
+			}
+			a.Base = a.ID
+			if a.Name == "" {
+				a.Name = builtinNames[a.ID]
+			}
+			seen[a.ID] = true
+			out = append(out, a)
+			continue
+		}
+		a.Hidden = false // only built-in ones can be hidden; a role is deleted outright
 		if a.Base != "" && !builtinAgent(a.Base) {
 			continue
 		}
@@ -346,17 +368,30 @@ func (h *Hub) Agents() []map[string]any {
 	var out []map[string]any
 	_, cerr := sysenv.FindClaude()
 	_, xerr := sysenv.FindCodex()
-	out = append(out,
-		map[string]any{"id": "claude", "name": "Claude Code", "available": cerr == nil, "error": errStr(cerr)},
-		map[string]any{"id": "codex", "name": "Codex", "available": xerr == nil, "error": errStr(xerr)},
-	)
-	nerr := native.Available(h.llm())
-	if nerr == nil {
-		// 没配模型时不列：大多数人只用 claude / codex，列一个永远不能用的选项是噪音
-		out = append(out, map[string]any{"id": "native", "name": "Gerdr Agent", "available": true})
+	// The built-in three first, as config.json edits them; then the roles. A hidden built-in one isn't listed.
+	list := []AgentDef{}
+	for _, id := range []string{"claude", "codex", "native"} {
+		d, _ := h.agentDef(id)
+		if d.Hidden {
+			continue
+		}
+		// Gerdr Agent without a model configured isn't listed: most people only use claude / codex, and an option
+		// that can never work is noise
+		if id == "native" && native.Available(h.llm().Only(d.Providers)) != nil {
+			continue
+		}
+		list = append(list, d)
 	}
 	for _, a := range h.extra() {
-		m := map[string]any{"id": a.ID, "name": a.Name, "available": true, "base": a.Base}
+		if !builtinAgent(a.ID) {
+			list = append(list, a)
+		}
+	}
+	for _, a := range list {
+		m := map[string]any{"id": a.ID, "name": a.Name, "available": true}
+		if !builtinAgent(a.ID) {
+			m["base"] = a.Base // a role's engine; the built-in ones are their own (and readers tell roles by it)
+		}
 		// prompt: what the role is for, in the user's words — what a coordinator (a board's router) picks it by
 		if a.Prompt != "" {
 			m["prompt"] = a.Prompt
@@ -455,19 +490,16 @@ func errStr(err error) string {
 	return err.Error()
 }
 
+// agentDef: an agent's definition. A built-in one is always there (hidden or not: sessions on it keep working),
+// as config.json edits it.
 func (h *Hub) agentDef(id string) (AgentDef, bool) {
-	switch id {
-	case "claude":
-		return AgentDef{ID: "claude", Name: "Claude Code"}, true
-	case "codex":
-		return AgentDef{ID: "codex", Name: "Codex"}, true
-	case "native":
-		return AgentDef{ID: "native", Name: "Gerdr Agent"}, true
-	}
 	for _, a := range h.extra() {
 		if a.ID == id {
 			return a, true
 		}
+	}
+	if builtinAgent(id) {
+		return AgentDef{ID: id, Name: builtinNames[id], Base: id}, true
 	}
 	return AgentDef{}, false
 }

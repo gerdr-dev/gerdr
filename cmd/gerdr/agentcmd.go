@@ -182,12 +182,29 @@ new-session defaults, in one step. Open windows update within seconds. List the 
 	var prune bool
 	rm := &cobra.Command{
 		Use:   "rm <id>",
-		Short: "Remove an agent and its new-session defaults",
+		Short: "Remove an agent and its new-session defaults; a built-in one (claude / codex / native) is only taken off the lists",
 		Args:  cobra.ExactArgs(1),
 		RunE:  func(_ *cobra.Command, a []string) error { return removeAgent(a[0], prune) },
 	}
 	rm.Flags().BoolVar(&prune, "prune", false, "also delete gerdr skills / MCP servers it listed that no other agent lists (kept while the global source hands gerdr's to every session; note the Gerdr Agent engine always uses gerdr's MCP, so an agent on it without an mcp list loses a pruned server too)")
 	cmd.AddCommand(rm)
+
+	cmd.AddCommand(&cobra.Command{
+		Use:   "restore <claude|codex|native>",
+		Short: "Put a built-in agent removed with `gerdr agent rm` back on the lists",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(_ *cobra.Command, a []string) error {
+			if !builtinID(a[0]) {
+				return fmt.Errorf("only the built-in agents (claude / codex / native) can be restored; a removed role is gone")
+			}
+			st, sec := openConfig()
+			var root any
+			if err := json.Unmarshal(st.Get(), &root); err != nil {
+				return fmt.Errorf("config.json: %w", err)
+			}
+			return setBuiltinHidden(st, sec, root, a[0], false)
+		},
+	})
 	return cmd
 }
 
@@ -486,14 +503,15 @@ func showAgent(id string) error {
 	st, _ := openConfig()
 	root := mustDecode(st.Get())
 	out := map[string]any{}
-	if id == "claude" || id == "codex" || id == "native" {
+	v, ok := getPath(root, []string{"agents", id})
+	if builtinID(id) {
 		out["id"] = id
 		out["builtin"] = true
-	} else {
-		v, ok := getPath(root, []string{"agents", id})
-		if !ok {
-			return fmt.Errorf("no agent with id %q (gerdr session agents)", id)
-		}
+	}
+	if !ok && !builtinID(id) {
+		return fmt.Errorf("no agent with id %q (gerdr session agents)", id)
+	}
+	if ok {
 		m, _ := v.(map[string]any)
 		maps.Copy(out, m)
 		em := openExt()
@@ -544,9 +562,12 @@ func removeAgent(id string, prune bool) error {
 	if err := json.Unmarshal(st.Get(), &root); err != nil {
 		return fmt.Errorf("config.json: %w", err)
 	}
+	if builtinID(id) {
+		return setBuiltinHidden(st, sec, root, id, true)
+	}
 	v, ok := getPath(root, []string{"agents", id})
 	if !ok {
-		return fmt.Errorf("no agent with id %q (built-in ones can't be removed)", id)
+		return fmt.Errorf("no agent with id %q", id)
 	}
 	agent, _ := v.(map[string]any)
 	root, _ = setPath(root, []string{"agents", id}, nil, true)
@@ -563,6 +584,44 @@ func removeAgent(id string, prune bool) error {
 		out["pruned"], out["kept"] = pruneFor(agent, root)
 	}
 	printJSON(out)
+	return nil
+}
+
+func builtinID(id string) bool { return id == "claude" || id == "codex" || id == "native" }
+
+// setBuiltinHidden takes a built-in agent off the agent lists (or puts it back): its entry in agents gets hidden, the
+// rest of what was edited on it stays for when it comes back. The engine itself stays — sessions on it carry on,
+// roles built on it keep working — so its new-session defaults stay too.
+func setBuiltinHidden(st *config.Store, sec *config.Secrets, root any, id string, hidden bool) error {
+	cur, _ := getPath(root, []string{"agents"})
+	agents, _ := cur.([]any)
+	i := index(agents, id)
+	switch {
+	case i < 0 && !hidden:
+		printJSON(map[string]any{"ok": true, "restored": id, "note": "it wasn't removed"})
+		return nil
+	case i < 0:
+		agents = append(agents, map[string]any{"id": id, "base": id, "hidden": true})
+	default:
+		m, _ := agents[i].(map[string]any)
+		if hidden {
+			m["hidden"] = true
+		} else {
+			delete(m, "hidden")
+		}
+	}
+	root, err := setPath(root, []string{"agents"}, agents, false)
+	if err != nil {
+		return err
+	}
+	if err := saveConfig(st, sec, root, false); err != nil {
+		return err
+	}
+	if hidden {
+		printJSON(map[string]any{"ok": true, "removed": id, "note": "a built-in agent: off the lists; sessions on it and roles on its engine keep working (gerdr agent restore " + id + ")"})
+	} else {
+		printJSON(map[string]any{"ok": true, "restored": id})
+	}
 	return nil
 }
 

@@ -255,7 +255,8 @@ const BASE_NAME: Record<string, string> = { claude: "Claude Code", codex: "Codex
 /** 自建 agent 卡片下面那行小字：有提示词就显示提示词开头（一眼看出它干什么的），没有就说用哪个引擎。 */
 function roleHint(d?: AgentDef) {
   if (!d?.base) return "";
-  return d.prompt?.trim().split("\n")[0] || t("newSession.engine", { name: BASE_NAME[d.base] });
+  // A built-in one edited in Settings (same id as its engine): naming the engine says nothing
+  return d.prompt?.trim().split("\n")[0] || (d.id === d.base ? "" : t("newSession.engine", { name: BASE_NAME[d.base] }));
 }
 
 export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean }) {

@@ -9,7 +9,7 @@ import (
 func TestAgentVariants(t *testing.T) {
 	h, err := New(Options{Dir: t.TempDir(), ExtraAgents: []AgentDef{
 		{ID: "claude-2", Name: "Claude 2", Base: "claude", Env: map[string]string{"CLAUDE_CONFIG_DIR": "~/.claude-2", "A": "1"}},
-		{ID: "claude", Base: "codex"},       // 和内置的撞名：丢掉
+		{ID: "claude", Base: "codex"},       // a built-in id on another engine: dropped
 		{ID: "bad", Base: "gemini"},         // 不认识的底子：丢掉
 		{ID: "ext", Command: []string{"x"}}, // 外部 agent
 		{ID: "reviewer", Base: "native", Prompt: "只读代码、挑毛病", Skills: []string{}}, // 基于 Gerdr Agent 的角色
@@ -40,6 +40,41 @@ func TestAgentVariants(t *testing.T) {
 	h.SetAgents(nil)
 	if h.Base("claude-2") != "claude-2" {
 		t.Fatal("删掉之后不该再认")
+	}
+}
+
+// An entry with a built-in id edits that agent; hidden takes it off the list but keeps it usable.
+func TestBuiltinOverride(t *testing.T) {
+	h, err := New(Options{Dir: t.TempDir(), ExtraAgents: []AgentDef{
+		{ID: "claude", Name: "Main", Prompt: "be brief", Icon: "hex"},
+		{ID: "codex", Hidden: true},
+		{ID: "r", Base: "claude", Hidden: true}, // only built-in ones hide
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, _ := h.agentDef("claude")
+	if d.Base != "claude" || d.Name != "Main" || d.Prompt != "be brief" {
+		t.Fatalf("override not applied: %+v", d)
+	}
+	if d, ok := h.agentDef("codex"); !ok || d.Name != "Codex" || d.Base != "codex" {
+		t.Fatalf("a hidden built-in one must stay usable: %+v %v", d, ok)
+	}
+	ids := map[string]map[string]any{}
+	for _, m := range h.Agents() {
+		ids[m["id"].(string)] = m
+	}
+	if _, ok := ids["codex"]; ok {
+		t.Fatal("hidden codex listed")
+	}
+	if ids["claude"]["name"] != "Main" || ids["claude"]["icon"] != "hex" || ids["claude"]["base"] != nil {
+		t.Fatalf("claude entry: %v", ids["claude"])
+	}
+	if _, ok := ids["r"]; !ok {
+		t.Fatal("a role can't be hidden")
+	}
+	if h.Base("claude") != "claude" || h.Base("r") != "claude" {
+		t.Fatal("Base")
 	}
 }
 

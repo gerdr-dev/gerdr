@@ -111,6 +111,8 @@ export type AgentDef = {
   icon?: string;
   /** a PALETTE key for the icon (components/AgentGlyph.tsx); not set = its own colours */
   color?: string;
+  /** built-in ones only (id claude / codex / native): taken out of the agent lists; sessions on it carry on */
+  hidden?: boolean;
 };
 
 export const DEFAULT_CONFIG: Config = {

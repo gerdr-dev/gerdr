@@ -39,7 +39,7 @@ type Draft = {
   id: string;
   name: string;
   kind: Kind;
-  builtin?: boolean; // 内置的三个：只能改新会话默认
+  builtin?: boolean; // one of the built-in three (id = its engine): everything but the engine can change
   env: string;
   bin: string;
   args: string;
@@ -55,10 +55,15 @@ type Draft = {
 
 const kindName = (k: Kind) => (k === "command" ? t("agentSettings.kind.command") : { claude: "Claude Code", codex: "Codex", native: "Native" }[k]);
 
+/** The built-in agents: their id is their engine. config.agents may hold an entry editing one (hub.ValidAgentDefs). */
+const BUILTIN = new Set(["claude", "codex", "native"]);
+const BUILTIN_NAME: Record<string, string> = { claude: "Claude Code", codex: "Codex", native: "Gerdr Agent" };
+
 const toDraft = (d: AgentDef): Draft => ({
   id: d.id,
   name: d.name,
-  kind: d.base ?? "command",
+  builtin: BUILTIN.has(d.id) || undefined,
+  kind: BUILTIN.has(d.id) ? (d.id as Kind) : (d.base ?? "command"),
   env: Object.entries(d.env ?? {})
     .map(([k, v]) => `${k}=${v}`)
     .join("\n"),
@@ -92,6 +97,8 @@ function fromDraft(d: Draft): AgentDef {
   }
   const native = d.kind === "native"; // Native 引擎没有可执行文件，启动参数 / 环境变量用不上
   if (native && !d.providers.length) throw new Error(t("agentSettings.err.providerRequired"));
+  // Gerdr Agent itself with every provider ticked: leave the list out, so a provider added later is in it too
+  const all = d.builtin && allProviders().every((id) => d.providers.includes(id));
   return {
     id: d.id,
     name: d.name.trim(),
@@ -102,7 +109,7 @@ function fromDraft(d: Draft): AgentDef {
     prompt: d.prompt.trim() || undefined,
     skills: d.skills ?? undefined,
     mcp: d.mcp ?? undefined,
-    providers: native ? d.providers : undefined,
+    providers: native && !all ? d.providers : undefined,
     ...looks(d),
   };
 }
@@ -184,22 +191,28 @@ export function AgentSettings() {
     setOrig(JSON.stringify(d));
   };
   const dirty = !!edit && JSON.stringify(edit) !== orig;
+  const hidden = defs.filter((d) => BUILTIN.has(d.id) && d.hidden);
+  // A built-in one not edited yet: its plain self
+  const builtinDraft = (id: string, name: string): Draft => ({
+    ...blank(id as Kind, name),
+    id,
+    builtin: true,
+    defaults: defaultsOf(id),
+    providers: id === "native" ? allProviders() : [],
+  });
   const save = () => {
     if (!edit) return;
     try {
       // 默认值整份写：原来有、现在清掉的也要写成空，setDefaults 才会删
-      const before = edit.builtin || !isNew ? defaultsOf(edit.id) : {};
+      const before = !isNew ? defaultsOf(edit.id) : {};
       const values: Record<string, string> = {};
       for (const k of new Set([...Object.keys(before), ...Object.keys(edit.defaults)])) values[k] = edit.defaults[k] ?? "";
-      if (edit.builtin) {
-        setDefaults(edit.id, values);
-        toast.success(t("agentSettings.savedBuiltin"));
-      } else {
-        const d = fromDraft(edit);
-        setDefaults(edit.id, values, { agents: isNew ? [...defs, d] : defs.map((x) => (x.id === d.id ? d : x)) });
-        const restarted = !isNew && processKey(edit) !== processKey(JSON.parse(orig));
-        toast.success(isNew ? t("agentSettings.added", { name: d.name }) : restarted ? t("agentSettings.savedRestarted") : t("common.saved"));
-      }
+      const d = fromDraft(edit);
+      // a built-in one edited for the first time has no entry yet
+      const agents = defs.some((x) => x.id === d.id) ? defs.map((x) => (x.id === d.id ? d : x)) : [...defs, d];
+      setDefaults(edit.id, values, { agents });
+      const restarted = !isNew && processKey(edit) !== processKey(JSON.parse(orig));
+      toast.success(isNew ? t("agentSettings.added", { name: d.name }) : restarted ? t("agentSettings.savedRestarted") : t("common.saved"));
       setEdit(null);
     } catch (e: any) {
       toast.error(e.message);
@@ -228,7 +241,7 @@ export function AgentSettings() {
                 <span className="max-w-[60%] shrink-0 truncate font-medium">{a.name}</span>
                 <span className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground">
                   {t("agentSettings.engineOf", { name: kindName((def ? (def.base ?? "command") : a.id) as Kind) })}
-                  {!def && t("agentSettings.builtinSuffix")}
+                  {BUILTIN.has(a.id) && t("agentSettings.builtinSuffix")}
                 </span>
                 <span className={cn("shrink-0 text-[12px]", a.available ? "text-ok" : "text-bad")}>
                   {a.available ? t("agentSettings.available") : t("agentSettings.unavailable")}
@@ -238,16 +251,30 @@ export function AgentSettings() {
                     size="icon"
                     variant="ghost"
                     className="size-7"
-                    title={def ? t("common.edit") : t("agentSettings.newSessionDefaults")}
-                    onClick={() => open(def ? toDraft(def) : { ...blank(a.id as Kind, a.name), id: a.id, builtin: true, defaults: defaultsOf(a.id) }, false)}
+                    title={t("common.edit")}
+                    onClick={() => open(def ? toDraft(def) : builtinDraft(a.id, a.name), false)}
                   >
                     <Pencil className="size-3.5" />
                   </Button>
-                  {def && (
+                  {BUILTIN.has(a.id) ? (
+                    // A built-in one is only taken off the list: its engine stays (sessions on it, roles built on it)
                     <ConfirmDelete
-                      title={t("agentSettings.deleteTitle")}
-                      onConfirm={() => setConfig({ agents: defs.filter((x) => x.id !== def.id), ...withoutDefaults(def.id) })}
+                      title={t("agentSettings.hideTitle")}
+                      onConfirm={() =>
+                        setConfig({
+                          agents: def
+                            ? defs.map((x) => (x.id === a.id ? { ...x, hidden: true } : x))
+                            : [...defs, { id: a.id, name: a.name, base: a.id as AgentDef["base"], hidden: true }],
+                        })
+                      }
                     />
+                  ) : (
+                    def && (
+                      <ConfirmDelete
+                        title={t("agentSettings.deleteTitle")}
+                        onConfirm={() => setConfig({ agents: defs.filter((x) => x.id !== def.id), ...withoutDefaults(def.id) })}
+                      />
+                    )
                   )}
                 </div>
               </div>
@@ -264,6 +291,22 @@ export function AgentSettings() {
           );
         })}
       </div>
+
+      {hidden.length > 0 && (
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-muted-foreground">
+          <span>{t("agentSettings.hiddenList")}</span>
+          {hidden.map((d) => (
+            <button
+              key={d.id}
+              className="rounded border px-1.5 py-0.5 hover:text-foreground"
+              title={t("agentSettings.restore")}
+              onClick={() => setConfig({ agents: defs.map((x) => (x.id === d.id ? { ...x, hidden: undefined } : x)) })}
+            >
+              {t("agentSettings.restoreOne", { name: d.name || BUILTIN_NAME[d.id] })}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* 只一个「新建」：换账号、外部 ACP agent 都在弹窗里选「引擎」/ 展开「高级」 */}
       <Button size="sm" variant="outline" onClick={() => open(blank("claude", t("agentSettings.newRoleName")), true)}>
@@ -284,19 +327,13 @@ export function AgentSettings() {
           {/* Same title as the Settings dialog under it (SettingsDialog.tsx): size, padding, the phone's 15px */}
           <DialogHeader className="min-w-0 shrink-0 border-b px-6 pt-5 pr-12 pb-4 text-left max-md:px-4 max-md:pt-3 max-md:pb-3">
             <DialogTitle className="truncate leading-normal max-md:text-[15px]">
-              {!edit
-                ? ""
-                : edit.builtin
-                  ? t("agentSettings.titleBuiltin", { name: edit.name })
-                  : isNew
-                    ? t("agentSettings.titleNew")
-                    : t("agentSettings.titleEdit", { name: edit.name })}
+              {!edit ? "" : isNew ? t("agentSettings.titleNew") : t("agentSettings.titleEdit", { name: edit.name })}
             </DialogTitle>
           </DialogHeader>
           {edit && (
             <Editor
               d={edit}
-              restarts={!isNew && !edit.builtin && processKey(edit) !== processKey(JSON.parse(orig))}
+              restarts={!isNew && processKey(edit) !== processKey(JSON.parse(orig))}
               onChange={setEdit}
               onSave={save}
               onCancel={() => setEdit(null)}
@@ -387,7 +424,7 @@ function Editor({
   const dir = /^CLAUDE_CONFIG_DIR=(.+)$/m.exec(d.env)?.[1]?.trim();
   const codexHome = /^CODEX_HOME=(.+)$/m.exec(d.env)?.[1]?.trim();
   const login = d.kind === "claude" && dir ? `CLAUDE_CONFIG_DIR=${dir} claude` : d.kind === "codex" && codexHome ? `CODEX_HOME=${codexHome} codex login` : "";
-  const role = d.kind !== "command" && !d.builtin;
+  const role = d.kind !== "command";
   // 「高级」里填过东西（另一个账号）就展开着，不然收起来：大多数角色用不到
   const [adv, setAdv] = useState(!!(d.env || d.bin || d.args) || d.kind === "command");
   return (
@@ -397,18 +434,16 @@ function Editor({
         {/* Phones: one column, each label pulled up against the field under it (a label column left the fields too narrow) */}
         <div className="grid grid-cols-[88px_minmax(0,1fr)] items-center gap-x-3 max-md:grid-cols-1 gap-y-2.5 max-md:[&>span.text-muted-foreground]:-mb-1.5 max-md:[&>span.text-muted-foreground]:pt-0">
           <span className="text-muted-foreground">{t("agentSettings.name")}</span>
+          <Input value={d.name} onChange={(e) => set({ name: e.target.value })} onKeyDown={stop} className="h-8" />
+          <span className="self-start pt-1.5 text-muted-foreground">{t("agentSettings.icon")}</span>
+          <RoleIconPicker d={d} onChange={set} />
+          {/* a built-in one is its engine */}
           {d.builtin ? (
-            <span className="font-medium">{d.name}</span>
-          ) : (
-            <Input value={d.name} onChange={(e) => set({ name: e.target.value })} onKeyDown={stop} className="h-8" />
-          )}
-          {!d.builtin && (
             <>
-              <span className="self-start pt-1.5 text-muted-foreground">{t("agentSettings.icon")}</span>
-              <RoleIconPicker d={d} onChange={set} />
+              <span className="text-muted-foreground">{t("agentSettings.engine")}</span>
+              <span>{kindName(d.kind)}</span>
             </>
-          )}
-          {!d.builtin && (
+          ) : (
             <>
               <span className="text-muted-foreground">{t("agentSettings.engine")}</span>
               <Select
@@ -428,7 +463,7 @@ function Editor({
               </Select>
             </>
           )}
-          {d.kind === "native" && !d.builtin && (
+          {d.kind === "native" && (
             <>
               <span className="self-start pt-1 text-muted-foreground">{t("agentSettings.providers")}</span>
               <div className="space-y-1">
@@ -477,13 +512,13 @@ function Editor({
 
         <DefaultsEditor
           id={d.id}
-          base={d.builtin ? d.id : d.kind}
+          base={d.kind}
           providers={d.kind === "native" ? d.providers : undefined}
           value={d.defaults}
           onChange={(v) => set({ defaults: v })}
         />
 
-        {!d.builtin && d.kind !== "native" && (
+        {d.kind !== "native" && (
           <div className="space-y-2.5">
             {d.kind !== "command" && (
               <button className="text-[12px] text-muted-foreground hover:text-foreground" onClick={() => setAdv(!adv)}>

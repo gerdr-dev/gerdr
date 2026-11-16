@@ -380,6 +380,11 @@ used). An agent's `skills` / `mcp` list gets exactly those names whatever the gl
 "what the global settings give"; `[]` means none. Skills that come with the repository being worked on are given
 either way.
 
+The built-in agents (`claude`, `codex`, `native`) are edited the same way: an entry in `agents` with that id changes
+its name, icon, prompt, skills / MCP, launch settings (its engine is always itself; `gerdr agent create` with the id
+adds one). `gerdr agent rm claude` only takes it off the lists — sessions on it and roles on its engine keep working —
+and `gerdr agent restore claude` puts it back.
+
 MCP tokens (headers, env) are secrets like API keys: put in only what the user hands you; `list` / `show` print them as
 `<hidden>`, and `create` fills a `<hidden>` back from the pool entry of the same name.
 

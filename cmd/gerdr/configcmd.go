@@ -62,7 +62,8 @@ var configKeys = map[string]configKey{
 // agentsHelp mirrors hub.AgentDef and Settings → Agent's editor (ui/src/components/AgentSettings.tsx).
 const agentsHelp = `Each element of agents is one agent (role) offered when starting a session:
 
-  id         unique, [a-z0-9-]; not claude / codex / native (those are the built-in ones)
+  id         unique, [a-z0-9-]. claude / codex / native are the built-in ones: an entry with one of those ids
+             edits that agent (name, icon, prompt, skills, mcp, providers, bin / args / env; base is itself)
   name       shown in the UI
   base       the engine: claude (Claude Code) | codex (Codex) | native (Gerdr Agent, calls the model API itself)
   command    instead of base: an external ACP agent's command line, e.g. ["gemini", "--experimental-acp"],
@@ -75,6 +76,9 @@ const agentsHelp = `Each element of agents is one agent (role) offered when star
   bin, args  claude / codex only: another executable, extra arguments
   env        claude / codex / command: environment variables (e.g. {"CLAUDE_CONFIG_DIR": "~/.claude-work"} for a
              second account, {"OPENCODE_CONFIG": "~/oc-work.json"} for another opencode config)
+  icon, color  the picture in the lists (Settings → Agent's picker draws the choices)
+  hidden     built-in ones only: true = taken out of the agent lists (` + "`gerdr agent rm claude`" + ` /
+             ` + "`gerdr agent restore claude`" + `); sessions on it and roles on its engine keep working
 
 skills / mcp may name any switched-on skill / MCP server: built-in, gerdr's own (gerdr skill add, gerdr mcp add)
 or the engine's own (Claude Code's / Codex's), whatever the global source says. Switched-off ones are never given.
@@ -452,6 +456,7 @@ func saveConfig(st *config.Store, sec *config.Secrets, root any, agents bool) er
 var agentFields = map[string]string{
 	"id": "string", "name": "string", "base": "string", "command": "array", "bin": "string", "args": "array",
 	"env": "object", "prompt": "string", "skills": "array", "mcp": "array", "providers": "array",
+	"icon": "string", "color": "string", "hidden": "bool",
 }
 
 // checkAgents refuses an agents list the backend would quietly drop entries from (hub.ValidAgentDefs) or misread,
@@ -465,7 +470,7 @@ func checkAgents(root any) error {
 	if !ok {
 		return fmt.Errorf("agents takes a list")
 	}
-	seen := map[string]bool{"claude": true, "codex": true, "native": true}
+	seen := map[string]bool{}
 	for i, e := range arr {
 		m, ok := e.(map[string]any)
 		if !ok {
@@ -477,8 +482,6 @@ func checkAgents(root any) error {
 			return fmt.Errorf("agents[%d] has no id", i)
 		case strings.ContainsAny(id, ". "):
 			return fmt.Errorf("agent id %q: no dots or spaces", id)
-		case id == "claude" || id == "codex" || id == "native":
-			return fmt.Errorf("agent id %q is a built-in one; pick another", id)
 		case seen[id]:
 			return fmt.Errorf("two agents with id %q", id)
 		}
@@ -505,6 +508,16 @@ func checkAgents(root any) error {
 		}
 		base, _ := m["base"].(string)
 		cmd, _ := m["command"].([]any)
+		if id == "claude" || id == "codex" || id == "native" {
+			// edits the built-in agent: its engine is itself
+			if (base != "" && base != id) || len(cmd) > 0 {
+				return fmt.Errorf("agents.%s edits the built-in agent: its base can only be %s, and no command", id, id)
+			}
+			continue
+		}
+		if h, _ := m["hidden"].(bool); h {
+			return fmt.Errorf("agents.%s.hidden: only the built-in ones (claude / codex / native) can be hidden; remove a role instead (gerdr agent rm %s)", id, id)
+		}
 		switch {
 		case base != "" && base != "claude" && base != "codex" && base != "native":
 			return fmt.Errorf("agents.%s.base is claude, codex or native, not %q", id, base)
