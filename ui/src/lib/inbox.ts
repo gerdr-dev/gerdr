@@ -104,6 +104,23 @@ function add(items: InboxItem[], quiet: boolean, notify = !quiet) {
 /** Inbox item id → its toast's id. One card per session (a newer item replaces its card), one per battery alert. */
 const toasts = new Map<string, string>();
 const BODY_MAX = 240;
+/** Cards being taken down by code (dropCards), not by the user: their onDismiss mustn't close them on other devices. */
+const quietly = new Set<string>();
+
+/**
+ * The user clicked a card or closed it (×, swipe): the same card goes in every other window and device too, else
+ * each one keeps showing what was already dealt with. Card ids match across devices (`inbox:<session>`, or the
+ * request's / panel item's id), only the battery one is per device, as its alert is.
+ */
+function userClosed(card: string) {
+  import("./sync").then((s) => s.sendCardsClosed([card]));
+}
+
+/** Cards closed elsewhere ("cards_closed"): drop them here. The items stay in the inbox until answered. */
+export function closeCards(ids: string[]) {
+  const want = new Set(ids);
+  dropCards((k) => !want.has(toasts.get(k)!));
+}
 
 /**
  * The in-app card, like the update one (native.ts onAppUpdate): stays until closed, since a system notification is
@@ -114,6 +131,7 @@ function toastItem(it: InboxItem, title: string) {
   const id = `inbox:${it.sessionId ?? it.id}`;
   for (const [k, v] of toasts) if (v === id) toasts.delete(k);
   toasts.set(it.id, id);
+  quietly.delete(id);
   const body = it.body && it.body.length > BODY_MAX ? it.body.slice(0, BODY_MAX) + "…" : it.body;
   const sid = it.sessionId;
   const open = sid || it.panel ? () => openFromCard(it) : undefined;
@@ -141,10 +159,19 @@ function toastItem(it: InboxItem, title: string) {
     action: open
       ? {
           label: it.kind === "ask" ? t("inbox.goAnswer") : it.kind === "error" ? t("inbox.goLook") : t("inbox.goHandle"),
-          onClick: open,
+          // Sonner takes the card down after this without calling onDismiss
+          onClick: () => {
+            if (toasts.get(it.id) === id) toasts.delete(it.id);
+            userClosed(id);
+            open();
+          },
         }
       : undefined,
-    onDismiss: () => toasts.delete(it.id),
+    // Also called when code dismisses it (sonner calls onDismiss for toast.dismiss too), hence `quietly`
+    onDismiss: () => {
+      if (toasts.get(it.id) === id) toasts.delete(it.id);
+      if (!quietly.delete(id)) userClosed(id);
+    },
   });
 }
 
@@ -208,6 +235,7 @@ function dropCards(keep?: (itemId: string) => boolean) {
   for (const [k, v] of [...toasts]) {
     if (keep?.(k)) continue;
     toasts.delete(k);
+    quietly.add(v);
     toast.dismiss(v);
   }
 }

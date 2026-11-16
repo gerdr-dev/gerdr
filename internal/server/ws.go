@@ -32,6 +32,8 @@ var upgrader = websocket.Upgrader{
 
 // ws：推会话列表 / 日志 / 布局 / 配置的变化。客户端发两种消息：{t:"watch", ids:[…], since:{id:seq}}、{t:"ping"}（回 {t:"pong"}）。
 // Plus {t:"draft", id, draft:{text, sel, imgs, from}}: the unsent composer content, mirrored to the other devices (hub/draft.go).
+// Plus {t:"cards", ids:[…]}: inbox cards the user clicked or closed in this window, passed on to every window and
+// device as "cards_closed" so the same card doesn't stay up on the others (ui/src/lib/inbox.ts).
 // wsCompressMin: messages smaller than this go out uncompressed (see write below).
 const wsCompressMin = 4 << 10
 
@@ -92,6 +94,10 @@ func (s *Server) ws(w http.ResponseWriter, r *http.Request) {
 				// The composer text, mirrored to every device looking at this session (hub/draft.go)
 				if !hw.draft(m.ID, m.Draft) {
 					s.Hub.SetDraft(m.ID, m.Draft)
+				}
+			case "cards":
+				if n := len(m.IDs); n > 0 && n <= 200 {
+					s.Hub.Broadcast("cards_closed", m.IDs)
 				}
 			case "ping":
 				// 应用层心跳：浏览器读不到协议层的 ping/pong，只能靠这个判断连接是不是「假在线」。

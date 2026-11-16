@@ -402,6 +402,10 @@ function handle(m: any) {
     case "inbox":
       import("./inbox").then((p) => p.syncPanelInbox(m.data ?? []));
       break;
+    // Inbox cards clicked or closed in some window / device: the same cards go here too (lib/inbox.ts)
+    case "cards_closed":
+      import("./inbox").then((p) => p.closeCards(m.data ?? []));
+      break;
     case "ext":
       set((s) => ({ extVersion: s.extVersion + 1 }));
       break;
@@ -463,6 +467,11 @@ function omit<T>(r: Record<string, T>, k: string): Record<string, T> {
 }
 
 onLayoutChange(() => syncWatch());
+
+/** Inbox cards the user clicked or closed here: every window and device drops the same ones ("cards_closed"). */
+export function sendCardsClosed(ids: string[]) {
+  if (ids.length && ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ t: "cards", ids }));
+}
 
 // Composer text mirrored across devices (hub/draft.go). Last writer wins on the whole text; what keeps devices from
 // drifting apart is the server's order: every write, ours included, comes back in the order the server took them. So
