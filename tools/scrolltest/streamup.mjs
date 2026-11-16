@@ -29,7 +29,9 @@ else {
     if (!isUser(all[i])) continue;
     let n = 0;
     for (let j = i + 1; j < all.length && !isUser(all[j]); j++) n += textLen(all[j]);
-    if (n > best) (best = n), (cut = i);
+    // Ties go to the later turn: it has history above to scroll into (the first turn of a session cut there is
+    // shorter than the screen, nothing to scroll, and the run reported a failure that wasn't one)
+    if (n >= best && n > 0) (best = n), (cut = i);
   }
 }
 if (cut < 0) throw new Error("no user message to cut at");
@@ -44,10 +46,18 @@ await page.mouse.move(vp.width * 0.6, vp.height * 0.45);
 const feeding = replay(page, sid, rest, { dt: a.dt });
 await page.waitForTimeout(500); // let the reply get going first
 const fb0 = (await fromBottom(page)).find((x) => x.visible);
+if (!fb0 || fb0.scrollHeight < page.viewportSize().height + a.step * a.steps) {
+  console.log(`can't test: the chat is ${fb0?.scrollHeight}px, not enough to scroll ${a.step * a.steps}px up (pick another turn with --at)`);
+  await browser.close();
+  process.exit(2);
+}
 for (let i = 0; i < a.steps; i++) {
   await page.mouse.wheel(0, -a.step);
   await page.waitForTimeout(a.gap);
-  if (a.v) console.log(`  step ${i + 1}: ${(await fromBottom(page)).find((x) => x.visible)?.fromBottom}px from bottom`);
+  if (a.v) {
+    const f = (await fromBottom(page)).find((x) => x.visible);
+    console.log(`  step ${i + 1}: ${f?.fromBottom}px from bottom (content ${f?.scrollHeight}px, scrollTop ${f?.scrollTop})`);
+  }
 }
 await page.waitForTimeout(800);
 const fb = (await fromBottom(page)).find((x) => x.visible);
