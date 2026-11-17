@@ -211,8 +211,10 @@ export const MessageView = memo(function MessageView({
         {/* 回退按钮悬停时浮在气泡左边，不占高度 */}
         <div className="relative ml-auto flex min-w-0 max-w-[max(80%,280px)] justify-end">
           {(canRewind || actions != null) && (
-            // Shown while the rewind popover is open too (the mouse moving to it leaves the hover)
-            <div className="absolute right-full bottom-1 mr-1 flex gap-0.5 opacity-0 transition-opacity group-hover/user:opacity-100 has-[[data-state=open]]:opacity-100 [@media(hover:none)]:opacity-100">
+            // Shown while the rewind popover is open too (the mouse moving to it leaves the hover). Centred on the
+            // bubble's last line: its bottom padding (py-2.5) plus half a line (0.75em of the 1.5 line height), then
+            // down by half their own height — at bottom-1 they sat lower than a one-line bubble's text (seen on a phone)
+            <div className="absolute right-full bottom-[calc(0.625rem+0.75em)] mr-1 flex translate-y-1/2 items-center gap-0.5 opacity-0 transition-opacity group-hover/user:opacity-100 has-[[data-state=open]]:opacity-100 [@media(hover:none)]:opacity-100">
               {actions}
               {canRewind && <RewindButton onConfirm={() => onRewind?.(msg)} />}
             </div>
