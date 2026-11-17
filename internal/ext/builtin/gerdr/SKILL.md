@@ -99,10 +99,11 @@ gerdr session new --agent codex --title reviewer \
   give `--cwd` when the task is about code;
 - `--workspace <id|number|label|new>` puts it in that Code workspace as a new tab (`gerdr workspace list`); without it,
   it opens next to you.
-- A panel's conversation (one a panel started, e.g. a board's worker) can't use `gerdr session new`: it is refused,
-  because the panel looks after the agents it runs (what they're told, the model, how they report, where they show).
-  Start another agent the panel's way, as its instructions say. The one exception is a helper on another computer,
-  which a panel can't start: `gerdr session new --host <id> --report-to self` (it reports back to you; you follow it).
+- A panel's conversation (one a panel started, e.g. a board's worker) can only start a helper that reports back to it:
+  `gerdr session new --cwd <repo> --report-to self` (add `--host <id>` for another computer); anything else is refused,
+  because the panel looks after the agents it runs. You look after the helper like a subagent: its reports wake you,
+  you answer it (`gerdr session send`), the panel shows it under your task and closes it with the task. It doesn't
+  appear in Code. For a separate piece of work, do it the panel's way, as its instructions say.
 - Gerdr records you as the new session's `parent` (also when a panel function you ran with `gerdr panel run` starts it),
   so who handed what to whom can be followed any number of levels deep — a panel can show that tree for its work.
   Starting a helper from your own session keeps the chain; don't hand work out through some other session.

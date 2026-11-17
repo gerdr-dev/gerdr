@@ -338,9 +338,22 @@ func (s *Server) createSession(w http.ResponseWriter, r *http.Request) {
 	if o.Agent == "" {
 		o.Agent = s.defaultAgent() // `gerdr session new` without --agent: what new sessions use in the UI
 	}
-	if panel, _ := s.panelCaller(o.Open); panel != "" {
-		httpError(w, 400, errPanelSessionNew(panel).Error())
-		return
+	// A panel's conversation (a board's worker) may start a helper that reports back to it: the caller looks after it
+	// like a subagent, and the panel shows it under the caller's task (panelCaller). It is the panel's (its tag: bringing
+	// it up from anywhere goes to the panel) and isn't placed in Code.
+	helper := false
+	if panel, caller := s.panelCaller(o.Open); panel != "" {
+		if o.ReportTo == "" || o.ReportTo != caller {
+			httpError(w, 400, errPanelSessionNew(panel).Error())
+			return
+		}
+		helper = true
+		if o.Tags == nil {
+			o.Tags = map[string]string{}
+		}
+		if _, ok := o.Tags[PanelTag]; !ok {
+			o.Tags[PanelTag] = panel
+		}
 	}
 	if o.Open != nil && o.ReportTo != "" {
 		// The new session isn't anywhere yet: it lands in the caller's project, so the target has to be reachable from there
@@ -368,6 +381,10 @@ func (s *Server) createSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	sum := sess.Summary()
+	if helper {
+		writeJSON(w, sum)
+		return
+	}
 	if err := s.placeCreated(o.Open, sum.ID, o.Cwd, sum.Cwd); err != nil {
 		httpError(w, 400, err.Error())
 		return
@@ -378,12 +395,14 @@ func (s *Server) createSession(w http.ResponseWriter, r *http.Request) {
 // panelCaller: the panel whose conversation (one it started: a board's worker, at any depth) runs `gerdr session new`,
 // and that conversation's id; "" when the caller isn't one of a panel's.
 //
-// Such a conversation can't start a session here: a panel looks after the agents it runs (what they're told, which
-// model, how they report, where they show), and one started past it has none of that — a board worker that handed
-// its work on with `session new` left a conversation nobody followed, on no board and closed with the old task
-// (2026-11-05). It starts agents the panel's way (its functions call ctx.sessions.start, which keeps the chain through
-// parent). The one thing a panel can't do is start one on another computer: there `session new --host` is allowed as a
-// helper that reports back to the caller (createOnHost), which the caller follows and the panel shows as its wait.
+// Such a conversation can only start a helper that reports back to it (`--report-to self`, here or on another
+// computer: createOnHost). A panel looks after the agents it runs (what they're told, which model, how they report,
+// where they show), and one started past it has none of that — a board worker that handed its work on with
+// `session new` left a conversation nobody followed, on no board and closed with the old task (2026-11-05). A helper
+// reporting back has someone following it: the caller looks after it like a subagent (its reports wake the caller,
+// which answers it), and the panel shows it as the caller's wait and closes it with the caller's task. 2026-11-17: a
+// worker whose task needed a change in another repository opened a second task card for it; the user follows one
+// requirement through one worker, so the worker keeps that work under it as a helper instead.
 func (s *Server) panelCaller(o *createOpen) (panel, caller string) {
 	if o == nil {
 		return "", ""
@@ -401,8 +420,8 @@ func (s *Server) panelCaller(o *createOpen) (panel, caller string) {
 
 func errPanelSessionNew(panel string) error {
 	return fmt.Errorf(i18n.S(
-		"你是面板「%s」开的对话，不能用 gerdr session new 开新会话：面板要管它开的 agent（交代什么、用哪个模型、怎么汇报、显示在哪）。要开新 agent，照这个面板给你的说明，用它自己的函数或工具。只有在另一台电脑上开、结果回报给你的帮手可以用 gerdr session new --host <电脑> --report-to self。",
-		"You are a conversation the panel %q started, so gerdr session new is refused: the panel looks after the agents it runs (what they're told, which model, how they report, where they show). To start another agent, do it the panel's way, through its own functions or tools, as its instructions say. Only a helper on another computer that reports back to you may be started with gerdr session new --host <computer> --report-to self."),
+		"你是面板「%s」开的对话，gerdr session new 只能开回报给你的帮手：加上 --report-to self（在另一台电脑上开再加 --host <电脑>）。它每次停下都会回报给你，由你管它：回答它、让它接着做；它会随你的任务一起关掉。要另开一件独立的事，照这个面板给你的说明来。",
+		"You are a conversation the panel %q started: gerdr session new can only start a helper that reports back to you. Add --report-to self (and --host <computer> to start it on another computer). It reports to you each time it stops and you look after it: answer it, tell it more; it is closed with your task. For a separate piece of work, do it the panel's way, as its instructions say."),
 		panel)
 }
 
@@ -413,7 +432,7 @@ func (s *Server) meta(r *http.Request, sess *hub.Session) (any, error) {
 		Tags     map[string]string `json:"tags"`
 		ReportTo *string           `json:"reportTo"`
 		Muted    *bool             `json:"muted"` // do not disturb (hub Record.Muted); left out = unchanged
-		From     string            `json:"from"` // the agent session asking
+		From     string            `json:"from"`  // the agent session asking
 	}
 	if err := decode(r, &b); err != nil {
 		return nil, err

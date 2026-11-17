@@ -478,9 +478,8 @@ func TestHostTerminal(t *testing.T) {
 	}
 }
 
-// A panel's conversation (a board's worker) can't `gerdr session new` here: the panel starts the agents it runs itself
-// (panelCaller). On another computer, which a panel can't reach, a helper reporting back to it is allowed, and it is
-// the panel's. Any other conversation still can.
+// A panel's conversation (a board's worker) can `gerdr session new` only a helper reporting back to it (panelCaller),
+// here or on another computer; the helper is the panel's and isn't placed in Code. Any other conversation still can.
 func TestPanelConversationSessionNew(t *testing.T) {
 	console, ch, hostSrv := hostPair(t)
 	auth := hdr("Authorization", "Bearer "+console.Token)
@@ -490,7 +489,7 @@ func TestPanelConversationSessionNew(t *testing.T) {
 	here := t.TempDir()
 	for _, body := range []string{
 		`{"cwd":` + mustJSON(here) + `,"open":{"near":"w2"}}`,
-		`{"cwd":` + mustJSON(here) + `,"reportTo":"w2","open":{"near":"w2"}}`,
+		`{"cwd":` + mustJSON(here) + `,"reportTo":"w1","open":{"near":"w2"}}`,
 		`{"cwd":` + mustJSON(here) + `,"open":{"near":"w2","workspace":"new"}}`,
 		`{"host":"mini","cwd":` + mustJSON(here) + `,"open":{"near":"w2"}}`,
 	} {
@@ -507,6 +506,13 @@ func TestPanelConversationSessionNew(t *testing.T) {
 	}
 	if s, err := hostSrv.Hub.Session(strings.TrimPrefix(sum.ID, "mini:")); err != nil || s.Summary().Tags["panel"] != "default/board" {
 		t.Fatalf("host helper not the panel's: %v %v", err, s)
+	}
+	w = do(ch, "POST", "/api/sessions", strings.NewReader(`{"cwd":`+mustJSON(here)+`,"reportTo":"w2","open":{"near":"w2","workspace":"new"}}`), auth, csrf)
+	if json.Unmarshal(w.Body.Bytes(), &sum); w.Code != 200 {
+		t.Fatalf("helper here: %d %s", w.Code, w.Body)
+	}
+	if s, err := console.Hub.Session(sum.ID); err != nil || s.Summary().Tags["panel"] != "default/board" || s.Summary().ReportTo != "w2" || s.Summary().Parent != "w2" {
+		t.Fatalf("helper here not the panel's, reporting to its caller: %v %+v", err, s)
 	}
 	if w := do(ch, "POST", "/api/sessions", strings.NewReader(`{"cwd":`+mustJSON(here)+`,"open":{"near":"w1"}}`), auth, csrf); w.Code != 200 {
 		t.Fatalf("plain caller: %d %s", w.Code, w.Body)
