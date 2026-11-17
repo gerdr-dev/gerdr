@@ -24,6 +24,7 @@ import { syncWatch } from "./lib/sync";
 import { isNative, nativeAskUpdate, nativeBadge, nativeMenuKeys, nativeSpace, onAppUpdate } from "./lib/native";
 import { initAndroid, syncAndroidTheme } from "./lib/android";
 import { CliApprove as CliApproveView } from "./components/CliApprove";
+import { KeepDevicePrompt } from "./components/KeepDevice";
 import { systemNotify } from "./lib/notify";
 import { watchInbox } from "./lib/inbox";
 import { watchBadges } from "./lib/badges";
@@ -348,6 +349,8 @@ export default function App() {
         <AddonSlot name="overlay" />
         <AppContextMenu />
         <CliApprove />
+        {/* A device just paired with a code: keep it (passkey / Face ID) or use it just for now */}
+        <KeepDevicePrompt />
         {/* Top centre everywhere: every pane's composer is at the bottom (and the phone's keyboard), so a bottom-corner toast
             covered the rightmost pane's input box (user report). The top is pane title bars, fine to cover for a moment.
             40px from the top, the tab bar's bottom border (h-10, TabBar.tsx): the card hangs right under the bar instead

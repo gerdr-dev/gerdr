@@ -119,6 +119,19 @@ func TestAppKey(t *testing.T) {
 		}
 	}
 
+	// Past the minutes after pairing (declined the prompt, wants Face ID later from Settings): stale until the
+	// computer approves a step-up, which counts as a presence proof for the App key too
+	code, _ = s.MintCode()
+	late, _, _ := s.Redeem(code, "iPhone", "1.2.3.4")
+	now = now.Add(StepUpWindow + time.Second)
+	if err := s.SetAppKey(late.ID, pub); err != ErrAppKeyStale {
+		t.Fatalf("a device past the window registered without an approval: %v", err)
+	}
+	s.GrantStepUp(late.ID)
+	if err := s.SetAppKey(late.ID, pub); err != nil {
+		t.Fatalf("after a local approval: %v", err)
+	}
+
 	// Revoking the device drops its key with it
 	s.Revoke(d.ID)
 	if _, err := s.AppKeyChallenge(d.ID); err != ErrAppKeyNone {

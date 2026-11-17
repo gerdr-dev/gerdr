@@ -169,8 +169,13 @@ devices couldn't register an App key) dropped out after 30 minutes with no way t
 code used within those minutes can bind a factor and stay, until the device is kicked. Past the window, step-up is
 as before (an existing passkey or a local approval): a stolen cookie still can't add a passkey.
 
-After a pairing the page asks the phone App's shell to `enroll` its App key (Face ID / fingerprint) while the
-pairing is fresh (`whoami.appKeyFresh`), so re-verifying never needs the browser. The iOS App's "add in browser"
+**Keeping the device is the person's choice** (2026-11-17, the user's call: sometimes a phone is only wanted for one
+job). Right after a pairing the UI asks once (`KeepDevice.tsx`, whoami `temp` + `appKeyFresh`, remembered per device
+in localStorage): add a passkey in a browser, or turn on the App's Face ID / fingerprint key in the phone Apps
+(`enroll`, then one `appkey` signature so the prompt is seen). "No" leaves it temporary. Before, the App enrolled
+its key silently after every pairing, which made every phone permanent. Settings → Remote access can do it later;
+past the window the computer approves first, and that approval (`PasskeyAt`) counts for the App key too
+(`auth.AppKeyFresh`), since the iOS App has no passkey to prove itself with. The iOS App's "add in browser"
 mints a handoff link (`auth/handoff.go`, `POST /api/remote/handoff`, `/?handoff=`): single use, 2 minutes, it
 signs Safari in as a new device exactly as fresh as the App, and opens Settings → Remote access there.
 

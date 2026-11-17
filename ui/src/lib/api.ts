@@ -488,6 +488,9 @@ export const api = {
       /** the device has an App key / may register one right now (just paired) */
       appKey?: boolean;
       appKeyFresh?: boolean;
+      /** a temporary device (pairing code) and when it lapses */
+      temp?: boolean;
+      expires?: string;
     }>("GET", "/api/remote/whoami"),
   /** 出配对码：只有本机口能调（远程那一侧服务端直接 403） */
   remotePairCode: () => req<{ code: string; expires: string; url: string; qr?: string }>("POST", "/api/remote/pair-code", {}),

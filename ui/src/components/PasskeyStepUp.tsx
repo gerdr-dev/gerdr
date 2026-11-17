@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { api, type StepUpRequest } from "@/lib/api";
 import { t } from "@/lib/i18n";
-import { isCancel, registerPasskey, stepUpWithPasskey } from "@/lib/passkey";
+import { isCancel, loginPasskey, registerPasskey, stepUpWithPasskey } from "@/lib/passkey";
+import { enrollAppKey, isIOSApp } from "@/lib/android";
 import { Button } from "@/components/ui/button";
 
 // 已经有 passkey 之后再加一把，要先证明是本人（step-up，internal/auth 的 StepUpNeeded）。两条路：
@@ -9,7 +10,9 @@ import { Button } from "@/components/ui/button";
 //   - 到电脑上批准（auth/approve.go）：新手机上一把都没有时只能走这条 —— 系统只会弹「未发现任何通行密钥」。
 // 批准之后**还要人再点一下**才去注册：WebAuthn 的 create 要用户手势，轮询到「已批准」时直接调会被浏览器拒掉。
 
-export function PasskeyStepUp({ onDone, onCancel }: { onDone: (label: string) => void; onCancel: () => void }) {
+// bio: the same proof, then turning on the App's Face ID / fingerprint key instead of adding a passkey (auth.AppKeyFresh
+// takes the approval too). The iOS App can't use passkeys, so it only gets the approval there.
+export function PasskeyStepUp({ onDone, onCancel, bio }: { onDone: (label: string) => void; onCancel: () => void; bio?: boolean }) {
   const [req, setReq] = useState<{ id: string; code: string } | null>(null);
   const [state, setState] = useState<"pending" | "approved" | "expired">("pending");
   const [err, setErr] = useState("");
@@ -46,14 +49,16 @@ export function PasskeyStepUp({ onDone, onCancel }: { onDone: (label: string) =>
     <div className="space-y-2 rounded-md border p-3">
       {!req ? (
         <>
-          <div>{t("passkeyStepUp.intro")}</div>
+          <div>{t(bio ? "passkeyStepUp.introBio" : "passkeyStepUp.intro")}</div>
           <div className="flex flex-wrap gap-2">
             <Button size="sm" onClick={ask}>
               {t("passkeyStepUp.approveOnComputer")}
             </Button>
-            <Button size="sm" variant="outline" onClick={() => attempt(stepUpWithPasskey)}>
-              {t("passkeyStepUp.usePasskey")}
-            </Button>
+            {!(bio && isIOSApp()) && (
+              <Button size="sm" variant="outline" onClick={() => attempt(bio ? () => loginPasskey().then(enrollBio) : stepUpWithPasskey)}>
+                {t("passkeyStepUp.usePasskey")}
+              </Button>
+            )}
             <Button size="sm" variant="ghost" onClick={onCancel}>
               {t("passkeyStepUp.nevermind")}
             </Button>
@@ -72,8 +77,8 @@ export function PasskeyStepUp({ onDone, onCancel }: { onDone: (label: string) =>
       ) : state === "approved" ? (
         <>
           <div className="text-ok">{t("passkeyStepUp.approved")}</div>
-          <Button size="sm" onClick={() => attempt(registerPasskey)}>
-            {t("passkeyStepUp.addNow")}
+          <Button size="sm" onClick={() => attempt(bio ? enrollBio : registerPasskey)}>
+            {t(bio ? "passkeyStepUp.enableNow" : "passkeyStepUp.addNow")}
           </Button>
         </>
       ) : (
@@ -88,6 +93,8 @@ export function PasskeyStepUp({ onDone, onCancel }: { onDone: (label: string) =>
     </div>
   );
 }
+
+const enrollBio = () => enrollAppKey().then(() => "");
 
 // 本机这边：远程设备请求加 passkey，坐在电脑前的人批准。只在本机口上画（接口远程是 403）。
 export function StepUpApprovals({ open }: { open: boolean }) {

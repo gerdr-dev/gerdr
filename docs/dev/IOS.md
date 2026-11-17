@@ -118,7 +118,8 @@ Devices re-verify every `reauthHours` (24 by default), and on iOS that meant the
 the App keeps its own key per server (`AppKey.swift`, server `internal/auth/appkey.go`, `server/appkey.go`):
 
 - **Enroll**: right after a browser approval succeeds (new device or re-verification), or when the page sends
-  `enroll` after a pairing code (whoami `appKeyFresh`: within the step-up window), the App makes a P-256 key in
+  `enroll` because the person chose to keep a code-paired device (the prompt after pairing or Settings → Remote
+  access; whoami `appKeyFresh`: within the step-up window of the pairing or of an approval on the computer), the App makes a P-256 key in
   the Secure Enclave (`.privateKeyUsage` + `.biometryCurrentSet`: every signature needs Face ID / Touch ID, a new
   face or finger voids it) and registers the public half: `POST /api/remote/appkey/register`. Silent: making the key
   needs no Face ID. The enclave's blob goes in the Keychain, this device only.

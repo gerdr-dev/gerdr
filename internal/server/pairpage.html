@@ -268,13 +268,13 @@
 
   if (new URLSearchParams(location.search).get("e") === "code") err("配对码不对或者已经过期了：回机器上再出一个。");
   if (new URLSearchParams(location.search).get("e") === "handoff") err("这个链接已经用过或者过期了（2 分钟）：回 App 里再点一次。");
-  // A device from a pairing code is temporary (auth.Device.Temp): say so up front. An App that can keep a Face ID /
-  // fingerprint key (hello appKey) registers it right after pairing, which keeps the device by itself.
+  // A device from a pairing code is temporary (auth.Device.Temp): say so up front. Once in, the UI asks whether to keep
+  // it (a passkey, or the App's Face ID / fingerprint key: KeepDevice.tsx); saying no leaves it temporary.
   var pairMinutes = 0;
   function tempText() {
     if (pairMinutes > 0) $("temp").textContent = akShell
-      ? "配对后 App 会自动开启 Face ID / 指纹验证，这台设备就一直能用。"
-      : "配对码进来的设备只能用 " + pairMinutes + " 分钟；要一直用，进去后 5 分钟内在「设置 → 远程访问」里加一把 passkey（不用回电脑批准）。";
+      ? "配对码登录 " + pairMinutes + " 分钟后过期。进去后可以添加 Face ID / 指纹登录，下次不用再配对。"
+      : "配对码登录 " + pairMinutes + " 分钟后过期。进去后可以添加 Passkey 登录，下次不用再配对。";
   }
   api("GET", "/api/remote/whoami").then(function (who) {
     if (who.authed) return enter(); // cookie 其实在（Strict 在跨站进来那一下没带），直接进

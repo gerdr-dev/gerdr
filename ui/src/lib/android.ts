@@ -133,19 +133,48 @@ export async function androidCopyImage(blob: Blob) {
   });
 }
 
-/**
- * Right after a pairing code (or anything that just proved presence), ask the shell to make its App key, so
- * re-verifying later is Face ID / a fingerprint instead of a trip to the browser. Before, the shells only enrolled
- * after a browser approval, which a device paired with a code never went through. The server says whether the
- * device may register now (whoami appKeyFresh); an older shell ignores the message.
- */
-async function enrollAfterPairing() {
+/** Wait (up to 3 s) for the shell's hello reply, which says what it can do (androidCan). */
+export async function shellReady(): Promise<boolean> {
+  if (!port) return false;
   for (let i = 0; i < 30 && !last.get("hello"); i++) await new Promise((r) => setTimeout(r, 100));
-  if (!androidCan("appKey")) return;
-  try {
-    const w = await api.remoteWhoami();
-    if (w.remote && w.authed && !w.appKey && w.appKeyFresh) postAndroid({ t: "enroll" });
-  } catch {}
+  return !!last.get("hello");
+}
+
+/** What this phone calls its biometrics: Face ID / Touch ID on iOS, fingerprint / face unlock on Android. */
+export const biometricName = () => t(isIOSApp() ? "android.bioIOS" : "android.bioAndroid");
+
+/**
+ * Turn on re-verifying with Face ID / a fingerprint for this device: the shell makes its App key and registers it
+ * (`enroll`), then signs one challenge with it (`appkey`) so the person sees the Face ID / fingerprint prompt they
+ * agreed to. Registering binds the device (a temporary one from a pairing code becomes permanent, auth.SetAppKey),
+ * so it only happens when the person chose it (KeepDevice.tsx); it used to run silently after every pairing, which
+ * left no way to use a phone just for the moment. The server only takes the key within minutes of a presence proof
+ * (whoami appKeyFresh): a pairing, a passkey, or an approval on the computer.
+ *
+ * `enroll` has no reply (older shells too), so this polls whoami for the key. Cancelling the Face ID prompt
+ * afterwards doesn't undo it: the key is registered either way.
+ */
+export async function enrollAppKey(): Promise<void> {
+  postAndroid({ t: "enroll" });
+  let ok = false;
+  for (let i = 0; i < 30 && !ok; i++) {
+    await new Promise((r) => setTimeout(r, 500));
+    ok = !!(await api.remoteWhoami().catch(() => null))?.appKey;
+  }
+  if (!ok) throw new Error(t("android.enrollFailed", { bio: biometricName() }));
+  await new Promise<void>((done) => {
+    const timer = setTimeout(() => (off(), done()), 60000);
+    const off = onAndroid(
+      "appkey",
+      () => {
+        clearTimeout(timer);
+        off();
+        done();
+      },
+      false,
+    );
+    postAndroid({ t: "appkey" });
+  });
 }
 
 /**
@@ -163,7 +192,6 @@ export function initAndroid() {
     // keys, no LAN routing, and WebKit doesn't stretch the page like Android's WebView (gateStretch)
     document.documentElement.classList.add("ios-app");
     postAndroid({ t: "hello" });
-    enrollAfterPairing();
     syncAndroidTheme();
     // LAN candidates as on Android (the shell ignores them where it can't route: before iOS 17, a debug address)
     sendLan();
@@ -178,7 +206,6 @@ export function initAndroid() {
   }
   document.documentElement.classList.add("android");
   postAndroid({ t: "hello" });
-  enrollAfterPairing();
   syncAndroidTheme();
   sendLan();
   // 局域网 IP 会变（换 Wi-Fi、DHCP）：回到前台时再报一次，壳会拿新候选重探

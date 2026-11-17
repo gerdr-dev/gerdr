@@ -77,6 +77,15 @@ func parseAppKey(pub []byte) (*ecdsa.PublicKey, error) {
 
 // SetAppKey registers (or replaces) the App key of a device. The caller passes the device as just authenticated;
 // the rule (fresh presence) is checked here against the stored device; a temporary device becomes permanent.
+// AppKeyFresh: may this device register an App key right now? A presence proof within StepUpWindow: VerifiedAt
+// (a pairing, a passkey, a sign-in approval) or PasskeyAt (also a local step-up approval, GrantStepUp). The
+// approval counts so a device past the minutes after its pairing can still turn Face ID on later from Settings:
+// the iOS App has no passkey to prove itself with, so "approve on the computer" is its only way back in.
+func AppKeyFresh(d *Device, now time.Time) bool {
+	fresh := func(t time.Time) bool { return !t.IsZero() && now.Sub(t) <= StepUpWindow }
+	return fresh(d.VerifiedAt) || fresh(d.PasskeyAt)
+}
+
 func (s *Store) SetAppKey(deviceID string, pub []byte) error {
 	if _, err := parseAppKey(pub); err != nil {
 		return err
@@ -91,7 +100,7 @@ func (s *Store) SetAppKey(deviceID string, pub []byte) error {
 		switch {
 		case d.Expired(now):
 			return ErrAppKeyStale
-		case d.VerifiedAt.IsZero() || now.Sub(d.VerifiedAt) > StepUpWindow:
+		case !AppKeyFresh(d, now):
 			return ErrAppKeyStale
 		}
 		d.AppKey = &AppKey{Pub: append([]byte(nil), pub...), Added: now}

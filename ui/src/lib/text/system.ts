@@ -244,6 +244,9 @@ export const zh = {
   "usageMeter.stale": "没刷新上，下面是上一次的",
   "usageMeter.error": "拿不到：{error}",
 
+  "android.bioIOS": "Face ID / 触控 ID",
+  "android.bioAndroid": "指纹 / 面部解锁",
+  "android.enrollFailed": "{bio} 没开成：手机上要先设好 {bio}，或者过一会儿再试",
   "android.noAnswer": "App 没有回应",
   "android.copyFailed": "复制失败",
   "android.updateReady": "Gerdr App {version} 已下载好",
@@ -529,6 +532,9 @@ export const en: Record<keyof typeof zh, string> = {
   "usageMeter.stale": "Couldn't refresh; showing the last reading",
   "usageMeter.error": "Unavailable: {error}",
 
+  "android.bioIOS": "Face ID / Touch ID",
+  "android.bioAndroid": "fingerprint / face unlock",
+  "android.enrollFailed": "Couldn't turn on {bio}: set it up on the phone first, or try again in a moment",
   "android.noAnswer": "The App didn't respond",
   "android.copyFailed": "Copy failed",
   "android.updateReady": "Gerdr App {version} downloaded",

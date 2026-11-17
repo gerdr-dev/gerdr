@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, type PasskeyInfo, type RemoteDevice, type RemoteStatus } from "@/lib/api";
 import { isCancel, isStepUp, passkeySupported, registerPasskey } from "@/lib/passkey";
-import { isIOSApp, openInBrowser } from "@/lib/android";
+import { androidCan, biometricName, enrollAppKey, isIOSApp, openInBrowser, shellReady } from "@/lib/android";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { t } from "@/lib/i18n";
@@ -34,6 +34,13 @@ export function RemoteSettings({ open }: { open: boolean }) {
   const [msg, setMsg] = useState("");
   const [confirmAll, setConfirmAll] = useState(false);
   const [stepUp, setStepUp] = useState(false);
+  // The phone App's Face ID / fingerprint key (KeepDevice.tsx): offered here when the shell can make one
+  const [bioOK, setBioOK] = useState(false);
+  const [bioStepUp, setBioStepUp] = useState(false);
+  const [bioBusy, setBioBusy] = useState(false);
+  useEffect(() => {
+    shellReady().then((ok) => setBioOK(ok && androidCan("appKey")));
+  }, []);
   // Devices just asked to re-verify: the button itself says so (the message at the top is often scrolled away)
   const [asked, setAsked] = useState<Record<string, boolean>>({});
 
@@ -275,6 +282,33 @@ export function RemoteSettings({ open }: { open: boolean }) {
         </div>
       )}
 
+      {isRemote && bioOK && me && (
+        <BioSetting
+          on={!!devs.find((d) => d.id === me)?.appKey}
+          busy={bioBusy}
+          stepUp={bioStepUp}
+          onEnable={() =>
+            run(async () => {
+              setBioBusy(true);
+              try {
+                // Within minutes of a presence proof the server takes the key now; later the computer approves first
+                if (!(await api.remoteWhoami()).appKeyFresh) return setBioStepUp(true);
+                await enrollAppKey();
+                setMsg(t("keepDevice.done", { what: biometricName() }));
+              } finally {
+                setBioBusy(false);
+              }
+            })
+          }
+          onStepUpDone={() => {
+            setBioStepUp(false);
+            setMsg(t("keepDevice.done", { what: biometricName() }));
+            load();
+          }}
+          onStepUpCancel={() => setBioStepUp(false)}
+        />
+      )}
+
       <div className="space-y-1.5">
         <div className="flex items-center justify-between">
           <div className="text-[13px] font-medium">passkey</div>
@@ -350,6 +384,26 @@ export function RemoteSettings({ open }: { open: boolean }) {
           {t("remoteSettings.logout")}
         </Button>
       )}
+    </div>
+  );
+}
+
+// This device's Face ID / fingerprint re-verification (the phone Apps' App key, auth/appkey.go). Turning it on
+// keeps a temporary device, so it's the person's choice here or in the prompt after pairing, never automatic.
+function BioSetting(p: { on: boolean; busy: boolean; stepUp: boolean; onEnable: () => void; onStepUpDone: () => void; onStepUpCancel: () => void }) {
+  const bio = biometricName();
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between">
+        <div className="text-[13px] font-medium">{t("remoteSettings.bioTitle", { bio })}</div>
+        {!p.on && !p.stepUp && (
+          <Button size="sm" variant="outline" disabled={p.busy} onClick={p.onEnable}>
+            {p.busy ? t("keepDevice.busy") : t("remoteSettings.bioEnable")}
+          </Button>
+        )}
+      </div>
+      {p.stepUp && <PasskeyStepUp bio onDone={p.onStepUpDone} onCancel={p.onStepUpCancel} />}
+      <div className="text-[12px] text-muted-foreground">{t(p.on ? "remoteSettings.bioOn" : "remoteSettings.bioOff", { bio })}</div>
     </div>
   );
 }

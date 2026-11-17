@@ -575,7 +575,12 @@ func (s *Server) remoteWhoami(w http.ResponseWriter, r *http.Request) {
 		// The App may register its key right now (fresh presence: auth.SetAppKey's rule; a temporary device then
 		// becomes permanent), so
 		// the page asks the shell to (`enroll`) after a pairing instead of waiting for a browser approval
-		out["appKeyFresh"] = !id.Device.Peer && time.Since(id.VerifiedAt) < auth.StepUpWindow
+		out["appKeyFresh"] = !id.Device.Peer && auth.AppKeyFresh(id.Device, time.Now())
+		// A temporary device (pairing code): the UI asks once whether to keep it (bind a passkey / Face ID) or
+		// let it lapse at expires — the person may only want it for this one job
+		if id.Device.Temp {
+			out["temp"], out["expires"] = true, id.Device.Expires
+		}
 		if s.reauthNeeded(id) {
 			out["need"] = "passkey"
 		}
