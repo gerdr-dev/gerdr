@@ -43,12 +43,12 @@ object AppUpdate {
     @Volatile var error = ""; private set
     @Volatile var checkedAt = 0L; private set
 
-    /** Told about every change, on the main thread (MainActivity forwards it to the page). */
-    var onChange: (() -> Unit)? = null
+    /** Told about every change, on the main thread (each window, MainActivity, forwards it to its page). */
+    val listeners: MutableSet<() -> Unit> = java.util.concurrent.CopyOnWriteArraySet()
 
     private val io = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
-    private fun changed() = main.post { onChange?.invoke() }
+    private fun changed() = main.post { listeners.forEach { it() } }
 
     fun state(ctx: Context): JSONObject = JSONObject().put("t", "update")
         .put("version", BuildInfo.version(ctx)).put("phase", phase).put("latest", latest)

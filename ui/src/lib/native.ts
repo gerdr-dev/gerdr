@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { api } from "./api";
 import { locale, t } from "./i18n";
 import { set } from "./store";
+import { androidCan, isAndroid, postAndroid } from "./android";
 
 type Bridge = { postMessage(m: unknown): void };
 
@@ -80,14 +81,23 @@ export async function nativeWebPid(): Promise<number | undefined> {
   return w.__GERDR_WEB_PID__ || undefined;
 }
 
-/** App 里：open a window of its own for a (herdr-style) session. */
+/** The shell can open more windows: the desktop App, or an Android App that says so in its hello reply. */
+export const canNewWindow = () => isNative() || androidCan("windows");
+
+/**
+ * App 里：open a window of its own for a (herdr-style) session. On Android it is a task of its own in the recents
+ * list (WindowActivity).
+ */
 export function nativeNewWindow(space: string) {
-  bridge()?.postMessage({ type: "newWindow", space });
+  if (androidCan("windows")) postAndroid({ t: "newWindow", space });
+  else bridge()?.postMessage({ type: "newWindow", space });
 }
 
 /** App 里：tell the shell which session this window shows (its title, where a notification click goes, what ⌘N copies). */
 export function nativeSpace(id: string, name: string) {
   bridge()?.postMessage({ type: "space", id, name });
+  // Android: the window's name in the recents list. Sent before the hello reply too: older Apps ignore it
+  if (isAndroid()) postAndroid({ t: "space", id, name });
 }
 
 /** App 里：菜单上显示 / 认的键跟着设置走（动作 id → accelerator，null = 菜单上不挂键）。 */

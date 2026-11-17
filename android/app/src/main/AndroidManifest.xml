@@ -50,6 +50,16 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- More windows, one project each (WindowActivity): documentLaunchMode=always makes every start its own task in
+             the recents list; autoRemoveFromRecents drops the card once the window is closed. Same configChanges and
+             soft input handling as the main window, for the same reasons -->
+        <activity
+            android:name=".WindowActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode|density"
+            android:documentLaunchMode="always"
+            android:autoRemoveFromRecents="true"
+            android:windowSoftInputMode="adjustResize" />
         <!-- ZXing's scanner screen ships locked to landscape; let it follow the phone like the rest of the app -->
         <activity
             android:name="com.journeyapps.barcodescanner.CaptureActivity"

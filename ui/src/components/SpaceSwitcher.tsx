@@ -20,7 +20,7 @@ import type { SessionSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { StatusDot, dotRank } from "./AgentIcon";
 import { askConfirm } from "@/lib/confirm";
-import { isNative, nativeNewWindow } from "@/lib/native";
+import { canNewWindow, nativeNewWindow } from "@/lib/native";
 import { SpaceDropLine, startSpaceDrag } from "./SpaceDrag";
 import { tabStatus } from "./TabBar";
 import { useBadges } from "@/lib/badges";
@@ -124,7 +124,7 @@ export function SpaceMenuItems({ sp, axis }: { sp: Space; axis: "x" | "y" }) {
   const [Back, Fwd] = axis === "y" ? [ArrowUp, ArrowDown] : [ArrowLeft, ArrowRight];
   return (
     <>
-      {isNative() && <ContextMenuItem onClick={() => nativeNewWindow(sp.id)}>{t("nav.openInNewWindow")}</ContextMenuItem>}
+      {canNewWindow() && <ContextMenuItem onClick={() => nativeNewWindow(sp.id)}>{t("nav.openInNewWindow")}</ContextMenuItem>}
       <ContextMenuItem onClick={() => renameSpaceDialog(sp)}>
         <Pencil /> {t("spaceSwitcher.renameEllipsis")}
       </ContextMenuItem>
@@ -318,7 +318,7 @@ function SpaceMenu() {
           );
         })}
         <DropdownMenuSeparator />
-        {isNative() && (
+        {canNewWindow() && (
           <DropdownMenuItem onClick={() => nativeNewWindow(cur.id)}>{t("spaceSwitcher.openNamedInNewWindow", { name: cur.name })}</DropdownMenuItem>
         )}
         <DropdownMenuItem onClick={newSpaceDialog}>

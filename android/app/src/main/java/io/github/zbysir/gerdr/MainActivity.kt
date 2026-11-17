@@ -63,7 +63,11 @@ import com.journeyapps.barcodescanner.ScanOptions
  * 整个壳就这一个 Activity：没填过服务器 → 填地址那一屏；填过 → 一个 WebView 加载那台
  * gerdr（远程访问那个地址）。界面全在网页里（为什么见 docs/dev/ANDROID.md），这里只做网页做不到的事。
  */
-class MainActivity : ComponentActivity() {
+/**
+ * The App's window. The launcher, notifications and the widget open this one (singleTask: one main window); more
+ * windows on one project each are [WindowActivity], a task of their own in the recents list.
+ */
+open class MainActivity : ComponentActivity() {
     private lateinit var root: FrameLayout
     private val bars by lazy { WindowInsetsControllerCompat(window, root) }
 
@@ -83,6 +87,11 @@ class MainActivity : ComponentActivity() {
 
     private val main = Handler(Looper.getMainLooper())
     private val pushRoute = Runnable { bridge?.route() }
+    private val onRoute: () -> Unit = {
+        main.removeCallbacks(pushRoute)
+        main.postDelayed(pushRoute, 150)
+    }
+    private val onUpdate: () -> Unit = { bridge?.update(AppUpdate.state(this)) }
     private val io = Executors.newSingleThreadExecutor()
     /** 正在进行的那次 passkey 登录；null = 没有 */
     private var login: LoginRun? = null
@@ -145,7 +154,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        AppUpdate.onChange = { bridge?.update(AppUpdate.state(this)) }
+        AppUpdate.listeners.add(onUpdate)
         // 图标深浅先跟系统明暗（原生那几屏也跟系统走，见 values-night）；页面起来后由 applyTheme 接手
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT),
@@ -191,6 +200,28 @@ class MainActivity : ComponentActivity() {
         bridge?.focus(id)
     }
 
+    /** Where this window's page starts: the server's root (the page picks the last project). [WindowActivity]: its project */
+    protected open fun startUri(server: Uri): Uri = server
+
+    /**
+     * The page's "open in new window" on a project: a task of its own (WindowActivity, documentLaunchMode=always), so
+     * it sits in the recents list next to this one, like the desktop App's windows. In split screen it opens in the
+     * other half.
+     */
+    fun newWindow(space: String) {
+        if (space.isEmpty()) return
+        var flags = Intent.FLAG_ACTIVITY_NEW_DOCUMENT or Intent.FLAG_ACTIVITY_MULTIPLE_TASK
+        if (isInMultiWindowMode) flags = flags or Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT
+        startActivity(Intent(this, WindowActivity::class.java).putExtra(WindowActivity.EXTRA_SPACE, space).addFlags(flags))
+    }
+
+    /** The project this window shows (the page's `space`): the window's name in the recents list */
+    fun setSpace(name: String) {
+        val label = if (name.isEmpty()) getString(R.string.app_name) else "${getString(R.string.app_name)} · $name"
+        @Suppress("DEPRECATION")
+        setTaskDescription(android.app.ActivityManager.TaskDescription(label))
+    }
+
     /** A hardware keyboard attached and in use (a Bluetooth / USB one, a keyboard case); not the on-screen one. */
     fun hardKeyboard(c: Configuration = resources.configuration) =
         c.keyboard != Configuration.KEYBOARD_NOKEYS && c.hardKeyboardHidden == Configuration.HARDKEYBOARDHIDDEN_NO
@@ -203,7 +234,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        visible = true
+        resumed.incrementAndGet()
         web?.onResume()
         // 回前台：人可能已经从公司回到家了，重新探一次局域网
         LanRoute.reprobe()
@@ -232,7 +263,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onPause() {
-        visible = false
+        resumed.decrementAndGet()
         // 页面那边会收到 visibilitychange（hidden），终端的「回前台发探针、僵了就重连」照常工作
         web?.onPause()
         CookieManager.getInstance().flush()
@@ -240,6 +271,8 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        AppUpdate.listeners.remove(onUpdate)
+        LanRoute.listeners.remove(onRoute)
         dropWeb()
         io.shutdownNow()
         super.onDestroy()
@@ -360,9 +393,9 @@ class MainActivity : ComponentActivity() {
 
     // ---- WebView ----
 
-    /** [start] 是第一次要打开的完整地址（配对链接带着 `?pair=`），默认就是 origin 本身 */
+    /** [start]: the full address to open first (a pairing link carries `?pair=`); by default this window's start ([startUri]) */
     @SuppressLint("SetJavaScriptEnabled")
-    private fun showWeb(server: Uri, start: Uri = server) {
+    private fun showWeb(server: Uri, start: Uri = startUri(server)) {
         dropWeb()
         root.removeAllViews()
         val o = Server.origin(server)
@@ -409,10 +442,7 @@ class MainActivity : ComponentActivity() {
         showLoading(server.host ?: o)
         // 「直连 / 中继」一变就告诉页面（顶栏那个标签）。连接开开关关很密（一个页面加载就是
         // 十几条），攒 150ms 发一次
-        LanRoute.onChange = {
-            main.removeCallbacks(pushRoute)
-            main.postDelayed(pushRoute, 150)
-        }
+        LanRoute.listeners.add(onRoute)
         // 先装好局域网换路的代理再加载：装之前发出去的请求不走代理（LanRoute 的注释）
         LanRoute.install(this, server) { if (web === w) w.loadUrl(start.toString()) }
     }
@@ -1159,7 +1189,10 @@ class MainActivity : ComponentActivity() {
     companion object {
         private const val REQ_APPROVE = 41
 
+        /** Windows in front (several with split screen / more windows; onPause and onResume of two windows interleave) */
+        private val resumed = java.util.concurrent.atomic.AtomicInteger()
+
         /** App 在不在前台。在的话后台服务不弹系统通知 —— 网页自己有提示卡和红点，再弹一条是噪音 */
-        @Volatile var visible = false
+        val visible get() = resumed.get() > 0
     }
 }

@@ -74,6 +74,8 @@ class Bridge(private val act: MainActivity, web: WebView, origin: String) {
                     JSONObject().put("t", "hello").put("platform", "android")
                         .put("version", BuildInfo.version(act)).put("webauthn", act.webAuthn).put("scan", true)
                         .put("copyImage", true).put("update", true).put("keyboard", true)
+                        // windows: "open in new window" on a project (MainActivity.newWindow)
+                        .put("windows", true)
                         // appKey: keep and re-verify this device with a fingerprint (AppKey.kt), also where the
                         // WebView can do passkeys: a phone paired with a code stays without having to add a passkey,
                         // the same flow as iOS. The pairing page offers it when the server says this device has one
@@ -106,6 +108,9 @@ class Bridge(private val act: MainActivity, web: WebView, origin: String) {
             }
             "theme" -> act.applyTheme(m.optString("bg"), m.optBoolean("light"))
             "open" -> act.openExternal(m.optString("url"))
+            // More windows, one project each (WindowActivity); `space` names this window's project for the recents list
+            "newWindow" -> act.newWindow(m.optString("space"))
+            "space" -> act.setSpace(m.optString("name"))
             "setup" -> act.showSetup(null)
             // Pair page's scan button; the answer comes back as `scan` (scanResult)
             "scan" -> act.scanPair()
@@ -159,7 +164,7 @@ class Bridge(private val act: MainActivity, web: WebView, origin: String) {
     /** 音量键（MainActivity.dispatchKeyEvent）：`dir` 是 up / down，`repeat` 是按住不放的连发 */
     fun key(dir: String, repeat: Boolean) = send(JSONObject().put("t", "key").put("k", dir).put("repeat", repeat))
 
-    /** 「直连 / 中继」变了（LanRoute.onChange，已经节流过） */
+    /** 「直连 / 中继」变了（LanRoute.listeners，已经节流过） */
     fun route() = send(LanRoute.snapshot())
 
     /** 后台通知那一块的状态（开没开 / 有没有通知权限 / 是否免电池优化），设置页照它画 */

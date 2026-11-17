@@ -70,8 +70,9 @@ object LanRoute {
      */
     private val openLan = java.util.concurrent.atomic.AtomicInteger()
     private val openRelay = java.util.concurrent.atomic.AtomicInteger()
-    /** 变了就回调（任意线程）。MainActivity 转给页面 */
-    @Volatile var onChange: (() -> Unit)? = null
+    /** Called on every change (any thread); each window (MainActivity) forwards it to its page */
+    val listeners: MutableSet<() -> Unit> = java.util.concurrent.CopyOnWriteArraySet()
+    private fun changed() = listeners.forEach { it() }
 
     /** 给页面的那份：`{lan, relay, next}`，next = 新连接现在往哪儿拨 */
     fun snapshot(): org.json.JSONObject = org.json.JSONObject()
@@ -84,7 +85,7 @@ object LanRoute {
     internal fun tunnel(h: String, isLan: Boolean, delta: Int) {
         if (!h.equals(host, ignoreCase = true)) return // 不支持反向绕过时别的主机也会进代理，那些不算
         (if (isLan) openLan else openRelay).addAndGet(delta)
-        onChange?.invoke()
+        changed()
     }
 
     /** 每次网络变化 / 新候选都加一，晚到的探测结果对不上就扔掉 */
@@ -128,6 +129,9 @@ object LanRoute {
             clear()
             return ready()
         }
+        // Another window (WindowActivity) on the same server: the proxy is already in place and probed. Installing
+        // again would drop the LAN route (lan = null) under the windows already open until the probe came back
+        if (host == h.lowercase() && proxy != null) return ready()
         host = h.lowercase()
         port = if (server.port > 0) server.port else 443
         lan = null
@@ -211,14 +215,14 @@ object LanRoute {
         val cs = candidates
         val g = ++gen
         lan = null
-        onChange?.invoke()
+        changed()
         if (cs.isEmpty()) return
         io.execute {
             val hit = probeAll(h, cs)
             if (g == gen) {
                 lan = hit
                 if (hit != null) proxy?.closeRelay()
-                onChange?.invoke()
+                changed()
                 Log.i(TAG, if (hit != null) "走局域网：$h → $hit" else "局域网探不通，走中继")
                 // 没探通但 Wi-Fi 连着：过一会儿再探（同一代里才算数，期间有新事件就作废）
                 if (hit == null && wifi != null) {

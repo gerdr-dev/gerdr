@@ -11,6 +11,7 @@
 ```
 android/app/src/main/java/io/github/zbysir/gerdr/
   MainActivity.kt   填地址一屏、WebView、加载层、导航锁、返回键、音量键、passkey 退路的浮层
+  WindowActivity.kt more windows, one project each (see "Windows")
   Look.kt           原生那几屏的控件样式（照配对页 pairpage.html 的卡片画）；颜色在 res/values(-night)/colors.xml，
                     和 index.css 的 token 对齐、跟系统明暗走 —— 改 token 时一起改
   Bridge.kt         页面 ↔ 壳 的那条线（另一半 ui/src/lib/android.ts）
@@ -186,6 +187,24 @@ version is downloaded into the cache by itself and checked against the sha256; S
 - Android refuses an APK signed with another key, so a tampered download can't get in; the sha256 catches truncation.
 - Versions compare as numbers (`0.2.10` > `0.2.9`); a local build is `0.1.0`, behind every release.
 
+## Windows
+
+Like the desktop App, the App can have one window per project, each its own card in the recents list, so working on
+two projects is switching apps instead of switching projects inside one page. "Open in new window" on a project (the
+project menu / a chip's long press) starts `WindowActivity`, a subclass of MainActivity with
+`documentLaunchMode="always"`: every start is a new task. It loads `/<project id>`, the address the desktop shells give
+a new window (ui sync.ts `wantSpace`); in split screen it opens in the other half (`FLAG_ACTIVITY_LAUNCH_ADJACENT`).
+
+- The launcher, notifications and the widget still go to the main window (MainActivity stays singleTask).
+- Each window has its own WebView, page, /ws and bridge; the cookie jar, the LAN proxy (`LanRoute`, process-wide
+  WebView proxy override) and the notice service are shared. So process-wide callbacks are listener sets
+  (`LanRoute.listeners`, `AppUpdate.listeners`), not one `onChange` that the last window would take over, and
+  `MainActivity.visible` counts resumed windows (two windows' onPause / onResume interleave).
+- `LanRoute.install` for the server already installed returns at once: installing again set `lan = null` and pushed the
+  open windows' new connections to the relay until the probe came back.
+- Swiping a window's card away destroys it (`autoRemoveFromRecents`). After the process is killed, the system relaunches
+  a window's task with its original intent, so it reopens on the project it was opened with.
+
 ## 桥
 
 The iOS App (ios/, docs/dev/IOS.md) speaks the same format as `window.gerdrIOS` and answers a subset of the table
@@ -210,4 +229,6 @@ below (hello, theme, open, setup, login, copyImage, lan, route); keep the two sh
 | `copyImage` | 页 → 壳 → 页 | Long-press "copy image": base64 `data` + `mime` (WebView's clipboard API can't write images); answers `ok` / `error`. The hello reply carries `copyImage: true` so the menu hides it on older Apps |
 | `keyboard` | 壳 → 页 | `hard`: a hardware keyboard is attached (`Configuration.hardKeyboardHidden`), sent after hello and on every plug in / out (`onConfigurationChanged`; the manifest's configChanges keeps the Activity alive). Menus show shortcut keys only with one (`ui/src/lib/hwKeyboard.ts`). The hello reply carries `keyboard: true`; older Apps fall back to the page's own guess |
 | `focus` | 壳 → 页 | 点通知进来：切到那个会话 |
+| `newWindow` | 页 → 壳 | "Open in new window" on a project (SpaceSwitcher): `space` = project id. Shown only when the hello reply says `windows: true` (`canNewWindow` in native.ts) |
+| `space` | 页 → 壳 | The project this window shows (`id`, `name`): the window's name in the recents list. Sent on every switch, also before hello |
 | `open` / `setup` / `fullscreen` | 页 → 壳 | 外部链接交给系统浏览器 / 回到填地址那屏 / 藏系统栏 |
