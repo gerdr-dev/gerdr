@@ -574,6 +574,9 @@ func (s *session) onAssistantBlock(ctx context.Context, apiID, parent string, ra
 			s.tools[b.ID] = st
 		}
 		st.input, st.parent, st.streamOnly = b.Input, parent, false
+		if st.started == 0 {
+			st.started = time.Now().UnixMilli()
+		}
 		cwd := s.cwd
 		s.mu.Unlock()
 		if b.Name == "TodoWrite" {

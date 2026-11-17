@@ -102,6 +102,9 @@ type toolState struct {
 	name   string
 	parent string
 	input  map[string]any
+	// started: when its whole tool_use block came in, i.e. when it began running (unix ms). A command moved to the
+	// background becomes a task only then (task_started), seconds in; the task's elapsed time counts from here.
+	started int64
 	// shown from the stream (content_block_start) and its input not in yet: if the next API request starts first, the
 	// CLI threw that response away (cut off mid-stream, it asks the model to go on) and the call never runs.
 	streamOnly bool

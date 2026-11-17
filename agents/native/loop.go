@@ -415,7 +415,7 @@ func (r *run) exec(ctx context.Context, p *pending) result {
 		return p.t.run(&call{ctx: ctx, r: r, id: p.tc.ID}, p.args)
 	}
 	r.out(acp.UpdateToolCall(acp.ToolCallId(p.tc.ID), acp.WithUpdateStatus(acp.ToolCallStatusInProgress)))
-	return p.t.run(&call{ctx: ctx, r: r, id: p.tc.ID}, p.args)
+	return p.t.run(&call{ctx: ctx, r: r, id: p.tc.ID, started: time.Now().UnixMilli()}, p.args)
 }
 
 func (r *run) askPermission(ctx context.Context, p *pending, rule string) (string, error) {

@@ -153,6 +153,19 @@ func (c *call) bgBash(p *proc, desc string) {
 	s := c.r.s
 	ctx, cancel := context.WithCancel(context.Background())
 	s.track(c.id, "local_bash", desc, cancel)
+	// Moved aside mid-run (send now, a detach): the task counts from the command's start, not the move
+	if c.started > 0 {
+		s.mu.Lock()
+		t := s.tasks[c.id]
+		moved := t != nil && c.started < t.StartedAt
+		if moved {
+			t.StartedAt = c.started
+		}
+		s.mu.Unlock()
+		if moved {
+			s.pushTasks()
+		}
+	}
 	go func() {
 		var werr error
 		stopped := false

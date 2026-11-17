@@ -83,6 +83,11 @@ func (s *session) taskEvent(ctx context.Context, sub string, raw []byte) {
 		t.Type, t.Description, t.Subagent, t.ToolCallID, t.Background = ev.TaskType, ev.Description, ev.SubagentType, ev.ToolUseID, ev.Background
 		if st := s.tools[ev.ToolUseID]; st != nil {
 			t.Parent = st.parent
+			// A command moved to the background (send now, ctrl+b) starts as a task seconds into its run: count from
+			// when the call itself started, or "done · 7s" showed for a 10s command (user report)
+			if st.started > 0 && st.started < t.StartedAt {
+				t.StartedAt = st.started
+			}
 		}
 	case "task_progress":
 		t := get(ev.TaskID)

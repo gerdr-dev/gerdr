@@ -60,6 +60,9 @@ type call struct {
 	ctx context.Context
 	r   *run
 	id  string
+	// started: when the call began running (unix ms). A command moved to the background becomes a task seconds in;
+	// its elapsed time counts from here, not from the move.
+	started int64
 }
 
 func (c *call) cwd() string { return c.r.s.cwd() }
