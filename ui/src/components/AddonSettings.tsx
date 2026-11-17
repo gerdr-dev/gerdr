@@ -372,7 +372,7 @@ function SettingField({ id, spec, value }: { id: string; spec: AddonSetting; val
         <span className={cn("min-w-0", stacked ? "md:flex-1" : "flex-1")}>{spec.title || spec.key}</span>
         {spec.type === "text" ? (
           <Textarea
-            className="min-h-20 font-mono text-[12px]"
+            className="max-h-48 min-h-20 overflow-y-auto font-mono text-[12px]"
             spellCheck={false}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
