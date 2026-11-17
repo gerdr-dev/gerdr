@@ -136,7 +136,15 @@ export function ChatView({
     const mac = /Mac/.test(navigator.platform);
     const onKey = (e: KeyboardEvent) => {
       if (e.defaultPrevented || e.code !== "KeyF" || e.altKey || e.shiftKey || (mac ? !e.metaKey || e.ctrlKey : !e.ctrlKey || e.metaKey)) return;
-      if (document.querySelector("[role=dialog]")) return;
+      // A dialog over the chat takes the key, but not one the chat is in (a panel's drawer holding it, SessionChat):
+      // that check used to skip every ⌘F there, and the browser's own find, blind to the virtual list, came up.
+      // Only the topmost dialog counts (dialogs are portaled in the order they open), and a chat hidden under another
+      // view of its drawer doesn't answer.
+      const me = scrollerEl.current;
+      if (me && !me.getClientRects().length) return;
+      const dialogs = document.querySelectorAll("[role=dialog]");
+      const top = dialogs[dialogs.length - 1];
+      if (top && !(me && top.contains(me))) return;
       e.preventDefault();
       setFind((n) => n + 1);
     };
