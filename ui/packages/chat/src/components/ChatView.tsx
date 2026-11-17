@@ -208,19 +208,38 @@ export function ChatView({
     const own = host.renderTool ? (p: ToolPart) => host.renderTool!(p, { sessionId: session.id, running: false }) !== undefined : undefined;
     return [buildRows(msgs, running, openGroups, new Set(liveTaskIds.split(" ").filter(Boolean)), Date.now(), out, showThinking, own), out.wake] as const;
   }, [msgs, running, openGroups, liveTaskIds, tick, showThinking, host]);
-  // The host's focus: scroll there once the rows have it, then flash the row (data-chat-key) for a moment
+  // The host's focus: scroll there once the rows have it, then flash the row (data-chat-key) for a moment.
+  // A long chat opens with only its latest part loaded (older parts come in on scrolling up), so the card asked for may
+  // not be in the rows yet: a panel's "waiting to send" line pointing at a reply card from an hour ago did nothing until
+  // the user scrolled up far enough to load it (user report). Then load older parts until it shows up, heading for the
+  // top meanwhile so the tap moves something at once (and the "loading" line there shows), and jump once it's in.
+  const focusDone = useRef(0); // the focus seq handled (found, or not in the whole history)
+  const focusSeeking = useRef(0); // the focus seq already heading for the top
+  const focusFlash = useRef(0);
   useEffect(() => {
-    if (!focus) return;
+    if (!focus || focusDone.current === focus.seq || !t.loaded) return;
     const i = rows.findIndex((r) => r.kind === "part" && focus.match(r.part));
-    if (i < 0) return;
+    if (i < 0) {
+      if (t.older === "loading") return; // runs again when that part is in
+      if (t.older !== "more" || !t.loadOlder) return void (focusDone.current = focus.seq);
+      if (focusSeeking.current !== focus.seq && rows.length) {
+        focusSeeking.current = focus.seq;
+        list.current?.scrollToIndex({ index: 0, align: "start", behavior: "smooth" });
+      }
+      t.loadOlder();
+      return;
+    }
+    focusDone.current = focus.seq;
     list.current?.scrollToIndex({ index: i, align: "start", behavior: "smooth", offset: PIN_ROOM });
     const key = rows[i].key;
-    const t = setTimeout(() => {
+    // Not cleared when this runs again: that is only more rows of a reply streaming in, and the flash is still due
+    clearTimeout(focusFlash.current);
+    focusFlash.current = window.setTimeout(() => {
       const el = scrollerEl.current?.querySelector<HTMLElement>(`[data-chat-key="${CSS.escape(key)}"]`);
       el?.animate([{ boxShadow: "0 0 0 2px var(--color-brand)" }, { boxShadow: "0 0 0 2px transparent" }], { duration: 1600, easing: "ease-out" });
     }, 350);
-    return () => clearTimeout(t);
-  }, [focus?.seq]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [focus?.seq, rows, t.loaded, t.older]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => clearTimeout(focusFlash.current), []);
   useEffect(() => {
     if (wake === undefined) return;
     const t = setTimeout(() => setTick((x) => x + 1), Math.max(0, wake - Date.now()));
