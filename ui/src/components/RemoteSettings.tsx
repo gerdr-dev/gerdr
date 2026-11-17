@@ -76,8 +76,8 @@ export function RemoteSettings({ open }: { open: boolean }) {
   };
 
   const approveApp = () => window.dispatchEvent(new Event("gerdr:cli-approve"));
-  // Passkeys are shown under the device that added them (passkeys.json v2)
-  const keyCount = (device: string) => keys.filter((k) => k.device === device).length;
+  // Passkeys are shown under the devices they belong to: the one that added it and those that used it (passkeys.json v2)
+  const keyCount = (device: string) => keys.filter((k) => (k.devices ?? [k.device]).includes(device)).length;
   const meDev = devs.find((d) => d.id === me);
 
   // This device's row: a way to keep it signed in, when it has none yet. The phone Apps turn on their Face ID /
@@ -282,8 +282,9 @@ export function RemoteSettings({ open }: { open: boolean }) {
         <div className="divide-y rounded-md border">
           {devs.length === 0 && <div className="p-3 text-muted-foreground">{t("remoteSettings.none")}</div>}
           {devs.map((d) => (
-            <div key={d.id} className="flex items-center gap-3 px-3 py-2">
-              <div className="min-w-0 flex-1">
+            // On a phone the buttons go under the name (beside it they squeezed it to a few characters)
+            <div key={d.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
+              <div className="min-w-0 flex-1 max-md:basis-full">
                 <div className="truncate">
                   {d.label}
                   {d.id === me && <span className="ml-2 text-[11px] text-brand">{t("remoteSettings.thisDevice")}</span>}

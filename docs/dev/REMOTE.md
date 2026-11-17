@@ -233,9 +233,10 @@ GERDR_* 本来就不往 agent 的环境里传（`sysenv.ChildEnv`）；acme 把�
   user's call): Settings → Remote access lists devices only, a passkey shows as a tag on its device, and revoking a
   device deletes the passkeys it added (`auth.RevokeDevice`, also `gerdr remote revoke`), since a passkey sign-in
   needs no credential and would bring a kicked device straight back. Version 1 files (no device on any passkey)
-  load empty: those passkeys are dropped once on upgrade. Gap: a passkey synced to another device (iCloud / Google)
-  and used to sign *that* device in is still tied to the device that registered it; revoking the second device
-  leaves the passkey, so it can sign back in. `gerdr remote passkeys` still lists / deletes them one by one.
+  load empty: those passkeys are dropped once on upgrade. A passkey synced to another device (iCloud / Google) that
+  signs *that* device in or verifies it belongs to it too (`UsedBy`, `Passkeys.Link` in login/finish), so revoking
+  either device deletes it; the other device then can't use it to re-verify. `gerdr remote passkeys` still lists /
+  deletes them one by one.
 - 「全部踢掉」连 passkey 一起清（`auth.RevokeEverything`）：passkey 登录不要求认证，只清设备的话留着的 passkey 立刻换回一份新凭据。
 - passkey 能不能用按**请求的 Host** 算（`passkeyOK`），本机口上那几个口 409，界面上不画按钮。
 - `NotAllowedError` 不等于取消：700ms 内回来的照旧报出来（`lib/passkey.ts`、配对页里同一段）。

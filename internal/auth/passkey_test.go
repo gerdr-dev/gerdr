@@ -344,6 +344,16 @@ func TestRevokeDeviceTakesItsPasskeys(t *testing.T) {
 		t.Fatalf("only the other device's passkey should stay: %+v", l)
 	}
 
+	// A device that signed in with another device's (synced) passkey: revoking it deletes that passkey too
+	c, _ := s.NewDevice("Mac", "1.2.3.4", "")
+	p.Link("k2", c.ID)
+	if l := p.List(); len(l[0].Devices) != 2 {
+		t.Fatalf("the passkey should list both devices: %+v", l[0])
+	}
+	if _, keys, _ := RevokeDevice(s, p, c.ID); keys != 1 || p.Count() != 0 {
+		t.Fatalf("revoking a device that used the passkey: keys=%d left=%d", keys, p.Count())
+	}
+
 	if err := os.WriteFile(filepath.Join(dir, "passkeys.json"), []byte(`{"handle":"aGFuZGxl","keys":[{"id":"old","label":"x"}]}`), 0o600); err != nil {
 		t.Fatal(err)
 	}

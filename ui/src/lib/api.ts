@@ -616,8 +616,9 @@ export type RemoteDevice = {
   /** The phone App's key for re-verifying with Face ID / a fingerprint (server auth/appkey.go) */
   appKey?: { added: string } | null;
 };
-/** device: the device that registered it (the settings page shows passkeys under their device) */
-export type PasskeyInfo = { id: string; label: string; created: string; lastUsed: string; device?: string };
+/** device: the device that registered it; devices: every device it belongs to, those that signed in / verified with
+ * it too (the settings page shows passkeys under their devices) */
+export type PasskeyInfo = { id: string; label: string; created: string; lastUsed: string; device?: string; devices?: string[] };
 
 export type MCPAuth = {
   name: string;

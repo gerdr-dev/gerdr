@@ -729,14 +729,17 @@ func (s *Server) remotePasskey(w http.ResponseWriter, r *http.Request) {
 		}
 		rm.Gate.Reset(ip)
 		// 已经是配过对的设备：只是刷新「上次验证」时间，不新建设备
+		// Either way the passkey now belongs to this device too (Passkeys.Link): revoking the device takes it along
 		if id := rm.Auth.Authenticate(r); id != nil {
 			rm.Auth.MarkVerified(id.Device.ID)
+			rm.Passkeys.Link(k.ID, id.Device.ID)
 			writeJSON(w, map[string]any{"ok": true, "label": id.Label, "passkey": k.Label})
 			return
 		}
 		// 新设备：passkey 直接换一份设备凭据，不用回机器前拿配对码
 		dev, token := rm.Auth.NewDevice(r.UserAgent(), ip, "passkey")
 		rm.Auth.MarkVerified(dev.ID)
+		rm.Passkeys.Link(k.ID, dev.ID)
 		rm.Auth.IssueCookie(w, token)
 		writeJSON(w, map[string]any{"ok": true, "label": dev.Label, "passkey": k.Label})
 

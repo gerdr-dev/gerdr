@@ -44,6 +44,9 @@ type Passkey struct {
 	// deletes the passkeys it added (DeleteByDevice): a passkey sign-in needs no credential, so a kicked device
 	// whose passkey stayed would be back at once.
 	Device string `json:"device,omitempty"`
+	// UsedBy: other devices that signed in or verified with it (a passkey synced through iCloud / Google reaches
+	// devices that never registered it). They count as its devices too, so revoking one of them deletes it.
+	UsedBy []string `json:"usedBy,omitempty"`
 	// Cred 里是公钥和计数器，没有任何秘密
 	Cred webauthn.Credential `json:"cred"`
 }
@@ -55,6 +58,42 @@ type PasskeyInfo struct {
 	Created  time.Time `json:"created"`
 	LastUsed time.Time `json:"lastUsed"`
 	Device   string    `json:"device,omitempty"`
+	// Devices: every device it belongs to (the one that registered it, then those that used it)
+	Devices []string `json:"devices,omitempty"`
+}
+
+func (k *Passkey) devices() []string {
+	out := []string{}
+	if k.Device != "" {
+		out = append(out, k.Device)
+	}
+	return append(out, k.UsedBy...)
+}
+
+func (k *Passkey) belongsTo(device string) bool {
+	for _, d := range k.devices() {
+		if d == device {
+			return true
+		}
+	}
+	return false
+}
+
+// Link records that a device signed in or verified with this passkey (login/finish): it now belongs to that
+// device as well (Passkey.UsedBy).
+func (p *Passkeys) Link(passkeyID, device string) {
+	if p == nil || device == "" {
+		return
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for _, k := range p.keys {
+		if k.ID == passkeyID && !k.belongsTo(device) {
+			k.UsedBy = append(k.UsedBy, device)
+			p.saveLocked()
+			return
+		}
+	}
 }
 
 type PasskeyConfig struct {
@@ -173,7 +212,7 @@ func (p *Passkeys) List() []PasskeyInfo {
 	defer p.mu.Unlock()
 	out := make([]PasskeyInfo, 0, len(p.keys))
 	for _, k := range p.keys {
-		out = append(out, PasskeyInfo{ID: k.ID, Label: k.Label, Created: k.Created, LastUsed: k.LastUsed, Device: k.Device})
+		out = append(out, PasskeyInfo{ID: k.ID, Label: k.Label, Created: k.Created, LastUsed: k.LastUsed, Device: k.Device, Devices: k.devices()})
 	}
 	return out
 }
@@ -192,7 +231,7 @@ func (p *Passkeys) Delete(id string) (string, bool) {
 	return "", false
 }
 
-// DeleteByDevice deletes the passkeys a device registered, returning how many.
+// DeleteByDevice deletes the passkeys that belong to a device (registered or used by it), returning how many.
 func (p *Passkeys) DeleteByDevice(device string) int {
 	if p == nil || device == "" {
 		return 0
@@ -201,7 +240,7 @@ func (p *Passkeys) DeleteByDevice(device string) int {
 	defer p.mu.Unlock()
 	kept, n := p.keys[:0], 0
 	for _, k := range p.keys {
-		if k.Device == device {
+		if k.belongsTo(device) {
 			n++
 			continue
 		}
@@ -214,7 +253,8 @@ func (p *Passkeys) DeleteByDevice(device string) int {
 	return n
 }
 
-// RevokeDevice revokes one device and the passkeys it registered (see Passkey.Device).
+// RevokeDevice revokes one device and the passkeys that belong to it (Passkey.Device / UsedBy). A passkey shared
+// with another device goes too: kept, it would sign the revoked device straight back in.
 func RevokeDevice(s *Store, p *Passkeys, id string) (label string, keys int, ok bool) {
 	// Resolve a prefix to the full id first: Revoke takes prefixes, DeleteByDevice compares whole ids
 	for _, d := range s.Devices() {
