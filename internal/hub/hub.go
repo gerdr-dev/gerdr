@@ -283,7 +283,8 @@ type Hub struct {
 	// Ended: a session's conversation ended for the person — closed (no pane shows it any more, or `gerdr session
 	// close`), deleted, or cleared (/clear: the tab goes on with a new, empty conversation). What was tied to that
 	// conversation goes with it, like Claude Code's background tasks when its session closes (the waits:
-	// server/waitsapi.go). why: "closed" / "deleted" / "cleared". nil = nobody cares. Called outside the hub's locks.
+	// server/waitsapi.go; its helpers: server/report.go endHelpers). why: "closed" / "deleted" / "cleared". nil = nobody
+	// cares. Called outside the hub's locks.
 	Ended func(id, why string)
 
 	opt  Options

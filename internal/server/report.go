@@ -59,6 +59,13 @@ func (s *Server) RunReports(ctx context.Context) {
 	}
 	rp := newReporter(s)
 	go rp.loop(ctx)
+	prevEnded := s.Hub.Ended
+	s.Hub.Ended = func(id, why string) {
+		if prevEnded != nil {
+			prevEnded(id, why)
+		}
+		s.endHelpers(id, why)
+	}
 	// Sessions on other computers that report to a session here (or on yet another one): kept on this computer
 	// (peer.Manager.ReportTo), so it is this reporter that watches them (docs/dev/MULTIHOST.md)
 	if s.Peers != nil {
@@ -328,4 +335,26 @@ func writeReport(b *strings.Builder, sum hub.Summary, kind, reply string) {
 		b.WriteString("\n")
 	}
 	fmt.Fprintf(b, i18n.S("（全文：gerdr session read %s）", "(full text: gerdr session read %s)"), sum.ID)
+}
+
+// endHelpers closes the helpers of a session whose conversation ended (closed, deleted, cleared: Hub.Ended): the
+// sessions it started that report back to it (`gerdr session new --report-to self`, Parent and ReportTo both it). They
+// end with it the way a subagent ends with its agent: nobody looks after them any more, and a helper's next report
+// would only wake the closed session again. Each one closed ends its own helpers in turn. Not a session that merely
+// reports here (someone pointed `report-to` at it), nor one it started without reports (a board's worker, started by
+// the board's agent): those were handed on, not kept. Helpers on other computers aren't reached (yet).
+func (s *Server) endHelpers(id, why string) {
+	for _, sum := range s.Hub.List() {
+		if sum.ID == id || sum.Parent != id || sum.ReportTo != id {
+			continue
+		}
+		if s.Log != nil {
+			s.Log.Info("helper closed with the session it reports to", "helper", sum.ID, "session", id, "why", why)
+		}
+		go func(h string) {
+			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+			defer cancel()
+			_ = s.Hub.CloseUI(ctx, h)
+		}(sum.ID)
+	}
 }

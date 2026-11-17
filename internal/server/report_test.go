@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -233,5 +234,54 @@ func TestReportsQuestionsEvenByPerson(t *testing.T) {
 	defer mu.Unlock()
 	if len(texts) != 2 || !strings.Contains(texts[1], "只有用户能处理") || strings.Contains(texts[1], "gerdr session send") {
 		t.Fatalf("approval: %q", texts)
+	}
+}
+
+// A session's helpers (started by it and reporting to it) close with it, and theirs with them, like subagents with
+// their agent; a session that only reports to it, or one it started without reports, is left alone.
+func TestHelpersEndWithTheirSession(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "sessions"), 0o700)
+	recs := []hub.Record{
+		{ID: "boss", Agent: "claude", AgentSessionID: "a1"},
+		{ID: "h1", Agent: "claude", AgentSessionID: "a2", Parent: "boss", ReportTo: "boss"},
+		{ID: "h2", Agent: "claude", AgentSessionID: "a3", Parent: "h1", ReportTo: "h1"},
+		{ID: "pointed", Agent: "claude", AgentSessionID: "a4", ReportTo: "boss"},
+		{ID: "handed", Agent: "claude", AgentSessionID: "a5", Parent: "boss"},
+	}
+	b, _ := json.Marshal(recs)
+	os.WriteFile(filepath.Join(dir, "sessions", "index.json"), b, 0o600)
+	h, err := hub.New(hub.Options{Dir: dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(h.Close)
+	var mu sync.Mutex
+	ended := map[string]bool{}
+	h.Ended = func(id, why string) { mu.Lock(); ended[id] = true; mu.Unlock() }
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	(&Server{Hub: h}).RunReports(ctx)
+	if err := h.CloseUI(ctx, "boss"); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		mu.Lock()
+		done := ended["h1"] && ended["h2"]
+		mu.Unlock()
+		if done || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	time.Sleep(50 * time.Millisecond)
+	mu.Lock()
+	defer mu.Unlock()
+	if !ended["h1"] || !ended["h2"] {
+		t.Errorf("helpers not closed with boss: %v", ended)
+	}
+	if ended["pointed"] || ended["handed"] {
+		t.Errorf("closed a session that isn't boss's helper: %v", ended)
 	}
 }

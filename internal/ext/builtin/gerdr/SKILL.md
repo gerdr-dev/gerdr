@@ -102,8 +102,8 @@ gerdr session new --agent codex --title reviewer \
 - A panel's conversation (one a panel started, e.g. a board's worker) can only start a helper that reports back to it:
   `gerdr session new --cwd <repo> --report-to self` (add `--host <id>` for another computer); anything else is refused,
   because the panel looks after the agents it runs. You look after the helper like a subagent: its reports wake you,
-  you answer it (`gerdr session send`), the panel shows it under your task and closes it with the task. It doesn't
-  appear in Code. For a separate piece of work, do it the panel's way, as its instructions say.
+  you answer it (`gerdr session send`), the panel shows it under your task, and it closes with you (and with the task).
+  It doesn't appear in Code. For a separate piece of work, do it the panel's way, as its instructions say.
 - Gerdr records you as the new session's `parent` (also when a panel function you ran with `gerdr panel run` starts it),
   so who handed what to whom can be followed any number of levels deep — a panel can show that tree for its work.
   Starting a helper from your own session keeps the chain; don't hand work out through some other session.
@@ -226,6 +226,9 @@ reply and id (not when a turn the user drove by typing in that session's chat si
 you're busy, reports are held and arrive together when your turn ends; a report not delivered yet is lost if Gerdr
 restarts, so check with `gerdr session list` if one seems overdue. With `--report-to`, don't also `--wait` (you'd get
 the result twice).
+A session you start with `--report-to self` is your helper: when your conversation ends (closed, deleted, `/clear`)
+it is closed with you, and its own helpers with it, the way a subagent ends with its agent. To keep one going on its
+own, stop its reports first (`gerdr session report-to <it> none`).
 
 ```bash
 gerdr session new --cwd ~/code/api --title "fix login" --tag task=t12 --report-to self \
