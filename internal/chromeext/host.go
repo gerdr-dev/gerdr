@@ -25,8 +25,10 @@ func IsHostInvocation(args []string) bool {
 
 // RunHost is the native host: Chrome's native messaging on stdin / stdout (each message a 4-byte little-endian
 // length + JSON), relayed message by message to the running Gerdr's WebSocket (GET /api/browser/ext), and back.
-// Gerdr not running or restarting: dial again every 2 s (dial re-reads where Gerdr is each time). Chrome closing
-// stdin ends it.
+// Gerdr restarting: dial again every 2 s (dial re-reads where Gerdr is each time). Gerdr gone for ~10 s: exit, and
+// the extension starts a host again within 30 s from whatever manifest is current then — a host that kept retrying
+// would keep a dev instance's launcher, or an old App's path, alive for as long as Chrome runs. Chrome closing stdin
+// ends it too.
 func RunHost(origin string, dial func() (url string, header http.Header, err error)) error {
 	id := strings.TrimSuffix(strings.TrimPrefix(origin, "chrome-extension://"), "/")
 	if !slices.Contains(ExtensionIDs, id) {
@@ -91,11 +93,15 @@ func RunHost(origin string, dial func() (url string, header http.Header, err err
 		return err
 	}
 
+	failures := 0
 	for {
 		select {
 		case err := <-stdinDone:
 			return done(err)
 		default:
+		}
+		if failures >= 5 {
+			return errors.New("gerdr is not reachable")
 		}
 		var c *websocket.Conn
 		u, header, err := dial()
@@ -104,6 +110,7 @@ func RunHost(origin string, dial func() (url string, header http.Header, err err
 			c, _, err = d.Dial(u+"?ext="+id, header)
 		}
 		if err != nil {
+			failures++
 			select {
 			case err := <-stdinDone:
 				return done(err)
@@ -111,6 +118,7 @@ func RunHost(origin string, dial func() (url string, header http.Header, err err
 			}
 			continue
 		}
+		failures = 0
 		c.SetReadLimit(1 << 20)
 		mu.Lock()
 		ws = c
