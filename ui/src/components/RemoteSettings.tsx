@@ -75,6 +75,67 @@ export function RemoteSettings({ open }: { open: boolean }) {
     load();
   };
 
+  const approveApp = () => window.dispatchEvent(new Event("gerdr:cli-approve"));
+  // Passkeys are shown under the device that added them (passkeys.json v2)
+  const keyCount = (device: string) => keys.filter((k) => k.device === device).length;
+  const meDev = devs.find((d) => d.id === me);
+
+  // This device's row: a way to keep it signed in, when it has none yet. The phone Apps turn on their Face ID /
+  // fingerprint key; a browser adds a passkey; the iOS App (no passkeys in it, an older shell without the key)
+  // hands over to Safari.
+  const AddFactor = () => {
+    if (!meDev || meDev.appKey || keyCount(me) > 0) return null;
+    if (bioOK)
+      return (
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={bioBusy}
+          onClick={() =>
+            run(async () => {
+              setBioBusy(true);
+              try {
+                // Within minutes of a presence proof the server takes the key now; later the computer approves first
+                if (!(await api.remoteWhoami()).appKeyFresh) return setBioStepUp(true);
+                await enrollAppKey();
+                setMsg(t("keepDevice.done", { what: biometricName() }));
+              } finally {
+                setBioBusy(false);
+              }
+            })
+          }
+        >
+          {bioBusy ? t("keepDevice.busy") : t("remoteSettings.bioEnable", { bio: biometricName() })}
+        </Button>
+      );
+    if (!pkOK) return null;
+    if (isIOSApp())
+      // Safari has its own cookies: a one-time link signs it in as this device, so it doesn't land on pairing
+      return (
+        <Button size="sm" variant="outline" onClick={() => run(async () => openInBrowser((await api.remoteHandoff()).url))}>
+          {t("remoteSettings.addPasskeyBrowser")}
+        </Button>
+      );
+    return (
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={() =>
+          run(async () => {
+            try {
+              setMsg(t("remoteSettings.added", { label: await registerPasskey() }));
+            } catch (e) {
+              if (!isStepUp(e)) throw e;
+              setStepUp(true); // past the minutes after pairing: prove it's you first (PasskeyStepUp)
+            }
+          })
+        }
+      >
+        {t("remoteSettings.addPasskey")}
+      </Button>
+    );
+  };
+
   if (!st) return <div className="text-[13px] text-muted-foreground">{err || "…"}</div>;
 
   return (
@@ -176,9 +237,22 @@ export function RemoteSettings({ open }: { open: boolean }) {
                       {t("remoteSettings.codeValid", { time: new Date(pair.expires).toLocaleTimeString() })}
                       {st.pairMinutes > 0 && t("remoteSettings.tempMinutes", { n: st.pairMinutes })}
                     </div>
+                    {/* The phone Apps: the address to type, and the other way in (an 8-digit code approved here) */}
+                    <div className="space-y-1.5 border-t pt-2 text-[12px] text-muted-foreground">
+                      <div className="break-all">{t("remoteSettings.appHint", { url: st.url ?? "" })}</div>
+                      <Button size="sm" variant="outline" onClick={approveApp}>
+                        {t("remoteSettings.approveApp")}
+                      </Button>
+                    </div>
                   </PopoverContent>
                 )}
               </Popover>
+            )}
+            {/* On a remote device there's no pairing code to hand out; approving an App's code is the way to add one */}
+            {st.enabled && isRemote && (
+              <Button size="sm" variant="outline" onClick={approveApp}>
+                {t("remoteSettings.approveApp")}
+              </Button>
             )}
             {devs.length + keys.length > 0 && (
               // 两下才生效：这是急停，连 passkey 一起清（只清设备的话，留着的 passkey 能立刻换回一份新凭据）
@@ -214,6 +288,7 @@ export function RemoteSettings({ open }: { open: boolean }) {
                   {d.label}
                   {d.id === me && <span className="ml-2 text-[11px] text-brand">{t("remoteSettings.thisDevice")}</span>}
                   {/* 配对码进来的临时设备：到点就掉，在那台设备上过一次 passkey 才转正（auth.Device.Temp） */}
+                  {keyCount(d.id) > 0 && <span className="ml-2 text-[11px] text-muted-foreground">Passkey</span>}
                   {d.appKey && <span className="ml-2 text-[11px] text-muted-foreground">{t("remoteSettings.appKey")}</span>}
                   {d.temp && (
                     <span className="ml-2 text-[11px] text-warn">
@@ -225,6 +300,7 @@ export function RemoteSettings({ open }: { open: boolean }) {
                   {t("remoteSettings.deviceMeta", { seen: when(d.lastSeen), ip: d.lastIp, created: when(d.created) })}
                 </div>
               </div>
+              {d.id === me && !stepUp && !bioStepUp && <AddFactor />}
               {/* Re-verify without kicking it (gerdr remote reverify): only where re-verification exists at all — a
                   passkey registered or the device's own App key, not another Gerdr, not a temporary device that dies on its own anyway */}
               {(keys.length > 0 || d.appKey) && !d.peer && !d.temp && (
@@ -253,6 +329,7 @@ export function RemoteSettings({ open }: { open: boolean }) {
               <Button
                 size="sm"
                 variant="ghost"
+                title={keyCount(d.id) > 0 ? t("remoteSettings.revokeWithKeys") : undefined}
                 onClick={() =>
                   run(async () => {
                     await api.remoteRevoke(d.id);
@@ -265,78 +342,6 @@ export function RemoteSettings({ open }: { open: boolean }) {
             </div>
           ))}
         </div>
-      </div>
-
-      {st.enabled && (
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between">
-            <div className="text-[13px] font-medium">{t("remoteSettings.android")}</div>
-            <Button size="sm" variant="outline" onClick={() => window.dispatchEvent(new Event("gerdr:cli-approve"))}>
-              {t("remoteSettings.approveApp")}
-            </Button>
-          </div>
-          <div className="text-[12px] text-muted-foreground">
-            {t("remoteSettings.androidHint", { url: st.url ?? "" })}
-            {st.lanErr && <span className="text-bad"> {st.lanErr}</span>}
-          </div>
-        </div>
-      )}
-
-      {isRemote && bioOK && me && (
-        <BioSetting
-          on={!!devs.find((d) => d.id === me)?.appKey}
-          busy={bioBusy}
-          stepUp={bioStepUp}
-          onEnable={() =>
-            run(async () => {
-              setBioBusy(true);
-              try {
-                // Within minutes of a presence proof the server takes the key now; later the computer approves first
-                if (!(await api.remoteWhoami()).appKeyFresh) return setBioStepUp(true);
-                await enrollAppKey();
-                setMsg(t("keepDevice.done", { what: biometricName() }));
-              } finally {
-                setBioBusy(false);
-              }
-            })
-          }
-          onStepUpDone={() => {
-            setBioStepUp(false);
-            setMsg(t("keepDevice.done", { what: biometricName() }));
-            load();
-          }}
-          onStepUpCancel={() => setBioStepUp(false)}
-        />
-      )}
-
-      <div className="space-y-1.5">
-        <div className="flex items-center justify-between">
-          <div className="text-[13px] font-medium">passkey</div>
-          {pkOK && !stepUp && isIOSApp() && (
-            // Safari has its own cookies: a one-time link signs it in as this device, so it doesn't land on pairing
-            <Button size="sm" variant="outline" onClick={() => run(async () => openInBrowser((await api.remoteHandoff()).url))}>
-              {t("remoteSettings.addPasskeyBrowser")}
-            </Button>
-          )}
-          {pkOK && !stepUp && !isIOSApp() && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() =>
-                run(async () => {
-                  try {
-                    setMsg(t("remoteSettings.added", { label: await registerPasskey() }));
-                  } catch (e) {
-                    if (!isStepUp(e)) throw e;
-                    setStepUp(true); // 已经有 passkey 了：先证明是本人（PasskeyStepUp）
-                  }
-                })
-              }
-            >
-              {t("remoteSettings.addPasskey")}
-            </Button>
-          )}
-        </div>
         {stepUp && (
           <PasskeyStepUp
             onCancel={() => setStepUp(false)}
@@ -347,26 +352,21 @@ export function RemoteSettings({ open }: { open: boolean }) {
             }}
           />
         )}
+        {bioStepUp && (
+          <PasskeyStepUp
+            bio
+            onCancel={() => setBioStepUp(false)}
+            onDone={() => {
+              setBioStepUp(false);
+              setMsg(t("keepDevice.done", { what: biometricName() }));
+              load();
+            }}
+          />
+        )}
         <div className="text-[12px] text-muted-foreground">
-          {t("remoteSettings.passkeyHint", { hours: st.reauthHours || "—", max: st.reauthHours ? st.reauthHours * 2 : "—" })}
-          {isIOSApp() && t("remoteSettings.passkeyIOS")}
-          {!pkOK && st.enabled && t("remoteSettings.passkeyHost", { host: st.host ?? "" })}
-        </div>
-        <div className="divide-y rounded-md border">
-          {keys.length === 0 && <div className="p-3 text-muted-foreground">{t("remoteSettings.none")}</div>}
-          {keys.map((k) => (
-            <div key={k.id} className="flex items-center gap-3 px-3 py-2">
-              <div className="min-w-0 flex-1">
-                <div className="truncate">{k.label}</div>
-                <div className="truncate text-[11px] text-muted-foreground">
-                  {t("remoteSettings.passkeyMeta", { created: when(k.created), used: when(k.lastUsed) })}
-                </div>
-              </div>
-              <Button size="sm" variant="ghost" onClick={() => run(() => api.remoteDeletePasskey(k.id))}>
-                {t("remoteSettings.delete")}
-              </Button>
-            </div>
-          ))}
+          {t("remoteSettings.reauthHint", { hours: st.reauthHours || "—" })}
+          {isRemote && !pkOK && st.enabled && t("remoteSettings.passkeyHost", { host: st.host ?? "" })}
+          {st.lanErr && <span className="text-bad"> {st.lanErr}</span>}
         </div>
       </div>
 
@@ -384,26 +384,6 @@ export function RemoteSettings({ open }: { open: boolean }) {
           {t("remoteSettings.logout")}
         </Button>
       )}
-    </div>
-  );
-}
-
-// This device's Face ID / fingerprint re-verification (the phone Apps' App key, auth/appkey.go). Turning it on
-// keeps a temporary device, so it's the person's choice here or in the prompt after pairing, never automatic.
-function BioSetting(p: { on: boolean; busy: boolean; stepUp: boolean; onEnable: () => void; onStepUpDone: () => void; onStepUpCancel: () => void }) {
-  const bio = biometricName();
-  return (
-    <div className="space-y-1.5">
-      <div className="flex items-center justify-between">
-        <div className="text-[13px] font-medium">{t("remoteSettings.bioTitle", { bio })}</div>
-        {!p.on && !p.stepUp && (
-          <Button size="sm" variant="outline" disabled={p.busy} onClick={p.onEnable}>
-            {p.busy ? t("keepDevice.busy") : t("remoteSettings.bioEnable")}
-          </Button>
-        )}
-      </div>
-      {p.stepUp && <PasskeyStepUp bio onDone={p.onStepUpDone} onCancel={p.onStepUpCancel} />}
-      <div className="text-[12px] text-muted-foreground">{t(p.on ? "remoteSettings.bioOn" : "remoteSettings.bioOff", { bio })}</div>
     </div>
   );
 }

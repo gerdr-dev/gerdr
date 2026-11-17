@@ -29,7 +29,7 @@ func remoteServerWithPasskey(t *testing.T, edit ...func(*config.Remote)) (*Serve
 	dir := t.TempDir()
 	rd := config.RemoteDir(dir)
 	_ = os.MkdirAll(rd, 0o700)
-	if err := os.WriteFile(filepath.Join(rd, "passkeys.json"), []byte(`{"handle":"aGFuZGxl","keys":[{"id":"k1","label":"test"}]}`), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(rd, "passkeys.json"), []byte(`{"v":2,"handle":"aGFuZGxl","keys":[{"id":"k1","label":"test"}]}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	cfg := config.Remote{RelayURL: "https://relay.example.com", Host: testHost, DeviceTTL: 24 * time.Hour, ReauthAfter: 24 * time.Hour,

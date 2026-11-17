@@ -229,6 +229,13 @@ GERDR_* 本来就不往 agent 的环境里传（`sysenv.ChildEnv`）；acme 把�
   （实测 Android Edge）。所以还有一条「到电脑上批准」（`auth/approve.go`）：远程设备发起请求，本机设置页（和一条通知）
   显示请求 + 四位核对码，点批准 → `Store.GrantStepUp` 给那台设备写 PasskeyAt。批准和待批列表只在本机口 —— 远程能批的话，
   偷来的 cookie 自己批自己。批准之后手机上还要人再点一下才注册：WebAuthn 的 create 要用户手势，轮询到了直接调会被拒。
+- **Passkeys belong to the device that added them** (`Passkey.Device`, passkeys.json `v: 2`, 2026-11-17, the
+  user's call): Settings → Remote access lists devices only, a passkey shows as a tag on its device, and revoking a
+  device deletes the passkeys it added (`auth.RevokeDevice`, also `gerdr remote revoke`), since a passkey sign-in
+  needs no credential and would bring a kicked device straight back. Version 1 files (no device on any passkey)
+  load empty: those passkeys are dropped once on upgrade. Gap: a passkey synced to another device (iCloud / Google)
+  and used to sign *that* device in is still tied to the device that registered it; revoking the second device
+  leaves the passkey, so it can sign back in. `gerdr remote passkeys` still lists / deletes them one by one.
 - 「全部踢掉」连 passkey 一起清（`auth.RevokeEverything`）：passkey 登录不要求认证，只清设备的话留着的 passkey 立刻换回一份新凭据。
 - passkey 能不能用按**请求的 Host** 算（`passkeyOK`），本机口上那几个口 409，界面上不画按钮。
 - `NotAllowedError` 不等于取消：700ms 内回来的照旧报出来（`lib/passkey.ts`、配对页里同一段）。

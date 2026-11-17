@@ -40,6 +40,10 @@ type Passkey struct {
 	Label    string    `json:"label"`
 	Created  time.Time `json:"created"`
 	LastUsed time.Time `json:"lastUsed"`
+	// Device: the device that registered it. The settings page lists devices, not passkeys, and revoking a device
+	// deletes the passkeys it added (DeleteByDevice): a passkey sign-in needs no credential, so a kicked device
+	// whose passkey stayed would be back at once.
+	Device string `json:"device,omitempty"`
 	// Cred 里是公钥和计数器，没有任何秘密
 	Cred webauthn.Credential `json:"cred"`
 }
@@ -50,6 +54,7 @@ type PasskeyInfo struct {
 	Label    string    `json:"label"`
 	Created  time.Time `json:"created"`
 	LastUsed time.Time `json:"lastUsed"`
+	Device   string    `json:"device,omitempty"`
 }
 
 type PasskeyConfig struct {
@@ -168,7 +173,7 @@ func (p *Passkeys) List() []PasskeyInfo {
 	defer p.mu.Unlock()
 	out := make([]PasskeyInfo, 0, len(p.keys))
 	for _, k := range p.keys {
-		out = append(out, PasskeyInfo{ID: k.ID, Label: k.Label, Created: k.Created, LastUsed: k.LastUsed})
+		out = append(out, PasskeyInfo{ID: k.ID, Label: k.Label, Created: k.Created, LastUsed: k.LastUsed, Device: k.Device})
 	}
 	return out
 }
@@ -185,6 +190,43 @@ func (p *Passkeys) Delete(id string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// DeleteByDevice deletes the passkeys a device registered, returning how many.
+func (p *Passkeys) DeleteByDevice(device string) int {
+	if p == nil || device == "" {
+		return 0
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	kept, n := p.keys[:0], 0
+	for _, k := range p.keys {
+		if k.Device == device {
+			n++
+			continue
+		}
+		kept = append(kept, k)
+	}
+	p.keys = kept
+	if n > 0 {
+		p.saveLocked()
+	}
+	return n
+}
+
+// RevokeDevice revokes one device and the passkeys it registered (see Passkey.Device).
+func RevokeDevice(s *Store, p *Passkeys, id string) (label string, keys int, ok bool) {
+	// Resolve a prefix to the full id first: Revoke takes prefixes, DeleteByDevice compares whole ids
+	for _, d := range s.Devices() {
+		if d.ID == id || (len(id) >= 4 && strings.HasPrefix(d.ID, id)) {
+			id = d.ID
+			break
+		}
+	}
+	if label, ok = s.Revoke(id); !ok {
+		return "", 0, false
+	}
+	return label, p.DeleteByDevice(id), true
 }
 
 // DeleteAll 清空所有 passkey，返回清掉几把。
@@ -224,7 +266,13 @@ func RevokeEverything(s *Store, p *Passkeys) (devs, keys int) {
 
 func (p *Passkeys) file() string { return filepath.Join(p.cfg.Dir, "passkeys.json") }
 
+// passkeyFileVersion 2: passkeys carry the device that registered them. Version 1 files' passkeys are dropped on
+// load (user decision, 2026-11-17): they can't be shown under a device or go with it when it's revoked, and adding
+// one again takes a tap.
+const passkeyFileVersion = 2
+
 type passkeyFile struct {
+	V      int        `json:"v,omitempty"`
 	Handle string     `json:"handle"`
 	Keys   []*Passkey `json:"keys"`
 }
@@ -247,6 +295,13 @@ func (p *Passkeys) load() error {
 		p.handle = randBytes(32)
 	}
 	p.keys = f.Keys
+	if f.V < passkeyFileVersion {
+		p.keys = nil
+		if len(f.Keys) > 0 {
+			p.saveLocked() // notes the file for the tamper guard too
+			return nil
+		}
+	}
 	p.guard.note(p.file())
 	return nil
 }
@@ -256,7 +311,7 @@ func (p *Passkeys) saveLocked() {
 		return
 	}
 	b, err := json.MarshalIndent(passkeyFile{
-		Handle: base64.StdEncoding.EncodeToString(p.handle), Keys: p.keys,
+		V: passkeyFileVersion, Handle: base64.StdEncoding.EncodeToString(p.handle), Keys: p.keys,
 	}, "", "  ")
 	if err != nil {
 		return
@@ -319,7 +374,7 @@ func (p *Passkeys) BeginRegister() (any, string, error) {
 	return opts, p.stashLocked(session), nil
 }
 
-func (p *Passkeys) FinishRegister(ceremony, ua string, r *http.Request) (*Passkey, error) {
+func (p *Passkeys) FinishRegister(ceremony, ua, device string, r *http.Request) (*Passkey, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.w == nil { // 锁里判：SetRP 随时可能把它换成 nil
@@ -337,7 +392,7 @@ func (p *Passkeys) FinishRegister(ceremony, ua string, r *http.Request) (*Passke
 	now := p.now()
 	k := &Passkey{
 		ID: hex.EncodeToString(randBytes(6)), Label: LabelFromUA(ua),
-		Created: now, LastUsed: now, Cred: *cred,
+		Created: now, LastUsed: now, Cred: *cred, Device: device,
 	}
 	p.keys = append(p.keys, k)
 	p.saveLocked()

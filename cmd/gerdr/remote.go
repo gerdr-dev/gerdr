@@ -127,7 +127,7 @@ func remoteCmd() *cobra.Command {
 	})
 	cmd.AddCommand(&cobra.Command{
 		Use:   i18n.S("revoke <设备 id|all>", "revoke <device-id|all>"),
-		Short: i18n.S("踢掉一台设备（all = 全部设备 + 全部 passkey）", "Revoke a device (all = every device + every passkey)"),
+		Short: i18n.S("踢掉一台设备，连同它加的 passkey（all = 全部设备 + 全部 passkey）", "Revoke a device and the passkeys it added (all = every device + every passkey)"),
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			arg := args[0]
@@ -156,11 +156,11 @@ func remoteCmd() *cobra.Command {
 				fmt.Println("  " + revokedMsg(arg, n, k, ""))
 				return nil
 			}
-			label, ok := s.Auth.Revoke(arg)
+			label, keys, ok := auth.RevokeDevice(s.Auth, s.Passkeys, arg)
 			if !ok {
 				return fmt.Errorf(i18n.S("没有这台设备：%s", "no such device: %s"), arg)
 			}
-			fmt.Println("  " + revokedMsg(arg, 1, 0, label))
+			fmt.Println("  " + revokedMsg(arg, 1, keys, label))
 			return nil
 		},
 	})
@@ -274,6 +274,9 @@ func remoteCmd() *cobra.Command {
 func revokedMsg(arg string, n, keys int, label string) string {
 	if !i18n.IsZH() {
 		if arg != "all" {
+			if keys > 0 {
+				return fmt.Sprintf("Revoked %s and deleted the %d %s it added", label, keys, plural(keys, "passkey", "passkeys"))
+			}
 			return "Revoked " + label
 		}
 		if keys == 0 {
@@ -282,6 +285,9 @@ func revokedMsg(arg string, n, keys int, label string) string {
 		return fmt.Sprintf("Revoked %d %s and deleted %d %s (an emergency stop has to remove the factor too, or a passkey login could get fresh credentials right away)", n, plural(n, "device", "devices"), keys, plural(keys, "passkey", "passkeys"))
 	}
 	if arg != "all" {
+		if keys > 0 {
+			return fmt.Sprintf("踢掉了 %s，连同它加的 %d 把 passkey", label, keys)
+		}
 		return "踢掉了 " + label
 	}
 	if keys == 0 {

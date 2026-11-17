@@ -454,7 +454,8 @@ func (s *Server) remoteRoutes(mux *http.ServeMux) {
 		writeJSON(w, map[string]any{"revoked": n, "passkeys": keys})
 	})
 	mux.HandleFunc("DELETE /api/remote/devices/{id}", func(w http.ResponseWriter, r *http.Request) {
-		label, ok := s.Remote.Auth.Revoke(r.PathValue("id"))
+		// Its passkeys go with it (auth.RevokeDevice): one left behind would sign it straight back in
+		label, keys, ok := auth.RevokeDevice(s.Remote.Auth, s.Remote.Passkeys, r.PathValue("id"))
 		if !ok {
 			httpError(w, 404, i18n.S("没有这台设备", "No such device"))
 			return
@@ -463,7 +464,7 @@ func (s *Server) remoteRoutes(mux *http.ServeMux) {
 		if s.myDevice(r) == r.PathValue("id") {
 			s.Remote.Auth.ClearCookie(w)
 		}
-		writeJSON(w, map[string]any{"revoked": 1, "label": label})
+		writeJSON(w, map[string]any{"revoked": 1, "label": label, "passkeys": keys})
 	})
 	// Make a device re-verify on its next request without kicking it (auth.RequireReverify). Allowed from remote
 	// like revoke, which it is a milder form of.
@@ -691,7 +692,7 @@ func (s *Server) remotePasskey(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, map[string]any{"options": opts, "ceremony": ceremony})
 			return
 		}
-		k, err := rm.Passkeys.FinishRegister(r.URL.Query().Get("c"), r.UserAgent(), r)
+		k, err := rm.Passkeys.FinishRegister(r.URL.Query().Get("c"), r.UserAgent(), id.Device.ID, r)
 		if err != nil {
 			httpError(w, 400, err.Error())
 			return

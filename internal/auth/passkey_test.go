@@ -2,6 +2,8 @@ package auth
 
 import (
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -319,5 +321,40 @@ func TestRevokeEverythingClearsPasskeys(t *testing.T) {
 	// 数目要如实回报：调用方靠它决定说不说那句「顺带删了 N 把」
 	if devs, keys := RevokeEverything(s, p); devs != 0 || keys != 0 {
 		t.Errorf("已经空了还报 (%d, %d)", devs, keys)
+	}
+}
+
+// Revoking a device deletes the passkeys it registered (a passkey sign-in would bring it straight back) and only
+// those; a version 1 file (passkeys with no device) loads empty.
+func TestRevokeDeviceTakesItsPasskeys(t *testing.T) {
+	dir := t.TempDir()
+	s := newStore(t, Config{TTL: 24 * time.Hour})
+	p, err := NewPasskeys(PasskeyConfig{Dir: dir, RPID: "localhost", Origins: []string{"http://localhost:7788"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, _ := s.NewDevice("iPhone", "1.2.3.4", "")
+	b, _ := s.NewDevice("Mac", "1.2.3.4", "")
+	p.keys = []*Passkey{{ID: "k1", Device: a.ID}, {ID: "k2", Device: b.ID}, {ID: "k3", Device: a.ID}}
+	p.saveLocked()
+	if _, keys, ok := RevokeDevice(s, p, a.ID[:6]); !ok || keys != 2 {
+		t.Fatalf("revoke by prefix: ok=%v keys=%d", ok, keys)
+	}
+	if l := p.List(); len(l) != 1 || l[0].ID != "k2" {
+		t.Fatalf("only the other device's passkey should stay: %+v", l)
+	}
+
+	if err := os.WriteFile(filepath.Join(dir, "passkeys.json"), []byte(`{"handle":"aGFuZGxl","keys":[{"id":"old","label":"x"}]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	p2, err := NewPasskeys(PasskeyConfig{Dir: dir, RPID: "localhost", Origins: []string{"http://localhost:7788"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p2.Count() != 0 {
+		t.Fatalf("a version 1 file's passkeys should be dropped: %d", p2.Count())
+	}
+	if string(p2.handle) != "handle" {
+		t.Fatal("the user handle must survive the migration")
 	}
 }
