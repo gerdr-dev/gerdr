@@ -74,6 +74,7 @@ export type OptGroup = { id: string; label: string; value: string; options: Opt[
 // 其它模式（默认、自动、接受编辑）平时就那样，收起来不占地方
 const LOUD_MODE = /plan|read-?only|bypass|full-access|dontAsk/i;
 
+// The model and effort as one button (desktop: the mode stays its own dropdown); on a phone the mode folds in too.
 // 手机上输入框底栏放不下模式 / 模型 / 思考强度三个下拉（挤得要横着滑）：收成一个按钮，
 // 点开是一张按组排的单列菜单 —— 不用子菜单，触屏上子菜单往右弹会出屏幕。
 // 按钮上写模型和思考强度（「Opus 5.5 · medium」，要一眼看得到在用哪个）；模式平时就那样，只有落在 LOUD_MODE 里才写出来。
@@ -82,8 +83,11 @@ export function OptionsMenu({
   mode,
   onSetDefault,
   short,
+  chevron,
 }: {
   groups: OptGroup[];
+  /** The full (desktop) row: the model + effort menu, with the same arrow as the single dropdowns */
+  chevron?: boolean;
   mode?: OptGroup;
   onSetDefault?: () => void;
   /** No room on the row: 1 = model and a loud mode, 2 = only the model (the rest is one tap away in the menu) */
@@ -106,6 +110,7 @@ export function OptionsMenu({
         {!summary && !modeName && <SlidersHorizontal className="size-4" />}
         {modeName && <span className="max-w-28 shrink-0 truncate">{modeName}</span>}
         {summary && <span className="truncate">{summary}</span>}
+        {chevron && <ChevronDown className="-ml-0.5 size-3 shrink-0 opacity-60" />}
       </DropdownMenuTrigger>
       <DropdownMenuContent side="top" align="start" className="max-h-[60vh] w-72 overflow-auto" onCloseAutoFocus={(e) => e.preventDefault()}>
         {all.map((g, i) => (

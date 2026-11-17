@@ -1208,7 +1208,9 @@ const ComposerImpl = forwardRef<
                 }
               />
             ) : (
-              [modeGroup, ...optGroups].map(
+              // The mode keeps its own dropdown; the model and its effort (and any other agent options) share one, so
+              // the row reads "Opus 5.5 · medium" as one thing and choosing both is one menu (user ask)
+              [modeGroup, ...(optGroups.length > 1 ? [] : optGroups)].map(
                 (g) =>
                   g && (
                     <OptionMenu
@@ -1228,6 +1230,19 @@ const ComposerImpl = forwardRef<
                     />
                   ),
               )
+            )}
+            {!compact && optGroups.length > 1 && (
+              <OptionsMenu
+                groups={optGroups}
+                chevron
+                onSetDefault={
+                  defaults &&
+                  (() => {
+                    defaults.setAll(Object.fromEntries(optGroups.map((g) => [g.id, g.value])));
+                    toast.success(tr("composer.defaultsSaved"));
+                  })
+                }
+              />
             )}
             {host.composerBar?.(session, { paneId })}
           </div>
