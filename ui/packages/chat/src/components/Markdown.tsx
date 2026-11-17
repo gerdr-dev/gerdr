@@ -17,10 +17,52 @@ const rehypePlugins = [...Object.values(defaultRehypePlugins), rehypePaths, rehy
 
 // GFM by default also reads a pair of single tildes as strikethrough, so a sentence naming two home paths
 // (`~/.claude.json、~/.codex/config.toml`) came out crossed through. Only `~~text~~` strikes now.
-const remarkPlugins = Object.values({
-  ...defaultRemarkPlugins,
-  gfm: [(defaultRemarkPlugins.gfm as [any, object])[0], { singleTilde: false }],
-}) as StreamdownProps["remarkPlugins"];
+const remarkPlugins = [
+  ...Object.values({
+    ...defaultRemarkPlugins,
+    gfm: [(defaultRemarkPlugins.gfm as [any, object])[0], { singleTilde: false }],
+  }),
+  remarkCjkAutolinks,
+] as StreamdownProps["remarkPlugins"];
+
+// GFM's bare-URL links run until whitespace, and Chinese has none: `打开 https://a.com/app，注册账号。` linked the
+// whole rest of the sentence. A bare URL now ends at the first full-width / CJK punctuation mark (never legal in a
+// URL unencoded, unlike CJK letters: `https://zh.wikipedia.org/wiki/中国` stays whole). Written links (`[x](url)`,
+// `<url>`) are left alone: their end is explicit.
+const cjkPunct = /[　-〿！-／：-＠［-｀｛-･‘’“”…—]/;
+
+function remarkCjkAutolinks() {
+  return (tree: any, file: any) => {
+    const src = String(file?.value ?? "");
+    const walk = (node: any) => {
+      const kids = node.children;
+      if (!Array.isArray(kids)) return;
+      for (let i = 0; i < kids.length; i++) {
+        const k = kids[i];
+        if (k.type !== "link") {
+          walk(k);
+          continue;
+        }
+        const text = k.children?.length === 1 && k.children[0].type === "text" ? (k.children[0].value as string) : null;
+        const start = k.position?.start?.offset;
+        if (text == null || start == null || src[start] === "[" || src[start] === "<") continue;
+        const cut = text.search(cjkPunct);
+        if (cut <= 0) continue;
+        const head = text.slice(0, cut);
+        const tail = text.slice(cut);
+        // The url carries the same text after a scheme GFM may have added (www. → http://www., mail → mailto:).
+        const at = k.url.lastIndexOf(text);
+        if (at < 0 || at + text.length !== k.url.length) continue;
+        k.url = k.url.slice(0, at) + head;
+        k.children[0].value = head;
+        const next = kids[i + 1];
+        if (next?.type === "text") next.value = tail + next.value;
+        else kids.splice(i + 1, 0, { type: "text", value: tail });
+      }
+    };
+    walk(tree);
+  };
+}
 
 const DefaultA = (defaultComponents as Record<string, any>).a ?? "a";
 
