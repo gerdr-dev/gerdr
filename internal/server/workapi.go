@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/gerdr-dev/gerdr/internal/i18n"
 	"github.com/gerdr-dev/gerdr/internal/uisite"
 	"github.com/gerdr-dev/gerdr/internal/work"
 )
@@ -357,6 +358,15 @@ func (s *Server) workRoutes(mux *http.ServeMux) {
 			if sess, err := s.Hub.Session(b.From); err == nil {
 				b.Project = callerPanel(sess.Summary().Tags[PanelTag], b.Project)
 			}
+		}
+		// Nothing said which panel (no --project, a directory that isn't a panel's, not from an agent conversation or
+		// a panel's command) and the guess, the default project's own panel, is gone: say that, not "the panel was
+		// removed", which reads as something being broken
+		if b.From == "" && (b.Project == "" || b.Project == work.DefaultProject) && s.Work.WorkRemoved(work.DefaultProject) {
+			httpError(w, 400, i18n.S(
+				"不知道要在哪个面板里运行：当前目录不在任何面板里，也不是从 Gerdr 的会话或面板里调用的。用 --project <项目>/<面板> 指明（gerdr panel list --project <项目> 能看到面板的 key）",
+				"can't tell which panel to run this in: the current directory isn't a panel's and this isn't called from a Gerdr conversation or panel. Name it with --project <project>/<panel> (gerdr panel list --project <project> shows the keys)"))
+			return
 		}
 		run := s.Work.StartAs(b.Project, b.Fn, b.Input, b.From)
 		if strings.Contains(r.Header.Get("Accept"), "text/event-stream") {

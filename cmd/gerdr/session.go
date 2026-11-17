@@ -1234,7 +1234,7 @@ func fail(err error) {
 func workCmd() *cobra.Command {
 	cmd := &cobra.Command{Use: "work", Short: "Old name of gerdr panel run / functions / logs / schedules / triggers / secret / status", Hidden: true}
 	var project string
-	cmd.PersistentFlags().StringVar(&project, "project", "", "project id (default: the one the current directory belongs to)")
+	cmd.PersistentFlags().StringVar(&project, "project", "", "project id (default: the one the current directory belongs to, else the panel whose ctx.exec started this command)")
 	cmd.AddCommand(panelFnCmds(func() string {
 		if project != "" {
 			return project
@@ -1516,7 +1516,7 @@ func panelCmd() *cobra.Command {
 	}
 	client := func() (*apiClient, error) { return newAPIClient() }
 	cmd := &cobra.Command{Use: "panel", Short: "A project's panels: list, install from git, add a blank one, update, change the icon, reorder, put a dot / number on its button, remove; and run what's in one (run, functions, logs, schedules, triggers, secret, status)"}
-	cmd.PersistentFlags().StringVar(&projectArg, "project", "", "project id, or a panel's key (<project>/<name>) for run / functions / logs …  (default: the one the current directory belongs to)")
+	cmd.PersistentFlags().StringVar(&projectArg, "project", "", "project id, or a panel's key (<project>/<name>) for run / functions / logs …  (default: the one the current directory belongs to, else the panel whose ctx.exec started this command)")
 	cmd.AddCommand(panelFnCmds(which)...)
 	cmd.AddCommand(&cobra.Command{
 		Use:   "list",

@@ -90,7 +90,8 @@ func (r *runner) exec(name string, args, opts jsValue) *promise {
 	if ms := intOf(o["timeout"], 0); ms > 0 {
 		timeout = min(time.Duration(ms)*time.Millisecond, execMaxTimeout)
 	}
-	var env []string
+	// The panel itself first, so `gerdr panel run …` in the command reaches it (PanelEnv); the caller's env may override
+	env := []string{PanelEnv + "=" + r.project}
 	if m, ok := o["env"].(map[string]any); ok {
 		for k, v := range m {
 			if v != nil {

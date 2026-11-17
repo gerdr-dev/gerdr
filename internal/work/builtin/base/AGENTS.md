@@ -124,7 +124,8 @@ and their choices are what they set or wrote down, not what the code says.
     others are added. So code that turns something on for the user, or saves their edit of a skill, writes under
     `user/`; reading a skill's file, look in `user/skills/…` first. The shared folders hold the panel's own
     definitions and careful defaults. Sessions get the merged skills.
-- `gerdr panel run …` acts on the project of the current directory, so run it from here.
+- `gerdr panel run …` acts on the panel of the current directory, so run it from here (a command this panel's
+  `ctx.exec` runs reaches this panel from any directory; anywhere else, name it with `--project <project>/<panel>`).
 - Other projects have their own panels, and this project can have other panels besides this one (each in its own
   directory, with its own agent): don't touch them.
 - Built-in files are upgraded by Gerdr unless you edit them; once edited they're yours.

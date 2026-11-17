@@ -252,10 +252,20 @@ func (r *Runner) WorkKey(dir string) (string, bool) {
 	return "", false
 }
 
-// ProjectOf is the Work key whose directory contains dir (for `gerdr panel run …` run by a Work agent from its cwd); the
-// default project when it's none of them.
+// PanelEnv names the panel a command was started by: ctx.exec sets it on every command a panel's function runs.
+// A command a panel runs on someone's behalf (the taskboard's wait checks: `cd <the agent's repo> && <its
+// command>`) has neither a panel directory as its cwd nor an agent conversation's id in its environment, so
+// `gerdr panel run tasks.list` in it fell through to the default project, whose own panel the user had removed,
+// and every check failed (a worker's wait for another task never woke).
+const PanelEnv = "GERDR_PANEL"
+
+// ProjectOf is the Work key `gerdr panel …` acts on without --project: the one whose directory contains dir (a
+// panel's agent runs there), else the panel that started this command (PanelEnv), else the default project.
 func (r *Runner) ProjectOf(dir string) string {
 	if k, ok := r.WorkKey(dir); ok {
+		return k
+	}
+	if k := strings.TrimSpace(os.Getenv(PanelEnv)); k != "" {
 		return k
 	}
 	return DefaultProject

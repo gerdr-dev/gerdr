@@ -27,7 +27,8 @@ interface Ctx {
    * Runs a command-line tool. A non-zero exit isn't an error: look at `code`. Only a missing command, a timeout or a bad
    * `cwd` reject. The command and its arguments go apart, with no shell in between: put URLs and user input straight
    * into the array, never into a command string. For pipes: `ctx.exec('sh', ['-c', 'git log "$1" | head', '_', branch])`.
-   * Commands are found on the user's login shell PATH. stdin is empty unless `input` is given.
+   * Commands are found on the user's login shell PATH. stdin is empty unless `input` is given. The command gets
+   * `GERDR_PANEL` (this panel's key), so `gerdr panel run …` inside it reaches this panel whatever its cwd.
    */
   exec(cmd: string, args?: string[], opts?: ExecOptions): Promise<ExecResult>;
   exec(cmd: string, opts: ExecOptions): Promise<ExecResult>;

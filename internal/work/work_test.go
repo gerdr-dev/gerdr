@@ -65,6 +65,18 @@ func TestProjects(t *testing.T) {
 			t.Fatalf("ProjectOf(%s) = %s", d, got)
 		}
 	}
+	// A command a panel runs elsewhere (ctx.exec sets PanelEnv) reaches that panel; a panel's own directory still wins
+	t.Setenv(PanelEnv, "lb/board")
+	if got := r.ProjectOf(t.TempDir()); got != "lb/board" {
+		t.Fatalf("ProjectOf outside any panel with %s set = %s", PanelEnv, got)
+	}
+	if d, _ := r.Dir("s3k2"); r.ProjectOf(d) != "s3k2" {
+		t.Fatalf("a panel's own directory lost to %s", PanelEnv)
+	}
+	t.Setenv(PanelEnv, "")
+	if got := r.ProjectOf(t.TempDir()); got != DefaultProject {
+		t.Fatalf("ProjectOf outside any panel = %s", got)
+	}
 	for _, bad := range []string{"../x", "a/b/c", "a/..", "../b", ".hidden", "v1.2", " pad", "a\\b"} {
 		if _, err := r.Dir(bad); err == nil {
 			t.Fatalf("%q accepted", bad)
