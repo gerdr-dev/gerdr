@@ -54,3 +54,18 @@ func TestCleanTitle(t *testing.T) {
 		}
 	}
 }
+
+// The "[Image #n]" labels the composer puts in front of each image aren't what the person said: a title or prompt list
+// made from the message leaves them out, the same text in the message itself stays.
+func TestContentTextSkipsImageLabels(t *testing.T) {
+	blocks := []json.RawMessage{
+		json.RawMessage(`{"type":"text","text":"compare [Image #3] with [Image #5]"}`),
+		json.RawMessage(`{"type":"text","text":"[Image #3]"}`),
+		json.RawMessage(`{"type":"image","data":"x","mimeType":"image/png"}`),
+		json.RawMessage(`{"type":"text","text":"[Image #5]"}`),
+		json.RawMessage(`{"type":"image","data":"y","mimeType":"image/png"}`),
+	}
+	if got := contentText(blocks); got != "compare [Image #3] with [Image #5]" {
+		t.Fatalf("got %q", got)
+	}
+}

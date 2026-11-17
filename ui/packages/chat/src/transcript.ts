@@ -202,6 +202,11 @@ export function allowRetryText(rules: string[]) {
 const SHELL_CTX = /^<bash-input>([\s\S]*?)<\/bash-input>\n<bash-stdout>([\s\S]*?)<\/bash-stdout><bash-stderr>([\s\S]*?)<\/bash-stderr>\s*$/;
 
 export const isShellContext = (text: string) => SHELL_CTX.test(text);
+/**
+ * A text block that is only "[Image #n]": the composer puts one in front of each inline image it sends, so the agent
+ * knows which image the "[Image #n]" in the message means (Composer). Not drawn: the image is.
+ */
+export const isImageLabel = (text: string) => /^\[Image #\d+\]$/.test(text);
 
 /*
  * The earlier conversation handed to a new agent (hub/handoff.go): rides in front of the first message after another
@@ -280,6 +285,7 @@ export class Transcript {
     if (content.length === 1 && content[0].type === "text" && machineBlock(content[0].text)?.notice) return;
     const parts: GPart[] = [];
     for (const c of content) {
+      if (c.type === "text" && isImageLabel(c.text)) continue;
       if (c.type === "text") parts.push({ type: "text", text: c.text });
       else if (c.type === "image") parts.push({ type: "file", mediaType: c.mimeType, url: imageURL(c) });
       else if (c.type === "resource_link") parts.push(linkPart(c, this.sessionId));
@@ -491,6 +497,7 @@ export class Transcript {
         for (const c of e.content ?? []) {
           if (c.type === "text" && isShellContext(c.text)) continue; // `!命令` 带过去的输出：上面已经有那张命令卡片了
           if (c.type === "text" && isHandoffContext(c.text)) continue; // the earlier conversation: it's on screen above
+          if (c.type === "text" && isImageLabel(c.text)) continue;
           if (c.type === "text") parts.push({ type: "text", text: mb?.text ?? c.text });
           else if (c.type === "image") parts.push({ type: "file", mediaType: c.mimeType, url: imageURL(c) });
           else if (c.type === "resource_link") parts.push(linkPart(c, this.sessionId));
@@ -785,6 +792,7 @@ export class Transcript {
           this.pushPart(this.assistant(ts), { type: "data-notice", data: { level: "info", text: t("notice.handoff", { from: ho[1] }) } });
           break;
         }
+        if (u.content?.type === "text" && u.content.text && isImageLabel(u.content.text)) break;
         if (u.content?.type === "text" && u.content.text) {
           const mb = machineBlock(u.content.text);
           if (mb?.notice) {

@@ -168,7 +168,7 @@ func conversation(evs []*hub.Event, last int) []map[string]any {
 					Type string `json:"type"`
 					Text string `json:"text"`
 				}
-				if json.Unmarshal(raw, &b) == nil && b.Type == "text" && strings.TrimSpace(b.Text) != "" {
+				if json.Unmarshal(raw, &b) == nil && b.Type == "text" && strings.TrimSpace(b.Text) != "" && !hub.IsImageLabel(b.Text) {
 					parts = append(parts, b.Text)
 				}
 			}

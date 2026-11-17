@@ -107,12 +107,12 @@ function Overlay({ session }: { session: ChatSession }) {
 // What other devices get of the attachments: references only. Ones still uploading are left out until they're done.
 const shareable = (xs: DraftImage[]): DraftImg[] =>
   xs.flatMap((im): DraftImg[] =>
-    im.path ? [{ mimeType: im.mimeType, path: im.path, name: im.name }] : im.blob ? [{ mimeType: im.mimeType, blob: im.blob }] : [],
+    im.path ? [{ mimeType: im.mimeType, path: im.path, name: im.name }] : im.blob ? [{ mimeType: im.mimeType, blob: im.blob, n: im.n }] : [],
   );
 const fromShared = (r: DraftImg): DraftImage =>
   r.path
     ? { data: "", mimeType: r.mimeType, url: fileURL(r.path), path: r.path, name: r.name }
-    : { data: "", mimeType: r.mimeType, url: r.blob!, blob: r.blob };
+    : { data: "", mimeType: r.mimeType, url: r.blob!, blob: r.blob, n: r.n };
 const imgsKey = (xs: DraftImg[]) => xs.map((x) => x.blob ?? x.path).join("\n");
 // Images being stored on the gerdr machine (by data URL), so a remount doesn't upload the same one twice
 const savingBlobs = new Set<string>();
@@ -144,7 +144,11 @@ function useSharedDraft({ session, textarea: ta, text, images: imgs, setText, se
     // Keep the local copies (they have the bytes); images still uploading here stay at the end
     setImgs((xs) => {
       const have = new Map(xs.filter((x) => x.blob || x.path).map((x) => [x.blob ?? x.path, x]));
-      return [...d.imgs.map((r) => have.get(r.blob ?? r.path) ?? fromShared(r)), ...xs.filter((x) => !x.blob && !x.path)];
+      const mine = (r: DraftImg) => {
+        const x = have.get(r.blob ?? r.path);
+        return x && { ...x, n: r.n };
+      };
+      return [...d.imgs.map((r) => mine(r) ?? fromShared(r)), ...xs.filter((x) => !x.blob && !x.path)];
     });
     let sel: number[] | null = null;
     // Not on an unfocused touch screen: there the tap that focuses the box puts the caret anyway, and moving the

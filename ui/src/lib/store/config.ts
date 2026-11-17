@@ -7,7 +7,8 @@ export type Theme = "system" | "light" | "dark";
  * A composer attachment as other devices see it: a reference, never the bytes. `blob` is an image stored on the gerdr
  * machine (POST /api/blobs → /api/blobs/<sha256>), `path` an uploaded video.
  */
-export type DraftImg = { mimeType: string; blob?: string; path?: string; name?: string };
+// n: an inline image's number in its "[Image #n]" placeholder (DraftImage.n)
+export type DraftImg = { mimeType: string; blob?: string; path?: string; name?: string; n?: number };
 /** The composer content shared across devices (hub/draft.go): text, selection [start, end], attachments. */
 export type SharedDraft = { text: string; sel?: [number, number]; imgs: DraftImg[] };
 

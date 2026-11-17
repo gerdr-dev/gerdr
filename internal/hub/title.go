@@ -65,6 +65,13 @@ func (s *Session) Prompts() []string {
 	return out
 }
 
+// imageLabel: a text block that is only "[Image #n]". The composer sends one in front of each inline image so the agent
+// knows which image a placeholder in the message means (ui Composer); it isn't something the person said.
+var imageLabel = regexp.MustCompile(`^\[Image #\d+\]$`)
+
+// IsImageLabel reports whether a user message's text block is such a label.
+func IsImageLabel(text string) bool { return imageLabel.MatchString(text) }
+
 func contentText(blocks []json.RawMessage) string {
 	var parts []string
 	for _, raw := range blocks {
@@ -73,7 +80,7 @@ func contentText(blocks []json.RawMessage) string {
 			Text string `json:"text"`
 		}
 		// `!命令` 带给 agent 的输出（shell.go）不是人说的话，起标题时不算
-		if json.Unmarshal(raw, &b) == nil && b.Type == "text" && b.Text != "" && !strings.HasPrefix(b.Text, shellPrefix) && !strings.HasPrefix(b.Text, handoffPrefix) {
+		if json.Unmarshal(raw, &b) == nil && b.Type == "text" && b.Text != "" && !strings.HasPrefix(b.Text, shellPrefix) && !strings.HasPrefix(b.Text, handoffPrefix) && !IsImageLabel(b.Text) {
 			parts = append(parts, b.Text)
 		}
 	}

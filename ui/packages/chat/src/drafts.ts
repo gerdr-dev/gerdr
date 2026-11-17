@@ -8,8 +8,10 @@ import { useSyncExternalStore } from "react";
  * Attachments: an image keeps its bytes in `data` (base64); a video can't go inline, so it's uploaded
  * (ChatHost.upload) and sent as a resource_link to `path` — unset while the upload runs, `data` empty. `blob`: the
  * host stored the image and can show it elsewhere (gerdr's shared drafts); `data` may be empty then until it's sent.
+ * `n`: an inline image's number, the one in its "[Image #n]" placeholder in the text (like Claude Code's CLI). The two
+ * go together: deleting either removes the other. Videos and other files have none.
  */
-export type DraftImage = { data: string; mimeType: string; url: string; path?: string; name?: string; blob?: string };
+export type DraftImage = { data: string; mimeType: string; url: string; path?: string; name?: string; blob?: string; n?: number };
 
 export interface DraftStore {
   useText(paneId: string): string;

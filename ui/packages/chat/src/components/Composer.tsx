@@ -6,7 +6,7 @@ import { Button } from "../ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import type { ConfigOption, ContentBlock, ChatSession } from "../types";
-import { dropShellContext, videoLinkPath, type GMessage } from "../transcript";
+import { dropShellContext, isImageLabel, videoLinkPath, type GMessage } from "../transcript";
 import { isCoarse, keyboardUp, usePhone } from "../device";
 import { askKey } from "../askkeys";
 import { cn } from "../utils";
@@ -67,8 +67,9 @@ async function blobData(url: string) {
 }
 
 function toImgs(blocks: ContentBlock[], h: ChatHost): Img[] {
+  let n = 0;
   return blocks.flatMap((c): Img[] => {
-    if (c.type === "image") return [{ data: c.data, mimeType: c.mimeType, url: `data:${c.mimeType};base64,${c.data}` }];
+    if (c.type === "image") return [{ data: c.data, mimeType: c.mimeType, url: `data:${c.mimeType};base64,${c.data}`, n: ++n }];
     if (c.type !== "resource_link") return [];
     const v = videoLinkPath(c);
     if (v) return [{ data: "", mimeType: "video/*", url: h.fileURL(v), path: v, name: c.name }];
@@ -76,6 +77,63 @@ function toImgs(blocks: ContentBlock[], h: ChatHost): Img[] {
     return [{ data: "", mimeType: "application/octet-stream", url: "", path: p, name: c.name || baseName(p) }];
   });
 }
+
+// Inline images sit in the text as "[Image #n]" (like Claude Code's CLI), so with several of them the words can say
+// which one they mean. The placeholder and the image go together: deleting one removes the other (Img.n).
+const TOKEN = /\[Image #(\d+)\]/g;
+const tokenOf = (n: number) => `[Image #${n}]`;
+const tokensIn = (t: string) => [...t.matchAll(TOKEN)].map((m) => ({ n: +m[1], start: m.index!, end: m.index! + m[0].length }));
+const maxN = (t: string, imgs: Img[]) => Math.max(0, ...tokensIn(t).map((x) => x.n), ...imgs.map((im) => im.n ?? 0));
+// Take a placeholder out of the text along with one space next to it, so no double space is left behind
+function dropToken(t: string, n: number) {
+  const x = tokensIn(t).find((x) => x.n === n);
+  if (!x) return t;
+  const end = t[x.end] === " " ? x.end + 1 : x.end;
+  const start = end === x.end && t[x.start - 1] === " " ? x.start - 1 : x.start;
+  return t.slice(0, start) + t.slice(end);
+}
+
+/**
+ * A sent message's text and attachments, to go back in the box. Its images come with their numbers (the "[Image #n]"
+ * label sent in front of each, see send); a number already taken in the box, and every image of a message sent without
+ * labels (numbered 1… in its own text), gets a new one above `top`, and the text's placeholders follow. An image whose
+ * placeholder isn't in the text gets one put in front.
+ */
+function backInBox(blocks: ContentBlock[], h: ChatHost, sep: string, taken: Set<number>, top: number) {
+  const imgs = toImgs(blocks, h);
+  // Each image's number in the message: from the label in front of it, else its place among the images
+  const orig: number[] = [];
+  let label = 0;
+  for (const c of blocks) {
+    if (c.type === "text" && isImageLabel(c.text)) label = +c.text.slice(8, -1);
+    else if (c.type === "image") {
+      orig.push(label || -(orig.length + 1));
+      label = 0;
+    } else label = 0;
+  }
+  const map = new Map<number, number>();
+  imgs
+    .filter((im) => im.n)
+    .forEach((im, k) => {
+      const o = orig[k];
+      const n = o > 0 && !taken.has(o) ? o : ++top;
+      taken.add(n);
+      map.set(Math.abs(o), n);
+      im.n = n;
+    });
+  let text = blocks
+    .filter((c) => c.type === "text" && !isImageLabel(c.text))
+    .map((c) => (c as { text: string }).text)
+    .join(sep)
+    .replace(TOKEN, (m, d) => (map.has(+d) ? tokenOf(map.get(+d)!) : m));
+  const have = new Set(tokensIn(text).map((x) => x.n));
+  const missing = imgs.filter((im) => im.n && !have.has(im.n)).map((im) => tokenOf(im.n!));
+  if (missing.length) text = missing.join(" ") + (text ? " " + text : "");
+  return { text, imgs };
+}
+
+// The textarea's text box: the mirror under it (the placeholders' tints) has to lay its text out exactly the same
+const TEXT_BOX = "px-4 pt-3 pb-1 text-[1em] max-md:text-[length:max(1em,15px)] max-md:supports-[-webkit-touch-callout:none]:text-[16px] leading-relaxed";
 
 // 命令别名：agent 报了右边那个命令才有左边的别名，发出去时换回本名（agent 只认本名）
 const ALIASES: Record<string, string> = { new: "clear" };
@@ -142,6 +200,25 @@ const ComposerImpl = forwardRef<
   const root = useRef<HTMLDivElement>(null);
   const imgRefs = useRef<(HTMLDivElement | null)[]>([]);
   const setText = (t: string) => drafts.setText(paneId, t);
+  // Images whose placeholder was deleted from the text, by number: an undo (⌘Z) that brings the placeholder back
+  // brings the image back too. Emptied on send
+  const gone = useRef(new Map<number, Img>());
+  // The image whose placeholder or thumbnail the pointer is on: both light up together
+  const [hot, setHot] = useState<number | null>(null);
+  const mirror = useRef<HTMLDivElement>(null);
+  // The highest image number used so far: numbers go up through the whole conversation and are never reused (like
+  // Claude Code's CLI), so "[Image #2]" in a later message still means that one image, and what the box shows is what
+  // the agent gets. Read from the conversation (the sent messages' placeholders) and this box
+  const usedN = () => {
+    let top = Math.max(maxN(drafts.getText(paneId), drafts.getImages(paneId)), ...gone.current.keys());
+    for (const m of history()) {
+      if (m.role !== "user") continue;
+      const content = m.metadata?.content as ContentBlock[] | undefined;
+      const texts = content ? content.flatMap((c) => (c.type === "text" ? [c.text] : [])) : m.parts.flatMap((p) => (p.type === "text" ? [p.text] : []));
+      for (const t of texts) top = Math.max(top, maxN(t, []));
+    }
+    return top;
+  };
   // Host features that need the composer's state (gerdr: the draft shared across devices)
   const extras =
     hooks.useExtras?.({
@@ -162,8 +239,9 @@ const ComposerImpl = forwardRef<
     // 回退：整条消息放回来，文字和贴的图都要（只放文字的话截图就丢了）
     setContent: (blocks0: ContentBlock[]) => {
       const blocks = dropShellContext(blocks0); // `!命令` 带过去的输出不放回来：命令卡片还在对话里，下一条照样带上
-      putText(blocks.map((c) => (c.type === "text" ? (c as { text: string }).text : "")).join(""));
-      setImgs(toImgs(blocks, host));
+      const back = backInBox(blocks, host, "", new Set(), usedN());
+      putText(back.text);
+      setImgs(back.imgs);
     },
     putBack: (blocks: ContentBlock[]) => putBack(blocks),
     ctrlC: () => ctrlC(),
@@ -234,6 +312,7 @@ const ComposerImpl = forwardRef<
     el.style.height = "auto";
     el.style.height = Math.min(el.scrollHeight, Math.max(160, window.innerHeight * 0.4)) + "px";
     if (box) box.style.minHeight = "";
+    syncMirror();
   };
   useEffect(fitHeight, [text]);
   // And when the width changes: measured while the box was briefly narrow (an overview tile appearing or sliding into
@@ -508,19 +587,30 @@ const ComposerImpl = forwardRef<
         return;
       }
     }
-    const content: ContentBlock[] = [];
-    for (const im of full)
-      content.push(
-        im.path
-          ? { type: "resource_link", uri: `file://${im.path}`, name: im.name ?? im.path.slice(im.path.lastIndexOf("/") + 1) }
-          : { type: "image", data: im.data, mimeType: im.mimeType },
-      );
+    // Videos and files first (as before), then the text, then each inline image with its "[Image #n]" label in front
+    // (in the order the text mentions them): the agent is told which image each placeholder means instead of
+    // guessing from the order, which no longer works once a deleted image leaves a gap in the numbers
+    const at = new Map(
+      tokensIn(t)
+        .map((x, i) => [x.n, i] as const)
+        .reverse(),
+    );
+    const rank = (im: Img) => (im.n && at.has(im.n) ? at.get(im.n)! : 1e9);
+    const inline = full.filter((im) => !im.path).sort((a, b) => rank(a) - rank(b));
+    const content: ContentBlock[] = full
+      .filter((im) => im.path)
+      .map((im) => ({ type: "resource_link", uri: `file://${im.path}`, name: im.name ?? im.path!.slice(im.path!.lastIndexOf("/") + 1) }));
     if (t) content.push({ type: "text", text: t });
+    for (const im of inline) {
+      if (im.n) content.push({ type: "text", text: tokenOf(im.n) });
+      content.push({ type: "image", data: im.data, mimeType: im.mimeType });
+    }
     setBusy(true);
     const prev = text;
     const prevImgs = imgs;
     setText("");
     setImgs([]);
+    gone.current.clear();
     hist.current.idx = -1;
     const tid = `send-${session.id}`;
     const flush = now ? queuedAhead?.() : undefined;
@@ -568,13 +658,10 @@ const ComposerImpl = forwardRef<
   // 原来 ↑ 和撤回按钮只放字，截图就丢了（用户报的）
   const putBack = (blocks0: ContentBlock[]) => {
     const blocks = dropShellContext(blocks0); // 同 setContent：`!命令` 的输出不放回输入框
-    const back = blocks
-      .filter((c) => c.type === "text")
-      .map((c) => (c as { text: string }).text)
-      .join("\n\n");
     const cur = drafts.getText(paneId);
+    const draftNs = [...tokensIn(cur).map((x) => x.n), ...drafts.getImages(paneId).map((im) => im.n ?? 0), ...gone.current.keys()];
+    const { text: back, imgs: images } = backInBox(blocks, host, "\n\n", new Set(draftNs), usedN());
     if (back) setText(cur ? `${back}\n\n${cur}` : back);
-    const images = toImgs(blocks, host);
     if (images.length) setImgs((x) => [...images, ...x]);
     ta.current?.focus();
   };
@@ -656,6 +743,9 @@ const ComposerImpl = forwardRef<
   // Any file, not only images: the host can hand its path on this machine to the agent (localPath) or upload it
   const anyFile = !!(host.upload || host.localPath);
   const addFiles = (files: FileList | File[]) => {
+    // Each inline image puts its "[Image #n]" where the caret is, all of one paste / drop together
+    let n = usedN();
+    const placed: string[] = [];
     for (const f of Array.from(files)) {
       const local = host.localPath?.(f);
       if (f.type.startsWith("video/")) {
@@ -678,14 +768,79 @@ const ComposerImpl = forwardRef<
         toast.error(tr("composer.tooBig", { name: f.name, max: "20MB" }));
         continue;
       }
+      const num = ++n;
+      placed.push(tokenOf(num));
       const r = new FileReader();
       r.onload = () => {
         const url = String(r.result);
-        setImgs((xs) => [...xs, { url, data: url.slice(url.indexOf(",") + 1), mimeType: f.type }]);
+        // Its placeholder was deleted while the file was still being read: the image goes where deleted ones go
+        const im: Img = { url, data: url.slice(url.indexOf(",") + 1), mimeType: f.type, n: num };
+        if (!tokensIn(drafts.getText(paneId)).some((x) => x.n === num)) gone.current.set(num, im);
+        else setImgs((xs) => [...xs, im]);
       };
       r.readAsDataURL(f);
     }
+    if (placed.length) insertAtCaret(placed.join(" "));
   };
+
+  // Type text in at the caret as if typed, so ⌘Z takes it out again (execCommand is the only way into the textarea's
+  // undo stack). Spaced off from the words on either side
+  const insertAtCaret = (s: string) => {
+    const el = ta.current;
+    if (!el) {
+      const cur = drafts.getText(paneId);
+      setText(cur + (cur && !/\s$/.test(cur) ? " " : "") + s + " ");
+      return;
+    }
+    if (document.activeElement !== el) el.focus({ preventScroll: true });
+    const v = el.value;
+    const a = el.selectionStart ?? v.length;
+    const b = el.selectionEnd ?? a;
+    const ins = (a > 0 && !/\s/.test(v[a - 1]) ? " " : "") + s + (/\s/.test(v[b] ?? "") ? "" : " ");
+    if (document.execCommand("insertText", false, ins)) return;
+    setText(v.slice(0, a) + ins + v.slice(b));
+    caretTo.current = a + ins.length;
+    setCaret(caretTo.current);
+  };
+
+  // Remove an attachment; an inline image takes its placeholder out of the text with it
+  const removeAt = (i: number) => {
+    const n = imgs[i]?.n;
+    setImgs((xs) => xs.filter((_, j) => j !== i));
+    if (n) setText(dropToken(drafts.getText(paneId), n));
+  };
+
+  // After the text was edited: images whose placeholder is gone go with it, ones whose placeholder came back (undo)
+  // come back
+  const syncImages = (v: string) => {
+    const live = new Set(tokensIn(v).map((x) => x.n));
+    const cur = drafts.getImages(paneId);
+    const dead = cur.filter((im) => im.n && !live.has(im.n));
+    const back = [...gone.current].filter(([n]) => live.has(n) && !cur.some((im) => im.n === n));
+    if (!dead.length && !back.length) return;
+    for (const im of dead) gone.current.set(im.n!, im);
+    for (const [n] of back) gone.current.delete(n);
+    setImgs((xs) => [...xs.filter((im) => !im.n || live.has(im.n)), ...back.map(([, im]) => im)]);
+  };
+
+  // The inline images' placeholders in the text: where each one is, from the mirror under the textarea
+  const liveTokens = tokensIn(text).filter((x) => imgs.some((im) => im.n === x.n && !isFile(im) && !isVideo(im)));
+  const tokenAt = (x: number, y: number) => {
+    if (!liveTokens.length) return null;
+    for (const el of Array.from(mirror.current?.querySelectorAll<HTMLElement>("[data-n]") ?? []))
+      for (const r of Array.from(el.getClientRects())) if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return { n: +el.dataset.n!, el };
+    return null;
+  };
+  // The mirror has the textarea's text box: same width (without a scrollbar), height and scroll
+  const syncMirror = () => {
+    const el = ta.current;
+    const m = mirror.current;
+    if (!el || !m) return;
+    m.style.width = el.clientWidth + "px";
+    m.style.height = el.clientHeight + "px";
+    m.scrollTop = el.scrollTop;
+  };
+  useLayoutEffect(syncMirror);
 
   // A file on this machine: attach its path as is, nothing read or copied (a folder works too)
   const addLocal = (f: File, path: string) => {
@@ -745,7 +900,7 @@ const ComposerImpl = forwardRef<
     if (e.key === "Backspace" || e.key === "Delete") {
       e.preventDefault();
       const n = imgs.length - 1;
-      setImgs((xs) => xs.filter((_, j) => j !== i));
+      removeAt(i);
       const next = e.key === "Backspace" ? Math.max(i - 1, 0) : Math.min(i, n - 1);
       if (n === 0 || (e.key === "Delete" && i === n)) toText();
       else requestAnimationFrame(() => imgRefs.current[next]?.focus());
@@ -834,12 +989,38 @@ const ComposerImpl = forwardRef<
         return;
       }
     }
-    // 贴的图排在文字前面：光标在最开头（没选中文字）按退格，删掉紧挨着的最后一张图（照 Claude Code），不用伸手去点那个小叉
-    if (e.key === "Backspace" && imgs.length && !e.altKey && !e.metaKey && !e.ctrlKey) {
+    // Backspace / Delete on an inline image's placeholder (right behind / in front of the caret, or the caret inside it)
+    // takes the whole "[Image #n]" out at once, and the image with it (syncImages). Selected and deleted the browser's
+    // way, so ⌘Z puts both back
+    if ((e.key === "Backspace" || e.key === "Delete") && liveTokens.length && !e.altKey && !e.metaKey && !e.ctrlKey) {
+      const el = e.currentTarget;
+      const c = el.selectionStart;
+      const back = e.key === "Backspace";
+      const x = c === el.selectionEnd && liveTokens.find((x) => (back ? x.start < c && c <= x.end : x.start <= c && c < x.end));
+      if (x) {
+        e.preventDefault();
+        // With the space after it too when one is before it (or it starts the text): no double space left behind
+        const v0 = el.value;
+        const end = v0[x.end] === " " && (x.start === 0 || /\s/.test(v0[x.start - 1])) ? x.end + 1 : x.end;
+        el.setSelectionRange(x.start, end);
+        if (!document.execCommand("delete")) {
+          const v = v0.slice(0, x.start) + v0.slice(end);
+          setText(v);
+          syncImages(v);
+          caretTo.current = x.start;
+          setCaret(x.start);
+        }
+        return;
+      }
+    }
+    // Videos and files (no placeholder) sit before the text: Backspace at the very start removes the last of them
+    // (like Claude Code), no reaching for the little ×
+    const loose = imgs.map((im, i) => (im.n ? -1 : i)).filter((i) => i >= 0);
+    if (e.key === "Backspace" && loose.length && !e.altKey && !e.metaKey && !e.ctrlKey) {
       const el = e.currentTarget;
       if (el.selectionStart === 0 && el.selectionEnd === 0) {
         e.preventDefault();
-        setImgs((xs) => xs.slice(0, -1));
+        removeAt(loose[loose.length - 1]);
         return;
       }
     }
@@ -961,7 +1142,23 @@ const ComposerImpl = forwardRef<
         // ！ 同理：中文输入法下打出来的是全角的，当 ! 用（`!命令`）
         const v = text === "" && /^[、／]$/.test(e.target.value) ? "/" : text === "" && e.target.value === "！" ? "!" : e.target.value;
         setText(v);
+        syncImages(v);
         setCaret(e.target.selectionStart ?? e.target.value.length);
+      }}
+      onScroll={syncMirror}
+      onMouseMove={(e) => {
+        const hit = tokenAt(e.clientX, e.clientY);
+        if ((hit?.n ?? null) !== hot) setHot(hit?.n ?? null);
+        e.currentTarget.style.cursor = hit ? "pointer" : "";
+      }}
+      onMouseLeave={() => hot !== null && setHot(null)}
+      onClick={(e) => {
+        // A click (not a drag selecting text) on a placeholder enlarges its image
+        const el = e.currentTarget;
+        if (el.selectionStart !== el.selectionEnd) return;
+        const hit = tokenAt(e.clientX, e.clientY);
+        const i = hit ? imgs.findIndex((im) => im.n === hit.n) : -1;
+        if (hit && i >= 0) preview(i, hit.el);
       }}
       onSelect={(e) => {
         setCaret(e.currentTarget.selectionStart ?? 0);
@@ -979,8 +1176,34 @@ const ComposerImpl = forwardRef<
         host.placeholder?.(session, running) ??
         (shellReady ? tr("composer.sendShell") : running ? tr("composer.busy") : host.shell ? tr("composer.idleShell") : tr("composer.idle"))
       }
-      className="block max-h-[40vh] min-h-[44px] w-full resize-none bg-transparent px-4 pt-3 pb-1 text-[1em] max-md:text-[length:max(1em,15px)] max-md:supports-[-webkit-touch-callout:none]:text-[16px] leading-relaxed outline-none placeholder:text-muted-foreground/70"
+      className={cn("relative block max-h-[40vh] min-h-[44px] w-full resize-none bg-transparent outline-none placeholder:text-muted-foreground/70", TEXT_BOX)}
     />
+  );
+  // Drawn under the textarea with the same text laid out the same way, invisible but for a tint behind each inline
+  // image's placeholder (a textarea can't style part of its text). Also what tokenAt measures
+  const field = (
+    <div className="relative">
+      {liveTokens.length > 0 && (
+        <div
+          ref={mirror}
+          aria-hidden
+          className={cn("pointer-events-none absolute left-0 top-0 overflow-hidden whitespace-pre-wrap text-transparent [overflow-wrap:break-word]", TEXT_BOX)}
+        >
+          {liveTokens.map((x, i) => (
+            <span key={x.start}>
+              {text.slice(i ? liveTokens[i - 1].end : 0, x.start)}
+              <span data-n={x.n} className={cn("rounded-sm [box-decoration-break:clone] transition-colors", hot === x.n ? "bg-brand/35" : "bg-brand/15")}>
+                {text.slice(x.start, x.end)}
+              </span>
+            </span>
+          ))}
+          {text.slice(liveTokens[liveTokens.length - 1].end)}
+          {"\u200b"}
+        </div>
+      )}
+      {input}
+      {host.composerInputOverlay?.(session, { paneId, focus: focusBox })}
+    </div>
   );
   return (
     <div ref={root} className="relative px-3 pb-3">
@@ -1072,7 +1295,12 @@ const ComposerImpl = forwardRef<
                 }}
                 tabIndex={-1}
                 onKeyDown={(e) => onImgKey(e, i)}
-                className="group/img relative rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-card"
+                onMouseEnter={() => im.n && setHot(im.n)}
+                onMouseLeave={() => im.n && setHot(null)}
+                className={cn(
+                  "group/img relative rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-card",
+                  im.n && hot === im.n && "ring-2 ring-brand ring-offset-1 ring-offset-card",
+                )}
               >
                 {isFile(im) ? (
                   <div
@@ -1104,11 +1332,17 @@ const ComposerImpl = forwardRef<
                 ) : (
                   <img src={im.url} onClick={(e) => preview(i, e.currentTarget)} className="size-14 cursor-zoom-in rounded-md border object-cover" />
                 )}
+                {im.n && !isFile(im) && !isVideo(im) && (
+                  // Its number, matching the "[Image #n]" in the text
+                  <span className="pointer-events-none absolute bottom-0.5 left-0.5 rounded-sm bg-background/80 px-1 text-[10px] font-medium leading-4 tabular-nums">
+                    #{im.n}
+                  </span>
+                )}
                 <button
                   className="absolute -right-1.5 -top-1.5 hidden rounded-full bg-foreground p-0.5 text-background group-hover/img:block [@media(hover:none)]:block"
                   // Removing an attachment hands focus back to the text box, like the send button (not on touch screens).
                   onMouseDown={keepFocus}
-                  onClick={() => setImgs(imgs.filter((_, j) => j !== i))}
+                  onClick={() => removeAt(i)}
                 >
                   <X className="size-3" />
                 </button>
@@ -1116,15 +1350,8 @@ const ComposerImpl = forwardRef<
             ))}
           </div>
         )}
-        {host.composerInputOverlay ? (
-          // relative: the host's overlay is positioned over the text field (gerdr: a "hold to talk" spot in its middle)
-          <div className="relative">
-            {input}
-            {host.composerInputOverlay(session, { paneId, focus: focusBox })}
-          </div>
-        ) : (
-          input
-        )}
+        {/* relative (field): the host's overlay is positioned over the text field (gerdr: a "hold to talk" spot in its middle) */}
+        {field}
         {shellMode && (
           // 照 Claude Code 的「! for bash mode」：说清这一句不发给 agent、在哪个目录跑、输出去哪
           <div className="truncate px-4 pb-1 text-[12px] text-warn" title={session.cwd}>
