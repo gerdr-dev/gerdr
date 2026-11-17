@@ -21,6 +21,8 @@ github.com/zbysir/lightron, where browser-side changes go as general hooks — t
 - Desktop App self-update (backend-only ~10MB vs whole App, applied only when idle; `internal/selfupdate`,
   `tools/shell-id.sh`, `desktop/feed.sh`): docs/dev/UPDATE.md. Changing shell files (tools/chromeshell,
   tools/winshell, internal/selfupdate) or the Lightron version in go.mod forces a full download for everyone.
+- The user's own Chrome through Gerdr's browser extension (`browser-extension/`, `internal/chromeext`, `gerdr browser`;
+  the gerdr program is its native host): docs/dev/CHROME-EXT.md. Same protocol as Annulo's extension; keep them in step.
 - 后台常驻（launchd，`internal/service`、`cmd/gerdr/attach.go`）和 App 怎么分工、怎么跟着 App 升级：docs/dev/SERVICE.md。
 - iOS Safari / the iOS App / anything WebKit stutters where Android doesn't (the pager's WebKit branch, style recalc
   costs, measuring on an iPhone through a paired computer): docs/dev/WEBKIT.md.

@@ -30,6 +30,7 @@ import (
 	"github.com/gerdr-dev/gerdr/internal/addons"
 	"github.com/gerdr-dev/gerdr/internal/auth"
 	"github.com/gerdr-dev/gerdr/internal/awake"
+	"github.com/gerdr-dev/gerdr/internal/chromeext"
 	"github.com/gerdr-dev/gerdr/internal/config"
 	"github.com/gerdr-dev/gerdr/internal/doctor"
 	"github.com/gerdr-dev/gerdr/internal/events"
@@ -93,6 +94,8 @@ type Server struct {
 	Awake *awake.Keeper
 	// Doctor: Settings → Labs → Diagnosis (doctorapi.go). nil = off (tests).
 	Doctor *doctor.Doctor
+	// Browser: the user's own Chrome through Gerdr's browser extension (browserapi.go). nil = off.
+	Browser *chromeext.Bridge
 	// Peers: other computers this Gerdr drives (hosts.go, docs/dev/MULTIHOST.md). nil = off (tests).
 	Peers       *peer.Manager
 	remoteConns remoteConns // 正在连着的远程界面（remoteconns.go）
@@ -242,6 +245,7 @@ func (s *Server) Handler() http.Handler {
 	s.memoryRoutes(mux)
 	s.importRoutes(mux)
 	s.doctorRoutes(mux)
+	s.browserRoutes(mux)
 	s.screenRoutes(mux)
 	if s.Remote != nil {
 		s.remoteRoutes(mux)

@@ -31,6 +31,7 @@ import (
 	"github.com/gerdr-dev/gerdr/internal/addons"
 	"github.com/gerdr-dev/gerdr/internal/agentwire"
 	"github.com/gerdr-dev/gerdr/internal/awake"
+	"github.com/gerdr-dev/gerdr/internal/chromeext"
 	"github.com/gerdr-dev/gerdr/internal/config"
 	"github.com/gerdr-dev/gerdr/internal/doctor"
 	"github.com/gerdr-dev/gerdr/internal/events"
@@ -51,6 +52,14 @@ import (
 )
 
 func main() {
+	if chromeext.IsHostInvocation(os.Args) {
+		// Chrome started us as the browser extension's native host (browserhost.go)
+		if err := runBrowserHost(os.Args[1]); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
 	root := &cobra.Command{
 		Use:           "gerdr",
 		Short:         i18n.S("Claude Code 和 Codex 的图形界面（ACP），可以中途插话、回退、审批", "A GUI for Claude Code and Codex (ACP): interject mid-turn, rewind, approve"),
@@ -97,7 +106,7 @@ func main() {
 		Short: i18n.S("打印版本", "Print the version"),
 		Run:   func(cmd *cobra.Command, args []string) { fmt.Println(version.Version) },
 	})
-	root.AddCommand(addProjectFlag(sessionCmd()), folderCmd(), hostCmd(), artifactsCmd(), uiCmd(), workCmd(), panelCmd(), remoteCmd(), configCmd(), agentCmd(), mcpCmd(), skillCmd(), addonCmd(), eventCmd(), waitCmd(), addProjectFlag(workspaceCmd()), addProjectFlag(tabCmd()), addProjectFlag(paneCmd()))
+	root.AddCommand(addProjectFlag(sessionCmd()), folderCmd(), hostCmd(), artifactsCmd(), uiCmd(), workCmd(), panelCmd(), remoteCmd(), configCmd(), agentCmd(), mcpCmd(), skillCmd(), addonCmd(), eventCmd(), waitCmd(), browserCmd(), addProjectFlag(workspaceCmd()), addProjectFlag(tabCmd()), addProjectFlag(paneCmd()))
 	if err := root.Execute(); err != nil {
 		if errors.Is(err, errHandover) {
 			os.Exit(exitHandover)
@@ -488,6 +497,9 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 	doctorCtx, stopDoctor := context.WithCancel(context.Background())
 	defer stopDoctor()
 	go srv.Doctor.Watch(doctorCtx, 10*time.Minute)
+	// The user's own Chrome through Gerdr's browser extension (docs/dev/CHROME-EXT.md).
+	srv.Browser = chromeext.New(log)
+	registerBrowserHost(env.Dir, log)
 	// 打开后台常驻时，App 起的这个后端让位：退出（errHandover → 退出码 75），后台服务拿到锁接手，
 	// App 看到 75 就重起一个后端，它只连后台、不自己干活（desktop/main.js）。
 	handover := make(chan struct{})
