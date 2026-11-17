@@ -76,16 +76,23 @@ function askToast(method: KeepMethod, expires?: string, err?: string) {
       } else {
         await registerPasskey();
       }
-      toast.success(t("keepDevice.doneTitle"), { id: ID, description: t("keepDevice.done", { what }), duration: 4000, closeButton: false });
+      toast.success(t("keepDevice.doneTitle"), {
+        id: ID,
+        description: bio ? t("keepDevice.done", { what }) : t("keepDevice.donePasskey"),
+        duration: 4000,
+        closeButton: false,
+      });
     } catch (e) {
       if (isStepUp(e)) return toSettings();
       askToast(method, expires, isCancel(e) ? undefined : (e as Error).message);
     }
   };
-  toast(t("keepDevice.title", { what }), {
+  toast(bio ? t("keepDevice.title", { what }) : t("keepDevice.titlePasskey"), {
     id: ID,
     duration: Infinity,
     closeButton: true,
+    // Buttons under the text, right-aligned: beside it they squeezed the text into a narrow column on a phone
+    classNames: { toast: "flex-wrap!", content: "basis-full!", cancelButton: "ml-auto!", actionButton: "ml-2!" },
     description: lines.join(" "),
     // preventDefault: sonner closes the toast on a button; this one turns into the progress / result instead
     action: {
