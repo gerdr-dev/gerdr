@@ -416,8 +416,10 @@ export const RowView = memo(
   },
   (a, b) => {
     if (a.env !== b.env) {
-      // env 只有 running 会变；它只影响用户消息（能不能回退）和还在跑的那一轮
+      // Only running and cuttingIn change in env. running affects user messages (can rewind) and the live turn;
+      // cuttingIn turns queued rows into "cutting in" — left out, Send now's click showed nothing (user report).
       if (a.env.running !== b.env.running && (a.row.kind === "user" || (a.row.kind === "part" && a.row.live))) return false;
+      if (a.env.cuttingIn !== b.env.cuttingIn && a.row.kind === "user") return false;
       if (a.env.sessionId !== b.env.sessionId) return false;
     }
     const x = a.row,
