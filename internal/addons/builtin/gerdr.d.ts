@@ -487,7 +487,7 @@ declare global {
       /** 给某个会话发一句话（它在跑就插进去）。 */
       send(sessionId: string, text: string): Promise<void>;
       runCommand(id: string): Promise<void>;
-      /** Append text to a session's composer (what is typed there, not sent). */
+      /** Put text into a session's composer at its caret (what is typed there, not sent). */
       insertText(sessionId: string, text: string): void;
     };
 
@@ -634,10 +634,15 @@ declare global {
     sessionId: string;
     /** What is typed in the composer now. */
     readonly text: string;
-    /** Append to what is typed. */
+    /**
+     * Where the caret is in `text` now (start < end: that much is selected). Both are text.length when the composer
+     * isn't on screen. Words an add-on puts in (voice input, a snippet) belong here, not after everything typed.
+     */
+    readonly selection: { readonly start: number; readonly end: number };
+    /** Put text in at the caret (over the selection, if any); the caret ends up after it. */
     insert(text: string): void;
-    /** Replace what is typed. */
-    setText(text: string): void;
+    /** Replace what is typed; caret: where to put the caret in the new text (default: wherever the browser leaves it, the end). */
+    setText(text: string, caret?: number): void;
   }
 
   interface MenuContext {

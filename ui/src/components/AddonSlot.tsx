@@ -1,6 +1,7 @@
 import { Component, createContext, useContext, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { composerActions, fail, slots, type SlotName, type SlotReg } from "@/lib/addons";
-import { get, set, useStore } from "@/lib/store";
+import { get, useStore } from "@/lib/store";
+import { composerSelection, insertComposerText, setComposerText } from "@/lib/composerText";
 import { Button } from "@/components/ui/button";
 import type { LoaderProps } from "@gerdr/chat";
 import type { LoaderChoice } from "@/lib/store/config";
@@ -185,9 +186,13 @@ function composerCtx(sessionId: string, paneId: string) {
     get text() {
       return get().drafts[paneId] ?? "";
     },
+    // Where the caret is (the end when the composer isn't on screen)
+    get selection() {
+      return composerSelection(paneId);
+    },
     // Drafts are kept per pane (what is typed in this composer), not per session
-    setText: (t: string) => set((s) => ({ drafts: { ...s.drafts, [paneId]: t } })),
-    insert: (t: string) => set((s) => ({ drafts: { ...s.drafts, [paneId]: (s.drafts[paneId] ?? "") + t } })),
+    setText: (t: string, caret?: number) => setComposerText(paneId, t, caret),
+    insert: (t: string) => insertComposerText(paneId, t),
   };
 }
 

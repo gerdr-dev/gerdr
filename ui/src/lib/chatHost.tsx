@@ -24,6 +24,7 @@ import {
 } from "./store";
 import { pushDraft, sameDraft } from "./sync";
 import { AddonComposerActions, AddonComposerOverlay, AddonLoader } from "@/components/AddonSlot";
+import { useComposerBox } from "./composerText";
 import { useAddonTurnStat } from "./addons";
 import { MessageActions } from "@/components/chat/MessageActions";
 import { locale, t } from "./i18n";
@@ -389,7 +390,10 @@ export function GerdrChatProvider({ children }: { children: ReactNode }) {
       messageActions: (m) => <MessageActions info={m} />,
       composer: {
         drafts,
-        useExtras: useSharedDraft,
+        useExtras: (ctx) => {
+          useComposerBox(ctx.paneId, ctx.textarea); // add-ons' words go in at its caret (lib/composerText)
+          return useSharedDraft(ctx);
+        },
         localCommands,
         onSendError: (session, e: any, retry) => {
           if (e?.code !== "held_elsewhere") return false;

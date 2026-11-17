@@ -19,6 +19,7 @@ import { AddonIcon } from "@/components/IconPicker";
 import { locale, t } from "./i18n";
 import { activeTab, activeWs, leaves, type Layout, type PaneLeaf, type Tab, type Workspace } from "./layout";
 import { get, set, useStore, visibleSessions } from "./store";
+import { insertComposerText } from "./composerText";
 import type { AddonBuild, AddonService, SessionSummary } from "./types";
 
 type TabLabelFn = (tab: any, ctx: any) => string | void;
@@ -83,7 +84,13 @@ export type ComposerAction = {
   place?: "start";
   run: (ctx: ComposerCtx) => void | Promise<void>;
 };
-export type ComposerCtx = { sessionId: string; text: string; insert(text: string): void; setText(text: string): void };
+export type ComposerCtx = {
+  sessionId: string;
+  text: string;
+  selection: { start: number; end: number };
+  insert(text: string): void;
+  setText(text: string, caret?: number): void;
+};
 export const composerActions: ComposerAction[] = [];
 export type MenuItem = { addon: string; id: string; title: string; when?: (ctx: MenuCtx) => boolean; run: (ctx: MenuCtx) => void | Promise<void> };
 export type MenuCtx = { selection: string; sessionId?: string };
@@ -456,13 +463,13 @@ function makeApi(id: string, hash: string) {
         await (await import("./actions")).send(sid, text);
       },
       runCommand: async (cid: string) => runCommand(cid),
-      // Drafts are per pane: write into the panes showing this session (the focused one first, usually the only one)
+      // Drafts are per pane: write into the pane showing this session (the focused one first, usually the only one), at its caret
       insertText: (sid: string, text: string) => {
         const l = get().layout;
         const panes = l.workspaces.flatMap((w) => w.tabs.flatMap((t) => leaves(t.root))).filter((p) => p.sessionId === sid);
         const focus = activeTab(l).focus;
         const p = panes.find((x) => x.id === focus) ?? panes[0];
-        if (p) set((s) => ({ drafts: { ...s.drafts, [p.id]: (s.drafts[p.id] ?? "") + text } }));
+        if (p) insertComposerText(p.id, text);
       },
     },
     // React and gerdr's own building blocks, so an add-on's UI looks like the rest without bundling its own copy
