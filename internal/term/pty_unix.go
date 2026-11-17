@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/creack/pty"
+	"golang.org/x/sys/unix"
 )
 
 type ptySys struct{}
@@ -54,6 +55,22 @@ func (t *Term) Resize(cols, rows uint16) error {
 		return nil
 	}
 	return pty.Setsize(t.out, &pty.Winsize{Cols: cols, Rows: rows})
+}
+
+// Running: a program holds the terminal's foreground (the shell isn't sitting at its prompt), so closing it or
+// restarting Gerdr would cut something off. The PTY's foreground process group is the shell's own (its pid: it
+// leads the session) while it waits at the prompt, and the job's while a command runs. Jobs sent to the
+// background with `&` don't count: they can't be told from a prompt theme's helper (powerlevel10k's gitstatusd
+// is a child of the shell too). When it can't tell, it says running, the safe side for restarts.
+func (t *Term) Running() bool {
+	if t.out == nil {
+		return true
+	}
+	pg, err := unix.IoctlGetInt(int(t.out.Fd()), unix.TIOCGPGRP)
+	if err != nil {
+		return true
+	}
+	return pg != t.pid
 }
 
 // width: the PTY's current columns (0 = unknown), for Text to wrap lines where the screen did.

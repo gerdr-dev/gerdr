@@ -185,6 +185,9 @@ func (t *Term) Resize(cols, rows uint16) error {
 
 func (t *Term) width() int { return int(t.sys.cols.Load()) }
 
+// Running: ConPTY has no foreground process group to ask, so a live terminal always counts as running.
+func (t *Term) Running() bool { return true }
+
 // kill ends the shell and everything it started (closing the job, KILL_ON_JOB_CLOSE). Windows has no SIGHUP to ask
 // first.
 func (t *Term) kill() {

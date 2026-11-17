@@ -88,3 +88,38 @@ func TestTrimRing(t *testing.T) {
 		t.Fatalf("%q", r)
 	}
 }
+
+// A shell at its prompt doesn't hold updates back; a command in its foreground does (Running, /api/busy).
+func TestRunning(t *testing.T) {
+	t.Setenv("SHELL", "/bin/sh")
+	m := New(os.Environ, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	defer m.Close()
+	tm, err := m.Create(CreateOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, out, detach := tm.Attach()
+	defer detach()
+	go func() {
+		for range out {
+		}
+	}()
+	wait := func(want bool) {
+		t.Helper()
+		deadline := time.Now().Add(5 * time.Second)
+		for tm.Running() != want {
+			if time.Now().After(deadline) {
+				t.Fatalf("Running() stayed %v", !want)
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+	}
+	wait(false)
+	_ = tm.Write([]byte("sleep 100\n"))
+	wait(true)
+	if !tm.Info().Running {
+		t.Error("Info().Running = false while sleep runs")
+	}
+	_ = tm.Write([]byte("\x03"))
+	wait(false)
+}

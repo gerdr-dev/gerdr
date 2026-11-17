@@ -35,6 +35,7 @@ type Info struct {
 	Shell   string `json:"shell"`
 	Pid     int    `json:"pid"`
 	Exited  bool   `json:"exited"`
+	Running bool   `json:"running"` // a program holds the foreground (see Term.Running); false once exited
 	Code    int    `json:"code"`
 	Created int64  `json:"created"`
 }
@@ -189,8 +190,10 @@ func (t *Term) ID() string { return t.id }
 
 func (t *Term) Info() Info {
 	t.mu.Lock()
-	defer t.mu.Unlock()
-	return Info{ID: t.id, Cwd: t.cwd, Shell: filepath.Base(t.shell), Pid: t.pid, Exited: t.exited, Code: t.code, Created: t.created.UnixMilli()}
+	i := Info{ID: t.id, Cwd: t.cwd, Shell: filepath.Base(t.shell), Pid: t.pid, Exited: t.exited, Code: t.code, Created: t.created.UnixMilli()}
+	t.mu.Unlock()
+	i.Running = !i.Exited && t.Running()
+	return i
 }
 
 // Done：shell 退出时关上。

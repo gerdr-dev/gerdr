@@ -588,13 +588,15 @@ func itoa(n int) string {
 // attaching backend (cmd/gerdr appAttach) only swap in a new gerdr on their own when everything is zero:
 // idle sessions come back on their own after a restart (the next message resumes them), but a running turn
 // is interrupted, a permission request is lost, background tasks live only in memory, and terminals are
-// gerdr's own child processes (docs/dev/ARCHITECTURE.md, terminals).
+// gerdr's own child processes (docs/dev/ARCHITECTURE.md, terminals). A terminal only counts while a program
+// runs in it: a shell sitting at its prompt held every update back for as long as its pane stayed open, and
+// losing it costs no more than reopening it (the pane offers that).
 type Busy struct {
 	Version string `json:"version"`
 	Turns   int    `json:"turns"`   // sessions with a turn running
 	Waiting int    `json:"waiting"` // sessions waiting on a person (permission / question)
 	Tasks   int    `json:"tasks"`   // background tasks still running
-	Terms   int    `json:"terms"`   // live terminals
+	Terms   int    `json:"terms"`   // terminals with a program running (not just a shell at its prompt)
 }
 
 func (b Busy) Idle() bool { return b.Turns+b.Waiting+b.Tasks+b.Terms == 0 }
@@ -616,7 +618,7 @@ func (s *Server) busy() Busy {
 	}
 	if s.Terms != nil {
 		for _, t := range s.Terms.List() {
-			if !t.Exited {
+			if t.Running {
 				b.Terms++
 			}
 		}

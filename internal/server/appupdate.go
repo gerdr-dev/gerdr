@@ -92,7 +92,7 @@ func (s *Server) appUpdateRoutes(mux *http.ServeMux) {
 		// With automatic updates on it goes ahead by itself once idle anyway.
 		if b.Op == "apply" && s.Hub != nil {
 			if x := s.busy(); x.Turns+x.Waiting+x.Tasks+x.Terms > 0 {
-				httpError(w, http.StatusConflict, i18n.S("还有 agent 在跑或终端开着，现在更新会打断它们：等空闲了再点", "Agents are running or terminals are open, and updating now would interrupt them. Try again when things are idle"))
+				httpError(w, http.StatusConflict, i18n.S("还有 agent 或终端里的程序在跑，现在更新会打断它们：等空闲了再点", "Agents or programs in terminals are running, and updating now would interrupt them. Try again when things are idle"))
 				return
 			}
 		}

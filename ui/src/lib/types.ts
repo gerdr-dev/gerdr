@@ -236,7 +236,17 @@ export interface ExtView {
 }
 
 /** 服务端的一个终端（/api/terms） */
-export type TermInfo = { id: string; cwd: string; shell: string; pid: number; exited: boolean; code: number; created: number };
+export type TermInfo = {
+  id: string;
+  cwd: string;
+  shell: string;
+  pid: number;
+  exited: boolean;
+  /** a program holds the foreground (not just a shell at its prompt): only these hold an update back. Missing from older backends. */
+  running?: boolean;
+  code: number;
+  created: number;
+};
 
 /** 设置 →「记忆」：一家 agent 的一个记忆目录（后端 internal/memstore）。 */
 export type MemoryEntry = { file: string; path: string; name?: string; description?: string; type?: string; size: number; modTime: number };

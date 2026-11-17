@@ -60,7 +60,8 @@ release it was built on top of. Versions that aren't a tag or git describe (`0.1
 ## When to apply: only when nothing would be cut off
 
 A backend restart kills running turns, pending permission requests, background tasks (memory only) and terminals
-(Gerdr's child PTYs). Idle sessions don't care: the next message resumes them. `GET /api/busy` counts the four.
+(Gerdr's child PTYs). Idle sessions don't care: the next message resumes them. `GET /api/busy` counts the four;
+for terminals only those with a program running, not a shell at its prompt (ARCHITECTURE.md, terminals).
 
 - The shell polls it every minute. Backend update waiting + all zero → restart the backend by itself. Otherwise the
   page shows a toast (`window.gerdr.appUpdate`, an older UI without the hook gets a system notification); "update now"

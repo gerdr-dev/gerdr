@@ -989,6 +989,11 @@ stream-json 模式下没人看得见）—— resume、回退、追上全部失�
   不在服务端维护屏幕状态（要一个完整的终端模拟器）：重放跨过 resize 的那段可能错位，全屏程序 ctrl+l 一下就好。
   同一个终端可以同时开在几处（电脑 + 手机），输出广播给每个连着的；跟不上的连接直接踢掉，让它重连拿重放。
 - **Gerdr 重启 = 终端全没**：PTY 是 Gerdr 的子进程。布局里留着 id 和 cwd，pane 上给「在 xx 重开」。
+  So only a terminal with a program in its foreground holds an update back (`/api/busy` `terms`, `Term.Running`:
+  the PTY's foreground process group, TIOCGPGRP, is the shell's own pid while it sits at the prompt). Counting every
+  open pane meant one idle shell blocked updates for days. Jobs put in the background with `&` aren't seen: they
+  look the same as a prompt theme's helper (powerlevel10k's gitstatusd), which every such shell would then count.
+  Windows (ConPTY) has no foreground group to ask, so a live terminal there always counts.
 - **关 pane 就杀 shell**（SIGHUP 给整个进程组，2 秒后 SIGKILL）：不然它在服务端没人看得见地一直跑。
   shell 自己退出（exit、ctrl+d）时 pane 自动收掉，**不看退出码**：ctrl+d 时 zsh 带的是上一条命令的退出码
   （前面 ctrl+c 过就是 130，踩过）。只有被信号杀掉的（退出码 -1：Gerdr 退出、被 kill）留着给「重开」。

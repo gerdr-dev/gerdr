@@ -156,7 +156,7 @@ function UpdateBlockers({
     })
     .filter((panel): panel is NonNullable<typeof panel> => !!panel);
   const terminalPanels = terms
-    .filter((term) => !term.exited)
+    .filter((term) => term.running ?? !term.exited)
     .map((term) => {
       const located = leaves.find(({ pane }) => pane.term?.id === term.id);
       return {
