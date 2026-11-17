@@ -57,6 +57,25 @@ files) but harmless. What the scan can't see still arrives late and still needs 
 third-party packages (Streamdown's Markdown elements, keep that list) and classes assembled at runtime (`"w-" + n`).
 The chat list's two hidden frames (`ChatList.tsx`) were not re-measured; check with `tools/scrolltest/` before dropping them.
 
+### Rewriting an unchanged sheet: a whole-page style recalc
+
+The precompile above left a cost behind. On every DOM change that adds an element (or changes a `class`), the browser
+build scans every `[class]` element on the page for class names it hasn't seen *in the DOM* yet, and if there are any,
+assigns its whole generated sheet again (`textContent = build(...)`). Classes compiled up front through `@source
+inline` don't count as seen, so a subtree full of first-time names (Settings opening) makes it rewrite ~250KB of
+identical CSS, and the browser re-parses it and recalculates every element on the page.
+
+Measured opening Settings the first time (`tools/scrolltest/settingsopen.mjs`; the generated sheet's length doesn't
+change, yet `Build #n (incremental)` is followed by a `<style>` childList mutation and an `UpdateLayoutTree` over
+~1430 elements): two rewrites inside the 200ms fade, each recalc ~7ms at 1x, ~30ms at 4x CPU throttling; the fade
+dropped 2–5 frames at 4x. Fix: `sameStyleScript` (`internal/uisite/html.go`), run before Tailwind loads, makes
+writing a `<style>`'s current text back a no-op. After: 0 dropped frames at 4x, the builds still run but nothing is
+written. A class nobody compiled still arrives (checked: `pb-[7.25px]` added at runtime gets its padding).
+
+What's left is the scan itself: 155 incremental builds while streaming a ~20k-character reply (only chunks that add
+elements trigger one), ~1ms each at 1x on a ~1000-element page, about 1% of the CPU, growing with the page's
+element count. Only dropping the browser build (todo/tailwind-server.md) removes it.
+
 Traps of the browser build's `@source inline` (4.1.11, each silent: the rest of that line's classes just aren't
 generated):
 

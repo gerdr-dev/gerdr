@@ -32,6 +32,21 @@ const errorsScript = `(function(){
   addEventListener("unhandledrejection", function(e){ var r = e.reason; push("unhandledrejection", r && r.message ? (r.name || "Error") + ": " + r.message : r, r && r.stack) });
 })()`
 
+// sameStyleScript makes writing a <style>'s current text back into it a no-op. Tailwind's browser build rewrites its
+// whole generated sheet (~250KB on gerdr's UI) whenever a class name shows up in the DOM for the first time, even when
+// that class was already compiled up front (classes.go), so the text comes out identical; the browser still re-parses
+// it and recalculates every element's style. Opening Settings did it twice inside the dialog's fade, dropping 2–5
+// frames at 4x CPU throttling (docs/dev/TAILWIND.md). Comparing is cheap next to that: equal lengths are rare unless
+// the text is the same. Runs before Tailwind loads; patching its minified source instead would break on upgrades.
+// The one behaviour it changes: an identical write no longer resets rules added with insertRule, which nothing here does.
+const sameStyleScript = `(function(){
+  var d = Object.getOwnPropertyDescriptor(Node.prototype, "textContent");
+  if (!d || !d.set) return;
+  Object.defineProperty(HTMLStyleElement.prototype, "textContent", { configurable: true, enumerable: d.enumerable,
+    get: function(){ return d.get.call(this) },
+    set: function(v){ if (typeof v === "string" && v === d.get.call(this)) return; d.set.call(this, v) } });
+})()`
+
 // loadingHTML: the loading screen, with text in place of the line under the spinner.
 // The UI's own "connecting" screen (LoadingScreen in ui/src/App.tsx) replaces it with the same spinner and line at
 // the same spot, so keep the two in step or the spinner jumps when React mounts. The slow-start hint is positioned
@@ -93,6 +108,7 @@ func (r *Renderer) ServePage(w http.ResponseWriter, req *http.Request, nonce str
 	for _, u := range append([]string{b.entry}, preload...) {
 		s.WriteString(`<link rel="modulepreload" href="` + html.EscapeString(u) + `">` + "\n")
 	}
+	s.WriteString("<script" + n + ">" + sameStyleScript + "</script>\n")
 	s.WriteString(`<script type="module" src="/_esm/` + tailwindBrowser + `"></script>` + "\n")
 	s.WriteString("</head>\n<body>\n<div id=\"root\">" + loadingHTML(i18n.S("加载中…", "Loading…")) + "</div>\n<script" + n + ">")
 	s.WriteString(loadingScript)
