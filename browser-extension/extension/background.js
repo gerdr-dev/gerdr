@@ -352,7 +352,9 @@ async function handle(op, a) {
         throw fail('Gerdr is not allowed on ' + a.params?.url, 'not_granted')
       }
       const target = { tabId: a.tab }
-      if (a.method === 'Input.dispatchMouseEvent') await showPointer(a.tab, a.params)
+      // quiet: input a person makes themselves (Gerdr's Browser pane forwarding their mouse): they see their own
+      // pointer, and waiting for the glide would make it lag
+      if (a.method === 'Input.dispatchMouseEvent' && !a.quiet) await showPointer(a.tab, a.params)
       if (a.method === 'Page.captureScreenshot') {
         // the frame and cursor are for the user, not in the agent's picture
         await overlayCall(a.tab, 'hide(true)')
