@@ -5,15 +5,30 @@ import { useEffect, type RefObject } from "react";
 import { get, set } from "./store";
 
 const boxes = new Map<string, HTMLTextAreaElement>();
+const senders = new Map<string, () => void>();
 
-/** Called by every composer: its pane's textarea, while mounted. */
-export function useComposerBox(paneId: string, ta: RefObject<HTMLTextAreaElement | null>) {
+/** Called by every composer: its pane's textarea and its own send (text and attachments), while mounted. */
+export function useComposerBox(paneId: string, ta: RefObject<HTMLTextAreaElement | null>, send: () => void) {
   useEffect(() => {
     const el = ta.current;
     if (!el) return;
     boxes.set(paneId, el);
     return () => void (boxes.get(paneId) === el && boxes.delete(paneId));
   }, [paneId]);
+  useEffect(() => {
+    senders.set(paneId, send);
+    return () => void (senders.get(paneId) === send && senders.delete(paneId));
+  });
+}
+
+/**
+ * Send the pane's composer as Enter does, attachments included. false: no composer drawn for the pane (the caller
+ * sends the text some other way).
+ */
+export function sendComposer(paneId: string): boolean {
+  const f = senders.get(paneId);
+  f?.();
+  return !!f;
 }
 
 const draft = (paneId: string) => get().drafts[paneId] ?? "";

@@ -271,6 +271,11 @@ export type ComposerContext = {
   setImages(f: DraftImage[] | ((cur: DraftImage[]) => DraftImage[])): void;
   /** The latest draft (not the one this render saw). */
   get(): { text: string; images: DraftImage[] };
+  /**
+   * Send what is in the box, attachments included, as Enter does. Runs after the next render, so a setText just
+   * before it is what goes (voice input's send on release: sending only the text left the pasted images behind).
+   */
+  send(): void;
 };
 
 const Ctx = createContext<ChatHost | null>(null);

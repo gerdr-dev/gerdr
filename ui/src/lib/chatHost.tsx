@@ -364,7 +364,7 @@ export function GerdrChatProvider({ children }: { children: ReactNode }) {
       composer: {
         drafts,
         useExtras: (ctx) => {
-          useComposerBox(ctx.paneId, ctx.textarea); // add-ons' words go in at its caret (lib/composerText)
+          useComposerBox(ctx.paneId, ctx.textarea, ctx.send); // add-ons' words go in at its caret, and send it (lib/composerText)
           return useSharedDraft(ctx);
         },
         localCommands,

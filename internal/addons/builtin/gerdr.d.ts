@@ -647,6 +647,11 @@ declare global {
     insert(text: string): void;
     /** Replace what is typed; caret: where to put the caret in the new text (default: wherever the browser leaves it, the end). */
     setText(text: string, caret?: number): void;
+    /**
+     * Send what is in the composer, attached images and files included, as pressing Enter does (g.actions.send takes
+     * text only). A setText just before it is what goes. With no composer on screen, only the text is sent.
+     */
+    send(): Promise<void>;
   }
 
   interface MenuContext {

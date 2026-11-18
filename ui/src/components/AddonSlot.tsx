@@ -1,7 +1,7 @@
 import { Component, createContext, useContext, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { composerActions, fail, slots, type SlotName, type SlotReg } from "@/lib/addons";
 import { get, useStore } from "@/lib/store";
-import { composerSelection, insertComposerText, setComposerText } from "@/lib/composerText";
+import { composerSelection, insertComposerText, sendComposer, setComposerText } from "@/lib/composerText";
 import { Button } from "@/components/ui/button";
 import type { LoaderProps } from "@gerdr/chat";
 import type { LoaderChoice } from "@/lib/store/config";
@@ -193,6 +193,14 @@ function composerCtx(sessionId: string, paneId: string) {
     // Drafts are kept per pane (what is typed in this composer), not per session
     setText: (t: string, caret?: number) => setComposerText(paneId, t, caret),
     insert: (t: string) => insertComposerText(paneId, t),
+    // As Enter does, attachments included; with no composer drawn, the text alone
+    send: async () => {
+      if (sendComposer(paneId)) return;
+      const t = (get().drafts[paneId] ?? "").trim();
+      if (!t) return;
+      await (await import("@/lib/actions")).send(sessionId, t);
+      setComposerText(paneId, "");
+    },
   };
 }
 

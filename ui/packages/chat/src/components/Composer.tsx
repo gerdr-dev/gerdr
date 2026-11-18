@@ -230,6 +230,7 @@ const ComposerImpl = forwardRef<
       setText,
       setImages: setImgs,
       get: () => ({ text: drafts.getText(paneId), images: drafts.getImages(paneId) }),
+      send: () => void setTimeout(() => sendRef.current(), 0), // same wait as a picked completion's send below
     }) || undefined;
 
   useImperativeHandle(ref, () => ({

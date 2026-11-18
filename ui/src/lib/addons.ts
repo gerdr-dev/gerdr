@@ -90,6 +90,7 @@ export type ComposerCtx = {
   selection: { start: number; end: number };
   insert(text: string): void;
   setText(text: string, caret?: number): void;
+  send(): Promise<void>;
 };
 export const composerActions: ComposerAction[] = [];
 export type MenuItem = { addon: string; id: string; title: string; when?: (ctx: MenuCtx) => boolean; run: (ctx: MenuCtx) => void | Promise<void> };
