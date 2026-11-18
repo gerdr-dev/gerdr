@@ -753,6 +753,11 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
                 </DropdownMenuItem>
               </>
             )}
+            {/* The project's browser beside this pane (components/browser/) */}
+            <DropdownMenuItem onClick={() => (focusPane(pane.id), openBrowserPane("right"))}>
+              <Globe /> {t("keys.splitBrowser")}
+              <ActionKeys action="splitBrowser" />
+            </DropdownMenuItem>
             {/* Through runAction like ⌘T itself: with the overview up that opens a new agent there instead of a tab */}
             <DropdownMenuItem onClick={() => runAction("newTab")}>
               <Plus /> {t("panes.newTab")}
