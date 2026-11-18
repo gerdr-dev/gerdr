@@ -293,6 +293,19 @@ func (t *Tab) act(ctx context.Context, action string, a ActArgs) (*ActResult, er
 // answer, so they fail at once; a command that opens one (a click on a button that calls confirm()) returns as soon
 // as it is open instead of waiting for the dialog to be answered.
 func (t *Tab) call(ctx context.Context, method string, params any, out any) error {
+	return t.callVia(ctx, t.send, method, params, out)
+}
+
+// callQuiet is call for the person's own input from the Browser pane (Tab.sendQuiet).
+func (t *Tab) callQuiet(ctx context.Context, method string, params any, out any) error {
+	send := t.sendQuiet
+	if send == nil {
+		send = t.send
+	}
+	return t.callVia(ctx, send, method, params, out)
+}
+
+func (t *Tab) callVia(ctx context.Context, send func(context.Context, string, json.RawMessage) (json.RawMessage, error), method string, params any, out any) error {
 	if method != "Page.handleJavaScriptDialog" {
 		if d := t.log.openDialog(); d != nil {
 			return fmt.Errorf(i18n.S("页面开着一个 %s 对话框（%q），先用 dialog 回答", "A %s dialog is open (%q): answer it with dialog first"), d.Type, d.Message)
@@ -310,7 +323,7 @@ func (t *Tab) call(ctx context.Context, method string, params any, out any) erro
 	cctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	go func() {
 		defer cancel()
-		raw, err := cdp(cctx, t.conn, t.ID, method, p)
+		raw, err := send(cctx, method, p)
 		ch <- reply{raw, err}
 	}()
 	tick := time.NewTicker(100 * time.Millisecond)

@@ -211,11 +211,21 @@ func (e *Endpoint) handle(ctx context.Context, m cdpMsg) {
 
 // cdp sends one DevTools command to the tab through the extension.
 func cdp(ctx context.Context, c *Conn, tab int, method string, params json.RawMessage) (json.RawMessage, error) {
+	return cdpTo(ctx, c, tab, method, params, false)
+}
+
+// cdpTo: quiet asks the extension not to draw its cursor for a mouse event (and not to wait for its glide): the
+// person's own mouse in the Browser pane (view.go), which they already see. An agent's clicks keep the cursor.
+func cdpTo(ctx context.Context, c *Conn, tab int, method string, params json.RawMessage, quiet bool) (json.RawMessage, error) {
 	var p any = map[string]any{}
 	if len(params) > 0 && string(params) != "null" {
 		p = params
 	}
-	res, err := c.Call(ctx, "cdp", map[string]any{"tab": tab, "method": method, "params": p})
+	args := map[string]any{"tab": tab, "method": method, "params": p}
+	if quiet {
+		args["quiet"] = true
+	}
+	res, err := c.Call(ctx, "cdp", args)
 	if err != nil {
 		return nil, err
 	}

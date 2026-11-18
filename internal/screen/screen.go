@@ -28,7 +28,7 @@ type Status struct {
 // Input is one action from the UI. X and Y are fractions of the main display (0..1), so the client never needs to
 // know the display's points or the screenshot's scale.
 type Input struct {
-	Kind   string   `json:"kind"`   // click | scroll | text | key
+	Kind   string   `json:"kind"`   // click | scroll | text | key; a browser tab also takes down | up | move | compose | go | back | forward | reload
 	X      float64  `json:"x"`      // click, scroll
 	Y      float64  `json:"y"`      // click, scroll
 	Button string   `json:"button"` // click: left (default) | right
@@ -37,6 +37,18 @@ type Input struct {
 	Text   string   `json:"text"`   // text: typed as is (a newline presses Return)
 	Key    string   `json:"key"`    // key: a name from keyCodes (enter, tab, esc, a, space…)
 	Mods   []string `json:"mods"`   // key: cmd | shift | opt | ctrl
+	// scroll in a browser tab: CSS px (a trackpad's deltas); DY above is lines
+	DXPx float64 `json:"dxPx,omitempty"`
+	DYPx float64 `json:"dyPx,omitempty"`
+}
+
+// Page is where a browser tab is (the Browser pane's address bar); the display has none.
+type Page struct {
+	URL     string `json:"url"`
+	Title   string `json:"title"`
+	Back    bool   `json:"back,omitempty"`
+	Forward bool   `json:"forward,omitempty"`
+	Loading bool   `json:"loading,omitempty"`
 }
 
 var ErrUnsupported = errors.New("remote screen only works on macOS")

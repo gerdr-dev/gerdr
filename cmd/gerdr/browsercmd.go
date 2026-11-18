@@ -27,26 +27,35 @@ func browserCmd() *cobra.Command {
 	var tab int
 	cmd := &cobra.Command{
 		Use:   "browser",
-		Short: i18n.S("在用户自己的 Chrome 里操作网页（已登录的账号），经 Gerdr 浏览器插件", "Work in the user's own Chrome (their signed-in accounts) through the Gerdr browser extension"),
-		Long: i18n.S(`在用户平时用的 Chrome 里开窗口、操作网页，用的是用户已经登好的账号。要在那个 Chrome 里装 Gerdr 浏览器插件（Chrome 开着）。
+		Short: i18n.S("操作网页：默认在项目自己的浏览器里（界面右侧的浏览器面板），--chrome 在用户自己的 Chrome 里", "Work on web pages: in the project's own browser by default (the Browser pane beside the chat), with --chrome in the user's own Chrome"),
+		Long: i18n.S(`开网页、操作网页。两种浏览器，操作完全一样：
 
-典型流程：open 开窗口 → snapshot 看页面上有什么（每个可操作的东西带一个 ref，如 e12）→ click / type / fill / key / scroll 按 ref 操作
+- 项目浏览器（默认）：Gerdr 在后台跑的 Chrome，每个项目一份自己的 profile，登录过的网站在这个项目里一直保持登录。
+  打开的页面显示在对话旁边的「浏览器」面板里，用户能看着你操作，也能自己点、自己输入（登录、验证码交给用户）。
+- 用户自己的 Chrome（open --chrome / --profile）：用户平时用的那个，已经登好的账号都在。要装 Gerdr 浏览器插件、Chrome 开着；
+  插件的限制改不了：只操作它自己开的窗口；每个网站第一次用时插件弹窗问用户「允许」（open 会一直等，最多 10 分钟），
+  页面跳到没允许的网站就停止操作；读 cookie、存储这类 DevTools 命令一律不放行。
+
+典型流程：open 开页面 → snapshot 看页面上有什么（每个可操作的东西带一个 ref，如 e12）→ click / type / fill / key / scroll 按 ref 操作
 → 再 snapshot 或 screenshot 看结果 → 用完 close。操作用真实的鼠标键盘事件，富文本输入框也认。
-不加 -t 时操作最后打开的那个窗口。同样的操作也有 MCP 版：gerdr browser mcp。
+不加 -t 时操作最后打开的那个页面。同样的操作也有 MCP 版：gerdr browser mcp。
+要登录的网站：先 open，如果页面要登录，请用户在浏览器面板里登录（在 Gerdr 里看得到），登完再继续；以后这个项目里就一直是登录的。`,
+			`Open web pages and work on them. Two browsers, the same actions on both:
 
-插件的限制改不了：只操作它自己开的窗口；每个网站第一次用时插件弹窗问用户「允许」（open 会一直等用户点，最多 10 分钟），
-页面跳到没允许的网站就停止操作；读 cookie、存储这类 DevTools 命令一律不放行；页面自己弹出的新标签页接管不了。`,
-			`Open windows and work on pages in the Chrome the user uses every day, signed in as they already are. Needs the
-Gerdr browser extension installed in that Chrome, and Chrome open.
+- The project's browser (default): a Chrome Gerdr runs in the background, with a profile per project, so a site signed
+  in to once stays signed in for that project. Its pages show in the Browser pane beside the chat: the user watches
+  you work and can click and type there themselves (hand them sign-ins and captchas).
+- The user's own Chrome (open --chrome / --profile): the one they use every day, signed in as they already are. Needs
+  the Gerdr browser extension and Chrome open. The extension's limits can't be changed: it only drives windows it
+  opened; the first time a site is used it asks the user to Allow (open waits, up to 10 minutes); going to a site that
+  isn't allowed stops it; cookie, storage and similar DevTools commands are never let through.
 
-The usual loop: open a window → snapshot to see what is on the page (everything you can act on gets a ref, like e12)
+The usual loop: open a page → snapshot to see what is on it (everything you can act on gets a ref, like e12)
 → click / type / fill / key / scroll by ref → snapshot or screenshot again to see the result → close when done.
-Actions are real mouse and keyboard events, which rich text editors accept. Without -t they act on the window opened
+Actions are real mouse and keyboard events, which rich text editors accept. Without -t they act on the page opened
 last. The same actions as MCP tools: gerdr browser mcp.
-
-The extension's limits can't be changed: it only drives windows it opened; the first time a site is used it pops a
-window asking the user to Allow (open waits for the click, up to 10 minutes); going to a site that isn't allowed stops
-it; cookie, storage and similar DevTools commands are never let through; tabs the page opens by itself aren't taken over.`),
+Sites that need a sign-in: open the page; if it asks to sign in, ask the user to do it in the Browser pane (they see it
+in Gerdr), then carry on. The project stays signed in from then on.`),
 		Args: cobra.NoArgs,
 		RunE: func(_ *cobra.Command, _ []string) error { return browserStatus(asJSON) },
 	}
@@ -85,16 +94,16 @@ it; cookie, storage and similar DevTools commands are never let through; tabs th
 
 	cmd.AddCommand(&cobra.Command{
 		Use:   "status",
-		Short: i18n.S("连着的 Chrome、允许的网站、开着的窗口", "Connected Chromes, allowed sites, open windows"),
+		Short: i18n.S("开着的页面、连着的 Chrome、允许的网站", "Open pages, connected Chromes, allowed sites"),
 		Args:  cobra.NoArgs,
 		RunE:  func(_ *cobra.Command, _ []string) error { return browserStatus(asJSON) },
 	})
 
 	var why, profile, size string
-	var focus bool
+	var focus, chrome bool
 	open := &cobra.Command{
 		Use:   "open <url>",
-		Short: i18n.S("在用户的 Chrome 里开一个窗口，等页面加载完，打印窗口号", "Open a window in the user's Chrome, wait for the page to load, print the window number"),
+		Short: i18n.S("开一个页面（默认在项目浏览器里，显示在浏览器面板），等它加载完，打印页面号", "Open a page (in the project's browser by default, shown in the Browser pane), wait for it to load, print its number"),
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			w, h := 0, 0
@@ -104,7 +113,7 @@ it; cookie, storage and similar DevTools commands are never let through; tabs th
 					return err
 				}
 			}
-			t, err := browserOpen(args[0], why, profile, focus, w, h)
+			t, err := browserOpen(args[0], why, profile, chrome, focus, w, h)
 			if err != nil {
 				return err
 			}
@@ -112,13 +121,21 @@ it; cookie, storage and similar DevTools commands are never let through; tabs th
 				printJSON(t)
 				return nil
 			}
-			fmt.Printf("tab %d\ncdp %s\n", t.Tab, t.WS)
+			fmt.Printf("tab %d\n", t.Tab)
+			if t.WS != "" {
+				fmt.Printf("cdp %s\n", t.WS)
+			}
+			if t.Project != "" {
+				fmt.Printf(i18n.S("在项目 %s 的浏览器里，用户在浏览器面板里看得到\n", "in project %s's browser, shown to the user in the Browser pane\n"), t.Project)
+			}
 			return nil
 		},
 	}
-	open.Flags().StringVar(&why, "why", "", i18n.S("问用户允许网站时窗口上写的理由", "the reason shown when the user is asked to allow the site"))
-	open.Flags().StringVar(&profile, "profile", "", i18n.S("用哪个 Chrome profile：用户在插件弹窗里起的名字（如 Work），或 status 里的 id；默认按网站选", "which Chrome profile: the name the user gave it in the extension's popup (like Work) or an id from status; default: picked by site"))
-	open.Flags().BoolVar(&focus, "focus", false, i18n.S("把窗口调到前台（默认在后面开）", "bring the window to the front (default: opens behind)"))
+	open.Flags().BoolVar(&chrome, "chrome", false, i18n.S("在用户自己的 Chrome 里开（经浏览器插件，用户已登录的账号）", "open in the user's own Chrome (through the browser extension, their signed-in accounts)"))
+	open.Flags().StringVar(&why, "why", "", i18n.S("--chrome：问用户允许网站时窗口上写的理由", "--chrome: the reason shown when the user is asked to allow the site"))
+	open.Flags().StringVar(&profile, "profile", "", i18n.S("--chrome：用哪个 Chrome profile，用户在插件弹窗里起的名字（如 Work）或 status 里的 id；默认按网站选", "--chrome: which Chrome profile, the name the user gave it in the extension's popup (like Work) or an id from status; default: picked by site"))
+	open.Flags().BoolVar(&focus, "focus", false, i18n.S("--chrome：把窗口调到前台（默认在后面开）", "--chrome: bring the window to the front (default: opens behind)"))
+	addProjectFlag(open)
 	open.Flags().StringVar(&size, "size", "", i18n.S("窗口大小，如 1440x900", "window size, like 1440x900"))
 	cmd.AddCommand(open)
 
@@ -378,18 +395,22 @@ func browserAct(tab int, action string, a chromeext.ActArgs) (*chromeext.ActResu
 
 type browserOpened struct {
 	Tab     int    `json:"tab"`
-	Profile string `json:"profile"`
+	Profile string `json:"profile,omitempty"`
+	Project string `json:"project,omitempty"`
 	URL     string `json:"url"`
-	WS      string `json:"ws"`
+	WS      string `json:"ws,omitempty"`
 }
 
-func browserOpen(url, why, profile string, focus bool, w, h int) (*browserOpened, error) {
+// browserOpen: chrome / profile → the user's Chrome; else the caller's project's browser.
+func browserOpen(url, why, profile string, chrome, focus bool, w, h int) (*browserOpened, error) {
 	c, err := newAPIClient()
 	if err != nil {
 		return nil, err
 	}
 	c.http.Timeout = 11 * time.Minute // the user may have to allow the site first
-	body := map[string]any{"url": url, "why": why, "profile": profile, "focused": focus}
+	cl := c.caller()
+	body := map[string]any{"url": url, "why": why, "profile": profile, "chrome": chrome, "focused": focus,
+		"project": cl.Project, "from": cl.Session, "term": cl.Term}
 	if w > 0 && h > 0 {
 		body["width"], body["height"] = w, h
 	}
@@ -426,10 +447,11 @@ type browserState struct {
 		Sites   []string `json:"sites"`
 	} `json:"profiles"`
 	Tabs []struct {
-		Tab  int    `json:"tab"`
-		URL  string `json:"url"`
-		WS   string `json:"ws"`
-		Gone string `json:"gone"`
+		Tab     int    `json:"tab"`
+		Project string `json:"project,omitempty"`
+		URL     string `json:"url"`
+		WS      string `json:"ws,omitempty"`
+		Gone    string `json:"gone,omitempty"`
 	} `json:"tabs"`
 }
 
@@ -448,7 +470,7 @@ func getBrowserState() (*browserState, error) {
 func (st *browserState) text() string {
 	var b strings.Builder
 	if len(st.Profiles) == 0 {
-		b.WriteString(i18n.S("没有 Chrome 连上：确认 Chrome 开着、装了 Gerdr 浏览器插件\n", "No Chrome connected: make sure Chrome is open with the Gerdr browser extension\n"))
+		b.WriteString(i18n.S("用户自己的 Chrome 没连上（--chrome 要它：Chrome 开着、装了 Gerdr 浏览器插件）\n", "The user's own Chrome isn't connected (--chrome needs it: Chrome open with the Gerdr browser extension)\n"))
 	}
 	for _, p := range st.Profiles {
 		if p.Name != "" {
@@ -461,7 +483,11 @@ func (st *browserState) text() string {
 		}
 	}
 	for _, t := range st.Tabs {
-		line := fmt.Sprintf("tab %d  %s  %s", t.Tab, t.URL, t.WS)
+		where := t.WS
+		if t.Project != "" {
+			where = i18n.S("项目 ", "project ") + t.Project
+		}
+		line := fmt.Sprintf("tab %d  %s  %s", t.Tab, t.URL, where)
 		if t.Gone != "" {
 			line += "  (" + t.Gone + ")"
 		}

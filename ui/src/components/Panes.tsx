@@ -7,6 +7,7 @@ import {
   FileText,
   FolderOpen,
   GitBranch,
+  Globe,
   ListPlus,
   ListX,
   Maximize2,
@@ -29,6 +30,7 @@ import { Button } from "@/components/ui/button";
 import { api, type FileStat } from "@/lib/api";
 import { FileActions, FileContent } from "./FileViewer";
 import { Folder } from "./folder/Folder";
+import { BrowserScreen } from "./browser/BrowserScreen";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import {
   basename,
@@ -38,6 +40,7 @@ import {
   focusPane,
   focusSession,
   openArtifacts,
+  openBrowserPane,
   openTerminal,
   paneToTab,
   reopenTerminal,
@@ -248,6 +251,7 @@ function PaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; tab: T
   if (pane.term) return <TermPaneView pane={pane} tab={tab} framed={framed} zoomed={zoomed} count={count} />;
   if (pane.file?.folder) return <FolderPaneView pane={pane} tab={tab} framed={framed} zoomed={zoomed} count={count} />;
   if (pane.file) return <FilePaneView pane={pane} tab={tab} framed={framed} zoomed={zoomed} count={count} />;
+  if (pane.browser) return <BrowserPaneView pane={pane} tab={tab} framed={framed} zoomed={zoomed} count={count} />;
   return <HeldSessionPane pane={pane} tab={tab} framed={framed} zoomed={zoomed} count={count} />;
 }
 
@@ -426,6 +430,40 @@ function FilePaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; ta
   );
 }
 
+/** A page of the project's own browser beside the chat (components/browser/, docs/dev/BROWSER-PANE.md). */
+function BrowserPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; tab: Tab; framed: boolean; zoomed?: boolean; count?: Count }) {
+  const b = pane.browser!;
+  const focused = useContext(TabActive) && tab.focus === pane.id;
+  const many = framed || zoomed;
+  const headH = usePaneHeadHeight(framed);
+  const drag = usePaneDrag(pane.id, { label: t("browser.empty") });
+  return (
+    <div
+      data-pane-id={pane.id}
+      className={cn(
+        "flex h-full min-h-0 flex-col",
+        framed && "overflow-hidden rounded-md border",
+        framed && (focused ? "border-brand" : "border-border"),
+        drag.dragging && "opacity-40",
+      )}
+      onMouseDown={() => !focused && focusPane(pane.id)}
+    >
+      <BrowserScreen
+        project={b.project}
+        tab={b.tab}
+        lastURL={b.url}
+        paneId={pane.id}
+        focused={focused}
+        headClassName={cn(headH, !focused && many && "opacity-70")}
+        onHeadPointerDown={drag.onPointerDown}
+        extra={<PaneCount count={count} />}
+        onClose={() => (focusPane(pane.id), closeFocusedPane())}
+        Body={PaneBody}
+      />
+    </div>
+  );
+}
+
 /** An artifacts folder beside the chat (components/folder/, docs/dev/ARTIFACTS.md): title bar + the folder view. */
 function FolderPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; tab: Tab; framed: boolean; zoomed?: boolean; count?: Count }) {
   const f = pane.file!;
@@ -526,6 +564,10 @@ function TermPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; ta
             <DropdownMenuItem onClick={() => (focusPane(pane.id), openTerminal("down"))}>
               <SquareTerminal /> {t("panes.termDown")}
               <ActionKeys action="duplicateDown" />
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => (focusPane(pane.id), openBrowserPane("right"))}>
+              <Globe /> {t("keys.splitBrowser")}
+              <ActionKeys action="splitBrowser" />
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => (focusPane(pane.id), splitFocused("right"))}>
               <Columns2 /> {t("panes.sessionRight")}

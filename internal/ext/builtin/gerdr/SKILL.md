@@ -1,6 +1,6 @@
 ---
 name: gerdr
-description: "Coordinate other coding-agent sessions inside Gerdr (Claude Code / Codex sessions in the Gerdr GUI): list sessions, start a new agent session next to you, hand it a task, wait for it, read its reply, or message an existing session. Use when the user asks you to delegate to / start / ask / check on another agent or session in Gerdr, or to run several agents in parallel. Also for running commands on another computer paired with this one (`gerdr host exec`) and copying files / folders to or from it (`gerdr host cp`), and typing into / reading a terminal pane (`gerdr pane send / read`). Also for arranging Gerdr's layout: sorting tabs into workspaces, splitting panes together, renaming or reordering workspaces / tabs, pointing sessions and workspaces at a project folder that was moved or renamed. Also for changing Gerdr's own settings (theme, default agent / mode / model, shortcuts, model providers) with `gerdr config`, and for setting up agents (roles) with their own prompt, skills and MCP servers (`gerdr agent`, `gerdr skill`, `gerdr mcp`). Also for a Gerdr project's own skills and memory (given only to that project's sessions): adding / editing / removing a skill for one project (`gerdr skill --project`), keeping the project's shared memory. Also for add-ons (`gerdr addon`): browsing add-on stores, installing / updating / removing add-ons, switching them on or off, changing their settings. Also for a project's panels (`gerdr panel`): listing, installing one from a git repository, adding a blank one, updating, changing its icon, reordering them, putting a red dot / number on its button, removing. Also for being told when something happens outside the conversation (a chat message: `gerdr event watch / list`) or waiting until something outside is in some state (an MR got review comments, its pipeline failed, it merged: `gerdr wait`). Also for artifacts (`gerdr artifacts`) in a task a panel (board) started: where its output that isn't committed goes (generated images / videos, reports, drafts, copy to publish), and recording a PR / MR, a folder made outside the repository or a short result so the person finds it later. Also for working in the user's own Chrome, signed in as they are, through the Gerdr browser extension (`gerdr browser`, also as MCP): opening a page, an outline with refs, clicking / typing / filling forms with real input, waiting, screenshots, its console and network requests. Also for turning on remote access (opening this Gerdr from a phone): `gerdr remote` (with Tailscale and no domain: `gerdr remote direct --tailscale`). Requires GERDR_ENV=1."
+description: "Coordinate other coding-agent sessions inside Gerdr (Claude Code / Codex sessions in the Gerdr GUI): list sessions, start a new agent session next to you, hand it a task, wait for it, read its reply, or message an existing session. Use when the user asks you to delegate to / start / ask / check on another agent or session in Gerdr, or to run several agents in parallel. Also for running commands on another computer paired with this one (`gerdr host exec`) and copying files / folders to or from it (`gerdr host cp`), and typing into / reading a terminal pane (`gerdr pane send / read`). Also for arranging Gerdr's layout: sorting tabs into workspaces, splitting panes together, renaming or reordering workspaces / tabs, pointing sessions and workspaces at a project folder that was moved or renamed. Also for changing Gerdr's own settings (theme, default agent / mode / model, shortcuts, model providers) with `gerdr config`, and for setting up agents (roles) with their own prompt, skills and MCP servers (`gerdr agent`, `gerdr skill`, `gerdr mcp`). Also for a Gerdr project's own skills and memory (given only to that project's sessions): adding / editing / removing a skill for one project (`gerdr skill --project`), keeping the project's shared memory. Also for add-ons (`gerdr addon`): browsing add-on stores, installing / updating / removing add-ons, switching them on or off, changing their settings. Also for a project's panels (`gerdr panel`): listing, installing one from a git repository, adding a blank one, updating, changing its icon, reordering them, putting a red dot / number on its button, removing. Also for being told when something happens outside the conversation (a chat message: `gerdr event watch / list`) or waiting until something outside is in some state (an MR got review comments, its pipeline failed, it merged: `gerdr wait`). Also for artifacts (`gerdr artifacts`) in a task a panel (board) started: where its output that isn't committed goes (generated images / videos, reports, drafts, copy to publish), and recording a PR / MR, a folder made outside the repository or a short result so the person finds it later. Also for working on web pages (`gerdr browser`, also as MCP): in the project's own browser, shown to the user in the Browser pane beside the chat and signed in per project, or in the user's own Chrome through the Gerdr browser extension (`open --chrome`); opening a page, an outline with refs, clicking / typing / filling forms with real input, waiting, screenshots, its console and network requests; showing the user a page. Also for turning on remote access (opening this Gerdr from a phone): `gerdr remote` (with Tailscale and no domain: `gerdr remote direct --tailscale`). Requires GERDR_ENV=1."
 ---
 
 # Gerdr：和其他会话协作
@@ -576,14 +576,25 @@ gerdr artifacts link <new url> --supersedes <id>  # replaces an outdated record;
 - Longer text than a line or two goes in a `.md` file in the folder (then `pin` it), not in a text record.
 - Scratch files go in the folder's `草稿/` (or `drafts/`): `.gerdrignore` keeps them out of syncing.
 
-## The user's own Chrome (`gerdr browser`)
+## Web pages (`gerdr browser`)
 
-To work on a website as the user, signed in as they already are (their ChatGPT / Doubao / a company back office),
-use their everyday Chrome through the Gerdr browser extension (it must be installed there and Chrome open;
-`gerdr browser status` shows whether one is connected). Not for sites a throwaway browser can do: use your own tools there.
+Two browsers, the same actions on both:
+
+- **The project's browser** (default): a Chrome Gerdr runs in the background with a profile per project, so a site
+  signed in to once stays signed in for that project. Pages you open show in the **Browser pane** beside your chat:
+  the user watches you work and can click and type there themselves. A site that needs a sign-in or a captcha: open
+  it, then ask the user to do that part in the Browser pane, and carry on when they say so. Also the way to show the
+  user a page (a dev server you started, a report): open it, it appears next to the conversation.
+- **The user's own Chrome** (`open --chrome`, or `--profile`): their everyday Chrome through the Gerdr browser
+  extension, signed in as they already are (their ChatGPT / Doubao / a company back office). Only when the user asks
+  for it or the work needs their own accounts. The extension must be installed and Chrome open (`gerdr browser
+  status` shows whether one is connected).
+
+Not for fetching what a plain HTTP request or your own tools can get.
 
 ```bash
-gerdr browser open https://www.doubao.com/chat/ --why "ask Doubao about X"   # waits for the page; prints `tab <n>`
+gerdr browser open http://localhost:5173/  # the project's browser; waits for the page; prints `tab <n>`
+gerdr browser open https://www.doubao.com/chat/ --chrome --why "ask Doubao about X"   # the user's own Chrome
 gerdr browser snapshot                     # what's on the page, each thing with a ref: [e12] button "发送"
 gerdr browser click e12                    # real mouse events; or x,y from a screenshot
 gerdr browser type "你好" --into e8 --submit # real typing, rich editors too; --submit presses Enter
@@ -598,19 +609,21 @@ gerdr browser console --errors
 gerdr browser close                        # --keep leaves the window to the user
 ```
 
+- The user can also open pages in the Browser pane themselves; `status` lists every page with its project.
 - Several Chrome profiles can be connected (`status` lists them, each with the name the user gave it in the
   extension's popup, like "Work"). When the user says which one ("the Work Chrome"), pass `open --profile Work`
   (a name or an id); otherwise `open` picks one that allowed the site. A profile without a name: ask the user to name
   it in the Gerdr extension's popup (toolbar icon) rather than guessing between ids.
-- Actions without `-t <tab>` use the window opened last. Refs come from the latest snapshot; after the page changes,
+- Actions without `-t <tab>` use the page opened last. Refs come from the latest snapshot; after the page changes,
   take a new one (an old ref that is gone says so). `snapshot --find 发送` narrows a long page.
 - Also: `hover`, `drag <from> <to>`, `upload <ref> <files>`, `goto / back / forward / reload`, `eval <js>`,
   `resize 390x844 --mobile`, `dialog accept|dismiss` (the page is paused while an alert / confirm is open), `cdp`.
-- The first time a site is used, the extension pops a window asking the user to Allow: `open` waits (up to 10
-  minutes). Tell the user to look at Chrome. Going to a site that isn't allowed stops the window.
-- Cookies and storage are refused by the extension, by design. Tabs the page opens by itself aren't taken over.
+- `--chrome`: the first time a site is used, the extension pops a window asking the user to Allow: `open` waits (up
+  to 10 minutes). Tell the user to look at Chrome. Going to a site that isn't allowed stops the window. Cookies and
+  storage are refused by the extension, by design, and tabs the page opens by itself aren't taken over (in the
+  project's browser they are: they show up in `status` as new pages).
 - The same actions as MCP tools (images come back as images): `gerdr mcp add browser -- gerdr browser mcp`.
-- Close the windows you opened when you're done.
+- Close the pages you opened when you're done, unless the user is meant to look at them.
 
 ## 并行
 

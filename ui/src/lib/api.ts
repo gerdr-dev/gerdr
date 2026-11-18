@@ -64,6 +64,18 @@ export type ScreenInput =
   | { kind: "text"; text: string }
   | { kind: "key"; key: string; mods?: ("cmd" | "shift" | "opt" | "ctrl")[] };
 
+/** A page Gerdr drives: project set = that project's own browser; else the user's Chrome (profile = which one). */
+export type BrowserTab = { tab: number; project?: string; profile?: string; url: string; gone?: string; opened: number };
+
+/** One action in a browser tab (chromeext.View): ScreenInput plus what only a page has. */
+export type BrowserInput =
+  | ScreenInput
+  | { kind: "down" | "up" | "move"; x: number; y: number; button?: "left" | "right" | ""; count?: number; mods?: string[] }
+  | { kind: "scroll"; x: number; y: number; dy?: number; dxPx: number; dyPx: number }
+  | { kind: "compose"; text: string }
+  | { kind: "go"; text: string }
+  | { kind: "back" | "forward" | "reload" };
+
 export class ApiError extends Error {
   status: number;
   /** 远程那条路上的细分原因：reason="stepup"（再加 passkey 前先验一次）、need="pair" | "passkey"（见 docs/dev/REMOTE.md） */
@@ -277,6 +289,11 @@ export const api = {
   screenInput: (i: ScreenInput, host?: string) => req("POST", `/api/screen/input${hostQ(host)}`, i),
   /** Local only: shows macOS's permission prompts on this computer and opens the pane still missing. */
   screenRequestAccess: () => req<ScreenStatus>("POST", "/api/screen/request-access", {}),
+  /** Pages Gerdr has open: projects' own browsers and the user's Chrome (server/browserapi.go, docs/dev/BROWSER-PANE.md) */
+  browserTabs: () => req<{ tabs: BrowserTab[] }>("GET", "/api/browser"),
+  /** Open a page in a project's browser; noWait: return once it's open, not after its first load */
+  browserOpen: (url: string, project: string) => req<BrowserTab>("POST", "/api/browser/open", { url, project, noWait: true }),
+  browserClose: (tab: number) => req("POST", "/api/browser/close", { tab }),
   /** continueFrom: another agent's session whose conversation the new one carries on (hub/handoff.go) */
   /** host: start it on that computer (server/hosts.go) */
   createSession: (o: {

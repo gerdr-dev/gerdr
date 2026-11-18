@@ -40,6 +40,7 @@ import (
 	"github.com/gerdr-dev/gerdr/internal/i18n"
 	"github.com/gerdr-dev/gerdr/internal/mcpauth"
 	"github.com/gerdr-dev/gerdr/internal/peer"
+	"github.com/gerdr-dev/gerdr/internal/projbrowser"
 	"github.com/gerdr-dev/gerdr/internal/remote"
 	"github.com/gerdr-dev/gerdr/internal/server"
 	"github.com/gerdr-dev/gerdr/internal/term"
@@ -507,6 +508,10 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 	go srv.Doctor.Watch(doctorCtx, 10*time.Minute)
 	// The user's own Chrome through Gerdr's browser extension (docs/dev/CHROME-EXT.md).
 	srv.Browser = chromeext.New(log)
+	srv.Browser.OnTabs = func() { h.Broadcast("browser_tabs", srv.Browser.Tabs()) }
+	// Each project's own browser, shown in the Browser pane (docs/dev/BROWSER-PANE.md)
+	srv.ProjBrowser = projbrowser.New(env.Dir, srv.Browser, log)
+	defer srv.ProjBrowser.Close()
 	registerBrowserHost(env.Dir, log)
 	// 打开后台常驻时，App 起的这个后端让位：退出（errHandover → 退出码 75），后台服务拿到锁接手，
 	// App 看到 75 就重起一个后端，它只连后台、不自己干活（desktop/main.js）。

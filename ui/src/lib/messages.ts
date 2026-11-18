@@ -15,6 +15,7 @@ import * as system from "./text/system";
 import * as workbench from "./text/workbench";
 import * as workSource from "./text/workSource";
 import * as folder from "./text/folder";
+import * as browser from "./text/browser";
 
 const settingsZh = {
   "settings.title": "设置",
@@ -120,6 +121,7 @@ export const zh = {
   ...nav.zh,
   ...misc.zh,
   ...folder.zh,
+  ...browser.zh,
 };
 
 export type MessageKey = keyof typeof zh;
@@ -233,4 +235,5 @@ export const en: Record<MessageKey, string> = {
   ...nav.en,
   ...misc.en,
   ...folder.en,
+  ...browser.en,
 };

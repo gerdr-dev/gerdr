@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"image"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -33,13 +34,44 @@ var screenBurst = []time.Duration{40, 150, 300, 600, 1000, 1600, 2500}
 
 const screenIdleEvery = time.Second
 
+// pictureSource is what the stream shows and where its input goes: this computer's display (the remote screen) or a
+// browser tab (the Browser pane, chromeext.View).
+type pictureSource interface {
+	Grab(maxWidth int) (*image.RGBA, error)
+	Cursor() (fx, fy float64, ok bool)
+	Do(in screen.Input) error
+	Off() string              // non-empty: it can't be shown any more, and why
+	Changed() <-chan struct{} // fires when there is something new to capture; nil = capture on the schedule only
+	Page() *screen.Page       // a browser tab's address bar; nil for the display
+	Size(w, h int)            // the viewer's box in CSS px (a browser tab lays its page out at that size)
+	Selection() string        // the selected text, for the viewer's copy
+}
+
+// desktopSource: this computer's main display (internal/screen).
+type desktopSource struct{ s *Server }
+
+func (d desktopSource) Grab(w int) (*image.RGBA, error)  { return screen.Grab(w) }
+func (d desktopSource) Cursor() (float64, float64, bool) { return screen.Cursor() }
+func (d desktopSource) Do(in screen.Input) error         { return screen.Do(in) }
+func (d desktopSource) Changed() <-chan struct{}         { return nil }
+func (d desktopSource) Page() *screen.Page               { return nil }
+func (d desktopSource) Size(int, int)                    {}
+func (d desktopSource) Selection() string                { return "" }
+func (d desktopSource) Off() string {
+	if !d.s.screenOn() {
+		return "remote screen is off (Settings → Remote access)"
+	}
+	return ""
+}
+
 // screenStream: GET /api/screen/stream?w=&q= (WebSocket). The server pushes the picture as diffs against what this
 // viewer already has (internal/screen/diff.go): one binary message per capture that changed something, nothing
 // while the screen is still. The page sends JSON:
 //
 //	{t:"input", seq, input}  run it, then capture on the screenBurst schedule; frames carry ack = seq
-//	{t:"cfg", w, q}          new size / quality: the next frame is a full one
+//	{t:"cfg", w, q, vw, vh}  new size / quality (vw / vh: the viewer's box, for a browser tab): the next frame is a full one
 //	{t:"full"}               resend the whole picture (the refresh button)
+//	{t:"copy"}               a browser tab: send the selected text back (header.text)
 //
 // Input never reaches the log: typed text is often a password.
 func (s *Server) screenStream(w http.ResponseWriter, r *http.Request) {
@@ -52,7 +84,10 @@ func (s *Server) screenStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer conn.Close()
+	streamPictures(conn, r, desktopSource{s})
+}
 
+func streamPictures(conn *websocket.Conn, r *http.Request, src pictureSource) {
 	type cfg struct{ w, q int }
 	parse := func(w, q int) cfg {
 		c := cfg{1600, 60}
@@ -68,6 +103,7 @@ func (s *Server) screenStream(w http.ResponseWriter, r *http.Request) {
 	cfgs := make(chan cfg, 4)       // new size / quality
 	fulls := make(chan struct{}, 1) // resend everything
 	errs := make(chan string, 4)    // an input failed: told to the page
+	texts := make(chan string, 2)   // a selection asked for with copy
 	done := make(chan struct{})
 
 	const readWait = 70 * time.Second
@@ -89,6 +125,8 @@ func (s *Server) screenStream(w http.ResponseWriter, r *http.Request) {
 				Input screen.Input `json:"input"`
 				W     int          `json:"w"`
 				Q     int          `json:"q"`
+				VW    int          `json:"vw"`
+				VH    int          `json:"vh"`
 			}
 			if json.Unmarshal(b, &m) != nil {
 				continue
@@ -96,10 +134,10 @@ func (s *Server) screenStream(w http.ResponseWriter, r *http.Request) {
 			switch m.T {
 			case "input":
 				// Here, in order: a typed string must not overtake the click that focused its field
-				if !s.screenOn() {
+				if src.Off() != "" {
 					return
 				}
-				if err := screen.Do(m.Input); err != nil {
+				if err := src.Do(m.Input); err != nil {
 					select {
 					case errs <- err.Error():
 					default:
@@ -110,6 +148,9 @@ func (s *Server) screenStream(w http.ResponseWriter, r *http.Request) {
 				default:
 				}
 			case "cfg":
+				if m.VW > 0 && m.VH > 0 {
+					src.Size(m.VW, m.VH)
+				}
 				select {
 				case cfgs <- parse(m.W, m.Q):
 				default:
@@ -117,6 +158,11 @@ func (s *Server) screenStream(w http.ResponseWriter, r *http.Request) {
 			case "full":
 				select {
 				case fulls <- struct{}{}:
+				default:
+				}
+			case "copy":
+				select {
+				case texts <- src.Selection():
 				default:
 				}
 			}
@@ -143,18 +189,22 @@ func (s *Server) screenStream(w http.ResponseWriter, r *http.Request) {
 		lastSend = time.Now()
 		return true
 	}
+	var lastPage screen.Page
 	capture := func() bool {
-		if !s.screenOn() {
-			send(screen.Message(screen.Header{Err: "remote screen is off (Settings → Remote access)"}, nil))
+		if off := src.Off(); off != "" {
+			send(screen.Message(screen.Header{Err: off}, nil))
 			return false
 		}
-		m, err := screen.Grab(c.w)
+		m, err := src.Grab(c.w)
 		h := screen.Header{Ack: ack}
+		if p := src.Page(); p != nil && *p != lastPage {
+			lastPage, h.Page = *p, p
+		}
 		if err != nil {
 			h.Err = err.Error()
 			return send(screen.Message(h, nil))
 		}
-		if fx, fy, ok := screen.Cursor(); ok {
+		if fx, fy, ok := src.Cursor(); ok {
 			h.Cur = &[2]float64{fx, fy}
 		}
 		rects, payload, full, err := d.Diff(m, c.q)
@@ -164,7 +214,7 @@ func (s *Server) screenStream(w http.ResponseWriter, r *http.Request) {
 		}
 		moved := (h.Cur == nil) != (lastCur == nil) || (h.Cur != nil && *h.Cur != *lastCur)
 		// Nothing new to draw or acknowledge: stay quiet, except a keepalive now and then
-		if len(rects) == 0 && ack == sentAck && !moved && time.Since(lastSend) < 10*time.Second {
+		if len(rects) == 0 && ack == sentAck && !moved && h.Page == nil && time.Since(lastSend) < 10*time.Second {
 			return true
 		}
 		seq++
@@ -205,6 +255,14 @@ func (s *Server) screenStream(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			timer.Reset(next())
+		case <-src.Changed():
+			if !capture() {
+				return
+			}
+		case txt := <-texts:
+			if !send(screen.Message(screen.Header{Ack: ack, Text: txt}, nil)) {
+				return
+			}
 		case <-ping.C:
 			_ = conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 			if conn.WriteMessage(websocket.PingMessage, nil) != nil {

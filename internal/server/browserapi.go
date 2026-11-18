@@ -1,12 +1,15 @@
 package server
 
 import (
+	"image"
 	"net/http"
+	"strconv"
 
 	"github.com/gorilla/websocket"
 
 	"github.com/gerdr-dev/gerdr/internal/chromeext"
 	"github.com/gerdr-dev/gerdr/internal/i18n"
+	"github.com/gerdr-dev/gerdr/internal/screen"
 )
 
 // /api/browser: the user's own Chrome through Gerdr's browser extension (internal/chromeext,
@@ -39,6 +42,8 @@ func (s *Server) browserRoutes(mux *http.ServeMux) {
 		}
 		writeJSON(w, map[string]any{"profiles": b.Profiles(), "tabs": b.Tabs()})
 	})
+	// open a page: in the project's own browser (the Browser pane shows it), or with chrome / profile in the user's
+	// Chrome through the extension. The project is the caller's (ResolveSpace) unless given.
 	mux.HandleFunc("POST /api/browser/open", func(w http.ResponseWriter, r *http.Request) {
 		b := br(w)
 		if b == nil {
@@ -46,24 +51,70 @@ func (s *Server) browserRoutes(mux *http.ServeMux) {
 		}
 		var in struct {
 			URL     string `json:"url"`
+			Chrome  bool   `json:"chrome"`
 			Profile string `json:"profile"`
 			Why     string `json:"why"`
 			Focused bool   `json:"focused"`
 			Width   int    `json:"width"`
 			Height  int    `json:"height"`
+			Caller
+			// NoWait: return as soon as the page is open (the pane's own address bar), not after its first load
+			NoWait bool `json:"noWait"`
 		}
 		if err := decode(r, &in); err != nil {
 			httpError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		t, err := b.Open(r.Context(), chromeext.OpenOptions{URL: in.URL, Profile: in.Profile, Why: in.Why, Focused: in.Focused, Width: in.Width, Height: in.Height})
-		if err != nil {
-			httpError(w, http.StatusBadGateway, err.Error())
-			return
+		var id int
+		if in.Chrome || in.Profile != "" || s.ProjBrowser == nil {
+			t, err := b.Open(r.Context(), chromeext.OpenOptions{URL: in.URL, Profile: in.Profile, Why: in.Why, Focused: in.Focused, Width: in.Width, Height: in.Height})
+			if err != nil {
+				httpError(w, http.StatusBadGateway, err.Error())
+				return
+			}
+			id = t.ID
+		} else {
+			project := s.browserProject(in.Caller)
+			tab, err := s.ProjBrowser.Open(r.Context(), project, in.URL, in.Width, in.Height)
+			if err != nil {
+				httpError(w, http.StatusBadGateway, err.Error())
+				return
+			}
+			id = tab
+			// the UI puts the Browser pane beside the agent that opened it (ui/src/lib/actions/browser.ts)
+			s.Hub.Broadcast("browser_open", map[string]any{"tab": id, "project": project, "session": in.Caller.Session})
 		}
 		// wait for the first load; a page that never settles is still open and usable
-		b.Act(r.Context(), t.ID, "wait", chromeext.ActArgs{Load: true, Timeout: 30000})
-		writeJSON(w, t)
+		if !in.NoWait {
+			b.Act(r.Context(), id, "wait", chromeext.ActArgs{Load: true, Timeout: 30000})
+		}
+		for _, t := range b.Tabs() {
+			if t.ID == id {
+				writeJSON(w, t)
+				return
+			}
+		}
+		httpError(w, http.StatusBadGateway, i18n.S("页面刚打开就关了", "The page closed right after opening"))
+	})
+	// the Browser pane: a tab's screen and input over the remote screen's stream (screenstream.go)
+	mux.HandleFunc("GET /api/browser/view", func(w http.ResponseWriter, r *http.Request) {
+		b := br(w)
+		if b == nil {
+			return
+		}
+		id, _ := strconv.Atoi(r.URL.Query().Get("tab"))
+		v, err := b.View(id)
+		if err != nil {
+			httpError(w, http.StatusNotFound, err.Error())
+			return
+		}
+		defer v.Close()
+		conn, err := screenUpgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		streamPictures(conn, r, browserSource{v})
 	})
 	mux.HandleFunc("POST /api/browser/close", func(w http.ResponseWriter, r *http.Request) {
 		b := br(w)
@@ -106,6 +157,34 @@ func (s *Server) browserRoutes(mux *http.ServeMux) {
 		}
 		writeJSON(w, res)
 	})
+}
+
+// browserProject: the project a browser page opens in: the caller's, else the default one.
+func (s *Server) browserProject(c Caller) string {
+	if c.Session != "" && c.SessionCwd == "" && s.Hub != nil {
+		if self, err := s.Hub.Session(c.Session); err == nil {
+			c.SessionCwd = self.Summary().Cwd
+		}
+	}
+	if p := ResolveSpace(s.Layout.Get(), c, s.workProject()); p != "" {
+		return p
+	}
+	return DefaultSpace
+}
+
+// browserSource: a tab as the stream's picture (chromeext.View).
+type browserSource struct{ v *chromeext.View }
+
+func (b browserSource) Grab(w int) (*image.RGBA, error)  { return b.v.Grab(w) }
+func (b browserSource) Cursor() (float64, float64, bool) { return 0, 0, false }
+func (b browserSource) Do(in screen.Input) error         { return b.v.Do(in) }
+func (b browserSource) Off() string                      { return b.v.Gone() }
+func (b browserSource) Changed() <-chan struct{}         { return b.v.Changed() }
+func (b browserSource) Size(w, h int)                    { b.v.Size(w, h) }
+func (b browserSource) Selection() string                { return b.v.Selection() }
+func (b browserSource) Page() *screen.Page {
+	p := b.v.Page()
+	return &p
 }
 
 var browserUpgrader = websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return r.Header.Get("Origin") == "" }}

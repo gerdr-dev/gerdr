@@ -13,3 +13,4 @@ export * from "./actions/terminal";
 export * from "./actions/sessions";
 export * from "./actions/runAction";
 export * from "./actions/files";
+export * from "./actions/browser";

@@ -11,6 +11,7 @@ import { stepSpace } from "./spaces";
 import { addTab, closeTab, lastTab, selectTab, stepTab } from "./tabs";
 import { navBack, navForward } from "./nav";
 import { openTerminal } from "./terminal";
+import { openBrowserPane } from "./browser";
 import { closeWorkspace, selectWorkspaceN, stepWorkspace } from "./workspaces";
 import { currentView, type ViewName } from "./views";
 import { t } from "../i18n";
@@ -75,6 +76,7 @@ const CODE: Record<Exclude<KeyAction, keyof typeof APP>, Run> = {
   duplicateDown: () => duplicateFocused("down"),
   splitTerminal: () => openTerminal("right"),
   splitTerminalDown: () => openTerminal("down"),
+  splitBrowser: () => openBrowserPane("right"),
   terminalTab: () => openTerminal("tab"),
   closePane: () => confirmCloseFocusedPane(),
   zoom: () => toggleZoom(),

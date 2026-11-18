@@ -12,6 +12,7 @@ export type KeyAction =
   | "duplicateDown"
   | "splitTerminal"
   | "splitTerminalDown"
+  | "splitBrowser"
   | "terminalTab"
   | "closePane"
   | "zoom"
@@ -92,6 +93,7 @@ export const ACTION_TITLES: Record<KeyAction, string> = {
   duplicateDown: t("keys.duplicateDown"),
   splitTerminal: t("keys.splitTerminal"),
   splitTerminalDown: t("keys.splitTerminalDown"),
+  splitBrowser: t("keys.splitBrowser"),
   terminalTab: t("keys.terminalTab"),
   closePane: t("keys.closePane"),
   zoom: t("keys.zoom"),
@@ -179,6 +181,8 @@ const MAC_KEYS: Record<KeyAction, string[]> = {
   // prefix+t 在 tmux 里是大钟，没人用；herdr 也没占
   splitTerminal: ["prefix+t"],
   splitTerminalDown: ["prefix+shift+-"],
+  // the project's browser beside the chat (components/browser/); i for internet: o / w are taken
+  splitBrowser: ["prefix+i"],
   terminalTab: ["prefix+shift+c"],
   closePane: ["prefix+x", "meta+w"],
   zoom: ["prefix+z", "meta+shift+enter"],
@@ -318,6 +322,7 @@ export const KEY_GROUPS: [string, KeyAction[]][] = [
       "splitDown",
       "splitTerminal",
       "splitTerminalDown",
+      "splitBrowser",
       "closePane",
       "zoom",
       "focusLeft",

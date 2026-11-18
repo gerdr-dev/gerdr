@@ -9,25 +9,81 @@ import (
 	"os/exec"
 	"runtime"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/gerdr-dev/gerdr/internal/i18n"
 )
 
-// Tab is a window Gerdr opened in the user's Chrome. It stays open until closed (`gerdr browser close`, the user
-// closing it, the extension stopping it); its endpoint takes one CDP client at a time.
+// Tab is a window Gerdr drives: one it opened in the user's Chrome through the extension, or a page of a project's own
+// browser (internal/projbrowser, Adopt). It stays open until closed (`gerdr browser close`, the user closing it, the
+// extension stopping it). An extension tab's endpoint takes one CDP client at a time.
 type Tab struct {
 	ID      int    `json:"tab"`
-	Profile string `json:"profile"`
-	URL     string `json:"url"`            // what it was opened on
-	WS      string `json:"ws"`             // CDP browser WebSocket
-	HTTP    string `json:"http"`           // the same as http://host:port (for clients that fetch /json/version)
-	Gone    string `json:"gone,omitempty"` // why it can't be driven any more; "" while it can
+	Profile string `json:"profile,omitempty"`
+	Project string `json:"project,omitempty"` // a project's own browser (projbrowser); "" = the user's Chrome
+	URL     string `json:"url"`               // what it was opened on
+	WS      string `json:"ws,omitempty"`      // CDP browser WebSocket (extension tabs only)
+	HTTP    string `json:"http,omitempty"`    // the same as http://host:port (for clients that fetch /json/version)
+	Gone    string `json:"gone,omitempty"`    // why it can't be driven any more; "" while it can
 	Opened  int64  `json:"opened"`
 
-	conn *Conn
-	ep   *Endpoint
-	log  *tabLog // console, network, the open dialog (actions.go)
+	// send runs one DevTools command in the page: through the extension, or the project browser's pipe
+	send func(ctx context.Context, method string, params json.RawMessage) (json.RawMessage, error)
+	// sendQuiet is send for the person's own input from the Browser pane: the extension then draws no cursor for it
+	// (cdpTo). nil = send (a project browser's page has no such cursor).
+	sendQuiet func(ctx context.Context, method string, params json.RawMessage) (json.RawMessage, error)
+	close     func(keep bool)
+	// resize the window itself (the Browser pane's size); nil where the window isn't ours to size (the user's Chrome)
+	resize func(ctx context.Context, width, height int) error
+	ep     *Endpoint
+	log    *tabLog // console, network, the open dialog (actions.go)
+	watch  *watchers
+	cast   *caster // the screencast its viewers share (view.go)
+}
+
+// watchers get a tab's DevTools events (the Browser pane's screencast, view.go).
+type watchers struct {
+	mu   sync.Mutex
+	next int
+	fns  map[int]func(method string, params json.RawMessage)
+}
+
+func (w *watchers) add(fn func(string, json.RawMessage)) func() {
+	w.mu.Lock()
+	w.next++
+	id := w.next
+	w.fns[id] = fn
+	w.mu.Unlock()
+	return func() {
+		w.mu.Lock()
+		delete(w.fns, id)
+		w.mu.Unlock()
+	}
+}
+
+func (w *watchers) emit(method string, params json.RawMessage) {
+	w.mu.Lock()
+	fns := make([]func(string, json.RawMessage), 0, len(w.fns))
+	for _, fn := range w.fns {
+		fns = append(fns, fn)
+	}
+	w.mu.Unlock()
+	for _, fn := range fns {
+		fn(method, params)
+	}
+}
+
+func newTab(id int, url string) *Tab {
+	t := &Tab{ID: id, URL: url, Opened: time.Now().UnixMilli(), log: newTabLog(), watch: &watchers{fns: map[int]func(string, json.RawMessage){}}}
+	t.cast = &caster{t: t}
+	return t
+}
+
+// event takes one DevTools event of the page.
+func (t *Tab) event(method string, params json.RawMessage) {
+	t.log.record(method, params)
+	t.watch.emit(method, params)
 }
 
 // OpenOptions for Bridge.Open.
@@ -92,16 +148,32 @@ func (b *Bridge) Open(ctx context.Context, o OpenOptions) (*Tab, error) {
 	if err != nil {
 		return nil, err
 	}
-	t := &Tab{ID: tabID, Profile: conn.ID, URL: o.URL, Opened: time.Now().UnixMilli(), conn: conn, log: newTabLog()}
+	t := newTab(tabID, o.URL)
+	t.Profile = conn.ID
+	t.send = func(ctx context.Context, method string, params json.RawMessage) (json.RawMessage, error) {
+		return cdp(ctx, conn, tabID, method, params)
+	}
+	t.sendQuiet = func(ctx context.Context, method string, params json.RawMessage) (json.RawMessage, error) {
+		return cdpTo(ctx, conn, tabID, method, params, true)
+	}
 	ep, err := newEndpoint(conn, tabID, window, func(ev Event) { b.tabEvent(t, ev) })
 	if err != nil {
 		conn.Close(tabID)
 		return nil, err
 	}
 	t.ep, t.WS, t.HTTP = ep, ep.URL, ep.HTTPURL()
+	t.close = func(keep bool) {
+		ep.Close()
+		if keep {
+			conn.Release(tabID)
+		} else {
+			conn.Close(tabID)
+		}
+	}
 	b.mu.Lock()
 	b.tabs[tabID] = t
 	b.mu.Unlock()
+	b.tabsChanged()
 	ectx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	for _, m := range []string{"Page.enable", "Runtime.enable", "Network.enable", "Log.enable"} {
@@ -121,7 +193,7 @@ func (b *Bridge) tabEvent(t *Tab, ev Event) {
 	var why string
 	switch {
 	case ev.Kind == "cdp":
-		t.log.record(ev.Method, ev.Params)
+		t.event(ev.Method, ev.Params)
 		return
 	case ev.Kind == "closed":
 		why = i18n.S("窗口关了", "The window was closed")
@@ -146,6 +218,7 @@ func (b *Bridge) tabEvent(t *Tab, ev Event) {
 	if closed {
 		t.ep.Close()
 	}
+	b.tabsChanged()
 }
 
 // Tabs Gerdr has open, oldest first.
@@ -172,7 +245,7 @@ func (b *Bridge) tab(id int) (*Tab, error) {
 		}
 		if last == nil {
 			b.mu.Unlock()
-			return nil, errors.New(i18n.S("Gerdr 还没在 Chrome 里开窗口：先 open", "Gerdr has no window open in Chrome: open one first"))
+			return nil, errors.New(i18n.S("Gerdr 还没开浏览器窗口：先 open", "Gerdr has no browser window open: open one first"))
 		}
 		id = last.ID
 	}
@@ -207,12 +280,8 @@ func (b *Bridge) Close(id int, keep bool) error {
 	if t == nil {
 		return nil
 	}
-	t.ep.Close()
-	if keep {
-		t.conn.Release(id)
-	} else {
-		t.conn.Close(id)
-	}
+	t.close(keep)
+	b.tabsChanged()
 	return nil
 }
 

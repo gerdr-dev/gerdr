@@ -40,12 +40,24 @@ Like herdr / tmux: press the prefix `ctrl+b`, release, then:
 | `g` | session list | `o` | jump to a session waiting on you |
 | `u` / `d` | previous / next session needing you | `:` | command palette (also `⌘K`) |
 | `t` | terminal | `b` | sidebar |
-| `?` | all shortcuts | | |
+| `i` | browser on the right | `?` | all shortcuts |
 
 Keys are matched by physical position, so they work with a CJK input method on. Rebind everything in
 Settings → Shortcuts. The macOS app adds menu shortcuts: `⌘T` new tab, `⌘1…9` go to the Nth agent under "Active" in the sidebar (hold `⌘` to see the numbers; tabs are `prefix+1…9`), `⌘E` back to the last tab even in another workspace, `⌘D` / `⌘⇧D` duplicate
 the focused pane to the right / below (a new session with the same agent, directory and mode, or a terminal in the
 same directory).
+
+## the Browser pane
+
+A browser can sit beside the chat: the pane's "⋯" menu → "Browser on the right", or `prefix+i`, then type an address
+at the top. Pages an agent opens with `gerdr browser open` show up beside it too: you watch it work and can click and
+type there yourself (input methods and paste included), e.g. to sign in or solve a captcha for it.
+
+Each project has its own browser (the profile lives in `~/.gerdr/projects/<project>/browser`): a site signed in to
+in one project stays signed in there, and other projects don't see it. It is a Chrome Gerdr runs in the background (the
+Chrome / Edge / Brave / Chromium installed on the computer), streamed to the pane tile by tile, so it works on a phone
+and over remote access too. For an agent to use your everyday, already signed-in Chrome, see the browser extension
+(`gerdr browser open --chrome`).
 
 ## memory use
 

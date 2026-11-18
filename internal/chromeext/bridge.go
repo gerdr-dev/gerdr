@@ -35,17 +35,30 @@ var ExtensionIDs = []string{"okkofibhcocmcnafoamflffmkgiphppc"}
 type Bridge struct {
 	Log *slog.Logger
 
-	mu    sync.Mutex
-	conns map[string]*Conn
-	wake  chan struct{} // closed and replaced when connections or allowed sites change
-	tabs  map[int]*Tab
+	// OnTabs runs (on its own goroutine) when a tab opens or closes: the server tells the UI (the Browser pane)
+	OnTabs func()
+
+	mu        sync.Mutex
+	conns     map[string]*Conn
+	wake      chan struct{} // closed and replaced when connections or allowed sites change
+	tabs      map[int]*Tab
+	nextOwned int // ids of adopted pages (Adopt)
 }
 
 func New(log *slog.Logger) *Bridge {
 	if log == nil {
 		log = slog.Default()
 	}
-	return &Bridge{Log: log, conns: map[string]*Conn{}, wake: make(chan struct{}), tabs: map[int]*Tab{}}
+	// Adopted pages count up from a point that differs from one run to the next: a Browser pane remembers its page's
+	// number in the layout, and after a restart a new page with the same number would show up in it
+	start := int(time.Now().Unix()%90000) * 10
+	return &Bridge{Log: log, conns: map[string]*Conn{}, wake: make(chan struct{}), tabs: map[int]*Tab{}, nextOwned: start}
+}
+
+func (b *Bridge) tabsChanged() {
+	if fn := b.OnTabs; fn != nil {
+		go fn()
+	}
 }
 
 func (b *Bridge) changed() {

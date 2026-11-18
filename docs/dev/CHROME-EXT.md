@@ -2,6 +2,9 @@
 
 Status: first version (2026-11-17), loaded unpacked; not in the Chrome Web Store yet.
 
+Since 2026-11-18 `gerdr browser open` goes to the project's own browser by default (docs/dev/BROWSER-PANE.md, shown in
+the Browser pane); the extension is `open --chrome` / `--profile`. Both are tabs of the same `chromeext.Bridge`.
+
 Agents work in the Chrome the user uses every day, signed in as they already are, on the sites the user allowed.
 Same design as Annulo's extension (annulo repo, `browser-extension/` and `docs/browser-extension.md`, which has the
 reasons: why an extension and not `--remote-debugging-port`, why `debugger`, why native messaging), ported with the

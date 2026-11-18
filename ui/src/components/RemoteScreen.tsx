@@ -10,6 +10,7 @@ import { t } from "@/lib/i18n";
 import type { MessageKey } from "@/lib/messages";
 import { closeDialog, set, setConfig, useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
+import { paintFrame, parseFrame, wsURL } from "@/lib/screenStream";
 
 // Settings → Remote access → Control this computer (backend: internal/screen, server/screenstream.go). A WebSocket carries the inputs
 // up and the picture down: the backend captures right after each input (60 / 150 / 300 ms… later) and then once a
@@ -60,24 +61,6 @@ function loadQuality(): Quality {
   } catch {
     return "std";
   }
-}
-
-type Frame = {
-  seq: number;
-  w: number;
-  h: number;
-  full?: boolean;
-  ack: number;
-  cur?: [number, number];
-  rects: [number, number, number, number, number][];
-  err?: string;
-  inputErr?: string;
-};
-
-/** Reads one stream message: a 4-byte big-endian header length, the header JSON, then the rects' JPEGs back to back. */
-function parseFrame(buf: ArrayBuffer): { h: Frame; body: number } {
-  const n = new DataView(buf).getUint32(0);
-  return { h: JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 4, n))) as Frame, body: 4 + n };
 }
 
 export function RemoteScreen({ open }: { open: boolean }) {
@@ -252,24 +235,7 @@ export function RemoteScreen({ open }: { open: boolean }) {
     if (!h.w) return;
     const cv = canvasRef.current;
     if (!cv) return;
-    let off = body;
-    const bitmaps = await Promise.all(
-      h.rects.map(([, , , , len]) => {
-        const blob = new Blob([new Uint8Array(buf, off, len)], { type: "image/jpeg" });
-        off += len;
-        return createImageBitmap(blob);
-      }),
-    );
-    if (h.full || cv.width !== h.w || cv.height !== h.h) {
-      cv.width = h.w;
-      cv.height = h.h;
-      setSize({ w: h.w, h: h.h });
-    }
-    const ctx = cv.getContext("2d");
-    h.rects.forEach(([x, y], i) => {
-      ctx?.drawImage(bitmaps[i], x, y);
-      bitmaps[i].close();
-    });
+    if (await paintFrame(cv, buf, h, body)) setSize({ w: h.w, h: h.h });
     setHasPic(true);
     setShotErr("");
     setLoading(false);
@@ -299,9 +265,7 @@ export function RemoteScreen({ open }: { open: boolean }) {
     const connect = () => {
       if (!alive || document.visibilityState !== "visible") return;
       const { w, q } = want();
-      const ws = new WebSocket(
-        `${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}/api/screen/stream?w=${w}&q=${q}${host ? `&host=${encodeURIComponent(host)}` : ""}`,
-      );
+      const ws = new WebSocket(wsURL(`/api/screen/stream?w=${w}&q=${q}${host ? `&host=${encodeURIComponent(host)}` : ""}`));
       ws.binaryType = "arraybuffer";
       wsRef.current = ws;
       let last = Date.now();

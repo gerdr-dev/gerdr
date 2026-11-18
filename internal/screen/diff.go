@@ -30,6 +30,8 @@ type Header struct {
 	Rects []Rect      `json:"rects"`
 	Err   string      `json:"err,omitempty"`      // capturing failed (no grant, switched off)
 	InErr string      `json:"inputErr,omitempty"` // an input failed
+	Page  *Page       `json:"page,omitempty"`     // a browser tab: where it is now, sent when it changes
+	Text  string      `json:"text,omitempty"`     // a browser tab: the selection a {t:"copy"} asked for
 }
 
 // Differ remembers the last picture sent to one viewer.

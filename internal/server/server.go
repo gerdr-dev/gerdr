@@ -38,6 +38,7 @@ import (
 	"github.com/gerdr-dev/gerdr/internal/hub"
 	"github.com/gerdr-dev/gerdr/internal/i18n"
 	"github.com/gerdr-dev/gerdr/internal/peer"
+	"github.com/gerdr-dev/gerdr/internal/projbrowser"
 	"github.com/gerdr-dev/gerdr/internal/remote"
 	"github.com/gerdr-dev/gerdr/internal/service"
 	"github.com/gerdr-dev/gerdr/internal/term"
@@ -96,6 +97,9 @@ type Server struct {
 	Doctor *doctor.Doctor
 	// Browser: the user's own Chrome through Gerdr's browser extension (browserapi.go). nil = off.
 	Browser *chromeext.Bridge
+	// ProjBrowser: each project's own headless browser, its pages in Browser's tab list (browserapi.go,
+	// docs/dev/BROWSER-PANE.md). nil = off.
+	ProjBrowser *projbrowser.Manager
 	// Peers: other computers this Gerdr drives (hosts.go, docs/dev/MULTIHOST.md). nil = off (tests).
 	Peers       *peer.Manager
 	remoteConns remoteConns // 正在连着的远程界面（remoteconns.go）

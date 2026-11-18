@@ -53,10 +53,11 @@ func browserTools() []mcpTool {
 		return mcpTool{Name: name, Description: desc, InputSchema: s, action: action}
 	}
 	return []mcpTool{
-		tool("status", "", "The Chrome profiles connected through the Gerdr extension, the sites the user allowed, and the windows open now.", nil),
-		tool("open", "", "Open a window on a URL in the user's own Chrome (signed in as they are) and wait for it to load. The first time a site is used the extension asks the user to Allow it; this waits for that (up to 10 minutes): tell the user to look at Chrome. Returns the window number (tab).",
-			map[string]any{"url": str("http(s) URL"), "why": str("Shown to the user when asking to allow the site"), "size": str("Window size like 1440x900"), "focus": boolean("Bring the window to the front"),
-				"profile": str("Which Chrome profile: the name the user gave it (status lists them, like Work) or its id; default: one that allowed the site")}, "url"),
+		tool("status", "", "The pages open now, the Chrome profiles connected through the Gerdr extension and the sites the user allowed there.", nil),
+		tool("open", "", "Open a page on a URL and wait for it to load; returns its number (tab). By default in the project's own browser: a profile per project that stays signed in, shown to the user in the Browser pane beside the chat, where they can sign in for you. With chrome (or profile): in the user's own Chrome through the Gerdr extension, signed in as they are; the first time a site is used there the extension asks the user to Allow it and this waits (up to 10 minutes): tell the user to look at Chrome.",
+			map[string]any{"url": str("http(s) URL"), "chrome": boolean("Open in the user's own Chrome instead of the project's browser"), "size": str("Window size like 1440x900"),
+				"why": str("chrome: shown to the user when asking to allow the site"), "focus": boolean("chrome: bring the window to the front"),
+				"profile": str("chrome: which Chrome profile, the name the user gave it (status lists them, like Work) or its id; default: one that allowed the site")}, "url"),
 		tool("close", "", "Close the window (keep: leave it open for the user, no longer driven).", map[string]any{"keep": boolean("Leave it to the user")}),
 		tool("snapshot", "snapshot", "An outline of the page: everything that can be acted on (links, buttons, fields…) and the page's structure, each with a ref (e12) to use in click / type / fill / scroll / hover. Take a new one after the page changes.",
 			map[string]any{"all": boolean("Include the text too"), "viewport": boolean("Only what is in the window now"), "find": str("Only lines containing this text"), "max": num("At most this many lines (default 400)")}),
@@ -119,8 +120,8 @@ func serveBrowserMCP() error {
 				"protocolVersion": "2024-11-05",
 				"capabilities":    map[string]any{"tools": map[string]any{}},
 				"serverInfo":      map[string]any{"name": "gerdr-browser", "version": version.Version},
-				"instructions": "Work in the user's own Chrome, signed in as they are, through the Gerdr extension. Loop: open → snapshot (refs like e12) → click / type / fill / key / scroll by ref → snapshot or screenshot to check → close. " +
-					"Without tab, actions use the window opened last. Each site needs the user's Allow the first time (open waits for it).",
+				"instructions": "Work on web pages: in the project's own browser (shown in Gerdr's Browser pane, signed in per project) or, with open's chrome, in the user's own Chrome through the Gerdr extension. Loop: open → snapshot (refs like e12) → click / type / fill / key / scroll by ref → snapshot or screenshot to check → close. " +
+					"Without tab, actions use the page opened last. A sign-in: ask the user to do it in the Browser pane. In the user's Chrome each site needs their Allow the first time (open waits for it).",
 			})
 		case "ping":
 			reply(m.ID, map[string]any{})
@@ -162,6 +163,7 @@ func callBrowserTool(byName map[string]mcpTool, name string, raw json.RawMessage
 		Focus   bool   `json:"focus"`
 		Keep    bool   `json:"keep"`
 		Profile string `json:"profile"`
+		Chrome  bool   `json:"chrome"`
 	}
 	if err := json.Unmarshal(raw, &common); err != nil {
 		return fail(err)
@@ -181,7 +183,7 @@ func callBrowserTool(byName map[string]mcpTool, name string, raw json.RawMessage
 				return fail(err)
 			}
 		}
-		o, err := browserOpen(common.URL, common.Why, common.Profile, common.Focus, w, h)
+		o, err := browserOpen(common.URL, common.Why, common.Profile, common.Chrome, common.Focus, w, h)
 		if err != nil {
 			return fail(err)
 		}

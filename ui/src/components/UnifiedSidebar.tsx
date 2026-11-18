@@ -19,6 +19,7 @@ import {
   Plus,
   Search,
   SquareDashed,
+  Globe,
   SquareTerminal,
   SquareSplitHorizontal,
   X,
@@ -172,13 +173,22 @@ type Item = { ws: Workspace; tab: Tab; pane: PaneLeaf; split: boolean; s?: Sessi
 /** Stuck on you: asking or failed. Finished-and-unread is not counted, it isn't waiting on anything. */
 const needsYou = (s: SessionSummary | undefined) => !!s && (s.status === "waiting" || s.status === "error");
 
-/** What a row shows for a pane: an agent, a terminal, a file, a subagent, or a new conversation not started yet. */
+function hostOf(u: string) {
+  try {
+    return new URL(u).host || u;
+  } catch {
+    return u;
+  }
+}
+
+/** What a row shows for a pane: an agent, a terminal, a file, a subagent, a browser, or a new conversation not started yet. */
 function paneLabel(p: PaneLeaf, s: SessionSummary | undefined): { title: string; sub: string } {
   if (s) return { title: s.title || basename(s.cwd), sub: basename(s.cwd) };
   if (p.term) return { title: t("unifiedSidebar.terminal"), sub: basename(p.term.cwd) };
   if (p.file?.folder) return { title: p.file.session ? t("folder.open") : basename(p.file.path), sub: basename(p.file.path) };
   if (p.file) return { title: basename(p.file.path), sub: t("unifiedSidebar.file") };
   if (p.sub) return { title: p.sub.title || t("unifiedSidebar.subagent"), sub: t("unifiedSidebar.subagent") };
+  if (p.browser) return { title: p.browser.url ? hostOf(p.browser.url) : t("browser.empty"), sub: t("browser.empty") };
   return { title: t("unifiedSidebar.newSession"), sub: p.draft?.cwd ? basename(p.draft.cwd) : "" };
 }
 
@@ -306,6 +316,7 @@ export function UnifiedSidebar({ className }: { className?: string }) {
             pane.sub?.title,
             pane.term ? `${t("unifiedSidebar.terminal")} ${pane.term.cwd}` : "",
             pane.file?.path,
+            pane.browser?.url,
           ]
             .join(" ")
             .toLowerCase()
@@ -721,7 +732,7 @@ const Row = memo(function Row({
     if (inSplit) movePane(pane.id, { tabId: activeTabId, side: "right" });
     else mergeTab(tab.id, activeTabId, undefined, "right");
   };
-  const Icon = pane.term ? SquareTerminal : pane.file?.folder ? FolderOpen : pane.file ? FileText : pane.sub ? Columns2 : SquareDashed;
+  const Icon = pane.term ? SquareTerminal : pane.file?.folder ? FolderOpen : pane.file ? FileText : pane.sub ? Columns2 : pane.browser ? Globe : SquareDashed;
   // Picked and still loading after a moment (the drawer stays open till then, App.tsx): say so on the row itself
   const loading = useSlowCatchUp(current ? s?.id : undefined);
   const roomy = useContext(Roomy);

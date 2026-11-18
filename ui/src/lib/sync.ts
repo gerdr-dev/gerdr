@@ -391,6 +391,13 @@ function handle(m: any) {
     case "open":
       import("./actions").then((a) => a.openSessionNear(m.data?.id, m.data?.near, !!m.data?.focus));
       break;
+    // Browser panes (actions/browser.ts): the pages open now, and an agent opening one
+    case "browser_tabs":
+      import("./actions").then((a) => a.setBrowserTabs(Array.isArray(m.data) ? m.data : []));
+      break;
+    case "browser_open":
+      if (m.data?.tab) import("./actions").then((a) => a.browserOpened(m.data));
+      break;
     case "close":
       import("./actions").then((a) => a.closeSessionPanes(m.data?.id));
       break;

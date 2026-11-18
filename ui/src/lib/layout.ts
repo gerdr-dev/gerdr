@@ -10,6 +10,9 @@ import { t } from "./i18n";
  * path is absolute (resolved when it was opened), so the pane doesn't depend on which session's directory it came from.
  * folder: the path is an artifacts folder (components/folder/, docs/dev/ARTIFACTS.md), drawn as a tree with records;
  * session: whose folder it is (it may not exist yet, and its records are looked up by the session).
+ * browser: a page of the project's own browser (components/browser/, docs/dev/BROWSER-PANE.md); tab is the backend's
+ * page number (gerdr browser -t), unset until a page is opened in it. project: whose browser. url: where it last was,
+ * to open again after Gerdr restarted (pages don't outlive the backend).
  */
 export type PaneLeaf = {
   type: "pane";
@@ -21,6 +24,7 @@ export type PaneLeaf = {
   term?: { id: string; cwd: string };
   /** host: on another computer (docs/dev/MULTIHOST.md) */
   file?: { path: string; host?: string; folder?: boolean; session?: string };
+  browser?: { project: string; tab?: number; url?: string };
 };
 export type PaneSplit = { type: "split"; id: string; dir: "row" | "col"; ratio: number; a: PaneNode; b: PaneNode };
 export type PaneNode = PaneLeaf | PaneSplit;
