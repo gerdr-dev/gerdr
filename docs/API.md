@@ -87,8 +87,10 @@ curl -s -H "Authorization: Bearer $T" http://127.0.0.1:7870/api/pending
 `POST /api/sessions/{id}/send`，body `{"content": [{"type": "text", "text": "…"}], "id": "<自己生成的 UUID>"}`。
 它在跑的话会插进它这一轮（不打断）。`id` 用来去重：网络不好重发同一条时拿同一个 id，不会发出两条。
 
-回 409 + `"code": "held_elsewhere"`：这个会话还在别处（herdr / 终端里的 claude、另一个 Codex）开着，两边同时写会分叉。
-界面上会让人挑怎么处理；程序这边可以 `POST /api/sessions/{id}/takeover` `{"action": "fork"}` 另起一份再重发。
+If the session is still open somewhere else (an interactive claude in herdr / a terminal, another Codex), writing
+from both would fork it, so Gerdr first forks it into a copy with the whole history that lives only in Gerdr (the other
+one is untouched) and sends there; the conversation says so. To close the other one instead, call
+`POST /api/sessions/{id}/takeover` `{"action": "kill"}` before sending.
 
 ## 实时推送
 

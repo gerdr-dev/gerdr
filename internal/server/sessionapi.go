@@ -508,13 +508,6 @@ func (s *Server) sessionOp(fn func(*http.Request, *hub.Session) (any, error)) ht
 			return
 		}
 		res, err := fn(r, sess)
-		var held *hub.HeldError
-		if errors.As(err, &held) {
-			w.Header().Set("Content-Type", "application/json; charset=utf-8")
-			w.WriteHeader(409)
-			_ = json.NewEncoder(w).Encode(map[string]any{"error": err.Error(), "code": "held_elsewhere", "holders": held.Holders})
-			return
-		}
 		if err != nil {
 			httpError(w, 400, err.Error())
 			return

@@ -783,21 +783,6 @@ func (s *Session) close(ctx context.Context) {
 	}
 }
 
-// HeldError：这个会话正被别的进程开着（见 acpx.MethodHolders）。server 把它回成 409 + holders，界面弹框让人挑。
-type HeldError struct{ Holders []acpx.Holder }
-
-func (e *HeldError) Error() string {
-	h := e.Holders[0]
-	if h.Pid == 0 {
-		return fmt.Sprintf(i18n.S("这个会话正在%s里开着，这里接不上", "This session is open in %s, so it can't be picked up here"), h.Name)
-	}
-	where := i18n.S("别的终端", "another terminal")
-	if h.Name != "" {
-		where = i18n.S("「"+h.Name+"」", "\""+h.Name+"\"")
-	}
-	return fmt.Sprintf(i18n.S("这个会话还在%s里开着（claude，pid %d）。两边同时写会分叉，谁也看不见对方说的话", "This session is still open in %s (claude, pid %d). Writing from both places would fork it, and neither side would see the other's messages"), where, h.Pid)
-}
-
 func (s *Session) heldElsewhere(ctx context.Context, c *agenthost.Host) []acpx.Holder {
 	s.mu.Lock()
 	sid := s.rec.AgentSessionID

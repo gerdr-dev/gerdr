@@ -4,7 +4,7 @@ import { feedOf, isFeed, subscribeFeed, type FeedFile } from "./feedChat";
 import { ToolCard, cardOf } from "@/components/chat/ToolCard";
 import { ChatProvider, type ChatHost, type ChatSession, type ComposerContext, type DraftImage, type DraftStore } from "@gerdr/chat";
 import { toast } from "sonner";
-import { api, type Holder } from "./api";
+import { api } from "./api";
 import { closeAgentInPane, focusSession, openPath, openSubagent, refocusAfterDialog, withdrawSteer } from "./actions";
 import { defaultsOf, setDefault, setDefaults } from "./defaults";
 import { hasNativeFilePath, isNative, nativeFilePath, nativeOpenPath } from "./native";
@@ -29,7 +29,6 @@ import { useAddonTurnStat } from "./addons";
 import { MessageActions } from "@/components/chat/MessageActions";
 import { locale, t } from "./i18n";
 import { UsagePanel } from "@/components/UsageMeter";
-import { HeldDialog } from "@/components/chat/HeldDialog";
 import { RunButton } from "@/components/chat/RunButton";
 import { LoginChip } from "@/components/chat/LoginChip";
 import { timedEscape } from "./escTiming";
@@ -37,7 +36,7 @@ import { timedEscape } from "./escTiming";
 /**
  * gerdr's side of the chat package (@gerdr/chat, ui/packages/chat): where its data comes from (the store, fed over
  * the WebSocket) and what its buttons do (lib/api, lib/actions), plus the composer features only gerdr has —
- * drafts shared across devices, /resume and /usage, "session open elsewhere", making options the default for new
+ * drafts shared across devices, /resume and /usage, making options the default for new
  * sessions, `!command` runs, and Ctrl+C twice to quit an agent.
  */
 
@@ -52,21 +51,6 @@ const drafts: DraftStore = {
   getImages: (id) => get().draftImgs[id] ?? NO_IMGS,
   setImages: (id, f) => set((s) => ({ draftImgs: { ...s.draftImgs, [id]: typeof f === "function" ? f(s.draftImgs[id] ?? NO_IMGS) : f } })),
 };
-
-// "Session open elsewhere" (HeldDialog): which session's composer is waiting on the choice, and how to resend after it
-type Held = { sessionId: string; holders: Holder[]; retry: () => void };
-let held: Held | null = null;
-const heldSubs = new Set<() => void>();
-const setHeld = (h: Held | null) => ((held = h), heldSubs.forEach((f) => f()));
-function useHeld() {
-  const [, bump] = useState(0);
-  useEffect(() => {
-    const f = () => bump((n) => n + 1);
-    heldSubs.add(f);
-    return () => void heldSubs.delete(f);
-  }, []);
-  return held;
-}
 
 // /usage's panel, per session
 let usageFor: string | null = null;
@@ -83,23 +67,8 @@ function useUsageFor() {
 }
 
 function Overlay({ session }: { session: ChatSession }) {
-  const h = useHeld();
   const usage = useUsageFor();
-  return (
-    <>
-      {usage === session.id && <UsagePanel agent={session.base ?? session.agent} onClose={() => setUsageFor(null)} />}
-      <HeldDialog
-        sessionId={session.id}
-        holders={h?.sessionId === session.id ? h.holders : null}
-        onClose={() => setHeld(null)}
-        onDone={() => {
-          const retry = h?.retry;
-          setHeld(null);
-          if (retry) setTimeout(retry, 50);
-        }}
-      />
-    </>
-  );
+  return <>{usage === session.id && <UsagePanel agent={session.base ?? session.agent} onClose={() => setUsageFor(null)} />}</>;
 }
 
 // ---- drafts shared across devices (the same composer on the phone and the computer) ----
@@ -399,11 +368,6 @@ export function GerdrChatProvider({ children }: { children: ReactNode }) {
           return useSharedDraft(ctx);
         },
         localCommands,
-        onSendError: (session, e: any, retry) => {
-          if (e?.code !== "held_elsewhere") return false;
-          setHeld({ sessionId: session.id, holders: e.holders ?? [], retry });
-          return true;
-        },
         onExit: closeAgentInPane,
         useDefaults: (agent) => {
           // subscribe to what defaultsOf reads, so "already the default" shows right after setting it

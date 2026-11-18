@@ -37,8 +37,7 @@ src/App.tsx        首页的工作台：侧栏、tab 栏、分屏
 src/components/    组件
   ui/              shadcn/ui 组件（Button、Dialog、Select……），新组件照它们的写法
   ai-elements/     对话流的组件（AI SDK 的 AI Elements）
-  chat/            gerdr-only pieces of the chat: ChatView (wraps the package's, tells it whether the tab shows), RunButton (`! command` in a reply),
-                   HeldDialog (session open elsewhere)
+  chat/            gerdr-only pieces of the chat: ChatView (wraps the package's, tells it whether the tab shows), RunButton (`! command` in a reply)
   TabBar.tsx       the tab bar (desktop); PhoneBar.tsx: the phone's top row in its place
   Rail.tsx         the strip down the left edge on wider screens, every mode: projects, Code / Work, add-on buttons
                    (RailAddons.tsx, lib/rail.ts: one per add-on, its icon the add-on's), inbox, settings. Nothing of gerdr's is drawn over the Work site (it owns everything right of the rail)

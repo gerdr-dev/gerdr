@@ -100,20 +100,6 @@ export const zh = {
   "runButton.nearTerminalHint": "敲进旁边开着的终端（{dir}）",
 
   // chat/HeldDialog
-  "heldDialog.title": "这个会话还在别处开着",
-  "heldDialog.knownBusy": "{where}里的 Claude（PID {pid}，正在干活）也开着它。两边同时写，对话会分叉：谁也看不见对方说过的话。",
-  "heldDialog.knownIdle": "{where}里的 Claude（PID {pid}，闲着）也开着它。两边同时写，对话会分叉：谁也看不见对方说过的话。",
-  "heldDialog.known": "{where}里的 Claude（PID {pid}）也开着它。两边同时写，对话会分叉：谁也看不见对方说过的话。",
-  "heldDialog.namedWhere": "「{name}」",
-  "heldDialog.otherTerminal": "另一个终端",
-  "heldDialog.unknown": "{where}正开着它，同一时间只能有一处接着聊。在那边关掉它再重试，或者在这里另起一份。",
-  "heldDialog.elsewhere": "别处",
-  "heldDialog.notSent": "你的消息还没发出去，在输入框里。",
-  "heldDialog.working": "处理中…",
-  "heldDialog.fork": "另起一份，在这里接着聊（推荐）",
-  "heldDialog.killing": "正在关掉那边…",
-  "heldDialog.kill": "关掉那边的 Claude，在这里接着聊",
-  "heldDialog.closedRetry": "我已经在那边关掉了，重试",
 
   // chatHost
   "chatHost.resume": "换到这个目录下之前的一段对话",
@@ -287,22 +273,6 @@ export const en: Record<keyof typeof zh, string> = {
   "runButton.nearTerminalHint": "Types it into the terminal open alongside ({dir})",
 
   // chat/HeldDialog
-  "heldDialog.title": "This session is open somewhere else",
-  "heldDialog.knownBusy":
-    "Claude in {where} (PID {pid}, working) also has it open. If both write at once, the conversation forks: neither side sees what the other said.",
-  "heldDialog.knownIdle":
-    "Claude in {where} (PID {pid}, idle) also has it open. If both write at once, the conversation forks: neither side sees what the other said.",
-  "heldDialog.known": "Claude in {where} (PID {pid}) also has it open. If both write at once, the conversation forks: neither side sees what the other said.",
-  "heldDialog.namedWhere": '"{name}"',
-  "heldDialog.otherTerminal": "another terminal",
-  "heldDialog.unknown": "{where} has it open, and only one place can continue it at a time. Close it there and retry, or start a copy here.",
-  "heldDialog.elsewhere": "Another app",
-  "heldDialog.notSent": "Your message hasn't been sent; it's still in the input box.",
-  "heldDialog.working": "Working…",
-  "heldDialog.fork": "Make a copy and continue here (recommended)",
-  "heldDialog.killing": "Closing the other one…",
-  "heldDialog.kill": "Close the other Claude and continue here",
-  "heldDialog.closedRetry": "I've closed it there, retry",
 
   // chatHost
   "chatHost.resume": "Switch to an earlier conversation in this folder",

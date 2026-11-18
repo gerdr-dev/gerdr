@@ -99,17 +99,26 @@ func (s *Session) SendWith(ctx context.Context, content []acp.ContentBlock, o Se
 		}()
 	}
 	c, err := s.ensureAttached(ctx)
-	if err != nil {
-		// codex：别处（终端 / Codex App）开着这个 thread 时接不回来 —— 它自己防住了分叉，但光秃秃一句英文报错人不知道怎么办
-		if strings.Contains(err.Error(), "active writer") {
-			return SendResult{}, &HeldError{Holders: []acpx.Holder{{Name: i18n.S("另一个 Codex（终端或 Codex App）", "another Codex (terminal or Codex App)")}}}
-		}
+	// The session is still open somewhere else (an interactive claude in herdr / a terminal; for codex, another Codex
+	// holding the thread, which refuses the attach with "active writer"). Writing from both sides would fork the
+	// transcript, each side blind to the other. Gerdr forks it here instead: a copy with the whole history that lives
+	// only in Gerdr, the other one untouched. That used to be a dialog (fork / kill the other / cancel) whose
+	// recommended choice was this fork, shown on the first message of nearly every imported session; the user asked
+	// for no dialog, just the recommended choice. Done before the message is recorded, so it's sent once, to the copy.
+	held := err != nil && strings.Contains(err.Error(), "active writer")
+	if err != nil && !held {
 		return SendResult{}, err
 	}
-	// 别处（herdr / 终端里的交互式 claude）还开着这个会话：先不发，让人挑（另起一份 / 关掉那边）。
-	// 在记下这条消息之前拦 —— 处理完 client 拿同一个 id 重发，对话里不会多出一条。
-	if hs := s.heldElsewhere(ctx, c); len(hs) > 0 {
-		return SendResult{}, &HeldError{Holders: hs}
+	if !held {
+		held = len(s.heldElsewhere(ctx, c)) > 0
+	}
+	if held {
+		if err := s.Takeover(ctx, "fork"); err != nil {
+			return SendResult{}, err
+		}
+		if c, err = s.ensureAttached(ctx); err != nil {
+			return SendResult{}, err
+		}
 	}
 	s.mu.Lock()
 	running := s.running

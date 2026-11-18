@@ -943,12 +943,16 @@ menu written for the variables keeps a sane width and no gap.
 - **claude 不拦**：两个进程同时 `--resume` 同一个会话，各自往同一个记录文件里追加、各接在自己看到的最后一条后面
   —— 记录分叉，两边都只看得见自己那一半。判据是交互式 claude 的登记文件 `<配置目录>/sessions/<pid>.json`
   （退出时删，强杀会残留，所以还要核 pid 活着；Gerdr 自己起的 stream-json 进程**不写**这个文件）。
-  发消息前问一次（`_gerdr/holders`），有人占着就回 409，界面上挑：另起一份（`--fork-session` 复制出新会话）/
-  关掉那边（SIGTERM，**等进程退出**而不是等登记文件消失：它先删文件、再把记录写完，中间差一两秒）。
+  Before a message is sent Gerdr asks once (`_gerdr/holders`); if someone holds it, Gerdr forks it on its own
+  (`--fork-session` copies it into a new session with the whole history) and sends there. That used to be a dialog
+  (fork / close the other one / cancel) that came up on the first message of nearly every imported session, always
+  answered with the recommended fork; the user asked for it gone. Closing the other one instead is still
+  `POST /api/sessions/{id}/takeover {"action":"kill"}` (SIGTERM, then **wait for the process to exit**, not for the
+  file to go: it deletes the file first and finishes writing the transcript a second or two later).
 - **codex 自己拦**：一个 thread 同一时间只有一处能写。Gerdr 先开着，终端里的 codex 显示「open in another app」；
   终端先开着，Gerdr 这边 `thread/resume` 报 `already has an active writer`。不会分叉，但光秃秃一句英文人不知道怎么办，
-  所以同样回 409，界面上给「另起一份」（`thread/fork`，不用先接上原来那个）/「已经在那边关掉了，重试」。
-  没有登记文件，不知道是哪个进程，所以不提供「关掉那边」。
+  so it's handled the same way: forked on its own (`thread/fork`, without attaching to the original first).
+  There's no registration file, so Gerdr doesn't know which process holds it and can't close it.
 - **追上**：Gerdr 的对话日志只记它经手的事。别处接着聊过，agent 的记录文件会长 —— 但**文件变长不等于别处聊过**：
   自己一轮刚完就重启（来不及记大小）、claude 一轮之后补写的收尾、切模式写的那一行，都会让它变长（第一版只比大小，
   用户撞上了误报）。所以判据是「上次对齐之后（`Record.SyncedSize`），记录里有没有 Gerdr 没发过的人话」：agent 把那一段

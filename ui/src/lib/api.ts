@@ -19,7 +19,6 @@ import type {
 } from "./types";
 
 /** 正开着某个会话的别的进程（herdr / 终端里的交互式 claude） */
-export type Holder = { pid: number; name?: string; status?: string; cwd?: string };
 
 /** 一条用量额度（后端 acpx.UsageLimit）：label 直接显示，percent 0–100，resetsAt unix ms（0 = 不知道） */
 export type UsageLimit = { kind: string; label: string; percent: number; resetsAt?: number; windowMins?: number };
@@ -70,18 +69,15 @@ export class ApiError extends Error {
   /** 远程那条路上的细分原因：reason="stepup"（再加 passkey 前先验一次）、need="pair" | "passkey"（见 docs/dev/REMOTE.md） */
   reason?: string;
   need?: string;
-  /** 业务上的细分：code="held_elsewhere"（会话还在别处开着，holders 是占着它的进程） */
   code?: string;
-  holders?: Holder[];
   /** fs/stat：短写的相对路径对上了好几个文件，这是它们的绝对路径 */
   candidates?: string[];
-  constructor(status: number, message: string, data?: { reason?: string; need?: string; code?: string; holders?: Holder[]; candidates?: string[] }) {
+  constructor(status: number, message: string, data?: { reason?: string; need?: string; code?: string; candidates?: string[] }) {
     super(message);
     this.status = status;
     this.reason = data?.reason;
     this.need = data?.need;
     this.code = data?.code;
-    this.holders = data?.holders;
     this.candidates = data?.candidates;
   }
 }
