@@ -39,6 +39,7 @@ let retry = 0;
 let watched = "";
 const draftOutbox = new Map<string, SharedDraft>(); // session id → draft waiting for the throttle (or for a connection)
 const draftsInFlight = new Map<string, number>(); // session id → writes sent, echo not back yet
+const draftsUnconfirmed = new Map<string, SharedDraft>(); // session id → the last of those writes, resent on reconnect
 let draftTimer: ReturnType<typeof setTimeout> | null = null;
 let stopped = false;
 
@@ -165,9 +166,13 @@ function connect() {
     const restarted = get().restarting;
     set({ connected: true, everConnected: true, restarting: null });
     watched = "";
-    // Echoes of drafts sent on the old connection never come back: stop waiting for them. Then send what was typed
-    // while offline, after the watch, so the server's (older) draft pushed on watch arrives while ours is in flight
-    // and gets ignored.
+    // Echoes of drafts sent on the old connection never come back: stop waiting for them. A write sent there whose echo
+    // never came may not have reached the server either (a phone's connection dies quietly and takes what was sent
+    // with it), so it is sent again with what was typed while offline. After the watch, so the server's (older) draft
+    // pushed on watch arrives while ours is in flight and gets ignored. Without the resend that older draft won:
+    // voice input's words already in the composer vanished on a reconnect mid-dictation.
+    for (const [id, d] of draftsUnconfirmed) if (!draftOutbox.has(id)) draftOutbox.set(id, d);
+    draftsUnconfirmed.clear();
     draftsInFlight.clear();
     syncWatch();
     flushDrafts();
@@ -451,7 +456,7 @@ export function syncWatch() {
   const before = new Set(watched ? watched.split(",") : []);
   watched = key;
   // Sessions no longer watched won't echo our drafts back (hub.SetDraft only tells watchers)
-  for (const id of draftsInFlight.keys()) if (!ids.includes(id)) draftsInFlight.delete(id);
+  for (const id of draftsInFlight.keys()) if (!ids.includes(id)) (draftsInFlight.delete(id), draftsUnconfirmed.delete(id));
   // 手里已有的日志报个序号：重连、切回看过的面板时不用整份重推（远程连着时一份几十 MB）
   const since: Record<string, number> = {};
   for (const id of ids) {
@@ -514,7 +519,10 @@ function flushDrafts() {
   for (const [id, d] of draftOutbox) {
     ws.send(JSON.stringify({ t: "draft", id, draft: { ...d, from: clientId } }));
     // The echo only comes back to tabs watching the session; don't wait for one that won't
-    if (watching.has(id)) draftsInFlight.set(id, (draftsInFlight.get(id) ?? 0) + 1);
+    if (watching.has(id)) {
+      draftsInFlight.set(id, (draftsInFlight.get(id) ?? 0) + 1);
+      draftsUnconfirmed.set(id, d);
+    }
   }
   draftOutbox.clear();
 }
@@ -524,7 +532,7 @@ function gotDraft(id: string, d: { text?: string; sel?: [number, number]; imgs?:
   // Our own echo. The one pushed on watch (init) is not an echo even if we wrote it: it was sent once, not per write.
   if (d.from === clientId && !d.init) {
     if (n > 1) draftsInFlight.set(id, n - 1);
-    else draftsInFlight.delete(id);
+    else (draftsInFlight.delete(id), draftsUnconfirmed.delete(id));
     return;
   }
   if (n > 0 || draftOutbox.has(id)) return; // older than what we're sending: ours will win everywhere
