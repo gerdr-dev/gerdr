@@ -171,6 +171,10 @@ func (s *Session) userTextSet() map[string]bool {
 	evs := append([]*Event(nil), s.events...)
 	s.mu.Unlock()
 	out := map[string]bool{}
+	// Claude's transcript joins a message's text blocks with nothing between them (userText in agents/claude), so
+	// the joined form is kept too. Without it a message of two text blocks (an uploaded file's "@path" block and the
+	// words after it) never matched, and the next check after a restart said "continued elsewhere (1 message)".
+	chunks := map[string][]string{} // replayed messages: messageId → their text chunks
 	for _, e := range evs {
 		switch e.Kind {
 		case EvUser:
@@ -185,20 +189,30 @@ func (s *Session) userTextSet() map[string]bool {
 				}
 			}
 			out[normText(strings.Join(parts, "\n"))] = true
+			out[normText(strings.Join(parts, ""))] = true
 			for _, p := range parts { // 带图的消息，记录里可能只剩文字那块
 				out[normText(p)] = true
 			}
 		case EvUpdate:
 			var u struct {
 				SessionUpdate string `json:"sessionUpdate"`
+				MessageID     string `json:"messageId"`
 				Content       struct {
+					Type string `json:"type"`
 					Text string `json:"text"`
 				} `json:"content"`
 			}
 			if json.Unmarshal(e.Update, &u) == nil && u.SessionUpdate == "user_message_chunk" {
 				out[normText(u.Content.Text)] = true
+				if u.MessageID != "" && u.Content.Type == "text" {
+					chunks[u.MessageID] = append(chunks[u.MessageID], u.Content.Text)
+				}
 			}
 		}
+	}
+	for _, texts := range chunks {
+		out[normText(strings.Join(texts, "\n"))] = true
+		out[normText(strings.Join(texts, ""))] = true
 	}
 	return out
 }
