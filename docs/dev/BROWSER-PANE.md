@@ -70,11 +70,23 @@ All on Chrome 157, macOS.
   reconnecting opens the new stream before the old one closes, so the old one's stop landed after the new one's
   start and froze the pane. Fixed by the `caster` (view.go): one per tab, started by the first viewer, stopped by
   the last, start / stop serialized, the count checked again before stopping.
+- **A page that opens a new tab hides itself.** A target=_blank link or `window.open` opens a tab in the same
+  window; the page that opened it becomes a background tab (`document.visibilityState` "hidden") and gets no more
+  screencast frames, so a pane on it froze (seen live: a portal's link to its other domain). The new tab is adopted
+  with `Tab.Opener`, a pane showing the opener follows it, and goes back when it closes (`followNewTabs`,
+  actions/browser.ts), as a browser's tab strip would. A viewer arriving on a page brings it to the front
+  (`Page.bringToFront` in `caster.acquire`), and a page turning visible again restarts the cast. Only on the turn
+  from hidden: starting a cast itself reports "visible", so restarting on every one would loop.
 - **A navigation to another site can end the screencast** (the renderer process changes): it's started again on
   every main-frame `Page.frameNavigated`.
-- **Frames are acknowledged after 60 ms** (`frameGap`): Chrome sends the next only after the ack, so a page that
-  animates without pause is sampled at ~15 fps. Without that it would cost a JPEG encode per paint. A still page
-  sends nothing.
+- **Frames are acknowledged after 30 ms** (`frameGap`): Chrome sends the next only after the ack, so a page that
+  animates without pause is sampled at ~30 fps instead of costing a JPEG encode per paint. A still page sends nothing.
+- **A viewer on this computer gets Chrome's JPEG as it is** (`View.Raw`, `streamPictures`' raw mode, chosen by
+  `!auth.FromRemote`). Diffing tiles meant decoding each frame (40–80 ms at 1400×1800 in Go) and re-encoding a big
+  change (30–40 ms), on top of the round trip: the pane felt laggy. Raw, an input reaches a new frame in 2–37 ms
+  (`TestLiveInputLatency`), at ~290 KB a frame, free on loopback. Remote viewers keep the tile diff: a keystroke
+  is a few KB there instead of a whole frame. A raw frame is "full" only when its size changes, since resizing the
+  canvas clears it.
 - **Page numbers differ from run to run** (`Bridge.New`: the first adopted id depends on the clock): a pane stores
   its page's number in the layout, and after a restart a new page with the same number appeared in an old pane.
 - `--use-mock-keychain`: cookies are encrypted with a key of the profile's own instead of the macOS keychain's. The

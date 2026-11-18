@@ -260,9 +260,9 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
       }
       return;
     }
-    // hover menus need the pointer's moves; a few a second is enough, a drag gets every one
+    // hover menus need the pointer's moves: about one a frame (a drag gets every one)
     const now = performance.now();
-    if (!pressed.current && now - moveAt.current < 50) return;
+    if (!pressed.current && now - moveAt.current < 16) return;
     moveAt.current = now;
     const p = at(e);
     if (p) send({ kind: "move", ...p, button: pressed.current === "left" ? "left" : "", mods: modsOf(e) });

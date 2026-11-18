@@ -22,11 +22,14 @@ type Tab struct {
 	ID      int    `json:"tab"`
 	Profile string `json:"profile,omitempty"`
 	Project string `json:"project,omitempty"` // a project's own browser (projbrowser); "" = the user's Chrome
-	URL     string `json:"url"`               // what it was opened on
-	WS      string `json:"ws,omitempty"`      // CDP browser WebSocket (extension tabs only)
-	HTTP    string `json:"http,omitempty"`    // the same as http://host:port (for clients that fetch /json/version)
-	Gone    string `json:"gone,omitempty"`    // why it can't be driven any more; "" while it can
-	Opened  int64  `json:"opened"`
+	// Opener: the tab whose page opened this one. A Browser pane showing the opener follows it here, as a browser
+	// does with a new tab, and back when it closes (ui/src/lib/actions/browser.ts)
+	Opener int    `json:"opener,omitempty"`
+	URL    string `json:"url"`            // what it was opened on
+	WS     string `json:"ws,omitempty"`   // CDP browser WebSocket (extension tabs only)
+	HTTP   string `json:"http,omitempty"` // the same as http://host:port (for clients that fetch /json/version)
+	Gone   string `json:"gone,omitempty"` // why it can't be driven any more; "" while it can
+	Opened int64  `json:"opened"`
 
 	// send runs one DevTools command in the page: through the extension, or the project browser's pipe
 	send func(ctx context.Context, method string, params json.RawMessage) (json.RawMessage, error)

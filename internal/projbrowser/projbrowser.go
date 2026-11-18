@@ -242,7 +242,7 @@ func (in *instance) open(ctx context.Context, raw string, width, height int) (in
 		TargetID string `json:"targetId"`
 	}
 	json.Unmarshal(res, &t)
-	p, err := in.attach(ctx, t.TargetID, raw)
+	p, err := in.attach(ctx, t.TargetID, raw, 0)
 	if err != nil {
 		return 0, err
 	}
@@ -251,7 +251,7 @@ func (in *instance) open(ctx context.Context, raw string, width, height int) (in
 
 // attach takes a page over: a session on it, the logs on, then (when go is set) loads go with location.replace, so
 // about:blank stays out of the history and the first load is logged.
-func (in *instance) attach(ctx context.Context, target, goTo string) (*page, error) {
+func (in *instance) attach(ctx context.Context, target, goTo string, opener int) (*page, error) {
 	res, err := in.c.call(ctx, "", "Target.attachToTarget", map[string]any{"targetId": target, "flatten": true})
 	if err != nil {
 		return nil, err
@@ -266,6 +266,7 @@ func (in *instance) attach(ctx context.Context, target, goTo string) (*page, err
 	}
 	p.owned = in.m.Bridge.Adopt(chromeext.Page{
 		Project: in.project,
+		Opener:  opener,
 		URL:     goTo,
 		Send:    send,
 		Close: func() {
@@ -372,7 +373,9 @@ func (in *instance) event(m *msg) {
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 			defer cancel()
-			if _, err := in.attach(ctx, t.TargetID, ""); err != nil {
+			// A new tab of the same window: the opener becomes a background tab (hidden, no more screencast frames)
+			// until it is brought to the front again (chromeext caster.acquire), so the pane follows the new one
+			if _, err := in.attach(ctx, t.TargetID, "", in.ownedOf(t.OpenerID)); err != nil {
 				in.m.Log.Warn("project browser: popup", "err", err)
 			}
 		}()
@@ -399,6 +402,18 @@ func (in *instance) event(m *msg) {
 			in.drop(sess, i18n.S("页面关了", "The page was closed"))
 		}
 	}
+}
+
+// ownedOf: the tab id of the page on target id (0 if it isn't one of ours).
+func (in *instance) ownedOf(id string) int {
+	in.mu.Lock()
+	defer in.mu.Unlock()
+	for _, p := range in.pages {
+		if p.target == id {
+			return p.owned.ID()
+		}
+	}
+	return 0
 }
 
 func (in *instance) hasTarget(id string) bool {

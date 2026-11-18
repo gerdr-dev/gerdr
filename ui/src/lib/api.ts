@@ -65,7 +65,7 @@ export type ScreenInput =
   | { kind: "key"; key: string; mods?: ("cmd" | "shift" | "opt" | "ctrl")[] };
 
 /** A page Gerdr drives: project set = that project's own browser; else the user's Chrome (profile = which one). */
-export type BrowserTab = { tab: number; project?: string; profile?: string; url: string; gone?: string; opened: number };
+export type BrowserTab = { tab: number; project?: string; profile?: string; url: string; gone?: string; opened: number; opener?: number };
 
 /** One action in a browser tab (chromeext.View): ScreenInput plus what only a page has. */
 export type BrowserInput =

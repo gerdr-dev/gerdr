@@ -3,6 +3,7 @@ package projbrowser
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -225,5 +226,132 @@ func TestLiveTwoWindows(t *testing.T) {
 	t.Logf("after submit: %d frames, page %+v", n, v.Page())
 	if n == 0 {
 		t.Error("no frames")
+	}
+}
+
+// TestLiveFrameCost: where a frame's time goes (decode the screencast JPEG, diff, encode the changed tiles).
+func TestLiveFrameCost(t *testing.T) {
+	if os.Getenv("GERDR_LIVE_BROWSER") == "" {
+		t.Skip("set GERDR_LIVE_BROWSER=1")
+	}
+	b := chromeext.New(nil)
+	m := New(t.TempDir(), b, nil)
+	defer m.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	id, err := m.Open(ctx, "test", "https://zh.wikipedia.org/wiki/Border_Collie", 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b.Act(ctx, id, "wait", chromeext.ActArgs{Load: true, Timeout: 20000})
+	v, _ := b.View(id)
+	defer v.Close()
+	v.Size(700, 900)
+	time.Sleep(500 * time.Millisecond)
+	var d screen.Differ
+	for i := 0; i < 6; i++ {
+		t0 := time.Now()
+		img, err := v.Grab(1400)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t1 := time.Now()
+		rects, payload, full, _ := d.Diff(img, 70)
+		t2 := time.Now()
+		t.Logf("grab+decode %v, diff+encode %v, %d rects, %d KB, full=%v, %v", t1.Sub(t0), t2.Sub(t1), len(rects), len(payload)/1024, full, img.Bounds())
+		v.Do(screen.Input{Kind: "scroll", X: 0.5, Y: 0.5, DYPx: 300})
+		time.Sleep(200 * time.Millisecond)
+	}
+}
+
+// TestLiveInputLatency: from an input to the first new frame (what a viewer on this computer waits, raw mode).
+func TestLiveInputLatency(t *testing.T) {
+	if os.Getenv("GERDR_LIVE_BROWSER") == "" {
+		t.Skip("set GERDR_LIVE_BROWSER=1")
+	}
+	b := chromeext.New(nil)
+	m := New(t.TempDir(), b, nil)
+	defer m.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	id, err := m.Open(ctx, "test", "https://zh.wikipedia.org/wiki/Border_Collie", 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b.Act(ctx, id, "wait", chromeext.ActArgs{Load: true, Timeout: 20000})
+	v, _ := b.View(id)
+	defer v.Close()
+	v.Size(700, 900)
+	_, _, _, seq, err := v.Raw(1400)
+	if err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(500 * time.Millisecond)
+	for i := 0; i < 5; i++ {
+		_, _, _, seq, _ = v.Raw(1400)
+		t0 := time.Now()
+		v.Do(screen.Input{Kind: "scroll", X: 0.5, Y: 0.5, DYPx: 200})
+		for {
+			select {
+			case <-v.Changed():
+			case <-time.After(2 * time.Second):
+				t.Fatal("no frame")
+			}
+			jpg, w, h, s, _ := v.Raw(1400)
+			if s != seq {
+				t.Logf("scroll → new frame %v (%dx%d, %d KB)", time.Since(t0).Round(time.Millisecond), w, h, len(jpg)/1024)
+				break
+			}
+		}
+		time.Sleep(300 * time.Millisecond)
+	}
+}
+
+// TestLiveNewTab: a page opening a link in a new tab (same window) becomes a background tab, hidden, with no
+// screencast frames: the new tab is adopted with its opener, and a viewer of the opener brings it back to front.
+func TestLiveNewTab(t *testing.T) {
+	if os.Getenv("GERDR_LIVE_BROWSER") == "" {
+		t.Skip("set GERDR_LIVE_BROWSER=1")
+	}
+	b := chromeext.New(nil)
+	m := New(t.TempDir(), b, nil)
+	defer m.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	id, err := m.Open(ctx, "test", "https://example.com/", 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b.Act(ctx, id, "wait", chromeext.ActArgs{Load: true, Timeout: 20000})
+	b.Act(ctx, id, "eval", chromeext.ActArgs{Expr: `(() => { const a = document.createElement("a"); a.href = "https://example.org/"; a.target = "_blank"; a.id = "nt"; a.textContent = "NEW TAB"; a.style = "position:fixed;left:0;top:0;font-size:40px"; document.body.append(a) })()`})
+	if _, err := b.Act(ctx, id, "click", chromeext.ActArgs{Target: "20,20"}); err != nil {
+		t.Fatal(err)
+	}
+	var popup chromeext.Tab
+	for i := 0; i < 50 && popup.ID == 0; i++ {
+		time.Sleep(100 * time.Millisecond)
+		for _, x := range b.Tabs() {
+			if x.ID != id {
+				popup = x
+			}
+		}
+	}
+	if popup.Opener != id {
+		t.Fatalf("new tab %+v, want opener %d", popup, id)
+	}
+	vis, _ := b.Act(ctx, id, "eval", chromeext.ActArgs{Expr: "document.visibilityState"})
+	t.Log("opener after the new tab:", vis.Text)
+	v, err := b.View(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer v.Close()
+	if _, err := v.Grab(1000); err != nil {
+		t.Fatal("viewing the opener:", err)
+	}
+	vis, _ = b.Act(ctx, id, "eval", chromeext.ActArgs{Expr: "document.visibilityState"})
+	t.Log("opener while viewed:", vis.Text)
+	if !strings.Contains(vis.Text, "visible") || strings.Contains(vis.Text, "hidden") {
+		t.Error("the viewed page should be in front")
 	}
 }

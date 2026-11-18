@@ -7,6 +7,7 @@ import (
 
 	"github.com/gorilla/websocket"
 
+	"github.com/gerdr-dev/gerdr/internal/auth"
 	"github.com/gerdr-dev/gerdr/internal/chromeext"
 	"github.com/gerdr-dev/gerdr/internal/i18n"
 	"github.com/gerdr-dev/gerdr/internal/screen"
@@ -114,7 +115,8 @@ func (s *Server) browserRoutes(mux *http.ServeMux) {
 			return
 		}
 		defer conn.Close()
-		streamPictures(conn, r, browserSource{v})
+		// whole JPEGs to a viewer on this computer, changed tiles over the relay (screenstream.go)
+		streamPictures(conn, r, browserSource{v}, !auth.FromRemote(r))
 	})
 	mux.HandleFunc("POST /api/browser/close", func(w http.ResponseWriter, r *http.Request) {
 		b := br(w)
@@ -175,13 +177,14 @@ func (s *Server) browserProject(c Caller) string {
 // browserSource: a tab as the stream's picture (chromeext.View).
 type browserSource struct{ v *chromeext.View }
 
-func (b browserSource) Grab(w int) (*image.RGBA, error)  { return b.v.Grab(w) }
-func (b browserSource) Cursor() (float64, float64, bool) { return 0, 0, false }
-func (b browserSource) Do(in screen.Input) error         { return b.v.Do(in) }
-func (b browserSource) Off() string                      { return b.v.Gone() }
-func (b browserSource) Changed() <-chan struct{}         { return b.v.Changed() }
-func (b browserSource) Size(w, h int)                    { b.v.Size(w, h) }
-func (b browserSource) Selection() string                { return b.v.Selection() }
+func (b browserSource) Grab(w int) (*image.RGBA, error)            { return b.v.Grab(w) }
+func (b browserSource) Cursor() (float64, float64, bool)           { return 0, 0, false }
+func (b browserSource) Do(in screen.Input) error                   { return b.v.Do(in) }
+func (b browserSource) Off() string                                { return b.v.Gone() }
+func (b browserSource) Changed() <-chan struct{}                   { return b.v.Changed() }
+func (b browserSource) Size(w, h int)                              { b.v.Size(w, h) }
+func (b browserSource) Selection() string                          { return b.v.Selection() }
+func (b browserSource) Raw(w int) ([]byte, int, int, int64, error) { return b.v.Raw(w) }
 func (b browserSource) Page() *screen.Page {
 	p := b.v.Page()
 	return &p

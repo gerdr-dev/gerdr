@@ -18,6 +18,7 @@ const ownedBase = 100000
 type Page struct {
 	Project string
 	URL     string
+	Opener  int // the tab whose page opened this one (target=_blank, window.open); 0 = none
 	Send    func(ctx context.Context, method string, params json.RawMessage) (json.RawMessage, error)
 	Close   func()
 	Resize  func(ctx context.Context, width, height int) error // the window's size (a headless window is all viewport)
@@ -40,7 +41,7 @@ func (b *Bridge) Adopt(p Page) *Owned {
 		id = ownedBase + b.nextOwned
 	}
 	t := newTab(id, p.URL)
-	t.Project = p.Project
+	t.Project, t.Opener = p.Project, p.Opener
 	t.send = p.Send
 	t.resize = p.Resize
 	o := &Owned{b: b, t: t}

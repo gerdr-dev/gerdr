@@ -84,10 +84,18 @@ func (s *Server) screenStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer conn.Close()
-	streamPictures(conn, r, desktopSource{s})
+	streamPictures(conn, r, desktopSource{s}, false)
 }
 
-func streamPictures(conn *websocket.Conn, r *http.Request, src pictureSource) {
+// rawSource: a source that already has each picture as a JPEG (a browser tab's screencast, chromeext.View.Raw).
+type rawSource interface {
+	Raw(maxWidth int) (jpg []byte, w, h int, seq int64, err error)
+}
+
+// streamPictures runs one viewer's stream. raw: send a rawSource's JPEGs as they are, whole, instead of diffing
+// tiles: for a viewer on this computer, where bandwidth is free and decoding / re-encoding was most of the latency
+// (docs/dev/BROWSER-PANE.md).
+func streamPictures(conn *websocket.Conn, r *http.Request, src pictureSource, raw bool) {
 	type cfg struct{ w, q int }
 	parse := func(w, q int) cfg {
 		c := cfg{1600, 60}
@@ -190,10 +198,41 @@ func streamPictures(conn *websocket.Conn, r *http.Request, src pictureSource) {
 		return true
 	}
 	var lastPage screen.Page
+	rs, _ := src.(rawSource)
+	var rawSeq int64 = -1
+	var rawW, rawH int
+	captureRaw := func() bool {
+		jpg, w, hh, fseq, err := rs.Raw(c.w)
+		h := screen.Header{Ack: ack}
+		if p := src.Page(); p != nil && *p != lastPage {
+			lastPage, h.Page = *p, p
+		}
+		if err != nil {
+			h.Err = err.Error()
+			return send(screen.Message(h, nil))
+		}
+		fresh := fseq != rawSeq
+		if !fresh && ack == sentAck && h.Page == nil && time.Since(lastSend) < 10*time.Second {
+			return true
+		}
+		seq++
+		h.Seq, h.W, h.H = seq, w, hh
+		// full only when the size changes: the page then resizes its canvas, which clears it
+		h.Full = w != rawW || hh != rawH
+		var payload []byte
+		if fresh || h.Full {
+			h.Rects, payload = []screen.Rect{{0, 0, w, hh, len(jpg)}}, jpg
+		}
+		rawSeq, rawW, rawH, sentAck = fseq, w, hh, ack
+		return send(screen.Message(h, payload))
+	}
 	capture := func() bool {
 		if off := src.Off(); off != "" {
 			send(screen.Message(screen.Header{Err: off}, nil))
 			return false
+		}
+		if raw && rs != nil {
+			return captureRaw()
 		}
 		m, err := src.Grab(c.w)
 		h := screen.Header{Ack: ack}
@@ -242,9 +281,11 @@ func streamPictures(conn *websocket.Conn, r *http.Request, src pictureSource) {
 		case nc := <-cfgs:
 			c = nc
 			d.Reset()
+			rawW, rawH = 0, 0
 			timer.Reset(0)
 		case <-fulls:
 			d.Reset()
+			rawW, rawH = 0, 0
 			timer.Reset(0)
 		case e := <-errs:
 			if !send(screen.Message(screen.Header{Ack: ack, InErr: e}, nil)) {

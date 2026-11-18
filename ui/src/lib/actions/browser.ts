@@ -9,7 +9,32 @@ import { get, setLayout } from "../store";
 export const useBrowserTabs = create<{ tabs: BrowserTab[]; loaded: boolean }>(() => ({ tabs: [], loaded: false }));
 
 export function setBrowserTabs(tabs: BrowserTab[] | null | undefined) {
-  useBrowserTabs.setState({ tabs: tabs ?? [], loaded: true });
+  const prev = useBrowserTabs.getState();
+  const next = tabs ?? [];
+  useBrowserTabs.setState({ tabs: next, loaded: true });
+  if (prev.loaded) followNewTabs(prev.tabs, next);
+}
+
+/**
+ * Panes follow their page the way a browser's tab strip does. A page that opened a new tab (a target=_blank link, a
+ * sign-in popup) sits behind it in the same window, hidden and no longer painting, so a pane showing it moves to the
+ * new tab; when that tab closes, the pane goes back to the page that opened it.
+ */
+function followNewTabs(prev: BrowserTab[], next: BrowserTab[]) {
+  const had = new Set(prev.map((x) => x.tab));
+  const alive = new Set(next.filter((x) => !x.gone).map((x) => x.tab));
+  const moves = new Map<number, number>(); // pane's tab → where it goes
+  for (const x of next) if (x.opener && !had.has(x.tab) && !x.gone) moves.set(x.opener, x.tab);
+  for (const x of prev) if (!alive.has(x.tab) && x.opener && alive.has(x.opener)) moves.set(x.tab, x.opener);
+  if (!moves.size) return;
+  setLayout((l) => {
+    let out = l;
+    for (const p of leavesOf(l)) {
+      const to = p.browser?.tab && moves.get(p.browser.tab);
+      if (to) out = setPane(out, p.id, { browser: { ...p.browser!, tab: to } });
+    }
+    return out;
+  });
 }
 
 export async function loadBrowserTabs() {

@@ -23,9 +23,14 @@ import (
 //
 // The picture comes from Page.startScreencast rather than Page.captureScreenshot: Chrome pushes a frame only when the
 // page painted, which is also the signal to diff and send, and a still page costs nothing. A frame is acknowledged
-// after frameGap, so a page animating non-stop is sampled at ~15 fps instead of costing a JPEG encode per paint.
+// after frameGap, so a page animating non-stop is sampled at ~30 fps instead of costing a JPEG encode per paint.
+//
+// Two ways out (server/screenstream.go): to a viewer on this computer the screencast's JPEG goes as it is (Raw): no
+// decode, diff or encode, which cost 40–80 ms and 30–40 ms a frame at 1400×1800 (measured, TestLiveFrameCost).
+// Remote viewers (a phone over the relay) get Grab's picture diffed into changed tiles, a few KB for a keystroke
+// instead of a ~200 KB frame.
 
-const frameGap = 60 * time.Millisecond
+const frameGap = 30 * time.Millisecond
 
 // View is one viewer's hold on a tab's screen.
 type View struct {
@@ -37,6 +42,7 @@ type View struct {
 
 	mu       sync.Mutex
 	frame    []byte // the latest screencast JPEG
+	frameSeq int64  // counts frames, so Raw's caller can tell a new one
 	vw, vh   float64
 	maxW     int
 	casting  bool // holds the tab's caster
@@ -103,11 +109,42 @@ func (v *View) Size(width, height int) {
 	v.t.resize(ctx, width, height)
 }
 
-// Grab is the latest frame, no wider than maxWidth px. The first call (and a new width) starts the screencast and
-// waits briefly for its first frame.
+// Grab is the latest frame, no wider than maxWidth px, as pixels. The first call (and a new width) starts the
+// screencast and waits briefly for its first frame.
 func (v *View) Grab(maxWidth int) (*image.RGBA, error) {
+	b, _, err := v.latest(maxWidth)
+	if err != nil {
+		return nil, err
+	}
+	m, err := jpeg.Decode(bytes.NewReader(b))
+	if err != nil {
+		return nil, err
+	}
+	if rgba, ok := m.(*image.RGBA); ok {
+		return rgba, nil
+	}
+	out := image.NewRGBA(m.Bounds())
+	draw.Draw(out, out.Bounds(), m, m.Bounds().Min, draw.Src)
+	return out, nil
+}
+
+// Raw is the latest frame as the screencast's own JPEG, its size, and its number (the same number = nothing new).
+func (v *View) Raw(maxWidth int) (jpg []byte, w, h int, seq int64, err error) {
+	b, seq, err := v.latest(maxWidth)
+	if err != nil {
+		return nil, 0, 0, 0, err
+	}
+	c, err := jpeg.DecodeConfig(bytes.NewReader(b)) // the header only
+	if err != nil {
+		return nil, 0, 0, 0, err
+	}
+	return b, c.Width, c.Height, seq, nil
+}
+
+// latest makes sure the screencast runs at maxWidth and returns its newest JPEG.
+func (v *View) latest(maxWidth int) ([]byte, int64, error) {
 	if g := v.Gone(); g != "" {
-		return nil, errors.New(g)
+		return nil, 0, errors.New(g)
 	}
 	v.mu.Lock()
 	first, resized := !v.casting, v.maxW != maxWidth
@@ -126,7 +163,7 @@ func (v *View) Grab(maxWidth int) (*image.RGBA, error) {
 		}
 		cancel()
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		deadline := time.Now().Add(3 * time.Second)
 		for time.Now().Before(deadline) {
@@ -143,21 +180,12 @@ func (v *View) Grab(maxWidth int) (*image.RGBA, error) {
 		}
 	}
 	v.mu.Lock()
-	b := v.frame
+	b, seq := v.frame, v.frameSeq
 	v.mu.Unlock()
 	if b == nil {
-		return nil, errors.New(i18n.S("页面还没画出来", "The page hasn't drawn anything yet"))
+		return nil, 0, errors.New(i18n.S("页面还没画出来", "The page hasn't drawn anything yet"))
 	}
-	m, err := jpeg.Decode(bytes.NewReader(b))
-	if err != nil {
-		return nil, err
-	}
-	if rgba, ok := m.(*image.RGBA); ok {
-		return rgba, nil
-	}
-	out := image.NewRGBA(m.Bounds())
-	draw.Draw(out, out.Bounds(), m, m.Bounds().Min, draw.Src)
-	return out, nil
+	return b, seq, nil
 }
 
 func (v *View) event(method string, params json.RawMessage) {
@@ -188,6 +216,7 @@ func (v *View) event(method string, params json.RawMessage) {
 		if err == nil {
 			v.mu.Lock()
 			v.frame, v.vw, v.vh = b, p.Metadata.DeviceWidth, p.Metadata.DeviceHeight
+			v.frameSeq++
 			v.mu.Unlock()
 			v.kick()
 		}
@@ -396,6 +425,7 @@ type caster struct {
 	mu      sync.Mutex
 	refs    int
 	maxW    int
+	hidden  bool // the page said it is hidden (a background tab)
 	unwatch func()
 }
 
@@ -408,6 +438,10 @@ func (c *caster) acquire(ctx context.Context, w int) error {
 	}
 	c.maxW = w
 	c.mu.Unlock()
+	// The page a viewer looks at is the front tab of its window: a page that opened a new tab (target=_blank) is a
+	// background tab otherwise, hidden, and Chrome sends no screencast frames for it (measured: the pane froze on
+	// the page that opened a link in a new tab)
+	c.t.send(ctx, "Page.bringToFront", nil)
 	return c.start(ctx)
 }
 
@@ -460,7 +494,7 @@ func (c *caster) start(ctx context.Context) error {
 	if !on {
 		return nil
 	}
-	p, _ := json.Marshal(map[string]any{"format": "jpeg", "quality": 85, "maxWidth": w, "maxHeight": w * 4, "everyNthFrame": 1})
+	p, _ := json.Marshal(map[string]any{"format": "jpeg", "quality": 80, "maxWidth": w, "maxHeight": w * 4, "everyNthFrame": 1})
 	c.t.send(ctx, "Page.stopScreencast", nil)
 	_, err := c.t.send(ctx, "Page.startScreencast", p)
 	return err
@@ -480,6 +514,24 @@ func (c *caster) event(method string, params json.RawMessage) {
 			ack, _ := json.Marshal(map[string]any{"sessionId": p.SessionID})
 			c.t.send(ctx, "Page.screencastFrameAck", ack)
 		}()
+	case "Page.screencastVisibilityChanged":
+		// shown again (its tab back in front): start the cast again rather than trust it to resume. Only on the
+		// turn from hidden: starting a cast itself reports visible, so restarting on every "visible" would loop
+		var p struct {
+			Visible bool `json:"visible"`
+		}
+		json.Unmarshal(params, &p)
+		c.mu.Lock()
+		back := p.Visible && c.hidden
+		c.hidden = !p.Visible
+		c.mu.Unlock()
+		if back {
+			go func() {
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cancel()
+				c.start(ctx)
+			}()
+		}
 	case "Page.frameNavigated":
 		var p struct {
 			Frame struct {
