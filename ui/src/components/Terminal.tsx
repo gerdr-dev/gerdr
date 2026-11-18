@@ -73,12 +73,31 @@ export function TerminalView({
     // font's glyphs, which don't fill a cell taller than the font (lineHeight > 1), leaving gaps and stray background
     // strips between rows. WebGL draws them as custom glyphs that fill the cell. Loaded lazily so the terminal still
     // works on the DOM renderer when the package can't be fetched, WebGL is missing, or the context gets lost.
+    // A resize clears the WebGL canvas, and xterm only redraws on the next animation frame, so dragging a pane edge
+    // showed one empty frame each step (the text flickering). flush() draws now, before this frame is painted. Private
+    // API of xterm 5.5 (names kept in its bundle); optional chaining makes a future rename fall back to the flicker.
+    const flush = () => {
+      try {
+        (term as any)._core?._renderService?._renderDebouncer?._innerRefresh?.();
+      } catch {}
+    };
+    // The renderer also watches its canvas's device-pixel size and, when it differs from what it computed, sets the
+    // canvas to it (clearing it again) and redraws a frame later. At a fractional devicePixelRatio (3.25 on the Android
+    // App) that happens on every resize: measured, the canvas went 1128 → 1127 device px each step and that frame was
+    // blank. This observer is created after the renderer's, so it runs right after that correction, in the same frame.
+    let dpo: ResizeObserver | undefined;
     import("@xterm/addon-webgl")
       .then(({ WebglAddon }) => {
         if (disposed) return;
         const gl = new WebglAddon();
         gl.onContextLoss(() => gl.dispose());
         term.loadAddon(gl);
+        dpo = new ResizeObserver(flush);
+        for (const c of el.querySelectorAll(".xterm-screen canvas")) {
+          try {
+            dpo.observe(c, { box: "device-pixel-content-box" });
+          } catch {}
+        }
       })
       .catch(() => {});
 
@@ -95,11 +114,8 @@ export function TerminalView({
       if (!el.offsetWidth || !el.offsetHeight) return;
       try {
         fit.fit();
-        // A resize clears the WebGL canvas, and xterm only redraws on the next animation frame, so dragging a pane
-        // edge showed one empty frame each step (the text flickering). Draw now, before this frame is painted. Private
-        // API of xterm 5.5 (names kept in its bundle); optional chaining makes a future rename fall back to the flicker.
-        (term as any)._core?._renderService?._renderDebouncer?._innerRefresh?.();
       } catch {}
+      flush();
     };
 
     term.onData((d) => {
@@ -211,6 +227,7 @@ export function TerminalView({
       clearTimeout(timer);
       clearInterval(pingTimer);
       ro.disconnect();
+      dpo?.disconnect();
       mo.disconnect();
       ws?.close();
       // Dispose one task later: xterm 5.5's Viewport queues setTimeout(syncScrollArea) when the terminal opens, and if
