@@ -2,8 +2,10 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/gerdr-dev/gerdr/internal/config"
@@ -188,6 +190,34 @@ func TestConversation(t *testing.T) {
 	}
 	if last := conversation(evs, 2); len(last) != 2 || last[0]["role"] != "agent" {
 		t.Errorf("last 2 = %v", last)
+	}
+}
+
+// Reading only the tail gives what reading it all and cutting gives, for any count, also past a user message without
+// text (an image only) and with several agent messages in a turn.
+func TestConversationTail(t *testing.T) {
+	up := func(kind, text string) *hub.Event {
+		return &hub.Event{Kind: hub.EvUpdate, Update: json.RawMessage(`{"sessionUpdate":"` + kind + `","content":{"type":"text","text":` + quote(text) + `}}`)}
+	}
+	user := func(text string) *hub.Event {
+		return &hub.Event{Kind: hub.EvUser, Content: []json.RawMessage{json.RawMessage(`{"type":"text","text":` + quote(text) + `}`)}}
+	}
+	image := &hub.Event{Kind: hub.EvUser, Content: []json.RawMessage{json.RawMessage(`{"type":"image","data":"x"}`)}}
+	end := &hub.Event{Kind: hub.EvTurnEnd, StopReason: "end_turn"}
+	var evs []*hub.Event
+	for i := 0; i < 6; i++ {
+		evs = append(evs, user(fmt.Sprintf("ask %d", i)), up("agent_message_chunk", fmt.Sprintf("a%d", i)), end)
+	}
+	evs = append(evs, image, up("agent_message_chunk", "seen"), end, image, end, user("go"), up("agent_message_chunk", "one"), up("tool_call", ""), up("agent_message_chunk", "two"), end)
+	all := conversationAll(evs, 0)
+	for n := 1; n <= len(all)+2; n++ {
+		want := all
+		if len(want) > n {
+			want = want[len(want)-n:]
+		}
+		if got := conversation(evs, n); !reflect.DeepEqual(got, want) {
+			t.Fatalf("last %d = %v, want %v", n, got, want)
+		}
 	}
 }
 

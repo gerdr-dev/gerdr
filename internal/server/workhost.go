@@ -143,9 +143,39 @@ func (h workHost) Conversation(id string, last int) ([]map[string]any, error) {
 	return conversation(sess.Events(), last), nil
 }
 
+// conversation with last > 0 reads only the tail: from the last-th user message back, widened until it holds enough.
+// Parsing every update of a long worker session (2000+ events, 3 MB) took 70–110 ms per read, and a board reads one
+// per active task on each refresh (the Superagent panel's tasks.list spent ~0.4 s here, 2026-11-18). Starting at a
+// user message keeps an agent message whole: text never runs across one.
+
 // conversation: the user's messages and the agent's text, in order (ctx.sessions.read). Text either side of a tool call
 // is one message in separate paragraphs, as the chat shows it; subagents' text isn't the agent's.
 func conversation(evs []*hub.Event, last int) []map[string]any {
+	if last <= 0 {
+		return conversationAll(evs, 0)
+	}
+	for users := last; ; users *= 2 {
+		start, n := 0, 0
+		for i := len(evs) - 1; i >= 0; i-- {
+			if evs[i].Kind == hub.EvUser {
+				if n++; n == users {
+					start = i
+					break
+				}
+			}
+		}
+		// Too few user messages to cut at (or none): the whole log, as before
+		if n < users || start == 0 {
+			return conversationAll(evs, last)
+		}
+		// A user message without text (only an image) gives nothing: widen until the tail holds enough
+		if out := conversationAll(evs[start:], last); len(out) >= last {
+			return out
+		}
+	}
+}
+
+func conversationAll(evs []*hub.Event, last int) []map[string]any {
 	out := []map[string]any{}
 	var cur *strings.Builder
 	var at int64
