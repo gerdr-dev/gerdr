@@ -176,7 +176,6 @@ function InstalledRow({ a, newer }: { a: AddonStatus; newer?: StoreAddon }) {
         {a.version && <span className="text-[11px] text-muted-foreground">v{a.version}</span>}
         {a.name !== a.id && <span className="font-mono text-[11px] text-muted-foreground">{a.id}</span>}
         {a.source ? <Tag>{a.source.store}</Tag> : <Tag>{t("addonSettings.tag.local")}</Tag>}
-        {a.modified && <Tag className="text-warn">{t("addonSettings.tag.modified")}</Tag>}
       </div>
       <div className="flex min-h-9 shrink-0 items-center gap-1.5 md:-my-1 md:min-h-0">
         {newer && update("max-md:hidden")}
@@ -345,6 +344,9 @@ function ActionSetting({ id, spec }: { id: string; spec: AddonSetting }) {
 
 // One entry of an add-on's addon.json "settings". Saved on change (a number on blur / Enter); stored by gerdr, so
 // every window and device sees the same value.
+// Don't add a type here for one add-on's need: add-ons draw their own fields in g.slot("settings") (SettingsSlot,
+// <Field> plus whatever they like). Tried once (a "string with options" pick-or-type field for the voice add-on's
+// Azure voice) and reverted: that add-on now has a select with a "custom" option and a string shown while it's picked.
 function SettingField({ id, spec, value }: { id: string; spec: AddonSetting; value: unknown }) {
   const shown = value !== undefined ? value : spec.default;
   const [draft, setDraft] = useState(String(shown ?? ""));
@@ -431,16 +433,21 @@ function SettingField({ id, spec, value }: { id: string; spec: AddonSetting; val
         )}
       </div>
       {(spec.description || value !== undefined) && (
-        <div className="mt-0.5 flex gap-2 text-[11px] text-muted-foreground">
-          <span className="min-w-0 flex-1">{spec.description}</span>
+        // Wraps: a long default ("Reset to zh-CN-XiaoxiaoMultilingualNeural") goes under the description instead of
+        // squeezing it to a character per line beside it
+        <div className="mt-0.5 flex flex-wrap gap-x-2 text-[11px] text-muted-foreground">
+          <span className="min-w-0 flex-[1_1_12rem]">{spec.description}</span>
           {value !== undefined && (
-            <button type="button" className="shrink-0 hover:text-foreground" onClick={() => save(null)}>
+            <button type="button" className="ml-auto max-w-full text-right hover:text-foreground" onClick={() => save(null)}>
               {/* A secret's default is not echoed either (usually empty anyway) */}
               {spec.type === "secret"
                 ? t("addonSettings.clear")
                 : spec.type === "text"
                   ? t("addonSettings.resetDefault")
-                  : t("addonSettings.resetDefaultTo", { value: String(spec.default) })}
+                  : t("addonSettings.resetDefaultTo", {
+                      // a select's default by its label, not its raw value
+                      value: spec.options?.find((o) => String(o.value) === String(spec.default))?.label ?? String(spec.default),
+                    })}
             </button>
           )}
         </div>

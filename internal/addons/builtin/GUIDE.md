@@ -292,7 +292,9 @@ the light / dark switch and outlives the add-on.
 ### Settings
 
 Declare them and Gerdr draws the form (Settings → Add-ons → your add-on → 设置) and stores the values, the same on
-every device:
+every device. The types below are all there is, on purpose: what they don't cover is built from them in
+[your own settings layout](#your-own-settings-layout) — fields shown only when another is set, and "pick from a
+list or type your own" as a `select` with a `"custom"` option plus a `string` drawn only while it's picked:
 
 ```json
 "settings": [

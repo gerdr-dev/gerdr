@@ -16,7 +16,6 @@ export const zh = {
   "addonSettings.uninstall.desc": "会删掉 {dir} 整个文件夹。它存的数据（addon-data）留着，重新装上还在。",
   "addonSettings.uninstall.descLocal": "会删掉 {dir} 整个文件夹（它不是从商店装的，删了就找不回来了）。它存的数据（addon-data）留着，重新装上还在。",
   "addonSettings.tag.local": "本地",
-  "addonSettings.tag.modified": "本地改过",
   "addonSettings.tag.localFolder": "本地文件夹",
   "addonSettings.tag.service": "后台进程",
   "addonSettings.updateTo": "更新 v{version}",
@@ -337,7 +336,6 @@ export const en: Record<keyof typeof zh, string> = {
   "addonSettings.uninstall.descLocal":
     "This deletes the whole {dir} folder (it wasn't installed from a store, so it can't be recovered). Its data (addon-data) stays, so it's still there if you reinstall.",
   "addonSettings.tag.local": "Local",
-  "addonSettings.tag.modified": "Modified locally",
   "addonSettings.tag.localFolder": "Local folder",
   "addonSettings.tag.service": "Background process",
   "addonSettings.updateTo": "Update to v{version}",
