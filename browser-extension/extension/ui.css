@@ -1,4 +1,4 @@
-:root { color-scheme: light dark; --fg: #141210; --muted: #6b6560; --line: #e6e3d8; --bg: #fbfaf4; --brand: #b05a36; }
+:root { color-scheme: light dark; --fg: #141210; --muted: #6b6560; --line: #e6e3d8; --bg: #fbfaf4; --brand: #3b7be0; /* Gerdr blue, same as the page overlay (background.js BRAND) */ }
 @media (prefers-color-scheme: dark) { :root { --fg: #f1efe8; --muted: #a39d95; --line: #3a3632; --bg: #1b1917; } }
 body { margin: 0; font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; color: var(--fg); background: var(--bg); }
 .muted { color: var(--muted); }
