@@ -95,6 +95,10 @@ export function TerminalView({
       if (!el.offsetWidth || !el.offsetHeight) return;
       try {
         fit.fit();
+        // A resize clears the WebGL canvas, and xterm only redraws on the next animation frame, so dragging a pane
+        // edge showed one empty frame each step (the text flickering). Draw now, before this frame is painted. Private
+        // API of xterm 5.5 (names kept in its bundle); optional chaining makes a future rename fall back to the flicker.
+        (term as any)._core?._renderService?._renderDebouncer?._innerRefresh?.();
       } catch {}
     };
 
@@ -246,8 +250,11 @@ export function TerminalView({
 
   return (
     <div className="relative flex h-full min-h-0 flex-col">
-      {/* 左边留一点：字贴着边框不好看。背景用终端自己的（xterm 画的就是 --background） */}
-      <div ref={box} className="min-h-0 flex-1 overflow-hidden pl-2 pt-1" onMouseDown={() => xt.current?.focus()} />
+      {/* Some padding on the left: text flush against the border looks cramped. The background is the terminal's own
+          (xterm paints --background). `isolate` keeps xterm's z-indexed layers (its accessibility / message overlay
+          covers the whole terminal at z-index 10) inside this box, or they sit on top of the reopen bar below and
+          swallow its clicks. */}
+      <div ref={box} className="isolate min-h-0 flex-1 overflow-hidden pl-2 pt-1" onMouseDown={() => xt.current?.focus()} />
       {isCoarse() && state === "live" && (
         // 手机键盘上没有的那几个键
         <div className="flex shrink-0 gap-1 overflow-x-auto border-t px-1.5 py-1" onPointerDown={(e) => e.preventDefault()}>
