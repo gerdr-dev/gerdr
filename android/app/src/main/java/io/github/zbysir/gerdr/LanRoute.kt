@@ -45,6 +45,11 @@ import javax.net.ssl.SSLSocketFactory
  *    那一下重连终端」，撞上的就是这个）。掐掉之后浏览器自己重建、终端的自动重连自己走局域网 ——
  *    条件只看「此刻有没有走中继的连接」，没有时机问题。反方向不用管：离开 Wi-Fi 时局域网那些连接
  *    自己会断。
+ *    Also later: a connection that tried the LAN, missed the 800ms dial (weak Wi-Fi, a dual-network phone)
+ *    and fell back to the relay stays there for good while the route counts as up, so the label read
+ *    "just switched" forever, even across App restarts. The next connection that does get through the LAN
+ *    proves the route works again, so it sweeps those fallbacks too (`LocalProxy.sweepFallbacks`, throttled
+ *    so a flapping Wi-Fi doesn't drop the same WebSocket every few seconds).
  */
 object LanRoute {
     private const val TAG = "LanRoute"
@@ -82,8 +87,11 @@ object LanRoute {
         .put("next", if (lan != null) "lan" else "relay")
         .put("proxied", host != null)
 
+    /** Is this CONNECT for the server (the one host that has a LAN route)? */
+    internal fun isServer(h: String) = h.equals(host, ignoreCase = true)
+
     internal fun tunnel(h: String, isLan: Boolean, delta: Int) {
-        if (!h.equals(host, ignoreCase = true)) return // 不支持反向绕过时别的主机也会进代理，那些不算
+        if (!isServer(h)) return // 不支持反向绕过时别的主机也会进代理，那些不算
         (if (isLan) openLan else openRelay).addAndGet(delta)
         changed()
     }
@@ -343,12 +351,33 @@ private class LocalProxy(private val route: (String, Int) -> List<Target>) {
     /** 开着的、走中继的上游连接。切到局域网时一起掐掉（见 LanRoute 的第 3 条） */
     private val relayUps: MutableSet<Socket> = java.util.Collections.newSetFromMap(java.util.concurrent.ConcurrentHashMap())
 
+    /** When [sweepFallbacks] last ran; it only sweeps once per [SWEEP_MS] */
+    @Volatile private var lastSweep = 0L
+
+    /**
+     * A connection just got through the LAN: close the server's connections that fell back to the relay
+     * (LanRoute's note 3, last paragraph). Throttled: if the Wi-Fi keeps dropping dials, a swept WebSocket can
+     * fall back again on its reconnect, and sweeping it on every LAN hit would cut it off over and over.
+     */
+    fun sweepFallbacks() {
+        if (relayUps.isEmpty()) return
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (now - lastSweep < SWEEP_MS) return
+        lastSweep = now
+        Log.i("LanRoute", "a connection got through the LAN; moving the ones that fell back to the relay")
+        closeRelay()
+    }
+
     fun closeRelay() {
         val n = relayUps.size
         relayUps.forEach { runCatching { it.close() } }
         if (n > 0) Log.i("LanRoute", "切到局域网：掐掉 $n 条走中继的连接，让它们重连到局域网")
     }
     val port: Int get() = server.localPort
+
+    private companion object {
+        const val SWEEP_MS = 30_000L
+    }
 
     fun start() {
         Thread({
@@ -391,7 +420,10 @@ private class LocalProxy(private val route: (String, Int) -> List<Target>) {
             val (up, isLan) = hit
             Log.d("LanRoute", "CONNECT $h:$p → ${up.remoteSocketAddress}${if (isLan) "（局域网）" else ""}")
             LanRoute.tunnel(h, isLan, +1)
-            if (!isLan) relayUps.add(up)
+            // Only the server's own connections: without reverse bypass every host goes through this proxy,
+            // and closing those (they have no LAN route to move to) would just cut them off
+            if (!isLan && LanRoute.isServer(h)) relayUps.add(up)
+            if (isLan) sweepFallbacks()
             // 拨的那一刻还没有局域网这条路（targets 里压根没有它）、连上时却已经探通了：这条是从
             // 「先作废、再探」那个空档里漏过来的，closeRelay 已经扫过去了，当场补掐。
             // 试过局域网、没拨通才退到中继的那种是正当的退路，不动
