@@ -149,7 +149,7 @@ projbrowser.Open: the App connected → OpenNative in the project's profile; els
 - **Agents drive it the same way**: the shell speaks the extension's protocol (`cdp` → `View.Call`, events from
   `OnEvent`), so its pages are ordinary tabs (`Tab.Native`, ids from 2000000) for every action and the stream.
 - **The pane only reports where it is.** Its box's `getBoundingClientRect` and `devicePixelRatio` (so the UI's zoom
-  counts), checked on resize, on any change to `<body>`'s children (a Radix menu / dialog portal) and every 250 ms. It hides
+  counts), checked on resize, when a menu / dialog / toast of ours is added anywhere in the document (a Radix portal under `<body>`, the lightbox inside the chat: watching only `<body>`'s children left the page over the lightbox until the next timed check) and every 250 ms. It hides
   the window while the box isn't shown (another tab, the page hidden). The stream still runs with `pic=0`: no picture,
   only the address bar's info and its input (go / back / reload).
 - **Our menus / dialogs over the page: a still.** The window is above the UI, so nothing of ours can be drawn over it.
@@ -158,9 +158,25 @@ projbrowser.Open: the App connected → OpenNative in the project's profile; els
   page is frozen meanwhile (as Claude Desktop does). The still is a canvas drawn from a decoded `ImageBitmap`, not an
   `<img>`: an `<img>` decodes on its own schedule (a big one is left out of the first frame it is in, even when
   another `Image()` decoded the same URL before), so the window stepped aside over an empty box and most menu opens
-  flashed black for a frame. Tried first and dropped: cutting their shapes out of the window
+  flashed black for a frame. Stepping aside must not resize the page either (desktop/main.js `parkView` keeps its
+  size): parked at another size, it came back drawn at that size for a frame or two. Tried first and dropped: cutting their shapes out of the window
   (Lightron's `View.Mask`) kept the page live, but clicks in the holes and the keyboard had to be handed between the
   two windows by hand, and each case was a bug of its own (a rename dialog's text box that took no typing).
+- **A page is in one pane.** Picking, in a pane's page list, a page another pane shows swaps the two panes'
+  pages (`showBrowserTab`). Two panes on one page read as two pages (the second shows the first's pictures), and a
+  reload in either looked like every pane reloading to one address.
+- **A page is in one window.** With two App windows on the same project both UIs mount the pane. The last pane to
+  place the page has it; the window it was taken from gets `gerdr:browsertaken` and shows the page's pictures (the
+  stream) instead, until that pane lets go (`release` on its last hide) or its window closes (`gerdr:browserfree`).
+  A hide from a window that doesn't have the page is dropped (desktop/core views.go `placeView`, desktop/main.js): a
+  new window's out-of-sight pane reported "hidden" and the page in the first window went black.
+- **The still stays up under the page** (Claude Desktop's "underlay frame", read from its bundle): drawn into the
+  canvas each time one is taken (the pointer back from the page, a press, 500 ms after the pointer or the page's
+  input went quiet), never hidden while the pane has the page. So when one of ours mounts, the still has been on
+  screen for a long time and the page steps aside at once, in main.js on the bridge message itself (not after the
+  trip to the core). Put up only as ours mounted, the page had to wait two frames for the still to be on screen
+  and covered a dialog's fade-in for 4-6 frames (a shortcut-opened Settings, a recording). What is left is the
+  window's views changing, a frame or two.
 - **Focus between the two windows** (Lightron's menu.m): a click in the page makes its window key; it shares the
   App window's key state (`_sharesParentKeyState`), so the App doesn't look inactive, and a press on the App's window
   takes the keys back. Two App windows at the same bounds: the host is told apart by a title of its own for a moment

@@ -112,12 +112,17 @@ func main() {
 	}
 
 	err := el.Run(el.Options{
-		Name:        appName,
-		Version:     appVersion,
-		URLFunc:     sh.startBackend,
-		Menu:        sh.menu(),
-		DockMenu:    sh.dockMenu(),
-		OnMessage:   sh.message,
+		Name:      appName,
+		Version:   appVersion,
+		URLFunc:   sh.startBackend,
+		Menu:      sh.menu(),
+		DockMenu:  sh.dockMenu(),
+		OnMessage: sh.message,
+		OnWindowClose: func(w *el.Window) {
+			if sh.views != nil {
+				sh.views.windowClosed(w)
+			}
+		},
 		OnNoteClick: sh.noteClick,
 		DataDir:     *dataDir,
 		Logf:        log.Printf,

@@ -96,10 +96,10 @@ export const canNativeBrowser = () => {
 
 /** The App's real page over the box (rect, CSS px of this page) or off screen (null); radius: its corners' (the pane's
  * inside), since the page is drawn over ours and its square corners covered the pane's rounded ones. */
-export function nativeBrowserView(tab: number, rect: { x: number; y: number; width: number; height: number } | null, radius = 0) {
+export function nativeBrowserView(tab: number, rect: { x: number; y: number; width: number; height: number } | null, radius = 0, release = false) {
   const b = bridge();
   if (!b) return;
-  if (!rect) b.postMessage({ type: "browserView", tab, hide: true });
+  if (!rect) b.postMessage({ type: "browserView", tab, hide: true, ...(release ? { release: true } : {}) });
   else b.postMessage({ type: "browserView", tab, rect: [rect.x, rect.y, rect.width, rect.height], dpr: window.devicePixelRatio || 1, radius });
 }
 

@@ -15,6 +15,19 @@ function shown(l: Layout): Set<number> {
  * its pictures instead (BrowserScreen). */
 export const useNativeOwners = create<Record<number, string>>(() => ({}));
 
+/** The page is in another window of the App (a page is in one window: the last pane to place it has it, desktop/core
+ * views.go). This window's panes show its pictures until that pane lets go or its window closes. */
+const ELSEWHERE = "~another-window";
+if (typeof window !== "undefined") {
+  window.addEventListener("gerdr:browsertaken", (e) => useNativeOwners.setState({ [(e as CustomEvent<number>).detail]: ELSEWHERE }));
+  window.addEventListener("gerdr:browserfree", (e) => {
+    const tab = (e as CustomEvent<number>).detail;
+    if (useNativeOwners.getState()[tab] !== ELSEWHERE) return;
+    const { [tab]: _, ...rest } = useNativeOwners.getState();
+    useNativeOwners.setState(rest, true);
+  });
+}
+
 export function claimNative(tab: number, paneId: string): boolean {
   const owners = useNativeOwners.getState();
   if (owners[tab] && owners[tab] !== paneId) return false;
@@ -111,9 +124,19 @@ export async function browserHere(paneId: string) {
   });
 }
 
-/** Point a Browser pane at another page (or none: the address bar). */
+/**
+ * Point a Browser pane at another page (or none: the address bar). A page is in one pane: when another pane shows the
+ * page picked, the two swap. Two panes on one page looked like two pages (the second is the first one's pictures):
+ * reloading or going somewhere in either changed "all of them" (user report).
+ */
 export function showBrowserTab(paneId: string, project: string, tab?: number) {
-  setLayout((l) => setPane(l, paneId, { browser: { project, tab } }));
+  setLayout((l) => {
+    const mine = leavesOf(l).find((x) => x.id === paneId)?.browser;
+    let out = l;
+    if (tab)
+      for (const p of leavesOf(l)) if (p.id !== paneId && p.browser?.tab === tab) out = setPane(out, p.id, { browser: mine ?? { project: p.browser.project } });
+    return setPane(out, paneId, { browser: { project, tab } });
+  });
 }
 
 /** Remember where a Browser pane's page is, to open it again after a restart (PaneLeaf.browser.url). */

@@ -65,6 +65,8 @@ type Options struct {
 	Menu      []MenuItem
 	DockMenu  []MenuItem
 	OnMessage func(w *Window, raw json.RawMessage)
+	// OnWindowClose: a window is gone (called once it is off Windows())
+	OnWindowClose func(w *Window)
 	// OnNoteClick: a notification shown with App.Notify was clicked.
 	OnNoteClick func(w *Window, sessionID, space string)
 	BrowserArgs []string
@@ -245,8 +247,12 @@ func (a *App) read(r io.Reader) {
 		case "window":
 			if !m.Open {
 				a.mu.Lock()
+				w := a.windows[m.Win]
 				delete(a.windows, m.Win)
 				a.mu.Unlock()
+				if w != nil && a.opts.OnWindowClose != nil {
+					go a.opts.OnWindowClose(w)
+				}
 			} else {
 				a.window(m.Win)
 			}

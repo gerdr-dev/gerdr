@@ -257,6 +257,40 @@ func (b *appBrowser) view(tab int) *appView {
 	return b.views[tab]
 }
 
+// hasWindow: w is still one of the App's windows (a closed one keeps no page).
+func (b *appBrowser) hasWindow(w *el.Window) bool {
+	for _, x := range b.s.app.Windows() {
+		if x == w {
+			return true
+		}
+	}
+	return false
+}
+
+// tell: an event about a page for every window's UI but one.
+func (b *appBrowser) tell(but *el.Window, event string, tab int) {
+	for _, x := range b.s.app.Windows() {
+		if x != but {
+			_ = x.Eval(fmt.Sprintf(`window.dispatchEvent(new CustomEvent(%q, {detail: %d}))`, event, tab))
+		}
+	}
+}
+
+// windowClosed: the pages its panes showed are free for the other windows' panes.
+func (b *appBrowser) windowClosed(w *el.Window) {
+	b.mu.Lock()
+	var tabs []int
+	for tab, v := range b.views {
+		if v.host == w {
+			tabs = append(tabs, tab)
+		}
+	}
+	b.mu.Unlock()
+	for _, tab := range tabs {
+		b.tell(w, "gerdr:browserfree", tab)
+	}
+}
+
 // placeView: the UI's Browser pane says where its box is ({type: "browserView", tab, rect: [x, y, w, h], radius}) or
 // that it's gone ({…, hide: true}). Only the latest counts: a split being dragged sends many.
 func (b *appBrowser) placeView(w *el.Window, m map[string]any) {
@@ -268,8 +302,26 @@ func (b *appBrowser) placeView(w *el.Window, m map[string]any) {
 	}
 	var f func()
 	if m["hide"] == true {
+		// A page is in one window. Another window's pane saying it doesn't show it has nothing to hide: parking it
+		// then left the window that does show it with a black box (a project opened in a new window: its UI mounts
+		// the same pane out of sight and reports "hidden"). Dropped here, before the queue: there it would replace
+		// a placement of the window that has the page.
+		b.mu.Lock()
+		host := v.host
+		b.mu.Unlock()
+		if host != nil && host != w && b.hasWindow(host) {
+			return
+		}
 		f = func() {
 			_ = v.v.Hide()
+			// the pane is gone for good (closed, on another page), not just under a menu: the page is free for
+			// another window's pane, which shows its pictures until then (ui: lib/actions/browser.ts)
+			if m["release"] == true {
+				b.mu.Lock()
+				v.host = nil
+				b.mu.Unlock()
+				b.tell(w, "gerdr:browserfree", int(n))
+			}
 			if v.placed {
 				v.placed = false
 				log.Printf("app browser: tab %d hidden", int(n))
@@ -287,7 +339,14 @@ func (b *appBrowser) placeView(w *el.Window, m map[string]any) {
 		width, _ := r[2].(float64)
 		height, _ := r[3].(float64)
 		f = func() {
+			// taken from another window's pane: that one shows the page's pictures from now on
+			b.mu.Lock()
+			old := v.host
 			v.host = w
+			b.mu.Unlock()
+			if old != nil && old != w {
+				_ = old.Eval(fmt.Sprintf(`window.dispatchEvent(new CustomEvent("gerdr:browsertaken", {detail: %d}))`, int(n)))
+			}
 			if err := v.v.Place(w, x, y, width, height, radius); err != nil {
 				log.Printf("app browser: place: %v", err)
 			} else if !v.placed {

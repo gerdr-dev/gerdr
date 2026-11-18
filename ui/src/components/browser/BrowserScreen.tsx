@@ -258,14 +258,13 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
     // our UI (it has to, before anything of ours is clicked) and again at each press. A menu opens on the press itself,
     // before a still taken then is ready: waiting for one let the live page cover the menu for a moment (half the
     // time, seen on a recording). It may be a little old: shown at once, and replaced by a fresh one when that comes.
+    // And once the pointer has been still for 500 ms, in our UI (below) or in the page (the App says so:
+    // desktop/main.js "gerdr:browseridle"): a page that changed by itself since, or was scrolled with the pointer in
+    // it before a shortcut opened a dialog, showed as it had been for a moment.
     let warm: ImageBitmap | null = null;
     let taking: Promise<ImageBitmap | null> | null = null; // one still at a time; a second ask shares it
-    const overlays = () =>
-      Array.from(
-        document.querySelectorAll<HTMLElement>(
-          "[data-radix-popper-content-wrapper] > *, [role=dialog], [role=alertdialog], [role=tooltip], [data-sonner-toast]",
-        ),
-      );
+    const OVER = "[data-radix-popper-content-wrapper] > *, [role=dialog], [role=alertdialog], [role=tooltip], [data-sonner-toast]";
+    const overlays = () => Array.from(document.querySelectorAll<HTMLElement>(OVER));
     // The still: from the App's own process when it can (desktop/main.js gerdr:shot, a data URL in tens of ms, as
     // Claude Desktop does), else through the backend (an older App). Decoded here into a bitmap, so showing it is one
     // synchronous drawImage (see stillRef).
@@ -281,6 +280,7 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
           const bmp = await createImageBitmap(img);
           warm?.close(); // what it showed is in the canvas already
           warm = bmp;
+          show(bmp);
           return bmp;
         } catch {
           return null;
@@ -290,7 +290,15 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
       })().finally(() => (taking = null)));
     const placedOnScreen = () => !covered && !!last && last !== "hidden";
     let inPage = true; // the pointer is over the page (our document gets no events then)
+    let quiet: ReturnType<typeof setTimeout> | undefined;
+    const settle = () => {
+      clearTimeout(quiet);
+      quiet = setTimeout(() => placedOnScreen() && void take(), 500);
+    };
+    const idle = (e: Event) => (e as CustomEvent).detail === tab && placedOnScreen() && void take();
+    window.addEventListener("gerdr:browseridle", idle);
     const back = () => {
+      settle();
       if (!inPage) return;
       inPage = false;
       if (placedOnScreen()) void take();
@@ -300,12 +308,24 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
     document.addEventListener("pointermove", back, true);
     document.documentElement.addEventListener("pointerleave", away);
     document.addEventListener("pointerdown", press, true);
+    // The still stays up, under the page, from the first one taken (Claude Desktop's "underlay frame"): when one of
+    // ours comes up it has been on screen for a long time already, so the page steps aside at once. Shown only as
+    // ours came up, the page had to wait two frames for it to be on screen, and covered a dialog's fade-in that long
+    // (a shortcut-opened Settings: visibly under the page for tens of ms, user report).
+    let upSince = 0; // when the canvas went on screen; 0 = it isn't
     const drop = () => {
       const cv = stillRef.current;
       if (cv) cv.style.display = "none";
+      upSince = 0;
+    };
+    const lay = () => {
+      const cv = stillRef.current;
+      if (!cv) return;
+      const p = placed.current;
+      Object.assign(cv.style, { left: p.left + "px", top: p.top + "px", width: p.width + "px", height: p.height + "px", borderRadius: p.radius + "px" });
     };
     // false: nothing was drawn (the bitmap was closed or empty), the page has to stay
-    const show = (bmp: ImageBitmap): boolean => {
+    function show(bmp: ImageBitmap): boolean {
       const cv = stillRef.current;
       if (!cv || !bmp.width || !bmp.height) return false;
       // setting a canvas's size clears it, even to the same value: only when it changed, then drawn in the same task
@@ -318,27 +338,18 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
       } catch {
         return false; // a closed bitmap
       }
-      const p = placed.current;
-      Object.assign(cv.style, {
-        left: p.left + "px",
-        top: p.top + "px",
-        width: p.width + "px",
-        height: p.height + "px",
-        borderRadius: p.radius + "px",
-        display: "block",
-      });
+      lay();
+      cv.style.display = "block";
+      upSince ||= performance.now();
       return true;
-    };
-    const cover = (bmp: ImageBitmap, n: number): boolean => {
-      if (!show(bmp)) return false;
+    }
+    const cover = (n: number) => {
       last = "covered";
-      // the page steps aside once the still is on screen (drawn above; the frame after this one has it)
-      requestAnimationFrame(() =>
-        requestAnimationFrame(() => {
-          if (covered && n === shot) nativeBrowserView(tab, null);
-        }),
-      );
-      return true;
+      const aside = () => covered && n === shot && nativeBrowserView(tab, null);
+      // at once when the still has been on screen a while; just put up, once it is (the frame after the next has it:
+      // stepping aside before that showed the empty box, a black flash)
+      if (upSince && performance.now() - upSince > 100) aside();
+      else requestAnimationFrame(() => requestAnimationFrame(aside));
     };
     const report = () => {
       const r = box.getBoundingClientRect();
@@ -352,19 +363,14 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
       if (over && !covered) {
         covered = true;
         const n = ++shot;
-        const had = !!warm && cover(warm, n);
-        // a fresh one: replaces the warm one when it comes (or is the first, the page staying until then)
-        void take().then((b) => {
-          if (!b || !covered || n !== shot) return;
-          if (!had) cover(b, n);
-          else show(b);
-        });
+        const had = upSince > 0;
+        if (had) cover(n);
+        // a fresh one (take draws it): replaces the one that was up, or is the first, the page staying until then
+        void take().then((b) => b && covered && n === shot && !had && cover(n));
       } else if (!over && covered) {
         covered = false;
-        const n = ++shot;
-        last = ""; // placed again below; the still goes once the page is back over it
-        // only if nothing of ours came back over it meanwhile: dropping the still then left the box black
-        requestAnimationFrame(() => requestAnimationFrame(() => !covered && n === shot && drop()));
+        ++shot;
+        last = ""; // placed again below, over the still, which stays
       }
       if (covered) return;
       // the pane's corners, inside its border: the page window has to be rounded as they are
@@ -379,13 +385,22 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
         const left = Math.ceil(r.x),
           top = Math.ceil(r.y);
         placed.current = { left: left - r.x, top: top - r.y, width: Math.floor(r.x + r.width) - left, height: Math.floor(r.y + r.height) - top, radius };
+        lay();
       }
       nativeBrowserView(tab, shown ? r : null, radius);
     };
     const ro = new ResizeObserver(report);
     ro.observe(box);
-    const mo = new MutationObserver(report);
-    mo.observe(document.body, { childList: true });
+    // One of ours coming up anywhere in the document, not only as a child of <body> (where Radix portals go): the
+    // lightbox is drawn inside the chat, so only the 250 ms check below saw it and the live page stayed over its
+    // fade-in for up to that long (a recording: 8 frames). Only added nodes that are or hold one of ours make a
+    // check, so a streaming reply's nodes cost a selector match each, not a layout.
+    const mo = new MutationObserver((recs) => {
+      for (const rec of recs)
+        if (rec.target === document.body) return report();
+        else for (const n of rec.addedNodes) if (n instanceof Element && (n.matches(OVER) || n.querySelector(OVER))) return report();
+    });
+    mo.observe(document.body, { childList: true, subtree: true });
     const iv = setInterval(report, 250);
     window.addEventListener("resize", report);
     document.addEventListener("visibilitychange", report);
@@ -399,8 +414,11 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
       document.removeEventListener("visibilitychange", report);
       document.removeEventListener("pointerdown", press, true);
       document.removeEventListener("pointermove", back, true);
+      window.removeEventListener("gerdr:browseridle", idle);
+      clearTimeout(quiet);
       document.documentElement.removeEventListener("pointerleave", away);
-      nativeBrowserView(tab, null);
+      // release: this pane is done with the page, another window's pane may take it (lib/actions/browser.ts)
+      nativeBrowserView(tab, null, 0, true);
       covered = false;
       shot++;
       drop();

@@ -330,6 +330,13 @@ ipcMain.handle("gerdr:shot", async (e, tab) => {
 ipcMain.on("gerdr", (e, m) => {
   const w = BrowserWindow.fromWebContents(e.sender);
   if (!w || !wins.has(winId(w))) return;
+  // The pane's page steps aside (one of the UI's menus / dialogs is over it) right here, not after the trip to the
+  // core and back: each frame it stays is a frame it covers what opened. Only for the window it is in: another
+  // window's pane saying "not shown here" has nothing to hide (the core's placeView has the same rule and the say).
+  if (m && m.type === "browserView" && m.hide) {
+    const v = [...views.values()].find((x) => x.tab === m.tab);
+    if (v && v.host === w) parkView(v);
+  }
   send({ ev: "message", win: winId(w), data: m });
 });
 
@@ -353,19 +360,30 @@ function parkWindow(width, height) {
 
 function parkView(v) {
   if (quitting || !views.has(v.id)) return;
+  if (v.parked && v.park && !v.park.isDestroyed()) return; // there already (the bridge's fast path, then the core)
   if (v.radius) {
     v.radius = 0;
     v.view.setBorderRadius(0);
   }
-  if (v.host && !v.host.isDestroyed()) v.host.contentView.removeChildView(v.view);
+  const host = v.host && !v.host.isDestroyed() ? v.host : null;
+  if (host) host.contentView.removeChildView(v.view);
   v.host = null;
-  if (!v.park || v.park.isDestroyed()) {
-    const b = v.view.getBounds();
-    v.park = parkWindow(Math.max(b.width, 400), Math.max(b.height, 300));
-  }
+  // The keys go back to the window's own page: with the keyboard in the pane's page (it was clicked last), it stepped
+  // aside for a dialog opened by a shortcut and took the keyboard with it into the park window, so Esc didn't close
+  // the dialog until something of the UI was clicked (user report: the first Settings after using the page).
+  if (host && host.isFocused() && !host.webContents.isFocused()) host.webContents.focus();
+  // The page keeps the size it had in the pane: the park window follows it. Sized to the park window instead (made
+  // at 400x300 when the view opens, before it has a size), every step aside for one of our menus resized the page
+  // twice, and it came back drawn 400 wide in a corner of a black box until its layout caught up (a recording: 1-2
+  // frames at each menu close; a page with breakpoints, YouTube, showed its narrow layout).
+  const had = v.view.getBounds();
+  const width = had.width > 1 ? had.width : 400,
+    height = had.height > 1 ? had.height : 300;
+  if (!v.park || v.park.isDestroyed()) v.park = parkWindow(width, height);
+  else v.park.setContentSize(width, height);
   v.park.contentView.addChildView(v.view);
-  const b = v.park.getContentBounds();
-  v.view.setBounds({ x: 0, y: 0, width: b.width, height: b.height });
+  v.view.setBounds({ x: 0, y: 0, width, height });
+  v.parked = true;
 }
 
 function openView(profile, url, tab) {
@@ -395,6 +413,18 @@ function openView(profile, url, tab) {
   dbg.on("detach", () => closeView(v, true));
   // a click in the page: its pane becomes the focused one (the pane can't see clicks on a view drawn over it)
   wc.on("focus", () => send({ ev: "view", view: id, kind: "focus" }));
+  // The person's mouse / wheel / keys in the page gone quiet for 500 ms: the pane takes a fresh still then
+  // (BrowserScreen's warm still), so one of the UI's dialogs opened by a shortcut, the pointer still in the page,
+  // comes up over the page as it is now and not as it was when the pointer last left it. The window's own document
+  // sees nothing of what happens in here, so it can't tell by itself.
+  wc.on("input-event", () => {
+    clearTimeout(v.quiet);
+    v.quiet = setTimeout(() => {
+      const h = v.host;
+      if (!h || h.isDestroyed() || wc.isDestroyed()) return;
+      h.webContents.executeJavaScript(`window.dispatchEvent(new CustomEvent("gerdr:browseridle", {detail: ${Number(v.tab) || 0}}))`).catch(() => {});
+    }, 500);
+  });
   wc.on("destroyed", () => closeView(v, true));
   parkView(v);
   wc.loadURL(url || "about:blank").catch(() => {});
@@ -404,6 +434,7 @@ function openView(profile, url, tab) {
 function closeView(v, gone) {
   if (!views.has(v.id)) return;
   views.delete(v.id);
+  clearTimeout(v.quiet);
   if (v.host && !v.host.isDestroyed()) v.host.contentView.removeChildView(v.view);
   if (v.park && !v.park.isDestroyed()) v.park.destroy();
   const wc = v.view.webContents; // gone already when the App quits
@@ -428,6 +459,7 @@ function placeView(v, w, rect, radius) {
     if (v.park && !v.park.isDestroyed()) v.park.contentView.removeChildView(v.view);
     w.contentView.addChildView(v.view);
     v.host = w;
+    v.parked = false;
   }
   v.view.setBounds({ x, y, width: Math.max(width, 1), height: Math.max(height, 1) });
   const r = Math.max(0, Math.round((radius || 0) * z));
