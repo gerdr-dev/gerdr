@@ -126,7 +126,10 @@ to `/api/app-update` (local door only), re-sending every 30s. The phone reads it
 (`app_update`). A button pressed on the phone goes `POST /api/app-update/op` → `/ws` `app_update_op` addressed to
 the reporting page's client id → that page calls the same shell message its own button would.
 
-The shell itself is untouched on purpose: changing its files would make the next release a full download. So this
-only works while the App has a window open; past 90s without a report the phone shows nothing. "Apply" from the
-phone is refused while anything is busy: the shell would ask in a dialog on the computer, which nobody at the phone
-can answer. With automatic updates on it applies by itself once idle anyway.
+The relay itself needs nothing from the shell, so it only works while the App has a window open; past 90s without
+a report the phone shows nothing. "Apply" from the phone while something would be cut off can't go to the shell as
+is: the shell would ask in a dialog on the computer, which nobody at the phone can answer. So the backend answers 409
+`code: "busy"`, the phone asks in its own confirmation ("Restart now"), and the confirmed click comes back with
+`force`, relayed as `{apply: true, force: true}`, which the shell (`desktop/core/app.go` applyUpdate `confirmed`)
+takes as already answered. A new App with the background service on cuts nothing off, so that one isn't asked about.
+A shell from before `force` ignores it and asks on the computer.

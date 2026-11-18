@@ -72,8 +72,9 @@ func (s *Server) appUpdateRoutes(mux *http.ServeMux) {
 	})
 	mux.HandleFunc("POST /api/app-update/op", func(w http.ResponseWriter, r *http.Request) {
 		var b struct {
-			Op string `json:"op"`
-			On bool   `json:"on"`
+			Op    string `json:"op"`
+			On    bool   `json:"on"`
+			Force bool   `json:"force"` // apply: the person agreed to cut off what is running
 		}
 		if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
 			httpError(w, 400, err.Error())
@@ -83,22 +84,45 @@ func (s *Server) appUpdateRoutes(mux *http.ServeMux) {
 			httpError(w, 400, i18n.S("op 只能是 check / apply / auto", "op must be check, apply or auto"))
 			return
 		}
-		_, client := s.appUpdate.get(time.Now())
+		st, client := s.appUpdate.get(time.Now())
 		if client == "" {
 			httpError(w, http.StatusConflict, i18n.S("电脑上的 Gerdr App 没开着窗口，没法检查更新", "The Gerdr app on the computer has no window open, so it can't check for updates"))
 			return
 		}
-		// Applying while busy makes the shell ask in a dialog on the computer, which nobody at a phone can answer.
-		// With automatic updates on it goes ahead by itself once idle anyway.
-		if b.Op == "apply" && s.Hub != nil {
+		// Applying while busy makes the shell ask in a dialog on the computer, which nobody at a phone can answer. So
+		// the phone asks instead: a 409 with busy (what would be cut off) makes it show its own confirmation, and a
+		// confirmed click comes back with force, which the shell takes as already answered (desktop/core/app.go).
+		if b.Op == "apply" && !b.Force && s.Hub != nil && s.applyCutsOff(st) {
 			if x := s.busy(); x.Turns+x.Waiting+x.Tasks+x.Terms > 0 {
-				httpError(w, http.StatusConflict, i18n.S("还有 agent 或终端里的程序在跑，现在更新会打断它们：等空闲了再点", "Agents or programs in terminals are running, and updating now would interrupt them. Try again when things are idle"))
+				w.Header().Set("Content-Type", "application/json; charset=utf-8")
+				w.WriteHeader(http.StatusConflict)
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"code":  "busy",
+					"error": i18n.S("还有 agent 或终端里的程序在跑，现在更新会打断它们", "Agents or programs in terminals are running, and updating now would interrupt them"),
+					"busy":  x,
+				})
 				return
 			}
 		}
 		if s.Hub != nil {
-			s.Hub.Broadcast("app_update_op", map[string]any{"client": client, "op": b.Op, "on": b.On})
+			s.Hub.Broadcast("app_update_op", map[string]any{"client": client, "op": b.Op, "on": b.On, "force": b.Force})
 		}
 		writeJSON(w, map[string]any{})
 	})
+}
+
+// applyCutsOff: whether applying the App's pending update would stop running agents. A new App with the background
+// service on doesn't: the agents run in the service, which carries on while the windows close and reopen (the shell
+// skips its own question then too, desktop/core/app.go applyUpdate).
+func (s *Server) applyCutsOff(status json.RawMessage) bool {
+	var st struct {
+		Pending *struct {
+			Kind string `json:"kind"`
+		} `json:"pending"`
+	}
+	_ = json.Unmarshal(status, &st)
+	if st.Pending != nil && st.Pending.Kind == "app" && s.Service != nil && s.Service.Installed() {
+		return false
+	}
+	return true
 }

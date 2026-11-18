@@ -1,7 +1,8 @@
 import { Info, Loader2, SquareTerminal, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
+import { askConfirm } from "@/lib/confirm";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
@@ -75,7 +76,29 @@ export function UpdateSetting() {
     if (native) nativeAskUpdate(true);
     else relay("check").catch(checking.stop);
   };
-  const apply = native ? nativeApplyUpdate : () => relay("apply").catch(() => {});
+  // Off the App, a busy computer refuses (its shell would ask in a dialog nobody at the phone can answer): ask here,
+  // and a confirmed click goes through with force, which the shell takes as already answered.
+  const [sending, setSending] = useState(false);
+  const applyRemote = async () => {
+    setSending(true);
+    try {
+      await api.appUpdateOp("apply").catch(async (e) => {
+        if (!(e instanceof ApiError && e.code === "busy")) throw e;
+        const ok = await askConfirm({
+          title: t("updateSetting.forceTitle", { version: p?.version ?? "" }),
+          description: t("updateSetting.forceDesc", { list: cutList(u?.busy) }),
+          action: t("updateSetting.forceAction"),
+          destructive: true,
+        });
+        if (ok) await api.appUpdateOp("apply", false, true);
+      });
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setSending(false);
+    }
+  };
+  const apply = native ? () => nativeApplyUpdate() : applyRemote;
   const setAuto = native ? nativeSetAutoUpdate : (on: boolean) => relay("auto", on).catch(() => {});
 
   return (
@@ -96,7 +119,8 @@ export function UpdateSetting() {
         </div>
         {u?.enabled &&
           (p ? (
-            <Button size="sm" disabled={u.phase === "applying"} onClick={apply}>
+            <Button size="sm" disabled={u.phase === "applying" || sending} onClick={apply}>
+              {sending && <Loader2 className="size-3.5 animate-spin" />}
               {p.kind === "app" ? t("native.restartToUpdate") : t("systemUpdate.updateNow")}
             </Button>
           ) : (
@@ -292,6 +316,17 @@ function describe(u: AppUpdateStatus, service: boolean | null): { text: string; 
   if (!u.checkedAt) return { text: "", tone: "" };
   const at = new Date(u.checkedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   return { text: t("systemUpdate.upToDate", { time: at }), tone: "" };
+}
+
+/** What a forced restart cuts off, for the confirmation; the counts come from the status the App last reported. */
+function cutList(b: AppUpdateStatus["busy"] | undefined): string {
+  if (!b) return t("updateSetting.cutSome");
+  const parts: string[] = [];
+  if (b.turns) parts.push(plural("updateSetting.cutTurns", b.turns));
+  if (b.waiting) parts.push(plural("updateSetting.cutRequests", b.waiting));
+  if (b.tasks) parts.push(plural("updateSetting.cutTasks", b.tasks));
+  if (b.terms) parts.push(plural("updateSetting.cutTerms", b.terms));
+  return parts.length ? parts.join(t("updateSetting.listSep")) : t("updateSetting.cutSome");
 }
 
 /** key.one / key.other by n (English needs both; zh has the same text in each). */

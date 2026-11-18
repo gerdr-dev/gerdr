@@ -386,7 +386,7 @@ function handle(m: any) {
       if (!isNative()) set({ appUpdate: m.data?.status ?? null });
       break;
     case "app_update_op":
-      if (isNative() && m.data?.client === clientId) runRelayedUpdateOp(m.data.op, !!m.data.on);
+      if (isNative() && m.data?.client === clientId) runRelayedUpdateOp(m.data.op, !!m.data.on, !!m.data.force);
       break;
     case "open":
       import("./actions").then((a) => a.openSessionNear(m.data?.id, m.data?.near, !!m.data?.focus));

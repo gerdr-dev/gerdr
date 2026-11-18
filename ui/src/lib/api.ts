@@ -539,7 +539,8 @@ export const api = {
   appUpdate: () => req<{ status: AppUpdateStatus | null; client: string }>("GET", "/api/app-update"),
   reportAppUpdate: (status: AppUpdateStatus) => req<{}>("PUT", "/api/app-update", { client: clientId, status }),
   /** A button in Settings → 版本 pressed off the App: the App's page carries it to the shell. */
-  appUpdateOp: (op: "check" | "apply" | "auto", on?: boolean) => req<{}>("POST", "/api/app-update/op", { op, on: !!on }),
+  /** force (apply): the person agreed to cut off what is running; without it a busy computer answers 409 code "busy" */
+  appUpdateOp: (op: "check" | "apply" | "auto", on?: boolean, force?: boolean) => req<{}>("POST", "/api/app-update/op", { op, on: !!on, force: !!force }),
   uiStatus: () => req<UIStatus>("GET", "/api/ui/status"),
   /** Settings → Labs → Production React: build its packages before reloading onto them; state "" = ready */
   prepareProdReact: () => req<{ ready: boolean; state: string }>("POST", "/api/ui/prod-react"),

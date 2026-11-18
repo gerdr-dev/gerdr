@@ -173,7 +173,7 @@ func (s *shell) pollBusy() {
 				idleOK := s.idleOK == p.Version
 				s.upMu.Unlock()
 				if s.up.Auto() || s.up.Backend().Bundled || idleOK {
-					s.applyUpdate(false)
+					s.applyUpdate(false, false)
 				}
 			}
 		}
@@ -182,8 +182,9 @@ func (s *shell) pollBusy() {
 }
 
 // applyUpdate restarts the backend onto the pending update. ask: the person clicked "update"; if something would be
-// cut off, say what and let them pick (now / when idle / cancel).
-func (s *shell) applyUpdate(ask bool) {
+// cut off, say what and let them pick (now / when idle / cancel). confirmed: they already agreed to cut it off, on
+// a device without this dialog (a phone over remote access, server/appupdate.go), so don't ask on the computer.
+func (s *shell) applyUpdate(ask, confirmed bool) {
 	p := s.up.Pending()
 	if p == nil {
 		return
@@ -198,7 +199,7 @@ func (s *shell) applyUpdate(ask bool) {
 	// the windows close and reopen, and appAttach moves it to the new backend once idle (docs/dev/UPDATE.md). The page
 	// already said so on the button that got us here; asking again here said the opposite.
 	app := p.Kind == "app"
-	if ask && !(app && serviceInstalled()) {
+	if ask && !confirmed && !(app && serviceInstalled()) {
 		if b := s.fetchBusy(); !b.Idle() {
 			switch s.askUpdate(p.Version, b, !app) {
 			case "later":
@@ -304,7 +305,7 @@ func (s *shell) updateMessage(m map[string]any) {
 		on, _ := m["auto"].(bool)
 		s.up.SetAuto(on)
 	case m["apply"] == true:
-		go s.applyUpdate(true)
+		go s.applyUpdate(true, m["force"] == true)
 	case m["check"] == true:
 		go func() { log.Printf("update: %s", s.up.Check()) }()
 	}
@@ -317,12 +318,12 @@ func (s *shell) checkFromMenu() {
 		return
 	}
 	if s.up.Pending() != nil {
-		s.applyUpdate(true)
+		s.applyUpdate(true, false)
 		return
 	}
 	msg := s.up.Check()
 	if s.up.Pending() != nil { // found one (or the automatic check had, a moment ago): this click is the go-ahead
-		s.applyUpdate(true)
+		s.applyUpdate(true, false)
 		return
 	}
 	if s.up.Pending() == nil {

@@ -171,9 +171,12 @@ export function nativeSetAutoUpdate(on: boolean) {
   bridge()?.postMessage({ type: "update", auto: on });
 }
 
-/** App 里：apply the downloaded update now (the shell asks first if it would cut something off). */
-export function nativeApplyUpdate() {
-  bridge()?.postMessage({ type: "update", apply: true });
+/**
+ * App 里：apply the downloaded update now. The shell asks first if it would cut something off, unless force: the
+ * person already agreed on another device (a phone, UpdateSetting), where the shell's dialog can't be answered.
+ */
+export function nativeApplyUpdate(force = false) {
+  bridge()?.postMessage({ type: "update", apply: true, force });
 }
 
 /**
@@ -207,7 +210,7 @@ export function onAppUpdate(u: AppUpdateStatus) {
       duration: Infinity,
       closeButton: true,
       description: app ? restartEffect(u, service) : t("native.updateReadyDesc"),
-      action: { label: app ? t("native.restartToUpdate") : t("native.update"), onClick: nativeApplyUpdate },
+      action: { label: app ? t("native.restartToUpdate") : t("native.update"), onClick: () => nativeApplyUpdate() },
       cancel: { label: t("native.later"), onClick: () => {} },
       // Two buttons beside the text squeezed it into a narrow column: the text takes the row, the buttons wrap under
       // it, right-aligned by sonner's margin-left: auto, kept on "Later" only so the two stay together. Sonner's own
@@ -292,8 +295,8 @@ function relayUpdate(u: AppUpdateStatus) {
 }
 
 /** A button pressed on another device ("app_update_op", addressed to this page): do it as if pressed here. */
-export function runRelayedUpdateOp(op: string, on: boolean) {
+export function runRelayedUpdateOp(op: string, on: boolean, force: boolean) {
   if (op === "check") nativeAskUpdate(true);
-  else if (op === "apply") nativeApplyUpdate();
+  else if (op === "apply") nativeApplyUpdate(force);
   else if (op === "auto") nativeSetAutoUpdate(on);
 }
