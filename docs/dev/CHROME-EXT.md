@@ -62,7 +62,9 @@ Emulation, Log, Inspector, CSS, Network, Accessibility, Overlay, DOMSnapshot, Pe
 Like Claude in Chrome: the tab goes into a blue "Gerdr" tab group, and the page gets a glowing frame plus a cursor
 that glides to each mouse event before the extension forwards it, with a ripple on a press (overlay.js, sent in with
 `Runtime.evaluate` now and `Page.addScriptToEvaluateOnNewDocument` for later pages). It is drawn by the extension, not
-by Gerdr, so the fake CDP endpoint's clients get it too. Kept out of the agent's way: `pointer-events: none`, a closed
+by Gerdr, so the fake CDP endpoint's clients get it too. A `cdp` request with `quiet: true` (next to `tab` /
+`method`) skips the cursor: for input a person makes themselves, who sees their own pointer and shouldn't wait for
+the glide. Kept out of the agent's way: `pointer-events: none`, a closed
 shadow root (snapshot walks only open ones), appended to `<html>` (not in `body.innerText`), hidden during
 `Page.captureScreenshot`; built with the CSSOM and Web Animations only, since `innerHTML` / `<style>` fail on pages with
 Trusted Types or a strict `style-src` (tested). Every overlay call gives up after 700 ms, since a page paused on an
