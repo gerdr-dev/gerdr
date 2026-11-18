@@ -825,6 +825,63 @@ const ComposerImpl = forwardRef<
 
   // The inline images' placeholders in the text: where each one is, from the mirror under the textarea
   const liveTokens = tokensIn(text).filter((x) => imgs.some((im) => im.n === x.n && !isFile(im) && !isVideo(im)));
+  const liveIn = (v: string) => tokensIn(v).filter((x) => drafts.getImages(paneId).some((im) => im.n === x.n && !isFile(im) && !isVideo(im)));
+  // Backspace / Delete on an inline image's placeholder (right behind / in front of the caret, or the caret inside it)
+  // takes the whole "[Image #n]" out at once, and the image with it (syncImages). Selected and deleted the browser's
+  // way, so ⌘Z puts both back. True when it did (the caller cancels the key / input).
+  const cutToken = (el: HTMLTextAreaElement, back: boolean) => {
+    const c = el.selectionStart;
+    if (c !== el.selectionEnd) return false;
+    const x = liveIn(el.value).find((x) => (back ? x.start < c && c <= x.end : x.start <= c && c < x.end));
+    if (!x) return false;
+    // With the space after it too when one is before it (or it starts the text): no double space left behind
+    const v0 = el.value;
+    const end = v0[x.end] === " " && (x.start === 0 || /\s/.test(v0[x.start - 1])) ? x.end + 1 : x.end;
+    el.setSelectionRange(x.start, end);
+    if (!document.execCommand("delete")) {
+      const v = v0.slice(0, x.start) + v0.slice(end);
+      setText(v);
+      syncImages(v);
+      caretTo.current = x.start;
+      setCaret(x.start);
+    }
+    return true;
+  };
+  // An edit that took only part of a placeholder out (a phone keyboard deleting inside its composing word, where
+  // beforeinput can't be cancelled): take the rest of it out too, so it never stays as broken text
+  const healCut = (prev: string, v: string) => {
+    if (v.length >= prev.length) return null;
+    let a = 0;
+    while (a < v.length && prev[a] === v[a]) a++;
+    let s = 0;
+    while (s < v.length - a && prev[prev.length - 1 - s] === v[v.length - 1 - s]) s++;
+    const b = prev.length - s;
+    if (v.length - s !== a) return null; // something was typed too, not only deleted
+    const hit = liveIn(prev).filter((x) => a < x.end && b > x.start && !(a <= x.start && b >= x.end));
+    if (!hit.length) return null;
+    const from = Math.min(a, ...hit.map((x) => x.start));
+    const to = Math.max(b, ...hit.map((x) => x.end));
+    return { v: prev.slice(0, from) + prev.slice(to), caret: from };
+  };
+  // The caret never rests inside a placeholder: it jumps over it the way it was moving (a tap lands on the nearer
+  // edge), and a selection's ends widen to whole placeholders
+  const lastCaret = useRef(0);
+  const composing = useRef(false);
+  const snapOut = (el: HTMLTextAreaElement) => {
+    if (composing.current) return;
+    const a = el.selectionStart;
+    const b = el.selectionEnd;
+    const toks = liveIn(el.value);
+    const inside = (c: number) => toks.find((x) => x.start < c && c < x.end);
+    const xa = inside(a);
+    const xb = inside(b);
+    if (!xa && !xb) return;
+    if (a === b && xa) {
+      const p = lastCaret.current;
+      const c = p >= xa.end ? xa.start : p <= xa.start ? xa.end : a - xa.start < xa.end - a ? xa.start : xa.end;
+      el.setSelectionRange(c, c);
+    } else el.setSelectionRange(xa ? xa.start : a, xb ? xb.end : b, el.selectionDirection ?? "none");
+  };
   const tokenAt = (x: number, y: number) => {
     if (!liveTokens.length) return null;
     for (const el of Array.from(mirror.current?.querySelectorAll<HTMLElement>("[data-n]") ?? []))
@@ -989,29 +1046,10 @@ const ComposerImpl = forwardRef<
         return;
       }
     }
-    // Backspace / Delete on an inline image's placeholder (right behind / in front of the caret, or the caret inside it)
-    // takes the whole "[Image #n]" out at once, and the image with it (syncImages). Selected and deleted the browser's
-    // way, so ⌘Z puts both back
-    if ((e.key === "Backspace" || e.key === "Delete") && liveTokens.length && !e.altKey && !e.metaKey && !e.ctrlKey) {
-      const el = e.currentTarget;
-      const c = el.selectionStart;
-      const back = e.key === "Backspace";
-      const x = c === el.selectionEnd && liveTokens.find((x) => (back ? x.start < c && c <= x.end : x.start <= c && c < x.end));
-      if (x) {
-        e.preventDefault();
-        // With the space after it too when one is before it (or it starts the text): no double space left behind
-        const v0 = el.value;
-        const end = v0[x.end] === " " && (x.start === 0 || /\s/.test(v0[x.start - 1])) ? x.end + 1 : x.end;
-        el.setSelectionRange(x.start, end);
-        if (!document.execCommand("delete")) {
-          const v = v0.slice(0, x.start) + v0.slice(end);
-          setText(v);
-          syncImages(v);
-          caretTo.current = x.start;
-          setCaret(x.start);
-        }
-        return;
-      }
+    // Backspace / Delete on an inline image's placeholder takes the whole "[Image #n]" out at once (cutToken)
+    if ((e.key === "Backspace" || e.key === "Delete") && !e.altKey && !e.metaKey && !e.ctrlKey && cutToken(e.currentTarget, e.key === "Backspace")) {
+      e.preventDefault();
+      return;
     }
     // Videos and files (no placeholder) sit before the text: Backspace at the very start removes the last of them
     // (like Claude Code), no reaching for the little ×
@@ -1101,6 +1139,29 @@ const ComposerImpl = forwardRef<
     return () => el.removeEventListener("beforeinput", f);
   }, [sendKey]);
 
+  // Phone keyboards send Backspace as keyCode 229 (onKeyDown skips it), so the placeholder rule there runs on the
+  // deleting input instead; a desktop keydown that already took the placeholder cancels this one
+  const cutRef = useRef(cutToken);
+  cutRef.current = cutToken;
+  useEffect(() => {
+    const el = ta.current;
+    if (!el) return;
+    const f = (e: InputEvent) => {
+      if (e.isComposing || (e.inputType !== "deleteContentBackward" && e.inputType !== "deleteContentForward")) return;
+      if (cutRef.current(el, e.inputType === "deleteContentBackward")) e.preventDefault();
+    };
+    const on = () => (composing.current = true);
+    const off = () => (composing.current = false);
+    el.addEventListener("beforeinput", f);
+    el.addEventListener("compositionstart", on);
+    el.addEventListener("compositionend", off);
+    return () => {
+      el.removeEventListener("beforeinput", f);
+      el.removeEventListener("compositionstart", on);
+      el.removeEventListener("compositionend", off);
+    };
+  }, []);
+
   const modes = session.modes;
   const opts = session.configOptions ?? [];
   // 新会话的默认值（宿主有才有「设为默认」）：设完下拉里马上显示「已是默认」
@@ -1141,6 +1202,14 @@ const ComposerImpl = forwardRef<
         // 中文输入法下按 / 出来的是「、」（有的是全角「／」）：空输入框打的第一个字是它，就当 / —— 不然想调命令得先切英文
         // ！ 同理：中文输入法下打出来的是全角的，当 ! 用（`!命令`）
         const v = text === "" && /^[、／]$/.test(e.target.value) ? "/" : text === "" && e.target.value === "！" ? "!" : e.target.value;
+        const healed = healCut(text, v);
+        if (healed) {
+          setText(healed.v);
+          syncImages(healed.v);
+          caretTo.current = healed.caret;
+          setCaret(healed.caret);
+          return;
+        }
         setText(v);
         syncImages(v);
         setCaret(e.target.selectionStart ?? e.target.value.length);
@@ -1161,6 +1230,8 @@ const ComposerImpl = forwardRef<
         if (hit && i >= 0) preview(i, hit.el);
       }}
       onSelect={(e) => {
+        snapOut(e.currentTarget);
+        lastCaret.current = e.currentTarget.selectionStart ?? 0;
         setCaret(e.currentTarget.selectionStart ?? 0);
         extras?.onSelect?.();
       }}
