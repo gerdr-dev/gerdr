@@ -117,7 +117,7 @@ it; cookie, storage and similar DevTools commands are never let through; tabs th
 		},
 	}
 	open.Flags().StringVar(&why, "why", "", i18n.S("问用户允许网站时窗口上写的理由", "the reason shown when the user is asked to allow the site"))
-	open.Flags().StringVar(&profile, "profile", "", i18n.S("用哪个 Chrome profile（status 里的 id；默认按网站选）", "which Chrome profile (an id from status; default: picked by site)"))
+	open.Flags().StringVar(&profile, "profile", "", i18n.S("用哪个 Chrome profile：用户在插件弹窗里起的名字（如 Work），或 status 里的 id；默认按网站选", "which Chrome profile: the name the user gave it in the extension's popup (like Work) or an id from status; default: picked by site"))
 	open.Flags().BoolVar(&focus, "focus", false, i18n.S("把窗口调到前台（默认在后面开）", "bring the window to the front (default: opens behind)"))
 	open.Flags().StringVar(&size, "size", "", i18n.S("窗口大小，如 1440x900", "window size, like 1440x900"))
 	cmd.AddCommand(open)
@@ -421,6 +421,7 @@ func parseSize(s string) (int, int, error) {
 type browserState struct {
 	Profiles []struct {
 		ID      string   `json:"id"`
+		Name    string   `json:"name"`
 		Version string   `json:"version"`
 		Sites   []string `json:"sites"`
 	} `json:"profiles"`
@@ -450,7 +451,11 @@ func (st *browserState) text() string {
 		b.WriteString(i18n.S("没有 Chrome 连上：确认 Chrome 开着、装了 Gerdr 浏览器插件\n", "No Chrome connected: make sure Chrome is open with the Gerdr browser extension\n"))
 	}
 	for _, p := range st.Profiles {
-		fmt.Fprintf(&b, "chrome %s (extension %s)\n", p.ID, p.Version)
+		if p.Name != "" {
+			fmt.Fprintf(&b, "chrome %q %s (extension %s)\n", p.Name, p.ID, p.Version)
+		} else {
+			fmt.Fprintf(&b, "chrome %s (extension %s)\n", p.ID, p.Version)
+		}
 		for _, s := range p.Sites {
 			fmt.Fprintf(&b, "  allowed %s\n", s)
 		}

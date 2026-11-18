@@ -129,8 +129,14 @@ function send(msg) {
 }
 
 async function hello() {
-  return { id: await profileId(), version: VERSION, ua: navigator.userAgent, sites: await sites(), lastActive }
+  const { name = '' } = await chrome.storage.local.get('name')
+  return { id: await profileId(), name, version: VERSION, ua: navigator.userAgent, sites: await sites(), lastActive }
 }
+
+// The name the user gives this profile in the popup ("Work"), so they can tell an agent which Chrome to use.
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes.name) send({ event: 'name', name: changes.name.newValue || '' })
+})
 
 function connect() {
   if (port) return

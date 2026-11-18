@@ -33,7 +33,7 @@ gerdr browser … (CLI) → /api/browser/* (internal/server/browserapi.go)
   it is only needed to pack a .crx, which we don't). Add the store id when it is listed.
 - Protocol: requests `{id, op, args}` → `{id, ok, result | error, code}`; ops `hello`, `grant` (the extension's Allow
   window, can take minutes), `cancel_grant`, `open`, `cdp` (`{tab, method, params}`), `close`, `release`, `focus`,
-  `revoke`; events `hello`, `sites`, `active`, `cdp`, `closed`, `detached`, `blocked`.
+  `revoke`; events `hello`, `name`, `sites`, `active`, `cdp`, `closed`, `detached`, `blocked`.
 
 ## Limits (in the extension, nothing on our side can widen them)
 
@@ -46,6 +46,9 @@ Emulation, Log, Inspector, CSS, Network, Accessibility, Overlay, DOMSnapshot, Pe
 
 - `POST /api/browser/act {tab, action, args}` runs one action (`chromeext.Act`, actions.go); `open`, `close`,
   `GET /api/browser` (status) and the native host's `GET /api/browser/ext` are the rest (internal/server/browserapi.go).
+- Several profiles: each can be named in the popup (stored in the profile's `chrome.storage.local`, sent in `hello`
+  and a `name` event). `status` shows it and `open --profile` / the MCP `open`'s `profile` take a name (any case) or
+  an id, so the user can say "use the Work Chrome". Only the user names a profile: an agent can't tell them apart.
 - CLI: `gerdr browser status | open | close | snapshot | text | screenshot | click | hover | drag | type | key | fill |
   scroll | wait | goto | back | forward | reload | eval | console | network | body | upload | resize | dialog | cdp`
   (cmd/gerdr/browsercmd.go); `gerdr browser mcp` serves the same as MCP tools (browsermcp.go). The built-in `gerdr`

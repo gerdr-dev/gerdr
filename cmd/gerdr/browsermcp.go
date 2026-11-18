@@ -55,7 +55,8 @@ func browserTools() []mcpTool {
 	return []mcpTool{
 		tool("status", "", "The Chrome profiles connected through the Gerdr extension, the sites the user allowed, and the windows open now.", nil),
 		tool("open", "", "Open a window on a URL in the user's own Chrome (signed in as they are) and wait for it to load. The first time a site is used the extension asks the user to Allow it; this waits for that (up to 10 minutes): tell the user to look at Chrome. Returns the window number (tab).",
-			map[string]any{"url": str("http(s) URL"), "why": str("Shown to the user when asking to allow the site"), "size": str("Window size like 1440x900"), "focus": boolean("Bring the window to the front")}, "url"),
+			map[string]any{"url": str("http(s) URL"), "why": str("Shown to the user when asking to allow the site"), "size": str("Window size like 1440x900"), "focus": boolean("Bring the window to the front"),
+				"profile": str("Which Chrome profile: the name the user gave it (status lists them, like Work) or its id; default: one that allowed the site")}, "url"),
 		tool("close", "", "Close the window (keep: leave it open for the user, no longer driven).", map[string]any{"keep": boolean("Leave it to the user")}),
 		tool("snapshot", "snapshot", "An outline of the page: everything that can be acted on (links, buttons, fields…) and the page's structure, each with a ref (e12) to use in click / type / fill / scroll / hover. Take a new one after the page changes.",
 			map[string]any{"all": boolean("Include the text too"), "viewport": boolean("Only what is in the window now"), "find": str("Only lines containing this text"), "max": num("At most this many lines (default 400)")}),
@@ -154,12 +155,13 @@ func callBrowserTool(byName map[string]mcpTool, name string, raw json.RawMessage
 		raw = json.RawMessage("{}")
 	}
 	var common struct {
-		Tab   int    `json:"tab"`
-		URL   string `json:"url"`
-		Why   string `json:"why"`
-		Size  string `json:"size"`
-		Focus bool   `json:"focus"`
-		Keep  bool   `json:"keep"`
+		Tab     int    `json:"tab"`
+		URL     string `json:"url"`
+		Why     string `json:"why"`
+		Size    string `json:"size"`
+		Focus   bool   `json:"focus"`
+		Keep    bool   `json:"keep"`
+		Profile string `json:"profile"`
 	}
 	if err := json.Unmarshal(raw, &common); err != nil {
 		return fail(err)
@@ -179,7 +181,7 @@ func callBrowserTool(byName map[string]mcpTool, name string, raw json.RawMessage
 				return fail(err)
 			}
 		}
-		o, err := browserOpen(common.URL, common.Why, "", common.Focus, w, h)
+		o, err := browserOpen(common.URL, common.Why, common.Profile, common.Focus, w, h)
 		if err != nil {
 			return fail(err)
 		}

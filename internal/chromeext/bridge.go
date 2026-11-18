@@ -98,6 +98,7 @@ type Conn struct {
 
 	mu         sync.Mutex
 	sites      []string // allowed sites, Chrome match patterns like https://www.doubao.com/*
+	name       string   // what the user called this profile in the extension's popup ("Work"), so they can say which
 	lastActive int64    // ms; when the user last focused a window of this profile
 	next       int64
 	pending    map[int64]chan reply
@@ -125,6 +126,7 @@ type message struct {
 	At         int64           `json:"at"`
 	Sites      []string        `json:"sites"`
 	LastActive int64           `json:"lastActive"`
+	Name       string          `json:"name"`
 }
 
 type helloInfo struct {
@@ -132,6 +134,7 @@ type helloInfo struct {
 	Version    string   `json:"version"`
 	Sites      []string `json:"sites"`
 	LastActive int64    `json:"lastActive"`
+	Name       string   `json:"name"`
 }
 
 // Serve takes over a WebSocket the native host opened until it closes: ask who it is (hello), then register.
@@ -153,7 +156,7 @@ func (b *Bridge) Serve(ctx context.Context, ws *websocket.Conn) {
 	}
 	c.ID, c.Version = h.ID, h.Version
 	c.mu.Lock()
-	c.sites, c.lastActive = h.Sites, h.LastActive
+	c.sites, c.lastActive, c.name = h.Sites, h.LastActive, strings.TrimSpace(h.Name)
 	c.mu.Unlock()
 	b.mu.Lock()
 	if old := b.conns[c.ID]; old != nil {
@@ -220,6 +223,11 @@ func (c *Conn) read() {
 		case "hello":
 			c.mu.Lock()
 			c.sites, c.lastActive = m.Sites, m.LastActive
+			c.mu.Unlock()
+			c.b.changed()
+		case "name":
+			c.mu.Lock()
+			c.name = strings.TrimSpace(m.Name)
 			c.mu.Unlock()
 			c.b.changed()
 		case "sites":
@@ -325,6 +333,7 @@ func siteMatch(pattern string, u *url.URL) bool {
 // Profile is one connected Chrome profile, for `gerdr browser status`.
 type Profile struct {
 	ID         string   `json:"id"`
+	Name       string   `json:"name,omitempty"`
 	Version    string   `json:"version"`
 	Sites      []string `json:"sites"`
 	LastActive int64    `json:"lastActive"`
@@ -345,7 +354,7 @@ func (b *Bridge) Profiles() []Profile {
 	out := []Profile{}
 	for _, c := range b.conns_() {
 		c.mu.Lock()
-		out = append(out, Profile{ID: c.ID, Version: c.Version, Sites: append([]string{}, c.sites...), LastActive: c.lastActive})
+		out = append(out, Profile{ID: c.ID, Name: c.name, Version: c.Version, Sites: append([]string{}, c.sites...), LastActive: c.lastActive})
 		c.mu.Unlock()
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].LastActive > out[j].LastActive })
@@ -372,15 +381,33 @@ func (b *Bridge) Wait(ctx context.Context) bool {
 // ErrNotConnected: no extension is connected.
 var ErrNotConnected = errors.New("browser extension not connected")
 
-// Pick which Chrome profile opens this URL: id if given; else one that allowed the site (the most recently used of
+// find a connected profile by its id or by the name the user gave it in the popup (any case).
+func (b *Bridge) find(key string) *Conn {
+	b.mu.Lock()
+	c := b.conns[key]
+	b.mu.Unlock()
+	if c != nil {
+		return c
+	}
+	key = strings.TrimSpace(key)
+	for _, c := range b.conns_() {
+		c.mu.Lock()
+		name := c.name
+		c.mu.Unlock()
+		if name != "" && strings.EqualFold(name, key) {
+			return c
+		}
+	}
+	return nil
+}
+
+// Pick which Chrome profile opens this URL: id (or the profile's name) if given; else one that allowed the site (the most recently used of
 // them); else the most recently used, with needGrant (ask the user first).
 func (b *Bridge) Pick(id, raw string) (c *Conn, needGrant bool, err error) {
 	if id != "" {
-		b.mu.Lock()
-		c = b.conns[id]
-		b.mu.Unlock()
+		c = b.find(id)
 		if c == nil {
-			return nil, false, fmt.Errorf("%s: %s", i18n.S("这个 Chrome 现在没连上", "That Chrome isn't connected"), id)
+			return nil, false, fmt.Errorf("%s: %s", i18n.S("这个 Chrome 现在没连上（gerdr browser status 列出连上的）", "That Chrome isn't connected (gerdr browser status lists the connected ones)"), id)
 		}
 		return c, raw != "" && !c.Allows(raw), nil
 	}

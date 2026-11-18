@@ -2,6 +2,7 @@ package chromeext
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/url"
 	"strings"
 	"testing"
@@ -72,5 +73,21 @@ func TestModifierBits(t *testing.T) {
 	}
 	if got := modifierBits([]string{"Alt", "ctrl"}); got != 3 {
 		t.Fatalf("alt+ctrl = %d", got)
+	}
+}
+
+// --profile takes the name the user gave a profile in the popup as well as its id.
+func TestPickByName(t *testing.T) {
+	b := New(slog.New(slog.DiscardHandler))
+	work := &Conn{b: b, ID: "gerdr-1", name: "Work"}
+	home := &Conn{b: b, ID: "gerdr-2", name: "个人"}
+	b.conns[work.ID], b.conns[home.ID] = work, home
+	for key, want := range map[string]*Conn{"gerdr-1": work, "work": work, " Work ": work, "个人": home} {
+		if c, _, err := b.Pick(key, ""); err != nil || c != want {
+			t.Errorf("Pick(%q) = %v, %v", key, c, err)
+		}
+	}
+	if _, _, err := b.Pick("nobody", ""); err == nil {
+		t.Error("an unknown name should fail")
 	}
 }

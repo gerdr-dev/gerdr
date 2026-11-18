@@ -598,6 +598,10 @@ gerdr browser console --errors
 gerdr browser close                        # --keep leaves the window to the user
 ```
 
+- Several Chrome profiles can be connected (`status` lists them, each with the name the user gave it in the
+  extension's popup, like "Work"). When the user says which one ("the Work Chrome"), pass `open --profile Work`
+  (a name or an id); otherwise `open` picks one that allowed the site. A profile without a name: ask the user to name
+  it in the Gerdr extension's popup (toolbar icon) rather than guessing between ids.
 - Actions without `-t <tab>` use the window opened last. Refs come from the latest snapshot; after the page changes,
   take a new one (an old ref that is gone says so). `snapshot --find 发送` narrows a long page.
 - Also: `hover`, `drag <from> <to>`, `upload <ref> <files>`, `goto / back / forward / reload`, `eval <js>`,

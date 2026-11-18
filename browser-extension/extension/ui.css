@@ -20,3 +20,6 @@ button.primary { background: var(--brand); border-color: var(--brand); color: #f
 .grant .callout { padding: 10px 12px; border-radius: 8px; background: #f4e4da; color: #8c4225; }
 @media (prefers-color-scheme: dark) { .grant .callout { background: #3a2a22; color: #f0c7b3; } }
 .grant .who { margin: 0 0 10px; }
+.popup input { box-sizing: border-box; width: 100%; font: inherit; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); background: transparent; color: inherit; outline: none; }
+.popup input:focus { border-color: var(--brand); }
+.popup .small { font-size: 12px; margin: 4px 0 0; }
