@@ -494,7 +494,9 @@ func (c *caster) start(ctx context.Context) error {
 	if !on {
 		return nil
 	}
-	p, _ := json.Marshal(map[string]any{"format": "jpeg", "quality": 80, "maxWidth": w, "maxHeight": w * 4, "everyNthFrame": 1})
+	// 92: at 80 text in the pane looked soft (a viewer here gets this JPEG as it is); measured at the same speed and
+	// about the size of PNG on a text page
+	p, _ := json.Marshal(map[string]any{"format": "jpeg", "quality": 92, "maxWidth": w, "maxHeight": w * 4, "everyNthFrame": 1})
 	c.t.send(ctx, "Page.stopScreencast", nil)
 	_, err := c.t.send(ctx, "Page.startScreencast", p)
 	return err

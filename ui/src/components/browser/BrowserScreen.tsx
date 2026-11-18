@@ -119,7 +119,9 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
     const dpr = window.devicePixelRatio || 1;
     const vw = el ? Math.round(el.clientWidth) : 1280;
     const vh = el ? Math.round(el.clientHeight) : 800;
-    return { w: Math.min(3000, Math.max(320, Math.round(vw * dpr))), q: QUALITY, vw, vh };
+    // The page's own pixels (the project browser draws at 2x): capped any lower, a 1600 px pane on a Retina screen was
+    // shrunk by a fraction and every glyph resampled, which read as blurry. 4000 is the server's limit.
+    return { w: Math.min(4000, Math.max(320, Math.round(vw * dpr))), q: QUALITY, vw, vh };
   };
   const sendWS = (m: object) => {
     const ws = wsRef.current;
