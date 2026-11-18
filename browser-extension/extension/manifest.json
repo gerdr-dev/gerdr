@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Gerdr",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "__MSG_description__",
   "default_locale": "en",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAxKuVzQMuVttNJXh+q+LrZP4TcdZXfcrvspBdUgVqhNUDCZuif/m+ryYLFRWNiQPvRPeo7iESqfzaWYdUreZ44/iYvjECoNQFx9hyJqd7M4nuVIZx4xJpCb2+QwZ3em1YBgtHDO/0LG1C0VC1LIoL9MQLxs8GENuxXookIhVlMN7RTNYx2daMkv9k/5aBYjtOcygAUDORU6AiK9ba8t9e4h/l2QOms3sBa/jj0rxrXGc0Wkm9gWKcdxgGjszIEsJHqM51hE9GUQcTwKXN7agEbMCMYsLHDbrPf+JMj+b5EU2q8nQDBpxmBkX0SdBZC63d05hKRvVSHQMX4zptcyfuSwIDAQAB",

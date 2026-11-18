@@ -14,7 +14,7 @@ export function overlay(color) {
   if (window !== window.top || window.__gerdrOverlay) return
   const css = (el, s) => (Object.assign(el.style, s), el)
   const SVG = 'http://www.w3.org/2000/svg'
-  let host, root, glow, cursor, x = null, y = null, moving = null
+  let host, root, glow, cursor, arrow, x = null, y = null, moving = null
 
   function build() {
     host = css(document.createElement('gerdr-overlay'), {
@@ -31,7 +31,8 @@ export function overlay(color) {
       position: 'absolute', left: '0', top: '0', width: '24px', height: '24px', pointerEvents: 'none', display: 'none',
       filter: 'drop-shadow(0 1px 2px rgba(0,0,0,.35))',
     })
-    const svg = document.createElementNS(SVG, 'svg')
+    const svg = (arrow = document.createElementNS(SVG, 'svg'))
+    css(svg, { display: 'block', transformOrigin: '3px 2px' }) // the tip, so a press keeps it on the point
     svg.setAttribute('width', '24')
     svg.setAttribute('height', '24')
     svg.setAttribute('viewBox', '0 0 24 24')
@@ -99,7 +100,9 @@ export function overlay(color) {
     root.append(ring)
     ring.animate([{ transform: 'scale(.3)', opacity: 0.9 }, { transform: 'scale(1.5)', opacity: 0 }], { duration: 450, easing: 'ease-out' })
       .finished.then(() => ring.remove(), () => ring.remove())
-    cursor.animate([{ scale: '1' }, { scale: '.82' }, { scale: '1' }], { duration: 220, easing: 'ease-out' })
+    // squeeze the arrow, not `cursor`: the `scale` property applies outside `transform`, so on `cursor` it scaled the
+    // translate too and the arrow jumped toward the window's top-left on every click (seen in a screen recording)
+    arrow.animate([{ transform: 'scale(1)' }, { transform: 'scale(.82)' }, { transform: 'scale(1)' }], { duration: 220, easing: 'ease-out' })
   }
 
   function hide(on) {
