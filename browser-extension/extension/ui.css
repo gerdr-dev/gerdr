@@ -17,8 +17,8 @@ button.primary { background: var(--brand); border-color: var(--brand); color: #f
 .popup ul { list-style: none; padding: 0; margin: 0; }
 .popup li { display: flex; align-items: center; justify-content: space-between; padding: 6px 0; border-top: 1px solid var(--line); }
 .popup li button { padding: 2px 10px; font-size: 12px; }
-.grant .callout { padding: 10px 12px; border-radius: 8px; background: #f4e4da; color: #8c4225; }
-@media (prefers-color-scheme: dark) { .grant .callout { background: #3a2a22; color: #f0c7b3; } }
+.grant .callout { padding: 10px 12px; border-radius: 8px; background: #e3ecfb; color: #1f4f9e; }
+@media (prefers-color-scheme: dark) { .grant .callout { background: #1f2a3d; color: #b9cff5; } }
 .grant .who { margin: 0 0 10px; }
 .popup input { box-sizing: border-box; width: 100%; font: inherit; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); background: transparent; color: inherit; outline: none; }
 .popup input:focus { border-color: var(--brand); }

@@ -461,8 +461,11 @@ func Grant(ctx context.Context, conns []*Conn, raw, why string) (*Conn, error) {
 	}
 	answers := make(chan answer, len(conns))
 	for _, c := range conns {
+		c.mu.Lock()
+		who := c.name // shown on the Allow window, so with several profiles the user sees which one this is
+		c.mu.Unlock()
 		go func() {
-			res, err := c.Call(ctx, "grant", map[string]any{"url": raw, "why": why, "key": key, "multi": len(conns) > 1, "who": ""})
+			res, err := c.Call(ctx, "grant", map[string]any{"url": raw, "why": why, "key": key, "multi": len(conns) > 1, "who": who})
 			var r struct {
 				Granted bool `json:"granted"`
 			}
