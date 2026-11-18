@@ -42,6 +42,7 @@ var configKeys = map[string]configKey{
 	"expandEdits":     {kind: "bool", desc: "show file edits' diffs expanded by default"},
 	"showThinking":    {kind: "bool", desc: "show thinking on its own line, expanded (default on)"},
 	"confirmLinks":    {kind: "bool", desc: "ask before opening an external link from a chat (default on)"},
+	"skillUpdates":    {kind: "bool", desc: "when a session's skill files (a panel's, a project's) change, its next message starts with the files changed so the agent reads them again; a one-line notice in the chat (default on). One session: gerdr session set <session> --skill-updates on|off|default"},
 	"autoSendShell":   {kind: "bool", desc: "a `!` command run in a chat sends its output to the agent as soon as it finishes, starting a turn (default on); off = it goes with the next message"},
 	"copyOnSelect":    {kind: "bool", desc: "Labs: copy text as soon as it is selected (a device that picked its own in Settings keeps that; this is the value for the others)"},
 	"virtualList":     {kind: "bool", desc: "Labs: virtual scrolling for chats (a device that picked its own in Settings keeps that; this is the value for the others)"},

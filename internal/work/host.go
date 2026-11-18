@@ -42,8 +42,6 @@ type Host interface {
 	Tag(id string, tags map[string]string) (map[string]any, error)
 	// Mute turns do not disturb on or off for a conversation: nothing about it notifies the person (hub Record.Muted).
 	Mute(id string, on bool) (map[string]any, error)
-	// SkillUpdates turns on or off telling the agent when its skill files change (hub Record.SkillUpdates).
-	SkillUpdates(id string, on bool) (map[string]any, error)
 	// SessionsChanged waits until one of ids moves — something new in its log (a message, the agent's text as it
 	// streams, a tool call) or its status — and returns those that moved; none when timeout passes first. Pushed by the
 	// hub, the way the chat follows a conversation: a panel follows conversations without polling them.
@@ -124,9 +122,6 @@ type StartOptions struct {
 	// it notify nobody; it still turns unread. For a conversation the person reads when they choose to (an always-on
 	// secretary), not one whose stops they must hear about.
 	Muted bool `json:"muted,omitempty"`
-	// SkillUpdates: tell the agent when its skill files change (hub Record.SkillUpdates), for a conversation that
-	// lives long enough for its rules to change under it.
-	SkillUpdates bool `json:"skillUpdates,omitempty"`
 	// Fold / Show: the first message (prompt), as SendOptions'.
 	Fold string `json:"fold,omitempty"`
 	Show bool   `json:"show,omitempty"`
@@ -334,21 +329,6 @@ func (r *runner) sessionsObject() map[string]any {
 				v = b
 			}
 			s, err := h.Mute(id, v)
-			if err != nil {
-				r.throw(err)
-			}
-			return s
-		},
-		// ctx.sessions.skillUpdates(id, on = true) → session: tell it when its skill files change, or stop with false
-		"skillUpdates": func(id string, on any) map[string]any {
-			if h == nil {
-				r.throw(errNoHost)
-			}
-			v := true // left out: on
-			if b, ok := on.(bool); ok {
-				v = b
-			}
-			s, err := h.SkillUpdates(id, v)
 			if err != nil {
 				r.throw(err)
 			}

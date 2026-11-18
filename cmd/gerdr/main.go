@@ -335,7 +335,15 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 	})
 	artsOf := server.SessionArtifacts(sessionProject(env.Dir, layout))
 	h, err := hub.New(hub.Options{Dir: env.Dir, ClaudeIdle: env.ClaudeIdle, ExtraAgents: cfgAgents(), LLM: cfgLLM, Defaults: cfgDefaults, Log: log, Ext: em, SkillDirs: sessionSkills(env.Dir, layout, em), MCP: workMCP(env.Dir), Project: sessionProject(env.Dir, layout),
-		Artifacts: func(rec hub.Record) string { d, _, _ := artsOf(rec); return d }})
+		Artifacts: func(rec hub.Record) string { d, _, _ := artsOf(rec); return d },
+		// config.json skillUpdates: tell sessions their skill files changed (hub skillnote.go); left out = on
+		SkillUpdates: func() bool {
+			var c struct {
+				On *bool `json:"skillUpdates"`
+			}
+			_ = json.Unmarshal(cfg.Get(), &c)
+			return c.On == nil || *c.On
+		}})
 	if err != nil {
 		return err
 	}

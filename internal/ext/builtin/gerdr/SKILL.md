@@ -253,27 +253,21 @@ gerdr session tag "fix login" mr=group/api/34 task=   # k=v sets, k= removes
 Keep tag values to letters, digits and `/ - _ . :`: an unquoted `!` or `#` makes the command count as unsafe, so it
 waits for the user's approval.
 
-### Do not disturb for one session
+### One session's own settings
 
 ```bash
-gerdr session mute "nightly sweep"         # no notifications when it finishes, waits or fails; it still turns unread
-gerdr session mute "nightly sweep" --off
+gerdr session set "nightly sweep" --mute on              # no notifications when it finishes, waits or fails; it still turns unread
+gerdr session set "billing task" --skill-updates off     # don't tell this one when its skill files change
+gerdr session set "billing task" --skill-updates default # back to the global setting
 ```
 
-For a session the user reads when they choose to, or when they say they don't want to hear about it. A whole group
-of tabs is muted from the UI (the workspace's do not disturb); this is one session, wherever it is.
+`--mute`: for a session the user reads when they choose to, or when they say they don't want to hear about it (`gerdr
+session mute <session>` is the same). A whole group of tabs is muted from the UI (the workspace's do not disturb).
 
-### Tell a long-running session its skills changed
-
-```bash
-gerdr session skill-updates "billing task"         # from now on, each message starts with the skill files changed since the last one
-gerdr session skill-updates "billing task" --off
-```
-
-A session reads its skills once, early, and doesn't look again: one that runs for days or weeks goes on with the old
-rules after they are edited. With this on, the next message names the changed files (a one-line notice in the chat)
-and tells it to read them again. Counts from when it's turned on. A panel turns it on for its workers with
-`ctx.sessions.start({ skillUpdates: true })` / `ctx.sessions.skillUpdates(id)`.
+`--skill-updates`: by default every session is told when a file of its skills (a panel's, a project's) changes: its
+next message starts with the changed files and asks it to read them again, a one-line notice in the chat. That keeps
+work running for days or weeks on the current rules. It's the global setting `skillUpdates` (Settings → Agent →
+Skill; `gerdr config set skillUpdates false` turns it off for all); `set` overrides it for one session.
 
 ## 给已有的会话发消息
 

@@ -11,7 +11,7 @@ import (
 	"github.com/coder/acp-go-sdk"
 )
 
-// Telling a long-lived agent its skills changed (Record.SkillUpdates).
+// Telling a long-lived agent its skills changed (Options.SkillUpdates, on by default; Record.SkillUpdates per session).
 //
 // A skill file edited on disk is live (the session's roots are links), but an agent that read it on day one keeps
 // what it read then and has no reason to look again: a panel's task runs for one or two weeks, its rules change in
@@ -102,13 +102,28 @@ func skillsText(files []skillFile) string {
 	return b.String()
 }
 
+// skillUpdatesOn: whether this session is told its skill files changed — its own choice, else the global setting.
+func (h *Hub) skillUpdatesOn(rec Record) bool {
+	if rec.SkillUpdates != nil {
+		return *rec.SkillUpdates
+	}
+	return h.opt.SkillUpdates == nil || h.opt.SkillUpdates()
+}
+
 // skillsChanged: the block naming the session's skill files changed since the last check, nil when nothing changed
-// or SkillUpdates is off. Moves the mark to now either way, so a change is told once.
+// or it's off. Moves the mark to now, so a change is told once; off, it stops counting, so turning the setting on
+// again later doesn't dump everything edited meanwhile on the agent.
 func (s *Session) skillsChanged() []acp.ContentBlock {
 	s.mu.Lock()
 	rec := s.rec
 	s.mu.Unlock()
-	if !rec.SkillUpdates {
+	if !s.h.skillUpdatesOn(rec) {
+		if rec.SkillsSeen != 0 {
+			s.mu.Lock()
+			s.rec.SkillsSeen = 0
+			s.mu.Unlock()
+			s.h.saveIndex()
+		}
 		return nil
 	}
 	at := now() // before the walk: a file changed while walking is news next time too

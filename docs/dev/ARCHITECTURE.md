@@ -769,10 +769,11 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
     skill wins over a same-named gerdr one. Native now gets skill roots too. `ext.RootsFingerprint` (the skill names
     in the roots) is part of claude / codex's session fingerprint: a skill added or removed restarts claude's process
     / re-attaches codex's thread before the next turn; an edit doesn't need to (links / files read live).
-  - An edit is live on disk but not in what a running agent read days ago. A session with `skillUpdates` on (hub
-    `skillnote.go`, `gerdr session skill-updates`, `ctx.sessions.start({ skillUpdates })`) gets a
-    `<gerdr-skills-changed>` block in front of its next message naming the files changed since the last one; the chat
-    draws it as a notice. Not left to Claude Code's own "file changed" note: that only covers files still in its
+  - An edit is live on disk but not in what a running agent read days ago. So each message gets a
+    `<gerdr-skills-changed>` block in front naming the session's skill files changed since the last one (hub
+    `skillnote.go`); the chat draws it as a notice. A global setting, on by default (config.json `skillUpdates`,
+    Settings → Agent → Skill), not something to turn on per session: nobody would (the user, 2026-11-18). One
+    session can override it: `gerdr session set <s> --skill-updates on|off|default`. Not left to Claude Code's own "file changed" note: that only covers files still in its
     read cache, which compaction empties, and codex / native have none (2026-11-17, a panel task that ran for weeks).
   - Memory is the same format as Claude Code's auto memory (one .md per fact, MEMORY.md index). The index goes into
     the system prompt through `AppendPrompt` (claude `--append-system-prompt`, codex developerInstructions, native

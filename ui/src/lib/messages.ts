@@ -49,6 +49,9 @@ const settingsZh = {
   "settings.showThinking": "显示思考",
   "settings.showThinking.hint": "Agent 的思考过程单独成行、直接展开。Claude 模型建议打开。",
   "settings.autoSendShell": "命令跑完自动发给 Agent",
+  "settings.skillUpdates": "Skill 改了，提醒 Agent 重读",
+  "settings.skillUpdates.hint":
+    "会话用的 skill（面板的、项目的）有文件改了，下一条消息前面会写上改了哪些，让它重读；对话里是一行小字。跑了很久的会话靠它跟上新规则",
   "settings.autoSendShell.hint": "对话里跑的 `!` 命令（输入框里敲的、回复里点「运行」的）一结束就把输出发给 Agent；关掉就等你下一条消息再带过去",
   "settings.confirmLinks": "打开链接前确认",
   "settings.confirmLinks.hint": "点对话里的外部链接先弹框，显示完整地址，可以复制或打开；关掉就直接打开",
@@ -155,6 +158,9 @@ const settingsEn: Record<keyof typeof settingsZh, string> = {
   "settings.showThinking": "Show thinking",
   "settings.showThinking.hint": "The agent's thinking gets rows of its own, expanded. Recommended for Claude models.",
   "settings.autoSendShell": "Send command output to the agent",
+  "settings.skillUpdates": "Tell agents when their skills change",
+  "settings.skillUpdates.hint":
+    "When a file of a session's skills (a panel's, a project's) changes, its next message names the changed files so the agent reads them again; a one-line notice in the chat. Keeps long-running sessions on the current rules",
   "settings.autoSendShell.hint":
     "A `!` command run in the chat (typed, or a reply's Run button) sends its output to the agent as soon as it finishes; when off it goes with your next message",
   "settings.confirmLinks": "Confirm before opening links",

@@ -12,7 +12,8 @@ import (
 // A long-lived session is told which of its skill files changed since the last message, once, and only when on.
 // Files reached through links (a panel's user/.skills tree) count by their target's time.
 func TestSkillsChanged(t *testing.T) {
-	h, err := New(Options{Dir: t.TempDir()})
+	global := false
+	h, err := New(Options{Dir: t.TempDir(), SkillUpdates: func() bool { return global }})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,9 +41,10 @@ func TestSkillsChanged(t *testing.T) {
 	if got := s.skillsChanged(); got != nil {
 		t.Fatalf("off: %v", got)
 	}
-	s.SetSkillUpdates(true)
+	// The global setting comes on: the first message only starts the count
+	global = true
 	if got := s.skillsChanged(); got != nil {
-		t.Fatalf("nothing changed since it was turned on: %v", got[0].Text.Text)
+		t.Fatalf("nothing changed since it came on: %v", got[0].Text.Text)
 	}
 
 	time.Sleep(5 * time.Millisecond)
@@ -71,8 +73,22 @@ func TestSkillsChanged(t *testing.T) {
 	if got := s.skillsChanged(); got != nil {
 		t.Fatalf("told twice: %v", got[0].Text.Text)
 	}
-	if !s.rec.SkillUpdates || s.rec.SkillsSeen == 0 {
-		t.Fatal("record not kept")
+	if s.rec.SkillsSeen == 0 {
+		t.Fatal("mark not kept")
+	}
+
+	// The session's own "off" wins over the global setting, and stops the count
+	off := false
+	s.SetSkillUpdates(&off)
+	time.Sleep(5 * time.Millisecond)
+	write(filepath.Join(root, "my-workflow", "SKILL.md"))
+	if got := s.skillsChanged(); got != nil || s.rec.SkillsSeen != 0 {
+		t.Fatalf("session off: %v, mark %d", got, s.rec.SkillsSeen)
+	}
+	// Back to the global setting: counts from now, the edit made while off isn't told
+	s.SetSkillUpdates(nil)
+	if got := s.skillsChanged(); got != nil {
+		t.Fatalf("edit made while off was told: %v", got[0].Text.Text)
 	}
 }
 

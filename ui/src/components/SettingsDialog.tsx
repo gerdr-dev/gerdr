@@ -435,7 +435,10 @@ export function SettingsDialog({ open }: { open: boolean }) {
                   <TabsContent value="roles">
                     <AgentSettings />
                   </TabsContent>
-                  <TabsContent value="skills">
+                  <TabsContent value="skills" className="space-y-4">
+                    <Row label={t("settings.skillUpdates")} hint={t("settings.skillUpdates.hint")}>
+                      <Switch checked={cfg.skillUpdates !== false} onCheckedChange={(v) => setConfig({ skillUpdates: v })} />
+                    </Row>
                     <SkillSettings open={agentOpen && agentTab === "skills"} />
                   </TabsContent>
                   <TabsContent value="mcp">

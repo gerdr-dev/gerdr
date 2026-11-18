@@ -45,6 +45,8 @@ export type Config = {
   /** A `!` command run in the chat (typed, or a reply's Run button) hands its output to the agent as soon as it
    *  finishes, starting a turn (hub Session.Shell's send). Off: the output waits for the next message. Missing = on. */
   autoSendShell?: boolean;
+  /** Tell sessions their skill files changed, at the top of the next message (hub skillnote.go); left out = on */
+  skillUpdates?: boolean;
   /** 实验室：对话用虚拟滚动（只渲染屏幕附近的行）。默认关 —— 往上翻时行卸载再挂载，带图的行高度先 0 后撑开，界面一跳一跳（用户报的）。 */
   virtualList?: boolean;
   /** Labs: following the bottom stops at the start of a reply text that grows taller than the screen, so it can be read

@@ -160,7 +160,7 @@ func (s *Session) SendWith(ctx context.Context, content []acp.ContentBlock, o Se
 		s.mu.Lock()
 		content = withShell(s.pendingShellLocked(), content)
 		s.mu.Unlock()
-		// Skill files changed since the last message (Record.SkillUpdates): said first, before anything else
+		// Skill files changed since the last message (skillnote.go): said first, before anything else
 		content = withShell(s.skillsChanged(), content)
 	}
 	// First message after taking over another agent's conversation: the earlier conversation goes in front (handoff.go)

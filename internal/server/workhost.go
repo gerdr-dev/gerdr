@@ -64,7 +64,7 @@ func (h workHost) StartSession(ctx context.Context, project string, o work.Start
 			config[k] = v
 		}
 	}
-	sess, err := s.Hub.Create(ctx, hub.CreateOptions{Agent: agent, Cwd: o.Cwd, Mode: o.Mode, Config: config, Parent: o.Parent, Title: o.Title, Tags: tags, ReportTo: reportTo, SkillDirs: skills, SystemFile: o.SystemFile, ContinueFrom: o.ContinueFrom, Project: spaceOr(project), ArtifactsDir: o.ArtifactsDir, Muted: o.Muted, SkillUpdates: o.SkillUpdates, FromCLI: true})
+	sess, err := s.Hub.Create(ctx, hub.CreateOptions{Agent: agent, Cwd: o.Cwd, Mode: o.Mode, Config: config, Parent: o.Parent, Title: o.Title, Tags: tags, ReportTo: reportTo, SkillDirs: skills, SystemFile: o.SystemFile, ContinueFrom: o.ContinueFrom, Project: spaceOr(project), ArtifactsDir: o.ArtifactsDir, Muted: o.Muted, FromCLI: true})
 	if err != nil {
 		return nil, err
 	}
@@ -274,16 +274,6 @@ func (h workHost) Mute(id string, on bool) (map[string]any, error) {
 		return nil, err
 	}
 	sess.SetMuted(on)
-	return h.view(sess.Summary(), nil), nil
-}
-
-// SkillUpdates: ctx.sessions.skillUpdates (hub Record.SkillUpdates).
-func (h workHost) SkillUpdates(id string, on bool) (map[string]any, error) {
-	sess, err := h.s.Hub.Session(id)
-	if err != nil {
-		return nil, err
-	}
-	sess.SetSkillUpdates(on)
 	return h.view(sess.Summary(), nil), nil
 }
 
@@ -537,9 +527,6 @@ func (h workHost) view(x hub.Summary, evs []*hub.Event) map[string]any {
 	}
 	if x.Muted {
 		v["muted"] = true
-	}
-	if x.SkillUpdates {
-		v["skillUpdates"] = true
 	}
 	if x.Parent != "" {
 		v["parent"] = x.Parent

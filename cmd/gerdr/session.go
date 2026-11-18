@@ -140,7 +140,7 @@ type sessInfo struct {
 	Tags         map[string]string `json:"tags"`
 	ReportTo     string            `json:"reportTo"`
 	Muted        bool              `json:"muted"`
-	SkillUpdates bool              `json:"skillUpdates"`
+	SkillUpdates *bool             `json:"skillUpdates"`
 	WaitingSince int64             `json:"waitingSince"`
 	Turn         *struct {
 		StartedAt int64 `json:"startedAt"`
@@ -185,10 +185,10 @@ func (s sessInfo) view(self string) map[string]any {
 		m["reportTo"] = s.ReportTo
 	}
 	if s.Muted {
-		m["muted"] = true // do not disturb: nothing about it notifies the person (gerdr session mute)
+		m["muted"] = true // do not disturb: nothing about it notifies the person (gerdr session set --mute)
 	}
-	if s.SkillUpdates {
-		m["skillUpdates"] = true // told when its skill files change (gerdr session skill-updates)
+	if s.SkillUpdates != nil {
+		m["skillUpdates"] = *s.SkillUpdates // its own choice over the global setting (gerdr session set --skill-updates)
 	}
 	if s.Host != nil {
 		m["host"] = s.Host.ID // runs on another computer (gerdr host list); its paths are that computer's
@@ -801,10 +801,69 @@ and hand it a task, wait for it to finish, read its reply. Refer to a session by
 		},
 	})
 
+	// set: a session's own settings, one flag each, so a new one is a flag rather than another subcommand. mute stays
+	// as a shorthand: skills and scripts already use it.
+	var setMute, setSkills string
+	setCmd := &cobra.Command{
+		Use:   i18n.S("set <会话>", "set <session>"),
+		Short: i18n.S("改一个会话自己的设置（只改给了的）：--mute on|off 免打扰；--skill-updates on|off|default 它的 skill 文件改了要不要告诉它（default = 跟着全局设置 skillUpdates，默认开）。输出改完的会话", "Change one session's own settings (only the flags given): --mute on|off do not disturb; --skill-updates on|off|default whether it is told its skill files changed (default = the global skillUpdates setting, on unless turned off). Prints the session"),
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cc *cobra.Command, args []string) error {
+			c := client()
+			body := map[string]any{"from": c.selfID()}
+			onOff := func(flag, v string, def bool) (any, error) {
+				switch v {
+				case "on":
+					return true, nil
+				case "off":
+					return false, nil
+				case "default":
+					if def {
+						return "default", nil
+					}
+				}
+				if def {
+					return nil, fmt.Errorf("--%s: on, off or default", flag)
+				}
+				return nil, fmt.Errorf("--%s: on or off", flag)
+			}
+			if cc.Flags().Changed("mute") {
+				v, err := onOff("mute", setMute, false)
+				if err != nil {
+					return err
+				}
+				body["muted"] = v
+			}
+			if cc.Flags().Changed("skill-updates") {
+				v, err := onOff("skill-updates", setSkills, true)
+				if err != nil {
+					return err
+				}
+				body["skillUpdates"] = v
+			}
+			if len(body) == 1 {
+				return errors.New(i18n.S("没给要改的：--mute on|off、--skill-updates on|off|default", "nothing to change: --mute on|off, --skill-updates on|off|default"))
+			}
+			s, err := c.resolve(args[0])
+			if err != nil {
+				return err
+			}
+			var out sessInfo
+			if err := c.do("POST", "/api/sessions/"+s.ID+"/meta", body, &out); err != nil {
+				return err
+			}
+			printJSON(out.view(c.selfID()))
+			return nil
+		},
+	}
+	setCmd.Flags().StringVar(&setMute, "mute", "", i18n.S("on | off：免打扰（它跑完、等人、出错都不发通知，只标未读）", "on | off: do not disturb (no notifications when it finishes, waits or fails; it only turns unread)"))
+	setCmd.Flags().StringVar(&setSkills, "skill-updates", "", i18n.S("on | off | default：它的 skill 文件改了，下一条消息前面写上改过的文件让它重读", "on | off | default: when its skill files change, its next message names them so it reads them again"))
+	cmd.AddCommand(setCmd)
+
 	var mOff bool
 	muteCmd := &cobra.Command{
 		Use:   i18n.S("mute <会话>", "mute <session>"),
-		Short: i18n.S("这个会话免打扰：它跑完、等人、出错都不发通知（界面、手机），只标未读；--off 取消。输出改完的会话", "Do not disturb for one session: no notifications when it finishes, waits or fails (UI, phone), it only turns unread; --off undoes it. Prints the session"),
+		Short: i18n.S("免打扰，同 set --mute on（--off 同 set --mute off）。输出改完的会话", "Do not disturb, same as set --mute on (--off: set --mute off). Prints the session"),
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			c := client()
@@ -822,28 +881,6 @@ and hand it a task, wait for it to finish, read its reply. Refer to a session by
 	}
 	muteCmd.Flags().BoolVar(&mOff, "off", false, i18n.S("取消免打扰", "turn do not disturb off"))
 	cmd.AddCommand(muteCmd)
-
-	var suOff bool
-	suCmd := &cobra.Command{
-		Use:   i18n.S("skill-updates <会话>", "skill-updates <session>"),
-		Short: i18n.S("它的 skill 文件改了就告诉它：之后每条消息前面写上上次以来改过的文件，让它重读（一跑一两周的长任务用）；从现在开始算，--off 关掉。输出改完的会话", "Tell a session when its skill files change: each message from then on starts with the files changed since the last one, so it reads them again (for work that runs for weeks); counts from now, --off turns it off. Prints the session"),
-		Args:  cobra.ExactArgs(1),
-		RunE: func(_ *cobra.Command, args []string) error {
-			c := client()
-			s, err := c.resolve(args[0])
-			if err != nil {
-				return err
-			}
-			var out sessInfo
-			if err := c.do("POST", "/api/sessions/"+s.ID+"/meta", map[string]any{"skillUpdates": !suOff, "from": c.selfID()}, &out); err != nil {
-				return err
-			}
-			printJSON(out.view(c.selfID()))
-			return nil
-		},
-	}
-	suCmd.Flags().BoolVar(&suOff, "off", false, i18n.S("不再告诉它", "stop telling it"))
-	cmd.AddCommand(suCmd)
 
 	cmd.AddCommand(&cobra.Command{
 		Use:   i18n.S("fetch <会话> <路径> [存到哪]", "fetch <session> <path> [dest]"),
