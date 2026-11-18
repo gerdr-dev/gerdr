@@ -57,7 +57,7 @@ func (s *Session) Prompts() []string {
 		case e.Kind == EvNotice && e.Level == "clear":
 			out = out[:0]
 		case e.Kind == EvUser:
-			if t := strings.TrimSpace(contentText(e.Content)); t != "" && commandIn(t) == "" {
+			if t := stripImageTokens(contentText(e.Content)); t != "" && commandIn(t) == "" {
 				out = append(out, t)
 			}
 		}
@@ -71,6 +71,16 @@ var imageLabel = regexp.MustCompile(`^\[Image #\d+\]$`)
 
 // IsImageLabel reports whether a user message's text block is such a label.
 func IsImageLabel(text string) bool { return imageLabel.MatchString(text) }
+
+// imageToken: an inline image's "[Image #n]" placeholder inside the person's own text.
+var imageToken = regexp.MustCompile(`\[Image #\d+\]`)
+
+// stripImageTokens takes the "[Image #n]" placeholders out of text that becomes (or is asked to become) a title: a
+// message starting with a pasted screenshot was titled "[Image #1] superage 的…" in the tab bar. The message itself
+// keeps them (contentText), they say which image is meant.
+func stripImageTokens(t string) string {
+	return strings.TrimSpace(imageToken.ReplaceAllString(t, ""))
+}
 
 func contentText(blocks []json.RawMessage) string {
 	var parts []string
@@ -194,11 +204,12 @@ func buildTitlePrompt(prompts []string) string {
 }
 
 // cleanTitle strips quotes and a final full stop. Multi-line or too long means the model answered the messages instead
-// of naming them; a single character is a glitch (haiku once named a session "Ε", Greek Epsilon, which no rerun of the
+// of naming them (the limit is in runes, so it is loose: haiku asked for "about 20 characters" gave a 50-rune mixed
+// Chinese / English title, which a 40 limit threw away and left the session on its first-message placeholder); a single character is a glitch (haiku once named a session "Ε", Greek Epsilon, which no rerun of the
 // same prompt reproduced). Either way it counts as no title, and the session keeps the one it had.
 func cleanTitle(t string) string {
-	t = strings.Trim(stripTitleLabel(strings.TrimSpace(t)), "\"'「」“”。.")
-	if n := utf8.RuneCountInString(t); n < 2 || n > 40 || strings.Contains(t, "\n") {
+	t = strings.Trim(stripTitleLabel(stripImageTokens(t)), "\"'「」“”。.")
+	if n := utf8.RuneCountInString(t); n < 2 || n > 60 || strings.Contains(t, "\n") {
 		return ""
 	}
 	return t

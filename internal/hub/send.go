@@ -400,8 +400,10 @@ func (s *Session) touchTitle(content []acp.ContentBlock) {
 		return
 	}
 	for _, b := range content {
-		if b.Text != nil && strings.TrimSpace(b.Text.Text) != "" && commandIn(b.Text.Text) == "" && !injectedText(b.Text.Text) {
-			t := strings.Join(strings.Fields(b.Text.Text), " ")
+		if b.Text == nil || injectedText(b.Text.Text) {
+			continue
+		}
+		if t := strings.Join(strings.Fields(stripImageTokens(b.Text.Text)), " "); t != "" && commandIn(t) == "" {
 			if utf8.RuneCountInString(t) > 60 {
 				t = string([]rune(t)[:60]) + "…"
 			}

@@ -41,13 +41,15 @@ func TestCleanTitle(t *testing.T) {
 	for in, want := range map[string]string{
 		"「修登录页」。":               "修登录页",
 		"ok\n我来帮你":              "",
-		strings.Repeat("长", 41): "",
-		"Ε":                     "",
-		"「E」":                   "",
-		"Title: 实时语音对话模型选型":     "实时语音对话模型选型",
-		"**标题：** 修登录页":          "修登录页",
-		"title:Fix login":       "Fix login",
-		"Titles of tabs":        "Titles of tabs",
+		strings.Repeat("长", 61): "",
+		"superage worker agent 状态显示在标题栏，与 code 模式保持一致，带绿色、黄色小圆点": "superage worker agent 状态显示在标题栏，与 code 模式保持一致，带绿色、黄色小圆点",
+		"[Image #1] 修登录页":   "修登录页",
+		"Ε":                 "",
+		"「E」":               "",
+		"Title: 实时语音对话模型选型": "实时语音对话模型选型",
+		"**标题：** 修登录页":      "修登录页",
+		"title:Fix login":   "Fix login",
+		"Titles of tabs":    "Titles of tabs",
 	} {
 		if got := cleanTitle(in); got != want {
 			t.Errorf("cleanTitle(%q) = %q, want %q", in, got, want)
