@@ -4,8 +4,8 @@ import { Button } from "@/components/ui/button";
 import { addTab, focusedSessionId, tabName } from "@/lib/actions";
 import { activeWs, allLeaves, currentSpace, spaceOf } from "@/lib/layout";
 import { applyTabLabel } from "@/lib/addons";
-import { set, useStore } from "@/lib/store";
-import { MAX_TILES, showInOverview, toggleOverview } from "@/lib/overview";
+import { get, set, useStore } from "@/lib/store";
+import { MAX_TILES, focusTile, overviewIds, showInOverview, toggleOverview } from "@/lib/overview";
 import { FadeText } from "./FadeText";
 import { StatusDot } from "./AgentIcon";
 import { toast } from "sonner";
@@ -88,7 +88,8 @@ function blockSelectionUntilLift() {
 }
 
 /**
- * The phone bar's overview button. Tap opens the overview; long-press (or right-click) puts the pane you're on into it
+ * The phone bar's overview button. Tap opens the overview, on the tile of the session you're on when it already has
+ * one (asked for: no hunting for it in the strip); long-press (or right-click) puts the pane you're on into it
  * and goes to that tile. Our own timer rather than relying on contextmenu: iOS Safari never fires it on a long-press.
  */
 function OverviewButton() {
@@ -125,6 +126,8 @@ function OverviewButton() {
       onClick={() => {
         // The click that ends a long-press already did its thing
         if (held.current) return void (held.current = false);
+        const id = focusedSessionId();
+        if (id && overviewIds(get()).includes(id)) focusTile(id);
         toggleOverview(true);
       }}
     >
