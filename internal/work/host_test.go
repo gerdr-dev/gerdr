@@ -45,6 +45,9 @@ func (f *fakeHost) Tag(id string, tags map[string]string) (map[string]any, error
 func (f *fakeHost) Mute(id string, on bool) (map[string]any, error) {
 	return map[string]any{"id": id, "muted": on}, nil
 }
+func (f *fakeHost) SkillUpdates(id string, on bool) (map[string]any, error) {
+	return map[string]any{"id": id, "skillUpdates": on}, nil
+}
 func (f *fakeHost) Send(_ context.Context, _, id, text string, _ SendOptions) (map[string]any, error) {
 	return map[string]any{"id": id, "sent": text}, nil
 }

@@ -160,6 +160,8 @@ func (s *Session) SendWith(ctx context.Context, content []acp.ContentBlock, o Se
 		s.mu.Lock()
 		content = withShell(s.pendingShellLocked(), content)
 		s.mu.Unlock()
+		// Skill files changed since the last message (Record.SkillUpdates): said first, before anything else
+		content = withShell(s.skillsChanged(), content)
 	}
 	// First message after taking over another agent's conversation: the earlier conversation goes in front (handoff.go)
 	content = withShell(s.pendingHandoff(), content)
@@ -389,7 +391,7 @@ func (s *Session) touchTitle(content []acp.ContentBlock) {
 		return
 	}
 	for _, b := range content {
-		if b.Text != nil && strings.TrimSpace(b.Text.Text) != "" && commandIn(b.Text.Text) == "" && !strings.HasPrefix(b.Text.Text, shellPrefix) && !strings.HasPrefix(b.Text.Text, handoffPrefix) {
+		if b.Text != nil && strings.TrimSpace(b.Text.Text) != "" && commandIn(b.Text.Text) == "" && !injectedText(b.Text.Text) {
 			t := strings.Join(strings.Fields(b.Text.Text), " ")
 			if utf8.RuneCountInString(t) > 60 {
 				t = string([]rune(t)[:60]) + "…"
@@ -458,7 +460,7 @@ func (s *Session) Cancel(ctx context.Context) error {
 // firstLine: the message's first non-empty line of text, cut to n runes: what a message no person typed folds to.
 func firstLine(content []acp.ContentBlock, n int) string {
 	for _, b := range content {
-		if b.Text == nil || strings.HasPrefix(b.Text.Text, shellPrefix) || strings.HasPrefix(b.Text.Text, handoffPrefix) {
+		if b.Text == nil || injectedText(b.Text.Text) {
 			continue
 		}
 		for _, l := range strings.Split(b.Text.Text, "\n") {

@@ -140,6 +140,7 @@ type sessInfo struct {
 	Tags         map[string]string `json:"tags"`
 	ReportTo     string            `json:"reportTo"`
 	Muted        bool              `json:"muted"`
+	SkillUpdates bool              `json:"skillUpdates"`
 	WaitingSince int64             `json:"waitingSince"`
 	Turn         *struct {
 		StartedAt int64 `json:"startedAt"`
@@ -185,6 +186,9 @@ func (s sessInfo) view(self string) map[string]any {
 	}
 	if s.Muted {
 		m["muted"] = true // do not disturb: nothing about it notifies the person (gerdr session mute)
+	}
+	if s.SkillUpdates {
+		m["skillUpdates"] = true // told when its skill files change (gerdr session skill-updates)
 	}
 	if s.Host != nil {
 		m["host"] = s.Host.ID // runs on another computer (gerdr host list); its paths are that computer's
@@ -818,6 +822,28 @@ and hand it a task, wait for it to finish, read its reply. Refer to a session by
 	}
 	muteCmd.Flags().BoolVar(&mOff, "off", false, i18n.S("取消免打扰", "turn do not disturb off"))
 	cmd.AddCommand(muteCmd)
+
+	var suOff bool
+	suCmd := &cobra.Command{
+		Use:   i18n.S("skill-updates <会话>", "skill-updates <session>"),
+		Short: i18n.S("它的 skill 文件改了就告诉它：之后每条消息前面写上上次以来改过的文件，让它重读（一跑一两周的长任务用）；从现在开始算，--off 关掉。输出改完的会话", "Tell a session when its skill files change: each message from then on starts with the files changed since the last one, so it reads them again (for work that runs for weeks); counts from now, --off turns it off. Prints the session"),
+		Args:  cobra.ExactArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			c := client()
+			s, err := c.resolve(args[0])
+			if err != nil {
+				return err
+			}
+			var out sessInfo
+			if err := c.do("POST", "/api/sessions/"+s.ID+"/meta", map[string]any{"skillUpdates": !suOff, "from": c.selfID()}, &out); err != nil {
+				return err
+			}
+			printJSON(out.view(c.selfID()))
+			return nil
+		},
+	}
+	suCmd.Flags().BoolVar(&suOff, "off", false, i18n.S("不再告诉它", "stop telling it"))
+	cmd.AddCommand(suCmd)
 
 	cmd.AddCommand(&cobra.Command{
 		Use:   i18n.S("fetch <会话> <路径> [存到哪]", "fetch <session> <path> [dest]"),

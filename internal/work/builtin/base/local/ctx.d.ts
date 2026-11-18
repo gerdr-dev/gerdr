@@ -163,6 +163,13 @@ interface Ctx {
        */
       muted?: boolean;
       /**
+       * Tell the agent when its skill files change: each message from then on starts with the files changed since the
+       * last one (drawn in the chat as a one-line notice), so it reads them again. For a conversation that lives for
+       * days or weeks (a task's worker): it read its skills once, early, and doesn't look again by itself. Change it
+       * later with `skillUpdates`.
+       */
+      skillUpdates?: boolean;
+      /**
        * A conversation this new one carries on (any agent, the same one too): its chat is copied above a notice, and
        * the first message brings it along to the agent, hidden in the chat. For replacing a conversation that broke or
        * must restart (another agent or model) while the person keeps reading one conversation. It must not be running.
@@ -241,6 +248,11 @@ interface Ctx {
     tag(id: string, tags: Record<string, string>): Session;
     /** Do not disturb for that conversation (see start's `muted`); `false` turns it off again. */
     mute(id: string, on?: boolean): Session;
+    /**
+     * Tell that conversation when its skill files change (see start's `skillUpdates`), counting from now; `false`
+     * turns it off. For workers started before you passed `skillUpdates`.
+     */
+    skillUpdates(id: string, on?: boolean): Session;
   };
 
   /** The Code side's workspaces (not this panel: that's `ctx.workspace`). */
@@ -514,6 +526,8 @@ interface Session {
   reportTo?: string;
   /** Do not disturb is on for it (sessions.start's `muted`, sessions.mute). */
   muted?: boolean;
+  /** It is told when its skill files change (sessions.start's `skillUpdates`, sessions.skillUpdates). */
+  skillUpdates?: boolean;
   /**
    * The session that started it (an agent's `gerdr session new`, or a function that agent ran). Follow `parent` up and
    * look for sessions whose parent is this one to draw who handed what to whom, any number of levels deep.

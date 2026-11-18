@@ -100,6 +100,19 @@ func (s *Session) SetMuted(on bool) {
 	s.h.broadcastSession(s)
 }
 
+// SetSkillUpdates turns Record.SkillUpdates on or off. Turning it on starts counting from now: what changed before
+// can't be told apart from what the agent already read.
+func (s *Session) SetSkillUpdates(on bool) {
+	s.mu.Lock()
+	if on && !s.rec.SkillUpdates {
+		s.rec.SkillsSeen = now()
+	}
+	s.rec.SkillUpdates = on
+	s.mu.Unlock()
+	s.h.saveIndex()
+	s.h.broadcastSession(s)
+}
+
 // SetReportTo points this session's reports at another session ("" stops them).
 func (s *Session) SetReportTo(to string) error {
 	if to != "" {

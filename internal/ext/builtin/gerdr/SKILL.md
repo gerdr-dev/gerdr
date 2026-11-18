@@ -263,6 +263,18 @@ gerdr session mute "nightly sweep" --off
 For a session the user reads when they choose to, or when they say they don't want to hear about it. A whole group
 of tabs is muted from the UI (the workspace's do not disturb); this is one session, wherever it is.
 
+### Tell a long-running session its skills changed
+
+```bash
+gerdr session skill-updates "billing task"         # from now on, each message starts with the skill files changed since the last one
+gerdr session skill-updates "billing task" --off
+```
+
+A session reads its skills once, early, and doesn't look again: one that runs for days or weeks goes on with the old
+rules after they are edited. With this on, the next message names the changed files (a one-line notice in the chat)
+and tells it to read them again. Counts from when it's turned on. A panel turns it on for its workers with
+`ctx.sessions.start({ skillUpdates: true })` / `ctx.sessions.skillUpdates(id)`.
+
 ## 给已有的会话发消息
 
 ```bash

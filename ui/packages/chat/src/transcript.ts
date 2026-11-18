@@ -123,6 +123,9 @@ const ALLOWED_OLD = /^\s*我已经允许了刚才被拦下的操作，请重试�
 const INTERRUPT = /^\s*\[Request interrupted by user[^\]]*\]\s*$/;
 // A late answer to a question withdrawn by an interrupt (lateAnswerText): drawn on that question's card, not as a bubble
 const LATE_ANSWER = /^\s*<gerdr-answer req="([^"]*)">([\s\S]*?)<\/gerdr-answer>\s*$/;
+// Skill files changed since the last message (hub/skillnote.go): rides in front of a message, "- <name>: <path>" lines
+const SKILLS_CHANGED = /^<gerdr-skills-changed>\n[^\n]*\n([\s\S]*?)<\/gerdr-skills-changed>\s*$/;
+export const isSkillsChanged = (text: string) => SKILLS_CHANGED.test(text);
 
 /** 多行压成一行、剥掉 ANSI（这些都只占一行小字，长了也读不了）；太长截断。 */
 function squash(s: string, max = 300) {
@@ -158,6 +161,14 @@ export function machineBlock(text: string): { notice?: { level: string; text: st
   if ((m = BASH_IN.exec(text))) return { text: "! " + squash(m[1]) };
   if (BASH_OUT.test(text)) return { notice: { level: "info", text: squash(text.replace(ANY_TAG, " ")) } };
   if (INTERRUPT.test(text)) return { notice: { level: "info", text: t("notice.interrupted") } };
+  if ((m = SKILLS_CHANGED.exec(text))) {
+    const names = m[1].split("\n").flatMap((l) => {
+      if (!l.startsWith("- ")) return [];
+      const i = l.indexOf(": ");
+      return [i > 2 ? l.slice(2, i) : l.slice(2)];
+    });
+    return { notice: { level: "info", text: t("notice.skillsChanged", { files: names.join(t("list.sep")) }) } };
+  }
   if (ALLOWED_OLD.test(text)) return { notice: { level: "info", text: t("notice.allowedRetry") } };
   if ((m = ALLOWED.exec(text))) {
     const rules = m[1].split("\n").flatMap((l) => (l.startsWith("- ") ? [l.slice(2).trim()] : []));
@@ -217,7 +228,8 @@ const HANDOFF = /^<gerdr-handoff from="([^"]*)">/;
 export const isHandoffContext = (text: string) => HANDOFF.test(text);
 
 /** 消息内容里去掉 `!命令` 带的那几块和换 agent 时带上的之前的对话（撤回、回退放回输入框时用：命令还在对话里，下一条照样会带上） */
-export const dropShellContext = (blocks: ContentBlock[]) => blocks.filter((c) => !(c.type === "text" && (isShellContext(c.text) || isHandoffContext(c.text))));
+export const dropShellContext = (blocks: ContentBlock[]) =>
+  blocks.filter((c) => !(c.type === "text" && (isShellContext(c.text) || isHandoffContext(c.text) || isSkillsChanged(c.text))));
 
 /**
  * Whether a row's text is the command itself rather than a description of it. Only command text is drawn
@@ -454,12 +466,21 @@ export class Transcript {
     }
     switch (e.kind) {
       case "user": {
-        // `!` output / handoff blocks ride in front of whatever is sent next, "allow and retry" included: look past them
-        const own = (e.content ?? []).filter((c) => !(c.type === "text" && (isShellContext(c.text) || isHandoffContext(c.text))));
+        // `!` output / handoff / changed-skills blocks ride in front of whatever is sent next, "allow and retry"
+        // included: look past them
+        const own = (e.content ?? []).filter((c) => !(c.type === "text" && (isShellContext(c.text) || isHandoffContext(c.text) || isSkillsChanged(c.text))));
         const only = own.length === 1 && own[0].type === "text" ? own[0].text : undefined;
         const mb = only !== undefined ? machineBlock(only) : undefined;
         // Before the notice branch: it breaks early, and a sending bubble left behind stays on screen for good
         if (e.messageId) this.dropSending(e.messageId);
+        // Skills changed since the last message: a notice line above it, like a compaction's
+        for (const c of e.content ?? []) {
+          const sk = c.type === "text" && isSkillsChanged(c.text) ? machineBlock(c.text)?.notice : undefined;
+          if (sk) {
+            this.messages = [...this.messages];
+            this.pushPart(this.assistant(e.ts), { type: "data-notice", data: sk });
+          }
+        }
         const late = only !== undefined ? LATE_ANSWER.exec(only) : null;
         // Anything the user says closes the late questions; a late answer also fills its own card
         if (this.lateAsks.size) {
@@ -497,6 +518,7 @@ export class Transcript {
         for (const c of e.content ?? []) {
           if (c.type === "text" && isShellContext(c.text)) continue; // `!命令` 带过去的输出：上面已经有那张命令卡片了
           if (c.type === "text" && isHandoffContext(c.text)) continue; // the earlier conversation: it's on screen above
+          if (c.type === "text" && isSkillsChanged(c.text)) continue; // drawn as the notice above
           if (c.type === "text" && isImageLabel(c.text)) continue;
           if (c.type === "text") parts.push({ type: "text", text: mb?.text ?? c.text });
           else if (c.type === "image") parts.push({ type: "file", mediaType: c.mimeType, url: imageURL(c) });

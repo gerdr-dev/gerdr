@@ -106,6 +106,7 @@ func (h *Hub) continueFrom(ctx context.Context, o CreateOptions) (*Session, erro
 	if o.ArtifactsDir == "" {
 		o.ArtifactsDir = srcRec.ArtifactsDir // a panel's task folder stays the task's
 	}
+	o.SkillUpdates = o.SkillUpdates || srcRec.SkillUpdates
 	// The conversation's title comes along (adoptHistoryNote), unless one is given: then that is the session's fixed
 	// name (Record.TitleFixed), as when started fresh. A panel restarting its conversation names it again each time,
 	// and dropping that let an auto title from an earlier piece of work ride along from one restart to the next.
@@ -425,7 +426,7 @@ func handoffUserText(blocks []json.RawMessage) string {
 			URI  string `json:"uri"`
 			Name string `json:"name"`
 		}
-		if json.Unmarshal(raw, &c) != nil || isHandoffBlock(raw) {
+		if json.Unmarshal(raw, &c) != nil || isHandoffBlock(raw) || isSkillsBlock(raw) {
 			continue
 		}
 		switch c.Type {

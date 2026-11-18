@@ -96,6 +96,13 @@ type Record struct {
 	// or one the person wants quiet in a busy group. Set with `gerdr session mute`, ctx.sessions.start({ muted }) /
 	// ctx.sessions.mute.
 	Muted bool `json:"muted,omitempty"`
+	// SkillUpdates: tell the agent when one of its skill files changes (skillnote.go). A conversation that lives for
+	// weeks (a panel's task) read its skills once, early; edits since are on disk but not in what it remembers, and
+	// it has no reason to read them again. On, each message from Gerdr starts with the files changed since the last
+	// one. Set with ctx.sessions.start({ skillUpdates }), `gerdr session skill-updates`.
+	SkillUpdates bool `json:"skillUpdates,omitempty"`
+	// SkillsSeen: when the skill files were last checked for SkillUpdates (ms); changes after it are news.
+	SkillsSeen int64 `json:"skillsSeen,omitempty"`
 }
 
 // WorkDir is the directory the agent works in now: what paths it prints are relative to, where `!` commands run.
