@@ -12,7 +12,7 @@ key (.p8 + key id + issuer id), shared by notarization and TestFlight uploads. A
 **Mac, how**:
 1. Replace GERDR_MAC_SIGN_P12_B64 / _PASS with the Developer ID p12; the check `[ "$id" = "Gerdr Local Signing" ]` in
    release.yml and the identity name desktop/sign-id.sh defaults to follow (local builds can keep the self-signed one).
-2. codesign in desktop/build.sh and tools/chromeshell/package.sh with `--options runtime --timestamp` (notarization
+2. codesign in desktop/build.sh and desktop/package.sh with `--options runtime --timestamp` (notarization
    requires hardened runtime and a secure timestamp). Inner binaries first (Resources/gerdr, MacOS/gerdr-exp), the
    bundle last.
 3. Notarize: `xcrun notarytool submit <dmg> --key AuthKey.p8 --key-id … --issuer … --wait`, then `xcrun stapler

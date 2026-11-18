@@ -1,5 +1,5 @@
 // mkico writes a Windows .ico from PNGs: the icon of the shortcuts the installer makes, and of the installer itself
-// (package.sh). The window's own icon comes from the PNG in the exe (main.go).
+// (desktop/package-win.sh; the exe's own icon is set by @electron/packager from the .ico).
 //
 //	go run ./mkico out.ico icon.png 16 32 48 256         # PNG-compressed entries (Windows Vista and later)
 //	go run ./mkico -bmp out.ico icon.png 16 32 48        # classic 32-bit bitmap entries: NSIS's installer icon

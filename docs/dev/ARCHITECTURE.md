@@ -1026,13 +1026,14 @@ stream-json 模式下没人看得见）—— resume、回退、追上全部失�
 
 经云端中继对外，配对码 + passkey；本机令牌在远程不认。设计和坑在 [REMOTE.md](REMOTE.md)，动这块之前先读它。
 
-## Desktop App (tools/chromeshell, tools/winshell)
+## Desktop App (desktop/)
 
-macOS: `tools/chromeshell`, the user's own Chrome renamed into a Gerdr App by Lightron; Windows: `tools/winshell`
-(WebView2). Both Chromium, so what works in Chrome works in the App; their READMEs say how and why. The Electron shell
-(`desktop/`, until 0.2.21) is gone; [WHY-ELECTRON.md](WHY-ELECTRON.md) keeps why it was Chromium and the traps any
-shell meets (quitting, the parent process on Windows, menus, signing). The shell starts the bundled
-`gerdr --app --parent-pid`, reads `GERDR_READY <url>` from its stdout, and attaches to a Gerdr already running (the
-data dir is locked). An App started from Finder has only the system dirs on its PATH, so the backend asks the login
-shell for its PATH once at start (`sysenv.AdoptLoginPath`), or it wouldn't find claude / codex. Building: `make app`
-(this Mac) / `make dmg` / `make win`; `make install` puts this Mac's build in /Applications.
+Electron on macOS and Windows (back since 2026-11-18: [WHY-ELECTRON-COMEBACK.md](WHY-ELECTRON-COMEBACK.md); the
+Lightron shells before it are in git history, [WHY-ELECTRON.md](WHY-ELECTRON.md) keeps why Chromium and the traps any
+shell meets: quitting, the parent process on Windows, menus, signing). `desktop/main.js` has the windows, the bridge
+(`preload.js`, `window.gerdrNative`), the Browser pane's pages (WebContentsViews), menus, Dock; `desktop/core`, a Go
+process beside it (protocol in `desktop/core/el/el.go`), starts the bundled `gerdr --app --parent-pid`, reads
+`GERDR_READY <url>` from its stdout, attaches to a Gerdr already running (the data dir is locked), and runs updates.
+An App started from Finder has only the system dirs on its PATH, so the backend asks the login shell for its PATH once
+at start (`sysenv.AdoptLoginPath`), or it wouldn't find claude / codex. Building: `make app` (this Mac) / `make dmg` /
+`make win`; `make install` puts this Mac's build in /Applications.

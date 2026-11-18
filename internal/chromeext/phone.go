@@ -13,7 +13,7 @@ import (
 // override with mobile on (sites switch to their mobile layout) and touch events. The App's pane showing it again
 // ends that (the desktop wins when both look), as does the last remote viewer leaving.
 //
-// The shell says when its pane shows a page (the "shown" event, tools/chromeshell/views.go). Headless pages don't need
+// The shell says when its pane shows a page (the "shown" event, desktop/core/views.go). Headless pages don't need
 // this: their window is resized to the viewer (Tab.resize).
 
 type phoneLayout struct {

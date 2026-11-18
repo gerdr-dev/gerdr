@@ -26,7 +26,7 @@ import (
 // in the system keychain. The project's profile is used by two programs in turn (this headless Chrome, and the App's
 // re-signed copy while the App runs: chromeext/app.go), and each hand-over broke the binding: Google asked to sign in
 // again, with two-step verification, every time (seen 2026-11-18). Off in both, so the sign-in is plain cookies, which
-// both read. tools/chromeshell passes the same switch.
+// both read. The App (desktop/main.js) passes the same switch.
 const noBoundSessions = "--disable-features=EnableBoundSessionCredentials,DeviceBoundSessions"
 
 // idleClose: a browser with no page open for this long exits (its profile stays).
@@ -34,12 +34,12 @@ const idleClose = 10 * time.Minute
 
 // Manager runs one browser per project, started on the first page and stopped when idle.
 type Manager struct {
-	Dir    string // Gerdr's data dir
+	Dir string // Gerdr's data dir
 	// BackendLink: this backend's login link (http://127.0.0.1:7870/auth?token=…), for the browser-only Electron to
 	// connect back with (electron.go); set once it listens
 	BackendLink string
-	Bridge *chromeext.Bridge
-	Log    *slog.Logger
+	Bridge      *chromeext.Bridge
+	Log         *slog.Logger
 
 	mu      sync.Mutex
 	inst    map[string]*instance
@@ -99,7 +99,7 @@ func (m *Manager) appChanged(connected bool) {
 }
 
 // Release stops the headless browser on the App's data directory: the App is starting its own on it
-// (tools/chromeshell asks before Lightron starts the browser; the directory is one process's at a time).
+// (desktop/core asks at start; the directory is one process's at a time).
 func (m *Manager) Release() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	m.Bridge.QuitApp(ctx)

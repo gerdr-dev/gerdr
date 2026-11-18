@@ -144,7 +144,7 @@ jobs:
             Gerdr-*.dmg
             gerdr-*.br
 
-  # Windows, built on Linux (pure Go, NSIS): the desktop shell's installer (tools/winshell, WebView2;
+  # Windows: the Electron App's installer (desktop/package-win.sh, NSIS;
   # Gerdr-<v>-windows-x64-setup.exe, update.json app["win32-x64"]) and the backend alone, compressed like the mac
   # ones (desktop/compress.js; update.json backend["win32-x64"]). Always built: a couple of minutes.
   windows:
@@ -167,9 +167,9 @@ jobs:
           HOMEBREW_NO_INSTALL_CLEANUP: "1"
       - run: |
           v="${{ needs.plan.outputs.version }}"
-          NAME=Gerdr VERSION="$v" tools/winshell/package.sh
-          node desktop/compress.js tools/winshell/dist/stage/gerdr.exe "gerdr-$v-win32-x64.br"
-          mv tools/winshell/dist/Gerdr-*-windows-x64-setup.exe .
+          NAME=Gerdr ID=io.github.zbysir.gerdr VERSION="$v" desktop/package-win.sh
+          node desktop/compress.js desktop/dist/win/gerdr.exe "gerdr-$v-win32-x64.br"
+          mv desktop/dist/win/Gerdr-*-windows-x64-setup.exe .
       - uses: actions/upload-artifact@v7
         with:
           name: windows

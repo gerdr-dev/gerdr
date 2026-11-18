@@ -6,9 +6,9 @@ From source (Go 1.24+, Node 20+, pnpm):
 
 ```bash
 make build        # → bin/gerdr (CLI + an embedded copy of the UI source)
-make app          # → tools/chromeshell/dist/<arch>/Gerdr.app + dmg (this machine's arch)
-make dmg          # → tools/chromeshell/dist/Gerdr-<version>-mac-{arm64,amd64}.dmg
-make win          # → tools/winshell/dist/Gerdr-<version>-windows-x64-setup.exe (builds on a Mac too)
+make app          # → desktop/dist/<arch>/Gerdr.app + dmg (this machine's arch)
+make dmg          # → desktop/dist/Gerdr-<version>-mac-{arm64,amd64}.dmg
+make win          # → desktop/dist/win/Gerdr-<version>-windows-x64-setup.exe (builds on a Mac too)
 make apk          # → Android app (needs the Android SDK and JDK 17–21)
 make install      # puts Gerdr.app in /Applications, links the CLI to ~/.local/bin/gerdr
 ```

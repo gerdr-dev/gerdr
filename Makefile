@@ -1,4 +1,4 @@
-# gerdr: one Go binary + the desktop App (Electron: desktop/; Windows still tools/winshell on Lightron).
+# gerdr: one Go binary + the desktop App (Electron, macOS and Windows: desktop/).
 # 界面是 ui/ 下的源码，没有打包环节（internal/uisite）：
 # 编二进制时把 ui/ 原样拷进去内嵌，第一次启动装到 ~/.gerdr/ui，之后谁改那份源码界面就跟着变。
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo 0.1.0-dev)
@@ -47,9 +47,8 @@ test-e2e:
 	GERDR_E2E=claude go test ./internal/agenthost/ -run E2E -v -count=1
 
 # Desktop App, as the release builds it (NAME=Gerdr, the real App's id): app = this Mac's arch in
-# desktop/dist/<arch>/Gerdr.app (+ dmg); dmg = both arches; win = the Windows installer (tools/winshell, until it moves
-# to Electron too). The App is Electron again since 2026-11-18 (desktop/, docs/dev/WHY-ELECTRON-COMEBACK.md); the
-# Lightron shell (tools/chromeshell) is no longer built.
+# desktop/dist/<arch>/Gerdr.app (+ dmg); dmg = both arches; win = the Windows installer (desktop/dist/win). The App is
+# Electron again since 2026-11-18 (docs/dev/WHY-ELECTRON-COMEBACK.md); the Lightron shells are gone.
 HOST_ARCH := $(shell uname -m | sed 's/x86_64/amd64/')
 MAC_APP := NAME=Gerdr ID=io.github.zbysir.gerdr VERSION=$(VERSION) desktop/package.sh
 app:
@@ -59,7 +58,7 @@ dmg:
 	$(MAC_APP)
 
 win:
-	NAME=Gerdr VERSION=$(VERSION) tools/winshell/package.sh
+	NAME=Gerdr ID=io.github.zbysir.gerdr VERSION=$(VERSION) desktop/package-win.sh
 
 # 安卓 App（android/，设计见 docs/dev/ANDROID.md）。要 Android SDK（sdk.dir 写在 android/local.properties）和 JDK 17–21
 # （AGP 不认更新的 JDK）。apk = 正式包，用 ~/.android-release/gerdr.jks 签（它的指纹写死在 config.OfficialAndroidCert：

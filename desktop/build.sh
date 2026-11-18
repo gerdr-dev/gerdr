@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The macOS backends for a release: the two compressed ones (desktop/dist/gerdr-<version>-darwin-<arch>.br) the
 # updaters download when the shell didn't change, and the binaries (desktop/bin/gerdr-<arch>) the release then packs
-# into the dmgs (BACKEND_DIR=desktop/bin tools/chromeshell/package.sh). release.yml runs it.
+# into the dmgs (BACKEND_DIR=desktop/bin desktop/package.sh). release.yml runs it.
 #   ./desktop/build.sh mac-backend <version>
 # This folder held the Electron shell until 0.2.21; what's left is what the release still uses (this, compress.js,
 # feed.sh, sign-id.sh, res/icon.png: its path is part of the shell id, tools/shell-id.sh, so it stays put).

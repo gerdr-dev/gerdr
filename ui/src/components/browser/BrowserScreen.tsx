@@ -231,8 +231,12 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
   // windows by hand, and each case was its own bug (a rename dialog's box that took no typing). Checked every frame
   // while any is open (they animate in), every 250 ms otherwise.
   // The still and where it goes: exactly where the page is (placeView rounds inwards and rounds its corners), at its
-  // size; stretched over the whole box it read soft and a pixel off
-  const [still, setStill] = useState<{ url: string; left: number; top: number; width: number; height: number; radius: number } | null>(null);
+  // size; stretched over the whole box it read soft and a pixel off.
+  // Drawn into a canvas from a decoded bitmap, by hand: an <img> decodes on its own schedule (a big image is left out
+  // of the frame it is first drawn in, and a second Image() having decoded the same URL doesn't change that), so the
+  // page stepped aside over an empty box for a frame: a black flash at most menu opens (a recording, frame by frame).
+  // A canvas shows what was drawn into it in the very next frame.
+  const stillRef = useRef<HTMLCanvasElement>(null);
   const placed = useRef({ left: 0, top: 0, width: 0, height: 0, radius: 0 });
   // A click in the App's page (a view drawn over this box, which never sees the click): this pane becomes the focused
   // one, as a click anywhere else in it does (desktop/core views.go OnFocus)
@@ -250,14 +254,12 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
     let raf = 0;
     let covered = false; // one of ours is over the box: the still shows, the page is off
     let shot = 0; // which cover the still being taken is for
-    let url: string | null = null;
     // A still kept warm for when one of ours comes up over the box: taken when the pointer comes back from the page to
     // our UI (it has to, before anything of ours is clicked) and again at each press. A menu opens on the press itself,
     // before a still taken then is ready: waiting for one let the live page cover the menu for a moment (half the
     // time, seen on a recording). It may be a little old: shown at once, and replaced by a fresh one when that comes.
-    let warm: { url: string; at: number } | null = null;
-    let taking: Promise<string | null> | null = null; // one still at a time; a second ask shares it
-    const forget = (u: string | null) => u?.startsWith("blob:") && u !== url && u !== warm?.url && URL.revokeObjectURL(u);
+    let warm: ImageBitmap | null = null;
+    let taking: Promise<ImageBitmap | null> | null = null; // one still at a time; a second ask shares it
     const overlays = () =>
       Array.from(
         document.querySelectorAll<HTMLElement>(
@@ -265,21 +267,26 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
         ),
       );
     // The still: from the App's own process when it can (desktop/main.js gerdr:shot, a data URL in tens of ms, as
-    // Claude Desktop does), else through the backend (an older App). Decoded before it goes on screen: set while still
-    // decoding, the box showed nothing for a frame (a black flash).
-    const take = (): Promise<string | null> =>
+    // Claude Desktop does), else through the backend (an older App). Decoded here into a bitmap, so showing it is one
+    // synchronous drawImage (see stillRef).
+    const take = (): Promise<ImageBitmap | null> =>
       (taking ??= (async () => {
         const native = (window as any).gerdrNative?.browserShot as ((t: number) => Promise<string | null>) | undefined;
         const u = await (native ? native(tab) : api.browserShot(tab)).catch(() => null);
-        if (u) {
+        if (!u) return null;
+        try {
           const img = new Image();
           img.src = u;
-          await img.decode().catch(() => {});
-          const old = warm?.url;
-          warm = { url: u, at: Date.now() };
-          if (old) forget(old);
+          await img.decode();
+          const bmp = await createImageBitmap(img);
+          warm?.close(); // what it showed is in the canvas already
+          warm = bmp;
+          return bmp;
+        } catch {
+          return null;
+        } finally {
+          if (u.startsWith("blob:")) URL.revokeObjectURL(u);
         }
-        return u;
       })().finally(() => (taking = null)));
     const placedOnScreen = () => !covered && !!last && last !== "hidden";
     let inPage = true; // the pointer is over the page (our document gets no events then)
@@ -294,26 +301,44 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
     document.documentElement.addEventListener("pointerleave", away);
     document.addEventListener("pointerdown", press, true);
     const drop = () => {
-      const u = url;
-      url = null;
-      setStill(null);
-      forget(u);
+      const cv = stillRef.current;
+      if (cv) cv.style.display = "none";
     };
-    const show = (u: string) => {
-      const old = url;
-      url = u;
-      setStill({ url: u, ...placed.current });
-      forget(old);
+    // false: nothing was drawn (the bitmap was closed or empty), the page has to stay
+    const show = (bmp: ImageBitmap): boolean => {
+      const cv = stillRef.current;
+      if (!cv || !bmp.width || !bmp.height) return false;
+      // setting a canvas's size clears it, even to the same value: only when it changed, then drawn in the same task
+      if (cv.width !== bmp.width || cv.height !== bmp.height) {
+        cv.width = bmp.width;
+        cv.height = bmp.height;
+      }
+      try {
+        cv.getContext("2d")!.drawImage(bmp, 0, 0);
+      } catch {
+        return false; // a closed bitmap
+      }
+      const p = placed.current;
+      Object.assign(cv.style, {
+        left: p.left + "px",
+        top: p.top + "px",
+        width: p.width + "px",
+        height: p.height + "px",
+        borderRadius: p.radius + "px",
+        display: "block",
+      });
+      return true;
     };
-    const cover = (u: string, n: number) => {
-      show(u);
+    const cover = (bmp: ImageBitmap, n: number): boolean => {
+      if (!show(bmp)) return false;
       last = "covered";
-      // the page steps aside once the still is on screen (React's commit, then paint)
+      // the page steps aside once the still is on screen (drawn above; the frame after this one has it)
       requestAnimationFrame(() =>
         requestAnimationFrame(() => {
           if (covered && n === shot) nativeBrowserView(tab, null);
         }),
       );
+      return true;
     };
     const report = () => {
       const r = box.getBoundingClientRect();
@@ -327,13 +352,12 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
       if (over && !covered) {
         covered = true;
         const n = ++shot;
-        const was = warm;
-        if (was) cover(was.url, n);
+        const had = !!warm && cover(warm, n);
         // a fresh one: replaces the warm one when it comes (or is the first, the page staying until then)
-        void take().then((u) => {
-          if (!u || !covered || n !== shot) return;
-          if (!was) cover(u, n);
-          else if (u !== was.url) show(u);
+        void take().then((b) => {
+          if (!b || !covered || n !== shot) return;
+          if (!had) cover(b, n);
+          else show(b);
         });
       } else if (!over && covered) {
         covered = false;
@@ -380,6 +404,8 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
       covered = false;
       shot++;
       drop();
+      warm?.close();
+      warm = null;
     };
   }, [nativeView, tab]);
 
@@ -776,15 +802,7 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
       </div>
       <Body>
         <div ref={boxRef} className="relative h-full w-full overflow-hidden bg-background">
-          {nativeView && still && (
-            <img
-              src={still.url}
-              alt=""
-              draggable={false}
-              className="pointer-events-none absolute max-w-none select-none"
-              style={{ left: still.left, top: still.top, width: still.width, height: still.height, borderRadius: still.radius }}
-            />
-          )}
+          {nativeView && <canvas ref={stillRef} className="pointer-events-none absolute hidden max-w-none select-none" />}
           {live && !nativeView && (
             <canvas
               ref={canvasRef}

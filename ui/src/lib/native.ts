@@ -1,5 +1,5 @@
 // 和桌面 App 外壳之间的桥。浏览器里跑时这些都退化成网页自己的实现。
-// The shells (tools/chromeshell, tools/winshell) put window.gerdrNative there (their bridge.js); the WKWebView shell
+// The desktop App (desktop/preload.js; the Lightron shells before it) puts window.gerdrNative there; the WKWebView shell
 // before them used messageHandlers.gerdr, same messages, still accepted.
 
 import { toast } from "sonner";
@@ -44,7 +44,7 @@ export function nativeNotify(title: string, body: string, sessionId?: string, sp
 
 /**
  * App 里: bring up the window showing `space` and go to the conversation there, as a notification click does (the
- * macOS shell's __noteClick, tools/chromeshell noteClick; with no such window it goes to this one). false = not
+ * App's __noteClick, desktop/core gerdr.go noteClick; with no such window it goes to this one). false = not
  * handled (a browser, or the Windows shell with its one window): the caller goes to it here.
  */
 export function nativeFocusSession(sessionId: string, space: string) {

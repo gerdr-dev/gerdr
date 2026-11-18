@@ -4,7 +4,7 @@
 # backend = the brotli-compressed Go backend per platform (enough when the shell didn't change), app = the whole package.
 # Read by the desktop shells' updater (internal/selfupdate) and by Electron Apps still out there (desktop/updater.js).
 # shell = tools/shell-id.sh, the shells' id: an Electron App's is another, so its updater installs the whole package,
-# which moves it over to the new shell (tools/chromeshell's dmg; Gerdr.app at its root).
+# which moves it over to the new shell (desktop/package.sh's dmg; Gerdr.app at its root).
 set -euo pipefail
 VERSION="${1#v}"
 DIR="$2"

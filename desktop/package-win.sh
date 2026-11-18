@@ -25,8 +25,8 @@ RES=$(mktemp -d)
 GOOS=windows GOARCH=amd64 go build -ldflags "-s -w -X github.com/gerdr-dev/gerdr/internal/version.Version=$VERSION" -o "$RES/gerdr.exe" ./cmd/gerdr
 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags '-s -w -H windowsgui' -o "$RES/gerdr-shell.exe" ./desktop/core
 # the exe's icon (packager) and the installer's: bitmap entries (makensis crashes on PNG ones)
-go run ./tools/winshell/mkico "$RES/icon.ico" desktop/res/icon.png 16 24 32 48 64 256
-go run ./tools/winshell/mkico -bmp "$RES/setup.ico" desktop/res/icon.png 16 32 48
+go run ./desktop/mkico "$RES/icon.ico" desktop/res/icon.png 16 24 32 48 64 256
+go run ./desktop/mkico -bmp "$RES/setup.ico" desktop/res/icon.png 16 32 48
 node desktop/pack.js win32 x64 "$NAME" "$ID" "$VERSION" "$(git rev-parse --short HEAD)" "$SHELL_ID" "$RES/icon.ico" "$OUT" "$RES/gerdr.exe" "$RES/gerdr-shell.exe" >/dev/null
 APPDIR="$OUT/$NAME-win32-x64"
 

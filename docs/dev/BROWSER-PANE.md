@@ -123,7 +123,7 @@ pane. Built 2026-11-18 on Lightron 0.5.0's `App.OpenView` (Lightron's docs/api.m
 
 ```
 the pane (BrowserScreen, nativeView) ──postMessage {type:"browserView", tab, rect, dpr} / {hide}──▶ the shell
-the shell (tools/chromeshell/views.go) ──lightron View.Place / Hide──▶ the window, a child of Gerdr's
+the core (desktop/core/views.go) ──el View.Place / Hide──▶ a WebContentsView inside Gerdr's window (desktop/main.js)
 the shell ──WebSocket /api/browser/ext, the extension's protocol + "app": true──▶ chromeext (app.go)
 projbrowser.Open: the App connected → OpenNative in the project's profile; else headless as before
 ```
@@ -155,7 +155,10 @@ projbrowser.Open: the App connected → OpenNative in the project's profile; els
 - **Our menus / dialogs over the page: a still.** The window is above the UI, so nothing of ours can be drawn over it.
   While one of our menus / dialogs / toasts overlaps the box, the box shows a still of the page (`GET
   /api/browser/shot`, `Page.captureScreenshot`, ~0.1 s) and the window steps aside; it comes back when they close. The
-  page is frozen meanwhile (as Claude Desktop does). Tried first and dropped: cutting their shapes out of the window
+  page is frozen meanwhile (as Claude Desktop does). The still is a canvas drawn from a decoded `ImageBitmap`, not an
+  `<img>`: an `<img>` decodes on its own schedule (a big one is left out of the first frame it is in, even when
+  another `Image()` decoded the same URL before), so the window stepped aside over an empty box and most menu opens
+  flashed black for a frame. Tried first and dropped: cutting their shapes out of the window
   (Lightron's `View.Mask`) kept the page live, but clicks in the holes and the keyboard had to be handed between the
   two windows by hand, and each case was a bug of its own (a rename dialog's text box that took no typing).
 - **Focus between the two windows** (Lightron's menu.m): a click in the page makes its window key; it shares the
