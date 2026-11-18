@@ -201,10 +201,11 @@ const MAC_KEYS: Record<KeyAction, string[]> = {
   prevTab: ["prefix+p", "meta+shift+["],
   // Not on Windows / Linux: Ctrl+E is end-of-line in a terminal pane
   lastTab: ["prefix+;", "meta+e"],
-  // The mouse's side buttons do these (actions/nav.ts). No keys by default: the usual ones (⌃- / ⌘[) are taken by
-  // terminals or by prevTab / prevSpace
-  navBack: [],
-  navForward: [],
+  // Also the mouse's side buttons (actions/nav.ts). ⌘[ / ⌘] as in a browser: the Lightron App got them from Chrome
+  // (its page Back, caught by nav.ts's popstate guard); Electron has no such key, so they're ours now. Not on
+  // Windows / Linux (meta keys are dropped there): Alt+Left / Right are a terminal's word moves
+  navBack: ["meta+["],
+  navForward: ["meta+]"],
   closeTab: ["prefix+shift+x"],
   // 和浏览器一样。浏览器里这个键被浏览器自己占着（重开它的标签页），只在桌面 App 里管用；那边用命令面板
   reopenClosed: ["meta+shift+t"],

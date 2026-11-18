@@ -136,6 +136,9 @@ func (s *shell) menu() []el.MenuItem {
 			act(t("在浏览器里打开", "Open in Browser"), "", func(*el.Window) { s.openExternal(s.backendEntry) }),
 		}},
 		{Label: t("前往", "Go"), Submenu: append(append([]el.MenuItem{
+			cmd(t("后退", "Back"), "navBack", "Cmd+["),
+			cmd(t("前进", "Forward"), "navForward", "Cmd+]"),
+			sep,
 			cmd(t("下一个 tab", "Next Tab"), "nextTab", "Cmd+Shift+]"),
 			cmd(t("上一个 tab", "Previous Tab"), "prevTab", "Cmd+Shift+["),
 		}, tabs...), sep,
