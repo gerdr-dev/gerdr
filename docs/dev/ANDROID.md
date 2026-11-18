@@ -169,6 +169,9 @@ conversation's words as hints. `onPermissionRequest` grants only `RESOURCE_AUDIO
 host, and asks for Android's RECORD_AUDIO the first time (the page's request waits on that dialog). The manifest also needs
 MODIFY_AUDIO_SETTINGS (a normal permission, no dialog): without it WebView's capture fails with NotReadableError
 "Could not start audio source" even with RECORD_AUDIO granted.
+While the page records, `MicFocus` holds audio focus (it watches the App's own recordings, AudioRecordingCallback): the
+WebView records in communication mode but holds no focus, so with a Bluetooth headset another app's music came back
+~2s into a press and the rest of the recording was silent.
 VIBRATE (normal) is there for `navigator.vibrate`, which WebView silently ignores without it; a buzz felt on a long
 press without it is the system's own long-press feedback, which goes away once the page cancels the touch's defaults. The WebView pauses
 the page in the background, so recording and playback only work with the App in front.

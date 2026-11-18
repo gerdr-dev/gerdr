@@ -155,6 +155,7 @@ open class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         AppUpdate.listeners.add(onUpdate)
+        MicFocus.start(this)
         // 图标深浅先跟系统明暗（原生那几屏也跟系统走，见 values-night）；页面起来后由 applyTheme 接手
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT),
