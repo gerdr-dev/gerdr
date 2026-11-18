@@ -49,6 +49,17 @@ type Bridge struct {
 	app        *Conn  // the desktop App's own browser (app.go); nil when it isn't connected
 	appEngine  string // its browser program, from its hello
 	appDataDir string // its browser's data directory
+	appArgs    []string
+	appKind    string // "electron": the desktop App on Electron, whose program is also the projects' browser while the App is closed
+	appOnly    bool   // the connected one is that browser (desktop/main.js --gerdr-browser), not the App
+	orphans    []orphan
+}
+
+// orphan: one of the App's pages that went with its browser (the browser-only one quitting for the App): the App opens
+// it again when it connects (projbrowser appChanged).
+type orphan struct {
+	TabInfo
+	at time.Time
 }
 
 func New(log *slog.Logger) *Bridge {
@@ -150,14 +161,17 @@ type message struct {
 }
 
 type helloInfo struct {
-	App        bool     `json:"app"`     // the desktop App's own browser (app.go), not an extension
-	Engine     string   `json:"engine"`  // the App's: its browser program
-	DataDir    string   `json:"dataDir"` // and its data directory (projects' profiles are in it)
-	ID         string   `json:"id"`
-	Version    string   `json:"version"`
-	Sites      []string `json:"sites"`
-	LastActive int64    `json:"lastActive"`
-	Name       string   `json:"name"`
+	App         bool     `json:"app"`         // the desktop App's own browser (app.go), not an extension
+	Engine      string   `json:"engine"`      // the App's: its browser program
+	DataDir     string   `json:"dataDir"`     // and its data directory (projects' profiles are in it)
+	Args        []string `json:"args"`        // what the program needs before its own arguments (a development Electron: the app's path)
+	Kind        string   `json:"kind"`        // "electron" (desktop/main.js); "" = the Lightron shell
+	BrowserOnly bool     `json:"browserOnly"` // the projects' browser while the App is closed, not the App
+	ID          string   `json:"id"`
+	Version     string   `json:"version"`
+	Sites       []string `json:"sites"`
+	LastActive  int64    `json:"lastActive"`
+	Name        string   `json:"name"`
 }
 
 // Serve takes over a WebSocket the native host opened until it closes: ask who it is (hello), then register.
@@ -180,7 +194,7 @@ func (b *Bridge) Serve(ctx context.Context, ws *websocket.Conn) {
 	c.ID, c.Version = h.ID, h.Version
 	if h.App {
 		b.mu.Lock()
-		b.appEngine, b.appDataDir = h.Engine, h.DataDir
+		b.appEngine, b.appDataDir, b.appArgs, b.appKind, b.appOnly = h.Engine, h.DataDir, h.Args, h.Kind, h.BrowserOnly
 		b.mu.Unlock()
 		b.serveApp(ctx, c)
 		return

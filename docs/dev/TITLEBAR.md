@@ -1,5 +1,10 @@
 # A title bar of our own (macOS): shelved
 
+> **Done on Electron (2026-11-18)**: the Electron App (docs/dev/WHY-ELECTRON-COMEBACK.md) hides the system bar
+> (`titleBarStyle: "hidden"`, `trafficLightPosition`, desktop/main.js); the page keeps a strip at its top in the
+> sidebar's colour that drags the window (`window.gerdrNative.titleBar`, ui/src/lib/native.ts nativeTitleBar,
+> App.tsx, index.css `.native-titlebar`). What follows is the Lightron-era investigation.
+
 **Status**: looked into and prototyped on 2026-11-13, then shelved. The desktop window's top strip stays Chrome's
 (grey, follows light / dark). This page is why, what was measured, and what doing it would take, so it doesn't have
 to be found out again.

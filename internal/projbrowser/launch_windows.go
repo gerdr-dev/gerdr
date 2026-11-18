@@ -34,3 +34,6 @@ func pipeArgs(cmd *exec.Cmd) (w *os.File, r *os.File, after func(), err error) {
 
 // killStale: Windows locks the profile with a file the browser holds open; nothing to read a pid from.
 func killStale(string) {}
+
+// detach: nothing to do on Windows (a child isn't killed with its parent's console here).
+func detach(cmd *exec.Cmd) {}

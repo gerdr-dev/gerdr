@@ -398,7 +398,7 @@ func TestLiveAppProfile(t *testing.T) {
 	b := chromeext.New(nil)
 	dir, appData := t.TempDir(), t.TempDir()
 	m := New(dir, b, nil)
-	m.saveAppInfo(exe, appData)
+	m.saveAppInfo(exe, appData, "", nil)
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 	id, err := m.Open(ctx, "proj a", "https://example.com/", 0, 0)

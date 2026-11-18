@@ -35,15 +35,17 @@ const appInfoFile = "browser-engine"
 const appKey = "@app"
 
 type appInfo struct {
-	Exe     string `json:"exe"`
-	DataDir string `json:"dataDir"`
+	Exe     string   `json:"exe"`
+	DataDir string   `json:"dataDir"`
+	Kind    string   `json:"kind,omitempty"` // "electron": the projects' browser is that program run with --gerdr-browser (electron.go)
+	Args    []string `json:"args,omitempty"`
 }
 
-func (m *Manager) saveAppInfo(exe, dataDir string) {
+func (m *Manager) saveAppInfo(exe, dataDir, kind string, args []string) {
 	if exe == "" || dataDir == "" {
 		return
 	}
-	b, _ := json.Marshal(appInfo{Exe: exe, DataDir: dataDir})
+	b, _ := json.Marshal(appInfo{Exe: exe, DataDir: dataDir, Kind: kind, Args: args})
 	_ = os.WriteFile(filepath.Join(m.Dir, appInfoFile), b, 0o600)
 }
 
@@ -69,11 +71,14 @@ type location struct {
 	profile string // --profile-directory
 	exe     string // "" = findBrowser
 	shared  bool   // the App's data directory
+	// electron: the App is the Electron one: its profiles are partitions (Partitions/<profile>) only Electron opens,
+	// never a headless Chrome; a Chrome profile copied in couldn't be read (another cookie key), so none is adopted
+	electron bool
 }
 
 func (m *Manager) location(project string) location {
 	if a, ok := m.app(); ok {
-		return location{key: appKey, dataDir: a.DataDir, profile: profileName(project), exe: a.Exe, shared: true}
+		return location{key: appKey, dataDir: a.DataDir, profile: profileName(project), exe: a.Exe, shared: true, electron: a.Kind == "electron"}
 	}
 	return location{key: project, dataDir: m.ProfileDir(project), profile: "Default"}
 }
@@ -87,7 +92,7 @@ func profileName(project string) string {
 // adopt brings a project's profile from its own data directory (before the App had one) into the App's, once, so the
 // sites signed in to stay signed in. Only while neither browser has it open.
 func (m *Manager) adopt(project string, loc location) {
-	if !loc.shared {
+	if !loc.shared || loc.electron {
 		return
 	}
 	dst := filepath.Join(loc.dataDir, loc.profile)

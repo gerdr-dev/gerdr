@@ -256,6 +256,10 @@ func (b *Bridge) tabEvent(t *Tab, ev Event) {
 	closed := ev.Kind == "closed" && b.tabs[t.ID] == t
 	if closed {
 		delete(b.tabs, t.ID)
+		// its browser went (the browser-only one quitting for the App): the App opens it again (TakeOrphans)
+		if t.Native && b.appOnly && t.Project != "" {
+			b.orphans = append(b.orphans, orphan{TabInfo{ID: t.ID, Project: t.Project, URL: t.CurrentURL()}, time.Now()})
+		}
 	}
 	b.mu.Unlock()
 	if closed {

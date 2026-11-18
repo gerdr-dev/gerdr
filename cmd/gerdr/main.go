@@ -561,6 +561,7 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 	srv.RunReports(svcCtx)  // --report-to: tell a coordinator when the sessions it handed work to stop (server/report.go)
 	go srv.MountWorks()     // every project's Work UI, compiled into the page (uisite mounts)
 	u := loginURL(env.Host, port, token)
+	srv.ProjBrowser.BackendLink = u // the browser-only App connects back with it (projbrowser/electron.go)
 	if appMode {
 		fmt.Println("GERDR_READY " + u)
 	} else {

@@ -62,3 +62,7 @@ func killStale(profile string) {
 	}
 	p.Kill()
 }
+
+// detach: a process of its own session, so it outlives this one's terminal / process group (the browser-only App
+// quits by itself when idle).
+func detach(cmd *exec.Cmd) { cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true} }

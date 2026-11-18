@@ -192,6 +192,12 @@
   #root {
     height: var(--vvh, 100%);
   }
+  /* The desktop App's own title bar (lib/native.ts nativeTitleBar): no system bar, the page keeps a strip at its top
+     for the traffic lights, in the sidebar's colour; App.tsx lays a drag region over it */
+  .native-titlebar #root {
+    padding-top: var(--titlebar-h);
+    background-color: var(--sidebar);
+  }
   /* The stretch of a message an add-on's action is on (ctx.highlight: the paragraph being read aloud), lib/readingHighlight.ts.
      A highlight pseudo-element takes only colors, so no padding / radius: a tint of the brand behind the words. */
   ::highlight(gerdr-reading) {

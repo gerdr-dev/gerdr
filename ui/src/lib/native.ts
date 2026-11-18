@@ -49,7 +49,7 @@ export function nativeNotify(title: string, body: string, sessionId?: string, sp
  */
 export function nativeFocusSession(sessionId: string, space: string) {
   const w = window as any;
-  if (w.gerdrNative?.shell !== "chrome") return false;
+  if (w.gerdrNative?.shell !== "chrome" && w.gerdrNative?.shell !== "electron") return false;
   w.gerdrNative.postMessage({ type: "__noteClick", sessionId, space });
   return true;
 }
@@ -64,11 +64,29 @@ export function nativeOpenPath(path: string, cwd: string | undefined, reveal: bo
 }
 
 /**
- * macOS App: its own browser shows a project's pages as real windows over the Browser pane (tools/chromeshell/views.go,
- * Lightron's View). Tell it where the pane's box is (CSS px from the viewport's top-left), or null to take the page off
- * screen (the pane hidden, a menu of ours over it).
+ * The App shows a project's pages inside its window over the Browser pane (desktop/main.js views, Electron's
+ * WebContentsView; before it the macOS Lightron shell's separate windows, tools/chromeshell/views.go). Tell it where the
+ * pane's box is (CSS px from the viewport's top-left), or null to take the page off screen (the pane hidden, a menu of
+ * ours over it).
  */
-export const canNativeBrowser = () => (window as any).gerdrNative?.shell === "chrome" && (window as any).gerdrNative?.platform === "darwin";
+/**
+ * The App's window has no system title bar (desktop/main.js: macOS draws only the traffic lights over the page): the
+ * page keeps a strip `height` px high at its top, in the sidebar's colour, that drags the window (App.tsx, index.css
+ * .native-titlebar). null in a browser and in the older shells, which have the system's bar.
+ */
+export const nativeTitleBar = (): { height: number; left: number } | null => (window as any).gerdrNative?.titleBar ?? null;
+{
+  const tb = nativeTitleBar();
+  if (tb) {
+    document.documentElement.classList.add("native-titlebar");
+    document.documentElement.style.setProperty("--titlebar-h", `${tb.height}px`);
+  }
+}
+
+export const canNativeBrowser = () => {
+  const n = (window as any).gerdrNative;
+  return n?.shell === "electron" || (n?.shell === "chrome" && n?.platform === "darwin");
+};
 
 /** The App's real page over the box (rect, CSS px of this page) or off screen (null). */
 export function nativeBrowserView(tab: number, rect: { x: number; y: number; width: number; height: number } | null) {

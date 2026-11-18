@@ -35,6 +35,9 @@ const idleClose = 10 * time.Minute
 // Manager runs one browser per project, started on the first page and stopped when idle.
 type Manager struct {
 	Dir    string // Gerdr's data dir
+	// BackendLink: this backend's login link (http://127.0.0.1:7870/auth?token=…), for the browser-only Electron to
+	// connect back with (electron.go); set once it listens
+	BackendLink string
 	Bridge *chromeext.Bridge
 	Log    *slog.Logger
 
@@ -61,7 +64,19 @@ func (m *Manager) appChanged(connected bool) {
 	}
 	// Remember the App's browser (program, data directory): the headless browser runs the same (location.go)
 	exe, dataDir := m.Bridge.AppEngine()
-	m.saveAppInfo(exe, dataDir)
+	kind, args := m.Bridge.AppKind()
+	m.saveAppInfo(exe, dataDir, kind, args)
+	if m.Bridge.AppBrowserOnly() {
+		return // the projects' browser this package started (electron.go): nothing to move
+	}
+	// The App came while the browser-only one had pages: they open again in the App, in their tabs' places
+	for _, o := range m.Bridge.TakeOrphans() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		if _, err := m.Bridge.OpenNative(ctx, o.Project, profileName(o.Project), o.URL, 0, 0, o.ID); err != nil {
+			m.Log.Warn("project browser: move a page into the App", "url", o.URL, "err", err)
+		}
+		cancel()
+	}
 	m.mu.Lock()
 	running := make([]*instance, 0, len(m.inst))
 	for _, in := range m.inst {
@@ -86,6 +101,9 @@ func (m *Manager) appChanged(connected bool) {
 // Release stops the headless browser on the App's data directory: the App is starting its own on it
 // (tools/chromeshell asks before Lightron starts the browser; the directory is one process's at a time).
 func (m *Manager) Release() {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	m.Bridge.QuitApp(ctx)
+	cancel()
 	m.stopKey(appKey)
 }
 
@@ -124,6 +142,14 @@ func (m *Manager) Open(ctx context.Context, project, raw string, width, height i
 			case <-ctx.Done():
 				return 0, ctx.Err()
 			case <-time.After(100 * time.Millisecond):
+			}
+		}
+	}
+	// The Electron App closed: its program serves the pages, windowless, on the same partitions (electron.go)
+	if !m.Bridge.AppConnected() {
+		if a, ok := m.app(); ok && a.Kind == "electron" {
+			if err := m.startElectron(ctx, a); err != nil {
+				return 0, err
 			}
 		}
 	}

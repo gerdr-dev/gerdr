@@ -104,6 +104,18 @@ Most of the Browser pane is not shell code and stays:
    AppUserModelID winshell uses, so the permission and the Start menu entry carry over), the backend's quit without
    SIGTERM (WHY-ELECTRON.md §6), and the upgrade from winshell (UPDATE.md).
 
+### Measured (2026-11-18, Electron 45.3.4, arm64, on this Mac)
+
+- **§6.1, Electron as the windowless browser: works.** A second process of the same Electron, no window (`show:
+  false`, `paintWhenInitiallyHidden`, `backgroundThrottling: false`, Dock icon hidden), partition
+  `persist:proj-test` under one `userData`: the page loads (0.6 s cold, 0.2 s warm), a cookie set in it is read back
+  by the next process, the screencast gives 48 frames in 2 s while nothing is on screen, and a click through
+  `Input.dispatchMouseEvent` lands. So with the App installed, "headless" becomes this: the backend starts the App's
+  own Electron in a browser-only mode, the same binary on the same partitions, and logins stay one set of cookies.
+  (Prototype: a 60-line main.js; not kept.)
+- **§6.4, size**: Electron alone is 258 MB unpacked, 115 MB zipped, 90 MB as an lzma dmg; with the backend (~15 MB)
+  about 105 MB a download per arch, against ~18 MB for the Lightron shell.
+
 ## 7. Plan
 
 1. Prototype in desktop/: an Electron shell that opens the UI and a `WebContentsView` per Browser pane page, speaking
@@ -114,6 +126,21 @@ Most of the Browser pane is not shell code and stays:
    views work as a library feature, it has other users).
 5. Windows: the same shell packaged for it (`make win`), winshell retired, its upgrade path checked on a real
    Windows machine.
+
+## 8. Where it stands (2026-11-18)
+
+Built and installed on the author's Mac (arm64), not released:
+
+- `desktop/main.js` + `preload.js` (Electron 45.3.4), `desktop/core` (the chromeshell logic on `el`, the protocol
+  with main.js described in el.go), `desktop/package.sh` / `pack.js` (@electron/packager; ad hoc or the local
+  signing identity), `tools/shell-id.sh` covers them.
+- The Browser pane's page is a `WebContentsView` placed over the pane; parked in a hidden window when not shown
+  (still painting); a still under our menus. The title bar is ours (TITLEBAR.md).
+- The App closed: projbrowser starts the App's program with `--gerdr-browser` (projbrowser/electron.go); the App
+  starting sends it away (its pid file) and opens its pages again (`Bridge.TakeOrphans`).
+- The UI's settings are copied from the Lightron profile's localStorage on first start. Projects' sign-ins aren't:
+  Chrome's cookies can't be read by Electron (another key), each site is signed in to once more.
+- Not done: the release (release.yml still builds the Lightron App), the update path from the Lightron App, Windows.
 
 When to look at this again: if Chrome (or Lightron) ever gets a real way to embed a page in a window, or if size
 becomes the constraint that matters most.

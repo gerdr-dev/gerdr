@@ -34,6 +34,54 @@ func (b *Bridge) AppEngine() (exe, dataDir string) {
 	return b.appEngine, b.appDataDir
 }
 
+// AppKind: "electron" when the App that connected last is the Electron one (its program is also the projects' browser
+// while it's closed: projbrowser starts it with --gerdr-browser); its arguments before its own (a development build).
+func (b *Bridge) AppKind() (kind string, args []string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.appKind, b.appArgs
+}
+
+// AppBrowserOnly: what's connected is the browser-only process, not the App (no pane shows its pages).
+func (b *Bridge) AppBrowserOnly() bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.app != nil && b.appOnly
+}
+
+// QuitApp asks the browser-only process to quit (the App needs its data directory) and waits for it to go.
+func (b *Bridge) QuitApp(ctx context.Context) {
+	b.mu.Lock()
+	c := b.app
+	only := b.appOnly
+	b.mu.Unlock()
+	if c == nil || !only {
+		return
+	}
+	qctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	_, _ = c.Call(qctx, "quit", nil)
+	cancel()
+	select {
+	case <-c.done:
+	case <-ctx.Done():
+	case <-time.After(8 * time.Second):
+	}
+}
+
+// TakeOrphans: the App's pages whose browser went in the last minute, for the App to open again.
+func (b *Bridge) TakeOrphans() []TabInfo {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	var out []TabInfo
+	for _, o := range b.orphans {
+		if time.Since(o.at) < time.Minute {
+			out = append(out, o.TabInfo)
+		}
+	}
+	b.orphans = nil
+	return out
+}
+
 func (b *Bridge) serveApp(ctx context.Context, c *Conn) {
 	b.mu.Lock()
 	if old := b.app; old != nil {
