@@ -266,23 +266,7 @@ func (b *appBrowser) placeView(w *lightron.Window, m map[string]any) {
 		y, _ := r[1].(float64)
 		width, _ := r[2].(float64)
 		height, _ := r[3].(float64)
-		// holes: the UI's own menus / dialogs over the box ([x, y, w, h, radius] from its top-left): cut out of the
-		// page, which stays live around them (Lightron's View.Mask)
-		var holes [][5]float64
-		if hs, ok := m["holes"].([]any); ok {
-			for _, h := range hs {
-				a, _ := h.([]any)
-				var r [5]float64
-				for i := 0; i < len(a) && i < 5; i++ {
-					r[i], _ = a[i].(float64)
-				}
-				holes = append(holes, r)
-			}
-		}
 		f = func() {
-			if err := v.v.Mask(holes, dpr); err != nil {
-				log.Printf("app browser: mask: %v", err)
-			}
 			if err := v.v.Place(w, x, y, width, height, dpr); err != nil {
 				log.Printf("app browser: place: %v", err)
 			} else if !v.placed {

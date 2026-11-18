@@ -150,9 +150,18 @@ projbrowser.Open: the App connected → OpenNative in the project's profile; els
   `OnEvent`), so its pages are ordinary tabs (`Tab.Native`, ids from 2000000) for every action and the stream.
 - **The pane only reports where it is.** Its box's `getBoundingClientRect` and `devicePixelRatio` (so the UI's zoom
   counts), checked on resize, on any change to `<body>`'s children (a Radix menu / dialog portal) and every 250 ms. It hides
-  the window while the box isn't shown (another tab, the page hidden) or a menu / dialog / toast of ours overlaps it, since the
-  window is above the page. The stream still runs with `pic=0`: no picture, only the address bar's info and its input
-  (go / back / reload).
+  the window while the box isn't shown (another tab, the page hidden). The stream still runs with `pic=0`: no picture,
+  only the address bar's info and its input (go / back / reload).
+- **Our menus / dialogs over the page: a still.** The window is above the UI, so nothing of ours can be drawn over it.
+  While one of our menus / dialogs / toasts overlaps the box, the box shows a still of the page (`GET
+  /api/browser/shot`, `Page.captureScreenshot`, ~0.1 s) and the window steps aside; it comes back when they close. The
+  page is frozen meanwhile (as Claude Desktop does). Tried first and dropped: cutting their shapes out of the window
+  (Lightron's `View.Mask`) kept the page live, but clicks in the holes and the keyboard had to be handed between the
+  two windows by hand, and each case was a bug of its own (a rename dialog's text box that took no typing).
+- **Focus between the two windows** (Lightron's menu.m): a click in the page makes its window key; it shares the
+  App window's key state (`_sharesParentKeyState`), so the App doesn't look inactive, and a press on the App's window
+  takes the keys back. Two App windows at the same bounds: the host is told apart by a title of its own for a moment
+  (it was found by its bounds alone, the newest won, and a click in the page brought the other window forward).
 - **Popups**: the browser would open them in an ordinary tabbed window; Lightron closes those and the shell opens the
   URL as another view, reported as a `popup` event: a tab with `Opener`, which the pane follows (`followNewTabs`). The
   new page's `window.opener` is lost, so a sign-in popup that reports back through it won't finish (most fall back to

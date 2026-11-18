@@ -224,39 +224,73 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
   }, [live, tab, draw, nativeView]);
 
   // The real page over the box: where the box is, kept up to date (a split dragged, the sidebar toggled, the window
-  // resized), off screen while the box isn't shown. Our own menus / dialogs / toasts over it are cut out of the page
-  // window (holes of their shape: Lightron's View.Mask), so they show and take clicks while the page around stays live;
-  // checked every frame while any is open (they animate in), every 250 ms otherwise.
+  // resized), off screen while the box isn't shown. The page is a window of its own above ours, so nothing of ours can
+  // be drawn over it: while one of our menus / dialogs / toasts overlaps the box, the box shows a still of the page
+  // (taken as it opens) and the real page steps aside, back once they're gone. Cutting their shape out of the page
+  // instead (Lightron's View.Mask) kept the page live but needed the clicks and the keyboard handed between the two
+  // windows by hand, and each case was its own bug (a rename dialog's box that took no typing). Checked every frame
+  // while any is open (they animate in), every 250 ms otherwise.
+  const [still, setStill] = useState<string | null>(null);
   useEffect(() => {
     if (!nativeView || !tab) return;
     const box = boxRef.current;
     if (!box) return;
     let last = "";
     let raf = 0;
+    let covered = false; // one of ours is over the box: the still shows, the page is off
+    let shot = 0; // which cover the still being taken is for
+    let url: string | null = null;
     const overlays = () =>
       Array.from(
         document.querySelectorAll<HTMLElement>(
           "[data-radix-popper-content-wrapper] > *, [role=dialog], [role=alertdialog], [role=tooltip], [data-sonner-toast]",
         ),
       );
+    const drop = () => {
+      if (url) URL.revokeObjectURL(url);
+      url = null;
+      setStill(null);
+    };
     const report = () => {
       const r = box.getBoundingClientRect();
       const shown = document.visibilityState === "visible" && r.width > 20 && r.height > 20 && box.offsetParent !== null;
-      const holes: number[][] = [];
       const open = overlays();
-      for (const o of open) {
+      const over = open.some((o) => {
         const q = o.getBoundingClientRect();
-        if (q.width <= 0 || q.left >= r.right || q.right <= r.left || q.top >= r.bottom || q.bottom <= r.top) continue;
-        const radius = parseFloat(getComputedStyle(o).borderTopLeftRadius) || 0;
-        holes.push([q.left - r.left, q.top - r.top, q.width, q.height, radius].map((n) => Math.round(n * 10) / 10));
-      }
-      const key = shown
-        ? [r.x, r.y, r.width, r.height, window.devicePixelRatio].map((n) => Math.round(n * 10) / 10).join(",") + "|" + JSON.stringify(holes)
-        : "hidden";
+        return q.width > 0 && q.left < r.right && q.right > r.left && q.top < r.bottom && q.bottom > r.top;
+      });
       if (open.length && !raf) raf = requestAnimationFrame(() => ((raf = 0), report()));
+      if (over && !covered) {
+        covered = true;
+        const n = ++shot;
+        // the page stays until its still is there: no blank box while it's taken (tens of ms)
+        api
+          .browserShot(tab)
+          .catch(() => null)
+          .then((u) => {
+            if (!covered || n !== shot) {
+              if (u) URL.revokeObjectURL(u);
+              return;
+            }
+            // no still (a backend without /api/browser/shot, the page gone): the page stays rather than an empty box
+            if (!u) return;
+            if (url) URL.revokeObjectURL(url);
+            url = u;
+            setStill(u);
+            last = "covered";
+            nativeBrowserView(tab, null);
+          });
+      } else if (!over && covered) {
+        covered = false;
+        shot++;
+        last = ""; // placed again below; the still goes once the page is back over it
+        requestAnimationFrame(() => requestAnimationFrame(drop));
+      }
+      if (covered) return;
+      const key = shown ? [r.x, r.y, r.width, r.height, window.devicePixelRatio].map((n) => Math.round(n * 10) / 10).join(",") : "hidden";
       if (key === last) return;
       last = key;
-      nativeBrowserView(tab, shown ? r : null, holes);
+      nativeBrowserView(tab, shown ? r : null);
     };
     const ro = new ResizeObserver(report);
     ro.observe(box);
@@ -274,6 +308,9 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
       window.removeEventListener("resize", report);
       document.removeEventListener("visibilitychange", report);
       nativeBrowserView(tab, null);
+      covered = false;
+      shot++;
+      drop();
     };
   }, [nativeView, tab]);
 
@@ -670,6 +707,9 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
       </div>
       <Body>
         <div ref={boxRef} className="relative h-full w-full overflow-hidden bg-background">
+          {nativeView && still && (
+            <img src={still} alt="" draggable={false} className="pointer-events-none absolute inset-0 h-full w-full object-cover object-top-left" />
+          )}
           {live && !nativeView && (
             <canvas
               ref={canvasRef}

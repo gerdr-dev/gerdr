@@ -5,6 +5,11 @@
 > before; see their READMEs for how and why. The reasoning below is still why it's Chromium and not WKWebView.
 > The Electron files (`desktop/main.js`, `preload.js`, `updater.js`, `i18n.js`, `package.json`…) were deleted after
 > 0.2.34; comments that say a shell does something "as desktop/main.js did" point at them in git history.
+>
+> **Coming back (2026-11-18), macOS and Windows**: the Browser pane needs a page inside the App's window, which
+> Electron does (`WebContentsView`) and neither the Lightron nor the WebView2 shell can (on Lightron each page was a
+> separate window: a day of focus / stacking bugs).
+> Why and the plan: docs/dev/WHY-ELECTRON-COMEBACK.md.
 
 **结论：桌面外壳是 Electron（`desktop/`），自带 Chromium。** 不用系统 WebView（原来的 mac 外壳就是
 WKWebView）、不用 Tauri / Wails、不用 mygo，也不用 nsh。

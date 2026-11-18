@@ -304,6 +304,13 @@ export const api = {
   /** Open a page in a project's browser; noWait: return once it's open, not after its first load */
   browserOpen: (url: string, project: string) => req<BrowserTab>("POST", "/api/browser/open", { url, project, noWait: true }),
   browserClose: (tab: number) => req("POST", "/api/browser/close", { tab }),
+  /** A still of a page as it is now (an object URL; revoke it when done): shown in place of the App's real page while
+   * one of our menus / dialogs is over it (server/browserapi.go) */
+  browserShot: async (tab: number) => {
+    const res = await fetch(`/api/browser/shot?tab=${tab}`, { credentials: "same-origin", headers: { "X-Gerdr": "1" } });
+    if (!res.ok) throw new ApiError(res.status, res.statusText);
+    return URL.createObjectURL(await res.blob());
+  },
   /** continueFrom: another agent's session whose conversation the new one carries on (hub/handoff.go) */
   /** host: start it on that computer (server/hosts.go) */
   createSession: (o: {

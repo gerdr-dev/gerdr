@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"image"
 	"log/slog"
 	"net/http"
@@ -148,6 +149,31 @@ func (s *Server) browserRoutes(mux *http.ServeMux) {
 			return
 		}
 		writeJSON(w, map[string]any{"ok": true})
+	})
+	// a still of a page as it is now (JPEG): the Browser pane shows it in place of the App's real page while one of the
+	// UI's own menus / dialogs is over it (a page window can't be drawn under the UI's HTML)
+	mux.HandleFunc("GET /api/browser/shot", func(w http.ResponseWriter, r *http.Request) {
+		b := br(w)
+		if b == nil {
+			return
+		}
+		tab, _ := strconv.Atoi(r.URL.Query().Get("tab"))
+		params, _ := json.Marshal(map[string]any{"format": "jpeg", "quality": 85})
+		res, err := b.Act(r.Context(), tab, "cdp", chromeext.ActArgs{Method: "Page.captureScreenshot", Params: params})
+		if err != nil {
+			httpError(w, http.StatusBadGateway, err.Error())
+			return
+		}
+		var shot struct {
+			Data []byte `json:"data"` // base64 in the JSON
+		}
+		if err := json.Unmarshal([]byte(res.Text), &shot); err != nil || len(shot.Data) == 0 {
+			httpError(w, http.StatusBadGateway, "no picture")
+			return
+		}
+		w.Header().Set("Content-Type", "image/jpeg")
+		w.Header().Set("Cache-Control", "no-store")
+		_, _ = w.Write(shot.Data)
 	})
 	// one action in a window (chromeext.Act): {tab (0 = the one opened last), action, args}
 	mux.HandleFunc("POST /api/browser/act", func(w http.ResponseWriter, r *http.Request) {

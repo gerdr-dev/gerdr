@@ -70,13 +70,12 @@ export function nativeOpenPath(path: string, cwd: string | undefined, reveal: bo
  */
 export const canNativeBrowser = () => (window as any).gerdrNative?.shell === "chrome" && (window as any).gerdrNative?.platform === "darwin";
 
-/** holes: this page's own menus / dialogs over the box, [x, y, w, h, corner radius] from its top-left: cut out of the page
- * window so they show (and take clicks) while the page around stays live (Lightron's View.Mask). */
-export function nativeBrowserView(tab: number, rect: { x: number; y: number; width: number; height: number } | null, holes: number[][] = []) {
+/** The App's real page over the box (rect, CSS px of this page) or off screen (null). */
+export function nativeBrowserView(tab: number, rect: { x: number; y: number; width: number; height: number } | null) {
   const b = bridge();
   if (!b) return;
   if (!rect) b.postMessage({ type: "browserView", tab, hide: true });
-  else b.postMessage({ type: "browserView", tab, rect: [rect.x, rect.y, rect.width, rect.height], dpr: window.devicePixelRatio || 1, holes });
+  else b.postMessage({ type: "browserView", tab, rect: [rect.x, rect.y, rect.width, rect.height], dpr: window.devicePixelRatio || 1 });
 }
 
 export function nativeOpenURL(url: string) {
