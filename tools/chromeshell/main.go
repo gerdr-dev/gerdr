@@ -113,10 +113,19 @@ func main() {
 		Menu:      sh.menu(),
 		DockMenu:  sh.dockMenu(),
 		OnMessage: sh.message,
-		DataDir:   *dataDir,
-		Logf:      log.Printf,
+		// Projects' pages run in this browser while the App is open (views.go), in profiles a headless browser uses
+		// when it isn't: device-bound sessions would tie a Google sign-in to one of the two programs and every hand-over
+		// asked to sign in again (internal/projbrowser noBoundSessions)
+		BrowserArgs: []string{"--disable-features=EnableBoundSessionCredentials,DeviceBoundSessions",
+			// A project's page keeps painting with the App's window behind others: a phone may be watching or driving it
+			// (the screencast gets no frames from a window the browser counts as occluded)
+			"--disable-backgrounding-occluded-windows", "--disable-renderer-backgrounding", "--disable-background-timer-throttling"},
+		DataDir: *dataDir,
+		Logf:    log.Printf,
 		OnReady: func(a *lightron.App) {
 			sh.setApp(a)
+			sh.views = newAppBrowser(sh)
+			go sh.views.run()
 			go sh.superviseBackend()
 			sh.up.Start(sh.pushUpdate)
 			go sh.pollBusy()

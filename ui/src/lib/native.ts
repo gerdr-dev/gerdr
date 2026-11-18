@@ -63,6 +63,22 @@ export function nativeOpenPath(path: string, cwd: string | undefined, reveal: bo
   bridge()?.postMessage({ type: "openPath", path, cwd, reveal });
 }
 
+/**
+ * macOS App: its own browser shows a project's pages as real windows over the Browser pane (tools/chromeshell/views.go,
+ * Lightron's View). Tell it where the pane's box is (CSS px from the viewport's top-left), or null to take the page off
+ * screen (the pane hidden, a menu of ours over it).
+ */
+export const canNativeBrowser = () => (window as any).gerdrNative?.shell === "chrome" && (window as any).gerdrNative?.platform === "darwin";
+
+/** holes: this page's own menus / dialogs over the box, [x, y, w, h, corner radius] from its top-left: cut out of the page
+ * window so they show (and take clicks) while the page around stays live (Lightron's View.Mask). */
+export function nativeBrowserView(tab: number, rect: { x: number; y: number; width: number; height: number } | null, holes: number[][] = []) {
+  const b = bridge();
+  if (!b) return;
+  if (!rect) b.postMessage({ type: "browserView", tab, hide: true });
+  else b.postMessage({ type: "browserView", tab, rect: [rect.x, rect.y, rect.width, rect.height], dpr: window.devicePixelRatio || 1, holes });
+}
+
 export function nativeOpenURL(url: string) {
   const b = bridge();
   if (b) b.postMessage({ type: "open", url });

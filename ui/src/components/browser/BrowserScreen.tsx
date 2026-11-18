@@ -4,9 +4,10 @@ import { ArrowLeft, ArrowRight, Check, Globe, Keyboard, MoreHorizontal, Plus, Ro
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { api, type BrowserInput } from "@/lib/api";
-import { loadBrowserTabs, noteBrowserURL, showBrowserTab, useBrowserTabs } from "@/lib/actions";
+import { claimNative, loadBrowserTabs, noteBrowserURL, releaseNative, showBrowserTab, useBrowserTabs, useNativeOwners } from "@/lib/actions";
 import { t } from "@/lib/i18n";
 import { paintFrame, parseFrame, wsURL, type StreamPage } from "@/lib/screenStream";
+import { canNativeBrowser, nativeBrowserView } from "@/lib/native";
 import { cn } from "@/lib/utils";
 
 // The Browser pane's content: a page of the project's own browser (internal/projbrowser, docs/dev/BROWSER-PANE.md),
@@ -96,6 +97,21 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
   const [streamErr, setStreamErr] = useState("");
   const gone = !!tab && loaded && (!cur || !!cur.gone);
   const live = !!tab && !gone;
+  // A page of the macOS App's own browser, shown here as the real window over the box (native.ts nativeBrowserView);
+  // the stream then only carries where the page is (pic=0) and the address bar's input
+  // One page is one window: the first pane on it owns it, another pane on the same page shows its pictures instead
+  const owner = useNativeOwners((o) => (tab ? o[tab] : undefined));
+  const canNative = live && !!cur?.native && canNativeBrowser();
+  useEffect(() => {
+    if (!canNative || !tab) return;
+    claimNative(tab, paneId);
+    return () => releaseNative(tab, paneId);
+  }, [canNative, tab, paneId]);
+  // the owner went (its pane closed, it moved to another page): take it over
+  useEffect(() => {
+    if (canNative && tab && !owner) claimNative(tab, paneId);
+  }, [owner, canNative, tab, paneId]);
+  const nativeView = canNative && owner === paneId;
 
   const [page, setPage] = useState<StreamPage | null>(null);
   const [addr, setAddr] = useState("");
@@ -145,12 +161,19 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
     if (h.inputErr) toast.error(h.inputErr);
     if (h.err) {
       setStreamErr(h.err);
+      if (h.seq) sendWS({ t: "got", seq: h.seq });
       return;
     }
-    if (!h.w) return;
+    if (!h.w) {
+      // nothing to draw (an input's acknowledgement, a page update): acknowledged at once
+      if (h.seq) sendWS({ t: "got", seq: h.seq });
+      return;
+    }
     const cv = canvasRef.current;
     if (!cv) return;
     await paintFrame(cv, buf, h, body);
+    // drawn: the server sends the next picture only once this one is in (flow control, server/screenstream.go)
+    if (h.seq) sendWS({ t: "got", seq: h.seq });
     setHasPic(true);
     setStreamErr("");
   }, []);
@@ -165,12 +188,12 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
     const connect = () => {
       if (!alive || document.visibilityState !== "visible") return;
       const { w, q } = want();
-      const ws = new WebSocket(wsURL(`/api/browser/view?tab=${tab}&w=${w}&q=${q}`));
+      const ws = new WebSocket(wsURL(`/api/browser/view?tab=${tab}&w=${w}&q=${q}${nativeView ? "&pic=0" : ""}`));
       ws.binaryType = "arraybuffer";
       wsRef.current = ws;
       ws.onopen = () => {
         backoff = 500;
-        ws.send(JSON.stringify({ t: "cfg", ...want() }));
+        if (!nativeView) ws.send(JSON.stringify({ t: "cfg", ...want() }));
       };
       ws.onmessage = (ev) => {
         const buf = ev.data as ArrayBuffer;
@@ -198,7 +221,61 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
       wsRef.current?.close();
       wsRef.current = null;
     };
-  }, [live, tab, draw]);
+  }, [live, tab, draw, nativeView]);
+
+  // The real page over the box: where the box is, kept up to date (a split dragged, the sidebar toggled, the window
+  // resized), off screen while the box isn't shown. Our own menus / dialogs / toasts over it are cut out of the page
+  // window (holes of their shape: Lightron's View.Mask), so they show and take clicks while the page around stays live;
+  // checked every frame while any is open (they animate in), every 250 ms otherwise.
+  useEffect(() => {
+    if (!nativeView || !tab) return;
+    const box = boxRef.current;
+    if (!box) return;
+    let last = "";
+    let raf = 0;
+    const overlays = () =>
+      Array.from(
+        document.querySelectorAll<HTMLElement>(
+          "[data-radix-popper-content-wrapper] > *, [role=dialog], [role=alertdialog], [role=tooltip], [data-sonner-toast]",
+        ),
+      );
+    const report = () => {
+      const r = box.getBoundingClientRect();
+      const shown = document.visibilityState === "visible" && r.width > 20 && r.height > 20 && box.offsetParent !== null;
+      const holes: number[][] = [];
+      const open = overlays();
+      for (const o of open) {
+        const q = o.getBoundingClientRect();
+        if (q.width <= 0 || q.left >= r.right || q.right <= r.left || q.top >= r.bottom || q.bottom <= r.top) continue;
+        const radius = parseFloat(getComputedStyle(o).borderTopLeftRadius) || 0;
+        holes.push([q.left - r.left, q.top - r.top, q.width, q.height, radius].map((n) => Math.round(n * 10) / 10));
+      }
+      const key = shown
+        ? [r.x, r.y, r.width, r.height, window.devicePixelRatio].map((n) => Math.round(n * 10) / 10).join(",") + "|" + JSON.stringify(holes)
+        : "hidden";
+      if (open.length && !raf) raf = requestAnimationFrame(() => ((raf = 0), report()));
+      if (key === last) return;
+      last = key;
+      nativeBrowserView(tab, shown ? r : null, holes);
+    };
+    const ro = new ResizeObserver(report);
+    ro.observe(box);
+    const mo = new MutationObserver(report);
+    mo.observe(document.body, { childList: true });
+    const iv = setInterval(report, 250);
+    window.addEventListener("resize", report);
+    document.addEventListener("visibilitychange", report);
+    report();
+    return () => {
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+      mo.disconnect();
+      clearInterval(iv);
+      window.removeEventListener("resize", report);
+      document.removeEventListener("visibilitychange", report);
+      nativeBrowserView(tab, null);
+    };
+  }, [nativeView, tab]);
 
   // The page follows the pane's size (debounced: a drag of the split sends one resize at the end)
   useEffect(() => {
@@ -232,6 +309,39 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
   const touch = useRef<{ x: number; y: number; lastY: number; lastX: number; moved: boolean } | null>(null);
   const moveAt = useRef(0);
 
+  // Zoom on a phone: pinch with two fingers, double-tap to zoom in / out; zoomed in, a finger moves the picture and
+  // what's left past its edge scrolls the page. Only the picture is scaled (a CSS transform), so a point still maps
+  // through the canvas box (at). Lives here, per pane; a new page starts unzoomed.
+  const [zoom, setZoomState] = useState({ s: 1, x: 0, y: 0 });
+  const zoomRef = useRef(zoom);
+  const setZoom = (z: { s: number; x: number; y: number }) => {
+    const box = boxRef.current;
+    const cv = canvasRef.current;
+    if (box && cv) {
+      // keep the picture over the box: no empty margin when zoomed in
+      const w = box.clientWidth * z.s;
+      const h = cv.clientHeight * z.s;
+      z = { s: z.s, x: Math.min(0, Math.max(box.clientWidth - w, z.x)), y: Math.min(0, Math.max(Math.min(0, box.clientHeight - h), z.y)) };
+    }
+    if (z.s <= 1.02) z = { s: 1, x: 0, y: 0 };
+    zoomRef.current = z;
+    setZoomState(z);
+  };
+  useEffect(() => setZoom({ s: 1, x: 0, y: 0 }), [tab]);
+  const fingers = useRef(new Map<number, { x: number; y: number }>());
+  const pinch = useRef<{ d: number; s: number; cx: number; cy: number } | null>(null);
+  const lastTap = useRef<{ t: number; x: number; y: number } | null>(null);
+  const boxPoint = (cx: number, cy: number) => {
+    const r = boxRef.current!.getBoundingClientRect();
+    return { x: cx - r.left, y: cy - r.top };
+  };
+  const zoomAround = (s: number, px: number, py: number, from = zoomRef.current, at0 = { x: px, y: py }) => {
+    // the content point under at0 (box px, at zoom `from`) ends up under (px, py) at zoom s
+    const cx = (at0.x - from.x) / from.s;
+    const cy = (at0.y - from.y) / from.s;
+    setZoom({ s: Math.max(1, Math.min(6, s)), x: px - cx * s, y: py - cy * s });
+  };
+
   const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const p = at(e);
     if (!p) return;
@@ -241,6 +351,16 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
     // page's focus lands in a field (page.editable, below) or from the ⌨ button
     if (e.pointerType !== "touch") keysRef.current?.focus({ preventScroll: true });
     if (e.pointerType === "touch") {
+      fingers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (fingers.current.size === 2) {
+        // a second finger: a pinch, not a tap or a scroll
+        const [a, b] = [...fingers.current.values()];
+        const m = boxPoint((a.x + b.x) / 2, (a.y + b.y) / 2);
+        pinch.current = { d: Math.hypot(a.x - b.x, a.y - b.y), s: zoomRef.current.s, cx: m.x, cy: m.y };
+        pinchFrom.current = zoomRef.current;
+        touch.current = null;
+        return;
+      }
       touch.current = { x: e.clientX, y: e.clientY, lastX: e.clientX, lastY: e.clientY, moved: false };
       return;
     }
@@ -249,19 +369,40 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
     pressed.current = button;
     send({ kind: "down", ...p, button, count: Math.max(1, e.detail || 1), mods: modsOf(e) });
   };
+  const pinchFrom = useRef(zoom);
   const onPointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (e.pointerType === "touch") {
+      if (fingers.current.has(e.pointerId)) fingers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      const pc = pinch.current;
+      if (pc && fingers.current.size >= 2) {
+        const [a, b] = [...fingers.current.values()];
+        const m = boxPoint((a.x + b.x) / 2, (a.y + b.y) / 2);
+        zoomAround((pc.s * Math.hypot(a.x - b.x, a.y - b.y)) / pc.d, m.x, m.y, pinchFrom.current, { x: pc.cx, y: pc.cy });
+        return;
+      }
+    }
     const tc = touch.current;
     if (e.pointerType === "touch" && tc) {
-      // a finger drags the page like a phone's browser: scroll by how far it moved
       const dx = e.clientX - tc.lastX;
       const dy = e.clientY - tc.lastY;
       if (Math.abs(e.clientX - tc.x) + Math.abs(e.clientY - tc.y) > 8) tc.moved = true;
       if (tc.moved && (dx || dy)) {
-        // the page is laid out at the pane's size, so a pixel here is a CSS pixel there
-        const p = at(e) ?? { x: 0.5, y: 0.5 };
-        send({ kind: "scroll", ...p, dxPx: -dx, dyPx: -dy });
         tc.lastX = e.clientX;
         tc.lastY = e.clientY;
+        // zoomed in: the finger moves the picture first; what's left past its edge scrolls the page
+        const z = zoomRef.current;
+        let restX = dx;
+        let restY = dy;
+        if (z.s > 1) {
+          setZoom({ s: z.s, x: z.x + dx, y: z.y + dy });
+          restX = dx - (zoomRef.current.x - z.x);
+          restY = dy - (zoomRef.current.y - z.y);
+        }
+        if (restX || restY) {
+          // a finger drags the page like a phone's browser (a pixel here is about a CSS pixel there, divided by the zoom)
+          const p = at(e) ?? { x: 0.5, y: 0.5 };
+          send({ kind: "scroll", ...p, dxPx: -restX / z.s, dyPx: -restY / z.s });
+        }
       }
       return;
     }
@@ -273,11 +414,30 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
     if (p) send({ kind: "move", ...p, button: pressed.current === "left" ? "left" : "", mods: modsOf(e) });
   };
   const onPointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (e.pointerType === "touch") {
+      fingers.current.delete(e.pointerId);
+      if (pinch.current) {
+        if (fingers.current.size < 2) pinch.current = null;
+        return;
+      }
+    }
     const tc = touch.current;
     if (e.pointerType === "touch" && tc) {
       touch.current = null;
+      if (tc.moved) return;
+      // a double tap zooms in on that spot, or back out; its second tap isn't a click
+      const now = performance.now();
+      const lt = lastTap.current;
+      if (lt && now - lt.t < 300 && Math.hypot(e.clientX - lt.x, e.clientY - lt.y) < 30) {
+        lastTap.current = null;
+        const b = boxPoint(e.clientX, e.clientY);
+        if (zoomRef.current.s > 1) setZoom({ s: 1, x: 0, y: 0 });
+        else zoomAround(2.5, b.x, b.y);
+        return;
+      }
+      lastTap.current = { t: now, x: e.clientX, y: e.clientY };
       const p = at(e);
-      if (!tc.moved && p) send({ kind: "click", ...p });
+      if (p) send({ kind: "click", ...p });
       return;
     }
     if (!pressed.current) return;
@@ -510,16 +670,22 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
       </div>
       <Body>
         <div ref={boxRef} className="relative h-full w-full overflow-hidden bg-background">
-          {live && (
+          {live && !nativeView && (
             <canvas
               ref={canvasRef}
               // Width-fit and top-aligned, not "contain": a phone's keyboard makes the pane shorter, and fitting the
               // whole picture into that shrank it (and the page under the finger) mid-tap
               className={cn("absolute top-0 left-0 h-auto w-full touch-none", !hasPic && "invisible")}
+              style={zoom.s !== 1 ? { transform: `translate(${zoom.x}px, ${zoom.y}px) scale(${zoom.s})`, transformOrigin: "0 0" } : undefined}
               onPointerDown={onPointerDown}
               onPointerMove={onPointerMove}
               onPointerUp={onPointerUp}
-              onPointerCancel={() => ((pressed.current = ""), (touch.current = null))}
+              onPointerCancel={(e) => {
+                pressed.current = "";
+                touch.current = null;
+                fingers.current.delete(e.pointerId);
+                if (fingers.current.size < 2) pinch.current = null;
+              }}
               onContextMenu={(e) => e.preventDefault()}
             />
           )}
@@ -544,7 +710,7 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
               if (text) send({ kind: "text", text });
             }}
           />
-          {live && !hasPic && (
+          {live && !nativeView && !hasPic && (
             <div className="absolute inset-0 grid place-items-center p-6 text-center text-[13px] text-muted-foreground">
               {streamErr || t("browser.loading")}
             </div>

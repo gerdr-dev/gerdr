@@ -112,6 +112,7 @@ func streamPictures(conn *websocket.Conn, r *http.Request, src pictureSource, ra
 	fulls := make(chan struct{}, 1) // resend everything
 	errs := make(chan string, 4)    // an input failed: told to the page
 	texts := make(chan string, 2)   // a selection asked for with copy
+	gots := make(chan int64, 16)    // frames the page has drawn (flow control)
 	done := make(chan struct{})
 
 	const readWait = 70 * time.Second
@@ -145,7 +146,8 @@ func streamPictures(conn *websocket.Conn, r *http.Request, src pictureSource, ra
 				if src.Off() != "" {
 					return
 				}
-				if err := src.Do(m.Input); err != nil {
+				err := src.Do(m.Input)
+				if err != nil {
 					select {
 					case errs <- err.Error():
 					default:
@@ -166,6 +168,11 @@ func streamPictures(conn *websocket.Conn, r *http.Request, src pictureSource, ra
 			case "full":
 				select {
 				case fulls <- struct{}{}:
+				default:
+				}
+			case "got":
+				select {
+				case gots <- m.Seq:
 				default:
 				}
 			case "copy":
@@ -197,6 +204,12 @@ func streamPictures(conn *websocket.Conn, r *http.Request, src pictureSource, ra
 		lastSend = time.Now()
 		return true
 	}
+	// Flow control, for a viewer that says {t:"got", seq} once it has drawn a frame (the Browser pane does): a new
+	// picture only while fewer than two are on their way. A page that never stops moving sent every frame it painted,
+	// up to 30 a second, whether the phone kept up or not, and over the relay they queued: each tap waited behind
+	// seconds of old pictures. Now a slow link gets fewer, always the newest. Input acknowledgements still go at once.
+	var gotSeq, picSeq int64 // the newest seq the page drew / the newest seq that carried a picture
+	flow, held := false, false
 	var lastPage screen.Page
 	rs, _ := src.(rawSource)
 	var rawSeq int64 = -1
@@ -222,14 +235,35 @@ func streamPictures(conn *websocket.Conn, r *http.Request, src pictureSource, ra
 		var payload []byte
 		if fresh || h.Full {
 			h.Rects, payload = []screen.Rect{{0, 0, w, hh, len(jpg)}}, jpg
+			picSeq = seq
 		}
 		rawSeq, rawW, rawH, sentAck = fseq, w, hh, ack
 		return send(screen.Message(h, payload))
 	}
+	// pic=0: no picture, only where the page is (the desktop App shows its own pages as the real page and needs only
+	// the address bar's), and the input's acknowledgements
+	nopic := r.URL.Query().Get("pic") == "0"
 	capture := func() bool {
+		// Only pictures count: an input's acknowledgement or a page update carries none, and counting them held the
+		// stream for good after a tap (the page acks pictures as it draws them, which never came again)
+		if flow && picSeq-gotSeq >= 2 {
+			held = true // after the page catches up (gots)
+			return true
+		}
 		if off := src.Off(); off != "" {
 			send(screen.Message(screen.Header{Err: off}, nil))
 			return false
+		}
+		if nopic {
+			h := screen.Header{Ack: ack}
+			if p := src.Page(); p != nil && *p != lastPage {
+				lastPage, h.Page = *p, p
+			}
+			if h.Page == nil && ack == sentAck && time.Since(lastSend) < 10*time.Second {
+				return true
+			}
+			sentAck = ack
+			return send(screen.Message(h, nil))
 		}
 		if raw && rs != nil {
 			return captureRaw()
@@ -258,6 +292,9 @@ func streamPictures(conn *websocket.Conn, r *http.Request, src pictureSource, ra
 		}
 		seq++
 		h.Seq, h.W, h.H, h.Full, h.Rects = seq, m.Bounds().Dx(), m.Bounds().Dy(), full, rects
+		if len(rects) > 0 {
+			picSeq = seq
+		}
 		lastCur, sentAck = h.Cur, ack
 		return send(screen.Message(h, payload))
 	}
@@ -296,6 +333,17 @@ func streamPictures(conn *websocket.Conn, r *http.Request, src pictureSource, ra
 				return
 			}
 			timer.Reset(next())
+		case g := <-gots:
+			flow = true
+			if g > gotSeq {
+				gotSeq = g
+			}
+			if held {
+				held = false
+				if !capture() {
+					return
+				}
+			}
 		case <-src.Changed():
 			if !capture() {
 				return

@@ -1,10 +1,10 @@
-import { ChevronUp, Folder, FolderGit2, History, Laptop, Loader2, Play, Server, Settings2, SquareTerminal } from "lucide-react";
+import { ChevronUp, Folder, FolderGit2, Globe, History, Laptop, Loader2, Play, Server, Settings2, SquareTerminal } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
-import { closeFocusedPane, continueInPane, createInPane, focusPane, focusSession, openTerminal, resumeInPane } from "@/lib/actions";
+import { browserHere, closeFocusedPane, continueInPane, createInPane, focusPane, focusSession, openTerminal, resumeInPane } from "@/lib/actions";
 import { api, ApiError } from "@/lib/api";
 import { get, set, useStore, type AgentDef } from "@/lib/store";
 import { keyText } from "./KeyCaps";
@@ -449,6 +449,11 @@ export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean
           >
             <SquareTerminal className="size-4" />
             {t("newSession.terminal")}
+          </Button>
+          {/* or this pane becomes the project's browser (components/browser/) */}
+          <Button variant="outline" disabled={busy} title={t("newSession.browserHere")} onClick={() => void browserHere(pane.id)}>
+            <Globe className="size-4" />
+            {t("newSession.browser")}
           </Button>
         </div>
         <div>

@@ -1,9 +1,33 @@
 import { create } from "zustand";
 import { api, type BrowserTab } from "../api";
-import { activeTab, activeWs, leaves, locateSession, rid, setPane, spaceOf, split, updateTab, type Layout, type PaneLeaf } from "../layout";
+import { activeTab, activeWs, allLeaves, leaves, locateSession, rid, setPane, spaceOf, split, updateTab, type Layout, type PaneLeaf } from "../layout";
 import { get, setLayout } from "../store";
 
 // ---- Browser panes: a page of the project's own browser beside the chat (components/browser/, docs/dev/BROWSER-PANE.md) ----
+
+/** Pages some Browser pane already shows: a new pane takes another one, or none (a fresh page), since one page is
+ * one window of the App's browser and can be in one place only. */
+function shown(l: Layout): Set<number> {
+  return new Set(leavesOf(l).flatMap((p) => (p.browser?.tab ? [p.browser.tab] : [])));
+}
+
+/** Which pane shows each page as the real window (the App): the first to show it; another pane on the same page shows
+ * its pictures instead (BrowserScreen). */
+export const useNativeOwners = create<Record<number, string>>(() => ({}));
+
+export function claimNative(tab: number, paneId: string): boolean {
+  const owners = useNativeOwners.getState();
+  if (owners[tab] && owners[tab] !== paneId) return false;
+  if (!owners[tab]) useNativeOwners.setState({ [tab]: paneId });
+  return true;
+}
+
+export function releaseNative(tab: number, paneId: string) {
+  if (useNativeOwners.getState()[tab] === paneId) {
+    const { [tab]: _, ...rest } = useNativeOwners.getState();
+    useNativeOwners.setState(rest, true);
+  }
+}
 
 /** The pages Gerdr has open (pushed by the server as "browser_tabs" whenever one opens or closes). */
 export const useBrowserTabs = create<{ tabs: BrowserTab[]; loaded: boolean }>(() => ({ tabs: [], loaded: false }));
@@ -18,13 +42,16 @@ export function setBrowserTabs(tabs: BrowserTab[] | null | undefined) {
 /**
  * Panes follow their page the way a browser's tab strip does. A page that opened a new tab (a target=_blank link, a
  * sign-in popup) sits behind it in the same window, hidden and no longer painting, so a pane showing it moves to the
- * new tab; when that tab closes, the pane goes back to the page that opened it.
+ * new tab; when that tab closes, the pane goes back to the page that opened it. A page moved into the desktop App's browser
+ * (replaces) takes its old tab's panes.
  */
 function followNewTabs(prev: BrowserTab[], next: BrowserTab[]) {
   const had = new Set(prev.map((x) => x.tab));
   const alive = new Set(next.filter((x) => !x.gone).map((x) => x.tab));
   const moves = new Map<number, number>(); // pane's tab → where it goes
   for (const x of next) if (x.opener && !had.has(x.tab) && !x.gone) moves.set(x.opener, x.tab);
+  // the same page moved into the desktop App's browser when it connected (chromeext Tab.Replaces)
+  for (const x of next) if (x.replaces && !had.has(x.tab) && !x.gone) moves.set(x.replaces, x.tab);
   for (const x of prev) if (!alive.has(x.tab) && x.opener && alive.has(x.opener)) moves.set(x.tab, x.opener);
   if (!moves.size) return;
   setLayout((l) => {
@@ -59,10 +86,28 @@ export async function openBrowserPane(dir: "right" | "down" = "right") {
     if (old) return updateTab(l, t.id, (tab) => ({ ...tab, zoom: undefined, focus: old.id }));
     const newest = useBrowserTabs
       .getState()
-      .tabs.filter((x) => x.project === project && !x.gone)
+      .tabs.filter((x) => x.project === project && !x.gone && !shown(l).has(x.tab))
       .sort((a, b) => b.opened - a.opened)[0];
     const fresh: PaneLeaf = { type: "pane", id: rid("p"), browser: { project, tab: newest?.tab } };
     return updateTab(l, t.id, (tab) => ({ ...split(tab, tab.zoom ?? tab.focus, dir === "right" ? "row" : "col", fresh), focus: fresh.id }));
+  });
+}
+
+/**
+ * Turn a pane (an empty one, the new-session screen's) into a Browser pane of its workspace's project, on the project's
+ * newest page when there is one, else the address bar.
+ */
+export async function browserHere(paneId: string) {
+  if (!useBrowserTabs.getState().loaded) await loadBrowserTabs();
+  setLayout((l) => {
+    const loc = allLeaves(l).find((x) => x.pane.id === paneId);
+    if (!loc) return l;
+    const project = spaceOf(loc.ws);
+    const newest = useBrowserTabs
+      .getState()
+      .tabs.filter((x) => x.project === project && !x.gone && !shown(l).has(x.tab))
+      .sort((a, b) => b.opened - a.opened)[0];
+    return setPane(l, paneId, { draft: undefined, browser: { project, tab: newest?.tab } });
   });
 }
 

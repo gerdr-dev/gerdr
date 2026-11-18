@@ -22,6 +22,13 @@ import (
 	"github.com/gerdr-dev/gerdr/internal/i18n"
 )
 
+// noBoundSessions: Chrome's device-bound sessions (DBSC) tie a Google sign-in to a key the signed browser program keeps
+// in the system keychain. The project's profile is used by two programs in turn (this headless Chrome, and the App's
+// re-signed copy while the App runs: chromeext/app.go), and each hand-over broke the binding: Google asked to sign in
+// again, with two-step verification, every time (seen 2026-11-18). Off in both, so the sign-in is plain cookies, which
+// both read. tools/chromeshell passes the same switch.
+const noBoundSessions = "--disable-features=EnableBoundSessionCredentials,DeviceBoundSessions"
+
 // idleClose: a browser with no page open for this long exits (its profile stays).
 const idleClose = 10 * time.Minute
 
@@ -31,15 +38,55 @@ type Manager struct {
 	Bridge *chromeext.Bridge
 	Log    *slog.Logger
 
-	mu   sync.Mutex
-	inst map[string]*instance
+	mu      sync.Mutex
+	inst    map[string]*instance
+	started time.Time
 }
 
 func New(dir string, b *chromeext.Bridge, log *slog.Logger) *Manager {
 	if log == nil {
 		log = slog.Default()
 	}
-	return &Manager{Dir: dir, Bridge: b, Log: log, inst: map[string]*instance{}}
+	m := &Manager{Dir: dir, Bridge: b, Log: log, inst: map[string]*instance{}, started: time.Now()}
+	b.OnApp = m.appChanged
+	return m
+}
+
+// appChanged: the desktop App's browser connected. Pages open in headless browsers move into it, at the address
+// they're at, each replacing its old tab (a pane showing one follows: Tab.Replaces), so they show as real pages
+// right away instead of on the next open. The headless browser stops first: the profile is one browser's at a time.
+func (m *Manager) appChanged(connected bool) {
+	if !connected {
+		return
+	}
+	// Remember the App's browser (program, data directory): the headless browser runs the same (location.go)
+	exe, dataDir := m.Bridge.AppEngine()
+	m.saveAppInfo(exe, dataDir)
+	m.mu.Lock()
+	running := make([]*instance, 0, len(m.inst))
+	for _, in := range m.inst {
+		running = append(running, in)
+	}
+	m.mu.Unlock()
+	for _, in := range running {
+		pages := m.Bridge.ProjectTabs(in.project)
+		m.stopKey(in.key)
+		loc := m.location(in.project)
+		m.adopt(in.project, loc)
+		for _, p := range pages {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			if _, err := m.Bridge.OpenNative(ctx, in.project, loc.profile, p.URL, 0, 0, p.ID); err != nil {
+				m.Log.Warn("project browser: move a page into the App", "url", p.URL, "err", err)
+			}
+			cancel()
+		}
+	}
+}
+
+// Release stops the headless browser on the App's data directory: the App is starting its own on it
+// (tools/chromeshell asks before Lightron starts the browser; the directory is one process's at a time).
+func (m *Manager) Release() {
+	m.stopKey(appKey)
 }
 
 // ValidProject: a project id is also a directory name (ext.ValidProject).
@@ -66,11 +113,59 @@ func (m *Manager) Open(ctx context.Context, project, raw string, width, height i
 	} else if u, err := url.Parse(raw); err != nil || (u.Scheme != "http" && u.Scheme != "https" && raw != "about:blank") {
 		return 0, fmt.Errorf("%s: %q", i18n.S("只能打开 http / https 地址", "Only http / https URLs can be opened"), raw)
 	}
+	// The desktop App running: the page opens in its browser, in the same profile, and the pane shows the real page
+	// (chromeext/app.go). A profile is one browser's at a time, so this project's headless browser goes first; its
+	// pages close (they come back in the App when opened again).
+	// Just started (a restart, an update): the App's browser reconnects within seconds and may still hold the
+	// profile; a headless browser opening it meanwhile would be two browsers writing one profile. Wait for it a moment.
+	if !m.Bridge.AppConnected() && time.Since(m.started) < 15*time.Second {
+		for i := 0; i < 50 && !m.Bridge.AppConnected(); i++ {
+			select {
+			case <-ctx.Done():
+				return 0, ctx.Err()
+			case <-time.After(100 * time.Millisecond):
+			}
+		}
+	}
+	if m.Bridge.AppConnected() {
+		m.stopHeadless(project)
+		loc := m.location(project)
+		if !loc.shared {
+			// the App connected but its data directory isn't known (an older App): not shown natively
+			loc.profile = ""
+		}
+		m.adopt(project, loc)
+		t, err := m.Bridge.OpenNative(ctx, project, loc.profile, raw, width, height, 0)
+		if err == nil {
+			return t.ID, nil
+		}
+		if m.Bridge.AppConnected() {
+			// it's there but failed: don't open the profile headless under it
+			return 0, err
+		}
+		m.Log.Warn("project browser: the App's browser went away, opening headless", "err", err)
+	}
 	in, err := m.instance(project)
 	if err != nil {
 		return 0, err
 	}
 	return in.open(ctx, raw, width, height)
+}
+
+// stopHeadless stops the headless browser a project's profile is open in (it's about to open in the App's).
+func (m *Manager) stopHeadless(project string) {
+	m.stopKey(m.location(project).key)
+}
+
+func (m *Manager) stopKey(key string) {
+	m.mu.Lock()
+	in := m.inst[key]
+	delete(m.inst, key)
+	m.mu.Unlock()
+	if in != nil {
+		m.Log.Info("project browser: stopping the headless browser", "project", in.project)
+		in.stop()
+	}
 }
 
 // Close every browser (Gerdr is exiting).
@@ -90,22 +185,36 @@ func (m *Manager) Close() {
 }
 
 func (m *Manager) instance(project string) (*instance, error) {
+	loc := m.location(project)
 	m.mu.Lock()
-	defer m.mu.Unlock()
-	if in := m.inst[project]; in != nil && !in.dead() {
+	in := m.inst[loc.key]
+	if in != nil && !in.dead() && in.profile == loc.profile {
+		m.mu.Unlock()
 		return in, nil
 	}
-	in, err := m.start(project)
+	m.mu.Unlock()
+	if in != nil && !in.dead() {
+		// the App's data directory runs one profile at a time (location.go): this project's replaces the other's
+		m.stopKey(loc.key)
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if in := m.inst[loc.key]; in != nil && !in.dead() && in.profile == loc.profile {
+		return in, nil
+	}
+	in, err := m.start(project, loc)
 	if err != nil {
 		return nil, err
 	}
-	m.inst[project] = in
+	m.inst[loc.key] = in
 	return in, nil
 }
 
 type instance struct {
 	m       *Manager
 	project string
+	key     string // in Manager.inst
+	profile string
 	proc    *os.Process
 	c       *conn
 	exited  chan struct{}
@@ -121,18 +230,29 @@ type page struct {
 	owned           *chromeext.Owned
 }
 
-func (m *Manager) start(project string) (*instance, error) {
-	exe, err := findBrowser()
-	if err != nil {
+func (m *Manager) start(project string, loc location) (*instance, error) {
+	exe := loc.exe
+	if exe == "" {
+		var err error
+		if exe, err = findBrowser(); err != nil {
+			return nil, err
+		}
+	}
+	if err := os.MkdirAll(loc.dataDir, 0o700); err != nil {
 		return nil, err
 	}
-	profile := m.ProfileDir(project)
-	if err := os.MkdirAll(profile, 0o700); err != nil {
-		return nil, err
+	if loc.shared {
+		// The App's browser has it (it's open, or quitting): never kill that one
+		if lockHeld(loc.dataDir) {
+			return nil, errAppHasIt
+		}
+		m.adopt(project, loc)
+	} else {
+		killStale(loc.dataDir)
 	}
-	killStale(profile)
 	cmd := exec.Command(exe,
-		"--user-data-dir="+profile,
+		"--user-data-dir="+loc.dataDir,
+		"--profile-directory="+loc.profile,
 		"--headless",
 		"--no-first-run",
 		"--no-default-browser-check",
@@ -146,6 +266,7 @@ func (m *Manager) start(project string) (*instance, error) {
 		// second page) counted as hidden, stopped painting, and its pane froze (Page.screencastVisibilityChanged
 		// false, no more frames). Every page here is on show in some pane, so none is ever in the background.
 		"--disable-backgrounding-occluded-windows",
+		noBoundSessions,
 		"--disable-renderer-backgrounding",
 		"--disable-background-timer-throttling",
 		"--accept-lang="+acceptLang(),
@@ -159,7 +280,7 @@ func (m *Manager) start(project string) (*instance, error) {
 		return nil, fmt.Errorf("start %s: %w", exe, err)
 	}
 	after()
-	in := &instance{m: m, project: project, proc: cmd.Process, exited: make(chan struct{}), pages: map[string]*page{}}
+	in := &instance{m: m, project: project, key: loc.key, profile: loc.profile, proc: cmd.Process, exited: make(chan struct{}), pages: map[string]*page{}}
 	go func() {
 		cmd.Wait()
 		close(in.exited)
@@ -180,7 +301,7 @@ func (m *Manager) start(project string) (*instance, error) {
 	in.ua = strings.Replace(v.UserAgent, "HeadlessChrome", "Chrome", 1)
 	// pages opened by a page (target=_blank, window.open) are shown and driven too
 	in.c.call(ctx, "", "Target.setDiscoverTargets", map[string]any{"discover": true})
-	m.Log.Info("project browser started", "project", project, "exe", exe)
+	m.Log.Info("project browser started", "project", project, "exe", exe, "profile", filepath.Join(loc.dataDir, loc.profile))
 	in.armIdle()
 	return in, nil
 }
@@ -450,8 +571,8 @@ func (in *instance) closedAll(why string) {
 		p.owned.Gone(why)
 	}
 	in.m.mu.Lock()
-	if in.m.inst[in.project] == in {
-		delete(in.m.inst, in.project)
+	if in.m.inst[in.key] == in {
+		delete(in.m.inst, in.key)
 	}
 	in.m.mu.Unlock()
 }

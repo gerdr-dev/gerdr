@@ -37,6 +37,8 @@ type shell struct {
 	upgrading    upgradeMark
 	idleOK       string // "update when idle" was picked for this version (automatic updates off)
 
+	views *appBrowser // the App's own browser for the Browser pane (views.go)
+
 	mu     sync.Mutex
 	spaces map[string]string // window id → the session (layout.ts Space) its page says it shows
 	notes  map[string]time.Time
@@ -68,7 +70,28 @@ func (s *shell) startBackend() (string, error) {
 	}
 	s.backendEntry = entry
 	s.setBackend(be)
+	releaseBrowser(entry)
 	return windowLink(entry), nil
+}
+
+// releaseBrowser: the backend's headless browser runs on this App's browser data directory while the App is closed
+// (projects' profiles are there: internal/projbrowser location.go); it must let go before Lightron starts the
+// browser on it, which happens right after this (URLFunc). Lightron also waits for any browser on it to quit.
+func releaseBrowser(entry string) {
+	u, err := url.Parse(entry)
+	if err != nil || u.Host == "" {
+		return
+	}
+	req, _ := http.NewRequest("POST", "http://"+u.Host+"/api/browser/release", strings.NewReader("{}"))
+	req.Header.Set("Authorization", "Bearer "+u.Query().Get("token"))
+	req.Header.Set("X-Gerdr", "1")
+	req.Header.Set("Content-Type", "application/json")
+	c := &http.Client{Timeout: 15 * time.Second}
+	if resp, err := c.Do(req); err != nil {
+		log.Printf("release the browser data directory: %v", err)
+	} else {
+		resp.Body.Close()
+	}
 }
 
 // windowLink: the link the windows open at, with a one-time code instead of the token (/auth?code=…). It goes on the
@@ -139,7 +162,7 @@ func (s *shell) message(w *lightron.Window, raw json.RawMessage) {
 		return
 	}
 	// The type only: payloads carry notification texts (what agents said).
-	if typ != "menuKeys" && typ != "locale" && typ != "badge" {
+	if typ != "menuKeys" && typ != "locale" && typ != "badge" && typ != "browserView" {
 		log.Printf("page → %s", typ)
 	}
 	switch typ {
@@ -169,6 +192,10 @@ func (s *shell) message(w *lightron.Window, raw json.RawMessage) {
 		_ = w.Eval(fmt.Sprintf("window.__GERDR_WEB_PID__ = %d", rendererPid(s.app, w)))
 	case "update":
 		s.updateMessage(m)
+	case "browserView":
+		if s.views != nil {
+			s.views.placeView(w, m)
+		}
 	case "menuKeys":
 		// The menu shows the keys the UI's settings give its commands (null = no key).
 		keys := map[string]*string{}

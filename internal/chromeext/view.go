@@ -45,7 +45,11 @@ type View struct {
 	frameSeq int64  // counts frames, so Raw's caller can tell a new one
 	vw, vh   float64
 	maxW     int
-	casting  bool // holds the tab's caster
+	casting  bool       // holds the tab's caster
+	remote   bool       // a remote viewer that sized the page (phone.go)
+	mapping  [4]float64 // inputMap's cache: kx, ky, ox, oy
+	mapAt    time.Time
+	mapFor   [2]float64
 	page     screen.Page
 	gone     string
 	pageKick chan struct{}
@@ -78,6 +82,12 @@ func (v *View) Close() {
 	if casting {
 		v.t.cast.release()
 	}
+	v.mu.Lock()
+	remote := v.remote
+	v.mu.Unlock()
+	if remote {
+		go v.t.remoteSize(v, 0, 0)
+	}
 	v.cancel()
 }
 
@@ -100,8 +110,21 @@ func (v *View) Page() screen.Page {
 
 // Size lays the page out at the pane's size (CSS px): a project browser's window is resized; the user's own Chrome
 // window is left as it is and shown scaled.
-func (v *View) Size(width, height int) {
-	if width < 200 || height < 150 || v.t.resize == nil {
+func (v *View) Size(width, height int) { v.SizeFrom(width, height, false) }
+
+// SizeFrom: Size, saying whether the viewer is remote (a phone over the relay). A remote viewer of an App page gets it
+// laid out as a phone while the App's pane isn't showing it (phone.go).
+func (v *View) SizeFrom(width, height int, remote bool) {
+	if width < 200 || height < 150 {
+		return
+	}
+	if v.t.resize == nil {
+		if v.t.Native && remote {
+			v.mu.Lock()
+			v.remote = true
+			v.mu.Unlock()
+			v.t.remoteSize(v, width, height)
+		}
 		return
 	}
 	ctx, cancel := context.WithTimeout(v.ctx, 5*time.Second)
@@ -290,6 +313,52 @@ func (v *View) pageLoop() {
 	}
 }
 
+// inputMap: how a point of the picture (in the frame's own size, vw x vh) becomes a point the page's input takes,
+// which is CSS pixels of the page's viewport. They differ when the page is shown scaled: a page with no mobile viewport
+// laid out as a phone (phone.go) is ~980 CSS px wide and fitted into the phone's ~370. Chrome reports that two ways
+// (measured, Chrome 157): the App's window says visual viewport 980 wide at scale 0.38, headless says visual 400 at
+// scale 1 with the layout 992. Either way the picture shows the wider of the two, unless the page is zoomed in
+// (scale > 1: the picture is the visual viewport, at its offset). Asked of the page at most every half second.
+func (v *View) inputMap(ctx context.Context, vw, vh float64) (kx, ky, ox, oy float64) {
+	v.mu.Lock()
+	if time.Since(v.mapAt) < 500*time.Millisecond && v.mapFor == [2]float64{vw, vh} {
+		m := v.mapping
+		v.mu.Unlock()
+		return m[0], m[1], m[2], m[3]
+	}
+	v.mu.Unlock()
+	kx, ky = 1, 1
+	if raw, err := v.t.send(ctx, "Page.getLayoutMetrics", nil); err == nil && vw > 0 && vh > 0 {
+		var m struct {
+			Layout struct {
+				W float64 `json:"clientWidth"`
+				H float64 `json:"clientHeight"`
+			} `json:"cssLayoutViewport"`
+			Visual struct {
+				W     float64 `json:"clientWidth"`
+				H     float64 `json:"clientHeight"`
+				X     float64 `json:"offsetX"`
+				Y     float64 `json:"offsetY"`
+				Scale float64 `json:"scale"`
+			} `json:"cssVisualViewport"`
+		}
+		if json.Unmarshal(raw, &m) == nil && m.Visual.W > 0 {
+			w, h := max(m.Layout.W, m.Visual.W), max(m.Layout.H, m.Visual.H)
+			if m.Visual.Scale > 1.01 {
+				w, h, ox, oy = m.Visual.W, m.Visual.H, m.Visual.X, m.Visual.Y
+			}
+			// only when it's really scaled: rounding between the frame and CSS sizes isn't a scale
+			if r := w / vw; r > 1.02 || r < 0.98 {
+				kx, ky = r, h/vh
+			}
+		}
+	}
+	v.mu.Lock()
+	v.mapping, v.mapAt, v.mapFor = [4]float64{kx, ky, ox, oy}, time.Now(), [2]float64{vw, vh}
+	v.mu.Unlock()
+	return kx, ky, ox, oy
+}
+
 // editableJS: the title, the load state, and whether the focus is somewhere to type (inside iframes and shadow roots).
 const editableJS = `(() => {
   let a = document.activeElement;
@@ -317,6 +386,11 @@ func (v *View) Do(in screen.Input) error {
 	vw, vh := v.vw, v.vh
 	v.mu.Unlock()
 	x, y := clamp01(in.X)*vw, clamp01(in.Y)*vh
+	switch in.Kind {
+	case "click", "down", "up", "move", "scroll":
+		kx, ky, ox, oy := v.inputMap(ctx, vw, vh)
+		x, y = x*kx+ox, y*ky+oy
+	}
 	mods := modifierBits(in.Mods)
 	// the person's own mouse: quiet, so the extension doesn't draw its cursor over it or wait for it to glide there
 	mouse := func(typ, button string, buttons, clicks int) error {
@@ -460,7 +534,11 @@ func (c *caster) acquire(ctx context.Context, w int) error {
 	// The page a viewer looks at is the front tab of its window: a page that opened a new tab (target=_blank) is a
 	// background tab otherwise, hidden, and Chrome sends no screencast frames for it (measured: the pane froze on
 	// the page that opened a link in a new tab)
-	c.t.send(ctx, "Page.bringToFront", nil)
+	// Only a headless project page (resize set): on the user's own Chrome it would raise their window over their
+	// work, and the App's pages are placed by the App (a hidden one would show where it was)
+	if c.t.resize != nil {
+		c.t.send(ctx, "Page.bringToFront", nil)
+	}
 	return c.start(ctx)
 }
 
@@ -570,4 +648,11 @@ func (c *caster) event(method string, params json.RawMessage) {
 			}()
 		}
 	}
+}
+
+// Viewport: the size the pane's points are fractions of, from the last frame.
+func (v *View) Viewport() [2]float64 {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	return [2]float64{v.vw, v.vh}
 }

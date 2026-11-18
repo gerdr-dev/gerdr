@@ -116,31 +116,54 @@ as keys (the `key` action, which adds the macOS editing commands). Other ⌘ com
 ⌘C / ⌘X first ask for the selection (`{t:"copy"}` → header `text`) and write it to this device's clipboard: the page's
 clipboard is the computer's. ⌘L goes to the address bar. A finger drag scrolls, and a tap clicks.
 
-## Next: a native view in the desktop App
+## The desktop App (macOS): the real page
 
-On the desktop the pane could be the real thing instead of pictures: full fidelity (video, the input method's own
-window, file pickers, drag and drop), no encoding. The plan, not built:
+In the macOS App the pane shows the page itself, not pictures: a window of the App's own browser placed over the
+pane. Built 2026-11-18 on Lightron 0.5.0's `App.OpenView` (Lightron's docs/api.md, View).
 
-- macOS: Lightron already runs our code inside its Chrome (the menu library, `DYLD_INSERT_LIBRARIES`). A borderless
-  window of that Chrome, made a child of the Gerdr window there (`-[NSWindow addChildWindow:ordered:]`, public API),
-  moves, minimizes and stacks with it, placed over the pane's rect. The pane reports its rect and hides the view
-  while a Gerdr menu or dialog would be under it (the same limit as Electron's WebContentsView).
-- Windows: a second WebView2 controller in the same window, a `CoreWebView2Profile` per project.
-- Prototype (2026-11-18, /tmp: an ad-hoc signed Chrome 157 copy with a test dylib, as Lightron runs it), measured:
-  - **A profile per project in the one browser**: launching the engine again with `--user-data-dir=<the same>
-    --profile-directory=<project> --app=<url>` hands over to the running instance, which opens an `--app` window in
-    that profile (its folder is made and kept). CDP sees every profile's pages (`Target.getTargets`, each with its
-    own `browserContextId`), so actions work on them. But `Target.createTarget` only takes the default context:
-    another profile's id is "Failed to find browser context". So pages open by the command line, then get attached
-    over CDP.
-  - **The child window**: `[gerdrWindow addChildWindow:pageWindow ordered:NSWindowAbove]` from the dylib, after
-    `styleMask = NSWindowStyleMaskBorderless`, works on Chrome's `NativeWidgetMacNSWindow`. Moving the parent moved
-    the child by exactly the same amount; minimizing the parent hid the child and restoring brought it back,
-    still attached. Size and place it through CDP `Browser.setWindowBounds` (screen top-left coordinates):
-    `-[NSWindow setFrame:]` from the dylib moved it but Chrome put the width back.
-  - Not yet tried: fullscreen and Spaces (they take over the screen), the keyboard focus moving between Gerdr and
-    the page window, Gerdr's own menus over the pane (expected to need hiding the child while they are open).
-- The child window must live in Lightron's process, so a separate browser per project won't do there.
-- The headless browser and the App's Chrome can't hold one profile at once: the App would ask the backend to stop
-  that project's headless browser before opening the profile, and give it back when it closes. Remote viewers then
-  stream the App's window, which `--disable-backgrounding-occluded-windows` keeps painting.
+```
+the pane (BrowserScreen, nativeView) ──postMessage {type:"browserView", tab, rect, dpr} / {hide}──▶ the shell
+the shell (tools/chromeshell/views.go) ──lightron View.Place / Hide──▶ the window, a child of Gerdr's
+the shell ──WebSocket /api/browser/ext, the extension's protocol + "app": true──▶ chromeext (app.go)
+projbrowser.Open: the App connected → OpenNative in the project's profile; else headless as before
+```
+
+- **One profile, one place** (projbrowser/location.go). With the App installed, a project's profile is a real
+  directory of the App's browser data directory (`gerdr-<hash of the project>`, Lightron's `BrowserDataDir`); the App
+  opens it as a view's profile, and the headless browser opens the same one while the App is closed
+  (`--user-data-dir=<the App's> --profile-directory=…`). Measured, the hard way: a profile linked into a data
+  directory from elsewhere never got its cookies on disk (the App's network service had only its own `Default/Cookies`
+  open; a headless test with and without the network service in process: "no such table: cookies"). So every
+  sign-in in the App was in memory only and gone at the next start. A data directory is one process's at a time:
+  a second headless launch on it exits with "SingletonLock: File exists", so the browser itself stops two from
+  sharing it. The cost: while the App is closed, one headless browser serves one project's profile at a time
+  (another project's page replaces it). The App starting asks the backend to release the directory
+  (`POST /api/browser/release`, before Lightron starts the browser; Lightron also waits for any browser on it), and
+  the headless browser never kills a browser holding the App's directory (`lockHeld`). Without the App, a project
+  has its own data directory under `projects/<p>/browser`; the first App-mode use copies that profile in (`adopt`).
+- **One program on both sides.** The headless browser runs the App's own re-signed copy of the browser when the App
+  has said where it is (its hello's `engine` and `dataDir`, kept in `<data dir>/browser-engine`; Lightron's
+  `App.EnginePath`, `App.BrowserDataDir`), the installed Chrome only without an App. With the real Chrome headless and the copy in the App, Google asked to sign in
+  again, with two-step verification, after every hand-over: its device-bound sessions (DBSC) tie a sign-in to the
+  program. DBSC is also switched off in both (`noBoundSessions`), so a sign-in is plain cookies either way.
+- **Agents drive it the same way**: the shell speaks the extension's protocol (`cdp` → `View.Call`, events from
+  `OnEvent`), so its pages are ordinary tabs (`Tab.Native`, ids from 2000000) for every action and the stream.
+- **The pane only reports where it is.** Its box's `getBoundingClientRect` and `devicePixelRatio` (so the UI's zoom
+  counts), checked on resize, on any change to `<body>`'s children (a Radix menu / dialog portal) and every 250 ms. It hides
+  the window while the box isn't shown (another tab, the page hidden) or a menu / dialog / toast of ours overlaps it, since the
+  window is above the page. The stream still runs with `pic=0`: no picture, only the address bar's info and its input
+  (go / back / reload).
+- **Popups**: the browser would open them in an ordinary tabbed window; Lightron closes those and the shell opens the
+  URL as another view, reported as a `popup` event: a tab with `Opener`, which the pane follows (`followNewTabs`). The
+  new page's `window.opener` is lost, so a sign-in popup that reports back through it won't finish (most fall back to
+  a redirect).
+- **Out of sight, still awake.** A phone watches and drives the same page while the App's window is behind others,
+  minimized or showing something else. Lightron's `View.Hide` veils the window (transparent, clicks through) instead
+  of taking it off screen, which made the browser count it hidden and stop painting (the phone saw a frozen page); the
+  App's browser runs with `--disable-backgrounding-occluded-windows` (and no renderer / timer backgrounding) so a
+  covered window paints too.
+- **Limits**: Windows' App (WebView2) has no views yet, so it stays headless + pictures; the window shows for a moment
+  where the browser puts a new window before it is taken off screen.
+- Measured in the prototype and Lightron's `TestE2EView`: the child window follows moves and minimize exactly; sizing
+  goes through `Browser.setWindowBounds`, read back and set again (the browser puts an app window back where it
+  remembers it, one run in two).

@@ -10,8 +10,8 @@ import (
 	"github.com/gerdr-dev/gerdr/internal/i18n"
 )
 
-// findBrowser is the Chromium browser installed here, in the order Lightron looks (Chrome, Edge, Brave, Chromium).
-// GERDR_BROWSER_EXE overrides it.
+// findBrowser: the Chromium browser installed here, in the order Lightron looks (Chrome, Edge, Brave, Chromium), for
+// when there is no desktop App (with one, location.go runs the App's own program). GERDR_BROWSER_EXE overrides it.
 func findBrowser() (string, error) {
 	if p := os.Getenv("GERDR_BROWSER_EXE"); p != "" {
 		return p, nil

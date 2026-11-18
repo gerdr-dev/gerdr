@@ -9,7 +9,9 @@ import (
 	"os/exec"
 	"runtime"
 	"sort"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gerdr-dev/gerdr/internal/i18n"
@@ -24,12 +26,17 @@ type Tab struct {
 	Project string `json:"project,omitempty"` // a project's own browser (projbrowser); "" = the user's Chrome
 	// Opener: the tab whose page opened this one. A Browser pane showing the opener follows it here, as a browser
 	// does with a new tab, and back when it closes (ui/src/lib/actions/browser.ts)
-	Opener int    `json:"opener,omitempty"`
-	URL    string `json:"url"`            // what it was opened on
-	WS     string `json:"ws,omitempty"`   // CDP browser WebSocket (extension tabs only)
-	HTTP   string `json:"http,omitempty"` // the same as http://host:port (for clients that fetch /json/version)
-	Gone   string `json:"gone,omitempty"` // why it can't be driven any more; "" while it can
-	Opened int64  `json:"opened"`
+	Opener int `json:"opener,omitempty"`
+	// Native: a page of the desktop App's own browser (app.go): the App shows it in the pane as the real page
+	Native bool `json:"native,omitempty"`
+	// Replaces: the tab this one took over (the same page moved into the App's browser when it connected): a pane
+	// showing that one moves here (ui/src/lib/actions/browser.ts)
+	Replaces int    `json:"replaces,omitempty"`
+	URL      string `json:"url"`            // what it was opened on
+	WS       string `json:"ws,omitempty"`   // CDP browser WebSocket (extension tabs only)
+	HTTP     string `json:"http,omitempty"` // the same as http://host:port (for clients that fetch /json/version)
+	Gone     string `json:"gone,omitempty"` // why it can't be driven any more; "" while it can
+	Opened   int64  `json:"opened"`
 
 	// send runs one DevTools command in the page: through the extension, or the project browser's pipe
 	send func(ctx context.Context, method string, params json.RawMessage) (json.RawMessage, error)
@@ -42,7 +49,11 @@ type Tab struct {
 	ep     *Endpoint
 	log    *tabLog // console, network, the open dialog (actions.go)
 	watch  *watchers
-	cast   *caster // the screencast its viewers share (view.go)
+	cast   *caster       // the screencast its viewers share (view.go)
+	cur    *atomic.Value // CurrentURL
+	// phone layout for remote viewers of an App page (phone.go)
+	phoneOnce *sync.Once
+	phoneL    *phoneLayout
 }
 
 // watchers get a tab's DevTools events (the Browser pane's screencast, view.go).
@@ -80,13 +91,42 @@ func (w *watchers) emit(method string, params json.RawMessage) {
 func newTab(id int, url string) *Tab {
 	t := &Tab{ID: id, URL: url, Opened: time.Now().UnixMilli(), log: newTabLog(), watch: &watchers{fns: map[int]func(string, json.RawMessage){}}}
 	t.cast = &caster{t: t}
+	t.cur = &atomic.Value{}
+	t.phoneOnce = &sync.Once{}
 	return t
 }
 
 // event takes one DevTools event of the page.
 func (t *Tab) event(method string, params json.RawMessage) {
+	if method == "Page.frameNavigated" || method == "Page.navigatedWithinDocument" {
+		var p struct {
+			Frame struct {
+				ParentID string `json:"parentId"`
+				URL      string `json:"url"`
+				Fragment string `json:"urlFragment"`
+			} `json:"frame"`
+			URL string `json:"url"` // navigatedWithinDocument
+		}
+		if json.Unmarshal(params, &p) == nil {
+			u := p.URL
+			if u == "" && p.Frame.ParentID == "" {
+				u = p.Frame.URL + p.Frame.Fragment
+			}
+			if u != "" && !strings.HasPrefix(u, "about:") && !strings.HasPrefix(u, "data:") {
+				t.cur.Store(u)
+			}
+		}
+	}
 	t.log.record(method, params)
 	t.watch.emit(method, params)
+}
+
+// CurrentURL: where the page is now (the last main-frame navigation), else where it was opened.
+func (t *Tab) CurrentURL() string {
+	if u, ok := t.cur.Load().(string); ok && u != "" {
+		return u
+	}
+	return t.URL
 }
 
 // OpenOptions for Bridge.Open.

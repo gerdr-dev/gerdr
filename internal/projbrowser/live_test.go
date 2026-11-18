@@ -3,6 +3,7 @@ package projbrowser
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -384,4 +385,44 @@ func TestLiveEditable(t *testing.T) {
 	if editable() {
 		t.Error("clicked outside: want not editable")
 	}
+}
+
+// TestLiveAppProfile: with the App's browser known, a project's profile lives in the App's data directory and a
+// sign-in (a cookie) is still there after the headless browser closes and opens again. GERDR_TEST_ENGINE: the App's
+// browser program (its re-signed copy).
+func TestLiveAppProfile(t *testing.T) {
+	exe := os.Getenv("GERDR_TEST_ENGINE")
+	if os.Getenv("GERDR_LIVE_BROWSER") == "" || exe == "" {
+		t.Skip("set GERDR_LIVE_BROWSER=1 and GERDR_TEST_ENGINE")
+	}
+	b := chromeext.New(nil)
+	dir, appData := t.TempDir(), t.TempDir()
+	m := New(dir, b, nil)
+	m.saveAppInfo(exe, appData)
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	id, err := m.Open(ctx, "proj a", "https://example.com/", 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b.Act(ctx, id, "wait", chromeext.ActArgs{Load: true, Timeout: 20000})
+	b.Act(ctx, id, "eval", chromeext.ActArgs{Expr: `document.cookie = "signedin=yes; max-age=86400; path=/"`})
+	m.Close() // the browser quits (the backend restarting)
+	id, err = m.Open(ctx, "proj a", "https://example.com/", 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b.Act(ctx, id, "wait", chromeext.ActArgs{Load: true, Timeout: 20000})
+	res, _ := b.Act(ctx, id, "eval", chromeext.ActArgs{Expr: "document.cookie"})
+	if !strings.Contains(res.Text, "signedin=yes") {
+		t.Errorf("after a restart the cookie is gone: %q", res.Text)
+	}
+	if _, err := os.Stat(filepath.Join(appData, profileName("proj a"), "Cookies")); err != nil {
+		t.Errorf("the profile isn't in the App's data directory: %v", err)
+	}
+	// another project's page replaces it (one process on the App's directory)
+	if _, err := m.Open(ctx, "proj b", "https://example.org/", 0, 0); err != nil {
+		t.Fatal(err)
+	}
+	m.Close()
 }

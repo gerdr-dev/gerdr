@@ -2,6 +2,7 @@ package server
 
 import (
 	"image"
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -97,6 +98,14 @@ func (s *Server) browserRoutes(mux *http.ServeMux) {
 		}
 		httpError(w, http.StatusBadGateway, i18n.S("页面刚打开就关了", "The page closed right after opening"))
 	})
+	// the desktop App is about to start its browser on its data directory, where projects' profiles are while it's
+	// installed: the headless browser on it must let go first (tools/chromeshell, internal/projbrowser location.go)
+	mux.HandleFunc("POST /api/browser/release", func(w http.ResponseWriter, r *http.Request) {
+		if s.ProjBrowser != nil {
+			s.ProjBrowser.Release()
+		}
+		writeJSON(w, map[string]any{"ok": true})
+	})
 	// the Browser pane: a tab's screen and input over the remote screen's stream (screenstream.go)
 	mux.HandleFunc("GET /api/browser/view", func(w http.ResponseWriter, r *http.Request) {
 		b := br(w)
@@ -116,7 +125,10 @@ func (s *Server) browserRoutes(mux *http.ServeMux) {
 		}
 		defer conn.Close()
 		// whole JPEGs to a viewer on this computer, changed tiles over the relay (screenstream.go)
-		streamPictures(conn, r, browserSource{v}, !auth.FromRemote(r))
+		remote := auth.FromRemote(r)
+		slog.Info("browser pane stream", "tab", id, "remote", remote, "query", r.URL.RawQuery)
+		defer slog.Info("browser pane stream ended", "tab", id)
+		streamPictures(conn, r, browserSource{v: v, remote: remote}, !remote)
 	})
 	mux.HandleFunc("POST /api/browser/close", func(w http.ResponseWriter, r *http.Request) {
 		b := br(w)
@@ -175,14 +187,17 @@ func (s *Server) browserProject(c Caller) string {
 }
 
 // browserSource: a tab as the stream's picture (chromeext.View).
-type browserSource struct{ v *chromeext.View }
+type browserSource struct {
+	v      *chromeext.View
+	remote bool // over the relay (a phone): an App page is laid out for it while the App doesn't show it
+}
 
 func (b browserSource) Grab(w int) (*image.RGBA, error)            { return b.v.Grab(w) }
 func (b browserSource) Cursor() (float64, float64, bool)           { return 0, 0, false }
 func (b browserSource) Do(in screen.Input) error                   { return b.v.Do(in) }
 func (b browserSource) Off() string                                { return b.v.Gone() }
 func (b browserSource) Changed() <-chan struct{}                   { return b.v.Changed() }
-func (b browserSource) Size(w, h int)                              { b.v.Size(w, h) }
+func (b browserSource) Size(w, h int)                              { b.v.SizeFrom(w, h, b.remote) }
 func (b browserSource) Selection() string                          { return b.v.Selection() }
 func (b browserSource) Raw(w int) ([]byte, int, int, int64, error) { return b.v.Raw(w) }
 func (b browserSource) Page() *screen.Page {

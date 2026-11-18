@@ -37,12 +37,18 @@ type Bridge struct {
 
 	// OnTabs runs (on its own goroutine) when a tab opens or closes: the server tells the UI (the Browser pane)
 	OnTabs func()
+	// OnApp runs (on its own goroutine) when the desktop App's browser connects (true) or goes (false): projbrowser
+	// moves projects' pages between it and its headless browsers
+	OnApp func(connected bool)
 
-	mu        sync.Mutex
-	conns     map[string]*Conn
-	wake      chan struct{} // closed and replaced when connections or allowed sites change
-	tabs      map[int]*Tab
-	nextOwned int // ids of adopted pages (Adopt)
+	mu         sync.Mutex
+	conns      map[string]*Conn
+	wake       chan struct{} // closed and replaced when connections or allowed sites change
+	tabs       map[int]*Tab
+	nextOwned  int    // ids of adopted pages (Adopt)
+	app        *Conn  // the desktop App's own browser (app.go); nil when it isn't connected
+	appEngine  string // its browser program, from its hello
+	appDataDir string // its browser's data directory
 }
 
 func New(log *slog.Logger) *Bridge {
@@ -140,9 +146,13 @@ type message struct {
 	Sites      []string        `json:"sites"`
 	LastActive int64           `json:"lastActive"`
 	Name       string          `json:"name"`
+	Opener     int             `json:"opener"`
 }
 
 type helloInfo struct {
+	App        bool     `json:"app"`     // the desktop App's own browser (app.go), not an extension
+	Engine     string   `json:"engine"`  // the App's: its browser program
+	DataDir    string   `json:"dataDir"` // and its data directory (projects' profiles are in it)
 	ID         string   `json:"id"`
 	Version    string   `json:"version"`
 	Sites      []string `json:"sites"`
@@ -168,6 +178,13 @@ func (b *Bridge) Serve(ctx context.Context, ws *websocket.Conn) {
 		return
 	}
 	c.ID, c.Version = h.ID, h.Version
+	if h.App {
+		b.mu.Lock()
+		b.appEngine, b.appDataDir = h.Engine, h.DataDir
+		b.mu.Unlock()
+		b.serveApp(ctx, c)
+		return
+	}
 	c.mu.Lock()
 	c.sites, c.lastActive, c.name = h.Sites, h.LastActive, strings.TrimSpace(h.Name)
 	c.mu.Unlock()
@@ -252,6 +269,10 @@ func (c *Conn) read() {
 			c.mu.Lock()
 			c.lastActive = m.At
 			c.mu.Unlock()
+		case "shown": // the desktop App's pane shows (Name "on") the page as the real window, or stopped (phone.go)
+			c.b.DesktopShown(m.Tab, m.Reason == "on")
+		case "popup": // the desktop App's browser: a page opened another, now a tab of its own (app.go)
+			go c.b.appPopup(c, m.Tab, m.Opener, m.URL)
 		case "cdp", "closed", "detached", "blocked":
 			c.mu.Lock()
 			fn := c.subs[m.Tab]
