@@ -32,6 +32,7 @@ require (
 	github.com/spf13/cobra v1.10.2
 	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common v1.3.83
 	github.com/zbysir/dialhome v0.1.1-0.20261109055524-f1db825c85a1
+	golang.org/x/image v0.12.0
 	golang.org/x/net v0.61.0
 	golang.org/x/oauth2 v0.36.0
 	golang.org/x/sys v0.49.0
@@ -43,7 +44,6 @@ require (
 	github.com/jchv/go-webview2 v0.0.0-20260205173254-56598839c808 // indirect
 	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646 // indirect
 	github.com/tc-hib/winres v0.3.1 // indirect
-	golang.org/x/image v0.12.0 // indirect
 )
 
 require (

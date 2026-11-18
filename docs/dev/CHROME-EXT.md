@@ -54,6 +54,18 @@ Emulation, Log, Inspector, CSS, Network, Accessibility, Overlay, DOMSnapshot, Pe
   one client at a time). It answers what chromedp needs plus `setAutoAttach` with flatten; Playwright
   `connectOverCDP` is untested.
 
+## Showing which window is Gerdr's
+
+Like Claude in Chrome: the tab goes into a blue "Gerdr" tab group, and the page gets a glowing frame plus a cursor
+that glides to each mouse event before the extension forwards it, with a ripple on a press (overlay.js, sent in with
+`Runtime.evaluate` now and `Page.addScriptToEvaluateOnNewDocument` for later pages). It is drawn by the extension, not
+by Gerdr, so the fake CDP endpoint's clients get it too. Kept out of the agent's way: `pointer-events: none`, a closed
+shadow root (snapshot walks only open ones), appended to `<html>` (not in `body.innerText`), hidden during
+`Page.captureScreenshot`; built with the CSSOM and Web Animations only, since `innerHTML` / `<style>` fail on pages with
+Trusted Types or a strict `style-src` (tested). Every overlay call gives up after 700 ms, since a page paused on an
+alert never answers. When the debugger goes (release, the user's Cancel, a blocked site) the group is removed and a
+content script takes the overlay off the current page (needs `scripting`; fails silently on a site not allowed).
+
 ## How the actions work (and what was measured)
 
 Modelled on Claude in Chrome's tools.
@@ -73,7 +85,11 @@ Modelled on Claude in Chrome's tools.
 - **scroll** is `scrollBy` from inside the page on the scrollable box under the point. Measured: `Input.dispatchMouseEvent`
   `mouseWheel` never answers in a window that isn't in front (the call hit the 2-minute timeout); clicks, keys and
   `Page.captureScreenshot` work there.
-- **screenshot** clips with `scale: 1/devicePixelRatio`, so the image is in CSS pixels and a point on it is a click x,y.
+- **screenshot** gives an image in CSS pixels, so a point on it is a click x,y. Not with `clip.scale: 1/devicePixelRatio`:
+  in a visible window Chrome re-renders the page at that scale on screen for the capture, and the user sees it flash
+  smaller (A/B on a 2x screen: every clip+scale capture flickered, no plain one did). The viewport, and an element
+  that fits in it, are captured plain and cropped / scaled in Go (`toCSSPixels`); only `--full` and an element larger
+  than the viewport still use Chrome's clip, and still flash.
 - **console / network / dialog**: Page, Runtime, Network and Log are enabled when the window opens (on about:blank,
   then `location.replace(url)` so the first load is logged and about:blank stays out of the history); their events
   go into a per-window log (tablog.go). While an alert / confirm is open the page is paused and DevTools calls into it

@@ -1,12 +1,17 @@
 package chromeext
 
 import (
+	"bytes"
 	"context"
 	_ "embed"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"image"
+	"image/jpeg"
+	"image/png"
+	"math"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -16,6 +21,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/gerdr-dev/gerdr/internal/i18n"
+	"golang.org/x/image/draw"
 )
 
 // What `gerdr browser` and its MCP server can do in a window, modelled on Claude in Chrome: an outline of the page
@@ -541,27 +547,45 @@ func (t *Tab) screenshot(ctx context.Context, a ActArgs) (*ActResult, error) {
 	if a.Format == "jpeg" || a.Format == "jpg" {
 		format = "jpeg"
 	}
-	// scaled to CSS pixels: a point in the image is the same point for click x,y (as long as it's the viewport)
-	clip := map[string]any{"x": m.X, "y": m.Y, "width": m.W, "height": m.H, "scale": 1 / m.DPR}
-	p := map[string]any{"format": format}
+	// The image is in CSS pixels, so a point on it is the same point for click x,y (as long as it's the viewport).
+	// Asking Chrome for that with clip.scale makes a visible window flash: it re-renders the page at the smaller
+	// scale on screen for the capture (measured: every clip+scale capture flickered, plain ones never did). So the
+	// viewport and an element inside it are captured as they are and cropped / scaled down here; only a whole page
+	// or an element bigger than the viewport still needs Chrome's clip.
 	what := fmt.Sprintf("viewport %gx%g (coordinates match click x,y)", m.W, m.H)
+	crop := image.Rect(0, 0, int(m.W), int(m.H))
+	var clip map[string]any
 	switch {
 	case a.Target != "" && !strings.Contains(a.Target, ","):
 		var bx struct{ X, Y, W, H float64 }
 		if err := t.page(ctx, &bx, "box", a.Target); err != nil {
 			return nil, err
 		}
-		clip = map[string]any{"x": bx.X, "y": bx.Y, "width": bx.W, "height": bx.H, "scale": 1 / m.DPR}
-		p["captureBeyondViewport"] = true
 		what = a.Target
+		// box is in page coordinates; after scrolling it into view, is it all inside the viewport?
+		var now struct{ X, Y float64 }
+		if err := t.page(ctx, &now, "metrics"); err != nil {
+			return nil, err
+		}
+		vx, vy := bx.X-now.X, bx.Y-now.Y
+		if vx >= 0 && vy >= 0 && vx+bx.W <= m.W && vy+bx.H <= m.H {
+			crop = image.Rect(int(vx), int(vy), int(math.Ceil(vx+bx.W)), int(math.Ceil(vy+bx.H)))
+		} else {
+			clip = map[string]any{"x": bx.X, "y": bx.Y, "width": bx.W, "height": bx.H, "scale": 1 / m.DPR}
+		}
 	case a.Full:
 		h := min(m.SH, 16000)
 		clip = map[string]any{"x": 0, "y": 0, "width": m.SW, "height": h, "scale": 1 / m.DPR}
-		p["captureBeyondViewport"] = true
 		what = fmt.Sprintf("whole page %gx%g", m.SW, h)
 	}
-	p["clip"] = clip
-	if format == "jpeg" {
+	p := map[string]any{"format": format}
+	if clip != nil {
+		p["clip"] = clip
+		p["captureBeyondViewport"] = true
+	} else {
+		p["format"] = "png" // re-encoded below
+	}
+	if p["format"] == "jpeg" {
 		p["quality"] = 80
 	}
 	var r struct {
@@ -569,6 +593,13 @@ func (t *Tab) screenshot(ctx context.Context, a ActArgs) (*ActResult, error) {
 	}
 	if err := t.call(ctx, "Page.captureScreenshot", p, &r); err != nil {
 		return nil, err
+	}
+	if clip == nil {
+		data, err := toCSSPixels(r.Data, crop, m.DPR, format)
+		if err != nil {
+			return nil, err
+		}
+		r.Data = data
 	}
 	return &ActResult{Text: "screenshot of " + what, Image: r.Data, MIME: "image/" + format}, nil
 }
@@ -981,4 +1012,49 @@ func (t *Tab) upload(ctx context.Context, a ActArgs) (*ActResult, error) {
 		names[i] = filepath.Base(f)
 	}
 	return &ActResult{Text: "attached " + strings.Join(names, ", ") + " to " + a.Target}, nil
+}
+
+// toCSSPixels takes a plain capture of the viewport (device pixels, base64 PNG), cuts out crop (CSS pixels) and
+// scales it to one image pixel per CSS pixel. The capture can differ from innerWidth x innerHeight by a pixel or a
+// scrollbar, so the scale comes from the image and the crop is kept inside it.
+func toCSSPixels(b64 string, crop image.Rectangle, dpr float64, format string) (string, error) {
+	raw, err := base64.StdEncoding.DecodeString(b64)
+	if err != nil {
+		return "", err
+	}
+	src, err := png.Decode(bytes.NewReader(raw))
+	if err != nil {
+		return "", err
+	}
+	if dpr <= 0 {
+		dpr = 1
+	}
+	b := src.Bounds()
+	from := image.Rect(
+		int(float64(crop.Min.X)*dpr), int(float64(crop.Min.Y)*dpr),
+		int(math.Ceil(float64(crop.Max.X)*dpr)), int(math.Ceil(float64(crop.Max.Y)*dpr)),
+	).Add(b.Min).Intersect(b)
+	if from.Empty() {
+		return "", errors.New("nothing to capture: the area is outside the window")
+	}
+	w := max(1, int(math.Round(float64(from.Dx())/dpr)))
+	h := max(1, int(math.Round(float64(from.Dy())/dpr)))
+	var img image.Image = src
+	if w != b.Dx() || h != b.Dy() || from != b {
+		dst := image.NewRGBA(image.Rect(0, 0, w, h))
+		draw.CatmullRom.Scale(dst, dst.Bounds(), src, from, draw.Src, nil)
+		img = dst
+	}
+	var out bytes.Buffer
+	if format == "jpeg" {
+		err = jpeg.Encode(&out, img, &jpeg.Options{Quality: 80})
+	} else if img == src {
+		out.Write(raw)
+	} else {
+		err = png.Encode(&out, img)
+	}
+	if err != nil {
+		return "", err
+	}
+	return base64.StdEncoding.EncodeToString(out.Bytes()), nil
 }

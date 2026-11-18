@@ -12,6 +12,8 @@
 //   - only allow-listed DevTools commands are forwarded; cookie, storage, target and browser-wide
 //     commands never are.
 
+import { overlay } from './overlay.js'
+
 const HOST = 'com.gerdr.browser'
 const VERSION = chrome.runtime.getManifest().version
 
@@ -61,6 +63,49 @@ async function siteAllowed(url) {
 async function sites() {
   const p = await chrome.permissions.getAll()
   return (p.origins || []).filter((o) => o !== 'https://*/*' && o !== 'http://*/*')
+}
+
+// ---------- showing which tab is Gerdr's ----------
+// The tab sits in a "Gerdr" tab group, and the page gets a glowing frame plus a cursor that moves to each click
+// (overlay.js). Nothing here may make an action fail: every call swallows its errors, and the page-side ones give up
+// after a moment because a page paused on an alert never answers.
+
+const BRAND = '#3b7be0' // Gerdr's brand blue (ui/src/index.css --brand)
+const OVERLAY = `(${overlay})(${JSON.stringify(BRAND)})`
+
+async function markTab(tabId) {
+  try {
+    const group = await chrome.tabs.group({ tabIds: [tabId] })
+    await chrome.tabGroups.update(group, { title: 'Gerdr', color: 'blue' })
+  } catch (e) {
+    console.warn('gerdr: tab group', e)
+  }
+  const target = { tabId }
+  await chrome.debugger.sendCommand(target, 'Page.addScriptToEvaluateOnNewDocument', { source: OVERLAY }).catch(() => {})
+  await chrome.debugger.sendCommand(target, 'Runtime.evaluate', { expression: OVERLAY }).catch(() => {})
+}
+
+// After the debugger is gone (released, or the user cancelled it) its new-document script goes with it, but the
+// current page keeps the overlay: take it off with a plain content script (works on the sites the user allowed).
+function unmarkTab(tabId) {
+  chrome.tabs.ungroup(tabId).catch(() => {})
+  chrome.scripting
+    .executeScript({ target: { tabId }, world: 'MAIN', func: () => window.__gerdrOverlay?.remove() })
+    .catch(() => {})
+}
+
+function overlayCall(tabId, call) {
+  const run = chrome.debugger
+    .sendCommand({ tabId }, 'Runtime.evaluate', { expression: `window.__gerdrOverlay?.${call}`, awaitPromise: true, returnByValue: true })
+    .catch(() => {})
+  return Promise.race([run, new Promise((r) => setTimeout(r, 700))])
+}
+
+// before a mouse event reaches the page: glide the cursor there (waiting, so the user sees where it goes), ripple on press
+async function showPointer(tabId, p) {
+  if (!p || typeof p.x !== 'number' || typeof p.y !== 'number') return
+  if (p.type === 'mouseMoved') await overlayCall(tabId, `move(${p.x}, ${p.y})`)
+  else if (p.type === 'mousePressed') await overlayCall(tabId, `move(${p.x}, ${p.y}), window.__gerdrOverlay?.press()`)
 }
 
 // ---------- connection to Gerdr ----------
@@ -135,6 +180,7 @@ chrome.debugger.onEvent.addListener((source, method, params) => {
 
 chrome.debugger.onDetach.addListener((source, reason) => {
   if (!owned.has(source.tabId)) return
+  unmarkTab(source.tabId)
   // canceled_by_user: the user clicked "Cancel" on Chrome's debugging bar
   send({ event: 'detached', tab: source.tabId, reason })
 })
@@ -160,6 +206,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, change) => {
   info.blocked = change.url
   persist()
   chrome.debugger.detach({ tabId }).catch(() => {})
+  unmarkTab(tabId)
   send({ event: 'blocked', tab: tabId, url: change.url })
 })
 
@@ -250,6 +297,7 @@ async function handle(op, a) {
         chrome.windows.remove(win.id).catch(() => {})
         throw e
       }
+      await markTab(tab)
       if (a.url && a.url !== 'about:blank') await chrome.tabs.update(tab, { url: a.url })
       return { tab, window: win.id }
     }
@@ -275,6 +323,7 @@ async function handle(op, a) {
       if (!owned.delete(a.tab)) return null
       persist()
       await chrome.debugger.detach({ tabId: a.tab }).catch(() => {})
+      unmarkTab(a.tab)
       return null
     }
 
@@ -296,7 +345,18 @@ async function handle(op, a) {
       if (a.method === 'Page.navigate' && !(await siteAllowed(a.params?.url))) {
         throw fail('Gerdr is not allowed on ' + a.params?.url, 'not_granted')
       }
-      return chrome.debugger.sendCommand({ tabId: a.tab }, a.method, a.params || {})
+      const target = { tabId: a.tab }
+      if (a.method === 'Input.dispatchMouseEvent') await showPointer(a.tab, a.params)
+      if (a.method === 'Page.captureScreenshot') {
+        // the frame and cursor are for the user, not in the agent's picture
+        await overlayCall(a.tab, 'hide(true)')
+        try {
+          return await chrome.debugger.sendCommand(target, a.method, a.params || {})
+        } finally {
+          overlayCall(a.tab, 'hide(false)')
+        }
+      }
+      return chrome.debugger.sendCommand(target, a.method, a.params || {})
     }
 
     default:
