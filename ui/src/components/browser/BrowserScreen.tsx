@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, ArrowRight, Check, Globe, MoreHorizontal, Plus, RotateCw, XCircle } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Globe, Keyboard, MoreHorizontal, Plus, RotateCw, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { api, type BrowserInput } from "@/lib/api";
@@ -220,11 +220,11 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
   const at = (e: { clientX: number; clientY: number }) => {
     const cv = canvasRef.current;
     if (!cv || !cv.width) return null;
+    // The canvas is as wide as the pane and as tall as its picture says (width-fit, top-aligned), so its box is
+    // the picture
     const r = cv.getBoundingClientRect();
-    // object-contain at the top left: the drawn picture is the canvas scaled to fit
-    const s = Math.min(r.width / cv.width, r.height / cv.height);
-    const x = (e.clientX - r.left) / (cv.width * s);
-    const y = (e.clientY - r.top) / (cv.height * s);
+    const x = (e.clientX - r.left) / r.width;
+    const y = (e.clientY - r.top) / r.height;
     if (x < 0 || x > 1 || y < 0 || y > 1) return null;
     return { x, y };
   };
@@ -236,8 +236,10 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
     const p = at(e);
     if (!p) return;
     e.preventDefault();
-    keysRef.current?.focus({ preventScroll: true });
     setEditing(false);
+    // A touch doesn't take the keys: on a phone that opens the keyboard on every tap. The keyboard comes up when the
+    // page's focus lands in a field (page.editable, below) or from the ⌨ button
+    if (e.pointerType !== "touch") keysRef.current?.focus({ preventScroll: true });
     if (e.pointerType === "touch") {
       touch.current = { x: e.clientX, y: e.clientY, lastX: e.clientX, lastY: e.clientY, moved: false };
       return;
@@ -374,6 +376,23 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
     if (!tab && focused) addrRef.current?.focus();
   }, [tab, focused]);
 
+  // A phone's keyboard follows the page's focus: up when it lands in a field, down when it leaves. Android opens it
+  // from here; iOS only from a tap, which the ⌨ button is
+  const coarse = typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
+  useEffect(() => {
+    if (!coarse || !live) return;
+    const ta = keysRef.current;
+    if (!ta) return;
+    if (page?.editable) ta.focus({ preventScroll: true });
+    else if (document.activeElement === ta) ta.blur();
+  }, [page?.editable, live]);
+  const toggleKeys = () => {
+    const ta = keysRef.current;
+    if (!ta) return;
+    if (document.activeElement === ta) ta.blur();
+    else ta.focus({ preventScroll: true });
+  };
+
   const shown = editing ? addr : (page?.url ?? cur?.url ?? (gone ? (lastURL ?? "") : ""));
   const title = page?.title || (cur ? hostOf(cur.url) : "");
 
@@ -404,6 +423,19 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
         <Button variant="ghost" size="icon" className="size-6 shrink-0" disabled={!live} title={t("browser.reload")} onClick={() => send({ kind: "reload" })}>
           <RotateCw className={cn("size-3.5", page?.loading && "animate-spin")} />
         </Button>
+        {coarse && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-6 shrink-0"
+            disabled={!live}
+            title={t("browser.keyboard")}
+            onPointerDown={(e) => e.preventDefault()}
+            onClick={toggleKeys}
+          >
+            <Keyboard className="size-3.5" />
+          </Button>
+        )}
         <form
           className="min-w-0 flex-1"
           onSubmit={(e) => {
@@ -481,7 +513,9 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
           {live && (
             <canvas
               ref={canvasRef}
-              className={cn("absolute inset-0 h-full w-full touch-none object-contain object-left-top", !hasPic && "invisible")}
+              // Width-fit and top-aligned, not "contain": a phone's keyboard makes the pane shorter, and fitting the
+              // whole picture into that shrank it (and the page under the finger) mid-tap
+              className={cn("absolute top-0 left-0 h-auto w-full touch-none", !hasPic && "invisible")}
               onPointerDown={onPointerDown}
               onPointerMove={onPointerMove}
               onPointerUp={onPointerUp}

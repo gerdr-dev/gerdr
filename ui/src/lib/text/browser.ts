@@ -13,6 +13,7 @@ export const zh = {
     "在上面输入网址打开。这是「{project}」项目自己的浏览器：登录过的网站在这个项目里一直保持登录，agent 用 gerdr browser 打开的页面也显示在这里。",
   "browser.gone": "这个页面已经关了",
   "browser.reopen": "重新打开",
+  "browser.keyboard": "键盘",
 };
 
 export const en: Record<keyof typeof zh, string> = {
@@ -29,4 +30,5 @@ export const en: Record<keyof typeof zh, string> = {
     "Type a URL above. This is the {project} project's own browser: sites you sign in to stay signed in for this project, and pages agents open with gerdr browser show here too.",
   "browser.gone": "This page was closed",
   "browser.reopen": "Open again",
+  "browser.keyboard": "Keyboard",
 };

@@ -262,13 +262,14 @@ func (v *View) pageLoop() {
 			p = screen.Page{URL: e.URL, Title: e.Title, Back: h.CurrentIndex > 0, Forward: h.CurrentIndex < len(h.Entries)-1}
 		}
 		var ready string
-		if raw, err := v.t.eval(ctx, "[document.title, document.readyState]"); err == nil {
-			var r []string
-			if json.Unmarshal(raw, &r) == nil && len(r) == 2 {
-				if r[0] != "" {
-					p.Title = r[0]
+		if raw, err := v.t.eval(ctx, editableJS); err == nil {
+			var r []any
+			if json.Unmarshal(raw, &r) == nil && len(r) == 3 {
+				if s, _ := r[0].(string); s != "" {
+					p.Title = s
 				}
-				ready = r[1]
+				ready, _ = r[1].(string)
+				p.Editable, _ = r[2].(bool)
 			}
 		}
 		cancel()
@@ -289,10 +290,28 @@ func (v *View) pageLoop() {
 	}
 }
 
+// editableJS: the title, the load state, and whether the focus is somewhere to type (inside iframes and shadow roots).
+const editableJS = `(() => {
+  let a = document.activeElement;
+  for (;;) {
+    if (a && a.shadowRoot && a.shadowRoot.activeElement) { a = a.shadowRoot.activeElement; continue }
+    if (a && a.tagName === "IFRAME") { try { const d = a.contentDocument; if (d && d.activeElement) { a = d.activeElement; continue } } catch (e) {} }
+    break
+  }
+  const t = a && a.tagName;
+  const typing = !!a && (a.isContentEditable || t === "TEXTAREA" || (t === "INPUT" && !/^(button|submit|reset|checkbox|radio|range|color|file|image|hidden)$/i.test(a.type)));
+  return [document.title, document.readyState, typing && !a.disabled && !a.readOnly]
+})()`
+
 // Do runs one input from the pane. X / Y are fractions of the viewport, as on the remote screen.
 func (v *View) Do(in screen.Input) error {
 	ctx, cancel := context.WithTimeout(v.ctx, 15*time.Second)
 	defer cancel()
+	switch in.Kind {
+	case "click", "up", "key":
+		// the focus may have moved into or out of a field: the pane opens / closes a phone's keyboard by it
+		defer v.kickPage()
+	}
 	t := v.t
 	v.mu.Lock()
 	vw, vh := v.vw, v.vh

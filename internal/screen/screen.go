@@ -49,6 +49,9 @@ type Page struct {
 	Back    bool   `json:"back,omitempty"`
 	Forward bool   `json:"forward,omitempty"`
 	Loading bool   `json:"loading,omitempty"`
+	// Editable: the page's focus is somewhere to type (an input, a textarea, a contenteditable). A phone opens its
+	// keyboard only then, instead of on every tap
+	Editable bool `json:"editable,omitempty"`
 }
 
 var ErrUnsupported = errors.New("remote screen only works on macOS")

@@ -3,7 +3,7 @@
 // server/screenstream.go), each message a header and the tiles' JPEGs back to back, pasted onto a canvas here.
 
 /** Where a browser tab is (the Browser pane's address bar); sent when it changes. */
-export type StreamPage = { url: string; title: string; back?: boolean; forward?: boolean; loading?: boolean };
+export type StreamPage = { url: string; title: string; back?: boolean; forward?: boolean; loading?: boolean; editable?: boolean };
 
 export type StreamFrame = {
   seq: number;

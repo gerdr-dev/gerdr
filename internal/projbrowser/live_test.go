@@ -355,3 +355,33 @@ func TestLiveNewTab(t *testing.T) {
 		t.Error("the viewed page should be in front")
 	}
 }
+
+// TestLiveEditable: the page says when its focus is in a field (a phone's keyboard follows it).
+func TestLiveEditable(t *testing.T) {
+	if os.Getenv("GERDR_LIVE_BROWSER") == "" {
+		t.Skip("set GERDR_LIVE_BROWSER=1")
+	}
+	b := chromeext.New(nil)
+	m := New(t.TempDir(), b, nil)
+	defer m.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	id, _ := m.Open(ctx, "test", "https://example.com/", 800, 600)
+	b.Act(ctx, id, "wait", chromeext.ActArgs{Load: true, Timeout: 20000})
+	b.Act(ctx, id, "eval", chromeext.ActArgs{Expr: `(() => { const i = document.createElement("input"); i.style = "position:fixed;left:0;top:0;width:400px;height:100px"; document.body.append(i) })()`})
+	v, _ := b.View(id)
+	defer v.Close()
+	v.Grab(800)
+	editable := func() bool {
+		time.Sleep(400 * time.Millisecond)
+		return v.Page().Editable
+	}
+	v.Do(screen.Input{Kind: "click", X: 0.1, Y: 0.05})
+	if !editable() {
+		t.Error("focus in the input: want editable")
+	}
+	v.Do(screen.Input{Kind: "click", X: 0.5, Y: 0.8})
+	if editable() {
+		t.Error("clicked outside: want not editable")
+	}
+}
