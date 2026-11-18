@@ -126,9 +126,21 @@ window, file pickers, drag and drop), no encoding. The plan, not built:
   moves, minimizes and stacks with it, placed over the pane's rect. The pane reports its rect and hides the view
   while a Gerdr menu or dialog would be under it (the same limit as Electron's WebContentsView).
 - Windows: a second WebView2 controller in the same window, a `CoreWebView2Profile` per project.
-- Open question to measure first: several persistent profiles in the one Chrome that Lightron runs (its own
-  `--profile-directory` per project, opened in the running instance) and whether CDP reaches their windows. The
-  child window must live in Lightron's process, so a separate browser per project won't do there.
+- Prototype (2026-11-18, /tmp: an ad-hoc signed Chrome 157 copy with a test dylib, as Lightron runs it), measured:
+  - **A profile per project in the one browser**: launching the engine again with `--user-data-dir=<the same>
+    --profile-directory=<project> --app=<url>` hands over to the running instance, which opens an `--app` window in
+    that profile (its folder is made and kept). CDP sees every profile's pages (`Target.getTargets`, each with its
+    own `browserContextId`), so actions work on them. But `Target.createTarget` only takes the default context:
+    another profile's id is "Failed to find browser context". So pages open by the command line, then get attached
+    over CDP.
+  - **The child window**: `[gerdrWindow addChildWindow:pageWindow ordered:NSWindowAbove]` from the dylib, after
+    `styleMask = NSWindowStyleMaskBorderless`, works on Chrome's `NativeWidgetMacNSWindow`. Moving the parent moved
+    the child by exactly the same amount; minimizing the parent hid the child and restoring brought it back,
+    still attached. Size and place it through CDP `Browser.setWindowBounds` (screen top-left coordinates):
+    `-[NSWindow setFrame:]` from the dylib moved it but Chrome put the width back.
+  - Not yet tried: fullscreen and Spaces (they take over the screen), the keyboard focus moving between Gerdr and
+    the page window, Gerdr's own menus over the pane (expected to need hiding the child while they are open).
+- The child window must live in Lightron's process, so a separate browser per project won't do there.
 - The headless browser and the App's Chrome can't hold one profile at once: the App would ask the backend to stop
   that project's headless browser before opening the profile, and give it back when it closes. Remote viewers then
   stream the App's window, which `--disable-backgrounding-occluded-windows` keeps painting.

@@ -456,11 +456,65 @@ function BrowserPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
         focused={focused}
         headClassName={cn(headH, !focused && many && "opacity-70")}
         onHeadPointerDown={drag.onPointerDown}
-        extra={<PaneCount count={count} />}
-        onClose={() => (focusPane(pane.id), closeFocusedPane())}
+        extra={
+          <>
+            <PaneCount count={count} />
+            {zoomed && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-6 shrink-0"
+                onClick={toggleZoom}
+                title={keyText("zoom") ? t("panes.restoreKey", { key: keyText("zoom") }) : t("panes.restore")}
+              >
+                <Minimize2 className="size-3.5" />
+              </Button>
+            )}
+          </>
+        }
+        paneItems={<PaneMoveItems pane={pane} tab={tab} zoomed={zoomed} count={count} />}
         Body={PaneBody}
       />
     </div>
+  );
+}
+
+/**
+ * The ⋯ menu's part every pane has, in the session pane's order and words: split, new tab, zoom, to its own tab, close.
+ * A pane's own items go above it (the Browser pane's pages).
+ */
+function PaneMoveItems({ pane, tab, zoomed, count }: { pane: PaneLeaf; tab: Tab; zoomed?: boolean; count?: Count }) {
+  return (
+    <>
+      <DropdownMenuItem onClick={() => (focusPane(pane.id), splitFocused("right"))}>
+        <Columns2 /> {t("panes.splitRight")}
+        <ActionKeys action="splitRight" />
+      </DropdownMenuItem>
+      <DropdownMenuItem onClick={() => (focusPane(pane.id), splitFocused("down"))}>
+        <Rows2 /> {t("panes.splitDown")}
+        <ActionKeys action="splitDown" />
+      </DropdownMenuItem>
+      <DropdownMenuItem onClick={() => runAction("newTab")}>
+        <Plus /> {t("panes.newTab")}
+        <ActionKeys action="newTab" />
+      </DropdownMenuItem>
+      {!zoomed && !count && leaves(tab.root).length > 1 && (
+        <DropdownMenuItem onClick={() => (focusPane(pane.id), toggleZoom())}>
+          <Maximize2 /> {t("panes.zoom")}
+          <ActionKeys action="zoom" />
+        </DropdownMenuItem>
+      )}
+      {leaves(tab.root).length > 1 && (
+        <DropdownMenuItem onClick={() => paneToTab(pane.id)}>
+          <ExternalLink /> {t("panes.toNewTab")}
+        </DropdownMenuItem>
+      )}
+      <DropdownMenuSeparator />
+      <DropdownMenuItem onClick={() => (focusPane(pane.id), closeFocusedPane())}>
+        <X /> {t("panes.closePane")}
+        <ActionKeys action="closePane" />
+      </DropdownMenuItem>
+    </>
   );
 }
 

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, ArrowRight, ChevronDown, Globe, Plus, RotateCw, X, XCircle } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Globe, MoreHorizontal, Plus, RotateCw, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { api, type BrowserInput } from "@/lib/api";
@@ -48,9 +48,10 @@ type Props = {
   /** the title bar's own look (Panes.tsx: height, padding, dimmed when not focused) */
   headClassName: string;
   onHeadPointerDown?: (e: React.PointerEvent<HTMLElement>) => void;
-  /** after the address bar in the title bar (the phone's pane count) */
+  /** after the address bar in the title bar (the phone's pane count, zoom's restore) */
   extra?: React.ReactNode;
-  onClose: () => void;
+  /** the ⋯ menu's items every pane has (Panes.tsx PaneMoveItems), below this pane's own */
+  paneItems: React.ReactNode;
   /** wraps the picture (Panes.tsx PaneBody: the zoom animation's pinned size) */
   Body: React.ComponentType<{ children: React.ReactNode }>;
 };
@@ -82,7 +83,7 @@ function hostOf(u: string) {
   }
 }
 
-export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClassName, onHeadPointerDown, extra, onClose, Body }: Props) {
+export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClassName, onHeadPointerDown, extra, paneItems, Body }: Props) {
   const all = useBrowserTabs((s) => s.tabs);
   const loaded = useBrowserTabs((s) => s.loaded);
   useEffect(() => {
@@ -438,10 +439,11 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
           />
         </form>
         {extra}
+        {/* One ⋯ like every pane's: this pane's pages first, then the pane moves (split, new tab, close…) */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="size-6 shrink-0" title={t("browser.pages")}>
-              <ChevronDown className="size-3.5" />
+              <MoreHorizontal className="size-3.5" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="max-w-80" onCloseAutoFocus={(e) => e.preventDefault()}>
@@ -449,10 +451,9 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
               <DropdownMenuItem key={p.tab} onClick={() => showBrowserTab(paneId, project, p.tab)} className={cn(p.tab === tab && "font-medium")}>
                 <Globe className={cn(p.tab === tab ? "text-brand" : "text-muted-foreground")} />
                 <span className="truncate">{p.tab === tab && page?.title ? page.title : hostOf(p.url)}</span>
-                <span className="ml-auto pl-2 font-mono text-[10px] text-muted-foreground">#{p.tab}</span>
+                {p.tab === tab && <Check className="ml-auto" />}
               </DropdownMenuItem>
             ))}
-            {pages.length > 0 && <DropdownMenuSeparator />}
             <DropdownMenuItem onClick={() => (showBrowserTab(paneId, project, undefined), requestAnimationFrame(() => addrRef.current?.focus()))}>
               <Plus /> {t("browser.newPage")}
             </DropdownMenuItem>
@@ -470,11 +471,10 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
                 <XCircle /> {t("browser.closePage")}
               </DropdownMenuItem>
             )}
+            <DropdownMenuSeparator />
+            {paneItems}
           </DropdownMenuContent>
         </DropdownMenu>
-        <Button variant="ghost" size="icon" className="size-6 shrink-0" title={t("common.close")} onClick={onClose}>
-          <X className="size-3.5" />
-        </Button>
       </div>
       <Body>
         <div ref={boxRef} className="relative h-full w-full overflow-hidden bg-background">
