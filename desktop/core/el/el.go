@@ -8,12 +8,14 @@
 //	start {url, port}            the backend is up: open the first window at its login link
 //	newWindow {url} → window id  windows {} → [ids]   focus {win}   load {win, url}   eval {win, js} → value
 //	badge {label}   menu {items}   dockMenu {items}   quit {}   webPid {win} → pid   engine {} → {exe, dataDir, kind}
+//	openExternal {url}   openPath {path, reveal}
 //	notify {win, title, body, sessionId, space}   dialog {kind, title, detail, buttons, defaultId, cancelId} → index
-//	openView {profile, url} → view id   viewCdp {view, method, params} → result   viewPlace {view, win, rect}
+//	openView {profile, url} → view id   viewCdp {view, method, params} → result   viewPlace {view, win, rect, radius}
 //	viewHide {view}   viewClose {view}
 //
 // Electron → core: {"ev": …}
 //
+//	view kinds also: focus (the page took the focus)
 //	ready {browserOnly, port}   message {win, data}   window {win, open}   menu {item, win}
 //	noteClick {win, sessionId, space}   view {view, kind: cdp | popup | closed, method, params, url}   quit {}
 package el
@@ -395,6 +397,14 @@ func (a *App) menuData(items []MenuItem, prefix string) []map[string]any {
 	return out
 }
 
+// OpenExternal opens a link in the default browser (http, https, mailto only).
+func (a *App) OpenExternal(u string) { _, _ = a.call(map[string]any{"op": "openExternal", "url": u}) }
+
+// OpenPath opens a file with its default program, or shows it in Finder / Explorer (reveal).
+func (a *App) OpenPath(p string, reveal bool) {
+	_, _ = a.call(map[string]any{"op": "openPath", "path": p, "reveal": reveal})
+}
+
 // Quit quits the App.
 func (a *App) Quit() { _, _ = a.call(map[string]any{"op": "quit"}) }
 
@@ -447,10 +457,13 @@ func (a *App) Engine() (exe string, args []string, dataDir string) {
 // ViewOptions: a project's page.
 type ViewOptions struct {
 	Profile string // the partition (persist:<Profile>)
+	Tab     int    // the backend's id for it (the UI asks Electron for a still by it)
 	URL     string
 	OnEvent func(method string, params json.RawMessage)
 	OnPopup func(url string)
 	OnClose func()
+	// OnFocus: the page took the focus (a click in it).
+	OnFocus func()
 }
 
 // View is a project's page (a WebContentsView).
@@ -463,7 +476,7 @@ type View struct {
 
 // OpenView opens a project's page in its partition, parked (painting, not on screen) until placed.
 func (a *App) OpenView(o ViewOptions) (*View, error) {
-	raw, err := a.call(map[string]any{"op": "openView", "profile": o.Profile, "url": o.URL})
+	raw, err := a.call(map[string]any{"op": "openView", "profile": o.Profile, "url": o.URL, "tab": o.Tab})
 	if err != nil {
 		return nil, err
 	}
@@ -483,6 +496,10 @@ func (v *View) event(kind, method string, params json.RawMessage, url string) {
 	case "cdp":
 		if v.opts.OnEvent != nil {
 			v.opts.OnEvent(method, params)
+		}
+	case "focus":
+		if v.opts.OnFocus != nil {
+			go v.opts.OnFocus()
 		}
 	case "popup":
 		if v.opts.OnPopup != nil {
@@ -505,9 +522,10 @@ func (v *View) Call(method string, params any) (json.RawMessage, error) {
 	return v.app.call(map[string]any{"op": "viewCdp", "view": v.id, "method": method, "params": params})
 }
 
-// Place puts the page over a box of window w (CSS px of w's page; dpr unused: Electron applies the page's zoom).
-func (v *View) Place(w *Window, x, y, width, height, dpr float64) error {
-	_, err := v.app.call(map[string]any{"op": "viewPlace", "view": v.id, "win": w.id, "rect": []float64{x, y, width, height}})
+// Place puts the page over a box of window w (CSS px of w's page; Electron applies the page's zoom), its corners
+// rounded by radius (CSS px; the pane's inside).
+func (v *View) Place(w *Window, x, y, width, height, radius float64) error {
+	_, err := v.app.call(map[string]any{"op": "viewPlace", "view": v.id, "win": w.id, "rect": []float64{x, y, width, height}, "radius": radius})
 	return err
 }
 

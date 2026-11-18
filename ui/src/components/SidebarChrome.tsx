@@ -35,7 +35,7 @@ export function SidebarBottom({ sidebarToggle }: { sidebarToggle?: boolean }) {
 export function ListHeader() {
   const name = useStore((s) => spaceList(s.layout).find((x) => x.id === currentSpace(s.layout))?.name);
   return (
-    <div className="flex h-10 shrink-0 items-center gap-1 border-b pr-1.5 pl-3" style={{ WebkitAppRegion: "drag" } as any}>
+    <div data-titlebar-inset className="flex h-10 shrink-0 items-center gap-1 border-b pr-1.5 pl-3" style={{ WebkitAppRegion: "drag" } as any}>
       <span className="min-w-0 flex-1 truncate text-[12px] font-semibold">{name}</span>
       <Tooltip>
         <TooltipTrigger asChild>

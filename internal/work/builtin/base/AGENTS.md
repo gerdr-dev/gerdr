@@ -64,7 +64,12 @@ and their choices are what they set or wrote down, not what the code says.
     hidden, while another is shown, and `document.visibilityState` stays "visible" all the while.
   - `ui/ui.json` — the title, `"icon"` / `"color"` (its button on Gerdr's rail, the same choices as an agent's icon:
     a glyph or line icon like `kanban`, or `sprite:<key>` from an add-on), and `"chat": false` when the page draws its
-    own chats with `SessionChat` (it then gets the whole width; without it, you are the column on its right). These are
+    own chats with `SessionChat` (it then gets the whole width; without it, you are the column on its right), and
+    `"titleBar": true` when the page's own header is laid out for the macOS App's title bar: the App has no system
+    bar, its traffic lights sit over the page's top-left, so by default Gerdr puts a strip of their height above the
+    page; with `"titleBar": true` the page reaches the window's top instead, starts its header row
+    `var(--titlebar-inset, 0px)` from its left edge and `var(--titlebar-h, 0px)` tall (unset outside the App), and makes the
+    row's empty space drag the window with `-webkit-app-region: drag` (`no-drag` on its buttons). These are
     the panel's own, for everyone who installs it. What the user picks from the button's right-click (or `gerdr panel
     rename` / `icon`) is kept in `user/ui.json` and wins over them, for this user only: to change the name they see
     after they picked one, change it there.

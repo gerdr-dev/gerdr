@@ -58,7 +58,7 @@ for arch in $ARCHS; do
   CGO_ENABLED=0 GOOS=darwin GOARCH=$arch go build -trimpath -ldflags '-s -w' -o "$RES/gerdr-shell" ./desktop/core
   sign "$RES/gerdr-shell" io.github.zbysir.gerdr.shell
   rm -rf "$OUT/$arch"
-  node desktop/pack.js "$farch" "$NAME" "$ID" "$VERSION" "$(git rev-parse --short HEAD)" "$SHELL_ID" "$ICNS/icon.icns" "$OUT/$arch" "$RES/gerdr" "$RES/gerdr-shell" >/dev/null
+  node desktop/pack.js darwin "$farch" "$NAME" "$ID" "$VERSION" "$(git rev-parse --short HEAD)" "$SHELL_ID" "$ICNS/icon.icns" "$OUT/$arch" "$RES/gerdr" "$RES/gerdr-shell" >/dev/null
   mv "$OUT/$arch/$NAME-darwin-$farch/$NAME.app" "$OUT/$arch/$NAME.app"
   rm -rf "$OUT/$arch/$NAME-darwin-$farch" "$RES"
   APP="$OUT/$arch/$NAME.app"

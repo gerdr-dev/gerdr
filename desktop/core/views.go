@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"net/url"
@@ -40,6 +41,7 @@ type appView struct {
 	profile string      // its profile's name in the App's browser data directory
 	place   chan func() // the latest placement, done in order and coalesced
 	placed  bool        // logged the first time
+	host    *el.Window  // the window whose pane shows it (placeView)
 }
 
 func newAppBrowser(s *shell) *appBrowser {
@@ -208,6 +210,7 @@ func (b *appBrowser) open(profile, raw string, opener int) (int, error) {
 	av := &appView{profile: profile, place: make(chan func(), 1)}
 	v, err := app.OpenView(el.ViewOptions{
 		Profile: profile,
+		Tab:     tab,
 		URL:     raw,
 		OnEvent: func(method string, params json.RawMessage) {
 			b.send(map[string]any{"event": "cdp", "tab": tab, "method": method, "params": params})
@@ -219,6 +222,12 @@ func (b *appBrowser) open(profile, raw string, opener int) (int, error) {
 				return
 			}
 			b.send(map[string]any{"event": "popup", "tab": child, "opener": tab, "url": u})
+		},
+		// a click in the page: the pane showing it becomes the focused one (BrowserScreen listens)
+		OnFocus: func() {
+			if h := av.host; h != nil {
+				_ = h.Eval(fmt.Sprintf(`window.dispatchEvent(new CustomEvent("gerdr:browserfocus", {detail: %d}))`, tab))
+			}
 		},
 		OnClose: func() {
 			b.mu.Lock()
@@ -248,7 +257,7 @@ func (b *appBrowser) view(tab int) *appView {
 	return b.views[tab]
 }
 
-// placeView: the UI's Browser pane says where its box is ({type: "browserView", tab, rect: [x, y, w, h], dpr}) or
+// placeView: the UI's Browser pane says where its box is ({type: "browserView", tab, rect: [x, y, w, h], radius}) or
 // that it's gone ({…, hide: true}). Only the latest counts: a split being dragged sends many.
 func (b *appBrowser) placeView(w *el.Window, m map[string]any) {
 	n, _ := m["tab"].(float64)
@@ -269,7 +278,7 @@ func (b *appBrowser) placeView(w *el.Window, m map[string]any) {
 		}
 	} else {
 		r, _ := m["rect"].([]any)
-		dpr, _ := m["dpr"].(float64)
+		radius, _ := m["radius"].(float64)
 		if len(r) != 4 {
 			return
 		}
@@ -278,7 +287,8 @@ func (b *appBrowser) placeView(w *el.Window, m map[string]any) {
 		width, _ := r[2].(float64)
 		height, _ := r[3].(float64)
 		f = func() {
-			if err := v.v.Place(w, x, y, width, height, dpr); err != nil {
+			v.host = w
+			if err := v.v.Place(w, x, y, width, height, radius); err != nil {
 				log.Printf("app browser: place: %v", err)
 			} else if !v.placed {
 				v.placed = true

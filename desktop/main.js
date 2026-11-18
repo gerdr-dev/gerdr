@@ -34,16 +34,34 @@ const appName = dev ? process.env.GERDR_SHELL_NAME || "Gerdr dev shell" : path.b
 app.setName(appName);
 // "<name> Shell": the directory the Lightron shell used (update prefs, downloaded backends: the core's -data). The
 // browser data (Electron's userData: the UI's localStorage, the projects' partitions) goes in electron/ inside it.
-const shellDir = process.env.GERDR_SHELL_DATA || path.join(app.getPath("appData"), appName + " Shell");
+// Windows: %LOCALAPPDATA%\<name>, the WebView2 shell's (tools/winshell: its update prefs, downloaded backends).
+const shellDir =
+  process.env.GERDR_SHELL_DATA ||
+  (process.platform === "win32" ? path.join(process.env.LOCALAPPDATA || app.getPath("appData"), appName) : path.join(app.getPath("appData"), appName + " Shell"));
+
+// What the package says about itself (pack.js writes gerdr-app.json next to the core): its version, its shell id
+// (tools/shell-id.sh: an update with the same id only needs the backend) and its id (Windows' AppUserModelID, which
+// notifications need).
+const pkg = (() => {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(process.resourcesPath, "gerdr-app.json"), "utf8"));
+  } catch {
+    return {};
+  }
+})();
+if (process.platform === "win32" && pkg.id) app.setAppUserModelId(pkg.id);
 app.setPath("userData", path.join(shellDir, "electron"));
 fs.mkdirSync(app.getPath("userData"), { recursive: true });
 
-// From the Lightron shell: the UI's per-device settings are localStorage under http://gerdr in its browser profile
-// (<name> Shell/profile/Default). Copied over once, before any page loads, so the switch doesn't reset them.
+// From the shell before: the UI's per-device settings are localStorage under http://gerdr in its browser profile
+// (macOS, Lightron: <name> Shell/profile/Default; Windows, WebView2: <name>\WebView2\EBWebView\Default). Copied
+// over once, before any page loads, so the switch doesn't reset them.
 (() => {
-  const from = path.join(shellDir, "profile", "Default", "Local Storage");
+  const from = [path.join(shellDir, "profile", "Default", "Local Storage"), path.join(shellDir, "WebView2", "EBWebView", "Default", "Local Storage")].find((p) =>
+    fs.existsSync(p),
+  );
   const to = path.join(app.getPath("userData"), "Local Storage");
-  if (browserOnly || fs.existsSync(to) || !fs.existsSync(from)) return;
+  if (browserOnly || fs.existsSync(to) || !from) return;
   try {
     fs.cpSync(from, to, { recursive: true, filter: (src) => !/\bLOCK$/.test(src) });
   } catch (e) {
@@ -125,8 +143,9 @@ const log = (...a) => console.error("[shell]", ...a);
 
 function coreBinary() {
   if (process.env.GERDR_CORE) return process.env.GERDR_CORE;
-  if (!dev) return path.join(process.resourcesPath, "gerdr-shell");
-  return path.join(__dirname, "core", "gerdr-shell"); // `make desktop-core` builds it there
+  const exe = process.platform === "win32" ? "gerdr-shell.exe" : "gerdr-shell";
+  if (!dev) return path.join(process.resourcesPath, exe);
+  return path.join(__dirname, "core", exe); // go build -o desktop/core/gerdr-shell ./desktop/core
 }
 
 function startCore() {
@@ -135,7 +154,14 @@ function startCore() {
   if (process.env.GERDR_BIN) args.push("-gerdr", process.env.GERDR_BIN);
   core = spawn(coreBinary(), args, {
     stdio: ["pipe", "pipe", "inherit"],
-    env: { ...process.env, GERDR_SHELL_EXE: process.execPath, GERDR_SHELL_USERDATA: app.getPath("userData"), GERDR_SHELL_PACKAGED: dev ? "" : "1" },
+    env: {
+      ...process.env,
+      GERDR_SHELL_PACKAGED: dev ? "" : "1",
+      GERDR_SHELL_PID: String(process.pid),
+      GERDR_APP_VERSION: pkg.version || "",
+      GERDR_SHELL_ID: pkg.shell || "",
+    },
+    windowsHide: true,
   });
   readline.createInterface({ input: core.stdout }).on("line", (line) => {
     let m;
@@ -235,9 +261,9 @@ function openWindow(url) {
     show: false,
     backgroundColor: nativeTheme.shouldUseDarkColors ? "#0f0f0f" : "#ffffff",
     autoHideMenuBar: true,
-    // Our own title bar (docs/dev/TITLEBAR.md): macOS draws only the traffic lights, the page fills the window to its
-    // top edge and keeps a strip for them (window.gerdrNative.titleBar, the UI's App.tsx / index.css)
-    ...(isMac ? { titleBarStyle: "hidden", trafficLightPosition: { x: 12, y: 9 } } : {}),
+    // Our own title bar (docs/dev/TITLEBAR.md): macOS draws only the traffic lights, at the window's top-left over the
+    // UI's rail, centred on its 40px headers; the UI makes room (window.gerdrNative.titleBar, ui/src/lib/native.ts)
+    ...(isMac ? { titleBarStyle: "hidden", trafficLightPosition: { x: 16, y: 14 } } : {}),
     webPreferences: { preload: path.join(__dirname, "preload.js"), contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: false },
   });
   const id = winId(w);
@@ -290,6 +316,17 @@ function showWindow(w) {
   w.focus();
 }
 
+// A still of a project's page for the pane to show while one of the UI's menus / dialogs is over it (a view is drawn
+// above the page, nothing of the UI can be). Taken here, in-process, as Claude Desktop does: through the backend and
+// the protocol it took long enough that a lightbox opened under the live page and was covered until the still came.
+ipcMain.handle("gerdr:shot", async (e, tab) => {
+  const v = [...views.values()].find((x) => x.tab === tab);
+  if (!v || v.view.webContents.isDestroyed()) return null;
+  const img = await v.view.webContents.capturePage();
+  // PNG: a JPEG still read softer than the live page next to it
+  return img.isEmpty() ? null : "data:image/png;base64," + img.toPNG().toString("base64");
+});
+
 ipcMain.on("gerdr", (e, m) => {
   const w = BrowserWindow.fromWebContents(e.sender);
   if (!w || !wins.has(winId(w))) return;
@@ -316,6 +353,10 @@ function parkWindow(width, height) {
 
 function parkView(v) {
   if (quitting || !views.has(v.id)) return;
+  if (v.radius) {
+    v.radius = 0;
+    v.view.setBorderRadius(0);
+  }
   if (v.host && !v.host.isDestroyed()) v.host.contentView.removeChildView(v.view);
   v.host = null;
   if (!v.park || v.park.isDestroyed()) {
@@ -327,7 +368,7 @@ function parkView(v) {
   v.view.setBounds({ x: 0, y: 0, width: b.width, height: b.height });
 }
 
-function openView(profile, url) {
+function openView(profile, url, tab) {
   const id = String(nextView++);
   const view = new WebContentsView({
     webPreferences: {
@@ -338,7 +379,7 @@ function openView(profile, url) {
       backgroundThrottling: false,
     },
   });
-  const v = { id, view, host: null, park: null, profile };
+  const v = { id, view, host: null, park: null, profile, tab: tab || 0 };
   views.set(id, v);
   const wc = view.webContents;
   // a page opening another (target=_blank, window.open): another view, reported as a popup of this one
@@ -352,6 +393,8 @@ function openView(profile, url) {
     if (!sessionId) send({ ev: "view", view: id, kind: "cdp", method, params });
   });
   dbg.on("detach", () => closeView(v, true));
+  // a click in the page: its pane becomes the focused one (the pane can't see clicks on a view drawn over it)
+  wc.on("focus", () => send({ ev: "view", view: id, kind: "focus" }));
   wc.on("destroyed", () => closeView(v, true));
   parkView(v);
   wc.loadURL(url || "about:blank").catch(() => {});
@@ -370,10 +413,16 @@ function closeView(v, gone) {
 }
 
 // placeView: rect is the pane's box in CSS px of the window's page; the page's zoom turns it into the window's points.
-function placeView(v, w, rect) {
+// Rounded inwards (rounding to nearest put the page a point over the pane's right border), and its corners rounded as
+// the pane's inside are (radius, CSS px): a view is drawn over the page, square corners showed over the pane's.
+function placeView(v, w, rect, radius) {
   if (!w || w.isDestroyed()) throw new Error("no such window");
   const z = w.webContents.getZoomFactor() || 1;
-  const [x, y, width, height] = rect.map((n) => Math.round(n * z));
+  const [rx, ry, rw, rh] = rect;
+  const x = Math.ceil(rx * z),
+    y = Math.ceil(ry * z);
+  const width = Math.floor((rx + rw) * z) - x,
+    height = Math.floor((ry + rh) * z) - y;
   if (v.host !== w) {
     if (v.host && !v.host.isDestroyed()) v.host.contentView.removeChildView(v.view);
     if (v.park && !v.park.isDestroyed()) v.park.contentView.removeChildView(v.view);
@@ -381,6 +430,11 @@ function placeView(v, w, rect) {
     v.host = w;
   }
   v.view.setBounds({ x, y, width: Math.max(width, 1), height: Math.max(height, 1) });
+  const r = Math.max(0, Math.round((radius || 0) * z));
+  if (v.radius !== r) {
+    v.radius = r;
+    v.view.setBorderRadius(r);
+  }
 }
 
 // ---- menus ----
@@ -466,7 +520,15 @@ async function handle(m) {
       if (isMac) app.dock?.setBadge(m.label || "");
       return;
     case "menu":
-      Menu.setApplicationMenu(Menu.buildFromTemplate(menuItems(m.items)));
+      // Windows: no menu bar. Its accelerators would take Ctrl+C / Ctrl+W before the page, which has keys of its own
+      // (Ctrl+C twice stops an agent, the prefix key…); copy and paste work without it there.
+      if (isMac) Menu.setApplicationMenu(Menu.buildFromTemplate(menuItems(m.items)));
+      return;
+    case "openExternal":
+      return openExternal(m.url);
+    case "openPath":
+      if (m.reveal) shell.showItemInFolder(m.path);
+      else await shell.openPath(m.path);
       return;
     case "dockMenu":
       if (isMac) app.dock?.setMenu(Menu.buildFromTemplate(menuItems(m.items)));
@@ -483,13 +545,13 @@ async function handle(m) {
       return { exe: process.execPath, args: dev ? [app.getAppPath()] : [], dataDir: app.getPath("userData"), kind: "electron" };
     case "openView":
       armIdle();
-      return openView(m.profile, m.url);
+      return openView(m.profile, m.url, m.tab);
     case "viewCdp": {
       const v = viewOf(m.view);
       return await v.view.webContents.debugger.sendCommand(m.method, m.params || {});
     }
     case "viewPlace":
-      return placeView(viewOf(m.view), wins.get(m.win), m.rect);
+      return placeView(viewOf(m.view), wins.get(m.win), m.rect, m.radius);
     case "viewHide":
       return parkView(viewOf(m.view));
     case "viewClose":
@@ -576,12 +638,23 @@ app.on("before-quit", (e) => {
   setTimeout(() => app.exit(0), 5000);
 });
 
+// Windows shows an App's notifications only when a Start menu shortcut carries its AppUserModelID; NSIS can't set
+// that property, so the App sets it on the shortcut the installer made (installer.nsi), every start.
+function windowsShortcut() {
+  if (process.platform !== "win32" || dev || browserOnly || !pkg.id) return;
+  const lnk = path.join(app.getPath("appData"), "Microsoft", "Windows", "Start Menu", "Programs", appName + ".lnk");
+  const ok = shell.writeShortcutLink(lnk, fs.existsSync(lnk) ? "update" : "create", { target: process.execPath, appUserModelId: pkg.id });
+  if (!ok) log("start menu shortcut: not written");
+}
+
 app.whenReady().then(() => {
+  windowsShortcut();
   // The pages say they're Chrome, as they are: "Electron/…" and the App's name in the user agent made sites treat the
   // projects' pages as an embedded browser (Google refuses to sign in to one)
   app.userAgentFallback = app.userAgentFallback.replace(/ (Electron|\S*Gerdr\S*)\/\S+/g, "");
   // The App's own menu bar until the core sends Gerdr's (Edit: ⌘C / ⌘V need it)
-  if (!browserOnly) Menu.setApplicationMenu(Menu.buildFromTemplate([{ role: "appMenu" }, { role: "editMenu" }, { role: "windowMenu" }]));
+  if (!browserOnly && isMac) Menu.setApplicationMenu(Menu.buildFromTemplate([{ role: "appMenu" }, { role: "editMenu" }, { role: "windowMenu" }]));
+  if (!isMac) Menu.setApplicationMenu(null);
   startCore();
   send({ ev: "ready", browserOnly, port });
 });

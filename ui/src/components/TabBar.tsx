@@ -90,7 +90,12 @@ export function TabBar() {
     // 看不出哪个是当前的；加粗 + 压暗别的、顶上加品牌色细线都试过，还是不明显 / 不好看（用户报的），所以改成有底色的胶囊。
     // 对齐：侧栏开着时栏左边留 6px、标签 px-1.5，图标落在 12px —— 和下面 pane 标题栏（px-3 + 16px 图标 + gap-2）上下对齐。
     // 侧栏收起时左边是展开侧栏的按钮，本来就对不齐，照旧留空。
-    <div className="flex h-10 shrink-0 items-center gap-1 border-b bg-sidebar px-1.5" style={{ WebkitAppRegion: "drag" } as any}>
+    <div
+      // beside the traffic lights only while the list is hidden (with it, the list's header is)
+      data-titlebar-inset={!sidebar || undefined}
+      className="flex h-10 shrink-0 items-center gap-1 border-b bg-sidebar px-1.5"
+      style={{ WebkitAppRegion: "drag" } as any}
+    >
       {!sidebar && (
         <Button variant="ghost" size="icon" className="size-7" onClick={toggleSidebar} style={{ WebkitAppRegion: "no-drag" } as any}>
           <PanelLeft className="size-4" />

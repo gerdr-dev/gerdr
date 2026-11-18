@@ -6,13 +6,8 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"strconv"
 	"strings"
 	"sync/atomic"
-	"syscall"
 	"time"
 
 	"github.com/gerdr-dev/gerdr/internal/i18n"
@@ -205,7 +200,7 @@ func (s *shell) applyUpdate(ask bool) {
 	app := p.Kind == "app"
 	if ask && !(app && serviceInstalled()) {
 		if b := s.fetchBusy(); !b.Idle() {
-			switch askUpdate(p.Version, b, !app) {
+			switch s.askUpdate(p.Version, b, !app) {
 			case "later":
 				s.upMu.Lock()
 				s.idleOK = p.Version
@@ -223,7 +218,7 @@ func (s *shell) applyUpdate(ask bool) {
 			return
 		}
 		log.Printf("update: installing the %s App", p.Version)
-		if installApp(p.File) {
+		if s.installApp(p.File) {
 			s.app.Quit()
 		}
 		return
@@ -241,9 +236,9 @@ func (s *shell) applyUpdate(ask bool) {
 	s.pushUpdate()
 }
 
-// askUpdate: a dialog like desktop/main.js's. "now", "later" (when idle) or "" (cancelled). later: offer "when idle";
-// only a backend update has it, a new App waits for a click (pollBusy applies backends only), so "when idle" did nothing.
-func askUpdate(version string, b *selfupdate.Busy, later bool) string {
+// askUpdate: "now", "later" (when idle) or "" (cancelled). later: offer "when idle"; only a backend update has it, a
+// new App waits for a click (pollBusy applies backends only), so "when idle" would do nothing.
+func (s *shell) askUpdate(version string, b *selfupdate.Busy, later bool) string {
 	detail := i18n.S("正在跑的 agent 和终端会被打断。", "Running agents and terminals will be cut off.")
 	if b != nil {
 		var parts []string
@@ -259,39 +254,21 @@ func askUpdate(version string, b *selfupdate.Busy, later bool) string {
 		detail = i18n.S("重启会打断：", "Restarting cuts off: ") + strings.Join(parts, i18n.S("、", ", ")) +
 			i18n.S("。空闲的会话不受影响，下次发话自己接上。", ". Idle sessions aren't affected and pick up on your next message.")
 	}
-	now, idle, cancel := i18n.S("现在更新", "Update now"), i18n.S("等空闲时自动更新", "Update when idle"), i18n.S("取消", "Cancel")
 	title := fmt.Sprintf(i18n.S("更新到 %s", "Update to %s"), version)
-	// argv, never spliced into the script; buttons left to right: cancel, [when idle,] now
-	script := `on run argv
-display dialog (item 2 of argv) with title (item 1 of argv) buttons {(item 5 of argv), (item 4 of argv), (item 3 of argv)} default button 2 cancel button 1
-return button returned of result
-end run`
-	args := []string{"-e", script, title, detail, now, idle, cancel}
-	if !later {
-		script = `on run argv
-display dialog (item 2 of argv) with title (item 1 of argv) buttons {(item 4 of argv), (item 3 of argv)} default button 2 cancel button 1
-return button returned of result
-end run`
-		args = []string{"-e", script, title, detail, now, cancel}
-	}
-	out, err := exec.Command("osascript", args...).Output()
-	if err != nil {
+	now, idle, cancel := i18n.S("现在更新", "Update now"), i18n.S("等空闲时自动更新", "Update when idle"), i18n.S("取消", "Cancel")
+	if later {
+		switch s.app.Dialog("question", title, detail, []string{now, idle, cancel}, 1, 2) {
+		case 0:
+			return "now"
+		case 1:
+			return "later"
+		}
 		return ""
 	}
-	switch strings.TrimSpace(string(out)) {
-	case now:
+	if s.app.Dialog("question", title, detail, []string{now, cancel}, 0, 1) == 0 {
 		return "now"
-	case idle:
-		return "later"
 	}
 	return ""
-}
-
-// serviceInstalled: the background service is on (its plist, like installedBackend and service.Manager.Installed).
-func serviceInstalled() bool {
-	home, _ := os.UserHomeDir()
-	_, err := os.Stat(filepath.Join(home, "Library/LaunchAgents/io.github.zbysir.gerdr.plist"))
-	return err == nil
 }
 
 // pushUpdate tells every page (window.gerdr.appUpdate, ui/src/lib/native.ts onAppUpdate) and the menu.
@@ -349,78 +326,8 @@ func (s *shell) checkFromMenu() {
 		return
 	}
 	if s.up.Pending() == nil {
-		script := `on run argv
-display dialog (item 2 of argv) with title (item 1 of argv) buttons {"OK"} default button 1
-end run`
-		_ = exec.Command("osascript", "-e", script, i18n.S("检查更新", "Check for Updates"), msg).Run()
+		s.app.Dialog("info", i18n.S("检查更新", "Check for Updates"), msg, []string{"OK"}, 0, 0)
 	}
 }
 
 var _ atomic.Bool // (sync/atomic: backend.replaced, shell.quitting)
-
-// installApp swaps in a downloaded App (a dmg), the way desktop/updater.js does: copy the new bundle out of the dmg
-// next to ours (same volume, so the swap is two renames; copying into /Applications in place can be stopped halfway,
-// Makefile install), then a detached script waits for this process to go, swaps, and opens the new one. Off the
-// happy path (translocated, run off a dmg, a directory we can't write, not a dmg): open the dmg for the person to drag
-// it over. True: the caller should quit now.
-func installApp(file string) bool {
-	exe, _ := os.Executable()
-	bundle, _ := filepath.Abs(filepath.Join(filepath.Dir(exe), "..", ".."))
-	ok := strings.HasSuffix(bundle, ".app") && !strings.Contains(bundle, "/AppTranslocation/") && !strings.HasPrefix(bundle, "/Volumes/") &&
-		strings.HasSuffix(file, ".dmg") && writable(filepath.Dir(bundle))
-	if !ok {
-		_ = exec.Command("open", file).Start()
-		return false
-	}
-	staged := filepath.Join(filepath.Dir(bundle), ".Gerdr-update.app")
-	mnt := filepath.Join(filepath.Dir(file), "mnt")
-	_ = os.RemoveAll(staged)
-	_ = os.MkdirAll(mnt, 0o755)
-	err := func() error {
-		if out, err := exec.Command("hdiutil", "attach", "-nobrowse", "-readonly", "-noautoopen", "-mountpoint", mnt, file).CombinedOutput(); err != nil {
-			return fmt.Errorf("hdiutil attach: %v %s", err, out)
-		}
-		defer exec.Command("hdiutil", "detach", "-quiet", mnt).Run()
-		names, _ := os.ReadDir(mnt)
-		for _, n := range names {
-			if strings.HasSuffix(n.Name(), ".app") {
-				if out, err := exec.Command("ditto", filepath.Join(mnt, n.Name()), staged).CombinedOutput(); err != nil {
-					return fmt.Errorf("ditto: %v %s", err, out)
-				}
-				return nil
-			}
-		}
-		return fmt.Errorf("no .app in %s", file)
-	}()
-	if err != nil {
-		log.Printf("update: %v; opening the dmg instead", err)
-		_ = os.RemoveAll(staged)
-		_ = exec.Command("open", file).Start()
-		return false
-	}
-	// Waits for this process to go, swaps, opens the new one; if a rename fails, puts the old one back and opens the
-	// dmg instead.
-	script := `
-while kill -0 "$1" 2>/dev/null; do sleep 0.2; done
-old="$2.old"; rm -rf "$old"
-if mv "$2" "$old" && mv "$3" "$2"; then rm -rf "$old" "$4"; open "$2"
-else [ -d "$2" ] || mv "$old" "$2"; rm -rf "$3"; open "$2"; open "$4"; fi`
-	cmd := exec.Command("/bin/sh", "-c", script, "sh", strconv.Itoa(os.Getpid()), bundle, staged, file)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true} // outlives us
-	if err := cmd.Start(); err != nil {
-		log.Printf("update: %v", err)
-		_ = os.RemoveAll(staged)
-		return false
-	}
-	return true
-}
-
-func writable(dir string) bool {
-	f, err := os.CreateTemp(dir, ".gerdr-write-test-")
-	if err != nil {
-		return false
-	}
-	f.Close()
-	os.Remove(f.Name())
-	return true
-}

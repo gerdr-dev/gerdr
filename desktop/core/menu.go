@@ -133,7 +133,7 @@ func (s *shell) menu() []el.MenuItem {
 			act(t("重新载入", "Reload"), "Cmd+R", s.reload),
 			role(t("开发者工具", "Developer Tools"), "devTools", ""),
 			// the backend's own address: the user's browser doesn't know the pages' host
-			act(t("在浏览器里打开", "Open in Browser"), "", func(*el.Window) { openExternal(s.backendEntry) }),
+			act(t("在浏览器里打开", "Open in Browser"), "", func(*el.Window) { s.openExternal(s.backendEntry) }),
 		}},
 		{Label: t("前往", "Go"), Submenu: append(append([]el.MenuItem{
 			cmd(t("下一个 tab", "Next Tab"), "nextTab", "Cmd+Shift+]"),

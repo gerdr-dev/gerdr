@@ -5,16 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"time"
 )
 
@@ -39,6 +36,7 @@ func startBackend(bin string, env []string) (*backend, error) {
 	b := &backend{ready: make(chan string, 4), exited: make(chan struct{})}
 	b.cmd = exec.Command(bin, "--app", "--parent-pid", strconv.Itoa(os.Getpid()))
 	b.cmd.Env = append(append(os.Environ(), "GERDR_FROM_APP=1"), env...)
+	hideConsole(b.cmd)
 	stdout, _ := b.cmd.StdoutPipe()
 	stderr, _ := b.cmd.StderrPipe()
 	if err := b.cmd.Start(); err != nil {
@@ -87,40 +85,9 @@ func (b *backend) stderr() string {
 	return b.errTail
 }
 
-// stop: SIGTERM and up to 3s to write its session logs (shutdown itself is < 0.1s), as desktop/main.js stopBackend.
-func (b *backend) stop() {
-	select {
-	case <-b.exited:
-		return
-	default:
-	}
-	_ = b.cmd.Process.Signal(syscall.SIGTERM)
-	select {
-	case <-b.exited:
-	case <-time.After(3 * time.Second):
-		log.Print("backend didn't stop in 3s, killing it")
-		_ = b.cmd.Process.Kill()
-	}
-}
-
 func tail(s string, n int) string {
 	if len(s) > n {
 		return s[len(s)-n:]
 	}
 	return s
-}
-
-// installedBackend: the gerdr the background service runs (its plist), else the one in Gerdr.app. Started with --app
-// when no gerdr is running, exactly as Gerdr.app would.
-func installedBackend() string {
-	home, _ := os.UserHomeDir()
-	if out, err := exec.Command("plutil", "-extract", "ProgramArguments.0", "raw", "-o", "-",
-		filepath.Join(home, "Library/LaunchAgents/io.github.zbysir.gerdr.plist")).Output(); err == nil {
-		if p := strings.TrimSpace(string(out)); p != "" {
-			if _, err := os.Stat(p); err == nil {
-				return p
-			}
-		}
-	}
-	return "/Applications/Gerdr.app/Contents/Resources/gerdr"
 }

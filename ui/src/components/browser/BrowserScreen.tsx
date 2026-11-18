@@ -4,7 +4,7 @@ import { ArrowLeft, ArrowRight, Check, Globe, Keyboard, MoreHorizontal, Plus, Ro
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { api, type BrowserInput } from "@/lib/api";
-import { claimNative, loadBrowserTabs, noteBrowserURL, releaseNative, showBrowserTab, useBrowserTabs, useNativeOwners } from "@/lib/actions";
+import { claimNative, focusPane, loadBrowserTabs, noteBrowserURL, releaseNative, showBrowserTab, useBrowserTabs, useNativeOwners } from "@/lib/actions";
 import { t } from "@/lib/i18n";
 import { paintFrame, parseFrame, wsURL, type StreamPage } from "@/lib/screenStream";
 import { canNativeBrowser, nativeBrowserView } from "@/lib/native";
@@ -230,7 +230,18 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
   // instead (Lightron's View.Mask) kept the page live but needed the clicks and the keyboard handed between the two
   // windows by hand, and each case was its own bug (a rename dialog's box that took no typing). Checked every frame
   // while any is open (they animate in), every 250 ms otherwise.
-  const [still, setStill] = useState<string | null>(null);
+  // The still and where it goes: exactly where the page is (placeView rounds inwards and rounds its corners), at its
+  // size; stretched over the whole box it read soft and a pixel off
+  const [still, setStill] = useState<{ url: string; left: number; top: number; width: number; height: number; radius: number } | null>(null);
+  const placed = useRef({ left: 0, top: 0, width: 0, height: 0, radius: 0 });
+  // A click in the App's page (a view drawn over this box, which never sees the click): this pane becomes the focused
+  // one, as a click anywhere else in it does (desktop/core views.go OnFocus)
+  useEffect(() => {
+    if (!nativeView || !tab) return;
+    const on = (e: Event) => (e as CustomEvent).detail === tab && focusPane(paneId);
+    window.addEventListener("gerdr:browserfocus", on);
+    return () => window.removeEventListener("gerdr:browserfocus", on);
+  }, [nativeView, tab, paneId]);
   useEffect(() => {
     if (!nativeView || !tab) return;
     const box = boxRef.current;
@@ -240,16 +251,69 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
     let covered = false; // one of ours is over the box: the still shows, the page is off
     let shot = 0; // which cover the still being taken is for
     let url: string | null = null;
+    // A still kept warm for when one of ours comes up over the box: taken when the pointer comes back from the page to
+    // our UI (it has to, before anything of ours is clicked) and again at each press. A menu opens on the press itself,
+    // before a still taken then is ready: waiting for one let the live page cover the menu for a moment (half the
+    // time, seen on a recording). It may be a little old: shown at once, and replaced by a fresh one when that comes.
+    let warm: { url: string; at: number } | null = null;
+    let taking: Promise<string | null> | null = null; // one still at a time; a second ask shares it
+    const forget = (u: string | null) => u?.startsWith("blob:") && u !== url && u !== warm?.url && URL.revokeObjectURL(u);
     const overlays = () =>
       Array.from(
         document.querySelectorAll<HTMLElement>(
           "[data-radix-popper-content-wrapper] > *, [role=dialog], [role=alertdialog], [role=tooltip], [data-sonner-toast]",
         ),
       );
+    // The still: from the App's own process when it can (desktop/main.js gerdr:shot, a data URL in tens of ms, as
+    // Claude Desktop does), else through the backend (an older App). Decoded before it goes on screen: set while still
+    // decoding, the box showed nothing for a frame (a black flash).
+    const take = (): Promise<string | null> =>
+      (taking ??= (async () => {
+        const native = (window as any).gerdrNative?.browserShot as ((t: number) => Promise<string | null>) | undefined;
+        const u = await (native ? native(tab) : api.browserShot(tab)).catch(() => null);
+        if (u) {
+          const img = new Image();
+          img.src = u;
+          await img.decode().catch(() => {});
+          const old = warm?.url;
+          warm = { url: u, at: Date.now() };
+          if (old) forget(old);
+        }
+        return u;
+      })().finally(() => (taking = null)));
+    const placedOnScreen = () => !covered && !!last && last !== "hidden";
+    let inPage = true; // the pointer is over the page (our document gets no events then)
+    const back = () => {
+      if (!inPage) return;
+      inPage = false;
+      if (placedOnScreen()) void take();
+    };
+    const away = () => (inPage = true);
+    const press = () => placedOnScreen() && void take();
+    document.addEventListener("pointermove", back, true);
+    document.documentElement.addEventListener("pointerleave", away);
+    document.addEventListener("pointerdown", press, true);
     const drop = () => {
-      if (url) URL.revokeObjectURL(url);
+      const u = url;
       url = null;
       setStill(null);
+      forget(u);
+    };
+    const show = (u: string) => {
+      const old = url;
+      url = u;
+      setStill({ url: u, ...placed.current });
+      forget(old);
+    };
+    const cover = (u: string, n: number) => {
+      show(u);
+      last = "covered";
+      // the page steps aside once the still is on screen (React's commit, then paint)
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          if (covered && n === shot) nativeBrowserView(tab, null);
+        }),
+      );
     };
     const report = () => {
       const r = box.getBoundingClientRect();
@@ -263,34 +327,36 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
       if (over && !covered) {
         covered = true;
         const n = ++shot;
-        // the page stays until its still is there: no blank box while it's taken (tens of ms)
-        api
-          .browserShot(tab)
-          .catch(() => null)
-          .then((u) => {
-            if (!covered || n !== shot) {
-              if (u) URL.revokeObjectURL(u);
-              return;
-            }
-            // no still (a backend without /api/browser/shot, the page gone): the page stays rather than an empty box
-            if (!u) return;
-            if (url) URL.revokeObjectURL(url);
-            url = u;
-            setStill(u);
-            last = "covered";
-            nativeBrowserView(tab, null);
-          });
+        const was = warm;
+        if (was) cover(was.url, n);
+        // a fresh one: replaces the warm one when it comes (or is the first, the page staying until then)
+        void take().then((u) => {
+          if (!u || !covered || n !== shot) return;
+          if (!was) cover(u, n);
+          else if (u !== was.url) show(u);
+        });
       } else if (!over && covered) {
         covered = false;
-        shot++;
+        const n = ++shot;
         last = ""; // placed again below; the still goes once the page is back over it
-        requestAnimationFrame(() => requestAnimationFrame(drop));
+        // only if nothing of ours came back over it meanwhile: dropping the still then left the box black
+        requestAnimationFrame(() => requestAnimationFrame(() => !covered && n === shot && drop()));
       }
       if (covered) return;
-      const key = shown ? [r.x, r.y, r.width, r.height, window.devicePixelRatio].map((n) => Math.round(n * 10) / 10).join(",") : "hidden";
+      // the pane's corners, inside its border: the page window has to be rounded as they are
+      const pane = box.closest<HTMLElement>("[data-pane-id]");
+      const cs = pane ? getComputedStyle(pane) : null;
+      const radius = cs ? Math.max(0, (parseFloat(cs.borderBottomLeftRadius) || 0) - (parseFloat(cs.borderBottomWidth) || 0)) : 0;
+      const key = shown ? [r.x, r.y, r.width, r.height, window.devicePixelRatio, radius].map((n) => Math.round(n * 10) / 10).join(",") : "hidden";
       if (key === last) return;
       last = key;
-      nativeBrowserView(tab, shown ? r : null);
+      if (shown) {
+        // where desktop/main.js placeView puts the page (at the page's zoom of 1): inwards to whole pixels
+        const left = Math.ceil(r.x),
+          top = Math.ceil(r.y);
+        placed.current = { left: left - r.x, top: top - r.y, width: Math.floor(r.x + r.width) - left, height: Math.floor(r.y + r.height) - top, radius };
+      }
+      nativeBrowserView(tab, shown ? r : null, radius);
     };
     const ro = new ResizeObserver(report);
     ro.observe(box);
@@ -307,6 +373,9 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
       clearInterval(iv);
       window.removeEventListener("resize", report);
       document.removeEventListener("visibilitychange", report);
+      document.removeEventListener("pointerdown", press, true);
+      document.removeEventListener("pointermove", back, true);
+      document.documentElement.removeEventListener("pointerleave", away);
       nativeBrowserView(tab, null);
       covered = false;
       shot++;
@@ -708,7 +777,13 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
       <Body>
         <div ref={boxRef} className="relative h-full w-full overflow-hidden bg-background">
           {nativeView && still && (
-            <img src={still} alt="" draggable={false} className="pointer-events-none absolute inset-0 h-full w-full object-cover object-top-left" />
+            <img
+              src={still.url}
+              alt=""
+              draggable={false}
+              className="pointer-events-none absolute max-w-none select-none"
+              style={{ left: still.left, top: still.top, width: still.width, height: still.height, borderRadius: still.radius }}
+            />
           )}
           {live && !nativeView && (
             <canvas

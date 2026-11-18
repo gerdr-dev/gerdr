@@ -21,7 +21,7 @@ import { HOLD_MS, useCaughtUp } from "./lib/catchup";
 import { isPhone, usePhone, useViewportHeight } from "./lib/phone";
 import { cn } from "./lib/utils";
 import { syncWatch } from "./lib/sync";
-import { isNative, nativeAskUpdate, nativeBadge, nativeMenuKeys, nativeSpace, nativeTitleBar, onAppUpdate } from "./lib/native";
+import { isNative, nativeAskUpdate, nativeBadge, nativeMenuKeys, nativeSpace, onAppUpdate } from "./lib/native";
 import { initAndroid, syncAndroidTheme } from "./lib/android";
 import { CliApprove as CliApproveView } from "./components/CliApprove";
 import { KeepDevicePrompt } from "./components/KeepDevice";
@@ -287,13 +287,10 @@ export default function App() {
     );
   }
   if (!ready) return <LoadingScreen text={t("app.connecting")} />;
-  const titleBar = nativeTitleBar();
 
   return (
     <GerdrChatProvider>
       <TooltipProvider delayDuration={400}>
-        {/* The desktop App's title bar strip (lib/native.ts nativeTitleBar): drags the window, double click zooms */}
-        {titleBar && <div className="fixed inset-x-0 top-0 z-[60] [-webkit-app-region:drag]" style={{ height: titleBar.height }} />}
         <div className="relative flex h-full">
           {overviewMounted && !unified && (
             <div className={cn("absolute inset-0 z-30", !overview && "pointer-events-none invisible")} aria-hidden={!overview}>

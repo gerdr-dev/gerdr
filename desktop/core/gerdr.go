@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -185,9 +184,9 @@ func (s *shell) message(w *el.Window, raw json.RawMessage) {
 	case "newWindow":
 		s.newWindow(str("space"))
 	case "open":
-		openExternal(str("url"))
+		s.openExternal(str("url"))
 	case "openPath":
-		openPath(str("path"), str("cwd"), m["reveal"] == true)
+		s.openPath(str("path"), str("cwd"), m["reveal"] == true)
 	case "webPid":
 		_ = w.Eval(fmt.Sprintf("window.__GERDR_WEB_PID__ = %d", s.app.WebPid(w)))
 	case "update":
@@ -276,16 +275,18 @@ func (s *shell) noteClick(from *el.Window, sessionID, space string) {
 	}
 }
 
-func openExternal(u string) {
-	if pu, err := url.Parse(u); err == nil && (pu.Scheme == "http" || pu.Scheme == "https" || pu.Scheme == "mailto") {
-		_ = exec.Command("open", u).Start()
+// openExternal: a link in the default browser (Electron's shell.openExternal: open on macOS, the default handler on
+// Windows).
+func (s *shell) openExternal(u string) {
+	if pu, err := url.Parse(u); err == nil && (pu.Scheme == "http" || pu.Scheme == "https" || pu.Scheme == "mailto") && s.app != nil {
+		s.app.OpenExternal(u)
 	}
 }
 
 // openPath: the open / reveal buttons under a picture or video in the chat. Relative paths are the session's.
-func openPath(p, cwd string, reveal bool) {
+func (s *shell) openPath(p, cwd string, reveal bool) {
 	home, _ := os.UserHomeDir()
-	if strings.HasPrefix(p, "~/") {
+	if strings.HasPrefix(p, "~/") || strings.HasPrefix(p, `~\`) {
 		p = filepath.Join(home, p[2:])
 	}
 	if !filepath.IsAbs(p) {
@@ -294,14 +295,10 @@ func openPath(p, cwd string, reveal bool) {
 		}
 		p = filepath.Join(cwd, p)
 	}
-	if _, err := os.Stat(p); err != nil {
+	if _, err := os.Stat(p); err != nil || s.app == nil {
 		return
 	}
-	if reveal {
-		_ = exec.Command("open", "-R", p).Start()
-	} else {
-		_ = exec.Command("open", p).Start()
-	}
+	s.app.OpenPath(p, reveal)
 }
 
 func originOf(u string) string {

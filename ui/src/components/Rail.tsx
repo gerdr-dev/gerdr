@@ -7,7 +7,7 @@ import { currentSpace, spaceInitials, spaceList, type Space } from "@/lib/layout
 import { isCoarse } from "@/lib/phone";
 import { set, setMode, toggleSidebar, useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
-import { updateWaitsForClick } from "@/lib/native";
+import { nativeTitleBar, updateWaitsForClick } from "@/lib/native";
 import { StatusDot } from "./AgentIcon";
 import { RailAddonButtons } from "./RailAddons";
 import { RouteLabel } from "./ConnStatus";
@@ -89,6 +89,7 @@ function RailProjects() {
 }
 
 export function Rail() {
+  const titleBar = nativeTitleBar();
   const mode = useStore((s) => s.mode);
   const sidebar = useStore((s) => s.sidebar);
   const doctorBad = useStore((s) => s.doctor?.level === "bad");
@@ -129,8 +130,24 @@ export function Rail() {
     // The whole rail scrolls when the window is too short for it (a phone on its side is ~400px tall, ~150px with the
     // soft keyboard up). Only the projects scrolling squeezed them to nothing there, under the fixed rest. min-h-full
     // inside keeps the spacer pushing the bottom group down when there is room.
-    <div className="h-full w-12 shrink-0 overflow-y-auto border-r bg-sidebar [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <div
+      className={cn("h-full w-12 shrink-0 overflow-y-auto bg-sidebar [scrollbar-width:none] [&::-webkit-scrollbar]:hidden", !titleBar && "border-r")}
+      // The desktop App: the right edge's line starts below the traffic lights' row (it ran through the middle light),
+      // drawn as a background so it stays put while the rail scrolls
+      style={
+        titleBar
+          ? {
+              backgroundImage: "linear-gradient(var(--border), var(--border))",
+              backgroundSize: `1px calc(100% - ${titleBar.height}px)`,
+              backgroundPosition: "right bottom",
+              backgroundRepeat: "no-repeat",
+            }
+          : undefined
+      }
+    >
       <div className="flex min-h-full flex-col items-center">
+        {/* The desktop App's traffic lights start here (lib/native.ts nativeTitleBar): their row, which drags the window */}
+        {titleBar && <div className="w-full shrink-0" style={{ height: titleBar.height, WebkitAppRegion: "drag" } as React.CSSProperties} />}
         <div data-space-list="rail" className="relative flex w-full flex-col items-center gap-2 pt-2.5 pb-1 short:gap-1.5 short:pt-2">
           <RailProjects />
           <SpaceDropLine list="rail" axis="y" />

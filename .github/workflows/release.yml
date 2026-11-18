@@ -4,7 +4,7 @@
 #
 # Incremental: most releases only change the Go backend, so only what changed is rebuilt (job `plan` decides):
 # - dmgs: rebuilt when the shell id (tools/shell-id.sh) differs from the latest release's update.json, or anything in
-#   desktop/ changed since the tag the latest dmgs were built for (signing, builder config aren't in the id). Otherwise
+#   desktop/ changed since the tag the latest dmgs were built for (signing, packaging aren't all in the id). Otherwise
 #   only the ~10MB backends are built and the previous dmgs are copied into this release: an App on an older shell
 #   still needs a whole App, and its updater looks for it under this release's tag (desktop/updater.js releaseURL).
 # - apk: rebuilt only when android/ changed since the tag of the apk the latest release offers. Otherwise that
@@ -64,7 +64,7 @@ jobs:
             dv=$(jq -r '.app["darwin-arm64"].file // ""' prev/update.json | sed -nE 's/^Gerdr-(.+)-mac-arm64\.dmg$/\1/p')
             if [ -n "$dv" ] && jq -e --arg s "$shell" '.shell == $s and .app["darwin-x64"]' prev/update.json >/dev/null &&
               git rev-parse -q --verify "refs/tags/v$dv" >/dev/null &&
-              git diff --quiet "v$dv" HEAD -- tools/chromeshell tools/shell-id.sh internal/selfupdate desktop/res desktop/sign-id.sh; then
+              git diff --quiet "v$dv" HEAD -- desktop tools/shell-id.sh internal/selfupdate; then
               dmg=reuse
             fi
             echo "dmg of $prev is v$dv; rebuild: $dmg"
@@ -112,19 +112,19 @@ jobs:
           [ "$id" = "Gerdr Local Signing" ] || { echo "the identity in Secrets isn't 'Gerdr Local Signing': $id"; exit 1; }
       # The update-only backends (gerdr-<v>-darwin-<arch>.br, signed with the identity above), every release.
       - run: ./desktop/build.sh mac-backend ${{ needs.plan.outputs.version }}
-      # One dmg each for Apple silicon and Intel (Gerdr-<version>-mac-arm64.dmg / -mac-x64.dmg): the desktop shell on
-      # the user's own Chrome (tools/chromeshell, ~18MB; the Electron App in desktop/ is retired). Its backend is
-      # signed with the identity above; the rest ad hoc, which Gatekeeper treats like no signature: the first open of
-      # a downloaded dmg needs right-click → Open (an update installs without that). An Electron App still out there
-      # sees another shell id in update.json and installs this dmg on its next update.
+      # One dmg each for Apple silicon and Intel (Gerdr-<version>-mac-arm64.dmg / -mac-x64.dmg): the Electron App
+      # (desktop/package.sh, ~100MB; docs/dev/WHY-ELECTRON-COMEBACK.md), signed with the identity above (Gatekeeper
+      # still treats a self-signed App like an unsigned one: the first open of a downloaded dmg needs right-click →
+      # Open; an update installs without that). A Lightron App out there sees another shell id in update.json and
+      # installs this dmg on its next update.
       - if: needs.plan.outputs.dmg == 'build'
         # BACKEND_DIR: the backends the step above built and signed, not compiled again
-        run: BACKEND_DIR=desktop/bin VERSION=${{ needs.plan.outputs.version }} NAME=Gerdr ID=io.github.zbysir.gerdr tools/chromeshell/package.sh
+        run: BACKEND_DIR=desktop/bin VERSION=${{ needs.plan.outputs.version }} NAME=Gerdr ID=io.github.zbysir.gerdr desktop/package.sh
       # The update-only backends must carry the identity too, or an update voids the grants
       - name: Check the backends' signature
         run: |
           for b in desktop/bin/gerdr-*; do codesign -d -r- "$b" 2>&1 | tee /dev/stderr | grep -q 'certificate leaf' || exit 1; done
-      - run: mv desktop/dist/gerdr-*-darwin-*.br . && (mv tools/chromeshell/dist/Gerdr-*-mac-*.dmg . 2>/dev/null || true)
+      - run: mv desktop/dist/gerdr-*-darwin-*.br . && (mv desktop/dist/Gerdr-*-mac-*.dmg . 2>/dev/null || true)
       # Check the App inside each dmg is fully signed: a download of one that isn't opens as "damaged" (v0.2.0 shipped
       # like that)
       - name: Check the signature inside the dmgs

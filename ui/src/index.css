@@ -192,12 +192,12 @@
   #root {
     height: var(--vvh, 100%);
   }
-  /* The desktop App's own title bar (lib/native.ts nativeTitleBar): no system bar, the page keeps a strip at its top
-     for the traffic lights, in the sidebar's colour; App.tsx lays a drag region over it */
-  .native-titlebar #root {
-    padding-top: var(--titlebar-h);
-    background-color: var(--sidebar);
+  /* The desktop App's traffic lights reach past the rail (lib/native.ts nativeTitleBar): the header beside them at the
+     window's top starts after them. Only that header has [data-titlebar-inset] (the list's, else the tab bar). */
+  .native-titlebar [data-titlebar-inset] {
+    padding-left: calc(var(--titlebar-inset) + 1.25rem) !important;
   }
+
   /* The stretch of a message an add-on's action is on (ctx.highlight: the paragraph being read aloud), lib/readingHighlight.ts.
      A highlight pseudo-element takes only colors, so no padding / radius: a tint of the brand behind the words. */
   ::highlight(gerdr-reading) {

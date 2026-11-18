@@ -12,7 +12,7 @@ cd "$(dirname "$0")/.."
     \( -name '*.go' -o -name '*.js' -o -name '*.m' -o -name '*.sh' -o -name '*.nsi' -o -name '*.syso' -o -name '*.png' \) \
     ! -name '*_test.go' ! -path '*/dist/*' | LC_ALL=C sort
   echo desktop/res/icon.png
-  printf '%s\n' desktop/main.js desktop/preload.js desktop/package.json desktop/pack.js desktop/package.sh
+  printf '%s\n' desktop/main.js desktop/preload.js desktop/package.json desktop/pack.js desktop/package.sh desktop/package-win.sh desktop/installer.nsi
 } | {
   while read -r f; do printf '%s\n' "$f"; cat "$f"; done
   grep 'github.com/zbysir/lightron' go.mod

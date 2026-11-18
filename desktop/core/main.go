@@ -17,9 +17,8 @@ import (
 	"flag"
 	"log"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strings"
+	"strconv"
 	"time"
 
 	"github.com/gerdr-dev/gerdr/desktop/core/el"
@@ -35,9 +34,7 @@ func main() {
 	// Electron says whether it is the packaged App (GERDR_SHELL_PACKAGED); then this binary is Contents/Resources/gerdr-shell
 	exePath, _ := os.Executable()
 	packaged := os.Getenv("GERDR_SHELL_PACKAGED") == "1"
-	home, _ := os.UserHomeDir()
 	resources := filepath.Dir(exePath)
-	plist := filepath.Join(resources, "../Info.plist")
 	gerdrBin := flag.String("gerdr", "", "run this gerdr backend (--app); default: the bundle's (or the installed one)")
 	dataDir := flag.String("data", filepath.Join(os.TempDir(), "gerdr-desktop"), "the shell's directory: downloaded backends, update prefs")
 	name := flag.String("name", "Gerdr dev shell", "the App's name")
@@ -57,7 +54,8 @@ func main() {
 		if browserMode {
 			logName += " browser"
 		}
-		logPath := filepath.Join(home, "Library/Logs", logName+".log")
+		logPath := logPath(logName)
+		_ = os.MkdirAll(filepath.Dir(logPath), 0o755)
 		if st, err := os.Stat(logPath); err == nil && st.Size() > 5<<20 {
 			_ = os.Rename(logPath, logPath+".old")
 		}
@@ -96,11 +94,12 @@ func main() {
 	// (the background service) and, when that runs another binary than this one, restarts it on this one once nothing
 	// is running (appAttach): that is how an update, downloaded or installed with the App, reaches the service.
 	// The binary: the newer of the bundle's and a downloaded one (internal/selfupdate); -gerdr picks one, for debugging.
+	// The App's version and shell id (tools/shell-id.sh) come from Electron (desktop/main.js reads the bundle's
+	// gerdr-app.json, pack.js writes it); the backend beside this binary is the bundle's.
 	bundledBin, appVersion, shellID := *gerdrBin, "", ""
 	if packaged {
-		bundledBin = filepath.Join(resources, "gerdr")
-		appVersion, _ = plistString(plist, "CFBundleShortVersionString")
-		shellID, _ = plistString(plist, "GerdrShell")
+		bundledBin = filepath.Join(resources, backendName)
+		appVersion, shellID = os.Getenv("GERDR_APP_VERSION"), os.Getenv("GERDR_SHELL_ID")
 	}
 	sh.up = selfupdate.New(*dataDir, bundledBin, appVersion, shellID, packaged && *gerdrBin == "")
 	switch {
@@ -140,19 +139,18 @@ func main() {
 func fatal(msg string) {
 	log.Print("fatal: ", msg)
 	if alerts {
-		// argv, never spliced into the script
-		_ = exec.Command("osascript", "-e", "on run argv\ndisplay alert (item 1 of argv) message (item 2 of argv) as critical\nend run",
-			appName, msg).Run()
+		alert(appName, msg)
 	}
 	os.Exit(1)
+}
+
+// shellPid: the Electron process this one runs under (an update waits for it to go too).
+func shellPid() int {
+	n, _ := strconv.Atoi(os.Getenv("GERDR_SHELL_PID"))
+	return n
 }
 
 func fileExists(p string) bool {
 	st, err := os.Stat(p)
 	return err == nil && !st.IsDir()
-}
-
-func plistString(path, key string) (string, error) {
-	out, err := exec.Command("plutil", "-extract", key, "raw", "-o", "-", path).Output()
-	return strings.TrimSpace(string(out)), err
 }

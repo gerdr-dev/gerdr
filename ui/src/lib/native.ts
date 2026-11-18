@@ -70,16 +70,22 @@ export function nativeOpenPath(path: string, cwd: string | undefined, reveal: bo
  * ours over it).
  */
 /**
- * The App's window has no system title bar (desktop/main.js: macOS draws only the traffic lights over the page): the
- * page keeps a strip `height` px high at its top, in the sidebar's colour, that drags the window (App.tsx, index.css
- * .native-titlebar). null in a browser and in the older shells, which have the system's bar.
+ * The App's window has no system title bar (desktop/main.js: macOS draws only the traffic lights over the page, their
+ * row `height` px tall, reaching `right` px from the left edge). The rail keeps that row at its top (Rail.tsx), and the
+ * header right of the rail at the top (the list's, else the tab bar) starts after the lights (--titlebar-inset, from
+ * the rail's edge). A Work panel is given a strip above it unless its ui.json says "titleBar": true (WorkView.tsx); then
+ * it lays out its own header with --titlebar-h / --titlebar-inset. null in a browser and in the older shells.
  */
-export const nativeTitleBar = (): { height: number; left: number } | null => (window as any).gerdrNative?.titleBar ?? null;
+export const nativeTitleBar = (): { height: number; right: number } | null => (window as any).gerdrNative?.titleBar ?? null;
 {
   const tb = nativeTitleBar();
   if (tb) {
-    document.documentElement.classList.add("native-titlebar");
-    document.documentElement.style.setProperty("--titlebar-h", `${tb.height}px`);
+    const root = document.documentElement;
+    root.classList.add("native-titlebar");
+    root.style.setProperty("--titlebar-h", `${tb.height}px`);
+    // the rail is w-12; an App from before `right` said `left` (how wide it wanted the rail): same reach
+    const right = Number((tb as any).right ?? (tb as any).left) || 72;
+    root.style.setProperty("--titlebar-inset", `${Math.max(0, right - 48)}px`);
   }
 }
 
@@ -88,12 +94,13 @@ export const canNativeBrowser = () => {
   return n?.shell === "electron" || (n?.shell === "chrome" && n?.platform === "darwin");
 };
 
-/** The App's real page over the box (rect, CSS px of this page) or off screen (null). */
-export function nativeBrowserView(tab: number, rect: { x: number; y: number; width: number; height: number } | null) {
+/** The App's real page over the box (rect, CSS px of this page) or off screen (null); radius: its corners' (the pane's
+ * inside), since the page is drawn over ours and its square corners covered the pane's rounded ones. */
+export function nativeBrowserView(tab: number, rect: { x: number; y: number; width: number; height: number } | null, radius = 0) {
   const b = bridge();
   if (!b) return;
   if (!rect) b.postMessage({ type: "browserView", tab, hide: true });
-  else b.postMessage({ type: "browserView", tab, rect: [rect.x, rect.y, rect.width, rect.height], dpr: window.devicePixelRatio || 1 });
+  else b.postMessage({ type: "browserView", tab, rect: [rect.x, rect.y, rect.width, rect.height], dpr: window.devicePixelRatio || 1, radius });
 }
 
 export function nativeOpenURL(url: string) {

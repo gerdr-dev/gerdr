@@ -1,5 +1,6 @@
 import { ArrowDownRight, PanelRightClose, PanelRightOpen, Check, ChevronDown, Code2, History, MessageSquarePlus, Settings, X } from "lucide-react";
 import { DrawerButton } from "./DrawerButton";
+import { nativeTitleBar } from "@/lib/native";
 import { createElement, useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { toast } from "sonner";
@@ -755,7 +756,34 @@ function ChatHeader({ onHide }: { onHide?: () => void }) {
   );
 }
 
+/**
+ * The desktop App has no system title bar, and its traffic lights reach past the rail over the panel's top-left
+ * (lib/native.ts nativeTitleBar). A panel's page is its own, so by default it gets a strip of their height above it
+ * and nothing of it changes. A panel that lays out its own header for them says "titleBar": true in its ui.json; it
+ * then reaches the window's top and uses --titlebar-h / --titlebar-inset and -webkit-app-region: drag itself
+ * (no-drag on what it draws there, sheets included: a drag region takes the clicks over anything above it).
+ */
 export function WorkView() {
+  const project = useWorkProject();
+  const { info } = useMount(project);
+  const phone = usePhone();
+  const strip = !!nativeTitleBar() && !phone && info?.config?.titleBar !== true;
+  if (!strip) return <WorkViewBody />;
+  return (
+    <div className="flex h-full flex-col">
+      {/* Drags the window (double click zooms). Electron's drag regions win over whatever is drawn above them, so the
+          panel's own overlays must stay off it: they start below it (the transform below). */}
+      <div className="h-(--titlebar-h) shrink-0 border-b bg-sidebar" style={{ WebkitAppRegion: "drag" } as React.CSSProperties} />
+      {/* transform: the containing block of the panel's fixed overlays (sheets, drawers), so they start below the
+          strip instead of at the window's top */}
+      <div className="relative min-h-0 flex-1" style={{ transform: "translateZ(0)" }}>
+        <WorkViewBody />
+      </div>
+    </div>
+  );
+}
+
+function WorkViewBody() {
   const phone = usePhone();
   // A page that draws its own chats (ui.json "chat": false) gets the whole width; the Work agent is still one call away
   const project = useWorkProject();

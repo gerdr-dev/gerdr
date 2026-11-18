@@ -1,4 +1,4 @@
-# gerdr: one Go binary + the desktop App shells (macOS tools/chromeshell, Windows tools/winshell, both on Lightron).
+# gerdr: one Go binary + the desktop App (Electron: desktop/; Windows still tools/winshell on Lightron).
 # 界面是 ui/ 下的源码，没有打包环节（internal/uisite）：
 # 编二进制时把 ui/ 原样拷进去内嵌，第一次启动装到 ~/.gerdr/ui，之后谁改那份源码界面就跟着变。
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo 0.1.0-dev)
@@ -47,10 +47,11 @@ test-e2e:
 	GERDR_E2E=claude go test ./internal/agenthost/ -run E2E -v -count=1
 
 # Desktop App, as the release builds it (NAME=Gerdr, the real App's id): app = this Mac's arch in
-# tools/chromeshell/dist/<arch>/Gerdr.app (+ dmg); dmg = both arches; win = the Windows installer (tools/winshell).
-# The Electron shell (desktop/, until 0.2.21) is gone: docs/dev/WHY-ELECTRON.md for the history.
+# desktop/dist/<arch>/Gerdr.app (+ dmg); dmg = both arches; win = the Windows installer (tools/winshell, until it moves
+# to Electron too). The App is Electron again since 2026-11-18 (desktop/, docs/dev/WHY-ELECTRON-COMEBACK.md); the
+# Lightron shell (tools/chromeshell) is no longer built.
 HOST_ARCH := $(shell uname -m | sed 's/x86_64/amd64/')
-MAC_APP := NAME=Gerdr ID=io.github.zbysir.gerdr VERSION=$(VERSION) tools/chromeshell/package.sh
+MAC_APP := NAME=Gerdr ID=io.github.zbysir.gerdr VERSION=$(VERSION) desktop/package.sh
 app:
 	ARCH=$(HOST_ARCH) $(MAC_APP)
 
