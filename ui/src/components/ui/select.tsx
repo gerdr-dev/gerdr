@@ -4,6 +4,7 @@ import * as React from "react"
 import { cn } from "@/lib/utils"
 import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from "lucide-react"
 import { Select as SelectPrimitive } from "radix-ui"
+import { keepLayer } from "@/components/ui/dialog"
 
 function Select({
   ...props
@@ -54,6 +55,7 @@ function SelectContent({
   children,
   position = "item-aligned",
   align = "center",
+  style,
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Content>) {
   return (
@@ -68,6 +70,8 @@ function SelectContent({
         )}
         position={position}
         align={align}
+        // Phones drew one frame with the list gone when its zoom-in ended (the layer is dropped): keep it (TAILWIND.md)
+        style={{ ...keepLayer, ...style }}
         {...props}
       >
         <SelectScrollUpButton />

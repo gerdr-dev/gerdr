@@ -110,7 +110,8 @@ chat underneath, and the viewer's scroll box (an `overflow-auto` scroller is com
 when written: if it still flashes, update this): `will-change: opacity` on the overlay and
 content for as long as they're open, so the layers don't change when the animation ends. Inline, not a class (a class
 compiled a frame late changes the layers mid-animation); opacity, not transform (a transform layer blurs dialog text
-in WebKit). Any other box that animates in over a large area and then sits still needs the same if a phone shows it.
+in WebKit). Any other box that animates in over a large area and then sits still needs the same if a phone shows it:
+`select.tsx` did (the add-on settings' long option list vanished for one frame as it finished opening, Android).
 
 How it was found, and what didn't work:
 
