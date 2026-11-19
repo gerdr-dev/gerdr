@@ -114,8 +114,21 @@ class CardBoundary extends Component<{ fallback: ReactNode; children: ReactNode 
   }
 }
 
-/** The built-in card (title, body, answerable choices with undo). core exports it as DefaultCard, for a card type to wrap. */
-export function BuiltinCard({ card }: { card: Card }) {
+/**
+ * How a card's question was settled outside it (its page, an earlier answer), told by the card type that wraps the
+ * built-in card: drawn as answered — `value` picked (several: one per line), green, the choices closed — or, with
+ * `dropped`, closed and grey. `note` is the line under the choices; `action` sits at its end (e.g. a button to change
+ * the answer). A card without choices only changes colour: a line added under it would change its height.
+ */
+export type CardDone = { value?: string; dropped?: boolean; note?: ReactNode; action?: ReactNode };
+
+/**
+ * The built-in card (title, body, answerable choices with undo). core exports it as DefaultCard, for a card type to
+ * wrap. Its height doesn't change with its state: open, sending, sent and settled (`done`) all draw the same rows,
+ * the last one (the "other" box while open) turning into the status line — a card that shrank when answered moved
+ * the chat under the reader's eyes.
+ */
+export function BuiltinCard({ card, done }: { card: Card; done?: CardDone }) {
   const key = card.ref ?? card.title;
   const { p, rerender } = usePick(key);
   const [own, setOwn] = useState("");
@@ -124,8 +137,10 @@ export function BuiltinCard({ card }: { card: Card }) {
   const left = waiting ? Math.max(0, Math.ceil((p.at + UNDO_MS - Date.now()) / 1000)) : 0;
   const [ticked, setTicked] = useState<string[]>([]);
   const multi = !!ch?.multi;
+  // Settled outside: wins over a pick made here that went out already (the outside now says the same, or newer)
+  const settled = !!done && !waiting && !p?.err;
   const choose = (v: string) => {
-    if (p && !p.err) return;
+    if (settled || (p && !p.err)) return;
     send(key, card, v);
     rerender();
   };
@@ -133,29 +148,39 @@ export function BuiltinCard({ card }: { card: Card }) {
   const tick = (o: string) => setTicked((x) => (x.includes(o) ? x.filter((y) => y !== o) : [...x, o]));
   const picked = [...(ch?.options.filter((o) => ticked.includes(o)) ?? []), ...(own.trim() ? [own.trim()] : [])];
   const submit = () => picked.length && choose(picked.join("\n"));
-  // What was sent beyond the options (written under "other"), shown under them
-  const extra =
-    p &&
-    (multi
-      ? p.v
-          .split("\n")
-          .filter((x) => !ch?.options.includes(x))
-          .join("\n")
-      : ch?.options.includes(p.v)
-        ? ""
-        : p.v);
+  // The answer given: the pick made here, else the one settled outside
+  const answer = settled ? (done!.value ?? "") : (p?.v ?? "");
+  const given = answer ? (multi ? answer.split("\n") : [answer]) : [];
+  // What was answered beyond the options (written under "other"), shown in the status line
+  const extra = given.filter((x) => !ch?.options.includes(x)).join("\n");
   const undo = () => {
     if (p?.timer) clearTimeout(p.timer);
     picks.delete(key);
     rerender();
   };
-  const open = !!ch && (!p || !!p.err);
+  const open = !!ch && !settled && (!p || !!p.err);
+  const ok = settled ? !done!.dropped : !!p?.sent;
+  const grey = settled && !!done!.dropped;
+  // The last row: the "other" box while open, else where things stand. Same box, same height (ChoiceOther's padding)
+  const row = "flex min-w-0 items-center gap-2 rounded-lg border border-transparent px-2.5 py-2 text-[1em] leading-normal";
   return (
-    <ChoiceCard className={cn("border-l-2", p?.sent ? "border-l-ok" : "border-l-warn")}>
-      <ChoiceKicker icon={ch ? <CircleHelp className="size-3.5 text-warn" /> : <ClipboardList className="size-3.5 text-warn" />}>
+    <ChoiceCard className={cn("border-l-2", ok ? "border-l-ok" : grey ? "border-l-muted-foreground/40" : "border-l-warn")}>
+      <ChoiceKicker
+        icon={
+          ok ? (
+            <Check className="size-3.5 text-ok" />
+          ) : grey ? (
+            <Undo2 className="size-3.5" />
+          ) : ch ? (
+            <CircleHelp className="size-3.5 text-warn" />
+          ) : (
+            <ClipboardList className="size-3.5 text-warn" />
+          )
+        }
+      >
         <span>{card.kicker ?? (ch ? t("toolCard.decide") : t("toolCard.todo"))}</span>
       </ChoiceKicker>
-      <ChoiceTitle>{card.title}</ChoiceTitle>
+      <ChoiceTitle className={cn(grey && "text-muted-foreground line-through")}>{card.title}</ChoiceTitle>
       {card.body && (
         <div className="mt-1 text-[1em] text-muted-foreground">
           <Markdown>{card.body}</Markdown>
@@ -165,7 +190,7 @@ export function BuiltinCard({ card }: { card: Card }) {
         <ChoiceList className="mt-3">
           {ch.options.map((o, n) => {
             const [label, desc] = split(o);
-            const on = multi ? (p ? p.v.split("\n").includes(o) : ticked.includes(o)) : p?.v === o;
+            const on = given.length ? given.includes(o) : multi && ticked.includes(o);
             return (
               <ChoiceRow
                 key={n}
@@ -176,20 +201,39 @@ export function BuiltinCard({ card }: { card: Card }) {
                 tone="warn"
                 dim={!open && !on}
                 disabled={!open}
+                className={cn(on && ok && "bg-ok/10 enabled:hover:bg-ok/10")}
                 onClick={() => (multi ? tick(o) : choose(o))}
               />
             );
           })}
-          {ch.other !== false && open && (
-            <ChoiceOther
-              value={own}
-              onChange={(e) => setOwn(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.nativeEvent.isComposing || e.keyCode === 229) return;
-                if (e.key === "Enter" && own.trim()) multi ? submit() : choose(own.trim());
-              }}
-              placeholder={ch.options.length ? t("toolCard.other") : t("toolCard.answer")}
-            />
+          {open ? (
+            ch.other !== false ? (
+              <ChoiceOther
+                value={own}
+                onChange={(e) => setOwn(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+                  if (e.key === "Enter" && own.trim()) multi ? submit() : choose(own.trim());
+                }}
+                placeholder={ch.options.length ? t("toolCard.other") : t("toolCard.answer")}
+              />
+            ) : (
+              <div className={cn(row, "text-muted-foreground/70")}>{t("toolCard.pick")}</div>
+            )
+          ) : (
+            <div className={cn(row, extra && (ok ? "bg-ok/10" : "bg-warn/10"))}>
+              {extra && <span className="min-w-0 flex-1 whitespace-pre-wrap">{extra}</span>}
+              <span className={cn("min-w-0 truncate text-[12px]", !extra && "flex-1", waiting || grey ? "text-muted-foreground" : "text-ok")}>
+                {waiting ? t("toolCard.sending", { n: left }) : settled ? done!.note : t("toolCard.sent")}
+              </span>
+              {waiting && (
+                <button className="shrink-0 rounded-md px-1.5 text-[12px] text-muted-foreground hover:bg-accent hover:text-foreground" onClick={undo}>
+                  <Undo2 className="mr-1 inline size-3" />
+                  {t("toolCard.undo")}
+                </button>
+              )}
+              {settled && done!.action}
+            </div>
           )}
           {multi && open && (
             <Button size="sm" className="self-end" disabled={!picked.length} onClick={submit}>
@@ -197,24 +241,8 @@ export function BuiltinCard({ card }: { card: Card }) {
               {t("toolCard.submit", { n: picked.length })}
             </Button>
           )}
-          {extra && (
-            <div className="flex items-center gap-3 rounded-lg bg-warn/10 px-2.5 py-2.5 text-[1em]">
-              <span className="min-w-0 flex-1">{extra}</span>
-              <Check className="size-3.5 text-warn" />
-            </div>
-          )}
         </ChoiceList>
       )}
-      {waiting && (
-        <div className="mt-3 flex items-center gap-2 text-[12px] text-muted-foreground">
-          <span className="flex-1">{t("toolCard.sending", { n: left })}</span>
-          <Button size="sm" variant="outline" className="h-7 text-[12px]" onClick={undo}>
-            <Undo2 className="size-3.5" />
-            {t("toolCard.undo")}
-          </Button>
-        </div>
-      )}
-      {p?.sent && <div className="mt-3 text-[12px] text-ok">{t("toolCard.sent")}</div>}
       {p?.err && <div className="mt-3 text-[12px] text-bad">{p.err}</div>}
     </ChoiceCard>
   );

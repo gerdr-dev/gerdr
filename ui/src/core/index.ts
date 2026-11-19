@@ -18,7 +18,7 @@ export { onShowSession } from "@/lib/panelRoute";
 export { useDark } from "./theme";
 export { askSecret } from "@/lib/workSecrets";
 export { registerCard, type CardProps } from "@/lib/cards";
-export { BuiltinCard as DefaultCard, type Card } from "@/components/chat/ToolCard";
+export { BuiltinCard as DefaultCard, type Card, type CardDone } from "@/components/chat/ToolCard";
 export { toast } from "sonner";
 export { usePortalContainer } from "./portal";
 export { usePanelVisible } from "./visible";

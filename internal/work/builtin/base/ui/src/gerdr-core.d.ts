@@ -235,8 +235,19 @@ declare module "@gerdr/core" {
 
   export function registerCard(type: string, component: ComponentType<CardProps>): () => void;
 
-  /** The built-in card (title, body, choices answerable in place with undo), for a card type that only adds to it. */
-  export function DefaultCard(props: { card: Card }): ReactNode;
+  /**
+   * How a card's question was settled outside the card (on your page, an answer given before), for DefaultCard: drawn
+   * answered — `value` picked (several: one per line), a green edge, the choices closed — or, `dropped`, closed and
+   * grey. `note`: the status line under the choices; `action`: at its end (e.g. a button to change the answer).
+   */
+  export type CardDone = { value?: string; dropped?: boolean; note?: ReactNode; action?: ReactNode };
+
+  /**
+   * The built-in card (title, body, choices answerable in place with undo), for a card type that only adds to it.
+   * `done`: settled outside it. It keeps its height in every state (the "other" box becomes the status line), so give
+   * `done` rather than swapping it for a smaller card once answered: a card that shrinks moves the chat being read.
+   */
+  export function DefaultCard(props: { card: Card; done?: CardDone }): ReactNode;
 
   /** gerdr's toasts. */
   export const toast: {
