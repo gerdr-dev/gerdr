@@ -289,7 +289,10 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
     // it before a shortcut opened a dialog, showed as it had been for a moment.
     let warm: ImageBitmap | null = null;
     let taking: Promise<ImageBitmap | null> | null = null; // one still at a time; a second ask shares it
-    const OVER = "[data-radix-popper-content-wrapper] > *, [role=dialog], [role=alertdialog], [role=tooltip], [data-sonner-toast]";
+    // data-over-page: anything else of ours drawn over panes (the tab / pane drag layer, the right-click menu, a rail
+    // add-on's panel). Without it a tab dragged over the page was drawn under it, drop preview and all (user report).
+    // Set it only while the thing is shown: one on screen keeps this check running every frame.
+    const OVER = "[data-radix-popper-content-wrapper] > *, [role=dialog], [role=alertdialog], [role=tooltip], [data-sonner-toast], [data-over-page]";
     const overlays = () => Array.from(document.querySelectorAll<HTMLElement>(OVER));
     // The still: from the App's own process when it can (desktop/main.js gerdr:shot, a data URL in tens of ms, as
     // Claude Desktop does), else through the backend (an older App). Decoded here into a bitmap, so showing it is one
@@ -423,10 +426,11 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
     // check, so a streaming reply's nodes cost a selector match each, not a layout.
     const mo = new MutationObserver((recs) => {
       for (const rec of recs)
-        if (rec.target === document.body) return report();
+        if (rec.target === document.body || rec.type === "attributes") return report();
         else for (const n of rec.addedNodes) if (n instanceof Element && (n.matches(OVER) || n.querySelector(OVER))) return report();
     });
-    mo.observe(document.body, { childList: true, subtree: true });
+    // data-over-page turned on in place (a rail add-on's panel stays mounted)
+    mo.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["data-over-page"] });
     const iv = setInterval(report, 250);
     window.addEventListener("resize", report);
     document.addEventListener("visibilitychange", report);

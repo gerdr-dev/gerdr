@@ -347,6 +347,7 @@ export function AppContextMenu() {
       ref={box}
       role="menu"
       data-app-context-menu
+      data-over-page
       style={pos ?? { left: menu.x, top: menu.y, visibility: "hidden" }}
       className="pointer-events-auto fixed z-[300] min-w-40 rounded-lg border bg-popover p-1 text-sm text-popover-foreground shadow-md select-none"
       onContextMenu={(e) => e.preventDefault()}

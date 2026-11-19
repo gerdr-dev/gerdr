@@ -408,7 +408,9 @@ export function TabDragLayer() {
   const compact = !!t && t.kind !== "reorder";
   const fixed = (b: Box): React.CSSProperties => ({ left: b.left, top: b.top, width: b.width, height: b.height });
   return createPortal(
-    <div className="pointer-events-none fixed inset-0 z-[100]">
+    // data-over-page: the whole window, so a Browser pane's page steps aside for the drag (its still shows instead) and
+    // the ghost and the drop preview over it are seen (BrowserScreen.tsx OVER)
+    <div data-over-page className="pointer-events-none fixed inset-0 z-[100]">
       {t?.kind === "tab" && (
         <div className="fixed overflow-hidden rounded-md bg-brand/10 ring-2 ring-brand" style={fixed(t.rect)}>
           {/* 停住多久会切过去：底下一条走满 */}

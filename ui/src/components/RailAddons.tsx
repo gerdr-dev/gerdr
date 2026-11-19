@@ -141,6 +141,8 @@ function AddonButton({ b }: { b: RailButton }) {
         // py-1.5 matches the px-1.5 blocks give themselves (GUIDE.md), so a block's hover fill sits evenly in the panel
         <div
           ref={panel}
+          // only while open: it stays mounted, and a marked one makes the Browser pane check every frame
+          data-over-page={open || undefined}
           className={cn("fixed z-50 w-72 rounded-lg border bg-popover py-1.5 text-popover-foreground shadow-md", !open && "hidden")}
           style={pos}
           onPointerEnter={hover(true)}

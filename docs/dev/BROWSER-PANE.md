@@ -158,6 +158,10 @@ projbrowser.Open: the App connected → OpenNative in the project's profile; els
   the window while the box isn't shown (another tab, the page hidden). The stream still runs with `pic=0`: no picture,
   only the address bar's info and its input (go / back / reload).
 - **Our menus / dialogs over the page: a still.** The window is above the UI, so nothing of ours can be drawn over it.
+  What counts as ours is a list of selectors (`OVER` in BrowserScreen.tsx): Radix's popups, dialogs, tooltips, toasts,
+  and `data-over-page` on anything else (the tab / pane drag layer, which is the whole window so the page steps aside
+  for the whole drag; the right-click menu; a rail add-on's panel). Something new drawn over panes needs the attribute,
+  set only while shown: a tab dragged over the page was drawn under it until the drag layer had it.
   While one of our menus / dialogs / toasts overlaps the box, the box shows a still of the page (`GET
   /api/browser/shot`, `Page.captureScreenshot`, ~0.1 s) and the window steps aside; it comes back when they close. The
   page is frozen meanwhile (as Claude Desktop does). The still is a canvas drawn from a decoded `ImageBitmap`, not an
