@@ -27,9 +27,9 @@ import (
 	"github.com/gerdr-dev/gerdr/internal/i18n"
 )
 
-// ExtensionIDs are the extensions the native host manifest allows. Only the development build so far (its manifest
-// carries a key, so the id is fixed; loaded unpacked); add the Chrome Web Store id once it is listed.
-var ExtensionIDs = []string{"okkofibhcocmcnafoamflffmkgiphppc"}
+// ExtensionIDs are the extensions the native host manifest allows: the development build (its manifest carries a key,
+// so the id is fixed; loaded unpacked) and the Chrome Web Store build (the store assigns its own id).
+var ExtensionIDs = []string{"okkofibhcocmcnafoamflffmkgiphppc", "hkooiloghnflaffpkfapfodomgkdpnff"}
 
 // Bridge holds every connected extension (one per Chrome profile that has it) and the tabs Gerdr opened.
 type Bridge struct {
