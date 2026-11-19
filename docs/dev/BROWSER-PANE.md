@@ -35,6 +35,14 @@ projbrowser (internal/projbrowser): the installed Chrome / Edge / Brave / Chromi
   outlive the backend (every update restarts it), so after a restart the pane offers to open it again. It doesn't
   reopen by itself, because every device showing the layout would open its own copy.
 
+- **A panel's agents** (its agent column, the workers it started: `tags.panel`) are in no pane, so `browserOpened`
+  has nowhere to put a page. Each page records the session that opened it (`chromeext Tab.Session`, inherited by
+  the pages it opens and by its move into the App's browser), and the panel gets a browser column at its right
+  (`core/SessionBrowser.tsx PanelBrowser`, opened by itself on the next open, × closes it until then; a third tab on
+  a phone). Asked for: one place for the whole panel, not a tab beside each chat (the first cut). Its "open in new
+  window" asks the App for a window on `/<project>?browser=<tab>` (desktop/core `newWindow` with a `path`), which
+  App.tsx draws as that page alone (`BrowserWindow`); the App's real page moves there (one window per page).
+
 ## Why not the obvious ways
 
 - **The user's everyday Chrome profile directly**: impossible while Chrome runs. The profile is locked to that

@@ -34,6 +34,7 @@ import { reloadAddons, setTabNameFn } from "./lib/addons";
 import { AddonSlot as AddonSlotView } from "./components/AddonSlot";
 import { focusedSession, fontSizeOf, get, keyFor, prefOf, markUnread, set, useStore, visibleSessions } from "./lib/store";
 import { boot } from "./lib/sync";
+import { BrowserWindow, browserOnly } from "./core/SessionBrowser";
 import type { SessionSummary } from "./lib/types";
 import { t } from "./lib/i18n";
 
@@ -287,6 +288,8 @@ export default function App() {
     );
   }
   if (!ready) return <LoadingScreen text={t("app.connecting")} />;
+  // a window opened for one page of a project's browser (a panel's "open in new window")
+  if (browserOnly) return <BrowserWindow tab={browserOnly} />;
 
   return (
     <GerdrChatProvider>

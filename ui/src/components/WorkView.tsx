@@ -1,7 +1,7 @@
 import { ArrowDownRight, PanelRightClose, PanelRightOpen, Check, ChevronDown, Code2, History, MessageSquarePlus, Settings, X } from "lucide-react";
 import { DrawerButton } from "./DrawerButton";
 import { nativeTitleBar } from "@/lib/native";
-import { createElement, useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { createElement, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { toast } from "sonner";
 import { PortalContext } from "@/core/portal";
@@ -10,7 +10,8 @@ import { useClearBadge } from "@/lib/badges";
 import { AgentIcon, StatusDot, dotStatus } from "@/components/AgentIcon";
 import { COL_EDGE, startColResize } from "@/components/SidebarChrome";
 import { ChatView } from "@/components/chat/ChatView";
-import { ChatWithBrowser } from "@/core/SessionBrowser";
+import { PanelBrowser } from "@/core/SessionBrowser";
+import { useBrowserTabs } from "@/lib/actions";
 import { cardOf } from "@/components/chat/ToolCard";
 import type { GPart } from "@gerdr/chat";
 import { PixelLoader } from "@/components/chat/PixelLoader";
@@ -58,33 +59,36 @@ const CHAT_MIN = 320;
 const CHAT_MAX = 900;
 const clampChatW = (w: number) => Math.round(Math.min(CHAT_MAX, window.innerWidth * 0.7, Math.max(CHAT_MIN, w)));
 
-function useChatW() {
+// The browser column right of it (core/SessionBrowser.tsx PanelBrowser), the same way
+const BROWSER_W = 560;
+
+function useChatW(key = "gerdr.workChatW", def = CHAT_W) {
   const [w, setW] = useState(() => {
     try {
-      const v = Number(localStorage.getItem("gerdr.workChatW"));
-      return v ? clampChatW(v) : CHAT_W;
+      const v = Number(localStorage.getItem(key));
+      return v ? clampChatW(v) : def;
     } catch {
-      return CHAT_W;
+      return def;
     }
   });
   const save = (v: number) => {
     v = clampChatW(v);
     setW(v);
     try {
-      localStorage.setItem("gerdr.workChatW", String(v));
+      localStorage.setItem(key, String(v));
     } catch {}
   };
   return [w, save] as const;
 }
 
 /** The chat column's left edge: drag to resize, double-click for the default. Same look as the sidebar's (SidebarEdge). */
-function ChatEdge({ width, onWidth }: { width: number; onWidth: (w: number) => void }) {
+function ChatEdge({ width, onWidth, def = CHAT_W }: { width: number; onWidth: (w: number) => void; def?: number }) {
   const start = (e: React.PointerEvent) => startColResize(e, (dx) => onWidth(width - dx));
   return (
     <div
       className={cn("absolute top-0 -left-1 bottom-0 w-2 px-[3px] pointer-coarse:-left-3 pointer-coarse:w-6 pointer-coarse:px-[11px]", COL_EDGE)}
       onPointerDown={start}
-      onDoubleClick={() => onWidth(CHAT_W)}
+      onDoubleClick={() => onWidth(def)}
       title={t("nav.dragResize")}
       style={{ WebkitAppRegion: "no-drag" } as any}
     />
@@ -520,9 +524,7 @@ function WorkPeek() {
         )}
         <div className="min-h-0 flex-1" data-composer-scope>
           {session ? (
-            <ChatWithBrowser session={id}>
-              <ChatView key={id} session={session} paneId={`work-peek:${id}`} focused focus={focus} />
-            </ChatWithBrowser>
+            <ChatView key={id} session={session} paneId={`work-peek:${id}`} focused focus={focus} />
           ) : (
             <div className="flex h-full items-center justify-center text-[12px] text-muted-foreground">
               {ready ? t("workView.peekGone") : <PixelLoader className="size-4" />}
@@ -564,13 +566,7 @@ function WorkChat() {
   useEffect(() => {
     if (ready && !session) ensureWorkSession().catch((e) => setErr(e.message ?? String(e)));
   }, [ready, session]);
-  // its pages (gerdr browser open) beside it: in no pane, nothing else shows them (core/SessionBrowser.tsx)
-  if (session)
-    return (
-      <ChatWithBrowser session={session.id}>
-        <ChatView key={session.id} session={session} paneId={`${WORK_PANE}:${project}`} focused={false} />
-      </ChatWithBrowser>
-    );
+  if (session) return <ChatView key={session.id} session={session} paneId={`${WORK_PANE}:${project}`} focused={false} />;
   return (
     <div className="flex h-full items-center justify-center gap-2 p-6 text-center text-[12px] text-muted-foreground">
       {err ? (
@@ -802,14 +798,31 @@ function WorkViewBody() {
   const space = spaceOfKey(project);
   const { panels, loaded, ownRemoved } = usePanels(space);
   const [chatW, setChatW] = useChatW();
-  const [side, setSide] = useState<"page" | "chat">("page");
+  const [browserW, setBrowserW] = useChatW("gerdr.workBrowserW", BROWSER_W);
+  const sessions = usePanelSessions(project);
+  // the pages this panel's agents opened: a column at the far right (asked for), a third tab on a phone
+  const browser = (full?: boolean) => (
+    <PanelBrowser
+      panel={project}
+      sessions={sessions}
+      width={full ? undefined : browserW}
+      edge={full ? undefined : <ChatEdge width={browserW} onWidth={setBrowserW} def={BROWSER_W} />}
+    />
+  );
+  const hasPages = useBrowserTabs((s) => s.tabs.some((x) => !x.gone && !!x.session && sessions.has(x.session)));
+  const [side, setSide] = useState<"page" | "chat" | "browser">("page");
+  const sides = [...(["page"] as const), ...(ownChat ? [] : (["chat"] as const)), ...(hasPages ? (["browser"] as const) : [])];
+  const at = side === "browser" && !hasPages ? "page" : side;
   const showChat = useCallback(() => setSide("chat"), []);
   // Every panel of the project removed, its own Work too: nothing to show but the way to add one
   if (loaded && !panels.length) return <NoPanels space={space} ownRemoved={ownRemoved} />;
   if (ownChat && !phone)
     return (
-      <div className="h-full bg-background">
-        <WorkFrames />
+      <div className="flex h-full bg-background">
+        <div className="min-w-0 flex-1">
+          <WorkFrames />
+        </div>
+        {browser()}
       </div>
     );
   if (phone) {
@@ -819,15 +832,15 @@ function WorkViewBody() {
           {/* The drawer, as in Code (PhoneBar): projects, the Code / panel switch, settings, and the panel's own items
               (core/phoneMenu.ts). It used to be a Code button, which left a phone no way to anything else */}
           <DrawerButton />
-          <div className={cn("flex flex-1 justify-center", ownChat && "invisible")}>
+          <div className={cn("flex flex-1 justify-center", sides.length < 2 && "invisible")}>
             <div className="flex gap-0.5 rounded-lg bg-muted p-0.5">
-              {(["page", "chat"] as const).map((v) => (
+              {sides.map((v) => (
                 <button
                   key={v}
-                  className={cn("h-7 rounded-md px-3 text-[12px]", side === v ? "bg-background shadow-sm" : "text-muted-foreground")}
+                  className={cn("h-7 rounded-md px-3 text-[12px]", at === v ? "bg-background shadow-sm" : "text-muted-foreground")}
                   onClick={() => setSide(v)}
                 >
-                  {v === "page" ? t("workView.page") : t("workView.assistant")}
+                  {v === "page" ? t("workView.page") : v === "chat" ? t("workView.assistant") : t("workView.browser")}
                 </button>
               ))}
             </div>
@@ -835,16 +848,17 @@ function WorkViewBody() {
           <div className="size-9" />
         </div>
         {/* both stay mounted: switching tabs keeps the page's state and the chat's scroll */}
-        <div className={cn("min-h-0 flex-1", side !== "page" && !ownChat && "hidden")}>
+        <div className={cn("min-h-0 flex-1", (at === "browser" || (at !== "page" && !ownChat)) && "hidden")}>
           <WorkFrames onShowChat={showChat} />
         </div>
         {/* The same header as on wider screens: without it a phone has no history, no new chat and no agent picker */}
-        <div className={cn("flex min-h-0 flex-1 flex-col", (side !== "chat" || ownChat) && "hidden")}>
+        <div className={cn("flex min-h-0 flex-1 flex-col", (at !== "chat" || ownChat) && "hidden")}>
           <ChatHeader />
           <div className="min-h-0 flex-1" data-composer-scope>
             <WorkChat />
           </div>
         </div>
+        {at === "browser" && browser(true)}
       </div>
     );
   }
@@ -864,6 +878,20 @@ function WorkViewBody() {
           <WorkChat />
         </div>
       </div>
+      {browser()}
     </div>
   );
+}
+
+/** The conversations of panel project: its agent column's (useWorkChats) and the workers it started (tags.panel). */
+function usePanelSessions(project: string): Set<string> {
+  const own = useWorkChats();
+  const workers = useStore((s) =>
+    Object.values(s.sessions)
+      .filter((x) => x.tags?.panel === project)
+      .map((x) => x.id)
+      .join("\n"),
+  );
+  const ids = [...own.map((c) => c.id), ...workers.split("\n").filter(Boolean)].join("\n");
+  return useMemo(() => new Set(ids.split("\n").filter(Boolean)), [ids]);
 }

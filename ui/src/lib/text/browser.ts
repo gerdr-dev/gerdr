@@ -1,8 +1,9 @@
 // The Browser pane (components/browser/, docs/dev/BROWSER-PANE.md). en is typed against zh.
 export const zh = {
   "browser.back": "后退",
-  "browser.chat": "对话",
-  "browser.tab": "浏览器",
+  "browser.newWindow": "在新窗口打开",
+  "browser.hideColumn": "收起浏览器",
+  "browser.showColumn": "打开浏览器",
   "browser.forward": "前进",
   "browser.reload": "刷新",
   "browser.address": "输入网址或搜索",
@@ -51,8 +52,9 @@ export const zh = {
 
 export const en: Record<keyof typeof zh, string> = {
   "browser.back": "Back",
-  "browser.chat": "Chat",
-  "browser.tab": "Browser",
+  "browser.newWindow": "Open in new window",
+  "browser.hideColumn": "Hide the browser",
+  "browser.showColumn": "Show the browser",
   "browser.forward": "Forward",
   "browser.reload": "Reload",
   "browser.address": "Type a URL or search",

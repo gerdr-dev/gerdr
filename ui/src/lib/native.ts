@@ -133,6 +133,14 @@ export function nativeNewWindow(space: string) {
   else bridge()?.postMessage({ type: "newWindow", space });
 }
 
+/**
+ * App 里：a window of its own for one page of a project's browser (core/SessionBrowser.tsx BrowserWindow): Gerdr on
+ * path (/<project>?browser=<tab>). An App older than that ignores path and opens the project's usual window.
+ */
+export function nativeNewPathWindow(space: string, path: string) {
+  bridge()?.postMessage({ type: "newWindow", space, path });
+}
+
 /** App 里：tell the shell which session this window shows (its title, where a notification click goes, what ⌘N copies). */
 export function nativeSpace(id: string, name: string) {
   bridge()?.postMessage({ type: "space", id, name });

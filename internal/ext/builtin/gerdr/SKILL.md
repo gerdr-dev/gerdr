@@ -587,7 +587,8 @@ Two browsers, the same actions on both:
 
 - **The project's browser** (default): a Chrome Gerdr runs in the background with a profile per project, so a site
   signed in to once stays signed in for that project. Pages you open show in the **Browser pane** beside your chat
-  (when you work for a panel, as its board, in the browser view next to your conversation there, if the panel has one):
+  (when you are a panel's agent or one of its workers: in a browser column at the right of that panel, which opens by
+  itself):
   the user watches you work and can click and type there themselves. A site that needs a sign-in or a captcha: open
   it, then ask the user to do that part in the Browser pane, and carry on when they say so. Also the way to show the
   user a page (a dev server you started, a report): open it, it appears next to the conversation.

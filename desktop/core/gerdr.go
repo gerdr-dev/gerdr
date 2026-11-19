@@ -182,7 +182,15 @@ func (s *shell) message(w *el.Window, raw json.RawMessage) {
 		s.spaces[w.ID()] = str("id")
 		s.mu.Unlock()
 	case "newWindow":
-		s.newWindow(str("space"))
+		// path: a window for something other than a project's usual view (a page of its browser on its own,
+		// ui/src/core/SessionBrowser.tsx openBrowserWindow)
+		if p := str("path"); strings.HasPrefix(p, "/") && !strings.HasPrefix(p, "//") {
+			if err := s.app.NewWindow(p); err != nil {
+				log.Printf("new window: %v", err)
+			}
+		} else {
+			s.newWindow(str("space"))
+		}
 	case "open":
 		s.openExternal(str("url"))
 	case "openPath":
