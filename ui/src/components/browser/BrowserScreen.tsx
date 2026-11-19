@@ -8,6 +8,7 @@ import { claimNative, focusPane, loadBrowserTabs, noteBrowserURL, releaseNative,
 import { t } from "@/lib/i18n";
 import { paintFrame, parseFrame, wsURL, type StreamPage } from "@/lib/screenStream";
 import { canNativeBrowser, nativeBrowserView } from "@/lib/native";
+import { FLOAT_FITS, type FloatFit } from "@/lib/layout";
 import { cn } from "@/lib/utils";
 
 // The Browser pane's content: a page of the project's own browser (internal/projbrowser, docs/dev/BROWSER-PANE.md),
@@ -46,6 +47,9 @@ type Props = {
   lastURL?: string;
   paneId: string;
   focused: boolean;
+  /** the pane floats over the others (Panes.tsx FloatPane): the page laid out at this fixed size (layout.FLOAT_FITS),
+   *  not live there, a still scaled down from it every second (asked for) */
+  fit?: FloatFit;
   /** the title bar's own look (Panes.tsx: height, padding, dimmed when not focused) */
   headClassName: string;
   onHeadPointerDown?: (e: React.PointerEvent<HTMLElement>) => void;
@@ -84,7 +88,7 @@ function hostOf(u: string) {
   }
 }
 
-export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClassName, onHeadPointerDown, extra, paneItems, Body }: Props) {
+export function BrowserScreen({ project, tab, lastURL, paneId, focused, fit, headClassName, onHeadPointerDown, extra, paneItems, Body }: Props) {
   const all = useBrowserTabs((s) => s.tabs);
   const loaded = useBrowserTabs((s) => s.loaded);
   useEffect(() => {
@@ -112,6 +116,15 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
     if (canNative && tab && !owner) claimNative(tab, paneId);
   }, [owner, canNative, tab, paneId]);
   const nativeView = canNative && owner === paneId;
+  const floating = !!fit;
+  // Floating: the page laid out at the picked size, whatever the box's (shrunk to it, sites showed their phone
+  // layout). Docked again, the backend drops it once the App shows the page (chromeext phone.go); said here too, for
+  // a pane that goes while floating. In order: a change of size is a clear then a set
+  useEffect(() => {
+    if (!fit || !tab || !live) return;
+    queueFit(tab, FLOAT_FITS[fit]);
+    return () => queueFit(tab, null);
+  }, [fit, tab, live]);
   // The page failed to load (the stream says so): Chrome's error page is blank here, so the pane draws its own with a
   // retry. The App's real page would cover it, so it's kept out of sight meanwhile (read by the placing below)
   const failedRef = useRef(false);
@@ -317,7 +330,11 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
     const take = (): Promise<ImageBitmap | null> =>
       (taking ??= (async () => {
         const native = (window as any).gerdrNative?.browserShot as ((t: number) => Promise<string | null>) | undefined;
-        const u = await (native ? native(tab) : api.browserShot(tab)).catch(() => null);
+        // floating: from the backend, scaled to the box (the App's own still is the page's full size, at its window's
+        // size, not the fixed one it is laid out at)
+        const u = await (
+          floating ? api.browserShot(tab, placed.current.width * (window.devicePixelRatio || 1)) : native ? native(tab) : api.browserShot(tab)
+        ).catch(() => null);
         if (!u) return null;
         try {
           const img = new Image();
@@ -368,7 +385,16 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
       const cv = stillRef.current;
       if (!cv) return;
       const p = placed.current;
-      Object.assign(cv.style, { left: p.left + "px", top: p.top + "px", width: p.width + "px", height: p.height + "px", borderRadius: p.radius + "px" });
+      // floating: the page kept the size it had docked, so its still is fitted into the pane, not stretched
+      Object.assign(cv.style, {
+        left: p.left + "px",
+        top: p.top + "px",
+        width: p.width + "px",
+        height: p.height + "px",
+        borderRadius: p.radius + "px",
+        objectFit: floating ? "contain" : "",
+        objectPosition: floating ? "left top" : "",
+      });
     };
     // false: nothing was drawn (the bitmap was closed or empty), the page has to stay
     function show(bmp: ImageBitmap): boolean {
@@ -406,33 +432,36 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
         return q.width > 0 && q.left < r.right && q.right > r.left && q.top < r.bottom && q.bottom > r.top;
       });
       if (open.length && !raf) raf = requestAnimationFrame(() => ((raf = 0), report()));
-      if (over && !covered) {
+      // the pane's corners, inside its border: the page window has to be rounded as they are
+      const pane = box.closest<HTMLElement>("[data-pane-id]");
+      const cs = pane ? getComputedStyle(pane) : null;
+      const radius = cs ? Math.max(0, (parseFloat(cs.borderBottomLeftRadius) || 0) - (parseFloat(cs.borderBottomWidth) || 0)) : 0;
+      // where desktop/main.js placeView puts the page (at the page's zoom of 1): inwards to whole pixels. Relative to
+      // the box, so the still moves with it; a floating pane's still is laid here too (its page is never placed)
+      const place = () => {
+        const left = Math.ceil(r.x),
+          top = Math.ceil(r.y);
+        placed.current = { left: left - r.x, top: top - r.y, width: Math.floor(r.x + r.width) - left, height: Math.floor(r.y + r.height) - top, radius };
+        lay();
+      };
+      if (floating && shown) place();
+      if ((over || (floating && shown)) && !covered) {
         covered = true;
         const n = ++shot;
         const had = upSince > 0;
         if (had) cover(n);
         // a fresh one (take draws it): replaces the one that was up, or is the first, the page staying until then
         void take().then((b) => b && covered && n === shot && !had && cover(n));
-      } else if (!over && covered) {
+      } else if (!over && !(floating && shown) && covered) {
         covered = false;
         ++shot;
         last = ""; // placed again below, over the still, which stays
       }
       if (covered) return;
-      // the pane's corners, inside its border: the page window has to be rounded as they are
-      const pane = box.closest<HTMLElement>("[data-pane-id]");
-      const cs = pane ? getComputedStyle(pane) : null;
-      const radius = cs ? Math.max(0, (parseFloat(cs.borderBottomLeftRadius) || 0) - (parseFloat(cs.borderBottomWidth) || 0)) : 0;
       const key = shown ? [r.x, r.y, r.width, r.height, window.devicePixelRatio, radius].map((n) => Math.round(n * 10) / 10).join(",") : "hidden";
       if (key === last) return;
       last = key;
-      if (shown) {
-        // where desktop/main.js placeView puts the page (at the page's zoom of 1): inwards to whole pixels
-        const left = Math.ceil(r.x),
-          top = Math.ceil(r.y);
-        placed.current = { left: left - r.x, top: top - r.y, width: Math.floor(r.x + r.width) - left, height: Math.floor(r.y + r.height) - top, radius };
-        lay();
-      }
+      if (shown) place();
       nativeBrowserView(tab, shown ? r : null, radius);
     };
     placeNow.current = report;
@@ -450,6 +479,9 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
     // data-over-page turned on in place (a rail add-on's panel stays mounted)
     mo.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["data-over-page"] });
     const iv = setInterval(report, 250);
+    // Floating: the page stays aside (it can't be clicked or typed into there) and the still is taken again every
+    // second. The parked page keeps painting (desktop/main.js parkView), at the size it last had in a pane.
+    const tick = floating ? setInterval(() => covered && document.visibilityState === "visible" && void take(), 1000) : undefined;
     window.addEventListener("resize", report);
     document.addEventListener("visibilitychange", report);
     report();
@@ -458,6 +490,7 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
       ro.disconnect();
       mo.disconnect();
       clearInterval(iv);
+      clearInterval(tick);
       window.removeEventListener("resize", report);
       document.removeEventListener("visibilitychange", report);
       document.removeEventListener("pointerdown", press, true);
@@ -474,7 +507,7 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
       warm?.close();
       warm = null;
     };
-  }, [nativeView, tab]);
+  }, [nativeView, tab, floating]);
 
   // The page follows the pane's size (debounced: a drag of the split sends one resize at the end)
   useEffect(() => {
@@ -970,4 +1003,12 @@ function cssHex(color: string): string | null {
   cx.fillRect(0, 0, 1, 1);
   const [r, g, b] = cx.getImageData(0, 0, 1, 1).data;
   return "#" + [r, g, b].map((n) => n.toString(16).padStart(2, "0")).join("");
+}
+
+// One request at a time per page, so a clear and the next set (another size picked) land in that order
+const fitQueue = new Map<number, Promise<unknown>>();
+function queueFit(tab: number, f: { w: number; h: number; mobile: boolean } | null) {
+  const next = (fitQueue.get(tab) ?? Promise.resolve()).then(() => api.browserFit(tab, f).catch(() => {}));
+  fitQueue.set(tab, next);
+  void next.finally(() => fitQueue.get(tab) === next && fitQueue.delete(tab));
 }

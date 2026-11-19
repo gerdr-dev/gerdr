@@ -54,6 +54,7 @@ type LayoutParams struct {
 	Lines        int     `json:"lines,omitempty"`    // pane.read: how many of the last lines
 	Text         string  `json:"text,omitempty"`     // pane.send: what to type
 	NoEnter      bool    `json:"no_enter,omitempty"` // pane.send: don't press Enter after it
+	Fit          string  `json:"fit,omitempty"`      // pane.float: the page's size, pc / pad / mobile (ui/src/lib/layout.ts FLOAT_FITS)
 }
 
 type node = map[string]any
@@ -279,7 +280,10 @@ func (c *layoutCall) run(method string, p LayoutParams) (any, error) {
 		if err != nil {
 			return nil, err
 		}
-		return c.setFloat(t, str(pn, "id"), method == "pane.float")
+		if method == "pane.float" && p.Fit != "" && p.Fit != "pc" && p.Fit != "pad" && p.Fit != "mobile" {
+			return nil, errors.New("fit is pc, pad or mobile")
+		}
+		return c.setFloat(t, str(pn, "id"), method == "pane.float", p.Fit)
 	case "pane.swap":
 		_, ta, a, err := c.pane(p.ID)
 		if err != nil {
@@ -312,7 +316,9 @@ func (c *layoutCall) run(method string, p LayoutParams) (any, error) {
 
 // setFloat lifts a pane out of its tab's split to float over it (picture-in-picture, Tab.float in ui/src/lib/layout.ts),
 // or docks it back where it was: a floating pane stays in the tree, only drawn apart. Mirrors toggleFloat there.
-func (c *layoutCall) setFloat(t node, id string, on bool) (any, error) {
+// fit: the floating page's size (pc / pad / mobile; "" = pc, or as it was); floating an already floating pane with
+// one changes it.
+func (c *layoutCall) setFloat(t node, id string, on bool, fit string) (any, error) {
 	f := asNode(t["float"])
 	if !on {
 		if f[id] == nil {
@@ -326,8 +332,13 @@ func (c *layoutCall) setFloat(t node, id string, on bool) (any, error) {
 		c.changed = true
 		return node{"ok": true}, nil
 	}
-	if f[id] != nil {
-		return nil, errors.New("that pane is already floating")
+	if b := asNode(f[id]); b != nil {
+		if fit == "" {
+			return nil, errors.New("that pane is already floating")
+		}
+		b["fit"] = fit
+		c.changed = true
+		return node{"ok": true}, nil
 	}
 	docked := 0
 	for _, l := range leaves(asNode(t["root"])) {
@@ -347,6 +358,9 @@ func (c *layoutCall) setFloat(t node, id string, on bool) (any, error) {
 	}
 	n := float64(len(f)) // each next one a little up-left, as the UI does
 	f[id] = node{"x": 0.58 - n*0.03, "y": 0.53 - n*0.04, "w": 0.4, "h": 0.45}
+	if fit != "" {
+		asNode(f[id])["fit"] = fit
+	}
 	t["focus"] = id
 	if t["zoom"] == id {
 		delete(t, "zoom")
@@ -1143,6 +1157,9 @@ func (c *layoutCall) layoutView(w, t node) node {
 		for _, pv := range panes {
 			if b := asNode(f[str(pv, "pane_id")]); b != nil {
 				pv["floating"] = true
+				if fit := str(b, "fit"); fit != "" {
+					pv["fit"] = fit
+				}
 				pv["rect"] = node{"x": b["x"], "y": b["y"], "width": b["w"], "height": b["h"]}
 			}
 		}

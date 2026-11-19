@@ -282,14 +282,19 @@ func paneCmd() *cobra.Command {
 	}
 	swap.Flags().StringVar(&sp.TargetPane, "target-pane", "", "the other pane")
 	cmd.AddCommand(swap)
-	cmd.AddCommand(&cobra.Command{
-		Use:   "float <pane>",
-		Short: "Float a Browser pane over the others in its tab (picture-in-picture; the user drags / resizes it). Needs another pane left in the split",
-		Args:  cobra.ExactArgs(1),
+	var fit string
+	float := &cobra.Command{
+		Use: "float <pane>",
+		Short: "Float a Browser pane over the others in its tab (picture-in-picture; the user drags / resizes it). Needs another pane left in the split. " +
+			"Its page is laid out at a fixed size whatever the box's (--fit pc 1280x800, pad 820x1180, mobile 390x844; default pc) and shown as stills; " +
+			"--fit on a floating pane changes it",
+		Args: cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, a []string) error {
-			return layoutCall("pane.float", server.LayoutParams{ID: a[0]})
+			return layoutCall("pane.float", server.LayoutParams{ID: a[0], Fit: fit})
 		},
-	})
+	}
+	float.Flags().StringVar(&fit, "fit", "", "the page's size while floating: pc, pad or mobile")
+	cmd.AddCommand(float)
 	cmd.AddCommand(&cobra.Command{
 		Use:   "dock <pane>",
 		Short: "Put a floating pane back in its place in the split",

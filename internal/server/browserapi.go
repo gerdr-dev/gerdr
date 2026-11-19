@@ -158,7 +158,23 @@ func (s *Server) browserRoutes(mux *http.ServeMux) {
 			return
 		}
 		tab, _ := strconv.Atoi(r.URL.Query().Get("tab"))
-		params, _ := json.Marshal(map[string]any{"format": "jpeg", "quality": 85})
+		args := map[string]any{"format": "jpeg", "quality": 85}
+		// w: the picture's width in pixels, scaled down from the page's (a floating pane's small box: a full-size
+		// still every second was megabytes to decode for a few hundred pixels). The clip is the visible viewport,
+		// in the document's coordinates (where it is scrolled to)
+		if want, _ := strconv.Atoi(r.URL.Query().Get("w")); want > 0 {
+			var lm struct {
+				V struct {
+					PageX, PageY, ClientWidth, ClientHeight float64
+				} `json:"cssVisualViewport"`
+			}
+			if res, err := b.Act(r.Context(), tab, "cdp", chromeext.ActArgs{Method: "Page.getLayoutMetrics"}); err == nil &&
+				json.Unmarshal([]byte(res.Text), &lm) == nil && lm.V.ClientWidth > 0 {
+				args["clip"] = map[string]any{"x": lm.V.PageX, "y": lm.V.PageY, "width": lm.V.ClientWidth, "height": lm.V.ClientHeight,
+					"scale": min(1, float64(want)/lm.V.ClientWidth)}
+			}
+		}
+		params, _ := json.Marshal(args)
 		res, err := b.Act(r.Context(), tab, "cdp", chromeext.ActArgs{Method: "Page.captureScreenshot", Params: params})
 		if err != nil {
 			httpError(w, http.StatusBadGateway, err.Error())
@@ -174,6 +190,32 @@ func (s *Server) browserRoutes(mux *http.ServeMux) {
 		w.Header().Set("Content-Type", "image/jpeg")
 		w.Header().Set("Cache-Control", "no-store")
 		_, _ = w.Write(shot.Data)
+	})
+	// a floating Browser pane's fixed page size (chromeext.SetFit): {tab, width, height, mobile}; width 0 = none
+	mux.HandleFunc("POST /api/browser/fit", func(w http.ResponseWriter, r *http.Request) {
+		b := br(w)
+		if b == nil {
+			return
+		}
+		var in struct {
+			Tab    int  `json:"tab"`
+			Width  int  `json:"width"`
+			Height int  `json:"height"`
+			Mobile bool `json:"mobile"`
+		}
+		if err := decode(r, &in); err != nil {
+			httpError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		var f *chromeext.Fit
+		if in.Width > 0 && in.Height > 0 {
+			f = &chromeext.Fit{W: min(in.Width, 4000), H: min(in.Height, 4000), Mobile: in.Mobile}
+		}
+		if err := b.SetFit(in.Tab, f); err != nil {
+			httpError(w, http.StatusNotFound, err.Error())
+			return
+		}
+		writeJSON(w, map[string]any{"ok": true})
 	})
 	// one action in a window (chromeext.Act): {tab (0 = the one opened last), action, args}
 	mux.HandleFunc("POST /api/browser/act", func(w http.ResponseWriter, r *http.Request) {

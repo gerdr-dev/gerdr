@@ -306,10 +306,13 @@ export const api = {
   /** Open a page in a project's browser; noWait: return once it's open, not after its first load */
   browserOpen: (url: string, project: string) => req<BrowserTab>("POST", "/api/browser/open", { url, project, noWait: true }),
   browserClose: (tab: number) => req("POST", "/api/browser/close", { tab }),
+  /** A floating pane's fixed page size (null: back to the pane's own size; server/browserapi.go, chromeext SetFit) */
+  browserFit: (tab: number, f: { w: number; h: number; mobile: boolean } | null) =>
+    req("POST", "/api/browser/fit", f ? { tab, width: f.w, height: f.h, mobile: f.mobile } : { tab }),
   /** A still of a page as it is now (an object URL; revoke it when done): shown in place of the App's real page while
    * one of our menus / dialogs is over it (server/browserapi.go) */
-  browserShot: async (tab: number) => {
-    const res = await fetch(`/api/browser/shot?tab=${tab}`, { credentials: "same-origin", headers: { "X-Gerdr": "1" } });
+  browserShot: async (tab: number, w?: number) => {
+    const res = await fetch(`/api/browser/shot?tab=${tab}${w ? `&w=${Math.round(w)}` : ""}`, { credentials: "same-origin", headers: { "X-Gerdr": "1" } });
     if (!res.ok) throw new ApiError(res.status, res.statusText);
     return URL.createObjectURL(await res.blob());
   },

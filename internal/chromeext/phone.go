@@ -3,6 +3,7 @@ package chromeext
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"sync"
 	"time"
 )
@@ -13,6 +14,11 @@ import (
 // override with mobile on (sites switch to their mobile layout) and touch events. The App's pane showing it again
 // ends that (the desktop wins when both look), as does the last remote viewer leaving.
 //
+// A floating Browser pane (picture-in-picture) shows stills of the page shrunk into a small box. Laid out at that
+// box's size, sites switched to their phone layout, which isn't what the person floated it for, so the pane picks a
+// fixed size instead (Fit: a desktop, a tablet or a phone) and the stills are scaled down from it. That wins over a
+// remote viewer's phone layout, and ends when the App's pane shows the page again (docked) or the pane says so.
+//
 // The shell says when its pane shows a page (the "shown" event, desktop/core/views.go). Headless pages don't need
 // this: their window is resized to the viewer (Tab.resize).
 
@@ -20,7 +26,14 @@ type phoneLayout struct {
 	mu      sync.Mutex
 	desktop bool // the App's pane shows the page now
 	viewers map[*View][2]int
-	on      bool // the override is set
+	fit     *Fit // a floating pane's fixed size
+	on      Fit  // the override set now; zero = none
+}
+
+// Fit is a page's laid-out size (CSS px) and whether it is laid out as a mobile device (sites' mobile layout, touch).
+type Fit struct {
+	W, H   int
+	Mobile bool
 }
 
 func (t *Tab) phone() *phoneLayout {
@@ -45,12 +58,24 @@ func (t *Tab) desktopShown(on bool) {
 	p := t.phone()
 	p.mu.Lock()
 	p.desktop = on
+	if on {
+		p.fit = nil // docked again: the page takes the pane's size
+	}
 	p.mu.Unlock()
 	t.applyPhone()
 }
 
-// applyPhone sets or clears the override to match: on while a remote viewer is there and the desktop isn't showing
-// the page, at the newest viewer's size.
+// setFit: a floating pane's fixed size for the page; nil = none.
+func (t *Tab) setFit(f *Fit) {
+	p := t.phone()
+	p.mu.Lock()
+	p.fit = f
+	p.mu.Unlock()
+	t.applyPhone()
+}
+
+// applyPhone sets or clears the override to match: a floating pane's Fit when it has one; else on while a remote
+// viewer is there and the desktop isn't showing the page, at the newest viewer's size.
 func (t *Tab) applyPhone() {
 	p := t.phone()
 	p.mu.Lock()
@@ -58,25 +83,39 @@ func (t *Tab) applyPhone() {
 	for _, s := range p.viewers {
 		size = s
 	}
-	want := !p.desktop && size[0] > 0
+	var want Fit
+	if p.fit != nil {
+		want = *p.fit
+	} else if !p.desktop && size[0] > 0 {
+		want = Fit{size[0], size[1], true}
+	}
 	was := p.on
 	p.on = want
 	p.mu.Unlock()
+	if want == was && want.W > 0 {
+		return
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if want {
-		params, _ := json.Marshal(map[string]any{"width": size[0], "height": size[1], "deviceScaleFactor": 0, "mobile": true})
+	touch := func(on bool) {
+		m := map[string]any{"enabled": on}
+		if on {
+			m["maxTouchPoints"] = 5
+		}
+		params, _ := json.Marshal(m)
+		t.send(ctx, "Emulation.setTouchEmulationEnabled", params)
+	}
+	if want.W > 0 {
+		params, _ := json.Marshal(map[string]any{"width": want.W, "height": want.H, "deviceScaleFactor": 0, "mobile": want.Mobile})
 		t.send(ctx, "Emulation.setDeviceMetricsOverride", params)
-		if !was {
-			touch, _ := json.Marshal(map[string]any{"enabled": true, "maxTouchPoints": 5})
-			t.send(ctx, "Emulation.setTouchEmulationEnabled", touch)
+		if want.Mobile != (was.W > 0 && was.Mobile) {
+			touch(want.Mobile)
 		}
 		return
 	}
-	if was {
+	if was.W > 0 {
 		t.send(ctx, "Emulation.clearDeviceMetricsOverride", nil)
-		off, _ := json.Marshal(map[string]any{"enabled": false})
-		t.send(ctx, "Emulation.setTouchEmulationEnabled", off)
+		touch(false)
 	}
 }
 
@@ -88,4 +127,16 @@ func (b *Bridge) DesktopShown(id int, on bool) {
 	if t != nil && t.Native {
 		go t.desktopShown(on)
 	}
+}
+
+// SetFit lays tab id out at a fixed size while a pane floats it (nil = back to the pane's own size).
+func (b *Bridge) SetFit(id int, f *Fit) error {
+	b.mu.Lock()
+	t := b.tabs[id]
+	b.mu.Unlock()
+	if t == nil {
+		return errors.New("no such tab")
+	}
+	t.setFit(f)
+	return nil
 }

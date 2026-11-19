@@ -34,7 +34,24 @@ export type PaneNode = PaneLeaf | PaneSplit;
  * stays in `root` where it was, so docking it puts it back in place; the split is laid out without it (dockedRoot).
  * At least one pane stays docked (floatable).
  */
-export type FloatBox = { x: number; y: number; w: number; h: number };
+/** pw: the shown page's width in CSS px (the box's size; its height follows from the fit's shape), unset = the fit's
+ *  default. x / y / w / h stay fractions of the tab (where it is; the backend's pane rect reads w / h). */
+export type FloatBox = { x: number; y: number; w: number; h: number; fit?: FloatFit; pw?: number };
+/**
+ * A floating Browser pane's page is laid out at a fixed size, one of these (picked in its ⋯ menu, a desktop by default),
+ * and the box keeps that shape: shrunk to the box's size, sites switched to their phone layout. The box's h follows
+ * from its w (Panes.tsx FloatPane); the stills are scaled down from the page.
+ */
+export type FloatFit = "pc" | "pad" | "mobile";
+// pw: the range the shown page's width keeps to, [smallest, default, largest] in CSS px. Free, a phone box kept the
+// width it had as a desktop one and its height ran the tab's whole height (user report); smaller than this the
+// stills can't be read, larger it isn't a corner view any more
+export const FLOAT_FITS: Record<FloatFit, { w: number; h: number; mobile: boolean; pw: [number, number, number] }> = {
+  pc: { w: 1280, h: 800, mobile: false, pw: [320, 480, 720] },
+  pad: { w: 820, h: 1180, mobile: true, pw: [240, 320, 460] },
+  mobile: { w: 390, h: 844, mobile: true, pw: [170, 230, 300] },
+};
+export const fitOf = (b: FloatBox): FloatFit => (b.fit && b.fit in FLOAT_FITS ? b.fit : "pc");
 export type Tab = { id: string; name?: string; root: PaneNode; focus: string; zoom?: string; float?: Record<string, FloatBox> };
 /** space: which session (see Space below) it belongs to; unset = the default one. */
 /**
@@ -230,7 +247,7 @@ export function floatable(tab: Tab, paneId: string): boolean {
 const clampBox = (b: FloatBox): FloatBox => {
   const w = Math.min(1, Math.max(0.15, b.w));
   const h = Math.min(1, Math.max(0.15, b.h));
-  return { w, h, x: Math.min(1 - w, Math.max(0, b.x)), y: Math.min(1 - h, Math.max(0, b.y)) };
+  return { ...b, w, h, x: Math.min(1 - w, Math.max(0, b.x)), y: Math.min(1 - h, Math.max(0, b.y)) };
 };
 
 /** Float a pane (default: the bottom right corner, about a third of the tab) or dock it back where it was. */
@@ -243,6 +260,14 @@ export function toggleFloat(tab: Tab, paneId: string): Tab {
   const n = Object.keys(tab.float ?? {}).length; // each next one a little up-left, so they don't stack exactly
   const box = clampBox({ w: 0.4, h: 0.45, x: 0.58 - n * 0.03, y: 0.53 - n * 0.04 });
   return { ...tab, float: { ...tab.float, [paneId]: box }, focus: paneId, zoom: tab.zoom === paneId ? undefined : tab.zoom };
+}
+
+export function setFloatFit(tab: Tab, paneId: string, fit: FloatFit): Tab {
+  const b = tab.float?.[paneId];
+  if (!b) return tab;
+  // the new fit's default size: a width kept from another shape is a different size altogether
+  const { pw: _, ...rest } = b;
+  return { ...tab, float: { ...tab.float, [paneId]: { ...rest, fit } } };
 }
 
 export function setFloatBox(tab: Tab, paneId: string, box: FloatBox): Tab {

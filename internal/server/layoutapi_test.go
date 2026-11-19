@@ -203,6 +203,14 @@ func TestPaneFloatDockAndCleanup(t *testing.T) {
 	if _, _, err := ApplyLayout(json.RawMessage(raw), opsSessions, "A", "default", "pane.float", LayoutParams{ID: "p1"}); err == nil {
 		t.Fatal("floated the last docked pane")
 	}
+	// --fit on a floating pane changes its page's size; anything but pc / pad / mobile is refused
+	phone, _ := apply(t, raw, call("pane.float", LayoutParams{ID: "p2", Fit: "mobile"}))
+	if b := asNode(floats(phone)["p2"]); b["fit"] != "mobile" || b["w"] == nil {
+		t.Fatalf("fit not set on the floating box: %v", b)
+	}
+	if _, _, err := ApplyLayout(json.RawMessage(raw), opsSessions, "A", "default", "pane.float", LayoutParams{ID: "p2", Fit: "tv"}); err == nil {
+		t.Fatal("took an unknown fit")
+	}
 	docked, _ := apply(t, raw, call("pane.dock", LayoutParams{ID: "p2"}))
 	if f := floats(docked); f != nil {
 		t.Fatalf("still floating after dock: %v", f)

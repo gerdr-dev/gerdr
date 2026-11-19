@@ -11,7 +11,11 @@ import {
   ListPlus,
   ListX,
   Maximize2,
+  Monitor,
   RefreshCw,
+  Smartphone,
+  Tablet,
+  Check,
   Minimize2,
   MoreHorizontal,
   PanelTopOpen,
@@ -25,7 +29,7 @@ import {
   CircleX,
   X,
 } from "lucide-react";
-import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { api, type FileStat } from "@/lib/api";
@@ -52,11 +56,15 @@ import {
 } from "@/lib/actions";
 import {
   dockedRoot,
+  FLOAT_FITS,
+  fitOf,
   floatable,
   floating,
   leaves,
   phoneRoot,
   setFloatBox,
+  setFloatFit,
+  type FloatFit,
   setRatio,
   updateTab,
   type FloatBox,
@@ -269,6 +277,26 @@ const EDGES: { e: Edge; cls: string }[] = [
  */
 function FloatPane({ pane, tab, box: fb, area }: { pane: PaneLeaf; tab: Tab; box: FloatBox; area: React.RefObject<HTMLDivElement | null> }) {
   const focused = tab.focus === pane.id;
+  // The tab's size in pixels: the box keeps its page's shape (layout.FLOAT_FITS), so its height comes from its width.
+  // Measured on a layer of its own over the tab, not on `area`: mounted with its tab (a tab switched back to after it
+  // was unmounted), this effect runs before the parent's ref is set, area.current was null, nothing was measured and
+  // the box never showed again (user report)
+  const meter = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState<{ w: number; h: number } | null>(null);
+  useLayoutEffect(() => {
+    const el = meter.current;
+    if (!el) return;
+    const measure = () => setSize({ w: el.clientWidth, h: el.clientHeight });
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const fit = FLOAT_FITS[fitOf(fb)];
+  const ratio = fit.w / fit.h;
+  const [pwMin, pwDef, pwMax] = fit.pw;
+  const span = { min: pwMin + FLOAT_CHROME_W, max: pwMax + FLOAT_CHROME_W };
+  const geom = size && floatGeom(fb.x * size.w, fb.y * size.h, (fb.pw ?? pwDef) + FLOAT_CHROME_W, ratio, size, span);
   // One gesture: pointer moves turn into box changes, at most one layout update a frame (as the seams do)
   const gesture = (e: React.PointerEvent, cursor: string, next: (dx: number, dy: number) => FloatBox) => {
     const el = area.current;
@@ -306,32 +334,92 @@ function FloatPane({ pane, tab, box: fb, area }: { pane: PaneLeaf; tab: Tab; box
     // The title bar's own buttons (⋯, close…) keep their click
     if ((e.target as Element).closest("button, a, input, [role=menuitem]")) return;
     if (!focused) focusPane(pane.id);
-    gesture(e, "grabbing", (dx, dy) => ({ ...fb, x: fb.x + dx, y: fb.y + dy }));
+    // from where it is drawn (kept inside the tab), with its drawn height stored too (the backend's pane rect reads it)
+    if (!size || !geom) return;
+    const x = geom.left / size.w,
+      y = geom.top / size.h;
+    gesture(e, "grabbing", (dx, dy) => ({ ...fb, x: x + dx, y: y + dy, w: geom.w / size.w, h: geom.h / size.h, pw: geom.w - FLOAT_CHROME_W }));
   };
-  const onResize = (e: React.PointerEvent, g: Edge, cursor: string) =>
+  // Any edge resizes the box at its shape: a side's move is the width's, a top / bottom's turns into the width that
+  // gives that height. The edges across from the one held stay put.
+  const onResize = (e: React.PointerEvent, g: Edge, cursor: string) => {
+    if (!size || !geom) return;
     gesture(e, cursor, (dx, dy) => {
-      const MIN = 0.15; // the same floor as layout's clampBox, so the opposite edge stays put at the minimum
-      let { x, y, w, h } = fb;
-      if (g.r) w = fb.w + dx;
-      if (g.b) h = fb.h + dy;
-      if (g.l) ((w = Math.max(MIN, Math.min(fb.x + fb.w, fb.w - dx))), (x = fb.x + fb.w - w));
-      if (g.t) ((h = Math.max(MIN, Math.min(fb.y + fb.h, fb.h - dy))), (y = fb.y + fb.h - h));
-      return { x, y, w, h };
+      const px = dx * size.w,
+        py = dy * size.h;
+      const dw = g.l ? -px : g.r ? px : (g.t ? -py : py) * ratio;
+      const right = geom.left + geom.w,
+        bottom = geom.top + geom.h;
+      // the room on the side that moves
+      const roomW = g.l ? right : size.w - geom.left;
+      const roomH = g.t ? bottom : size.h - geom.top;
+      const next = floatGeom(0, 0, geom.w + dw, ratio, { w: roomW, h: roomH }, span);
+      const left = g.l ? right - next.w : geom.left;
+      const top = g.t ? bottom - next.h : geom.top;
+      return { ...fb, x: left / size.w, y: top / size.h, w: next.w / size.w, h: next.h / size.h, pw: next.w - FLOAT_CHROME_W };
     });
+  };
+  const meterEl = <div ref={meter} aria-hidden className="pointer-events-none invisible absolute inset-0" />;
+  if (!geom) return meterEl;
   return (
-    <div
-      style={{ left: pct(fb.x), top: pct(fb.y), width: pct(fb.w), height: pct(fb.h) }}
-      className={cn("absolute min-h-0 min-w-0 p-[3px]", focused ? "z-40" : "z-30")}
-    >
-      <div className="h-full w-full rounded-md bg-background shadow-2xl">
-        <FloatMove.Provider value={onMove}>
-          <PaneView pane={pane} tab={tab} framed />
-        </FloatMove.Provider>
+    <>
+      {meterEl}
+      <div
+        style={{ left: geom.left, top: geom.top, width: geom.w, height: geom.h }}
+        className={cn("absolute min-h-0 min-w-0 p-[3px]", focused ? "z-40" : "z-30")}
+      >
+        <div className="h-full w-full rounded-md bg-background shadow-2xl">
+          <FloatMove.Provider value={onMove}>
+            <PaneView pane={pane} tab={tab} framed />
+          </FloatMove.Provider>
+        </div>
+        {EDGES.map(({ e: g, cls }, i) => (
+          <div key={i} className={cn("absolute touch-none", cls)} onPointerDown={(e) => onResize(e, g, getComputedStyle(e.currentTarget).cursor)} />
+        ))}
       </div>
-      {EDGES.map(({ e: g, cls }, i) => (
-        <div key={i} className={cn("absolute touch-none", cls)} onPointerDown={(e) => onResize(e, g, getComputedStyle(e.currentTarget).cursor)} />
-      ))}
-    </div>
+    </>
+  );
+}
+
+// Around a floating pane's page: its wrapper's 3px padding and the pane's 1px border each side, and the title bar
+// (h-8) above. The page's own box is what has the shape.
+const FLOAT_CHROME_W = 8;
+const FLOAT_CHROME_H = 40;
+
+/** A floating box at width w and the page's shape (ratio = width / height), fitted into room and placed inside it. */
+function floatGeom(x: number, y: number, w: number, ratio: number, room: { w: number; h: number }, span: { min: number; max: number }) {
+  const hOf = (w: number) => (w - FLOAT_CHROME_W) / ratio + FLOAT_CHROME_H;
+  const wOf = (h: number) => (h - FLOAT_CHROME_H) * ratio + FLOAT_CHROME_W;
+  // the fit's range first, then the room there is (a small window wins over the smallest size)
+  w = Math.min(Math.max(span.min, Math.min(w, span.max)), room.w, wOf(room.h));
+  const h = Math.min(hOf(w), room.h);
+  return { left: Math.min(Math.max(0, x), room.w - w), top: Math.min(Math.max(0, y), room.h - h), w, h };
+}
+
+const FIT_ICONS: Record<FloatFit, typeof Monitor> = { pc: Monitor, pad: Tablet, mobile: Smartphone };
+
+/** A floating Browser pane's page size: a desktop, a tablet or a phone (layout.FLOAT_FITS). */
+function FitItems({ pane, tab }: { pane: PaneLeaf; tab: Tab }) {
+  const b = tab.float?.[pane.id];
+  if (!b || !pane.browser) return null;
+  const cur = fitOf(b);
+  return (
+    <>
+      <DropdownMenuSeparator />
+      {(Object.keys(FLOAT_FITS) as FloatFit[]).map((f) => {
+        const Icon = FIT_ICONS[f];
+        return (
+          <DropdownMenuItem key={f} onClick={() => setLayout((l) => updateTab(l, tab.id, (x) => setFloatFit(x, pane.id, f)))}>
+            <Icon /> {t(`panes.fit.${f}`)}
+            <span className="ml-auto text-[11px] text-muted-foreground">
+              {FLOAT_FITS[f].w}×{FLOAT_FITS[f].h}
+            </span>
+            {f === cur ? <Check /> : <span className="size-4" />}
+          </DropdownMenuItem>
+        );
+      })}
+      <DropdownMenuSeparator />
+    </>
   );
 }
 
@@ -567,6 +655,7 @@ function BrowserPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
         lastURL={b.url}
         paneId={pane.id}
         focused={focused}
+        fit={tab.float?.[pane.id] ? fitOf(tab.float[pane.id]) : undefined}
         headClassName={cn(headH, !focused && many && "opacity-70")}
         onHeadPointerDown={drag.onPointerDown}
         extra={
@@ -625,6 +714,7 @@ function PaneMoveItems({ pane, tab, zoomed, count }: { pane: PaneLeaf; tab: Tab;
         <ActionKeys action="newTab" />
       </DropdownMenuItem>
       <FloatItem pane={pane} tab={tab} count={count} />
+      <FitItems pane={pane} tab={tab} />
       {!zoomed && !count && !tab.float?.[pane.id] && leaves(tab.root).length > 1 && (
         <DropdownMenuItem onClick={() => (focusPane(pane.id), toggleZoom())}>
           <Maximize2 /> {t("panes.zoom")}

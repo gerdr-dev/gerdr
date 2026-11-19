@@ -177,6 +177,17 @@ projbrowser.Open: the App connected → OpenNative in the project's profile; els
   size): parked at another size, it came back drawn at that size for a frame or two. Tried first and dropped: cutting their shapes out of the window
   (Lightron's `View.Mask`) kept the page live, but clicks in the holes and the keyboard had to be handed between the
   two windows by hand, and each case was a bug of its own (a rename dialog's text box that took no typing).
+- **A floating pane shows stills only, of a page at a fixed size.** A Browser pane floated over the others
+  (picture-in-picture, `Tab.float`) keeps its page aside the whole time and shows a still taken every second: no
+  clicks, no typing (asked for that way). Floating is for shrinking the page into a corner, and a page laid out at the
+  small box's size switched to its phone layout; so the page is laid out at a fixed size picked in the pane's ⋯ menu
+  (`FLOAT_FITS` in ui/src/lib/layout.ts: pc 1280x800, pad 820x1180, mobile 390x844, the last two as mobile devices)
+  and the box keeps that shape (Panes.tsx `FloatPane`: its height follows its width). The size is a device-metrics
+  override set by the backend (`POST /api/browser/fit`, chromeext phone.go `Fit`), which wins over a remote viewer's
+  phone layout and ends when the App shows the page again (docked) or the pane says so. The stills come from the
+  backend (`/api/browser/shot?w=`: `Page.captureScreenshot` of the visible viewport, scaled to the box), not the App's
+  own capture, which has the window's size, not the emulated one. The UA isn't changed: a site that tells tablets and
+  phones apart by it alone still sends its desktop page. Agents: `gerdr pane float <pane> --fit pad`.
 - **A page is in one pane.** Picking, in a pane's page list, a page another pane shows swaps the two panes'
   pages (`showBrowserTab`). Two panes on one page read as two pages (the second shows the first's pictures), and a
   reload in either looked like every pane reloading to one address.
