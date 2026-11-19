@@ -1,0 +1,159 @@
+<!doctype html>
+<!-- Store screenshots: render.sh renders this headless as ?shot=<n>&lang=<en|zh> at 1280×800 (shot=tile is the 440×280
+     promo tile). The extension's own windows are drawn after extension/ui.css and grant.html / popup.html, with the
+     same wording as the extension, so the screenshots don't promise anything it doesn't show. -->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  :root { --fg: #141210; --muted: #6b6560; --line: #e6e3d8; --bg: #fbfaf4; --brand: #3b7be0; --paper: #eef2f8; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", system-ui, sans-serif; color: var(--fg); background: var(--paper); overflow: hidden; }
+  .shot { width: 1280px; height: 800px; display: grid; grid-template-columns: 430px 1fr; gap: 40px; padding: 64px 56px 0 72px; position: relative; overflow: hidden; }
+  .copy { padding-top: 70px; }
+  .mark { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 18px; }
+  .mark img { width: 34px; height: 34px; border-radius: 8px; }
+  h1 { font-size: 40px; line-height: 1.15; margin: 34px 0 18px; letter-spacing: -.01em; }
+  .lead { font-size: 18px; color: #33383f; margin: 0 0 26px; }
+  .points { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
+  .points li { display: flex; gap: 10px; font-size: 15.5px; color: #33383f; }
+  .points li::before { content: ""; flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--brand); margin-top: 8px; }
+  .stage { position: relative; }
+  /* a Chrome window */
+  .win { position: absolute; background: #fff; border-radius: 12px; box-shadow: 0 30px 70px rgba(20,30,50,.18), 0 0 0 1px rgba(20,30,50,.08); overflow: hidden; }
+  .tabs { height: 38px; background: #dfe3e8; display: flex; align-items: flex-end; padding: 0 12px; gap: 8px; }
+  .dots { display: flex; gap: 7px; align-self: center; margin-right: 10px; }
+  .dots i { width: 12px; height: 12px; border-radius: 50%; background: #ff5f57; } .dots i:nth-child(2) { background: #febc2e; } .dots i:nth-child(3) { background: #28c840; }
+  .group { align-self: center; font-size: 12px; font-weight: 600; color: #fff; background: #1a73e8; border-radius: 6px; padding: 1px 8px; }
+  .tab { background: #fff; border-radius: 9px 9px 0 0; height: 30px; padding: 0 14px; display: flex; align-items: center; gap: 8px; font-size: 12.5px; min-width: 190px; }
+  .tab.grouped { box-shadow: inset 0 2px 0 #1a73e8; }
+  .tab .fav { width: 14px; height: 14px; border-radius: 4px; background: #8a63d2; }
+  .bar { height: 40px; display: flex; align-items: center; gap: 10px; padding: 0 12px; border-bottom: 1px solid #e3e5e8; }
+  .url { flex: 1; height: 28px; border-radius: 14px; background: #f1f3f4; display: flex; align-items: center; padding: 0 14px; font-size: 13px; color: #3c4043; }
+  .ext { width: 28px; height: 28px; border-radius: 6px; display: grid; place-items: center; }
+  .ext.on { background: #e8eaed; }
+  .ext img { width: 18px; height: 18px; border-radius: 4px; }
+  .infobar { display: flex; align-items: center; gap: 10px; padding: 8px 14px; background: #f8f9fa; border-bottom: 1px solid #e3e5e8; font-size: 12.5px; color: #3c4043; }
+  .infobar b { font-weight: 600; }
+  .infobar .x { margin-left: auto; padding: 3px 12px; border: 1px solid #dadce0; border-radius: 6px; background: #fff; }
+  /* the page being worked on (a sketch), with the overlay the extension puts on it: a glowing frame and a cursor */
+  .viewport { position: relative; height: calc(100% - 78px); }
+  .viewport.info { height: calc(100% - 112px); }
+  .glow { position: absolute; inset: 0; box-shadow: inset 0 0 0 3px var(--brand), inset 0 0 26px rgba(59,123,224,.45); pointer-events: none; }
+  .page { padding: 22px 30px; display: grid; gap: 14px; }
+  .ph { display: flex; justify-content: space-between; align-items: center; }
+  .ph b { font-size: 17px; }
+  .pill { font-size: 12px; padding: 4px 12px; border-radius: 8px; background: #8a63d2; color: #fff; }
+  .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .card { border: 1px solid #eceef1; border-radius: 10px; padding: 12px; display: grid; gap: 6px; }
+  .card small { color: #5f6368; font-size: 11.5px; }
+  .card b { font-size: 20px; }
+  .rows { border: 1px solid #eceef1; border-radius: 10px; }
+  .row { display: grid; grid-template-columns: 1.4fr 1fr .8fr; gap: 12px; padding: 10px 14px; border-top: 1px solid #eceef1; font-size: 12.5px; color: #3c4043; }
+  .row:first-child { border: 0; color: #5f6368; font-size: 11.5px; }
+  .row .bad { color: #c5221f; }
+  .ln { height: 10px; border-radius: 5px; background: #eceef1; }
+  .cursor { position: absolute; width: 24px; height: 24px; }
+  .ripple { position: absolute; width: 34px; height: 34px; border-radius: 50%; border: 2px solid var(--brand); opacity: .6; }
+  /* the extension's own UI, after extension/ui.css */
+  .ui { font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", system-ui, sans-serif; color: var(--fg); background: var(--bg); }
+  .ui .muted { color: var(--muted); }
+  .ui button { font: inherit; padding: 6px 14px; border-radius: 8px; border: 1px solid var(--line); background: transparent; color: inherit; }
+  .ui button.primary { background: var(--brand); border-color: var(--brand); color: #fff; }
+  .grant { padding: 28px; }
+  .grant img { width: 40px; height: 40px; border-radius: 9px; }
+  .grant h2 { font-size: 18px; margin: 14px 0 6px; }
+  .grant .site { font: 600 16px ui-monospace, Menlo, monospace; margin: 0 0 10px; }
+  .grant .who { margin: 0 0 10px; }
+  .grant p { margin: 0 0 10px; }
+  .grant .buttons { display: flex; gap: 8px; margin-top: 20px; }
+  .popup { width: 300px; padding: 14px 16px; border-radius: 10px; box-shadow: 0 18px 50px rgba(20,30,50,.22), 0 0 0 1px rgba(20,30,50,.1); position: absolute; }
+  .popup .head { display: flex; align-items: center; gap: 8px; }
+  .popup .head img { width: 20px; height: 20px; border-radius: 5px; }
+  .popup .badge { margin-left: auto; font-size: 12px; padding: 1px 8px; border-radius: 99px; background: #d8ebe8; color: #1f5e65; }
+  .popup p { margin: 8px 0 0; }
+  .popup h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 14px 0 6px; }
+  .popup .input { padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); }
+  .popup .small { font-size: 12px; margin: 4px 0 0; }
+  .popup ul { list-style: none; padding: 0; margin: 0; }
+  .popup li { display: flex; align-items: center; justify-content: space-between; padding: 6px 0; border-top: 1px solid var(--line); }
+  .popup li button { padding: 2px 10px; font-size: 12px; }
+  .chromeask { position: absolute; width: 360px; background: #fff; border-radius: 10px; padding: 18px 20px; box-shadow: 0 18px 50px rgba(20,30,50,.25), 0 0 0 1px rgba(20,30,50,.1); font-size: 13.5px; }
+  .chromeask b { display: block; font-size: 14.5px; margin-bottom: 8px; }
+  .chromeask .r { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+  .chromeask span { padding: 6px 14px; border-radius: 16px; border: 1px solid #dadce0; color: #1a73e8; }
+  .chromeask span.p { background: #1a73e8; color: #fff; border-color: #1a73e8; }
+  /* promo tile */
+  .tile { width: 440px; height: 280px; background: var(--paper); padding: 30px 32px; position: relative; overflow: hidden; }
+  .tile .mark img { width: 30px; height: 30px; }
+  .tile h1 { font-size: 27px; margin: 22px 0 10px; }
+  .tile p { margin: 0; font-size: 14px; color: #33383f; max-width: 300px; }
+  .tile .chip { position: absolute; right: 24px; bottom: 24px; background: var(--bg); border-radius: 10px; padding: 10px 14px; box-shadow: 0 12px 30px rgba(20,30,50,.18), 0 0 0 1px rgba(20,30,50,.08); font-size: 12.5px; display: grid; gap: 6px; width: 210px; }
+  .tile .chip div { display: flex; justify-content: space-between; border-top: 1px solid var(--line); padding-top: 6px; }
+  .tile .chip div:first-child { border: 0; padding: 0; font-weight: 600; }
+  .tile .chip em { font-style: normal; font-size: 11px; padding: 0 7px; border-radius: 99px; background: #d8ebe8; color: #1f5e65; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+const q = new URLSearchParams(location.search)
+const zh = q.get('lang') === 'zh'
+const shot = q.get('shot') || '1'
+const icon = '../extension/icons/icon-128.png'
+const T = zh ? {
+  s1: ['让你的 coding agent 用你自己的 Chrome', 'Gerdr 里的 Claude Code、Codex 可以在你已经登录的网站上看页面、点按钮、查问题，不用另开浏览器重新登录。', ['只在它自己打开的标签页里操作，归在「Gerdr」分组里，页面带蓝色边框', '只和这台电脑上的 Gerdr 连接，不经过任何服务器', '不读取、不修改你的 cookie']],
+  s2: ['网站一个一个授权', 'agent 第一次要用某个网站时，Gerdr 会先问你。你点了允许，它才能在这个网站上操作。', ['只授权这一个网站，不是所有网站', '页面离开允许的网站，插件就停止控制', '不允许也没关系，Gerdr 还有它自己的浏览器']],
+  s3: ['随时查看、随时移除', '点插件图标就能看到 Gerdr 能操作哪些网站，不想让它用了就移除。', ['给这个 Chrome 起个名字，agent 按名字找它', '移除后立刻生效，下次要用会重新问你', '需要安装 Gerdr 桌面应用：gerdr.dev']],
+  infobar: '“Gerdr”已开始调试此浏览器', cancel: '取消',
+  dash: '订单', newBtn: '新建', cards: [['今日订单', '1,284'], ['支付成功率', '97.6%'], ['退款', '12']], head: ['订单号', '状态', '金额'],
+  rows: [['#20931', '已支付', '¥128.00'], ['#20930', '支付失败', '¥64.00', 1], ['#20929', '已支付', '¥256.00'], ['#20928', '已支付', '¥32.00']],
+  grantTitle: 'Gerdr 想在这个网站上帮你操作', note: '只在 Gerdr 自己打开的窗口里操作，用的是你在这个 Chrome 里已经登录的账号。随时可以在插件图标的菜单里取消。', allow: '允许', deny: '不允许', who: '这是 Chrome 里的', profile: '工作',
+  why: '要在后台确认刚修的支付失败问题已经不再出现。',
+  askT: '“Gerdr”请求获得以下权限：', askB: '读取和更改您在 admin.example.com 上的数据', askAllow: '允许', askDeny: '拒绝',
+  on: '已连接', onHint: 'Gerdr 只会在以下您授权过的网站中操作。', sites: '允许的网站', remove: '移除',
+  name: '这个 Chrome 叫', nameHint: '告诉 agent「用工作那个 Chrome」时，它按这个名字找。',
+  tileT: '让 agent 用你自己的 Chrome', tileP: 'Gerdr 里的 coding agent 用你已经登录的账号，在你允许的网站上操作。',
+} : {
+  s1: ['Let your coding agents use your own Chrome', 'Claude Code and Codex in Gerdr can look at pages, click through and check things on sites you are already signed in to, with no second sign-in.', ['Works only in tabs it opens, grouped as “Gerdr” with a blue frame', 'Talks only to Gerdr on this computer, no servers in between', 'Never reads or changes your cookies']],
+  s2: ['You allow sites one by one', 'The first time an agent needs a website, Gerdr asks you. It can only work there after you click Allow.', ['Allows that one site, not every site', 'Leaving the allowed sites stops the extension', 'Prefer not to? Gerdr still has its own browser']],
+  s3: ['See and remove sites any time', 'Click the extension icon to see which sites Gerdr may work on, and remove any you no longer want.', ['Name this Chrome, and agents find it by name', 'Removing takes effect at once; it asks again next time', 'Requires the Gerdr desktop app: gerdr.dev']],
+  infobar: '"Gerdr" started debugging this browser', cancel: 'Cancel',
+  dash: 'Orders', newBtn: 'New', cards: [['Orders today', '1,284'], ['Payment success', '97.6%'], ['Refunds', '12']], head: ['Order', 'Status', 'Amount'],
+  rows: [['#20931', 'Paid', '$18.00'], ['#20930', 'Payment failed', '$9.00', 1], ['#20929', 'Paid', '$36.00'], ['#20928', 'Paid', '$4.50']],
+  grantTitle: 'Gerdr wants to work on this site for you', note: 'It only works in windows Gerdr opens itself, signed in as you are in this Chrome. You can remove it any time from the extension menu.', allow: 'Allow', deny: "Don't allow", who: 'This is the Chrome profile', profile: 'Work',
+  why: 'Check in the admin that the payment failure just fixed no longer shows up.',
+  askT: '"Gerdr" wants permission to:', askB: 'Read and change your data on admin.example.com', askAllow: 'Allow', askDeny: 'Deny',
+  on: 'Connected', onHint: "Gerdr only works on the sites below that you've allowed.", sites: 'Allowed sites', remove: 'Remove',
+  name: 'Name this Chrome', nameHint: 'Tell an agent "use the Work Chrome" and it finds this one by name.',
+  tileT: 'Agents in your own Chrome', tileP: 'Let the coding agents in Gerdr act on the sites you allow, signed in as you already are.',
+}
+document.documentElement.lang = zh ? 'zh-CN' : 'en'
+const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;')
+const copy = ([h, lead, pts]) => `<div class="copy"><div class="mark"><img src="${icon}">Gerdr</div><h1>${esc(h)}</h1><p class="lead">${esc(lead)}</p><ul class="points">${pts.map((p) => `<li>${esc(p)}</li>`).join('')}</ul></div>`
+const chrome = ({ x, y, w, h, url, info, extOn, grouped, body }) => `<div class="win" style="left:${x}px;top:${y}px;width:${w}px;height:${h}px">
+  <div class="tabs"><div class="dots"><i></i><i></i><i></i></div>${grouped ? '<span class="group">Gerdr</span>' : ''}<div class="tab ${grouped ? 'grouped' : ''}"><span class="fav"></span>${esc(url.split('/')[0])}</div></div>
+  <div class="bar"><div class="url">${esc(url)}</div><div class="ext ${extOn ? 'on' : ''}"><img src="${icon}"></div></div>
+  ${info ? `<div class="infobar"><span>ⓘ</span><b>${esc(T.infobar)}</b><span class="x">${esc(T.cancel)}</span></div>` : ''}
+  <div class="viewport ${info ? 'info' : ''}">${body}</div></div>`
+const dash = (overlay) => `<div class="page"><div class="ph"><b>${esc(T.dash)}</b><span class="pill">${esc(T.newBtn)}</span></div>
+  <div class="cards">${T.cards.map(([k, v]) => `<div class="card"><small>${esc(k)}</small><b>${esc(v)}</b></div>`).join('')}</div>
+  <div class="rows"><div class="row">${T.head.map((h) => `<span>${esc(h)}</span>`).join('')}</div>${T.rows.map(([a, b, c, bad]) => `<div class="row"><span>${a}</span><span class="${bad ? 'bad' : ''}">${esc(b)}</span><span>${c}</span></div>`).join('')}</div>
+  <div class="ln" style="width:70%"></div><div class="ln" style="width:52%"></div></div>
+  ${overlay ? `<div class="glow"></div><div class="ripple" style="left:118px;top:316px"></div><svg class="cursor" style="left:128px;top:326px" viewBox="0 0 24 24"><path d="M3 2l7 19 2.6-7.4L20 11z" fill="${'#3b7be0'}" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/></svg>` : ''}`
+const popup = (x, y) => `<div class="ui popup" style="left:${x}px;top:${y}px"><div class="head"><img src="${icon}"><b>Gerdr</b><span class="badge">${esc(T.on)}</span></div><p class="muted">${esc(T.onHint)}</p><h3>${esc(T.name)}</h3><div class="input">${esc(T.profile)}</div><p class="muted small">${esc(T.nameHint)}</p><h3>${esc(T.sites)}</h3><ul>${['admin.example.com', 'github.com', 'staging.example.dev', 'docs.example.org'].map((s) => `<li><span>${s}</span><button>${esc(T.remove)}</button></li>`).join('')}</ul></div>`
+const grant = `<div class="ui grant" style="height:100%"><img src="${icon}"><h2>${esc(T.grantTitle)}</h2><p class="site">admin.example.com</p><p class="who">${esc(T.who)} <b>${esc(T.profile)}</b></p><p class="muted">${esc(T.why)}</p><p class="muted">${esc(T.note)}</p><div class="buttons"><button class="primary">${esc(T.allow)}</button><button>${esc(T.deny)}</button></div></div>`
+const root = document.getElementById('root')
+if (shot === 'tile') {
+  root.innerHTML = `<div class="tile"><div class="mark"><img src="${icon}">Gerdr</div><h1>${esc(T.tileT)}</h1><p>${esc(T.tileP)}</p><div class="chip"><div><span>${esc(T.sites)}</span><em>${esc(T.on)}</em></div><div><span>admin.example.com</span></div><div><span>github.com</span></div></div></div>`
+} else if (shot === '1') {
+  root.innerHTML = `<div class="shot">${copy(T.s1)}<div class="stage">${chrome({ x: 0, y: 40, w: 682, h: 640, url: 'admin.example.com/orders', info: true, extOn: false, grouped: true, body: dash(true) })}</div></div>`
+} else if (shot === '2') {
+  root.innerHTML = `<div class="shot">${copy(T.s2)}<div class="stage">${chrome({ x: 0, y: 40, w: 682, h: 640, url: 'admin.example.com/orders', info: false, extOn: false, body: dash(false) })}<div class="win" style="left:100px;top:130px;width:480px;height:450px"><div class="tabs" style="height:30px;align-items:center"><div class="dots"><i></i><i></i><i></i></div><span style="font-size:12px;color:#5f6368">Gerdr</span></div>${grant}</div><div class="chromeask" style="left:300px;top:500px"><b>${esc(T.askT)}</b>${esc(T.askB)}<div class="r"><span>${esc(T.askDeny)}</span><span class="p">${esc(T.askAllow)}</span></div></div></div></div>`
+} else {
+  root.innerHTML = `<div class="shot">${copy(T.s3)}<div class="stage">${chrome({ x: 0, y: 40, w: 682, h: 640, url: 'gerdr.dev', info: false, extOn: true, body: '<div class="page"><div class="ln" style="width:40%;height:18px"></div><div class="ln" style="width:80%"></div><div class="ln" style="width:70%"></div></div>' })}<div style="position:absolute;left:150px;top:110px;transform:scale(1.3);transform-origin:top left">${popup(0, 0)}</div></div></div>`
+}
+</script>
+</body>
+</html>
