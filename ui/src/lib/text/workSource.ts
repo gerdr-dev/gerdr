@@ -20,7 +20,7 @@ export const zh = {
   "panelBadge.tooltipN": "{name} · {n} 条新动态",
   "panelIcon.menu": "换图标…",
   "panelIcon.title": "「{name}」的图标",
-  "panelIcon.desc": "和 agent 头像一样：内置图标、线条图标，或者资源插件带来的图片。存在这个面板的 ui.json 里，跟着面板走。",
+  "panelIcon.desc": "和 agent 头像一样：内置图标、线条图标，或者素材扩展带来的图片。存在这个面板的 ui.json 里，跟着面板走。",
   "panelIcon.default": "默认",
   "workSource.newTitle": "新建空白面板",
   "workSource.newDesc": "从 Gerdr 自带的空白页面开始，让它右边的助手照你的想法做。和这个项目原来的面板互不影响。",
