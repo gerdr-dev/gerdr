@@ -77,6 +77,14 @@ declare module "@gerdr/core" {
     | undefined;
 
   /**
+   * Whether the conversation has a turn that ended unseen (the green dot in Code's tabs and list). It clears when the
+   * conversation is shown: in Code, or in a SessionChat with `focused` while the window is in front. A board can drop
+   * a worker's "its turn is over" dot once it was read, as Code does. Older gerdr versions don't have it: import the
+   * module as a namespace and check it's there.
+   */
+  export function useUnread(id: string | undefined): boolean;
+
+  /**
    * Every conversation `match` picks (all without one), kept current like useSession: this computer's and the other
    * computers' ("<host>:<id>"). The same array until one it picked changes or the set does, so a page re-renders only
    * for the sessions it cares about. Watch the sessions a view depends on with this instead of polling a function

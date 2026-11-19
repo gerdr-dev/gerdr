@@ -11,6 +11,14 @@ export function useSession(id: string | undefined): SessionSummary | undefined {
 }
 
 /**
+ * Whether the conversation has a turn that ended unseen (gerdr's unread: the green dot in Code's tabs and list). It
+ * clears when the conversation is shown — in Code, or in a panel's SessionChat while that has `focused`.
+ */
+export function useUnread(id: string | undefined): boolean {
+  return useStore((s) => !!(id && s.unread[id]));
+}
+
+/**
  * Every conversation `match` picks (all without one: this computer's and the other computers', "<host>:<id>"), kept
  * current from the same push as the rest of gerdr. The same array until a picked one changes or the set does, so a
  * page re-renders only for the sessions it cares about.

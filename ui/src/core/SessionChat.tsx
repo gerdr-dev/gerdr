@@ -6,7 +6,8 @@ import { cardOf } from "@/components/chat/ToolCard";
 import { PixelLoader } from "@/components/chat/PixelLoader";
 import { TabActive } from "@/components/Panes";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { set, useStore } from "@/lib/store";
+import { markRead, set, useStore } from "@/lib/store";
+import { useWindowInFront } from "@/lib/front";
 import type { SessionSummary } from "@/lib/types";
 import { syncWatch } from "@/lib/sync";
 import { holdSendNow } from "@/lib/chatHost";
@@ -71,6 +72,13 @@ export function SessionChat({
   useEffect(() => (sendNow ? holdSendNow(id) : undefined), [id, sendNow]);
   const session = useStore((s) => s.sessions[id]);
   const ready = useStore((s) => s.ready);
+  // Shown and focused in a panel (a board's drawer) is seen, as a focused pane in Code is (Panes.tsx): its unread mark
+  // clears, also when a turn ends while it is open. Only with the window in front: unread is shared by every device
+  const unread = useStore((s) => !!s.unread[id]);
+  const front = useWindowInFront();
+  useEffect(() => {
+    if (focused && front && unread && !shownSub) markRead(id);
+  }, [focused, front, unread, id, shownSub]);
   const focus = useMemo(() => (jump ? { match: (p: GPart) => cardOf(p)?.ref === jump.ref, seq: jump.seq } : undefined), [jump?.ref, jump?.seq]);
   // A mounted page is a React root of its own: the contexts the chat reads in Code (tooltips, "is this tab showing")
   // aren't above it, so they're given here. Its text size is gerdr's setting (--gerdr-font, App.tsx), not whatever the
