@@ -323,6 +323,31 @@ object LanRoute {
         false
     }
 
+    /** A [recheckLater] is already scheduled */
+    private val recheckPending = java.util.concurrent.atomic.AtomicBoolean()
+
+    /**
+     * A connection tried the LAN and fell back to the relay. Waiting for the next LAN connection to sweep it
+     * (`LocalProxy.sweepFallbacks`) isn't enough: once the page is up, WebView keeps reusing the connections it
+     * has (HTTP/2, keep-alive) and opens hardly any new ones, and a sweep that lands inside the throttle window is
+     * dropped. So a WebSocket that fell back right after a sweep stayed on the relay for good — reported on a
+     * phone sharing its hotspot with the Mac: "just switched to direct" for minutes. Check once more on our own
+     * after the throttle window: if the LAN still answers, move the fallbacks.
+     */
+    fun recheckLater() {
+        if (!recheckPending.compareAndSet(false, true)) return
+        timer.schedule({
+            recheckPending.set(false)
+            val h = host
+            val l = lan
+            val p = proxy
+            if (h != null && l != null && p != null && p.hasRelay() && probe(h, l)) {
+                Log.i(TAG, "the LAN answers again; moving the connections that fell back to the relay")
+                p.closeRelay()
+            }
+        }, LocalProxy.SWEEP_MS + 1_000, java.util.concurrent.TimeUnit.MILLISECONDS)
+    }
+
     /** 代理问「这个 CONNECT 该往哪儿拨」：按顺序试，前面的连不上就下一个 */
     private fun route(h: String, p: Int): List<Target> {
         val direct = Target(InetSocketAddress(h, p), 10_000, lan = false)
@@ -368,6 +393,8 @@ private class LocalProxy(private val route: (String, Int) -> List<Target>) {
         closeRelay()
     }
 
+    fun hasRelay() = relayUps.isNotEmpty()
+
     fun closeRelay() {
         val n = relayUps.size
         relayUps.forEach { runCatching { it.close() } }
@@ -375,7 +402,7 @@ private class LocalProxy(private val route: (String, Int) -> List<Target>) {
     }
     val port: Int get() = server.localPort
 
-    private companion object {
+    companion object {
         const val SWEEP_MS = 30_000L
     }
 
@@ -424,6 +451,8 @@ private class LocalProxy(private val route: (String, Int) -> List<Target>) {
             // and closing those (they have no LAN route to move to) would just cut them off
             if (!isLan && LanRoute.isServer(h)) relayUps.add(up)
             if (isLan) sweepFallbacks()
+            // Tried the LAN and fell back: nothing else may come along to sweep it (see LanRoute.recheckLater)
+            if (!isLan && targets.any { it.lan }) LanRoute.recheckLater()
             // 拨的那一刻还没有局域网这条路（targets 里压根没有它）、连上时却已经探通了：这条是从
             // 「先作废、再探」那个空档里漏过来的，closeRelay 已经扫过去了，当场补掐。
             // 试过局域网、没拨通才退到中继的那种是正当的退路，不动

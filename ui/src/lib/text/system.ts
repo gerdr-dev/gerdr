@@ -80,7 +80,7 @@ export const zh = {
   "androidSettings.checkSchedule": "每次打开 App 时检查，最多 6 小时一次",
   "androidSettings.appVersion": "App 版本 {version}",
   "androidSettings.routeRelay": "经云端中继",
-  "androidSettings.routeSwitching": "刚切到直连：新连接直接连 Mac，有的还在中继上（重连一次就过去了）",
+  "androidSettings.routeSwitching": "部分直连：新连接已直连 Mac，还有几条旧连接在走中继，半分钟左右会自动切过来",
   "androidSettings.routeLan": "直连 Mac，不绕中继（局域网、Tailscale 或 IPv6）",
 
   "doctorPanel.group.path": "环境",
@@ -369,7 +369,7 @@ export const en: Record<keyof typeof zh, string> = {
   "androidSettings.appVersion": "App version {version}",
   "androidSettings.routeRelay": "Via cloud relay",
   "androidSettings.routeSwitching":
-    "Just switched to direct: new connections go straight to the Mac, some are still on the relay (they move over on the next reconnect)",
+    "Partly direct: new connections go straight to the Mac, a few older ones still use the relay and move over within about half a minute",
   "androidSettings.routeLan": "Straight to the Mac, not through the relay (local network, Tailscale or IPv6)",
 
   "doctorPanel.group.path": "Environment",
