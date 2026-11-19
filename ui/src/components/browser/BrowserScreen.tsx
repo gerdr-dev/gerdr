@@ -118,12 +118,23 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, fit, hea
   const nativeView = canNative && owner === paneId;
   const floating = !!fit;
   // Floating: the page laid out at the picked size, whatever the box's (shrunk to it, sites showed their phone
-  // layout). Docked again, the backend drops it once the App shows the page (chromeext phone.go); said here too, for
-  // a pane that goes while floating. In order: a change of size is a clear then a set
+  // layout). Cleared here only when it stops floating while shown, or the pane moves to another page; not when the
+  // pane unmounts (its tab switched away and dropped): cleared then, the page went back to its docked shape and the
+  // first still after switching back was that shape, a part of the box for a second (user report). Docked again, the
+  // backend drops it anyway once the App shows the page (chromeext phone.go). Queued: a clear then a set land in order
+  const fitOn = useRef<number | null>(null);
   useEffect(() => {
-    if (!fit || !tab || !live) return;
-    queueFit(tab, FLOAT_FITS[fit]);
-    return () => queueFit(tab, null);
+    if (fitOn.current != null && fitOn.current !== tab) {
+      queueFit(fitOn.current, null);
+      fitOn.current = null;
+    }
+    if (fit && tab && live) {
+      queueFit(tab, FLOAT_FITS[fit]);
+      fitOn.current = tab;
+    } else if (fitOn.current != null) {
+      queueFit(fitOn.current, null);
+      fitOn.current = null;
+    }
   }, [fit, tab, live]);
   // The page failed to load (the stream says so): Chrome's error page is blank here, so the pane draws its own with a
   // retry. The App's real page would cover it, so it's kept out of sight meanwhile (read by the placing below)
