@@ -117,6 +117,36 @@ func TestViewScrollScaled(t *testing.T) {
 	if !strings.Contains(js, ",0,245") {
 		t.Errorf("scroll = %s, want 100 px of the picture as 245 CSS px", js[strings.LastIndex(js, "("):])
 	}
+	// a finger's drag as a fraction of the picture: a quarter of it is a quarter of the page's 1911 CSS px
+	if err := v.Do(screen.Input{Kind: "scroll", X: 0.5, Y: 0.5, DYPx: 999, DYF: 0.25}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(js, ",0,477.75") {
+		t.Errorf("scroll = %s, want a quarter of the page", js[strings.LastIndex(js, "("):])
+	}
+	// a page pinned to 1280x800: the frame is the page's own size (no scale), a quarter is 200 px
+	v.mu.Lock()
+	v.vw, v.vh, v.mapAt = 1280, 800, time.Time{}
+	v.mu.Unlock()
+	tab.send = func(_ context.Context, method string, params json.RawMessage) (json.RawMessage, error) {
+		switch method {
+		case "Page.getLayoutMetrics":
+			return json.RawMessage(`{"cssLayoutViewport":{"clientWidth":1280,"clientHeight":800},"cssVisualViewport":{"clientWidth":1280,"clientHeight":800,"scale":1}}`), nil
+		case "Runtime.evaluate":
+			var p struct {
+				Expression string `json:"expression"`
+			}
+			json.Unmarshal(params, &p)
+			js = p.Expression
+		}
+		return json.RawMessage(`{"result":{"value":true}}`), nil
+	}
+	if err := v.Do(screen.Input{Kind: "scroll", X: 0.5, Y: 0.5, DYPx: 30, DYF: 0.25}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(js, ",0,200]") {
+		t.Errorf("pinned pc: scroll = %s, want 200 px", js[strings.LastIndex(js, "("):])
+	}
 }
 
 // The person's mouse in the Browser pane goes quiet (no extension cursor, no glide); an agent's click doesn't.

@@ -585,10 +585,15 @@ func (v *View) Do(in screen.Input) error {
 		if dx == 0 && dy == 0 {
 			dy = float64(-in.DY) * 40
 		}
-		// The viewer's px are the picture's, and a page laid out wider than the viewer (a desktop page on a phone,
-		// ~980 CSS px in a 400 px picture) is shown scaled down: scrolled by the viewer's px unscaled, the page moved
-		// about 40% of the finger's way (user report). Scaled as the point is, the page follows the finger
-		dx, dy = dx*kx, dy*ky
+		// A finger drag comes as fractions of the picture (DXF / DYF): the picture is the page scaled by whatever the
+		// viewer's box and the page's size make it, so only here is it known how many CSS px that is. Scrolled by the
+		// viewer's own px, the page moved a fraction of the finger's way: ~40% for a desktop page laid out at ~980 px
+		// on a phone, a third for a page pinned to 1280 px (user reports). Px from a wheel are scaled as the point is
+		if in.DXF != 0 || in.DYF != 0 {
+			dx, dy = in.DXF*vw*kx, in.DYF*vh*ky
+		} else {
+			dx, dy = dx*kx, dy*ky
+		}
 		_, err := t.eval(ctx, scrollJS(x, y, dx, dy))
 		return err
 	case "text":

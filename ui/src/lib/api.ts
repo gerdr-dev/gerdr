@@ -86,7 +86,9 @@ export type BrowserProfile = { id: string; name?: string; version: string; sites
 export type BrowserInput =
   | ScreenInput
   | { kind: "down" | "up" | "move"; x: number; y: number; button?: "left" | "right" | ""; count?: number; mods?: string[] }
-  | { kind: "scroll"; x: number; y: number; dy?: number; dxPx: number; dyPx: number }
+  /** dxf / dyf: a finger's move as fractions of the picture (the backend makes them the page's px); dxPx / dyPx then
+   *  only for an older backend */
+  | { kind: "scroll"; x: number; y: number; dy?: number; dxPx: number; dyPx: number; dxf?: number; dyf?: number }
   | { kind: "compose"; text: string }
   | { kind: "go"; text: string }
   /** the pane's background (#rrggbb): what a page that fails to load is drawn on, instead of white */

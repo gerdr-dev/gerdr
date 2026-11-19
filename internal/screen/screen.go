@@ -40,6 +40,11 @@ type Input struct {
 	// scroll in a browser tab: CSS px (a trackpad's deltas); DY above is lines
 	DXPx float64 `json:"dxPx,omitempty"`
 	DYPx float64 `json:"dyPx,omitempty"`
+	// scroll in a browser tab by a finger drag: how far it moved as fractions of the picture's width / height, which the
+	// tab turns into the page's CSS px (the picture is the page scaled by an amount only the tab knows: a desktop page
+	// on a phone). When set, DXPx / DYPx are only for an older backend
+	DXF float64 `json:"dxf,omitempty"`
+	DYF float64 `json:"dyf,omitempty"`
 }
 
 // Page is where a browser tab is (the Browser pane's address bar); the display has none.

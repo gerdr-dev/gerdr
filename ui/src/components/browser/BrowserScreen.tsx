@@ -710,9 +710,13 @@ export function BrowserScreen({
           restY = dy - (zoomRef.current.y - z.y);
         }
         if (restX || restY) {
-          // a finger drags the page like a phone's browser (a pixel here is about a CSS pixel there, divided by the zoom)
+          // a finger drags the page like a phone's browser: the page follows it
+          // Sent as fractions of the picture (its box includes the zoom): only the backend knows how many of the page's
+          // px the picture shows, which differs with the page's size (a desktop size picked on a phone)
           const p = at(e) ?? { x: 0.5, y: 0.5 };
-          send({ kind: "scroll", ...p, dxPx: -restX / z.s, dyPx: -restY / z.s });
+          const r = canvasRef.current?.getBoundingClientRect();
+          const frac = r && r.width > 0 && r.height > 0 ? { dxf: -restX / r.width, dyf: -restY / r.height } : {};
+          send({ kind: "scroll", ...p, dxPx: -restX / z.s, dyPx: -restY / z.s, ...frac });
         }
       }
       return;
