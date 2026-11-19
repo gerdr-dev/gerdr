@@ -9,7 +9,7 @@ export const zh = {
   "moveSession.noHosts": "还没有连上别的电脑：设置 → 远程访问 → 这台电脑控制的电脑。",
   "moveSession.go": "过去接着聊",
   "forkSession.title": "Fork 这个对话",
-  "forkSession.desc": "开一个新对话，带着「{title}」到现在为止的对话，从这里分开往下聊；原来的对话不动。选接着聊的 agent：",
+  "forkSession.desc": "带着现在的对话另开一个，原来的不动。",
   "forkSession.same": "同一个 agent",
   "forkSession.other": "换它接着聊",
   "forkSession.failed": "没能 Fork：{error}",
@@ -187,8 +187,7 @@ export const en: Record<keyof typeof zh, string> = {
   "moveSession.noHosts": "No other computer is connected yet: Settings → Remote access → Computers this one controls.",
   "moveSession.go": "Continue there",
   "forkSession.title": "Fork this conversation",
-  "forkSession.desc":
-    "Start a new conversation carrying “{title}” so far and take it another way from here; the original stays as it is. Pick the agent to carry it on:",
+  "forkSession.desc": "A new conversation with this one so far; the original stays as it is.",
   "forkSession.same": "Same agent",
   "forkSession.other": "Continue with it",
   "forkSession.failed": "Couldn't fork: {error}",

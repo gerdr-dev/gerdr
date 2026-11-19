@@ -43,7 +43,7 @@ export function ForkSessionDialog() {
     <Dialog open={!!fk} onOpenChange={(o) => !o && closeDialog()}>
       <DialogContent className="max-w-md gap-3">
         <DialogTitle className="text-[14px]">{t("forkSession.title")}</DialogTitle>
-        <DialogDescription className="text-[12px]">{t("forkSession.desc", { title: session.title || session.cwd })}</DialogDescription>
+        <DialogDescription className="text-[12px]">{t("forkSession.desc")}</DialogDescription>
         <div className="grid grid-cols-2 gap-2">
           {list.map((a) => (
             <button
