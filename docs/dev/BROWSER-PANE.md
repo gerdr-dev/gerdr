@@ -213,6 +213,13 @@ projbrowser.Open: the App connected → OpenNative in the project's profile; els
   wins over a remote viewer's phone layout, since the person on the phone picked it. The layout is shared, so every
   device shows the page at that size; a desktop draws it at most at its own size and within the box, a phone
   width-fit (its keyboard shortens the box) with pinch zoom.
+- **A device's iframes play it too** (`frameDevice`, phone.go). Overrides are per DevTools target and a cross-site
+  iframe is a target of its own: with the page playing an Android phone, an iframe's `navigator` still said MacIntel
+  with no touch (measured), and Bing's Cloudflare Turnstile check failed on that (user report). While pad / mobile
+  is on, the page auto-attaches its iframes paused (`waitForDebuggerOnStart`), each gets the same user agent and
+  touch, attaches its own the same way, and is let go. Non-flattened sessions (`Target.sendMessageToTarget`), so the
+  App's shell, which carries only the page's session, needed no change (a full App download for everyone otherwise).
+  App pages only. A target is always let go, even if its set-up failed: one left waiting never runs.
 - **A pane closed closes its page.** Left open, pages piled up out of sight (each a whole renderer; a video played on
   with no pane to stop it). On every layout save (layout.json's `OnSet`, server/browserpanes.go), whatever closed the
   pane: a page whose pane is gone and that no pane shows is closed, unless the agent session that opened it (`gerdr

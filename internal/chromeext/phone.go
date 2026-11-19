@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -33,6 +34,14 @@ type phoneLayout struct {
 	fit     *Fit   // a floating pane's fixed size
 	engine  string // the browser's Chrome version (engineVersion)
 	on      Fit    // the override set now; zero = none
+	// what each cross-site iframe gets too while the page plays a device (frameDevice); nil = nothing
+	frameCmds []frameCmd
+	unframe   func()
+}
+
+type frameCmd struct {
+	Method string `json:"method"`
+	Params any    `json:"params"`
 }
 
 // Fit is a page's laid-out size (CSS px) and whether it is laid out as a mobile device (sites' mobile layout, touch).
@@ -112,7 +121,121 @@ func (t *Tab) applyDevice(was, device string) {
 	}
 	params, _ := json.Marshal(ua)
 	t.send(ctx, "Emulation.setUserAgentOverride", params)
+	if device != "" {
+		t.frameDevice(ctx, []frameCmd{
+			{"Emulation.setUserAgentOverride", ua},
+			{"Emulation.setTouchEmulationEnabled", map[string]any{"enabled": true, "maxTouchPoints": 5}},
+		})
+	} else {
+		t.frameDevice(ctx, nil)
+	}
 	t.send(ctx, "Page.reload", nil)
+}
+
+// frameDevice makes every cross-site iframe of the page the same device as the page (cmds; nil = stop). Overrides are
+// per DevTools target, and such an iframe is a target of its own: a page playing an Android phone had iframes still
+// saying Mac (measured: the iframe's navigator was MacIntel with no touch while the page's was Android), and a bot
+// check in one (Cloudflare Turnstile on Bing) failed on the mismatch (user report). Each iframe is attached as it
+// starts, paused until it has the same overrides (Target.setAutoAttach with waitForDebuggerOnStart), and attaches
+// its own iframes the same way. Non-flattened sessions (commands wrapped in Target.sendMessageToTarget, events in
+// Target.receivedMessageFromTarget): the App's shell only carries the page's own session, and this needs no change
+// there. Only the App's pages: the headless browser's pipe speaks flattened sessions.
+func (t *Tab) frameDevice(ctx context.Context, cmds []frameCmd) {
+	if !t.Native {
+		return
+	}
+	p := t.phone()
+	p.mu.Lock()
+	p.frameCmds = cmds
+	if cmds != nil && p.unframe == nil {
+		p.unframe = t.watch.add(func(method string, params json.RawMessage) { t.frameEvent(nil, method, params) })
+	}
+	var unframe func()
+	if cmds == nil {
+		unframe, p.unframe = p.unframe, nil
+	}
+	p.mu.Unlock()
+	if unframe != nil {
+		unframe()
+	}
+	params, _ := json.Marshal(autoAttach(cmds != nil))
+	t.send(ctx, "Target.setAutoAttach", params)
+}
+
+func autoAttach(on bool) map[string]any {
+	return map[string]any{"autoAttach": on, "waitForDebuggerOnStart": on, "flatten": false}
+}
+
+// frameEvent: an event of the page (path nil) or of an attached iframe (path: the sessions down to it).
+func (t *Tab) frameEvent(path []string, method string, params json.RawMessage) {
+	switch method {
+	case "Target.attachedToTarget":
+		var a struct {
+			SessionID  string `json:"sessionId"`
+			Waiting    bool   `json:"waitingForDebugger"`
+			TargetInfo struct {
+				Type string `json:"type"`
+			} `json:"targetInfo"`
+		}
+		if json.Unmarshal(params, &a) != nil || a.SessionID == "" {
+			return
+		}
+		child := append(append([]string{}, path...), a.SessionID)
+		go t.frameSetUp(child, a.TargetInfo.Type == "iframe", a.Waiting)
+	case "Target.receivedMessageFromTarget":
+		var m struct {
+			SessionID string `json:"sessionId"`
+			Message   string `json:"message"`
+		}
+		if json.Unmarshal(params, &m) != nil {
+			return
+		}
+		var inner struct {
+			Method string          `json:"method"`
+			Params json.RawMessage `json:"params"`
+		}
+		if json.Unmarshal([]byte(m.Message), &inner) != nil || inner.Method == "" {
+			return // a command's answer
+		}
+		t.frameEvent(append(append([]string{}, path...), m.SessionID), inner.Method, inner.Params)
+	}
+}
+
+// frameSetUp gives an attached target the page's device and lets it run. A worker or anything else is only let go:
+// it was paused all the same.
+func (t *Tab) frameSetUp(path []string, iframe, waiting bool) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	p := t.phone()
+	p.mu.Lock()
+	cmds := p.frameCmds
+	p.mu.Unlock()
+	if iframe {
+		for _, c := range cmds {
+			t.sendIn(ctx, path, c.Method, c.Params)
+		}
+		if cmds != nil {
+			t.sendIn(ctx, path, "Target.setAutoAttach", autoAttach(true))
+		}
+	}
+	// always, whatever failed above: a target left waiting never runs (a blank iframe)
+	if waiting {
+		t.sendIn(ctx, path, "Runtime.runIfWaitingForDebugger", map[string]any{})
+	}
+}
+
+var frameMsgID atomic.Int64
+
+// sendIn sends a command to the target at the end of path, each step wrapped in Target.sendMessageToTarget. The
+// answer comes back as an event, unread: what's sent here can't usefully fail.
+func (t *Tab) sendIn(ctx context.Context, path []string, method string, params any) {
+	msg, _ := json.Marshal(map[string]any{"id": frameMsgID.Add(1), "method": method, "params": params})
+	for i := len(path) - 1; i >= 1; i-- {
+		msg, _ = json.Marshal(map[string]any{"id": frameMsgID.Add(1), "method": "Target.sendMessageToTarget",
+			"params": map[string]any{"sessionId": path[i], "message": string(msg)}})
+	}
+	outer, _ := json.Marshal(map[string]any{"sessionId": path[0], "message": string(msg)})
+	t.send(ctx, "Target.sendMessageToTarget", outer)
 }
 
 // engineVersion: the browser's Chrome version ("131.0.6778.85"), read once from the page before any override, for a

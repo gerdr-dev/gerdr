@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 // An App page is laid out as a phone for a remote viewer only while the App's pane doesn't show it.
@@ -229,5 +230,79 @@ func TestPinnedFit(t *testing.T) {
 	tab.setFit(nil) // back to auto: the phone's layout
 	if got := last(); got != "390x700" {
 		t.Fatalf("auto again: %s", got)
+	}
+}
+
+// A page playing a phone gives each cross-site iframe the same device as it attaches (paused until then), its nested
+// ones too, and always lets it run.
+func TestFrameDevice(t *testing.T) {
+	tab := newTab(2000004, "https://example.com/")
+	tab.Native = true
+	var mu sync.Mutex
+	var sent []string // "method" or "sendMessageToTarget sid→inner method"
+	tab.send = func(_ context.Context, method string, p json.RawMessage) (json.RawMessage, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		if method != "Target.sendMessageToTarget" {
+			sent = append(sent, method)
+			return json.RawMessage(`{}`), nil
+		}
+		// unwrap to the innermost command, recording the sessions on the way
+		var route []string
+		for {
+			var m struct {
+				SessionID string `json:"sessionId"`
+				Message   string `json:"message"`
+			}
+			json.Unmarshal(p, &m)
+			route = append(route, m.SessionID)
+			var in struct {
+				Method string          `json:"method"`
+				Params json.RawMessage `json:"params"`
+			}
+			json.Unmarshal([]byte(m.Message), &in)
+			if in.Method != "Target.sendMessageToTarget" {
+				sent = append(sent, strings.Join(route, "/")+" "+in.Method)
+				break
+			}
+			p = in.Params
+		}
+		return json.RawMessage(`{}`), nil
+	}
+	take := func() []string {
+		time.Sleep(50 * time.Millisecond) // set-up runs in a goroutine
+		mu.Lock()
+		defer mu.Unlock()
+		out := sent
+		sent = nil
+		return out
+	}
+	tab.applyDevice("", "phone")
+	if got := strings.Join(take(), ","); !strings.Contains(got, "Target.setAutoAttach") || !strings.HasSuffix(got, "Page.reload") {
+		t.Fatalf("phone picked: %s", got)
+	}
+	tab.event("Target.attachedToTarget", json.RawMessage(`{"sessionId":"A","waitingForDebugger":true,"targetInfo":{"type":"iframe"}}`))
+	want := "A Emulation.setUserAgentOverride,A Emulation.setTouchEmulationEnabled,A Target.setAutoAttach,A Runtime.runIfWaitingForDebugger"
+	if got := strings.Join(take(), ","); got != want {
+		t.Fatalf("iframe set up:\n got %s\nwant %s", got, want)
+	}
+	// an iframe inside that one, reported through it
+	inner, _ := json.Marshal(map[string]any{"method": "Target.attachedToTarget", "params": map[string]any{"sessionId": "B", "waitingForDebugger": true, "targetInfo": map[string]any{"type": "iframe"}}})
+	ev, _ := json.Marshal(map[string]any{"sessionId": "A", "message": string(inner)})
+	tab.event("Target.receivedMessageFromTarget", ev)
+	if got := take(); len(got) != 4 || got[0] != "A/B Emulation.setUserAgentOverride" || got[3] != "A/B Runtime.runIfWaitingForDebugger" {
+		t.Fatalf("nested iframe: %v", got)
+	}
+	// a worker is only let go
+	tab.event("Target.attachedToTarget", json.RawMessage(`{"sessionId":"W","waitingForDebugger":true,"targetInfo":{"type":"worker"}}`))
+	if got := strings.Join(take(), ","); got != "W Runtime.runIfWaitingForDebugger" {
+		t.Fatalf("worker: %s", got)
+	}
+	// back to the browser's own: no more attaching, and attach events are ignored
+	tab.applyDevice("phone", "")
+	take()
+	tab.event("Target.attachedToTarget", json.RawMessage(`{"sessionId":"C","waitingForDebugger":false,"targetInfo":{"type":"iframe"}}`))
+	if got := take(); len(got) != 0 {
+		t.Fatalf("set up after the device ended: %v", got)
 	}
 }
