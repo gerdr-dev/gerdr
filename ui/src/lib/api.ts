@@ -75,6 +75,8 @@ export type BrowserTab = {
   opener?: number;
   native?: boolean;
   replaces?: number;
+  /** the agent session that opened it, or the page it came from (chromeext Tab.Session) */
+  session?: string;
 };
 
 /** One action in a browser tab (chromeext.View): ScreenInput plus what only a page has. */

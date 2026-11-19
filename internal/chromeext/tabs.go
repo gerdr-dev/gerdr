@@ -32,6 +32,10 @@ type Tab struct {
 	// Replaces: the tab this one took over (the same page moved into the App's browser when it connected): a pane
 	// showing that one moves here (ui/src/lib/actions/browser.ts)
 	Replaces int    `json:"replaces,omitempty"`
+	// Session: the agent session that opened the page (gerdr browser open), or the page it came from (Opener,
+	// Replaces). A panel shows its conversation's pages beside it with this (ui/src/core/SessionBrowser.tsx): a
+	// panel's agent is in no pane, so no Browser pane comes up beside it
+	Session string `json:"session,omitempty"`
 	URL      string `json:"url"`            // what it was opened on
 	WS       string `json:"ws,omitempty"`   // CDP browser WebSocket (extension tabs only)
 	HTTP     string `json:"http,omitempty"` // the same as http://host:port (for clients that fetch /json/version)
@@ -266,6 +270,31 @@ func (b *Bridge) tabEvent(t *Tab, ev Event) {
 		t.ep.Close()
 	}
 	b.tabsChanged()
+}
+
+// SetSession records the agent session that opened page id (Tab.Session), and on the pages it opened meanwhile.
+func (b *Bridge) SetSession(id int, session string) {
+	if session == "" {
+		return
+	}
+	b.mu.Lock()
+	for _, t := range b.tabs {
+		if t.ID == id || (t.Session == "" && (t.Opener == id || t.Replaces == id)) {
+			t.Session = session
+		}
+	}
+	b.mu.Unlock()
+	b.tabsChanged()
+}
+
+// inheritSession: a page opened by another (or moving it into the App's browser) belongs to the same session. b.mu held.
+func (b *Bridge) inheritSession(t *Tab) {
+	for _, from := range []int{t.Opener, t.Replaces} {
+		if p := b.tabs[from]; from != 0 && p != nil && p.Session != "" {
+			t.Session = p.Session
+			return
+		}
+	}
 }
 
 // Tabs Gerdr has open, oldest first.

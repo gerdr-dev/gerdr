@@ -51,6 +51,9 @@ and their choices are what they set or wrote down, not what the code says.
     (layout.tsx switches the menu to tabs below `md`): on a phone the page is the whole screen.
   - `@gerdr/core` (types: `ui/src/gerdr-core.d.ts`) — Gerdr's own pieces for the page: `<SessionChat id>` (a whole
     conversation with its input box, anywhere in the page: a worker's chat in the page's own drawer or column),
+    `<SessionBrowser session>` + `useSessionBrowser` (the pages that conversation's agent opened with `gerdr browser open`:
+    a panel's agent is in no pane, so no Browser pane comes up beside it — put this next to its chat, e.g. a tab
+    shown while `pages` isn't empty, switched to when `opened` changes, or the user can't do the sign-in it asks for),
     `<FeedChat>` (the page's own list of what happened — several agents' feed — drawn and answered as a chat),
     `useSession` / `useSessions`, `usePanelChange`, `usePanelVisible`, `onShowSession` (the conversations this panel started are its own: brought up from a notification or
     the inbox they come back here, and the page shows them), `askSecret`, `registerCard`, `toast`, `useDark`, `usePhoneMenu` (on a phone, the panel's top-left button

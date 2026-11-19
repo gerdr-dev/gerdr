@@ -170,6 +170,7 @@ func (b *Bridge) nativeTab(c *Conn, id int, project, raw string, opener, replace
 		c.Close(id)
 	}
 	b.mu.Lock()
+	b.inheritSession(t)
 	b.tabs[id] = t
 	b.mu.Unlock()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

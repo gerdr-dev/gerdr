@@ -133,6 +133,21 @@ declare module "@gerdr/core" {
    */
   export function ArtifactsFolder(props: { dir: string }): ReactNode;
 
+  /**
+   * A conversation's browser: the page its agent opened (`gerdr browser open`) in the project's own browser, with an
+   * address bar and its other pages, clicked and typed into by the user (a sign-in, a captcha) as Code's Browser pane.
+   * A panel's agent is in no pane, so nothing shows its pages unless the page puts this beside the conversation (a
+   * tab next to SessionChat). It fills its box (give it a height).
+   */
+  export function SessionBrowser(props: { session: string; className?: string }): ReactNode;
+
+  /**
+   * The pages a conversation's agent opened, oldest first (none: nothing to show yet), and `opened`, the time it last
+   * opened one while gerdr's window was up: switch to SessionBrowser when it changes, so the user sees what the agent
+   * asks them to do there.
+   */
+  export function useSessionBrowser(session: string | undefined): { pages: { tab: number; url: string; project?: string }[]; opened?: number };
+
   /** Whether gerdr is in dark mode (the page shares gerdr's <html>, so its `dark` class is right already). */
   export function useDark(): boolean;
 

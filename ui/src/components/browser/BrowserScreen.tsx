@@ -48,8 +48,15 @@ type Props = {
   tab?: number;
   /** where the pane's page last was (opened again from here after a restart) */
   lastURL?: string;
+  /** whose the page is while shown (the App's real page is in one place: claimNative); a pane's id, or a panel's own */
   paneId: string;
   focused: boolean;
+  /** Outside a pane (a panel beside its conversation, core/SessionBrowser.tsx): what the layout would otherwise keep.
+   *  onShow: another page picked (or none: the address bar); onURL: where the page is now; onFocus: clicked in the
+   *  App's real page. Each defaults to the pane's (PaneLeaf.browser). */
+  onShow?: (tab?: number) => void;
+  onURL?: (url: string) => void;
+  onFocus?: () => void;
   /** the pane floats over the others (Panes.tsx FloatPane): the page laid out at this fixed size (layout.FLOAT_FITS),
    *  not live there, a still scaled down from it every second (asked for) */
   fit?: FloatFit;
@@ -63,7 +70,7 @@ type Props = {
   /** after the address bar in the title bar (the phone's pane count, zoom's restore) */
   extra?: React.ReactNode;
   /** the ⋯ menu's items every pane has (Panes.tsx PaneMoveItems), below this pane's own */
-  paneItems: React.ReactNode;
+  paneItems?: React.ReactNode;
   /** wraps the picture (Panes.tsx PaneBody: the zoom animation's pinned size) */
   Body: React.ComponentType<{ children: React.ReactNode }>;
 };
@@ -101,6 +108,9 @@ export function BrowserScreen({
   lastURL,
   paneId,
   focused,
+  onShow,
+  onURL,
+  onFocus,
   fit,
   onFitDrawn,
   viewOnly,
@@ -110,6 +120,7 @@ export function BrowserScreen({
   paneItems,
   Body,
 }: Props) {
+  const show = (t?: number) => (onShow ? onShow(t) : showBrowserTab(paneId, project, t));
   const all = useBrowserTabs((s) => s.tabs);
   const loaded = useBrowserTabs((s) => s.loaded);
   useEffect(() => {
@@ -258,7 +269,9 @@ export function BrowserScreen({
   // One frame at a time, in order
   useEffect(() => {
     const u = page?.url;
-    if (u && u !== "about:blank" && u !== lastURL) noteBrowserURL(paneId, u);
+    if (!u || u === "about:blank" || u === lastURL) return;
+    if (onURL) onURL(u);
+    else noteBrowserURL(paneId, u);
   }, [page?.url]);
 
   const draw = useCallback(async (buf: ArrayBuffer) => {
@@ -363,7 +376,7 @@ export function BrowserScreen({
   // one, as a click anywhere else in it does (desktop/core views.go OnFocus)
   useEffect(() => {
     if (!nativeView || !tab) return;
-    const on = (e: Event) => (e as CustomEvent).detail === tab && focusPane(paneId);
+    const on = (e: Event) => (e as CustomEvent).detail === tab && (onFocus ? onFocus() : focusPane(paneId));
     window.addEventListener("gerdr:browserfocus", on);
     return () => window.removeEventListener("gerdr:browserfocus", on);
   }, [nativeView, tab, paneId]);
@@ -477,8 +490,12 @@ export function BrowserScreen({
     };
     const report = () => {
       const r = box.getBoundingClientRect();
-      const shown = document.visibilityState === "visible" && r.width > 20 && r.height > 20 && box.offsetParent !== null && !failedRef.current;
-      const open = overlays();
+      // visibility too, not only display: the Work view stays mounted under visibility:hidden in Code mode (App.tsx),
+      // and a panel's browser there (core/SessionBrowser.tsx) kept its page over the Code side
+      const seen = box.offsetParent !== null && (box.checkVisibility?.({ visibilityProperty: true }) ?? true);
+      const shown = document.visibilityState === "visible" && r.width > 20 && r.height > 20 && seen && !failedRef.current;
+      // the dialog this box is in isn't over it (a panel's drawer, role=dialog, holding the browser)
+      const open = overlays().filter((o) => !o.contains(box));
       const over = open.some((o) => {
         const q = o.getBoundingClientRect();
         return q.width > 0 && q.left < r.right && q.right > r.left && q.top < r.bottom && q.bottom > r.top;
@@ -803,7 +820,7 @@ export function BrowserScreen({
     setOpening(true);
     try {
       const opened = await api.browserOpen(url, project);
-      showBrowserTab(paneId, project, opened.tab);
+      show(opened.tab);
       void loadBrowserTabs();
     } catch (err) {
       toast.error((err as Error).message);
@@ -927,13 +944,13 @@ export function BrowserScreen({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="max-w-80" onCloseAutoFocus={(e) => e.preventDefault()}>
             {pages.map((p) => (
-              <DropdownMenuItem key={p.tab} onClick={() => showBrowserTab(paneId, project, p.tab)} className={cn(p.tab === tab && "font-medium")}>
+              <DropdownMenuItem key={p.tab} onClick={() => show(p.tab)} className={cn(p.tab === tab && "font-medium")}>
                 <Globe className={cn(p.tab === tab ? "text-brand" : "text-muted-foreground")} />
                 <span className="truncate">{p.tab === tab && page?.title ? page.title : hostOf(p.url)}</span>
                 {p.tab === tab && <Check className="ml-auto" />}
               </DropdownMenuItem>
             ))}
-            <DropdownMenuItem onClick={() => (showBrowserTab(paneId, project, undefined), requestAnimationFrame(() => addrRef.current?.focus()))}>
+            <DropdownMenuItem onClick={() => (show(undefined), requestAnimationFrame(() => addrRef.current?.focus()))}>
               <Plus /> {t("browser.newPage")}
             </DropdownMenuItem>
             {live && (
@@ -944,13 +961,13 @@ export function BrowserScreen({
                     .then(() => loadBrowserTabs())
                     .catch((err) => toast.error((err as Error).message));
                   const next = pages.filter((p) => p.tab !== tab).at(-1);
-                  showBrowserTab(paneId, project, next?.tab);
+                  show(next?.tab);
                 }}
               >
                 <XCircle /> {t("browser.closePage")}
               </DropdownMenuItem>
             )}
-            <DropdownMenuSeparator />
+            {paneItems && <DropdownMenuSeparator />}
             {paneItems}
           </DropdownMenuContent>
         </DropdownMenu>

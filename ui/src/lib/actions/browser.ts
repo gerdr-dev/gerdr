@@ -59,13 +59,7 @@ export function setBrowserTabs(tabs: BrowserTab[] | null | undefined) {
  * (replaces) takes its old tab's panes.
  */
 function followNewTabs(prev: BrowserTab[], next: BrowserTab[]) {
-  const had = new Set(prev.map((x) => x.tab));
-  const alive = new Set(next.filter((x) => !x.gone).map((x) => x.tab));
-  const moves = new Map<number, number>(); // pane's tab → where it goes
-  for (const x of next) if (x.opener && !had.has(x.tab) && !x.gone) moves.set(x.opener, x.tab);
-  // the same page moved into the desktop App's browser when it connected (chromeext Tab.Replaces)
-  for (const x of next) if (x.replaces && !had.has(x.tab) && !x.gone) moves.set(x.replaces, x.tab);
-  for (const x of prev) if (!alive.has(x.tab) && x.opener && alive.has(x.opener)) moves.set(x.tab, x.opener);
+  const moves = tabMoves(prev, next);
   if (!moves.size) return;
   setLayout((l) => {
     let out = l;
@@ -75,6 +69,18 @@ function followNewTabs(prev: BrowserTab[], next: BrowserTab[]) {
     }
     return out;
   });
+}
+
+/** Where a view of each page goes after the page list changed from prev to next (followNewTabs): page → page. */
+export function tabMoves(prev: BrowserTab[], next: BrowserTab[]): Map<number, number> {
+  const had = new Set(prev.map((x) => x.tab));
+  const alive = new Set(next.filter((x) => !x.gone).map((x) => x.tab));
+  const moves = new Map<number, number>();
+  for (const x of next) if (x.opener && !had.has(x.tab) && !x.gone) moves.set(x.opener, x.tab);
+  // the same page moved into the desktop App's browser when it connected (chromeext Tab.Replaces)
+  for (const x of next) if (x.replaces && !had.has(x.tab) && !x.gone) moves.set(x.replaces, x.tab);
+  for (const x of prev) if (!alive.has(x.tab) && x.opener && alive.has(x.opener)) moves.set(x.tab, x.opener);
+  return moves;
 }
 
 export async function loadBrowserTabs() {
@@ -152,13 +158,20 @@ function leavesOf(l: Layout) {
   return l.workspaces.flatMap((w) => w.tabs.flatMap((t) => leaves(t.root)));
 }
 
+/** The page each agent session opened last, as it opened (browser_open): a panel turns to its browser then
+ * (core/SessionBrowser.tsx useSessionBrowser). Only what happened since this UI loaded: an open seen again on reload
+ * would pull the panel there again. */
+export const useBrowserOpens = create<Record<string, { tab: number; at: number }>>(() => ({}));
+
 /**
  * An agent opened a page (`gerdr browser open`): show it beside that agent's pane, without taking the focus from
- * where the user is. A tab that already has a Browser pane switches it to the new page. An agent no pane shows (a Work
- * agent, a closed one) gets nothing on screen: its project's pages are in any Browser pane's page list.
+ * where the user is. A tab that already has a Browser pane switches it to the new page. An agent no pane shows (a
+ * panel's, a closed one) gets no pane: a panel shows its conversation's pages itself (core/SessionBrowser.tsx), and
+ * the project's pages are in any Browser pane's page list.
  */
 export function browserOpened(m: { tab: number; project: string; session?: string }) {
   if (!m.session) return;
+  useBrowserOpens.setState({ [m.session]: { tab: m.tab, at: Date.now() } });
   const loc = locateSession(get().layout, m.session);
   if (!loc) return;
   setLayout((l) => {

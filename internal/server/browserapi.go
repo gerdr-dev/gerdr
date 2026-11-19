@@ -85,7 +85,9 @@ func (s *Server) browserRoutes(mux *http.ServeMux) {
 			}
 			id = tab
 			s.notePageOpener(id, in.Caller.Session)
-			// the UI puts the Browser pane beside the agent that opened it (ui/src/lib/actions/browser.ts)
+			b.SetSession(id, in.Caller.Session)
+			// the UI puts the Browser pane beside the agent that opened it (ui/src/lib/actions/browser.ts), or a
+			// panel beside its conversation (ui/src/core/SessionBrowser.tsx)
 			s.Hub.Broadcast("browser_open", map[string]any{"tab": id, "project": project, "session": in.Caller.Session})
 		}
 		// wait for the first load; a page that never settles is still open and usable

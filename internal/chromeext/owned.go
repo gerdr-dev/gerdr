@@ -46,6 +46,7 @@ func (b *Bridge) Adopt(p Page) *Owned {
 	t.resize = p.Resize
 	o := &Owned{b: b, t: t}
 	t.close = func(bool) { o.once.Do(p.Close) }
+	b.inheritSession(t)
 	b.tabs[id] = t
 	b.mu.Unlock()
 	b.tabsChanged()
