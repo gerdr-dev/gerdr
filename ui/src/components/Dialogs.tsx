@@ -3,6 +3,7 @@ import { refocusAfterDialog } from "@/lib/actions";
 import { useStore } from "@/lib/store";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { FilePicker, FileViewer } from "./FileViewer";
+import { ForkSessionDialog } from "./ForkSessionDialog";
 import { ImportAgentDialog } from "./ImportAgentDialog";
 import { ImportHerdr } from "./ImportHerdr";
 import { KeyHelp } from "./KeyHelp";
@@ -32,6 +33,7 @@ export function Dialogs() {
       <SettingsDialog open={d?.kind === "settings"} />
       <RemoteScreen open={d?.kind === "screen"} />
       <MoveSessionDialog />
+      <ForkSessionDialog />
       <SessionsDialog open={d?.kind === "sessions"} />
       <WorkspacesDialog open={d?.kind === "workspaces"} />
       <Rename />

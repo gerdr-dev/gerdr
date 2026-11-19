@@ -124,3 +124,35 @@ func TestHandoffTitle(t *testing.T) {
 		t.Fatalf("plain title changed: %q", got)
 	}
 }
+
+// A fork (CreateOptions.Fork) carries the history the same way as a handoff, but tells the agent it is a branch that
+// goes its own way, whether it is the same agent or another.
+func TestForkBlock(t *testing.T) {
+	if forkTitle("修登录页") != "Fork: 修登录页" || forkTitle("") != "Fork" {
+		t.Fatal(forkTitle("修登录页"))
+	}
+	h, err := New(Options{Dir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := Record{ID: "old", Agent: "claude", Cwd: "/tmp", Title: forkTitle("修登录页"), CustomTitle: true}
+	s := newSession(h, Record{ID: "new", Agent: "claude", Cwd: "/tmp"})
+	h.register(s)
+	h.adoptHistoryNote(s, src, []*Event{msg("u1", "登录页打不开"), agentText("路由表是空的。")}, "forked", true)
+	if s.rec.Title != "Fork: 修登录页" || !s.rec.CustomTitle || s.rec.Handoff == nil || !s.rec.Handoff.Fork {
+		t.Fatalf("record: %+v", s.rec)
+	}
+	p := s.pendingHandoff()
+	if len(p) != 1 {
+		t.Fatalf("pending %d", len(p))
+	}
+	txt := p[0].Text.Text
+	for _, want := range []string{`<gerdr-handoff from="Claude Code">`, "has forked it", "with you (Claude Code) in another session", "路由表是空的。"} {
+		if !strings.Contains(txt, want) {
+			t.Errorf("block lacks %q:\n%s", want, txt)
+		}
+	}
+	if strings.Contains(txt, "another coding agent") {
+		t.Errorf("same agent called another:\n%s", txt)
+	}
+}

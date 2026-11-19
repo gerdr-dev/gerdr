@@ -360,6 +360,11 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
   had those turns as real turns, so there is nothing on its side to roll back to.
 - Refused when the source is running (the copy would miss the tail) or when the agent is the same (that's a plain
   resume).
+- **Fork** (`CreateOptions.Fork`, the session menu's "Fork…", `gerdr session fork`) is the same copy, with the same
+  agent allowed: a new conversation named "Fork: <title>" (CustomTitle, so auto-naming leaves it alone) whose
+  `Handoff.Fork` makes the first message's block say it's a branch that goes its own way while the original carries
+  on, not a takeover. It deliberately doesn't use the agents' own forks (claude `--fork-session`, codex `thread/fork`):
+  one mechanism for every agent, the same agent or another, and nothing on the source's side is touched.
 
 ## 界面：没有打包环节（internal/uisite）
 

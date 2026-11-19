@@ -39,6 +39,8 @@ type Dialog =
   | { kind: "resume"; sessionId: string; paneId: string }
   /** carry a conversation on on another computer (MoveSessionDialog) */
   | { kind: "moveSession"; sessionId: string; paneId: string }
+  /** fork a conversation into a new one, with the same agent or another (ForkSessionDialog) */
+  | { kind: "forkSession"; sessionId: string }
   | { kind: "file"; stat: FileStat }
   | { kind: "pickFile"; path: string; candidates: string[]; beside?: boolean; host?: string }
   | null;

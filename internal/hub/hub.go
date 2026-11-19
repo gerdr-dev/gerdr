@@ -781,6 +781,9 @@ type CreateOptions struct {
 	Title  string `json:"title,omitempty"`
 	// ContinueFrom: a gerdr session of another agent whose conversation this new session carries on (handoff.go).
 	ContinueFrom string `json:"continueFrom,omitempty"`
+	// Fork: with ContinueFrom, the user is forking that conversation (the same agent allowed): the new one is named
+	// "Fork: <its title>" and its agent is told it is a branch, not a takeover (handoff.go).
+	Fork bool `json:"fork,omitempty"`
 	// History: the same, for a conversation that lives on another computer (docs/dev/MULTIHOST.md): its record and
 	// log come along, since this hub can't read them. Any agent, the same one included: it's a move, not a switch.
 	History *History `json:"history,omitempty"`

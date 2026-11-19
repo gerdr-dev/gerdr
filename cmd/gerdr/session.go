@@ -707,6 +707,62 @@ and hand it a task, wait for it to finish, read its reply. Refer to a session by
 	newCmd.Flags().BoolVar(&nFocus, "focus", false, i18n.S("打开后把焦点切过去（默认不切，别打断人）", "switch focus to it once opened (off by default, so as not to interrupt the user)"))
 	cmd.AddCommand(newCmd)
 
+	// fork: the menu's "Fork…" (hub CreateOptions.Fork). A copy of the conversation in a new session, with the same
+	// agent or another; the original is left as it is.
+	var fAgent, fPrompt string
+	var fWait, fFocus bool
+	var fTimeout time.Duration
+	forkCmd := &cobra.Command{
+		Use:   i18n.S("fork <会话>", "fork <session>"),
+		Short: i18n.S("分叉一个会话：开一个新会话，带着它到现在为止的对话（同一个 agent 或 --agent 换一个），名字是「Fork: 原来的名字」；原来的不动。在跑的会话要先停下。输出新会话", "Fork a session: a new session carrying its conversation so far (the same agent, or another with --agent), named \"Fork: <original title>\"; the original is left as it is. Not while it is running. Prints the new session"),
+		Args:  cobra.ExactArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			c := client()
+			self := c.selfID()
+			src, err := c.resolve(args[0])
+			if err != nil {
+				return err
+			}
+			agent := fAgent
+			if agent == "" {
+				agent = src.Agent
+			}
+			body := map[string]any{"agent": agent, "cwd": src.Cwd, "continueFrom": src.ID, "fork": true, "open": map[string]any{"near": self, "focus": fFocus}}
+			if src.Host != nil {
+				body["host"] = src.Host.ID // forked on the computer the conversation is on, not moved here
+			}
+			var s sessInfo
+			if err := c.do("POST", "/api/sessions", body, &s); err != nil {
+				return err
+			}
+			if fPrompt == "" {
+				printJSON(s.view(self))
+				return nil
+			}
+			// The reply starts after the copied conversation, which would otherwise come back as part of it
+			evs, err := c.events(s.ID)
+			if err != nil {
+				return err
+			}
+			since := lastSeq(evs)
+			if err := c.sendTo(s.ID, fPrompt, self, ""); err != nil {
+				return err
+			}
+			if !fWait {
+				s, _ = c.get(s.ID)
+				printJSON(s.view(self))
+				return nil
+			}
+			return waitResult(c, s.ID, since, fTimeout)
+		},
+	}
+	forkCmd.Flags().StringVar(&fAgent, "agent", "", i18n.S("用哪个 agent 接着聊（id 同 new --agent）；不给 = 和原来的一样", "the agent that carries it on (ids as for new --agent); omitted = the same as the original"))
+	forkCmd.Flags().StringVar(&fPrompt, "prompt", "", i18n.S("分叉之后马上发的第一句话（之前的对话随它一起带过去）", "first message to send once forked (the earlier conversation goes along with it)"))
+	forkCmd.Flags().BoolVar(&fWait, "wait", false, i18n.S("和 --prompt 一起用：等它做完，输出它的回复", "with --prompt: wait for it to finish and print its reply"))
+	forkCmd.Flags().DurationVar(&fTimeout, "timeout", 30*time.Minute, i18n.S("--wait 最多等多久", "how long --wait waits at most"))
+	forkCmd.Flags().BoolVar(&fFocus, "focus", false, i18n.S("打开后把焦点切过去（默认不切，别打断人）", "switch focus to it once opened (off by default, so as not to interrupt the user)"))
+	cmd.AddCommand(forkCmd)
+
 	cmd.AddCommand(&cobra.Command{
 		Use:   i18n.S("tag <会话> <k=v>...", "tag <session> <k=v>..."),
 		Short: i18n.S("改会话的标签：k=v 设置，k= 删掉；没提到的不动。输出改完的会话", "Change a session's tags: k=v sets, k= removes; others stay. Prints the session"),

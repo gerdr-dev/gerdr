@@ -47,6 +47,17 @@ const (
 type Handoff struct {
 	Session string `json:"session"` // the gerdr session it was copied from
 	Agent   string `json:"agent"`   // that session's agent
+	// Fork: the user forked that conversation (CreateOptions.Fork) to take it somewhere else, with the same agent or
+	// another; the original goes on separately. Changes what the new agent is told it is carrying on.
+	Fork bool `json:"fork,omitempty"`
+}
+
+// forkTitle names a fork after its source, so the list shows which conversation it branched off.
+func forkTitle(src string) string {
+	if src == "" {
+		return "Fork"
+	}
+	return "Fork: " + src
 }
 
 func isHandoffBlock(raw json.RawMessage) bool {
@@ -91,10 +102,11 @@ func (h *Hub) continueFrom(ctx context.Context, o CreateOptions) (*Session, erro
 	if running {
 		return nil, errors.New(i18n.S("这个会话还在跑：先停下这一轮，再换 agent 接着聊", "This session is still running: stop the current turn before switching agents"))
 	}
-	// The same agent only from code (a panel replacing a broken or reconfigured conversation): a person would just
-	// open the old one
+	// The same agent only from code (a panel replacing a broken or reconfigured conversation) or as a fork: otherwise a
+	// person would just open the old one
 	same := srcRec.Agent == o.Agent
-	if same && !o.FromCLI {
+	fork := o.Fork
+	if same && !o.FromCLI && !fork {
 		return nil, errors.New(i18n.S("同一个 agent 直接打开这个会话就行，不用换", "It's the same agent: just open this session, no need to switch"))
 	}
 	if o.Cwd == "" {
@@ -112,17 +124,27 @@ func (h *Hub) continueFrom(ctx context.Context, o CreateOptions) (*Session, erro
 	// The conversation's title comes along (adoptHistoryNote), unless one is given: then that is the session's fixed
 	// name (Record.TitleFixed), as when started fresh. A panel restarting its conversation names it again each time,
 	// and dropping that let an auto title from an earlier piece of work ride along from one restart to the next.
+	// A fork is named "Fork: <the original's title>", as if the user had renamed it: auto-naming leaves it alone, and
+	// a fixed name stays fixed.
 	given := o.Title
-	o.ContinueFrom, o.Import, o.Title = "", "", ""
+	o.ContinueFrom, o.Import, o.Title, o.Fork = "", "", "", false
 	if given != "" {
 		srcRec.Title, srcRec.CustomTitle, srcRec.TitleFixed, srcRec.TitleKey, srcRec.PluginTitleFor = given, true, true, "", ""
+	} else if fork {
+		srcRec.Title, srcRec.CustomTitle, srcRec.TitleKey, srcRec.PluginTitleFor = forkTitle(srcRec.Title), true, "", ""
 	}
 	s, err := h.Create(ctx, o)
 	if err != nil {
 		return nil, err
 	}
-	if same {
-		h.adoptHistoryNote(s, srcRec, evs, i18n.S("换了一个新会话接着聊：上面是之前的对话，下一条消息会把它一起带过去", "Continued in a new session: above is the earlier conversation; the next message brings it along"))
+	if fork {
+		note := i18n.S("从原来的对话分叉出来：上面是分叉前的对话，下一条消息会把它一起带过去；原来的对话不受影响", "Forked from the original conversation: above is the conversation up to the fork; the next message brings it along. The original is unaffected")
+		if !same {
+			note = fmt.Sprintf(i18n.S("从原来的对话分叉出来，换 %s 接着聊：上面是和 %s 的对话，下一条消息会把它一起带过去；原来的对话不受影响", "Forked from the original conversation, continuing with %s: above is the conversation with %s; the next message brings it along. The original is unaffected"), h.agentName(o.Agent), h.agentName(srcRec.Agent))
+		}
+		h.adoptHistoryNote(s, srcRec, evs, note, true)
+	} else if same {
+		h.adoptHistoryNote(s, srcRec, evs, i18n.S("换了一个新会话接着聊：上面是之前的对话，下一条消息会把它一起带过去", "Continued in a new session: above is the earlier conversation; the next message brings it along"), false)
 	} else {
 		h.adoptHistory(s, srcRec, evs)
 	}
@@ -157,21 +179,21 @@ func (h *Hub) continueHistory(ctx context.Context, o CreateOptions) (*Session, e
 	if err != nil {
 		return nil, err
 	}
-	h.adoptHistoryNote(s, hist.Record, evs, fmt.Sprintf(i18n.S("从 %s 搬过来接着聊：上面是在那边的对话，下一条消息会把它一起带给 %s", "Moved here from %s: above is the conversation there; your next message will bring it along to %s"), firstNonEmpty(hist.From, "?"), h.agentName(s.rec.Agent)))
+	h.adoptHistoryNote(s, hist.Record, evs, fmt.Sprintf(i18n.S("从 %s 搬过来接着聊：上面是在那边的对话，下一条消息会把它一起带给 %s", "Moved here from %s: above is the conversation there; your next message will bring it along to %s"), firstNonEmpty(hist.From, "?"), h.agentName(s.rec.Agent)), false)
 	return s, nil
 }
 
 // adoptHistory puts src's log (evs, copies) in front of s's and marks where s's agent takes over.
 func (h *Hub) adoptHistory(s *Session, srcRec Record, evs []*Event) {
 	from, to := h.agentName(srcRec.Agent), h.agentName(s.rec.Agent)
-	h.adoptHistoryNote(s, srcRec, evs, fmt.Sprintf(i18n.S("换 %s 接着聊：上面是和 %s 的对话，下一条消息会把它一起带给 %s", "Switched to %s: above is the conversation with %s; your next message will bring it along to %s"), to, from, to))
+	h.adoptHistoryNote(s, srcRec, evs, fmt.Sprintf(i18n.S("换 %s 接着聊：上面是和 %s 的对话，下一条消息会把它一起带给 %s", "Switched to %s: above is the conversation with %s; your next message will bring it along to %s"), to, from, to), false)
 }
 
-func (h *Hub) adoptHistoryNote(s *Session, srcRec Record, evs []*Event, note string) {
+func (h *Hub) adoptHistoryNote(s *Session, srcRec Record, evs []*Event, note string, fork bool) {
 	all := s.rewriteLog(func() {
 		s.events = append(evs, s.events...)
 		s.rec.Title, s.rec.CustomTitle, s.rec.TitleFixed, s.rec.TitleKey, s.rec.PluginTitleFor = srcRec.Title, srcRec.CustomTitle, srcRec.TitleFixed, srcRec.TitleKey, srcRec.PluginTitleFor
-		s.rec.Handoff = &Handoff{Session: srcRec.ID, Agent: srcRec.Agent}
+		s.rec.Handoff = &Handoff{Session: srcRec.ID, Agent: srcRec.Agent, Fork: fork}
 	})
 	h.broadcastEvents(s.rec.ID, all, true)
 	s.emit(&Event{Kind: EvNotice, Level: handoffLevel, Text: note})
@@ -225,7 +247,11 @@ func (s *Session) pendingHandoff() []acp.ContentBlock {
 		s.h.log.Warn("write handoff transcript", "id", s.rec.ID, "err", err)
 		path = ""
 	}
-	return []acp.ContentBlock{acp.TextBlock(handoffBlock(renderHandoff(evs, false), from, s.h.agentName(agent), path))}
+	to := s.h.agentName(agent)
+	if hf != nil && hf.Fork {
+		return []acp.ContentBlock{acp.TextBlock(forkBlock(renderHandoff(evs, false), from, to, path))}
+	}
+	return []acp.ContentBlock{acp.TextBlock(handoffBlock(renderHandoff(evs, false), from, to, path))}
 }
 
 func (s *Session) handoffFile() string {
@@ -235,13 +261,33 @@ func (s *Session) handoffFile() string {
 // handoffBlock wraps the transcript for the new agent. Written in English for the model; it answers in the user's
 // language anyway.
 func handoffBlock(transcript, from, to, path string) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "%s from=%q>\n", handoffPrefix, from)
-	fmt.Fprintf(&b, "The user started this conversation with another coding agent (%s) and is now continuing it with you (%s), "+
+	return wrapHandoff(transcript, from, path, fmt.Sprintf("The user started this conversation with another coding agent (%s) and is now continuing it with you (%s), "+
 		"in the same working directory. Below is that conversation so far, rebuilt from the chat log: what the user said, "+
 		"what the assistant answered, and the tools it called (titles only, without their results). Files it changed are "+
 		"already changed on disk; re-read files or re-run commands when you need details. Carry on from where it left off: "+
-		"the user's new message follows this block.\n", from, to)
+		"the user's new message follows this block.\n", from, to))
+}
+
+// forkBlock is handoffBlock for a fork (Handoff.Fork): the same agent or another, but either way a branch of a
+// conversation that goes on separately, which the model should know so it doesn't take the user's new direction for a
+// correction of the old one.
+func forkBlock(transcript, from, to, path string) string {
+	who := "you (" + to + ")"
+	if from != to {
+		who = "another coding agent (" + from + ")"
+	}
+	return wrapHandoff(transcript, from, path, fmt.Sprintf("The user had this conversation with %s in another session and has forked it: this session is a "+
+		"copy that goes its own way from here, with you (%s), in the same working directory; the original session "+
+		"carries on separately. Below is the conversation up to the fork, rebuilt from the chat log: what the user said, "+
+		"what the assistant answered, and the tools it called (titles only, without their results). Files changed so far "+
+		"are already changed on disk, and the original session may keep changing them; re-read files or re-run commands "+
+		"when you need details. Carry on from the fork point: the user's new message follows this block.\n", who, to))
+}
+
+func wrapHandoff(transcript, from, path, intro string) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s from=%q>\n", handoffPrefix, from)
+	b.WriteString(intro)
 	cut := false
 	if r := []rune(transcript); len(r) > handoffInline {
 		transcript = string(r[len(r)-handoffInline:])

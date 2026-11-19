@@ -6,6 +6,7 @@ import {
   ExternalLink,
   FileText,
   FolderOpen,
+  GitFork,
   GitBranch,
   Globe,
   ListPlus,
@@ -1107,6 +1108,10 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
                 <DropdownMenuItem onClick={() => set({ dialog: { kind: "rename", target: "session", id: session.id, value: session.title ?? "" } })}>
                   <Pencil /> {t("panes.renameSession")}
                   <ActionKeys action="renamePane" />
+                </DropdownMenuItem>
+                {/* A new conversation carrying this one so far, the same agent or another; this one stays (ForkSessionDialog) */}
+                <DropdownMenuItem onClick={() => set({ dialog: { kind: "forkSession", sessionId: session.id } })}>
+                  <GitFork /> {t("panes.forkSession")}
                 </DropdownMenuItem>
                 {/* Gerdr's own id is the one name for a session, for people and for `gerdr session`. The agent's own
                     session id changes on /clear and is only good for carrying on in a terminal, so it is only handed out
