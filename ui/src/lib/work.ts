@@ -73,7 +73,11 @@ function setWorkSession(project: string, id: string) {
   syncWatch();
 }
 
-/** The project's Work agent conversations (sessions opened in its Work directory), newest first. */
+/**
+ * The project's Work agent conversations (sessions opened in its Work directory), newest first. Not the ones the
+ * panel's own code started (ctx.sessions.start tags them PanelTag): those run in the same directory too, e.g. the
+ * Superagent's secretary, replaced dozens of times, filled the whole history and buried the agent's own chats.
+ */
 export function useWorkChats() {
   const project = useWorkProject();
   const [d, setD] = useState(dirs[project] ?? "");
@@ -83,7 +87,7 @@ export function useWorkChats() {
     workDir(project).then(setD, () => {});
   }, [project]);
   return Object.values(sessions)
-    .filter((s) => d && s.cwd === d)
+    .filter((s) => d && s.cwd === d && !s.tags?.panel)
     .sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
