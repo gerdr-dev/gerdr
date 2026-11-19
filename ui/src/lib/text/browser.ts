@@ -21,7 +21,6 @@ export const zh = {
   "browser.retry": "重试",
   "browser.retrying": "正在重试…",
   "browser.keyboard": "键盘",
-  "browser.useChrome": "用你自己的 Chrome…",
   "browserSettings.chrome": "你自己的 Chrome",
   "browserSettings.chromeHint":
     "装上 Gerdr 浏览器插件，agent 就能在你平时用的 Chrome 里、用你已经登录的账号操作网页：只在你允许的网站上，只用它自己打开的标签页。",
@@ -72,7 +71,6 @@ export const en: Record<keyof typeof zh, string> = {
   "browser.retry": "Try again",
   "browser.retrying": "Trying again…",
   "browser.keyboard": "Keyboard",
-  "browser.useChrome": "Use your own Chrome…",
   "browserSettings.chrome": "Your own Chrome",
   "browserSettings.chromeHint":
     "With the Gerdr browser extension, agents can work on web pages in the Chrome you use every day, signed in as you already are: only on the sites you allow, only in tabs they open themselves.",
