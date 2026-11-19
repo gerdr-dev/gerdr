@@ -500,7 +500,7 @@ gerdr panel new <name>                             # a blank one, for its agent 
 gerdr panel update [<panel>]                       # git pull; the user's own changes stay on top
 gerdr panel rename <panel> "任务看板"                # the name shown for it, for this person
 gerdr panel icon <panel> kanban [--color blue]     # glyph / line icon key, or sprite:<key>; no icon = default
-gerdr panel move <panel> 1                         # its place on the rail (1 = top), as dragging the button does
+gerdr panel move <panel> 1                         # its place on the rail (1 = top, Code counts), as dragging does; `.` = Code
 gerdr panel badge <panel> 3 | dot | clear          # a red number / dot on its rail button ("something new"); --add N adds to it
 gerdr panel rm <panel>                             # to the trash, data and all
 gerdr panel restore                                # the project's own panel back (blank) after removing it

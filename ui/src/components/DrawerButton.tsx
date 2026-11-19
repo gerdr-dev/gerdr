@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import { switchSpace } from "@/lib/actions";
 import { currentSpace, spaceList, type Space } from "@/lib/layout";
-import { usePanels } from "@/lib/panels";
+import { railItems, usePanels } from "@/lib/panels";
 import { set, setMode, setWorkPanel, useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { t } from "@/lib/i18n";
@@ -96,7 +96,7 @@ function AllViews({ done }: { done: () => void }) {
 
 /** One project's Code and panels; `named` heads them with its name (the ☰ bubble groups every project, a chip's has only its own). */
 export function ProjectViews({ sp, done, named }: { sp: Space; done: () => void; named?: boolean }) {
-  const { panels } = usePanels(sp.id);
+  const { panels, codeAt } = usePanels(sp.id);
   const here = useStore((s) => currentSpace(s.layout) === sp.id);
   const mode = useStore((s) => s.mode);
   const chosen = useStore((s) => s.workPanels[sp.id] ?? "");
@@ -129,8 +129,12 @@ export function ProjectViews({ sp, done, named }: { sp: Space; done: () => void;
   return (
     <>
       {named && <div className="truncate px-2 pt-1 pb-0.5 text-[11px] font-medium text-muted-foreground">{sp.name}</div>}
-      {row("code", null, <Code2 className="size-3.5 shrink-0" />, "Code")}
-      {panels.map((p) => row(p.key, p.name, <PanelIcon icon={p.icon} color={p.color} title={p.title} className="size-3.5 shrink-0" />, p.title))}
+      {/* In the rail's order, Code at its place among the panels */}
+      {railItems(panels, codeAt).map((p) =>
+        p
+          ? row(p.key, p.name, <PanelIcon icon={p.icon} color={p.color} title={p.title} className="size-3.5 shrink-0" />, p.title)
+          : row("code", null, <Code2 className="size-3.5 shrink-0" />, "Code"),
+      )}
     </>
   );
 }

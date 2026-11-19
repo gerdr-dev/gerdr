@@ -31,28 +31,48 @@ export function panelTitle(key: string): string | undefined {
 /** Tell every usePanels to fetch again (after adding, removing, restoring, a new icon). */
 export const panelsChanged = () => window.dispatchEvent(new Event("gerdr:panels"));
 
-const cache: Record<string, { panels: Panel[]; ownRemoved: boolean }> = {};
+type Cached = { panels: Panel[]; codeAt: number; ownRemoved: boolean };
+const cache: Record<string, Cached> = {};
 
 /**
- * Put a panel at place `to` (0-based) among its project's panels: dragging its button on the rail, or its menu's move up /
- * down. Shown at once (every usePanels of the project reads the cache again), then saved (work/order.go) and fetched.
+ * Code's key in the rail's order (work.CodeName): Code is dragged and moved like any panel, its place kept with theirs.
+ * "." can't be a panel's name, so it never clashes.
+ */
+export const codeKey = (space: string) => `${space}/.`;
+
+/**
+ * The project's rail group in order: Code (`null`) at its place among the panels. What the rail, the phone's switch and
+ * the drawer's list all draw, so Code is never treated apart from the panels.
+ */
+export function railItems(panels: Panel[], codeAt: number): (Panel | null)[] {
+  const out: (Panel | null)[] = [...panels];
+  out.splice(Math.max(0, Math.min(codeAt, panels.length)), 0, null);
+  return out;
+}
+
+/**
+ * Put a panel (or Code: codeKey) at place `to` (0-based) among its project's rail group, Code counted: dragging its
+ * button on the rail, or its menu's move up / down. Shown at once (every usePanels of the project reads the cache
+ * again), then saved (work/order.go) and fetched.
  */
 export function movePanel(space: string, key: string, to: number) {
   const c = cache[space];
   if (c) {
-    const panels = c.panels.filter((p) => p.key !== key);
-    const p = c.panels.find((p) => p.key === key);
-    if (!p) return;
-    panels.splice(Math.max(0, Math.min(to, panels.length)), 0, p);
-    cache[space] = { ...c, panels };
+    const code = codeKey(space);
+    const keys = railItems(c.panels, c.codeAt).map((p) => p?.key ?? code);
+    if (!keys.includes(key)) return;
+    const rest = keys.filter((k) => k !== key);
+    rest.splice(Math.max(0, Math.min(to, rest.length)), 0, key);
+    const byKey = new Map(c.panels.map((p) => [p.key, p]));
+    cache[space] = { ...c, panels: rest.flatMap((k) => byKey.get(k) ?? []), codeAt: rest.indexOf(code) };
     window.dispatchEvent(new CustomEvent("gerdr:panels-cache", { detail: space }));
   }
   api.movePanel(key, to).then(panelsChanged, (e) => (panelsChanged(), toast.error(e.message)));
 }
 
-const fromCache = (space: string) => ({ space, ...(cache[space] ?? { panels: [], ownRemoved: false }), loaded: !!cache[space] });
+const fromCache = (space: string) => ({ space, ...(cache[space] ?? { panels: [], codeAt: 0, ownRemoved: false }), loaded: !!cache[space] });
 
-export function usePanels(space: string): { panels: Panel[]; ownRemoved: boolean; loaded: boolean } {
+export function usePanels(space: string): { panels: Panel[]; codeAt: number; ownRemoved: boolean; loaded: boolean } {
   const [state, setState] = useState(() => fromCache(space));
   useEffect(() => {
     let dead = false;
@@ -69,8 +89,9 @@ export function usePanels(space: string): { panels: Panel[]; ownRemoved: boolean
             color: str(p.config.color),
             source: p.source,
           }));
-          cache[space] = { panels, ownRemoved: r.ownRemoved };
-          if (!dead) setState({ space, panels, ownRemoved: r.ownRemoved, loaded: true });
+          const codeAt = r.codeAt ?? 0;
+          cache[space] = { panels, codeAt, ownRemoved: r.ownRemoved };
+          if (!dead) setState({ space, panels, codeAt, ownRemoved: r.ownRemoved, loaded: true });
         },
         () => {},
       );

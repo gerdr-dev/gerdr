@@ -104,25 +104,29 @@ export function ModeSwitch() {
   const cur = mode === "work" ? "work" : "agents";
   // Back to Code keeps the grid as it was: App.tsx only hides it while a panel shows (asked for)
   const go = (m: typeof cur) => setMode(m);
-  // Icons, not words: the project name next to it needs the room (the sidebar is 224px by default)
-  const item = (m: typeof cur, label: string, Icon: typeof Code2) => (
-    <button
-      title={label}
-      aria-label={label}
-      className={cn(
-        "flex h-6 w-7 items-center justify-center rounded-md",
-        cur === m ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
-      )}
-      onClick={() => go(m)}
-    >
-      <Icon className="size-3.5" />
-    </button>
-  );
+  // Icons, not words: the project name next to it needs the room (the sidebar is 224px by default). Code sits among
+  // the panels at its place in their order, dragged like them (PanelButtons)
+  const code = {
+    tip: "Code",
+    button: (drag: object) => (
+      <button
+        {...drag}
+        aria-label="Code"
+        className={cn(
+          "flex h-6 w-7 items-center justify-center rounded-md",
+          cur === "agents" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+        )}
+        onClick={() => go("agents")}
+      >
+        <Code2 className="size-3.5" />
+      </button>
+    ),
+  };
   return (
     <div data-space-list={panelList("row")} className="relative flex shrink-0 gap-0.5 rounded-lg bg-muted p-0.5" style={{ WebkitAppRegion: "no-drag" } as any}>
-      {item("agents", "Code", Code2)}
       <PanelButtons
         size="row"
+        code={code}
         className={(on) =>
           cn(
             "flex h-6 w-7 items-center justify-center rounded-md",

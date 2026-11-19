@@ -157,12 +157,19 @@ func (s *Server) workRoutes(mux *http.ServeMux) {
 			list = append(list, p)
 		}
 		// In the person's order (work/order.go): its own first and the rest by name until they drag one
-		for _, n := range s.Work.PanelNames(project) {
+		// Code is in the same order (dragged like a panel): codeAt is its place among these panels, 0 = before them all
+		codeAt := 0
+		for _, n := range s.Work.RailOrder(project) {
+			if n == work.CodeName {
+				codeAt = len(list)
+				continue
+			}
 			add(work.PanelKey(project, n), n)
 		}
-		writeJSON(w, map[string]any{"panels": list, "ownRemoved": s.Work.WorkRemoved(project)})
+		writeJSON(w, map[string]any{"panels": list, "codeAt": codeAt, "ownRemoved": s.Work.WorkRemoved(project)})
 	})
-	// Move a panel on the rail: to its 0-based place among its project's panels (dragging its button, `gerdr panel move`).
+	// Move a panel on the rail: to its 0-based place among its project's panels and Code (key "<project>/."), as
+	// dragging its button or `gerdr panel move` does.
 	mux.HandleFunc("POST /api/work/panels/move", func(w http.ResponseWriter, r *http.Request) {
 		var b struct {
 			Key string `json:"key"`

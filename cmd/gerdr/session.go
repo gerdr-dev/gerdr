@@ -1670,7 +1670,7 @@ func panelCmd() *cobra.Command {
 	})
 	cmd.AddCommand(&cobra.Command{
 		Use:   "move <panel> <position>",
-		Short: "Move a panel's button on the rail, for this person: position 1 is the top (as dragging the button does); `gerdr panel list` shows the order",
+		Short: "Move a panel's button on the rail, for this person: position 1 is the top (as dragging the button does); `.` is Code, which counts as a place too; `gerdr panel list` shows the order (codeAt: Code's place among the panels, 0-based)",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(_ *cobra.Command, args []string) error {
 			n, err := strconv.Atoi(args[1])

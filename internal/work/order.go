@@ -13,6 +13,13 @@ import (
 // project's own panel. A dot-file can't be a panel (validProject refuses '.'), and it goes with the project's panels.
 // Panels not in the list (added since, or never moved) keep the default place after the listed ones: the project's own
 // first, then by name. A removed panel's name stays in the list, harmless, and puts it back where it was if restored.
+//
+// Code (the project's agents, always there) has its place in the same list as CodeName: it is dragged like any panel
+// (asked for: "no special case for Code"). Lists saved before it was movable don't name it; it is then first, where
+// it always was.
+
+// CodeName stands for Code in the rail's order: "." can't be a panel's name (validProject), so it never clashes.
+const CodeName = "."
 
 const orderFile = ".order.json"
 
@@ -35,6 +42,9 @@ func (r *Runner) savedOrder(project string) []string {
 	}
 	var names []string
 	_ = json.Unmarshal(b, &names)
+	if !slices.Contains(names, CodeName) {
+		names = append([]string{CodeName}, names...)
+	}
 	return names
 }
 
@@ -64,10 +74,16 @@ func (r *Runner) PanelNames(project string) []string {
 	return r.OrderPanels(project, names)
 }
 
-// MovePanel puts a panel at position `to` (0-based, clamped) among its project's panels.
+// RailOrder: everything in the project's rail group, in the person's order: its panels and Code (CodeName).
+func (r *Runner) RailOrder(project string) []string {
+	return r.OrderPanels(project, append([]string{CodeName}, r.PanelNames(project)...))
+}
+
+// MovePanel puts a panel (or Code: key "<project>/.") at position `to` (0-based, clamped) among its project's rail
+// group, Code included.
 func (r *Runner) MovePanel(key string, to int) error {
 	project, panel := SplitKey(key)
-	names := r.PanelNames(project)
+	names := r.RailOrder(project)
 	i := slices.Index(names, panel)
 	if i < 0 {
 		return fmt.Errorf("no panel %q", key)

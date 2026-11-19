@@ -5,7 +5,7 @@ import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator,
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { api } from "@/lib/api";
 import { currentSpace } from "@/lib/layout";
-import { movePanel, usePanels, type Panel } from "@/lib/panels";
+import { codeKey, movePanel, railItems, usePanels, type Panel } from "@/lib/panels";
 import { set, setMode, setWorkPanel, useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { PanelIcon } from "./PanelIcon";
@@ -20,12 +20,25 @@ import { SpaceDropLine, startSpaceDrag } from "./SpaceDrag";
  * remove it (to the trash). The rail stacks them (axis y); the phone drawer's header lays them in a row.
  * Dragged along the list they reorder, like the projects above them (SpaceDrag.tsx); the menu has move up / down for a
  * touch screen. The parent is the list: `data-space-list={panelList(size)}` and `relative`.
+ * Code is one of them in this: drawn at its place in the order (codeAt), dragged and moved the same way (asked for: no
+ * special case). Its look and click stay the caller's (`code.button`, handed the props that make it draggable).
  */
 export const panelList = (size: "rail" | "row") => `panels-${size}`;
 
-export function PanelButtons({ className, size = "rail" }: { className: (on: boolean) => string; size?: "rail" | "row" }) {
+type DragProps = { "data-space-id": string; onPointerDown: (e: React.PointerEvent<HTMLElement>) => void };
+
+export function PanelButtons({
+  className,
+  size = "rail",
+  code,
+}: {
+  className: (on: boolean) => string;
+  size?: "rail" | "row";
+  /** The Code button: `button` spreads the drag props onto its <button>; `tip` is its tooltip. */
+  code: { button: (p: DragProps) => React.ReactElement; tip: React.ReactNode };
+}) {
   const space = useStore((s) => currentSpace(s.layout));
-  const { panels, loaded } = usePanels(space);
+  const { panels, codeAt, loaded } = usePanels(space);
   const mode = useStore((s) => s.mode);
   const chosen = useStore((s) => s.workPanels[space] ?? "");
   // The chosen one is gone (removed here or elsewhere, the project's own Work too): the first there is
@@ -35,9 +48,13 @@ export function PanelButtons({ className, size = "rail" }: { className: (on: boo
   }, [cur, chosen, space]);
   return (
     <>
-      {panels.map((p, i) => (
-        <PanelButton key={p.key} p={p} i={i} n={panels.length} on={mode === "work" && p.name === cur} className={className} size={size} space={space} />
-      ))}
+      {railItems(panels, codeAt).map((p, i, all) =>
+        p ? (
+          <PanelButton key={p.key} p={p} i={i} n={all.length} on={mode === "work" && p.name === cur} className={className} size={size} space={space} />
+        ) : (
+          <CodeButton key="." code={code} i={i} n={all.length} size={size} space={space} />
+        ),
+      )}
       <SpaceDropLine list={panelList(size)} axis={size === "rail" ? "y" : "x"} />
       {/* Add one: install it from a repository, or a blank one to build (WorkSourceDialog). Not on a phone's row: it
           crowds the switch there, and adding a panel is a rare thing done from Settings → Panels */}
@@ -54,6 +71,57 @@ export function PanelButtons({ className, size = "rail" }: { className: (on: boo
           </TooltipTrigger>
           <TooltipContent side="right">{t("workSource.add")}</TooltipContent>
         </Tooltip>
+      )}
+    </>
+  );
+}
+
+/** Code in the panels' list: its own button (the caller's), with the drag and the move up / down the panels have. */
+function CodeButton({
+  code,
+  i,
+  n,
+  size,
+  space,
+}: {
+  code: { button: (p: DragProps) => React.ReactElement; tip: React.ReactNode };
+  i: number;
+  n: number;
+  size: "rail" | "row";
+  space: string;
+}) {
+  const axis = size === "rail" ? "y" : "x";
+  const key = codeKey(space);
+  const btn = code.button({ "data-space-id": key, onPointerDown: (e) => startSpaceDrag(e, key, axis, (k, to) => movePanel(space, k, to)) });
+  return (
+    <ContextMenu>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <ContextMenuTrigger asChild>{btn}</ContextMenuTrigger>
+        </TooltipTrigger>
+        <TooltipContent side={size === "rail" ? "right" : "bottom"}>{code.tip}</TooltipContent>
+      </Tooltip>
+      <ContextMenuContent collisionPadding={8} className="max-w-[calc(100vw-16px)]">
+        <MoveItems i={i} n={n} axis={axis} move={(to) => movePanel(space, key, to)} />
+      </ContextMenuContent>
+    </ContextMenu>
+  );
+}
+
+/** Move up / down (left / right in a row): dragging's stand-in on a touch screen. */
+function MoveItems({ i, n, axis, move }: { i: number; n: number; axis: "x" | "y"; move: (to: number) => void }) {
+  const [Back, Fwd] = axis === "y" ? [ArrowUp, ArrowDown] : [ArrowLeft, ArrowRight];
+  return (
+    <>
+      {i > 0 && (
+        <ContextMenuItem onClick={() => move(i - 1)}>
+          <Back /> {axis === "y" ? t("spaceSwitcher.moveUp") : t("spaceSwitcher.moveLeft")}
+        </ContextMenuItem>
+      )}
+      {i < n - 1 && (
+        <ContextMenuItem onClick={() => move(i + 1)}>
+          <Fwd /> {axis === "y" ? t("spaceSwitcher.moveDown") : t("spaceSwitcher.moveRight")}
+        </ContextMenuItem>
       )}
     </>
   );
@@ -77,7 +145,6 @@ function PanelButton({
   space: string;
 }) {
   const axis = size === "rail" ? "y" : "x";
-  const [Back, Fwd] = axis === "y" ? [ArrowUp, ArrowDown] : [ArrowLeft, ArrowRight];
   const src = p.source;
   const label = p.title;
   const go = () => {
@@ -125,16 +192,7 @@ function PanelButton({
             <RefreshCw /> {t("workSource.menuUpdate")}
           </ContextMenuItem>
         )}
-        {i > 0 && (
-          <ContextMenuItem onClick={() => movePanel(space, p.key, i - 1)}>
-            <Back /> {axis === "y" ? t("spaceSwitcher.moveUp") : t("spaceSwitcher.moveLeft")}
-          </ContextMenuItem>
-        )}
-        {i < n - 1 && (
-          <ContextMenuItem onClick={() => movePanel(space, p.key, i + 1)}>
-            <Fwd /> {axis === "y" ? t("spaceSwitcher.moveDown") : t("spaceSwitcher.moveRight")}
-          </ContextMenuItem>
-        )}
+        <MoveItems i={i} n={n} axis={axis} move={(to) => movePanel(space, p.key, to)} />
         <ContextMenuItem variant="destructive" onClick={remove}>
           <Trash2 /> {t("workSource.menuRemove")}
         </ContextMenuItem>

@@ -99,31 +99,27 @@ export function Rail() {
   const cur = mode === "work" ? "work" : "agents";
   const coarse = isCoarse();
 
-  const modeItem = (m: typeof cur, label: string, Icon: typeof Code2) => {
-    const on = cur === m;
-    // The mode you're in again: Code toggles its list (as an activity bar does); Work has nothing to toggle.
-    // Icons in one capsule, like the horizontal Code / Work switch this replaced, stood on end: the capsule is as wide
-    // as the project chips above (36px), the current mode raised inside it. Separate labelled buttons looked out of
-    // place next to the chips whatever their size; the names are in the tooltips.
-    const title = on && m === "agents" ? `Code · ${sidebar ? t("nav.hideSessionList") : t("rail.showSessionList")}` : label;
-    return tip(
-      title,
+  // The mode you're in again: Code toggles its list (as an activity bar does). An icon in the capsule the panels share,
+  // as wide as the project chips above (36px), the current one raised; the name is in the tooltip. Dragged and ordered
+  // like a panel (PanelButtons), which hands it the drag props.
+  const codeOn = cur === "agents";
+  const code = {
+    tip: codeOn ? `Code · ${sidebar ? t("nav.hideSessionList") : t("rail.showSessionList")}` : "Code",
+    button: (drag: object) => (
       <button
-        aria-label={label}
-        aria-pressed={on}
+        {...drag}
+        aria-label="Code"
+        aria-pressed={codeOn}
         className={cn(
           "flex size-8 items-center justify-center rounded-md",
-          on ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+          codeOn ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
         )}
-        onClick={() => {
-          if (on) return m === "agents" && toggleSidebar();
-          // Back to Code keeps the grid as it was: App.tsx only hides it while a panel shows (asked for)
-          setMode(m);
-        }}
+        // Back to Code keeps the grid as it was: App.tsx only hides it while a panel shows (asked for)
+        onClick={() => (codeOn ? toggleSidebar() : setMode("agents"))}
       >
-        <Icon className="size-4" />
-      </button>,
-    );
+        <Code2 className="size-4" />
+      </button>
+    ),
   };
 
   return (
@@ -164,8 +160,7 @@ export function Rail() {
         </div>
         <div className="my-2 h-px w-7 shrink-0 bg-border short:my-1.5" />
         <div data-space-list={panelList("rail")} className="relative flex shrink-0 flex-col items-center gap-0.5 rounded-lg bg-muted p-0.5">
-          {modeItem("agents", "Code", Code2)}
-          <PanelButtons className={panelBtn} />
+          <PanelButtons className={panelBtn} code={code} />
         </div>
         <div className="min-h-2 flex-1" />
         <div className="flex shrink-0 flex-col items-center gap-1 pb-2">

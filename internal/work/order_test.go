@@ -36,6 +36,19 @@ func TestMovePanel(t *testing.T) {
 	if got := r.PanelNames("p"); !slices.Equal(got, []string{"b", "a", "", "c"}) {
 		t.Fatalf("a new one goes last: %q", got)
 	}
+	// Code has its place among them: first until something is moved above it
+	if got := r.RailOrder("p"); !slices.Equal(got, []string{"b", CodeName, "a", "", "c"}) {
+		t.Fatalf("rail order: %q", got)
+	}
+	if err := r.MovePanel("p/"+CodeName, 2); err != nil {
+		t.Fatal(err)
+	}
+	if got := r.RailOrder("p"); !slices.Equal(got, []string{"b", "a", CodeName, "", "c"}) {
+		t.Fatalf("Code moved: %q", got)
+	}
+	if got := r.PanelNames("p"); !slices.Equal(got, []string{"b", "a", "", "c"}) {
+		t.Fatalf("panels without Code: %q", got)
+	}
 	if err := r.MovePanel("p/nope", 0); err == nil {
 		t.Fatal("moving a missing panel should fail")
 	}

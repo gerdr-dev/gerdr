@@ -250,6 +250,8 @@ export const api = {
   panels: (project: string) =>
     req<{
       panels: { key: string; name: string; config: Record<string, unknown>; source: { git: boolean; remote?: string; dirty?: boolean } }[];
+      /** Code's place among the panels (it is dragged like one), 0 = before them all. */
+      codeAt?: number;
       ownRemoved: boolean;
     }>("GET", `/api/work/panels?project=${encodeURIComponent(project)}`),
   /** Put a panel at its 0-based place on the rail (the person's order, work/order.go). */
