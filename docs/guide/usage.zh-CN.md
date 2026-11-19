@@ -47,7 +47,22 @@ mac App 里另有 ⌘T 新 tab、⌘1…9 跳到侧栏「进行中」的第 N �
 
 每个项目有一个自己的浏览器（profile 放在 `~/.gerdr/projects/<项目>/browser`）：在这个项目里登录过的网站会一直保持登录，
 别的项目看不到。它是 Gerdr 在后台跑的 Chrome（用这台电脑装的 Chrome / Edge / Brave / Chromium），画面一块一块传过来，
-所以手机上、远程访问时也看得到、点得了。要让 agent 用你平时那个已经登录好的 Chrome，见浏览器插件（`gerdr browser open --chrome`）。
+所以手机上、远程访问时也看得到、点得了。要让 agent 用你平时那个已经登录好的 Chrome，见下面的浏览器插件。
+
+## 你自己的 Chrome（浏览器插件）
+
+项目浏览器一开始什么都没登录。agent 要用你自己的账号（公司后台、平时常用的网站），你又不想在项目浏览器里再登录一次，
+就在平时用的 Chrome 里装 **Gerdr 浏览器插件**：设置 → 浏览器 →「从 Chrome 应用商店安装」
+（[商店页面](https://chromewebstore.google.com/detail/hkooiloghnflaffpkfapfodomgkdpnff)）。Chrome 开着、Gerdr 在运行，
+它就会自动连上；设置 → 浏览器 里能看到连上了哪些 Chrome、各自允许了哪些网站。
+
+你让 agent 用它时它才用（`gerdr browser open --chrome`）。它能做的事是受限的：
+
+- agent 第一次要用某个网站时，插件弹窗问你，只允许这一个网站；点 Chrome 工具栏上的插件图标能看到、移除允许的网站；
+- 只在它自己打开的标签页里操作，这些标签页在 Chrome 里归在「Gerdr」组、页面带蓝色边框；页面离开允许的网站就停止控制；
+- 不读取、不修改 cookie 和网站存储，只和同一台电脑上的 Gerdr 通信。
+
+有几个 Chrome 用户？点插件图标给每个起个名字（「工作」「个人」），告诉 agent 用哪个就行。隐私政策：https://gerdr.dev/privacy 。
 
 ## 内存
 

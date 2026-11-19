@@ -20,6 +20,7 @@ import { AddonSettings } from "./AddonSettings";
 import { AgentSettings } from "./AgentSettings";
 import { AndroidSettings } from "./AndroidSettings";
 import { AwakeSetting } from "./AwakeSetting";
+import { BrowserSettings } from "./BrowserSettings";
 import { DoctorPanel } from "./DoctorPanel";
 import { MCPSettings, SkillSettings } from "./ExtSettings";
 import { KeySettings } from "./KeySettings";
@@ -181,6 +182,7 @@ export function SettingsDialog({ open }: { open: boolean }) {
                 <TabsTrigger value="agents">Agent</TabsTrigger>
                 <TabsTrigger value="panels">{t("panelSettings.tab")}</TabsTrigger>
                 <TabsTrigger value="addons">{t("settings.tab.addons")}</TabsTrigger>
+                <TabsTrigger value="browser">{t("settings.tab.browser")}</TabsTrigger>
                 <TabsTrigger value="remote">
                   {t("settings.tab.remote")}
                   {/* 有远程界面连着：数字红点（谁连着、连了多久在 tab 里面） */}
@@ -465,6 +467,9 @@ export function SettingsDialog({ open }: { open: boolean }) {
                   <DoctorPanel />
                 </div>
               </Page>
+              <Page value="browser" className="pt-2">
+                <BrowserSettings open={open && tabOpen === "browser"} />
+              </Page>
               <Page value="remote" className="space-y-4 pt-2">
                 <RemoteSettings open={open && tabOpen === "remote"} />
                 {/* Staying awake is for being reached from elsewhere: it sits with remote access (asked for; was in Labs) */}
@@ -551,7 +556,7 @@ function ProdReactRow() {
 }
 
 // The top-level pages in the tab row's order: a swipe on a phone goes to the next / previous one
-const PAGES = ["general", "keys", "agents", "panels", "addons", "remote", "resources", "labs"];
+const PAGES = ["general", "keys", "agents", "panels", "addons", "browser", "remote", "resources", "labs"];
 /**
  * The pages' scroll area. On a phone it is the swipe pager, mounted with the dialog's content so the pager's touch
  * listeners find it (the dialog itself stays mounted while closed); wider screens scroll it as one.

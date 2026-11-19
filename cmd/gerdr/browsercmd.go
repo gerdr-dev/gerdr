@@ -470,7 +470,7 @@ func getBrowserState() (*browserState, error) {
 func (st *browserState) text() string {
 	var b strings.Builder
 	if len(st.Profiles) == 0 {
-		b.WriteString(i18n.S("用户自己的 Chrome 没连上（--chrome 要它：Chrome 开着、装了 Gerdr 浏览器插件）\n", "The user's own Chrome isn't connected (--chrome needs it: Chrome open with the Gerdr browser extension)\n"))
+		b.WriteString(i18n.S("用户自己的 Chrome 没连上（--chrome 要它：Chrome 开着、装了 Gerdr 浏览器插件；安装入口在 Gerdr 的 设置 → 浏览器）\n", "The user's own Chrome isn't connected (--chrome needs it: Chrome open with the Gerdr browser extension; install it from Gerdr's Settings → Browser)\n"))
 	}
 	for _, p := range st.Profiles {
 		if p.Name != "" {

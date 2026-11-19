@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { toast } from "sonner";
-import { ArrowLeft, ArrowRight, Check, Globe, Keyboard, MoreHorizontal, Plus, RotateCw, XCircle } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Chrome, Globe, Keyboard, MoreHorizontal, Plus, RotateCw, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { api, type BrowserInput } from "@/lib/api";
@@ -11,7 +11,7 @@ import { t } from "@/lib/i18n";
 import { paintFrame, parseFrame, wsURL, type StreamPage } from "@/lib/screenStream";
 import { canNativeBrowser, nativeBrowserView } from "@/lib/native";
 import { FLOAT_FITS, leaves, type FloatFit } from "@/lib/layout";
-import { useStore } from "@/lib/store";
+import { set, useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
 // The Browser pane's content: a page of the project's own browser (internal/projbrowser, docs/dev/BROWSER-PANE.md),
@@ -967,6 +967,10 @@ export function BrowserScreen({
                 <XCircle /> {t("browser.closePage")}
               </DropdownMenuItem>
             )}
+            {/* Where the other browser agents can use is set up: Settings → Browser (the extension, its connection) */}
+            <DropdownMenuItem onClick={() => set({ dialog: { kind: "settings", tab: "browser" } })}>
+              <Chrome /> {t("browser.useChrome")}
+            </DropdownMenuItem>
             {paneItems && <DropdownMenuSeparator />}
             {paneItems}
           </DropdownMenuContent>

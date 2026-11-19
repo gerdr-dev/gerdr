@@ -594,7 +594,8 @@ Two browsers, the same actions on both:
 - **The user's own Chrome** (`open --chrome`, or `--profile`): their everyday Chrome through the Gerdr browser
   extension, signed in as they already are (their ChatGPT / Doubao / a company back office). Only when the user asks
   for it or the work needs their own accounts. The extension must be installed and Chrome open (`gerdr browser
-  status` shows whether one is connected).
+  status` shows whether one is connected). Not connected: tell the user to install it from Gerdr's Settings → Browser
+  (it links to the Chrome Web Store and shows the connection), and keep Chrome open.
 
 Not for fetching what a plain HTTP request or your own tools can get.
 

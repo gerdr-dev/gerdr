@@ -79,6 +79,9 @@ export type BrowserTab = {
   session?: string;
 };
 
+/** A Chrome profile connected through the Gerdr browser extension (chromeext.Profile). */
+export type BrowserProfile = { id: string; name?: string; version: string; sites: string[]; lastActive: number };
+
 /** One action in a browser tab (chromeext.View): ScreenInput plus what only a page has. */
 export type BrowserInput =
   | ScreenInput
@@ -304,7 +307,7 @@ export const api = {
   /** Local only: shows macOS's permission prompts on this computer and opens the pane still missing. */
   screenRequestAccess: () => req<ScreenStatus>("POST", "/api/screen/request-access", {}),
   /** Pages Gerdr has open: projects' own browsers and the user's Chrome (server/browserapi.go, docs/dev/BROWSER-PANE.md) */
-  browserTabs: () => req<{ tabs: BrowserTab[] }>("GET", "/api/browser"),
+  browserTabs: () => req<{ tabs: BrowserTab[]; profiles: BrowserProfile[] }>("GET", "/api/browser"),
   /** Open a page in a project's browser; noWait: return once it's open, not after its first load */
   browserOpen: (url: string, project: string) => req<BrowserTab>("POST", "/api/browser/open", { url, project, noWait: true }),
   browserClose: (tab: number) => req("POST", "/api/browser/close", { tab }),

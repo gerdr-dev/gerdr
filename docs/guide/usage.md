@@ -57,7 +57,26 @@ Each project has its own browser (the profile lives in `~/.gerdr/projects/<proje
 in one project stays signed in there, and other projects don't see it. It is a Chrome Gerdr runs in the background (the
 Chrome / Edge / Brave / Chromium installed on the computer), streamed to the pane tile by tile, so it works on a phone
 and over remote access too. For an agent to use your everyday, already signed-in Chrome, see the browser extension
-(`gerdr browser open --chrome`).
+below.
+
+## your own Chrome (the browser extension)
+
+The project browser starts signed out. When an agent needs your own accounts (a company back office, sites you use
+every day) and you'd rather not sign in again there, install the **Gerdr browser extension** in your everyday Chrome:
+Settings → Browser → "Install from the Chrome Web Store"
+([store page](https://chromewebstore.google.com/detail/hkooiloghnflaffpkfapfodomgkdpnff)). With Chrome open and
+Gerdr running it connects by itself; Settings → Browser shows each connected Chrome and the sites it allowed.
+
+Agents use it when you ask (`gerdr browser open --chrome`). It stays limited:
+
+- the first time an agent needs a site, the extension asks you to allow that one site; the extension's toolbar icon
+  lists the allowed sites and removes them;
+- it only works in tabs it opened itself, grouped as "Gerdr" in Chrome's tab strip with a blue frame on the page; a
+  page that leaves the allowed sites stops being controlled;
+- it never reads or changes cookies or site storage, and it only talks to Gerdr on the same computer.
+
+Several Chrome profiles? Name each one from the extension's toolbar icon ("Work", "Personal") and tell the agent which
+one to use. Privacy: https://gerdr.dev/privacy.
 
 ## memory use
 

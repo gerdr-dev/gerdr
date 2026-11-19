@@ -1,6 +1,6 @@
 # The user's own Chrome: Gerdr's browser extension (`browser-extension/`, `internal/chromeext`, `gerdr browser`)
 
-Status: first version (2026-11-17), loaded unpacked; not in the Chrome Web Store yet.
+Status: first version (2026-11-17); submitted to the Chrome Web Store 2026-11-19 (id `hkooiloghnflaffpkfapfodomgkdpnff`).
 
 Since 2026-11-18 `gerdr browser open` goes to the project's own browser by default (docs/dev/BROWSER-PANE.md, shown in
 the Browser pane); the extension is `open --chrome` / `--profile`. Both are tabs of the same `chromeext.Bridge`.
@@ -33,7 +33,7 @@ gerdr browser … (CLI) → /api/browser/* (internal/server/browserapi.go)
   a launcher that sets `GERDR_DIR`. The next start of the normal Gerdr points it back.
 - `ExtensionIDs` (bridge.go) is the manifest's `allowed_origins`. The development id `okkofibhcocmcnafoamflffmkgiphppc`
   is fixed by the `key` in `browser-extension/extension/manifest.json` (public key only; the private key was not kept,
-  it is only needed to pack a .crx, which we don't). Add the store id when it is listed.
+  it is only needed to pack a .crx, which we don't). The Chrome Web Store build is `hkooiloghnflaffpkfapfodomgkdpnff`.
 - Protocol: requests `{id, op, args}` → `{id, ok, result | error, code}`; ops `hello`, `grant` (the extension's Allow
   window, can take minutes), `cancel_grant`, `open`, `cdp` (`{tab, method, params}`), `close`, `release`, `focus`,
   `revoke`; events `hello`, `name`, `sites`, `active`, `cdp`, `closed`, `detached`, `blocked`.
@@ -104,11 +104,15 @@ Modelled on Claude in Chrome's tools.
   don't answer: every call fails fast then, and a call that opens one (a click) returns once it is open; `dialog`
   answers it.
 
-## Installing (until it is in the store)
+## Installing
 
-chrome://extensions → Developer mode → Load unpacked → `browser-extension/extension`. Gerdr must have started once
-since (it writes the native host manifest); the extension's toolbar popup shows Connected.
+Users: the Chrome Web Store, linked from Settings → Browser (`ui/src/components/BrowserSettings.tsx`, which also shows
+the connected profiles from `GET /api/browser`, polled while the page shows). Development: chrome://extensions →
+Developer mode → Load unpacked → `browser-extension/extension`. Either way Gerdr must have started once since (it
+writes the native host manifest); the extension's toolbar popup shows Connected.
 `browser-extension/scripts/pack.sh` builds the store zip (without the `key`).
+The Chrome Web Store listing (texts, permission justifications, privacy answers, what to change once listed) is
+`browser-extension/store/listing.md`; `store/render.sh` renders its screenshots. Privacy policy: https://gerdr.dev/privacy.
 
 ## Known gaps
 

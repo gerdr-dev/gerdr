@@ -18,6 +18,32 @@ export const zh = {
   "browser.retry": "重试",
   "browser.retrying": "正在重试…",
   "browser.keyboard": "键盘",
+  "browser.useChrome": "用你自己的 Chrome…",
+  "browserSettings.chrome": "你自己的 Chrome",
+  "browserSettings.chromeHint":
+    "装上 Gerdr 浏览器插件，agent 就能在你平时用的 Chrome 里、用你已经登录的账号操作网页：只在你允许的网站上，只用它自己打开的标签页。",
+  "browserSettings.install": "从 Chrome 应用商店安装",
+  "browserSettings.installHint": "装好后只要 Chrome 开着、Gerdr 在运行就会自动连上，会显示在这里。",
+  "browserSettings.none": "还没有连上的 Chrome",
+  "browserSettings.connected": "已连接",
+  "browserSettings.unnamed": "没起名字的 Chrome",
+  "browserSettings.unnamedHint": "点 Chrome 工具栏上的 Gerdr 插件图标给它起个名字（比如「工作」），之后跟 agent 说「用工作那个 Chrome」就行。",
+  "browserSettings.version": "插件 {version}",
+  "browserSettings.noSites": "还没有允许的网站。agent 第一次要用某个网站时，插件会弹窗问你。",
+  "browserSettings.sitesHint": "移除网站：点 Chrome 工具栏上的 Gerdr 插件图标。",
+  "browserSettings.loadFailed": "读不到连接状态：{error}",
+  "browserSettings.howTo": "怎么用",
+  "browserSettings.chromeUse": "要用你自己已经登录的账号（公司后台、常用的网站），就说用你的 Chrome（先装好上面的插件）：",
+  "browserSettings.chromeEx1": "用我的 Chrome 打开公司后台，看看订单 20930 为什么支付失败",
+  "browserSettings.chromeEx2": "用「工作」那个 Chrome 去 GitHub 看看这个 PR 下面的评论",
+  "browserSettings.chromeFirst":
+    "agent 第一次用某个网站时，Chrome 里会弹出一个窗口问你，点「允许」它才继续。它打开的标签页在 Chrome 里归在「Gerdr」组、页面带蓝色边框，你能看着它操作。",
+  "browserSettings.projectUse": "在对话里跟 agent 说要看哪个网页就行，默认用项目浏览器：",
+  "browserSettings.projectEx": "打开 localhost:5173 看看登录页有没有报错",
+  "browserSettings.projectSelf": "页面会出现在对话旁边，你能看着它操作，要登录、过验证码时自己在里面点。自己开一个：pane 的「⋯」→「右边开浏览器」。",
+  "browserSettings.project": "项目浏览器",
+  "browserSettings.projectHint":
+    "每个项目自己的浏览器，Gerdr 在后台运行，页面显示在对话旁边的浏览器面板里。登录过的网站在这个项目里一直保持登录，别的项目看不到。不用装插件。",
 };
 
 export const en: Record<keyof typeof zh, string> = {
@@ -39,4 +65,32 @@ export const en: Record<keyof typeof zh, string> = {
   "browser.retry": "Try again",
   "browser.retrying": "Trying again…",
   "browser.keyboard": "Keyboard",
+  "browser.useChrome": "Use your own Chrome…",
+  "browserSettings.chrome": "Your own Chrome",
+  "browserSettings.chromeHint":
+    "With the Gerdr browser extension, agents can work on web pages in the Chrome you use every day, signed in as you already are: only on the sites you allow, only in tabs they open themselves.",
+  "browserSettings.install": "Install from the Chrome Web Store",
+  "browserSettings.installHint": "Once it's installed, it connects by itself whenever Chrome is open and Gerdr is running, and shows up here.",
+  "browserSettings.none": "No Chrome connected",
+  "browserSettings.connected": "Connected",
+  "browserSettings.unnamed": "Unnamed Chrome",
+  "browserSettings.unnamedHint": "Name it from the Gerdr extension's icon in Chrome's toolbar (e.g. Work), then tell an agent to \"use the Work Chrome\".",
+  "browserSettings.version": "Extension {version}",
+  "browserSettings.noSites": "No sites allowed yet. The first time an agent needs a site, the extension asks you.",
+  "browserSettings.sitesHint": "To remove a site, click the Gerdr extension's icon in Chrome's toolbar.",
+  "browserSettings.loadFailed": "Couldn't read the connection status: {error}",
+  "browserSettings.howTo": "How to use it",
+  "browserSettings.chromeUse":
+    "For your own signed-in accounts (a company back office, sites you use every day), say to use your Chrome (install the extension above first):",
+  "browserSettings.chromeEx1": "Use my Chrome to open the company admin and see why order 20930's payment failed",
+  "browserSettings.chromeEx2": "Use the Work Chrome to read the comments on this PR on GitHub",
+  "browserSettings.chromeFirst":
+    'The first time an agent uses a site, Chrome shows a window asking you; it only goes on after you click Allow. Its tabs sit in a "Gerdr" group in Chrome with a blue frame on the page, so you can watch it work.',
+  "browserSettings.projectUse": "Just tell the agent in the chat which page to look at; it uses the project browser by default:",
+  "browserSettings.projectEx": "Open localhost:5173 and check the login page for errors",
+  "browserSettings.projectSelf":
+    'The page shows up beside the chat: watch it work, and sign in or solve a captcha there yourself when needed. To open one yourself: a pane\'s "⋯" → "Browser on the right".',
+  "browserSettings.project": "Project browser",
+  "browserSettings.projectHint":
+    "Each project's own browser, run by Gerdr in the background and shown in the Browser pane beside the chat. Sites you sign in to stay signed in for that project, and other projects don't see them. No extension needed.",
 };

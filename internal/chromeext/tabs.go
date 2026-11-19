@@ -162,8 +162,8 @@ func (b *Bridge) Open(ctx context.Context, o OpenOptions) (*Tab, error) {
 		}
 	}
 	if errors.Is(err, ErrNotConnected) {
-		return nil, errors.New(i18n.S("没连上你的 Chrome：确认 Chrome 开着、装了 Gerdr 浏览器插件（docs/guide 里有装法）",
-			"Couldn't reach your Chrome: make sure Chrome is open with the Gerdr browser extension installed (see docs/guide)"))
+		return nil, errors.New(i18n.S("没连上你的 Chrome：确认 Chrome 开着、装了 Gerdr 浏览器插件（Gerdr 的 设置 → 浏览器 里有安装入口和连接状态）",
+			"Couldn't reach your Chrome: make sure Chrome is open with the Gerdr browser extension installed (Gerdr's Settings → Browser has the install link and the connection status)"))
 	}
 	if err != nil {
 		return nil, err
