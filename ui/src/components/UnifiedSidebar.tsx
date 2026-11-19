@@ -751,7 +751,7 @@ const Row = memo(function Row({
   };
   /*
    * In the drawer a finger's tap goes on `pointerup`, not `click` (measured on the old phone pane list): with the
-   * keyboard up from the search box, the same tap first drops the keyboard, --vvh changes, the list reflows and the
+   * keyboard up from the search box, the same tap first drops the keyboard, the page's height changes, the list reflows and the
    * browser sends the click elsewhere or not at all — "the first tap only closes the keyboard". Touch pointers are
    * implicitly captured, so pointerup lands on the row pointerdown did. A hold is the long-press menu, not a tap.
    */

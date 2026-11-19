@@ -9,6 +9,7 @@ import { api } from "@/lib/api";
 import { clearAll, dismiss, kindLabel, markSeen, openInboxItem, sessionName, useInbox, type InboxItem } from "@/lib/inbox";
 import { set, useStore } from "@/lib/store";
 import type { AskQuestion, PermissionOption } from "@/lib/types";
+import { useVvhStyle } from "@/lib/phone";
 import { cn } from "@/lib/utils";
 import { t } from "@/lib/i18n";
 
@@ -21,6 +22,7 @@ export function InboxButton({ phone, rail }: { phone?: boolean; rail?: boolean }
   const fresh = useInbox((s) => s.fresh);
   const count = useInbox((s) => s.items.length);
   const [open, setOpen] = useState(false);
+  const vvh = useVvhStyle(open);
   const close = useCallback(() => setOpen(false), []);
   const onOpen = (v: boolean) => {
     setOpen(v);
@@ -69,6 +71,7 @@ export function InboxButton({ phone, rail }: { phone?: boolean; rail?: boolean }
         align={phone ? "end" : "end"}
         collisionPadding={8}
         className="flex max-h-[min(70vh,calc(var(--vvh,100vh)-80px))] w-[min(380px,calc(100vw-16px))] flex-col gap-0 overflow-hidden p-0"
+        style={vvh}
       >
         <InboxPanel close={close} />
       </PopoverContent>

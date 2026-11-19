@@ -131,7 +131,8 @@ export default function App() {
   const drawer = useStore((s) => s.drawer);
   const phone = usePhone();
   useTheme();
-  useViewportHeight();
+  // html's own height, not --vvh: a custom property on html restyles the whole page (device.ts)
+  useViewportHeight({ height: true });
   useAttention();
 
   useEffect(() => {

@@ -266,7 +266,8 @@ export function TerminalView({
   };
 
   return (
-    <div className="relative flex h-full min-h-0 flex-col">
+    // data-ime-lift: slides up with the Android App's soft keyboard (lib/imeLift.ts)
+    <div data-ime-lift="" className="relative flex h-full min-h-0 flex-col">
       {/* Some padding on the left: text flush against the border looks cramped. The background is the terminal's own
           (xterm paints --background). `isolate` keeps xterm's z-indexed layers (its accessibility / message overlay
           covers the whole terminal at z-index 10) inside this box, or they sit on top of the reopen bar below and

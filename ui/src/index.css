@@ -1,6 +1,9 @@
 @custom-variant dark (&:is(.dark *));
-/* A short window: a phone on its side (~400px tall) or with the soft keyboard up. The rail (Rail.tsx) tightens up */
-@custom-variant short (@media (max-height: 560px));
+/* A short window: a phone on its side (~400px tall, keyboard up or not). The rail (Rail.tsx) tightens up.
+   Landscape only: a phone upright has no rail (App.tsx), but its soft keyboard took the page across 560px both ways,
+   and a media query whose result flips restyles every element: a full recalc and relayout in the frame the keyboard
+   starts going down, half of that frame's cost (tools/scrolltest/grow.mjs). */
+@custom-variant short (@media (max-height: 560px) and (orientation: landscape));
 
 /* tw-animate-css, what shadcn's animate-in / fade-in / slide-in-from-* classes need (see the file for why it is copied in) */
 @import "./animate.css";
@@ -185,12 +188,13 @@
   * {
     @apply outline-ring/50;
   }
-  /* --vvh：可视区域的高度（lib/phone.ts 的 useViewportHeight 写的）。iOS 弹软键盘时只缩可视区域、不缩布局视口，
-     用 100% 的话输入框会被键盘盖住。 */
+  /* html's height is the visual viewport's, written inline by useViewportHeight (packages/chat device.ts): iOS doesn't
+     shrink the layout viewport for the soft keyboard, only the visual one, and with plain 100% the keyboard covers the
+     composer. 100% until it's written. */
   html,
   body,
   #root {
-    height: var(--vvh, 100%);
+    height: 100%;
   }
   /* The desktop App's traffic lights reach past the rail (lib/native.ts nativeTitleBar): the header beside them at the
      window's top starts after them. Only that header has [data-titlebar-inset] (the list's, else the tab bar). */

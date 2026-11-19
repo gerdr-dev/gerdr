@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { useVvhStyle } from "@/lib/phone";
 import { api, ApiError, type ScreenInput, type ScreenStatus } from "@/lib/api";
 import { t } from "@/lib/i18n";
 import type { MessageKey } from "@/lib/messages";
@@ -64,6 +65,7 @@ function loadQuality(): Quality {
 }
 
 export function RemoteScreen({ open }: { open: boolean }) {
+  const vvh = useVvhStyle(open);
   // Another computer's screen (docs/dev/MULTIHOST.md): everything goes through this Gerdr with ?host=
   const host = useStore((s) => (s.dialog?.kind === "screen" ? s.dialog.host : undefined));
   const hostName = useStore((s) => (host ? (s.hosts.find((h) => h.id === host)?.name ?? host) : ""));
@@ -377,6 +379,7 @@ export function RemoteScreen({ open }: { open: boolean }) {
     <Dialog open={open} onOpenChange={(o) => !o && closeDialog()}>
       <DialogContent
         className="flex h-[calc(var(--vvh,100dvh)-1rem)] max-w-[calc(100%-1rem)] flex-col gap-2 overflow-hidden p-2 sm:max-w-[calc(100%-2rem)] sm:p-3"
+        style={vvh}
         aria-describedby={undefined}
       >
         <div className="flex flex-wrap items-center gap-1.5 pr-8">

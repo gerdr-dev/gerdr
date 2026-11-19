@@ -18,6 +18,7 @@ import { focusSession } from "./actions";
 import { toggleOverview } from "./overview";
 import { get, set, useStore, visibleSessions } from "./store";
 import { isPhone, keyboardUp } from "./phone";
+import { watchImeLift } from "./imeLift";
 
 export type AndroidMsg = { t: string; [k: string]: unknown };
 
@@ -205,7 +206,9 @@ export function initAndroid() {
     return;
   }
   document.documentElement.classList.add("android");
-  postAndroid({ t: "hello" });
+  // ime: this page moves its chat along with the sliding soft keyboard (lib/imeLift.ts), so the shell resizes the
+  // WebView once per slide instead of on its first frame
+  postAndroid({ t: "hello", ime: true });
   syncAndroidTheme();
   sendLan();
   // 局域网 IP 会变（换 Wi-Fi、DHCP）：回到前台时再报一次，壳会拿新候选重探
@@ -216,6 +219,7 @@ export function initAndroid() {
     onAndroid("focus", (m) => typeof m.session === "string" && focusSession(m.session), false),
     onAndroid("key", (m) => (volumeKey(m.k === "up" ? "ArrowUp" : "ArrowDown"), syncMedia()), false),
     onAndroid("update", updateReady),
+    watchImeLift(),
   ];
   // Media events don't bubble, but they do go through the capture phase
   for (const ev of MEDIA_EVENTS) document.addEventListener(ev, syncMedia, true);

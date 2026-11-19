@@ -209,6 +209,37 @@ a new window (ui sync.ts `wantSpace`); in split screen it opens in the other hal
 - Swiping a window's card away destroys it (`autoRemoveFromRecents`). After the process is killed, the system relaunches
   a window's task with its original intent, so it reopens on the project it was opened with.
 
+## Soft keyboard: the composer follows it
+
+Android lets the WebView know the keyboard's final height up front, so resizing the WebView to it made the composer
+jump up while the keyboard was still sliding in; native apps move along with it, frame by frame. Shell
+(`MainActivity.onCreate`: the insets listener and a `WindowInsetsAnimationCompat.Callback`) and page
+(`ui/src/lib/imeLift.ts`) split it:
+
+- **The WebView resizes once per slide**: at the end when the keyboard comes up, at the start when it goes down (the
+  room under it is covered by the keyboard either way). In between the page lifts the focused chat (or terminal) by
+  a transform, `h - pad`. Resizing the WebView on every frame was tried first and dropped frames: each one relays the
+  whole page out.
+- **The switch must land in one frame.** The page takes a new `pad` in the visual viewport's resize event, the same
+  one the page's height is written in (`useViewportHeight`); the window's resize came a frame apart, and the chat
+  jumped by the keyboard's height for that frame.
+- **Round the lift like the page's height**, `round(vv) - round(vv - (h - pad))`, not `round(h - pad)`: 316.6 CSS px
+  rounded to 317 while the page lost 316, and the composer settled 1px high and dropped when the resize landed.
+- **Keep the lifted box's layer** (`will-change` stays when the lift ends): dropping it in the resize frame left the
+  composer without its box and buttons for one frame. Same cause as TAILWIND.md "one bad frame when an animation ends".
+- **A chat scrolled up lifts only its composer** (with the page's colour behind and below it, or the list shows
+  through): a resize keeps such a list's top in place, so a list lifted with it fell back. A chat at its end goes up whole.
+- **The resize frame has to be cheap**, or the composer stalls under the keyboard going down (that resize is at the
+  start, while everything moves). In a long chat it was 140–220ms; two things restyled every element: the `short`
+  variant's `max-height` media query flipping as the keyboard crossed 560px (now landscape only), and the page's height
+  written as `--vvh` on html (any custom property change on html restyles the whole page in Chromium, registered
+  non-inherited or not: Gerdr now uses `useViewportHeight({ height: true })`). Measure with
+  `tools/scrolltest/grow.mjs`; on the phone, the perf probe add-on's `loaf` records.
+
+How these were found: logcat timestamps from the shell's callbacks, and the phone's screen recording pulled frame by
+frame against them (`adb shell screenrecord`, then every frame with its timestamp, TAILWIND.md). Guessing from code was
+wrong twice.
+
 ## 桥
 
 The iOS App (ios/, docs/dev/IOS.md) speaks the same format as `window.gerdrIOS` and answers a subset of the table
@@ -232,6 +263,7 @@ below (hello, theme, open, setup, login, copyImage, lan, route, ws, http); keep 
 | `arrows` | 页 → 壳 | Whether ↑ / ↓ have a use right now (soft keyboard up, a dropdown open, a question waiting in the focused session: `syncArrows`). Off = the volume keys stay volume keys. Never sent (an older page) = always mapped, the old behaviour |
 | `copyImage` | 页 → 壳 → 页 | Long-press "copy image": base64 `data` + `mime` (WebView's clipboard API can't write images); answers `ok` / `error`. The hello reply carries `copyImage: true` so the menu hides it on older Apps |
 | `keyboard` | 壳 → 页 | `hard`: a hardware keyboard is attached (`Configuration.hardKeyboardHidden`), sent after hello and on every plug in / out (`onConfigurationChanged`; the manifest's configChanges keeps the Activity alive). Menus show shortcut keys only with one (`ui/src/lib/hwKeyboard.ts`). The hello reply carries `keyboard: true`; older Apps fall back to the page's own guess |
+| `ime` | 页 → 壳 → 页 | The soft keyboard as it slides ("Soft keyboard" above). The page's hello says `ime: true` (it follows the keyboard itself); then on every frame of a slide the shell sends `h` (the keyboard's height now) and `pad` (how much of it the WebView's padding holds), CSS px, nav bar taken out. Without it (an older page, Android < 11) the WebView resizes in one step as before |
 | `focus` | 壳 → 页 | 点通知进来：切到那个会话 |
 | `newWindow` | 页 → 壳 | "Open in new window" on a project (SpaceSwitcher): `space` = project id. Shown only when the hello reply says `windows: true` (`canNewWindow` in native.ts) |
 | `space` | 页 → 壳 | The project this window shows (`id`, `name`): the window's name in the recents list. Sent on every switch, also before hello |

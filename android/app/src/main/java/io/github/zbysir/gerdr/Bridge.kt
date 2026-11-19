@@ -62,6 +62,7 @@ class Bridge(private val act: MainActivity, web: WebView, origin: String) {
         net.closeAll()
         mediaPlaying = false
         arrows = null
+        imeLift = false
         backCb?.invoke(false)
         backCb = null
     }
@@ -71,6 +72,7 @@ class Bridge(private val act: MainActivity, web: WebView, origin: String) {
         when (m.optString("t")) {
             "hello" -> {
                 page = reply
+                imeLift = m.optBoolean("ime")
                 act.hideLoading()
                 // webauthn：WebView 自己能不能做 passkey（MainActivity.webAuthn）。能的话页面直接用
                 // navigator.credentials；不能才发 login 走 device flow（Login.kt）
@@ -170,6 +172,18 @@ class Bridge(private val act: MainActivity, web: WebView, origin: String) {
      * or out. The page shows shortcut keys in its menus only with one (ui lib/hwKeyboard.ts); it can't tell by itself.
      */
     fun keyboard(hard: Boolean) = send(JSONObject().put("t", "keyboard").put("hard", hard))
+
+    /**
+     * The page moves its chat along with the sliding keyboard itself (its hello says `ime`; ui lib/imeLift.ts), so the
+     * shell resizes the WebView only once per slide (MainActivity.onCreate).
+     */
+    @Volatile var imeLift = false
+
+    /**
+     * The soft keyboard mid-slide: its height now (`h`) and how much of it the WebView's padding holds (`pad`), CSS px.
+     * The page lifts by `h - pad`, taking a new `pad` only at its next resize so the switch lands in one frame.
+     */
+    fun ime(h: Float, pad: Float) = send(JSONObject().put("t", "ime").put("h", h).put("pad", pad))
 
     /** Self-update state (AppUpdate.state), on every change */
     fun update(m: JSONObject) = send(m)

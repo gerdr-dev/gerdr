@@ -52,6 +52,7 @@ import android.os.Handler
 import android.os.Looper
 import java.util.concurrent.Executors
 import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsAnimationCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.webkit.WebSettingsCompat
@@ -70,6 +71,24 @@ import com.journeyapps.barcodescanner.ScanOptions
 open class MainActivity : ComponentActivity() {
     private lateinit var root: FrameLayout
     private val bars by lazy { WindowInsetsControllerCompat(window, root) }
+
+    // The soft keyboard's slide (onCreate): sliding, its height in px where the slide started / now / will end, and how
+    // much of it the root's bottom padding holds right now
+    private var imeSliding = false
+    private var imeFrom = 0
+    private var imeNow = 0
+    private var imeEnd = 0
+    private var imePad = 0
+    private var imeNav = 0 // the navigation bar's height, which the padding always holds
+
+    /**
+     * Tell the page the keyboard's height now and how much of it the padding holds, in CSS px, both counted above the
+     * navigation bar. The page lifts its chat by the difference.
+     */
+    private fun sendIme() {
+        val d = resources.displayMetrics.density
+        bridge?.ime((imeNow - imeNav).coerceAtLeast(0) / d, (imePad - imeNav).coerceAtLeast(0) / d)
+    }
 
     private var web: WebView? = null
     private var bridge: Bridge? = null
@@ -167,14 +186,61 @@ open class MainActivity : ComponentActivity() {
         // 是一次普通的视口变化（和 PWA 上 resizes-content 一样），终端按它重排。
         // 不垫 ime 的话 targetSdk 35 起强制 edge-to-edge，adjustResize 不再生效，键盘直接
         // 盖住终端底下那几行和发件箱。
+        //
+        // The keyboard slides in over ~250ms, but the listener hears only its end height, up front, so the WebView used
+        // to jump to its new height on the first frame while the keyboard was still sliding. Resizing the WebView on
+        // every frame of the slide instead was tried and dropped frames: each resize relays the whole page out. So the
+        // WebView still changes size once, at the end of a slide that takes room (keyboard coming up) and at the start
+        // of one that gives room back, and in between the page moves its chat by a transform, which costs no layout:
+        // each frame the bridge tells it how high the keyboard is now and how much of that the padding already holds
+        // (Bridge.ime, ui lib/imeLift.ts). Only with a page that says it does this (hello `ime`); an older page, and
+        // phones before API 30 (no animation callbacks), keep the one-step change.
         ViewCompat.setOnApplyWindowInsetsListener(root) { v, ins ->
-            val b = ins.getInsets(
-                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.ime() or
-                    WindowInsetsCompat.Type.displayCutout()
-            )
-            v.setPadding(b.left, b.top, b.right, b.bottom)
+            val b = ins.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
+            val ime = ins.getInsets(WindowInsetsCompat.Type.ime()).bottom
+            imeEnd = ime
+            imeNav = b.bottom
+            if (!imeSliding) imeNow = ime
+            // Mid-slide this is the end state: hold the smaller of where the keyboard starts and ends, the rest is the
+            // page's transform
+            val held = if (imeSliding) minOf(imeFrom, ime) else ime
+            if (held != imePad) {
+                imePad = held
+                sendIme() // before the resize: the page waits for its resize event to take the new padding
+            }
+            v.setPadding(b.left, b.top, b.right, maxOf(b.bottom, held))
             WindowInsetsCompat.CONSUMED
         }
+        ViewCompat.setWindowInsetsAnimationCallback(
+            root,
+            object : WindowInsetsAnimationCompat.Callback(DISPATCH_MODE_STOP) {
+                override fun onPrepare(a: WindowInsetsAnimationCompat) {
+                    if (a.typeMask and WindowInsetsCompat.Type.ime() == 0 || bridge?.imeLift != true) return
+                    imeSliding = true
+                    imeFrom = imeNow
+                }
+
+                override fun onProgress(
+                    ins: WindowInsetsCompat,
+                    running: MutableList<WindowInsetsAnimationCompat>,
+                ): WindowInsetsCompat {
+                    if (!imeSliding) return ins
+                    val ime = ins.getInsets(WindowInsetsCompat.Type.ime()).bottom
+                    if (ime != imeNow) {
+                        imeNow = ime
+                        sendIme()
+                    }
+                    return ins
+                }
+
+                override fun onEnd(a: WindowInsetsAnimationCompat) {
+                    if (a.typeMask and WindowInsetsCompat.Type.ime() == 0 || !imeSliding) return
+                    imeSliding = false
+                    imeNow = imeEnd
+                    ViewCompat.requestApplyInsets(root) // take the room the keyboard now has (the listener)
+                }
+            },
+        )
         WebView.setWebContentsDebuggingEnabled(BuildInfo.debuggable(this))
         onBackPressedDispatcher.addCallback(this) { back() }
 

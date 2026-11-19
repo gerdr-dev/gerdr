@@ -29,18 +29,28 @@ export function usePhone() {
 export const isCoarse = () => window.matchMedia("(pointer: coarse)").matches;
 
 /**
- * 把可视区域的高度写进 `--vvh`（html / body / #root 的高度用它，见 index.css）。
+ * Keeps the page as tall as the visual viewport: writes its height, rounded, into `--vvh` on html for the host's CSS
+ * (html / body / #root's height), or with `{ height: true }` straight into html's own `height` (the host's body and
+ * root then take 100%).
  *
- * iOS Safari 弹出软键盘时**不缩布局视口**，只缩 visualViewport：不跟着它走的话，整页还是原来那么高，
- * 输入框被键盘盖在下面，人看不见自己在打什么。安卓 Chrome 默认会缩布局视口，这条在那边是无害的重复。
+ * iOS Safari doesn't shrink the layout viewport for the soft keyboard, only the visual one: without this the page stays
+ * as tall as before and the keyboard covers the composer. Android Chrome shrinks the layout viewport itself, so there
+ * it's a harmless repeat.
+ *
+ * `height` is the cheap one: Chromium restyles every element in the page when any custom property on html changes
+ * (registered non-inherited or not), and the keyboard changes this one each time it comes up or goes down. In a long
+ * chat on an Android phone that was tens of ms in the frame the keyboard starts going down; html's own height
+ * restyles a handful (tools/scrolltest/grow.mjs).
  */
-export function useViewportHeight() {
+export function useViewportHeight({ height = false }: { height?: boolean } = {}) {
   useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return;
     const f = () => {
       seen(vv);
-      document.documentElement.style.setProperty("--vvh", `${Math.round(vv.height)}px`);
+      const h = `${Math.round(vv.height)}px`;
+      if (height) document.documentElement.style.height = h;
+      else document.documentElement.style.setProperty("--vvh", h);
       // 键盘弹起时 iOS 会把整页往上推一截（滚动的是 window），我们已经自己缩了高度，推回来
       if (window.scrollY) window.scrollTo(0, 0);
     };
@@ -51,7 +61,7 @@ export function useViewportHeight() {
       vv.removeEventListener("resize", f);
       vv.removeEventListener("scroll", f);
     };
-  }, []);
+  }, [height]);
 }
 
 // The tallest the visual viewport has been at the current width: the height with no soft keyboard. Reset when the

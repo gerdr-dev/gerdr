@@ -79,7 +79,7 @@ src/lib/
   actions.ts       actions: split, open a session, switch tabs. Re-exports actions/, one file per area
                    (panes, tabs, reopen, workspaces, spaces, terminal, sessions, runAction, files)
   keys.ts          快捷键
-  phone.ts         手机那一档（usePhone，< 768px）、--vvh（软键盘弹起时的可视高度）
+  phone.ts         手机那一档（usePhone，< 768px）、useVvhStyle（软键盘弹起时的可视高度，给要贴着它的弹窗用）
   addons.ts        the add-on runtime (~/.gerdr/addons); Settings → Add-ons is components/AddonSettings.tsx
 ```
 
