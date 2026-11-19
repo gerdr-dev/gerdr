@@ -202,7 +202,7 @@ config.json (example in the README), read fresh every turn.
 8. 会话记录 `<dir>/native/sessions/<id>.jsonl` 存**完整历史**，压缩是追加一条 `compact`，上下文从最后一条往后算 ——
    回退到压缩之前，截掉那条就回到压缩前的上下文。`/clear` 换新 id（和 claude / codex 的同一条路）。
    Before compaction the model is warned once (input past 80% of the threshold, `maybeNoteContext` in session.go) to
-   save its progress — todo list, details a summary would lose — and the system prompt says compaction lets it go on.
+   save its progress — its todo list if it keeps one, details a summary would lose — and the system prompt says compaction lets it go on.
    Once per cycle, never a running countdown: telling a model how little is left makes it wrap up early, which is
    why Claude Code's default reminder doesn't report the real window either. The notice is a user message with no
    ID (replay and titles skip it), marked `contextNote` so the cycle knows it had one.

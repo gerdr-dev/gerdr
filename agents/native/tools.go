@@ -859,10 +859,14 @@ func relLines(out, cwd string) string {
 
 // ---- todo ----
 
+// The description is deliberately restrained: Claude Code as Gerdr runs it (2.1.x, stream-json) ships no
+// TodoWrite / TaskCreate at all, so its sessions never show a plan, and a prompt pushing "multi-step → todo list"
+// made the native agent open nearly every task with one. Keep the two feeling alike.
 var todoTool = &tool{
 	name: "todo_write",
-	desc: "Create or update the task list for the current work (shown to the user as a checklist). Use it for multi-step tasks: " +
-		"write all steps up front, keep exactly one in_progress, mark each completed as soon as it is done. Pass the full list every time.",
+	desc: "Create or update a checklist shown to the user. Most work does not need one: just do it. Use it only when the user " +
+		"asks for a plan / checklist, or for a long piece of work with many separate deliverables the user will want to " +
+		"follow. When you do: keep exactly one item in_progress, mark each completed as soon as it is done, pass the full list every time.",
 	params: obj(map[string]any{
 		"todos": map[string]any{"type": "array", "items": obj(map[string]any{
 			"content": prop("string", "What to do"),

@@ -498,7 +498,7 @@ func init() {
 //
 // Compaction drops the conversation for a summary, and whatever the summary misses (an exact error, a finding
 // not yet acted on, the plan for the next steps) is gone. So shortly before it, the model is told once that
-// the context is nearly full and asked to make its progress survive: update the todo list, write down what a
+// the context is nearly full and asked to make its progress survive: update the todo list if it keeps one, write down what a
 // summary would lose. Same idea as Claude Code; there the signal comes from the API for the models with
 // "context awareness" (<system_warning>Token usage: …</system_warning> after each tool call, Sonnet 4.5+ / Haiku
 // 4.5) and from its own <system-reminder> attachments. We send ours to every model: most of ours get nothing
@@ -514,7 +514,7 @@ func (m resolved) contextNoteAt() int { return m.compactAt() * 8 / 10 }
 
 const contextNote = "<system-reminder>Context usage: about %d of %d tokens. The conversation will be compacted automatically " +
 	"at about %d tokens: the earlier messages get replaced by a summary of them, and you continue from that summary. " +
-	"Make sure your progress survives it: update the todo list so it shows what is done and what comes next, and if " +
+	"Make sure your progress survives it: if you keep a todo list, update it so it shows what is done and what comes next; if " +
 	"there are details a summary would likely lose (exact error messages, findings not acted on yet, the plan for the " +
 	"next steps), state them briefly in a message now. Then carry on with the task. Do not stop or cut the work short " +
 	"because of this: compaction lets you keep going.</system-reminder>"
