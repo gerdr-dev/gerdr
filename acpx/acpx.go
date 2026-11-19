@@ -112,6 +112,11 @@ type TranscriptStatResponse struct {
 	// （一轮之后的收尾、切模式……），不算「别处聊过」。只看文件大小的话，gerdr 自己一轮刚完就重启（没来得及记大小）
 	// 也会被当成别处聊过（用户报的误报）。
 	NewUserTexts []string `json:"newUserTexts,omitempty"`
+	// NewUserIDs: the record's id for each of NewUserTexts (same index; "" when it has none). Claude stores a message
+	// gerdr sent under gerdr's messageId, so an id the hub knows is its own message whatever its text looks like —
+	// comparing texts alone kept missing shapes the adapter rewrites (attachments as "@path", `!` output, several
+	// blocks joined) and called a session never used anywhere else "continued elsewhere". Agents without ids leave it empty.
+	NewUserIDs []string `json:"newUserIds,omitempty"`
 }
 
 type HoldersRequest struct {

@@ -960,6 +960,14 @@ menu written for the variables keeps a sane width and no gap.
   （`Session.Reload`），否则只把位置挪过去。claude 被打断时自己补写的 `[Request interrupted by user…]` 也是 user 消息，
   不算人话（不然重启一下 App 就误报「在别处接着聊过」）。重放出来的历史消息是 `user_message_chunk`（messageId = 记录里的 uuid），
   不是 Gerdr 自己记的 user 事件 —— 回退要两种都认，只认后者的话重新载入过的消息全都「找不到这条消息」。
+  Which messages are Gerdr's is decided by **id** first: Gerdr sends its messageId as the uuid and claude stores
+  it, so `transcript_stat` also returns each message's uuid (`newUserIds`). Comparing texts alone kept misfiring on
+  shapes the adapter rewrites (an attachment's resource_link becomes an "@path" block, `!` output, joined blocks) and
+  reloaded whole conversations; the text is now only the fallback for agents without ids.
+- **Only imported sessions have an "elsewhere"** (`Record.GerdrOnly`): a session started in Gerdr, or forked into
+  a copy only Gerdr writes to (Takeover), skips both the holders check before a message and the catch-up. If someone
+  resumes it in a terminal anyway, the two copies fork and Gerdr keeps its own — the user's choice, after the
+  guards kept misfiring on sessions that never lived anywhere else. Records from before the flag keep both checks.
 - **Gerdr 被强杀时那一轮没断**：Gerdr 被 SIGKILL / 崩溃（App 退出等不及也会：Electron 3 秒就强杀）时来不及杀 claude，
   claude 只看到 stdin 断了，会**把手上这一轮跑完**、写进自己的记录才退（实测又跑了一分钟）。Gerdr 日志停在半截、
   重启时补了「中断」，而上面的追上只认生人话，多出来的全是 agent 回复，救不回来。所以重启时日志里有没收尾的一轮，

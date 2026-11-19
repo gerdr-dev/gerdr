@@ -170,6 +170,35 @@ func TestReplayUserImage(t *testing.T) {
 	}
 }
 
+// An attached file reaches claude as its own "@/path" text block. Replayed, it must come back as the attachment
+// (it came back as the raw path glued to the words after a catch-up reload), while catch-up still sees the message
+// the way the hub joins it.
+func TestReplayUserFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "s.jsonl")
+	line := `{"type":"user","uuid":"u1","message":{"role":"user","content":[` +
+		`{"type":"text","text":"@/tmp/a b.mov"},{"type":"text","text":"看录屏"}]}}` + "\n"
+	if err := os.WriteFile(path, []byte(line), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var got []acp.SessionUpdate
+	if err := replayTranscript(path, func(u acp.SessionUpdate) { got = append(got, u) }); err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("want 2 chunks (file + words), got %d", len(got))
+	}
+	link, txt := got[0].UserMessageChunk, got[1].UserMessageChunk
+	if link == nil || link.Content.ResourceLink == nil || link.Content.ResourceLink.Uri != "file:///tmp/a b.mov" || link.Content.ResourceLink.Name != "a b.mov" {
+		t.Fatalf("first chunk should be the file: %+v", got[0])
+	}
+	if txt == nil || txt.Content.Text == nil || txt.Content.Text.Text != "看录屏" {
+		t.Fatalf("second chunk should be the words: %+v", got[1])
+	}
+	if texts, ids := userTextsFrom(path, 0); !slices.Equal(texts, []string{"@/tmp/a b.mov看录屏"}) || !slices.Equal(ids, []string{"u1"}) {
+		t.Fatalf("userTextsFrom = %q %q", texts, ids)
+	}
+}
+
 // After an auto-compaction Claude Code writes the summary as a user message (isCompactSummary). Replay must not
 // show it as something the person said (it did: a huge "This session is being continued…" bubble), nor count it as
 // a message sent elsewhere; the compact_boundary before it becomes the same note the live stream shows.
@@ -189,7 +218,7 @@ func TestReplayCompaction(t *testing.T) {
 	if len(got) != 2 || got[0].UserMessageChunk == nil || got[1].ToolCall == nil || got[1].ToolCall.Status != acp.ToolCallStatusCompleted {
 		t.Fatalf("want the user message then a finished compaction card, got %+v", got)
 	}
-	if texts := userTextsFrom(p, 0); !slices.Equal(texts, []string{"hi"}) {
+	if texts, _ := userTextsFrom(p, 0); !slices.Equal(texts, []string{"hi"}) {
 		t.Fatalf("userTextsFrom = %q", texts)
 	}
 }
@@ -205,7 +234,7 @@ func TestUserTextsFromSkipsInterrupt(t *testing.T) {
 	if err := os.WriteFile(p, []byte(lines), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if got := userTextsFrom(p, 0); !slices.Equal(got, []string{"hi"}) {
+	if got, _ := userTextsFrom(p, 0); !slices.Equal(got, []string{"hi"}) {
 		t.Fatalf("%q", got)
 	}
 }

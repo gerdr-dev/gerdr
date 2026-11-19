@@ -109,7 +109,10 @@ func (s *Session) SendWith(ctx context.Context, content []acp.ContentBlock, o Se
 	if err != nil && !held {
 		return SendResult{}, err
 	}
-	if !held {
+	s.mu.Lock()
+	gerdrOnly := s.rec.GerdrOnly
+	s.mu.Unlock()
+	if !held && !gerdrOnly { // a session started here has no other holder to guard against (Record.GerdrOnly)
 		held = len(s.heldElsewhere(ctx, c)) > 0
 	}
 	if held {

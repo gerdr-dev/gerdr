@@ -807,7 +807,7 @@ func (a *Agent) HandleExtensionMethod(ctx context.Context, method string, params
 		}
 		res := acpx.TranscriptStatResponse{Size: st.Size(), ModTime: st.ModTime().UnixMilli()}
 		if p.Since >= 0 {
-			res.NewUserTexts = userTextsFrom(path, p.Since)
+			res.NewUserTexts, res.NewUserIDs = userTextsFrom(path, p.Since)
 		}
 		return res, nil
 	case acpx.MethodHolders:

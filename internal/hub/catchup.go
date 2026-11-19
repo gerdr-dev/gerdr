@@ -55,8 +55,13 @@ func (s *Session) markSynced(delay time.Duration) {
 // 判据不是「文件变大了」，而是「文件里多出了 gerdr 没发过的人话」：文件变大还有一堆自己的原因 —— 自己一轮刚完、
 // 还没来得及记大小就重启了（用户报的误报：明明没在别处聊过，却提示「别处接着聊过」）、claude 一轮之后补写的收尾、
 // 切模式写的那一行。所以让 agent 把上次对齐之后记录里人说的话列出来，和自己日志里的比：全是自己发过的，只更新位置。
+// "Mine" is decided by id where the agent gives one (NewUserIDs), by text otherwise — see acpx.TranscriptStatResponse.
 func (s *Session) CatchUp(ctx context.Context) {
 	s.mu.Lock()
+	if s.rec.GerdrOnly { // started here: there is no elsewhere to catch up with
+		s.mu.Unlock()
+		return
+	}
 	// 同一个会话半分钟内只查一次：切 tab、几台设备同时开着，都会触发
 	busy := s.running || s.catchingUp || s.adopting || time.Since(s.lastCatch) < 30*time.Second
 	if !busy {
@@ -74,9 +79,14 @@ func (s *Session) CatchUp(ctx context.Context) {
 	if synced > 0 && st.Size == synced {
 		return
 	}
-	mine := s.userTextSet()
+	mine, mineIDs := s.userTextSet()
 	foreign := 0
-	for _, t := range st.NewUserTexts {
+	for i, t := range st.NewUserTexts {
+		// The id first: a message gerdr sent is stored under its messageId. The text is the fallback for agents
+		// without ids and for messages logged before gerdr sent its id along.
+		if i < len(st.NewUserIDs) && st.NewUserIDs[i] != "" && mineIDs[st.NewUserIDs[i]] {
+			continue
+		}
 		if !mine[normText(t)] {
 			foreign++
 		}
@@ -164,13 +174,14 @@ func (s *Session) adoptOrphanTurn(lastTS int64) {
 // userChunk：从 agent 记录重放的一块用户消息（user_message_chunk），取出它的 messageId 和内容块。
 func userChunk(e *Event) (string, json.RawMessage, bool) { return chatlog.UserChunk(e) }
 
-// userTextSet：gerdr 日志里人说过的话（自己发的 + 导入 / 重新载入时从记录重放的），归一化过。
-func (s *Session) userTextSet() map[string]bool {
+// userTextSet: the user messages in gerdr's log (sent from here, or replayed from the record on import / reload):
+// their normalized texts, and their ids (messageId; for Claude that is the record's uuid).
+func (s *Session) userTextSet() (map[string]bool, map[string]bool) {
 	s.mu.Lock()
 	s.loadLocked()
 	evs := append([]*Event(nil), s.events...)
 	s.mu.Unlock()
-	out := map[string]bool{}
+	out, ids := map[string]bool{}, map[string]bool{}
 	// Claude's transcript joins a message's text blocks with nothing between them (userText in agents/claude), so
 	// the joined form is kept too. Without it a message of two text blocks (an uploaded file's "@path" block and the
 	// words after it) never matched, and the next check after a restart said "continued elsewhere (1 message)".
@@ -178,14 +189,27 @@ func (s *Session) userTextSet() map[string]bool {
 	for _, e := range evs {
 		switch e.Kind {
 		case EvUser:
+			if e.MessageID != "" {
+				ids[e.MessageID] = true
+			}
 			var parts []string
 			for _, c := range e.Content {
 				var b struct {
 					Type string `json:"type"`
 					Text string `json:"text"`
+					URI  string `json:"uri"`
 				}
-				if json.Unmarshal(c, &b) == nil && b.Type == "text" {
+				if json.Unmarshal(c, &b) != nil {
+					continue
+				}
+				switch b.Type {
+				case "text":
 					parts = append(parts, b.Text)
+				case "resource_link":
+					// An uploaded file is logged as a resource_link; the claude adapter sends it as an "@path" text
+					// block (toClaudeContent), and that is what its transcript holds. Leaving it out, a message with a
+					// file never matched and every restart said "continued elsewhere (1 message)".
+					parts = append(parts, "@"+strings.TrimPrefix(b.URI, "file://"))
 				}
 			}
 			out[normText(strings.Join(parts, "\n"))] = true
@@ -200,12 +224,20 @@ func (s *Session) userTextSet() map[string]bool {
 				Content       struct {
 					Type string `json:"type"`
 					Text string `json:"text"`
+					URI  string `json:"uri"`
 				} `json:"content"`
 			}
 			if json.Unmarshal(e.Update, &u) == nil && u.SessionUpdate == "user_message_chunk" {
-				out[normText(u.Content.Text)] = true
-				if u.MessageID != "" && u.Content.Type == "text" {
-					chunks[u.MessageID] = append(chunks[u.MessageID], u.Content.Text)
+				text := u.Content.Text
+				if u.Content.Type == "resource_link" { // replay turns the "@path" block back into the file
+					text = "@" + strings.TrimPrefix(u.Content.URI, "file://")
+				}
+				out[normText(text)] = true
+				if u.MessageID != "" { // replayed from the record: the messageId is the record's uuid
+					ids[u.MessageID] = true
+				}
+				if u.MessageID != "" && (u.Content.Type == "text" || u.Content.Type == "resource_link") {
+					chunks[u.MessageID] = append(chunks[u.MessageID], text)
 				}
 			}
 		}
@@ -214,7 +246,7 @@ func (s *Session) userTextSet() map[string]bool {
 		out[normText(strings.Join(texts, "\n"))] = true
 		out[normText(strings.Join(texts, ""))] = true
 	}
-	return out
+	return out, ids
 }
 
 // normText：比对用。空白折成一个空格、只看前 200 个字（两边对长消息的存法可能差在末尾的换行 / 截断）。

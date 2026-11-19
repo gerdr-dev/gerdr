@@ -46,6 +46,13 @@ type Record struct {
 	Config         map[string]string `json:"config,omitempty"`
 	// SyncedSize：gerdr 最后一次和 agent 的记录文件对齐时，那个文件有多大（catchUp）。比它大 = 别处接着聊过。
 	SyncedSize int64 `json:"syncedSize,omitempty"`
+	// GerdrOnly: the agent session was started here (not imported), or forked into a copy only Gerdr writes to
+	// (Takeover). Nobody else has it, so there is no "elsewhere": no catch-up (CatchUp) and no check for another
+	// process holding it before a message (Send). If someone does resume it in a terminal, the two copies fork and
+	// Gerdr keeps its own — the user's call: guarding sessions that only ever lived here kept misfiring (a message
+	// whose text the adapter rewrote looked "sent elsewhere" and reloaded the whole conversation). Imported sessions,
+	// and records from before this flag, keep both checks. /clear's pieces inherit it with the record.
+	GerdrOnly bool `json:"gerdrOnly,omitempty"`
 	// Fork：回退出来、agent 还没写出记录的会话从哪儿来（acpx.RewindResponse.Fork）。接回会话时带给 agent：
 	// 它重启过的话自己记的就没了，起成一个空会话，前面的对话全丢。换 id 时清掉（rekey）；agent 那边记录有了就不再理它。
 	Fork *acpx.PendingFork `json:"fork,omitempty"`
@@ -810,6 +817,10 @@ func (s *Session) Takeover(ctx context.Context, action string) error {
 	}
 	if res.SessionId != "" && string(res.SessionId) != sid {
 		s.h.rekey(s, string(res.SessionId))
+		s.mu.Lock()
+		s.rec.GerdrOnly = true // the copy lives only here (the notice below says so)
+		s.mu.Unlock()
+		s.h.saveIndex()
 		s.emit(&Event{Kind: EvNotice, Level: "info", Text: i18n.S("另起了一份接着聊：从这里往下只在 Gerdr 里，别处那个会话不受影响", "Forked into a new copy: from here on it lives only in Gerdr; the session elsewhere is unaffected")})
 	}
 	return nil

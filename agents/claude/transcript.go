@@ -329,6 +329,41 @@ func userImages(e *entry) []acp.ContentBlock {
 	return out
 }
 
+// userLinks: the files a user message carried. An attached file goes to claude as a text block of its own,
+// "@/abs/path" (toClaudeContent turns the resource_link into that), so a block that is exactly that is turned back
+// into a resource_link: replayed (catch-up, reload), the file shows as the attachment it was, not as a raw path in the
+// words. Returns the blocks and the texts they came from, to take out of userText.
+func userLinks(e *entry) ([]acp.ContentBlock, []string) {
+	if e.Type != "user" || e.IsSidechain || e.IsMeta || e.IsCompactSummary {
+		return nil, nil
+	}
+	var m userMsg
+	if json.Unmarshal(e.Message, &m) != nil {
+		return nil, nil
+	}
+	var parts []struct {
+		Type string `json:"type"`
+		Text string `json:"text"`
+	}
+	if json.Unmarshal(m.Content, &parts) != nil || len(parts) < 2 {
+		return nil, nil // a message of one block is words the person typed, even if they start with "@/"
+	}
+	var out []acp.ContentBlock
+	var texts []string
+	for _, p := range parts {
+		if p.Type == "tool_result" {
+			return nil, nil
+		}
+		if p.Type != "text" || !strings.HasPrefix(p.Text, "@/") || strings.ContainsAny(p.Text, "\n") {
+			continue
+		}
+		path := p.Text[1:]
+		out = append(out, acp.ResourceLinkBlock(filepath.Base(path), "file://"+path))
+		texts = append(texts, p.Text)
+	}
+	return out, texts
+}
+
 func replayTranscript(path string, emit func(acp.SessionUpdate)) error {
 	return replayTranscriptUntil(path, "", emit)
 }
@@ -349,7 +384,14 @@ func replayTranscriptUntil(path, last string, emit func(acp.SessionUpdate)) erro
 			// 文字和图是同一条消息的几块，用同一个 MessageId 发，界面按它拼回一条
 			if t, imgs := userText(e), userImages(e); t != "" || len(imgs) > 0 {
 				id := e.UUID
-				if t != "" {
+				links, linkTexts := userLinks(e)
+				for _, lt := range linkTexts {
+					t = strings.Replace(t, lt, "", 1)
+				}
+				for _, b := range links {
+					emit(acp.SessionUpdate{UserMessageChunk: &acp.SessionUpdateUserMessageChunk{Content: b, MessageId: &id}})
+				}
+				if strings.TrimSpace(t) != "" {
 					emit(acp.SessionUpdate{UserMessageChunk: &acp.SessionUpdateUserMessageChunk{Content: acp.TextBlock(t), MessageId: &id}})
 				}
 				for _, b := range imgs {
@@ -468,19 +510,18 @@ func inheritedTitle(path string) string {
 
 // userTextsFrom：记录文件 offset 之后人说的话（跳过斜杠命令的包装、系统提醒、工具结果）。
 // offset 比文件还大（文件被换掉 / 截断过）就从头读。
-func userTextsFrom(path string, offset int64) []string {
+func userTextsFrom(path string, offset int64) (texts, ids []string) {
 	f, err := os.Open(path)
 	if err != nil {
-		return nil
+		return nil, nil
 	}
 	defer f.Close()
 	if st, err := f.Stat(); err != nil || offset > st.Size() {
 		offset = 0
 	}
 	if _, err := f.Seek(offset, io.SeekStart); err != nil {
-		return nil
+		return nil, nil
 	}
-	var out []string
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 0, 1<<20), 256<<20)
 	for sc.Scan() {
@@ -496,8 +537,9 @@ func userTextsFrom(path string, offset int64) []string {
 		//   - 「<task-notification>…」：后台任务跑完 / 被停时 CLI 自己开一轮汇报（踩过：后台 find 超时被停，提示「1 条消息」）
 		t := userText(&e)
 		if tt := strings.TrimSpace(t); tt != "" && !strings.HasPrefix(tt, "[Request interrupted by user") && !strings.HasPrefix(tt, "<task-notification>") {
-			out = append(out, t)
+			texts = append(texts, t)
+			ids = append(ids, e.UUID)
 		}
 	}
-	return out
+	return texts, ids
 }
