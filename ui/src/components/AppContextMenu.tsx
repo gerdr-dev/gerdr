@@ -22,6 +22,7 @@ import { get } from "@/lib/store";
 import { IS_MAC } from "@/lib/keys";
 import { isNative, nativeOpenPath, nativeOpenURL } from "@/lib/native";
 import { stripLineAnchor } from "@/lib/paths";
+import { copyText as copyToClipboard } from "@/lib/clipboard";
 import { isPhone } from "@/lib/phone";
 import { t as tr } from "@/lib/i18n"; // `t` is the event target below
 
@@ -84,7 +85,7 @@ const fail = (e: unknown) => {
 };
 
 async function copyText(text: string) {
-  await navigator.clipboard.writeText(text).catch(fail);
+  await copyToClipboard(text).catch(fail);
 }
 
 // The clipboard only takes PNG, so redraw whatever the image is. Same-origin media can always be drawn; a remote

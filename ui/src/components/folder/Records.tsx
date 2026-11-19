@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { api, type ArtifactItem } from "@/lib/api";
+import { copyText } from "@/lib/clipboard";
 import { t } from "@/lib/i18n";
 import { IS_MAC } from "@/lib/keys";
 import { isNative, nativeOpenPath, nativeOpenURL } from "@/lib/native";
@@ -94,9 +95,13 @@ function Row({ it, host, onBrowse, onRetire }: { it: ArtifactItem; host?: string
   const Icon = it.kind === "link" ? Link2 : it.kind === "path" ? FolderOpen : it.kind === "file" ? FileText : Type;
   const value = it.url ?? it.path ?? it.text ?? "";
   const copy = () => {
-    navigator.clipboard.writeText(value);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1200);
+    copyText(value).then(
+      () => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1200);
+      },
+      () => toast.error(t("common.copyFailed")),
+    );
   };
   const open = () => {
     if (it.kind === "link") {

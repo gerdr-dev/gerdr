@@ -76,6 +76,10 @@ fs.mkdirSync(app.getPath("userData"), { recursive: true });
 // a backend that comes up elsewhere relaunches the App with the right one (onReady).
 const port = Number(process.env.GERDR_PORT) || 7870;
 app.commandLine.appendSwitch("host-rules", `MAP gerdr 127.0.0.1:${port}`);
+// http://gerdr isn't a secure context by itself (only https, localhost and 127.0.0.1 are), and the APIs that need one
+// are then missing: navigator.clipboard (every copy button), web notifications, crypto.subtle. The Lightron shell had
+// this switch; the move back to Electron (e413039) dropped it and copy buttons broke.
+app.commandLine.appendSwitch("unsafely-treat-insecure-origin-as-secure", "http://gerdr");
 // Device-bound sessions would tie a Google sign-in to one program (internal/projbrowser noBoundSessions)
 app.commandLine.appendSwitch("disable-features", "EnableBoundSessionCredentials,DeviceBoundSessions");
 // A project's page keeps painting when the App's window is covered or minimized: a phone may be watching it

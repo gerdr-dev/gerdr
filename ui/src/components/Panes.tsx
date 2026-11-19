@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { copyText } from "@/lib/clipboard";
 import { Button } from "@/components/ui/button";
 import { api, type FileStat } from "@/lib/api";
 import { FileActions, FileContent } from "./FileViewer";
@@ -1112,8 +1113,10 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
                     inside that command. */}
                 <DropdownMenuItem
                   onClick={() => {
-                    navigator.clipboard.writeText(session.id);
-                    toast(t("panes.idCopied"));
+                    copyText(session.id).then(
+                      () => toast(t("panes.idCopied")),
+                      () => toast.error(t("common.copyFailed")),
+                    );
                   }}
                 >
                   <Copy /> {t("panes.copyId")}
@@ -1131,8 +1134,10 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
                         {["claude", "codex"].includes(session.base ?? session.agent) && session.agentSessionId && (
                           <DropdownMenuItem
                             onClick={() => {
-                              navigator.clipboard.writeText(resumeCommand(session.base ?? session.agent, session.cwd, session.agentSessionId));
-                              toast(t("panes.resumeCopied"));
+                              copyText(resumeCommand(session.base ?? session.agent, session.cwd, session.agentSessionId)).then(
+                                () => toast(t("panes.resumeCopied")),
+                                () => toast.error(t("common.copyFailed")),
+                              );
                             }}
                           >
                             <SquareTerminal /> {t("panes.copyResume")}

@@ -5,6 +5,7 @@ import { ArrowLeft, ArrowRight, Check, Globe, Keyboard, MoreHorizontal, Plus, Ro
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { api, type BrowserInput } from "@/lib/api";
+import { copyText } from "@/lib/clipboard";
 import { claimNative, focusPane, loadBrowserTabs, noteBrowserURL, releaseNative, showBrowserTab, useBrowserTabs, useNativeOwners } from "@/lib/actions";
 import { t } from "@/lib/i18n";
 import { paintFrame, parseFrame, wsURL, type StreamPage } from "@/lib/screenStream";
@@ -263,7 +264,7 @@ export function BrowserScreen({
   const draw = useCallback(async (buf: ArrayBuffer) => {
     const { h, body } = parseFrame(buf);
     if (h.page) setPage(h.page);
-    if (h.text) void navigator.clipboard?.writeText(h.text).catch(() => {});
+    if (h.text) void copyText(h.text).catch(() => {});
     // the navigation finished (loaded, or failed: the page info says so)
     if (h.ack && h.ack >= navSeq.current) setNavigating(false);
     // A navigation that failed (net::…) is shown in the pane itself (page.failed), no toast on top of it
