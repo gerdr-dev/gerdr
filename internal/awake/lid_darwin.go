@@ -19,10 +19,17 @@ import (
 // 「合盖模式」也是这条。它要 root，所以靠一条 sudoers 规则只放行这两条命令（和 Amphetamine Enhancer 装的
 // /etc/sudoers.d/amphetamine_PowerProtect 同一个范围；装过 Amphetamine 的机器直接就能用）。
 //
-// disablesleep 是全局开关、不随进程走，gerdr 崩了它会一直开着 —— 塞进包里的电脑就一直醒着发烫。所以三道保险：
-//   - 开的时候另起一个看门的 sh（自己一个进程组，gerdr 被整组杀也不带走它），等 gerdr 没了就关掉；
-//   - 留一个标记文件，下次启动看到就关掉（看门的也没跑成的情况）；
-//   - 用电池且电量 ≤ 20% 时放手（Keeper.watchBattery）。
+// disablesleep is one switch for the whole machine and outlives the process that set it: if gerdr crashed with it on,
+// a Mac put in a bag would stay awake and hot. So three safeguards:
+//   - a watcher sh started alongside (its own process group, so killing gerdr's group spares it) lets go once gerdr is gone;
+//   - a holder file (below) left behind is let go at the next start (when the watcher never ran either);
+//   - on battery at or under 20% it lets go (Keeper.watchBattery).
+//
+// Shared with others: the lid-awake add-on (and Amphetamine-style tools) flip the same switch, and each turning it off
+// when *its* stretch ended switched it off under the other: one night Gerdr's remote stretch ended at 23:18 and the Mac
+// slept although the add-on still wanted it awake. So whoever turns it on writes a holder file, <gerdr dir>/run/
+// disablesleep/<name>, holding a pid that lives as long as the hold, and turns it off only when no other holder's pid
+// is alive. The add-on follows the same rule (internal/addons/builtin/GUIDE.md, "Shared machine switches").
 
 const (
 	pmset   = "/usr/bin/pmset"
@@ -30,7 +37,40 @@ const (
 	ruleDst = "/etc/sudoers.d/gerdr_pmset"
 )
 
-func lidMarker(dir string) string { return filepath.Join(dir, "awake-lid") }
+// holderName: Gerdr's own file among the holders of disablesleep.
+const holderName = "gerdr"
+
+func holdersDir(dir string) string { return filepath.Join(dir, "run", "disablesleep") }
+
+// oldLidMarker: where the hold was recorded before holder files; only read by lidCleanup.
+func oldLidMarker(dir string) string { return filepath.Join(dir, "awake-lid") }
+
+// othersHold: some other holder's pid is still alive. Files of dead holders are removed on the way.
+func othersHold(dir string) bool {
+	ents, _ := os.ReadDir(holdersDir(dir))
+	for _, e := range ents {
+		if e.Name() == holderName {
+			continue
+		}
+		f := filepath.Join(holdersDir(dir), e.Name())
+		b, _ := os.ReadFile(f)
+		pid, err := strconv.Atoi(strings.TrimSpace(string(b)))
+		if err == nil && pid > 0 && (syscall.Kill(pid, 0) == nil || errors.Is(syscall.Kill(pid, 0), syscall.EPERM)) {
+			return true
+		}
+		_ = os.Remove(f)
+	}
+	return false
+}
+
+// release drops Gerdr's hold and turns disablesleep off unless someone else still holds it.
+func release(dir string) error {
+	_ = os.Remove(filepath.Join(holdersDir(dir), holderName))
+	if othersHold(dir) {
+		return nil
+	}
+	return setDisableSleep(false)
+}
 
 func setDisableSleep(on bool) error {
 	v := "0"
@@ -53,11 +93,28 @@ func lidOn(dir string) (func(), error) {
 	if !lidReady() {
 		return nil, errors.New(i18n.S("还没授权：设置 → 实验室里点「授权」（要在电脑上输一次密码）", "not authorized yet: click \"Authorize\" in Settings → Labs (you'll enter your password once on this computer)"))
 	}
-	if err := setDisableSleep(true); err != nil {
+	if err := os.MkdirAll(holdersDir(dir), 0o700); err != nil {
 		return nil, err
 	}
-	_ = os.WriteFile(lidMarker(dir), []byte(strconv.Itoa(os.Getpid())), 0o600)
-	watch := exec.Command("/bin/sh", "-c", `while kill -0 "$0" 2>/dev/null; do sleep 5; done; `+sudo+` -n `+pmset+` -a disablesleep 0`, strconv.Itoa(os.Getpid()))
+	holder := filepath.Join(holdersDir(dir), holderName)
+	if err := os.WriteFile(holder, []byte(strconv.Itoa(os.Getpid())), 0o600); err != nil {
+		return nil, err
+	}
+	if err := setDisableSleep(true); err != nil {
+		_ = os.Remove(holder)
+		return nil, err
+	}
+	// Once gerdr is gone: drop its hold, then let go unless another holder's pid is alive (same rule as othersHold).
+	watch := exec.Command("/bin/sh", "-c", `while kill -0 "$0" 2>/dev/null; do sleep 5; done
+rm -f "$1/`+holderName+`"
+for f in "$1"/*; do
+  [ -f "$f" ] || continue
+  p=$(cat "$f" 2>/dev/null)
+  case "$p" in ''|*[!0-9]*) rm -f "$f"; continue ;; esac
+  if kill -0 "$p" 2>/dev/null || ps -p "$p" >/dev/null 2>&1; then exit 0; fi
+  rm -f "$f"
+done
+`+sudo+` -n `+pmset+` -a disablesleep 0`, strconv.Itoa(os.Getpid()), holdersDir(dir))
 	watch.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if err := watch.Start(); err == nil {
 		go func() { _ = watch.Wait() }()
@@ -68,21 +125,33 @@ func lidOn(dir string) (func(), error) {
 		if watch != nil {
 			_ = watch.Process.Kill()
 		}
-		if err := setDisableSleep(false); err != nil {
-			return // 标记留着，下次启动再关
+		if err := release(dir); err != nil {
+			// The hold file is gone already; put it back so the next start retries the release.
+			_ = os.WriteFile(holder, []byte(strconv.Itoa(os.Getpid())), 0o600)
 		}
-		_ = os.Remove(lidMarker(dir))
 	}, nil
 }
 
-// lidCleanup：上次没收拾干净（gerdr 崩了、看门的也没跑成）就关掉。
+// lidCleanup: the last run left its hold behind (gerdr crashed and the watcher never ran either): let it go.
 func lidCleanup(dir string) {
-	if _, err := os.Stat(lidMarker(dir)); err != nil {
+	_, errOld := os.Stat(oldLidMarker(dir))
+	_, errNew := os.Stat(filepath.Join(holdersDir(dir), holderName))
+	if errOld != nil && errNew != nil {
 		return
 	}
-	if setDisableSleep(false) == nil {
-		_ = os.Remove(lidMarker(dir))
+	if release(dir) == nil {
+		_ = os.Remove(oldLidMarker(dir))
 	}
+}
+
+// sleepIfLidClosed: called after letting go on a low battery. With the lid closed, nothing else would put the Mac
+// to sleep until idle sleep gets round to it (see Keeper.watchBattery); `pmset sleepnow` needs no root.
+func sleepIfLidClosed() {
+	out, err := exec.Command("/usr/sbin/ioreg", "-r", "-k", "AppleClamshellState", "-d", "1").Output()
+	if err != nil || !strings.Contains(string(out), `"AppleClamshellState" = Yes`) {
+		return
+	}
+	_ = exec.Command(pmset, "sleepnow").Run()
 }
 
 var battRe = regexp.MustCompile(`(\d+)%; ([a-zA-Z ]+);`)

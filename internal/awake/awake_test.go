@@ -115,6 +115,8 @@ func TestLid(t *testing.T) {
 	k.batt = func() Battery {
 		return Battery{Percent: map[bool]int{true: 10, false: 80}[low.Load()], OnBattery: true}
 	}
+	var slept atomic.Int32
+	k.lidSleep = func() { slept.Add(1) }
 	k.done = make(chan struct{})
 	go k.watchBattery(10 * time.Millisecond)
 	defer k.Close()
@@ -139,6 +141,9 @@ func TestLid(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 	if lid.Load() != 0 || !k.Status().LowBattery {
 		t.Fatal("电量低没放手")
+	}
+	if slept.Load() != 1 {
+		t.Fatalf("letting go on a low battery should try to sleep a closed-lid Mac once, tried %d", slept.Load())
 	}
 	if !k.Awake() {
 		t.Fatal("电量低只放合盖模式，闲置不睡照旧")

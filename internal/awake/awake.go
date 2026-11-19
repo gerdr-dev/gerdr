@@ -46,6 +46,8 @@ type Keeper struct {
 	lidOn    func() (stop func(), err error)
 	lidReady func() bool
 	batt     func() Battery
+	// lidSleep puts the Mac to sleep now if its lid is closed (see watchBattery). nil = never.
+	lidSleep func()
 	done     chan struct{}
 
 	mu      sync.Mutex
@@ -86,7 +88,7 @@ func New(log *slog.Logger, dir string) *Keeper {
 		}
 		lidCleanup(dir)
 		k.lidOn = func() (func(), error) { return lidOn(dir) }
-		k.lidReady, k.batt = lidReady, battery
+		k.lidReady, k.batt, k.lidSleep = lidReady, battery, sleepIfLidClosed
 		go k.watchBattery(time.Minute)
 	}
 	k.resume()
@@ -181,14 +183,21 @@ func (k *Keeper) watchBattery(every time.Duration) {
 		}
 		low := k.batt().low()
 		k.mu.Lock()
+		letGo := false
 		if low != k.lowBatt {
 			k.lowBatt = low
+			letGo = low && k.lidStop != nil
 			if low {
 				k.log.Warn("awake: 电量低，合盖模式放手")
 			}
 			k.sync()
 		}
 		k.mu.Unlock()
+		// Turning disablesleep off does not sleep a Mac whose lid is already closed: clamshell sleep only fires on
+		// the lid-close event. It then waits for idle sleep, which took 50 minutes one night (20% → 9%, in a bag).
+		if letGo && k.lidSleep != nil {
+			k.lidSleep()
+		}
 	}
 }
 

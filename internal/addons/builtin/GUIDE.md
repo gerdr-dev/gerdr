@@ -453,6 +453,17 @@ add-on only has to bring messages in and post replies.
 - Keep files in `$GERDR_ADDON_DATA`, never in the add-on's folder (writing there reloads every window, and an update
   replaces the folder).
 
+#### Shared machine switches
+
+Some switches belong to the whole computer, not to one program: macOS's `pmset -a disablesleep` (sleep with the lid
+closed) is one, and Gerdr's own lid mode (Settings → Labs) flips it too. When each user turns it off as its own stretch
+ends, one switches it off under another. So for `disablesleep`:
+
+- Whoever turns it on writes a holder file `$GERDR_DIR/run/disablesleep/<your add-on id>` containing a pid that stays
+  alive as long as the hold (your service's own `$$`; a helper's pid while it holds in your place). Gerdr's is `gerdr`.
+- When letting go, remove your file, then turn the switch off only if no other file there holds a live pid (remove the
+  dead ones on the way). The `lid-awake` add-on's `service.sh` has a ready `others_hold` / `release`.
+
 ### Events
 
 An add-on that watches something outside (a chat, a mailbox, a dashboard) turns what it sees into **events** and
