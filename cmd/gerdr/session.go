@@ -710,7 +710,7 @@ and hand it a task, wait for it to finish, read its reply. Refer to a session by
 	// fork: the menu's "Fork…" (hub CreateOptions.Fork). A copy of the conversation in a new session, with the same
 	// agent or another; the original is left as it is.
 	var fAgent, fPrompt string
-	var fWait, fFocus bool
+	var fWait, fFocus, fText bool
 	var fTimeout time.Duration
 	forkCmd := &cobra.Command{
 		Use:   i18n.S("fork <会话>", "fork <session>"),
@@ -727,7 +727,7 @@ and hand it a task, wait for it to finish, read its reply. Refer to a session by
 			if agent == "" {
 				agent = src.Agent
 			}
-			body := map[string]any{"agent": agent, "cwd": src.Cwd, "continueFrom": src.ID, "fork": true, "open": map[string]any{"near": self, "focus": fFocus}}
+			body := map[string]any{"agent": agent, "cwd": src.Cwd, "continueFrom": src.ID, "fork": true, "forkText": fText, "open": map[string]any{"near": self, "focus": fFocus}}
 			if src.Host != nil {
 				body["host"] = src.Host.ID // forked on the computer the conversation is on, not moved here
 			}
@@ -757,6 +757,7 @@ and hand it a task, wait for it to finish, read its reply. Refer to a session by
 		},
 	}
 	forkCmd.Flags().StringVar(&fAgent, "agent", "", i18n.S("用哪个 agent 接着聊（id 同 new --agent）；不给 = 和原来的一样", "the agent that carries it on (ids as for new --agent); omitted = the same as the original"))
+	forkCmd.Flags().BoolVar(&fText, "text", false, i18n.S("同一种引擎也用文字转交：不复制会话，把之前的对话整理成文字随第一句话交过去（从一段摘要重新开始的上下文）。不加 = 复制会话、上下文原样。换另一种引擎本来就是文字转交", "with the same engine, hand over as text too: instead of copying the session, the conversation so far goes along as text with the first message (a fresh context that starts from a summary). Without it = the session is copied, the context exactly as it was. Another engine always gets text"))
 	forkCmd.Flags().StringVar(&fPrompt, "prompt", "", i18n.S("分叉之后马上发的第一句话（之前的对话随它一起带过去）", "first message to send once forked (the earlier conversation goes along with it)"))
 	forkCmd.Flags().BoolVar(&fWait, "wait", false, i18n.S("和 --prompt 一起用：等它做完，输出它的回复", "with --prompt: wait for it to finish and print its reply"))
 	forkCmd.Flags().DurationVar(&fTimeout, "timeout", 30*time.Minute, i18n.S("--wait 最多等多久", "how long --wait waits at most"))

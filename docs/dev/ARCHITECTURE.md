@@ -372,7 +372,9 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
     app-server's `thread/fork`, because a codex 0.166 thread is also registered in its sqlite databases
     (`state_5.sqlite`…) and `thread/resume` takes only an id, so a copied rollout file would never be found. The
     fork keeps the original's mode / model / effort / folder.
-  - **Another engine**, or the agent couldn't copy (nothing written yet, e.g. new or rewound and not spoken since; a
+  - **Text with the same engine**, when asked for (`CreateOptions.ForkText`: the Fork dialog's tick box, off by
+    default; `gerdr session fork --text`): a fresh context that starts from a summary instead of the copy.
+  - **Another engine** (always; there is no option), or the agent couldn't copy (nothing written yet, e.g. new or rewound and not spoken since; a
     variant with its own records folder; an external agent): the handoff above, whose `Handoff.Fork` makes the first
     message's block say it's a branch that goes its own way while the original carries on, not a takeover.
 

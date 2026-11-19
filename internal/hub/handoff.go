@@ -108,7 +108,7 @@ func (h *Hub) continueFrom(ctx context.Context, o CreateOptions) (*Session, erro
 	// The same agent only from code (a panel replacing a broken or reconfigured conversation) or as a fork: otherwise a
 	// person would just open the old one
 	same := srcRec.Agent == o.Agent
-	fork := o.Fork
+	fork, forkText := o.Fork, o.ForkText
 	if same && !o.FromCLI && !fork {
 		return nil, errors.New(i18n.S("同一个 agent 直接打开这个会话就行，不用换", "It's the same agent: just open this session, no need to switch"))
 	}
@@ -130,14 +130,15 @@ func (h *Hub) continueFrom(ctx context.Context, o CreateOptions) (*Session, erro
 	// A fork is named "Fork: <the original's title>" until it has gone its own way for a while: auto-naming then names
 	// it from what was said since the fork (title.go). A fixed name stays fixed.
 	given := o.Title
-	o.ContinueFrom, o.Import, o.Title, o.Fork = "", "", "", false
+	o.ContinueFrom, o.Import, o.Title, o.Fork, o.ForkText = "", "", "", false, false
 	if given != "" {
 		srcRec.Title, srcRec.CustomTitle, srcRec.TitleFixed, srcRec.TitleKey, srcRec.PluginTitleFor = given, true, true, "", ""
 	} else if fork {
 		srcRec.Title, srcRec.CustomTitle, srcRec.TitleKey, srcRec.PluginTitleFor = forkTitle(srcRec.Title), srcRec.TitleFixed, "", ""
 	}
-	if fork {
-		// The same engine copies its own session; otherwise (or when it can't) the history goes over as text, below
+	if fork && !forkText {
+		// The same engine copies its own session; another engine (or a session that can't be copied) gets the
+		// history as text, below
 		s, err := h.forkSame(ctx, o, srcRec, evs)
 		if err == nil {
 			return s, nil

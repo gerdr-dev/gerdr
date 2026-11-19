@@ -1,6 +1,7 @@
 import { Loader2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { openSessionNear } from "@/lib/actions";
 import { api } from "@/lib/api";
@@ -11,8 +12,9 @@ import { AgentIcon } from "./AgentIcon";
 
 /**
  * Fork a conversation: a new session carrying it so far, with the same agent or another, named "Fork: <title>"
- * (hub CreateOptions.Fork, the same copy-and-hand-over as switching agents in hub/handoff.go). It opens beside the
- * original, which stays as it was. One click on an agent forks: there's nothing else to choose.
+ * (hub CreateOptions.Fork). The same engine copies its own session (hub/fork.go), unless "hand over as text" is
+ * ticked; another engine always gets the history as text (hub/handoff.go). It opens beside the original, which stays
+ * as it was. One click on an agent forks.
  */
 export function ForkSessionDialog() {
   const d = useStore((s) => s.dialog);
@@ -20,7 +22,10 @@ export function ForkSessionDialog() {
   const session = useStore((s) => (fk ? s.sessions[fk.sessionId] : undefined));
   const agents = useStore((s) => s.agents);
   const [busy, setBusy] = useState("");
+  const [text, setText] = useState(false);
   if (!session) return null;
+  const engine = (id: string) => agents.find((a) => a.id === id)?.base || id;
+  const same = (id: string) => engine(id) === (session.base || engine(session.agent));
   // The conversation's own agent first: forking to try another direction with it is the usual case
   const list = [...agents.filter((a) => a.id === session.agent), ...agents.filter((a) => a.id !== session.agent)];
 
@@ -28,7 +33,14 @@ export function ForkSessionDialog() {
     if (busy) return;
     setBusy(agent);
     try {
-      const s = await api.createSession({ agent, cwd: session.cwd, continueFrom: session.id, fork: true, host: session.host?.id });
+      const s = await api.createSession({
+        agent,
+        cwd: session.cwd,
+        continueFrom: session.id,
+        fork: true,
+        forkText: text && same(agent),
+        host: session.host?.id,
+      });
       useStore.setState((st) => ({ sessions: { ...st.sessions, [s.id]: s } }));
       closeDialog();
       openSessionNear(s.id, session.id, true);
@@ -61,12 +73,17 @@ export function ForkSessionDialog() {
               <div className="min-w-0">
                 <div className="text-[13px] font-medium">{a.name}</div>
                 <div className="truncate text-[11px] text-muted-foreground">
-                  {!a.available ? t("newSession.notInstalled") : a.id === session.agent ? t("forkSession.same") : t("forkSession.other")}
+                  {!a.available ? t("newSession.notInstalled") : same(a.id) && !text ? t("forkSession.copy") : t("forkSession.asText")}
                 </div>
               </div>
             </button>
           ))}
         </div>
+        {/* Only the same engine has a choice: another one can only get the conversation as text */}
+        <label className="flex items-start gap-2 text-[12px] text-muted-foreground">
+          <Checkbox className="mt-0.5" checked={text} onCheckedChange={(v) => setText(v === true)} />
+          <span>{t("forkSession.text")}</span>
+        </label>
       </DialogContent>
     </Dialog>
   );

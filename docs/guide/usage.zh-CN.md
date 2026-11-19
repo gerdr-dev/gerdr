@@ -20,8 +20,8 @@ gerdr acp claude  # 把内置适配器当 stdio ACP agent 跑（给 Zed 等 ACP 
 
 想换个方向试试、又不想丢掉现在这段对话，就 Fork 它：会话菜单（pane 顶部的 ⋯）→「Fork…」（或者输入 `/fork`），再选 agent，同一个或换一个都行。
 旁边会开一个叫「Fork: 原来的名字」的新对话（在里面说了话之后，会按新话题改名成「Fork: 新话题」），带着到现在为止的对话，原来的对话不动。
-同一种引擎（Claude Code 到 Claude Code、Claude 的角色到 Claude Code……）会直接复制 agent 自己的会话，上下文和原来一模一样（提示词缓存也照样命中）；
-换成另一种引擎时，之前的对话会整理成文字，在你发第一句话时一起交给它。
+同一种引擎（Claude Code 到 Claude Code、Claude 的角色到 Claude Code……）会直接复制 agent 自己的会话，上下文和原来一模一样（提示词缓存也照样命中），除非在 Fork 窗口里勾上「文字转交」；
+换成另一种引擎时，总是把之前的对话整理成文字，在你发第一句话时一起交给它。
 agent 也能做：`gerdr session fork`。
 
 ## 快捷键

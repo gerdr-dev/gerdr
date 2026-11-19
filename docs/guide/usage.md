@@ -28,8 +28,8 @@ To try another direction without losing the conversation, fork it: the session m
 (or type `/fork`), then pick the agent — the same one or another. A new conversation named "Fork: <title>" (renamed "Fork: <its own topic>" once you've talked
 in it) opens beside it with the conversation so far; the original stays as it was. With the same engine (Claude Code
 to Claude Code, a Claude role to Claude Code…) the agent's own session is copied, so it carries on with exactly the
-same context (and the prompt cache still hits); to another engine the conversation is handed over as text with your
-first message there. Agents can
+same context (and the prompt cache still hits), unless you tick *hand over as text* in the Fork dialog; to another
+engine the conversation is always handed over as text with your first message there. Agents can
 do the same with `gerdr session fork`.
 
 ## keys

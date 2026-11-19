@@ -784,6 +784,10 @@ type CreateOptions struct {
 	// Fork: with ContinueFrom, the user is forking that conversation (the same agent allowed): the new one is named
 	// "Fork: <its title>" and its agent is told it is a branch, not a takeover (handoff.go).
 	Fork bool `json:"fork,omitempty"`
+	// ForkText: a fork with the same engine hands the history over as text (handoff.go) instead of copying the agent's
+	// session (fork.go): a fresh context that starts from a summary. Off by default (the Fork dialog's tick box,
+	// `gerdr session fork --text`). Another engine always gets text, there being no other way.
+	ForkText bool `json:"forkText,omitempty"`
 	// History: the same, for a conversation that lives on another computer (docs/dev/MULTIHOST.md): its record and
 	// log come along, since this hub can't read them. Any agent, the same one included: it's a move, not a switch.
 	History *History `json:"history,omitempty"`

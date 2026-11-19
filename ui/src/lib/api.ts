@@ -335,6 +335,8 @@ export const api = {
     continueFrom?: string;
     /** with continueFrom: a fork, "Fork: <title>", the same agent allowed (hub CreateOptions.Fork) */
     fork?: boolean;
+    /** a fork with the same engine hands the history over as text instead of copying the session */
+    forkText?: boolean;
     host?: string;
     /** the project (layout space) it's started in: its skills / MCP apply from the first turn (projectOf in lib/layout.ts) */
     project?: string;
