@@ -287,12 +287,15 @@ func (v *View) pageLoop() {
 		var ready string
 		if raw, err := v.t.eval(ctx, editableJS); err == nil {
 			var r []any
-			if json.Unmarshal(raw, &r) == nil && len(r) == 3 {
+			if json.Unmarshal(raw, &r) == nil && len(r) == 4 {
 				if s, _ := r[0].(string); s != "" {
 					p.Title = s
 				}
 				ready, _ = r[1].(string)
 				p.Editable, _ = r[2].(bool)
+				if href, _ := r[3].(string); strings.HasPrefix(href, "chrome-error://") {
+					p.Failed = v.t.log.docFailure(p.URL)
+				}
 			}
 		}
 		cancel()
@@ -359,7 +362,10 @@ func (v *View) inputMap(ctx context.Context, vw, vh float64) (kx, ky, ox, oy flo
 	return kx, ky, ox, oy
 }
 
-// editableJS: the title, the load state, and whether the focus is somewhere to type (inside iframes and shadow roots).
+// editableJS: the title, the load state, whether the focus is somewhere to type (inside iframes and shadow roots), and
+// the document's own address: a page that failed to load is Chrome's error page (chrome-error://chromewebdata/) while
+// the history entry keeps the address it tried. The error page is blank in both the headless browser and the App's
+// views (no Chrome UI resources there), which looked like a page that never drew.
 const editableJS = `(() => {
   let a = document.activeElement;
   for (;;) {
@@ -369,7 +375,7 @@ const editableJS = `(() => {
   }
   const t = a && a.tagName;
   const typing = !!a && (a.isContentEditable || t === "TEXTAREA" || (t === "INPUT" && !/^(button|submit|reset|checkbox|radio|range|color|file|image|hidden)$/i.test(a.type)));
-  return [document.title, document.readyState, typing && !a.disabled && !a.readOnly]
+  return [document.title, document.readyState, typing && !a.disabled && !a.readOnly, location.href]
 })()`
 
 // Do runs one input from the pane. X / Y are fractions of the viewport, as on the remote screen.

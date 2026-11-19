@@ -387,6 +387,41 @@ func TestLiveEditable(t *testing.T) {
 	}
 }
 
+// TestLiveFailed: a page that can't load is Chrome's error page, blank in the pane: the page info says why, and going
+// to a page that loads clears it.
+func TestLiveFailed(t *testing.T) {
+	if os.Getenv("GERDR_LIVE_BROWSER") == "" {
+		t.Skip("set GERDR_LIVE_BROWSER=1")
+	}
+	b := chromeext.New(nil)
+	m := New(t.TempDir(), b, nil)
+	defer m.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	id, _ := m.Open(ctx, "test", "https://example.com/", 800, 600)
+	b.Act(ctx, id, "wait", chromeext.ActArgs{Load: true, Timeout: 20000})
+	v, _ := b.View(id)
+	defer v.Close()
+	v.Grab(800)
+	page := func() screen.Page {
+		time.Sleep(time.Second)
+		return v.Page()
+	}
+	if p := page(); p.Failed != "" {
+		t.Fatalf("loaded page: %+v", p)
+	}
+	v.Do(screen.Input{Kind: "go", Text: "http://127.0.0.1:1/"}) // Chrome refuses the port: net::ERR_UNSAFE_PORT
+	if p := page(); p.Failed == "" || p.URL != "http://127.0.0.1:1/" {
+		t.Errorf("failed page: %+v", p)
+	} else {
+		t.Logf("failed page: %+v", p)
+	}
+	v.Do(screen.Input{Kind: "go", Text: "https://example.com/"})
+	if p := page(); p.Failed != "" {
+		t.Errorf("loaded again: %+v", p)
+	}
+}
+
 // TestLiveAppProfile: with the App's browser known, a project's profile lives in the App's data directory and a
 // sign-in (a cookie) is still there after the headless browser closes and opens again. GERDR_TEST_ENGINE: the App's
 // browser program (its re-signed copy).

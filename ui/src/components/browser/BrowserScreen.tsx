@@ -112,8 +112,25 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
     if (canNative && tab && !owner) claimNative(tab, paneId);
   }, [owner, canNative, tab, paneId]);
   const nativeView = canNative && owner === paneId;
+  // The page failed to load (the stream says so): Chrome's error page is blank here, so the pane draws its own with a
+  // retry. The App's real page would cover it, so it's kept out of sight meanwhile (read by the placing below)
+  const failedRef = useRef(false);
+  // A navigation of ours (the address bar, back / forward / reload, retry) is running, until its input's
+  // acknowledgement comes back: the backend answers a "go" once the page settled or failed. page.loading alone misses
+  // it: the old document stays "complete" until the new one commits, and a failing address never commits at all
+  const [navigating, setNavigating] = useState(false);
+  const navSeq = useRef(Infinity);
+  // the stream reconnecting loses the acknowledgement: don't spin for ever (a navigation gives up well before this)
+  useEffect(() => {
+    if (!navigating) return;
+    const id = setTimeout(() => setNavigating(false), 45_000);
+    return () => clearTimeout(id);
+  }, [navigating]);
 
   const [page, setPage] = useState<StreamPage | null>(null);
+  useEffect(() => {
+    failedRef.current = !!page?.failed;
+  }, [page?.failed]);
   const [addr, setAddr] = useState("");
   const [editing, setEditing] = useState(false);
   const [opening, setOpening] = useState(false);
@@ -129,6 +146,8 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
     setPage(null);
     setHasPic(false);
     setStreamErr("");
+    setNavigating(false);
+    navSeq.current = Infinity;
   }, [tab]);
 
   const want = () => {
@@ -147,6 +166,10 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
     return true;
   };
   const send = (input: BrowserInput) => sendWS({ t: "input", seq: ++seqRef.current, input });
+  const nav = (input: BrowserInput) => {
+    navSeq.current = seqRef.current + 1; // the seq send gives it
+    setNavigating(send(input));
+  };
 
   // One frame at a time, in order
   useEffect(() => {
@@ -158,7 +181,10 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
     const { h, body } = parseFrame(buf);
     if (h.page) setPage(h.page);
     if (h.text) void navigator.clipboard?.writeText(h.text).catch(() => {});
-    if (h.inputErr) toast.error(h.inputErr);
+    // the navigation finished (loaded, or failed: the page info says so)
+    if (h.ack && h.ack >= navSeq.current) setNavigating(false);
+    // A navigation that failed (net::…) is shown in the pane itself (page.failed), no toast on top of it
+    if (h.inputErr && !h.inputErr.startsWith("net::")) toast.error(h.inputErr);
     if (h.err) {
       setStreamErr(h.err);
       if (h.seq) sendWS({ t: "got", seq: h.seq });
@@ -353,7 +379,7 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
     };
     const report = () => {
       const r = box.getBoundingClientRect();
-      const shown = document.visibilityState === "visible" && r.width > 20 && r.height > 20 && box.offsetParent !== null;
+      const shown = document.visibilityState === "visible" && r.width > 20 && r.height > 20 && box.offsetParent !== null && !failedRef.current;
       const open = overlays();
       const over = open.some((o) => {
         const q = o.getBoundingClientRect();
@@ -666,7 +692,7 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
     setEditing(false);
     if (!url) return;
     if (live) {
-      send({ kind: "go", text: url });
+      nav({ kind: "go", text: url });
       keysRef.current?.focus({ preventScroll: true });
       return;
     }
@@ -705,10 +731,12 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
 
   const shown = editing ? addr : (page?.url ?? cur?.url ?? (gone ? (lastURL ?? "") : ""));
   const title = page?.title || (cur ? hostOf(cur.url) : "");
+  const busy = opening || (live && (navigating || !!page?.loading));
 
   return (
     <>
-      <div onPointerDown={onHeadPointerDown} className={cn("flex shrink-0 items-center gap-1 border-b px-2 text-[12px] max-md:pl-4", headClassName)}>
+      <div onPointerDown={onHeadPointerDown} className={cn("relative flex shrink-0 items-center gap-1 border-b px-2 text-[12px] max-md:pl-4", headClassName)}>
+        {busy && <div className="page-loading pointer-events-none absolute inset-x-0 -bottom-px h-0.5 overflow-hidden" />}
         <Globe className="mr-1 size-4 shrink-0 text-muted-foreground" />
         <Button
           variant="ghost"
@@ -716,7 +744,7 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
           className="size-6 shrink-0"
           disabled={!live || !page?.back}
           title={t("browser.back")}
-          onClick={() => send({ kind: "back" })}
+          onClick={() => nav({ kind: "back" })}
         >
           <ArrowLeft className="size-3.5" />
         </Button>
@@ -726,12 +754,12 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
           className="size-6 shrink-0 max-md:hidden"
           disabled={!live || !page?.forward}
           title={t("browser.forward")}
-          onClick={() => send({ kind: "forward" })}
+          onClick={() => nav({ kind: "forward" })}
         >
           <ArrowRight className="size-3.5" />
         </Button>
-        <Button variant="ghost" size="icon" className="size-6 shrink-0" disabled={!live} title={t("browser.reload")} onClick={() => send({ kind: "reload" })}>
-          <RotateCw className={cn("size-3.5", page?.loading && "animate-spin")} />
+        <Button variant="ghost" size="icon" className="size-6 shrink-0" disabled={!live} title={t("browser.reload")} onClick={() => nav({ kind: "reload" })}>
+          <RotateCw className={cn("size-3.5", busy && "animate-spin")} />
         </Button>
         {coarse && (
           <Button
@@ -861,7 +889,21 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
               if (text) send({ kind: "text", text });
             }}
           />
-          {live && !nativeView && !hasPic && (
+          {live && page?.failed && (
+            <div className="absolute inset-0 grid place-items-center bg-background p-6 text-center">
+              <div className="max-w-sm space-y-3">
+                <div className="text-[13px] font-medium">{t("browser.failed")}</div>
+                <div className="space-y-1 text-[12px] break-all text-muted-foreground">
+                  {page.url && <div>{page.url}</div>}
+                  <div className="font-mono">{page.failed}</div>
+                </div>
+                <Button size="sm" variant="outline" disabled={busy} onClick={() => nav(page.url ? { kind: "go", text: page.url } : { kind: "reload" })}>
+                  <RotateCw className={cn(busy && "animate-spin")} /> {t(busy ? "browser.retrying" : "browser.retry")}
+                </Button>
+              </div>
+            </div>
+          )}
+          {live && !nativeView && !hasPic && !page?.failed && (
             <div className="absolute inset-0 grid place-items-center p-6 text-center text-[13px] text-muted-foreground">
               {streamErr || t("browser.loading")}
             </div>

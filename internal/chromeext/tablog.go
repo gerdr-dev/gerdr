@@ -300,3 +300,28 @@ func (l *tabLog) netText(filter, typ string, limit int, clear bool) string {
 	}
 	return strings.Join(out, "\n")
 }
+
+// docFailure: why the page at url didn't load, from its document request's failure (the newest one for that address,
+// else the newest failed document). "net::ERR_FAILED" when the log has none (it was cleared, or the load failed
+// before the window's log started).
+func (l *tabLog) docFailure(url string) string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	any := ""
+	for i := len(l.order) - 1; i >= 0; i-- {
+		e := l.net[l.order[i]]
+		if e == nil || e.Type != "Document" || e.Failed == "" {
+			continue
+		}
+		if e.URL == url {
+			return e.Failed
+		}
+		if any == "" {
+			any = e.Failed
+		}
+	}
+	if any == "" {
+		any = "net::ERR_FAILED"
+	}
+	return any
+}

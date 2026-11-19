@@ -91,3 +91,26 @@ func TestPickByName(t *testing.T) {
 		t.Error("an unknown name should fail")
 	}
 }
+
+func TestDocFailure(t *testing.T) {
+	l := newTabLog()
+	ev := func(method string, p map[string]any) {
+		b, _ := json.Marshal(p)
+		l.record(method, b)
+	}
+	if got := l.docFailure("https://a/"); got != "net::ERR_FAILED" {
+		t.Fatalf("empty log: %q", got)
+	}
+	ev("Network.requestWillBeSent", map[string]any{"requestId": "1", "type": "Document", "request": map[string]any{"method": "GET", "url": "https://b/"}})
+	ev("Network.loadingFailed", map[string]any{"requestId": "1", "errorText": "net::ERR_NAME_NOT_RESOLVED"})
+	ev("Network.requestWillBeSent", map[string]any{"requestId": "2", "type": "Document", "request": map[string]any{"method": "GET", "url": "https://a/"}})
+	ev("Network.loadingFailed", map[string]any{"requestId": "2", "errorText": "net::ERR_CONNECTION_CLOSED"})
+	ev("Network.requestWillBeSent", map[string]any{"requestId": "3", "type": "Script", "request": map[string]any{"method": "GET", "url": "https://c/x.js"}})
+	ev("Network.loadingFailed", map[string]any{"requestId": "3", "errorText": "net::ERR_BLOCKED"})
+	if got := l.docFailure("https://b/"); got != "net::ERR_NAME_NOT_RESOLVED" {
+		t.Fatalf("by url: %q", got)
+	}
+	if got := l.docFailure("https://other/"); got != "net::ERR_CONNECTION_CLOSED" {
+		t.Fatalf("newest document: %q", got)
+	}
+}

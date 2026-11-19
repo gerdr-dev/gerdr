@@ -79,6 +79,11 @@ All on Chrome 157, macOS.
   from hidden: starting a cast itself reports "visible", so restarting on every one would loop.
 - **A navigation to another site can end the screencast** (the renderer process changes): it's started again on
   every main-frame `Page.frameNavigated`.
+- **A page that fails to load is blank.** Chrome's error page (`chrome-error://chromewebdata/`) has no content in
+  the headless browser nor in the App's views, so a dropped connection looked like a page that never drew. The page
+  info reads `location.href` with the title (`editableJS`); on the error page `Failed` carries the main document's
+  network error from the tab's log (`docFailure`), and the pane draws its own error with a retry (`go` to the
+  history entry's address, which keeps the one that failed). The App's real page is kept out of sight meanwhile.
 - **Frames are acknowledged after 30 ms** (`frameGap`): Chrome sends the next only after the ack, so a page that
   animates without pause is sampled at ~30 fps instead of costing a JPEG encode per paint. A still page sends nothing.
 - **A viewer on this computer gets Chrome's JPEG as it is** (`View.Raw`, `streamPictures`' raw mode, chosen by

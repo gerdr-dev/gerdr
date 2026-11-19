@@ -52,6 +52,9 @@ type Page struct {
 	// Editable: the page's focus is somewhere to type (an input, a textarea, a contenteditable). A phone opens its
 	// keyboard only then, instead of on every tap
 	Editable bool `json:"editable,omitempty"`
+	// Failed: the page couldn't be loaded (a browser tab on Chrome's error page): the network error, e.g.
+	// "net::ERR_CONNECTION_CLOSED". The pane says so with a retry, since the error page itself is blank there
+	Failed string `json:"failed,omitempty"`
 }
 
 var ErrUnsupported = errors.New("remote screen only works on macOS")
