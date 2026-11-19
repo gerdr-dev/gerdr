@@ -153,9 +153,12 @@ function toastItem(it: InboxItem, title: string) {
     // and the button to the text's, so a short question left a wide empty band on the right (user report). In the
     // grid the text spans both columns, so the width is max(text, chip + button). Under 600px sonner makes every toast
     // full width; this keeps out of its way there. Sonner's sizes and margins are unlayered CSS, which beats
-    // Tailwind's layered utilities: hence the `!`.
+    // Tailwind's layered utilities: hence the `!`. The centring (inset-x-0 mx-auto) is wide-screen only too: under
+    // 600px sonner's toaster is `left: 16px; width: 100%`, i.e. it sticks 16px out past the right edge, and its own
+    // toasts only look centred because they sit at its left edge; mx-auto centred the card in that shifted box, so
+    // on a phone it hung 16px right, touching the screen's edge (user report).
     classNames: {
-      toast: "grid! grid-cols-[1fr_auto] gap-y-3! min-[601px]:w-fit! min-[601px]:min-w-80 max-w-(--width) inset-x-0 mx-auto",
+      toast: "grid! grid-cols-[1fr_auto] gap-y-3! min-[601px]:w-fit! min-[601px]:min-w-80 max-w-(--width) min-[601px]:inset-x-0 min-[601px]:mx-auto",
       content: "col-span-2",
       icon: "order-1 size-auto! max-w-full m-0!",
       actionButton: "order-2 col-start-2",
