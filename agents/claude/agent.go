@@ -826,6 +826,12 @@ func (a *Agent) HandleExtensionMethod(ctx context.Context, method string, params
 			return nil, err
 		}
 		return s.takeover(p.Action)
+	case acpx.MethodFork:
+		var p acpx.ForkRequest
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, acp.NewInvalidParams(err.Error())
+		}
+		return a.fork(p)
 	case acpx.MethodAllowRules:
 		var p acpx.AllowRulesRequest
 		if err := json.Unmarshal(params, &p); err != nil {

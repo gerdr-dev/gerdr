@@ -635,6 +635,16 @@ func (a *Agent) HandleExtensionMethod(ctx context.Context, method string, params
 			return nil, err
 		}
 		return acpx.RewindResponse{SessionId: acp.SessionId(s.currentID())}, nil
+	case acpx.MethodFork:
+		var p acpx.ForkRequest
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, acp.NewInvalidParams(err.Error())
+		}
+		id, err := a.st.fork(string(p.SessionId))
+		if err != nil {
+			return nil, err
+		}
+		return acpx.ForkResponse{SessionId: acp.SessionId(id)}, nil
 	case acpx.MethodTaskStop:
 		var p acpx.TaskStopRequest
 		if err := json.Unmarshal(params, &p); err != nil {

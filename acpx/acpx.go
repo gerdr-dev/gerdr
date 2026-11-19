@@ -49,6 +49,13 @@ const (
 	// MethodTakeover：client → agent。处理「别处开着」：fork = 另起一份（带着全部历史复制出一个新会话，回新的 sessionId）；
 	// kill = 关掉占着它的那些进程（最多等几秒），之后照常接着聊。
 	MethodTakeover = "_gerdr/takeover"
+	// MethodFork: client → agent. Copy a session's history into a new session of this agent, word for word, leaving the
+	// original untouched, and return the new id; the client resumes it like any session. Used to fork a conversation
+	// with the same engine, so the copy's prompt is the original's prefix (prompt cache hits, the full context, tool
+	// output included). Gerdr copies claude's and native's transcripts itself; codex goes through its app-server's
+	// thread/fork, since its threads are also registered in its own databases. Unsupported agents, or a source with
+	// nothing written yet, answer an error and the client hands the history over as text instead (hub/fork.go).
+	MethodFork = "_gerdr/fork"
 	// MethodTranscriptStat：client → agent。这个会话在 agent 自己的记录文件有多大、什么时候改的。gerdr 的对话日志只记它
 	// 自己经手的事；别处（herdr / 终端）接着聊过的话，记录文件会长、gerdr 这边不知道 —— 拿它判断要不要从记录重新载入。
 	MethodTranscriptStat = "_gerdr/transcript_stat"
@@ -142,6 +149,15 @@ type TakeoverRequest struct {
 
 type TakeoverResponse struct {
 	SessionId acp.SessionId `json:"sessionId"` // fork 之后是新的
+}
+
+type ForkRequest struct {
+	SessionId acp.SessionId `json:"sessionId"`
+	Cwd       string        `json:"cwd,omitempty"`
+}
+
+type ForkResponse struct {
+	SessionId acp.SessionId `json:"sessionId"`
 }
 
 // AutoDeniedKey：工具调用的 _meta.gerdr.autoDenied = []string，这次调用被 auto 模式的分类器拒了，

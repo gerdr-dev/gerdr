@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"os"
@@ -201,5 +202,47 @@ func TestForkAutoTitle(t *testing.T) {
 	s.emit(&Event{Kind: EvNotice, Level: "clear"})
 	if s.inFork() {
 		t.Fatal("still a fork after /clear")
+	}
+}
+
+// A fork with the same engine: the agent copies its own session, so the fork resumes that copy with nothing carried
+// as text; the settings come along, and naming starts at the fork.
+func TestForkSameEngine(t *testing.T) {
+	src, _ := startFake(t, false)
+	h := src.h
+	src.mu.Lock()
+	src.rec.Title, src.rec.Mode, src.rec.Config = "修登录页", "plan", map[string]string{"model": "m1"}
+	src.mu.Unlock()
+	src.emit(msg("u1", "登录页打不开"))
+	src.emit(agentText("路由表是空的。"))
+	evs := src.Events()
+	rec := src.rec
+	rec.Title = forkTitle(rec.Title)
+	s, err := h.forkSame(context.Background(), CreateOptions{Agent: "fake", Project: "p1", Tags: map[string]string{"k": "v"}}, rec, evs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.rec.AgentSessionID != "a1-fork" || s.rec.Title != "Fork: 修登录页" || s.rec.CustomTitle || s.rec.Mode != "plan" ||
+		s.rec.Config["model"] != "m1" || s.rec.Project != "p1" || s.rec.Tags["k"] != "v" || !s.rec.GerdrOnly || s.rec.Handoff != nil || s.attached {
+		t.Fatalf("record: %+v", s.rec)
+	}
+	got := s.Events()
+	if len(got) != len(evs)+1 || got[len(got)-1].Level != forkLevel {
+		t.Fatalf("log: %d events, last %+v", len(got), got[len(got)-1])
+	}
+	if p := s.pendingHandoff(); len(p) != 0 {
+		t.Fatal("history sent as text to an agent that already has it")
+	}
+	if p, fork := s.contextPrompts(); len(p) != 0 || !fork {
+		t.Fatalf("prompts %q fork=%v", p, fork)
+	}
+	if _, _, _, err := chatlog.RewindPoint(got, "u1"); err != nil {
+		t.Fatalf("rewind past the fork: %v", err)
+	}
+	if h.FindByAgent("fake", "a1-fork") != s || src.rec.AgentSessionID != "a1" {
+		t.Fatal("registration / source changed")
+	}
+	if _, err := h.forkSame(context.Background(), CreateOptions{Agent: "codex"}, rec, evs); !errors.Is(err, errOtherEngine) {
+		t.Fatalf("another engine: %v", err)
 	}
 }

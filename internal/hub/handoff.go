@@ -136,6 +136,16 @@ func (h *Hub) continueFrom(ctx context.Context, o CreateOptions) (*Session, erro
 	} else if fork {
 		srcRec.Title, srcRec.CustomTitle, srcRec.TitleKey, srcRec.PluginTitleFor = forkTitle(srcRec.Title), srcRec.TitleFixed, "", ""
 	}
+	if fork {
+		// The same engine copies its own session; otherwise (or when it can't) the history goes over as text, below
+		s, err := h.forkSame(ctx, o, srcRec, evs)
+		if err == nil {
+			return s, nil
+		}
+		if !errors.Is(err, errOtherEngine) {
+			h.log.Info("fork: copying the agent session failed, handing the history over as text", "from", srcRec.ID, "err", err)
+		}
+	}
 	s, err := h.Create(ctx, o)
 	if err != nil {
 		return nil, err

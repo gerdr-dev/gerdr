@@ -1087,6 +1087,30 @@ func (a *Agent) HandleExtensionMethod(ctx context.Context, method string, params
 			return nil, err
 		}
 		return acpx.TakeoverResponse{SessionId: acp.SessionId(res.Thread.ID)}, nil
+	case acpx.MethodFork:
+		// A fork with the same engine (hub/fork.go): the app-server's own thread/fork, which copies the history into a
+		// new thread and registers it in codex's databases; copying the rollout file here would miss those. The
+		// original thread is left as it is. excludeTurns: only the new id is needed, not the history back.
+		var p acpx.ForkRequest
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, acp.NewInvalidParams(err.Error())
+		}
+		rpc, err := a.client(ctx)
+		if err != nil {
+			return nil, err
+		}
+		var res struct {
+			Thread struct {
+				ID string `json:"id"`
+			} `json:"thread"`
+		}
+		if err := rpc.Call(ctx, "thread/fork", map[string]any{"threadId": string(p.SessionId), "excludeTurns": true}, &res); err != nil {
+			return nil, err
+		}
+		if res.Thread.ID == "" {
+			return nil, errors.New("thread/fork returned no thread")
+		}
+		return acpx.ForkResponse{SessionId: acp.SessionId(res.Thread.ID)}, nil
 	case acpx.MethodSteer:
 		var p acpx.SteerRequest
 		if err := json.Unmarshal(params, &p); err != nil {

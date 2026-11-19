@@ -360,13 +360,25 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
   had those turns as real turns, so there is nothing on its side to roll back to.
 - Refused when the source is running (the copy would miss the tail) or when the agent is the same (that's a plain
   resume).
-- **Fork** (`CreateOptions.Fork`, the session menu's "Fork…", `gerdr session fork`) is the same copy, with the same
-  agent allowed: a new conversation named "Fork: <title>" whose `Handoff.Fork` makes the first message's block say it's
-  a branch that goes its own way while the original carries on, not a takeover. Auto-naming (title.go
-  `contextPrompts`) counts only the messages since the fork, from the first one, and keeps the "Fork: " prefix, so
-  several forks of one conversation get told apart; the agent's own title is ignored there (claude titles a session
-  by its first message, which is the copied conversation). It deliberately doesn't use the agents' own forks (claude `--fork-session`, codex `thread/fork`):
-  one mechanism for every agent, the same agent or another, and nothing on the source's side is touched.
+- **Fork** (`CreateOptions.Fork`, the session menu's "Fork…", `/fork`, `gerdr session fork`): a new conversation named
+  "Fork: <title>", the original left as it is. Two ways, by engine (`Hub.engine`: a role's base):
+  - **Same engine** (hub/fork.go `forkSame`): the agent copies its own session (`_gerdr/fork`) and the fork resumes
+    the copy, so its prompt starts with the original's word for word: the prompt cache hits and the agent has the
+    whole context, tool output included. claude: Gerdr copies the transcript itself (agents/claude/fork.go), only
+    each line's `sessionId` swapped, the `<id>/` side folder copied, and the title lines (`custom-title`, `ai-title`,
+    `agent-name`) left out, or claude would report the original's name (a /rename even as the user's) on resume. Not
+    claude's `--fork-session`, by the user's choice. Message uuids stay, so a rewind in the fork works, past the fork
+    too (the `fork` notice doesn't block it). native: its record copied, the /rename title dropped. codex: the
+    app-server's `thread/fork`, because a codex 0.166 thread is also registered in its sqlite databases
+    (`state_5.sqlite`…) and `thread/resume` takes only an id, so a copied rollout file would never be found. The
+    fork keeps the original's mode / model / effort / folder.
+  - **Another engine**, or the agent couldn't copy (nothing written yet, e.g. new or rewound and not spoken since; a
+    variant with its own records folder; an external agent): the handoff above, whose `Handoff.Fork` makes the first
+    message's block say it's a branch that goes its own way while the original carries on, not a takeover.
+
+  Auto-naming (title.go `contextPrompts`) counts only the messages since the fork (the `fork` notice, or the fork's
+  handoff notice), from the first one, and keeps the "Fork: " prefix, so several forks of one conversation get told
+  apart; the agent's own title is ignored there (claude titles a session by its first message).
 
 ## 界面：没有打包环节（internal/uisite）
 

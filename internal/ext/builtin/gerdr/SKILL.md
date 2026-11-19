@@ -91,8 +91,9 @@ gerdr session new --agent codex --title reviewer \
   已经开着的会话改名用 `gerdr session rename <会话> <标题>`（加 `--fixed` 一样固定；标题给 `""` 交回自动起名）；
 - Fork a conversation (the session menu's "Fork…"): `gerdr session fork <session> [--agent <id>] [--prompt … --wait]`
   starts a new session carrying that conversation so far, named "Fork: <its title>" (auto-renamed "Fork: <its own topic>" once it's talked to), with the same agent or another;
-  the original is left as it is. The history goes to the new agent as text with the first message (like switching
-  agents), so it works for any agent. Not while the source is running. Use it when the user wants to try another
+  the original is left as it is. With the same engine (a claude role forked to claude…) the agent's session is
+  copied, so it has the whole context exactly as it was; to another engine the history goes along as text with the
+  first message (like switching agents). Not while the source is running. Use it when the user wants to try another
   direction, or another agent's take, without losing the conversation they have;
 - A project folder was moved or renamed: `gerdr session cwd <session> <new folder>` moves each of its conversations
   there (the conversation and Claude's transcript come along; not while it runs), and `gerdr workspace cwd <ws> <folder>`

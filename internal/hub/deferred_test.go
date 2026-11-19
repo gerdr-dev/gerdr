@@ -80,6 +80,10 @@ func (f *fakeAgent) HandleExtensionMethod(ctx context.Context, method string, pa
 		return acpx.SteerResponse{Outcome: acpx.SteerInjected}, nil
 	case acpx.MethodWithdraw:
 		return acpx.WithdrawResponse{}, nil
+	case acpx.MethodFork:
+		var p acpx.ForkRequest
+		_ = json.Unmarshal(params, &p)
+		return acpx.ForkResponse{SessionId: p.SessionId + "-fork"}, nil
 	}
 	return nil, acp.NewMethodNotFound(method)
 }

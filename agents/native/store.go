@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/coder/acp-go-sdk"
+	"github.com/google/uuid"
 
 	"github.com/gerdr-dev/gerdr/agents/native/llm"
 )
@@ -237,4 +238,23 @@ func userText(m llm.Message) string {
 		}
 	}
 	return b.String()
+}
+
+// fork copies a session's record under a new id (acpx.MethodFork, a fork with the same engine): the same messages,
+// so the model sees the original's conversation word for word. The /rename title stays behind: it names the
+// original, and Gerdr names the fork. A session with nothing written yet is an error (the client copies the chat).
+func (st store) fork(src string) (string, error) {
+	es, err := st.load(src)
+	if err != nil {
+		return "", err
+	}
+	for i, e := range es {
+		if e.Meta != nil && e.Meta.Title != "" {
+			m := *e.Meta
+			m.Title = ""
+			es[i].Meta = &m
+		}
+	}
+	id := uuid.NewString()
+	return id, st.rewrite(id, es)
 }

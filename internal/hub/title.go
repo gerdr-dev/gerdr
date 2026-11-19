@@ -52,8 +52,9 @@ func (s *Session) Prompts() []string {
 	return p
 }
 
-// contextPrompts is Prompts, and whether this context is a fork's (CreateOptions.Fork): then it starts at the fork,
-// not at the copied conversation above it, which is the original's and would name the fork after it at once.
+// contextPrompts is Prompts, and whether this context is a fork's (CreateOptions.Fork): then it starts at the fork
+// (a forkLevel notice, or the handoff notice of a fork to another engine), not at the copied conversation above it,
+// which is the original's and would name the fork after it at once.
 func (s *Session) contextPrompts() (out []string, fork bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -71,7 +72,7 @@ func (s *Session) contextPrompts() (out []string, fork bool) {
 		switch {
 		case e.Kind == EvNotice && e.Level == "clear":
 			out, fork = out[:0], false
-		case i == at:
+		case e.Kind == EvNotice && e.Level == forkLevel, i == at:
 			out, fork = out[:0], true
 		case e.Kind == EvUser:
 			if t := stripImageTokens(contentText(e.Content)); t != "" && commandIn(t) == "" {
