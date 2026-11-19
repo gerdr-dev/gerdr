@@ -63,8 +63,8 @@ export function BrowserSettings({ open }: { open: boolean }) {
             </div>
           )
         )}
-        {/* Already connected: the store page stays one click away for another profile, worded as that (the same "Install"
-            words under a connected Chrome read as being told to install again, reported) */}
+        {/* Already connected: the store page stays one click away (another profile, updates, reviews), worded as just the
+            store (an "Install" link under a connected Chrome read as being told to install again, reported) */}
         {!!profiles?.length && (
           <a
             href={STORE_URL}
