@@ -1,5 +1,5 @@
 import { Component, useEffect, useState, type ReactNode } from "react";
-import { Check, CircleHelp, ClipboardList, Undo2 } from "lucide-react";
+import { Check, CircleHelp, ClipboardList, Info, Undo2 } from "lucide-react";
 import { ChoiceCard, ChoiceKicker, ChoiceList, ChoiceOther, ChoiceRow, ChoiceTitle, Markdown, type GPart, type ToolPart } from "@gerdr/chat";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
@@ -11,7 +11,8 @@ import { t } from "@/lib/i18n";
  * A tool call whose result asks to be seen: a Work tool (cmd/gerdr/workmcp.go) returns `{ gerdrCard: … }` when what
  * it did is something the user should notice in the chat, e.g. a step put on their board. The card replaces the
  * usual folded "called a tool" row, and looks like the chat's own question card (AskCard) with a yellow edge: it's
- * something waiting on the user.
+ * something waiting on the user. With tone "info" / "ok" (and no choices) it's a record instead: no yellow edge, no
+ * default "要你做" kicker.
  *
  * `ref` names it, so a page can point the conversation at it (WorkPeek's jump). `choose` makes it answerable right
  * here: the pick runs `fn` of that Work project with `{ ...input, [field]: answer }`, the same call the page would
@@ -161,6 +162,24 @@ export function BuiltinCard({ card, done }: { card: Card; done?: CardDone }) {
   const open = !!ch && !settled && (!p || !!p.err);
   const ok = settled ? !done!.dropped : !!p?.sent;
   const grey = settled && !!done!.dropped;
+  // tone "info" / "ok" without choices: a record of what was done (a memory saved, a ticket approved), nothing to do
+  // for the user, so no yellow edge and no "要你做". "warn" and no tone stay the to-do card.
+  if (!ch && !done && (card.tone === "info" || card.tone === "ok"))
+    return (
+      <ChoiceCard className={cn("border-l-2", card.tone === "ok" ? "border-l-ok" : "border-l-border")}>
+        {card.kicker && (
+          <ChoiceKicker icon={card.tone === "ok" ? <Check className="size-3.5 text-ok" /> : <Info className="size-3.5 text-muted-foreground" />}>
+            <span>{card.kicker}</span>
+          </ChoiceKicker>
+        )}
+        <ChoiceTitle>{card.title}</ChoiceTitle>
+        {card.body && (
+          <div className="mt-1 text-[1em] text-muted-foreground">
+            <Markdown>{card.body}</Markdown>
+          </div>
+        )}
+      </ChoiceCard>
+    );
   // The last row: the "other" box while open, else where things stand. Same box, same height (ChoiceOther's padding)
   const row = "flex min-w-0 items-center gap-2 rounded-lg border border-transparent px-2.5 py-2 text-[1em] leading-normal";
   return (
