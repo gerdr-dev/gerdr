@@ -27,6 +27,15 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
     /// LAN routing (iOS 17+, an https domain); nil = everything goes the usual way
     private var route: LanRoute?
     private var pendingRoute: [String: Any]?
+    /// Add-ons' sockets and requests made from the phone (NativeNet), made on first use. Not `lazy`: deinit must
+    /// not create one (a weak reference to an object being deallocated traps)
+    private var netMade: NativeNet?
+    private var net: NativeNet {
+        if let n = netMade { return n }
+        let n = NativeNet { [weak self] m in self?.post(m) }
+        netMade = n
+        return n
+    }
 
     init(root: RootViewController, server: URL, start: URL) {
         self.root = root
@@ -42,6 +51,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         web?.configuration.userContentController.removeScriptMessageHandler(forName: "gerdr")
         NotificationCenter.default.removeObserver(self)
         route?.stop()
+        netMade?.shutdown() // its URLSession holds it (the session's delegate) until invalidated
         // The default data store outlives this page: don't leave the next server behind this one's proxy
         if #available(iOS 17.0, *), route != nil { web?.configuration.websiteDataStore.proxyConfigurations = [] }
     }
@@ -172,7 +182,9 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
             // appKey: this phone can re-verify with Face ID (Secure Enclave + biometrics set up); the pairing page
             // offers it when the server says this device registered one
             post(["t": "hello", "platform": "ios", "version": appVersion, "webauthn": false, "scan": false, "copyImage": true,
-                  "lan": route != nil, "appKey": AppKey.available])
+                  "lan": route != nil, "appKey": AppKey.available,
+                  // net: add-ons' g.socket / g.fetch go from the phone straight to the service (NativeNet)
+                  "net": true])
             route?.announce() // a new document: its label starts from the current state
         case "theme":
             applyTheme(m["bg"] as? String ?? "", light: m["light"] as? Bool ?? true)
@@ -197,6 +209,16 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         case "haptic":
             // A press the page acts on (hold to talk), felt like a native one (android.ts haptic)
             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        // An add-on's WebSocket / HTTP request, made here instead of through the computer (NativeNet, ui lib/appnet.ts)
+        case "ws":
+            switch m["op"] as? String {
+            case "open": net.open(m)
+            case "send": net.send(m)
+            case "close": net.close(m)
+            default: break
+            }
+        case "http":
+            net.fetch(m)
         default:
             break // Android-only messages (lan, volkeys, notify…) and anything newer than this App
         }
@@ -270,6 +292,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
 
     func webView(_ w: WKWebView, didCommit navigation: WKNavigation!) {
         helloed = false // a new document has to say hello again; the old one's channel is gone
+        netMade?.closeAll()
     }
 
     func webView(_ w: WKWebView, didFinish navigation: WKNavigation!) {

@@ -381,7 +381,7 @@ declare global {
      * reached, the URL isn't http(s), or 30s pass. Responses over 10 MB are refused.
      * binary: true for an answer that isn't text (audio, images): read it with bytes() / blob(); text is then "".
      * A body that is a Blob / ArrayBuffer / Uint8Array is sent as those bytes (recorded audio to a speech-to-text API).
-     * In the Android App the phone makes the request itself (no detour through the computer); local / private
+     * In the phone Apps the phone makes the request itself (no detour through the computer); local / private
      * addresses, and hosts the phone can't reach, still go through the computer.
      */
     fetch(
@@ -394,7 +394,7 @@ declare global {
      * messages pass both ways as they are, text as text, binary as binary. Resolves an opening WebSocket: set
      * binaryType, wait for "open", send, close as usual. A refusal (wrong key) shows as an error / close event.
      * For streaming APIs: speech-to-text that returns words as they are said, realtime models.
-     * In the Android App the phone opens it itself, straight to the service; local / private addresses, and hosts the
+     * In the phone Apps the phone opens it itself, straight to the service; local / private addresses, and hosts the
      * phone can't reach, still go through the computer. Either way you get the same WebSocket.
      */
     socket(url: string, init?: { headers?: Record<string, string>; protocols?: string[] }): Promise<WebSocket>;

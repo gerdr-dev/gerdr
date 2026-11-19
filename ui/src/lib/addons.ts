@@ -618,7 +618,7 @@ function makeApi(id: string, hash: string) {
         body = JSON.stringify(raw);
         if (!Object.keys(headers).some((k) => k.toLowerCase() === "content-type")) headers["Content-Type"] = "application/json";
       }
-      // Made by the backend, or in the Android App by the phone itself (lib/appnet.ts)
+      // Made by the backend, or in the phone App by the phone itself (lib/appnet.ts)
       const r = await addonFetch(id, { url, method: init?.method, headers, body, bodyBase64, binary: init?.binary });
       // binary: the backend sent the body as base64 (audio, images: bytes that don't survive being text)
       const bytes = () => (r.base64 ? Uint8Array.from(atob(r.body), (c) => c.charCodeAt(0)) : new TextEncoder().encode(r.body));
@@ -634,7 +634,7 @@ function makeApi(id: string, hash: string) {
         blob: () => new Blob([bytes()], { type: r.headers["content-type"] ?? "" }),
       };
     },
-    // A WebSocket the backend opens for the add-on (internal/server/addonsocket.go), or in the Android App the
+    // A WebSocket the backend opens for the add-on (internal/server/addonsocket.go), or in the phone App the
     // phone itself (lib/appnet.ts): remotely the backend's route is phone → relay → computer → service, and
     // speech-to-text lagged behind the voice
     socket: (url: string, init?: { headers?: Record<string, string>; protocols?: string[] }) => addonSocket(id, url, init),

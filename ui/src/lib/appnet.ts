@@ -1,5 +1,5 @@
-// An add-on's g.socket / g.fetch made by the Android App itself, straight from the phone to the service
-// (Bridge.kt NativeNet), instead of through the computer's backend (addonsocket.go / addonfetch.go). Remotely the
+// An add-on's g.socket / g.fetch made by the phone App itself, straight from the phone to the service
+// (Android's NativeNet.kt, iOS's NativeNet.swift), instead of through the computer's backend (addonsocket.go / addonfetch.go). Remotely the
 // backend route is phone → relay → computer → service and back, which made streaming speech-to-text lag behind
 // the voice; the page can't connect by itself (CSP `connect-src 'self'`, a browser WebSocket can't set the
 // headers these APIs authenticate with, and their HTTP APIs send no CORS headers). The add-on's code already runs
@@ -14,11 +14,11 @@
 // `unreachable`), the same request goes through the backend instead. Anything the service answered (an error
 // status, a refused handshake) is the answer, never retried.
 
-import { androidCan, isAndroid, onAndroid, postAndroid, type AndroidMsg } from "./android";
+import { androidCan, isApp, onAndroid, postAndroid, type AndroidMsg } from "./android";
 import { api } from "./api";
 
-/** The App can make add-ons' connections itself. */
-const appNet = () => isAndroid() && androidCan("net");
+/** The App (Android or iOS) can make add-ons' connections itself. */
+const appNet = () => isApp() && androidCan("net");
 
 /** A host only the computer is likely to reach: loopback, private / link-local / tailnet IPs, mDNS, a bare name. */
 function useLocal(url: string): boolean {

@@ -15,6 +15,7 @@ ios/
     WebViewController.swift     WKWebView, navigation lock, bridge, loading / error covers, downloads, login overlay
     Login.swift         the device flow's HTTP (passkey through Safari)
     LanRoute.swift      LAN routing: the in-App CONNECT proxy, probing, network watching (iOS 17+)
+    NativeNet.swift     add-ons' g.socket / g.fetch from the phone itself (bridge `ws` / `http`), not through the computer
     Server.swift        parsing / saving the address, origin format, local hosts
     Css.swift           the page's CSS colours (rgb / oklch / #hex) → UIColor
     Look.swift          native screens' colours (same values as index.css's tokens) and controls; L(zh, en)
@@ -69,7 +70,9 @@ means Android only (keys, LAN, notifications, update); `isApp()` is either App, 
 - Shell → page is `evaluateJavaScript("gerdrIOS.onmessage({data: <JSON string>})")`, only after the page's hello
   and only while the web view is on the server's origin (reset on every commit).
 - Messages iOS answers: `hello` (reply: `platform: "ios"`, `webauthn: false`, `scan: false`, `copyImage: true`,
-  `lan` = it routes over the LAN), `theme`, `open`, `setup`, `login`, `appkey`, `enroll`, `copyImage`, `lan`; it sends `route`. Everything else is ignored, as Android ignores what it doesn't know.
+  `lan` = it routes over the LAN, `net: true`), `theme`, `open`, `setup`, `login`, `appkey`, `enroll`, `copyImage`, `lan`,
+  `ws` / `http` (add-ons' connections made by the phone: NativeNet.swift on URLSession, same messages as Android's
+  NativeNet.kt, docs/dev/ADDONS.md); it sends `route`. Everything else is ignored, as Android ignores what it doesn't know.
 
 ## Passkey: through Safari, not in the WKWebView
 

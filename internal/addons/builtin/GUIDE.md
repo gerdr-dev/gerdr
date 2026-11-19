@@ -286,7 +286,7 @@ the light / dark switch and outlives the add-on.
 | `g.fetch(url, init)` | An HTTP request made by Gerdr's backend, so the API needs no CORS. The only way out: the page's own `fetch` is limited to Gerdr itself (CSP `connect-src 'self'`), CORS or not. Resolves `{ ok, status, headers, text, json(), bytes(), blob() }`; a non-string `body` goes as JSON, a `Blob` / `ArrayBuffer` / `Uint8Array` as those bytes (recorded audio to a speech-to-text API). `binary: true` for an answer that isn't text (audio, images). |
 | `g.socket(url, { headers })` | A WebSocket (`ws(s)://`) opened by Gerdr's backend with your headers (a key), for streaming APIs: speech-to-text returning words as they're said, realtime models. Resolves a normal `WebSocket`; messages pass as they are. |
 
-In the Android App, `g.fetch` and `g.socket` go from the phone straight to the service, not through the computer
+In the phone Apps (Android, iOS), `g.fetch` and `g.socket` go from the phone straight to the service, not through the computer
 (remotely that detour is phone → relay → computer → service, slow for streaming). Local and private addresses
 (`localhost`, `192.168.…`, `.local`, a bare host name), and any host the phone can't reach at all (a company host
 behind the computer's VPN), still go through the computer by themselves. Nothing to change in an add-on.
