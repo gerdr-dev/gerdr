@@ -5,9 +5,82 @@ import (
 	"encoding/json"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/gerdr-dev/gerdr/internal/screen"
 )
+
+// An App page whose screencast went silent (the screen locked) is caught up on with screenshots after a change, until
+// two in a row are the same; a screencast frame after the change stops it.
+func TestViewCatchUp(t *testing.T) {
+	b := New(nil)
+	tab := newTab(8, "https://example.com/")
+	tab.Native = true
+	var mu sync.Mutex
+	shots, pic := 0, "A"
+	tab.send = func(_ context.Context, method string, _ json.RawMessage) (json.RawMessage, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		switch method {
+		case "Page.getLayoutMetrics":
+			return json.RawMessage(`{"cssVisualViewport":{"clientWidth":400,"clientHeight":780}}`), nil
+		case "Page.captureScreenshot":
+			shots++
+			d, _ := json.Marshal(map[string][]byte{"data": []byte(pic)})
+			return d, nil
+		}
+		return json.RawMessage(`{}`), nil
+	}
+	b.tabs[tab.ID] = tab
+	v, err := b.View(tab.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer v.Close()
+	frame := func() string {
+		v.mu.Lock()
+		defer v.mu.Unlock()
+		return string(v.frame)
+	}
+	// a change long enough ago that a live screencast would have answered
+	ago := func() {
+		v.mu.Lock()
+		v.changedAt = v.changedAt.Add(-time.Second)
+		v.stillAt = time.Time{}
+		v.mu.Unlock()
+	}
+	v.frame = []byte("old")
+	v.markChanged()
+	v.catchUp()
+	if frame() != "old" || shots != 0 {
+		t.Fatalf("caught up before a screencast frame could come: %q, %d shots", frame(), shots)
+	}
+	ago()
+	v.catchUp()
+	if frame() != "A" {
+		t.Fatalf("frame = %q, want the still", frame())
+	}
+	ago()
+	v.catchUp() // the same picture: settled
+	ago()
+	v.catchUp()
+	if shots != 2 {
+		t.Errorf("shots = %d, want 2 (stop once two are the same)", shots)
+	}
+	// the screencast answered the next change: no still
+	v.markChanged()
+	ago()
+	v.mu.Lock()
+	v.castAt = time.Now()
+	v.mu.Unlock()
+	mu.Lock()
+	pic = "B"
+	mu.Unlock()
+	v.catchUp()
+	if shots != 2 || frame() != "A" {
+		t.Errorf("a still over a live screencast: %d shots, frame %q", shots, frame())
+	}
+}
 
 // The person's mouse in the Browser pane goes quiet (no extension cursor, no glide); an agent's click doesn't.
 func TestViewMouseQuiet(t *testing.T) {

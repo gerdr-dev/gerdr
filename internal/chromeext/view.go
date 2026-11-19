@@ -56,6 +56,11 @@ type View struct {
 	bg       *rgba // the pane's background ("bg" input): a failed page's error page is drawn on it
 	bgOn     bool   // the override is set
 	pageKick chan struct{}
+	// The screencast going silent on an App page (catchUp): when the page last should have changed (a navigation, an
+	// input, a new size), when the screencast last sent a frame, and the stills taken since
+	changedAt, castAt, stillAt time.Time
+	lastStill               []byte
+	settled                 bool // two stills in a row were the same: nothing more to catch up on
 }
 
 // View starts streaming tab id's screen (0 = the one opened last). Close it when the viewer leaves.
@@ -121,6 +126,7 @@ func (v *View) SizeFrom(width, height int, remote bool) {
 	if width < 200 || height < 150 {
 		return
 	}
+	defer v.markChanged()
 	if v.t.resize == nil {
 		if v.t.Native && remote {
 			v.mu.Lock()
@@ -133,6 +139,60 @@ func (v *View) SizeFrom(width, height int, remote bool) {
 	ctx, cancel := context.WithTimeout(v.ctx, 5*time.Second)
 	defer cancel()
 	v.t.resize(ctx, width, height)
+}
+
+// markChanged: the page should look different soon (a navigation, an input, a new size), so a silent screencast is
+// caught up on with stills (catchUp).
+func (v *View) markChanged() {
+	v.mu.Lock()
+	v.changedAt, v.settled = time.Now(), false
+	v.mu.Unlock()
+}
+
+// Stills stand in for a silent screencast this long after a change, at most this often.
+const (
+	catchUpFor   = 8 * time.Second
+	catchUpEvery = 400 * time.Millisecond
+	catchUpAfter = 200 * time.Millisecond // a live screencast's frame comes well within this
+)
+
+// catchUp: a still as the frame when the screencast has sent nothing since the page last changed. The desktop App's
+// pages paint into the screencast only while macOS composites the window: with the screen locked (a phone driving the
+// computer from elsewhere, user report) a page navigated, was typed into, resized, and the phone kept the picture
+// taken when it connected; the page itself was live (`captureScreenshot` showed it). Only the App's pages: the
+// headless browser's screencast doesn't stop, and the user's own Chrome would get the extension's screenshots. Stops
+// when two stills in a row are the same, so a click that changed nothing costs two screenshots.
+func (v *View) catchUp() {
+	if !v.t.Native {
+		return
+	}
+	v.mu.Lock()
+	now := time.Now()
+	due := !v.settled && !v.changedAt.IsZero() && v.castAt.Before(v.changedAt) &&
+		now.Sub(v.changedAt) >= catchUpAfter && now.Sub(v.changedAt) <= catchUpFor && now.Sub(v.stillAt) >= catchUpEvery
+	if due {
+		v.stillAt = now
+	}
+	v.mu.Unlock()
+	if !due {
+		return
+	}
+	shot, vw, vh, ok := v.still()
+	if !ok {
+		return
+	}
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	if v.castAt.After(v.changedAt) { // the screencast spoke meanwhile: its frame is the newer
+		return
+	}
+	if bytes.Equal(shot, v.lastStill) {
+		v.settled = true
+		return
+	}
+	v.lastStill = shot
+	v.frame, v.vw, v.vh = shot, vw, vh
+	v.frameSeq++
 }
 
 // Grab is the latest frame, no wider than maxWidth px, as pixels. The first call (and a new width) starts the
@@ -221,6 +281,7 @@ func (v *View) latest(maxWidth int) ([]byte, int64, error) {
 			}
 		}
 	}
+	v.catchUp()
 	v.mu.Lock()
 	b, seq := v.frame, v.frameSeq
 	v.mu.Unlock()
@@ -259,10 +320,14 @@ func (v *View) event(method string, params json.RawMessage) {
 			v.mu.Lock()
 			v.frame, v.vw, v.vh = b, p.Metadata.DeviceWidth, p.Metadata.DeviceHeight
 			v.frameSeq++
+			v.castAt = time.Now()
 			v.mu.Unlock()
 			v.kick()
 		}
 	case "Page.navigatedWithinDocument", "Page.frameNavigated", "Page.loadEventFired", "Page.frameStartedLoading", "Page.frameStoppedLoading":
+		if method != "Page.frameStartedLoading" {
+			v.markChanged() // a new document, or its load done: it looks different now
+		}
 		v.kickPage()
 	case "Network.loadingFailed":
 		// A document that failed: its error page is about to show, blank, and the pane covers it with its own as soon
@@ -452,6 +517,13 @@ func (v *View) Do(in screen.Input) error {
 	case "click", "up", "key":
 		// the focus may have moved into or out of a field: the pane opens / closes a phone's keyboard by it
 		defer v.kickPage()
+	}
+	switch in.Kind {
+	case "move", "down", "bg":
+	default:
+		// what the person did should show, even when the screencast is silent (catchUp); a hover or a press alone
+		// rarely changes anything worth a screenshot
+		defer v.markChanged()
 	}
 	t := v.t
 	v.mu.Lock()
@@ -773,6 +845,20 @@ func (v *View) Viewport() [2]float64 {
 // stillFrame: a screenshot of the visible page as the frame, while the screencast has sent none (a page that doesn't
 // paint sends none). Its size (CSS px) is what the input maps onto, as a screencast frame's metadata is.
 func (v *View) stillFrame() {
+	shot, vw, vh, ok := v.still()
+	if !ok {
+		return
+	}
+	v.mu.Lock()
+	if v.frame == nil { // a real frame came meanwhile: that one is newer
+		v.frame, v.vw, v.vh = shot, vw, vh
+		v.frameSeq++
+	}
+	v.mu.Unlock()
+}
+
+// still: a screenshot of the visible page (JPEG) and the viewport it covers (CSS px).
+func (v *View) still() (jpg []byte, vw, vh float64, ok bool) {
 	ctx, cancel := context.WithTimeout(v.ctx, 5*time.Second)
 	defer cancel()
 	var lm struct {
@@ -782,18 +868,13 @@ func (v *View) stillFrame() {
 		} `json:"cssVisualViewport"`
 	}
 	if err := v.t.call(ctx, "Page.getLayoutMetrics", map[string]any{}, &lm); err != nil || lm.V.ClientWidth <= 0 {
-		return
+		return nil, 0, 0, false
 	}
 	var shot struct {
 		Data []byte `json:"data"` // base64 in the JSON
 	}
 	if err := v.t.call(ctx, "Page.captureScreenshot", map[string]any{"format": "jpeg", "quality": 92}, &shot); err != nil || len(shot.Data) == 0 {
-		return
+		return nil, 0, 0, false
 	}
-	v.mu.Lock()
-	if v.frame == nil { // a real frame came meanwhile: that one is newer
-		v.frame, v.vw, v.vh = shot.Data, lm.V.ClientWidth, lm.V.ClientHeight
-		v.frameSeq++
-	}
-	v.mu.Unlock()
+	return shot.Data, lm.V.ClientWidth, lm.V.ClientHeight, true
 }

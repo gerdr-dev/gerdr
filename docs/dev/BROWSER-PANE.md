@@ -247,6 +247,13 @@ projbrowser.Open: the App connected → OpenNative in the project's profile; els
   of taking it off screen, which made the browser count it hidden and stop painting (the phone saw a frozen page); the
   App's browser runs with `--disable-backgrounding-occluded-windows` (and no renderer / timer backgrounding) so a
   covered window paints too.
+- **With the screen locked the screencast goes silent** (Electron, 2026-11-19, measured): a phone drove a page parked in
+  its hidden window while the Mac was locked; the page navigated and took typing (`location.href`, a screenshot both
+  showed it), but `Page.startScreencast` sent no frame after the first, so the phone kept the picture taken when it
+  connected (`stillFrame`) whatever happened. `Page.captureScreenshot` still works then. So after a change (a
+  navigation, its load, an input other than a move / press, a new size) an App page whose screencast hasn't spoken
+  within 200 ms gets screenshots as its frames, at most every 400 ms for 8 s, stopping once two in a row are the same
+  (`View.catchUp`). A live screencast answers well within that, and then nothing extra is taken.
 - **Limits**: Windows' App (WebView2) has no views yet, so it stays headless + pictures; the window shows for a moment
   where the browser puts a new window before it is taken off screen.
 - Measured in the prototype and Lightron's `TestE2EView`: the child window follows moves and minimize exactly; sizing
