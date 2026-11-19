@@ -19,6 +19,7 @@ import {
   openSessionsWithProject,
   overviewFocus,
   overviewIds,
+  phoneOrder,
   toPin,
   type ActiveConf,
   type Overview,
@@ -117,6 +118,9 @@ export function placeTilesAfter(ids: string[], after: string) {
  */
 export function removeActive(id: string) {
   const s = get().sessions[id];
+  // Taking out the focused tile moves the focus to the one beside it, as seen: left alone it fell back to the first
+  // tile, far from where the user was (reported on the phone). Worked out before it leaves the list.
+  const next = overviewFocus(get()) === id ? besideTile(id) : undefined;
   if (s && get().unread[id]) markRead(id);
   setActive((a) => {
     // Forget sessions gone since, so the map doesn't grow forever
@@ -125,6 +129,20 @@ export function removeActive(id: string) {
     return { ...a, added: a.added.filter((x) => x !== id), dismissed };
   });
   setOverview((o) => (o.main === id ? { ...o, main: undefined } : o));
+  if (next) focusTile(next);
+}
+
+/**
+ * The tile to focus when `id` goes: the next one in the order on screen, else the previous. On a phone that is the chip
+ * strip's order (phoneOrder, frozen while the overview is open), in the grid the tiles' order without the minimized.
+ */
+function besideTile(id: string): string | undefined {
+  const st = get();
+  const o = st.overview;
+  const ids = overviewIds(st);
+  const order = o.phone ? phoneOrder(ids, st.sessions, st.unread, o.phone) : ids.filter((x) => x === id || !o.mini?.includes(x));
+  const i = order.indexOf(id);
+  return i < 0 ? undefined : (order[i + 1] ?? order[i - 1]);
 }
 
 /** The finished ones (seen or not): what's still running, waiting on you or failed stays. */
@@ -587,12 +605,7 @@ function neighbour(from: string, dir: Dir): string | undefined {
 /** Close the focused tile: it leaves the grid (the agent keeps running), focus moves to its neighbour. */
 export function closeTile() {
   const cur = overviewFocus(get());
-  if (!cur) return;
-  const ids = overviewIds(get());
-  const i = ids.indexOf(cur);
-  const next = ids[i + 1] ?? ids[i - 1];
-  removeActive(cur);
-  if (next) focusTile(next);
+  if (cur) removeActive(cur); // which moves the focus to its neighbour
 }
 
 export function stepTile(delta: 1 | -1) {
