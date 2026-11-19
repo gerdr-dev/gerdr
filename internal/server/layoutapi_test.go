@@ -184,3 +184,27 @@ func TestPaneReadFindsTerminalNextToCaller(t *testing.T) {
 		t.Fatalf("by pane id: want T1, got %q %v", id, err)
 	}
 }
+
+// A pane floats only with another one left docked; moving it away forgets its float box.
+func TestPaneFloatDockAndCleanup(t *testing.T) {
+	floats := func(raw string) node {
+		var l node
+		_ = json.Unmarshal([]byte(raw), &l)
+		return asNode(tabsOf(nodes(l["workspaces"])[0])[0]["float"])
+	}
+	raw, _ := apply(t, opsLayout, call("pane.float", LayoutParams{ID: "p2"}))
+	if f := floats(raw); f["p2"] == nil {
+		t.Fatalf("p2 not floating: %v", f)
+	}
+	if _, _, err := ApplyLayout(json.RawMessage(raw), opsSessions, "A", "default", "pane.float", LayoutParams{ID: "p1"}); err == nil {
+		t.Fatal("floated the last docked pane")
+	}
+	docked, _ := apply(t, raw, call("pane.dock", LayoutParams{ID: "p2"}))
+	if f := floats(docked); f != nil {
+		t.Fatalf("still floating after dock: %v", f)
+	}
+	moved, _ := apply(t, raw, call("pane.move", LayoutParams{ID: "p2", NewTab: true}))
+	if f := floats(moved); f != nil {
+		t.Fatalf("float box left behind: %v", f)
+	}
+}

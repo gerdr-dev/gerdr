@@ -16,6 +16,7 @@ import {
   MoreHorizontal,
   PanelTopOpen,
   Pencil,
+  PictureInPicture2,
   Plus,
   Rows2,
   Server,
@@ -46,9 +47,24 @@ import {
   reopenTerminal,
   runAction,
   splitFocused,
+  toggleFloatPane,
   toggleZoom,
 } from "@/lib/actions";
-import { leaves, phoneRoot, setRatio, updateTab, type PaneLeaf, type PaneNode, type PaneSplit, type Tab } from "@/lib/layout";
+import {
+  dockedRoot,
+  floatable,
+  floating,
+  leaves,
+  phoneRoot,
+  setFloatBox,
+  setRatio,
+  updateTab,
+  type FloatBox,
+  type PaneLeaf,
+  type PaneNode,
+  type PaneSplit,
+  type Tab,
+} from "@/lib/layout";
 import { applyPaneTitle, paneSnapshot, tabSnapshot } from "@/lib/addons";
 import { AddonSlot } from "./AddonSlot";
 import { useWindowInFront } from "@/lib/front";
@@ -105,7 +121,11 @@ export function TabView({ tab }: { tab: Tab }) {
   const all = leaves(tab.root);
   // 手机上：上下分屏照画，左右分屏只画焦点那一边（见 phoneRoot）。不管布局里的 zoom ——
   // 布局是存服务端、桌面那边共用的，手机上看一眼不该把电脑上的分屏变成放大。看不见的 pane 走面板一览，焦点那个标题栏上标「第几个 / 共几个」。
-  const root = phone ? phoneRoot(tab) : tab.root;
+  // Floating panes (picture-in-picture, layout.toggleFloat) are laid out apart, over the split; not on a phone, which
+  // shows one pane at a time anyway
+  const docked = phone ? null : dockedRoot(tab);
+  const floats = docked ? floating(tab) : [];
+  const root = phone ? phoneRoot(tab) : (docked ?? tab.root);
   const panes: { pane: PaneLeaf; box: Box }[] = [];
   const seams: { split: PaneSplit; box: Box }[] = [];
   place(root, FULL, panes, seams);
@@ -113,7 +133,7 @@ export function TabView({ tab }: { tab: Tab }) {
   // 分屏时和 herdr 一样：每个 pane 一圈边框、中间留缝，焦点那个边框高亮。只有一个 pane（或放大着）时不画框（省地方）。
   const anim = useZoomAnim(zoom, phone);
   // Frames stay on while a zoom animates (the growing pane looks like a window sliding over its neighbours) and drop at the end.
-  const framed = panes.length > 1 && (!zoom || !!anim);
+  const framed = panes.length + floats.length > 1 && (!zoom || !!anim || floats.length > 0);
   // The animating pane's body (chat / terminal) is pinned to the full tab size (the size at the zoomed end) for the whole
   // transition, so only its clipping box moves: the chat list / xterm see one resize at the zoomed end instead of one per
   // frame (re-measuring every row or refitting the terminal each frame is what made a naive width/height transition stutter).
@@ -219,7 +239,98 @@ export function TabView({ tab }: { tab: Tab }) {
               />
             );
           })}
+        {floats.map((pane) => (
+          <FloatPane key={pane.id} pane={pane} tab={tab} box={tab.float![pane.id]} area={box} />
+        ))}
       </div>
+    </div>
+  );
+}
+
+/** The title bar's drag of a floating pane: it moves the pane inside its tab instead of moving it elsewhere (usePaneDrag). */
+const FloatMove = createContext<((e: React.PointerEvent<HTMLElement>) => void) | undefined>(undefined);
+
+type Edge = { l?: boolean; r?: boolean; t?: boolean; b?: boolean };
+// prettier-ignore
+const EDGES: { e: Edge; cls: string }[] = [
+  { e: { l: true }, cls: "inset-y-2 left-0 w-1.5 cursor-ew-resize" },
+  { e: { r: true }, cls: "inset-y-2 right-0 w-1.5 cursor-ew-resize" },
+  { e: { t: true }, cls: "inset-x-2 top-0 h-1.5 cursor-ns-resize" },
+  { e: { b: true }, cls: "inset-x-2 bottom-0 h-1.5 cursor-ns-resize" },
+  { e: { l: true, t: true }, cls: "left-0 top-0 size-3 cursor-nwse-resize" },
+  { e: { r: true, b: true }, cls: "right-0 bottom-0 size-3 cursor-nwse-resize" },
+  { e: { r: true, t: true }, cls: "right-0 top-0 size-3 cursor-nesw-resize" },
+  { e: { l: true, b: true }, cls: "left-0 bottom-0 size-3 cursor-nesw-resize" },
+];
+
+/**
+ * A pane floating over the split of its tab (picture-in-picture): dragged by its title bar, resized from its edges,
+ * kept inside the tab. Its box is stored as fractions of the tab (Tab.float), so it follows the window's size.
+ */
+function FloatPane({ pane, tab, box: fb, area }: { pane: PaneLeaf; tab: Tab; box: FloatBox; area: React.RefObject<HTMLDivElement | null> }) {
+  const focused = tab.focus === pane.id;
+  // One gesture: pointer moves turn into box changes, at most one layout update a frame (as the seams do)
+  const gesture = (e: React.PointerEvent, cursor: string, next: (dx: number, dy: number) => FloatBox) => {
+    const el = area.current;
+    if (!el || e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const c = el.getBoundingClientRect();
+    const x0 = e.clientX;
+    const y0 = e.clientY;
+    let to: FloatBox | null = null;
+    let raf = 0;
+    const apply = () => {
+      raf = 0;
+      if (to) setLayout((l) => updateTab(l, tab.id, (t) => setFloatBox(t, pane.id, to!)));
+    };
+    const move = (ev: PointerEvent) => {
+      to = next((ev.clientX - x0) / c.width, (ev.clientY - y0) / c.height);
+      raf ||= requestAnimationFrame(apply);
+    };
+    const up = () => {
+      if (raf) (cancelAnimationFrame(raf), apply());
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+    document.body.style.cursor = cursor;
+    document.body.style.userSelect = "none";
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
+  };
+  const onMove = (e: React.PointerEvent<HTMLElement>) => {
+    // The title bar's own buttons (⋯, close…) keep their click
+    if ((e.target as Element).closest("button, a, input, [role=menuitem]")) return;
+    if (!focused) focusPane(pane.id);
+    gesture(e, "grabbing", (dx, dy) => ({ ...fb, x: fb.x + dx, y: fb.y + dy }));
+  };
+  const onResize = (e: React.PointerEvent, g: Edge, cursor: string) =>
+    gesture(e, cursor, (dx, dy) => {
+      const MIN = 0.15; // the same floor as layout's clampBox, so the opposite edge stays put at the minimum
+      let { x, y, w, h } = fb;
+      if (g.r) w = fb.w + dx;
+      if (g.b) h = fb.h + dy;
+      if (g.l) ((w = Math.max(MIN, Math.min(fb.x + fb.w, fb.w - dx))), (x = fb.x + fb.w - w));
+      if (g.t) ((h = Math.max(MIN, Math.min(fb.y + fb.h, fb.h - dy))), (y = fb.y + fb.h - h));
+      return { x, y, w, h };
+    });
+  return (
+    <div
+      style={{ left: pct(fb.x), top: pct(fb.y), width: pct(fb.w), height: pct(fb.h) }}
+      className={cn("absolute min-h-0 min-w-0 p-[3px]", focused ? "z-40" : "z-30")}
+    >
+      <div className="h-full w-full rounded-md bg-background shadow-2xl">
+        <FloatMove.Provider value={onMove}>
+          <PaneView pane={pane} tab={tab} framed />
+        </FloatMove.Provider>
+      </div>
+      {EDGES.map(({ e: g, cls }, i) => (
+        <div key={i} className={cn("absolute touch-none", cls)} onPointerDown={(e) => onResize(e, g, getComputedStyle(e.currentTarget).cursor)} />
+      ))}
     </div>
   );
 }
@@ -243,6 +354,8 @@ function usePaneHeadHeight(framed: boolean) {
 function usePaneDrag(paneId: string, ghost: TabGhost) {
   const phone = usePhone();
   const dragging = useDrag()?.paneId === paneId;
+  const floatMove = useContext(FloatMove);
+  if (floatMove) return { dragging: false, onPointerDown: floatMove };
   return { dragging, onPointerDown: phone ? undefined : (e: React.PointerEvent<HTMLElement>) => startPaneDrag(e, paneId, ghost) };
 }
 
@@ -479,6 +592,19 @@ function BrowserPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
   );
 }
 
+/** Float this pane over the others in the tab (picture-in-picture), or dock it back. Only with another pane to stay docked. */
+function FloatItem({ pane, tab }: { pane: PaneLeaf; tab: Tab; count?: Count }) {
+  if (usePhone()) return null; // a phone shows one pane at a time: nothing to float over
+  const on = !!tab.float?.[pane.id];
+  if (!on && !floatable(tab, pane.id)) return null;
+  return (
+    <DropdownMenuItem onClick={() => toggleFloatPane(pane.id)}>
+      <PictureInPicture2 /> {t(on ? "panes.dock" : "panes.float")}
+      <ActionKeys action="float" />
+    </DropdownMenuItem>
+  );
+}
+
 /**
  * The ⋯ menu's part every pane has, in the session pane's order and words: split, new tab, zoom, to its own tab, close.
  * A pane's own items go above it (the Browser pane's pages).
@@ -498,7 +624,8 @@ function PaneMoveItems({ pane, tab, zoomed, count }: { pane: PaneLeaf; tab: Tab;
         <Plus /> {t("panes.newTab")}
         <ActionKeys action="newTab" />
       </DropdownMenuItem>
-      {!zoomed && !count && leaves(tab.root).length > 1 && (
+      <FloatItem pane={pane} tab={tab} count={count} />
+      {!zoomed && !count && !tab.float?.[pane.id] && leaves(tab.root).length > 1 && (
         <DropdownMenuItem onClick={() => (focusPane(pane.id), toggleZoom())}>
           <Maximize2 /> {t("panes.zoom")}
           <ActionKeys action="zoom" />
@@ -636,7 +763,8 @@ function TermPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; ta
               <Plus /> {t("panes.newTab")}
               <ActionKeys action="newTab" />
             </DropdownMenuItem>
-            {!zoomed && !count && leaves(tab.root).length > 1 && (
+            <FloatItem pane={pane} tab={tab} count={count} />
+            {!zoomed && !count && !tab.float?.[pane.id] && leaves(tab.root).length > 1 && (
               <DropdownMenuItem onClick={() => (focusPane(pane.id), toggleZoom())}>
                 <Maximize2 /> {t("panes.zoom")}
                 <ActionKeys action="zoom" />
@@ -817,7 +945,8 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
               <Plus /> {t("panes.newTab")}
               <ActionKeys action="newTab" />
             </DropdownMenuItem>
-            {!zoomed && !count && leaves(tab.root).length > 1 && (
+            <FloatItem pane={pane} tab={tab} count={count} />
+            {!zoomed && !count && !tab.float?.[pane.id] && leaves(tab.root).length > 1 && (
               <DropdownMenuItem onClick={() => (focusPane(pane.id), toggleZoom())}>
                 <Maximize2 /> {t("panes.zoom")}
                 <ActionKeys action="zoom" />

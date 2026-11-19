@@ -29,7 +29,13 @@ export type PaneLeaf = {
 export type PaneSplit = { type: "split"; id: string; dir: "row" | "col"; ratio: number; a: PaneNode; b: PaneNode };
 export type PaneNode = PaneLeaf | PaneSplit;
 
-export type Tab = { id: string; name?: string; root: PaneNode; focus: string; zoom?: string };
+/**
+ * float: panes lifted out of the split (picture-in-picture), each with its box as fractions of the tab. A floating pane
+ * stays in `root` where it was, so docking it puts it back in place; the split is laid out without it (dockedRoot).
+ * At least one pane stays docked (floatable).
+ */
+export type FloatBox = { x: number; y: number; w: number; h: number };
+export type Tab = { id: string; name?: string; root: PaneNode; focus: string; zoom?: string; float?: Record<string, FloatBox> };
 /** space: which session (see Space below) it belongs to; unset = the default one. */
 /**
  * rows: the sidebar's own order for this group (pane ids), see sideRows. Only the list; the screen doesn't follow it.
@@ -191,6 +197,56 @@ export function phoneRoot(tab: Tab): PaneNode {
   return walk(tab.root);
 }
 
+/** The floating panes of a tab that are still in it. */
+export function floating(tab: Tab): PaneLeaf[] {
+  const f = tab.float;
+  return f ? leaves(tab.root).filter((p) => f[p.id]) : [];
+}
+
+/** The split without its floating panes (what the tab lays out); null when nothing would be left (bad data). */
+export function dockedRoot(tab: Tab): PaneNode | null {
+  const f = tab.float;
+  if (!f) return tab.root;
+  const rm = (n: PaneNode): PaneNode | null => {
+    if (n.type === "pane") return f[n.id] ? null : n;
+    const a = rm(n.a);
+    const b = rm(n.b);
+    if (!a) return b;
+    if (!b) return a;
+    return a === n.a && b === n.b ? n : { ...n, a, b };
+  };
+  return rm(tab.root);
+}
+
+/** Whether paneId can float: it is docked and another pane stays docked. */
+export function floatable(tab: Tab, paneId: string): boolean {
+  const d = dockedRoot(tab);
+  return !!d && d.type === "split" && leaves(d).some((p) => p.id === paneId);
+}
+
+const clampBox = (b: FloatBox): FloatBox => {
+  const w = Math.min(1, Math.max(0.15, b.w));
+  const h = Math.min(1, Math.max(0.15, b.h));
+  return { w, h, x: Math.min(1 - w, Math.max(0, b.x)), y: Math.min(1 - h, Math.max(0, b.y)) };
+};
+
+/** Float a pane (default: the bottom right corner, about a third of the tab) or dock it back where it was. */
+export function toggleFloat(tab: Tab, paneId: string): Tab {
+  if (tab.float?.[paneId]) {
+    const { [paneId]: _, ...rest } = tab.float;
+    return { ...tab, float: Object.keys(rest).length ? rest : undefined, focus: paneId };
+  }
+  if (!floatable(tab, paneId)) return tab;
+  const n = Object.keys(tab.float ?? {}).length; // each next one a little up-left, so they don't stack exactly
+  const box = clampBox({ w: 0.4, h: 0.45, x: 0.58 - n * 0.03, y: 0.53 - n * 0.04 });
+  return { ...tab, float: { ...tab.float, [paneId]: box }, focus: paneId, zoom: tab.zoom === paneId ? undefined : tab.zoom };
+}
+
+export function setFloatBox(tab: Tab, paneId: string, box: FloatBox): Tab {
+  if (!tab.float?.[paneId]) return tab;
+  return { ...tab, float: { ...tab.float, [paneId]: clampBox(box) } };
+}
+
 export function findLeaf(n: PaneNode, id: string): PaneLeaf | undefined {
   return leaves(n).find((l) => l.id === id);
 }
@@ -313,7 +369,15 @@ export function closePane(tab: Tab, paneId: string): Tab | null {
     const i = old.findIndex((x) => x.id === paneId);
     focus = (old[i - 1] ?? old[i + 1] ?? ls[0]).id;
   }
-  return { ...tab, root, focus, zoom: tab.zoom === paneId ? undefined : tab.zoom };
+  return { ...tab, root, focus, zoom: tab.zoom === paneId ? undefined : tab.zoom, float: keptFloat(tab.float, ls, paneId) };
+}
+
+/** The float boxes left after a pane closed: none when no pane would stay docked (the last docked one closed). */
+function keptFloat(f: Tab["float"], ls: PaneLeaf[], gone: string): Tab["float"] {
+  if (!f) return f;
+  const { [gone]: _, ...rest } = f;
+  if (!ls.some((p) => !rest[p.id])) return undefined;
+  return Object.keys(rest).length ? rest : undefined;
 }
 
 /** paneId 那个 pane 的父分割（它是根时没有）。 */

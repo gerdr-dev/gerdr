@@ -16,6 +16,7 @@ export type KeyAction =
   | "terminalTab"
   | "closePane"
   | "zoom"
+  | "float"
   | "focusLeft"
   | "focusDown"
   | "focusUp"
@@ -97,6 +98,7 @@ export const ACTION_TITLES: Record<KeyAction, string> = {
   terminalTab: t("keys.terminalTab"),
   closePane: t("keys.closePane"),
   zoom: t("keys.zoom"),
+  float: t("keys.float"),
   focusLeft: t("keys.focusLeft"),
   focusDown: t("keys.focusDown"),
   focusUp: t("keys.focusUp"),
@@ -186,6 +188,8 @@ const MAC_KEYS: Record<KeyAction, string[]> = {
   terminalTab: ["prefix+shift+c"],
   closePane: ["prefix+x", "meta+w"],
   zoom: ["prefix+z", "meta+shift+enter"],
+  // f for float (picture-in-picture inside the tab); free in tmux / herdr
+  float: ["prefix+f"],
   focusLeft: ["prefix+h", "prefix+left"],
   focusDown: ["prefix+j", "prefix+down"],
   focusUp: ["prefix+k", "prefix+up"],
@@ -326,6 +330,7 @@ export const KEY_GROUPS: [string, KeyAction[]][] = [
       "splitBrowser",
       "closePane",
       "zoom",
+      "float",
       "focusLeft",
       "focusDown",
       "focusUp",

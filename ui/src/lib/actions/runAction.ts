@@ -4,7 +4,18 @@ import { activeTab, activeWs } from "../layout";
 import { get, set, setMode, toggleSidebar } from "../store";
 import { closeTile, focusTileDir, stepTile, swapTileDir, toggleOverview, toggleTileZoom } from "../overview";
 import { activeAt } from "../modHeld";
-import { confirmCloseFocusedPane, cyclePane, duplicateFocused, focusDir, newAgentInOverview, splitFocused, swapDir, tabName, toggleZoom } from "./panes";
+import {
+  confirmCloseFocusedPane,
+  cyclePane,
+  duplicateFocused,
+  focusDir,
+  newAgentInOverview,
+  splitFocused,
+  swapDir,
+  tabName,
+  toggleFloatFocused,
+  toggleZoom,
+} from "./panes";
 import { reopenClosed } from "./reopen";
 import { attentionList, focusSession, focusedSessionId, stashDraft, stepAttention, stopFocused } from "./sessions";
 import { stepSpace } from "./spaces";
@@ -80,6 +91,7 @@ const CODE: Record<Exclude<KeyAction, keyof typeof APP>, Run> = {
   terminalTab: () => openTerminal("tab"),
   closePane: () => confirmCloseFocusedPane(),
   zoom: () => toggleZoom(),
+  float: () => toggleFloatFocused(),
   focusLeft: () => focusDir("left"),
   focusDown: () => focusDir("down"),
   focusUp: () => focusDir("up"),

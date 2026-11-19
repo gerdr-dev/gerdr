@@ -274,6 +274,12 @@ func (c *layoutCall) run(method string, p LayoutParams) (any, error) {
 		return node{"pane": c.paneView(w, t, pn)}, nil
 	case "pane.move":
 		return c.movePane(p)
+	case "pane.float", "pane.dock":
+		_, t, pn, err := c.pane(p.ID)
+		if err != nil {
+			return nil, err
+		}
+		return c.setFloat(t, str(pn, "id"), method == "pane.float")
 	case "pane.swap":
 		_, ta, a, err := c.pane(p.ID)
 		if err != nil {
@@ -302,6 +308,48 @@ func (c *layoutCall) run(method string, p LayoutParams) (any, error) {
 		return node{"ok": true}, nil
 	}
 	return nil, fmt.Errorf("unknown layout method %q", method)
+}
+
+// setFloat lifts a pane out of its tab's split to float over it (picture-in-picture, Tab.float in ui/src/lib/layout.ts),
+// or docks it back where it was: a floating pane stays in the tree, only drawn apart. Mirrors toggleFloat there.
+func (c *layoutCall) setFloat(t node, id string, on bool) (any, error) {
+	f := asNode(t["float"])
+	if !on {
+		if f[id] == nil {
+			return nil, errors.New("that pane isn't floating")
+		}
+		delete(f, id)
+		if len(f) == 0 {
+			delete(t, "float")
+		}
+		t["focus"] = id
+		c.changed = true
+		return node{"ok": true}, nil
+	}
+	if f[id] != nil {
+		return nil, errors.New("that pane is already floating")
+	}
+	docked := 0
+	for _, l := range leaves(asNode(t["root"])) {
+		if f[str(l, "id")] == nil {
+			docked++
+		}
+	}
+	if docked < 2 {
+		return nil, errors.New("a pane can only float over another pane in its tab, and that would leave none docked")
+	}
+	if f == nil {
+		f = node{}
+		t["float"] = f
+	}
+	n := float64(len(f)) // each next one a little up-left, as the UI does
+	f[id] = node{"x": 0.58 - n*0.03, "y": 0.53 - n*0.04, "w": 0.4, "h": 0.45}
+	t["focus"] = id
+	if t["zoom"] == id {
+		delete(t, "zoom")
+	}
+	c.changed = true
+	return node{"ok": true}, nil
 }
 
 // ---- moving ----
@@ -781,6 +829,23 @@ func (c *layoutCall) normalize() {
 			if t["zoom"] != nil && !hasPane(t["zoom"]) {
 				delete(t, "zoom")
 			}
+			// Floating panes: forget the ones gone, and all of them once none is left docked (the UI's closePane does the same)
+			if f := asNode(t["float"]); f != nil {
+				docked := false
+				for id := range f {
+					if !hasPane(id) {
+						delete(f, id)
+					}
+				}
+				for _, p := range ls {
+					if f[str(p, "id")] == nil {
+						docked = true
+					}
+				}
+				if len(f) == 0 || !docked {
+					delete(t, "float")
+				}
+			}
 		}
 	}
 	if !has(c.l["active"]) {
@@ -1061,6 +1126,15 @@ func (c *layoutCall) layoutView(w, t node) node {
 		walk(asNode(n["b"]), b)
 	}
 	walk(asNode(t["root"]), rect{0, 0, 1, 1})
+	// A floating pane's rect is where it floats, not its (empty) place in the split
+	if f := asNode(t["float"]); f != nil {
+		for _, pv := range panes {
+			if b := asNode(f[str(pv, "pane_id")]); b != nil {
+				pv["floating"] = true
+				pv["rect"] = node{"x": b["x"], "y": b["y"], "width": b["w"], "height": b["h"]}
+			}
+		}
+	}
 	return node{"workspace_id": w["id"], "tab_id": t["id"], "split": splitExpr(asNode(t["root"])), "panes": panes, "splits": splits}
 }
 

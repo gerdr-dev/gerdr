@@ -18,6 +18,7 @@ import {
   spaceWorkspaces,
   split,
   swap,
+  toggleFloat,
   updateTab,
   updateWs,
   type PaneLeaf,
@@ -281,7 +282,23 @@ export function toggleZoom() {
   setLayout((l) => {
     const t = activeTab(l);
     if (leaves(t.root).length < 2 && !t.zoom) return l;
+    if (!t.zoom && t.float?.[t.focus]) return l; // a floating pane isn't in the split to zoom
     return updateTab(l, t.id, (tab) => ({ ...tab, zoom: tab.zoom ? undefined : tab.focus }));
+  });
+}
+
+/** Float a pane over the others in its tab (picture-in-picture), or dock it back where it was (layout.toggleFloat). */
+export function toggleFloatPane(paneId: string) {
+  setLayout((l) => {
+    const hit = allLeaves(l).find((x) => x.pane.id === paneId);
+    return hit ? updateTab(l, hit.tab.id, (t) => toggleFloat(t, paneId)) : l;
+  });
+}
+
+export function toggleFloatFocused() {
+  setLayout((l) => {
+    const t = activeTab(l);
+    return updateTab(l, t.id, (tab) => toggleFloat(tab, tab.focus));
   });
 }
 
