@@ -63,7 +63,8 @@ export function BrowserSettings({ open }: { open: boolean }) {
             </div>
           )
         )}
-        {/* Already connected: the store page stays one click away, for another profile or another computer */}
+        {/* Already connected: the store page stays one click away for another profile, worded as that (the same "Install"
+            words under a connected Chrome read as being told to install again, reported) */}
         {!!profiles?.length && (
           <a
             href={STORE_URL}
@@ -71,7 +72,7 @@ export function BrowserSettings({ open }: { open: boolean }) {
             rel="noreferrer"
             className="inline-flex items-center gap-1 text-[12px] text-muted-foreground hover:text-foreground"
           >
-            <ExternalLink className="size-3" /> {t("browserSettings.install")}
+            <ExternalLink className="size-3" /> {t("browserSettings.installMore")}
           </a>
         )}
       </section>

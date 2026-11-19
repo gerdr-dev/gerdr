@@ -23,6 +23,7 @@ export const zh = {
   "browserSettings.chromeHint":
     "装上 Gerdr 浏览器插件，agent 就能在你平时用的 Chrome 里、用你已经登录的账号操作网页：只在你允许的网站上，只用它自己打开的标签页。",
   "browserSettings.install": "从 Chrome 应用商店安装",
+  "browserSettings.installMore": "给另一个 Chrome 用户也装上",
   "browserSettings.installHint": "装好后只要 Chrome 开着、Gerdr 在运行就会自动连上，会显示在这里。",
   "browserSettings.none": "还没有连上的 Chrome",
   "browserSettings.connected": "已连接",
@@ -70,6 +71,7 @@ export const en: Record<keyof typeof zh, string> = {
   "browserSettings.chromeHint":
     "With the Gerdr browser extension, agents can work on web pages in the Chrome you use every day, signed in as you already are: only on the sites you allow, only in tabs they open themselves.",
   "browserSettings.install": "Install from the Chrome Web Store",
+  "browserSettings.installMore": "Add it to another Chrome profile",
   "browserSettings.installHint": "Once it's installed, it connects by itself whenever Chrome is open and Gerdr is running, and shows up here.",
   "browserSettings.none": "No Chrome connected",
   "browserSettings.connected": "Connected",
