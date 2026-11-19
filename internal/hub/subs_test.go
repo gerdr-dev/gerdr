@@ -24,39 +24,39 @@ func TestEventsAfter(t *testing.T) {
 	s.emit(chunk("ab"))
 	ab := s.events[1].Seq
 
-	if _, ok := h.eventsAfter(s, 0); ok {
+	if _, ok := h.eventsAfter(s, 0, false); ok {
 		t.Fatal("since=0 应整份")
 	}
-	evs, ok := h.eventsAfter(s, u1)
+	evs, ok := h.eventsAfter(s, u1, false)
 	if !ok || len(evs) != 1 || evs[0].Seq != ab {
 		t.Fatalf("接 u1：%v %v", ok, evs)
 	}
-	if evs, ok := h.eventsAfter(s, ab); !ok || len(evs) != 0 {
+	if evs, ok := h.eventsAfter(s, ab, false); !ok || len(evs) != 0 {
 		t.Fatalf("已是最新：%v %v", ok, evs)
 	}
 
 	// 再来一段并进上一条：那条换了新序号，拿着旧序号的接不上（不然 "ab" 会重复）
 	s.emit(chunk("cd"))
-	if _, ok := h.eventsAfter(s, ab); ok {
+	if _, ok := h.eventsAfter(s, ab, false); ok {
 		t.Fatal("并过的片段应整份")
 	}
-	if _, ok := h.eventsAfter(s, u1); !ok {
+	if _, ok := h.eventsAfter(s, u1, false); !ok {
 		t.Fatal("u1 还在，应接得上")
 	}
 
 	// 整份重推（撤回用户消息之类改写了日志）：之前的序号都不信
 	h.broadcastEvents("s1", s.Events(), true)
-	if _, ok := h.eventsAfter(s, s.events[len(s.events)-1].Seq); ok {
+	if _, ok := h.eventsAfter(s, s.events[len(s.events)-1].Seq, false); ok {
 		t.Fatal("重推前的序号应整份")
 	}
 	s.emit(&Event{Kind: EvTurnEnd})
-	if _, ok := h.eventsAfter(s, s.events[len(s.events)-1].Seq); !ok {
+	if _, ok := h.eventsAfter(s, s.events[len(s.events)-1].Seq, false); !ok {
 		t.Fatal("重推后的新条目应接得上")
 	}
 
 	// 重启前的序号
 	h.bootSeq = h.seq
-	if _, ok := h.eventsAfter(s, s.events[len(s.events)-1].Seq); ok {
+	if _, ok := h.eventsAfter(s, s.events[len(s.events)-1].Seq, false); ok {
 		t.Fatal("重启前的序号应整份")
 	}
 }
@@ -175,7 +175,7 @@ func TestWithdrawIsIncremental(t *testing.T) {
 	if h.resetAt["s1"] != 0 {
 		t.Fatal("withdraw pushed the whole log again")
 	}
-	evs, ok := h.eventsAfter(s, mark)
+	evs, ok := h.eventsAfter(s, mark, false)
 	if !ok || evs[len(evs)-1].Kind != EvWithdrawn {
 		t.Fatalf("catch-up %v %v", ok, evs)
 	}

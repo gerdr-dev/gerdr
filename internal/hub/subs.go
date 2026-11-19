@@ -26,10 +26,13 @@ type Sub struct {
 	ids    map[string]bool
 	out    chan Msg
 	closed bool
+	// logged: sessions whose log this connection has been sent. What the page holds of them came from this process, so
+	// its seqs are good even when they are at or below bootSeq (see eventsAfter).
+	logged map[string]bool
 }
 
 func (h *Hub) Subscribe() *Sub {
-	s := &Sub{ids: map[string]bool{}, out: make(chan Msg, 4096)}
+	s := &Sub{ids: map[string]bool{}, logged: map[string]bool{}, out: make(chan Msg, 4096)}
 	h.mu.Lock()
 	h.subs[s] = struct{}{}
 	h.mu.Unlock()
@@ -67,13 +70,18 @@ func (h *Hub) Watch(sub *Sub, ids []string, since map[string]int64) {
 		}
 	}
 	sub.ids = want
+	logged := map[string]bool{}
+	for _, id := range added {
+		logged[id] = sub.logged[id]
+		sub.logged[id] = true
+	}
 	sub.mu.Unlock()
 	for _, id := range added {
 		s, err := h.Session(id)
 		if err != nil {
 			continue
 		}
-		if evs, ok := h.eventsAfter(s, since[id]); ok {
+		if evs, ok := h.eventsAfter(s, since[id], logged[id]); ok {
 			sub.send(Msg{T: "events", ID: id, Events: evs})
 		} else {
 			tail, older := s.Tail()
@@ -96,12 +104,20 @@ func (h *Hub) Watch(sub *Sub, ids []string, since map[string]int64) {
 //   - since 之后整份重推过（撤回用户消息会删掉中间的条目，光看序号看不出来）；
 //   - 日志里已经没有 since 这一条：流式片段并进上一条时会换新序号（emit），前端那条的内容被并进了后面的条目，
 //     再按序号往后接会把已经有的字重复一遍。
-func (h *Hub) eventsAfter(s *Session, since int64) ([]*Event, bool) {
+//
+// ours: this connection was sent this session's log before (Sub.logged), so the page's copy is from this process and
+// "since is from before the restart" doesn't apply. Without it every session idle since the restart (all its seqs
+// at or below bootSeq) was pushed again from its latest part each time it was watched again: a chat unmounted and
+// shown again (a tab not kept, a panel's chat going to a subagent's conversation and back) lost the older parts the
+// user had scrolled up to load, and the scroll position it came back to was a pixel offset into a much shorter log,
+// somewhere else entirely (tools/scrolltest/subback.mjs). A new connection (reconnecting, or after a restart) still
+// gets the whole tail: it may hold a copy from an earlier process.
+func (h *Hub) eventsAfter(s *Session, since int64, ours bool) ([]*Event, bool) {
 	if since <= 0 {
 		return nil, false
 	}
 	h.mu.Lock()
-	stale := since <= h.bootSeq || since <= h.resetAt[s.rec.ID]
+	stale := (!ours && since <= h.bootSeq) || since <= h.resetAt[s.rec.ID]
 	h.mu.Unlock()
 	if stale {
 		return nil, false

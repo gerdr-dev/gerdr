@@ -54,6 +54,7 @@ on another tab, and the scripts after them find no chat.
 | Pinned to the bottom after opening, the text shakes and the scrollbar jumps while the rows off screen are measured | `settle.mjs [--reload] [--up=150] [--nudge] [--x= --y=]` | Opens a chat cold (switch, or `--reload` with every older segment loaded first, as a page reload with the transcript cached) and watches it for a few seconds: no row on screen may move by more than 0.2px, none may be drawn over another, the content's height may barely change. `--up`: scroll up while the measuring still runs. `--nudge [--frac]`: a row above the screen grows and shrinks by half a pixel, the box made a fraction of a pixel tall with `--frac`; the text must not move at all. `--x/--y` picks the chat in a split (a 432px column at x=1640 by default, like a panel's chat column) |
 | Following output at the bottom, the content seems to move up then back down a little (a probe's rAF samples: -57px then +16px) | `bounce.mjs [--tab=2] [--cpu=4] [--width=900]` | Replays a turn at the bottom, records rAF and painted frames; fails if a painted frame shows the content moving back down. A new row at the end is placed at its estimate and measured in ChatList's ResizeObserver before paint: rAF frames run before that and see the estimate (one 16px move back per replay), painted frames never did (2026-11-16, CPU 4x, 900px too). Judge such reports from painted frames |
 | Reading mid-chat while a reply streams in below, the text shakes | `midstream.mjs [--at="a later user message"] [--up=600]` | Scrolls --up px above the bottom, replays the turn after --at, records rAF and painted frames: no row on screen may move by more than 0.2px. Exits 2 when the chat is too short to sit mid-chat (pick a later turn) |
+| Mid-chat, open a subagent's conversation and come back: the chat is somewhere else | `subback.mjs [--frac=0.15] [--mode=code\|remount\|both] [--same=1]` | Parks mid-chat (the default run loads older parts on the way), then "查看对话" in Code (a split pane) and an unmount / remount like a panel's SessionChat (a tab switch with keepTabs 1); the top row must come back by key and offset. `--same`: tab 2 shows the same session, so it stays watched while unmounted |
 | 某一行自己变高矮 | `rows.mjs [--tab=1]` | 行挂上后高度变没变（DOM 没变也会变）、Virtuoso 记的高度和实际对不对 |
 
 用户说「就在这儿闪」：拿那个会话，`fling.mjs --from="那段话"`，先翻到那儿再甩。闪不闪跟内容关系很大，别拿别的会话代替。
@@ -130,6 +131,13 @@ Virtuoso 在 ResizeObserver 里量行高、改布局，所以 rAF 里看到「�
   alone; `midstream.mjs`). The pad now only changes while stuck to the bottom; off it, the fraction goes below the last
   row.
 
+- **Coming back to a chat whose log was pushed again lost its place** (user report from a panel: open a subagent's
+  conversation, go back, the main chat is somewhere else; `subback.mjs`). Not the list: re-watching a session sent its
+  whole log again from the latest part whenever the page's seqs were at or below the hub's `bootSeq`, i.e. for every
+  session idle since the backend started. The older parts the user had loaded were gone, and the remounted chat put
+  back a pixel offset (`scrollMem`) into a log 10-20k px shorter. `Hub.eventsAfter` now trusts seqs this same
+  connection was sent (`Sub.logged`); a new connection (reconnect, restart) still gets the tail. A panel's `SessionChat`
+  stays watched while it shows the subagent, but its `jump` ran again on the remount: it is now done once.
 - **代码块的 `content-visibility: auto`**（streamdown 写的行内样式，占位 200px）：屏幕外的块浏览器不排版、按 200px 算，
   滚近了才排成真实高度。虚拟列表提前挂上的行被量成占位高度 → 往上翻一闪一闪。同一行 899 → 753px，DOM 一个字节没变。
   `index.css` 里用 `!important` 压成 visible。再出现「DOM 没变、高度变了」先查这类：`content-visibility`、懒加载图片、字体。

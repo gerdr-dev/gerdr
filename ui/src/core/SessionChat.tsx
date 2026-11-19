@@ -79,7 +79,14 @@ export function SessionChat({
   useEffect(() => {
     if (focused && front && unread && !shownSub) markRead(id);
   }, [focused, front, unread, id, shownSub]);
-  const focus = useMemo(() => (jump ? { match: (p: GPart) => cardOf(p)?.ref === jump.ref, seq: jump.seq } : undefined), [jump?.ref, jump?.seq]);
+  // A jump is done once: the main chat remounts when coming back from a subagent's conversation, and ChatView keeps
+  // which jump it handled per mount, so the same one scrolled to its card again and the chat lost its place
+  const jumped = useRef<number | undefined>(undefined);
+  if (shownSub) jumped.current = jump?.seq;
+  const focus = useMemo(
+    () => (jump && jump.seq !== jumped.current ? { match: (p: GPart) => cardOf(p)?.ref === jump.ref, seq: jump.seq } : undefined),
+    [jump?.ref, jump?.seq, !!shownSub], // eslint-disable-line react-hooks/exhaustive-deps
+  );
   // A mounted page is a React root of its own: the contexts the chat reads in Code (tooltips, "is this tab showing")
   // aren't above it, so they're given here. Its text size is gerdr's setting (--gerdr-font, App.tsx), not whatever the
   // page's own stylesheet gives its area (a panel's `body { font-size: 14px }` lands on it): it's gerdr's chat.
