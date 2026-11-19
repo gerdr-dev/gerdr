@@ -80,4 +80,6 @@ dependencies {
     // Scanning the pairing QR code. ZXing rather than Google's code scanner: that one needs Play services,
     // which most phones sold in China don't have. Brings its own camera screen and CAMERA permission request.
     implementation("com.journeyapps:zxing-android-embedded:4.3.0")
+    // Add-ons' WebSockets and HTTP requests from the phone itself (NativeNet): Android has no WebSocket client of its own
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 }

@@ -193,6 +193,14 @@ sees: `internal/addons/builtin/gerdr.d.ts`, copied into `~/.gerdr/addons` on eve
   layout) and a fast text model with the conversation as context can. Thinking off by default: these are quick jobs.
 - `g.fetch` takes bytes as a body too (`bodyBase64` on the hop to the backend): a speech-to-text API takes the
   recording itself.
+- In the Android App, `g.fetch` / `g.socket` go from the phone itself (ui/src/lib/appnet.ts ↔ Android's NativeNet.kt,
+  bridge messages `http` / `ws`, 2026-11). Remotely the backend route was phone → relay → computer → service and back,
+  and the voice add-on's words lagged behind the voice. The add-on's code and keys are in the page already, so nothing
+  new reaches the phone. Not for hosts only the computer reaches: local / private / tailnet addresses and bare names go
+  through the backend from the start (`useLocal`), and when the phone can't reach a host at all (no DNS answer,
+  refused, connect timeout, before any byte of the request went out: `unreachable`) the same request goes through the
+  backend. What the service answered (an error status, a refused handshake) is never retried. The iOS App doesn't do
+  this yet.
 
 ## Languages
 

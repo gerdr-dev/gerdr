@@ -31,6 +31,9 @@ class Bridge(private val act: MainActivity, web: WebView, origin: String) {
     private var pendingFocus: String? = null
     private val main = Handler(Looper.getMainLooper())
 
+    /** Add-ons' sockets and requests made from the phone (NativeNet); its answers come off OkHttp's threads */
+    private val net = NativeNet { m -> main.post { send(m) } }
+
     val ready get() = page != null
 
     init {
@@ -56,6 +59,7 @@ class Bridge(private val act: MainActivity, web: WebView, origin: String) {
 
     fun reset() {
         page = null
+        net.closeAll()
         mediaPlaying = false
         arrows = null
         backCb?.invoke(false)
@@ -79,7 +83,9 @@ class Bridge(private val act: MainActivity, web: WebView, origin: String) {
                         // appKey: keep and re-verify this device with a fingerprint (AppKey.kt), also where the
                         // WebView can do passkeys: a phone paired with a code stays without having to add a passkey,
                         // the same flow as iOS. The pairing page offers it when the server says this device has one
-                        .put("appKey", AppKey.available(act)),
+                        .put("appKey", AppKey.available(act))
+                        // net: add-ons' g.socket / g.fetch go from the phone straight to the service (NativeNet)
+                        .put("net", true),
                 )
                 keyboard(act.hardKeyboard()) // whether menus show their shortcut keys (ui lib/hwKeyboard.ts)
                 send(LanRoute.snapshot()) // 顶栏那个「直连 / 中继」标签的初值
@@ -135,6 +141,13 @@ class Bridge(private val act: MainActivity, web: WebView, origin: String) {
                 if (m.optString("op") == "set") act.setVolumeKeys(m.optBoolean("on"))
                 send(JSONObject().put("t", "volkeys").put("on", act.volumeKeys()))
             }
+            // An add-on's WebSocket / HTTP request, made here instead of through the computer (NativeNet, ui lib/appnet.ts)
+            "ws" -> when (m.optString("op")) {
+                "open" -> net.open(m)
+                "send" -> net.send(m)
+                "close" -> net.close(m)
+            }
+            "http" -> net.fetch(m)
             "notify" -> {
                 val op = m.optString("op")
                 if (op == "get") send(act.notifyState()) else act.notifyOp(op, m.optBoolean("on"))

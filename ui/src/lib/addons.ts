@@ -20,6 +20,7 @@ import { locale, t } from "./i18n";
 import { activeTab, activeWs, leaves, type Layout, type PaneLeaf, type Tab, type Workspace } from "./layout";
 import { get, set, useStore, visibleSessions } from "./store";
 import { insertComposerText } from "./composerText";
+import { addonFetch, addonSocket } from "./appnet";
 import type { AddonBuild, AddonService, SessionSummary } from "./types";
 
 type TabLabelFn = (tab: any, ctx: any) => string | void;
@@ -617,7 +618,8 @@ function makeApi(id: string, hash: string) {
         body = JSON.stringify(raw);
         if (!Object.keys(headers).some((k) => k.toLowerCase() === "content-type")) headers["Content-Type"] = "application/json";
       }
-      const r = await api.addonFetch(id, { url, method: init?.method, headers, body, bodyBase64, binary: init?.binary });
+      // Made by the backend, or in the Android App by the phone itself (lib/appnet.ts)
+      const r = await addonFetch(id, { url, method: init?.method, headers, body, bodyBase64, binary: init?.binary });
       // binary: the backend sent the body as base64 (audio, images: bytes that don't survive being text)
       const bytes = () => (r.base64 ? Uint8Array.from(atob(r.body), (c) => c.charCodeAt(0)) : new TextEncoder().encode(r.body));
       const text = r.base64 ? "" : r.body;
@@ -632,13 +634,10 @@ function makeApi(id: string, hash: string) {
         blob: () => new Blob([bytes()], { type: r.headers["content-type"] ?? "" }),
       };
     },
-    // A WebSocket the backend opens for the add-on (internal/server/addonsocket.go): a plain WebSocket to our own
-    // /api, which the backend joins to the service's
-    socket: async (url: string, init?: { headers?: Record<string, string>; protocols?: string[] }) => {
-      const { token } = await api.addonSocket(id, { url, headers: init?.headers, protocols: init?.protocols });
-      const proto = location.protocol === "https:" ? "wss:" : "ws:";
-      return new WebSocket(`${proto}//${location.host}/api/addons/${encodeURIComponent(id)}/socket/${token}`);
-    },
+    // A WebSocket the backend opens for the add-on (internal/server/addonsocket.go), or in the Android App the
+    // phone itself (lib/appnet.ts): remotely the backend's route is phone → relay → computer → service, and
+    // speech-to-text lagged behind the voice
+    socket: (url: string, init?: { headers?: Record<string, string>; protocols?: string[] }) => addonSocket(id, url, init),
     haptic: () => haptic(),
     // Its own message action on a conversation's latest reply on screen, as a tap would (lib/messageActions.ts)
     // (imported late: messageActions.ts imports this module)

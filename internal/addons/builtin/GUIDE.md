@@ -285,6 +285,11 @@ the light / dark switch and outlives the add-on.
 | `g.storage.get/set` | Small private storage, kept in this browser / App (not shared between devices). A cache: store `{ at: Date.now(), data }` and refetch when it's older than you like. |
 | `g.fetch(url, init)` | An HTTP request made by Gerdr's backend, so the API needs no CORS. The only way out: the page's own `fetch` is limited to Gerdr itself (CSP `connect-src 'self'`), CORS or not. Resolves `{ ok, status, headers, text, json(), bytes(), blob() }`; a non-string `body` goes as JSON, a `Blob` / `ArrayBuffer` / `Uint8Array` as those bytes (recorded audio to a speech-to-text API). `binary: true` for an answer that isn't text (audio, images). |
 | `g.socket(url, { headers })` | A WebSocket (`ws(s)://`) opened by Gerdr's backend with your headers (a key), for streaming APIs: speech-to-text returning words as they're said, realtime models. Resolves a normal `WebSocket`; messages pass as they are. |
+
+In the Android App, `g.fetch` and `g.socket` go from the phone straight to the service, not through the computer
+(remotely that detour is phone → relay → computer → service, slow for streaming). Local and private addresses
+(`localhost`, `192.168.…`, `.local`, a bare host name), and any host the phone can't reach at all (a company host
+behind the computer's VPN), still go through the computer by themselves. Nothing to change in an add-on.
 | `g.llm.complete({ model?, system?, prompt })` | One call to a model the person configured in Gerdr (Settings → Models), made by the backend: no key of your own, no tools, thinking off. `g.llm.models()` lists them as `provider/model`. For quick jobs: fixing a transcript, a summary, a title. |
 | `g.sessions.reply(id)` | What the agent answered to the last message sent to it, as text: `text` all of it, `final` its last stretch (what it said once the work was done). Read it on `g.on("turnEnd")`: speak it, forward it. |
 | `g.asset(path)` | A URL for a file of the add-on's folder: `<img src={g.asset("logo.png")} />`, `new Audio(g.asset("done.wav"))`. |

@@ -16,6 +16,7 @@ android/app/src/main/java/io/github/zbysir/gerdr/
                     和 index.css 的 token 对齐、跟系统明暗走 —— 改 token 时一起改
   Bridge.kt         页面 ↔ 壳 的那条线（另一半 ui/src/lib/android.ts）
   LanRoute.kt       局域网换路：本机 CONNECT 代理 + 探测
+  NativeNet.kt      add-ons' g.socket / g.fetch from the phone itself (bridge `ws` / `http`), not through the computer
   Login.kt          passkey 的退路：device flow
   NoticeService.kt  后台通知：前台服务长轮询 /api/app/*
   Agents.kt         会话一览挑哪几行、什么颜色（常驻通知和桌面小部件共用）
@@ -235,3 +236,5 @@ below (hello, theme, open, setup, login, copyImage, lan, route); keep the two sh
 | `newWindow` | 页 → 壳 | "Open in new window" on a project (SpaceSwitcher): `space` = project id. Shown only when the hello reply says `windows: true` (`canNewWindow` in native.ts) |
 | `space` | 页 → 壳 | The project this window shows (`id`, `name`): the window's name in the recents list. Sent on every switch, also before hello |
 | `open` / `setup` / `fullscreen` | 页 → 壳 | 外部链接交给系统浏览器 / 回到填地址那屏 / 藏系统栏 |
+| `ws` | 页 ↔ 壳 | An add-on's `g.socket` made by the phone (`NativeNet.kt`, OkHttp; `ui/src/lib/appnet.ts`). Page → shell: `op` open (`id`, `url`, `headers`, `protocols`) / send (`id`, `text` or base64 `b64`) / close (`id`, `code`, `reason`). Shell → page: `id` + `ev` open (`protocol`) / message (`text` or `b64`) / error (`msg`, `unreachable`) / close (`code`, `reason`). `unreachable`: no answer to the handshake, so the page opens the same socket through the backend instead. Offered when the hello reply says `net: true` |
+| `http` | 页 → 壳 → 页 | An add-on's `g.fetch` made by the phone: the backend's `/api/addons/{id}/fetch` request and answer shapes plus `id`, or `error` + `unreachable` (nothing of the request went out: the page retries through the backend). Same limits as the backend: 30s, 10 MB, http(s) only |
