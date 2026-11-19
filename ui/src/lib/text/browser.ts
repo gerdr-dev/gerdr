@@ -23,7 +23,7 @@ export const zh = {
   "browserSettings.chromeHint":
     "装上 Gerdr 浏览器插件，agent 就能在你平时用的 Chrome 里、用你已经登录的账号操作网页：只在你允许的网站上，只用它自己打开的标签页。",
   "browserSettings.install": "从 Chrome 应用商店安装",
-  "browserSettings.installMore": "去浏览器商店",
+  "browserSettings.installMore": "去插件商店",
   "browserSettings.installHint": "装好后只要 Chrome 开着、Gerdr 在运行就会自动连上，会显示在这里。",
   "browserSettings.none": "还没有连上的 Chrome",
   "browserSettings.connected": "已连接",
