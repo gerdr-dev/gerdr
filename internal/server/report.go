@@ -46,10 +46,10 @@ type reporter struct {
 	// source: what a report is about (summary + log). Hub-backed, or another computer's (hosts.go).
 	source func(id string) (hub.Summary, []*hub.Event, error)
 	delay  time.Duration
-	mu      sync.Mutex
-	last    map[string]string   // session → last status seen
-	queue   map[string][]report // target → reports not delivered yet
-	timers  map[string]*time.Timer
+	mu     sync.Mutex
+	last   map[string]string   // session → last status seen
+	queue  map[string][]report // target → reports not delivered yet
+	timers map[string]*time.Timer
 }
 
 // RunReports watches session status changes for reports until ctx ends.

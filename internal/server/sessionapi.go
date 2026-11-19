@@ -435,7 +435,7 @@ func (s *Server) meta(r *http.Request, sess *hub.Session) (any, error) {
 		// SkillUpdates: tell it when its skill files change (hub Record.SkillUpdates): true / false, or "default" for
 		// the global setting; left out = unchanged
 		SkillUpdates json.RawMessage `json:"skillUpdates"`
-		From     string            `json:"from"`  // the agent session asking
+		From         string          `json:"from"` // the agent session asking
 	}
 	if err := decode(r, &b); err != nil {
 		return nil, err
