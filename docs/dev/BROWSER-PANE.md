@@ -84,6 +84,12 @@ All on Chrome 157, macOS.
   info reads `location.href` with the title (`editableJS`); on the error page `Failed` carries the main document's
   network error from the tab's log (`docFailure`), and the pane draws its own error with a retry (`go` to the
   history entry's address, which keeps the one that failed). The App's real page is kept out of sight meanwhile.
+  Until that happens the error page is on screen, white: a flash in a dark theme. So the pane tells the stream its
+  background (`bg` input), and a failed document's `Network.loadingFailed` sets it as the page's default background
+  (`Emulation.setDefaultBackgroundColorOverride`), before the error page commits; the next document's request clears
+  it, since a site without a background of its own is meant to be white. Not for `net::ERR_ABORTED` (a new
+  navigation replacing the load: its request came first). The pane also places the page again at once on a failure
+  instead of on its 250 ms check.
 - **Frames are acknowledged after 30 ms** (`frameGap`): Chrome sends the next only after the ack, so a page that
   animates without pause is sampled at ~30 fps instead of costing a JPEG encode per paint. A still page sends nothing.
 - **A viewer on this computer gets Chrome's JPEG as it is** (`View.Raw`, `streamPictures`' raw mode, chosen by

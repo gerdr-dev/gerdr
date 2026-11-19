@@ -28,7 +28,7 @@ type Status struct {
 // Input is one action from the UI. X and Y are fractions of the main display (0..1), so the client never needs to
 // know the display's points or the screenshot's scale.
 type Input struct {
-	Kind   string   `json:"kind"`   // click | scroll | text | key; a browser tab also takes down | up | move | compose | go | back | forward | reload
+	Kind   string   `json:"kind"`   // click | scroll | text | key; a browser tab also takes down | up | move | compose | go | back | forward | reload | bg
 	X      float64  `json:"x"`      // click, scroll
 	Y      float64  `json:"y"`      // click, scroll
 	Button string   `json:"button"` // click: left (default) | right

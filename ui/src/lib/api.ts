@@ -84,6 +84,8 @@ export type BrowserInput =
   | { kind: "scroll"; x: number; y: number; dy?: number; dxPx: number; dyPx: number }
   | { kind: "compose"; text: string }
   | { kind: "go"; text: string }
+  /** the pane's background (#rrggbb): what a page that fails to load is drawn on, instead of white */
+  | { kind: "bg"; text: string }
   | { kind: "back" | "forward" | "reload" };
 
 export class ApiError extends Error {

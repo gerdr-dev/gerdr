@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"image"
 	"image/draw"
 	"image/jpeg"
@@ -52,6 +53,8 @@ type View struct {
 	mapFor   [2]float64
 	page     screen.Page
 	gone     string
+	bg       *rgba // the pane's background ("bg" input): a failed page's error page is drawn on it
+	bgOn     bool   // the override is set
 	pageKick chan struct{}
 }
 
@@ -245,7 +248,54 @@ func (v *View) event(method string, params json.RawMessage) {
 		}
 	case "Page.navigatedWithinDocument", "Page.frameNavigated", "Page.loadEventFired", "Page.frameStartedLoading", "Page.frameStoppedLoading":
 		v.kickPage()
+	case "Network.loadingFailed":
+		// A document that failed: its error page is about to show, blank, and the pane covers it with its own as soon
+		// as the page info says so (kicked here too, so the look starts with the failure). Blank is white: a white
+		// flash in a dark theme until then. So the page's default background becomes the pane's own first, before the
+		// error page commits; the next document's request puts it back (a site without a background is white).
+		// Not for an aborted load: that's a new navigation replacing it, whose request came first
+		var p struct {
+			Type     string `json:"type"`
+			Error    string `json:"errorText"`
+			Canceled bool   `json:"canceled"`
+		}
+		if json.Unmarshal(params, &p) == nil && p.Type == "Document" {
+			v.kickPage()
+			if !p.Canceled && p.Error != "net::ERR_ABORTED" {
+				v.setBg(true)
+			}
+		}
+	case "Network.requestWillBeSent":
+		var p struct {
+			Type string `json:"type"`
+		}
+		if json.Unmarshal(params, &p) == nil && p.Type == "Document" {
+			v.setBg(false)
+		}
 	}
+}
+
+type rgba struct{ R, G, B int }
+
+// setBg sets (on) or clears the page's default background override for a failed load (see Network.loadingFailed).
+func (v *View) setBg(on bool) {
+	v.mu.Lock()
+	bg := v.bg
+	if bg == nil || v.bgOn == on {
+		v.mu.Unlock()
+		return
+	}
+	v.bgOn = on
+	v.mu.Unlock()
+	params := map[string]any{}
+	if on {
+		params["color"] = map[string]any{"r": bg.R, "g": bg.G, "b": bg.B, "a": 1}
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(v.ctx, 5*time.Second)
+		defer cancel()
+		v.t.callQuiet(ctx, "Emulation.setDefaultBackgroundColorOverride", params, nil)
+	}()
 }
 
 func (v *View) kick() {
@@ -478,6 +528,15 @@ func (v *View) Do(in screen.Input) error {
 	case "go":
 		_, err := t.act(ctx, "goto", ActArgs{URL: in.Text})
 		return err
+	case "bg":
+		var c rgba
+		if _, err := fmt.Sscanf(in.Text, "#%02x%02x%02x", &c.R, &c.G, &c.B); err != nil {
+			return errors.New("bg: want #rrggbb")
+		}
+		v.mu.Lock()
+		v.bg = &c
+		v.mu.Unlock()
+		return nil
 	case "back", "forward", "reload":
 		_, err := t.act(ctx, in.Kind, ActArgs{})
 		return err

@@ -2,6 +2,11 @@ package projbrowser
 
 import (
 	"context"
+	"fmt"
+	"image/color"
+	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -410,15 +415,40 @@ func TestLiveFailed(t *testing.T) {
 	if p := page(); p.Failed != "" {
 		t.Fatalf("loaded page: %+v", p)
 	}
-	v.Do(screen.Input{Kind: "go", Text: "http://127.0.0.1:1/"}) // Chrome refuses the port: net::ERR_UNSAFE_PORT
-	if p := page(); p.Failed == "" || p.URL != "http://127.0.0.1:1/" {
+	// the pane's background: the blank error page is drawn on it, not white
+	if err := v.Do(screen.Input{Kind: "bg", Text: "#102030"}); err != nil {
+		t.Fatal(err)
+	}
+	corner := func() color.RGBA {
+		img, err := v.Grab(800)
+		if err != nil {
+			t.Fatal(err)
+		}
+		r, g, b, _ := img.At(img.Bounds().Dx()-5, img.Bounds().Dy()-5).RGBA()
+		return color.RGBA{uint8(r >> 8), uint8(g >> 8), uint8(b >> 8), 255}
+	}
+	// a port nobody listens on: refused
+	l, _ := net.Listen("tcp", "127.0.0.1:0")
+	dead := fmt.Sprintf("http://127.0.0.1:%d/", l.Addr().(*net.TCPAddr).Port)
+	l.Close()
+	v.Do(screen.Input{Kind: "go", Text: dead})
+	if p := page(); p.Failed == "" || p.URL != dead {
 		t.Errorf("failed page: %+v", p)
 	} else {
 		t.Logf("failed page: %+v", p)
 	}
-	v.Do(screen.Input{Kind: "go", Text: "https://example.com/"})
+	if c := corner(); c.R > 0x30 || c.B < 0x20 {
+		t.Errorf("error page drawn on %v, want about #102030", c)
+	}
+	// a page without a background of its own is white again
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, "<p>plain</p>") }))
+	defer srv.Close()
+	v.Do(screen.Input{Kind: "go", Text: srv.URL + "/"})
 	if p := page(); p.Failed != "" {
 		t.Errorf("loaded again: %+v", p)
+	}
+	if c := corner(); c.R < 0xf0 {
+		t.Errorf("loaded page drawn on %v, want white", c)
 	}
 }
 

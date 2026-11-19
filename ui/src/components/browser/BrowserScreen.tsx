@@ -115,11 +115,22 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
   // The page failed to load (the stream says so): Chrome's error page is blank here, so the pane draws its own with a
   // retry. The App's real page would cover it, so it's kept out of sight meanwhile (read by the placing below)
   const failedRef = useRef(false);
+  // the placing's check, run at once when the page fails: waiting for its 250 ms tick left Chrome's blank (white)
+  // error page on screen for a few frames, a white flash in a dark theme
+  const placeNow = useRef<(() => void) | null>(null);
   // A navigation of ours (the address bar, back / forward / reload, retry) is running, until its input's
   // acknowledgement comes back: the backend answers a "go" once the page settled or failed. page.loading alone misses
   // it: the old document stays "complete" until the new one commits, and a failing address never commits at all
   const [navigating, setNavigating] = useState(false);
   const navSeq = useRef(Infinity);
+  // an address typed in the bar and sent, while the page still reports the one it was at (from)
+  const [pending, setPending] = useState<{ url: string; from?: string } | null>(null);
+  // a navigation that ended without moving (aborted, the same address): give the bar back to the page info
+  useEffect(() => {
+    if (navigating || !pending) return;
+    const id = setTimeout(() => setPending(null), 1000);
+    return () => clearTimeout(id);
+  }, [navigating, pending]);
   // the stream reconnecting loses the acknowledgement: don't spin for ever (a navigation gives up well before this)
   useEffect(() => {
     if (!navigating) return;
@@ -130,6 +141,7 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
   const [page, setPage] = useState<StreamPage | null>(null);
   useEffect(() => {
     failedRef.current = !!page?.failed;
+    placeNow.current?.();
   }, [page?.failed]);
   const [addr, setAddr] = useState("");
   const [editing, setEditing] = useState(false);
@@ -148,6 +160,7 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
     setStreamErr("");
     setNavigating(false);
     navSeq.current = Infinity;
+    setPending(null);
   }, [tab]);
 
   const want = () => {
@@ -184,7 +197,9 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
     // the navigation finished (loaded, or failed: the page info says so)
     if (h.ack && h.ack >= navSeq.current) setNavigating(false);
     // A navigation that failed (net::…) is shown in the pane itself (page.failed), no toast on top of it
-    if (h.inputErr && !h.inputErr.startsWith("net::")) toast.error(h.inputErr);
+    // and the pane's background (kind "bg") is a nicety an older backend (another computer's, one not restarted
+    // yet) doesn't know: it says so, nobody needs to hear it
+    if (h.inputErr && !h.inputErr.startsWith("net::") && !h.inputErr.endsWith("input kind: bg")) toast.error(h.inputErr);
     if (h.err) {
       setStreamErr(h.err);
       if (h.seq) sendWS({ t: "got", seq: h.seq });
@@ -220,6 +235,8 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
       ws.onopen = () => {
         backoff = 500;
         if (!nativeView) ws.send(JSON.stringify({ t: "cfg", ...want() }));
+        const bg = boxRef.current && cssHex(getComputedStyle(boxRef.current).backgroundColor);
+        if (bg) ws.send(JSON.stringify({ t: "input", seq: ++seqRef.current, input: { kind: "bg", text: bg } }));
       };
       ws.onmessage = (ev) => {
         const buf = ev.data as ArrayBuffer;
@@ -418,6 +435,7 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
       }
       nativeBrowserView(tab, shown ? r : null, radius);
     };
+    placeNow.current = report;
     const ro = new ResizeObserver(report);
     ro.observe(box);
     // One of ours coming up anywhere in the document, not only as a child of <body> (where Radix portals go): the
@@ -447,6 +465,7 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
       window.removeEventListener("gerdr:browseridle", idle);
       clearTimeout(quiet);
       document.documentElement.removeEventListener("pointerleave", away);
+      placeNow.current = null;
       // release: this pane is done with the page, another window's pane may take it (lib/actions/browser.ts)
       nativeBrowserView(tab, null, 0, true);
       covered = false;
@@ -696,6 +715,7 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
     setEditing(false);
     if (!url) return;
     if (live) {
+      setPending({ url, from: page?.url });
       nav({ kind: "go", text: url });
       keysRef.current?.focus({ preventScroll: true });
       return;
@@ -733,7 +753,10 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
     else ta.focus({ preventScroll: true });
   };
 
-  const shown = editing ? addr : (page?.url ?? cur?.url ?? (gone ? (lastURL ?? "") : ""));
+  // The typed address stays in the bar until the page info moves off the old one (the new page, its redirect, or the
+  // failed address): the page info lags the Enter by a navigation, and the old address flashed back meanwhile
+  const typed = pending && page?.url === pending.from ? pending.url : undefined;
+  const shown = editing ? addr : (typed ?? page?.url ?? cur?.url ?? (gone ? (lastURL ?? "") : ""));
   const title = page?.title || (cur ? hostOf(cur.url) : "");
   const busy = opening || (live && (navigating || !!page?.loading));
 
@@ -937,4 +960,14 @@ export function BrowserScreen({ project, tab, lastURL, paneId, focused, headClas
       </Body>
     </>
   );
+}
+
+/** A CSS color as #rrggbb (the theme's colors compute to oklch, which the backend can't read): drawn and read back. */
+function cssHex(color: string): string | null {
+  const cx = document.createElement("canvas").getContext("2d");
+  if (!cx) return null;
+  cx.fillStyle = color;
+  cx.fillRect(0, 0, 1, 1);
+  const [r, g, b] = cx.getImageData(0, 0, 1, 1).data;
+  return "#" + [r, g, b].map((n) => n.toString(16).padStart(2, "0")).join("");
 }
