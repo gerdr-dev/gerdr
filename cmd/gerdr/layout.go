@@ -284,7 +284,7 @@ func paneCmd() *cobra.Command {
 	cmd.AddCommand(swap)
 	cmd.AddCommand(&cobra.Command{
 		Use:   "float <pane>",
-		Short: "Float a pane over the others in its tab (picture-in-picture; the user drags / resizes it). Needs another pane left in the split",
+		Short: "Float a Browser pane over the others in its tab (picture-in-picture; the user drags / resizes it). Needs another pane left in the split",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, a []string) error {
 			return layoutCall("pane.float", server.LayoutParams{ID: a[0]})

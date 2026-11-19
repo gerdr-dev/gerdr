@@ -344,7 +344,7 @@ gerdr pane move <pane> --target-pane <pane> --split right      # split it beside
 gerdr pane move <pane> --tab <tab> --split down                # beside the whole tab
 gerdr pane move <pane> --new-tab                               # pull it out of a split into a tab of its own
 gerdr pane swap <pane> --target-pane <pane>
-gerdr pane float <pane>                                        # float it over the rest of its tab (picture-in-picture)
+gerdr pane float <pane>                                        # float a Browser pane over the rest of its tab (picture-in-picture)
 gerdr pane dock <pane>                                         # put a floating pane back in its place
 gerdr tab move <tab> --workspace lb [--position 1]             # a whole tab, splits and all
 gerdr tab move <tab> --tab <other-tab> --split right           # merge it into another tab

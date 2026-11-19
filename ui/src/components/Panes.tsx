@@ -763,7 +763,6 @@ function TermPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; ta
               <Plus /> {t("panes.newTab")}
               <ActionKeys action="newTab" />
             </DropdownMenuItem>
-            <FloatItem pane={pane} tab={tab} count={count} />
             {!zoomed && !count && !tab.float?.[pane.id] && leaves(tab.root).length > 1 && (
               <DropdownMenuItem onClick={() => (focusPane(pane.id), toggleZoom())}>
                 <Maximize2 /> {t("panes.zoom")}
@@ -945,7 +944,6 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
               <Plus /> {t("panes.newTab")}
               <ActionKeys action="newTab" />
             </DropdownMenuItem>
-            <FloatItem pane={pane} tab={tab} count={count} />
             {!zoomed && !count && !tab.float?.[pane.id] && leaves(tab.root).length > 1 && (
               <DropdownMenuItem onClick={() => (focusPane(pane.id), toggleZoom())}>
                 <Maximize2 /> {t("panes.zoom")}

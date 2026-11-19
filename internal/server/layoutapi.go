@@ -335,6 +335,9 @@ func (c *layoutCall) setFloat(t node, id string, on bool) (any, error) {
 			docked++
 		}
 	}
+	if pn := c.leafIn(t, id); pn == nil || pn["browser"] == nil {
+		return nil, errors.New("only a Browser pane can float for now")
+	}
 	if docked < 2 {
 		return nil, errors.New("a pane can only float over another pane in its tab, and that would leave none docked")
 	}
@@ -350,6 +353,15 @@ func (c *layoutCall) setFloat(t node, id string, on bool) (any, error) {
 	}
 	c.changed = true
 	return node{"ok": true}, nil
+}
+
+func (c *layoutCall) leafIn(t node, id string) node {
+	for _, l := range leaves(asNode(t["root"])) {
+		if str(l, "id") == id {
+			return l
+		}
+	}
+	return nil
 }
 
 // ---- moving ----

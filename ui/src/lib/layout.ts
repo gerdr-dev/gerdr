@@ -218,10 +218,13 @@ export function dockedRoot(tab: Tab): PaneNode | null {
   return rm(tab.root);
 }
 
-/** Whether paneId can float: it is docked and another pane stays docked. */
+/**
+ * Whether paneId can float: a Browser pane (only those for now: a page to keep an eye on while working beside it),
+ * docked, with another pane staying docked. The backend's setFloat (server/layoutapi.go) has the same rule.
+ */
 export function floatable(tab: Tab, paneId: string): boolean {
   const d = dockedRoot(tab);
-  return !!d && d.type === "split" && leaves(d).some((p) => p.id === paneId);
+  return !!d && d.type === "split" && leaves(d).some((p) => p.id === paneId && !!p.browser);
 }
 
 const clampBox = (b: FloatBox): FloatBox => {

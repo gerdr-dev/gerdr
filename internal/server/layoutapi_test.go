@@ -192,7 +192,11 @@ func TestPaneFloatDockAndCleanup(t *testing.T) {
 		_ = json.Unmarshal([]byte(raw), &l)
 		return asNode(tabsOf(nodes(l["workspaces"])[0])[0]["float"])
 	}
-	raw, _ := apply(t, opsLayout, call("pane.float", LayoutParams{ID: "p2"}))
+	if _, _, err := ApplyLayout(json.RawMessage(opsLayout), opsSessions, "A", "default", "pane.float", LayoutParams{ID: "p2"}); err == nil {
+		t.Fatal("floated a conversation pane: only Browser panes float")
+	}
+	browser := strings.Replace(opsLayout, `"id":"p2","sessionId":"B"`, `"id":"p2","browser":{"project":"default"}`, 1)
+	raw, _ := apply(t, browser, call("pane.float", LayoutParams{ID: "p2"}))
 	if f := floats(raw); f["p2"] == nil {
 		t.Fatalf("p2 not floating: %v", f)
 	}
