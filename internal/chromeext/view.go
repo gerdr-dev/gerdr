@@ -54,13 +54,13 @@ type View struct {
 	page     screen.Page
 	gone     string
 	bg       *rgba // the pane's background ("bg" input): a failed page's error page is drawn on it
-	bgOn     bool   // the override is set
+	bgOn     bool  // the override is set
 	pageKick chan struct{}
 	// The screencast going silent on an App page (catchUp): when the page last should have changed (a navigation, an
 	// input, a new size), when the screencast last sent a frame, and the stills taken since
 	changedAt, castAt, stillAt time.Time
-	lastStill               []byte
-	settled                 bool // two stills in a row were the same: nothing more to catch up on
+	lastStill                  []byte
+	settled                    bool // two stills in a row were the same: nothing more to catch up on
 }
 
 // View starts streaming tab id's screen (0 = the one opened last). Close it when the viewer leaves.
@@ -530,9 +530,11 @@ func (v *View) Do(in screen.Input) error {
 	vw, vh := v.vw, v.vh
 	v.mu.Unlock()
 	x, y := clamp01(in.X)*vw, clamp01(in.Y)*vh
+	kx, ky := 1.0, 1.0
 	switch in.Kind {
 	case "click", "down", "up", "move", "scroll":
-		kx, ky, ox, oy := v.inputMap(ctx, vw, vh)
+		var ox, oy float64
+		kx, ky, ox, oy = v.inputMap(ctx, vw, vh)
 		x, y = x*kx+ox, y*ky+oy
 	}
 	mods := modifierBits(in.Mods)
@@ -583,6 +585,10 @@ func (v *View) Do(in screen.Input) error {
 		if dx == 0 && dy == 0 {
 			dy = float64(-in.DY) * 40
 		}
+		// The viewer's px are the picture's, and a page laid out wider than the viewer (a desktop page on a phone,
+		// ~980 CSS px in a 400 px picture) is shown scaled down: scrolled by the viewer's px unscaled, the page moved
+		// about 40% of the finger's way (user report). Scaled as the point is, the page follows the finger
+		dx, dy = dx*kx, dy*ky
 		_, err := t.eval(ctx, scrollJS(x, y, dx, dy))
 		return err
 	case "text":

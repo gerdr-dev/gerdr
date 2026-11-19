@@ -3,6 +3,7 @@ package chromeext
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -79,6 +80,42 @@ func TestViewCatchUp(t *testing.T) {
 	v.catchUp()
 	if shots != 2 || frame() != "A" {
 		t.Errorf("a still over a live screencast: %d shots, frame %q", shots, frame())
+	}
+}
+
+// A finger drag on a page shown scaled down (980 CSS px laid out, a 400 px picture) scrolls the page by as much as the
+// finger moved over the picture, not 40% of it.
+func TestViewScrollScaled(t *testing.T) {
+	b := New(nil)
+	tab := newTab(9, "https://example.com/")
+	var js string
+	tab.send = func(_ context.Context, method string, params json.RawMessage) (json.RawMessage, error) {
+		switch method {
+		case "Page.getLayoutMetrics":
+			return json.RawMessage(`{"cssLayoutViewport":{"clientWidth":980,"clientHeight":1911},"cssVisualViewport":{"clientWidth":980,"clientHeight":1911,"scale":0.408}}`), nil
+		case "Runtime.evaluate":
+			var p struct {
+				Expression string `json:"expression"`
+			}
+			json.Unmarshal(params, &p)
+			js = p.Expression
+		}
+		return json.RawMessage(`{"result":{"value":true}}`), nil
+	}
+	b.tabs[tab.ID] = tab
+	v, err := b.View(tab.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer v.Close()
+	v.mu.Lock()
+	v.vw, v.vh = 400, 780
+	v.mu.Unlock()
+	if err := v.Do(screen.Input{Kind: "scroll", X: 0.5, Y: 0.5, DYPx: 100}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(js, ",0,245") {
+		t.Errorf("scroll = %s, want 100 px of the picture as 245 CSS px", js[strings.LastIndex(js, "("):])
 	}
 }
 
