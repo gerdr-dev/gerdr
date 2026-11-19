@@ -98,7 +98,7 @@ export const zh = {
   "tabDrag.down": "放到下面",
 
   // Panes
-  "panes.count": "这个 Tab 里的 Pane（点开侧栏去挑）",
+  "panes.count": "这个 Tab 里的 Pane（点一下切到下一个）",
   "panes.subAgent": "子 Agent",
   "panes.sessionGone": "这个会话已经不在了",
   "panes.reread": "重新读取",
@@ -310,7 +310,7 @@ export const en: Record<keyof typeof zh, string> = {
   "tabDrag.up": "Drop above",
   "tabDrag.down": "Drop below",
 
-  "panes.count": "Panes in this tab (tap to pick one in the sidebar)",
+  "panes.count": "Panes in this tab (tap for the next one)",
   "panes.subAgent": "Subagent",
   "panes.sessionGone": "This session no longer exists",
   "panes.reread": "Reload",

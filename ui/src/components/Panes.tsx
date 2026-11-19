@@ -153,7 +153,8 @@ export function TabView({ tab }: { tab: Tab }) {
   let count: (Count & { pane: string }) | undefined;
   if (phone && panes.length < all.length) {
     const p = panes.find((x) => x.pane.id === tab.focus)?.pane ?? panes[0].pane;
-    count = { i: all.indexOf(p) + 1, n: all.length, pane: p.id };
+    const i = all.indexOf(p);
+    count = { i: i + 1, n: all.length, next: all[(i + 1) % all.length].id, pane: p.id };
   }
 
   const startDrag = (e: React.PointerEvent, split: PaneSplit, b: Box) => {
@@ -458,7 +459,8 @@ function FitItems({ pane, tab }: { pane: PaneLeaf; tab: Tab }) {
   );
 }
 
-type Count = { i: number; n: number };
+/** `next`: the pane a tap on the counter switches to (the following one, wrapping round to the first). */
+type Count = { i: number; n: number; next: string };
 
 /**
  * 标题栏按住拖：把这个 pane 挪到别处（见 TabDrag.tsx 的 startPaneDrag）。手机上一次只看一个 pane，不给拖。
@@ -510,14 +512,16 @@ function PaneBody({ children }: { children: React.ReactNode }) {
 }
 
 /** On a phone, how many panes this tab has and which one you're on: the others are off screen, something has to say
- * they're there. A tap opens the drawer to pick one. */
+ * they're there. A tap cycles to the next one (asked for: one tap beats opening the drawer and picking). It sits
+ * right before the ⋯ (or the close button where there is no ⋯) in every kind of pane, so repeated taps cycling through mixed
+ * panes stay on one spot. */
 function PaneCount({ count }: { count?: Count }) {
   if (!count) return null;
   return (
     <button
       className="shrink-0 rounded-sm border px-1.5 py-px font-mono text-[10px] text-muted-foreground"
       title={t("panes.count")}
-      onClick={() => set({ drawer: true })}
+      onClick={() => focusPane(count.next)}
     >
       {count.i}/{count.n}
     </button>
@@ -577,13 +581,13 @@ function SubPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; tab
         <FadeText className="min-w-0 shrink-[2] text-muted-foreground">{task?.subagent || t("panes.subAgent")}</FadeText>
         <FadeText className="min-w-0 flex-1 font-medium">{title}</FadeText>
         {task?.status === "running" && <StatusDot status="running" />}
-        <PaneCount count={count} />
         {/* Shrinks too (truncated), so in a narrow pane the close button still fits */}
         {session && (
           <button className="min-w-0 max-w-[40%] truncate text-[11px] text-muted-foreground hover:text-foreground" onClick={() => focusSession(session.id)}>
             ← {session.title || basename(session.cwd)}
           </button>
         )}
+        <PaneCount count={count} />
         <Button variant="ghost" size="icon" className="size-6 shrink-0" title={t("common.close")} onClick={() => (focusPane(pane.id), closeFocusedPane())}>
           <X className="size-3.5" />
         </Button>
@@ -640,7 +644,6 @@ function FilePaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; ta
       >
         <FileText className="size-4 shrink-0 text-muted-foreground" />
         <FadeText className="min-w-[3em] max-w-[60%] shrink font-medium max-md:max-w-none">{basename(path)}</FadeText>
-        <PaneCount count={count} />
         <span className="hidden min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground md:block" title={path}>
           {path}
         </span>
@@ -649,6 +652,7 @@ function FilePaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; ta
           <RefreshCw className="size-3.5" />
         </Button>
         {stat && <FileActions stat={stat} small />}
+        <PaneCount count={count} />
         <Button variant="ghost" size="icon" className="size-6 shrink-0" title={t("common.close")} onClick={() => (focusPane(pane.id), closeFocusedPane())}>
           <X className="size-3.5" />
         </Button>
@@ -701,7 +705,6 @@ function BrowserPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
         onHeadPointerDown={drag.onPointerDown}
         extra={
           <>
-            <PaneCount count={count} />
             {zoomed && (
               <Button
                 variant="ghost"
@@ -713,6 +716,7 @@ function BrowserPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
                 <Minimize2 className="size-3.5" />
               </Button>
             )}
+            <PaneCount count={count} />
           </>
         }
         paneItems={<PaneMoveItems pane={pane} tab={tab} zoomed={zoomed} count={count} />}
@@ -806,8 +810,8 @@ function FolderPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; 
       >
         <FolderOpen className="size-4 shrink-0 text-brand" />
         <FadeText className="min-w-[3em] max-w-[60%] shrink font-medium max-md:max-w-none">{f.session ? t("folder.open") : basename(f.path)}</FadeText>
-        <PaneCount count={count} />
         <div className="flex-1" />
+        <PaneCount count={count} />
         <Button variant="ghost" size="icon" className="size-6 shrink-0" title={t("common.close")} onClick={() => (focusPane(pane.id), closeFocusedPane())}>
           <X className="size-3.5" />
         </Button>
@@ -850,7 +854,6 @@ function TermPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; ta
         <SquareTerminal className="size-4 text-muted-foreground" />
         {/* The 60% cap leaves room for the path, which a phone hides: there it only left a gap before the ⋯ */}
         <FadeText className="min-w-[3em] max-w-[60%] shrink font-medium max-md:max-w-none">{title}</FadeText>
-        <PaneCount count={count} />
         <span className="hidden min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground md:block" title={cwd}>
           {cwd}
         </span>
@@ -867,6 +870,7 @@ function TermPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; ta
             <Minimize2 className="size-3.5" />
           </Button>
         )}
+        <PaneCount count={count} />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="size-6">
@@ -1007,7 +1011,6 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
         )}
         <HostTag session={session} />
         {session?.pending ? <span className="shrink-0 whitespace-nowrap rounded-sm bg-bad/15 px-1.5 text-[11px] text-bad">{t("panes.waiting")}</span> : null}
-        <PaneCount count={count} />
         {session ? (
           <span className="hidden min-w-0 flex-1 items-center gap-2 overflow-hidden font-mono text-[11px] text-muted-foreground md:flex">
             {/* Where the agent works now (it can move itself, e.g. Claude's EnterWorktree); the branch below is that place's */}
@@ -1043,6 +1046,7 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
             <Minimize2 className="size-3.5" />
           </Button>
         )}
+        <PaneCount count={count} />
         <DropdownMenu onOpenChange={(o) => !o && setMore(false)}>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="size-6">
